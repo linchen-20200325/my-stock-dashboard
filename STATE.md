@@ -2,7 +2,7 @@
 
 ## 📌 當前狀態
 - **專案**: 台股 AI 戰情室（Streamlit Cloud + GitHub，Python 3.x）
-- **版本**: v10.62.0 | main
+- **版本**: v10.62.1 | main
 - **部署**: Streamlit Cloud，需設定 `FINMIND_TOKEN` + `GEMINI_API_KEY` + `PROXY_URL`
 - **三大法人**: TWSE BFI82U via `fetch_url`（自動降級直連），`tables` fallback，`row[3]` 元÷1e8=億，5天回溯
 - **融資餘額**: 6 段備援 — Plan 0=FinMind `TaiwanStockTotalMarginPurchaseShortSale`（v10.56.0 新增，海外 IP 唯一可達），Plan A=TWSE `rwd/MI_MARGN`，Plan B-E=HiStock/Goodinfo/Yahoo/cnyes 網爬
@@ -45,6 +45,7 @@
 - **🚀 v10.61.1**（2026-05-07）— 漏網修補 + 100/100/10 UI 透明化：(1) `macro_core.py` 新增的 `fetch_tw_pmi()` 4 段 + `fetch_ism_pmi()` 3 段共 7 處 `fetch_url(...)` 全部補 `attempts=1`（PR #30/#31 別 session 加進來時忘了帶，等於繞過 v10.61.0 lean path），治台灣 PMI 🔴 未取得；(2) 個股「🛡️ 第一關」KPI 卡的 100/100/10 規則改在 A/B/C 三項分別顯示 ✅/❌/⚪，Fail 原因一目了然（門檻 A>100% / B≥100% / C>10% 與 `financial_health_engine:416/423/431` 對齊；N/A 含「5年」等假數字用先 `'N/A' in s` 短路防誤判）
 - **🚀 v10.61.2**（2026-05-07）— 診斷頁 3 修：(1) 個股 raw data optional 缺失從 🟡 改 🔴（`etf_dashboard:3324` `_row` helper + `:3838` `_add_field` helper），語意改為「🟡=時效延遲、🔴=完全抓不到」；(2)「⚠️ 資料異常清單」加 `_all_section_rows` accumulator pattern，5 個 expander（總經/大盤+籌碼/先行指標/個股/ETF）的 detail rows 都會併入清單，個股 + ETF granular missing 不再隱形（schema 用 `_norm_anom()` 統一映射 `日期↔最新日期`、`狀態↔新鮮度`，按資料名稱去重）；(3) `app.py:_fetch_pmi` 失敗時改只回傳 `{'_err_pmi': ...}`，不再帶 `value:None` junk key 進 `macro_info`，異常清單會顯示具體錯誤訊息（如 `MacroMicro:NoneType | CIER:Timeout`）便於下一輪診斷
 - **🚀 v10.62.0**（2026-05-07）— 來源升級 PMI + ETF 費用率：(1) `macro_core.fetch_tw_pmi()` 新增**方案 0 = 國發會 NDC** 為 primary（鏡像 `nas_server.py:218` composite endpoint pattern：4 個 URL 變體 `/PMI`、`/pmi`、`/PMI/latest`、`/indicator/PMI/latest` + 多 JSON shape parser 容錯 list/`{data:[]}`/`{items:[]}`/單筆 dict），失敗才降到既有 4 段（MacroMicro/CIER/StockFeel/鉅亨）；(2) `etf_dashboard.fetch_sitca_expense_ratio()` 新函式從**投信投顧公會 SITCA**（`sitca.org.tw IN2222_01`）抓台股 ETF 內扣費用率，用 `pandas.read_html()` defensively 找含「代號+費用率」欄位的表格 → `get_etf_expense_ratio_safe()` 改為 SITCA primary、yfinance fallback；(3) **不動 MOPS 個股**（per-stock POST body 沙箱無法驗證，等下輪 F12 截圖）。攻堅原則：multi-endpoint fallback + multi-shape parser，沙箱無法 fetch 但生產走 NAS proxy，部署後看 console log iterate
+- **🚀 v10.62.1**（2026-05-07）— SITCA 防呆：使用者確認 column 名「年度費用率」後預先補 2 個邊界（避免上線即跌）：(1) Column detection 改用 `any(k in str(c) for k in ...)`，保留原 column 物件給 `tbl[col]` 索引用 → 治 pandas MultiIndex tuple column 場景（pandas 多層 header 時 `tbl[col_str]` 會 KeyError）；(2) Ticker 比對加 leading-zero 容忍：cell digits 與 target 雙方 `lstrip('0') or '0'` 後比對 → 治 pandas read_html 把「0050」parse 成 int 50 的場景；6 個 smoke case 全對（int-parsed / 字串保持 / MultiIndex tuple / 不存在 ticker）
 
 ## 🏗️ 核心模組
 | 檔案 | 職責 |

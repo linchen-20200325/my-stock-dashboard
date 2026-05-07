@@ -112,15 +112,19 @@ def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
         r.encoding = 'utf-8'
         # ASP.NET 頁面通常一張總費用率表；多表都試找含「代號」+「費用率」欄位的那張
         tables = _pd_sit.read_html(r.text)
+        # ticker 標準化：去掉 leading 0（治 pandas 把 "0050" parse 成 int 50 的場景）
+        _tn = _t.lstrip('0') or '0'
         for tbl in tables:
-            cols = [str(c) for c in tbl.columns]
-            code_col = next((c for c in cols
-                             if any(k in c for k in ('代號', 'ETF', 'Code'))), None)
-            rate_col = next((c for c in cols
-                             if '費用率' in c or '費用比率' in c), None)
-            if not code_col or not rate_col:
+            # 注意：column 可能是 MultiIndex tuple，比對用 str(c)，但取值用原物件 c
+            code_col = next((c for c in tbl.columns
+                             if any(k in str(c) for k in ('代號', 'ETF', 'Code'))), None)
+            rate_col = next((c for c in tbl.columns
+                             if '費用率' in str(c) or '費用比率' in str(c)), None)
+            if code_col is None or rate_col is None:
                 continue
-            row = tbl[tbl[code_col].astype(str).str.replace(r'\D', '', regex=True) == _t]
+            # 雙向 leading-zero 容忍：cell 也 strip leading 0 後比對
+            _digits = tbl[code_col].astype(str).str.replace(r'\D', '', regex=True)
+            row = tbl[_digits.where(_digits != '', '0').str.lstrip('0').replace('', '0') == _tn]
             if row.empty:
                 continue
             raw = str(row[rate_col].iloc[0])
@@ -129,7 +133,7 @@ def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
                 continue
             v = float(m.group(1))
             # SITCA 表格數字常見已是百分比（0.36 = 0.36%），標準化成「比例」回傳
-            print(f'[SITCA/expense] ✅ {_t} = {v}%')
+            print(f'[SITCA/expense] ✅ {_t} = {v}% (col={rate_col})')
             return v / 100.0
         print(f'[SITCA/expense] ⚠️ {_t} 未找到符合 column 的表格 (tables={len(tables)})')
         return None
