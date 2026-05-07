@@ -88,8 +88,62 @@ def fetch_etf_info(ticker: str) -> dict:
     except Exception:
         return {}
 
+def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
+    """從 SITCA 投信投顧公會抓台股 ETF 內扣費用率（Primary，海外 IP 走 NAS proxy）。
+
+    URL: https://www.sitca.org.tw/ROC/Industry/IN2211.aspx?pid=IN2222_01
+
+    Returns
+    -------
+    float | None  比例形式（0.0036 = 0.36%）；找不到 ticker 或抓取失敗回 None。
+    """
+    from proxy_helper import fetch_url as _fu_sit
+    import pandas as _pd_sit, re as _re_sit
+    _t = (ticker or '').replace('.TW', '').replace('.tw', '').strip()
+    if not _t or not _t.isdigit():
+        return None  # SITCA 只收純台股 ETF 數字代號（0050、00878 等）
+    try:
+        r = _fu_sit(
+            'https://www.sitca.org.tw/ROC/Industry/IN2211.aspx?pid=IN2222_01',
+            timeout=15, attempts=attempts,
+        )
+        if r is None or r.status_code != 200:
+            return None
+        r.encoding = 'utf-8'
+        # ASP.NET 頁面通常一張總費用率表；多表都試找含「代號」+「費用率」欄位的那張
+        tables = _pd_sit.read_html(r.text)
+        for tbl in tables:
+            cols = [str(c) for c in tbl.columns]
+            code_col = next((c for c in cols
+                             if any(k in c for k in ('代號', 'ETF', 'Code'))), None)
+            rate_col = next((c for c in cols
+                             if '費用率' in c or '費用比率' in c), None)
+            if not code_col or not rate_col:
+                continue
+            row = tbl[tbl[code_col].astype(str).str.replace(r'\D', '', regex=True) == _t]
+            if row.empty:
+                continue
+            raw = str(row[rate_col].iloc[0])
+            m = _re_sit.search(r'(\d+(?:\.\d+)?)', raw)
+            if not m:
+                continue
+            v = float(m.group(1))
+            # SITCA 表格數字常見已是百分比（0.36 = 0.36%），標準化成「比例」回傳
+            print(f'[SITCA/expense] ✅ {_t} = {v}%')
+            return v / 100.0
+        print(f'[SITCA/expense] ⚠️ {_t} 未找到符合 column 的表格 (tables={len(tables)})')
+        return None
+    except Exception as e:
+        print(f'[SITCA/expense] ❌ {_t}: {type(e).__name__}: {e}')
+        return None
+
+
 def get_etf_expense_ratio_safe(ticker: str):
-    """安全讀取 ETF 費用率，任何 key 缺失回傳 None 不崩潰"""
+    """安全讀取 ETF 費用率：SITCA primary（台股 ETF）→ yfinance fallback；任何 key 缺失回 None 不崩潰"""
+    # 台股 ETF（純數字代號）優先走 SITCA（投信投顧公會官方），yfinance 對 .TW 票常 stale
+    _sit = fetch_sitca_expense_ratio(ticker)
+    if _sit is not None:
+        return _sit
     try:
         info = fetch_etf_info(ticker)
         return (info.get('annualReportExpenseRatio')
@@ -757,8 +811,8 @@ def render_etf_single(gemini_fn=None):
         return
 
     etf_name = info.get('longName') or info.get('shortName') or ticker
-    expense  = (info.get('annualReportExpenseRatio') or info.get('totalExpenseRatio')
-                or info.get('expenseRatio'))
+    # 費用率走 SITCA primary（台股 ETF 官方，海外 IP 走 NAS proxy）→ yfinance fallback
+    expense  = get_etf_expense_ratio_safe(ticker)
     beta     = info.get('beta') or info.get('beta3Year')
     aum      = info.get('totalAssets')
 
@@ -3980,8 +4034,10 @@ def render_data_health_raw():
                              source='yfinance', endpoint='.info[beta]', proxy=False))
             rows.append(_row('ETF 費用率',
                              str(_dt_r.date.today()) if _e1.get('expense') else None, 'daily',
-                             optional=True,
-                             source='yfinance', endpoint='.info[netExpenseRatio]', proxy=False))
+                             optional=False,
+                             source='SITCA + yfinance 雙源',
+                             endpoint='sitca.org.tw IN2222_01 / .info[expenseRatio]',
+                             proxy=True))
             # NAV 淨值
             _prem = _e1.get('premium') or {}
             _nav_ok = _prem.get('nav') is not None

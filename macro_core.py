@@ -416,7 +416,7 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 # ══════════════════════════════════════════════════════════════
 
 def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
-    """抓取台灣製造業 PMI（CIER 中華經濟研究院，月頻）。
+    """抓取台灣製造業 PMI（國發會 NDC 為主，CIER/MacroMicro 等為 fallback；月頻）。
 
     Returns
     -------
@@ -429,6 +429,68 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     import re as _re
     today = _dt.date.today()
     errs: list[str] = []
+
+    # ── 方案 0 (Primary): 國發會 NDC 景氣指標 API（鏡像現有 composite endpoint pattern）──
+    # nas_server.py:218 已驗證 https://index.ndc.gov.tw/app/data/indicator/composite 走 JSON；
+    # PMI 端點推測 /PMI 或 /pmi 或 /PMI/latest，多個 endpoint 變體 + 多 JSON shape parser
+    # 都試一遍，attempts=1 走 lean path 不阻塞 macro pool 預算
+    for ndc_url in (
+        'https://index.ndc.gov.tw/app/data/indicator/PMI',
+        'https://index.ndc.gov.tw/app/data/indicator/pmi',
+        'https://index.ndc.gov.tw/app/data/PMI/latest',
+        'https://index.ndc.gov.tw/app/data/indicator/PMI/latest',
+    ):
+        try:
+            r = fetch_url(ndc_url, timeout=12, attempts=1,
+                          headers={'Accept': 'application/json'})
+            if r is None or r.status_code != 200:
+                continue
+            try:
+                j = r.json()
+            except Exception:
+                continue
+            # 解析多種 JSON shape：list / {data:[...]} / {items:[...]} / 單筆 dict
+            items = j if isinstance(j, list) else (j.get('data') or j.get('items') or [j])
+            if not items:
+                continue
+            latest = items[-1] if isinstance(items, list) and items else items
+            if not isinstance(latest, dict):
+                continue
+            # 數值欄位常見 key：value / score / pmi / index / composite
+            v_raw = (latest.get('value') or latest.get('score')
+                     or latest.get('pmi') or latest.get('index')
+                     or latest.get('composite'))
+            # 日期欄位：date / yearMonth / period / month
+            d_raw = (latest.get('date') or latest.get('yearMonth')
+                     or latest.get('period') or latest.get('month'))
+            if v_raw is None or not d_raw:
+                continue
+            try:
+                v = float(v_raw)
+            except (TypeError, ValueError):
+                continue
+            if not (30 <= v <= 70):
+                continue
+            # 日期 normalize：'2026-04' / '202604' / '2026/04' → 'YYYY-MM-01'
+            d_str = str(d_raw)
+            m_d = _re.search(r'(20\d{2})[-/]?(\d{2})', d_str)
+            if not m_d:
+                continue
+            date = f'{m_d.group(1)}-{m_d.group(2)}-01'
+            try:
+                last_d = _dt.date(int(m_d.group(1)), int(m_d.group(2)), 1)
+                if (today - last_d).days > max_age_days:
+                    continue
+            except Exception:
+                pass
+            print(f'[macro_core/TW-PMI/NDC] ✅ {v} date={date} via {ndc_url[-30:]}')
+            return {'value': v, 'date': date,
+                    'label': '國發會 NDC 景氣指標',
+                    'source': 'NDC', 'is_proxy': True,
+                    'series_id': 'ndc-pmi'}
+        except Exception as e:
+            errs.append(f'NDC.{ndc_url[-15:]}:{type(e).__name__}')
+            print(f'[macro_core/TW-PMI/NDC/{ndc_url[-15:]}] ❌ {e}')
 
     # ── 方案 1: MacroMicro 財經 M 平方（chart 22 = 台灣 PMI）──
     try:
