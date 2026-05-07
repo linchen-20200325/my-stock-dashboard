@@ -1,0 +1,32 @@
+# Secrets - NEVER commit
+.streamlit/secrets.toml
+
+# Notebook (contains hardcoded API keys)
+*.ipynb
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# Temp / cache
+temp/
+*.pkl
+*.cache
+*.csv
+*.xlsx
+
+# Runtime state (generated at runtime, must not be committed)
+macro_state.json
+
+# Test coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
