@@ -865,8 +865,20 @@ def render_etf_single(gemini_fn=None):
     _3y_cutoff = _now2 - timedelta(days=365 * 3)
     _df_3y = df[df.index >= _3y_cutoff]
     _cagr3 = calc_cagr(_df_3y) if len(_df_3y) >= 30 else None
+    # MK 框架 #6：成立年數（yfinance firstTradeDateEpochUtc primary，df span fallback）
+    _incept_yrs = None
+    try:
+        _ep = info.get('firstTradeDateEpochUtc') if isinstance(info, dict) else None
+        if _ep:
+            import datetime as _dt_inc
+            _incept_yrs = (_dt_inc.datetime.now()
+                           - _dt_inc.datetime.fromtimestamp(int(_ep))).days / 365.25
+    except Exception:
+        pass
+    if _incept_yrs is None and len(df) > 0:
+        _incept_yrs = (df.index[-1] - df.index[0]).days / 365.25
 
-    _mc1, _mc2, _mc3 = st.columns(3)
+    _mc1, _mc2, _mc3, _mc4 = st.columns(4)
     if _div_yoy is None:
         _mc1.metric('配息 12M YoY', 'N/A', delta='—')
     elif _div_yoy < -10:
@@ -891,9 +903,17 @@ def render_etf_single(gemini_fn=None):
     else:
         _mc3.metric('近 3Y 年化報酬', f'{_cagr3:.1f}%',
                     delta='🟡 不及 7% 門檻', delta_color='inverse')
+    if _incept_yrs is None:
+        _mc4.metric('成立年數', 'N/A')
+    elif _incept_yrs >= 3:
+        _mc4.metric('成立年數', f'{_incept_yrs:.1f} 年',
+                    delta='✅ ≥ 3 年（多空考驗）', delta_color='normal')
+    else:
+        _mc4.metric('成立年數', f'{_incept_yrs:.1f} 年',
+                    delta='🟡 未滿 3 年（選舊不選新）', delta_color='inverse')
     st.caption(
         '⚠️ 配息來源「**平準金佔比**」需 ETF 公開說明書揭露，本期暫不顯示（下輪計畫加 SITCA 抓取）。'
-        '\n\n💡 **MK 老師標準**：3 個指標若有 ≥ 2 項 🔴/🟡 警示 → 建議汰弱換強。'
+        '\n\n💡 **MK 老師標準**：4 項指標若有 ≥ 2 項 🔴/🟡 警示 → 建議汰弱換強。'
     )
 
     # ── 策略二：孫慶龍 7% ─────────────────────────────────────
@@ -1103,6 +1123,40 @@ def render_etf_single(gemini_fn=None):
     else:
         st.info(f'ℹ️ 資料不足 252 日（目前 {len(df)} 日），無法計算 σ 位階')
 
+    # ── MK 框架 #5：季線 × 趨勢 聯合警示燈號（跌破 + 下彎 = 趨勢轉弱）──
+    st.markdown('#### 📉 季線 × 趨勢 聯合警示（MK 框架：技術面防禦）')
+    if len(df) >= 80:
+        _close_now = float(df['Close'].iloc[-1])
+        _ma60_series = df['Close'].rolling(60).mean()
+        _ma60_now = float(_ma60_series.iloc[-1])
+        _ma60_20d = float(_ma60_series.iloc[-21])
+        _above_ma60 = _close_now > _ma60_now
+        _ma60_slope = (_ma60_now - _ma60_20d) / _ma60_20d * 100 if _ma60_20d > 0 else 0.0
+        _ma60_up = _ma60_slope > 0
+        if _above_ma60 and _ma60_up:
+            _t5_label, _t5_color, _t5_action = '🟢 健康（站上季線且 MA60 上彎）', 'green', '正常持有，不需動作'
+        elif _above_ma60 and not _ma60_up:
+            _t5_label, _t5_color, _t5_action = '🟡 上漲乏力（站上但 MA60 下彎）', 'yellow', '觀察 MA60 是否止跌；衛星部位降槓桿'
+        elif not _above_ma60 and _ma60_up:
+            _t5_label, _t5_color, _t5_action = '🟡 短線回測（跌破但 MA60 仍上彎）', 'yellow', '可逢低分批布局，等回上 MA60 確認'
+        else:
+            _t5_label, _t5_color, _t5_action = '🔴 趨勢轉弱（跌破 MA60 且下彎）', 'red', '建議減碼或觀望，等趨勢翻轉'
+        _colored_box(
+            f'<b>{_t5_label}</b><br>'
+            f'Close {_close_now:.2f} vs MA60 {_ma60_now:.2f}（'
+            f'{(_close_now-_ma60_now)/_ma60_now*100:+.2f}%）<br>'
+            f'MA60 20 日斜率：{_ma60_slope:+.2f}%（{"上彎 ↗" if _ma60_up else "下彎 ↘"}）<br>'
+            f'<b>建議</b>：{_t5_action}',
+            _t5_color,
+        )
+        _teacher_conclusion('郭俊宏',
+                            f'季線 {("站上" if _above_ma60 else "跌破")}+'
+                            f'{("上彎" if _ma60_up else "下彎")}',
+                            _t5_label.split('（')[0],
+                            _t5_action)
+    else:
+        st.info(f'ℹ️ 資料不足 80 日（目前 {len(df)} 日），無法計算季線 × 斜率')
+
     # ── 走勢圖 ────────────────────────────────────────────────
     st.markdown(f'#### 📈 {ticker} 近5年走勢')
     _plot_etf_chart(df, ticker, benchmark, bench_df)
@@ -1295,8 +1349,12 @@ def render_etf_portfolio(gemini_fn=None):
     regime   = mkt_info.get('regime', 'neutral')
     macro_allocation_banner(regime)
 
-    st.markdown('#### 📋 輸入組合（格式：代號,目標權重%,現值 元）')
-    default_input = "0050.TW,40,200000\n00713.TW,30,150000\nBND,20,100000\n00878.TW,10,50000"
+    st.markdown('#### 📋 輸入組合（格式：代號,目標權重%,現值 元[,類型]）')
+    st.caption('💡 第 4 欄「類型」可填「核心」或「衛星」（省略則依代號自動分類）。MK 框架核衛分離見下方燈號。')
+    default_input = ("0050.TW,40,200000,核心\n"
+                     "00713.TW,30,150000,核心\n"
+                     "BND,20,100000,核心\n"
+                     "00878.TW,10,50000,核心")
     raw       = st.text_area('組合輸入', value=default_input, height=130,
                               key='etf_p_input', label_visibility='collapsed')
     tolerance = st.slider('再平衡容忍偏離度（%）', 1, 15, 5, key='etf_p_tol')
@@ -1308,15 +1366,26 @@ def render_etf_portfolio(gemini_fn=None):
         st.info('💡 填入組合後點擊「計算組合」')
         return
 
+    # MK 框架 #9：核心 / 衛星預設分類（高股息大型 / 全市場 / 債券 → 核心；其他 → 衛星）
+    _CORE_TICKERS = {'0050','0051','0056','006208','00713','00878','00919','00929',
+                     '00940','00946','00713B','00679B','00937B','BND','AGG','VTI',
+                     'VOO','SPY','VT','SCHD','VEA','VWO','VNQ'}
+    def _auto_role(tk: str) -> str:
+        code = tk.replace('.TWO', '').replace('.TW', '').upper()
+        return '核心' if code in _CORE_TICKERS else '衛星'
+
     # 解析輸入
     rows = []
     for line in raw.strip().splitlines():
         parts = [p.strip() for p in line.split(',')]
         if len(parts) >= 3:
             try:
-                rows.append({'ticker': parts[0].upper(),
+                _tk = parts[0].upper()
+                _role = parts[3] if (len(parts) >= 4 and parts[3] in ('核心', '衛星')) else _auto_role(_tk)
+                rows.append({'ticker': _tk,
                               'target_pct': float(parts[1]),
-                              'current_value': float(parts[2])})
+                              'current_value': float(parts[2]),
+                              'role': _role})
             except ValueError:
                 st.warning(f'⚠️ 無法解析：{line}')
     if not rows:
@@ -1340,11 +1409,55 @@ def render_etf_portfolio(gemini_fn=None):
     overview_df = pd.DataFrame([{
         'ETF': r['ticker'],
         '名稱': _etf_name(r['ticker']),
+        '類型': r.get('role', '—'),
         '目標權重%': r['target_pct'],
         '實際權重%': r['actual_pct'], '偏離度%': r['deviation'],
         '現值(元)': f'{r["current_value"]:,.0f}',
     } for r in rows])
     st.dataframe(overview_df, use_container_width=True, hide_index=True)
+
+    # ── MK 框架 #9：核心 / 衛星比例 vs regime 目標 ────────────
+    _core_value = sum(r['current_value'] for r in rows if r.get('role') == '核心')
+    _sat_value  = sum(r['current_value'] for r in rows if r.get('role') == '衛星')
+    _core_pct = _core_value / total_value * 100 if total_value > 0 else 0.0
+    _sat_pct  = _sat_value / total_value * 100 if total_value > 0 else 0.0
+    try:
+        from portfolio_manager import CoreSatelliteManager as _CSM
+        _mgr = _CSM(total_value, regime=regime)
+        _target_core_pct = _mgr.core_ratio * 100
+        _target_sat_pct  = _mgr.satellite_ratio * 100
+        _rebal_info = _mgr.check_rebalance(satellite_current_value=_sat_value)
+        st.markdown('#### 🎯 核心 / 衛星 配置 vs MK regime 目標')
+        _cs1, _cs2 = st.columns(2)
+        _core_dev = _core_pct - _target_core_pct
+        _sat_dev  = _sat_pct  - _target_sat_pct
+        _cs1.metric(f'核心比 (目標 {_target_core_pct:.0f}%)', f'{_core_pct:.1f}%',
+                    delta=f'{_core_dev:+.1f}pp',
+                    delta_color='normal' if abs(_core_dev) <= 10 else 'inverse')
+        _cs2.metric(f'衛星比 (目標 {_target_sat_pct:.0f}%)', f'{_sat_pct:.1f}%',
+                    delta=f'{_sat_dev:+.1f}pp',
+                    delta_color='normal' if abs(_sat_dev) <= 10 else 'inverse')
+        if isinstance(_rebal_info, dict) and _rebal_info.get('rebalance_needed'):
+            _excess = _rebal_info.get('excess_pct', 0) * 100 if _rebal_info.get('excess_pct', 0) < 1 else _rebal_info.get('excess_pct', 0)
+            _colored_box(
+                f'⚠️ <b>衛星超標</b> {_excess:.1f}pp（regime={regime} 目標衛星 {_target_sat_pct:.0f}%）<br>'
+                f'<b>建議</b>：{_rebal_info.get("action", "考慮停利衛星部位轉入核心")}',
+                'red')
+            _teacher_conclusion('郭俊宏',
+                                f'衛星 {_sat_pct:.1f}% > 目標 {_target_sat_pct:.0f}%',
+                                '衛星部位超標，違背核衛宿命',
+                                '停利衛星轉入核心（葡萄串閉環）')
+        else:
+            _colored_box(
+                f'✅ 核衛比例符合 regime={regime} 目標範圍（±10pp 容忍）',
+                'green')
+            _teacher_conclusion('郭俊宏',
+                                f'核 {_core_pct:.0f}% / 衛 {_sat_pct:.0f}%',
+                                f'符合 regime={regime} 目標 {_target_core_pct:.0f}/{_target_sat_pct:.0f}',
+                                '維持當前配置')
+        st.caption('💡 **regime 目標**：多頭 60/40 / 中性 70/30 / 保守 80/20 / 空頭 85/15（核/衛）')
+    except Exception as _csm_e:
+        st.info(f'ℹ️ 核衛分離計算暫時不可用：{type(_csm_e).__name__}')
 
     # ── 再平衡交易指令（含具體股數）────────────────────────────
     st.markdown('#### ⚖️ 再平衡交易指令')
