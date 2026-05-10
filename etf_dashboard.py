@@ -855,6 +855,67 @@ def render_etf_single(gemini_fn=None):
                             '成長型ETF，以價差報酬衡量',
                             '衡量 CAGR 是否超過大盤')
 
+    # ── MK 框架 #1+#2+#7：配息健康度 + 3Y 年化報酬（汰弱五項中前兩項 + 留強 3-3-3 第二項）──
+    st.markdown('#### 💧 配息健康度 + 年化報酬（MK 框架燈號）')
+    _now2 = df.index[-1]
+    _12m_div = float(divs[(divs.index >= _now2 - timedelta(days=365))].sum()) if not divs.empty else 0.0
+    _prev12m_div = float(divs[(divs.index >= _now2 - timedelta(days=730))
+                              & (divs.index < _now2 - timedelta(days=365))].sum()) if not divs.empty else 0.0
+    _div_yoy = ((_12m_div - _prev12m_div) / _prev12m_div * 100) if _prev12m_div > 0 else None
+    _3y_cutoff = _now2 - timedelta(days=365 * 3)
+    _df_3y = df[df.index >= _3y_cutoff]
+    _cagr3 = calc_cagr(_df_3y) if len(_df_3y) >= 30 else None
+    # MK 框架 #6：成立年數（yfinance firstTradeDateEpochUtc primary，df span fallback）
+    _incept_yrs = None
+    try:
+        _ep = info.get('firstTradeDateEpochUtc') if isinstance(info, dict) else None
+        if _ep:
+            import datetime as _dt_inc
+            _incept_yrs = (_dt_inc.datetime.now()
+                           - _dt_inc.datetime.fromtimestamp(int(_ep))).days / 365.25
+    except Exception:
+        pass
+    if _incept_yrs is None and len(df) > 0:
+        _incept_yrs = (df.index[-1] - df.index[0]).days / 365.25
+
+    _mc1, _mc2, _mc3, _mc4 = st.columns(4)
+    if _div_yoy is None:
+        _mc1.metric('配息 12M YoY', 'N/A', delta='—')
+    elif _div_yoy < -10:
+        _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='⚠️ 衰退 > 10%', delta_color='inverse')
+    elif _div_yoy < 0:
+        _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='略減（< 10%）', delta_color='inverse')
+    else:
+        _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='✅ 增長 / 持平', delta_color='normal')
+    if cur_yield > 0 and total_ret < cur_yield:
+        _mc2.metric('含息報酬 − 殖利率', f'{total_ret - cur_yield:+.1f}pp',
+                    delta='🔴 本金侵蝕', delta_color='inverse')
+    elif cur_yield > 0:
+        _mc2.metric('含息報酬 − 殖利率', f'{total_ret - cur_yield:+.1f}pp',
+                    delta='✅ 雙贏', delta_color='normal')
+    else:
+        _mc2.metric('含息報酬 − 殖利率', 'N/A', delta='無配息')
+    if _cagr3 is None:
+        _mc3.metric('近 3Y 年化報酬', 'N/A', delta='資料不足 < 90 日')
+    elif _cagr3 >= 7:
+        _mc3.metric('近 3Y 年化報酬', f'{_cagr3:.1f}%',
+                    delta='✅ 達 7% 定存替代', delta_color='normal')
+    else:
+        _mc3.metric('近 3Y 年化報酬', f'{_cagr3:.1f}%',
+                    delta='🟡 不及 7% 門檻', delta_color='inverse')
+    if _incept_yrs is None:
+        _mc4.metric('成立年數', 'N/A')
+    elif _incept_yrs >= 3:
+        _mc4.metric('成立年數', f'{_incept_yrs:.1f} 年',
+                    delta='✅ ≥ 3 年（多空考驗）', delta_color='normal')
+    else:
+        _mc4.metric('成立年數', f'{_incept_yrs:.1f} 年',
+                    delta='🟡 未滿 3 年（選舊不選新）', delta_color='inverse')
+    st.caption(
+        '⚠️ 配息來源「**平準金佔比**」需 ETF 公開說明書揭露，本期暫不顯示（下輪計畫加 SITCA 抓取）。'
+        '\n\n💡 **MK 老師標準**：4 項指標若有 ≥ 2 項 🔴/🟡 警示 → 建議汰弱換強。'
+    )
+
     # ── 策略二：孫慶龍 7% ─────────────────────────────────────
     st.markdown('#### 🧠 策略二：孫慶龍 — 7% 存股聖經估值買賣點')
     avg_yield = calc_avg_yield(df, divs, years=5)
@@ -1026,11 +1087,89 @@ def render_etf_single(gemini_fn=None):
         _kv_ai = round(float(_k_s.iloc[-1]), 1)
         _dv_ai = round(float(_d_s.iloc[-1]), 1)
 
+    # ── MK 框架 #11：標準差 σ 量化買點（年線 ± σ 位階分級）──────
+    st.markdown('#### 🎯 標準差量化買點（MK 框架：跌了就買）')
+    if len(df) >= 252:
+        _ret_252 = df['Close'].pct_change().tail(252).dropna()
+        _sigma_pct = (float(_ret_252.std()) * (252 ** 0.5) * 100) if not _ret_252.empty else 0.0
+        _cur_p = float(df['Close'].iloc[-1])
+        _ma240 = float(df['Close'].rolling(240).mean().iloc[-1]) if len(df) >= 240 else None
+        if _ma240 and _sigma_pct > 0:
+            _bias_pct = (_cur_p - _ma240) / _ma240 * 100
+            _z = _bias_pct / _sigma_pct
+            if _z <= -2:
+                _label, _color, _action = '🟢 極佳買點（≤ -2σ）', 'green', '大跌大買 — 大幅加碼，剩餘資金主力投入'
+            elif _z <= -1:
+                _label, _color, _action = '🟢 進場買點（-2σ ~ -1σ）', 'green', '小跌小買 — 投入 20–30% 資金'
+            elif _z <= 1:
+                _label, _color, _action = '🟡 持平區（±1σ 內）', 'yellow', '保留現金，等待 ≤ -1σ 進場'
+            elif _z <= 2:
+                _label, _color, _action = '🟠 偏高（+1σ ~ +2σ）', 'yellow', '不追高；衛星部位可考慮停利'
+            else:
+                _label, _color, _action = '🔴 極端偏高（≥ +2σ）', 'red', '建議減碼；勿在 +2σ 以上加碼'
+            _colored_box(
+                f'<b>{_label}</b><br>'
+                f'目前 {_cur_p:.2f} vs MA240 {_ma240:.2f} → '
+                f'偏離 {_bias_pct:+.2f}%（年化 σ ≈ {_sigma_pct:.1f}%，z = {_z:+.2f}）<br>'
+                f'<b>建議</b>：{_action}',
+                _color,
+            )
+            _teacher_conclusion('郭俊宏',
+                                f'位階 z={_z:+.2f}σ',
+                                _label.split('（')[0],
+                                _action)
+        else:
+            st.info('ℹ️ MA240 或 σ 不足，無法分級')
+    else:
+        st.info(f'ℹ️ 資料不足 252 日（目前 {len(df)} 日），無法計算 σ 位階')
+
+    # ── MK 框架 #5：季線 × 趨勢 聯合警示燈號（跌破 + 下彎 = 趨勢轉弱）──
+    st.markdown('#### 📉 季線 × 趨勢 聯合警示（MK 框架：技術面防禦）')
+    if len(df) >= 80:
+        _close_now = float(df['Close'].iloc[-1])
+        _ma60_series = df['Close'].rolling(60).mean()
+        _ma60_now = float(_ma60_series.iloc[-1])
+        _ma60_20d = float(_ma60_series.iloc[-21])
+        _above_ma60 = _close_now > _ma60_now
+        _ma60_slope = (_ma60_now - _ma60_20d) / _ma60_20d * 100 if _ma60_20d > 0 else 0.0
+        _ma60_up = _ma60_slope > 0
+        if _above_ma60 and _ma60_up:
+            _t5_label, _t5_color, _t5_action = '🟢 健康（站上季線且 MA60 上彎）', 'green', '正常持有，不需動作'
+        elif _above_ma60 and not _ma60_up:
+            _t5_label, _t5_color, _t5_action = '🟡 上漲乏力（站上但 MA60 下彎）', 'yellow', '觀察 MA60 是否止跌；衛星部位降槓桿'
+        elif not _above_ma60 and _ma60_up:
+            _t5_label, _t5_color, _t5_action = '🟡 短線回測（跌破但 MA60 仍上彎）', 'yellow', '可逢低分批布局，等回上 MA60 確認'
+        else:
+            _t5_label, _t5_color, _t5_action = '🔴 趨勢轉弱（跌破 MA60 且下彎）', 'red', '建議減碼或觀望，等趨勢翻轉'
+        _colored_box(
+            f'<b>{_t5_label}</b><br>'
+            f'Close {_close_now:.2f} vs MA60 {_ma60_now:.2f}（'
+            f'{(_close_now-_ma60_now)/_ma60_now*100:+.2f}%）<br>'
+            f'MA60 20 日斜率：{_ma60_slope:+.2f}%（{"上彎 ↗" if _ma60_up else "下彎 ↘"}）<br>'
+            f'<b>建議</b>：{_t5_action}',
+            _t5_color,
+        )
+        _teacher_conclusion('郭俊宏',
+                            f'季線 {("站上" if _above_ma60 else "跌破")}+'
+                            f'{("上彎" if _ma60_up else "下彎")}',
+                            _t5_label.split('（')[0],
+                            _t5_action)
+    else:
+        st.info(f'ℹ️ 資料不足 80 日（目前 {len(df)} 日），無法計算季線 × 斜率')
+
     # ── 走勢圖 ────────────────────────────────────────────────
     st.markdown(f'#### 📈 {ticker} 近5年走勢')
     _plot_etf_chart(df, ticker, benchmark, bench_df)
 
     # ── 存入 session_state 供 Tab⑨ 使用 ─────────────────────
+    # 真失敗時補上 _err_* 訊息，供診斷頁 inline 顯示根因
+    _err_expense = (
+        'SITCA 未收錄此 ETF + yfinance.info[expenseRatio] 為空'
+        '（海外 ETF / 私募 / 已下市可能）'
+    ) if not expense else None
+    _err_nav = (
+        'FinMind ETF NAV + goodinfo + TWSE OpenAPI + MoneyDJ + yfinance 5 源全失敗'
+    ) if (prem or {}).get('nav') is None else None
     st.session_state['etf_single_data'] = {
         'ticker': ticker, 'name': etf_name,
         'cur_yield': cur_yield, 'avg_yield': avg_yield,
@@ -1040,6 +1179,8 @@ def render_etf_single(gemini_fn=None):
         'expense': expense, 'beta': beta, 'aum': aum,
         'k_val': _kv_ai, 'd_val': _dv_ai,
         'bias240': _bias240_ai,
+        '_err_expense': _err_expense,
+        '_err_nav':     _err_nav,
     }
 
     # ── AI ETF 存股決策總結 ───────────────────────────────────
@@ -1218,8 +1359,12 @@ def render_etf_portfolio(gemini_fn=None):
     regime   = mkt_info.get('regime', 'neutral')
     macro_allocation_banner(regime)
 
-    st.markdown('#### 📋 輸入組合（格式：代號,目標權重%,現值 元）')
-    default_input = "0050.TW,40,200000\n00713.TW,30,150000\nBND,20,100000\n00878.TW,10,50000"
+    st.markdown('#### 📋 輸入組合（格式：代號,目標權重%,現值 元[,類型]）')
+    st.caption('💡 第 4 欄「類型」可填「核心」或「衛星」（省略則依代號自動分類）。MK 框架核衛分離見下方燈號。')
+    default_input = ("0050.TW,40,200000,核心\n"
+                     "00713.TW,30,150000,核心\n"
+                     "BND,20,100000,核心\n"
+                     "00878.TW,10,50000,核心")
     raw       = st.text_area('組合輸入', value=default_input, height=130,
                               key='etf_p_input', label_visibility='collapsed')
     tolerance = st.slider('再平衡容忍偏離度（%）', 1, 15, 5, key='etf_p_tol')
@@ -1231,15 +1376,26 @@ def render_etf_portfolio(gemini_fn=None):
         st.info('💡 填入組合後點擊「計算組合」')
         return
 
+    # MK 框架 #9：核心 / 衛星預設分類（高股息大型 / 全市場 / 債券 → 核心；其他 → 衛星）
+    _CORE_TICKERS = {'0050','0051','0056','006208','00713','00878','00919','00929',
+                     '00940','00946','00713B','00679B','00937B','BND','AGG','VTI',
+                     'VOO','SPY','VT','SCHD','VEA','VWO','VNQ'}
+    def _auto_role(tk: str) -> str:
+        code = tk.replace('.TWO', '').replace('.TW', '').upper()
+        return '核心' if code in _CORE_TICKERS else '衛星'
+
     # 解析輸入
     rows = []
     for line in raw.strip().splitlines():
         parts = [p.strip() for p in line.split(',')]
         if len(parts) >= 3:
             try:
-                rows.append({'ticker': parts[0].upper(),
+                _tk = parts[0].upper()
+                _role = parts[3] if (len(parts) >= 4 and parts[3] in ('核心', '衛星')) else _auto_role(_tk)
+                rows.append({'ticker': _tk,
                               'target_pct': float(parts[1]),
-                              'current_value': float(parts[2])})
+                              'current_value': float(parts[2]),
+                              'role': _role})
             except ValueError:
                 st.warning(f'⚠️ 無法解析：{line}')
     if not rows:
@@ -1263,11 +1419,55 @@ def render_etf_portfolio(gemini_fn=None):
     overview_df = pd.DataFrame([{
         'ETF': r['ticker'],
         '名稱': _etf_name(r['ticker']),
+        '類型': r.get('role', '—'),
         '目標權重%': r['target_pct'],
         '實際權重%': r['actual_pct'], '偏離度%': r['deviation'],
         '現值(元)': f'{r["current_value"]:,.0f}',
     } for r in rows])
     st.dataframe(overview_df, use_container_width=True, hide_index=True)
+
+    # ── MK 框架 #9：核心 / 衛星比例 vs regime 目標 ────────────
+    _core_value = sum(r['current_value'] for r in rows if r.get('role') == '核心')
+    _sat_value  = sum(r['current_value'] for r in rows if r.get('role') == '衛星')
+    _core_pct = _core_value / total_value * 100 if total_value > 0 else 0.0
+    _sat_pct  = _sat_value / total_value * 100 if total_value > 0 else 0.0
+    try:
+        from portfolio_manager import CoreSatelliteManager as _CSM
+        _mgr = _CSM(total_value, regime=regime)
+        _target_core_pct = _mgr.core_ratio * 100
+        _target_sat_pct  = _mgr.satellite_ratio * 100
+        _rebal_info = _mgr.check_rebalance(satellite_current_value=_sat_value)
+        st.markdown('#### 🎯 核心 / 衛星 配置 vs MK regime 目標')
+        _cs1, _cs2 = st.columns(2)
+        _core_dev = _core_pct - _target_core_pct
+        _sat_dev  = _sat_pct  - _target_sat_pct
+        _cs1.metric(f'核心比 (目標 {_target_core_pct:.0f}%)', f'{_core_pct:.1f}%',
+                    delta=f'{_core_dev:+.1f}pp',
+                    delta_color='normal' if abs(_core_dev) <= 10 else 'inverse')
+        _cs2.metric(f'衛星比 (目標 {_target_sat_pct:.0f}%)', f'{_sat_pct:.1f}%',
+                    delta=f'{_sat_dev:+.1f}pp',
+                    delta_color='normal' if abs(_sat_dev) <= 10 else 'inverse')
+        if isinstance(_rebal_info, dict) and _rebal_info.get('rebalance_needed'):
+            _excess = _rebal_info.get('excess_pct', 0) * 100 if _rebal_info.get('excess_pct', 0) < 1 else _rebal_info.get('excess_pct', 0)
+            _colored_box(
+                f'⚠️ <b>衛星超標</b> {_excess:.1f}pp（regime={regime} 目標衛星 {_target_sat_pct:.0f}%）<br>'
+                f'<b>建議</b>：{_rebal_info.get("action", "考慮停利衛星部位轉入核心")}',
+                'red')
+            _teacher_conclusion('郭俊宏',
+                                f'衛星 {_sat_pct:.1f}% > 目標 {_target_sat_pct:.0f}%',
+                                '衛星部位超標，違背核衛宿命',
+                                '停利衛星轉入核心（葡萄串閉環）')
+        else:
+            _colored_box(
+                f'✅ 核衛比例符合 regime={regime} 目標範圍（±10pp 容忍）',
+                'green')
+            _teacher_conclusion('郭俊宏',
+                                f'核 {_core_pct:.0f}% / 衛 {_sat_pct:.0f}%',
+                                f'符合 regime={regime} 目標 {_target_core_pct:.0f}/{_target_sat_pct:.0f}',
+                                '維持當前配置')
+        st.caption('💡 **regime 目標**：多頭 60/40 / 中性 70/30 / 保守 80/20 / 空頭 85/15（核/衛）')
+    except Exception as _csm_e:
+        st.info(f'ℹ️ 核衛分離計算暫時不可用：{type(_csm_e).__name__}')
 
     # ── 再平衡交易指令（含具體股數）────────────────────────────
     st.markdown('#### ⚖️ 再平衡交易指令')
@@ -3341,6 +3541,51 @@ def render_data_health_raw():
         except Exception:
             return None
 
+    def _probe_col(df, col):
+        """欄位三態探測：分辨「fetch 失敗 / 此股無此欄 / 該股本期為空 / 已抓到」。
+        Returns: (status, last_date)
+          status: 'fail' (df 整個沒抓到) / 'na' (df 有但無此欄) / 'zero' (有欄但全空) / 'ok'
+        """
+        try:
+            if df is None or (hasattr(df, 'empty') and df.empty):
+                return ('fail', None)
+            if col not in df.columns:
+                return ('na', None)
+            sub = df[df[col].notna()]
+            if sub.empty:
+                return ('zero', None)
+            return ('ok', _last_date(sub))
+        except Exception:
+            return ('fail', None)
+
+    def _probe_fin_field(fin_raw, key, aliases, slot='_bs_slot_latest'):
+        """財報欄位三態探測（針對 _fin_raw2 內的 dict）。
+        Returns: (status, value)
+          'fail': fin_raw 整體錯誤（API 沒回）
+          'na'  : raw slot 內無任一 alias（此股無此科目）
+          'zero': raw slot 有 alias 但值為 0（該股本季為 0）
+          'ok'  : 有值 > 0
+        """
+        try:
+            if not fin_raw or fin_raw.get('error'):
+                return ('fail', None)
+            v = float(fin_raw.get(key) or 0)
+            if v > 0:
+                return ('ok', v)
+            _slot = fin_raw.get(slot) or {}
+            if not _slot:
+                # 沒有 raw slot（舊版 fetcher 或解析失敗）→ 退化為 'fail'
+                return ('fail', None)
+            for _a in aliases:
+                if _a in _slot:
+                    try:
+                        return ('zero', float(str(_slot[_a]).replace(',', '') or 0))
+                    except Exception:
+                        return ('zero', 0.0)
+            return ('na', None)
+        except Exception:
+            return ('fail', None)
+
     def _light(date_str, freq='daily'):
         """回傳 (icon, label)；freq: daily / monthly / quarterly / yearly"""
         if not date_str:
@@ -3365,21 +3610,38 @@ def render_data_health_raw():
     _FREQ_LBL = {'daily': '日頻', 'monthly': '月頻', 'quarterly': '季頻', 'yearly': '不定期'}
 
     def _row(name, date_str, freq='daily', error_msg=None, optional=False,
-             source='', endpoint='', proxy=False):
+             source='', endpoint='', proxy=False, probe_status=None):
         """資料新鮮度單列。
         source: 來源系統（如 FRED / yfinance / FinMind）
         endpoint: API 端點 / Ticker（如 NAPM / ^VIX）
         proxy: 是否經 Squid Proxy 出口（True=✅ / False=—）
+        probe_status: 三態探測結果，覆蓋預設燈號邏輯
+          'na'   → ⚪ 此股無此科目（非異常，不入異常清單）
+          'zero' → 🔵 該股本期為 0（非異常）
+          'fail' → 🔴 fetch 失敗（真異常）
+          'ok'   → 套既有 _light 流程
         """
         _fl = _FREQ_LBL.get(freq, freq)
         _px = '✅' if proxy else '—'
         _base = {'資料名稱': name, '頻率': _fl, '來源': source or '—',
                  '端點': endpoint or '—', 'Proxy': _px}
+        # ── probe_status 優先：分辨 N/A vs zero vs fail ─────────────
+        if probe_status == 'na':
+            return {**_base, '最後更新': '⚪ 此股無此科目',
+                    '日期': '—', '狀態': '⚪'}
+        if probe_status == 'zero':
+            return {**_base, '最後更新': '🔵 該股本期為 0',
+                    '日期': '—', '狀態': '🔵'}
+        if probe_status == 'fail':
+            _emsg = f'🔴 抓取失敗：{str(error_msg)[:50]}' if error_msg else '🔴 抓取失敗'
+            return {**_base, '最後更新': _emsg, '日期': '—', '狀態': '🔴'}
+        # ── 既有邏輯 ─────────────────────────────────────────────
         if not date_str and error_msg:
             short = str(error_msg)[:55]
             return {**_base, '最後更新': f'❌ {short}', '日期': '—', '狀態': '🔴'}
         if not date_str and optional:
-            return {**_base, '最後更新': '🔴 N/A（此股無此科目）', '日期': '—', '狀態': '🔴'}
+            # 走到這代表 caller 沒給 probe_status — 保守標 ⚪ N/A，避免假性紅燈
+            return {**_base, '最後更新': '⚪ 此股無此科目', '日期': '—', '狀態': '⚪'}
         if not date_str:
             return {**_base, '最後更新': '🔴 未取得', '日期': '—', '狀態': '🔴'}
         icon, lbl = _light(date_str, freq)
@@ -3404,14 +3666,18 @@ def render_data_health_raw():
         '均線、RSI、乖離率、AI 評分等計算指標**不在此列**。'
     )
 
-    # ── [v10.55.0] 引導 banner：說明 lazy-load 與紅燈成因 ──
-    st.info(
-        '💡 **為什麼有紅燈「未取得」？**\n\n'
-        '本頁顯示的是 `session_state` 內的快取狀態，**並非即時 ping 來源**。\n'
-        '若看到紅燈，請先到「**📋 五分鐘檢核**」Tab → 點擊 **🚀 一鍵更新全部數據** '
-        '即可一次抓回所有總經 / 籌碼 / 先行指標資料，再回此頁查看結果。\n\n'
-        '🩺 若想即時驗證**融資餘額**抓取邏輯（6 段備援），可使用下方按鈕：'
-    )
+    # ── 燈號圖例 + 重新整理按鈕（不再要求用戶手動觸發按鈕流程）──
+    _bn1, _bn2 = st.columns([8, 2])
+    with _bn1:
+        st.info(
+            '💡 **燈號語意**：'
+            '🟢 已抓取且新鮮 ｜ 🟡 時效延遲或待補抓 ｜ '
+            '🔵 該股本期數值為 0（非異常） ｜ ⚪ 此股無此科目（非異常） ｜ '
+            '🔴 真失敗（API/proxy/網路問題）'
+        )
+    with _bn2:
+        if st.button('🔄 重新整理', key='btn_diag_rerun', use_container_width=True):
+            st.rerun()
 
     # ── [v10.56.0] 立即測試融資餘額 6 段備援（FinMind + 5 段網爬）──
     _diag_c1, _diag_c2 = st.columns([3, 7])
@@ -3648,7 +3914,7 @@ def render_data_health_raw():
         if _shown_g < _total:
             st.caption(f'已篩選：顯示 {_shown_g}/{_total}　｜　🟢 {_fresh_cnt["🟢"]}　🟡 {_fresh_cnt["🟡"]}　🔴 {_fresh_cnt["🔴"]}')
     else:
-        st.info('尚未載入任何資料。請先到「🌍 總經」Tab 點擊「🔄 更新全部總經數據」')
+        st.info('尚未載入任何資料。系統會於下次背景輪詢自動補抓；可點上方「🔄 重新整理」即時重抓。')
 
     # ══════════════════════════════════════════════════════════════
     # 🔍 詳細抽查（依資料類別）
@@ -3687,10 +3953,10 @@ def render_data_health_raw():
                     str(item.get('year', ''))[:7] or None)
             if not date:
                 if _ma_never:
-                    # 整批沒抓 — 黃燈友善提示，不誤導使用者「真的失敗」
+                    # 整批沒抓 — 黃燈友善提示（系統會自動補抓）
                     rows.append({**{'資料名稱': label, '頻率': _FREQ_LBL.get(freq, freq),
                                     '來源': src, '端點': ep, 'Proxy': '✅' if px else '—'},
-                                 '最後更新': '⏸️ 尚未抓取（請點 Tab 4 一鍵更新）',
+                                 '最後更新': '🟡 待補抓（系統下次背景輪詢自動處理）',
                                  '日期': '—', '狀態': '🟡'})
                     continue
                 if _ma_all_failed:
@@ -3721,7 +3987,7 @@ def render_data_health_raw():
                          '來源': 'CBC + FinMind 雙源',
                          '端點': 'cbc.gov.tw / TaiwanStockMonetaryAggregates',
                          'Proxy': '✅',
-                         '最後更新': ('⏸️ 尚未抓取（請點 Tab 4 一鍵更新）'
+                         '最後更新': ('🟡 待補抓（系統下次背景輪詢自動處理）'
                                       if _m1b_never else '❌ 抓取失敗'),
                          '日期': '—',
                          '狀態': '🟡' if _m1b_never else '🔴'})
@@ -3844,8 +4110,12 @@ def render_data_health_raw():
             rows.append(_row('存貨', _last_date_col(_qte, '存貨'), 'quarterly',
                              source='FinMind', endpoint='TaiwanStockBalanceSheet',
                              proxy=False))
-            rows.append(_row('合約負債', _last_date_col(_qte, '合約負債'), 'quarterly',
+            # 合約負債：三態探測（fail/na/zero/ok）— 不再硬標 🔴
+            _cl_st, _cl_dt = _probe_col(_qte, '合約負債')
+            rows.append(_row('合約負債',
+                             _cl_dt if _cl_st == 'ok' else None, 'quarterly',
                              optional=True,
+                             probe_status=None if _cl_st == 'ok' else _cl_st,
                              source='FinMind + MOPS 雙源',
                              endpoint='TaiwanStockBalanceSheet → ajax_t164sb03',
                              proxy=True))
@@ -3878,12 +4148,15 @@ def render_data_health_raw():
 
                 def _add_field(name, key, mj_indicator, optional=False,
                                source='FinMind', endpoint='', proxy=False,
-                               module=''):
-                    """檢查單一財報原料欄位：>0 視為已抓到。
-                    mj_indicator: 該原料對應的 MJ 指標（如「現金流量比率(>100)」）
-                    module: MJ 五大模組（一氣長 / 二好生意 / 三翻桌率 / 四還債 / 五那根棒子）
+                               module='', aliases=None, slot='_bs_slot_latest'):
+                    """檢查單一財報原料欄位。三態探測（針對 optional=True）：
+                      🟢 已抓到（value > 0）
+                      🔵 該股本期為 0（raw slot 有 alias 但值 = 0）
+                      ⚪ 此股無此科目（raw slot 完全沒此 alias）
+                      🔴 fetch 失敗（_fin_raw2 整體錯誤或 raw slot 缺）
+                    aliases: FinMind 該欄位的所有別名 list（傳入避免硬編維護成本）
+                    slot: '_bs_slot_latest' / '_cf_slot_latest' / '_is_slot_latest'
                     """
-                    _v = float(_fin_raw2.get(key) or 0)
                     _meta = {
                         'MJ 模組': module,
                         '資料名稱': f'{name}',
@@ -3894,16 +4167,32 @@ def render_data_health_raw():
                         'Proxy': '✅' if proxy else '—',
                         '日期': '—',
                     }
+                    if optional and aliases:
+                        # 三態探測：分辨「真失敗 / 此股無此科目 / 該股本季為 0」
+                        _st_p, _val_p = _probe_fin_field(_fin_raw2, key, aliases, slot=slot)
+                        if _st_p == 'ok':
+                            rows.append({**_meta, '最後更新': f'已抓取（{_val_p:,.0f}千）',
+                                         '狀態': '🟢'})
+                        elif _st_p == 'na':
+                            rows.append({**_meta, '最後更新': '⚪ 此股無此科目',
+                                         '狀態': '⚪'})
+                        elif _st_p == 'zero':
+                            rows.append({**_meta, '最後更新': '🔵 該股本期為 0',
+                                         '狀態': '🔵'})
+                        else:
+                            rows.append({**_meta, '最後更新': '🔴 抓取失敗',
+                                         '狀態': '🔴'})
+                        return
+                    # ── 必要欄位 / 未提供 aliases：值=0 即視為失敗 ─────────────
+                    _v = float(_fin_raw2.get(key) or 0)
                     if _v > 0:
                         rows.append({**_meta, '最後更新': '已抓取', '狀態': '🟢'})
                     elif optional:
-                        rows.append({**_meta,
-                                     '最後更新': '🔴 科目查無（此股無此項）',
-                                     '狀態': '🔴'})
+                        # 沒給 aliases 的 optional 欄位 — 退回 ⚪ 而非紅燈，避免誤判
+                        rows.append({**_meta, '最後更新': '⚪ 此股本期無值',
+                                     '狀態': '⚪'})
                     else:
-                        rows.append({**_meta,
-                                     '最後更新': '❌ 缺失',
-                                     '狀態': '🔴'})
+                        rows.append({**_meta, '最後更新': '❌ 缺失', '狀態': '🔴'})
 
                 _BS_EP = 'TaiwanStockBalanceSheet'
                 _CF_EP = 'TaiwanStockCashFlowsStatement'
@@ -3924,16 +4213,25 @@ def render_data_health_raw():
                            module=_M1, endpoint=_CF_EP)
                 _add_field('發放現金股利（千）', '現金股利(千)',
                            '現金流量允當比率（5年加總） + 現金再投資比率',
-                           module=_M1, endpoint=_CF_EP, optional=True)
+                           module=_M1, endpoint=_CF_EP, optional=True,
+                           aliases=['CashDividendsPaid', '發放現金股利',
+                                    '現金股利', '支付之現金股利',
+                                    '本期支付之股利'],
+                           slot='_cf_slot_latest')
                 _add_field('固定資產毛額（千）', '固定資產(千)',
                            '現金再投資比率（分母）',
                            module=_M1, endpoint=_BS_EP)
                 _add_field('長期投資（千）', '長期投資(千)',
                            '現金再投資比率（分母）',
-                           module=_M1, endpoint=_BS_EP, optional=True)
+                           module=_M1, endpoint=_BS_EP, optional=True,
+                           aliases=['LongTermInvestments', '長期投資',
+                                    '採權益法之投資',
+                                    '採用權益法之投資'])
                 _add_field('其他非流動資產（千）', '其他非流動資產(千)',
                            '現金再投資比率（分母）',
-                           module=_M1, endpoint=_BS_EP, optional=True)
+                           module=_M1, endpoint=_BS_EP, optional=True,
+                           aliases=['OtherNoncurrentAssets', '其他非流動資產',
+                                    '其他非流動資產合計'])
 
                 # ━━━ 二、獲利能力（好生意）━━━━━━━━━━━━━━━━━━━━━━━━
                 _M2 = '二、獲利能力(好生意)'
@@ -3960,13 +4258,17 @@ def render_data_health_raw():
                 _M3 = '三、經營能力(翻桌率)'
                 _add_field('應收帳款（含關係人+票據，千）', '應收帳款(千)',
                            'DSO 應收帳款收現天數 + CCC',
-                           module=_M3, endpoint=_BS_EP, optional=True)  # 服務業/軟體業可能無
+                           module=_M3, endpoint=_BS_EP, optional=True,
+                           aliases=['AccountsReceivable', '應收帳款淨額',
+                                    '應收帳款', '應收帳款及票據', '應收票據及帳款',
+                                    '應收帳款及合約資產', '應收款項', '貿易應收款'])
                 _add_field('應收帳款收現天數（DSO，計算值）', '應收帳款天數',
                            'DSO = 應收 / 營收 × 360（衍生）',
-                           module=_M3, endpoint=_BS_EP, optional=True)
+                           module=_M3, endpoint=_BS_EP, optional=True)  # 計算值無 raw alias
                 _add_field('存貨（千）', '存貨(千)',
                            'DIO 存貨週轉天數 + 速動比率（扣除項）',
-                           module=_M3, endpoint=_BS_EP, optional=_is_finance)
+                           module=_M3, endpoint=_BS_EP, optional=_is_finance,
+                           aliases=['Inventories', '存貨', '存貨淨額'])
                 _add_field('營業成本合計（千）', '營業成本(千)',
                            'DIO = 存貨 / 營業成本 × 360（分母）',
                            module=_M3, endpoint=_IS_EP)
@@ -3984,13 +4286,17 @@ def render_data_health_raw():
                            module=_M4, endpoint=_BS_EP)
                 _add_field('預付款項（千）', '預付款項(千)',
                            '速動比率（扣除項）',
-                           module=_M4, endpoint=_BS_EP, optional=True)
+                           module=_M4, endpoint=_BS_EP, optional=True,
+                           aliases=['Prepayments', '預付款項', '預付費用',
+                                    '預付貨款', '預付投資款', '其他預付款項'])
 
                 # ━━━ 五、財務結構（那根棒子）━━━━━━━━━━━━━━━━━━━━━━
                 _M5 = '五、財務結構(那根棒子)'
                 _add_field('負債總計（千）', '總負債(千)',
                            '負債佔資產比率 = 負債 / 資產',
-                           module=_M5, endpoint=_BS_EP, optional=_is_finance)
+                           module=_M5, endpoint=_BS_EP, optional=_is_finance,
+                           aliases=['TotalLiabilities', '負債總計', '負債合計',
+                                    '負債總額'])
 
                 # ━━━ 5 年加總（允當比率 B 項）━━━━━━━━━━━━━━━━━━━━━━
                 _b5_ok = _b5_2.get('status') == 'ok'
@@ -4039,6 +4345,7 @@ def render_data_health_raw():
             rows.append(_row('ETF 費用率',
                              str(_dt_r.date.today()) if _e1.get('expense') else None, 'daily',
                              optional=False,
+                             error_msg=_e1.get('_err_expense'),
                              source='SITCA + yfinance 雙源',
                              endpoint='sitca.org.tw IN2222_01 / .info[expenseRatio]',
                              proxy=True))
@@ -4047,6 +4354,7 @@ def render_data_health_raw():
             _nav_ok = _prem.get('nav') is not None
             rows.append(_row('NAV 淨值',
                              str(_dt_r.date.today()) if _nav_ok else None, 'daily',
+                             error_msg=_e1.get('_err_nav'),
                              source='FinMind / TWSE OpenAPI',
                              endpoint='TaiwanETFNetAssetValue / opendata',
                              proxy=True))
@@ -4148,6 +4456,6 @@ def render_data_health_raw():
             unsafe_allow_html=True,
         )
         st.caption(
-            '💡 **燈號語意**：🔴 = 抓不到（含個股缺科目／API 失敗／過舊超過閾值）；'
-            '🟡 = 時效延遲（有資料但稍舊，仍可參考）。'
+            '💡 **燈號語意**：🔴 真失敗（API/proxy/網路問題）｜🟡 時效延遲或待補抓（仍可參考）；'
+            '⚪ 此股無此科目、🔵 該股本期為 0 — 兩者**非異常**，已從本清單剔除（請至各 Tab 詳查）。'
         )

@@ -1928,6 +1928,11 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
         "預付款項(千)":      round(prepaid),
         "其他非流動資產(千)": round(other_nca),
         "is_finance":        stock_id.startswith(('28', '58')),
+        # ── 原始 slot 暴露：供診斷頁分辨「API 真失敗 / 此股無此科目 / 該股本季為 0」──
+        "_bs_slot_latest":   dict(_bs_slot),
+        "_cf_slot_latest":   dict(_cf.get(_lat, {})),
+        "_is_slot_latest":   dict(_is.get(_lat, {})),
+        "_period_latest":    _lat,
     }
 
 
