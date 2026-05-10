@@ -430,7 +430,86 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     today = _dt.date.today()
     errs: list[str] = []
 
-    # ── 方案 0 (Primary): 國發會 NDC 景氣指標 API（鏡像現有 composite endpoint pattern）──
+    # ── 方案 0 (新 Primary v10.62.1): data.gov.tw dataset/6100 官方開放資料 ──
+    # 政府資料開放平臺「臺灣採購經理人指數」(提供機關：國發會 NDC)。
+    # 流程：① 試 metadata API 取 resources URL → ② 下載 CSV/JSON 解析末筆
+    # 失敗就 fallback 到既有方案 0~6。
+    try:
+        import io as _io_dgw
+        import csv as _csv_dgw
+        # metadata API 端點（多個變體：v1/v2 + .json + 直查 dataset id）
+        for _meta_url in (
+            'https://data.gov.tw/api/v2/rest/dataset/6100',
+            'https://data.gov.tw/api/v1/rest/dataset/6100',
+            'https://data.gov.tw/dataset/6100/resource',
+        ):
+            try:
+                _r_meta = fetch_url(_meta_url, timeout=10, attempts=1,
+                                    headers={'Accept': 'application/json'})
+                if _r_meta is None or _r_meta.status_code != 200:
+                    continue
+                try:
+                    _j_meta = _r_meta.json()
+                except Exception:
+                    continue
+                # 解析 resources：常見 shape `result.resources[]` / `resources[]`
+                _res = (_j_meta.get('result', {}).get('resources')
+                        or _j_meta.get('resources')
+                        or _j_meta.get('data', {}).get('resources')
+                        or [])
+                if not _res:
+                    continue
+                # 找 CSV / JSON resource
+                _csv_url = None
+                for _it in _res:
+                    _fmt = str(_it.get('format', '')).upper()
+                    _url2 = _it.get('url') or _it.get('resourceDownloadUrl')
+                    if _fmt in ('CSV', 'JSON') and _url2:
+                        _csv_url = _url2
+                        break
+                if not _csv_url:
+                    continue
+                # 下載 CSV / JSON
+                _r_csv = fetch_url(_csv_url, timeout=15, attempts=2)
+                if _r_csv is None or _r_csv.status_code != 200:
+                    continue
+                _txt_csv = _r_csv.content.decode('utf-8-sig', errors='ignore')
+                # CSV 路徑：解析最後一筆有效 row（含 PMI 欄位 + 年月）
+                if _csv_url.lower().endswith('.csv') or 'csv' in _csv_url.lower():
+                    _rdr = list(_csv_dgw.DictReader(_io_dgw.StringIO(_txt_csv)))
+                    if _rdr:
+                        # 找 PMI 欄位（常見 key：'PMI' / '製造業採購經理人指數' / '指數'）
+                        _row_last = _rdr[-1]
+                        _pmi_v = None; _pmi_d = None
+                        for _k, _v_cell in _row_last.items():
+                            _kl = str(_k)
+                            if any(_x in _kl for _x in ('PMI', '採購經理', '製造業')):
+                                try:
+                                    _val = float(str(_v_cell).strip())
+                                    if 30 <= _val <= 70:
+                                        _pmi_v = _val
+                                        break
+                                except (ValueError, TypeError):
+                                    pass
+                        # 找日期欄位
+                        for _k2, _v2 in _row_last.items():
+                            _m_d = _re.search(r'(20\d{2})[-/年]?(\d{1,2})', str(_v2))
+                            if _m_d:
+                                _pmi_d = f'{_m_d.group(1)}-{int(_m_d.group(2)):02d}-01'
+                                break
+                        if _pmi_v is not None and _pmi_d:
+                            print(f'[macro_core/TW-PMI/data.gov.tw] ✅ {_pmi_v} date={_pmi_d}')
+                            return {'value': _pmi_v, 'date': _pmi_d,
+                                    'label': '政府資料開放平臺 dataset/6100',
+                                    'source': 'data.gov.tw', 'is_proxy': True,
+                                    'series_id': 'dgtw-6100'}
+            except Exception as _e_dg:
+                errs.append(f'dgtw.{_meta_url[-15:]}:{type(_e_dg).__name__}')
+    except Exception as _e_dg_outer:
+        errs.append(f'dgtw_outer:{type(_e_dg_outer).__name__}')
+        print(f'[macro_core/TW-PMI/data.gov.tw] ❌ outer {_e_dg_outer}')
+
+    # ── 方案 0b (原 Primary): 國發會 NDC 景氣指標 API（鏡像現有 composite endpoint pattern）──
     # nas_server.py:218 已驗證 https://index.ndc.gov.tw/app/data/indicator/composite 走 JSON；
     # PMI 端點推測 /PMI 或 /pmi 或 /PMI/latest，多個 endpoint 變體 + 多 JSON shape parser
     # 都試一遍，attempts=1 走 lean path 不阻塞 macro pool 預算
@@ -710,8 +789,8 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
         errs.append(f'MoneyDJ:{type(e).__name__}')
         print(f'[macro_core/TW-PMI/MoneyDJ] ❌ {e}')
 
-    err_msg = ' | '.join(errs) or 'all 7 stages failed'
-    print(f'[macro_core/TW-PMI] ❌ 7 段備援全失敗：{err_msg}')
+    err_msg = ' | '.join(errs) or 'all 8 stages failed'
+    print(f'[macro_core/TW-PMI] ❌ 8 段備援全失敗：{err_msg}')
     return {'_err_pmi': err_msg, 'value': None}
 
 
