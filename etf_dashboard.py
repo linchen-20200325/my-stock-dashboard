@@ -855,6 +855,47 @@ def render_etf_single(gemini_fn=None):
                             '成長型ETF，以價差報酬衡量',
                             '衡量 CAGR 是否超過大盤')
 
+    # ── MK 框架 #1+#2+#7：配息健康度 + 3Y 年化報酬（汰弱五項中前兩項 + 留強 3-3-3 第二項）──
+    st.markdown('#### 💧 配息健康度 + 年化報酬（MK 框架燈號）')
+    _now2 = df.index[-1]
+    _12m_div = float(divs[(divs.index >= _now2 - timedelta(days=365))].sum()) if not divs.empty else 0.0
+    _prev12m_div = float(divs[(divs.index >= _now2 - timedelta(days=730))
+                              & (divs.index < _now2 - timedelta(days=365))].sum()) if not divs.empty else 0.0
+    _div_yoy = ((_12m_div - _prev12m_div) / _prev12m_div * 100) if _prev12m_div > 0 else None
+    _3y_cutoff = _now2 - timedelta(days=365 * 3)
+    _df_3y = df[df.index >= _3y_cutoff]
+    _cagr3 = calc_cagr(_df_3y) if len(_df_3y) >= 30 else None
+
+    _mc1, _mc2, _mc3 = st.columns(3)
+    if _div_yoy is None:
+        _mc1.metric('配息 12M YoY', 'N/A', delta='—')
+    elif _div_yoy < -10:
+        _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='⚠️ 衰退 > 10%', delta_color='inverse')
+    elif _div_yoy < 0:
+        _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='略減（< 10%）', delta_color='inverse')
+    else:
+        _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='✅ 增長 / 持平', delta_color='normal')
+    if cur_yield > 0 and total_ret < cur_yield:
+        _mc2.metric('含息報酬 − 殖利率', f'{total_ret - cur_yield:+.1f}pp',
+                    delta='🔴 本金侵蝕', delta_color='inverse')
+    elif cur_yield > 0:
+        _mc2.metric('含息報酬 − 殖利率', f'{total_ret - cur_yield:+.1f}pp',
+                    delta='✅ 雙贏', delta_color='normal')
+    else:
+        _mc2.metric('含息報酬 − 殖利率', 'N/A', delta='無配息')
+    if _cagr3 is None:
+        _mc3.metric('近 3Y 年化報酬', 'N/A', delta='資料不足 < 90 日')
+    elif _cagr3 >= 7:
+        _mc3.metric('近 3Y 年化報酬', f'{_cagr3:.1f}%',
+                    delta='✅ 達 7% 定存替代', delta_color='normal')
+    else:
+        _mc3.metric('近 3Y 年化報酬', f'{_cagr3:.1f}%',
+                    delta='🟡 不及 7% 門檻', delta_color='inverse')
+    st.caption(
+        '⚠️ 配息來源「**平準金佔比**」需 ETF 公開說明書揭露，本期暫不顯示（下輪計畫加 SITCA 抓取）。'
+        '\n\n💡 **MK 老師標準**：3 個指標若有 ≥ 2 項 🔴/🟡 警示 → 建議汰弱換強。'
+    )
+
     # ── 策略二：孫慶龍 7% ─────────────────────────────────────
     st.markdown('#### 🧠 策略二：孫慶龍 — 7% 存股聖經估值買賣點')
     avg_yield = calc_avg_yield(df, divs, years=5)
@@ -1025,6 +1066,42 @@ def render_etf_single(gemini_fn=None):
         _d_s = _k_s.ewm(com=2, adjust=False).mean()
         _kv_ai = round(float(_k_s.iloc[-1]), 1)
         _dv_ai = round(float(_d_s.iloc[-1]), 1)
+
+    # ── MK 框架 #11：標準差 σ 量化買點（年線 ± σ 位階分級）──────
+    st.markdown('#### 🎯 標準差量化買點（MK 框架：跌了就買）')
+    if len(df) >= 252:
+        _ret_252 = df['Close'].pct_change().tail(252).dropna()
+        _sigma_pct = (float(_ret_252.std()) * (252 ** 0.5) * 100) if not _ret_252.empty else 0.0
+        _cur_p = float(df['Close'].iloc[-1])
+        _ma240 = float(df['Close'].rolling(240).mean().iloc[-1]) if len(df) >= 240 else None
+        if _ma240 and _sigma_pct > 0:
+            _bias_pct = (_cur_p - _ma240) / _ma240 * 100
+            _z = _bias_pct / _sigma_pct
+            if _z <= -2:
+                _label, _color, _action = '🟢 極佳買點（≤ -2σ）', 'green', '大跌大買 — 大幅加碼，剩餘資金主力投入'
+            elif _z <= -1:
+                _label, _color, _action = '🟢 進場買點（-2σ ~ -1σ）', 'green', '小跌小買 — 投入 20–30% 資金'
+            elif _z <= 1:
+                _label, _color, _action = '🟡 持平區（±1σ 內）', 'yellow', '保留現金，等待 ≤ -1σ 進場'
+            elif _z <= 2:
+                _label, _color, _action = '🟠 偏高（+1σ ~ +2σ）', 'yellow', '不追高；衛星部位可考慮停利'
+            else:
+                _label, _color, _action = '🔴 極端偏高（≥ +2σ）', 'red', '建議減碼；勿在 +2σ 以上加碼'
+            _colored_box(
+                f'<b>{_label}</b><br>'
+                f'目前 {_cur_p:.2f} vs MA240 {_ma240:.2f} → '
+                f'偏離 {_bias_pct:+.2f}%（年化 σ ≈ {_sigma_pct:.1f}%，z = {_z:+.2f}）<br>'
+                f'<b>建議</b>：{_action}',
+                _color,
+            )
+            _teacher_conclusion('郭俊宏',
+                                f'位階 z={_z:+.2f}σ',
+                                _label.split('（')[0],
+                                _action)
+        else:
+            st.info('ℹ️ MA240 或 σ 不足，無法分級')
+    else:
+        st.info(f'ℹ️ 資料不足 252 日（目前 {len(df)} 日），無法計算 σ 位階')
 
     # ── 走勢圖 ────────────────────────────────────────────────
     st.markdown(f'#### 📈 {ticker} 近5年走勢')
