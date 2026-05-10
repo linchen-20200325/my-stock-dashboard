@@ -612,8 +612,106 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
         errs.append(f'Cnyes:{type(e).__name__}')
         print(f'[macro_core/TW-PMI/Cnyes] ❌ {e}')
 
-    err_msg = ' | '.join(errs) or 'all 4 stages failed'
-    print(f'[macro_core/TW-PMI] ❌ 4 段備援全失敗：{err_msg}')
+    # ── 方案 5: FinMind TaiwanEconomicIndicator（v10.62.0 新增）──
+    # 抓 FinMind 官方總經指標 dataset，過濾「PMI」/「製造業」相關 series
+    try:
+        import os as _os_fm, requests as _rq_fm
+        _tok = _os_fm.environ.get('FINMIND_TOKEN')
+        if not _tok:
+            try:
+                import streamlit as _st_fm
+                _tok = (_st_fm.secrets or {}).get('FINMIND_TOKEN')
+            except Exception:
+                pass
+        if _tok:
+            _start = (today - _dt.timedelta(days=180)).strftime('%Y-%m-%d')
+            _r_fm = _rq_fm.get(
+                'https://api.finmindtrade.com/api/v4/data',
+                params={'dataset': 'TaiwanEconomicIndicator',
+                        'start_date': _start, 'token': _tok},
+                timeout=12)
+            if _r_fm.status_code == 200:
+                _j = _r_fm.json()
+                _data = _j.get('data') or []
+                # 篩出 name 含 PMI / 製造業採購 的 series，按 date 取最新
+                _pmi_rows = [d for d in _data
+                             if 'PMI' in str(d.get('name', '')) or '製造業' in str(d.get('name', ''))]
+                if _pmi_rows:
+                    _pmi_rows.sort(key=lambda x: str(x.get('date', '')), reverse=True)
+                    _top = _pmi_rows[0]
+                    _v = float(_top.get('value') or 0)
+                    _d_str = str(_top.get('date', ''))
+                    if 30 <= _v <= 70 and _d_str:
+                        print(f"[macro_core/TW-PMI/FinMind] ✅ {_v} date={_d_str} ({_top.get('name')})")
+                        return {'value': _v, 'date': _d_str[:10],
+                                'label': f"FinMind TaiwanEconomicIndicator ({_top.get('name')})",
+                                'source': 'FinMind', 'is_proxy': True,
+                                'series_id': 'finmind-tw-pmi'}
+        else:
+            errs.append('FinMind:無 token')
+    except Exception as e:
+        errs.append(f'FinMind:{type(e).__name__}')
+        print(f'[macro_core/TW-PMI/FinMind] ❌ {e}')
+
+    # ── 方案 6: CIER cid=8（PMI 專屬類別，非 cid=21 新聞稿）──
+    try:
+        from bs4 import BeautifulSoup
+        for cier_url in ('https://www.cier.edu.tw/news/list?cid=8',
+                         'https://www.cier.edu.tw/news/list?cid=8&page=1'):
+            r = fetch_url(cier_url, timeout=12, attempts=1)
+            if r is None:
+                continue
+            r.encoding = 'utf-8'
+            txt = BeautifulSoup(r.text, 'html.parser').get_text(' ', strip=True)
+            m = _re.search(
+                r'(20\d{2})\s*年\s*(\d{1,2})\s*月.{0,40}?'
+                r'PMI[^。]{0,30}?(\d{2}\.\d)',
+                txt)
+            if m:
+                yr, mo, v = m.group(1), int(m.group(2)), float(m.group(3))
+                if 30 <= v <= 70 and 1 <= mo <= 12:
+                    last_date = _dt.date(int(yr), mo, 1)
+                    if (today - last_date).days <= max_age_days:
+                        date = f'{yr}-{mo:02d}-01'
+                        print(f'[macro_core/TW-PMI/CIER-cid8] ✅ {v} date={date}')
+                        return {'value': v, 'date': date,
+                                'label': 'CIER 中華經濟研究院（PMI 專欄）',
+                                'source': 'CIER', 'is_proxy': False,
+                                'series_id': 'cier-pmi-cid8'}
+    except Exception as e:
+        errs.append(f'CIER-cid8:{type(e).__name__}')
+        print(f'[macro_core/TW-PMI/CIER-cid8] ❌ {e}')
+
+    # ── 方案 7: MoneyDJ 財經知識庫（搜尋頁，HTML 含 PMI 圖表 alt）──
+    try:
+        from bs4 import BeautifulSoup
+        mdj_url = ('https://www.moneydj.com/KMDJ/Search/SearchListNew.aspx'
+                   '?keyword=%E5%8F%B0%E7%81%A3PMI&type=knowledge')
+        r = fetch_url(mdj_url, timeout=12, attempts=1)
+        if r is not None:
+            r.encoding = 'utf-8'
+            txt = BeautifulSoup(r.text, 'html.parser').get_text(' ', strip=True)
+            m = _re.search(
+                r'(20\d{2})\s*年\s*(\d{1,2})\s*月.{0,40}?'
+                r'(?:台灣|TW)\s*(?:製造業)?[^。]{0,40}?PMI[^。]{0,30}?(\d{2}\.\d)',
+                txt)
+            if m:
+                yr, mo, v = m.group(1), int(m.group(2)), float(m.group(3))
+                if 30 <= v <= 70 and 1 <= mo <= 12:
+                    last_date = _dt.date(int(yr), mo, 1)
+                    if (today - last_date).days <= max_age_days:
+                        date = f'{yr}-{mo:02d}-01'
+                        print(f'[macro_core/TW-PMI/MoneyDJ] ✅ {v} date={date}')
+                        return {'value': v, 'date': date,
+                                'label': 'MoneyDJ 財經知識庫',
+                                'source': 'MoneyDJ', 'is_proxy': False,
+                                'series_id': 'mdj-tw-pmi'}
+    except Exception as e:
+        errs.append(f'MoneyDJ:{type(e).__name__}')
+        print(f'[macro_core/TW-PMI/MoneyDJ] ❌ {e}')
+
+    err_msg = ' | '.join(errs) or 'all 7 stages failed'
+    print(f'[macro_core/TW-PMI] ❌ 7 段備援全失敗：{err_msg}')
     return {'_err_pmi': err_msg, 'value': None}
 
 
