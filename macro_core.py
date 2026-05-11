@@ -180,6 +180,98 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
 
 
 # ══════════════════════════════════════════════════════════════
+# 總經指南針 (Top-Down Macro Compass) — Phase 1 規格三大指標
+#   VIX / TNX / GSPC + 60MA，固定於頁面頂部供新人秒懂市場大環境。
+#   呼叫端：app.py 的 render_macro_compass()（在 st.tabs() 之前渲染）。
+# ══════════════════════════════════════════════════════════════
+
+def fetch_macro_compass(range_: str = "6mo") -> dict:
+    """Phase 1 — 一次抓 ^VIX / ^TNX / ^GSPC 三大美股指標 + GSPC 60MA。
+
+    所有抓取都走 macro_core.fetch_yf_close()（NAS proxy → Yahoo Chart REST API），
+    避開 yfinance 直連被 Streamlit Cloud IP 限流。失敗欄位填 None，UI 端優雅降級。
+
+    Returns dict:
+      vix  : {'value', 'series', 'dates', 'signal':(light, label, color)} | None
+      tnx  : 同上                                                          | None
+      gspc : 同上 + {'ma60', 'ma60_series'}                                | None
+    """
+    out: dict = {'vix': None, 'tnx': None, 'gspc': None}
+
+    def _sig_vix(v):
+        # Phase 1 規格：>25 黃 / >30 綠（恐慌貪婪區=逢低加碼時機）
+        if v > 30: return ('🟢', '恐慌貪婪區（準備跌深就買）', '#3fb950')
+        if v > 25: return ('🟡', '波動加劇', '#d29922')
+        return ('🟢', '市場平靜', '#3fb950')
+
+    def _sig_tnx(t):
+        # 估值壓力：≥4.5% 紅 / 3.5–4.5 黃 / <3.5 綠（寬鬆）
+        if t >= 4.5: return ('🔴', '估值壓力（科技股不利）', '#f85149')
+        if t >= 3.5: return ('🟡', '中性區', '#d29922')
+        return ('🟢', '寬鬆有利', '#3fb950')
+
+    def _sig_gspc(g, ma):
+        # Phase 1 規格：站上 60MA=多頭、跌破=趨勢轉弱
+        if ma is None or g is None:
+            return ('⚪', '60MA 計算中', '#8b949e')
+        if g >= ma: return ('🟢', '多頭格局（股優於債）', '#3fb950')
+        return ('🔴', '趨勢轉弱（提高防禦）', '#f85149')
+
+    # ── ^VIX ────────────────────────────────────────────────
+    try:
+        s = fetch_yf_close('^VIX', range_=range_)
+        if not s.empty:
+            v = round(float(s.iloc[-1]), 2)
+            tail = s.tail(90)
+            out['vix'] = {
+                'value': v,
+                'series': [round(float(x), 2) for x in tail.tolist()],
+                'dates':  [d.strftime('%Y-%m-%d') for d in tail.index],
+                'signal': _sig_vix(v),
+            }
+    except Exception as e:
+        print(f'[macro_compass] VIX fetch failed: {e}')
+
+    # ── ^TNX ────────────────────────────────────────────────
+    try:
+        s = fetch_yf_close('^TNX', range_=range_)
+        if not s.empty:
+            t = round(float(s.iloc[-1]), 3)
+            tail = s.tail(90)
+            out['tnx'] = {
+                'value': t,
+                'series': [round(float(x), 3) for x in tail.tolist()],
+                'dates':  [d.strftime('%Y-%m-%d') for d in tail.index],
+                'signal': _sig_tnx(t),
+            }
+    except Exception as e:
+        print(f'[macro_compass] TNX fetch failed: {e}')
+
+    # ── ^GSPC + 60MA ────────────────────────────────────────
+    try:
+        s = fetch_yf_close('^GSPC', range_=range_)
+        if not s.empty:
+            g = round(float(s.iloc[-1]), 2)
+            ma60_ser = s.rolling(60).mean()
+            ma60_last = ma60_ser.dropna()
+            ma60 = round(float(ma60_last.iloc[-1]), 2) if not ma60_last.empty else None
+            tail = s.tail(90)
+            ma_tail = ma60_ser.tail(90)
+            out['gspc'] = {
+                'value': g,
+                'ma60': ma60,
+                'series': [round(float(x), 2) for x in tail.tolist()],
+                'ma60_series': [None if pd.isna(x) else round(float(x), 2) for x in ma_tail.tolist()],
+                'dates': [d.strftime('%Y-%m-%d') for d in tail.index],
+                'signal': _sig_gspc(g, ma60),
+            }
+    except Exception as e:
+        print(f'[macro_compass] GSPC fetch failed: {e}')
+
+    return out
+
+
+# ══════════════════════════════════════════════════════════════
 # ISM 製造業 PMI — 5 段備援共用函式（v1.1 兩端統一）
 #
 # 為什麼 5 段？

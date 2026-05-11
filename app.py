@@ -1321,6 +1321,69 @@ st.markdown(
     '<div style="display:flex;align-items:center;gap:10px;padding:4px 0 8px;">'    '<span style="font-size:22px;font-weight:900;color:#e6edf3;">&#128202; 台股 AI 戰情室</span>'    '<span style="font-size:10px;color:#484f58;background:#161b22;border-radius:10px;padding:2px 8px;">v4.0 Pro</span>'    '</div>',
     unsafe_allow_html=True)
 
+# ══════════════════════════════════════════════════════
+# 🧭 總經指南針 (Top-Down Macro) — Phase 1 規格頂部三大美股指標
+# ══════════════════════════════════════════════════════
+def _render_compass_card(col, info, title, ticker, fmt='{:.2f}', unit='', show_ma=False):
+    """單張指標卡：值 + Phase 1 訊號燈 + 60D sparkline。info=None 顯示降級訊息。"""
+    if info is None:
+        col.markdown(
+            f'<div style="background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:10px;height:84px;">'
+            f'<div style="font-size:11px;color:#8b949e;">{title}（{ticker}）</div>'
+            f'<div style="font-size:13px;color:#8b949e;margin-top:6px;">🔴 未取得（yfinance 暫時失敗）</div>'
+            f'</div>', unsafe_allow_html=True)
+        return
+    val = info.get('value')
+    sig = info.get('signal') or ('⚪', '無訊號', '#8b949e')
+    light, label, color = sig[0], sig[1], sig[2]
+    val_str = fmt.format(val) + unit if val is not None else 'N/A'
+    extra = ''
+    if show_ma and info.get('ma60') is not None:
+        extra = f' <span style="font-size:10px;color:#8b949e;font-weight:400;">/ 60MA {fmt.format(info["ma60"])}</span>'
+    col.markdown(
+        f'<div style="background:#0d1117;border:1px solid {color};border-radius:8px;padding:10px;">'
+        f'<div style="font-size:11px;color:#8b949e;">{title}（{ticker}）</div>'
+        f'<div style="font-size:22px;font-weight:900;color:#e6edf3;margin:2px 0;">{val_str}{extra}</div>'
+        f'<div style="font-size:11px;font-weight:700;color:{color};">{light} {label}</div>'
+        f'</div>', unsafe_allow_html=True)
+    ser = info.get('series') or []
+    if ser:
+        try:
+            import pandas as _pd_mc
+            col.line_chart(_pd_mc.Series(ser, name=title), height=80, use_container_width=True)
+        except Exception:
+            pass
+
+def render_macro_compass():
+    """頂部三卡：VIX 恐慌指數 × 美 10Y 殖利率 × S&P 500 vs 60MA。
+    session_state 自管 15 分鐘快取。"""
+    import datetime as _dt_mc
+    _cache = st.session_state.get('_macro_compass_cache')
+    _now = _dt_mc.datetime.now()
+    if not _cache or (_now - _cache.get('_ts', _now)).total_seconds() > 900:
+        try:
+            from macro_core import fetch_macro_compass as _fmc
+            data = _fmc()
+        except Exception as e:
+            print(f'[render_macro_compass] fetch failed: {e}')
+            data = {}
+        st.session_state['_macro_compass_cache'] = {'_ts': _now, 'data': data}
+    data = (st.session_state.get('_macro_compass_cache') or {}).get('data') or {}
+
+    st.markdown(
+        '<div style="font-size:14px;font-weight:900;color:#e6edf3;margin:4px 0 4px;">'
+        '🧭 總經指南針 (Top-Down Macro)'
+        '<span style="font-size:10px;color:#8b949e;font-weight:400;margin-left:8px;">'
+        'VIX × 10Y × S&amp;P 500 — yfinance 每 15 分快取</span></div>',
+        unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3)
+    _render_compass_card(c1, data.get('vix'),  'VIX 恐慌指數',     '^VIX',  fmt='{:.2f}')
+    _render_compass_card(c2, data.get('tnx'),  '美 10Y 殖利率',    '^TNX',  fmt='{:.2f}', unit='%')
+    _render_compass_card(c3, data.get('gspc'), 'S&P 500 vs 60MA',  '^GSPC', fmt='{:,.2f}', show_ma=True)
+
+render_macro_compass()
+
 tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_etf, tab_etf_grp, tab_diag, tab_edu = st.tabs([
     '🌍 總經', '🗺️ 產業熱力圖', '🔬 個股', '🏆 個股組合',
     '💎 高息網', '🏦 ETF', '⚖️ ETF組合', '🔎 資料診斷', '📚 教學',
