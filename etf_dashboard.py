@@ -715,18 +715,28 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
 def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> dict:
     """折溢價率 = (市價 - 淨值) / 淨值 × 100
     核心原則：NAV 與市價必須來自同一日，避免跨來源日期錯位。
-    主動式 ETF（代號末碼字母 e.g. 00980A）NAV 公布常 T+1 延遲，加雙守門員：
+    主動式 ETF（代號末碼字母 e.g. 00980A）NAV 公布常 T+1 延遲，加三守門員：
       G1：NAV 最新日 vs 市價最新日相差 ≥1 交易日 → stale，回傳 N/A
       G2：主動式 ETF |prem| > 2.0% → 疑 NAV 同日寫入但數值未更新 → 回傳 N/A
+      G3：NAV 最新日早於「前一交易日」→ 雙源同步落後（FinMind+yfinance 同日卡關）
     資料來源：1. TWSE OpenAPI 直讀（同日 NAV+市價+折溢價率）
               2. FinMind NAV history + df 同日 inner join（精確日期配對）
               3. yfinance info navPrice
     """
     import pandas as _pd_prem
     import re as _re_prem
+    import datetime as _dt_prem
     _code_clean = ticker.replace('.TW', '').replace('.TWO', '') if ticker else ''
     _is_active_etf = bool(_re_prem.match(r'^\d{4,5}[A-Z]$', _code_clean))
     _ACTIVE_PREM_MAX = 2.0  # 主動式 ETF |prem| 門檻，超過判定 NAV stale
+
+    def _prev_business_day(_d):
+        _d2 = _d - _dt_prem.timedelta(days=1)
+        while _d2.weekday() >= 5:   # 5=Sat, 6=Sun
+            _d2 -= _dt_prem.timedelta(days=1)
+        return _d2
+    _PREV_BD = _prev_business_day(_dt_prem.date.today())
+
     _stale_payload = {'nav': None, 'price': None, 'premium_pct': None,
                       'warning': False, 'stale_nav': True}
     try:
@@ -761,21 +771,27 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                     _merged = _nav_df.join(_price_s, how='inner').dropna()
                     if not _merged.empty:
                         _nav_date_used = _merged.index[-1]
+                        _nav_d_only = _nav_date_used.date()
                         _price_latest = _price_s.index.max()
                         _gap_days = (_price_latest - _nav_date_used).days
                         if _gap_days >= 1:
-                            print(f'[折溢價-B/stale] {ticker}: NAV={_nav_date_used.date()} 落後 {_gap_days}d')
+                            print(f'[折溢價-B/stale-G1] {ticker}: NAV={_nav_d_only} 落後 {_gap_days}d')
+                            return _stale_payload
+                        # G3：雙源同步落後 — NAV 早於前一交易日，配對 OK 但整體資料過時
+                        if _nav_d_only < _PREV_BD:
+                            print(f'[折溢價-B/stale-G3] {ticker}: NAV={_nav_d_only} < prev BD {_PREV_BD}')
                             return _stale_payload
                         _row = _merged.iloc[-1]  # 最近一筆同日配對
                         _nav_v = float(_row['nav'])
                         _pr_v  = float(_row['Close'])
                         _prem  = round((_pr_v - _nav_v) / _nav_v * 100, 2)
                         if _is_active_etf and abs(_prem) > _ACTIVE_PREM_MAX:
-                            print(f'[折溢價-B/stale] {ticker}: prem={_prem}% > ±{_ACTIVE_PREM_MAX}%')
+                            print(f'[折溢價-B/stale-G2] {ticker}: prem={_prem}% > ±{_ACTIVE_PREM_MAX}%')
                             return _stale_payload
-                        print(f'[折溢價-B] {ticker}: date={_nav_date_used.date()} nav={_nav_v} price={_pr_v} prem={_prem}%')
+                        print(f'[折溢價-B] {ticker}: date={_nav_d_only} nav={_nav_v} price={_pr_v} prem={_prem}%')
                         return {'nav': _nav_v, 'price': _pr_v,
-                                'premium_pct': _prem, 'warning': _prem > 1.0}
+                                'premium_pct': _prem, 'warning': _prem > 1.0,
+                                'data_date': _nav_d_only}
 
         print(f'[折溢價] {ticker}: 所有路徑失敗，回傳 N/A')
     except Exception as _ep:
@@ -1241,7 +1257,7 @@ def render_etf_single(gemini_fn=None):
     elif prem.get('stale_nav'):
         _prem_color  = '#8b949e'
         _prem_action = '⏳ NAV 資料延遲'
-        _prem_reason = '主動式 ETF NAV 公布 T+1 延遲（或同日寫入但值未更新），暫不顯示折溢價以免誤判'
+        _prem_reason = 'NAV 資料早於前一交易日（FinMind/yfinance 同步延遲），暫不顯示折溢價以免誤判'
     else:
         _prem_color  = '#8b949e'
         _prem_action = 'ℹ️ 無 NAV 資料'
@@ -1253,7 +1269,10 @@ def render_etf_single(gemini_fn=None):
         f'<div style="font-size:20px;font-weight:900;color:{_prem_color};">{_prem_action}</div>'
         f'<div style="font-size:13px;color:#c9d1d9;margin-top:4px;">{_prem_reason}</div>'
         + (f'<div style="font-size:12px;color:#8b949e;margin-top:6px;">折溢價率：'
-           f'<b style="color:{_prem_color};">{_pct:+.2f}%</b></div>' if _pct is not None else '')
+           f'<b style="color:{_prem_color};">{_pct:+.2f}%</b>'
+           + (f'　<span style="color:#6e7681;">（資料日：{prem.get("data_date")}）</span>'
+              if prem.get('data_date') else '')
+           + '</div>' if _pct is not None else '')
         + '</div>',
         unsafe_allow_html=True)
 
