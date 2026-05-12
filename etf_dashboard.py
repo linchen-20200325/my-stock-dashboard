@@ -3635,6 +3635,15 @@ def render_data_health():
                  '來源': str(_exp.get('source', '-'))},
             ]
             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True)
+
+            # ── 美林時鐘景氣循環 ───────────────────────────────
+            try:
+                from merrill_clock import render_merrill_clock as _render_clock
+                _pmi_val = _pmi.get('value')
+                _cpi_val = _cpi.get('yoy')
+                _render_clock(_pmi_val, _cpi_val)
+            except Exception as _e_clk:
+                st.caption(f'⚪ 美林時鐘載入失敗：{type(_e_clk).__name__}')
         else:
             st.warning('尚未載入，請點擊「更新全部總經數據」')
 
