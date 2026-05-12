@@ -14,6 +14,7 @@
 | **資料註冊** | `data_registry.py` · `data_config.py` · `config.py` |
 | **引擎** | `scoring_engine.py` · `financial_health_engine.py` · `market_strategy.py` · `risk_control.py` · `backtest_engine.py` · `unified_decision.py` · `v4_strategy_engine.py` · `v5_modules.py` · `yield_screener.py` |
 | **ETF 工具鏈** | `etf_categories.py`（同儕分類）· `merrill_clock.py`（景氣循環）· `grape_ladder.py`（月配組合最佳化）· `etf_quality.py`（4 因子品質評等） |
+| **健診** | `health_inspector.py`（Raw Data 資料健診儀表板，PR #52 從 etf_dashboard 抽出）|
 | **AI / 警示** | `ai_engine.py` · `macro_alert.py` · `macro_state_locker.py` · `persona.py` |
 | **基建** | `proxy_helper.py`（NAS proxy + Storm Shield 快取）· `nas_server.py`（FastAPI 中繼）· `chart_plotter.py` · `portfolio_manager.py` · `stock_names.py` |
 
@@ -35,11 +36,12 @@
 | #49 | STATE.md 治理同步 | 9041a95 |
 | #50 | etf_quality.py 排毒重構（5 毒素清除） | 0cc5b81 |
 | #51 | etf_dashboard.py fetch_etf_nav_history 排毒（8 毒素清除，ruff −27） | （pending） |
+| #52 | health_inspector.py 抽出 + 刪 render_data_health dead code (1019 行) | （pending） |
 
 ## 🎯 Backlog
 - **環境工**：5 條 stale remote branches 清理（sandbox token 無 delete 權）
-- **部署驗證**：PR #42-#51 累積 Streamlit Cloud 上線驗收項目
-- **技術債**：`etf_dashboard.py` 仍 5107 行（可進一步拆 render_data_health / render_data_health_raw 兩個 ~970 行巨型函式）；`app.py` ruff 682 baseline errors
+- **部署驗證**：PR #42-#52 累積 Streamlit Cloud 上線驗收項目
+- **技術債**：`etf_dashboard.py` 5107 → **3093 行**（-39%，PR #52 完成）；`app.py` ruff 681 baseline errors（從 682 微降）
 
 ## 🧱 開發協議
 依 `CLAUDE.md` v2.0 核心協議運行（§1-§5 嚴格三步法 / 防幻覺 / 精準讀寫 / 鋼鐵自省 / 卡關救援）。
