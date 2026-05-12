@@ -1087,6 +1087,71 @@ def _render_bias(df: pd.DataFrame, ticker: str) -> None:
 # Tab ⑥：單一 ETF 深度診斷
 # ═══════════════════════════════════════════════════════════════
 
+@st.cache_data(ttl=3600, max_entries=50, show_spinner=False)
+def compute_etf_peer_ranking(ticker: str, periods: tuple = (63, 126, 252)) -> dict:
+    """ETF 同儕近 3M/6M/1Y 報酬排名（總報酬率含息，用 yfinance Adj Close）。
+
+    Parameters
+    ----------
+    ticker : str
+        目標 ETF 代號，如 '0050.TW'。
+    periods : tuple[int, ...]
+        交易日視窗（預設 63=3M、126=6M、252=1Y）。
+
+    Returns
+    -------
+    dict
+      命中：{63: {'self_ret': float, 'peer_median': float, 'percentile': float,
+                  'peer_count': int}, 126: {...}, 252: {...},
+             'category': str, 'peers': list[str]}
+      無同儕：{'_err': '同儕資料不足', 'category': ''}
+    """
+    from etf_categories import get_peers, get_category_name
+    _peers = get_peers(ticker)
+    _category = get_category_name(ticker)
+    if len(_peers) < 3:
+        return {'_err': '同儕資料不足', 'category': _category, 'peers': _peers}
+    _all = [ticker] + _peers
+    _result: dict = {'category': _category, 'peers': _peers}
+    try:
+        _hist = yf.download(_all, period='2y', auto_adjust=True,
+                            progress=False, threads=False)
+        # yf.download 多 ticker 回 MultiIndex (column 0=field, 1=ticker)；單一回扁平
+        if isinstance(_hist.columns, pd.MultiIndex):
+            _close = _hist['Close']
+        else:
+            _close = _hist[['Close']].rename(columns={'Close': _all[0]})
+        if _close.empty:
+            return {'_err': 'yfinance 抓不到價格', 'category': _category, 'peers': _peers}
+        for _p in periods:
+            if len(_close) < _p + 1:
+                _result[_p] = {'_err': f'資料不足 {_p} 日'}
+                continue
+            _window = _close.iloc[-(_p + 1):]
+            _rets = (_window.iloc[-1] / _window.iloc[0] - 1.0) * 100.0
+            _rets = _rets.dropna()
+            if ticker not in _rets.index or len(_rets) < 3:
+                _result[_p] = {'_err': '有效樣本不足'}
+                continue
+            _self = float(_rets[ticker])
+            _peer_only = _rets.drop(ticker)
+            _median = float(_peer_only.median())
+            # percentile：self 高於 N% 同儕；用 strict less 計
+            _pct = float((_peer_only < _self).sum()) / len(_peer_only) * 100.0
+            _result[_p] = {
+                'self_ret': round(_self, 2),
+                'peer_median': round(_median, 2),
+                'percentile': round(_pct, 1),
+                'peer_count': len(_peer_only),
+            }
+        return _result
+    except Exception as _e:
+        import traceback as _tb_pr
+        print(f'[peer-rank] {ticker} ❌ {type(_e).__name__}: {_e}')
+        _tb_pr.print_exc()
+        return {'_err': f'{type(_e).__name__}', 'category': _category, 'peers': _peers}
+
+
 def render_etf_single(gemini_fn=None):
     mkt_info = st.session_state.get('mkt_info', {})
     regime   = mkt_info.get('regime', 'neutral')
@@ -1554,6 +1619,38 @@ def render_etf_single(gemini_fn=None):
             st.caption(f'✅ 黃金交叉狀態：MA20 {_ma20:.2f} ≥ MA60 {_ma60_v:.2f}（趨勢偏多）')
     else:
         st.info(f'ℹ️ 資料不足 60 日（目前 {len(df)} 日），無法計算月線/季線交叉')
+
+    # ── 同儕近 3M/6M/1Y 排名 ──────────────────────────────────
+    _peer_rank = compute_etf_peer_ranking(ticker)
+    if _peer_rank.get('_err'):
+        st.caption(f'⚪ 同儕排名：{_peer_rank["_err"]}（分類 {_peer_rank.get("category") or "未分類"}）')
+    else:
+        _cat = _peer_rank.get('category', '')
+        st.markdown(f'#### 🏆 {ticker} 同儕排名（vs {_cat} 類）')
+        _c3m, _c6m, _c1y = st.columns(3)
+        for _col, _lbl, _key in [(_c3m, '近 3M', 63), (_c6m, '近 6M', 126), (_c1y, '近 1Y', 252)]:
+            _data = _peer_rank.get(_key) or {}
+            with _col:
+                if _data.get('_err'):
+                    st.metric(_lbl, 'N/A', help=_data['_err'])
+                    continue
+                _self = _data['self_ret']
+                _med = _data['peer_median']
+                _pct = _data['percentile']
+                _n = _data['peer_count']
+                _icon = '🟢' if _pct >= 75 else ('🟡' if _pct >= 25 else '🔴')
+                _color = '#3fb950' if _pct >= 75 else ('#d29922' if _pct >= 25 else '#f85149')
+                st.markdown(
+                    f"<div style='border:1px solid {_color};border-left:4px solid {_color};"
+                    f"border-radius:0 6px 6px 0;padding:8px 14px;background:#0d1117'>"
+                    f"<div style='color:#8b949e;font-size:11px'>{_lbl}　{_icon} PR {_pct:.0f}</div>"
+                    f"<div style='color:{_color};font-size:22px;font-weight:700;margin-top:2px'>"
+                    f"{_self:+.2f}%</div>"
+                    f"<div style='color:#6e7681;font-size:11px;margin-top:4px'>"
+                    f"vs 同類 {_n} 檔（中位數 {_med:+.2f}%）</div>"
+                    f"</div>", unsafe_allow_html=True)
+        st.caption('PR = 百分位排名（越高代表勝率越好）；報酬已含息（yfinance auto_adjust）。'
+                   '🟢 PR≥75　🟡 25-75　🔴 <25')
 
     # ── 走勢圖 ────────────────────────────────────────────────
     st.markdown(f'#### 📈 {ticker} 近5年走勢')
