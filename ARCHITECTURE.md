@@ -1078,25 +1078,24 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 
 ---
 
-**`render_data_health()`**（§0 全域資料新鮮度診斷）
+**`render_data_health()`** — ⚠️ **已於 PR #52 刪除（dead code，1019 行）**
 
-| 項目 | 說明 |
-|------|------|
-| 輸入 | 無（從 `st.session_state['data_registry']` 讀取） |
-| 輸出 | `None`（全部渲染至 Streamlit UI） |
-| 副作用 | 動態生成 `st.tabs`：掃描 registry 所有 `category` 值 → 每個 category 一個 Tab，無需硬寫類別清單 |
-| 5 欄表格 | `資料項目 / 所屬類別 / 更新頻率 / 最新資料時間 / 狀態（🟢最新/🟡略舊/🔴過期/⚫缺失）` |
-| 大盤子分組 | Tab 內再依關鍵字分為 🇹🇼 台股市場 / 🌐 國際指數 / 💰 固定收益 / 📈 先行指標 |
-| 全域 Banner | 跨所有 Tab 統計 ⚫缺失 + 🔴過期總數，顯示摘要警告或 ✅ 全部最新 |
+> 此函式為被取代的舊版健診儀表板，整個 codebase 無任何 caller。實際使用的是
+> `health_inspector.render_data_health_raw()`（PR #52 抽出至獨立模組）。
+> 對應的 `_check_icon` / `_check_etf_health` / `_HEALTH_CHECKS` /
+> `_HEALTH_ETF_TW` / `_HEALTH_ETF_US` 連帶刪除。
 
 ---
 
-**`_freshness(date_str, frequency)`**（定義於 `render_data_health` 內）
+**`render_data_health_raw()`**（資料健診儀表板 — Raw Data 嚴格版）
 
 | 項目 | 說明 |
 |------|------|
-| 輸入 | `date_str: str` — ISO 日期字串；`frequency: str` — `'daily'`/`'monthly'`/`'quarterly'` |
-| 輸出 | `tuple[str, str]` — `(icon, label)`，icon ∈ `{'🟢','🟡','🔴','⚪'}` |
-| 閾值 | 日：🟢≤3天 / 🟡≤5天 / 🔴>5天；月：🟢≤45天 / 🟡≤75天 / 🔴>75天；季：🟢≤90天 / 🟡≤180天 / 🔴>180天 |
+| 位置 | `health_inspector.py`（PR #52 抽出，前身為 `etf_dashboard.py:4137`）|
+| 輸入 | 無（從 `st.session_state` 與各模組已抓的資料中組裝）|
+| 輸出 | `None`（全部渲染至 Streamlit UI） |
+| 原則 | 只顯示「從網路 API 直接抓取的第一手原始資料」；嚴禁均線 / RSI / 乖離率 / AI 評分等任何計算值 |
+| 欄位 | `資料名稱 / 最後更新 / 狀態燈號（🟢🟡🔴⚪🔵）`|
+| 呼叫端 | `app.py:9055 render_data_health_raw()` |
 
 ---

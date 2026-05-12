@@ -49,8 +49,9 @@ from scoring_engine import score_single_stock, rank_stocks, momentum_signal, cal
 from etf_dashboard import (
     render_etf_single, render_etf_portfolio,
     render_etf_backtest, render_etf_ai,
-    render_data_health, render_data_health_raw, render_sector_heatmap,
+    render_sector_heatmap,
 )
+from health_inspector import render_data_health_raw  # noqa: E402
 from grape_ladder import render_grape_ladder  # noqa: E402
 from ai_engine import generate_daily_report
 from unified_decision import render_unified_decision
