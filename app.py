@@ -51,6 +51,7 @@ from etf_dashboard import (
     render_etf_backtest, render_etf_ai,
     render_data_health, render_data_health_raw, render_sector_heatmap,
 )
+from grape_ladder import render_grape_ladder  # noqa: E402
 from ai_engine import generate_daily_report
 from unified_decision import render_unified_decision
 from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA
@@ -1389,8 +1390,8 @@ tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_etf, tab_etf
     '💎 高息網', '🏦 ETF', '⚖️ ETF組合', '🔎 資料診斷', '📚 教學',
 ])
 with tab_etf_grp:
-    _tab_etf_port, _tab_etf_bt, _tab_etf_ai = st.tabs([
-        '⚖️ 組合配置', '📈 歷史回測', '🤖 ETF AI',
+    _tab_etf_port, _tab_etf_bt, _tab_etf_ai, _tab_etf_grape = st.tabs([
+        '⚖️ 組合配置', '📈 歷史回測', '🤖 ETF AI', '📅 葡萄串領息法',
     ])
 
 # ══════════════════════════════════════════════════════════════
@@ -9036,6 +9037,9 @@ with _tab_etf_bt:
 # ══════════════════════════════════════════════════════════════
 with _tab_etf_ai:
     render_etf_ai(gemini_fn=gemini_call)
+
+with _tab_etf_grape:
+    render_grape_ladder(gemini_fn=gemini_call)
 
 # ══════════════════════════════════════════════════════════════
 # TAB: 7% 高殖利率防禦網（Screener Mode）
