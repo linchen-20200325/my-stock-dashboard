@@ -1692,8 +1692,9 @@ def render_etf_single(gemini_fn=None):
     # ── 存入 session_state 供 Tab⑨ 使用 ─────────────────────
     # 海外 ETF 偵測：ticker 非 4-6 碼台灣代號（如 VOO/SCHD/QQQ）→ 本系統 NAV/費用率
     # 5 源僅限台灣 ETF（SITCA / FinMind / TWSE / goodinfo / MoneyDJ），標 ⚪ 非異常
+    # 末位字母後綴允許：A=Active 主動式 / L=Leveraged / R=Reverse / B=Bond / U/F=Futures
     import re as _re_etf
-    _is_overseas = not bool(_re_etf.match(r'^\d{4,6}\.(TW|TWO)$', ticker))
+    _is_overseas = not bool(_re_etf.match(r'^\d{4,6}[A-Z]?\.(TW|TWO)$', ticker))
     _err_expense = None if (expense or _is_overseas) else (
         'SITCA + MoneyDJ + yfinance.info[expenseRatio] 3 源全失敗'
         '（私募 / 已下市可能）'
