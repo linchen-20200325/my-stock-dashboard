@@ -1,7 +1,14 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import datetime, os, re, time, requests, json, pickle, hashlib
+import datetime
+import os
+import re
+import time
+import requests
+import json
+import pickle
+import hashlib
 
 # ── 台灣時間（UTC+8）─────────────────────────────────────
 _TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
@@ -23,12 +30,11 @@ print('[INFO] main.py v3.0 戰情室 載入完成')
 
 from data_loader import StockDataLoader
 from chart_plotter import plot_combined_chart, plot_revenue_chart, plot_quarterly_chart
-from ai_engine import analyze_stock_trend
-from leading_indicators import build_leading_indicators, build_leading_fast, render_leading_table
+from leading_indicators import build_leading_fast, render_leading_table
 from daily_checklist import (
     fetch_single, calc_stats, sparkline, multi_chart,
-    bar_chart_institutional, stat_card, section_header,
-    margin_card, fetch_institutional, fetch_margin_balance,
+    stat_card, section_header,
+    fetch_institutional, fetch_margin_balance,
     evaluate_market_status_v4_final,
     fetch_adl,
     analyze_20d_chips,
@@ -41,11 +47,10 @@ from market_strategy import get_market_assessment
 from macro_state_locker import MacroStateLocker, load_macro_state, calculate_system_state
 from v4_strategy_engine import V4StrategyEngine   # v4.0 核心策略引擎
 from v5_modules import (                           # v5.0 大師滿配
-    analyze_fundamental_leading, calc_relative_strength,
-    calc_valuation_zone, detect_bollinger_breakout,
-    calc_dividend_yield_357, get_defensive_allocation, DEFENSIVE_ETFS,
+    analyze_fundamental_leading, detect_bollinger_breakout,
+    calc_dividend_yield_357,
 )
-from scoring_engine import score_single_stock, rank_stocks, momentum_signal, calc_rs_score, rs_slope
+from scoring_engine import calc_rs_score, rs_slope
 from etf_dashboard import (
     render_etf_single, render_etf_portfolio,
     render_etf_backtest, render_etf_ai,
@@ -53,20 +58,10 @@ from etf_dashboard import (
 )
 from health_inspector import render_data_health_raw  # noqa: E402
 from grape_ladder import render_grape_ladder  # noqa: E402
-from ai_engine import generate_daily_report
-from unified_decision import render_unified_decision
 from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA
 from financial_health_engine import analyze_financial_health, no_ai_overall_verdict
 from data_loader import fetch_financial_statements
 from macro_alert import fetch_macro_snapshot, check_macro_alerts, render_macro_alerts
-from financial_debug_helper import (
-    FIELD_ALIASES, FieldResult, DebugReport,
-    safe_float, find_value_by_alias, classify_missing_data,
-    is_financial_industry, status_to_ui_text, status_to_color,
-    test_finmind_token, fetch_finmind_monthly_revenue,
-    build_financial_debug_report,
-    STATUS_OK, STATUS_FETCH_ERROR, STATUS_MISSING, STATUS_NOT_APPLICABLE,
-)
 
 api_key       = st.secrets.get('GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY', ''))  # [Fixed] st.secrets 優先
 FINMIND_TOKEN = st.secrets.get('FINMIND_TOKEN',  os.environ.get('FINMIND_TOKEN', ''))   # [Fixed] st.secrets 優先
@@ -665,7 +660,6 @@ def calc_fundamental_score(qtr_df, yearly_df, avg_div):
     }
     try:
         if qtr_df is not None and not qtr_df.empty:
-            cols = {c.strip():c for c in qtr_df.columns}
             def _gcol(*keys):
                 for k in keys:
                     for c in qtr_df.columns:
@@ -852,7 +846,7 @@ def explain_box(term, simple_explain, detail=''):
         f'<span style="font-size:12px;font-weight:700;color:#58a6ff;">{term}</span>'
         f'<span style="font-size:12px;color:#c9d1d9;"> = {simple_explain}</span>'
         + (f'<br><span style="font-size:11px;color:#8b949e;">{detail}</span>' if detail else '') +
-        f'</div>'
+        '</div>'
     )
 
 def traffic_light(value, good_cond, bad_cond, good_label, bad_label, neutral_label='⚪ 觀察'):
@@ -871,7 +865,7 @@ def beginner_kpi(title, value, plain_meaning, color='#e6edf3', tip=''):
         f'<div style="font-size:22px;font-weight:900;color:{color};">{value}</div>'
         f'<div style="font-size:11px;color:#8b949e;margin-top:3px;">{plain_meaning}</div>'
         + (f'<div style="font-size:10px;color:#484f58;margin-top:2px;">💡 {tip}</div>' if tip else '') +
-        f'</div>'
+        '</div>'
     )
 
 # 術語白話對照表
@@ -917,7 +911,6 @@ def generate_ai_comment(data: dict) -> str:
       m1b_diff (M1B-M2 差距%)
     """
     lines = []
-    h      = data.get('health', 0)
     score  = data.get('score', 0)
     rsi    = data.get('rsi') or 50
     val    = str(data.get('val_label', ''))
@@ -1097,7 +1090,7 @@ def render_health_score(score, details, sid='', fund_scores=None, tech_alerts=No
         fund_html = '<div style="display:flex;gap:4px;margin:10px 0;">'
         for cat in ['profit','growth','dividend','valuation']:
             fs  = fund_scores.get(cat,{})
-            sc  = fs.get('score',0); mx=fs.get('max',3)
+            sc  = fs.get('score',0)
             lb  = fs.get('label',cat); ic=_cat_ic.get(cat,'')
             cl  = _sc_cl.get(min(sc,3),'#8b949e')
             chk = ''
@@ -1439,7 +1432,9 @@ def _fetch_macro_news(n: int = 5) -> list:
     ttl=1800：每 30 分鐘自動更新一次快取。
     """
     try:
-        import feedparser as _fp, html as _h, re as _re2
+        import feedparser as _fp
+        import html as _h
+        import re as _re2
     except ImportError:
         print('[AI-News] ⚠️ feedparser 未安裝，跳過新聞抓取')
         return []
@@ -1514,7 +1509,9 @@ def _fetch_stock_news(stock_id: str, stock_name: str = "", n: int = 5) -> list:
     透過 NAS Squid proxy 路由（Streamlit Cloud IP 易被 Google News RSS 限速/封鎖）。
     """
     try:
-        import feedparser as _fp, html as _h, re as _re2
+        import feedparser as _fp
+        import html as _h
+        import re as _re2
     except ImportError:
         return []
     try:
@@ -1745,7 +1742,7 @@ with tab_macro:
                 f'<b style="color:{tl["color"]};">{_mi_exp}</b></span>'
                 + (f'<span style="font-size:11px;color:#484f58;">更新 {_mi_upd}</span>'
                    if _mi_upd else '')
-                + f'</div>'
+                + '</div>'
             )
 
         with placeholder.container():
@@ -1972,7 +1969,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             f'<div style="font-size:11px;color:#484f58;margin-bottom:4px;">📌 今日唯一行動建議</div>'
             f'<div style="font-size:17px;font-weight:900;color:{_wr_action_color};">{_wr_action}</div>'
             + (f'<div style="font-size:11px;color:#484f58;margin-top:4px;">更新時間：{_wr_ts}</div>' if _wr_ts else '') +
-            f'</div>', unsafe_allow_html=True)
+            '</div>', unsafe_allow_html=True)
 
         # 今日5分鐘清單
         st.markdown('##### ✅ 今日操作前 5 分鐘清單')
@@ -2276,7 +2273,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _li_lines.append(msg)
                     _li_ph.info('📡 先行指標載入中…\n' + '\n'.join(_li_lines[-5:]))
                 try:
-                    import importlib, leading_indicators as _li_mod
+                    import importlib
+                    import leading_indicators as _li_mod
                     importlib.reload(_li_mod)
                     _li_log(f'v={getattr(_li_mod,"LI_VERSION","?")} token={bool(_li_tok)}')
                     df_li_a = _li_mod.build_leading_fast(days=14, token=_li_tok)
@@ -2368,7 +2366,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
             # ── M1B-M2 + 乖離率 並發計算 ──────────────────────
             def _job_m1b():
-                import requests as _rq_m1, pandas as _pd_m1
+                import requests as _rq_m1
+                import pandas as _pd_m1
                 _fm_tok_m1 = _get_fm_token()
                 _start_m1 = (datetime.date.today()-datetime.timedelta(days=420)).strftime('%Y-%m-%d')
 
@@ -2391,7 +2390,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
                 # ── 路徑 2：FRED（台灣 M1B/M2，fetch_url + FRED_API_KEY）──
                 try:
-                    import io as _io_m1, os as _os_m1f
+                    import os as _os_m1f
                     from proxy_helper import fetch_url as _fu_m1
                     _fred_key_m1 = (_os_m1f.environ.get('FRED_API_KEY') or
                                     (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
@@ -2426,7 +2425,6 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
                 # ── 路徑 2b：IMF DataMapper API（FRED 備援，全球可達）──
                 try:
-                    import io as _io_m1b
                     # MABMM301 = M2 年增率%, MANMM101 = M1 年增率% (IMF IFS)
                     _imf_m1_r = _rq_m1.get(
                         'https://www.imf.org/external/datamapper/api/v1/MANMM101/TW',
@@ -2514,7 +2512,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
             def _job_macro():
                 """總經拼圖 v5.2：VIX/CPI/PMI/NDC/Export 並行抓取（NDC 改抓 StockFeel+MacroMicro 雙源）"""
-                import requests as _rq_mc, pandas as _pd_mc, io as _io_mc
+                import requests as _rq_mc
                 # L2: 使用頂層已匯入的 ThreadPoolExecutor / as_completed
                 _TPE, _asc_mc = ThreadPoolExecutor, as_completed
                 # 兼容 Python 3.8-3.10：concurrent.futures.TimeoutError 與 builtins.TimeoutError 不同類別
@@ -2568,7 +2566,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
                 # ── 2. CPI ──────────────────────────────────────────────────────────
                 def _fetch_cpi():
-                    import pandas as _pd2, datetime as _dt_cpi, io as _io_cpi
+                    import datetime as _dt_cpi
                     _s = _mk_s()
                     _cpi_errs = []
                     # ── 方案1: FRED CSV（fetch_url + FRED_API_KEY）──────────────
@@ -2707,7 +2705,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
                 # ── 5. 台灣出口 YoY ─────────────────────────────────────────
                 def _fetch_export():
-                    import pandas as _pd7, io as _io_ex, os as _os_ex, datetime as _dt_ex
+                    import pandas as _pd7
+                    import io as _io_ex
+                    import os as _os_ex
+                    import datetime as _dt_ex
                     _s_ex = _mk_s()
                     _s_ex.verify = False
                     _s_ex.headers.update({'User-Agent': 'Mozilla/5.0',
@@ -3504,7 +3505,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     f'跌破MA60({_d60:.1f}%) + 均線向下 → 中期起跌訊號'))
             elif _above60 and not _above120:
                 pivot_signals.append(('整理區間','⚪','#8b949e',
-                    f'站上MA60但未過MA120 → 等待方向確認'))
+                    '站上MA60但未過MA120 → 等待方向確認'))
 
         # 2. 乖離率（與台股體質 ±7~10% 門檻）
         if _bias2:
@@ -3731,7 +3732,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             else:
                 _t2c = f'台股 {_tp:+.1f}% ／ 台幣 {_fp:+.2f}%，無明顯方向性波動'; _t2a = '維持現有部位，靜待表態'
         else:
-            _t2c = f'台股資料載入中'; _t2a = '等待完整數據'
+            _t2c = '台股資料載入中'; _t2a = '等待完整數據'
             _tp = _twii2.get('pct', 0) or 0; _fp = _twd2.get('pct', 0) or 0
         _t2_ind = f'加權 {_twii2.get("last",0):,.0f}pt {(_tp or 0):+.1f}% | 台幣 {_twd2.get("last",0):.2f}'
     elif _twii2:
@@ -4337,8 +4338,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             f'padding:10px 14px;margin:8px 0;">'
             f'<span style="color:{_sig_color};font-weight:700;">{_adl_signal}</span>'
             f'　｜　騰落線 {_adl_val:,.0f} {_adl_trend} MA20({_adl_ma20:,.0f})'
-            + (f'　⚠️ <span style="color:#f85149;font-weight:700;">背離警告：指數漲但廣度萎縮！</span>' if _divergence else '') +
-            f'</div>', unsafe_allow_html=True)
+            + ('　⚠️ <span style="color:#f85149;font-weight:700;">背離警告：指數漲但廣度萎縮！</span>' if _divergence else '') +
+            '</div>', unsafe_allow_html=True)
 
         # 騰落線圖（ADL + MA20 + 上漲佔比）
         _fig_adl = go.Figure()
@@ -4918,8 +4919,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _r2_html = (_cond_badge(_cC, f'C 出口={_exp_c:+.1f}%' if _exp_c is not None else 'C 出口未知') + ' ' +
                         _cond_badge(_cD, f'D M1B-M2={_gap8c:+.2f}%' if _gap8c is not None else 'D M1B-M2未知'))
             _r3_html = (_cond_badge(_cE, f'E 外資={_fnet8:+.0f}億' if _fnet8 is not None else 'E 外資未知') + ' ' +
-                        _cond_badge(_cF, f'F 股匯雙漲' if _cF else 'F 股匯雙漲') + ' ' +
-                        _cond_badge(_cG, f'G SOX/NVDA點火'))
+                        _cond_badge(_cF, 'F 股匯雙漲' if _cF else 'F 股匯雙漲') + ' ' +
+                        _cond_badge(_cG, 'G SOX/NVDA點火'))
 
             if not _ring1_pass:
                 _atk_color = '#f85149'; _atk_grade = '🚫 禁止攻擊'
@@ -6209,13 +6210,13 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             _inst_f = st.session_state.get('t2_inst', {})
             _fnet_f = _inst_f.get('外資', 0) if _inst_f else 0
             if _above_f and _fnet_f > 0:
-                _fb_txt = f'站上月線 + 外資買超，主力進駐訊號，可跟進'; _fc_txt = '停損設月線下方'
+                _fb_txt = '站上月線 + 外資買超，主力進駐訊號，可跟進'; _fc_txt = '停損設月線下方'
             elif _above_f and _fnet_f < 0:
-                _fb_txt = f'站上月線但外資賣超，需謹慎確認主力方向'; _fc_txt = '等待外資轉買後再行動'
+                _fb_txt = '站上月線但外資賣超，需謹慎確認主力方向'; _fc_txt = '等待外資轉買後再行動'
             elif not _above_f and _fnet_f > 0:
-                _fb_txt = f'月線下方但外資買超，可能正在築底'; _fc_txt = '等待重回月線確認後再評估'
+                _fb_txt = '月線下方但外資買超，可能正在築底'; _fc_txt = '等待重回月線確認後再評估'
             else:
-                _fb_txt = f'月線下方且外資賣超，趨勢偏空，暫時迴避'; _fc_txt = '等待更明確的多頭訊號'
+                _fb_txt = '月線下方且外資賣超，趨勢偏空，暫時迴避'; _fc_txt = '等待更明確的多頭訊號'
             _fa = f'{sid2} 現價{_p_now_f:.1f}（{"站月線" if _above_f else "跌月線"}）| 外資{"買超" if _fnet_f>0 else "賣超" if _fnet_f<0 else "中性"}'
         else:
             _fb_txt = '技術資料載入中，請先點擊「🔍 載入完整分析」'
@@ -6237,7 +6238,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             elif _kp > _km100:
                 _trend_msg = f'📊 多箱整理：股價在 MA100 之上 — 宏爺：等待站上 MA20({_km20:.1f})確認方向'; _tc = '#d29922'
             else:
-                _trend_msg = f'📊 空箱整理：股價低於 MA100 — 宏爺：耐心等待多頭訊號，不摸底'; _tc = '#d29922'
+                _trend_msg = '📊 空箱整理：股價低於 MA100 — 宏爺：耐心等待多頭訊號，不摸底'; _tc = '#d29922'
             st.markdown(f'<div style="border-left:4px solid {_tc};padding:10px 14px;background:#0d1117;border-radius:0 8px 8px 0;font-size:13px;font-weight:700;color:{_tc};margin:8px 0;">{_trend_msg}</div>', unsafe_allow_html=True)
 
         # K線均線結論（安全版）
@@ -7852,7 +7853,7 @@ with tab_stock_grp:
                     except Exception:
                         pass
 
-            except Exception as e4:
+            except Exception:
                 results_t3.append({
                     'stock_id': sid4, '代碼': sid4, '名稱': '失敗', '現價': '-',
                     '健康度': 0, '評級': '-', 'RSI': '-', '量比': '-',
@@ -7966,7 +7967,7 @@ with tab_stock_grp:
             if _active_n >= 2:
                 _r5c = f'本批 {_active_n} 支達積極布局條件'; _r5a = '可同步建倉，停損設健康度跌破50'
             elif _active_n == 1:
-                _r5c = f'僅 1 支達積極條件，其餘觀察或等待'; _r5a = '單一標的建倉，其餘等訊號確認'
+                _r5c = '僅 1 支達積極條件，其餘觀察或等待'; _r5a = '單一標的建倉，其餘等訊號確認'
             else:
                 _r5c = f'本批無積極訊號（{_wait_n} 支等待），市場擇股難度高'; _r5a = '空手等待，勿強求進場'
             st.markdown(teacher_conclusion('宏爺', f'健康+多因子+357三重確認，共 {len(results_t3)} 支', _r5c, _r5a), unsafe_allow_html=True)
