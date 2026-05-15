@@ -1161,94 +1161,82 @@ padding:12px 16px;margin:8px 0;">
         else:
             st.warning('⚠️ 無配息記錄（成長股）— 建議改用本益比評估')
         # ── 357 動態建議 ──
+        _asset_type = '📈 大盤' if sid2 in ('^TWII', 'TAIEX') else '📊 個股'
         if avg_div2 > 0:
-            _357_verdict = (f'現價 {price2:.1f} 處於 {"便宜價🟢 — 孫慶龍：積極買進！" if price2<=cheap2 else ("合理價🟡 — 孫慶龍：可分批布局，等殖利率拉升再加碼" if price2<=fair2 else ("昂貴價🔴 — 孫慶龍：謹慎操作，等待回檔再進場" if price2<=dear2 else "超過昂貴價🔴 — 孫慶龍：絕對不追高，等待大幅修正"))}，近5年均股利 {avg_div2:.2f} 元')
+            _grade = ("便宜價🟢 — 孫慶龍：積極買進！" if price2<=cheap2
+                      else ("合理價🟡 — 孫慶龍：可分批布局，等殖利率拉升再加碼" if price2<=fair2
+                            else ("昂貴價🔴 — 孫慶龍：謹慎操作，等待回檔再進場" if price2<=dear2
+                                  else "超過昂貴價🔴 — 孫慶龍：絕對不追高，等待大幅修正")))
+            _357_verdict = f'**{sid2} {name2}** 現價 {price2:.1f} 處於 {_grade}，近5年均股利 {avg_div2:.2f} 元'
             _357_c = '#3fb950' if price2<=cheap2 else ('#d29922' if price2<=fair2 else '#f85149')
+            st.markdown(
+                f'{_asset_type} **`{sid2}` {name2}** ｜ 孫慶龍·357法則判斷'
+            )
             st.markdown(f'<div style="background:#161b22;border-left:4px solid {_357_c};padding:10px 14px;border-radius:0 8px 8px 0;font-size:13px;font-weight:700;color:{_357_c};margin:6px 0;">{_357_verdict}</div>', unsafe_allow_html=True)
         # 357結論：直接顯示當前評估，不導向策略手冊
         st.markdown(
             f'<div style="background:#0d1117;border-left:4px solid {_357_c};'
             f'padding:10px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
-            f'<span style="font-size:12px;color:#8b949e;">🎓 孫慶龍 · 357法則判斷</span><br>'
+            f'<span style="font-size:12px;color:#8b949e;">{_asset_type} <code>{sid2}</code> {name2} ｜ 🎓 孫慶龍 · 357法則判斷</span><br>'
             f'<span style="font-size:14px;font-weight:800;color:{_357_c};">{_357_verdict}</span><br>'
             f'<span style="font-size:11px;color:#8b949e;">判讀邏輯：殖利率≥7%=便宜大買；5-7%=合理；3-5%=偏貴持有；&lt;3%=昂貴停利</span>'
             f'</div>',
             unsafe_allow_html=True
         )
 
-        # ── 估值河流圖（357殖利率河流）────────────────────────────
+        # ── 估值河流圖（357殖利率河流，逐日 TTM）────────────────────
         if df2 is not None and not df2.empty:
-            # ── 1. 建立逐年現金股利 DataFrame ──
-            _riv_records = []
+            # ── 1. 將 yearly2 轉成「ex-div 事件序列」（年中 7/1 為合成除息日） ──
+            _riv_events = []
             if yearly2:
                 for _y in yearly2:
                     try:
                         _y_cash = float(_y.get('cash', 0) or 0)
-                        _riv_records.append({
-                            'date': pd.Timestamp(int(_y['year']), 12, 31),
-                            'div':  _y_cash
-                        })
+                        if _y_cash > 0:
+                            _riv_events.append({
+                                'date': pd.Timestamp(int(_y['year']), 7, 1),
+                                'div':  _y_cash
+                            })
                     except Exception:
                         pass
-            # 若無逐年資料，用 avg_div2 補一筆當年
-            if not _riv_records and avg_div2 and avg_div2 > 0:
-                _riv_records.append({
-                    'date': pd.Timestamp(datetime.date.today().year, 12, 31),
+            # 若無逐年資料，用 avg_div2 補一筆當年（提供 fallback 才不至於整張空白）
+            if not _riv_events and avg_div2 and avg_div2 > 0:
+                _riv_events.append({
+                    'date': pd.Timestamp(datetime.date.today().year, 7, 1),
                     'div':  float(avg_div2)
                 })
 
-            _div_df_riv = (pd.DataFrame(_riv_records)
-                           .sort_values('date')
-                           .reset_index(drop=True)
-                           if _riv_records else None)
-
-            if _div_df_riv is not None and not _div_df_riv.empty and _div_df_riv['div'].max() > 0:
-                # ── 2. 3年滾動平均現金股利（min_periods=1 讓早期也有值）──
-                _div_df_riv['avg_div'] = (
-                    _div_df_riv['div']
-                    .rolling(window=3, min_periods=1)
-                    .mean()
-                )
-                # 防禦：排除 0 / 負值
-                _div_df_riv['avg_div'] = _div_df_riv['avg_div'].where(
-                    _div_df_riv['avg_div'] > 0, other=pd.NA)
-
-                # ── 3. 建立「年份→平均股利」查表，並對每個交易日做前向填充 ──
-                # 使用年份整數做 key，避免 merge_asof 的 dtype 問題
-                # P2: vectorized dict construction → O(n) single pass
-                _riv_clean = _div_df_riv.dropna(subset=['avg_div']).copy()
-                _riv_clean['_yr'] = pd.to_datetime(_riv_clean['date'], errors='coerce').dt.year
-                _div_year_map = (_riv_clean.dropna(subset=['_yr'])
-                                 .assign(_yr=lambda d: d['_yr'].astype(int))
-                                 .set_index('_yr')['avg_div']
-                                 .apply(float).to_dict())
-
-                _rdates_s  = pd.to_datetime(
+            if _riv_events:
+                # ── 2. 對 df2 每個交易日做 365D rolling sum (TTM 股利) ──
+                _rdates_s   = pd.to_datetime(
                     df2['date'] if 'date' in df2.columns else pd.RangeIndex(len(df2)))
                 _rclose_riv = pd.to_numeric(df2['close'], errors='coerce').reset_index(drop=True)
                 _rdates_riv = _rdates_s.reset_index(drop=True)
 
-                # 每個交易日找「<=該年」的最近已知平均股利（前向填充）
-                _sorted_yrs = sorted(_div_year_map.keys())
-                def _lookup_avg_div(ts):
-                    yr = ts.year
-                    avail = [y for y in _sorted_yrs if y <= yr]
-                    if avail:
-                        return _div_year_map[max(avail)]
-                    if _sorted_yrs:
-                        return _div_year_map[min(_sorted_yrs)]  # 早於最早記錄
-                    return float(avg_div2) if avg_div2 else 0
-                _avg_div_series = _rdates_s.map(_lookup_avg_div)
+                # 合併「股利事件」+「交易日」成一條時間序列，計算 365D rolling sum
+                _ev_df = pd.DataFrame(_riv_events).sort_values('date').reset_index(drop=True)
+                _ev_df['kind'] = 'ev'
+                _td_df = pd.DataFrame({'date': _rdates_riv, 'div': 0.0, 'kind': 'td'})
+                _all_df = (pd.concat([_ev_df, _td_df], ignore_index=True)
+                           .sort_values('date')
+                           .reset_index(drop=True))
+                _all_df['ttm'] = (_all_df.set_index('date')['div']
+                                  .rolling('365D', min_periods=1).sum().values)
 
-                # ── 4. 計算河流帶：P = 平均股利 / 殖利率 ──
-                _band7_riv = (_avg_div_series / 0.07).round(2).reset_index(drop=True)
-                _band5_riv = (_avg_div_series / 0.05).round(2).reset_index(drop=True)
-                _band3_riv = (_avg_div_series / 0.03).round(2).reset_index(drop=True)
+                # 抽出交易日對應的 TTM，並 forward-fill 上一次有效值（避免年末窗口空洞）
+                _td_only = _all_df[_all_df['kind'] == 'td'].copy()
+                _td_only['ttm'] = _td_only['ttm'].mask(_td_only['ttm'] <= 0).ffill()
+                _ttm_series = pd.to_numeric(_td_only['ttm'], errors='coerce').reset_index(drop=True)
 
-                _cur_div_riv = float(_avg_div_series.dropna().iloc[-1]) if not _avg_div_series.dropna().empty else 0
-                _p7r = round(_cur_div_riv / 0.07, 0) if _cur_div_riv > 0 else 0
-                _p5r = round(_cur_div_riv / 0.05, 0) if _cur_div_riv > 0 else 0
-                _p3r = round(_cur_div_riv / 0.03, 0) if _cur_div_riv > 0 else 0
+                # ── 3. 計算河流帶：P = TTM 股利 / 殖利率閾值（逐日） ──
+                _band7_riv = (_ttm_series / 0.07).round(2)
+                _band5_riv = (_ttm_series / 0.05).round(2)
+                _band3_riv = (_ttm_series / 0.03).round(2)
+
+                _cur_div_riv = float(_ttm_series.dropna().iloc[-1]) if not _ttm_series.dropna().empty else 0
+                _p7r = float(_band7_riv.dropna().iloc[-1]) if not _band7_riv.dropna().empty else 0
+                _p5r = float(_band5_riv.dropna().iloc[-1]) if not _band5_riv.dropna().empty else 0
+                _p3r = float(_band3_riv.dropna().iloc[-1]) if not _band3_riv.dropna().empty else 0
 
                 # ── 5. 繪圖 ──
                 _fig_riv = go.Figure()
@@ -1257,15 +1245,16 @@ padding:12px 16px;margin:8px 0;">
                     line=dict(color='#e6edf3', width=2.5),
                     hovertemplate='%{x|%Y-%m-%d}<br>%{y:.2f}<extra></extra>'))
 
-                for _bs, _lbl, _col in [
-                    (_band7_riv, '7%便宜', '#3fb950'),
-                    (_band5_riv, '5%合理', '#d29922'),
-                    (_band3_riv, '3%昂貴', '#f85149')
+                for _bs, _lbl_base, _last_val, _col in [
+                    (_band7_riv, '7%便宜', _p7r, '#3fb950'),
+                    (_band5_riv, '5%合理', _p5r, '#d29922'),
+                    (_band3_riv, '3%昂貴', _p3r, '#f85149')
                 ]:
+                    _lbl = f'{_lbl_base}:{_last_val:.0f}' if _last_val > 0 else _lbl_base
                     _fig_riv.add_trace(go.Scatter(
                         x=_rdates_riv, y=_bs, name=_lbl,
                         line=dict(color=_col, width=1.5, dash='dot'),
-                        hovertemplate=f'{_lbl}: %{{y:.0f}}<extra></extra>'))
+                        hovertemplate=f'{_lbl_base}: %{{y:.0f}}<extra></extra>'))
 
                 # 色帶（以最新一日的帶值為基準）
                 _b7_last = float(_band7_riv.dropna().iloc[-1]) if not _band7_riv.dropna().empty else 0
@@ -1289,7 +1278,7 @@ padding:12px 16px;margin:8px 0;">
 
                 _fig_riv.update_layout(
                     title=dict(
-                        text=f'📊 {sid2} {name2} 殖利率河流圖（近3年均股利 {_cur_div_riv:.2f}元）',
+                        text=f'📊 {sid2} {name2} 殖利率河流圖（TTM 股利 {_cur_div_riv:.2f}元）',
                         font=dict(color='#8b949e', size=12)),
                     height=300, plot_bgcolor='#0e1117', paper_bgcolor='#0e1117',
                     font=dict(color='white', size=11),
@@ -1307,7 +1296,7 @@ padding:12px 16px;margin:8px 0;">
                 st.caption(
                     f'目前位於 {_cur_zone}（現價 {_cur_price_riv:.0f} / '
                     f'便宜≤{_p7r:.0f} / 合理≤{_p5r:.0f} / 昂貴≤{_p3r:.0f}）'
-                    f'　近3年均股利 {_cur_div_riv:.2f}元')
+                    f'　TTM 股利 {_cur_div_riv:.2f}元')
                 if _cur_div_riv < 0.5:
                     st.info('ℹ️ 此股近年現金股利極低（< 0.5元），殖利率河流圖參考意義有限，建議搭配本益比等其他估值工具。')
 
