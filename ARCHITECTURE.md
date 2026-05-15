@@ -1,6 +1,6 @@
 # 台股 AI 戰情室 — 技術規格書
 
-> **版本**：v6.7　|　**最後更新**：2026-05-15　|　**狀態**：完成 ✅
+> **版本**：v6.8　|　**最後更新**：2026-05-15　|　**狀態**：完成 ✅
 >
 > 本文件為系統架構師視角的唯讀規格書，不含任何實作程式碼。
 
@@ -791,23 +791,28 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 
 ---
 
-#### `app.py` 結構演進（PR #66 — P2-B Phase 4-A/B/C）
+#### `app.py` 結構演進（PR #66 + #68 — P2-B Phase 4 全收官 ✅）
 
 **動機**：將 module-level `with tab_xxx:` 巨型區塊包成 `render_<tab>()` 純函式，達成：
 1. **scope 隔離**：消除跨 TAB 變數隱性洩漏風險
 2. **暴露 ruff F841**：module-level 不檢查 unused locals，wrap 後可清出歷次 refactor 殘留
-3. **未來抽檔橋樑**：下一階段可逐 TAB 抽到獨立 `tab_xxx.py`
+3. **未來抽檔橋樑**：下一階段（Phase 5）可逐 TAB 抽到獨立 `tab_xxx.py`
 
-**已 wrap 函式**（P4-A/B/C）：
+**已 wrap 函式（4/4 ✅）**：
 
-| 函式 | 行範圍 | 對應 TAB | 行數 |
+| 函式 | 對應 TAB | 行數 | PR |
 |---|---|---|---|
-| `render_tab_stock()` | L5310-L7708 | 個股深度分析 | 2402 |
-| `render_stock_grp()` | L7716-L8745 | 比較 × 排行 | 1031 |
-| `render_tab_edu()` | L8754-L9143 | 教學說明書 | 387 |
+| `render_tab_macro()` | 總經紅綠燈 | 3970 | #68 |
+| `render_tab_stock()` | 個股深度分析 | 2402 | #66 |
+| `render_stock_grp()` | 比較 × 排行 | 1031 | #66 |
+| `render_tab_edu()` | 教學說明書 | 387 | #66 |
+
+合計 **7790 行** module-level Streamlit code 全部變成 dispatch 模式。
 
 **呼叫端模式**：
 ```python
+with tab_macro:
+    render_tab_macro()
 with tab_stock:
     render_tab_stock()
 with tab_stock_grp:
@@ -816,9 +821,14 @@ with tab_edu:
     render_tab_edu()
 ```
 
-**前置審計**：`PHASE4_AUDIT.md`（141 行）— AST-based cross-TAB leak scan，0 真實洩漏，動工綠燈。
+**前置審計**：`PHASE4_AUDIT.md`（141 行）— AST-based cross-TAB leak scan，補抓 4 種 Store 場景（except/import/def args/class），嚴格規則 0 真實洩漏，動工綠燈。
 
-**待辦 P4-D**：`render_tab_macro()` (~3970 行，最大、最複雜)。
+**已暴露死碼清除**：
+- `cx4 = _d4.get('cx')` (tab_stock_grp 內，PR #66)
+- redundant `from scoring_engine import calc_rs_score, rs_slope` (tab_stock 內，PR #66)
+- tab_macro / tab_edu 內部已乾淨，無新死碼暴露
+
+**Phase 5 候選**：逐函式抽到獨立檔案（如 `tab_macro.py`），預估 app.py 可瘦身至 ~1500 行。
 
 ---
 
