@@ -10,12 +10,31 @@ import pickle
 import hashlib
 import sys
 
-# ── Streamlit Cloud 防護 ─────────────────────────────────
-# 當 tab_*.py 從 `app` import helper 時，把當前執行中的 __main__
-# 模組註冊為 'app'，避免 Python 把 app.py 當成新 module 重新執行
-# （否則會在第二次跑 st.set_page_config 時觸發
-#  StreamlitSetPageConfigMustBeFirstCommandError）
-sys.modules.setdefault('app', sys.modules[__name__])
+# ── Streamlit Cloud 防護（PR #82 升級版）────────────────────
+# 背景：tab_*.py 用 `from app import X` 抓 helper。要讓它命中 cache（不重跑
+# 整支 app.py 觸發 set_page_config 二次呼叫），sys.modules['app'] 必須指向
+# 「正在執行的這支 script 的 module」。
+#
+# PR #82 採 `sys.modules.setdefault('app', sys.modules[__name__])`，但
+# Streamlit Cloud 上 sys.modules['__main__'] 不一定是這支 script——可能仍是
+# Streamlit CLI binary 本身，導致 sys.modules['app'] 指向錯誤的 module，
+# 五個 helper 全找不到 → ImportError（線上實測重現）。
+#
+# 修法：用 ModuleType 子類做 proxy，__getattr__ 轉發到 live globals()，
+# 完全繞開 __main__ 解析，無論 Streamlit 怎樣管 sys.modules 都能命中。
+import types as _types  # noqa: E402
+_app_globals = globals()
+
+class _AppProxy(_types.ModuleType):
+    """Proxy module：將 `from app import X` 的 attribute 查詢轉發到 app.py 的 live globals。"""
+    def __getattr__(self, name):
+        try:
+            return _app_globals[name]
+        except KeyError:
+            raise AttributeError(f"module 'app' has no attribute {name!r}") from None
+
+if not isinstance(sys.modules.get('app'), _AppProxy):
+    sys.modules['app'] = _AppProxy('app')
 
 # ── 台灣時間（UTC+8）─────────────────────────────────────
 _TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
