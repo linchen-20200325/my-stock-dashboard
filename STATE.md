@@ -9,7 +9,7 @@
 ## 🏗️ 主要模組
 | 層 | 檔案 |
 |---|---|
-| **UI** | `app.py`（主入口，PR #66 後 **9199 行**，3 個 TAB 已 wrap def）· `etf_dashboard.py` · `ui_widgets.py`（PR #60 抽出 8 個純 HTML 函式） |
+| **UI** | `app.py`（主入口，PR #68 後 **9208 行**，4/4 TAB 全 wrap def）· `etf_dashboard.py` · `ui_widgets.py`（PR #60 抽出 8 個純 HTML 函式） |
 | **資料抓取** | `data_loader.py` · `macro_core.py`（含 PR #53 `diagnose_tw_pmi_sources`）· `tw_macro.py` · `daily_checklist.py` · `leading_indicators.py` · `tw_stock_data_fetcher.py` |
 | **資料註冊** | `data_registry.py` · `data_config.py` · `config.py` |
 | **引擎** | `scoring_engine.py` · `scoring_helpers.py`（PR #61 抽 3 純函式：fundamental_score / health_score / health_grade）· `financial_health_engine.py` · `market_strategy.py` · `risk_control.py` · `backtest_engine.py` · `unified_decision.py` · `v4_strategy_engine.py` · `v5_modules.py` · `yield_screener.py` |
@@ -24,7 +24,7 @@
 - 設計文件：`ARCHITECTURE.md` · `DATASTATION.md` · `STRATEGY_MANUAL.md`
 - 測試：`test_*.py`
 
-## 🚀 最近完工（PR #42-#66，2026-05）
+## 🚀 最近完工（PR #42-#68，2026-05）
 | PR | 任務 | SHA |
 |---|---|---|
 | #42 | ETF 折溢價 G1+G2 守門員（NAV-Price gap + 主動式 ETF 異常閾值） | c21e577 |
@@ -52,20 +52,23 @@
 | #64 | app.py ruff 排毒 P2 收尾（E402 + F821 noqa，21 → **0 errors** 🎯） | 8345b40 |
 | #65 | docs 同步 PR #62-#64（ruff 0 errors 達成） | b9b7d0e |
 | #66 | app.py P2-B Phase 4-A/B/C：wrap 3 個 TAB def + PHASE4_AUDIT.md | d1e9c5a |
+| #67 | docs 同步 PR #65-#66 | dd8afd5 |
+| #68 | app.py P2-B Phase 4-D：wrap tab_macro（4/4 全收官）🏆 | a6dea89 |
 
 ## 🎯 Backlog
-- **環境工**：21 條 stale remote branches 清理（PR #42-#66 累積，sandbox token 無 delete 權）
-- **部署驗證**：PR #42-#66 累積 Streamlit Cloud 上線驗收項目
+- **環境工**：23 條 stale remote branches 清理（PR #42-#68 累積，sandbox token 無 delete 權）
+- **部署驗證**：PR #42-#68 累積 Streamlit Cloud 上線驗收項目
 - **PMI 真實異常**：PR #53 加好診斷工具，下次 PMI 紅燈時用 `🔬 8 段備援源詳細診斷` 按鈕定位根因（proxy 死 / regex 過時 / 端點改版）
-- **P2-B Phase 4 進度（4 個巨型 TAB wrap def）**：
-  - ✅ P4-A `tab_stock_grp` (1031 行) — PR #66
-  - ✅ P4-B `tab_edu` (387 行) — PR #66
-  - ✅ P4-C `tab_stock` (2402 行) — PR #66
-  - ⏳ P4-D `tab_macro` (3970 行) — 待辦（最大、最複雜）
+- **P2-B Phase 4 ✅ 全收官（4/4 巨型 TAB wrap def）**：
+  - ✅ P4-A `tab_stock_grp` (1031 行) → `render_stock_grp()` — PR #66
+  - ✅ P4-B `tab_edu` (387 行) → `render_tab_edu()` — PR #66
+  - ✅ P4-C `tab_stock` (2402 行) → `render_tab_stock()` — PR #66
+  - ✅ P4-D `tab_macro` (3970 行) → `render_tab_macro()` — PR #68
 - **技術債（已全面清乾淨）**：
   - 🎯 `app.py` ruff errors **681 → 0（100% clean）**（PR #56/#57/#60/#63/#64）
-  - `app.py` 9622 → **9199 行**（−423，−4.4%，PR #58/#60/#61 抽函式 + #66 wrap def）
+  - `app.py` 9622 → **9208 行**（−414，−4.3%，PR #58/#60/#61 抽函式 + #66/#68 wrap 4 TAB def）
   - `etf_dashboard.py` 3122 行
+- **Phase 5 候選**（低風險）：將 `render_tab_xxx()` 4 個函式逐一抽到獨立 .py 模組（tab_macro.py / tab_stock.py / tab_stock_grp.py / tab_edu.py），預估 app.py 可瘦身至 ~1500 行
 
 ## 🧱 開發協議
 依 `CLAUDE.md` v2.0 核心協議運行（§1-§5 嚴格三步法 / 防幻覺 / 精準讀寫 / 鋼鐵自省 / 卡關救援）。
