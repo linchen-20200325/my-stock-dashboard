@@ -1331,7 +1331,11 @@ def _run_llm_analysis(macro_info: dict, news: list) -> dict:
         return {'error': str(_le)[:150]}
 
 
-with tab_macro:
+# ══════════════════════════════════════════════════════════════
+# TAB 1: 總經紅綠燈 + 多指標儀表板
+# P2-B Phase 4-D: wrap 成 render_tab_macro() 純函式（最終巨型 TAB）
+# ══════════════════════════════════════════════════════════════
+def render_tab_macro():
     # ════════════════════════════════════════════════════════
     # 【模組一】紅綠燈決策儀表板（st.empty 佔位符修復版）
     # 修復：先挖洞（placeholder）→ 資料到位後回填，杜絕未審先判
@@ -5301,6 +5305,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             st.caption('▲ 點擊上方「執行 AI 裁決」，AI 將綜合量化數據與即時新聞生成完整戰情報告。')
 
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
+
+
+with tab_macro:
+    render_tab_macro()
+
 
 # ══════════════════════════════════════════════════════════════
 # TAB 2: 個股深度分析 + 健康度評分
