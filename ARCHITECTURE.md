@@ -759,6 +759,38 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 
 ---
 
+#### `scoring_helpers.py`（PR #61 新增 — 從 app.py 抽出）
+
+**設計原則**：純評分函式，**零 Streamlit / 零 session state 依賴**。
+
+| 函式 | 簽名 | 用途 |
+|---|---|---|
+| `calc_fundamental_score` | `(qtr_df, yearly_df, avg_div) -> dict` | 基本面四維評分（獲利 / 成長 / 股利 / 估值，各 0-3 分） |
+| `calc_health_score` | `(df, rsi, ibs, vr, k_val, d_val, bb) -> tuple[int, dict]` | 綜合健康度評分 0-100（6 因子：趨勢 30 + RSI 20 + 量比 15 + IBS 10 + KD 15 + 布林 10） |
+| `health_grade` | `(score) -> tuple[str, str, str, str]` | 分數 → (等級標籤, 顏色 hex, css class, emoji) |
+
+**呼叫端**：`app.py` render_health_score / render_etf_single / TAB 2 個股 / TAB 3 比較排行 等多處。
+
+---
+
+#### `ui_widgets.py`（PR #60 新增 — 從 app.py 抽出）
+
+**設計原則**：純 HTML 字串生成器，**零 Streamlit / 零 session state 依賴**，呼叫端用 `st.markdown(..., unsafe_allow_html=True)` 渲染。
+
+| 函式 / 常數 | 用途 | Callers |
+|---|---|---|
+| `explain_box(term, simple_explain, detail='')` | 術語說明框 | 內部 |
+| `traffic_light(value, good_cond, bad_cond, ...)` | 紅綠燈指示器 | 5 |
+| `beginner_kpi(title, value, plain_meaning, ...)` | 初學者 KPI 卡 | 5 |
+| `show_term_help(term)` | 術語對照表查詢 | 2 |
+| `kpi(title, value, sub='', color, border)` | 一般 KPI 卡 | **53** |
+| `teacher_box(icon, teacher, logic)` | 舊版老師建議框（保留向下相容） | 0 |
+| `teacher_conclusion(teacher, indicator_val, conclusion, ...)` | 老師結論（自動配色） | **25** |
+| `signal_box(label, color, desc='')` | 訊號方塊 | 4 |
+| `TERM_EXPLAIN: dict` | 13 個常見術語白話對照 | 內部 |
+
+---
+
 #### `scoring_engine.py`
 
 ---
