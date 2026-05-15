@@ -7710,8 +7710,9 @@ padding:10px 14px;font-size:11px;color:#f85149;margin-top:12px;">
 
 # ══════════════════════════════════════════════════════════════
 # TAB 3+4: 比較排行 + 策略手冊（從 v3_20_21 恢復）
+# P2-B Phase 4-A: wrap 成 render_stock_grp() 純函式
 # ══════════════════════════════════════════════════════════════
-with tab_stock_grp:
+def render_stock_grp():
     st.markdown("""<div style="padding:6px 0 4px;">
 <span style="font-size:20px;font-weight:900;color:#e6edf3;">📊 比較 × 排行</span>
 <span style="font-size:11px;color:#484f58;margin-left:10px;">市場狀態 · 多股比較 · 多因子排行 · 汰弱留強 · 最終建議</span>
@@ -7831,7 +7832,6 @@ with tab_stock_grp:
                            else _gsn(sid4))
                 avg_div4= _d4.get('avg_div', 0)
                 cl4     = _d4.get('cl')
-                cx4     = _d4.get('cx')
                 _fin_st4= {}
 
                 price4  = float(df4['close'].iloc[-1]) if df4 is not None and not df4.empty else 0
@@ -8742,6 +8742,11 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
             st.markdown(_t3ai_cached)
         elif not _t3ai_btn:
             st.caption('▲ 點擊上方按鈕，AI 將生成投資組合強弱排序矩陣與汰弱留強建議。')
+
+
+with tab_stock_grp:
+    render_stock_grp()
+
 
 # ══════════════════════════════════════════════════════════════
 # TAB 教學：策略邏輯說明書（靜態 Markdown）
