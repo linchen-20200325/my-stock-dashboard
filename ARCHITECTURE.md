@@ -1,6 +1,6 @@
 # 台股 AI 戰情室 — 技術規格書
 
-> **版本**：v7.0　|　**最後更新**：2026-05-15　|　**狀態**：完成 ✅
+> **版本**：v7.1　|　**最後更新**：2026-05-15　|　**狀態**：完成 ✅
 >
 > 本文件為系統架構師視角的唯讀規格書，不含任何實作程式碼。
 
@@ -790,6 +790,43 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 | `TERM_EXPLAIN: dict` | 13 個常見術語白話對照 | 內部 |
 
 ---
+
+#### `etf_dashboard.py` 結構演進（PR #75-#78 — P2-B Phase 6 全收官 ✅✅）
+
+**最終戰績**：etf_dashboard.py 3122 → **1667 行（−46.6%）**，4 個大 `render_etf_*` 函式全部抽到獨立 `.py` 模組。
+
+| 模組 | 行數 | 依賴 | 角色 | PR |
+|---|---|---|---|---|
+| `etf_tab_single.py` | 616 | 22 | ETF 單一深度診斷（NAV / 折溢價 / 費用率 / 品質評等） | #75 |
+| `etf_tab_portfolio.py` | 531 | 14 | ETF 組合配置（相關性矩陣 / 類股暴露 / AI 投組） | #76 |
+| `etf_tab_backtest.py` | 284 | 13 | ETF 歷史回測（CAGR / MDD / Sharpe / Monte Carlo） | #77 |
+| `etf_tab_ai.py` | 169 | 5 | ETF AI 教練（MACRO_ALLOC 配置 / news / banner） | #78 |
+
+**Phase 6 依賴策略**：
+- **Top-level**：僅 `import streamlit as st`
+- **函式內 late import**：所有其他依賴（stdlib / 外部模組 / etf_dashboard.py 內部 helper）
+- **循環 import 處理**：etf_dashboard.py 底部 re-export 4 個 render_etf_*，維持 app.py 既有 import 不變
+
+**etf_dashboard.py 內部 helper 跨檔使用統計（從各 etf_tab_*.py late import）**：
+
+| Helper | etf_tab_single | etf_tab_portfolio | etf_tab_backtest | etf_tab_ai |
+|---|---|---|---|---|
+| `_colored_box` | ✅ | ✅ | ✅ | — |
+| `_teacher_conclusion` | ✅ | ✅ | ✅ | — |
+| `macro_allocation_banner` | ✅ | ✅ | — | ✅ |
+| `fetch_etf_price` | ✅ | ✅ | ✅ | — |
+| `fetch_etf_dividends` | ✅ | ✅ | ✅ | — |
+| `fetch_etf_info` | ✅ | ✅ | — | — |
+| `calc_*` 系列 (cagr/mdd/sharpe/avg_yield/...) | ✅ | — | ✅ | — |
+| `_compute_etf_warroom_row` | — | ✅ | — | — |
+| `_etf_ai_*` 系列 | ✅ (hokei) | ✅ (portfolio) | ✅ (backtest) | — |
+| `MACRO_ALLOC` / `_fetch_news_for` | — | — | — | ✅ |
+
+**已清除繼承風格債（55+ 個）**：
+- P6-A: 36 個（13 E701 + 9 E702 + 9 F541 + 3 E401 + 2 F401，autopep8 + ruff --fix）
+- P6-B: 1 個 E701
+- P6-C: 10 個 E701/E702
+- P6-D: 8 個 F541
 
 #### `app.py` 結構演進（PR #66/#68/#70-#73 — P2-B Phase 4+5 全收官 ✅✅）
 
