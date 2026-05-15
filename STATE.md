@@ -68,6 +68,7 @@
 | #82 | fix(app): `sys.modules['app']` 別名 — 修復線上 `StreamlitSetPageConfigMustBeFirstCommandError`（治 4 處 `from app import` re-execute） | 0b993b2 |
 | #84 | fix(tab_stock): 殖利率河流圖三條 band 改用逐日 TTM（修水平直線 bug）+ 風控警示卡帶上 asset_type/sid/name 三件套 | 3068494 |
 | #86 | fix(app): `_AppProxy` 取代 `sys.modules.setdefault` — 線上 Streamlit Cloud `__main__` ≠ script module 時 PR #82 失效，改用 ModuleType proxy 轉發 live globals() 徹底解 4 檔 from-app ImportError | 40741be |
+| #88 | fix(app): proxy v2 — globals 從 closure 改塞 `proxy.__dict__['__app_globals__']`，無條件 refresh，徹底解線上 tab_stock 11-name `from app import` 殘留 ImportError | 07a7321 |
 
 ## 🎯 Backlog
 - **環境工**：33 條 stale remote branches 清理（PR #42-#78 累積，sandbox token 無 delete 權）
