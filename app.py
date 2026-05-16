@@ -219,16 +219,29 @@ def _get_loader():
     """快取單一 StockDataLoader 實例，避免每次 cache miss 都重新 login"""
     return StockDataLoader()
 
+def _expected_latest_trading_date():
+    d = datetime.date.today()
+    while d.weekday() >= 5:
+        d -= datetime.timedelta(days=1)
+    return d
+
 @st.cache_data(ttl=1800, max_entries=10)
 def fetch_price_data(sid, days):
-    # K線緩存4小時
-    _c = _load_cache('price', sid, str(days), ttl_hours=4)
+    _c = _load_cache('price', sid, str(days), ttl_hours=0.5)
     if _c is not None:
         df_c, name_c = _c
-        # 驗證快取資料有效（close不為全0）
         if df_c is not None and not df_c.empty and float(df_c['close'].max()) > 0:
-            return df_c, name_c, None
-        # 快取有問題，重新抓取
+            try:
+                _latest = df_c['date'].iloc[-1]
+                if hasattr(_latest, 'date'):
+                    _latest = _latest.date()
+                elif isinstance(_latest, str):
+                    _latest = datetime.datetime.strptime(str(_latest)[:10], '%Y-%m-%d').date()
+                # 5 個 calendar day 內視為新鮮（涵蓋週末 + 1 個連假）；超過 → 強制重抓
+                if (_expected_latest_trading_date() - _latest).days <= 5:
+                    return df_c, name_c, None
+            except Exception:
+                return df_c, name_c, None
     loader = _get_loader()
     df, err, name = loader.get_combined_data(sid, days + 60, True)
     if err or df is None:
