@@ -68,6 +68,45 @@ def safe_get(value: Any) -> Any:
     return value
 
 
+def final_recommendation(row: dict, score_map: dict) -> tuple[str, str]:
+    """個股最終綜合建議 — 取代 tab_stock_grp._final_rec closure。
+
+    四項加分（健康度 + 多因子總分 + 估值帶位 + 趨勢）合計：
+      pts ≥ 7：🟢 積極 / pts ≥ 4：🟡 觀察 / 其餘：🔴 等待。
+
+    Args:
+        row: 至少含 'stock_id'，可選 '_health' / '_val' / '_trend'
+        score_map: {stock_id → {'total': mf_score}} 多因子總分對照
+
+    Returns:
+        (label, color_hex)
+    """
+    health   = row.get('_health', 0)
+    val      = row.get('_val', '')
+    trend    = row.get('_trend', '')
+    mf_total = score_map.get(row['stock_id'], {}).get('total', 0)
+    pts = 0
+    if health >= 80:
+        pts += 3
+    elif health >= 50:
+        pts += 1
+    if mf_total >= 75:
+        pts += 3
+    elif mf_total >= 55:
+        pts += 1
+    if '便宜' in val:
+        pts += 2
+    elif '合理' in val:
+        pts += 1
+    if '多頭' in trend:
+        pts += 1
+    if pts >= 7:
+        return '🟢 積極', '#3fb950'
+    if pts >= 4:
+        return '🟡 觀察', '#d29922'
+    return '🔴 等待', '#f85149'
+
+
 def safe_ma(df: pd.DataFrame, n: int) -> float:
     """取最新 MA{n} — 取代 tab_stock._safe_ma。
 

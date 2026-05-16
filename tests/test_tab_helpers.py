@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from tab_helpers import (
+    final_recommendation,
     format_condition_emoji,
     parse_cash_flow_ratio,
     safe_get,
@@ -114,3 +115,52 @@ class TestSafeMa:
         df = pd.DataFrame({'close': list(range(1, 21))})  # 1..20
         # tail(20).mean() = sum(1..20)/20 = 10.5
         assert safe_ma(df, 20) == pytest.approx(10.5)
+
+
+class TestFinalRecommendation:
+    SCORE_MAP = {'2330': {'total': 80}, '2317': {'total': 60}, '0050': {'total': 40}}
+
+    def test_aggressive_all_high(self):
+        row = {'stock_id': '2330', '_health': 90, '_val': '便宜', '_trend': '多頭'}
+        # health≥80:+3, mf≥75:+3, 便宜:+2, 多頭:+1 = 9 ≥ 7
+        label, color = final_recommendation(row, self.SCORE_MAP)
+        assert '積極' in label
+        assert color == '#3fb950'
+
+    def test_watch_medium(self):
+        row = {'stock_id': '2317', '_health': 60, '_val': '合理', '_trend': '多頭'}
+        # health≥50:+1, mf≥55:+1, 合理:+1, 多頭:+1 = 4
+        label, color = final_recommendation(row, self.SCORE_MAP)
+        assert '觀察' in label
+        assert color == '#d29922'
+
+    def test_wait_low(self):
+        row = {'stock_id': '0050', '_health': 30, '_val': '昂貴', '_trend': '空頭'}
+        # 全 0 點
+        label, color = final_recommendation(row, self.SCORE_MAP)
+        assert '等待' in label
+        assert color == '#f85149'
+
+    def test_missing_keys_default_to_wait(self):
+        # 缺所有可選 key + stock_id 不在 score_map → 全 0
+        row = {'stock_id': 'UNKNOWN'}
+        label, _ = final_recommendation(row, self.SCORE_MAP)
+        assert '等待' in label
+
+    def test_health_only_threshold_7(self):
+        # health=80(+3) + mf=80(+3) + 便宜(+2) = 8 ≥ 7
+        row = {'stock_id': '2330', '_health': 80, '_val': '便宜', '_trend': ''}
+        label, _ = final_recommendation(row, self.SCORE_MAP)
+        assert '積極' in label
+
+    def test_boundary_pts_4_watch(self):
+        # health=50(+1) + mf=55(+1) + 合理(+1) + 多頭(+1) = 4 → 觀察
+        row = {'stock_id': '2317', '_health': 50, '_val': '合理', '_trend': '多頭'}
+        label, _ = final_recommendation(row, self.SCORE_MAP)
+        assert '觀察' in label
+
+    def test_boundary_pts_3_wait(self):
+        # health=50(+1) + mf=55(+1) + 合理(+1) = 3 < 4 → 等待
+        row = {'stock_id': '2317', '_health': 50, '_val': '合理', '_trend': '空頭'}
+        label, _ = final_recommendation(row, self.SCORE_MAP)
+        assert '等待' in label

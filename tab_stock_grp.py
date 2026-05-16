@@ -14,7 +14,11 @@ from __future__ import annotations
 
 import streamlit as st
 
-from tab_helpers import format_condition_emoji, parse_cash_flow_ratio
+from tab_helpers import (
+    final_recommendation,
+    format_condition_emoji,
+    parse_cash_flow_ratio,
+)
 
 
 def render_stock_grp():
@@ -379,38 +383,11 @@ def render_stock_grp():
         if results_t3:
             score_map = {s['stock_id']: s for s in score_t3}
 
-            def _final_rec(row):
-                health   = row.get('_health', 0)
-                val      = row.get('_val', '')
-                trend    = row.get('_trend', '')
-                mf_total = score_map.get(row['stock_id'], {}).get('total', 0)
-                pts = 0
-                if health >= 80:
-                    pts += 3
-                elif health >= 50:
-                    pts += 1
-                if mf_total >= 75:
-                    pts += 3
-                elif mf_total >= 55:
-                    pts += 1
-                if '便宜' in val:
-                    pts += 2
-                elif '合理' in val:
-                    pts += 1
-                if '多頭' in trend:
-                    pts += 1
-                if pts >= 7:
-                    return '🟢 積極', '#3fb950'
-                elif pts >= 4:
-                    return '🟡 觀察', '#d29922'
-                else:
-                    return '🔴 等待', '#f85149'
-
             st.markdown('#### ⑤ 最終綜合建議')
             # 動態：計算積極/觀察/等待各有幾支
             _rec_counts = {'積極': 0, '觀察': 0, '等待': 0}
             for _rr in results_t3:
-                _rl, _ = _final_rec(_rr)
+                _rl, _ = final_recommendation(_rr, score_map)
                 _rec_counts[_rl.split()[-1]] = _rec_counts.get(_rl.split()[-1], 0) + 1
             _active_n = _rec_counts.get('積極', 0)
             _wait_n = _rec_counts.get('等待', 0)
@@ -426,7 +403,7 @@ def render_stock_grp():
             st.markdown(teacher_conclusion('宏爺', f'健康+多因子+357三重確認，共 {len(results_t3)} 支', _r5c, _r5a), unsafe_allow_html=True)
             rec_cols = st.columns(min(len(results_t3), 5))
             for ci, row in enumerate(results_t3[:5]):
-                rec_label, rec_color = _final_rec(row)
+                rec_label, rec_color = final_recommendation(row, score_map)
                 mf2 = score_map.get(row['stock_id'], {}).get('total', 0)
                 _fd2 = _fund_map.get(row['stock_id'], {})
                 with rec_cols[ci]:

@@ -414,19 +414,30 @@ def _no_ai_survival(fd: dict) -> dict:
     inv_p = fd.get("存貨前期(千)", 0) or 0
     a_val = round(ocf / cl * 100, 1) if cl > 0 else None
     a_st = ("Pass" if a_val and a_val > 100 else "Fail") if a_val is not None else "N/A"
-    # B項：現金流量允當比率（必須使用 5 年歷史資料，禁止單季推估）
-    # 優先使用呼叫方預填的 5 年精確值（fetch_5_years_cash_flow 回傳）
+    # B項：現金流量允當比率
+    # 1. 呼叫端預填 5 年精確值（fetch_5_years_cash_flow）→ 優先採用
+    # 2. 預填 status=error（API 失敗）→ N/A，避免單季誤導
+    # 3. 上市未滿 5 年 / 年份不足 → N/A 並標示原因
+    # 4. 未預填 _b5 → 退回單季估算（legacy 路徑、unit test 使用）
     _b5 = fd.get("b_item_5y") or {}
-    if _b5.get("status") == "ok" and _b5.get("ratio") is not None:
+    _b5_status = _b5.get("status")
+    if _b5_status == "ok" and _b5.get("ratio") is not None:
         b_val     = _b5["ratio"]
         b_display = _b5["label"]                          # e.g. "127.3%（5年實際）"
         b_st      = "Pass" if b_val >= 100 else "Fail"
-    elif _b5.get("status") == "insufficient_data":
-        # 上市未滿5年或年份資料不足：明確標示無法計算
+    elif _b5_status == "insufficient_data":
         b_val, b_display, b_st = None, f"N/A（{_b5.get('label','上市未滿5年')}）", "Fail"
-    else:
-        # 5年資料抓取失敗（API 錯誤）：顯示 N/A，不使用單季估算
+    elif _b5_status == "error":
         b_val, b_display, b_st = None, "N/A（5年歷史資料未取得）", "N/A"
+    else:
+        _inv_inc = max(inv - inv_p, 0)
+        _b_denom = capex + _inv_inc + div
+        if _b_denom <= 0:
+            b_val, b_display, b_st = None, "N/A", "N/A"
+        else:
+            b_val = round(ocf / _b_denom * 100, 1)
+            b_display = f"{b_val:.1f}%(1Q估)"
+            b_st = "Pass" if b_val >= 100 else "Fail"
     c_val = round((ocf - div) / (ppe + lt) * 100, 1) if (ppe + lt) > 0 else None
     c_st = ("Pass" if c_val and c_val > 10 else "Fail") if c_val is not None else "N/A"
     rule_st = "Pass" if (a_st in ("Pass", "N/A") and b_st in ("Pass", "N/A") and c_st in ("Pass", "N/A")) else "Fail"
@@ -439,9 +450,11 @@ def _no_ai_survival(fd: dict) -> dict:
             "Cash_Flow_Adequacy": b_display,
             "Cash_Reinvestment": f"{c_val}%" if c_val is not None else "N/A",
             "Status": rule_st,
-            "Insight": ("原始數據直接計算（B項5年實際）"
-                        if (_b5.get("status") == "ok")
-                        else "原始數據直接計算（B項單季估算）"),
+            "Insight": (
+                "原始數據直接計算（B項5年實際）" if _b5_status == "ok"
+                else "原始數據直接計算（B項5年資料未取得）" if _b5_status == "error"
+                else "原始數據直接計算（B項單季估算）"
+            ),
         },
         "Final_Survival_Verdict": verdict,
     }}

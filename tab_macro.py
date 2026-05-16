@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from macro_helpers import calc_traffic_light
 from tab_helpers import safe_get
 
 
@@ -67,78 +68,7 @@ def render_tab_macro():
     # 修復：先挖洞（placeholder）→ 資料到位後回填，杜絕未審先判
     # ════════════════════════════════════════════════════════
 
-    # ── 核心工具函式：計算燈號（任何時候都可以呼叫）────────
-    def _calc_traffic_light(mkt_info, jingqi_info, cl_data, li_latest):
-        """根據當前數據計算紅綠燈狀態，回傳 dict。無數據時回傳 None。"""
-        # 尚未有任何數據→回傳 None（由 placeholder 顯示等待狀態）
-        if not mkt_info and not jingqi_info and not cl_data:
-            return None
-        _mkt    = mkt_info   or {}
-        _jq     = jingqi_info or {}
-        _cd     = cl_data    or {}
-        _score  = _mkt.get('score', 0)
-        _jqavg  = _jq.get('avg', 50)
-        _inst   = _cd.get('inst', {})
-        _fk     = next((k for k in _inst if '外資' in k), None)
-        if _fk is None:
-            _fk = next((k for k in _inst if '外資' in k), None)
-        _fnet   = _inst.get(_fk, {}).get('net', 0) if _fk else 0
-        # 先行指標期貨空單
-        _fut_net = 0
-        if li_latest is not None and not li_latest.empty and '外資大小' in li_latest.columns:
-            try:
-                _fut_net = float(li_latest.iloc[-1].get('外資大小', 0))
-            except Exception:
-                pass
-        # 韭菜指數
-        _leek = 50
-        if li_latest is not None and not li_latest.empty and '韭菜指數' in li_latest.columns:
-            try:
-                _leek = float(li_latest.iloc[-1].get('韭菜指數', 50))
-            except Exception:
-                pass
-
-        _regime  = _mkt.get('regime', 'neutral')
-        _defense = (_score < 2 and abs(_fut_net) > 30000 and _fut_net < 0)
-        _health  = round(_jqavg * 0.4 + min(_score / 5 * 100, 100) * 0.4 + (20 if _fnet > 0 else 0), 1)
-
-        # Regime 為主要驅動，_defense / _health<40 為強制覆蓋（緊急防禦）
-        if _defense or _health < 40:
-            _color = '#f85149'
-            _icon = '🔴'
-            _label = '空頭防禦｜降低部位'
-            _action = '⛔ 大環境惡化，系統已啟動資金保護機制'
-            _sub    = '建議持有現金，等待市場明確訊號，禁止追買任何個股'
-        elif _regime == 'bull':
-            _color = '#3fb950'
-            _icon = '🟢'
-            _label = '多頭市場｜積極操作'
-            _action = '✅ 市場健康，籌碼乾淨，可積極尋找強勢標的'
-            _sub    = '可積極尋找強勢標的，留意趨勢延續性'
-        elif _regime in ('caution', 'bear'):
-            _color = '#f85149'
-            _icon = '🔴'
-            _label = '保守防禦｜縮減部位'
-            _action = '⛔ 市場走弱，建議縮減持股比例，等待多頭確認'
-            _sub    = '降低風險暴露，避免新開倉，等待多頭重啟'
-        else:
-            _color = '#d29922'
-            _icon = '🟡'
-            _label = '震盪整理｜謹慎觀望'
-            _action = '⚠️ 市場處於整理期，謹慎操作，降低部位'
-            _sub    = '持有現有倉位觀望，不追高，等待更明確信號'
-
-        # 數據信心指數
-        _conf = round(sum([bool(mkt_info), bool(jingqi_info), bool(_fk),
-                           bool(li_latest is not None and not li_latest.empty),
-                           bool(_cd.get('adl') is not None)]) / 5 * 100)
-        return {
-            'color': _color, 'icon': _icon, 'label': _label,
-            'action': _action, 'sub': _sub, 'health': _health,
-            'defense': _defense, 'score': _score, 'jqavg': _jqavg,
-            'leek': _leek, 'fnet': _fnet, 'fk': _fk, 'fut_net': _fut_net,
-            'conf': _conf, 'regime': _regime,
-        }
+    # 紅綠燈計算邏輯已抽至 macro_helpers.calc_traffic_light（Phase 7A-Ext）
 
     def _render_traffic_light(placeholder, tl, mkt_info=None):
         """將計算結果回填到 placeholder（或顯示等待狀態）。
@@ -233,7 +163,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         _tm_jq_init  = st.session_state.get('jingqi_info', {})
         _tm_cd_init  = st.session_state.get('cl_data', {})
         _tm_li_init  = st.session_state.get('li_latest')
-        _tl_init     = _calc_traffic_light(_tm_mkt_init, _tm_jq_init, _tm_cd_init, _tm_li_init)
+        _tl_init     = calc_traffic_light(_tm_mkt_init, _tm_jq_init, _tm_cd_init, _tm_li_init)
         _render_traffic_light(_tl_placeholder, _tl_init, _tm_mkt_init)
     else:
         # 無快取 or 快取過期 → 顯示等待狀態，不顯示誤導性燈號
@@ -2101,7 +2031,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         with _mkt_placeholder.container():
             st.info('📡 請點擊「🚀 一鍵更新全部數據」載入大盤數據')
     # ── ③ 資料到位後，回填紅綠燈佔位符（修復「未審先判」Bug）────
-    _tl_final = _calc_traffic_light(
+    _tl_final = calc_traffic_light(
         st.session_state.get('mkt_info', {}),
         st.session_state.get('jingqi_info', {}),
         st.session_state.get('cl_data', {}),
