@@ -957,6 +957,26 @@ tab_stock.py / tab_stock_grp.py / tab_macro.py  (module-level import)
 - ✅ tests/test_macro_helpers.py 12 case（regime × defense 矩陣 + health 公式 + conf 計分）
 - ✅ tests/test_tab_helpers.py +7（TestFinalRecommendation：積極/觀察/等待 × 邊界值）
 
+#### `etf_helpers.py` ETF tab 共用純函式（P2-B Phase 7B）
+
+**動機**：Phase 7A/7A-Ext 已抽完 tab_macro / tab_stock(_grp) 的 closure，但 `etf_tab_backtest.py` 與 `etf_tab_portfolio.py` 仍各有純邏輯 closure 嵌在 render 內無法獨立測試：
+- `etf_tab_backtest._norm_return` / `_norm_lower_better`（雷達圖 5 維 0-100 正規化，12 行；組合 + 基準共 10 個 callsites）
+- `etf_tab_portfolio._auto_role` + `_CORE_TICKERS`（MK 框架 #9 核心/衛星分類，6 行）
+
+| 抽出 | 從 | 至 | Lines saved |
+|---|---|---|---|
+| `norm_return(v, lo, mid, hi)` | etf_tab_backtest.render_etf_backtest:186-190 | `etf_helpers.py` | 5 |
+| `norm_lower_better(v, best, mid, worst)` | etf_tab_backtest.render_etf_backtest:192-197 | `etf_helpers.py` | 6 |
+| `auto_role(tk)` + `_CORE_TICKERS` | etf_tab_portfolio.render_etf_portfolio:45-51 | `etf_helpers.py` | 7 |
+
+**`etf_helpers.py` 設計**：零 Streamlit/Plotly 依賴；`_CORE_TICKERS` 改用 `frozenset` 防呆（測試實證 `.add()` raise AttributeError）。命名去 underscore prefix（`_norm_return` → `norm_return`、`_auto_role` → `auto_role`）改為 public module API，與 `tab_helpers` 慣例一致。Module-level import 於兩個 consumer 頂部（無循環風險）。
+
+**驗證結果**：
+- ✅ py_compile + ruff (`All checks passed!`)
+- ✅ pytest 全套 **548/548 全綠**（原 519 + 新增 29）
+- ✅ tests/test_etf_helpers.py：TestNormReturn 9 + TestNormLowerBetter 10 + TestAutoRole 10
+- 涵蓋：邊界值（≥hi/≤lo/at mid）、線性段、custom bounds（實際 callsite 參數）、abs 取值、`.TWO` / `.TW` 後綴剝離、`None` / 空字串、frozenset 不可變
+
 #### `app.py` 結構演進（PR #66/#68/#70-#73 — P2-B Phase 4+5 全收官 ✅✅）
 
 **最終戰績**：app.py 9622 → **1378 行（−85.7%）**，4 個 TAB 全部抽到獨立 `.py` 模組。

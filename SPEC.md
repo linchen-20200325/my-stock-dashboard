@@ -153,7 +153,31 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 2. **`tab_helpers.py`**：至少 2 個 tab_*.py 模組會用到（跨檔重複）；**`macro_helpers.py`**：tab_macro 專屬邏輯但需 unit test
 3. 必須附對應 `tests/test_*.py` 測試（至少 normal / edge / None 三類 case）
 
-### §6.4 同期修補：`_no_ai_survival` 1Q fallback（commit `e678d22`）
+### §6.4 `etf_helpers.py`（Phase 7B — 3 函式）
+
+> 從 `etf_tab_backtest` / `etf_tab_portfolio` 抽出，獨立模組以避免 `tab_helpers.py` 混入 ETF 專屬邏輯。
+
+| 函式 | 輸入 | 輸出 | 取代的 closure |
+|---|---|---|---|
+| `norm_return(v, lo=-50, mid=0, hi=50)` | float × 4 | float (0-100) | `_norm_return` (etf_tab_backtest:186) |
+| `norm_lower_better(v, best=5, mid=20, worst=35)` | float × 4 | float (0-100) | `_norm_lower_better` (etf_tab_backtest:192) |
+| `auto_role(tk)` | str / None | '核心' / '衛星' | `_auto_role` + `_CORE_TICKERS` (etf_tab_portfolio:45-51) |
+
+**`_CORE_TICKERS` 白名單**（MK 框架 #9，frozenset 防呆）：
+
+| 類別 | ticker（去後綴） |
+|---|---|
+| 台股高股息 / 大型 | 0050, 0051, 0056, 006208, 00713, 00878, 00919, 00929, 00940, 00946 |
+| 台股債券 | 00713B, 00679B, 00937B |
+| 美股全市場 / 高股息 | VTI, VOO, SPY, VT, SCHD, VEA, VWO, VNQ |
+| 美股債券 / REITs | BND, AGG, VNQ |
+
+**邊界處理**：
+- `norm_return`：v=hi → 100（含等號邊界）；v=mid → 50
+- `norm_lower_better`：先 `abs(v)`，負數視為相同距離；v=best → 100；v=worst → 0
+- `auto_role`：`.TW` / `.TWO` 後綴自動剝離；`None` / 空字串 → 衛星；大小寫不敏感
+
+### §6.5 同期修補：`_no_ai_survival` 1Q fallback（commit `e678d22`）
 
 `financial_health_engine._no_ai_survival` 對 B 項（現金流量允當比率）分支：
 
@@ -170,7 +194,7 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 
 ## §7 文件治理連動
 
-任何 §1–§6 規約變更必須同步：
+任何 §1–§6.5 規約變更必須同步：
 - `STATE.md` — 加入 commit / PR 行
 - `ARCHITECTURE.md` — 對應模組章節
 - `SPEC.md`（本檔） — 直接更新對應表 / 啟發式
