@@ -895,6 +895,36 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 
 **邊界處理**：try/except 包覆；`_add_pt` 用 `locals().get()` 防 NameError；MA 欄位缺失即時 rolling 補算；y ≤ 0 時不畫線。
 
+#### `tab_helpers.py` 跨 tab 共用純函式（commit `0ef1991` — P2-B Phase 7A）
+
+**動機**：tab_stock.py 與 tab_stock_grp.py 內出現 EXACT DUPLICATE 的 `_r110_ok_a` / `_r110_ok_b`（cash flow 比率解析）與 `_tk` / `_tk2`（bool → emoji），各自還 local re-import `re`；tab_macro 也有相似的 `_v`（NaN 過濾）與 tab_stock 的 `_safe_ma`。Phase 7A 把這 4 個 closure 合併到模組頂層、零 Streamlit 依賴、可獨立 unit test。
+
+| 函式 | 取代 | 來源 | Lines saved |
+|---|---|---|---|
+| `parse_cash_flow_ratio(value, threshold, strict)` | `_r110_ok_a` / `_r110_ok_b` | tab_stock:2157 + tab_stock_grp:723 | 20 |
+| `format_condition_emoji(value)` | `_tk2` / `_tk` | tab_stock:2169 + tab_stock_grp:735 | 4 |
+| `safe_get(value)` | `_v` | tab_macro:2667 | 6 |
+| `safe_ma(df, n)` | `_safe_ma` | tab_stock:378 | 7 |
+
+**依賴方向**：
+
+```
+tab_helpers.py  (葉節點 / 純 Python + pandas，零 streamlit / plotly)
+       ↑
+tab_stock.py / tab_stock_grp.py / tab_macro.py  (module-level import)
+```
+
+**設計原則**：
+- 零 Streamlit / Plotly：可被任何模組安全引用
+- 防呆優先：對 None / NaN / 缺欄位皆有 fallback path
+- 顯式參數：`strict=True/False` 取代隱式 bool 位置參數
+- 對應測試覆蓋：`tests/test_tab_helpers.py` 27 case（13 cash flow + 4 emoji + 6 safe_get + 4 safe_ma）
+
+**驗證結果**：
+- ✅ py_compile + ruff 全綠
+- ✅ pytest 全套 500 → 496 pass / 4 unrelated fail（test_financial_health_engine.TestNoAiSurvivalBItem 既有問題）
+- ✅ 3 tab 檔合計 −41 行（移除 closure + 重複 import）
+
 #### `app.py` 結構演進（PR #66/#68/#70-#73 — P2-B Phase 4+5 全收官 ✅✅）
 
 **最終戰績**：app.py 9622 → **1378 行（−85.7%）**，4 個 TAB 全部抽到獨立 `.py` 模組。

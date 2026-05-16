@@ -111,9 +111,31 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 
 ---
 
-## §6 文件治理連動
+## §6 跨 tab 共用純函式（Phase 7A — commit `0ef1991`）
 
-任何 §1–§5 規約變更必須同步：
+> 來源：`tab_helpers.py`。零 Streamlit / Plotly 依賴，任何 module 皆可 import。
+
+| 函式 | 輸入 | 輸出 | 取代的 closure | 對應 financial_health_engine |
+|---|---|---|---|---|
+| `parse_cash_flow_ratio(value, threshold, strict)` | str/None/NaN, float, bool | True / False / None | `_r110_ok_a` (tab_stock:2157) + `_r110_ok_b` (tab_stock_grp:723) | A>100% / B≥100% / C>10% 對齊 `:416/423/431` |
+| `format_condition_emoji(value)` | bool / None / 其他 | '✅' / '❌' / '⚪' | `_tk2` (tab_stock) + `_tk` (tab_stock_grp) | UI 顯示三態 |
+| `safe_get(value)` | Any | value or None | `_v` (tab_macro:2667) | 過濾 None / NaN |
+| `safe_ma(df, n)` | DataFrame (需有 close 欄), int | float | `_safe_ma` (tab_stock:378) | 對應 data_loader:555 計算結果 |
+
+**呼叫慣例**：
+- ✅ Module-level `from tab_helpers import ...`（純函式無循環風險）
+- ❌ 不要在函式內 late import，會浪費 cache
+
+**新增 helper 條件**：
+1. 純 Python（含 pandas/numpy），無 `st.*` 呼叫、無 `plotly.*` 呼叫
+2. 至少 2 個 tab_*.py 模組會用到（單一模組專屬請放回原模組頂層）
+3. 必須附對應 `tests/test_tab_helpers.py` 測試（至少 normal / edge / None 三類 case）
+
+---
+
+## §7 文件治理連動
+
+任何 §1–§6 規約變更必須同步：
 - `STATE.md` — 加入 commit / PR 行
 - `ARCHITECTURE.md` — 對應模組章節
 - `SPEC.md`（本檔） — 直接更新對應表 / 啟發式
