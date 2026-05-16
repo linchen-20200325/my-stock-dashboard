@@ -111,25 +111,60 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 
 ---
 
-## §6 跨 tab 共用純函式（Phase 7A — commit `0ef1991`）
+## §6 跨 tab 共用純函式（Phase 7A — commit `0ef1991` / Phase 7A-Ext — commit `e678d22`）
 
-> 來源：`tab_helpers.py`。零 Streamlit / Plotly 依賴，任何 module 皆可 import。
+> 來源：`tab_helpers.py` + `macro_helpers.py`。零 Streamlit / Plotly 依賴，任何 module 皆可 import。
 
-| 函式 | 輸入 | 輸出 | 取代的 closure | 對應 financial_health_engine |
+### §6.1 `tab_helpers.py`（5 函式）
+
+| 函式 | 輸入 | 輸出 | 取代的 closure | 階段 |
 |---|---|---|---|---|
-| `parse_cash_flow_ratio(value, threshold, strict)` | str/None/NaN, float, bool | True / False / None | `_r110_ok_a` (tab_stock:2157) + `_r110_ok_b` (tab_stock_grp:723) | A>100% / B≥100% / C>10% 對齊 `:416/423/431` |
-| `format_condition_emoji(value)` | bool / None / 其他 | '✅' / '❌' / '⚪' | `_tk2` (tab_stock) + `_tk` (tab_stock_grp) | UI 顯示三態 |
-| `safe_get(value)` | Any | value or None | `_v` (tab_macro:2667) | 過濾 None / NaN |
-| `safe_ma(df, n)` | DataFrame (需有 close 欄), int | float | `_safe_ma` (tab_stock:378) | 對應 data_loader:555 計算結果 |
+| `parse_cash_flow_ratio(value, threshold, strict)` | str/None/NaN, float, bool | True / False / None | `_r110_ok_a` (tab_stock:2157) + `_r110_ok_b` (tab_stock_grp:723) | 7A |
+| `format_condition_emoji(value)` | bool / None / 其他 | '✅' / '❌' / '⚪' | `_tk2` (tab_stock) + `_tk` (tab_stock_grp) | 7A |
+| `safe_get(value)` | Any | value or None | `_v` (tab_macro:2667) | 7A |
+| `safe_ma(df, n)` | DataFrame (需有 close 欄), int | float | `_safe_ma` (tab_stock:378) | 7A |
+| `final_recommendation(row, score_map)` | dict, dict | (label, color_hex) | `_final_rec` (tab_stock_grp:382 closure) | 7A-Ext |
+
+### §6.2 `macro_helpers.py`（1 函式）
+
+> 從 `tab_macro.render_tab_macro` 抽出，獨立模組以避免 `tab_helpers.py` 引入 tab_macro 專屬邏輯污染。
+
+| 函式 | 輸入 | 輸出 | 取代的 closure |
+|---|---|---|---|
+| `calc_traffic_light(mkt_info, jingqi_info, cl_data, li_latest)` | dict, dict, dict, DataFrame | dict (15 keys) or None | `_calc_traffic_light` (tab_macro:71-141, 71 行 nested def) |
+
+**決策樹（5 路）**：
+1. 三來源全空 → `None`（由 placeholder 顯示等待狀態）
+2. `defense=True`（`score<2` 且外資期貨大空單 `<−30000`）或 `health<40` → 🔴 空頭防禦（強制覆蓋）
+3. `regime == 'bull'` → 🟢 多頭積極
+4. `regime in ('caution','bear')` → 🔴 保守防禦
+5. 其他 → 🟡 震盪整理
+
+**回傳 dict 15 keys**：`color / icon / label / action / sub / health / defense / score / jqavg / leek / fnet / fk / fut_net / conf / regime`
+
+### §6.3 通用慣例
 
 **呼叫慣例**：
-- ✅ Module-level `from tab_helpers import ...`（純函式無循環風險）
+- ✅ Module-level `from tab_helpers import ...` / `from macro_helpers import ...`（純函式無循環風險）
 - ❌ 不要在函式內 late import，會浪費 cache
 
 **新增 helper 條件**：
 1. 純 Python（含 pandas/numpy），無 `st.*` 呼叫、無 `plotly.*` 呼叫
-2. 至少 2 個 tab_*.py 模組會用到（單一模組專屬請放回原模組頂層）
-3. 必須附對應 `tests/test_tab_helpers.py` 測試（至少 normal / edge / None 三類 case）
+2. **`tab_helpers.py`**：至少 2 個 tab_*.py 模組會用到（跨檔重複）；**`macro_helpers.py`**：tab_macro 專屬邏輯但需 unit test
+3. 必須附對應 `tests/test_*.py` 測試（至少 normal / edge / None 三類 case）
+
+### §6.4 同期修補：`_no_ai_survival` 1Q fallback（commit `e678d22`）
+
+`financial_health_engine._no_ai_survival` 對 B 項（現金流量允當比率）分支：
+
+| `b_item_5y.status` | b_val | b_display | b_st |
+|---|---|---|---|
+| `"ok"` | 5y 實際值 | `"127.3%（5年實際）"` | Pass/Fail |
+| `"insufficient_data"` | None | `"N/A（上市未滿5年）"` | Fail |
+| `"error"` | None | `"N/A（5年歷史資料未取得）"` | N/A |
+| **缺 key（unit test / legacy 呼叫端）** | **1Q 估算** | **`"XX.X%(1Q估)"`** | **Pass/Fail** |
+
+公式：`b_val = OCF / (capex + max(inv-inv_p, 0) + div) × 100`；`b_denom ≤ 0` → display `"N/A"`、status N/A。
 
 ---
 

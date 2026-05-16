@@ -11,7 +11,7 @@
 |---|---|
 | **UI** | `app.py`（主入口，PR #73 後 **1378 行**，−85%，4/4 TAB 已抽至獨立模組）· `tab_macro.py` (4031) · `tab_stock.py` (2521) · `tab_stock_grp.py` (1073) · `tab_edu.py` (401) · `etf_dashboard.py`（Phase 7C 後 **49 行 shim**，−97%，三層全拆）· `etf_tab_single.py` (616) · `etf_tab_portfolio.py` (531) · `etf_tab_backtest.py` (284) · `etf_tab_ai.py` (169) · `ui_widgets.py`（PR #60 抽出 8 個純 HTML 函式） |
 | **ETF 三層** | `etf_fetch.py` (572 / Phase 7C 純 I/O：價格 / 配息 / NAV / 費用率 / 類股漲跌 / 新聞) · `etf_calc.py` (465 / 純算：殖利率 / 總報酬 / 折溢價 / 風險指標 / 同儕排名 / 戰情室列) · `etf_render.py` (505 / Streamlit UI：橫幅 / 走勢 / BIAS / 蒙地卡羅 / 類股熱力圖) |
-| **跨 tab 共用** | `tab_helpers.py` (89 / Phase 7A 純函式：parse_cash_flow_ratio / format_condition_emoji / safe_get / safe_ma — 取代 tab_stock + tab_stock_grp + tab_macro 內 4 個重複 closure；零 Streamlit 依賴，27 個 unit test) |
+| **跨 tab 共用** | `tab_helpers.py` (135 / Phase 7A+7A-Ext 純函式：parse_cash_flow_ratio / format_condition_emoji / safe_get / safe_ma / final_recommendation — 取代 tab_stock + tab_stock_grp + tab_macro 內 5 個重複 closure；零 Streamlit 依賴，34 unit test) · `macro_helpers.py` (110 / Phase 7A-Ext：calc_traffic_light — tab_macro 紅綠燈決策核心抽出；12 unit test) |
 | **資料抓取** | `data_loader.py` · `macro_core.py`（含 PR #53 `diagnose_tw_pmi_sources`）· `tw_macro.py` · `daily_checklist.py` · `leading_indicators.py` · `tw_stock_data_fetcher.py` |
 | **資料註冊** | `data_registry.py` · `data_config.py` · `config.py` |
 | **引擎** | `scoring_engine.py` · `scoring_helpers.py`（PR #61 抽 3 純函式：fundamental_score / health_score / health_grade）· `financial_health_engine.py` · `market_strategy.py` · `risk_control.py` · `backtest_engine.py` · `unified_decision.py` · `v4_strategy_engine.py` · `v5_modules.py` · `yield_screener.py` |
@@ -89,6 +89,7 @@
 | (同上) | feat(tab_stock): Phase 7D — 停利停損面板下方新增關鍵價位 K 線圖（K + 量 + MA20/MA100 + 9 條 add_hline 水平線：停利 1/2、減碼/硬停損、支撐/壓力、月線停損、5MA、初步目標、加碼點） | 461d465 |
 | (同上) | docs: Phase 7C/7D 三檔同步 — STATE/ARCHITECTURE/SPEC 補三層架構章節 + 9 條水平線對照表 + §5 三層職責邊界規約 | ab0b34d |
 | (同上) | refactor: Phase 7A — 抽 4 個跨 tab 重複純函式至 tab_helpers.py（parse_cash_flow_ratio / format_condition_emoji / safe_get / safe_ma），消除 tab_stock + tab_stock_grp 之間 _r110_ok_a/_b EXACT DUPLICATE；+27 unit test | 0ef1991 |
+| (同上) | refactor: Phase 7A-Ext 雙抽純函式 + 修復 B 項 1Q fallback — `_calc_traffic_light` (71 行) → `macro_helpers.calc_traffic_light` + `_final_rec` (26 行) → `tab_helpers.final_recommendation`；補 `_no_ai_survival` 「呼叫端未預填 b_item_5y」的單季 fallback 分支（修 4 個 pre-existing TestNoAiSurvivalBItem 紅燈）；+19 unit test，全套件 519/519 全綠 | e678d22 |
 
 ## 🎯 Backlog
 - **環境工**：33 條 stale remote branches 清理（PR #42-#78 累積，sandbox token 無 delete 權）
@@ -115,16 +116,15 @@
   - ✅ `etf_dashboard.py` 由 1667 → **49 行 shim**（re-export 40 個 symbol + 4 個 tab 入口），6 個下游 importer (app / etf_quality / grape_ladder / 4 個 etf_tab_*) 零修改
   - ✅ 7D `tab_stock.py` 停利停損面板 K 線圖 +9 條水平線（+65 行）— commit `461d465`
   - ✅ 7A `tab_helpers.py` (89 行) — 抽 4 個跨 tab 重複純函式（parse_cash_flow_ratio / format_condition_emoji / safe_get / safe_ma），消除 tab_stock vs tab_stock_grp 之間 _r110_ok 的 EXACT DUPLICATE；3 tab 檔合計 −41 行；+27 unit test 全綠 — commit `0ef1991`
+  - ✅ 7A-Ext `macro_helpers.py` (110 行) + `tab_helpers.final_recommendation` — 抽 `_calc_traffic_light` (71 行 / tab_macro) + `_final_rec` (26 行 / tab_stock_grp)；同 commit 修復 `_no_ai_survival` 缺 1Q fallback 的 4 個 pre-existing 紅燈；+19 unit test，全套件 **519/519 全綠** — commit `e678d22`
 - **技術債（已全面清乾淨）**：
   - 🎯 `app.py` ruff errors **681 → 0（100% clean）**（PR #56/#57/#60/#63/#64）
   - `app.py` 9622 → **1378 行**（**−8244，−85.7%**，PR #58/#60/#61 抽純函式 + #66/#68 wrap def + #70-#73 抽 4 TAB）
   - `etf_dashboard.py` 3122 → **49 行 shim**（**−3073，−98.4%**，PR #75-#78 抽 4 render + Phase 7C 三層全拆）
   - **兩大入口檔合計** 12744 → **1427 行**（**−11317，−88.8%**）
 - **剩餘候選**（可選）：
-  - 7A-Ext：tab_macro `_calc_traffic_light` (71 行) + `_li_futures_scoring` (45 行) 抽至 `macro_helpers.py`（中等風險，需動 render_tab_macro 邏輯較多）
-  - 7A-Ext：tab_stock_grp `_final_rec` (26 行) 推薦評分抽純函式
-  - 7B：補 `tests/test_tab_*.py` / `tests/test_etf_tab_*.py` 個別 mock 化測試
-  - C：`test_financial_health_engine.py::TestNoAiSurvivalBItem` 4 個 pre-existing 紅燈（與 ETF / tab 重構無關，需另查）
+  - 7B：補 `tests/test_tab_*.py` / `tests/test_etf_tab_*.py` 個別 mock 化測試（範圍大，建議獨立規劃為 P3）
+  - 註：`_li_futures_scoring` 經 Explore 驗證**從未存在於 codebase**（前次清單誤記）
 
 ## 🧱 開發協議
 依 `CLAUDE.md` v2.0 核心協議運行（§1-§5 嚴格三步法 / 防幻覺 / 精準讀寫 / 鋼鐵自省 / 卡關救援）。

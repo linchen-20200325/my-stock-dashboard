@@ -922,8 +922,40 @@ tab_stock.py / tab_stock_grp.py / tab_macro.py  (module-level import)
 
 **驗證結果**：
 - ✅ py_compile + ruff 全綠
-- ✅ pytest 全套 500 → 496 pass / 4 unrelated fail（test_financial_health_engine.TestNoAiSurvivalBItem 既有問題）
+- ✅ pytest 全套 500 → 496 pass / 4 unrelated fail（test_financial_health_engine.TestNoAiSurvivalBItem 既有問題，已於 7A-Ext 一併修復）
 - ✅ 3 tab 檔合計 −41 行（移除 closure + 重複 import）
+
+#### `macro_helpers.py` + `tab_helpers.final_recommendation` + B 項 1Q fallback（commit `e678d22` — P2-B Phase 7A-Ext）
+
+**動機**：Phase 7A 抽出 4 個跨 tab 重複 helper 後仍有 2 個 tab 內部 closure 阻擋 unit test：
+- `tab_macro._calc_traffic_light`（71 行 nested def，紅綠燈決策核心）
+- `tab_stock_grp._final_rec`（26 行 closure，含 `score_map` 閉包）
+
+同時發現 `financial_health_engine._no_ai_survival` 對 B 項（現金流量允當比率）**缺少「呼叫端未預填 b_item_5y」的單季 fallback 分支**，導致 4 個 pre-existing 紅燈（`test_financial_health_engine.TestNoAiSurvivalBItem`）長期未修。
+
+| 抽出 | 從 | 至 | Lines saved |
+|---|---|---|---|
+| `calc_traffic_light(mkt_info, jq_info, cl_data, li_latest)` | tab_macro.render_tab_macro:71-141 | `macro_helpers.py` | 71 |
+| `final_recommendation(row, score_map)` | tab_stock_grp.render_stock_grp:382-407 | `tab_helpers.py` | 26 |
+
+**`macro_helpers.py` 設計**：獨立模組（非併入 `tab_helpers.py`），避免跨 tab 共用層引入 tab_macro 專屬決策邏輯；零 Streamlit/Plotly 依賴，僅用 stdlib + pandas DataFrame 偵測。同時清理 1 處 dead code（`_fk` fallback 重複 `next()` 呼叫）。
+
+**`_no_ai_survival` B 項 4 分支策略**（修補後）：
+
+| `b_item_5y.status` | b_val | b_display | b_st | 適用情境 |
+|---|---|---|---|---|
+| `"ok"` | 5y 實際值 | `"127.3%（5年實際）"` | Pass/Fail | 正常 production（tab_stock/tab_stock_grp 預填） |
+| `"insufficient_data"` | None | `"N/A（上市未滿5年）"` | Fail | 新上市股票 |
+| `"error"` | None | `"N/A（5年歷史資料未取得）"` | N/A | API 失敗（保守標 N/A 不單季推估） |
+| **缺 key** | **1Q 估算** | **`"XX.X%(1Q估)"`** | **Pass/Fail** | **unit test / legacy 呼叫端** |
+
+公式：`b_val = OCF / (capex + max(inv-inv_p, 0) + div) × 100`；`b_denom ≤ 0` → display `"N/A"`、status N/A。
+
+**驗證結果**：
+- ✅ py_compile + ruff（僅 3 個 pre-existing financial_health_engine.py 紅燈，非本次修改）
+- ✅ pytest 全套 **519/519 全綠**（原 500 + 新增 19 + 解 4 pre-existing failures）
+- ✅ tests/test_macro_helpers.py 12 case（regime × defense 矩陣 + health 公式 + conf 計分）
+- ✅ tests/test_tab_helpers.py +7（TestFinalRecommendation：積極/觀察/等待 × 邊界值）
 
 #### `app.py` 結構演進（PR #66/#68/#70-#73 — P2-B Phase 4+5 全收官 ✅✅）
 
