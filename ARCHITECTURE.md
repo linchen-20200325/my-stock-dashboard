@@ -977,6 +977,34 @@ tab_stock.py / tab_stock_grp.py / tab_macro.py  (module-level import)
 - ✅ tests/test_etf_helpers.py：TestNormReturn 9 + TestNormLowerBetter 10 + TestAutoRole 10
 - 涵蓋：邊界值（≥hi/≤lo/at mid）、線性段、custom bounds（實際 callsite 參數）、abs 取值、`.TWO` / `.TW` 後綴剝離、`None` / 空字串、frozenset 不可變
 
+#### `macro_helpers.{rp_ts, rp_entry, rp_scalar}` data_registry 三函式（P2-B Phase 7E）
+
+**動機**：`tab_macro.py:1663-1709` 內三個互相協作的 closure（`_rp_ts` / `_rp_entry` / `_rp_scalar`）負責「Registry 常態 Patch」段把 session_state 的個股 / ETF / 比較 / 回測資料轉成 `data_registry` entry dict。30 行核心邏輯（DataFrame 4 種時間源解析），但被 `_proxy_rp` closure capture 綁死，不能單元測試；其它 tab 若也想做 registry patch 也無法重用。
+
+**抽出明細**：
+
+| 函式 | 原 closure 位置 | 抽至 | 行數 |
+|---|---|---|---|
+| `rp_ts(df)` | tab_macro.render_tab_macro:1663-1698 | `macro_helpers.py` | 36 |
+| `rp_entry(df, cat, freq)` | tab_macro.render_tab_macro:1700-1703 | `macro_helpers.py` | 4 |
+| `rp_scalar(val, cat, freq, proxy_date)` | tab_macro.render_tab_macro:1705-1709 | `macro_helpers.py` | 5 |
+
+**設計理念**：
+- `_QE_MAP`（季度標籤映射）由原 closure scope 提至 `macro_helpers.py` 模組級私有常數，方便 unit test 直接驗證 Q1-Q4 對應。
+- `rp_scalar` 的 `proxy_date` 改為**顯式參數**（原 closure capture `_proxy_rp`）— 純函式化的關鍵，移除對 `st.session_state.cl_ts` 的隱式依賴；單元測試可傳任意日期字串驗證行為。
+- 命名去 underscore prefix（`_rp_ts` → `rp_ts` 等）改為 public API，與 `calc_traffic_light` 同一模組並列。
+- `rp_ts` 內 pandas import 改為 macro_helpers.py 頂部 `import pandas as pd`（與既有 `calc_traffic_light` 的 duck-typing 風格不同 — 因為 `rp_ts` 必須用 `pd.to_datetime` / `pd.Timestamp` / `pd.isna` API）。
+
+**callsite 衝擊**：
+- `tab_macro.py` 刪 47 行 closure 區塊 + 26 callsite 重接（`rp_scalar` 21 + `rp_entry` 3 + `rp_ts` 2）
+- `_proxy_rp` 變數**保留**於 tab_macro.py（外層 `_cl_ts_rp` 解析仍需），每次 `rp_scalar(..., _proxy_rp)` 顯式傳入
+
+**驗證**：
+- ✅ py_compile + ruff (`All checks passed!`)
+- ✅ pytest 全套 **566/566 全綠**（原 548 + 新增 18）
+- ✅ tests/test_macro_helpers.py：TestRpTs 11 + TestRpEntry 3 + TestRpScalar 4
+- 涵蓋：`None` / 非 DataFrame / 空 DataFrame、DatetimeIndex、季度標籤 Q1-Q4 + 無效 Q 數、年度 int、`_date` strict format vs 一般 `date` 自動推斷、無法 parse → 'N/A'、scalar `0` / `''` 不被誤判為 None
+
 #### `app.py` 結構演進（PR #66/#68/#70-#73 — P2-B Phase 4+5 全收官 ✅✅）
 
 **最終戰績**：app.py 9622 → **1378 行（−85.7%）**，4 個 TAB 全部抽到獨立 `.py` 模組。

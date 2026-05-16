@@ -125,15 +125,18 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 | `safe_ma(df, n)` | DataFrame (需有 close 欄), int | float | `_safe_ma` (tab_stock:378) | 7A |
 | `final_recommendation(row, score_map)` | dict, dict | (label, color_hex) | `_final_rec` (tab_stock_grp:382 closure) | 7A-Ext |
 
-### §6.2 `macro_helpers.py`（1 函式）
+### §6.2 `macro_helpers.py`（4 函式 — Phase 7A-Ext + 7E）
 
 > 從 `tab_macro.render_tab_macro` 抽出，獨立模組以避免 `tab_helpers.py` 引入 tab_macro 專屬邏輯污染。
 
-| 函式 | 輸入 | 輸出 | 取代的 closure |
-|---|---|---|---|
-| `calc_traffic_light(mkt_info, jingqi_info, cl_data, li_latest)` | dict, dict, dict, DataFrame | dict (15 keys) or None | `_calc_traffic_light` (tab_macro:71-141, 71 行 nested def) |
+| 函式 | 輸入 | 輸出 | 取代的 closure | Phase |
+|---|---|---|---|---|
+| `calc_traffic_light(mkt_info, jingqi_info, cl_data, li_latest)` | dict, dict, dict, DataFrame | dict (15 keys) or None | `_calc_traffic_light` (tab_macro:71-141, 71 行 nested def) | 7A-Ext |
+| `rp_ts(df)` | DataFrame | str (YYYY-MM-DD or 'N/A') | `_rp_ts` (tab_macro:1663, 36 行 closure) | 7E |
+| `rp_entry(df, cat, freq)` | DataFrame, str, str | dict (`last_updated`/`rows`/`category`/`frequency`[/`missing`]) | `_rp_entry` (tab_macro:1700) | 7E |
+| `rp_scalar(val, cat, freq, proxy_date)` | Any, str, str, str | dict (同上) | `_rp_scalar` (tab_macro:1705) | 7E |
 
-**決策樹（5 路）**：
+**`calc_traffic_light` 決策樹（5 路）**：
 1. 三來源全空 → `None`（由 placeholder 顯示等待狀態）
 2. `defense=True`（`score<2` 且外資期貨大空單 `<−30000`）或 `health<40` → 🔴 空頭防禦（強制覆蓋）
 3. `regime == 'bull'` → 🟢 多頭積極
@@ -141,6 +144,15 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 5. 其他 → 🟡 震盪整理
 
 **回傳 dict 15 keys**：`color / icon / label / action / sub / health / defense / score / jqavg / leek / fnet / fk / fut_net / conf / regime`
+
+**`rp_ts` 時間源優先序（4 路）**：
+1. `DatetimeIndex` → `df.index.max()`
+2. 「季度標籤」欄（如 `'2024Q4'`）→ `_QE_MAP` 對應到該季最後一日（Q1=03-31, Q2=06-30, Q3=09-30, Q4=12-31）；無效 Q 數預設 `12-31`
+3. 「年度」欄（int）→ `'YYYY-12-31'`
+4. `_date | date | datetime | timestamp | 日期 | quarter | period` 欄 — `_date` 強制 `'%Y%m%d'`，其餘自動推斷
+5. 全失敗或例外 → `'N/A'`
+
+**`rp_scalar` proxy_date 設計**：由呼叫端傳入（tab_macro 用 `st.session_state.cl_ts` 解析的日期，或 fallback `today()`），避免 module-level 取系統時間造成測試不穩定。
 
 ### §6.3 通用慣例
 
