@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from etf_helpers import auto_role
+
 
 def render_etf_portfolio(gemini_fn=None):
     # ─ Late imports（避免循環 import）─
@@ -41,14 +43,6 @@ def render_etf_portfolio(gemini_fn=None):
     st.caption('💡 表格欄位：**股票代號 / 持有張數 / 平均買入價格**。'
                '系統自動：① 1 張 = 1000 股換算 ② 核心/衛星判讀 ③ 即時收盤價算現值、資本利得、已領配息。'
                '可用「+」新增列、勾選後 Del 刪除列。')
-
-    # MK 框架 #9：核心 / 衛星預設分類（高股息大型 / 全市場 / 債券 → 核心；其他 → 衛星）
-    _CORE_TICKERS = {'0050','0051','0056','006208','00713','00878','00919','00929',
-                     '00940','00946','00713B','00679B','00937B','BND','AGG','VTI',
-                     'VOO','SPY','VT','SCHD','VEA','VWO','VNQ'}
-    def _auto_role(tk: str) -> str:
-        code = (tk or '').replace('.TWO', '').replace('.TW', '').upper()
-        return '核心' if code in _CORE_TICKERS else '衛星'
 
     # ── 結構化表單輸入（取代 text_area）─────────────────────
     _default_df = pd.DataFrame({
@@ -102,7 +96,7 @@ def render_etf_portfolio(gemini_fn=None):
             'avg_price':  _avg_price,
             'cost':       _shares * _avg_price,
             'target_pct': None,         # 不再有「希望比例」輸入 → 以實際現值權重為目標
-            'role':       _auto_role(_tk_raw),
+            'role':       auto_role(_tk_raw),
         })
     if not rows:
         st.error('❌ 請至少填入一筆有效持股（代號 + 張數 + 均價皆 > 0）')
