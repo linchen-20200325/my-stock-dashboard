@@ -133,7 +133,11 @@ def render_stock_grp():
                 cl4, cx4, _capex4, _cl_src4, _cx_src4, _, _fin_errs4 = fetch_financials(sid4, industry='')
                 result4 = {'sid': sid4, 'df': df4, 'name': name4,
                            'avg_div': avg_div4, 'cl': cl4, 'cx': cx4}
-                _save_cache('t3v2', sid4, result4)
+                # 空 K 線標記 error 並跳過快取（避免 4hr 內持續空轉）
+                if df4 is None or df4.empty:
+                    result4['error'] = _err4 or '無 K 線資料（yfinance + FinMind 雙源皆空）'
+                else:
+                    _save_cache('t3v2', sid4, result4)
                 return result4
             except Exception as _e4:
                 return {'sid': sid4, 'error': str(_e4)}
