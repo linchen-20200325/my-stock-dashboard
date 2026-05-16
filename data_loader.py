@@ -438,7 +438,11 @@ class StockDataLoader:
 
             # 若未使用還原K線或 Yahoo 失敗，則走 FinMind（一般K線 / 備援）
             if df is None:
-                df_price = _self.dl.taiwan_stock_daily(stock_id=stock_id, start_date=start_str)
+                df_price = _self.dl.taiwan_stock_daily(
+                    stock_id=stock_id,
+                    start_date=start_str,
+                    end_date=end_date.strftime('%Y-%m-%d'),
+                )
 
                 if df_price.empty:
                     # Yahoo 備援（先 .TW，再試 .TWO 上櫃）
