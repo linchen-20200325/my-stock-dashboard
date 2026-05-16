@@ -1301,15 +1301,22 @@ padding:12px 16px;margin:8px 0;">
                 st.plotly_chart(_fig_riv, width='stretch', config={'displayModeBar': False})
 
                 _cur_price_riv = float(_rclose_riv.dropna().iloc[-1]) if not _rclose_riv.dropna().empty else 0
-                _cur_zone = ('🟢 便宜區' if _cur_price_riv < _p7r else
-                             '🟡 合理區' if _cur_price_riv < _p5r else
-                             '🔴 昂貴區' if _cur_price_riv < _p3r else '⛔ 超昂貴')
-                st.caption(
-                    f'目前位於 {_cur_zone}（現價 {_cur_price_riv:.0f} / '
-                    f'便宜≤{_p7r:.0f} / 合理≤{_p5r:.0f} / 昂貴≤{_p3r:.0f}）'
-                    f'　{_div_label} {_cur_div_riv:.2f}元')
-                if _cur_div_riv < 0.5:
-                    st.info('ℹ️ 此股近年現金股利極低（< 0.5元），殖利率河流圖參考意義有限，建議搭配本益比等其他估值工具。')
+                if _is_fallback_flat:
+                    # Fallback 模式（近 12 月無除息）：橫帶保留作歷史比較，但移除便宜/合理/昂貴/超昂貴判讀避免誤導
+                    st.caption(
+                        f'📊 歷史參考帶（{_div_label} {_cur_div_riv:.2f}元，非即時 TTM）　'
+                        f'7%≤{_p7r:.0f} / 5%≤{_p5r:.0f} / 3%≤{_p3r:.0f}　現價 {_cur_price_riv:.0f}')
+                    st.info('ℹ️ 此股近 12 個月無除息事件，殖利率河流退化為 5 年均股利橫帶（僅作歷史對照），**不適合作為即時估值依據**。建議改用本益比 / 股價淨值比等其他估值工具。')
+                else:
+                    _cur_zone = ('🟢 便宜區' if _cur_price_riv < _p7r else
+                                 '🟡 合理區' if _cur_price_riv < _p5r else
+                                 '🔴 昂貴區' if _cur_price_riv < _p3r else '⛔ 超昂貴')
+                    st.caption(
+                        f'目前位於 {_cur_zone}（現價 {_cur_price_riv:.0f} / '
+                        f'便宜≤{_p7r:.0f} / 合理≤{_p5r:.0f} / 昂貴≤{_p3r:.0f}）'
+                        f'　{_div_label} {_cur_div_riv:.2f}元')
+                    if _cur_div_riv < 0.5:
+                        st.info('ℹ️ 此股近年現金股利極低（< 0.5元），殖利率河流圖參考意義有限，建議搭配本益比等其他估值工具。')
 
         # ══ C. 領先指標 ════════════════════════════════════════
         st.markdown('---')
