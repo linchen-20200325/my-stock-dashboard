@@ -98,7 +98,10 @@ my-stock-dashboard/
 | 檔案 | 行數 | 職責 |
 |------|-----:|------|
 | `chart_plotter.py` | ~574 | Plotly 5 子圖（K 線 + 成交量 + 外資 + 投信 + 自營/融資）、月營收趨勢圖、季度財務圖 |
-| `etf_dashboard.py` | ~2,263 | ETF 四子頁（診斷/組合/回測/AI）；NAV 折溢價、年線乖離率、VCP、追蹤誤差、蒙地卡羅模擬、板塊熱力圖 |
+| `etf_dashboard.py` | 49 | Phase 7C 後：純 re-export shim；維持 6 個下游 importer 既有 `from etf_dashboard import ...` 不變 |
+| `etf_fetch.py` | 572 | Phase 7C 新增 — 純 I/O 層：價格 / 配息 / 基本資訊 / 費用率 (SITCA/MoneyDJ) / NAV 5 源備援 / 類股漲跌 / 新聞 |
+| `etf_calc.py` | 465 | Phase 7C 新增 — 純計算層：殖利率 / 總報酬 / 折溢價 G1-G3 守門員 / 風險指標 (TE/MDD/CAGR/Sharpe) / 同儕排名 / 戰情室列 |
+| `etf_render.py` | 505 | Phase 7C 新增 — Streamlit UI 層：MACRO 配置橫幅 / 走勢圖 / BIAS / 蒙地卡羅 / 類股熱力圖 |
 
 #### AI 層
 
@@ -277,7 +280,7 @@ bear（空頭）  15%     10%     15%     15%     25%     20%
 | 模組 | 渲染目標 | 依賴層 |
 |------|---------|--------|
 | `chart_plotter.py` | 個股 K 線 5 子圖、月營收、季度財務 | L1、L2 |
-| `etf_dashboard.py` | ETF 四子頁（診斷/組合/回測/AI） | L1、L2、L3、L5 |
+| `etf_dashboard.py` | ETF 四子頁 Public API shim（Phase 7C 後 49 行 re-export）；實際邏輯下沉至 `etf_fetch` (L1) / `etf_calc` (L2) / `etf_render` (L4) | L1、L2、L3、L5 |
 | `daily_checklist.py` (UI 部分) | 共用 UI 元件（`section_header`、`kpi`、`sparkline`） | L1 |
 
 **設計原則**：
@@ -828,6 +831,254 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 - P6-B: 1 個 E701
 - P6-C: 10 個 E701/E702
 - P6-D: 8 個 F541
+
+#### `etf_dashboard.py` 三層分檔（commit `44a0e87` — P2-B Phase 7C 收官 ✅）
+
+**最終戰績**：etf_dashboard.py 1667 → **49 行 shim（−97.1%）**，36 個內部 helper 全部下沉到 3 個按職責分離的子模組。
+
+| 模組 | 行數 | 角色 | 依賴 |
+|---|---|---|---|
+| `etf_fetch.py` | 572 | 純 I/O：價格 / 配息 / 基本資訊 / 費用率 (SITCA→MoneyDJ→yfinance 3 源備援) / NAV (FinMind→goodinfo→TWSE→MoneyDJ→yfinance 5 源備援+stale fallback) / 類股漲跌 / 新聞 | streamlit + pandas + yfinance（**零內部依賴**） |
+| `etf_calc.py` | 465 | 純算：殖利率 / 總報酬 / 折溢價 G1-G3 守門員 / 風險指標 (TE/MDD/CAGR/Sharpe) / VCP / 同儕排名 / `_compute_etf_warroom_row` | `etf_fetch` |
+| `etf_render.py` | 505 | Streamlit UI：MACRO_ALLOC 配置橫幅 / 走勢圖 / BIAS / 蒙地卡羅 / 類股熱力圖 / `_teacher_conclusion` / `_check_sector_exposure` | `etf_fetch`（只取 `_fetch_news_for` / `_fetch_sector_returns`） |
+| `etf_dashboard.py` | 49 | Public API shim — re-export 40 個 symbol + 4 個 tab 入口 | 上述 3 檔 + 4 個 etf_tab_*.py |
+
+**Phase 7C 依賴方向**：
+
+```
+   etf_fetch  (葉節點 / 純 I/O)
+       ↑
+   etf_calc   (依賴 etf_fetch)
+       ↑
+   etf_render (依賴 etf_fetch)
+       ↑
+ etf_dashboard.py  (re-export shim)
+       ↑
+ 6 個下游 importer (app / etf_quality / grape_ladder / etf_tab_*)
+```
+
+**關鍵設計決策**：
+- `_compute_etf_warroom_row` 雖混 fetch + calc，仍歸 `etf_calc`（calc 可依賴 fetch，反向不可）
+- `_safe_float` / `_NAV_MIN` / `_NAV_MAX` 留 `etf_fetch`（NAV 解析配套）
+- `_fetch_sector_returns` 留 `etf_fetch`（雖含 st.warning，但本質仍是 I/O）
+- `_teacher_conclusion` 內部對 `ui_widgets._to_strategy` 採 late import，避免 render 直接依賴
+
+**驗證結果**：
+- ✅ py_compile 4 檔全綠
+- ✅ 40 個 re-export symbol import 驗證通過
+- ✅ 6 個下游 importer (app / etf_quality / grape_ladder / etf_tab_single / etf_tab_portfolio / etf_tab_backtest / etf_tab_ai) 零修改載入成功
+- ✅ pytest 469 pass / 4 unrelated fail（與 ETF 無關，financial_health_engine 既有問題）
+
+#### `tab_stock.py` 停利停損面板 K 線圖（commit `461d465` — Phase 7D）
+
+**動機**：「停利停損建議 + 近期支撐壓力」面板僅有數字 metric，使用者需手動腦補價位在 K 線的相對位置。新增精簡 K 線圖直接視覺化所有關鍵價位。
+
+**位置**：`tab_stock.py:507-570`（緊接 `_sig_cols[2]` 目標+停損段之後，原 F 段 5-row 完整圖保持不動）。
+
+**結構**：
+- Plotly subplots 2 rows（價 78% / 量 22% 共享 x 軸）
+- 近 180 個交易日，MA20 (粉紅) + MA100 (青)
+- 9 條 add_hline 水平線（每條有顏色 + 虛線樣式 + 左上角價位標籤）：
+
+| 線 | 來源變數 | 顏色 | 樣式 |
+|---|---|---|---|
+| 停利 2 (+10%) | `_tp2_p` | #58a6ff | dash |
+| 停利 1 (+5%) | `_tp1_p` | #3fb950 | dash |
+| 壓力 (20D high) | `_hi20_p` | #f0883e | dot |
+| 初步目標（1:1對稱） | `_target1` | #2ea043 | dashdot |
+| 5MA 停利 | `_ma5` | #FFD700 | solid |
+| 支撐 (20D low) | `_lo20_p` | #1f6feb | dot |
+| 月線停損 | `_sl_ma20` | #8b949e | dot |
+| 停損 (-8%) | `_sl_p` | #f85149 | dash |
+| 硬停損 (-7%) | `_sl_hard` | #a40e26 | dashdot |
+| 加碼點（條件性） | `_add_pt` | #a371f7 | dashdot |
+
+**邊界處理**：try/except 包覆；`_add_pt` 用 `locals().get()` 防 NameError；MA 欄位缺失即時 rolling 補算；y ≤ 0 時不畫線。
+
+#### `tab_helpers.py` 跨 tab 共用純函式（commit `0ef1991` — P2-B Phase 7A）
+
+**動機**：tab_stock.py 與 tab_stock_grp.py 內出現 EXACT DUPLICATE 的 `_r110_ok_a` / `_r110_ok_b`（cash flow 比率解析）與 `_tk` / `_tk2`（bool → emoji），各自還 local re-import `re`；tab_macro 也有相似的 `_v`（NaN 過濾）與 tab_stock 的 `_safe_ma`。Phase 7A 把這 4 個 closure 合併到模組頂層、零 Streamlit 依賴、可獨立 unit test。
+
+| 函式 | 取代 | 來源 | Lines saved |
+|---|---|---|---|
+| `parse_cash_flow_ratio(value, threshold, strict)` | `_r110_ok_a` / `_r110_ok_b` | tab_stock:2157 + tab_stock_grp:723 | 20 |
+| `format_condition_emoji(value)` | `_tk2` / `_tk` | tab_stock:2169 + tab_stock_grp:735 | 4 |
+| `safe_get(value)` | `_v` | tab_macro:2667 | 6 |
+| `safe_ma(df, n)` | `_safe_ma` | tab_stock:378 | 7 |
+
+**依賴方向**：
+
+```
+tab_helpers.py  (葉節點 / 純 Python + pandas，零 streamlit / plotly)
+       ↑
+tab_stock.py / tab_stock_grp.py / tab_macro.py  (module-level import)
+```
+
+**設計原則**：
+- 零 Streamlit / Plotly：可被任何模組安全引用
+- 防呆優先：對 None / NaN / 缺欄位皆有 fallback path
+- 顯式參數：`strict=True/False` 取代隱式 bool 位置參數
+- 對應測試覆蓋：`tests/test_tab_helpers.py` 27 case（13 cash flow + 4 emoji + 6 safe_get + 4 safe_ma）
+
+**驗證結果**：
+- ✅ py_compile + ruff 全綠
+- ✅ pytest 全套 500 → 496 pass / 4 unrelated fail（test_financial_health_engine.TestNoAiSurvivalBItem 既有問題，已於 7A-Ext 一併修復）
+- ✅ 3 tab 檔合計 −41 行（移除 closure + 重複 import）
+
+#### `macro_helpers.py` + `tab_helpers.final_recommendation` + B 項 1Q fallback（commit `e678d22` — P2-B Phase 7A-Ext）
+
+**動機**：Phase 7A 抽出 4 個跨 tab 重複 helper 後仍有 2 個 tab 內部 closure 阻擋 unit test：
+- `tab_macro._calc_traffic_light`（71 行 nested def，紅綠燈決策核心）
+- `tab_stock_grp._final_rec`（26 行 closure，含 `score_map` 閉包）
+
+同時發現 `financial_health_engine._no_ai_survival` 對 B 項（現金流量允當比率）**缺少「呼叫端未預填 b_item_5y」的單季 fallback 分支**，導致 4 個 pre-existing 紅燈（`test_financial_health_engine.TestNoAiSurvivalBItem`）長期未修。
+
+| 抽出 | 從 | 至 | Lines saved |
+|---|---|---|---|
+| `calc_traffic_light(mkt_info, jq_info, cl_data, li_latest)` | tab_macro.render_tab_macro:71-141 | `macro_helpers.py` | 71 |
+| `final_recommendation(row, score_map)` | tab_stock_grp.render_stock_grp:382-407 | `tab_helpers.py` | 26 |
+
+**`macro_helpers.py` 設計**：獨立模組（非併入 `tab_helpers.py`），避免跨 tab 共用層引入 tab_macro 專屬決策邏輯；零 Streamlit/Plotly 依賴，僅用 stdlib + pandas DataFrame 偵測。同時清理 1 處 dead code（`_fk` fallback 重複 `next()` 呼叫）。
+
+**`_no_ai_survival` B 項 4 分支策略**（修補後）：
+
+| `b_item_5y.status` | b_val | b_display | b_st | 適用情境 |
+|---|---|---|---|---|
+| `"ok"` | 5y 實際值 | `"127.3%（5年實際）"` | Pass/Fail | 正常 production（tab_stock/tab_stock_grp 預填） |
+| `"insufficient_data"` | None | `"N/A（上市未滿5年）"` | Fail | 新上市股票 |
+| `"error"` | None | `"N/A（5年歷史資料未取得）"` | N/A | API 失敗（保守標 N/A 不單季推估） |
+| **缺 key** | **1Q 估算** | **`"XX.X%(1Q估)"`** | **Pass/Fail** | **unit test / legacy 呼叫端** |
+
+公式：`b_val = OCF / (capex + max(inv-inv_p, 0) + div) × 100`；`b_denom ≤ 0` → display `"N/A"`、status N/A。
+
+**驗證結果**：
+- ✅ py_compile + ruff（僅 3 個 pre-existing financial_health_engine.py 紅燈，非本次修改）
+- ✅ pytest 全套 **519/519 全綠**（原 500 + 新增 19 + 解 4 pre-existing failures）
+- ✅ tests/test_macro_helpers.py 12 case（regime × defense 矩陣 + health 公式 + conf 計分）
+- ✅ tests/test_tab_helpers.py +7（TestFinalRecommendation：積極/觀察/等待 × 邊界值）
+
+#### `etf_helpers.py` ETF tab 共用純函式（P2-B Phase 7B）
+
+**動機**：Phase 7A/7A-Ext 已抽完 tab_macro / tab_stock(_grp) 的 closure，但 `etf_tab_backtest.py` 與 `etf_tab_portfolio.py` 仍各有純邏輯 closure 嵌在 render 內無法獨立測試：
+- `etf_tab_backtest._norm_return` / `_norm_lower_better`（雷達圖 5 維 0-100 正規化，12 行；組合 + 基準共 10 個 callsites）
+- `etf_tab_portfolio._auto_role` + `_CORE_TICKERS`（MK 框架 #9 核心/衛星分類，6 行）
+
+| 抽出 | 從 | 至 | Lines saved |
+|---|---|---|---|
+| `norm_return(v, lo, mid, hi)` | etf_tab_backtest.render_etf_backtest:186-190 | `etf_helpers.py` | 5 |
+| `norm_lower_better(v, best, mid, worst)` | etf_tab_backtest.render_etf_backtest:192-197 | `etf_helpers.py` | 6 |
+| `auto_role(tk)` + `_CORE_TICKERS` | etf_tab_portfolio.render_etf_portfolio:45-51 | `etf_helpers.py` | 7 |
+
+**`etf_helpers.py` 設計**：零 Streamlit/Plotly 依賴；`_CORE_TICKERS` 改用 `frozenset` 防呆（測試實證 `.add()` raise AttributeError）。命名去 underscore prefix（`_norm_return` → `norm_return`、`_auto_role` → `auto_role`）改為 public module API，與 `tab_helpers` 慣例一致。Module-level import 於兩個 consumer 頂部（無循環風險）。
+
+**驗證結果**：
+- ✅ py_compile + ruff (`All checks passed!`)
+- ✅ pytest 全套 **548/548 全綠**（原 519 + 新增 29）
+- ✅ tests/test_etf_helpers.py：TestNormReturn 9 + TestNormLowerBetter 10 + TestAutoRole 10
+- 涵蓋：邊界值（≥hi/≤lo/at mid）、線性段、custom bounds（實際 callsite 參數）、abs 取值、`.TWO` / `.TW` 後綴剝離、`None` / 空字串、frozenset 不可變
+
+#### `macro_helpers.{rp_ts, rp_entry, rp_scalar}` data_registry 三函式（P2-B Phase 7E）
+
+**動機**：`tab_macro.py:1663-1709` 內三個互相協作的 closure（`_rp_ts` / `_rp_entry` / `_rp_scalar`）負責「Registry 常態 Patch」段把 session_state 的個股 / ETF / 比較 / 回測資料轉成 `data_registry` entry dict。30 行核心邏輯（DataFrame 4 種時間源解析），但被 `_proxy_rp` closure capture 綁死，不能單元測試；其它 tab 若也想做 registry patch 也無法重用。
+
+**抽出明細**：
+
+| 函式 | 原 closure 位置 | 抽至 | 行數 |
+|---|---|---|---|
+| `rp_ts(df)` | tab_macro.render_tab_macro:1663-1698 | `macro_helpers.py` | 36 |
+| `rp_entry(df, cat, freq)` | tab_macro.render_tab_macro:1700-1703 | `macro_helpers.py` | 4 |
+| `rp_scalar(val, cat, freq, proxy_date)` | tab_macro.render_tab_macro:1705-1709 | `macro_helpers.py` | 5 |
+
+**設計理念**：
+- `_QE_MAP`（季度標籤映射）由原 closure scope 提至 `macro_helpers.py` 模組級私有常數，方便 unit test 直接驗證 Q1-Q4 對應。
+- `rp_scalar` 的 `proxy_date` 改為**顯式參數**（原 closure capture `_proxy_rp`）— 純函式化的關鍵，移除對 `st.session_state.cl_ts` 的隱式依賴；單元測試可傳任意日期字串驗證行為。
+- 命名去 underscore prefix（`_rp_ts` → `rp_ts` 等）改為 public API，與 `calc_traffic_light` 同一模組並列。
+- `rp_ts` 內 pandas import 改為 macro_helpers.py 頂部 `import pandas as pd`（與既有 `calc_traffic_light` 的 duck-typing 風格不同 — 因為 `rp_ts` 必須用 `pd.to_datetime` / `pd.Timestamp` / `pd.isna` API）。
+
+**callsite 衝擊**：
+- `tab_macro.py` 刪 47 行 closure 區塊 + 26 callsite 重接（`rp_scalar` 21 + `rp_entry` 3 + `rp_ts` 2）
+- `_proxy_rp` 變數**保留**於 tab_macro.py（外層 `_cl_ts_rp` 解析仍需），每次 `rp_scalar(..., _proxy_rp)` 顯式傳入
+
+**驗證**：
+- ✅ py_compile + ruff (`All checks passed!`)
+- ✅ pytest 全套 **566/566 全綠**（原 548 + 新增 18）
+- ✅ tests/test_macro_helpers.py：TestRpTs 11 + TestRpEntry 3 + TestRpScalar 4
+- 涵蓋：`None` / 非 DataFrame / 空 DataFrame、DatetimeIndex、季度標籤 Q1-Q4 + 無效 Q 數、年度 int、`_date` strict format vs 一般 `date` 自動推斷、無法 parse → 'N/A'、scalar `0` / `''` 不被誤判為 None
+
+#### `ui_widgets.cond_badge` 條件徽章函式（P2-B Phase 7F）
+
+**動機**：`tab_macro.py:3392` 內 `_cond_badge(ok, label)` 是 SECTION 八 五維點火條件列（A-G 共 7 個徽章）專用 HTML span 模板，零 Streamlit 依賴 + 7 callsite，符合 `ui_widgets.py` 既有 PR #60 純 HTML 函式集合的設計風格，自然合併。
+
+**抽出明細**：
+
+| 函式 | 原 closure 位置 | 抽至 | 行數 |
+|---|---|---|---|
+| `cond_badge(ok, label)` | tab_macro.render_tab_macro:3392-3394 | `ui_widgets.py`（既有 9 函式集合 + 1） | 3 |
+
+**設計理念**：
+- 命名去 underscore prefix（`_cond_badge` → `cond_badge`）成 public API，與 `ui_widgets` 其他 9 個函式（`explain_box` / `traffic_light` / `kpi` / `signal_box` ...）並列。
+- 配色語意：`True` → `#3fb950` 綠（達成）；`False` → `#484f58` 灰（未達成）。利用 `f'{c}22'` 的 hex `+22` alpha 製造背景淡色 + 邊框 / 文字深色的對比。
+- 真值判斷：直接用 Python `if ok else`，0 / None / '' 自動視為 False（與呼叫端 `_ring1_pass`、`_cA`-`_cG` 等 boolean / int / None 變數混用相容）。
+- 首次為 `ui_widgets.py` 建立 `tests/test_ui_widgets.py`（之前 9 函式無對應測試），開啟未來逐個補測試的入口。
+
+**callsite 衝擊**：
+- `tab_macro.py` 刪 3 行 closure + import 補 `cond_badge` + 7 callsite 重接（A VIX / B 期貨 / C 出口 / D M1B-M2 / E 外資 / F 股匯雙漲 / G SOX/NVDA 點火）
+
+**驗證**：
+- ✅ py_compile + ruff (`All checks passed!`)
+- ✅ pytest 全套 **574/574 全綠**（原 566 + 新增 8）
+- ✅ tests/test_ui_widgets.py：TestCondBadge 8 cases
+- 涵蓋：truthy 綠色 / falsy 灰色 / label 嵌入 / HTML 結構（span + border-radius + font-size）/ `0` / `None` / `''` 邊界 / 空 label
+
+#### `ui_widgets.py` 既有 9 函式 + 1 常數補完單測（P2-B Phase 7G）
+
+**動機**：PR #60 從 `app.py` 抽出 `ui_widgets.py` 時未附對應單測，Phase 7F 雖建立 `tests/test_ui_widgets.py` 但僅涵蓋新增的 `cond_badge`，留下 9 函式 + 1 常數無單測。7G 補完此技術債，零生產碼變動。
+
+**測試明細**：
+
+| 測試類別 | 涵蓋函式/常數 | cases | 重點邊界 |
+|---|---|---|---|
+| `TestTermExplain` | `TERM_EXPLAIN` 常數 | 3 | 13 個術語 keys / 每 entry 為 2-tuple / 字串非空 |
+| `TestExplainBox` | `explain_box` | 5 | detail 有/無 → `<br>` 條件渲染 |
+| `TestTrafficLight` | `traffic_light` | 7 | good>bad 優先序 / 預設與自訂 neutral_label / value 參數預留 |
+| `TestBeginnerKpi` | `beginner_kpi` | 7 | tip 有/無 → `💡` 條件渲染 / 自訂 color |
+| `TestShowTermHelp` | `show_term_help` | 5 | 已知 / 未知 / 空字串 / 中文 term / 復用 explain_box |
+| `TestKpi` | `kpi` | 6 | sub / 自訂 color & border |
+| `TestToStrategy` | `_to_strategy` + `_STRATEGY_MAP` | 6 | 策略 1/2/3 全 10 老師 + 未知 fallback `('策略', '👤')` |
+| `TestTeacherBox` | `teacher_box` | 5 | logic 嵌入 / 已知 vs 未知 teacher |
+| `TestTeacherConclusion` | `teacher_conclusion` | 10 | 台股紅綠慣例（正面 → `#da3633` 紅、負面 → `#2ea043` 綠）+ 手動 color 覆寫 + action 關鍵字觸發 |
+| `TestSignalBox` | `signal_box` | 9 | green/red/yellow/blue 4 keys + 未知 color fallback |
+
+**驗證**：
+- ✅ ruff (`All checks passed!`) — 純測試碼，無 py_compile 變動
+- ✅ pytest 全套 **637/637 全綠**（原 574 + 新增 63）
+- ✅ 7F 8 cases + 7G 63 cases = 71 cases 全綠（ui_widgets.py 模組 100% 函式 coverage）
+- 涵蓋：所有預設參數路徑 / 條件渲染分支（detail/tip/desc 有無）/ 配色 fallback / 未知 key fallback / 11 個關鍵字觸發 teacher_conclusion 自動配色
+
+#### `tech_indicators.py` + `scoring_helpers.py` 9 純函式補完單測（P2-B Phase 7H）
+
+**動機**：PR #58（`tech_indicators.py` 6 純函式）和 PR #61（`scoring_helpers.py` 3 純函式）抽出時皆未附對應單測，留下技術債。Phase 7H 補完此缺口，零生產碼變動，跨 tab 共用層 + 技術指標層 + 評分引擎層全部達 100% 函式 coverage。
+
+**測試明細**：
+
+| 測試檔 | 測試類別 | 涵蓋函式 | cases | 重點邊界 |
+|---|---|---|---|---|
+| `test_tech_indicators.py` | `TestCalcRsi` | `calc_rsi` | 7 | None / 不足 rows / 全漲全跌極端值 / 四捨五入 / 缺欄位 |
+| ↑ | `TestCalcIbs` | `calc_ibs` | 8 | high==low 防呆 0.5 / 取最後一列 / 四捨五入 3 位 |
+| ↑ | `TestCalcVolumeRatio` | `calc_volume_ratio` | 6 | avg_vol=0 防呆 / 排除今日 / custom period |
+| ↑ | `TestCalcKd` | `calc_kd` | 8 | 回傳 tuple / k,d ∈ [0,100] / 全漲 k>80 |
+| ↑ | `TestCalcBollinger` | `calc_bollinger` | 7 | 7 keys 結構 / lower≤ma≤upper / 常數價 std=0 → bw=0 |
+| ↑ | `TestCalcVcp` | `calc_vcp` | 5+1 | 需≥30 rows / 平坦無 swing → None / n_swings 過大 → None |
+| `test_scoring_helpers.py` | `TestCalcFundamentalScore` | `calc_fundamental_score` | 16 | 4 維度 dict 結構 / list 視為 None / 357 估值 4 段 / 殖利率穩定性 |
+| ↑ | `TestCalcHealthScore` | `calc_health_score` | 19 | 5 種趨勢分支 / 5 段 RSI 評分 / 5 段量比 / 4 種 KD 排列 / 4 種布林位置 |
+| ↑ | `TestHealthGrade` | `health_grade` | 11 (含 7 parametrize) | 80/50 二級閥值 / 完整 threshold 表 |
+
+**驗證**：
+- ✅ ruff (`All checks passed!`) — 純測試碼，無生產碼變動
+- ✅ pytest 全套 **734/734 全綠**（原 637 + 新增 97：tech 47 + scoring 50）
+- 涵蓋：所有 None / 空資料 / 不足資料的 fallback；所有評分閾值；所有回傳結構完整性
+
+**累積成果**：跨 tab 共用層（`tab_helpers` / `macro_helpers` / `etf_helpers` / `ui_widgets`）+ 技術指標層（`tech_indicators`）+ 評分引擎層（`scoring_helpers`）共 **6 個 helper 模組 100% 函式 coverage**，總計 **300+ unit test 全綠**。
 
 #### `app.py` 結構演進（PR #66/#68/#70-#73 — P2-B Phase 4+5 全收官 ✅✅）
 

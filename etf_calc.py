@@ -1,0 +1,465 @@
+"""
+ETF 計算層（calc layer）
+從 etf_dashboard.py 抽出的純計算函式：殖利率 / 總報酬 / 折溢價 / 風險指標 / 同儕排名 / 戰情室列計算
+依賴：etf_fetch（單向；calc 永遠不依賴 render）。
+"""
+import streamlit as st
+import pandas as pd
+import yfinance as yf
+from datetime import timedelta
+
+from etf_fetch import (
+    fetch_etf_price, fetch_etf_dividends, fetch_etf_info,
+    fetch_etf_nav_history, _get_etf_launch_price,
+)
+
+
+@st.cache_data(ttl=900, max_entries=50, show_spinner=False)
+def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
+    """ETF 追蹤戰情室單列健檢計算（核心/衛星依 role 分流燈號邏輯）。
+
+    核心資產（穩領息）燈號 → 「健康燈號」欄位：
+        🔴 賺息賠本（總報酬 < 殖利率）→ 考慮換股
+        🟡 趨勢轉弱（跌破 MA60）
+        🟢 體質健康（總報酬 ≥ 殖利率 且 站上 MA60）
+        其他附帶警示：條件 B 破發 / 條件 C 溢價>1% 加註於燈號文字
+
+    衛星資產（賺價差，跌了就買 σ 分級）燈號 → 「σ位階」欄位：
+        🟢🟢🟢 股災價（< MA20-3σ）→ 大買 50%
+        🟢🟢   超跌價（< MA20-2σ）→ 買 30%
+        🟢     便宜價（< MA20-1σ）→ 小買 20%
+        ⚪     中性區（MA20-1σ ~ MA20+1.5σ）
+        🟠     偏高（≥ MA20+1.5σ）→ 不追高
+        🔴     準備停利（≥ MA20+2σ）
+
+    回傳欄位：
+        代號 / 名稱 / 類型 / 市價 / 折溢價% / 年化配息率% / 1年含息報酬% /
+        距月線% / 距季線% / σ位階 / 走勢（30日）/ 健康燈號 / 動作建議
+    """
+    _empty = {
+        '代號': ticker, '名稱': name, '類型': role,
+        '市價': None, '折溢價%': None, '年化配息率%': None,
+        '1年含息報酬%': None, '距月線%': None, '距季線%': None,
+        'σ位階': None, '走勢': [], '健康燈號': '⚪ 資料不足', '動作建議': '—',
+    }
+    try:
+        df = fetch_etf_price(ticker, period='1y')
+        if df.empty or 'Close' not in df.columns:
+            return _empty
+        divs = fetch_etf_dividends(ticker)
+        info = fetch_etf_info(ticker)
+
+        _cur = float(df['Close'].iloc[-1])
+        _ttl = calc_total_return_1y(df, divs)
+        _yld = calc_current_yield(df, divs)
+        _prem = calc_premium_discount(info, df, ticker)
+        _prem_pct = _prem.get('premium_pct') if isinstance(_prem, dict) else None
+
+        # 均線 & 乖離
+        _ma20v = float(df['Close'].rolling(20).mean().iloc[-1]) if len(df) >= 20 else None
+        _ma60v = float(df['Close'].rolling(60).mean().iloc[-1]) if len(df) >= 60 else None
+        _bias20 = round((_cur - _ma20v) / _ma20v * 100, 2) if (_ma20v and _ma20v > 0) else None
+        _bias60 = round((_cur - _ma60v) / _ma60v * 100, 2) if (_ma60v and _ma60v > 0) else None
+
+        # MA20 ± σ（衛星「跌了就買」分級）：用近 1 年 daily close 的標準差
+        _sigma_label, _sigma_action, _sigma_emoji = None, None, None
+        if _ma20v is not None and len(df) >= 60:
+            _std = float(df['Close'].tail(252).std())  # 近 1 年 daily std
+            if _std > 0:
+                _lo3 = _ma20v - 3 * _std
+                _lo2 = _ma20v - 2 * _std
+                _lo1 = _ma20v - 1 * _std
+                _hi15 = _ma20v + 1.5 * _std
+                _hi2 = _ma20v + 2 * _std
+                if _cur < _lo3:
+                    _sigma_emoji, _sigma_label, _sigma_action = '🟢🟢🟢', '股災價(<-3σ)', '大買 50%'
+                elif _cur < _lo2:
+                    _sigma_emoji, _sigma_label, _sigma_action = '🟢🟢', '超跌價(<-2σ)', '買 30%'
+                elif _cur < _lo1:
+                    _sigma_emoji, _sigma_label, _sigma_action = '🟢', '便宜價(<-1σ)', '小買 20%'
+                elif _cur >= _hi2:
+                    _sigma_emoji, _sigma_label, _sigma_action = '🔴', '準備停利(≥+2σ)', '分批停利'
+                elif _cur >= _hi15:
+                    _sigma_emoji, _sigma_label, _sigma_action = '🟠', '偏高(≥+1.5σ)', '不追高/減碼'
+                else:
+                    _sigma_emoji, _sigma_label, _sigma_action = '⚪', '中性區(±1σ)', '靜待訊號'
+
+        # 30 日 sparkline
+        _spark = [float(x) for x in df['Close'].tail(30).tolist()]
+
+        # ── 燈號分流：核心 vs 衛星 ──────────────────────────────
+        _is_core = (role == '核心')
+        _is_sat = (role == '衛星')
+
+        if _is_core:
+            # 核心：總報酬 vs 殖利率 + MA60 趨勢
+            _below_ma60 = (_ma60v is not None and _cur < _ma60v)
+            _has_yld = _yld and _yld > 0
+            _extra = []
+            # 條件 B 破發
+            _lp = _get_etf_launch_price(ticker, df)
+            if _lp and _cur < _lp:
+                _extra.append(f'破發(<{_lp:.1f})')
+            # 條件 C 溢價
+            if _prem_pct is not None and _prem_pct > 1:
+                _extra.append(f'溢價過高({_prem_pct:+.2f}%)')
+            elif _prem_pct is not None and _prem_pct < 0:
+                _extra.append(f'折價({_prem_pct:+.2f}%)')
+
+            if _has_yld and _ttl < _yld:
+                _lamp = f'🔴 賺息賠本({_ttl:.1f}%<{_yld:.1f}%)→考慮換股'
+                _action_hint = '考慮換股（核心紀律不容侵蝕本金）'
+            elif _below_ma60:
+                _lamp = f'🟡 趨勢轉弱（跌破 MA60 {_ma60v:.2f}）'
+                _action_hint = '觀察均線止跌；不加碼'
+            elif _has_yld:
+                _lamp = f'🟢 體質健康（{_ttl:.1f}% ≥ {_yld:.1f}%）'
+                _action_hint = '正常續抱領息'
+            else:
+                _lamp = '🟡 中性持有（無配息資料）'
+                _action_hint = '觀察'
+            if _extra:
+                _lamp += ' ｜ ' + ' / '.join(_extra)
+
+        elif _is_sat:
+            # 衛星：直接拿 σ 位階當燈號
+            if _sigma_emoji:
+                _lamp = f'{_sigma_emoji} {_sigma_label}'
+                _action_hint = _sigma_action or '—'
+            else:
+                _lamp = '⚪ σ 資料不足'
+                _action_hint = '—'
+
+        else:
+            # 其他角色：保留舊邏輯精簡版
+            _warns = []
+            if _yld and _yld > 0 and _ttl < _yld:
+                _warns.append('賺息賠本')
+            if _prem_pct is not None and _prem_pct > 1:
+                _warns.append(f'溢價{_prem_pct:+.2f}%')
+            _lamp = ('🔴 ' + ' ｜ '.join(_warns)) if _warns else '🟡 中性持有'
+            _action_hint = '—'
+
+        return {
+            '代號': ticker, '名稱': name, '類型': role,
+            '市價': round(_cur, 2),
+            '折溢價%': (round(_prem_pct, 2) if _prem_pct is not None else None),
+            '年化配息率%': (round(_yld, 2) if _yld else None),
+            '1年含息報酬%': round(_ttl, 2),
+            '距月線%': _bias20,
+            '距季線%': _bias60,
+            'σ位階': (f'{_sigma_emoji} {_sigma_label}' if _sigma_emoji else None),
+            '走勢': _spark,
+            '健康燈號': _lamp,
+            '動作建議': _action_hint,
+        }
+    except Exception as e:
+        print(f'[warroom/{ticker}] {type(e).__name__}: {e}')
+        _empty['健康燈號'] = f'⚪ 計算失敗：{type(e).__name__}'
+        return _empty
+
+
+def calc_current_yield(df: pd.DataFrame, divs: pd.Series) -> float:
+    """近12個月現金殖利率(%)"""
+    if df.empty or divs.empty:
+        return 0.0
+    try:
+        cutoff = df.index[-1] - timedelta(days=365)
+        annual_div = float(divs[divs.index >= cutoff].sum())
+        price = float(df['Close'].iloc[-1])
+        return round(annual_div / price * 100, 2) if price > 0 else 0.0
+    except Exception:
+        return 0.0
+
+
+def calc_total_return_1y(df: pd.DataFrame, divs: pd.Series) -> float:
+    """近1年含息總報酬率(%)"""
+    if df.empty:
+        return 0.0
+    try:
+        cutoff = df.index[-1] - timedelta(days=365)
+        df_1y = df[df.index >= cutoff]
+        if len(df_1y) < 2:
+            return 0.0
+        p_start = float(df_1y['Close'].iloc[0])
+        p_end   = float(df_1y['Close'].iloc[-1])
+        div_sum = float(divs[divs.index >= cutoff].sum()) if not divs.empty else 0.0
+        return round((p_end - p_start + div_sum) / p_start * 100, 2)
+    except Exception:
+        return 0.0
+
+
+def calc_avg_yield(df: pd.DataFrame, divs: pd.Series, years: int = 5) -> float:
+    """近N年平均殖利率（孫慶龍7%公式）"""
+    if df.empty or divs.empty:
+        return 0.0
+    try:
+        now = df.index[-1]
+        result = []
+        for y in range(years):
+            y_start = now - timedelta(days=365 * (y + 1))
+            y_end   = now - timedelta(days=365 * y)
+            y_div   = float(divs[(divs.index >= y_start) & (divs.index < y_end)].sum())
+            df_y    = df[(df.index >= y_start) & (df.index < y_end)]
+            if df_y.empty or y_div <= 0:
+                continue
+            avg_p = float(df_y['Close'].mean())
+            if avg_p > 0:
+                result.append(y_div / avg_p * 100)
+        return round(sum(result) / len(result), 2) if result else 0.0
+    except Exception:
+        return 0.0
+
+
+def check_vcp_signal(df: pd.DataFrame) -> dict:
+    """春哥 VCP 波幅收縮偵測"""
+    r = {'signal': False, 'above_ma50': False, 'above_ma200': False,
+         'vol_confirm': False, 'weekly_ranges': [], 'stop_loss': None}
+    if df is None or len(df) < 210:
+        return r
+    try:
+        close  = df['Close']
+        last_c = float(close.iloc[-1])
+        ma50   = float(close.rolling(50).mean().iloc[-1])
+        ma200  = float(close.rolling(200).mean().iloc[-1])
+        r['above_ma50']  = last_c > ma50
+        r['above_ma200'] = last_c > ma200
+        r['stop_loss']   = round(last_c * 0.92, 2)
+
+        # 週K波幅（近5週）
+        df_w = df.resample('W').agg({'High':'max','Low':'min',
+                                       'Close':'last','Volume':'sum'}).dropna()
+        if len(df_w) >= 6:
+            ranges = []
+            for i in range(-5, 0):
+                row = df_w.iloc[i]
+                mid = (float(row['High']) + float(row['Low'])) / 2
+                if mid > 0:
+                    ranges.append(round((float(row['High']) - float(row['Low'])) / mid * 100, 1))
+            r['weekly_ranges'] = ranges
+            if len(ranges) >= 5:
+                early_avg = sum(ranges[:2]) / 2
+                late_avg  = sum(ranges[-2:]) / 2
+                shrinking = late_avg < early_avg * 0.6
+                vol_ma50  = float(df['Volume'].rolling(50).mean().iloc[-1])
+                vol_now   = float(df['Volume'].iloc[-1])
+                r['vol_confirm'] = vol_now > vol_ma50
+                r['signal'] = (r['above_ma50'] and r['above_ma200']
+                                and shrinking and r['vol_confirm'])
+    except Exception:
+        pass
+    return r
+
+
+def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> dict:
+    """折溢價率 = (市價 - 淨值) / 淨值 × 100
+    核心原則：NAV 與市價必須來自同一日，避免跨來源日期錯位。
+    主動式 ETF（代號末碼字母 e.g. 00980A）NAV 公布常 T+1 延遲，加三守門員：
+      G1：NAV 最新日 vs 市價最新日相差 ≥1 交易日 → stale，回傳 N/A
+      G2：主動式 ETF |prem| > 2.0% → 疑 NAV 同日寫入但數值未更新 → 回傳 N/A
+      G3：NAV 最新日早於「前一交易日」→ 雙源同步落後（FinMind+yfinance 同日卡關）
+    資料來源：1. TWSE OpenAPI 直讀（同日 NAV+市價+折溢價率）
+              2. FinMind NAV history + df 同日 inner join（精確日期配對）
+              3. yfinance info navPrice
+    """
+    import pandas as _pd_prem
+    import re as _re_prem
+    import datetime as _dt_prem
+    _code_clean = ticker.replace('.TW', '').replace('.TWO', '') if ticker else ''
+    _is_active_etf = bool(_re_prem.match(r'^\d{4,5}[A-Z]$', _code_clean))
+    _ACTIVE_PREM_MAX = 2.0  # 主動式 ETF |prem| 門檻，超過判定 NAV stale
+
+    def _prev_business_day(_d):
+        _d2 = _d - _dt_prem.timedelta(days=1)
+        while _d2.weekday() >= 5:   # 5=Sat, 6=Sun
+            _d2 -= _dt_prem.timedelta(days=1)
+        return _d2
+    _PREV_BD = _prev_business_day(_dt_prem.date.today())
+
+    _stale_payload = {'nav': None, 'price': None, 'premium_pct': None,
+                      'warning': False, 'stale_nav': True}
+    try:
+        if ticker:
+            _nav_hist = fetch_etf_nav_history(ticker, days=10)
+            if not _nav_hist.empty and 'nav' in _nav_hist.columns:
+                _last = _nav_hist.iloc[-1]
+
+                # ── 路徑A：TWSE 已含同日折溢價率，直接使用 ──
+                if 'premium_pct' in _nav_hist.columns:
+                    _prem_val = _last.get('premium_pct')
+                    _price_val = _last.get('price', None)
+                    if _prem_val is not None and not _pd_prem.isna(_prem_val):
+                        _pv = float(_prem_val)
+                        if _is_active_etf and abs(_pv) > _ACTIVE_PREM_MAX:
+                            print(f'[折溢價-A/stale] {ticker}: prem={_pv}% > ±{_ACTIVE_PREM_MAX}%')
+                            return _stale_payload
+                        _latest_nav = float(_last['nav'])
+                        _pr = float(_price_val) if _price_val else (_latest_nav * (1 + _pv / 100))
+                        print(f'[折溢價-A] {ticker}: nav={_latest_nav} prem={_pv}% (TWSE直讀)')
+                        return {'nav': _latest_nav, 'price': round(_pr, 4),
+                                'premium_pct': _pv, 'warning': _pv > 1.0}
+
+                # ── 路徑B：FinMind NAV history + df Same-Date Inner Join ──
+                # 與「近30日淨值」表格相同的精確日期配對邏輯，杜絕日期錯位
+                if not df.empty and 'Close' in df.columns:
+                    _nav_df = _nav_hist[['date', 'nav']].copy()
+                    _nav_df['date'] = _pd_prem.to_datetime(_nav_df['date']).dt.normalize()
+                    _nav_df = _nav_df.set_index('date')
+                    _price_s = df[['Close']].copy()
+                    _price_s.index = _pd_prem.to_datetime(_price_s.index).normalize()
+                    _merged = _nav_df.join(_price_s, how='inner').dropna()
+                    if not _merged.empty:
+                        _nav_date_used = _merged.index[-1]
+                        _nav_d_only = _nav_date_used.date()
+                        _price_latest = _price_s.index.max()
+                        _gap_days = (_price_latest - _nav_date_used).days
+                        if _gap_days >= 1:
+                            print(f'[折溢價-B/stale-G1] {ticker}: NAV={_nav_d_only} 落後 {_gap_days}d')
+                            return _stale_payload
+                        # G3：雙源同步落後 — NAV 早於前一交易日，配對 OK 但整體資料過時
+                        if _nav_d_only < _PREV_BD:
+                            print(f'[折溢價-B/stale-G3] {ticker}: NAV={_nav_d_only} < prev BD {_PREV_BD}')
+                            return _stale_payload
+                        _row = _merged.iloc[-1]  # 最近一筆同日配對
+                        _nav_v = float(_row['nav'])
+                        _pr_v  = float(_row['Close'])
+                        _prem  = round((_pr_v - _nav_v) / _nav_v * 100, 2)
+                        if _is_active_etf and abs(_prem) > _ACTIVE_PREM_MAX:
+                            print(f'[折溢價-B/stale-G2] {ticker}: prem={_prem}% > ±{_ACTIVE_PREM_MAX}%')
+                            return _stale_payload
+                        print(f'[折溢價-B] {ticker}: date={_nav_d_only} nav={_nav_v} price={_pr_v} prem={_prem}%')
+                        return {'nav': _nav_v, 'price': _pr_v,
+                                'premium_pct': _prem, 'warning': _prem > 1.0,
+                                'data_date': _nav_d_only}
+
+        print(f'[折溢價] {ticker}: 所有路徑失敗，回傳 N/A')
+    except Exception as _ep:
+        import traceback as _tb_p; print(f'[折溢價] 錯誤: {_ep}'); _tb_p.print_exc()
+    return {'nav': None, 'price': None, 'premium_pct': None, 'warning': False}
+
+
+def calc_tracking_error(df: pd.DataFrame, bench_df: pd.DataFrame) -> float:
+    """追蹤誤差 = std(ETF日報酬 - 基準日報酬) × √252 × 100"""
+    try:
+        if df.empty or bench_df.empty:
+            return None
+        etf_r   = df['Close'].pct_change().dropna()
+        bench_r = bench_df['Close'].pct_change().dropna()
+        common  = etf_r.index.intersection(bench_r.index)
+        if len(common) < 20:
+            return None
+        diff = etf_r.loc[common] - bench_r.loc[common]
+        return round(float(diff.std() * (252 ** 0.5) * 100), 2)
+    except Exception:
+        return None
+
+
+def calc_mdd(df: pd.DataFrame) -> float:
+    """最大回撤 MDD(%)"""
+    try:
+        close    = df['Close']
+        roll_max = close.cummax()
+        return round(float(((close - roll_max) / roll_max * 100).min()), 2)
+    except Exception:
+        return None
+
+
+def calc_cagr(df: pd.DataFrame) -> float:
+    """年化報酬率 CAGR(%)"""
+    try:
+        if len(df) < 2:
+            return 0.0
+        days  = (df.index[-1] - df.index[0]).days
+        if days < 30:
+            return 0.0
+        y     = days / 365.25
+        start = float(df['Close'].iloc[0])
+        end   = float(df['Close'].iloc[-1])
+        return round(((end / start) ** (1 / y) - 1) * 100, 2)
+    except Exception:
+        return 0.0
+
+
+def calc_sharpe(df: pd.DataFrame, rf: float = 5.33) -> float:
+    """夏普值（年化，rf預設5.33% FEDFUNDS）"""
+    try:
+        ret     = df['Close'].pct_change().dropna()
+        if len(ret) < 20:
+            return 0.0
+        ann_ret = float(ret.mean() * 252 * 100)
+        ann_vol = float(ret.std() * (252 ** 0.5) * 100)
+        return round((ann_ret - rf) / ann_vol, 2) if ann_vol > 0 else 0.0
+    except Exception:
+        return 0.0
+
+
+def auto_detect_benchmark(ticker: str) -> str:
+    t = ticker.upper()
+    if t.endswith('.TW') or t.endswith('.TWO'):
+        return '0050.TW'
+    return '^GSPC'
+
+
+@st.cache_data(ttl=3600, max_entries=50, show_spinner=False)
+def compute_etf_peer_ranking(ticker: str, periods: tuple = (63, 126, 252)) -> dict:
+    """ETF 同儕近 3M/6M/1Y 報酬排名（總報酬率含息，用 yfinance Adj Close）。
+
+    Parameters
+    ----------
+    ticker : str
+        目標 ETF 代號，如 '0050.TW'。
+    periods : tuple[int, ...]
+        交易日視窗（預設 63=3M、126=6M、252=1Y）。
+
+    Returns
+    -------
+    dict
+      命中：{63: {'self_ret': float, 'peer_median': float, 'percentile': float,
+                  'peer_count': int}, 126: {...}, 252: {...},
+             'category': str, 'peers': list[str]}
+      無同儕：{'_err': '同儕資料不足', 'category': ''}
+    """
+    from etf_categories import get_peers, get_category_name
+    _peers = get_peers(ticker)
+    _category = get_category_name(ticker)
+    if len(_peers) < 3:
+        return {'_err': '同儕資料不足', 'category': _category, 'peers': _peers}
+    _all = [ticker] + _peers
+    _result: dict = {'category': _category, 'peers': _peers}
+    try:
+        _hist = yf.download(_all, period='2y', auto_adjust=True,
+                            progress=False, threads=False)
+        # yf.download 多 ticker 回 MultiIndex (column 0=field, 1=ticker)；單一回扁平
+        if isinstance(_hist.columns, pd.MultiIndex):
+            _close = _hist['Close']
+        else:
+            _close = _hist[['Close']].rename(columns={'Close': _all[0]})
+        if _close.empty:
+            return {'_err': 'yfinance 抓不到價格', 'category': _category, 'peers': _peers}
+        for _p in periods:
+            if len(_close) < _p + 1:
+                _result[_p] = {'_err': f'資料不足 {_p} 日'}
+                continue
+            _window = _close.iloc[-(_p + 1):]
+            _rets = (_window.iloc[-1] / _window.iloc[0] - 1.0) * 100.0
+            _rets = _rets.dropna()
+            if ticker not in _rets.index or len(_rets) < 3:
+                _result[_p] = {'_err': '有效樣本不足'}
+                continue
+            _self = float(_rets[ticker])
+            _peer_only = _rets.drop(ticker)
+            _median = float(_peer_only.median())
+            # percentile：self 高於 N% 同儕；用 strict less 計
+            _pct = float((_peer_only < _self).sum()) / len(_peer_only) * 100.0
+            _result[_p] = {
+                'self_ret': round(_self, 2),
+                'peer_median': round(_median, 2),
+                'percentile': round(_pct, 1),
+                'peer_count': len(_peer_only),
+            }
+        return _result
+    except Exception as _e:
+        import traceback as _tb_pr
+        print(f'[peer-rank] {ticker} ❌ {type(_e).__name__}: {_e}')
+        _tb_pr.print_exc()
+        return {'_err': f'{type(_e).__name__}', 'category': _category, 'peers': _peers}

@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from etf_helpers import norm_lower_better, norm_return
+
 
 def render_etf_backtest(gemini_fn=None):
     # ─ Late imports（避免循環 import）─
@@ -182,26 +184,13 @@ def render_etf_backtest(gemini_fn=None):
     c5.metric('最大回撤',     f'{mdd:.1f}%')
 
     # ── 五維風報雷達圖（組合 vs 基準）────────────────────────────
-    # 各維度正規化為 0-100 分數，越大越好（波動率/MDD 已反向處理）
-    def _norm_return(v, lo=-50, mid=0, hi=50):
-        if v >= hi: return 100
-        if v <= lo: return 0
-        if v >= mid: return 50 + (v - mid) / (hi - mid) * 50
-        return (v - lo) / (mid - lo) * 50
-
-    def _norm_lower_better(v, best=5, mid=20, worst=35):
-        v = abs(v)
-        if v <= best: return 100
-        if v >= worst: return 0
-        if v <= mid: return 100 - (v - best) / (mid - best) * 50
-        return 50 - (v - mid) / (worst - mid) * 50
-
+    # 各維度 0-100 正規化（越大越好）：norm_return / norm_lower_better 抽至 etf_helpers
     _port_scores = [
-        _norm_return(cum_ret, lo=-50, mid=0, hi=80),
-        _norm_return(cagr, lo=-5, mid=5, hi=15),
-        _norm_lower_better(vol, best=8, mid=20, worst=35),
-        _norm_return(sharpe * 50, lo=-50, mid=50, hi=150),  # sharpe -1~3 → 0-100
-        _norm_lower_better(mdd, best=5, mid=20, worst=35),
+        norm_return(cum_ret, lo=-50, mid=0, hi=80),
+        norm_return(cagr, lo=-5, mid=5, hi=15),
+        norm_lower_better(vol, best=8, mid=20, worst=35),
+        norm_return(sharpe * 50, lo=-50, mid=50, hi=150),  # sharpe -1~3 → 0-100
+        norm_lower_better(mdd, best=5, mid=20, worst=35),
     ]
     # 基準分數（從 bench_val 計算）
     _bench_scores = None
@@ -213,11 +202,11 @@ def render_etf_backtest(gemini_fn=None):
         _b_vol     = round(float(bench_val.pct_change().dropna().std() * (252**0.5) * 100), 2)
         _b_cum     = round((float(bench_val.iloc[-1]) - initial) / initial * 100, 2)
         _bench_scores = [
-            _norm_return(_b_cum, lo=-50, mid=0, hi=80),
-            _norm_return(_b_cagr, lo=-5, mid=5, hi=15),
-            _norm_lower_better(_b_vol, best=8, mid=20, worst=35),
-            _norm_return(_b_sharpe * 50, lo=-50, mid=50, hi=150),
-            _norm_lower_better(_b_mdd, best=5, mid=20, worst=35),
+            norm_return(_b_cum, lo=-50, mid=0, hi=80),
+            norm_return(_b_cagr, lo=-5, mid=5, hi=15),
+            norm_lower_better(_b_vol, best=8, mid=20, worst=35),
+            norm_return(_b_sharpe * 50, lo=-50, mid=50, hi=150),
+            norm_lower_better(_b_mdd, best=5, mid=20, worst=35),
         ]
 
     _radar_labels = ['累積報酬', 'CAGR', '低波動', '夏普值', '低回撤']

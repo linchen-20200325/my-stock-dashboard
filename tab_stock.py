@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
+
 
 def render_tab_stock():
     # ─ Late imports（避免循環 import）─
@@ -374,18 +376,10 @@ padding:14px 18px;margin-bottom:12px;">
             '</div>', unsafe_allow_html=True)
         if df2 is not None and not df2.empty:
             _p2    = float(df2['close'].iloc[-1])
-            # MA 欄位：若不存在則即時計算
-            def _safe_ma(df, n):
-                col = f'MA{n}'
-                if col in df.columns:
-                    return float(df[col].iloc[-1])
-                if len(df) >= n:
-                    return float(df['close'].tail(n).mean())
-                return float(df['close'].mean())
-            _ma5   = _safe_ma(df2, 5)
-            _ma20  = _safe_ma(df2, 20)
-            _ma60  = _safe_ma(df2, 60)
-            _ma240 = _safe_ma(df2, 240)
+            _ma5   = safe_ma(df2, 5)
+            _ma20  = safe_ma(df2, 20)
+            _ma60  = safe_ma(df2, 60)
+            _ma240 = safe_ma(df2, 240)
 
             # 趨勢排列
             _bull_align  = _p2 > _ma20 > _ma60   # 多頭排列
@@ -503,6 +497,71 @@ padding:14px 18px;margin-bottom:12px;">
                     _add_pt = round(_hi20_i * 1.01, 2)
                     st.markdown(f'<div style="font-size:12px;color:#58a6ff;padding:2px 0;">➕ 加碼點（策略3 突破法）：>{_add_pt:.2f}</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
+
+            # ══ 關鍵價位 K 線圖（停利/停損/支撐壓力直接畫在 K 線上）═════
+            try:
+                from plotly.subplots import make_subplots
+                _kdf = df2.tail(180).copy()
+                _fig_kl = make_subplots(
+                    rows=2, cols=1, shared_xaxes=True,
+                    row_heights=[0.78, 0.22], vertical_spacing=0.03,
+                )
+                _open_s = _kdf['open'] if 'open' in _kdf.columns else _kdf['close']
+                _fig_kl.add_trace(go.Candlestick(
+                    x=_kdf.index, open=_open_s,
+                    high=_kdf['high'], low=_kdf['low'], close=_kdf['close'],
+                    increasing_line_color='#da3633', decreasing_line_color='#2ea043',
+                    name='K線', showlegend=False,
+                ), row=1, col=1)
+                _ma20s = _kdf['MA20'] if 'MA20' in _kdf.columns else df2['close'].rolling(20).mean().tail(len(_kdf))
+                _ma100s = _kdf['MA100'] if 'MA100' in _kdf.columns else df2['close'].rolling(100).mean().tail(len(_kdf))
+                _fig_kl.add_trace(go.Scatter(x=_kdf.index, y=_ma20s,
+                    line=dict(color='#FF69B4', width=1.4), name='MA20'), row=1, col=1)
+                _fig_kl.add_trace(go.Scatter(x=_kdf.index, y=_ma100s,
+                    line=dict(color='#00CED1', width=1.4), name='MA100'), row=1, col=1)
+                if 'volume' in _kdf.columns:
+                    _vc = ['#da3633' if c >= o else '#2ea043'
+                           for c, o in zip(_kdf['close'], _open_s)]
+                    _fig_kl.add_trace(go.Bar(x=_kdf.index, y=_kdf['volume'],
+                        marker_color=_vc, name='量', showlegend=False), row=2, col=1)
+                # 9 條關鍵價位水平線
+                _add_pt_v = locals().get('_add_pt')
+                _hlines = [
+                    (_tp2_p,   '#58a6ff', 'dash',    f'停利2 +10% {_tp2_p:.2f}'),
+                    (_tp1_p,   '#3fb950', 'dash',    f'停利1 +5% {_tp1_p:.2f}'),
+                    (_hi20_p,  '#f0883e', 'dot',     f'壓力 {_hi20_p:.2f}'),
+                    (_target1, '#2ea043', 'dashdot', f'初步目標 {_target1:.2f}'),
+                    (_ma5,     '#FFD700', 'solid',   f'5MA {_ma5:.2f}'),
+                    (_lo20_p,  '#1f6feb', 'dot',     f'支撐 {_lo20_p:.2f}'),
+                    (_sl_ma20, '#8b949e', 'dot',     f'月線停損 {_sl_ma20:.2f}'),
+                    (_sl_p,    '#f85149', 'dash',    f'停損 -8% {_sl_p:.2f}'),
+                    (_sl_hard, '#a40e26', 'dashdot', f'硬停損 -7% {_sl_hard:.2f}'),
+                ]
+                if _add_pt_v:
+                    _hlines.append((_add_pt_v, '#a371f7', 'dashdot', f'加碼點 >{_add_pt_v:.2f}'))
+                for _y, _c, _ds, _txt in _hlines:
+                    if _y and _y > 0:
+                        _fig_kl.add_hline(
+                            y=_y, line=dict(color=_c, width=1, dash=_ds),
+                            annotation_text=_txt, annotation_position='top left',
+                            annotation_font=dict(color=_c, size=10),
+                            row=1, col=1,
+                        )
+                _fig_kl.update_layout(
+                    title=dict(text=f'{sid2} {name2} K線 + 關鍵價位（停利/停損/支撐壓力）',
+                               font=dict(size=13)),
+                    height=460, margin=dict(l=10, r=10, t=40, b=10),
+                    template='plotly_dark', showlegend=True,
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02,
+                                x=1, xanchor='right', font=dict(size=10)),
+                    xaxis_rangeslider_visible=False,
+                )
+                _fig_kl.update_yaxes(title_text='價格', row=1, col=1)
+                _fig_kl.update_yaxes(title_text='量', row=2, col=1)
+                st.plotly_chart(_fig_kl, use_container_width=True,
+                                config={'displayModeBar': False})
+            except Exception as _kl_err:
+                st.caption(f'⚠️ K 線繪製失敗：{_kl_err}')
 
         else:
             st.info('載入個股資料後顯示進出場訊號')
@@ -2088,30 +2147,18 @@ padding:12px 16px;margin:8px 0;">
                     _r1102 = _surv2.get('Rule_100_100_10', {})
                     _r110c2 = _sc_map.get(_r1102.get('Status', 'Fail'), '#f85149')
                     # 各分項勾叉（門檻：A>100% / B≥100% / C>10%，與 financial_health_engine:416/423/431 對齊）
-                    import re as _re_r110a
-                    def _r110_ok_a(_s, _thr, _strict):
-                        _ss = str(_s or '')
-                        if not _ss or 'N/A' in _ss:
-                            return None
-                        _mn = _re_r110a.search(r'(-?\d+(?:\.\d+)?)\s*%', _ss)
-                        if not _mn:
-                            return None
-                        _vn = float(_mn.group(1))
-                        return (_vn > _thr) if _strict else (_vn >= _thr)
-                    _a_ok2 = _r110_ok_a(_r1102.get('Cash_Flow_Ratio',''), 100, True)
-                    _b_ok2 = _r110_ok_a(_r1102.get('Cash_Flow_Adequacy',''), 100, False)
-                    _c_ok2 = _r110_ok_a(_r1102.get('Cash_Reinvestment',''), 10, True)
-                    def _tk2(x):
-                        return '✅' if x is True else ('❌' if x is False else '⚪')
+                    _a_ok2 = parse_cash_flow_ratio(_r1102.get('Cash_Flow_Ratio',''), 100, strict=True)
+                    _b_ok2 = parse_cash_flow_ratio(_r1102.get('Cash_Flow_Adequacy',''), 100, strict=False)
+                    _c_ok2 = parse_cash_flow_ratio(_r1102.get('Cash_Reinvestment',''), 10, strict=True)
                     with _s2c[2]:
                         st.markdown(
                             f'<div style="background:{_r110c2}18;border:1px solid {_r110c2}55;'
                             f'border-radius:8px;padding:10px;text-align:center;">'
                             f'<div style="font-size:11px;color:#8b949e;">🔄 100/100/10</div>'
                             f'<div style="font-size:11px;color:#c9d1d9;">'
-                            f'A{_tk2(_a_ok2)}{_r1102.get("Cash_Flow_Ratio","N/A")} '
-                            f'B{_tk2(_b_ok2)}{_r1102.get("Cash_Flow_Adequacy","N/A")} '
-                            f'C{_tk2(_c_ok2)}{_r1102.get("Cash_Reinvestment","N/A")}</div>'
+                            f'A{format_condition_emoji(_a_ok2)}{_r1102.get("Cash_Flow_Ratio","N/A")} '
+                            f'B{format_condition_emoji(_b_ok2)}{_r1102.get("Cash_Flow_Adequacy","N/A")} '
+                            f'C{format_condition_emoji(_c_ok2)}{_r1102.get("Cash_Reinvestment","N/A")}</div>'
                             f'<div style="font-size:12px;font-weight:700;color:{_r110c2};">{_r1102.get("Status","?")}</div>'
                             f'<div style="font-size:10px;color:#8b949e;margin-top:4px;">{_r1102.get("Insight","")}</div>'
                             f'</div>', unsafe_allow_html=True)
