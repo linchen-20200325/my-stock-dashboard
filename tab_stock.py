@@ -1318,6 +1318,185 @@ padding:12px 16px;margin:8px 0;">
                     if _cur_div_riv < 0.5:
                         st.info('ℹ️ 此股近年現金股利極低（< 0.5元），殖利率河流圖參考意義有限，建議搭配本益比等其他估值工具。')
 
+        # ── 估值河流圖（PE 本益比河流，逐日 TTM EPS）───────────────────
+        # TTM EPS = 最近 4 季 EPS 加總；歷史 TTM = 4 季 rolling sum，按公告生效日對應到日線
+        _has_eps = (qtr2 is not None and not qtr2.empty
+                    and 'EPS' in qtr2.columns and 'date' in qtr2.columns)
+        _eps_q_clean = (pd.to_numeric(qtr2['EPS'], errors='coerce').dropna()
+                        if _has_eps else pd.Series(dtype=float))
+
+        if df2 is not None and not df2.empty and _has_eps and len(_eps_q_clean) >= 4:
+            # PE 閾值三組 selectbox（依產業屬性切換）
+            _pe_preset_label = st.selectbox(
+                'PE 估值區間',
+                ['通用 10/15/20', '保守 8/12/16（景氣循環股）', '成長 12/18/25'],
+                index=0, key=f'pe_preset_{sid2}',
+                help='通用：多數產業；保守：半導體代工/面板/DRAM 等高波動景氣循環股；成長：科技/消費/軟體股')
+            _PE_BANDS = {
+                '通用 10/15/20': (10, 15, 20),
+                '保守 8/12/16（景氣循環股）': (8, 12, 16),
+                '成長 12/18/25': (12, 18, 25),
+            }
+            _pe_low, _pe_mid, _pe_high = _PE_BANDS[_pe_preset_label]
+
+            # ── 1. 計算逐季 TTM EPS（4 季 rolling sum） ──
+            _qs = qtr2.sort_values(['年度', '季度']).reset_index(drop=True).copy()
+            _qs['ttm_eps'] = pd.to_numeric(_qs['EPS'], errors='coerce').rolling(4, min_periods=4).sum()
+            # 公告生效日：季末 + 60 天（涵蓋台股財報公告期 Q1=5/15、Q2=8/14、Q3=11/14、年報 3/31）
+            _qs['announce'] = pd.to_datetime(_qs['date'], errors='coerce') + pd.Timedelta(days=60)
+            _qa = _qs.dropna(subset=['ttm_eps', 'announce']).sort_values('announce').reset_index(drop=True)
+
+            # ── 2. asof 對應到日線：每個交易日採用該日之前最後一筆已公告的 TTM EPS ──
+            _rdates_pe = pd.to_datetime(
+                df2['date'] if 'date' in df2.columns else pd.RangeIndex(len(df2)),
+                errors='coerce').reset_index(drop=True)
+            _rclose_pe = pd.to_numeric(df2['close'], errors='coerce').reset_index(drop=True)
+            _df_p = pd.DataFrame({'date': _rdates_pe, 'close': _rclose_pe}).sort_values('date').reset_index(drop=True)
+            _df_a = _qa[['announce', 'ttm_eps']].rename(columns={'announce': 'date'})
+            _merged_pe = pd.merge_asof(_df_p, _df_a, on='date', direction='backward')
+            _ttm_eps_series = _merged_pe['ttm_eps']
+
+            # ── 3. 計算最新 TTM EPS + 虧損股檢查 ──
+            _cur_eps_pe = float(_ttm_eps_series.dropna().iloc[-1]) if not _ttm_eps_series.dropna().empty else 0
+            _cur_price_pe = float(_rclose_pe.dropna().iloc[-1]) if not _rclose_pe.dropna().empty else 0
+
+            if _cur_eps_pe <= 0:
+                st.warning(f'⚠️ {sid2} 近 4 季 TTM EPS = {_cur_eps_pe:.2f} 元（虧損），本益比估值不適用。請參考下方 P/B 股價淨值比河流圖。')
+            else:
+                # ── 4. 計算河流帶（逐日） ──
+                _band_pe_low  = (_ttm_eps_series * _pe_low).round(2)
+                _band_pe_mid  = (_ttm_eps_series * _pe_mid).round(2)
+                _band_pe_high = (_ttm_eps_series * _pe_high).round(2)
+                _p_lo = float(_band_pe_low.dropna().iloc[-1])  if not _band_pe_low.dropna().empty  else 0
+                _p_mi = float(_band_pe_mid.dropna().iloc[-1])  if not _band_pe_mid.dropna().empty  else 0
+                _p_hi = float(_band_pe_high.dropna().iloc[-1]) if not _band_pe_high.dropna().empty else 0
+
+                # ── 5. 繪圖 ──
+                _fig_pe = go.Figure()
+                _fig_pe.add_trace(go.Scatter(
+                    x=_rdates_pe, y=_rclose_pe, name='收盤價',
+                    line=dict(color='#e6edf3', width=2.5),
+                    hovertemplate='%{x|%Y-%m-%d}<br>%{y:.2f}<extra></extra>'))
+                for _bs, _lbl_base, _last_val, _col in [
+                    (_band_pe_low,  f'PE{_pe_low}便宜',  _p_lo, '#3fb950'),
+                    (_band_pe_mid,  f'PE{_pe_mid}合理',  _p_mi, '#d29922'),
+                    (_band_pe_high, f'PE{_pe_high}昂貴', _p_hi, '#f85149'),
+                ]:
+                    _lbl = f'{_lbl_base}:{_last_val:.0f}' if _last_val > 0 else _lbl_base
+                    _fig_pe.add_trace(go.Scatter(
+                        x=_rdates_pe, y=_bs, name=_lbl,
+                        line=dict(color=_col, width=1.5, dash='dot'),
+                        hovertemplate=f'{_lbl_base}: %{{y:.0f}}<extra></extra>'))
+                if _p_lo > 0:
+                    _fig_pe.add_hrect(y0=0, y1=_p_lo, fillcolor='rgba(63,185,80,0.07)', line_width=0)
+                if _p_mi > _p_lo:
+                    _fig_pe.add_hrect(y0=_p_lo, y1=_p_mi, fillcolor='rgba(210,153,34,0.07)', line_width=0)
+                if _p_hi > _p_mi:
+                    _fig_pe.add_hrect(y0=_p_mi, y1=_p_hi, fillcolor='rgba(248,81,73,0.05)', line_width=0)
+
+                _all_pe_vals = (list(_rclose_pe.dropna())
+                                + list(_band_pe_high.dropna()) + list(_band_pe_low.dropna()))
+                _ymax_pe = max(_all_pe_vals) * 1.05 if _all_pe_vals else 100
+                _ymin_pe = max(0, min(_all_pe_vals) * 0.7) if _all_pe_vals else 0
+
+                _fig_pe.update_layout(
+                    title=dict(
+                        text=f'📈 {sid2} {name2} 本益比河流圖（TTM EPS {_cur_eps_pe:.2f}元 × PE {_pe_low}/{_pe_mid}/{_pe_high}）',
+                        font=dict(color='#8b949e', size=12)),
+                    height=300, plot_bgcolor='#0e1117', paper_bgcolor='#0e1117',
+                    font=dict(color='white', size=11),
+                    margin=dict(l=10, r=10, t=40, b=10),
+                    xaxis=dict(gridcolor='#21262d'),
+                    yaxis=dict(range=[_ymin_pe, _ymax_pe], gridcolor='#21262d'),
+                    hovermode='x unified', showlegend=True,
+                    legend=dict(orientation='h', y=1.08, x=0, font=dict(size=10)))
+                st.plotly_chart(_fig_pe, width='stretch', config={'displayModeBar': False})
+
+                _cur_pe_ratio = _cur_price_pe / _cur_eps_pe if _cur_eps_pe > 0 else 0
+                _cur_zone_pe = ('🟢 便宜區' if _cur_price_pe < _p_lo else
+                                '🟡 合理區' if _cur_price_pe < _p_mi else
+                                '🔴 昂貴區' if _cur_price_pe < _p_hi else '⛔ 超昂貴')
+                st.caption(
+                    f'目前位於 {_cur_zone_pe}（現價 {_cur_price_pe:.0f} / '
+                    f'PE{_pe_low}≤{_p_lo:.0f} / PE{_pe_mid}≤{_p_mi:.0f} / PE{_pe_high}≤{_p_hi:.0f}）　'
+                    f'TTM EPS {_cur_eps_pe:.2f}元，當前 PE ≈ {_cur_pe_ratio:.1f} 倍')
+        elif df2 is not None and not df2.empty:
+            st.info(f'ℹ️ {sid2} 季報 EPS 資料不足 4 季（取得 {len(_eps_q_clean)} 季），無法繪製本益比河流圖。')
+
+        # ── 估值河流圖（PB 股價淨值比河流，BPS 橫帶 fallback）──────────
+        # BPS 變化緩慢，採用 yfinance 最新 bookValue 畫橫帶（不做歷史 rolling）
+        _bps_val = 0.0
+        try:
+            import yfinance as _yf_pb
+            for _sfx_pb in ('.TW', '.TWO'):
+                try:
+                    _info_pb = _yf_pb.Ticker(f'{sid2}{_sfx_pb}').info or {}
+                    _bps_v = _info_pb.get('bookValue')
+                    if _bps_v and float(_bps_v) > 0:
+                        _bps_val = float(_bps_v)
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        if df2 is not None and not df2.empty and _bps_val > 0:
+            _PB_LOW, _PB_MID, _PB_HIGH = 0.8, 1.5, 2.5
+            _b_lo_pb = round(_bps_val * _PB_LOW, 2)
+            _b_mi_pb = round(_bps_val * _PB_MID, 2)
+            _b_hi_pb = round(_bps_val * _PB_HIGH, 2)
+
+            _rdates_pb = pd.to_datetime(
+                df2['date'] if 'date' in df2.columns else pd.RangeIndex(len(df2)),
+                errors='coerce').reset_index(drop=True)
+            _rclose_pb = pd.to_numeric(df2['close'], errors='coerce').reset_index(drop=True)
+
+            _fig_pb = go.Figure()
+            _fig_pb.add_trace(go.Scatter(
+                x=_rdates_pb, y=_rclose_pb, name='收盤價',
+                line=dict(color='#e6edf3', width=2.5),
+                hovertemplate='%{x|%Y-%m-%d}<br>%{y:.2f}<extra></extra>'))
+            for _v_pb, _lbl_pb, _col_pb in [
+                (_b_lo_pb, f'PB{_PB_LOW}便宜:{_b_lo_pb:.0f}',  '#3fb950'),
+                (_b_mi_pb, f'PB{_PB_MID}合理:{_b_mi_pb:.0f}',  '#d29922'),
+                (_b_hi_pb, f'PB{_PB_HIGH}昂貴:{_b_hi_pb:.0f}', '#f85149'),
+            ]:
+                _fig_pb.add_hline(y=_v_pb, line=dict(color=_col_pb, width=1.5, dash='dot'),
+                                  annotation_text=_lbl_pb, annotation_position='right',
+                                  annotation_font=dict(color=_col_pb, size=10))
+            _fig_pb.add_hrect(y0=0, y1=_b_lo_pb, fillcolor='rgba(63,185,80,0.07)', line_width=0)
+            _fig_pb.add_hrect(y0=_b_lo_pb, y1=_b_mi_pb, fillcolor='rgba(210,153,34,0.07)', line_width=0)
+            _fig_pb.add_hrect(y0=_b_mi_pb, y1=_b_hi_pb, fillcolor='rgba(248,81,73,0.05)', line_width=0)
+
+            _all_pb_vals = list(_rclose_pb.dropna()) + [_b_hi_pb, _b_lo_pb]
+            _ymax_pb = max(_all_pb_vals) * 1.05 if _all_pb_vals else 100
+            _ymin_pb = max(0, min(_all_pb_vals) * 0.7) if _all_pb_vals else 0
+            _cur_price_pb = float(_rclose_pb.dropna().iloc[-1]) if not _rclose_pb.dropna().empty else 0
+            _cur_pb_ratio = _cur_price_pb / _bps_val if _bps_val > 0 else 0
+
+            _fig_pb.update_layout(
+                title=dict(
+                    text=f'📐 {sid2} {name2} 股價淨值比河流圖（BPS {_bps_val:.2f}元 × PB {_PB_LOW}/{_PB_MID}/{_PB_HIGH}）',
+                    font=dict(color='#8b949e', size=12)),
+                height=280, plot_bgcolor='#0e1117', paper_bgcolor='#0e1117',
+                font=dict(color='white', size=11),
+                margin=dict(l=10, r=10, t=40, b=10),
+                xaxis=dict(gridcolor='#21262d'),
+                yaxis=dict(range=[_ymin_pb, _ymax_pb], gridcolor='#21262d'),
+                hovermode='x unified', showlegend=False)
+            st.plotly_chart(_fig_pb, width='stretch', config={'displayModeBar': False})
+
+            _cur_zone_pb = ('🟢 便宜區' if _cur_price_pb < _b_lo_pb else
+                            '🟡 合理區' if _cur_price_pb < _b_mi_pb else
+                            '🔴 昂貴區' if _cur_price_pb < _b_hi_pb else '⛔ 超昂貴')
+            st.caption(
+                f'目前位於 {_cur_zone_pb}（現價 {_cur_price_pb:.0f} / '
+                f'PB{_PB_LOW}≤{_b_lo_pb:.0f} / PB{_PB_MID}≤{_b_mi_pb:.0f} / PB{_PB_HIGH}≤{_b_hi_pb:.0f}）　'
+                f'BPS {_bps_val:.2f}元，當前 PB ≈ {_cur_pb_ratio:.2f} 倍')
+            st.info('ℹ️ BPS（每股淨值）變化緩慢，本圖採 yfinance 最新值作橫帶（非逐日 rolling）。製造業慣例 PB<1 便宜、1~1.5 合理、>1.5 昂貴；金融股可放寬。')
+        elif df2 is not None and not df2.empty:
+            st.caption('ℹ️ 股價淨值比河流圖：yfinance 未提供 BPS 資料，跳過。')
+
         # ══ C. 領先指標 ════════════════════════════════════════
         st.markdown('---')
         st.markdown('#### 🔬 C. 公司真的在賺錢嗎？（財報領先指標）')
