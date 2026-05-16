@@ -1005,6 +1005,31 @@ tab_stock.py / tab_stock_grp.py / tab_macro.py  (module-level import)
 - ✅ tests/test_macro_helpers.py：TestRpTs 11 + TestRpEntry 3 + TestRpScalar 4
 - 涵蓋：`None` / 非 DataFrame / 空 DataFrame、DatetimeIndex、季度標籤 Q1-Q4 + 無效 Q 數、年度 int、`_date` strict format vs 一般 `date` 自動推斷、無法 parse → 'N/A'、scalar `0` / `''` 不被誤判為 None
 
+#### `ui_widgets.cond_badge` 條件徽章函式（P2-B Phase 7F）
+
+**動機**：`tab_macro.py:3392` 內 `_cond_badge(ok, label)` 是 SECTION 八 五維點火條件列（A-G 共 7 個徽章）專用 HTML span 模板，零 Streamlit 依賴 + 7 callsite，符合 `ui_widgets.py` 既有 PR #60 純 HTML 函式集合的設計風格，自然合併。
+
+**抽出明細**：
+
+| 函式 | 原 closure 位置 | 抽至 | 行數 |
+|---|---|---|---|
+| `cond_badge(ok, label)` | tab_macro.render_tab_macro:3392-3394 | `ui_widgets.py`（既有 9 函式集合 + 1） | 3 |
+
+**設計理念**：
+- 命名去 underscore prefix（`_cond_badge` → `cond_badge`）成 public API，與 `ui_widgets` 其他 9 個函式（`explain_box` / `traffic_light` / `kpi` / `signal_box` ...）並列。
+- 配色語意：`True` → `#3fb950` 綠（達成）；`False` → `#484f58` 灰（未達成）。利用 `f'{c}22'` 的 hex `+22` alpha 製造背景淡色 + 邊框 / 文字深色的對比。
+- 真值判斷：直接用 Python `if ok else`，0 / None / '' 自動視為 False（與呼叫端 `_ring1_pass`、`_cA`-`_cG` 等 boolean / int / None 變數混用相容）。
+- 首次為 `ui_widgets.py` 建立 `tests/test_ui_widgets.py`（之前 9 函式無對應測試），開啟未來逐個補測試的入口。
+
+**callsite 衝擊**：
+- `tab_macro.py` 刪 3 行 closure + import 補 `cond_badge` + 7 callsite 重接（A VIX / B 期貨 / C 出口 / D M1B-M2 / E 外資 / F 股匯雙漲 / G SOX/NVDA 點火）
+
+**驗證**：
+- ✅ py_compile + ruff (`All checks passed!`)
+- ✅ pytest 全套 **574/574 全綠**（原 566 + 新增 8）
+- ✅ tests/test_ui_widgets.py：TestCondBadge 8 cases
+- 涵蓋：truthy 綠色 / falsy 灰色 / label 嵌入 / HTML 結構（span + border-radius + font-size）/ `0` / `None` / `''` 邊界 / 空 label
+
 #### `app.py` 結構演進（PR #66/#68/#70-#73 — P2-B Phase 4+5 全收官 ✅✅）
 
 **最終戰績**：app.py 9622 → **1378 行（−85.7%）**，4 個 TAB 全部抽到獨立 `.py` 模組。

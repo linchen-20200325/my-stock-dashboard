@@ -9,7 +9,7 @@
 ## 🏗️ 主要模組
 | 層 | 檔案 |
 |---|---|
-| **UI** | `app.py`（主入口，PR #73 後 **1378 行**，−85%，4/4 TAB 已抽至獨立模組）· `tab_macro.py` (4031) · `tab_stock.py` (2521) · `tab_stock_grp.py` (1073) · `tab_edu.py` (401) · `etf_dashboard.py`（Phase 7C 後 **49 行 shim**，−97%，三層全拆）· `etf_tab_single.py` (616) · `etf_tab_portfolio.py` (531) · `etf_tab_backtest.py` (284) · `etf_tab_ai.py` (169) · `ui_widgets.py`（PR #60 抽出 8 個純 HTML 函式） |
+| **UI** | `app.py`（主入口，PR #73 後 **1378 行**，−85%，4/4 TAB 已抽至獨立模組）· `tab_macro.py` (4031) · `tab_stock.py` (2521) · `tab_stock_grp.py` (1073) · `tab_edu.py` (401) · `etf_dashboard.py`（Phase 7C 後 **49 行 shim**，−97%，三層全拆）· `etf_tab_single.py` (616) · `etf_tab_portfolio.py` (531) · `etf_tab_backtest.py` (284) · `etf_tab_ai.py` (169) · `ui_widgets.py`（PR #60 抽出 8 個純 HTML 函式 + Phase 7F `cond_badge` 第 9 個 / 8 unit test） |
 | **ETF 三層** | `etf_fetch.py` (572 / Phase 7C 純 I/O：價格 / 配息 / NAV / 費用率 / 類股漲跌 / 新聞) · `etf_calc.py` (465 / 純算：殖利率 / 總報酬 / 折溢價 / 風險指標 / 同儕排名 / 戰情室列) · `etf_render.py` (505 / Streamlit UI：橫幅 / 走勢 / BIAS / 蒙地卡羅 / 類股熱力圖) |
 | **跨 tab 共用** | `tab_helpers.py` (135 / Phase 7A+7A-Ext 純函式：parse_cash_flow_ratio / format_condition_emoji / safe_get / safe_ma / final_recommendation — 取代 tab_stock + tab_stock_grp + tab_macro 內 5 個重複 closure；零 Streamlit 依賴，34 unit test) · `macro_helpers.py` (Phase 7A-Ext+7E：calc_traffic_light + rp_ts / rp_entry / rp_scalar — tab_macro 紅綠燈決策核心 + data_registry 三函式抽出；30 unit test) · `etf_helpers.py` (53 / Phase 7B：norm_return / norm_lower_better / auto_role — 抽 etf_tab_backtest 雷達正規化 + etf_tab_portfolio 核心/衛星分類；29 unit test) |
 | **資料抓取** | `data_loader.py` · `macro_core.py`（含 PR #53 `diagnose_tw_pmi_sources`）· `tw_macro.py` · `daily_checklist.py` · `leading_indicators.py` · `tw_stock_data_fetcher.py` |
@@ -92,6 +92,7 @@
 | (同上) | refactor: Phase 7A-Ext 雙抽純函式 + 修復 B 項 1Q fallback — `_calc_traffic_light` (71 行) → `macro_helpers.calc_traffic_light` + `_final_rec` (26 行) → `tab_helpers.final_recommendation`；補 `_no_ai_survival` 「呼叫端未預填 b_item_5y」的單季 fallback 分支（修 4 個 pre-existing TestNoAiSurvivalBItem 紅燈）；+19 unit test，全套件 519/519 全綠 | e678d22 |
 | (同上) | refactor: Phase 7B — 抽 `etf_helpers.py` (norm_return / norm_lower_better / auto_role)，消除 etf_tab_backtest 雷達正規化 + etf_tab_portfolio 核心/衛星分類兩個 render 內部 closure；`_CORE_TICKERS` 改 frozenset 防呆；+29 unit test，全套件 **548/548 全綠** | 5f299d5 |
 | (同上) | refactor: Phase 7E — 抽 `macro_helpers.{rp_ts, rp_entry, rp_scalar}` — tab_macro.py render 內 data_registry patch 三函式（季度標籤/年度/DatetimeIndex/_date 多源時間解析 + scalar proxy date metadata）；`_QE_MAP` 提至模組級；47 行 closure 刪除 + 26 callsites 重接 + `_proxy_rp` 顯式參數化；+18 unit test，全套件 **566/566 全綠** | ec7e39f |
+| (同上) | refactor: Phase 7F — 抽 `ui_widgets.cond_badge(ok, label)` — tab_macro.py 五維點火條件徽章 closure（HTML span，True 綠 / False 灰）；3 行 closure 刪除 + 7 callsite 重接；新增 `tests/test_ui_widgets.py` 8 cases；全套件 **574/574 全綠** | fde8047 |
 
 ## 🎯 Backlog
 - **環境工**：33 條 stale remote branches 清理（PR #42-#78 累積，sandbox token 無 delete 權）
@@ -121,6 +122,7 @@
   - ✅ 7A-Ext `macro_helpers.py` (110 行) + `tab_helpers.final_recommendation` — 抽 `_calc_traffic_light` (71 行 / tab_macro) + `_final_rec` (26 行 / tab_stock_grp)；同 commit 修復 `_no_ai_survival` 缺 1Q fallback 的 4 個 pre-existing 紅燈；+19 unit test，全套件 **519/519 全綠** — commit `e678d22`
   - ✅ 7B `etf_helpers.py` (53 行 / 3 函式：`norm_return` / `norm_lower_better` / `auto_role`) — 抽 etf_tab_backtest 雷達正規化 + etf_tab_portfolio 核心/衛星分類；`_CORE_TICKERS` 改 frozenset 防呆；+29 unit test，全套件 **548/548 全綠**
   - ✅ 7E `macro_helpers.{rp_ts, rp_entry, rp_scalar}` + `_QE_MAP` 常數 — 抽 tab_macro.py L1663-1709 data_registry patch 三函式（4 種時間源解析：DatetimeIndex / 季度標籤 / 年度 / _date|date|datetime|...）；`_proxy_rp` 改顯式參數，消除 closure capture；47 行 closure 刪除 + 26 callsite 重接；+18 unit test，全套件 **566/566 全綠**
+  - ✅ 7F `ui_widgets.cond_badge(ok, label)` — 抽 tab_macro.py L3392-3394 五維點火條件徽章 closure（HTML span 模板）；3 行 closure 刪除 + 7 callsite 重接；+8 unit test，全套件 **574/574 全綠**
 - **技術債（已全面清乾淨）**：
   - 🎯 `app.py` ruff errors **681 → 0（100% clean）**（PR #56/#57/#60/#63/#64）
   - `app.py` 9622 → **1378 行**（**−8244，−85.7%**，PR #58/#60/#61 抽純函式 + #66/#68 wrap def + #70-#73 抽 4 TAB）

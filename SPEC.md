@@ -189,7 +189,22 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 - `norm_lower_better`：先 `abs(v)`，負數視為相同距離；v=best → 100；v=worst → 0
 - `auto_role`：`.TW` / `.TWO` 後綴自動剝離；`None` / 空字串 → 衛星；大小寫不敏感
 
-### §6.5 同期修補：`_no_ai_survival` 1Q fallback（commit `e678d22`）
+### §6.5 `ui_widgets.cond_badge`（Phase 7F — HTML 徽章函式）
+
+> 從 `tab_macro.render_tab_macro` 五維點火條件列抽出至 `ui_widgets.py`（PR #60 既有 8 HTML 函式之延伸，現為第 9 個）。
+
+| 函式 | 輸入 | 輸出 | 取代的 closure |
+|---|---|---|---|
+| `cond_badge(ok, label)` | bool/truthy, str | str (HTML span) | `_cond_badge` (tab_macro:3392) |
+
+**配色**：
+- `ok=True` → 綠色 `#3fb950`（背景 `+22` alpha + 邊框 + 文字皆同色）
+- `ok=False` → 灰色 `#484f58`
+- 其他純真值判斷（`0` / `None` / `''` 視為 False）
+
+**設計**：HTML 字串模板（無 Streamlit 依賴），呼叫端負責用 `st.markdown(..., unsafe_allow_html=True)` 渲染。
+
+### §6.6 同期修補：`_no_ai_survival` 1Q fallback（commit `e678d22`）
 
 `financial_health_engine._no_ai_survival` 對 B 項（現金流量允當比率）分支：
 
@@ -206,7 +221,7 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 
 ## §7 文件治理連動
 
-任何 §1–§6.5 規約變更必須同步：
+任何 §1–§6.6 規約變更必須同步：
 - `STATE.md` — 加入 commit / PR 行
 - `ARCHITECTURE.md` — 對應模組章節
 - `SPEC.md`（本檔） — 直接更新對應表 / 啟發式
