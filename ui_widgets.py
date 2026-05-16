@@ -167,3 +167,10 @@ def signal_box(label, color, desc=''):
             f'padding:10px 14px;margin:4px 0;">'
             f'<b style="color:{tc};">{label}</b>'
             f'<span style="color:#8b949e;font-size:12px;margin-left:8px;">{desc}</span></div>')
+
+
+def cond_badge(ok, label):
+    """條件徽章：True → 綠色實心，False → 灰色淡色。tab_macro 五維點火條件列。"""
+    c = '#3fb950' if ok else '#484f58'
+    return (f'<span style="background:{c}22;border:1px solid {c};border-radius:4px;'
+            f'padding:2px 8px;font-size:12px;color:{c};margin:2px;">{label}</span>')

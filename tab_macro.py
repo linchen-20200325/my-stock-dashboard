@@ -57,7 +57,7 @@ def render_tab_macro():
     )
     from market_strategy import get_market_assessment
     from leading_indicators import build_leading_fast, render_leading_table
-    from ui_widgets import beginner_kpi, kpi, teacher_conclusion
+    from ui_widgets import beginner_kpi, cond_badge, kpi, teacher_conclusion
     # app.py 內部 helper
     from app import (
         _bps, _fetch_macro_news, _get_fm_token, _tw_now_str, gemini_call,
@@ -3389,17 +3389,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _ring2_cnt  = int(_cC) + int(_cD)
             _ring3_cnt  = int(_cE) + int(_cF) + int(_cG)
 
-            def _cond_badge(ok, label):
-                c = '#3fb950' if ok else '#484f58'
-                return f'<span style="background:{c}22;border:1px solid {c};border-radius:4px;padding:2px 8px;font-size:12px;color:{c};margin:2px;">{label}</span>'
-
-            _r1_html = (_cond_badge(_cA, f'A VIX={_vix_now8:.1f}<20' if _vix_now8 else 'A VIX未知') + ' ' +
-                        _cond_badge(_cB, f'B 期貨={_fut8:,.0f}口' if _fut8 is not None else 'B 期貨未知'))
-            _r2_html = (_cond_badge(_cC, f'C 出口={_exp_c:+.1f}%' if _exp_c is not None else 'C 出口未知') + ' ' +
-                        _cond_badge(_cD, f'D M1B-M2={_gap8c:+.2f}%' if _gap8c is not None else 'D M1B-M2未知'))
-            _r3_html = (_cond_badge(_cE, f'E 外資={_fnet8:+.0f}億' if _fnet8 is not None else 'E 外資未知') + ' ' +
-                        _cond_badge(_cF, 'F 股匯雙漲' if _cF else 'F 股匯雙漲') + ' ' +
-                        _cond_badge(_cG, 'G SOX/NVDA點火'))
+            _r1_html = (cond_badge(_cA, f'A VIX={_vix_now8:.1f}<20' if _vix_now8 else 'A VIX未知') + ' ' +
+                        cond_badge(_cB, f'B 期貨={_fut8:,.0f}口' if _fut8 is not None else 'B 期貨未知'))
+            _r2_html = (cond_badge(_cC, f'C 出口={_exp_c:+.1f}%' if _exp_c is not None else 'C 出口未知') + ' ' +
+                        cond_badge(_cD, f'D M1B-M2={_gap8c:+.2f}%' if _gap8c is not None else 'D M1B-M2未知'))
+            _r3_html = (cond_badge(_cE, f'E 外資={_fnet8:+.0f}億' if _fnet8 is not None else 'E 外資未知') + ' ' +
+                        cond_badge(_cF, 'F 股匯雙漲' if _cF else 'F 股匯雙漲') + ' ' +
+                        cond_badge(_cG, 'G SOX/NVDA點火'))
 
             if not _ring1_pass:
                 _atk_color = '#f85149'
