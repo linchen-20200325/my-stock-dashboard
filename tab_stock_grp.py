@@ -161,6 +161,7 @@ def render_stock_grp():
                            else _gsn(sid4))
                 avg_div4= _d4.get('avg_div', 0)
                 cl4     = _d4.get('cl')
+                cx4     = _d4.get('cx')
                 _fin_st4= {}
 
                 price4  = float(df4['close'].iloc[-1]) if df4 is not None and not df4.empty else 0
@@ -230,6 +231,14 @@ def render_stock_grp():
 
                     '舊評分': int(old_score4),
                     '_health': health4, '_val': val4, '_trend': trend4,
+                    # 資料診斷專用欄位（health_inspector 讀取）
+                    '_price_date': (str(df4['date'].iloc[-1])[:10]
+                                    if df4 is not None and not df4.empty
+                                    and 'date' in df4.columns else None),
+                    '_cl_ok':      bool(cl4 and cl4 > 0),
+                    '_cx_ok':      bool(cx4 and cx4 > 0),
+                    '_has_div':    bool(avg_div4 and avg_div4 > 0),
+                    '_fetch_err':  _d4.get('error'),
                 })
 
                 # ── 操作狀態燈 🔵🟠🟡 ──────────────────────────

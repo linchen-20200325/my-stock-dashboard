@@ -839,6 +839,59 @@ def render_data_health_raw():
                 '📚 **MJ 五大模組對照**：一、現金流量（氣長）｜二、獲利能力（好生意）｜'
                 '三、經營能力（翻桌率）｜四、償債能力（還債）｜五、財務結構（那根棒子）。')
 
+        # ────────── 個股組合：逐檔批次分析診斷 ─────────────────
+        _t3 = st.session_state.get('t3_data') or {}
+        _t3_results = _t3.get('results') or []
+        if _t3_results:
+            st.markdown('---')
+            st.markdown(f'**🏆 個股組合逐檔診斷（{len(_t3_results)} 檔）**')
+            _grp_diag_rows = []
+            _today_grp = str(_dt_r.date.today())
+            for _gr in _t3_results:
+                _sid = _gr.get('stock_id') or _gr.get('代碼') or '?'
+                _nm  = _gr.get('名稱', _sid)
+                _err = _gr.get('_fetch_err')
+                # K線 OHLCV
+                _grp_diag_rows.append(_row(
+                    f'{_sid} {_nm} K線',
+                    _gr.get('_price_date'), 'daily',
+                    error_msg=_err or None,
+                    source='FinMind / yfinance',
+                    endpoint='TaiwanStockPrice / Ticker.history',
+                    proxy=False))
+                # 合約負債（三態）
+                _grp_diag_rows.append(_row(
+                    f'{_sid} 合約負債',
+                    _today_grp if _gr.get('_cl_ok') else None, 'quarterly',
+                    optional=True,
+                    probe_status=None if _gr.get('_cl_ok') else 'na',
+                    source='FinMind + MOPS 雙源',
+                    endpoint='TaiwanStockBalanceSheet → ajax_t164sb03',
+                    proxy=True))
+                # 資本支出（三態）
+                _grp_diag_rows.append(_row(
+                    f'{_sid} 資本支出 / 固定資產',
+                    _today_grp if _gr.get('_cx_ok') else None, 'quarterly',
+                    optional=True,
+                    probe_status=None if _gr.get('_cx_ok') else 'na',
+                    source='FinMind',
+                    endpoint='TaiwanStockCashFlowsStatement',
+                    proxy=False))
+                # 股利（三態）
+                _grp_diag_rows.append(_row(
+                    f'{_sid} 股利歷史',
+                    _today_grp if _gr.get('_has_div') else None, 'yearly',
+                    optional=True,
+                    probe_status=None if _gr.get('_has_div') else 'zero',
+                    source='FinMind',
+                    endpoint='TaiwanStockDividend',
+                    proxy=False))
+            _all_section_rows.extend(_grp_diag_rows)
+            _tbl(_grp_diag_rows)
+            st.caption(
+                '💡 批次分析涵蓋 K線+合約負債+資本支出+股利 4 大維度（不含 MJ 五大模組 N/A 對照）。'
+                '若需單檔深度診斷請至「🔬 個股」Tab 載入完整分析。')
+
     # ════ 5. ETF Raw ═════════════════════════════════════════════
     with st.expander('🏦 ETF Raw Data', expanded=False):
         _e1 = st.session_state.get('etf_single_data') or {}
