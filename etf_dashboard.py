@@ -1222,52 +1222,6 @@ def _check_sector_exposure(rows: list, total_value: float) -> None:
         _colored_box('✅ 所有類股曝險均在 30% 以內，產業分散度良好', 'green')
 
 
-def _etf_ai_portfolio(gemini_fn, rows, rebal_actions, regime, loss_pct):
-    with st.expander('🤖 AI 組合評斷（展開）', expanded=False):
-        row_txt = '\n'.join(
-            f'  {r["ticker"]}：目標{r["target_pct"]}% 實際{r["actual_pct"]}% 偏離{r["deviation"]:+.1f}%'
-            for r in rows)
-        act_txt = '\n'.join(
-            f'  {a["動作"]} {a["ETF"]} {a["金額(元)"]:,.0f}元'
-            for a in rebal_actions) if rebal_actions else '  無需再平衡'
-        if st.button('🤖 生成組合AI評斷', key='etf_ai_p_btn'):
-            # 為組合中每檔 ETF 抓取新聞（最多各 2 則）
-            _p_news_lines = []
-            for _r in rows[:4]:
-                _tk = _r.get('ticker', '')
-                _nn = _fetch_news_for(_tk, _tk, 2)
-                if _nn and _nn != '（暫無相關新聞）':
-                    _p_news_lines.append(f'[{_tk}]\n{_nn}')
-            _p_news_str = '\n'.join(_p_news_lines) if _p_news_lines else '（暫無相關新聞）'
-            prompt = (
-                f"你是ETF組合管理專家，依據以下資料給出精準建議，每項不超過200字，嚴禁捏造：\n"
-                f"市場狀態：{regime}\n"
-                f"組合明細：\n{row_txt}\n"
-                f"再平衡指令：\n{act_txt}\n"
-                f"壓力測試損失：{loss_pct:.1f}%（S&P500下跌20%模擬）\n\n"
-                f"【近期各ETF相關新聞】\n{_p_news_str}\n\n"
-                f"輸出：\n"
-                f"1.【組合健康度】分散度、集中風險點\n"
-                f"2.【再平衡必要性】是否緊急，原因\n"
-                f"3.【總經視角】依{regime}市場狀態，調整方向\n"
-                f"4.【一句話結論】立即行動 or 繼續觀察\n"
-                f"⚠️ 僅供學術研究，非投資建議"
-            )
-            with st.spinner('AI 分析中...'):
-                result = gemini_fn(prompt, max_tokens=900)
-            if result and not result.startswith('⚠️'):
-                st.session_state['etf_ai_p_result'] = result
-                st.rerun()
-            else:
-                st.session_state['etf_ai_p_result'] = None
-                st.warning(result or 'AI 回傳為空')
-        _p_saved = st.session_state.get('etf_ai_p_result')
-        if _p_saved:
-            st.markdown(_p_saved)
-            if st.button('🔄 清除', key='etf_ai_p_clear'):
-                st.session_state.pop('etf_ai_p_result', None)
-                st.rerun()
-
 def _render_monte_carlo(port_val: pd.Series, initial: float, ann_vol: float,
                         n_paths: int = 10_000, n_days: int = 252) -> None:
     """
