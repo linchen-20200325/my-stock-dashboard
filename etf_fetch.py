@@ -1,0 +1,572 @@
+"""
+ETF 抓取層（fetch layer）
+從 etf_dashboard.py 抽出的純 I/O 函式：價格 / 配息 / 基本資訊 / 費用率 / NAV / 類股漲跌
+無內部依賴；可被 etf_calc、etf_render、tab_* 模組安全 import。
+"""
+import streamlit as st
+import pandas as pd
+import yfinance as yf
+
+
+def _fetch_news_for(ticker: str, name: str = "", n: int = 4) -> str:
+    """抓取個股/ETF 相關新聞，回傳格式化字串。失敗時回傳空字串。"""
+    try:
+        import feedparser as _fp, html as _h
+    except ImportError:
+        return ""
+    _q = f"{ticker} {name}".strip()
+    _feeds = [
+        f'https://news.google.com/rss/search?q={_q}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant',
+        f'https://news.google.com/rss/search?q=Taiwan+ETF+{ticker}&hl=en-US&gl=US&ceid=US:en',
+    ]
+    _out = []
+    for _url in _feeds:
+        try:
+            for _e in _fp.parse(_url).entries:
+                _t = _h.unescape(_e.get('title', '')).strip()
+                _p = str(_e.get('published', ''))[:10]
+                if _t:
+                    _out.append(f'- {_t}（{_p}）')
+                if len(_out) >= n:
+                    break
+        except Exception:
+            pass
+        if len(_out) >= n:
+            break
+    return '\n'.join(_out[:n]) if _out else '（暫無相關新聞）'
+
+
+# ── MK 規格 條件 B：台灣 ETF 發行價對照表（用於破發檢測）──────
+# 台灣常見 ETF 發行價（多為 10/15/20/30/40 元）；債券 ETF 多為 40 元
+_TW_ETF_LAUNCH_PRICE = {
+    '0050': 36.98, '0051': 25.57, '0052': 36.99, '0053': 22.20,
+    '0055': 12.95, '0056': 25.20, '0057': 38.10,
+    '006203': 25, '006204': 30, '006208': 30, '00646': 20,
+    '00692': 20, '00701': 20, '00713': 20, '00730': 20,
+    '00731': 20, '00733': 20, '00735': 20, '00850': 20,
+    '00878': 15, '00881': 15, '00882': 15, '00891': 15,
+    '00892': 15, '00893': 15, '00895': 15, '00896': 15,
+    '00897': 15, '00898': 15, '00899': 15, '00900': 15,
+    '00901': 15, '00902': 15, '00903': 15, '00904': 15,
+    '00905': 15, '00907': 15, '00910': 15, '00911': 15,
+    '00912': 15, '00913': 15, '00915': 15, '00916': 15,
+    '00918': 15, '00919': 20, '00920': 15, '00921': 15,
+    '00922': 15, '00923': 15, '00924': 15, '00925': 15,
+    '00927': 15, '00929': 15, '00930': 15, '00932': 15,
+    '00934': 10, '00935': 10, '00936': 10, '00939': 15,
+    '00940': 10, '00941': 10, '00942B': 15, '00943': 15,
+    '00944': 10, '00945B': 15, '00946': 10, '00947': 10,
+    # 債券 ETF 多為 40 元起始
+    '00679B': 40, '00687B': 40, '00696B': 40, '00697B': 40,
+    '00710B': 40, '00711B': 40, '00712':  20, '00714':  30,
+    '00718B': 40, '00719B': 40, '00720B': 40, '00721B': 40,
+    '00722B': 40, '00723B': 40, '00724B': 40, '00725B': 40,
+    '00726B': 40, '00727B': 40, '00772B': 40, '00773B': 40,
+    '00777B': 40, '00778B': 40, '00779B': 40, '00780B': 40,
+    '00781B': 40, '00782B': 40, '00783B': 40, '00784B': 40,
+    '00785B': 40, '00786B': 40, '00787B': 40, '00788B': 40,
+    '00795B': 40, '00834B': 40, '00836B': 40, '00837B': 40,
+    '00840B': 40, '00845B': 40, '00846B': 40, '00847B': 40,
+    '00848B': 40, '00849B': 40, '00853B': 40, '00857B': 40,
+    '00859B': 40, '00860B': 40, '00862B': 40, '00863B': 40,
+    '00864B': 40, '00865B': 40, '00867B': 40, '00870B': 40,
+    '00883B': 40, '00890B': 40, '00937B': 40,
+}
+
+
+def _get_etf_launch_price(ticker: str, df: "pd.DataFrame|None" = None):
+    """取得 ETF 發行價（用於 MK 規格條件 B 破發檢測）。
+
+    優先序：
+    1. 內建台灣 ETF 對照表（最精準）
+    2. df 首個交易日收盤價（已還原權息，僅供 fallback 估算）
+
+    Returns
+    -------
+    float | None
+    """
+    _code = (ticker or '').replace('.TWO', '').replace('.TW', '').upper().strip()
+    _v = _TW_ETF_LAUNCH_PRICE.get(_code)
+    if _v is not None:
+        return float(_v)
+    # fallback：用 df 第一筆收盤估算（僅當美股 ETF / 未收錄者）
+    try:
+        if df is not None and len(df) > 0:
+            return float(df['Close'].iloc[0])
+    except Exception:
+        pass
+    return None
+
+
+@st.cache_data(ttl=3600, max_entries=10)
+def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
+    """取得 ETF 歷史價格（auto_adjust=True 還原權息）"""
+    try:
+        df = yf.Ticker(ticker).history(period=period, auto_adjust=True)
+        if df.empty:
+            return pd.DataFrame()
+        df.index = pd.to_datetime(df.index).tz_localize(None)
+        return df.ffill()
+    except Exception as e:
+        st.error(f'❌ 無法取得 {ticker} 價格：{e}')
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600, max_entries=10)
+def fetch_etf_dividends(ticker: str) -> pd.Series:
+    """取得 ETF 歷史配息"""
+    try:
+        divs = yf.Ticker(ticker).dividends
+        if divs.empty:
+            return pd.Series(dtype=float)
+        divs.index = pd.to_datetime(divs.index).tz_localize(None)
+        return divs
+    except Exception:
+        return pd.Series(dtype=float)
+
+
+@st.cache_data(ttl=3600, max_entries=10)
+def fetch_etf_info(ticker: str) -> dict:
+    """取得 ETF 基本資訊（費用率/Beta/AUM）"""
+    try:
+        return yf.Ticker(ticker).info or {}
+    except Exception:
+        return {}
+
+
+def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
+    """從 SITCA 投信投顧公會抓台股 ETF 內扣費用率（Primary，海外 IP 走 NAS proxy）。
+
+    URL: https://www.sitca.org.tw/ROC/Industry/IN2211.aspx?pid=IN2222_01
+
+    Returns
+    -------
+    float | None  比例形式（0.0036 = 0.36%）；找不到 ticker 或抓取失敗回 None。
+    """
+    from proxy_helper import fetch_url as _fu_sit
+    import pandas as _pd_sit, re as _re_sit
+    _t = (ticker or '').replace('.TW', '').replace('.tw', '').strip()
+    if not _t or not _t.isdigit():
+        return None  # SITCA 只收純台股 ETF 數字代號（0050、00878 等）
+    try:
+        r = _fu_sit(
+            'https://www.sitca.org.tw/ROC/Industry/IN2211.aspx?pid=IN2222_01',
+            timeout=15, attempts=attempts,
+        )
+        if r is None or r.status_code != 200:
+            return None
+        r.encoding = 'utf-8'
+        # ASP.NET 頁面通常一張總費用率表；多表都試找含「代號」+「費用率」欄位的那張
+        tables = _pd_sit.read_html(r.text)
+        # ticker 標準化：去掉 leading 0（治 pandas 把 "0050" parse 成 int 50 的場景）
+        _tn = _t.lstrip('0') or '0'
+        for tbl in tables:
+            # 注意：column 可能是 MultiIndex tuple，比對用 str(c)，但取值用原物件 c
+            code_col = next((c for c in tbl.columns
+                             if any(k in str(c) for k in ('代號', 'ETF', 'Code'))), None)
+            rate_col = next((c for c in tbl.columns
+                             if '費用率' in str(c) or '費用比率' in str(c)), None)
+            if code_col is None or rate_col is None:
+                continue
+            # 雙向 leading-zero 容忍：cell 也 strip leading 0 後比對
+            _digits = tbl[code_col].astype(str).str.replace(r'\D', '', regex=True)
+            row = tbl[_digits.where(_digits != '', '0').str.lstrip('0').replace('', '0') == _tn]
+            if row.empty:
+                continue
+            raw = str(row[rate_col].iloc[0])
+            m = _re_sit.search(r'(\d+(?:\.\d+)?)', raw)
+            if not m:
+                continue
+            v = float(m.group(1))
+            # SITCA 表格數字常見已是百分比（0.36 = 0.36%），標準化成「比例」回傳
+            print(f'[SITCA/expense] ✅ {_t} = {v}% (col={rate_col})')
+            return v / 100.0
+        print(f'[SITCA/expense] ⚠️ {_t} 未找到符合 column 的表格 (tables={len(tables)})')
+        return None
+    except Exception as e:
+        print(f'[SITCA/expense] ❌ {_t}: {type(e).__name__}: {e}')
+        return None
+
+
+def fetch_moneydj_expense_ratio(ticker: str):
+    """從 MoneyDJ ETF Basic0004 頁面抓「經理費 + 保管費」總費用率（私募/已下市 ETF 備援）。
+
+    URL: https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid=XXXX.TW
+
+    Returns
+    -------
+    float | None  比例形式（0.0036 = 0.36%）；找不到或抓取失敗回 None。
+    """
+    import re as _re_mdje
+    _t = (ticker or '').replace('.tw', '.TW').strip()
+    if not _t:
+        return None
+    # MoneyDJ etfid 通常吃 '0050.TW' 格式；純數字補 .TW
+    if _t.isdigit():
+        _t = f'{_t}.TW'
+    _url = f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}'
+    _hdrs = {
+        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                       '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8',
+        'Referer': 'https://www.moneydj.com/',
+    }
+    try:
+        # curl_cffi Chrome TLS 指紋優先；失敗降級 requests
+        try:
+            from curl_cffi import requests as _cffi_mdje
+            _r = _cffi_mdje.get(_url, impersonate='chrome124', timeout=12)
+        except Exception:
+            import requests as _rq_mdje
+            _r = _rq_mdje.get(_url, headers=_hdrs, timeout=12, verify=False)
+        if _r.status_code != 200:
+            print(f'[MoneyDJ/expense] {_t}: HTTP {_r.status_code}')
+            return None
+        _txt = _r.text
+        # 直掃「經理費 X.XX%」與「保管費 X.XX%」合計；MoneyDJ Basic0004 表格常以 td 緊鄰呈現
+        _mng = _re_mdje.search(r'經理費[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%', _txt)
+        _cus = _re_mdje.search(r'保管費[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%', _txt)
+        if _mng and _cus:
+            _total = float(_mng.group(1)) + float(_cus.group(1))
+            print(f'[MoneyDJ/expense] ✅ {_t} = {_total}% (mng={_mng.group(1)}+cus={_cus.group(1)})')
+            return _total / 100.0
+        # Fallback：找「總費用率 / 內含費用率」單一欄位
+        _tot = _re_mdje.search(r'(?:總費用率|內含費用率|費用率)[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%', _txt)
+        if _tot:
+            _v = float(_tot.group(1))
+            print(f'[MoneyDJ/expense] ✅ {_t} = {_v}% (總費用率欄位)')
+            return _v / 100.0
+        print(f'[MoneyDJ/expense] ⚠️ {_t} 頁面無「經理費/保管費/總費用率」欄位')
+        return None
+    except Exception as _e:
+        print(f'[MoneyDJ/expense] ❌ {_t}: {type(_e).__name__}: {_e}')
+        return None
+
+
+def get_etf_expense_ratio_safe(ticker: str):
+    """安全讀取 ETF 費用率：SITCA → MoneyDJ → yfinance 三段備援；缺失回 None 不崩潰"""
+    # 1. 台股 ETF（純數字代號）優先走 SITCA（投信投顧公會官方），yfinance 對 .TW 票常 stale
+    _sit = fetch_sitca_expense_ratio(ticker)
+    if _sit is not None:
+        return _sit
+    # 2. MoneyDJ Basic0004（私募/已下市/SITCA 未收錄的台股 ETF 兜底）
+    _mdj = fetch_moneydj_expense_ratio(ticker)
+    if _mdj is not None:
+        return _mdj
+    # 3. yfinance.info（海外 ETF 主要來源；台股 ETF 末段保險）
+    try:
+        info = fetch_etf_info(ticker)
+        return (info.get('annualReportExpenseRatio')
+                or info.get('totalExpenseRatio')
+                or info.get('expenseRatio'))
+    except Exception:
+        return None
+
+
+# ── NAV 合理範圍常數（用於 fetch_etf_nav_history 多源 sanity check）──
+_NAV_MIN, _NAV_MAX = 0.5, 100000
+
+
+def _safe_float(s, strip_chars: str = ',%') -> float | None:
+    """安全 float 解析：失敗回 None。
+
+    Replaces inline `try: float(...) except: pass` pattern；避免 bare except
+    吞掉 KeyboardInterrupt / SystemExit。
+    """
+    try:
+        _t = str(s).strip()
+        for _c in strip_chars:
+            _t = _t.replace(_c, '')
+        return float(_t) if _t else None
+    except (ValueError, TypeError):
+        return None
+
+
+@st.cache_data(ttl=7200, show_spinner=False, max_entries=10)
+def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.DataFrame":
+    """ETF 歷史淨值及折溢價（最近 N 個交易日）
+
+    資料來源優先順序（5 段備援 + 1 兜底）：
+      1. FinMind TaiwanETFNetAssetValue（批次，有/無 token 皆可）
+      2. goodinfo.tw StockDetail（不受 TWSE IP 封鎖）
+      3. TWSE OpenAPI（僅 NAS Proxy 環境）
+      4. MoneyDJ BeautifulSoup
+      5. yfinance navPrice
+      *. 兜底：FinMind 過舊資料（前述 5 段全失敗時）
+
+    Args
+    ----
+    ticker : str  ETF 代號（含 .TW 後綴）
+    days   : int  目標回溯交易日（含緩衝 +10 日）
+    ver    : int  cache key bumper — 升版觸發 @st.cache_data 失效；不入函式邏輯。
+
+    Returns
+    -------
+    pd.DataFrame  欄位：date / price / nav / premium / premium_pct
+    """
+    import os
+    import datetime as _dt
+    import requests as _rq_etfnav
+    code = ticker.replace('.TW', '').replace('.TWO', '')
+    # st.secrets 優先（Streamlit Cloud secrets 不自動匯出至 os.environ）
+    token = (getattr(st, 'secrets', {}).get('FINMIND_TOKEN')
+             or os.environ.get('FINMIND_TOKEN', ''))
+    start = (_dt.date.today() - _dt.timedelta(days=days + 10)).strftime('%Y-%m-%d')
+    _df_stale = None       # 備援：FinMind 過舊資料
+    _days_stale: int | None = None
+
+    # ── 1. FinMind ETF NAV（試兩個 dataset 名稱 + 多種欄位名稱）───────────
+    for _ds1 in ['TaiwanETFNetAssetValue', 'TaiwanStockETFNAV']:
+        try:
+            _p = {'dataset': _ds1, 'data_id': code, 'start_date': start}
+            if token: _p['token'] = token
+            _r = _rq_etfnav.get('https://api.finmindtrade.com/api/v4/data', params=_p,
+                                  timeout=15)
+            _j = _r.json()
+            _jstatus = _j.get('status')
+            _jdata   = _j.get('data')
+            # 接受 status=200 / status=None（部分 proxy 環境）；排除已知錯誤碼
+            _status_ok = str(_jstatus) not in ('400', '401', '402', '403', '404', '500')
+            if _jdata and _status_ok:
+                _df = pd.DataFrame(_jdata)
+                # 自動偵測 NAV 欄位名稱（FinMind 兩個版本欄位名不同）
+                _nav_field = next((f for f in ['nav', 'base_unit_net_value', 'NavPrice', 'netAssetValue']
+                                   if f in _df.columns), None)
+                if _nav_field is None:
+                    print(f'[ETF NAV] {code} {_ds1}: 找不到 NAV 欄位，現有={list(_df.columns)}')
+                    continue
+                _df['date'] = pd.to_datetime(_df['date']).dt.date
+                _df['nav']  = pd.to_numeric(_df[_nav_field], errors='coerce')
+                _df = _df[_df['nav'].notna() & (_df['nav'] > 0)].sort_values('date')
+                if _df.empty:
+                    print(f'[ETF NAV] {code} {_ds1}: 所有 nav 欄位為空/NaN，跳過')
+                    continue
+                _latest_d   = _df['date'].iloc[-1]
+                _days_stale = (_dt.date.today() - _latest_d).days
+                _df_stale   = _df[['date', 'nav']]   # 保留，供 path 4 備援
+                print(f'[ETF NAV] {code} {_ds1}(field={_nav_field}): {len(_df)} 筆, 最新={_latest_d}, 距今={_days_stale}d')
+                if _days_stale <= 14:          # 14天內視為可用（含連假/公告延遲）
+                    return _df_stale
+                print(f'[ETF NAV] {_ds1} {code} 資料較舊({_days_stale}d)，嘗試其他來源')
+                break   # 找到資料就不再嘗試第二個 dataset
+            else:
+                _msg = str(_j.get('msg', ''))[:80]
+                print(f'[ETF NAV] FinMind {_ds1} {code}: status={_jstatus} data_len={len(_jdata) if _jdata else 0} msg={_msg}')
+        except Exception as _e1:
+            print(f'[ETF NAV] FinMind {_ds1} {code}: {_e1}')
+
+    # ── 2. goodinfo.tw — 不受 TWSE IP 封鎖，抓取 ETF 淨值 ───────────────────
+    try:
+        from bs4 import BeautifulSoup as _BS4_gi
+        import re as _re_gi
+        _url_gi = f'https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID={code}'
+        _hdrs_gi = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'zh-TW,zh;q=0.9', 'Referer': 'https://goodinfo.tw/tw/'}
+        try:
+            from curl_cffi import requests as _cffi_gi
+            _r_gi = _cffi_gi.get(_url_gi, impersonate='chrome124', timeout=12)
+        except Exception:
+            _r_gi = _rq_etfnav.get(_url_gi, headers=_hdrs_gi, timeout=12, verify=False)
+        if _r_gi.status_code == 200:
+            _soup_gi = _BS4_gi(_r_gi.text, 'lxml')
+            _nav_gi, _prem_gi = None, None
+            # 策略1：在 <td> 中找「淨值」標籤，取下一格數字
+            for _td_gi in _soup_gi.find_all('td'):
+                _txt_gi = _td_gi.get_text(strip=True)
+                if _txt_gi in ('淨值', '每單位淨值', 'NAV'):
+                    _sib_gi = _td_gi.find_next_sibling('td')
+                    if _sib_gi:
+                        _v = _safe_float(_sib_gi.get_text(strip=True))
+                        if _v is not None and _NAV_MIN < _v < _NAV_MAX:
+                            _nav_gi = _v
+                    if _nav_gi:
+                        break
+            # 策略2：regex 掃全文
+            if not _nav_gi:
+                _m_gi = _re_gi.search(r'淨值[^\d<]{0,30}?(\d{1,5}\.\d{2,6})', _r_gi.text)
+                if _m_gi:
+                    _v = _safe_float(_m_gi.group(1))
+                    if _v is not None and _NAV_MIN < _v < _NAV_MAX:
+                        _nav_gi = _v
+            # 嘗試抓折溢價率
+            if _nav_gi:
+                for _td_gi2 in _soup_gi.find_all('td'):
+                    if '折溢價' in _td_gi2.get_text(strip=True):
+                        _sib_gi2 = _td_gi2.find_next_sibling('td')
+                        if _sib_gi2:
+                            _m_p = _re_gi.search(r'([+-]?\d+\.?\d*)', _sib_gi2.get_text(strip=True))
+                            if _m_p:
+                                _prem_gi = _safe_float(_m_p.group(1))
+                        if _prem_gi is not None:
+                            break
+                _row_gi = {'date': _dt.date.today(), 'nav': _nav_gi}
+                if _prem_gi is not None: _row_gi['premium_pct'] = _prem_gi
+                print(f'[ETF NAV] {code} goodinfo: nav={_nav_gi} prem={_prem_gi}%')
+                return pd.DataFrame([_row_gi])
+            else:
+                print(f'[ETF NAV] {code} goodinfo: 找不到淨值欄位')
+        else:
+            print(f'[ETF NAV] {code} goodinfo: HTTP {_r_gi.status_code}')
+    except Exception as _e_gi:
+        print(f'[ETF NAV] goodinfo {code}: {_e_gi}')
+
+    # ── 3. TWSE OpenAPI（openapi.twse.com.tw 非主站，先直連再走 Proxy）──────
+    try:
+        from daily_checklist import get_nas_proxy as _gnp_nav
+        _nas_nav = _gnp_nav()
+    except Exception:
+        _nas_nav = None
+
+    def _parse_twse_row(row_dict, ep_label):
+        _nav2 = 0.0
+        for _nk in ['單位淨值', '淨值', 'NetAssetValue', 'nav']:
+            _v = _safe_float(row_dict.get(_nk, ''))
+            if _v is not None:
+                _nav2 = _v
+                break
+        _price2 = 0.0
+        for _pk in ['收盤價', 'ClosingPrice', 'close']:
+            _v = _safe_float(row_dict.get(_pk, ''))
+            if _v is not None:
+                _price2 = _v
+                break
+        _prem_key = next((k for k in row_dict if '折溢價' in str(k)), None)
+        _prem2 = _safe_float(row_dict[_prem_key]) if _prem_key else None
+        if _prem2 is None and _nav2 > 0 and _price2 > 0:
+            _prem2 = round((_price2 - _nav2) / _nav2 * 100, 2)
+        if _nav2 > 0:
+            _r_out = {'date': _dt.date.today(), 'nav': _nav2}
+            if _price2 > 0:
+                _r_out['price'] = _price2
+            if _prem2 is not None:
+                _r_out['premium_pct'] = _prem2
+            print(f'[ETF NAV] {code} TWSE({ep_label}): nav={_nav2} price={_price2} prem={_prem2}%')
+            return _r_out
+        return None
+
+    for _proxy_candidate in ([None] + ([_nas_nav] if _nas_nav else [])):
+        _ptag = 'direct' if _proxy_candidate is None else 'proxy'
+        for _op_id2 in ['TaiwanStockPremiumDiscountRatio', 'TaiwanStockNetValue']:
+            try:
+                _ep2 = f'https://openapi.twse.com.tw/v1/ETF/{_op_id2}'
+                _r2 = _rq_etfnav.get(_ep2, headers={'Accept': 'application/json',
+                                                      'User-Agent': 'Mozilla/5.0'},
+                                      proxies=_proxy_candidate, timeout=10, verify=False)
+                _j2 = _r2.json()
+                _df2 = pd.DataFrame(_j2 if isinstance(_j2, list) else [])
+                if _df2.empty:
+                    print(f'[ETF NAV] TWSE {_op_id2}({_ptag}): 回傳空資料'); continue
+                _code_col = next((c for c in _df2.columns if '證券代號' in str(c) or c == 'code'), None)
+                if _code_col is None:
+                    print(f'[ETF NAV] TWSE {_op_id2}({_ptag}): 找不到 證券代號 欄位'); continue
+                _match = _df2[_df2[_code_col].astype(str).str.strip() == code]
+                if _match.empty:
+                    print(f'[ETF NAV] TWSE {_op_id2}({_ptag}): 找不到 {code}'); continue
+                _out2 = _parse_twse_row(_match.iloc[0].to_dict(), f'{_op_id2}/{_ptag}')
+                if _out2:
+                    return pd.DataFrame([_out2])
+            except Exception as _e2:
+                print(f'[ETF NAV] TWSE {_op_id2}({_ptag}) {code}: {_e2}')
+        # 若無 _nas_nav，外層 list 為 [None] 單元素，loop 自然結束無需 break
+
+    # ── 4. MoneyDJ 爬蟲（BeautifulSoup，不需 token）──────────────────────
+    try:
+        from bs4 import BeautifulSoup as _BS4
+        _hdrs_mdj = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8',
+            'Referer': 'https://www.moneydj.com/',
+        }
+        _url_mdj = f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={code}'
+        # 優先用 curl_cffi 模擬 Chrome TLS 指紋，繞過反爬蟲；失敗再降級 requests
+        try:
+            from curl_cffi import requests as _cffi_req
+            _r_mdj = _cffi_req.get(_url_mdj, impersonate='chrome124', timeout=12)
+        except Exception:
+            _r_mdj = _rq_etfnav.get(_url_mdj, headers=_hdrs_mdj, timeout=12, verify=False)
+        if _r_mdj.status_code == 200:
+            _soup = _BS4(_r_mdj.text, 'lxml')
+            _nav_mdj = None
+            # 策略1：找含「淨值」的 th/td，取下一格數字
+            for _th in _soup.find_all(['th', 'td', 'span', 'div', 'dt']):
+                _t = _th.get_text(strip=True)
+                if ('淨值' in _t or 'NAV' in _t) and len(_t) < 20:
+                    _td = _th.find_next_sibling()
+                    if _td:
+                        _v = _safe_float(_td.get_text(strip=True))
+                        if _v is not None and _v > 0:
+                            _nav_mdj = _v
+                            break
+            # 策略2：regex 直接掃 HTML
+            if not _nav_mdj:
+                import re as _re_mdj
+                _m = _re_mdj.search(r'(?:淨值|NAV)[^\d]{0,20}?(\d{1,5}\.\d{2,6})', _r_mdj.text)
+                if _m:
+                    _nav_mdj = _safe_float(_m.group(1))
+            if _nav_mdj and _nav_mdj > 0:
+                print(f'[ETF NAV] MoneyDJ {code}: nav={_nav_mdj}')
+                return pd.DataFrame([{'date': _dt.date.today(), 'nav': _nav_mdj}])
+            else:
+                print(f'[ETF NAV] MoneyDJ {code}: HTTP {_r_mdj.status_code} 找不到淨值')
+        else:
+            print(f'[ETF NAV] MoneyDJ {code}: HTTP {_r_mdj.status_code}')
+    except Exception as _e_mdj:
+        print(f'[ETF NAV] MoneyDJ {code}: {_e_mdj}')
+
+    # ── 5. yfinance ETF info.navPrice（加限速 retry）──────────────────────
+    import time as _t3
+    for _sfx3 in ('.TW', '.TWO'):
+        for _retry3 in range(3):
+            try:
+                import yfinance as _yf3
+                _tk3 = _yf3.Ticker(f'{code}{_sfx3}')
+                _info3 = _tk3.info
+                _nav3 = _info3.get('navPrice') or _info3.get('regularMarketNAV')
+                if _nav3 and float(_nav3) > 0:
+                    print(f'[ETF NAV] yfinance {code}{_sfx3}: navPrice={_nav3}')
+                    return pd.DataFrame([{'date': _dt.date.today(), 'nav': float(_nav3)}])
+                break  # 沒資料，不 retry
+            except Exception as _e3:
+                _e3s = str(_e3)
+                if ('Too Many Requests' in _e3s or 'Rate' in _e3s) and _retry3 < 2:
+                    _t3.sleep(2 + _retry3 * 2)  # 2s, 4s
+                    print(f'[ETF NAV] yfinance {code}{_sfx3}: 限速 retry {_retry3+1}/3')
+                    continue
+                print(f'[ETF NAV] yfinance {code}{_sfx3}: {_e3}')
+                break
+
+    # ── 最終兜底：FinMind 過舊資料（goodinfo/MoneyDJ/yfinance 全部失敗時）────
+    if _df_stale is not None and not _df_stale.empty:
+        print(f'[ETF NAV] {code} 最終兜底: FinMind過舊資料({_days_stale}d)，所有即時來源失敗')
+        return _df_stale
+
+    return pd.DataFrame()
+
+
+@st.cache_data(ttl=1800, max_entries=10)
+def _fetch_sector_returns(tickers: tuple, period: str) -> dict:
+    """批次抓取類股漲跌幅，回傳 {ticker: pct_change}"""
+    result = {}
+    try:
+        raw = yf.download(list(tickers), period=period,
+                          auto_adjust=True, progress=False, threads=True)
+        if raw.empty:
+            return result
+        # yf.download 多 ticker 時 Close 為 MultiIndex
+        if isinstance(raw.columns, pd.MultiIndex):
+            close = raw['Close'] if 'Close' in raw.columns.get_level_values(0) else raw.xs('Close', axis=1, level=0)
+        else:
+            close = raw[['Close']] if 'Close' in raw.columns else raw
+        close = close.ffill().dropna(how='all')
+        for t in tickers:
+            if t in close.columns:
+                series = close[t].dropna()
+                if len(series) >= 2:
+                    pct = round((float(series.iloc[-1]) / float(series.iloc[0]) - 1) * 100, 2)
+                    result[t] = pct
+    except Exception as e:
+        st.warning(f'類股資料抓取部分失敗：{e}')
+    return result
