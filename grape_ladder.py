@@ -363,12 +363,10 @@ def _render_evaluate_subtab() -> None:
 
 
 def render_grape_ladder(gemini_fn=None) -> None:
-    """Streamlit UI 對外入口。"""
+    """Streamlit UI 對外入口 — 主視圖：評估你現有的 ETF 組合（讀組合配置持股）。"""
     st.markdown('### 📅 葡萄串領息法')
     st.caption('「不同月配 ETF」組合形成「葡萄串」：讓每個月都有息可領。'
                '資料來源：yfinance 近 ~13 月實際除息紀錄。')
-    _sub_p, _sub_e = st.tabs(['💡 系統提議', '🔍 評估我的組合'])
-    with _sub_p:
+    _render_evaluate_subtab()
+    with st.expander('💡 還沒有持股？讓系統從高股息 10 檔自動挑選最佳組合', expanded=False):
         _render_propose_subtab()
-    with _sub_e:
-        _render_evaluate_subtab()
