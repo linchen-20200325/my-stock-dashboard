@@ -1055,6 +1055,31 @@ tab_stock.py / tab_stock_grp.py / tab_macro.py  (module-level import)
 - ✅ 7F 8 cases + 7G 63 cases = 71 cases 全綠（ui_widgets.py 模組 100% 函式 coverage）
 - 涵蓋：所有預設參數路徑 / 條件渲染分支（detail/tip/desc 有無）/ 配色 fallback / 未知 key fallback / 11 個關鍵字觸發 teacher_conclusion 自動配色
 
+#### `tech_indicators.py` + `scoring_helpers.py` 9 純函式補完單測（P2-B Phase 7H）
+
+**動機**：PR #58（`tech_indicators.py` 6 純函式）和 PR #61（`scoring_helpers.py` 3 純函式）抽出時皆未附對應單測，留下技術債。Phase 7H 補完此缺口，零生產碼變動，跨 tab 共用層 + 技術指標層 + 評分引擎層全部達 100% 函式 coverage。
+
+**測試明細**：
+
+| 測試檔 | 測試類別 | 涵蓋函式 | cases | 重點邊界 |
+|---|---|---|---|---|
+| `test_tech_indicators.py` | `TestCalcRsi` | `calc_rsi` | 7 | None / 不足 rows / 全漲全跌極端值 / 四捨五入 / 缺欄位 |
+| ↑ | `TestCalcIbs` | `calc_ibs` | 8 | high==low 防呆 0.5 / 取最後一列 / 四捨五入 3 位 |
+| ↑ | `TestCalcVolumeRatio` | `calc_volume_ratio` | 6 | avg_vol=0 防呆 / 排除今日 / custom period |
+| ↑ | `TestCalcKd` | `calc_kd` | 8 | 回傳 tuple / k,d ∈ [0,100] / 全漲 k>80 |
+| ↑ | `TestCalcBollinger` | `calc_bollinger` | 7 | 7 keys 結構 / lower≤ma≤upper / 常數價 std=0 → bw=0 |
+| ↑ | `TestCalcVcp` | `calc_vcp` | 5+1 | 需≥30 rows / 平坦無 swing → None / n_swings 過大 → None |
+| `test_scoring_helpers.py` | `TestCalcFundamentalScore` | `calc_fundamental_score` | 16 | 4 維度 dict 結構 / list 視為 None / 357 估值 4 段 / 殖利率穩定性 |
+| ↑ | `TestCalcHealthScore` | `calc_health_score` | 19 | 5 種趨勢分支 / 5 段 RSI 評分 / 5 段量比 / 4 種 KD 排列 / 4 種布林位置 |
+| ↑ | `TestHealthGrade` | `health_grade` | 11 (含 7 parametrize) | 80/50 二級閥值 / 完整 threshold 表 |
+
+**驗證**：
+- ✅ ruff (`All checks passed!`) — 純測試碼，無生產碼變動
+- ✅ pytest 全套 **734/734 全綠**（原 637 + 新增 97：tech 47 + scoring 50）
+- 涵蓋：所有 None / 空資料 / 不足資料的 fallback；所有評分閾值；所有回傳結構完整性
+
+**累積成果**：跨 tab 共用層（`tab_helpers` / `macro_helpers` / `etf_helpers` / `ui_widgets`）+ 技術指標層（`tech_indicators`）+ 評分引擎層（`scoring_helpers`）共 **6 個 helper 模組 100% 函式 coverage**，總計 **300+ unit test 全綠**。
+
 #### `app.py` 結構演進（PR #66/#68/#70-#73 — P2-B Phase 4+5 全收官 ✅✅）
 
 **最終戰績**：app.py 9622 → **1378 行（−85.7%）**，4 個 TAB 全部抽到獨立 `.py` 模組。

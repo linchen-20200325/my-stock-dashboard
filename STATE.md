@@ -14,8 +14,8 @@
 | **跨 tab 共用** | `tab_helpers.py` (135 / Phase 7A+7A-Ext 純函式：parse_cash_flow_ratio / format_condition_emoji / safe_get / safe_ma / final_recommendation — 取代 tab_stock + tab_stock_grp + tab_macro 內 5 個重複 closure；零 Streamlit 依賴，34 unit test) · `macro_helpers.py` (Phase 7A-Ext+7E：calc_traffic_light + rp_ts / rp_entry / rp_scalar — tab_macro 紅綠燈決策核心 + data_registry 三函式抽出；30 unit test) · `etf_helpers.py` (53 / Phase 7B：norm_return / norm_lower_better / auto_role — 抽 etf_tab_backtest 雷達正規化 + etf_tab_portfolio 核心/衛星分類；29 unit test) |
 | **資料抓取** | `data_loader.py` · `macro_core.py`（含 PR #53 `diagnose_tw_pmi_sources`）· `tw_macro.py` · `daily_checklist.py` · `leading_indicators.py` · `tw_stock_data_fetcher.py` |
 | **資料註冊** | `data_registry.py` · `data_config.py` · `config.py` |
-| **引擎** | `scoring_engine.py` · `scoring_helpers.py`（PR #61 抽 3 純函式：fundamental_score / health_score / health_grade）· `financial_health_engine.py` · `market_strategy.py` · `risk_control.py` · `backtest_engine.py` · `unified_decision.py` · `v4_strategy_engine.py` · `v5_modules.py` · `yield_screener.py` |
-| **技術指標** | `tech_indicators.py`（PR #58 從 app.py 抽出 6 個純函式：RSI/IBS/VR/KD/BB/VCP，零 Streamlit 依賴）|
+| **引擎** | `scoring_engine.py` · `scoring_helpers.py`（PR #61 抽 3 純函式：fundamental_score / health_score / health_grade — Phase 7H 補 50 unit test）· `financial_health_engine.py` · `market_strategy.py` · `risk_control.py` · `backtest_engine.py` · `unified_decision.py` · `v4_strategy_engine.py` · `v5_modules.py` · `yield_screener.py` |
+| **技術指標** | `tech_indicators.py`（PR #58 從 app.py 抽出 6 個純函式：RSI/IBS/VR/KD/BB/VCP，零 Streamlit 依賴 — Phase 7H 補 47 unit test）|
 | **ETF 工具鏈** | `etf_categories.py`（同儕分類）· `merrill_clock.py`（景氣循環）· `grape_ladder.py`（月配組合最佳化）· `etf_quality.py`（4 因子品質評等） |
 | **健診** | `health_inspector.py`（Raw Data 資料健診儀表板，PR #52 從 etf_dashboard 抽出）|
 | **AI / 警示** | `ai_engine.py` · `macro_alert.py` · `macro_state_locker.py` · `persona.py` |
@@ -94,6 +94,7 @@
 | (同上) | refactor: Phase 7E — 抽 `macro_helpers.{rp_ts, rp_entry, rp_scalar}` — tab_macro.py render 內 data_registry patch 三函式（季度標籤/年度/DatetimeIndex/_date 多源時間解析 + scalar proxy date metadata）；`_QE_MAP` 提至模組級；47 行 closure 刪除 + 26 callsites 重接 + `_proxy_rp` 顯式參數化；+18 unit test，全套件 **566/566 全綠** | ec7e39f |
 | (同上) | refactor: Phase 7F — 抽 `ui_widgets.cond_badge(ok, label)` — tab_macro.py 五維點火條件徽章 closure（HTML span，True 綠 / False 灰）；3 行 closure 刪除 + 7 callsite 重接；新增 `tests/test_ui_widgets.py` 8 cases；全套件 **574/574 全綠** | fde8047 |
 | (同上) | test: Phase 7G — `ui_widgets.py` PR #60 既有 9 函式 + 1 常數補完單元測試（TERM_EXPLAIN / explain_box / traffic_light / beginner_kpi / show_term_help / kpi / _to_strategy / teacher_box / teacher_conclusion / signal_box），零生產碼變動；+63 unit test，全套件 **637/637 全綠** | 114f17f |
+| (同上) | test: Phase 7H — `tech_indicators.py` (PR #58) + `scoring_helpers.py` (PR #61) 9 純函式補完單元測試（calc_rsi / calc_ibs / calc_volume_ratio / calc_kd / calc_bollinger / calc_vcp + calc_fundamental_score / calc_health_score / health_grade），零生產碼變動；+97 unit test，全套件 **734/734 全綠** | 8b26a13 |
 
 ## 🎯 Backlog
 - **環境工**：33 條 stale remote branches 清理（PR #42-#78 累積，sandbox token 無 delete 權）
@@ -125,6 +126,7 @@
   - ✅ 7E `macro_helpers.{rp_ts, rp_entry, rp_scalar}` + `_QE_MAP` 常數 — 抽 tab_macro.py L1663-1709 data_registry patch 三函式（4 種時間源解析：DatetimeIndex / 季度標籤 / 年度 / _date|date|datetime|...）；`_proxy_rp` 改顯式參數，消除 closure capture；47 行 closure 刪除 + 26 callsite 重接；+18 unit test，全套件 **566/566 全綠**
   - ✅ 7F `ui_widgets.cond_badge(ok, label)` — 抽 tab_macro.py L3392-3394 五維點火條件徽章 closure（HTML span 模板）；3 行 closure 刪除 + 7 callsite 重接；+8 unit test，全套件 **574/574 全綠**
   - ✅ 7G `tests/test_ui_widgets.py` 補測 — 將 PR #60 既有 9 函式 + 1 常數補完單元測試（TERM_EXPLAIN / explain_box / traffic_light / beginner_kpi / show_term_help / kpi / _to_strategy / teacher_box / teacher_conclusion / signal_box）；零生產碼變動，純測試補完；+63 unit test，全套件 **637/637 全綠**
+  - ✅ 7H `tests/test_tech_indicators.py` + `tests/test_scoring_helpers.py` 補測 — PR #58/#61 抽出 6+3 = 9 純函式時遺漏的單測技術債一次補完（calc_rsi / calc_ibs / calc_volume_ratio / calc_kd / calc_bollinger / calc_vcp / calc_fundamental_score / calc_health_score / health_grade）；零生產碼變動；+97 unit test（tech 47 + scoring 50），全套件 **734/734 全綠**
 - **技術債（已全面清乾淨）**：
   - 🎯 `app.py` ruff errors **681 → 0（100% clean）**（PR #56/#57/#60/#63/#64）
   - `app.py` 9622 → **1378 行**（**−8244，−85.7%**，PR #58/#60/#61 抽純函式 + #66/#68 wrap def + #70-#73 抽 4 TAB）
