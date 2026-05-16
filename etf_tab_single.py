@@ -97,8 +97,8 @@ def render_etf_single(gemini_fn=None):
 
     st.markdown('---')
 
-    # ── 策略一：MK 郭俊宏 ─────────────────────────────────────
-    st.markdown('#### 🧠 策略一：MK 郭俊宏 — 以息養股避雷策略')
+    # ── 策略一：以息養股避雷 ─────────────────────────────────────
+    st.markdown('#### 🧠 策略一：以息養股避雷')
     total_ret = calc_total_return_1y(df, divs)
     cur_yield = calc_current_yield(df, divs)
     ca, cb    = st.columns(2)
@@ -181,11 +181,11 @@ def render_etf_single(gemini_fn=None):
                     delta='🟡 未滿 3 年（選舊不選新）', delta_color='inverse')
     st.caption(
         '⚠️ 配息來源「**平準金佔比**」需 ETF 公開說明書揭露，本期暫不顯示（下輪計畫加 SITCA 抓取）。'
-        '\n\n💡 **MK 老師標準**：4 項指標若有 ≥ 2 項 🔴/🟡 警示 → 建議汰弱換強。'
+        '\n\n💡 **判讀標準**：4 項指標若有 ≥ 2 項 🔴/🟡 警示 → 建議汰弱換強。'
     )
 
-    # ── 策略二：孫慶龍 7% ─────────────────────────────────────
-    st.markdown('#### 🧠 策略二：孫慶龍 — 7% 存股聖經估值買賣點')
+    # ── 策略二：7% 存股估值 ─────────────────────────────────────
+    st.markdown('#### 🧠 策略二：7% 存股估值買賣點')
     avg_yield = calc_avg_yield(df, divs, years=5)
     cc, cd    = st.columns(2)
     cc.metric('近5年平均殖利率', f'{avg_yield:.2f}%' if avg_yield else 'N/A')
@@ -222,8 +222,8 @@ def render_etf_single(gemini_fn=None):
                             '無法套用 7% 存股聖經，改看回測 CAGR',
                             '前往「ETF回測」確認年化報酬是否 ≥ 8%')
 
-    # ── 策略三：春哥 VCP ──────────────────────────────────────
-    st.markdown('#### 🧠 策略三：春哥（Stan Weinstein）— VCP 波幅收縮突破')
+    # ── 策略三：VCP 突破 ──────────────────────────────────────
+    st.markdown('#### 🧠 策略三：VCP 波幅收縮突破')
     vcp = check_vcp_signal(df)
     ce, cf, cg = st.columns(3)
     ce.metric('站上 50MA',  '✅' if vcp['above_ma50']  else '❌')

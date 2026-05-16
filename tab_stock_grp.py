@@ -566,7 +566,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
     # ══ 批次財報體檢（自動執行）══════════════════════════════════
     if results_t3 and stock_list_t3:
         st.markdown('---')
-        st.markdown("""<div style="margin:16px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#d2a8ff18,#0d1117);border-left:4px solid #d2a8ff;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#d2a8ff;">🏥 批次財報體檢（MJ林明樟體系）</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">4力1棒子 · 現金流矩陣 · OPM護城河</span></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style="margin:16px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#d2a8ff18,#0d1117);border-left:4px solid #d2a8ff;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#d2a8ff;">🏥 批次財報體檢（策略2）</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">4力1棒子 · 現金流矩陣 · OPM護城河</span></div>""", unsafe_allow_html=True)
         _fh3_trigger = '_'.join(sorted(r.get('stock_id', r.get('代碼','')) for r in results_t3[:10]))
         if st.session_state.get('_fh_t3_last_key') != _fh3_trigger or not st.session_state.get('_fh_t3_results'):
             _asc = as_completed  # L2: 使用頂層已匯入的 as_completed
