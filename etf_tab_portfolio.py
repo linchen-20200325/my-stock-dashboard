@@ -8,7 +8,7 @@
   * 外部: unified_decision.render_unified_decision
   * etf_dashboard.py 內部 helper (10):
     _check_sector_exposure / _colored_box / _compute_etf_warroom_row
-    / _etf_ai_portfolio / _plot_correlation / _teacher_conclusion
+    / _plot_correlation / _teacher_conclusion
     / fetch_etf_dividends / fetch_etf_info / fetch_etf_price
     / macro_allocation_banner
 
@@ -28,7 +28,7 @@ def render_etf_portfolio(gemini_fn=None):
     from unified_decision import render_unified_decision
     from etf_dashboard import (
         _check_sector_exposure, _colored_box, _compute_etf_warroom_row,
-        _etf_ai_portfolio, _plot_correlation, _teacher_conclusion,
+        _plot_correlation, _teacher_conclusion,
         fetch_etf_dividends, fetch_etf_info, fetch_etf_price,
         macro_allocation_banner,
     )
@@ -620,10 +620,7 @@ def render_etf_portfolio(gemini_fn=None):
         'loss_pct': loss_pct,
     }
 
-    if gemini_fn:
-        _etf_ai_portfolio(gemini_fn, rows, rebal_actions, regime, loss_pct)
-
-    # ── 統一投資決策分析模組 ──────────────────────────────────
+    # ── 統一投資決策分析模組（AI 首席顧問決策中心）──────────────
     render_unified_decision(gemini_fn, {
         'type': 'portfolio',
         'id':   'etf_portfolio',
