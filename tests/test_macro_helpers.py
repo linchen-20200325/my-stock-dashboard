@@ -1,10 +1,10 @@
-"""macro_helpers.py 純函式 unit test — Phase 7A-Ext。"""
+"""macro_helpers.py 純函式 unit test — Phase 7A-Ext / 7E。"""
 from __future__ import annotations
 
 import pandas as pd
 import pytest
 
-from macro_helpers import calc_traffic_light
+from macro_helpers import calc_traffic_light, rp_entry, rp_scalar, rp_ts
 
 
 class TestCalcTrafficLight:
@@ -105,3 +105,103 @@ class TestCalcTrafficLight:
         cl  = {'inst': {'外資': {'net': 100}}}
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl['health'] == pytest.approx(80.0)
+
+
+class TestRpTs:
+    def test_none_returns_na(self):
+        assert rp_ts(None) == 'N/A'
+
+    def test_non_df_returns_na(self):
+        assert rp_ts({'x': 1}) == 'N/A'
+        assert rp_ts([1, 2, 3]) == 'N/A'
+
+    def test_empty_df_returns_na(self):
+        assert rp_ts(pd.DataFrame()) == 'N/A'
+
+    def test_datetime_index(self):
+        df = pd.DataFrame({'close': [10, 20]}, index=pd.to_datetime(['2024-01-15', '2024-03-22']))
+        assert rp_ts(df) == '2024-03-22'
+
+    def test_quarter_label_q4(self):
+        # 季度標籤 '2024Q4' → '2024-12-31'
+        df = pd.DataFrame({'季度標籤': ['2024Q1', '2024Q4'], 'val': [1, 2]})
+        assert rp_ts(df) == '2024-12-31'
+
+    def test_quarter_label_q1_q2_q3(self):
+        # Q1=03-31, Q2=06-30, Q3=09-30
+        for q, expect in [('1', '03-31'), ('2', '06-30'), ('3', '09-30')]:
+            df = pd.DataFrame({'季度標籤': [f'2023Q{q}']})
+            assert rp_ts(df) == f'2023-{expect}'
+
+    def test_quarter_label_invalid_qnum_defaults_to_1231(self):
+        df = pd.DataFrame({'季度標籤': ['2024Q9']})
+        assert rp_ts(df) == '2024-12-31'
+
+    def test_year_int_column(self):
+        df = pd.DataFrame({'年度': [2022, 2023, 2024], 'val': [1, 2, 3]})
+        assert rp_ts(df) == '2024-12-31'
+
+    def test_underscore_date_format(self):
+        # _date 強制 '%Y%m%d'
+        df = pd.DataFrame({'_date': ['20240515', '20240601']})
+        assert rp_ts(df) == '2024-06-01'
+
+    def test_date_column_auto_parse(self):
+        df = pd.DataFrame({'date': ['2024-05-15', '2024-06-01']})
+        assert rp_ts(df) == '2024-06-01'
+
+    def test_unparseable_returns_na(self):
+        df = pd.DataFrame({'foo': ['bar', 'baz']})
+        assert rp_ts(df) == 'N/A'
+
+
+class TestRpEntry:
+    def test_none_df_missing(self):
+        e = rp_entry(None, '個股', 'daily')
+        assert e['missing'] is True
+        assert e['rows'] == 0
+        assert e['last_updated'] == 'N/A'
+        assert e['category'] == '個股'
+        assert e['frequency'] == 'daily'
+
+    def test_empty_df_missing(self):
+        e = rp_entry(pd.DataFrame(), 'ETF', 'monthly')
+        assert e['missing'] is True
+        assert e['rows'] == 0
+
+    def test_valid_df_uses_rp_ts(self):
+        df = pd.DataFrame({'date': ['2024-05-15']})
+        e = rp_entry(df, 'ETF', 'daily')
+        assert 'missing' not in e
+        assert e['rows'] == 1
+        assert e['last_updated'] == '2024-05-15'
+        assert e['category'] == 'ETF'
+        assert e['frequency'] == 'daily'
+
+
+class TestRpScalar:
+    def test_none_val_missing(self):
+        e = rp_scalar(None, '個股', 'daily', '2026-05-16')
+        assert e['missing'] is True
+        assert e['rows'] == 0
+        assert e['last_updated'] == 'N/A'
+
+    def test_valid_val_uses_proxy_date(self):
+        e = rp_scalar(42, 'ETF', 'daily', '2026-05-16')
+        assert 'missing' not in e
+        assert e['rows'] == 1
+        assert e['last_updated'] == '2026-05-16'
+        assert e['category'] == 'ETF'
+
+    def test_zero_treated_as_valid(self):
+        # 0 不是 None → 視為有值（如 RSI=0、健康度=0 仍是有效讀數）
+        e = rp_scalar(0, '個股', 'daily', '2026-05-16')
+        assert e.get('missing') is None
+        assert e['rows'] == 1
+        assert e['last_updated'] == '2026-05-16'
+
+    def test_empty_string_treated_as_valid(self):
+        # '' 也不是 None
+        e = rp_scalar('', 'ETF', 'daily', '2026-01-01')
+        assert e.get('missing') is None
+        assert e['rows'] == 1

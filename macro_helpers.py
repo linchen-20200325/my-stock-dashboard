@@ -12,6 +12,11 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+import pandas as pd
+
+# 季末日對照（DataFrame 內「季度標籤 2024Q4」→「2024-12-31」用）
+_QE_MAP = {'1': '03-31', '2': '06-30', '3': '09-30', '4': '12-31'}
+
 
 def calc_traffic_light(
     mkt_info: Optional[dict],
@@ -105,3 +110,70 @@ def calc_traffic_light(
         'leek': _leek, 'fnet': _fnet, 'fk': _fk, 'fut_net': _fut_net,
         'conf': _conf, 'regime': _regime,
     }
+
+
+def rp_ts(df: Any) -> str:
+    """取 DataFrame 最新日期字串（與 _reg_add 邏輯一致）。
+
+    支援來源（依序嘗試）：
+      1. DatetimeIndex → 直接取 max
+      2. 「季度標籤」欄（'2024Q4' → '2024-12-31'，依 _QE_MAP）
+      3. 「年度」欄（int → 'YYYY-12-31'）
+      4. _date / date / datetime / timestamp / 日期 / quarter / period 欄
+         （_date 強制 '%Y%m%d' format，其他自動推斷）
+
+    任何例外或無法解析 → 回 'N/A'。
+    """
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return 'N/A'
+    if isinstance(df.index, pd.DatetimeIndex):
+        try:
+            return pd.Timestamp(df.index.max()).strftime('%Y-%m-%d')
+        except Exception:
+            pass
+    for c in df.columns:
+        cl = str(c)
+        cll = cl.lower()
+        if cl == '季度標籤':
+            try:
+                lq = str(df[c].dropna().iloc[-1])
+                yr_q, qn = lq.split('Q')
+                return f'{yr_q}-{_QE_MAP.get(qn, "12-31")}'
+            except Exception:
+                pass
+        if cl == '年度':
+            try:
+                yr = int(df[c].dropna().iloc[-1])
+                return f'{yr}-12-31'
+            except Exception:
+                pass
+        fmt = '%Y%m%d' if cll == '_date' else None
+        if cll in ('_date', 'date', 'datetime', 'timestamp', '日期', 'quarter', 'period'):
+            try:
+                lat = pd.to_datetime(df[c], format=fmt, errors='coerce').max()
+                if lat is not None and not pd.isna(lat):
+                    return lat.strftime('%Y-%m-%d')
+            except Exception:
+                pass
+    return 'N/A'
+
+
+def rp_entry(df: Any, cat: str, freq: str) -> dict:
+    """DataFrame → registry entry dict（last_updated + rows + cat + freq）。
+
+    空 / None → missing=True；有資料 → 用 rp_ts 取最後日期。
+    """
+    if isinstance(df, pd.DataFrame) and not df.empty:
+        return {'last_updated': rp_ts(df), 'rows': len(df), 'category': cat, 'frequency': freq}
+    return {'last_updated': 'N/A', 'rows': 0, 'category': cat, 'frequency': freq, 'missing': True}
+
+
+def rp_scalar(val: Any, cat: str, freq: str, proxy_date: str) -> dict:
+    """純量值（健康度評分 / RSI / 殖利率等）→ registry entry dict。
+
+    有值（非 None）→ rows=1 + last_updated=proxy_date（呼叫端傳入今天或總經更新時間）
+    None → missing=True。
+    """
+    if val is not None:
+        return {'last_updated': proxy_date, 'rows': 1, 'category': cat, 'frequency': freq}
+    return {'last_updated': 'N/A', 'rows': 0, 'category': cat, 'frequency': freq, 'missing': True}
