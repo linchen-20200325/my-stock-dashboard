@@ -96,6 +96,7 @@
 | (同上) | test: Phase 7G — `ui_widgets.py` PR #60 既有 9 函式 + 1 常數補完單元測試（TERM_EXPLAIN / explain_box / traffic_light / beginner_kpi / show_term_help / kpi / _to_strategy / teacher_box / teacher_conclusion / signal_box），零生產碼變動；+63 unit test，全套件 **637/637 全綠** | 114f17f |
 | (同上) | test: Phase 7H — `tech_indicators.py` (PR #58) + `scoring_helpers.py` (PR #61) 9 純函式補完單元測試（calc_rsi / calc_ibs / calc_volume_ratio / calc_kd / calc_bollinger / calc_vcp + calc_fundamental_score / calc_health_score / health_grade），零生產碼變動；+97 unit test，全套件 **734/734 全綠** | 8b26a13 |
 | (同上) | chore: 產出 `cleanup_stale_branches.sh` — 49 條 stale 遠端分支清理腳本（48 merged 主清單 + 2 unmerged opt-in 區段）；含 DRY_RUN 預設、白名單保護（main / 當前分支）、刪前重新驗證 ancestor of origin/main；對應 STATE.md Backlog「環境工」條目 | (本輪) |
+| (debug) | feat(diag): `api_diagnostic.py` — 「Key 對但全站抓不到」根因診斷面板（掛 tab_diag 第一格）：逐 key 來源/遮罩、proxy vs 直連 雙跑、結果判讀指南；側邊欄連線狀態 fallback 補 os.environ；**結案結論**：用戶 PROXY_URL 拼字錯（`cheng→chen`）導致 DNS NameResolutionError，Streamlit Cloud 改正即復原；分支 `claude/debug-api-key-JmH9N` 保留為診斷工具，不發 PR | 7f02af3 |
 
 ## 🎯 Backlog
 - **環境工**：49 條 stale remote branches 清理 → ✅ 產出 `cleanup_stale_branches.sh`（48 merged 主清單 + 2 unmerged opt-in），預設 DRY_RUN=1；sandbox HTTP 403 擋 push --delete，需本機 clone 後 `DRY_RUN=0 ./cleanup_stale_branches.sh` 執行
