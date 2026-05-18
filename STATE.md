@@ -97,6 +97,7 @@
 | (同上) | test: Phase 7H — `tech_indicators.py` (PR #58) + `scoring_helpers.py` (PR #61) 9 純函式補完單元測試（calc_rsi / calc_ibs / calc_volume_ratio / calc_kd / calc_bollinger / calc_vcp + calc_fundamental_score / calc_health_score / health_grade），零生產碼變動；+97 unit test，全套件 **734/734 全綠** | 8b26a13 |
 | (同上) | chore: 產出 `cleanup_stale_branches.sh` — 49 條 stale 遠端分支清理腳本（48 merged 主清單 + 2 unmerged opt-in 區段）；含 DRY_RUN 預設、白名單保護（main / 當前分支）、刪前重新驗證 ancestor of origin/main；對應 STATE.md Backlog「環境工」條目 | (本輪) |
 | (同上) | docs(state): 標記 49 條 stale remote branches 清理 ✅ 收官 — 使用者本機跑腳本後遠端僅剩 main + 開發分支；環境工 Backlog 條目劃線 | (本輪) |
+| (同上) | docs(secrets): `.streamlit/secrets.toml.example` 完整版重寫 — 涵蓋 code 內全 7 組 secrets key（FINMIND_TOKEN / FINMIND_USER+PASSWORD / GEMINI_API_KEY / FRED_API_KEY / PROXY_URL+HOST+PORT / NAS_PROXY_URL / NAS_API_KEY）+ 分節說明 / 用途 / 申請 URL / 驗證指令；對應新帳號遷移後 Streamlit Cloud 重 deploy 需重填 secrets | (本輪) |
 
 ## 🎯 Backlog
 - ~~**環境工**：49 條 stale remote branches 清理~~ → ✅ **2026-05-16 全清乾淨**（使用者本機跑 `cleanup_stale_branches.sh`，刪 48 merged + 2 unmerged opt-in 共 50 條；遠端僅剩 `main` + `claude/fix-yield-river-bands-YK8i7` 開發分支）
