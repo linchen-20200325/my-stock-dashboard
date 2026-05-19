@@ -506,6 +506,10 @@ ETF 組合子頁（render_etf_portfolio）額外流程：
        │
        ├─ 相關係數矩陣計算 → 熱力圖（價格報酬 Pearson）
        ├─ 持股 Overlap 矩陣（PR #2）→ 熱力圖（fetch_etf_holdings + Σmin / Jaccard）
+       ├─ 主動 ETF 弱勢度檢測（PR #3）→ ProgressColumn 表格
+       │     │  is_active_etf 過濾 → calc_weakness_metrics
+       │     │  大跌弱勢率 / 反彈弱勢率 / 連敗季數 / TE%
+       │     └  fetch_etf_manager 標註經理人任期；連敗 ≥ 2 季 → 紅卡換股建議
        ├─ 組合績效回測（CAGR / Sharpe / MDD）
        ├─ _render_monte_carlo()：蒙地卡羅模擬（1000 次路徑）
        └─ _etf_ai_portfolio()：組合 AI 評斷
