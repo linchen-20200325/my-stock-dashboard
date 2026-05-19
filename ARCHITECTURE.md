@@ -339,8 +339,13 @@ app.py      ✓    ✓    ✓    ✓    ✓    ✓
 |--------|---------|------|
 | `GEMINI_API_KEY` | L5（ai_engine、unified_decision） | Gemini 2.5-Flash API 金鑰 |
 | `FINMIND_TOKEN` | L1（data_loader、leading_indicators） | FinMind 免費帳號（每小時 600 次） |
+| `PROXY_URL` | L0（proxy_helper） | NAS Squid Proxy 上游 URL |
+| `FRED_API_KEY` | L1（macro_core） | FRED 經濟資料 API 金鑰 |
+| `[gcp_service_account]` | 雲端儲存（gsheet_portfolio）| **SA 模式**：管理員部署用 Service Account JSON（向後相容） |
+| `portfolio_sheet_id` | 雲端儲存（gsheet_portfolio）| **SA 模式**：Google Sheet ID（OAuth 模式下由使用者 in-app 輸入，存 `session_state`） |
+| `[google_oauth]` | 雲端儲存（oauth_state）| **OAuth 模式**（推薦）：`client_id` / `client_secret` / `redirect_uri`；亦可由使用者透過 in-app wizard 寫入 `session_state['custom_oauth_cfg']` |
 
-兩者皆儲存於 Streamlit Secrets（`st.secrets`），部署時不進版控。
+前 4 項儲存於 Streamlit Secrets（`st.secrets`），部署時不進版控。OAuth 雙模式契約見 SPEC.md §8。
 
 ---
 
@@ -1585,6 +1590,80 @@ with tab_edu:
 | 輸入 | 無 |
 | 輸出 | `list[dict]` — 每筆 `{method, status, detail, url}` |
 | 狀態語意 | `✅` 端點 OK 且關鍵欄位存在 ｜ `⚠️` HTTP 200 但內容形狀變了 ｜ `❌` HTTP 非 200 / fetch_url 回 None / 例外 ｜ `⚪` 跳過（無 token 等） |
+
+---
+
+### 4.7 雲端儲存（Cloud Storage — Google Sheet 持股組合）
+
+對應 PR #5（初版 SA-only，commit `48de077`）+ commit `0c6e0b9`（OAuth 移植自基金 dashboard）。
+契約見 SPEC.md §8；Secrets 對照見 §2.4。
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ etf_tab_portfolio._render_cloud_storage  ← UI 層         │
+│    └─ _render_oauth_panel (OAuth wizard + Sheet ID 輸入) │
+└────────────────────┬────────────────────────────────────┘
+                     │ is_configured / load / save / delete
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│ gsheet_portfolio                          ← 純函式 API   │
+│   _oauth_active / _sa_configured / _get_active_sheet_id │
+│   _build_client（OAuth 優先 → SA fallback）             │
+│   list_portfolios / load / save / delete                │
+└─────────┬──────────────────────────────┬───────────────┘
+          │ OAuth                        │ SA fallback
+          ▼                              ▼
+┌──────────────────────┐    ┌────────────────────────────┐
+│ oauth_state          │    │ google.oauth2.service_     │
+│  _resolve_oauth_cfg  │    │ account.Credentials         │
+│  _get_oauth_client   │    │ （st.secrets['gcp_service_ │
+│  handle_oauth_       │    │  account']）               │
+│  callback            │    └────────────────────────────┘
+└─────────┬────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────┐
+│ infra/oauth (純 HTTP，零 streamlit 依賴)                 │
+│   build_authorize_url / exchange_code_for_tokens        │
+│   refresh_access_token / build_credentials_from_tokens  │
+│   is_token_expired / ensure_fresh_tokens / OAuthError   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**`gsheet_portfolio.py`** — 雙模式持股組合儲存
+
+| 項目 | 說明 |
+|------|------|
+| Schema | 單一 worksheet `portfolios`：`name | ticker | lots | avg_price | updated_at` |
+| 多組命名 | 同 worksheet 多列共用，以 `name` 欄分組 |
+| `is_configured()` | `_oauth_active() or _sa_configured()`；任一條件即可（contract 跨兩模式不變）|
+| `_oauth_active()` | OAuth Client 已設 + `session_state['gsheet_tokens']` 存在 + 有 sheet id |
+| `_sa_configured()` | `st.secrets['portfolio_sheet_id']` + `[gcp_service_account]` 皆有 |
+| `_get_active_sheet_id()` | 優先 `session_state['portfolio_sheet_id']`（OAuth 模式使用者輸入）→ 退 `st.secrets['portfolio_sheet_id']` |
+| `_build_client()` | OAuth → `oauth_state._get_oauth_client()`；否則 SA Credentials.from_service_account_info |
+| `_ws()` | 每次重新建立（OAuth token 可能 refresh，**不可** `st.cache_resource` 化）|
+| 寫入策略 | `save_portfolio` 先取 `get_all_values` → 過濾舊 name 列 → `clear` + `append_row(HEADERS)` + `append_rows(keep + new)` |
+
+**`oauth_state.py`** — OAuth 設定解析 + gspread client + callback handler
+
+| 函式 | 說明 |
+|------|------|
+| `_resolve_oauth_cfg()` | 優先 `st.secrets['google_oauth']`；缺則 `st.session_state['custom_oauth_cfg']`（in-app wizard）|
+| `_get_oauth_client()` | 從 `session_state['gsheet_tokens']` 建 gspread client，順便 `ensure_fresh_tokens` refresh |
+| `handle_oauth_callback()` | URL `?code=...` → `exchange_code_for_tokens` → 寫 `session_state['gsheet_tokens']` → `query_params.clear()` + `st.rerun()`；`app.py` 在 `set_page_config` 後立即呼叫一次 |
+
+**`infra/oauth.py`** — 純 HTTP OAuth 2.0 flow（零 streamlit 依賴，移植自基金 dashboard，202 行）
+
+| 函式 | 說明 |
+|------|------|
+| `build_authorize_url(client_id, redirect_uri, state=None)` | Google OAuth consent URL（scopes：spreadsheets + drive + userinfo.email）|
+| `exchange_code_for_tokens(code, client_id, client_secret, redirect_uri)` | `code` → `{access_token, refresh_token, expires_at, ...}` dict |
+| `refresh_access_token(refresh_token, client_id, client_secret)` | 用 refresh token 換新 access token |
+| `build_credentials_from_tokens(tokens, client_id, client_secret)` | dict → `google.oauth2.credentials.Credentials` |
+| `is_token_expired(tokens, leeway=60)` / `ensure_fresh_tokens(...)` | 過期前 60 秒自動 refresh |
+| `OAuthError` | 統一例外類別（HTTP 非 200 / JSON 缺欄）|
+
+**Sidebar Google 帳號區（app.py）**：已登入顯示 `🟢 已登入 + 🚪 登出`；OAuth Client 已設未登入顯示 `🔐 用 Google 登入` link_button；SA 模式顯示 `ℹ️ 使用 Service Account`；未設定顯示 `⚙️ OAuth 尚未設定 — 至「ETF 組合」Tab 展開「💾 雲端儲存」設定`。
 | 探測源 | ① data.gov.tw ② NDC ③ MacroMicro ④ CIER cid=21 ⑤ StockFeel ⑥ 鉅亨網 ⑦ FinMind（需 token）⑧ MoneyDJ |
 | 設計原則 | **不改 `fetch_tw_pmi`**（零 regression）；**lazy 載入**（只在使用者點按鈕才探測）；timeout=8s × 8 段 worst case ≤ 1 分鐘 |
 | 呼叫端 | `health_inspector.py` 異常清單 expander 內按鈕觸發 |
