@@ -74,6 +74,8 @@ def render_tab_macro():
         """將計算結果回填到 placeholder（或顯示等待狀態）。
         mkt_info: 選填，來自 market_regime() 的原始 dict，用以合併顯示市場評分與信號。
         以較保守信號為主（traffic light 已含 defense/health 降級邏輯）。
+
+        信心門檻：conf < 70% 時不顯示燈號，改列出缺失資料避免誤導決策。
         """
         if tl is None:
             placeholder.info(
@@ -81,6 +83,29 @@ def render_tab_macro():
                 '首次使用請點擊「🚀 一鍵更新全部數據」載入資料。',
                 icon='📡'
             )
+            return
+
+        # ── 信心門檻 gating：conf<70% 直接擋燈號，逐項列出缺失資料 ──
+        if tl.get('conf', 0) < 70:
+            _missing = tl.get('missing_sources', []) or []
+            _missing_lines = ''.join(
+                f'<li style="margin:4px 0;color:#f85149;">❌ {m}</li>' for m in _missing
+            ) if _missing else '<li style="color:#8b949e;">（無法判斷）</li>'
+            with placeholder.container():
+                st.markdown(
+                    f'<div style="background:linear-gradient(135deg,#2a1d00,#1a1208);'
+                    f'border:2px solid #d29922;border-radius:14px;padding:18px 22px;margin-bottom:12px;">'
+                    f'<div style="font-size:22px;font-weight:900;color:#d29922;">⏸️ 資料不足，無法判斷市場狀態</div>'
+                    f'<div style="font-size:13px;color:#c9d1d9;margin-top:8px;">'
+                    f'目前數據信心 <b style="color:#f85149;">{tl["conf"]}%</b>'
+                    f'（門檻 70%，避免新舊資料混雜誤導決策）</div>'
+                    f'<div style="font-size:12px;color:#8b949e;margin-top:10px;">缺少以下資料來源：</div>'
+                    f'<ul style="font-size:13px;margin:6px 0 0 4px;padding-left:20px;">{_missing_lines}</ul>'
+                    f'<div style="font-size:12px;color:#58a6ff;margin-top:12px;">'
+                    f'👉 請點上方「🚀 一鍵更新全部數據」載入完整資料後，燈號才會顯示。'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
             return
 
         # ── 整合 market_regime() 的輔助資訊 ──────────────────────
@@ -408,12 +433,32 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         st.success(f'✅ FinMind Token 已設定（{_fm_tok_now[:12]}...）', icon='🔑')
 
     def _on_refresh_click():
-        """on_click callback：清除所有 pickle 快取後設刷新旗標，確保拿到最新資料。"""
+        """on_click callback：全清快取（pickle + st.cache_data + proxy URL cache
+        + 總經相關 session_state），確保拿到真正最新資料，零殘留。
+        """
         try:
             from daily_checklist import _pkl_clear_all
             _pkl_clear_all()
         except Exception as _e_clr:
-            print(f'[Cache] clear failed: {_e_clr}')
+            print(f'[Cache] pkl clear failed: {_e_clr}')
+        try:
+            st.cache_data.clear()
+            print('[Cache] 🗑️ st.cache_data cleared')
+        except Exception as _e_sc:
+            print(f'[Cache] st.cache_data clear failed: {_e_sc}')
+        try:
+            import proxy_helper as _ph_clr
+            _ph_clr._URL_CACHE.clear()
+            _ph_clr.reset_proxy_cache()
+            print('[Cache] 🗑️ proxy URL cache + config cache cleared')
+        except Exception as _e_ph:
+            print(f'[Cache] proxy clear failed: {_e_ph}')
+        # 清除總經 tab session_state 殘留資料，避免新舊混雜
+        for _k in ('cl_data', 'cl_ts', 'mkt_info', 'jingqi_info', 'li_latest',
+                   'warroom_summary', '_last_inst', '_last_inst_date',
+                   '_last_margin', 'futures_net', 'adl_debug_msg'):
+            st.session_state.pop(_k, None)
+        print('[Cache] 🗑️ session_state macro keys cleared')
         st.session_state['_is_refreshing'] = True
 
     cb1, cb2 = st.columns([5, 5])
@@ -465,11 +510,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ── 市場狀態卡 placeholder（等資料載入後才更新）──────────────
     _mkt_placeholder = st.empty()
 
-    # [Phase 2] 冷啟動瘦身：cl_data 不存在時只抓輕量資料 (intl/tw/tech)
-    # 籌碼面 (inst/margin/adl) + 先行指標 (li) 改為使用者點按鈕才載入，避免冷啟超時死亡
+    # [v10.56.0] 進頁完全不自動抓資料：必須使用者點按鈕才觸發
+    # 移除舊的冷啟動條件 `'cl_data' not in st.session_state`，避免新舊資料混雜誤導
+    # 副作用：冷啟動時所有資料區塊顯示 placeholder，由 _show_market_data gate 控制
     _load_heavy = bool(do_refresh) or bool(st.session_state.get('chips_loaded', False))
 
-    if do_refresh or 'cl_data' not in st.session_state:
+    if do_refresh:
         _fetch_ph = st.empty()
         _fetch_ph.info(
             '⏳ 載入指數行情中…' if not _load_heavy
