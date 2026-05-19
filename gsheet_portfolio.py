@@ -245,8 +245,12 @@ def save_portfolio(name: str, rows: list[dict[str, Any]]) -> int:
     return len(new_rows)
 
 
-def list_user_sheets() -> list[dict]:
-    """OAuth 模式列出使用者 Google Drive 內所有 Spreadsheets。
+def list_user_sheets(folder_id: str = '') -> list[dict]:
+    """OAuth 模式列出使用者 Google Drive 內 Spreadsheets。
+
+    Args:
+        folder_id: 若提供，僅列出此資料夾內的 Sheets（gspread 6.x 原生支援）；
+                   留空則列全部（既有行為）。
 
     需要 OAuth scope `drive.metadata.readonly`（infra/oauth.py 已內建）。
     回傳 [{'id': ..., 'name': ...}, ...] 依名稱排序；非 OAuth 模式回空 list。
@@ -256,7 +260,8 @@ def list_user_sheets() -> list[dict]:
         return []
     client = _build_client()
     try:
-        files = client.list_spreadsheet_files()
+        files = client.list_spreadsheet_files(
+            folder_id=(folder_id.strip() or None))
     except Exception as e:
         raise RuntimeError(f'列出 Drive Sheets 失敗：[{type(e).__name__}] {e}') from e
     out: list[dict] = []

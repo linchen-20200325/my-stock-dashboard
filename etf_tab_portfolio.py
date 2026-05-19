@@ -840,15 +840,25 @@ def _render_oauth_panel(_gsp) -> bool:
             st.caption(f'✅ 已設定 Sheet ID：`{_sid}`')
 
         # ── 從 Drive 列出既有 Sheets 挑一個（不必複製 ID）──────────
-        st.caption('📂 **或者** — 從你 Google Drive 既有的 Sheets 挑一個：')
+        st.caption('📂 **或者** — 從你 Google Drive 既有的 Sheets 挑一個（可選擇限定資料夾）：')
+        _folder_raw = st.text_input(
+            '📁 限定資料夾（可選）— 貼資料夾 URL 或 ID，留空則列全部',
+            value=str(st.session_state.get('_etf_p_drive_folder', '') or ''),
+            key='etf_p_drive_folder_input',
+            placeholder='https://drive.google.com/drive/folders/<FOLDER_ID>',
+            help='從 Google Drive 開資料夾 → 上方網址列複製整段 URL 貼上，系統會自動抽 ID')
+        _fm = _re.search(r'/folders/([a-zA-Z0-9_-]+)', _folder_raw)
+        _folder_id = _fm.group(1) if _fm else _folder_raw.strip()
+        st.session_state['_etf_p_drive_folder'] = _folder_id
         _list_c1, _list_c2 = st.columns([2, 3])
         if _list_c1.button('📂 從 Drive 列出 Sheets',
                             key='etf_p_list_drive', use_container_width=True,
                             help='需要 OAuth `drive.metadata.readonly` 權限；若顯示權限不足請登出再登入'):
             try:
-                _files_ls = _gsp.list_user_sheets()
+                _files_ls = _gsp.list_user_sheets(folder_id=_folder_id)
                 st.session_state['_etf_p_my_sheets'] = _files_ls
                 st.session_state['_etf_p_list_tried'] = True
+                st.session_state['_etf_p_list_scope'] = f'資料夾 `{_folder_id[:14]}…`' if _folder_id else '整個帳號'
             except Exception as _lse:
                 _err = str(_lse)
                 if 'insufficient' in _err.lower() or '403' in _err:
@@ -858,10 +868,12 @@ def _render_oauth_panel(_gsp) -> bool:
                     st.error(f'❌ 列檔失敗：{_lse}')
 
         _my_sheets = st.session_state.get('_etf_p_my_sheets') or []
+        _list_scope = st.session_state.get('_etf_p_list_scope', '')
         if _my_sheets:
             _opt_labels = [f"📄 {f['name']}  (`{f['id'][:14]}…`)" for f in _my_sheets]
+            _scope_hint = f'（來源：{_list_scope}）' if _list_scope else ''
             _sel_idx = st.selectbox(
-                f'清單共 {len(_my_sheets)} 個 Sheets — 選一個',
+                f'清單共 {len(_my_sheets)} 個 Sheets — 選一個 {_scope_hint}',
                 range(len(_opt_labels)),
                 format_func=lambda i: _opt_labels[i],
                 key='etf_p_sel_my_sheets',
