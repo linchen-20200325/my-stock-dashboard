@@ -800,19 +800,29 @@ def _render_oauth_panel(_gsp) -> bool:
         _wz_ru   = st.text_input('redirect_uri',
             value=_wz_cfg.get('redirect_uri', ''),
             key='wz_oauth_ru',
-            placeholder='https://<your-app>.streamlit.app/')
+            placeholder='https://<your-app>.streamlit.app/',
+            help='必須含 `https://` 開頭與結尾斜線，且要跟 GCP Console「Authorized redirect URIs」一字不差')
         if st.button('💾 套用 OAuth Client 設定',
                       key='wz_oauth_apply', use_container_width=True):
-            if _wz_cid and _wz_csec and _wz_ru:
+            if not (_wz_cid and _wz_csec and _wz_ru):
+                st.error('三個欄位都要填')
+            else:
+                _ru = _wz_ru.strip()
+                # 防呆 1：缺 scheme 自動補 https://
+                if _ru and not (_ru.startswith('http://') or _ru.startswith('https://')):
+                    _ru = 'https://' + _ru
+                # 防呆 2：Google OAuth 要求 redirect_uri 完整含 path，常見漏掉結尾 /
+                if '/' not in _ru[8:]:  # 跳過 https:// 後檢查 path
+                    _ru = _ru + '/'
                 st.session_state['custom_oauth_cfg'] = {
                     'client_id':     _wz_cid.strip(),
                     'client_secret': _wz_csec.strip(),
-                    'redirect_uri':  _wz_ru.strip(),
+                    'redirect_uri':  _ru,
                 }
+                if _ru != _wz_ru.strip():
+                    st.info(f'ℹ️ redirect_uri 自動補完為 `{_ru}` — 請確認 GCP Console「Authorized redirect URIs」也是這個字串')
                 st.success('✅ 已套用，下方會出現「🔐 用 Google 登入」按鈕')
                 st.rerun()
-            else:
-                st.error('三個欄位都要填')
         return False
 
     # ── OAuth 已登入：個人 Sheet ID 設定 ────────────────────────
