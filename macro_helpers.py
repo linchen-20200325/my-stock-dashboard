@@ -98,17 +98,21 @@ def calc_traffic_light(
         _action = '⚠️ 市場處於整理期，謹慎操作，降低部位'
         _sub    = '持有現有倉位觀望，不追高，等待更明確信號'
 
-    _conf = round(sum([
-        bool(mkt_info), bool(jingqi_info), bool(_fk),
-        bool(li_latest is not None and not li_latest.empty),
-        bool(_cd.get('adl') is not None),
-    ]) / 5 * 100)
+    _conf_sources = [
+        ('大盤趨勢評分 (market_regime)', bool(mkt_info)),
+        ('旌旗指數 (站上均線比例)',       bool(jingqi_info)),
+        ('外資買賣超 (三大法人)',         bool(_fk)),
+        ('先行指標 (期貨/PCR/韭菜)',      bool(li_latest is not None and not li_latest.empty)),
+        ('ADL 騰落指標',                  bool(_cd.get('adl') is not None)),
+    ]
+    _conf = round(sum(_ok for _, _ok in _conf_sources) / 5 * 100)
+    _missing = [_name for _name, _ok in _conf_sources if not _ok]
     return {
         'color': _color, 'icon': _icon, 'label': _label,
         'action': _action, 'sub': _sub, 'health': _health,
         'defense': _defense, 'score': _score, 'jqavg': _jqavg,
         'leek': _leek, 'fnet': _fnet, 'fk': _fk, 'fut_net': _fut_net,
-        'conf': _conf, 'regime': _regime,
+        'conf': _conf, 'missing_sources': _missing, 'regime': _regime,
     }
 
 
