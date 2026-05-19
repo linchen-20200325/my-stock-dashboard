@@ -838,9 +838,47 @@ def _render_oauth_panel(_gsp) -> bool:
         if _sid and _sid != _sid_cur:
             st.session_state['portfolio_sheet_id'] = _sid
             st.caption(f'✅ 已設定 Sheet ID：`{_sid}`')
+
+        # ── 從 Drive 列出既有 Sheets 挑一個（不必複製 ID）──────────
+        st.caption('📂 **或者** — 從你 Google Drive 既有的 Sheets 挑一個：')
+        _list_c1, _list_c2 = st.columns([2, 3])
+        if _list_c1.button('📂 從 Drive 列出 Sheets',
+                            key='etf_p_list_drive', use_container_width=True,
+                            help='需要 OAuth `drive.metadata.readonly` 權限；若顯示權限不足請登出再登入'):
+            try:
+                _files_ls = _gsp.list_user_sheets()
+                st.session_state['_etf_p_my_sheets'] = _files_ls
+                if not _files_ls:
+                    st.info('ℹ️ Drive 內沒有 Google Sheets，或目前 token 只能看 app 建立的檔。')
+            except Exception as _lse:
+                _err = str(_lse)
+                if 'insufficient' in _err.lower() or '403' in _err:
+                    st.error('❌ 列檔失敗：OAuth token 缺少 `drive.metadata.readonly` 權限。\n\n'
+                             '**解法**：先「🚪 登出」→ 重新「🔐 用 Google 登入」（這次同意畫面會新增 Drive 中繼權限）→ 再試。')
+                else:
+                    st.error(f'❌ 列檔失敗：{_lse}')
+
+        _my_sheets = st.session_state.get('_etf_p_my_sheets') or []
+        if _my_sheets:
+            _opt_labels = [f"📄 {f['name']}  (`{f['id'][:14]}…`)" for f in _my_sheets]
+            _sel_idx = st.selectbox(
+                f'清單共 {len(_my_sheets)} 個 Sheets — 選一個',
+                range(len(_opt_labels)),
+                format_func=lambda i: _opt_labels[i],
+                key='etf_p_sel_my_sheets',
+            )
+            if st.button('✅ 使用此 Sheet 作為投組資料庫',
+                          key='etf_p_pick_my_sheet',
+                          type='primary', use_container_width=True):
+                _picked = _my_sheets[_sel_idx]
+                st.session_state['portfolio_sheet_id'] = _picked['id']
+                # 清掉舊的 text_input 殘值
+                st.session_state.pop('etf_p_sheet_id_input', None)
+                st.success(f"✅ 已選用 `{_picked['name']}`")
+                st.rerun()
+
         if not _sid:
-            st.info('💡 還沒輸入 Sheet ID — 請在 Google Drive 建一份試算表（檔案完全空白即可），'
-                    '貼上完整 URL 或 ID，本工具會自動建立 `portfolios` 分頁。')
+            st.info('💡 還沒選定 Sheet — 上方貼 URL/ID 或點「📂 從 Drive 列出 Sheets」挑一個（會自動建立 `portfolios` 分頁）')
             return False
 
     # 兩條路徑都通：給 caller 繼續渲染存取 UI

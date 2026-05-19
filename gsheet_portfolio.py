@@ -215,6 +215,30 @@ def save_portfolio(name: str, rows: list[dict[str, Any]]) -> int:
     return len(new_rows)
 
 
+def list_user_sheets() -> list[dict]:
+    """OAuth 模式列出使用者 Google Drive 內所有 Spreadsheets。
+
+    需要 OAuth scope `drive.metadata.readonly`（infra/oauth.py 已內建）。
+    回傳 [{'id': ..., 'name': ...}, ...] 依名稱排序；非 OAuth 模式回空 list。
+    """
+    if not _oauth_active() and not (st and st.session_state.get('gsheet_tokens')):
+        # SA 模式無法列檔；OAuth 但未登入也回空
+        return []
+    client = _build_client()
+    try:
+        files = client.list_spreadsheet_files()
+    except Exception as e:
+        raise RuntimeError(f'列出 Drive Sheets 失敗：[{type(e).__name__}] {e}') from e
+    out: list[dict] = []
+    for f in (files or []):
+        _id = f.get('id') if isinstance(f, dict) else getattr(f, 'id', None)
+        _nm = f.get('name') if isinstance(f, dict) else getattr(f, 'name', None)
+        if _id and _nm:
+            out.append({'id': _id, 'name': _nm})
+    out.sort(key=lambda x: x['name'].lower())
+    return out
+
+
 def delete_portfolio(name: str) -> int:
     """刪除指定名稱的組合（所有持股列），回傳刪除的列數。"""
     name = (name or '').strip()
