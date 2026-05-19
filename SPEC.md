@@ -243,3 +243,52 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 - `SPEC.md`（本檔） — 直接更新對應表 / 啟發式
 
 CLAUDE.md v2.0 §4：「請直接 merge PR + 存檔(STATE.md) 與也同步 ARCHITECTURE.md、SPEC.md」
+
+---
+
+## §8 ETF 持股組合雲端儲存 — OAuth 雙模式契約（commit `0c6e0b9`）
+
+對應模組：`gsheet_portfolio.py` / `oauth_state.py` / `infra/oauth.py`；UI：`etf_tab_portfolio._render_oauth_panel` + `_render_cloud_storage` + `app.py` sidebar Google 帳號區。
+
+### §8.1 認證模式優先序
+
+`gsheet_portfolio.is_configured()` 回傳 `_oauth_active() or _sa_configured()`，任一為真即可使用雲端儲存。`_build_client()` 內部優先序：
+
+| 模式 | 觸發條件 | Sheet ID 來源 | 適用場景 |
+|------|---------|--------------|---------|
+| **OAuth**（推薦） | `_oauth_configured` + `session_state['gsheet_tokens']` 存在 + 有 Sheet ID | `session_state['portfolio_sheet_id']`（使用者輸入） | 使用者自帶 Sheet，無須管理員設定 secrets |
+| **SA fallback** | `st.secrets['portfolio_sheet_id']` + `[gcp_service_account]` 皆存在 | `st.secrets['portfolio_sheet_id']` | 管理員部署、向後相容 PR #5 |
+
+OAuth 條件不滿足時自動降級為 SA，兩者皆缺則 `is_configured() = False`，UI 顯示設定面板。
+
+### §8.2 OAuth Client 配置來源優先序
+
+`oauth_state._resolve_oauth_cfg()`：
+
+1. `st.secrets['google_oauth']`（部署層）— 三欄齊備：`client_id` / `client_secret` / `redirect_uri`
+2. `st.session_state['custom_oauth_cfg']`（in-app wizard）— 同三欄
+
+兩者皆缺 → `_oauth_configured = False`，UI 顯示 OAuth Client 設定 wizard。
+
+### §8.3 Sheet ID 解析
+
+`etf_tab_portfolio._render_oauth_panel` Sheet URL 輸入框 regex：`r'/spreadsheets/d/([a-zA-Z0-9_-]+)'`。若使用者貼整段 URL 自動抽 ID；若直接貼 ID 則原樣保存。寫入 `st.session_state['portfolio_sheet_id']`。
+
+### §8.4 Token 生命週期
+
+`infra.oauth.ensure_fresh_tokens(tokens, client_id, client_secret)` 在過期前 **60 秒** 自動 refresh；`_get_oauth_client()` 每次呼叫都跑一次 refresh 並回寫 `session_state['gsheet_tokens']`。因此 `_ws()` **不可** 用 `st.cache_resource` 包裝（token 換新後舊 client 會失效）。
+
+### §8.5 OAuth Callback 入點
+
+`app.py` module body 在 `st.set_page_config` 之後、sidebar 渲染之前呼叫一次：
+
+```python
+from oauth_state import handle_oauth_callback as _oauth_cb
+_oauth_cb()
+```
+
+收到 `?code=...` 且 `gsheet_tokens` 尚未存在 → 換 token → 清 URL params → `st.rerun()`。例外吞掉並 `print`，避免阻擋主畫面渲染。
+
+### §8.6 純函式 API 不變式
+
+PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` / `save_portfolio` / `delete_portfolio`）契約跨 OAuth ↔ SA 切換 **零修改**。`tests/test_gsheet_portfolio.py` 20 cases 在 monkeypatch `_get_worksheet` 的前提下全綠（未碰 `_build_client` 內部分支）。
