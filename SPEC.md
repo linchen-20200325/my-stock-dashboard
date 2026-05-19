@@ -143,7 +143,21 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 4. `regime in ('caution','bear')` → 🔴 保守防禦
 5. 其他 → 🟡 震盪整理
 
-**回傳 dict 15 keys**：`color / icon / label / action / sub / health / defense / score / jqavg / leek / fnet / fk / fut_net / conf / regime`
+**回傳 dict 16 keys**：`color / icon / label / action / sub / health / defense / score / jqavg / leek / fnet / fk / fut_net / conf / missing_sources / regime`
+
+**`missing_sources: list[str]`（PR #1 新增）**：從 conf 計分的 5 個資料源 bool 反向列出缺失項，由 `_render_traffic_light` 在 conf<70 早回時逐項顯示給用戶。對應名稱固定為：
+
+| 來源 | 缺失條件 | 顯示字串 |
+|---|---|---|
+| `mkt_info` | `not bool(mkt_info)` | `大盤趨勢評分 (market_regime)` |
+| `jingqi_info` | `not bool(jingqi_info)` | `旌旗指數 (站上均線比例)` |
+| `_fk`（外資 key） | 外資未在 inst dict | `外資買賣超 (三大法人)` |
+| `li_latest` | None 或 empty | `先行指標 (期貨/PCR/韭菜)` |
+| `_cd['adl']` | None | `ADL 騰落指標` |
+
+**信心門檻 gating（PR #1）**：`_render_traffic_light` 渲染前先檢 `tl.get('conf', 0) < 70`：
+- ✅ True → 橘色「⏸️ 資料不足，無法判斷市場狀態」卡片 + 逐項列 `missing_sources`，**不渲染燈號**（early-return）
+- ❌ False → 正常渲染主燈號 + meta + 條件 badge；conf 介於 70-79 仍會在卡片下方顯示 `st.warning` 提醒
 
 **`rp_ts` 時間源優先序（4 路）**：
 1. `DatetimeIndex` → `df.index.max()`

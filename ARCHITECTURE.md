@@ -520,7 +520,10 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 
 ### 3.4 流程三：每日市場總覽
 
-**觸發**：使用者點擊「🔄 更新全部總經數據」。
+**觸發**：使用者點擊「🚀 一鍵更新全部數據（總經 + 籌碼 + 先行指標）」。
+
+> **v10.56.0 嚴格原則（PR #1）**：進頁 0 並發 0 抓取，必須使用者明確點按鈕才觸發。
+> 副作用：所有資料區塊冷啟動顯示「更新後顯示」placeholder，由 `_show_market_data` gate 統一控制。
 
 ```
 點擊更新按鈕
@@ -566,24 +569,31 @@ ETF 回測子頁（render_etf_backtest）額外流程：
          └────────────┬────────────┘
                       │
          ┌────────────▼────────────┐
-         │  app.py                 │
-         │  _calc_traffic_light()  │
+         │  macro_helpers          │
+         │  calc_traffic_light()   │
+         │  （Phase 7A-Ext 抽出）  │
          │                         │
          │  主要驅動：regime        │
          │  緊急覆蓋：defense /     │
          │           health < 40   │
          │                         │
-         │  輸出：tl dict           │
+         │  輸出：tl dict (16 keys) │
          │   icon / label /         │
          │   color / action / sub  │
-         │   health / conf          │
+         │   health / conf /        │
+         │   missing_sources (PR#1) │
          └────────────┬────────────┘
                       │
          ┌────────────▼────────────┐
          │  _render_traffic_light()│
          │  + mkt_info（合併看板）  │
          │                         │
-         │  渲染：                  │
+         │  PR #1 信心門檻 gate：   │
+         │  conf<70 → 橘色「⏸️ 資料 │
+         │  不足」卡 + 列缺失資料   │
+         │  early-return，不渲染燈號│
+         │                         │
+         │  conf≥70 渲染：          │
          │  ① 主燈號 + 操作建議     │
          │  ② 市場評分/指數/持股%   │
          │  ③ 信號 badges           │
@@ -625,24 +635,37 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 
 > **Streamlit 環境封印（`.streamlit/config.toml`）**：`runOnSave = false`（禁止存檔自動重載）、`[logger] level = "error"`（過濾 Info/Warning 雜訊，減少日誌風暴）。
 
-#### 冷啟動瘦身：Lazy Load 籌碼面（v10.54.0 新增）
+#### 冷啟動完全停機：使用者點按鈕才抓資料（v10.56.0 / PR #1，取代 v10.54.0 Lazy Load）
 
-為避免 Streamlit Cloud `Code: 1ST` 後端逾時與行動瀏覽器 `SessionInfo` 重連錯誤，
-冷啟動只跑 3 個輕量 ThreadPool job（`intl/tw/tech` ≤30s 完成），
-重資料 (`inst/margin/adl/li`) 改為按鈕觸發：
+**演進歷程**：
+- v10.54.0：冷啟動跑 3 輕量 job（intl/tw/tech）+ 按鈕載入 4 重資料 → 結果寫進
+  `cl_data` 使 `_cache_fresh=True`，部分資料即觸發燈號計算，新舊混雜誤導決策。
+- **v10.56.0（PR #1）**：冷啟動 **0 並發 0 抓取**，必須使用者明確點按鈕。
 
 ```
-冷啟動：               [自動] intl + tw + tech (yfinance 指數行情)
-                       │
-                       ▼
-使用者點「📊 載入籌碼面+先行指標」按鈕（chips_loaded=True 寫入 query_params）
-                       │
-                       ▼
-重抓 cl_data：         [自動] intl + tw + tech + [新增] inst + margin + adl + li_fast
+冷啟動：                [無動作] 所有資料區塊顯示 placeholder「更新後顯示」
+                        燈號區顯示「⏳ 燈號等待中（尚無資料）」
+                        │
+                        ▼
+使用者點「🚀 一鍵更新全部數據」 (do_refresh=True，同步 chips_loaded=True)
+                        │
+                        ▼ on_click callback 全清三層快取：
+                          ① st.cache_data.clear()
+                          ② proxy_helper._URL_CACHE.clear() + reset_proxy_cache()
+                          ③ session_state pop 11 key（cl_data / cl_ts / mkt_info /
+                             jingqi_info / li_latest / warroom_summary /
+                             _last_inst / _last_inst_date / _last_margin /
+                             futures_net / adl_debug_msg）
+                        │
+                        ▼ 7 job 全量並發：
+                          [輕量] intl + tw + tech
+                          [重量] inst + margin + adl + li_fast
 ```
 
-`st.query_params['chips']='1'` 雙向同步至 URL，使手機鎖屏 / WebSocket 重連後
-重整頁可從 URL 恢復籌碼載入狀態，避免 `Bad message format - SessionInfo not initialized`。
+**設計理由**：
+- 燈號渲染必須建立在**完整資料**之上，否則 conf<70 仍會被 `_render_traffic_light` early-return（顯示橘色「⏸️ 資料不足」+ 逐項列缺失資料）
+- 全清快取保證「禁用暫存資料、全部都要重新下載」的用戶意圖落實
+- `chips_loaded=True` query_params 同步機制仍保留（WebSocket 重連恢復用）
 
 > **融資維持率已於 v10.54.0 移除**：原三段備援（TWSE MI_MARGN / wantgoo / OpenAPI）
 > 因 Streamlit Cloud 不在台灣 IP 段，透過代理仍經常 8s+ 失敗，且 v4 引擎的
