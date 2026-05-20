@@ -3,12 +3,16 @@
 依賴策略
 ========
 - Top-level: streamlit
-- 函式內 late import 13 個依賴：
+- 函式內 late import：
   * stdlib: pandas, plotly.graph_objects
-  * 外部: unified_decision.render_unified_decision
   * etf_dashboard.py 內部 helper (9):
     _colored_box / _etf_ai_backtest / _render_monte_carlo / _teacher_conclusion
     / calc_cagr / calc_mdd / calc_sharpe / fetch_etf_dividends / fetch_etf_price
+
+去重歷史
+========
+- PR #19+：刪 render_unified_decision 呼叫（與 etf_tab_ai.py「ETF AI 首席策略師」重疊）
+  保留 _etf_ai_backtest（CAGR/Sharpe 速評，與 ETF AI 戰情報告角度不同）
 
 呼叫端
 ======
@@ -25,7 +29,6 @@ def render_etf_backtest(gemini_fn=None):
     # ─ Late imports（避免循環 import）─
     import pandas as pd
     import plotly.graph_objects as go
-    from unified_decision import render_unified_decision
     from etf_dashboard import (
         _colored_box, _etf_ai_backtest, _render_monte_carlo, _teacher_conclusion,
         calc_cagr, calc_mdd, calc_sharpe,
@@ -378,17 +381,3 @@ def render_etf_backtest(gemini_fn=None):
 
     if gemini_fn:
         _etf_ai_backtest(gemini_fn, cagr, sharpe, mdd, vol, weights, regime)
-
-    # ── 統一投資決策分析模組 ──────────────────────────────────
-    render_unified_decision(gemini_fn, {
-        'type': 'portfolio',
-        'id':   'etf_backtest',
-        'data': {
-            '組合權重':   {t: f'{w*100:.0f}%' for t, w in weights.items()},
-            'CAGR':       f'{cagr:.2f}%',
-            'Sharpe比率': round(sharpe, 2),
-            '最大回撤MDD': f'{mdd:.1f}%',
-            '年化波動率':  f'{vol:.2f}%',
-            '大盤狀態':    regime,
-        },
-    })
