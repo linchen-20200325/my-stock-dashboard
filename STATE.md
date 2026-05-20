@@ -79,6 +79,7 @@
 | #98 | refactor(etf): 移除「AI ETF 存股決策總結」與 AI 首席顧問決策中心併軌（兩者功能重疊都做 BIAS240+KD+殖利率三維判讀）。刪 _etf_ai_hokei() 函數 98 行 + 順手清 3 個 pre-existing dead imports（render_unified_decision/calc_stats/re as _re2） | 2350d72 |
 | #99 | feat(etf): ETF 組合 4 分頁整合為 1 + 持股資產追蹤改造。Phase A：app.py 移除內嵌 tab，改 tab_etf_grp 順序呼叫 4 個 render + hr 分隔線。Phase B：輸入格式 `代號,目標權重%,現值元` → `代號,股數,均價[,希望比例%][,類型]`；新增自動計算現價/現值/成本/資本利得/已領配息（近1年除息×股數）/總損益；資產總覽卡 5 大 metric；批次抓現價並 dedup 下游再平衡 fetch 迴圈 | b6e4562 |
 | #101 | refactor(etf): 葡萄串改用持股 + AI 移到最底（單一輸入來源）。etf_tab_portfolio 把 rows 存 session_state['etf_portfolio_rows']；grape_ladder _render_evaluate_subtab 移除自己的 text_area，改讀 session_state 用真實股數估算月配息；app.py 順序改 組合配置→回測→葡萄串→AI（壓軸避免 anchor bias） | 19f0052 |
+| (本輪) | fix(gsheet): `list_user_sheets` 過濾已刪除 Sheets — 從 gspread `list_spreadsheet_files()` 改成自己打 Drive v3 API（mirror `list_user_folders`）加 `q='mimeType=...spreadsheet and trashed=false'`，外加 `supportsAllDrives` / `includeItemsFromAllDrives` 與 paging；user 反饋下拉清單出現重複 / 殭屍項目（已 trashed 的、舊備份等）。同步移植自基金倉 PR #16 | (待 push) |
 | #102 | refactor(grape): 「評估我的組合」拉到主頁面，系統提議改 expander 折疊。子 tab 結構展平，主視圖直接顯示「評估我的組合」（讀組合配置持股），「系統提議」（高股息 10 檔挑選）改 st.expander 預設收起 | c4fcb41 |
 | #103 | refactor(etf): 回測也共用持股組合（單一輸入來源全面收斂）。移除 etf_tab_backtest 的 text_area，改讀 session_state['etf_portfolio_rows']；新增 radio 切換「希望比例%（規劃驗證）/ 現值比例%（實況回放）」做回測權重。ETF 組合 tab 全頁面唯一輸入來源達成 | 3204666 |
 | #104 | feat(diag): 資料診斷新增 ETF 組合「逐檔個別判斷」。health_inspector ETF Raw Data expander 內加 N×2 行（每檔現價+配息），三態探測：海外 ETF 配息標 ⚪ na、台股無配息標 🔵 zero、現價失敗標 🔴；所有 rows 加入底部異常清單彙總 | f82c121 |

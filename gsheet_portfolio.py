@@ -249,29 +249,52 @@ def list_user_sheets(folder_id: str = '') -> list[dict]:
     """OAuth 模式列出使用者 Google Drive 內 Spreadsheets。
 
     Args:
-        folder_id: 若提供，僅列出此資料夾內的 Sheets（gspread 6.x 原生支援）；
-                   留空則列全部（既有行為）。
+        folder_id: 若提供，僅列出此資料夾內的 Sheets；留空則列全部。
 
     需要 OAuth scope `drive.metadata.readonly`（infra/oauth.py 已內建）。
     回傳 [{'id': ..., 'name': ...}, ...] 依名稱排序；非 OAuth 模式回空 list。
+
+    v19.x：直接走 Drive v3 API（同 list_user_folders）加 `trashed=false` 過濾，
+    取代原本 gspread `list_spreadsheet_files()`（會抓出已刪除 Sheets，造成
+    UI 下拉出現殭屍項目）。
     """
     if not _has_oauth_tokens():
         # 未登入 OAuth → 無法列檔（SA 沒 drive.metadata.readonly scope）
         return []
     client = _build_client()
+    url = 'https://www.googleapis.com/drive/v3/files'
+    q_parts = [
+        'mimeType="application/vnd.google-apps.spreadsheet"',
+        'trashed=false',
+    ]
+    if folder_id and folder_id.strip():
+        q_parts.append(f'"{folder_id.strip()}" in parents')
+    params = {
+        'q': ' and '.join(q_parts),
+        'pageSize': 1000,
+        'supportsAllDrives': True,
+        'includeItemsFromAllDrives': True,
+        'fields': 'nextPageToken,files(id,name)',
+    }
+    files: list[dict] = []
+    page_token: str | None = None
     try:
-        files = client.list_spreadsheet_files(
-            folder_id=(folder_id.strip() or None))
+        while True:
+            if page_token:
+                params['pageToken'] = page_token
+            resp = client.http_client.request('get', url, params=params)
+            data = resp.json() if hasattr(resp, 'json') else resp
+            for f in (data.get('files') or []):
+                _id, _nm = f.get('id'), f.get('name')
+                if _id and _nm:
+                    files.append({'id': _id, 'name': _nm})
+            page_token = data.get('nextPageToken')
+            if not page_token:
+                break
     except Exception as e:
         raise RuntimeError(f'列出 Drive Sheets 失敗：[{type(e).__name__}] {e}') from e
-    out: list[dict] = []
-    for f in (files or []):
-        _id = f.get('id') if isinstance(f, dict) else getattr(f, 'id', None)
-        _nm = f.get('name') if isinstance(f, dict) else getattr(f, 'name', None)
-        if _id and _nm:
-            out.append({'id': _id, 'name': _nm})
-    out.sort(key=lambda x: x['name'].lower())
-    return out
+    files.sort(key=lambda x: x['name'].lower())
+    return files
 
 
 def list_user_folders() -> list[dict]:
