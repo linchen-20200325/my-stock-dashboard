@@ -996,6 +996,80 @@ def render_data_health_raw():
             _tbl(_port_diag_rows)
             st.caption('💡 配息「🔵 該股本期為 0」可能為成長型 ETF（不配息）或新上市未滿 1 年；「⚪ 不適用」為海外 ETF。')
 
+            # ────── 主動 ETF 經理人 / 持股探測 ──────
+            try:
+                from etf_fetch import is_active_etf, fetch_etf_manager, fetch_etf_holdings
+            except ImportError:
+                is_active_etf = fetch_etf_manager = fetch_etf_holdings = None
+
+            if is_active_etf is not None and fetch_etf_manager is not None:
+                st.markdown('---')
+                st.markdown('**🏃 主動 ETF 經理人 / 持股 MoneyDJ 探測**')
+                st.caption('診斷「弱勢度檢測」表格「經理人」「任期」全空的根因：'
+                           'MoneyDJ 反爬擋海外 IP，需走 proxy_helper（NAS Squid 台灣 IP）。'
+                           '若此處紅燈代表 proxy 掛掉或 MoneyDJ 端點變動。')
+                _probe_rows = []
+                _tk_seen: set[str] = set()
+                for _pr in _ep_rows:
+                    _tk_p = _pr.get('ticker', '')
+                    if not _tk_p or _tk_p in _tk_seen:
+                        continue
+                    _tk_seen.add(_tk_p)
+                    _active = is_active_etf(_tk_p)
+                    # 經理人探測
+                    if not _active:
+                        _probe_rows.append(_row(
+                            f'{_tk_p} 經理人', None, 'static',
+                            optional=True, probe_status='na',
+                            source='MoneyDJ', endpoint='Basic0001.xdjhtm',
+                            proxy=True))
+                    else:
+                        try:
+                            _mgr = fetch_etf_manager(_tk_p)
+                        except Exception as _emgr:
+                            _mgr = None
+                            print(f'[diag/manager] {_tk_p}: {type(_emgr).__name__}: {_emgr}')
+                        if _mgr and _mgr.get('name'):
+                            _nm_mgr = _mgr['name']
+                            _tn = _mgr.get('tenure_days')
+                            _label = f'{_nm_mgr}' + (f'（任期 {_tn} 天）' if _tn else '（任期未抓到）')
+                            _probe_rows.append(_row(
+                                f'{_tk_p} 經理人 = {_label}',
+                                _mgr.get('since') or _today_ep, 'static',
+                                source='MoneyDJ', endpoint='Basic0001.xdjhtm',
+                                proxy=True))
+                        else:
+                            _probe_rows.append(_row(
+                                f'{_tk_p} 經理人',
+                                None, 'static',
+                                error_msg='MoneyDJ 抓取失敗（403 反爬 / regex 漏 / proxy 掛掉）',
+                                source='MoneyDJ', endpoint='Basic0001.xdjhtm',
+                                proxy=True))
+                    # 持股探測（簡版：有 / 無）
+                    try:
+                        _hd = fetch_etf_holdings(_tk_p) if fetch_etf_holdings else None
+                    except Exception as _ehd:
+                        _hd = None
+                        print(f'[diag/holdings] {_tk_p}: {type(_ehd).__name__}: {_ehd}')
+                    if _hd:
+                        _probe_rows.append(_row(
+                            f'{_tk_p} 持股 = {len(_hd)} 檔',
+                            _today_ep, 'monthly',
+                            source='yfinance/MoneyDJ',
+                            endpoint='funds_data → Basic0007/0008/RankA0001',
+                            proxy=True))
+                    else:
+                        _probe_rows.append(_row(
+                            f'{_tk_p} 持股',
+                            None, 'monthly', optional=True,
+                            error_msg='三條備援 URL 全失敗（403 / 端點變動）',
+                            source='yfinance/MoneyDJ',
+                            endpoint='funds_data → Basic0007/0008/RankA0001',
+                            proxy=True))
+                _all_section_rows.extend(_probe_rows)
+                _tbl(_probe_rows)
+                st.caption('💡 經理人「⚪ 不適用」= 被動式 ETF 無需查；「❌ 抓取失敗」= 主動式但 proxy/regex 異常。')
+
     # ══════════════════════════════════════════════════════════════
     # ⚠️ 資料異常清單（最下方一覽，獨立於上方總表/抽查）
     # ══════════════════════════════════════════════════════════════

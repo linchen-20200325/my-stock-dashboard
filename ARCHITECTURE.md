@@ -711,20 +711,22 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 
 **設計理由**：Streamlit Cloud 多人共用且容器重啟會洗，本地檔不持久；下載/上傳 JSON 則需手動管理檔案。Google Sheet 一次設定、跨裝置自動同步、Sheet 也可手動編輯查看，是兼具可攜性與低門檻的方案。憑證在 `secrets.toml` 不入 git，安全性與 FINMIND_TOKEN 等 secrets 同層級。
 
-#### ETF 組合 + 葡萄串去重：AI 與配息分布單一入口（PR #19）
+#### ETF 組合 + 葡萄串去重：AI 與配息分布單一入口（PR #19 + #20）
 
-使用者實證重複：(1) ETF 組合配置末尾 `render_unified_decision()` 顯示「🧠 AI 首席顧問決策中心」與 ETF AI 獨立 tab 「🤖 ETF AI 首席策略師」並存；(2)「💰 配息日曆 × 年度現金流預估」(`etf_tab_portfolio`) 與「🔍 評估你現有的 ETF 組合」(`grape_ladder._render_evaluate_subtab`) 都展示 12 月配息分布。
+使用者實證重複：(1) ETF 組合配置末尾 + 回測末尾兩處 `render_unified_decision()` 顯示「🧠 AI 首席顧問決策中心」與 ETF AI 獨立 tab 「🤖 ETF AI 首席策略師」並存；(2)「💰 配息日曆 × 年度現金流預估」(`etf_tab_portfolio`) 與「🔍 評估你現有的 ETF 組合」(`grape_ladder._render_evaluate_subtab`) 都展示 12 月配息分布。
 
 **處置**：
-- **AI 收斂**：刪 `etf_tab_portfolio.py` 末尾 `render_unified_decision()` 呼叫，保留 `etf_tab_ai.py`（戰情研判報告 + 自由提問 + 主動 ETF 弱勢度整合，功能更完整）。`etf_portfolio_data` session_state 寫入保留（`health_inspector` / `tab_macro` / `etf_tab_ai` 三下游仍讀）。`unified_decision` 模組不刪（`etf_tab_single` 個股 AI / `etf_tab_backtest` 回測 AI 仍用）。
-- **配息收斂**：刪 `grape_ladder._render_evaluate_subtab()` 51 行；葡萄串主視圖改直接顯示「💡 系統提議（從高股息 10 檔自動挑選）」（葡萄串的獨特價值），副標補導引「若想看你既有持股的月配息分布，請見上方『💰 配息日曆 × 年度現金流預估』」。
+- **AI 收斂**：分兩 PR 完成 — PR #19 刪 `etf_tab_portfolio` 末尾、PR #20 刪 `etf_tab_backtest` 末尾的 `render_unified_decision()`。保留 `etf_tab_ai.py`（戰情研判報告 + 自由提問 + 主動 ETF 弱勢度整合，功能最完整）。`etf_portfolio_data` session_state 寫入保留（`health_inspector` / `tab_macro` / `etf_tab_ai` 三下游仍讀）。`unified_decision` 模組不刪（`etf_tab_single` 個股 AI 仍用）。
+- **配息收斂**（PR #19）：刪 `grape_ladder._render_evaluate_subtab()` 51 行；葡萄串主視圖改直接顯示「💡 系統提議（從高股息 10 檔自動挑選）」（葡萄串的獨特價值），副標補導引「若想看你既有持股的月配息分布，請見上方『💰 配息日曆 × 年度現金流預估』」。
 
 **單一入口原則**：
-| 功能 | 唯一入口 | 重複功能（已刪） |
-|------|----------|------------------|
-| 組合 AI 評斷 | `etf_tab_ai.py` | ~~`etf_tab_portfolio` 末尾 render_unified_decision~~ |
-| 自家持股 12 月配息 | `etf_tab_portfolio` 配息日曆 | ~~`grape_ladder._render_evaluate_subtab`~~ |
-| 從零挑選月配組合 | `grape_ladder._render_propose_subtab` | （無重複） |
+| 層級 / 功能 | 唯一入口 | 重複功能（已刪） |
+|-------------|----------|------------------|
+| 個股 AI 評斷 | `etf_tab_single` (unified_decision context='etf') | — |
+| 組合 AI 評斷 | `etf_tab_ai.py`（戰情報告 + 自由提問） | ~~`etf_tab_portfolio` 末尾 render_unified_decision (PR #19)~~ / ~~`etf_tab_backtest` 末尾 render_unified_decision (PR #20)~~ |
+| 回測 AI 速評 | `_etf_ai_backtest`（CAGR/Sharpe，與戰情報告角度不同） | — |
+| 自家持股 12 月配息 | `etf_tab_portfolio` 配息日曆 | ~~`grape_ladder._render_evaluate_subtab` (PR #19)~~ |
+| 從零挑選月配組合 | `grape_ladder._render_propose_subtab` | — |
 
 > **融資維持率已於 v10.54.0 移除**：原三段備援（TWSE MI_MARGN / wantgoo / OpenAPI）
 > 因 Streamlit Cloud 不在台灣 IP 段，透過代理仍經常 8s+ 失敗，且 v4 引擎的
