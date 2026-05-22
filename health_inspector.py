@@ -1004,10 +1004,24 @@ def render_data_health_raw():
 
             if is_active_etf is not None and fetch_etf_manager is not None:
                 st.markdown('---')
-                st.markdown('**🏃 主動 ETF 經理人 / 持股 MoneyDJ 探測**')
+                _h1, _h2 = st.columns([5, 1])
+                _h1.markdown('**🏃 主動 ETF 經理人 / 持股 MoneyDJ 探測**')
+                if _h2.button('🗑️ 清快取重試', key='_etf_mgr_clear',
+                               use_container_width=True,
+                               help='清掉 fetch_etf_manager + fetch_etf_holdings 的 None 快取，重新走 proxy 抓'):
+                    try:
+                        fetch_etf_manager.clear()
+                    except Exception:
+                        pass
+                    try:
+                        fetch_etf_holdings.clear()
+                    except Exception:
+                        pass
+                    st.rerun()
                 st.caption('診斷「弱勢度檢測」表格「經理人」「任期」全空的根因：'
                            'MoneyDJ 反爬擋海外 IP，需走 proxy_helper（NAS Squid 台灣 IP）。'
-                           '若此處紅燈代表 proxy 掛掉或 MoneyDJ 端點變動。')
+                           '若舊版抓過一次 None 已被快取 7 日，請按右上「🗑️ 清快取重試」強制重抓。'
+                           '若清完仍 ❌ 代表 proxy 掛掉或 PROXY_URL 沒設。')
                 _probe_rows = []
                 _tk_seen: set[str] = set()
                 for _pr in _ep_rows:
