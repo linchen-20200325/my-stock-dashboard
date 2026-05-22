@@ -302,41 +302,45 @@ def fetch_etf_holdings(ticker: str):
         print(f'[Holdings/yf] {_t_yf}: {type(_ey).__name__}: {_ey}')
 
     # ── 2. MoneyDJ 三條 URL 嘗試（台股 ETF 主源）────────────────
-    _hdrs = {
-        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                       '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8',
-        'Referer': 'https://www.moneydj.com/',
-    }
+    # 走 proxy_helper（NAS Squid 台灣 IP）為主源 — MoneyDJ 反爬擋海外 IP 回 403；
+    # curl_cffi 留作 fallback（本機開發或 proxy 掛掉時）
     _urls = [
         f'https://www.moneydj.com/ETF/X/Basic/Basic0007.xdjhtm?etfid={_t_mdj}',
         f'https://www.moneydj.com/ETF/X/Basic/Basic0008.xdjhtm?etfid={_t_mdj}',
         f'https://www.moneydj.com/ETF/X/Basic/RankA0001.xdjhtm?etfid={_t_mdj}',
     ]
     for _url in _urls:
+        _txt = None
+        # ── 2a. proxy_helper 主源 ───
         try:
+            from proxy_helper import fetch_url as _fu_h
+            _r = _fu_h(_url, timeout=15, attempts=2)
+            if _r is not None and _r.status_code == 200:
+                _r.encoding = 'utf-8'
+                _txt = _r.text
+        except Exception as _eph:
+            print(f'[Holdings/MDJ] proxy 異常 {_t_mdj}: {type(_eph).__name__}: {_eph}')
+        # ── 2b. curl_cffi fallback ─
+        if _txt is None:
             try:
                 from curl_cffi import requests as _cffi_h
-                _r = _cffi_h.get(_url, impersonate='chrome124', timeout=15)
-            except Exception:
-                import requests as _rq_h
-                _r = _rq_h.get(_url, headers=_hdrs, timeout=15, verify=False)
-            if _r.status_code != 200:
-                print(f'[Holdings/MDJ] {_t_mdj} {_url[-30:]}: HTTP {_r.status_code}')
-                continue
-            _txt = _r.text
-            # 寬鬆 regex：個股名（中文/英數 2-20 字元）+ 後續 30 字內出現「X.XX%」
-            # MoneyDJ Basic 系列表格通常 <td>個股名</td>...<td>X.XX%</td> 形式
+                _r2 = _cffi_h.get(_url, impersonate='chrome124', timeout=15)
+                if _r2.status_code == 200:
+                    _txt = _r2.text
+                else:
+                    print(f'[Holdings/MDJ] curl_cffi {_t_mdj} {_url[-30:]}: HTTP {_r2.status_code}')
+            except Exception as _eh:
+                print(f'[Holdings/MDJ] curl_cffi 異常 {_t_mdj} {_url[-30:]}: {type(_eh).__name__}: {_eh}')
+        if _txt is None:
+            continue
+        # ── 寬鬆 regex 擷取：個股名（中文/英數）+ 後續百分比 ──
+        try:
             _stocks = {}
-            # pattern: <td>個股名</td>\s*<td>\d+\.\d+%</td>  — 但 HTML 結構各 page 不同
-            # 寬鬆掃：每行抓「中文/英文名稱 + 緊鄰百分比」
             for _m in _re_h.finditer(
                 r'>([一-鿿 A-Z0-9&\.\-]{2,30})</[^>]+>[^<]*<[^>]+>\s*(\d{1,2}\.\d{1,3})\s*%',
                 _txt
             ):
                 _nm = _m.group(1).strip()
-                # 過濾雜訊（純數字、表頭關鍵字）
                 if (_nm and not _nm.isdigit() and not _nm.replace('.', '').isdigit()
                         and _nm not in ('持股比例', '比例', '持股比重', '權重', '個股名稱', '名稱')
                         and len(_nm) >= 2):
@@ -351,8 +355,8 @@ def fetch_etf_holdings(ticker: str):
             if _stocks:
                 print(f'[Holdings/MDJ] ✅ {_t_mdj} {len(_stocks)} 檔 ({_url[-30:]})')
                 return _stocks
-        except Exception as _eh:
-            print(f'[Holdings/MDJ] {_t_mdj} {_url[-30:]}: {type(_eh).__name__}: {_eh}')
+        except Exception as _eh2:
+            print(f'[Holdings/MDJ] regex 異常 {_t_mdj} {_url[-30:]}: {type(_eh2).__name__}: {_eh2}')
             continue
 
     print(f'[Holdings] ❌ {_t} — yf/MoneyDJ 三條 URL 全失敗')
@@ -405,6 +409,12 @@ def fetch_etf_manager(ticker: str):
 
     URL: https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid=XXXX.TW
 
+    抓取策略
+    --------
+    1. **proxy_helper.fetch_url（NAS Squid 台灣 IP）為主源** — MoneyDJ 反爬擋海外 IP
+       回 403，Streamlit Cloud 必須走 proxy
+    2. curl_cffi chrome124 為 fallback（本機開發或 proxy 掛掉時）
+
     Returns
     -------
     dict | None
@@ -421,24 +431,37 @@ def fetch_etf_manager(ticker: str):
     if '.' not in _t:
         _t = f'{_t}.TW'
     _url = f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_t}'
-    _hdrs = {
-        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                       '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'zh-TW,zh;q=0.9',
-        'Referer': 'https://www.moneydj.com/',
-    }
+
+    # ── 1. proxy_helper（NAS Squid 台灣 IP）主源 ───────────────
+    _txt = None
     try:
+        from proxy_helper import fetch_url as _fu_mg
+        _r = _fu_mg(_url, timeout=12, attempts=2)
+        if _r is not None and _r.status_code == 200:
+            _r.encoding = 'utf-8'
+            _txt = _r.text
+        else:
+            _code = _r.status_code if _r is not None else 'None'
+            print(f'[MDJ/manager] proxy {_t}: HTTP {_code}')
+    except Exception as _ep:
+        print(f'[MDJ/manager] proxy 異常 {_t}: {type(_ep).__name__}: {_ep}')
+
+    # ── 2. curl_cffi fallback ─────────────────────────────────
+    if _txt is None:
         try:
             from curl_cffi import requests as _cffi_mg
-            _r = _cffi_mg.get(_url, impersonate='chrome124', timeout=12)
-        except Exception:
-            import requests as _rq_mg
-            _r = _rq_mg.get(_url, headers=_hdrs, timeout=12, verify=False)
-        if _r.status_code != 200:
-            print(f'[MDJ/manager] {_t}: HTTP {_r.status_code}')
-            return None
-        _txt = _r.text
+            _r2 = _cffi_mg.get(_url, impersonate='chrome124', timeout=12)
+            if _r2.status_code == 200:
+                _txt = _r2.text
+            else:
+                print(f'[MDJ/manager] curl_cffi {_t}: HTTP {_r2.status_code}')
+        except Exception as _ec:
+            print(f'[MDJ/manager] curl_cffi 異常 {_t}: {type(_ec).__name__}: {_ec}')
+
+    if _txt is None:
+        return None
+
+    try:
         _name_m = _re_mg.search(r'經理人[^<>\d]{0,30}?>?\s*([一-鿿]{2,8})\s*<', _txt)
         _date_m = _re_mg.search(
             r'(?:到職日|上任日|任期|管理基金日)[^\d]{0,30}?(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})',
@@ -460,7 +483,7 @@ def fetch_etf_manager(ticker: str):
         print(f'[MDJ/manager] ✅ {_t} = {_name} (since={_since}, days={_days})')
         return {'name': _name, 'since': _since, 'tenure_days': _days}
     except Exception as _e:
-        print(f'[MDJ/manager] ❌ {_t}: {type(_e).__name__}: {_e}')
+        print(f'[MDJ/manager] ❌ regex parse {_t}: {type(_e).__name__}: {_e}')
         return None
 
 
