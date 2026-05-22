@@ -1004,7 +1004,7 @@ def render_data_health_raw():
 
             if is_active_etf is not None and fetch_etf_manager is not None:
                 st.markdown('---')
-                _h1, _h2 = st.columns([5, 1])
+                _h1, _h2, _h3 = st.columns([4, 1, 1])
                 _h1.markdown('**🏃 主動 ETF 經理人 / 持股 MoneyDJ 探測**')
                 if _h2.button('🗑️ 清快取重試', key='_etf_mgr_clear',
                                use_container_width=True,
@@ -1018,10 +1018,74 @@ def render_data_health_raw():
                     except Exception:
                         pass
                     st.rerun()
+                _do_deep = _h3.button('🔬 深度診斷', key='_etf_mgr_deep',
+                                       use_container_width=True,
+                                       help='挑首檔主動式 ETF，直接打 MoneyDJ 不走快取，逐源顯示 HTTP status / regex match')
                 st.caption('診斷「弱勢度檢測」表格「經理人」「任期」全空的根因：'
                            'MoneyDJ 反爬擋海外 IP，需走 proxy_helper（NAS Squid 台灣 IP）。'
-                           '若舊版抓過一次 None 已被快取 7 日，請按右上「🗑️ 清快取重試」強制重抓。'
-                           '若清完仍 ❌ 代表 proxy 掛掉或 PROXY_URL 沒設。')
+                           '若清完仍 ❌ 但 proxy 連線狀態🟢 → 按「🔬 深度診斷」看 MoneyDJ 是否擋 NAS IP / regex 漏抓。')
+
+                # ────── 🔬 深度診斷：不走快取 raw probe ──────
+                if _do_deep:
+                    _active_tks = [_pr.get('ticker', '') for _pr in _ep_rows
+                                   if is_active_etf(_pr.get('ticker', ''))]
+                    if not _active_tks:
+                        st.warning('組合內無主動式 ETF（被動式不需查經理人）')
+                    else:
+                        _tk_probe = _active_tks[0]
+                        _url_probe = (
+                            'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm'
+                            f'?etfid={_tk_probe}')
+                        st.markdown(f'**🎯 探測對象：`{_tk_probe}`** → `{_url_probe}`')
+                        # 源 1：proxy_helper.fetch_url
+                        try:
+                            from proxy_helper import fetch_url as _fu_d
+                            _r_p = _fu_d(_url_probe, timeout=12, attempts=2)
+                            if _r_p is None:
+                                st.error('❌ **proxy_helper.fetch_url** 回 None（proxy 全失敗或 403×2 後降級也失敗）')
+                            else:
+                                _len_p = len(_r_p.text) if _r_p.text else 0
+                                _msg = f'**proxy_helper.fetch_url** → HTTP `{_r_p.status_code}` · 長度 `{_len_p}` chars'
+                                if _r_p.status_code == 200 and _len_p > 1000:
+                                    st.success(f'✅ {_msg}')
+                                    _r_p.encoding = 'utf-8'
+                                    import re as _re_d
+                                    _txt = _r_p.text
+                                    _nm_m = _re_d.search(r'經理人[^<>\d]{0,30}?>?\s*([一-鿿]{2,8})\s*<', _txt)
+                                    _dt_m = _re_d.search(
+                                        r'(?:到職日|上任日|任期|管理基金日)[^\d]{0,30}?(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})',
+                                        _txt)
+                                    if _nm_m:
+                                        st.success(f'✅ regex 經理人：`{_nm_m.group(1)}`')
+                                    else:
+                                        st.warning('⚠️ regex 沒抓到「經理人」欄位 — MoneyDJ HTML 結構可能改版')
+                                    if _dt_m:
+                                        st.success(f'✅ regex 到職日：`{_dt_m.group(1)}-{_dt_m.group(2)}-{_dt_m.group(3)}`')
+                                    else:
+                                        st.info('ℹ️ regex 沒抓到「到職日 / 上任日」（只有經理人沒任期也算部分成功）')
+                                    # 預覽含「經理人」字眼附近 200 字
+                                    _pos = _txt.find('經理人')
+                                    if _pos >= 0:
+                                        st.code(_txt[max(0, _pos - 50):_pos + 250], language='html')
+                                    else:
+                                        st.warning('⚠️ 整篇文章連「經理人」這三字都沒有 — 可能是錯誤頁面 / 反爬干擾頁')
+                                else:
+                                    st.error(f'❌ {_msg} — MoneyDJ 擋了 NAS IP 或回了空頁')
+                        except Exception as _ep_d:
+                            st.error(f'❌ proxy_helper 例外：{type(_ep_d).__name__}: {_ep_d}')
+                        # 源 2：curl_cffi 直連
+                        try:
+                            from curl_cffi import requests as _cffi_d
+                            _r_c = _cffi_d.get(_url_probe, impersonate='chrome124', timeout=12)
+                            _len_c = len(_r_c.text) if _r_c.text else 0
+                            _msg = f'**curl_cffi 直連** → HTTP `{_r_c.status_code}` · 長度 `{_len_c}` chars'
+                            if _r_c.status_code == 200 and _len_c > 1000:
+                                st.success(f'✅ {_msg}（fallback 可用）')
+                            else:
+                                st.warning(f'⚠️ {_msg}（fallback 也失敗，預期 — 海外 IP 被擋）')
+                        except Exception as _ec_d:
+                            st.warning(f'⚠️ curl_cffi 例外：{type(_ec_d).__name__}: {_ec_d}')
+
                 _probe_rows = []
                 _tk_seen: set[str] = set()
                 for _pr in _ep_rows:
