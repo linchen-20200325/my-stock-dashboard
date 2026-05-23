@@ -135,7 +135,12 @@ def _proxy_status_badge() -> str:
 # ④ 主畫面渲染
 # ══════════════════════════════════════════════════════════════════════════════
 def render_yield_screener():
-    """7% 高殖利率防禦網主畫面 — Screener Mode"""
+    """7% 高殖利率防禦網主畫面 — Screener Mode
+
+    Returns:
+        篩選後候選清單 DataFrame（代碼/名稱/本益比/殖利率(%)/股價淨值比）供智慧選股取用；
+        全市場抓取失敗或篩選為空時回 None。
+    """
     _hdr_cols = st.columns([4, 1])
     with _hdr_cols[0]:
         st.markdown('### 💎 7% 高殖利率防禦網')
@@ -171,7 +176,7 @@ def render_yield_screener():
         if st.button('🔄 強制重抓（清除快取）', key='ys_force_refresh'):
             fetch_twse_yield_pe.clear()
             st.rerun()
-        return
+        return None
 
     st.success(f'✅ TWSE 全市場資料就緒：共 **{len(_df_all)}** 檔上市股票')
 
@@ -205,7 +210,7 @@ def render_yield_screener():
             f'⚠️ 條件過嚴：殖利率 ≥ {_min_yield}% 且本益比 ≤ {_max_pe} '
             f'查無任何標的，請放寬條件'
         )
-        return
+        return None
 
     # ── ③ 候選清單 ────────────────────────────────────────
     st.markdown(f'#### 📋 候選清單（共 **{len(_df_filt)}** 檔通過篩選）')
@@ -250,7 +255,7 @@ def render_yield_screener():
 
     if not _ticker:
         st.info('💡 從上方表格挑一檔，或直接輸入代號（如 6770）查看歷史配息')
-        return
+        return _df_filt
 
     # ── ⑤ 抓配息歷史 ─────────────────────────────────────
     _disp_name = _ticker
@@ -271,7 +276,7 @@ def render_yield_screener():
             f'- 代號錯誤或非台股上市公司\n'
             f'- yfinance 海外資料源延遲'
         )
-        return
+        return _df_filt
 
     # 只保留近 10 年
     _div_recent = _div_series.tail(10)
@@ -313,3 +318,5 @@ def render_yield_screener():
             '現金配息(元)': _div_recent.round(4).values,
         })
         st.dataframe(_raw_df, use_container_width=True, hide_index=True)
+
+    return _df_filt

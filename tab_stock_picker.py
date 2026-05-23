@@ -29,14 +29,14 @@ Stage 3：AI 綜合建議
 
 呼叫端
 ======
-- app.py 經 tab_screener 旁邊新 tab `🎯 智慧選股` 取用
+- app.py 於「💎 高息網」(tab_screener) 候選清單下方呼叫，candidates 帶入 render_yield_screener() 的篩選結果
 """
 from __future__ import annotations
 
 import streamlit as st
 
 
-def render_tab_stock_picker(gemini_fn=None):
+def render_tab_stock_picker(gemini_fn=None, candidates=None):
     # ─ Late imports（避免循環 import + 啟動時間）─
     import datetime as _dt_sp
     import pandas as pd
@@ -44,36 +44,40 @@ def render_tab_stock_picker(gemini_fn=None):
 
     st.markdown('### 🎯 智慧選股 — 三階段濾網')
     st.caption('專業台股投資策略：① 基本面防禦 → ② 籌碼技術 → ③ AI 綜合建議。'
-               '輸入觀察清單 10-30 檔，系統自動跑三階段篩選並提供配置建議。')
+               '從上方「💎 高息網」候選清單勾選標的，系統自動跑三階段篩選並提供配置建議。')
     st.caption('💡 全 15 項條件實作完成：Stage 1 基本面 ×9 + Stage 2 籌碼技術 ×6 + Stage 3 AI 建議。')
 
-    # ── Section 1：輸入觀察清單（沿用組合配置 data_editor 慣例）─────
-    st.markdown('#### 📋 輸入觀察清單（股票代號 4 位數，10-30 檔）')
-    _default = pd.DataFrame({
-        '股票代號': ['2330', '0050', '00878', '2412', '2454'],
-    })
-    edited_df = st.data_editor(
-        _default, num_rows='dynamic', hide_index=True,
-        use_container_width=False, key='picker_table',
-        column_config={
-            '股票代號': st.column_config.TextColumn('股票代號', required=True, width='small',
-                                                   help='4 位數台股代號（不需 .TW 後綴）'),
-        })
+    # ── Section 1：候選清單來自高息網篩選結果 ─────────────────────
+    st.markdown('#### 📋 候選清單（來自上方「高息網」篩選結果，勾選後跑三階段）')
+    if candidates is None or len(candidates) == 0:
+        st.info('💡 請先在上方「💎 高息網」設定殖利率 / 本益比條件，篩出候選清單後，'
+                '這裡會自動帶入供你勾選。')
+        return
+
+    # 去重保序取出純代碼
+    _codes: list[str] = []
+    for _, _row in candidates.iterrows():
+        _c = str(_row.get('代碼') or '').strip()
+        if _c and _c not in _codes:
+            _codes.append(_c)
+    if not _codes:
+        st.info('💡 高息網候選清單為空，請放寬殖利率 / 本益比條件。')
+        return
+
+    _sel = st.multiselect(
+        f'從高息網 {len(_codes)} 檔候選中勾選（建議 10-30 檔，避免 API 風暴）',
+        _codes, default=_codes[:10], key='picker_multiselect',
+        help='預設帶入殖利率最高的前 10 檔，可自由增減；上限 30 檔')
 
     if not st.button('🎯 開始三階段篩選', key='picker_btn',
                      use_container_width=True, type='primary'):
-        st.info('💡 填好上方觀察清單後按「🎯 開始三階段篩選」')
+        st.info('💡 勾選候選股票後按「🎯 開始三階段篩選」')
         return
 
     # ── 解析清單 ─────────────────────────────────────────────
-    _tickers: list[str] = []
-    for _, _row in edited_df.iterrows():
-        _tk = str(_row.get('股票代號') or '').strip()
-        _tk = ''.join(c for c in _tk if c.isdigit())  # 只留數字
-        if len(_tk) >= 4 and _tk not in _tickers:
-            _tickers.append(_tk)
+    _tickers = list(dict.fromkeys(_sel))
     if not _tickers:
-        st.error('❌ 請至少輸入一筆有效 4 位數股票代號')
+        st.error('❌ 請至少勾選一檔候選股票')
         return
     if len(_tickers) > 30:
         st.warning(f'⚠️ 超過 30 檔（{len(_tickers)}），僅取前 30 檔避免 API 風暴')
