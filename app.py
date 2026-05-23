@@ -1154,9 +1154,9 @@ def render_macro_compass():
 
 render_macro_compass()
 
-tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_etf, tab_etf_grp, tab_diag, tab_edu = st.tabs([
+tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_picker, tab_etf, tab_etf_grp, tab_diag, tab_edu = st.tabs([
     '🌍 總經', '🗺️ 產業熱力圖', '🔬 個股', '🏆 個股組合',
-    '💎 高息網', '🏦 ETF', '⚖️ ETF組合', '🔎 資料診斷', '📚 教學',
+    '💎 高息網', '🎯 智慧選股', '🏦 ETF', '⚖️ ETF組合', '🔎 資料診斷', '📚 教學',
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -1461,6 +1461,13 @@ with tab_etf_grp:
 with tab_screener:
     from yield_screener import render_yield_screener
     render_yield_screener()
+
+# ══════════════════════════════════════════════════════════════
+# TAB: 🎯 智慧選股（三階段濾網 + AI 三型建議）
+# ══════════════════════════════════════════════════════════════
+with tab_picker:
+    from tab_stock_picker import render_tab_stock_picker
+    render_tab_stock_picker(gemini_fn=gemini_call)
 
 # ══════════════════════════════════════════════════════════════
 # TAB: 資料診斷（Raw Data only）
