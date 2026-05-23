@@ -2,22 +2,27 @@
 
 Per CLAUDE.md §2 設計：使用者輸入觀察清單 10-30 檔，按鈕觸發批次跑（不全市場掃描避免 API 風暴）
 
-三階段邏輯（MVP 第一版 — 12 項條件中 7 項即時實作 + 5 項 placeholder ⏳ 待補）
+三階段邏輯（全 15 項條件實作完成 — Stage 1 ×9 + Stage 2 ×6 + Stage 3 AI）
 ==========================================================================
 
-Stage 1：基本面防禦與成長
-- ✅ 負債比 < 50%（FinMind 資產負債表）
-- ✅ 三率三升 YoY（毛利率 / 營益率 / 淨利率）
+Stage 1：基本面防禦與成長（9 項）
+- ✅ 負債比 < 50%（FinMind 資產負債表，金融股標 ⚠️ 不誤殺）
+- ✅ 三率三升 YoY（毛利率 / 營益率 / 淨利率 — FinMind 損益表 8 季）
 - ✅ 連續 5 年配息 + 平均殖利率 > 7%（yfinance.dividends）
-- ✅ PE 河流圖區間（便宜 / 合理 / 昂貴 — 與 tab_stock 同邏輯）
-- ⏳ 應收周轉 / 存貨周轉 / 合約負債 YoY / 資本支出 / 清算價值（後續 PR 補）
+- ✅ PE 河流圖區間（便宜 <10 / 合理 <15 / 昂貴）
+- ✅ 應收帳款周轉天數穩定（季變動 < 30%）
+- ✅ 存貨周轉率年化 > 4 次
+- ✅ 資本支出積極（CapEx > 股東權益 5%）
+- ✅ 淨流動值為正（流動資產 > 總負債）
+- ✅ 合約負債 YoY > 20% + 連 2 季增（FinMind BS 多季）
 
-Stage 2：籌碼與技術面鎖定
+Stage 2：籌碼與技術面鎖定（6 項）
 - ✅ 股價站穩 MA20 + 月線翻揚
 - ✅ MACD 綠轉紅 / 柱狀體收斂轉發散
 - ✅ KD 低檔黃金交叉（K < 20）
-- ⏳ 投信連續 5 日買超（後續 PR 補）
-- ⏳ 大戶 400 張持股 2 週增加 / 布林開口（後續 PR 補）
+- ✅ 布林通道剛開口（band 寬度近 5 日 > 前 20 日 1.3 倍）
+- ✅ 投信連續 5 日買超（FinMind 法人買賣超）
+- ✅ 大戶 ≥1000 張級距持股近 2 週比例增加（FinMind 集保股權分散）
 
 Stage 3：AI 綜合建議
 - ✅ Gemini Markdown 報告 — 積極型 / 保守型 / 止損紀律三型分析
@@ -99,13 +104,14 @@ def render_tab_stock_picker(gemini_fn=None):
         '存貨周轉':   r['inv_turnover_label'],
         '資本支出':   r['capex_label'],
         '淨流動值':   r['book_value_label'],
-        '合約負債':   '⏳ 待補',
-        'S1 通過':    f"{r['s1_pass_cnt']}/8",
+        '合約負債':   r['contract_liab_label'],
+        'S1 通過':    f"{r['s1_pass_cnt']}/9",
     } for r in results])
     st.dataframe(_s1_df, hide_index=True, use_container_width=True)
-    st.caption('💡 通過數 = 8 項實作條件中過的個數；5+ 通過視為基本面健康。'
+    st.caption('💡 通過數 = 9 項實作條件中過的個數；5+ 通過視為基本面健康。'
                '「應收周轉」穩定 = 季變動 < 30%；「存貨周轉」OK = 年化 > 4 次；'
-               '「資本支出」積極 = CapEx > 股東權益 5%；「淨流動值」OK = 流動資產 > 總負債。')
+               '「資本支出」積極 = CapEx > 股東權益 5%；「淨流動值」OK = 流動資產 > 總負債；'
+               '「合約負債」OK = YoY > 20% 且連 2 季增。')
 
     # ── Stage 2：籌碼 + 技術 ──────────────────────────────────
     st.markdown('#### ⚡ Stage 2：籌碼與技術面鎖定（發動訊號）')
@@ -116,20 +122,21 @@ def render_tab_stock_picker(gemini_fn=None):
         'MACD 翻紅':  r['macd_label'],
         'KD 黃叉':    r['kd_label'],
         '布林開口':   r['boll_label'],
-        '投信買超':   '⏳ 待補',
-        '大戶持股':   '⏳ 待補',
-        'S2 通過':    f"{r['s2_pass_cnt']}/4",
+        '投信買超':   r['inst_label'],
+        '大戶持股':   r['major_label'],
+        'S2 通過':    f"{r['s2_pass_cnt']}/6",
     } for r in results])
     st.dataframe(_s2_df, hide_index=True, use_container_width=True)
-    st.caption('💡 S1 ≥ 5/8 且 S2 ≥ 2/4 → 進入 Stage 3 AI 重點分析。'
-               '「布林開口」= 近 5 日 band 寬度 > 前 20 日 1.3 倍（瘦窄轉發散）。')
+    st.caption('💡 S1 ≥ 5/9 且 S2 ≥ 3/6 → 進入 Stage 3 AI 重點分析。'
+               '「布林開口」= 近 5 日 band 寬度 > 前 20 日 1.3 倍；'
+               '「投信買超」= 近 5 日連續買超；「大戶持股」= ≥1000 張級距近 2 週比例增加。')
 
-    # ── 通過清單（提高門檻：S1 ≥ 5/8 & S2 ≥ 2/4）─────────────
-    _qualified = [r for r in results if r['s1_pass_cnt'] >= 5 and r['s2_pass_cnt'] >= 2]
+    # ── 通過清單（門檻：S1 ≥ 5/9 & S2 ≥ 3/6）─────────────────
+    _qualified = [r for r in results if r['s1_pass_cnt'] >= 5 and r['s2_pass_cnt'] >= 3]
     if _qualified:
         st.success(f'✅ 通過兩階段濾網：{len(_qualified)} 檔 → {[r["ticker"] for r in _qualified]}')
     else:
-        st.warning('⚠️ 觀察清單中沒有同時通過 Stage 1 (5/8) + Stage 2 (2/4) 的標的')
+        st.warning('⚠️ 觀察清單中沒有同時通過 Stage 1 (5/9) + Stage 2 (3/6) 的標的')
 
     # ── Stage 3：AI 綜合建議 ──────────────────────────────────
     st.markdown('---')
@@ -156,22 +163,25 @@ def _check_one_stock(ticker: str, today, yf) -> dict:
     _r = {
         'ticker': ticker,
         'note':   '',
-        # Stage 1 labels
-        'debt_ratio_label':  '❓ N/A',
-        'three_rate_label':  '❓ N/A',
-        'div_5y_label':      '❓ N/A',
-        'pe_zone_label':     '❓ N/A',
-        'ar_turnover_label': '❓ N/A',
-        'inv_turnover_label':'❓ N/A',
-        'capex_label':       '❓ N/A',
-        'book_value_label':  '❓ N/A',
-        's1_pass_cnt':       0,
-        # Stage 2 labels
-        'ma20_label':        '❓ N/A',
-        'macd_label':        '❓ N/A',
-        'kd_label':          '❓ N/A',
-        'boll_label':        '❓ N/A',
-        's2_pass_cnt':       0,
+        # Stage 1 labels (9 條件)
+        'debt_ratio_label':   '❓ N/A',
+        'three_rate_label':   '❓ N/A',
+        'div_5y_label':       '❓ N/A',
+        'pe_zone_label':      '❓ N/A',
+        'ar_turnover_label':  '❓ N/A',
+        'inv_turnover_label': '❓ N/A',
+        'capex_label':        '❓ N/A',
+        'book_value_label':   '❓ N/A',
+        'contract_liab_label':'❓ N/A',
+        's1_pass_cnt':        0,
+        # Stage 2 labels (6 條件)
+        'ma20_label':         '❓ N/A',
+        'macd_label':         '❓ N/A',
+        'kd_label':           '❓ N/A',
+        'boll_label':         '❓ N/A',
+        'inst_label':         '❓ N/A',
+        'major_label':        '❓ N/A',
+        's2_pass_cnt':        0,
     }
     # ── 抓 K 線（yfinance + .TW / .TWO 雙後綴重試）──
     _df = None
@@ -202,18 +212,23 @@ def _check_one_stock(ticker: str, today, yf) -> dict:
     _r['ar_turnover_label'] = _check_ar_turnover(_fs)
     _r['inv_turnover_label']= _check_inventory_turnover(_fs)
     _r['capex_label']       = _check_capex_vs_equity(_fs)
-    _r['book_value_label']  = _check_book_value(_fs, _df)
+    _r['book_value_label']    = _check_book_value(_fs, _df)
+    _r['contract_liab_label'] = _check_contract_liab_yoy(ticker)
     _r['s1_pass_cnt'] = sum(1 for k in (
         'debt_ratio_label', 'three_rate_label', 'div_5y_label', 'pe_zone_label',
         'ar_turnover_label', 'inv_turnover_label', 'capex_label', 'book_value_label',
+        'contract_liab_label',
     ) if _r[k].startswith('✅'))
 
     # ── Stage 2 條件 ──────────────────────────────────────────
-    _r['ma20_label'] = _check_ma20_uptrend(_df)
-    _r['macd_label'] = _check_macd_bullish(_df)
-    _r['kd_label']   = _check_kd_golden_cross(_df)
-    _r['boll_label'] = _check_bollinger_opening(_df)
-    _r['s2_pass_cnt'] = sum(1 for k in ('ma20_label', 'macd_label', 'kd_label', 'boll_label')
+    _r['ma20_label']  = _check_ma20_uptrend(_df)
+    _r['macd_label']  = _check_macd_bullish(_df)
+    _r['kd_label']    = _check_kd_golden_cross(_df)
+    _r['boll_label']  = _check_bollinger_opening(_df)
+    _r['inst_label']  = _check_institutional_buying(ticker)
+    _r['major_label'] = _check_major_holders(ticker)
+    _r['s2_pass_cnt'] = sum(1 for k in ('ma20_label', 'macd_label', 'kd_label',
+                                          'boll_label', 'inst_label', 'major_label')
                               if _r[k].startswith('✅'))
     return _r
 
@@ -435,6 +450,58 @@ def _check_book_value(fs: dict, df) -> str:
         return '❓ N/A'
 
 
+def _check_contract_liab_yoy(stock_id: str) -> str:
+    """合約負債 YoY > 20% + 近兩季季增（在手訂單成長指標）。"""
+    try:
+        import os as _os_cl
+        import datetime as _dt_cl
+        import requests as _rq_cl
+        _tok = _os_cl.environ.get('FINMIND_TOKEN', '')
+        _start = (_dt_cl.date.today() - _dt_cl.timedelta(days=900)).strftime('%Y-%m-%d')
+        _p = {'dataset': 'TaiwanStockBalanceSheet',
+              'data_id': stock_id, 'start_date': _start}
+        if _tok:
+            _p['token'] = _tok
+        _r = _rq_cl.get('https://api.finmindtrade.com/api/v4/data',
+                         params=_p, timeout=15)
+        _data = _r.json().get('data', []) if _r.status_code == 200 else []
+        if not _data:
+            return '❓ FinMind 無 BS'
+        # 合約負債別名（含「－流動」「－非流動」需 sum）
+        _aliases = ('合約負債', '合約負債－流動', '合約負債－非流動',
+                    '預收款項', '遞延收入', 'ContractLiability', 'ContractLiabilities')
+        _quarters: dict = {}  # date → 合約負債 sum
+        for _row in _data:
+            _t = str(_row.get('type', ''))
+            _name = str(_row.get('origin_name', ''))
+            if not any(a in _t or a in _name for a in _aliases):
+                continue
+            try:
+                _v = float(str(_row.get('value', 0) or 0).replace(',', ''))
+            except (TypeError, ValueError):
+                continue
+            if _v <= 0:
+                continue
+            _d = _row.get('date', '')
+            _quarters[_d] = _quarters.get(_d, 0) + _v
+        _dates = sorted(_quarters.keys(), reverse=True)
+        if len(_dates) < 5:
+            return f'❓ {len(_dates)}季 不足'
+        _now = _quarters[_dates[0]]
+        _yoy = _quarters[_dates[4]]
+        _prev = _quarters[_dates[1]]
+        _prev2 = _quarters[_dates[2]] if len(_dates) > 2 else 0
+        _yoy_pct = (_now - _yoy) / _yoy * 100 if _yoy > 0 else 0
+        _qoq_2 = _now > _prev > _prev2  # 連兩季季增
+        if _yoy_pct > 20 and _qoq_2:
+            return f'✅ YoY+{_yoy_pct:.0f}% 連2季增'
+        if _yoy_pct > 20:
+            return f'⚠️ YoY+{_yoy_pct:.0f}% 季未連增'
+        return f'❌ YoY{_yoy_pct:+.0f}%'
+    except Exception as _e:
+        return f'❓ {type(_e).__name__}'
+
+
 # ══════════════════════════════════════════════════════════════
 # Stage 2 純函式（籌碼 + 技術）
 # ══════════════════════════════════════════════════════════════
@@ -537,6 +604,98 @@ def _check_kd_golden_cross(df) -> str:
         if _k_now > 80:
             return f'⚠️ 高檔 K={_k_now:.1f}'
         return f'❌ K={_k_now:.1f}'
+    except Exception as _e:
+        return f'❓ {type(_e).__name__}'
+
+
+def _check_institutional_buying(stock_id: str) -> str:
+    """投信近 5 個交易日連續買超（buy > sell）。"""
+    try:
+        import os as _os_in
+        import datetime as _dt_in
+        import requests as _rq_in
+        _tok = _os_in.environ.get('FINMIND_TOKEN', '')
+        _start = (_dt_in.date.today() - _dt_in.timedelta(days=20)).strftime('%Y-%m-%d')
+        _p = {'dataset': 'TaiwanStockInstitutionalInvestorsBuySell',
+              'data_id': stock_id, 'start_date': _start}
+        if _tok:
+            _p['token'] = _tok
+        _r = _rq_in.get('https://api.finmindtrade.com/api/v4/data',
+                         params=_p, timeout=15)
+        _data = _r.json().get('data', []) if _r.status_code == 200 else []
+        if not _data:
+            return '❓ FinMind 無法人'
+        # 過濾投信（Investment_Trust）每日 buy/sell
+        _by_date: dict = {}
+        for _row in _data:
+            _name = str(_row.get('name', ''))
+            if 'Investment_Trust' not in _name and '投信' not in _name:
+                continue
+            _d = _row.get('date', '')
+            try:
+                _buy = float(_row.get('buy', 0) or 0)
+                _sell = float(_row.get('sell', 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            _by_date[_d] = _buy - _sell
+        if not _by_date:
+            return '❓ 無投信資料'
+        _dates = sorted(_by_date.keys(), reverse=True)[:5]
+        if len(_dates) < 5:
+            return f'❓ 僅 {len(_dates)} 日'
+        _pos = sum(1 for d in _dates if _by_date[d] > 0)
+        if _pos == 5:
+            return '✅ 連5日買超'
+        if _pos >= 3:
+            return f'⚠️ {_pos}/5 日買超'
+        return f'❌ {_pos}/5 日買超'
+    except Exception as _e:
+        return f'❓ {type(_e).__name__}'
+
+
+def _check_major_holders(stock_id: str) -> str:
+    """大戶（≥1000 張或最大級距）持股比例近 2 週增加（集保股權分散表）。"""
+    try:
+        import os as _os_mh
+        import datetime as _dt_mh
+        import requests as _rq_mh
+        _tok = _os_mh.environ.get('FINMIND_TOKEN', '')
+        _start = (_dt_mh.date.today() - _dt_mh.timedelta(days=45)).strftime('%Y-%m-%d')
+        _p = {'dataset': 'TaiwanStockHoldingSharesPer',
+              'data_id': stock_id, 'start_date': _start}
+        if _tok:
+            _p['token'] = _tok
+        _r = _rq_mh.get('https://api.finmindtrade.com/api/v4/data',
+                         params=_p, timeout=15)
+        _data = _r.json().get('data', []) if _r.status_code == 200 else []
+        if not _data:
+            return '❓ FinMind 無股權'
+        # 取「大戶級距」— FinMind HoldingClass 最大級距通常是「1,000,001 股以上」(=1000 張+)
+        # 用 percent 欄位（持股比例）依日期比較
+        _by_date: dict = {}
+        for _row in _data:
+            _cls = str(_row.get('HoldingSharesLevel', _row.get('level', '')))
+            # 鎖定大戶級距：含「1,000,001」或「以上」或級距 15（FinMind 最大級距）
+            if '1,000,001' not in _cls and '以上' not in _cls and _cls not in ('15', '16'):
+                continue
+            _d = _row.get('date', '')
+            try:
+                _pct = float(_row.get('percent', 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            # 同日多個大戶級距取最大比例（保守）
+            _by_date[_d] = max(_by_date.get(_d, 0), _pct)
+        if len(_by_date) < 2:
+            return '❓ 週數不足'
+        _dates = sorted(_by_date.keys(), reverse=True)
+        _now = _by_date[_dates[0]]
+        _ago = _by_date[_dates[min(2, len(_dates) - 1)]]  # 約 2 週前
+        _chg = _now - _ago
+        if _chg > 0.1:
+            return f'✅ 大戶+{_chg:.2f}%'
+        if _chg > -0.1:
+            return f'⚠️ 持平 {_chg:+.2f}%'
+        return f'❌ 大戶{_chg:+.2f}%'
     except Exception as _e:
         return f'❓ {type(_e).__name__}'
 
