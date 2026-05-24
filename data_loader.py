@@ -345,6 +345,34 @@ def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> 
     return df
 
 
+def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.DataFrame:
+    """FinMind 原始 API 取個股日K（不依賴 Python SDK），供 DataLoader=None 時備援。
+
+    回傳與 dl.taiwan_stock_daily 相同的原生欄位（date/open/max/min/close/Trading_Volume…），
+    呼叫端沿用既有 rename 與單位處理；失敗回空 DataFrame。
+    """
+    import os
+    _token = os.environ.get('FINMIND_TOKEN', '')
+    try:
+        _params = {'dataset': 'TaiwanStockPrice', 'data_id': stock_id,
+                   'start_date': start_str, 'end_date': end_str}
+        if _token:
+            _params['token'] = _token
+        _r = _bps_dl().get(
+            'https://api.finmindtrade.com/api/v4/data',
+            params=_params,
+            headers={'Authorization': f'Bearer {_token}'} if _token else {},
+            timeout=20)
+        _j = _r.json()
+        if _j.get('status') == 200 and _j.get('data'):
+            print(f'[FM-Raw price] {stock_id}: ✅ {len(_j["data"])} 筆（SDK 未載入，走 HTTP 備援）')
+            return pd.DataFrame(_j['data'])
+        print(f'[FM-Raw price] {stock_id}: status={_j.get("status")} msg={_j.get("msg","")}')
+    except Exception as _e:
+        print(f'[FM-Raw price] {stock_id}: ❌ {_e}')
+    return pd.DataFrame()
+
+
 class StockDataLoader:
     """台股數據引擎 - FinMind 優先，Yahoo 備援"""
 
@@ -355,7 +383,10 @@ class StockDataLoader:
         _fm_user     = os.environ.get('FINMIND_USER', '')
         _fm_password = os.environ.get('FINMIND_PASSWORD', '')
         try:
-            if _fm_token:
+            if self.dl is None:
+                print('[FinMind] ⚠️  SDK 未載入（DataLoader=None），改用 raw HTTP API 備援')
+                self._token = _fm_token
+            elif _fm_token:
                 self.dl.login_by_token(api_token=_fm_token)
                 print(f'[FinMind] ✅ Token 登入成功（{_fm_token[:12]}...）')
                 self._token = _fm_token
@@ -368,7 +399,7 @@ class StockDataLoader:
                 self._token = ''
         except Exception as e:
             print(f'[FinMind] ⚠️  登入失敗：{e}')
-            self._token = ''
+            self._token = _fm_token  # 保留 token 供 raw HTTP 備援使用
 
     @st.cache_data(ttl=3600)
     def get_combined_data(_self, stock_id, days, use_adjusted=True):
@@ -438,11 +469,16 @@ class StockDataLoader:
 
             # 若未使用還原K線或 Yahoo 失敗，則走 FinMind（一般K線 / 備援）
             if df is None:
-                df_price = _self.dl.taiwan_stock_daily(
-                    stock_id=stock_id,
-                    start_date=start_str,
-                    end_date=end_date.strftime('%Y-%m-%d'),
-                )
+                if _self.dl is not None:
+                    df_price = _self.dl.taiwan_stock_daily(
+                        stock_id=stock_id,
+                        start_date=start_str,
+                        end_date=end_date.strftime('%Y-%m-%d'),
+                    )
+                else:
+                    # FinMind SDK 未載入（DataLoader=None）→ raw HTTP 備援，避免 NoneType 崩潰
+                    df_price = _fetch_finmind_price_raw(
+                        stock_id, start_str, end_date.strftime('%Y-%m-%d'))
 
                 if df_price.empty:
                     # Yahoo 備援（先 .TW，再試 .TWO 上櫃）
