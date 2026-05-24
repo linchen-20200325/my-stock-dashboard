@@ -133,6 +133,9 @@
 | #59 | fix(etf): ETF 新聞改走 proxy + CONSENT cookie（原本完全直連 Google 必 403）| 6bdf2c2 |
 | #60 | fix(names): 股名表 TWSE/TPEx OpenAPI 改走 NAS proxy（稽核任務一·連線防護）| e63be1c |
 | #61 #62 | feat(ui): 故事化任務二補白話 — ETF 單一/回測(費用率/Beta/AUM/夏普/MDD/CAGR) + 高息網(殖利率/PE/PB/7%防禦網) + 智慧選股(三階段濾網) 各加「💡 這項數據代表什麼？」expander | 1ec6d51 / d553115 |
+| #63-#68 | docs 同步 + 新聞真兇修復鏈（#65 餵 bytes、#66 移除 when:6m + ElementTree 備援解析 + item標籤診斷 → **新聞 25 則正常**、#67 文案改「近期」）+ 個股 AI 再補 RS 相對強度/龍頭擴產檢測(#68) | …/4000be7/fd23b3d/8d3e005/ae36743 |
+| #69 | feat(ui): 補完最後 3 tab 故事化（葡萄串領息法/產業熱力圖/ETF組合配置 核心衛星·再平衡·Overlap）→ **全 tab 故事化完整** | e90a604 |
+| #70-#73 | feat: **每 tab AI 補餵該頁全章節**（稽核 4 AI 後）— 個股組合(五維/SQ/FGMS/財報體檢/風控警示)、智慧選股Stage3(餵滿9+6+修/4/3錯標)、總經裁決(NDC/PMI/外銷/CPI/美股科技動能)、ETF AI(持股重疊Overlap/主動弱勢度換股，跨檔 session_state 持久化) | 93be635/fd84b1f/4a4ca69/f8d5474 |
 
 > **自動健檢稽核結論（唯讀稽核 4 子任務）**：失效按鈕 0（`if not st.button` 為合法閘門）；空資料 IndexError 風險經驗證**多為誤報**（`tab_stock_picker` len≥60 早退、`chip_radar`/`tab_stock_grp` 已 guard）。真實修復＝新聞 consent(#58)/ETF新聞(#59)/股名表(#60) 三個 proxy 缺口。剩 `app.py` TWSE OpenAPI＝死碼未呼叫、IMF/Gemini 非台灣站不阻。
 

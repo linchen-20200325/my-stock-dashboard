@@ -336,6 +336,14 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 - **ETF 單一**：內扣費用率 / Beta / AUM；**ETF 回測**：CAGR / 夏普值 / 最大回撤 / 年化波動率。
 - **高息網**：殖利率 / 本益比 / 股價淨值比 / 「7% 防禦網」；**智慧選股**：三階段濾網（基本面9→籌碼技術6→AI）。
 - 總經 / 個股 / 個股組合 / 教學原已具備 → 各主要 tab 故事化白話覆蓋一致。
+- **PR #69 收尾**：葡萄串領息法、產業熱力圖、ETF 組合配置（核心/衛星·再平衡·Overlap）補 💡 → 9 tab 全覆蓋。
+
+### §9.9 每 tab AI 補餵該頁全章節（PR #70-#73）
+稽核 4 個 tab AI 後，補齊「頁面有算但 AI 沒餵」的章節（皆 defensive 取值）：
+- **個股組合 AI**：每檔五維分數(趨勢/動能/籌碼/量價/RS)、SQ品質分/FGMS、財報體檢(現金水位/OCF/負債比/雷達均分) + 【風控警示】段。
+- **智慧選股 Stage3 AI**：餵滿 Stage1 全 9 項 + Stage2 全 6 項，修正 `/4`/`/3` 錯標為 `/9`/`/6`。
+- **總經 AI 裁決**：`_v_macro_ctx` 補 NDC 景氣燈號 / 台灣 PMI / 外銷訂單 / 美核心 CPI / 美股科技動能(SOX/NVDA)。
+- **ETF AI**：跨檔持久化 `session_state['etf_overlap_summary']`（持股重疊=重複押注）+ `['etf_weakness_summary']`（主動 ETF 換股訊號），注入 Input Data。
 
 ### §9.6 個股 AI 總結補餵已算章節（PR #55）
 原 prompt 僅含技術/籌碼/基本面/財報體檢/新聞/總經；四、戰術建議價位由 AI 臆測。改為補餵 `tab_stock` 上方**已實算**三章節（全程 try/except 防呆，未算到顯示「未計算」不崩）：
