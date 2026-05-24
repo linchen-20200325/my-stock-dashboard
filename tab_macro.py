@@ -230,6 +230,22 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
 </div>''', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ── 🔰 故事化白話解讀（純疊加；解碼上方燈號卡片的數字，不重複多空說明）──
+    with st.expander('🔰 看不懂上面那張燈號卡片的數字？點我 30 秒讀懂'):
+        st.markdown('''卡片上的每個數字，用一句話看懂：
+
+| 卡片欄位 | 白話意思 |
+|---|---|
+| **綜合健康度 /100** | 把均線、籌碼、景氣等訊號綜合成一個「市場體檢分數」，越高越健康 |
+| **信心 %** | 系統對「資料夠不夠新、夠不夠齊」的把握度；**低於 70% 會直接擋住燈號**，避免拿過期資料誤判 |
+| **評分 x/4** | 大盤多空打分，分數越高越偏多頭 |
+| **建議持股 %** | 對應目前環境，建議把多少比例的資金放在股票上（其餘留現金） |
+| **灰色小標籤** | 當下觸發的關鍵訊號（如外資買超、融資增減、期貨淨部位等） |
+
+> 💡 看燈前先按上方「🚀 一鍵更新全部數據」，燈號才會反映「今天」而不是過期資料。''')
+
+    st.divider()
+
     st.markdown("""<div style="padding:6px 0 4px;">
 <span style="font-size:20px;font-weight:900;color:#e6edf3;">🌍 今日市場總覽</span>
 <span style="font-size:11px;color:#484f58;margin-left:10px;">決定：現在能買嗎？大盤水位？</span>
