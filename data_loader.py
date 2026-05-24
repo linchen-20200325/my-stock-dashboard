@@ -373,6 +373,12 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
     return pd.DataFrame()
 
 
+# 版本鍵：改動 StockDataLoader 邏輯時 bump 此字串，供 app._get_loader 作為
+# @st.cache_resource 的 cache key。避免線上 hot-reload 後仍用到舊實例的舊方法碼
+# （PR #44 修了 NoneType 但 cache_resource 舊實例殘留 → 仍崩，即此故）。
+_LOADER_VERSION = 'v2-raw-http-fallback'
+
+
 class StockDataLoader:
     """台股數據引擎 - FinMind 優先，Yahoo 備援"""
 
