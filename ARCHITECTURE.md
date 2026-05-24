@@ -458,6 +458,12 @@ app.py      ✓    ✓    ✓    ✓    ✓    ✓
 | `market_regime()` | 指數價/均線/外資/ADL | `dict`（regime + score） | 寫入 `session_state['mkt_info']` |
 | `_build_prompt()` | context `dict` | `str`（完整 Prompt） | 路由至 `_STOCK_LOGIC` |
 
+**v5.0 本輪變更（branch `claude/debug-api-key-JmH9N`；詳見 SPEC.md §9）**：
+- **資料源備援**：`StockDataLoader` 在 FinMind SDK import 失敗（`dl=None`）時，個股價格改走 `_fetch_finmind_price_raw`（v4 HTTP `TaiwanStockPrice`），不再 `NoneType` 崩潰（PR #44）。
+- **集保籌碼整合**：`chip_radar.render_chip_radar(sid2)` 由個股主代碼驅動、置於「AI 首席顧問總結」上方，回傳摘要注入 AI prompt 籌碼段（PR #45）。
+- **總經判斷單一真相**：總經 ③「今日行動建議」結論/色彩/持股統一以紅綠燈（`_tl_eff_reg` + `market_regime.exposure_pct`）為準，v4 降為補充；⑩ 快照不一致時提醒（PR #42）。
+- **故事化白話層**：個股/總經新增 `st.expander`/`st.caption` 白話導讀，零更動計算邏輯（PR #37/#40/#41/#43/#46/#47）。
+
 ---
 
 ### 3.3 流程二：ETF 分析
