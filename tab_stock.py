@@ -2508,8 +2508,13 @@ padding:12px 16px;margin:8px 0;">
                     unsafe_allow_html=True,
                 )
 
+        # ══ 💠 集保籌碼大戶雷達（隨主代碼 sid2 自動查詢；置於 AI 總結上方供其引用）══
+        st.markdown('---')
+        from chip_radar import render_chip_radar
+        _chip_radar_summary = render_chip_radar(sid2)
+
         # ══ 🤖 AI 首席顧問總結 ═══════════════════════════════════
-        st.markdown("""<div style="margin:28px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#76e3ea18,#0d1117);border-left:4px solid #76e3ea;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#76e3ea;">🤖 AI 首席顧問總結</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">技術面 · 籌碼 · 基本面 · 財報體檢（策略2）· 總經 五維綜合評估</span></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style="margin:28px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#76e3ea18,#0d1117);border-left:4px solid #76e3ea;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#76e3ea;">🤖 AI 首席顧問總結</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">技術面 · 三大法人 · 集保大戶籌碼 · 基本面 · 財報體檢（策略2）· 總經｜五維綜合評估</span></div>""", unsafe_allow_html=True)
 
         _ai_sum_key = f'_ai_sum_{sid2}'
         _ai_sum_cached = st.session_state.get(_ai_sum_key, '')
@@ -2666,7 +2671,8 @@ padding:12px 16px;margin:8px 0;">
 {_tech_data2}
 
 【籌碼動向】
-{_chip_str2}
+三大法人：{_chip_str2}
+{_chip_radar_summary if _chip_radar_summary else '集保大戶/散戶：無資料（未取得集保股權分散表）'}
 
 【財務基本面】
 {_fund_data2}
