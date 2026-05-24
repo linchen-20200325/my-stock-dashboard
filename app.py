@@ -58,7 +58,7 @@ import yfinance as yf  # noqa: E402
 
 print('[INFO] main.py v3.0 戰情室 載入完成')
 
-from data_loader import StockDataLoader  # noqa: E402
+from data_loader import StockDataLoader, _LOADER_VERSION  # noqa: E402
 # ── 新增模組（根據說明書 v1.0）──────────────────────────────
 # ── v3.0 新增模組（§5-§11）──────────────────────────────────
 from etf_dashboard import (  # noqa: E402
@@ -223,8 +223,13 @@ def _save_cache(prefix, sid, data, extra=''):
         pass
 
 @st.cache_resource
-def _get_loader():
-    """快取單一 StockDataLoader 實例，避免每次 cache miss 都重新 login"""
+def _get_loader(_v: str = _LOADER_VERSION):
+    """快取單一 StockDataLoader 實例，避免每次 cache miss 都重新 login。
+
+    `_v` 綁定 `data_loader._LOADER_VERSION`：改動 loader 邏輯並 bump 版本後，
+    cache key 隨之改變 → 自動建立新實例，避免 Streamlit hot-reload 後仍用到
+    舊實例的舊方法碼（stale @st.cache_resource，PR #44 NoneType 殘留即此故）。
+    """
     return StockDataLoader()
 
 def _expected_latest_trading_date():
