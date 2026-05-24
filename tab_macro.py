@@ -329,7 +329,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _wr_bias.get('ma240', 0) or 0,
         _wr_fut_net,
     )
-    _wr_exp = _v4['Suggested_Holding']
+    # 持股建議統一用紅綠燈/market_regime 的 exposure_pct（與 ①②一致，不再用 v4 區間）
+    _wr_exp = _wr_mkt.get('exposure_pct', '--') if _wr_mkt else '--'
 
     if _show_market_data and (_wr_mkt or _wr_cd):
         # ── 今日唯一結論（大字顯示）──────────────────────────
@@ -337,17 +338,24 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _wr_action_color = '#484f58'
         _wr_warns = []
 
-        # v4 引擎直接給出結論（已包含多頭過熱/空頭防禦分類）
-        _v4_sig = _v4['Signal']
-        if '🟢' in _v4_sig:
-            _wr_action = f'{_v4["Action_Advice"]}（建議持股 {_wr_exp}）'
-            _wr_action_color = '#3fb950'
-        elif '🔴' in _v4_sig:
-            _wr_action = _v4['Action_Advice']
-            _wr_action_color = '#f85149'
-        else:
-            _wr_action = f'{_v4["Action_Advice"]}（建議持股 {_wr_exp}）'
-            _wr_action_color = '#d29922'
+        # 主結論統一以頂部紅綠燈 regime 為準（與燈號/戰情概覽一致，杜絕打架）
+        _wr_reg_map = {
+            'bull':    ('🟢 趨勢偏多 — 可逢回布局核心部位',   '#3fb950'),
+            'neutral': ('🟡 方向震盪 — 區間操作、控制部位',   '#d29922'),
+            'bear':    ('🔴 趨勢偏空 — 優先保留現金、嚴設停損', '#f85149'),
+        }
+        _wr_base, _wr_action_color = _wr_reg_map.get(_wr_reg, ('請先更新總經數據', '#484f58'))
+        _wr_action = (f'{_wr_base}（建議持股 {_wr_exp}）'
+                      if _wr_exp not in ('--', None, '') else _wr_base)
+        # v4 年線位階資訊 → 降為補充提示，不再覆蓋主結論
+        _v4_bits = [f'年線乖離 {_v4["Bias_240"]:+.1f}%']
+        if not _v4.get('Is_Bull'):
+            _v4_bits.append('股價在年線下')
+        if _v4.get('Is_Overheated'):
+            _v4_bits.append('乖離過熱')
+        if _v4.get('Is_Foreign_Hedging'):
+            _v4_bits.append('外資期貨避險')
+        _wr_v4_hint = '｜'.join(_v4_bits)
 
         # 風險警示收集（v5：純融資餘額判斷）
         if _wr_margin and _wr_margin > 3400:
@@ -376,6 +384,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             f'border-radius:0 10px 10px 0;padding:14px 18px;margin:8px 0;">'
             f'<div style="font-size:11px;color:#484f58;margin-bottom:4px;">📌 今日唯一行動建議</div>'
             f'<div style="font-size:17px;font-weight:900;color:{_wr_action_color};">{_wr_action}</div>'
+            + (f'<div style="font-size:11px;color:#8b949e;margin-top:4px;">📐 年線位階參考：{_wr_v4_hint}</div>' if _wr_v4_hint else '')
             + (f'<div style="font-size:11px;color:#484f58;margin-top:4px;">更新時間：{_wr_ts}</div>' if _wr_ts else '') +
             '</div>', unsafe_allow_html=True)
 
@@ -3960,6 +3969,14 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             f'</div>'
             f'</div>',
             unsafe_allow_html=True)
+
+        # 快照時效檢查：與即時紅綠燈比對，不一致則提醒重新裁決（避免依過期判斷操作）
+        _live_reg_zh = {'bull': '多頭', 'neutral': '震盪', 'bear': '空頭'}.get(_tl_eff_reg, '')
+        if _ms_ts and _live_reg_zh and _regime in ('多頭', '震盪', '空頭') and _regime != _live_reg_zh:
+            st.warning(
+                f'⚠️ 此為 {_ms_ts} 的鎖定快照（市場體制：{_regime}），'
+                f'與目前即時紅綠燈（{_live_reg_zh}）不一致 —— '
+                f'請重按上方「執行 AI 裁決」更新，以免依過期判斷操作。')
 
         # ── Markdown AI 戰情報告（與 Tab 2 AI 首席顧問同風格）────
         _macro_ai_rpt = st.session_state.get('_macro_ai_report', '')
