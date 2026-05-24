@@ -639,6 +639,8 @@ padding:14px 18px;margin-bottom:12px;">
         st.markdown("""<div style="margin:24px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#58a6ff18,#0d1117);border-left:4px solid #58a6ff;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#58a6ff;">📈 技術面分析</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">健康度評分 · VCP波幅收縮 · K線技術圖 · 即時操作建議</span></div>""", unsafe_allow_html=True)
         # ══ A. 健康度評分 ══════════════════════════════════════
         st.markdown('#### 🏥 A. 個股健康度評分（0~100）')
+        st.caption('🔰 指標白話：RSI >70 過熱、<30 超賣｜KD 黃金交叉（K 升破 D）偏多、死亡交叉偏空｜'
+                   'IBS 看收盤落在當日高低點的位置（越高越強）｜量比＝今日量 ÷ 近期均量（>1 放量）。')
         if health2 >= 80:
             _ha = f'健康度 {health2:.0f}分，技術面強勢'
             _hb = '確認大盤方向後可建倉，停損設月線下方'
@@ -908,6 +910,8 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         # ══ E. VCP + 布林 ══════════════════════════════════════
         st.markdown('---')
         st.markdown('#### 🎯 E. VCP波幅收縮 + 布林通道')
+        st.caption('🔰 指標白話：VCP＝股價波動一波比一波小（像彈簧壓緊），常是噴出前的整理；'
+                   '布林通道＝股價的上下軌道，帶寬收縮代表變盤在即、股價貼上軌偏強。')
         if vcp2 and vcp2.get('contracting'):
             _sw = vcp2.get('swings', [])
             _ea = f'VCP確認收縮（{len(_sw)}波段），量能萎縮，等待帶量突破進場'
@@ -990,6 +994,8 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         # ══ G. 近 20 日籌碼集中度（外資+投信 vs 總成交量）═══════════
         st.markdown('---')
         st.markdown('#### 🔬 G. 近 20 日籌碼集中度')
+        st.caption('🔰 指標白話：集中度＝大戶（外資+投信）淨買量佔總成交量的比例，正值越高＝大戶默默吸貨（偏多）、'
+                   '負值＝倒貨；延續性＝最近多少比例的交易日持續買超。')
         with st.spinner(f'計算 {sid2} 近 20 日籌碼集中度...'):
             _chip20 = analyze_20d_chips(sid2)
         if _chip20.get('error'):
