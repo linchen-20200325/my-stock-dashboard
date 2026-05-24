@@ -816,7 +816,6 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
             # ── M1B-M2 + 乖離率 並發計算 ──────────────────────
             def _job_m1b():
-                import requests as _rq_m1
                 import pandas as _pd_m1
                 _fm_tok_m1 = _get_fm_token()
                 _start_m1 = (datetime.date.today()-datetime.timedelta(days=420)).strftime('%Y-%m-%d')
