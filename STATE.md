@@ -9,7 +9,7 @@
 ## 🏗️ 主要模組
 | 層 | 檔案 |
 |---|---|
-| **UI** | `app.py`（主入口，PR #73 後 **1378 行**，−85%，4/4 TAB 已抽至獨立模組）· `tab_macro.py` (4031) · `tab_stock.py` (2521) · `tab_stock_grp.py` (1073) · `tab_edu.py` (401) · `etf_dashboard.py`（Phase 7C 後 **49 行 shim**，−97%，三層全拆）· `etf_tab_single.py` (616) · `etf_tab_portfolio.py` (531) · `etf_tab_backtest.py` (284) · `etf_tab_ai.py` (169) · `ui_widgets.py`（PR #60 抽出 8 個純 HTML 函式 + Phase 7F `cond_badge` 第 9 個 / Phase 7G 補完 9 函式 + 1 常數測試，71 unit test 全綠） |
+| **UI** | `app.py`（主入口，PR #73 後 **1378 行**，−85%，4/4 TAB 已抽至獨立模組）· `tab_macro.py` (3999) · `tab_stock.py` (2763) · `tab_stock_grp.py` (1073) · `tab_edu.py` (401) · `etf_dashboard.py`（Phase 7C 後 **49 行 shim**，−97%，三層全拆）· `etf_tab_single.py` (616) · `etf_tab_portfolio.py` (531) · `etf_tab_backtest.py` (284) · `etf_tab_ai.py` (169) · `ui_widgets.py`（PR #60 抽出 8 個純 HTML 函式 + Phase 7F `cond_badge` 第 9 個 / Phase 7G 補完 9 函式 + 1 常數測試，71 unit test 全綠） |
 | **ETF 三層** | `etf_fetch.py` (572 / Phase 7C 純 I/O：價格 / 配息 / NAV / 費用率 / 類股漲跌 / 新聞) · `etf_calc.py` (465 / 純算：殖利率 / 總報酬 / 折溢價 / 風險指標 / 同儕排名 / 戰情室列) · `etf_render.py` (505 / Streamlit UI：橫幅 / 走勢 / BIAS / 蒙地卡羅 / 類股熱力圖) |
 | **跨 tab 共用** | `tab_helpers.py` (135 / Phase 7A+7A-Ext 純函式：parse_cash_flow_ratio / format_condition_emoji / safe_get / safe_ma / final_recommendation — 取代 tab_stock + tab_stock_grp + tab_macro 內 5 個重複 closure；零 Streamlit 依賴，34 unit test) · `macro_helpers.py` (Phase 7A-Ext+7E：calc_traffic_light + rp_ts / rp_entry / rp_scalar — tab_macro 紅綠燈決策核心 + data_registry 三函式抽出；30 unit test) · `etf_helpers.py` (53 / Phase 7B：norm_return / norm_lower_better / auto_role — 抽 etf_tab_backtest 雷達正規化 + etf_tab_portfolio 核心/衛星分類；29 unit test) |
 | **資料抓取** | `data_loader.py` · `macro_core.py`（含 PR #53 `diagnose_tw_pmi_sources`）· `tw_macro.py` · `daily_checklist.py` · `leading_indicators.py` · `tw_stock_data_fetcher.py` |
@@ -110,6 +110,19 @@
 | (branch `claude/debug-api-key-JmH9N`) | feat(picker): 智慧選股併入高息網下方 — 移除獨立「🎯 智慧選股」分頁（tab 10→9），內容搬到「💎 高息網」候選清單下方同分頁；`render_yield_screener()` 回傳篩選後 `_df_filt`（失敗/空回 None），`tab_stock_picker` 加 `candidates` 參數，手動 data_editor 觀察清單改為從高息網代碼帶入的 multiselect（預設殖利率最高前 10 檔、上限 30 檔防 API 風暴）。py_compile + ruff 全綠 | 46d8e6b |
 | #22 | fix(etf): 主動 ETF 經理人/任期抓取走 proxy + 補資料診斷面板 — 弱勢度檢測表「經理人」「任期」全空、新經理人 <6 月寬限機制失效。**根因**：`fetch_etf_manager` + `fetch_etf_holdings` 直接用 `curl_cffi` 打 MoneyDJ，Streamlit Cloud 海外 IP 被反爬擋 HTTP 403（實測 5 種 impersonate `chrome120/119/124/131/safari17/edge99` 全 403）；SITCA 費用率已用 `proxy_helper.fetch_url`（NAS Squid 台灣 IP）解過同樣問題，這兩個是漏網。**修復**：(1) `fetch_etf_manager` 改雙源 — `proxy_helper.fetch_url` 主源 + `curl_cffi` fallback；(2) `fetch_etf_holdings` MoneyDJ 三條 URL 同步雙源化；(3) `health_inspector` ETF Raw Data expander 新增「🏃 主動 ETF 經理人 / 持股 MoneyDJ 探測」子段（每檔顯示 ✅名字+任期天數 / ❌ 抓取失敗原因 / ⚪ 被動式不適用 + 持股檔數三態探測）。全套件 788/788 全綠；ruff 0 新增警告 | 992fa01 |
 
+### 🆕 本輪 v5.0（branch `claude/debug-api-key-JmH9N`，2026-05-24）
+| PR | 任務 | SHA |
+|---|---|---|
+| #37 | fix(ux): 空輸入按鈕補友善提示（個股組合批次 / 集保籌碼）— Task 1 稽核 | 685327a |
+| #38→#39 | feat→**revert**(ai): 通用 AI 解盤模組試點個股後撤回（個股早有更完整五維診斷 AI，避免重複）；確認 Task 3 各 tab 早已有 AI | cca9b23 |
+| #40 #41 | feat(macro): 總經故事化 — 紅綠燈數字解碼 expander + 總經拼圖「三塊怎麼一起看」(Task 2) | d8fbee4 / 4c1c0b6 |
+| #42 | fix(macro): **統一總經判斷來源** — ③今日行動建議改以紅綠燈為準(v4 降補充)、⑩快照不一致提醒 | 709c293 |
+| #43 #46 #47 | feat(stock): 個股故事化三階段 — 財報名詞快查 / 技術指標白話 / 估值河流圖「怎麼看」(Task 2) | 1d805c2 / 9334ec5 / ee10b05 |
+| #44 | fix(data): **FinMind SDK 缺失改走 raw HTTP** — 修個股「資料全抓不到」NoneType 崩潰 | a7a48ee |
+| #45 | refactor(stock): 集保籌碼改吃主代碼 sid2、上移至 AI 總結上方、納入 AI prompt | 818376c |
+
+> **v5.0 三大任務狀態**：Task 1 稽核修復 ✅ / Task 2 故事化（總經 ✅ + 個股 ✅ 三階段）/ Task 3 AI 解盤 ✅（各 tab 早已具備，未重複）。詳見 `SPEC.md §9`。
+
 ## 🎯 Backlog
 
 ### 📌 未完成項目追蹤（編號穩定，供「做 #N」引用 — 2026-05-23 盤點）
@@ -128,7 +141,7 @@
 - [ ] **#U8** `etf_tab_single.py:183` — 配息「平準金佔比」需公開說明書揭露，計畫加 SITCA 抓取（⚠️ 全新端點，response 格式未知，sandbox 無法驗證，盲寫高風險 — 建議線上可測時再做）
 - [x] **#U9** ✅ `tab_stock.py` 龍頭預警區雙 bug 修復（單位 元→億 + 真實股本比 cl/股本≥50% cx/股本≥80%，新增 `_fetch_share_capital`）— PR `bfc60e7`
 - [x] **#U10** ✅ `tab_stock_picker._check_pe_zone` 改真 TTM 4Q EPS 加總（抽 `_fetch_quarterly_is` 共用）— PR `bfc60e7`
-- [ ] **#U11** 集保大戶籌碼 — 🔶 **自建爬蟲版已實作**：`chip_radar.py`（norway.twsthr.info `StockHolders.aspx`，走 proxy_helper + 隨機 UA + `pandas.read_html` 自適應欄位偵測 + `@st.cache_data(ttl=86400)`，掛在「🔬 個股」tab 末），含 Plotly 雙軸圖（散戶人數 bar / 大戶比例 line）+ 防呆 + 🔬 解析診斷面板。**待雲端驗證**：sandbox 連不到目標站，實際表格欄位結構需雲端跑一次看診斷面板對齊（若自適應沒抓到欄位，貼診斷輸出即可精準化）。原 `tab_stock_picker._check_major_holders`（FinMind premium）維持 robust 回「⚠️ 需付費 token」不動
+- [ ] **#U11** 集保大戶籌碼 — 🔶 **自建爬蟲版已實作**：`chip_radar.py`（norway.twsthr.info `StockHolders.aspx`，走 proxy_helper + 隨機 UA + `pandas.read_html` 自適應欄位偵測 + `@st.cache_data(ttl=86400)`，PR #45 後改吃主代碼 `sid2`、移除自有輸入框、上移至「AI 首席顧問總結」上方、摘要注入 AI prompt），含 Plotly 雙軸圖（散戶人數 bar / 大戶比例 line）+ 防呆 + 🔬 解析診斷面板。**待雲端驗證**：sandbox 連不到目標站（norway.twsthr.info），實際表格欄位結構需雲端跑一次看診斷面板對齊。原 `tab_stock_picker._check_major_holders`（FinMind premium）維持 robust 回「⚠️ 需付費 token」不動
 - ⚠️ **v5.0 Task 3（每 tab AI 解盤）其實早已完成**：總經(台股大盤戰情研判)/個股(五維診斷雷達)/個股組合/智慧選股(三型)/ETF(etf_tab_ai) 都已有 AI 區塊 — **勿再加通用 AI 模組造成重複**（PR #38 曾誤加個股第二個 AI，已撤）。唯一缺 AI 的是 高息網本體/教學/籌碼，但多無強需求
 - [x] **#U12** ✅ 結案（非技術債）：`app.py:429 fetch_financials` 的「v3.35 簡化版」僅為 docstring 版本標籤，函式運作正常（100% FinMind status=200），無未實作邏輯，不需動作
 

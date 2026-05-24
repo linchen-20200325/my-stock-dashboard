@@ -292,3 +292,34 @@ _oauth_cb()
 ### §8.6 純函式 API 不變式
 
 PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` / `save_portfolio` / `delete_portfolio`）契約跨 OAuth ↔ SA 切換 **零修改**。`tests/test_gsheet_portfolio.py` 20 cases 在 monkeypatch `_get_worksheet` 的前提下全綠（未碰 `_build_client` 內部分支）。
+
+---
+
+## §9 v5.0 — 判斷單一真相 + 集保籌碼整合 + 資料源備援 + 故事化白話層（branch `claude/debug-api-key-JmH9N`）
+
+### §9.1 總經「今日行動建議」單一真相（PR #42）
+總經 tab 原有 4 個獨立判斷引擎易互相矛盾，現以**紅綠燈為單一真相**：
+
+| 元件 | 多空結論來源 | 建議持股來源 |
+|---|---|---|
+| ① 紅綠燈 / ② 戰情概覽 | `calc_traffic_light` → `_tl_eff_reg` | `market_regime` `exposure_pct` |
+| ③ 今日唯一行動建議 | **`_wr_reg`（=紅綠燈）** | **`market_regime` `exposure_pct`**（原為 v4，已改） |
+| ⑩ AI 總裁決 | `macro_state.json` 快照 | 快照 `exposure_limit_pct` |
+
+- v4（`evaluate_market_status_v4_final`，僅 price vs ma240 + 期貨）降為「📐 年線位階參考」補充小字，不再主導 ③ 的結論/色彩/持股。
+- ⑩ 快照 regime 與即時 `_tl_eff_reg` 不一致時 → `st.warning` 提醒重按「執行 AI 裁決」。
+
+### §9.2 集保籌碼大戶雷達介面（PR #45）
+`chip_radar.render_chip_radar(ticker: str = '') -> str`：
+- 移除自有 `text_input` / 按鈕 / `_chip_radar_active`；改由呼叫端傳入個股主代碼 `sid2`。
+- 回傳籌碼摘要字串（`集保大戶持股比例=X%（近5期↑/↓）| 散戶人數=N`；無資料回 `''`）。
+- 位置：`tab_stock` 內、置於「🤖 AI 首席顧問總結」**上方**；摘要注入 AI prompt「籌碼動向」段（三大法人 + 集保大戶並列），使總結涵蓋集保籌碼章節。
+
+### §9.3 FinMind SDK 缺失備援（PR #44）
+`data_loader.py`：FinMind `DataLoader` import 失敗時 `self.dl = None`。個股價格改走 `_fetch_finmind_price_raw()`（v4 HTTP `TaiwanStockPrice`，回傳與 `taiwan_stock_daily` 相同原生欄位），不再 `NoneType` 崩潰。其餘 `dl.*` 呼叫皆已 try/except 或有 raw fallback，優雅降級為 N/A。
+
+### §9.4 故事化白話層原則（PR #37/#40/#41/#43/#46/#47）
+- 純疊加 `st.expander` / `st.caption` 白話導讀，**零更動計算邏輯**。
+- **不重複既有白話**（總經 `beginner_kpi`/`teacher_conclusion`、個股白話問句標題等已白話處不再加）。
+- Streamlit **不可巢狀 expander** → 白話 expander 須置於既有 expander 之外（個股財報名詞快查即放在「策略2」expander 外）。
+- v5.0 Task 3（每 tab AI 解盤）盤點後確認**各重點 tab 早已有 AI**（總經/個股/組合/智慧選股/ETF），不另加通用模組（PR #38 誤加個股第二個 AI 已 #39 撤回）。
