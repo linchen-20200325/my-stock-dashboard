@@ -2045,6 +2045,22 @@ padding:12px 16px;margin:8px 0;">
 
         st.markdown("""<div style="margin:24px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#d2a8ff18,#0d1117);border-left:4px solid #d2a8ff;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#d2a8ff;">🏥 體檢表</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">策略2 · 4力1棒子 · 現金流矩陣 · OPM護城河</span></div>""", unsafe_allow_html=True)
 
+        # ── 🔰 故事化白話：財報名詞快查（純疊加；放在體檢 expander 外，避免巢狀）──
+        with st.expander('🔰 看懂下面這些財報名詞（新手必看，30 秒）'):
+            st.markdown('''下面「AI 財報體檢」用的是 MJ（林明樟）財報分析框架，名詞白話對照：
+
+| 名詞 | 白話意思 |
+|---|---|
+| **氣長不長**（現金 > 總資產 25%） | 公司手上現金夠不夠多；現金多＝氣長、撐得久、不怕周轉不靈 |
+| **真假獲利 / OCF**（營業現金流為正） | 帳上賺錢有沒有真的收到現金；OCF 為正才是真賺，帳面賺卻沒收到現金＝**黑字破產**風險 |
+| **那根棒子**（負債比 < 60%） | 公司欠錢的比例；越低越穩，>60% 代表槓桿偏高 |
+| **周轉效率** | 賣貨、收帳的速度；越快＝資金越活、不卡庫存與呆帳 |
+| **以長支長** | 用「長期的錢」（股本＋長期借款）買「長期資產」（廠房設備）；比率夠才不會短債養長投、周轉爆掉 |
+| **MJ 300 / 150** | MJ 的嚴格標準：流動比率 >300%、速動比率 >150%＝短期還債餘裕大（收現行業或現金充足者會放寬門檻＝「保命符」） |
+| **跨表勾稽 + 地雷** | 把損益表／資產負債表／現金流量表三張表交叉對驗，揪出兜不攏的造假或地雷訊號 |
+
+> 💡 燈號：🟢 安全、🟡 注意、🔴 危險。任一生死指標亮紅燈，務必深究原因再決定要不要碰。''')
+
         with st.expander('🔬 AI 財報體檢（策略2）', expanded=True):
             _fh_key2 = f'_fh_{sid2}'
             if _fh_key2 not in st.session_state:
