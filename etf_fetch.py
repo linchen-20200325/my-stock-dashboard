@@ -9,20 +9,39 @@ import yfinance as yf
 
 
 def _fetch_news_for(ticker: str, name: str = "", n: int = 4) -> str:
-    """抓取個股/ETF 相關新聞，回傳格式化字串。失敗時回傳空字串。"""
+    """抓取個股/ETF 相關新聞，回傳格式化字串。失敗時回傳空字串。
+    走 NAS 中繼站 → Squid proxy(帶 CONSENT cookie 繞 Google 同意頁) → 直連。"""
     try:
-        import feedparser as _fp, html as _h
+        import feedparser as _fp
+        import html as _h
+        from urllib.parse import quote as _uq
     except ImportError:
         return ""
-    _q = f"{ticker} {name}".strip()
+    try:
+        from proxy_helper import fetch_url as _furl, nas_relay_fetch as _nasf
+    except ImportError:
+        _furl = _nasf = None
     _feeds = [
-        f'https://news.google.com/rss/search?q={_q}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant',
-        f'https://news.google.com/rss/search?q=Taiwan+ETF+{ticker}&hl=en-US&gl=US&ceid=US:en',
+        f'https://news.google.com/rss/search?q={_uq(f"{ticker} {name}".strip())}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant',
+        f'https://news.google.com/rss/search?q={_uq(f"Taiwan ETF {ticker}".strip())}&hl=en-US&gl=US&ceid=US:en',
     ]
+    _hdr = {'Cookie': 'CONSENT=YES+cb; SOCS=CAI',
+            'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.5'}
     _out = []
     for _url in _feeds:
         try:
-            for _e in _fp.parse(_url).entries:
+            _fd = None
+            if _nasf is not None:
+                _rr = _nasf(_url, timeout=15)
+                if _rr is not None:
+                    _fd = _fp.parse(_rr.text)
+            if (_fd is None or not getattr(_fd, 'entries', None)) and _furl is not None:
+                _rs = _furl(_url, headers=_hdr, timeout=10)
+                if _rs is not None:
+                    _fd = _fp.parse(_rs.text)
+            if _fd is None or not getattr(_fd, 'entries', None):
+                _fd = _fp.parse(_url, request_headers=_hdr)
+            for _e in _fd.entries:
                 _t = _h.unescape(_e.get('title', '')).strip()
                 _p = str(_e.get('published', ''))[:10]
                 if _t:
