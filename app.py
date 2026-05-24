@@ -878,6 +878,21 @@ with st.sidebar:
                           use_container_width=True):
                 st.session_state.pop('gsheet_tokens', None)
                 st.rerun()
+            # ── Google Sheet ID（集中於帳號區；ETF 組合面板可從 Drive 挑選/新建）──
+            _sb_sid_cur = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
+            _sb_sid_raw = st.text_input(
+                'Google Sheet ID 或完整 URL（系統會自動解析 ID）',
+                value=_sb_sid_cur, key='etf_p_sheet_id_input',
+                placeholder='貼上 https://docs.google.com/spreadsheets/d/...',
+                help='貼 URL/ID 設定投組資料庫；或到「ETF 組合」Tab 從 Drive 挑選 / 一鍵新建')
+            _sb_m = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', _sb_sid_raw)
+            _sb_sid_new = _sb_m.group(1) if _sb_m else _sb_sid_raw.strip()
+            if _sb_sid_new and _sb_sid_new != _sb_sid_cur:
+                st.session_state['portfolio_sheet_id'] = _sb_sid_new
+            if _sb_sid_new:
+                st.caption(f'✅ Sheet ID：`{_sb_sid_new}`')
+            else:
+                st.caption('💡 未設定 — 貼上 URL/ID 或到「ETF 組合」Tab 挑選')
         elif _sb_buildurl and _sb_cfg:
             _sb_url = _sb_buildurl(_sb_cfg['client_id'], _sb_cfg['redirect_uri'])
             st.link_button('🔐 用 Google 登入', _sb_url, use_container_width=True)

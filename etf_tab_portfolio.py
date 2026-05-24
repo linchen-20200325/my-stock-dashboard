@@ -717,8 +717,6 @@ def _render_oauth_panel(_gsp) -> bool:
     回傳 True 代表雲端儲存可用（OAuth 已登入＋有 Sheet ID，或 SA 已備齊）。
     False 代表需要先完成設定，後續 UI 應跳過。
     """
-    import re as _re
-
     try:
         from oauth_state import (
             get_oauth_cfg, _gsa_secret, _sheet_id_secret,
@@ -810,19 +808,14 @@ def _render_oauth_panel(_gsp) -> bool:
                 st.rerun()
         return False
 
-    # ── OAuth 已登入：個人 Sheet ID 設定 ────────────────────────
+    # ── OAuth 已登入：Sheet ID 於左側 sidebar「🔐 Google 帳號」設定 ──
     if _oauth_configured and _logged_in:
-        _sid_cur = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
-        _sid_raw = st.text_input(
-            'Google Sheet ID 或完整 URL（系統會自動解析 ID）',
-            value=_sid_cur, key='etf_p_sheet_id_input',
-            placeholder='貼上 https://docs.google.com/spreadsheets/d/...',
-        )
-        _m = _re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', _sid_raw)
-        _sid = _m.group(1) if _m else _sid_raw.strip()
-        if _sid and _sid != _sid_cur:
-            st.session_state['portfolio_sheet_id'] = _sid
-            st.caption(f'✅ 已設定 Sheet ID：`{_sid}`')
+        _sid = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
+        if _sid:
+            st.caption(f'✅ 目前 Sheet ID（於左側 sidebar 設定）：`{_sid}`')
+        else:
+            st.caption('💡 **貼 URL/ID 設定** 請到左側 sidebar「🔐 Google 帳號」；'
+                       '或用下方從 Drive 挑選 / 一鍵新建：')
 
         # ── 從 Drive 列出既有 Sheets 挑一個（不必複製 ID）──────────
         st.caption('📂 **或者** — 從你 Google Drive 既有的 Sheets 挑一個（可選擇限定資料夾）：')
@@ -928,7 +921,7 @@ def _render_oauth_panel(_gsp) -> bool:
                 st.rerun()
 
         if not _sid:
-            st.info('💡 還沒選定 Sheet — 上方貼 URL/ID、從 Drive 列出挑一個、或按「🆕 建立新 Sheet」三選一')
+            st.info('💡 還沒選定 Sheet — 左側 sidebar 貼 URL/ID、從 Drive 列出挑一個、或按「🆕 建立新 Sheet」三選一')
             return False
 
     # 兩條路徑都通：給 caller 繼續渲染存取 UI
