@@ -289,35 +289,22 @@ def _render_diag(result: dict) -> None:
                 st.dataframe(_pv, use_container_width=True, hide_index=True)
 
 
-def render_chip_radar() -> None:
-    """💠 集保籌碼大戶雷達主畫面（單檔深度檢驗，輸入後才觸發）。"""
+def render_chip_radar(ticker: str = '') -> str:
+    """💠 集保籌碼大戶雷達。
+
+    ticker 由呼叫端（個股 tab 主代碼 sid2）帶入，不再自建輸入框。
+    回傳一段給「AI 首席顧問總結」引用的籌碼摘要字串（無資料回 ''）。
+    """
     st.markdown('### 💠 集保籌碼大戶雷達')
-    st.caption('資料來源：norway.twsthr.info 集保戶股權分散表（每週更新）。'
-               '輸入單一股票代號後觸發抓取（**不**全市場掃描，避免 IP 被封）。')
+    st.caption('資料來源：norway.twsthr.info 集保戶股權分散表（每週更新）；隨上方個股代碼自動查詢。')
 
-    _c1, _c2 = st.columns([3, 1])
-    with _c1:
-        _typed = st.text_input(
-            '股票代號（如 6770 力積電）', value='',
-            key='chip_radar_ticker', placeholder='例：6770')
-    with _c2:
-        st.markdown('<br>', unsafe_allow_html=True)
-        _go = st.button('🔍 查詢籌碼', key='chip_radar_go',
-                        use_container_width=True, type='primary')
+    _tk = ''.join(c for c in str(ticker) if c.isalnum())
+    if not _tk:
+        st.info('💡 請在最上方輸入個股代碼並「載入完整分析」，這裡會自動顯示該檔集保籌碼。')
+        return ''
 
-    _tk = ''.join(c for c in str(_typed) if c.isalnum())
-    if _go and not _tk:
-        st.warning('⚠️ 請先輸入股票代號（如 6770）再按「🔍 查詢籌碼」')
-    if _go and _tk:
-        st.session_state['_chip_radar_active'] = _tk
-    _active = st.session_state.get('_chip_radar_active', '')
-
-    if not _active:
-        st.info('💡 輸入股票代號後按「🔍 查詢籌碼」（資料每日快取一次）')
-        return
-
-    with st.spinner(f'抓取 {_active} 集保股權分散表中…（NAS 代理 + 3 次重試）'):
-        _result = fetch_chip_concentration(_active)
+    with st.spinner(f'抓取 {_tk} 集保股權分散表中…（NAS 代理 + 3 次重試）'):
+        _result = fetch_chip_concentration(_tk)
 
     _df = _result.get('df', pd.DataFrame())
     _err = _result.get('err', '')
@@ -330,7 +317,7 @@ def render_chip_radar() -> None:
             fetch_chip_concentration.clear()
             st.rerun()
         _render_diag(_result)
-        return
+        return ''
 
     # ── 摘要 metric ──
     _latest = _df.iloc[-1]
@@ -346,9 +333,29 @@ def render_chip_radar() -> None:
         st.metric('散戶持股人數', f'{int(_rt):,}' if pd.notna(_rt) else '—')
 
     # ── 雙 Y 軸圖 ──
-    _plot_chip(_df, _active)
+    _plot_chip(_df, _tk)
 
     with st.expander('📑 原始解析資料表', expanded=False):
         st.dataframe(_df, use_container_width=True, hide_index=True)
 
     _render_diag(_result)
+
+    # ── 給「AI 首席顧問總結」引用的籌碼摘要字串 ──
+    _summary = ''
+    try:
+        _bits = []
+        _mj_v = _latest['大戶比例']
+        _rt_v = _latest['散戶人數']
+        if pd.notna(_mj_v):
+            _trend = ''
+            if len(_df) >= 5 and pd.notna(_df['大戶比例'].iloc[-5]):
+                _delta = float(_mj_v) - float(_df['大戶比例'].iloc[-5])
+                _trend = f'（近5期{"↑增" if _delta > 0 else "↓減" if _delta < 0 else "持平"}{_delta:+.2f}%）'
+            _bits.append(f'集保大戶持股比例={float(_mj_v):.2f}%{_trend}')
+        if pd.notna(_rt_v):
+            _bits.append(f'散戶人數={int(_rt_v):,}')
+        if _bits:
+            _summary = '集保籌碼：' + ' | '.join(_bits)
+    except Exception:
+        _summary = ''
+    return _summary
