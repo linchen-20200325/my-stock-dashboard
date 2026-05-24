@@ -2544,8 +2544,8 @@ padding:12px 16px;margin:8px 0;">
 
         def _show_news_expander(_news, _diag=None):
             _cnt = len(_news) if _news else 0
-            with st.expander(f'📰 近半年相關新聞（{_cnt} 則 · Google News RSS · 近期為主）', expanded=bool(_news)):
-                st.caption('來源：Google News RSS（中英文，when:6m 偏近半年）。RSS 偏重近期，無法保證涵蓋完整半年；點標題開原文。')
+            with st.expander(f'📰 近期相關新聞（{_cnt} 則 · Google News RSS · 近期為主）', expanded=bool(_news)):
+                st.caption('來源：Google News RSS（中英文）。依關聯度與時間排序、以近期報導為主；點標題開原文。')
                 if _news:
                     st.markdown(_fmt_news_list(_news))
                 else:
@@ -2692,7 +2692,7 @@ padding:12px 16px;margin:8px 0;">
                 f"建議持股={_mkt_info2.get('exposure_limit_pct', st.session_state.get('macro_state',{}).get('exposure_limit_pct','N/A'))}%\n"
                 f"宏觀跨資產背景：{_macro_extra2}"
             )
-            # ── 抓取個股新聞（近半年，RSS 偏近期）──────────────────
+            # ── 抓取個股新聞（近期，RSS 偏近期）──────────────────
             _news_diag2 = []
             _stock_news2 = _fetch_stock_news(sid2, name2, 25, recency='6m', _diag=_news_diag2)
             st.session_state[_ai_sum_key + '_news'] = _stock_news2
@@ -2754,7 +2754,7 @@ padding:12px 16px;margin:8px 0;">
 【財報體檢（MJ林明樟體系）】
 {_health_check_str2}
 
-【近半年相關新聞】（Google News RSS，近期為主，供事件面輔助研判，不作為唯一依據）
+【近期相關新聞】（Google News RSS，近期為主，供事件面輔助研判，不作為唯一依據）
 {_news_str2}
 
 【總體經濟背景】
@@ -2767,7 +2767,7 @@ padding:12px 16px;margin:8px 0;">
 步驟三：財報體檢整合 - 綜合 MJ林明樟體系（企業DNA / 五力雷達 / OPM話語權 / 地雷警示）評判財務健康度與資金流向型態。
 步驟四：估值定位 - 結合357估值區間判斷目前股價是否在合理買進區。
 步驟五：風險量化與宏觀交叉驗證 - 利用ATR計算動態波動區間；並必須引用「宏觀跨資產背景」中的 VIX / 美核心CPI / 🇹🇼 台灣 PMI / 美10Y / 費半 SOX 至少 2 項，說明對個股估值與外資籌碼的影響（例：「台灣 PMI < 48 → 製造業衰退，台股出口股承壓」、「SOX 重挫 -2% 領先台股科技股 → 對外資權值股不利」、「美10Y > 4.5% → 高 PE 成長股估值壓抑」）。
-步驟六：新聞事件面 - 歸納近半年新聞中的「利多催化劑」與「利空/風險事件」，評估是否與技術籌碼訊號相互印證或背離（若無新聞則註明「近期無顯著新聞催化」）。
+步驟六：新聞事件面 - 歸納近期新聞中的「利多催化劑」與「利空/風險事件」，評估是否與技術籌碼訊號相互印證或背離（若無新聞則註明「近期無顯著新聞催化」）。
 
 【輸出格式】使用 Markdown 語法，生成以下架構的報告：
 
@@ -2788,7 +2788,7 @@ padding:12px 16px;margin:8px 0;">
 - **技術/籌碼亮點**：（均線與法人的共振現象 + 近20日籌碼集中度/延續性的主力訊號）
 - **基本面與估值**：（目前股價是否透支未來成長，357估值定位 + D2 先行指標燈號）
 - **財報體質**：（企業DNA類型說明、OPM商業話語權、五力雷達弱點、地雷警示是否觸發）
-- **新聞事件面**：（歸納近半年關鍵新聞的催化劑與風險事件，對後市與籌碼的影響；無則註明）
+- **新聞事件面**：（歸納近期關鍵新聞的催化劑與風險事件，對後市與籌碼的影響；無則註明）
 
 ### 四、具體戰術建議
 ⚠️ 以下內容僅供參考，不構成買賣邀約。（價位**務必引用上方「關鍵價位」系統實算值**，可補充理由，但嚴禁自行虛構數字）
@@ -2818,7 +2818,7 @@ padding:12px 16px;margin:8px 0;">
                 _show_news_expander(_cached_news, st.session_state.get(_ai_sum_key + '_newsdiag'))
             st.markdown(_ai_sum_cached)
         elif not _do_ai_sum:
-            st.caption('▲ 點擊上方按鈕，AI 將綜合技術面、基本面、財報體檢、近半年新聞五大面向生成完整戰略評估報告。')
+            st.caption('▲ 點擊上方按鈕，AI 將綜合技術面、基本面、財報體檢、近期新聞五大面向生成完整戰略評估報告。')
 
 # ══════════════════════════════════════════════════════════════
 # ══════════════════════════════════════════════════════════════
