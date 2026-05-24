@@ -149,14 +149,15 @@
 **戰情室層級（流程 / 環境）**
 - [ ] **#U1** 環境工：49 條 stale remote branches 清理（`cleanup_stale_branches.sh` 已備，sandbox 403 擋 push --delete，需本機 `DRY_RUN=0` 執行）
 - [ ] **#U2** 部署驗證：PR #42-#78 累積 Streamlit Cloud 上線驗收（Phase 5+6 共 8 抽出模組手動驗 happy path）
-- [ ] **#U3** PMI 真實異常：待下次 PMI 紅燈時用「🔬 8 段備援源詳細診斷」定位根因（工具已備 PR #53）
+- [ ] **#U3** PMI 真實異常：**工具已備、屬事件驅動**（8 段備援 each-source 失敗原因已記錄於 macro_core:902 + 「資料診斷」tab）；待下次 PMI 紅燈時定位根因，無新碼可寫
 - [ ] **#U4** 剩餘重構候選（可選）：tab_*.py / etf_tab_*.py 內 closure 沿用 7A/7B 模式抽純函式 + 補 test
 
 **程式碼技術債（功能簡化 / 資料源待補）**
 - [ ] **#U5** `tab_edu.py:38` — BWIBBU_d / BFI82U 兩指標無趨勢資料（低價值：BWIBBU_d 已在 yield_screener 有 fetcher，但教學 tab 走 session_state 背景 job 管線，資料形狀「全市場快照 vs 個指標趨勢」不合，硬接價值低；建議延後或重新設計需求）
 - [ ] **#U6** `tab_edu.py:94` — 「其他」類指標暫無資料（同 #U5 管線問題）
-- [ ] **#U7** `tab_edu.py:165` — 單一最新值指標趨勢圖待補（需擴充 macro fetcher 存歷史序列；中等工 + 線上不可驗）
-- [ ] **#U8** `etf_tab_single.py:183` — 配息「平準金佔比」需公開說明書揭露，計畫加 SITCA 抓取（⚠️ 全新端點，response 格式未知，sandbox 無法驗證，盲寫高風險 — 建議線上可測時再做）
+- [x] **#U7** ✅ `tab_edu` 單值指標趨勢圖（PR #77）— FRED-id 指標(CPILFESL/VALEXPTWM052N/NAPM)用 `_fetch_fred_series_edu`(units=pc1 取 YoY%) 抓近24M 畫 sparkline；無 key/停更自動 degrade 回單值。NDC/ms1 非 FRED id 維持單值
+- [🔶] **#U8** `etf_tab_single` 平準金佔比（PR #76 部分）— 無穩定 API 來源，改提供誠實手動查法(投信月報/公開說明書/MoneyDJ 收益分配)+「>30% 賺息賠本」判讀；完整 SITCA 抓取待找到正確端點再做（不盲寫）
+- [本輪✅] **IMF proxy** — `tab_macro` IMF DataMapper M1/M2 改走 `fetch_url`(proxy 優先降級直連)，移除未用 `_rq_m1`（PR #76）
 - [x] **#U9** ✅ `tab_stock.py` 龍頭預警區雙 bug 修復（單位 元→億 + 真實股本比 cl/股本≥50% cx/股本≥80%，新增 `_fetch_share_capital`）— PR `bfc60e7`
 - [x] **#U10** ✅ `tab_stock_picker._check_pe_zone` 改真 TTM 4Q EPS 加總（抽 `_fetch_quarterly_is` 共用）— PR `bfc60e7`
 - [x] **#U11** ✅ 集保大戶籌碼 — **自建爬蟲版已實作**：`chip_radar.py`（norway.twsthr.info `StockHolders.aspx`，走 proxy_helper + 隨機 UA + `pandas.read_html` 自適應欄位偵測 + `@st.cache_data(ttl=86400)`，PR #45 後改吃主代碼 `sid2`、移除自有輸入框、上移至「AI 首席顧問總結」上方、摘要注入 AI prompt），含 Plotly 雙軸圖（散戶人數 bar / 大戶比例 line）+ 防呆 + 🔬 解析診斷面板。**✅ 解析已校正（PR #52）**：使用者雲端展開診斷面板定位 read_html 共 21 表、真正時序表為表#9（343×16，表頭未被當欄名 → 整數欄名升首列為表頭 + `_find_major_col` 補認「百分比」+ 評分加有效日期比例），日期/大戶比例(43.88%)/散戶人數正常。原 `tab_stock_picker._check_major_holders`（FinMind premium）維持 robust 回「⚠️ 需付費 token」不動
