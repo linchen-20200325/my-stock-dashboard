@@ -876,14 +876,14 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 # ── 路徑 2b：IMF DataMapper API（FRED 備援，全球可達）──
                 try:
                     # MABMM301 = M2 年增率%, MANMM101 = M1 年增率% (IMF IFS)
-                    _imf_m1_r = _rq_m1.get(
-                        'https://www.imf.org/external/datamapper/api/v1/MANMM101/TW',
-                        headers={'User-Agent': 'Mozilla/5.0'}, timeout=15, verify=False)
-                    _imf_m2_r = _rq_m1.get(
-                        'https://www.imf.org/external/datamapper/api/v1/MABMM301/TW',
-                        headers={'User-Agent': 'Mozilla/5.0'}, timeout=15, verify=False)
-                    print(f'[M1B/IMF] M1={_imf_m1_r.status_code} M2={_imf_m2_r.status_code}')
-                    if _imf_m1_r.status_code == 200 and _imf_m2_r.status_code == 200:
+                    from proxy_helper import fetch_url as _fu_imf  # 強制走 NAS proxy（一致性；失敗自動降級直連）
+                    _imf_m1_r = _fu_imf(
+                        'https://www.imf.org/external/datamapper/api/v1/MANMM101/TW', timeout=15, attempts=1)
+                    _imf_m2_r = _fu_imf(
+                        'https://www.imf.org/external/datamapper/api/v1/MABMM301/TW', timeout=15, attempts=1)
+                    print(f'[M1B/IMF] M1={getattr(_imf_m1_r, "status_code", None)} M2={getattr(_imf_m2_r, "status_code", None)}')
+                    if (_imf_m1_r is not None and _imf_m2_r is not None
+                            and _imf_m1_r.status_code == 200 and _imf_m2_r.status_code == 200):
                         _imf_m1_j = _imf_m1_r.json()
                         _imf_m2_j = _imf_m2_r.json()
                         _imf_m1_vals = _imf_m1_j.get('values', {}).get('MANMM101', {}).get('TW', {})
