@@ -1003,6 +1003,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 st.session_state.pop(_t3ai_key, None)
                 st.rerun()
         if _t3ai_btn:
+            _sc_map3 = {s.get('stock_id'): s for s in score_t3}
             _port_lines = []
             for _rp in results_t3:
                 _sid_p = _rp.get('stock_id', _rp.get('代碼',''))
@@ -1016,12 +1017,22 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 _rsi_p = _rp.get('rsi', 'N/A')
                 _ma_p  = '多頭排列' if (_rp.get('ma_above', 0) or 0) >= 2 else '空頭排列'
                 _vcp_p = 'VCP突破' if _rp.get('vcp_signal') else '未突破'
+                _scf   = _sc_map3.get(_sid_p, {})
+                try:
+                    _dim_p = (f" 五維(趨{_scf.get('trend',0):.0f}/動{_scf.get('momentum',0):.0f}/籌{_scf.get('chip',0):.0f}"
+                              f"/量{_scf.get('volume',0):.0f}/RS{_scf.get('rs_score',50):.0f})") if _scf else ''
+                except (TypeError, ValueError):
+                    _dim_p = ''
+                _rad_p = _fhp.get('radar_scores', {}) if _fhp else {}
+                _rad_avg_p = f"{sum(_rad_p.values())/len(_rad_p):.1f}" if _rad_p else '-'
                 _port_lines.append(
-                    f"[{_sid_p} {_nm_p}] 健康度={_ht_p:.0f} 評分={_sc_p:.0f} | "
+                    f"[{_sid_p} {_nm_p}] 健康度={_ht_p:.0f} 評分={_sc_p:.0f}{_dim_p} | "
                     f"技術: 均線={_ma_p} RSI={_rsi_p} {_vcp_p} | "
                     f"籌碼: 外資{'買超' if _fb_p>0 else '賣超'}{abs(_fb_p)/1e8:.1f}億 | "
-                    f"基本面: EPS={_fd_p.get('近4季EPS','-')} 毛利={_fd_p.get('毛利率%','-')}% | "
-                    f"財報DNA={_dna_p}"
+                    f"基本面: EPS={_fd_p.get('近4季EPS','-')} 毛利={_fd_p.get('毛利率%','-')}% "
+                    f"殖利率={_fd_p.get('殖利率%','-')} SQ品質={_fd_p.get('SQ評分','-')} FGMS={_fd_p.get('FGMS','-')} | "
+                    f"財報體檢: DNA={_dna_p} 現金水位={_fhp.get('cash_ratio_value','-') if _fhp else '-'} "
+                    f"OCF={_fhp.get('ocf_value','-') if _fhp else '-'} 負債比={_fhp.get('debt_ratio_value','-') if _fhp else '-'} 雷達均分={_rad_avg_p}"
                 )
             _reg_p = st.session_state.get('mkt_info', {}).get('regime', 'neutral')
             _reg_txt_p = '多頭市場（積極操作）' if _reg_p == 'bull' else ('空頭市場（縮減部位）' if _reg_p == 'bear' else '震盪整理（謹慎觀望）')
@@ -1051,7 +1062,10 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 "【近期各股相關新聞】（RSS即時，輔助研判用）",
                 _t3_news_str,
                 "",
-                "請依以下格式輸出《投資組合戰略優化報告》：",
+                "【風控警示】（系統規則引擎觸發）",
+                ('\n'.join(f'⚠️ {_a}' for _a in risk_alerts) if risk_alerts else '（目前無觸發）'),
+                "",
+                "請依以下格式輸出《投資組合戰略優化報告》（務必運用上方每檔的五維評分、SQ/FGMS、財報體檢與風控警示）：",
                 "",
                 "#### 一、組合強弱排序矩陣",
                 "| 梯隊 | 股票 | 核心催化劑 | 法人態度 | 綜合評分 |",
