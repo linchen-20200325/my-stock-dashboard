@@ -12,7 +12,8 @@ def _fetch_news_for(ticker: str, name: str = "", n: int = 4) -> str:
     """抓取個股/ETF 相關新聞，回傳格式化字串。失敗時回傳空字串。
     走 NAS 中繼站 → Squid proxy(帶 CONSENT cookie 繞 Google 同意頁) → 直連。"""
     try:
-        import feedparser as _fp, html as _h
+        import feedparser as _fp
+        import html as _h
         from urllib.parse import quote as _uq
     except ImportError:
         return ""
