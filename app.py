@@ -899,7 +899,10 @@ with st.sidebar:
     st.markdown('### 🔌 連線狀態')
     # [Fixed] 與 line 73-74 對齊：st.secrets 優先，os.environ fallback
     _fm_tok  = str(st.secrets.get('FINMIND_TOKEN',  os.environ.get('FINMIND_TOKEN',  '')))
-    _gm_key  = str(st.secrets.get('GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY', '')))
+    # Gemini 改看整池 key（GEMINI_API_KEY + _2~_6），任一把有設就算通
+    _gm_keys  = _gemini_keys()
+    _gm_slots = [_n for _n in _GEMINI_KEY_NAMES
+                 if str(st.secrets.get(_n, '') or os.environ.get(_n, '') or '').strip()]
     _px_host = str(st.secrets.get('PROXY_HOST',     os.environ.get('PROXY_HOST',     '')))
     # PROXY_URL 與 PROXY_HOST 二擇一即可亮 ✅
     if not _px_host:
@@ -911,8 +914,8 @@ with st.sidebar:
         else:
             st.error('FinMind ❌')
     with _sb_c2:
-        if _gm_key:
-            st.success('Gemini ✅')
+        if _gm_keys:
+            st.success(f'Gemini ✅ ×{len(_gm_keys)}')
         else:
             st.error('Gemini ❌')
     with _sb_c3:
@@ -920,6 +923,12 @@ with st.sidebar:
             st.success('Proxy ✅')
         else:
             st.warning('Proxy —')
+    # Gemini 金鑰池偵測明細（協助確認多帳號 key 有沒有被讀到）
+    if _gm_slots:
+        st.caption('🔑 偵測到 Gemini 金鑰：' + '、'.join(_gm_slots))
+    else:
+        st.caption('🔑 未偵測到任何 Gemini 金鑰（請確認 Secrets 內 '
+                   'GEMINI_API_KEY 或 GEMINI_API_KEY_2~_6 的名稱與值）')
     if _px_host:
         _px_port = str(st.secrets.get('PROXY_PORT', os.environ.get('PROXY_PORT', '')))
         st.caption(f'🔒 {_px_host}:{_px_port}' if _px_port else '🔒 PROXY_URL 已設定')
