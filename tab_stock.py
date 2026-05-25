@@ -1283,16 +1283,16 @@ padding:12px 16px;margin:8px 0;">
                 f'{_asset_type} **`{sid2}` {name2}** ｜ 策略1·357法則判斷'
             )
             st.markdown(f'<div style="background:#161b22;border-left:4px solid {_357_c};padding:10px 14px;border-radius:0 8px 8px 0;font-size:13px;font-weight:700;color:{_357_c};margin:6px 0;">{_357_verdict}</div>', unsafe_allow_html=True)
-        # 357結論：直接顯示當前評估，不導向策略手冊
-        st.markdown(
-            f'<div style="background:#0d1117;border-left:4px solid {_357_c};'
-            f'padding:10px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
-            f'<span style="font-size:12px;color:#8b949e;">{_asset_type} <code>{sid2}</code> {name2} ｜ 🎓 策略1 · 357法則判斷</span><br>'
-            f'<span style="font-size:14px;font-weight:800;color:{_357_c};">{_357_verdict}</span><br>'
-            f'<span style="font-size:11px;color:#8b949e;">判讀邏輯：殖利率≥7%=便宜大買；5-7%=合理；3-5%=偏貴持有；&lt;3%=昂貴停利</span>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+            # 357結論：直接顯示當前評估，不導向策略手冊
+            st.markdown(
+                f'<div style="background:#0d1117;border-left:4px solid {_357_c};'
+                f'padding:10px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
+                f'<span style="font-size:12px;color:#8b949e;">{_asset_type} <code>{sid2}</code> {name2} ｜ 🎓 策略1 · 357法則判斷</span><br>'
+                f'<span style="font-size:14px;font-weight:800;color:{_357_c};">{_357_verdict}</span><br>'
+                f'<span style="font-size:11px;color:#8b949e;">判讀邏輯：殖利率≥7%=便宜大買；5-7%=合理；3-5%=偏貴持有；&lt;3%=昂貴停利</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
         # ── 估值河流圖（357殖利率河流，逐日 TTM）────────────────────
         st.caption('🔰 河流圖怎麼看：把「便宜／合理／昂貴」三種估值水位畫成色帶，看股價（線）落在哪一條 —— '
