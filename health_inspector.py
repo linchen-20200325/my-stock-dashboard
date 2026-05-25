@@ -269,14 +269,24 @@ def render_data_health_raw():
                         _lines.append('🌐 出口 IP 測試無回應（不一定影響成分股，續看下方實測）')
                 except Exception as _eip:
                     _lines.append(f'🌐 出口 IP 測試略過：{type(_eip).__name__}')
-                # 3) 實測抓 0050.TW 成分股（清快取確保真打網路）
-                from etf_fetch import fetch_etf_holdings
+                # 3) 台灣 Yahoo 股市直測（國內版 Yahoo，海外 IP 可直連）
+                from etf_fetch import _fetch_holdings_yahoo_tw, fetch_etf_holdings
+                try:
+                    _yh = _fetch_holdings_yahoo_tw('0050.TW')
+                    if _yh:
+                        _lines.append(f'🇹🇼 台灣 Yahoo 股市：✅ 0050.TW 取得 {len(_yh)} 檔持股（主源生效）')
+                    else:
+                        _lines.append('🇹🇼 台灣 Yahoo 股市：⚪ 0050.TW 解析不出持股'
+                                      '（頁面結構可能改版，續看下方整合結果）')
+                except Exception as _eyh:
+                    _lines.append(f'🇹🇼 台灣 Yahoo 股市：測試異常 {type(_eyh).__name__}')
+                # 4) 實測整合抓取 0050.TW 成分股（清快取確保真打網路）
                 try:
                     fetch_etf_holdings.clear()
                 except Exception:
                     pass
                 _t0 = _tt.time()
-                with st.spinner('實測抓取 0050.TW 成分股中…'):
+                with st.spinner('實測整合抓取 0050.TW 成分股中…'):
                     _h = fetch_etf_holdings('0050.TW')
                 _dt = _tt.time() - _t0
                 if _h:

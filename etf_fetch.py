@@ -263,13 +263,91 @@ def fetch_moneydj_expense_ratio(ticker: str):
         return None
 
 
+def _fetch_holdings_yahoo_tw(symbol_yf: str):
+    """台灣 Yahoo 股市 ETF 持股頁（國內版 Yahoo，海外 IP 可直連、繞過 MoneyDJ 403）。
+
+    URL：https://tw.stock.yahoo.com/quote/{symbol}/holding
+    symbol_yf：yfinance 格式代號（如 '00980A.TW' / '0050.TW'）。
+    解析雙策略：① 頁面內嵌 JSON（名稱+權重鍵）② BeautifulSoup 表格列（中文名 + n.nn%）。
+    回 {個股名稱: 權重%} 或 None（抓不到 / 解析不出）。
+    """
+    import re as _re_y
+    try:
+        from proxy_helper import fetch_url as _fu_y
+    except Exception:
+        return None
+    _url = f'https://tw.stock.yahoo.com/quote/{symbol_yf}/holding'
+    try:
+        _r = _fu_y(_url, timeout=15, attempts=2)
+    except Exception as _e:
+        print(f'[Holdings/YahooTW] fetch 異常 {symbol_yf}: {type(_e).__name__}: {_e}')
+        return None
+    if _r is None or getattr(_r, 'status_code', None) != 200:
+        print(f'[Holdings/YahooTW] {symbol_yf} 無回應 / 非 200')
+        return None
+    try:
+        _r.encoding = 'utf-8'
+    except Exception:
+        pass
+    _html = _r.text or ''
+    _out = {}
+    # ── 策略 A：頁面內嵌 JSON（名稱鍵 + 權重鍵就近配對）──
+    for _m in _re_y.finditer(
+        r'"(?:name|symbolName|holdingName|stockName)"\s*:\s*"([^"]{1,40})"'
+        r'[^{}]{0,200}?"(?:weighting|holdingPercent|percent|weight|ratio)"'
+        r'\s*:\s*"?([0-9]+(?:\.[0-9]+)?)"?',
+        _html
+    ):
+        _nm = _m.group(1).strip()
+        try:
+            _w = float(_m.group(2))
+        except ValueError:
+            continue
+        if _w <= 1.5:           # 小數表示（0.05）→ 轉百分比
+            _w *= 100
+        if _nm and not _nm.isdigit() and 0 < _w <= 100 and _nm not in _out:
+            _out[_nm] = round(_w, 4)
+        if len(_out) >= 60:
+            break
+    if _out:
+        print(f'[Holdings/YahooTW] ✅(JSON) {symbol_yf} {len(_out)} 檔')
+        return _out
+    # ── 策略 B：表格純文字（中文股名 + n.nn% 同列）──
+    try:
+        from bs4 import BeautifulSoup as _BS_y
+        _txt = _BS_y(_html, 'html.parser').get_text(' ', strip=True)
+        for _m in _re_y.finditer(
+            r'([一-鿿][一-鿿A-Za-z0-9&\.\-]{1,29})\s+'
+            r'([0-9]{1,2}\.[0-9]{1,2})\s*%', _txt
+        ):
+            _nm = _m.group(1).strip()
+            try:
+                _w = float(_m.group(2))
+            except ValueError:
+                continue
+            if (_nm and not _nm.isdigit() and 0 < _w <= 100
+                    and _nm not in _out
+                    and _nm not in ('持股權重', '權重', '比例', '持股比例')):
+                _out[_nm] = _w
+            if len(_out) >= 60:
+                break
+    except Exception as _eb:
+        print(f'[Holdings/YahooTW] BS 解析異常 {symbol_yf}: {type(_eb).__name__}: {_eb}')
+    if _out:
+        print(f'[Holdings/YahooTW] ✅(HTML) {symbol_yf} {len(_out)} 檔')
+        return _out
+    print(f'[Holdings/YahooTW] ⚪ {symbol_yf} 頁面無可解析持股')
+    return None
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_etf_holdings(ticker: str):
     """抓 ETF 成份股清單（個股名稱 → 權重 %）。台股 ETF 為主，海外 ETF 走 yfinance 兜底。
 
-    三段備援（按順序嘗試，任一成功即返回）：
+    多段備援（按順序嘗試，任一成功即返回）：
       1. yfinance `.funds_data.top_holdings` — 海外 ETF 主源；台股通常 None
-      2. MoneyDJ 三條 URL 並掃（持股頁面 pattern 各家不一）：
+      1.5 台灣 Yahoo 股市 /quote/{sym}/holding — 台股 ETF 主源（海外 IP 可直連）
+      2. MoneyDJ 三條 URL 並掃（備源，海外 IP 需 NAS proxy）：
          - Basic0007.xdjhtm（持股明細）
          - Basic0008.xdjhtm（投資配置）
          - RankA0001.xdjhtm（持股排名）
@@ -320,7 +398,13 @@ def fetch_etf_holdings(ticker: str):
     except Exception as _ey:
         print(f'[Holdings/yf] {_t_yf}: {type(_ey).__name__}: {_ey}')
 
-    # ── 2. MoneyDJ 三條 URL 嘗試（台股 ETF 主源）────────────────
+    # ── 1.5 台灣 Yahoo 股市（國內版 Yahoo，台股 ETF 主源）────────
+    # Yahoo CDN 海外 IP 可直連，繞過 MoneyDJ 對海外 IP 的 403 封鎖
+    _yh = _fetch_holdings_yahoo_tw(_t_yf)
+    if _yh:
+        return _yh
+
+    # ── 2. MoneyDJ 三條 URL 嘗試（台股 ETF 備源）────────────────
     # 走 proxy_helper（NAS Squid 台灣 IP）為主源 — MoneyDJ 反爬擋海外 IP 回 403；
     # curl_cffi 留作 fallback（本機開發或 proxy 掛掉時）
     _urls = [
