@@ -340,6 +340,28 @@ def _fetch_holdings_yahoo_tw(symbol_yf: str):
     return None
 
 
+def _enrich_tw_holding_name(raw_name: str, symbol) -> str:
+    """持股顯示成「中文名 (代碼)」。
+
+    - symbol 形如 '2330.TW'：台股代號（4-6 碼數字，末可帶字母）→ 以
+      stock_names.get_stock_name 補中文；查無中文時退回「原名 (代碼)」至少帶出代碼。
+    - 海外成分股（如美股 ETF 的 AAPL）或無法判別 → 原樣回傳，不畫蛇添足。
+    """
+    import re as _re_n
+    _code = str(symbol or '').upper().replace('.TWO', '').replace('.TW', '').strip()
+    if not _re_n.fullmatch(r'\d{4,6}[A-Z]?', _code):
+        return raw_name
+    _zh = ''
+    try:
+        from stock_names import get_stock_name as _gsn
+        _zh = _gsn(_code) or ''
+    except Exception:
+        _zh = ''
+    if _zh and _re_n.search(r'[一-鿿]', _zh):
+        return f'{_zh} ({_code})'
+    return f'{raw_name} ({_code})'
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_etf_holdings(ticker: str):
     """抓 ETF 成份股清單（個股名稱 → 權重 %）。台股 ETF 為主，海外 ETF 走 yfinance 兜底。
@@ -380,6 +402,7 @@ def fetch_etf_holdings(ticker: str):
                 _out = {}
                 for _idx, _row in _th.iterrows():
                     _name = str(_row.get('Name', _idx) or _idx).strip()
+                    _sym  = _row.get('Symbol', _idx)  # top_holdings index 多為代號
                     _w_raw = _row.get('Holding Percent', _row.get('% of Net Assets', None))
                     if _w_raw is None or _name == '':
                         continue
@@ -391,7 +414,7 @@ def fetch_etf_holdings(ticker: str):
                     if _w <= 1.5:
                         _w = _w * 100
                     if _w > 0:
-                        _out[_name] = round(_w, 4)
+                        _out[_enrich_tw_holding_name(_name, _sym)] = round(_w, 4)
                 if _out:
                     print(f'[Holdings/yf] ✅ {_t_yf} {len(_out)} 檔')
                     return _out
