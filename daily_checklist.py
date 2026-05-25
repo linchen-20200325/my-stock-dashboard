@@ -926,6 +926,49 @@ def analyze_20d_chips(stock_id: str) -> dict:
         return {'error': str(_e20), 'signal': '⚫ 計算失敗'}
 
 
+def analyze_20d_chips_from_df(df) -> dict:
+    """近 20 日籌碼集中度 — 直接複用個股 K 線已載入的 df（含 外資/投信/volume 欄，
+    單位皆為張），免重複呼叫 FinMind（規避 quota 失敗）。
+    回傳格式與 analyze_20d_chips 完全相同；欄位不足時回 error 供呼叫端退回 API 版。"""
+    try:
+        import pandas as _pd
+        if df is None or len(df) < 5:
+            return {'error': 'df資料不足', 'signal': '⚫ 資料不足'}
+        if not all(c in df.columns for c in ('外資', '投信', 'volume')):
+            return {'error': 'df缺法人/量欄', 'signal': '⚫ 資料不足'}
+        _d   = df.tail(20)
+        _net = (_pd.to_numeric(_d['外資'], errors='coerce').fillna(0)
+                + _pd.to_numeric(_d['投信'], errors='coerce').fillna(0))
+        _vol = _pd.to_numeric(_d['volume'], errors='coerce').fillna(0)
+        if not (_net != 0).any():        # 法人欄全為 0 → df 未載到籌碼，退回 API 版
+            return {'error': 'df法人欄全為0', 'signal': '⚫ 資料不足'}
+        _tot_net = float(_net.sum())
+        _tot_vol = float(_vol.sum())
+        if _tot_vol <= 0:
+            return {'error': '成交量為0', 'signal': '⚫ 資料不足'}
+        _concentration = _tot_net / _tot_vol * 100
+        _pos_days   = int((_net > 0).sum())
+        _continuity = _pos_days / len(_d) * 100
+        if _concentration > 5 and _continuity > 50:
+            _signal = '🔥 大戶吸籌'
+        elif _concentration < -5:
+            _signal = '🔴 大戶倒貨'
+        else:
+            _signal = '🟡 籌碼發散'
+        return {
+            'concentration': round(_concentration, 2),
+            'continuity':    round(_continuity, 1),
+            'signal':        _signal,
+            'days':          len(_d),
+            'pos_days':      _pos_days,
+            'total_net_k':   round(_tot_net / 1e3, 1),
+            'total_vol_k':   round(_tot_vol / 1e3, 1),
+            'error':         None,
+        }
+    except Exception as _edf:
+        return {'error': str(_edf), 'signal': '⚫ 計算失敗'}
+
+
 def calc_stats(df):
     """計算股票統計數據（last/pct/status）"""
     if df is None or df.empty: return None

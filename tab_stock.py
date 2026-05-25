@@ -73,7 +73,7 @@ def render_tab_stock():
     from config import FINMIND_TOKEN
     # 外部模組
     from v4_strategy_engine import V4StrategyEngine
-    from daily_checklist import analyze_20d_chips
+    from daily_checklist import analyze_20d_chips, analyze_20d_chips_from_df
     from v5_modules import (
         analyze_fundamental_leading,
         calc_dividend_yield_357,
@@ -995,9 +995,12 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         st.markdown('---')
         st.markdown('#### 🔬 G. 近 20 日籌碼集中度')
         st.caption('🔰 指標白話：集中度＝大戶（外資+投信）淨買量佔總成交量的比例，正值越高＝大戶默默吸貨（偏多）、'
-                   '負值＝倒貨；延續性＝最近多少比例的交易日持續買超。')
+                   '負值＝倒貨；延續性＝最近多少比例的交易日持續買超。資料直接取自下方 K 線的三大法人/成交量。')
         with st.spinner(f'計算 {sid2} 近 20 日籌碼集中度...'):
-            _chip20 = analyze_20d_chips(sid2)
+            # 優先複用 K 線已載入的 df2（含 外資/投信/量），免重複呼叫 FinMind（規避 quota 失敗）
+            _chip20 = analyze_20d_chips_from_df(df2)
+            if _chip20.get('error'):
+                _chip20 = analyze_20d_chips(sid2)   # df2 無籌碼欄時退回獨立 API 版
         if _chip20.get('error'):
             st.caption(f'⚫ 籌碼集中度取得失敗：{_chip20["error"]}')
         else:
