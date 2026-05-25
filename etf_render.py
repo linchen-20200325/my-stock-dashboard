@@ -9,6 +9,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from etf_fetch import _fetch_news_for, _fetch_sector_returns
+from ai_structured_summary import build_structured_summary_prompt
 
 
 # ── 總經連動配置建議表 ────────────────────────────────────────
@@ -557,7 +558,7 @@ def _build_treemap_data(sectors: dict, returns: dict, market: str) -> go.Figure:
     return fig
 
 
-def render_sector_heatmap():
+def render_sector_heatmap(gemini_fn=None):
     st.markdown('### 🗺️ 產業熱力圖')
     st.caption('即時抓取各類股漲跌幅，紅=漲 / 綠=跌（台灣慣例）。點選區塊可展開子類股。')
     with st.expander('💡 怎麼用產業熱力圖？', expanded=False):
@@ -628,3 +629,48 @@ def render_sector_heatmap():
             'yellow')
     else:
         _colored_box(f'✅ 全部 {total_s} 個類股資料取得完整', 'green')
+
+    # ── AI 白話總結 ──────────────────────────────────────────
+    if gemini_fn:
+        st.markdown('---')
+        clicked = st.button('🤖 生成 AI 白話總結', key='sector_ai_btn')
+        if clicked:
+            # 只取有數據的類股，依漲跌幅排序（最強→最弱）
+            valued = [r for r in rank_rows
+                      if isinstance(r[f'{period_label}漲跌%'], float)]
+            ranking = '、'.join(
+                f"{r['類股']} {r[f'{period_label}漲跌%']:+.2f}%" for r in valued
+            ) or '目前沒有可用的漲跌資料'
+
+            ups = [r for r in valued if r[f'{period_label}漲跌%'] > 0]
+            downs = [r for r in valued if r[f'{period_label}漲跌%'] < 0]
+            if valued:
+                strongest = valued[0]
+                weakest = valued[-1]
+                flow = (
+                    f"上漲的有 {len(ups)} 個產業、下跌的有 {len(downs)} 個產業。"
+                    f"今天最受青睞（漲最多）的是「{strongest['類股']}」"
+                    f"（{strongest[f'{period_label}漲跌%']:+.2f}%），"
+                    f"最被冷落（跌最多）的是「{weakest['類股']}」"
+                    f"（{weakest[f'{period_label}漲跌%']:+.2f}%）。"
+                )
+            else:
+                flow = '目前沒有足夠的資料判斷資金流向。'
+
+            sections = [
+                {'name': '今天哪些產業在漲、哪些在跌', 'data': ranking},
+                {'name': '錢正在往哪裡跑（資金流向的感覺）', 'data': flow},
+            ]
+            news_text = _fetch_news_for('台股', '台股 類股 輪動 產業 盤勢', 5)
+            prompt = build_structured_summary_prompt(
+                subject_title=f'今天的{market_label}產業表現',
+                sections=sections,
+                news_text=news_text,
+                overall_question='現在資金比較偏好哪些產業、有沒有明顯的輪動、一般人可以怎麼看。',
+            )
+            with st.spinner('AI 正在用白話幫你整理產業輪動...'):
+                md = gemini_fn(prompt, max_tokens=1000)
+            st.session_state['_sector_ai_md'] = md
+            st.markdown(md)
+        elif st.session_state.get('_sector_ai_md'):
+            st.markdown(st.session_state['_sector_ai_md'])

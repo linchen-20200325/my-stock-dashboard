@@ -3,9 +3,10 @@
 依賴策略
 ========
 - Top-level: streamlit（最穩定）
-- 函式內 late import 22 個依賴，避免循環 import：
+- 函式內 late import 依賴，避免循環 import：
   * stdlib: pandas, datetime.timedelta
-  * 外部: unified_decision.render_unified_decision
+  * 外部: ai_structured_summary.build_structured_summary_prompt（按鈕觸發時）
+          / etf_fetch._fetch_news_for（按鈕觸發時）
   * etf_dashboard.py 內部 helper (21):
     - 渲染類: _colored_box / _plot_etf_chart / _render_bias
       / _teacher_conclusion / macro_allocation_banner
@@ -28,7 +29,6 @@ def render_etf_single(gemini_fn=None):
     # ─ Late imports（避免循環 import）─
     import pandas as pd
     from datetime import timedelta
-    from unified_decision import render_unified_decision
     from etf_dashboard import (
         # 渲染類
         _colored_box, _plot_etf_chart, _render_bias, render_etf_holdings,
@@ -613,20 +613,89 @@ def render_etf_single(gemini_fn=None):
         '_err_nav':     _err_nav,
     }
 
-    # ── 統一投資決策分析模組（AI 首席顧問決策中心）─────────────
-    render_unified_decision(gemini_fn, {
-        'type': 'etf',
-        'id':   ticker,
-        'data': {
-            'ETF':              f'{etf_name} ({ticker})',
-            '現金殖利率':        f'{cur_yield:.2f}%',
-            '近5年平均殖利率':   f'{avg_yield:.2f}%',
-            '近1年含息總報酬':   f'{total_ret:.2f}%',
-            '年線乖離率BIAS240': f'{_bias240_ai:+.2f}%' if _bias240_ai is not None else 'N/A（< 240日）',
-            'KD': (f'K:{_kv_ai:.1f} D:{_dv_ai:.1f}' if _kv_ai is not None else 'N/A'),
-            'VCP突破':           vcp.get('signal', False) if isinstance(vcp, dict) else False,
-            '折溢價率':          f'{prem["premium_pct"]}%' if prem.get("premium_pct") is not None else 'N/A',
-            '追蹤誤差':          f'{te:.2f}%' if te is not None else 'N/A',
-            '大盤狀態':          regime,
-        },
-    })
+    # ── AI 白話結構化總結（取代舊的統一決策三卡片）─────────────
+    st.markdown('### 🧠 AI 白話總結')
+    st.caption('把這檔 ETF 的數據翻成「跟長輩聊天」的白話，逐項講好壞與要注意的地方。'
+               '⚠️ 僅供學術研究，非投資建議。')
+
+    # 小工具：None 一律顯示 N/A，數值補上單位
+    def _fmt(_v, _suffix='', _sign=False, _nd=2):
+        if _v is None:
+            return 'N/A'
+        try:
+            _f = float(_v)
+            return f'{_f:+.{_nd}f}{_suffix}' if _sign else f'{_f:.{_nd}f}{_suffix}'
+        except (TypeError, ValueError):
+            return str(_v)
+
+    _prem_pct = prem.get('premium_pct') if isinstance(prem, dict) else None
+    _ai_sum_key = f'etf_ai_sum_{ticker}'
+    if st.button('🧠 生成 AI 白話總結', key=_ai_sum_key, use_container_width=True):
+        from ai_structured_summary import build_structured_summary_prompt
+        from etf_fetch import _fetch_news_for
+
+        _sections = [
+            {
+                'name': '買這檔大概能領多少利息（配息）',
+                'data': (
+                    f'現金殖利率（你買進後一年大概能領回幾 % 現金）={_fmt(cur_yield, "%")}；'
+                    f'近5年平均殖利率（過去5年平均一年領回幾 %）={_fmt(avg_yield, "%")}。'
+                ),
+            },
+            {
+                'name': '過去一年賺賠多少、現在貴不貴（報酬與位階）',
+                'data': (
+                    f'近1年含息總報酬（連配息一起算，過去一年賺或賠幾 %）={_fmt(total_ret, "%")}；'
+                    f'年線乖離（現在價格比過去一年平均價高/低幾 %，正數=偏高偏貴、負數=偏低）='
+                    f'{_fmt(_bias240_ai, "%", _sign=True) if _bias240_ai is not None else "N/A（上市未滿約一年）"}；'
+                    f'KD（短線過熱或過冷的溫度計，80 以上偏熱、20 以下偏冷）='
+                    f'{(f"K={_fmt(_kv_ai, _nd=1)} D={_fmt(_dv_ai, _nd=1)}") if _kv_ai is not None else "N/A"}。'
+                ),
+            },
+            {
+                'name': '這檔健不健康（買貴沒、跟得上沒、內扣貴不貴、夠不夠大）',
+                'data': (
+                    f'折溢價（市價比這檔真正的身價貴還是便宜，正數=買貴了、負數=撿便宜）='
+                    f'{_fmt(_prem_pct, "%", _sign=True) if _prem_pct is not None else "N/A"}；'
+                    f'追蹤誤差（它跟它要追的指數差多少，越小代表越貼、越乖）={_fmt(te, "%")}；'
+                    f'內扣費用率（每年自動從你錢裡扣掉的管理費 %）={_fmt(expense * 100, "%") if expense else "N/A"}；'
+                    f'規模 AUM（這檔總共管多少錢，越大通常越穩、越不怕清算）='
+                    f'{f"{aum / 1e9:.1f}B 美元" if (aum and aum > 1e6) else "N/A"}；'
+                    f'Beta（跟著大盤上下震動的幅度，>1 比大盤更激動、<1 比較穩）={_fmt(beta)}。'
+                ),
+            },
+            {
+                'name': '有沒有破發、跌破均線等警訊',
+                'data': (
+                    f'破發（現在市價是否已經跌破當初發行的價格）='
+                    f'{("是，已破發" if _broken_issue else "否")}'
+                    f'（vs 發行價 {_fmt(_vs_launch_pct, "%", _sign=True) if _vs_launch_pct is not None else "N/A"}）；'
+                    f'跌破月線 MA20（短期約一個月的平均成本線）={("是" if _below_ma20 else "否")}；'
+                    f'跌破季線 MA60（中期約一季的平均成本線）={("是" if _below_ma60 else "否")}；'
+                    f'死亡交叉（短期均線往下穿過中期均線，常被視為轉弱訊號）='
+                    f'{("是" if (_ma20 is not None and _ma60_v is not None and _ma20 < _ma60_v) else "否")}；'
+                    f'目前大盤狀態={regime}。'
+                ),
+            },
+        ]
+
+        _news_text = _fetch_news_for(ticker, etf_name, 4)
+        _prompt = build_structured_summary_prompt(
+            f'{ticker} {etf_name} 這檔 ETF',
+            _sections,
+            news_text=_news_text,
+            overall_question='這檔 ETF 適合什麼樣的人、現在買貴了沒、要注意什麼。',
+        )
+        if gemini_fn is None:
+            st.warning('未提供 AI 服務（gemini_fn），無法生成總結。')
+        else:
+            with st.spinner('AI 白話總結生成中...'):
+                _ai_result = gemini_fn(_prompt, max_tokens=1200)
+            if _ai_result and not str(_ai_result).startswith('⚠️'):
+                st.session_state[f'{_ai_sum_key}_result'] = _ai_result
+            else:
+                st.warning(_ai_result or 'AI 回傳為空，請確認 GEMINI_API_KEY')
+
+    _ai_saved = st.session_state.get(f'{_ai_sum_key}_result')
+    if _ai_saved:
+        st.markdown(_ai_saved)

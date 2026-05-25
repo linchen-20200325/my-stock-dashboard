@@ -3891,54 +3891,16 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                             _line += f'｜{_s_n[:120]}'
                         _v_news_lines.append(_line)
                 _v_news_str = '\n'.join(_v_news_lines) if _v_news_lines else '（無法取得新聞）'
-                _macro_ai_prompt = (
-                    '你是一位擁有 20 年台股與全球宏觀研究經驗的「台股AI戰情室」首席總經分析師。'
-                    '你的分析風格冷靜、精準，且強調風險控管。\n\n'
-                    '## 資訊隔離約束（絕對遵守）\n'
-                    '- 禁止使用預訓練知識中的具體數字，解讀必須 100% 基於下方 Input Data 的內容\n'
-                    '- 禁止建議任何個股、ETF 或特定標的\n'
-                    '- 不得出現任何具體持股百分比數字\n\n'
-                    '## 🚨 系統性風險前置檢核（最高優先級，先做再寫報告）\n'
-                    '在進入正式分析前，**強制掃描【即時財經新聞】**，逐則比對下列黑天鵝關鍵字：\n'
-                    '  • 戰爭 / 軍事衝突 / 飛彈 / 入侵 / war / military / invasion\n'
-                    '  • 疫情 / 大規模封城 / pandemic / lockdown / outbreak\n'
-                    '  • 央行突發政策 / 緊急升降息 / emergency rate / unscheduled meeting\n'
-                    '  • 金融機構倒閉 / 擠兌 / bank run / collapse / bailout\n'
-                    '  • 重大地緣政治 / 制裁 / 斷交 / sanctions / embargo\n'
-                    '  • 主權違約 / 信評降等 / sovereign default / downgrade\n'
-                    '若**任一則新聞**命中以上關鍵字，視為【系統性風險觸發】：\n'
-                    '  ① 在報告最開頭以紅色橫幅標註 `🚨 系統性風險警報觸發`，列出觸發新聞 1-3 則\n'
-                    '  ② 「大盤戰略建議」中「操作方向」**強制下調一級**（多頭→震盪、震盪→空頭、空頭→極度防禦）\n'
-                    '  ③ 「警示旗語」中**首位**列出觸發新聞與其潛在傳導路徑（對台股的衝擊鏈）\n'
-                    '若沒有命中關鍵字，仍須在「警示旗語」末段註明「✅ 已掃描 N 則新聞，未發現系統性風險訊號」。\n\n'
-                    '## Input Data\n\n'
-                    f'【系統狀態（Python 規則引擎計算結果）】\n{_v_state_json}\n\n'
-                    f'【量化數據快照】\n{_v_macro_ctx if _v_macro_ctx else "（數據尚未載入，請先更新總經拼圖）"}\n\n'
-                    f'【即時財經新聞】\n{_v_news_str}\n\n'
-                    '## 輸出格式\n'
-                    '使用 Markdown 語法，生成以下架構的台股大盤戰情研判報告：\n\n'
-                    '## 📊 台股大盤戰情研判報告\n\n'
-                    '### 一、市場五維診斷（0-10 評分）\n'
-                    '- **景氣循環**：（得分/10，依據 PMI/OECD CLI）\n'
-                    '- **資金動能**：（得分/10，依據 M1B-M2 Gap）\n'
-                    '- **市場情緒**：（得分/10，依據 VIX/PCR）\n'
-                    '- **籌碼趨勢**：（得分/10，依據外資/融資/期貨淨部位）\n'
-                    '- **美股連動**：（得分/10，依據 SOX/VIX）\n\n'
-                    '### 二、核心洞察（50 字以內）\n'
-                    '（當前大盤處於哪個操作階段及核心邏輯）\n\n'
-                    '### 三、深度解析\n'
-                    '- **資金流向**：\n'
-                    '- **籌碼博弈**：\n'
-                    '- **潛在隱患**：\n\n'
-                    '### 四、大盤戰略建議\n'
-                    '⚠️ 僅供學術研究，不構成投資建議，盈虧自負。\n'
-                    '- **操作方向**：\n'
-                    '- **防禦策略**：\n'
-                    '- **追蹤指標**：\n\n'
-                    '### 五、警示旗語\n'
-                    '（列出可能破壞此分析邏輯的關鍵風險因子）\n\n'
-                    '【語言規範】統一使用繁體中文。禁止出現任何持股百分比數字。'
-                )
+                from ai_structured_summary import build_structured_summary_prompt
+                _sections_macro = [
+                    {'name': '現在市場是偏多還偏空（系統幫你下的判斷）',
+                     'data': _v_state_json},
+                    {'name': '景氣、資金、利率這些關鍵數字現在長怎樣',
+                     'data': _v_macro_ctx},
+                ]
+                _macro_ai_prompt = build_structured_summary_prompt(
+                    '台股大盤現在的狀況', _sections_macro, news_text=_v_news_str,
+                    overall_question='現在大盤整體偏多還偏空、適不適合進場、最該留意什麼。')
                 _ai_rpt = gemini_call(_macro_ai_prompt, max_tokens=1800)
                 _tz8 = datetime.timezone(datetime.timedelta(hours=8))
                 st.session_state['_macro_ai_report'] = _ai_rpt

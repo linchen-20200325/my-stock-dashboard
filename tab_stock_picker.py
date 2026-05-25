@@ -783,33 +783,60 @@ def _check_major_holders(stock_id: str) -> str:
 # ══════════════════════════════════════════════════════════════
 
 def _generate_ai_report(gemini_fn, qualified: list[dict], all_results: list[dict]) -> str:
-    """生成 Markdown 戰情報告：積極型 / 保守型 / 止損紀律。"""
-    _lines = ['以下為通過二階段濾網的候選個股清單，請依「積極型 / 保守型 / 止損紀律」三型給出操作建議：\n']
+    """用白話結構化摘要元件，把三關卡篩選結果翻成人話報告。"""
+    from ai_structured_summary import build_structured_summary_prompt
+    from etf_fetch import _fetch_news_for
+
+    # ── 第 1 節：通過名單（含為何入選）─────────────────────────
+    _pick_lines = []
     for r in qualified:
-        _lines.append(
-            f'- **{r["ticker"]} {r.get("note","")}**：'
-            f'S1=`{r["s1_pass_cnt"]}/9`（債{r.get("debt_ratio_label","?")} · 三率{r.get("three_rate_label","?")} '
-            f'· 5Y配息{r.get("div_5y_label","?")} · PE{r.get("pe_zone_label","?")} · 應收{r.get("ar_turnover_label","?")} '
-            f'· 存貨{r.get("inv_turnover_label","?")} · 資支{r.get("capex_label","?")} · 淨值{r.get("book_value_label","?")} '
-            f'· 合約負債{r.get("contract_liab_label","?")}）'
-            f' / S2=`{r["s2_pass_cnt"]}/6`（MA20{r.get("ma20_label","?")} · MACD{r.get("macd_label","?")} '
-            f'· KD{r.get("kd_label","?")} · 布林{r.get("boll_label","?")} · 投信{r.get("inst_label","?")} · 大戶{r.get("major_label","?")}）'
+        _name = (r.get('note') or '').strip()
+        _title = f'{r["ticker"]} {_name}'.strip()
+        _pick_lines.append(
+            f'- {_title}：'
+            f'基本面體質過了 {r["s1_pass_cnt"]}/9 關'
+            f'（負債{r.get("debt_ratio_label", "?")}、賺錢能力三率{r.get("three_rate_label", "?")}、'
+            f'近5年配息{r.get("div_5y_label", "?")}、股價貴不貴{r.get("pe_zone_label", "?")}、'
+            f'收帳速度{r.get("ar_turnover_label", "?")}、賣貨速度{r.get("inv_turnover_label", "?")}、'
+            f'敢花錢擴廠{r.get("capex_label", "?")}、家底淨值{r.get("book_value_label", "?")}、'
+            f'未來訂單合約負債{r.get("contract_liab_label", "?")}）；'
+            f'買盤時機過了 {r["s2_pass_cnt"]}/6 關'
+            f'（站上月線{r.get("ma20_label", "?")}、MACD多空{r.get("macd_label", "?")}、'
+            f'KD轉強{r.get("kd_label", "?")}、布林開口{r.get("boll_label", "?")}、'
+            f'投信買超{r.get("inst_label", "?")}、千張大戶加碼{r.get("major_label", "?")}）'
         )
-    _prompt = (
-        '你是一位擁有 20 年台股經驗的「台股AI戰情室」首席策略師。'
-        '依下方候選名單，輸出 Markdown 結構戰情報告：\n\n'
-        + '\n'.join(_lines)
-        + '\n\n請依以下結構回覆：\n\n'
-        '## 🎯 三階段選股建議\n\n'
-        '### 🔥 積極型投資人優先佈局\n'
-        '（選 1-2 檔，說明技術面表態 + 短期催化劑）\n\n'
-        '### 🛡️ 保守型存股族防禦配置\n'
-        '（選 1-2 檔，說明價值安全邊際 + 殖利率支撐）\n\n'
-        '### ⚠️ 限制與風險提醒\n'
-        '（每檔的潛在風險：景氣循環 / 老闆畫餅 / 客戶集中等）\n\n'
-        '### 📉 止損紀律建議\n'
-        '（建議跌破月線出場 or 虧損 15% 出場 + 加碼條件）\n\n'
-        '請務必包含上述四個章節，每項分析含具體理由。'
+    _pick_data = '\n'.join(_pick_lines) if _pick_lines else '（這批觀察清單沒有同時通過基本面與買盤時機篩選的股票）'
+
+    # ── 第 2 節：整批名單體質統計（通過率）────────────────────
+    _total = len(all_results)
+    _qual_n = len(qualified)
+    _s1_strong = sum(1 for r in all_results if r.get('s1_pass_cnt', 0) >= 5)
+    _s2_strong = sum(1 for r in all_results if r.get('s2_pass_cnt', 0) >= 3)
+    _rate = (f'{_qual_n / _total * 100:.0f}%' if _total else '0%')
+    _stat_lines = [
+        f'- 這次總共掃了 {_total} 檔股票。',
+        f'- 基本面體質健康（過 5 關以上）的有 {_s1_strong} 檔。',
+        f'- 買盤時機到位（過 3 關以上）的有 {_s2_strong} 檔。',
+        f'- 兩邊同時都過、最後入選的有 {_qual_n} 檔，等於每 100 檔大約只挑出 {_rate}。',
+        '- 入選比例越低，代表標準守得越嚴、地雷股被擋掉越多。',
+    ]
+    _stat_data = '\n'.join(_stat_lines)
+
+    _sections = [
+        {'name': '哪些股票通過了三關卡篩選（基本面健康＋買盤時機到位）', 'data': _pick_data},
+        {'name': '整體這批名單的體質與通過率怎麼樣', 'data': _stat_data},
+    ]
+
+    try:
+        _news = _fetch_news_for('台股', '台股 高股息 存股 ETF', 5)
+    except Exception:
+        _news = ''
+
+    _prompt = build_structured_summary_prompt(
+        subject_title='高股息存股候選清單',
+        sections=_sections,
+        news_text=_news,
+        overall_question='這批名單適不適合存股族、現在進場要注意什麼。',
     )
     try:
         _r = gemini_fn(_prompt)

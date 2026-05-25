@@ -1533,6 +1533,6 @@ with tab_diag:
 # TAB: 產業熱力圖
 # ══════════════════════════════════════════════════════════════
 with tab_heatmap:
-    render_sector_heatmap()
+    render_sector_heatmap(gemini_fn=gemini_call)
 
 st.markdown('<div style="text-align:center;font-size:10px;color:#484f58;padding:8px 0;">⚠️ 台股AI戰情室 v3.0 · 僅供學術研究，非投資建議，盈虧自負</div>', unsafe_allow_html=True)

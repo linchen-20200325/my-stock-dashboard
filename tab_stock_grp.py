@@ -35,9 +35,11 @@ def render_stock_grp():
     from scoring_helpers import calc_health_score, health_grade
     from ui_widgets import teacher_conclusion
     from financial_health_engine import analyze_financial_health
+    from ai_structured_summary import build_structured_summary_prompt
+    from etf_fetch import _fetch_news_for
     # app.py 內部 helper
     from app import (
-        _fetch_stock_news, _get_loader, _load_cache, _save_cache,
+        _get_loader, _load_cache, _save_cache,
         fetch_dividend_data, fetch_financials,
         fetch_quarterly, fetch_quarterly_extra,
         gemini_call, parse_stocks,
@@ -1037,55 +1039,57 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
             _reg_p = st.session_state.get('mkt_info', {}).get('regime', 'neutral')
             _reg_txt_p = '多頭市場（積極操作）' if _reg_p == 'bull' else ('空頭市場（縮減部位）' if _reg_p == 'bear' else '震盪整理（謹慎觀望）')
             _exp_p = st.session_state.get('macro_state', {}).get('exposure_limit_pct', 'N/A')
-            # ── 抓取組合中各股個別新聞（最多前4檔，每檔2則）──────────
-            _t3_news_lines = []
-            for _rp_n in results_t3[:4]:
-                _sid_n = _rp_n.get('stock_id', _rp_n.get('代碼',''))
-                _nm_n  = _rp_n.get('stock_name', _rp_n.get('名稱', _sid_n))
-                _nn    = _fetch_stock_news(_sid_n, _nm_n, 2)
-                _nn_lines = '\n'.join(
-                    f'  - {_ni["title"]}（{_ni.get("published","")}）'
-                    for _ni in _nn
-                ) if _nn else '  （暫無新聞）'
-                _t3_news_lines.append(f'[{_sid_n} {_nm_n}]\n{_nn_lines}')
-            _t3_news_str = '\n'.join(_t3_news_lines) if _t3_news_lines else '（暫無相關新聞）'
-            _prompt_parts = [
-                "你是一位掌管百億資金的「台股資深基金經理人」與「量化策略師」。",
-                "專長是從投資組合高度進行資金效能最大化、汰弱留強與風險對沖。分析冷靜、客觀。",
-                "禁止出現「一定要買」「保證獲利」等字眼。統一使用繁體中文。",
-                "",
-                f"大盤格局={_reg_txt_p} | 建議持股上限={_exp_p}%",
-                "",
-                "投資組合數據：",
-            ] + _port_lines + [
-                "",
-                "【近期各股相關新聞】（RSS即時，輔助研判用）",
-                _t3_news_str,
-                "",
-                "【風控警示】（系統規則引擎觸發）",
-                ('\n'.join(f'⚠️ {_a}' for _a in risk_alerts) if risk_alerts else '（目前無觸發）'),
-                "",
-                "請依以下格式輸出《投資組合戰略優化報告》（務必運用上方每檔的五維評分、SQ/FGMS、財報體檢與風控警示）：",
-                "",
-                "#### 一、組合強弱排序矩陣",
-                "| 梯隊 | 股票 | 核心催化劑 | 法人態度 | 綜合評分 |",
-                "|:---|:---|:---|:---|:---|",
-                "| S級（強勢領漲）| ... | ... | 偏多 | ... |",
-                "| A級（蓄勢待發）| ... | ... | 中立 | ... |",
-                "| B級（弱勢汰換）| ... | ... | 偏空 | ... |",
-                "",
-                "#### 二、投資組合體質與風險診斷",
-                "- 產業集中度分析：",
-                "- 總經環境適配度：",
-                "",
-                "#### 三、汰弱留強戰術建議（僅供策略參考，不構成投資邀約）",
-                "- 建議減碼/剔除名單：",
-                "- 建議加碼/核心名單（含資金分配比例建議）：",
-                "",
-                "#### 四、組合防禦底線",
-                "（設定整個組合的綜合防禦觀測指標）",
+            # ── 依綜合評分排出強弱順序（重用上方已算好的資料）──────────
+            _ranked_t3 = sorted(
+                results_t3,
+                key=lambda _r: _r.get('total', _r.get('舊評分', 0)) or 0,
+                reverse=True,
+            )
+            _strong_lines = []
+            for _ri, _rr in enumerate(_ranked_t3, 1):
+                _sid_r = _rr.get('stock_id', _rr.get('代碼', ''))
+                _nm_r  = _rr.get('stock_name', _rr.get('名稱', _sid_r))
+                _sc_r  = _rr.get('total', _rr.get('舊評分', 0)) or 0
+                _ht_r  = _rr.get('_health', 0) or 0
+                _ma_r  = '均線多頭排列' if (_rr.get('ma_above', 0) or 0) >= 2 else '均線空頭排列'
+                _fb_r  = _rr.get('foreign_buy', 0) or 0
+                _strong_lines.append(
+                    f"第{_ri}名 [{_sid_r} {_nm_r}] 綜合評分={_sc_r:.0f} 健康度={_ht_r:.0f} | "
+                    f"{_ma_r}、外資{'買超' if _fb_r > 0 else '賣超'}{abs(_fb_r)/1e8:.1f}億"
+                )
+            _strong_str = '\n'.join(_strong_lines) if _strong_lines else '（沒有可排序的股票）'
+            # ── 風險診斷字串（大盤格局 + 建議上限 + 系統風控警示）──────
+            _risk_str = (
+                f"目前大盤格局：{_reg_txt_p}\n"
+                f"系統建議的持股上限：{_exp_p}%\n"
+                "系統風控警示：\n"
+                + ('\n'.join(f'⚠️ {_a}' for _a in risk_alerts) if risk_alerts else '（目前沒有觸發任何風控警示）')
+            )
+            # ── 時事新聞：抓組合中評分最高的 1~2 檔（重用排序結果）──────
+            _news_blocks = []
+            for _rn in _ranked_t3[:2]:
+                _sid_news = _rn.get('stock_id', _rn.get('代碼', ''))
+                _nm_news  = _rn.get('stock_name', _rn.get('名稱', _sid_news))
+                if not _sid_news:
+                    continue
+                _nblk = _fetch_news_for(_sid_news, _nm_news, 3)
+                if _nblk:
+                    _news_blocks.append(f'【{_sid_news} {_nm_news}】\n{_nblk}')
+            _t3_news_str = '\n\n'.join(_news_blocks) if _news_blocks else None
+            _t3ai_sections = [
+                {'name': '這個組合裡有哪些股票、各檔現在的體質',
+                 'data': '\n'.join(_port_lines)},
+                {'name': '哪幾檔比較強、哪幾檔在拖後腿',
+                 'data': _strong_str},
+                {'name': '這個組合有沒有押太集中、現在風險在哪',
+                 'data': _risk_str},
             ]
-            _t3ai_prompt = '\n'.join(_prompt_parts)
+            _t3ai_prompt = build_structured_summary_prompt(
+                subject_title='我的個股組合',
+                sections=_t3ai_sections,
+                news_text=_t3_news_str,
+                overall_question='這個組合整體狀況如何、要不要調整、最該注意什麼風險。',
+            )
             with st.spinner('AI 基金經理人分析中（約 30 秒）...'):
                 _t3ai_result = gemini_call(_t3ai_prompt, max_tokens=2000)
             st.session_state[_t3ai_key] = _t3ai_result
