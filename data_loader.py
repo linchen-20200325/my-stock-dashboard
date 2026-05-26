@@ -1529,9 +1529,14 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
             print(f"[fetch_fin/{dataset}] {_e}")
             return [], None
 
-    _bs_rows, _bs_st = _fm("TaiwanStockBalanceSheet")
-    _cf_rows, _cf_st = _fm("TaiwanStockCashFlowsStatement")
-    _is_rows, _is_st = _fm("TaiwanStockFinancialStatements")
+    # 3 個 dataset 彼此獨立 → 並行抓（_fm 純獨立 requests、無共享可變狀態，線程安全）。
+    # map 保序，故下方解包順序與 _ds_ffs 一致；總請求數不變（FinMind 限額為每小時制）。
+    from concurrent.futures import ThreadPoolExecutor as _TPE_ffs
+    _ds_ffs = ("TaiwanStockBalanceSheet", "TaiwanStockCashFlowsStatement",
+               "TaiwanStockFinancialStatements")
+    with _TPE_ffs(max_workers=3) as _ex_ffs:
+        _fm_res = list(_ex_ffs.map(_fm, _ds_ffs))
+    (_bs_rows, _bs_st), (_cf_rows, _cf_st), (_is_rows, _is_st) = _fm_res
 
     if not _bs_rows and not _cf_rows:
         # 區分 Token 問題 vs 股票本身無資料
