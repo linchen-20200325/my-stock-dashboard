@@ -190,6 +190,21 @@ def fetch_url(url: str, headers: dict = None,
                 return _r_dc
         except Exception as _e_dc:
             print(f'[proxy] 直連失敗：{_e_dc}')
+
+    # ── 最後手段：NAS 中繼站（家用台灣住宅 IP 代抓）──────────────────
+    # Squid proxy + 直連皆失敗時觸發，繞過資料中心 IP 被 403 擋的官方來源
+    # （如 NDC 景氣指標、CIER PMI）。未設 NAS_BASE_URL 時 nas_relay_fetch
+    # 回 None → 行為與原本完全一致（純失敗路徑增益，不影響成功路徑）。
+    try:
+        _relay_url = url
+        if params:
+            _relay_url = requests.Request('GET', url, params=params).prepare().url
+        _r_relay = nas_relay_fetch(_relay_url, timeout=timeout)
+        if _r_relay is not None and getattr(_r_relay, 'status_code', 0) == 200:
+            _URL_CACHE[_cache_key] = (_t.time(), _r_relay.content, 200)
+            return _r_relay
+    except Exception as _e_relay:
+        print(f'[proxy] NAS 中繼 fallback 失敗：{type(_e_relay).__name__}: {_e_relay}')
     return None
 
 
