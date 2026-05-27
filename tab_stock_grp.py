@@ -37,9 +37,14 @@ def render_stock_grp():
     from financial_health_engine import analyze_financial_health
     from ai_structured_summary import build_structured_summary_prompt
     from etf_fetch import _fetch_news_for
+    from daily_checklist import analyze_20d_chips_from_df
+    from exit_signals import (
+        compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
+    )
     # app.py 內部 helper
     from app import (
         _get_loader, _load_cache, _save_cache,
+        _fetch_stock_news,
         fetch_dividend_data, fetch_financials,
         fetch_quarterly, fetch_quarterly_extra,
         gemini_call, parse_stocks,
@@ -234,6 +239,11 @@ def render_stock_grp():
                     old_score4 += 1
                 old_score4 += round(health4 / 50, 0)
 
+                # 出場訊號：技術 + 籌碼兩維（利空新聞第三維由「AI 掃利空」鈕後補）
+                _ex_tech4 = compute_tech_bearish(df4, k=k4, d=d4)
+                _ex_chip4 = analyze_20d_chips_from_df(df4)
+                _ex_chip_sig4 = _ex_chip4.get('signal', '') if isinstance(_ex_chip4, dict) else ''
+
                 results_t3.append({
                     'stock_id': sid4,
                     '代碼': sid4, '名稱': name4 or sid4, '現價': f'{price4:.2f}',
@@ -250,6 +260,7 @@ def render_stock_grp():
 
                     '舊評分': int(old_score4),
                     '_health': health4, '_val': val4, '_trend': trend4,
+                    '_ex_tech': _ex_tech4, '_ex_chip_sig': _ex_chip_sig4,
                     # 資料診斷專用欄位（health_inspector 讀取）
                     '_price_date': (str(df4['date'].iloc[-1])[:10]
                                     if df4 is not None and not df4.empty
@@ -537,18 +548,52 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 _e4c = f'本批 {len(results_t3)} 支全數通過汰弱篩選'
                 _e4a = '品質整齊，可從多因子排行取前2~3支'
             st.markdown(teacher_conclusion('弘爺', f'汰弱留強（共 {len(results_t3)} 支）', _e4c, _e4a), unsafe_allow_html=True)
+            # ── 出場警示掃描鈕（利空新聞 LLM 第三維，按需觸發以省額度）──
             if results_t3:
+                _scan_c1, _scan_c2 = st.columns([1, 3])
+                with _scan_c1:
+                    _scan_news = st.button('🤖 AI 掃利空', key='_grp_scan_news',
+                                           help='對組合內每檔近期新聞做 Gemini 利空判讀（6h 快取）')
+                if _scan_news:
+                    _sent_map = {}
+                    _prog_n = st.progress(0.0, text='AI 掃描利空新聞中...')
+                    for _ni, _r3n in enumerate(results_t3):
+                        _sidn = _r3n.get('stock_id', _r3n.get('代碼', ''))
+                        _nmn = _r3n.get('名稱', _sidn)
+                        _prog_n.progress((_ni + 1) / len(results_t3),
+                                         text=f'AI 判讀 {_sidn} 利空... ({_ni+1}/{len(results_t3)})')
+                        try:
+                            _rawn = _fetch_stock_news(_sidn, _nmn, 8, recency='3m')
+                            _titlesn = [n.get('title', '') for n in (_rawn or []) if n.get('title')]
+                            _sent_map[_sidn] = (judge_news_sentiment_cached(gemini_call, _sidn, _nmn, _titlesn)
+                                                if _titlesn else None)
+                        except Exception:
+                            _sent_map[_sidn] = None
+                    _prog_n.empty()
+                    st.session_state['_grp_news_sent'] = _sent_map
+                _grp_sent = st.session_state.get('_grp_news_sent', {})
+                with _scan_c2:
+                    if _grp_sent:
+                        _nh = sum(1 for v in _grp_sent.values()
+                                  if v and v.get('label') == '利空' and v.get('confidence', 0) >= 50)
+                        st.caption(f'✅ 已掃描；偵測 {_nh} 檔利空。出場欄＝三維計分（🔴3／🟠2／🟡1／🟢0）')
+                    else:
+                        st.caption('出場欄目前為「技術＋籌碼」兩維；按左鈕加入「利空新聞(LLM)」第三維')
                 _elim_rows = []
                 for _r3 in results_t3:
                     _sid3 = _r3.get('stock_id', _r3.get('代碼',''))
                     _row = {k: v for k, v in _r3.items() if not k.startswith('_') and k != 'stock_id'}
                     _row.update(_fund_map.get(_sid3, {}))
+                    _ev3 = evaluate_exit_signals(_r3.get('_ex_tech'),
+                                                 _r3.get('_ex_chip_sig', ''),
+                                                 _grp_sent.get(_sid3))
+                    _row['出場'] = f'{_ev3["icon"]} {_ev3["score"]}/3'
                     _elim_rows.append(_row)
                 df_cmp = pd.DataFrame(_elim_rows).sort_values(['舊評分', '健康度'], ascending=[False, False]).reset_index(drop=True)
                 # 確保名稱欄位存在
                 if '名稱' not in df_cmp.columns and '代碼' in df_cmp.columns:
                     df_cmp.insert(0, '名稱', df_cmp['代碼'])
-                _col_order = [c for c in ['名稱','代碼','現價','操作狀態','健康度','評級','舊評分',
+                _col_order = [c for c in ['名稱','代碼','現價','出場','操作狀態','健康度','評級','舊評分',
                                            'RSI','KD','量比','IBS','趨勢','357評價','VCP',
                                            '合約負債','近4季EPS','毛利率%','殖利率%']
                               if c in df_cmp.columns]
@@ -558,6 +603,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                                  '名稱':     st.column_config.TextColumn('名稱', width='small'),
                                  '代碼':     st.column_config.TextColumn('代碼', width='small'),
                                  '現價':     st.column_config.TextColumn('現價'),
+                                 '出場':     st.column_config.TextColumn('出場', width='small', help='三維出場訊號：🔴3=強烈出場 / 🟠2=建議減碼 / 🟡1=留意 / 🟢0=清淡（利空新聞需按「AI 掃利空」）'),
                                  '健康度':   st.column_config.NumberColumn('健康度',  format='%d 🏥'),
                                  '舊評分':   st.column_config.NumberColumn('評分',    format='%d ⭐'),
                                  '近4季EPS': st.column_config.TextColumn('近4Q EPS'),

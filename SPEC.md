@@ -358,3 +358,28 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 - `proxy_helper.nas_relay_fetch(url)`：呼叫 `nas_server.py` 的 `/proxy?url=...` 透明中繼端點（家用台灣 IP server-side 代抓、原樣回傳 body），帶 `X-API-Key`。
 - `_fetch_stock_news` 抓取串接：**NAS 中繼站 → Squid proxy → 直連**；查詢字串 `urllib.parse.quote` 編碼；`_diag` 逐路徑記錄 HTTP/則數供 UI 顯示。
 - **需設定**：Secrets `NAS_BASE_URL`（如 `http://xxx.synology.me:8765`）+ `NAS_API_KEY`，且 `nas_server.py` 運行、該埠對 Streamlit Cloud 可達。未設定則自動跳過、回退 Squid/直連。
+
+## §10 三維出場訊號（`exit_signals.py`）
+
+純邏輯模組（不抓資料、不畫 UI）。三個維度任一成立記 1 分，總分決定等級。
+
+### §10.1 維度定義
+| 維度 | 成立條件 | 資料來源 |
+|---|---|---|
+| ① 利空新聞 | LLM 判 `label=='利空'` 且 `confidence>=50` | Gemini 情緒判讀（呼叫端傳入 `gemini_call`）|
+| ② 技術轉空 | 含**強訊號**（空頭排列 股<月<季線／週MACD翻負）或 **≥2 條警示**（跌破季線/年線/5MA、月線正乖離>15%、KD高檔死叉 K>70）| OHLC DataFrame（+ 呼叫端算好的 KD）|
+| ③ 籌碼倒貨 | `analyze_20d_chips_from_df()` 之 `signal` 含「大戶倒貨」（🔴）| 近 20 日法人/量（複用 K 線 df）|
+
+### §10.2 分級（命中維度數）
+`3 → 🔴 強烈出場` / `2 → 🟠 建議減碼` / `1 → 🟡 留意觀察` / `0 → 🟢 訊號清淡`
+
+### §10.3 公開 API（不變式）
+- `compute_tech_bearish(df, k=None, d=None) -> {'bearish':bool,'reasons':[str],'hits':int,'strong':bool}`
+- `judge_news_sentiment(_gemini_call, name, headlines) -> {'label':'利空|中性|利多','confidence':0-100,'reason':str,'ok':bool}`；Gemini 失效或無新聞一律回**中性**（不阻斷流程）。
+- `judge_news_sentiment_cached(_gemini_call, sid, name, headlines)`：以 `st.cache_data(ttl=6h)` 包裝，key=`(sid, name, 標題 tuple)`，`_gemini_call` 以底線前綴排除於 hash 外；無 streamlit 環境（單元測試）自動退回未快取版。
+- `parse_news_sentiment(raw)`：沿用 `financial_health_engine._extract_json` 清洗慣例（去 ```json 圍欄 + 抓首個 `{...}`）；非法 label 正規化為「中性」、confidence clamp 0-100。
+- `evaluate_exit_signals(tech, chip_signal, news, news_conf_threshold=50) -> {'score','icon','label','color','dims':[(名稱,命中,說明)],'hit_names','headline'}`；`news=None` 代表「未掃描」（最高僅能達 2 分）。
+
+### §10.4 兩 tab 接線
+- **個股 tab**：進出場訊號三欄**上方**插入「🚨 出場點綜合提示」banner（舊各策略 `_exit`/`_entry` 訊號完整保留為詳細層）；新聞自動判讀（標題以 session_state 暫存避免每次 rerun 重打 RSS）。
+- **個股組合 tab**：批次迴圈每檔算 ②③ 兩維存入 `_ex_tech`/`_ex_chip_sig`（隨 `t3_data` 快取）；④汰弱留強表新增「出場」欄（`🔴3/3` 格式）。① 利空新聞 LLM 第三維由「🤖 AI 掃利空」鈕**按需觸發**（避免每次開組合對每檔打 Gemini 耗額度），結果存 `session_state['_grp_news_sent']`。

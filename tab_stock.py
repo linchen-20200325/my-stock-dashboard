@@ -94,6 +94,9 @@ def render_tab_stock():
     # 外部模組
     from v4_strategy_engine import V4StrategyEngine
     from daily_checklist import analyze_20d_chips, analyze_20d_chips_from_df
+    from exit_signals import (
+        compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
+    )
     from v5_modules import (
         analyze_fundamental_leading,
         calc_dividend_yield_357,
@@ -466,6 +469,40 @@ padding:14px 18px;margin-bottom:12px;">
             _lo20_i = float(df2['low'].tail(20).min())
             _range20 = _hi20_i - _lo20_i
             _target1 = round(_p2 + _range20, 2)  # 初步目標：現價 + 20日震幅
+
+            # ══ 🚨 出場點綜合提示（三維：利空新聞 + 技術 + 籌碼）═════════
+            try:
+                _ex_tech = compute_tech_bearish(df2, k=k2, d=d2)
+                _ex_chip = analyze_20d_chips_from_df(df2)
+                _ex_chip_sig = _ex_chip.get('signal', '') if isinstance(_ex_chip, dict) else ''
+                # 新聞標題（本 session 內快取，避免每次 rerun 重打 RSS）
+                _ex_news_key = f'_exit_news_titles_{sid2}'
+                _ex_titles = st.session_state.get(_ex_news_key)
+                if _ex_titles is None:
+                    _ex_raw = _fetch_stock_news(sid2, name2, 8, recency='3m')
+                    _ex_titles = [n.get('title', '') for n in (_ex_raw or []) if n.get('title')]
+                    st.session_state[_ex_news_key] = _ex_titles
+                _ex_news = (judge_news_sentiment_cached(gemini_call, sid2, name2, _ex_titles)
+                            if _ex_titles else None)
+                _ex = evaluate_exit_signals(_ex_tech, _ex_chip_sig, _ex_news)
+                _ex_dim_html = ''.join(
+                    f'<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;border-radius:10px;'
+                    f'font-size:11px;background:{"#3a1414" if _hit else "#161b22"};'
+                    f'color:{"#ff7b72" if _hit else "#8b949e"};border:1px solid '
+                    f'{"#f85149" if _hit else "#30363d"};">{"⚠️" if _hit else "✓"} {_nm}：{_desc}</span>'
+                    for _nm, _hit, _desc in _ex['dims'])
+                st.markdown(
+                    f'<div style="margin:6px 0 12px;padding:10px 14px;border-radius:8px;'
+                    f'background:linear-gradient(90deg,{_ex["color"]}1f,#0d1117);'
+                    f'border-left:5px solid {_ex["color"]};">'
+                    f'<div style="font-size:15px;font-weight:900;color:{_ex["color"]};">'
+                    f'🚨 出場點綜合提示 — {_ex["headline"]}</div>'
+                    f'<div style="margin-top:6px;">{_ex_dim_html}</div>'
+                    f'<div style="font-size:10px;color:#6e7681;margin-top:4px;">'
+                    f'三維計分（利空新聞為 Gemini 情緒判讀，6h 快取）；下方為各策略詳細訊號</div>'
+                    f'</div>', unsafe_allow_html=True)
+            except Exception as _ex_err:
+                st.caption(f'⚪ 出場點綜合提示暫不可用：{_ex_err}')
 
             _sig_cols = st.columns(3)
 

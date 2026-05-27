@@ -92,6 +92,7 @@ my-stock-dashboard/
 | `market_strategy.py` | ~213 | 市場多空判斷（5 分制評分 → bull / neutral / caution / bear）與對應建議持股比例 |
 | `risk_control.py` | ~221 | 固定停損 (-8%)、追蹤停利 (-7%)、ATR 動態停損、投資組合層級風控（最大回撤 / 現金下限） |
 | `backtest_engine.py` | ~264 | MA 交叉與 MA+RSI 策略回測；Walk-Forward Test（3 年訓練 / 12 個月測試滾動窗口）|
+| `exit_signals.py` | ~210 | 三維出場訊號綜合判斷（純邏輯，零 UI）：①利空新聞 LLM 情緒判讀（Gemini 由呼叫端注入、`st.cache_data` 6h）②技術轉空 ③籌碼倒貨 → 命中維度數 3/2/1 分級。個股 + 個股組合 tab 共用；詳見 SPEC §10 |
 
 #### 視覺化層
 
