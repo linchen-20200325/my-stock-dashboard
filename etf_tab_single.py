@@ -73,6 +73,25 @@ def render_etf_single(gemini_fn=None):
         st.session_state.pop('etf_s_active', None)
         return
 
+    # ── PROXY 健診：MoneyDJ／TWSE 封鎖海外資料中心 IP，未設 PROXY_URL 時，
+    #    內扣費用率／折溢價／經理人／中文名／AUM 全 N/A（這是 N/A 的真正原因）──
+    if ticker.endswith(('.TW', '.TWO')):
+        import os as _os_prx
+        _has_proxy = bool(_os_prx.environ.get('PROXY_URL')
+                          or _os_prx.environ.get('NAS_PROXY_URL'))
+        if not _has_proxy:
+            try:
+                _sec = getattr(st, 'secrets', {})
+                _has_proxy = bool(_sec.get('PROXY_URL') or _sec.get('NAS_PROXY_URL'))
+            except Exception:
+                pass
+        if not _has_proxy:
+            st.warning(
+                '⚠️ 未偵測到 **PROXY_URL**：MoneyDJ／TWSE 封鎖海外資料中心 IP'
+                '（Streamlit Cloud 美國 IP），因此 **內扣費用率／折溢價／基金經理人／'
+                '中文名／AUM** 會是 N/A。請在本 App 的 **Streamlit secrets** 設定 '
+                '`PROXY_URL`（家用 NAS 台灣 IP，與新聞專案同一台）即可解鎖。')
+
     # 中文名優先：MoneyDJ 抓取（cache 7 天，主動式 ETF 含 'A' 後綴也支援）
     # → fallback 至 yfinance longName/shortName（多為英文）→ 最後用 ticker
     from etf_fetch import fetch_etf_zh_name as _fetch_zh_n
@@ -97,6 +116,40 @@ def render_etf_single(gemini_fn=None):
             '- **Beta（β）**：相對大盤的波動敏感度。**β≈1** 與大盤同步；**β>1** 漲跌更兇（攻擊型）；**β<1** 較抗跌（防禦型）—— 配置時用來控整體風險。\n'
             '- **AUM（基金規模）**：總管理資產。**太小（如 <10 億）有清算下市風險**；規模大則流動性好、買賣價差小。'
         )
+
+    # ── 基金經理人 + 異動偵測（ETF 表現與經理人相關，換手須提醒）──────
+    if ticker.endswith(('.TW', '.TWO')):
+        try:
+            from etf_fetch import fetch_etf_manager, track_etf_manager_change
+            _mgr = fetch_etf_manager(ticker)
+            _chg = track_etf_manager_change(ticker, _mgr)
+            if _mgr and _mgr.get('name'):
+                _since = _mgr.get('since')
+                _td = _mgr.get('tenure_days')
+                if isinstance(_td, int):
+                    _tenure_txt = (f'{_td // 30} 個月' if _td < 365
+                                   else f'{_td / 365:.1f} 年')
+                elif _since:
+                    _tenure_txt = f'自 {_since}'
+                else:
+                    _tenure_txt = '任期未揭露'
+                mc1, mc2 = st.columns([1, 1])
+                mc1.metric('基金經理人', _mgr['name'])
+                mc2.metric('任期', _tenure_txt,
+                           help='ETF 績效與經理人選股/換股策略高度相關，任期越短越需觀察。')
+                if _chg.get('changed'):
+                    _colored_box(
+                        f'🔁 <b>經理人異動</b>：<b>{_chg["prev"]}</b> → '
+                        f'<b>{_mgr["name"]}</b>（偵測於 {_chg.get("detected_at")}）'
+                        '；新經理人選股風格可能改變，建議重新檢視持股與績效。', 'red')
+                elif _chg.get('is_new'):
+                    _colored_box(
+                        f'🆕 <b>新任經理人</b>：{_mgr["name"]}（任期 {_tenure_txt}）'
+                        '，操盤績效尚短、待觀察，暫不宜只看歷史報酬下結論。', 'yellow')
+            else:
+                st.caption('👤 基金經理人：查無資料（MoneyDJ／SITCA 未揭露或抓取失敗）')
+        except Exception as _e_mgr:
+            st.caption(f'👤 經理人資訊載入失敗：{type(_e_mgr).__name__}')
 
     # ── 自製品質評等（4 因子：AUM / 費用率 / 殖利率穩定度 / Beta）──
     try:
@@ -300,9 +353,20 @@ def render_etf_single(gemini_fn=None):
         _prem_action = '⏳ NAV 資料延遲'
         _prem_reason = 'NAV 資料早於前一交易日（FinMind/yfinance 同步延遲），暫不顯示折溢價以免誤判'
     else:
+        import os as _os_prx2
+        _hp = bool(_os_prx2.environ.get('PROXY_URL') or _os_prx2.environ.get('NAS_PROXY_URL'))
+        if not _hp:
+            try:
+                _sec2 = getattr(st, 'secrets', {})
+                _hp = bool(_sec2.get('PROXY_URL') or _sec2.get('NAS_PROXY_URL'))
+            except Exception:
+                pass
         _prem_color  = '#8b949e'
         _prem_action = 'ℹ️ 無 NAV 資料'
-        _prem_reason = 'yfinance 未提供 NAV，建議至官網確認折溢價'
+        _prem_reason = ('FinMind／goodinfo／TWSE／MoneyDJ 皆未回傳淨值（可能為新上市或當日尚未公告）。'
+                        if _hp else
+                        'MoneyDJ／TWSE 封鎖海外 IP 且未設定 PROXY_URL，故抓不到淨值/折溢價；'
+                        '請於本 App 的 Streamlit secrets 設定 PROXY_URL（家用 NAS）即可解鎖。')
 
     st.markdown(
         f'<div style="background:#0d1117;border:2px solid {_prem_color};border-radius:10px;'

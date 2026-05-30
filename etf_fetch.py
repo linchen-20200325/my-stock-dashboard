@@ -201,14 +201,36 @@ def fetch_etf_meta_moneydj(ticker: str) -> dict:
             pass
 
     # 3-4. 經理費 / 保管費（% → 比例）
-    for _label, _key in (('經理費', 'manager_fee'), ('保管費', 'custodian_fee')):
-        _m = _re_meta.search(
-            rf'{_label}[^\d%]{{0,30}}?(\d+(?:\.\d+)?)\s*%', _txt)
-        if _m:
-            try:
-                _out[_key] = float(_m.group(1)) / 100.0
-            except ValueError:
-                pass
+    # MoneyDJ 標籤多為「經理費(%)」(值格無 %)，純 regex 會被標籤內 % 破壞，
+    # 故以 _html_kv_pairs 儲存格配對為主（同經理人解析法）、regex 為輔。
+    _kv_meta = _html_kv_pairs(_txt)
+
+    def _pct_ratio(_raw):
+        """字串取數字並轉比例（1.00 → 0.01）；無數字回 None。"""
+        _mm = _re_meta.search(r'(\d+(?:\.\d+)?)', str(_raw).replace(',', ''))
+        if not _mm:
+            return None
+        try:
+            return float(_mm.group(1)) / 100.0
+        except ValueError:
+            return None
+
+    for _labels, _key in ((('經理費', '管理費'), 'manager_fee'),
+                          (('保管費',), 'custodian_fee')):
+        _v = None
+        for _k, _vv in _kv_meta.items():               # KV 主路徑
+            if any(_lb in _k for _lb in _labels):
+                _v = _pct_ratio(_vv)
+                if _v is not None:
+                    break
+        if _v is None:                                  # regex 兜底
+            for _lb in _labels:
+                _m = _re_meta.search(rf'{_lb}[^\d%]{{0,30}}?(\d+(?:\.\d+)?)\s*%', _txt)
+                if _m:
+                    _v = _pct_ratio(_m.group(1))
+                    break
+        if _v is not None:
+            _out[_key] = _v
 
     # 5. 合計總費用率（經理 + 保管）；若僅一項則退而求其次
     if 'manager_fee' in _out and 'custodian_fee' in _out:
@@ -216,15 +238,21 @@ def fetch_etf_meta_moneydj(ticker: str) -> dict:
     elif 'manager_fee' in _out:
         _out['expense'] = _out['manager_fee']
     else:
-        # 兜底：找「總費用率」單一欄位
-        _m = _re_meta.search(
-            r'(?:總費用率|內含費用率|費用率)[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%',
-            _txt)
-        if _m:
-            try:
-                _out['expense'] = float(_m.group(1)) / 100.0
-            except ValueError:
-                pass
+        # 兜底：找「總費用率/內扣費用率」單一欄位（KV 優先 → regex）
+        for _k, _vv in _kv_meta.items():
+            if any(_lb in _k for _lb in ('總費用率', '內扣費用率', '內含費用率', '費用率')):
+                _ev = _pct_ratio(_vv)
+                if _ev is not None:
+                    _out['expense'] = _ev
+                    break
+        if 'expense' not in _out:
+            _m = _re_meta.search(
+                r'(?:總費用率|內扣費用率|內含費用率|費用率)[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%',
+                _txt)
+            if _m:
+                _ev = _pct_ratio(_m.group(1))
+                if _ev is not None:
+                    _out['expense'] = _ev
 
     # 6. 追蹤指數（與 fetch_etf_underlying_index 同 regex 風格，HTML entity 預清洗）
     _txt_c = (_txt.replace('&nbsp;', ' ').replace('&#160;', ' ')
@@ -730,6 +758,46 @@ def _fetch_yuanta_active_etf_meta(ticker: str) -> dict | None:
     return None
 
 
+def _html_kv_pairs(html_text: str) -> dict:
+    """把 HTML 表格 td/th 相鄰儲存格配成 {欄位名: 值}（沿用新聞專案解析法）。
+
+    MoneyDJ 標籤(如「經理人」「經理費(%)」)的值在相鄰儲存格,純 regex 易被
+    標籤內 % 或 HTML 干擾;改用儲存格配對更穩健。只在『前格像欄位名(含中文、
+    ≤12字)』時配對,濾掉報價頁雜訊。
+    """
+    import re as _re_kv
+    from html.parser import HTMLParser as _HP_kv
+
+    class _Cells(_HP_kv):
+        def __init__(self):
+            super().__init__()
+            self.cells, self._buf = [], None
+        def handle_starttag(self, tag, attrs):
+            if tag in ('td', 'th'):
+                self._buf = []
+        def handle_data(self, data):
+            if self._buf is not None:
+                self._buf.append(data)
+        def handle_endtag(self, tag):
+            if tag in ('td', 'th') and self._buf is not None:
+                self.cells.append(_re_kv.sub(r'\s+', ' ', ''.join(self._buf)).strip())
+                self._buf = None
+
+    _p = _Cells()
+    try:
+        _p.feed(html_text or '')
+    except Exception:
+        return {}
+    _cells = [c for c in _p.cells if c]
+    _kv: dict = {}
+    for _i in range(len(_cells) - 1):
+        _key = _cells[_i].rstrip(':： ').strip()
+        _val = _cells[_i + 1].strip()
+        if _val and _key and _key not in _kv and len(_key) <= 12 and _re_kv.search(r'[一-鿿]', _key):
+            _kv[_key] = _val
+    return _kv
+
+
 @st.cache_data(ttl=604800, show_spinner=False)
 def fetch_etf_manager(ticker: str):
     """從 MoneyDJ ETF 抓「現任經理人 + 任期起始日」。
@@ -761,12 +829,15 @@ def fetch_etf_manager(ticker: str):
     if '.' not in _t:
         _t = f'{_t}.TW'
 
+    # Basic0004(簡介頁)就有「經理人」欄(fetch_etf_meta_moneydj 抓的同一頁)，擺第一優先。
     _urls = [
+        f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}',
         f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_t}',
         f'https://www.moneydj.com/ETF/X/Basic/Basic0006.xdjhtm?etfid={_t}',
         f'https://www.moneydj.com/ETF/X/Basic/Basic0011.xdjhtm?etfid={_t}',
     ]
     _err_trace: list[str] = []
+    _best = None   # 名字已抓到但缺到職日時暫存；續查其他頁是否有任期再決定
 
     for _url in _urls:
         _txt = None
@@ -804,6 +875,45 @@ def fetch_etf_manager(ticker: str):
         if _txt is None:
             continue
 
+        # ── 3a. KV 儲存格解析（穩健，優先 regex）：經理人/到職日常在表格相鄰格 ──
+        try:
+            _kv_mg = _html_kv_pairs(_txt)
+            _nm_raw = ''
+            for _k in ('基金經理人', '現任經理人', '經理人'):
+                if _k in _kv_mg:
+                    _nm_raw = _kv_mg[_k]
+                    break
+            if not _nm_raw:
+                for _k, _v in _kv_mg.items():
+                    if '經理' in _k:
+                        _nm_raw = _v
+                        break
+            _nm_m2 = _re_mg.search(r'[一-鿿]{2,8}', _nm_raw)  # 取第一段中文（避開「、」多人）
+            if _nm_m2:
+                _name = _nm_m2.group(0)
+                _since, _days = None, None
+                _dt_raw = ''
+                for _k in ('到職日', '上任日', '派任日', '起聘日', '管理基金日', '任期'):
+                    if _k in _kv_mg:
+                        _dt_raw = _kv_mg[_k]
+                        break
+                _dm2 = _re_mg.search(r'(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})', _dt_raw)
+                if _dm2:
+                    try:
+                        _dtv = _date_mg(int(_dm2.group(1)), int(_dm2.group(2)), int(_dm2.group(3)))
+                        _since = _dtv.strftime('%Y-%m-%d')
+                        _days = (_date_mg.today() - _dtv).days
+                    except ValueError:
+                        pass
+                if _since:
+                    print(f'[MDJ/manager] ✅(KV) {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
+                    return {'name': _name, 'since': _since, 'tenure_days': _days}
+                if _best is None:   # 名字有、到職日缺 → 暫存，續查其他頁
+                    _best = {'name': _name, 'since': None, 'tenure_days': None}
+                    print(f'[MDJ/manager] (KV) {_t} = {_name} via {_endpoint}，無到職日，續查其他頁')
+        except Exception as _ekv:
+            print(f'[MDJ/manager] KV parse 略過 {_endpoint}: {type(_ekv).__name__}')
+
         # ── 3. 寬鬆 regex 嘗試解析 ────────────────────────────────
         try:
             # 名字：經理人 / 基金經理人 / 現任經理人 ... 中文 2-8 字
@@ -835,11 +945,20 @@ def fetch_etf_manager(ticker: str):
                     _days = (_date_mg.today() - _dt).days
                 except ValueError:
                     pass
-            print(f'[MDJ/manager] ✅ {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
-            return {'name': _name, 'since': _since, 'tenure_days': _days}
+            if _since:
+                print(f'[MDJ/manager] ✅ {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
+                return {'name': _name, 'since': _since, 'tenure_days': _days}
+            if _best is None:
+                _best = {'name': _name, 'since': None, 'tenure_days': None}
+                print(f'[MDJ/manager] (regex) {_t} = {_name} via {_endpoint}，無到職日，續查其他頁')
         except Exception as _e:
             _err_trace.append(f'{_endpoint}: regex 例外 {type(_e).__name__}')
             print(f'[MDJ/manager] ❌ regex parse {_t} {_endpoint}: {type(_e).__name__}: {_e}')
+
+    # MoneyDJ 各頁掃完：有名字但全無到職日 → 回名字（任期 UI 顯示「未揭露」屬實）
+    if _best is not None:
+        print(f'[MDJ/manager] ▶ {_t} = {_best["name"]}（MoneyDJ 各頁皆無到職日）')
+        return _best
 
     # ── 4. SITCA fallback — 與費用率同 proxy 路徑（已證可走）────────
     if _t.replace('.TW', '').replace('.TWO', '').isdigit():
@@ -870,6 +989,92 @@ def fetch_etf_manager(ticker: str):
     except Exception:
         pass
     return None
+
+
+import os as _os_mg
+import json as _json_mg
+
+_MGR_HISTORY_PATH = _os_mg.path.join('/tmp/st_cache', 'etf_manager_history.json')
+# 持久檔：由 update_etf_managers.py（GitHub Actions 每週）維護並 commit 進 repo，
+# 跨 Streamlit Cloud 容器重啟仍存活（解決 /tmp 清空導致紅框不跳的問題）。
+_ETF_MANAGERS_REPO_PATH = _os_mg.path.join(
+    _os_mg.path.dirname(_os_mg.path.abspath(__file__)), 'etf_managers.json')
+_RECENT_CHANGE_DAYS = 180   # 換手偵測日後多久內仍在 UI 亮紅框
+
+
+def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
+    """比對 ETF 經理人異動（ETF 表現與經理人相關，換手須提醒）。
+
+    換手基準與歷史的主來源 = `etf_managers.json`（Actions 維護、commit 進 repo，
+    跨容器重啟存活）；`/tmp` 為次要（兩次 Actions 之間 app 自行即時偵測 + 雲端
+    唯讀時的備援）。回傳 UI 用字典:
+      {'changed': bool, 'prev': str|None, 'detected_at': 'YYYY-MM-DD'|None,
+       'is_new': bool, 'tenure_days': int|None}
+    changed：持久檔近 180 天有換手紀錄，或 live 名字與基準不同。
+    is_new：到職日推算任期 < 180 天（半年內新任,表現待觀察）。
+    """
+    import datetime as _dt_mg
+    _name = (manager or {}).get('name') or None
+    _tenure = (manager or {}).get('tenure_days')
+    _is_new = isinstance(_tenure, int) and _tenure < 180
+    _out = {'changed': False, 'prev': None, 'detected_at': None,
+            'is_new': _is_new, 'tenure_days': _tenure}
+    if not _name:
+        return _out
+    _key = (ticker or '').replace('.tw', '.TW').strip()
+    _today_d = _dt_mg.date.today()
+    _today = _today_d.isoformat()
+
+    # ── 1. 持久檔（repo）：跨容器存活的換手基準 + 歷史 ──────────────
+    _repo_rec = {}
+    try:
+        if _os_mg.path.exists(_ETF_MANAGERS_REPO_PATH):
+            with open(_ETF_MANAGERS_REPO_PATH, 'r', encoding='utf-8') as _f:
+                _repo_db = _json_mg.load(_f) or {}
+            _repo_rec = (_repo_db.get('managers') or {}).get(_key) or {}
+    except Exception as _e_repo:
+        print(f'[ETF Manager] 讀持久檔略過: {_e_repo}')
+
+    # 1a. 持久 history 近 180 天的換手 → 即使容器重啟仍亮紅框
+    for _h in reversed(_repo_rec.get('history') or []):
+        _da = _h.get('detected_at')
+        try:
+            _dd = _dt_mg.date.fromisoformat(_da) if _da else None
+        except ValueError:
+            _dd = None
+        if _dd and (_today_d - _dd).days <= _RECENT_CHANGE_DAYS:
+            _out.update({'changed': True, 'prev': _h.get('from'), 'detected_at': _da})
+            break
+
+    # 1b. live 名字 vs 持久基準不同 → 兩次 Actions 之間也能即時偵測
+    _repo_name = _repo_rec.get('name')
+    if not _out['changed'] and _repo_name and _repo_name != _name:
+        _out.update({'changed': True, 'prev': _repo_name, 'detected_at': _today})
+
+    # ── 2. /tmp 即時檔（次要：session 內 + 持久檔不可寫時備援）──────
+    try:
+        _os_mg.makedirs('/tmp/st_cache', exist_ok=True)
+        _db = {}
+        if _os_mg.path.exists(_MGR_HISTORY_PATH):
+            with open(_MGR_HISTORY_PATH, 'r', encoding='utf-8') as _f:
+                _db = _json_mg.load(_f) or {}
+        _rec = _db.get(_key) or {}
+        _prev = _rec.get('name')
+        if _prev and _prev != _name and not _out['changed']:
+            _out.update({'changed': True, 'prev': _prev, 'detected_at': _today})
+            _hist = _rec.get('history') or []
+            _hist.append({'from': _prev, 'to': _name, 'detected_at': _today,
+                          'since': (manager or {}).get('since')})
+            _rec['history'] = _hist[-10:]
+        _rec.update({'name': _name, 'since': (manager or {}).get('since'),
+                     'last_seen': _today})
+        _rec.setdefault('history', _rec.get('history', []))
+        _db[_key] = _rec
+        with open(_MGR_HISTORY_PATH, 'w', encoding='utf-8') as _f:
+            _json_mg.dump(_db, _f, ensure_ascii=False, indent=2)
+    except Exception as _e_mg:
+        print(f'[ETF Manager] 異動追蹤略過（無法存檔）: {_e_mg}')
+    return _out
 
 
 @st.cache_data(ttl=604800, show_spinner=False)
@@ -1014,6 +1219,15 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
     _df_stale = None       # 備援：FinMind 過舊資料
     _days_stale: int | None = None
 
+    # 即時報價類來源（goodinfo/TWSE/MoneyDJ/yfinance）回的是「最後一筆已公告淨值」，
+    # 但若硬戳 today，遇週末/假日會與 yfinance 收盤日（上一交易日）對不上而 inner-join 落空。
+    # 故統一戳「最近交易日」：今天是工作日用今天，否則往前推到最後一個工作日。
+    def _last_business_day(_d):
+        while _d.weekday() >= 5:   # 5=Sat, 6=Sun
+            _d -= _dt.timedelta(days=1)
+        return _d
+    _last_bd = _last_business_day(_dt.date.today())
+
     # ── 1. FinMind ETF NAV（試兩個 dataset 名稱 + 多種欄位名稱）───────────
     from proxy_helper import fetch_url as _fu_etfnav  # NAS 中繼 fallback
     for _ds1 in ['TaiwanETFNetAssetValue', 'TaiwanStockETFNAV']:
@@ -1098,7 +1312,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                                 _prem_gi = _safe_float(_m_p.group(1))
                         if _prem_gi is not None:
                             break
-                _row_gi = {'date': _dt.date.today(), 'nav': _nav_gi}
+                _row_gi = {'date': _last_bd, 'nav': _nav_gi}
                 if _prem_gi is not None: _row_gi['premium_pct'] = _prem_gi
                 print(f'[ETF NAV] {code} goodinfo: nav={_nav_gi} prem={_prem_gi}%')
                 return pd.DataFrame([_row_gi])
@@ -1128,7 +1342,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
         if _prem2 is None and _nav2 > 0 and _price2 > 0:
             _prem2 = round((_price2 - _nav2) / _nav2 * 100, 2)
         if _nav2 > 0:
-            _r_out = {'date': _dt.date.today(), 'nav': _nav2}
+            _r_out = {'date': _last_bd, 'nav': _nav2}
             if _price2 > 0:
                 _r_out['price'] = _price2
             if _prem2 is not None:
@@ -1167,12 +1381,51 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
         import re as _re_mdj
         # etfid 需 .TW 後綴；主動式 ETF 'A' 保留（如 00982A.TW）
         _etfid_mdj = ticker.upper() if ticker.upper().endswith(('.TW', '.TWO')) else f'{code}.TW'
+
+        # 4a. Basic0001 即時報價頁 — 直接含「淨值/市價/折溢價(%)」官方值，
+        #     不必用 yfinance Close 反推（杜絕跨來源日期錯位）。KV 解析較 regex 穩。
+        _url_q = f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_etfid_mdj}'
+        _r_q = _fu_etfnav(_url_q, headers={'Referer': 'https://www.moneydj.com/'},
+                          timeout=12, attempts=2)
+        if _r_q is not None and _r_q.status_code == 200:
+            _r_q.encoding = 'utf-8'
+            _kv_q = _html_kv_pairs(_r_q.text)
+
+            def _kv_num_q(_keys, _excl=()):
+                for _k, _v in _kv_q.items():
+                    if any(_kk in _k for _kk in _keys) and not any(_xx in _k for _xx in _excl):
+                        _m = _re_mdj.search(r'[-+]?\d+\.?\d*', _v.replace(',', ''))
+                        if _m:
+                            return _safe_float(_m.group(0))
+                return None
+
+            _nav_q   = _kv_num_q(['淨值'])
+            _price_q = _kv_num_q(['市價', '成交價'], _excl=['漲跌'])
+            _prem_q  = _kv_num_q(['折溢價'])
+            if _nav_q is not None and _NAV_MIN < _nav_q < _NAV_MAX:
+                _row_q = {'date': _last_bd, 'nav': _nav_q}
+                if _price_q is not None and _price_q > 0:
+                    _row_q['price'] = _price_q
+                if _prem_q is None and _price_q and _nav_q:
+                    _prem_q = round((_price_q - _nav_q) / _nav_q * 100, 2)
+                if _prem_q is not None:
+                    _row_q['premium_pct'] = _prem_q
+                print(f'[ETF NAV] MoneyDJ-Q(Basic0001) {_etfid_mdj}: '
+                      f'nav={_nav_q} price={_price_q} prem={_prem_q}%')
+                return pd.DataFrame([_row_q])
+            print(f'[ETF NAV] MoneyDJ-Q {_etfid_mdj}: 200 但 KV 無淨值 '
+                  f'(keys={list(_kv_q)[:8]})')
+        else:
+            _cq = _r_q.status_code if _r_q is not None else 'None'
+            print(f'[ETF NAV] MoneyDJ-Q {_etfid_mdj}: HTTP {_cq}')
+
+        # 4b. Basic0003 淨值表格 — 補 NAV 歷史（4a 拿不到時的備援）
         _url_mdj = f'https://www.moneydj.com/ETF/X/Basic/Basic0003.xdjhtm?etfid={_etfid_mdj}'
         _r_mdj = _fu_etfnav(_url_mdj, headers={'Referer': 'https://www.moneydj.com/'},
                             timeout=12, attempts=2)
         if _r_mdj is not None and _r_mdj.status_code == 200:
             _r_mdj.encoding = 'utf-8'
-            _nav_mdj, _date_mdj = None, _dt.date.today()
+            _nav_mdj, _date_mdj = None, _last_bd
             # 策略：Basic0003 淨值表格 row = 日期 + 單位淨值。掃最近一筆 (date, nav) pair
             # 典型格式：<td>2026/05/30</td><td>24.5678</td>
             _pairs = _re_mdj.findall(
@@ -1215,7 +1468,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                 _nav3 = _info3.get('navPrice') or _info3.get('regularMarketNAV')
                 if _nav3 and float(_nav3) > 0:
                     print(f'[ETF NAV] yfinance {code}{_sfx3}: navPrice={_nav3}')
-                    return pd.DataFrame([{'date': _dt.date.today(), 'nav': float(_nav3)}])
+                    return pd.DataFrame([{'date': _last_bd, 'nav': float(_nav3)}])
                 break  # 沒資料，不 retry
             except Exception as _e3:
                 _e3s = str(_e3)

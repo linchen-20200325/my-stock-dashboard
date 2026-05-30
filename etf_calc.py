@@ -331,6 +331,31 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                         return {'nav': _nav_v, 'price': _pr_v,
                                 'premium_pct': _prem, 'warning': _prem > 1.0,
                                 'data_date': _nav_d_only}
+                    else:
+                        # 假日/連假兜底：即時來源(goodinfo/TWSE/MoneyDJ)常只回一筆淨值，
+                        # 其日期與 yfinance 收盤日(上一交易日)對不上→同日 join 落空。
+                        # 改用「最新淨值 vs 最新收盤」，但兩者日期需 ≤4 天(涵蓋連假)，
+                        # 避免拿過時淨值硬配。此即「遇假日往前抓最後交易日淨值」。
+                        _nav_df = _nav_df.sort_index()
+                        _price_s = _price_s.sort_index()
+                        _nav_last_d = _nav_df.index.max()
+                        _price_last_d = _price_s.index.max()
+                        _gap = abs((_price_last_d - _nav_last_d).days)
+                        if _gap <= 4:
+                            _nav_v = float(_nav_df['nav'].iloc[-1])
+                            _pr_v  = float(_price_s['Close'].iloc[-1])
+                            _prem  = round((_pr_v - _nav_v) / _nav_v * 100, 2)
+                            if _is_active_etf and abs(_prem) > _ACTIVE_PREM_MAX:
+                                print(f'[折溢價-B2/stale-G2] {ticker}: prem={_prem}% > ±{_ACTIVE_PREM_MAX}%')
+                                return _stale_payload
+                            _dd = min(_nav_last_d, _price_last_d).date()
+                            print(f'[折溢價-B2/假日兜底] {ticker}: nav日={_nav_last_d.date()} '
+                                  f'價日={_price_last_d.date()} gap={_gap}d '
+                                  f'nav={_nav_v} price={_pr_v} prem={_prem}%')
+                            return {'nav': _nav_v, 'price': _pr_v,
+                                    'premium_pct': _prem, 'warning': _prem > 1.0,
+                                    'data_date': _dd}
+                        print(f'[折溢價-B2] {ticker}: nav日與價日落差 {_gap}d >4，不配對')
 
         print(f'[折溢價] {ticker}: 所有路徑失敗，回傳 N/A')
     except Exception as _ep:
@@ -783,7 +808,9 @@ def compute_etf_weakness_row(ticker: str, name: str = '',
         return _row
 
     _tenure_days = None
-    if _is_act:
+    # 經理人/任期：所有台股 ETF 都抓（ETF 表現與經理人相關；被動式換手也值得知道）。
+    # 海外 ETF（如 BND）MoneyDJ 無資料 → 自然留「—」，故只對台股代號發 proxy 請求。
+    if ticker.endswith(('.TW', '.TWO')):
         _mg = fetch_etf_manager(ticker)
         if _mg:
             _row['經理人'] = _mg.get('name', '—')
