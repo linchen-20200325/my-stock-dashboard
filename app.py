@@ -1571,6 +1571,9 @@ with tab_diag:
     render_api_diagnostic()
     st.markdown('---')
     render_data_health_raw()
+    st.markdown('---')
+    from calibration_ui import render_calibration_panel
+    render_calibration_panel()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: 產業熱力圖
