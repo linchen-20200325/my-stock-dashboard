@@ -73,7 +73,11 @@ def render_etf_single(gemini_fn=None):
         st.session_state.pop('etf_s_active', None)
         return
 
-    etf_name = info.get('longName') or info.get('shortName') or ticker
+    # 中文名優先：MoneyDJ 抓取（cache 7 天，主動式 ETF 含 'A' 後綴也支援）
+    # → fallback 至 yfinance longName/shortName（多為英文）→ 最後用 ticker
+    from etf_fetch import fetch_etf_zh_name as _fetch_zh_n
+    _zh_name = _fetch_zh_n(ticker)
+    etf_name = _zh_name or info.get('longName') or info.get('shortName') or ticker
     # 費用率走 SITCA primary（台股 ETF 官方，海外 IP 走 NAS proxy）→ yfinance fallback
     expense  = get_etf_expense_ratio_safe(ticker)
     beta     = info.get('beta') or info.get('beta3Year')
