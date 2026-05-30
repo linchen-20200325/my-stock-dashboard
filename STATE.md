@@ -6,8 +6,8 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：PR #122（主動式 ETF 中文名 / 費用率 / NAV 三項修復）
-  - 沿革：#113 拐點偵測補強 → #114 主動式 ETF Yuanta fallback → #115 AI 報告補熱錢/拐點章節 + TWII 倒掛回測 → #116 prompt 強制 N 節全出 + 4 節 token 餘裕 → #117 etf_fetch.fetch_etf_underlying_index + etf_calc.calc_avg_volume_20d / calc_liquidity_score → #119 PMI FinMind / ETF NAV 4 段 / 費用率 MoneyDJ 共 6 處改走 fetch_url（PR #100 NAS 中繼自動接管）→ #122 新增 fetch_etf_zh_name（MDJ title regex 中文名）+ SITCA 剝主動式 'A' 後綴 + MoneyDJ NAV 段改 Basic0003（淨值表格頁）並修 etfid 缺 .TW bug → 折溢價自動算出
+- **目前版本**：PR #124（統一 ETF metadata 改走 MoneyDJ Basic0004 + NAS 中繼站）
+  - 沿革：#117 fetch_etf_underlying_index + liquidity_score → #119 PMI/NAV/費用率 6 處改走 fetch_url（NAS 中繼自動接管）→ #122 主動式 ETF 中文名 + SITCA 'A' 剝除 + MoneyDJ NAV 段改 Basic0003 → #124 新增 fetch_etf_meta_moneydj（Basic0004 一次取 zh_name + AUM + 經理費+保管費 + 追蹤指數），fetch_etf_info 在 yfinance.info 缺欄時自動 merge，get_etf_expense_ratio_safe 把 MoneyDJ 升為 primary — 繞 yfinance.info 海外 IP 封鎖
 - **Secrets**：`FINMIND_TOKEN` · `GEMINI_API_KEY[_2..6]` · `PROXY_URL` · `FRED_API_KEY` ·（選配 `NAS_BASE_URL` / `NAS_API_KEY`）
 
 ## 模組分層（PR #58–#73 大重構後）
