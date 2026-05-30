@@ -995,17 +995,23 @@ import os as _os_mg
 import json as _json_mg
 
 _MGR_HISTORY_PATH = _os_mg.path.join('/tmp/st_cache', 'etf_manager_history.json')
+# 持久檔：由 update_etf_managers.py（GitHub Actions 每週）維護並 commit 進 repo，
+# 跨 Streamlit Cloud 容器重啟仍存活（解決 /tmp 清空導致紅框不跳的問題）。
+_ETF_MANAGERS_REPO_PATH = _os_mg.path.join(
+    _os_mg.path.dirname(_os_mg.path.abspath(__file__)), 'etf_managers.json')
+_RECENT_CHANGE_DAYS = 180   # 換手偵測日後多久內仍在 UI 亮紅框
 
 
 def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
-    """記錄並比對 ETF 經理人異動（ETF 表現與經理人相關，換手須提醒）。
+    """比對 ETF 經理人異動（ETF 表現與經理人相關，換手須提醒）。
 
-    把每檔最近一次抓到的經理人存本機 JSON;若這次名字與上次不同→判定換手,
-    把舊→新記進 history。回傳 UI 用字典:
+    換手基準與歷史的主來源 = `etf_managers.json`（Actions 維護、commit 進 repo，
+    跨容器重啟存活）；`/tmp` 為次要（兩次 Actions 之間 app 自行即時偵測 + 雲端
+    唯讀時的備援）。回傳 UI 用字典:
       {'changed': bool, 'prev': str|None, 'detected_at': 'YYYY-MM-DD'|None,
        'is_new': bool, 'tenure_days': int|None}
+    changed：持久檔近 180 天有換手紀錄，或 live 名字與基準不同。
     is_new：到職日推算任期 < 180 天（半年內新任,表現待觀察）。
-    無法寫檔（雲端唯讀）時仍以 tenure 回傳 is_new,不拋錯。
     """
     import datetime as _dt_mg
     _name = (manager or {}).get('name') or None
@@ -1016,7 +1022,36 @@ def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
     if not _name:
         return _out
     _key = (ticker or '').replace('.tw', '.TW').strip()
-    _today = _dt_mg.date.today().isoformat()
+    _today_d = _dt_mg.date.today()
+    _today = _today_d.isoformat()
+
+    # ── 1. 持久檔（repo）：跨容器存活的換手基準 + 歷史 ──────────────
+    _repo_rec = {}
+    try:
+        if _os_mg.path.exists(_ETF_MANAGERS_REPO_PATH):
+            with open(_ETF_MANAGERS_REPO_PATH, 'r', encoding='utf-8') as _f:
+                _repo_db = _json_mg.load(_f) or {}
+            _repo_rec = (_repo_db.get('managers') or {}).get(_key) or {}
+    except Exception as _e_repo:
+        print(f'[ETF Manager] 讀持久檔略過: {_e_repo}')
+
+    # 1a. 持久 history 近 180 天的換手 → 即使容器重啟仍亮紅框
+    for _h in reversed(_repo_rec.get('history') or []):
+        _da = _h.get('detected_at')
+        try:
+            _dd = _dt_mg.date.fromisoformat(_da) if _da else None
+        except ValueError:
+            _dd = None
+        if _dd and (_today_d - _dd).days <= _RECENT_CHANGE_DAYS:
+            _out.update({'changed': True, 'prev': _h.get('from'), 'detected_at': _da})
+            break
+
+    # 1b. live 名字 vs 持久基準不同 → 兩次 Actions 之間也能即時偵測
+    _repo_name = _repo_rec.get('name')
+    if not _out['changed'] and _repo_name and _repo_name != _name:
+        _out.update({'changed': True, 'prev': _repo_name, 'detected_at': _today})
+
+    # ── 2. /tmp 即時檔（次要：session 內 + 持久檔不可寫時備援）──────
     try:
         _os_mg.makedirs('/tmp/st_cache', exist_ok=True)
         _db = {}
@@ -1025,10 +1060,8 @@ def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
                 _db = _json_mg.load(_f) or {}
         _rec = _db.get(_key) or {}
         _prev = _rec.get('name')
-        if _prev and _prev != _name:
-            _out['changed'] = True
-            _out['prev'] = _prev
-            _out['detected_at'] = _today
+        if _prev and _prev != _name and not _out['changed']:
+            _out.update({'changed': True, 'prev': _prev, 'detected_at': _today})
             _hist = _rec.get('history') or []
             _hist.append({'from': _prev, 'to': _name, 'detected_at': _today,
                           'since': (manager or {}).get('since')})

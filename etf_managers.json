@@ -1,0 +1,5 @@
+{
+  "note": "由 update_etf_managers.py（GitHub Actions）自動維護的 ETF 經理人持久檔。app 讀此檔當『換手偵測』基準，跨容器重啟仍存活（取代僅存活於 /tmp 的舊機制）。請勿手動編輯。",
+  "updated_at": null,
+  "managers": {}
+}
