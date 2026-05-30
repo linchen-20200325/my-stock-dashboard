@@ -1186,6 +1186,15 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
     _df_stale = None       # 備援：FinMind 過舊資料
     _days_stale: int | None = None
 
+    # 即時報價類來源（goodinfo/TWSE/MoneyDJ/yfinance）回的是「最後一筆已公告淨值」，
+    # 但若硬戳 today，遇週末/假日會與 yfinance 收盤日（上一交易日）對不上而 inner-join 落空。
+    # 故統一戳「最近交易日」：今天是工作日用今天，否則往前推到最後一個工作日。
+    def _last_business_day(_d):
+        while _d.weekday() >= 5:   # 5=Sat, 6=Sun
+            _d -= _dt.timedelta(days=1)
+        return _d
+    _last_bd = _last_business_day(_dt.date.today())
+
     # ── 1. FinMind ETF NAV（試兩個 dataset 名稱 + 多種欄位名稱）───────────
     from proxy_helper import fetch_url as _fu_etfnav  # NAS 中繼 fallback
     for _ds1 in ['TaiwanETFNetAssetValue', 'TaiwanStockETFNAV']:
@@ -1270,7 +1279,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                                 _prem_gi = _safe_float(_m_p.group(1))
                         if _prem_gi is not None:
                             break
-                _row_gi = {'date': _dt.date.today(), 'nav': _nav_gi}
+                _row_gi = {'date': _last_bd, 'nav': _nav_gi}
                 if _prem_gi is not None: _row_gi['premium_pct'] = _prem_gi
                 print(f'[ETF NAV] {code} goodinfo: nav={_nav_gi} prem={_prem_gi}%')
                 return pd.DataFrame([_row_gi])
@@ -1300,7 +1309,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
         if _prem2 is None and _nav2 > 0 and _price2 > 0:
             _prem2 = round((_price2 - _nav2) / _nav2 * 100, 2)
         if _nav2 > 0:
-            _r_out = {'date': _dt.date.today(), 'nav': _nav2}
+            _r_out = {'date': _last_bd, 'nav': _nav2}
             if _price2 > 0:
                 _r_out['price'] = _price2
             if _prem2 is not None:
@@ -1361,7 +1370,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
             _price_q = _kv_num_q(['市價', '成交價'], _excl=['漲跌'])
             _prem_q  = _kv_num_q(['折溢價'])
             if _nav_q is not None and _NAV_MIN < _nav_q < _NAV_MAX:
-                _row_q = {'date': _dt.date.today(), 'nav': _nav_q}
+                _row_q = {'date': _last_bd, 'nav': _nav_q}
                 if _price_q is not None and _price_q > 0:
                     _row_q['price'] = _price_q
                 if _prem_q is None and _price_q and _nav_q:
@@ -1383,7 +1392,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                             timeout=12, attempts=2)
         if _r_mdj is not None and _r_mdj.status_code == 200:
             _r_mdj.encoding = 'utf-8'
-            _nav_mdj, _date_mdj = None, _dt.date.today()
+            _nav_mdj, _date_mdj = None, _last_bd
             # 策略：Basic0003 淨值表格 row = 日期 + 單位淨值。掃最近一筆 (date, nav) pair
             # 典型格式：<td>2026/05/30</td><td>24.5678</td>
             _pairs = _re_mdj.findall(
@@ -1426,7 +1435,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                 _nav3 = _info3.get('navPrice') or _info3.get('regularMarketNAV')
                 if _nav3 and float(_nav3) > 0:
                     print(f'[ETF NAV] yfinance {code}{_sfx3}: navPrice={_nav3}')
-                    return pd.DataFrame([{'date': _dt.date.today(), 'nav': float(_nav3)}])
+                    return pd.DataFrame([{'date': _last_bd, 'nav': float(_nav3)}])
                 break  # 沒資料，不 retry
             except Exception as _e3:
                 _e3s = str(_e3)
