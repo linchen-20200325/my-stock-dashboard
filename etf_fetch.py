@@ -1297,6 +1297,45 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
         import re as _re_mdj
         # etfid 需 .TW 後綴；主動式 ETF 'A' 保留（如 00982A.TW）
         _etfid_mdj = ticker.upper() if ticker.upper().endswith(('.TW', '.TWO')) else f'{code}.TW'
+
+        # 4a. Basic0001 即時報價頁 — 直接含「淨值/市價/折溢價(%)」官方值，
+        #     不必用 yfinance Close 反推（杜絕跨來源日期錯位）。KV 解析較 regex 穩。
+        _url_q = f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_etfid_mdj}'
+        _r_q = _fu_etfnav(_url_q, headers={'Referer': 'https://www.moneydj.com/'},
+                          timeout=12, attempts=2)
+        if _r_q is not None and _r_q.status_code == 200:
+            _r_q.encoding = 'utf-8'
+            _kv_q = _html_kv_pairs(_r_q.text)
+
+            def _kv_num_q(_keys, _excl=()):
+                for _k, _v in _kv_q.items():
+                    if any(_kk in _k for _kk in _keys) and not any(_xx in _k for _xx in _excl):
+                        _m = _re_mdj.search(r'[-+]?\d+\.?\d*', _v.replace(',', ''))
+                        if _m:
+                            return _safe_float(_m.group(0))
+                return None
+
+            _nav_q   = _kv_num_q(['淨值'])
+            _price_q = _kv_num_q(['市價', '成交價'], _excl=['漲跌'])
+            _prem_q  = _kv_num_q(['折溢價'])
+            if _nav_q is not None and _NAV_MIN < _nav_q < _NAV_MAX:
+                _row_q = {'date': _dt.date.today(), 'nav': _nav_q}
+                if _price_q is not None and _price_q > 0:
+                    _row_q['price'] = _price_q
+                if _prem_q is None and _price_q and _nav_q:
+                    _prem_q = round((_price_q - _nav_q) / _nav_q * 100, 2)
+                if _prem_q is not None:
+                    _row_q['premium_pct'] = _prem_q
+                print(f'[ETF NAV] MoneyDJ-Q(Basic0001) {_etfid_mdj}: '
+                      f'nav={_nav_q} price={_price_q} prem={_prem_q}%')
+                return pd.DataFrame([_row_q])
+            print(f'[ETF NAV] MoneyDJ-Q {_etfid_mdj}: 200 但 KV 無淨值 '
+                  f'(keys={list(_kv_q)[:8]})')
+        else:
+            _cq = _r_q.status_code if _r_q is not None else 'None'
+            print(f'[ETF NAV] MoneyDJ-Q {_etfid_mdj}: HTTP {_cq}')
+
+        # 4b. Basic0003 淨值表格 — 補 NAV 歷史（4a 拿不到時的備援）
         _url_mdj = f'https://www.moneydj.com/ETF/X/Basic/Basic0003.xdjhtm?etfid={_etfid_mdj}'
         _r_mdj = _fu_etfnav(_url_mdj, headers={'Referer': 'https://www.moneydj.com/'},
                             timeout=12, attempts=2)
