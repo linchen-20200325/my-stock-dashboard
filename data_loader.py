@@ -697,8 +697,8 @@ class StockDataLoader:
     @st.cache_data(ttl=3600)
     def get_monthly_revenue(_self, stock_id):
         """月營收優先順序：MOPS(官方) → FinMind"""
-        import os as _os_rv, datetime as _dt_rv, time as _t_rv
-        import requests as _rq_rv, pandas as _pd_rv
+        import os as _os_rv, datetime as _dt_rv
+        import pandas as _pd_rv
         _tok = (_os_rv.environ.get('FINMIND_TOKEN','') or
                 _os_rv.environ.get('FM_TOKEN',''))
         end_date   = _dt_rv.date.today()
@@ -933,7 +933,7 @@ class StockDataLoader:
             if df_fin is None or df_fin.empty:
                 # ── 備援: yfinance 季度 ──
                 try:
-                    import yfinance as _yf_q, pandas as _pd_yf_q
+                    import yfinance as _yf_q
                     for _sfx_q in ('.TW', '.TWO'):
                         _tk_q = _yf_q.Ticker(f"{stock_id}{_sfx_q}")
                         _qf_q = (getattr(_tk_q, 'quarterly_income_stmt', None)
@@ -1320,8 +1320,7 @@ class StockDataLoader:
         資料來源：FinMind TaiwanStockBalanceSheet + TaiwanStockCashFlowsStatement
         """
         try:
-            import os as _os_bscf, requests as _rq_bscf, datetime as _dt_bscf
-            import re as _re_bscf
+            import os as _os_bscf, datetime as _dt_bscf
             _tok = _os_bscf.environ.get('FINMIND_TOKEN', '')
             _start = (_dt_bscf.date.today() - _dt_bscf.timedelta(days=365 * 3)).strftime('%Y-%m-%d')
             _hdrs = {'Authorization': f'Bearer {_tok}'} if _tok else {}

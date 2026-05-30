@@ -6,8 +6,8 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：PR #124（統一 ETF metadata 改走 MoneyDJ Basic0004 + NAS 中繼站）
-  - 沿革：#117 fetch_etf_underlying_index + liquidity_score → #119 PMI/NAV/費用率 6 處改走 fetch_url（NAS 中繼自動接管）→ #122 主動式 ETF 中文名 + SITCA 'A' 剝除 + MoneyDJ NAV 段改 Basic0003 → #124 新增 fetch_etf_meta_moneydj（Basic0004 一次取 zh_name + AUM + 經理費+保管費 + 追蹤指數），fetch_etf_info 在 yfinance.info 缺欄時自動 merge，get_etf_expense_ratio_safe 把 MoneyDJ 升為 primary — 繞 yfinance.info 海外 IP 封鎖
+- **目前版本**：PR #124（統一 ETF metadata 改走 MoneyDJ Basic0004 + NAS 中繼站）｜**代碼淨化與收尾完成** ✅
+  - 沿革：#117 fetch_etf_underlying_index + liquidity_score → #119 PMI/NAV/費用率 6 處改走 fetch_url（NAS 中繼自動接管）→ #122 主動式 ETF 中文名 + SITCA 'A' 剝除 + MoneyDJ NAV 段改 Basic0003 → #124 新增 fetch_etf_meta_moneydj（Basic0004 一次取 zh_name + AUM + 經理費+保管費 + 追蹤指數），fetch_etf_info 在 yfinance.info 缺欄時自動 merge，get_etf_expense_ratio_safe 把 MoneyDJ 升為 primary — 繞 yfinance.info 海外 IP 封鎖 → 收尾淨化：data_loader.py / daily_checklist.py 移除 7 處 unused imports（ruff F401 全綠）
 - **Secrets**：`FINMIND_TOKEN` · `GEMINI_API_KEY[_2..6]` · `PROXY_URL` · `FRED_API_KEY` ·（選配 `NAS_BASE_URL` / `NAS_API_KEY`）
 
 ## 模組分層（PR #58–#73 大重構後）
