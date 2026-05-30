@@ -201,14 +201,36 @@ def fetch_etf_meta_moneydj(ticker: str) -> dict:
             pass
 
     # 3-4. 經理費 / 保管費（% → 比例）
-    for _label, _key in (('經理費', 'manager_fee'), ('保管費', 'custodian_fee')):
-        _m = _re_meta.search(
-            rf'{_label}[^\d%]{{0,30}}?(\d+(?:\.\d+)?)\s*%', _txt)
-        if _m:
-            try:
-                _out[_key] = float(_m.group(1)) / 100.0
-            except ValueError:
-                pass
+    # MoneyDJ 標籤多為「經理費(%)」(值格無 %)，純 regex 會被標籤內 % 破壞，
+    # 故以 _html_kv_pairs 儲存格配對為主（同經理人解析法）、regex 為輔。
+    _kv_meta = _html_kv_pairs(_txt)
+
+    def _pct_ratio(_raw):
+        """字串取數字並轉比例（1.00 → 0.01）；無數字回 None。"""
+        _mm = _re_meta.search(r'(\d+(?:\.\d+)?)', str(_raw).replace(',', ''))
+        if not _mm:
+            return None
+        try:
+            return float(_mm.group(1)) / 100.0
+        except ValueError:
+            return None
+
+    for _labels, _key in ((('經理費', '管理費'), 'manager_fee'),
+                          (('保管費',), 'custodian_fee')):
+        _v = None
+        for _k, _vv in _kv_meta.items():               # KV 主路徑
+            if any(_lb in _k for _lb in _labels):
+                _v = _pct_ratio(_vv)
+                if _v is not None:
+                    break
+        if _v is None:                                  # regex 兜底
+            for _lb in _labels:
+                _m = _re_meta.search(rf'{_lb}[^\d%]{{0,30}}?(\d+(?:\.\d+)?)\s*%', _txt)
+                if _m:
+                    _v = _pct_ratio(_m.group(1))
+                    break
+        if _v is not None:
+            _out[_key] = _v
 
     # 5. 合計總費用率（經理 + 保管）；若僅一項則退而求其次
     if 'manager_fee' in _out and 'custodian_fee' in _out:
@@ -216,15 +238,21 @@ def fetch_etf_meta_moneydj(ticker: str) -> dict:
     elif 'manager_fee' in _out:
         _out['expense'] = _out['manager_fee']
     else:
-        # 兜底：找「總費用率」單一欄位
-        _m = _re_meta.search(
-            r'(?:總費用率|內含費用率|費用率)[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%',
-            _txt)
-        if _m:
-            try:
-                _out['expense'] = float(_m.group(1)) / 100.0
-            except ValueError:
-                pass
+        # 兜底：找「總費用率/內扣費用率」單一欄位（KV 優先 → regex）
+        for _k, _vv in _kv_meta.items():
+            if any(_lb in _k for _lb in ('總費用率', '內扣費用率', '內含費用率', '費用率')):
+                _ev = _pct_ratio(_vv)
+                if _ev is not None:
+                    _out['expense'] = _ev
+                    break
+        if 'expense' not in _out:
+            _m = _re_meta.search(
+                r'(?:總費用率|內扣費用率|內含費用率|費用率)[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%',
+                _txt)
+            if _m:
+                _ev = _pct_ratio(_m.group(1))
+                if _ev is not None:
+                    _out['expense'] = _ev
 
     # 6. 追蹤指數（與 fetch_etf_underlying_index 同 regex 風格，HTML entity 預清洗）
     _txt_c = (_txt.replace('&nbsp;', ' ').replace('&#160;', ' ')
@@ -809,6 +837,7 @@ def fetch_etf_manager(ticker: str):
         f'https://www.moneydj.com/ETF/X/Basic/Basic0011.xdjhtm?etfid={_t}',
     ]
     _err_trace: list[str] = []
+    _best = None   # 名字已抓到但缺到職日時暫存；續查其他頁是否有任期再決定
 
     for _url in _urls:
         _txt = None
@@ -876,8 +905,12 @@ def fetch_etf_manager(ticker: str):
                         _days = (_date_mg.today() - _dtv).days
                     except ValueError:
                         pass
-                print(f'[MDJ/manager] ✅(KV) {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
-                return {'name': _name, 'since': _since, 'tenure_days': _days}
+                if _since:
+                    print(f'[MDJ/manager] ✅(KV) {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
+                    return {'name': _name, 'since': _since, 'tenure_days': _days}
+                if _best is None:   # 名字有、到職日缺 → 暫存，續查其他頁
+                    _best = {'name': _name, 'since': None, 'tenure_days': None}
+                    print(f'[MDJ/manager] (KV) {_t} = {_name} via {_endpoint}，無到職日，續查其他頁')
         except Exception as _ekv:
             print(f'[MDJ/manager] KV parse 略過 {_endpoint}: {type(_ekv).__name__}')
 
@@ -912,11 +945,20 @@ def fetch_etf_manager(ticker: str):
                     _days = (_date_mg.today() - _dt).days
                 except ValueError:
                     pass
-            print(f'[MDJ/manager] ✅ {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
-            return {'name': _name, 'since': _since, 'tenure_days': _days}
+            if _since:
+                print(f'[MDJ/manager] ✅ {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
+                return {'name': _name, 'since': _since, 'tenure_days': _days}
+            if _best is None:
+                _best = {'name': _name, 'since': None, 'tenure_days': None}
+                print(f'[MDJ/manager] (regex) {_t} = {_name} via {_endpoint}，無到職日，續查其他頁')
         except Exception as _e:
             _err_trace.append(f'{_endpoint}: regex 例外 {type(_e).__name__}')
             print(f'[MDJ/manager] ❌ regex parse {_t} {_endpoint}: {type(_e).__name__}: {_e}')
+
+    # MoneyDJ 各頁掃完：有名字但全無到職日 → 回名字（任期 UI 顯示「未揭露」屬實）
+    if _best is not None:
+        print(f'[MDJ/manager] ▶ {_t} = {_best["name"]}（MoneyDJ 各頁皆無到職日）')
+        return _best
 
     # ── 4. SITCA fallback — 與費用率同 proxy 路徑（已證可走）────────
     if _t.replace('.TW', '').replace('.TWO', '').isdigit():
