@@ -144,13 +144,136 @@ def fetch_etf_dividends(ticker: str) -> pd.Series:
         return pd.Series(dtype=float)
 
 
+@st.cache_data(ttl=3600, max_entries=300, show_spinner=False)
+def fetch_etf_meta_moneydj(ticker: str) -> dict:
+    """從 MoneyDJ Basic0004 一次取得台股 ETF metadata（走 NAS Squid + 中繼站）。
+
+    為何需要：yfinance.info 在 Streamlit Cloud 經常被 Yahoo 海外 IP 封鎖
+    或 rate limit；MoneyDJ Basic0004 走 NAS 中繼站（家用台灣 IP）可穩定取得
+    台股 ETF 的 AUM / 費用率（經理費 + 保管費）/ 標的指數 / 中文名。
+
+    Returns
+    -------
+    dict  欄位缺漏為 None；全失敗回 {}
+        keys: zh_name / aum_twd / expense / manager_fee /
+              custodian_fee / underlying_index
+    """
+    import re as _re_meta
+    _t = (ticker or '').replace('.tw', '.TW').strip()
+    if not _t:
+        return {}
+    if '.' not in _t:
+        _t = f'{_t}.TW'
+
+    _url = f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}'
+    try:
+        from proxy_helper import fetch_url as _fu_meta
+        _r = _fu_meta(_url, headers={'Referer': 'https://www.moneydj.com/'},
+                      timeout=12, attempts=2)
+        if _r is None or _r.status_code != 200:
+            _code = _r.status_code if _r is not None else 'None'
+            print(f'[MDJ/meta] {_t}: HTTP {_code}（含 NAS 中繼皆失敗）')
+            return {}
+        _r.encoding = 'utf-8'
+        _txt = _r.text
+    except Exception as _e:
+        print(f'[MDJ/meta] {_t}: {type(_e).__name__}: {_e}')
+        return {}
+
+    _out: dict = {}
+
+    # 1. 中文名（從 <title> 擷取首段）
+    _m = _re_meta.search(
+        r'<title>\s*([^<\-]{2,30}?)\s*-\s*[0-9]{4,5}[A-Z]?\.TW\s*-', _txt)
+    if _m:
+        _name = _m.group(1).strip()
+        if any('一' <= _c <= '鿿' for _c in _name):
+            _out['zh_name'] = _name
+
+    # 2. 基金規模（億 → 元）
+    _m = _re_meta.search(
+        r'(?:基金規模|資產規模|淨資產)[^\d]{0,30}?'
+        r'(\d{1,5}(?:,\d{3})*(?:\.\d+)?)\s*億', _txt)
+    if _m:
+        try:
+            _out['aum_twd'] = float(_m.group(1).replace(',', '')) * 1e8
+        except ValueError:
+            pass
+
+    # 3-4. 經理費 / 保管費（% → 比例）
+    for _label, _key in (('經理費', 'manager_fee'), ('保管費', 'custodian_fee')):
+        _m = _re_meta.search(
+            rf'{_label}[^\d%]{{0,30}}?(\d+(?:\.\d+)?)\s*%', _txt)
+        if _m:
+            try:
+                _out[_key] = float(_m.group(1)) / 100.0
+            except ValueError:
+                pass
+
+    # 5. 合計總費用率（經理 + 保管）；若僅一項則退而求其次
+    if 'manager_fee' in _out and 'custodian_fee' in _out:
+        _out['expense'] = round(_out['manager_fee'] + _out['custodian_fee'], 6)
+    elif 'manager_fee' in _out:
+        _out['expense'] = _out['manager_fee']
+    else:
+        # 兜底：找「總費用率」單一欄位
+        _m = _re_meta.search(
+            r'(?:總費用率|內含費用率|費用率)[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%',
+            _txt)
+        if _m:
+            try:
+                _out['expense'] = float(_m.group(1)) / 100.0
+            except ValueError:
+                pass
+
+    # 6. 追蹤指數（與 fetch_etf_underlying_index 同 regex 風格，HTML entity 預清洗）
+    _txt_c = (_txt.replace('&nbsp;', ' ').replace('&#160;', ' ')
+                  .replace('&amp;', '&').replace('　', ' '))
+    _m = _re_meta.search(
+        r'(?:追蹤|標的|對應)\s*指數[^一-鿿A-Za-z\d]{0,40}?'
+        r'([一-鿿A-Za-z0-9 &\.\-／/（）()]{4,80})', _txt_c)
+    if _m:
+        _idx = _m.group(1).strip().rstrip('，,。.、 ')
+        if 4 <= len(_idx) <= 80 and not any(b in _idx for b in (
+                '追蹤誤差', '指數股票型', '指數型基金', 'nbsp', 'amp;')):
+            _out['underlying_index'] = _idx
+
+    if _out:
+        print(f'[MDJ/meta] OK {_t} = {list(_out.keys())}')
+    else:
+        print(f'[MDJ/meta] {_t}: 200 但無欄位匹配')
+    return _out
+
+
 @st.cache_data(ttl=3600, max_entries=10)
 def fetch_etf_info(ticker: str) -> dict:
-    """取得 ETF 基本資訊（費用率/Beta/AUM）"""
+    """取得 ETF 基本資訊（費用率 / Beta / AUM）。
+
+    yfinance.info 主源（含 Beta、海外 ETF 必要）→ MoneyDJ Basic0004 補齊
+    AUM/expense（yfinance 海外 IP 經常被擋時自動補位，台股 ETF only）。
+    """
     try:
-        return yf.Ticker(ticker).info or {}
+        _info = yf.Ticker(ticker).info or {}
     except Exception:
-        return {}
+        _info = {}
+
+    # 補齊：yfinance.info 空或缺 AUM/expense 時，從 MoneyDJ Basic0004 fetch
+    _t = (ticker or '').upper()
+    _is_tw = _t.endswith('.TW') or _t.endswith('.TWO')
+    if _is_tw and (not _info.get('totalAssets') or not _info.get('expenseRatio')):
+        _meta = fetch_etf_meta_moneydj(ticker)
+        if _meta:
+            if not _info.get('totalAssets') and _meta.get('aum_twd'):
+                _info['totalAssets'] = _meta['aum_twd']
+            if not _info.get('expenseRatio') and _meta.get('expense'):
+                _info['expenseRatio'] = _meta['expense']
+            if not _info.get('annualReportExpenseRatio') and _meta.get('expense'):
+                _info['annualReportExpenseRatio'] = _meta['expense']
+            # longName 補中文名（yfinance 多為英文）
+            if _meta.get('zh_name') and not any(
+                    '一' <= _c <= '鿿' for _c in str(_info.get('longName', ''))):
+                _info['longName'] = _meta['zh_name']
+    return _info
 
 
 def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
@@ -811,7 +934,15 @@ def _fetch_sitca_manager(ticker: str):
 
 
 def get_etf_expense_ratio_safe(ticker: str):
-    """安全讀取 ETF 費用率：SITCA → MoneyDJ → Yuanta → yfinance 四段備援；缺失回 None"""
+    """安全讀取 ETF 費用率：MoneyDJ Basic0004 → SITCA → Yuanta → yfinance 四段備援。
+
+    順序變更（v2）：MoneyDJ 改為 primary（走 NAS 中繼站穩定，繞 SITCA/yfinance
+    在 Streamlit Cloud 海外 IP 被封鎖時的單點失敗）。缺失回 None。
+    """
+    # Primary：MoneyDJ Basic0004 一次取 metadata（含 expense），與 fetch_etf_info 共用 cache
+    _meta = fetch_etf_meta_moneydj(ticker)
+    if _meta and _meta.get('expense') is not None:
+        return _meta['expense']
     _sit = fetch_sitca_expense_ratio(ticker)
     if _sit is not None:
         return _sit
