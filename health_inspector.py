@@ -374,9 +374,12 @@ def render_data_health_raw():
         _g_add(_glbl, _gsrc, 'daily', date_str=_maxd or _cl_ts_g, count=_cnt)
 
     _inst_df = _cl_g.get('inst')
+    # inst 是 dict（非 DataFrame）→ 必須有 key 才算真有資料，避免 {} 被誤判 🟢
+    _inst_has_data = (isinstance(_inst_df, dict) and len(_inst_df) > 0) or \
+                     (isinstance(_inst_df, _pd_r.DataFrame) and not _inst_df.empty)
     _g_add('三大法人現貨買賣超', 'TWSE BFI82U', 'daily',
            df=_inst_df if isinstance(_inst_df, _pd_r.DataFrame) else None,
-           date_str=_cl_ts_g if _inst_df is not None and not isinstance(_inst_df, _pd_r.DataFrame) else None)
+           date_str=(_cl_ts_g if _inst_has_data and not isinstance(_inst_df, _pd_r.DataFrame) else None))
     _g_add('融資餘額',           'FinMind+TWSE+HiStock+Goodinfo+Yahoo+鉅亨 6段備援', 'daily',
            date_str=(_cl_ts_g if _cl_g.get('margin') is not None else None))
     _adl_df = _cl_g.get('adl')
