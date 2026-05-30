@@ -730,6 +730,46 @@ def _fetch_yuanta_active_etf_meta(ticker: str) -> dict | None:
     return None
 
 
+def _html_kv_pairs(html_text: str) -> dict:
+    """把 HTML 表格 td/th 相鄰儲存格配成 {欄位名: 值}（沿用新聞專案解析法）。
+
+    MoneyDJ 標籤(如「經理人」「經理費(%)」)的值在相鄰儲存格,純 regex 易被
+    標籤內 % 或 HTML 干擾;改用儲存格配對更穩健。只在『前格像欄位名(含中文、
+    ≤12字)』時配對,濾掉報價頁雜訊。
+    """
+    import re as _re_kv
+    from html.parser import HTMLParser as _HP_kv
+
+    class _Cells(_HP_kv):
+        def __init__(self):
+            super().__init__()
+            self.cells, self._buf = [], None
+        def handle_starttag(self, tag, attrs):
+            if tag in ('td', 'th'):
+                self._buf = []
+        def handle_data(self, data):
+            if self._buf is not None:
+                self._buf.append(data)
+        def handle_endtag(self, tag):
+            if tag in ('td', 'th') and self._buf is not None:
+                self.cells.append(_re_kv.sub(r'\s+', ' ', ''.join(self._buf)).strip())
+                self._buf = None
+
+    _p = _Cells()
+    try:
+        _p.feed(html_text or '')
+    except Exception:
+        return {}
+    _cells = [c for c in _p.cells if c]
+    _kv: dict = {}
+    for _i in range(len(_cells) - 1):
+        _key = _cells[_i].rstrip(':： ').strip()
+        _val = _cells[_i + 1].strip()
+        if _val and _key and _key not in _kv and len(_key) <= 12 and _re_kv.search(r'[一-鿿]', _key):
+            _kv[_key] = _val
+    return _kv
+
+
 @st.cache_data(ttl=604800, show_spinner=False)
 def fetch_etf_manager(ticker: str):
     """從 MoneyDJ ETF 抓「現任經理人 + 任期起始日」。
@@ -761,7 +801,9 @@ def fetch_etf_manager(ticker: str):
     if '.' not in _t:
         _t = f'{_t}.TW'
 
+    # Basic0004(簡介頁)就有「經理人」欄(fetch_etf_meta_moneydj 抓的同一頁)，擺第一優先。
     _urls = [
+        f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}',
         f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_t}',
         f'https://www.moneydj.com/ETF/X/Basic/Basic0006.xdjhtm?etfid={_t}',
         f'https://www.moneydj.com/ETF/X/Basic/Basic0011.xdjhtm?etfid={_t}',
@@ -803,6 +845,41 @@ def fetch_etf_manager(ticker: str):
 
         if _txt is None:
             continue
+
+        # ── 3a. KV 儲存格解析（穩健，優先 regex）：經理人/到職日常在表格相鄰格 ──
+        try:
+            _kv_mg = _html_kv_pairs(_txt)
+            _nm_raw = ''
+            for _k in ('基金經理人', '現任經理人', '經理人'):
+                if _k in _kv_mg:
+                    _nm_raw = _kv_mg[_k]
+                    break
+            if not _nm_raw:
+                for _k, _v in _kv_mg.items():
+                    if '經理' in _k:
+                        _nm_raw = _v
+                        break
+            _nm_m2 = _re_mg.search(r'[一-鿿]{2,8}', _nm_raw)  # 取第一段中文（避開「、」多人）
+            if _nm_m2:
+                _name = _nm_m2.group(0)
+                _since, _days = None, None
+                _dt_raw = ''
+                for _k in ('到職日', '上任日', '派任日', '起聘日', '管理基金日', '任期'):
+                    if _k in _kv_mg:
+                        _dt_raw = _kv_mg[_k]
+                        break
+                _dm2 = _re_mg.search(r'(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})', _dt_raw)
+                if _dm2:
+                    try:
+                        _dtv = _date_mg(int(_dm2.group(1)), int(_dm2.group(2)), int(_dm2.group(3)))
+                        _since = _dtv.strftime('%Y-%m-%d')
+                        _days = (_date_mg.today() - _dtv).days
+                    except ValueError:
+                        pass
+                print(f'[MDJ/manager] ✅(KV) {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
+                return {'name': _name, 'since': _since, 'tenure_days': _days}
+        except Exception as _ekv:
+            print(f'[MDJ/manager] KV parse 略過 {_endpoint}: {type(_ekv).__name__}')
 
         # ── 3. 寬鬆 regex 嘗試解析 ────────────────────────────────
         try:
@@ -870,6 +947,59 @@ def fetch_etf_manager(ticker: str):
     except Exception:
         pass
     return None
+
+
+import os as _os_mg
+import json as _json_mg
+
+_MGR_HISTORY_PATH = _os_mg.path.join('/tmp/st_cache', 'etf_manager_history.json')
+
+
+def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
+    """記錄並比對 ETF 經理人異動（ETF 表現與經理人相關，換手須提醒）。
+
+    把每檔最近一次抓到的經理人存本機 JSON;若這次名字與上次不同→判定換手,
+    把舊→新記進 history。回傳 UI 用字典:
+      {'changed': bool, 'prev': str|None, 'detected_at': 'YYYY-MM-DD'|None,
+       'is_new': bool, 'tenure_days': int|None}
+    is_new：到職日推算任期 < 180 天（半年內新任,表現待觀察）。
+    無法寫檔（雲端唯讀）時仍以 tenure 回傳 is_new,不拋錯。
+    """
+    import datetime as _dt_mg
+    _name = (manager or {}).get('name') or None
+    _tenure = (manager or {}).get('tenure_days')
+    _is_new = isinstance(_tenure, int) and _tenure < 180
+    _out = {'changed': False, 'prev': None, 'detected_at': None,
+            'is_new': _is_new, 'tenure_days': _tenure}
+    if not _name:
+        return _out
+    _key = (ticker or '').replace('.tw', '.TW').strip()
+    _today = _dt_mg.date.today().isoformat()
+    try:
+        _os_mg.makedirs('/tmp/st_cache', exist_ok=True)
+        _db = {}
+        if _os_mg.path.exists(_MGR_HISTORY_PATH):
+            with open(_MGR_HISTORY_PATH, 'r', encoding='utf-8') as _f:
+                _db = _json_mg.load(_f) or {}
+        _rec = _db.get(_key) or {}
+        _prev = _rec.get('name')
+        if _prev and _prev != _name:
+            _out['changed'] = True
+            _out['prev'] = _prev
+            _out['detected_at'] = _today
+            _hist = _rec.get('history') or []
+            _hist.append({'from': _prev, 'to': _name, 'detected_at': _today,
+                          'since': (manager or {}).get('since')})
+            _rec['history'] = _hist[-10:]
+        _rec.update({'name': _name, 'since': (manager or {}).get('since'),
+                     'last_seen': _today})
+        _rec.setdefault('history', _rec.get('history', []))
+        _db[_key] = _rec
+        with open(_MGR_HISTORY_PATH, 'w', encoding='utf-8') as _f:
+            _json_mg.dump(_db, _f, ensure_ascii=False, indent=2)
+    except Exception as _e_mg:
+        print(f'[ETF Manager] 異動追蹤略過（無法存檔）: {_e_mg}')
+    return _out
 
 
 @st.cache_data(ttl=604800, show_spinner=False)

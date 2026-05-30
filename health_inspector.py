@@ -1029,6 +1029,23 @@ def render_data_health_raw():
                              source='FinMind / TWSE OpenAPI',
                              endpoint='TaiwanETFNetAssetValue / opendata',
                              proxy=True))
+            # 基金經理人（ETF 表現與經理人相關，換手須提醒）
+            try:
+                from etf_fetch import fetch_etf_manager as _fem_r
+                _mgr_r = _fem_r(tk)
+            except Exception:
+                _mgr_r = None
+            _mgr_name = (_mgr_r or {}).get('name')
+            rows.append(_row('基金經理人',
+                             str(_dt_r.date.today()) if _mgr_name else None, 'static',
+                             optional=True,
+                             error_msg=(None if _mgr_name
+                                        else st.session_state.get(
+                                            '_etf_manager_last_err', {}).get(
+                                            tk.replace('.tw', '.TW'))),
+                             source='MoneyDJ / SITCA / Yuanta',
+                             endpoint='Basic0004/0001/0006/0011 → SITCA → 官網',
+                             proxy=True))
             _all_section_rows.extend(rows)
             _tbl(rows)
             st.caption('⚠️ 殖利率、追蹤誤差、CAGR、Sharpe、折溢價率為計算值，不顯示於此。')

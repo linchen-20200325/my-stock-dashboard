@@ -783,7 +783,9 @@ def compute_etf_weakness_row(ticker: str, name: str = '',
         return _row
 
     _tenure_days = None
-    if _is_act:
+    # 經理人/任期：所有台股 ETF 都抓（ETF 表現與經理人相關；被動式換手也值得知道）。
+    # 海外 ETF（如 BND）MoneyDJ 無資料 → 自然留「—」，故只對台股代號發 proxy 請求。
+    if ticker.endswith(('.TW', '.TWO')):
         _mg = fetch_etf_manager(ticker)
         if _mg:
             _row['經理人'] = _mg.get('name', '—')

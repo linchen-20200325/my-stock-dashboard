@@ -98,6 +98,40 @@ def render_etf_single(gemini_fn=None):
             '- **AUM（基金規模）**：總管理資產。**太小（如 <10 億）有清算下市風險**；規模大則流動性好、買賣價差小。'
         )
 
+    # ── 基金經理人 + 異動偵測（ETF 表現與經理人相關，換手須提醒）──────
+    if ticker.endswith(('.TW', '.TWO')):
+        try:
+            from etf_fetch import fetch_etf_manager, track_etf_manager_change
+            _mgr = fetch_etf_manager(ticker)
+            _chg = track_etf_manager_change(ticker, _mgr)
+            if _mgr and _mgr.get('name'):
+                _since = _mgr.get('since')
+                _td = _mgr.get('tenure_days')
+                if isinstance(_td, int):
+                    _tenure_txt = (f'{_td // 30} 個月' if _td < 365
+                                   else f'{_td / 365:.1f} 年')
+                elif _since:
+                    _tenure_txt = f'自 {_since}'
+                else:
+                    _tenure_txt = '任期未揭露'
+                mc1, mc2 = st.columns([1, 1])
+                mc1.metric('基金經理人', _mgr['name'])
+                mc2.metric('任期', _tenure_txt,
+                           help='ETF 績效與經理人選股/換股策略高度相關，任期越短越需觀察。')
+                if _chg.get('changed'):
+                    _colored_box(
+                        f'🔁 <b>經理人異動</b>：<b>{_chg["prev"]}</b> → '
+                        f'<b>{_mgr["name"]}</b>（偵測於 {_chg.get("detected_at")}）'
+                        '；新經理人選股風格可能改變，建議重新檢視持股與績效。', 'red')
+                elif _chg.get('is_new'):
+                    _colored_box(
+                        f'🆕 <b>新任經理人</b>：{_mgr["name"]}（任期 {_tenure_txt}）'
+                        '，操盤績效尚短、待觀察，暫不宜只看歷史報酬下結論。', 'yellow')
+            else:
+                st.caption('👤 基金經理人：查無資料（MoneyDJ／SITCA 未揭露或抓取失敗）')
+        except Exception as _e_mgr:
+            st.caption(f'👤 經理人資訊載入失敗：{type(_e_mgr).__name__}')
+
     # ── 自製品質評等（4 因子：AUM / 費用率 / 殖利率穩定度 / Beta）──
     try:
         from etf_quality import compute_etf_quality, render_quality_badge
