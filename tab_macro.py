@@ -4183,7 +4183,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 _macro_ai_prompt = build_structured_summary_prompt(
                     '台股大盤現在的狀況', _sections_macro, news_text=_v_news_str,
                     overall_question='現在大盤整體偏多還偏空、適不適合進場、最該留意什麼。')
-                _ai_rpt = gemini_call(_macro_ai_prompt, max_tokens=1800)
+                _ai_rpt = gemini_call(_macro_ai_prompt, max_tokens=2400)
                 _tz8 = datetime.timezone(datetime.timedelta(hours=8))
                 st.session_state['_macro_ai_report'] = _ai_rpt
                 st.session_state['_macro_ai_ts'] = datetime.datetime.now(_tz8).strftime('%Y-%m-%d %H:%M:%S')
