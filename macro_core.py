@@ -857,7 +857,7 @@ def _pmi_src_cnyes(today, max_age_days, errs):
 def _pmi_src_finmind(today, max_age_days, errs):
     """方案 5: FinMind TaiwanEconomicIndicator（過濾 PMI/製造業 series 取最新）。"""
     try:
-        import os as _os_fm, requests as _rq_fm
+        import os as _os_fm
         _tok = _os_fm.environ.get('FINMIND_TOKEN')
         if not _tok:
             try:
@@ -867,12 +867,13 @@ def _pmi_src_finmind(today, max_age_days, errs):
                 pass
         if _tok:
             _start = (today - _dt.timedelta(days=180)).strftime('%Y-%m-%d')
-            _r_fm = _rq_fm.get(
+            # 走 fetch_url（NAS Squid → 直連 → NAS 中繼站 fallback，PR #100）
+            _r_fm = fetch_url(
                 'https://api.finmindtrade.com/api/v4/data',
                 params={'dataset': 'TaiwanEconomicIndicator',
                         'start_date': _start, 'token': _tok},
-                timeout=12)
-            if _r_fm.status_code == 200:
+                timeout=12, attempts=1)
+            if _r_fm is not None and _r_fm.status_code == 200:
                 _j = _r_fm.json()
                 _data = _j.get('data') or []
                 # 篩出 name 含 PMI / 製造業採購 的 series，按 date 取最新

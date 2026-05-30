@@ -224,23 +224,14 @@ def fetch_moneydj_expense_ratio(ticker: str):
     if _t.isdigit():
         _t = f'{_t}.TW'
     _url = f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}'
-    _hdrs = {
-        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                       '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8',
-        'Referer': 'https://www.moneydj.com/',
-    }
     try:
-        # curl_cffi Chrome TLS 指紋優先；失敗降級 requests
-        try:
-            from curl_cffi import requests as _cffi_mdje
-            _r = _cffi_mdje.get(_url, impersonate='chrome124', timeout=12)
-        except Exception:
-            import requests as _rq_mdje
-            _r = _rq_mdje.get(_url, headers=_hdrs, timeout=12, verify=False)
-        if _r.status_code != 200:
-            print(f'[MoneyDJ/expense] {_t}: HTTP {_r.status_code}')
+        # 走 fetch_url（NAS Squid → 直連 → NAS 中繼站 fallback，PR #100）
+        from proxy_helper import fetch_url as _fu_mdje
+        _r = _fu_mdje(_url, headers={'Referer': 'https://www.moneydj.com/'},
+                      timeout=12, attempts=2)
+        if _r is None or _r.status_code != 200:
+            _code = _r.status_code if _r is not None else 'None'
+            print(f'[MoneyDJ/expense] {_t}: HTTP {_code}（含 NAS 中繼皆失敗）')
             return None
         _txt = _r.text
         # 直掃「經理費 X.XX%」與「保管費 X.XX%」合計；MoneyDJ Basic0004 表格常以 td 緊鄰呈現
@@ -882,7 +873,6 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
     """
     import os
     import datetime as _dt
-    import requests as _rq_etfnav
     code = ticker.replace('.TW', '').replace('.TWO', '')
     # st.secrets 優先（Streamlit Cloud secrets 不自動匯出至 os.environ）
     token = (getattr(st, 'secrets', {}).get('FINMIND_TOKEN')
@@ -892,12 +882,16 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
     _days_stale: int | None = None
 
     # ── 1. FinMind ETF NAV（試兩個 dataset 名稱 + 多種欄位名稱）───────────
+    from proxy_helper import fetch_url as _fu_etfnav  # NAS 中繼 fallback
     for _ds1 in ['TaiwanETFNetAssetValue', 'TaiwanStockETFNAV']:
         try:
             _p = {'dataset': _ds1, 'data_id': code, 'start_date': start}
             if token: _p['token'] = token
-            _r = _rq_etfnav.get('https://api.finmindtrade.com/api/v4/data', params=_p,
-                                  timeout=15)
+            _r = _fu_etfnav('https://api.finmindtrade.com/api/v4/data', params=_p,
+                            timeout=15, attempts=1)
+            if _r is None:
+                print(f'[ETF NAV] FinMind {_ds1} {code}: fetch_url 回 None（含 NAS 中繼皆失敗）')
+                continue
             _j = _r.json()
             _jstatus = _j.get('status')
             _jdata   = _j.get('data')
@@ -936,15 +930,10 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
         from bs4 import BeautifulSoup as _BS4_gi
         import re as _re_gi
         _url_gi = f'https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID={code}'
-        _hdrs_gi = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'zh-TW,zh;q=0.9', 'Referer': 'https://goodinfo.tw/tw/'}
-        try:
-            from curl_cffi import requests as _cffi_gi
-            _r_gi = _cffi_gi.get(_url_gi, impersonate='chrome124', timeout=12)
-        except Exception:
-            _r_gi = _rq_etfnav.get(_url_gi, headers=_hdrs_gi, timeout=12, verify=False)
-        if _r_gi.status_code == 200:
+        # 走 fetch_url（自動 NAS Squid → 直連 → NAS 中繼站 fallback）
+        _r_gi = _fu_etfnav(_url_gi, headers={'Referer': 'https://goodinfo.tw/tw/'},
+                           timeout=12, attempts=2)
+        if _r_gi is not None and _r_gi.status_code == 200:
             _soup_gi = _BS4_gi(_r_gi.text, 'lxml')
             _nav_gi, _prem_gi = None, None
             # 策略1：在 <td> 中找「淨值」標籤，取下一格數字
@@ -987,13 +976,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
     except Exception as _e_gi:
         print(f'[ETF NAV] goodinfo {code}: {_e_gi}')
 
-    # ── 3. TWSE OpenAPI（openapi.twse.com.tw 非主站，先直連再走 Proxy）──────
-    try:
-        from daily_checklist import get_nas_proxy as _gnp_nav
-        _nas_nav = _gnp_nav()
-    except Exception:
-        _nas_nav = None
-
+    # ── 3. TWSE OpenAPI（走 fetch_url，含 NAS Squid + NAS 中繼站 fallback）─
     def _parse_twse_row(row_dict, ep_label):
         _nav2 = 0.0
         for _nk in ['單位淨值', '淨值', 'NetAssetValue', 'nav']:
@@ -1021,48 +1004,36 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
             return _r_out
         return None
 
-    for _proxy_candidate in ([None] + ([_nas_nav] if _nas_nav else [])):
-        _ptag = 'direct' if _proxy_candidate is None else 'proxy'
-        for _op_id2 in ['TaiwanStockPremiumDiscountRatio', 'TaiwanStockNetValue']:
-            try:
-                _ep2 = f'https://openapi.twse.com.tw/v1/ETF/{_op_id2}'
-                _r2 = _rq_etfnav.get(_ep2, headers={'Accept': 'application/json',
-                                                      'User-Agent': 'Mozilla/5.0'},
-                                      proxies=_proxy_candidate, timeout=10, verify=False)
-                _j2 = _r2.json()
-                _df2 = pd.DataFrame(_j2 if isinstance(_j2, list) else [])
-                if _df2.empty:
-                    print(f'[ETF NAV] TWSE {_op_id2}({_ptag}): 回傳空資料'); continue
-                _code_col = next((c for c in _df2.columns if '證券代號' in str(c) or c == 'code'), None)
-                if _code_col is None:
-                    print(f'[ETF NAV] TWSE {_op_id2}({_ptag}): 找不到 證券代號 欄位'); continue
-                _match = _df2[_df2[_code_col].astype(str).str.strip() == code]
-                if _match.empty:
-                    print(f'[ETF NAV] TWSE {_op_id2}({_ptag}): 找不到 {code}'); continue
-                _out2 = _parse_twse_row(_match.iloc[0].to_dict(), f'{_op_id2}/{_ptag}')
-                if _out2:
-                    return pd.DataFrame([_out2])
-            except Exception as _e2:
-                print(f'[ETF NAV] TWSE {_op_id2}({_ptag}) {code}: {_e2}')
-        # 若無 _nas_nav，外層 list 為 [None] 單元素，loop 自然結束無需 break
+    for _op_id2 in ['TaiwanStockPremiumDiscountRatio', 'TaiwanStockNetValue']:
+        try:
+            _ep2 = f'https://openapi.twse.com.tw/v1/ETF/{_op_id2}'
+            _r2 = _fu_etfnav(_ep2, headers={'Accept': 'application/json'},
+                             timeout=10, attempts=1)
+            if _r2 is None:
+                print(f'[ETF NAV] TWSE {_op_id2}: fetch_url 回 None'); continue
+            _j2 = _r2.json()
+            _df2 = pd.DataFrame(_j2 if isinstance(_j2, list) else [])
+            if _df2.empty:
+                print(f'[ETF NAV] TWSE {_op_id2}: 回傳空資料'); continue
+            _code_col = next((c for c in _df2.columns if '證券代號' in str(c) or c == 'code'), None)
+            if _code_col is None:
+                print(f'[ETF NAV] TWSE {_op_id2}: 找不到 證券代號 欄位'); continue
+            _match = _df2[_df2[_code_col].astype(str).str.strip() == code]
+            if _match.empty:
+                print(f'[ETF NAV] TWSE {_op_id2}: 找不到 {code}'); continue
+            _out2 = _parse_twse_row(_match.iloc[0].to_dict(), _op_id2)
+            if _out2:
+                return pd.DataFrame([_out2])
+        except Exception as _e2:
+            print(f'[ETF NAV] TWSE {_op_id2} {code}: {_e2}')
 
-    # ── 4. MoneyDJ 爬蟲（BeautifulSoup，不需 token）──────────────────────
+    # ── 4. MoneyDJ 爬蟲（走 fetch_url，含 NAS 中繼站 fallback）──────────────
     try:
         from bs4 import BeautifulSoup as _BS4
-        _hdrs_mdj = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8',
-            'Referer': 'https://www.moneydj.com/',
-        }
         _url_mdj = f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={code}'
-        # 優先用 curl_cffi 模擬 Chrome TLS 指紋，繞過反爬蟲；失敗再降級 requests
-        try:
-            from curl_cffi import requests as _cffi_req
-            _r_mdj = _cffi_req.get(_url_mdj, impersonate='chrome124', timeout=12)
-        except Exception:
-            _r_mdj = _rq_etfnav.get(_url_mdj, headers=_hdrs_mdj, timeout=12, verify=False)
-        if _r_mdj.status_code == 200:
+        _r_mdj = _fu_etfnav(_url_mdj, headers={'Referer': 'https://www.moneydj.com/'},
+                            timeout=12, attempts=2)
+        if _r_mdj is not None and _r_mdj.status_code == 200:
             _soup = _BS4(_r_mdj.text, 'lxml')
             _nav_mdj = None
             # 策略1：找含「淨值」的 th/td，取下一格數字
