@@ -30,3 +30,7 @@ coverage.xml
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Debug protocol artifacts (cleaned up at end of session)
+*.bak
+debug.log
