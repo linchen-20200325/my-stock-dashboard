@@ -165,8 +165,10 @@ def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
     from proxy_helper import fetch_url as _fu_sit
     import pandas as _pd_sit, re as _re_sit
     _t = (ticker or '').replace('.TW', '').replace('.tw', '').strip()
-    if not _t or not _t.isdigit():
-        return None  # SITCA 只收純台股 ETF 數字代號（0050、00878 等）
+    # 主動式 ETF 後綴字母（00982A、00980A、00406A）→ SITCA 表格僅收純數字代號，先剝
+    _t_num = _re_sit.sub(r'[A-Za-z]+$', '', _t)
+    if not _t_num or not _t_num.isdigit():
+        return None  # SITCA 只收純台股 ETF 數字代號（0050、00878、剝 'A' 後的 00982）
     try:
         r = _fu_sit(
             'https://www.sitca.org.tw/ROC/Industry/IN2211.aspx?pid=IN2222_01',
@@ -178,7 +180,7 @@ def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
         # ASP.NET 頁面通常一張總費用率表；多表都試找含「代號」+「費用率」欄位的那張
         tables = _pd_sit.read_html(r.text)
         # ticker 標準化：去掉 leading 0（治 pandas 把 "0050" parse 成 int 50 的場景）
-        _tn = _t.lstrip('0') or '0'
+        _tn = _t_num.lstrip('0') or '0'
         for tbl in tables:
             # 注意：column 可能是 MultiIndex tuple，比對用 str(c)，但取值用原物件 c
             code_col = next((c for c in tbl.columns
@@ -1027,40 +1029,49 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
         except Exception as _e2:
             print(f'[ETF NAV] TWSE {_op_id2} {code}: {_e2}')
 
-    # ── 4. MoneyDJ 爬蟲（走 fetch_url，含 NAS 中繼站 fallback）──────────────
+    # ── 4. MoneyDJ Basic0003 淨值表格（每日 NAV 歷史）─────────────────────
+    # 修正：原使用 Basic0004（基本資料頁，無 NAV 歷史）+ etfid 缺 .TW 後綴
+    # Basic0003 是專門的淨值表格，主動式 ETF（00982A.TW）也支援
     try:
-        from bs4 import BeautifulSoup as _BS4
-        _url_mdj = f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={code}'
+        import re as _re_mdj
+        # etfid 需 .TW 後綴；主動式 ETF 'A' 保留（如 00982A.TW）
+        _etfid_mdj = ticker.upper() if ticker.upper().endswith(('.TW', '.TWO')) else f'{code}.TW'
+        _url_mdj = f'https://www.moneydj.com/ETF/X/Basic/Basic0003.xdjhtm?etfid={_etfid_mdj}'
         _r_mdj = _fu_etfnav(_url_mdj, headers={'Referer': 'https://www.moneydj.com/'},
                             timeout=12, attempts=2)
         if _r_mdj is not None and _r_mdj.status_code == 200:
-            _soup = _BS4(_r_mdj.text, 'lxml')
-            _nav_mdj = None
-            # 策略1：找含「淨值」的 th/td，取下一格數字
-            for _th in _soup.find_all(['th', 'td', 'span', 'div', 'dt']):
-                _t = _th.get_text(strip=True)
-                if ('淨值' in _t or 'NAV' in _t) and len(_t) < 20:
-                    _td = _th.find_next_sibling()
-                    if _td:
-                        _v = _safe_float(_td.get_text(strip=True))
-                        if _v is not None and _v > 0:
-                            _nav_mdj = _v
-                            break
-            # 策略2：regex 直接掃 HTML
-            if not _nav_mdj:
-                import re as _re_mdj
-                _m = _re_mdj.search(r'(?:淨值|NAV)[^\d]{0,20}?(\d{1,5}\.\d{2,6})', _r_mdj.text)
-                if _m:
-                    _nav_mdj = _safe_float(_m.group(1))
+            _r_mdj.encoding = 'utf-8'
+            _nav_mdj, _date_mdj = None, _dt.date.today()
+            # 策略：Basic0003 淨值表格 row = 日期 + 單位淨值。掃最近一筆 (date, nav) pair
+            # 典型格式：<td>2026/05/30</td><td>24.5678</td>
+            _pairs = _re_mdj.findall(
+                r'(\d{4}[/\-](?:1[0-2]|0?[1-9])[/\-](?:3[01]|[12]\d|0?[1-9]))'
+                r'[^\d]{0,40}?(\d{1,4}\.\d{2,6})',
+                _r_mdj.text)
+            if _pairs:
+                # 取日期最新者
+                def _parse_d(_s):
+                    try:
+                        _y, _m_, _d_ = (int(x) for x in _s.replace('-', '/').split('/'))
+                        return _dt.date(_y, _m_, _d_)
+                    except (ValueError, IndexError):
+                        return _dt.date.min
+                _pairs.sort(key=lambda p: _parse_d(p[0]), reverse=True)
+                for _ds, _vs in _pairs:
+                    _v = _safe_float(_vs)
+                    if _v is not None and _NAV_MIN < _v < _NAV_MAX:
+                        _nav_mdj = _v
+                        _date_mdj = _parse_d(_ds)
+                        break
             if _nav_mdj and _nav_mdj > 0:
-                print(f'[ETF NAV] MoneyDJ {code}: nav={_nav_mdj}')
-                return pd.DataFrame([{'date': _dt.date.today(), 'nav': _nav_mdj}])
-            else:
-                print(f'[ETF NAV] MoneyDJ {code}: HTTP {_r_mdj.status_code} 找不到淨值')
+                print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: nav={_nav_mdj} date={_date_mdj}')
+                return pd.DataFrame([{'date': _date_mdj, 'nav': _nav_mdj}])
+            print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: 200 但 regex 無 date+nav pair')
         else:
-            print(f'[ETF NAV] MoneyDJ {code}: HTTP {_r_mdj.status_code}')
+            _code_st = _r_mdj.status_code if _r_mdj is not None else 'None'
+            print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: HTTP {_code_st}')
     except Exception as _e_mdj:
-        print(f'[ETF NAV] MoneyDJ {code}: {_e_mdj}')
+        print(f'[ETF NAV] MoneyDJ {code}: {type(_e_mdj).__name__}: {_e_mdj}')
 
     # ── 5. yfinance ETF info.navPrice（加限速 retry）──────────────────────
     import time as _t3
@@ -1116,6 +1127,62 @@ def _fetch_sector_returns(tickers: tuple, period: str) -> dict:
     except Exception as e:
         st.warning(f'類股資料抓取部分失敗：{e}')
     return result
+
+
+@st.cache_data(ttl=604800, max_entries=500, show_spinner=False)
+def fetch_etf_zh_name(ticker: str):
+    """從 MoneyDJ 抓 ETF 中文名稱（yfinance 對台股 ETF 只有英文 longName）。
+
+    抓取策略：MoneyDJ Basic 系列頁面（Basic0003/0004/0001）的 <title> 標籤
+    格式為「{中文名}-{代號}.TW-ETF{頁面類型} - MoneyDJ理財網」，regex 擷取首段中文。
+
+    例：
+      <title>主動群益台灣強棒-00982A.TW-ETF淨值表格 - MoneyDJ理財網</title>
+      → 主動群益台灣強棒
+
+      <title>元大台灣50-0050.TW-ETF基本資料 - MoneyDJ理財網</title>
+      → 元大台灣50
+
+    Returns
+    -------
+    str | None  中文名（2-30 字）；找不到回 None（呼叫端應 fallback 至 yfinance）
+    """
+    import re as _re_zh
+    _t = (ticker or '').replace('.tw', '.TW').strip()
+    if not _t:
+        return None
+    if '.' not in _t:
+        _t = f'{_t}.TW'
+
+    # Basic0003（淨值表格）通常最快、最穩；fallback 0004/0001
+    _urls = [
+        f'https://www.moneydj.com/ETF/X/Basic/Basic0003.xdjhtm?etfid={_t}',
+        f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}',
+        f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_t}',
+    ]
+    for _url in _urls:
+        try:
+            from proxy_helper import fetch_url as _fu_zh
+            _r = _fu_zh(_url, headers={'Referer': 'https://www.moneydj.com/'},
+                        timeout=12, attempts=1)
+            if _r is None or _r.status_code != 200:
+                continue
+            _r.encoding = 'utf-8'
+            # Title pattern：「{中文名}-{代號}.TW-...」首段 capture
+            _m = _re_zh.search(
+                r'<title>\s*([^<\-]{2,30}?)\s*-\s*[0-9]{4,5}[A-Z]?\.TW\s*-',
+                _r.text)
+            if _m:
+                _name = _m.group(1).strip()
+                # 排除：純數字、純英數（yfinance 也會回的英文名）
+                if (2 <= len(_name) <= 30 and not _name.isdigit()
+                        and any('一' <= _c <= '鿿' for _c in _name)):
+                    print(f'[MDJ/zhname] OK {_t} = {_name}')
+                    return _name
+        except Exception as _e:
+            print(f'[MDJ/zhname] {_t} {_url[-30:]}: {type(_e).__name__}: {_e}')
+    print(f'[MDJ/zhname] FAIL {_t}')
+    return None
 
 
 @st.cache_data(ttl=604800, max_entries=200, show_spinner=False)
