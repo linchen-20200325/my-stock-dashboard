@@ -2006,6 +2006,80 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     pivot_signals.append(('散戶極度悲觀（機會）','💡','#3fb950',
                         f'韭菜指數 {_leek_v:.1f}% < -20% → 散戶極度看空，底部拐點機會（反向指標）'))
 
+        # ── 6. 台灣領先指標拐點（景氣對策 / 領先指標 / 外資連續日數）─────
+        try:
+            from tw_macro import (
+                fetch_ndc_signal_history as _f_ndc_h,
+                fetch_ndc_leading_index as _f_ndc_li,
+                fetch_foreign_consecutive_days as _f_fi_streak,
+            )
+            _FMD_TK = st.secrets.get('FINMIND_TOKEN', '') \
+                if hasattr(st, 'secrets') else ''
+            _ndc_h = st.session_state.get('_ndc_hist_cache')
+            if _ndc_h is None:
+                _ndc_h = _f_ndc_h(months_back=12, token=_FMD_TK or '')
+                st.session_state['_ndc_hist_cache'] = _ndc_h
+            _ndc_li = st.session_state.get('_ndc_li_cache')
+            if _ndc_li is None:
+                _ndc_li = _f_ndc_li(months_back=18, token=_FMD_TK or '')
+                st.session_state['_ndc_li_cache'] = _ndc_li
+            _fi_st = st.session_state.get('_fi_streak_cache')
+            if _fi_st is None:
+                _fi_st = _f_fi_streak(days_back=30, token=_FMD_TK or '')
+                st.session_state['_fi_streak_cache'] = _fi_st
+
+            # 6-A 景氣對策信號拐點
+            _inf = (_ndc_h or {}).get('inflection', '')
+            _sc, _spv = (_ndc_h or {}).get('score_latest'), (_ndc_h or {}).get('score_prev')
+            if '翻多' in _inf:
+                pivot_signals.append(('景氣對策連2月翻多','🚀','#3fb950',
+                    f'分數 {_spv}→{_sc} 由跌轉升 → 景氣領先翻揚拐點'))
+            elif '翻空' in _inf:
+                pivot_signals.append(('景氣對策連2月翻空','⚠️','#f85149',
+                    f'分數 {_spv}→{_sc} 由升轉跌 → 景氣動能衰退拐點'))
+            elif '連3月上升' in _inf:
+                pivot_signals.append(('景氣對策連3月上升','✅','#3fb950',
+                    f'分數穩步上升至 {_sc}/45 → 景氣擴張持續'))
+            elif '連3月下降' in _inf:
+                pivot_signals.append(('景氣對策連3月下降','❌','#f85149',
+                    f'分數連續下滑至 {_sc}/45 → 景氣收縮持續'))
+
+            # 6-B 領先指標 6M smoothed change
+            _li_inf = (_ndc_li or {}).get('inflection', '')
+            _s6m = (_ndc_li or {}).get('smooth6m')
+            _ps6m = (_ndc_li or {}).get('prev_s6m')
+            if '由負轉正' in _li_inf and _s6m is not None and _ps6m is not None:
+                pivot_signals.append(('領先指標 6M 由負轉正','🚀','#3fb950',
+                    f'6M smoothed change：{_ps6m:+.2f}%→{_s6m:+.2f}% → 景氣翻揚黃金拐點'))
+            elif '由正轉負' in _li_inf and _s6m is not None and _ps6m is not None:
+                pivot_signals.append(('領先指標 6M 由正轉負','⚠️','#f85149',
+                    f'6M smoothed change：{_ps6m:+.2f}%→{_s6m:+.2f}% → 景氣轉折下行'))
+            elif '持續擴張' in _li_inf and _s6m is not None:
+                pivot_signals.append(('領先指標持續擴張','✅','#3fb950',
+                    f'6M smoothed change {_s6m:+.2f}% 維持正值 → 景氣擴張'))
+            elif '持續收縮' in _li_inf and _s6m is not None:
+                pivot_signals.append(('領先指標持續收縮','❌','#f85149',
+                    f'6M smoothed change {_s6m:+.2f}% 維持負值 → 景氣收縮'))
+
+            # 6-C 外資連續日數反轉
+            _fi_inf = (_fi_st or {}).get('inflection', '')
+            _cd = (_fi_st or {}).get('consec_days')
+            _ps = (_fi_st or {}).get('prev_streak')
+            if '賣→買' in _fi_inf:
+                pivot_signals.append(('外資由連賣轉買','🚀','#3fb950',
+                    f'外資連 {-_ps if _ps else 0} 賣後首日翻買 → 籌碼面拐點'))
+            elif '買→賣' in _fi_inf:
+                pivot_signals.append(('外資由連買轉賣','⚠️','#f85149',
+                    f'外資連 {_ps if _ps else 0} 買後首日翻賣 → 籌碼動能減弱'))
+            elif '連' in _fi_inf and '買超' in _fi_inf and _cd is not None:
+                pivot_signals.append(('外資連續買超','✅','#3fb950',
+                    f'外資已連 {_cd} 日買超 → 籌碼穩健'))
+            elif '連' in _fi_inf and '賣超' in _fi_inf and _cd is not None:
+                pivot_signals.append(('外資連續賣超','❌','#f85149',
+                    f'外資已連 {abs(_cd)} 日賣超 → 籌碼流出警示'))
+        except Exception as _e_tp6:
+            print(f'[tab_macro/拐點面板6] {type(_e_tp6).__name__}: {_e_tp6}')
+
         # ── 綜合評分 & 顯示 ──────────────────────────────────────
         _bull_pts = sum(1 for _,_,c,_ in pivot_signals if c == '#3fb950')
         _bear_pts = sum(1 for _,_,c,_ in pivot_signals if c == '#f85149')
