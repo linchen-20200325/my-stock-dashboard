@@ -1145,3 +1145,117 @@ def _fetch_sector_returns(tickers: tuple, period: str) -> dict:
     except Exception as e:
         st.warning(f'類股資料抓取部分失敗：{e}')
     return result
+
+
+@st.cache_data(ttl=604800, max_entries=200, show_spinner=False)
+def fetch_etf_underlying_index(ticker: str):
+    """從 MoneyDJ 抓 ETF 追蹤指數名稱（yfinance 沒有此欄）。
+
+    抓取策略：複用 fetch_etf_manager 的 proxy 通路（NAS Squid 主源 + curl_cffi fallback）。
+    優先順序：Basic0001（基本資料，最常見）→ Basic0006（基金概觀）→ Basic0007（持股明細，部分有）。
+
+    Regex 三層寬鬆策略：
+      1. 表頭 + 表格儲存格：>追蹤指數</…><td…>內容</td>
+      2. 冒號形式：追蹤指數：內容 / 標的指數：內容
+      3. 同義詞兜底：對應/標的/追蹤 指數 後接中英文/數字 4-80 字
+
+    Returns
+    -------
+    str | None
+        指數名稱（如 '臺灣加權股價報酬指數' / 'MSCI Taiwan ESG Index'），找不到回 None。
+    """
+    import re as _re_ui
+    _t = (ticker or '').replace('.tw', '.TW').strip()
+    if not _t:
+        return None
+    if '.' not in _t:
+        _t = f'{_t}.TW'
+
+    _urls = [
+        f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_t}',
+        f'https://www.moneydj.com/ETF/X/Basic/Basic0006.xdjhtm?etfid={_t}',
+        f'https://www.moneydj.com/ETF/X/Basic/Basic0007.xdjhtm?etfid={_t}',
+    ]
+    _err_trace: list[str] = []
+
+    for _url in _urls:
+        _txt = None
+        _endpoint = _url.split('/')[-1].split('?')[0]
+        try:
+            from proxy_helper import fetch_url as _fu_ui
+            _r = _fu_ui(_url, timeout=12, attempts=2)
+            if _r is not None and _r.status_code == 200 and len(_r.text or '') > 500:
+                _r.encoding = 'utf-8'
+                _txt = _r.text
+            else:
+                _code = _r.status_code if _r is not None else 'None'
+                _err_trace.append(f'proxy {_endpoint}: HTTP {_code}')
+        except Exception as _epu:
+            _err_trace.append(f'proxy {_endpoint}: {type(_epu).__name__}')
+
+        if _txt is None:
+            try:
+                from curl_cffi import requests as _cffi_ui
+                _r2 = _cffi_ui.get(_url, impersonate='chrome124', timeout=12)
+                if _r2.status_code == 200 and len(_r2.text or '') > 500:
+                    _txt = _r2.text
+                else:
+                    _err_trace.append(f'cffi {_endpoint}: HTTP {_r2.status_code}')
+            except Exception as _ecu:
+                _err_trace.append(f'cffi {_endpoint}: {type(_ecu).__name__}')
+
+        if _txt is None:
+            continue
+
+        # HTML entity 預清洗 — 避免 lazy regex 卡在 &nbsp;
+        _txt = (_txt.replace('&nbsp;', ' ').replace('&#160;', ' ')
+                    .replace('&amp;', '&').replace('　', ' '))
+
+        # 排除「追蹤誤差」「指數型基金」等假陽性詞
+        _idx = None
+        try:
+            # 1. 表頭 + 儲存格（最常見的 MoneyDJ 排版）
+            _m = _re_ui.search(
+                r'(?:追蹤|標的|對應)\s*指數\s*</[^>]+>\s*<[^>]+>\s*'
+                r'([一-鿿A-Za-z0-9 &\.\-／/（）()]{4,80})\s*<',
+                _txt,
+            )
+            if not _m:
+                # 2. 冒號形式
+                _m = _re_ui.search(
+                    r'(?:追蹤|標的|對應)\s*指數\s*[：:]\s*'
+                    r'([一-鿿A-Za-z0-9 &\.\-／/（）()]{4,80})',
+                    _txt,
+                )
+            if not _m:
+                # 3. 寬鬆兜底（含 HTML/whitespace 雜訊）
+                _m = _re_ui.search(
+                    r'(?:追蹤|標的|對應)\s*指數[^一-鿿A-Za-z\d]{0,40}?'
+                    r'([一-鿿A-Za-z0-9 &\.\-／/（）()]{4,80})',
+                    _txt,
+                )
+            if _m:
+                _cand = _m.group(1)
+                # HTML entity / 全形空白清洗 → 排除假陽性與長度不足
+                _cand = (_cand.replace('&nbsp;', ' ').replace('　', ' ')
+                              .replace('&amp;', '&').strip().rstrip('，,。.、 '))
+                _bad = ('追蹤誤差', '指數股票型', '指數型基金', '基金經理',
+                        '管理費', 'nbsp', 'amp;')
+                if len(_cand) >= 4 and not any(_b in _cand for _b in _bad):
+                    _idx = _cand
+        except Exception as _ex:
+            _err_trace.append(f'{_endpoint}: regex {type(_ex).__name__}')
+
+        if _idx:
+            print(f'[MDJ/index] OK {_t} = {_idx} via {_endpoint}')
+            return _idx
+        _err_trace.append(f'{_endpoint}: 200 但 regex 無指數')
+
+    try:
+        if st is not None:
+            _store = st.session_state.setdefault('_etf_index_last_err', {})
+            _store[_t] = ' | '.join(_err_trace) if _err_trace else 'unknown'
+    except Exception:
+        pass
+    print(f'[MDJ/index] FAIL {_t} — {_err_trace[-1] if _err_trace else "no trace"}')
+    return None

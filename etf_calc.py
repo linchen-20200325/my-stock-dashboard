@@ -338,6 +338,70 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
     return {'nav': None, 'price': None, 'premium_pct': None, 'warning': False}
 
 
+def calc_avg_volume_20d(df: pd.DataFrame) -> float:
+    """20 日均量（張數，台股慣例：1 張 = 1000 股）。
+
+    用既有 yfinance df 自算，不額外抓取。資料不足回 None。
+    """
+    try:
+        if df is None or df.empty or 'Volume' not in df.columns:
+            return None
+        _vol = df['Volume'].tail(20).dropna()
+        if len(_vol) < 5:
+            return None
+        return round(float(_vol.mean()) / 1000.0, 1)
+    except Exception:
+        return None
+
+
+def calc_liquidity_score(df: pd.DataFrame, aum=None) -> dict:
+    """流動性綜合警示（無需新資料源，由 Volume + AUM 自算）。
+
+    Parameters
+    ----------
+    df  : 含 Volume 欄的 ETF 價格 df（fetch_etf_price 回傳即可）
+    aum : 規模（新台幣元），來自 fetch_etf_info()['totalAssets']；None 則只看均量
+
+    判分（取最嚴重的等級）
+      🟢 正常       avg_vol_20d >= 1000 張 且 aum >= 10 億
+      🟡 流動性偏弱  500 <= avg_vol_20d < 1000 或 5 億 <= aum < 10 億
+      🔴 流動性風險  avg_vol_20d < 500 或 aum < 5 億
+
+    Returns
+    -------
+    dict {'level': '🟢/🟡/🔴', 'avg_vol_20d': float, 'reasons': [str, ...]}
+        資料不足回 {'level': '⚪', 'avg_vol_20d': None, 'reasons': ['資料不足']}
+    """
+    _avg = calc_avg_volume_20d(df)
+    _reasons: list[str] = []
+    if _avg is None:
+        return {'level': '⚪', 'avg_vol_20d': None, 'reasons': ['資料不足']}
+
+    _level = '🟢'
+    if _avg < 500:
+        _level = '🔴'
+        _reasons.append(f'20日均量僅 {_avg:,.0f} 張（< 500）')
+    elif _avg < 1000:
+        _level = '🟡'
+        _reasons.append(f'20日均量 {_avg:,.0f} 張（< 1000）')
+
+    try:
+        if aum is not None and aum > 0:
+            _aum_e = float(aum) / 1e8  # 換成「億」
+            if _aum_e < 5:
+                _level = '🔴'
+                _reasons.append(f'規模僅 {_aum_e:.1f} 億（< 5）')
+            elif _aum_e < 10 and _level == '🟢':
+                _level = '🟡'
+                _reasons.append(f'規模 {_aum_e:.1f} 億（< 10）')
+    except (TypeError, ValueError):
+        pass
+
+    if not _reasons:
+        _reasons.append('流動性與規模皆充足')
+    return {'level': _level, 'avg_vol_20d': _avg, 'reasons': _reasons}
+
+
 def calc_tracking_error(df: pd.DataFrame, bench_df: pd.DataFrame) -> float:
     """追蹤誤差 = std(ETF日報酬 - 基準日報酬) × √252 × 100"""
     try:
