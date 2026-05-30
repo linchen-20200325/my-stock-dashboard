@@ -6,8 +6,8 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：ETF 折溢價直讀 MoneyDJ + 內扣費用率/任期 解析修復（#127）
-  - 沿革：#119 PMI/NAV/費用率改走 fetch_url → #122 主動式 ETF 中文名 + SITCA 'A' 剝除 + NAV 改 Basic0003 → #124 fetch_etf_meta_moneydj（Basic0004 一次取 zh_name + AUM + 費用率 + 追蹤指數）→ #126 經理人顯示 + 異動偵測 + `_html_kv_pairs`（MoneyDJ 儲存格配對，新聞 etf_profile_fetcher 同法）→ **#127**：① 折溢價真正改 MoneyDJ 直讀（`fetch_etf_nav_history` 新增 4a Basic0001 即時報價頁，KV 取淨值/市價/官方折溢價%，免脆弱同日 join）；② 內扣費用率改 KV 解析破「經理費(%)」標籤含%陷阱（regex 必破，00982A 實證→1.20%）；③ `fetch_etf_manager` 不再抓到名字即早退，掃完 Basic0004/0001/0006/0011 才回（任期缺為資料源未揭露，非 bug）；④ 未設 PROXY_URL 顯誠實橫幅
+- **目前版本**：ETF 折溢價假日/週末對齊最後交易日（#129）
+  - 沿革：#119 PMI/NAV/費用率改走 fetch_url → #122 主動式 ETF 中文名 + SITCA 'A' 剝除 + NAV 改 Basic0003 → #124 fetch_etf_meta_moneydj（Basic0004 一次取 zh_name + AUM + 費用率 + 追蹤指數）→ #126 經理人顯示 + 異動偵測 + `_html_kv_pairs`（MoneyDJ 儲存格配對，新聞 etf_profile_fetcher 同法）→ #127 折溢價改 MoneyDJ Basic0001 直讀 + 內扣費用率改 KV 破「經理費(%)」陷阱（00982A→1.20%）+ 經理人不早退 + 未設 PROXY_URL 顯誠實橫幅 → **#129**：折溢價假日 bug——即時來源（goodinfo/TWSE/MoneyDJ/yfinance）原硬戳 `date.today()`，週末/假日與 yfinance 收盤日（上一交易日）同日 inner-join 落空→N/A。修：`fetch_etf_nav_history` 新增 `_last_business_day()`（淨值列改戳最近交易日）；`calc_premium_discount` 路徑B 同日 join 落空時假日兜底（最新淨值 vs 最新收盤，日期 ≤4 天才配，涵蓋連假）
   - ⚠️ **前提**：MoneyDJ 擋海外 IP，Streamlit App secrets 須設 `PROXY_URL`（家用 NAS 台灣 IP）這些 ETF 欄位才有值，否則 N/A（已設好；部署重建會自動清 `@st.cache_data` 快取）
 - **Secrets**：`FINMIND_TOKEN` · `GEMINI_API_KEY[_2..6]` · `PROXY_URL` · `FRED_API_KEY` ·（選配 `NAS_BASE_URL` / `NAS_API_KEY`）
 
