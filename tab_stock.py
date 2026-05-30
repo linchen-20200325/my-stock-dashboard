@@ -166,11 +166,7 @@ def render_tab_stock():
     show_ma_dict = {'MA5':show_ma5,'MA20':show_ma20,'MA60':show_ma60,
                     'MA100':show_ma100,'MA120':show_ma120,'MA240':show_ma240}
 
-    t2l, t2r = st.columns([1, 2])
-    with t2l:
-        pass
-    with t2r:
-        st.markdown("""<div style="background:#161b22;border:1px solid #21262d;border-left:4px solid #ffd700;
+    st.markdown("""<div style="background:#161b22;border:1px solid #21262d;border-left:4px solid #ffd700;
 border-radius:8px;padding:10px 14px;font-size:12px;color:#8b949e;">
 <b style="color:#ffd700;">自動從網路抓取：</b><br>
 K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 · 月/季營收毛利率 · 合約負債/資本支出 · 健康評分(RSI+量比+IBS+KD+布林)
