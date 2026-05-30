@@ -540,6 +540,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # 副作用：冷啟動時所有資料區塊顯示 placeholder，由 _show_market_data gate 控制
     _load_heavy = bool(do_refresh) or bool(st.session_state.get('chips_loaded', False))
 
+    # 用戶要求：未按按鈕前完全空白，只剩按鈕（隱藏所有 section）
+    if not _load_heavy:
+        return
+
     if do_refresh:
         _fetch_ph = st.empty()
         _fetch_ph.info(
