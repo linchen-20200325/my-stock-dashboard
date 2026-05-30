@@ -589,7 +589,6 @@ def fetch_adl(days=60, token=None):
     import pickle as _pk
     import os as _os2
     import time as _tm2
-    import re as _re
     import pandas as _pd_adl
 # ── 日誌 helper ──────────────────────────────────────────────
     _log_path = '/tmp/_adl_log.txt'
@@ -779,7 +778,6 @@ def multi_chart(data_dict, title="", norm=False, height=250):
 
 def bar_chart_institutional(inst_dict, title="三大法人買賣超（堆疊柱狀圖）", height=300):
     """升級版：堆疊柱狀圖（三大法人各自一欄，顏色區分）"""
-    import datetime as _dt_bar
     # 分離三個法人
     _inst_keys = ['外資', '投信', '自營商']
     _inst_colors = {'外資': '#58a6ff', '投信': '#3fb950', '自營商': '#bc8cff'}
