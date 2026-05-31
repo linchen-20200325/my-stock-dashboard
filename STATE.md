@@ -6,11 +6,13 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：紅綠燈校準門檻收斂 v18.140（防禦 health 40→35、多頭加 score≥4 條件）
-  - **#139**：5Y TWII 真實校準顯示防禦 precision 14.8%、多頭 30.7%（皆過鬆）→ `macro_helpers.calc_traffic_light`：`_health < 40` 改 `<35`、`elif _regime == 'bull'` 加 `and _score >= 4`，regime=bull 但 score<4 落 🟡 中性；測試 32/32 通過、完整 tests/ 837 passed。下次校準重跑應見 precision 顯著上升
-- **前版**：ETF 經理人換手偵測持久化（GitHub Actions 爬蟲 → commit JSON → app 讀檔）｜**代碼淨化與收尾完成** ✅
+- **目前版本**：紅綠燈校準報告誠實化 v18.141（TWII-only 警語 banner + 建議讀現行門檻）
+  - **#140**：校準重跑顯示多頭 0/0、防禦 15%；診斷為 TWII-only 模式 artifact（砍掉 FinMind 籌碼 → score 結構性 0~3，永遠踩不到 score≥4；health 結構性 20~36，狂踩 <35）→ `macro_helpers` 抽出 `HEALTH_DEFENSE_THRESHOLD=35` / `BULL_MIN_SCORE=4` 常數、`calc_traffic_light` 改讀；`calibrate_macro_traffic.build_report` 報告頭部加 TWII-only 警語 banner、(c) 建議 import 常數動態填值、新增「多頭 0 預測」專屬解讀；新測試 3 題；tests/ 840 passed
+- **前版**：紅綠燈校準門檻收斂 v18.140（防禦 health 40→35、多頭加 score≥4 條件）
+  - **#139**：5Y TWII 真實校準顯示防禦 precision 14.8%、多頭 30.7%（皆過鬆）→ `macro_helpers.calc_traffic_light`：`_health < 40` 改 `<35`、`elif _regime == 'bull'` 加 `and _score >= 4`，regime=bull 但 score<4 落 🟡 中性
+- **前一版**：ETF 經理人換手偵測持久化（GitHub Actions 爬蟲 → commit JSON → app 讀檔）｜**代碼淨化與收尾完成** ✅
   - 新增：`update_etf_managers.py`（獨立爬蟲,無 streamlit/pandas 相依,走 proxy_helper 讀 env PROXY_URL）+ `.github/workflows/update_etf_managers.yml`（週一排程 + 手動,需 repo Secrets 設 `PROXY_URL`）+ `etf_manager_watchlist.json`（追蹤清單）+ `etf_managers.json`（持久經理人/換手歷史,Actions 維護勿手改）。`track_etf_manager_change` 改以 repo 持久檔為換手基準/歷史主來源（近 180 天換手亮紅框,跨容器重啟存活）,`/tmp` 降次要。解決舊機制只存 `/tmp`、雲端重啟即清空→紅框幾乎不跳的問題
-- **前一版**：ETF 折溢價假日/週末對齊最後交易日（#129）
+- **前二版**：ETF 折溢價假日/週末對齊最後交易日（#129）
   - 沿革：#119 PMI/NAV/費用率改走 fetch_url → #122 主動式 ETF 中文名 + SITCA 'A' 剝除 + NAV 改 Basic0003 → #124 fetch_etf_meta_moneydj（Basic0004 一次取 zh_name + AUM + 費用率 + 追蹤指數）→ #126 經理人顯示 + 異動偵測 + `_html_kv_pairs`（MoneyDJ 儲存格配對，新聞 etf_profile_fetcher 同法）→ #127 折溢價改 MoneyDJ Basic0001 直讀 + 內扣費用率改 KV 破「經理費(%)」陷阱（00982A→1.20%）+ 經理人不早退 + 未設 PROXY_URL 顯誠實橫幅 → **#129**：折溢價假日 bug——即時來源（goodinfo/TWSE/MoneyDJ/yfinance）原硬戳 `date.today()`，週末/假日與 yfinance 收盤日（上一交易日）同日 inner-join 落空→N/A。修：`fetch_etf_nav_history` 新增 `_last_business_day()`（淨值列改戳最近交易日）；`calc_premium_discount` 路徑B 同日 join 落空時假日兜底（最新淨值 vs 最新收盤，日期 ≤4 天才配，涵蓋連假）→ **收尾淨化**：data_loader.py / daily_checklist.py 移除 7 處 unused imports（ruff F401 全綠，純 import 刪減無邏輯改動）
   - ⚠️ **前提**：MoneyDJ 擋海外 IP，Streamlit App secrets 須設 `PROXY_URL`（家用 NAS 台灣 IP）這些 ETF 欄位才有值，否則 N/A（已設好；部署重建會自動清 `@st.cache_data` 快取）
 - **Secrets**：`FINMIND_TOKEN` · `GEMINI_API_KEY[_2..6]` · `PROXY_URL` · `FRED_API_KEY` ·（選配 `NAS_BASE_URL` / `NAS_API_KEY`）
