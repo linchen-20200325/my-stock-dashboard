@@ -79,9 +79,22 @@ def render_stock_grp():
             f'<div style="font-size:16px;font-weight:900;color:{_tl_color};">{_tl_label}</div>'
             f'</div>', unsafe_allow_html=True)
     with _t3c2:
-        _twii = _t3_mkt.get('台股加權指數', {})
-        if _twii:
-            _twii_pct = _twii.get('pct', 0)
+        # 修正：台股加權指數真實在 cl_data['tw']，而非 mkt_info；舊路徑永遠 None
+        _t3_cl = st.session_state.get('cl_data', {}) or {}
+        _twii_df = (_t3_cl.get('tw', {}) or {}).get('台股加權指數')
+        _twii_pct = None
+        if _twii_df is not None and hasattr(_twii_df, 'empty') and not _twii_df.empty:
+            _close_col = 'close' if 'close' in _twii_df.columns else (
+                'Close' if 'Close' in _twii_df.columns else None)
+            if _close_col and len(_twii_df) >= 2:
+                try:
+                    _c_now  = float(_twii_df[_close_col].iloc[-1])
+                    _c_prev = float(_twii_df[_close_col].iloc[-2])
+                    if _c_prev > 0:
+                        _twii_pct = (_c_now / _c_prev - 1.0) * 100.0
+                except (ValueError, TypeError):
+                    pass
+        if _twii_pct is not None:
             _twii_c = '#da3633' if _twii_pct > 0 else '#2ea043'
             _twii_val = f'{_twii_pct:+.2f}%'
         else:
@@ -93,8 +106,9 @@ def render_stock_grp():
             f'<div style="font-size:16px;font-weight:900;color:{_twii_c};">{_twii_val}</div>'
             f'</div>', unsafe_allow_html=True)
     with _t3c3:
-        _t3_hold = _t3_tl.get('hold_pct')
-        _hold_val = f'{_t3_hold}%' if _t3_hold not in (None, '', '--') else '未載入'
+        # 修正：warroom_summary 從未寫入 hold_pct；改讀 mkt_info.exposure_pct ('80%' 字串)
+        _t3_hold = _t3_mkt.get('exposure_pct') if _t3_mkt else None
+        _hold_val = str(_t3_hold) if _t3_hold not in (None, '', '--') else '未載入'
         _hold_c = '#58a6ff' if _t3_hold not in (None, '', '--') else '#484f58'
         st.markdown(
             f'<div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;'

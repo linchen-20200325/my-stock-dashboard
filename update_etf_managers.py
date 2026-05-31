@@ -182,9 +182,13 @@ def main() -> int:
             hist.append({"from": prev, "to": name, "detected_at": today,
                          "since": res.get("since")})
             rec["history"] = hist[-20:]
+            # 經理人換新 → first_seen 重設為今天（新任期起點）
+            rec["first_seen"] = today
             print(f"🔁 {etfid}: 經理人異動 {prev} → {name}")
         else:
             rec.setdefault("history", rec.get("history", []))
+            # 首次紀錄此經理人時設 first_seen（後續不動，當 MoneyDJ 未揭露到職日的備援）
+            rec.setdefault("first_seen", today)
             print(f"✓ {etfid}: {name}"
                   + (f"（到職 {res['since']}）" if res.get("since") else "（到職日未揭露）"))
         rec.update({"name": name, "since": res.get("since"),
