@@ -61,14 +61,36 @@ class TestCalcTrafficLight:
         assert tl['defense'] is True
         assert '空頭防禦' in tl['label']
 
-    def test_health_below_40_forces_defense(self):
-        # jqavg=10 + score=0 + fnet=0 → health=10*0.4+0+0=4 < 40 → defense override
+    def test_health_below_35_forces_defense(self):
+        # jqavg=10 + score=0 + fnet=0 → health=10*0.4+0+0=4 < 35 → defense override
         mkt = {'score': 0, 'regime': 'bull'}
         jq  = {'avg': 10}
         cl  = {'inst': {}}
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl['icon'] == '🔴'
         assert '空頭防禦' in tl['label']
+
+    def test_health_38_no_longer_defense_v18_140(self):
+        # v18.140 校準收斂：health 介於 35~40 不再觸發防禦
+        # jqavg=80 + score=0 + fnet=0 → health=80*0.4+0+0=32... 改用更貼近 38 的設定
+        # jqavg=70 + score=1 + fnet=0 → health=70*0.4+(1/5*100)*0.4+0=28+8=36 ≥ 35 → 不防禦
+        mkt = {'score': 1, 'regime': 'neutral'}
+        jq  = {'avg': 70}
+        cl  = {'inst': {}}
+        tl = calc_traffic_light(mkt, jq, cl, None)
+        assert tl['health'] == pytest.approx(36.0)
+        assert tl['icon'] == '🟡'  # neutral，不再強制 🔴
+        assert tl['defense'] is False
+
+    def test_bull_low_score_falls_to_neutral_v18_140(self):
+        # v18.140 校準收斂：regime=bull 但 score<4 → 不升綠燈，退回 🟡 中性
+        mkt = {'score': 3, 'regime': 'bull'}
+        jq  = {'avg': 75}
+        cl  = {'inst': {'外資自營': {'net': 1000}}, 'adl': 1}
+        tl = calc_traffic_light(mkt, jq, cl, None)
+        assert tl['icon'] == '🟡'
+        assert '震盪' in tl['label']
+        assert tl['regime'] == 'bull'  # regime 仍是 bull，只是門檻不夠
 
     def test_foreign_net_extraction(self):
         cl = {'inst': {'外資 (自營+投信)': {'net': 12345}}}
