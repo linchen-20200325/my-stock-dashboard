@@ -4,7 +4,32 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from macro_helpers import calc_traffic_light, rp_entry, rp_scalar, rp_ts
+from macro_helpers import (
+    BULL_MIN_SCORE,
+    HEALTH_DEFENSE_THRESHOLD,
+    calc_traffic_light,
+    rp_entry,
+    rp_scalar,
+    rp_ts,
+)
+
+
+class TestCalibrationConstants:
+    """v18.141：校準收斂門檻常數對外 export，校準腳本與測試共用真值。"""
+
+    def test_defense_threshold_value(self):
+        assert HEALTH_DEFENSE_THRESHOLD == 35
+
+    def test_bull_min_score_value(self):
+        assert BULL_MIN_SCORE == 4
+
+    def test_threshold_drives_actual_decision(self):
+        # health 剛好 ≥ 常數 → 不 defense；驗證 calc_traffic_light 真的讀這個常數
+        mkt = {'score': 1, 'regime': 'neutral'}
+        target_jqavg = (HEALTH_DEFENSE_THRESHOLD - 1 / 5 * 100 * 0.4) / 0.4
+        tl_at = calc_traffic_light(mkt, {'avg': target_jqavg}, {'inst': {}}, None)
+        assert tl_at['health'] >= HEALTH_DEFENSE_THRESHOLD
+        assert tl_at['defense'] is False
 
 
 class TestCalcTrafficLight:
