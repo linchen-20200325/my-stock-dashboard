@@ -13,7 +13,7 @@ import streamlit as st
 
 
 # #U7：單值總經指標若 identifier 為 FRED series id → 可抓歷史序列畫 sparkline
-_FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'VALEXPTWM052N': 'pc1', 'NAPM': 'lin'}
+_FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'XTEXVA01TWM664S': 'pc1', 'NAPM': 'lin'}
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -66,7 +66,7 @@ def render_tab_edu():
 
                 覆蓋範圍：
                   ✓ 有 series：^VIX / ^TNX / ^SOX / DX-Y.NYB（cl_data.intl 有 90D OHLC）
-                  ✓ 僅單值：CPILFESL / NAPM / VALEXPTWM052N / NDC_signal /
+                  ✓ 僅單值：CPILFESL / NAPM / XTEXVA01TWM664S / NDC_signal /
                             ms1.json / MI_MARGN（macro_info / m1b_m2_info）
                   ✗ 無資料：BWIBBU_d / BFI82U（結構複雜，待後續 PR）
                 """
@@ -111,7 +111,7 @@ def render_tab_edu():
                     'CPILFESL':       ((_macro.get('us_core_cpi') or {}).get('yoy'),         2.5,  4,    True),
                     'NAPM':           ((_macro.get('ism_pmi')     or {}).get('value') or
                                        (_macro.get('ism_pmi')     or {}).get('current'),     50,   45,   False),
-                    'VALEXPTWM052N':  ((_macro.get('tw_export')   or {}).get('yoy'),         0,    -5,   False),
+                    'XTEXVA01TWM664S':  ((_macro.get('tw_export')   or {}).get('yoy'),         0,    -5,   False),
                     'NDC_signal':     ((_macro.get('ndc_signal')  or {}).get('score') or
                                        (_macro.get('ndc_signal')  or {}).get('value'),       32,   22,   None),
                     'ms1.json':       ((_m1b.get('m1b_yoy')      or 0) -
