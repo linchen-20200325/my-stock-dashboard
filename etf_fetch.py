@@ -1046,6 +1046,20 @@ def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
             _out.update({'changed': True, 'prev': _h.get('from'), 'detected_at': _da})
             break
 
+    # 1c. 任期 fallback：live tenure_days 缺 → 用持久檔 first_seen 推算近似值
+    #     （MoneyDJ 不揭露到職日的 ETF 適用；標 'approx' 讓 UI 知道是估算）
+    if _out['tenure_days'] is None and _repo_rec.get('first_seen'):
+        try:
+            _fs = _dt_mg.date.fromisoformat(_repo_rec['first_seen'])
+            _approx_days = (_today_d - _fs).days
+            if _approx_days >= 0:
+                _out['tenure_days'] = _approx_days
+                _out['tenure_approx'] = True   # UI 提示「至少 X 天」而非確切
+                # 重新評估 is_new（用近似 tenure）
+                _out['is_new'] = _approx_days < 180
+        except ValueError:
+            pass
+
     # 1b. live 名字 vs 持久基準不同 → 兩次 Actions 之間也能即時偵測
     _repo_name = _repo_rec.get('name')
     if not _out['changed'] and _repo_name and _repo_name != _name:
@@ -1066,10 +1080,26 @@ def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
             _hist.append({'from': _prev, 'to': _name, 'detected_at': _today,
                           'since': (manager or {}).get('since')})
             _rec['history'] = _hist[-10:]
+            # 換手 → first_seen 重設為今天（新任期起點）
+            _rec['first_seen'] = _today
         _rec.update({'name': _name, 'since': (manager or {}).get('since'),
                      'last_seen': _today})
+        # 首次紀錄此 ticker 時設 first_seen（容器存活期內當任期備援）
+        _rec.setdefault('first_seen', _today)
         _rec.setdefault('history', _rec.get('history', []))
         _db[_key] = _rec
+
+        # 若持久檔沒 first_seen 但 /tmp 有 → 補回 out 推算 tenure
+        if _out['tenure_days'] is None and _rec.get('first_seen'):
+            try:
+                _fs2 = _dt_mg.date.fromisoformat(_rec['first_seen'])
+                _ad2 = (_today_d - _fs2).days
+                if _ad2 >= 0:
+                    _out['tenure_days'] = _ad2
+                    _out['tenure_approx'] = True
+                    _out['is_new'] = _ad2 < 180
+            except ValueError:
+                pass
         with open(_MGR_HISTORY_PATH, 'w', encoding='utf-8') as _f:
             _json_mg.dump(_db, _f, ensure_ascii=False, indent=2)
     except Exception as _e_mg:
