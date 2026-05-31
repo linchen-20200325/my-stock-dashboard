@@ -312,6 +312,15 @@ def build_report(metrics: dict, df_twii: pd.DataFrame, mode: str) -> str:
     md.append(f"- **有效樣本**：{metrics['n_total']} 個交易日")
     md.append(f"- **燈號分佈**：{color_dist_str}")
     md.append("")
+    # v18.141：TWII-only mode top-banner — 校準是 sandbox 驗證，非 production 真實表現
+    if "TWII-only" in mode:
+        md.append("> ⚠️ **TWII-only 模式校準警語**：本表僅注入 ^TWII OHLCV，"
+                  "外資 / 籌碼 / ADL / 外資期貨 / M1B-M2 / jingqi 全以「中性 0」代入 → "
+                  "**score 結構性偏低**（多落在 0~3，難以踩 🟢 多頭門檻 `score≥4`），"
+                  "**health 結構性偏低**（多落在 20~36，易踩 🔴 防禦門檻 `<35`） → "
+                  "本表代表「校準 pipeline 是否暢通」，**不代表 production 真實表現**"
+                  "（production 每日讀數有完整 FinMind 資料，請以 Tab Macro 當下顯示為準）。")
+        md.append("")
     md.append("---")
     md.append("")
 
@@ -363,19 +372,47 @@ def build_report(metrics: dict, df_twii: pd.DataFrame, mode: str) -> str:
     # ── (c) 門檻調整建議 ─────────────────────────────────────
     md.append("## (c) 門檻調整建議")
     md.append("")
+    # v18.141：動態讀現行門檻，不再寫死「health<40」舊文字
+    try:
+        from macro_helpers import (  # noqa: PLC0415
+            BULL_MIN_SCORE as _BMS,
+            HEALTH_DEFENSE_THRESHOLD as _HDT,
+        )
+    except Exception:
+        _BMS, _HDT = 4, 35
+    md.append(f"> 現行門檻（讀自 `macro_helpers`）：🔴 防禦 `health < {_HDT}`、"
+              f"🟢 多頭 `regime=='bull' AND score >= {_BMS}`。")
+    md.append("")
+    # TWII-only 模式：先擺一條共用註記，避免每條建議重複「校準失真」說明
+    _twii_only = "TWII-only" in mode
     suggestions = []
-    if metrics["green_precision"] < 50 and metrics["n_green_pred"] >= 5:
+    if _twii_only and metrics["n_green_pred"] == 0:
+        suggestions.append(
+            f"- 🟢 **多頭 0 預測**：TWII-only 模式因子缺失，score 結構性卡在 0~3，"
+            f"永遠無法踩 `score >= {_BMS}` → 0 fire。**Production 不受影響**"
+            f"（今日讀數 score=4.0/6 仍會踩 🟢）。要看真實多頭命中率，需 NAS 端"
+            "batch 抓 365 日 FinMind 歷史後重跑。"
+        )
+    elif metrics["green_precision"] < 50 and metrics["n_green_pred"] >= 5:
         suggestions.append(
             f"- 🟢 **多頭 precision {metrics['green_precision']}% < 50%**："
-            "目前判定為「ma120_above_3d AND ma120_rising」即進場，"
-            "建議追加「外資連續買超 3 日」或「score >= 4」條件以提升精準度。"
+            f"現行已要求 `regime=='bull' AND score >= {_BMS}`，仍偏鬆。"
+            "可考慮追加「外資連續買超 3 日」或把 score 門檻拉到 5。"
         )
     if metrics["red_precision"] < 40 and metrics["n_red_pred"] >= 5:
-        suggestions.append(
-            f"- 🔴 **防禦 precision {metrics['red_precision']}% < 40%**："
-            "目前判定為「health<40 OR (score<2 AND |fut_net|>30000 空單)」，"
-            "建議將 health 門檻由 40 → 35（更嚴格），減少假陽性。"
-        )
+        if _twii_only:
+            suggestions.append(
+                f"- 🔴 **防禦 precision {metrics['red_precision']}% < 40%**："
+                f"TWII-only 下 health 結構性偏低，紅燈狂響是模式 artifact 不是規則 bug。"
+                f"現行 `health < {_HDT}` 在 production（有完整資料）下表現另計，"
+                "本表 precision **不宜直接套用**到 production 規則微調。"
+            )
+        else:
+            suggestions.append(
+                f"- 🔴 **防禦 precision {metrics['red_precision']}% < 40%**："
+                f"現行 `health < {_HDT}`，可考慮再收緊至 {max(_HDT - 5, 25)}，"
+                "或追加「外資連續賣超 3 日」作為門檻共識條件。"
+            )
     if metrics["red_recall"] < 30 and metrics["n_red_truth"] >= 5:
         suggestions.append(
             f"- 🔴 **防禦 recall {metrics['red_recall']}% < 30%**："
