@@ -1155,11 +1155,44 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     import pandas as _pd7
                     import io as _io_ex
                     import os as _os_ex
+                    import re as _re_ex
                     import datetime as _dt_ex
                     _s_ex = _mk_s()
                     _s_ex.verify = False
                     _s_ex.headers.update({'User-Agent': 'Mozilla/5.0',
                                           'Accept': 'application/json'})
+
+                    # 方案 0 (2026-06 新增): 中華民國統計資訊網 stat.gov.tw 出口年增率
+                    # 為什麼放首位？
+                    #   stat.gov.tw 是 DGBAS 官方點資料頁，每月更新最新 YoY，HTML 含
+                    #   「出口年增率 ... 12.3%」格式；走 fetch_url（NAS 中繼站）取台灣 IP。
+                    try:
+                        from proxy_helper import fetch_url as _fu_stat
+                        from bs4 import BeautifulSoup as _BS_stat
+                        _stat_url = ('https://www.stat.gov.tw/Point.aspx?'
+                                     'sid=t.8&n=3587&sms=11480')
+                        _r_stat = _fu_stat(_stat_url, timeout=12, attempts=1)
+                        if _r_stat is not None and _r_stat.status_code == 200:
+                            _r_stat.encoding = 'utf-8'
+                            _txt_stat = _BS_stat(_r_stat.text, 'html.parser').get_text(' ', strip=True)
+                            # 模式：「2026年4月 出口年增率 18.9%」or「出口年增率 ... 18.9」
+                            _m_stat = _re_ex.search(
+                                r'(20\d{2})\s*年\s*(\d{1,2})\s*月[^。]{0,80}?'
+                                r'出口[^。]{0,30}?年增率?[^\d\-]{0,15}(-?\d{1,3}\.\d)\s*%?',
+                                _txt_stat)
+                            if _m_stat:
+                                _yr_s, _mo_s = int(_m_stat.group(1)), int(_m_stat.group(2))
+                                _yoy_s = float(_m_stat.group(3))
+                                if 1 <= _mo_s <= 12 and -80 <= _yoy_s <= 200:
+                                    _date_s = f'{_yr_s}-{_mo_s:02d}'
+                                    print(f'[Export/stat.gov.tw] ✅ YoY={_yoy_s:.2f}% date={_date_s}')
+                                    return {'tw_export': {'yoy': _yoy_s, 'date': _date_s,
+                                                          'source': 'stat.gov.tw'}}
+                            print('[Export/stat.gov.tw] ❌ HTML 未含可解析 YoY')
+                        else:
+                            print(f'[Export/stat.gov.tw] ❌ HTTP {getattr(_r_stat, "status_code", "None")}')
+                    except Exception as _e_stat:
+                        print(f'[Export/stat.gov.tw] ❌ {type(_e_stat).__name__}: {_e_stat}')
 
                     # 方案FM: FinMind TaiwanEconomicIndicator 出口相關指標
                     try:

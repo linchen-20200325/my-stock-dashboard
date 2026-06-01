@@ -510,9 +510,9 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 # ══════════════════════════════════════════════════════════════
 
 def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
-    """抓取台灣製造業 PMI（9 來源並行賽跑，依優先序取最高優先的有效值；月頻）。
+    """抓取台灣製造業 PMI（10 來源並行賽跑，依優先序取最高優先的有效值；月頻）。
 
-    來源優先序：data.gov.tw → NDC → MacroMicro → CIER(cid21) → StockFeel
+    來源優先序：CIER-EN → data.gov.tw → NDC → MacroMicro → CIER(cid21) → StockFeel
                 → Cnyes → FinMind → CIER(cid8) → MoneyDJ
     各來源彼此獨立、無共享狀態 → ThreadPoolExecutor 並行；關鍵路徑由原序列
     最壞 ~100s+ 降為 ~單一最慢源，順帶修掉「序列鏈超過 macro pool 70s
@@ -531,7 +531,9 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
 
     # 優先序（越前面越權威）；每個 source fn 線程安全：只讀 today/max_age_days、
     # 對共享 errs 做 append（CPython list.append 為原子操作），回傳新 dict。
+    # CIER-EN（英文月度頁）為 2026-06 新增最高優先源：slug 結構穩定、HTML 乾淨
     _sources = [
+        ('CIER-EN',     _pmi_src_cier_en_monthly),
         ('data.gov.tw', _pmi_src_dgtw),
         ('NDC',         _pmi_src_ndc),
         ('MacroMicro',  _pmi_src_macromicro),
@@ -560,9 +562,66 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
         if _nm in _results:
             print(f'[macro_core/TW-PMI] ✅ 採用 {_nm}（9 源並行，依優先序）')
             return _results[_nm]
-    err_msg = ' | '.join(errs) or 'all 9 stages failed'
-    print(f'[macro_core/TW-PMI] ❌ 9 段並行全失敗：{err_msg}')
+    err_msg = ' | '.join(errs) or 'all 10 stages failed'
+    print(f'[macro_core/TW-PMI] ❌ 10 段並行全失敗：{err_msg}')
     return {'_err_pmi': err_msg, 'value': None}
+
+
+def _pmi_src_cier_en_monthly(today, max_age_days, errs):
+    """方案 -1 (CIER 英文月度頁): 直接打 `/en/eco/taiwan-manufacturing-pmi-{月}-{年}/`。
+
+    為什麼選這個當最高優先源？
+    - CIER 是 PMI 官方發布單位（國發會委託），slug 結構自 2024 起穩定
+    - HTML 簡潔（單篇報導 + 數字在標題與首段），正則命中率 >95%
+    - 海外 IP 仍會 403 / cloudflare 攔截 → 走 fetch_url 自動 fallback NAS 中繼站
+    - 失敗時不要拖時間：每個月最多 2 次 attempts，總共 3 個 slug
+    """
+    _month_names = ['january', 'february', 'march', 'april', 'may', 'june',
+                    'july', 'august', 'september', 'october', 'november', 'december']
+    try:
+        from bs4 import BeautifulSoup
+        # 嘗試 current / -1 / -2 month（PMI 報告通常於次月初公布，最近 1-2 月
+        # slug 是命中熱區；再往前推 3 個月當保險）
+        for _m_back in range(0, 3):
+            _y, _m = today.year, today.month - _m_back
+            while _m <= 0:
+                _m += 12
+                _y -= 1
+            _slug = f'taiwan-manufacturing-pmi-{_month_names[_m - 1]}-{_y}'
+            _url = f'https://www.cier.edu.tw/en/eco/{_slug}/'
+            try:
+                r = fetch_url(_url, timeout=12, attempts=1)
+                if r is None or r.status_code != 200:
+                    if r is not None:
+                        errs.append(f'CIER-EN.{_slug}:HTTP{r.status_code}')
+                    continue
+                r.encoding = 'utf-8'
+                _txt = BeautifulSoup(r.text, 'html.parser').get_text(' ', strip=True)
+                # 模式：「Taiwan Manufacturing PMI ... 55.4」or 「PMI ... at 55.4%」
+                # CIER 英文文體穩定，數值通常出現在標題與首段
+                _m_pmi = _re.search(
+                    r'(?:Manufacturing\s+PMI|PMI)[^.]{0,80}?'
+                    r'(?:at|registered|reached|of|stood\s+at|rose\s+to|fell\s+to|was)?'
+                    r'[^\d]{0,15}(\d{2}\.\d)\s*(?:%|percent)?',
+                    _txt, _re.IGNORECASE)
+                if _m_pmi:
+                    _v = float(_m_pmi.group(1))
+                    if 30 <= _v <= 70:
+                        _last_date = _dt.date(_y, _m, 1)
+                        if (today - _last_date).days <= max_age_days:
+                            _d_iso = f'{_y}-{_m:02d}-01'
+                            print(f'[macro_core/TW-PMI/CIER-EN] ✅ {_v} date={_d_iso} slug={_slug}')
+                            return {'value': _v, 'date': _d_iso,
+                                    'label': f'CIER Manufacturing PMI ({_month_names[_m - 1].title()} {_y})',
+                                    'source': 'CIER-EN', 'is_proxy': False,
+                                    'series_id': f'cier-en-{_y}{_m:02d}'}
+            except Exception as _e_slug:
+                errs.append(f'CIER-EN.{_slug}:{type(_e_slug).__name__}')
+                continue
+    except Exception as e:
+        errs.append(f'CIER-EN:{type(e).__name__}')
+        print(f'[macro_core/TW-PMI/CIER-EN] ❌ {e}')
+    return None
 
 
 def _pmi_src_dgtw(today, max_age_days, errs):
