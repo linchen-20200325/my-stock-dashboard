@@ -126,11 +126,16 @@ def render_etf_single(gemini_fn=None):
             if _mgr and _mgr.get('name'):
                 _since = _mgr.get('since')
                 _td = _mgr.get('tenure_days')
+                # 持久檔 / /tmp 推算的 tenure（MoneyDJ 未揭露到職日時）
+                _td_approx = _chg.get('tenure_days') if _chg.get('tenure_approx') else None
                 if isinstance(_td, int):
                     _tenure_txt = (f'{_td // 30} 個月' if _td < 365
                                    else f'{_td / 365:.1f} 年')
                 elif _since:
                     _tenure_txt = f'自 {_since}'
+                elif isinstance(_td_approx, int) and _td_approx > 0:
+                    _tenure_txt = (f'≥{_td_approx} 天' if _td_approx < 365
+                                   else f'≥{_td_approx / 365:.1f} 年')
                 else:
                     _tenure_txt = '任期未揭露'
                 mc1, mc2 = st.columns([1, 1])

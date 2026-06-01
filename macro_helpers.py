@@ -17,6 +17,10 @@ import pandas as pd
 # 季末日對照（DataFrame 內「季度標籤 2024Q4」→「2024-12-31」用）
 _QE_MAP = {'1': '03-31', '2': '06-30', '3': '09-30', '4': '12-31'}
 
+# v18.140 校準收斂門檻：health 低於此值觸發 🔴 防禦；regime=bull 需 score ≥ 此值才升 🟢
+HEALTH_DEFENSE_THRESHOLD = 35
+BULL_MIN_SCORE = 4
+
 
 def calc_traffic_light(
     mkt_info: Optional[dict],
@@ -28,10 +32,10 @@ def calc_traffic_light(
 
     取代 tab_macro.render_tab_macro._calc_traffic_light closure。
 
-    決策樹：
+    決策樹（v18.140 校準後收斂門檻，常數見模組 HEALTH_DEFENSE_THRESHOLD / BULL_MIN_SCORE）：
       1. 三來源全空 → None（由 placeholder 顯示等待）
-      2. defense 觸發（score<2 且外資期貨大空單）或 health<40 → 🔴 空頭防禦
-      3. regime=='bull' → 🟢 多頭積極
+      2. defense 觸發（score<2 且外資期貨大空單）或 health<HEALTH_DEFENSE_THRESHOLD → 🔴 空頭防禦
+      3. regime=='bull' AND score>=BULL_MIN_SCORE → 🟢 多頭積極
       4. regime in ('caution','bear') → 🔴 保守防禦
       5. 其他 → 🟡 震盪整理
 
@@ -77,12 +81,12 @@ def calc_traffic_light(
         _jqavg * 0.4 + min(_score / 5 * 100, 100) * 0.4 + (20 if _fnet > 0 else 0), 1
     )
 
-    if _defense or _health < 40:
+    if _defense or _health < HEALTH_DEFENSE_THRESHOLD:
         _color, _icon  = '#f85149', '🔴'
         _label  = '空頭防禦｜降低部位'
         _action = '⛔ 大環境惡化，系統已啟動資金保護機制'
         _sub    = '建議持有現金，等待市場明確訊號，禁止追買任何個股'
-    elif _regime == 'bull':
+    elif _regime == 'bull' and _score >= BULL_MIN_SCORE:
         _color, _icon  = '#3fb950', '🟢'
         _label  = '多頭市場｜積極操作'
         _action = '✅ 市場健康，籌碼乾淨，可積極尋找強勢標的'
