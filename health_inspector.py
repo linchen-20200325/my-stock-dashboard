@@ -351,11 +351,11 @@ def render_data_health_raw():
     _g_add('美國核心 CPI YoY', 'FRED',           'monthly',
            date_str=str((_ma_g.get('us_core_cpi') or {}).get('date',''))[:10] or None)
     _g_add('🇹🇼 台灣製造業 PMI',
-           'data.gov.tw+NDC+MacroMicro+CIER+StockFeel+鉅亨+FinMind+MoneyDJ 8 段', 'monthly',
+           'CIER-EN+data.gov.tw+NDC+MacroMicro+CIER+StockFeel+鉅亨+FinMind+MoneyDJ 9 段', 'monthly',
            date_str=str((_ma_g.get('ism_pmi') or {}).get('date',''))[:10] or None)
     _g_add('NDC 景氣燈號',      'StockFeel+MacroMicro 雙源', 'monthly',
            date_str=str((_ma_g.get('ndc_signal') or {}).get('date',''))[:10] or None)
-    _g_add('台灣出口 YoY',      'FRED+MOF+靜態 3段備援',     'monthly',
+    _g_add('台灣出口 YoY',      'stat.gov.tw+FinMind+MOF+FRED+data.gov.tw+靜態 6段備援', 'monthly',
            date_str=str((_ma_g.get('tw_export') or {}).get('date',''))[:10] or None)
     _g_add('台灣 M1B / M2',    'CBC + FinMind 雙源',         'monthly',
            date_str=(_cl_ts_g if _mi_g.get('m1b_yoy') is not None else None))
@@ -539,7 +539,7 @@ def render_data_health_raw():
             ('NDC 景氣燈號分數',        'ndc_signal',  'monthly', '_err_ndc',
              'StockFeel+MacroMicro 雙源',     'stockfeel/biz-light + charts/2',      True),
             ('台灣出口 YoY',           'tw_export',   'monthly', '_err_export',
-             'FRED+MOF+靜態 3段',             'XTEXVA01TWM657S',                     True),
+             'stat.gov.tw+FinMind+MOF+FRED+data.gov.tw+靜態 6段', 'XTEXVA01TWM657S',  True),
         ]:
             item = _ma.get(key) or {}
             date = (item.get('date') or item.get('period') or
