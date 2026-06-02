@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-02T12:49:08.365060+00:00",
+  "updated_at": "2026-06-02T20:24:53.904307+00:00",
   "datasets": {
     "twii_ohlcv": {
       "name": "twii_ohlcv",
@@ -21,6 +21,18 @@
     },
     "finmind_m1m2": {
       "name": "finmind_m1m2",
+      "last_updated": null,
+      "row_count": 0,
+      "last_error": "抓取結果為空"
+    },
+    "finmind_ndc_signal": {
+      "name": "finmind_ndc_signal",
+      "last_updated": null,
+      "row_count": 0,
+      "last_error": "抓取結果為空"
+    },
+    "finmind_leading_index": {
+      "name": "finmind_leading_index",
       "last_updated": null,
       "row_count": 0,
       "last_error": "抓取結果為空"
