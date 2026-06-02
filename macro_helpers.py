@@ -18,8 +18,36 @@ import pandas as pd
 _QE_MAP = {'1': '03-31', '2': '06-30', '3': '09-30', '4': '12-31'}
 
 # v18.140 校準收斂門檻：health 低於此值觸發 🔴 防禦；regime=bull 需 score ≥ 此值才升 🟢
+# v18.143+：優先讀 macro_thresholds.json（由季度 recalibrate workflow 經 PR 審閱後寫入），
+# 缺檔則 fall back 至模組預設常數
 HEALTH_DEFENSE_THRESHOLD = 35
 BULL_MIN_SCORE = 4
+
+
+def _load_calibrated_thresholds() -> tuple[int, int]:
+    """讀 macro_thresholds.json，回傳 (HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE)。
+
+    缺檔 / 解析失敗 / 值越界 → silently 回 module 預設，不噴錯。
+    Production 流程不應因設定檔損毀而連帶崩潰。
+    """
+    import json as _json
+    import os as _os
+    _path = _os.path.join(_os.path.dirname(__file__), 'macro_thresholds.json')
+    try:
+        if _os.path.exists(_path):
+            with open(_path, 'r', encoding='utf-8') as _f:
+                _cfg = _json.load(_f)
+            _h = int(_cfg.get('HEALTH_DEFENSE_THRESHOLD', HEALTH_DEFENSE_THRESHOLD))
+            _s = int(_cfg.get('BULL_MIN_SCORE', BULL_MIN_SCORE))
+            # 越界守門：health ∈ [20, 60]、score ∈ [1, 6]
+            if 20 <= _h <= 60 and 1 <= _s <= 6:
+                return _h, _s
+    except Exception:
+        pass
+    return HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE
+
+
+HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE = _load_calibrated_thresholds()
 
 
 def calc_traffic_light(
@@ -27,6 +55,9 @@ def calc_traffic_light(
     jingqi_info: Optional[dict],
     cl_data: Optional[dict],
     li_latest: Any,
+    *,
+    health_defense_threshold: Optional[int] = None,
+    bull_min_score: Optional[int] = None,
 ) -> Optional[dict]:
     """根據當前數據計算紅綠燈狀態，回傳 dict。無數據時回傳 None。
 
@@ -81,12 +112,16 @@ def calc_traffic_light(
         _jqavg * 0.4 + min(_score / 5 * 100, 100) * 0.4 + (20 if _fnet > 0 else 0), 1
     )
 
-    if _defense or _health < HEALTH_DEFENSE_THRESHOLD:
+    # 校準腳本可注入測試門檻；正式呼叫不傳 → 用模組常數
+    _h_thr = health_defense_threshold if health_defense_threshold is not None else HEALTH_DEFENSE_THRESHOLD
+    _s_thr = bull_min_score if bull_min_score is not None else BULL_MIN_SCORE
+
+    if _defense or _health < _h_thr:
         _color, _icon  = '#f85149', '🔴'
         _label  = '空頭防禦｜降低部位'
         _action = '⛔ 大環境惡化，系統已啟動資金保護機制'
         _sub    = '建議持有現金，等待市場明確訊號，禁止追買任何個股'
-    elif _regime == 'bull' and _score >= BULL_MIN_SCORE:
+    elif _regime == 'bull' and _score >= _s_thr:
         _color, _icon  = '#3fb950', '🟢'
         _label  = '多頭市場｜積極操作'
         _action = '✅ 市場健康，籌碼乾淨，可積極尋找強勢標的'

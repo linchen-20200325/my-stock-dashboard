@@ -13,6 +13,26 @@ import datetime as _dt
 import streamlit as st
 
 
+def _show_threshold_status():
+    """顯示 macro_thresholds.json 內現行門檻 + 最後校準時間（季度排程寫入）。"""
+    import json as _json
+    import os as _os
+    _path = _os.path.join(_os.path.dirname(__file__), 'macro_thresholds.json')
+    if not _os.path.exists(_path):
+        return
+    try:
+        with open(_path, 'r', encoding='utf-8') as _fp:
+            _cfg = _json.load(_fp)
+    except Exception:
+        return
+    _h = _cfg.get('HEALTH_DEFENSE_THRESHOLD', 35)
+    _s = _cfg.get('BULL_MIN_SCORE', 4)
+    _ts = _cfg.get('last_calibrated') or '尚未校準（使用預設）'
+    _method = _cfg.get('method', '')
+    st.caption(f'🤖 **現行門檻**：HEALTH `<{_h}` 觸發 🔴 防禦、SCORE `≥{_s}` 升 🟢 多頭　'
+               f'|　**最後校準**：{_ts}　|　{_method}')
+
+
 def render_calibration_panel():
     """渲染「🧪 紅綠燈系統校準」面板（折疊）。"""
     with st.expander('🧪 紅綠燈系統校準（進階）', expanded=False):
@@ -21,6 +41,9 @@ def render_calibration_panel():
             '量化每個燈號 🟢🟡🔴 在後 20/60 日 TWII 的真實 precision / recall，'
             '並提出門檻調整建議。')
         st.caption('⚠️ 本工具僅用於系統校準診斷，不影響日常選股 / AI 報告。')
+
+        # v18.143+：顯示季度排程校準狀態（macro_thresholds.json）
+        _show_threshold_status()
 
         _c1, _c2, _c3 = st.columns([1, 1, 1])
         with _c1:
