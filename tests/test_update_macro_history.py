@@ -107,8 +107,13 @@ def test_update_one_handles_finmind_without_token():
 
 
 # ════════════════════════════════════════════════════════════════
-# 新增：景氣對策信號 + 領先指標（FinMind TaiwanMacroEconomics）
+# 景氣對策信號 + 領先指標（FinMind TaiwanBusinessIndicator wide-format）
 # ════════════════════════════════════════════════════════════════
+def _fake_business_indicator_df(rows: list[dict]) -> pd.DataFrame:
+    """Helper：偽造 TaiwanBusinessIndicator wide-format 回應。"""
+    return pd.DataFrame(rows)
+
+
 def test_datasets_includes_ndc_and_leading():
     """新增的兩個 dataset 必須註冊在 DATASETS 與 FETCHERS。"""
     import update_macro_history as umh
@@ -119,86 +124,68 @@ def test_datasets_includes_ndc_and_leading():
     assert umh.FETCHERS["finmind_leading_index"][1] is True
 
 
-def test_filter_macro_indicator_exact_match():
-    """exact match：indicator 名稱完全相等時應抽出對應列。"""
-    from update_macro_history import _filter_macro_indicator, NDC_SIGNAL_KEYS
-    df = pd.DataFrame({
-        "date": ["2024-01-31", "2024-02-29", "2024-01-31"],
-        "name": ["景氣對策信號(分)", "景氣對策信號(分)", "CPI"],
-        "value": [25, 30, 102.5],
-    })
-    out = _filter_macro_indicator(df, NDC_SIGNAL_KEYS)
-    assert len(out) == 2
+def test_pick_macro_column_basic():
+    """從 wide-format 抽出 [date, value] 並轉型；NaN 應 drop。"""
+    from update_macro_history import _pick_macro_column
+    df = _fake_business_indicator_df([
+        {"date": "2024-01-31", "leading": 102.5, "monitoring": 25},
+        {"date": "2024-02-29", "leading": 103.1, "monitoring": 30},
+        {"date": "2024-03-31", "leading": None, "monitoring": 28},  # NaN drop
+    ])
+    out = _pick_macro_column(df, "monitoring")
     assert list(out.columns) == ["date", "value"]
-    assert sorted(out["value"].tolist()) == [25.0, 30.0]
+    assert len(out) == 3
+    assert out["value"].tolist() == [25.0, 30.0, 28.0]
+    out2 = _pick_macro_column(df, "leading")
+    assert len(out2) == 2  # NaN row 被 drop
+    assert out2["value"].tolist() == [102.5, 103.1]
 
 
-def test_filter_macro_indicator_contains_fallback():
-    """exact 找不到時用 contains 兜底（FinMind 名稱版本變體）。"""
-    from update_macro_history import _filter_macro_indicator
-    df = pd.DataFrame({
-        "date": ["2024-01-31"],
-        "name": ["景氣對策信號 v2"],   # 帶後綴的變體
-        "value": [28],
-    })
-    out = _filter_macro_indicator(df, ("景氣對策信號",))
-    assert len(out) == 1
-    assert out["value"].iloc[0] == 28.0
+def test_pick_macro_column_missing_column():
+    """請求的欄位不存在 → 回空（不 raise）。"""
+    from update_macro_history import _pick_macro_column
+    df = _fake_business_indicator_df([
+        {"date": "2024-01-31", "leading": 102.5},
+    ])
+    assert _pick_macro_column(df, "monitoring").empty
 
 
-def test_filter_macro_indicator_no_match():
-    """完全找不到時回空 DataFrame，不 raise。"""
-    from update_macro_history import _filter_macro_indicator
-    df = pd.DataFrame({
-        "date": ["2024-01-31"],
-        "name": ["CPI"],
-        "value": [102.5],
-    })
-    out = _filter_macro_indicator(df, ("景氣對策信號",))
-    assert out.empty
+def test_pick_macro_column_empty_input():
+    """空 / None / 缺 date 欄 → 回空。"""
+    from update_macro_history import _pick_macro_column
+    assert _pick_macro_column(pd.DataFrame(), "monitoring").empty
+    assert _pick_macro_column(None, "monitoring").empty
+    assert _pick_macro_column(pd.DataFrame({"x": [1]}), "monitoring").empty
 
 
-def test_filter_macro_indicator_empty_input():
-    """空 df / None 應回空 DataFrame。"""
-    from update_macro_history import _filter_macro_indicator
-    assert _filter_macro_indicator(pd.DataFrame(), ("X",)).empty
-    assert _filter_macro_indicator(None, ("X",)).empty
+def test_macro_table_uses_taiwan_business_indicator(monkeypatch):
+    """_finmind_macro_table 必須打 FinMind v4 的 TaiwanBusinessIndicator dataset。"""
+    import update_macro_history as umh
+    umh._MACRO_FULL_TABLE_CACHE.clear()
+    captured = {"dataset": None}
 
+    def _fake_finmind_get(dataset, data_id, start, end, token):
+        captured["dataset"] = dataset
+        return _fake_business_indicator_df([
+            {"date": "2024-01-31", "leading": 102.5, "monitoring": 25},
+        ])
 
-def test_filter_macro_indicator_missing_columns():
-    """缺 indicator / value / date 欄位 → 回空（不 raise）。"""
-    from update_macro_history import _filter_macro_indicator
-    df = pd.DataFrame({"some_col": [1, 2]})
-    assert _filter_macro_indicator(df, ("X",)).empty
-
-
-def test_filter_macro_indicator_alt_column_names():
-    """indicator / name / metric + value / data 任一組合都要 work。"""
-    from update_macro_history import _filter_macro_indicator
-    df = pd.DataFrame({
-        "date": ["2024-01-31"],
-        "metric": ["景氣對策信號(分)"],
-        "data": [25],
-    })
-    out = _filter_macro_indicator(df, ("景氣對策信號(分)",))
-    assert len(out) == 1
-    assert out["value"].iloc[0] == 25.0
+    monkeypatch.setattr(umh, "_finmind_get", _fake_finmind_get)
+    umh._finmind_macro_table(dt.date(2024, 1, 1), dt.date(2024, 2, 1), "tok")
+    assert captured["dataset"] == "TaiwanBusinessIndicator"
 
 
 def test_macro_table_cache_skips_second_call(monkeypatch):
     """_finmind_macro_table 同 key 第二次 call 應走 cache，不重打 API。"""
     import update_macro_history as umh
-    # 清快取
     umh._MACRO_FULL_TABLE_CACHE.clear()
     call_count = {"n": 0}
 
     def _fake_finmind_get(dataset, data_id, start, end, token):
         call_count["n"] += 1
-        return pd.DataFrame({
-            "date": ["2024-01-31"],
-            "name": ["景氣對策信號(分)"],
-            "value": [25],
-        })
+        return _fake_business_indicator_df([
+            {"date": "2024-01-31", "leading": 102.5, "monitoring": 25},
+        ])
 
     monkeypatch.setattr(umh, "_finmind_get", _fake_finmind_get)
     start = dt.date(2024, 1, 1)
@@ -209,34 +196,30 @@ def test_macro_table_cache_skips_second_call(monkeypatch):
 
 
 def test_fetch_ndc_signal_shape(monkeypatch):
-    """fetch_finmind_ndc_signal 回 [date, ndc_signal] 兩欄、ndc_signal 為整數型別。"""
+    """fetch_finmind_ndc_signal 回 [date, ndc_signal] + Int64 + round。"""
     import update_macro_history as umh
     umh._MACRO_FULL_TABLE_CACHE.clear()
-    fake = pd.DataFrame({
-        "date": ["2024-01-31", "2024-02-29"],
-        "name": ["景氣對策信號(分)", "景氣對策信號(分)"],
-        "value": [25.0, 30.4],   # 含小數應被 round
-    })
-    monkeypatch.setattr(umh, "_finmind_get",
-                        lambda *a, **kw: fake)
+    fake = _fake_business_indicator_df([
+        {"date": "2024-01-31", "leading": 102.5, "monitoring": 25.0},
+        {"date": "2024-02-29", "leading": 103.1, "monitoring": 30.4},  # round → 30
+    ])
+    monkeypatch.setattr(umh, "_finmind_get", lambda *a, **kw: fake)
     out = umh.fetch_finmind_ndc_signal(
         dt.date(2024, 1, 1), dt.date(2024, 3, 1), "tok")
     assert list(out.columns) == ["date", "ndc_signal"]
     assert len(out) == 2
-    assert out["ndc_signal"].iloc[1] == 30   # 30.4 → 30
+    assert out["ndc_signal"].iloc[1] == 30  # 30.4 → 30
 
 
 def test_fetch_leading_index_shape(monkeypatch):
-    """fetch_finmind_leading_index 回 [date, leading_index]，不含 smooth 欄。"""
+    """fetch_finmind_leading_index 回 [date, leading_index] float。"""
     import update_macro_history as umh
     umh._MACRO_FULL_TABLE_CACHE.clear()
-    fake = pd.DataFrame({
-        "date": ["2024-01-31", "2024-02-29"],
-        "name": ["領先指標綜合指數", "領先指標綜合指數"],
-        "value": [102.5, 103.1],
-    })
-    monkeypatch.setattr(umh, "_finmind_get",
-                        lambda *a, **kw: fake)
+    fake = _fake_business_indicator_df([
+        {"date": "2024-01-31", "leading": 102.5, "monitoring": 25},
+        {"date": "2024-02-29", "leading": 103.1, "monitoring": 30},
+    ])
+    monkeypatch.setattr(umh, "_finmind_get", lambda *a, **kw: fake)
     out = umh.fetch_finmind_leading_index(
         dt.date(2024, 1, 1), dt.date(2024, 3, 1), "tok")
     assert list(out.columns) == ["date", "leading_index"]
@@ -244,17 +227,14 @@ def test_fetch_leading_index_shape(monkeypatch):
     assert out["leading_index"].iloc[0] == 102.5
 
 
-def test_fetch_ndc_signal_empty_when_no_match(monkeypatch):
-    """API 回的全表沒有 NDC 信號名稱時，fetcher 應回空 DataFrame、不 raise。"""
+def test_fetch_ndc_signal_empty_when_column_missing(monkeypatch):
+    """API 回的全表沒有 monitoring 欄時（FinMind 改 schema），fetcher 回空。"""
     import update_macro_history as umh
     umh._MACRO_FULL_TABLE_CACHE.clear()
-    fake = pd.DataFrame({
-        "date": ["2024-01-31"],
-        "name": ["CPI"],
-        "value": [102.5],
-    })
-    monkeypatch.setattr(umh, "_finmind_get",
-                        lambda *a, **kw: fake)
+    fake = _fake_business_indicator_df([
+        {"date": "2024-01-31", "leading": 102.5},  # 缺 monitoring
+    ])
+    monkeypatch.setattr(umh, "_finmind_get", lambda *a, **kw: fake)
     out = umh.fetch_finmind_ndc_signal(
         dt.date(2024, 1, 1), dt.date(2024, 2, 1), "tok")
     assert out.empty
@@ -268,11 +248,9 @@ def test_ndc_and_leading_share_cache(monkeypatch):
 
     def _fake(*args, **kwargs):
         call_count["n"] += 1
-        return pd.DataFrame({
-            "date": ["2024-01-31", "2024-01-31"],
-            "name": ["景氣對策信號(分)", "領先指標綜合指數"],
-            "value": [25.0, 102.5],
-        })
+        return _fake_business_indicator_df([
+            {"date": "2024-01-31", "leading": 102.5, "monitoring": 25.0},
+        ])
 
     monkeypatch.setattr(umh, "_finmind_get", _fake)
     start = dt.date(2024, 1, 1)
