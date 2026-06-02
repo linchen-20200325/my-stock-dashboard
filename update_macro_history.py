@@ -2,11 +2,13 @@
 
 資料流（與 update_etf_managers.py 同模式，但抓多個 dataset）
 =========================================================
-data_cache/twii_ohlcv.parquet       ← ^TWII 日 K（yfinance via NAS proxy）
-data_cache/finmind_inst.parquet     ← 三大法人總買賣超（FinMind）
-data_cache/finmind_margin.parquet   ← 融資餘額（FinMind）
-data_cache/finmind_m1m2.parquet     ← M1B / M2 月差（FinMind）
-data_cache/metadata.json            ← 各表 last_updated + row_count
+data_cache/twii_ohlcv.parquet              ← ^TWII 日 K（yfinance via NAS proxy）
+data_cache/finmind_inst.parquet            ← 三大法人總買賣超（FinMind）
+data_cache/finmind_margin.parquet          ← 融資餘額（FinMind）
+data_cache/finmind_m1m2.parquet            ← M1B / M2 月差（FinMind）
+data_cache/finmind_ndc_signal.parquet      ← 景氣對策信號分數 9-45（FinMind TaiwanMacroEconomics）
+data_cache/finmind_leading_index.parquet   ← 領先指標綜合指數（FinMind TaiwanMacroEconomics）
+data_cache/metadata.json                   ← 各表 last_updated + row_count
 
 每日跑一次（TW 17:00 收盤後）
 - 對每個 Parquet：讀取 last_date → 抓 [last_date+1, today] → append + dedupe → 寫回
@@ -38,9 +40,18 @@ CACHE_DIR = Path("data_cache")
 META_PATH = CACHE_DIR / "metadata.json"
 
 # Parquet 表名 → 抓取函式名（runtime dispatch）
-DATASETS = ["twii_ohlcv", "finmind_inst", "finmind_margin", "finmind_m1m2"]
+DATASETS = ["twii_ohlcv", "finmind_inst", "finmind_margin", "finmind_m1m2",
+            "finmind_ndc_signal", "finmind_leading_index"]
 
 FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
+
+# FinMind TaiwanMacroEconomics 月頻指標名（中央銀行/國發會公開資料）
+NDC_SIGNAL_KEYS = ("景氣對策信號(分)", "景氣對策信號")
+LEADING_INDEX_KEYS = ("領先指標綜合指數", "領先指標", "領先指標(綜合指數)")
+
+# 模組級快取：同 (start, end, has_token) 的 TaiwanMacroEconomics 全表只抓一次，
+# 避免 ndc_signal + leading_index 兩個 fetcher 重複打 API
+_MACRO_FULL_TABLE_CACHE: dict[tuple, pd.DataFrame] = {}
 
 
 # ════════════════════════════════════════════════════════════════
@@ -316,11 +327,96 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     return out[["date", "m1b", "m2", "m1b_m2_gap"]]
 
 
+def _finmind_macro_table(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
+    """FinMind TaiwanMacroEconomics 全表抓取（含模組級快取）。
+
+    NDC 信號與領先指標都在這同一 dataset 下，分兩次打 API 重複——
+    用 (start, end, has_token) 做 key 緩存 → 一次抓全表，兩個 fetcher 共用。
+    """
+    key = (start.isoformat(), end.isoformat(), bool(token))
+    cached = _MACRO_FULL_TABLE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    raw = _finmind_get(
+        "TaiwanMacroEconomics", "",
+        start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), token,
+    )
+    _MACRO_FULL_TABLE_CACHE[key] = raw
+    return raw
+
+
+def _filter_macro_indicator(df: pd.DataFrame, keys: tuple) -> pd.DataFrame:
+    """從 TaiwanMacroEconomics 全表抽出指定 indicator 的月頻時序。
+
+    FinMind 欄位可能是 indicator / name / metric（視版本而定），值可能是 value / data。
+    回 [date, value]；找不到回空 DataFrame。
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+    name_col = next((c for c in ("indicator", "name", "metric")
+                     if c in df.columns), None)
+    val_col = next((c for c in ("value", "data") if c in df.columns), None)
+    if name_col is None or val_col is None or "date" not in df.columns:
+        print(f"[macro_indicator_filter] 欄位對應失敗 cols={list(df.columns)[:8]}")
+        return pd.DataFrame()
+    mask = df[name_col].astype(str).isin(keys)
+    if not mask.any():
+        # 用 contains 兜底（FinMind 名稱有時帶括弧變體）
+        mask = df[name_col].astype(str).apply(
+            lambda x: any(k in x for k in keys))
+    if not mask.any():
+        print(f"[macro_indicator_filter] keys={keys} 在 {name_col} 找不到")
+        return pd.DataFrame()
+    sub = df.loc[mask, ["date", val_col]].copy()
+    sub.columns = ["date", "value"]
+    sub["value"] = pd.to_numeric(sub["value"], errors="coerce")
+    sub["date"] = pd.to_datetime(sub["date"]).dt.date
+    return sub.dropna().sort_values("date").reset_index(drop=True)
+
+
+def fetch_finmind_ndc_signal(start: _dt.date, end: _dt.date,
+                              token: str) -> pd.DataFrame:
+    """景氣對策信號分數（月頻；範圍 9-45）。
+
+    輸出欄位：date, ndc_signal
+    用於驗證總經 Tab 的拐點判定：連 2 月翻多/翻空、歷史 crisis 對應。
+    """
+    raw = _finmind_macro_table(start, end, token)
+    sub = _filter_macro_indicator(raw, NDC_SIGNAL_KEYS)
+    if sub.empty:
+        print("[finmind_ndc_signal] ⚠️ 無景氣對策信號資料")
+        return sub
+    out = sub.rename(columns={"value": "ndc_signal"})
+    out["ndc_signal"] = out["ndc_signal"].round().astype("Int64")
+    print(f"[finmind_ndc_signal] ✅ {len(out)} rows")
+    return out
+
+
+def fetch_finmind_leading_index(start: _dt.date, end: _dt.date,
+                                 token: str) -> pd.DataFrame:
+    """領先指標綜合指數（月頻原始指數值）。
+
+    輸出欄位：date, leading_index
+    刻意只存原始指數值；6M smoothed change 需要 6 月以上 lookback context，
+    增量更新時無法在 fetcher 內正確計算，由下游分析端 on-the-fly 算（讀全 series 再 rolling）。
+    """
+    raw = _finmind_macro_table(start, end, token)
+    sub = _filter_macro_indicator(raw, LEADING_INDEX_KEYS)
+    if sub.empty:
+        print("[finmind_leading_index] ⚠️ 無領先指標資料")
+        return sub
+    out = sub.rename(columns={"value": "leading_index"})
+    print(f"[finmind_leading_index] ✅ {len(out)} rows")
+    return out
+
+
 FETCHERS = {
     "twii_ohlcv": (fetch_twii_ohlcv, False),       # (fn, needs_token)
     "finmind_inst": (fetch_finmind_inst, True),
     "finmind_margin": (fetch_finmind_margin, True),
     "finmind_m1m2": (fetch_finmind_m1m2, True),
+    "finmind_ndc_signal": (fetch_finmind_ndc_signal, True),
+    "finmind_leading_index": (fetch_finmind_leading_index, True),
 }
 
 
