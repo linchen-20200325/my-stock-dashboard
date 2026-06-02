@@ -40,6 +40,74 @@ import pandas as pd
 # ════════════════════════════════════════════════════════════════
 # 資料抓取層 (DI hooks)
 # ════════════════════════════════════════════════════════════════
+_CACHE_DIR = "data_cache"
+
+
+def load_from_cache(years: int = 5) -> Optional[pd.DataFrame]:
+    """讀 data_cache/twii_ohlcv.parquet + enrich FinMind 欄位（首選資料源）。
+
+    回傳 DataFrame indexed by date，含 Close/Volume + foreign_buy/m1b_m2_gap
+    （缺檔欄位以 NaN 填、後續 _build_features_at 處理 NaN→中性值）。
+    缺 cache 或讀檔失敗回 None，呼叫端應 fallback 到 fetch_twii_ohlcv。
+    """
+    import os as _os
+    _twii_path = _os.path.join(_CACHE_DIR, "twii_ohlcv.parquet")
+    if not _os.path.exists(_twii_path):
+        return None
+    try:
+        df = pd.read_parquet(_twii_path)
+    except Exception as e:
+        print(f"[calibrate/cache] 讀 twii_ohlcv 失敗：{type(e).__name__}: {e}")
+        return None
+    # 整型化：date → DatetimeIndex、欄位首字母大寫對齊既有 _build_features_at
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date").sort_index()
+    df = df.rename(columns={"open": "Open", "high": "High",
+                            "low": "Low", "close": "Close", "volume": "Volume"})
+    # 只保留指定年份（避免拉太久反而 walk-forward 計算過長）
+    cutoff = pd.Timestamp(_dt.date.today() - _dt.timedelta(days=years * 365))
+    df = df[df.index >= cutoff]
+    # Enrich：左 join FinMind 欄位（無檔則 NaN）
+    df = _enrich_with_finmind(df)
+    print(f"[calibrate/cache] ✅ 載入 {len(df)} 日 ({df.index[0].date()} ~ {df.index[-1].date()})")
+    return df
+
+
+def _enrich_with_finmind(df_twii: pd.DataFrame) -> pd.DataFrame:
+    """對齊 FinMind 欄位到 TWII 日 index：左 join + ffill 月頻欄位。
+
+    新增欄位（缺檔自動 NaN）：
+      - foreign_buy: 三大法人外資淨買賣（億）
+      - margin_balance: 融資餘額
+      - m1b_m2_gap: M1B-M2 月年增率差
+    """
+    import os as _os
+    out = df_twii.copy()
+    for fname, cols, ffill in [
+        ("finmind_inst.parquet", ["foreign_buy"], False),
+        ("finmind_margin.parquet", ["margin_balance"], False),
+        ("finmind_m1m2.parquet", ["m1b_m2_gap"], True),  # 月頻 → ffill 到日
+    ]:
+        path = _os.path.join(_CACHE_DIR, fname)
+        if not _os.path.exists(path):
+            for c in cols:
+                out[c] = float("nan")
+            continue
+        try:
+            sub = pd.read_parquet(path)
+            sub["date"] = pd.to_datetime(sub["date"])
+            sub = sub.set_index("date").sort_index()
+            out = out.join(sub[cols], how="left")
+            if ffill:
+                out[cols] = out[cols].ffill()
+        except Exception as e:
+            print(f"[calibrate/enrich] {fname} 讀檔失敗：{type(e).__name__}: {e}")
+            for c in cols:
+                if c not in out.columns:
+                    out[c] = float("nan")
+    return out
+
+
 def fetch_twii_ohlcv(range_: str = "2y") -> Optional[pd.DataFrame]:
     """抓 ^TWII OHLCV 全歷史；失敗回 None。"""
     try:
@@ -112,6 +180,10 @@ class _Features:
     ma60_prev: float
     vol_today: float
     avg_vol_20: float
+    # Enriched (cache 載入時填；缺檔則 NaN，後續用中性值代入)
+    foreign_buy: float = float("nan")
+    m1b_m2_gap: float = float("nan")
+    m1b_m2_prev: float = float("nan")
 
 
 def _build_features_at(df: pd.DataFrame, t: int) -> Optional[_Features]:
@@ -147,6 +219,11 @@ def _build_features_at(df: pd.DataFrame, t: int) -> Optional[_Features]:
     vol_today = float(sub["Volume"].iloc[-1]) if "Volume" in sub.columns else 0.0
     avg_vol = (float(sub["Volume"].rolling(20).mean().iloc[-1])
                if "Volume" in sub.columns and len(sub) >= 20 else 1.0)
+    # Enriched cols（cache 載入時存在；fallback fetch_twii_ohlcv 模式則無）
+    fb = float(sub["foreign_buy"].iloc[-1]) if "foreign_buy" in sub.columns else float("nan")
+    m_cur = float(sub["m1b_m2_gap"].iloc[-1]) if "m1b_m2_gap" in sub.columns else float("nan")
+    m_prev = (float(sub["m1b_m2_gap"].iloc[-22])
+              if "m1b_m2_gap" in sub.columns and len(sub) >= 22 else float("nan"))
     return _Features(
         date=pd.Timestamp(sub.index[-1]),
         close=cur, ma60=ma60, ma120=ma120,
@@ -154,25 +231,31 @@ def _build_features_at(df: pd.DataFrame, t: int) -> Optional[_Features]:
         ma120_above_3d=ma120_above_3d, ma120_below_3d=ma120_below_3d,
         ma120_rising=ma120_rising, ma120_falling=ma120_falling,
         ma60_prev=ma60_prev, vol_today=vol_today, avg_vol_20=avg_vol,
+        foreign_buy=fb, m1b_m2_gap=m_cur, m1b_m2_prev=m_prev,
     )
 
 
 def _features_to_traffic_light(f: _Features) -> dict:
-    """以特徵組成 mkt_info → 呼叫 calc_traffic_light（TWII-only 中性外資/籌碼）。"""
+    """以特徵組成 mkt_info → 呼叫 calc_traffic_light（cache 模式餵真實值）。"""
     from market_strategy import market_regime
     from macro_helpers import calc_traffic_light
+    fb = 0 if pd.isna(f.foreign_buy) else float(f.foreign_buy)
+    mg = None if pd.isna(f.m1b_m2_gap) else float(f.m1b_m2_gap)
+    mp = None if pd.isna(f.m1b_m2_prev) else float(f.m1b_m2_prev)
     mkt = market_regime(
         index_close=f.close, ma60=f.ma60, ma120=f.ma120,
-        foreign_buy=0, ad_ratio=1.0,  # TWII-only mode：中性值
+        foreign_buy=fb, ad_ratio=1.0,  # ADL 無歷史 cache，暫保留中性 1.0
         ma60_prev=f.ma60_prev, ma120_prev=None,
         vol_today=f.vol_today, avg_vol_20=f.avg_vol_20,
-        m1b_m2_gap=None, m1b_m2_prev=None,
+        m1b_m2_gap=mg, m1b_m2_prev=mp,
         ma60_above_3d=f.ma60_above_3d, ma60_below_3d=f.ma60_below_3d,
         ma120_above_3d=f.ma120_above_3d, ma120_below_3d=f.ma120_below_3d,
         ma120_rising=f.ma120_rising, ma120_falling=f.ma120_falling,
     )
+    # 餵 cl_data 進去：foreign_buy 非 NaN 才填，否則沿用 None（避免假資料）
+    cl = ({"inst": {"外資": {"net": fb * 1e8}}} if not pd.isna(f.foreign_buy) else None)
     tl = calc_traffic_light(mkt_info=mkt, jingqi_info=None,
-                            cl_data=None, li_latest=None)
+                            cl_data=cl, li_latest=None)
     return tl or {}
 
 
@@ -302,6 +385,9 @@ def _backtest_with_inputs_cache(df: pd.DataFrame) -> list[dict]:
 
     回傳 list[dict]，每筆含：date, close, ret_20d, ret_60d, mkt_info, jingqi_info,
     cl_data, li_latest。後續用於 evaluate_thresholds 重決色。
+
+    cache 模式下：df 已含 foreign_buy / m1b_m2_gap 欄位 → 餵真實值給 market_regime
+    與 calc_traffic_light（解 TWII-only score 結構性 0~3 問題）。
     """
     from market_strategy import market_regime
     cache = []
@@ -309,16 +395,21 @@ def _backtest_with_inputs_cache(df: pd.DataFrame) -> list[dict]:
         f = _build_features_at(df, t)
         if f is None:
             continue
+        fb = 0 if pd.isna(f.foreign_buy) else float(f.foreign_buy)
+        mg = None if pd.isna(f.m1b_m2_gap) else float(f.m1b_m2_gap)
+        mp = None if pd.isna(f.m1b_m2_prev) else float(f.m1b_m2_prev)
         mkt = market_regime(
             index_close=f.close, ma60=f.ma60, ma120=f.ma120,
-            foreign_buy=0, ad_ratio=1.0,
+            foreign_buy=fb, ad_ratio=1.0,
             ma60_prev=f.ma60_prev, ma120_prev=None,
             vol_today=f.vol_today, avg_vol_20=f.avg_vol_20,
-            m1b_m2_gap=None, m1b_m2_prev=None,
+            m1b_m2_gap=mg, m1b_m2_prev=mp,
             ma60_above_3d=f.ma60_above_3d, ma60_below_3d=f.ma60_below_3d,
             ma120_above_3d=f.ma120_above_3d, ma120_below_3d=f.ma120_below_3d,
             ma120_rising=f.ma120_rising, ma120_falling=f.ma120_falling,
         )
+        cl = ({"inst": {"外資": {"net": fb * 1e8}}}
+              if not pd.isna(f.foreign_buy) else None)
         cache.append({
             'date': f.date,
             'close': f.close,
@@ -326,7 +417,7 @@ def _backtest_with_inputs_cache(df: pd.DataFrame) -> list[dict]:
             'ret_60d': _forward_return(df, t, 60),
             'mkt_info': mkt,
             'jingqi_info': None,
-            'cl_data': None,
+            'cl_data': cl,
             'li_latest': None,
         })
     return cache
@@ -801,6 +892,10 @@ def main():
                    help="輸出 Markdown 報告路徑")
     p.add_argument("--demo", action="store_true",
                    help="使用合成資料（NAS proxy 不可達時 fallback）")
+    p.add_argument("--use-cache", action="store_true", default=True,
+                   help="優先讀 data_cache/twii_ohlcv.parquet + FinMind 欄位（預設開啟）")
+    p.add_argument("--no-cache", dest="use_cache", action="store_false",
+                   help="強制走 fetch_twii_ohlcv（網路 API）而非 cache")
     p.add_argument("--optimize", action="store_true",
                    help="跑 walk-forward 找最佳門檻（用於季度排程）")
     p.add_argument("--n-folds", type=int, default=4,
@@ -812,12 +907,20 @@ def main():
     args = p.parse_args()
 
     mode_label = "TWII-only (歷史 fixture 缺)"
-    df: Optional[pd.DataFrame]
+    df: Optional[pd.DataFrame] = None
     if args.demo:
         print("[calibrate] [DEMO] 產生合成 ^TWII 500 日 ...")
         df = synthetic_twii_ohlcv()
         mode_label = "TWII-only · DEMO 合成資料 (sandbox 用)"
-    else:
+    elif args.use_cache:
+        _yrs_map = {"1y": 1, "2y": 2, "5y": 5, "max": 10}
+        _years = _yrs_map.get(args.range, 5)
+        df = load_from_cache(years=_years)
+        if df is None:
+            print("[calibrate] cache 缺檔，fallback 抓 fetch_twii_ohlcv")
+        else:
+            mode_label = f"Cache enriched (TWII + FinMind 籌碼/M1M2, {_years}y)"
+    if df is None and not args.demo:
         print(f"[calibrate] 抓 ^TWII range={args.range} ...")
         df = fetch_twii_ohlcv(args.range)
         if df is None or df.empty:
