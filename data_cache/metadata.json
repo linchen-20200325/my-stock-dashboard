@@ -1,11 +1,11 @@
 {
-  "updated_at": "2026-06-02T12:12:55.335467+00:00",
+  "updated_at": "2026-06-02T12:28:17.042184+00:00",
   "datasets": {
     "twii_ohlcv": {
       "name": "twii_ohlcv",
-      "last_updated": "2026-06-02",
-      "row_count": 1214,
-      "last_error": null
+      "last_updated": null,
+      "row_count": 0,
+      "last_error": "抓取結果為空"
     },
     "finmind_inst": {
       "name": "finmind_inst",
