@@ -170,19 +170,21 @@ def fetch_twii_ohlcv(start: _dt.date, end: _dt.date) -> pd.DataFrame:
 def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
     """三大法人總買賣超（FinMind TaiwanStockTotalInstitutionalInvestors）。
 
-    輸出欄位：date, foreign_buy（億，三大法人外資淨買賣超彙總）
-    原始 FinMind dataset 含 institutional_investors 分欄；篩 '外資及陸資'。
+    輸出欄位：date, foreign_buy（億，外資淨買賣超）
+    FinMind 實際欄位：['buy', 'date', 'name', 'sell']
+    `name` 欄含投資人類型（外資、投信、自營商）；篩 '外資' 後算淨買賣超。
     """
     raw = _finmind_get("TaiwanStockTotalInstitutionalInvestors",
                        "", start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), token)
     if raw.empty:
         return raw
-    # 篩 '外資' 列（institutional_investors 欄）；單位 = 元，轉「億」便於 calc_traffic_light
-    if "institutional_investors" not in raw.columns:
-        print(f"[finmind_inst] 缺欄位 institutional_investors，欄位={list(raw.columns)}")
+    # FinMind 欄位是 'name'（不是 'institutional_investors'），篩 '外資' 列
+    if "name" not in raw.columns:
+        print(f"[finmind_inst] 缺欄位 name，欄位={list(raw.columns)}")
         return pd.DataFrame()
-    fi = raw[raw["institutional_investors"].astype(str).str.contains("外資", na=False)]
+    fi = raw[raw["name"].astype(str).str.contains("外資", na=False)]
     if fi.empty:
+        print(f"[finmind_inst] name 欄位無 '外資' 列，name unique={raw['name'].unique()[:10]}")
         return pd.DataFrame()
     fi = fi.copy()
     fi["foreign_buy"] = (pd.to_numeric(fi.get("buy"), errors="coerce").fillna(0)
@@ -213,29 +215,67 @@ def fetch_finmind_margin(start: _dt.date, end: _dt.date, token: str) -> pd.DataF
 
 
 def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
-    """M1B / M2（FinMind TaiwanM1B / TaiwanM2 月頻；計算 m1b_m2_gap）。
+    """M1B / M2 月頻（改抓 CBC 中央銀行 ms1.json，FinMind 無對應 dataset）。
 
-    部分 FinMind 版本可能用不同 dataset 名；任一抓失敗時 graceful 回空表。
+    走 proxy_helper.fetch_url（PROXY_URL）→ CBC 擋海外 IP 必須過台灣中繼。
+    輸出：date / m1b / m2 / m1b_m2_gap（M1B YoY − M2 YoY）。
     """
-    df_m1b = _finmind_get("TaiwanM1B", "", start.strftime("%Y-%m-%d"),
-                          end.strftime("%Y-%m-%d"), token)
-    df_m2 = _finmind_get("TaiwanM2", "", start.strftime("%Y-%m-%d"),
-                         end.strftime("%Y-%m-%d"), token)
-    if df_m1b.empty or df_m2.empty:
+    # token 參數忽略不用（CBC 不需要），但維持 signature 統一
+    _ = token
+    try:
+        from proxy_helper import fetch_url as _fu_cbc
+    except ImportError:
+        print("[finmind_m1m2] 缺 proxy_helper，無法抓 CBC")
         return pd.DataFrame()
-    val_m1b = next((c for c in df_m1b.columns if c.lower() in ("value", "m1b", "amount")), None)
-    val_m2 = next((c for c in df_m2.columns if c.lower() in ("value", "m2", "amount")), None)
-    if val_m1b is None or val_m2 is None:
-        print(f"[finmind_m1m2] 缺 value 欄；m1b={list(df_m1b.columns)} m2={list(df_m2.columns)}")
+    urls = [
+        "https://www.cbc.gov.tw/public/data/ms1.json",
+        "https://www.cbc.gov.tw/tw/public/data/ms1.json",
+    ]
+    data = None
+    for url in urls:
+        try:
+            r = _fu_cbc(url, timeout=15, attempts=2)
+            if r is None or r.status_code != 200:
+                continue
+            data = r.json()
+            if isinstance(data, list) and len(data) > 0:
+                break
+        except Exception as e:
+            print(f"[finmind_m1m2] {url[-25:]} ❌ {type(e).__name__}: {e}")
+    if not isinstance(data, list) or len(data) < 13:
+        print("[finmind_m1m2] CBC ms1.json 取不到月資料（all urls failed）")
         return pd.DataFrame()
-    a = df_m1b[["date", val_m1b]].rename(columns={val_m1b: "m1b"})
-    b = df_m2[["date", val_m2]].rename(columns={val_m2: "m2"})
-    out = pd.merge(a, b, on="date", how="inner")
-    out["date"] = pd.to_datetime(out["date"]).dt.date
+
+    df = pd.DataFrame(data)
+    c1 = next((c for c in df.columns
+               if "M1B" in str(c).upper() or "貨幣供給額M1B" in str(c)), None)
+    c2 = next((c for c in df.columns
+               if str(c).strip().upper() == "M2" or "貨幣供給額M2" in str(c)), None)
+    date_col = next((c for c in df.columns
+                     if str(c).strip() in ("年月", "date", "yearMonth", "Date")), None)
+    if not (c1 and c2 and date_col):
+        print(f"[finmind_m1m2] CBC 欄位對應失敗：{list(df.columns)[:10]}")
+        return pd.DataFrame()
+
+    out = df[[date_col, c1, c2]].copy()
+    out.columns = ["date_raw", "m1b", "m2"]
+    # 日期 normalize：'2026/04' / '2026-04' / '202604' → 'YYYY-MM-01'
+    import re as _re
+    def _norm(s):
+        m = _re.search(r"(20\d{2})[-/年]?(\d{1,2})", str(s))
+        if not m:
+            return None
+        return _dt.date(int(m.group(1)), int(m.group(2)), 1)
+    out["date"] = out["date_raw"].apply(_norm)
+    out = out.dropna(subset=["date"]).drop(columns=["date_raw"])
     out["m1b"] = pd.to_numeric(out["m1b"], errors="coerce")
     out["m2"] = pd.to_numeric(out["m2"], errors="coerce")
     out = out.dropna().sort_values("date").reset_index(drop=True)
-    out["m1b_m2_gap"] = out["m1b"].pct_change() * 100 - out["m2"].pct_change() * 100
+    # M1B YoY − M2 YoY（黃金交叉指標）
+    out["m1b_m2_gap"] = (out["m1b"] / out["m1b"].shift(12) - 1) * 100 - \
+                        (out["m2"] / out["m2"].shift(12) - 1) * 100
+    out = out[(out["date"] >= start) & (out["date"] <= end)]
+    print(f"[finmind_m1m2] ✅ CBC ms1.json {len(out)} rows")
     return out[["date", "m1b", "m2", "m1b_m2_gap"]]
 
 
