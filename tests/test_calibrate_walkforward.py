@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 
+import pandas as pd
 import pytest
 
 
@@ -117,6 +118,65 @@ def test_objective_penalizes_large_deviation():
     score_close = _objective_with_penalty(base_metrics, 36, 4, 35, 4)
     score_far = _objective_with_penalty(base_metrics, 45, 4, 35, 4)
     assert score_close > score_far, '偏離小應分數高'
+
+
+def test_load_from_cache_missing_returns_none():
+    """data_cache/ 缺檔時應 graceful 回 None，不 raise。"""
+    import tempfile
+    import calibrate_macro_traffic as cmt
+    original = cmt._CACHE_DIR
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cmt._CACHE_DIR = tmpdir  # 指向空目錄
+        try:
+            result = cmt.load_from_cache(years=2)
+            assert result is None
+        finally:
+            cmt._CACHE_DIR = original
+
+
+def test_enrich_with_finmind_handles_missing_files():
+    """_enrich_with_finmind 對缺 FinMind 檔應補 NaN 欄位、不 raise。"""
+    import datetime as dt
+    import tempfile
+    import calibrate_macro_traffic as cmt
+    original = cmt._CACHE_DIR
+    df_twii = pd.DataFrame({
+        "Close": [15000.0, 15100.0, 15200.0],
+    }, index=pd.to_datetime([dt.date(2026, 1, 1), dt.date(2026, 1, 2), dt.date(2026, 1, 3)]))
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cmt._CACHE_DIR = tmpdir
+        try:
+            out = cmt._enrich_with_finmind(df_twii)
+            for col in ["foreign_buy", "margin_balance", "m1b_m2_gap"]:
+                assert col in out.columns, f"應補 {col} 欄為 NaN"
+                assert out[col].isna().all()
+        finally:
+            cmt._CACHE_DIR = original
+
+
+def test_enrich_joins_finmind_inst_correctly(tmp_path):
+    """FinMind 檔存在時應左 join 到 TWII index 並維持原資料數值。"""
+    import datetime as dt
+    import calibrate_macro_traffic as cmt
+    original = cmt._CACHE_DIR
+    # 建假 finmind_inst.parquet
+    inst = pd.DataFrame({
+        "date": [dt.date(2026, 1, 1), dt.date(2026, 1, 2)],
+        "foreign_buy": [50.0, -30.0],  # 億
+    })
+    inst.to_parquet(tmp_path / "finmind_inst.parquet", index=False)
+    df_twii = pd.DataFrame({"Close": [15000.0, 15100.0, 15200.0]},
+                           index=pd.to_datetime([dt.date(2026, 1, 1),
+                                                  dt.date(2026, 1, 2),
+                                                  dt.date(2026, 1, 3)]))
+    cmt._CACHE_DIR = str(tmp_path)
+    try:
+        out = cmt._enrich_with_finmind(df_twii)
+        assert out.loc[pd.Timestamp(dt.date(2026, 1, 1)), "foreign_buy"] == 50.0
+        assert out.loc[pd.Timestamp(dt.date(2026, 1, 2)), "foreign_buy"] == -30.0
+        assert pd.isna(out.loc[pd.Timestamp(dt.date(2026, 1, 3)), "foreign_buy"])
+    finally:
+        cmt._CACHE_DIR = original
 
 
 if __name__ == '__main__':

@@ -6,7 +6,14 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：紅綠燈門檻校準走 Walk-Forward + 季度排程（反過擬合）
+- **目前版本**：總經歷史資料快取層 + 每日增量 Actions（解 TWII-only 結構性偏弱）
+  - **data_cache/**：Parquet 表 git 追蹤——`twii_ohlcv.parquet`（^TWII 日 K）/`finmind_inst.parquet`（三大法人外資淨買賣，億）/`finmind_margin.parquet`（融資餘額）/`finmind_m1m2.parquet`（M1B/M2 月差）+ `metadata.json`（last_updated + row_count + last_error per dataset）
+  - **`update_macro_history.py`**：無 streamlit 相依的爬蟲（pattern 同 update_etf_managers），讀 Parquet last_date → 抓 `[last_date+1, today]` 增量 → append + dedupe（保留 new 修正版）→ 寫回；走 proxy_helper 解海外 IP；CLI `--bootstrap --years N --only NAME`
+  - **`.github/workflows/update_macro_history.yml`**：每日 UTC 09:00（TW 17:00 收盤後）+ workflow_dispatch（input bootstrap/years），需 Secrets `PROXY_URL` + `FINMIND_TOKEN`，跑完直接 commit `data_cache/` 到 main（純資料增量、無邏輯 → 不開 PR）
+  - **`calibrate_macro_traffic.py`**：新增 `load_from_cache(years)` 為首選資料源、`_enrich_with_finmind(df_twii)` 左 join FinMind 欄位（M1B/M2 月頻自動 ffill 到日）；`_Features` 加 foreign_buy/m1b_m2_gap/m1b_m2_prev；`_features_to_traffic_light` + `_backtest_with_inputs_cache` 改餵真實值（NaN→中性 graceful）；CLI 加 `--use-cache`（預設 on）+ `--no-cache`
+  - **tests/test_update_macro_history.py**（7 個）+ test_calibrate_walkforward 新增 3 個 cache 測試 = 53/53 全綠
+  - 預期效益：FinMind 資料注入後 score 不再卡 0~3、health 不再貼 20~36；季度 recalibrate workflow 直接讀 cache 無需 FinMind 即時 API quota
+- **前一版**：紅綠燈門檻校準走 Walk-Forward + 季度排程（反過擬合）
   - **calc_traffic_light**：加 `health_defense_threshold` / `bull_min_score` optional kwargs（不影響 production，純供校準注入）
   - **macro_helpers.py**：module load 時優先讀 `macro_thresholds.json`，缺檔/越界 silently fall back module 常數；越界守門 H∈[20,60]、S∈[1,6]
   - **calibrate_macro_traffic.py**：新增 `walk_forward_validate(df, n_folds=4)`——滾動切折、每折 train 找最佳門檻 grid (H∈[25,45] step 2 × S∈[2,5])、test 報告 OOS、目標函數含「偏離現行常數」正則項；新增 `evaluate_thresholds` / `grid_search_thresholds` / `emit_thresholds_json` / `build_proposal_report`；CLI 加 `--optimize --emit-json --emit-proposal --n-folds`
