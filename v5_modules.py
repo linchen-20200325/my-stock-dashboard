@@ -30,7 +30,7 @@ def analyze_fundamental_leading(cl_now: Optional[float], cl_prev: Optional[float
 
     Returns: {cl_yoy, capex_ratio, signal, color, msg}
     """
-    R = '#da3633'; G = '#2ea043'; Y = '#d29922'; N = '#484f58'
+    R = '#da3633'; Y = '#d29922'; N = '#484f58'
 
     # Edge: 完全無數據
     if cl_now is None and capex_now is None:
@@ -140,7 +140,7 @@ def calc_valuation_zone(price: float, eps_ttm: float, bvps: float,
     Edge E-A(EPS=0負): eps_ttm <= 0 → 改用 PB 評估，跳過 PE
     Edge E-B(歷史不足): hist_std = 0 → 只顯示現值，無法分區
     """
-    R = '#da3633'; G = '#2ea043'; Y = '#d29922'; N = '#484f58'; B = '#388bfd'
+    R = '#da3633'; G = '#2ea043'; N = '#484f58'
 
     result = {"pe": None, "pb": None, "pe_zone": "N/A", "pb_zone": "N/A",
               "signal": "⚪", "color": N, "msg": ""}
@@ -205,7 +205,7 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
 
     Returns: {bw, bw_pct, upper, lower, ma, signal, color, msg}
     """
-    R = '#da3633'; G = '#2ea043'; Y = '#d29922'; N = '#484f58'
+    R = '#da3633'; Y = '#d29922'; N = '#484f58'
 
     if len(df) < window:
         return {"bw": None, "signal": "⚪ 資料不足", "color": N,

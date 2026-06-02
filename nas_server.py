@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.responses import Response as _RawResponse
 from pydantic import BaseModel
 from typing import Optional
-import requests, pandas as pd, datetime, os, re
+import requests, datetime, os
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
