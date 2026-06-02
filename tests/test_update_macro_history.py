@@ -106,5 +106,181 @@ def test_update_one_handles_finmind_without_token():
         assert "FINMIND_TOKEN" in meta["last_error"]
 
 
+# ════════════════════════════════════════════════════════════════
+# 新增：景氣對策信號 + 領先指標（FinMind TaiwanMacroEconomics）
+# ════════════════════════════════════════════════════════════════
+def test_datasets_includes_ndc_and_leading():
+    """新增的兩個 dataset 必須註冊在 DATASETS 與 FETCHERS。"""
+    import update_macro_history as umh
+    assert "finmind_ndc_signal" in umh.DATASETS
+    assert "finmind_leading_index" in umh.DATASETS
+    # 都需要 FINMIND_TOKEN
+    assert umh.FETCHERS["finmind_ndc_signal"][1] is True
+    assert umh.FETCHERS["finmind_leading_index"][1] is True
+
+
+def test_filter_macro_indicator_exact_match():
+    """exact match：indicator 名稱完全相等時應抽出對應列。"""
+    from update_macro_history import _filter_macro_indicator, NDC_SIGNAL_KEYS
+    df = pd.DataFrame({
+        "date": ["2024-01-31", "2024-02-29", "2024-01-31"],
+        "name": ["景氣對策信號(分)", "景氣對策信號(分)", "CPI"],
+        "value": [25, 30, 102.5],
+    })
+    out = _filter_macro_indicator(df, NDC_SIGNAL_KEYS)
+    assert len(out) == 2
+    assert list(out.columns) == ["date", "value"]
+    assert sorted(out["value"].tolist()) == [25.0, 30.0]
+
+
+def test_filter_macro_indicator_contains_fallback():
+    """exact 找不到時用 contains 兜底（FinMind 名稱版本變體）。"""
+    from update_macro_history import _filter_macro_indicator
+    df = pd.DataFrame({
+        "date": ["2024-01-31"],
+        "name": ["景氣對策信號 v2"],   # 帶後綴的變體
+        "value": [28],
+    })
+    out = _filter_macro_indicator(df, ("景氣對策信號",))
+    assert len(out) == 1
+    assert out["value"].iloc[0] == 28.0
+
+
+def test_filter_macro_indicator_no_match():
+    """完全找不到時回空 DataFrame，不 raise。"""
+    from update_macro_history import _filter_macro_indicator
+    df = pd.DataFrame({
+        "date": ["2024-01-31"],
+        "name": ["CPI"],
+        "value": [102.5],
+    })
+    out = _filter_macro_indicator(df, ("景氣對策信號",))
+    assert out.empty
+
+
+def test_filter_macro_indicator_empty_input():
+    """空 df / None 應回空 DataFrame。"""
+    from update_macro_history import _filter_macro_indicator
+    assert _filter_macro_indicator(pd.DataFrame(), ("X",)).empty
+    assert _filter_macro_indicator(None, ("X",)).empty
+
+
+def test_filter_macro_indicator_missing_columns():
+    """缺 indicator / value / date 欄位 → 回空（不 raise）。"""
+    from update_macro_history import _filter_macro_indicator
+    df = pd.DataFrame({"some_col": [1, 2]})
+    assert _filter_macro_indicator(df, ("X",)).empty
+
+
+def test_filter_macro_indicator_alt_column_names():
+    """indicator / name / metric + value / data 任一組合都要 work。"""
+    from update_macro_history import _filter_macro_indicator
+    df = pd.DataFrame({
+        "date": ["2024-01-31"],
+        "metric": ["景氣對策信號(分)"],
+        "data": [25],
+    })
+    out = _filter_macro_indicator(df, ("景氣對策信號(分)",))
+    assert len(out) == 1
+    assert out["value"].iloc[0] == 25.0
+
+
+def test_macro_table_cache_skips_second_call(monkeypatch):
+    """_finmind_macro_table 同 key 第二次 call 應走 cache，不重打 API。"""
+    import update_macro_history as umh
+    # 清快取
+    umh._MACRO_FULL_TABLE_CACHE.clear()
+    call_count = {"n": 0}
+
+    def _fake_finmind_get(dataset, data_id, start, end, token):
+        call_count["n"] += 1
+        return pd.DataFrame({
+            "date": ["2024-01-31"],
+            "name": ["景氣對策信號(分)"],
+            "value": [25],
+        })
+
+    monkeypatch.setattr(umh, "_finmind_get", _fake_finmind_get)
+    start = dt.date(2024, 1, 1)
+    end = dt.date(2024, 2, 1)
+    umh._finmind_macro_table(start, end, "tok")
+    umh._finmind_macro_table(start, end, "tok")  # 應走 cache
+    assert call_count["n"] == 1
+
+
+def test_fetch_ndc_signal_shape(monkeypatch):
+    """fetch_finmind_ndc_signal 回 [date, ndc_signal] 兩欄、ndc_signal 為整數型別。"""
+    import update_macro_history as umh
+    umh._MACRO_FULL_TABLE_CACHE.clear()
+    fake = pd.DataFrame({
+        "date": ["2024-01-31", "2024-02-29"],
+        "name": ["景氣對策信號(分)", "景氣對策信號(分)"],
+        "value": [25.0, 30.4],   # 含小數應被 round
+    })
+    monkeypatch.setattr(umh, "_finmind_get",
+                        lambda *a, **kw: fake)
+    out = umh.fetch_finmind_ndc_signal(
+        dt.date(2024, 1, 1), dt.date(2024, 3, 1), "tok")
+    assert list(out.columns) == ["date", "ndc_signal"]
+    assert len(out) == 2
+    assert out["ndc_signal"].iloc[1] == 30   # 30.4 → 30
+
+
+def test_fetch_leading_index_shape(monkeypatch):
+    """fetch_finmind_leading_index 回 [date, leading_index]，不含 smooth 欄。"""
+    import update_macro_history as umh
+    umh._MACRO_FULL_TABLE_CACHE.clear()
+    fake = pd.DataFrame({
+        "date": ["2024-01-31", "2024-02-29"],
+        "name": ["領先指標綜合指數", "領先指標綜合指數"],
+        "value": [102.5, 103.1],
+    })
+    monkeypatch.setattr(umh, "_finmind_get",
+                        lambda *a, **kw: fake)
+    out = umh.fetch_finmind_leading_index(
+        dt.date(2024, 1, 1), dt.date(2024, 3, 1), "tok")
+    assert list(out.columns) == ["date", "leading_index"]
+    assert len(out) == 2
+    assert out["leading_index"].iloc[0] == 102.5
+
+
+def test_fetch_ndc_signal_empty_when_no_match(monkeypatch):
+    """API 回的全表沒有 NDC 信號名稱時，fetcher 應回空 DataFrame、不 raise。"""
+    import update_macro_history as umh
+    umh._MACRO_FULL_TABLE_CACHE.clear()
+    fake = pd.DataFrame({
+        "date": ["2024-01-31"],
+        "name": ["CPI"],
+        "value": [102.5],
+    })
+    monkeypatch.setattr(umh, "_finmind_get",
+                        lambda *a, **kw: fake)
+    out = umh.fetch_finmind_ndc_signal(
+        dt.date(2024, 1, 1), dt.date(2024, 2, 1), "tok")
+    assert out.empty
+
+
+def test_ndc_and_leading_share_cache(monkeypatch):
+    """同一段 (start, end) 內 NDC + 領先共抓一次 API（cache 共用驗證）。"""
+    import update_macro_history as umh
+    umh._MACRO_FULL_TABLE_CACHE.clear()
+    call_count = {"n": 0}
+
+    def _fake(*args, **kwargs):
+        call_count["n"] += 1
+        return pd.DataFrame({
+            "date": ["2024-01-31", "2024-01-31"],
+            "name": ["景氣對策信號(分)", "領先指標綜合指數"],
+            "value": [25.0, 102.5],
+        })
+
+    monkeypatch.setattr(umh, "_finmind_get", _fake)
+    start = dt.date(2024, 1, 1)
+    end = dt.date(2024, 2, 1)
+    umh.fetch_finmind_ndc_signal(start, end, "tok")
+    umh.fetch_finmind_leading_index(start, end, "tok")
+    assert call_count["n"] == 1, "兩個 fetcher 應共用一次 API call"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
