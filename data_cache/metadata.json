@@ -1,0 +1,29 @@
+{
+  "updated_at": "2026-06-02T11:41:22.600993+00:00",
+  "datasets": {
+    "twii_ohlcv": {
+      "name": "twii_ohlcv",
+      "last_updated": "2026-06-02",
+      "row_count": 1214,
+      "last_error": null
+    },
+    "finmind_inst": {
+      "name": "finmind_inst",
+      "last_updated": null,
+      "row_count": 0,
+      "last_error": "FINMIND_TOKEN 未設定"
+    },
+    "finmind_margin": {
+      "name": "finmind_margin",
+      "last_updated": null,
+      "row_count": 0,
+      "last_error": "FINMIND_TOKEN 未設定"
+    },
+    "finmind_m1m2": {
+      "name": "finmind_m1m2",
+      "last_updated": null,
+      "row_count": 0,
+      "last_error": "FINMIND_TOKEN 未設定"
+    }
+  }
+}
