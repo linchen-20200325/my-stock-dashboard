@@ -1,0 +1,7 @@
+{
+  "HEALTH_DEFENSE_THRESHOLD": 35,
+  "BULL_MIN_SCORE": 4,
+  "last_calibrated": null,
+  "method": "default (uncalibrated)",
+  "_comment": "By recalibrate_macro Actions workflow. Override calc_traffic_light thresholds. PR-reviewed before applied."
+}

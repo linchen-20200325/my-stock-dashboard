@@ -286,6 +286,342 @@ def compute_metrics(bt: pd.DataFrame) -> dict:
 
 
 # ════════════════════════════════════════════════════════════════
+# Walk-Forward Validation + Threshold Grid Search（反過擬合核心）
+# ════════════════════════════════════════════════════════════════
+#
+# 設計原則
+# --------
+# 1. **永不在訓練窗報告分數**：每折在 train 找最佳門檻，metrics 只看 test
+# 2. **正則化**：偏好接近現行門檻的解（避免劇烈調整）
+# 3. **穩健性 > 帳面最佳**：選「各折一致性最高、train→test 衰退最小」那組
+# 4. **誠實標警語**：IS/OOS 差距過大時，直接標「過擬合風險，不建議套用」
+
+
+def _backtest_with_inputs_cache(df: pd.DataFrame) -> list[dict]:
+    """跑一次 backtest，cache 每日的 (mkt_info, jq, cl, li) + 真實 forward 報酬。
+
+    回傳 list[dict]，每筆含：date, close, ret_20d, ret_60d, mkt_info, jingqi_info,
+    cl_data, li_latest。後續用於 evaluate_thresholds 重決色。
+    """
+    from market_strategy import market_regime
+    cache = []
+    for t in range(125, len(df) - 20):
+        f = _build_features_at(df, t)
+        if f is None:
+            continue
+        mkt = market_regime(
+            index_close=f.close, ma60=f.ma60, ma120=f.ma120,
+            foreign_buy=0, ad_ratio=1.0,
+            ma60_prev=f.ma60_prev, ma120_prev=None,
+            vol_today=f.vol_today, avg_vol_20=f.avg_vol_20,
+            m1b_m2_gap=None, m1b_m2_prev=None,
+            ma60_above_3d=f.ma60_above_3d, ma60_below_3d=f.ma60_below_3d,
+            ma120_above_3d=f.ma120_above_3d, ma120_below_3d=f.ma120_below_3d,
+            ma120_rising=f.ma120_rising, ma120_falling=f.ma120_falling,
+        )
+        cache.append({
+            'date': f.date,
+            'close': f.close,
+            'ret_20d': _forward_return(df, t, 20),
+            'ret_60d': _forward_return(df, t, 60),
+            'mkt_info': mkt,
+            'jingqi_info': None,
+            'cl_data': None,
+            'li_latest': None,
+        })
+    return cache
+
+
+def evaluate_thresholds(cache: list[dict], h_thr: int, s_thr: int) -> dict:
+    """用 (h_thr, s_thr) 重決所有 cache 行的色，回傳 precision/recall。"""
+    from macro_helpers import calc_traffic_light
+    rows = []
+    for c in cache:
+        tl = calc_traffic_light(
+            c['mkt_info'], c['jingqi_info'], c['cl_data'], c['li_latest'],
+            health_defense_threshold=h_thr, bull_min_score=s_thr,
+        )
+        rows.append({
+            'date': c['date'],
+            'color': tl.get('icon', '?') if tl else '?',
+            'regime': tl.get('regime', '') if tl else '',
+            'score': float((tl or {}).get('score') or 0),
+            'health': float((tl or {}).get('health') or 0),
+            'ret_20d': c['ret_20d'],
+            'ret_60d': c['ret_60d'],
+        })
+    bt = pd.DataFrame(rows)
+    if bt.empty:
+        return {'n_total': 0, 'green_precision': 0.0, 'red_precision': 0.0,
+                'green_recall': 0.0, 'red_recall': 0.0,
+                'n_green_pred': 0, 'n_red_pred': 0}
+    m = compute_metrics(bt)
+    return {
+        'n_total': m['n_total'],
+        'green_precision': m['green_precision'],
+        'red_precision': m['red_precision'],
+        'green_recall': m['green_recall'],
+        'red_recall': m['red_recall'],
+        'n_green_pred': m['n_green_pred'],
+        'n_red_pred': m['n_red_pred'],
+    }
+
+
+def _f1(precision: float, recall: float) -> float:
+    """precision/recall 為百分比（0~100），回 F1（百分比）。"""
+    p, r = precision / 100.0, recall / 100.0
+    if p + r == 0:
+        return 0.0
+    return 100.0 * 2 * p * r / (p + r)
+
+
+def _objective_with_penalty(
+    metrics: dict, h_thr: int, s_thr: int,
+    h_default: int, s_default: int,
+    min_predictions: int = 5,
+    penalty_weight: float = 0.5,
+) -> float:
+    """雙燈號 F1 加總 − 偏離現行門檻的正則項。
+
+    正則：每偏離預設 1 點扣 0.5，避免無理由大幅調整。
+    若預測次數 < min_predictions，視為無效（直接 -inf）。
+    """
+    if metrics['n_red_pred'] < min_predictions and metrics['n_green_pred'] < min_predictions:
+        return float('-inf')
+    f1_red = _f1(metrics['red_precision'], metrics['red_recall'])
+    f1_green = _f1(metrics['green_precision'], metrics['green_recall'])
+    deviation = abs(h_thr - h_default) + abs(s_thr - s_default) * 5  # score 1 點權重等於 health 5 點
+    return f1_red + f1_green - penalty_weight * deviation
+
+
+def grid_search_thresholds(
+    cache: list[dict],
+    h_grid: list[int] | None = None,
+    s_grid: list[int] | None = None,
+    h_default: int = 35,
+    s_default: int = 4,
+) -> tuple[int, int, dict]:
+    """在 (h, s) 網格上找最大 objective，回 (best_h, best_s, best_metrics)。"""
+    if h_grid is None:
+        h_grid = list(range(25, 46, 2))   # [25, 27, ..., 45]
+    if s_grid is None:
+        s_grid = [2, 3, 4, 5]
+    best = (-float('inf'), h_default, s_default, None)
+    for h in h_grid:
+        for s in s_grid:
+            m = evaluate_thresholds(cache, h, s)
+            score = _objective_with_penalty(m, h, s, h_default, s_default)
+            if score > best[0]:
+                best = (score, h, s, m)
+    return best[1], best[2], best[3] or evaluate_thresholds(cache, h_default, s_default)
+
+
+def walk_forward_validate(
+    df: pd.DataFrame,
+    n_folds: int = 4,
+    h_default: int = 35,
+    s_default: int = 4,
+) -> dict:
+    """Walk-forward 驗證：滾動切 n_folds 折，每折 train 找最佳、test 報告 OOS。
+
+    回傳 dict：
+      - folds: list of {train_period, test_period, train_best, train_metrics,
+                        test_metrics, drift_pct}
+      - aggregated: 各折 test 指標平均
+      - recommended: 穩健門檻（票選 + 衰退過濾）
+      - overfit_warning: 是否標警語
+    """
+    cache = _backtest_with_inputs_cache(df)
+    if len(cache) < n_folds * 60:  # 至少每折 60 日
+        return {
+            'folds': [],
+            'aggregated': None,
+            'recommended': (h_default, s_default),
+            'overfit_warning': False,
+            'error': f'cache 樣本 {len(cache)} 不足 {n_folds} 折 × 60 日門檻',
+        }
+
+    # 按 cache index 等分（順序滾動，無 shuffle 防 look-ahead）
+    n = len(cache)
+    fold_size = n // (n_folds + 1)  # 留 1 份當第一折的初始 train
+    folds = []
+    for k in range(n_folds):
+        train_end = (k + 1) * fold_size
+        test_end = train_end + fold_size
+        if test_end > n:
+            break
+        train_cache = cache[:train_end]
+        test_cache = cache[train_end:test_end]
+        if len(train_cache) < 60 or len(test_cache) < 20:
+            continue
+        # train 找最佳
+        best_h, best_s, train_m = grid_search_thresholds(
+            train_cache, h_default=h_default, s_default=s_default)
+        # test OOS 評分
+        test_m = evaluate_thresholds(test_cache, best_h, best_s)
+        # 衰退率：以紅燈 F1 為主
+        f1_train = _f1(train_m['red_precision'], train_m['red_recall'])
+        f1_test = _f1(test_m['red_precision'], test_m['red_recall'])
+        drift = (f1_train - f1_test) / max(f1_train, 1e-6) * 100 if f1_train > 0 else 0.0
+        folds.append({
+            'fold': k + 1,
+            'train_start': train_cache[0]['date'].strftime('%Y-%m-%d'),
+            'train_end': train_cache[-1]['date'].strftime('%Y-%m-%d'),
+            'test_start': test_cache[0]['date'].strftime('%Y-%m-%d'),
+            'test_end': test_cache[-1]['date'].strftime('%Y-%m-%d'),
+            'best_h': best_h,
+            'best_s': best_s,
+            'train_red_f1': round(f1_train, 1),
+            'test_red_f1': round(f1_test, 1),
+            'test_red_precision': test_m['red_precision'],
+            'test_red_recall': test_m['red_recall'],
+            'test_green_precision': test_m['green_precision'],
+            'test_green_recall': test_m['green_recall'],
+            'drift_pct': round(drift, 1),
+        })
+
+    if not folds:
+        return {
+            'folds': [],
+            'aggregated': None,
+            'recommended': (h_default, s_default),
+            'overfit_warning': False,
+            'error': '所有折皆樣本不足，無法回傳結果',
+        }
+
+    # 票選穩健門檻：取最常被選中的 (h, s)
+    from collections import Counter
+    votes = Counter((f['best_h'], f['best_s']) for f in folds)
+    most_common, _vote_count = votes.most_common(1)[0]
+    rec_h, rec_s = most_common
+
+    # 衰退過濾：若所有折 drift > 30% → 過擬合警語
+    high_drift_count = sum(1 for f in folds if f['drift_pct'] > 30)
+    overfit_warning = high_drift_count > len(folds) // 2
+
+    # 若警語觸發，回退到預設門檻
+    if overfit_warning:
+        rec_h, rec_s = h_default, s_default
+
+    # 各折 test 平均
+    agg = {
+        'mean_test_red_f1': round(sum(f['test_red_f1'] for f in folds) / len(folds), 1),
+        'mean_test_red_precision': round(sum(f['test_red_precision'] for f in folds) / len(folds), 1),
+        'mean_test_red_recall': round(sum(f['test_red_recall'] for f in folds) / len(folds), 1),
+        'mean_test_green_precision': round(sum(f['test_green_precision'] for f in folds) / len(folds), 1),
+        'mean_test_green_recall': round(sum(f['test_green_recall'] for f in folds) / len(folds), 1),
+        'mean_drift_pct': round(sum(f['drift_pct'] for f in folds) / len(folds), 1),
+    }
+
+    return {
+        'folds': folds,
+        'aggregated': agg,
+        'recommended': (rec_h, rec_s),
+        'overfit_warning': overfit_warning,
+        'vote_count': _vote_count,
+        'total_folds': len(folds),
+    }
+
+
+def build_proposal_report(wf: dict, df_twii: pd.DataFrame, mode: str,
+                          h_current: int, s_current: int) -> str:
+    """產出 MACRO_CALIBRATION_PROPOSAL.md：walk-forward + 建議門檻 + OOS 數字。"""
+    now = _dt.datetime.now().strftime('%Y-%m-%d %H:%M')
+    md = []
+    md.append('# MACRO_CALIBRATION_PROPOSAL.md — 門檻校準建議')
+    md.append('')
+    md.append(f'> 自動產生：{now}　|　模式：**{mode}**')
+    md.append('')
+    md.append(f'- **回測期間**：{df_twii.index[0].date()} ~ {df_twii.index[-1].date()}')
+    md.append(f'- **Walk-forward 折數**：{wf.get("total_folds", 0)}')
+    md.append('')
+    if wf.get('error'):
+        md.append(f'> ❌ 校準失敗：{wf["error"]}')
+        return '\n'.join(md)
+
+    rec_h, rec_s = wf['recommended']
+    md.append('## 🎯 建議門檻 vs 現行')
+    md.append('')
+    md.append('| 參數 | 現行 | 建議 | 變動 |')
+    md.append('|------|------|------|------|')
+    md.append(f'| `HEALTH_DEFENSE_THRESHOLD` | {h_current} | **{rec_h}** | {rec_h - h_current:+d} |')
+    md.append(f'| `BULL_MIN_SCORE` | {s_current} | **{rec_s}** | {rec_s - s_current:+d} |')
+    md.append('')
+    if wf['overfit_warning']:
+        md.append('> ⚠️ **過擬合警語觸發**：超過半數折 drift > 30%，建議**維持現行門檻不調整**。')
+        md.append('> 建議門檻已自動回退到現行值。本報告僅供觀察 walk-forward 結果，**不建議 merge 套用**。')
+    elif (rec_h, rec_s) == (h_current, s_current):
+        md.append('> ✅ 票選結果與現行門檻一致，**無需調整**。')
+    else:
+        md.append(f'> 📊 票選結果（{wf.get("vote_count", 0)}/{wf["total_folds"]} 折）建議微調。'
+                  '請審閱下方各折 OOS 表現再決定是否 merge。')
+    md.append('')
+
+    md.append('## 📈 OOS（測試窗）平均表現')
+    md.append('')
+    agg = wf['aggregated']
+    md.append(f'- 🔴 防禦 F1：**{agg["mean_test_red_f1"]}%** '
+              f'（precision {agg["mean_test_red_precision"]}% / recall {agg["mean_test_red_recall"]}%）')
+    md.append(f'- 🟢 多頭 precision / recall：**{agg["mean_test_green_precision"]}%** / '
+              f'{agg["mean_test_green_recall"]}%')
+    md.append(f'- 平均 train→test 衰退：**{agg["mean_drift_pct"]}%**（>30% 即警語）')
+    md.append('')
+
+    md.append('## 🔍 各折細節（train→test）')
+    md.append('')
+    md.append('| 折 | Train 窗 | Test 窗 | best (H, S) | Train F1🔴 | Test F1🔴 | Drift | OOS 🔴 P/R | OOS 🟢 P/R |')
+    md.append('|----|----------|---------|-------------|-----------|-----------|-------|------------|------------|')
+    for f in wf['folds']:
+        md.append(
+            f'| {f["fold"]} | {f["train_start"]}~{f["train_end"]} | '
+            f'{f["test_start"]}~{f["test_end"]} | ({f["best_h"]}, {f["best_s"]}) | '
+            f'{f["train_red_f1"]}% | **{f["test_red_f1"]}%** | {f["drift_pct"]}% | '
+            f'{f["test_red_precision"]}%/{f["test_red_recall"]}% | '
+            f'{f["test_green_precision"]}%/{f["test_green_recall"]}% |'
+        )
+    md.append('')
+    md.append('---')
+    md.append('')
+    md.append('## 反過擬合方法')
+    md.append('')
+    md.append('- **Walk-forward**：滾動切 N 折，每折用前段 train 找門檻、後段 test 報告 OOS（永不在訓練窗自評）')
+    md.append('- **正則化**：目標函數含「偏離現行門檻」懲罰項，避免劇烈調整')
+    md.append('- **穩健性票選**：取最多折選中的同一組門檻；若衰退中位 > 30% 直接回退預設')
+    md.append('- **季度排程**：Actions workflow 每季首日跑一次，commit JSON 後開 PR 給人類審閱')
+    md.append('')
+    md.append(f'*產生工具：`calibrate_macro_traffic.py --optimize`　|　報告時間：{now}*')
+    return '\n'.join(md)
+
+
+def emit_thresholds_json(rec_h: int, rec_s: int, method: str,
+                         path: str = 'macro_thresholds.json') -> bool:
+    """寫 macro_thresholds.json；若值未變回 False（避免空 commit）。"""
+    import json as _json
+    import os as _os
+    current = {'HEALTH_DEFENSE_THRESHOLD': 35, 'BULL_MIN_SCORE': 4}
+    if _os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as fp:
+                current = _json.load(fp)
+        except Exception:
+            pass
+    if (int(current.get('HEALTH_DEFENSE_THRESHOLD', 35)) == rec_h
+            and int(current.get('BULL_MIN_SCORE', 4)) == rec_s):
+        return False
+    payload = {
+        'HEALTH_DEFENSE_THRESHOLD': rec_h,
+        'BULL_MIN_SCORE': rec_s,
+        'last_calibrated': _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'method': method,
+        '_comment': 'By recalibrate_macro Actions workflow. PR-reviewed before applied.',
+    }
+    with open(path, 'w', encoding='utf-8') as fp:
+        _json.dump(payload, fp, indent=2, ensure_ascii=False)
+        fp.write('\n')
+    return True
+
+
+# ════════════════════════════════════════════════════════════════
 # 報告產生
 # ════════════════════════════════════════════════════════════════
 def _df_to_md(df: pd.DataFrame, float_fmt: str = "{:.2f}") -> str:
@@ -304,7 +640,7 @@ def build_report(metrics: dict, df_twii: pd.DataFrame, mode: str) -> str:
     color_dist_str = " · ".join(f"{c} {n} 日" for c, n in color_dist.items())
 
     md = []
-    md.append(f"# MACRO_CALIBRATION.md — 台股紅綠燈系統校準報告")
+    md.append("# MACRO_CALIBRATION.md — 台股紅綠燈系統校準報告")
     md.append("")
     md.append(f"> 自動產生：{now}　|　模式：**{mode}**")
     md.append("")
@@ -331,7 +667,7 @@ def build_report(metrics: dict, df_twii: pd.DataFrame, mode: str) -> str:
     md.append(f"- 🔴 高風險命中 = 後 20 日 TWII 跌幅 > {abs(RED_20D_THR)}% "
               f"或 後 60 日跌幅 > {abs(RED_60D_THR)}%")
     md.append(f"- 🟢 多頭命中 = 後 20 日 TWII 漲幅 > {GREEN_20D_THR}%")
-    md.append(f"- 🟡 中性 = 其他")
+    md.append("- 🟡 中性 = 其他")
     md.append("")
     md.append("**勝率指標**：")
     md.append("")
@@ -421,7 +757,7 @@ def build_report(metrics: dict, df_twii: pd.DataFrame, mode: str) -> str:
         )
     if abs(metrics["corr_score_ret20"]) < 0.1:
         suggestions.append(
-            f"- ⚠️ **score 對 20d 報酬幾無預測力（|corr| < 0.1）**："
+            "- ⚠️ **score 對 20d 報酬幾無預測力（|corr| < 0.1）**："
             "目前 score 權重均為 +1 等權，建議改為「MA120 三日 = 2 分、"
             "MA60 三日 = 1 分、外資 = 1 分」（趨勢權重加倍）。"
         )
@@ -438,7 +774,7 @@ def build_report(metrics: dict, df_twii: pd.DataFrame, mode: str) -> str:
     md.append("")
     md.append("## ⚠️ 樣本不足 / 限制聲明")
     md.append("")
-    md.append(f"- **TWII-only mode**：本次回測僅注入 ^TWII OHLCV 資料，"
+    md.append("- **TWII-only mode**：本次回測僅注入 ^TWII OHLCV 資料，"
               "外資買賣超、ADL、外資期貨、M1B-M2、jingqi 等指標均以「中性預設」"
               "（0 / 1.0 / None）代入。實務上完整版會多 2~3 分 score。")
     md.append("- **FinMind 歷史 quota 限制**：M1B-M2、ADL、外資期貨日 series "
@@ -465,12 +801,20 @@ def main():
                    help="輸出 Markdown 報告路徑")
     p.add_argument("--demo", action="store_true",
                    help="使用合成資料（NAS proxy 不可達時 fallback）")
+    p.add_argument("--optimize", action="store_true",
+                   help="跑 walk-forward 找最佳門檻（用於季度排程）")
+    p.add_argument("--n-folds", type=int, default=4,
+                   help="walk-forward 折數（預設 4）")
+    p.add_argument("--emit-json", default=None,
+                   help="把建議門檻寫到 JSON 檔（預設 macro_thresholds.json）")
+    p.add_argument("--emit-proposal", default=None,
+                   help="把 walk-forward 報告寫到 .md（預設 MACRO_CALIBRATION_PROPOSAL.md）")
     args = p.parse_args()
 
     mode_label = "TWII-only (歷史 fixture 缺)"
     df: Optional[pd.DataFrame]
     if args.demo:
-        print(f"[calibrate] [DEMO] 產生合成 ^TWII 500 日 ...")
+        print("[calibrate] [DEMO] 產生合成 ^TWII 500 日 ...")
         df = synthetic_twii_ohlcv()
         mode_label = "TWII-only · DEMO 合成資料 (sandbox 用)"
     else:
@@ -497,7 +841,39 @@ def main():
     report = build_report(metrics, df, mode=mode_label)
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(report)
-    print(f"[calibrate] ✅ 完成")
+    print("[calibrate] ✅ 完成")
+
+    # ── --optimize：walk-forward 找最佳門檻 + 寫 proposal/json ──
+    if args.optimize:
+        from macro_helpers import HEALTH_DEFENSE_THRESHOLD as _H_CUR, BULL_MIN_SCORE as _S_CUR
+        print(f"[calibrate] 跑 walk-forward 驗證（{args.n_folds} 折）...")
+        wf = walk_forward_validate(df, n_folds=args.n_folds,
+                                   h_default=_H_CUR, s_default=_S_CUR)
+        if wf.get('error'):
+            print(f"[calibrate/optimize] ❌ {wf['error']}")
+        else:
+            rec_h, rec_s = wf['recommended']
+            print(f"[calibrate/optimize] 建議：H={rec_h} (現行 {_H_CUR})、S={rec_s} (現行 {_S_CUR})")
+            if wf['overfit_warning']:
+                print("[calibrate/optimize] ⚠️ 過擬合警語，建議維持現行")
+
+            proposal_path = args.emit_proposal or 'MACRO_CALIBRATION_PROPOSAL.md'
+            with open(proposal_path, 'w', encoding='utf-8') as fp:
+                fp.write(build_proposal_report(
+                    wf, df, mode=mode_label,
+                    h_current=_H_CUR, s_current=_S_CUR))
+            print(f"[calibrate/optimize] ✅ proposal → {proposal_path}")
+
+            if args.emit_json is not None:
+                json_path = args.emit_json or 'macro_thresholds.json'
+                changed = emit_thresholds_json(
+                    rec_h, rec_s,
+                    method=f'walk-forward {args.n_folds} folds ({mode_label})',
+                    path=json_path)
+                if changed:
+                    print(f"[calibrate/optimize] ✅ JSON 寫入 → {json_path}")
+                else:
+                    print("[calibrate/optimize] ↺ JSON 無變動，跳過寫入")
     return 0
 
 

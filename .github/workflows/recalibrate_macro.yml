@@ -1,0 +1,83 @@
+name: Recalibrate Macro Thresholds (Quarterly)
+
+on:
+  # 手動觸發
+  workflow_dispatch:
+    inputs:
+      range:
+        description: 'TWII 抓取期間（1y / 2y / 5y / max）'
+        required: false
+        default: '5y'
+      n_folds:
+        description: 'walk-forward 折數'
+        required: false
+        default: '4'
+  # 每季首日 UTC 00:00（1/4/7/10 月 1 號）
+  schedule:
+    - cron: '0 0 1 1,4,7,10 *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  recalibrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Walk-Forward Calibration
+        env:
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: |
+          python calibrate_macro_traffic.py \
+            --range ${{ github.event.inputs.range || '5y' }} \
+            --optimize \
+            --n-folds ${{ github.event.inputs.n_folds || '4' }} \
+            --emit-json macro_thresholds.json \
+            --emit-proposal MACRO_CALIBRATION_PROPOSAL.md
+
+      - name: Detect Changes
+        id: check
+        run: |
+          if git diff --quiet macro_thresholds.json MACRO_CALIBRATION_PROPOSAL.md; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "→ 門檻 & proposal 無變動，跳過開 PR"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create PR for Review
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date +%Y%m%d)
+          BRANCH="auto/recalibrate-${DATE}"
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add macro_thresholds.json MACRO_CALIBRATION_PROPOSAL.md
+          git commit -m "🤖 季度自動校準：門檻建議 ($DATE)"
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "🤖 季度校準建議 ($DATE)" \
+            --body-file MACRO_CALIBRATION_PROPOSAL.md \
+            --base main \
+            --head "$BRANCH"
