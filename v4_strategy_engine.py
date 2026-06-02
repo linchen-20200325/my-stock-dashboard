@@ -71,11 +71,6 @@ class V4StrategyEngine:
         except (TypeError, ValueError):
             futures = 0
 
-        try:
-            pcr = float(self.macro.get('pcr') or 100)
-        except (TypeError, ValueError):
-            pcr = 100
-
         # 紅燈：高風險
         if vix > 25 or futures < -20000:
             return {
@@ -385,7 +380,6 @@ class V4StrategyEngine:
             return {'signal': 'HOLD', 'message': '⚪ 資料不足，假突破偵測略過'}
 
         last        = self.df.iloc[-1]
-        hi_col      = 'close'  # 無 high 欄時退回 close
         vol_col     = 'volume'
 
         current_high  = float(last.get('high', last['close']))
@@ -436,8 +430,6 @@ class V4StrategyEngine:
 # [Step 6] 自動化邊界測試
 # ══════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    import traceback
-
     print("=" * 55)
     print("V4StrategyEngine 自動化邊界測試")
     print("=" * 55)
