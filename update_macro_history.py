@@ -100,17 +100,27 @@ def _fetch_url_via_proxy(url: str, params: dict | None = None,
 
 def _finmind_get(dataset: str, data_id: str, start: str, end: str,
                  token: str) -> pd.DataFrame:
-    """無 streamlit 相依的 FinMind 抓取器。"""
+    """無 streamlit 相依的 FinMind 抓取器（直連，不走 proxy chain）。
+
+    為什麼直連？
+    - FinMind API 全球可達，無 IP 封鎖
+    - proxy_helper.fetch_url 對非 200/403/407 狀態靜默失敗（無 status 紀錄），
+      在 Actions runner 上 PROXY_URL 未設時，整條 chain 失敗看不出真因
+    - 直連 + 把 HTTP status / response body 印出 → 任何錯誤都看得到
+    """
     params = {"dataset": dataset, "start_date": start, "end_date": end}
     if data_id:
         params["data_id"] = data_id
     if token:
         params["token"] = token
-    r = _fetch_url_via_proxy(FINMIND_URL, params=params, timeout=30)
-    if r is None or r.status_code != 200:
-        print(f"[FinMind/{dataset}] HTTP={getattr(r, 'status_code', 'None')}")
-        return pd.DataFrame()
     try:
+        r = requests.get(
+            FINMIND_URL, params=params, timeout=30,
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+        )
+        if r.status_code != 200:
+            print(f"[FinMind/{dataset}] HTTP={r.status_code} body={r.text[:200]}")
+            return pd.DataFrame()
         d = r.json()
         if d.get("status") != 200:
             print(f"[FinMind/{dataset}] status={d.get('status')} msg={d.get('msg', '')}")
@@ -119,7 +129,7 @@ def _finmind_get(dataset: str, data_id: str, start: str, end: str,
         print(f"[FinMind/{dataset}] ✅ {len(df)} rows ({start}~{end})")
         return df
     except Exception as e:
-        print(f"[FinMind/{dataset}] parse error: {type(e).__name__}: {e}")
+        print(f"[FinMind/{dataset}] ❌ {type(e).__name__}: {e}")
         return pd.DataFrame()
 
 
