@@ -178,13 +178,15 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
                        "", start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), token)
     if raw.empty:
         return raw
-    # FinMind 欄位是 'name'（不是 'institutional_investors'），篩 '外資' 列
+    # FinMind 實際 name 值為英文：Foreign_Investor / Foreign_Dealer_Self /
+    # Investment_Trust / Dealer_self / Dealer_Hedging / total
+    # 外資總額 = Foreign_Investor + Foreign_Dealer_Self（兩者皆 'Foreign' prefix）
     if "name" not in raw.columns:
         print(f"[finmind_inst] 缺欄位 name，欄位={list(raw.columns)}")
         return pd.DataFrame()
-    fi = raw[raw["name"].astype(str).str.contains("外資", na=False)]
+    fi = raw[raw["name"].astype(str).str.contains("Foreign", na=False)]
     if fi.empty:
-        print(f"[finmind_inst] name 欄位無 '外資' 列，name unique={raw['name'].unique()[:10]}")
+        print(f"[finmind_inst] name 欄位無 'Foreign' 列，unique={list(raw['name'].unique())[:10]}")
         return pd.DataFrame()
     fi = fi.copy()
     fi["foreign_buy"] = (pd.to_numeric(fi.get("buy"), errors="coerce").fillna(0)
@@ -227,24 +229,55 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     except ImportError:
         print("[finmind_m1m2] 缺 proxy_helper，無法抓 CBC")
         return pd.DataFrame()
-    urls = [
+    # ── Tier 1: ms1.json 三路徑 ──
+    ms1_urls = [
+        "https://www.cbc.gov.tw/public/Attachment/ms1.json",
         "https://www.cbc.gov.tw/public/data/ms1.json",
         "https://www.cbc.gov.tw/tw/public/data/ms1.json",
     ]
     data = None
-    for url in urls:
+    for url in ms1_urls:
         try:
             r = _fu_cbc(url, timeout=15, attempts=2)
-            if r is None or r.status_code != 200:
+            if r is None:
+                print(f"[finmind_m1m2/ms1] {url[-40:]} → None")
                 continue
-            data = r.json()
-            if isinstance(data, list) and len(data) > 0:
-                break
+            if r.status_code != 200:
+                print(f"[finmind_m1m2/ms1] {url[-40:]} HTTP={r.status_code}")
+                continue
+            try:
+                _j = r.json()
+                if isinstance(_j, list) and len(_j) > 0:
+                    data = _j
+                    print(f"[finmind_m1m2/ms1] ✅ {url[-40:]} 取到 {len(_j)} 行")
+                    break
+                print(f"[finmind_m1m2/ms1] {url[-40:]} json 非 list 或為空")
+            except Exception:
+                print(f"[finmind_m1m2/ms1] {url[-40:]} JSON 解析失敗 body={r.text[:200]}")
         except Exception as e:
-            print(f"[finmind_m1m2] {url[-25:]} ❌ {type(e).__name__}: {e}")
+            print(f"[finmind_m1m2/ms1] {url[-40:]} ❌ {type(e).__name__}: {e}")
+
+    # ── Tier 2: SDMX EF15M01 ──
     if not isinstance(data, list) or len(data) < 13:
-        print("[finmind_m1m2] CBC ms1.json 取不到月資料（all urls failed）")
+        try:
+            r = _fu_cbc("https://cpx.cbc.gov.tw/API/DataAPI/Get",
+                        params={"FileName": "EF15M01"}, timeout=20, attempts=2)
+            if r is not None and r.status_code == 200:
+                try:
+                    sdmx = r.json()
+                    rows = sdmx.get("DataSet", []) if isinstance(sdmx, dict) else []
+                    if rows:
+                        print(f"[finmind_m1m2/EF15M01] ✅ 取到 {len(rows)} 行")
+                        data = rows
+                except Exception:
+                    print(f"[finmind_m1m2/EF15M01] JSON 解析失敗 body={r.text[:200]}")
+        except Exception as e:
+            print(f"[finmind_m1m2/EF15M01] ❌ {type(e).__name__}: {e}")
+
+    if not isinstance(data, list) or len(data) < 13:
+        print("[finmind_m1m2] CBC 全來源失敗")
         return pd.DataFrame()
+    print(f"[finmind_m1m2] 抓到欄位：{list(pd.DataFrame(data).columns)[:15]}")
 
     df = pd.DataFrame(data)
     c1 = next((c for c in df.columns
@@ -252,7 +285,8 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     c2 = next((c for c in df.columns
                if str(c).strip().upper() == "M2" or "貨幣供給額M2" in str(c)), None)
     date_col = next((c for c in df.columns
-                     if str(c).strip() in ("年月", "date", "yearMonth", "Date")), None)
+                     if str(c).strip() in ("年月", "date", "yearMonth", "Date",
+                                            "PERIOD", "TIME_PERIOD")), None)
     if not (c1 and c2 and date_col):
         print(f"[finmind_m1m2] CBC 欄位對應失敗：{list(df.columns)[:10]}")
         return pd.DataFrame()
@@ -268,8 +302,11 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
         return _dt.date(int(m.group(1)), int(m.group(2)), 1)
     out["date"] = out["date_raw"].apply(_norm)
     out = out.dropna(subset=["date"]).drop(columns=["date_raw"])
-    out["m1b"] = pd.to_numeric(out["m1b"], errors="coerce")
-    out["m2"] = pd.to_numeric(out["m2"], errors="coerce")
+    # SDMX 數字可能含 thousand separator，先去掉再轉
+    out["m1b"] = pd.to_numeric(
+        out["m1b"].astype(str).str.replace(",", ""), errors="coerce")
+    out["m2"] = pd.to_numeric(
+        out["m2"].astype(str).str.replace(",", ""), errors="coerce")
     out = out.dropna().sort_values("date").reset_index(drop=True)
     # M1B YoY − M2 YoY（黃金交叉指標）
     out["m1b_m2_gap"] = (out["m1b"] / out["m1b"].shift(12) - 1) * 100 - \
