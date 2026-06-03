@@ -1,4 +1,4 @@
-"""tab_macro_validation.py — 台股總經 tab 歷史驗證 UI section (v18.159 Phase 3).
+"""tab_macro_validation.py — 台股總經 tab 歷史驗證 UI section (v18.161 v2 edge UI).
 
 對應 tab_macro.py section 十「📊 總經訊號歷史驗證」.
 
@@ -171,11 +171,13 @@ def render_history_validation_section(
 def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
     """🚦 Phase 3 — 4 個台股本地訊號 × TWII crisis 命中率（鏡像 fund Phase 3）。"""
     st.markdown("---")
-    st.markdown("### 🚦 總經訊號預測力驗證（Phase 3）")
+    st.markdown("### 🚦 總經訊號預測力驗證（Phase 3 · v2 轉折偵測）")
     st.caption(
-        "對每個歷史危機事件回看 N 天前的總經訊號 → 量化「Tab1 訊號是否真的有預警」。"
-        "公式鏡像 my-Fund-dashboard Phase 3；訊號來源為 `data_cache/` 4 表本地計算（"
-        "外資 5 日累積賣超 / 融資餘額 / M1B-M2 缺口惡化 / TWII 20 日跌幅）。"
+        "🔄 **v2 edge detection**：對每個歷史危機事件，在峰前 M 天區間內搜尋訊號"
+        "**從非警戒跨越到警戒**的最早**轉折日**（不是「找最早一個觸發警戒的日子」），"
+        "排除「常態性已在警戒 → 假預警」誤判。公式鏡像 my-Fund-dashboard Phase 3；"
+        "訊號來源為 `data_cache/` 4 表本地計算（外資 5 日累積賣超 / 融資餘額 / "
+        "M1B-M2 缺口惡化 / TWII 20 日跌幅）。"
     )
 
     col_a, col_b = st.columns(2)
@@ -231,8 +233,8 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
                 "命中事件": stats["n_hit"],
                 "命中率": (f"{stats['hit_rate']:.0%}"
                             if stats["hit_rate"] is not None else "—"),
-                "平均提前天數": (f"{stats['avg_lead_days']:.0f}"
-                                  if stats["avg_lead_days"] is not None else "—"),
+                "平均提前轉折天數": (f"{stats['avg_lead_days']:.0f}"
+                                       if stats["avg_lead_days"] is not None else "—"),
                 "解讀": spec.note,
             })
         st.session_state[_PHASE3_CACHE_KEY] = {
@@ -265,7 +267,7 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
         for spec in specs:
             lb = lookbacks_by_key[spec.key][i]
             if lb.lead_time_days is not None:
-                cell = f"✅ 提前 {lb.lead_time_days}d"
+                cell = f"✅ 轉折提前 {lb.lead_time_days}d"
             elif lb.value_at_lookback is not None:
                 cell = (f"❌ ({lb.value_at_lookback:.2f}{spec.unit})"
                         if spec.unit else f"❌ ({lb.value_at_lookback:.2f})")
@@ -277,7 +279,7 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
                   use_container_width=True, hide_index=True)
 
     st.caption(
-        "✅ = 峰前搜尋上限區間內，訊號曾進入警戒區，並顯示提前天數；"
-        "❌ = 訊號序列涵蓋但未警戒（顯示峰前 offset 觀測值）；"
+        "✅ = 峰前 M 天區間內捕捉到「從非警戒**跨越**到警戒」的轉折日，顯示距峰提前天數；"
+        "❌ = 訊號序列涵蓋但區間內無轉折事件（顯示峰前 offset 觀測值，可能整段未警戒或整段已警戒）；"
         "— = 訊號歷史不涵蓋該事件（Parquet 缺檔 / 序列過短）。"
     )
