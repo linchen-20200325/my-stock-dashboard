@@ -106,9 +106,12 @@ def render_etf_single(gemini_fn=None):
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric('最新收盤', f'{df["Close"].iloc[-1]:.2f}')
-    c2.metric('內扣費用率', f'{expense*100:.2f}%' if expense else 'N/A')
-    c3.metric('Beta', f'{float(beta):.2f}' if beta else 'N/A')
-    c4.metric('AUM', f'{aum/1e9:.1f}B USD' if aum and aum > 1e6 else 'N/A')
+    c2.metric('內扣費用率', f'{expense*100:.2f}%' if expense else 'N/A',
+              help=None if expense else '主動式/私募 ETF 投信未揭露，或抓取失敗（詳見資料診斷 Tab）')
+    c3.metric('Beta', f'{float(beta):.2f}' if beta else 'N/A',
+              help=None if beta else 'yfinance .info 無資料（海外 IP 或主動式 ETF）')
+    c4.metric('AUM', f'{aum/1e9:.1f}B USD' if aum and aum > 1e6 else 'N/A',
+              help=None if (aum and aum > 1e6) else '主動式/私募 ETF 規模未揭露，或 yfinance .info 海外 IP 受限')
 
     with st.expander('💡 這項數據代表什麼？（內扣費用率 · Beta · AUM）', expanded=False):
         st.markdown(
@@ -396,14 +399,16 @@ def render_etf_single(gemini_fn=None):
         _teacher_conclusion('宏爺', f'{ticker} 折溢價 {_pct:+.2f}%', _prem_concl, _prem_act2)
 
     ch, ci = st.columns(2)
-    ch.metric('折溢價率', f'{_pct:+.2f}%' if _pct is not None else 'N/A')
+    ch.metric('折溢價率', f'{_pct:+.2f}%' if _pct is not None else 'N/A',
+              help=None if _pct is not None else 'NAV 抓不到 → 連帶無法計算折溢價（檢查 PROXY_URL 或主動式 ETF 投信無公開 NAV）')
     if te is not None:
         ci.metric(f'追蹤誤差 vs {benchmark}', f'{te:.2f}%')
         if te > 1.5:
             ci.markdown('<small style="color:#d29922;">⚠️ 追蹤誤差 >1.5%，注意隱藏成本</small>',
                         unsafe_allow_html=True)
     else:
-        ci.metric('追蹤誤差', 'N/A')
+        ci.metric('追蹤誤差', 'N/A',
+                  help='主動式 ETF 無對應指數，或 benchmark 資料不足')
 
     # ── 歷史淨值及折溢價表 ────────────────────────────────────
     import pandas as _pd_navtbl
