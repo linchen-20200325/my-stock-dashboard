@@ -4100,10 +4100,22 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             f'</div>', unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════
-    # SECTION 十: 🤖 AI 總裁決（實體狀態鎖架構）
+    # SECTION 十: 📊 總經訊號歷史驗證（v18.150 Phase C；v18.156 與 AI 總裁決交換位置）
+    # 讀 data_cache Parquet → TWII crisis × NDC/領先指標命中表
+    # ══════════════════════════════════════════════════════════════
+    try:
+        from tab_macro_validation import render_history_validation_section
+        render_history_validation_section()
+    except Exception as _e_hv:
+        st.caption(f"⚠️ 歷史驗證 section 載入失敗：{_e_hv}")
+
+    st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════
+    # SECTION 十一: 🤖 AI 總裁決（實體狀態鎖架構）
     # 前端唯讀 macro_state.json；LLM 運算由觸發按鈕在背景執行並寫檔
     # ══════════════════════════════════════════════════════════════
-    st.markdown(section_header('十', '🤖 AI 總裁決', '🤖'), unsafe_allow_html=True)
+    st.markdown(section_header('十一', '🤖 AI 總裁決', '🤖'), unsafe_allow_html=True)
 
     with st.expander('🤖 AI 總裁決 — 實體狀態鎖架構（唯讀）', expanded=True):
         _verdict_hdr_c1, _verdict_hdr_c2, _verdict_hdr_c3 = st.columns([4, 1, 1])
@@ -4383,13 +4395,3 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         else:
             st.caption('▲ 點擊上方「執行 AI 裁決」，AI 將綜合量化數據與即時新聞生成完整戰情報告。')
 
-    # ──────────────────────────────────────────────────────────────
-    # 十一、總經訊號歷史驗證（v18.150 Phase C）— 讀 data_cache Parquet
-    # ──────────────────────────────────────────────────────────────
-    try:
-        from tab_macro_validation import render_history_validation_section
-        render_history_validation_section()
-    except Exception as _e_hv:
-        st.caption(f"⚠️ 歷史驗證 section 載入失敗：{_e_hv}")
-
-    st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)

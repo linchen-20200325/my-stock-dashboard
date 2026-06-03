@@ -6,7 +6,13 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：v18.155_NdcRelayWithAjaxHeader（user 提醒 NAS 中繼站 → 強制走 relay 帶 AJAX header 觸發 SPA 回 JSON）
+- **目前版本**：v18.156_MacroSectionSwap（macro tab section 十 ↔ 十一 交換 — 歷史驗證上、AI 總裁決下）
+  - **User 需求**：「十一、總經訊號歷史驗證 往上移到十 交換」— UI 排序調整
+  - **tab_macro_validation.py**：內部 markdown header「十一、」改「十、」（兩處：docstring + render markdown）
+  - **tab_macro.py**：插入新 section 十（render_history_validation_section call）在原 section 十之前；原 AI 總裁決的 section_header 從 '十' 改 '十一'；刪除文件末尾的重複 validation block（避免渲染兩次）
+  - **tests/test_macro_validation_tw.py**：`test_ui_section_after_section_ten` rename + 邏輯改為「歷史驗證（十）必須在 AI 總裁決（十一）之前」
+  - **回歸**：tests/ **918 passed** 零回歸
+- **前一版**：v18.155_NdcRelayWithAjaxHeader（user 提醒 NAS 中繼站 → 強制走 relay 帶 AJAX header 觸發 SPA 回 JSON）
   - **背景**：v18.152/153 NDC URL 全敗的根因錯怪：不是 NDC URL pattern 錯，而是**透過 Squid Proxy 抓沒帶 `X-Requested-With: XMLHttpRequest`**。`nas_server.py:35` 的 `_HDR` 已配 AJAX header，AngularJS SPA 偵測到 XHR 應該會切回 JSON 模式（典型雙模式 SPA 行為）— 但 `fetch_url` 內 Squid 是 transparent forwarder 不會自動加這 header
   - **解法**：新增 `_fetch_via_nas_relay(url, label)` 直接呼叫 `proxy_helper.nas_relay_fetch()` 跳過 Squid 優先序，header 由 NAS 中繼站 FastAPI 自動填（X-Requested-With + Accept: application/json）
   - **update_macro_history.py**：
