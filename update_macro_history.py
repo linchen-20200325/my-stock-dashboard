@@ -6,8 +6,8 @@ data_cache/twii_ohlcv.parquet              ← ^TWII 日 K（yfinance via NAS pr
 data_cache/finmind_inst.parquet            ← 三大法人總買賣超（FinMind）
 data_cache/finmind_margin.parquet          ← 融資餘額（FinMind）
 data_cache/finmind_m1m2.parquet            ← M1B / M2 月差（FinMind）
-data_cache/finmind_ndc_signal.parquet      ← 景氣對策信號分數 9-45（國發會 NDC OpenAPI，免 token；v18.152 取代 FinMind 付費牆）
-data_cache/finmind_leading_index.parquet   ← 領先指標綜合指數（國發會 NDC OpenAPI；檔名保留 finmind_ 前綴以維持向後相容）
+data_cache/finmind_ndc_signal.parquet      ← 景氣對策信號分數 9-45（data.gov.tw NDC dataset；免 token；v18.154 取代 NDC SPA OpenAPI）
+data_cache/finmind_leading_index.parquet   ← 領先指標綜合指數（data.gov.tw NDC dataset；檔名保留 finmind_ 前綴以維持向後相容）
 data_cache/metadata.json                   ← 各表 last_updated + row_count
 
 每日跑一次（TW 17:00 收盤後）
@@ -319,94 +319,205 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
 
 
 # ──────────────────────────────────────────────────────────────────
-# v18.152 國發會 NDC OpenAPI 取代 FinMind TaiwanBusinessIndicator（付費牆）
+# v18.154 data.gov.tw search API + dataset CSV — NDC OpenAPI 確認為 SPA HTML fallback dead
 # ──────────────────────────────────────────────────────────────────
-# 候選 URL：macro_core._pmi_src_ndc 已實測 /app/data/indicator/PMI 有效，
-# 由此類推 composite/leading 等 slug；多 candidate 同時打，第一個 HTTP 200 + 解析
-# 成功者勝出；全失敗印 verbose log（HTTP code + body 前 200 char）供下一輪 PR
-# 鎖死正確 URL。
-_NDC_SIGNAL_URL_CANDIDATES: tuple = (
-    "https://index.ndc.gov.tw/app/data/indicator/monitoring",
-    "https://index.ndc.gov.tw/app/data/indicator/composite",
-    "https://index.ndc.gov.tw/app/data/indicator/signal",
-    "https://index.ndc.gov.tw/app/data/indicator/cyclical",
-    "https://index.ndc.gov.tw/app/data/indicator/SignalScore",
+# v18.152/153 已實驗證：index.ndc.gov.tw/app/data/indicator/* 全回 AngularJS SPA 首頁
+# HTML（client-side routing fallback）→ 完全砍掉 NDC OpenAPI 路徑。
+# 改鏡像 macro_core._pmi_src_dgtw 已驗證模式（dataset/6100 PMI 在生產 work）：
+#   ① data.gov.tw search API 找 keyword 對應 dataset
+#   ② 直接 probe 已知 dataset ID 鄰近範圍（國發會系列 ID 通常連號）
+#   ③ 對候選 ID 抓 metadata → CSV resource → 解全部 [date, value] rows
+_DGTW_SIGNAL_KEYWORDS: tuple = ("景氣對策信號", "景氣燈號", "景氣指標")
+_DGTW_LEADING_KEYWORDS: tuple = ("領先指標綜合指數", "領先指標", "景氣領先指標")
+
+# 已知 dataset ID 鄰近 6100 (PMI)：探 0099 ~ 6108 + 6053 (export 已知) 鄰近
+_DGTW_CANDIDATE_IDS: tuple = (
+    "6099", "6101", "6102", "6103", "6104", "6105",
+    "6098", "6106", "6107", "6108", "6097", "6109",
+    "6054", "6055", "6052", "6056",
 )
 
-_NDC_LEADING_URL_CANDIDATES: tuple = (
-    "https://index.ndc.gov.tw/app/data/indicator/leading",
-    "https://index.ndc.gov.tw/app/data/indicator/Leading",
-    "https://index.ndc.gov.tw/app/data/indicator/lead",
-    "https://index.ndc.gov.tw/app/data/indicator/LeadingIndex",
-    "https://index.ndc.gov.tw/app/data/indicator/leadingComposite",
+_DGTW_SIGNAL_VALUE_KEYWORDS: tuple = (
+    "綜合判斷分數", "對策信號", "景氣分數", "景氣對策", "信號分數", "分數",
+)
+_DGTW_LEADING_VALUE_KEYWORDS: tuple = (
+    "領先指標綜合指數", "領先指標", "綜合指數",
+)
+_DGTW_DATE_COL_KEYWORDS: tuple = (
+    "年月", "日期", "date", "Date", "time", "Time", "month", "Month", "yearMonth",
 )
 
-_NDC_VALUE_KEYS = ("value", "score", "data", "index", "composite",
-                   "monitoring", "leading", "signal")
-_NDC_DATE_KEYS = ("date", "yearMonth", "period", "month",
-                  "year_month", "yearmonth", "yearMonthCode")
 
-
-def _fetch_ndc_indicator_full(url_candidates: tuple, label: str) -> pd.DataFrame:
-    """逐一嘗試 URL candidate；第一個成功的回 [date, value] 全歷史 DataFrame。
-
-    走 proxy_helper.fetch_url（NAS Squid → 直連 fallback；macro_core 同款）。
-    全失敗回空 DataFrame + 印每個 URL 的 HTTP code 與 body 前 200 char。
-    """
+def _fetch_dgtw_search_dataset_ids(keyword: str, label: str) -> list:
+    """search data.gov.tw → 回 candidate dataset IDs；多 shape parser + verbose log。"""
     try:
         from proxy_helper import fetch_url
+        import urllib.parse as _up
     except ImportError:
-        print(f"[ndc/{label}] ❌ proxy_helper 不可用，無法走 NAS 中繼")
-        return pd.DataFrame()
-
-    import re as _re_ndc
-    for url in url_candidates:
-        slug = url.rsplit("/", 1)[-1]
+        print(f"[dgtw/{label}/search] ❌ proxy_helper 不可用")
+        return []
+    encoded = _up.quote(keyword)
+    for search_url in (
+        f"https://data.gov.tw/api/v2/rest/dataset/search?q={encoded}&size=10",
+        f"https://data.gov.tw/api/v1/rest/dataset/search?q={encoded}",
+        f"https://data.gov.tw/api/front/dataset/search?q={encoded}",
+    ):
         try:
-            r = fetch_url(url, timeout=15, attempts=2,
+            r = fetch_url(search_url, timeout=15, attempts=2,
                           headers={"Accept": "application/json"})
             if r is None:
-                print(f"[ndc/{label}/{slug}] 無回應")
+                print(f"[dgtw/{label}/search] 無回應 {search_url[-30:]}")
                 continue
             if r.status_code != 200:
-                body = r.text[:200].replace("\n", " ")
-                print(f"[ndc/{label}/{slug}] HTTP={r.status_code} body={body}")
+                body = r.text[:200].replace("\n", " ") if r.text else "<empty>"
+                print(f"[dgtw/{label}/search] HTTP={r.status_code} body={body}")
                 continue
             try:
                 j = r.json()
             except Exception as e:
-                # v18.153：印 Content-Type + body 前 300 char 診斷（HTML/JSONP/空）
                 ct = r.headers.get("Content-Type", "?")[:50] if hasattr(r, "headers") else "?"
-                body_preview = (r.text[:300] if r.text else "<empty>").replace("\n", " ")
-                print(f"[ndc/{label}/{slug}] JSON 失敗 {type(e).__name__} CT={ct} body={body_preview}")
+                body_preview = (r.text[:200] if r.text else "<empty>").replace("\n", " ")
+                print(f"[dgtw/{label}/search] JSON 失敗 CT={ct} body={body_preview}")
                 continue
         except Exception as e:
-            print(f"[ndc/{label}/{slug}] {type(e).__name__}: {str(e)[:100]}")
+            print(f"[dgtw/{label}/search] {type(e).__name__}: {str(e)[:100]}")
             continue
 
-        items = j if isinstance(j, list) else (
-            j.get("data") or j.get("items")
-            or j.get("result", {}).get("records") or [])
+        items = (j.get("result", {}).get("results")
+                 or j.get("datasets")
+                 or j.get("result", {}).get("records")
+                 or j.get("data")
+                 or (j if isinstance(j, list) else []))
         if not items or not isinstance(items, list):
-            top_keys = list(j.keys())[:6] if isinstance(j, dict) else type(j).__name__
-            print(f"[ndc/{label}/{slug}] 解析後 items 為空 (top={top_keys})")
+            top = list(j.keys())[:5] if isinstance(j, dict) else type(j).__name__
+            print(f"[dgtw/{label}/search] 0 items (top={top})")
+            continue
+
+        ids = []
+        for it in items[:15]:
+            if not isinstance(it, dict):
+                continue
+            ds_id = (it.get("identifier") or it.get("id")
+                     or it.get("dataset_id") or it.get("datasetId"))
+            title = (it.get("title") or it.get("name") or "")[:30]
+            if ds_id:
+                ids.append((str(ds_id), title))
+        if ids:
+            preview = [(i, t) for i, t in ids[:5]]
+            print(f"[dgtw/{label}/search] ✅ 找到 {len(ids)} 個 datasets 前 5={preview}")
+            return [i for i, _ in ids]
+    return []
+
+
+def _fetch_dgtw_dataset_csv_full(ds_id: str, value_keywords: tuple,
+                                  label: str) -> pd.DataFrame:
+    """從 dataset id 抓 metadata → 找 CSV resource → 下載 → 解 [date, value] 全部 rows.
+
+    完全鏡像 macro_core._pmi_src_dgtw 模式（已驗證 dataset/6100 在生產 work）。
+    """
+    try:
+        from proxy_helper import fetch_url
+        import io as _io
+        import csv as _csv
+        import re as _re
+    except ImportError:
+        return pd.DataFrame()
+
+    for meta_url in (f"https://data.gov.tw/api/v2/rest/dataset/{ds_id}",
+                      f"https://data.gov.tw/api/v1/rest/dataset/{ds_id}",
+                      f"https://data.gov.tw/dataset/{ds_id}/resource"):
+        try:
+            r = fetch_url(meta_url, timeout=10, attempts=1,
+                          headers={"Accept": "application/json"})
+            if r is None or r.status_code != 200:
+                continue
+            try:
+                j = r.json()
+            except Exception:
+                continue
+        except Exception:
+            continue
+
+        res = (j.get("result", {}).get("resources")
+               or j.get("resources")
+               or j.get("data", {}).get("resources")
+               or j.get("result", {}).get("distribution")
+               or [])
+        if not res or not isinstance(res, list):
+            continue
+
+        csv_url = None
+        csv_fmt = None
+        for it in res:
+            if not isinstance(it, dict):
+                continue
+            fmt = str(it.get("format", "")).upper()
+            url2 = (it.get("url") or it.get("resourceDownloadUrl")
+                    or it.get("downloadUrl"))
+            if fmt in ("CSV", "JSON") and url2:
+                csv_url = url2
+                csv_fmt = fmt
+                break
+        if not csv_url:
+            continue
+
+        try:
+            r2 = fetch_url(csv_url, timeout=20, attempts=2)
+            if r2 is None or r2.status_code != 200:
+                print(f"[dgtw/{label}/{ds_id}] CSV HTTP={r2.status_code if r2 else 'none'}")
+                continue
+        except Exception as e:
+            print(f"[dgtw/{label}/{ds_id}] CSV fetch {type(e).__name__}: {e}")
+            continue
+
+        # CSV 解析（JSON 路徑暫不處理 — 通常 dataset 都提供 CSV）
+        if csv_fmt != "CSV":
+            print(f"[dgtw/{label}/{ds_id}] 跳過 non-CSV resource fmt={csv_fmt}")
+            continue
+        txt = r2.content.decode("utf-8-sig", errors="ignore")
+        try:
+            rdr = list(_csv.DictReader(_io.StringIO(txt)))
+        except Exception as e:
+            print(f"[dgtw/{label}/{ds_id}] CSV parse {type(e).__name__}: {e}")
+            continue
+        if not rdr:
+            print(f"[dgtw/{label}/{ds_id}] CSV 0 rows")
+            continue
+
+        cols = list(rdr[0].keys())
+        # 找 value 欄（keyword 優先匹配）
+        value_col = next(
+            (c for c in cols
+             if any(kw in str(c) for kw in value_keywords)),
+            None,
+        )
+        date_col = next(
+            (c for c in cols
+             if any(kw in str(c) for kw in _DGTW_DATE_COL_KEYWORDS)),
+            None,
+        )
+        if not value_col:
+            print(f"[dgtw/{label}/{ds_id}] CSV 無 value 欄 cols={cols[:8]}")
             continue
 
         rows = []
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            v_raw = next((it[k] for k in _NDC_VALUE_KEYS
-                          if k in it and it[k] is not None), None)
-            d_raw = next((it[k] for k in _NDC_DATE_KEYS
-                          if k in it and it[k]), None)
-            if v_raw is None or not d_raw:
+        for row in rdr:
+            v_raw = row.get(value_col)
+            if v_raw is None or str(v_raw).strip() in ("", "-", "—"):
                 continue
             try:
-                v = float(v_raw)
-            except (TypeError, ValueError):
+                v = float(str(v_raw).replace(",", "").strip())
+            except (ValueError, TypeError):
                 continue
-            m = _re_ndc.search(r"(20\d{2}|19\d{2})[-/]?(\d{1,2})", str(d_raw))
+            # date：先試 date_col；fallback 掃全 row
+            d_raw = row.get(date_col) if date_col else None
+            m = _re.search(r"(20\d{2}|19\d{2})[-/年]?(\d{1,2})",
+                           str(d_raw)) if d_raw else None
+            if not m:
+                for v2 in row.values():
+                    m = _re.search(r"(20\d{2}|19\d{2})[-/年]?(\d{1,2})", str(v2))
+                    if m:
+                        break
             if not m:
                 continue
             try:
@@ -416,24 +527,53 @@ def _fetch_ndc_indicator_full(url_candidates: tuple, label: str) -> pd.DataFrame
             rows.append({"date": d, "value": v})
 
         if not rows:
-            print(f"[ndc/{label}/{slug}] items={len(items)} 但 0 個 row 可解析")
+            print(f"[dgtw/{label}/{ds_id}] CSV 0 個有效 row col={str(value_col)[:30]}")
             continue
 
         df = pd.DataFrame(rows).drop_duplicates("date").sort_values("date").reset_index(drop=True)
-        print(f"[ndc/{label}/{slug}] ✅ {len(df)} rows ({df['date'].iloc[0]} ~ {df['date'].iloc[-1]})")
+        print(f"[dgtw/{label}/{ds_id}] ✅ {len(df)} rows ({df['date'].iloc[0]} ~ {df['date'].iloc[-1]}) col={str(value_col)[:30]}")
         return df
 
-    print(f"[ndc/{label}] ❌ 所有 {len(url_candidates)} 個 candidate URL 全失敗")
+    return pd.DataFrame()
+
+
+def _fetch_dgtw_indicator(keywords: tuple, value_keywords: tuple,
+                           candidate_ids: tuple, label: str) -> pd.DataFrame:
+    """二路徑彙整：① search API ② 直接 probe 已知 dataset ID 範圍。"""
+    # 路徑 1：search API（精準）
+    seen_ids: set = set()
+    for kw in keywords:
+        ids = _fetch_dgtw_search_dataset_ids(kw, f"{label}/{kw[:6]}")
+        for ds_id in ids[:5]:
+            if ds_id in seen_ids:
+                continue
+            seen_ids.add(ds_id)
+            df = _fetch_dgtw_dataset_csv_full(ds_id, value_keywords, label)
+            if not df.empty:
+                return df
+
+    # 路徑 2：直接 probe 候選 ID（兜底）
+    print(f"[dgtw/{label}/probe] search 全敗，改 probe {len(candidate_ids)} 個鄰近 ID")
+    for ds_id in candidate_ids:
+        if ds_id in seen_ids:
+            continue
+        df = _fetch_dgtw_dataset_csv_full(ds_id, value_keywords, label)
+        if not df.empty:
+            return df
+
+    print(f"[dgtw/{label}] ❌ search + probe 全失敗")
     return pd.DataFrame()
 
 
 def fetch_ndc_signal(start: _dt.date, end: _dt.date) -> pd.DataFrame:
-    """景氣對策信號分數（月頻；範圍 9-45；來源 國發會 NDC OpenAPI）。
+    """景氣對策信號分數（月頻；範圍 9-45；來源 data.gov.tw NDC dataset）。
 
     輸出欄位：date, ndc_signal
-    走 NAS Squid Proxy（fetch_url）解海外 IP 封鎖；多 URL candidate fallback。
+    走 NAS Squid Proxy（fetch_url）+ 二路徑 fallback（search → ID probe）。
     """
-    raw = _fetch_ndc_indicator_full(_NDC_SIGNAL_URL_CANDIDATES, "signal")
+    raw = _fetch_dgtw_indicator(
+        _DGTW_SIGNAL_KEYWORDS, _DGTW_SIGNAL_VALUE_KEYWORDS,
+        _DGTW_CANDIDATE_IDS, "signal")
     if raw.empty:
         print("[ndc_signal] ⚠️ 無景氣對策信號資料")
         return raw
@@ -445,12 +585,14 @@ def fetch_ndc_signal(start: _dt.date, end: _dt.date) -> pd.DataFrame:
 
 
 def fetch_ndc_leading_index(start: _dt.date, end: _dt.date) -> pd.DataFrame:
-    """領先指標綜合指數（月頻原始指數值；來源 國發會 NDC OpenAPI）。
+    """領先指標綜合指數（月頻原始指數值；來源 data.gov.tw NDC dataset）。
 
     輸出欄位：date, leading_index
     6M smoothed change 由下游分析端 on-the-fly 算（rolling 6 月需 lookback context）。
     """
-    raw = _fetch_ndc_indicator_full(_NDC_LEADING_URL_CANDIDATES, "leading")
+    raw = _fetch_dgtw_indicator(
+        _DGTW_LEADING_KEYWORDS, _DGTW_LEADING_VALUE_KEYWORDS,
+        _DGTW_CANDIDATE_IDS, "leading")
     if raw.empty:
         print("[ndc_leading_index] ⚠️ 無領先指標資料")
         return raw
