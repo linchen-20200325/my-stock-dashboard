@@ -198,9 +198,7 @@ def test_evaluate_triggered_at_lookback_above():
 
 
 def test_evaluate_first_warning_finds_earliest():
-    """peak=2024-06-01, max_lookback=365：[2023-06-01, 2024-06-01]，
-    series 從 2024-04-01 起連 30 日 = 30 (警戒) → 最早 warning 應為 2024-04-01。
-    """
+    """edge mode：series 在 2024-04-01 從非警戒（10）跨越進警戒（30）→ 最早 crossing 為 2024-04-01。"""
     ev = _mock_event("2024-06-01")
     idx_before = pd.date_range("2023-06-01", "2024-03-31", freq="D")
     s_before = pd.Series([10.0] * len(idx_before), index=idx_before)
@@ -213,6 +211,67 @@ def test_evaluate_first_warning_finds_earliest():
     assert lb.first_warning_date == pd.Timestamp("2024-04-01")
     assert lb.lead_time_days == (pd.Timestamp("2024-06-01")
                                   - pd.Timestamp("2024-04-01")).days
+
+
+# ════════════════════════════════════════════════════════════════
+# v18.160 edge mode：避免「整窗都在警戒」假預警
+# ════════════════════════════════════════════════════════════════
+def test_evaluate_edge_mode_no_crossing_returns_none():
+    """series 一直在警戒區（無 transition）→ edge mode 應回 None（不算預警）。
+
+    這是 v18.160 修 bug 的核心：v1 state mode 會誤判成「提前 max_lookback 天」。
+    """
+    ev = _mock_event("2024-06-01")
+    idx = pd.date_range("2024-01-01", "2024-05-31", freq="D")
+    s = pd.Series([30.0] * len(idx), index=idx)  # 全在警戒
+    spec = _spec_above(25.0)
+    lb = evaluate_signal_at_event(ev, s, spec, lookback_days=90,
+                                   max_lookback_days=180, mode="edge")
+    # edge mode：沒看到 transition → None
+    assert lb.first_warning_date is None
+    assert lb.lead_time_days is None
+
+
+def test_evaluate_state_mode_legacy_still_works():
+    """state mode（legacy）：series 一直在警戒區，回最早一日（v1 行為）。"""
+    ev = _mock_event("2024-06-01")
+    idx = pd.date_range("2024-01-01", "2024-05-31", freq="D")
+    s = pd.Series([30.0] * len(idx), index=idx)
+    spec = _spec_above(25.0)
+    lb = evaluate_signal_at_event(ev, s, spec, lookback_days=90,
+                                   max_lookback_days=180, mode="state")
+    # state mode：仍會回 window 內最早一日
+    assert lb.first_warning_date is not None
+
+
+def test_evaluate_edge_mode_picks_transition_in_window():
+    """series 早期在警戒，中期回到非警戒，晚期再次警戒 → edge 應抓晚期的 transition。"""
+    ev = _mock_event("2024-12-01")
+    # 早期窗外警戒（被忽略）→ 警戒退出 → window 內再次警戒（這才是 edge）
+    idx1 = pd.date_range("2024-01-01", "2024-03-31", freq="D")  # 全 30 警戒
+    idx2 = pd.date_range("2024-04-01", "2024-08-31", freq="D")  # 全 10 非警戒
+    idx3 = pd.date_range("2024-09-01", "2024-11-30", freq="D")  # 全 30 警戒
+    s = pd.concat([
+        pd.Series([30.0] * len(idx1), index=idx1),
+        pd.Series([10.0] * len(idx2), index=idx2),
+        pd.Series([30.0] * len(idx3), index=idx3),
+    ])
+    spec = _spec_above(25.0)
+    lb = evaluate_signal_at_event(ev, s, spec, lookback_days=90,
+                                   max_lookback_days=180, mode="edge")
+    assert lb.first_warning_date == pd.Timestamp("2024-09-01")
+    assert lb.lead_time_days == (pd.Timestamp("2024-12-01")
+                                  - pd.Timestamp("2024-09-01")).days
+
+
+def test_evaluate_default_mode_is_edge():
+    """v18.160 起 mode 預設值為 'edge'，UI 不傳 mode 也應走 edge 邏輯。"""
+    ev = _mock_event("2024-06-01")
+    idx = pd.date_range("2024-01-01", "2024-05-31", freq="D")
+    s = pd.Series([30.0] * len(idx), index=idx)  # 全警戒，edge 應回 None
+    spec = _spec_above(25.0)
+    lb = evaluate_signal_at_event(ev, s, spec)  # 不傳 mode
+    assert lb.first_warning_date is None
 
 
 def test_evaluate_below_direction_works():

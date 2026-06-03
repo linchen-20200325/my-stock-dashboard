@@ -19,8 +19,8 @@ data_cache/metadata.json                   ← 各表 last_updated + row_count
 CLI
 ===
     python update_macro_history.py             # 增量更新
-    python update_macro_history.py --bootstrap # 砍掉重抓全部 5 年（初次部署用）
-    python update_macro_history.py --years 3   # 自訂歷史長度（預設 5）
+    python update_macro_history.py --bootstrap # 砍掉重抓全部 20 年（初次部署用）
+    python update_macro_history.py --years 10  # 自訂歷史長度（預設 20）
 """
 from __future__ import annotations
 
@@ -429,8 +429,8 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--bootstrap", action="store_true",
                    help="砍掉重抓全部歷史（初次部署用）")
-    p.add_argument("--years", type=int, default=5,
-                   help="歷史長度（bootstrap / 缺檔時用，預設 5）")
+    p.add_argument("--years", type=int, default=20,
+                   help="歷史長度（bootstrap / 缺檔時用，預設 20）")
     p.add_argument("--only", default=None,
                    help="只更新指定 dataset（debug 用，逗號分隔）")
     args = p.parse_args()
