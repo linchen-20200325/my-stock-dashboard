@@ -319,14 +319,115 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
 
 
 # ──────────────────────────────────────────────────────────────────
-# v18.154 data.gov.tw search API + dataset CSV — NDC OpenAPI 確認為 SPA HTML fallback dead
+# v18.155 NDC OpenAPI 重啟（強制走 NAS 中繼站，帶 AJAX header）+ dgtw 兜底
 # ──────────────────────────────────────────────────────────────────
-# v18.152/153 已實驗證：index.ndc.gov.tw/app/data/indicator/* 全回 AngularJS SPA 首頁
-# HTML（client-side routing fallback）→ 完全砍掉 NDC OpenAPI 路徑。
-# 改鏡像 macro_core._pmi_src_dgtw 已驗證模式（dataset/6100 PMI 在生產 work）：
-#   ① data.gov.tw search API 找 keyword 對應 dataset
-#   ② 直接 probe 已知 dataset ID 鄰近範圍（國發會系列 ID 通常連號）
-#   ③ 對候選 ID 抓 metadata → CSV resource → 解全部 [date, value] rows
+# v18.152/153 透過 Squid Proxy 抓 NDC OpenAPI 全回 SPA HTML，但 Squid 沒帶
+# X-Requested-With: XMLHttpRequest header。nas_server.py `_HDR` 配 AJAX
+# 標記 → AngularJS SPA 偵測到 XHR 應該會回 JSON（典型 SPA 雙模式行為）。
+# 本次三路徑彙整：
+#   Path 1: NDC OpenAPI via NAS 中繼站（nas_relay_fetch 帶 AJAX header）— 重新試
+#   Path 2: data.gov.tw search API（v18.154 已建）— 兜底
+#   Path 3: data.gov.tw direct ID probe（v18.154 已建）— 最後 ditch
+
+# NDC OpenAPI candidate（重啟）
+_NDC_SIGNAL_URL_CANDIDATES: tuple = (
+    "https://index.ndc.gov.tw/app/data/indicator/monitoring",
+    "https://index.ndc.gov.tw/app/data/indicator/composite",
+    "https://index.ndc.gov.tw/app/data/indicator/signal",
+    "https://index.ndc.gov.tw/app/data/indicator/cyclical",
+)
+_NDC_LEADING_URL_CANDIDATES: tuple = (
+    "https://index.ndc.gov.tw/app/data/indicator/leading",
+    "https://index.ndc.gov.tw/app/data/indicator/Leading",
+    "https://index.ndc.gov.tw/app/data/indicator/LeadingIndex",
+)
+_NDC_VALUE_KEYS: tuple = ("value", "score", "data", "index", "composite",
+                            "monitoring", "leading", "signal")
+_NDC_DATE_KEYS: tuple = ("date", "yearMonth", "period", "month",
+                           "year_month", "yearmonth", "yearMonthCode")
+
+
+def _fetch_via_nas_relay(url: str, label: str) -> pd.DataFrame:
+    """直接走 NAS 中繼站（不走 Squid Proxy）抓 NDC OpenAPI；中繼站 _HDR 帶
+    X-Requested-With: XMLHttpRequest → 應觸發 SPA 回 JSON 而非 HTML。
+
+    回 [date, value] DataFrame 或空（失敗 graceful）。"""
+    try:
+        from proxy_helper import nas_relay_fetch
+    except ImportError:
+        print(f"[ndc-relay/{label}] ❌ proxy_helper.nas_relay_fetch 不可用")
+        return pd.DataFrame()
+    import re as _re_ndc
+
+    slug = url.rsplit("/", 1)[-1]
+    r = nas_relay_fetch(url, timeout=20)
+    if r is None:
+        print(f"[ndc-relay/{label}/{slug}] 無回應（NAS 中繼未設定或失敗）")
+        return pd.DataFrame()
+    if r.status_code != 200:
+        body = r.text[:200].replace("\n", " ")
+        print(f"[ndc-relay/{label}/{slug}] HTTP={r.status_code} body={body}")
+        return pd.DataFrame()
+    try:
+        j = r.json()
+    except Exception as e:
+        ct = r.headers.get("Content-Type", "?")[:50] if hasattr(r, "headers") else "?"
+        body_preview = (r.text[:300] if r.text else "<empty>").replace("\n", " ")
+        print(f"[ndc-relay/{label}/{slug}] JSON 失敗 CT={ct} body={body_preview}")
+        return pd.DataFrame()
+
+    items = j if isinstance(j, list) else (
+        j.get("data") or j.get("items")
+        or j.get("result", {}).get("records") or [])
+    if not items or not isinstance(items, list):
+        top = list(j.keys())[:6] if isinstance(j, dict) else type(j).__name__
+        print(f"[ndc-relay/{label}/{slug}] items 為空 (top={top})")
+        return pd.DataFrame()
+
+    rows = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        v_raw = next((it[k] for k in _NDC_VALUE_KEYS
+                      if k in it and it[k] is not None), None)
+        d_raw = next((it[k] for k in _NDC_DATE_KEYS
+                      if k in it and it[k]), None)
+        if v_raw is None or not d_raw:
+            continue
+        try:
+            v = float(v_raw)
+        except (TypeError, ValueError):
+            continue
+        m = _re_ndc.search(r"(20\d{2}|19\d{2})[-/]?(\d{1,2})", str(d_raw))
+        if not m:
+            continue
+        try:
+            d = _dt.date(int(m.group(1)), int(m.group(2)), 1)
+        except (ValueError, TypeError):
+            continue
+        rows.append({"date": d, "value": v})
+
+    if not rows:
+        print(f"[ndc-relay/{label}/{slug}] items={len(items)} 但 0 row 解析")
+        return pd.DataFrame()
+    df = pd.DataFrame(rows).drop_duplicates("date").sort_values("date").reset_index(drop=True)
+    print(f"[ndc-relay/{label}/{slug}] ✅ {len(df)} rows ({df['date'].iloc[0]} ~ {df['date'].iloc[-1]})")
+    return df
+
+
+def _try_ndc_via_relay(candidates: tuple, label: str) -> pd.DataFrame:
+    """逐一試 NDC OpenAPI candidate 經 NAS 中繼站；第一個成功就回。"""
+    for url in candidates:
+        df = _fetch_via_nas_relay(url, label)
+        if not df.empty:
+            return df
+    print(f"[ndc-relay/{label}] ❌ 所有 {len(candidates)} 個 candidate 全失敗")
+    return pd.DataFrame()
+
+
+# ──────────────────────────────────────────────────────────────────
+# v18.154 data.gov.tw search API + dataset CSV（路徑 2/3 兜底）
+# ──────────────────────────────────────────────────────────────────
 _DGTW_SIGNAL_KEYWORDS: tuple = ("景氣對策信號", "景氣燈號", "景氣指標")
 _DGTW_LEADING_KEYWORDS: tuple = ("領先指標綜合指數", "領先指標", "景氣領先指標")
 
@@ -571,9 +672,14 @@ def fetch_ndc_signal(start: _dt.date, end: _dt.date) -> pd.DataFrame:
     輸出欄位：date, ndc_signal
     走 NAS Squid Proxy（fetch_url）+ 二路徑 fallback（search → ID probe）。
     """
-    raw = _fetch_dgtw_indicator(
-        _DGTW_SIGNAL_KEYWORDS, _DGTW_SIGNAL_VALUE_KEYWORDS,
-        _DGTW_CANDIDATE_IDS, "signal")
+    # 路徑 1：NDC OpenAPI via NAS 中繼站（v18.155 — AJAX header 可能觸發 JSON）
+    raw = _try_ndc_via_relay(_NDC_SIGNAL_URL_CANDIDATES, "signal")
+    # 路徑 2/3：data.gov.tw search + ID probe（v18.154 兜底）
+    if raw.empty:
+        print("[ndc_signal] NDC 中繼路徑失敗，改試 data.gov.tw...")
+        raw = _fetch_dgtw_indicator(
+            _DGTW_SIGNAL_KEYWORDS, _DGTW_SIGNAL_VALUE_KEYWORDS,
+            _DGTW_CANDIDATE_IDS, "signal")
     if raw.empty:
         print("[ndc_signal] ⚠️ 無景氣對策信號資料")
         return raw
@@ -590,9 +696,14 @@ def fetch_ndc_leading_index(start: _dt.date, end: _dt.date) -> pd.DataFrame:
     輸出欄位：date, leading_index
     6M smoothed change 由下游分析端 on-the-fly 算（rolling 6 月需 lookback context）。
     """
-    raw = _fetch_dgtw_indicator(
-        _DGTW_LEADING_KEYWORDS, _DGTW_LEADING_VALUE_KEYWORDS,
-        _DGTW_CANDIDATE_IDS, "leading")
+    # 路徑 1：NDC OpenAPI via NAS 中繼站（v18.155）
+    raw = _try_ndc_via_relay(_NDC_LEADING_URL_CANDIDATES, "leading")
+    # 路徑 2/3：data.gov.tw（v18.154 兜底）
+    if raw.empty:
+        print("[ndc_leading_index] NDC 中繼路徑失敗，改試 data.gov.tw...")
+        raw = _fetch_dgtw_indicator(
+            _DGTW_LEADING_KEYWORDS, _DGTW_LEADING_VALUE_KEYWORDS,
+            _DGTW_CANDIDATE_IDS, "leading")
     if raw.empty:
         print("[ndc_leading_index] ⚠️ 無領先指標資料")
         return raw

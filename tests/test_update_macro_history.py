@@ -343,12 +343,126 @@ def test_fetch_ndc_leading_index_uses_dgtw(monkeypatch):
 
 
 def test_fetch_ndc_signal_empty_when_dgtw_fails(monkeypatch):
-    """dgtw 全失敗 → fetch_ndc_signal 回空（不 raise）。"""
+    """relay + dgtw 全失敗 → fetch_ndc_signal 回空（不 raise）。"""
     import update_macro_history as umh
+    monkeypatch.setattr(umh, "_try_ndc_via_relay",
+                        lambda *a, **kw: pd.DataFrame())
     monkeypatch.setattr(umh, "_fetch_dgtw_indicator",
                         lambda *a, **kw: pd.DataFrame())
     out = umh.fetch_ndc_signal(dt.date(2024, 1, 1), dt.date(2024, 2, 1))
     assert out.empty
+
+
+# ────────────────────────────────────────────────────────────────
+# v18.155 NDC OpenAPI via NAS 中繼站
+# ────────────────────────────────────────────────────────────────
+def test_ndc_url_candidates_listed():
+    """NDC OpenAPI candidate URL constants 已定義。"""
+    import update_macro_history as umh
+    assert len(umh._NDC_SIGNAL_URL_CANDIDATES) >= 3
+    assert len(umh._NDC_LEADING_URL_CANDIDATES) >= 3
+    for url in umh._NDC_SIGNAL_URL_CANDIDATES + umh._NDC_LEADING_URL_CANDIDATES:
+        assert "index.ndc.gov.tw" in url
+
+
+def test_fetch_via_nas_relay_success(monkeypatch):
+    """relay 回 JSON list → 解析成 DataFrame。"""
+    import update_macro_history as umh
+    fake = [
+        {"date": "2024-01", "value": 25},
+        {"date": "2024-02", "value": 30},
+    ]
+    import proxy_helper as _ph
+    monkeypatch.setattr(_ph, "nas_relay_fetch",
+                        lambda *a, **kw: _FakeResp(fake))
+    df = umh._fetch_via_nas_relay(
+        "https://index.ndc.gov.tw/app/data/indicator/monitoring", "signal")
+    assert len(df) == 2
+    assert df["value"].tolist() == [25.0, 30.0]
+
+
+def test_fetch_via_nas_relay_no_relay_configured(monkeypatch):
+    """relay 回 None（NAS_BASE_URL 未設定）→ 回空 DataFrame。"""
+    import update_macro_history as umh
+    import proxy_helper as _ph
+    monkeypatch.setattr(_ph, "nas_relay_fetch", lambda *a, **kw: None)
+    df = umh._fetch_via_nas_relay(
+        "https://index.ndc.gov.tw/app/data/indicator/x", "signal")
+    assert df.empty
+
+
+def test_fetch_via_nas_relay_html_response(monkeypatch):
+    """relay 回 HTML（SPA 還是回首頁）→ JSON 解析失敗 + 印 CT log + 回空。"""
+    import update_macro_history as umh
+    import proxy_helper as _ph
+    monkeypatch.setattr(_ph, "nas_relay_fetch",
+                        lambda *a, **kw: _FakeResp(
+                            content_bytes=b"<html>...</html>",
+                            content_type="text/html"))
+    df = umh._fetch_via_nas_relay(
+        "https://index.ndc.gov.tw/app/data/indicator/x", "signal")
+    assert df.empty
+
+
+def test_try_ndc_via_relay_short_circuits_on_first_success(monkeypatch):
+    """第一個 candidate 成功 → 不打第二個。"""
+    import update_macro_history as umh
+    call_log = []
+
+    def _fake(url, **kw):
+        call_log.append(url)
+        return _FakeResp([{"date": "2024-01", "value": 25}])
+
+    import proxy_helper as _ph
+    monkeypatch.setattr(_ph, "nas_relay_fetch", _fake)
+    df = umh._try_ndc_via_relay(
+        ("https://index.ndc.gov.tw/app/data/indicator/a",
+         "https://index.ndc.gov.tw/app/data/indicator/b"),
+        "signal")
+    assert len(call_log) == 1
+    assert len(df) == 1
+
+
+def test_fetch_ndc_signal_uses_relay_first(monkeypatch):
+    """relay 成功 → fetch_ndc_signal 不該再走 dgtw。"""
+    import update_macro_history as umh
+    fake_df = pd.DataFrame({
+        "date": [dt.date(2024, 1, 1), dt.date(2024, 2, 1)],
+        "value": [25.0, 30.0],
+    })
+    dgtw_called = {"n": 0}
+
+    def _dgtw_fail(*a, **kw):
+        dgtw_called["n"] += 1
+        return pd.DataFrame()
+
+    monkeypatch.setattr(umh, "_try_ndc_via_relay",
+                        lambda *a, **kw: fake_df)
+    monkeypatch.setattr(umh, "_fetch_dgtw_indicator", _dgtw_fail)
+    out = umh.fetch_ndc_signal(dt.date(2024, 1, 1), dt.date(2024, 3, 1))
+    assert len(out) == 2
+    assert dgtw_called["n"] == 0, "relay 成功就不該再走 dgtw fallback"
+
+
+def test_fetch_ndc_signal_falls_through_to_dgtw(monkeypatch):
+    """relay 失敗 → 觸發 dgtw fallback。"""
+    import update_macro_history as umh
+    fake_df = pd.DataFrame({
+        "date": [dt.date(2024, 1, 1)],
+        "value": [28.0],
+    })
+    dgtw_called = {"n": 0}
+
+    def _dgtw_ok(*a, **kw):
+        dgtw_called["n"] += 1
+        return fake_df
+
+    monkeypatch.setattr(umh, "_try_ndc_via_relay",
+                        lambda *a, **kw: pd.DataFrame())
+    monkeypatch.setattr(umh, "_fetch_dgtw_indicator", _dgtw_ok)
+    out = umh.fetch_ndc_signal(dt.date(2024, 1, 1), dt.date(2024, 2, 1))
+    assert len(out) == 1
+    assert dgtw_called["n"] == 1
 
 
 def test_fetch_ndc_signal_empty_when_all_urls_fail(monkeypatch):

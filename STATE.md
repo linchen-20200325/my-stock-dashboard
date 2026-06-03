@@ -6,7 +6,18 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：v18.154_DgtwSearchFallback（最後一輪 — 棄 NDC SPA → data.gov.tw search API + dataset CSV probe）
+- **目前版本**：v18.155_NdcRelayWithAjaxHeader（user 提醒 NAS 中繼站 → 強制走 relay 帶 AJAX header 觸發 SPA 回 JSON）
+  - **背景**：v18.152/153 NDC URL 全敗的根因錯怪：不是 NDC URL pattern 錯，而是**透過 Squid Proxy 抓沒帶 `X-Requested-With: XMLHttpRequest`**。`nas_server.py:35` 的 `_HDR` 已配 AJAX header，AngularJS SPA 偵測到 XHR 應該會切回 JSON 模式（典型雙模式 SPA 行為）— 但 `fetch_url` 內 Squid 是 transparent forwarder 不會自動加這 header
+  - **解法**：新增 `_fetch_via_nas_relay(url, label)` 直接呼叫 `proxy_helper.nas_relay_fetch()` 跳過 Squid 優先序，header 由 NAS 中繼站 FastAPI 自動填（X-Requested-With + Accept: application/json）
+  - **update_macro_history.py**：
+    - 重啟 `_NDC_SIGNAL_URL_CANDIDATES` / `_NDC_LEADING_URL_CANDIDATES`（v18.154 砍掉的）+ `_NDC_VALUE_KEYS` / `_NDC_DATE_KEYS`
+    - 新增 `_fetch_via_nas_relay(url, label)` — 強制走 NAS 中繼站；JSON 解析 + verbose log（CT + body 前 300 char）
+    - 新增 `_try_ndc_via_relay(candidates, label)` — 逐一試 candidate；第一成功就 break
+    - `fetch_ndc_signal` / `fetch_ndc_leading_index` 三路徑彙整：① relay+AJAX header ② data.gov.tw search ③ data.gov.tw ID probe（保留 v18.154 dgtw 作兜底）
+  - **tests/test_update_macro_history.py**：新增 7 case：candidate URL constants 完整性 / `_fetch_via_nas_relay` 成功 / NAS 未設定 graceful / HTML 回應 graceful / `_try_ndc_via_relay` 短路 / `fetch_ndc_signal` relay 成功不走 dgtw / relay 失敗 fallthrough 到 dgtw；既有「全失敗 graceful」測試補 monkeypatch relay
+  - **回歸**：tests/ **918 passed**（911 + 7 net）零回歸
+  - **下一步**：merge 後 bootstrap 一次 → log 會印 `[ndc-relay/...]` 系列訊息，若 SPA 確實對 AJAX header 回 JSON → ✅；若 relay 也回 HTML → 走 dgtw 兜底；若 dgtw 也敗 → §5 警鈴啟動 C 案
+- **前一版**：v18.154_DgtwSearchFallback（最後一輪 — 棄 NDC SPA → data.gov.tw search API + dataset CSV probe）
   - **背景**：v18.153 診斷確認 `index.ndc.gov.tw/app/data/indicator/*` **全 5 個 candidate URL 回相同 AngularJS SPA index HTML**（`<html ng-app="NDCapp">` + `csrf-token` meta）— SPA client-side routing fallback 結構性 dead，繼續加 candidate slug 沒用
   - **解法**：完全砍 NDC OpenAPI，改用 **data.gov.tw 政府資料開放平臺**（鏡像 `macro_core._pmi_src_dgtw` 已驗證 dataset/6100 PMI 在生產 work 的模式）
   - **update_macro_history.py**：
