@@ -6,10 +6,11 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：標題但無值清單三件
-  - **M1B/M2 CBC**：SDMX EF15M01 合表 API 已失效 → 改試 EF19M01（M1B）+ EF21M01（M2）分開抓 + merge，舊 EF15M01 保留為最後嘗試；失敗時印 body 前 120 字診斷
-  - **BFI82U 教學卡**：tab_edu 加 handler 從 `cl_data.inst` 抽外資 net 顯示為即時值（億）；註解同步 BFI82U 已有資料、BWIBBU_d 仍為散點需個股 Tab
-  - **ETF N/A 強化**：內扣費用率 / Beta / AUM / 折溢價率 / 追蹤誤差 5 個 metric 加 `help=`（純 hover hint、不改值或邏輯）
+- **目前版本**：data_cache 4/4 全綠 ✅ + 標題但無值清單三件
+  - **M1B/M2 終於進去**：經 9 輪 iteration 確認 CBC PXWeb API 真實結構 `sdmx["data"]["dataSets"]`（list of `[YYYYMmm, value, ...]`），寫順鏈 parser；bootstrap 抓 5 年得 58 個月度資料 + YoY gap 欄位
+  - **CBC API breaking change 記事**：舊 `ms1.json` 全 404 / 回 HTML、SDMX EF15M01 合表 API 改回 metadata + dataSets；新 parser 用 EF19M01（M1B）+ EF21M01（M2）分表抓再 merge on period_raw
+  - **BFI82U 教學卡**：tab_edu 加 handler 抽外資 net 顯示為億；BWIBBU_d 仍標散點需個股 Tab
+  - **ETF N/A 強化**：內扣費用率 / Beta / AUM / 折溢價率 / 追蹤誤差 5 個 metric 加 help= hover
 - **前一版**：v18.157_PureTwiiDrawdown（C 案降級 — 砍 NDC + 領先指標，Section 十 改純 TWII drawdown 事件表）
   - **背景**：v18.151-156 連 6 輪 PR 嘗試解 NDC 卡關（FinMind enum 改名 → 付費牆 → NDC SPA HTML → data.gov.tw search 無對應 dataset → NAS FastAPI 8765 端 user 未架設）。User 拍板「股票跟基金一樣只走 Squid Proxy 3128」— fund 從來沒用 NAS_BASE_URL FastAPI，只用 PROXY_URL Squid，stock 應該對等
   - **update_macro_history.py**（819 → 419 行，砍 395 行）：移除 `_NDC_*_URL_CANDIDATES` / `_NDC_VALUE_KEYS` / `_NDC_DATE_KEYS` / `_fetch_via_nas_relay` / `_try_ndc_via_relay` / `_DGTW_*` constants / `_fetch_dgtw_search_dataset_ids` / `_fetch_dgtw_dataset_csv_full` / `_fetch_dgtw_indicator` / `fetch_ndc_signal` / `fetch_ndc_leading_index`；DATASETS 從 6 個剩 4（twii / inst / margin / m1m2）；FETCHERS dict 同步
