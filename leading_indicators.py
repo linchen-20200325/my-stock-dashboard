@@ -1262,12 +1262,23 @@ def render_leading_table(df):
     def fmt(v, col):
         if v is None or (isinstance(v, float) and pd.isna(v)): return "-"
         if col in BRACKET:
-            n = int(v); return f"({abs(n):,})" if n < 0 else f"{n:,}"
-        if col in SPOT: return f"{float(v):+.1f}"
+            n = int(v)
+            if n > 0: return f"▲ {n:,}"
+            if n < 0: return f"▼ ({abs(n):,})"
+            return f"{n:,}"
+        if col in SPOT:
+            n = float(v)
+            if n > 0: return f"▲ {n:.1f}"
+            if n < 0: return f"▼ {abs(n):.1f}"
+            return f"{n:.1f}"
         if col in MARGIN: return f"{float(v):,.0f}億"
         if col == "選PCR": return f"{float(v):.1f}"
         if col == "未平倉口數": return f"{int(v):,}"
-        if col == "韭菜指數": return f"{float(v):+.1f}%"
+        if col == "韭菜指數":
+            n = float(v)
+            if n > 0: return f"▲ {n:.1f}%"
+            if n < 0: return f"▼ {abs(n):.1f}%"
+            return f"{n:.1f}%"
         return str(v)
     def sty(v, col):
         if v is None: return ""
@@ -1277,13 +1288,15 @@ def render_leading_table(df):
             pass
         try: n = float(v)
         except: return ""
+        # 台股紅漲綠跌：正數 = 紅 #f85149 / 負數 = 綠 #3fb950
         if col in BRACKET:
-            if n > 0: return "color:#58a6ff;font-weight:bold;"
-            if n < 0: return "color:#f85149;font-weight:bold;"
+            if n > 0: return "color:#f85149;font-weight:bold;"
+            if n < 0: return "color:#3fb950;font-weight:bold;"
         if col in SPOT:
-            if n > 0: return "color:#58a6ff;"
-            if n < 0: return "color:#f85149;"
+            if n > 0: return "color:#f85149;"
+            if n < 0: return "color:#3fb950;"
         if col == "融資餘額":
+            # 水位指標（紅=過熱警示 / 綠=寬鬆），不受紅漲綠跌影響
             if n >= 3400: return "color:#f85149;font-weight:bold;"
             if n >= 2800: return "color:#d29922;"
             return "color:#3fb950;"
@@ -1291,16 +1304,18 @@ def render_leading_table(df):
             if n >= 100:  return "color:#f85149;"
             return "color:#8b949e;"
         if col == "選PCR":
-            if n < 80:  return "color:#58a6ff;"
-            if n > 120: return "color:#f85149;"
+            # PCR 反向：高 PCR = 看空 (跌) = 綠 / 低 PCR = 看多 (漲) = 紅
+            if n < 80:  return "color:#f85149;"
+            if n > 120: return "color:#3fb950;"
         if col == "未平倉口數":
-            if n > 0: return "color:#58a6ff;"
-            if n < 0: return "color:#f85149;"
+            if n > 0: return "color:#f85149;"
+            if n < 0: return "color:#3fb950;"
         if col == "韭菜指數":
-            if n > 10:  return "color:#58a6ff;font-weight:bold;"
-            elif n > 0: return "color:#58a6ff;"
-            elif n < -10: return "color:#f85149;font-weight:bold;"
-            elif n < 0: return "color:#f85149;"
+            # 直接視角：散戶淨多正數 = 紅；散戶淨空負數 = 綠（反向解讀由 user 自行）
+            if n > 10:  return "color:#f85149;font-weight:bold;"
+            elif n > 0: return "color:#f85149;"
+            elif n < -10: return "color:#3fb950;font-weight:bold;"
+            elif n < 0: return "color:#3fb950;"
         return ""
     # 判斷是否有融資融券資料（避免顯示全空欄位）
     _has_margin = any(df[c].notna().any() for c in ["融資餘額","融券餘額"] if c in df.columns)
