@@ -1,6 +1,6 @@
 """tab_macro_validation.py — 台股總經 tab 歷史驗證 UI section (v18.150 Phase C).
 
-對應 tab_macro.py section 十一「📊 總經訊號歷史驗證」.
+對應 tab_macro.py section 十「📊 總經訊號歷史驗證」.
 
 設計：
 - 純 Streamlit 渲染薄殼，純函式邏輯在 macro_validation_tw.py
@@ -31,13 +31,13 @@ from macro_validation_tw import (
 def render_history_validation_section(
     cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
 ) -> None:
-    """渲染「總經訊號歷史驗證」section（tab_macro section 十一）.
+    """渲染「總經訊號歷史驗證」section（tab_macro section 十）.
 
     讀 Parquet → 偵測 TWII crisis → 同步驗證 NDC 信號 + 領先指標的預警能力。
     """
     st.markdown("---")
     st.markdown(
-        "## 📊 十一、總經訊號歷史驗證 — 「Tab 判定 vs 歷史崩盤」 對照"
+        "## 📊 十、總經訊號歷史驗證 — 「Tab 判定 vs 歷史崩盤」 對照"
     )
     st.caption(
         "把 data_cache 抓的 TWII 日 K 跑 high-water-mark 找 ≥20% 回撤事件 → "

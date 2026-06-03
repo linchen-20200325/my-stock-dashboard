@@ -332,13 +332,14 @@ def test_ui_module_exposes_render_function():
     assert callable(tmv.render_history_validation_section)
 
 
-def test_ui_section_after_section_ten():
-    """新 section 必須在 section 十 之後（保持原 1-10 順序不破壞）。"""
+def test_ui_validation_section_before_ai_verdict():
+    """v18.156 user 要求：歷史驗證 section（十）必須在 AI 總裁決（十一）之前。"""
     src = (Path(__file__).parent.parent / "tab_macro.py").read_text(encoding="utf-8")
-    idx_10 = src.find("'十'")
-    idx_new = src.find("render_history_validation_section()")
-    assert idx_10 > 0 and idx_new > 0
-    assert idx_10 < idx_new, "新 section 必須在 section 十 之後"
+    idx_validation = src.find("render_history_validation_section()")
+    idx_ai_verdict = src.find("section_header('十一'")
+    assert idx_validation > 0 and idx_ai_verdict > 0
+    assert idx_validation < idx_ai_verdict, \
+        "歷史驗證（section 十）應在 AI 總裁決（section 十一）之前"
 
 
 if __name__ == "__main__":
