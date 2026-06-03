@@ -6,14 +6,28 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：v18.151_FinMindBusinessIndicatorFix（FinMind v4 dataset 改名 hotfix — bootstrap 失敗復原）
+- **目前版本**：v18.152_NdcOpenApiMigration（脫離 FinMind 付費牆 → 國發會 NDC OpenAPI 免費直連 + multi-URL probe）
+  - **背景**：v18.151 把 dataset 改 `TaiwanBusinessIndicator` 後，bootstrap 撞 HTTP 400 `"Your level is register"` — FinMind 已把 NDC 信號/領先指標歸到 Sponsor 付費 tier（NT$500+/月）。Streamlit live tab `tw_macro.py` 用同 dataset 也壞掉（user 未察覺因為 tab 有 graceful 包覆）
+  - **解法**：脫離 FinMind 改打**國發會 NDC OpenAPI**（`https://index.ndc.gov.tw/app/data/indicator/{slug}`）— PMI 已驗證有效（`macro_core._pmi_src_ndc`）+ proxy 白名單已涵蓋（`nas_server.py`），免 token、免錢
+  - **update_macro_history.py**：
+    - 移除 dead code `_finmind_macro_table` / `_pick_macro_column` / `_MACRO_FULL_TABLE_CACHE`（FinMind 路完全切斷，wide-format helper 不再需要）
+    - 新增 `_NDC_SIGNAL_URL_CANDIDATES`（5 個 slug：monitoring / composite / signal / cyclical / SignalScore）+ `_NDC_LEADING_URL_CANDIDATES`（5 個：leading / Leading / lead / LeadingIndex / leadingComposite）+ `_NDC_VALUE_KEYS`（8 個 fallback）+ `_NDC_DATE_KEYS`（7 個）
+    - 新增 `_fetch_ndc_indicator_full(candidates, label)` — 逐一 try URL via `proxy_helper.fetch_url`，多 JSON shape parser（list / {data:[]} / {items:[]} / {result.records:[]}）+ verbose log（HTTP code + body 前 200 char）供下一輪鎖死
+    - `fetch_ndc_signal(start, end)` + `fetch_ndc_leading_index(start, end)` 取代舊 `fetch_finmind_*`（簽名拿掉 `token` 參數）
+    - FETCHERS dict 把兩 dataset 的 `needs_token` 從 True 改 False（v18.152 起 NDC 表完全免 token）
+    - Parquet 檔名保留 `finmind_ndc_signal.parquet` / `finmind_leading_index.parquet`（向後相容 macro_validation_tw.py + Section 十一 UI）
+  - **tests/test_update_macro_history.py**：替換 11 個 FinMind 測試 → 11 個 NDC 測試（含 _FakeResp helper）：candidate URL constants 完整性 / 第一 URL 成功不打第二 / 第一 fail fallback 第二 / 全 URL fail 回空 / JSON shape={'data':[]} unwrap / yearMonth date key / round + Int64 cast / 範圍 filter / 全 fail graceful
+  - **tw_macro.py 暫不動**：本 PR 純 bootstrap fetcher 修復；Streamlit live tab 同樣是 FinMind 來源，留下次 PR 一起遷移到 NDC OpenAPI（避免 hotfix scope 爆量）
+  - **回歸**：tests/ **907 passed** 零回歸
+  - **下一步**：merge 後請手動觸發 `update_macro_history.yml` workflow_dispatch + bootstrap=true / years=25 → bootstrap log 會印每個 candidate URL 的 HTTP 狀態 → 第一個 work 的 URL 自動寫進 Parquet；若全失敗，貼 log 給我 → 下一輪 PR 加新 candidate / 改用 data.gov.tw dataset ID fallback
+- **前一版**：v18.151_FinMindBusinessIndicatorFix（FinMind v4 dataset 改名 hotfix — bootstrap 失敗復原）
   - **背景**：v18.149 用 dataset `TaiwanMacroEconomics` 抓 NDC + 領先指標，bootstrap 時 FinMind 回 HTTP 422 enum invalid（dataset 已被廢除/改名）→ NDC/領先 Parquet 0 rows → Section 十一驗證無資料可看
   - **根因**：FinMind v4 把 NDC monitoring + 領先 leading 合併打包成 wide-format dataset `TaiwanBusinessIndicator`（欄位：date / leading / leading_notrend / coincident / coincident_notrend / lagging / lagging_notrend / monitoring）
   - **update_macro_history.py**：dataset 改 `TaiwanBusinessIndicator`；移除 dead code `_filter_macro_indicator` + `NDC_SIGNAL_KEYS` + `LEADING_INDEX_KEYS`（wide-format 不需 long-format indicator filter）；新增 `_pick_macro_column(df, col)` wide-format 抽欄輔助；`fetch_finmind_ndc_signal` 改抓 `monitoring`、`fetch_finmind_leading_index` 改抓 `leading`；`_finmind_macro_table` cache 機制不變（NDC + leading 仍共用一次 API call）
   - **tests/test_update_macro_history.py**：移除 5 個 `_filter_macro_indicator` 測試 + 改寫 4 個 fetcher / cache 測試以 wide-format 為 fixture；新增 3 個 `_pick_macro_column` 測試（基本抽欄 + NaN drop / 缺欄 graceful / 空輸入）+ 1 個 dataset 名稱驗證測試（防 FinMind 再次改名時無感）
   - **回歸**：tests/ **907 passed**（v18.150 909 - 5 obsolete + 3 new = 907）零功能回歸
   - **下一步**：請手動觸發 `update_macro_history.yml` workflow_dispatch + bootstrap=true / years=25 → 應抓到 ~300 月 NDC + 領先資料（1984 起算）→ Section 十一可看 7 場 crisis 命中表 → 接 Phase E 跨來源比對
-- **前一版**：v18.150_MacroBacktestUI（macro tab section 十一 — 歷史驗證 UI，鏡像 fund Phase 6a）
+- **前二版**：v18.150_MacroBacktestUI（macro tab section 十一 — 歷史驗證 UI，鏡像 fund Phase 6a）
   - **User 需求**：「兩邊都可以做回測來驗證台股的總經 tab 與基金（全球的）總經 tab」。Sister repo my-Fund-dashboard 已於 v18.276 Phase B.2 把 Parquet 接到 Phase 6a 驗證 UI；本 PR 為台股對等版本，讀 PR #149 v18.149 鋪好的 NDC + 領先指標 Parquet + 既有 twii_ohlcv → 雙指標 × TWII crisis 命中表
   - **macro_validation_tw.py**（~270 行 pure data）：3 個 Parquet loader（NDC / 領先 / TWII close）+ `detect_twii_crisis_events`（high-water-mark walk-forward，與 fund crisis_backtest 同範式，預設 20% 回撤）+ `verify_ndc_signal_vs_crises`（峰前 N 月 → 峰時 NDC 下降 ≥ drop_pts 分；預設 4 分 ≈ 1 燈號跨度）+ `verify_leading_index_vs_crises`（peak 月 6M smoothed change < 0 即命中）+ `compute_smoothed_change_pct`（與 tw_macro.fetch_ndc_leading_index 一致 rolling 6 月 MA → pct_change × 100）+ `compute_hit_rate` 統計卡 helper
   - **tab_macro_validation.py**（~240 行 Streamlit UI）：`render_history_validation_section(cache_dir)` — Section 十一 渲染；缺檔友善 banner 引導 user 等 cron；3 sliders（TWII 回撤門檻 10-40% / lead_months 3-12 / NDC drop_pts 2-10）+ 跑按鈕 + 2 張命中率卡 + plotly 雙軸圖（TWII 主軸 + NDC 副軸 + crisis 紅區）+ NDC/領先指標雙命中表 + 2 個 CSV 下載按鈕（utf-8-sig BOM 解 Excel）
@@ -21,7 +35,7 @@
   - **tests/test_macro_validation_tw.py**（29 case 全綠）：Parquet 讀取（缺檔 / 正常解析 / 壞檔 graceful）/ detect_twii_crisis_events（v 型 / 門檻下無事件 / 空 / 過短 / open-ended 無 recovery / 多事件）/ verify_ndc（命中 exact 4 pts / 明確 8 pts / 無事件 / 空 series）/ compute_smoothed_change（常數 → 0% / 線性升全正 / 空 input）/ verify_li（peak 時 smooth<0 命中 / 單調升不命中 / 空 input）/ compute_hit_rate（mixed / empty / all None drop_pts）/ UI source-level（tab_macro.py import 與呼叫 + 模組 export render fn + section 順序在 10 之後）
   - **回歸**：tests/ **909 passed** 零回歸（880 + 29 新）
   - Roadmap：Phase D（PMI 補抓進 Parquet）→ Phase E（fund + stock 同框跨來源比對工具）
-- **前二版**：v18.149_NdcLeadingHistoryFetchers（macro_history 擴 2 新表：景氣對策信號 + 領先指標）
+- **前三版**：v18.149_NdcLeadingHistoryFetchers（macro_history 擴 2 新表：景氣對策信號 + 領先指標）
   - **User 需求**：「兩邊都可以做回測來驗證台股的總經 tab 與基金（全球的）總經 tab」+ 「直接抓取資料放在資料庫，之後每周定期更新」→ 沿用 PR #144 已建的 Parquet 快取模式（非 SQLite），補上**驗證總經 Tab 的關鍵 2 指標**：NDC 景氣對策信號（拐點偵測 9-45 分）+ 領先指標綜合指數（6M smoothed change 領先期）
   - **update_macro_history.py**：新增 `fetch_finmind_ndc_signal` + `fetch_finmind_leading_index`（都打 FinMind TaiwanMacroEconomics dataset，模組級 `_MACRO_FULL_TABLE_CACHE` 字典快取讓兩 fetcher 共用一次 API call）；新增 `_finmind_macro_table()` 全表抓取（含 cache）+ `_filter_macro_indicator()` 指標篩選工具（支援 indicator/name/metric × value/data 欄位變體 + exact→contains 兩層 fallback）；DATASETS 從 4 表擴 6 表，FETCHERS dict 同步註冊（皆需 FINMIND_TOKEN）
   - **新增 Parquet**：`data_cache/finmind_ndc_signal.parquet`（columns: date, ndc_signal Int64）+ `data_cache/finmind_leading_index.parquet`（columns: date, leading_index float）；領先指標**只存原始值**，6M smoothed change 由分析端 on-the-fly 算（rolling 6 月需 lookback context，fetcher 增量時無法正確算）

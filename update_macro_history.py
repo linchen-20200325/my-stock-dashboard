@@ -6,8 +6,8 @@ data_cache/twii_ohlcv.parquet              ← ^TWII 日 K（yfinance via NAS pr
 data_cache/finmind_inst.parquet            ← 三大法人總買賣超（FinMind）
 data_cache/finmind_margin.parquet          ← 融資餘額（FinMind）
 data_cache/finmind_m1m2.parquet            ← M1B / M2 月差（FinMind）
-data_cache/finmind_ndc_signal.parquet      ← 景氣對策信號分數 9-45（FinMind TaiwanBusinessIndicator.monitoring）
-data_cache/finmind_leading_index.parquet   ← 領先指標綜合指數（FinMind TaiwanBusinessIndicator.leading）
+data_cache/finmind_ndc_signal.parquet      ← 景氣對策信號分數 9-45（國發會 NDC OpenAPI，免 token；v18.152 取代 FinMind 付費牆）
+data_cache/finmind_leading_index.parquet   ← 領先指標綜合指數（國發會 NDC OpenAPI；檔名保留 finmind_ 前綴以維持向後相容）
 data_cache/metadata.json                   ← 各表 last_updated + row_count
 
 每日跑一次（TW 17:00 收盤後）
@@ -44,13 +44,6 @@ DATASETS = ["twii_ohlcv", "finmind_inst", "finmind_margin", "finmind_m1m2",
             "finmind_ndc_signal", "finmind_leading_index"]
 
 FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
-
-# FinMind TaiwanBusinessIndicator (v4)：wide-format 月頻國發會景氣表，
-# 欄位 date / leading / leading_notrend / coincident / coincident_notrend /
-# lagging / lagging_notrend / monitoring（景氣對策信號分數 9-45）。
-# 同 (start, end, has_token) 全表只抓一次，NDC + leading 兩 fetcher 共用。
-_MACRO_FULL_TABLE_CACHE: dict[tuple, pd.DataFrame] = {}
-
 
 # ════════════════════════════════════════════════════════════════
 # I/O Helpers
@@ -325,69 +318,143 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     return out[["date", "m1b", "m2", "m1b_m2_gap"]]
 
 
-def _finmind_macro_table(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
-    """FinMind TaiwanBusinessIndicator wide-format 全表（含模組級快取）。
+# ──────────────────────────────────────────────────────────────────
+# v18.152 國發會 NDC OpenAPI 取代 FinMind TaiwanBusinessIndicator（付費牆）
+# ──────────────────────────────────────────────────────────────────
+# 候選 URL：macro_core._pmi_src_ndc 已實測 /app/data/indicator/PMI 有效，
+# 由此類推 composite/leading 等 slug；多 candidate 同時打，第一個 HTTP 200 + 解析
+# 成功者勝出；全失敗印 verbose log（HTTP code + body 前 200 char）供下一輪 PR
+# 鎖死正確 URL。
+_NDC_SIGNAL_URL_CANDIDATES: tuple = (
+    "https://index.ndc.gov.tw/app/data/indicator/monitoring",
+    "https://index.ndc.gov.tw/app/data/indicator/composite",
+    "https://index.ndc.gov.tw/app/data/indicator/signal",
+    "https://index.ndc.gov.tw/app/data/indicator/cyclical",
+    "https://index.ndc.gov.tw/app/data/indicator/SignalScore",
+)
 
-    NDC monitoring + leading 都在同一 dataset 同一回應 — 用 (start, end, has_token)
-    做 key 緩存避免重複 API call；wide-format 直接 column-pick 無需 long-format filter。
+_NDC_LEADING_URL_CANDIDATES: tuple = (
+    "https://index.ndc.gov.tw/app/data/indicator/leading",
+    "https://index.ndc.gov.tw/app/data/indicator/Leading",
+    "https://index.ndc.gov.tw/app/data/indicator/lead",
+    "https://index.ndc.gov.tw/app/data/indicator/LeadingIndex",
+    "https://index.ndc.gov.tw/app/data/indicator/leadingComposite",
+)
+
+_NDC_VALUE_KEYS = ("value", "score", "data", "index", "composite",
+                   "monitoring", "leading", "signal")
+_NDC_DATE_KEYS = ("date", "yearMonth", "period", "month",
+                  "year_month", "yearmonth", "yearMonthCode")
+
+
+def _fetch_ndc_indicator_full(url_candidates: tuple, label: str) -> pd.DataFrame:
+    """逐一嘗試 URL candidate；第一個成功的回 [date, value] 全歷史 DataFrame。
+
+    走 proxy_helper.fetch_url（NAS Squid → 直連 fallback；macro_core 同款）。
+    全失敗回空 DataFrame + 印每個 URL 的 HTTP code 與 body 前 200 char。
     """
-    key = (start.isoformat(), end.isoformat(), bool(token))
-    cached = _MACRO_FULL_TABLE_CACHE.get(key)
-    if cached is not None:
-        return cached
-    raw = _finmind_get(
-        "TaiwanBusinessIndicator", "",
-        start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), token,
-    )
-    _MACRO_FULL_TABLE_CACHE[key] = raw
-    return raw
-
-
-def _pick_macro_column(df: pd.DataFrame, col: str) -> pd.DataFrame:
-    """從 TaiwanBusinessIndicator wide-format 抽出 [date, col] 並清理 NaN/型別。"""
-    if df is None or df.empty or "date" not in df.columns or col not in df.columns:
+    try:
+        from proxy_helper import fetch_url
+    except ImportError:
+        print(f"[ndc/{label}] ❌ proxy_helper 不可用，無法走 NAS 中繼")
         return pd.DataFrame()
-    sub = df[["date", col]].copy()
-    sub.columns = ["date", "value"]
-    sub["value"] = pd.to_numeric(sub["value"], errors="coerce")
-    sub["date"] = pd.to_datetime(sub["date"]).dt.date
-    return sub.dropna(subset=["value"]).sort_values("date").reset_index(drop=True)
+
+    import re as _re_ndc
+    for url in url_candidates:
+        slug = url.rsplit("/", 1)[-1]
+        try:
+            r = fetch_url(url, timeout=15, attempts=2,
+                          headers={"Accept": "application/json"})
+            if r is None:
+                print(f"[ndc/{label}/{slug}] 無回應")
+                continue
+            if r.status_code != 200:
+                body = r.text[:200].replace("\n", " ")
+                print(f"[ndc/{label}/{slug}] HTTP={r.status_code} body={body}")
+                continue
+            try:
+                j = r.json()
+            except Exception as e:
+                print(f"[ndc/{label}/{slug}] JSON 解析失敗 {type(e).__name__}: {str(e)[:100]}")
+                continue
+        except Exception as e:
+            print(f"[ndc/{label}/{slug}] {type(e).__name__}: {str(e)[:100]}")
+            continue
+
+        items = j if isinstance(j, list) else (
+            j.get("data") or j.get("items")
+            or j.get("result", {}).get("records") or [])
+        if not items or not isinstance(items, list):
+            top_keys = list(j.keys())[:6] if isinstance(j, dict) else type(j).__name__
+            print(f"[ndc/{label}/{slug}] 解析後 items 為空 (top={top_keys})")
+            continue
+
+        rows = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            v_raw = next((it[k] for k in _NDC_VALUE_KEYS
+                          if k in it and it[k] is not None), None)
+            d_raw = next((it[k] for k in _NDC_DATE_KEYS
+                          if k in it and it[k]), None)
+            if v_raw is None or not d_raw:
+                continue
+            try:
+                v = float(v_raw)
+            except (TypeError, ValueError):
+                continue
+            m = _re_ndc.search(r"(20\d{2}|19\d{2})[-/]?(\d{1,2})", str(d_raw))
+            if not m:
+                continue
+            try:
+                d = _dt.date(int(m.group(1)), int(m.group(2)), 1)
+            except (ValueError, TypeError):
+                continue
+            rows.append({"date": d, "value": v})
+
+        if not rows:
+            print(f"[ndc/{label}/{slug}] items={len(items)} 但 0 個 row 可解析")
+            continue
+
+        df = pd.DataFrame(rows).drop_duplicates("date").sort_values("date").reset_index(drop=True)
+        print(f"[ndc/{label}/{slug}] ✅ {len(df)} rows ({df['date'].iloc[0]} ~ {df['date'].iloc[-1]})")
+        return df
+
+    print(f"[ndc/{label}] ❌ 所有 {len(url_candidates)} 個 candidate URL 全失敗")
+    return pd.DataFrame()
 
 
-def fetch_finmind_ndc_signal(start: _dt.date, end: _dt.date,
-                              token: str) -> pd.DataFrame:
-    """景氣對策信號分數（月頻；範圍 9-45；來源 TaiwanBusinessIndicator.monitoring）。
+def fetch_ndc_signal(start: _dt.date, end: _dt.date) -> pd.DataFrame:
+    """景氣對策信號分數（月頻；範圍 9-45；來源 國發會 NDC OpenAPI）。
 
     輸出欄位：date, ndc_signal
-    用於驗證總經 Tab 的拐點判定：連 2 月翻多/翻空、歷史 crisis 對應。
+    走 NAS Squid Proxy（fetch_url）解海外 IP 封鎖；多 URL candidate fallback。
     """
-    raw = _finmind_macro_table(start, end, token)
-    sub = _pick_macro_column(raw, "monitoring")
-    if sub.empty:
-        print("[finmind_ndc_signal] ⚠️ 無景氣對策信號資料（monitoring 欄缺失或全空）")
-        return sub
-    out = sub.rename(columns={"value": "ndc_signal"})
+    raw = _fetch_ndc_indicator_full(_NDC_SIGNAL_URL_CANDIDATES, "signal")
+    if raw.empty:
+        print("[ndc_signal] ⚠️ 無景氣對策信號資料")
+        return raw
+    raw = raw[(raw["date"] >= start) & (raw["date"] <= end)]
+    out = raw.rename(columns={"value": "ndc_signal"})
     out["ndc_signal"] = out["ndc_signal"].round().astype("Int64")
-    print(f"[finmind_ndc_signal] ✅ {len(out)} rows")
-    return out
+    print(f"[ndc_signal] ✅ {len(out)} rows in [{start}, {end}]")
+    return out.reset_index(drop=True)
 
 
-def fetch_finmind_leading_index(start: _dt.date, end: _dt.date,
-                                 token: str) -> pd.DataFrame:
-    """領先指標綜合指數（月頻原始指數值；來源 TaiwanBusinessIndicator.leading）。
+def fetch_ndc_leading_index(start: _dt.date, end: _dt.date) -> pd.DataFrame:
+    """領先指標綜合指數（月頻原始指數值；來源 國發會 NDC OpenAPI）。
 
     輸出欄位：date, leading_index
-    刻意只存原始指數值；6M smoothed change 需要 6 月以上 lookback context，
-    增量更新時無法在 fetcher 內正確計算，由下游分析端 on-the-fly 算（讀全 series 再 rolling）。
+    6M smoothed change 由下游分析端 on-the-fly 算（rolling 6 月需 lookback context）。
     """
-    raw = _finmind_macro_table(start, end, token)
-    sub = _pick_macro_column(raw, "leading")
-    if sub.empty:
-        print("[finmind_leading_index] ⚠️ 無領先指標資料")
-        return sub
-    out = sub.rename(columns={"value": "leading_index"})
-    print(f"[finmind_leading_index] ✅ {len(out)} rows")
-    return out
+    raw = _fetch_ndc_indicator_full(_NDC_LEADING_URL_CANDIDATES, "leading")
+    if raw.empty:
+        print("[ndc_leading_index] ⚠️ 無領先指標資料")
+        return raw
+    raw = raw[(raw["date"] >= start) & (raw["date"] <= end)]
+    out = raw.rename(columns={"value": "leading_index"})
+    print(f"[ndc_leading_index] ✅ {len(out)} rows in [{start}, {end}]")
+    return out.reset_index(drop=True)
 
 
 FETCHERS = {
@@ -395,8 +462,8 @@ FETCHERS = {
     "finmind_inst": (fetch_finmind_inst, True),
     "finmind_margin": (fetch_finmind_margin, True),
     "finmind_m1m2": (fetch_finmind_m1m2, True),
-    "finmind_ndc_signal": (fetch_finmind_ndc_signal, True),
-    "finmind_leading_index": (fetch_finmind_leading_index, True),
+    "finmind_ndc_signal": (fetch_ndc_signal, False),       # v18.152 NDC OpenAPI 免 token
+    "finmind_leading_index": (fetch_ndc_leading_index, False),
 }
 
 
