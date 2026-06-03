@@ -44,6 +44,8 @@ jobs:
         env:
           PROXY_URL: ${{ secrets.PROXY_URL }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          NAS_BASE_URL: ${{ secrets.NAS_BASE_URL }}
+          NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
         run: |
           if [ "${{ github.event.inputs.bootstrap }}" = "true" ]; then
             python update_macro_history.py --bootstrap --years ${{ github.event.inputs.years || '5' }}
