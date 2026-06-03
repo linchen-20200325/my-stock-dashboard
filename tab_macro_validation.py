@@ -189,8 +189,8 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
     with col_b:
         max_lookback_days = st.slider(
             "提前預警搜尋上限（峰前 M 天）",
-            min_value=90, max_value=540, value=365, step=30,
-            help="在峰前 M 天內搜尋訊號最早一次進入警戒區的日期",
+            min_value=60, max_value=365, value=180, step=30,
+            help="在峰前 M 天內搜尋訊號『從非警戒跨越到警戒』的最早轉折日（edge detection）",
             key="macro_tw_phase3_max_lookback",
         )
 

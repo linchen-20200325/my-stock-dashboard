@@ -250,12 +250,19 @@ def evaluate_signal_at_event(
     signal_series: pd.Series,
     spec: TwSignalSpec,
     lookback_days: int = 90,
-    max_lookback_days: int = 365,
+    max_lookback_days: int = 180,
+    mode: str = "edge",
 ) -> TwSignalLookback:
-    """對單一事件單一訊號做回看判讀（鏡像 fund repo）.
+    """對單一事件單一訊號做回看判讀.
 
     1. 取峰日往前 lookback_days 那一天 ≤ 目標日的最近觀測值 → triggered_at_lookback
-    2. 在峰前 max_lookback_days 區間找「最早一次」進入警戒區 → lead_time_days
+    2. 在峰前 max_lookback_days 區間找「進入警戒區」日期 → lead_time_days
+
+    v18.160 修正：mode 參數
+    - "state" (v1 legacy): 找 series 內第一次 value 落在警戒區
+                            → 「一直亮紅燈」會被誤判成提前 N 天預警
+    - "edge"  (v2 預設):   找 series 在 window 內**從非警戒跨越到警戒**的轉折日
+                            → 真實「事件驅動」訊號；窗口開頭已警戒則不算（沒看到 transition）
     """
     if signal_series is None or signal_series.empty or event.peak_date is None:
         return TwSignalLookback(
@@ -297,11 +304,27 @@ def evaluate_signal_at_event(
     first_warn_date: Optional[pd.Timestamp] = None
     lead_days: Optional[int] = None
     if not window.empty:
-        warn_mask = window.apply(lambda v: _is_warning(float(v), spec.threshold, spec.direction))
-        warn_idx = window.index[warn_mask]
-        if len(warn_idx) > 0:
-            first_warn_date = warn_idx[0]
-            lead_days = (peak - first_warn_date).days
+        if mode == "edge":
+            # v2 edge detection：全 series 算 warn_mask（含 window 外的歷史），
+            # crossing = t-1 非警戒 + t 警戒；只取落在 window 內的 crossings
+            full_warn = before_peak.apply(
+                lambda v: _is_warning(float(v), spec.threshold, spec.direction))
+            # shift 第 1 列補 True：series 起點的「之前狀態」未知，保守視為「已在警戒」
+            # 這樣 series 第一筆即使在警戒區也不算 transition（避免誤判）
+            crossings = full_warn & ~full_warn.shift(1, fill_value=True)
+            cross_in_window = before_peak.index[
+                crossings & (before_peak.index >= window_start)]
+            if len(cross_in_window) > 0:
+                first_warn_date = cross_in_window[0]
+                lead_days = (peak - first_warn_date).days
+        else:
+            # v1 state：任何警戒值即算（legacy 行為，保留供回歸對照）
+            warn_mask = window.apply(
+                lambda v: _is_warning(float(v), spec.threshold, spec.direction))
+            warn_idx = window.index[warn_mask]
+            if len(warn_idx) > 0:
+                first_warn_date = warn_idx[0]
+                lead_days = (peak - first_warn_date).days
 
     return TwSignalLookback(
         event_peak_date=peak,
@@ -322,16 +345,18 @@ def lookback_all_signals_tw(
     series_by_key: dict[str, pd.Series],
     specs: Optional[list[TwSignalSpec]] = None,
     lookback_days: int = 90,
-    max_lookback_days: int = 365,
+    max_lookback_days: int = 180,
+    mode: str = "edge",
 ) -> dict[str, list[TwSignalLookback]]:
-    """批次：對所有事件 × 所有訊號做回看。"""
+    """批次：對所有事件 × 所有訊號做回看（v18.160 預設 edge mode）。"""
     if specs is None:
         specs = DEFAULT_TW_SIGNALS
     out: dict[str, list[TwSignalLookback]] = {}
     for spec in specs:
         series = series_by_key.get(spec.key, pd.Series(dtype=float))
         out[spec.key] = [
-            evaluate_signal_at_event(ev, series, spec, lookback_days, max_lookback_days)
+            evaluate_signal_at_event(ev, series, spec,
+                                     lookback_days, max_lookback_days, mode)
             for ev in events
         ]
     return out
