@@ -6,7 +6,21 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：v18.153_NdcOpenApiDiag（NDC URL 多 candidate 全 JSON 失敗 — 加強診斷 log 找根因）
+- **目前版本**：v18.154_DgtwSearchFallback（最後一輪 — 棄 NDC SPA → data.gov.tw search API + dataset CSV probe）
+  - **背景**：v18.153 診斷確認 `index.ndc.gov.tw/app/data/indicator/*` **全 5 個 candidate URL 回相同 AngularJS SPA index HTML**（`<html ng-app="NDCapp">` + `csrf-token` meta）— SPA client-side routing fallback 結構性 dead，繼續加 candidate slug 沒用
+  - **解法**：完全砍 NDC OpenAPI，改用 **data.gov.tw 政府資料開放平臺**（鏡像 `macro_core._pmi_src_dgtw` 已驗證 dataset/6100 PMI 在生產 work 的模式）
+  - **update_macro_history.py**：
+    - 移除 dead code：`_NDC_SIGNAL_URL_CANDIDATES` / `_NDC_LEADING_URL_CANDIDATES` / `_NDC_VALUE_KEYS` / `_NDC_DATE_KEYS` / `_fetch_ndc_indicator_full`（v18.152/153 殘骸）
+    - 新增 `_DGTW_*` constants：3 個 signal keywords + 3 個 leading keywords + 16 個 candidate IDs（6097-6109 + 6052-6056；國發會系列 ID 鄰近 6100 PMI）+ 6 個 signal value 欄關鍵字 + 3 個 leading value 欄關鍵字 + 9 個 date 欄關鍵字
+    - 新增 `_fetch_dgtw_search_dataset_ids(keyword, label)` — 打 3 個 search API 變體（v2/v1/front）+ 多 result shape parser；印 candidate IDs + titles
+    - 新增 `_fetch_dgtw_dataset_csv_full(ds_id, value_keywords, label)` — metadata API 取 resources → 找 CSV → 下載 → 全 row 解析 [date, value]（不限末筆，bootstrap 用），完全鏡像 `_pmi_src_dgtw` 但回完整 DataFrame
+    - 新增 `_fetch_dgtw_indicator(keywords, value_keywords, candidate_ids, label)` — 二路徑彙整：① search API 找 ID ② 直接 probe 鄰近 ID 範圍
+    - `fetch_ndc_signal` / `fetch_ndc_leading_index` 內部改呼叫 `_fetch_dgtw_indicator`
+  - **tests/test_update_macro_history.py**：替換 7 個 NDC OpenAPI 測試 → 11 個 dgtw 測試（含擴強 `_FakeResp` 支援 CSV bytes + Content-Type）：constants 完整性 / search 解析 results / search 0 results / search HTML fallback / dataset CSV parse 完整 / dataset 無 CSV resource / CSV 無 value 欄 / search→dataset 直通成功 / search fail fallback probe / fetch_ndc_signal Int64+filter / fetch_ndc_leading_index float / 全失敗 graceful
+  - **回歸**：tests/ **911 passed**（907 + 4 net）零功能回歸
+  - **下一步**：merge 後再按一次 bootstrap → log 會印 search API 真實回應 + 各 candidate ID metadata 結果 → 命中或徹底失敗都能診斷
+  - **§5 警鈴**：若本輪仍失敗 → 直接走 C 案（Section 十一 純 TWII drawdown，捨 NDC 驗證），不再嘗試第 5 路徑
+- **前一版**：v18.153_NdcOpenApiDiag（NDC URL 多 candidate 全 JSON 失敗 — 加強診斷 log 找根因）
   - **背景**：v18.152 bootstrap 10 個 NDC OpenAPI candidate URL 全回「JSON 解析失敗 line 1 column 1 (char 0)」— proxy 報「成功抓取」表示 HTTP 200 + body 有內容（非空），但首字元非 JSON。推測：NDC SPA 對所有 `/app/data/indicator/*` 路徑回 HTML 首頁（client-side routing fallback）
   - **update_macro_history.py**：`_fetch_ndc_indicator_full` JSON 解析失敗分支新增 `Content-Type` header 與 `body[:300]` dump（從原本只印 exception type → 補出 HTML/JSONP/空 body 的關鍵診斷）
   - **回歸**：tests/ 907 passed 零回歸（log 字串變動，不影響邏輯路徑測試）
