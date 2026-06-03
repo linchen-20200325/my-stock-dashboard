@@ -6,7 +6,18 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：data_cache 4/4 全綠 ✅ + 標題但無值清單三件
+- **目前版本**：v18.158_LeadingTableRedGreen（先行指標表配色換台股慣例 — 紅漲綠跌 + ▲▼ icon）
+  - **User 需求**：截圖回報「台股這顏色我分辨不出來」— `render_leading_table` 原配色「正藍 #58a6ff / 負紅 #f85149」在 OLED 螢幕藍色偏紫，與紅幾乎同色相。User 選「台股紅綠（紅漲綠跌）+ 三角 icon」方案
+  - **leading_indicators.py:render_leading_table** 改 fmt() + sty() 兩 fn（line 1262-1304）：
+    - **fmt** 加 ▲/▼ icon prefix（BRACKET / SPOT / 韭菜指數 三類數值）。BRACKET 負數保留會計慣例 `(43,596)` 加 `▼ ` 前綴；正數 `▲ ` 前綴
+    - **sty 色彩語意**：BRACKET / SPOT / 韭菜指數 / 未平倉口數 — 正紅 `#f85149` 負綠 `#3fb950`（台股紅漲綠跌）
+    - **PCR 反向語意**：< 80 看多紅、> 120 看空綠（原本相反；台股紅漲綠跌邏輯）
+    - **融資餘額不變**（紅 = 過熱警示 / 綠 = 寬鬆），這是水位指標非漲跌
+    - **韭菜指數維持「直接視角」**（散戶淨多正數 = 紅；反向解讀由 user 自行）；line 793 `render_table` 是 legacy（已用紅綠 + 反向韭菜邏輯）dead code 未動
+  - **tests/test_leading_indicators.py**：5 個 PCR case 更新 — `test_pcr_below_80_blue` 改 `test_pcr_below_80_red`、`test_pcr_above_120_red` 改 `test_pcr_above_120_green`，斷言色從 `#58a6ff` 改 `#f85149`、`#f85149` 改 `#3fb950`
+  - **回歸**：tests/test_leading_indicators.py **47 passed** 零回歸
+  - **下一步**：refresh Tab1 macro 看新配色，正負分辨度應大幅提升
+- **前一版**：data_cache 4/4 全綠 ✅ + 標題但無值清單三件
   - **M1B/M2 終於進去**：經 9 輪 iteration 確認 CBC PXWeb API 真實結構 `sdmx["data"]["dataSets"]`（list of `[YYYYMmm, value, ...]`），寫順鏈 parser；bootstrap 抓 5 年得 58 個月度資料 + YoY gap 欄位
   - **CBC API breaking change 記事**：舊 `ms1.json` 全 404 / 回 HTML、SDMX EF15M01 合表 API 改回 metadata + dataSets；新 parser 用 EF19M01（M1B）+ EF21M01（M2）分表抓再 merge on period_raw
   - **BFI82U 教學卡**：tab_edu 加 handler 抽外資 net 顯示為億；BWIBBU_d 仍標散點需個股 Tab

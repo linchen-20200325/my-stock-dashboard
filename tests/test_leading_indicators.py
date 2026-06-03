@@ -256,31 +256,33 @@ def _pcr_df(pcr_val):
 
 
 class TestRenderLeadingTablePCR(unittest.TestCase):
-    """PCR 顏色：< 80 → 藍(#58a6ff)；> 120 → 紅(#f85149)；80~120 → 無色"""
+    """PCR 顏色（v18.158 台股紅綠化）：
+    < 80 → 紅(#f85149) 看多/漲；> 120 → 綠(#3fb950) 看空/跌；80~120 → 無色
+    """
 
-    def test_pcr_below_80_blue(self):
+    def test_pcr_below_80_red(self):
         html = render_leading_table(_pcr_df(65.0))
-        self.assertIn("58a6ff", html)
-
-    def test_pcr_above_120_red(self):
-        html = render_leading_table(_pcr_df(135.0))
         self.assertIn("f85149", html)
+
+    def test_pcr_above_120_green(self):
+        html = render_leading_table(_pcr_df(135.0))
+        self.assertIn("3fb950", html)
 
     def test_pcr_neutral_no_data_color(self):
         # 100.0 在 80~120 之間，PCR 欄不應有顏色；其餘欄全 None
         html = render_leading_table(_pcr_df(100.0))
-        self.assertNotIn("58a6ff", html)
         self.assertNotIn("f85149", html)
+        self.assertNotIn("3fb950", html)
 
-    def test_pcr_boundary_80_no_blue(self):
-        # 剛好 80 不觸發藍色（n < 80 為假）
+    def test_pcr_boundary_80_no_red(self):
+        # 剛好 80 不觸發紅色（n < 80 為假）
         html = render_leading_table(_pcr_df(80.0))
-        self.assertNotIn("58a6ff", html)
-
-    def test_pcr_boundary_120_no_red(self):
-        # 剛好 120 不觸發紅色（n > 120 為假）
-        html = render_leading_table(_pcr_df(120.0))
         self.assertNotIn("f85149", html)
+
+    def test_pcr_boundary_120_no_green(self):
+        # 剛好 120 不觸發綠色（n > 120 為假）
+        html = render_leading_table(_pcr_df(120.0))
+        self.assertNotIn("3fb950", html)
 
 
 if __name__ == "__main__":
