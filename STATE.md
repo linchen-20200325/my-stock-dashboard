@@ -6,7 +6,16 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：v18.156_MacroSectionSwap（macro tab section 十 ↔ 十一 交換 — 歷史驗證上、AI 總裁決下）
+- **目前版本**：v18.157_PureTwiiDrawdown（C 案降級 — 砍 NDC + 領先指標，Section 十 改純 TWII drawdown 事件表）
+  - **背景**：v18.151-156 連 6 輪 PR 嘗試解 NDC 卡關（FinMind enum 改名 → 付費牆 → NDC SPA HTML → data.gov.tw search 無對應 dataset → NAS FastAPI 8765 端 user 未架設）。User 拍板「股票跟基金一樣只走 Squid Proxy 3128」— fund 從來沒用 NAS_BASE_URL FastAPI，只用 PROXY_URL Squid，stock 應該對等
+  - **update_macro_history.py**（819 → 419 行，砍 395 行）：移除 `_NDC_*_URL_CANDIDATES` / `_NDC_VALUE_KEYS` / `_NDC_DATE_KEYS` / `_fetch_via_nas_relay` / `_try_ndc_via_relay` / `_DGTW_*` constants / `_fetch_dgtw_search_dataset_ids` / `_fetch_dgtw_dataset_csv_full` / `_fetch_dgtw_indicator` / `fetch_ndc_signal` / `fetch_ndc_leading_index`；DATASETS 從 6 個剩 4（twii / inst / margin / m1m2）；FETCHERS dict 同步
+  - **macro_validation_tw.py**（344 → 157 行，砍 187 行）：移除 `load_ndc_signal_from_parquet` / `load_leading_index_from_parquet` / `NdcVerifyResult` / `verify_ndc_signal_vs_crises` / `LeadingIndexVerifyResult` / `compute_smoothed_change_pct` / `verify_leading_index_vs_crises` / `compute_hit_rate`；只保留 `load_twii_close_from_parquet` + `TwiiCrisisEvent` + `detect_twii_crisis_events`
+  - **tab_macro_validation.py**（258 → 131 行，砍 127 行）：rewrite UI — 純 TWII drawdown 事件表（1 slider 回撤門檻 + TWII + crisis 紅區走勢圖 + 事件清單表 + CSV 下載）；移除 NDC/領先指標命中表 + 命中率卡 + 3 slider 變 1 slider
+  - **tests/test_update_macro_history.py**（479 → 112 行）：砍 _FakeResp + dgtw 11 case + ndc 6 case 共 17 個 NDC/dgtw/relay 測試
+  - **tests/test_macro_validation_tw.py**（346 → 154 行）：砍 NDC/leading/hit_rate/smoothed_change 共 17 個測試；test_load_handles_corrupt_parquet 改用 twii 檔
+  - **回歸**：tests/ **880 passed**（v18.156 918 - 38 NDC/dgtw/relay 測試 = 880）零功能回歸
+  - **未來還原路徑**：若 user 將來 SSH 進 NAS 跑 FastAPI 8765 + 設好 `NAS_BASE_URL` secret → revert PR 即恢復；目前選擇與 fund 對等的最簡架構
+- **前一版**：v18.156_MacroSectionSwap（macro tab section 十 ↔ 十一 交換 — 歷史驗證上、AI 總裁決下）
   - **User 需求**：「十一、總經訊號歷史驗證 往上移到十 交換」— UI 排序調整
   - **tab_macro_validation.py**：內部 markdown header「十一、」改「十、」（兩處：docstring + render markdown）
   - **tab_macro.py**：插入新 section 十（render_history_validation_section call）在原 section 十之前；原 AI 總裁決的 section_header 從 '十' 改 '十一'；刪除文件末尾的重複 validation block（避免渲染兩次）
