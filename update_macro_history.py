@@ -375,7 +375,10 @@ def _fetch_ndc_indicator_full(url_candidates: tuple, label: str) -> pd.DataFrame
             try:
                 j = r.json()
             except Exception as e:
-                print(f"[ndc/{label}/{slug}] JSON 解析失敗 {type(e).__name__}: {str(e)[:100]}")
+                # v18.153：印 Content-Type + body 前 300 char 診斷（HTML/JSONP/空）
+                ct = r.headers.get("Content-Type", "?")[:50] if hasattr(r, "headers") else "?"
+                body_preview = (r.text[:300] if r.text else "<empty>").replace("\n", " ")
+                print(f"[ndc/{label}/{slug}] JSON 失敗 {type(e).__name__} CT={ct} body={body_preview}")
                 continue
         except Exception as e:
             print(f"[ndc/{label}/{slug}] {type(e).__name__}: {str(e)[:100]}")

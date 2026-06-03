@@ -6,7 +6,12 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：v18.152_NdcOpenApiMigration（脫離 FinMind 付費牆 → 國發會 NDC OpenAPI 免費直連 + multi-URL probe）
+- **目前版本**：v18.153_NdcOpenApiDiag（NDC URL 多 candidate 全 JSON 失敗 — 加強診斷 log 找根因）
+  - **背景**：v18.152 bootstrap 10 個 NDC OpenAPI candidate URL 全回「JSON 解析失敗 line 1 column 1 (char 0)」— proxy 報「成功抓取」表示 HTTP 200 + body 有內容（非空），但首字元非 JSON。推測：NDC SPA 對所有 `/app/data/indicator/*` 路徑回 HTML 首頁（client-side routing fallback）
+  - **update_macro_history.py**：`_fetch_ndc_indicator_full` JSON 解析失敗分支新增 `Content-Type` header 與 `body[:300]` dump（從原本只印 exception type → 補出 HTML/JSONP/空 body 的關鍵診斷）
+  - **回歸**：tests/ 907 passed 零回歸（log 字串變動，不影響邏輯路徑測試）
+  - **下一步**：merge 後 bootstrap 一次 → log 會印出 NDC 實際回什麼 → 我下一輪 PR 依結果選正確路徑（HTML 抓 → 改 data.gov.tw search；JSONP → 加 unwrap；空 → 改 query string 帶參數）
+- **前一版**：v18.152_NdcOpenApiMigration（脫離 FinMind 付費牆 → 國發會 NDC OpenAPI 免費直連 + multi-URL probe）
   - **背景**：v18.151 把 dataset 改 `TaiwanBusinessIndicator` 後，bootstrap 撞 HTTP 400 `"Your level is register"` — FinMind 已把 NDC 信號/領先指標歸到 Sponsor 付費 tier（NT$500+/月）。Streamlit live tab `tw_macro.py` 用同 dataset 也壞掉（user 未察覺因為 tab 有 graceful 包覆）
   - **解法**：脫離 FinMind 改打**國發會 NDC OpenAPI**（`https://index.ndc.gov.tw/app/data/indicator/{slug}`）— PMI 已驗證有效（`macro_core._pmi_src_ndc`）+ proxy 白名單已涵蓋（`nas_server.py`），免 token、免錢
   - **update_macro_history.py**：
