@@ -256,22 +256,58 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
         except Exception as e:
             print(f"[finmind_m1m2/ms1] {url[-40:]} ❌ {type(e).__name__}: {e}")
 
-    # ── Tier 2: SDMX EF15M01 ──
+    # ── Tier 2: SDMX 個別 item code（EF19M01=M1B、EF21M01=M2 月資料）──
+    # CBC API 文件確認 EF19M01en / EF21M01en 為月度貨幣供給代碼；EF15M01 合表已失效
     if not isinstance(data, list) or len(data) < 13:
-        try:
-            r = _fu_cbc("https://cpx.cbc.gov.tw/API/DataAPI/Get",
-                        params={"FileName": "EF15M01"}, timeout=20, attempts=2)
-            if r is not None and r.status_code == 200:
+        m1b_rows, m2_rows = [], []
+        for fname, label, target in [
+            ("EF19M01", "M1B", m1b_rows),
+            ("EF21M01", "M2", m2_rows),
+            ("EF15M01", "M1M2合表", None),
+        ]:
+            try:
+                r = _fu_cbc("https://cpx.cbc.gov.tw/API/DataAPI/Get",
+                            params={"FileName": fname}, timeout=20, attempts=2)
+                if r is None or r.status_code != 200:
+                    continue
                 try:
                     sdmx = r.json()
                     rows = sdmx.get("DataSet", []) if isinstance(sdmx, dict) else []
                     if rows:
-                        print(f"[finmind_m1m2/EF15M01] ✅ 取到 {len(rows)} 行")
-                        data = rows
+                        print(f"[finmind_m1m2/{fname}] ✅ {label} 取到 {len(rows)} 行")
+                        if target is not None:
+                            target.extend(rows)
+                        else:
+                            data = rows
+                            break
+                    else:
+                        print(f"[finmind_m1m2/{fname}] DataSet 空 body={r.text[:120]}")
                 except Exception:
-                    print(f"[finmind_m1m2/EF15M01] JSON 解析失敗 body={r.text[:200]}")
-        except Exception as e:
-            print(f"[finmind_m1m2/EF15M01] ❌ {type(e).__name__}: {e}")
+                    print(f"[finmind_m1m2/{fname}] JSON 解析失敗 body={r.text[:200]}")
+            except Exception as e:
+                print(f"[finmind_m1m2/{fname}] ❌ {type(e).__name__}: {e}")
+
+        if (not isinstance(data, list) or len(data) < 13) and m1b_rows and m2_rows:
+            try:
+                df_a = pd.DataFrame(m1b_rows)
+                df_b = pd.DataFrame(m2_rows)
+                date_a = next((c for c in df_a.columns
+                               if str(c).strip() in ("年月", "date", "TIME_PERIOD", "PERIOD")), None)
+                val_a = next((c for c in df_a.columns
+                              if c != date_a and pd.api.types.is_numeric_dtype(
+                                  pd.to_numeric(df_a[c].astype(str).str.replace(",", ""), errors="coerce"))), None)
+                date_b = next((c for c in df_b.columns
+                               if str(c).strip() in ("年月", "date", "TIME_PERIOD", "PERIOD")), None)
+                val_b = next((c for c in df_b.columns
+                              if c != date_b and pd.api.types.is_numeric_dtype(
+                                  pd.to_numeric(df_b[c].astype(str).str.replace(",", ""), errors="coerce"))), None)
+                if date_a and val_a and date_b and val_b:
+                    a = df_a[[date_a, val_a]].rename(columns={date_a: "date_raw", val_a: "m1b"})
+                    b = df_b[[date_b, val_b]].rename(columns={date_b: "date_raw", val_b: "m2"})
+                    data = pd.merge(a, b, on="date_raw", how="inner").to_dict(orient="records")
+                    print(f"[finmind_m1m2] EF19+EF21 合併 {len(data)} 行")
+            except Exception as e:
+                print(f"[finmind_m1m2] EF19+EF21 合併失敗：{type(e).__name__}: {e}")
 
     if not isinstance(data, list) or len(data) < 13:
         print("[finmind_m1m2] CBC 全來源失敗")
