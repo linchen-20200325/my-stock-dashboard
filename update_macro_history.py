@@ -256,8 +256,9 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
         except Exception as e:
             print(f"[finmind_m1m2/ms1] {url[-40:]} ❌ {type(e).__name__}: {e}")
 
-    # ── Tier 2: SDMX 個別 item code（EF19M01=M1B、EF21M01=M2 月資料）──
-    # CBC API 文件確認 EF19M01en / EF21M01en 為月度貨幣供給代碼；EF15M01 合表已失效
+    # ── Tier 2: CBC PXWeb API（EF19M01=M1B、EF21M01=M2 月度 .px 檔）──
+    # 第一手回應只給 meta + links 的 PC-Axis metadata，真實資料需順 links 抓
+    # 嘗試多種 response shape：DataSet（舊）/ dataset（CBC 文件）/ data / 觀察 links
     if not isinstance(data, list) or len(data) < 13:
         m1b_rows, m2_rows = [], []
         for fname, label, target in [
@@ -272,7 +273,23 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
                     continue
                 try:
                     sdmx = r.json()
-                    rows = sdmx.get("DataSet", []) if isinstance(sdmx, dict) else []
+                    # 試多種 response shape（CBC API 結構在不同年份有變動）
+                    rows = []
+                    if isinstance(sdmx, dict):
+                        for key in ("DataSet", "dataset", "data", "Data", "values"):
+                            v = sdmx.get(key)
+                            if isinstance(v, list) and len(v) > 0:
+                                rows = v
+                                print(f"[finmind_m1m2/{fname}] 用 key={key} 取到 {len(rows)} 行")
+                                break
+                        # 若 meta + links 結構：印出 links 供下次寫 follower
+                        if not rows:
+                            _meta = sdmx.get("meta") or {}
+                            _links = sdmx.get("links") or _meta.get("links")
+                            print(f"[finmind_m1m2/{fname}] DataSet 空。"
+                                  f"top-level keys={list(sdmx.keys())[:10]}"
+                                  f"  links 型態={type(_links).__name__}"
+                                  f"  links 預覽={str(_links)[:400]}")
                     if rows:
                         print(f"[finmind_m1m2/{fname}] ✅ {label} 取到 {len(rows)} 行")
                         if target is not None:
@@ -280,10 +297,8 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
                         else:
                             data = rows
                             break
-                    else:
-                        print(f"[finmind_m1m2/{fname}] DataSet 空 body={r.text[:120]}")
                 except Exception:
-                    print(f"[finmind_m1m2/{fname}] JSON 解析失敗 body={r.text[:200]}")
+                    print(f"[finmind_m1m2/{fname}] JSON 解析失敗 body={r.text[:300]}")
             except Exception as e:
                 print(f"[finmind_m1m2/{fname}] ❌ {type(e).__name__}: {e}")
 
