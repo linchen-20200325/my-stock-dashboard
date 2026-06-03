@@ -273,23 +273,34 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
                     continue
                 try:
                     sdmx = r.json()
-                    # 試多種 response shape（CBC API 結構在不同年份有變動）
                     rows = []
                     if isinstance(sdmx, dict):
+                        # 試多種 top-level shape：list 直拿 / dict 看 nested
                         for key in ("DataSet", "dataset", "data", "Data", "values"):
                             v = sdmx.get(key)
                             if isinstance(v, list) and len(v) > 0:
                                 rows = v
-                                print(f"[finmind_m1m2/{fname}] 用 key={key} 取到 {len(rows)} 行")
+                                print(f"[finmind_m1m2/{fname}] top-level list key={key} 取到 {len(rows)} 行")
                                 break
-                        # 若 meta + links 結構：印出 links 供下次寫 follower
+                            if isinstance(v, dict) and len(v) > 0:
+                                # nested dict：再往下挖一層常見鍵
+                                for sub in ("value", "values", "data", "Data",
+                                            "observations", "series", "rows"):
+                                    sv = v.get(sub)
+                                    if isinstance(sv, list) and len(sv) > 0:
+                                        rows = sv
+                                        print(f"[finmind_m1m2/{fname}] nested key={key}.{sub} 取到 {len(rows)} 行")
+                                        break
+                                if rows:
+                                    break
+                                # 若 dict 內全是 dict（如 JSON-Stat 維度結構）→ 印出供診斷
+                                print(f"[finmind_m1m2/{fname}] data dict keys={list(v.keys())[:10]} "
+                                      f"preview={str(v)[:400]}")
+                                break
                         if not rows:
-                            _meta = sdmx.get("meta") or {}
-                            _links = sdmx.get("links") or _meta.get("links")
                             print(f"[finmind_m1m2/{fname}] DataSet 空。"
-                                  f"top-level keys={list(sdmx.keys())[:10]}"
-                                  f"  links 型態={type(_links).__name__}"
-                                  f"  links 預覽={str(_links)[:400]}")
+                                  f"top-level keys={list(sdmx.keys())[:10]} "
+                                  f"body={r.text[:500]}")
                     if rows:
                         print(f"[finmind_m1m2/{fname}] ✅ {label} 取到 {len(rows)} 行")
                         if target is not None:
