@@ -273,41 +273,34 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
                     continue
                 try:
                     sdmx = r.json()
-                    rows = []
+                    # CBC PXWeb 實際結構：sdmx["data"]["dataSets"] = [[period, val, "-", val, ...], ...]
+                    # 每 row：第 0 欄是 'YYYYMmm' 期間字串，第 1 欄是該表的主數值（百萬元）
+                    raw_rows = []
                     if isinstance(sdmx, dict):
-                        # 試多種 top-level shape：list 直拿 / dict 看 nested
-                        for key in ("DataSet", "dataset", "data", "Data", "values"):
-                            v = sdmx.get(key)
-                            if isinstance(v, list) and len(v) > 0:
-                                rows = v
-                                print(f"[finmind_m1m2/{fname}] top-level list key={key} 取到 {len(rows)} 行")
-                                break
-                            if isinstance(v, dict) and len(v) > 0:
-                                # nested dict：再往下挖一層常見鍵
-                                for sub in ("value", "values", "data", "Data",
-                                            "observations", "series", "rows"):
-                                    sv = v.get(sub)
-                                    if isinstance(sv, list) and len(sv) > 0:
-                                        rows = sv
-                                        print(f"[finmind_m1m2/{fname}] nested key={key}.{sub} 取到 {len(rows)} 行")
-                                        break
-                                if rows:
-                                    break
-                                # 若 dict 內全是 dict（如 JSON-Stat 維度結構）→ 印出供診斷
-                                print(f"[finmind_m1m2/{fname}] data dict keys={list(v.keys())[:10]} "
-                                      f"preview={str(v)[:400]}")
-                                break
-                        if not rows:
-                            print(f"[finmind_m1m2/{fname}] DataSet 空。"
-                                  f"top-level keys={list(sdmx.keys())[:10]} "
-                                  f"body={r.text[:500]}")
-                    if rows:
-                        print(f"[finmind_m1m2/{fname}] ✅ {label} 取到 {len(rows)} 行")
-                        if target is not None:
-                            target.extend(rows)
-                        else:
-                            data = rows
-                            break
+                        _data = sdmx.get("data")
+                        if isinstance(_data, dict):
+                            raw_rows = _data.get("dataSets") or _data.get("value") or []
+                        elif isinstance(_data, list):
+                            raw_rows = _data
+                    if not raw_rows:
+                        print(f"[finmind_m1m2/{fname}] dataSets 空 body={r.text[:300]}")
+                        continue
+                    print(f"[finmind_m1m2/{fname}] ✅ {label} 取到 {len(raw_rows)} 行 raw")
+                    # 標準化：每 row 轉成 {period, value}
+                    parsed = []
+                    for row in raw_rows:
+                        if not isinstance(row, list) or len(row) < 2:
+                            continue
+                        parsed.append({"period_raw": str(row[0]), "value": row[1]})
+                    if target is m1b_rows:
+                        for p in parsed:
+                            target.append({"period_raw": p["period_raw"], "m1b": p["value"]})
+                    elif target is m2_rows:
+                        for p in parsed:
+                            target.append({"period_raw": p["period_raw"], "m2": p["value"]})
+                    else:
+                        # EF15M01 合表結構不同（多欄），暫不處理
+                        pass
                 except Exception:
                     print(f"[finmind_m1m2/{fname}] JSON 解析失敗 body={r.text[:300]}")
             except Exception as e:
@@ -317,23 +310,12 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
             try:
                 df_a = pd.DataFrame(m1b_rows)
                 df_b = pd.DataFrame(m2_rows)
-                date_a = next((c for c in df_a.columns
-                               if str(c).strip() in ("年月", "date", "TIME_PERIOD", "PERIOD")), None)
-                val_a = next((c for c in df_a.columns
-                              if c != date_a and pd.api.types.is_numeric_dtype(
-                                  pd.to_numeric(df_a[c].astype(str).str.replace(",", ""), errors="coerce"))), None)
-                date_b = next((c for c in df_b.columns
-                               if str(c).strip() in ("年月", "date", "TIME_PERIOD", "PERIOD")), None)
-                val_b = next((c for c in df_b.columns
-                              if c != date_b and pd.api.types.is_numeric_dtype(
-                                  pd.to_numeric(df_b[c].astype(str).str.replace(",", ""), errors="coerce"))), None)
-                if date_a and val_a and date_b and val_b:
-                    a = df_a[[date_a, val_a]].rename(columns={date_a: "date_raw", val_a: "m1b"})
-                    b = df_b[[date_b, val_b]].rename(columns={date_b: "date_raw", val_b: "m2"})
-                    data = pd.merge(a, b, on="date_raw", how="inner").to_dict(orient="records")
-                    print(f"[finmind_m1m2] EF19+EF21 合併 {len(data)} 行")
+                merged = pd.merge(df_a, df_b, on="period_raw", how="inner")
+                if not merged.empty:
+                    data = merged.to_dict(orient="records")
+                    print(f"[finmind_m1m2] EF19+EF21 merge {len(data)} 行")
             except Exception as e:
-                print(f"[finmind_m1m2] EF19+EF21 合併失敗：{type(e).__name__}: {e}")
+                print(f"[finmind_m1m2] EF19+EF21 merge 失敗：{type(e).__name__}: {e}")
 
     if not isinstance(data, list) or len(data) < 13:
         print("[finmind_m1m2] CBC 全來源失敗")
@@ -341,23 +323,32 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     print(f"[finmind_m1m2] 抓到欄位：{list(pd.DataFrame(data).columns)[:15]}")
 
     df = pd.DataFrame(data)
-    c1 = next((c for c in df.columns
-               if "M1B" in str(c).upper() or "貨幣供給額M1B" in str(c)), None)
-    c2 = next((c for c in df.columns
-               if str(c).strip().upper() == "M2" or "貨幣供給額M2" in str(c)), None)
-    date_col = next((c for c in df.columns
-                     if str(c).strip() in ("年月", "date", "yearMonth", "Date",
-                                            "PERIOD", "TIME_PERIOD")), None)
-    if not (c1 and c2 and date_col):
-        print(f"[finmind_m1m2] CBC 欄位對應失敗：{list(df.columns)[:10]}")
-        return pd.DataFrame()
-
-    out = df[[date_col, c1, c2]].copy()
-    out.columns = ["date_raw", "m1b", "m2"]
-    # 日期 normalize：'2026/04' / '2026-04' / '202604' → 'YYYY-MM-01'
+    # EF19+EF21 路徑：欄位已是 period_raw / m1b / m2
+    if {"period_raw", "m1b", "m2"}.issubset(set(df.columns)):
+        out = df[["period_raw", "m1b", "m2"]].copy()
+        out = out.rename(columns={"period_raw": "date_raw"})
+    else:
+        # 舊 ms1.json 路徑（已不再可用，留邏輯防禦）
+        c1 = next((c for c in df.columns
+                   if "M1B" in str(c).upper() or "貨幣供給額M1B" in str(c)), None)
+        c2 = next((c for c in df.columns
+                   if str(c).strip().upper() == "M2" or "貨幣供給額M2" in str(c)), None)
+        date_col = next((c for c in df.columns
+                         if str(c).strip() in ("年月", "date", "yearMonth", "Date",
+                                                "PERIOD", "TIME_PERIOD")), None)
+        if not (c1 and c2 and date_col):
+            print(f"[finmind_m1m2] CBC 欄位對應失敗：{list(df.columns)[:10]}")
+            return pd.DataFrame()
+        out = df[[date_col, c1, c2]].copy()
+        out.columns = ["date_raw", "m1b", "m2"]
+    # 日期 normalize：支援 'YYYYMmm'（CBC PXWeb）/ 'YYYY-MM' / 'YYYY/MM' / 'YYYYMM'
     import re as _re
     def _norm(s):
-        m = _re.search(r"(20\d{2})[-/年]?(\d{1,2})", str(s))
+        s = str(s).strip()
+        m = _re.search(r"(20\d{2})\s*M\s*(\d{1,2})", s, _re.IGNORECASE)
+        if m:
+            return _dt.date(int(m.group(1)), int(m.group(2)), 1)
+        m = _re.search(r"(20\d{2})[-/年]?(\d{1,2})", s)
         if not m:
             return None
         return _dt.date(int(m.group(1)), int(m.group(2)), 1)
@@ -373,7 +364,7 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     out["m1b_m2_gap"] = (out["m1b"] / out["m1b"].shift(12) - 1) * 100 - \
                         (out["m2"] / out["m2"].shift(12) - 1) * 100
     out = out[(out["date"] >= start) & (out["date"] <= end)]
-    print(f"[finmind_m1m2] ✅ CBC ms1.json {len(out)} rows")
+    print(f"[finmind_m1m2] ✅ CBC PXWeb {len(out)} rows")
     return out[["date", "m1b", "m2", "m1b_m2_gap"]]
 
 
