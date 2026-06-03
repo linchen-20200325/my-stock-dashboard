@@ -6,7 +6,11 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：代碼淨化與收尾完成 ✅（v5_modules / v4_strategy_engine / nas_server 移除 unused vars/imports，0 邏輯改動）
+- **目前版本**：標題但無值清單三件 ✅
+  - **M1B/M2**：CBC SDMX 改用 EF19M01（M1B）+ EF21M01（M2）分開抓再 merge（舊 EF15M01 合表 API 已失效）；保留為 fallback；多層 Tier 1-2 失敗時也會印診斷
+  - **BFI82U 教學卡**：tab_edu 加 handler 從 `cl_data.inst` 抽外資 net 顯示為即時值（億），結構複雜的 BWIBBU_d 改成明確標註「無聚合值請至個股 Tab」
+  - **ETF N/A 訊息強化**：內扣費用率/Beta/AUM/折溢價率/追蹤誤差 metric 加 `help=` 說明（「主動式/私募未揭露」/「PROXY_URL 受限」/「benchmark 資料不足」），不改值/邏輯只加 hover
+- **前一版**：代碼淨化收尾 ✅（v5_modules / v4_strategy_engine / nas_server 移除 unused vars/imports，0 邏輯改動）
 - **前一版**：總經歷史資料快取層 + 每日增量 Actions（解 TWII-only 結構性偏弱）
   - **data_cache/**：Parquet 表 git 追蹤——`twii_ohlcv.parquet`（^TWII 日 K）/`finmind_inst.parquet`（三大法人外資淨買賣，億）/`finmind_margin.parquet`（融資餘額）/`finmind_m1m2.parquet`（M1B/M2 月差）+ `metadata.json`（last_updated + row_count + last_error per dataset）
   - **`update_macro_history.py`**：無 streamlit 相依的爬蟲（pattern 同 update_etf_managers），讀 Parquet last_date → 抓 `[last_date+1, today]` 增量 → append + dedupe（保留 new 修正版）→ 寫回；走 proxy_helper 解海外 IP；CLI `--bootstrap --years N --only NAME`

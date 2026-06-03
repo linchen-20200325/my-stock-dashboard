@@ -67,8 +67,8 @@ def render_tab_edu():
                 覆蓋範圍：
                   ✓ 有 series：^VIX / ^TNX / ^SOX / DX-Y.NYB（cl_data.intl 有 90D OHLC）
                   ✓ 僅單值：CPILFESL / NAPM / XTEXVA01TWM664S / NDC_signal /
-                            ms1.json / MI_MARGN（macro_info / m1b_m2_info）
-                  ✗ 無資料：BWIBBU_d / BFI82U（結構複雜，待後續 PR）
+                            ms1.json / MI_MARGN / BFI82U（macro_info / m1b_m2_info / cl_data）
+                  ✗ 無資料：BWIBBU_d（TWSE 大盤散點資料，無單一聚合值，請至個股 Tab 看）
                 """
                 _macro = st.session_state.get('macro_info') or {}
                 _cl    = st.session_state.get('cl_data') or {}
@@ -120,6 +120,18 @@ def render_tab_edu():
                                            and _m1b.get('m2_yoy') is not None)
                                        else None,                                            0,    -2,   False),
                 }
+                # ─ BFI82U：三大法人現貨買賣超（取外資 net，億）─
+                if identifier == 'BFI82U':
+                    _inst = _cl.get('inst') or {}
+                    _foreign_key = next((k for k in _inst if '外資' in str(k)), None)
+                    if _foreign_key:
+                        _net = _inst.get(_foreign_key, {}).get('net')
+                        if _net is not None:
+                            # net 單位是元（FinMind）or 億（TWSE）；統一以億為 UI 單位
+                            _val = float(_net) / 1e8 if abs(float(_net)) > 1e6 else float(_net)
+                            return _val, None, 0, -100, False
+                    return None, None, 0, -100, False
+
                 if identifier in _single:
                     _v, _tw, _tc, _hib = _single[identifier]
                     _funits = _FRED_EDU_UNITS.get(identifier)
