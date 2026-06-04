@@ -337,5 +337,82 @@ def test_hit_rate_mixed_coverage_and_hits():
     assert stats["avg_lead_days"] == 100
 
 
+# ════════════════════════════════════════════════════════════════
+# v18.163：訊號精確率（forward-looking）測試
+# ════════════════════════════════════════════════════════════════
+from macro_signal_lookback_tw import compute_signal_precision  # noqa: E402
+
+
+class TestComputeSignalPrecision:
+    def test_empty_series_returns_zero(self):
+        stat = compute_signal_precision(
+            pd.Series([], dtype=float), [_mock_event("2020-01-01")],
+            _spec_above(25.0))
+        assert stat["n_crossings"] == 0
+        assert stat["precision_pct"] is None
+
+    def test_all_true_positives(self):
+        """每個 crossing 後 30 天就有 event 命中 → 100% precision。"""
+        idx = pd.date_range("2020-01-01", "2023-12-31", freq="MS")
+        # 5 個月 below + 1 月 above + 5 月 below + 1 月 above ... → 多次 crossing
+        values = [30.0 if i % 6 == 5 else 10.0 for i in range(len(idx))]
+        series = pd.Series(values, index=idx, name="X")
+        # 每個 crossing 日後 30 天剛好放一個 event
+        crossing_dates = [idx[i] for i in range(len(idx)) if i % 6 == 5]
+        events = [_mock_event(str((d + pd.Timedelta(days=30)).date()))
+                  for d in crossing_dates]
+        stat = compute_signal_precision(series, events, _spec_above(25.0),
+                                          max_forward_days=365)
+        assert stat["n_crossings"] == len(crossing_dates)
+        assert stat["n_true_positives"] == stat["n_crossings"]
+        assert stat["n_false_positives"] == 0
+        assert stat["precision_pct"] == 100.0
+        assert stat["false_alert_rate_pct"] == 0.0
+
+    def test_all_false_positives(self):
+        """crossings 都在 events 之後很遠 → 全 FP。"""
+        idx = pd.date_range("2020-01-01", "2023-12-31", freq="MS")
+        values = [10.0] * 12 + [30.0] * (len(idx) - 12)
+        series = pd.Series(values, index=idx, name="X")
+        # event 在 2015，遠在 series 起點之前 → crossing 後找不到 future event
+        events = [_mock_event("2015-06-01")]
+        stat = compute_signal_precision(series, events, _spec_above(25.0),
+                                          max_forward_days=365)
+        assert stat["n_crossings"] == 1  # 只 1 個 transition
+        assert stat["n_true_positives"] == 0
+        assert stat["n_false_positives"] == 1
+        assert stat["precision_pct"] == 0.0
+        assert stat["false_alert_rate_pct"] == 100.0
+
+    def test_mixed_tp_fp(self):
+        """2 crossings：第 1 個有 event 命中，第 2 個沒。"""
+        idx = pd.date_range("2020-01-01", periods=400, freq="D")
+        # day 50 transition up，day 150 down，day 250 transition up
+        values = [10.0] * 50 + [30.0] * 100 + [10.0] * 100 + [30.0] * 150
+        series = pd.Series(values, index=idx, name="X")
+        # event 在 day 100 → 第 1 個 crossing (day 50) 在 365 天內命中
+        # 第 2 個 crossing (day 250) 在 365 天內無 event → FP
+        events = [_mock_event(str(idx[100].date()))]
+        stat = compute_signal_precision(series, events, _spec_above(25.0),
+                                          max_forward_days=365)
+        assert stat["n_crossings"] == 2
+        assert stat["n_true_positives"] == 1
+        assert stat["n_false_positives"] == 1
+        assert stat["precision_pct"] == 50.0
+        assert stat["false_alert_rate_pct"] == 50.0
+
+    def test_window_boundary_inclusive(self):
+        """event 剛好在 crossing + max_forward_days 邊界 → 算 TP（≤ 包含）."""
+        idx = pd.date_range("2020-01-01", periods=400, freq="D")
+        values = [10.0] * 50 + [30.0] * 350
+        series = pd.Series(values, index=idx, name="X")
+        # crossing 在 day 50；event 剛好在 day 50 + 365
+        events = [_mock_event(str((idx[50] + pd.Timedelta(days=365)).date()))]
+        stat = compute_signal_precision(series, events, _spec_above(25.0),
+                                          max_forward_days=365)
+        assert stat["n_true_positives"] == 1
+        assert stat["precision_pct"] == 100.0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
