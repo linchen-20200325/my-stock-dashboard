@@ -1172,9 +1172,9 @@ def render_macro_compass():
 
 render_macro_compass()
 
-tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_etf, tab_etf_grp, tab_etf_margin, tab_diag, tab_edu = st.tabs([
+tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_etf, tab_etf_grp, tab_etf_margin, tab_backtest, tab_diag, tab_edu = st.tabs([
     '🌍 總經', '🗺️ 產業熱力圖', '🔬 個股', '🏆 個股組合',
-    '💎 高息網', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🔎 資料診斷', '📚 教學',
+    '💎 高息網', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🧪 回測找參數', '🔎 資料診斷', '📚 教學',
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -1558,6 +1558,13 @@ with tab_etf_grp:
 with tab_etf_margin:
     from tab_etf_margin_simulator import render_etf_margin_simulator
     render_etf_margin_simulator()
+
+# ══════════════════════════════════════════════════════════════
+# TAB: 回測找參數（多因子權重最佳化 + 高原 + walk-forward, v18.167）
+# ══════════════════════════════════════════════════════════════
+with tab_backtest:
+    from tab_backtest_optimization import render_backtest_optimization_tab
+    render_backtest_optimization_tab()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: 7% 高殖利率防禦網（Screener Mode）
