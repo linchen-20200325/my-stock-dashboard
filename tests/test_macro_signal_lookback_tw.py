@@ -23,7 +23,10 @@ from macro_signal_lookback_tw import (  # noqa: E402
     fetch_foreign_sell_5d_series,
     fetch_m1b_m2_diff_series,
     fetch_margin_balance_series,
+    fetch_margin_growth_5d_series,
     fetch_twii_drop_20d_series,
+    fetch_twii_realized_vol_20d_series,
+    fetch_twse_vol_ratio_series,
     lookback_all_signals_tw,
 )
 from macro_validation_tw import TwiiCrisisEvent  # noqa: E402
@@ -132,6 +135,77 @@ def test_fetch_twii_drop_20d_computes_pct_change(tmp_path: Path):
     assert abs(s.iloc[0] - (-5.0)) < 0.01
     # 最末（22 日，index 21）：close[21]=90 vs close[1]=100 → -10%
     assert abs(s.iloc[1] - (-10.0)) < 0.01
+
+
+# ════════════════════════════════════════════════════════════════
+# v18.168：3 個新 fetcher 缺檔 + 計算驗證
+# ════════════════════════════════════════════════════════════════
+def test_fetch_twse_vol_ratio_missing_returns_empty(tmp_path: Path):
+    assert fetch_twse_vol_ratio_series(tmp_path).empty
+
+
+def test_fetch_margin_growth_5d_missing_returns_empty(tmp_path: Path):
+    assert fetch_margin_growth_5d_series(tmp_path).empty
+
+
+def test_fetch_twii_realized_vol_20d_missing_returns_empty(tmp_path: Path):
+    assert fetch_twii_realized_vol_20d_series(tmp_path).empty
+
+
+def test_fetch_twse_vol_ratio_zscore_centered_zero(tmp_path: Path):
+    """正常 60 日 SMA 後 z-score 平均應 ≈ 0；異常高量點應顯著正值."""
+    import numpy as np
+    n = 200
+    dates = pd.date_range("2024-01-01", periods=n, freq="D")
+    rng = np.random.default_rng(0)
+    volumes = rng.normal(1e10, 1e9, n).clip(min=1e9)
+    df = pd.DataFrame({"date": dates, "volume": volumes})
+    df.to_parquet(tmp_path / "twii_ohlcv.parquet", index=False)
+    s = fetch_twse_vol_ratio_series(tmp_path)
+    assert not s.empty
+    # z-score 全段平均應接近 0
+    assert abs(s.mean()) < 0.1
+    # 標準差應接近 1
+    assert abs(s.std() - 1.0) < 0.05
+
+
+def test_fetch_margin_growth_5d_diff(tmp_path: Path):
+    """margin_balance 從 100 → 105（5 日後）億 → diff(5) = +5 億."""
+    n = 7
+    dates = pd.date_range("2024-01-01", periods=n, freq="D")
+    # 100, 101, 102, 103, 104, 105 億；index 5 處 diff(5) = 105 - 100 = +5
+    balances_billions = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 110.0]
+    margin_raw = [b * 1e8 for b in balances_billions]
+    df = pd.DataFrame({"date": dates, "margin_balance": margin_raw})
+    df.to_parquet(tmp_path / "finmind_margin.parquet", index=False)
+    s = fetch_margin_growth_5d_series(tmp_path)
+    # dropna 後剩 index 5 = +5 億 / index 6 = +9 億
+    assert len(s) == 2
+    assert abs(s.iloc[0] - 5.0) < 0.01
+    assert abs(s.iloc[1] - 9.0) < 0.01
+
+
+def test_fetch_twii_realized_vol_20d_positive(tmp_path: Path):
+    """波動率為正且 dropna 後長度合理（21 日 - 20 視窗 + 1 = 2，但 pct_change 又少 1）."""
+    import numpy as np
+    n = 50
+    dates = pd.date_range("2024-01-01", periods=n, freq="D")
+    rng = np.random.default_rng(0)
+    closes = (100 * np.cumprod(1 + rng.normal(0, 0.01, n))).tolist()
+    df = pd.DataFrame({"date": dates, "close": closes})
+    df.to_parquet(tmp_path / "twii_ohlcv.parquet", index=False)
+    s = fetch_twii_realized_vol_20d_series(tmp_path)
+    assert not s.empty
+    # 年化波動率合理區間（這資料 σ ≈ 1% daily → 年化 ≈ 16%）
+    assert 5.0 < s.mean() < 50.0
+    # 全為正
+    assert (s >= 0).all()
+
+
+def test_fetchers_registry_covers_v18_168_keys():
+    """3 個新 key 都在 TW_SIGNAL_FETCHERS registry."""
+    for key in ("TWSE_VOL_RATIO", "MARGIN_GROWTH_5D", "TWII_REALIZED_VOL_20D"):
+        assert key in TW_SIGNAL_FETCHERS, f"{key} 未註冊"
 
 
 # ════════════════════════════════════════════════════════════════

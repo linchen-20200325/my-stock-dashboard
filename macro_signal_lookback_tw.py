@@ -169,12 +169,86 @@ def fetch_twii_drop_20d_series(
     return s.dropna()
 
 
+# v18.168：擴 3 個 parquet 衍生因子（成交量比 / 融資增速 / 已實現波動率）
+def fetch_twse_vol_ratio_series(
+    cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+) -> pd.Series:
+    """大盤成交量比（volume / SMA60 - 1，z-score 後輸出）.
+
+    異常爆量 = 恐慌賣壓或拋售；z-score 之後高分代表偏離正常水位越多。
+    direction="above" → 正向 z-score 越大越警戒。
+    """
+    df = _load_parquet_safe(cache_dir / "twii_ohlcv.parquet", {"date", "volume"})
+    if df is None:
+        return pd.Series(dtype=float, name="TWSE_VOL_RATIO")
+    vol = (df.assign(date=pd.to_datetime(df["date"]))
+             .set_index("date")["volume"]
+             .astype(float)
+             .sort_index())
+    sma60 = vol.rolling(window=60, min_periods=60).mean()
+    ratio = (vol / sma60 - 1.0).dropna()
+    if ratio.empty:
+        return pd.Series(dtype=float, name="TWSE_VOL_RATIO")
+    mu, sd = ratio.mean(), ratio.std()
+    if not sd or sd == 0:
+        return pd.Series(dtype=float, name="TWSE_VOL_RATIO")
+    z = (ratio - mu) / sd
+    z.name = "TWSE_VOL_RATIO"
+    return z.dropna()
+
+
+def fetch_margin_growth_5d_series(
+    cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+) -> pd.Series:
+    """融資餘額 5 日累積變動（億元，diff(5)）.
+
+    > 0 = 5 日內融資餘額擴張（散戶加碼加速 → 槓桿堆積）；
+    direction="above" → 增加越多越警戒。
+    """
+    df = _load_parquet_safe(cache_dir / "finmind_margin.parquet",
+                             {"date", "margin_balance"})
+    if df is None:
+        return pd.Series(dtype=float, name="MARGIN_GROWTH_5D")
+    s = (df.assign(date=pd.to_datetime(df["date"]))
+           .set_index("date")["margin_balance"]
+           .astype(float)
+           .sort_index()
+           / 1e8)
+    s = s.diff(5)
+    s.name = "MARGIN_GROWTH_5D"
+    return s.dropna()
+
+
+def fetch_twii_realized_vol_20d_series(
+    cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+) -> pd.Series:
+    """TWII 20 日年化已實現波動率 %（returns.rolling(20).std() × √252 × 100）.
+
+    本地版 VIX 替代品；高波動 = 市場恐慌 / 拋售加速。
+    direction="above" → 波動率越高越警戒。
+    """
+    df = _load_parquet_safe(cache_dir / "twii_ohlcv.parquet", {"date", "close"})
+    if df is None:
+        return pd.Series(dtype=float, name="TWII_REALIZED_VOL_20D")
+    close = (df.assign(date=pd.to_datetime(df["date"]))
+               .set_index("date")["close"]
+               .astype(float)
+               .sort_index())
+    rets = close.pct_change()
+    vol = rets.rolling(window=20, min_periods=20).std() * (252 ** 0.5) * 100.0
+    vol.name = "TWII_REALIZED_VOL_20D"
+    return vol.dropna()
+
+
 # Registry：key → fetcher（從 spec.key 拿對應 series fetcher）
 TW_SIGNAL_FETCHERS: dict[str, Callable[[Path], pd.Series]] = {
-    "FOREIGN_SELL_5D": fetch_foreign_sell_5d_series,
-    "MARGIN_BALANCE":  fetch_margin_balance_series,
-    "M1B_M2_DIFF":     fetch_m1b_m2_diff_series,
-    "TWII_DROP_20D":   fetch_twii_drop_20d_series,
+    "FOREIGN_SELL_5D":       fetch_foreign_sell_5d_series,
+    "MARGIN_BALANCE":        fetch_margin_balance_series,
+    "M1B_M2_DIFF":           fetch_m1b_m2_diff_series,
+    "TWII_DROP_20D":         fetch_twii_drop_20d_series,
+    "TWSE_VOL_RATIO":        fetch_twse_vol_ratio_series,
+    "MARGIN_GROWTH_5D":      fetch_margin_growth_5d_series,
+    "TWII_REALIZED_VOL_20D": fetch_twii_realized_vol_20d_series,
 }
 
 

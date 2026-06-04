@@ -61,6 +61,22 @@ FACTOR_POOL: list[FactorSpec] = [
         "TWII_DROP_20D", "below",
         note="20 日跌幅 ≤ -5%（加速下跌）",
     ),
+    # v18.168：純 parquet 衍生 3 補強因子（量價結構 + 融資加速 + 已實現波動率）
+    FactorSpec(
+        "TWSE_VOL_RATIO", "大盤量比（60日 z-score）", "local",
+        "TWSE_VOL_RATIO", "above",
+        note="成交量 / SMA60 - 1 → z-score；異常爆量 = 恐慌賣壓",
+    ),
+    FactorSpec(
+        "MARGIN_GROWTH_5D", "融資 5 日累積增幅", "local",
+        "MARGIN_GROWTH_5D", "above",
+        note="融資餘額 diff(5) 億元；散戶 5 日加碼加速 = 槓桿堆積",
+    ),
+    FactorSpec(
+        "TWII_REALIZED_VOL_20D", "TWII 20 日已實現波動率", "local",
+        "TWII_REALIZED_VOL_20D", "above",
+        note="returns std × √252 × 100；本地 VIX 替代品，高波動 = 恐慌",
+    ),
 ]
 
 FACTOR_POOL_BY_KEY = {f.key: f for f in FACTOR_POOL}
