@@ -1172,9 +1172,9 @@ def render_macro_compass():
 
 render_macro_compass()
 
-tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_etf, tab_etf_grp, tab_diag, tab_edu = st.tabs([
+tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_etf, tab_etf_grp, tab_etf_margin, tab_diag, tab_edu = st.tabs([
     '🌍 總經', '🗺️ 產業熱力圖', '🔬 個股', '🏆 個股組合',
-    '💎 高息網', '🏦 ETF', '⚖️ ETF組合', '🔎 資料診斷', '📚 教學',
+    '💎 高息網', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🔎 資料診斷', '📚 教學',
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -1551,6 +1551,13 @@ with tab_etf_grp:
 
     # ── ④ AI 綜合評斷 + 自由提問（壓軸區，整合所有上方分析）──
     render_etf_ai(gemini_fn=gemini_call)
+
+# ══════════════════════════════════════════════════════════════
+# TAB: ETF 質借倒金字塔加碼模擬器 (v18.162)
+# ══════════════════════════════════════════════════════════════
+with tab_etf_margin:
+    from tab_etf_margin_simulator import render_etf_margin_simulator
+    render_etf_margin_simulator()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: 7% 高殖利率防禦網（Screener Mode）
