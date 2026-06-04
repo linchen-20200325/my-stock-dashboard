@@ -213,6 +213,7 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
             return
     else:
         # 跑訊號回看
+        from dataclasses import replace as _replace
         from macro_signal_lookback_tw import (
             DEFAULT_TW_SIGNALS,
             compute_signal_hit_rate,
@@ -220,18 +221,24 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
             lookback_all_signals_tw,
         )
 
+        # v18.164: 套用 session-only threshold overrides（若 user 已採用建議）
+        _overrides = st.session_state.get("_phase3_overrides", {})
+        active_specs = [_replace(s, threshold=_overrides[s.key])
+                         if s.key in _overrides else s
+                         for s in DEFAULT_TW_SIGNALS]
+
         with st.spinner("讀取 4 訊號 series ..."):
             series_by_key = fetch_all_tw_signal_series(cache_dir)
         with st.spinner(f"對 {len(events)} 個事件做訊號回看 ..."):
             lookbacks_by_key = lookback_all_signals_tw(
                 events, series_by_key,
-                specs=DEFAULT_TW_SIGNALS,
+                specs=active_specs,
                 lookback_days=int(offset_days),
                 max_lookback_days=int(max_lookback_days),
             )
         # 計算命中率彙總
         summary_rows = []
-        for spec in DEFAULT_TW_SIGNALS:
+        for spec in active_specs:
             stats = compute_signal_hit_rate(lookbacks_by_key[spec.key])
             arrow = "≥" if spec.direction == "above" else "≤"
             threshold_disp = f"{arrow} {spec.threshold:g}{spec.unit}"
@@ -251,7 +258,7 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
             "max_lookback": max_lookback_days,
             "summary_rows": summary_rows,
             "lookbacks": lookbacks_by_key,
-            "specs": DEFAULT_TW_SIGNALS,
+            "specs": active_specs,  # v18.164: 含 session overrides
             "series_by_key": series_by_key,  # v18.163 for precision compute
         }
 
@@ -335,3 +342,159 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
         "💡 解讀：召回率高 + 精確率高 = 神準預警；召回率高但精確率低 = 警鈴常響但只少數真的爆；"
         "兩者皆低 = 訊號失效。理想 ≥ 50% 精確率代表「賭一半以上」。"
     )
+
+    # ── 🎯 v18.164：MT5-style 自動校準（walk-forward）────────────
+    _render_phase3_auto_calibration(events, specs, series_by_key)
+
+
+def _render_phase3_auto_calibration(events, specs, series_by_key) -> None:
+    """🎯 MT5-style threshold 自動校準 — walk-forward + 3 重 anti-overfit gate."""
+    from dataclasses import replace
+    from signal_threshold_optimization import (
+        make_default_grid, optimize_signal_threshold,
+    )
+
+    with st.expander(
+            "🎯 MT5-style 自動校準（walk-forward + 3 重 anti-overfit gate）",
+            expanded=False):
+        st.caption(
+            "🤖 對選定訊號跑 walk-forward 4 折回測：grid sweep × train/test "
+            "OOS 驗證 × 折間票選 × drift > 30% 自動回退預設。**採用建議僅本 "
+            "session 生效**，cloud reboot 後回原值。"
+        )
+        col_pick, col_grid = st.columns([2, 1])
+        with col_pick:
+            spec_by_label = {s.label: s for s in specs}
+            sel_label = st.selectbox(
+                "選擇訊號", options=list(spec_by_label.keys()),
+                key="phase3_calib_signal",
+            )
+        with col_grid:
+            n_steps = st.slider(
+                "grid 步數", min_value=5, max_value=21, value=11, step=2,
+                key="phase3_calib_n_steps",
+                help="grid 範圍 = 預設 threshold ±50%；步數越多越細。",
+            )
+
+        if not st.button("🚀 跑 walk-forward 回測", type="primary",
+                          key="phase3_calib_run"):
+            _last = st.session_state.get("_phase3_calib_result")
+            if not _last:
+                st.caption("⬆️ 點按鈕開始（< 5 秒）")
+                return
+        else:
+            sel_spec = spec_by_label[sel_label]
+            series = series_by_key.get(sel_spec.key)
+            if series is None or series.empty:
+                st.warning(f"⚠️ {sel_label} series 為空，無法校準")
+                return
+            grid = make_default_grid(sel_spec.threshold, n_steps=n_steps)
+            with st.spinner(f"跑 walk-forward × {n_steps} grid × "
+                             f"{len(events)} events ..."):
+                result = optimize_signal_threshold(
+                    series, events, sel_spec, grid=grid,
+                    n_folds=4, max_forward_days=365,
+                )
+            st.session_state["_phase3_calib_result"] = {
+                "spec_key": sel_spec.key, "spec_label": sel_label,
+                "current": result["current"],
+                "recommended": result["recommended"],
+                "current_metrics": result["current_metrics"],
+                "recommended_metrics": result["recommended_metrics"],
+                "grid_results": result["grid_results"],
+                "walk_forward": result["walk_forward"],
+                "status": result["status"],
+                "drift_warning": result["drift_warning"],
+                "votes": result["votes"],
+            }
+
+        last = st.session_state.get("_phase3_calib_result")
+        if not last:
+            return
+
+        # ── 結果展示 ────────────────────────────────────
+        st.markdown(f"##### 📋 {last['spec_label']} 校準結果")
+        status = last["status"]
+        if status == "insufficient_events":
+            st.error("❌ 危機事件數不足 ≥ 4，無法 4 折 walk-forward。"
+                      "請先在 Phase 1 偵測更多事件（降回撤門檻或加長歷史）。")
+            return
+        if status == "fallback_overfit":
+            st.warning(
+                f"⚠️ **過擬合守門啟動**：過半折 drift > 30% → "
+                f"建議**回退預設 {last['current']:g}**（不採用 grid 找到的值）。"
+                f"樣本可能不足或週期偏移，需更多歷史資料。"
+            )
+        else:
+            st.success(f"✅ **3 重 gate 全過** → 建議採用 "
+                        f"**{last['recommended']:g}**")
+
+        cur_m = last["current_metrics"] or {}
+        rec_m = last["recommended_metrics"] or {}
+        col_a, col_b = st.columns(2)
+        col_a.metric(
+            f"現行 threshold {last['current']:g}",
+            f"F1 = {cur_m.get('f1', 0):.3f}",
+            help=f"P = {cur_m.get('precision', 0):.1%} · "
+                 f"R = {cur_m.get('recall', 0):.1%} · "
+                 f"crossings = {cur_m.get('n_crossings', 0)}",
+        )
+        delta_f1 = rec_m.get("f1", 0) - cur_m.get("f1", 0)
+        col_b.metric(
+            f"建議 threshold {last['recommended']:g}",
+            f"F1 = {rec_m.get('f1', 0):.3f}",
+            delta=f"{delta_f1:+.3f}",
+            help=f"P = {rec_m.get('precision', 0):.1%} · "
+                 f"R = {rec_m.get('recall', 0):.1%} · "
+                 f"crossings = {rec_m.get('n_crossings', 0)}",
+        )
+
+        # walk-forward 折表
+        if last["walk_forward"]:
+            st.markdown("##### 🔄 Walk-forward 各折 (OOS)")
+            wf_df = pd.DataFrame(last["walk_forward"])
+            wf_df["drift_pct"] = wf_df["drift_pct"].round(1)
+            wf_df["train_f1"] = wf_df["train_f1"].round(3)
+            wf_df["test_f1"] = wf_df["test_f1"].round(3)
+            wf_df = wf_df.rename(columns={
+                "fold": "折",
+                "n_train": "train 事件",
+                "n_test": "test 事件",
+                "train_best": "train 最佳 threshold",
+                "train_f1": "Train F1",
+                "test_f1": "OOS Test F1",
+                "drift_pct": "Drift %",
+            })
+            st.dataframe(wf_df, use_container_width=True, hide_index=True)
+
+        # 採用按鈕
+        if (status == "adopted"
+                and abs(last["recommended"] - last["current"]) > 1e-9):
+            if st.button(
+                    f"✅ 採用建議 threshold {last['recommended']:g}"
+                    f"（本 session 生效）",
+                    type="primary", key="phase3_calib_adopt"):
+                overrides = st.session_state.get("_phase3_overrides", {})
+                overrides[last["spec_key"]] = last["recommended"]
+                st.session_state["_phase3_overrides"] = overrides
+                st.session_state.pop(_PHASE3_CACHE_KEY, None)
+                st.success(
+                    f"✅ 已採用 {last['spec_label']} → "
+                    f"{last['recommended']:g}。"
+                    f"請按上方「🚦 跑訊號回看」重新計算（cache 已清）。"
+                )
+                st.rerun()
+
+        # 顯示已採用 overrides
+        ov = st.session_state.get("_phase3_overrides", {})
+        if ov:
+            ov_df = pd.DataFrame([
+                {"訊號": k, "session override threshold": v} for k, v in ov.items()
+            ])
+            st.markdown("##### 📌 已採用 overrides（本 session）")
+            st.dataframe(ov_df, use_container_width=True, hide_index=True)
+            if st.button("🔄 清空 overrides（回預設）",
+                          key="phase3_calib_clear"):
+                st.session_state.pop("_phase3_overrides", None)
+                st.session_state.pop(_PHASE3_CACHE_KEY, None)
+                st.rerun()
