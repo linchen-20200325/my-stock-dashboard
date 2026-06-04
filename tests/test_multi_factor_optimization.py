@@ -277,8 +277,8 @@ class TestPlotlyFigures:
 
 class TestFactorPool:
     def test_pool_size(self):
-        # 台股本地 4 訊號（FOREIGN_SELL_5D / MARGIN_BALANCE / M1B_M2_DIFF / TWII_DROP_20D）
-        assert len(FACTOR_POOL) == 4
+        # v18.168：4 原始訊號 + 3 衍生因子（TWSE_VOL_RATIO / MARGIN_GROWTH_5D / TWII_REALIZED_VOL_20D）
+        assert len(FACTOR_POOL) == 7
 
     def test_keys_unique(self):
         keys = [f.key for f in FACTOR_POOL]
@@ -287,6 +287,34 @@ class TestFactorPool:
     def test_lookup_by_key(self):
         # 台股訊號全來自本地 Parquet（macro_signal_lookback_tw）
         assert FACTOR_POOL_BY_KEY["FOREIGN_SELL_5D"].source == "local"
+
+
+class TestV18_168NewFactors:
+    """v18.168：3 個 parquet 衍生因子 metadata 驗證."""
+
+    def test_twse_vol_ratio_present(self):
+        assert "TWSE_VOL_RATIO" in FACTOR_POOL_BY_KEY
+        spec = FACTOR_POOL_BY_KEY["TWSE_VOL_RATIO"]
+        assert spec.source == "local"
+        assert spec.direction == "above"
+
+    def test_margin_growth_5d_present(self):
+        assert "MARGIN_GROWTH_5D" in FACTOR_POOL_BY_KEY
+        spec = FACTOR_POOL_BY_KEY["MARGIN_GROWTH_5D"]
+        assert spec.source == "local"
+        assert spec.direction == "above"
+
+    def test_twii_realized_vol_20d_present(self):
+        assert "TWII_REALIZED_VOL_20D" in FACTOR_POOL_BY_KEY
+        spec = FACTOR_POOL_BY_KEY["TWII_REALIZED_VOL_20D"]
+        assert spec.source == "local"
+        assert spec.direction == "above"
+
+    def test_all_new_factors_in_registry(self):
+        """3 個新 key 都要在 TW_SIGNAL_FETCHERS registry 內可路由."""
+        from macro_signal_lookback_tw import TW_SIGNAL_FETCHERS
+        for key in ("TWSE_VOL_RATIO", "MARGIN_GROWTH_5D", "TWII_REALIZED_VOL_20D"):
+            assert key in TW_SIGNAL_FETCHERS, f"{key} 未註冊 TW_SIGNAL_FETCHERS"
 
 
 if __name__ == "__main__":
