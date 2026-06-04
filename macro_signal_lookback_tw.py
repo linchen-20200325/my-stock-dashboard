@@ -386,3 +386,73 @@ def compute_signal_hit_rate(lookbacks: list[TwSignalLookback]) -> dict:
         "hit_rate": hit_rate,
         "avg_lead_days": avg_lead,
     }
+
+
+# ══════════════════════════════════════════════════════════════
+# v18.163：訊號精確率（forward-looking）— 解「召回率」單面向
+# ══════════════════════════════════════════════════════════════
+
+def compute_signal_precision(
+    signal_series: pd.Series,
+    events: list[TwiiCrisisEvent],
+    spec: TwSignalSpec,
+    max_forward_days: int = 365,
+) -> dict:
+    """訊號歷史精確率：遍歷全 series 抓所有 crossings → 每個 crossing
+    後 max_forward_days 天內是否有 event.peak_date 命中（鏡像 fund v18.282）。
+
+    召回率（Phase 3 hit_rate）= 已知危機回頭看訊號（向後）；
+    精確率（本函數）       = 已知訊號響起看未來危機（向前）。
+
+    Returns:
+        {
+            "n_crossings": int,
+            "n_true_positives": int,
+            "n_false_positives": int,
+            "precision_pct": float | None,
+            "false_alert_rate_pct": float | None,
+            "avg_lead_to_crisis_days": float | None,
+        }
+    """
+    base = {
+        "n_crossings": 0,
+        "n_true_positives": 0,
+        "n_false_positives": 0,
+        "precision_pct": None,
+        "false_alert_rate_pct": None,
+        "avg_lead_to_crisis_days": None,
+    }
+    if signal_series is None or signal_series.empty:
+        return base
+    s = signal_series.dropna()
+    if s.empty:
+        return base
+    warn = s.apply(lambda v: _is_warning(float(v), spec.threshold, spec.direction))
+    crossings_mask = warn & ~warn.shift(1, fill_value=True)
+    crossing_dates = s.index[crossings_mask]
+    n_cross = len(crossing_dates)
+    if n_cross == 0:
+        return base
+
+    peak_dates = sorted([ev.peak_date for ev in events
+                         if ev.peak_date is not None])
+    n_tp = 0
+    lead_days_list: list[int] = []
+    for cd in crossing_dates:
+        window_end = cd + pd.Timedelta(days=max_forward_days)
+        hit_peak = next((pd_ for pd_ in peak_dates
+                        if cd <= pd_ <= window_end), None)
+        if hit_peak is not None:
+            n_tp += 1
+            lead_days_list.append((hit_peak - cd).days)
+    n_fp = n_cross - n_tp
+    precision = n_tp / n_cross
+    return {
+        "n_crossings": n_cross,
+        "n_true_positives": n_tp,
+        "n_false_positives": n_fp,
+        "precision_pct": precision * 100,
+        "false_alert_rate_pct": (1 - precision) * 100,
+        "avg_lead_to_crisis_days": (sum(lead_days_list) / len(lead_days_list))
+                                     if lead_days_list else None,
+    }
