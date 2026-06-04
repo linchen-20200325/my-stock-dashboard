@@ -6,7 +6,8 @@
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
 - **基建**：NAS Squid Proxy + FastAPI 中繼站（個股新聞）
-- **目前版本**：v18.164_MT5StyleAutoCalibration（Phase 3 加「🎯 MT5-style 自動校準」expander — walk-forward 4 折 grid sweep × 3 重 anti-overfit gate（折間票選 + drift>30% 回退 + cap 守門）；session-only override 機制；對齊 fund v18.283；963 全測試 passed）
+- **目前版本**：v18.165_MultiFactorPlateauWalkForward（Phase 3 加「🔬 多因子權重最佳化」expander — 綜合分數 S_t = Σ w_i × normalize(I_{i,t−1})（lag=1 防未來引用），simplex 權重 grid sweep 算 F1+Sharpe，**plateau 評分 = 鄰域 mean − λ × std**（不取單一最高 F1）；walk-forward 滾動 train/test 串 OOS 權益曲線；plotly 2D heatmap + 3D surface toggle；4 因子池（FOREIGN_SELL_5D / MARGIN_BALANCE / M1B_M2_DIFF / TWII_DROP_20D 全 source="local"）；FactorSpec source literal 擴 yahoo|fred|local 兼容台股本地訊號；鏡像 fund v18.285；28 case 驗收 + ruff 全綠）
+- **前一版**：v18.164_MT5StyleAutoCalibration（Phase 3 加「🎯 MT5-style 自動校準」expander — walk-forward 4 折 grid sweep × 3 重 anti-overfit gate（折間票選 + drift>30% 回退 + cap 守門）；session-only override 機制；對齊 fund v18.283；963 全測試 passed）
 - **前一版**：v18.163_SignalPrecisionAnalysis（Phase 3 加「📐 訊號精確率分析」forward-looking 區塊 — 解召回率單面向：遍歷歷史 crossings 算 TP/FP/精確率/誤報率/avg lead time；對齊 fund v18.282；953 全測試 passed）
 - **前一版**：v18.162_EtfMarginSimulator（ETF 質借倒金字塔加碼模擬器：4 風格 preset × 3 階梯觸發 + HWM 回撤 + 擔保維持率 140/130% 爆倉檢測；新 Tab「💰 ETF質借模擬」+ 43 case 全綠 + 全測試 948 passed）
 - **前一版**：v18.161_EdgeDetectionUiSurfacing（Phase 3 標題加「v2 轉折偵測」+ 提前 → 轉折提前）
