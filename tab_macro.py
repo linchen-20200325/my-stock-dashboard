@@ -37,9 +37,14 @@ from tab_helpers import safe_get
 # 設計：與紅綠燈卡（慢總經）互補，補 1～5 日動量/情緒/位階訊號
 # AppTest 保護門：fred_api_key < 30 字元 → 完全跳過（避開 4×~15s 序列 HTTP）
 # ════════════════════════════════════════════════════════════════
-def _render_global_risk_radar(fred_api_key: str = "") -> None:
+def _render_global_risk_radar(fred_api_key: str = "",
+                              slow_verdict: dict | None = None) -> None:
     """渲染 10 燈短線風險雷達（VIX / VIX/3M / HY OAS / 10Y / MOVE / SPX DMA /
-    SOX / Sector / P/C / Asia 夜盤）+ 整體 level banner + 細節 expander。"""
+    SOX / Sector / P/C / Asia 夜盤）+ 整體 level banner + 細節 expander。
+
+    v18.173：若 slow_verdict 提供（dict with level/score/color/icon/action），
+    於 10 燈之下渲染「🤝 雙速合議」banner — 慢總經 verdict × 短線雷達 level
+    → 單一行動建議（adopt_slow / downgrade_1 / downgrade_2 / override_defense）。"""
     # AppTest 保護門：測試環境 key 通常 <30 字元 → 直接跳過避開 HTTP 撞 timeout
     if not fred_api_key or len(str(fred_api_key).strip()) < 30:
         return
@@ -121,6 +126,35 @@ def _render_global_risk_radar(fred_api_key: str = "") -> None:
             )
         st.caption('💡 雷達為「短線急殺領先指標」（1～5 日視角），與上方長/短期總經（季級）互補。'
                    '4+ 紅燈 = 急殺進行中；2 紅燈 = 警報需降槓桿；紅+黃 ≥4 = 警戒觀察。')
+
+    # ── v18.173 🤝 雙速合議（慢總經 × 短線雷達 → 單一行動建議）──────────
+    if slow_verdict and isinstance(slow_verdict, dict):
+        try:
+            from risk_radar import synthesize_dual_verdict
+            _syn = synthesize_dual_verdict(
+                slow_level=str(slow_verdict.get('level') or '中性'),
+                slow_score=float(slow_verdict.get('score') or 0.0),
+                slow_color=str(slow_verdict.get('color') or '#888'),
+                slow_icon=str(slow_verdict.get('icon') or '⚪'),
+                slow_action=str(slow_verdict.get('action') or '—'),
+                radar_level=_rs.get('level'),
+            )
+            st.markdown(
+                f'<div style="background:#0d1117;border:2px solid {_syn["color"]};'
+                f'border-radius:8px;padding:12px 14px;margin:10px 0 4px 0;">'
+                f'<div style="color:#8b949e;font-size:12px;margin-bottom:4px;">'
+                f'🤝 雙速合議（長期總經 × 短線雷達）｜模式 {_syn["mode"]}</div>'
+                f'<div style="color:{_syn["color"]};font-size:20px;font-weight:700;">'
+                f'{_syn["icon"]} {_syn["level"]}</div>'
+                f'<div style="color:#c9d1d9;font-size:13px;margin-top:8px;line-height:1.6;">'
+                f'{_syn["action"]}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            st.caption('💡 規則：雷達極端警報 → 強制減倉（覆蓋慢總經）；雷達警報 + 慢樂觀 → 降槓桿（分歧）；'
+                       '雷達警戒 → 維持持倉但暫緩加碼；雷達平靜 → 採用慢總經結論。')
+        except Exception as _e_syn:
+            print(f'[risk_radar/dual_verdict] {type(_e_syn).__name__}: {_e_syn}')
 
 
 def render_tab_macro():
@@ -314,6 +348,8 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
     # ── v18.171 長期 vs 短期 雙視角總經面板（上移至紅綠燈卡正下方）─────
     # 長期 (12M)：景氣大循環位階；短期 (1Q)：對齊台股財報季偏向
     # 純函式集中於 macro_helpers.classify_long_term_regime / classify_short_term_regime
+    # v18.173：_lt hoist 到 try 外，供下方雙速合議使用
+    _lt = None
     try:
         from macro_helpers import (
             classify_long_term_regime as _cls_lt,
@@ -430,11 +466,24 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
     except Exception as _e_lts:
         print(f'[tab_macro/長短期雙視角] {type(_e_lts).__name__}: {_e_lts}')
 
-    # ── v18.172 📡 全球風險雷達（10 燈短線急殺訊號）— 鏡像 fund v19.20 ────
+    # ── v18.172/v18.173 📡 全球風險雷達 + 🤝 雙速合議 ──────────────────
     try:
         _rr_fred_key = (os.environ.get('FRED_API_KEY') or
                         (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
-        _render_global_risk_radar(_rr_fred_key)
+        # v18.173：把 v18.171 dual-view 算出的長期 regime _lt 映射成 slow_verdict
+        # 校準：_cls_lt score 範圍 ~[-2,+2]，乘 5 對齊 fund synth 期望的 ~[-10,+10]
+        _slow_v = None
+        if _lt and isinstance(_lt, dict) and _lt.get('regime'):
+            _reg = str(_lt['regime'])
+            _icon = _reg.split()[0] if _reg.split() else '⚪'
+            _slow_v = {
+                'level':  _reg,
+                'score':  float(_lt.get('score') or 0.0) * 5.0,
+                'color':  _lt.get('color') or '#888',
+                'icon':   _icon,
+                'action': f"{_lt.get('detail','')}；建議持股 {_lt.get('suggest_pct','--')}",
+            }
+        _render_global_risk_radar(_rr_fred_key, slow_verdict=_slow_v)
     except Exception as _e_rr:
         print(f'[tab_macro/risk_radar] {type(_e_rr).__name__}: {_e_rr}')
 
