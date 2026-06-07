@@ -315,8 +315,163 @@ def fetch_cbc_m1b_m2() -> dict:
 # ══════════════════════════════════════════════════════════════
 
 # FinMind TaiwanMacroEconomics 指標名（中央銀行/國發會公開資料）
+# v18.177：FinMind v4 已把此 dataset 改 Sponsor 付費 tier，
+# tw_macro 改走 data.gov.tw NDC OpenData（dgtw）為 PRIMARY，FinMind 為 FALLBACK
 _NDC_SIGNAL_KEYS  = ('景氣對策信號(分)', '景氣對策信號')
 _NDC_LI_KEYS      = ('領先指標綜合指數', '領先指標', '領先指標(綜合指數)')
+
+# v18.177 dgtw NDC 配置
+_DGTW_SEARCH_URLS = (
+    'https://data.gov.tw/api/v2/rest/dataset/search',
+    'https://data.gov.tw/api/v1/rest/dataset/search',
+)
+_DGTW_DATASET_META_URLS = (
+    'https://data.gov.tw/api/v2/rest/dataset/{id}',
+    'https://data.gov.tw/api/v1/rest/dataset/{id}',
+)
+# 候選 dataset ID（國發會景氣指標序列；以 PMI=6100 為錨點向周邊延伸）
+_DGTW_NDC_SIGNAL_CANDIDATE_IDS = ('6097', '6098', '6099', '6101', '6102',
+                                    '6103', '6104', '6105', '6106', '6107',
+                                    '6108', '6109', '6053', '6054', '6055', '6056')
+_DGTW_NDC_LEADING_CANDIDATE_IDS = _DGTW_NDC_SIGNAL_CANDIDATE_IDS
+_DGTW_NDC_SIGNAL_KEYWORDS = ('景氣對策信號', '景氣信號', '對策信號')
+_DGTW_NDC_LEADING_KEYWORDS = ('領先指標', '景氣領先', '綜合領先指標')
+_DGTW_NDC_SIGNAL_VALUE_KEYWORDS = ('信號分數', '對策信號', '景氣對策', '分數', '燈號')
+_DGTW_NDC_LEADING_VALUE_KEYWORDS = ('領先指標', '綜合領先', '不含趨勢', '指數')
+
+
+def _dgtw_search_dataset_ids(keyword: str, label: str = "") -> list[str]:
+    """v18.177：data.gov.tw search API 找關鍵字對應 dataset ID list。
+
+    多 endpoint 變體 + 多 result shape parser；任一成功即回；全失敗回 []。
+    """
+    _ids: list[str] = []
+    for _su in _DGTW_SEARCH_URLS:
+        try:
+            _r = fetch_url(_su, params={'q': keyword, 'limit': 20},
+                            timeout=10, attempts=1,
+                            headers={'Accept': 'application/json'})
+            if _r is None or _r.status_code != 200:
+                continue
+            try:
+                _j = _r.json()
+            except Exception:
+                continue
+            _items = (_j.get('result', {}).get('results')
+                      or _j.get('results') or _j.get('data', {}).get('results')
+                      or _j.get('data') or [])
+            for _it in _items:
+                _did = str(_it.get('id') or _it.get('datasetId') or
+                           _it.get('resourceId') or '').strip()
+                if _did and _did.isdigit() and _did not in _ids:
+                    _ids.append(_did)
+            if _ids:
+                if label:
+                    print(f'[tw_macro/dgtw/{label}] search '
+                          f'"{keyword}" → {len(_ids)} IDs')
+                return _ids
+        except Exception:
+            continue
+    return _ids
+
+
+def _dgtw_fetch_dataset_csv(ds_id: str, value_keywords: tuple,
+                             label: str = "") -> Optional[pd.DataFrame]:
+    """v18.177：給 dataset ID，抓 metadata 找 CSV → 解析全表 [date, value]。
+
+    Sanity：value ∈ [-1e6, 1e6]（避開字串、NaN）；月頻保留所有列。
+    """
+    import csv as _csv
+    import io as _io
+    for _mu_t in _DGTW_DATASET_META_URLS:
+        _mu = _mu_t.format(id=ds_id)
+        try:
+            _r_meta = fetch_url(_mu, timeout=10, attempts=1,
+                                 headers={'Accept': 'application/json'})
+            if _r_meta is None or _r_meta.status_code != 200:
+                continue
+            try:
+                _j_meta = _r_meta.json()
+            except Exception:
+                continue
+            _res = (_j_meta.get('result', {}).get('resources')
+                    or _j_meta.get('resources')
+                    or _j_meta.get('data', {}).get('resources') or [])
+            if not _res:
+                continue
+            # 找 CSV resource
+            _csv_url = None
+            for _it in _res:
+                _fmt = str(_it.get('format', '')).upper()
+                _url2 = _it.get('url') or _it.get('resourceDownloadUrl')
+                if _fmt in ('CSV', 'JSON') and _url2:
+                    _csv_url = _url2
+                    break
+            if not _csv_url:
+                continue
+            _r_csv = fetch_url(_csv_url, timeout=15, attempts=2)
+            if _r_csv is None or _r_csv.status_code != 200:
+                continue
+            _txt = _r_csv.content.decode('utf-8-sig', errors='ignore')
+            _rdr = list(_csv.DictReader(_io.StringIO(_txt)))
+            if not _rdr:
+                continue
+            _rows: list[tuple[str, float]] = []
+            for _row in _rdr:
+                _v = None
+                _d = None
+                for _k, _vc in _row.items():
+                    _kl = str(_k)
+                    if _v is None and any(_x in _kl for _x in value_keywords):
+                        try:
+                            _vn = float(str(_vc).strip().replace(',', ''))
+                            if -1e6 < _vn < 1e6:
+                                _v = _vn
+                        except (ValueError, TypeError):
+                            pass
+                    if _d is None:
+                        _m = _re.search(r'(20\d{2}|19\d{2})[-/年]?(\d{1,2})',
+                                         str(_vc))
+                        if _m:
+                            _d = f'{_m.group(1)}-{int(_m.group(2)):02d}-01'
+                if _v is not None and _d:
+                    _rows.append((_d, _v))
+            if not _rows:
+                continue
+            _df = pd.DataFrame(_rows, columns=['date', 'value'])
+            _df = _df.drop_duplicates(subset=['date'], keep='last').sort_values(
+                'date').reset_index(drop=True)
+            if label:
+                print(f'[tw_macro/dgtw/{label}] dataset/{ds_id} '
+                      f'→ {len(_df)} rows')
+            return _df
+        except Exception:
+            continue
+    return None
+
+
+def _dgtw_ndc_indicator_series(keywords: tuple, value_keywords: tuple,
+                                 candidate_ids: tuple,
+                                 label: str = "") -> Optional[pd.DataFrame]:
+    """v18.177：兩路徑彙整找 NDC 月頻指標 DataFrame。
+
+    ① search API 找 dataset IDs → 試每個的 CSV
+    ② 直接 probe 鄰近 candidate IDs
+    任一命中且回 DataFrame[date, value] 即返；全失敗回 None。
+    """
+    # 路徑 1：search API
+    for _kw in keywords:
+        _ids = _dgtw_search_dataset_ids(_kw, label=label)
+        for _did in _ids:
+            _df = _dgtw_fetch_dataset_csv(_did, value_keywords, label=label)
+            if _df is not None and not _df.empty:
+                return _df
+    # 路徑 2：probe candidate IDs
+    for _did in candidate_ids:
+        _df = _dgtw_fetch_dataset_csv(_did, value_keywords, label=label)
+        if _df is not None and not _df.empty:
+            return _df
+    return None
 
 
 def _finmind_macro_series(indicator_keys: tuple, months_back: int = 18,
@@ -391,10 +546,23 @@ def fetch_ndc_signal_history(months_back: int = 12,
         'trend': [], 'inflection': '⬜ 資料不足',
         'date_latest': '', 'source': None, 'error': None,
     }
-    sub = _finmind_macro_series(_NDC_SIGNAL_KEYS,
-                                months_back=months_back, token=token)
+    # v18.177 chain：dgtw PRIMARY（免費 NDC OpenData）→ FinMind FALLBACK（付費牆）
+    sub = _dgtw_ndc_indicator_series(
+        _DGTW_NDC_SIGNAL_KEYWORDS, _DGTW_NDC_SIGNAL_VALUE_KEYWORDS,
+        _DGTW_NDC_SIGNAL_CANDIDATE_IDS, label='ndc_signal')
+    _src = 'data.gov.tw' if sub is not None and not sub.empty else None
+    if sub is None or sub.empty:
+        sub = _finmind_macro_series(_NDC_SIGNAL_KEYS,
+                                    months_back=months_back, token=token)
+        if sub is not None and not sub.empty:
+            _src = 'FinMind'
     if sub is None or len(sub) < 3:
-        result['error'] = 'FinMind TaiwanMacroEconomics 無景氣對策信號資料'
+        result['error'] = 'dgtw + FinMind 皆無景氣對策信號資料'
+        return result
+    # v18.177 sanity：信號分數 ∈ [9, 45]
+    sub = sub[(sub['value'] >= 9) & (sub['value'] <= 45)].reset_index(drop=True)
+    if len(sub) < 3:
+        result['error'] = '景氣對策信號通過 sanity 後資料不足'
         return result
     vals = [int(round(v)) for v in sub['value'].tail(6).tolist()]
     cur, prev = vals[-1], vals[-2]
@@ -404,7 +572,7 @@ def fetch_ndc_signal_history(months_back: int = 12,
     result['score_prev2']  = prev2
     result['trend']        = vals
     result['date_latest']  = str(sub['date'].iloc[-1])[:10]
-    result['source']       = 'FinMind'
+    result['source']       = _src or 'unknown'
     # 拐點判斷：連 2 月同向反轉
     if prev2 is not None:
         # 連 2 月由跌轉升（prev2 ≥ prev 且 prev < cur 且 cur > prev）
@@ -448,13 +616,22 @@ def fetch_ndc_leading_index(months_back: int = 18,
         'inflection': '⬜ 資料不足', 'trend': [],
         'date_latest': '', 'source': None, 'error': None,
     }
-    sub = _finmind_macro_series(_NDC_LI_KEYS,
-                                months_back=months_back, token=token)
+    # v18.177 chain：dgtw PRIMARY → FinMind FALLBACK
+    sub = _dgtw_ndc_indicator_series(
+        _DGTW_NDC_LEADING_KEYWORDS, _DGTW_NDC_LEADING_VALUE_KEYWORDS,
+        _DGTW_NDC_LEADING_CANDIDATE_IDS, label='ndc_leading')
+    _src_li = 'data.gov.tw' if sub is not None and not sub.empty else None
+    if sub is None or sub.empty:
+        sub = _finmind_macro_series(_NDC_LI_KEYS,
+                                    months_back=months_back, token=token)
+        if sub is not None and not sub.empty:
+            _src_li = 'FinMind'
     if sub is None or len(sub) < 8:
-        result['error'] = 'FinMind TaiwanMacroEconomics 無領先指標歷史'
+        result['error'] = 'dgtw + FinMind 皆無領先指標歷史'
         return result
     s = sub.set_index('date')['value'].astype(float)
-    cur = float(s.iloc[-1]); prev = float(s.iloc[-2])
+    cur = float(s.iloc[-1])
+    prev = float(s.iloc[-2])
     # 6M smoothed change：用 6 月移動平均的月變化率
     ma6 = s.rolling(6).mean().dropna()
     if len(ma6) < 2:
@@ -474,7 +651,7 @@ def fetch_ndc_leading_index(months_back: int = 18,
         'prev_s6m': round(prev_s, 2),
         'trend':    trend,
         'date_latest': str(s.index[-1])[:10],
-        'source':   'FinMind',
+        'source':   _src_li or 'unknown',
     })
     if cur_s > 0 and prev_s <= 0:
         result['inflection'] = '🚀 6M 由負轉正'
