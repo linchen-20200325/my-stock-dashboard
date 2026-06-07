@@ -32,6 +32,97 @@ from macro_helpers import calc_traffic_light, rp_entry, rp_scalar, rp_ts
 from tab_helpers import safe_get
 
 
+# ════════════════════════════════════════════════════════════════
+# v18.172 全球風險雷達（10 燈短線急殺訊號）— 鏡像 fund v19.20
+# 設計：與紅綠燈卡（慢總經）互補，補 1～5 日動量/情緒/位階訊號
+# AppTest 保護門：fred_api_key < 30 字元 → 完全跳過（避開 4×~15s 序列 HTTP）
+# ════════════════════════════════════════════════════════════════
+def _render_global_risk_radar(fred_api_key: str = "") -> None:
+    """渲染 10 燈短線風險雷達（VIX / VIX/3M / HY OAS / 10Y / MOVE / SPX DMA /
+    SOX / Sector / P/C / Asia 夜盤）+ 整體 level banner + 細節 expander。"""
+    # AppTest 保護門：測試環境 key 通常 <30 字元 → 直接跳過避開 HTTP 撞 timeout
+    if not fred_api_key or len(str(fred_api_key).strip()) < 30:
+        return
+    try:
+        from risk_radar import detect_risk_radar, summarize_radar
+    except Exception as _e_imp:
+        st.warning(f'⚠️ 風險雷達模組載入失敗：{_e_imp}')
+        return
+    try:
+        _radar = detect_risk_radar(fred_api_key)
+        _rs = summarize_radar(_radar)
+    except Exception as _e_rd:
+        st.warning(f'⚠️ 風險雷達抓取失敗：{type(_e_rd).__name__}: {_e_rd}')
+        return
+
+    st.markdown(
+        '#### 📡 全球風險雷達 — 10 燈短線急殺訊號',
+        help='1～5 日動量/情緒/位階訊號，與上方慢總經紅綠燈互補。'
+             '紅燈 ≥4 = 極端警報；紅燈 ≥2 = 警報；紅+黃 ≥4 = 警戒'
+    )
+    _banner_txt = (
+        f'🔴 {_rs["red"]}　🟡 {_rs["yellow"]}　🟢 {_rs["green"]}　⬜ {_rs["gray"]}'
+    )
+    st.markdown(
+        f'<div style="background:#0d1117;border:2px solid {_rs["color"]};'
+        f'border-radius:8px;padding:10px 14px;margin:4px 0 10px 0;">'
+        f'<div style="color:#8b949e;font-size:12px;margin-bottom:4px;">'
+        f'⚡ 短線雷達整體狀態（10 燈）</div>'
+        f'<div style="color:{_rs["color"]};font-size:20px;font-weight:700;">'
+        f'{_rs["level"]}</div>'
+        f'<div style="color:#c9d1d9;font-size:13px;margin-top:6px;">{_banner_txt}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # 10 燈 grid — 5 cols × 2 rows
+    _light_labels = {
+        'vix_level':       'VIX 級距',
+        'vix_term_struct': 'VIX/3M',
+        'hy_oas_delta':    'HY OAS Δ',
+        'yield_10y_shock': '10Y 衝擊',
+        'move_level':      'MOVE 級距',
+        'spx_trend_break': 'SPX 均線',
+        'sox_drop':        'SOX 日跌',
+        'sector_rotation': '防禦/攻擊',
+        'put_call_ratio':  'Put/Call',
+        'asia_overnight':  '亞洲夜盤',
+    }
+    _keys = list(_light_labels.keys())
+    for _row_start in (0, 5):
+        _cols = st.columns(5)
+        for _i, _k in enumerate(_keys[_row_start:_row_start + 5]):
+            _lt = _radar.get(_k) or {}
+            _sig = _lt.get('signal', '⬜')
+            _val = _lt.get('value')
+            _val_txt = f'{_val}' if _val is not None else '—'
+            with _cols[_i]:
+                st.markdown(
+                    f'<div style="background:#0d1117;border-left:4px solid {_lt.get("color","#888")};'
+                    f'border-radius:4px;padding:6px 10px;margin:2px 0;">'
+                    f'<div style="color:#8b949e;font-size:11px;">{_light_labels[_k]}</div>'
+                    f'<div style="color:#e6edf3;font-size:14px;font-weight:600;">{_sig}</div>'
+                    f'<div style="color:#8b949e;font-size:11px;margin-top:2px;">{_val_txt}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+    with st.expander('📡 10 燈細節 — 每燈觸發解釋 + 資料源', expanded=False):
+        for _k, _label in _light_labels.items():
+            _lt = _radar.get(_k) or {}
+            _src = _lt.get('label', '—')
+            _note = _lt.get('note', '—')
+            _sig = _lt.get('signal', '⬜')
+            st.markdown(
+                f'**{_label}**：{_sig}  \n'
+                f'<span style="color:#8b949e;font-size:12px;">{_note}</span>  \n'
+                f'<span style="color:#6e7681;font-size:11px;">資料源：{_src}</span>',
+                unsafe_allow_html=True,
+            )
+        st.caption('💡 雷達為「短線急殺領先指標」（1～5 日視角），與上方長/短期總經（季級）互補。'
+                   '4+ 紅燈 = 急殺進行中；2 紅燈 = 警報需降槓桿；紅+黃 ≥4 = 警戒觀察。')
+
+
 def render_tab_macro():
     # ─ Late imports（避免循環 import）─
     import datetime
@@ -338,6 +429,14 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         st.divider()
     except Exception as _e_lts:
         print(f'[tab_macro/長短期雙視角] {type(_e_lts).__name__}: {_e_lts}')
+
+    # ── v18.172 📡 全球風險雷達（10 燈短線急殺訊號）— 鏡像 fund v19.20 ────
+    try:
+        _rr_fred_key = (os.environ.get('FRED_API_KEY') or
+                        (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
+        _render_global_risk_radar(_rr_fred_key)
+    except Exception as _e_rr:
+        print(f'[tab_macro/risk_radar] {type(_e_rr).__name__}: {_e_rr}')
 
     st.markdown('<div style="background:#0a1628;border:1px solid #1f6feb;border-radius:12px;padding:16px;margin-bottom:12px;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:18px;font-weight:900;color:#58a6ff;margin-bottom:8px;">🌍 今日市場總覽 — 現在適合買股票嗎？</div>', unsafe_allow_html=True)
