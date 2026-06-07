@@ -240,6 +240,25 @@ def fetch_twii_realized_vol_20d_series(
     return vol.dropna()
 
 
+def fetch_pmi_below_50_series(
+    cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+) -> pd.Series:
+    """v18.178 Phase E：台灣製造業 PMI 月頻（讀 PR-A v18.176 補入的 tw_pmi.parquet）.
+
+    PMI < 50 = 製造業收縮 → 景氣由擴張轉收縮警戒；月頻訊號，與既有日頻訊號交互
+    驗證，用於 Phase E 跨資料源比對視角。
+    """
+    df = _load_parquet_safe(cache_dir / "tw_pmi.parquet", {"date", "pmi"})
+    if df is None:
+        return pd.Series(dtype=float, name="PMI_BELOW_50")
+    s = (df.assign(date=pd.to_datetime(df["date"]))
+           .set_index("date")["pmi"]
+           .astype(float)
+           .sort_index())
+    s.name = "PMI_BELOW_50"
+    return s.dropna()
+
+
 # Registry：key → fetcher（從 spec.key 拿對應 series fetcher）
 TW_SIGNAL_FETCHERS: dict[str, Callable[[Path], pd.Series]] = {
     "FOREIGN_SELL_5D":       fetch_foreign_sell_5d_series,
@@ -249,6 +268,7 @@ TW_SIGNAL_FETCHERS: dict[str, Callable[[Path], pd.Series]] = {
     "TWSE_VOL_RATIO":        fetch_twse_vol_ratio_series,
     "MARGIN_GROWTH_5D":      fetch_margin_growth_5d_series,
     "TWII_REALIZED_VOL_20D": fetch_twii_realized_vol_20d_series,
+    "PMI_BELOW_50":          fetch_pmi_below_50_series,
 }
 
 
@@ -285,6 +305,15 @@ DEFAULT_TW_SIGNALS: list[TwSignalSpec] = [
         direction="below",
         unit="%",
         note="20 日跌幅 ≤ -5%（加速下跌）",
+    ),
+    # v18.178 Phase E：跨資料源加 PMI 月頻訊號
+    TwSignalSpec(
+        key="PMI_BELOW_50",
+        label="製造業 PMI",
+        threshold=50.0,
+        direction="below",
+        unit="",
+        note="PMI < 50（製造業收縮，景氣由擴轉縮）",
     ),
 ]
 
