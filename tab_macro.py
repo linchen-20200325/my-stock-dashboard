@@ -220,6 +220,125 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
             'confidence_pct':_tl_init['conf'],
         }
 
+    # ── v18.171 長期 vs 短期 雙視角總經面板（上移至紅綠燈卡正下方）─────
+    # 長期 (12M)：景氣大循環位階；短期 (1Q)：對齊台股財報季偏向
+    # 純函式集中於 macro_helpers.classify_long_term_regime / classify_short_term_regime
+    try:
+        from macro_helpers import (
+            classify_long_term_regime as _cls_lt,
+            classify_short_term_regime as _cls_st,
+            detect_mk_golden_inflection as _det_mk2,
+        )
+        _mi_d = st.session_state.get('macro_info') or {}
+        _cpi_d  = _mi_d.get('us_core_cpi') or {}
+        _fed_d  = _mi_d.get('fed_funds') or {}
+        _ndc_d  = _mi_d.get('ndc_signal') or {}
+        _pmi_d  = _mi_d.get('ism_pmi') or {}
+        _vix_d  = _mi_d.get('vix') or {}
+        _exp_d  = _mi_d.get('tw_export') or {}
+        _fi_st_d = st.session_state.get('_fi_streak_cache') or {}
+
+        _mk_for_lt = _det_mk2(
+            cpi_yoy=_cpi_d.get('yoy'),
+            cpi_prev_yoy=_cpi_d.get('prev_yoy'),
+            fed_rate=_fed_d.get('current'),
+            fed_prev_rate=_fed_d.get('prev'),
+        )
+        _lt = _cls_lt(
+            cpi_yoy=_cpi_d.get('yoy'),
+            fed_rate=_fed_d.get('current'),
+            fed_prev_rate=_fed_d.get('prev'),
+            ndc_score=_ndc_d.get('score'),
+            pmi=_pmi_d.get('value') or _pmi_d.get('current') or _pmi_d.get('pmi'),
+            mk_signal=_mk_for_lt,
+        )
+        _st_r = _cls_st(
+            export_yoy=_exp_d.get('yoy'),
+            pmi=_pmi_d.get('value') or _pmi_d.get('current') or _pmi_d.get('pmi'),
+            vix_current=_vix_d.get('current'),
+            fi_streak_days=_fi_st_d.get('consec_days'),
+            cpi_yoy=_cpi_d.get('yoy'),
+            cpi_prev_yoy=_cpi_d.get('prev_yoy'),
+        )
+
+        st.markdown(
+            '#### 🔭 長短期雙視角總經判讀',
+            help='長期看景氣大循環位階（12M），短期對齊台股財報季偏向（1Q）'
+        )
+        _c_lt, _c_st = st.columns(2)
+        with _c_lt:
+            st.markdown(
+                f'<div style="background:#0d1117;border:2px solid {_lt["color"]};'
+                f'border-radius:8px;padding:12px 14px;margin:4px 0;">'
+                f'<div style="color:#8b949e;font-size:12px;margin-bottom:4px;">'
+                f'🏔️ 長期總經（12 個月視角）</div>'
+                f'<div style="color:{_lt["color"]};font-size:22px;font-weight:700;">'
+                f'{_lt["regime"]}</div>'
+                f'<div style="color:#c9d1d9;font-size:13px;margin-top:6px;">'
+                f'綜合分數 <b>{_lt["score"]:+.2f}</b> ／ 建議持股 <b>{_lt["suggest_pct"]}</b></div>'
+                f'<div style="color:#8b949e;font-size:12px;margin-top:8px;line-height:1.5;">'
+                f'{_lt["detail"]}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if _lt.get('components'):
+                _parts_lt = ' ｜ '.join(
+                    f'{_n} {_p:+d}' for _n, _p, _w in _lt['components']
+                )
+                st.caption(f'📊 細項：{_parts_lt}')
+
+        with _c_st:
+            st.markdown(
+                f'<div style="background:#0d1117;border:2px solid {_st_r["color"]};'
+                f'border-radius:8px;padding:12px 14px;margin:4px 0;">'
+                f'<div style="color:#8b949e;font-size:12px;margin-bottom:4px;">'
+                f'⚡ 短期總經（1 季視角，對齊財報季）</div>'
+                f'<div style="color:{_st_r["color"]};font-size:22px;font-weight:700;">'
+                f'{_st_r["regime"]}</div>'
+                f'<div style="color:#c9d1d9;font-size:13px;margin-top:6px;">'
+                f'綜合分數 <b>{_st_r["score"]:+.2f}</b></div>'
+                f'<div style="color:#8b949e;font-size:12px;margin-top:8px;line-height:1.5;">'
+                f'{_st_r["detail"]}<br>{_st_r["action"]}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if _st_r.get('components'):
+                _parts_st = ' ｜ '.join(
+                    f'{_n} {_p:+d}' for _n, _p, _w in _st_r['components']
+                )
+                st.caption(f'📊 細項：{_parts_st}')
+
+        # 雙視角矩陣解讀（教學保護 §4）
+        with st.expander('🔰 為什麼要分長期 / 短期？兩者怎麼搭配看？', expanded=False):
+            st.markdown('''
+**🏔️ 長期總經（12 個月視角）** — 「現在景氣在哪一格？」
+- 看月度慢指標（CPI/Fed/NDC/PMI/MK 拐點）
+- 6-12 個月才會換一次格，告訴你**股市的大方向**
+- 用途：**資產配置**、**中長期持股勝率**
+
+**⚡ 短期總經（1 季視角，對齊台股財報季）** — 「下一個財報季好不好？」
+- 看季度動量指標（出口/PMI/VIX/外資籌碼/通膨減壓）
+- 每季財報前後（5/8/11/3 月）會切換偏向
+- 用途：**波段操作**、**個股輪動時機**
+
+**🎯 兩者組合決策矩陣**
+
+| 長期 ＼ 短期 | ⚡ 偏多 | ⚖️ 中性 | ⚠️ 偏空 |
+|---|---|---|---|
+| 🟢 成長期 | 🚀 **滿手做多** | ✅ 加碼但留現金 | ⚠️ 短線謹慎、長線抱緊 |
+| 🔵 復甦期 | 🎯 **波段佈局好時機** | 📊 區間操作 | 🛡️ 暫緩加碼等回穩 |
+| 🟡 過熱/震盪期 | ⚡ 短線追擊 | ⚠️ 高檔震盪別追高 | 🔻 **準備見頂訊號** |
+| 🔴 衰退期 | 🔄 反彈逃命別貪 | 🛑 觀望 | 🚨 **滿手現金** |
+
+**⚠️ 兩者矛盾時的處理原則**
+- **長期 🟢 + 短期 ⚠️** = 等回檔再進、別空（長期方向贏）
+- **長期 🔴 + 短期 ⚡** = 反彈逃命別貪（長期下行為主）
+- 一般原則：**以長期為主、短期為輔**，短期是進出場時機
+''')
+        st.divider()
+    except Exception as _e_lts:
+        print(f'[tab_macro/長短期雙視角] {type(_e_lts).__name__}: {_e_lts}')
+
     st.markdown('<div style="background:#0a1628;border:1px solid #1f6feb;border-radius:12px;padding:16px;margin-bottom:12px;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:18px;font-weight:900;color:#58a6ff;margin-bottom:8px;">🌍 今日市場總覽 — 現在適合買股票嗎？</div>', unsafe_allow_html=True)
     st.markdown('''<div style="font-size:13px;color:#c9d1d9;line-height:1.8;">
@@ -2358,124 +2477,6 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
             # 拐點參考表 → 已移至 Tab5 策略手冊
             st.caption('📖 拐點判斷參考表 → 詳見「策略手冊」Tab')
-
-        # ── v18.170 長期 vs 短期 雙視角總經面板 ────────────────────────
-        # 長期 (12M)：景氣大循環位階；短期 (1Q)：對齊台股財報季偏向
-        # 純函式集中於 macro_helpers.classify_long_term_regime / classify_short_term_regime
-        try:
-            from macro_helpers import (
-                classify_long_term_regime as _cls_lt,
-                classify_short_term_regime as _cls_st,
-                detect_mk_golden_inflection as _det_mk2,
-            )
-            _mi_d = st.session_state.get('macro_info') or {}
-            _cpi_d  = _mi_d.get('us_core_cpi') or {}
-            _fed_d  = _mi_d.get('fed_funds') or {}
-            _ndc_d  = _mi_d.get('ndc_signal') or {}
-            _pmi_d  = _mi_d.get('ism_pmi') or {}
-            _vix_d  = _mi_d.get('vix') or {}
-            _exp_d  = _mi_d.get('tw_export') or {}
-            _fi_st_d = st.session_state.get('_fi_streak_cache') or {}
-
-            _mk_for_lt = _det_mk2(
-                cpi_yoy=_cpi_d.get('yoy'),
-                cpi_prev_yoy=_cpi_d.get('prev_yoy'),
-                fed_rate=_fed_d.get('current'),
-                fed_prev_rate=_fed_d.get('prev'),
-            )
-            _lt = _cls_lt(
-                cpi_yoy=_cpi_d.get('yoy'),
-                fed_rate=_fed_d.get('current'),
-                fed_prev_rate=_fed_d.get('prev'),
-                ndc_score=_ndc_d.get('score'),
-                pmi=_pmi_d.get('value') or _pmi_d.get('current') or _pmi_d.get('pmi'),
-                mk_signal=_mk_for_lt,
-            )
-            _st_r = _cls_st(
-                export_yoy=_exp_d.get('yoy'),
-                pmi=_pmi_d.get('value') or _pmi_d.get('current') or _pmi_d.get('pmi'),
-                vix_current=_vix_d.get('current'),
-                fi_streak_days=_fi_st_d.get('consec_days'),
-                cpi_yoy=_cpi_d.get('yoy'),
-                cpi_prev_yoy=_cpi_d.get('prev_yoy'),
-            )
-
-            st.markdown(
-                '#### 🔭 長短期雙視角總經判讀',
-                help='長期看景氣大循環位階（12M），短期對齊台股財報季偏向（1Q）'
-            )
-            _c_lt, _c_st = st.columns(2)
-            with _c_lt:
-                st.markdown(
-                    f'<div style="background:#0d1117;border:2px solid {_lt["color"]};'
-                    f'border-radius:8px;padding:12px 14px;margin:4px 0;">'
-                    f'<div style="color:#8b949e;font-size:12px;margin-bottom:4px;">'
-                    f'🏔️ 長期總經（12 個月視角）</div>'
-                    f'<div style="color:{_lt["color"]};font-size:22px;font-weight:700;">'
-                    f'{_lt["regime"]}</div>'
-                    f'<div style="color:#c9d1d9;font-size:13px;margin-top:6px;">'
-                    f'綜合分數 <b>{_lt["score"]:+.2f}</b> ／ 建議持股 <b>{_lt["suggest_pct"]}</b></div>'
-                    f'<div style="color:#8b949e;font-size:12px;margin-top:8px;line-height:1.5;">'
-                    f'{_lt["detail"]}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-                if _lt.get('components'):
-                    _parts_lt = ' ｜ '.join(
-                        f'{_n} {_p:+d}' for _n, _p, _w in _lt['components']
-                    )
-                    st.caption(f'📊 細項：{_parts_lt}')
-
-            with _c_st:
-                st.markdown(
-                    f'<div style="background:#0d1117;border:2px solid {_st_r["color"]};'
-                    f'border-radius:8px;padding:12px 14px;margin:4px 0;">'
-                    f'<div style="color:#8b949e;font-size:12px;margin-bottom:4px;">'
-                    f'⚡ 短期總經（1 季視角，對齊財報季）</div>'
-                    f'<div style="color:{_st_r["color"]};font-size:22px;font-weight:700;">'
-                    f'{_st_r["regime"]}</div>'
-                    f'<div style="color:#c9d1d9;font-size:13px;margin-top:6px;">'
-                    f'綜合分數 <b>{_st_r["score"]:+.2f}</b></div>'
-                    f'<div style="color:#8b949e;font-size:12px;margin-top:8px;line-height:1.5;">'
-                    f'{_st_r["detail"]}<br>{_st_r["action"]}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-                if _st_r.get('components'):
-                    _parts_st = ' ｜ '.join(
-                        f'{_n} {_p:+d}' for _n, _p, _w in _st_r['components']
-                    )
-                    st.caption(f'📊 細項：{_parts_st}')
-
-            # 雙視角矩陣解讀（教學保護 §4）
-            with st.expander('🔰 為什麼要分長期 / 短期？兩者怎麼搭配看？', expanded=False):
-                st.markdown('''
-**🏔️ 長期總經（12 個月視角）** — 「現在景氣在哪一格？」
-- 看月度慢指標（CPI/Fed/NDC/PMI/MK 拐點）
-- 6-12 個月才會換一次格，告訴你**股市的大方向**
-- 用途：**資產配置**、**中長期持股勝率**
-
-**⚡ 短期總經（1 季視角，對齊台股財報季）** — 「下一個財報季好不好？」
-- 看季度動量指標（出口/PMI/VIX/外資籌碼/通膨減壓）
-- 每季財報前後（5/8/11/3 月）會切換偏向
-- 用途：**波段操作**、**個股輪動時機**
-
-**🎯 兩者組合決策矩陣**
-
-| 長期 ＼ 短期 | ⚡ 偏多 | ⚖️ 中性 | ⚠️ 偏空 |
-|---|---|---|---|
-| 🟢 成長期 | 🚀 **滿手做多** | ✅ 加碼但留現金 | ⚠️ 短線謹慎、長線抱緊 |
-| 🔵 復甦期 | 🎯 **波段佈局好時機** | 📊 區間操作 | 🛡️ 暫緩加碼等回穩 |
-| 🟡 過熱/震盪期 | ⚡ 短線追擊 | ⚠️ 高檔震盪別追高 | 🔻 **準備見頂訊號** |
-| 🔴 衰退期 | 🔄 反彈逃命別貪 | 🛑 觀望 | 🚨 **滿手現金** |
-
-**⚠️ 兩者矛盾時的處理原則**
-- **長期 🟢 + 短期 ⚠️** = 等回檔再進、別空（長期方向贏）
-- **長期 🔴 + 短期 ⚡** = 反彈逃命別貪（長期下行為主）
-- 一般原則：**以長期為主、短期為輔**，短期是進出場時機
-''')
-        except Exception as _e_lts:
-            print(f'[tab_macro/長短期雙視角] {type(_e_lts).__name__}: {_e_lts}')
 
         # ── 熱錢深度監測（三角交叉：外資 × 匯率 × 背離偵測）─────────────
         # 拉到 expander 同層 sibling — Streamlit 禁止 expander 巢狀（原 #101 為 bug）
