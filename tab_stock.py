@@ -66,10 +66,87 @@ def _fetch_share_capital(sid: str) -> float:
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_bps_from_finmind(sid: str) -> float:
+    """v18.174：FinMind TaiwanStockBalanceSheet 計算最新季度每股淨值（BPS）。
+
+    公式：BPS = 股東權益總額 / 流通在外普通股股數
+         流通股數 = 普通股股本 / 面額 10 元（台股慣例）
+
+    PRIMARY 資料源 — 比 yfinance bookValue 即時且涵蓋 TPEx。
+    抓近 540 日 BS（保證有近兩季資料），取最近一筆 date 兩個欄位：
+      - 股東權益總額：type ∈ {Equity, TotalEquity} 或 origin_name 含 '股東權益'/'權益總額'
+      - 普通股股本：  type ∈ {CommonStock, OrdinaryShare, ShareCapital} 或 origin_name 含 '股本'
+
+    Sanity 守門：BPS ∈ (0.1, 5000)。範圍外回 0.0（避免單位錯抓壞數）。
+    BPS 季變動低頻 → 快取 1 日。
+    """
+    import os as _os_bf
+    import datetime as _dt_bf
+    import requests as _rq_bf
+    try:
+        _tok = _os_bf.environ.get('FINMIND_TOKEN', '')
+        _start = (_dt_bf.date.today() - _dt_bf.timedelta(days=540)).strftime('%Y-%m-%d')
+        _p = {'dataset': 'TaiwanStockBalanceSheet', 'data_id': sid, 'start_date': _start}
+        if _tok:
+            _p['token'] = _tok
+        _r = _rq_bf.get('https://api.finmindtrade.com/api/v4/data',
+                        params=_p, timeout=15)
+        _data = _r.json().get('data', []) if _r.status_code == 200 else []
+        if not _data:
+            return 0.0
+        _dates = sorted({_row.get('date', '') for _row in _data}, reverse=True)
+        _latest = _dates[0] if _dates else ''
+        _equity = 0.0
+        _common_stock = 0.0
+        for _row in _data:
+            if _row.get('date') != _latest:
+                continue
+            _t = str(_row.get('type', ''))
+            _nm = str(_row.get('origin_name', ''))
+            try:
+                _v = float(str(_row.get('value', 0) or 0).replace(',', ''))
+            except (TypeError, ValueError):
+                continue
+            if _v <= 0:
+                continue
+            # 股東權益總額（優先取「合計/總額」避免父子科目混淆）
+            if (not _equity and (_t in ('Equity', 'TotalEquity', 'StockholdersEquity')
+                                  or '股東權益總額' in _nm or '權益總額' in _nm
+                                  or '股東權益合計' in _nm or '權益合計' in _nm)):
+                _equity = _v
+            # 普通股股本（用於算流通股數）
+            elif (not _common_stock and (_t in ('CommonStock', 'OrdinaryShare', 'ShareCapital')
+                                          or '普通股股本' in _nm
+                                          or ('股本' in _nm and '特別股' not in _nm))):
+                _common_stock = _v
+        if _equity <= 0 or _common_stock <= 0:
+            return 0.0
+        # BPS = 股東權益 / (股本/10 元面額)
+        _shares_outstanding = _common_stock / 10.0
+        _bps = _equity / _shares_outstanding
+        # Sanity：台股 BPS 合理範圍 0.1 ~ 5000 元，超出回 0.0 由 yfinance 接手
+        if not (0.1 < _bps < 5000):
+            return 0.0
+        return float(_bps)
+    except Exception:
+        return 0.0
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
 def _fetch_bps(sid: str) -> float:
-    """yfinance 最新每股淨值（bookValue），雙後綴 .TW/.TWO 重試，失敗回 0.0。
-    供 PB 股價淨值比河流圖橫帶。BPS 季變動低頻 → 快取 1 日，避免每次 Streamlit
-    rerun 都阻塞於 yf.Ticker().info（~1-3 秒網路呼叫）。"""
+    """每股淨值（BPS）— v18.174 修正資料源：FinMind BS PRIMARY，yfinance FALLBACK。
+
+    舊版單靠 yfinance.Ticker().info['bookValue']，台股季報切換時段常落後
+    1-3 個月或缺值；新版改先走 FinMind TaiwanStockBalanceSheet 算最新季度
+    BPS（公式：股東權益總額 / (普通股股本 / 10 元面額)），失敗才退回 yfinance。
+
+    BPS 季變動低頻 → 快取 1 日，避免每次 Streamlit rerun 都阻塞網路呼叫。
+    """
+    # PRIMARY: FinMind BS（最新季度，台股權威）
+    _bps_fm = _fetch_bps_from_finmind(sid)
+    if _bps_fm > 0:
+        return _bps_fm
+    # FALLBACK: yfinance bookValue（可能 stale，但比沒有強）
     try:
         import yfinance as _yf_pb
         for _sfx_pb in ('.TW', '.TWO'):
@@ -1591,7 +1668,8 @@ padding:12px 16px;margin:8px 0;">
             st.info(f'ℹ️ {sid2} 季報 EPS 資料不足 4 季（取得 {len(_eps_q_clean)} 季），無法繪製本益比河流圖。')
 
         # ── 估值河流圖（PB 股價淨值比河流，BPS 橫帶 fallback）──────────
-        # BPS 變化緩慢，採用 yfinance 最新 bookValue 畫橫帶（不做歷史 rolling）
+        # v18.174：BPS 改抓 FinMind TaiwanStockBalanceSheet 最新季度（公式 =
+        # 股東權益總額 / (普通股股本/10 面額)），yfinance bookValue 為退路。
         _bps_val = _fetch_bps(sid2)
 
         if df2 is not None and not df2.empty and _bps_val > 0:
@@ -1647,7 +1725,7 @@ padding:12px 16px;margin:8px 0;">
                 f'目前位於 {_cur_zone_pb}（現價 {_cur_price_pb:.0f} / '
                 f'PB{_PB_LOW}≤{_b_lo_pb:.0f} / PB{_PB_MID}≤{_b_mi_pb:.0f} / PB{_PB_HIGH}≤{_b_hi_pb:.0f}）　'
                 f'BPS {_bps_val:.2f}元，當前 PB ≈ {_cur_pb_ratio:.2f} 倍')
-            st.info('ℹ️ BPS（每股淨值）變化緩慢，本圖採 yfinance 最新值作橫帶（非逐日 rolling）。製造業慣例 PB<1 便宜、1~1.5 合理、>1.5 昂貴；金融股可放寬。')
+            st.info('ℹ️ BPS（每股淨值）= 股東權益總額 ÷ 流通在外股數（普通股股本 ÷ 10 元面額）；資料源：FinMind TaiwanStockBalanceSheet 最新季度（yfinance bookValue 為退路）。本圖採最新值作橫帶（非逐日 rolling）。製造業慣例 PB<1 便宜、1~1.5 合理、>1.5 昂貴；金融股可放寬。')
         elif df2 is not None and not df2.empty:
             st.caption('ℹ️ 股價淨值比河流圖：yfinance 未提供 BPS 資料，跳過。')
 
