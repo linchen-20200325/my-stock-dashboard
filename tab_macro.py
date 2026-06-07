@@ -1034,9 +1034,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                                                             errors='coerce').dropna()
                                 if len(_vals0) >= 13:
                                     _yoy = round((_vals0.iloc[-1] / _vals0.iloc[-13] - 1) * 100, 2)
+                                    # v18.169：補 prev_yoy 供 MK 黃金拐點偵測（CPI 月度變化）
+                                    _prev_yoy = (round((_vals0.iloc[-2] / _vals0.iloc[-14] - 1) * 100, 2)
+                                                 if len(_vals0) >= 14 else None)
                                     _date = str(_df0.iloc[-1, 0])[:10]
-                                    print(f'[Macro/CPI/fredgraph] ✅ YoY={_yoy:.2f}% date={_date}')
-                                    return {'us_core_cpi': {'yoy': _yoy, 'date': _date,
+                                    print(f'[Macro/CPI/fredgraph] ✅ YoY={_yoy:.2f}% prev={_prev_yoy} date={_date}')
+                                    return {'us_core_cpi': {'yoy': _yoy, 'prev_yoy': _prev_yoy,
+                                                            'date': _date,
                                                             'source': 'FRED/fredgraph.csv',
                                                             'series_id': 'CPILFESL'}}
                             _cpi_errs.append(f'fredgraph:rows<13({len(_df0)})')
@@ -1068,9 +1072,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                             if len(_obs_c) >= 13:
                                 _vals_c = [float(o['value']) for o in _obs_c]
                                 _yoy = round((_vals_c[-1] / _vals_c[-13] - 1) * 100, 2)
+                                # v18.169：補 prev_yoy 供 MK 黃金拐點偵測
+                                _prev_yoy = (round((_vals_c[-2] / _vals_c[-14] - 1) * 100, 2)
+                                             if len(_vals_c) >= 14 else None)
                                 _date = _obs_c[-1]['date']
-                                print(f'[Macro/CPI/FRED-API] ✅ YoY={_yoy:.2f}% date={_date}')
-                                return {'us_core_cpi': {'yoy': _yoy, 'date': _date,
+                                print(f'[Macro/CPI/FRED-API] ✅ YoY={_yoy:.2f}% prev={_prev_yoy} date={_date}')
+                                return {'us_core_cpi': {'yoy': _yoy, 'prev_yoy': _prev_yoy,
+                                                        'date': _date,
                                                         'source': 'FRED-API',
                                                         'series_id': 'CPILFESL'}}
                     except Exception as _e:
@@ -1103,16 +1111,92 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                                     _ents = [o for o, _ in _valid]
                                     _vals = [v for _, v in _valid]
                                     _yoy = round((_vals[-1] / _vals[-13] - 1) * 100, 2)
+                                    # v18.169：補 prev_yoy 供 MK 黃金拐點偵測
+                                    _prev_yoy = (round((_vals[-2] / _vals[-14] - 1) * 100, 2)
+                                                 if len(_vals) >= 14 else None)
                                     _last = _ents[-1]
                                     _date = f"{_last['year']}-{int(_last['period'][1:]):02d}-01"
-                                    print(f'[Macro/CPI/BLS] ✅ YoY={_yoy:.2f}% date={_date}')
-                                    return {'us_core_cpi': {'yoy': _yoy, 'date': _date,
+                                    print(f'[Macro/CPI/BLS] ✅ YoY={_yoy:.2f}% prev={_prev_yoy} date={_date}')
+                                    return {'us_core_cpi': {'yoy': _yoy, 'prev_yoy': _prev_yoy,
+                                                            'date': _date,
                                                             'source': 'BLS',
                                                             'series_id': 'CUSR0000SA0L1E'}}
                     except Exception as _e:
                         _cpi_errs.append(f'BLS:{type(_e).__name__}')
                         print(f'[Macro/CPI/BLS] ❌ {_e}')
                     return {'_err_cpi': ' | '.join(_cpi_errs) or 'all failed'}
+
+                # ── 2b. Fed Funds Rate（FRED FEDFUNDS，月均有效利率）─────────────
+                #   v18.169：MK 黃金拐點偵測需 CPI YoY × Fed Rate 同步月度比較。
+                #   兩層備援：① fredgraph.csv 公開無 key ② FRED API 帶 key 加速。
+                def _fetch_fed_funds():
+                    import datetime as _dt_ff
+                    import io as _io_ff
+                    import pandas as _pd_ff
+                    _ff_errs = []
+                    # ── 方案0: FRED 公開 fredgraph.csv（無需 key）────────────────
+                    try:
+                        from proxy_helper import fetch_url as _fu_ff
+                        _r0 = _fu_ff('https://fred.stlouisfed.org/graph/fredgraph.csv',
+                                     params={'id': 'FEDFUNDS'},
+                                     timeout=10, attempts=1)
+                        print(f'[Macro/FedFunds/fredgraph] response={"OK" if _r0 else "None"}')
+                        if _r0 is not None and _r0.status_code == 200:
+                            _df0 = _pd_ff.read_csv(
+                                _io_ff.StringIO(_r0.content.decode('utf-8', errors='ignore')))
+                            _df0 = _df0.dropna()
+                            if len(_df0) >= 2:
+                                _vals0 = _pd_ff.to_numeric(_df0.iloc[:, 1],
+                                                           errors='coerce').dropna()
+                                if len(_vals0) >= 2:
+                                    _curr = round(float(_vals0.iloc[-1]), 2)
+                                    _prev = round(float(_vals0.iloc[-2]), 2)
+                                    _date = str(_df0.iloc[-1, 0])[:10]
+                                    print(f'[Macro/FedFunds/fredgraph] ✅ {_prev:.2f}%→{_curr:.2f}% date={_date}')
+                                    return {'fed_funds': {'current': _curr, 'prev': _prev,
+                                                          'date': _date,
+                                                          'source': 'FRED/fredgraph.csv',
+                                                          'series_id': 'FEDFUNDS'}}
+                            _ff_errs.append(f'fredgraph:rows<2({len(_df0)})')
+                        else:
+                            _ff_errs.append(f'fredgraph:HTTP{_r0.status_code if _r0 else "None"}')
+                    except Exception as _e:
+                        _ff_errs.append(f'fredgraph:{type(_e).__name__}')
+                        print(f'[Macro/FedFunds/fredgraph] ❌ {_e}')
+                    # ── 方案1: FRED API（FEDFUNDS + API key）────────────────────
+                    try:
+                        import os as _os_ff_f
+                        from proxy_helper import fetch_url as _fu_ff
+                        _fred_key_ff = (_os_ff_f.environ.get('FRED_API_KEY') or
+                                        (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
+                        _ff_start = (_dt_ff.datetime.now() - _dt_ff.timedelta(days=365*2)).strftime('%Y-%m-%d')
+                        _ff_end = _dt_ff.datetime.now().strftime('%Y-%m-%d')
+                        _ff_p = {'series_id': 'FEDFUNDS', 'file_type': 'json',
+                                 'sort_order': 'asc', 'limit': 24,
+                                 'observation_start': _ff_start,
+                                 'observation_end': _ff_end}
+                        if _fred_key_ff:
+                            _ff_p['api_key'] = _fred_key_ff
+                        _rc1 = _fu_ff('https://api.stlouisfed.org/fred/series/observations',
+                                      params=_ff_p, timeout=12, attempts=1)
+                        print(f'[Macro/FedFunds/FRED-API] response={"OK" if _rc1 else "None"}')
+                        if _rc1 is not None:
+                            _obs_f = [o for o in _rc1.json().get('observations', [])
+                                      if o.get('value', '.') != '.']
+                            if len(_obs_f) >= 2:
+                                _vals_f = [float(o['value']) for o in _obs_f]
+                                _curr = round(_vals_f[-1], 2)
+                                _prev = round(_vals_f[-2], 2)
+                                _date = _obs_f[-1]['date']
+                                print(f'[Macro/FedFunds/FRED-API] ✅ {_prev:.2f}%→{_curr:.2f}% date={_date}')
+                                return {'fed_funds': {'current': _curr, 'prev': _prev,
+                                                      'date': _date,
+                                                      'source': 'FRED-API',
+                                                      'series_id': 'FEDFUNDS'}}
+                    except Exception as _e:
+                        _ff_errs.append(f'FRED-API:{type(_e).__name__}')
+                        print(f'[Macro/FedFunds/FRED-API] ❌ {_e}')
+                    return {'_err_fed_funds': ' | '.join(_ff_errs) or 'all failed'}
 
                 # ── 3. 台灣 PMI（CIER 中華經濟研究院）────────────────────────────
                 #   v3：Stock 端定位是台股視角，應抓「台灣製造業 PMI」（CIER 中華
@@ -1438,14 +1522,15 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 # 立刻逃離；避免 with-block 退出時 shutdown(wait=True) 卡在 stuck thread 上等
                 # ~240s（fetch_url 三層重試 × 8 個 MOF URL）拖爆外層 _fut_macro.result(80s)。
                 _r = {}
-                _pool_mc = _TPE(max_workers=5)
+                _pool_mc = _TPE(max_workers=6)  # v18.169: 5→6 加 fed_funds
                 try:
                     _futs_mc = {
-                        _pool_mc.submit(_fetch_vix):    'vix',
-                        _pool_mc.submit(_fetch_cpi):    'cpi',
-                        _pool_mc.submit(_fetch_pmi):    'pmi',
-                        _pool_mc.submit(_fetch_ndc):    'ndc',
-                        _pool_mc.submit(_fetch_export): 'export',
+                        _pool_mc.submit(_fetch_vix):        'vix',
+                        _pool_mc.submit(_fetch_cpi):        'cpi',
+                        _pool_mc.submit(_fetch_pmi):        'pmi',
+                        _pool_mc.submit(_fetch_ndc):        'ndc',
+                        _pool_mc.submit(_fetch_export):     'export',
+                        _pool_mc.submit(_fetch_fed_funds):  'fed_funds',  # v18.169 MK 拐點
                     }
                     try:
                         for _fut_mc in _asc_mc(_futs_mc, timeout=70):
@@ -1713,6 +1798,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             for _mkey, _mname, _mfreq in [
                 ('vix',         'VIX 波動率指數',      'daily'),
                 ('us_core_cpi', '美國核心CPI年增率',   'monthly'),
+                ('fed_funds',   '美國 Fed Funds Rate', 'monthly'),  # v18.169
                 ('ism_pmi',     '🇹🇼 台灣 PMI 製造業指數',  'monthly'),
                 ('tw_export',   '台灣出口年增率',       'monthly'),
                 ('ndc_signal',  '景氣先行指標（NDC）', 'monthly'),
@@ -1981,6 +2067,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 _macro_rb = st.session_state.get('macro_info') or {}
                 for _mk, _mn, _mf in [('vix','VIX 波動率指數','daily'),
                                        ('us_core_cpi','美國核心CPI年增率','monthly'),
+                                       ('fed_funds','美國 Fed Funds Rate','monthly'),  # v18.169
                                        ('ism_pmi','🇹🇼 台灣 PMI 製造業指數','monthly'),
                                        ('tw_export','台灣出口年增率','monthly'),
                                        ('ndc_signal','景氣先行指標（NDC）','monthly')]:
@@ -2023,7 +2110,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
 
     # ══════════════════════════════════════════════════════════════
-    # 拐點偵測系統（整合五大面向）
+    # 拐點偵測系統（整合六大面向 + MK 黃金拐點，v18.169）
     # ══════════════════════════════════════════════════════════════
     if _mkt_info:
         _mi2    = _mkt_info
@@ -2211,6 +2298,29 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         except Exception as _e_tp6:
             print(f'[tab_macro/拐點面板6] {type(_e_tp6).__name__}: {_e_tp6}')
 
+        # ── 7. MK 黃金拐點（CPI YoY × Fed Funds Rate 雙頂回落）─────────────
+        # v18.169：鏡像 fund services/macro_service.py::_detect_inflection
+        # 規則：CPI 月降 + Fed Funds 月降/持平 → ⭐ 強訊號（多頭最佳買點）
+        # 邏輯純函式集中於 macro_helpers.detect_mk_golden_inflection（可單測）
+        try:
+            from macro_helpers import detect_mk_golden_inflection as _det_mk
+            _mi_mk = st.session_state.get('macro_info') or {}
+            _cpi_mk = _mi_mk.get('us_core_cpi') or {}
+            _fed_mk = _mi_mk.get('fed_funds') or {}
+            _mk_sig = _det_mk(
+                cpi_yoy=_cpi_mk.get('yoy'),
+                cpi_prev_yoy=_cpi_mk.get('prev_yoy'),
+                fed_rate=_fed_mk.get('current'),
+                fed_prev_rate=_fed_mk.get('prev'),
+            )
+            if _mk_sig is not None:
+                pivot_signals.append((
+                    _mk_sig['label'], _mk_sig['icon'],
+                    _mk_sig['color'], _mk_sig['detail'],
+                ))
+        except Exception as _e_tp7:
+            print(f'[tab_macro/拐點面板7-MK] {type(_e_tp7).__name__}: {_e_tp7}')
+
         # v1.2 暫存供 AI 首席總經分析師讀（章節：拐點訊號摘要）
         st.session_state['_pivot_signals'] = list(pivot_signals)
 
@@ -2234,7 +2344,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     f'font-size:13px;font-weight:600;color:{_pivot_color};">'
                     f'{_pivot_overall}</div>', unsafe_allow_html=True)
 
-        with st.expander('📊 拐點詳細分析 — 五大面向綜合判斷', expanded=True):
+        with st.expander('📊 拐點詳細分析 — 六大面向 + MK 黃金拐點', expanded=True):
             if pivot_signals:
                 for _label, _icon, _color, _detail in pivot_signals:
                     st.markdown(
@@ -3467,7 +3577,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         else:
             st.markdown(f'<div style="color:#c9d1d9;font-size:12px;padding:2px 6px;">• {_mc2}</div>', unsafe_allow_html=True)
 
-    _m_cols = st.columns(3)
+    # v18.169：3 卡 → 2 卡精簡（月線乖離併入年線副標；詳細訊號歸頂部拐點面板）
+    _m_cols = st.columns(2)
     with _m_cols[0]:
         if _m1b_info:
             _m1b_v  = _m1b_info.get('m1b_yoy', 0)
@@ -3484,29 +3595,23 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     with _m_cols[1]:
         if _bias_info:
             _bias_v = _bias_info.get('bias_240', 0)
+            _bias_20 = _bias_info.get('bias_20', 0)
             _bc     = '#f85149' if _bias_v > 20 else ('#3fb950' if _bias_v < -20 else '#d29922')
             _bl     = ('⚠️ 乖離過大，考慮減碼' if _bias_v > 20
                        else ('✅ 嚴重低估，可積極布局' if _bias_v < -20
                        else '⚪ 乖離正常區間'))
             _est_note = '（估算）' if _bias_info.get('is_estimated') else ''
             _days_note = f" {_bias_info.get('data_days',0)}天資料" if _bias_info.get('is_estimated') else ''
+            # 月線乖離併入副標（過熱/超賣時加 emoji 提示）
+            _bl20_short = ('⚠️過熱' if _bias_20 > 10 else
+                           ('✅機會' if _bias_20 < -10 else '正常'))
             st.markdown(kpi(f'年線乖離率(240MA){_est_note}', f'{_bias_v:+.1f}%',
-                            f'{_bl}{_days_note}', _bc, '#0d1117'), unsafe_allow_html=True)
+                            f'{_bl}{_days_note}　｜　月線20MA: {_bias_20:+.1f}% ({_bl20_short})',
+                            _bc, '#0d1117'), unsafe_allow_html=True)
         else:
-            st.markdown(kpi('年線乖離率(240MA)', '計算中', '大盤收盤/年線', '#484f58', '#0d1117'), unsafe_allow_html=True)
+            st.markdown(kpi('年線乖離率(240MA)', '計算中', '大盤收盤/年線（月線乖離併顯示）', '#484f58', '#0d1117'), unsafe_allow_html=True)
 
-    with _m_cols[2]:
-        if _bias_info:
-            _bias_20 = _bias_info.get('bias_20', 0)
-            _bc20    = '#f85149' if _bias_20 > 10 else ('#3fb950' if _bias_20 < -10 else '#d29922')
-            _bl20    = ('⚠️ 月線乖離過大，短線過熱' if _bias_20 > 10
-                        else ('✅ 月線負乖離，考慮進場' if _bias_20 < -10
-                        else '⚪ 月線乖離正常'))
-            st.markdown(kpi('月線乖離率(20MA)', f'{_bias_20:+.1f}%',
-                            _bl20, _bc20, '#0d1117'), unsafe_allow_html=True)
-        else:
-            st.markdown(kpi('月線乖離率(20MA)', '計算中', '', '#484f58', '#0d1117'), unsafe_allow_html=True)
-
+    st.caption('📖 完整乖離訊號與門檻判讀 → 詳見頂部「📊 拐點詳細分析」第 2 面向')
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════
@@ -3550,6 +3655,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     _m8_exp   = _macro_info.get('tw_export')
     _m8_pmi   = _macro_info.get('ism_pmi')
     _m8_cpi   = _macro_info.get('us_core_cpi')
+    _m8_fed   = _macro_info.get('fed_funds')  # v18.169: MK 黃金拐點配對指標
     _m8_vix   = _macro_info.get('vix')
 
     # ── Row 1: NDC燈號 | 外銷訂單YoY | 🇹🇼 台灣 PMI ──────────
@@ -3591,22 +3697,51 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         else:
             st.markdown(kpi('🇹🇼 台灣 PMI', '待取得', '50為榮枯線（CIER 中華經濟研究院）', '#484f58', '#0d1117'), unsafe_allow_html=True)
 
-    # ── Row 2: 美國核心CPI | VIX 時間序列圖 ────────────────
-    _s8c2 = st.columns([1, 2])
+    # ── Row 2: 美國核心CPI | Fed Funds Rate | VIX 時間序列圖 ──────
+    # v18.169：CPI + Fed Funds 並排呈現「MK 黃金拐點」配對指標
+    _s8c2 = st.columns([1, 1, 2])
 
     with _s8c2[0]:
         if _m8_cpi:
             _cy8 = _m8_cpi.get('yoy', 0)
+            _cpv8 = _m8_cpi.get('prev_yoy')  # v18.169
             _cc8 = '#f85149' if _cy8 > 3.5 else ('#d29922' if _cy8 > 2.5 else '#3fb950')
             _cl8 = ('🔴 通膨偏高，Fed升息壓力大' if _cy8 > 3.5 else
                     ('⚠️ 通膨黏性，降息路徑放緩' if _cy8 > 2.5 else '✅ 通膨受控，降息可期'))
             _cdate8 = f" ({_m8_cpi.get('date','')})" if _m8_cpi.get('date') else ''
-            st.markdown(kpi('美國核心CPI YoY', f'{_cy8:+.2f}%', f'{_cl8}{_cdate8}', _cc8, '#0d1117'), unsafe_allow_html=True)
+            _ctrend = ''
+            if _cpv8 is not None:
+                _cdelta = _cy8 - _cpv8
+                _ctrend = (f"｜上月 {_cpv8:+.2f}% ({'↓' if _cdelta<-0.05 else ('↑' if _cdelta>0.05 else '→')}"
+                           f"{abs(_cdelta):.2f})")
+            st.markdown(kpi('美國核心CPI YoY', f'{_cy8:+.2f}%',
+                            f'{_cl8}{_ctrend}{_cdate8}', _cc8, '#0d1117'), unsafe_allow_html=True)
             st.caption('💡 Fed 目標值 = 2%。CPI > 3.5% 時升息預期升高，外資易從台股提款。')
         else:
             st.markdown(kpi('美國核心CPI YoY', '待取得', 'Fed 目標值 = 2%', '#484f58', '#0d1117'), unsafe_allow_html=True)
 
     with _s8c2[1]:
+        # v18.169：美國 Fed Funds Rate（CPI 配對 → MK 黃金拐點判讀）
+        if _m8_fed:
+            _fc = _m8_fed.get('current', 0)
+            _fp = _m8_fed.get('prev', 0)
+            _fdelta = _fc - _fp
+            _fc8 = ('#f85149' if _fc >= 5.0 else
+                    ('#d29922' if _fc >= 3.0 else '#3fb950'))
+            _fl8 = ('🔴 利率高位（>5%），緊縮壓力大' if _fc >= 5.0 else
+                    ('⚠️ 中性偏緊（3-5%）' if _fc >= 3.0 else '✅ 寬鬆環境（<3%）'))
+            _fdate8 = f" ({_m8_fed.get('date','')})" if _m8_fed.get('date') else ''
+            _farrow = '↓' if _fdelta < -0.05 else ('↑' if _fdelta > 0.05 else '→')
+            _ftrend = f"｜上月 {_fp:.2f}% ({_farrow}{abs(_fdelta):.2f})"
+            st.markdown(kpi('美國 Fed Funds Rate', f'{_fc:.2f}%',
+                            f'{_fl8}{_ftrend}{_fdate8}', _fc8, '#0d1117'), unsafe_allow_html=True)
+            st.caption('💡 與 CPI 配對：兩者同步月降 → ⭐ MK 黃金拐點（多頭最佳買點）')
+        else:
+            st.markdown(kpi('美國 Fed Funds Rate', '待取得',
+                            '聯邦資金月均利率（FRED FEDFUNDS）',
+                            '#484f58', '#0d1117'), unsafe_allow_html=True)
+
+    with _s8c2[2]:
         if _m8_vix and _m8_vix.get('dates'):
             _vcur8 = _m8_vix.get('current', 0)
             _vma8  = _m8_vix.get('ma20', 0)
@@ -4147,6 +4282,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 _exp_d  = _macro_info.get('tw_export') or {}
                 _pmi_d  = _macro_info.get('ism_pmi') or {}
                 _cpi_d  = _macro_info.get('us_core_cpi') or {}
+                _fed_d  = _macro_info.get('fed_funds') or {}  # v18.169 MK 拐點
                 _mi_d   = st.session_state.get('m1b_m2_info') or {}
                 _bi_d   = st.session_state.get('bias_info') or {}
                 _li_d   = st.session_state.get('li_latest')
@@ -4181,6 +4317,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     'ISM_PMI_or_OECD_CLI': _pmi_cur,
                     'PMI_Prev_Month':       _pmi_prev_v,
                     'US_Core_CPI_YoY_pct': _cpi_d.get('yoy'),
+                    'US_Core_CPI_PrevMonth_YoY_pct': _cpi_d.get('prev_yoy'),  # v18.169
+                    'US_FedFunds_Rate_pct': _fed_d.get('current'),             # v18.169
+                    'US_FedFunds_PrevMonth_pct': _fed_d.get('prev'),           # v18.169
                     'BIAS240_pct':         _bi_d.get('bias_240'),
                     'PCR':                 _pcr_v,
                     'Futures_Net_Short':   _fut_net_v,

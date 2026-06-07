@@ -220,3 +220,77 @@ def rp_scalar(val: Any, cat: str, freq: str, proxy_date: str) -> dict:
     if val is not None:
         return {'last_updated': proxy_date, 'rows': 1, 'category': cat, 'frequency': freq}
     return {'last_updated': 'N/A', 'rows': 0, 'category': cat, 'frequency': freq, 'missing': True}
+
+
+# v18.169: MK 黃金拐點（CPI × Fed Funds 雙頂回落）— 純函式 helper
+def detect_mk_golden_inflection(
+    cpi_yoy: Optional[float],
+    cpi_prev_yoy: Optional[float],
+    fed_rate: Optional[float],
+    fed_prev_rate: Optional[float],
+) -> Optional[dict]:
+    """MK 黃金拐點偵測 — CPI YoY × Fed Funds Rate 雙頂回落判讀（鏡像 fund _detect_inflection）。
+
+    參數
+    ----
+    cpi_yoy        : 最新月度美國核心 CPI 年增率（%）
+    cpi_prev_yoy   : 上月度美國核心 CPI 年增率（%）
+    fed_rate       : 最新月度 Fed Funds Rate（%，月均有效利率）
+    fed_prev_rate  : 上月度 Fed Funds Rate（%）
+
+    回傳
+    ----
+    None  — 資料不足（任一參數為 None）或無 MK 訊號
+    dict  — {'label', 'icon', 'color', 'detail', 'strength'}
+            strength: 'strong'（雙明確回落）/ 'weak'（CPI 弱降+Fed 持平）
+
+    判讀規則（防雜訊：±0.05ppt 視為持平）
+    --------
+    - CPI 月降 ≥ 0.2ppt AND Fed 持平或月降      → ⭐ 強訊號（MK 黃金拐點 ＝ 多頭最佳買點）
+    - CPI 月降 ∈ [0.05, 0.2)ppt AND Fed 持平或月降 → ✅ 弱訊號（MK 拐點觀察中）
+    - 任一上升 (> 0.05ppt) 或 CPI 未降          → None（無訊號）
+    """
+    if cpi_yoy is None or cpi_prev_yoy is None:
+        return None
+    if fed_rate is None or fed_prev_rate is None:
+        return None
+
+    try:
+        cpi_delta = float(cpi_yoy) - float(cpi_prev_yoy)      # 負值 = 通膨降溫
+        fed_delta = float(fed_rate) - float(fed_prev_rate)    # 負/零 = 降息或暫停
+    except (TypeError, ValueError):
+        return None
+
+    # 任一指標明確上升 → 無 MK 訊號
+    if cpi_delta > 0.05 or fed_delta > 0.05:
+        return None
+    # CPI 須至少出現降溫（>= 0.05ppt 月降）
+    if cpi_delta > -0.05:
+        return None
+
+    _fed_desc = '持平' if abs(fed_delta) < 0.05 else f'月降 {abs(fed_delta):.2f}ppt'
+
+    if cpi_delta <= -0.2:
+        return {
+            'label': 'MK 黃金拐點 ⭐',
+            'icon': '⭐',
+            'color': '#3fb950',
+            'detail': (
+                f'核心 CPI {cpi_prev_yoy:+.2f}% → {cpi_yoy:+.2f}% '
+                f'（月降 {abs(cpi_delta):.2f}ppt） + Fed Funds '
+                f'{fed_prev_rate:.2f}% → {fed_rate:.2f}% （{_fed_desc}） '
+                f'→ ⭐ 通膨+利率雙頂回落，景氣多頭最佳買點（歷史勝率最高）'
+            ),
+            'strength': 'strong',
+        }
+    return {
+        'label': 'MK 拐點觀察中',
+        'icon': '✅',
+        'color': '#d29922',
+        'detail': (
+            f'核心 CPI {cpi_prev_yoy:+.2f}% → {cpi_yoy:+.2f}% + '
+            f'Fed Funds {fed_prev_rate:.2f}% → {fed_rate:.2f}% '
+            f'→ 通膨初步降溫，待 CPI 加速回落或 Fed 確認暫停升息'
+        ),
+        'strength': 'weak',
+    }
