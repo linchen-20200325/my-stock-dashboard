@@ -65,6 +65,104 @@ def _fetch_share_capital(sid: str) -> float:
         return 0.0
 
 
+# ════════════════════════════════════════════════════════════════════
+# v18.175 P/B 估值資料源升級 — TWSE BWIBBU_d 權威值 PRIMARY
+# ════════════════════════════════════════════════════════════════════
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_pbratio_from_twse(sid: str) -> float:
+    """v18.175：從 TWSE OpenAPI BWIBBU_d 直取個股 P/B 股價淨值比（伺服器端權威值）。
+
+    重用既有 yield_screener.fetch_twse_yield_pe() 1 日快取的全市場 DataFrame，
+    過濾出指定 sid 的「股價淨值比」欄位。涵蓋全 TWSE 上市股（TPEx 退 FinMind）。
+    """
+    try:
+        from yield_screener import fetch_twse_yield_pe
+        _df = fetch_twse_yield_pe()
+        if _df is None or _df.empty:
+            return 0.0
+        _hit = _df[_df['代碼'].astype(str) == str(sid)]
+        if _hit.empty:
+            return 0.0
+        _pb = _hit.iloc[0].get('股價淨值比')
+        if _pb is None:
+            return 0.0
+        _pb_v = float(_pb)
+        if not (0.01 < _pb_v < 100):
+            return 0.0
+        return _pb_v
+    except Exception:
+        return 0.0
+
+
+# ── 產業別 P/B 閾值對照表（金融 / 成長科技 / 製造 default）─────────────
+_PB_BANDS_FINANCIAL = (0.5, 0.9, 1.2)   # 金融保險 / 銀行業
+_PB_BANDS_GROWTH    = (1.5, 2.5, 4.0)   # 半導體 / 電子 / 光電 / 通信網路 / 電腦周邊 / 其他電子
+_PB_BANDS_MFG       = (0.8, 1.5, 2.5)   # 製造業 default
+
+_FINANCIAL_INDUSTRIES = ('金融保險業', '銀行業', '證券業', '保險業', '金融業')
+_GROWTH_INDUSTRIES = (
+    '半導體業', '電子工業', '光電業', '通信網路業',
+    '電腦及週邊設備業', '其他電子業', '電子零組件業',
+)
+
+
+def _get_pb_bands(industry: str | None) -> tuple[float, float, float]:
+    """v18.175：依產業類別回傳 P/B 河流圖橫帶閾值（低/中/高）。
+
+    - 金融業：(0.5, 0.9, 1.2) — 銀行資產驅動，PB<1 屬正常
+    - 成長科技：(1.5, 2.5, 4.0) — 高 ROE / 智財權溢價
+    - 製造業 default：(0.8, 1.5, 2.5) — 慣例值（保持 v18.174 行為）
+    """
+    if not industry:
+        return _PB_BANDS_MFG
+    _ind = str(industry)
+    if any(_kw in _ind for _kw in _FINANCIAL_INDUSTRIES):
+        return _PB_BANDS_FINANCIAL
+    if any(_kw in _ind for _kw in _GROWTH_INDUSTRIES):
+        return _PB_BANDS_GROWTH
+    return _PB_BANDS_MFG
+
+
+def _pb_bands_label(industry: str | None) -> str:
+    """v18.175：產業別閾值標籤 — 用於 caption 顯示。"""
+    if not industry:
+        return '製造業預設'
+    _ind = str(industry)
+    if any(_kw in _ind for _kw in _FINANCIAL_INDUSTRIES):
+        return f'金融業（{_ind}）'
+    if any(_kw in _ind for _kw in _GROWTH_INDUSTRIES):
+        return f'成長科技（{_ind}）'
+    return f'製造業（{_ind}）'
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_industry_category(sid: str) -> str:
+    """v18.175：從 FinMind TaiwanStockInfo 抓個股產業類別字串。失敗回 ''。
+
+    用於 P/B 河流圖閾值動態調整（金融/成長科技/製造）。1 日快取。
+    """
+    import os as _os_ic
+    import requests as _rq_ic
+    try:
+        _tok = _os_ic.environ.get('FINMIND_TOKEN', '')
+        _p = {'dataset': 'TaiwanStockInfo', 'data_id': sid}
+        if _tok:
+            _p['token'] = _tok
+        _r = _rq_ic.get('https://api.finmindtrade.com/api/v4/data',
+                        params=_p, timeout=15)
+        _data = _r.json().get('data', []) if _r.status_code == 200 else []
+        if not _data:
+            return ''
+        for _row in _data:
+            _ind = _row.get('industry_category', '')
+            if _ind:
+                return str(_ind)
+        return ''
+    except Exception:
+        return ''
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fetch_bps_from_finmind(sid: str) -> float:
     """v18.174：FinMind TaiwanStockBalanceSheet 計算最新季度每股淨值（BPS）。
@@ -1667,21 +1765,50 @@ padding:12px 16px;margin:8px 0;">
         elif df2 is not None and not df2.empty:
             st.info(f'ℹ️ {sid2} 季報 EPS 資料不足 4 季（取得 {len(_eps_q_clean)} 季），無法繪製本益比河流圖。')
 
-        # ── 估值河流圖（PB 股價淨值比河流，BPS 橫帶 fallback）──────────
-        # v18.174：BPS 改抓 FinMind TaiwanStockBalanceSheet 最新季度（公式 =
-        # 股東權益總額 / (普通股股本/10 面額)），yfinance bookValue 為退路。
-        _bps_val = _fetch_bps(sid2)
+        # ── 估值河流圖（PB 股價淨值比河流）─────────────────────────
+        # v18.175 三段資料源 chain：
+        #   PRIMARY:  TWSE BWIBBU_d 直取個股 PBratio（伺服器端官方權威值）
+        #             → BPS 反推 = 當前股價 / PBratio
+        #   SECONDARY: FinMind TaiwanStockBalanceSheet 算 BPS = 股東權益/(股本/10)
+        #   FALLBACK:  yfinance bookValue
+        # v18.175 橫帶閾值改依產業別動態調整：金融 0.5/0.9/1.2 /
+        #   成長科技 1.5/2.5/4.0 / 製造業 default 0.8/1.5/2.5
+        _rdates_pb_pre = pd.to_datetime(
+            df2['date'] if 'date' in df2.columns else pd.RangeIndex(len(df2)),
+            errors='coerce').reset_index(drop=True) if df2 is not None else None
+        _rclose_pb_pre = (pd.to_numeric(df2['close'], errors='coerce').reset_index(drop=True)
+                          if df2 is not None and 'close' in df2.columns else None)
+        _cur_price_pb_pre = (float(_rclose_pb_pre.dropna().iloc[-1])
+                              if _rclose_pb_pre is not None and not _rclose_pb_pre.dropna().empty else 0.0)
+
+        # PRIMARY: TWSE 官方 PBratio → BPS 反推
+        _twse_pb = _fetch_pbratio_from_twse(sid2)
+        _bps_val = 0.0
+        _bps_source = ''
+        if _twse_pb > 0 and _cur_price_pb_pre > 0:
+            _bps_val = _cur_price_pb_pre / _twse_pb
+            _bps_source = 'TWSE BWIBBU_d 官方 PBratio 反推'
+        else:
+            # SECONDARY + FALLBACK: 透過 _fetch_bps（FinMind PRIMARY → yfinance fallback）
+            _bps_val = _fetch_bps(sid2)
+            if _bps_val > 0:
+                _bps_source = 'FinMind TaiwanStockBalanceSheet 季度 / yfinance bookValue'
+
+        # 產業別閾值
+        _industry = _fetch_industry_category(sid2)
+        _PB_LOW, _PB_MID, _PB_HIGH = _get_pb_bands(_industry)
+        _industry_label = _pb_bands_label(_industry)
 
         if df2 is not None and not df2.empty and _bps_val > 0:
-            _PB_LOW, _PB_MID, _PB_HIGH = 0.8, 1.5, 2.5
             _b_lo_pb = round(_bps_val * _PB_LOW, 2)
             _b_mi_pb = round(_bps_val * _PB_MID, 2)
             _b_hi_pb = round(_bps_val * _PB_HIGH, 2)
 
-            _rdates_pb = pd.to_datetime(
+            _rdates_pb = _rdates_pb_pre if _rdates_pb_pre is not None else pd.to_datetime(
                 df2['date'] if 'date' in df2.columns else pd.RangeIndex(len(df2)),
                 errors='coerce').reset_index(drop=True)
-            _rclose_pb = pd.to_numeric(df2['close'], errors='coerce').reset_index(drop=True)
+            _rclose_pb = (_rclose_pb_pre if _rclose_pb_pre is not None
+                          else pd.to_numeric(df2['close'], errors='coerce').reset_index(drop=True))
 
             _fig_pb = go.Figure()
             _fig_pb.add_trace(go.Scatter(
@@ -1704,11 +1831,13 @@ padding:12px 16px;margin:8px 0;">
             _ymax_pb = max(_all_pb_vals) * 1.05 if _all_pb_vals else 100
             _ymin_pb = max(0, min(_all_pb_vals) * 0.7) if _all_pb_vals else 0
             _cur_price_pb = float(_rclose_pb.dropna().iloc[-1]) if not _rclose_pb.dropna().empty else 0
-            _cur_pb_ratio = _cur_price_pb / _bps_val if _bps_val > 0 else 0
+            # v18.175：若有 TWSE 官方 PBratio 用官方值，否則自算
+            _cur_pb_ratio = _twse_pb if _twse_pb > 0 else (
+                _cur_price_pb / _bps_val if _bps_val > 0 else 0)
 
             _fig_pb.update_layout(
                 title=dict(
-                    text=f'📐 {sid2} {name2} 股價淨值比河流圖（BPS {_bps_val:.2f}元 × PB {_PB_LOW}/{_PB_MID}/{_PB_HIGH}）',
+                    text=f'📐 {sid2} {name2} 股價淨值比河流圖（BPS {_bps_val:.2f}元 × PB {_PB_LOW}/{_PB_MID}/{_PB_HIGH} · {_industry_label}）',
                     font=dict(color='#8b949e', size=12)),
                 height=280, plot_bgcolor='#0e1117', paper_bgcolor='#0e1117',
                 font=dict(color='white', size=11),
@@ -1725,9 +1854,13 @@ padding:12px 16px;margin:8px 0;">
                 f'目前位於 {_cur_zone_pb}（現價 {_cur_price_pb:.0f} / '
                 f'PB{_PB_LOW}≤{_b_lo_pb:.0f} / PB{_PB_MID}≤{_b_mi_pb:.0f} / PB{_PB_HIGH}≤{_b_hi_pb:.0f}）　'
                 f'BPS {_bps_val:.2f}元，當前 PB ≈ {_cur_pb_ratio:.2f} 倍')
-            st.info('ℹ️ BPS（每股淨值）= 股東權益總額 ÷ 流通在外股數（普通股股本 ÷ 10 元面額）；資料源：FinMind TaiwanStockBalanceSheet 最新季度（yfinance bookValue 為退路）。本圖採最新值作橫帶（非逐日 rolling）。製造業慣例 PB<1 便宜、1~1.5 合理、>1.5 昂貴；金融股可放寬。')
+            st.info(
+                f'ℹ️ **P/B 資料源**：{_bps_source}（v18.175 三段 chain：TWSE BWIBBU_d → FinMind BS → yfinance）。  \n'
+                f'**BPS 公式**：股東權益總額 ÷ 流通在外股數（= 普通股股本 ÷ 10 元面額）；或由 TWSE 官方 PBratio 反推（BPS = 股價 / PBratio）。  \n'
+                f'**閾值依據**：{_industry_label} → PB {_PB_LOW}/{_PB_MID}/{_PB_HIGH}（v18.175 產業別動態：金融 0.5/0.9/1.2 / 成長科技 1.5/2.5/4.0 / 製造業 0.8/1.5/2.5）。本圖採最新值作橫帶（非逐日 rolling）。'
+            )
         elif df2 is not None and not df2.empty:
-            st.caption('ℹ️ 股價淨值比河流圖：yfinance 未提供 BPS 資料，跳過。')
+            st.caption('ℹ️ 股價淨值比河流圖：TWSE/FinMind/yfinance 三路徑皆無 BPS 資料，跳過。')
 
         # ══ C. 領先指標 ════════════════════════════════════════
         st.markdown('---')
