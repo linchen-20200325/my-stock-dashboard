@@ -8,6 +8,7 @@ from macro_helpers import (
     BULL_MIN_SCORE,
     HEALTH_DEFENSE_THRESHOLD,
     calc_traffic_light,
+    detect_mk_golden_inflection,
     rp_entry,
     rp_scalar,
     rp_ts,
@@ -252,3 +253,81 @@ class TestRpScalar:
         e = rp_scalar('', 'ETF', 'daily', '2026-01-01')
         assert e.get('missing') is None
         assert e['rows'] == 1
+
+
+class TestDetectMkGoldenInflection:
+    """v18.169：MK 黃金拐點偵測 — CPI YoY × Fed Funds Rate 雙頂回落。"""
+
+    def test_strong_signal_cpi_drop_fed_drop(self):
+        # CPI 月降 0.3ppt + Fed 月降 0.08ppt → 強訊號 ⭐
+        sig = detect_mk_golden_inflection(3.0, 3.3, 5.25, 5.33)
+        assert sig is not None
+        assert sig['strength'] == 'strong'
+        assert sig['color'] == '#3fb950'
+        assert '⭐' in sig['icon']
+        assert 'MK 黃金拐點' in sig['label']
+
+    def test_strong_signal_cpi_drop_fed_flat(self):
+        # CPI 月降 0.25ppt + Fed 持平 → 強訊號 ⭐
+        sig = detect_mk_golden_inflection(3.0, 3.25, 5.33, 5.33)
+        assert sig is not None
+        assert sig['strength'] == 'strong'
+        assert '持平' in sig['detail']
+
+    def test_weak_signal_cpi_mild_drop_fed_drop(self):
+        # CPI 月降 0.1ppt + Fed 月降 0.08ppt → 弱訊號 ✅
+        sig = detect_mk_golden_inflection(3.2, 3.3, 5.25, 5.33)
+        assert sig is not None
+        assert sig['strength'] == 'weak'
+        assert sig['color'] == '#d29922'
+        assert 'MK 拐點觀察中' in sig['label']
+
+    def test_no_signal_cpi_rising(self):
+        # CPI 上升 → 無訊號
+        assert detect_mk_golden_inflection(3.4, 3.0, 5.25, 5.33) is None
+
+    def test_no_signal_fed_rising(self):
+        # Fed 升息 → 無訊號
+        assert detect_mk_golden_inflection(3.0, 3.3, 5.5, 5.33) is None
+
+    def test_no_signal_cpi_flat(self):
+        # CPI 持平（diff 在噪聲區 ±0.05） → 無訊號
+        assert detect_mk_golden_inflection(3.32, 3.30, 5.25, 5.33) is None
+        assert detect_mk_golden_inflection(3.30, 3.30, 5.25, 5.33) is None
+
+    def test_no_signal_missing_data(self):
+        assert detect_mk_golden_inflection(None, 3.3, 5.25, 5.33) is None
+        assert detect_mk_golden_inflection(3.0, None, 5.25, 5.33) is None
+        assert detect_mk_golden_inflection(3.0, 3.3, None, 5.33) is None
+        assert detect_mk_golden_inflection(3.0, 3.3, 5.25, None) is None
+
+    def test_invalid_data_returns_none(self):
+        # 非數值（字串等） → graceful None
+        assert detect_mk_golden_inflection('abc', 3.3, 5.25, 5.33) is None
+
+    def test_detail_text_includes_values(self):
+        sig = detect_mk_golden_inflection(2.8, 3.3, 5.0, 5.33)
+        assert sig is not None
+        # 強訊號 detail 應該包含 CPI + Fed 數字
+        assert '2.80' in sig['detail']
+        assert '3.30' in sig['detail']
+        assert '5.00' in sig['detail']
+        assert '5.33' in sig['detail']
+
+    def test_threshold_boundary_strong_vs_weak(self):
+        # 0.20ppt 邊界：cpi_delta = -0.20 → 強
+        sig_strong = detect_mk_golden_inflection(3.0, 3.20, 5.33, 5.33)
+        assert sig_strong is not None and sig_strong['strength'] == 'strong'
+        # 0.19ppt → 弱
+        sig_weak = detect_mk_golden_inflection(3.01, 3.20, 5.33, 5.33)
+        assert sig_weak is not None and sig_weak['strength'] == 'weak'
+
+    def test_boundary_cpi_just_above_noise(self):
+        # CPI 降 0.06ppt（剛過噪聲門檻 0.05） + Fed 持平 → 弱訊號
+        sig = detect_mk_golden_inflection(3.24, 3.30, 5.33, 5.33)
+        assert sig is not None and sig['strength'] == 'weak'
+
+    def test_fed_slight_uptick_within_noise_still_signals(self):
+        # Fed 微升 0.03ppt（在 ±0.05 噪聲區） + CPI 月降 0.3 → 強訊號（Fed 視為持平）
+        sig = detect_mk_golden_inflection(3.0, 3.3, 5.36, 5.33)
+        assert sig is not None and sig['strength'] == 'strong'
