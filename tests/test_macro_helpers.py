@@ -8,6 +8,8 @@ from macro_helpers import (
     BULL_MIN_SCORE,
     HEALTH_DEFENSE_THRESHOLD,
     calc_traffic_light,
+    classify_long_term_regime,
+    classify_short_term_regime,
     detect_mk_golden_inflection,
     rp_entry,
     rp_scalar,
@@ -331,3 +333,152 @@ class TestDetectMkGoldenInflection:
         # Fed 微升 0.03ppt（在 ±0.05 噪聲區） + CPI 月降 0.3 → 強訊號（Fed 視為持平）
         sig = detect_mk_golden_inflection(3.0, 3.3, 5.36, 5.33)
         assert sig is not None and sig['strength'] == 'strong'
+
+
+class TestClassifyLongTermRegime:
+    """v18.170：長期總經 12M 視角分類（景氣大循環位階）。"""
+
+    def test_growth_regime_full_bull(self):
+        # CPI 溫和 + Fed 降息 + NDC 黃紅 + PMI 強 + MK 強 → 🟢 成長期
+        mk = detect_mk_golden_inflection(2.0, 2.5, 4.5, 4.75)
+        r = classify_long_term_regime(2.0, 4.5, 4.75, 35, 56, mk)
+        assert r['regime'].startswith('🟢')
+        assert r['score'] >= 1.0
+        assert r['suggest_pct'] == '80%+'
+
+    def test_recovery_regime_mid_bull(self):
+        # CPI 3% + Fed 持平 + NDC 綠 + PMI 53 + 無 MK → 🔵 復甦期
+        r = classify_long_term_regime(3.0, 5.25, 5.25, 27, 53, None)
+        assert r['regime'].startswith('🔵')
+        assert 0.0 <= r['score'] < 1.0
+
+    def test_overheat_regime_caution(self):
+        # CPI 4.5% + Fed 持平 + NDC 綠 + PMI 49 + 無 MK → 🟡 過熱/震盪期
+        # 計算：(-1)*25 + (+1)*20 + 0*20 + (-1)*20 + 0*15 = -25 / 100 = -0.25
+        r = classify_long_term_regime(4.5, 5.5, 5.5, 25, 49, None)
+        assert r['regime'].startswith('🟡')
+        assert -1.0 <= r['score'] < 0.0
+
+    def test_recession_regime_defense(self):
+        # CPI 5.5% + Fed 升息 + NDC 藍 + PMI 47 + 無 MK → 🔴 衰退期
+        r = classify_long_term_regime(5.5, 5.5, 5.0, 15, 47, None)
+        assert r['regime'].startswith('🔴')
+        assert r['score'] < -1.0
+        assert r['suggest_pct'] == '<30%'
+
+    def test_insufficient_data_returns_grey(self):
+        # 所有指標皆 None → ⚪ 資料不足
+        r = classify_long_term_regime(None, None, None, None, None, None)
+        assert r['regime'] == '⚪ 資料不足'
+        assert r['score'] == 0.0
+        assert r['suggest_pct'] == 'N/A'
+
+    def test_mk_alone_not_enough(self):
+        # 只有 MK 訊號、其他全 None → ⚪ 資料不足（MK 不該獨自驅動 regime）
+        mk = detect_mk_golden_inflection(3.0, 3.3, 5.25, 5.33)
+        r = classify_long_term_regime(None, None, None, None, None, mk)
+        assert r['regime'] == '⚪ 資料不足'
+
+    def test_partial_data_works(self):
+        # 只有 CPI + PMI 兩項 → 仍能算分（部分權重）
+        r = classify_long_term_regime(2.0, None, None, None, 56, None)
+        assert r['regime'] != '⚪ 資料不足'
+        assert len(r['components']) == 3  # CPI + PMI + MK 拐點(0)
+
+    def test_components_structure(self):
+        # components 應為 list of (name, score, weight)
+        r = classify_long_term_regime(2.0, 5.0, 5.0, 27, 53, None)
+        for comp in r['components']:
+            assert len(comp) == 3
+            name, score, weight = comp
+            assert isinstance(name, str)
+            assert isinstance(score, int)
+            assert isinstance(weight, int)
+
+    def test_invalid_data_graceful(self):
+        # 字串/NaN 等不該炸
+        r = classify_long_term_regime('bad', float('nan'), None, 'x', None, None)
+        assert r['regime'] == '⚪ 資料不足'
+
+    def test_score_range_clamp(self):
+        # 分數應在 [-2, +2] 區間內
+        r = classify_long_term_regime(1.5, 4.0, 4.5, 40, 58, None)
+        assert -2.0 <= r['score'] <= 2.0
+
+    def test_mk_strong_vs_weak_boost(self):
+        # 同樣中性主指標下，強 MK 應比弱 MK 分數高
+        mk_strong = {'strength': 'strong'}
+        mk_weak = {'strength': 'weak'}
+        r_s = classify_long_term_regime(3.0, 5.0, 5.0, 27, 50, mk_strong)
+        r_w = classify_long_term_regime(3.0, 5.0, 5.0, 27, 50, mk_weak)
+        assert r_s['score'] > r_w['score']
+
+
+class TestClassifyShortTermRegime:
+    """v18.170：短期總經 1Q 視角分類（對齊台股財報季偏向）。"""
+
+    def test_bullish_full_strong(self):
+        # 出口強 + PMI 強 + VIX 低 + 連買多 + CPI 月降 → ⚡ 偏多
+        r = classify_short_term_regime(18, 55, 14, 7, 3.0, 3.3)
+        assert r['regime'].startswith('⚡')
+        assert r['score'] >= 0.8
+
+    def test_neutral_mixed_signals(self):
+        # 出口溫 + PMI 51 + VIX 22 + 微連買 + CPI 持平 → ⚖️ 中性
+        r = classify_short_term_regime(3, 51, 22, 1, 3.0, 3.05)
+        assert r['regime'].startswith('⚖️')
+        assert -0.3 <= r['score'] < 0.8
+
+    def test_bearish_full_weak(self):
+        # 出口降 + PMI 弱 + VIX 高 + 連賣多 + CPI 上升 → ⚠️ 偏空
+        r = classify_short_term_regime(-10, 47, 32, -8, 3.5, 3.1)
+        assert r['regime'].startswith('⚠️')
+        assert r['score'] < -0.3
+
+    def test_insufficient_data(self):
+        r = classify_short_term_regime(None, None, None, None, None, None)
+        assert r['regime'] == '⚪ 資料不足'
+
+    def test_partial_data_export_only(self):
+        # 只有出口 YoY 一項，仍算
+        r = classify_short_term_regime(20, None, None, None, None, None)
+        assert r['regime'] != '⚪ 資料不足'
+        assert r['score'] > 0  # 出口強 → 應偏多
+
+    def test_foreign_investor_streak_positive(self):
+        # 外資連買 5 日（+2）vs 連賣 5 日（-2），分數差應顯著
+        r_buy = classify_short_term_regime(10, 52, 18, 5, 3.0, 3.1)
+        r_sell = classify_short_term_regime(10, 52, 18, -5, 3.0, 3.1)
+        assert r_buy['score'] > r_sell['score']
+
+    def test_vix_threshold_boundaries(self):
+        # VIX < 15 → +2；VIX >= 30 → -2
+        r_calm = classify_short_term_regime(0, 50, 14, 0, 3.0, 3.0)
+        r_panic = classify_short_term_regime(0, 50, 35, 0, 3.0, 3.0)
+        assert r_calm['score'] > r_panic['score']
+
+    def test_components_includes_weights(self):
+        r = classify_short_term_regime(10, 52, 18, 3, 3.0, 3.2)
+        assert len(r['components']) == 5  # 五項全有
+        names = [c[0] for c in r['components']]
+        assert '出口 YoY' in names
+        assert '台 PMI' in names
+        assert 'VIX 波動' in names
+        assert '外資籌碼' in names
+        assert 'CPI 月降' in names
+
+    def test_invalid_data_graceful(self):
+        # 字串輸入不該炸
+        r = classify_short_term_regime('bad', 'x', None, 'y', float('nan'), None)
+        assert r['regime'] == '⚪ 資料不足'
+
+    def test_cpi_month_drop_boosts_score(self):
+        # 同樣其他指標，CPI 月降 0.4 vs 月升 0.4 應有顯著分數差
+        r_drop = classify_short_term_regime(5, 51, 20, 0, 3.0, 3.4)
+        r_rise = classify_short_term_regime(5, 51, 20, 0, 3.4, 3.0)
+        assert r_drop['score'] > r_rise['score']
+
+    def test_action_message_present(self):
+        r = classify_short_term_regime(15, 54, 15, 5, 3.0, 3.3)
+        assert r.get('action') and isinstance(r['action'], str)
+        assert len(r['action']) > 5
