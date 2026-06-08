@@ -38,7 +38,8 @@ CACHE_DIR = Path("data_cache")
 META_PATH = CACHE_DIR / "metadata.json"
 
 # Parquet 表名 → 抓取函式名（runtime dispatch）
-DATASETS = ["twii_ohlcv", "finmind_inst", "finmind_margin", "finmind_m1m2"]
+DATASETS = ["twii_ohlcv", "finmind_inst", "finmind_margin", "finmind_m1m2",
+            "tw_pmi"]  # v18.176 Phase D：加台灣 PMI 月頻 history（dgtw 6100）
 
 FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
 
@@ -368,11 +369,117 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     return out[["date", "m1b", "m2", "m1b_m2_gap"]]
 
 
+# ════════════════════════════════════════════════════════════════
+# v18.176 Phase D：台灣 PMI 月頻 history（data.gov.tw dataset/6100）
+# ════════════════════════════════════════════════════════════════
+_DGTW_PMI_METADATA_URLS = (
+    "https://data.gov.tw/api/v2/rest/dataset/6100",
+    "https://data.gov.tw/api/v1/rest/dataset/6100",
+    "https://data.gov.tw/dataset/6100/resource",
+)
+_PMI_DATE_KEYS = ("年月", "資料時間", "時間", "日期", "month", "date", "yearmonth")
+_PMI_VALUE_KEYS = ("PMI", "採購經理", "製造業", "指數")
+
+
+def _parse_pmi_csv_full(csv_text: str) -> pd.DataFrame:
+    """全 CSV 解析 → [date YYYY-MM-01, pmi float] DataFrame；月頻保留全歷史。
+
+    Sanity：PMI ∈ [20, 80]（中華經濟研究院實務範圍 30-65，留 ±15 緩衝）。
+    """
+    import csv as _csv
+    import io as _io
+    import re as _re_p
+    _rdr = list(_csv.DictReader(_io.StringIO(csv_text)))
+    if not _rdr:
+        return pd.DataFrame(columns=["date", "pmi"])
+    _rows: list[tuple[_dt.date, float]] = []
+    for _row in _rdr:
+        _date_v = None
+        _pmi_v = None
+        for _k, _v in _row.items():
+            _kl = str(_k)
+            # PMI 數值欄
+            if any(_x in _kl for _x in _PMI_VALUE_KEYS):
+                try:
+                    _val = float(str(_v).strip().replace(",", ""))
+                    if 20 <= _val <= 80:
+                        _pmi_v = _val
+                except (ValueError, TypeError):
+                    pass
+            # 日期欄
+            if _date_v is None:
+                _m = _re_p.search(r"(20\d{2}|19\d{2})[-/年]?(\d{1,2})", str(_v))
+                if _m:
+                    try:
+                        _date_v = _dt.date(int(_m.group(1)), int(_m.group(2)), 1)
+                    except ValueError:
+                        pass
+        if _date_v is not None and _pmi_v is not None:
+            _rows.append((_date_v, _pmi_v))
+    if not _rows:
+        return pd.DataFrame(columns=["date", "pmi"])
+    _df = pd.DataFrame(_rows, columns=["date", "pmi"]).drop_duplicates(
+        subset=["date"], keep="last").sort_values("date").reset_index(drop=True)
+    return _df
+
+
+def fetch_tw_pmi_history(start: _dt.date, end: _dt.date) -> pd.DataFrame:
+    """台灣製造業 PMI 月頻歷史（data.gov.tw dataset/6100 — 國發會 NDC 提供）。
+
+    輸出欄位：[date, pmi]；月度資料量小（~300 月 / 25 年），每次 bootstrap 全 CSV
+    無增量必要；caller 透過 `_merge_dedupe` 去重。
+    """
+    for _meta_url in _DGTW_PMI_METADATA_URLS:
+        try:
+            _r_meta = _fetch_url_via_proxy(_meta_url, timeout=10)
+            if _r_meta is None or _r_meta.status_code != 200:
+                print(f"[tw_pmi] metadata HTTP={getattr(_r_meta, 'status_code', 'None')}")
+                continue
+            try:
+                _j_meta = _r_meta.json()
+            except Exception as _e_json:
+                print(f"[tw_pmi] metadata JSON parse fail: {_e_json}")
+                continue
+            _res = (_j_meta.get("result", {}).get("resources")
+                    or _j_meta.get("resources")
+                    or _j_meta.get("data", {}).get("resources")
+                    or [])
+            if not _res:
+                continue
+            # 找 CSV / JSON resource
+            _csv_url = None
+            for _it in _res:
+                _fmt = str(_it.get("format", "")).upper()
+                _url2 = _it.get("url") or _it.get("resourceDownloadUrl")
+                if _fmt in ("CSV", "JSON") and _url2:
+                    _csv_url = _url2
+                    break
+            if not _csv_url:
+                continue
+            _r_csv = _fetch_url_via_proxy(_csv_url, timeout=15)
+            if _r_csv is None or _r_csv.status_code != 200:
+                print(f"[tw_pmi] CSV HTTP={getattr(_r_csv, 'status_code', 'None')}")
+                continue
+            _txt = _r_csv.content.decode("utf-8-sig", errors="ignore")
+            _df = _parse_pmi_csv_full(_txt)
+            if _df.empty:
+                print("[tw_pmi] CSV 解析後無有效列")
+                continue
+            _df = _df[(_df["date"] >= start) & (_df["date"] <= end)].reset_index(drop=True)
+            print(f"[tw_pmi] ✅ data.gov.tw {len(_df)} rows ({start}~{end})")
+            return _df
+        except Exception as _e_outer:
+            print(f"[tw_pmi] outer {type(_e_outer).__name__}: {_e_outer}")
+    print("[tw_pmi] ❌ 所有 dgtw metadata URL 皆失敗")
+    return pd.DataFrame(columns=["date", "pmi"])
+
+
 FETCHERS = {
     "twii_ohlcv": (fetch_twii_ohlcv, False),       # (fn, needs_token)
     "finmind_inst": (fetch_finmind_inst, True),
     "finmind_margin": (fetch_finmind_margin, True),
     "finmind_m1m2": (fetch_finmind_m1m2, True),
+    "tw_pmi": (fetch_tw_pmi_history, False),       # v18.176 Phase D PMI Parquet
 }
 
 

@@ -343,11 +343,81 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
         "兩者皆低 = 訊號失效。理想 ≥ 50% 精確率代表「賭一半以上」。"
     )
 
+    # ── 📡 v18.178 Phase E：跨資料源比對矩陣（事件 × 訊號）─────────
+    _render_phase4_cross_source_matrix(events, specs, series_by_key,
+                                        offset_days, max_lookback_days)
+
     # ── 🎯 v18.164：MT5-style 自動校準（walk-forward）────────────
     _render_phase3_auto_calibration(events, specs, series_by_key)
 
     # ── 🔬 v18.165：多因子權重最佳化（高原區 + walk-forward OOS）─────
     _render_phase3_multi_factor_optimization(events, series_by_key)
+
+
+def _render_phase4_cross_source_matrix(events, specs, series_by_key,
+                                         offset_days: int,
+                                         max_lookback_days: int) -> None:
+    """v18.178 Phase E：跨資料源比對視角矩陣。
+
+    Phase 3 是命中率彙總視角（縱軸訊號、橫軸事件、單元格 0/1，行尾命中率%）；
+    本區塊是「資料源視角」交叉表：
+    - 橫軸：N 場歷史 TWII crisis 事件（峰日 yyyy-mm-dd）
+    - 縱軸：所有訊號（含 PMI 等月頻訊號）
+    - 單元格：✅ 提前 Xd / ⚪ 未命中 / — 無資料
+    讓 user 一眼看出「在 2020 COVID 那場，哪 5 個資料源同時發警報，哪 2 個失靈」。
+    """
+    from macro_signal_lookback_tw import evaluate_signal_at_event
+
+    with st.expander("📡 跨資料源比對視角矩陣（Phase E）", expanded=False):
+        st.caption(
+            "🔄 **資料源視角**：行 = 各訊號（含月頻 PMI v18.176/178），"
+            "列 = 各 TWII crisis 事件（峰日）；單元格顯示「提前 N 天」或「未命中」。"
+            "Phase 3 是命中率彙總（看訊號好壞），Phase E 是事件分析（看哪場危機"
+            "多少訊號同步預警 → 高交集 = 多源驗證的可信警報）。"
+        )
+        if not events or not specs:
+            st.info("ℹ️ 無事件或無訊號可繪矩陣。")
+            return
+
+        peak_labels = [evt.peak_date.strftime('%Y-%m-%d') for evt in events]
+        matrix_rows: list[dict] = []
+        for spec in specs:
+            series = series_by_key.get(spec.key, pd.Series(dtype=float))
+            row: dict = {"訊號": spec.label}
+            hit_count = 0
+            for evt, lbl in zip(events, peak_labels):
+                if series.empty:
+                    row[lbl] = "—"
+                    continue
+                lkb = evaluate_signal_at_event(
+                    series, spec, evt, offset_days=offset_days,
+                    max_lookback_days=max_lookback_days)
+                # first_warning_date 有值 → 命中
+                if lkb.first_warning_date is not None:
+                    lead = (evt.peak_date - lkb.first_warning_date.date()).days
+                    row[lbl] = f"✅ {lead}d"
+                    hit_count += 1
+                else:
+                    row[lbl] = "⚪"
+            row["命中"] = f"{hit_count}/{len(events)}"
+            matrix_rows.append(row)
+
+        # 加事件「多源共識」尾列
+        consensus_row: dict = {"訊號": "📊 多源共識"}
+        for evt, lbl in zip(events, peak_labels):
+            count = sum(1 for r in matrix_rows
+                         if isinstance(r[lbl], str) and r[lbl].startswith("✅"))
+            consensus_row[lbl] = f"{count}/{len(specs)}"
+        consensus_row["命中"] = "—"
+        matrix_rows.append(consensus_row)
+
+        st.dataframe(pd.DataFrame(matrix_rows),
+                      use_container_width=True, hide_index=True)
+        st.caption(
+            "💡 解讀：✅ Xd = 訊號於峰前 X 天首次轉折警戒；⚪ = 該事件未命中；"
+            "— = 該訊號無資料。最末列「📊 多源共識」= 該事件被多少訊號預警，"
+            "≥3 為高可信，<2 屬低可信（單源警報誤判率高）。"
+        )
 
 
 def _render_phase3_auto_calibration(events, specs, series_by_key) -> None:

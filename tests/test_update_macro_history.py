@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -107,6 +108,97 @@ def test_update_one_handles_finmind_without_token():
 
 
 # ════════════════════════════════════════════════════════════════
+# v18.176 Phase D — 台灣 PMI Parquet（data.gov.tw dataset/6100）
+# ════════════════════════════════════════════════════════════════
+def _mk_dgtw_meta_resp(csv_url: str) -> MagicMock:
+    """模擬 dgtw metadata API 回 resources 含 CSV URL。"""
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.json.return_value = {
+        "result": {"resources": [{"format": "CSV", "url": csv_url}]}
+    }
+    return resp
+
+
+def _mk_csv_resp(csv_text: str) -> MagicMock:
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.content = csv_text.encode("utf-8")
+    return resp
+
+
+class TestPmiDatasets:
+    def test_pmi_in_DATASETS(self):
+        import update_macro_history as umh
+        assert "tw_pmi" in umh.DATASETS, "PMI 必須註冊在 DATASETS"
+
+    def test_pmi_in_FETCHERS(self):
+        import update_macro_history as umh
+        assert "tw_pmi" in umh.FETCHERS
+        fn, needs_token = umh.FETCHERS["tw_pmi"]
+        assert callable(fn)
+        assert needs_token is False, "PMI 走 dgtw 不需 FinMind token"
+
+
+class TestPmiCsvParser:
+    def test_parses_full_csv_to_dataframe(self):
+        """全 CSV → [date, pmi] DataFrame，月頻保留全列。"""
+        import update_macro_history as umh
+        csv = "年月,PMI\n2024-01,48.5\n2024-02,51.2\n2024-03,53.0\n"
+        df = umh._parse_pmi_csv_full(csv)
+        assert len(df) == 3
+        assert list(df.columns) == ["date", "pmi"]
+        assert df.iloc[0]["date"] == dt.date(2024, 1, 1)
+        assert abs(df.iloc[1]["pmi"] - 51.2) < 0.01
+
+    def test_sanity_filters_out_of_range(self):
+        """PMI 超出 [20, 80] 視為髒值 skip。"""
+        import update_macro_history as umh
+        csv = "年月,PMI\n2024-01,150.0\n2024-02,50.0\n"  # 150 髒
+        df = umh._parse_pmi_csv_full(csv)
+        assert len(df) == 1
+        assert df.iloc[0]["date"] == dt.date(2024, 2, 1)
+
+    def test_dedupe_keeps_last_for_same_month(self):
+        """同月重複 row 取最新（修正情境）。"""
+        import update_macro_history as umh
+        csv = "年月,PMI\n2024-01,48.5\n2024-01,49.0\n"
+        df = umh._parse_pmi_csv_full(csv)
+        assert len(df) == 1
+        assert abs(df.iloc[0]["pmi"] - 49.0) < 0.01
+
+    def test_empty_csv_returns_empty_df(self):
+        import update_macro_history as umh
+        df = umh._parse_pmi_csv_full("")
+        assert df.empty
+        assert list(df.columns) == ["date", "pmi"]
+
+
+class TestFetchTwPmiHistory:
+    def test_full_chain_success(self, monkeypatch):
+        """metadata → CSV URL → 下載 → 解析 → 範圍 filter."""
+        import update_macro_history as umh
+        csv = "年月,PMI\n2023-12,50.1\n2024-01,52.3\n2024-02,53.5\n"
+        responses = iter([
+            _mk_dgtw_meta_resp("https://example.tw/pmi.csv"),
+            _mk_csv_resp(csv),
+        ])
+        monkeypatch.setattr(umh, "_fetch_url_via_proxy",
+                             lambda *a, **kw: next(responses))
+        df = umh.fetch_tw_pmi_history(dt.date(2024, 1, 1), dt.date(2024, 12, 31))
+        assert len(df) == 2  # 2023-12 被 filter 掉
+        assert df.iloc[0]["date"] == dt.date(2024, 1, 1)
+
+    def test_metadata_fail_returns_empty(self, monkeypatch):
+        """3 個 metadata URL 全 500 → 回空 DataFrame，不 raise。"""
+        import update_macro_history as umh
+        bad = MagicMock()
+        bad.status_code = 500
+        monkeypatch.setattr(umh, "_fetch_url_via_proxy", lambda *a, **kw: bad)
+        df = umh.fetch_tw_pmi_history(dt.date(2024, 1, 1), dt.date(2024, 12, 31))
+        assert df.empty
+        assert list(df.columns) == ["date", "pmi"]
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

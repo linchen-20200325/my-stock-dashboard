@@ -36,10 +36,11 @@ from macro_validation_tw import TwiiCrisisEvent  # noqa: E402
 # DEFAULT_TW_SIGNALS / Registry 完整性
 # ════════════════════════════════════════════════════════════════
 def test_default_signals_count_and_keys():
-    assert len(DEFAULT_TW_SIGNALS) == 4
+    # v18.178 Phase E：4 → 5（加 PMI_BELOW_50）
+    assert len(DEFAULT_TW_SIGNALS) == 5
     keys = {s.key for s in DEFAULT_TW_SIGNALS}
     assert keys == {"FOREIGN_SELL_5D", "MARGIN_BALANCE",
-                    "M1B_M2_DIFF", "TWII_DROP_20D"}
+                    "M1B_M2_DIFF", "TWII_DROP_20D", "PMI_BELOW_50"}
 
 
 def test_fetchers_registry_covers_all_default_keys():
@@ -362,12 +363,14 @@ def test_evaluate_below_direction_works():
 # lookback_all_signals_tw
 # ════════════════════════════════════════════════════════════════
 def test_lookback_all_signals_tw_returns_dict_keyed_by_spec():
+    # v18.178 Phase E：DEFAULT_TW_SIGNALS 加 PMI_BELOW_50 → 5 keys
     ev = _mock_event("2024-06-01")
     series_by_key = {
         "FOREIGN_SELL_5D": pd.Series(dtype=float),
         "MARGIN_BALANCE": pd.Series(dtype=float),
         "M1B_M2_DIFF": pd.Series(dtype=float),
         "TWII_DROP_20D": pd.Series(dtype=float),
+        "PMI_BELOW_50": pd.Series(dtype=float),
     }
     out = lookback_all_signals_tw([ev], series_by_key)
     assert set(out.keys()) == set(series_by_key.keys())
