@@ -3,6 +3,8 @@
 > **版本**：v7.1　|　**最後更新**：2026-05-15　|　**狀態**：完成 ✅
 >
 > 本文件為系統架構師視角的唯讀規格書，不含任何實作程式碼。
+>
+> **v18.182 起 UI 入口暫封存**：「🧪 回測找參數」頂層 Tab + ETF 組合 Tab 內「② 歷史回測」sub-section 暫不渲染（user 反饋暫不使用）；下文提及的 `backtest_engine.py` / `etf_tab_backtest.py` / `tab_backtest_optimization.py` / `tw_backtest.py` 模組磁碟保留完整，未來啟用只需 grep `v18.182 ARCHIVED:` 取消註解即可。架構描述未變。
 
 ---
 
