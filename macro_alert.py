@@ -280,12 +280,17 @@ def fetch_macro_snapshot(
             pass
 
     # ── ③ PCR：session_state['li_latest'].iloc[-1]['選PCR'] ──────────
+    # v18.183 scale normalize：leading_indicators.py 寫入 '選PCR' 時 ×100 轉百分比
+    # （50-200 區間，UI 卡片直接顯示用），但 config.py PCR threshold 採標準 PCR ratio
+    # (0.5-2.0)；此處 >10 視為百分比 scale 回除以 100 對齊。修 v18.182 前 PCR=126.80
+    # 觸發 >1.5 紅警示的假陽性 bug。
     if session_li is not None:
         try:
             if not session_li.empty and '選PCR' in session_li.columns:
                 _pcr_raw = session_li.iloc[-1].get('選PCR')
                 if _pcr_raw is not None and str(_pcr_raw) not in ('', 'nan', '-'):
-                    snap['pcr'] = float(_pcr_raw)
+                    _pcr_val = float(_pcr_raw)
+                    snap['pcr'] = _pcr_val / 100 if _pcr_val > 10 else _pcr_val
         except Exception:
             pass
 
