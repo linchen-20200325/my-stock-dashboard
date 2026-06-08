@@ -1,6 +1,8 @@
 # 介面與規約 (Interface SPEC)
 
 > 集中記錄 **跨模組對外可見** 的命名、對應表、語意契約。修改本檔代表 UI / API 行為改動，需同步 STATE / ARCHITECTURE。
+>
+> **v18.182 起 UI 入口暫封存**：「🧪 回測找參數」頂層 Tab + ETF 組合 Tab 內「② 歷史回測」sub-section 暫不渲染；下文提及的 `etf_tab_backtest` / `tab_backtest_optimization` 等模組磁碟保留完整。語意規約未變。
 
 ---
 
