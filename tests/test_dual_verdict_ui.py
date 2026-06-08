@@ -252,3 +252,101 @@ class TestWarningBranchWithSlowVerdict:
         joined = ' '.join(md_calls)
         assert '雙速合議' in joined
         assert 'downgrade_1' in joined or '中性觀察' in joined
+
+
+# ════════════════════════════════════════════════════════════════
+# §6 v18.179 第三維度 (valuation + event_calendar) 純函式測試
+# ════════════════════════════════════════════════════════════════
+class TestThirdAxisOverlay:
+    """直接測 ``synthesize_dual_verdict`` 純函式的第三維度疊加邏輯。
+
+    第三維度只 append 到 action + third_axis_notes，**不改 mode/icon/color/level**。
+    """
+
+    def _call(self, **kw):
+        from risk_radar import synthesize_dual_verdict
+        defaults = dict(
+            slow_level="景氣擴張",
+            slow_score=6.0,
+            slow_color="#3fb950",
+            slow_icon="🟢",
+            slow_action="維持滿倉、定期定額正常進場",
+            radar_level="平靜",
+        )
+        defaults.update(kw)
+        return synthesize_dual_verdict(**defaults)
+
+    def test_no_third_axis_backward_compat(self):
+        """皆 None → mode 不變，third_axis_notes 為空 list，action 不變."""
+        out = self._call()
+        assert out["mode"] == "adopt_slow"
+        assert out["third_axis_notes"] == []
+        assert "維持滿倉" in out["action"]
+        assert " ｜ " not in out["action"]
+
+    def test_valuation_expensive_appends_warning(self):
+        """估值極貴 + adopt_slow → action 追加減倉建議，mode 不變."""
+        out = self._call(valuation_level="極貴")
+        assert out["mode"] == "adopt_slow"  # mode 仍 unchanged
+        assert "估值頂部分位" in out["action"]
+        assert "估值頂部分位（極貴），建議減倉至中性" in out["third_axis_notes"]
+
+    def test_valuation_cheap_appends_in_downgrade(self):
+        """估值便宜 + 雷達警報 downgrade_2 → 追加擇機加碼建議."""
+        out = self._call(
+            radar_level="警報", slow_score=-7.0,
+            valuation_level="便宜",
+        )
+        assert out["mode"] == "downgrade_2"
+        assert "估值底部分位" in out["action"]
+        assert any("便宜" in n for n in out["third_axis_notes"])
+
+    def test_valuation_expensive_no_override_when_extreme_radar(self):
+        """估值極貴 + 雷達極端警報 → override_defense 不被升級（雷達壓倒一切）."""
+        out = self._call(
+            radar_level="極端警報", valuation_level="極貴",
+        )
+        assert out["mode"] == "override_defense"
+        # override_defense 已是最重，不再追加 valuation 警語
+        assert out["third_axis_notes"] == []
+
+    def test_event_calendar_major_event_in_adopt_slow(self):
+        """重大事件 + adopt_slow → 追加暫緩加碼建議."""
+        out = self._call(event_calendar_level="重大事件")
+        assert out["mode"] == "adopt_slow"
+        assert "重大事件臨近" in out["action"]
+        assert any("重大事件" in n for n in out["third_axis_notes"])
+
+    def test_event_calendar_tailwind_in_downgrade(self):
+        """事件曆順風 + 雷達警報 downgrade_2 → 追加擇機建議."""
+        out = self._call(
+            radar_level="警報", slow_score=6.0,
+            event_calendar_level="順風",
+        )
+        assert out["mode"] == "downgrade_2"
+        assert any("順風" in n for n in out["third_axis_notes"])
+
+    def test_event_calendar_headwind_in_adopt_slow(self):
+        """事件曆逆風 + adopt_slow → 追加波動警語."""
+        out = self._call(event_calendar_level="逆風")
+        assert "事件曆逆風" in out["action"]
+        assert any("逆風" in n for n in out["third_axis_notes"])
+
+    def test_both_axes_combined_notes(self):
+        """兩維度同時觸發 → action 含兩段註解、third_axis_notes 含兩條."""
+        out = self._call(
+            valuation_level="極貴",
+            event_calendar_level="重大事件",
+        )
+        assert len(out["third_axis_notes"]) == 2
+        assert "估值頂部" in out["action"]
+        assert "重大事件" in out["action"]
+
+    def test_neutral_levels_are_noop(self):
+        """估值合理 + 事件曆中性 → 不加註解，action 不變."""
+        out = self._call(
+            valuation_level="合理",
+            event_calendar_level="中性",
+        )
+        assert out["third_axis_notes"] == []
+        assert " ｜ " not in out["action"]

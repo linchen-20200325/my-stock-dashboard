@@ -424,8 +424,11 @@ def synthesize_dual_verdict(
     slow_icon: str,
     slow_action: str,
     radar_level: str | None,
+    *,
+    valuation_level: str | None = None,
+    event_calendar_level: str | None = None,
 ) -> dict:
-    """v18.173 雙速合議 — 將慢總經 verdict 與短線雷達 level 整合為單一行動建議。
+    """v18.173 雙速合議（+ v18.179 第三維度補充）— 慢總經 verdict × 短線雷達 level → 行動建議.
 
     Returns
     -------
@@ -435,26 +438,39 @@ def synthesize_dual_verdict(
         "color"  : str,    # hex
         "action" : str,    # 行動建議全文（內含分歧/降槓桿等明確指引）
         "mode"   : str,    # "adopt_slow" / "downgrade_1" / "downgrade_2" / "override_defense"
+        "third_axis_notes": list[str]  # v18.179 第三維度附加註解（無則 []）
     }
 
-    決策表：
+    決策表（雙速 base）：
       radar=None/平靜    → adopt_slow（採用慢總經）
       radar=警戒          → downgrade_1（慢樂觀則維持觀察；慢中性/悲觀則降至中性）
       radar=警報          → downgrade_2（慢樂觀→降槓桿；慢中性→偏空；慢悲觀→全面防守）
       radar=極端警報      → override_defense（強制減倉，慢總經暫不採信）
+
+    v18.179 第三維度（兩個皆 Optional，預設 None 時行為與 v18.173 完全一致）
+    ----------------
+    - ``valuation_level``：估值分位 "便宜" / "合理" / "偏貴" / "極貴"
+        極貴 + 非 override_defense → 追加「估值頂部分位、建議減倉中性」
+        便宜 + 非 adopt_slow → 追加「估值底部分位、可逐步擇機加碼」
+    - ``event_calendar_level``：事件曆 "順風" / "中性" / "逆風" / "重大事件"
+        重大事件 + adopt_slow → 追加「重大事件臨近、暫緩單筆加碼」
+        逆風 + adopt_slow → 追加「事件曆逆風」
+        順風 + 降級 mode → 追加「事件曆順風、可酌量擇機」
+
+    第三維度**只 append 到 action 與 third_axis_notes**，不改 mode/icon/color/level
+    （保 backward compat，已寫好的下游 UI 可零變動繼續用）。
     """
     if radar_level in (None, "平靜"):
         suffix = "（短線雷達平靜確認）" if radar_level == "平靜" else ""
-        return {
+        _base = {
             "icon": slow_icon,
             "level": f"{slow_level}{suffix}",
             "color": slow_color,
             "action": slow_action,
             "mode": "adopt_slow",
         }
-
-    if radar_level == "極端警報":
-        return {
+    elif radar_level == "極端警報":
+        _base = {
             "icon": "🔴",
             "level": "立即減倉防守",
             "color": "#d32f2f",
@@ -464,10 +480,9 @@ def synthesize_dual_verdict(
             ),
             "mode": "override_defense",
         }
-
-    if radar_level == "警報":
+    elif radar_level == "警報":
         if slow_score >= 5:
-            return {
+            _base = {
                 "icon": "🟠",
                 "level": "雙速分歧：降槓桿",
                 "color": "#ef6c00",
@@ -477,8 +492,8 @@ def synthesize_dual_verdict(
                 ),
                 "mode": "downgrade_2",
             }
-        if slow_score >= -5:
-            return {
+        elif slow_score >= -5:
+            _base = {
                 "icon": "🔴",
                 "level": "雙線疲弱：偏空操作",
                 "color": "#d84315",
@@ -488,20 +503,20 @@ def synthesize_dual_verdict(
                 ),
                 "mode": "downgrade_2",
             }
-        return {
-            "icon": "🔴",
-            "level": "全面防守",
-            "color": "#b71c1c",
-            "action": (
-                f"慢總經 {slow_level}({slow_score:+.1f}) 已悲觀，疊加短線警報 → "
-                f"現金 35%+、核心轉投資等級債／全球均衡"
-            ),
-            "mode": "downgrade_2",
-        }
-
-    if radar_level == "警戒":
+        else:
+            _base = {
+                "icon": "🔴",
+                "level": "全面防守",
+                "color": "#b71c1c",
+                "action": (
+                    f"慢總經 {slow_level}({slow_score:+.1f}) 已悲觀，疊加短線警報 → "
+                    f"現金 35%+、核心轉投資等級債／全球均衡"
+                ),
+                "mode": "downgrade_2",
+            }
+    elif radar_level == "警戒":
         if slow_score >= 5:
-            return {
+            _base = {
                 "icon": slow_icon,
                 "level": f"{slow_level}但警戒觀察",
                 "color": "#fbc02d",
@@ -511,22 +526,60 @@ def synthesize_dual_verdict(
                 ),
                 "mode": "downgrade_1",
             }
-        return {
-            "icon": "🟡",
-            "level": "中性觀察",
-            "color": "#f9a825",
-            "action": (
-                f"慢總經 {slow_level}({slow_score:+.1f}) 疊加雷達警戒 → "
-                f"分批進場、倉位 60-70%、定期定額減半"
-            ),
-            "mode": "downgrade_1",
+        else:
+            _base = {
+                "icon": "🟡",
+                "level": "中性觀察",
+                "color": "#f9a825",
+                "action": (
+                    f"慢總經 {slow_level}({slow_score:+.1f}) 疊加雷達警戒 → "
+                    f"分批進場、倉位 60-70%、定期定額減半"
+                ),
+                "mode": "downgrade_1",
+            }
+    else:
+        # 未知雷達狀態 fallback
+        _base = {
+            "icon": slow_icon,
+            "level": slow_level,
+            "color": slow_color,
+            "action": slow_action,
+            "mode": "adopt_slow",
         }
 
-    # 未知雷達狀態 fallback
-    return {
-        "icon": slow_icon,
-        "level": slow_level,
-        "color": slow_color,
-        "action": slow_action,
-        "mode": "adopt_slow",
-    }
+    return _apply_third_axis_overlay(_base, valuation_level, event_calendar_level)
+
+
+# v18.179 第三維度疊加 helper（純函式、零 IO）
+def _apply_third_axis_overlay(
+    base: dict,
+    valuation_level: str | None,
+    event_calendar_level: str | None,
+) -> dict:
+    """v18.179 在 dual base verdict 上 append 估值/事件曆註解；mode 等不變.
+
+    backward compat：兩參數皆 None → 回 base + 空 third_axis_notes（不破壞既有 dict shape）。
+    """
+    notes: list[str] = []
+
+    mode = base.get("mode", "adopt_slow")
+
+    # valuation 疊加
+    if valuation_level == "極貴" and mode != "override_defense":
+        notes.append("估值頂部分位（極貴），建議減倉至中性")
+    elif valuation_level == "便宜" and mode != "adopt_slow":
+        notes.append("估值底部分位（便宜），可逐步擇機加碼")
+
+    # event_calendar 疊加
+    if event_calendar_level == "重大事件" and mode == "adopt_slow":
+        notes.append("重大事件臨近，暫緩單筆加碼")
+    elif event_calendar_level == "逆風" and mode == "adopt_slow":
+        notes.append("事件曆逆風，留意波動放大")
+    elif event_calendar_level == "順風" and mode in ("downgrade_1", "downgrade_2"):
+        notes.append("事件曆順風，可酌量擇機")
+
+    out = dict(base)
+    out["third_axis_notes"] = notes
+    if notes:
+        out["action"] = base["action"] + " ｜ " + "、".join(notes)
+    return out
