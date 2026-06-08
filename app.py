@@ -63,7 +63,8 @@ from data_loader import StockDataLoader, _LOADER_VERSION  # noqa: E402
 # ── v3.0 新增模組（§5-§11）──────────────────────────────────
 from etf_dashboard import (  # noqa: E402
     render_etf_single, render_etf_portfolio,
-    render_etf_backtest, render_etf_ai,
+    # v18.182 ARCHIVED: render_etf_backtest 回測暫封存
+    render_etf_ai,
     render_sector_heatmap,
 )
 from health_inspector import render_data_health_raw  # noqa: E402
@@ -1172,9 +1173,12 @@ def render_macro_compass():
 
 render_macro_compass()
 
-tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_rev_screener, tab_etf, tab_etf_grp, tab_etf_margin, tab_backtest, tab_diag, tab_edu = st.tabs([
+# v18.182 ARCHIVED: 🧪 回測找參數 Tab 暫封存
+# 未來啟用：(1) tuple 加回 tab_backtest 在 tab_etf_margin 之後 tab_diag 之前
+# (2) labels 加回 '🧪 回測找參數' 對應位置 (3) 取消下方 with tab_backtest 區塊註解
+tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_rev_screener, tab_etf, tab_etf_grp, tab_etf_margin, tab_diag, tab_edu = st.tabs([
     '🌍 總經', '🗺️ 產業熱力圖', '🔬 個股', '🏆 個股組合',
-    '💎 高息網', '📈 月營收進退', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🧪 回測找參數', '🔎 資料診斷', '📚 教學',
+    '💎 高息網', '📈 月營收進退', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🔎 資料診斷', '📚 教學',
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -1541,9 +1545,9 @@ with tab_etf_grp:
     render_etf_portfolio(gemini_fn=gemini_call)
     st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
 
-    # ── ② 歷史回測 ──
-    render_etf_backtest(gemini_fn=gemini_call)
-    st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
+    # ── ② 歷史回測（v18.182 ARCHIVED 暫封存，模組 etf_tab_backtest.py 保留磁碟）──
+    # render_etf_backtest(gemini_fn=gemini_call)
+    # st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
 
     # ── ③ 葡萄串領息法（自動讀取持股做月配息評估）──
     render_grape_ladder(gemini_fn=gemini_call)
@@ -1560,11 +1564,13 @@ with tab_etf_margin:
     render_etf_margin_simulator()
 
 # ══════════════════════════════════════════════════════════════
-# TAB: 回測找參數（多因子權重最佳化 + 高原 + walk-forward, v18.167）
+# v18.182 ARCHIVED: 🧪 回測找參數 Tab 暫封存
+# 模組檔 tab_backtest_optimization.py + backtest_engine.py + tw_backtest.py 完整保留磁碟
+# 未來啟用：取消上方 import (etf_dashboard) + tab tuple + 以下 with-block 註解即可
 # ══════════════════════════════════════════════════════════════
-with tab_backtest:
-    from tab_backtest_optimization import render_backtest_optimization_tab
-    render_backtest_optimization_tab()
+# with tab_backtest:
+#     from tab_backtest_optimization import render_backtest_optimization_tab
+#     render_backtest_optimization_tab()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: 7% 高殖利率防禦網（Screener Mode）
