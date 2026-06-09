@@ -1176,9 +1176,12 @@ render_macro_compass()
 # v18.182 ARCHIVED: 🧪 回測找參數 Tab 暫封存
 # 未來啟用：(1) tuple 加回 tab_backtest 在 tab_etf_margin 之後 tab_diag 之前
 # (2) labels 加回 '🧪 回測找參數' 對應位置 (3) 取消下方 with tab_backtest 區塊註解
-tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_rev_screener, tab_mj_diff, tab_etf, tab_etf_grp, tab_etf_margin, tab_diag, tab_edu = st.tabs([
+# v18.187 ARCHIVED: 📈 月營收進退 Tab 暫封存（FinMind batch endpoint 已不支援免費 tier）
+# 未來啟用：(1) tuple 加回 tab_rev_screener 在 tab_screener 之後 tab_mj_diff 之前
+# (2) labels 加回 '📈 月營收進退' 對應位置 (3) 取消下方 with tab_rev_screener 區塊註解
+tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_mj_diff, tab_etf, tab_etf_grp, tab_etf_margin, tab_diag, tab_edu = st.tabs([
     '🌍 總經', '🗺️ 產業熱力圖', '🔬 個股', '🏆 個股組合',
-    '💎 高息網', '📈 月營收進退', '📊 MJ 體檢變化', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🔎 資料診斷', '📚 教學',
+    '💎 高息網', '📊 MJ 體檢變化', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🔎 資料診斷', '📚 教學',
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -1585,11 +1588,13 @@ with tab_screener:
     render_tab_stock_picker(gemini_fn=gemini_call, candidates=_picker_candidates)
 
 # ══════════════════════════════════════════════════════════════
-# TAB: 月營收進退篩選（v18.180）
+# TAB: 月營收進退篩選（v18.180） — v18.187 ARCHIVED
+# FinMind TaiwanStockMonthRevenue batch endpoint (無 data_id) 已不支援免費/sponsor tier
+# 模組 monthly_revenue_screener.py 保留磁碟，未來啟用：取消下方註解即可
 # ══════════════════════════════════════════════════════════════
-with tab_rev_screener:
-    from monthly_revenue_screener import render_monthly_revenue_screener
-    render_monthly_revenue_screener()
+# with tab_rev_screener:
+#     from monthly_revenue_screener import render_monthly_revenue_screener
+#     render_monthly_revenue_screener()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: MJ 體檢變化（v18.186）
