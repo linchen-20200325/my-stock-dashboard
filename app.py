@@ -1176,9 +1176,9 @@ render_macro_compass()
 # v18.182 ARCHIVED: 🧪 回測找參數 Tab 暫封存
 # 未來啟用：(1) tuple 加回 tab_backtest 在 tab_etf_margin 之後 tab_diag 之前
 # (2) labels 加回 '🧪 回測找參數' 對應位置 (3) 取消下方 with tab_backtest 區塊註解
-tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_rev_screener, tab_etf, tab_etf_grp, tab_etf_margin, tab_diag, tab_edu = st.tabs([
+tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_rev_screener, tab_mj_diff, tab_etf, tab_etf_grp, tab_etf_margin, tab_diag, tab_edu = st.tabs([
     '🌍 總經', '🗺️ 產業熱力圖', '🔬 個股', '🏆 個股組合',
-    '💎 高息網', '📈 月營收進退', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🔎 資料診斷', '📚 教學',
+    '💎 高息網', '📈 月營收進退', '📊 MJ 體檢變化', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🔎 資料診斷', '📚 教學',
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -1590,6 +1590,13 @@ with tab_screener:
 with tab_rev_screener:
     from monthly_revenue_screener import render_monthly_revenue_screener
     render_monthly_revenue_screener()
+
+# ══════════════════════════════════════════════════════════════
+# TAB: MJ 體檢變化（v18.186）
+# ══════════════════════════════════════════════════════════════
+with tab_mj_diff:
+    from tab_mj_health_diff import render_mj_health_diff_tab
+    render_mj_health_diff_tab()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: 資料診斷（Raw Data only）
