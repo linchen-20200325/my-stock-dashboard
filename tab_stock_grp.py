@@ -1156,3 +1156,217 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
             st.markdown(_t3ai_cached)
         elif not _t3ai_btn:
             st.caption('▲ 點擊上方按鈕，AI 將生成投資組合強弱排序矩陣與汰弱留強建議。')
+
+    # ══ 📊 MJ 趨勢分數（v18.189 月+季雙頻率融合）═══════════════════
+    if stock_list_t3:
+        _render_mj_trend_section(stock_list_t3)
+
+
+def _render_mj_trend_section(stock_list: list[str]) -> None:
+    """v18.189 個股組合內「MJ 趨勢分數」區塊。
+
+    對 stock_list 每檔合議「近 3 月月營收動能」+「近 3 季 MJ 體檢 status delta」
+    產出 5 段判定（🚀 強進步 / 📈 進步 / ➖ 中性 / 📉 退步 / 🔻 強退步）。
+    月權重 65%（先行）/ 季權重 35%（落後但見品質）。
+    """
+    import pandas as pd
+    from datetime import date
+
+    import streamlit as _st  # noqa: F811 — explicit local alias
+    from config import FINMIND_TOKEN as _TOK
+    from data_loader import fetch_financial_statements
+    from financial_health_engine import analyze_financial_health
+    from mj_health_diff import diff_mj_health  # noqa: F401 — used transitively by score
+    from mj_snapshot_io import (
+        current_finmind_yyyymm,
+        list_snapshots,
+        load_snapshot,
+        save_snapshot,
+    )
+    from mj_trend_score import compute_trend_score
+
+    _st.markdown('---')
+    _st.markdown(
+        '<div style="margin:16px 0 8px;padding:8px 16px;'
+        'background:linear-gradient(90deg,#22c55e22,#0d1117);'
+        'border-left:4px solid #22c55e;border-radius:0 6px 6px 0;">'
+        '<span style="font-size:15px;font-weight:900;color:#22c55e;">'
+        '📊 MJ 趨勢分數（v18.189）</span>'
+        '<span style="font-size:11px;color:#8b949e;margin-left:8px;">'
+        '月營收動能 × 季財報體檢 · 65/35 雙頻率合議</span></div>',
+        unsafe_allow_html=True,
+    )
+    _st.caption(
+        '🔰 **判定規則**：≥+1.5 🚀 強進步 / +0.5~+1.5 📈 進步 / -0.5~+0.5 ➖ 中性 / '
+        '-1.5~-0.5 📉 退步 / ≤-1.5 🔻 強退步。'
+        '**月權重高**因月營收 10 日公布（先行指標），季財報 45 天遞延（落後但見獲利品質）。'
+        '近 3 季 MJ 不足時自動補抓本季快照。'
+    )
+
+    _c1, _c2 = _st.columns([3, 1])
+    with _c1:
+        _w_mon = _st.slider(
+            '月營收權重',
+            min_value=0.4, max_value=0.9, value=0.65, step=0.05,
+            key='_mj_trend_w_mon',
+            help='月營收動能占比，季財報自動 = 1 - 此值',
+        )
+    with _c2:
+        _st.markdown('<br>', unsafe_allow_html=True)
+        _run = _st.button(
+            '📊 跑 MJ 趨勢分數',
+            type='primary', use_container_width=True,
+            key='_mj_trend_run_btn',
+        )
+
+    if not _run:
+        _st.caption(f'點按鈕對 {len(stock_list)} 檔跑 MJ 趨勢分數（首次約 30-60s）')
+        return
+
+    if not _TOK:
+        _st.error('🔴 未設定 `FINMIND_TOKEN` → 無法抓財報與月營收')
+        return
+
+    rows: list[dict] = []
+    yyyymm_curr = current_finmind_yyyymm(date.today())
+    prog = _st.progress(0.0, text=f'MJ 趨勢分數中 {len(stock_list)} 檔...')
+    for i, sid in enumerate(stock_list, 1):
+        prog.progress(i / len(stock_list), text=f'[{i}/{len(stock_list)}] {sid} 趨勢計算中...')
+        row = _compute_one_stock_trend(
+            sid, yyyymm_curr, _TOK, float(_w_mon),
+            fetch_financial_statements=fetch_financial_statements,
+            analyze_financial_health=analyze_financial_health,
+            list_snapshots=list_snapshots,
+            load_snapshot=load_snapshot,
+            save_snapshot=save_snapshot,
+            compute_trend_score=compute_trend_score,
+        )
+        rows.append(row)
+    prog.empty()
+
+    _render_mj_trend_table(rows, pd, _st)
+
+
+def _compute_one_stock_trend(
+    sid: str,
+    yyyymm_curr: str,
+    token: str,
+    w_monthly: float,
+    *,
+    fetch_financial_statements,
+    analyze_financial_health,
+    list_snapshots,
+    load_snapshot,
+    save_snapshot,
+    compute_trend_score,
+) -> dict:
+    """單檔流程：抓月營收 → 補抓 MJ 季財報 → 跑 compute_trend_score。
+
+    例外永遠 graceful — 單檔失敗不阻斷批次。
+    """
+    row: dict = {
+        'sid': sid, 'label': '—', 'label_code': 'error', 'score': 0.0,
+        'mon_sub': 0.0, 'mj_sub': 0.0, 'note': '',
+    }
+    monthly_3m: list[dict] = []
+    mj_snaps: list[dict] = []
+
+    # ── 1. 月營收 3 期 ──────────────────────────────────────────
+    try:
+        from monthly_revenue_screener import compute_yoy_mom, fetch_monthly_revenue
+        df_rev = fetch_monthly_revenue(sid, months=15)
+        stats = compute_yoy_mom(df_rev) if df_rev is not None and not df_rev.empty else {}
+        # compute_yoy_mom 回 {yoy_last3: [M-2, M-1, M], mom_last: float}
+        yoy_last3 = (stats or {}).get('yoy_last3') or []
+        mom_last = (stats or {}).get('mom_last')
+        if isinstance(yoy_last3, list) and yoy_last3:
+            for j, yoy in enumerate(yoy_last3):
+                if yoy is None:
+                    continue
+                m_dict = {'yoy_pct': yoy}
+                if j == len(yoy_last3) - 1 and mom_last is not None:
+                    m_dict['mom_pct'] = mom_last
+                monthly_3m.append(m_dict)
+    except Exception as e:  # pragma: no cover - defensive
+        row['note'] += f'月營收抓取失敗 ({type(e).__name__}); '
+
+    # ── 2. MJ 季財報快照（不足 3 季自動補抓本季）───────────────
+    try:
+        yms = list_snapshots(sid)
+        # 若本季快照缺，自動補抓
+        if yyyymm_curr not in yms:
+            try:
+                fin = fetch_financial_statements(sid, token)
+                if fin and not fin.get('error'):
+                    mj = analyze_financial_health(token, sid, fin, news_context='')
+                    if isinstance(mj, dict):
+                        save_snapshot(sid, yyyymm_curr, mj)
+                        yms = list_snapshots(sid)  # refresh
+            except Exception as e_in:  # pragma: no cover - defensive
+                row['note'] += f'本季 MJ 補抓失敗 ({type(e_in).__name__}); '
+
+        # 取近 3 季（list_snapshots 已降序：新→舊）
+        for ym in yms[:3]:
+            snap = load_snapshot(sid, ym)
+            if isinstance(snap, dict):
+                mj_snaps.append(snap)
+        # compute_mj_trend_subscore 期望 list[oldest..latest]，反轉之
+        mj_snaps.reverse()
+    except Exception as e:  # pragma: no cover - defensive
+        row['note'] += f'MJ 快照載入失敗 ({type(e).__name__}); '
+
+    # ── 3. 合議 ─────────────────────────────────────────────────
+    try:
+        out = compute_trend_score(monthly_3m, mj_snaps, w_monthly=w_monthly)
+        row['label'] = out['label']
+        row['label_code'] = out['label_code']
+        row['score'] = out['score']
+        row['mon_sub'] = out['monthly_subscore']
+        row['mj_sub'] = out['mj_subscore']
+        row['mon_detail'] = out['monthly_detail']
+        row['mj_detail'] = out['mj_detail']
+        if not monthly_3m and not mj_snaps:
+            row['note'] += '月+季資料皆缺; '
+    except Exception as e:  # pragma: no cover - defensive
+        row['note'] += f'合議失敗 ({type(e).__name__}); '
+    return row
+
+
+_TREND_SORT_ORDER = {
+    'strong_down': 0, 'down': 1, 'neutral': 2,
+    'up': 3, 'strong_up': 4, 'error': 5,
+}
+
+
+def _render_mj_trend_table(rows: list[dict], pd, st_mod) -> None:
+    """渲染結果表（退步在前）+ 統計 KPI。"""
+    if not rows:
+        return
+    cnt = {k: 0 for k in _TREND_SORT_ORDER}
+    for r in rows:
+        cnt[r['label_code']] = cnt.get(r['label_code'], 0) + 1
+    cols = st_mod.columns(5)
+    cols[0].metric('🔻 強退步', cnt.get('strong_down', 0))
+    cols[1].metric('📉 退步', cnt.get('down', 0))
+    cols[2].metric('➖ 中性', cnt.get('neutral', 0))
+    cols[3].metric('📈 進步', cnt.get('up', 0))
+    cols[4].metric('🚀 強進步', cnt.get('strong_up', 0))
+
+    rows_sorted = sorted(rows, key=lambda r: _TREND_SORT_ORDER.get(r['label_code'], 99))
+    df = pd.DataFrame([{
+        '代碼': r['sid'],
+        '判定': r['label'],
+        '綜合分數': round(r['score'], 2),
+        '月營收分': round(r['mon_sub'], 2),
+        'MJ 季財報分': round(r['mj_sub'], 2),
+        '備註': r['note'].strip().rstrip(';') if r['note'] else '',
+    } for r in rows_sorted])
+    st_mod.dataframe(df, use_container_width=True, hide_index=True)
+
+    with st_mod.expander('🛠️ 逐檔細節（分子分數推導）', expanded=False):
+        for r in rows_sorted:
+            st_mod.markdown(f"**{r['sid']}**：{r['label']}（合分 {r['score']:.2f}）")
+            st_mod.json({
+                'monthly_detail': r.get('mon_detail', {}),
+                'mj_detail': r.get('mj_detail', {}),
+            })
