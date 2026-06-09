@@ -1179,9 +1179,12 @@ render_macro_compass()
 # v18.187 ARCHIVED: 📈 月營收進退 Tab 暫封存（FinMind batch endpoint 已不支援免費 tier）
 # 未來啟用：(1) tuple 加回 tab_rev_screener 在 tab_screener 之後 tab_mj_diff 之前
 # (2) labels 加回 '📈 月營收進退' 對應位置 (3) 取消下方 with tab_rev_screener 區塊註解
-tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_mj_diff, tab_etf, tab_etf_grp, tab_etf_margin, tab_diag, tab_edu = st.tabs([
+# v18.189 ARCHIVED: 📊 MJ 體檢變化 Tab 暫封存（功能改整合至「🏆 個股組合」批次體檢區塊下方）
+# 未來啟用：(1) tuple 加回 tab_mj_diff 在 tab_screener 之後 tab_etf 之前
+# (2) labels 加回 '📊 MJ 體檢變化' 對應位置 (3) 取消下方 with tab_mj_diff 區塊註解
+tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_etf, tab_etf_grp, tab_etf_margin, tab_diag, tab_edu = st.tabs([
     '🌍 總經', '🗺️ 產業熱力圖', '🔬 個股', '🏆 個股組合',
-    '💎 高息網', '📊 MJ 體檢變化', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🔎 資料診斷', '📚 教學',
+    '💎 高息網', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🔎 資料診斷', '📚 教學',
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -1597,11 +1600,13 @@ with tab_screener:
 #     render_monthly_revenue_screener()
 
 # ══════════════════════════════════════════════════════════════
-# TAB: MJ 體檢變化（v18.186）
+# TAB: MJ 體檢變化（v18.186 / v18.188 batch 版） — v18.189 ARCHIVED
+# 功能改整合至「🏆 個股組合」批次體檢區塊下方「📊 MJ 趨勢分數」新區塊
+# 模組 tab_mj_health_diff.py 與 mj_trend_score.py 保留磁碟，未來啟用：取消下方註解
 # ══════════════════════════════════════════════════════════════
-with tab_mj_diff:
-    from tab_mj_health_diff import render_mj_health_diff_tab
-    render_mj_health_diff_tab()
+# with tab_mj_diff:
+#     from tab_mj_health_diff import render_mj_health_diff_tab
+#     render_mj_health_diff_tab()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: 資料診斷（Raw Data only）

@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -160,3 +161,27 @@ def list_all_stocks_with_snapshots(
         if m:
             sids.add(m.group(1))
     return sorted(sids)
+
+
+def current_finmind_yyyymm(today: date | None = None) -> str:
+    """依今日推算最近已公布完成季的 yyyymm（季底月份）。
+
+    台股財報公告截止：Q1=5/15、Q2=8/14、Q3=11/14、Q4=隔年3/31。
+
+      1-3 月  → 去年 Q3 (yyyy-1)09
+      4-5 月  → 去年 Q4 (yyyy-1)12
+      6-8 月  → 今年 Q1 yyyy03
+      9-11 月 → 今年 Q2 yyyy06
+      12 月   → 今年 Q3 yyyy09
+    """
+    t = today or date.today()
+    y, m = t.year, t.month
+    if 1 <= m <= 3:
+        return f"{y - 1}09"
+    if 4 <= m <= 5:
+        return f"{y - 1}12"
+    if 6 <= m <= 8:
+        return f"{y}03"
+    if 9 <= m <= 11:
+        return f"{y}06"
+    return f"{y}09"
