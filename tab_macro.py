@@ -4413,12 +4413,22 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             f'</div>', unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════
-    # SECTION 十: 📊 總經訊號歷史驗證（v18.150 Phase C；v18.156 與 AI 總裁決交換位置）
-    # 讀 data_cache Parquet → TWII crisis × NDC/領先指標命中表
+    # SECTION 十: 📊 總經訊號歷史驗證 — v18.191 ARCHIVED
     # ══════════════════════════════════════════════════════════════
-    try:
-        from tab_macro_validation import render_history_validation_section
-        render_history_validation_section()
-    except Exception as _e_hv:
-        st.caption(f"⚠️ 歷史驗證 section 載入失敗：{_e_hv}")
+    # archived 原因：user 反饋總經面板過於複雜（v18.190 已砍雙視角+AI總裁決），
+    # 進一步封存歷史驗證區（C 區）— 包含 5 個 expander：
+    #   - 🎯 TWII Crisis 事件清單 + Phase 1 events
+    #   - 🚦 Phase 3 訊號預測力驗證（命中率總覽 + 逐事件明細 + 📐 精確率分析）
+    #   - 📡 跨資料源比對視角矩陣（Phase E）
+    #   - 🎯 MT5-style 自動校準（walk-forward + 3 重 anti-overfit gate）
+    #   - 🔬 多因子權重最佳化（高原區 + walk-forward OOS）
+    # 模組保留磁碟：tab_macro_validation.py + 對應 service modules
+    # （macro_validation_tw / macro_signal_lookback_tw / multi_factor_optimization 等全留）
+    # 復活步驟：取消下方 5 行註解（1 分鐘工）即可恢復功能
+    #
+    # try:
+    #     from tab_macro_validation import render_history_validation_section
+    #     render_history_validation_section()
+    # except Exception as _e_hv:
+    #     st.caption(f"⚠️ 歷史驗證 section 載入失敗：{_e_hv}")
 
