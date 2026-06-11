@@ -739,15 +739,24 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _t_start = _t_spd.time()
 
             # ── 並發任務定義 ────────────────────────────────────
+            # v18.193 perf: 3 個 job 內部從 ticker 序列改為內層 ThreadPoolExecutor 並行
+            #             (原 N×fetch_single 序列 → max(t)；fetch_single /tmp pickle 30 分鐘
+            #             cache 不變、DX-Y.NYB→DX=F→UUP 備援邏輯不變)
+            def _parallel_fetch(_mp, **_kw):
+                _max_w = max(1, len(_mp))
+                with ThreadPoolExecutor(max_workers=_max_w) as _e_in:
+                    _f_in = {_e_in.submit(fetch_single, _s, **_kw): _n for _n, _s in _mp.items()}
+                    return {_f_in[_ft]: _ft.result() for _ft in _f_in}
+
             def _job_intl():
-                return {n: fetch_single(sym) for n, sym in INTL_MAP.items()}
+                return _parallel_fetch(INTL_MAP)
 
             def _job_tw():
                 # 9mo ≈ 195 交易日，確保 ^TWII 有足夠 bars 計算 MA120（需120筆）
-                return {n: fetch_single(sym, period='9mo') for n, sym in TW_MAP.items()}
+                return _parallel_fetch(TW_MAP, period='9mo')
 
             def _job_tech():
-                return {n: fetch_single(sym) for n, sym in TECH_MAP.items()}
+                return _parallel_fetch(TECH_MAP)
 
             def _job_inst():
                 return fetch_institutional()
