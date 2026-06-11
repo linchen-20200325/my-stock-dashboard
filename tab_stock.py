@@ -391,6 +391,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
             'cl_src': _cl_src2,'cx_src': _cx_src2,'fin_errs': _fin_errs2,
             'rsi':rsi2,'ibs':ibs2,'vr':vr2,'k':k2,'d':d2,'bb':bb2,'vcp':vcp2,
             'health':health2,'details':details2,'price':cur_price2,
+            'fetched_at': pd.Timestamp.now(),
         }
         # 快取最後一次成功抓到的月營收/季財報，供下次失敗時 fallback
         if rev2 is not None and not rev2.empty:
@@ -434,6 +435,60 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         if (qtr2 is None or qtr2.empty) and st.session_state.get(f'_last_qtr_{sid2}') is not None:
             qtr2 = st.session_state[f'_last_qtr_{sid2}']
             _qtr2_cached = True
+
+        # v18.197 ══ 📊 資料新鮮度條（截止日 + 抓取時間 + age + fallback 警示 + 強制重抓）══
+        _fetched_at = t2d.get('fetched_at')
+        _df_end_date = None
+        try:
+            if df2 is not None and not df2.empty:
+                if hasattr(df2, 'index') and len(df2.index):
+                    _df_end_date = pd.to_datetime(df2.index[-1])
+                if (_df_end_date is None or pd.isna(_df_end_date)) and 'date' in df2.columns:
+                    _df_end_date = pd.to_datetime(df2['date'].iloc[-1])
+        except Exception:
+            _df_end_date = None
+        _fresh_cols = st.columns([5, 1])
+        with _fresh_cols[0]:
+            if _fetched_at is not None:
+                _age_min = (pd.Timestamp.now() - _fetched_at).total_seconds() / 60
+                _age_color = '#3fb950' if _age_min < 60 else ('#d29922' if _age_min < 240 else '#f85149')
+                _age_label = (f'{int(_age_min)} 分鐘前' if _age_min < 60
+                              else f'{_age_min/60:.1f} 小時前')
+                _end_str = _df_end_date.strftime('%Y-%m-%d') if _df_end_date is not None else '—'
+                st.markdown(
+                    f'<div style="background:#0d1117;border-left:4px solid {_age_color};'
+                    f'border-radius:4px;padding:6px 12px;margin-bottom:6px;font-size:11px;color:#8b949e;">'
+                    f'📊 <b>資料新鮮度</b>　'
+                    f'📅 K線截止：<b style="color:#c9d1d9;">{_end_str}</b>　'
+                    f'🕐 抓取：<b style="color:#c9d1d9;">{_fetched_at.strftime("%H:%M:%S")}</b>　'
+                    f'⏱️ <span style="color:{_age_color};font-weight:700;">{_age_label}</span>　'
+                    f'📡 來源：FinMind / Yahoo'
+                    f'</div>', unsafe_allow_html=True)
+        with _fresh_cols[1]:
+            if st.button('🔄 強制重抓', key='t2_force_refresh',
+                         help='清除所有 @st.cache_data 快取 + 清 session 殘留值，保證下次載入抓最新資料'):
+                try:
+                    st.cache_data.clear()
+                except Exception:
+                    pass
+                for _k_pop in ('t2_data',
+                               f'_exit_news_titles_{sid2}',
+                               f'_last_rev_{sid2}',
+                               f'_last_qtr_{sid2}'):
+                    st.session_state.pop(_k_pop, None)
+                st.rerun()
+        if _rev2_cached or _qtr2_cached:
+            _stale_parts = []
+            if _rev2_cached:
+                _stale_parts.append('月營收')
+            if _qtr2_cached:
+                _stale_parts.append('季財報')
+            st.markdown(
+                f'<div style="background:#3a2814;border-left:4px solid #d29922;'
+                f'border-radius:4px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#ffd33d;">'
+                f'⚠️ <b>{"／".join(_stale_parts)} 本次抓取失敗，目前顯示上次成功的舊值</b>'
+                f'　— 按右上「🔄 強制重抓」可重試'
+                f'</div>', unsafe_allow_html=True)
 
         # ══ 即時價格 + 趨勢儀表板 ════════════════════════════════
         if df2 is not None and not df2.empty and len(df2) >= 20:
