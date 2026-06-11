@@ -350,12 +350,21 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
     if t2_run:
         sid2 = t2_sid or '2330'
         st.info(f'🌐 抓取 {sid2} 全方位數據...')
-        df2, name2, err2 = fetch_price_data(sid2, t2_days)
-        avg_div2, yearly2, div_src2 = fetch_dividend_data(sid2)
-        cl2, cx2, _capex2, _cl_src2, _cx_src2, _, _fin_errs2 = fetch_financials(sid2, industry='')
-        rev2, _      = fetch_revenue(sid2)
-        qtr2, _      = fetch_quarterly(sid2)
-        qtr_extra2, _ = fetch_quarterly_extra(sid2)   # BS+CF時序（合約負債/存貨/資本支出）
+        # v18.195 並行化：6 個獨立 IO 從序列改 ThreadPoolExecutor → cold-start 省 30-50s
+        from concurrent.futures import ThreadPoolExecutor as _TPE_t2
+        with _TPE_t2(max_workers=6) as _ex_t2:
+            _fu_price = _ex_t2.submit(fetch_price_data, sid2, t2_days)
+            _fu_div   = _ex_t2.submit(fetch_dividend_data, sid2)
+            _fu_fin   = _ex_t2.submit(fetch_financials, sid2, '')
+            _fu_rev   = _ex_t2.submit(fetch_revenue, sid2)
+            _fu_qtr   = _ex_t2.submit(fetch_quarterly, sid2)
+            _fu_qtr_extra = _ex_t2.submit(fetch_quarterly_extra, sid2)
+            df2, name2, err2 = _fu_price.result()
+            avg_div2, yearly2, div_src2 = _fu_div.result()
+            cl2, cx2, _capex2, _cl_src2, _cx_src2, _, _fin_errs2 = _fu_fin.result()
+            rev2, _ = _fu_rev.result()
+            qtr2, _ = _fu_qtr.result()
+            qtr_extra2, _ = _fu_qtr_extra.result()   # BS+CF時序（合約負債/存貨/資本支出）
         rsi2     = calc_rsi(df2)
         ibs2     = calc_ibs(df2)
         vr2      = calc_volume_ratio(df2)
