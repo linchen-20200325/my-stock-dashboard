@@ -1460,8 +1460,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     except Exception as _e_mm:
                         print(f'[NDC/MacroMicro] ❌ {type(_e_mm).__name__}: {_e_mm}')
 
-                    print('[NDC] ⚠️ 雙源皆失敗，回 None')
-                    return None
+                    print('[NDC] ⚠️ 雙源皆失敗，回 _err_ndc 標記（v18.194 UI fail trace）')
+                    return {'_err_ndc': 'StockFeel + MacroMicro 雙源皆失敗'}
 
                 # ── 5. 台灣出口 YoY ─────────────────────────────────────────
                 def _fetch_export():
@@ -3966,6 +3966,35 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             st.plotly_chart(_vfig8, width='stretch')
         else:
             st.markdown(kpi('VIX 恐慌指數', '待取得', '≥25警戒 / ≥30危機→強制空手', '#484f58', '#0d1117'), unsafe_allow_html=True)
+
+    # v18.194 fail trace：失敗 fetcher 錯誤碼浮上 UI（仿 Fund v19.43 RadarFailTrace）
+    # 三狀態：① _macro_info 為空 → 未刷新或 outer 80s timeout 全失敗；② 有 _err_* → 局部失敗；③ 全綠 → 不顯示
+    _err_label_map = {
+        '_err_vix': 'VIX 恐慌指數',
+        '_err_cpi': '美國核心 CPI',
+        '_err_fed_funds': 'Fed Funds Rate',
+        '_err_pmi': '🇹🇼 台灣 PMI',
+        '_err_ndc': 'NDC 景氣燈號',
+        '_err_export': '外銷訂單 YoY',
+    }
+    _macro_errs = {k: v for k, v in _macro_info.items() if k.startswith('_err_')}
+    _macro_has_data = any(k in _macro_info for k in ('vix', 'us_core_cpi', 'fed_funds', 'ism_pmi', 'ndc_signal', 'tw_export'))
+    if not _macro_has_data and _macro_info.get('_loaded_at'):
+        with st.expander('🚨 總經拼圖全部失敗 — 點開看可能原因', expanded=True):
+            st.markdown(f"- **載入時間**：`{_macro_info.get('_loaded_at', 'N/A')}`")
+            st.markdown('- **全部 6 個 fetcher 都沒拿到資料**，可能原因（按機率）：')
+            st.markdown('  1. **outer 80s timeout** — Streamlit Cloud → FRED/stat.gov.tw RTT 太慢')
+            st.markdown('  2. **proxy_helper 失效** — NAS Squid proxy 連線異常')
+            st.markdown('  3. **FRED API key 未設** — CPI/Fed Funds fallback 到公開 csv 較慢')
+            if _macro_errs:
+                st.markdown('- **各 fetcher 回報的錯誤碼**：')
+                for _ek, _ev in _macro_errs.items():
+                    st.markdown(f'  - **{_err_label_map.get(_ek, _ek)}**：`{_ev}`')
+    elif _macro_errs:
+        with st.expander(f'🔍 部分指標載入失敗（{len(_macro_errs)} 項）— 點開看錯誤碼', expanded=False):
+            for _ek, _ev in _macro_errs.items():
+                st.markdown(f'- **{_err_label_map.get(_ek, _ek)}**：`{_ev}`')
+            st.caption('💡 截圖此面板回報 → 可定位是 API timeout / proxy / FRED key / data source down')
 
     # ── v4.0 總經否決權 ─────────────────────────────────────
     _veto8 = []
