@@ -122,6 +122,7 @@ def render_etf_portfolio(gemini_fn=None):
     # ── 批次抓現價 + 配息（每檔 yfinance 已有 @st.cache_data 護身）──
     _cur_prices = {}
     _div_received = {}
+    _pf_price_end = None  # v18.198 價格資料截止日（取各檔最大）
     with st.spinner('抓取現價與配息資料...'):
         import datetime as _dt_pf
         _cutoff = pd.Timestamp(_dt_pf.date.today() - _dt_pf.timedelta(days=365))
@@ -130,6 +131,13 @@ def render_etf_portfolio(gemini_fn=None):
             try:
                 _df_p = fetch_etf_price(_tk, period='5d')
                 _cur_prices[_tk] = float(_df_p['Close'].iloc[-1]) if _df_p is not None and not _df_p.empty else 0.0
+                if _df_p is not None and not _df_p.empty:
+                    try:
+                        _d_end = pd.to_datetime(_df_p.index[-1])
+                        if _pf_price_end is None or _d_end > _pf_price_end:
+                            _pf_price_end = _d_end
+                    except Exception:
+                        pass
             except Exception:
                 _cur_prices[_tk] = 0.0
             try:
@@ -148,6 +156,7 @@ def render_etf_portfolio(gemini_fn=None):
                     _div_received[_tk] = 0.0
             except Exception:
                 _div_received[_tk] = 0.0
+    _pf_fetched_at = pd.Timestamp.now()  # v18.198 抓取完成時戳
 
     # ── 算現值/資本利得/已領配息 ──
     for r in rows:
@@ -200,6 +209,31 @@ def render_etf_portfolio(gemini_fn=None):
         f'<div style="font-size:18px;font-weight:900;color:{_pnl_color};">'
         f'{_pnl_sign}{_total_pnl:,.0f} ({_pnl_sign}{(_total_pnl/total_cost*100 if total_cost else 0):.2f}%)</div></div>'
         f'</div>', unsafe_allow_html=True)
+
+    # v18.198 ══ 📊 投組資料新鮮度條 ══（價格截止日 + 抓取時間 + age traffic-light + 強制重抓）
+    _pf_age_min = (pd.Timestamp.now() - _pf_fetched_at).total_seconds() / 60
+    _pf_color = '#3fb950' if _pf_age_min < 60 else ('#d29922' if _pf_age_min < 240 else '#f85149')
+    _pf_age_txt = (f'{_pf_age_min:.0f} 分鐘前' if _pf_age_min < 60
+                   else (f'{_pf_age_min / 60:.1f} 小時前' if _pf_age_min < 1440 else f'{_pf_age_min / 1440:.1f} 天前'))
+    _pf_end_txt = _pf_price_end.strftime('%Y-%m-%d') if _pf_price_end is not None else '—'
+    _fcols = st.columns([5, 1])
+    with _fcols[0]:
+        st.markdown(
+            f'<div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;'
+            f'padding:8px 14px;margin:0 0 12px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-size:12px;">'
+            f'<span style="color:#8b949e;">📅 價格截止 <b style="color:#c9d1d9;">{_pf_end_txt}</b></span>'
+            f'<span style="color:#8b949e;">🕐 抓取 <b style="color:#c9d1d9;">{_pf_fetched_at.strftime("%m-%d %H:%M")}</b></span>'
+            f'<span style="color:#8b949e;">⏱️ <b style="color:{_pf_color};">{_pf_age_txt}</b></span>'
+            f'<span style="color:#8b949e;">📡 來源 <b style="color:#c9d1d9;">yfinance（現價快取 1h／成份股 1 天）</b></span>'
+            f'</div>', unsafe_allow_html=True)
+    with _fcols[1]:
+        if st.button('🔄 強制重抓', key='etf_pf_force_refresh',
+                     help='清快取後重新抓取最新現價與配息（不需重填表格）'):
+            try:
+                st.cache_data.clear()
+            except Exception:
+                pass
+            st.rerun()
 
     # ── 持股明細表 ──
     # 查詢 ETF 名稱（去掉 .TW/.TWO 後綴後查 stock_names）
