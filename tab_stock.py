@@ -268,7 +268,7 @@ def render_tab_stock():
     from config import FINMIND_TOKEN
     # 外部模組
     from v4_strategy_engine import V4StrategyEngine
-    from daily_checklist import analyze_20d_chips, analyze_20d_chips_from_df
+    from daily_checklist import analyze_20d_chips_from_df
     from exit_signals import (
         compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
     )
@@ -350,21 +350,30 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
     if t2_run:
         sid2 = t2_sid or '2330'
         st.info(f'🌐 抓取 {sid2} 全方位數據...')
-        # v18.195 並行化：6 個獨立 IO 從序列改 ThreadPoolExecutor → cold-start 省 30-50s
+        # v18.196 並行化：7 個獨立 IO（含出場點 RSS 預抓）從序列改 ThreadPoolExecutor →
+        # cold-start 省 30-50s + 預抓 RSS 標題避免下游出場點區塊阻塞 3-5s
         from concurrent.futures import ThreadPoolExecutor as _TPE_t2
-        with _TPE_t2(max_workers=6) as _ex_t2:
+        with _TPE_t2(max_workers=7) as _ex_t2:
             _fu_price = _ex_t2.submit(fetch_price_data, sid2, t2_days)
             _fu_div   = _ex_t2.submit(fetch_dividend_data, sid2)
             _fu_fin   = _ex_t2.submit(fetch_financials, sid2, '')
             _fu_rev   = _ex_t2.submit(fetch_revenue, sid2)
             _fu_qtr   = _ex_t2.submit(fetch_quarterly, sid2)
             _fu_qtr_extra = _ex_t2.submit(fetch_quarterly_extra, sid2)
+            _fu_news  = _ex_t2.submit(_fetch_stock_news, sid2, sid2, 8, recency='3m')
             df2, name2, err2 = _fu_price.result()
             avg_div2, yearly2, div_src2 = _fu_div.result()
             cl2, cx2, _capex2, _cl_src2, _cx_src2, _, _fin_errs2 = _fu_fin.result()
             rev2, _ = _fu_rev.result()
             qtr2, _ = _fu_qtr.result()
             qtr_extra2, _ = _fu_qtr_extra.result()   # BS+CF時序（合約負債/存貨/資本支出）
+            try:
+                _raw_news_pre = _fu_news.result() or []
+                st.session_state[f'_exit_news_titles_{sid2}'] = [
+                    n.get('title', '') for n in _raw_news_pre if n.get('title')
+                ]
+            except Exception:
+                pass
         rsi2     = calc_rsi(df2)
         ibs2     = calc_ibs(df2)
         vr2      = calc_volume_ratio(df2)
@@ -1233,11 +1242,9 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         st.markdown('#### 🔬 G. 近 20 日籌碼集中度')
         st.caption('🔰 指標白話：集中度＝大戶（外資+投信）淨買量佔總成交量的比例，正值越高＝大戶默默吸貨（偏多）、'
                    '負值＝倒貨；延續性＝最近多少比例的交易日持續買超。資料直接取自下方 K 線的三大法人/成交量。')
-        with st.spinner(f'計算 {sid2} 近 20 日籌碼集中度...'):
-            # 優先複用 K 線已載入的 df2（含 外資/投信/量），免重複呼叫 FinMind（規避 quota 失敗）
-            _chip20 = analyze_20d_chips_from_df(df2)
-            if _chip20.get('error'):
-                _chip20 = analyze_20d_chips(sid2)   # df2 無籌碼欄時退回獨立 API 版
+        # v18.196 直算（df2 已含三大法人欄）— 移除 spinner 避免視覺跳動、
+        # 移除 analyze_20d_chips(sid2) fallback 避免第二次 FinMind API 呼叫
+        _chip20 = analyze_20d_chips_from_df(df2)
         if _chip20.get('error'):
             st.caption(f'⚫ 籌碼集中度取得失敗：{_chip20["error"]}')
         else:
