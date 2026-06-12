@@ -294,6 +294,10 @@ def fetch_price_data(sid, days):
     if err or df is None:
         return None, None, err
     result = df.tail(days).reset_index(drop=True)
+    try:
+        result.attrs.update(df.attrs)
+    except Exception:
+        pass
     _save_cache('price', sid, (result, name), str(days))
     return result, name, None
 
