@@ -1244,7 +1244,7 @@ def _render_mj_trend_section(stock_list: list[str]) -> None:
         rows.append(row)
     prog.empty()
 
-    _render_mj_trend_table(rows, pd, _st)
+    _render_mj_trend_table(rows, pd, _st, yyyymm_curr)
 
 
 def _compute_one_stock_trend(
@@ -1267,6 +1267,7 @@ def _compute_one_stock_trend(
     row: dict = {
         'sid': sid, 'label': '—', 'label_code': 'error', 'score': 0.0,
         'mon_sub': 0.0, 'mj_sub': 0.0, 'note': '',
+        'snap_ym': '', 'snap_stale': None,
     }
     monthly_3m: list[dict] = []
     mj_snaps: list[dict] = []
@@ -1305,6 +1306,11 @@ def _compute_one_stock_trend(
             except Exception as e_in:  # pragma: no cover - defensive
                 row['note'] += f'本季 MJ 補抓失敗 ({type(e_in).__name__}); '
 
+        # v18.199 ── 記錄實採最新快照季 + 是否落後（快照新鮮度條用）──
+        if yms:
+            row['snap_ym'] = yms[0]
+            row['snap_stale'] = (yms[0] != yyyymm_curr)
+
         # 取近 3 季（list_snapshots 已降序：新→舊）
         for ym in yms[:3]:
             snap = load_snapshot(sid, ym)
@@ -1338,7 +1344,16 @@ _TREND_SORT_ORDER = {
 }
 
 
-def _render_mj_trend_table(rows: list[dict], pd, st_mod) -> None:
+def _fmt_quarter(yyyymm: str) -> str:
+    """202503 → 2025Q1（季底月份對應季）；格式不符回原字串。"""
+    s = str(yyyymm or '').strip()
+    if len(s) != 6 or not s.isdigit():
+        return s or '—'
+    q = {'03': 'Q1', '06': 'Q2', '09': 'Q3', '12': 'Q4'}.get(s[4:6], s[4:6])
+    return f'{s[:4]}{q}'
+
+
+def _render_mj_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '') -> None:
     """渲染結果表（退步在前）+ 統計 KPI。"""
     if not rows:
         return
@@ -1352,6 +1367,34 @@ def _render_mj_trend_table(rows: list[dict], pd, st_mod) -> None:
     cols[3].metric('📈 進步', cnt.get('up', 0))
     cols[4].metric('🚀 強進步', cnt.get('strong_up', 0))
 
+    # v18.199 ── 📊 快照新鮮度條（MJ 季財報分來自哪季 — 防補抓失敗靜默沿用舊季）──
+    _fresh = sum(1 for r in rows if r.get('snap_stale') is False)
+    _stale = sum(1 for r in rows if r.get('snap_stale') is True)
+    _missing = sum(1 for r in rows if r.get('snap_stale') is None)
+    if _stale == 0 and _missing == 0:
+        _fc, _ft = '#3fb950', '🟢 全部最新'
+    elif _fresh == 0:
+        _fc, _ft = '#f85149', '🔴 全部落後或缺'
+    else:
+        _fc, _ft = '#d29922', '🟡 部分落後'
+    st_mod.markdown(
+        f'<div style="margin:8px 0;padding:8px 14px;border-left:4px solid {_fc};'
+        f'background:{_fc}14;border-radius:0 6px 6px 0;font-size:13px;">'
+        f'<b style="color:{_fc};">📊 MJ 快照新鮮度</b>　'
+        f'📅 應有最新季 <b>{_fmt_quarter(yyyymm_curr)}</b>　'
+        f'<span style="color:{_fc};">{_ft}</span>　'
+        f'<span style="color:#8b949e;">🟢 最新 {_fresh} ／ 🟡 落後 {_stale} ／ ⬜ 無快照 '
+        f'{_missing}（共 {len(rows)} 檔）</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    def _quarter_cell(r: dict) -> str:
+        _ym = r.get('snap_ym') or ''
+        if not _ym:
+            return '⬜ 無'
+        _q = _fmt_quarter(_ym)
+        return f'🟡 {_q}（舊）' if r.get('snap_stale') else f'🟢 {_q}'
+
     rows_sorted = sorted(rows, key=lambda r: _TREND_SORT_ORDER.get(r['label_code'], 99))
     df = pd.DataFrame([{
         '代碼': r['sid'],
@@ -1359,6 +1402,7 @@ def _render_mj_trend_table(rows: list[dict], pd, st_mod) -> None:
         '綜合分數': round(r['score'], 2),
         '月營收分': round(r['mon_sub'], 2),
         'MJ 季財報分': round(r['mj_sub'], 2),
+        '季別': _quarter_cell(r),
         '備註': r['note'].strip().rstrip(';') if r['note'] else '',
     } for r in rows_sorted])
     st_mod.dataframe(df, use_container_width=True, hide_index=True)
