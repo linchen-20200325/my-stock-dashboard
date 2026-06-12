@@ -424,6 +424,9 @@ class StockDataLoader:
             # ========== 1. 股價數據 ==========
 
             df = None
+            _price_src = 'unknown'
+            _inst_src = 'unknown'
+            _margin_src = 'unknown'
 
             # 還原K線(復權)：優先直接用 Yahoo auto_adjust=True 生成「已復權 OHLC」
             if use_adjusted:
@@ -468,6 +471,7 @@ class StockDataLoader:
                             df_yf_adj['volume'] = 0
 
                         df = df_yf_adj[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
+                        _price_src = 'yahoo_adj'
                         print("✅ 還原K線：Yahoo auto_adjust=True（直接生成還原 OHLC）")
                 except Exception as e:
                     print(f"⚠️ 還原K線：Yahoo auto_adjust 失敗，改用 FinMind 原始價：{e}")
@@ -481,10 +485,12 @@ class StockDataLoader:
                         start_date=start_str,
                         end_date=end_date.strftime('%Y-%m-%d'),
                     )
+                    _fm_path = 'finmind_sdk'
                 else:
                     # FinMind SDK 未載入（DataLoader=None）→ raw HTTP 備援，避免 NoneType 崩潰
                     df_price = _fetch_finmind_price_raw(
                         stock_id, start_str, end_date.strftime('%Y-%m-%d'))
+                    _fm_path = 'finmind_raw'
 
                 if df_price.empty:
                     # Yahoo 備援（先 .TW，再試 .TWO 上櫃）
@@ -524,8 +530,10 @@ class StockDataLoader:
 
                     df_yf['volume'] = (df_yf['volume'] / 1000).round().astype(int)
                     df = df_yf[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
+                    _price_src = 'yahoo_fallback'
                 else:
                     # FinMind 數據
+                    _price_src = _fm_path
                     df = df_price.rename(columns={
                         'Trading_Volume': 'volume',
                         'max': 'high',
@@ -616,6 +624,7 @@ class StockDataLoader:
                         _nz = (df.get('外資', pd.Series(dtype=float)) != 0).sum()
                         print(f'[籌碼] {stock_id}: SDK ✅ 外資非零={_nz}', flush=True)
                         _sdk_used = True
+                        _inst_src = 'finmind_sdk'
                     else:
                         _sdk_used = False
                 except Exception as e:
@@ -626,10 +635,18 @@ class StockDataLoader:
             if not _sdk_used:
                 # SDK 不可用 → FinMind Raw HTTP API（不依賴 SDK）
                 df = _fetch_finmind_inst_raw(stock_id, df, start_str)
+                if '外資' in df.columns:
+                    _inst_src = 'finmind_raw'
                 if '外資' not in df.columns:
                     df = _fetch_twse_inst_fallback(stock_id, df)
+                    if '外資' in df.columns:
+                        _inst_src = 'twse'
                 if '外資' not in df.columns:
                     df = _fetch_tpex_inst_fallback(stock_id, df)
+                    if '外資' in df.columns:
+                        _inst_src = 'tpex'
+                if _inst_src == 'unknown':
+                    _inst_src = 'missing'
 
             # ========== 5. 融資融券 ==========
             try:
@@ -651,9 +668,13 @@ class StockDataLoader:
                     margin_data['融券餘額'] = pd.to_numeric(margin_data['融券餘額'], errors='coerce')
 
                     df = pd.merge(df, margin_data, on='date', how='left')
+                    _margin_src = 'finmind_sdk'
+                else:
+                    _margin_src = 'missing'
 
             except Exception as e:
                 print(f"融資數據錯誤: {e}")
+                _margin_src = 'missing'
 
             # ========== 6. 數據清洗 ==========
             # 填補0
@@ -686,6 +707,13 @@ class StockDataLoader:
             if '外資' in df.columns:
                 print(f"外資欄位類型: {df['外資'].dtype}")
                 print(f"最後3筆外資數據: {df['外資'].tail(3).tolist()}")
+
+            try:
+                df.attrs['price_src'] = _price_src
+                df.attrs['inst_src'] = _inst_src
+                df.attrs['margin_src'] = _margin_src
+            except Exception:
+                pass
 
             return df, None, stock_name
 

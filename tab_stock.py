@@ -455,6 +455,23 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                 _age_label = (f'{int(_age_min)} 分鐘前' if _age_min < 60
                               else f'{_age_min/60:.1f} 小時前')
                 _end_str = _df_end_date.strftime('%Y-%m-%d') if _df_end_date is not None else '—'
+                _attrs = (df2.attrs or {}) if (df2 is not None and hasattr(df2, 'attrs')) else {}
+                _ps = str(_attrs.get('price_src', 'unknown'))
+                _is = str(_attrs.get('inst_src', 'unknown'))
+                _ms = str(_attrs.get('margin_src', 'unknown'))
+                _PRICE_LABEL = {
+                    'yahoo_adj': '🟢 Yahoo還原', 'finmind_sdk': '🟠 FinMind原始(降級)',
+                    'finmind_raw': '🟠 FinMind HTTP(降級)', 'yahoo_fallback': '🟠 Yahoo備援(降級)',
+                    'unknown': '⬜ 未知',
+                }
+                _INST_LABEL = {
+                    'finmind_sdk': '🟢 FinMind', 'finmind_raw': '🟠 FinMind HTTP(降級)',
+                    'twse': '🟠 TWSE降級', 'tpex': '🟠 TPEX降級',
+                    'missing': '🔴 缺失', 'unknown': '⬜ 未知',
+                }
+                _MARGIN_LABEL = {
+                    'finmind_sdk': '🟢 FinMind', 'missing': '🔴 缺失', 'unknown': '⬜ 未知',
+                }
                 st.markdown(
                     f'<div style="background:#0d1117;border-left:4px solid {_age_color};'
                     f'border-radius:4px;padding:6px 12px;margin-bottom:6px;font-size:11px;color:#8b949e;">'
@@ -462,8 +479,20 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                     f'📅 K線截止：<b style="color:#c9d1d9;">{_end_str}</b>　'
                     f'🕐 抓取：<b style="color:#c9d1d9;">{_fetched_at.strftime("%H:%M:%S")}</b>　'
                     f'⏱️ <span style="color:{_age_color};font-weight:700;">{_age_label}</span>　'
-                    f'📡 來源：FinMind / Yahoo'
+                    f'📡 K線：<b style="color:#c9d1d9;">{_PRICE_LABEL.get(_ps, _ps)}</b>　'
+                    f'🏦 籌碼：<b style="color:#c9d1d9;">{_INST_LABEL.get(_is, _is)}</b>　'
+                    f'💰 融資：<b style="color:#c9d1d9;">{_MARGIN_LABEL.get(_ms, _ms)}</b>'
                     f'</div>', unsafe_allow_html=True)
+                _degraded = (
+                    _ps in ('finmind_sdk', 'finmind_raw', 'yahoo_fallback')
+                    or _is in ('finmind_raw', 'twse', 'tpex', 'missing')
+                    or _ms == 'missing'
+                )
+                if _degraded:
+                    st.caption(
+                        '🟠 主資料來源失敗已降級，技術指標 / 籌碼 / 融資數值可能與正常情況不同；'
+                        '建議按右側 🔄 強制重抓 重試主源。'
+                    )
         with _fresh_cols[1]:
             if st.button('🔄 強制重抓', key='t2_force_refresh',
                          help='清除所有 @st.cache_data 快取 + 清 session 殘留值，保證下次載入抓最新資料'):
