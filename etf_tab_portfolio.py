@@ -207,6 +207,15 @@ def render_etf_portfolio(gemini_fn=None):
     # ── 共享給下游模組（葡萄串領息法 / AI 評斷）──
     st.session_state['etf_portfolio_rows'] = rows
 
+    # ── v18.208 I6：ETF 投組 ↔ 總經 regime 跨 Tab 聯動 banner ──
+    # 鏡像 v18.204 I4 個股端設計：reuse render_macro_stock_backdrop helper
+    # （純讀 mkt_info，不分個股/ETF），讓 user 看 ETF 投組時不忘大盤系統性風險背景
+    try:
+        from macro_stock_link import render_macro_stock_backdrop
+        render_macro_stock_backdrop(st.session_state)
+    except Exception as _e_msl:
+        print(f'[macro_stock_link/etf_pf] {type(_e_msl).__name__}: {_e_msl}')
+
     # ── 資產總覽卡（總成本 / 總現值 / 資本利得 / 已領配息 / 總損益）──
     _gain_color = '#3fb950' if total_gain >= 0 else '#f85149'
     _gain_sign  = '+' if total_gain >= 0 else ''
