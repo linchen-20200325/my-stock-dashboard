@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+
 from macro_helpers import calc_traffic_light, rp_entry, rp_scalar, rp_ts
 from tab_helpers import safe_get
 
@@ -456,7 +458,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
             _ov_lbl = {'bull':'🟢 多頭','neutral':'🟡 震盪','bear':'🔴 空頭防禦'}.get(_ov_reg,'⚪')
             _ov_exp = _ov_mkt.get('exposure_pct','--') if _ov_mkt else '--'
             st.markdown(beginner_kpi('今日市場狀態', _ov_lbl, f'建議持股比例 {_ov_exp}',
-                            '#3fb950' if _ov_reg=='bull' else ('#f85149' if _ov_reg=='bear' else '#d29922'),
+                            TRAFFIC_GREEN if _ov_reg=='bull' else (TRAFFIC_RED if _ov_reg=='bear' else TRAFFIC_YELLOW),
                             '#0d1117'), unsafe_allow_html=True)
         # 外資籌碼
         with _ov_cols[1]:
@@ -470,7 +472,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         with _ov_cols[2]:
             _ov_jqp = _ov_jq.get('avg',None) if _ov_jq else None
             if _ov_jqp is not None:
-                _ov_jc = '#3fb950' if _ov_jqp>=60 else ('#d29922' if _ov_jqp>=30 else '#f85149')
+                _ov_jc = TRAFFIC_GREEN if _ov_jqp>=60 else (TRAFFIC_YELLOW if _ov_jqp>=30 else TRAFFIC_RED)
                 st.markdown(beginner_kpi('全市場健康度', f'{_ov_jqp:.0f}%', '有幾%的股票站在均線之上', _ov_jc, '>60%才適合積極買進'), unsafe_allow_html=True)
             else:
                 st.markdown(kpi('旌旗指數', '--', '掃描後顯示', '#484f58', '#0d1117'), unsafe_allow_html=True)
@@ -478,7 +480,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         with _ov_cols[3]:
             _ov_b240 = _ov_bias.get('bias_240', None) if _ov_bias else None
             if _ov_b240 is not None:
-                _ov_bc = '#f85149' if abs(_ov_b240) > 20 else '#3fb950'
+                _ov_bc = TRAFFIC_RED if abs(_ov_b240) > 20 else TRAFFIC_GREEN
                 st.markdown(beginner_kpi('大盤位置', f'{_ov_b240:+.1f}%', '偏離年均線多少（過高=貴）', _ov_bc, '>+20%過熱；<-20%便宜'), unsafe_allow_html=True)
             else:
                 st.markdown(kpi('年線乖離', '--', '更新後顯示', '#484f58', '#0d1117'), unsafe_allow_html=True)
@@ -524,9 +526,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
         # 主結論統一以頂部紅綠燈 regime 為準（與燈號/戰情概覽一致，杜絕打架）
         _wr_reg_map = {
-            'bull':    ('🟢 趨勢偏多 — 可逢回布局核心部位',   '#3fb950'),
-            'neutral': ('🟡 方向震盪 — 區間操作、控制部位',   '#d29922'),
-            'bear':    ('🔴 趨勢偏空 — 優先保留現金、嚴設停損', '#f85149'),
+            'bull':    ('🟢 趨勢偏多 — 可逢回布局核心部位',   TRAFFIC_GREEN),
+            'neutral': ('🟡 方向震盪 — 區間操作、控制部位',   TRAFFIC_YELLOW),
+            'bear':    ('🔴 趨勢偏空 — 優先保留現金、嚴設停損', TRAFFIC_RED),
         }
         _wr_base, _wr_action_color = _wr_reg_map.get(_wr_reg, ('請先更新總經數據', '#484f58'))
         _wr_action = (f'{_wr_base}（建議持股 {_wr_exp}）'
@@ -589,7 +591,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         ]
         for _name, _val, _ok, _tip in _cl_items:
             _ic = '✅' if _ok else '⚠️'
-            _vc = '#3fb950' if _ok else '#f85149'
+            _vc = TRAFFIC_GREEN if _ok else TRAFFIC_RED
             st.markdown(
                 f'<div style="display:flex;align-items:center;padding:5px 8px;margin:2px 0;'
                 f'background:#0d1117;border-radius:6px;border:1px solid #21262d;">'
@@ -702,7 +704,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ── 時間戳列（合併按鈕後從 cb3 移到下方獨立一行） ──
     _now_ts = _tw_now_str()
     _last_ts = st.session_state.get('cl_ts', '尚未更新')
-    _ts_color = '#3fb950' if _last_ts != '尚未更新' else '#484f58'
+    _ts_color = TRAFFIC_GREEN if _last_ts != '尚未更新' else '#484f58'
     st.markdown(
         f'<div style="font-size:11px;padding:4px 0;">'
         f'<span style="color:#484f58;">現在：{_now_ts}</span>　'
@@ -990,7 +992,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 _jq_ratio = float(_jq_ratio)
                 _jq_pos  = '80~100%' if _jq_ratio>=60 else ('50~70%' if _jq_ratio>=40 else ('20~40%' if _jq_ratio>=20 else '0~20%'))
                 _jq_reg  = 'bull' if _jq_ratio>=60 else ('neutral' if _jq_ratio>=40 else 'bear')
-                _jq_col  = '#3fb950' if _jq_ratio>=60 else ('#d29922' if _jq_ratio>=40 else '#f85149')
+                _jq_col  = TRAFFIC_GREEN if _jq_ratio>=60 else (TRAFFIC_YELLOW if _jq_ratio>=40 else TRAFFIC_RED)
                 _jq_lbl  = '🟢 多頭積極' if _jq_ratio>=60 else ('🟡 中性均衡' if _jq_ratio>=40 else '🔴 保守防禦')
                 _jq_src_note = f'（來源：{_jq_ratio_src}）'
                 st.session_state['jingqi_info'] = {
@@ -2334,13 +2336,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _d120 = (_idx2-_ma120)/_ma120*100
 
             if _turn_up and _above60 and _above120:
-                pivot_signals.append(('均線多頭確認','🟢','#3fb950',
+                pivot_signals.append(('均線多頭確認','🟢',TRAFFIC_GREEN,
                     f'站上MA60(+{_d60:.1f}%) & MA120(+{_d120:.1f}%) + 均線向上彎折 → 中長線起漲點'))
             elif _turn_up and _above60:
-                pivot_signals.append(('均線初步翻多','🟡','#d29922',
+                pivot_signals.append(('均線初步翻多','🟡',TRAFFIC_YELLOW,
                     f'站上MA60(+{_d60:.1f}%) + 向上彎折，待突破MA120({_ma120:,.0f})確認'))
             elif not _above60 and _turn_down:
-                pivot_signals.append(('均線空頭確認','🔴','#f85149',
+                pivot_signals.append(('均線空頭確認','🔴',TRAFFIC_RED,
                     f'跌破MA60({_d60:.1f}%) + 均線向下 → 中期起跌訊號'))
             elif _above60 and not _above120:
                 pivot_signals.append(('整理區間','⚪','#8b949e',
@@ -2352,10 +2354,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _b60  = _bias2.get('bias_60', _bias2.get('bias_20', 0))
             _b20  = _bias2.get('bias_20', 0)
             if _b240 > 10:
-                pivot_signals.append(('年線乖離過大','⚠️','#f85149',
+                pivot_signals.append(('年線乖離過大','⚠️',TRAFFIC_RED,
                     f'年線乖離 +{_b240:.1f}% > 10% → 頂部拐點區間，考慮減碼'))
             elif _b240 < -10:
-                pivot_signals.append(('年線深度低估','💡','#3fb950',
+                pivot_signals.append(('年線深度低估','💡',TRAFFIC_GREEN,
                     f'年線乖離 {_b240:.1f}% < -10% → 底部拐點區間，考慮布局'))
             if abs(_b20) > 8:
                 _bl20 = '過熱' if _b20 > 0 else '超賣'
@@ -2370,10 +2372,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _m2_y  = _m1b2.get('m2_yoy', 0)
             _diff  = _m1b_y - _m2_y
             if _diff > 0:
-                pivot_signals.append(('M1B>M2 黃金交叉','✅','#3fb950',
+                pivot_signals.append(('M1B>M2 黃金交叉','✅',TRAFFIC_GREEN,
                     f'M1B({_m1b_y:.1f}%) > M2({_m2_y:.1f}%) → 資金由定存轉入股市，長線起漲徵兆'))
             elif _diff < -1:
-                pivot_signals.append(('M1B<M2 死亡交叉','❌','#f85149',
+                pivot_signals.append(('M1B<M2 死亡交叉','❌',TRAFFIC_RED,
                     f'M1B({_m1b_y:.1f}%) < M2({_m2_y:.1f}%) → 資金撤離股市，長線起跌警示'))
 
         # 4. 台幣匯率（貶轉升=外資流入，升轉貶=外資撤退）
@@ -2385,10 +2387,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 _twd_chg   = (_twd_now - _twd_prev5) / _twd_prev5 * 100
                 # 注意：TWD=X 是 USD/TWD，數字越小=台幣越升值
                 if _twd_chg < -0.5:  # 台幣升值 (匯率數字下降)
-                    pivot_signals.append(('台幣升值','✅','#3fb950',
+                    pivot_signals.append(('台幣升值','✅',TRAFFIC_GREEN,
                         f'台幣近5日升值 {abs(_twd_chg):.1f}% → 外資熱錢流入，指數底部反彈訊號'))
                 elif _twd_chg > 0.5:  # 台幣貶值 (匯率數字上升)
-                    pivot_signals.append(('台幣貶值','⚠️','#d29922',
+                    pivot_signals.append(('台幣貶值','⚠️',TRAFFIC_YELLOW,
                         f'台幣近5日貶值 {_twd_chg:.1f}% → 外資撤退觀察，留意資金流出風險'))
 
         # 5. 外資期貨 + 散戶比（先行指標）
@@ -2400,21 +2402,21 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             if _fut_net is not None:
                 _fut_net_v = float(_fut_net)
                 if _fut_net_v < -30000:
-                    pivot_signals.append(('外資期貨大量空單','🔴','#f85149',
+                    pivot_signals.append(('外資期貨大量空單','🔴',TRAFFIC_RED,
                         f'外資期貨淨空 {abs(_fut_net_v):,.0f}口 > 3萬口 → 頂部起跌訊號'))
                 elif _fut_net_v < 0 and abs(_fut_net_v) < 10000:
-                    pivot_signals.append(('外資空單縮減','🟡','#d29922',
+                    pivot_signals.append(('外資空單縮減','🟡',TRAFFIC_YELLOW,
                         f'外資期貨淨空 {abs(_fut_net_v):,.0f}口（補回中）→ 底部拐點觀察'))
                 elif _fut_net_v > 10000:
-                    pivot_signals.append(('外資期貨多方','✅','#3fb950',
+                    pivot_signals.append(('外資期貨多方','✅',TRAFFIC_GREEN,
                         f'外資期貨淨多 {_fut_net_v:,.0f}口 → 多頭強勢確認'))
             if _leek is not None:
                 _leek_v = float(_leek)
                 if _leek_v > 20:
-                    pivot_signals.append(('散戶極度看多（危險）','⚠️','#f85149',
+                    pivot_signals.append(('散戶極度看多（危險）','⚠️',TRAFFIC_RED,
                         f'韭菜指數 +{_leek_v:.1f}% > 20% → 散戶過熱，頂部拐點警示（反向指標）'))
                 elif _leek_v < -20:
-                    pivot_signals.append(('散戶極度悲觀（機會）','💡','#3fb950',
+                    pivot_signals.append(('散戶極度悲觀（機會）','💡',TRAFFIC_GREEN,
                         f'韭菜指數 {_leek_v:.1f}% < -20% → 散戶極度看空，底部拐點機會（反向指標）'))
 
         # ── 6. 台灣領先指標拐點（景氣對策 / 領先指標 / 外資連續日數）─────
@@ -2443,16 +2445,16 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _inf = (_ndc_h or {}).get('inflection', '')
             _sc, _spv = (_ndc_h or {}).get('score_latest'), (_ndc_h or {}).get('score_prev')
             if '翻多' in _inf:
-                pivot_signals.append(('景氣對策連2月翻多','🚀','#3fb950',
+                pivot_signals.append(('景氣對策連2月翻多','🚀',TRAFFIC_GREEN,
                     f'分數 {_spv}→{_sc} 由跌轉升 → 景氣領先翻揚拐點'))
             elif '翻空' in _inf:
-                pivot_signals.append(('景氣對策連2月翻空','⚠️','#f85149',
+                pivot_signals.append(('景氣對策連2月翻空','⚠️',TRAFFIC_RED,
                     f'分數 {_spv}→{_sc} 由升轉跌 → 景氣動能衰退拐點'))
             elif '連3月上升' in _inf:
-                pivot_signals.append(('景氣對策連3月上升','✅','#3fb950',
+                pivot_signals.append(('景氣對策連3月上升','✅',TRAFFIC_GREEN,
                     f'分數穩步上升至 {_sc}/45 → 景氣擴張持續'))
             elif '連3月下降' in _inf:
-                pivot_signals.append(('景氣對策連3月下降','❌','#f85149',
+                pivot_signals.append(('景氣對策連3月下降','❌',TRAFFIC_RED,
                     f'分數連續下滑至 {_sc}/45 → 景氣收縮持續'))
 
             # 6-B 領先指標 6M smoothed change
@@ -2460,16 +2462,16 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _s6m = (_ndc_li or {}).get('smooth6m')
             _ps6m = (_ndc_li or {}).get('prev_s6m')
             if '由負轉正' in _li_inf and _s6m is not None and _ps6m is not None:
-                pivot_signals.append(('領先指標 6M 由負轉正','🚀','#3fb950',
+                pivot_signals.append(('領先指標 6M 由負轉正','🚀',TRAFFIC_GREEN,
                     f'6M smoothed change：{_ps6m:+.2f}%→{_s6m:+.2f}% → 景氣翻揚黃金拐點'))
             elif '由正轉負' in _li_inf and _s6m is not None and _ps6m is not None:
-                pivot_signals.append(('領先指標 6M 由正轉負','⚠️','#f85149',
+                pivot_signals.append(('領先指標 6M 由正轉負','⚠️',TRAFFIC_RED,
                     f'6M smoothed change：{_ps6m:+.2f}%→{_s6m:+.2f}% → 景氣轉折下行'))
             elif '持續擴張' in _li_inf and _s6m is not None:
-                pivot_signals.append(('領先指標持續擴張','✅','#3fb950',
+                pivot_signals.append(('領先指標持續擴張','✅',TRAFFIC_GREEN,
                     f'6M smoothed change {_s6m:+.2f}% 維持正值 → 景氣擴張'))
             elif '持續收縮' in _li_inf and _s6m is not None:
-                pivot_signals.append(('領先指標持續收縮','❌','#f85149',
+                pivot_signals.append(('領先指標持續收縮','❌',TRAFFIC_RED,
                     f'6M smoothed change {_s6m:+.2f}% 維持負值 → 景氣收縮'))
 
             # 6-C 外資連續日數反轉
@@ -2477,16 +2479,16 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _cd = (_fi_st or {}).get('consec_days')
             _ps = (_fi_st or {}).get('prev_streak')
             if '賣→買' in _fi_inf:
-                pivot_signals.append(('外資由連賣轉買','🚀','#3fb950',
+                pivot_signals.append(('外資由連賣轉買','🚀',TRAFFIC_GREEN,
                     f'外資連 {-_ps if _ps else 0} 賣後首日翻買 → 籌碼面拐點'))
             elif '買→賣' in _fi_inf:
-                pivot_signals.append(('外資由連買轉賣','⚠️','#f85149',
+                pivot_signals.append(('外資由連買轉賣','⚠️',TRAFFIC_RED,
                     f'外資連 {_ps if _ps else 0} 買後首日翻賣 → 籌碼動能減弱'))
             elif '連' in _fi_inf and '買超' in _fi_inf and _cd is not None:
-                pivot_signals.append(('外資連續買超','✅','#3fb950',
+                pivot_signals.append(('外資連續買超','✅',TRAFFIC_GREEN,
                     f'外資已連 {_cd} 日買超 → 籌碼穩健'))
             elif '連' in _fi_inf and '賣超' in _fi_inf and _cd is not None:
-                pivot_signals.append(('外資連續賣超','❌','#f85149',
+                pivot_signals.append(('外資連續賣超','❌',TRAFFIC_RED,
                     f'外資已連 {abs(_cd)} 日賣超 → 籌碼流出警示'))
         except Exception as _e_tp6:
             print(f'[tab_macro/拐點面板6] {type(_e_tp6).__name__}: {_e_tp6}')
@@ -2518,19 +2520,19 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         st.session_state['_pivot_signals'] = list(pivot_signals)
 
         # ── 綜合評分 & 顯示 ──────────────────────────────────────
-        _bull_pts = sum(1 for _,_,c,_ in pivot_signals if c == '#3fb950')
-        _bear_pts = sum(1 for _,_,c,_ in pivot_signals if c == '#f85149')
-        _warn_pts = sum(1 for _,_,c,_ in pivot_signals if c in ('#d29922',''))
+        _bull_pts = sum(1 for _,_,c,_ in pivot_signals if c == TRAFFIC_GREEN)
+        _bear_pts = sum(1 for _,_,c,_ in pivot_signals if c == TRAFFIC_RED)
+        _warn_pts = sum(1 for _,_,c,_ in pivot_signals if c in (TRAFFIC_YELLOW,''))
 
         if _bull_pts > _bear_pts and _bull_pts >= 2:
             _pivot_overall = f'🟢 綜合拐點：{_bull_pts} 個多頭訊號 → 偏向底部起漲'
-            _pivot_color   = '#3fb950'
+            _pivot_color   = TRAFFIC_GREEN
         elif _bear_pts > _bull_pts and _bear_pts >= 2:
             _pivot_overall = f'🔴 綜合拐點：{_bear_pts} 個空頭訊號 → 偏向頂部起跌'
-            _pivot_color   = '#f85149'
+            _pivot_color   = TRAFFIC_RED
         else:
             _pivot_overall = f'⚪ 訊號分歧：多頭{_bull_pts} vs 空頭{_bear_pts}，方向待確認'
-            _pivot_color   = '#d29922'
+            _pivot_color   = TRAFFIC_YELLOW
 
         st.markdown(f'<div style="background:#161b22;border-left:4px solid {_pivot_color};'
                     f'border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;'
@@ -2727,7 +2729,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     bc,dc = st.columns(2)
     with bc:
         if '10Y公債殖利率' in intl:
-            st.plotly_chart(sparkline(intl['10Y公債殖利率'],'10Y公債殖利率','#f85149'),
+            st.plotly_chart(sparkline(intl['10Y公債殖利率'],'10Y公債殖利率',TRAFFIC_RED),
                             width='stretch',config={'displayModeBar':False})
     with dc:
         if '美元指數 DXY' in intl:
@@ -2870,8 +2872,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     x=_ohlc_tail.index,
                     open=_ohlc_tail['open'], high=_ohlc_tail['high'],
                     low=_ohlc_tail['low'],   close=_ohlc_tail['close'],
-                    increasing_line_color='#f85149', increasing_fillcolor='rgba(248,81,73,0.75)',
-                    decreasing_line_color='#3fb950', decreasing_fillcolor='rgba(63,185,80,0.75)',
+                    increasing_line_color=TRAFFIC_RED, increasing_fillcolor='rgba(248,81,73,0.75)',
+                    decreasing_line_color=TRAFFIC_GREEN, decreasing_fillcolor='rgba(63,185,80,0.75)',
                     name='加權指數',
                 )])
                 _fig_kl.update_layout(
@@ -2893,7 +2895,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             try:
                 otc = _fetch_otc_via_finmind(FINMIND_TOKEN)
                 if otc is not None and not otc.empty:
-                    st.plotly_chart(sparkline(otc,'櫃買指數 OTC','#3fb950'),
+                    st.plotly_chart(sparkline(otc,'櫃買指數 OTC',TRAFFIC_GREEN),
                                     width='stretch',config={'displayModeBar':False})
             except Exception:
                 pass
@@ -2911,12 +2913,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _fn3 = inst[_fk3]['net'] if _fk3 else 0
         _tn3 = inst[_tk3]['net'] if _tk3 else 0
         if _fn3 >= 100:
-            _hye_c = '#3fb950'
+            _hye_c = TRAFFIC_GREEN
             _hye_ind = f'外資大買超 {_fn3:.1f}億'
             _hye_concl = '大戶點火，跟著大戶走 → 積極加碼'
             _hye_act = '趁拉回布局，持股 80~100%'
         elif _fn3 <= -100:
-            _hye_c = '#f85149'
+            _hye_c = TRAFFIC_RED
             _hye_ind = f'外資大賣超 {abs(_fn3):.1f}億'
             _hye_concl = '大戶倒貨，嚴格減碼 → 離場為上'
             _hye_act = '持股降至 0~30%，停損優先'
@@ -2934,12 +2936,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _bc_vals = [float(_fn3 or 0),
                     float(_tn3 or 0),
                     float((inst.get(_zk3) or {}).get('net', 0) or 0)]
-        _bc_colors = ['#58a6ff' if v >= 0 else '#f85149' for v in _bc_vals] + \
-                     ['#3fb950' if _bc_vals[1] >= 0 else '#f85149',
-                      '#ffd700' if _bc_vals[2] >= 0 else '#f85149']
-        _bc_colors = ['#58a6ff' if _bc_vals[0] >= 0 else '#f85149',
-                      '#3fb950' if _bc_vals[1] >= 0 else '#f85149',
-                      '#ffd700' if _bc_vals[2] >= 0 else '#f85149']
+        _bc_colors = ['#58a6ff' if v >= 0 else TRAFFIC_RED for v in _bc_vals] + \
+                     [TRAFFIC_GREEN if _bc_vals[1] >= 0 else TRAFFIC_RED,
+                      '#ffd700' if _bc_vals[2] >= 0 else TRAFFIC_RED]
+        _bc_colors = ['#58a6ff' if _bc_vals[0] >= 0 else TRAFFIC_RED,
+                      TRAFFIC_GREEN if _bc_vals[1] >= 0 else TRAFFIC_RED,
+                      '#ffd700' if _bc_vals[2] >= 0 else TRAFFIC_RED]
         try:
             import plotly.graph_objects as _go_bc
             _fig_bc = _go_bc.Figure(_go_bc.Bar(
@@ -2958,17 +2960,17 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             st.caption(f'外資 {_bc_vals[0]:+.1f}億 ｜ 投信 {_bc_vals[1]:+.1f}億 ｜ 自營商 {_bc_vals[2]:+.1f}億')
     if margin:
         if margin >= 3400:
-            _sql_mc = '#f85149'
+            _sql_mc = TRAFFIC_RED
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '極度危險，嚴防多殺多 → 行情尾端'
             _sql_mact = '全面減碼，勿追高，準備逃命'
         elif margin >= 2800:
-            _sql_mc = '#d29922'
+            _sql_mc = TRAFFIC_YELLOW
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '水位偏高，籌碼凌亂 → 警戒操作'
             _sql_mact = '持股降至 50% 以下，避免重倉'
         else:
-            _sql_mc = '#3fb950'
+            _sql_mc = TRAFFIC_GREEN
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '籌碼乾淨，安全水位 → 可積極布局'
             _sql_mact = '健康多頭格局，持股 70~100%'
@@ -3134,7 +3136,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             for _wc, _wt, _wd, _wa in _warnings:
                 _wcolor = ('#2ea043' if _wc == '🟢' else
                            '#da3633' if _wc == '🔴' else
-                           '#d29922' if _wc == '🟡' else '#388bfd')
+                           TRAFFIC_YELLOW if _wc == '🟡' else '#388bfd')
                 st.markdown(
                     f'<div style="border-left:5px solid {_wcolor};background:#0d1117;'
                     f'padding:9px 14px;border-radius:0 8px 8px 0;margin:4px 0;">'
@@ -3175,15 +3177,15 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             if _v5_fut <= -30000:
                 _v5_stock, _v5_cash = 20, 80
                 _v5_strategy = '嚴禁追高攤平，保護本金優先；可留意低基期高殖利率個股'
-                _v5_color = '#f85149'
+                _v5_color = TRAFFIC_RED
             elif _v5_fut <= -15000:
                 _v5_stock, _v5_cash = 50, 50
                 _v5_strategy = '收回資金，逢高減碼漲多個股，等待期空回補訊號'
-                _v5_color = '#d29922'
+                _v5_color = TRAFFIC_YELLOW
             elif _v5_fut > 0:
                 _v5_stock, _v5_cash = 90, 10
                 _v5_strategy = '期貨翻多，順勢重壓強勢股，外投同買個股優先布局'
-                _v5_color = '#3fb950'
+                _v5_color = TRAFFIC_GREEN
             else:
                 _v5_stock, _v5_cash = 70, 30
                 _v5_strategy = '水位中性，依個股技術面操作，保留現金彈藥'
@@ -3330,7 +3332,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
         if   _score <= -3:
             _vd='🚨 強烈偏空'
-            _vc='#f85149'
+            _vc=TRAFFIC_RED
             _va='建議大幅降倉，等待空單回補訊號'
         elif _score <= -1:
             _vd='🔴 偏空'
@@ -3338,11 +3340,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _va='籌碼不穩，建議觀望為主'
         elif _score ==  0:
             _vd='⚪ 多空分歧'
-            _vc='#d29922'
+            _vc=TRAFFIC_YELLOW
             _va='訊號分歧，小倉觀察，詳見策略手冊'
         elif _score <=  2:
             _vd='🟢 偏多'
-            _vc='#3fb950'
+            _vc=TRAFFIC_GREEN
             _va='籌碼偏健康，可正常持倉'
         else:
             _vd='💚 強烈偏多'
@@ -3454,7 +3456,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         for _ac in _adl_concl:
             _ac_c = ('#2ea043' if '✅' in _ac or '可進攻' in _ac
                      else '#da3633' if '🔴' in _ac or '警告' in _ac
-                     else '#d29922' if '⚠️' in _ac else '#388bfd')
+                     else TRAFFIC_YELLOW if '⚠️' in _ac else '#388bfd')
             _ac_dot = '🟢' if '✅' in _ac else ('🔴' if '🔴' in _ac else ('🟡' if '⚠️' in _ac else '⚪'))
             _ac_clean = _ac.lstrip('✅⚠️🔴⚪').strip()
             st.markdown(
@@ -3504,15 +3506,15 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         # KPI 卡片
         _adl_cols = st.columns(4)
         with _adl_cols[0]:
-            st.markdown(kpi('今日上漲家數', f'{_adl_up:,}', '上漲股票總數', '#3fb950', '#0d2818'), unsafe_allow_html=True)
+            st.markdown(kpi('今日上漲家數', f'{_adl_up:,}', '上漲股票總數', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
         with _adl_cols[1]:
-            st.markdown(kpi('今日下跌家數', f'{_adl_down:,}', '下跌股票總數', '#f85149', '#2a0d0d'), unsafe_allow_html=True)
+            st.markdown(kpi('今日下跌家數', f'{_adl_down:,}', '下跌股票總數', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
         with _adl_cols[2]:
             st.markdown(kpi('AD值（今日）', f'{_adl_ad:+,}', '漲家－跌家', _adl_color, '#0d1117'), unsafe_allow_html=True)
         with _adl_cols[3]:
             # 廣度健康評分：0-100（對應全市場健康度）
             _breadth_score = round(_adl_ratio)  # 直接用上漲佔比%當分數
-            _bs_color = '#3fb950' if _breadth_score>=60 else ('#d29922' if _breadth_score>=40 else '#f85149')
+            _bs_color = TRAFFIC_GREEN if _breadth_score>=60 else (TRAFFIC_YELLOW if _breadth_score>=40 else TRAFFIC_RED)
             _bs_label = '🟢 廣度健康' if _breadth_score>=60 else ('🟡 中性' if _breadth_score>=40 else '🔴 廣度不足')
             st.markdown(kpi('全市場健康度', f'{_breadth_score}分', _bs_label, _bs_color, '#0d1117'), unsafe_allow_html=True)
             # 同步更新旌旗指數（如果尚未由 ADL 計算）
@@ -3525,7 +3527,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 }
 
         # 信號提示
-        _sig_color = '#3fb950' if _adl_ad > 200 else ('#d29922' if _adl_ad >= -100 else '#f85149')
+        _sig_color = TRAFFIC_GREEN if _adl_ad > 200 else (TRAFFIC_YELLOW if _adl_ad >= -100 else TRAFFIC_RED)
         st.markdown(
             f'<div style="background:#0d1117;border-left:4px solid {_sig_color};border-radius:0 8px 8px 0;'
             f'padding:10px 14px;margin:8px 0;">'
@@ -3600,7 +3602,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _fig_div.add_annotation(
                         x=df_adl['date'].iloc[-1], y=_adl_val,
                         text='⚠️ 背離警告', showarrow=True, arrowhead=2,
-                        font=dict(color='#f85149', size=12), bgcolor='#2a0d0d'
+                        font=dict(color=TRAFFIC_RED, size=12), bgcolor='#2a0d0d'
                     )
                 _fig_div.update_layout(
                     title=dict(text='🔍 ADL vs 加權指數（看背離是否存在）', font=dict(color='#8b949e', size=12)),
@@ -3649,11 +3651,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _up_v, _dn_v = _bd.get('adv'), _bd.get('dec')
             if _up_v is not None and _dn_v is not None and (_up_v + _dn_v) > 50:
                 _ratio_v = round(_up_v / (_up_v + _dn_v) * 100, 1)
-                _col_v = '#3fb950' if _ratio_v >= 60 else ('#d29922' if _ratio_v >= 40 else '#f85149')
+                _col_v = TRAFFIC_GREEN if _ratio_v >= 60 else (TRAFFIC_YELLOW if _ratio_v >= 40 else TRAFFIC_RED)
                 with _adl_today_cols[0]:
-                    st.markdown(kpi('今日上漲家數', f'{_up_v:,}', '即時TWSE', '#3fb950', '#0d2818'), unsafe_allow_html=True)
+                    st.markdown(kpi('今日上漲家數', f'{_up_v:,}', '即時TWSE', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
                 with _adl_today_cols[1]:
-                    st.markdown(kpi('今日下跌家數', f'{_dn_v:,}', '即時TWSE', '#f85149', '#2a0d0d'), unsafe_allow_html=True)
+                    st.markdown(kpi('今日下跌家數', f'{_dn_v:,}', '即時TWSE', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
                 with _adl_today_cols[2]:
                     st.markdown(kpi('全市場健康度', f'{_ratio_v:.1f}%',
                                     ('廣度健康' if _ratio_v >= 60 else ('中性' if _ratio_v >= 40 else '廣度不足')),
@@ -3764,7 +3766,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _mc3 = _mc2.replace('✅','').replace('⚠️','').replace('🔴','').strip()
         if '→' in _mc3:
             _ind7, _res7 = _mc3.split('→', 1)
-            _col7 = '#f85149' if any(k in _mc2 for k in ['🔴','⚠️']) else '#3fb950'
+            _col7 = TRAFFIC_RED if any(k in _mc2 for k in ['🔴','⚠️']) else TRAFFIC_GREEN
             _tchr7 = '弘爺' if 'M1B' in _mc2 else '孫慶龍'
             st.markdown(teacher_conclusion(_tchr7, _ind7.strip(), _res7.strip(), color=_col7), unsafe_allow_html=True)
         else:
@@ -3789,7 +3791,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         if _bias_info:
             _bias_v = _bias_info.get('bias_240', 0)
             _bias_20 = _bias_info.get('bias_20', 0)
-            _bc     = '#f85149' if _bias_v > 20 else ('#3fb950' if _bias_v < -20 else '#d29922')
+            _bc     = TRAFFIC_RED if _bias_v > 20 else (TRAFFIC_GREEN if _bias_v < -20 else TRAFFIC_YELLOW)
             _bl     = ('⚠️ 乖離過大，考慮減碼' if _bias_v > 20
                        else ('✅ 嚴重低估，可積極布局' if _bias_v < -20
                        else '⚪ 乖離正常區間'))
@@ -3857,8 +3859,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     with _s8c1[0]:
         if _m8_ndc:
             _sc8   = float(_m8_ndc.get('score', 0))
-            _nc8   = ('#f85149' if _sc8 >= 38 else '#d29922' if _sc8 >= 32 else
-                      '#3fb950' if _sc8 >= 23 else '#58a6ff')
+            _nc8   = (TRAFFIC_RED if _sc8 >= 38 else TRAFFIC_YELLOW if _sc8 >= 32 else
+                      TRAFFIC_GREEN if _sc8 >= 23 else '#58a6ff')
             _nl8   = ('🔴 紅燈 過熱' if _sc8 >= 38 else '🟡 黃紅燈 繁榮' if _sc8 >= 32 else
                       '🟢 綠燈 穩定' if _sc8 >= 23 else '🔵 黃藍燈 趨緩' if _sc8 >= 17 else '🔵 藍燈 衰退')
             _nd8   = f" ({_m8_ndc.get('date','')})" if _m8_ndc.get('date') else ''
@@ -3870,7 +3872,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     with _s8c1[1]:
         if _m8_exp:
             _ey8 = _m8_exp.get('yoy', 0)
-            _ec8 = '#3fb950' if _ey8 > 0 else '#f85149'
+            _ec8 = TRAFFIC_GREEN if _ey8 > 0 else TRAFFIC_RED
             _el8 = ('✅ 出口動能正成長，基本面有撐' if _ey8 > 0 else
                     ('🔴 外銷連兩月衰退，基本面警示！' if _ey8 < -5 else '⚠️ 外銷轉弱，留意基本面背離'))
             st.markdown(kpi('外銷訂單 YoY', f'{_ey8:+.1f}%', _el8, _ec8, '#0d1117'), unsafe_allow_html=True)
@@ -3882,7 +3884,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _pv8 = _m8_pmi.get('value', 50)
             _pmi_title = '🇹🇼 台灣 PMI'
             _pmi_榮枯 = 50
-            _pc8 = '#3fb950' if _pv8 >= _pmi_榮枯 else ('#d29922' if _pv8 >= (_pmi_榮枯-3) else '#f85149')
+            _pc8 = TRAFFIC_GREEN if _pv8 >= _pmi_榮枯 else (TRAFFIC_YELLOW if _pv8 >= (_pmi_榮枯-3) else TRAFFIC_RED)
             _pl8 = ('✅ 製造業擴張' if _pv8 >= _pmi_榮枯 else
                     ('⚠️ 輕微收縮，留意內需與外銷動能' if _pv8 >= (_pmi_榮枯-3) else '🔴 嚴重收縮，台股出口/電子股承壓'))
             _pd8 = f" ({_m8_pmi.get('date','')})" if _m8_pmi.get('date') else ''
@@ -3898,7 +3900,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         if _m8_cpi:
             _cy8 = _m8_cpi.get('yoy', 0)
             _cpv8 = _m8_cpi.get('prev_yoy')  # v18.169
-            _cc8 = '#f85149' if _cy8 > 3.5 else ('#d29922' if _cy8 > 2.5 else '#3fb950')
+            _cc8 = TRAFFIC_RED if _cy8 > 3.5 else (TRAFFIC_YELLOW if _cy8 > 2.5 else TRAFFIC_GREEN)
             _cl8 = ('🔴 通膨偏高，Fed升息壓力大' if _cy8 > 3.5 else
                     ('⚠️ 通膨黏性，降息路徑放緩' if _cy8 > 2.5 else '✅ 通膨受控，降息可期'))
             _cdate8 = f" ({_m8_cpi.get('date','')})" if _m8_cpi.get('date') else ''
@@ -3919,8 +3921,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _fc = _m8_fed.get('current', 0)
             _fp = _m8_fed.get('prev', 0)
             _fdelta = _fc - _fp
-            _fc8 = ('#f85149' if _fc >= 5.0 else
-                    ('#d29922' if _fc >= 3.0 else '#3fb950'))
+            _fc8 = (TRAFFIC_RED if _fc >= 5.0 else
+                    (TRAFFIC_YELLOW if _fc >= 3.0 else TRAFFIC_GREEN))
             _fl8 = ('🔴 利率高位（>5%），緊縮壓力大' if _fc >= 5.0 else
                     ('⚠️ 中性偏緊（3-5%）' if _fc >= 3.0 else '✅ 寬鬆環境（<3%）'))
             _fdate8 = f" ({_m8_fed.get('date','')})" if _m8_fed.get('date') else ''
@@ -3938,7 +3940,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         if _m8_vix and _m8_vix.get('dates'):
             _vcur8 = _m8_vix.get('current', 0)
             _vma8  = _m8_vix.get('ma20', 0)
-            _vc8   = '#f85149' if _vcur8 >= 30 else ('#d29922' if _vcur8 >= 20 else '#3fb950')
+            _vc8   = TRAFFIC_RED if _vcur8 >= 30 else (TRAFFIC_YELLOW if _vcur8 >= 20 else TRAFFIC_GREEN)
             _vl8   = ('🚨 恐慌衝頂，強制空手' if _vcur8 >= 30 else
                       ('⚠️ 市場緊張，降低持倉' if _vcur8 >= 20 else '✅ 市場平靜'))
             import plotly.graph_objects as _go8
@@ -3947,10 +3949,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 x=_m8_vix['dates'], y=_m8_vix['values'],
                 mode='lines', line=dict(color='#58a6ff', width=1.5),
                 fill='tozeroy', fillcolor='rgba(88,166,255,0.08)', name='VIX'))
-            _vfig8.add_hline(y=25, line_dash='dash', line_color='#d29922', opacity=0.6,
-                             annotation_text='25 警戒', annotation_font_color='#d29922')
-            _vfig8.add_hline(y=30, line_dash='dash', line_color='#f85149', opacity=0.6,
-                             annotation_text='30 危機', annotation_font_color='#f85149')
+            _vfig8.add_hline(y=25, line_dash='dash', line_color=TRAFFIC_YELLOW, opacity=0.6,
+                             annotation_text='25 警戒', annotation_font_color=TRAFFIC_YELLOW)
+            _vfig8.add_hline(y=30, line_dash='dash', line_color=TRAFFIC_RED, opacity=0.6,
+                             annotation_text='30 危機', annotation_font_color=TRAFFIC_RED)
             _vfig8.add_annotation(x=_m8_vix['dates'][-1], y=_vcur8,
                                   text=f'<b>{_vcur8}</b>', showarrow=True, arrowhead=2,
                                   font=dict(color=_vc8, size=12),
@@ -3999,16 +4001,16 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ── v4.0 總經否決權 ─────────────────────────────────────
     _veto8 = []
     if _m8_vix and _m8_vix.get('current', 0) >= 30:
-        _veto8.append(('🚨', f'VIX={_m8_vix["current"]} ≥ 30：全球流動性危機，無視所有技術面買訊，強制空手！', '#f85149'))
+        _veto8.append(('🚨', f'VIX={_m8_vix["current"]} ≥ 30：全球流動性危機，無視所有技術面買訊，強制空手！', TRAFFIC_RED))
     if _m8_pmi and _m8_pmi.get('value', 55) < 48:
-        _veto8.append(('⚠️', f'🇹🇼 台灣 PMI={_m8_pmi["value"]} < 48：在地製造業需求急凍，若 SOX 仍漲為「無基之彈」，降低持股水位', '#d29922'))
+        _veto8.append(('⚠️', f'🇹🇼 台灣 PMI={_m8_pmi["value"]} < 48：在地製造業需求急凍，若 SOX 仍漲為「無基之彈」，降低持股水位', TRAFFIC_YELLOW))
     if _m8_cpi and _m8_cpi.get('yoy', 0) > 4.0:
-        _veto8.append(('⚠️', f'核心CPI={_m8_cpi["yoy"]:.1f}% > 4%：通膨嚴峻，外資提款風險升高，注意匯率變動', '#d29922'))
+        _veto8.append(('⚠️', f'核心CPI={_m8_cpi["yoy"]:.1f}% > 4%：通膨嚴峻，外資提款風險升高，注意匯率變動', TRAFFIC_YELLOW))
     if _m8_exp and _m8_exp.get('yoy', 0) < -5:
-        _veto8.append(('⚠️', f'外銷訂單 YoY={_m8_exp["yoy"]:.1f}%：連續衰退，股價與基本面嚴重背離，謹慎追高', '#d29922'))
+        _veto8.append(('⚠️', f'外銷訂單 YoY={_m8_exp["yoy"]:.1f}%：連續衰退，股價與基本面嚴重背離，謹慎追高', TRAFFIC_YELLOW))
     _crisis_buy = _m8_ndc and _m8_ndc.get('score', 25) <= 16
     if _crisis_buy:
-        _veto8.append(('💡', f'NDC燈號={_m8_ndc["score"]:.0f}分（藍燈）：實體景氣衰退但為左側交易黃金布局時機！低基期好股勇敢建倉', '#3fb950'))
+        _veto8.append(('💡', f'NDC燈號={_m8_ndc["score"]:.0f}分（藍燈）：實體景氣衰退但為左側交易黃金布局時機！低基期好股勇敢建倉', TRAFFIC_GREEN))
 
     if _veto8:
         _has_veto = any(e[0] != '💡' for e in _veto8)
@@ -4039,15 +4041,15 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         # ── 宏爺：VIX 總經否決權 ──────────────────────────────
         if _vix_now8 is not None:
             if _vix_now8 >= 30:
-                _hyc8 = '#f85149'
+                _hyc8 = TRAFFIC_RED
                 _hyi8 = f'VIX {_vix_now8:.1f} ≥ 30'
                 _hyc8t = '🔴 系統性風險爆發，觸發否決權！無視所有技術面多頭訊號，強制清倉，建議持股 0~10%，現金為王。'
             elif _vix_now8 >= 20:
-                _hyc8 = '#d29922'
+                _hyc8 = TRAFFIC_YELLOW
                 _hyi8 = f'VIX {_vix_now8:.1f}（20~30 警戒）'
                 _hyc8t = '🟡 波動率飆升，市場情緒轉恐慌。停止加槓桿，汰弱留強，持股上限壓縮在 30% 以下。'
             else:
-                _hyc8 = '#3fb950'
+                _hyc8 = TRAFFIC_GREEN
                 _hyi8 = f'VIX {_vix_now8:.1f} < 20（平靜期）'
                 _hyc8t = '🟢 全球風險情緒穩定，未觸發否決權。回歸個股籌碼面與基本面操作。'
             st.markdown(teacher_conclusion('弘爺', _hyi8, _hyc8t, color=_hyc8), unsafe_allow_html=True)
@@ -4061,17 +4063,17 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _m2b8 = float(_m1b8_info.get('m2_yoy', 0))
             _gap8 = round(_m1b8 - _m2b8, 2)
             if _gap8 >= 1.0:
-                _m1bc8 = '#3fb950'
+                _m1bc8 = TRAFFIC_GREEN
                 _m1bi8 = f'M1B-M2 Gap = +{_gap8:.2f}%（黃金交叉·熱錢狂潮）'
                 _m1bt8 = (f'🔥 資金動能強勁（M1B={_m1b8:.1f}% > M2={_m2b8:.1f}%），'
                           '熱錢湧入股市，積極作多強勢股。')
             elif _gap8 >= 0:
-                _m1bc8 = '#3fb950'
+                _m1bc8 = TRAFFIC_GREEN
                 _m1bi8 = f'M1B-M2 Gap = +{_gap8:.2f}%（資金溫和·中性擴張）'
                 _m1bt8 = (f'💧 資金動能溫和（M1B={_m1b8:.1f}% ≥ M2={_m2b8:.1f}%），'
                           '無失血風險，回歸個股基本面與籌碼面操作。')
             else:
-                _m1bc8 = '#d29922'
+                _m1bc8 = TRAFFIC_YELLOW
                 _m1bi8 = f'M1B-M2 Gap = {_gap8:.2f}%（死亡交叉·資金退潮）'
                 _m1bt8 = (f'📉 資金動能趨緩（M1B={_m1b8:.1f}% < M2={_m2b8:.1f}%），'
                           '資金轉向定存或匯出，減碼等待訊號確認。')
@@ -4087,25 +4089,25 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             if _exp_yoy8 is not None:
                 _exp_txt8 = f'外銷訂單 YoY={_exp_yoy8:+.1f}%（{_exp_dt8}）'
                 if _sql_b >= 15 and _exp_yoy8 >= 10:
-                    _sqc8  = '#f85149'
+                    _sqc8  = TRAFFIC_RED
                     _sqi8  = f'年線乖離 +{_sql_b:.1f}% × {_exp_txt8} → 🚀 有基之彈'
                     _sqc8t = ('🚀 有基之彈（主升段狂熱）：高估值由強勁出口基本面支撐，'
                               '資金面與基本面完美共振。順勢作多，但需以月線作為嚴格停損，'
                               '跌破月線即走，切勿因多頭情緒追漲加碼。')
                 elif _sql_b >= 15 and _exp_yoy8 < 0:
-                    _sqc8  = '#f85149'
+                    _sqc8  = TRAFFIC_RED
                     _sqi8  = f'年線乖離 +{_sql_b:.1f}% × {_exp_txt8} → ⚠️ 無基之彈'
                     _sqc8t = ('⚠️ 無基之彈（史詩級泡沫）：股價嚴重高估且出口動能衰退，'
                               '純粹資金炒作泡沫，均值回歸壓力極大。'
                               '全面出清高本夢比個股，啟動長線倉位停利，切勿追高。')
                 elif _sql_b >= 15:  # Export 0~10%
-                    _sqc8  = '#d29922'
+                    _sqc8  = TRAFFIC_YELLOW
                     _sqi8  = f'年線乖離 +{_sql_b:.1f}% × {_exp_txt8} → ⚡ 高估技術整理'
                     _sqc8t = ('⚡ 技術嚴重過熱，出口尚可但未爆發：高位持多需謹慎，'
                               '嚴設 ATR 動態停損，逢高獲利了結部分倉位，'
                               '等待出口數據確認是否升為「有基之彈」格局。')
                 elif _sql_b > 0 and _exp_yoy8 > 0:
-                    _sqc8  = '#3fb950'
+                    _sqc8  = TRAFFIC_GREEN
                     _sqi8  = f'年線乖離 +{_sql_b:.1f}% × {_exp_txt8} → 🟢 趨勢多頭'
                     _sqc8t = ('🟢 趨勢多頭（基本面支撐）：均線多頭發散且出口擴張，'
                               '可持股按原計畫操作，回歸個股財報與籌碼面選股，'
@@ -4131,15 +4133,15 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 _cli_txt8 = (f'CLI={_cli_8:.1f}（{"擴張" if _cli_8 >= 100 else "收縮"}）'
                              if _cli_8 is not None else 'CLI未知')
                 if _sql_b >= 15 and _cli_8 is not None and _cli_8 >= 100:
-                    _sqc8  = '#f85149'
+                    _sqc8  = TRAFFIC_RED
                     _sqi8  = f'年線乖離 +{_sql_b:.1f}% × {_cli_txt8}（CLI備援·有基之彈）'
                     _sqc8t = '🔥 技術嚴重過熱且 CLI 擴張，可順勢持多，嚴設月線停損。'
                 elif _sql_b >= 15:
-                    _sqc8  = '#f85149'
+                    _sqc8  = TRAFFIC_RED
                     _sqi8  = f'年線乖離 +{_sql_b:.1f}% × {_cli_txt8}（CLI備援·無基之彈）'
                     _sqc8t = '⚠️ 史詩級過熱，外銷訂單無資料，謹慎追高，嚴防崩盤。'
                 elif _sql_b >= 0:
-                    _sqc8  = '#3fb950'
+                    _sqc8  = TRAFFIC_GREEN
                     _sqi8  = f'年線乖離 +{_sql_b:.1f}%（趨勢多頭） {_cli_txt8}'
                     _sqc8t = '🟢 均線多頭，可持股操作，等待外銷訂單資料補充判斷。'
                 elif _cli_8 is not None and _cli_8 > 100:
@@ -4204,7 +4206,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                         cond_badge(_cG, 'G SOX/NVDA點火'))
 
             if not _ring1_pass:
-                _atk_color = '#f85149'
+                _atk_color = TRAFFIC_RED
                 _atk_grade = '🚫 禁止攻擊'
                 _atk_pct = '持股 0~20%'
                 _atk_txt = ('第一環未通過（VIX過高 或 外資重兵空單）：'
@@ -4216,13 +4218,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 _atk_txt = ('三環齊備、資金面與基本面完美共振：天時地利人和。'
                             '勇敢追擊強勢突破股，重壓半導體主流。')
             elif _ring2_cnt >= 1 and _ring3_cnt >= 1:
-                _atk_color = '#f85149'
+                _atk_color = TRAFFIC_RED
                 _atk_grade = '🔥 A 級強勢進攻'
                 _atk_pct = '持股 60~80%'
                 _atk_txt = ('標準順風局：第二環（燃料）、第三環（點火）各至少一條通過。'
                             '順勢佈局，汰弱留強，跌破 10MA 停損。')
             elif _ring3_cnt >= 1:
-                _atk_color = '#d29922'
+                _atk_color = TRAFFIC_YELLOW
                 _atk_grade = '🛡️ B 級試探性建倉'
                 _atk_pct = '持股 30~50%'
                 _atk_txt = ('大環境無足夠燃料，但短線有點火訊號。'
@@ -4273,13 +4275,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _cli_str = (f'OECD CLI={_ai_cli:.2f}' if _ai_cli is not None else
                     f'台灣 PMI={_ai_pmi:.1f}' if _ai_pmi is not None else '')
         if _cycle_exp and _ai_exp >= 10:
-            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣擴張強勢期 📈', '#f85149', 'bull'
+            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣擴張強勢期 📈', TRAFFIC_RED, 'bull'
             _ai1_desc = f'{_cli_str}（擴張）× {_exp_str}（強勁需求）— 主升段格局，基本面充分支撐'
         elif _cycle_exp and _ai_exp > 0:
-            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣溫和擴張 🟢', '#3fb950', 'bull'
+            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣溫和擴張 🟢', TRAFFIC_GREEN, 'bull'
             _ai1_desc = f'{_cli_str}（擴張）× {_exp_str}— 穩步復甦，基本面有撐，持股安全'
         elif _cycle_exp and _ai_exp <= 0:
-            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣高峰震盪 ⚡', '#d29922', 'peak'
+            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣高峰震盪 ⚡', TRAFFIC_YELLOW, 'peak'
             _ai1_desc = f'{_cli_str}（微擴張）× {_exp_str}— 高位整理，需求疲軟，留意反轉訊號'
         elif not _cycle_exp and _ai_exp >= 5:
             _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣觸底回升 💎', '#58a6ff', 'recovery'
@@ -4288,12 +4290,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣收縮期 📉', '#8b949e', 'bear'
             _ai1_desc = f'{_cli_str}（收縮）× {_exp_str}— 多看少做，等待出口數據翻正'
         else:
-            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣整理期 🟡', '#d29922', 'neutral'
+            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣整理期 🟡', TRAFFIC_YELLOW, 'neutral'
             _ai1_desc = f'{_cli_str} × {_exp_str}— 方向待確認，保守持股'
     elif _cycle_ref is not None:
         _cli_str = f'OECD CLI={_ai_cli:.2f}' if _ai_cli is not None else f'台灣 PMI={_ai_pmi:.1f}'
         _ai1_lbl = '景氣擴張（出口待確認）' if _cycle_exp else '景氣趨緩（出口待確認）'
-        _ai1_clr = '#3fb950' if _cycle_exp else '#d29922'
+        _ai1_clr = TRAFFIC_GREEN if _cycle_exp else TRAFFIC_YELLOW
         _ai1_cyc = 'bull' if _cycle_exp else 'neutral'
         _ai1_desc = f'{_cli_str} — 外銷訂單數據載入中'
 
@@ -4309,16 +4311,16 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _r3_cnt = int(_r3_sox) + int(_r3_tw)
         _fuel_str = ((' 出口+' if _r2_exp else '') + (' M1B-M2+' if _r2_gap else '')).strip(' +') or '—'
         if not _r1_ok:
-            _ai2_lbl, _ai2_clr = '⛔ 防禦模式 持股0~20%', '#f85149'
+            _ai2_lbl, _ai2_clr = '⛔ 防禦模式 持股0~20%', TRAFFIC_RED
             _ai2_desc = f'VIX={_ai_vix:.1f}≥20，大環境風險偏高，現金為王，等待 VIX<20 才考慮進場'
         elif _r2_cnt >= 2 and _r3_cnt >= 1:
             _ai2_lbl, _ai2_clr = '🚀 積極進攻 持股80~100%', '#f0e040'
             _ai2_desc = f'VIX={_ai_vix:.1f}安全 × 燃料充足（{_fuel_str}）× 點火訊號啟動 — 三環齊備，重壓主流'
         elif _r2_cnt >= 1 and _r3_cnt >= 1:
-            _ai2_lbl, _ai2_clr = '🔥 標準多頭 持股60~80%', '#f85149'
+            _ai2_lbl, _ai2_clr = '🔥 標準多頭 持股60~80%', TRAFFIC_RED
             _ai2_desc = f'VIX={_ai_vix:.1f}安全，燃料（{_fuel_str}）有效，順勢佈局強勢個股，跌破10MA停損'
         elif _r3_cnt >= 1:
-            _ai2_lbl, _ai2_clr = '🛡️ 試探建倉 持股30~50%', '#d29922'
+            _ai2_lbl, _ai2_clr = '🛡️ 試探建倉 持股30~50%', TRAFFIC_YELLOW
             _ai2_desc = '短線點火訊號存在但燃料不足，打帶跑策略，見好就收，嚴設停損'
         else:
             _ai2_lbl, _ai2_clr = '⏸️ 保守觀望 持股30%以下', '#8b949e'
@@ -4329,16 +4331,16 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     if _ai_gap is not None:
         _gap_str = f'M1B={_ai_m1b:.1f}% M2={_ai_m2:.1f}% Gap={_ai_gap:+.2f}%'
         if _ai_gap >= 2.0:
-            _ai3_lbl, _ai3_clr = '🔥 熱錢大量流入股市', '#f85149'
+            _ai3_lbl, _ai3_clr = '🔥 熱錢大量流入股市', TRAFFIC_RED
             _ai3_desc = f'{_gap_str} — 黃金交叉大幅擴散，投機資金湧入，活絡貨幣遠超廣義貨幣'
         elif _ai_gap >= 1.0:
-            _ai3_lbl, _ai3_clr = '✅ 資金動能轉強', '#3fb950'
+            _ai3_lbl, _ai3_clr = '✅ 資金動能轉強', TRAFFIC_GREEN
             _ai3_desc = f'{_gap_str} — 活絡資金超越廣義貨幣，熱錢進場訊號確立，行情可期'
         elif _ai_gap >= 0:
-            _ai3_lbl, _ai3_clr = '🟡 資金溫和偏多', '#d29922'
+            _ai3_lbl, _ai3_clr = '🟡 資金溫和偏多', TRAFFIC_YELLOW
             _ai3_desc = f'{_gap_str} — M1B微幅領先，資金偏多但動能尚未爆發，需等待 Gap≥1% 確認'
         elif _ai_gap > -1.0:
-            _ai3_lbl, _ai3_clr = '⚠️ 資金略偏保守', '#d29922'
+            _ai3_lbl, _ai3_clr = '⚠️ 資金略偏保守', TRAFFIC_YELLOW
             _ai3_desc = f'{_gap_str} — M2相對偏高，部分資金仍停留在定存，股市吸引力不足'
         else:
             _ai3_lbl, _ai3_clr = '📉 資金明顯外逃', '#8b949e'
@@ -4357,22 +4359,22 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _sox_s   = f' SOX={_ai_sox:+.1f}%' if _ai_sox else ''
         _vma_s   = f' MA20={_ai_vma:.1f}' if _ai_vma else ''
         if _ai_vix < 20 and _cpi_ok and (_ai_sox >= 1.5 or _ai_nvda >= 2.0):
-            _ai4_lbl, _ai4_clr = '🚀 美股強勢，科技領漲', '#f85149'
+            _ai4_lbl, _ai4_clr = '🚀 美股強勢，科技領漲', TRAFFIC_RED
             _ai4_desc = f'VIX={_ai_vix:.1f}（恐慌低）{_sox_s}（半導體點火）{_cpi_s} — 台股跟漲機率高，可積極佈局科技'
         elif _ai_vix < 20 and _cpi_ok:
-            _ai4_lbl, _ai4_clr = '🟢 美股平穩，降息預期支撐', '#3fb950'
+            _ai4_lbl, _ai4_clr = '🟢 美股平穩，降息預期支撐', TRAFFIC_GREEN
             _ai4_desc = f'VIX={_ai_vix:.1f}{_vma_s}（安全）{_cpi_s} — 無系統性風險，有利個股選股表現'
         elif _ai_vix < 20 and _cpi_wrm:
-            _ai4_lbl, _ai4_clr = '🟡 美股震盪，通膨黏性制約', '#d29922'
+            _ai4_lbl, _ai4_clr = '🟡 美股震盪，通膨黏性制約', TRAFFIC_YELLOW
             _ai4_desc = f'VIX={_ai_vix:.1f}尚可但{_cpi_s}偏高 — Fed降息預期受壓，資金轉向謹慎，避免過度加槓桿'
         elif _ai_vix < 20 and _cpi_hot:
-            _ai4_lbl, _ai4_clr = '⚠️ 美股承壓，Fed鷹派升溫', '#d29922'
+            _ai4_lbl, _ai4_clr = '⚠️ 美股承壓，Fed鷹派升溫', TRAFFIC_YELLOW
             _ai4_desc = f'VIX={_ai_vix:.1f}{_cpi_s}超標 — 高利率環境延續，外資提款風險升高，注意匯率走勢'
         elif _ai_vix < 30:
-            _ai4_lbl, _ai4_clr = '🟡 美股波動加劇，謹慎操作', '#d29922'
+            _ai4_lbl, _ai4_clr = '🟡 美股波動加劇，謹慎操作', TRAFFIC_YELLOW
             _ai4_desc = f'VIX={_ai_vix:.1f}（警戒區間 20~30）{_vma_s} — 市場情緒不確定，控制倉位，勿追高'
         else:
-            _ai4_lbl, _ai4_clr = '🔴 美股恐慌模式，流動性危機', '#f85149'
+            _ai4_lbl, _ai4_clr = '🔴 美股恐慌模式，流動性危機', TRAFFIC_RED
             _ai4_desc = f'VIX={_ai_vix:.1f}≥30 — 全球流動性急凍，強制防禦，任何技術面買訊均視為誘多'
 
     # ── ⑤ 結論 ──────────────────────────────────────────────────
@@ -4417,11 +4419,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                        int(_ai_gap is not None and _ai_gap < 0) +
                        int(_ai_vix is not None and _ai_vix >= 30))
         if _bull_score >= 3 and _bear_score == 0:
-            _ai5_clr, _ai5_icon = '#3fb950', '✅ 整體偏多，積極操作'
+            _ai5_clr, _ai5_icon = TRAFFIC_GREEN, '✅ 整體偏多，積極操作'
         elif _bear_score >= 2 or (_ai_vix is not None and _ai_vix >= 30):
-            _ai5_clr, _ai5_icon = '#f85149', '🚨 整體偏空，防禦為主'
+            _ai5_clr, _ai5_icon = TRAFFIC_RED, '🚨 整體偏空，防禦為主'
         elif _bull_score >= 2:
-            _ai5_clr, _ai5_icon = '#d29922', '🟡 溫和偏多，精選個股'
+            _ai5_clr, _ai5_icon = TRAFFIC_YELLOW, '🟡 溫和偏多，精選個股'
         else:
             _ai5_clr, _ai5_icon = '#8b949e', '⏸️ 中性觀望，等待訊號'
     else:
@@ -4667,10 +4669,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _pivot_lines = []
                     _bull_n = _bear_n = _warn_n = 0
                     for _lab, _ic, _co, _det in _pivot_sigs_ai:
-                        if _co == '#3fb950':
+                        if _co == TRAFFIC_GREEN:
                             _bull_n += 1
                             _kind = '🟢 多頭'
-                        elif _co == '#f85149':
+                        elif _co == TRAFFIC_RED:
                             _bear_n += 1
                             _kind = '🔴 空頭'
                         else:
@@ -4710,8 +4712,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _cash_pct = 100 - _exp_pct
         _ms_ts = _ms.get('timestamp', '')
 
-        _srl_clr = {'安全': '#3fb950', '警告': '#d29922', '危險': '#f85149'}.get(_srl, '#8b949e')
-        _reg_clr = {'多頭': '#3fb950', '震盪': '#d29922', '空頭': '#f85149'}.get(_regime, '#8b949e')
+        _srl_clr = {'安全': TRAFFIC_GREEN, '警告': TRAFFIC_YELLOW, '危險': TRAFFIC_RED}.get(_srl, '#8b949e')
+        _reg_clr = {'多頭': TRAFFIC_GREEN, '震盪': TRAFFIC_YELLOW, '空頭': TRAFFIC_RED}.get(_regime, '#8b949e')
 
         st.markdown(
             f'<div style="background:#0d1117;border:2px solid {_srl_clr};'
