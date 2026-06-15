@@ -603,6 +603,13 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         except Exception as _e_msl:
             print(f'[macro_stock_link] {type(_e_msl).__name__}: {_e_msl}')
 
+        # ── v18.207 I5：個股 ↔ ETF 投組 / 組合比較 跨 Tab 持倉聯動 banner ──
+        try:
+            from portfolio_linkage import render_stock_portfolio_membership
+            render_stock_portfolio_membership(st.session_state, sid2, name2)
+        except Exception as _e_pfl:
+            print(f'[portfolio_linkage] {type(_e_pfl).__name__}: {_e_pfl}')
+
         # ══ 即時價格 + 趨勢儀表板 ════════════════════════════════
         if df2 is not None and not df2.empty and len(df2) >= 20:
             _p_now   = float(df2['close'].iloc[-1])
