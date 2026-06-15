@@ -596,6 +596,13 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                 f'　— 按右上「🔄 強制重抓」可重試'
                 f'</div>', unsafe_allow_html=True)
 
+        # ── v18.204 I4：個股 ↔ 總經 regime 聯動（讀總經 Tab mkt_info，跨 Tab 訊號）──
+        try:
+            from macro_stock_link import render_macro_stock_backdrop
+            render_macro_stock_backdrop(st.session_state)
+        except Exception as _e_msl:
+            print(f'[macro_stock_link] {type(_e_msl).__name__}: {_e_msl}')
+
         # ══ 即時價格 + 趨勢儀表板 ════════════════════════════════
         if df2 is not None and not df2.empty and len(df2) >= 20:
             _p_now   = float(df2['close'].iloc[-1])
