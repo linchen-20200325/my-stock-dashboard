@@ -493,6 +493,47 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                             if _tip_i else f'<b style="color:#c9d1d9;">{_INST_LABEL.get(_is, _is)}</b>')
                 _ms_html = (f'<b style="color:#c9d1d9;" title="{_tip_m}">{_MARGIN_LABEL.get(_ms, _ms)}</b>'
                             if _tip_m else f'<b style="color:#c9d1d9;">{_MARGIN_LABEL.get(_ms, _ms)}</b>')
+
+                # v18.202 E2：財報三段資料源 chip（月營收 / 季財報 / 季財報-extra）
+                # rev2 / qtr2 / qtr_extra2 的 .attrs 由 data_loader 寫入，過 @st.cache_data
+                # pickle 保留（app.py wrapper 未轉換 df）。None/empty → missing。
+                def _fin_attrs(_df, _key):
+                    _a = (_df.attrs or {}) if (_df is not None and hasattr(_df, 'attrs')) else {}
+                    _src = str(_a.get(f'{_key}_src', '') or '')
+                    if (_df is None) or (hasattr(_df, 'empty') and _df.empty):
+                        _src = 'missing'
+                    elif not _src:
+                        _src = 'unknown'
+                    return _src, str(_a.get(f'{_key}_fetched_at', '') or '')
+                _rev_src, _rev_fa = _fin_attrs(rev2, 'rev')
+                _qtr_src, _qtr_fa = _fin_attrs(qtr2, 'qtr')
+                _qe_src, _qe_fa = _fin_attrs(qtr_extra2, 'qtr_extra')
+                _REVENUE_LABEL = {
+                    'finmind': '🟢 FinMind', 'mops': '🟠 MOPS(備援)',
+                    'missing': '🔴 缺失', 'unknown': '⬜ 未知',
+                }
+                _QTR_LABEL = {
+                    'finmind_rest': '🟢 FinMind', 'finmind_sdk': '🟠 FinMind SDK(備援)',
+                    'yfinance': '🟠 yfinance(備援)', 'missing': '🔴 缺失', 'unknown': '⬜ 未知',
+                }
+                _QTR_EXTRA_LABEL = {
+                    'finmind': '🟢 FinMind', 'finmind_mops': '🟠 FinMind+MOPS補',
+                    'missing': '🔴 缺失', 'unknown': '⬜ 未知',
+                }
+                def _fin_chip(_src, _fa, _label_map, _label):
+                    _parts = [_label.upper()]
+                    if _src and _src not in ('unknown', 'missing'):
+                        _parts.append(f'源 {_src}')
+                    if _fa:
+                        _parts.append(f'抓取於 {_fa}')
+                    _tip = ' ｜ '.join(_parts) if len(_parts) > 1 else ''
+                    _txt = _label_map.get(_src, _src)
+                    if _tip:
+                        return f'<b style="color:#c9d1d9;" title="{_tip}">{_txt}</b>'
+                    return f'<b style="color:#c9d1d9;">{_txt}</b>'
+                _rev_html = _fin_chip(_rev_src, _rev_fa, _REVENUE_LABEL, '月營收')
+                _qtr_html = _fin_chip(_qtr_src, _qtr_fa, _QTR_LABEL, '季財報')
+                _qe_html = _fin_chip(_qe_src, _qe_fa, _QTR_EXTRA_LABEL, '季財報extra')
                 st.markdown(
                     f'<div style="background:#0d1117;border-left:4px solid {_age_color};'
                     f'border-radius:4px;padding:6px 12px;margin-bottom:6px;font-size:11px;color:#8b949e;">'
@@ -503,16 +544,31 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                     f'📡 K線：{_ps_html}　'
                     f'🏦 籌碼：{_is_html}　'
                     f'💰 融資：{_ms_html}'
+                    f'<br/>'
+                    f'📈 月營收：{_rev_html}　'
+                    f'📊 季財報：{_qtr_html}　'
+                    f'📑 季財報extra：{_qe_html}'
                     f'</div>', unsafe_allow_html=True)
                 _degraded = (
                     _ps in ('finmind_sdk', 'finmind_raw', 'yahoo_fallback')
                     or _is in ('finmind_raw', 'twse', 'tpex', 'missing')
                     or _ms == 'missing'
                 )
+                # v18.202 E2：財報三段降級也納入警示
+                _fin_degraded = (
+                    _rev_src in ('mops', 'missing')
+                    or _qtr_src in ('finmind_sdk', 'yfinance', 'missing')
+                    or _qe_src in ('finmind_mops', 'missing')
+                )
                 if _degraded:
                     st.caption(
                         '🟠 主資料來源失敗已降級，技術指標 / 籌碼 / 融資數值可能與正常情況不同；'
                         '建議按右側 🔄 強制重抓 重試主源。'
+                    )
+                if _fin_degraded:
+                    st.caption(
+                        '🟠 財報資料（月營收 / 季財報）部分走備援源或缺失，EPS / 營收 / 合約負債 '
+                        '數值可能與主源略有差異；hover chip 看資料源與抓取時間。'
                     )
         with _fresh_cols[1]:
             if st.button('🔄 強制重抓', key='t2_force_refresh',

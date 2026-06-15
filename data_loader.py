@@ -38,6 +38,24 @@ def _capture_finmind_meta(src_key: str, j_response: dict) -> None:
         _FINMIND_META[src_key] = {"last_update": "", "fetched_at": ""}
 
 
+def _stamp_finreport_attrs(df, src_key: str, src_val: str):
+    """v18.202 E2：把財報資料源 + 抓取時戳寫進 df.attrs。
+
+    鏡像 v18.200 B1（K線/籌碼/融資 src chip）+ v18.201 D2（hover tooltip）。
+    財報三段 fetcher 回傳 (df, err) tuple 且過 @st.cache_data，但 pandas
+    DataFrame.attrs 直接 pickle 可保留（app.py wrapper 未做 df 轉換），
+    故在 data_loader 寫入即可，無需 app.py attrs.update（與 fetch_price_data
+    走 .tail().reset_index() 掉 attrs 的情況不同）。
+    """
+    try:
+        df.attrs[f"{src_key}_src"] = src_val
+        df.attrs[f"{src_key}_fetched_at"] = datetime.datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        pass
+    return df
+
+
 def _bps_dl():
     try:
         from tw_stock_data_fetcher import build_proxy_session as _b
@@ -760,6 +778,7 @@ class StockDataLoader:
         start_date = end_date - _dt_rv.timedelta(days=1095)
         start_str  = start_date.strftime('%Y-%m-%d')
         df_revenue = None
+        _rev_src = 'unknown'   # v18.202 E2：月營收資料源（finmind / mops / missing）
 
         # ── 方案0: FinMind TaiwanStockMonthRevenue（優先，MOPS year-file全部404）
         if _tok and df_revenue is None:
@@ -780,6 +799,7 @@ class StockDataLoader:
                                              _df0r['revenue_month'].astype(str).str.zfill(2)+'-01')
                         _df0r['date'] = _pd_rv.to_datetime(_df0r['date'])
                         df_revenue = _df0r.sort_values('date').reset_index(drop=True)
+                        _rev_src = 'finmind'   # v18.202 E2
                         print(f'[FM-Rev0] {stock_id}: ✅ {len(df_revenue)}筆')
             except Exception as _e0r:
                 print(f'[FM-Rev0] {stock_id}: ❌ {type(_e0r).__name__}: {_e0r}')
@@ -803,6 +823,7 @@ class StockDataLoader:
                                               _dffm0['revenue_month'].astype(str).str.zfill(2)+'-01')
                         _dffm0['date'] = _pd_rv.to_datetime(_dffm0['date'])
                         df_revenue = _dffm0.sort_values('date').reset_index(drop=True)
+                        _rev_src = 'finmind'   # v18.202 E2
                         print(f'[FM-Rev] {stock_id}: ✅ {len(df_revenue)}筆')
             except Exception as _efm0:
                 print(f'[FM-Rev] {stock_id}: ❌ {type(_efm0).__name__}: {_efm0}')
@@ -850,6 +871,7 @@ class StockDataLoader:
                         if _mops_rows2:
                             df_revenue = _pd_mops.DataFrame(_mops_rows2)
                             df_revenue['date'] = _pd_mops.to_datetime(df_revenue['date'])
+                            _rev_src = 'mops'   # v18.202 E2
                             print(f'[MOPS-Rev] {stock_id}: ✅ {len(df_revenue)} 筆')
                             break
                     except: continue
@@ -887,6 +909,7 @@ class StockDataLoader:
                         _df['date'] = _pd_rv.to_datetime(_df['date'])
                         _df = _df.sort_values('date')
                         df_revenue = _df
+                        _rev_src = 'finmind'   # v18.202 E2
                         print(f'[FM-Rev] {stock_id}: ✅ {len(df_revenue)} 筆')
             except Exception as _eF:
                 print(f'[FM-Rev] {stock_id}: {_eF}')
@@ -925,6 +948,7 @@ class StockDataLoader:
                 if _mops_rows:
                     df_revenue = _pd_rv.DataFrame(_mops_rows)
                     df_revenue['date'] = _pd_rv.to_datetime(df_revenue['date'])
+                    _rev_src = 'mops'   # v18.202 E2
                     print(f'[MOPS-Rev] {stock_id}: ✅ {len(df_revenue)} 筆')
             except Exception as _eM:
                 print(f'[MOPS-Rev] {stock_id}: {_eM}')
@@ -933,6 +957,7 @@ class StockDataLoader:
             # 計算 YoY
             if 'revenue' in df_revenue.columns:
                 df_revenue['yoy'] = df_revenue['revenue'].pct_change(12) * 100
+            _stamp_finreport_attrs(df_revenue, 'rev', _rev_src)   # v18.202 E2
             return df_revenue, None
         return None, '月營收：所有來源均失敗（MOPS/FinMind）'
 
@@ -951,6 +976,7 @@ class StockDataLoader:
 
             # 先試 FinMind REST API
             df_fin = None
+            _qtr_src = 'unknown'   # v18.202 E2：季財報資料源（finmind_rest / finmind_sdk / yfinance / missing）
             try:
                 import os as _os_q; import requests as _rq_q
                 _tok_q = _os_q.environ.get('FINMIND_TOKEN', '')
@@ -975,6 +1001,7 @@ class StockDataLoader:
                         print(f'[季財報REST/{_ds_q}] {_eq2}')
                 if _df_q_tmp is not None and not _df_q_tmp.empty:
                     df_fin = _df_q_tmp
+                    _qtr_src = 'finmind_rest'   # v18.202 E2
             except Exception as _eq:
                 print(f'[季財報REST] {_eq}')
 
@@ -983,6 +1010,8 @@ class StockDataLoader:
                 try:
                     df_fin = _self.dl.taiwan_stock_financial_statement(
                         stock_id=stock_id, start_date=start_str)
+                    if df_fin is not None and not df_fin.empty:
+                        _qtr_src = 'finmind_sdk'   # v18.202 E2
                 except Exception: pass
 
             if df_fin is None or df_fin.empty:
@@ -1014,6 +1043,7 @@ class StockDataLoader:
                                                   'origin_name': '毛利', 'stock_id': stock_id})
                         if _rows_yf:
                             df_fin = pd.DataFrame(_rows_yf)
+                            _qtr_src = 'yfinance'   # v18.202 E2
                             print(f"[yfinance QTR] {stock_id}: ✅ {len(df_fin)}筆 (含毛利:{_gp_row is not None})")
                 except Exception as _eYF_q:
                     print(f"[yfinance QTR] {stock_id}: {_eYF_q}")
@@ -1361,6 +1391,7 @@ class StockDataLoader:
                 neg_data = df_quarterly[df_quarterly['營收'] < 0][['季度標籤', '營收']]
                 print(neg_data.to_string(index=False))
 
+            _stamp_finreport_attrs(df_quarterly, 'qtr', _qtr_src)   # v18.202 E2
             return df_quarterly, None
 
         except Exception as e:
@@ -1376,6 +1407,7 @@ class StockDataLoader:
         """
         try:
             import os as _os_bscf, datetime as _dt_bscf
+            _qtr_extra_src = 'unknown'   # v18.202 E2：季財報-extra 資料源（finmind / finmind_mops / missing）
             _tok = _os_bscf.environ.get('FINMIND_TOKEN', '')
             _start = (_dt_bscf.date.today() - _dt_bscf.timedelta(days=365 * 3)).strftime('%Y-%m-%d')
             _hdrs = {'Authorization': f'Bearer {_tok}'} if _tok else {}
@@ -1407,6 +1439,7 @@ class StockDataLoader:
 
             if not _bs_rows and not _cf_rows:
                 return None, f"{stock_id} BS+CF：FinMind 無資料"
+            _qtr_extra_src = 'finmind'   # v18.202 E2：BS/CF 主源命中
 
             # ── 彙整所有出現的季度日期 ──────────────────────────────
             _all_dates = sorted(set(list(_bs_map.keys()) + list(_cf_map.keys())))
@@ -1537,6 +1570,7 @@ class StockDataLoader:
                             _cl_mops = float(sum(_vals))
                     if _cl_mops == _cl_mops and _cl_mops > 0:
                         df_extra.loc[df_extra.index[-1], '合約負債'] = _cl_mops
+                        _qtr_extra_src = 'finmind_mops'   # v18.202 E2：MOPS 補合約負債
                         print(f'[BS/CF/MOPS] {stock_id} {_last_lbl}: ✅ CL={_cl_mops:.0f} (備援命中)')
                     else:
                         print(f'[BS/CF/MOPS] {stock_id} {_last_lbl}: ⚠️ MOPS 亦無合約負債科目（可能此股無此項）')
@@ -1544,6 +1578,7 @@ class StockDataLoader:
                 print(f'[BS/CF/MOPS] ⚠️ {type(_e_mops).__name__}: {_e_mops}')
 
             print(f'[BS/CF] {stock_id}: ✅ {len(df_extra)} 季 CL={df_extra["合約負債"].notna().sum()} INV={df_extra["存貨"].notna().sum()} CX={df_extra["資本支出"].notna().sum()} DISP={df_extra["處分資產現金流入"].notna().sum()}')
+            _stamp_finreport_attrs(df_extra, 'qtr_extra', _qtr_extra_src)   # v18.202 E2
             return df_extra, None
 
         except Exception as _e_bscf:
