@@ -469,25 +469,16 @@ def fetch_single(symbol, period="60d"):
     _sym_list = [symbol]
     if symbol in ('DX-Y.NYB', 'DX=F'):
         _sym_list = ['DX-Y.NYB', 'DX=F', 'UUP']  # NYB→期貨→ETF
-    # proxy 環境注入
+    # v18.209 K5：改走 yf_proxy.cached_history（內含 proxy env + st.cache_data 1h），
+    # 加 pkl 30min cache 兩層保護 → 跨 process 重啟存活 + 同 process 內秒讀。
     try:
-        from tw_stock_data_fetcher import _load_proxy_config as _lpc_fs
-        _px_fs = ((_lpc_fs() or {}).get('https') or (_lpc_fs() or {}).get('http') or None)
-    except Exception:
-        _px_fs = None
-    _ek_fs = ('HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy')
-    _bak_fs = {k: _os2.environ.get(k) for k in _ek_fs}
-    if _px_fs:
-        for k in _ek_fs: _os2.environ[k] = _px_fs
-    try:
-        import yfinance as yf
+        from yf_proxy import cached_history as _yp_hist
         h = None
         for _sym in _sym_list:
-            try:
-                _h = yf.Ticker(_sym).history(period=period)
-                if _h is not None and not _h.empty:
-                    h = _h; break
-            except: continue
+            _h = _yp_hist(_sym, period=period)
+            if _h is not None and not _h.empty:
+                h = _h
+                break
         if h is None or h.empty: return None
         h.index = pd.DatetimeIndex(h.index).tz_localize(None)
         h.columns = [c.lower().replace(' ','_') for c in h.columns]
@@ -500,10 +491,8 @@ def fetch_single(symbol, period="60d"):
         return h
     except Exception as e:
         print(f'[yf:{symbol}] {e}'); return None
-    finally:
-        for k, v in _bak_fs.items():
-            if v is None: _os2.environ.pop(k, None)
-            else: _os2.environ[k] = v
+    # v18.209 K5：原 finally env restore 移除，proxy_env 由 yf_proxy 內 contextmanager 處理
+
 
 def fetch_flow_snapshot(period="2y"):
     """全球資金流向所需的區域 / 跨資產 ETF 收盤序列：並行抓取 + /tmp pickle 快取 30 分。
