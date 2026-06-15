@@ -1,4 +1,4 @@
-"""v18.203 F2：Sidebar 全局資料健康總覽（鏡像 Fund 端 v19.63 F）。
+"""v18.205 G2：Sidebar 全局資料健康總覽（鏡像 Fund 端 v19.63 F）。
 
 把散落各 Tab 的資料新鮮度（個股 K線/籌碼/融資/財報六源 + 總經羅盤）聚合到
 sidebar，讓 user 一眼看出哪些資料源已過期、該按強制刷新。
@@ -161,3 +161,74 @@ def render_sidebar_data_health(session_state) -> None:
     )
     if _headline in ("🔴", "🟠"):
         st.caption("🟠 部分資料偏舊 / 走備援源，可按上方「🔄 強制刷新數據」重抓")
+        _render_data_health_ai(_lines)
+
+
+def _call_gemini_brief(prompt: str) -> str:
+    """v18.205 G2：最小 Gemini 呼叫 helper（鏡像 ai_engine.py 多模型嘗試，max_tokens=500）。"""
+    try:
+        import os
+        import requests as _rq
+        _key = ""
+        try:
+            _key = st.secrets.get("GEMINI_API_KEY", "") or ""
+        except Exception:
+            pass
+        if not _key:
+            _key = os.environ.get("GEMINI_API_KEY", "")
+        if not _key:
+            return "⚠️ 未設定 GEMINI_API_KEY"
+        _models = [
+            "gemini-2.5-flash", "gemini-2.0-flash-exp",
+            "gemini-1.5-flash-latest", "gemini-1.5-flash",
+        ]
+        for _m in _models:
+            try:
+                _r = _rq.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{_m}:generateContent",
+                    params={"key": _key},
+                    json={"contents": [{"parts": [{"text": prompt}]}],
+                          "generationConfig": {"temperature": 0.3, "maxOutputTokens": 500}},
+                    timeout=30,
+                )
+                if _r.status_code == 200:
+                    return _r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                if _r.status_code == 404:
+                    continue
+            except Exception:
+                continue
+    except Exception as _e:
+        return f"⚠️ AI 解讀失敗：{type(_e).__name__}"
+    return "⚠️ AI 服務暫時不可用"
+
+
+def _render_data_health_ai(lines: list) -> None:
+    """v18.205 G2：資料異常 AI 解讀（按需觸發，控制 API 成本）。
+
+    僅在 sidebar 資料健康偏舊（🔴/🟠）時提供按鈕；按下才呼叫 Gemini，
+    結果存 session_state 避免重複呼叫。零自動 API 消耗。
+    """
+    _AI_KEY = "_data_health_ai_resp"
+    if st.button("🤖 AI 解讀資料異常", key="btn_data_health_ai",
+                 use_container_width=True,
+                 help="按需呼叫 Gemini 解釋哪些資料偏舊 / 失敗 + 建議動作"
+                      "（消耗 API 額度，點了才打）"):
+        _ctx = "；".join(str(x) for x in (lines or []))
+        _prompt = (
+            "你是股票戰情室的資料健康助理。以下是面板各資料源的新鮮度狀態：\n"
+            f"{_ctx}\n\n"
+            "請用繁體中文、3-4 句白話，說明：(1) 哪些資料可能偏舊或抓取失敗；"
+            "(2) 最可能原因（API 額度用盡 / 網路不通 / FinMind 上游延遲）；"
+            "(3) 建議動作。直接講重點，不要客套或重複題目。"
+        )
+        with st.spinner("🤖 AI 解讀中…"):
+            _resp = _call_gemini_brief(_prompt)
+        st.session_state[_AI_KEY] = _resp
+    _resp = st.session_state.get(_AI_KEY)
+    if _resp:
+        st.markdown(
+            f"<div style='background:#161b22;border:1px solid #30363d;"
+            f"border-radius:6px;padding:8px 10px;margin-top:4px;font-size:11px;"
+            f"color:#c9d1d9;line-height:1.6'>🤖 {_resp}</div>",
+            unsafe_allow_html=True,
+        )
