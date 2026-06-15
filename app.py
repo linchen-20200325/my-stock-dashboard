@@ -1094,6 +1094,14 @@ with st.sidebar:
         st.rerun()
     st.markdown('---')
 
+    # ── v18.203 F2：全局資料健康總覽（聚合個股六源 + 總經羅盤 → 一眼看哪舊）──
+    try:
+        from sidebar_health import render_sidebar_data_health
+        render_sidebar_data_health(st.session_state)
+    except Exception as _e_sbh:
+        print(f'[sidebar_health] {type(_e_sbh).__name__}: {_e_sbh}')
+    st.markdown('---')
+
 # 主標題
 st.markdown(
     '<div style="display:flex;align-items:center;gap:10px;padding:4px 0 8px;">'    '<span style="font-size:22px;font-weight:900;color:#e6edf3;">&#128202; 台股 AI 戰情室</span>'    '<span style="font-size:10px;color:#484f58;background:#161b22;border-radius:10px;padding:2px 8px;">v4.0 Pro</span>'    '</div>',
