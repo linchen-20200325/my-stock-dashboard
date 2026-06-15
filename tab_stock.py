@@ -472,6 +472,27 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                 _MARGIN_LABEL = {
                     'finmind_sdk': '🟢 FinMind', 'missing': '🔴 缺失', 'unknown': '⬜ 未知',
                 }
+                # v18.201 D2：FinMind 後台 update + 抓取時間 hover tooltip
+                def _fm_tooltip(_key: str, _label: str) -> str:
+                    _lu = str(_attrs.get(f'{_key}_last_update', '') or '').strip()
+                    _fa = str(_attrs.get(f'{_key}_fetched_at', '') or '').strip()
+                    _parts = [_label.upper()]
+                    if _lu:
+                        _parts.append(f'後台 update {_lu}')
+                    if _fa:
+                        _parts.append(f'抓取於 {_fa}')
+                    if len(_parts) == 1:
+                        return ''
+                    return ' ｜ '.join(_parts)
+                _tip_p = _fm_tooltip('price', 'K 線')
+                _tip_i = _fm_tooltip('inst', '籌碼')
+                _tip_m = _fm_tooltip('margin', '融資')
+                _ps_html = (f'<b style="color:#c9d1d9;" title="{_tip_p}">{_PRICE_LABEL.get(_ps, _ps)}</b>'
+                            if _tip_p else f'<b style="color:#c9d1d9;">{_PRICE_LABEL.get(_ps, _ps)}</b>')
+                _is_html = (f'<b style="color:#c9d1d9;" title="{_tip_i}">{_INST_LABEL.get(_is, _is)}</b>'
+                            if _tip_i else f'<b style="color:#c9d1d9;">{_INST_LABEL.get(_is, _is)}</b>')
+                _ms_html = (f'<b style="color:#c9d1d9;" title="{_tip_m}">{_MARGIN_LABEL.get(_ms, _ms)}</b>'
+                            if _tip_m else f'<b style="color:#c9d1d9;">{_MARGIN_LABEL.get(_ms, _ms)}</b>')
                 st.markdown(
                     f'<div style="background:#0d1117;border-left:4px solid {_age_color};'
                     f'border-radius:4px;padding:6px 12px;margin-bottom:6px;font-size:11px;color:#8b949e;">'
@@ -479,9 +500,9 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                     f'📅 K線截止：<b style="color:#c9d1d9;">{_end_str}</b>　'
                     f'🕐 抓取：<b style="color:#c9d1d9;">{_fetched_at.strftime("%H:%M:%S")}</b>　'
                     f'⏱️ <span style="color:{_age_color};font-weight:700;">{_age_label}</span>　'
-                    f'📡 K線：<b style="color:#c9d1d9;">{_PRICE_LABEL.get(_ps, _ps)}</b>　'
-                    f'🏦 籌碼：<b style="color:#c9d1d9;">{_INST_LABEL.get(_is, _is)}</b>　'
-                    f'💰 融資：<b style="color:#c9d1d9;">{_MARGIN_LABEL.get(_ms, _ms)}</b>'
+                    f'📡 K線：{_ps_html}　'
+                    f'🏦 籌碼：{_is_html}　'
+                    f'💰 融資：{_ms_html}'
                     f'</div>', unsafe_allow_html=True)
                 _degraded = (
                     _ps in ('finmind_sdk', 'finmind_raw', 'yahoo_fallback')

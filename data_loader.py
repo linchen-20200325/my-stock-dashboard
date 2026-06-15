@@ -21,6 +21,23 @@ import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
 from proxy_helper import fetch_url as _fetch_url_dl
 
+# v18.201 D2：FinMind dataset 後台 update 時間追蹤
+# raw fetcher 從 response top-level 取 `last_update`，SDK 路徑無此欄位故留空
+# caller 在 attrs assign block 統一寫進 df.attrs，給 chip hover tooltip 用
+_FINMIND_META: dict = {}   # key: 'price'/'inst'/'margin', value: {last_update, fetched_at}
+
+
+def _capture_finmind_meta(src_key: str, j_response: dict) -> None:
+    """v18.201 D2：把 FinMind response top-level last_update + 抓取 wallclock 存進 module dict。"""
+    try:
+        _FINMIND_META[src_key] = {
+            "last_update": str(j_response.get("last_update", "") if isinstance(j_response, dict) else ""),
+            "fetched_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    except Exception:
+        _FINMIND_META[src_key] = {"last_update": "", "fetched_at": ""}
+
+
 def _bps_dl():
     try:
         from tw_stock_data_fetcher import build_proxy_session as _b
@@ -324,6 +341,7 @@ def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> 
             headers={'Authorization': f'Bearer {_token}'} if _token else {},
             timeout=20)
         _j = _r.json()
+        _capture_finmind_meta('inst', _j)   # v18.201 D2：紀錄 last_update + fetched_at
         if _j.get('data'):
             _first = _j['data'][0]
             _names = list(set(r.get('name','') for r in _j['data'][:20]))
@@ -364,6 +382,7 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
             headers={'Authorization': f'Bearer {_token}'} if _token else {},
             timeout=20)
         _j = _r.json()
+        _capture_finmind_meta('price', _j)   # v18.201 D2：紀錄 last_update + fetched_at
         if _j.get('status') == 200 and _j.get('data'):
             print(f'[FM-Raw price] {stock_id}: ✅ {len(_j["data"])} 筆（SDK 未載入，走 HTTP 備援）')
             return pd.DataFrame(_j['data'])
@@ -486,6 +505,7 @@ class StockDataLoader:
                         end_date=end_date.strftime('%Y-%m-%d'),
                     )
                     _fm_path = 'finmind_sdk'
+                    _capture_finmind_meta('price', {})   # v18.201 D2：SDK 無 response → 只記 fetched_at
                 else:
                     # FinMind SDK 未載入（DataLoader=None）→ raw HTTP 備援，避免 NoneType 崩潰
                     df_price = _fetch_finmind_price_raw(
@@ -625,6 +645,7 @@ class StockDataLoader:
                         print(f'[籌碼] {stock_id}: SDK ✅ 外資非零={_nz}', flush=True)
                         _sdk_used = True
                         _inst_src = 'finmind_sdk'
+                        _capture_finmind_meta('inst', {})   # v18.201 D2
                     else:
                         _sdk_used = False
                 except Exception as e:
@@ -669,6 +690,7 @@ class StockDataLoader:
 
                     df = pd.merge(df, margin_data, on='date', how='left')
                     _margin_src = 'finmind_sdk'
+                    _capture_finmind_meta('margin', {})   # v18.201 D2
                 else:
                     _margin_src = 'missing'
 
@@ -712,6 +734,11 @@ class StockDataLoader:
                 df.attrs['price_src'] = _price_src
                 df.attrs['inst_src'] = _inst_src
                 df.attrs['margin_src'] = _margin_src
+                # v18.201 D2：FinMind dataset 後台 update 時間 + 客戶端抓取 wallclock
+                for _k in ('price', 'inst', 'margin'):
+                    _meta = _FINMIND_META.get(_k, {}) or {}
+                    df.attrs[f'{_k}_last_update'] = _meta.get('last_update', '')
+                    df.attrs[f'{_k}_fetched_at'] = _meta.get('fetched_at', '')
             except Exception:
                 pass
 
