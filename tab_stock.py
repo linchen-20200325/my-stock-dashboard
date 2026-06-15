@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
 
 
@@ -451,7 +452,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         with _fresh_cols[0]:
             if _fetched_at is not None:
                 _age_min = (pd.Timestamp.now() - _fetched_at).total_seconds() / 60
-                _age_color = '#3fb950' if _age_min < 60 else ('#d29922' if _age_min < 240 else '#f85149')
+                _age_color = TRAFFIC_GREEN if _age_min < 60 else (TRAFFIC_YELLOW if _age_min < 240 else TRAFFIC_RED)
                 _age_label = (f'{int(_age_min)} 分鐘前' if _age_min < 60
                               else f'{_age_min/60:.1f} 小時前')
                 _end_str = _df_end_date.strftime('%Y-%m-%d') if _df_end_date is not None else '—'
@@ -626,7 +627,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                                 _above_ma60  if _above_ma60  is not None else False,
                                 _above_ma120 if _above_ma120 is not None else False])
             _trend_label = {3: '🟢 強勢多頭', 2: '🟡 中性偏多', 1: '🟡 弱勢', 0: '🔴 空頭區間'}[_trend_score]
-            _chg_color   = '#3fb950' if _p_chg >= 0 else '#f85149'
+            _chg_color   = TRAFFIC_GREEN if _p_chg >= 0 else TRAFFIC_RED
             _chg_arrow   = '▲' if _p_chg >= 0 else '▼'
             st.markdown(f'''<div style="background:#0d1117;border:2px solid #21262d;border-radius:12px;
 padding:14px 18px;margin-bottom:12px;">
@@ -638,10 +639,10 @@ padding:14px 18px;margin-bottom:12px;">
   <div><span style="font-size:28px;font-weight:900;color:#e6edf3;">{_p_now:.2f}</span>
        <span style="font-size:16px;color:{_chg_color};margin-left:6px;">{_chg_arrow} {abs(_p_chg):.2f}%</span></div>
   <div style="font-size:13px;color:#8b949e;line-height:2;">
-    MA20：<b style="color:{'#3fb950' if _above_ma20 else '#f85149'}">{_ma20_v:.2f}</b>
+    MA20：<b style="color:{TRAFFIC_GREEN if _above_ma20 else TRAFFIC_RED}">{_ma20_v:.2f}</b>
     {'✅' if _above_ma20 else '❌'}&nbsp;&nbsp;
-    {'MA60：<b style="color:' + ("#3fb950" if _above_ma60 else "#f85149") + '">' + f'{_ma60_v:.2f}</b> ' + ("✅" if _above_ma60 else "❌") + "&nbsp;&nbsp;" if _ma60_v else ""}
-    {'MA120：<b style="color:' + ("#3fb950" if _above_ma120 else "#f85149") + '">' + f'{_ma120_v:.2f}</b> ' + ("✅" if _above_ma120 else "❌") if _ma120_v else ""}
+    {'MA60：<b style="color:' + (TRAFFIC_GREEN if _above_ma60 else TRAFFIC_RED) + '">' + f'{_ma60_v:.2f}</b> ' + ("✅" if _above_ma60 else "❌") + "&nbsp;&nbsp;" if _ma60_v else ""}
+    {'MA120：<b style="color:' + (TRAFFIC_GREEN if _above_ma120 else TRAFFIC_RED) + '">' + f'{_ma120_v:.2f}</b> ' + ("✅" if _above_ma120 else "❌") if _ma120_v else ""}
   </div>
   <div style="font-size:18px;font-weight:700;">{_trend_label}</div>
 </div></div>''', unsafe_allow_html=True)
@@ -659,11 +660,11 @@ padding:14px 18px;margin-bottom:12px;">
         _sl_p   = round(_cur_p * 0.92, 2)
         _rr_p   = round((_tp1_p - _cur_p) / max(_cur_p - _sl_p, 0.01), 2)
         with _sp_c1:
-            st.markdown(kpi('停利目標1 (+5%)', f'{_tp1_p}', '短線先入袋', '#3fb950', '#0d2818'), unsafe_allow_html=True)
+            st.markdown(kpi('停利目標1 (+5%)', f'{_tp1_p}', '短線先入袋', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
         with _sp_c2:
             st.markdown(kpi('停利目標2 (+10%)', f'{_tp2_p}', '波段目標', '#58a6ff', '#0d1f3c'), unsafe_allow_html=True)
         with _sp_c3:
-            st.markdown(kpi('建議停損 (-8%)', f'{_sl_p}', '跌破認賠', '#f85149', '#2a0d0d'), unsafe_allow_html=True)
+            st.markdown(kpi('建議停損 (-8%)', f'{_sl_p}', '跌破認賠', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
         with _sp_c4:
             st.markdown(kpi('盈虧比', f'{_rr_p}x', '≥1.5 較理想', '#ffd700', '#1a1000'), unsafe_allow_html=True)
         _sp_c5, _sp_c6 = st.columns(2)
@@ -693,20 +694,20 @@ padding:14px 18px;margin-bottom:12px;">
         with _sp_c6b:
             if _abs_sl:
                 _bias_sl = round((_cur_p - _abs_sl) / _cur_p * 100, 1) if _cur_p else 0
-                _sl_color = '#f85149' if _bias_sl < 5 else '#d29922'
+                _sl_color = TRAFFIC_RED if _bias_sl < 5 else TRAFFIC_YELLOW
                 st.markdown(kpi('絕對停損線', f'{_abs_sl:.2f}',
                                 f'紅K低點（距{_bias_sl:.1f}%）', _sl_color, '#2a0d0d'), unsafe_allow_html=True)
             else:
-                st.markdown(kpi('絕對停損線', _sl_p.__str__(), '跌破即出場', '#f85149', '#2a0d0d'), unsafe_allow_html=True)
+                st.markdown(kpi('絕對停損線', _sl_p.__str__(), '跌破即出場', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
         with _sp_c7b:
             _rr2 = round((_tp1_p - _cur_p) / max(_cur_p - (_abs_sl or _sl_p), 0.01), 2) if _cur_p else 0
-            _rr_color = '#3fb950' if _rr2 >= 1.5 else ('#d29922' if _rr2 >= 1 else '#f85149')
+            _rr_color = TRAFFIC_GREEN if _rr2 >= 1.5 else (TRAFFIC_YELLOW if _rr2 >= 1 else TRAFFIC_RED)
             st.markdown(kpi('實際盈虧比', f'{_rr2}x', '≥1.5 可操作', _rr_color, '#0d1117'), unsafe_allow_html=True)
 
         with _sp_c5:
-            st.markdown(kpi('近20日壓力', f'{_hi20_p:.2f}', f'距現價 +{_dist_hi}%', '#f85149', '#2a0d0d'), unsafe_allow_html=True)
+            st.markdown(kpi('近20日壓力', f'{_hi20_p:.2f}', f'距現價 +{_dist_hi}%', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
         with _sp_c6:
-            st.markdown(kpi('近20日支撐', f'{_lo20_p:.2f}', f'距現價 -{_dist_lo}%', '#3fb950', '#0d2818'), unsafe_allow_html=True)
+            st.markdown(kpi('近20日支撐', f'{_lo20_p:.2f}', f'距現價 -{_dist_lo}%', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
 
         # ══ 進出場訊號（多位老師方法整合）═══════════════════════
         st.markdown('---')
@@ -761,10 +762,10 @@ padding:14px 18px;margin-bottom:12px;">
             ]
             _win_count = sum(1 for _, v in _win_conds if v)
             for _wn, _wv in _win_conds:
-                _wc = '#3fb950' if _wv else '#f85149'
+                _wc = TRAFFIC_GREEN if _wv else TRAFFIC_RED
                 _wi = '✅' if _wv else '❌'
                 st.markdown(f'<div style="font-size:12px;color:{_wc};padding:2px 0;">{_wi} {_wn}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div style="margin-top:8px;font-size:13px;font-weight:700;color:{"#3fb950" if _win_count>=4 else "#f85149"};">'
+            st.markdown(f'<div style="margin-top:8px;font-size:13px;font-weight:700;color:{TRAFFIC_GREEN if _win_count>=4 else TRAFFIC_RED};">'
                        f'{"🚀 符合 " + str(_win_count) + "/5，可以考慮操作" if _win_count>=4 else "⛔ 僅符合 " + str(_win_count) + "/5，建議等待"}'
                        f'</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -853,7 +854,7 @@ padding:14px 18px;margin-bottom:12px;">
                     f'<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;border-radius:10px;'
                     f'font-size:11px;background:{"#3a1414" if _hit else "#161b22"};'
                     f'color:{"#ff7b72" if _hit else "#8b949e"};border:1px solid '
-                    f'{"#f85149" if _hit else "#30363d"};">{"⚠️" if _hit else "✓"} {_nm}：{_desc}</span>'
+                    f'{TRAFFIC_RED if _hit else "#30363d"};">{"⚠️" if _hit else "✓"} {_nm}：{_desc}</span>'
                     for _nm, _hit, _desc in _ex['dims'])
                 st.markdown(
                     f'<div style="margin:6px 0 12px;padding:10px 14px;border-radius:8px;'
@@ -888,7 +889,7 @@ padding:14px 18px;margin-bottom:12px;">
                 try:
                     _rs_val  = calc_rs_score(df2)
                     _rs_up   = rs_slope(df2)
-                    _rs_color= '#3fb950' if _rs_val >= 75 else ('#d29922' if _rs_val >= 50 else '#f85149')
+                    _rs_color= TRAFFIC_GREEN if _rs_val >= 75 else (TRAFFIC_YELLOW if _rs_val >= 50 else TRAFFIC_RED)
                     _rs_trend= '↑強勢' if _rs_up else ('↓弱勢' if _rs_up is False else '')
                     _entry.append(f'<span style="color:{_rs_color}">📊 RS相對強度 {_rs_val:.0f}分 {_rs_trend}</span>')
                 except Exception:
@@ -990,13 +991,13 @@ padding:14px 18px;margin-bottom:12px;">
                 _add_pt_v = locals().get('_add_pt')
                 _hlines = [
                     (_tp2_p,   '#58a6ff', 'dash',    f'停利2 +10% {_tp2_p:.2f}'),
-                    (_tp1_p,   '#3fb950', 'dash',    f'停利1 +5% {_tp1_p:.2f}'),
+                    (_tp1_p,   TRAFFIC_GREEN, 'dash',    f'停利1 +5% {_tp1_p:.2f}'),
                     (_hi20_p,  '#f0883e', 'dot',     f'壓力 {_hi20_p:.2f}'),
                     (_target1, '#2ea043', 'dashdot', f'初步目標 {_target1:.2f}'),
                     (_ma5,     '#FFD700', 'solid',   f'5MA {_ma5:.2f}'),
                     (_lo20_p,  '#1f6feb', 'dot',     f'支撐 {_lo20_p:.2f}'),
                     (_sl_ma20, '#8b949e', 'dot',     f'月線停損 {_sl_ma20:.2f}'),
-                    (_sl_p,    '#f85149', 'dash',    f'停損 -8% {_sl_p:.2f}'),
+                    (_sl_p,    TRAFFIC_RED, 'dash',    f'停損 -8% {_sl_p:.2f}'),
                     (_sl_hard, '#a40e26', 'dashdot', f'硬停損 -7% {_sl_hard:.2f}'),
                 ]
                 if _add_pt_v:
@@ -1112,19 +1113,19 @@ padding:14px 18px;margin-bottom:12px;">
             ind1, ind2, ind3 = st.columns(3)
             ind4, ind5, ind6 = st.columns(3)
             with ind1:
-                rsi_c = '#d29922' if rsi2 and rsi2>70 else ('#3fb950' if rsi2 and rsi2<30 else '#58a6ff')
+                rsi_c = TRAFFIC_YELLOW if rsi2 and rsi2>70 else (TRAFFIC_GREEN if rsi2 and rsi2<30 else '#58a6ff')
                 rsi_txt = '超買⚠️' if rsi2 and rsi2>70 else ('超賣反彈' if rsi2 and rsi2<30 else '中性')
                 st.markdown(kpi('RSI(14)',f'{rsi2}' if rsi2 else '-',rsi_txt,rsi_c,rsi_c),unsafe_allow_html=True)
             with ind2:
-                vr_c = '#3fb950' if vr2 and vr2>=1.5 else ('#d29922' if vr2 and vr2>=1.0 else '#484f58')
+                vr_c = TRAFFIC_GREEN if vr2 and vr2>=1.5 else (TRAFFIC_YELLOW if vr2 and vr2>=1.0 else '#484f58')
                 vr_txt = '異常放量' if vr2 and vr2>=1.5 else ('溫和放量' if vr2 and vr2>=1.0 else '量縮')
                 st.markdown(kpi('量比(5日)',f'{vr2}' if vr2 else '-',vr_txt,vr_c,vr_c),unsafe_allow_html=True)
             with ind3:
-                ibs_c = '#3fb950' if ibs2 is not None and ibs2<=0.2 else ('#f85149' if ibs2 is not None and ibs2>=0.8 else '#58a6ff')
+                ibs_c = TRAFFIC_GREEN if ibs2 is not None and ibs2<=0.2 else (TRAFFIC_RED if ibs2 is not None and ibs2>=0.8 else '#58a6ff')
                 ibs_txt = '收低≤20%易反彈' if ibs2 is not None and ibs2<=0.2 else ('收高≥80%易賣壓' if ibs2 is not None and ibs2>=0.8 else '中性位置')
                 st.markdown(kpi('IBS',f'{ibs2}' if ibs2 is not None else '-',ibs_txt,ibs_c,ibs_c),unsafe_allow_html=True)
             with ind4:
-                kd_c = '#3fb950' if k2 and d2 and k2>d2 and k2<80 else ('#d29922' if k2 and d2 and k2>d2 else '#f85149')
+                kd_c = TRAFFIC_GREEN if k2 and d2 and k2>d2 and k2<80 else (TRAFFIC_YELLOW if k2 and d2 and k2>d2 else TRAFFIC_RED)
                 kd_txt = '黃金交叉' if k2 and d2 and k2>d2 else '死亡交叉'
                 st.markdown(kpi('KD',f'K={k2}/D={d2}' if k2 else '-',kd_txt,kd_c,kd_c),unsafe_allow_html=True)
             with ind5:
@@ -1134,22 +1135,22 @@ padding:14px 18px;margin-bottom:12px;">
                     m100=float(df2['MA100'].iloc[-1])
                     if p>m20>m100:
                         tr_txt='多頭排列'
-                        tr_c='#3fb950'
+                        tr_c=TRAFFIC_GREEN
                     elif p<m20<m100:
                         tr_txt='空頭排列'
-                        tr_c='#f85149'
+                        tr_c=TRAFFIC_RED
                     elif p>m100:
                         tr_txt='多箱整理'
-                        tr_c='#d29922'
+                        tr_c=TRAFFIC_YELLOW
                     else:
                         tr_txt='空箱整理'
-                        tr_c='#d29922'
+                        tr_c=TRAFFIC_YELLOW
                     st.markdown(kpi('趨勢',tr_txt,f'MA20={m20:.1f}',tr_c,tr_c),unsafe_allow_html=True)
                 else:
                     st.markdown(kpi('趨勢','-','無MA數據','#484f58'),unsafe_allow_html=True)
             with ind6:
                 if bb2:
-                    bw_c='#3fb950' if bb2['bw']<bb2['bw_mean']*0.7 else '#58a6ff'
+                    bw_c=TRAFFIC_GREEN if bb2['bw']<bb2['bw_mean']*0.7 else '#58a6ff'
                     bw_txt='帶寬極縮⚡' if bb2['bw']<bb2['bw_mean']*0.7 else ('黏近上軌' if bb2['near_upper'] else f'均值{bb2["bw_mean"]:.1f}%')
                     st.markdown(kpi('布林帶寬',f'{bb2["bw"]:.1f}%',bw_txt,bw_c,bw_c),unsafe_allow_html=True)
                 else:
@@ -1170,7 +1171,7 @@ padding:14px 18px;margin-bottom:12px;">
                 _price_pos = '多箱整理，等待突破'
             else:
                 _price_pos = '空箱整理，謹慎操作'
-        _verdict_color = '#3fb950' if health2>=80 else ('#d29922' if health2>=50 else '#f85149')
+        _verdict_color = TRAFFIC_GREEN if health2>=80 else (TRAFFIC_YELLOW if health2>=50 else TRAFFIC_RED)
         _verdict = ('持股不動，佛系等待；所有指標均表現優異，繼續持有。' if health2>=80
                     else ('等待突破訊號，不追高；多空交戰，方向未明，可分批布局。' if health2>=50
                           else '降低倉位或觀望；趨勢偏弱，以保本為優先。'))
@@ -1350,7 +1351,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             st.markdown('**VCP [Mark Minervini]**')
             if vcp2:
                 sw=' → '.join([f'{s:.1f}%' for s in vcp2['swings']])
-                vc='#3fb950' if vcp2['contracting'] else '#d29922'
+                vc=TRAFFIC_GREEN if vcp2['contracting'] else TRAFFIC_YELLOW
                 st.markdown(kpi('VCP狀態','✅符合收縮' if vcp2['contracting'] else '⚠️未收縮',
                                 f'波幅：{sw}',vc,vc),unsafe_allow_html=True)
                 if vcp2['contracting']:
@@ -1363,13 +1364,13 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                 b1,b2=st.columns(2)
                 with b1:
                     st.markdown(kpi('現價',f'{bb2["price"]:.2f}','','#e6edf3'),unsafe_allow_html=True)
-                    st.markdown(kpi('布林上軌',f'{bb2["upper"]:.2f}','壓力','#f85149','#f85149'),unsafe_allow_html=True)
+                    st.markdown(kpi('布林上軌',f'{bb2["upper"]:.2f}','壓力',TRAFFIC_RED,TRAFFIC_RED),unsafe_allow_html=True)
                 with b2:
-                    bw_c='#3fb950' if bb2['bw']<bb2['bw_mean']*0.7 else '#d29922'
+                    bw_c=TRAFFIC_GREEN if bb2['bw']<bb2['bw_mean']*0.7 else TRAFFIC_YELLOW
                     st.markdown(kpi('帶寬',f'{bb2["bw"]:.1f}%',
                                     f'均值{bb2["bw_mean"]:.1f}% {"⬇️收縮" if bb2["bw"]<bb2["bw_mean"] else "⬆️擴張"}',
                                     bw_c,bw_c),unsafe_allow_html=True)
-                    st.markdown(kpi('布林下軌',f'{bb2["lower"]:.2f}','支撐','#3fb950','#3fb950'),unsafe_allow_html=True)
+                    st.markdown(kpi('布林下軌',f'{bb2["lower"]:.2f}','支撐',TRAFFIC_GREEN,TRAFFIC_GREEN),unsafe_allow_html=True)
                 if bb2['bw']<bb2['bw_mean']*0.6:
                     st.markdown(signal_box('🔵布林帶寬極度收縮','blue','即將爆發，注意量能方向'),unsafe_allow_html=True)
                 if bb2['near_upper']:
@@ -1390,12 +1391,12 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                 _bb_verdict = f'⚪ 布林帶寬{bb2["bw"]:.1f}%（均值{bb2["bw_mean"]:.1f}%）：尚未到關鍵位置'
         if _vcp_verdict or _bb_verdict:
             for _msg in [m for m in [_vcp_verdict, _bb_verdict] if m]:
-                _mc2 = '#3fb950' if '✅' in _msg or '🟢' in _msg else ('#58a6ff' if '🔵' in _msg else '#8b949e')
+                _mc2 = TRAFFIC_GREEN if '✅' in _msg or '🟢' in _msg else ('#58a6ff' if '🔵' in _msg else '#8b949e')
                 st.markdown(f'<div style="border-left:3px solid {_mc2};padding:8px 12px;background:#0d1117;border-radius:0 6px 6px 0;font-size:12px;color:{_mc2};margin:4px 0;">{_msg}</div>', unsafe_allow_html=True)
 
         # VCP+布林結論（安全版：加入 _msg 預設值）
         _msg = _msg if '_msg' in dir() else '⚪ VCP/布林資料不足'
-        _vcp_c = '#3fb950' if '✅' in _msg or '🟢' in _msg else ('#d29922' if '⚠️' in _msg else '#484f58')
+        _vcp_c = TRAFFIC_GREEN if '✅' in _msg or '🟢' in _msg else (TRAFFIC_YELLOW if '⚠️' in _msg else '#484f58')
         st.markdown(
             f'<div style="background:#0d1117;border-left:3px solid {_vcp_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
             f'<span style="font-size:11px;color:#8b949e;">🎓 策略3 · VCP</span>　'
@@ -1404,7 +1405,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         )
         if bb2:
             _bb_verdict_safe = _bb_verdict if '_bb_verdict' in dir() else '⚪ 布林資料不足'
-            _bb_c = '#3fb950' if '✅' in _bb_verdict_safe or '🟢' in _bb_verdict_safe else ('#3aa2f5' if '🔵' in _bb_verdict_safe else '#d29922')
+            _bb_c = TRAFFIC_GREEN if '✅' in _bb_verdict_safe or '🟢' in _bb_verdict_safe else ('#3aa2f5' if '🔵' in _bb_verdict_safe else TRAFFIC_YELLOW)
             st.markdown(
                 f'<div style="background:#0d1117;border-left:3px solid {_bb_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
                 f'<span style="font-size:11px;color:#8b949e;">🎓 策略3 · 布林</span>　'
@@ -1428,8 +1429,8 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             _cty20  = _chip20['continuity']       # % 延續性
             _days20 = _chip20['days']
             _pos20  = _chip20['pos_days']
-            _sig20_c = ('#f85149' if '吸籌' in _sig20
-                        else ('#da3633' if '倒貨' in _sig20 else '#d29922'))
+            _sig20_c = (TRAFFIC_RED if '吸籌' in _sig20
+                        else ('#da3633' if '倒貨' in _sig20 else TRAFFIC_YELLOW))
             st.markdown(
                 f'<div style="background:#0d1117;border:1px solid {_sig20_c};'
                 f'border-radius:8px;padding:10px 14px;margin:6px 0;">'
@@ -1501,21 +1502,21 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             _km100 = float(df2['MA100'].iloc[-1])
             if _kp > _km20 > _km100:
                 _trend_msg = f'📈 多頭排列：股價 {_kp:.1f} ＞ MA20 {_km20:.1f} ＞ MA100 {_km100:.1f} — 宏爺：可持股，大盤多頭才做個股'
-                _tc = '#3fb950'
+                _tc = TRAFFIC_GREEN
             elif _kp < _km20 < _km100:
                 _trend_msg = f'📉 空頭排列：股價 {_kp:.1f} ＜ MA20 {_km20:.1f} ＜ MA100 {_km100:.1f} — 宏爺：不做多，嚴格停損'
-                _tc = '#f85149'
+                _tc = TRAFFIC_RED
             elif _kp > _km100:
                 _trend_msg = f'📊 多箱整理：股價在 MA100 之上 — 宏爺：等待站上 MA20({_km20:.1f})確認方向'
-                _tc = '#d29922'
+                _tc = TRAFFIC_YELLOW
             else:
                 _trend_msg = '📊 空箱整理：股價低於 MA100 — 宏爺：耐心等待多頭訊號，不摸底'
-                _tc = '#d29922'
+                _tc = TRAFFIC_YELLOW
             st.markdown(f'<div style="border-left:4px solid {_tc};padding:10px 14px;background:#0d1117;border-radius:0 8px 8px 0;font-size:13px;font-weight:700;color:{_tc};margin:8px 0;">{_trend_msg}</div>', unsafe_allow_html=True)
 
         # K線均線結論（安全版）
         _trend_msg_safe = _trend_msg if '_trend_msg' in dir() else '⚪ K線資料不足'
-        _kl_c = '#3fb950' if '多頭' in _trend_msg_safe or '✅' in _trend_msg_safe else ('#f85149' if '空頭' in _trend_msg_safe else '#d29922')
+        _kl_c = TRAFFIC_GREEN if '多頭' in _trend_msg_safe or '✅' in _trend_msg_safe else (TRAFFIC_RED if '空頭' in _trend_msg_safe else TRAFFIC_YELLOW)
         st.markdown(
             f'<div style="background:#0d1117;border-left:3px solid {_kl_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
             f'<span style="font-size:11px;color:#8b949e;">🎓 宏爺 · 均線排列</span>　'
@@ -1552,7 +1553,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             _fig_sh.add_trace(go.Scatter(
                 x=_sh_dates, y=_sh_health, mode='lines+markers',
                 line=dict(color='#58a6ff', width=2.5),
-                marker=dict(size=8, color=['#3fb950' if v>=80 else ('#d29922' if v>=50 else '#f85149')
+                marker=dict(size=8, color=[TRAFFIC_GREEN if v>=80 else (TRAFFIC_YELLOW if v>=50 else TRAFFIC_RED)
                                            for v in _sh_health]),
                 text=[str(v) for v in _sh_health], textposition='top center',
                 hovertemplate='%{x}<br>健康度：%{y:.0f}<extra></extra>'
@@ -1657,13 +1658,13 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             fair2=round(avg_div2/0.05,1)
             dear2=round(avg_div2/0.03,1)
             if price2<=cheap2:
-                sig2,sc2='🟢便宜價 — 積極買進','#3fb950'
+                sig2,sc2='🟢便宜價 — 積極買進',TRAFFIC_GREEN
             elif price2<=fair2:
-                sig2,sc2='🟡合理價 — 可分批布局','#d29922'
+                sig2,sc2='🟡合理價 — 可分批布局',TRAFFIC_YELLOW
             elif price2<=dear2:
-                sig2,sc2='🔴昂貴價 — 謹慎操作','#f85149'
+                sig2,sc2='🔴昂貴價 — 謹慎操作',TRAFFIC_RED
             else:
-                sig2,sc2='🔴超過昂貴 — 避免追高','#f85149'
+                sig2,sc2='🔴超過昂貴 — 避免追高',TRAFFIC_RED
             st.markdown(f"""<div style="background:#161b22;border:2px solid {sc2};border-radius:10px;
 padding:12px 16px;margin:8px 0;">
 <div style="font-size:16px;font-weight:900;color:{sc2};">{sig2}</div>
@@ -1672,8 +1673,8 @@ padding:12px 16px;margin:8px 0;">
   近5年均股利 <b style="color:#ffd700;">{avg_div2:.2f}元</b> ({t2d.get('div_src','')})
 </div></div>""", unsafe_allow_html=True)
             v1,v2,v3,v4=st.columns(4)
-            for vc,vl,vp,vcol in [(v1,'現價',price2,'#58a6ff'),(v2,'🟢便宜(7%)',cheap2,'#3fb950'),
-                                   (v3,'🟡合理(5%)',fair2,'#d29922'),(v4,'🔴昂貴(3%)',dear2,'#f85149')]:
+            for vc,vl,vp,vcol in [(v1,'現價',price2,'#58a6ff'),(v2,'🟢便宜(7%)',cheap2,TRAFFIC_GREEN),
+                                   (v3,'🟡合理(5%)',fair2,TRAFFIC_YELLOW),(v4,'🔴昂貴(3%)',dear2,TRAFFIC_RED)]:
                 with vc:
                     st.markdown(kpi(vl,f'{vp:.1f}','',vcol,vcol),unsafe_allow_html=True)
             if yearly2:
@@ -1697,7 +1698,7 @@ padding:12px 16px;margin:8px 0;">
                             else ("昂貴價🔴 — 策略1：謹慎操作，等待回檔再進場" if price2<=dear2
                                   else "超過昂貴價🔴 — 策略1：絕對不追高，等待大幅修正")))
             _357_verdict = f'**{sid2} {name2}** 現價 {price2:.1f} 處於 {_grade}，近5年均股利 {avg_div2:.2f} 元'
-            _357_c = '#3fb950' if price2<=cheap2 else ('#d29922' if price2<=fair2 else '#f85149')
+            _357_c = TRAFFIC_GREEN if price2<=cheap2 else (TRAFFIC_YELLOW if price2<=fair2 else TRAFFIC_RED)
             st.markdown(
                 f'{_asset_type} **`{sid2}` {name2}** ｜ 策略1·357法則判斷'
             )
@@ -1789,9 +1790,9 @@ padding:12px 16px;margin:8px 0;">
                     hovertemplate='%{x|%Y-%m-%d}<br>%{y:.2f}<extra></extra>'))
 
                 for _bs, _lbl_base, _last_val, _col in [
-                    (_band7_riv, '7%便宜', _p7r, '#3fb950'),
-                    (_band5_riv, '5%合理', _p5r, '#d29922'),
-                    (_band3_riv, '3%昂貴', _p3r, '#f85149')
+                    (_band7_riv, '7%便宜', _p7r, TRAFFIC_GREEN),
+                    (_band5_riv, '5%合理', _p5r, TRAFFIC_YELLOW),
+                    (_band3_riv, '3%昂貴', _p3r, TRAFFIC_RED)
                 ]:
                     _lbl = f'{_lbl_base}:{_last_val:.0f}' if _last_val > 0 else _lbl_base
                     _fig_riv.add_trace(go.Scatter(
@@ -1911,9 +1912,9 @@ padding:12px 16px;margin:8px 0;">
                     line=dict(color='#e6edf3', width=2.5),
                     hovertemplate='%{x|%Y-%m-%d}<br>%{y:.2f}<extra></extra>'))
                 for _bs, _lbl_base, _last_val, _col in [
-                    (_band_pe_low,  f'PE{_pe_low}便宜',  _p_lo, '#3fb950'),
-                    (_band_pe_mid,  f'PE{_pe_mid}合理',  _p_mi, '#d29922'),
-                    (_band_pe_high, f'PE{_pe_high}昂貴', _p_hi, '#f85149'),
+                    (_band_pe_low,  f'PE{_pe_low}便宜',  _p_lo, TRAFFIC_GREEN),
+                    (_band_pe_mid,  f'PE{_pe_mid}合理',  _p_mi, TRAFFIC_YELLOW),
+                    (_band_pe_high, f'PE{_pe_high}昂貴', _p_hi, TRAFFIC_RED),
                 ]:
                     _lbl = f'{_lbl_base}:{_last_val:.0f}' if _last_val > 0 else _lbl_base
                     _fig_pe.add_trace(go.Scatter(
@@ -2007,9 +2008,9 @@ padding:12px 16px;margin:8px 0;">
                 line=dict(color='#e6edf3', width=2.5),
                 hovertemplate='%{x|%Y-%m-%d}<br>%{y:.2f}<extra></extra>'))
             for _v_pb, _lbl_pb, _col_pb in [
-                (_b_lo_pb, f'PB{_PB_LOW}便宜:{_b_lo_pb:.0f}',  '#3fb950'),
-                (_b_mi_pb, f'PB{_PB_MID}合理:{_b_mi_pb:.0f}',  '#d29922'),
-                (_b_hi_pb, f'PB{_PB_HIGH}昂貴:{_b_hi_pb:.0f}', '#f85149'),
+                (_b_lo_pb, f'PB{_PB_LOW}便宜:{_b_lo_pb:.0f}',  TRAFFIC_GREEN),
+                (_b_mi_pb, f'PB{_PB_MID}合理:{_b_mi_pb:.0f}',  TRAFFIC_YELLOW),
+                (_b_hi_pb, f'PB{_PB_HIGH}昂貴:{_b_hi_pb:.0f}', TRAFFIC_RED),
             ]:
                 _fig_pb.add_hline(y=_v_pb, line=dict(color=_col_pb, width=1.5, dash='dot'),
                                   annotation_text=_lbl_pb, annotation_position='right',
@@ -2084,8 +2085,8 @@ padding:12px 16px;margin:8px 0;">
         _cx_st = _fin_st2.get('fixed_assets')         if '_fin_st2' in dir() else None  # noqa: F821
         _cl_label = "--" if cl_ok else '無數據'
         _cx_label = "--" if cx_ok else '無數據'
-        _cl_color_map = {'ok':'#3fb950','missing':'#d29922','not_applicable':'#484f58','fetch_error':'#f85149'}
-        _cx_color_map = {'ok':'#58a6ff','missing':'#d29922','not_applicable':'#484f58','fetch_error':'#f85149'}
+        _cl_color_map = {'ok':TRAFFIC_GREEN,'missing':TRAFFIC_YELLOW,'not_applicable':'#484f58','fetch_error':TRAFFIC_RED}
+        _cx_color_map = {'ok':'#58a6ff','missing':TRAFFIC_YELLOW,'not_applicable':'#484f58','fetch_error':TRAFFIC_RED}
         with fc1:
             _cl_val_txt = f'{cl2/1e8:.1f}億' if cl_ok else '抓取失敗'
             _cl_c = '#2ea043' if cl_ok else '#da3633'
@@ -2117,7 +2118,7 @@ padding:12px 16px;margin:8px 0;">
                 st.info('ℹ️ 查無揭露：服務業/軟體業通常無此數據，可跳過')
                 st.caption(f'來源：{_cl_src2 or _cx_src2 or "未知"}')
         # 財報結論：依合約負債+固定資產狀態給出判斷
-        _fin_color = '#3fb950' if cl_ok and cx_ok else ('#d29922' if cl_ok or cx_ok else '#484f58')
+        _fin_color = TRAFFIC_GREEN if cl_ok and cx_ok else (TRAFFIC_YELLOW if cl_ok or cx_ok else '#484f58')
         _fin_label = ('✅ 龍多確認：合約負債高＋資本支出高 = 訂單滿、擴廠中' if cl_ok and cx_ok
                       else ('⚠️ 部分訊號：' + ('合約負債充裕' if cl_ok else '資本支出積極')
                             if cl_ok or cx_ok else '⚪ 資料不足，無法判斷'))
@@ -2191,7 +2192,7 @@ padding:12px 16px;margin:8px 0;">
                     _rv_trend  = len(_yoy_s2)>=2 and all(_yoy_s2[i]>_yoy_s2[i-1] for i in range(1,len(_yoy_s2)))
                     _rv_sig = ('✅ 月營收YoY連續加速' if _rv_trend and _rv_latest>0
                                else ('⚠️ 月營收成長趨緩' if _rv_latest>0 else '🔴 月營收年減'))
-                    _rv_c = '#3fb950' if '✅' in _rv_sig else ('#f85149' if '🔴' in _rv_sig else '#d29922')
+                    _rv_c = TRAFFIC_GREEN if '✅' in _rv_sig else (TRAFFIC_RED if '🔴' in _rv_sig else TRAFFIC_YELLOW)
                     st.markdown(
                         f'<div style="background:#0d1117;border-left:3px solid {_rv_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
                         f'<span style="font-size:11px;color:#8b949e;">🎓 策略1 · 月營收</span>　'
@@ -2211,7 +2212,7 @@ padding:12px 16px;margin:8px 0;">
                     if len(_gp_series) >= 2:
                         _gp_now = float(_gp_series.iloc[-1])
                         _gp_trend = float(_gp_series.iloc[-1]) - float(_gp_series.iloc[-2])
-                        _gp_c = '#3fb950' if _gp_now >= 30 and _gp_trend >= 0 else ('#d29922' if _gp_now >= 20 else '#f85149')
+                        _gp_c = TRAFFIC_GREEN if _gp_now >= 30 and _gp_trend >= 0 else (TRAFFIC_YELLOW if _gp_now >= 20 else TRAFFIC_RED)
                         _gp_msg = (f'✅ {_gp_now:.1f}%（高毛利≥30%，護城河寬）' if _gp_now >= 30
                                    else f'⚠️ {_gp_now:.1f}%（中等毛利20~30%）' if _gp_now >= 20
                                    else f'🔴 {_gp_now:.1f}%（低毛利<20%）')
@@ -2230,7 +2231,7 @@ padding:12px 16px;margin:8px 0;">
                         _sq_lbl = _sq_res['sq_label']
                         _sq_gm = _sq_res['gm_trend']
                         _sq_rv = _sq_res['rev_trend']
-                        _sq_c  = '#3fb950' if _sq_v >= 75 else ('#d29922' if _sq_v >= 55 else '#f85149')
+                        _sq_c  = TRAFFIC_GREEN if _sq_v >= 75 else (TRAFFIC_YELLOW if _sq_v >= 55 else TRAFFIC_RED)
                         st.markdown(
                             f'<div style="background:#0d1117;border-left:3px solid {_sq_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
                             f'<span style="font-size:11px;color:#8b949e;">🎓 獲利品質 SQ</span>　'
@@ -2250,7 +2251,7 @@ padding:12px 16px;margin:8px 0;">
                     if _fgms_r.get('fgms') is not None:
                         _fv = _fgms_r['fgms']
                         _fl = _fgms_r['fgms_label']
-                        _fc = '#3fb950' if _fv >= 60 else ('#d29922' if _fv >= 45 else '#f85149')
+                        _fc = TRAFFIC_GREEN if _fv >= 60 else (TRAFFIC_YELLOW if _fv >= 45 else TRAFFIC_RED)
                         # 子維度摘要（得分）
                         _fd_parts = []
                         if _fgms_r['cl_momentum']    is not None:
@@ -2306,8 +2307,8 @@ padding:12px 16px;margin:8px 0;">
             _li_red = sum(1 for _r in _li_results if _r['signal'] == '🔴')
             _li_total_scored = _li_green + _li_yellow + _li_red
             if _li_total_scored > 0:
-                _li_bar_c = '#3fb950' if _li_green >= _li_total_scored * 0.6 else (
-                             '#d29922' if _li_green >= _li_total_scored * 0.3 else '#f85149')
+                _li_bar_c = TRAFFIC_GREEN if _li_green >= _li_total_scored * 0.6 else (
+                             TRAFFIC_YELLOW if _li_green >= _li_total_scored * 0.3 else TRAFFIC_RED)
                 st.markdown(
                     f'<div style="background:#0d1117;border-left:3px solid {_li_bar_c};'
                     f'padding:6px 12px;border-radius:0 6px 6px 0;margin:4px 0 8px 0;">'
@@ -2336,9 +2337,9 @@ padding:12px 16px;margin:8px 0;">
                 with _li_cols[_li_col_idx % 2]:
                     st.markdown(f'**{_li_module_labels.get(_mod, _mod)}**')
                     for _ind in _li_modules[_mod]:
-                        _ic = ('#3fb950' if _ind['signal'] == '🟢' else
-                               '#d29922' if _ind['signal'] == '🟡' else
-                               '#f85149' if _ind['signal'] == '🔴' else '#8b949e')
+                        _ic = (TRAFFIC_GREEN if _ind['signal'] == '🟢' else
+                               TRAFFIC_YELLOW if _ind['signal'] == '🟡' else
+                               TRAFFIC_RED if _ind['signal'] == '🔴' else '#8b949e')
                         st.markdown(
                             f'<div style="background:#0d1117;border-left:3px solid {_ic};'
                             f'padding:6px 10px;border-radius:0 4px 4px 0;margin:3px 0;">'
@@ -2416,7 +2417,7 @@ padding:12px 16px;margin:8px 0;">
             if _event_driven_flags:
                 _stance = 'event'
                 _stance_label = '⚠️ 事件驅動觀察'
-                _stance_color = '#d29922'
+                _stance_color = TRAFFIC_YELLOW
                 _stance_desc  = '偵測到重大資產處分，部分指標基期失真。建議關注重組後的資本配置方向與營運重啟節奏，暫不適用純基本面成長框架評估。'
             elif _n_scored == 0:
                 _stance = 'na'
@@ -2426,17 +2427,17 @@ padding:12px 16px;margin:8px 0;">
             elif _n_green >= _n_scored * 0.6:
                 _stance = 'bull'
                 _stance_label = '🟢 多方偏多'
-                _stance_color = '#3fb950'
+                _stance_color = TRAFFIC_GREEN
                 _stance_desc  = f'{_n_green}/{_n_scored} 項指標偏多，基本面動能強勁。'
             elif _n_red >= _n_scored * 0.6:
                 _stance = 'bear'
                 _stance_label = '🔴 基本面偏弱'
-                _stance_color = '#f85149'
+                _stance_color = TRAFFIC_RED
                 _stance_desc  = f'{_n_red}/{_n_scored} 項指標偏空，基本面壓力明顯。'
             else:
                 _stance = 'neutral'
                 _stance_label = '🟡 中性觀察'
-                _stance_color = '#d29922'
+                _stance_color = TRAFFIC_YELLOW
                 _stance_desc  = f'多空指標交錯（🟢{_n_green}/🔴{_n_red}），基本面尚未形成明確方向。'
 
             # ── 建議行動 ────────────────────────────────────
@@ -2590,7 +2591,7 @@ padding:12px 16px;margin:8px 0;">
                         _vals += [_vals[0]]
                         _fig_fh = _go_fh.Figure(_go_fh.Scatterpolar(
                             r=_vals, theta=_cats, fill='toself',
-                            line_color='#3fb950', fillcolor='rgba(63,185,80,0.2)',
+                            line_color=TRAFFIC_GREEN, fillcolor='rgba(63,185,80,0.2)',
                         ))
                         _fig_fh.update_layout(
                             polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
@@ -2606,9 +2607,9 @@ padding:12px 16px;margin:8px 0;">
                 with _fh_right:
                     st.markdown('#### 🧬 企業 DNA 與護城河')
                     _dna = _fh.get('business_model_dna', '無法判斷')
-                    _dna_clr = ('#3fb950' if 'A+' in _dna or _dna.startswith('A ')
-                                else '#d29922' if 'B' in _dna or 'C' in _dna
-                                else '#f85149')
+                    _dna_clr = (TRAFFIC_GREEN if 'A+' in _dna or _dna.startswith('A ')
+                                else TRAFFIC_YELLOW if 'B' in _dna or 'C' in _dna
+                                else TRAFFIC_RED)
                     st.markdown(
                         f'<div style="background:#161b22;border-left:4px solid {_dna_clr};'
                         f'border-radius:8px;padding:14px 16px;margin-bottom:10px;">'
@@ -2641,13 +2642,13 @@ padding:12px 16px;margin:8px 0;">
                 _surv2 = _fh.get('survival_module', {})
                 if _surv2:
                     st.markdown('#### 🏥 存活能力精細診斷（MJ 3大生死指標）')
-                    _sc_map = {'Pass': '#3fb950', 'Acceptable': '#d29922', 'Fail': '#f85149'}
+                    _sc_map = {'Pass': TRAFFIC_GREEN, 'Acceptable': TRAFFIC_YELLOW, 'Fail': TRAFFIC_RED}
                     _s2c = st.columns(3)
                     for _col2, (_key2, _lbl2) in zip(_s2c, [
                         ('Cash_Ratio', '💰 氣長不長'), ('DSO_Speed', '⚡ 收現速度')
                     ]):
                         _si2 = _surv2.get(_key2, {})
-                        _sc2 = _sc_map.get(_si2.get('Status', 'Fail'), '#f85149')
+                        _sc2 = _sc_map.get(_si2.get('Status', 'Fail'), TRAFFIC_RED)
                         with _col2:
                             st.markdown(
                                 f'<div style="background:{_sc2}18;border:1px solid {_sc2}55;'
@@ -2658,7 +2659,7 @@ padding:12px 16px;margin:8px 0;">
                                 f'<div style="font-size:10px;color:#8b949e;margin-top:4px;">{_si2.get("Insight","")}</div>'
                                 f'</div>', unsafe_allow_html=True)
                     _r1102 = _surv2.get('Rule_100_100_10', {})
-                    _r110c2 = _sc_map.get(_r1102.get('Status', 'Fail'), '#f85149')
+                    _r110c2 = _sc_map.get(_r1102.get('Status', 'Fail'), TRAFFIC_RED)
                     # 各分項勾叉（門檻：A>100% / B≥100% / C>10%，與 financial_health_engine:416/423/431 對齊）
                     _a_ok2 = parse_cash_flow_ratio(_r1102.get('Cash_Flow_Ratio',''), 100, strict=True)
                     _b_ok2 = parse_cash_flow_ratio(_r1102.get('Cash_Flow_Adequacy',''), 100, strict=False)
@@ -2692,7 +2693,7 @@ padding:12px 16px;margin:8px 0;">
                         _ccc_num, _ccc_is_num = 0.0, False
                     # OPM 護城河：引擎判定 Yes 且 CCC 為實質負數，兩者同時成立才顯示
                     _opm_yes = (_oper2.get('OPM_Strategy', 'No') == 'Yes') and _ccc_is_num and (_ccc_num < 0)
-                    _ccc_color = '#3fb950' if _opm_yes else ('#8b949e' if not _ccc_is_num else '#d29922')
+                    _ccc_color = TRAFFIC_GREEN if _opm_yes else ('#8b949e' if not _ccc_is_num else TRAFFIC_YELLOW)
                     with _oc1:
                         st.metric('DSO 應收天數', _oper2.get('DSO', 'N/A'))
                     with _oc2:
@@ -2732,8 +2733,8 @@ padding:12px 16px;margin:8px 0;">
                             f'border:1px solid {"#3fb95055" if _gm2_ok else "#f8514955"};'
                             f'border-radius:8px;padding:10px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">毛利率</div>'
-                            f'<div style="font-size:17px;font-weight:900;color:{"#3fb950" if _gm2_ok else "#f85149"};">{_gm2.get("Value","N/A")}</div>'
-                            f'<div style="font-size:10px;color:{"#3fb950" if _gm2_ok else "#f85149"};">{"好生意" if _gm2_ok else "辛苦生意"}</div>'
+                            f'<div style="font-size:17px;font-weight:900;color:{TRAFFIC_GREEN if _gm2_ok else TRAFFIC_RED};">{_gm2.get("Value","N/A")}</div>'
+                            f'<div style="font-size:10px;color:{TRAFFIC_GREEN if _gm2_ok else TRAFFIC_RED};">{"好生意" if _gm2_ok else "辛苦生意"}</div>'
                             f'</div>', unsafe_allow_html=True)
                     # 2 營業利益率
                     _om2 = _prof2.get('Operating_Margin', {})
@@ -2744,8 +2745,8 @@ padding:12px 16px;margin:8px 0;">
                             f'border:1px solid {"#3fb95055" if _om2_ok else "#f8514955"};'
                             f'border-radius:8px;padding:10px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">營業利益率</div>'
-                            f'<div style="font-size:17px;font-weight:900;color:{"#3fb950" if _om2_ok else "#f85149"};">{_om2.get("Value","N/A")}</div>'
-                            f'<div style="font-size:10px;color:{"#3fb950" if _om2_ok else "#f85149"};">{"本業獲利✅" if _om2_ok else "本業虧損❌"}</div>'
+                            f'<div style="font-size:17px;font-weight:900;color:{TRAFFIC_GREEN if _om2_ok else TRAFFIC_RED};">{_om2.get("Value","N/A")}</div>'
+                            f'<div style="font-size:10px;color:{TRAFFIC_GREEN if _om2_ok else TRAFFIC_RED};">{"本業獲利✅" if _om2_ok else "本業虧損❌"}</div>'
                             f'</div>', unsafe_allow_html=True)
                     # 3 安全邊際
                     _mos2 = _prof2.get('Margin_Of_Safety', {})
@@ -2756,13 +2757,13 @@ padding:12px 16px;margin:8px 0;">
                             f'border:1px solid {"#3fb95055" if _mos2_ok else "#d2992255"};'
                             f'border-radius:8px;padding:10px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">安全邊際</div>'
-                            f'<div style="font-size:17px;font-weight:900;color:{"#3fb950" if _mos2_ok else "#d29922"};">{_mos2.get("Value","N/A")}</div>'
-                            f'<div style="font-size:10px;color:{"#3fb950" if _mos2_ok else "#d29922"};">{"抗震極強✅" if _mos2_ok else "費用待改善"}</div>'
+                            f'<div style="font-size:17px;font-weight:900;color:{TRAFFIC_GREEN if _mos2_ok else TRAFFIC_YELLOW};">{_mos2.get("Value","N/A")}</div>'
+                            f'<div style="font-size:10px;color:{TRAFFIC_GREEN if _mos2_ok else TRAFFIC_YELLOW};">{"抗震極強✅" if _mos2_ok else "費用待改善"}</div>'
                             f'</div>', unsafe_allow_html=True)
                     # 4 稅後淨利率
                     _nm2 = _prof2.get('Net_Margin', {})
                     _nm2_s = _nm2.get('Status', '')
-                    _nm2_c = '#3fb950' if _nm2_s == 'Pass' else ('#d29922' if _nm2_s == 'Thin Profit' else '#f85149')
+                    _nm2_c = TRAFFIC_GREEN if _nm2_s == 'Pass' else (TRAFFIC_YELLOW if _nm2_s == 'Thin Profit' else TRAFFIC_RED)
                     with _p5c[3]:
                         st.markdown(
                             f'<div style="background:{_nm2_c}18;border:1px solid {_nm2_c}55;'
@@ -2779,7 +2780,7 @@ padding:12px 16px;margin:8px 0;">
                     except (ValueError, AttributeError):
                         _roe2_num = None
                     _roe2_positive = _roe2_num is not None and _roe2_num > 0
-                    _roe2_c = '#d29922' if _roe2_warn else ('#3fb950' if _roe2_positive else '#f85149')
+                    _roe2_c = TRAFFIC_YELLOW if _roe2_warn else (TRAFFIC_GREEN if _roe2_positive else TRAFFIC_RED)
                     with _p5c[4]:
                         st.markdown(
                             f'<div style="background:{_roe2_c}18;border:1px solid {_roe2_c}55;'
@@ -2799,7 +2800,7 @@ padding:12px 16px;margin:8px 0;">
                     # 1 負債佔資產比率
                     _dr2 = _fstr2.get('Debt_Ratio', {})
                     _dr2_s = _dr2.get('Status', '')
-                    _dr2_c = {'Pass': '#3fb950', 'Warning': '#d29922', 'Fail': '#f85149', 'N/A': '#8b949e'}.get(_dr2_s, '#8b949e')
+                    _dr2_c = {'Pass': TRAFFIC_GREEN, 'Warning': TRAFFIC_YELLOW, 'Fail': TRAFFIC_RED, 'N/A': '#8b949e'}.get(_dr2_s, '#8b949e')
                     with _fs2c[0]:
                         st.markdown(
                             f'<div style="background:{_dr2_c}18;border:1px solid {_dr2_c}55;'
@@ -2812,7 +2813,7 @@ padding:12px 16px;margin:8px 0;">
                     # 2 以長支長比率
                     _ltf2 = _fstr2.get('Long_Term_Funding_Ratio', {})
                     _ltf2_s = _ltf2.get('Status', '')
-                    _ltf2_c = '#3fb950' if _ltf2_s == 'Pass' else ('#8b949e' if _ltf2_s == 'N/A' else '#f85149')
+                    _ltf2_c = TRAFFIC_GREEN if _ltf2_s == 'Pass' else ('#8b949e' if _ltf2_s == 'N/A' else TRAFFIC_RED)
                     _ltf2_label = ('✅ 資金配置正確（>100%）' if _ltf2_s == 'Pass'
                                    else ('⚪ 資料不足，無法判斷' if _ltf2_s == 'N/A'
                                          else '🔴 短債長投！資金鏈危機'))
@@ -2835,7 +2836,7 @@ padding:12px 16px;margin:8px 0;">
                     _sv2_v = _solv2.get('Final_Solvency_Verdict', '')
                     _sv2_pass = 'Pass' in _sv2_v
                     _sv2_exc  = 'Exception' in _sv2_v
-                    _sv2_bc   = '#3fb950' if _sv2_pass and not _sv2_exc else ('#d29922' if _sv2_exc else '#f85149')
+                    _sv2_bc   = TRAFFIC_GREEN if _sv2_pass and not _sv2_exc else (TRAFFIC_YELLOW if _sv2_exc else TRAFFIC_RED)
                     _sv2_icon = '✅' if _sv2_pass and not _sv2_exc else ('⚡' if _sv2_exc else '🔴')
                     st.markdown(
                         f'<div style="background:{_sv2_bc}18;border:2px solid {_sv2_bc};'
@@ -2862,13 +2863,13 @@ padding:12px 16px;margin:8px 0;">
                             try:
                                 _cr_num = float(_si.get('Value', '0').replace('%', '').strip())
                                 if _cr_num > _thresh:
-                                    _si_c, _si_s = '#3fb950', f'Pass（保命符 >{_thresh}%）'
+                                    _si_c, _si_s = TRAFFIC_GREEN, f'Pass（保命符 >{_thresh}%）'
                                 else:
-                                    _si_c = '#f85149'
+                                    _si_c = TRAFFIC_RED
                             except (ValueError, AttributeError):
-                                _si_c = '#3fb950' if 'Pass' in _si_s else '#f85149'
+                                _si_c = TRAFFIC_GREEN if 'Pass' in _si_s else TRAFFIC_RED
                         else:
-                            _si_c = '#3fb950' if 'Pass' in _si_s else '#f85149'
+                            _si_c = TRAFFIC_GREEN if 'Pass' in _si_s else TRAFFIC_RED
                         with _col:
                             st.markdown(
                                 f'<div style="background:{_si_c}18;border:1px solid {_si_c}55;'
@@ -2894,7 +2895,7 @@ padding:12px 16px;margin:8px 0;">
                     # 盈餘品質
                     _eq2 = _adv2.get('Earnings_Quality', {})
                     _eq2_s = _eq2.get('Status', '')
-                    _eq2_c = '#3fb950' if _eq2_s == 'Pass' else ('#f85149' if _eq2_s == 'Fail' else '#8b949e')
+                    _eq2_c = TRAFFIC_GREEN if _eq2_s == 'Pass' else (TRAFFIC_RED if _eq2_s == 'Fail' else '#8b949e')
                     with _ad2r1[0]:
                         st.markdown(
                             f'<div style="background:{_eq2_c}18;border:1px solid {_eq2_c}55;'
@@ -2905,7 +2906,7 @@ padding:12px 16px;margin:8px 0;">
                             f'</div>', unsafe_allow_html=True)
                     # 杜邦分析
                     _dp2 = _adv2.get('DuPont_Health', '')
-                    _dp2_c = '#f85149' if '警報' in _dp2 else ('#3fb950' if '健康' in _dp2 else '#d29922')
+                    _dp2_c = TRAFFIC_RED if '警報' in _dp2 else (TRAFFIC_GREEN if '健康' in _dp2 else TRAFFIC_YELLOW)
                     _dp2_icon = '🔴' if '警報' in _dp2 else ('✅' if '健康' in _dp2 else '⚠️')
                     with _ad2r1[1]:
                         st.markdown(
@@ -2917,7 +2918,7 @@ padding:12px 16px;margin:8px 0;">
                     # 雙高危機
                     _dh2 = _adv2.get('Double_High_Warning', '')
                     _dh2_danger = 'Triggered' in _dh2
-                    _dh2_c = '#f85149' if _dh2_danger else ('#3fb950' if 'Clear' in _dh2 else '#8b949e')
+                    _dh2_c = TRAFFIC_RED if _dh2_danger else (TRAFFIC_GREEN if 'Clear' in _dh2 else '#8b949e')
                     with _ad2r1[2]:
                         st.markdown(
                             f'<div style="background:{_dh2_c}18;border:1px solid {_dh2_c}55;'
@@ -2928,7 +2929,7 @@ padding:12px 16px;margin:8px 0;">
                             f'</div>', unsafe_allow_html=True)
                     # 第二列：企業 DNA 全寬
                     _dna2 = _adv2.get('Business_DNA', '')
-                    _dna2_c = '#3fb950' if 'A+' in _dna2 else ('#d29922' if '成長' in _dna2 or '新創' in _dna2 else ('#f85149' if '瀕死' in _dna2 else '#58a6ff'))
+                    _dna2_c = TRAFFIC_GREEN if 'A+' in _dna2 else (TRAFFIC_YELLOW if '成長' in _dna2 or '新創' in _dna2 else (TRAFFIC_RED if '瀕死' in _dna2 else '#58a6ff'))
                     st.markdown(
                         f'<div style="background:{_dna2_c}18;border:1px solid {_dna2_c}55;'
                         f'border-radius:10px;padding:10px 16px;margin-top:8px;">'
