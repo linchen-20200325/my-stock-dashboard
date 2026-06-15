@@ -27,8 +27,10 @@ def render_macro_stock_backdrop(session_state) -> None:
     _label = str(_mkt.get("label", "") or _regime)
     _exp = str(_mkt.get("exposure_pct", "") or "")
     _below5 = _mkt.get("index_below_ma5")
-    _border = {"bull": "#3fb950", "neutral": "#d29922",
-               "bear": "#f85149"}.get(_regime, "#58a6ff")
+    # v18.210 K4：走 shared/colors SSOT（traffic-light hex 散落 15 檔 110 處統一收納）
+    from shared.colors import TRAFFIC_GREEN, TRAFFIC_YELLOW, TRAFFIC_RED
+    _border = {"bull": TRAFFIC_GREEN, "neutral": TRAFFIC_YELLOW,
+               "bear": TRAFFIC_RED}.get(_regime, "#58a6ff")
 
     _head = f"🧭 <b>大盤總經背景</b>（來自「總經」Tab）：<b>{_label}</b>"
     if _exp:

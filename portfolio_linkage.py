@@ -93,9 +93,11 @@ def render_stock_portfolio_membership(session_state, sid: str, name: str = "") -
         )
         return
 
+    # v18.210 K4：走 shared/colors SSOT
+    from shared.colors import TRAFFIC_GREEN
     _body = "<br/>".join(_parts)
     st.markdown(
-        f"<div style='background:#0d1117;border-left:4px solid #3fb950;"
+        f"<div style='background:#0d1117;border-left:4px solid {TRAFFIC_GREEN};"
         f"border-radius:4px;padding:6px 12px;margin:6px 0;font-size:11px;"
         f"color:#c9d1d9;line-height:1.7'>"
         f"🔗 <b>{str(name or sid)[:14]}</b> 跨 Tab 持倉聯動<br/>{_body}"
