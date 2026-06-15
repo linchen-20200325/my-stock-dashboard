@@ -345,29 +345,11 @@ def fetch_dividend_data(sid):
                 source = 'FinMind'
     except Exception:
         pass
-    # ── 備援2: yfinance ──
+    # ── 備援2: yfinance（v18.209 K5：改走 yf_proxy.cached_dividends，proxy+cache 統一）──
     if avg_div == 0:
         try:
-            import os as _os_div
-            try:
-                from tw_stock_data_fetcher import _load_proxy_config as _lpc_div
-                _px_div = ((_lpc_div() or {}).get('https') or (_lpc_div() or {}).get('http') or None)
-            except Exception:
-                _px_div = None
-            _ek_div = ('HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy')
-            _bak_div = {k: _os_div.environ.get(k) for k in _ek_div}
-            if _px_div:
-                for k in _ek_div:
-                    _os_div.environ[k] = _px_div
-            try:
-                tk = yf.Ticker(f'{sid}.TW')
-                divs = tk.dividends
-            finally:
-                for k, v in _bak_div.items():
-                    if v is None:
-                        _os_div.environ.pop(k, None)
-                    else:
-                        _os_div.environ[k] = v
+            from yf_proxy import cached_dividends as _yp_div
+            divs = _yp_div(f'{sid}.TW')
             if divs is not None and len(divs) > 0:
                 divs.index = pd.DatetimeIndex(divs.index).tz_localize(None)
                 rec = divs[divs.index >= pd.Timestamp.now()-pd.DateOffset(years=5)]
