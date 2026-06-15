@@ -120,42 +120,62 @@ def render_etf_portfolio(gemini_fn=None):
         return
 
     # ── 批次抓現價 + 配息（每檔 yfinance 已有 @st.cache_data 護身）──
+    # v18.206 H2：原序列 for-loop → ThreadPoolExecutor（鏡像 v18.195 tab_stock 6-IO 並行模式）。
+    # N 檔 ETF 每檔 2 個 yfinance 呼叫（價 + 配息），N 檔 wallclock 由 Σ → max(每檔)。
     _cur_prices = {}
     _div_received = {}
     _pf_price_end = None  # v18.198 價格資料截止日（取各檔最大）
     with st.spinner('抓取現價與配息資料...'):
         import datetime as _dt_pf
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         _cutoff = pd.Timestamp(_dt_pf.date.today() - _dt_pf.timedelta(days=365))
-        for r in rows:
-            _tk = r['ticker']
+
+        def _fetch_one(_tk: str, _shares: float):
+            """單檔抓現價 + 配息（無 st.* 呼叫 → thread-safe）。回 (price, div_amt, price_end_ts)。"""
+            _price = 0.0
+            _div_amt = 0.0
+            _p_end = None
             try:
                 _df_p = fetch_etf_price(_tk, period='5d')
-                _cur_prices[_tk] = float(_df_p['Close'].iloc[-1]) if _df_p is not None and not _df_p.empty else 0.0
                 if _df_p is not None and not _df_p.empty:
+                    _price = float(_df_p['Close'].iloc[-1])
                     try:
-                        _d_end = pd.to_datetime(_df_p.index[-1])
-                        if _pf_price_end is None or _d_end > _pf_price_end:
-                            _pf_price_end = _d_end
+                        _p_end = pd.to_datetime(_df_p.index[-1])
                     except Exception:
-                        pass
+                        _p_end = None
             except Exception:
-                _cur_prices[_tk] = 0.0
+                pass
             try:
                 _div_s = fetch_etf_dividends(_tk)
                 if _div_s is not None and not _div_s.empty:
                     _div_s = _div_s.copy()
                     _div_s.index = pd.to_datetime(_div_s.index, errors='coerce')
-                    # 移除 tz info 避免 cutoff 比對失敗
                     try:
                         _div_s.index = _div_s.index.tz_localize(None)
                     except Exception:
                         pass
                     _recent = _div_s[_div_s.index >= _cutoff]
-                    _div_received[_tk] = float(_recent.sum()) * r['shares']
-                else:
-                    _div_received[_tk] = 0.0
+                    _div_amt = float(_recent.sum()) * _shares
             except Exception:
-                _div_received[_tk] = 0.0
+                pass
+            return (_price, _div_amt, _p_end)
+
+        _workers = min(len(rows), 6)
+        with ThreadPoolExecutor(max_workers=_workers) as _ex:
+            _futs = {
+                _ex.submit(_fetch_one, r['ticker'], r['shares']): r['ticker']
+                for r in rows
+            }
+            for _fut in as_completed(_futs):
+                _tk = _futs[_fut]
+                try:
+                    _p, _d, _pe = _fut.result()
+                except Exception:
+                    _p, _d, _pe = 0.0, 0.0, None
+                _cur_prices[_tk] = _p
+                _div_received[_tk] = _d
+                if _pe is not None and (_pf_price_end is None or _pe > _pf_price_end):
+                    _pf_price_end = _pe
     _pf_fetched_at = pd.Timestamp.now()  # v18.198 抓取完成時戳
 
     # ── 算現值/資本利得/已領配息 ──
