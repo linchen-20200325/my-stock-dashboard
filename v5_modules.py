@@ -7,6 +7,7 @@ Author: AI戰情室 v5.0 | 防禦性開發
 import pandas as pd
 import numpy as np
 from typing import Optional, Tuple
+from shared.colors import TRAFFIC_YELLOW
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -30,7 +31,7 @@ def analyze_fundamental_leading(cl_now: Optional[float], cl_prev: Optional[float
 
     Returns: {cl_yoy, capex_ratio, signal, color, msg}
     """
-    R = '#da3633'; Y = '#d29922'; N = '#484f58'
+    R = '#da3633'; Y = TRAFFIC_YELLOW; N = '#484f58'
 
     # Edge: 完全無數據
     if cl_now is None and capex_now is None:
@@ -90,7 +91,7 @@ def calc_relative_strength(df_stock: pd.DataFrame, df_market: pd.DataFrame,
 
     Returns: {rs_scores: {20: 1.23, 60: 0.8, ...}, signal, color, msg}
     """
-    R = '#da3633'; G = '#2ea043'; Y = '#d29922'; N = '#484f58'
+    R = '#da3633'; G = '#2ea043'; Y = TRAFFIC_YELLOW; N = '#484f58'
 
     def _rs_one(n):
         if len(df_stock) < n or len(df_market) < n:
@@ -205,7 +206,7 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
 
     Returns: {bw, bw_pct, upper, lower, ma, signal, color, msg}
     """
-    R = '#da3633'; Y = '#d29922'; N = '#484f58'
+    R = '#da3633'; Y = TRAFFIC_YELLOW; N = '#484f58'
 
     if len(df) < window:
         return {"bw": None, "signal": "⚪ 資料不足", "color": N,
@@ -275,7 +276,7 @@ def calc_dividend_yield_357(price: float, eps_ttm: float,
 
     Returns: {est_yield, zone_357, signal, color, p_cheap, p_fair, p_expensive, msg}
     """
-    R = '#da3633'; G = '#2ea043'; Y = '#d29922'; N = '#484f58'
+    R = '#da3633'; G = '#2ea043'; Y = TRAFFIC_YELLOW; N = '#484f58'
 
     if not price or price <= 0:
         return {"est_yield": None, "signal": "⚪ 無股價", "color": N, "msg": "無法取得股價"}

@@ -5,6 +5,7 @@ Author: AI戰情室 v4.0
 """
 import pandas as pd
 import numpy as np
+from shared.colors import TRAFFIC_YELLOW
 
 
 class V4StrategyEngine:
@@ -87,7 +88,7 @@ class V4StrategyEngine:
             return {
                 "status":       "🟡 黃燈",
                 "level":        "Medium Risk",
-                "color":        "#d29922",
+                "color":        TRAFFIC_YELLOW,
                 "max_position": 50,
                 "msg":          "⚠️ 大盤震盪中，VIX={:.1f} — 縮小部位，跌破防守線務必嚴格執行".format(vix),
                 "vix":          vix,

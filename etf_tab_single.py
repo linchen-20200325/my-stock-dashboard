@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
 def render_etf_single(gemini_fn=None):
@@ -337,7 +338,7 @@ def render_etf_single(gemini_fn=None):
     _pct = prem['premium_pct']
     if _pct is not None:
         if _pct <= -2:
-            _prem_color  = '#3fb950'
+            _prem_color  = TRAFFIC_GREEN
             _prem_action = '🟢 強烈買進時機'
             _prem_reason = f'折價 {abs(_pct):.2f}%，低於 NAV 買入，立即為你創造安全邊際'
         elif _pct <= -0.5:
@@ -345,15 +346,15 @@ def render_etf_single(gemini_fn=None):
             _prem_action = '🔵 合理買進'
             _prem_reason = f'折價 {abs(_pct):.2f}%，略低於 NAV，可正常分批買入'
         elif _pct <= 1.0:
-            _prem_color  = '#d29922'
+            _prem_color  = TRAFFIC_YELLOW
             _prem_action = '🟡 中性觀望'
             _prem_reason = f'溢價 {_pct:.2f}%（±1% 正常範圍），無需急追'
         elif _pct <= 3.0:
-            _prem_color  = '#f85149'
+            _prem_color  = TRAFFIC_RED
             _prem_action = '🔴 暫緩買進'
             _prem_reason = f'溢價 {_pct:.2f}%，高於 NAV，追高風險較大，等待回落'
         else:
-            _prem_color  = '#f85149'
+            _prem_color  = TRAFFIC_RED
             _prem_action = '🔴 嚴禁追高'
             _prem_reason = f'溢價 {_pct:.2f}%，嚴重高溢價，等待折價或換標的'
     elif prem.get('stale_nav'):
@@ -404,7 +405,7 @@ def render_etf_single(gemini_fn=None):
     if te is not None:
         ci.metric(f'追蹤誤差 vs {benchmark}', f'{te:.2f}%')
         if te > 1.5:
-            ci.markdown('<small style="color:#d29922;">⚠️ 追蹤誤差 >1.5%，注意隱藏成本</small>',
+            ci.markdown(f'<small style="color:{TRAFFIC_YELLOW};">⚠️ 追蹤誤差 >1.5%，注意隱藏成本</small>',
                         unsafe_allow_html=True)
     else:
         ci.metric('追蹤誤差', 'N/A',
@@ -628,7 +629,7 @@ def render_etf_single(gemini_fn=None):
                 _pct = _data['percentile']
                 _n = _data['peer_count']
                 _icon = '🟢' if _pct >= 75 else ('🟡' if _pct >= 25 else '🔴')
-                _color = '#3fb950' if _pct >= 75 else ('#d29922' if _pct >= 25 else '#f85149')
+                _color = TRAFFIC_GREEN if _pct >= 75 else (TRAFFIC_YELLOW if _pct >= 25 else TRAFFIC_RED)
                 st.markdown(
                     f"<div style='border:1px solid {_color};border-left:4px solid {_color};"
                     f"border-radius:0 6px 6px 0;padding:8px 14px;background:#0d1117'>"

@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 
 from etf_fetch import _fetch_news_for, _fetch_sector_returns
 from ai_structured_summary import build_structured_summary_prompt
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
 # ── 總經連動配置建議表 ────────────────────────────────────────
@@ -30,7 +31,7 @@ def macro_allocation_banner(regime: str) -> None:
     alloc = MACRO_ALLOC.get(regime, MACRO_ALLOC['neutral'])
     desc  = MACRO_DESC.get(regime, MACRO_DESC['neutral'])
     bg_map  = {'bull': '#0d2618', 'neutral': '#1e1a00', 'bear': '#2a0d0d'}
-    brd_map = {'bull': '#2ea043',  'neutral': '#d29922',  'bear': '#f85149'}
+    brd_map = {'bull': '#2ea043',  'neutral': TRAFFIC_YELLOW,  'bear': TRAFFIC_RED}
     bg  = bg_map.get(regime, '#1a1f2e')
     brd = brd_map.get(regime, '#1f6feb')
     alloc_html = ' &nbsp;|&nbsp; '.join(
@@ -51,8 +52,8 @@ def _colored_box(text: str, color: str = 'green') -> None:
     """統一彩色提示框"""
     cfg = {
         'green':  ('#0d2618', '#2ea043'),
-        'yellow': ('#1e1a00', '#d29922'),
-        'red':    ('#2a0d0d', '#f85149'),
+        'yellow': ('#1e1a00', TRAFFIC_YELLOW),
+        'red':    ('#2a0d0d', TRAFFIC_RED),
         'blue':   ('#0a1628', '#1f6feb'),
     }
     bg, brd = cfg.get(color, cfg['blue'])
@@ -74,7 +75,7 @@ def _teacher_conclusion(teacher: str, indicator_val: str, conclusion: str,
         elif any(k in conclusion + action for k in _pos_kw):
             color = '#da3633'
         else:
-            color = '#d29922'
+            color = TRAFFIC_YELLOW
     _label, _icon = _t2s(teacher)
     _action_str = f'，{action}' if action else ''
     st.markdown(
@@ -106,7 +107,7 @@ def _plot_etf_chart(df: pd.DataFrame, ticker: str,
                               name='MA50', line=dict(color='#ffa657', width=1, dash='dot'),
                               hovertemplate=_hover))
     fig.add_trace(go.Scatter(x=df.index, y=_pct(close.rolling(200).mean()).round(2),
-                              name='MA200', line=dict(color='#f85149', width=1, dash='dash'),
+                              name='MA200', line=dict(color=TRAFFIC_RED, width=1, dash='dash'),
                               hovertemplate=_hover))
     if not bench_df.empty:
         _bc   = bench_df['Close'].reindex(df.index).ffill().dropna()
@@ -114,7 +115,7 @@ def _plot_etf_chart(df: pd.DataFrame, ticker: str,
         _bc_pct = ((_bc / _bc_b) - 1) * 100   # 基準也從0%起算
         fig.add_trace(go.Scatter(x=_bc.index, y=_bc_pct.round(2),
                                   name=f'{benchmark}（基準）',
-                                  line=dict(color='#3fb950', width=1.2, dash='dash'),
+                                  line=dict(color=TRAFFIC_GREEN, width=1.2, dash='dash'),
                                   hovertemplate=_hover))
     fig.update_layout(
         template='plotly_dark', height=380,
@@ -161,7 +162,7 @@ def _plot_holdings_overlap(mat: pd.DataFrame, title: str = '') -> None:
         z=z, x=labels, y=labels,
         text=text, texttemplate='%{text}',
         colorscale=[[0.0, '#0d1117'], [0.3, '#5a2a1e'],
-                    [0.6, '#a73c2a'], [1.0, '#f85149']],
+                    [0.6, '#a73c2a'], [1.0, TRAFFIC_RED]],
         zmin=0, zmax=100,
         hoverongaps=False,
         colorbar=dict(thickness=10, title=dict(text='%', font=dict(size=11))),
@@ -246,12 +247,12 @@ def _render_bias(df: pd.DataFrame, ticker: str) -> None:
             b20  = b20.dropna().tail(60)
             fig  = go.Figure(go.Bar(
                 x=b20.index, y=b20.values,
-                marker_color=['#f85149' if v > 0 else '#3fb950' for v in b20.values],
+                marker_color=[TRAFFIC_RED if v > 0 else TRAFFIC_GREEN for v in b20.values],
                 name='BIAS(MA20)',
             ))
-            fig.add_hline(y=10,  line_dash='dot', line_color='#f85149',
+            fig.add_hline(y=10,  line_dash='dot', line_color=TRAFFIC_RED,
                           annotation_text='+10%')
-            fig.add_hline(y=-10, line_dash='dot', line_color='#3fb950',
+            fig.add_hline(y=-10, line_dash='dot', line_color=TRAFFIC_GREEN,
                           annotation_text='-10%')
             fig.update_layout(
                 template='plotly_dark', height=220,
@@ -401,7 +402,7 @@ def _render_monte_carlo(port_val: pd.Series, initial: float, ann_vol: float,
                 showlegend=False,
             ))
         for label, pct, color in [
-            ('P10', 10, '#f85149'), ('P50', 50, '#e3b341'), ('P90', 90, '#3fb950'),
+            ('P10', 10, TRAFFIC_RED), ('P50', 50, '#e3b341'), ('P90', 90, TRAFFIC_GREEN),
         ]:
             band = np.percentile(paths, pct, axis=0)
             fig.add_trace(go.Scatter(

@@ -13,6 +13,7 @@
 from __future__ import annotations
 import streamlit as st
 import pandas as pd
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 TWSE_BWIBBU_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d'
 
@@ -119,14 +120,14 @@ def _proxy_status_badge() -> str:
         from proxy_helper import get_proxy_config
         _p = get_proxy_config()
         if _p:
-            return ('<span style="background:#0a2818;color:#3fb950;padding:3px 10px;'
+            return (f'<span style="background:#0a2818;color:{TRAFFIC_GREEN};padding:3px 10px;'
                     'border-radius:6px;font-size:11px;font-weight:700;">'
                     '🟢 NAS 中繼站 已啟用</span>')
-        return ('<span style="background:#1f0d0d;color:#f85149;padding:3px 10px;'
+        return (f'<span style="background:#1f0d0d;color:{TRAFFIC_RED};padding:3px 10px;'
                 'border-radius:6px;font-size:11px;font-weight:700;">'
                 '🔴 NAS 中繼站 未設定（直連模式）</span>')
     except Exception:
-        return ('<span style="background:#2a1f00;color:#d29922;padding:3px 10px;'
+        return (f'<span style="background:#2a1f00;color:{TRAFFIC_YELLOW};padding:3px 10px;'
                 'border-radius:6px;font-size:11px;font-weight:700;">'
                 '🟡 Proxy 狀態未知</span>')
 

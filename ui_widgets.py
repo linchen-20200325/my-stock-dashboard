@@ -19,6 +19,7 @@
 - TERM_EXPLAIN: dict — 13 個常見術語的白話對照表
 """
 from __future__ import annotations
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
 # 術語白話對照表
@@ -54,11 +55,11 @@ def explain_box(term, simple_explain, detail=''):
 def traffic_light(value, good_cond, bad_cond, good_label, bad_label, neutral_label='⚪ 觀察'):
     """紅綠燈指示器"""
     if good_cond:
-        color, label = '#3fb950', f'🟢 {good_label}'
+        color, label = TRAFFIC_GREEN, f'🟢 {good_label}'
     elif bad_cond:
-        color, label = '#f85149', f'🔴 {bad_label}'
+        color, label = TRAFFIC_RED, f'🔴 {bad_label}'
     else:
-        color, label = '#d29922', neutral_label
+        color, label = TRAFFIC_YELLOW, neutral_label
     return color, label
 
 
@@ -144,7 +145,7 @@ def teacher_conclusion(teacher, indicator_val, conclusion, action='', color=None
         elif any(k in conclusion+action for k in _pos_kw):
             color = '#da3633'   # 漲=紅
         else:
-            color = '#d29922'
+            color = TRAFFIC_YELLOW
     _label, _icon = _to_strategy(teacher)
     _action_str = f'，{action}' if action else ''
     return (
@@ -160,8 +161,8 @@ def teacher_conclusion(teacher, indicator_val, conclusion, action='', color=None
 
 
 def signal_box(label, color, desc=''):
-    colors = {'green': ('#0d2818', '#3fb950'), 'red': ('#2a0d0d', '#f85149'),
-              'yellow': ('#2a1f00', '#d29922'), 'blue': ('#0d1b2a', '#58a6ff')}
+    colors = {'green': ('#0d2818', TRAFFIC_GREEN), 'red': ('#2a0d0d', TRAFFIC_RED),
+              'yellow': ('#2a1f00', TRAFFIC_YELLOW), 'blue': ('#0d1b2a', '#58a6ff')}
     bg, tc = colors.get(color, ('#161b22', '#8b949e'))
     return (f'<div style="background:{bg};border:1px solid {tc};border-radius:8px;'
             f'padding:10px 14px;margin:4px 0;">'
@@ -171,6 +172,6 @@ def signal_box(label, color, desc=''):
 
 def cond_badge(ok, label):
     """條件徽章：True → 綠色實心，False → 灰色淡色。tab_macro 五維點火條件列。"""
-    c = '#3fb950' if ok else '#484f58'
+    c = TRAFFIC_GREEN if ok else '#484f58'
     return (f'<span style="background:{c}22;border:1px solid {c};border-radius:4px;'
             f'padding:2px 8px;font-size:12px;color:{c};margin:2px;">{label}</span>')

@@ -14,6 +14,7 @@ import time
 import requests
 
 from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
 # ── Survival Module Prompt（存活能力：3大生死指標）──────────
@@ -707,31 +708,31 @@ def no_ai_overall_verdict(fin_data: dict, fh_result: dict) -> dict:
     eq_ok      = adv.get("Earnings_Quality", {}).get("Status", "") == "Pass"
 
     if is_dying or len(fail_items) >= 4:
-        grade, gc = "F", "#f85149"
+        grade, gc = "F", TRAFFIC_RED
         headline  = "🔴 高危企業！多項生死指標亮紅燈"
         comment   = (f"財務健康嚴重失衡，共 **{len(fail_items)}** 項指標觸警："
                      f"{'、'.join(fail_items[:4])}{'…' if len(fail_items) > 4 else ''}。"
                      f"請確認是否為財報資料異常，或確實存在財務困境。")
     elif len(fail_items) >= 2:
-        grade, gc = "C", "#d29922"
+        grade, gc = "C", TRAFFIC_YELLOW
         headline  = "🟡 有明顯改善空間，需謹慎評估"
         comment   = (f"關鍵警示：**{'、'.join(fail_items)}**。"
                      f"{'盈餘含金量高，現金流尚佳。' if eq_ok else ''}"
                      f"建議與同業比較，判斷是結構性問題還是短期壓力。")
     elif len(fail_items) == 1:
-        grade, gc = "B+", "#d29922"
+        grade, gc = "B+", TRAFFIC_YELLOW
         headline  = "🟡 大致穩健，單點需留意"
         comment   = (f"整體財務健康，但「**{fail_items[0]}**」尚需改善。"
                      f"{'其餘 ' + str(len(pass_items)) + ' 項指標達標。' if pass_items else ''}"
                      f"若下季持續改善，可列入重點追蹤。")
     elif is_cashcow:
-        grade, gc = "A+", "#3fb950"
+        grade, gc = "A+", TRAFFIC_GREEN
         headline  = "🟢 印鈔機！A+ 型企業，策略2 最愛標的"
         comment   = (f"企業 DNA = A+ 穩健印鈔機，OCF 為{'正' if ocf > 0 else '負'}。"
                      f"{'共 ' + str(len(pass_items)) + ' 項達標：' + '、'.join(pass_items[:5]) + '。' if pass_items else ''}"
                      f"現金流真實可信，財務體質堅實，符合 策略2「找到好生意」的核心標準。")
     elif score_pct >= 70:
-        grade, gc = "A", "#3fb950"
+        grade, gc = "A", TRAFFIC_GREEN
         headline  = "🟢 優質企業！財務體質健康"
         comment   = (f"多項指標通過 策略2 嚴格標準：**{'、'.join(pass_items[:5])}**{'等' if len(pass_items) > 5 else ''}。"
                      f"{'盈餘含金量高，現金流真實可信。' if eq_ok else ''}"

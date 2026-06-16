@@ -16,6 +16,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from etf_margin_simulator import (
     LEVERAGE_PRESETS,
     LIQUIDATION_RATIO,
@@ -169,7 +170,7 @@ def _render_chart(result, symbol: str) -> None:
     ))
     fig.add_trace(go.Scatter(
         x=df["date"], y=df["borrowed"], mode="lines",
-        name="借款餘額", line=dict(color="#d29922", width=1, dash="dot"),
+        name="借款餘額", line=dict(color=TRAFFIC_YELLOW, width=1, dash="dot"),
         yaxis="y2", fill="tozeroy", opacity=0.3,
     ))
     # 爆倉紅點
@@ -177,7 +178,7 @@ def _render_chart(result, symbol: str) -> None:
     if not liq_df.empty:
         fig.add_trace(go.Scatter(
             x=liq_df["date"], y=liq_df["price"], mode="markers",
-            name="💥 強制平倉", marker=dict(color="#f85149", size=12,
+            name="💥 強制平倉", marker=dict(color=TRAFFIC_RED, size=12,
                                           symbol="x"),
             yaxis="y",
         ))
@@ -186,7 +187,7 @@ def _render_chart(result, symbol: str) -> None:
     if not add_df.empty:
         fig.add_trace(go.Scatter(
             x=add_df["date"], y=add_df["price"], mode="markers",
-            name="🟢 加碼觸發", marker=dict(color="#3fb950", size=10,
+            name="🟢 加碼觸發", marker=dict(color=TRAFFIC_GREEN, size=10,
                                           symbol="triangle-down"),
             yaxis="y",
         ))

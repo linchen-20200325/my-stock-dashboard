@@ -25,6 +25,7 @@ from __future__ import annotations
 import streamlit as st
 
 from etf_helpers import auto_role
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
 def render_etf_portfolio(gemini_fn=None):
@@ -217,10 +218,10 @@ def render_etf_portfolio(gemini_fn=None):
         print(f'[macro_stock_link/etf_pf] {type(_e_msl).__name__}: {_e_msl}')
 
     # ── 資產總覽卡（總成本 / 總現值 / 資本利得 / 已領配息 / 總損益）──
-    _gain_color = '#3fb950' if total_gain >= 0 else '#f85149'
+    _gain_color = TRAFFIC_GREEN if total_gain >= 0 else TRAFFIC_RED
     _gain_sign  = '+' if total_gain >= 0 else ''
     _total_pnl  = total_gain + total_div
-    _pnl_color  = '#3fb950' if _total_pnl >= 0 else '#f85149'
+    _pnl_color  = TRAFFIC_GREEN if _total_pnl >= 0 else TRAFFIC_RED
     _pnl_sign   = '+' if _total_pnl >= 0 else ''
     st.markdown(
         f'<div style="background:#0d1117;border:1px solid #30363d;border-radius:10px;'
@@ -233,7 +234,7 @@ def render_etf_portfolio(gemini_fn=None):
         f'<div style="font-size:18px;font-weight:700;color:{_gain_color};">'
         f'{_gain_sign}{total_gain:,.0f} ({_gain_sign}{(total_gain/total_cost*100 if total_cost else 0):.2f}%)</div></div>'
         f'<div><div style="font-size:11px;color:#8b949e;">已領配息（近1年）</div>'
-        f'<div style="font-size:18px;font-weight:700;color:#d29922;">+{total_div:,.0f}</div></div>'
+        f'<div style="font-size:18px;font-weight:700;color:{TRAFFIC_YELLOW};">+{total_div:,.0f}</div></div>'
         f'<div><div style="font-size:11px;color:#8b949e;">總損益（利得+配息）</div>'
         f'<div style="font-size:18px;font-weight:900;color:{_pnl_color};">'
         f'{_pnl_sign}{_total_pnl:,.0f} ({_pnl_sign}{(_total_pnl/total_cost*100 if total_cost else 0):.2f}%)</div></div>'
@@ -241,7 +242,7 @@ def render_etf_portfolio(gemini_fn=None):
 
     # v18.198 ══ 📊 投組資料新鮮度條 ══（價格截止日 + 抓取時間 + age traffic-light + 強制重抓）
     _pf_age_min = (pd.Timestamp.now() - _pf_fetched_at).total_seconds() / 60
-    _pf_color = '#3fb950' if _pf_age_min < 60 else ('#d29922' if _pf_age_min < 240 else '#f85149')
+    _pf_color = TRAFFIC_GREEN if _pf_age_min < 60 else (TRAFFIC_YELLOW if _pf_age_min < 240 else TRAFFIC_RED)
     _pf_age_txt = (f'{_pf_age_min:.0f} 分鐘前' if _pf_age_min < 60
                    else (f'{_pf_age_min / 60:.1f} 小時前' if _pf_age_min < 1440 else f'{_pf_age_min / 1440:.1f} 天前'))
     _pf_end_txt = _pf_price_end.strftime('%Y-%m-%d') if _pf_price_end is not None else '—'
@@ -774,7 +775,7 @@ def render_etf_portfolio(gemini_fn=None):
         _fig_div = _go_div.Figure(_go_div.Bar(
             x=[f'{m}月' for m in range(1, 13)],
             y=[_monthly_cf[m] for m in range(1, 13)],
-            marker_color='#3fb950',
+            marker_color=TRAFFIC_GREEN,
             text=[f'{_monthly_cf[m]:,.0f}' if _monthly_cf[m] > 0 else ''
                   for m in range(1, 13)],
             textposition='auto',

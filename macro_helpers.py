@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 import pandas as pd
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 # 季末日對照（DataFrame 內「季度標籤 2024Q4」→「2024-12-31」用）
 _QE_MAP = {'1': '03-31', '2': '06-30', '3': '09-30', '4': '12-31'}
@@ -117,22 +118,22 @@ def calc_traffic_light(
     _s_thr = bull_min_score if bull_min_score is not None else BULL_MIN_SCORE
 
     if _defense or _health < _h_thr:
-        _color, _icon  = '#f85149', '🔴'
+        _color, _icon  = TRAFFIC_RED, '🔴'
         _label  = '空頭防禦｜降低部位'
         _action = '⛔ 大環境惡化，系統已啟動資金保護機制'
         _sub    = '建議持有現金，等待市場明確訊號，禁止追買任何個股'
     elif _regime == 'bull' and _score >= _s_thr:
-        _color, _icon  = '#3fb950', '🟢'
+        _color, _icon  = TRAFFIC_GREEN, '🟢'
         _label  = '多頭市場｜積極操作'
         _action = '✅ 市場健康，籌碼乾淨，可積極尋找強勢標的'
         _sub    = '可積極尋找強勢標的，留意趨勢延續性'
     elif _regime in ('caution', 'bear'):
-        _color, _icon  = '#f85149', '🔴'
+        _color, _icon  = TRAFFIC_RED, '🔴'
         _label  = '保守防禦｜縮減部位'
         _action = '⛔ 市場走弱，建議縮減持股比例，等待多頭確認'
         _sub    = '降低風險暴露，避免新開倉，等待多頭重啟'
     else:
-        _color, _icon  = '#d29922', '🟡'
+        _color, _icon  = TRAFFIC_YELLOW, '🟡'
         _label  = '震盪整理｜謹慎觀望'
         _action = '⚠️ 市場處於整理期，謹慎操作，降低部位'
         _sub    = '持有現有倉位觀望，不追高，等待更明確信號'
@@ -274,7 +275,7 @@ def detect_mk_golden_inflection(
         return {
             'label': 'MK 黃金拐點 ⭐',
             'icon': '⭐',
-            'color': '#3fb950',
+            'color': TRAFFIC_GREEN,
             'detail': (
                 f'核心 CPI {cpi_prev_yoy:+.2f}% → {cpi_yoy:+.2f}% '
                 f'（月降 {abs(cpi_delta):.2f}ppt） + Fed Funds '
@@ -286,7 +287,7 @@ def detect_mk_golden_inflection(
     return {
         'label': 'MK 拐點觀察中',
         'icon': '✅',
-        'color': '#d29922',
+        'color': TRAFFIC_YELLOW,
         'detail': (
             f'核心 CPI {cpi_prev_yoy:+.2f}% → {cpi_yoy:+.2f}% + '
             f'Fed Funds {fed_prev_rate:.2f}% → {fed_rate:.2f}% '
@@ -437,16 +438,16 @@ def classify_long_term_regime(
     score = weighted_sum / weight_total  # ∈ [-2, +2]
 
     if score >= 1.0:
-        regime, color, suggest = '🟢 成長期', '#3fb950', '80%+'
+        regime, color, suggest = '🟢 成長期', TRAFFIC_GREEN, '80%+'
         detail = '景氣擴張+通膨溫和+資金寬鬆 → 多頭主升段，可積極做多'
     elif score >= 0.0:
         regime, color, suggest = '🔵 復甦期', '#58a6ff', '60-80%'
         detail = '景氣由谷底回升 → 加碼基本面好的標的，留意通膨變化'
     elif score >= -1.0:
-        regime, color, suggest = '🟡 過熱/震盪期', '#d29922', '40-60%'
+        regime, color, suggest = '🟡 過熱/震盪期', TRAFFIC_YELLOW, '40-60%'
         detail = '景氣高檔震盪或通膨壓力 → 謹慎觀望，等待方向確認'
     else:
-        regime, color, suggest = '🔴 衰退期', '#f85149', '<30%'
+        regime, color, suggest = '🔴 衰退期', TRAFFIC_RED, '<30%'
         detail = '景氣下行+通膨壓力或政策緊縮 → 保守減倉，現金為王'
 
     return {
@@ -596,15 +597,15 @@ def classify_short_term_regime(
     score = weighted_sum / weight_total  # ∈ [-2, +2]
 
     if score >= 0.8:
-        regime, color = '⚡ 偏多', '#3fb950'
+        regime, color = '⚡ 偏多', TRAFFIC_GREEN
         detail = '下個財報季正向動能 → 加碼績優股、波段佈局好時機'
         action = '建議：擇強做多、留意外資連續買超的個股'
     elif score >= -0.3:
-        regime, color = '⚖️ 中性', '#d29922'
+        regime, color = '⚖️ 中性', TRAFFIC_YELLOW
         detail = '訊號分歧或多空交織 → 觀望為主、留意個股輪動'
         action = '建議：區間操作、避免追高殺低、續抱長期持股'
     else:
-        regime, color = '⚠️ 偏空', '#f85149'
+        regime, color = '⚠️ 偏空', TRAFFIC_RED
         detail = '下個財報季承壓 → 防守為主、現金為王'
         action = '建議：減碼高估值、停利出場、留意外資連續賣超'
 

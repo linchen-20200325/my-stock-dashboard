@@ -16,6 +16,7 @@ import streamlit as st
 
 from etf_categories import ETF_PEER_GROUPS
 from etf_dashboard import fetch_etf_dividends
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED
 
 # ── Constants ─────────────────────────────────────────────────
 LOOKBACK_DAYS = 400         # 取近 ~13 月配息，給月配 ETF 偶缺一月緩衝
@@ -239,7 +240,7 @@ def _render_month_grid(month_etfs: dict[int, list[str]], missing: set[int]) -> N
                 _etfs = month_etfs.get(_m, [])
                 _has = bool(_etfs)
                 _bg = '#0d2818' if _has else '#2d0e0e'
-                _border = '#3fb950' if _has else '#f85149'
+                _border = TRAFFIC_GREEN if _has else TRAFFIC_RED
                 _icon = '✅' if _has else '❌'
                 _content = ('<br>'.join(
                     f"<span style='background:#1f6feb22;color:#79c0ff;"

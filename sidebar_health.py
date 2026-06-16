@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime as _dt
 
 import streamlit as st
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 # 各資料源「主源」值集合（命中即 🟢；missing→🔴；空/unknown→⬜；其餘→🟠 降級）
 # 對齊 tab_stock.py L462-474（B1）+ E2 財報三段的 LABEL dict 慣例。
@@ -151,7 +152,7 @@ def render_sidebar_data_health(session_state) -> None:
         return
     _order = {"🔴": 3, "🟠": 2, "🟢": 1, "⬜": 0}
     _headline = max(_domain_emojis, key=lambda e: _order.get(e, 0)) if _domain_emojis else "⬜"
-    _border = {"🔴": "#f85149", "🟠": "#d29922", "🟢": "#3fb950", "⬜": "#444"}.get(_headline, "#444")
+    _border = {"🔴": TRAFFIC_RED, "🟠": TRAFFIC_YELLOW, "🟢": TRAFFIC_GREEN, "⬜": "#444"}.get(_headline, "#444")
     _body = "<br/>".join(_lines)
     st.markdown(
         f"<div style='background:#0d1117;border-left:4px solid {_border};"

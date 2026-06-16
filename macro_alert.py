@@ -8,6 +8,7 @@ Step 2：資料擷取 fetch_macro_snapshot()  ← v1.1 改走 NAS proxy via macr
 Step 3：UI 渲染 render_macro_alerts()
 """
 from __future__ import annotations
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 try:
     from config import MACRO_ALERT_RULES
@@ -319,9 +320,9 @@ def fetch_macro_snapshot(
 
 # 三色對應：背景色、文字色、邊框色
 _LEVEL_STYLE: dict[str, dict] = {
-    'red':    {'bg': '#2d1b1b', 'text': '#f85149', 'border': '#f85149', 'badge_bg': '#3d1f1f'},
-    'yellow': {'bg': '#2d2208', 'text': '#d29922', 'border': '#d29922', 'badge_bg': '#3a2c0a'},
-    'green':  {'bg': '#0d2318', 'text': '#3fb950', 'border': '#3fb950', 'badge_bg': '#142d1e'},
+    'red':    {'bg': '#2d1b1b', 'text': TRAFFIC_RED, 'border': TRAFFIC_RED, 'badge_bg': '#3d1f1f'},
+    'yellow': {'bg': '#2d2208', 'text': TRAFFIC_YELLOW, 'border': TRAFFIC_YELLOW, 'badge_bg': '#3a2c0a'},
+    'green':  {'bg': '#0d2318', 'text': TRAFFIC_GREEN, 'border': TRAFFIC_GREEN, 'badge_bg': '#142d1e'},
 }
 
 
