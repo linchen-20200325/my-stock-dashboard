@@ -9,7 +9,7 @@
 呼叫端：app.py:9055 `render_data_health_raw()`
 """
 import streamlit as st
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.colors import MATERIAL_ORANGE, TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 # ══════════════════════════════════════════════════════════════════
 # 資料診斷 v2：嚴格 Raw-only 版
@@ -457,7 +457,7 @@ def render_data_health_raw():
         # ── 頻率徽章顏色（與基金端對齊）──
         _FREQ_COLOR = {
             '日頻':   '#42a5f5',
-            '月頻':   '#ff9800',
+            '月頻':   MATERIAL_ORANGE,
             '季頻':   '#ef5350',
             '不定期': '#9e9e9e',
         }
@@ -1303,7 +1303,7 @@ def render_data_health_raw():
             f'共 {len(_anom_rows)} 筆異常　｜　🔴 抓不到/過舊 {_a_red}　🟡 時效延遲 {_a_yel}'
             f'　｜　依嚴重度排序（含個股+ETF detail rows）'
         )
-        _FREQ_COLOR_A = {'日頻': '#42a5f5', '月頻': '#ff9800',
+        _FREQ_COLOR_A = {'日頻': '#42a5f5', '月頻': MATERIAL_ORANGE,
                         '季頻': '#ef5350', '不定期': '#9e9e9e'}
         _td_aa = ('padding:6px 10px;border-bottom:1px solid #21262d;'
                   'font-size:12px')

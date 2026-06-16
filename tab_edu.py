@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from shared.colors import MATERIAL_GREEN, MATERIAL_ORANGE, MATERIAL_RED
+
 
 # #U7：單值總經指標若 identifier 為 FRED series id → 可抓歷史序列畫 sparkline
 _FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'XTEXVA01TWM664S': 'pc1', 'NAPM': 'lin'}
@@ -181,10 +183,10 @@ def render_tab_edu():
                         _val_str = (f"{_val:.2f}" if isinstance(_val, (int, float))
                                     else "—")
                         _z_str   = f"  Z={_z:+.2f}" if _z is not None else ""
-                        _z_color = ("#f44336" if _z is not None and abs(_z) >= 2 and
+                        _z_color = (MATERIAL_RED if _z is not None and abs(_z) >= 2 and
                                     ((_hib and _z > 0) or (_hib is False and _z < 0))
-                                    else ("#00c853" if _z is not None and abs(_z) >= 2
-                                          else ("#ff9800" if _z is not None and abs(_z) >= 1.5
+                                    else (MATERIAL_GREEN if _z is not None and abs(_z) >= 2
+                                          else (MATERIAL_ORANGE if _z is not None and abs(_z) >= 1.5
                                                 else "#79c0ff")))
                         st.markdown(
                             f"<div style='display:flex;gap:14px;align-items:baseline;"
