@@ -242,9 +242,11 @@ def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
 
 def health_grade(score):
     # v18.210 K4：走 shared/colors SSOT
+    # v18.214 K7：走 shared/health_thresholds SSOT 閾值常數
     from shared.colors import TRAFFIC_GREEN, TRAFFIC_YELLOW, TRAFFIC_RED
-    if score >= 80:
+    from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
+    if score >= HEALTH_GRADE_A_MIN:
         return '優質優良', TRAFFIC_GREEN, 'health-A', '🟢'
-    if score >= 50:
+    if score >= HEALTH_GRADE_B_MIN:
         return '震盪盤整', TRAFFIC_YELLOW, 'health-B', '🟡'
     return '弱勢危險', TRAFFIC_RED, 'health-C', '🔴'
