@@ -85,10 +85,12 @@ def final_recommendation(row: dict, score_map: dict) -> tuple[str, str]:
     val      = row.get('_val', '')
     trend    = row.get('_trend', '')
     mf_total = score_map.get(row['stock_id'], {}).get('total', 0)
+    # v18.214 K7：走 shared/health_thresholds SSOT 閾值常數
+    from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
     pts = 0
-    if health >= 80:
+    if health >= HEALTH_GRADE_A_MIN:
         pts += 3
-    elif health >= 50:
+    elif health >= HEALTH_GRADE_B_MIN:
         pts += 1
     if mf_total >= 75:
         pts += 3
