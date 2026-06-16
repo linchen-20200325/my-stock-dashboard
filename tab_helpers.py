@@ -14,6 +14,7 @@ import re
 from typing import Any, Optional
 
 import pandas as pd
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 _PCT_RE = re.compile(r'(-?\d+(?:\.\d+)?)\s*%')
 
@@ -103,10 +104,10 @@ def final_recommendation(row: dict, score_map: dict) -> tuple[str, str]:
     if '多頭' in trend:
         pts += 1
     if pts >= 7:
-        return '🟢 積極', '#3fb950'
+        return '🟢 積極', TRAFFIC_GREEN
     if pts >= 4:
-        return '🟡 觀察', '#d29922'
-    return '🔴 等待', '#f85149'
+        return '🟡 觀察', TRAFFIC_YELLOW
+    return '🔴 等待', TRAFFIC_RED
 
 
 def safe_ma(df: pd.DataFrame, n: int) -> float:

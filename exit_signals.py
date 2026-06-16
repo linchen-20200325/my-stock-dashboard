@@ -17,13 +17,14 @@ import json
 import re
 
 import pandas as pd
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 # 命中維度數 → (圖示, 標籤, 色碼)
 _LEVELS = {
-    3: ('🔴', '強烈出場', '#f85149'),
+    3: ('🔴', '強烈出場', TRAFFIC_RED),
     2: ('🟠', '建議減碼', '#f0883e'),
-    1: ('🟡', '留意觀察', '#d29922'),
-    0: ('🟢', '訊號清淡', '#3fb950'),
+    1: ('🟡', '留意觀察', TRAFFIC_YELLOW),
+    0: ('🟢', '訊號清淡', TRAFFIC_GREEN),
 }
 
 

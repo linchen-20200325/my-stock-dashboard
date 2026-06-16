@@ -14,12 +14,13 @@ from __future__ import annotations
 import datetime as _dt
 import os as _os
 import pandas as pd
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 # 階段名 → (建議資產, 配色)。配色與既有 GitHub 風格對齊。
 _QUADRANT_MAP = {
-    ('expand', 'rising'):    ('過熱 Overheat',    '大宗商品 / 能源', '#f85149'),
-    ('expand', 'falling'):   ('復甦 Recovery',    '股票',           '#3fb950'),
-    ('contract', 'rising'):  ('停滯 Stagflation', '現金 / 黃金',     '#d29922'),
+    ('expand', 'rising'):    ('過熱 Overheat',    '大宗商品 / 能源', TRAFFIC_RED),
+    ('expand', 'falling'):   ('復甦 Recovery',    '股票',           TRAFFIC_GREEN),
+    ('contract', 'rising'):  ('停滯 Stagflation', '現金 / 黃金',     TRAFFIC_YELLOW),
     ('contract', 'falling'): ('衰退 Recession',   '債券',           '#42a5f5'),
 }
 
@@ -179,9 +180,9 @@ def _build_quadrant_fig(pmi_yoy_chg: float, cpi_yoy: float, state: dict):
     ))
     # 四象限標籤
     _labels = [
-        (_ranges * 0.6, _y_hi * 0.85, '過熱', '#f85149'),
-        (_ranges * 0.6, _y_lo + (_CPI_THRESHOLD - _y_lo) * 0.3, '復甦', '#3fb950'),
-        (-_ranges * 0.6, _y_hi * 0.85, '停滯', '#d29922'),
+        (_ranges * 0.6, _y_hi * 0.85, '過熱', TRAFFIC_RED),
+        (_ranges * 0.6, _y_lo + (_CPI_THRESHOLD - _y_lo) * 0.3, '復甦', TRAFFIC_GREEN),
+        (-_ranges * 0.6, _y_hi * 0.85, '停滯', TRAFFIC_YELLOW),
         (-_ranges * 0.6, _y_lo + (_CPI_THRESHOLD - _y_lo) * 0.3, '衰退', '#42a5f5'),
     ]
     for _x, _y, _name, _c in _labels:

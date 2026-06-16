@@ -5,6 +5,7 @@ unified_decision.py  —  統一投資決策分析模組 v1.0
 import re as _re
 import json as _json
 import streamlit as st
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
 # ════════════════════════════════════════════════════════════════
@@ -94,10 +95,10 @@ def _color_from_summary(summary: str) -> tuple:
     """回傳 (bg, border, text) 三色。"""
     s = summary or ''
     if any(x in s for x in ('🟢', '✅', '買點', '建倉', '多頭')):
-        return '#0a1f10', '#3fb950', '#3fb950'
+        return '#0a1f10', TRAFFIC_GREEN, TRAFFIC_GREEN
     if any(x in s for x in ('🔴', '❌', '減碼', '停止', '賣出', '空頭', '過熱')):
-        return '#200a0a', '#f85149', '#f85149'
-    return '#141200', '#d29922', '#d29922'   # 🟡 中性/謹慎
+        return '#200a0a', TRAFFIC_RED, TRAFFIC_RED
+    return '#141200', TRAFFIC_YELLOW, TRAFFIC_YELLOW   # 🟡 中性/謹慎
 
 
 def _list_html(items, bullet_color: str) -> str:
@@ -146,9 +147,9 @@ def _render_cards(parsed: dict, ctx_type: str = 'stock') -> None:
         st.markdown(
             f'<div style="background:#0a1a0e;border:1px solid #238636;border-radius:10px;'
             f'padding:18px 20px;min-height:150px;">'
-            f'<div style="font-size:10px;font-weight:700;color:#3fb950;letter-spacing:2px;'
+            f'<div style="font-size:10px;font-weight:700;color:{TRAFFIC_GREEN};letter-spacing:2px;'
             f'margin-bottom:14px;">{left_label}</div>'
-            f'{_list_html(actions, "#3fb950")}'
+            f'{_list_html(actions, TRAFFIC_GREEN)}'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -156,9 +157,9 @@ def _render_cards(parsed: dict, ctx_type: str = 'stock') -> None:
         st.markdown(
             f'<div style="background:#1a1200;border:1px solid #9e6a03;border-radius:10px;'
             f'padding:18px 20px;min-height:150px;">'
-            f'<div style="font-size:10px;font-weight:700;color:#d29922;letter-spacing:2px;'
+            f'<div style="font-size:10px;font-weight:700;color:{TRAFFIC_YELLOW};letter-spacing:2px;'
             f'margin-bottom:14px;">{right_label}</div>'
-            f'{_list_html(risks, "#d29922")}'
+            f'{_list_html(risks, TRAFFIC_YELLOW)}'
             f'</div>',
             unsafe_allow_html=True,
         )

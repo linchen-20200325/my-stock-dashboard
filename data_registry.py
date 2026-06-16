@@ -34,6 +34,7 @@
 """
 from __future__ import annotations
 from typing import Any
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_YELLOW
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -851,9 +852,9 @@ def render_edu_card_html(entry: dict, edu: dict) -> str:
     _hist_html = ''
     if _hist:
         _hist_html = (
-            f'<div style="margin-top:8px;background:#1c2128;border-left:3px solid #d29922;'
+            f'<div style="margin-top:8px;background:#1c2128;border-left:3px solid {TRAFFIC_YELLOW};'
             f'padding:6px 10px;border-radius:0 4px 4px 0;font-size:11px;color:#c9d1d9;">'
-            f'<b style="color:#d29922;">📊 歷史錨點：</b>{_hist}</div>'
+            f'<b style="color:{TRAFFIC_YELLOW};">📊 歷史錨點：</b>{_hist}</div>'
         )
 
     return (
@@ -869,7 +870,7 @@ def render_edu_card_html(entry: dict, edu: dict) -> str:
         f'</div>'
         # 白話定義
         f'<div style="font-size:12px;color:#c9d1d9;line-height:1.6;">'
-        f'<b style="color:#3fb950;">💡 是什麼：</b>{_meaning}</div>'
+        f'<b style="color:{TRAFFIC_GREEN};">💡 是什麼：</b>{_meaning}</div>'
         # 判讀
         f'{_rules_html}'
         # 搭配

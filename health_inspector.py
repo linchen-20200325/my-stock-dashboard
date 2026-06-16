@@ -9,6 +9,7 @@
 呼叫端：app.py:9055 `render_data_health_raw()`
 """
 import streamlit as st
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 # ══════════════════════════════════════════════════════════════════
 # 資料診斷 v2：嚴格 Raw-only 版
@@ -414,8 +415,8 @@ def render_data_health_raw():
             if _ic in _fresh_cnt: _fresh_cnt[_ic] += 1
         _total = len(_global_rows)
         _ok_pct = round(_fresh_cnt['🟢'] / _total * 100) if _total else 0
-        _light_color = ('#3fb950' if _ok_pct >= 80 else
-                        '#d29922' if _ok_pct >= 50 else '#f85149')
+        _light_color = (TRAFFIC_GREEN if _ok_pct >= 80 else
+                        TRAFFIC_YELLOW if _ok_pct >= 50 else TRAFFIC_RED)
         _light_label = ('🟢 綠燈（資料健康）' if _ok_pct >= 80 else
                         '🟡 黃燈（部分缺失，AI 仍可執行，參考性降低）' if _ok_pct >= 50 else
                         '🔴 紅燈（資料不足，建議重新更新）')
@@ -479,8 +480,8 @@ def render_data_health_raw():
             _ic_r = (_r['新鮮度'] or '')[:1]
             _row_bg = ('#161b22' if _ic_r == '🟢' else
                        '#1a1200' if _ic_r == '🟡' else '#1a0808')
-            _fcol_r = ('#3fb950' if _ic_r == '🟢' else
-                       '#d29922' if _ic_r == '🟡' else '#f85149')
+            _fcol_r = (TRAFFIC_GREEN if _ic_r == '🟢' else
+                       TRAFFIC_YELLOW if _ic_r == '🟡' else TRAFFIC_RED)
             _fq = _r.get('頻率', '')
             _fc = _FREQ_COLOR.get(_fq, '#9e9e9e')
             _rows_html_g += (

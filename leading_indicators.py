@@ -21,6 +21,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import urllib3
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def _bps():
@@ -1288,34 +1289,34 @@ def render_leading_table(df):
             pass
         try: n = float(v)
         except: return ""
-        # 台股紅漲綠跌：正數 = 紅 #f85149 / 負數 = 綠 #3fb950
+        # 台股紅漲綠跌：正數 = 紅 (TRAFFIC_RED) / 負數 = 綠 (TRAFFIC_GREEN)
         if col in BRACKET:
-            if n > 0: return "color:#f85149;font-weight:bold;"
-            if n < 0: return "color:#3fb950;font-weight:bold;"
+            if n > 0: return f"color:{TRAFFIC_RED};font-weight:bold;"
+            if n < 0: return f"color:{TRAFFIC_GREEN};font-weight:bold;"
         if col in SPOT:
-            if n > 0: return "color:#f85149;"
-            if n < 0: return "color:#3fb950;"
+            if n > 0: return f"color:{TRAFFIC_RED};"
+            if n < 0: return f"color:{TRAFFIC_GREEN};"
         if col == "融資餘額":
             # 水位指標（紅=過熱警示 / 綠=寬鬆），不受紅漲綠跌影響
-            if n >= 3400: return "color:#f85149;font-weight:bold;"
-            if n >= 2800: return "color:#d29922;"
-            return "color:#3fb950;"
+            if n >= 3400: return f"color:{TRAFFIC_RED};font-weight:bold;"
+            if n >= 2800: return f"color:{TRAFFIC_YELLOW};"
+            return f"color:{TRAFFIC_GREEN};"
         if col == "融券餘額":
-            if n >= 100:  return "color:#f85149;"
+            if n >= 100:  return f"color:{TRAFFIC_RED};"
             return "color:#8b949e;"
         if col == "選PCR":
             # PCR 反向：高 PCR = 看空 (跌) = 綠 / 低 PCR = 看多 (漲) = 紅
-            if n < 80:  return "color:#f85149;"
-            if n > 120: return "color:#3fb950;"
+            if n < 80:  return f"color:{TRAFFIC_RED};"
+            if n > 120: return f"color:{TRAFFIC_GREEN};"
         if col == "未平倉口數":
-            if n > 0: return "color:#f85149;"
-            if n < 0: return "color:#3fb950;"
+            if n > 0: return f"color:{TRAFFIC_RED};"
+            if n < 0: return f"color:{TRAFFIC_GREEN};"
         if col == "韭菜指數":
             # 直接視角：散戶淨多正數 = 紅；散戶淨空負數 = 綠（反向解讀由 user 自行）
-            if n > 10:  return "color:#f85149;font-weight:bold;"
-            elif n > 0: return "color:#f85149;"
-            elif n < -10: return "color:#3fb950;font-weight:bold;"
-            elif n < 0: return "color:#3fb950;"
+            if n > 10:  return f"color:{TRAFFIC_RED};font-weight:bold;"
+            elif n > 0: return f"color:{TRAFFIC_RED};"
+            elif n < -10: return f"color:{TRAFFIC_GREEN};font-weight:bold;"
+            elif n < 0: return f"color:{TRAFFIC_GREEN};"
         return ""
     # 判斷是否有融資融券資料（避免顯示全空欄位）
     _has_margin = any(df[c].notna().any() for c in ["融資餘額","融券餘額"] if c in df.columns)

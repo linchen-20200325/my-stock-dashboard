@@ -15,6 +15,7 @@ import math
 import pandas as pd
 import streamlit as st
 
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from etf_dashboard import (
     fetch_etf_info, fetch_etf_dividends, get_etf_expense_ratio_safe,
 )
@@ -196,8 +197,8 @@ def render_quality_badge(quality: dict | None) -> None:
     _stars = quality['stars']
     _score = quality['score']
     _cov = quality['coverage']
-    _color = ('#3fb950' if _stars >= 4 else
-              '#d29922' if _stars == 3 else '#f85149')
+    _color = (TRAFFIC_GREEN if _stars >= 4 else
+              TRAFFIC_YELLOW if _stars == 3 else TRAFFIC_RED)
     _star_str = '★' * _stars + '☆' * (5 - _stars)
     st.markdown(
         f"#### ⭐ 品質評等　"
@@ -217,8 +218,8 @@ def render_quality_badge(quality: dict | None) -> None:
             else:
                 _icon = ('🟢' if _s >= 0.7 else
                          '🟡' if _s >= 0.4 else '🔴')
-                _scol = ('#3fb950' if _s >= 0.7 else
-                         '#d29922' if _s >= 0.4 else '#f85149')
+                _scol = (TRAFFIC_GREEN if _s >= 0.7 else
+                         TRAFFIC_YELLOW if _s >= 0.4 else TRAFFIC_RED)
                 _bar = int(_s * 100)
             _val_str = _fmt_factor_val(_k, _f['val'])
             st.markdown(

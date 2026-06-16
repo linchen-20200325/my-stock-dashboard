@@ -18,6 +18,7 @@ import sys
 # 解析 `_app_globals` 名稱對 Streamlit rerun 行為有依賴。
 # 改為把 globals dict 塞 proxy.__dict__，每次都 refresh，徹底解耦。
 import types as _types  # noqa: E402
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 class _AppProxy(_types.ModuleType):
     """Proxy：`from app import X` → 從 proxy 自己 dict 拿 live globals。"""
@@ -126,16 +127,16 @@ try:
 except Exception:
     pass
 
-st.markdown("""<style>
-.main{background:#0e1117;}
-[data-testid="stSidebar"]{background:#161b22;}
-.stTabs [data-baseweb="tab-list"]{gap:2px;}
-.stTabs [data-baseweb="tab"]{background:#161b22;color:#8b949e;border-radius:6px 6px 0 0;padding:8px 16px;font-size:13px;}
-.stTabs [aria-selected="true"]{background:linear-gradient(135deg,#1f6feb,#0d4faa);color:#fff;font-weight:700;}
-.teacher-card{background:#0d1117;border-left:3px solid #ffd700;border-radius:0 8px 8px 0;padding:10px 14px;margin:6px 0;}
-.health-A{background:linear-gradient(90deg,#0d2818,#0d1117);border:2px solid #3fb950;border-radius:12px;padding:16px;text-align:center;}
-.health-B{background:linear-gradient(90deg,#2a1f00,#0d1117);border:2px solid #d29922;border-radius:12px;padding:16px;text-align:center;}
-.health-C{background:linear-gradient(90deg,#2a0d0d,#0d1117);border:2px solid #f85149;border-radius:12px;padding:16px;text-align:center;}
+st.markdown(f"""<style>
+.main{{background:#0e1117;}}
+[data-testid="stSidebar"]{{background:#161b22;}}
+.stTabs [data-baseweb="tab-list"]{{gap:2px;}}
+.stTabs [data-baseweb="tab"]{{background:#161b22;color:#8b949e;border-radius:6px 6px 0 0;padding:8px 16px;font-size:13px;}}
+.stTabs [aria-selected="true"]{{background:linear-gradient(135deg,#1f6feb,#0d4faa);color:#fff;font-weight:700;}}
+.teacher-card{{background:#0d1117;border-left:3px solid #ffd700;border-radius:0 8px 8px 0;padding:10px 14px;margin:6px 0;}}
+.health-A{{background:linear-gradient(90deg,#0d2818,#0d1117);border:2px solid {TRAFFIC_GREEN};border-radius:12px;padding:16px;text-align:center;}}
+.health-B{{background:linear-gradient(90deg,#2a1f00,#0d1117);border:2px solid {TRAFFIC_YELLOW};border-radius:12px;padding:16px;text-align:center;}}
+.health-C{{background:linear-gradient(90deg,#2a0d0d,#0d1117);border:2px solid {TRAFFIC_RED};border-radius:12px;padding:16px;text-align:center;}}
 </style>""", unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════
@@ -763,7 +764,7 @@ def render_health_score(score, details, sid='', fund_scores=None, tech_alerts=No
     fund_html = ''
     if fund_scores:
         _cat_ic = {'profit':'💰','growth':'📈','dividend':'🎁','valuation':'⚖️'}
-        _sc_cl  = {0:'#8b949e',1:'#d29922',2:'#3fb950',3:'#2ea043'}
+        _sc_cl  = {0:'#8b949e',1:TRAFFIC_YELLOW,2:TRAFFIC_GREEN,3:'#2ea043'}
         fund_html = '<div style="display:flex;gap:4px;margin:10px 0;">'
         for cat in ['profit','growth','dividend','valuation']:
             fs  = fund_scores.get(cat,{})
@@ -773,7 +774,7 @@ def render_health_score(score, details, sid='', fund_scores=None, tech_alerts=No
             cl  = _sc_cl.get(min(sc,3),'#8b949e')
             chk = ''
             for cn,cv,cp in fs.get('checks',[])[:3]:
-                cc = '#3fb950' if cp else '#f85149'
+                cc = TRAFFIC_GREEN if cp else TRAFFIC_RED
                 chk += f'<div style="font-size:9px;color:{cc};margin-top:1px;">{"✓" if cp else "✗"} {cn}</div>'
             fund_html += (
                 f'<div style="flex:1;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:7px 4px;text-align:center;">'
@@ -786,11 +787,11 @@ def render_health_score(score, details, sid='', fund_scores=None, tech_alerts=No
     # ③ 技術警示
     tech_html = ''
     if tech_alerts:
-        _pc = {'🔴':'#f85149','🟡':'#d29922','🟢':'#3fb950'}
+        _pc = {'🔴':TRAFFIC_RED,'🟡':TRAFFIC_YELLOW,'🟢':TRAFFIC_GREEN}
         tech_html = '<div style="margin:8px 0;"><div style="font-size:11px;color:#8b949e;margin-bottom:4px;">⚡ 技術警示</div>'
         for pri,name,sig,desc in tech_alerts[:5]:
             bc = _pc.get(pri,'#484f58')
-            sc2 = '#f85149' if any(k in sig for k in ['看跌','空頭','超賣']) else ('#3fb950' if any(k in sig for k in ['看漲','多頭']) else '#d29922')
+            sc2 = TRAFFIC_RED if any(k in sig for k in ['看跌','空頭','超賣']) else (TRAFFIC_GREEN if any(k in sig for k in ['看漲','多頭']) else TRAFFIC_YELLOW)
             tech_html += (
                 f'<div style="display:flex;align-items:center;gap:6px;margin:3px 0;background:#0d1117;border-left:3px solid {bc};padding:4px 8px;border-radius:0 4px 4px 0;">'
                 f'<span style="font-size:10px;">{pri}</span>'
@@ -806,7 +807,7 @@ def render_health_score(score, details, sid='', fund_scores=None, tech_alerts=No
     breakdown = '<div style="margin-top:8px;">'
     for factor, (desc, got, total) in details.items():
         pct = got / total * 100
-        bc  = '#3fb950' if pct>=70 else ('#d29922' if pct>=40 else '#f85149')
+        bc  = TRAFFIC_GREEN if pct>=70 else (TRAFFIC_YELLOW if pct>=40 else TRAFFIC_RED)
         breakdown += (
             f'<div style="display:flex;align-items:center;gap:6px;margin:2px 0;">'
             f'<div style="width:45px;font-size:10px;color:#8b949e;text-align:right;">{factor}</div>'
@@ -979,17 +980,17 @@ def calc_jingqi(scan_results):
     if avg >= 60:
         pos = '80~100%'
         regime = 'bull'
-        color = '#3fb950'
+        color = TRAFFIC_GREEN
         label = '🟢 多頭積極'
     elif avg >= 40:
         pos = '50~70%'
         regime = 'neutral'
-        color = '#d29922'
+        color = TRAFFIC_YELLOW
         label = '🟡 中性均衡'
     elif avg >= 20:
         pos = '20~40%'
         regime = 'caution'
-        color = '#f85149'
+        color = TRAFFIC_RED
         label = '🟠 保守防禦'
     else:
         pos = '0~20%'
@@ -1015,7 +1016,7 @@ def render_market_overview(market_info: dict):
     idx      = market_info.get('index_price', 0)
     exposure = market_info.get('exposure_pct', '50%')
     signals  = market_info.get('signals', [])
-    color_map = {'bull': '#3fb950', 'neutral': '#d29922', 'bear': '#f85149'}
+    color_map = {'bull': TRAFFIC_GREEN, 'neutral': TRAFFIC_YELLOW, 'bear': TRAFFIC_RED}
     bg_map    = {'bull': '#0d2818', 'neutral': '#2a1f00', 'bear': '#2a0d0d'}
     color = color_map.get(regime, '#8b949e')
     bg    = bg_map.get(regime, '#161b22')

@@ -23,6 +23,7 @@ from __future__ import annotations
 import streamlit as st
 
 from etf_helpers import norm_lower_better, norm_return
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
 def render_etf_backtest(gemini_fn=None):
@@ -159,7 +160,7 @@ def render_etf_backtest(gemini_fn=None):
     if bench_val is not None:
         fig.add_trace(go.Scatter(x=bench_val.index, y=bench_val.values,
                                   name=f'📊 {bench_ticker}（基準）',
-                                  line=dict(color='#3fb950', width=1.5, dash='dash')))
+                                  line=dict(color=TRAFFIC_GREEN, width=1.5, dash='dash')))
     fig.update_layout(
         template='plotly_dark', height=380,
         yaxis_title='資產價值（元）',
@@ -233,7 +234,7 @@ def render_etf_backtest(gemini_fn=None):
             r=_bench_scores + [_bench_scores[0]],
             theta=_radar_labels + [_radar_labels[0]],
             fill='toself', name=f'📊 {bench_ticker}（基準）',
-            line=dict(color='#3fb950', width=1.5, dash='dash'),
+            line=dict(color=TRAFFIC_GREEN, width=1.5, dash='dash'),
             fillcolor='rgba(63,185,80,0.15)'))
     _fig_radar.update_layout(
         polar=dict(
@@ -265,8 +266,8 @@ def render_etf_backtest(gemini_fn=None):
         _grade_pts += 1
     _grade_label = ('⭐⭐⭐ 優秀' if _grade_pts >= 7 else
                     '⭐⭐ 良好' if _grade_pts >= 4 else '⭐ 普通')
-    _grade_color = ('#3fb950' if _grade_pts >= 7 else
-                    '#d29922' if _grade_pts >= 4 else '#f85149')
+    _grade_color = (TRAFFIC_GREEN if _grade_pts >= 7 else
+                    TRAFFIC_YELLOW if _grade_pts >= 4 else TRAFFIC_RED)
     _sharpe_note = ('夏普值≥1.0，承擔風險有充分補償' if sharpe >= 1.0 else
                     '夏普值<0.5，波動大但報酬低，需檢視配置' if sharpe < 0.5 else
                     '夏普值介於0.5-1.0，風險報酬比尚可')
@@ -323,28 +324,28 @@ def render_etf_backtest(gemini_fn=None):
         _cagr_vals = [r['CAGR'] for r in _indiv_rows]
         _fig_indiv.add_trace(go.Bar(
             x=_tickers_i, y=_cagr_vals, name='CAGR',
-            marker_color=['#3fb950' if v >= 6 else ('#d29922' if v >= 0 else '#f85149') for v in _cagr_vals],
+            marker_color=[TRAFFIC_GREEN if v >= 6 else (TRAFFIC_YELLOW if v >= 0 else TRAFFIC_RED) for v in _cagr_vals],
             text=[f'{v:.2f}%' for v in _cagr_vals], textposition='outside'),
             row=1, col=1)
         # 波動率：越低越好 → 反向色階
         _vol_vals = [r['波動率'] for r in _indiv_rows]
         _fig_indiv.add_trace(go.Bar(
             x=_tickers_i, y=_vol_vals, name='波動率',
-            marker_color=['#3fb950' if v <= 15 else ('#d29922' if v <= 25 else '#f85149') for v in _vol_vals],
+            marker_color=[TRAFFIC_GREEN if v <= 15 else (TRAFFIC_YELLOW if v <= 25 else TRAFFIC_RED) for v in _vol_vals],
             text=[f'{v:.2f}%' for v in _vol_vals], textposition='outside'),
             row=1, col=2)
         # MDD：絕對值越小越好（負值往下長）→ 反向色階
         _mdd_vals = [r['最大回撤'] for r in _indiv_rows]
         _fig_indiv.add_trace(go.Bar(
             x=_tickers_i, y=_mdd_vals, name='MDD',
-            marker_color=['#3fb950' if abs(v) <= 10 else ('#d29922' if abs(v) <= 20 else '#f85149') for v in _mdd_vals],
+            marker_color=[TRAFFIC_GREEN if abs(v) <= 10 else (TRAFFIC_YELLOW if abs(v) <= 20 else TRAFFIC_RED) for v in _mdd_vals],
             text=[f'{v:.1f}%' for v in _mdd_vals], textposition='outside'),
             row=2, col=1)
         # 夏普值：>= 1 優、>= 0.5 可、< 0.5 弱
         _sharpe_vals = [r['夏普值'] for r in _indiv_rows]
         _fig_indiv.add_trace(go.Bar(
             x=_tickers_i, y=_sharpe_vals, name='夏普值',
-            marker_color=['#3fb950' if v >= 1 else ('#d29922' if v >= 0.5 else '#f85149') for v in _sharpe_vals],
+            marker_color=[TRAFFIC_GREEN if v >= 1 else (TRAFFIC_YELLOW if v >= 0.5 else TRAFFIC_RED) for v in _sharpe_vals],
             text=[f'{v:.2f}' for v in _sharpe_vals], textposition='outside'),
             row=2, col=2)
         _fig_indiv.update_layout(
