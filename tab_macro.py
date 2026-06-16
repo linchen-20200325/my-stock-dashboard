@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
 
 from macro_helpers import calc_traffic_light, rp_entry, rp_scalar, rp_ts
 from tab_helpers import safe_get
@@ -123,7 +123,7 @@ def _render_global_risk_radar(fred_api_key: str = "",
             st.markdown(
                 f'**{_label}**：{_sig}  \n'
                 f'<span style="color:#8b949e;font-size:12px;">{_note}</span>  \n'
-                f'<span style="color:#6e7681;font-size:11px;">資料源：{_src}</span>',
+                f'<span style="color:{TRAFFIC_NEUTRAL};font-size:11px;">資料源：{_src}</span>',
                 unsafe_allow_html=True,
             )
         st.caption('💡 雷達為「短線急殺領先指標」（1～5 日視角），與上方長/短期總經（季級）互補。'
@@ -216,15 +216,15 @@ def render_tab_macro():
         if tl.get('conf', 0) < 70:
             _missing = tl.get('missing_sources', []) or []
             _missing_lines = ''.join(
-                f'<li style="margin:4px 0;color:#f85149;">❌ {m}</li>' for m in _missing
+                f'<li style="margin:4px 0;color:{TRAFFIC_RED};">❌ {m}</li>' for m in _missing
             ) if _missing else '<li style="color:#8b949e;">（無法判斷）</li>'
             with placeholder.container():
                 st.markdown(
                     f'<div style="background:linear-gradient(135deg,#2a1d00,#1a1208);'
-                    f'border:2px solid #d29922;border-radius:14px;padding:18px 22px;margin-bottom:12px;">'
-                    f'<div style="font-size:22px;font-weight:900;color:#d29922;">⏸️ 資料不足，無法判斷市場狀態</div>'
+                    f'border:2px solid {TRAFFIC_YELLOW};border-radius:14px;padding:18px 22px;margin-bottom:12px;">'
+                    f'<div style="font-size:22px;font-weight:900;color:{TRAFFIC_YELLOW};">⏸️ 資料不足，無法判斷市場狀態</div>'
                     f'<div style="font-size:13px;color:#c9d1d9;margin-top:8px;">'
-                    f'目前數據信心 <b style="color:#f85149;">{tl["conf"]}%</b>'
+                    f'目前數據信心 <b style="color:{TRAFFIC_RED};">{tl["conf"]}%</b>'
                     f'（門檻 70%，避免新舊資料混雜誤導決策）</div>'
                     f'<div style="font-size:12px;color:#8b949e;margin-top:10px;">缺少以下資料來源：</div>'
                     f'<ul style="font-size:13px;margin:6px 0 0 4px;padding-left:20px;">{_missing_lines}</ul>'
@@ -408,11 +408,11 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
 
     st.markdown('<div style="background:#0a1628;border:1px solid #1f6feb;border-radius:12px;padding:16px;margin-bottom:12px;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:18px;font-weight:900;color:#58a6ff;margin-bottom:8px;">🌍 今日市場總覽 — 現在適合買股票嗎？</div>', unsafe_allow_html=True)
-    st.markdown('''<div style="font-size:13px;color:#c9d1d9;line-height:1.8;">
+    st.markdown(f'''<div style="font-size:13px;color:#c9d1d9;line-height:1.8;">
 投資前先看大環境，就像出門前先看天氣預報。這個頁面告訴你：<br>
-• <b style="color:#3fb950;">現在是多頭市場（晴天）</b> → 可以積極找好股票買進<br>
-• <b style="color:#d29922;">現在是震盪整理（多雲）</b> → 謹慎操作，小量買進<br>
-• <b style="color:#f85149;">現在是空頭市場（下雨）</b> → 先保留現金，等待機會<br>
+• <b style="color:{TRAFFIC_GREEN};">現在是多頭市場（晴天）</b> → 可以積極找好股票買進<br>
+• <b style="color:{TRAFFIC_YELLOW};">現在是震盪整理（多雲）</b> → 謹慎操作，小量買進<br>
+• <b style="color:{TRAFFIC_RED};">現在是空頭市場（下雨）</b> → 先保留現金，等待機會<br>
 </div>''', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -615,9 +615,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _monthly_loss = st.session_state.get('monthly_loss_pct', 0)
         if _monthly_loss < -10:
             st.markdown(
-                f'<div style="background:#3a0000;border:2px solid #f85149;border-radius:10px;'
+                f'<div style="background:#3a0000;border:2px solid {TRAFFIC_RED};border-radius:10px;'
                 f'padding:14px;margin:10px 0;text-align:center;">'
-                f'<div style="font-size:16px;font-weight:900;color:#f85149;">⛔ 月虧損警示</div>'
+                f'<div style="font-size:16px;font-weight:900;color:{TRAFFIC_RED};">⛔ 月虧損警示</div>'
                 f'<div style="font-size:13px;color:#c9d1d9;margin-top:6px;">'
                 f'本月虧損已達 {abs(_monthly_loss):.1f}%，建議暫停操作 7 天<br>'
                 f'冷靜後重新評估選股邏輯</div></div>',
@@ -688,7 +688,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _chips_loaded = st.session_state.get('chips_loaded', False)
         if _chips_loaded:
             st.markdown(
-                '<div style="font-size:12px;color:#3fb950;text-align:center;'
+                f'<div style="font-size:12px;color:{TRAFFIC_GREEN};text-align:center;'
                 'padding:8px;border:1px solid #21262d;border-radius:6px;background:#0d1117;">'
                 '✅ 籌碼面已載入<br>'
                 '<span style="font-size:10px;color:#8b949e;">下次點按鈕即重新抓取</span></div>',
@@ -3140,7 +3140,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 st.markdown(
                     f'<div style="border-left:5px solid {_wcolor};background:#0d1117;'
                     f'padding:9px 14px;border-radius:0 8px 8px 0;margin:4px 0;">'
-                    f'<span style="font-size:11px;color:#6e7681;">⚡ 進階警示</span><br>'
+                    f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">⚡ 進階警示</span><br>'
                     f'<span style="font-size:14px;font-weight:900;color:{_wcolor};">{_wc} {_wt}</span><br>'
                     f'<span style="font-size:12px;color:#c9d1d9;">{_wd}</span><br>'
                     f'<span style="font-size:11px;color:#8b949e;">→ {_wa}</span>'
@@ -3160,7 +3160,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             st.markdown(
                 f'<div style="border-left:5px solid {_v4_c};background:#0d1117;'
                 f'padding:9px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
-                f'<span style="font-size:11px;color:#6e7681;">🏛️ v4.0 總經否決權</span><br>'
+                f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">🏛️ v4.0 總經否決權</span><br>'
                 f'<span style="font-size:14px;font-weight:900;color:{_v4_c};">'
                 f'{_v4_veto["status"]} — 最大建議持股 {_v4_veto["max_position"]}%</span><br>'
                 f'<span style="font-size:12px;color:#c9d1d9;">{_v4_veto["msg"]}</span>'
@@ -3193,7 +3193,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             st.markdown(
                 f'<div style="border-left:5px solid {_v5_color};background:#0d1117;'
                 f'padding:9px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
-                f'<span style="font-size:11px;color:#6e7681;">💰 v5 動態配置</span><br>'
+                f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">💰 v5 動態配置</span><br>'
                 f'<span style="font-size:14px;font-weight:900;color:{_v5_color};">'
                 f'建議股票 {_v5_stock}% ／現金 {_v5_cash}%</span><br>'
                 f'<span style="font-size:12px;color:#c9d1d9;">📌 {_v5_strategy}</span>'
@@ -3533,7 +3533,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             f'padding:10px 14px;margin:8px 0;">'
             f'<span style="color:{_sig_color};font-weight:700;">{_adl_signal}</span>'
             f'　｜　騰落線 {_adl_val:,.0f} {_adl_trend} MA20({_adl_ma20:,.0f})'
-            + ('　⚠️ <span style="color:#f85149;font-weight:700;">背離警告：指數漲但廣度萎縮！</span>' if _divergence else '') +
+            + (f'　⚠️ <span style="color:{TRAFFIC_RED};font-weight:700;">背離警告：指數漲但廣度萎縮！</span>' if _divergence else '') +
             '</div>', unsafe_allow_html=True)
 
         # 騰落線圖（ADL + MA20 + 上漲佔比）

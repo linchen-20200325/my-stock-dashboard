@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
 from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
 
 
@@ -591,7 +591,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
             if _qtr2_cached:
                 _stale_parts.append('季財報')
             st.markdown(
-                f'<div style="background:#3a2814;border-left:4px solid #d29922;'
+                f'<div style="background:#3a2814;border-left:4px solid {TRAFFIC_YELLOW};'
                 f'border-radius:4px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#ffd33d;">'
                 f'⚠️ <b>{"／".join(_stale_parts)} 本次抓取失敗，目前顯示上次成功的舊值</b>'
                 f'　— 按右上「🔄 強制重抓」可重試'
@@ -748,7 +748,7 @@ padding:14px 18px;margin-bottom:12px;">
             st.markdown('</div>', unsafe_allow_html=True)
 
         with _mc_cols[1]:
-            st.markdown('<div style="background:#0a1628;border:1px solid #3fb950;border-radius:10px;padding:12px;">', unsafe_allow_html=True)
+            st.markdown(f'<div style="background:#0a1628;border:1px solid {TRAFFIC_GREEN};border-radius:10px;padding:12px;">', unsafe_allow_html=True)
             st.markdown('**🏆 勝利方程式（需全部符合）**')
             _wr_mkt2 = st.session_state.get('mkt_info', {})
             _wr_reg2 = _wr_mkt2.get('regime','neutral') if _wr_mkt2 else 'neutral'
@@ -789,7 +789,7 @@ padding:14px 18px;margin-bottom:12px;">
 
         if _ban_items:
             for _bi in _ban_items:
-                st.markdown(f'<div style="background:#2a0d0d;border-left:3px solid #f85149;border-radius:0 6px 6px 0;padding:7px 12px;margin:3px 0;font-size:12px;color:#f85149;">'
+                st.markdown(f'<div style="background:#2a0d0d;border-left:3px solid {TRAFFIC_RED};border-radius:0 6px 6px 0;padding:7px 12px;margin:3px 0;font-size:12px;color:{TRAFFIC_RED};">'
                            f'⛔ {_bi}</div>', unsafe_allow_html=True)
         else:
             st.success('✅ 今日無禁止操作情況，可以正常評估')
@@ -863,7 +863,7 @@ padding:14px 18px;margin-bottom:12px;">
                     f'<div style="font-size:15px;font-weight:900;color:{_ex["color"]};">'
                     f'🚨 出場點綜合提示 — {_ex["headline"]}</div>'
                     f'<div style="margin-top:6px;">{_ex_dim_html}</div>'
-                    f'<div style="font-size:10px;color:#6e7681;margin-top:4px;">'
+                    f'<div style="font-size:10px;color:{TRAFFIC_NEUTRAL};margin-top:4px;">'
                     f'三維計分（利空新聞為 Gemini 情緒判讀，6h 快取）；下方為各策略詳細訊號</div>'
                     f'</div>', unsafe_allow_html=True)
             except Exception as _ex_err:
@@ -946,14 +946,14 @@ padding:14px 18px;margin-bottom:12px;">
                 st.markdown('<div style="background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:10px;">', unsafe_allow_html=True)
                 st.markdown('**🎯 目標 + 停損**')
                 st.markdown(f'<div style="font-size:12px;color:#c9d1d9;padding:2px 0;">📌 現價：<b>{_p2:.2f}</b></div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:12px;color:#3fb950;padding:2px 0;">🎯 初步目標（策略3 一比一對稱）：<b>{_target1:.2f}</b></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:12px;color:{TRAFFIC_GREEN};padding:2px 0;">🎯 初步目標（策略3 一比一對稱）：<b>{_target1:.2f}</b></div>', unsafe_allow_html=True)
                 _sl_hard = round(_p2 * 0.93, 2)
                 _sl_ma20 = round(_ma20 * 0.99, 2)
                 _dist_hard = round((_p2 - _sl_hard) / _p2 * 100, 1) if _p2 else 0
                 _dist_ma20 = round((_p2 - _sl_ma20) / _p2 * 100, 1) if _p2 else 0
                 _dist_ma5  = round((_p2 - _ma5) / _p2 * 100, 1) if _p2 and _ma5 else 0
-                st.markdown(f'<div style="font-size:12px;color:#f85149;padding:2px 0;">🛑 硬停損(-7%)：<b>{_sl_hard:.2f}</b> <span style="color:#484f58;">（尚差{_dist_hard:.1f}%）</span></div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:12px;color:#d29922;padding:2px 0;">⚠️ 月線停損：<b>{_sl_ma20:.2f}</b> <span style="color:#484f58;">（尚差{_dist_ma20:.1f}%）</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:12px;color:{TRAFFIC_RED};padding:2px 0;">🛑 硬停損(-7%)：<b>{_sl_hard:.2f}</b> <span style="color:#484f58;">（尚差{_dist_hard:.1f}%）</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:12px;color:{TRAFFIC_YELLOW};padding:2px 0;">⚠️ 月線停損：<b>{_sl_ma20:.2f}</b> <span style="color:#484f58;">（尚差{_dist_ma20:.1f}%）</span></div>', unsafe_allow_html=True)
                 st.markdown(f'<div style="font-size:12px;color:#58a6ff;padding:2px 0;">📍 5MA停利：<b>{_ma5:.2f}</b> <span style="color:#484f58;">（尚差{_dist_ma5:.1f}%）</span></div>', unsafe_allow_html=True)
                 # 加碼點
                 if _bull_align and vcp2 and not _vcp_ok:
@@ -1629,7 +1629,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         except Exception as _ce:
             pass
 
-        st.markdown("""<div style="margin:24px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#3fb95018,#0d1117);border-left:4px solid #3fb950;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#3fb950;">📊 基本面分析</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">357殖利率評價 · 財報領先指標 · 月營收趨勢 · 六大先行指標</span></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div style="margin:24px 0 8px;padding:8px 16px;background:linear-gradient(90deg,{TRAFFIC_GREEN}18,#0d1117);border-left:4px solid {TRAFFIC_GREEN};border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:{TRAFFIC_GREEN};">📊 基本面分析</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">357殖利率評價 · 財報領先指標 · 月營收趨勢 · 六大先行指標</span></div>""", unsafe_allow_html=True)
         # ══ B. 357 評價 ════════════════════════════════════════
         st.markdown('---')
         st.markdown('#### 💰 B. 357殖利率評價 [策略1]')
@@ -2157,7 +2157,7 @@ padding:12px 16px;margin:8px 0;">
                         _db = '不管K線多好看，先觀望'
         st.markdown(teacher_conclusion('孫慶龍', _d_ind, _da, _db), unsafe_allow_html=True)
         st.markdown(
-            '<div style="background:#0a1628;border-left:3px solid #3fb950;padding:8px 12px;'
+            f'<div style="background:#0a1628;border-left:3px solid {TRAFFIC_GREEN};padding:8px 12px;'
             'border-radius:0 6px 6px 0;margin-bottom:8px;font-size:12px;color:#c9d1d9;">'
             '💡 月營收年增率（YoY%）= 今年這個月比去年同月多賺了幾%'
             '<br>🟢 <b>連續3個月YoY>15%</b> = 業績爆發，股價可能跟著漲'
@@ -2455,11 +2455,11 @@ padding:12px 16px;margin:8px 0;">
             _cons_html  = ''.join(f'<li style="margin:2px 0;">⛔ {c}</li>' for c in _cons)  if _cons  else ''
             _notes_html = ''.join(f'<li style="margin:2px 0;">{n}</li>'    for n in _notes) if _notes else ''
 
-            _pros_section  = (f'<div style="margin-top:6px;"><span style="font-size:11px;color:#3fb950;font-weight:600;">多方因素</span>'
+            _pros_section  = (f'<div style="margin-top:6px;"><span style="font-size:11px;color:{TRAFFIC_GREEN};font-weight:600;">多方因素</span>'
                               f'<ul style="margin:2px 0 0 12px;padding:0;font-size:11px;color:#e6edf3;">{_pros_html}</ul></div>') if _pros_html else ''
-            _cons_section  = (f'<div style="margin-top:4px;"><span style="font-size:11px;color:#f85149;font-weight:600;">風險因素</span>'
+            _cons_section  = (f'<div style="margin-top:4px;"><span style="font-size:11px;color:{TRAFFIC_RED};font-weight:600;">風險因素</span>'
                               f'<ul style="margin:2px 0 0 12px;padding:0;font-size:11px;color:#e6edf3;">{_cons_html}</ul></div>') if _cons_html else ''
-            _notes_section = (f'<div style="margin-top:4px;"><span style="font-size:11px;color:#d29922;font-weight:600;">注意事項</span>'
+            _notes_section = (f'<div style="margin-top:4px;"><span style="font-size:11px;color:{TRAFFIC_YELLOW};font-weight:600;">注意事項</span>'
                               f'<ul style="margin:2px 0 0 12px;padding:0;font-size:11px;color:#8b949e;">{_notes_html}</ul></div>') if _notes_html else ''
 
             st.markdown(
@@ -2729,8 +2729,8 @@ padding:12px 16px;margin:8px 0;">
                     _gm2_ok = _gm2.get('Status', '') == 'Good'
                     with _p5c[0]:
                         st.markdown(
-                            f'<div style="background:{"#3fb95018" if _gm2_ok else "#f8514918"};'
-                            f'border:1px solid {"#3fb95055" if _gm2_ok else "#f8514955"};'
+                            f'<div style="background:{"{TRAFFIC_GREEN}18" if _gm2_ok else "{TRAFFIC_RED}18"};'
+                            f'border:1px solid {"{TRAFFIC_GREEN}55" if _gm2_ok else "{TRAFFIC_RED}55"};'
                             f'border-radius:8px;padding:10px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">毛利率</div>'
                             f'<div style="font-size:17px;font-weight:900;color:{TRAFFIC_GREEN if _gm2_ok else TRAFFIC_RED};">{_gm2.get("Value","N/A")}</div>'
@@ -2741,8 +2741,8 @@ padding:12px 16px;margin:8px 0;">
                     _om2_ok = _om2.get('Core_Business_Profitable', 'No') == 'Yes'
                     with _p5c[1]:
                         st.markdown(
-                            f'<div style="background:{"#3fb95018" if _om2_ok else "#f8514918"};'
-                            f'border:1px solid {"#3fb95055" if _om2_ok else "#f8514955"};'
+                            f'<div style="background:{"{TRAFFIC_GREEN}18" if _om2_ok else "{TRAFFIC_RED}18"};'
+                            f'border:1px solid {"{TRAFFIC_GREEN}55" if _om2_ok else "{TRAFFIC_RED}55"};'
                             f'border-radius:8px;padding:10px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">營業利益率</div>'
                             f'<div style="font-size:17px;font-weight:900;color:{TRAFFIC_GREEN if _om2_ok else TRAFFIC_RED};">{_om2.get("Value","N/A")}</div>'
@@ -2753,8 +2753,8 @@ padding:12px 16px;margin:8px 0;">
                     _mos2_ok = _mos2.get('Status', '') == 'Strong'
                     with _p5c[2]:
                         st.markdown(
-                            f'<div style="background:{"#3fb95018" if _mos2_ok else "#d2992218"};'
-                            f'border:1px solid {"#3fb95055" if _mos2_ok else "#d2992255"};'
+                            f'<div style="background:{"{TRAFFIC_GREEN}18" if _mos2_ok else "{TRAFFIC_YELLOW}18"};'
+                            f'border:1px solid {"{TRAFFIC_GREEN}55" if _mos2_ok else "{TRAFFIC_YELLOW}55"};'
                             f'border-radius:8px;padding:10px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">安全邊際</div>'
                             f'<div style="font-size:17px;font-weight:900;color:{TRAFFIC_GREEN if _mos2_ok else TRAFFIC_YELLOW};">{_mos2.get("Value","N/A")}</div>'
@@ -3239,8 +3239,8 @@ padding:12px 16px;margin:8px 0;">
 # TAB 3: 綜合評分戰情室（汰弱留強 × 多因子評分 合併版）
 # ══════════════════════════════════════════════════════════════
 
-    st.markdown("""<div style="background:#2a0d0d;border:1px solid #f85149;border-radius:8px;
-padding:10px 14px;font-size:11px;color:#f85149;margin-top:12px;">
+    st.markdown(f"""<div style="background:#2a0d0d;border:1px solid {TRAFFIC_RED};border-radius:8px;
+padding:10px 14px;font-size:11px;color:{TRAFFIC_RED};margin-top:12px;">
 ⚠️ 本手冊整理自各大師公開課程內容，僅供學術研究與教育用途。
 投資涉及風險，任何操作均應自行判斷，盈虧自負。本系統非投資顧問，不構成買賣建議。
 </div>""", unsafe_allow_html=True)
