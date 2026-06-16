@@ -700,6 +700,67 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
             }
         )
 
+        # v18.213 L2：多檔模組比較表（鏡像 Fund L1 expander → 合併表 pattern）
+        # ── 經營能力多檔比較表 ───────────────────────────────────
+        _op_rows = []
+        for _sid_o, _fd_o in _fh_t3_cached.items():
+            _oper_o = _fd_o.get('operating_module', {}) or {}
+            if not _oper_o or _fd_o.get('error'):
+                continue
+            _op_rows.append({
+                '代碼':     _sid_o,
+                'DSO 應收': _oper_o.get('DSO', 'N/A'),
+                'DIO 存貨': _oper_o.get('DIO', 'N/A'),
+                'DPO 應付': _oper_o.get('DPO', 'N/A'),
+                '翻桌率':   _oper_o.get('Asset_Turnover', 'N/A'),
+                '完整循環': _oper_o.get('Complete_Cycle', 'N/A'),
+                '現金缺口': _oper_o.get('Cash_Gap_Days', 'N/A'),
+            })
+        if _op_rows:
+            st.markdown('##### ⚙️ 經營能力多檔比較（MJ DSO/DIO/DPO）')
+            _df_op = pd.DataFrame(_op_rows)
+            st.dataframe(
+                _df_op, use_container_width=True, hide_index=True,
+                column_config={
+                    '代碼':     st.column_config.TextColumn('代碼', width='small'),
+                    'DSO 應收': st.column_config.TextColumn('DSO 應收'),
+                    'DIO 存貨': st.column_config.TextColumn('DIO 存貨'),
+                    'DPO 應付': st.column_config.TextColumn('DPO 應付'),
+                    '翻桌率':   st.column_config.TextColumn('翻桌率'),
+                    '完整循環': st.column_config.TextColumn('完整循環'),
+                    '現金缺口': st.column_config.TextColumn('現金缺口'),
+                }
+            )
+
+        # ── 獲利能力多檔比較表 ───────────────────────────────────
+        _pf_rows = []
+        for _sid_p, _fd_p in _fh_t3_cached.items():
+            _prof_p = _fd_p.get('profitability_module', {}) or {}
+            if not _prof_p or _fd_p.get('error'):
+                continue
+            _pf_rows.append({
+                '代碼':       _sid_p,
+                '毛利率':     _prof_p.get('Gross_Margin', {}).get('Value', 'N/A'),
+                '營業利益率': _prof_p.get('Operating_Margin', {}).get('Value', 'N/A'),
+                '安全邊際':   _prof_p.get('Margin_Of_Safety', {}).get('Value', 'N/A'),
+                '淨利率':     _prof_p.get('Net_Margin', {}).get('Value', 'N/A'),
+                'ROE':        _prof_p.get('ROE', {}).get('Value', 'N/A'),
+            })
+        if _pf_rows:
+            st.markdown('##### 💰 獲利能力多檔比較（MJ 5大指標）')
+            _df_pf = pd.DataFrame(_pf_rows)
+            st.dataframe(
+                _df_pf, use_container_width=True, hide_index=True,
+                column_config={
+                    '代碼':       st.column_config.TextColumn('代碼', width='small'),
+                    '毛利率':     st.column_config.TextColumn('毛利率'),
+                    '營業利益率': st.column_config.TextColumn('營業利益率', width='medium'),
+                    '安全邊際':   st.column_config.TextColumn('安全邊際'),
+                    '淨利率':     st.column_config.TextColumn('淨利率'),
+                    'ROE':        st.column_config.TextColumn('ROE'),
+                }
+            )
+
         # ── 個股詳細展開卡片 ──────────────────────────────────────
         st.markdown('##### 🔍 個股詳細體檢報告')
         for _sid_f, _fd_f in _fh_t3_cached.items():
