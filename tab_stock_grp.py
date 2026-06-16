@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from tab_helpers import (
     final_recommendation,
     format_condition_emoji,
@@ -69,9 +70,9 @@ def render_stock_grp():
     _t3c1, _t3c2, _t3c3 = st.columns(3)
     with _t3c1:
         _tl_label = _t3_tl.get('traffic_light') or '未載入'
-        _tl_color = ('#3fb950' if '綠' in _tl_label else
-                     '#d29922' if '黃' in _tl_label else
-                     '#f85149' if '紅' in _tl_label else '#484f58')
+        _tl_color = (TRAFFIC_GREEN if '綠' in _tl_label else
+                     TRAFFIC_YELLOW if '黃' in _tl_label else
+                     TRAFFIC_RED if '紅' in _tl_label else '#484f58')
         st.markdown(
             f'<div style="background:#0d1117;border:1px solid {_tl_color}33;border-radius:8px;'
             f'padding:10px 14px;text-align:center;">'
@@ -765,11 +766,11 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
         st.markdown('##### 🔍 個股詳細體檢報告')
         for _sid_f, _fd_f in _fh_t3_cached.items():
             _dna_f = _fd_f.get('business_model_dna', '無法判斷')
-            _dna_color = ('#3fb950' if _dna_f.startswith('A+') else
+            _dna_color = (TRAFFIC_GREEN if _dna_f.startswith('A+') else
                           '#2ea043' if _dna_f.startswith('A') else
-                          '#d29922' if _dna_f.startswith('B') else
+                          TRAFFIC_YELLOW if _dna_f.startswith('B') else
                           '#f97316' if _dna_f.startswith('C') else
-                          '#f85149')
+                          TRAFFIC_RED)
             with st.expander(f'🏥 {_sid_f} — DNA: {_dna_f}', expanded=False):
                 # 生死燈號
                 _gc1, _gc2, _gc3 = st.columns(3)
@@ -790,8 +791,8 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                     _fig_f = go.Figure(go.Scatterpolar(
                         r=_vals_f, theta=_cats_f_closed,
                         fill='toself', fillcolor='rgba(63,185,80,0.15)',
-                        line=dict(color='#3fb950', width=2),
-                        marker=dict(size=6, color='#3fb950'),
+                        line=dict(color=TRAFFIC_GREEN, width=2),
+                        marker=dict(size=6, color=TRAFFIC_GREEN),
                     ))
                     _fig_f.update_layout(
                         polar=dict(
@@ -829,13 +830,13 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 if _surv_f and not _fd_f.get('error'):
                     st.markdown('**🏥 存活能力精細診斷（MJ 3大生死指標）**')
                     _s_cols = st.columns(3)
-                    _status_color = {'Pass': '#3fb950', 'Acceptable': '#d29922', 'Fail': '#f85149'}
+                    _status_color = {'Pass': TRAFFIC_GREEN, 'Acceptable': TRAFFIC_YELLOW, 'Fail': TRAFFIC_RED}
                     for _col, (_key, _label) in zip(_s_cols, [
                         ('Cash_Ratio', '💰 氣長不長'),
                         ('DSO_Speed',  '⚡ 收現速度'),
                     ]):
                         _si = _surv_f.get(_key, {})
-                        _sc = _status_color.get(_si.get('Status', 'Fail'), '#f85149')
+                        _sc = _status_color.get(_si.get('Status', 'Fail'), TRAFFIC_RED)
                         with _col:
                             st.markdown(
                                 f'<div style="background:{_sc}18;border:1px solid {_sc}55;'
@@ -846,7 +847,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                                 f'<div style="font-size:10px;color:#8b949e;margin-top:4px;">{_si.get("Insight","")}</div>'
                                 f'</div>', unsafe_allow_html=True)
                     _r110 = _surv_f.get('Rule_100_100_10', {})
-                    _r110_sc = _status_color.get(_r110.get('Status', 'Fail'), '#f85149')
+                    _r110_sc = _status_color.get(_r110.get('Status', 'Fail'), TRAFFIC_RED)
                     # 各分項勾叉（門檻：A>100% / B≥100% / C>10%，與 financial_health_engine:416/423/431 對齊）
                     _a_ok = parse_cash_flow_ratio(_r110.get('Cash_Flow_Ratio',''), 100, strict=True)
                     _b_ok = parse_cash_flow_ratio(_r110.get('Cash_Flow_Adequacy',''), 100, strict=False)
@@ -890,7 +891,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                     with _o2c[1]:
                         _ccc_f = str(_oper_f.get('Cash_Gap_Days', '0'))
                         _ccc_num_f = float(''.join(c for c in _ccc_f if c in '0123456789.-') or '0')
-                        _ccc_color_f = '#3fb950' if _ccc_num_f <= 0 else ('#d29922' if _ccc_num_f <= 30 else '#f85149')
+                        _ccc_color_f = TRAFFIC_GREEN if _ccc_num_f <= 0 else (TRAFFIC_YELLOW if _ccc_num_f <= 30 else TRAFFIC_RED)
                         _opm_yes_f = _oper_f.get('OPM_Strategy', 'No') == 'Yes'
                         st.markdown(
                             f'<div style="text-align:center;padding:8px;background:#161b22;border-radius:6px;">'
@@ -909,35 +910,35 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                     _gm_f_ok = _gm_f.get('Status', '') == 'Good'
                     with _p5f[0]:
                         st.markdown(
-                            f'<div style="background:{"#3fb95018" if _gm_f_ok else "#f8514918"};border:1px solid {"#3fb95055" if _gm_f_ok else "#f8514955"};'
+                            f'<div style="background:{f"{TRAFFIC_GREEN}18" if _gm_f_ok else f"{TRAFFIC_RED}18"};border:1px solid {f"{TRAFFIC_GREEN}55" if _gm_f_ok else f"{TRAFFIC_RED}55"};'
                             f'border-radius:8px;padding:8px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">毛利率</div>'
-                            f'<div style="font-size:15px;font-weight:900;color:{"#3fb950" if _gm_f_ok else "#f85149"};">{_gm_f.get("Value","N/A")}</div>'
-                            f'<div style="font-size:9px;color:{"#3fb950" if _gm_f_ok else "#f85149"};">{"好生意" if _gm_f_ok else "辛苦"}</div>'
+                            f'<div style="font-size:15px;font-weight:900;color:{TRAFFIC_GREEN if _gm_f_ok else TRAFFIC_RED};">{_gm_f.get("Value","N/A")}</div>'
+                            f'<div style="font-size:9px;color:{TRAFFIC_GREEN if _gm_f_ok else TRAFFIC_RED};">{"好生意" if _gm_f_ok else "辛苦"}</div>'
                             f'</div>', unsafe_allow_html=True)
                     _om_f = _prof_f.get('Operating_Margin', {})
                     _om_f_ok = _om_f.get('Core_Business_Profitable', 'No') == 'Yes'
                     with _p5f[1]:
                         st.markdown(
-                            f'<div style="background:{"#3fb95018" if _om_f_ok else "#f8514918"};border:1px solid {"#3fb95055" if _om_f_ok else "#f8514955"};'
+                            f'<div style="background:{f"{TRAFFIC_GREEN}18" if _om_f_ok else f"{TRAFFIC_RED}18"};border:1px solid {f"{TRAFFIC_GREEN}55" if _om_f_ok else f"{TRAFFIC_RED}55"};'
                             f'border-radius:8px;padding:8px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">營業利益率</div>'
-                            f'<div style="font-size:15px;font-weight:900;color:{"#3fb950" if _om_f_ok else "#f85149"};">{_om_f.get("Value","N/A")}</div>'
-                            f'<div style="font-size:9px;color:{"#3fb950" if _om_f_ok else "#f85149"};">{"本業獲利✅" if _om_f_ok else "本業虧損❌"}</div>'
+                            f'<div style="font-size:15px;font-weight:900;color:{TRAFFIC_GREEN if _om_f_ok else TRAFFIC_RED};">{_om_f.get("Value","N/A")}</div>'
+                            f'<div style="font-size:9px;color:{TRAFFIC_GREEN if _om_f_ok else TRAFFIC_RED};">{"本業獲利✅" if _om_f_ok else "本業虧損❌"}</div>'
                             f'</div>', unsafe_allow_html=True)
                     _mos_f = _prof_f.get('Margin_Of_Safety', {})
                     _mos_f_ok = _mos_f.get('Status', '') == 'Strong'
                     with _p5f[2]:
                         st.markdown(
-                            f'<div style="background:{"#3fb95018" if _mos_f_ok else "#d2992218"};border:1px solid {"#3fb95055" if _mos_f_ok else "#d2992255"};'
+                            f'<div style="background:{f"{TRAFFIC_GREEN}18" if _mos_f_ok else f"{TRAFFIC_YELLOW}18"};border:1px solid {f"{TRAFFIC_GREEN}55" if _mos_f_ok else f"{TRAFFIC_YELLOW}55"};'
                             f'border-radius:8px;padding:8px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">安全邊際</div>'
-                            f'<div style="font-size:15px;font-weight:900;color:{"#3fb950" if _mos_f_ok else "#d29922"};">{_mos_f.get("Value","N/A")}</div>'
-                            f'<div style="font-size:9px;color:{"#3fb950" if _mos_f_ok else "#d29922"};">{"抗震極強" if _mos_f_ok else "費用偏高"}</div>'
+                            f'<div style="font-size:15px;font-weight:900;color:{TRAFFIC_GREEN if _mos_f_ok else TRAFFIC_YELLOW};">{_mos_f.get("Value","N/A")}</div>'
+                            f'<div style="font-size:9px;color:{TRAFFIC_GREEN if _mos_f_ok else TRAFFIC_YELLOW};">{"抗震極強" if _mos_f_ok else "費用偏高"}</div>'
                             f'</div>', unsafe_allow_html=True)
                     _nm_f = _prof_f.get('Net_Margin', {})
                     _nm_f_s = _nm_f.get('Status', '')
-                    _nm_f_c = '#3fb950' if _nm_f_s == 'Pass' else ('#d29922' if _nm_f_s == 'Thin Profit' else '#f85149')
+                    _nm_f_c = TRAFFIC_GREEN if _nm_f_s == 'Pass' else (TRAFFIC_YELLOW if _nm_f_s == 'Thin Profit' else TRAFFIC_RED)
                     with _p5f[3]:
                         st.markdown(
                             f'<div style="background:{_nm_f_c}18;border:1px solid {_nm_f_c}55;'
@@ -953,7 +954,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                     except (ValueError, AttributeError):
                         _roe_f_num = None
                     _roe_f_positive = _roe_f_num is not None and _roe_f_num > 0
-                    _roe_f_c = '#d29922' if _roe_f_warn else ('#3fb950' if _roe_f_positive else '#f85149')
+                    _roe_f_c = TRAFFIC_YELLOW if _roe_f_warn else (TRAFFIC_GREEN if _roe_f_positive else TRAFFIC_RED)
                     with _p5f[4]:
                         st.markdown(
                             f'<div style="background:{_roe_f_c}18;border:1px solid {_roe_f_c}55;'
@@ -972,7 +973,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                     _fsf2c = st.columns(2)
                     _dr_f = _fstr_f.get('Debt_Ratio', {})
                     _dr_f_s = _dr_f.get('Status', '')
-                    _dr_f_c = {'Pass': '#3fb950', 'Warning': '#d29922', 'Fail': '#f85149', 'N/A': '#8b949e'}.get(_dr_f_s, '#8b949e')
+                    _dr_f_c = {'Pass': TRAFFIC_GREEN, 'Warning': TRAFFIC_YELLOW, 'Fail': TRAFFIC_RED, 'N/A': '#8b949e'}.get(_dr_f_s, '#8b949e')
                     with _fsf2c[0]:
                         st.markdown(
                             f'<div style="background:{_dr_f_c}18;border:1px solid {_dr_f_c}55;'
@@ -984,7 +985,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                             f'</div></div>', unsafe_allow_html=True)
                     _ltf_f = _fstr_f.get('Long_Term_Funding_Ratio', {})
                     _ltf_f_s = _ltf_f.get('Status', '')
-                    _ltf_f_c = '#3fb950' if _ltf_f_s == 'Pass' else ('#8b949e' if _ltf_f_s == 'N/A' else '#f85149')
+                    _ltf_f_c = TRAFFIC_GREEN if _ltf_f_s == 'Pass' else ('#8b949e' if _ltf_f_s == 'N/A' else TRAFFIC_RED)
                     _ltf_f_label = ('✅ 資金配置正確' if _ltf_f_s == 'Pass'
                                     else ('⚪ 資料不足' if _ltf_f_s == 'N/A'
                                           else '🔴 短債長投危機'))
@@ -1007,7 +1008,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                     _sv_f_v = _solv_f.get('Final_Solvency_Verdict', '')
                     _sv_f_pass = 'Pass' in _sv_f_v
                     _sv_f_exc  = 'Exception' in _sv_f_v
-                    _sv_f_bc   = '#3fb950' if _sv_f_pass and not _sv_f_exc else ('#d29922' if _sv_f_exc else '#f85149')
+                    _sv_f_bc   = TRAFFIC_GREEN if _sv_f_pass and not _sv_f_exc else (TRAFFIC_YELLOW if _sv_f_exc else TRAFFIC_RED)
                     _sv_f_icon = '✅' if _sv_f_pass and not _sv_f_exc else ('⚡' if _sv_f_exc else '🔴')
                     st.markdown(
                         f'<div style="background:{_sv_f_bc}18;border:1px solid {_sv_f_bc}55;'
@@ -1031,13 +1032,13 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                             try:
                                 _cr_f_num = float(_si_f.get('Value', '0').replace('%', '').strip())
                                 if _cr_f_num > _cr_thresh_f:
-                                    _si_f_c, _si_f_s = '#3fb950', f'Pass（保命符 >{_cr_thresh_f}%）'
+                                    _si_f_c, _si_f_s = TRAFFIC_GREEN, f'Pass（保命符 >{_cr_thresh_f}%）'
                                 else:
-                                    _si_f_c = '#f85149'
+                                    _si_f_c = TRAFFIC_RED
                             except (ValueError, AttributeError):
-                                _si_f_c = '#3fb950' if 'Pass' in _si_f_s else '#f85149'
+                                _si_f_c = TRAFFIC_GREEN if 'Pass' in _si_f_s else TRAFFIC_RED
                         else:
-                            _si_f_c = '#3fb950' if 'Pass' in _si_f_s else '#f85149'
+                            _si_f_c = TRAFFIC_GREEN if 'Pass' in _si_f_s else TRAFFIC_RED
                         with _col_s:
                             st.markdown(
                                 f'<div style="background:{_si_f_c}18;border:1px solid {_si_f_c}55;'
@@ -1061,7 +1062,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                     # 盈餘品質
                     _eq_f = _adv_f.get('Earnings_Quality', {})
                     _eq_f_s = _eq_f.get('Status', '')
-                    _eq_f_c = '#3fb950' if _eq_f_s == 'Pass' else ('#f85149' if _eq_f_s == 'Fail' else '#8b949e')
+                    _eq_f_c = TRAFFIC_GREEN if _eq_f_s == 'Pass' else (TRAFFIC_RED if _eq_f_s == 'Fail' else '#8b949e')
                     with _adf3c[0]:
                         st.markdown(
                             f'<div style="background:{_eq_f_c}18;border:1px solid {_eq_f_c}55;'
@@ -1072,7 +1073,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                             f'</div>', unsafe_allow_html=True)
                     # 雙高危機
                     _dh_f = _adv_f.get('Double_High_Warning', '')
-                    _dh_f_c = '#f85149' if 'Triggered' in _dh_f else ('#3fb950' if 'Clear' in _dh_f else '#8b949e')
+                    _dh_f_c = TRAFFIC_RED if 'Triggered' in _dh_f else (TRAFFIC_GREEN if 'Clear' in _dh_f else '#8b949e')
                     with _adf3c[1]:
                         st.markdown(
                             f'<div style="background:{_dh_f_c}18;border:1px solid {_dh_f_c}55;'
@@ -1082,7 +1083,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                             f'</div>', unsafe_allow_html=True)
                     # 企業 DNA
                     _dna_f = _adv_f.get('Business_DNA', 'N/A')
-                    _dna_f_c = '#3fb950' if 'A+' in _dna_f else ('#f85149' if '瀕死' in _dna_f else '#58a6ff')
+                    _dna_f_c = TRAFFIC_GREEN if 'A+' in _dna_f else (TRAFFIC_RED if '瀕死' in _dna_f else '#58a6ff')
                     with _adf3c[2]:
                         st.markdown(
                             f'<div style="background:{_dna_f_c}18;border:1px solid {_dna_f_c}55;'
@@ -1097,7 +1098,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 _insight_f = _fd_f.get('ai_insight', '')
                 if _insight_f:
                     st.markdown(
-                        f'<div style="background:#161b22;border-left:3px solid #3fb950;'
+                        f'<div style="background:#161b22;border-left:3px solid {TRAFFIC_GREEN};'
                         f'padding:10px 14px;border-radius:0 6px 6px 0;'
                         f'font-size:13px;color:#c9d1d9;margin-top:8px;">'
                         f'🤖 {_insight_f}</div>',
@@ -1433,11 +1434,11 @@ def _render_mj_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '') 
     _stale = sum(1 for r in rows if r.get('snap_stale') is True)
     _missing = sum(1 for r in rows if r.get('snap_stale') is None)
     if _stale == 0 and _missing == 0:
-        _fc, _ft = '#3fb950', '🟢 全部最新'
+        _fc, _ft = TRAFFIC_GREEN, '🟢 全部最新'
     elif _fresh == 0:
-        _fc, _ft = '#f85149', '🔴 全部落後或缺'
+        _fc, _ft = TRAFFIC_RED, '🔴 全部落後或缺'
     else:
-        _fc, _ft = '#d29922', '🟡 部分落後'
+        _fc, _ft = TRAFFIC_YELLOW, '🟡 部分落後'
     st_mod.markdown(
         f'<div style="margin:8px 0;padding:8px 14px;border-left:4px solid {_fc};'
         f'background:{_fc}14;border-radius:0 6px 6px 0;font-size:13px;">'
