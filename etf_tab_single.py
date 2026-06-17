@@ -49,10 +49,12 @@ def render_etf_single(gemini_fn=None):
 
     st.markdown('#### 🔍 輸入 ETF 代號')
     col_l, col_r = st.columns([2, 1])
-    ticker    = col_l.text_input('ETF 代號（台灣加 .TW，如 0050.TW | 美國：SPY、QQQ）',
-                                  value='0050.TW', key='etf_s_ticker').strip().upper()
-    benchmark = col_r.text_input('對照基準（留空自動偵測）',
-                                  value='', key='etf_s_bench').strip().upper()
+    from etf_helpers import normalize_etf_ticker
+    ticker    = normalize_etf_ticker(col_l.text_input(
+        'ETF 代號（台股純數字自動補 .TW，如 0050 或 0050.TW | 美國：SPY、QQQ）',
+        value='0050', key='etf_s_ticker'))
+    benchmark = normalize_etf_ticker(col_r.text_input(
+        '對照基準（留空自動偵測）', value='', key='etf_s_bench'))
     if not benchmark:
         benchmark = auto_detect_benchmark(ticker)
 

@@ -92,9 +92,10 @@ def render_etf_portfolio(gemini_fn=None):
         return
 
     # ── 解析 data_editor 表格 → rows（1 張 = 1000 股換算）─────
+    from etf_helpers import normalize_etf_ticker
     rows = []
     for _, _row in edited_df.iterrows():
-        _tk_raw = str(_row.get('股票代號') or '').strip().upper()
+        _tk_raw = normalize_etf_ticker(_row.get('股票代號'))
         if not _tk_raw:
             continue
         try:
@@ -1135,10 +1136,11 @@ def _render_cloud_storage(edited_df):
             if edited_df is None or len(edited_df) == 0:
                 st.warning('⚠️ 目前表格為空，請先填入持股')
             else:
+                from etf_helpers import normalize_etf_ticker
                 _rows_to_save = []
                 for _r in edited_df.to_dict('records'):
                     _rows_to_save.append({
-                        'ticker':    str(_r.get('股票代號') or '').strip().upper(),
+                        'ticker':    normalize_etf_ticker(_r.get('股票代號')),
                         'lots':      _r.get('持有張數'),
                         'avg_price': _r.get('平均買入價格'),
                     })

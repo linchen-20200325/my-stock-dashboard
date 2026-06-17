@@ -3,8 +3,13 @@
 零 Streamlit / Plotly 依賴；任何 module 皆可直接 import。
 - norm_return / norm_lower_better：雷達圖五維分數正規化（etf_tab_backtest）
 - auto_role：MK 框架 #9 核心/衛星分類（etf_tab_portfolio）
+- normalize_etf_ticker：ETF 代號規範化 SSOT（純 4-6 碼補 .TW；v18.224）
 """
 from __future__ import annotations
+
+import re as _re_etf_helpers
+
+_TW_PURE_RE = _re_etf_helpers.compile(r'^\d{4,6}[A-Z]?$')
 
 
 def norm_return(v: float, lo: float = -50, mid: float = 0, hi: float = 50) -> float:
@@ -51,3 +56,26 @@ def auto_role(tk: str | None) -> str:
     """
     code = (tk or '').replace('.TWO', '').replace('.TW', '').upper()
     return '核心' if code in _CORE_TICKERS else '衛星'
+
+
+def normalize_etf_ticker(raw: str | None) -> str:
+    """ETF 代號規範化 SSOT — 純 4-6 碼台股自動補 .TW；其餘原樣大寫去空白。
+
+    場景：ETF 單檔診斷 / ETF 組合 / ETF 多檔批次評分 共用，user 不必手動加 .TW。
+    範例：
+      '0050'    → '0050.TW'
+      '00919'   → '00919.TW'
+      '00980A'  → '00980A.TW'（主動式 ETF）
+      '0050.TW' → '0050.TW'（已含後綴原樣）
+      'SPY'     → 'SPY'（美股無後綴）
+      '  0056 ' → '0056.TW'（去空白）
+      ''/None   → ''
+    """
+    if not raw:
+        return ''
+    _t = str(raw).strip().upper()
+    if not _t:
+        return ''
+    if _TW_PURE_RE.fullmatch(_t):
+        return f'{_t}.TW'
+    return _t
