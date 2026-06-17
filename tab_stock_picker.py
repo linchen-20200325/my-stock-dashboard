@@ -36,15 +36,23 @@ from __future__ import annotations
 import streamlit as st
 
 
-def render_tab_stock_picker(gemini_fn=None, candidates=None):
+def render_tab_stock_picker(gemini_fn=None, candidates=None,
+                              source_label: str = '高息網',
+                              key_prefix: str = 'picker'):
+    """v19.58：source_label + key_prefix 抽參數，個股組合 tab 共用此函式（不複製 Stage 1/2/3 邏輯）。
+
+    candidates: pandas.DataFrame，需含 '代碼' 欄。為 None / 空 → 顯示 info 提示。
+    source_label: 候選清單來源顯示名（高息網 / 個股組合輸入 / ...）。
+    key_prefix: 所有 st.* widget key 前綴，避免同一頁多處渲染碰撞。
+    """
     # ─ Late imports（避免循環 import + 啟動時間）─
     import datetime as _dt_sp
     import pandas as pd
     import yfinance as yf
 
     st.markdown('### 🎯 智慧選股 — 三階段濾網')
-    st.caption('專業台股投資策略：① 基本面防禦 → ② 籌碼技術 → ③ AI 綜合建議。'
-               '從上方「💎 高息網」候選清單勾選標的，系統自動跑三階段篩選並提供配置建議。')
+    st.caption(f'專業台股投資策略：① 基本面防禦 → ② 籌碼技術 → ③ AI 綜合建議。'
+               f'從上方「{source_label}」候選清單勾選標的，系統自動跑三階段篩選並提供配置建議。')
     st.caption('💡 全 15 項條件實作完成：Stage 1 基本面 ×9 + Stage 2 籌碼技術 ×6 + Stage 3 AI 建議。')
 
     with st.expander('💡 三階段濾網在篩什麼？（基本面 → 籌碼技術 → AI）', expanded=False):
@@ -55,11 +63,10 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None):
             '🎯 核心邏輯：**先用基本面排除地雷，再用籌碼技術抓發動點** —— 避免買到便宜卻沒人要的「價值陷阱」。'
         )
 
-    # ── Section 1：候選清單來自高息網篩選結果 ─────────────────────
-    st.markdown('#### 📋 候選清單（來自上方「高息網」篩選結果，勾選後跑三階段）')
+    # ── Section 1：候選清單來自上游篩選結果 ─────────────────────
+    st.markdown(f'#### 📋 候選清單（來自「{source_label}」結果，勾選後跑三階段）')
     if candidates is None or len(candidates) == 0:
-        st.info('💡 請先在上方「💎 高息網」設定殖利率 / 本益比條件，篩出候選清單後，'
-                '這裡會自動帶入供你勾選。')
+        st.info(f'💡 上游「{source_label}」尚未提供候選清單，無法跑三階段。')
         return
 
     # 去重保序取出純代碼
@@ -69,20 +76,20 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None):
         if _c and _c not in _codes:
             _codes.append(_c)
     if not _codes:
-        st.info('💡 高息網候選清單為空，請放寬殖利率 / 本益比條件。')
+        st.info(f'💡「{source_label}」候選清單為空，請放寬篩選條件。')
         return
 
     _sel = st.multiselect(
-        f'從高息網 {len(_codes)} 檔候選中勾選（建議 10-30 檔，避免 API 風暴）',
-        _codes, default=_codes[:10], key='picker_multiselect',
-        help='預設帶入殖利率最高的前 10 檔，可自由增減；上限 30 檔')
+        f'從{source_label} {len(_codes)} 檔候選中勾選（建議 10-30 檔，避免 API 風暴）',
+        _codes, default=_codes[:10], key=f'{key_prefix}_multiselect',
+        help='預設帶入前 10 檔，可自由增減；上限 30 檔')
 
     _extra_raw = st.text_input(
-        '➕ 額外加入代碼（不在高息網清單內也可；逗號或空白分隔，例：6770, 2330 1101）',
-        value='', key='picker_extra_codes',
+        f'➕ 額外加入代碼（不在{source_label}清單內也可；逗號或空白分隔，例：6770, 2330 1101）',
+        value='', key=f'{key_prefix}_extra_codes',
         help='手動補進想一起跑三階段的個股，會與上方勾選自動合併、去重；台股代號 4-6 碼')
 
-    if not st.button('🎯 開始三階段篩選', key='picker_btn',
+    if not st.button('🎯 開始三階段篩選', key=f'{key_prefix}_btn',
                      use_container_width=True, type='primary'):
         st.info('💡 勾選候選股票後按「🎯 開始三階段篩選」')
         return
@@ -188,7 +195,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None):
         st.info('💡 無通過標的可生成 AI 建議；可嘗試擴大觀察清單或放寬條件')
         return
     if st.button('🤖 生成 AI 三型建議報告（積極 / 保守 / 止損紀律）',
-                 key='picker_ai_btn', use_container_width=True, type='primary'):
+                 key=f'{key_prefix}_ai_btn', use_container_width=True, type='primary'):
         with st.spinner('AI 三型策略分析中（約 8-12 秒）...'):
             _md = _generate_ai_report(gemini_fn, _qualified, results)
         st.markdown(_md)

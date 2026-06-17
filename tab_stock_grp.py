@@ -1223,6 +1223,47 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
     if stock_list_t3:
         _render_mj_trend_section(stock_list_t3)
 
+    # ══ 🎯 智慧選股 — 三階段濾網（v19.58 整合）═════════════════════
+    # 直接餵 stock_list_t3 為 candidates，共用 tab_stock_picker 既有 Stage 1/2/3 + AI 報告邏輯
+    # （Stage 1 基本面 9 項與 MJ 趨勢分數同源 fetch_financial_statements，零 fetcher 重複）
+    if stock_list_t3:
+        _render_stage_picker_section(stock_list_t3)
+
+
+def _render_stage_picker_section(stock_list: list[str]) -> None:
+    """v19.58 個股組合內三階段濾網 — 直接拿 stock_list_t3 為 candidates，共用 picker 子函式。
+
+    與 _render_mj_trend_section 互補：MJ 趨勢分數看「最近 3 月/3 季的進步退步」，
+    三階段濾網看「當下是否進場（基本面 9 項 ＋ 籌碼技術 6 項 ＋ AI 三型建議）」。
+    共用 data_loader.fetch_financial_statements + financial_health_engine（與 MJ 同源）。
+    """
+    import pandas as pd
+    import streamlit as _st  # noqa: F811
+
+    from app import gemini_call  # late import 沿用 render_stock_grp 同模式避循環
+    from tab_stock_picker import render_tab_stock_picker
+
+    _st.markdown('---')
+    _st.markdown(
+        '<div style="margin:16px 0 8px;padding:8px 16px;'
+        'background:linear-gradient(90deg,#3b82f622,#0d1117);'
+        'border-left:4px solid #3b82f6;border-radius:0 6px 6px 0;">'
+        '<span style="font-size:15px;font-weight:900;color:#3b82f6;">'
+        '🎯 三階段濾網（基本面 → 籌碼技術 → AI 建議）</span>'
+        '<span style="font-size:11px;color:#8b949e;margin-left:8px;">'
+        f'直接用上方輸入的 {len(stock_list)} 檔當候選</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    # 把純代碼 list 轉成 picker 需要的最小 DataFrame
+    _df = pd.DataFrame({'代碼': stock_list})
+    render_tab_stock_picker(
+        gemini_fn=gemini_call,
+        candidates=_df,
+        source_label='個股組合輸入',
+        key_prefix='picker_t3',
+    )
+
 
 def _render_mj_trend_section(stock_list: list[str]) -> None:
     """v18.189 個股組合內「MJ 趨勢分數」區塊。
