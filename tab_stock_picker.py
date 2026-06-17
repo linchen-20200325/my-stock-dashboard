@@ -64,7 +64,6 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         )
 
     # ── Section 1：候選清單來自上游篩選結果 ─────────────────────
-    st.markdown(f'#### 📋 候選清單（來自「{source_label}」結果，勾選後跑三階段）')
     if candidates is None or len(candidates) == 0:
         st.info(f'💡 上游「{source_label}」尚未提供候選清單，無法跑三階段。')
         return
@@ -79,19 +78,32 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         st.info(f'💡「{source_label}」候選清單為空，請放寬篩選條件。')
         return
 
-    _sel = st.multiselect(
-        f'從{source_label} {len(_codes)} 檔候選中勾選（建議 10-30 檔，避免 API 風暴）',
-        _codes, default=_codes[:10], key=f'{key_prefix}_multiselect',
-        help='預設帶入前 10 檔，可自由增減；上限 30 檔')
+    # v19.59：個股組合輸入場景跳過 multiselect / extra_codes 二次勾選 — 直接拿上方 N 檔全跑出結果
+    _t3_mode = (source_label == '個股組合輸入')
+    if _t3_mode:
+        _preview = ', '.join(_codes[:10]) + ('...' if len(_codes) > 10 else '')
+        st.markdown(f'#### 📋 候選清單（已自動帶入上方輸入的 {len(_codes)} 檔）')
+        st.caption(f'✅ {_preview}')
+        _sel = list(_codes)
+        _extra_raw = ''
+    else:
+        st.markdown(f'#### 📋 候選清單（來自「{source_label}」結果，勾選後跑三階段）')
+        _sel = st.multiselect(
+            f'從{source_label} {len(_codes)} 檔候選中勾選（建議 10-30 檔，避免 API 風暴）',
+            _codes, default=_codes[:10], key=f'{key_prefix}_multiselect',
+            help='預設帶入前 10 檔，可自由增減；上限 30 檔')
 
-    _extra_raw = st.text_input(
-        f'➕ 額外加入代碼（不在{source_label}清單內也可；逗號或空白分隔，例：6770, 2330 1101）',
-        value='', key=f'{key_prefix}_extra_codes',
-        help='手動補進想一起跑三階段的個股，會與上方勾選自動合併、去重；台股代號 4-6 碼')
+        _extra_raw = st.text_input(
+            f'➕ 額外加入代碼（不在{source_label}清單內也可；逗號或空白分隔，例：6770, 2330 1101）',
+            value='', key=f'{key_prefix}_extra_codes',
+            help='手動補進想一起跑三階段的個股，會與上方勾選自動合併、去重；台股代號 4-6 碼')
 
     if not st.button('🎯 開始三階段篩選', key=f'{key_prefix}_btn',
                      use_container_width=True, type='primary'):
-        st.info('💡 勾選候選股票後按「🎯 開始三階段篩選」')
+        if _t3_mode:
+            st.info(f'💡 按「🎯 開始三階段篩選」分析 {len(_codes)} 檔（並行 ~30s）')
+        else:
+            st.info('💡 勾選候選股票後按「🎯 開始三階段篩選」')
         return
 
     # ── 解析清單（高息網勾選 + 手動輸入，合併去重）─────────────
