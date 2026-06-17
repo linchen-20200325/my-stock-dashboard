@@ -344,6 +344,8 @@ def render_stock_grp():
             'score_t3':    score_t3,
             'risk_alerts': risk_alerts_t3,
         }
+        # v18.223：一鍵串接 — 鎖定 batch 當下 codes，下方 MJ + picker 自動跑全程
+        st.session_state['t3_batch_codes'] = tuple(stock_list_t3)
 
     # ══ 顯示結果 ════════════════════════════════════════════════
     t3_data = st.session_state.get('t3_data')
@@ -1219,20 +1221,23 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
         elif not _t3ai_btn:
             st.caption('▲ 點擊上方按鈕，AI 將生成投資組合強弱排序矩陣與汰弱留強建議。')
 
-    # ══ 📊 MJ 趨勢分數（v18.189 月+季雙頻率融合）═══════════════════
-    if stock_list_t3:
-        _render_mj_trend_section(stock_list_t3)
+    # ══ 📊 MJ 趨勢分數（v18.189）+ 🎯 三階段濾網（v19.58）═══════════
+    # v18.223 一鍵化：吃 batch 跑完時鎖定的 codes（t3_batch_codes），自動跑 MJ + picker + AI。
+    # 不再依賴 stock_list_t3（避免 textarea 改動觸發重跑），改 textarea 後須按「批次分析」才更新。
+    _batch_codes = st.session_state.get('t3_batch_codes')
+    if _batch_codes:
+        _bc_list = list(_batch_codes)
+        _render_mj_trend_section(_bc_list, auto_run=True)
+        _render_stage_picker_section(_bc_list, auto_run=True)
+    elif stock_list_t3:
+        st.info('💡 上方按「🚀 批次分析」會自動串跑 MJ 趨勢分數 + 三階段濾網 + AI 三型建議。')
 
-    # ══ 🎯 智慧選股 — 三階段濾網（v19.58 整合）═════════════════════
-    # 直接餵 stock_list_t3 為 candidates，共用 tab_stock_picker 既有 Stage 1/2/3 + AI 報告邏輯
-    # （Stage 1 基本面 9 項與 MJ 趨勢分數同源 fetch_financial_statements，零 fetcher 重複）
-    if stock_list_t3:
-        _render_stage_picker_section(stock_list_t3)
 
-
-def _render_stage_picker_section(stock_list: list[str]) -> None:
+def _render_stage_picker_section(stock_list: list[str], *,
+                                  auto_run: bool = False) -> None:
     """v19.58 個股組合內三階段濾網 — 直接拿 stock_list_t3 為 candidates，共用 picker 子函式。
 
+    v18.223：auto_run=True 串接「批次分析」一鍵流程（picker 跳過按鈕直接跑、AI 也自動）。
     與 _render_mj_trend_section 互補：MJ 趨勢分數看「最近 3 月/3 季的進步退步」，
     三階段濾網看「當下是否進場（基本面 9 項 ＋ 籌碼技術 6 項 ＋ AI 三型建議）」。
     共用 data_loader.fetch_financial_statements + financial_health_engine（與 MJ 同源）。
@@ -1262,12 +1267,15 @@ def _render_stage_picker_section(stock_list: list[str]) -> None:
         candidates=_df,
         source_label='個股組合輸入',
         key_prefix='picker_t3',
+        auto_run=auto_run,
     )
 
 
-def _render_mj_trend_section(stock_list: list[str]) -> None:
+def _render_mj_trend_section(stock_list: list[str], *,
+                              auto_run: bool = False) -> None:
     """v18.189 個股組合內「MJ 趨勢分數」區塊。
 
+    v18.223：auto_run=True 串接「批次分析」一鍵流程（移除手動按鈕，自動跑全程 + cache）。
     對 stock_list 每檔合議「近 3 月月營收動能」+「近 3 季 MJ 體檢 status delta」
     產出 5 段判定（🚀 強進步 / 📈 進步 / ➖ 中性 / 📉 退步 / 🔻 強退步）。
     月權重 65%（先行）/ 季權重 35%（落後但見品質）。
@@ -1306,46 +1314,47 @@ def _render_mj_trend_section(stock_list: list[str]) -> None:
         '近 3 季 MJ 不足時自動補抓本季快照。'
     )
 
-    _c1, _c2 = _st.columns([3, 1])
-    with _c1:
-        _w_mon = _st.slider(
-            '月營收權重',
-            min_value=0.4, max_value=0.9, value=0.65, step=0.05,
-            key='_mj_trend_w_mon',
-            help='月營收動能占比，季財報自動 = 1 - 此值',
-        )
-    with _c2:
-        _st.markdown('<br>', unsafe_allow_html=True)
-        _run = _st.button(
-            '📊 跑 MJ 趨勢分數',
-            type='primary', use_container_width=True,
-            key='_mj_trend_run_btn',
-        )
+    # v18.223：auto_run 模式移除手動按鈕；slider 保留以利使用者觀察/調整權重
+    _w_mon = _st.slider(
+        '月營收權重',
+        min_value=0.4, max_value=0.9, value=0.65, step=0.05,
+        key='_mj_trend_w_mon',
+        help='月營收動能占比，季財報自動 = 1 - 此值。改動後下次按「批次分析」生效。',
+    )
 
-    if not _run:
-        _st.caption(f'點按鈕對 {len(stock_list)} 檔跑 MJ 趨勢分數（首次約 30-60s）')
+    if not auto_run:
+        _st.caption('💡 上方按「🚀 批次分析」自動跑 MJ 趨勢分數（首次 ~30-60s）')
         return
 
     if not _TOK:
         _st.error('🔴 未設定 `FINMIND_TOKEN` → 無法抓財報與月營收')
         return
 
-    rows: list[dict] = []
     yyyymm_curr = current_finmind_yyyymm(date.today())
-    prog = _st.progress(0.0, text=f'MJ 趨勢分數中 {len(stock_list)} 檔...')
-    for i, sid in enumerate(stock_list, 1):
-        prog.progress(i / len(stock_list), text=f'[{i}/{len(stock_list)}] {sid} 趨勢計算中...')
-        row = _compute_one_stock_trend(
-            sid, yyyymm_curr, _TOK, float(_w_mon),
-            fetch_financial_statements=fetch_financial_statements,
-            analyze_financial_health=analyze_financial_health,
-            list_snapshots=list_snapshots,
-            load_snapshot=load_snapshot,
-            save_snapshot=save_snapshot,
-            compute_trend_score=compute_trend_score,
-        )
-        rows.append(row)
-    prog.empty()
+    # v18.223 cache 防 rerun 重跑（key 含 codes + 權重 + 當前季）
+    _mj_cache_key = (
+        f'_mj_trend_rows_{hash(tuple(stock_list))}_'
+        f'{round(float(_w_mon) * 100)}_{yyyymm_curr}'
+    )
+    rows = _st.session_state.get(_mj_cache_key)
+    if rows is None:
+        rows = []
+        prog = _st.progress(0.0, text=f'MJ 趨勢分數中 {len(stock_list)} 檔...')
+        for i, sid in enumerate(stock_list, 1):
+            prog.progress(i / len(stock_list),
+                          text=f'[{i}/{len(stock_list)}] {sid} 趨勢計算中...')
+            row = _compute_one_stock_trend(
+                sid, yyyymm_curr, _TOK, float(_w_mon),
+                fetch_financial_statements=fetch_financial_statements,
+                analyze_financial_health=analyze_financial_health,
+                list_snapshots=list_snapshots,
+                load_snapshot=load_snapshot,
+                save_snapshot=save_snapshot,
+                compute_trend_score=compute_trend_score,
+            )
+            rows.append(row)
+        prog.empty()
+        _st.session_state[_mj_cache_key] = rows
 
     _render_mj_trend_table(rows, pd, _st, yyyymm_curr)
 
