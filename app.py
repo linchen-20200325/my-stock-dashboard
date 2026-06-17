@@ -1533,10 +1533,15 @@ with tab_edu:
 
 
 # ══════════════════════════════════════════════════════════════
-# TAB: ETF 單一深度診斷
+# TAB: ETF 單一深度診斷 + 多檔批次評分（v18.223 子分頁）
 # ══════════════════════════════════════════════════════════════
 with tab_etf:
-    render_etf_single(gemini_fn=gemini_call)
+    _etf_sub_tabs = st.tabs(['🔍 單檔深度診斷', '📊 多檔評分比較'])
+    with _etf_sub_tabs[0]:
+        render_etf_single(gemini_fn=gemini_call)
+    with _etf_sub_tabs[1]:
+        from etf_tab_grp_compare import render_etf_grp_compare
+        render_etf_grp_compare()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: ETF 組合戰情室（4 區段整合：組合配置 + 歷史回測 + AI + 葡萄串）

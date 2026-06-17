@@ -38,12 +38,14 @@ import streamlit as st
 
 def render_tab_stock_picker(gemini_fn=None, candidates=None,
                               source_label: str = '高息網',
-                              key_prefix: str = 'picker'):
+                              key_prefix: str = 'picker',
+                              *, auto_run: bool = False):
     """v19.58：source_label + key_prefix 抽參數，個股組合 tab 共用此函式（不複製 Stage 1/2/3 邏輯）。
 
     candidates: pandas.DataFrame，需含 '代碼' 欄。為 None / 空 → 顯示 info 提示。
     source_label: 候選清單來源顯示名（高息網 / 個股組合輸入 / ...）。
     key_prefix: 所有 st.* widget key 前綴，避免同一頁多處渲染碰撞。
+    auto_run: v18.223 — True 時跳過「開始三階段篩選」按鈕直接跑，AI 三型報告也自動生成（cache 防 rerun 重跑）。
     """
     # ─ Late imports（避免循環 import + 啟動時間）─
     import datetime as _dt_sp
@@ -98,13 +100,15 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
             value='', key=f'{key_prefix}_extra_codes',
             help='手動補進想一起跑三階段的個股，會與上方勾選自動合併、去重；台股代號 4-6 碼')
 
-    if not st.button('🎯 開始三階段篩選', key=f'{key_prefix}_btn',
-                     use_container_width=True, type='primary'):
-        if _t3_mode:
-            st.info(f'💡 按「🎯 開始三階段篩選」分析 {len(_codes)} 檔（並行 ~30s）')
-        else:
-            st.info('💡 勾選候選股票後按「🎯 開始三階段篩選」')
-        return
+    # v18.223：auto_run 模式跳過按鈕（由上方批次分析一鍵串接）
+    if not auto_run:
+        if not st.button('🎯 開始三階段篩選', key=f'{key_prefix}_btn',
+                         use_container_width=True, type='primary'):
+            if _t3_mode:
+                st.info(f'💡 按「🎯 開始三階段篩選」分析 {len(_codes)} 檔（並行 ~30s）')
+            else:
+                st.info('💡 勾選候選股票後按「🎯 開始三階段篩選」')
+            return
 
     # ── 解析清單（高息網勾選 + 手動輸入，合併去重）─────────────
     import re as _re_pk
@@ -130,26 +134,30 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         st.warning(f'⚠️ 超過 30 檔（{len(_tickers)}），僅取前 30 檔避免 API 風暴')
         _tickers = _tickers[:30]
 
-    # ── 跑三階段篩選（ThreadPoolExecutor 並行）─────────────────
+    # ── 跑三階段篩選（ThreadPoolExecutor 並行，v18.223 加 cache 防 rerun 重跑）──
     # 原本序列跑 N 檔，每檔 ~2 yfinance + ~4 FinMind ≈ 上百次阻塞請求逐一等。
     # _check_one_stock 線程安全（獨立 requests + yfinance、無 st.*、無共享 loader），
     # 故無需鎖；總請求數不變（FinMind 限額為每小時制），純粹把 I/O 等待重疊。
-    _today = _dt_sp.date.today()
-    from concurrent.futures import ThreadPoolExecutor
-    _idx_results: dict[int, dict] = {}
-    with st.spinner(f'三階段篩選中（{len(_tickers)} 檔，並行）...'):
-        with ThreadPoolExecutor(max_workers=5) as _pick_exec:
-            _pick_futs = {
-                _pick_exec.submit(_check_one_stock, _tk, _today, yf): _i
-                for _i, _tk in enumerate(_tickers)
-            }
-        for _fut, _i in _pick_futs.items():
-            try:
-                _idx_results[_i] = _fut.result()
-            except Exception as _e_pick:
-                print(f'[picker] {_tickers[_i]}: {type(_e_pick).__name__}: {_e_pick}')
-                _idx_results[_i] = _blank_pick_result(_tickers[_i], note='❌ 分析失敗')
-    results: list[dict] = [_idx_results[_i] for _i in range(len(_tickers))]
+    _pick_cache_key = f'{key_prefix}_results_{hash(tuple(_tickers))}'
+    results = st.session_state.get(_pick_cache_key)
+    if results is None:
+        _today = _dt_sp.date.today()
+        from concurrent.futures import ThreadPoolExecutor
+        _idx_results: dict[int, dict] = {}
+        with st.spinner(f'三階段篩選中（{len(_tickers)} 檔，並行）...'):
+            with ThreadPoolExecutor(max_workers=5) as _pick_exec:
+                _pick_futs = {
+                    _pick_exec.submit(_check_one_stock, _tk, _today, yf): _i
+                    for _i, _tk in enumerate(_tickers)
+                }
+            for _fut, _i in _pick_futs.items():
+                try:
+                    _idx_results[_i] = _fut.result()
+                except Exception as _e_pick:
+                    print(f'[picker] {_tickers[_i]}: {type(_e_pick).__name__}: {_e_pick}')
+                    _idx_results[_i] = _blank_pick_result(_tickers[_i], note='❌ 分析失敗')
+        results: list[dict] = [_idx_results[_i] for _i in range(len(_tickers))]
+        st.session_state[_pick_cache_key] = results
 
     # ── Stage 1：基本面表 ─────────────────────────────────────
     st.markdown('---')
@@ -206,10 +214,26 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
     if not _qualified:
         st.info('💡 無通過標的可生成 AI 建議；可嘗試擴大觀察清單或放寬條件')
         return
-    if st.button('🤖 生成 AI 三型建議報告（積極 / 保守 / 止損紀律）',
-                 key=f'{key_prefix}_ai_btn', use_container_width=True, type='primary'):
-        with st.spinner('AI 三型策略分析中（約 8-12 秒）...'):
-            _md = _generate_ai_report(gemini_fn, _qualified, results)
+    # v18.223：auto_run 模式跳過 AI 按鈕，自動生成（cache 防 rerun 重打 Gemini）
+    _ai_cache_key = (
+        f'{key_prefix}_ai_md_'
+        f'{hash(tuple(q["ticker"] for q in _qualified))}'
+    )
+    if auto_run:
+        _md = st.session_state.get(_ai_cache_key)
+        if _md is None:
+            with st.spinner('AI 三型策略分析中（約 8-12 秒）...'):
+                _md = _generate_ai_report(gemini_fn, _qualified, results)
+            st.session_state[_ai_cache_key] = _md
+        st.markdown(_md)
+    elif st.button('🤖 生成 AI 三型建議報告（積極 / 保守 / 止損紀律）',
+                   key=f'{key_prefix}_ai_btn',
+                   use_container_width=True, type='primary'):
+        _md = st.session_state.get(_ai_cache_key)
+        if _md is None:
+            with st.spinner('AI 三型策略分析中（約 8-12 秒）...'):
+                _md = _generate_ai_report(gemini_fn, _qualified, results)
+            st.session_state[_ai_cache_key] = _md
         st.markdown(_md)
 
 
