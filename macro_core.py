@@ -28,7 +28,9 @@ macro_core.py — 兩個 dashboard 共用的總經核心 v1.0
 from __future__ import annotations
 
 import datetime as _dt
+import json as _json
 import math
+import os as _os
 import re as _re
 from typing import Optional
 
@@ -41,7 +43,160 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 __version__ = "1.0.0"
 
 FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
+FRED_RELEASE_BASE = "https://api.stlouisfed.org/fred/series/release"
+FRED_RELEASE_DATES_BASE = "https://api.stlouisfed.org/fred/release/dates"
 YF_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
+
+# v18.225 T1：PMI / Export 9-10 段全失敗時的 stale-cache fallback；TTL 90 天
+# (覆蓋 CIER 月度公布 + 假日緩衝)；只當 in-memory race 失敗時讀，UI 標 🟡 stale
+_MACRO_CACHE_DIR = _os.path.join("cache", "macro_snapshot")
+_MACRO_CACHE_TTL_DAYS = 90
+
+# v18.225 T2：FRED 下次 Release 30 天 TTL cache（鏡像 Fund repositories/macro_repository.py）
+_FRED_RELEASE_CACHE_DIR = _os.path.join("cache", "fred_release")
+_FRED_RELEASE_CACHE_TTL_DAYS = 30
+
+
+def _macro_cache_path(key: str) -> str:
+    return _os.path.join(_MACRO_CACHE_DIR, f"{key}.json")
+
+
+def _macro_cache_save(key: str, payload: dict) -> None:
+    """命中時持久化快照；任何 IO 錯誤靜默吞（cache 失敗不該破壞 happy path）。"""
+    try:
+        _os.makedirs(_MACRO_CACHE_DIR, exist_ok=True)
+        payload = dict(payload)
+        payload["cached_at"] = _dt.datetime.now().isoformat()
+        with open(_macro_cache_path(key), "w", encoding="utf-8") as fh:
+            _json.dump(payload, fh, ensure_ascii=False)
+    except Exception as e:
+        print(f"[macro_core/cache] save 失敗 {key}: {e}")
+
+
+def _macro_cache_load(key: str) -> Optional[dict]:
+    """讀取 TTL 內快照；過期或解析失敗回 None。"""
+    path = _macro_cache_path(key)
+    if not _os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = _json.load(fh)
+        ts = _dt.datetime.fromisoformat(data.get("cached_at", ""))
+        if (_dt.datetime.now() - ts).days >= _MACRO_CACHE_TTL_DAYS:
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def _fred_release_cache_path(series_id: str) -> str:
+    return _os.path.join(_FRED_RELEASE_CACHE_DIR, f"{series_id}.json")
+
+
+def _fred_release_cache_load(series_id: str) -> Optional[dict]:
+    path = _fred_release_cache_path(series_id)
+    if not _os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = _json.load(fh)
+        ts = _dt.datetime.fromisoformat(data["cached_at"])
+        if (_dt.datetime.now() - ts).days >= _FRED_RELEASE_CACHE_TTL_DAYS:
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def _fred_release_cache_save(series_id: str, payload: dict) -> None:
+    try:
+        _os.makedirs(_FRED_RELEASE_CACHE_DIR, exist_ok=True)
+        payload = dict(payload)
+        payload["cached_at"] = _dt.datetime.now().isoformat()
+        with open(_fred_release_cache_path(series_id), "w", encoding="utf-8") as fh:
+            _json.dump(payload, fh, ensure_ascii=False)
+    except Exception as e:
+        print(f"[macro_core/fred_release] cache save 失敗 {series_id}: {e}")
+
+
+def fred_get_next_release_date(series_id: str, api_key: str) -> Optional[_dt.date]:
+    """查詢指定 FRED series 的下次預定 release 日（鏡像 Fund 端，30d cache）。
+
+    流程：
+      1. 先讀本地 cache（30 天 TTL，避免每次 rerun 都打 API）
+      2. 呼叫 /fred/series/release 取 release_id
+      3. 呼叫 /fred/release/dates 取「今日起」未來最近一筆 release date
+
+    Returns
+    -------
+    datetime.date | None
+        下次 release 日；任一步驟失敗回 None（呼叫端應 fallback 到舊閾值）。
+    """
+    if not series_id or not api_key:
+        return None
+
+    cached = _fred_release_cache_load(series_id)
+    today = _dt.date.today()
+    if cached:
+        try:
+            nrd = _dt.date.fromisoformat(cached.get("next_release_date", ""))
+            if nrd >= today:
+                return nrd
+        except Exception:
+            pass
+
+    try:
+        r1 = fetch_url(
+            FRED_RELEASE_BASE,
+            params={"series_id": series_id, "api_key": api_key, "file_type": "json"},
+            timeout=15,
+        )
+        if r1 is None:
+            return None
+        releases = r1.json().get("releases", [])
+        if not releases:
+            return None
+        release_id = releases[0].get("id")
+        if not release_id:
+            return None
+    except Exception as e:
+        print(f"[macro_core/fred_release] {series_id} release_id 解析失敗: {e}")
+        return None
+
+    try:
+        r2 = fetch_url(
+            FRED_RELEASE_DATES_BASE,
+            params={
+                "release_id": release_id,
+                "api_key":    api_key,
+                "file_type":  "json",
+                "include_release_dates_with_no_data": "true",
+                "realtime_start": today.isoformat(),
+                "realtime_end": (today + _dt.timedelta(days=120)).isoformat(),
+                "sort_order": "asc",
+                "limit":      20,
+            },
+            timeout=15,
+        )
+        if r2 is None:
+            return None
+        dates = r2.json().get("release_dates", [])
+        for d in dates:
+            try:
+                cand = _dt.date.fromisoformat(d.get("date", ""))
+                if cand >= today:
+                    _fred_release_cache_save(series_id, {
+                        "release_id": release_id,
+                        "next_release_date": cand.isoformat(),
+                    })
+                    return cand
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"[macro_core/fred_release] {series_id} release_dates 解析失敗: {e}")
+        return None
+
+    return None
 
 
 # ══════════════════════════════════════════════════════════════
@@ -562,9 +717,21 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     for _nm, _ in _sources:
         if _nm in _results:
             print(f'[macro_core/TW-PMI] ✅ 採用 {_nm}（9 源並行，依優先序）')
+            # v18.225 T1：命中即 snapshot 持久化，作為後續全失敗時的 stale fallback
+            _macro_cache_save('tw_pmi', _results[_nm])
             return _results[_nm]
     err_msg = ' | '.join(errs) or 'all 10 stages failed'
     print(f'[macro_core/TW-PMI] ❌ 10 段並行全失敗：{err_msg}')
+    # v18.225 T1：10 段全失敗 → 讀 stale cache（90 天 TTL），UI 端顯示 🟡 而非 🔴
+    _stale = _macro_cache_load('tw_pmi')
+    if _stale:
+        _stale = dict(_stale)
+        _stale_src = _stale.get('source', '?')
+        _stale['source'] = f'stale-cache({_stale_src})'
+        _stale['is_stale'] = True
+        _stale['stale_err'] = err_msg
+        print(f'[macro_core/TW-PMI] ⚠️ 採用 stale-cache (cached_at={_stale.get("cached_at","?")[:10]})')
+        return _stale
     return {'_err_pmi': err_msg, 'value': None}
 
 
