@@ -387,6 +387,12 @@ def render_data_health_raw():
     _g_add('台灣 M1B / M2',    'CBC + FinMind 雙源',         'monthly',
            date_str=(_cl_ts_g if _mi_g.get('m1b_yoy') is not None else None))
 
+    # v18.226：外資連續日數（fetch_foreign_consecutive_days → _fi_streak_cache）
+    _fi_streak_g = st.session_state.get('_fi_streak_cache') or {}
+    _g_add('外資連續日數', 'FinMind TaiwanStockTotalInstitutionalInvestors', 'daily',
+           date_str=(_fi_streak_g.get('date_latest') or None)
+                    if _fi_streak_g.get('consec_days') is not None else None)
+
     # 大盤指數 + 籌碼
     for _gk, _glbl, _gsrc in [
         ('intl', '國際指數 OHLCV',    'yfinance'),
