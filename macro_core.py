@@ -261,22 +261,36 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     return df.dropna(subset=["value"]).sort_values("date").reset_index(drop=True)
 
 
-def fetch_yf_close(ticker: str, range_: str = "2y", interval: str = "1d") -> pd.Series:
-    """
-    抓取 Yahoo Finance 收盤價序列(透過 NAS proxy 直打 Chart API)。
+# v18.229 P1-S2：fetch_yf_close 跨 tab range_ 集中
+# 原本無 cache，跨 tab 重複抓 ^VIX/^GSPC/^TNX 等指標 2~3 次。
+# 改為固定 range='2y' 底層 + 記憶體切片 + 1hr TTL dict
+# （不用 @st.cache_data 是因為 macro_core 規定不依賴 streamlit，須能在 CLI/pytest 直接 import）。
+_YF_RANGE_TO_DAYS = {
+    "5d": 7, "1mo": 31, "3mo": 93, "6mo": 186,
+    "1y": 365, "2y": 365 * 2, "3y": 365 * 3, "5y": 365 * 5,
+    "10y": 365 * 10, "ytd": 366, "max": None,
+}
+_YF_CLOSE_CACHE: dict[tuple[str, str], tuple[float, pd.Series]] = {}
+_YF_CLOSE_TTL = 3600.0  # 1hr，與 st.cache_data 對齊
 
-    為何不用 yfinance:yfinance 預設不走 proxy,且常因雲端節點 IP
-    被 Yahoo 限流(429)而失敗。直接呼叫 Chart REST API + NAS 中繼,
-    取得台灣 IP 出口,穩定許多。
 
-    Returns
-    -------
-    pd.Series  index 為 DatetimeIndex,value 為收盤價。失敗時回傳空 Series。
+def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
+    """共用底層 — 固定 range='2y' + 1hr TTL，跨 tab 共享。
+
+    用 module-level TTL dict + copy-on-read 取代 @st.cache_data，
+    維持 macro_core 不依賴 streamlit 的設計邊界。
     """
+    import time as _time
+    key = (ticker, interval)
+    now = _time.time()
+    cached = _YF_CLOSE_CACHE.get(key)
+    if cached is not None and (now - cached[0]) < _YF_CLOSE_TTL:
+        return cached[1].copy()
+
     url = f"{YF_CHART_BASE}/{ticker}"
     r = fetch_url(
         url,
-        params={"interval": interval, "range": range_},
+        params={"interval": interval, "range": "2y"},
         timeout=15,
     )
     if r is None:
@@ -288,10 +302,37 @@ def fetch_yf_close(ticker: str, range_: str = "2y", interval: str = "1d") -> pd.
         close = result["indicators"]["quote"][0]["close"]
         s = pd.Series(close, index=pd.to_datetime(ts, unit="s"), dtype=float).dropna()
         s.name = ticker
+        _YF_CLOSE_CACHE[key] = (now, s.copy())
         return s
     except Exception as e:
         print(f"[macro_core/yf] {ticker} 解析失敗: {e}")
         return pd.Series(dtype=float, name=ticker)
+
+
+def fetch_yf_close(ticker: str, range_: str = "2y", interval: str = "1d") -> pd.Series:
+    """
+    抓取 Yahoo Finance 收盤價序列(透過 NAS proxy 直打 Chart API)。
+
+    為何不用 yfinance:yfinance 預設不走 proxy,且常因雲端節點 IP
+    被 Yahoo 限流(429)而失敗。直接呼叫 Chart REST API + NAS 中繼,
+    取得台灣 IP 出口,穩定許多。
+
+    v18.229 起改為共用 'range=2y' 底層 + 記憶體切片，跨 tab 同 ticker
+    從 2~3 次 fetch_url call → 1 次（cache key = (ticker, interval)）。
+    公開簽章不變，14 個呼叫端 0 改動。
+
+    Returns
+    -------
+    pd.Series  index 為 DatetimeIndex,value 為收盤價。失敗時回傳空 Series。
+    """
+    s = _fetch_yf_close_base(ticker, interval)
+    if s.empty:
+        return s
+    days = _YF_RANGE_TO_DAYS.get(range_, 365 * 2)
+    if days is None:
+        return s
+    cutoff = s.index.max() - pd.Timedelta(days=days)
+    return s.loc[s.index >= cutoff]
 
 
 def fetch_yf_latest(tickers: tuple[str, ...]) -> dict[str, Optional[float]]:
