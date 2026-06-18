@@ -117,11 +117,25 @@ def _get_etf_launch_price(ticker: str, df: "pd.DataFrame|None" = None):
     return None
 
 
-@st.cache_data(ttl=3600, max_entries=10)
-def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
-    """取得 ETF 歷史價格（auto_adjust=True 還原權息）"""
+# v18.228 P1-S1：fetch_etf_price 跨 tab period 集中
+# 原本 cache key = (ticker, period)，同檔 ETF 因 1y/5y/10y 不同 period 重抓 2~3 次。
+# 改為單一 'max' fetch + 記憶體內切片，cache key 只剩 ticker。
+_PERIOD_TO_DAYS = {
+    '5d': 7, '1mo': 31, '3mo': 93, '6mo': 186,
+    '1y': 365, '2y': 365 * 2, '3y': 365 * 3, '5y': 365 * 5,
+    '10y': 365 * 10, 'ytd': 366, 'max': None,
+}
+
+
+@st.cache_data(ttl=3600, max_entries=20)
+def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
+    """共用底層 — 一次抓 period='max'，供 fetch_etf_price 切片。
+
+    v18.228 集中化：portfolio / single / grp_compare / backtest 跨 tab 同檔
+    ETF 從 2~3 次 yfinance call → 1 次（cache key 只剩 ticker）。
+    """
     try:
-        df = yf.Ticker(ticker).history(period=period, auto_adjust=True)
+        df = yf.Ticker(ticker).history(period='max', auto_adjust=True)
         if df.empty:
             return pd.DataFrame()
         df.index = pd.to_datetime(df.index).tz_localize(None)
@@ -129,6 +143,21 @@ def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
     except Exception as e:
         st.error(f'❌ 無法取得 {ticker} 價格：{e}')
         return pd.DataFrame()
+
+
+def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
+    """取得 ETF 歷史價格（auto_adjust=True 還原權息）。
+
+    v18.228 起改為共用 'max' 底層 + 記憶體切片。公開簽章不變，呼叫端 0 改動。
+    """
+    df = _fetch_etf_price_max(ticker)
+    if df.empty:
+        return df
+    days = _PERIOD_TO_DAYS.get(period, 365 * 5)
+    if days is None or len(df) == 0:
+        return df
+    cutoff = df.index.max() - pd.Timedelta(days=days)
+    return df.loc[df.index >= cutoff]
 
 
 @st.cache_data(ttl=3600, max_entries=10)
