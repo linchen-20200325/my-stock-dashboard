@@ -312,7 +312,7 @@ def render_data_health_raw():
     # 📊 全域資料健康總表（統一視圖）
     # ══════════════════════════════════════════════════════════════
     st.markdown('#### 📊 全域資料健康總表')
-    st.caption('一覽所有資料來源的最新狀態 ｜ 色塊代表新鮮度（🟢新鮮 / 🟡可接受 / 🔴過舊）')
+    st.caption('一覽所有資料來源的最新狀態 ｜ 色塊代表新鮮度（🟢新鮮 / 🟡可接受 / 🔴過舊）｜ 下次 Release 來自 FRED API（30 天 cache）')
 
     _ma_g  = st.session_state.get('macro_info') or {}
     _cl_g  = st.session_state.get('cl_data')    or {}
@@ -322,9 +322,31 @@ def render_data_health_raw():
     _e1_g  = st.session_state.get('etf_single_data') or {}
     _cl_ts_g = str(st.session_state.get('cl_ts', ''))[:10] or None
 
+    # v18.225 T2：FRED 下次 release 取值（30 天 cache → rerun 不重打 API）
+    import os as _os_hi
+    _fred_key_hi = (_os_hi.environ.get('FRED_API_KEY') or
+                    (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
+    try:
+        from macro_core import fred_get_next_release_date as _fred_nrd
+    except Exception:
+        _fred_nrd = None
+
+    @st.cache_data(ttl=86400, show_spinner=False)
+    def _next_release_cached(series_id: str, api_key_present: bool) -> str:
+        """Streamlit 層多包一層 1 日 cache，避免 macro_core 30 天 disk cache 之外仍重複打。
+        api_key_present 進入 cache key 確保切換 secrets 時 invalidates。"""
+        if not series_id or not api_key_present or _fred_nrd is None:
+            return ''
+        try:
+            _d = _fred_nrd(series_id, _fred_key_hi)
+            return _d.isoformat() if _d else ''
+        except Exception:
+            return ''
+
     _global_rows = []
 
-    def _g_add(name, source, freq, df=None, date_str=None, count=None):
+    def _g_add(name, source, freq, df=None, date_str=None, count=None,
+               fred_series_id: str = ''):
         if isinstance(df, _pd_r.DataFrame) and not df.empty:
             _d = _last_date(df)
             _cnt = len(df) if count is None else count
@@ -336,12 +358,15 @@ def render_data_health_raw():
             _fresh = f'{icon} {lbl}'
         else:
             _fresh = '🔴 未取得'
+        # v18.225 T2：僅 FRED-backed 指標查下次 release，其餘留空 "—"
+        _nr = _next_release_cached(fred_series_id, bool(_fred_key_hi)) if fred_series_id else ''
         _global_rows.append({
             '資料名稱': name,
             '來源':     source,
             '頻率':     _FREQ_LBL.get(freq, freq),
             '最新日期': _d or '—',
             '新鮮度':   _fresh,
+            '下次Release': _nr or '—',
             '筆數':     _cnt if _cnt is not None else '—',
         })
 
@@ -350,7 +375,8 @@ def render_data_health_raw():
            date_str=str((_ma_g.get('vix') or {}).get('date',''))[:10] or _cl_ts_g
                     if (_ma_g.get('vix') or {}).get('current') is not None else None)
     _g_add('美國核心 CPI YoY', 'FRED',           'monthly',
-           date_str=str((_ma_g.get('us_core_cpi') or {}).get('date',''))[:10] or None)
+           date_str=str((_ma_g.get('us_core_cpi') or {}).get('date',''))[:10] or None,
+           fred_series_id='CPILFESL')
     _g_add('🇹🇼 台灣製造業 PMI',
            'CIER-EN+data.gov.tw+NDC+MacroMicro+CIER+StockFeel+鉅亨+FinMind+MoneyDJ 9 段', 'monthly',
            date_str=str((_ma_g.get('ism_pmi') or {}).get('date',''))[:10] or None)
@@ -464,14 +490,16 @@ def render_data_health_raw():
         _th_g = ('font-size:10px;color:#888;font-weight:700;padding:4px 8px;'
                  'border-bottom:1px solid #30363d')
         _td_g = 'font-size:11px;padding:4px 8px'
+        # v18.225 T2：grid 6→7 欄，第 6 欄為「下次 Release」（FRED-backed 才有值）
         _hdr_g = (
-            f"<div style='display:grid;grid-template-columns:2fr 1.6fr 0.7fr 1fr 1.4fr 0.7fr;"
+            f"<div style='display:grid;grid-template-columns:2fr 1.6fr 0.7fr 1fr 1.4fr 1fr 0.7fr;"
             f"background:#0d1117;border-radius:6px 6px 0 0'>"
             f"<span style='{_th_g}'>資料名稱</span>"
             f"<span style='{_th_g}'>來源</span>"
             f"<span style='{_th_g}'>頻率</span>"
             f"<span style='{_th_g}'>最新日期</span>"
             f"<span style='{_th_g}'>新鮮度</span>"
+            f"<span style='{_th_g}'>下次 Release</span>"
             f"<span style='{_th_g}'>筆數</span>"
             f"</div>"
         )
@@ -485,7 +513,7 @@ def render_data_health_raw():
             _fq = _r.get('頻率', '')
             _fc = _FREQ_COLOR.get(_fq, '#9e9e9e')
             _rows_html_g += (
-                f"<div style='display:grid;grid-template-columns:2fr 1.6fr 0.7fr 1fr 1.4fr 0.7fr;"
+                f"<div style='display:grid;grid-template-columns:2fr 1.6fr 0.7fr 1fr 1.4fr 1fr 0.7fr;"
                 f"background:{_row_bg};border-bottom:1px solid #21262d'>"
                 f"<span style='{_td_g};color:#e6edf3'>{_r.get('資料名稱','')}</span>"
                 f"<span style='{_td_g};color:#888'>{_r.get('來源','')}</span>"
@@ -495,6 +523,7 @@ def render_data_health_raw():
                 f"{_fq}</span></span>"
                 f"<span style='{_td_g};color:#aaa'>{_r.get('最新日期','—')}</span>"
                 f"<span style='{_td_g};color:{_fcol_r};font-weight:600'>{_r.get('新鮮度','')}</span>"
+                f"<span style='{_td_g};color:#aaa'>{_r.get('下次Release','—')}</span>"
                 f"<span style='{_td_g};color:#aaa'>{_r.get('筆數','—')}</span>"
                 f"</div>"
             )
