@@ -26,14 +26,47 @@ tw_macro.py — 台灣金融資料抓取核心 v1.0
 from __future__ import annotations
 
 import datetime as _dt
+import functools as _ft
 import re as _re
+import time as _time
 from typing import Optional
 
 import pandas as pd
 
 from proxy_helper import fetch_url
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
+
+
+# ── v1.1 輕量 TTL cache（純 stdlib，不依賴 streamlit）──────────
+# 雙 repo 共用設計約束：本模組嚴禁 import streamlit，故自帶 cache decorator。
+def _ttl_cache(ttl_sec: int, maxsize: int = 32):
+    """TTL+LRU cache。cache key=(args, sorted kwargs)；unhashable 引數 bypass。"""
+    def decorator(fn):
+        _cache: dict = {}
+
+        @_ft.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                key = (args, tuple(sorted(kwargs.items())))
+                hash(key)
+            except TypeError:
+                return fn(*args, **kwargs)
+            now = _time.time()
+            hit = _cache.get(key)
+            if hit and (now - hit[0]) < ttl_sec:
+                return hit[1]
+            result = fn(*args, **kwargs)
+            _cache[key] = (now, result)
+            if len(_cache) > maxsize:
+                oldest = min(_cache.items(), key=lambda kv: kv[1][0])[0]
+                _cache.pop(oldest, None)
+            return result
+
+        wrapper.cache_clear = lambda: _cache.clear()  # type: ignore[attr-defined]
+        return wrapper
+
+    return decorator
 
 # ── 各端點 URL ────────────────────────────────────────────
 TWSE_MI_INDEX_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
@@ -49,6 +82,7 @@ CBC_EF15M01_URL   = "https://cpx.cbc.gov.tw/API/DataAPI/Get"
 # TWSE 市場寬度
 # ══════════════════════════════════════════════════════════════
 
+@_ttl_cache(ttl_sec=600, maxsize=4)
 def fetch_twse_breadth() -> dict:
     """
     從 TWSE MI_INDEX 抓上漲/下跌家數,計算市場寬度。
@@ -109,6 +143,7 @@ def fetch_twse_breadth() -> dict:
 # FinMind 三大法人籌碼
 # ══════════════════════════════════════════════════════════════
 
+@_ttl_cache(ttl_sec=600, maxsize=8)
 def fetch_finmind_foreign_investor(days_back: int = 7) -> dict:
     """
     從 FinMind 抓最近 N 天的外資買賣超(免費 API,無需 token)。
@@ -255,6 +290,7 @@ def _try_twii_proxy() -> Optional[tuple]:
     return (chg20, round(chg60 / 3, 2))
 
 
+@_ttl_cache(ttl_sec=600, maxsize=4)
 def fetch_cbc_m1b_m2() -> dict:
     """
     抓中央銀行 M1B / M2 月資料 YoY 變動率。三層備援:
@@ -521,6 +557,7 @@ def _finmind_macro_series(indicator_keys: tuple, months_back: int = 18,
     return sub
 
 
+@_ttl_cache(ttl_sec=600, maxsize=8)
 def fetch_ndc_signal_history(months_back: int = 12,
                              token: str = "") -> dict:
     """抓景氣對策信號分數歷史（月頻），偵測連 2 月反轉拐點。
@@ -666,6 +703,7 @@ def fetch_ndc_leading_index(months_back: int = 18,
     return result
 
 
+@_ttl_cache(ttl_sec=600, maxsize=8)
 def fetch_foreign_consecutive_days(days_back: int = 30,
                                    token: str = "") -> dict:
     """抓外資最近 N 日買賣超，計算連續同向日數與反轉拐點。
