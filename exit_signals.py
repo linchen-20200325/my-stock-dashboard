@@ -1,15 +1,16 @@
+﻿from data_config import CACHE_TTL
 """
-exit_signals.py — 三維出場訊號綜合判斷（個股 / 個股組合共用）
+exit_signals.py ??銝雁?箏閮?蝬??斗嚗 / ?蝯??梁嚗?
 
-三個維度（任一成立記 1 分，總分決定等級）：
-  ① 利空新聞：LLM 情緒判讀（judge_news_sentiment，Gemini 由呼叫端傳入）
-  ② 技術轉空：空頭排列 / 跌破季年線 / KD高檔死叉 / 週MACD翻負 / 高乖離
-  ③ 籌碼倒貨：近 20 日大戶淨賣（analyze_20d_chips_from_df 回 '🔴 大戶倒貨'）
+銝雁摨佗?隞颱???閮?1 ??蝮賢?瘙箏?蝑?嚗?
+  ???拍征?啗?嚗LM ???方?嚗udge_news_sentiment嚗emini ?勗?怎垢?喳嚗?
+  ???銵?蝛綽?蝛粹?? / 頝摮?僑蝺?/ KD擃?甇餃? / ?專ACD蝧餉? / 擃???
+  ??蝐Ⅳ?疏嚗? 20 ?亙之?嗆楊鞈??analyze_20d_chips_from_df ??'? 憭扳?疏'嚗?
 
-分級（命中維度數 0~3）：3→🔴強烈出場 / 2→🟠建議減碼 / 1→🟡留意 / 0→🟢清淡
+??嚗銝剔雁摨行 0~3嚗?3??游撥???/ 2??遣霅唳?蝣?/ 1??∠???/ 0??Ｘ?瘛?
 
-本檔為純邏輯：不抓資料、不畫 UI。Gemini 呼叫沿用專案 gemini_fn 慣例（由呼叫端傳入），
-新聞判讀結果以 st.cache_data 快取（TTL 6h），避免組合 tab 多檔重複打 API。
+?祆??箇??摩嚗???????UI?emini ?澆瘝輻撠? gemini_fn ???嚗?澆蝡臬?伐?嚗?
+?啗??方?蝯?隞?st.cache_data 敹怠?嚗TL 6h嚗??踹?蝯? tab 憭?????API??
 """
 from __future__ import annotations
 
@@ -19,12 +20,12 @@ import re
 import pandas as pd
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
-# 命中維度數 → (圖示, 標籤, 色碼)
+# ?賭葉蝬剖漲????(?內, 璅惜, ?脩Ⅳ)
 _LEVELS = {
-    3: ('🔴', '強烈出場', TRAFFIC_RED),
-    2: ('🟠', '建議減碼', '#f0883e'),
-    1: ('🟡', '留意觀察', TRAFFIC_YELLOW),
-    0: ('🟢', '訊號清淡', TRAFFIC_GREEN),
+    3: ('?', '撘瑞??箏', TRAFFIC_RED),
+    2: ('??', '撱箄降皜Ⅳ', '#f0883e'),
+    1: ('?', '??閫撖?, TRAFFIC_YELLOW),
+    0: ('?', '閮?皜楚', TRAFFIC_GREEN),
 }
 
 
@@ -35,7 +36,7 @@ def _ma(close: pd.Series, n: int):
 
 
 def _weekly_macd_turn_negative(close: pd.Series) -> bool:
-    """近 30 日 K 線每 5 根合成週 K，週 MACD(3/5/3) 由正翻負視為中線轉弱。"""
+    """餈?30 ??K 蝺? 5 ?孵???K嚗?MACD(3/5/3) ?望迤蝧餉?閬銝剔?頧摹??""
     try:
         if close is None or len(close) < 30:
             return False
@@ -52,11 +53,11 @@ def _weekly_macd_turn_negative(close: pd.Series) -> bool:
 
 
 def compute_tech_bearish(df, k=None, d=None) -> dict:
-    """從 OHLC DataFrame 推導技術面空方訊號。
+    """敺?OHLC DataFrame ?典??銵蝛箸閮???
 
-    df：需有 'close' 欄（high/low 非必要）。k/d：呼叫端已算好的 KD（避免重算）。
-    回傳 {'bearish': bool, 'reasons': [str], 'hits': int, 'strong': bool}。
-    bearish 判定：含強訊號（空頭排列 / 週MACD翻負）或 ≥2 條警示 → 技術面明顯轉空。
+    df嚗???'close' 甈?high/low ??閬??/d嚗?怎垢撌脩?憟賜? KD嚗??蝞???
+    ? {'bearish': bool, 'reasons': [str], 'hits': int, 'strong': bool}??
+    bearish ?文?嚗撘瑁???蝛粹?? / ?專ACD蝧餉?嚗? ?? 璇郎蝷????銵?＊頧征??
     """
     out = {'bearish': False, 'reasons': [], 'hits': 0, 'strong': False}
     try:
@@ -69,27 +70,27 @@ def compute_tech_bearish(df, k=None, d=None) -> dict:
         strong = False
 
         if ma20 and ma60 and p < ma20 < ma60:
-            reasons.append('空頭排列（股價<月線<季線）')
+            reasons.append('蝛粹??嚗????<摮??嚗?)
             strong = True
         elif ma60 and p < ma60:
-            reasons.append('跌破季線 MA60')
+            reasons.append('頝摮?? MA60')
 
         if ma240 and p < ma240:
-            reasons.append('跌破年線 MA240')
+            reasons.append('頝撟渡? MA240')
         if ma20 and (p - ma20) / ma20 * 100 > 15:
-            reasons.append(f'月線正乖離過大 {(p - ma20) / ma20 * 100:+.0f}%')
+            reasons.append(f'??甇???ａ?憭?{(p - ma20) / ma20 * 100:+.0f}%')
         if ma5 and p < ma5:
-            reasons.append('跌破 5MA（短線轉弱）')
+            reasons.append('頝 5MA嚗蝺?撘梧?')
 
         if k is not None and d is not None:
             try:
                 if float(k) < float(d) and float(k) > 70:
-                    reasons.append(f'KD高檔死叉 K={float(k):.0f}')
+                    reasons.append(f'KD擃?甇餃? K={float(k):.0f}')
             except (TypeError, ValueError):
                 pass
 
         if _weekly_macd_turn_negative(close):
-            reasons.append('週MACD翻負（中線轉弱）')
+            reasons.append('?專ACD蝧餉?嚗葉蝺?撘梧?')
             strong = True
 
         out.update(bearish=(strong or len(reasons) >= 2),
@@ -102,26 +103,26 @@ def compute_tech_bearish(df, k=None, d=None) -> dict:
 def build_news_prompt(name: str, headlines: list[str]) -> str:
     lines = '\n'.join(f'{i + 1}. {h}' for i, h in enumerate(headlines))
     return (
-        f'你是台股風控分析師。以下是「{name}」近期新聞標題，請判斷整體對「持股人」的利空程度。\n'
+        f'雿?啗憸冽??撣怒誑銝?name}?????憿?隢?瑟擃????∩犖???拍征蝔漲?n'
         f'{lines}\n\n'
-        '只輸出 JSON（不要任何多餘文字、不要 markdown）：\n'
-        '{"label":"利空或中性或利多","confidence":0到100的整數,"reason":"30字內中文理由"}\n'
-        '判斷原則：只有實質衝擊營運或股價的負面消息（財報衰退、訂單流失、裁罰、利空政策、'
-        '法人調降目標價、重大意外或弊案）才算「利空」；一般中性報導、活動、正面消息勿誤判為利空。'
+        '?芾撓??JSON嚗?閬遙雿?擗?摮?閬?markdown嚗?\n'
+        '{"label":"?拍征?葉?扳??拙?","confidence":0??00???"reason":"30摮銝剜??"}\n'
+        '?斗??嚗?祕鞈芾??????∪???Ｘ??荔?鞎∪銵圈???格?憭晞?蝵啜蝛箸蝑?
+        '瘜犖隤輸??格??嫘?憭扳?憭?撘?嚗?蝞蝛箝?銝?砌葉?批撠暑?迤?Ｘ??臬隤文?箏蝛箝?
     )
 
 
 def parse_news_sentiment(raw: str) -> dict:
-    """解析 Gemini 回覆為 {label, confidence, reason, ok}。沿用專案 _extract_json 清洗慣例。"""
+    """閫?? Gemini ????{label, confidence, reason, ok}?窒?典?獢?_extract_json 皜??????""
     try:
         text = re.sub(r'```json|```', '', raw or '').strip()
         m = re.search(r'\{[\s\S]*\}', text)
         if not m:
-            return {'label': '中性', 'confidence': 0, 'reason': '無法解析 AI 回覆', 'ok': False}
+            return {'label': '銝剜?, 'confidence': 0, 'reason': '?⊥?閫?? AI ??', 'ok': False}
         d = json.loads(m.group(0))
-        label = str(d.get('label', '中性')).strip()
-        if label not in ('利空', '中性', '利多'):
-            label = '中性'
+        label = str(d.get('label', '銝剜?)).strip()
+        if label not in ('?拍征', '銝剜?, '?拙?'):
+            label = '銝剜?
         try:
             conf = int(float(d.get('confidence', 0)))
         except (TypeError, ValueError):
@@ -129,28 +130,28 @@ def parse_news_sentiment(raw: str) -> dict:
         return {'label': label, 'confidence': max(0, min(100, conf)),
                 'reason': str(d.get('reason', ''))[:60], 'ok': True}
     except Exception as e:
-        return {'label': '中性', 'confidence': 0, 'reason': f'解析失敗：{e}', 'ok': False}
+        return {'label': '銝剜?, 'confidence': 0, 'reason': f'閫??憭望?嚗e}', 'ok': False}
 
 
 def judge_news_sentiment(_gemini_call, name: str, headlines) -> dict:
-    """組 prompt → 呼叫 Gemini → 解析。Gemini 失效時回中性（不阻斷流程）。"""
+    """蝯?prompt ???澆 Gemini ??閫???emini 憭望???銝剜改?銝?瑟?蝔???""
     items = [h for h in (headlines or []) if h][:8]
     if not items:
-        return {'label': '中性', 'confidence': 0, 'reason': '無近期新聞', 'ok': False}
+        return {'label': '銝剜?, 'confidence': 0, 'reason': '?∟????, 'ok': False}
     raw = _gemini_call(build_news_prompt(name, items), max_tokens=256)
-    if not raw or str(raw).startswith('⚠️'):
-        return {'label': '中性', 'confidence': 0, 'reason': str(raw or 'AI 無回覆')[:60], 'ok': False}
+    if not raw or str(raw).startswith('??'):
+        return {'label': '銝剜?, 'confidence': 0, 'reason': str(raw or 'AI ?∪?閬?)[:60], 'ok': False}
     return parse_news_sentiment(raw)
 
 
 def _build_cached_judge():
-    """以 st.cache_data 包裝新聞判讀（TTL 6h）；無 streamlit 環境（如單元測試）則退回未快取版。"""
+    """隞?st.cache_data ???啗??方?嚗TL 6h嚗???streamlit ?啣?嚗??桀?皜祈岫嚗???敹怠???""
     try:
         import streamlit as st
     except Exception:
         return None
 
-    @st.cache_data(ttl=21600, show_spinner=False)
+    @st.cache_data(ttl=CACHE_TTL["daily_snapshot"], show_spinner=False)
     def _cached(_gemini_call, sid: str, name: str, headlines_key: tuple) -> dict:
         return judge_news_sentiment(_gemini_call, name, list(headlines_key))
 
@@ -161,7 +162,7 @@ _CACHED_JUDGE = _build_cached_judge()
 
 
 def judge_news_sentiment_cached(_gemini_call, sid: str, name: str, headlines) -> dict:
-    """快取版新聞判讀；key=股號+標題（gemini_call 以底線前綴排除於 hash 外）。"""
+    """敹怠???霈嚗ey=?∟?+璅?嚗emini_call 隞亙?蝺?蝬湔??斗 hash 憭???""
     key = tuple(h for h in (headlines or []) if h)[:8]
     if _CACHED_JUDGE is not None:
         return _CACHED_JUDGE(_gemini_call, sid, name, key)
@@ -171,37 +172,38 @@ def judge_news_sentiment_cached(_gemini_call, sid: str, name: str, headlines) ->
 def evaluate_exit_signals(tech: dict | None = None, chip_signal: str = '',
                           news: dict | None = None,
                           news_conf_threshold: int = 50) -> dict:
-    """三維綜合判斷。
+    """銝雁蝬??斗??
 
-    tech：compute_tech_bearish 回傳（None=未提供）。
-    chip_signal：analyze_20d_chips_from_df 的 'signal' 字串。
-    news：judge_news_sentiment 回傳（None=尚未掃描，例如組合 tab 未按掃描鈕）。
-    回傳 {score, icon, label, color, dims:[(名稱,命中,說明)], hit_names, headline}。
+    tech嚗ompute_tech_bearish ?嚗one=?芣?靘???
+    chip_signal嚗nalyze_20d_chips_from_df ??'signal' 摮葡??
+    news嚗udge_news_sentiment ?嚗one=撠??嚗?憒???tab ?芣???????
+    ? {score, icon, label, color, dims:[(?迂,?賭葉,隤芣?)], hit_names, headline}??
     """
-    news_hit = bool(news) and news.get('label') == '利空' \
+    news_hit = bool(news) and news.get('label') == '?拍征' \
         and int(news.get('confidence', 0)) >= news_conf_threshold
     if news_hit:
-        news_desc = f"利空（信心 {news.get('confidence')}）：{news.get('reason', '')}"
+        news_desc = f"?拍征嚗縑敹?{news.get('confidence')}嚗?{news.get('reason', '')}"
     elif news:
-        news_desc = f"{news.get('label', '中性')}：{news.get('reason', '')}"
+        news_desc = f"{news.get('label', '銝剜?)}嚗news.get('reason', '')}"
     else:
-        news_desc = '未掃描'
+        news_desc = '?芣???
 
     tech_hit = bool(tech) and tech.get('bearish')
-    tech_desc = '、'.join(tech.get('reasons', [])) if tech and tech.get('reasons') else '—'
+    tech_desc = '??.join(tech.get('reasons', [])) if tech and tech.get('reasons') else '??
 
-    chip_hit = '大戶倒貨' in (chip_signal or '')
-    chip_desc = chip_signal or '—'
+    chip_hit = '憭扳?疏' in (chip_signal or '')
+    chip_desc = chip_signal or '??
 
     dims = [
-        ('利空新聞', news_hit, news_desc),
-        ('技術轉空', tech_hit, tech_desc),
-        ('籌碼倒貨', chip_hit, chip_desc),
+        ('?拍征?啗?', news_hit, news_desc),
+        ('?銵?蝛?, tech_hit, tech_desc),
+        ('蝐Ⅳ?疏', chip_hit, chip_desc),
     ]
     score = sum(1 for _, hit, _ in dims if hit)
     icon, label, color = _LEVELS[score]
     hit_names = [n for n, hit, _ in dims if hit]
     headline = f'{icon} {label}'
-    headline += f'（{score}/3 維轉空：{"＋".join(hit_names)}）' if score else '（三維未轉空）'
+    headline += f'嚗score}/3 蝬剛?蝛綽?{"嚗?.join(hit_names)}嚗? if score else '嚗?蝬剜頧征嚗?
     return {'score': score, 'icon': icon, 'label': label, 'color': color,
             'dims': dims, 'hit_names': hit_names, 'headline': headline}
+

@@ -2,21 +2,20 @@
 股票多因子評分引擎 v3.0 (§5.2-5.4)
 評分維度：趨勢 / 動能 / 籌碼 / 量價 / 風險
 加權公式：0.30 / 0.25 / 0.20 / 0.15 / 0.10
+
+【v2.0 重構】所有常數已統一到 shared.constants，所有技術指標計算統一到 src.core.technical_indicators
 """
 
-try:
-    from config import (WEIGHT_TREND, WEIGHT_MOMENTUM, WEIGHT_CHIP,
-                        WEIGHT_VOLUME, WEIGHT_RISK,
-                        RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES)
-except ImportError:
-    WEIGHT_TREND=0.30; WEIGHT_MOMENTUM=0.25; WEIGHT_CHIP=0.20
-    WEIGHT_VOLUME=0.15; WEIGHT_RISK=0.10
-    RSI_OVERBOUGHT=70; RSI_OVERSOLD=30
-    WEIGHT_TABLES = {
-        'bull':    {'trend':0.30,'momentum':0.25,'chip':0.20,'volume':0.15,'risk':0.05,'fundamental':0.05},
-        'neutral': {'trend':0.25,'momentum':0.20,'chip':0.20,'volume':0.15,'risk':0.10,'fundamental':0.10},
-        'bear':    {'trend':0.15,'momentum':0.10,'chip':0.15,'volume':0.15,'risk':0.25,'fundamental':0.20},
-    }
+from shared.constants import (
+    WEIGHT_TREND, WEIGHT_MOMENTUM, WEIGHT_CHIP,
+    WEIGHT_VOLUME, WEIGHT_RISK,
+    RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES,
+    MA_SHORT, MA_MID, MA_LONG, MA_ANNUAL, MA_PERIODS_STANDARD,
+)
+
+from config import WEIGHT_FUNDAMENTAL
+
+from src.core.technical_indicators import calc_rsi, ensure_moving_averages
 
 # ── 1. 趨勢分數 ───────────────────────────────────────────────
 def calc_trend_score(df) -> float:
@@ -70,10 +69,7 @@ def calc_momentum_score(df) -> float:
 
     # ① RSI 區間評分
     if 'RSI' not in df.columns:
-        delta = close.diff()
-        gain  = delta.clip(lower=0).rolling(14).mean()
-        loss  = (-delta.clip(upper=0)).rolling(14).mean()
-        df['RSI'] = 100 - 100 / (1 + gain / (loss + 1e-10))
+        df['RSI'] = calc_rsi(close)  # 使用統一的 RSI 計算函數
     rsi = df['RSI'].iloc[-1]
     rsi_score = 2 if RSI_OVERSOLD < rsi < RSI_OVERBOUGHT else (1 if rsi <= RSI_OVERSOLD else 0)
 
@@ -231,16 +227,8 @@ def stock_score(trend, momentum, chip, volume_score, risk_score,
     """
     多因子加權總分（v3.2 動態權重版）
     regime='bull'|'neutral'|'bear' 自動切換因子權重表
+    所有權重表統一在 config.py，使用 SSOT 原則（禁止本地備用定義）
     """
-    try:
-        from config import WEIGHT_TABLES, WEIGHT_FUNDAMENTAL
-    except ImportError:
-        WEIGHT_TABLES = {
-            'bull':    {'trend':0.30,'momentum':0.25,'chip':0.20,'volume':0.15,'risk':0.05,'fundamental':0.05},
-            'neutral': {'trend':0.25,'momentum':0.20,'chip':0.20,'volume':0.15,'risk':0.10,'fundamental':0.10},
-            'bear':    {'trend':0.15,'momentum':0.10,'chip':0.15,'volume':0.15,'risk':0.25,'fundamental':0.20},
-        }
-        WEIGHT_FUNDAMENTAL = 0.10
     w = WEIGHT_TABLES.get(regime, WEIGHT_TABLES['neutral'])
     return round(
         trend             * w['trend']       +
