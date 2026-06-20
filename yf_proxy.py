@@ -1,18 +1,19 @@
-"""v18.209 K5：yfinance 共用 cached + proxy wrapper（解 Cloud IP 403 風險）。
+﻿from data_config import CACHE_TTL
+"""v18.209 K5嚗finance ?梁 cached + proxy wrapper嚗圾 Cloud IP 403 憸券嚗?
 
-Phase 1 audit 找到 8+ 處 `yf.Ticker()` 直呼，deep check 後確認 3 處真未 cache：
+Phase 1 audit ?曉 8+ ??`yf.Ticker()` ?游嚗eep check 敺Ⅱ隤?3 ????cache嚗?
   - app.py:363 (fetch_dividend_data)
   - tab_stock_picker.py:237 (_check_one_stock, in loop)
   - daily_checklist.py:487 (fetch_single, in loop)
 
-Streamlit Cloud 海外 IP 常被 Yahoo 403/rate-limit；既有 NAS Squid Proxy 走家用台灣 IP
-可繞過。但 caller 各自寫一份「env backup → set proxy → call → restore」boilerplate
-易漏接。本模組提供：
-  - cached_history(ticker, period): @st.cache_data(ttl=3600) 包 yf.Ticker.history
-  - cached_dividends(ticker): @st.cache_data(ttl=3600) 包 yf.Ticker.dividends
-proxy env 由模組內 try/finally 統一處理，caller 零樣板。
+Streamlit Cloud 瘚瑕? IP 撣貉◤ Yahoo 403/rate-limit嚗??NAS Squid Proxy 韏啣振?典??IP
+?舐??? caller ?撖思?隞賬nv backup ??set proxy ??call ??restore?oilerplate
+???乓璅∠???嚗?
+  - cached_history(ticker, period): @st.cache_data(ttl=CACHE_TTL["price_data"]) ??yf.Ticker.history
+  - cached_dividends(ticker): @st.cache_data(ttl=CACHE_TTL["price_data"]) ??yf.Ticker.dividends
+proxy env ?望芋蝯 try/finally 蝯曹???嚗aller ?嗆見?踴?
 
-設計：純函式 wrapper + st.cache_data；caller 用 from yf_proxy import ... 即可。
+閮剛?嚗??賢? wrapper + st.cache_data嚗aller ??from yf_proxy import ... ?喳??
 """
 from __future__ import annotations
 
@@ -28,9 +29,9 @@ _PROXY_ENV_KEYS = ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy")
 
 @contextmanager
 def _proxy_env():
-    """臨時設 NAS Squid Proxy 到 env vars（finally 自動還原，異常安全）。
+    """?冽?閮?NAS Squid Proxy ??env vars嚗inally ?芸???嚗撣詨??剁???
 
-    從 tw_stock_data_fetcher._load_proxy_config 取 proxy URL；無 proxy 時不動 env。
+    敺?tw_stock_data_fetcher._load_proxy_config ??proxy URL嚗 proxy ????env??
     """
     _purl = None
     try:
@@ -53,16 +54,16 @@ def _proxy_env():
                 _os.environ[k] = v
 
 
-@st.cache_data(ttl=3600, max_entries=200, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL["price_data"], max_entries=200, show_spinner=False)
 def cached_history(ticker: str, period: str = "1y") -> pd.DataFrame:
-    """yfinance Ticker.history with NAS proxy + 1h cache。
+    """yfinance Ticker.history with NAS proxy + 1h cache??
 
     Args:
-        ticker: yfinance 標的代碼，例 "2330.TW"
+        ticker: yfinance 璅?隞?Ⅳ嚗? "2330.TW"
         period: "5d"/"1mo"/"3mo"/"1y"/"5y"/"max"
 
     Returns:
-        pd.DataFrame；抓不到回空 DataFrame（不爆例外）。
+        pd.DataFrame嚗?銝?征 DataFrame嚗???憭???
     """
     import yfinance as yf
     try:
@@ -76,12 +77,12 @@ def cached_history(ticker: str, period: str = "1y") -> pd.DataFrame:
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600, max_entries=200, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL["price_data"], max_entries=200, show_spinner=False)
 def cached_dividends(ticker: str) -> pd.Series:
-    """yfinance Ticker.dividends with NAS proxy + 1h cache。
+    """yfinance Ticker.dividends with NAS proxy + 1h cache??
 
     Returns:
-        pd.Series；抓不到回空 Series（不爆例外）。
+        pd.Series嚗?銝?征 Series嚗???憭???
     """
     import yfinance as yf
     try:
@@ -93,3 +94,4 @@ def cached_dividends(ticker: str) -> pd.Series:
     except Exception as _e:
         print(f"[yf_proxy.dividends] {ticker}: {type(_e).__name__}: {_e}")
         return pd.Series(dtype=float)
+

@@ -1,12 +1,13 @@
-"""ETF 自製品質評等 — 4 因子加權合成 1-5 顆星
+﻿from data_config import CACHE_TTL
+"""ETF ?芾ˊ?釭閰? ??4 ?????? 1-5 憿?
 
-不依賴外部評等機構（晨星無公開 API），用 codebase 已有資料：
-  - AUM 規模 30%：log10 scale，100 億+ 滿分
-  - 費用率 25%：≤0.3% 滿分、≥1.5% 零分
-  - 殖利率穩定度 25%：近 3Y 年度配息 CV，≤0.15 滿分、≥0.6 零分
-  - Beta 合理性 20%：|β-1|≤0.1 滿分、|β-1|≥0.8 零分
+銝?鞈游??刻?蝑?瑽??冽??∪??API嚗???codebase 撌脫?鞈?嚗?
+  - AUM 閬芋 30%嚗og10 scale嚗?00 ?? 皛踹?
+  - 鞎餌??25%嚗0.3% 皛踹??1.5% ?嗅?
+  - 畾?帘摰漲 25%嚗? 3Y 撟游漲? CV嚗0.15 皛踹??0.6 ?嗅?
+  - Beta ????20%嚗帣-1|??.1 皛踹??帣-1|??.8 ?嗅?
 
-評等動態 rescale：缺一因子時剩餘權重歸一化。
+閰??? rescale嚗撩銝???擗??飛銝??
 """
 from __future__ import annotations
 import datetime as _dt
@@ -20,7 +21,7 @@ from etf_dashboard import (
     fetch_etf_info, fetch_etf_dividends, get_etf_expense_ratio_safe,
 )
 
-# ── 權重（4 因子加總 = 1.0）─────────────────────────────────
+# ?? 甈?嚗? ???蜇 = 1.0嚗?????????????????????????????????
 _WEIGHTS: dict[str, float] = {
     'aum':      0.30,
     'expense':  0.25,
@@ -28,27 +29,27 @@ _WEIGHTS: dict[str, float] = {
     'beta':     0.20,
 }
 
-# ── 因子閾值（滿分 / 零分）────────────────────────────────
-# AUM in TWD：1e9 (10億) → 0；1e10 (100億) → 1
+# ?? ???曉潘?皛踹? / ?嗅?嚗????????????????????????????????
+# AUM in TWD嚗?e9 (10?? ??0嚗?e10 (100?? ??1
 _AUM_LO_LOG = 9.0
 _AUM_HI_LOG = 10.0
-# Expense ratio：0.003 (0.3%) → 1；0.015 (1.5%) → 0
+# Expense ratio嚗?.003 (0.3%) ??1嚗?.015 (1.5%) ??0
 _EXP_HI = 0.003
 _EXP_LO = 0.015
-# Yield CV：0.15 → 1；0.6 → 0
+# Yield CV嚗?.15 ??1嚗?.6 ??0
 _YCV_HI = 0.15
 _YCV_LO = 0.6
-# Beta deviation from 1：0.1 → 1；0.8 → 0
+# Beta deviation from 1嚗?.1 ??1嚗?.8 ??0
 _BETA_HI = 0.1
 _BETA_LO = 0.8
 
 
-# ══════════════════════════════════════════════════════════════
-# 4 個 pure 評分函式（0-1 浮點，缺資料回 None）
-# ══════════════════════════════════════════════════════════════
+# ??????????????????????????????????????????????????????????????
+# 4 ??pure 閰??賢?嚗?-1 瘚桅?嚗撩鞈???None嚗?
+# ??????????????????????????????????????????????????????????????
 
 def score_aum(aum: float | None) -> float | None:
-    """AUM (元) → 0-1 分。log10 線性，10 億 → 0、100 億 → 1。"""
+    """AUM (?? ??0-1 ?og10 蝺改?10 ????0??00 ????1??""
     if aum is None or aum <= 0:
         return None
     _log = math.log10(float(aum))
@@ -56,14 +57,14 @@ def score_aum(aum: float | None) -> float | None:
 
 
 def score_expense(expense_ratio: float | None) -> float | None:
-    """費用率（比例形式 0.003=0.3%）→ 0-1 分。越低越好。"""
+    """鞎餌??瘥?敶Ｗ? 0.003=0.3%嚗? 0-1 ??雿?憟賬?""
     if expense_ratio is None or expense_ratio < 0:
         return None
     return max(0.0, min(1.0, (_EXP_LO - float(expense_ratio)) / (_EXP_LO - _EXP_HI)))
 
 
 def _yield_cv(divs: pd.Series | None) -> float | None:
-    """近 3Y 年度配息變異係數（std/mean）；樣本不足回 None。內部 helper。"""
+    """餈?3Y 撟游漲?霈靽嚗td/mean嚗?璅?銝雲??None???helper??""
     if divs is None or divs.empty:
         return None
     _cutoff = pd.Timestamp(_dt.date.today() - _dt.timedelta(days=3 * 365))
@@ -80,7 +81,7 @@ def _yield_cv(divs: pd.Series | None) -> float | None:
 
 
 def score_yield_cv(divs: pd.Series | None) -> float | None:
-    """殖利率穩定度：CV ≤ 0.15→1 / ≥ 0.6→0；資料不足回 None。"""
+    """畾?帘摰漲嚗V ??0.15?? / ??0.6??嚗???頞喳? None??""
     _cv = _yield_cv(divs)
     if _cv is None:
         return None
@@ -88,26 +89,26 @@ def score_yield_cv(divs: pd.Series | None) -> float | None:
 
 
 def score_beta(beta: float | None) -> float | None:
-    """Beta 合理性：|β-1| 越小越好。"""
+    """Beta ???改?|帣-1| 頞?頞末??""
     if beta is None:
         return None
     _dev = abs(float(beta) - 1.0)
     return max(0.0, min(1.0, (_BETA_LO - _dev) / (_BETA_LO - _BETA_HI)))
 
 
-# ══════════════════════════════════════════════════════════════
-# 主入口：compute_etf_quality()
-# ══════════════════════════════════════════════════════════════
+# ??????????????????????????????????????????????????????????????
+# 銝餃???compute_etf_quality()
+# ??????????????????????????????????????????????????????????????
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL["daily_snapshot"], show_spinner=False)
 def compute_etf_quality(ticker: str) -> dict:
-    """4 因子加權合成 ETF 品質評等。
+    """4 ?????? ETF ?釭閰???
 
     Returns
     -------
     dict
-      成功：{stars: 1-5, score: float, factors: {...}, weakest: str, coverage: float}
-      失敗：{stars: None, _err: str}
+      ??嚗stars: 1-5, score: float, factors: {...}, weakest: str, coverage: float}
+      憭望?嚗stars: None, _err: str}
     """
     try:
         _info = fetch_etf_info(ticker) or {}
@@ -116,8 +117,8 @@ def compute_etf_quality(ticker: str) -> dict:
         _exp = get_etf_expense_ratio_safe(ticker)
         _divs = fetch_etf_dividends(ticker)
     except Exception as _e:
-        return {'stars': None, '_err': f'抓取失敗 {type(_e).__name__}'}
-    # _yield_cv 只算 1 次；score_yield_cv 是純轉換不再做 groupby
+        return {'stars': None, '_err': f'??憭望? {type(_e).__name__}'}
+    # _yield_cv ?芰? 1 甈∴?score_yield_cv ?舐?頧?銝???groupby
     _ycv_raw = _yield_cv(_divs)
     _factors = {
         'aum':      {'val': _aum,  'score': score_aum(_aum)},
@@ -126,7 +127,7 @@ def compute_etf_quality(ticker: str) -> dict:
                      'score': score_yield_cv(_divs)},
         'beta':     {'val': _beta, 'score': score_beta(_beta)},
     }
-    # ── 單迴圈合一：valid_w / weighted_score / weakest 一次跑完 ──
+    # ?? ?株艘??銝嚗alid_w / weighted_score / weakest 銝甈∟?摰???
     _valid_w = 0.0
     _weighted = 0.0
     _valid_pairs: list[tuple[str, float]] = []
@@ -139,10 +140,10 @@ def compute_etf_quality(ticker: str) -> dict:
         _weighted += _w * _s
         _valid_pairs.append((_k, _s))
     if _valid_w <= 0:
-        return {'stars': None, '_err': '4 因子全缺資料', 'factors': _factors}
+        return {'stars': None, '_err': '4 ???函撩鞈?', 'factors': _factors}
     _score = _weighted / _valid_w
     _weakest = min(_valid_pairs, key=lambda x: x[1])[0]
-    # 5 顆星映射
+    # 5 憿???
     if _score >= 0.80:
         _stars = 5
     elif _score >= 0.65:
@@ -162,15 +163,15 @@ def compute_etf_quality(ticker: str) -> dict:
     }
 
 
-# ══════════════════════════════════════════════════════════════
+# ??????????????????????????????????????????????????????????????
 # UI Helper
-# ══════════════════════════════════════════════════════════════
+# ??????????????????????????????????????????????????????????????
 
 _FACTOR_NAMES = {
-    'aum':      'AUM 規模',
-    'expense':  '費用率',
-    'yield_cv': '殖利率穩定度',
-    'beta':     'Beta 合理性',
+    'aum':      'AUM 閬芋',
+    'expense':  '鞎餌??,
+    'yield_cv': '畾?帘摰漲',
+    'beta':     'Beta ????,
 }
 
 
@@ -178,33 +179,33 @@ def _fmt_factor_val(key: str, val) -> str:
     if val is None:
         return 'N/A'
     if key == 'aum':
-        return f'{val / 1e8:.1f} 億'
+        return f'{val / 1e8:.1f} ??
     if key == 'expense':
         return f'{val * 100:.2f}%'
     if key == 'yield_cv':
         return f'CV {val:.2f}'
     if key == 'beta':
-        return f'β {val:.2f}'
+        return f'帣 {val:.2f}'
     return str(val)
 
 
 def render_quality_badge(quality: dict | None) -> None:
-    """渲染 ETF 品質徽章（完整版：星等 + 4 因子分條 + 最弱項提示）。"""
+    """皜脫? ETF ?釭敺賜?嚗??渡?嚗?蝑?+ 4 ???? + ?撘梢??內嚗?""
     if quality is None or quality.get('stars') is None:
-        _msg = quality.get('_err', '未評等') if quality else '未評等'
-        st.caption(f'⚪ 品質評等：{_msg}')
+        _msg = quality.get('_err', '?芾?蝑?) if quality else '?芾?蝑?
+        st.caption(f'???釭閰?嚗_msg}')
         return
     _stars = quality['stars']
     _score = quality['score']
     _cov = quality['coverage']
     _color = (TRAFFIC_GREEN if _stars >= 4 else
               TRAFFIC_YELLOW if _stars == 3 else TRAFFIC_RED)
-    _star_str = '★' * _stars + '☆' * (5 - _stars)
+    _star_str = '?? * _stars + '?? * (5 - _stars)
     st.markdown(
-        f"#### ⭐ 品質評等　"
-        f"<span style='color:{_color};font-weight:700;font-size:22px'>{_star_str}</span>　"
+        f"#### 潃??釭閰??"
+        f"<span style='color:{_color};font-weight:700;font-size:22px'>{_star_str}</span>?"
         f"<span style='color:#8b949e;font-size:13px'>"
-        f"{_stars}/5 星｜綜合分 {_score:.2f}｜資料覆蓋 {_cov * 100:.0f}%</span>",
+        f"{_stars}/5 ??蝬???{_score:.2f}嚚?????{_cov * 100:.0f}%</span>",
         unsafe_allow_html=True)
     _cols = st.columns(4)
     for _i, (_k, _name) in enumerate(_FACTOR_NAMES.items()):
@@ -212,12 +213,12 @@ def render_quality_badge(quality: dict | None) -> None:
         with _cols[_i]:
             _s = _f['score']
             if _s is None:
-                _icon = '⚪'
+                _icon = '??
                 _scol = '#8b949e'
                 _bar = 0
             else:
-                _icon = ('🟢' if _s >= 0.7 else
-                         '🟡' if _s >= 0.4 else '🔴')
+                _icon = ('?' if _s >= 0.7 else
+                         '?' if _s >= 0.4 else '?')
                 _scol = (TRAFFIC_GREEN if _s >= 0.7 else
                          TRAFFIC_YELLOW if _s >= 0.4 else TRAFFIC_RED)
                 _bar = int(_s * 100)
@@ -235,5 +236,6 @@ def render_quality_badge(quality: dict | None) -> None:
                 f"</div></div>", unsafe_allow_html=True)
     if quality.get('weakest'):
         st.caption(
-            f"💡 最弱項：**{_FACTOR_NAMES[quality['weakest']]}**"
-            f"（拉升此因子可提升星等）")
+            f"? ?撘梢?嚗?*{_FACTOR_NAMES[quality['weakest']]}**"
+            f"嚗??迨???舀???蝑?")
+
