@@ -442,6 +442,14 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 etf_fetch.py (L1, I/O) → etf_calc.py (L2, 純函式) → etf_render.py (L4, 圖表) → etf_dashboard.py (L5, Tab)
 ```
 
+**8.2.A 已知例外清單**（豁免 §8.2 硬規則的特定模式,需明確標註理由）：
+
+| ID | 檔:行 | 例外規則 | 理由 |
+|---|---|---|---|
+| EX-L0-1 | `config.py:126-141` | L0 條件 import streamlit | 限於 `st.secrets` bootstrap 讀 FINMIND_TOKEN；`try/except ImportError` 已護純 .py 環境;**無 UI lifecycle 依賴**(不用 cache_data/session_state)。替代方案(移 L3 + 改函式)會打破所有 caller 介面,ROI 低。v18.241 A1 註記 |
+
+新增例外**必須**:(1) 在此表登錄、(2) 對應檔案加註解指回此表、(3) PR 描述附理由。**禁止**未經登錄的潛在「軟例外」。
+
 ### 8.3 灰色地帶（待 step 3 audit 確認是否違憲）
 
 - **`macro_helpers.py`**：分類 L2 但有輕度 I/O（讀 `macro_thresholds.json`）→ audit 看是否該抽 config-loader 到 L0
