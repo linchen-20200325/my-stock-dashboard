@@ -1,25 +1,24 @@
-﻿from data_config import CACHE_TTL
-"""chip_radar.py ???? ??蝐Ⅳ憭扳?琿?嚗撱箇?脩?嚗?
+"""chip_radar.py — 💠 集保籌碼大戶雷達（自建爬蟲版）
 
-鞈?靘?嚗orway.twsthr.info `StockHolders.aspx?stock={隞??}`嚗?靽?⊥??銵剁?瘥望?堆?
+資料來源：norway.twsthr.info `StockHolders.aspx?stock={代號}`（集保戶股權分散表，每週更新）
 
-閮剛???
+設計重點
 ========
-- ???嚗粥?Ｘ? `proxy_helper.fetch_url()`嚗AS Squid Proxy ???芸????湧?+
-  3 甈⊿?閰?+ 20s timeout + Storm Shield 300s 敹怠?嚗?憭??冽? User-Agent ?脩??
-- 閫??嚗pandas.read_html` ???”????**?芷??*?券??萄??菜葫?之?嗆?靘?/ ??鈭箸 /
-  ?交???雿?銝′蝺刻?撘望???蝬脩??寧?銋?⊿?摮暑嚗?
-- 敹怠?嚗@st.cache_data(ttl=CACHE_TTL["daily_snapshot"])` 銝?乩?????銝剔匱蝡???
-- ?脣?嚗遙雿仃??敺??征 df + ?航炊閮 + 閮箸鞈???UI 蝡舫＊蝷箸?蝷綽?**銝?靘???甇餉艘??*??
-- 閮箸嚗???read_html ??銵冽蝯?嚗hape / columns / ?嗾??嚗蝡航?銝甈∪??
-  霈蝙?刻?????啣祕??雿?閬????芷?圾??移皞圾??
+- 連線：走既有 `proxy_helper.fetch_url()`（NAS Squid Proxy → 自動降級直連 +
+  3 次重試 + 20s timeout + Storm Shield 300s 快取），外加隨機 User-Agent 防爬。
+- 解析：`pandas.read_html` 取所有表格 → **自適應**用關鍵字偵測「大戶比例 / 散戶人數 /
+  日期」欄位（不硬編脆弱欄名，網站改版也能盡量存活）。
+- 快取：`@st.cache_data(ttl=86400)` 一日一抓，降低中繼站負擔。
+- 防呆：任何失敗一律回「空 df + 錯誤訊息 + 診斷資料」，UI 端顯示提示，**不拋例外、不死迴圈**。
+- 診斷：回傳 read_html 原始表格結構（shape / columns / 前幾列），雲端跑一次即可
+  讓使用者/開發者看到實際欄位、必要時再把自適應解析改成精準解析。
 
-?憟?嚗ict嚗ache-safe ??銝?鞈?DataFrame.attrs ?典翰??摮暑嚗?
+回傳契約（dict，cache-safe — 不依賴 DataFrame.attrs 在快取後存活）
     {
-        'df':        DataFrame嚗?雿??交? / 憭扳瘥? / ??鈭箸嚗仃?蝛綽?,
-        'err':       str嚗?'=??嚗?
-        'tables':    list[dict]嚗那?瘀?瘥?read_html 銵冽??shape/columns/preview嚗?
-        'html_head': str嚗ead_html 憭望?????HTML ??挾嚗?
+        'df':        DataFrame（欄位：日期 / 大戶比例 / 散戶人數；失敗為空）,
+        'err':       str（''=成功）,
+        'tables':    list[dict]（診斷：每個 read_html 表格的 shape/columns/preview）,
+        'html_head': str（read_html 失敗時保留 HTML 開頭片段）,
     }
 """
 from __future__ import annotations
@@ -40,11 +39,11 @@ _UA_POOL = (
 )
 
 
-# ??????????????????????????????????????????????????????????????????????????????
-# 閫??頛嚗??賢?嚗?
-# ??????????????????????????????????????????????????????????????????????????????
+# ══════════════════════════════════════════════════════════════════════════════
+# 解析輔助（純函式）
+# ══════════════════════════════════════════════════════════════════════════════
 def _flatten_cols(df: pd.DataFrame) -> pd.DataFrame:
-    """?文像 MultiIndex 甈??撅文?銝莎?銝血?剖偏蝛箇??""
+    """攤平 MultiIndex 欄位成單層字串，並去頭尾空白。"""
     out = df.copy()
     if isinstance(out.columns, pd.MultiIndex):
         out.columns = [
@@ -57,7 +56,7 @@ def _flatten_cols(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _to_num(v) -> float:
-    """??'12.3%' / '1,234' / ' 56 ' 銋?摮葡頧 float嚗瘜圾?? NaN??""
+    """把 '12.3%' / '1,234' / ' 56 ' 之類字串轉為 float；無法解析回 NaN。"""
     import re as _re
     s = str(v).strip()
     if not s or s.lower() in ('nan', 'none', '-', '--'):
@@ -79,20 +78,20 @@ def _find_col(cols: list[str], keywords: tuple[str, ...]) -> str | None:
 
 
 def _find_major_col(cols: list[str]) -> str | None:
-    """憭扳???靘?嚗???憭扳?摮?+ 瘥?/??% 摮見嚗?????嗆活??""
-    _major = ('憭扯??, '憭扳', '400撘?, '1000撘?, '?撐', '?葉')
-    _ratio = ('瘥?', '??, '%', '??, '雿?, '?曉?瘥?, '?曉?暺?)
-    # pass1嚗之??+ 瘥?
+    """大戶持股『比例』欄：優先同時含大戶關鍵字 + 比例/率/% 字樣，再退而求其次。"""
+    _major = ('大股東', '大戶', '400張', '1000張', '千張', '集中')
+    _ratio = ('比例', '率', '%', '占', '佔', '百分比', '百分點')
+    # pass1：大戶 + 比例
     for c in cols:
         cl = str(c)
         if any(m in cl for m in _major) and any(r in cl for r in _ratio):
             return c
-    # pass2嚗?憭扳?摮??航撠望瘥?甈?
+    # pass2：純大戶關鍵字（可能就是比例欄）
     return _find_col(cols, _major)
 
 
 def _parse_date_series(s: pd.Series) -> pd.Series:
-    """?⊿????頧?datetime嚗?銝?祈圾???賭葉??? %Y%m%d嚗??詨?嚗?""
+    """盡量把日期欄轉 datetime：先一般解析，命中率低時退 %Y%m%d（純數字）。"""
     raw = s.astype(str).str.strip()
     out = pd.to_datetime(raw, errors='coerce')
     if out.notna().sum() < max(1, len(raw)) * 0.5:
@@ -104,9 +103,9 @@ def _parse_date_series(s: pd.Series) -> pd.Series:
 
 
 def _adaptive_parse(tables: list[pd.DataFrame]) -> pd.DataFrame:
-    """敺?read_html ???”?潔葉???甈????摨?銝撘萎蒂?賭?甈?
+    """從 read_html 的多個表格中挑最像「股權分散時序」的一張並抽三欄。
 
-    ?甈?嚗??/ 憭扳瘥? / ??鈭箸嚗撩??鋆?NaN嚗??曆??啣?蝛?DataFrame??
+    回傳欄位：日期 / 大戶比例 / 散戶人數（缺的欄補 NaN）；找不到回空 DataFrame。
     """
     best = None
     best_score = -1.0
@@ -114,24 +113,24 @@ def _adaptive_parse(tables: list[pd.DataFrame]) -> pd.DataFrame:
         if t is None or getattr(t, 'empty', True) or t.shape[1] < 2:
             continue
         ft = _flatten_cols(t)
-        # read_html ?芣??啗”?剜?甈??舀?貊揣撘?'0','1',?佗????函洵銝?銵券
-        # 嚗wsthr ??摨?銵典甇斗?瘜??祕甈??????/ >400撘萄之?⊥???曉?瘥擐?嚗?
+        # read_html 未抓到表頭時欄名是整數索引（'0','1',…）→ 用第一列當表頭
+        # （twsthr 時間序列表即此情況，真實欄名「資料日期 / >400張大股東持有百分比」在首列）
         if len(ft) >= 2 and all(str(c).strip().isdigit() for c in ft.columns):
             ft = ft.copy()
             ft.columns = [str(x).strip() for x in ft.iloc[0].tolist()]
             ft = ft.iloc[1:].reset_index(drop=True)
         cols = list(ft.columns)
         c_major = _find_major_col(cols)
-        c_retail = _find_col(cols, ('?⊥鈭箸', '??', '50撘?, '鈭箸'))
+        c_retail = _find_col(cols, ('股東人數', '散戶', '50張', '人數'))
         if not (c_major or c_retail):
             continue
-        c_date = _find_col(cols, ('?交?', '??, 'date', '??')) or cols[0]
-        # ???交?瘥?嚗?????璅???????銵????⊥?????◤憯??
+        c_date = _find_col(cols, ('日期', '週', 'date', '時間')) or cols[0]
+        # 有效日期比例（時間序列指標）— 分級分佈表/雜訊無有效日期，會被壓低分數
         _date_valid = 0.0
         if c_date in ft.columns:
             _dts = _parse_date_series(ft[c_date])
             _date_valid = float(_dts.notna().mean()) if len(_dts) else 0.0
-        # 閰?嚗??????) > 憭扳瘥? > ??鈭箸 > ?
+        # 評分：有效日期(時序) > 大戶比例 > 散戶人數 > 列數
         score = (_date_valid * 3.0 + (2.0 if c_major else 0)
                  + (1.0 if c_retail else 0) + min(len(ft), 300) / 1000.0)
         if score > best_score:
@@ -143,20 +142,20 @@ def _adaptive_parse(tables: list[pd.DataFrame]) -> pd.DataFrame:
 
     ft, c_date, c_major, c_retail = best
     out = pd.DataFrame()
-    out['?交?'] = _parse_date_series(ft[c_date]) if c_date in ft.columns else pd.NaT
-    out['憭扳瘥?'] = ft[c_major].map(_to_num) if c_major else float('nan')
-    out['??鈭箸'] = ft[c_retail].map(_to_num) if c_retail else float('nan')
+    out['日期'] = _parse_date_series(ft[c_date]) if c_date in ft.columns else pd.NaT
+    out['大戶比例'] = ft[c_major].map(_to_num) if c_major else float('nan')
+    out['散戶人數'] = ft[c_retail].map(_to_num) if c_retail else float('nan')
 
-    # 皜?嚗????潮蝻箇????交?蝻箇???銝?
-    out = out.dropna(how='all', subset=['憭扳瘥?', '??鈭箸'])
-    if out['?交?'].notna().any():
-        out = out.dropna(subset=['?交?']).sort_values('?交?')
+    # 清洗：丟掉兩個數值都缺的列；日期缺的列也丟
+    out = out.dropna(how='all', subset=['大戶比例', '散戶人數'])
+    if out['日期'].notna().any():
+        out = out.dropna(subset=['日期']).sort_values('日期')
     out = out.reset_index(drop=True)
     return out
 
 
 def _table_diag(tables: list[pd.DataFrame]) -> list[dict]:
-    """憯葬?敹怠????那?瑞?瑽?shape / columns / ??5 ????""
+    """壓縮成可快取的輕量診斷結構（shape / columns / 前 5 列）。"""
     diag = []
     for i, t in enumerate(tables):
         try:
@@ -173,12 +172,12 @@ def _table_diag(tables: list[pd.DataFrame]) -> list[dict]:
     return diag
 
 
-# ??????????????????????????????????????????????????????????????????????????????
-# ?詨???嚗st.cache_data ????dict嚗ache-safe嚗?
-# ??????????????????????????????????????????????????????????????????????????????
-@st.cache_data(ttl=CACHE_TTL["daily_snapshot"], show_spinner=False)
+# ══════════════════════════════════════════════════════════════════════════════
+# 核心抓取（@st.cache_data — 回 dict，cache-safe）
+# ══════════════════════════════════════════════════════════════════════════════
+@st.cache_data(ttl=86400, show_spinner=False)
 def fetch_chip_concentration(ticker: str) -> dict:
-    """??靽甈???”銝西?拇?閫???仃??蝛?df + ?航炊閮嚗???憭???""
+    """抓集保股權分散表並自適應解析。失敗回空 df + 錯誤訊息（不拋例外）。"""
     import io as _io
     import random as _rnd
 
@@ -186,7 +185,7 @@ def fetch_chip_concentration(ticker: str) -> dict:
 
     _tk = ''.join(c for c in str(ticker) if c.isalnum()).strip()
     if not _tk:
-        _empty['err'] = '?∠巨隞???箇征'
+        _empty['err'] = '股票代號為空'
         return _empty
 
     _url = TWSTHR_URL.format(ticker=_tk)
@@ -195,17 +194,17 @@ def fetch_chip_concentration(ticker: str) -> dict:
         _resp = fetch_url(_url, headers={'User-Agent': _rnd.choice(_UA_POOL)},
                           timeout=15, attempts=3)
     except Exception as _fe:
-        _empty['err'] = f'???靘?嚗歇?岫嚗?{type(_fe).__name__}: {_fe}'
+        _empty['err'] = f'連線例外（已重試）：{type(_fe).__name__}: {_fe}'
         return _empty
 
     if _resp is None:
-        _empty['err'] = 'NAS 隞??????憭望?嚗?閰?3 甈∪??征嚗?
+        _empty['err'] = 'NAS 代理與直連皆失敗（重試 3 次後回空）'
         return _empty
     if getattr(_resp, 'status_code', 0) != 200:
-        _empty['err'] = f'HTTP ??200嚗tatus={getattr(_resp, "status_code", None)}嚗?蝬脩?/隞???啣虜'
+        _empty['err'] = f'HTTP 非 200（status={getattr(_resp, "status_code", None)}）— 網站/代理異常'
         return _empty
 
-    # ?? 閫?Ⅳ嚗? .text嚗??剖??岫憭楊蝣潘???
+    # ── 解碼（先 .text，過短再嘗試多編碼）──
     try:
         _html = _resp.text or ''
         if len(_html) < 200 and getattr(_resp, 'content', None):
@@ -216,160 +215,159 @@ def fetch_chip_concentration(ticker: str) -> dict:
                 except Exception:
                     continue
     except Exception:
-        _empty['err'] = '???批捆閫?Ⅳ憭望?'
+        _empty['err'] = '回應內容解碼失敗'
         return _empty
 
     if not _html or len(_html) < 50:
-        _empty['err'] = '???批捆?箇征????
+        _empty['err'] = '回應內容為空或過短'
         return _empty
 
-    # ?? read_html ??
+    # ── read_html ──
     try:
         _tables = pd.read_html(_io.StringIO(_html))
     except ValueError:
-        _empty['err'] = 'pandas.read_html ?券??Ｘ銝隞颱? HTML 銵冽嚗雯蝡?賣?????航炊??'
+        _empty['err'] = 'pandas.read_html 在頁面找不到任何 HTML 表格（網站可能改版或回了錯誤頁）'
         _empty['html_head'] = _html[:600]
         return _empty
     except Exception as _pe:
-        _empty['err'] = f'read_html 靘?嚗type(_pe).__name__}: {_pe}'
+        _empty['err'] = f'read_html 例外：{type(_pe).__name__}: {_pe}'
         _empty['html_head'] = _html[:600]
         return _empty
 
     if not _tables:
-        _empty['err'] = 'read_html ?蝛箸???
+        _empty['err'] = 'read_html 回傳空清單'
         _empty['html_head'] = _html[:600]
         return _empty
 
     _parsed = _adaptive_parse(_tables)
     _diag = _table_diag(_tables)
     _err = '' if not _parsed.empty else \
-        '?曉銵冽雿瘜儘霅之?嗆?靘?/ ??鈭箸??雿???隢????寡那?琿?輻?撖阡?甈?蝯?'
+        '找到表格但無法辨識「大戶比例 / 散戶人數」欄位 — 請展開下方診斷面板看實際欄位結構'
     return {'df': _parsed, 'err': _err, 'tables': _diag, 'html_head': ''}
 
 
-# ??????????????????????????????????????????????????????????????????????????????
+# ══════════════════════════════════════════════════════════════════════════════
 # Streamlit UI
-# ??????????????????????????????????????????????????????????????????????????????
+# ══════════════════════════════════════════════════════════════════════════════
 def _plot_chip(df: pd.DataFrame, ticker: str) -> None:
-    """Plotly ??Y 頠賂?撌???鈭箸(bar)?=憭扳瘥?(line)??""
+    """Plotly 雙 Y 軸：左=散戶人數(bar)、右=大戶比例(line)。"""
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
     _fig = make_subplots(specs=[[{'secondary_y': True}]])
-    _has_retail = df['??鈭箸'].notna().any()
-    _has_major = df['憭扳瘥?'].notna().any()
-    _x = df['?交?'] if df['?交?'].notna().any() else list(range(len(df)))
+    _has_retail = df['散戶人數'].notna().any()
+    _has_major = df['大戶比例'].notna().any()
+    _x = df['日期'] if df['日期'].notna().any() else list(range(len(df)))
 
     if _has_retail:
         _fig.add_trace(
-            go.Bar(x=_x, y=df['??鈭箸'], name='???鈭箸',
+            go.Bar(x=_x, y=df['散戶人數'], name='散戶持股人數',
                    marker_color='#4a9eff', opacity=0.55),
             secondary_y=False)
     if _has_major:
         _fig.add_trace(
-            go.Scatter(x=_x, y=df['憭扳瘥?'], name='憭扳?瘥? (%)',
+            go.Scatter(x=_x, y=df['大戶比例'], name='大戶持股比例 (%)',
                        mode='lines+markers',
                        line=dict(color='#ff6b6b', width=2)),
             secondary_y=True)
 
     _fig.update_layout(
-        title=f'{ticker} ??蝐Ⅳ??嚗?嗡犖??vs 憭扳瘥?嚗?,
+        title=f'{ticker} 集保籌碼分布（散戶人數 vs 大戶比例）',
         height=440, hovermode='x unified',
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
         margin=dict(t=60, b=40, l=10, r=10))
-    _fig.update_yaxes(title_text='???鈭箸', secondary_y=False)
-    _fig.update_yaxes(title_text='憭扳?瘥? (%)', secondary_y=True)
+    _fig.update_yaxes(title_text='散戶持股人數', secondary_y=False)
+    _fig.update_yaxes(title_text='大戶持股比例 (%)', secondary_y=True)
     st.plotly_chart(_fig, use_container_width=True)
 
 
 def _render_diag(result: dict) -> None:
-    """閫??閮箸?Ｘ嚗ead_html ??銵冽蝯?嚗??脩垢撠?甈?嚗?""
-    with st.expander('? 閫??閮箸嚗ead_html ??蝯?嚗?, expanded=False):
+    """解析診斷面板：read_html 原始表格結構（供雲端對齊欄位）。"""
+    with st.expander('🔬 解析診斷（read_html 原始結構）', expanded=False):
         if result.get('html_head'):
-            st.caption('HTML ??挾嚗ead_html 憭望?????嚗?)
+            st.caption('HTML 開頭片段（read_html 失敗時保留）：')
             st.code(result['html_head'][:600])
         _tables = result.get('tables') or []
         if not _tables:
-            st.info('?∪?憪”?潸???憭??舫???挾撠勗仃???芷脣 read_html嚗?)
+            st.info('無原始表格資料（多半是連線階段就失敗，未進到 read_html）。')
             return
-        st.caption(f'read_html ?梯圾? **{len(_tables)}** ?”?潘?')
+        st.caption(f'read_html 共解析到 **{len(_tables)}** 個表格：')
         for _t in _tables:
-            st.markdown(f"**銵?#{_t['idx']}** ??shape = {tuple(_t['shape'])}")
+            st.markdown(f"**表 #{_t['idx']}** — shape = {tuple(_t['shape'])}")
             if _t.get('columns'):
-                st.write('甈?嚗?, _t['columns'])
+                st.write('欄位：', _t['columns'])
             _pv = _t.get('preview')
             if isinstance(_pv, pd.DataFrame) and not _pv.empty:
                 st.dataframe(_pv, use_container_width=True, hide_index=True)
 
 
 def render_chip_radar(ticker: str = '') -> str:
-    """?? ??蝐Ⅳ憭扳?琿???
+    """💠 集保籌碼大戶雷達。
 
-    ticker ?勗?怎垢嚗 tab 銝颱誨蝣?sid2嚗葆?伐?銝??芸遣頛詨獢?
-    ?銝畾萇策?I 擐葉憿批?蝮賜????函?蝐Ⅳ??摮葡嚗鞈???''嚗?
+    ticker 由呼叫端（個股 tab 主代碼 sid2）帶入，不再自建輸入框。
+    回傳一段給「AI 首席顧問總結」引用的籌碼摘要字串（無資料回 ''）。
     """
-    st.markdown('### ?? ??蝐Ⅳ憭扳?琿?')
-    st.caption('鞈?靘?嚗orway.twsthr.info ???嗉甈???”嚗??望?堆?嚗銝?隞?Ⅳ?芸??亥岷??)
+    st.markdown('### 💠 集保籌碼大戶雷達')
+    st.caption('資料來源：norway.twsthr.info 集保戶股權分散表（每週更新）；隨上方個股代碼自動查詢。')
 
     _tk = ''.join(c for c in str(ticker) if c.isalnum())
     if not _tk:
-        st.info('? 隢?銝頛詨?隞?Ⅳ銝艾??亙??游????ㄐ??＊蝷箄府瑼?靽?蝣潦?)
+        st.info('💡 請在最上方輸入個股代碼並「載入完整分析」，這裡會自動顯示該檔集保籌碼。')
         return ''
 
-    with st.spinner(f'?? {_tk} ???⊥??銵其葉?佗?NAS 隞?? + 3 甈⊿?閰佗?'):
+    with st.spinner(f'抓取 {_tk} 集保股權分散表中…（NAS 代理 + 3 次重試）'):
         _result = fetch_chip_concentration(_tk)
 
     _df = _result.get('df', pd.DataFrame())
     _err = _result.get('err', '')
 
     if _df is None or _df.empty:
-        st.warning('?? ?⊥?閫??蝐Ⅳ鞈?嚗?蝣箄??格?蝬脩?蝯???????)
+        st.warning('⚠️ 無法解析籌碼資料，請確認目標網站結構或連線狀態')
         if _err:
-            st.caption(f'?? 閮箸閮嚗_err}')
-        if st.button('??儭?皜翰??閰?, key='chip_radar_clear'):
+            st.caption(f'🛈 診斷訊息：{_err}')
+        if st.button('🗑️ 清快取重試', key='chip_radar_clear'):
             fetch_chip_concentration.clear()
             st.rerun()
         _render_diag(_result)
         return ''
 
-    # ?? ?? metric ??
+    # ── 摘要 metric ──
     _latest = _df.iloc[-1]
     _m1, _m2, _m3 = st.columns(3)
     with _m1:
-        _d = _latest['?交?']
-        st.metric('??啗??', _d.strftime('%Y-%m-%d') if pd.notna(_d) else '??)
+        _d = _latest['日期']
+        st.metric('最新資料日', _d.strftime('%Y-%m-%d') if pd.notna(_d) else '—')
     with _m2:
-        _mj = _latest['憭扳瘥?']
-        st.metric('憭扳?瘥?', f'{_mj:.2f}%' if pd.notna(_mj) else '??)
+        _mj = _latest['大戶比例']
+        st.metric('大戶持股比例', f'{_mj:.2f}%' if pd.notna(_mj) else '—')
     with _m3:
-        _rt = _latest['??鈭箸']
-        st.metric('???鈭箸', f'{int(_rt):,}' if pd.notna(_rt) else '??)
+        _rt = _latest['散戶人數']
+        st.metric('散戶持股人數', f'{int(_rt):,}' if pd.notna(_rt) else '—')
 
-    # ?? ??Y 頠詨? ??
+    # ── 雙 Y 軸圖 ──
     _plot_chip(_df, _tk)
 
-    with st.expander('?? ??閫??鞈?銵?, expanded=False):
+    with st.expander('📑 原始解析資料表', expanded=False):
         st.dataframe(_df, use_container_width=True, hide_index=True)
 
     _render_diag(_result)
 
-    # ?? 蝯艾I 擐葉憿批?蝮賜????函?蝐Ⅳ??摮葡 ??
+    # ── 給「AI 首席顧問總結」引用的籌碼摘要字串 ──
     _summary = ''
     try:
         _bits = []
-        _mj_v = _latest['憭扳瘥?']
-        _rt_v = _latest['??鈭箸']
+        _mj_v = _latest['大戶比例']
+        _rt_v = _latest['散戶人數']
         if pd.notna(_mj_v):
             _trend = ''
-            if len(_df) >= 5 and pd.notna(_df['憭扳瘥?'].iloc[-5]):
-                _delta = float(_mj_v) - float(_df['憭扳瘥?'].iloc[-5])
-                _trend = f'嚗?5?"??" if _delta > 0 else "??" if _delta < 0 else "?像"}{_delta:+.2f}%嚗?
-            _bits.append(f'??憭扳?瘥?={float(_mj_v):.2f}%{_trend}')
+            if len(_df) >= 5 and pd.notna(_df['大戶比例'].iloc[-5]):
+                _delta = float(_mj_v) - float(_df['大戶比例'].iloc[-5])
+                _trend = f'（近5期{"↑增" if _delta > 0 else "↓減" if _delta < 0 else "持平"}{_delta:+.2f}%）'
+            _bits.append(f'集保大戶持股比例={float(_mj_v):.2f}%{_trend}')
         if pd.notna(_rt_v):
-            _bits.append(f'??鈭箸={int(_rt_v):,}')
+            _bits.append(f'散戶人數={int(_rt_v):,}')
         if _bits:
-            _summary = '??蝐Ⅳ嚗? + ' | '.join(_bits)
+            _summary = '集保籌碼：' + ' | '.join(_bits)
     except Exception:
         _summary = ''
     return _summary
-

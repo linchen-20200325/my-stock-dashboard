@@ -1,19 +1,16 @@
 """
 回測引擎 v3.0 (§7)
 單策略回測 + Walk Forward Test + CAGR + 平均盈虧比
-
-【v2.0 重構】所有常數已統一到 shared.constants
 """
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-from shared.constants import (
-    BACKTEST_INIT_CASH, BACKTEST_COMMISSION, WFT_TRAIN_YEARS, WFT_TEST_MONTHS,
-    MA_SHORT, MA_LONG, RSI_OVERBOUGHT,
-)
-
-from src.core.technical_indicators import calc_rsi
+try:
+    from config import BACKTEST_INIT_CASH, BACKTEST_COMMISSION, WFT_TRAIN_YEARS, WFT_TEST_MONTHS
+except ImportError:
+    BACKTEST_INIT_CASH=1_000_000; BACKTEST_COMMISSION=0.001425
+    WFT_TRAIN_YEARS=3; WFT_TEST_MONTHS=12
 
 try:
     from backtesting import Backtest, Strategy
@@ -28,8 +25,8 @@ except ImportError:
 if _BACKTEST_AVAILABLE:
     class MA_Cross_Strategy(Strategy):
         """均線交叉策略（MA20/MA60）"""
-        ma_short = MA_SHORT  # 20
-        ma_long  = MA_MID    # 60
+        ma_short = 20
+        ma_long  = 60
         def init(self):
             self.ma_s = self.I(lambda x: pd.Series(x).rolling(self.ma_short).mean().values, self.data.Close)
             self.ma_l = self.I(lambda x: pd.Series(x).rolling(self.ma_long).mean().values,  self.data.Close)
@@ -39,7 +36,7 @@ if _BACKTEST_AVAILABLE:
 
     class MA_RSI_Strategy(Strategy):
         """MA + RSI 複合策略（§9 選股條件：MA20>MA60 且 RSI<70）"""
-        ma_short=MA_SHORT; ma_long=MA_MID; rsi_overbought=RSI_OVERBOUGHT
+        ma_short=20; ma_long=60; rsi_overbought=70
         def init(self):
             close = self.data.Close
             def _rsi(prices, n=14):

@@ -5,11 +5,14 @@
 v4.0 新增：宏爺 M1B-M2 資金活水評分維度
 v4.1 [step 3c]：來源切換 — TWSE BFI82U 直連 → tw_macro.fetch_finmind_foreign_investor
               ；yfinance.Ticker 直連 → macro_core.fetch_yf_ohlcv，全部走 NAS proxy
-【v2.0 重構】所有常數已統一到 config.py，使用 SSOT 原則（禁止本地備用定義）
 """
 import datetime
-from config import (MARKET_SCORE_BULL, MARKET_SCORE_NEUTRAL,
-                   EXPOSURE_BULL, EXPOSURE_NEUTRAL, EXPOSURE_BEAR)
+try:
+    from config import (MARKET_SCORE_BULL, MARKET_SCORE_NEUTRAL,
+                        EXPOSURE_BULL, EXPOSURE_NEUTRAL, EXPOSURE_BEAR)
+except ImportError:
+    MARKET_SCORE_BULL = 3; MARKET_SCORE_NEUTRAL = 2
+    EXPOSURE_BULL = 0.8; EXPOSURE_NEUTRAL = 0.5; EXPOSURE_BEAR = 0.2
 
 
 # ── 外部資料抓取 ──────────────────────────────────────────────

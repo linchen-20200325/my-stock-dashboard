@@ -1,13 +1,12 @@
-﻿from data_config import CACHE_TTL
-"""?∟?銝脤??舀?嚗rape Ladder嚗?擃??ETF ??蝯??雿喳?
+"""葡萄串領息法（Grape Ladder）— 高股息 ETF 月配組合最佳化
 
-?銝??斗?遢???⊥ ETF 蝯???嚗?瘥??賣??臬??
+挑選不同除息月份的高股息 ETF 組成投組，讓每個月都有息可領。
 
-?拙???
-- recommend_income_ladder(): 敺?etf_categories['擃??] 10 瑼???撠?ETF cover ?憭?
-- evaluate_income_ladder(): 閰摯雿輻?撓?亦????遢閬????暸?瘚?
+兩個入口：
+- recommend_income_ladder(): 從 etf_categories['高股息'] 10 檔自動挑最少 ETF cover 最多月
+- evaluate_income_ladder(): 評估使用者輸入組合的月份覆蓋率與現金流
 
-鞈?皞?yfinance via etf_dashboard.fetch_etf_dividends嚗??cache嚗?
+資料源：yfinance via etf_dashboard.fetch_etf_dividends（既有 cache）
 """
 from __future__ import annotations
 import datetime as _dt
@@ -19,27 +18,27 @@ from etf_categories import ETF_PEER_GROUPS
 from etf_dashboard import fetch_etf_dividends
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED
 
-# ?? Constants ?????????????????????????????????????????????????
-LOOKBACK_DAYS = 400         # ?? ~13 ???荔?蝯行???ETF ?嗥撩銝?楨銵?
-MAX_COMBO_SIZE = 5          # ?游???銝?
-MIN_PAYMENTS_FOR_VALID = 2  # ?喳? 2 甈⊿??舀?蝞?鞈???
+# ── Constants ─────────────────────────────────────────────────
+LOOKBACK_DAYS = 400         # 取近 ~13 月配息，給月配 ETF 偶缺一月緩衝
+MAX_COMBO_SIZE = 5          # 暴力搜尋上限
+MIN_PAYMENTS_FOR_VALID = 2  # 至少 2 次配息才算「有資料」
 TARGET_MONTHS_FULL = 12
 
-# ?? ETF 皜嚗lider ??賊??剁?
+# 月配 ETF 清單（slider 排除選項用）
 _MONTHLY_ETFS = {'00929.TW', '00940.TW', '00939.TW'}
 
 
-# ??????????????????????????????????????????????????????????????
-# Pure Logic嚗 Streamlit ?臭??剁??臬皜穿?
-# ??????????????????????????????????????????????????????????????
+# ══════════════════════════════════════════════════════════════
+# Pure Logic（無 Streamlit 副作用，可單測）
+# ══════════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=CACHE_TTL["daily_snapshot"], show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def get_pay_months(ticker: str, lookback_days: int = LOOKBACK_DAYS) -> set[int]:
-    """?? ticker 餈?lookback_days ?批祕??舀?隞賡???1-12嚗?
+    """取得 ticker 近 lookback_days 內實際除息月份集合（1-12）。
 
     Returns
     -------
-    set[int]  靘?{1, 4, 7, 10}嚗???頞單???憭望???set()??
+    set[int]  例：{1, 4, 7, 10}；資料不足或抓取失敗回 set()。
     """
     _divs = fetch_etf_dividends(ticker)
     if _divs is None or _divs.empty:
@@ -51,13 +50,13 @@ def get_pay_months(ticker: str, lookback_days: int = LOOKBACK_DAYS) -> set[int]:
     return set(_recent.index.month.tolist())
 
 
-@st.cache_data(ttl=CACHE_TTL["daily_snapshot"], show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def get_avg_monthly_cash(ticker: str, shares: int = 1000) -> dict[int, float]:
-    """{?遢: 閰脫?撟喳?瘥? ? shares}??
+    """{月份: 該月平均每股配息 × shares}。
 
     Returns
     -------
-    dict[int, float]  蝻箸?隞賭??箇??key 銝准?
+    dict[int, float]  缺月份不出現在 key 中。
     """
     _divs = fetch_etf_dividends(ticker)
     if _divs is None or _divs.empty:
@@ -71,7 +70,7 @@ def get_avg_monthly_cash(ticker: str, shares: int = 1000) -> dict[int, float]:
 
 
 def _score_combo(combo: tuple, month_map: dict[str, set[int]]) -> tuple[int, int]:
-    """(閬??, -??? ??tuple comparison ??閬???瘥??∪???""
+    """(覆蓋月數, -成員數) — tuple comparison 先比覆蓋、再比成員少。"""
     _covered = set().union(*(month_map[t] for t in combo))
     return (len(_covered), -len(combo))
 
@@ -84,12 +83,12 @@ def recommend_income_ladder(
     exclude_monthly: bool = False,
     min_stars: int = 1,
 ) -> dict:
-    """?游? itertools.combinations ???雿喟???
+    """暴力 itertools.combinations 搜尋最佳組合。
 
     Parameters
     ----------
     min_stars : int
-        ?雿?鞈芣?蝑?瞈暸?瑼鳴?1-5嚗? = 銝?瞈橘?3+ ??etf_quality ?????
+        最低品質星等過濾門檻（1-5）。1 = 不過濾，3+ 用 etf_quality 預先剔除。
 
     Returns
     -------
@@ -97,10 +96,10 @@ def recommend_income_ladder(
       best_combo, covered_months, missing_months, coverage_pct,
       month_map, all_candidates_evaluated, skipped_tickers, low_quality, alternatives
     """
-    _cands = list(candidates) if candidates else list(ETF_PEER_GROUPS.get('擃??, []))
+    _cands = list(candidates) if candidates else list(ETF_PEER_GROUPS.get('高股息', []))
     if exclude_monthly:
         _cands = [t for t in _cands if t not in _MONTHLY_ETFS]
-    # ?釭???蕪嚗in_stars >= 2 ?????踹? 1=銝?瞈暹??賣?嚗?
+    # 品質星等過濾（min_stars >= 2 才啟動，避免 1=不過濾時白抓）
     _low_quality: list[str] = []
     if min_stars >= 2:
         try:
@@ -110,14 +109,14 @@ def recommend_income_ladder(
                 _q = compute_etf_quality(_t)
                 _s = _q.get('stars') if _q else None
                 if _s is None or _s >= min_stars:
-                    # ?芾?蝑????踹?鞈?蝻箸?隤斗捏嚗?
+                    # 未評等者保留（避免資料缺漏誤殺）
                     _filtered.append(_t)
                 else:
                     _low_quality.append(_t)
             _cands = _filtered
         except Exception as _e_q:
-            print(f'[grape_ladder/min_stars] ??{type(_e_q).__name__}: {_e_q}')
-    # ??瑼??舀?隞踝?蝛?set 閬?∟???
+            print(f'[grape_ladder/min_stars] ❌ {type(_e_q).__name__}: {_e_q}')
+    # 抓每檔配息月份；空 set 視為無資料
     _month_map: dict[str, set[int]] = {}
     _skipped: list[str] = []
     for _t in _cands:
@@ -133,13 +132,13 @@ def recommend_income_ladder(
             'coverage_pct': 0.0, 'month_map': {},
             'all_candidates_evaluated': 0, 'skipped_tickers': _skipped,
             'low_quality': _low_quality, 'alternatives': [],
-            '_err': f'?? ETF ??{len(_valid)} 瑼?撠 min_etfs={min_etfs}',
+            '_err': f'有效 ETF 僅 {len(_valid)} 檔，少於 min_etfs={min_etfs}',
         }
     _max_k = min(max_etfs, len(_valid), MAX_COMBO_SIZE)
     _best_score: tuple[int, int] | None = None
     _best_combo: tuple = ()
     _evaluated = 0
-    _all_top: list[tuple] = []  # ??蝯?
+    _all_top: list[tuple] = []  # 同分組合
     for _k in range(min_etfs, _max_k + 1):
         for _combo in combinations(_valid, _k):
             _evaluated += 1
@@ -152,12 +151,12 @@ def recommend_income_ladder(
                 _all_top.append(_combo)
     _best_covered = set().union(*(_month_map[t] for t in _best_combo))
     _missing = set(range(1, target_months + 1)) - _best_covered
-    # 瘥? ???芸嗾瑼?
+    # 每月 → 哪幾檔配
     _by_month: dict[int, list[str]] = {}
     for _t in _best_combo:
         for _m in _month_map[_t]:
             _by_month.setdefault(_m, []).append(_t)
-    # alternatives嚗 best 憭???3 ??
+    # alternatives：除 best 外取前 3 個
     _alts = [list(_c) for _c in _all_top if _c != _best_combo][:3]
     return {
         'best_combo': list(_best_combo),
@@ -176,17 +175,17 @@ def evaluate_income_ladder(
     tickers: list[str],
     shares_map: dict[str, int] | None = None,
 ) -> dict:
-    """閰摯雿輻?撓?亦????遢閬???+ 瘥??暸?瘚?
+    """評估使用者輸入組合的月份覆蓋率 + 每月現金流。
 
     Returns
     -------
     dict
       tickers, covered_months, missing_months, month_etfs,
-      monthly_cashflow (1..12 摰 key), annual_cashflow, invalid_tickers
+      monthly_cashflow (1..12 完整 key), annual_cashflow, invalid_tickers
     """
     if not tickers:
-        return {'_err': '隢撠撓??1 瑼?ETF', 'tickers': [], 'invalid_tickers': []}
-    # ?駁?靽?
+        return {'_err': '請至少輸入 1 檔 ETF', 'tickers': [], 'invalid_tickers': []}
+    # 去重保序
     _seen: set[str] = set()
     _clean: list[str] = []
     for _t in tickers:
@@ -194,7 +193,7 @@ def evaluate_income_ladder(
         if _t and _t not in _seen:
             _seen.add(_t)
             _clean.append(_t)
-    # ?啗隞?Ⅳ撽?
+    # 台股代碼驗證
     _valid: list[str] = []
     _invalid: list[str] = []
     for _t in _clean:
@@ -225,14 +224,14 @@ def evaluate_income_ladder(
     }
 
 
-# ??????????????????????????????????????????????????????????????
+# ══════════════════════════════════════════════════════════════
 # UI Helpers
-# ??????????????????????????????????????????????????????????????
+# ══════════════════════════════════════════════════════════════
 
 def _render_month_grid(month_etfs: dict[int, list[str]], missing: set[int]) -> None:
-    """12 ?遢 3?4 grid嚗府??????蝬? + ETF chips嚗撩????蝝? ??""
-    _MONTH_NAMES = ['銝??, '鈭?', '銝?', '??', '鈭?', '?剜?',
-                    '銝?', '?急?', '銋?', '??', '????, '????]
+    """12 月份 3×4 grid；該月有配 → 綠底 + ETF chips；缺月 → 紅底 ❌。"""
+    _MONTH_NAMES = ['一月', '二月', '三月', '四月', '五月', '六月',
+                    '七月', '八月', '九月', '十月', '十一月', '十二月']
     for _row in range(3):
         _cols = st.columns(4)
         for _i in range(4):
@@ -242,13 +241,13 @@ def _render_month_grid(month_etfs: dict[int, list[str]], missing: set[int]) -> N
                 _has = bool(_etfs)
                 _bg = '#0d2818' if _has else '#2d0e0e'
                 _border = TRAFFIC_GREEN if _has else TRAFFIC_RED
-                _icon = '?? if _has else '??
+                _icon = '✅' if _has else '❌'
                 _content = ('<br>'.join(
                     f"<span style='background:#1f6feb22;color:#79c0ff;"
                     f"padding:2px 6px;border-radius:8px;font-size:10px;"
                     f"margin:2px 0;display:inline-block'>{_e}</span>"
                     for _e in _etfs)
-                    if _has else '<span style="color:#8b949e">??ETF</span>')
+                    if _has else '<span style="color:#8b949e">無 ETF</span>')
                 st.markdown(
                     f"<div style='background:{_bg};border:1px solid {_border};"
                     f"border-radius:6px;padding:8px;min-height:80px'>"
@@ -259,74 +258,73 @@ def _render_month_grid(month_etfs: dict[int, list[str]], missing: set[int]) -> N
 
 
 def _render_propose_subtab() -> None:
-    """? 蝟餌絞?降 sub-tab"""
-    st.markdown('##### ? 敺??⊥ 10 瑼???豢?雿喟???)
+    """💡 系統提議 sub-tab"""
+    st.markdown('##### 💡 從高股息 10 檔自動挑選最佳組合')
     _c1, _c2, _c3 = st.columns([1, 1, 1])
     with _c1:
-        _max_etfs = st.slider('?憭?ETF ??, 1, 5, value=4, key='_grape_max_etfs')
+        _max_etfs = st.slider('最多 ETF 數', 1, 5, value=4, key='_grape_max_etfs')
     with _c2:
-        _min_stars = st.slider('?雿?鞈芣?蝑?潃?, 1, 5, value=3,
+        _min_stars = st.slider('最低品質星等 ⭐', 1, 5, value=3,
                                key='_grape_min_stars',
-                               help='1 = 銝?瞈橘?3+ ??etf_quality 4 ?????雿?鞈?ETF')
+                               help='1 = 不過濾；3+ 用 etf_quality 4 因子預先剔除低品質 ETF')
     with _c3:
-        _excl = st.checkbox('???擃嚗?0929/00940/00939嚗?,
+        _excl = st.checkbox('排除月配高息（00929/00940/00939）',
                             value=False, key='_grape_excl_monthly')
-    if not st.button('?? ???降', key='_grape_btn_propose', type='primary'):
-        st.caption('暺??寞???遣霅啁???霅啣????岫???1~N 瑼????憭?C(10,5)=252 蝔殷???)
+    if not st.button('🍇 生成提議', key='_grape_btn_propose', type='primary'):
+        st.caption('點上方按鈕產生建議組合。提議引擎會嘗試所有 1~N 檔組合（最多 C(10,5)=252 種）。')
         return
-    with st.spinner('???雿喟??葉?佗?< 10 蝘?'):
+    with st.spinner('搜尋最佳組合中…（< 10 秒）'):
         _res = recommend_income_ladder(
             max_etfs=_max_etfs, min_etfs=1,
             exclude_monthly=_excl, min_stars=_min_stars)
     if _res.get('_err'):
-        st.error(f'??{_res["_err"]}')
+        st.error(f'❌ {_res["_err"]}')
         return
     _combo = _res['best_combo']
     _cover_pct = _res['coverage_pct']
     _missing = sorted(_res['missing_months'])
     if _cover_pct >= 100:
-        st.success(f'????{len(_combo)} 瑼?cover ?券 12 ??嚗???{", ".join(_combo)}')
+        st.success(f'✅ 用 {len(_combo)} 檔 cover 全部 12 個月！組合：{", ".join(_combo)}')
     else:
-        st.warning(f'?? ??{len(_combo)} 瑼?cover {len(_res["covered_months"])}/12 ??'
-                   f'({_cover_pct}%)嚗撩?遢嚗_missing}')
+        st.warning(f'⚠️ 用 {len(_combo)} 檔 cover {len(_res["covered_months"])}/12 月 '
+                   f'({_cover_pct}%)，缺月份：{_missing}')
     _m1, _m2, _m3, _m4 = st.columns(4)
-    _m1.metric('閬??', f'{len(_res["covered_months"])}/12')
-    _m2.metric('蝻箏', len(_missing))
-    _m3.metric('ETF ??, len(_combo))
-    _m4.metric('?岫蝯?', _res['all_candidates_evaluated'])
-    st.markdown('##### ?? 12 ?遢閬???)
+    _m1.metric('覆蓋月數', f'{len(_res["covered_months"])}/12')
+    _m2.metric('缺口', len(_missing))
+    _m3.metric('ETF 數', len(_combo))
+    _m4.metric('嘗試組合', _res['all_candidates_evaluated'])
+    st.markdown('##### 📅 12 月份覆蓋圖')
     _render_month_grid(_res['month_map'], _res['missing_months'])
     if _res.get('skipped_tickers'):
-        st.caption(f'???仿?嚗??航???頞喉?嚗", ".join(_res["skipped_tickers"])}')
+        st.caption(f'⚪ 略過（配息資料不足）：{", ".join(_res["skipped_tickers"])}')
     if _res.get('low_quality'):
-        st.caption(f'潃??釭???蕪嚗? {_min_stars}???嚗", ".join(_res["low_quality"])}')
+        st.caption(f'⭐ 品質星等過濾（< {_min_stars}★）剔除：{", ".join(_res["low_quality"])}')
     if _res.get('alternatives'):
-        st.markdown('##### ?? ??甈∪蝯?')
-        _alt_rows = [{'蝯?': ', '.join(_a), 'ETF ??: len(_a)}
+        st.markdown('##### 🔄 同分次優組合')
+        _alt_rows = [{'組合': ', '.join(_a), 'ETF 數': len(_a)}
                      for _a in _res['alternatives']]
         st.dataframe(pd.DataFrame(_alt_rows),
                      use_container_width=True, hide_index=True)
 
 
 def render_grape_ladder(gemini_fn=None) -> None:
-    """Streamlit UI 撠??亙 ??銝餉???? 蝟餌絞?降嚗?擃??10 瑼???豢?雿喟?????
+    """Streamlit UI 對外入口 — 主視圖：💡 系統提議（從高股息 10 檔自動挑選最佳組合）。
 
-    閮鳴?閰摯雿???∠????臬?撣??賢歇銝??etf_tab_portfolio ?????交? ? 撟游漲?暸?瘚?隡啜?PR #6 ?駁?嚗?
+    註：評估你現有持股的月配息分布功能已下放到 etf_tab_portfolio 的「💰 配息日曆 × 年度現金流預估」（PR #6 去重）。
     """
-    st.markdown('### ?? ?∟?銝脤??舀?')
-    st.caption('??????ETF???耦??葡??霈????賣??臬??
-               '?砍?敺??⊥ 10 瑼???豢?雿喟???'
-               '?交???Ｘ???????嚗?閬??嫘????交? ? 撟游漲?暸?瘚?隡啜?)
-    with st.expander('? ?∟?銝脤??舀??臭?暻潘??獐?剁?', expanded=False):
+    st.markdown('### 📅 葡萄串領息法')
+    st.caption('「不同月配 ETF」組合形成「葡萄串」：讓每個月都有息可領。'
+               '本區從高股息 10 檔自動挑選最佳組合；'
+               '若想看你既有持股的月配息分布，請見上方「💰 配息日曆 × 年度現金流預估」。')
+    with st.expander('💡 葡萄串領息法是什麼？怎麼用？', expanded=False):
         st.markdown(
-            '**?詨?璁艙**嚗????⊥ ETF ???箏?**??遢**嚗? 0056 ??1/4/7/10 ??0878 ??2/5/8/11 ?佗???
-            '?株眺銝瑼???銝撟游?嗾甈～???葉嚗?*?餅??剝????舀?隞賭?鋆??豢?**嚗停?賭葡??葡?? '
-            '**撟曆?瘥??賣??臬撣?*嚗??撟單??n\n'
-            '**?獐???寧???*嚗n'
-            '- **閬??遢/閬???*嚗???撟?12 ??銝剜?撟曉????唳嚗??亥? 12 頞末嚗n'
-            '- **蝻箸??遢**嚗撟曉?瘝 ???臬??曇府???舐? ETF 鋆??n'
-            '- **?釭???蕪**嚗???etf_quality 4 ???雿?鞈?ETF嚗??鞎瑕???n\n'
-            '? ?拙??唾?**蝛拙????**?????隡?????? ??鞈粹 ??畾??雿?寡??游?嚗竟?航??研?隞???舐蜇?梢??
+            '**核心概念**：台灣高股息 ETF 各有固定**配息月份**（如 0056 配 1/4/7/10 月、00878 配 2/5/8/11 月…）。'
+            '單買一檔 → 一年只領幾次、現金流集中；**刻意搭配「配息月份互補」的數檔**，就能串成「葡萄串」→ '
+            '**幾乎每月都有息入帳**，現金流平滑。\n\n'
+            '**怎麼看下方結果**：\n'
+            '- **覆蓋月份/覆蓋率**：這組合一年 12 個月中有幾個月領得到息（越接近 12 越好）。\n'
+            '- **缺漏月份**：哪幾個月沒息 → 可再找該月配息的 ETF 補上。\n'
+            '- **品質星等過濾**：先用 etf_quality 4 因子剔除低品質 ETF，避免「為領息買到爛標的」。\n\n'
+            '🎯 適合想要**穩定月現金流**的存股/退休族。提醒：領息 ≠ 賺錢 —— 殖利率高但股價跌更多＝「賺息賠本」，仍要看含息總報酬。'
         )
     _render_propose_subtab()
-
