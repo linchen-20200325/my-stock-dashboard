@@ -202,19 +202,21 @@ def render_unified_decision(gemini_fn, context: dict) -> None:
                 raw = gemini_fn(prompt, max_tokens=700)
             if raw and not raw.startswith('⚠️'):
                 m = _re.search(r'\{[\s\S]+\}', raw)
+                # v18.241 C3 (CLAUDE.md §1 Fail Loud + §2.2 反捏造):
+                # 原修法把 LLM raw[:300] 塞進 action_advice → 幻覺文字會被當「建議動作」渲染給使用者。
+                # 改修法：失敗時 action_advice 明標「不可作為建議」，原文挪到 precautions debug 區塊並前綴 [DEBUG]。
                 try:
                     parsed = _json.loads(m.group()) if m else {}
-                    if not parsed.get('summary'):
-                        parsed = {
-                            'summary': '⚠️ JSON 解析失敗，原始回傳如下',
-                            'action_advice': [raw[:300]],
-                            'precautions': [],
-                        }
+                    parse_failed = not parsed.get('summary')
                 except Exception:
+                    parsed = {}
+                    parse_failed = True
+
+                if parse_failed:
                     parsed = {
-                        'summary': '⚠️ JSON 解析失敗，原始回傳如下',
-                        'action_advice': [raw[:300]],
-                        'precautions': [],
+                        'summary': '⚠️ AI 回傳格式異常，請重試或聯絡管理員',
+                        'action_advice': ['⚠️ 本次 AI 輸出無法解析為結構化建議，請勿據此操作'],
+                        'precautions': [f'[DEBUG only - 原始 LLM 輸出，非投資建議] {raw[:300]}'],
                     }
                 st.session_state[_sess_key] = parsed
                 st.rerun()

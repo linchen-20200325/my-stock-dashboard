@@ -1,3 +1,24 @@
+"""
+ai_engine.py — Gemini LLM 推理層（L3 Service）
+
+【LLM 輸出血緣慣例（CLAUDE.md §2.2 + §8.2.A EX-AI-1）】
+本模組所有 public 函式（analyze_stock_trend / analyze_leading_indicators /
+generate_daily_report / generate_quick_summary）皆回傳 **str**，
+為效能與既有 caller 介面相容性考量，未改為 LLMOutput dataclass。
+
+所有 LLM 生成字串遵循以下視覺旗標慣例（caller 可用 string prefix 程式化偵測）：
+  - 開頭 `### 🧬 AI 戰情室` / `### 📡 AI 先行指標` 等 emoji 章節標題
+  - 結尾 `**使用模型**: <model_name>` 標明來源
+  - 錯誤路徑開頭 `⚠️ ...` / `❌ ...`
+
+【嚴格 caller 規則】
+  ✅ 允許：以 st.markdown / st.write 直接渲染給使用者
+  ❌ 禁止：以 regex 從 LLM 字串中萃取數字當作 data input 給 risk_control / strategy
+  ❌ 禁止：用 LLM 輸出覆寫資料層（如把 AI 給的「建議停損 850」存回 DataFrame）
+
+若未來新增 AI 公開函式，請確認遵循視覺旗標慣例，
+否則應改為 dataclass + is_llm_generated=True 旗標。
+"""
 import requests
 import json
 import datetime
@@ -7,16 +28,11 @@ import pandas as pd
 
 from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA
 
-def fetch_news_summary(api_key, stock_id, stock_name):
-    """
-    新聞摘要（L5 純推理版）— 不使用 Google Search Grounding。
-    依照 L5 架構邊界：AI 層只讀傳入的 data payload，嚴禁連網或呼叫外部 API。
-    呼叫者需自行傳入新聞素材；此函式僅作摘要整理，不自行搜尋。
-    若無素材則回傳空字串（UI 層選擇是否顯示）。
-    """
-    # L5 邊界：此函式不再主動連網查資料
-    # 新聞應由 L1 資料層（如 FinMind 公告、TWSE 重大訊息）傳入
-    return ""
+# v18.241 C1: 原 fetch_news_summary 永遠回空字串（L5 架構邊界禁連網），
+# 構成 dead code path（呼叫端 analyze_stock_trend L368-379 永遠不會 trigger 新聞區塊）。
+# 風險：LLM 若收到空字串以外的「未填新聞 placeholder」可能幻覺內容。
+# 修法：直接刪除函式 + 移除 analyze_stock_trend 內的 news_summary 區塊（CLAUDE.md §1 Fail Loud + §2.2 反捏造）。
+# 未來若需新聞功能，請在 L1 資料層新增 fetcher，將 news_data 透過 analyze_stock_trend 的參數明確傳入。
 
 
 def analyze_stock_trend(api_key, stock_id, stock_name, df, fundamental_summary=None):
@@ -365,18 +381,9 @@ def analyze_stock_trend(api_key, stock_id, stock_name, df, fundamental_summary=N
    - 確保所有數字格式統一、易讀
 """
 
-        # ========== 抓取最新新聞（Google Search Grounding）==========
-        news_summary = fetch_news_summary(api_key, stock_id, stock_name)
-        if news_summary:
-            prompt += f"""
-
----
-
-**【最新新聞摘要（Google 即時搜尋）】**
-{news_summary}
-
-**重要指示**：上方新聞為即時搜尋結果，請在第四章「產業與基本面展望」中適當引用這些最新資訊，包含最新財報、法人評等、產業動態等，讓分析更具時效性與參考價值。
-"""
+        # v18.241 C1: 原 fetch_news_summary dead path 已移除
+        # 新聞素材未來如需注入，請從 analyze_stock_trend 新增 news_data 參數明確傳入
+        # 避免「函式名暗示能抓但實際永遠回空」誤導 caller 與 LLM
 
         headers = {"Content-Type": "application/json"}
         payload = {
