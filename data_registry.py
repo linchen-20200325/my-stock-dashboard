@@ -35,6 +35,7 @@
 from __future__ import annotations
 from typing import Any
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_YELLOW
+from shared.fred_series import FRED_NAPM
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -576,7 +577,7 @@ EDU_GUIDE: dict[str, dict[str, Any]] = {
         'upstream': '油價、薪資成長、住房成本（OER）、供應鏈成本',
         'downstream': '影響 Fed 利率決策 → 美元 → 美債殖利率 → 美股估值（殖利率上 1%，PE 下調約 10–15%）',
     },
-    'NAPM': {
+    FRED_NAPM: {
         'meaning': 'ISM 製造業採購經理人指數，採購主管問卷彙總，領先 GDP 約 3–6 個月。',
         'how_to_read': [
             ('> 50', '🟢 製造業擴張'),

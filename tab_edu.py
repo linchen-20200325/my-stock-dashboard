@@ -12,11 +12,12 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import MATERIAL_GREEN, MATERIAL_ORANGE, MATERIAL_RED
+from shared.fred_series import FRED_NAPM
 from shared.ttls import TTL_1DAY
 
 
 # #U7：單值總經指標若 identifier 為 FRED series id → 可抓歷史序列畫 sparkline
-_FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'XTEXVA01TWM664S': 'pc1', 'NAPM': 'lin'}
+_FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'XTEXVA01TWM664S': 'pc1', FRED_NAPM: 'lin'}
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
@@ -112,7 +113,7 @@ def render_tab_edu():
                 # ─ 單值類（無 series，但顯示當前值 + 閾值線）─
                 _single = {
                     'CPILFESL':       ((_macro.get('us_core_cpi') or {}).get('yoy'),         2.5,  4,    True),
-                    'NAPM':           ((_macro.get('ism_pmi')     or {}).get('value') or
+                    FRED_NAPM:        ((_macro.get('ism_pmi')     or {}).get('value') or
                                        (_macro.get('ism_pmi')     or {}).get('current'),     50,   45,   False),
                     'XTEXVA01TWM664S':  ((_macro.get('tw_export')   or {}).get('yoy'),         0,    -5,   False),
                     'NDC_signal':     ((_macro.get('ndc_signal')  or {}).get('score') or
