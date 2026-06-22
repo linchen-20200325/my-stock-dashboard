@@ -9,10 +9,10 @@
 
 ---
 
-## §0. BOOTSTRAP 紀錄（首次填寫 2026-06-22）
+## §0. BOOTSTRAP 紀錄（首次填寫 2026-06-22；v3 升級 2026-06-22 新增 §8）
 
 > 完整稽核流程完成後再依 template 步驟 4 改名「§0. 填寫紀錄」。
-> 目前狀態：**步驟 2 完成（填寫）→ 待步驟 3（回溯稽核違憲清單）→ 步驟 4 收尾**。
+> 目前狀態：**步驟 2 完成（填寫 + v3 §8 增補）→ 待步驟 3（回溯稽核違憲清單）→ 步驟 4 收尾**。
 
 **步驟 1｜探查專案** — 已完成,三組並行 Explore agent 掃描,涵蓋：
 - meta-docs（README/STATE/ARCHITECTURE/SPEC/DATASTATION/STRATEGY_MANUAL/MACRO_CALIBRATION）
@@ -32,6 +32,7 @@
 - §4.4 Welford 適用性判斷
 - §4.5 時序對齊（**無**第三方 trading calendar lib）
 - §4.6 領域邊界（9 種 TW 股市特有狀態）
+- §8 架構先行 — 7 層分層 + 5 條硬規則 + 3 處灰色地帶（v3 增補,evidence: ARCHITECTURE.md §1-§7 + SPEC.md §5）
 
 **步驟 3｜回溯稽核** — 待使用者確認 §2 後啟動,將分模組輸出「違憲清單（檔名 + 行號 + 違反哪條 + 高/中/低）」,**只報告先別修**。
 
@@ -394,3 +395,70 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 4. 計算式先用**數學式**寫給我確認,再寫程式。
 
 先別寫 code,我們先對齊這四點。
+
+---
+
+## §8. 架構先行 — 涉及新模組 / 多檔案 / 改變資料流時
+
+§7 對齊的是「資料」；本節對齊的是「架構」（模組怎麼切、誰依賴誰、資料怎麼流）。
+
+**觸發條件**：新增模組、跨多檔案、或改變資料流。
+**不觸發**：單檔小修、純 bug fix、改字串、typo、版本字串 bump — 直接做,避免儀式性開銷。
+
+### 8.1 通則 — 先設計、自評過度設計、經核准才寫
+
+動工前先提交架構規劃（文字 + 簡單流程圖）,**這一步禁止寫 code**：
+
+1. 這個功能 / 模組的**單一職責**一句話講完。
+2. 該切成哪幾個模組 / 檔案？各自職責？
+3. **資料流向**：從哪進 → 經過哪幾層 → 從哪出。
+4. **依賴方向**：誰依賴誰？有無違反分層？
+5. **失敗降級**：外部來源失敗時這個架構怎麼辦（fail loud 還是有備援）？
+6. **自評過度設計**：對「當前需求的規模」會不會太重？用不到的抽象 / 分層標「**先不做,等真的需要再加**」。給最簡單能滿足需求的版本,不是最完整的。
+
+### 8.2 本專案分層與依賴硬規則（evidence: ARCHITECTURE.md §1-§7 + SPEC.md §5）
+
+**7 層架構**(由低到高,~21,323 LOC 跨 19 核心模組)：
+
+| 層 | 職責 | 代表檔案 |
+|---|---|---|
+| **L0 Infra** | 常數 / TTL / 門檻 / 全域 config | `config.py`、`shared/ttls.py`、`shared/thresholds.py`、`shared/health_thresholds.py`、`shared/fred_series.py` |
+| **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`、`data_registry.py`、`proxy_helper.py`、`update_macro_history.py`、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`、`tw_stock_data_fetcher.py` |
+| **L2 Compute** | 純函式運算 / 評分 / 策略 / 回測 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`merrill_clock.py`、`etf_calc.py`、`etf_quality.py`、`backtest_engine.py`、`risk_control.py`、`exit_signals.py`、`macro_signal_lookback_tw.py` |
+| **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_engine.py`、`ai_structured_summary.py`、`unified_decision.py`、`daily_checklist.py` |
+| **L4 Render** | 圖表生成 / 通用 UI 元件（無 Streamlit container） | `chart_plotter.py`、`etf_render.py`、`ui_widgets.py` |
+| **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`tab_mj_health_diff.py`、`etf_dashboard.py`、`etf_tab_*.py` |
+| **L6 App** | session_state 路由 + 全域編排 | `app.py`(7,300 LOC,僅 orchestrator) |
+
+**硬規則（violation = 違憲）**：
+- ❌ **L1 Data 不得 import streamlit** — 資料層脫離 UI 框架,可單獨測試
+- ❌ **L2 Compute 不得 import** `requests` / `proxy_helper` / `FinMind` SDK / `yfinance` — 純函式,無 I/O
+- ❌ **L0 Infra 不得依賴任何 L1+** — 被全層 import,須無迴圈依賴
+- ❌ **L5 UI / L6 App 不得直呼 L1 Data fetcher** — 透過 L3 Service 取數（cache 才能集中）
+- ❌ **跨層上行 import**：L1 不得 import L2/L3、L2 不得 import L3、L3 不得 import L4/L5
+
+**已落地範例**：ETF dashboard 三層分離(SPEC.md §5,v18.182+ 強制)：
+```
+etf_fetch.py (L1, I/O) → etf_calc.py (L2, 純函式) → etf_render.py (L4, 圖表) → etf_dashboard.py (L5, Tab)
+```
+
+### 8.3 灰色地帶（待 step 3 audit 確認是否違憲）
+
+- **`macro_helpers.py`**：分類 L2 但有輕度 I/O（讀 `macro_thresholds.json`）→ audit 看是否該抽 config-loader 到 L0
+- **`daily_checklist.py`**：跨 L1+L2+L3(fetch + cache + 摘要 + pkl 持久化)→ audit 看是否該拆檔
+- **`app.py`**：7,300 LOC,部分計算邏輯可能該下沉到 L2 → audit 看抽取規模
+
+### 8.4 做到一半的新增功能 — 先盤點再動
+
+新增功能前 audit pipeline：
+1. 現有程式大致分成哪幾塊？資料怎麼流？（對照 §8.2 七層）
+2. 哪裡**違反分層**？列檔名 + 行號（§8.3 灰色地帶已點名 3 處,audit 時補上更多）
+3. 這次的新功能該放哪一塊？會不會被現有壞結構卡住？
+4. 若需要先重構才好加,**分開提案**：「為這次必須改」vs「建議但可延後」,讓我決定範圍,**禁止**自作主張大重構。
+
+核准範圍後才動;一次改一塊,貼 diff + 說明為何不破壞既有行為。
+
+### 8.5 共同收尾
+
+核准後**一次只寫 / 改一個模組**,每完成一個跑 §6 自審。
+**禁止中途偏離已核准的架構**；若發現架構需要改,先停下來問。
