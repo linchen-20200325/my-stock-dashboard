@@ -4,6 +4,8 @@
 權重依市場狀態（bull/neutral/bear）由 config.WEIGHT_TABLES 動態切換。
 """
 
+import sys  # v18.241 D6: calc_atr_stop 例外路徑寫 stderr 用
+
 try:
     from config import RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES
 except ImportError:
@@ -942,8 +944,10 @@ def calc_atr_stop(df, entry_price: float, multiplier: float = 1.5) -> dict:
     解決固定停損8%過於剛性的問題
     """
     if df is None or len(df) < 14:
+        # 刻意降級：資料不足 → 固定 8% 停損，error=None 表非異常路徑
         return {'stop_loss': round(entry_price * 0.92, 2),
-                'atr': None, 'stop_pct': 8.0, 'method': 'fixed_8pct'}
+                'atr': None, 'stop_pct': 8.0,
+                'method': 'fixed_8pct', 'error': None}
     try:
         hi = df['high'] if 'high' in df.columns else df['close']
         lo = df['low']  if 'low'  in df.columns else df['close']
@@ -956,10 +960,17 @@ def calc_atr_stop(df, entry_price: float, multiplier: float = 1.5) -> dict:
             'atr': round(atr, 2),
             'stop_pct': round(stop_pct, 1),
             'method': f'ATR14×{multiplier}',
+            'error': None,
         }
-    except:
+    except Exception as e:
+        # v18.241 D6 hotfix (CLAUDE.md §1 Fail Loud):
+        # 原 bare except + 靜默 8% fallback → 偽造風控訊號可能導致實盤虧損。
+        # 改：(1) bare → except Exception (2) stderr log (3) error 欄位讓 caller 可追溯。
+        print(f"[calc_atr_stop] ATR 計算失敗 entry={entry_price}, 降級到固定 8% 停損: "
+              f"{type(e).__name__}: {e}", file=sys.stderr)
         return {'stop_loss': round(entry_price * 0.92, 2),
-                'atr': None, 'stop_pct': 8.0, 'method': 'fixed_8pct'}
+                'atr': None, 'stop_pct': 8.0,
+                'method': 'fixed_8pct', 'error': f"{type(e).__name__}: {e}"}
 
 # ── 時間停損判斷 ────────────────────────────────────────────
 def check_time_stop(entry_price: float, current_price: float,
