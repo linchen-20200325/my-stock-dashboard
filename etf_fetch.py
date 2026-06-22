@@ -104,7 +104,8 @@ def _get_etf_launch_price(ticker: str, df: "pd.DataFrame|None" = None):
     -------
     float | None
     """
-    _code = (ticker or '').replace('.TWO', '').replace('.TW', '').upper().strip()
+    from etf_helpers import bare_etf_code as _bare
+    _code = _bare(ticker)
     _v = _TW_ETF_LAUNCH_PRICE.get(_code)
     if _v is not None:
         return float(_v)
@@ -344,7 +345,8 @@ def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
     """
     from proxy_helper import fetch_url as _fu_sit
     import pandas as _pd_sit, re as _re_sit
-    _t = (ticker or '').replace('.TW', '').replace('.tw', '').strip()
+    from etf_helpers import bare_etf_code as _bare
+    _t = _bare(ticker)
     # 主動式 ETF 後綴字母（00982A、00980A、00406A）→ SITCA 表格僅收純數字代號，先剝
     _t_num = _re_sit.sub(r'[A-Za-z]+$', '', _t)
     if not _t_num or not _t_num.isdigit():
@@ -521,7 +523,8 @@ def _enrich_tw_holding_name(raw_name: str, symbol) -> str:
     - 海外成分股（如美股 ETF 的 AAPL）或無法判別 → 原樣回傳，不畫蛇添足。
     """
     import re as _re_n
-    _code = str(symbol or '').upper().replace('.TWO', '').replace('.TW', '').strip()
+    from etf_helpers import bare_etf_code as _bare
+    _code = _bare(symbol)
     if not _re_n.fullmatch(r'\d{4,6}[A-Z]?', _code):
         return raw_name
     _zh = ''
@@ -689,7 +692,8 @@ def is_active_etf(ticker: str) -> bool:
     """
     if not ticker:
         return False
-    _code = str(ticker).replace('.TW', '').replace('.TWO', '').replace('.tw', '').upper().strip()
+    from etf_helpers import bare_etf_code as _bare
+    _code = _bare(ticker)
     if _code in _ACTIVE_TW_ETF_WHITELIST:
         return True
     if not _code:
@@ -722,7 +726,8 @@ def _fetch_yuanta_active_etf_meta(ticker: str) -> dict | None:
         失敗：None
     """
     import re as _re_y
-    _code = (ticker or '').replace('.TW', '').replace('.TWO', '').strip().upper()
+    from etf_helpers import bare_etf_code as _bare
+    _code = _bare(ticker)
     if not _code or not is_active_etf(ticker):
         return None
     _urls = [
@@ -990,7 +995,8 @@ def fetch_etf_manager(ticker: str):
         return _best
 
     # ── 4. SITCA fallback — 與費用率同 proxy 路徑（已證可走）────────
-    if _t.replace('.TW', '').replace('.TWO', '').isdigit():
+    from etf_helpers import bare_etf_code as _bare4
+    if _bare4(_t).isdigit():
         _sitca = _fetch_sitca_manager(_t)
         if _sitca and _sitca.get('name'):
             print(f'[SITCA/manager] ✅ {_t} = {_sitca["name"]}')
@@ -1149,7 +1155,8 @@ def _fetch_sitca_manager(ticker: str):
     """
     from proxy_helper import fetch_url as _fu_sm
     import pandas as _pd_sm
-    _t = (ticker or '').replace('.TW', '').replace('.tw', '').replace('.TWO', '').strip()
+    from etf_helpers import bare_etf_code as _bare
+    _t = _bare(ticker)
     if not _t or not _t.isdigit():
         return None
     _tn = _t.lstrip('0') or '0'
@@ -1270,7 +1277,8 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
     """
     import os
     import datetime as _dt
-    code = ticker.replace('.TW', '').replace('.TWO', '')
+    from etf_helpers import bare_etf_code as _bare
+    code = _bare(ticker)
     # st.secrets 優先（Streamlit Cloud secrets 不自動匯出至 os.environ）
     token = (getattr(st, 'secrets', {}).get('FINMIND_TOKEN')
              or os.environ.get('FINMIND_TOKEN', ''))

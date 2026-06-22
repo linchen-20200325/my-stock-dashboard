@@ -265,7 +265,8 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
     import pandas as _pd_prem
     import re as _re_prem
     import datetime as _dt_prem
-    _code_clean = ticker.replace('.TW', '').replace('.TWO', '') if ticker else ''
+    from etf_helpers import bare_etf_code as _bare
+    _code_clean = _bare(ticker)
     _is_active_etf = bool(_re_prem.match(r'^\d{4,5}[A-Z]$', _code_clean))
     _ACTIVE_PREM_MAX = 2.0  # 主動式 ETF |prem| 門檻，超過判定 NAV stale
 
@@ -753,9 +754,10 @@ def _auto_bench_for_etf(ticker: str) -> str:
 
     .TW / .TWO / 純數字 → ^TWII（台股加權）；其他 → ^GSPC（S&P 500）
     """
+    from etf_helpers import bare_etf_code as _bare
     _t = (ticker or '').upper().strip()
     if _t.endswith('.TW') or _t.endswith('.TWO') or _t.replace('.', '').isalnum() and any(c.isdigit() for c in _t[:4]):
-        _code = _t.replace('.TW', '').replace('.TWO', '')
+        _code = _bare(_t)
         if _code and _code[0].isdigit():
             return '^TWII'
     return '^GSPC'

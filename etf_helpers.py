@@ -4,6 +4,7 @@
 - norm_return / norm_lower_better：雷達圖五維分數正規化（etf_tab_backtest）
 - auto_role：MK 框架 #9 核心/衛星分類（etf_tab_portfolio）
 - normalize_etf_ticker：ETF 代號規範化 SSOT（純 4-6 碼補 .TW；v18.224）
+- bare_etf_code：ETF 裸碼 SSOT（strip .TW/.TWO；v18.234）— normalize 反向
 """
 from __future__ import annotations
 
@@ -49,12 +50,30 @@ _CORE_TICKERS: frozenset[str] = frozenset({
 })
 
 
+def bare_etf_code(raw: str | None) -> str:
+    """ETF 裸碼 SSOT — strip `.TW` / `.TWO` 後綴並回大寫去空白；normalize_etf_ticker 的反向操作。
+
+    場景：外部 API URL（yuanta / SITCA）/ 內部 lookup key / 中文名 enrich /
+    is_active_etf 白名單比對 共用，避免 6+ 處 inline `.replace().upper()` 飄移。
+
+    範例：
+      '0050.TW'    → '0050'
+      '00982A.TWO' → '00982A'（主動式 ETF 字母後綴保留）
+      '  0050.tw ' → '0050'（大小寫無關 + 去空白）
+      'SPY'        → 'SPY'（無 .TW 後綴原樣）
+      ''/None      → ''
+    """
+    if not raw:
+        return ''
+    return str(raw).strip().upper().replace('.TWO', '').replace('.TW', '')
+
+
 def auto_role(tk: str | None) -> str:
     """ETF 核心 / 衛星判讀：白名單命中回「核心」，其餘「衛星」。
 
     自動剝離 `.TW` / `.TWO` 後綴並轉大寫；空字串 / None → 衛星。
     """
-    code = (tk or '').replace('.TWO', '').replace('.TW', '').upper()
+    code = bare_etf_code(tk)
     return '核心' if code in _CORE_TICKERS else '衛星'
 
 
