@@ -162,7 +162,7 @@ fd_proxy = fetch_tw_financials("2330", is_finance=False)
 ```python
 from ai_engine import (
     analyze_stock_trend,        # 個股深度分析（5章節完整報告）
-    fetch_news_summary,         # 即時新聞摘要（Gemini + Google Search）
+    # fetch_news_summary,       # v18.241 C1 移除（dead path，永遠回 ""，違反 §2.2 反捏造）
     analyze_leading_indicators, # 先行指標 AI 判讀
     generate_daily_report,      # 每日戰情摘要
     generate_quick_summary,     # 快速收盤摘要（1段文字）
@@ -178,8 +178,8 @@ report = analyze_stock_trend(
 )
 # → str：K線型態 / 均線架構 / 籌碼分析 / 產業定位 / 操作策略
 
-# 即時新聞
-news = fetch_news_summary(GEMINI_KEY, "2330", "台積電")  # → str
+# v18.241 C1 移除 fetch_news_summary：原永遠回空字串 dead path，違反 §2.2 反捏造
+# 未來如需新聞功能，請新增 L1 fetcher 並透過 analyze_stock_trend 的 news_data 參數注入
 
 # 先行指標判讀
 lead_text = analyze_leading_indicators(GEMINI_KEY, df_leading)  # → str

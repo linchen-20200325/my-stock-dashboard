@@ -4,6 +4,11 @@
 權重依市場狀態（bull/neutral/bear）由 config.WEIGHT_TABLES 動態切換。
 """
 
+import sys  # v18.241 D6: calc_atr_stop 例外路徑寫 stderr 用
+
+# v18.241 E10: ATR% 風險分級從 shared SSOT 引入
+from shared.signal_thresholds import ATR_PCT_LOW, ATR_PCT_HIGH
+
 try:
     from config import RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES
 except ImportError:
@@ -86,8 +91,8 @@ def calc_momentum_score(df) -> float:
         _lo = df['low']  if 'low'  in df.columns else close
         _tr = (_hi - _lo).rolling(14).mean().iloc[-1]
         _atr_pct = _tr / close.iloc[-1] if close.iloc[-1] > 0 else 0.02
-        # ATR% < 3% = 低波動性質，穩健；ATR% > 5% = 高波動，酌扣
-        atr_score = 2 if _atr_pct < 0.03 else (1 if _atr_pct < 0.05 else 0)
+        # v18.241 E10: ATR% 分級從 shared.signal_thresholds 引入（原 0.03/0.05 inline）
+        atr_score = 2 if _atr_pct < ATR_PCT_LOW else (1 if _atr_pct < ATR_PCT_HIGH else 0)
     else:
         atr_score = 1
 
@@ -283,7 +288,9 @@ def calc_rs_score(df, df_index=None, period=250):
         elif rs >= 0.5: return 55
         elif rs >= 0.0: return 40
         else:           return 20
-    except: return 50
+    except Exception as _e:  # v18.241 D4 (§1 Fail Loud): rs_score 異常時保留 50 dummy 以維 caller 介面，但記 stderr 讓問題可見
+        print(f"[rs_score] swallow → 中性 50: {type(_e).__name__}: {_e}", file=sys.stderr)
+        return 50
 
 def rs_slope(df, df_index=None, window=20):
     """RS 曲線斜率：最近20日 RS 趨勢向上=True"""
@@ -302,7 +309,9 @@ def rs_slope(df, df_index=None, window=20):
         x = list(range(len(rs_series)))
         slope = np.polyfit(x, rs_series, 1)[0]
         return slope > 0
-    except: return None
+    except Exception as _e:  # v18.241 D4 (§1 Fail Loud): rs_slope 異常 → None（caller 已防範 None），記 stderr
+        print(f"[rs_slope] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)
+        return None
 
 def score_single_stock(df, stock_id='', stock_name='', **kwargs) -> dict:
     """
@@ -415,7 +424,8 @@ def calc_fundamental_score(revenue_df=None, yoy_months: int = 3) -> float:
         if recent['yoy'].iloc[-1] > 15:
             score += 1
         return round(min(score / total * 100, 100), 1)
-    except:
+    except Exception as _e:  # v18.241 D5 (§1 Fail Loud): calc_fundamental_score 異常時保留 50.0 dummy 以維 caller，記 stderr
+        print(f"[calc_fundamental_score] swallow → 中性 50.0: {type(_e).__name__}: {_e}", file=sys.stderr)
         return 50.0
 
 # ── 獲利品質得分 (SQ) ────────────────────────────────────────
@@ -942,8 +952,10 @@ def calc_atr_stop(df, entry_price: float, multiplier: float = 1.5) -> dict:
     解決固定停損8%過於剛性的問題
     """
     if df is None or len(df) < 14:
+        # 刻意降級：資料不足 → 固定 8% 停損，error=None 表非異常路徑
         return {'stop_loss': round(entry_price * 0.92, 2),
-                'atr': None, 'stop_pct': 8.0, 'method': 'fixed_8pct'}
+                'atr': None, 'stop_pct': 8.0,
+                'method': 'fixed_8pct', 'error': None}
     try:
         hi = df['high'] if 'high' in df.columns else df['close']
         lo = df['low']  if 'low'  in df.columns else df['close']
@@ -956,10 +968,17 @@ def calc_atr_stop(df, entry_price: float, multiplier: float = 1.5) -> dict:
             'atr': round(atr, 2),
             'stop_pct': round(stop_pct, 1),
             'method': f'ATR14×{multiplier}',
+            'error': None,
         }
-    except:
+    except Exception as e:
+        # v18.241 D6 hotfix (CLAUDE.md §1 Fail Loud):
+        # 原 bare except + 靜默 8% fallback → 偽造風控訊號可能導致實盤虧損。
+        # 改：(1) bare → except Exception (2) stderr log (3) error 欄位讓 caller 可追溯。
+        print(f"[calc_atr_stop] ATR 計算失敗 entry={entry_price}, 降級到固定 8% 停損: "
+              f"{type(e).__name__}: {e}", file=sys.stderr)
         return {'stop_loss': round(entry_price * 0.92, 2),
-                'atr': None, 'stop_pct': 8.0, 'method': 'fixed_8pct'}
+                'atr': None, 'stop_pct': 8.0,
+                'method': 'fixed_8pct', 'error': f"{type(e).__name__}: {e}"}
 
 # ── 時間停損判斷 ────────────────────────────────────────────
 def check_time_stop(entry_price: float, current_price: float,

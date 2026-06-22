@@ -123,9 +123,16 @@ MACRO_ALERT_RULES: list = [
 # FINMIND_TOKEN：優先讀 Streamlit secrets，否則 fallback 到環境變數。
 # 由 tab_stock.py / tab_stock_grp.py 等模組統一從這裡 import，
 # 避免各檔重複貼 secrets+env 的 fallback 樣板。
+#
+# v18.241 A1：CLAUDE.md §8.2 例外 — L0 條件 import streamlit 限於 secrets bootstrap
+# 理由：
+#   1. try/except ImportError 已護 streamlit 缺席（純 .py 環境仍可運行）
+#   2. 用途僅限讀 st.secrets，無 UI lifecycle 依賴（不用 cache_data / session_state）
+#   3. 替代方案（移到 L3 + FINMIND_TOKEN 改函式）會打破所有 caller 介面，ROI 低
+# 將此模式列為 CLAUDE.md §8.2 已知例外（見「8.2 已知例外清單」）。
 import os as _os  # noqa: E402
 try:
-    import streamlit as _st  # noqa: E402
+    import streamlit as _st  # noqa: E402  -- 例外:見上方 v18.241 A1 註解
     try:
         _t = (getattr(_st, 'secrets', None) or {}).get('FINMIND_TOKEN', '')
     except Exception:

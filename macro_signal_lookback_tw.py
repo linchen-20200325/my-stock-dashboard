@@ -34,6 +34,12 @@ from typing import Callable, Literal, Optional
 import pandas as pd
 
 from macro_validation_tw import DEFAULT_PARQUET_CACHE_DIR, TwiiCrisisEvent
+# v18.241 E3-E7: 抽 inline magic 到 shared SSOT（CLAUDE.md §3.3）
+from shared.signal_thresholds import (
+    TRADING_DAYS_PER_YEAR,
+    FOREIGN_5D_NET_THRESHOLD_YI, MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
+    M1B_M2_GAP_DETERIORATION_THRESHOLD, TWII_20D_DROP_THRESHOLD_PCT,
+)
 
 # 訊號方向：above = 超過閾值算警戒；below = 低於閾值算警戒
 Direction = Literal["above", "below"]
@@ -235,7 +241,8 @@ def fetch_twii_realized_vol_20d_series(
                .astype(float)
                .sort_index())
     rets = close.pct_change()
-    vol = rets.rolling(window=20, min_periods=20).std() * (252 ** 0.5) * 100.0
+    # v18.241 E3: 年化常數從 SSOT 引入
+    vol = rets.rolling(window=20, min_periods=20).std() * (TRADING_DAYS_PER_YEAR ** 0.5) * 100.0
     vol.name = "TWII_REALIZED_VOL_20D"
     return vol.dropna()
 
@@ -277,7 +284,7 @@ DEFAULT_TW_SIGNALS: list[TwSignalSpec] = [
     TwSignalSpec(
         key="FOREIGN_SELL_5D",
         label="外資 5 日累積買賣超",
-        threshold=-500.0,
+        threshold=FOREIGN_5D_NET_THRESHOLD_YI,  # v18.241 E4
         direction="below",
         unit="億",
         note="5 日累積賣超 ≥ 500 億 → 警戒",
@@ -285,7 +292,7 @@ DEFAULT_TW_SIGNALS: list[TwSignalSpec] = [
     TwSignalSpec(
         key="MARGIN_BALANCE",
         label="融資餘額",
-        threshold=3400.0,
+        threshold=MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,  # v18.241 E5
         direction="above",
         unit="億",
         note="融資餘額 ≥ 3400 億（散戶槓桿過熱）",
@@ -293,7 +300,7 @@ DEFAULT_TW_SIGNALS: list[TwSignalSpec] = [
     TwSignalSpec(
         key="M1B_M2_DIFF",
         label="M1B/M2 缺口惡化",
-        threshold=-2.0,
+        threshold=M1B_M2_GAP_DETERIORATION_THRESHOLD,  # v18.241 E6
         direction="below",
         unit="pts/月",
         note="單月 M1B-M2 缺口惡化 ≥ 2 pts（資金流出股市）",
@@ -301,7 +308,7 @@ DEFAULT_TW_SIGNALS: list[TwSignalSpec] = [
     TwSignalSpec(
         key="TWII_DROP_20D",
         label="TWII 20 日跌幅",
-        threshold=-5.0,
+        threshold=TWII_20D_DROP_THRESHOLD_PCT,  # v18.241 E7
         direction="below",
         unit="%",
         note="20 日跌幅 ≤ -5%（加速下跌）",

@@ -440,8 +440,8 @@ app.py      ✓    ✓    ✓    ✓    ✓    ✓
           ┌────────────▼────────────┐
           │  L5 · ai_engine         │
           │  analyze_stock_trend()  │
-          │  fetch_news_summary()   │
-          │                         │
+          │  (v18.241 C1 移除 fetch_  │
+          │   news_summary dead path)│
           │  + unified_decision     │
           │  render_unified_        │
           │  decision()             │

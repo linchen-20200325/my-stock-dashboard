@@ -6,6 +6,11 @@ Author: AI戰情室 v4.0
 import pandas as pd
 import numpy as np
 from shared.colors import TRAFFIC_YELLOW
+# v18.241 E13: VIX / 外資期貨風險門檻從 shared SSOT 引入
+from shared.signal_thresholds import (
+    VIX_HIGH_RISK_THRESHOLD, VIX_MEDIUM_RISK_THRESHOLD,
+    FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS, FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS,
+)
 
 
 class V4StrategyEngine:
@@ -43,8 +48,13 @@ class V4StrategyEngine:
             elif 'trust' in low_col: col_map[col] = 'trust_net'
         
         self.df = df_stock.rename(columns=col_map).copy()
-        
+
         # Edge Case E-A: NaN / inf 防禦
+        # v18.241 群 B 深挖結論：此 ffill 方向安全 — caller (tab_stock.py:1191) 傳入的 df 由
+        # data_loader.sort_values('date').tail() 保證 ASCENDING（過去→未來），ffill 預設 axis=0
+        # 過去填補未來空格，無 lookahead bias。V4 為單點決策引擎（全 iloc[-1] / tail(N) /
+        # rolling(N).mean().iloc[-1]），不產生歷史信號序列，亦未被 backtest_engine 呼叫。詳見
+        # STATE.md v18.241 群 B 深挖 + audit B5 報告。
         self.df = self.df.ffill().fillna(0).replace([float('inf'), float('-inf')], 0)
         
         self.macro = df_macro or {}
@@ -72,8 +82,8 @@ class V4StrategyEngine:
         except (TypeError, ValueError):
             futures = 0
 
-        # 紅燈：高風險
-        if vix > 25 or futures < -20000:
+        # 紅燈：高風險 — v18.241 E13: 門檻從 SSOT 引入
+        if vix > VIX_HIGH_RISK_THRESHOLD or futures < FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS:
             return {
                 "status":       "🔴 紅燈",
                 "level":        "High Risk",
@@ -83,8 +93,8 @@ class V4StrategyEngine:
                 "vix":          vix,
                 "futures":      futures,
             }
-        # 黃燈：中度風險
-        elif vix > 20 or futures < -10000:
+        # 黃燈：中度風險 — v18.241 E13: 門檻從 SSOT 引入
+        elif vix > VIX_MEDIUM_RISK_THRESHOLD or futures < FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS:
             return {
                 "status":       "🟡 黃燈",
                 "level":        "Medium Risk",

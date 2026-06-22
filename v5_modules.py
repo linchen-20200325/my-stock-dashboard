@@ -12,6 +12,11 @@ from shared.thresholds import (
     YIELD_HIGH, YIELD_MID, YIELD_LOW,
     YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC,
 )
+# v18.241 E12: 龍多股篩選門檻從 shared SSOT 引入
+from shared.signal_thresholds import (
+    CONTRACT_LIABILITY_YOY_GROWTH_THRESHOLD_PCT,
+    CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT,
+)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -54,8 +59,9 @@ def analyze_fundamental_leading(cl_now: Optional[float], cl_prev: Optional[float
 
     # 訊號邏輯（孫慶龍「龍多股」標準）
     cl_ok     = cl_now and cl_now > 0
-    cl_growth = cl_yoy and cl_yoy > 20    # 合約負債 YoY > 20%
-    capex_ok  = capex_ratio and capex_ratio > 80  # 資本支出 > 股本 80%
+    # v18.241 E12: 龍多股篩選門檻從 SSOT 引入
+    cl_growth = cl_yoy and cl_yoy > CONTRACT_LIABILITY_YOY_GROWTH_THRESHOLD_PCT
+    capex_ok  = capex_ratio and capex_ratio > CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT
 
     if cl_growth and capex_ok:
         return {"signal": "🔴 龍多股", "color": R,

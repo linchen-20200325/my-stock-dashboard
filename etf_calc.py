@@ -13,6 +13,8 @@ from etf_fetch import (
     fetch_etf_nav_history, _get_etf_launch_price,
 )
 from shared.ttls import TTL_15MIN, TTL_1HOUR
+# v18.241 E8+E9: 抽 inline magic 到 shared SSOT
+from shared.signal_thresholds import TRADING_DAYS_PER_YEAR, ACTIVE_ETF_PREMIUM_MAX_PCT
 
 
 @st.cache_data(ttl=TTL_15MIN, max_entries=50, show_spinner=False)
@@ -65,7 +67,8 @@ def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
         # MA20 ± σ（衛星「跌了就買」分級）：用近 1 年 daily close 的標準差
         _sigma_label, _sigma_action, _sigma_emoji = None, None, None
         if _ma20v is not None and len(df) >= 60:
-            _std = float(df['Close'].tail(252).std())  # 近 1 年 daily std
+            # v18.241 E8: 年化常數從 SSOT 引入
+            _std = float(df['Close'].tail(TRADING_DAYS_PER_YEAR).std())  # 近 1 年 daily std
             if _std > 0:
                 _lo3 = _ma20v - 3 * _std
                 _lo2 = _ma20v - 2 * _std
@@ -269,7 +272,8 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
     from etf_helpers import bare_etf_code as _bare
     _code_clean = _bare(ticker)
     _is_active_etf = bool(_re_prem.match(r'^\d{4,5}[A-Z]$', _code_clean))
-    _ACTIVE_PREM_MAX = 2.0  # 主動式 ETF |prem| 門檻，超過判定 NAV stale
+    # v18.241 E9: 主動式 ETF prem 門檻從 SSOT 引入（原 _ACTIVE_PREM_MAX inline）
+    _ACTIVE_PREM_MAX = ACTIVE_ETF_PREMIUM_MAX_PCT
 
     def _prev_business_day(_d):
         _d2 = _d - _dt_prem.timedelta(days=1)

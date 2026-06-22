@@ -3,6 +3,7 @@ try:
 except Exception:
     pass
 
+import sys  # v18.241 D2: sys.stderr for imputation count logging
 import yfinance as yf
 import pandas as pd
 import datetime
@@ -300,6 +301,11 @@ def _normalize_inst_pivot(df_raw: pd.DataFrame) -> pd.DataFrame:
     df_raw 必須有 date / name / buy / sell 欄位，單位為股。"""
     import re as _re_ni
     df_raw = df_raw.copy()
+    # v18.241 D1 (CLAUDE.md §1 Fail Loud) 刻意取捨註記：
+    # fillna(0) before subtract = 「缺值 buy / sell 視為 0 股」，與 FinMind T86 在無交易日的語意一致
+    # (T86 不含週末/休市日，剩餘缺值多為個別法人未提交)。直接 raise 會中斷整 pivot，
+    # ROI 不如未來改 contract: 回傳含 `is_imputed` 旗標 DataFrame，由 caller 選擇是否容忍。
+    # 受影響筆數通常 < 1%，當前風險可接受；列入 §8.2.A future enhancement。
     df_raw['net_buy'] = (pd.to_numeric(df_raw['buy'],  errors='coerce').fillna(0) -
                          pd.to_numeric(df_raw['sell'], errors='coerce').fillna(0))
     df_raw['date'] = pd.to_datetime(df_raw['date']).dt.date
@@ -718,8 +724,14 @@ class StockDataLoader:
                 _margin_src = 'missing'
 
             # ========== 6. 數據清洗 ==========
-            # 填補0
+            # v18.241 D2 (CLAUDE.md §1 Fail Loud) 刻意取捨 + 可視化：
+            # fillna(0) 保留以維持下游 scoring/strategy 數值穩定，但統計受影響筆數寫 stderr
+            # 讓「靜默填補」變成「可觀測填補」。未來理想做法：caller 取 is_imputed DataFrame
+            # 旗標 → 由策略層自決是否容忍缺值（見 §8.2.A future enhancement）
             fill_cols = ['volume', '外資', '投信', '自營商', '主力合計']
+            _d2_imputed = sum(int(df[c].isna().sum()) for c in fill_cols if c in df.columns)
+            if _d2_imputed > 0:
+                print(f"[data_loader] {stock_id} {stock_name} imputed {_d2_imputed} NaN→0 across {fill_cols}", file=sys.stderr)
             for col in fill_cols:
                 if col in df.columns:
                     df[col] = df[col].fillna(0)
@@ -730,8 +742,14 @@ class StockDataLoader:
                 df = df.T.groupby(level=0).sum().T
 
             # 強制轉數值
+            # v18.241 D2 第二層 fillna：catches pd.to_numeric 強制 coerce 後的 NaN
+            # （非法字串轉數值失敗會變 NaN，再 fillna(0)）。保留同上理由。
             numeric_cols = ['open', 'high', 'low', 'close', 'volume',
                           '外資', '投信', '自營商', '主力合計', '融資餘額', '融券餘額']
+            _d2_coerce = sum(int(pd.to_numeric(df[c], errors='coerce').isna().sum()
+                                 - df[c].isna().sum()) for c in numeric_cols if c in df.columns)
+            if _d2_coerce > 0:
+                print(f"[data_loader] {stock_id} {stock_name} coerce-NaN {_d2_coerce} 個非法字串 → 0", file=sys.stderr)
             for col in numeric_cols:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
