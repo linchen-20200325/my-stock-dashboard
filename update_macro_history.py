@@ -226,10 +226,11 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     _ = token
     try:
         from proxy_helper import fetch_url as _fu_cbc
+        from tw_macro import fetch_cbc_ms1_rows
     except ImportError:
-        print("[finmind_m1m2] 缺 proxy_helper，無法抓 CBC")
+        print("[finmind_m1m2] 缺 proxy_helper / tw_macro，無法抓 CBC")
         return pd.DataFrame()
-    # ── Tier 1: ms1.json 三路徑 ──
+    # ── Tier 1: ms1.json 三路徑（共用 tw_macro.fetch_cbc_ms1_rows kernel）──
     ms1_urls = [
         "https://www.cbc.gov.tw/public/Attachment/ms1.json",
         "https://www.cbc.gov.tw/public/data/ms1.json",
@@ -238,22 +239,11 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     data = None
     for url in ms1_urls:
         try:
-            r = _fu_cbc(url, timeout=15, attempts=2)
-            if r is None:
-                print(f"[finmind_m1m2/ms1] {url[-40:]} → None")
-                continue
-            if r.status_code != 200:
-                print(f"[finmind_m1m2/ms1] {url[-40:]} HTTP={r.status_code}")
-                continue
-            try:
-                _j = r.json()
-                if isinstance(_j, list) and len(_j) > 0:
-                    data = _j
-                    print(f"[finmind_m1m2/ms1] ✅ {url[-40:]} 取到 {len(_j)} 行")
-                    break
-                print(f"[finmind_m1m2/ms1] {url[-40:]} json 非 list 或為空")
-            except Exception:
-                print(f"[finmind_m1m2/ms1] {url[-40:]} JSON 解析失敗 body={r.text[:200]}")
+            rows = fetch_cbc_ms1_rows(url, log_label='finmind_m1m2/ms1',
+                                      timeout=15, attempts=2)
+            if rows is not None:
+                data = rows
+                break
         except Exception as e:
             print(f"[finmind_m1m2/ms1] {url[-40:]} ❌ {type(e).__name__}: {e}")
 

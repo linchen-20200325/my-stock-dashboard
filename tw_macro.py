@@ -201,16 +201,43 @@ def fetch_finmind_foreign_investor(days_back: int = 7) -> dict:
 # 中央銀行 M1B / M2(三層備援)
 # ══════════════════════════════════════════════════════════════
 
-def _try_cbc_ms1(url: str) -> Optional[tuple]:
-    """嘗試抓 CBC ms1.json,回傳 (m1b_yoy, m2_yoy) 或 None。"""
-    r = fetch_url(url, timeout=12)
+def fetch_cbc_ms1_rows(url: str, *, min_rows: int = 1,
+                       log_label: Optional[str] = None,
+                       **fetch_kwargs) -> Optional[list]:
+    """v18.238 SSOT — CBC ms1.json 端點抓取 + JSON list-shape 驗證共用 kernel.
+
+    Consumers:
+      - tw_macro._try_cbc_ms1（即時三層備援 Tier 1）
+      - update_macro_history.fetch_finmind_m1m2（歷史 bootstrap ms1 分支）
+
+    `**fetch_kwargs` 透傳 fetch_url（timeout / attempts 等），caller 控制 IO 參數。
+    `log_label` 給時印詳細 debug log（update_macro_history 模式），否則 silent（tw_macro 模式）。
+    """
+    r = fetch_url(url, **fetch_kwargs)
     if r is None:
+        if log_label:
+            print(f"[{log_label}] {url[-40:]} → None")
         return None
     try:
         data = r.json()
     except Exception:
+        if log_label:
+            body = getattr(r, 'text', '')[:200]
+            print(f"[{log_label}] {url[-40:]} JSON 解析失敗 body={body}")
         return None
-    if not isinstance(data, list) or len(data) < 13:
+    if not isinstance(data, list) or len(data) < min_rows:
+        if log_label:
+            print(f"[{log_label}] {url[-40:]} json 非 list 或不足 {min_rows} 行")
+        return None
+    if log_label:
+        print(f"[{log_label}] ✅ {url[-40:]} 取到 {len(data)} 行")
+    return data
+
+
+def _try_cbc_ms1(url: str) -> Optional[tuple]:
+    """嘗試抓 CBC ms1.json,回傳 (m1b_yoy, m2_yoy) 或 None。"""
+    data = fetch_cbc_ms1_rows(url, min_rows=13, timeout=12)
+    if data is None:
         return None
     df = pd.DataFrame(data)
     c1 = next((c for c in df.columns
