@@ -19,10 +19,12 @@ from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from shared.ttls import TTL_3DAY, TTL_7DAY
+
 # ─────────────────────────────────────────────
 # §1 Constants
 # ─────────────────────────────────────────────
-CACHE_TTL_SEC = 86400 * 3   # 3 days
+CACHE_TTL_SEC = TTL_3DAY  # alias kept for back-compat
 _CONNECT_TIMEOUT = 10
 _READ_TIMEOUT = 30
 _RETRY_TOTAL = 3
@@ -520,9 +522,7 @@ fetch_tw_financials = _make_cached_fetcher()
 # ─────────────────────────────────────────────
 # §12.5  5年期現金流量允當比率（B 項精確版）
 # ─────────────────────────────────────────────
-_CACHE_7D = 86400 * 7
-
-@st.cache_data(ttl=_CACHE_7D, show_spinner=False)
+@st.cache_data(ttl=TTL_7DAY, show_spinner=False)
 def fetch_5_years_cash_flow(stock_code: str, token: str = "") -> dict:
     """
     抓取 5 年期現金流量允當比率（100/100/10 法則 B 項）

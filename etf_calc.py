@@ -12,9 +12,10 @@ from etf_fetch import (
     fetch_etf_price, fetch_etf_dividends, fetch_etf_info,
     fetch_etf_nav_history, _get_etf_launch_price,
 )
+from shared.ttls import TTL_15MIN, TTL_1HOUR
 
 
-@st.cache_data(ttl=900, max_entries=50, show_spinner=False)
+@st.cache_data(ttl=TTL_15MIN, max_entries=50, show_spinner=False)
 def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
     """ETF 追蹤戰情室單列健檢計算（核心/衛星依 role 分流燈號邏輯）。
 
@@ -490,7 +491,7 @@ def auto_detect_benchmark(ticker: str) -> str:
     return '^GSPC'
 
 
-@st.cache_data(ttl=3600, max_entries=50, show_spinner=False)
+@st.cache_data(ttl=TTL_1HOUR, max_entries=50, show_spinner=False)
 def compute_etf_peer_ranking(ticker: str, periods: tuple = (63, 126, 252)) -> dict:
     """ETF 同儕近 3M/6M/1Y 報酬排名（總報酬率含息，用 yfinance Adj Close）。
 
@@ -763,7 +764,7 @@ def _auto_bench_for_etf(ticker: str) -> str:
     return '^GSPC'
 
 
-@st.cache_data(ttl=900, max_entries=50, show_spinner=False)
+@st.cache_data(ttl=TTL_15MIN, max_entries=50, show_spinner=False)
 def compute_etf_weakness_row(ticker: str, name: str = '',
                               bench_ticker: str | None = None,
                               period: str = '1y') -> dict:

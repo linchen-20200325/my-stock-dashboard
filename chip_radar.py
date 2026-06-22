@@ -8,7 +8,7 @@
   3 次重試 + 20s timeout + Storm Shield 300s 快取），外加隨機 User-Agent 防爬。
 - 解析：`pandas.read_html` 取所有表格 → **自適應**用關鍵字偵測「大戶比例 / 散戶人數 /
   日期」欄位（不硬編脆弱欄名，網站改版也能盡量存活）。
-- 快取：`@st.cache_data(ttl=86400)` 一日一抓，降低中繼站負擔。
+- 快取：`@st.cache_data(ttl=TTL_1DAY)` 一日一抓，降低中繼站負擔。
 - 防呆：任何失敗一律回「空 df + 錯誤訊息 + 診斷資料」，UI 端顯示提示，**不拋例外、不死迴圈**。
 - 診斷：回傳 read_html 原始表格結構（shape / columns / 前幾列），雲端跑一次即可
   讓使用者/開發者看到實際欄位、必要時再把自適應解析改成精準解析。
@@ -22,6 +22,7 @@
     }
 """
 from __future__ import annotations
+from shared.ttls import TTL_1DAY
 
 import streamlit as st
 import pandas as pd
@@ -175,7 +176,7 @@ def _table_diag(tables: list[pd.DataFrame]) -> list[dict]:
 # ══════════════════════════════════════════════════════════════════════════════
 # 核心抓取（@st.cache_data — 回 dict，cache-safe）
 # ══════════════════════════════════════════════════════════════════════════════
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def fetch_chip_concentration(ticker: str) -> dict:
     """抓集保股權分散表並自適應解析。失敗回空 df + 錯誤訊息（不拋例外）。"""
     import io as _io

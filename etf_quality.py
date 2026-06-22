@@ -16,6 +16,7 @@ import pandas as pd
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ttls import TTL_1DAY
 from etf_dashboard import (
     fetch_etf_info, fetch_etf_dividends, get_etf_expense_ratio_safe,
 )
@@ -99,7 +100,7 @@ def score_beta(beta: float | None) -> float | None:
 # 主入口：compute_etf_quality()
 # ══════════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def compute_etf_quality(ticker: str) -> dict:
     """4 因子加權合成 ETF 品質評等。
 

@@ -7,6 +7,7 @@ daily_checklist.py v6.0 — Squid Proxy 模式
 import requests, pandas as pd, datetime, os, time, re
 import urllib3
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ttls import TTL_1HOUR
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -1027,11 +1028,11 @@ def calc_stats(df):
 # v5.0 Wrapper 函數 — NAS 優先，快取裝飾，統一 N/A 邏輯
 # ═══════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=3600, show_spinner=False, max_entries=10)
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False, max_entries=10)
 def get_export_yoy() -> dict | None:
     return None
 
 
-@st.cache_data(ttl=3600, show_spinner=False, max_entries=10)
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False, max_entries=10)
 def get_business_indicator() -> dict | None:
     return None

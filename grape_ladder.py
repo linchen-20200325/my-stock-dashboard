@@ -17,6 +17,7 @@ import streamlit as st
 from etf_categories import ETF_PEER_GROUPS
 from etf_dashboard import fetch_etf_dividends
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED
+from shared.ttls import TTL_1DAY
 
 # ── Constants ─────────────────────────────────────────────────
 LOOKBACK_DAYS = 400         # 取近 ~13 月配息，給月配 ETF 偶缺一月緩衝
@@ -32,7 +33,7 @@ _MONTHLY_ETFS = {'00929.TW', '00940.TW', '00939.TW'}
 # Pure Logic（無 Streamlit 副作用，可單測）
 # ══════════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def get_pay_months(ticker: str, lookback_days: int = LOOKBACK_DAYS) -> set[int]:
     """取得 ticker 近 lookback_days 內實際除息月份集合（1-12）。
 
@@ -50,7 +51,7 @@ def get_pay_months(ticker: str, lookback_days: int = LOOKBACK_DAYS) -> set[int]:
     return set(_recent.index.month.tolist())
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def get_avg_monthly_cash(ticker: str, shares: int = 1000) -> dict[int, float]:
     """{月份: 該月平均每股配息 × shares}。
 
