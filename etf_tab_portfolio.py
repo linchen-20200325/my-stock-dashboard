@@ -270,8 +270,9 @@ def render_etf_portfolio(gemini_fn=None):
     # 查詢 ETF 名稱（去掉 .TW/.TWO 後綴後查 stock_names）
     try:
         from stock_names import get_stock_name as _gsn_etf
+        from etf_helpers import bare_etf_code as _bare
         def _etf_name(tk):
-            code = tk.replace('.TWO','').replace('.TW','')
+            code = _bare(tk)
             n = _gsn_etf(code)
             return n if n and n != code else (fetch_etf_info(tk).get('shortName') or fetch_etf_info(tk).get('longName') or tk)
     except Exception:
