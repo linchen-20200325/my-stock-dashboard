@@ -226,18 +226,14 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     _ = token
     try:
         from proxy_helper import fetch_url as _fu_cbc
-        from tw_macro import fetch_cbc_ms1_rows
+        from tw_macro import CBC_MS1_URLS, fetch_cbc_ms1_rows
     except ImportError:
         print("[finmind_m1m2] 缺 proxy_helper / tw_macro，無法抓 CBC")
         return pd.DataFrame()
-    # ── Tier 1: ms1.json 三路徑（共用 tw_macro.fetch_cbc_ms1_rows kernel）──
-    ms1_urls = [
-        "https://www.cbc.gov.tw/public/Attachment/ms1.json",
-        "https://www.cbc.gov.tw/public/data/ms1.json",
-        "https://www.cbc.gov.tw/tw/public/data/ms1.json",
-    ]
+    # ── Tier 1: ms1.json（共用 tw_macro.CBC_MS1_URLS SSOT + fetch_cbc_ms1_rows kernel）──
+    # v18.240：URL 清單從 tw_macro import，dead Attachment URL（v18.231 確認 404）已移除
     data = None
-    for url in ms1_urls:
+    for url in CBC_MS1_URLS:
         try:
             rows = fetch_cbc_ms1_rows(url, log_label='finmind_m1m2/ms1',
                                       timeout=15, attempts=2)
