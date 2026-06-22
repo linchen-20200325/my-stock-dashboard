@@ -32,7 +32,7 @@ import json as _json
 import math
 import os as _os
 import re as _re
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 import pandas as pd
@@ -754,21 +754,9 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     today = _dt.date.today()
     errs: list[str] = []
 
-    # 優先序（越前面越權威）；每個 source fn 線程安全：只讀 today/max_age_days、
-    # 對共享 errs 做 append（CPython list.append 為原子操作），回傳新 dict。
-    # CIER-EN（英文月度頁）為 2026-06 新增最高優先源：slug 結構穩定、HTML 乾淨
-    _sources = [
-        ('CIER-EN',     _pmi_src_cier_en_monthly),
-        ('data.gov.tw', _pmi_src_dgtw),
-        ('NDC',         _pmi_src_ndc),
-        ('MacroMicro',  _pmi_src_macromicro),
-        ('CIER',        _pmi_src_cier21),
-        ('StockFeel',   _pmi_src_stockfeel),
-        ('Cnyes',       _pmi_src_cnyes),
-        ('FinMind',     _pmi_src_finmind),
-        ('CIER-cid8',   _pmi_src_cier8),
-        ('MoneyDJ',     _pmi_src_moneydj),
-    ]
+    # v18.240 SSOT：source 註冊清單抽到模組級 PMI_SOURCE_REGISTRY（見檔末）
+    # 新增 source = 在 registry append 1 entry，driver 不動。
+    _sources = PMI_SOURCE_REGISTRY
     _results: dict = {}
     with _TPE_pmi(max_workers=len(_sources)) as _ex_pmi:
         _fut2name = {_ex_pmi.submit(_fn, today, max_age_days, errs): _nm
@@ -1258,6 +1246,24 @@ def _pmi_src_moneydj(today, max_age_days, errs):
         errs.append(f'MoneyDJ:{type(e).__name__}')
         print(f'[macro_core/TW-PMI/MoneyDJ] ❌ {e}')
     return None
+
+
+# v18.240 SSOT — TW-PMI 來源註冊表
+# 順序即優先序（越前面越權威）；fetch_tw_pmi 並行賽跑後依此序取第一個命中。
+# 各 handler 線程安全：只讀 today/max_age_days、對共享 errs append、回傳新 dict 或 None。
+# 新增 source：append 1 entry 即可，fetch_tw_pmi driver 0 改。
+PMI_SOURCE_REGISTRY: list[tuple[str, Callable]] = [
+    ('CIER-EN',     _pmi_src_cier_en_monthly),
+    ('data.gov.tw', _pmi_src_dgtw),
+    ('NDC',         _pmi_src_ndc),
+    ('MacroMicro',  _pmi_src_macromicro),
+    ('CIER',        _pmi_src_cier21),
+    ('StockFeel',   _pmi_src_stockfeel),
+    ('Cnyes',       _pmi_src_cnyes),
+    ('FinMind',     _pmi_src_finmind),
+    ('CIER-cid8',   _pmi_src_cier8),
+    ('MoneyDJ',     _pmi_src_moneydj),
+]
 
 
 # ══════════════════════════════════════════════════════════════
