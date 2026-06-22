@@ -15,6 +15,7 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.thresholds import YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC
 from tab_helpers import (
     final_recommendation,
     format_condition_emoji,
@@ -228,7 +229,7 @@ def render_stock_grp():
 
                 val4 = '⚪無股利'
                 if avg_div4 > 0 and price4 > 0:
-                    ch4, fa4, de4 = avg_div4/0.07, avg_div4/0.05, avg_div4/0.03
+                    ch4, fa4, de4 = avg_div4/YIELD_HIGH_DEC, avg_div4/YIELD_MID_DEC, avg_div4/YIELD_LOW_DEC
                     if price4 <= ch4:
                         val4 = '🟢便宜'
                     elif price4 <= fa4:

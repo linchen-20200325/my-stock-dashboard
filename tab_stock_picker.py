@@ -35,6 +35,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from shared.thresholds import YIELD_HIGH
+
 
 def render_tab_stock_picker(gemini_fn=None, candidates=None,
                               source_label: str = '高息網',
@@ -441,7 +443,7 @@ def _check_dividend_5y(df, yf_ticker) -> str:
         _avg_annual_div = _last5y.sum() / 5 if len(_last5y) > 0 else 0
         _cur_price = float(df['Close'].iloc[-1])
         _yield_pct = (_avg_annual_div / _cur_price * 100) if _cur_price > 0 else 0
-        if len(_divs.last('5Y') if hasattr(_divs, 'last') else _divs) >= 5 and _yield_pct > 7:
+        if len(_divs.last('5Y') if hasattr(_divs, 'last') else _divs) >= 5 and _yield_pct > YIELD_HIGH:
             return f'✅ {_yield_pct:.2f}%'
         elif _yield_pct > 0:
             return f'❌ {_yield_pct:.2f}%'

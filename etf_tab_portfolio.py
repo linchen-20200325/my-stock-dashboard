@@ -26,6 +26,7 @@ import streamlit as st
 
 from etf_helpers import auto_role
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.thresholds import YIELD_MID, YIELD_LOW
 
 
 def render_etf_portfolio(gemini_fn=None):
@@ -754,14 +755,14 @@ def render_etf_portfolio(gemini_fn=None):
             f'💰 組合預估年度現金流入：<b>{_total_annual_raw:,.0f} 元</b>'
             f'（組合殖利率 {_yoc:.2f}%）'
             + ('&nbsp; ✅ 每年現金流穩定，適合存股策略'
-               if _yoc >= 3 else '&nbsp; 🟡 殖利率偏低，可考慮增加高息ETF比例'),
-            'green' if _yoc >= 3 else 'yellow')
-        if _yoc >= 5:
+               if _yoc >= YIELD_LOW else '&nbsp; 🟡 殖利率偏低，可考慮增加高息ETF比例'),
+            'green' if _yoc >= YIELD_LOW else 'yellow')
+        if _yoc >= YIELD_MID:
             _teacher_conclusion('郭俊宏',
                                 f'組合殖利率 {_yoc:.2f}%，年現金流 {_total_annual_raw:,.0f} 元',
                                 '殖利率優異，現金流充沛，以息養股目標達成',
                                 '持續持有，配息再投入複利滾動')
-        elif _yoc >= 3:
+        elif _yoc >= YIELD_LOW:
             _teacher_conclusion('郭俊宏',
                                 f'組合殖利率 {_yoc:.2f}%，年現金流 {_total_annual_raw:,.0f} 元',
                                 '殖利率合格，現金流穩定',

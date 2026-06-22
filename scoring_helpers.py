@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import pandas as _pd_fs
 
+from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
+
 
 def calc_fundamental_score(qtr_df, yearly_df, avg_div):
     """基本面四維評分：獲利/成長/股利/估值，各 0-3 分"""
@@ -101,11 +103,11 @@ def calc_fundamental_score(qtr_df, yearly_df, avg_div):
                 result['dividend']['checks'].append(('近4年配息', '穩定' if ok else '不穩定', ok))
         # 估值 357
         if avg_div and avg_div > 0:
-            if avg_div>=7:
+            if avg_div>=YIELD_HIGH:
                 sc,lb=3,'便宜區 >7%'
-            elif avg_div>=5:
+            elif avg_div>=YIELD_MID:
                 sc,lb=2,'合理 5~7%'
-            elif avg_div>=3:
+            elif avg_div>=YIELD_LOW:
                 sc,lb=1,'合理 3~5%'
             else:
                 sc,lb=0,'偏貴 <3%'
