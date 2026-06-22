@@ -285,7 +285,9 @@ def calc_rs_score(df, df_index=None, period=250):
         elif rs >= 0.5: return 55
         elif rs >= 0.0: return 40
         else:           return 20
-    except: return 50
+    except Exception as _e:  # v18.241 D4 (§1 Fail Loud): rs_score 異常時保留 50 dummy 以維 caller 介面，但記 stderr 讓問題可見
+        print(f"[rs_score] swallow → 中性 50: {type(_e).__name__}: {_e}", file=sys.stderr)
+        return 50
 
 def rs_slope(df, df_index=None, window=20):
     """RS 曲線斜率：最近20日 RS 趨勢向上=True"""
@@ -304,7 +306,9 @@ def rs_slope(df, df_index=None, window=20):
         x = list(range(len(rs_series)))
         slope = np.polyfit(x, rs_series, 1)[0]
         return slope > 0
-    except: return None
+    except Exception as _e:  # v18.241 D4 (§1 Fail Loud): rs_slope 異常 → None（caller 已防範 None），記 stderr
+        print(f"[rs_slope] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)
+        return None
 
 def score_single_stock(df, stock_id='', stock_name='', **kwargs) -> dict:
     """
@@ -417,7 +421,8 @@ def calc_fundamental_score(revenue_df=None, yoy_months: int = 3) -> float:
         if recent['yoy'].iloc[-1] > 15:
             score += 1
         return round(min(score / total * 100, 100), 1)
-    except:
+    except Exception as _e:  # v18.241 D5 (§1 Fail Loud): calc_fundamental_score 異常時保留 50.0 dummy 以維 caller，記 stderr
+        print(f"[calc_fundamental_score] swallow → 中性 50.0: {type(_e).__name__}: {_e}", file=sys.stderr)
         return 50.0
 
 # ── 獲利品質得分 (SQ) ────────────────────────────────────────

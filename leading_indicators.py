@@ -16,7 +16,7 @@ v5 修正：
   2. find_data_table(html, kw) 依關鍵字找正確資料表，不再依大小
   3. largeTraderFutQryTbl GET 解析 "43,469 (37,392)" 格式
 """
-import os, re, time
+import os, re, sys, time  # v18.241 D3: sys.stderr for fail-loud logging
 import streamlit as st
 import pandas as pd
 import requests
@@ -112,7 +112,7 @@ def to_num(v, as_int=False):
         if s in ("","-","nan","NaN","None","—","--","N/A"): return None
         f = float(s)
         return int(round(f)) if as_int else f
-    except: return None
+    except Exception: return None
 
 def first_num(cell, as_int=True):
     """從 '43,469  (37,392)' 或 '45.5%  (39.2%)' 取第一個數字"""
@@ -124,7 +124,7 @@ def first_num(cell, as_int=True):
     try:
         f = float(m2.group(0).replace(",",""))
         return int(round(f)) if as_int else f
-    except: return None
+    except Exception: return None
 
 def months_in_range(s, e):
     r, y, m = [], s.year, s.month
@@ -348,7 +348,8 @@ def taifex_calls_puts_day(date_ymd):
         if all(v is not None for v in [call_buy_amt, call_sell_amt, put_buy_amt, put_sell_amt]):
             net = call_buy_amt - call_sell_amt - put_buy_amt + put_sell_amt
             return round(net / 10)   # 金額÷10，與參考系統一致
-    except: pass
+    except Exception as _e:  # v18.241 D3 (§1 Fail Loud)
+        print(f"[taifex_calls_puts_day] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)
     return None
 
 
@@ -403,7 +404,8 @@ def taifex_mtx_data(date_ymd):
                     short_sum += so
             if long_sum + short_sum > 0:
                 inst_long, inst_short = long_sum, short_sum
-    except: pass
+    except Exception as _e:  # v18.241 D3 (§1 Fail Loud)
+        print(f"[taifex_mtx_data:legacy] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)
 
     try:
         # ② MTX 全體OI：futDailyMarketReport 各月 未沖銷契約量 加總
@@ -423,7 +425,8 @@ def taifex_mtx_data(date_ymd):
                 oi = to_num(row[12], as_int=True)
                 if oi is not None: total += oi
             if total > 0: total_oi = total
-    except: pass
+    except Exception as _e:  # v18.241 D3 (§1 Fail Loud)
+        print(f"[taifex_mtx_data:oi] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)
 
     if inst_long is None or inst_short is None or total_oi is None:
         return None
@@ -452,7 +455,7 @@ def twse_volume(yyyymm):
                     if 100 < v < 20000:
                         result[dk] = v
                         break
-                except: pass
+                except Exception: pass
         return result
 
     print(f"[VOL] twse_volume({yyyymm}) 開始")
@@ -540,9 +543,11 @@ def twse_volume_daily(ymd8):
                     try:
                         amt = round(float(str(row[idx]).replace(",","")) / 1e8, 1)
                         if 100 < amt < 20000: return amt
-                    except: pass
+                    except Exception: pass
         return None
-    except: return None
+    except Exception as _e:  # v18.241 D3 (§1 Fail Loud)
+        print(f"[twse_volume_daily] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)
+        return None
 
 # ════════════════════════════════════════════════════════
 # TWSE 三大法人 BFI82U
@@ -572,7 +577,9 @@ def twse_institutional_day(date_ymd):
         elif self_diff is not None:
             result["自營"] = self_diff
         return result
-    except: return {}
+    except Exception as _e:  # v18.241 D3 (§1 Fail Loud)
+        print(f"[twse_institutional_day] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)
+        return {}
 
 # ════════════════════════════════════════════════════════
 # TWSE 融資融券 MI_MARGN（單日）
@@ -666,7 +673,8 @@ def taifex_pcr(start_ymd, end_ymd):
             if 0.1 < val < 10: val = round(val * 100, 1)
             if 20 < val < 500 and d not in result:
                 result[d] = round(val, 1)
-    except: pass
+    except Exception as _e:  # v18.241 D3 (§1 Fail Loud)
+        print(f"[taifex_pcr] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)
     return result
 
 # ════════════════════════════════════════════════════════
@@ -686,7 +694,7 @@ def taifex_large_trader(date_ymd):
                            headers=TAIFEX_HDR, timeout=15)
             r.encoding = "utf-8"
             if len(r.text) > 200: html = r.text
-        except: pass
+        except Exception: pass
     if not html:
         html = taifex_post(
             "https://www.taifex.com.tw/cht/3/largeTraderFutQry",
@@ -739,7 +747,8 @@ def taifex_large_trader(date_ymd):
                 "前十大": top10_buy - top10_sell,
                 "未平倉": oi_total,                 # 直接取「全市場未沖銷部位數」
             }
-    except: pass
+    except Exception as _e:  # v18.241 D3 (§1 Fail Loud)
+        print(f"[taifex_large_trader] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)
     return {}
 
 # ════════════════════════════════════════════════════════
@@ -808,7 +817,7 @@ def render_table(df):
     def sty(v, col):
         if v is None or (isinstance(v, float) and pd.isna(v)): return ""
         try: n = float(v)
-        except: return ""
+        except Exception: return ""
         if col in BRACKET:
             if n > 0: return "color:#da3633;font-weight:bold;"
             if n < 0: return "color:#2ea043;font-weight:bold;"
@@ -1289,7 +1298,7 @@ def render_leading_table(df):
         except (TypeError, ValueError):
             pass
         try: n = float(v)
-        except: return ""
+        except Exception: return ""
         # 台股紅漲綠跌：正數 = 紅 (TRAFFIC_RED) / 負數 = 綠 (TRAFFIC_GREEN)
         if col in BRACKET:
             if n > 0: return f"color:{TRAFFIC_RED};font-weight:bold;"
