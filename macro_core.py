@@ -223,6 +223,15 @@ MACRO_THRESHOLDS: dict = {
 # 資料抓取(全部走 NAS proxy)
 # ══════════════════════════════════════════════════════════════
 
+# v18.231 P1-S3：fetch_fred 跨呼叫 (series_id, api_key, n) 集中
+# 原本無 cache，risk_radar.py L246/L271 雙呼 BAMLH0A0HYM2/DGS10 每次都打 FRED API。
+# 改 module-level TTL dict（30min，與 Fund repositories.macro_repository.fetch_fred
+# `@_ttl_cache(ttl_sec=1800, maxsize=32)` 對齊）。
+# 不用 @st.cache_data 是因為 macro_core 規定不依賴 streamlit，須能在 CLI/pytest 直接 import。
+_FRED_CACHE: dict[tuple[str, str, int], tuple[float, pd.DataFrame]] = {}
+_FRED_TTL = 1800.0  # 30min，FRED 日頻足夠
+
+
 def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     """
     抓取 FRED 經濟序列(透過 NAS proxy)。
@@ -231,9 +240,20 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     -------
     pd.DataFrame  欄位: ['date' (Timestamp), 'value' (float)],已排序去除空值。
                   失敗時回傳空 DataFrame。
+
+    v18.231 P1-S3：module-level TTL dict（30min）跨呼叫共享，
+    cache key = (series_id, api_key, n)；copy-on-read 防 caller mutation 污染。
     """
     if not api_key:
         return pd.DataFrame()
+
+    import time as _time
+    key = (series_id, api_key, n)
+    now = _time.time()
+    cached = _FRED_CACHE.get(key)
+    if cached is not None and (now - cached[0]) < _FRED_TTL:
+        return cached[1].copy()
+
     r = fetch_url(
         FRED_BASE,
         params={
@@ -258,7 +278,9 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     df = df[df["value"] != "."].copy()
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df["date"]  = pd.to_datetime(df["date"])
-    return df.dropna(subset=["value"]).sort_values("date").reset_index(drop=True)
+    out = df.dropna(subset=["value"]).sort_values("date").reset_index(drop=True)
+    _FRED_CACHE[key] = (now, out.copy())
+    return out
 
 
 # v18.229 P1-S2：fetch_yf_close 跨 tab range_ 集中
