@@ -72,6 +72,11 @@ def _ttl_cache(ttl_sec: int, maxsize: int = 32):
 TWSE_MI_INDEX_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
 FINMIND_BASE      = "https://api.finmindtrade.com/api/v4/data"
 CBC_MS1_URLS      = [
+    # v18.240 SSOT — CBC ms1.json 端點清單；tw_macro._try_cbc_ms1 與
+    # update_macro_history.fetch_finmind_m1m2 共用，與 fetch_cbc_ms1_rows
+    # kernel 形成完整 SSOT。新增端點 = 此清單 append 一個 URL 即可。
+    # 註：歷史 /public/Attachment/ms1.json 路徑於 v18.231 確認 404，
+    # 已移除（fetch_cbc_ms1_rows None-guard 已可覆蓋未來新增 dead URL）。
     "https://www.cbc.gov.tw/public/data/ms1.json",
     "https://www.cbc.gov.tw/tw/public/data/ms1.json",
 ]
