@@ -79,13 +79,16 @@ def fetch_pmi_history(months: int = 18) -> pd.DataFrame | None:
     if not _tok:
         return None
     try:
-        import requests as _rq
+        from proxy_helper import fetch_url as _fu
         _start = (_dt.date.today() - _dt.timedelta(days=months * 31)).strftime('%Y-%m-%d')
-        _r = _rq.get(
+        _r = _fu(
             'https://api.finmindtrade.com/api/v4/data',
             params={'dataset': 'TaiwanEconomicIndicator',
                     'start_date': _start, 'token': _tok},
             timeout=15)
+        if _r is None:
+            print('[merrill_clock/pmi-hist] fetch_url None（proxy 失敗）')
+            return None
         if _r.status_code != 200:
             print(f'[merrill_clock/pmi-hist] HTTP {_r.status_code}')
             return None
