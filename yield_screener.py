@@ -6,7 +6,7 @@
 
 架構：
   • 全部走既有 proxy_helper.fetch_url() → NAS Squid Proxy（自動降級直連）
-  • @st.cache_data(ttl=86400) 一日快取，減少對 NAS 中繼站的負擔
+  • @st.cache_data(ttl=TTL_1DAY) 一日快取，減少對 NAS 中繼站的負擔
   • Slider 動態篩選：最低殖利率(%) + 最高本益比
   • max_retries / timeout / 防迴圈：fetch_url 內建 3 次重試 + 20s timeout + Storm Shield 快取
 """
@@ -14,6 +14,7 @@ from __future__ import annotations
 import streamlit as st
 import pandas as pd
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ttls import TTL_1DAY
 
 TWSE_BWIBBU_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d'
 
@@ -21,7 +22,7 @@ TWSE_BWIBBU_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d'
 # ══════════════════════════════════════════════════════════════════════════════
 # ① 全市場 — TWSE BWIBBU_d 單次抓取
 # ══════════════════════════════════════════════════════════════════════════════
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def fetch_twse_yield_pe() -> pd.DataFrame:
     """從 TWSE OpenAPI 一次取得全市場本益比 / 殖利率 / 股價淨值比。
 
@@ -58,7 +59,7 @@ def fetch_twse_yield_pe() -> pd.DataFrame:
 # ══════════════════════════════════════════════════════════════════════════════
 # ② 單檔配息歷史 — yfinance Ticker.dividends（透過 NAS proxy）
 # ══════════════════════════════════════════════════════════════════════════════
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def fetch_dividend_history(ticker: str) -> pd.Series:
     """取得單檔股票的歷史配息（按年合計）。
 
@@ -156,7 +157,7 @@ def render_yield_screener():
         st.markdown(
             '- **全市場掃描**：TWSE OpenAPI `BWIBBU_d`（每日更新，含本益比 / 殖利率 / 股價淨值比）\n'
             '- **單檔配息歷史**：`yfinance Ticker.dividends`（僅在選定股票後觸發）\n'
-            '- **快取**：兩者皆 `@st.cache_data(ttl=86400)`，24 小時內重複查詢不打 API\n'
+            '- **快取**：兩者皆 `@st.cache_data(ttl=TTL_1DAY)`，24 小時內重複查詢不打 API\n'
             '- **連線**：透過 `proxy_helper.fetch_url()` 走 NAS Squid Proxy；自動降級直連\n'
             '- **重試/逾時**：fetch_url 內建 3 次重試 + 20s timeout + Storm Shield 防呆'
         )

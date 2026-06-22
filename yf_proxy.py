@@ -8,8 +8,8 @@ Phase 1 audit 找到 8+ 處 `yf.Ticker()` 直呼，deep check 後確認 3 處真
 Streamlit Cloud 海外 IP 常被 Yahoo 403/rate-limit；既有 NAS Squid Proxy 走家用台灣 IP
 可繞過。但 caller 各自寫一份「env backup → set proxy → call → restore」boilerplate
 易漏接。本模組提供：
-  - cached_history(ticker, period): @st.cache_data(ttl=3600) 包 yf.Ticker.history
-  - cached_dividends(ticker): @st.cache_data(ttl=3600) 包 yf.Ticker.dividends
+  - cached_history(ticker, period): @st.cache_data(ttl=TTL_1HOUR) 包 yf.Ticker.history
+  - cached_dividends(ticker): @st.cache_data(ttl=TTL_1HOUR) 包 yf.Ticker.dividends
 proxy env 由模組內 try/finally 統一處理，caller 零樣板。
 
 設計：純函式 wrapper + st.cache_data；caller 用 from yf_proxy import ... 即可。
@@ -21,6 +21,8 @@ from contextlib import contextmanager
 
 import pandas as pd
 import streamlit as st
+
+from shared.ttls import TTL_1HOUR
 
 
 _PROXY_ENV_KEYS = ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy")
@@ -53,7 +55,7 @@ def _proxy_env():
                 _os.environ[k] = v
 
 
-@st.cache_data(ttl=3600, max_entries=200, show_spinner=False)
+@st.cache_data(ttl=TTL_1HOUR, max_entries=200, show_spinner=False)
 def cached_history(ticker: str, period: str = "1y") -> pd.DataFrame:
     """yfinance Ticker.history with NAS proxy + 1h cache。
 
@@ -76,7 +78,7 @@ def cached_history(ticker: str, period: str = "1y") -> pd.DataFrame:
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600, max_entries=200, show_spinner=False)
+@st.cache_data(ttl=TTL_1HOUR, max_entries=200, show_spinner=False)
 def cached_dividends(ticker: str) -> pd.Series:
     """yfinance Ticker.dividends with NAS proxy + 1h cache。
 

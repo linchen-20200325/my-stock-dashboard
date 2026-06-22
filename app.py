@@ -19,6 +19,7 @@ import sys
 # 改為把 globals dict 塞 proxy.__dict__，每次都 refresh，徹底解耦。
 import types as _types  # noqa: E402
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ttls import TTL_30MIN, TTL_1HOUR
 
 class _AppProxy(_types.ModuleType):
     """Proxy：`from app import X` → 從 proxy 自己 dict 拿 live globals。"""
@@ -273,7 +274,7 @@ def _expected_latest_trading_date():
         d -= datetime.timedelta(days=1)
     return d
 
-@st.cache_data(ttl=1800, max_entries=10)
+@st.cache_data(ttl=TTL_30MIN, max_entries=10)
 def fetch_price_data(sid, days):
     _c = _load_cache('price', sid, str(days), ttl_hours=0.5)
     if _c is not None:
@@ -302,7 +303,7 @@ def fetch_price_data(sid, days):
     _save_cache('price', sid, (result, name), str(days))
     return result, name, None
 
-@st.cache_data(ttl=1800, max_entries=10)
+@st.cache_data(ttl=TTL_30MIN, max_entries=10)
 def fetch_dividend_data(sid):
     avg_div, yearly, source = 0.0, [], ''
     try:
@@ -406,7 +407,7 @@ def fetch_dividend_data(sid):
 
     return avg_div, yearly, source
 
-@st.cache_data(ttl=3600, max_entries=10)
+@st.cache_data(ttl=TTL_1HOUR, max_entries=10)
 def fetch_financials(sid, industry: str = ""):
     """
     合約負債 + 固定資產 + 資本支出 — v3.35 簡化版
@@ -554,7 +555,7 @@ def fetch_financials(sid, industry: str = ""):
     return cl, cx, _capex, cl_src, cx_src, cx_src_capex, fetch_errors
 
 
-@st.cache_data(ttl=3600, max_entries=10)
+@st.cache_data(ttl=TTL_1HOUR, max_entries=10)
 def fetch_revenue(sid):
     try:
         loader = _get_loader()
@@ -568,7 +569,7 @@ def fetch_revenue(sid):
         print(f"[fetch_revenue] {e}")
         return None, str(e)
 
-@st.cache_data(ttl=3600, max_entries=10)
+@st.cache_data(ttl=TTL_1HOUR, max_entries=10)
 def fetch_quarterly(sid, _ver=4):   # _ver 改變即清除舊快取
     try:
         loader = _get_loader()
@@ -582,7 +583,7 @@ def fetch_quarterly(sid, _ver=4):   # _ver 改變即清除舊快取
         print(f"[fetch_quarterly] {e}")
         return None, str(e)
 
-@st.cache_data(ttl=3600, show_spinner=False, max_entries=10)
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False, max_entries=10)
 def fetch_quarterly_extra(sid, _ver=2):   # _ver 改變即清除舊快取
     """取得近 12 季資產負債表 + 現金流量時序（合約負債、存貨、資本支出），用於前瞻動能分數"""
     try:
@@ -1216,14 +1217,14 @@ if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
 # AI 總經戰情 — 新聞抓取 + LLM 研判 工具函數
 # ══════════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=1800, show_spinner=False, max_entries=10)
+@st.cache_data(ttl=TTL_30MIN, show_spinner=False, max_entries=10)
 def _fetch_macro_news(n: int = 5) -> list:
     """抓取全球總經財經新聞 — 中英雙語多源（系統性風險偵測用）。
     來源：CNYES鉅亨 / 經濟日報 / Google News(中) / Google News(英) /
           Yahoo Finance / Reuters Biz / CNBC Economy / Bloomberg Markets
     策略：每源最多取 3 則 → 全池去重（依標題）→ 不依時間排序（部分 RSS 無 published），
           採「每源 round-robin」混合產出，確保中英來源都被納入 AI 判讀。
-    ttl=1800：每 30 分鐘自動更新一次快取。
+    ttl=TTL_30MIN：每 30 分鐘自動更新一次快取。
     """
     try:
         import feedparser as _fp

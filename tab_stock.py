@@ -23,10 +23,11 @@ import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.thresholds import YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC
+from shared.ttls import TTL_1DAY
 from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def _fetch_share_capital(sid: str) -> float:
     """FinMind 抓最新一季股本（普通股股本），回傳原始元值；失敗回 0。
 
@@ -71,7 +72,7 @@ def _fetch_share_capital(sid: str) -> float:
 # v18.175 P/B 估值資料源升級 — TWSE BWIBBU_d 權威值 PRIMARY
 # ════════════════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def _fetch_pbratio_from_twse(sid: str) -> float:
     """v18.175：從 TWSE OpenAPI BWIBBU_d 直取個股 P/B 股價淨值比（伺服器端權威值）。
 
@@ -138,7 +139,7 @@ def _pb_bands_label(industry: str | None) -> str:
     return f'製造業（{_ind}）'
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def _fetch_industry_category(sid: str) -> str:
     """v18.175：從 FinMind TaiwanStockInfo 抓個股產業類別字串。失敗回 ''。
 
@@ -165,7 +166,7 @@ def _fetch_industry_category(sid: str) -> str:
         return ''
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def _fetch_bps_from_finmind(sid: str) -> float:
     """v18.174：FinMind TaiwanStockBalanceSheet 計算最新季度每股淨值（BPS）。
 
@@ -232,7 +233,7 @@ def _fetch_bps_from_finmind(sid: str) -> float:
         return 0.0
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def _fetch_bps(sid: str) -> float:
     """每股淨值（BPS）— v18.174 修正資料源：FinMind BS PRIMARY，yfinance FALLBACK。
 

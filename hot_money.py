@@ -17,6 +17,7 @@ import datetime as _dt
 import numpy as np
 import pandas as pd
 import streamlit as st
+from shared.ttls import TTL_30MIN
 
 # 狀態白話解讀（供非專業讀者）
 STATE_TEXT = {
@@ -130,7 +131,7 @@ def _twd_df_to_series(twd_df: pd.DataFrame) -> pd.DataFrame:
 # ────────────────────────────────────────────────────────────────────────
 # 資料取得：複用既有 finmind_get（leading_indicators.py）
 # ────────────────────────────────────────────────────────────────────────
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=TTL_30MIN, show_spinner=False)
 def fetch_foreign_flow_series(days: int, token: str) -> tuple[pd.DataFrame, str]:
     """抓最近 N 天外資買賣超（複用 leading_indicators.finmind_get）。
 

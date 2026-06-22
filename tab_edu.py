@@ -12,13 +12,14 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import MATERIAL_GREEN, MATERIAL_ORANGE, MATERIAL_RED
+from shared.ttls import TTL_1DAY
 
 
 # #U7：單值總經指標若 identifier 為 FRED series id → 可抓歷史序列畫 sparkline
 _FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'XTEXVA01TWM664S': 'pc1', 'NAPM': 'lin'}
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def _fetch_fred_series_edu(series_id: str, units: str = 'lin', months: int = 24):
     """抓 FRED 指標近 N 月歷史序列（教學 tab sparkline 用）；units=pc1 取 YoY%。失敗回 None。"""
     try:

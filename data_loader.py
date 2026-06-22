@@ -20,6 +20,7 @@ import requests as _req_dl
 import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
 from proxy_helper import fetch_url as _fetch_url_dl
+from shared.ttls import TTL_1HOUR
 
 # v18.201 D2：FinMind dataset 後台 update 時間追蹤
 # raw fetcher 從 response top-level 取 `last_update`，SDK 路徑無此欄位故留空
@@ -444,7 +445,7 @@ class StockDataLoader:
             print(f'[FinMind] ⚠️  登入失敗：{e}')
             self._token = _fm_token  # 保留 token 供 raw HTTP 備援使用
 
-    @st.cache_data(ttl=3600)
+    @st.cache_data(ttl=TTL_1HOUR)
     def get_combined_data(_self, stock_id, days, use_adjusted=True):
         """完整數據載入流程
 
@@ -767,7 +768,7 @@ class StockDataLoader:
             traceback.print_exc()
             return None, f"系統錯誤: {str(e)}", None
 
-    @st.cache_data(ttl=3600)
+    @st.cache_data(ttl=TTL_1HOUR)
     def get_monthly_revenue(_self, stock_id):
         """月營收優先順序：MOPS(官方) → FinMind"""
         import os as _os_rv, datetime as _dt_rv
@@ -1587,7 +1588,7 @@ class StockDataLoader:
 
 
 # ── 模組級函式：MJ 財報體檢所需原始數據 ─────────────────────
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
     """
     從 FinMind 抓取最新一季資產負債表、現金流量表、損益表，

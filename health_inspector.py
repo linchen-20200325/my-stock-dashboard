@@ -10,6 +10,7 @@
 """
 import streamlit as st
 from shared.colors import MATERIAL_ORANGE, TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ttls import TTL_1DAY
 
 # ══════════════════════════════════════════════════════════════════
 # 資料診斷 v2：嚴格 Raw-only 版
@@ -331,7 +332,7 @@ def render_data_health_raw():
     except Exception:
         _fred_nrd = None
 
-    @st.cache_data(ttl=86400, show_spinner=False)
+    @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
     def _next_release_cached(series_id: str, api_key_present: bool) -> str:
         """Streamlit 層多包一層 1 日 cache，避免 macro_core 30 天 disk cache 之外仍重複打。
         api_key_present 進入 cache key 確保切換 secrets 時 invalidates。"""

@@ -15,7 +15,7 @@ v18.180 新增功能：篩選台股近 3 個月月營收呈現「進步 / 退步
   ② TWSE OpenAPI BWIBBU_d（取股票名稱對照）
 
 架構決策：
-  • 純函式 + Streamlit UI 分離；fetch_* 走 @st.cache_data(ttl=21600) 6 小時快取
+  • 純函式 + Streamlit UI 分離；fetch_* 走 @st.cache_data(ttl=TTL_6HOUR) 6 小時快取
   • 鏡像 yield_screener.py 漏斗 UI pattern
   • 全市場掃描 = FinMind 不帶 data_id 一次抓全 → 本地分組計算（避開 1700 檔逐股 API 風暴）
 """
@@ -26,6 +26,8 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+
+from shared.ttls import TTL_6HOUR
 
 FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
 
@@ -48,7 +50,7 @@ def _get_token() -> str:
             os.environ.get("FM_TOKEN", ""))
 
 
-@st.cache_data(ttl=21600, show_spinner=False)
+@st.cache_data(ttl=TTL_6HOUR, show_spinner=False)
 def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
     """抓單股近 N 月營收（FinMind TaiwanStockMonthRevenue）。
 
@@ -102,7 +104,7 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=21600, show_spinner=False)
+@st.cache_data(ttl=TTL_6HOUR, show_spinner=False)
 def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
     """一次抓全市場月營收（不帶 data_id，避開逐股迴圈）。
 

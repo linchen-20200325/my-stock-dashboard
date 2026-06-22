@@ -7,6 +7,8 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 
+from shared.ttls import TTL_30MIN, TTL_1HOUR, TTL_2HOUR, TTL_1DAY, TTL_7DAY
+
 
 def _fetch_news_for(ticker: str, name: str = "", n: int = 4) -> str:
     """抓取個股/ETF 相關新聞，回傳格式化字串。失敗時回傳空字串。
@@ -128,7 +130,7 @@ _PERIOD_TO_DAYS = {
 }
 
 
-@st.cache_data(ttl=3600, max_entries=20)
+@st.cache_data(ttl=TTL_1HOUR, max_entries=20)
 def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
     """共用底層 — 一次抓 period='max'，供 fetch_etf_price 切片。
 
@@ -161,7 +163,7 @@ def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
     return df.loc[df.index >= cutoff]
 
 
-@st.cache_data(ttl=3600, max_entries=10)
+@st.cache_data(ttl=TTL_1HOUR, max_entries=10)
 def fetch_etf_dividends(ticker: str) -> pd.Series:
     """取得 ETF 歷史配息"""
     try:
@@ -174,7 +176,7 @@ def fetch_etf_dividends(ticker: str) -> pd.Series:
         return pd.Series(dtype=float)
 
 
-@st.cache_data(ttl=3600, max_entries=300, show_spinner=False)
+@st.cache_data(ttl=TTL_1HOUR, max_entries=300, show_spinner=False)
 def fetch_etf_meta_moneydj(ticker: str) -> dict:
     """從 MoneyDJ Basic0004 一次取得台股 ETF metadata（走 NAS Squid + 中繼站）。
 
@@ -303,7 +305,7 @@ def fetch_etf_meta_moneydj(ticker: str) -> dict:
     return _out
 
 
-@st.cache_data(ttl=3600, max_entries=10)
+@st.cache_data(ttl=TTL_1HOUR, max_entries=10)
 def fetch_etf_info(ticker: str) -> dict:
     """取得 ETF 基本資訊（費用率 / Beta / AUM）。
 
@@ -538,7 +540,7 @@ def _enrich_tw_holding_name(raw_name: str, symbol) -> str:
     return f'{raw_name} ({_code})'
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def fetch_etf_holdings(ticker: str):
     """抓 ETF 成份股清單（個股名稱 → 權重 %）。台股 ETF 為主，海外 ETF 走 yfinance 兜底。
 
@@ -832,7 +834,7 @@ def _html_kv_pairs(html_text: str) -> dict:
     return _kv
 
 
-@st.cache_data(ttl=604800, show_spinner=False)
+@st.cache_data(ttl=TTL_7DAY, show_spinner=False)
 def fetch_etf_manager(ticker: str):
     """從 MoneyDJ ETF 抓「現任經理人 + 任期起始日」。
 
@@ -1142,7 +1144,7 @@ def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
     return _out
 
 
-@st.cache_data(ttl=604800, show_spinner=False)
+@st.cache_data(ttl=TTL_7DAY, show_spinner=False)
 def _fetch_sitca_manager(ticker: str):
     """SITCA fallback：投信投顧公會基金經理人查詢。
 
@@ -1253,7 +1255,7 @@ def _safe_float(s, strip_chars: str = ',%') -> float | None:
         return None
 
 
-@st.cache_data(ttl=7200, show_spinner=False, max_entries=10)
+@st.cache_data(ttl=TTL_2HOUR, show_spinner=False, max_entries=10)
 def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.DataFrame":
     """ETF 歷史淨值及折溢價（最近 N 個交易日）
 
@@ -1554,7 +1556,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
     return pd.DataFrame()
 
 
-@st.cache_data(ttl=1800, max_entries=10)
+@st.cache_data(ttl=TTL_30MIN, max_entries=10)
 def _fetch_sector_returns(tickers: tuple, period: str) -> dict:
     """批次抓取類股漲跌幅，回傳 {ticker: pct_change}"""
     result = {}
@@ -1580,7 +1582,7 @@ def _fetch_sector_returns(tickers: tuple, period: str) -> dict:
     return result
 
 
-@st.cache_data(ttl=604800, max_entries=500, show_spinner=False)
+@st.cache_data(ttl=TTL_7DAY, max_entries=500, show_spinner=False)
 def fetch_etf_zh_name(ticker: str):
     """從 MoneyDJ 抓 ETF 中文名稱（yfinance 對台股 ETF 只有英文 longName）。
 
@@ -1636,7 +1638,7 @@ def fetch_etf_zh_name(ticker: str):
     return None
 
 
-@st.cache_data(ttl=604800, max_entries=200, show_spinner=False)
+@st.cache_data(ttl=TTL_7DAY, max_entries=200, show_spinner=False)
 def fetch_etf_underlying_index(ticker: str):
     """從 MoneyDJ 抓 ETF 追蹤指數名稱（yfinance 沒有此欄）。
 

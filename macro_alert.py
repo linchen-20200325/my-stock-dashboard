@@ -9,6 +9,7 @@ Step 3：UI 渲染 render_macro_alerts()
 """
 from __future__ import annotations
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ttls import TTL_30MIN
 
 try:
     from config import MACRO_ALERT_RULES
@@ -200,7 +201,7 @@ def alert_summary(alerts: list[dict]) -> dict:
 # Step 2 — 資料擷取適配器
 # ══════════════════════════════════════════════════════════════
 
-@_safe_cache(ttl=1800, show_spinner=False)
+@_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def _yf_latest(tickers: tuple) -> dict:
     """
     [NAS Proxy 遷移 v1.1] 抓 tickers 最新收盤(走 NAS 中繼站)。

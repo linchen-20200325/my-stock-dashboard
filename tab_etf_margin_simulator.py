@@ -17,6 +17,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ttls import TTL_1HOUR
 from etf_margin_simulator import (
     LEVERAGE_PRESETS,
     LIQUIDATION_RATIO,
@@ -37,7 +38,7 @@ _DEFAULT_ETFS = {
 }
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def _fetch_etf_history(symbol: str, years: int) -> pd.Series | None:
     """從 yfinance 抓 ETF 收盤價歷史；TTL 1 小時。"""
     try:

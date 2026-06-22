@@ -114,7 +114,7 @@ def _fetch_one_etf(ticker: str) -> dict:
         _r['expense_ratio'] = _info.get('annualReportExpenseRatio')
         _r['aum'] = _info.get('totalAssets')
         _r['beta'] = _info.get('beta') or _info.get('beta3Year')
-        # compute_etf_quality 有 @st.cache_data(ttl=86400) — 線程內呼叫安全（Streamlit cache 自帶 lock）
+        # compute_etf_quality 有 @st.cache_data(ttl=TTL_1DAY) — 線程內呼叫安全（Streamlit cache 自帶 lock）
         _r['quality'] = compute_etf_quality(ticker)
 
         # v18.224：4 SSOT 補欄（折溢價 / 7% 估值 / 配息健康度）

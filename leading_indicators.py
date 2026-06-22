@@ -22,6 +22,7 @@ import pandas as pd
 import requests
 import urllib3
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ttls import TTL_30MIN
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def _bps():
@@ -251,7 +252,7 @@ def finmind_get(dataset, data_id, start_ymd, end_ymd, token=""):
             time.sleep(1)
     return pd.DataFrame()
 
-@_safe_cache(ttl=1800, show_spinner=False)
+@_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def finmind_fut_oi(start_ymd, end_ymd, token=""):
     """
     外資大小 = 外資大台淨多空口 + 外資小台淨多空口 × 0.25
@@ -302,7 +303,7 @@ def finmind_fut_oi(start_ymd, end_ymd, token=""):
 
     return {k: round(v) for k, v in result.items()}
 
-@_safe_cache(ttl=1800, show_spinner=False)
+@_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def taifex_calls_puts_day(date_ymd):
     """
     外(選) = (BC金額 - SC金額 - BP金額 + SP金額) / 10
@@ -351,7 +352,7 @@ def taifex_calls_puts_day(date_ymd):
     return None
 
 
-@_safe_cache(ttl=1800, show_spinner=False)
+@_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def taifex_mtx_data(date_ymd):
     """
     韭菜指數 = (三大法人空方MTX OI - 三大法人多方MTX OI) / 小台全體OI × 100
@@ -432,7 +433,7 @@ def taifex_mtx_data(date_ymd):
 # ════════════════════════════════════════════════════════
 # TWSE 成交量
 # ════════════════════════════════════════════════════════
-@_safe_cache(ttl=1800, show_spinner=False)
+@_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def twse_volume(yyyymm):
     """
     成交量（億元）from TWSE FMTQIK，多 URL 備援。
@@ -517,7 +518,7 @@ def twse_volume(yyyymm):
     return {}
 
 
-@_safe_cache(ttl=1800, show_spinner=False)
+@_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def twse_volume_daily(ymd8):
     """
     單日成交量 from TWSE MI_INDEX（搜尋所有 tables，row[2]=成交金額備援 row[1]）
@@ -546,7 +547,7 @@ def twse_volume_daily(ymd8):
 # ════════════════════════════════════════════════════════
 # TWSE 三大法人 BFI82U
 # ════════════════════════════════════════════════════════
-@_safe_cache(ttl=1800, show_spinner=False)
+@_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def twse_institutional_day(date_ymd):
     try:
         r = _TWSE_S.get("https://www.twse.com.tw/fund/BFI82U",
@@ -645,7 +646,7 @@ def _twse_margin_day(ymd8: str) -> dict:
 # TAIFEX 選擇權 PCR（批量）
 # ✅ 已穩定，保持不變
 # ════════════════════════════════════════════════════════
-@_safe_cache(ttl=1800, show_spinner=False)
+@_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def taifex_pcr(start_ymd, end_ymd):
     url  = "https://www.taifex.com.tw/cht/3/pcRatio"
     form = {"queryStartDate":ymd_to_slash(start_ymd),"queryEndDate":ymd_to_slash(end_ymd)}
@@ -674,7 +675,7 @@ def taifex_pcr(start_ymd, end_ymd):
 #    解析格式 "43,469  (37,392)" → 取 43,469
 #    找「臺股期貨」+ 「所有」列
 # ════════════════════════════════════════════════════════
-@_safe_cache(ttl=1800, show_spinner=False)
+@_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def taifex_large_trader(date_ymd):
     # 嘗試 GET（今日）或 POST（歷史）
     html = ""

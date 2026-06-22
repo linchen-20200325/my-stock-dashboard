@@ -18,6 +18,7 @@ import re
 
 import pandas as pd
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ttls import TTL_6HOUR
 
 # 命中維度數 → (圖示, 標籤, 色碼)
 _LEVELS = {
@@ -150,7 +151,7 @@ def _build_cached_judge():
     except Exception:
         return None
 
-    @st.cache_data(ttl=21600, show_spinner=False)
+    @st.cache_data(ttl=TTL_6HOUR, show_spinner=False)
     def _cached(_gemini_call, sid: str, name: str, headlines_key: tuple) -> dict:
         return judge_news_sentiment(_gemini_call, name, list(headlines_key))
 
