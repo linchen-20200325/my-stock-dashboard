@@ -1,16 +1,12 @@
 """
-股票多因子評分引擎 v3.0 (§5.2-5.4)
-評分維度：趨勢 / 動能 / 籌碼 / 量價 / 風險
-加權公式：0.30 / 0.25 / 0.20 / 0.15 / 0.10
+股票多因子評分引擎 v3.2（§5.2-5.4）
+6 因子：趨勢 / 動能 / 籌碼 / 量價 / 風險 / 基本面
+權重依市場狀態（bull/neutral/bear）由 config.WEIGHT_TABLES 動態切換。
 """
 
 try:
-    from config import (WEIGHT_TREND, WEIGHT_MOMENTUM, WEIGHT_CHIP,
-                        WEIGHT_VOLUME, WEIGHT_RISK,
-                        RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES)
+    from config import RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES
 except ImportError:
-    WEIGHT_TREND=0.30; WEIGHT_MOMENTUM=0.25; WEIGHT_CHIP=0.20
-    WEIGHT_VOLUME=0.15; WEIGHT_RISK=0.10
     RSI_OVERBOUGHT=70; RSI_OVERSOLD=30
     WEIGHT_TABLES = {
         'bull':    {'trend':0.30,'momentum':0.25,'chip':0.20,'volume':0.15,'risk':0.05,'fundamental':0.05},
@@ -233,15 +229,10 @@ def stock_score(trend, momentum, chip, volume_score, risk_score,
     regime='bull'|'neutral'|'bear' 自動切換因子權重表
     """
     try:
-        from config import WEIGHT_TABLES, WEIGHT_FUNDAMENTAL
+        from config import WEIGHT_TABLES as _WT
     except ImportError:
-        WEIGHT_TABLES = {
-            'bull':    {'trend':0.30,'momentum':0.25,'chip':0.20,'volume':0.15,'risk':0.05,'fundamental':0.05},
-            'neutral': {'trend':0.25,'momentum':0.20,'chip':0.20,'volume':0.15,'risk':0.10,'fundamental':0.10},
-            'bear':    {'trend':0.15,'momentum':0.10,'chip':0.15,'volume':0.15,'risk':0.25,'fundamental':0.20},
-        }
-        WEIGHT_FUNDAMENTAL = 0.10
-    w = WEIGHT_TABLES.get(regime, WEIGHT_TABLES['neutral'])
+        _WT = WEIGHT_TABLES  # 用 module-level fallback
+    w = _WT.get(regime, _WT['neutral'])
     return round(
         trend             * w['trend']       +
         momentum          * w['momentum']    +

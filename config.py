@@ -29,17 +29,8 @@ ATR_MULTIPLIER = 1.5     # 停損距離 = Entry - (N × ATR14)，N=1.5~2.0
 TIME_STOP_DAYS      = 15    # 買進後超過 15 天
 TIME_STOP_MIN_GAIN  = 0.02  # 若報酬未達 +2% → 強制換股
 
-# ── 多因子評分權重（優化版：加入基本面 15%）────────────────
-# 原：趨勢30 / 動能25 / 籌碼20 / 量價15 / 風險10
-# 新：趨勢25 / 動能20 / 籌碼20 / 量價15 / 風險10 / 基本面10
-WEIGHT_TREND      = 0.25   # 趨勢面（下調 5%）
-WEIGHT_MOMENTUM   = 0.20   # 動能面：改用 Sharpe-like（下調 5%）
-WEIGHT_CHIP       = 0.20   # 籌碼面
-WEIGHT_VOLUME     = 0.15   # 量價面
-WEIGHT_RISK       = 0.10   # 風險面
-WEIGHT_FUNDAMENTAL= 0.10   # 基本面（月營收YoY + 毛利率）新增
-
-# ── 動態因子權重表（依市場狀態自動切換）────────────────────
+# ── 動態因子權重表（依市場狀態自動切換，6 因子 SSOT）──────
+# 唯一權重來源；scoring_engine.stock_score 由此讀取。
 # bull：趨勢/動能加重，進攻型；bear：風險/基本面加重，防禦型
 WEIGHT_TABLES = {
     'bull': {

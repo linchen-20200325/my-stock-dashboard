@@ -508,7 +508,12 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
 
         with col_left:
             st.markdown('##### ③ 多因子評分排行')
-            st.caption('趨勢×0.30 + 動能×0.25 + 籌碼×0.20 + 量價×0.15 + 風險×0.10')
+            from config import WEIGHT_TABLES as _WT
+            _w = _WT['neutral']
+            st.caption(
+                f"趨勢×{_w['trend']:.2f} + 動能×{_w['momentum']:.2f} + 籌碼×{_w['chip']:.2f} + "
+                f"量價×{_w['volume']:.2f} + 風險×{_w['risk']:.2f} + 基本面×{_w['fundamental']:.2f}（neutral 權重，SSOT 來自 config.WEIGHT_TABLES）"
+            )
             st.caption('🔰 另三欄基本面白話：SQ品質分＝獲利品質（賺得乾不乾淨）、FGMS前瞻＝前瞻成長動能（未來成長力道），皆 0~100 越高越好；EPS／毛利率／殖利率為對照。')
             # 動態：找出最高分與門檻達標數
             _top_score_r = max(score_t3, key=lambda r: r.get('total', 0)) if score_t3 else None
