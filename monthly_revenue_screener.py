@@ -1,24 +1,23 @@
-﻿from data_config import CACHE_TTL
-"""monthly_revenue_screener.py ?????園脤蝭拚??
+"""monthly_revenue_screener.py — 月營收進退篩選器
 
-v18.180 ?啣??嚗祟?詨?∟? 3 ?????嗅??整脫郊 / ?甇乓隅?Ｙ?璅???
+v18.180 新增功能：篩選台股近 3 個月月營收呈現「進步 / 退步」趨勢的標的。
 
-?斗?箸?嚗oY + MoM ??隞塚?嚗?
-  ??撘琿脫郊 = 餈?3 ??YoY ????+threshold% 銝??急? MoM ??0
-  ???脫郊   = 餈?3 ??YoY ??> 0% 銝??急? MoM ??0
-  ??撘琿甇?= 餈?3 ??YoY ????-threshold% 銝??急? MoM ??0
-  ???甇?  = 餈?3 ??YoY ??< 0% 銝??急? MoM ??0
-  ??銝剜?  = ?園???
-  ??鞈?銝雲 = 銝雲 15 ??甇瑕嚗 12 ?? YoY ?箸? + 3 ???嗆?嚗?
+判斷基準（YoY + MoM 雙條件）：
+  • 強進步 = 近 3 月 YoY 全 ≥ +threshold% 且 末月 MoM ≥ 0
+  • 進步   = 近 3 月 YoY 全 > 0% 且 末月 MoM ≥ 0
+  • 強退步 = 近 3 月 YoY 全 ≤ -threshold% 且 末月 MoM ≤ 0
+  • 退步   = 近 3 月 YoY 全 < 0% 且 末月 MoM ≤ 0
+  • 中性   = 其餘情境
+  • 資料不足 = 不足 15 個月歷史（含 12 個月 YoY 基期 + 3 個月當期）
 
-鞈?皞?
-  ??FinMind TaiwanStockMonthRevenue嚗???10 ?亙??
-  ??TWSE OpenAPI BWIBBU_d嚗??∠巨?迂撠嚗?
+資料源：
+  ① FinMind TaiwanStockMonthRevenue（每月 10 日公告）
+  ② TWSE OpenAPI BWIBBU_d（取股票名稱對照）
 
-?嗆?瘙箇?嚗?
-  ??蝝撘?+ Streamlit UI ?嚗etch_* 韏?@st.cache_data(ttl=CACHE_TTL["daily_snapshot"]) 6 撠?敹怠?
-  ???∪? yield_screener.py 瞍? UI pattern
-  ???典??湔???= FinMind 銝葆 data_id 銝甈⊥??????砍??閮?嚗??1700 瑼 API 憸冽嚗?
+架構決策：
+  • 純函式 + Streamlit UI 分離；fetch_* 走 @st.cache_data(ttl=21600) 6 小時快取
+  • 鏡像 yield_screener.py 漏斗 UI pattern
+  • 全市場掃描 = FinMind 不帶 data_id 一次抓全 → 本地分組計算（避開 1700 檔逐股 API 風暴）
 """
 from __future__ import annotations
 
@@ -30,36 +29,36 @@ import streamlit as st
 
 FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
 
-# ?斗璅∪? ??銝剜? label
+# 判斷模式 → 中文 label
 TREND_LABELS = {
-    "strong_up": "?? 撘琿脫郊",
-    "up": "?? ?脫郊",
-    "strong_down": "? 撘琿甇?,
-    "down": "?? ?甇?,
-    "neutral": "??銝剜?,
-    "insufficient": "??鞈?銝雲",
+    "strong_up": "🚀 強進步",
+    "up": "📈 進步",
+    "strong_down": "🔻 強退步",
+    "down": "📉 退步",
+    "neutral": "➖ 中性",
+    "insufficient": "⚪ 資料不足",
 }
 
 
-# ??????????????????????????????????????????????????????????????????????????????
-# ??鞈???撅?
-# ??????????????????????????????????????????????????????????????????????????????
+# ══════════════════════════════════════════════════════════════════════════════
+# ① 資料抓取層
+# ══════════════════════════════════════════════════════════════════════════════
 def _get_token() -> str:
     return (os.environ.get("FINMIND_TOKEN", "") or
             os.environ.get("FM_TOKEN", ""))
 
 
-@st.cache_data(ttl=CACHE_TTL["daily_snapshot"], show_spinner=False)
+@st.cache_data(ttl=21600, show_spinner=False)
 def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
-    """??∟? N ???塚?FinMind TaiwanStockMonthRevenue嚗?
+    """抓單股近 N 月營收（FinMind TaiwanStockMonthRevenue）。
 
     Args:
-        stock_id: 蝝?∩誨蝣澆? '2330'
-        months: ?滲?嚗?閮?18 = 12 YoY ?箸? + 6 ??蝒蝺抵?嚗?
+        stock_id: 純台股代碼如 '2330'
+        months: 回溯月數（預設 18 = 12 YoY 基期 + 6 分析窗口緩衝）
 
     Returns:
         DataFrame columns: date / revenue / revenue_year / revenue_month
-        憭望??征 DataFrame
+        失敗回空 DataFrame
     """
     import datetime as _dt
 
@@ -99,20 +98,20 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
             c in _df.columns for c in ["revenue_year", "revenue_month"]
         ) else _df[["date", "revenue"]]
     except Exception as _e:
-        print(f"[mrev-screener] fetch {stock_id} 憭望?: {type(_e).__name__}: {_e}")
+        print(f"[mrev-screener] fetch {stock_id} 失敗: {type(_e).__name__}: {_e}")
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=CACHE_TTL["daily_snapshot"], show_spinner=False)
+@st.cache_data(ttl=21600, show_spinner=False)
 def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
-    """銝甈⊥??典??湔??嚗?撣?data_id嚗?餈游?嚗?
+    """一次抓全市場月營收（不帶 data_id，避開逐股迴圈）。
 
     Args:
-        months: ?滲?嚗?閮?18嚗?
+        months: 回溯月數（預設 18）
 
     Returns:
-        DataFrame columns: stock_id / date / revenue嚗??⊿銵剁?
-        憭望?? token ?征 DataFrame
+        DataFrame columns: stock_id / date / revenue（多股長表）
+        失敗或無 token 回空 DataFrame
     """
     import datetime as _dt
 
@@ -150,25 +149,25 @@ def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
         _df = _df.dropna(subset=["date", "revenue", "stock_id"])
         return _df[["stock_id", "date", "revenue"]].sort_values(["stock_id", "date"]).reset_index(drop=True)
     except Exception as _e:
-        print(f"[mrev-screener] batch fetch 憭望?: {type(_e).__name__}: {_e}")
+        print(f"[mrev-screener] batch fetch 失敗: {type(_e).__name__}: {_e}")
         return pd.DataFrame()
 
 
-# ??????????????????????????????????????????????????????????????????????????????
-# ??頞典閮?撅歹?蝝撘???銝１ streamlit / 蝬脰楝嚗?
-# ??????????????????????????????????????????????????????????????????????????????
+# ══════════════════════════════════════════════════════════════════════════════
+# ② 趨勢計算層（純函式 — 不碰 streamlit / 網路）
+# ══════════════════════════════════════════════════════════════════════════════
 def compute_yoy_mom(df_stock: pd.DataFrame) -> dict[str, Any]:
-    """撠?⊥??摨?閮?餈?3 ??YoY + ?急? MoM??
+    """對單股月營收序列計算近 3 月 YoY + 末月 MoM。
 
     Args:
-        df_stock: DataFrame with [date, revenue]嚗? date ???
+        df_stock: DataFrame with [date, revenue]，按 date 升冪排序
 
     Returns:
         dict: {
           'last_date': pd.Timestamp | None,
           'last_revenue': float | None,
-          'yoy_last3': list[float | None] ??[M-2, M-1, M] ??YoY%嚗撩?箸???None嚗?
-          'mom_last': float | None ???急? MoM%,
+          'yoy_last3': list[float | None] — [M-2, M-1, M] 的 YoY%（缺基期為 None）,
+          'mom_last': float | None — 末月 MoM%,
           'months_available': int,
         }
     """
@@ -185,9 +184,9 @@ def compute_yoy_mom(df_stock: pd.DataFrame) -> dict[str, Any]:
         return {"last_date": None, "last_revenue": None, "yoy_last3": [],
                 "mom_last": None, "months_available": 0}
 
-    # YoY: ??3 ?撠?12 ????
+    # YoY: 末 3 月相對 12 個月前
     _yoy_last3: list[float | None] = []
-    for _off in (2, 1, 0):  # M-2, M-1, M嚗?摨?
+    for _off in (2, 1, 0):  # M-2, M-1, M（時序）
         _idx_curr = _n - 1 - _off
         _idx_base = _idx_curr - 12
         if _idx_curr < 0 or _idx_base < 0:
@@ -200,7 +199,7 @@ def compute_yoy_mom(df_stock: pd.DataFrame) -> dict[str, Any]:
             continue
         _yoy_last3.append((_curr / _base - 1.0) * 100.0)
 
-    # MoM: ?急? vs 銝?
+    # MoM: 末月 vs 上月
     _mom: float | None = None
     if _n >= 2 and _rev[-1] is not None and _rev[-2] is not None and _rev[-2] != 0:
         _mom = (_rev[-1] / _rev[-2] - 1.0) * 100.0
@@ -215,11 +214,11 @@ def compute_yoy_mom(df_stock: pd.DataFrame) -> dict[str, Any]:
 
 
 def classify_trend(stats: dict[str, Any], yoy_threshold: float = 15.0) -> str:
-    """?寞? YoY + MoM ??隞嗅?憿隅?Ｕ?
+    """根據 YoY + MoM 雙條件分類趨勢。
 
     Args:
-        stats: compute_yoy_mom() ? dict
-        yoy_threshold: 撘琿脫郊/撘琿甇仿?瑼?%嚗?閮?15.0
+        stats: compute_yoy_mom() 回傳 dict
+        yoy_threshold: 強進步/強退步門檻 %，預設 15.0
 
     Returns:
         'strong_up' / 'up' / 'strong_down' / 'down' / 'neutral' / 'insufficient'
@@ -227,7 +226,7 @@ def classify_trend(stats: dict[str, Any], yoy_threshold: float = 15.0) -> str:
     _yoy3 = stats.get("yoy_last3") or []
     _mom = stats.get("mom_last")
 
-    # 鞈?摰?扳炎?伐??閬?3 ??YoY + 1 ??MoM ?券??None
+    # 資料完整性檢查：需要 3 個 YoY + 1 個 MoM 全部非 None
     if len(_yoy3) < 3 or any(y is None for y in _yoy3) or _mom is None:
         return "insufficient"
 
@@ -247,23 +246,23 @@ def classify_trend(stats: dict[str, Any], yoy_threshold: float = 15.0) -> str:
     return "neutral"
 
 
-# ??????????????????????????????????????????????????????????????????????????????
-# ???寞活蝭拚撅?
-# ??????????????????????????????????????????????????????????????????????????????
+# ══════════════════════════════════════════════════════════════════════════════
+# ③ 批次篩選層
+# ══════════════════════════════════════════════════════════════════════════════
 def screen_from_batch(
     df_batch: pd.DataFrame,
     yoy_threshold: float = 15.0,
     name_map: dict[str, str] | None = None,
 ) -> pd.DataFrame:
-    """敺?batch fetch 蝯???閮?瘥頞典??
+    """從 batch fetch 結果分組計算每股趨勢。
 
     Args:
-        df_batch: fetch_batch_monthly_revenue() 蝯?嚗 stock_id / date / revenue嚗?
-        yoy_threshold: 撘琿脫郊/撘琿甇仿?瑼?%
-        name_map: ?舫 {sid: name} 撠嚗???TWSE BWIBBU_d嚗?
+        df_batch: fetch_batch_monthly_revenue() 結果（含 stock_id / date / revenue）
+        yoy_threshold: 強進步/強退步門檻 %
+        name_map: 可選 {sid: name} 對照（來自 TWSE BWIBBU_d）
 
     Returns:
-        DataFrame: 隞?Ⅳ / ?迂 / ?急??交? / ?急??(?? / YoY-2 / YoY-1 / YoY / MoM / 頞典
+        DataFrame: 代碼 / 名稱 / 末月日期 / 末月營收(億) / YoY-2 / YoY-1 / YoY / MoM / 趨勢
     """
     if df_batch is None or df_batch.empty:
         return pd.DataFrame()
@@ -273,16 +272,16 @@ def screen_from_batch(
         _stats = compute_yoy_mom(_grp)
         _trend = classify_trend(_stats, yoy_threshold=yoy_threshold)
         _rows.append({
-            "隞?Ⅳ": _sid,
-            "?迂": _name_map.get(str(_sid), ""),
-            "?急??交?": _stats["last_date"].strftime("%Y-%m") if _stats["last_date"] is not None else "",
-            "?急??(??": (round(_stats["last_revenue"] / 1e8, 2)
+            "代碼": _sid,
+            "名稱": _name_map.get(str(_sid), ""),
+            "末月日期": _stats["last_date"].strftime("%Y-%m") if _stats["last_date"] is not None else "",
+            "末月營收(億)": (round(_stats["last_revenue"] / 1e8, 2)
                           if _stats["last_revenue"] is not None else None),
             "YoY-2(%)": _yoy_round(_stats["yoy_last3"], 0),
             "YoY-1(%)": _yoy_round(_stats["yoy_last3"], 1),
             "YoY(%)":   _yoy_round(_stats["yoy_last3"], 2),
             "MoM(%)":   round(_stats["mom_last"], 2) if _stats["mom_last"] is not None else None,
-            "頞典":     TREND_LABELS.get(_trend, _trend),
+            "趨勢":     TREND_LABELS.get(_trend, _trend),
             "_trend_key": _trend,
         })
     return pd.DataFrame(_rows)
@@ -296,14 +295,14 @@ def _yoy_round(yoy_list: list[float | None], idx: int) -> float | None:
 
 
 def filter_by_mode(df_result: pd.DataFrame, mode: str) -> pd.DataFrame:
-    """靘芋撘?瞈?screen_from_batch 蝯???
+    """依模式過濾 screen_from_batch 結果。
 
     Args:
-        df_result: screen_from_batch 頛詨嚗 _trend_key 甈?
+        df_result: screen_from_batch 輸出（含 _trend_key 欄）
         mode: 'all' / 'up' / 'strong_up' / 'down' / 'strong_down' / 'any_up' / 'any_down'
 
     Returns:
-        ?蕪敺?DataFrame嚗???_trend_key 靘?皜貊嚗?
+        過濾後 DataFrame（保留 _trend_key 供下游用）
     """
     if df_result is None or df_result.empty or mode == "all":
         return df_result
@@ -316,135 +315,134 @@ def filter_by_mode(df_result: pd.DataFrame, mode: str) -> pd.DataFrame:
     return df_result[df_result["_trend_key"] == mode].reset_index(drop=True)
 
 
-# ??????????????????????????????????????????????????????????????????????????????
-# ??Streamlit UI
-# ??????????????????????????????????????????????????????????????????????????????
+# ══════════════════════════════════════════════════════════════════════════════
+# ④ Streamlit UI
+# ══════════════════════════════════════════════════════════════════════════════
 def render_monthly_revenue_screener():
-    """???園脤蝭拚?其蜓?恍??""
-    st.markdown("### ?? ???園脤蝭拚")
+    """月營收進退篩選器主畫面。"""
+    st.markdown("### 📈 月營收進退篩選")
     st.caption(
-        "? **?斗?箸?嚗oY + MoM ??隞塚?**嚗? 3 ?僑憓??冽迤銝??憓? ??0 ???脫郊嚗?
-        "?刻?銝??憓? ??0 ???甇乓???嚗inMind `TaiwanStockMonthRevenue`嚗???10 ?亙??"
+        "🎯 **判斷基準（YoY + MoM 雙條件）**：近 3 月年增率全正且末月月增率 ≥ 0 → 進步；"
+        "全負且末月月增率 ≤ 0 → 退步。資料源：FinMind `TaiwanStockMonthRevenue`（每月 10 日公告）"
     )
 
     if not _get_token():
         st.error(
-            "? **?芸皜砍 FINMIND_TOKEN ?啣?霈**\n\n"
-            "?砍??賡? FinMind sponsor tier ???甇瑕???喋??鞈?閮箸?ab 瑼Ｘ API ????
+            "🔴 **未偵測到 FINMIND_TOKEN 環境變數**\n\n"
+            "本功能需 FinMind sponsor tier 抓月營收歷史。請至「🔎 資料診斷」Tab 檢查 API 金鑰狀態。"
         )
         return
 
-    with st.expander("? ?斗閬?蝝啁?嚗撥?脫郊 / ?脫郊 / ?甇?/ 撘琿甇伐?", expanded=False):
+    with st.expander("💡 判斷規則細節（強進步 / 進步 / 退步 / 強退步）", expanded=False):
         st.markdown(
-            "- **?? 撘琿脫郊** = 餈?3 ??YoY ?????瑼鳴??身 +15%嚗??急? MoM ??0\n"
-            "- **?? ?脫郊**   = 餈?3 ??YoY ??> 0% 銝??MoM ??0\n"
-            "- **? 撘琿甇?* = 餈?3 ??YoY ????-?瑼鳴??身 -15%嚗??急? MoM ??0\n"
-            "- **?? ?甇?*   = 餈?3 ??YoY ??< 0% 銝??MoM ??0\n"
-            "- **??銝剜?*   = ?園???嚗??????芰Ⅱ隤?瘛瑕??孵?嚗n"
-            "- **??鞈?銝雲** = 銝雲 15 ??甇瑕嚗 12 ?? YoY ?箸? + 3 ???嗆?嚗?銝??芣遛 1.5 撟游虜閬n\n"
-            "**?箔?暻潸? YoY + MoM ??隞塚?** YoY ?摮???批?撌殷?憒?1 ?摮平瘛∪迤嚗?MoM 鋆??????甇ａ??箸?雿摯???脫郊??
+            "- **🚀 強進步** = 近 3 月 YoY 全 ≥ 門檻（預設 +15%）且末月 MoM ≥ 0\n"
+            "- **📈 進步**   = 近 3 月 YoY 全 > 0% 且末月 MoM ≥ 0\n"
+            "- **🔻 強退步** = 近 3 月 YoY 全 ≤ -門檻（預設 -15%）且末月 MoM ≤ 0\n"
+            "- **📉 退步**   = 近 3 月 YoY 全 < 0% 且末月 MoM ≤ 0\n"
+            "- **➖ 中性**   = 其餘情境（震盪/拐點未確認/混合方向）\n"
+            "- **⚪ 資料不足** = 不足 15 個月歷史（含 12 個月 YoY 基期 + 3 個月當期）；上市未滿 1.5 年常見\n\n"
+            "**為什麼要 YoY + MoM 雙條件？** YoY 排除季節性偏差（如 1 月電子業淡季），MoM 補捉「近期動量」防止靠基期低估的假進步。"
         )
 
-    # ?? 蝭拚璇辣 ??????????????????????????????????????????
+    # ── 篩選條件 ──────────────────────────────────────────
     _c1, _c2, _c3 = st.columns([1, 1, 1])
     with _c1:
         _yoy_thr = st.slider(
-            "撘琿脫郊 / 撘琿甇?YoY ?瑼?(%)", 5.0, 50.0, 15.0, 1.0,
-            help="餈?3 ??YoY ?券頞?甇日?瑼???撘琿脫郊嚗?其???-甇日?瑼???撘琿甇?,
+            "強進步 / 強退步 YoY 門檻 (%)", 5.0, 50.0, 15.0, 1.0,
+            help="近 3 月 YoY 全部超過此門檻 → 強進步；全部低於 -此門檻 → 強退步",
             key="mrev_yoy_threshold",
         )
     with _c2:
         _mode_label = st.radio(
-            "蝭拚璅∪?",
-            ["?? 撘琿脫郊", "?? ?脫郊嚗撘琿脫郊嚗?, "?? ?甇伐??怠撥?甇伐?",
-             "? 撘琿甇?, "?券"],
+            "篩選模式",
+            ["🚀 強進步", "📈 進步（含強進步）", "📉 退步（含強退步）",
+             "🔻 強退步", "全部"],
             index=1,
             key="mrev_mode",
             horizontal=False,
         )
         _mode_key = {
-            "?? 撘琿脫郊": "strong_up",
-            "?? ?脫郊嚗撘琿脫郊嚗?: "any_up",
-            "?? ?甇伐??怠撥?甇伐?": "any_down",
-            "? 撘琿甇?: "strong_down",
-            "?券": "all",
+            "🚀 強進步": "strong_up",
+            "📈 進步（含強進步）": "any_up",
+            "📉 退步（含強退步）": "any_down",
+            "🔻 強退步": "strong_down",
+            "全部": "all",
         }[_mode_label]
     with _c3:
         _topn = st.number_input(
-            "憿舐內銝?蝑", min_value=10, max_value=500, value=100, step=10,
-            help="??敺???N 蝑?靘??YoY 蝯??潭?摨?",
+            "顯示上限筆數", min_value=10, max_value=500, value=100, step=10,
+            help="排序後取前 N 筆（依末月 YoY 絕對值排序）",
             key="mrev_topn",
         )
 
-    if st.button("? ???典??湔?? + 閮?", key="mrev_fetch_btn", type="primary"):
-        with st.spinner("甇??撣???塚?FinMind batch嚗? 15-60 蝘???):
+    if st.button("📡 抓取全市場月營收 + 計算", key="mrev_fetch_btn", type="primary"):
+        with st.spinner("正在抓全市場月營收（FinMind batch，約 15-60 秒）…"):
             _df_batch = fetch_batch_monthly_revenue(months=18)
         if _df_batch.empty:
             st.error(
-                "? **?典??湔????憭望?**\n\n"
-                "?航??嚗? FinMind tier 銝??batch嚗 data_id嚗???token ?? ??蝬脰楝?暹?\n\n"
-                "?? 隢???鞈?閮箸?ab 瑼Ｘ API ???
+                "🔴 **全市場月營收抓取失敗**\n\n"
+                "可能原因：① FinMind tier 不支援 batch（無 data_id） ② token 過期 ③ 網路逾時\n\n"
+                "👉 請至「🔎 資料診斷」Tab 檢查 API 狀態"
             )
             return
-        st.success(f"??? **{_df_batch['stock_id'].nunique()}** 瑼蟡?? **{_df_batch['date'].nunique()}** ??鞈?")
+        st.success(f"✅ 抓到 **{_df_batch['stock_id'].nunique()}** 檔股票 × **{_df_batch['date'].nunique()}** 個月資料")
         st.session_state["_mrev_batch"] = _df_batch
 
-        # ?郊??TWSE ?迂撠
+        # 同步抓 TWSE 名稱對照
         try:
             from yield_screener import fetch_twse_yield_pe
             _df_names = fetch_twse_yield_pe()
-            if not _df_names.empty and "隞?Ⅳ" in _df_names.columns:
+            if not _df_names.empty and "代碼" in _df_names.columns:
                 st.session_state["_mrev_namemap"] = dict(zip(
-                    _df_names["隞?Ⅳ"].astype(str),
-                    _df_names.get("?迂", pd.Series([""] * len(_df_names))).astype(str),
+                    _df_names["代碼"].astype(str),
+                    _df_names.get("名稱", pd.Series([""] * len(_df_names))).astype(str),
                 ))
         except Exception as _en:
-            print(f"[mrev-screener] ?迂撠頛憭望?: {_en}")
+            print(f"[mrev-screener] 名稱對照載入失敗: {_en}")
             st.session_state["_mrev_namemap"] = {}
 
     _df_batch = st.session_state.get("_mrev_batch")
     if _df_batch is None or _df_batch.empty:
-        st.info("?? 隢???????典??湔????憪?)
+        st.info("👆 請點擊「📡 抓取全市場月營收」開始")
         return
 
-    # ?? 閮? + 蝭拚 ?????????????????????????????????????????
+    # ── 計算 + 篩選 ─────────────────────────────────────────
     _namemap = st.session_state.get("_mrev_namemap", {})
     _df_screen = screen_from_batch(_df_batch, yoy_threshold=_yoy_thr, name_map=_namemap)
     _df_filtered = filter_by_mode(_df_screen, _mode_key)
 
     if _df_filtered.empty:
-        st.warning(f"? ?具_mode_label}?芋撘?+ YoY ?瑼?{_yoy_thr}% 銝蝚血?璅?嚗??曉祝璇辣")
+        st.warning(f"🟡 在「{_mode_label}」模式 + YoY 門檻 {_yoy_thr}% 下無符合標的，請放寬條件")
         return
 
-    # ??嚗??急? YoY 蝯??潮??迎?撘琿脫郊/?甇交筑銝?嚗?
+    # 排序：依末月 YoY 絕對值降冪（強進步/退步浮上來）
     _df_filtered = _df_filtered.copy()
     _df_filtered["_abs_yoy"] = _df_filtered["YoY(%)"].abs()
     _df_filtered = _df_filtered.sort_values("_abs_yoy", ascending=False).head(int(_topn))
     _df_show = _df_filtered.drop(columns=["_abs_yoy", "_trend_key"])
 
-    # ?? Summary ???????????????????????????????????????????
+    # ── Summary 卡 ─────────────────────────────────────────
     _summary_cols = st.columns(5)
     for _i, (_k, _label) in enumerate([
-        ("strong_up", "?? 撘琿脫郊"),
-        ("up", "?? ?脫郊"),
-        ("neutral", "??銝剜?),
-        ("down", "?? ?甇?),
-        ("strong_down", "? 撘琿甇?),
+        ("strong_up", "🚀 強進步"),
+        ("up", "📈 進步"),
+        ("neutral", "➖ 中性"),
+        ("down", "📉 退步"),
+        ("strong_down", "🔻 強退步"),
     ]):
         _cnt = int((_df_screen["_trend_key"] == _k).sum())
         with _summary_cols[_i]:
-            st.metric(_label, f"{_cnt} 瑼?)
+            st.metric(_label, f"{_cnt} 檔")
 
-    st.markdown(f"#### ?? 蝯?嚗 {len(_df_show)} 瑼?繚 靘?YoY 蝯??潭?摨?")
+    st.markdown(f"#### 📋 結果（共 {len(_df_show)} 檔 · 依 YoY 絕對值排序）")
     st.dataframe(_df_show, use_container_width=True, hide_index=True)
 
-    # ?? CSV 銝? ????????????????????????????????????????????
+    # ── CSV 下載 ────────────────────────────────────────────
     _csv = _df_show.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
-        "? 銝?蝯? CSV",
+        "💾 下載結果 CSV",
         data=_csv,
         file_name=f"monthly_revenue_screen_{_mode_key}_yoy{int(_yoy_thr)}.csv",
         mime="text/csv",
         key="mrev_csv_dl",
     )
-

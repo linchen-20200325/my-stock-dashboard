@@ -1,4 +1,3 @@
-﻿from data_config import CACHE_TTL
 try:
     import nest_asyncio as _nest; _nest.apply()
 except Exception:
@@ -11,25 +10,25 @@ try:
     from FinMind.data import DataLoader        # finmind < 1.x
 except ImportError:
     try:
-        from finmind.data import DataLoader    # finmind >= 1.x (撠神)
+        from finmind.data import DataLoader    # finmind >= 1.x (小寫)
     except ImportError as _e:
         DataLoader = None
         import warnings
-        warnings.warn(f"FinMind DataLoader ?⊥?頛嚗aw HTTP API 隞?剁?嚗_e}")
+        warnings.warn(f"FinMind DataLoader 無法載入（raw HTTP API 仍可用）：{_e}")
 import streamlit as st
 import requests as _req_dl
 import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
 from proxy_helper import fetch_url as _fetch_url_dl
 
-# v18.201 D2嚗inMind dataset 敺 update ??餈質馱
-# raw fetcher 敺?response top-level ??`last_update`嚗DK 頝臬??⊥迨甈???蝛?
-# caller ??attrs assign block 蝯曹?撖恍?df.attrs嚗策 chip hover tooltip ??
+# v18.201 D2：FinMind dataset 後台 update 時間追蹤
+# raw fetcher 從 response top-level 取 `last_update`，SDK 路徑無此欄位故留空
+# caller 在 attrs assign block 統一寫進 df.attrs，給 chip hover tooltip 用
 _FINMIND_META: dict = {}   # key: 'price'/'inst'/'margin', value: {last_update, fetched_at}
 
 
 def _capture_finmind_meta(src_key: str, j_response: dict) -> None:
-    """v18.201 D2嚗? FinMind response top-level last_update + ?? wallclock 摮?module dict??""
+    """v18.201 D2：把 FinMind response top-level last_update + 抓取 wallclock 存進 module dict。"""
     try:
         _FINMIND_META[src_key] = {
             "last_update": str(j_response.get("last_update", "") if isinstance(j_response, dict) else ""),
@@ -40,13 +39,13 @@ def _capture_finmind_meta(src_key: str, j_response: dict) -> None:
 
 
 def _stamp_finreport_attrs(df, src_key: str, src_val: str):
-    """v18.202 E2嚗?鞎∪鞈?皞?+ ???撖恍?df.attrs??
+    """v18.202 E2：把財報資料源 + 抓取時戳寫進 df.attrs。
 
-    ?∪? v18.200 B1嚗蝺?蝐Ⅳ/?? src chip嚗? v18.201 D2嚗over tooltip嚗?
-    鞎∪銝挾 fetcher ? (df, err) tuple 銝? @st.cache_data嚗? pandas
-    DataFrame.attrs ?湔 pickle ?臭???app.py wrapper ?芸? df 頧?嚗?
-    ? data_loader 撖怠?喳嚗? app.py attrs.update嚗? fetch_price_data
-    韏?.tail().reset_index() ??attrs ??瘜?????
+    鏡像 v18.200 B1（K線/籌碼/融資 src chip）+ v18.201 D2（hover tooltip）。
+    財報三段 fetcher 回傳 (df, err) tuple 且過 @st.cache_data，但 pandas
+    DataFrame.attrs 直接 pickle 可保留（app.py wrapper 未做 df 轉換），
+    故在 data_loader 寫入即可，無需 app.py attrs.update（與 fetch_price_data
+    走 .tail().reset_index() 掉 attrs 的情況不同）。
     """
     try:
         df.attrs[f"{src_key}_src"] = src_val
@@ -67,7 +66,7 @@ def _bps_dl():
     return s
 
 def _yf_dl(symbol, **kwargs):
-    """yfinance download嚗? os.environ 瘜典 proxy嚗摰寞?? yfinance嚗?""
+    """yfinance download，透過 os.environ 注入 proxy（相容新舊版 yfinance）。"""
     import os as _os_yfd
     try:
         from tw_stock_data_fetcher import _load_proxy_config as _lpc_yfd
@@ -91,16 +90,16 @@ def _yf_dl(symbol, **kwargs):
 _TWSE_DL = _bps_dl()
 from stock_names import get_stock_name
 
-# ?? v4.5 ?湔摰??獢 ?????????????????????????????????????????????????
+# ── v4.5 嚴格安全抓取框架 ─────────────────────────────────────────────────
 def safe_fetch_strict(data_name: str, fetch_func, ttl: int = 600):
     """
-    ?湔???冽??????啁?銝蝙?刻?鞈?嚗?亙??喳仃????
-    - ??嚗神??st.session_state.success_cache嚗TL ?勗?急蝞∠?嚗?
-    - 憭望?嚗???{'status': 'failed', 'value': None, 'message': '...'}
-    - ?交???嚗楊?亥???粹???銝楊?乩蝙?冽憭拙翰??
+    嚴格版安全抓取：抓不到絕不使用舊資料，直接回傳失敗狀態。
+    - 成功：寫入 st.session_state.success_cache（TTL 由呼叫方管理）
+    - 失敗：回傳 {'status': 'failed', 'value': None, 'message': '...'}
+    - 日期邊界：跨日自動視為過期（不跨日使用昨天快取）
     """
     _today_str = datetime.date.today().isoformat()
-    # 瑼Ｘ session_state 敹怠?
+    # 檢查 session_state 快取
     _sc = getattr(st.session_state, '__dict__', {})
     _cache = st.session_state.get('success_cache', {}) if hasattr(st, 'session_state') else {}
     _entry = _cache.get(data_name)
@@ -108,7 +107,7 @@ def safe_fetch_strict(data_name: str, fetch_func, ttl: int = 600):
         _age = datetime.datetime.now().timestamp() - _entry.get('ts', 0)
         if _age < ttl:
             return _entry['data'], 'success'
-    # 撖阡???
+    # 實際抓取
     try:
         result = fetch_func()
         if result is not None:
@@ -122,18 +121,18 @@ def safe_fetch_strict(data_name: str, fetch_func, ttl: int = 600):
             }
             return result, 'success'
     except Exception as _e:
-        print(f'[safe_fetch] {data_name} ??{type(_e).__name__}: {_e}')
-    # 憭望?嚗?蝣箸?閮?銝??喃遙雿???
+        print(f'[safe_fetch] {data_name} ❌ {type(_e).__name__}: {_e}')
+    # 失敗：明確標記，不回傳任何舊值
     return {'status': 'failed', 'value': None,
-            'message': f'{data_name} ?急??⊥?????啗???}, 'failed'
+            'message': f'{data_name} 暫時無法取得最新資料'}, 'failed'
 
 
-_T86_DAY_CACHE: dict = {}  # {?交?摮葡: {?∠巨隞?Ⅳ: {憭?,?縑,?芰??}} ?脩?蝝翰??憭?梁
+_T86_DAY_CACHE: dict = {}  # {日期字串: {股票代碼: {外資,投信,自營商}}} 進程級快取，多股共用
 
 
 def _get_t86_day(ds: str) -> dict:
-    """?? T86 ?孵??交??撣瘜犖鞈?嚗脩??批翰???銴?瘙?
-    ? {?∠巨隞?Ⅳ: {'憭?':float, '?縑':float, '?芰???:float}}嚗雿?撘?""
+    """抓取 T86 特定日期的全市場法人資料，進程內快取避免重複請求。
+    回傳 {股票代碼: {'外資':float, '投信':float, '自營商':float}}，單位：張"""
     if ds in _T86_DAY_CACHE:
         return _T86_DAY_CACHE[ds]
     HDR = {'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}
@@ -150,10 +149,10 @@ def _get_t86_day(ds: str) -> dict:
             return {}
         fields = [str(f) for f in j.get('fields', [])]
         fi = {n: i for i, n in enumerate(fields)}
-        # T86 甈??迂?具眺鞈?????楊??靘????貉?鞎瑁都頞?詻?靽∟眺鞈???⊥??
-        f_idx = next((v for k, v in fi.items() if '憭? in k and '鞎瑁都頞? in k and '?芰?' not in k), None)
-        t_idx = next((v for k, v in fi.items() if '?縑' in k and '鞎瑁都頞? in k), None)
-        d_idx = next((v for k, v in fi.items() if '?芰?' in k and '鞎瑁都頞? in k and '?芾?' in k), None)
+        # T86 欄位名稱用「買賣超」而非「淨」，例如「外陸資買賣超股數」「投信買賣超股數」
+        f_idx = next((v for k, v in fi.items() if '外' in k and '買賣超' in k and '自營' not in k), None)
+        t_idx = next((v for k, v in fi.items() if '投信' in k and '買賣超' in k), None)
+        d_idx = next((v for k, v in fi.items() if '自營' in k and '買賣超' in k and '自行' in k), None)
         print(f'[T86] {ds} fields={fields[:5]} f_idx={f_idx} t_idx={t_idx} d_idx={d_idx}')
 
         def _pn(row, idx):
@@ -165,18 +164,18 @@ def _get_t86_day(ds: str) -> dict:
         for row in j['data']:
             code = str(row[0]).strip()
             if code:
-                day_data[code] = {'憭?': _pn(row, f_idx), '?縑': _pn(row, t_idx), '?芰???: _pn(row, d_idx)}
+                day_data[code] = {'外資': _pn(row, f_idx), '投信': _pn(row, t_idx), '自營商': _pn(row, d_idx)}
         _T86_DAY_CACHE[ds] = day_data
-        print(f'[TWSE T86] {ds}: {len(day_data)} ??)
+        print(f'[TWSE T86] {ds}: {len(day_data)} 支')
         return day_data
     except Exception as e:
-        print(f'[TWSE T86] {ds} 憭望?: {e}')
+        print(f'[TWSE T86] {ds} 失敗: {e}')
         _T86_DAY_CACHE[ds] = {}
         return {}
 
 
 def _fetch_twse_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
-    """TWSE T86 ?嚗86 銝甈⊥??典??湛?憭?梁??隞賡脩?敹怠?嚗????潸?瘙?""
+    """TWSE T86 備援：T86 一次抓全市場，多股共用同一份進程快取，不重複發請求。"""
     try:
         rows = []
         base = datetime.date.today()
@@ -191,20 +190,20 @@ def _fetch_twse_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
                 rows.append({'date': d, **day[stock_id]})
         if rows:
             _df_tw = pd.DataFrame(rows)
-            _df_tw['銝餃???'] = _df_tw['憭?'] + _df_tw['?縑'] + _df_tw['?芰???]
+            _df_tw['主力合計'] = _df_tw['外資'] + _df_tw['投信'] + _df_tw['自營商']
             df = pd.merge(df, _df_tw, on='date', how='left')
-            print(f'[TWSE T86] {stock_id} 鋆? {len(rows)} ??)
+            print(f'[TWSE T86] {stock_id} 補充 {len(rows)} 日')
     except Exception as e:
-        print(f'[TWSE T86] {stock_id} 憭望?: {e}')
+        print(f'[TWSE T86] {stock_id} 失敗: {e}')
     return df
 
 
-_TPEX_DAY_CACHE: dict = {}  # {?交?摮葡: {?∠巨隞?Ⅳ: {憭?,?縑,?芰??}} TPEx ?脩?蝝翰??
+_TPEX_DAY_CACHE: dict = {}  # {日期字串: {股票代碼: {外資,投信,自營商}}} TPEx 進程級快取
 
 
 def _get_tpex_day(ds: str) -> dict:
-    """?? TPEx ?孵??交??撣瘜犖鞈?嚗?瑹嚗??脩??批翰??
-    ? {?∠巨隞?Ⅳ: {'憭?':float, '?縑':float, '?芰???:float}}嚗雿?撘?""
+    """抓取 TPEx 特定日期的全市場法人資料（上櫃股），進程內快取。
+    回傳 {股票代碼: {'外資':float, '投信':float, '自營商':float}}，單位：張"""
     if ds in _TPEX_DAY_CACHE:
         return _TPEX_DAY_CACHE[ds]
     HDR = {'User-Agent': 'Mozilla/5.0', 'Accept': '*/*',
@@ -235,44 +234,44 @@ def _get_tpex_day(ds: str) -> dict:
             try: return int(str(row[idx]).replace(',', '').replace('+', '') or 0)
             except: return 0
 
-        # ?? ???菜葫甈?蝝Ｗ?嚗Columns ??buy-sell-net 撽?嚗??????????
-        # TPEx 璅??澆?嚗0]隞?? [1]?迂
-        # 憭? [2]鞎?[3]鞈?[4]瘛? ?縑 [5]鞎?[6]鞈?[7]瘛?
-        # ?芰?(?芾?) [8]鞎?[9]鞈?[10]瘛? [11..13]?輸  [14]??
-        f_idx, t_idx, d_idx = 4, 7, 10  # ?身蝝Ｗ?
+        # ── 動態偵測欄位索引（sColumns 或 buy-sell-net 驗證）──────────
+        # TPEx 標準格式：[0]代號 [1]名稱
+        # 外資 [2]買 [3]賣 [4]淨  投信 [5]買 [6]賣 [7]淨
+        # 自營(自行) [8]買 [9]賣 [10]淨  [11..13]避險  [14]合計
+        f_idx, t_idx, d_idx = 4, 7, 10  # 預設索引
 
-        # ?函洵銝蝑?????霅?buy - sell ??net嚗捆閮?1 撘萎誑?扯炊撌殷?
+        # 用第一筆有效資料驗證 buy - sell ≈ net（容許 1 張以內誤差）
         for _sample in rows_data[:5]:
             if len(_sample) < 11: continue
             _f_buy = _int_tp(_sample, 2); _f_sell = _int_tp(_sample, 3); _f_net = _int_tp(_sample, 4)
             _t_buy = _int_tp(_sample, 5); _t_sell = _int_tp(_sample, 6); _t_net = _int_tp(_sample, 7)
             if abs(_f_net - (_f_buy - _f_sell)) <= 1000 and abs(_t_net - (_t_buy - _t_sell)) <= 1000:
-                break  # 撽???嚗蝙?券?閮剔揣撘?
+                break  # 驗證通過，使用預設索引
         else:
-            # ?仿?霅憭望?嚗?閰行?雿?撠??澆?嚗??TPEx API ???輸甈?
-            # [0]隞?? [1]?迂 [2]憭眺 [3]憭都 [4]憭楊 [5]?眺 [6]?都 [7]?楊 [8]?芾眺 [9]?芾都 [10]?芣楊
-            print(f'[TPEx] {ds} 甈?撽?憭望?嚗ow?瑕漲={len(rows_data[0]) if rows_data else 0}嚗蝙?券?閮剔揣撘?)
+            # 若驗證全失敗，嘗試欄位較少的格式（部分 TPEx API 版本省略避險欄）
+            # [0]代號 [1]名稱 [2]外買 [3]外賣 [4]外淨 [5]投買 [6]投賣 [7]投淨 [8]自買 [9]自賣 [10]自淨
+            print(f'[TPEx] {ds} 欄位驗證失敗，row長度={len(rows_data[0]) if rows_data else 0}，使用預設索引')
 
         day_data = {}
         for row in rows_data:
             code = str(row[0]).strip()
             if not code or len(row) < 11: continue
             day_data[code] = {
-                '憭?': _pn_tp(row, f_idx),
-                '?縑': _pn_tp(row, t_idx),
-                '?芰???: _pn_tp(row, d_idx),
+                '外資': _pn_tp(row, f_idx),
+                '投信': _pn_tp(row, t_idx),
+                '自營商': _pn_tp(row, d_idx),
             }
         _TPEX_DAY_CACHE[ds] = day_data
-        print(f'[TPEx] {ds} ({roc_date}): {len(day_data)} ??idx=({f_idx},{t_idx},{d_idx})')
+        print(f'[TPEx] {ds} ({roc_date}): {len(day_data)} 支 idx=({f_idx},{t_idx},{d_idx})')
         return day_data
     except Exception as e:
-        print(f'[TPEx] {ds} 憭望?: {e}')
+        print(f'[TPEx] {ds} 失敗: {e}')
         _TPEX_DAY_CACHE[ds] = {}
         return {}
 
 
 def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
-    """TPEx 銝??⊥?鈭箏??湛??摩??TWSE T86嚗蝙??TPEx 銝之瘜犖 API??""
+    """TPEx 上櫃股法人備援，邏輯同 TWSE T86，使用 TPEx 三大法人 API。"""
     try:
         rows = []
         base = datetime.date.today()
@@ -287,17 +286,17 @@ def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
                 rows.append({'date': d, **day[stock_id]})
         if rows:
             _df_tp = pd.DataFrame(rows)
-            _df_tp['銝餃???'] = _df_tp['憭?'] + _df_tp['?縑'] + _df_tp['?芰???]
+            _df_tp['主力合計'] = _df_tp['外資'] + _df_tp['投信'] + _df_tp['自營商']
             df = pd.merge(df, _df_tp, on='date', how='left')
-            print(f'[TPEx] {stock_id} 鋆? {len(rows)} ??)
+            print(f'[TPEx] {stock_id} 補充 {len(rows)} 日')
     except Exception as e:
-        print(f'[TPEx] {stock_id} 憭望?: {e}')
+        print(f'[TPEx] {stock_id} 失敗: {e}')
     return df
 
 
 def _normalize_inst_pivot(df_raw: pd.DataFrame) -> pd.DataFrame:
-    """??FinMind/T86 ??瘜犖 DataFrame 頧???憭?/?縑/?芰???銝餃??? 甈???pivot??
-    df_raw 敹???date / name / buy / sell 甈?嚗雿?～?""
+    """把 FinMind/T86 原始法人 DataFrame 轉成含 外資/投信/自營商/主力合計 欄位的 pivot。
+    df_raw 必須有 date / name / buy / sell 欄位，單位為股。"""
     import re as _re_ni
     df_raw = df_raw.copy()
     df_raw['net_buy'] = (pd.to_numeric(df_raw['buy'],  errors='coerce').fillna(0) -
@@ -305,46 +304,46 @@ def _normalize_inst_pivot(df_raw: pd.DataFrame) -> pd.DataFrame:
     df_raw['date'] = pd.to_datetime(df_raw['date']).dt.date
     pv = df_raw.pivot_table(index='date', columns='name', values='net_buy',
                              aggfunc='sum').reset_index()
-    # ?﹦?撘?
+    # 股→張
     for c in pv.columns:
         if c != 'date':
             pv[c] = pv[c] / 1000
-    # ????舀?望?嚗oreign_Investor嚗?銝剜?嚗??貉??佗?
-    # 瘜冽?嚗?鞈?? 撅砍?鞈???飛?乓?鞈??????
+    # 重命名：支援英文（Foreign_Investor）與中文（外陸資…）
+    # 注意：外資自營商 屬外資陣營，應歸入「外資」而非「自營商」
     rn = {}
     for c in pv.columns:
         cs = str(c); cl = cs.lower()
-        cb = _re_ni.split(r'[嚗?鞎瑁都]', cs)[0].strip()
-        if ('憭? in cs and '鞈? in cs) or cs in ('憭?', '憭鞈?, '憭??鞈?):
-            rn[c] = '憭?'          # 憭鞈?銝憭??芰??? + 憭??芰??????飛憭?
-        elif '?縑' in cb:
-            rn[c] = '?縑'
-        elif '?芰?' in cb and '憭?' not in cs:  # 蝝??扯??
-            rn[c] = '?芰???
+        cb = _re_ni.split(r'[（(買賣]', cs)[0].strip()
+        if ('外' in cs and '資' in cs) or cs in ('外資', '外陸資', '外資及陸資'):
+            rn[c] = '外資'          # 外陸資(不含外資自營商) + 外資自營商 → 均歸外資
+        elif '投信' in cb:
+            rn[c] = '投信'
+        elif '自營' in cb and '外資' not in cs:  # 純國內自營商
+            rn[c] = '自營商'
         elif 'foreign' in cl:
-            rn[c] = '憭?'          # ?望??迂嚗 dealer嚗?
+            rn[c] = '外資'          # 英文名稱（含 dealer）
         elif 'investment' in cl or 'trust' in cl:
-            rn[c] = '?縑'
+            rn[c] = '投信'
         elif 'dealer' in cl:
-            rn[c] = '?芰???
-    print(f'[INST-RENAME] 甈?撠?: {rn}')
+            rn[c] = '自營商'
+    print(f'[INST-RENAME] 欄位對應: {rn}')
     pv.rename(columns=rn, inplace=True)
-    # ??甈?雿蛛?pandas 3.0 ?詨捆嚗?
+    # 重複欄合併（pandas 3.0 相容）
     if pv.columns.duplicated().any():
         _dp = pv[['date']]
         _np = pv.drop(columns=['date'])
         _np = _np.T.groupby(level=0).sum().T
         pv = pd.concat([_dp, _np], axis=1)
-    main = [c for c in ['憭?', '?縑', '?芰???] if c in pv.columns]
+    main = [c for c in ['外資', '投信', '自營商'] if c in pv.columns]
     if main:
-        pv['銝餃???'] = pv[main].sum(axis=1)
+        pv['主力合計'] = pv[main].sum(axis=1)
     return pv
 
 
 def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> pd.DataFrame:
-    """FinMind ?? API ?嚗?靘陷 Python SDK嚗?
-    - ??FINMIND_TOKEN: 雿輻 token ?????
-    - ??token: ?踹?隢?嚗inMind ?祇?鞈?嚗???3 req/min嚗??臬?敺?
+    """FinMind 原始 API 備援（不依賴 Python SDK）
+    - 有 FINMIND_TOKEN: 使用 token 提高速率限制
+    - 無 token: 匿名請求（FinMind 公開資料，限速 3 req/min，仍可取得）
     """
     import os
     _token = os.environ.get('FINMIND_TOKEN', '')
@@ -360,33 +359,33 @@ def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> 
             headers={'Authorization': f'Bearer {_token}'} if _token else {},
             timeout=20)
         _j = _r.json()
-        _capture_finmind_meta('inst', _j)   # v18.201 D2嚗???last_update + fetched_at
+        _capture_finmind_meta('inst', _j)   # v18.201 D2：紀錄 last_update + fetched_at
         if _j.get('data'):
             _first = _j['data'][0]
             _names = list(set(r.get('name','') for r in _j['data'][:20]))
         if _j.get('status') == 200 and _j.get('data'):
             _pv = _normalize_inst_pivot(pd.DataFrame(_j['data']))
-            # 蝣箔??拙 date ?銝?游? merge
+            # 確保兩側 date 型別一致再 merge
             _pv['date'] = pd.to_datetime(_pv['date']).dt.date
             df['date']  = pd.to_datetime(df['date']).dt.date
             _df_dates   = set(df['date'])
             _pv_dates   = set(_pv['date'])
             _overlap    = len(_df_dates & _pv_dates)
             df = pd.merge(df, _pv, on='date', how='left')
-            _nz = (df.get('憭?', pd.Series(dtype=float)) != 0).sum()
-            print(f'[FM-Raw] {stock_id}: ??{len(_j["data"])} 蝑???{len(_pv)} ?? 憭??={_nz}')
+            _nz = (df.get('外資', pd.Series(dtype=float)) != 0).sum()
+            print(f'[FM-Raw] {stock_id}: ✅ {len(_j["data"])} 筆 → {len(_pv)} 日  外資非零={_nz}')
         else:
             print(f'[FM-Raw] {stock_id}: status={_j.get("status")} msg={_j.get("msg","")}')
     except Exception as _e:
-        print(f'[FM-Raw] {stock_id}: ??{_e}')
+        print(f'[FM-Raw] {stock_id}: ❌ {_e}')
     return df
 
 
 def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.DataFrame:
-    """FinMind ?? API ??仕嚗?靘陷 Python SDK嚗?靘?DataLoader=None ???氬?
+    """FinMind 原始 API 取個股日K（不依賴 Python SDK），供 DataLoader=None 時備援。
 
-    ???dl.taiwan_stock_daily ?詨?????雿?date/open/max/min/close/Trading_Volume?佗?嚗?
-    ?澆蝡舀窒?冽??rename ?雿???憭望??征 DataFrame??
+    回傳與 dl.taiwan_stock_daily 相同的原生欄位（date/open/max/min/close/Trading_Volume…），
+    呼叫端沿用既有 rename 與單位處理；失敗回空 DataFrame。
     """
     import os
     _token = os.environ.get('FINMIND_TOKEN', '')
@@ -401,72 +400,72 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
             headers={'Authorization': f'Bearer {_token}'} if _token else {},
             timeout=20)
         _j = _r.json()
-        _capture_finmind_meta('price', _j)   # v18.201 D2嚗???last_update + fetched_at
+        _capture_finmind_meta('price', _j)   # v18.201 D2：紀錄 last_update + fetched_at
         if _j.get('status') == 200 and _j.get('data'):
-            print(f'[FM-Raw price] {stock_id}: ??{len(_j["data"])} 蝑?SDK ?芾??伐?韏?HTTP ?嚗?)
+            print(f'[FM-Raw price] {stock_id}: ✅ {len(_j["data"])} 筆（SDK 未載入，走 HTTP 備援）')
             return pd.DataFrame(_j['data'])
         print(f'[FM-Raw price] {stock_id}: status={_j.get("status")} msg={_j.get("msg","")}')
     except Exception as _e:
-        print(f'[FM-Raw price] {stock_id}: ??{_e}')
+        print(f'[FM-Raw price] {stock_id}: ❌ {_e}')
     return pd.DataFrame()
 
 
-# ??蛛??孵? StockDataLoader ?摩??bump 甇文?銝莎?靘?app._get_loader 雿
-# @st.cache_resource ??cache key???銝?hot-reload 敺??典?祕靘??瘜Ⅳ
-# 嚗R #44 靽桐? NoneType 雿?cache_resource ?祕靘?????隞援嚗甇斗?嚗?
+# 版本鍵：改動 StockDataLoader 邏輯時 bump 此字串，供 app._get_loader 作為
+# @st.cache_resource 的 cache key。避免線上 hot-reload 後仍用到舊實例的舊方法碼
+# （PR #44 修了 NoneType 但 cache_resource 舊實例殘留 → 仍崩，即此故）。
 _LOADER_VERSION = 'v2-raw-http-fallback'
 
 
 class StockDataLoader:
-    """?啗?豢?撘? - FinMind ?芸?嚗ahoo ?"""
+    """台股數據引擎 - FinMind 優先，Yahoo 備援"""
 
     def __init__(self):
         import os
-        self.dl = DataLoader() if DataLoader is not None else None  # [Fixed] DataLoader ?芸?鋆?銝援瞏?
+        self.dl = DataLoader() if DataLoader is not None else None  # [Fixed] DataLoader 未安裝時不崩潰
         _fm_token    = os.environ.get('FINMIND_TOKEN', '')
         _fm_user     = os.environ.get('FINMIND_USER', '')
         _fm_password = os.environ.get('FINMIND_PASSWORD', '')
         try:
             if self.dl is None:
-                print('[FinMind] ??  SDK ?芾??伐?DataLoader=None嚗??寧 raw HTTP API ?')
+                print('[FinMind] ⚠️  SDK 未載入（DataLoader=None），改用 raw HTTP API 備援')
                 self._token = _fm_token
             elif _fm_token:
                 self.dl.login_by_token(api_token=_fm_token)
-                print(f'[FinMind] ??Token ?餃??嚗_fm_token[:12]}...嚗?)
+                print(f'[FinMind] ✅ Token 登入成功（{_fm_token[:12]}...）')
                 self._token = _fm_token
             elif _fm_user and _fm_password:
                 self.dl.login(user_id=_fm_user, password=_fm_password)
-                print('[FinMind] ??撣唾??餃??')
+                print('[FinMind] ✅ 帳號登入成功')
                 self._token = ''
             else:
-                print('[FinMind] ?對?  ?踹?璅∪?嚗?撠?600甈∴?')
+                print('[FinMind] ℹ️  匿名模式（每小時600次）')
                 self._token = ''
         except Exception as e:
-            print(f'[FinMind] ??  ?餃憭望?嚗e}')
-            self._token = _fm_token  # 靽? token 靘?raw HTTP ?雿輻
+            print(f'[FinMind] ⚠️  登入失敗：{e}')
+            self._token = _fm_token  # 保留 token 供 raw HTTP 備援使用
 
-    @st.cache_data(ttl=CACHE_TTL["price_data"])
+    @st.cache_data(ttl=3600)
     def get_combined_data(_self, stock_id, days, use_adjusted=True):
-        """摰?豢?頛瘚?
+        """完整數據載入流程
 
         Args:
-            stock_id: ?∠巨隞?Ⅳ
-            days: 頛憭拇
-            use_adjusted: True=??K蝺?敺拇?,?身), False=銝?春蝺?
+            stock_id: 股票代碼
+            days: 載入天數
+            use_adjusted: True=還原K線(復權,預設), False=一般K線
         """
         try:
             end_date = datetime.date.today()
             start_date = end_date - datetime.timedelta(days=days + 150)
             start_str = start_date.strftime('%Y-%m-%d')
 
-            # ========== 1. ?∪?豢? ==========
+            # ========== 1. 股價數據 ==========
 
             df = None
             _price_src = 'unknown'
             _inst_src = 'unknown'
             _margin_src = 'unknown'
 
-            # ??K蝺?敺拇?)嚗??亦 Yahoo auto_adjust=True ???歇敺拇? OHLC??
+            # 還原K線(復權)：優先直接用 Yahoo auto_adjust=True 生成「已復權 OHLC」
             if use_adjusted:
                 try:
                     yf_symbol = f"{stock_id}.TW"
@@ -477,7 +476,7 @@ class StockDataLoader:
                         auto_adjust=True,
                         progress=False
                     )
-                    # ??.TW ?亦鞈?嚗?閰?.TWO嚗?瑹蟡剁?
+                    # 若 .TW 查無資料，嘗試 .TWO（上櫃股票）
                     if df_yf_adj.empty:
                         yf_symbol = f"{stock_id}.TWO"
                         df_yf_adj = _yf_dl(
@@ -490,19 +489,19 @@ class StockDataLoader:
                     if not df_yf_adj.empty:
                         df_yf_adj = df_yf_adj.reset_index()
 
-                        # ?? MultiIndex
+                        # 處理 MultiIndex
                         if isinstance(df_yf_adj.columns, pd.MultiIndex):
                             df_yf_adj.columns = df_yf_adj.columns.get_level_values(0)
 
                         df_yf_adj.columns = [str(c).lower() for c in df_yf_adj.columns]
 
-                        # reset_index 敺虜??date 甈?
+                        # reset_index 後通常是 date 欄位
                         if 'date' not in df_yf_adj.columns and 'datetime' in df_yf_adj.columns:
                             df_yf_adj = df_yf_adj.rename(columns={'datetime': 'date'})
 
                         df_yf_adj['date'] = pd.to_datetime(df_yf_adj['date']).dt.date
 
-                        # ?漱????-> 撘?
+                        # 成交量：股 -> 張
                         if 'volume' in df_yf_adj.columns:
                             df_yf_adj['volume'] = (df_yf_adj['volume'] / 1000).round().astype(int)
                         else:
@@ -510,12 +509,12 @@ class StockDataLoader:
 
                         df = df_yf_adj[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
                         _price_src = 'yahoo_adj'
-                        print("????K蝺?Yahoo auto_adjust=True嚗?亦?????OHLC嚗?)
+                        print("✅ 還原K線：Yahoo auto_adjust=True（直接生成還原 OHLC）")
                 except Exception as e:
-                    print(f"?? ??K蝺?Yahoo auto_adjust 憭望?嚗??FinMind ???對?{e}")
+                    print(f"⚠️ 還原K線：Yahoo auto_adjust 失敗，改用 FinMind 原始價：{e}")
                     df = None
 
-            # ?交雿輻??K蝺? Yahoo 憭望?嚗?韏?FinMind嚗??春蝺?/ ?嚗?
+            # 若未使用還原K線或 Yahoo 失敗，則走 FinMind（一般K線 / 備援）
             if df is None:
                 if _self.dl is not None:
                     df_price = _self.dl.taiwan_stock_daily(
@@ -524,43 +523,43 @@ class StockDataLoader:
                         end_date=end_date.strftime('%Y-%m-%d'),
                     )
                     _fm_path = 'finmind_sdk'
-                    _capture_finmind_meta('price', {})   # v18.201 D2嚗DK ??response ???芾? fetched_at
+                    _capture_finmind_meta('price', {})   # v18.201 D2：SDK 無 response → 只記 fetched_at
                 else:
-                    # FinMind SDK ?芾??伐?DataLoader=None嚗? raw HTTP ?嚗??NoneType 撏拇蔑
+                    # FinMind SDK 未載入（DataLoader=None）→ raw HTTP 備援，避免 NoneType 崩潰
                     df_price = _fetch_finmind_price_raw(
                         stock_id, start_str, end_date.strftime('%Y-%m-%d'))
                     _fm_path = 'finmind_raw'
 
                 if df_price.empty:
-                    # Yahoo ?嚗? .TW嚗?閰?.TWO 銝?嚗?
+                    # Yahoo 備援（先 .TW，再試 .TWO 上櫃）
                     yf_symbol = f"{stock_id}.TW"
                     df_yf = _yf_dl(yf_symbol, start=start_date, progress=False)
                     if df_yf.empty:
                         yf_symbol = f"{stock_id}.TWO"
                         df_yf = _yf_dl(yf_symbol, start=start_date, progress=False)
                     if df_yf.empty:
-                        return None, "???亦鞈?", None
+                        return None, "❌ 查無資料", None
 
                     df_yf = df_yf.reset_index()
 
-                    # ========== ???儔甈??刻?撠神銋?嚗?=========
+                    # ========== 先處理復權（在轉小寫之前）==========
                     has_adj = False
                     adj_ratio_values = None
                     if isinstance(df_yf.columns, pd.MultiIndex):
                         df_yf.columns = df_yf.columns.get_level_values(0)
 
-                    # 瑼Ｘ銝西?蝞儔甈?靘??摮絲靘?
+                    # 檢查並計算復權比例（先儲存起來）
                     if 'Adj Close' in df_yf.columns and 'Close' in df_yf.columns and use_adjusted:
                         adj_ratio_values = (df_yf['Adj Close'] / df_yf['Close']).values
                         adj_close_values = df_yf['Adj Close'].values
                         has_adj = True
-                        print("??Yahoo ?嚗蝙?典儔甈???)
+                        print("✅ Yahoo 備援：使用復權資料")
 
-                    # 頧?撖?
+                    # 轉小寫
                     df_yf.columns = [str(c).lower() for c in df_yf.columns]
                     df_yf['date'] = pd.to_datetime(df_yf['date']).dt.date
 
-                    # ?敺拇?
+                    # 應用復權
                     if has_adj and use_adjusted and adj_ratio_values is not None:
                         df_yf['open'] = df_yf['open'] * adj_ratio_values
                         df_yf['high'] = df_yf['high'] * adj_ratio_values
@@ -571,7 +570,7 @@ class StockDataLoader:
                     df = df_yf[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
                     _price_src = 'yahoo_fallback'
                 else:
-                    # FinMind ?豢?
+                    # FinMind 數據
                     _price_src = _fm_path
                     df = df_price.rename(columns={
                         'Trading_Volume': 'volume',
@@ -582,7 +581,7 @@ class StockDataLoader:
                     df['date'] = pd.to_datetime(df['date']).dt.date
                     df['volume'] = (df['volume'] / 1000).astype(int)
 
-                    # ========== 敺拇???嚗? Yahoo ?脣?嚗?=========
+                    # ========== 復權處理（從 Yahoo 獲取）==========
                     if use_adjusted:
                         try:
                             yf_symbol = f"{stock_id}.TW"
@@ -591,41 +590,41 @@ class StockDataLoader:
                             if not df_adj.empty:
                                 df_adj = df_adj.reset_index()
 
-                                # ?? MultiIndex
+                                # 處理 MultiIndex
                                 if isinstance(df_adj.columns, pd.MultiIndex):
                                     df_adj.columns = df_adj.columns.get_level_values(0)
 
-                                # 閮?敺拇?瘥?
+                                # 計算復權比例
                                 if 'Adj Close' in df_adj.columns and 'Close' in df_adj.columns:
                                     df_adj['date_key'] = pd.to_datetime(df_adj['Date']).dt.date
                                     df_adj['adj_ratio'] = df_adj['Adj Close'] / df_adj['Close']
 
-                                    # ?蔥敺拇?瘥?
+                                    # 合併復權比例
                                     df = df.merge(df_adj[['date_key', 'adj_ratio']],
                                                   left_on='date', right_on='date_key', how='left')
 
-                                    # 憛怨?蝻箏仃?潛 1.0嚗?隤踵嚗?
+                                    # 填補缺失值為 1.0（不調整）
                                     df['adj_ratio'] = df['adj_ratio'].fillna(1.0)
 
-                                    # ?敺拇??唳????
+                                    # 應用復權到所有價格
                                     df['open'] = df['open'] * df['adj_ratio']
                                     df['high'] = df['high'] * df['adj_ratio']
                                     df['low'] = df['low'] * df['adj_ratio']
                                     df['close'] = df['close'] * df['adj_ratio']
 
-                                    # 皜?甈?
+                                    # 清理欄位
                                     df = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
-                                    print("??FinMind嚗儔甈???)
+                                    print("✅ FinMind：復權成功")
                                 else:
-                                    print("?? Yahoo ??Adj Close嚗蝙?典?憪??)
+                                    print("⚠️ Yahoo 無 Adj Close，使用原始價格")
                             else:
-                                print("?? Yahoo ?∟???雿輻???寞")
+                                print("⚠️ Yahoo 無資料，使用原始價格")
                         except Exception as e:
-                            print(f"?? 敺拇?憭望?: {e}")
-                            # 憭望??Ⅱ靽?df ?芣??箸甈?
+                            print(f"⚠️ 復權失敗: {e}")
+                            # 失敗時確保 df 只有基本欄位
                             df = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
 
-            # ========== 2. ?∠巨?迂 ==========
+            # ========== 2. 股票名稱 ==========
 
             stock_name = stock_id
             try:
@@ -640,11 +639,11 @@ class StockDataLoader:
             if stock_name == stock_id:
                 stock_name = get_stock_name(stock_id)
 
-            # ========== 3. ?? ==========
+            # ========== 3. 均線 ==========
             for period in [5, 10, 20, 60, 100, 120, 240]:
                 df[f'MA{period}'] = df['close'].rolling(window=period).mean()
 
-            # ========== 4. 銝之瘜犖 ==========
+            # ========== 4. 三大法人 ==========
             if _self.dl is not None:
                 try:
                     df_inst = _self.dl.taiwan_stock_institutional_investors(
@@ -660,8 +659,8 @@ class StockDataLoader:
                         df['date']       = pd.to_datetime(df['date']).dt.date
                         _overlap = len(set(df['date']) & set(df_pivot['date']))
                         df = pd.merge(df, df_pivot, on='date', how='left')
-                        _nz = (df.get('憭?', pd.Series(dtype=float)) != 0).sum()
-                        print(f'[蝐Ⅳ] {stock_id}: SDK ??憭??={_nz}', flush=True)
+                        _nz = (df.get('外資', pd.Series(dtype=float)) != 0).sum()
+                        print(f'[籌碼] {stock_id}: SDK ✅ 外資非零={_nz}', flush=True)
                         _sdk_used = True
                         _inst_src = 'finmind_sdk'
                         _capture_finmind_meta('inst', {})   # v18.201 D2
@@ -673,22 +672,22 @@ class StockDataLoader:
                 _sdk_used = False
 
             if not _sdk_used:
-                # SDK 銝????FinMind Raw HTTP API嚗?靘陷 SDK嚗?
+                # SDK 不可用 → FinMind Raw HTTP API（不依賴 SDK）
                 df = _fetch_finmind_inst_raw(stock_id, df, start_str)
-                if '憭?' in df.columns:
+                if '外資' in df.columns:
                     _inst_src = 'finmind_raw'
-                if '憭?' not in df.columns:
+                if '外資' not in df.columns:
                     df = _fetch_twse_inst_fallback(stock_id, df)
-                    if '憭?' in df.columns:
+                    if '外資' in df.columns:
                         _inst_src = 'twse'
-                if '憭?' not in df.columns:
+                if '外資' not in df.columns:
                     df = _fetch_tpex_inst_fallback(stock_id, df)
-                    if '憭?' in df.columns:
+                    if '外資' in df.columns:
                         _inst_src = 'tpex'
                 if _inst_src == 'unknown':
                     _inst_src = 'missing'
 
-            # ========== 5. ??? ==========
+            # ========== 5. 融資融券 ==========
             try:
                 df_margin = _self.dl.taiwan_stock_margin_purchase_short_sale(
                     stock_id=stock_id,
@@ -700,12 +699,12 @@ class StockDataLoader:
 
                     margin_data = df_margin[['date', 'MarginPurchaseTodayBalance', 'ShortSaleTodayBalance']].copy()
                     margin_data.rename(columns={
-                        'MarginPurchaseTodayBalance': '??擗?',
-                        'ShortSaleTodayBalance': '?擗?'
+                        'MarginPurchaseTodayBalance': '融資餘額',
+                        'ShortSaleTodayBalance': '融券餘額'
                     }, inplace=True)
 
-                    margin_data['??擗?'] = pd.to_numeric(margin_data['??擗?'], errors='coerce')
-                    margin_data['?擗?'] = pd.to_numeric(margin_data['?擗?'], errors='coerce')
+                    margin_data['融資餘額'] = pd.to_numeric(margin_data['融資餘額'], errors='coerce')
+                    margin_data['融券餘額'] = pd.to_numeric(margin_data['融券餘額'], errors='coerce')
 
                     df = pd.merge(df, margin_data, on='date', how='left')
                     _margin_src = 'finmind_sdk'
@@ -714,46 +713,46 @@ class StockDataLoader:
                     _margin_src = 'missing'
 
             except Exception as e:
-                print(f"???豢??航炊: {e}")
+                print(f"融資數據錯誤: {e}")
                 _margin_src = 'missing'
 
-            # ========== 6. ?豢?皜? ==========
-            # 憛怨?0
-            fill_cols = ['volume', '憭?', '?縑', '?芰???, '銝餃???']
+            # ========== 6. 數據清洗 ==========
+            # 填補0
+            fill_cols = ['volume', '外資', '投信', '自營商', '主力合計']
             for col in fill_cols:
                 if col in df.columns:
                     df[col] = df[col].fillna(0)
 
-            # ???脣?嚗?蔥敺???銴???????嚗??pd.to_numeric ?嗅 DataFrame嚗?
+            # ✅ 防呆：若合併後仍有重複欄名，先處理掉（避免 pd.to_numeric 收到 DataFrame）
             if df.columns.duplicated().any():
-                # ??甈?隞亙?蝮賢?雿蛛?pandas 3.0 蝘駁 axis=1嚗??T.groupby.T嚗?
+                # 同名欄位以加總合併（pandas 3.0 移除 axis=1，改用 T.groupby.T）
                 df = df.T.groupby(level=0).sum().T
 
-            # 撘瑕頧??
+            # 強制轉數值
             numeric_cols = ['open', 'high', 'low', 'close', 'volume',
-                          '憭?', '?縑', '?芰???, '銝餃???', '??擗?', '?擗?']
+                          '外資', '投信', '自營商', '主力合計', '融資餘額', '融券餘額']
             for col in numeric_cols:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-            # ========== 7. ?蝯撓??==========
-            # ?蕪??文???aN??嚗?翰??⊥?鞈?嚗?
+            # ========== 7. 最終輸出 ==========
+            # 過濾掉收盤價為0或NaN的列（避免快取到無效資料）
             df = df[pd.to_numeric(df['close'], errors='coerce').fillna(0) > 0].copy()
             df = df.sort_values('date').tail(days).reset_index(drop=True)
 
-            # ?日
-            k_type = "??K蝺?敺拇?)" if use_adjusted else "銝?春蝺??芸儔甈?"
-            print(f"\n????交??stock_id} {stock_name} - {k_type}")
-            print(f"鞈?蝑: {len(df)}")
-            if '憭?' in df.columns:
-                print(f"憭?甈?憿?: {df['憭?'].dtype}")
-                print(f"?敺?蝑?鞈?? {df['憭?'].tail(3).tolist()}")
+            # 除錯
+            k_type = "還原K線(復權)" if use_adjusted else "一般K線(未復權)"
+            print(f"\n【數據載入成功】{stock_id} {stock_name} - {k_type}")
+            print(f"資料筆數: {len(df)}")
+            if '外資' in df.columns:
+                print(f"外資欄位類型: {df['外資'].dtype}")
+                print(f"最後3筆外資數據: {df['外資'].tail(3).tolist()}")
 
             try:
                 df.attrs['price_src'] = _price_src
                 df.attrs['inst_src'] = _inst_src
                 df.attrs['margin_src'] = _margin_src
-                # v18.201 D2嚗inMind dataset 敺 update ?? + 摰Ｘ蝡舀???wallclock
+                # v18.201 D2：FinMind dataset 後台 update 時間 + 客戶端抓取 wallclock
                 for _k in ('price', 'inst', 'margin'):
                     _meta = _FINMIND_META.get(_k, {}) or {}
                     df.attrs[f'{_k}_last_update'] = _meta.get('last_update', '')
@@ -766,11 +765,11 @@ class StockDataLoader:
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return None, f"蝟餌絞?航炊: {str(e)}", None
+            return None, f"系統錯誤: {str(e)}", None
 
-    @st.cache_data(ttl=CACHE_TTL["price_data"])
+    @st.cache_data(ttl=3600)
     def get_monthly_revenue(_self, stock_id):
-        """???嗅??摨?MOPS(摰) ??FinMind"""
+        """月營收優先順序：MOPS(官方) → FinMind"""
         import os as _os_rv, datetime as _dt_rv
         import pandas as _pd_rv
         _tok = (_os_rv.environ.get('FINMIND_TOKEN','') or
@@ -779,9 +778,9 @@ class StockDataLoader:
         start_date = end_date - _dt_rv.timedelta(days=1095)
         start_str  = start_date.strftime('%Y-%m-%d')
         df_revenue = None
-        _rev_src = 'unknown'   # v18.202 E2嚗??鞈?皞?finmind / mops / missing嚗?
+        _rev_src = 'unknown'   # v18.202 E2：月營收資料源（finmind / mops / missing）
 
-        # ?? ?寞?0: FinMind TaiwanStockMonthRevenue嚗??MOPS year-file?券404嚗?
+        # ── 方案0: FinMind TaiwanStockMonthRevenue（優先，MOPS year-file全部404）
         if _tok and df_revenue is None:
             try:
                 _r_fm0 = _bps_dl().get(
@@ -801,12 +800,12 @@ class StockDataLoader:
                         _df0r['date'] = _pd_rv.to_datetime(_df0r['date'])
                         df_revenue = _df0r.sort_values('date').reset_index(drop=True)
                         _rev_src = 'finmind'   # v18.202 E2
-                        print(f'[FM-Rev0] {stock_id}: ??{len(df_revenue)}蝑?)
+                        print(f'[FM-Rev0] {stock_id}: ✅ {len(df_revenue)}筆')
             except Exception as _e0r:
-                print(f'[FM-Rev0] {stock_id}: ??{type(_e0r).__name__}: {_e0r}')
+                print(f'[FM-Rev0] {stock_id}: ❌ {type(_e0r).__name__}: {_e0r}')
 
 
-        # ?? ?寞?0: FinMind ???塚??芸?嚗?MOPS 撟港遢HTML?券404嚗????
+        # ── 方案0: FinMind 月營收（優先，因MOPS 年份HTML全部404）────
         if df_revenue is None and _tok:
             try:
                 _rfm0 = _bps_dl().get(
@@ -825,11 +824,11 @@ class StockDataLoader:
                         _dffm0['date'] = _pd_rv.to_datetime(_dffm0['date'])
                         df_revenue = _dffm0.sort_values('date').reset_index(drop=True)
                         _rev_src = 'finmind'   # v18.202 E2
-                        print(f'[FM-Rev] {stock_id}: ??{len(df_revenue)}蝑?)
+                        print(f'[FM-Rev] {stock_id}: ✅ {len(df_revenue)}筆')
             except Exception as _efm0:
-                print(f'[FM-Rev] {stock_id}: ??{type(_efm0).__name__}: {_efm0}')
+                print(f'[FM-Rev] {stock_id}: ❌ {type(_efm0).__name__}: {_efm0}')
 
-        # ?? ?寞?A: MOPS ???塚?摰靘?嚗? Token嚗??????????
+        # ── 方案A: MOPS 月營收（官方來源，無需 Token）──────────
         try:
             import pandas as _pd_mops
             _today_rv = _dt_rv.date.today()
@@ -851,11 +850,11 @@ class StockDataLoader:
                         for _dm2 in _dfs_m2:
                             _dm2.columns = [str(c) for c in _dm2.columns]
                             _id_c = next((c for c in _dm2.columns if
-                                any(k in c for k in ['隞??','?∠巨隞?Ⅳ','?砍隞??'])), None)
+                                any(k in c for k in ['代號','股票代碼','公司代號'])), None)
                             _rv_c = next((c for c in _dm2.columns if
-                                '?嗆?' in c and ('?? in c or '?' in c)), None)
+                                '當月' in c and ('收' in c or '營收' in c)), None)
                             _yoy_c = next((c for c in _dm2.columns if
-                                'YoY' in c or '撟游?' in c), None)
+                                'YoY' in c or '年增' in c), None)
                             if not _id_c or not _rv_c: continue
                             _row2 = _dm2[_dm2[_id_c].astype(str).str.strip()==str(stock_id)]
                             if _row2.empty: continue
@@ -873,14 +872,14 @@ class StockDataLoader:
                             df_revenue = _pd_mops.DataFrame(_mops_rows2)
                             df_revenue['date'] = _pd_mops.to_datetime(df_revenue['date'])
                             _rev_src = 'mops'   # v18.202 E2
-                            print(f'[MOPS-Rev] {stock_id}: ??{len(df_revenue)} 蝑?)
+                            print(f'[MOPS-Rev] {stock_id}: ✅ {len(df_revenue)} 筆')
                             break
                     except: continue
                 if df_revenue is not None: break
         except Exception as _eM_rv:
             print(f'[MOPS-Rev] {stock_id}: {_eM_rv}')
 
-        # ?? ?寞?B: FinMind TaiwanStockMonthRevenue嚗PI嚗?Token嚗??
+        # ── 方案B: FinMind TaiwanStockMonthRevenue（API，需Token）──
         if df_revenue is None and _tok:
             try:
                 import requests as _rq_fm_rv
@@ -896,8 +895,8 @@ class StockDataLoader:
                 print(f'[FM-Rev] {stock_id}: status={_j.get("status")} rows={len(_j.get("data",[]))}')
                 if _j.get('status') == 200 and _j.get('data'):
                     _df = _pd_rv.DataFrame(_j['data'])
-                    # 甈?嚗ate, revenue, revenue_year, revenue_month
-                    # 蝯曹?甈???
+                    # 欄位：date, revenue, revenue_year, revenue_month
+                    # 統一欄位名
                     _rename = {}
                     for _c in _df.columns:
                         if 'revenue' == _c.lower(): _rename[_c] = 'revenue'
@@ -911,11 +910,11 @@ class StockDataLoader:
                         _df = _df.sort_values('date')
                         df_revenue = _df
                         _rev_src = 'finmind'   # v18.202 E2
-                        print(f'[FM-Rev] {stock_id}: ??{len(df_revenue)} 蝑?)
+                        print(f'[FM-Rev] {stock_id}: ✅ {len(df_revenue)} 筆')
             except Exception as _eF:
                 print(f'[FM-Rev] {stock_id}: {_eF}')
 
-        # ?? ?寞?B2: MOPS 瘥僑?遢蝯梯?銵剁???孵?嚗???????????????
+        # ── 方案B2: MOPS 每年月份統計表（備援方式）───────────────
         if df_revenue is None:
             try:
                 _mops_rows = []
@@ -931,11 +930,11 @@ class StockDataLoader:
                     _dfs_m = _pd_rv.read_html(_rm.text)
                     for _dm in _dfs_m:
                         _dm.columns = [str(c) for c in _dm.columns]
-                        # ?曆誨蝣潭?
+                        # 找代碼欄
                         _id_col = next((c for c in _dm.columns
-                                        if any(k in c for k in ['隞??','?∠巨隞?Ⅳ','?砍隞??'])), None)
+                                        if any(k in c for k in ['代號','股票代碼','公司代號'])), None)
                         _rv_col = next((c for c in _dm.columns
-                                        if '?嗆?' in c and ('?? in c or '?' in c)), None)
+                                        if '當月' in c and ('收' in c or '營收' in c)), None)
                         if not _id_col or not _rv_col: continue
                         _row = _dm[_dm[_id_col].astype(str).str.strip() == str(stock_id)]
                         if _row.empty: continue
@@ -950,63 +949,63 @@ class StockDataLoader:
                     df_revenue = _pd_rv.DataFrame(_mops_rows)
                     df_revenue['date'] = _pd_rv.to_datetime(df_revenue['date'])
                     _rev_src = 'mops'   # v18.202 E2
-                    print(f'[MOPS-Rev] {stock_id}: ??{len(df_revenue)} 蝑?)
+                    print(f'[MOPS-Rev] {stock_id}: ✅ {len(df_revenue)} 筆')
             except Exception as _eM:
                 print(f'[MOPS-Rev] {stock_id}: {_eM}')
 
         if df_revenue is not None and not df_revenue.empty:
-            # 閮? YoY
+            # 計算 YoY
             if 'revenue' in df_revenue.columns:
                 df_revenue['yoy'] = df_revenue['revenue'].pct_change(12) * 100
             _stamp_finreport_attrs(df_revenue, 'rev', _rev_src)   # v18.202 E2
             return df_revenue, None
-        return None, '???塚????皞?憭望?嚗OPS/FinMind嚗?
+        return None, '月營收：所有來源均失敗（MOPS/FinMind）'
 
     def get_quarterly_data(_self, stock_id):
-        """頛餈?撟游迤摨西瓷???摮???嗚迤瘥??
+        """載入近3年季度財務數據（季營收、季毛利率）
 
-        ?箔??踹?銝?鞈?皞??ype??雿撘?銝?湛?靘?嚗1/Q2?迤?晞uarter 蝑?嚗?
-        ?ㄐ?∠??撖祇??? ???閬?颲刻?摮?漲???孵?嚗?擃?????
+        為了避免不同資料源的「type」欄位格式不一致（例如：Q1/Q2、季報、Quarter 等），
+        這裡採用「先寬鬆取回 → 再用規則辨識季度」的方式，提高成功率。
         """
         try:
             import re
-            # ??餈?3 撟渲???蝝?12 摮?+ buffer嚗?
+            # 取回近 3 年資料（約 12 季 + buffer）
             end_date = datetime.date.today()
             start_date = end_date - datetime.timedelta(days=1200)
             start_str = start_date.strftime('%Y-%m-%d')
 
-            # ?岫 FinMind REST API
+            # 先試 FinMind REST API
             df_fin = None
-            _qtr_src = 'unknown'   # v18.202 E2嚗迤鞎∪鞈?皞?finmind_rest / finmind_sdk / yfinance / missing嚗?
+            _qtr_src = 'unknown'   # v18.202 E2：季財報資料源（finmind_rest / finmind_sdk / yfinance / missing）
             try:
                 import os as _os_q; import requests as _rq_q
                 _tok_q = _os_q.environ.get('FINMIND_TOKEN', '')
-                # ?祥??TaiwanStockFinancialStatement嚗s嚗?隞祥???嚗?閰?
+                # 免費版：TaiwanStockFinancialStatement（無s）；付費版：有s；兩個都試
                 _df_q_tmp = None
                 for _ds_q in ['TaiwanStockFinancialStatement', 'TaiwanStockFinancialStatements']:
                     try:
                         _pq = {'dataset': _ds_q, 'data_id': stock_id, 'start_date': start_str}
-                        if _tok_q: _pq['token'] = _tok_q  # FinMind v4 ?閬?token ??params
+                        if _tok_q: _pq['token'] = _tok_q  # FinMind v4 需要 token 在 params
                         _resp_q = _rq_q.get('https://api.finmindtrade.com/api/v4/data',
                             params=_pq,
                             headers={'Authorization': f'Bearer {_tok_q}'} if _tok_q else {},
                             timeout=25)
                         _jd_q = _resp_q.json()
-                        print(f'[摮?瓷?崇EST/{_ds_q}] {stock_id} status={_jd_q.get("status")}, rows={len(_jd_q.get("data",[]))}')
+                        print(f'[季財報REST/{_ds_q}] {stock_id} status={_jd_q.get("status")}, rows={len(_jd_q.get("data",[]))}')
                         if _jd_q.get('data'):
                             _types = list(set(r.get('type','') for r in _jd_q['data'][:30]))
                         if _jd_q.get('status') == 200 and _jd_q.get('data'):
                             _df_q_tmp = pd.DataFrame(_jd_q['data'])
                             break
                     except Exception as _eq2:
-                        print(f'[摮?瓷?崇EST/{_ds_q}] {_eq2}')
+                        print(f'[季財報REST/{_ds_q}] {_eq2}')
                 if _df_q_tmp is not None and not _df_q_tmp.empty:
                     df_fin = _df_q_tmp
                     _qtr_src = 'finmind_rest'   # v18.202 E2
             except Exception as _eq:
-                print(f'[摮?瓷?崇EST] {_eq}')
+                print(f'[季財報REST] {_eq}')
 
-            # ?: FinMind Library
+            # 備援: FinMind Library
             if df_fin is None or df_fin.empty:
                 try:
                     df_fin = _self.dl.taiwan_stock_financial_statement(
@@ -1016,7 +1015,7 @@ class StockDataLoader:
                 except Exception: pass
 
             if df_fin is None or df_fin.empty:
-                # ?? ?: yfinance 摮?漲 ??
+                # ── 備援: yfinance 季度 ──
                 try:
                     import yfinance as _yf_q
                     for _sfx_q in ('.TW', '.TWO'):
@@ -1027,7 +1026,7 @@ class StockDataLoader:
                             break
                     if _qf_q is not None and not _qf_q.empty:
                         _rows_yf = []
-                        # ?曉 Revenue ??Gross Profit ??index label
+                        # 找出 Revenue 和 Gross Profit 的 index label
                         _rev_row = next((idx for idx in _qf_q.index if any(k in str(idx) for k in ['Revenue','Total Revenue','revenue'])), None)
                         _gp_row  = next((idx for idx in _qf_q.index if 'Gross Profit' in str(idx) or 'GrossProfit' in str(idx)), None)
                         for _col_q in _qf_q.columns:
@@ -1037,22 +1036,22 @@ class StockDataLoader:
                             _gp_val  = float(_qf_q.loc[_gp_row,  _col_q]) if _gp_row  is not None else float('nan')
                             _rows_yf.append({'date': _dt_q.strftime('%Y-%m-%d'),
                                               'type': f'Q{_qt_num}', 'value': _rev_val,
-                                              'origin_name': '?平?嗅??', 'stock_id': stock_id})
+                                              'origin_name': '營業收入合計', 'stock_id': stock_id})
                             if not pd.isna(_gp_val):
                                 _rows_yf.append({'date': _dt_q.strftime('%Y-%m-%d'),
                                                   'type': f'Q{_qt_num}', 'value': _gp_val,
-                                                  'origin_name': '瘥', 'stock_id': stock_id})
+                                                  'origin_name': '毛利', 'stock_id': stock_id})
                         if _rows_yf:
                             df_fin = pd.DataFrame(_rows_yf)
                             _qtr_src = 'yfinance'   # v18.202 E2
-                            print(f"[yfinance QTR] {stock_id}: ??{len(df_fin)}蝑?(?急???{_gp_row is not None})")
+                            print(f"[yfinance QTR] {stock_id}: ✅ {len(df_fin)}筆 (含毛利:{_gp_row is not None})")
                 except Exception as _eYF_q:
                     print(f"[yfinance QTR] {stock_id}: {_eYF_q}")
 
             if df_fin is None or df_fin.empty:
-                return None, f"{stock_id} 摮?瓷?梧????皞?FinMind/yfinance嚗??∟???
+                return None, f"{stock_id} 季財報：所有來源（FinMind/yfinance）均無資料"
 
-            # ===== 0) ?斗?臬???∴??踹????砍?賊?頛臬??圈??嚗?====
+            # ===== 0) 判斷是否金融股（避免把一般公司邏輯套到金融股）=====
             def _is_financial_stock(_sid: str) -> bool:
                 try:
                     info = _self.dl.taiwan_stock_info()
@@ -1060,27 +1059,27 @@ class StockDataLoader:
                         m2 = info[info['stock_id'] == _sid]
                         if not m2.empty:
                             row = m2.iloc[0].to_dict()
-                            # ?岫敺?賜??Ｘ平甈??斗
-                            for k in ['industry_category', 'industry', 'category', 'type', '?Ｘ平??, '?Ｘ平憿', '?Ｘ平??', 'industry_category_zh']:
+                            # 嘗試從可能的產業欄位判斷
+                            for k in ['industry_category', 'industry', 'category', 'type', '產業別', '產業類別', '產業分類', 'industry_category_zh']:
                                 if k in row and row[k] is not None:
                                     s = str(row[k])
-                                    if any(w in s for w in ['??', '靽', '?', '?銵?, '霅']):
+                                    if any(w in s for w in ['金融', '保險', '金控', '銀行', '證券']):
                                         return True
                 except Exception:
                     pass
-                # 靽?嚗?⊿???蝢文虜閬誨蝣澆?蝬?
+                # 保底：台股金融族群常見代碼前綴
                 return str(_sid).startswith(('28', '58'))
 
             is_finance = _is_financial_stock(stock_id)
 
-            # ===== ???∴?摮???嗆?具???蜇??瘥??閮? =====
+            # ===== 金融股：季營收改用「月營收加總」；毛利率不計算 =====
             if is_finance:
                 try:
                     df_m, err_m = _self.get_monthly_revenue(stock_id)
                     if err_m is None and df_m is not None and not df_m.empty:
                         df_m = df_m.copy()
-                        col_date = '?交?' if '?交?' in df_m.columns else ('date' if 'date' in df_m.columns else None)
-                        col_rev  = '?' if '?' in df_m.columns else ('revenue' if 'revenue' in df_m.columns else None)
+                        col_date = '日期' if '日期' in df_m.columns else ('date' if 'date' in df_m.columns else None)
+                        col_rev  = '營收' if '營收' in df_m.columns else ('revenue' if 'revenue' in df_m.columns else None)
                         if col_date is not None and col_rev is not None:
                             df_m[col_date] = pd.to_datetime(df_m[col_date], errors='coerce')
                             df_m = df_m.dropna(subset=[col_date]).sort_values(col_date)
@@ -1088,43 +1087,43 @@ class StockDataLoader:
                             df_m['_q'] = (((df_m[col_date].dt.month - 1) // 3) + 1).astype('int64')
                             df_m[col_rev] = pd.to_numeric(df_m[col_rev], errors='coerce')
                             qsum = df_m.groupby(['_y', '_q'])[col_rev].sum().reset_index()
-                            qsum = qsum.rename(columns={'_y': '撟游漲', '_q': '摮?漲', col_rev: '?'})
-                            qsum['摮?漲璅惜'] = qsum['撟游漲'].astype(str) + 'Q' + qsum['摮?漲'].astype(str)
-                            qsum['瘥??] = pd.NA
-                            qsum['瘥??蝔?] = '瘥??
-                            qsum['?臬????] = True
+                            qsum = qsum.rename(columns={'_y': '年度', '_q': '季度', col_rev: '營收'})
+                            qsum['季度標籤'] = qsum['年度'].astype(str) + 'Q' + qsum['季度'].astype(str)
+                            qsum['毛利率'] = pd.NA
+                            qsum['毛利率名稱'] = '毛利率'
+                            qsum['是否金融股'] = True
                             return qsum, None
                 except Exception:
-                    # ?交???蜇銋仃???匱蝥粥銝???祇?頛荔??踹??湔挾銝剜嚗?
+                    # 若月營收加總也失敗，才繼續走下面的原本邏輯（避免整段中斷）
                     pass
 
 
-            # ===== ?日鞈?嚗????其??斗 API 甈??澆?嚗?====
-            print(f"甈?: {df_fin.columns.tolist()}")
-            print(f"蝮賜??? {len(df_fin)}")
+            # ===== 除錯資訊（保留，用來判斷 API 欄位格式）=====
+            print(f"欄位: {df_fin.columns.tolist()}")
+            print(f"總筆數: {len(df_fin)}")
 
-            # ===== 1) ??閰西儘霅迤摨艾???=====
+            # ===== 1) 先嘗試辨識「季度」資料 =====
             df_work = df_fin.copy()
 
-            # ??鞈?? type 銵函內摮?漲/撟游漲嚗???type 頧?摮葡靘踵?斗
+            # 有些資料會用 type 表示季度/年度；先把 type 轉成字串便於判斷
             if 'type' in df_work.columns:
                 df_work['type'] = df_work['type'].astype(str)
                 type_uniques = sorted(df_work['type'].dropna().unique().tolist())
 
-                # 撣貉?摮?漲??嚗1/Q2/Q3/Q4??Q/2Q...?迤?晞uarter?迤
-                q_mask = df_work['type'].str.contains(r"(?:^Q[1-4]$|^[1-4]Q$|摮ㄍ摮?|quarter)", case=False, na=False)
+                # 常見季度型態：Q1/Q2/Q3/Q4、1Q/2Q...、季報、Quarter、季
+                q_mask = df_work['type'].str.contains(r"(?:^Q[1-4]$|^[1-4]Q$|季|季報|quarter)", case=False, na=False)
                 df_q = df_work[q_mask].copy()
 
-                # ?仿?瞈曉??蝛綽?隞?” type 銝?車?澆?嚗?憒?祆?????嚗停???券?鞈?
+                # 若過濾後反而全空，代表 type 不是這種格式（例如根本沒有區分），就退回用全量資料
                 if not df_q.empty:
                     df_work = df_q
-                # else: type甈??澆?銝泵嚗匱蝥蝙?典????
+                # else: type欄位格式不符，繼續使用全量資料
 
-            # ===== 2) Pivot嚗ate x 蝘 =====
+            # ===== 2) Pivot：date x 科目 =====
             need_cols = {'date', 'origin_name', 'value'}
             if not need_cols.issubset(set(df_work.columns)):
-                # 蝻箸?雿停?湔?嚗蒂???桀?甈?嚗靘踹?雿?
-                return None, f"摮?漲鞎∪甈?銝雲嚗?閬?date/origin_name/value嚗??桀??芣?: {', '.join(df_work.columns.astype(str).tolist()[:20])}"
+                # 缺欄位就直接回報，並附上目前欄位，方便定位
+                return None, f"季度財報欄位不足（需要 date/origin_name/value），目前只有: {', '.join(df_work.columns.astype(str).tolist()[:20])}"
 
             df_pivot = df_work.pivot_table(
                 index=['date'],
@@ -1133,122 +1132,122 @@ class StockDataLoader:
                 aggfunc='first'
             ).reset_index()
 
-            # date 頧???
+            # date 轉時間
             df_pivot['date'] = pd.to_datetime(df_pivot['date'], errors='coerce')
             df_pivot = df_pivot[df_pivot['date'].notna()].copy()
             if df_pivot.empty:
-                return None, "摮?漲鞎∪?交?甈??⊥?閫??"
+                return None, "季度財報日期欄位無法解析"
 
-            # ===== 3) 撱箇?摮?漲璅惜 =====
+            # ===== 3) 建立季度標籤 =====
             df_quarterly = pd.DataFrame()
-            df_quarterly['撟游漲'] = df_pivot['date'].dt.year
-            df_quarterly['摮?漲'] = ((df_pivot['date'].dt.month - 1) // 3) + 1
-            df_quarterly['摮?漲璅惜'] = df_quarterly['撟游漲'].astype(int).astype(str) + 'Q' + df_quarterly['摮?漲'].astype(int).astype(str)
+            df_quarterly['年度'] = df_pivot['date'].dt.year
+            df_quarterly['季度'] = ((df_pivot['date'].dt.month - 1) // 3) + 1
+            df_quarterly['季度標籤'] = df_quarterly['年度'].astype(int).astype(str) + 'Q' + df_quarterly['季度'].astype(int).astype(str)
 
-            # ===== 4) ?整??嗚?雿?銝?砍?詨????????冽???蜇雿摮?漲?嚗?====
+            # ===== 4) 找「營收」欄位（一般公司優先；金融股/金控用月營收加總作為季度營收）=====
             is_finance = False
             revenue_candidates = []
             for col in df_pivot.columns:
                 c = str(col)
-                if any(k in c for k in ['?平?嗅', '?嗅??', '?']) or re.search(r"\brevenue\b", c, re.I):
+                if any(k in c for k in ['營業收入', '收入合計', '營收']) or re.search(r"\brevenue\b", c, re.I):
                     revenue_candidates.append(col)
 
-            # ??/靽撣貉????嗡誨??雿?銝?摰??潛??塚?雿?其??斗?臬?粹??嚗?
+            # 金融/保險常見的「營收代理」欄位（不一定等於營收，但可用來判斷是否為金融股）
             finance_candidates = []
             for col in df_pivot.columns:
                 c = str(col)
-                if any(k in c for k in ['瘛冽??, '?拇瘛冽??, '?拇隞亙?瘛冽??, '靽鞎皞?瘛刻???]) or re.search(r"interest\s*net\s*income|net\s*interest|net\s*revenue", c, re.I):
+                if any(k in c for k in ['淨收益', '利息淨收益', '利息以外淨收益', '保險負債準備淨變動']) or re.search(r"interest\s*net\s*income|net\s*interest|net\s*revenue", c, re.I):
                     finance_candidates.append(col)
 
             if revenue_candidates:
                 rev_col = revenue_candidates[0]
-                df_quarterly['?'] = pd.to_numeric(df_pivot[rev_col], errors='coerce')
+                df_quarterly['營收'] = pd.to_numeric(df_pivot[rev_col], errors='coerce')
             else:
-                # ?曆??唬??祉??嗆?雿?敺?賣?????
+                # 找不到一般營收欄位：很可能是金融股/金控
                 is_finance = True if finance_candidates else True
-                # ?鞎∪銝剔?隞??甈?憓?嚗?征?潘?嚗?蝥??具???蜇???迤摨衣???
+                # 先用財報中的代理欄位墊底（避免空值），後續會用「月營收加總」覆蓋季度營收
                 if finance_candidates:
                     rev_col = finance_candidates[0]
-                    df_quarterly['?'] = pd.to_numeric(df_pivot[rev_col], errors='coerce')
+                    df_quarterly['營收'] = pd.to_numeric(df_pivot[rev_col], errors='coerce')
                 else:
-                    df_quarterly['?'] = pd.NA
+                    df_quarterly['營收'] = pd.NA
 
-            # ???∴?摮?漲?銝敺誑??? 3 ???蜇?皞?撠??頠??迤?嚗?
+            # 金融股：季度營收一律以「月營收 3 個月加總」為準（對齊看盤軟體的季營收）
             if is_finance:
                 df_month, _merr = _self.get_monthly_revenue(stock_id)
                 if df_month is not None and not df_month.empty:
-                    dfm = df_month[['撟?, '??, '?']].copy()
-                    dfm['?交?'] = pd.to_datetime(dfm['撟?].astype(str) + '-' + dfm['??].astype(int).astype(str).str.zfill(2) + '-01', errors='coerce')
-                    dfm = dfm[dfm['?交?'].notna()].copy()
-                    dfm['撟游漲'] = dfm['?交?'].dt.year.astype(int)
-                    dfm['摮?漲'] = (((dfm['?交?'].dt.month - 1) // 3) + 1).astype(int)
-                    qsum = dfm.groupby(['撟游漲', '摮?漲'], as_index=False)['?'].sum()
-                    # ?典?銝脤?蔥嚗??pandas ?其??像?啁??int/int64 factorize mismatch
-                    df_quarterly['yq_key'] = df_quarterly['撟游漲'].astype(int).astype(str) + 'Q' + df_quarterly['摮?漲'].astype(int).astype(str)
-                    qsum['yq_key'] = qsum['撟游漲'].astype(int).astype(str) + 'Q' + qsum['摮?漲'].astype(int).astype(str)
-                    df_quarterly = df_quarterly.merge(qsum[['yq_key', '?']].rename(columns={'?': '?_??蝮?}), on='yq_key', how='left')
-                    df_quarterly['?'] = pd.to_numeric(df_quarterly['?_??蝮?], errors='coerce').fillna(pd.to_numeric(df_quarterly['?'], errors='coerce'))
-                    df_quarterly = df_quarterly.drop(columns=['?_??蝮?])
+                    dfm = df_month[['年', '月', '營收']].copy()
+                    dfm['日期'] = pd.to_datetime(dfm['年'].astype(str) + '-' + dfm['月'].astype(int).astype(str).str.zfill(2) + '-01', errors='coerce')
+                    dfm = dfm[dfm['日期'].notna()].copy()
+                    dfm['年度'] = dfm['日期'].dt.year.astype(int)
+                    dfm['季度'] = (((dfm['日期'].dt.month - 1) // 3) + 1).astype(int)
+                    qsum = dfm.groupby(['年度', '季度'], as_index=False)['營收'].sum()
+                    # 用字串鍵合併，避免 pandas 在不同平台發生 int/int64 factorize mismatch
+                    df_quarterly['yq_key'] = df_quarterly['年度'].astype(int).astype(str) + 'Q' + df_quarterly['季度'].astype(int).astype(str)
+                    qsum['yq_key'] = qsum['年度'].astype(int).astype(str) + 'Q' + qsum['季度'].astype(int).astype(str)
+                    df_quarterly = df_quarterly.merge(qsum[['yq_key', '營收']].rename(columns={'營收': '營收_月加總'}), on='yq_key', how='left')
+                    df_quarterly['營收'] = pd.to_numeric(df_quarterly['營收_月加總'], errors='coerce').fillna(pd.to_numeric(df_quarterly['營收'], errors='coerce'))
+                    df_quarterly = df_quarterly.drop(columns=['營收_月加總'])
                 else:
-                    pass  # ???嗅?蝮賢仃??蝜潛??刻瓷?勗?憪?
+                    pass  # 月營收加總失敗，繼續用財報原始值
 
-            # ?身???迂
-            df_quarterly['瘥??蝔?] = '瘥??
-            # ===== 5) 瘥???芸??冽??抬?瘝?撠梁(?-?) =====
-            # ???∴?銝?蝞??拍?嚗?函?敺???(%) ?誨嚗蝞??箏??征
+            # 預設指標名稱
+            df_quarterly['毛利率名稱'] = '毛利率'
+            # ===== 5) 毛利率：優先用毛利，沒有就用(營收-成本) =====
+            # 金融股：不計算毛利率，改用稅後純益率(%) 取代；若算不出則留空
             if is_finance:
                 net_col = None
                 for col in df_pivot.columns:
                     c = str(col)
-                    if any(k in c for k in ['?祆?蝔?瘛典', '蝔?瘛典', '瘛典嚗楊??', '蝜潛??平?桐??祆?瘛典']) or re.search(r"income\s*after\s*tax|net\s*income", c, re.I):
+                    if any(k in c for k in ['本期稅後淨利', '稅後淨利', '淨利（淨損）', '繼續營業單位本期淨利']) or re.search(r"income\s*after\s*tax|net\s*income", c, re.I):
                         net_col = col
                         break
                 if net_col is not None:
                     net_income = pd.to_numeric(df_pivot[net_col], errors='coerce')
-                    df_quarterly['瘥??] = (net_income / pd.to_numeric(df_quarterly['?'], errors='coerce') * 100).round(2)
-                    df_quarterly['瘥??蝔?] = '蝔?蝝???
+                    df_quarterly['毛利率'] = (net_income / pd.to_numeric(df_quarterly['營收'], errors='coerce') * 100).round(2)
+                    df_quarterly['毛利率名稱'] = '稅後純益率'
                 else:
-                    df_quarterly['瘥??] = float('nan')
-                    df_quarterly['瘥??蝔?] = '蝔?蝝???
+                    df_quarterly['毛利率'] = float('nan')
+                    df_quarterly['毛利率名稱'] = '稅後純益率'
 
-            # 銝?砍?賂??扯?閮?瘥?????∪歇?其???if is_finance ?憛???甇方??仿?嚗?
+            # 一般公司：照舊計算毛利率（金融股已在上方 if is_finance 區塊處理，此處略過）
             if not is_finance:
-                # ?芸?嚗?交??拍?(%)甈?嚗?????湔蝯衣??嚗?
-                _gm_pct_col = next((col for col in df_pivot.columns if '瘥?? in str(col)), None)
+                # 優先：直接毛利率(%)欄位（部分資料源直接給百分比）
+                _gm_pct_col = next((col for col in df_pivot.columns if '毛利率' in str(col)), None)
                 if _gm_pct_col is not None:
                     _gm_vals = pd.to_numeric(df_pivot[_gm_pct_col], errors='coerce')
                     if _gm_vals.notna().any():
-                        df_quarterly['瘥??] = _gm_vals.values
-                        print(f'[瘥? ?湔甈? {_gm_pct_col}: ??)
+                        df_quarterly['毛利率'] = _gm_vals.values
+                        print(f'[毛利率] 直接欄位 {_gm_pct_col}: ✅')
                     else:
-                        _gm_pct_col = None  # 甈??沐aN嚗匱蝥銝??蝞?
+                        _gm_pct_col = None  # 欄位全NaN，繼續用下面的計算
 
                 if _gm_pct_col is None:
                     gp_col = None
                     for col in df_pivot.columns:
                         c = str(col)
-                        if any(k in c for k in ['瘥', '?平瘥']) or re.search(r"gross\s*profit", c, re.I):
+                        if any(k in c for k in ['毛利', '營業毛利']) or re.search(r"gross\s*profit", c, re.I):
                             gp_col = col
                             break
 
                     if gp_col is not None:
                         gp = pd.to_numeric(df_pivot[gp_col], errors='coerce')
-                        df_quarterly['瘥??] = (gp / df_quarterly['?'] * 100).round(2)
+                        df_quarterly['毛利率'] = (gp / df_quarterly['營收'] * 100).round(2)
                     else:
                         cost_col = None
                         for col in df_pivot.columns:
                             c = str(col)
-                            if any(k in c for k in ['?平?', '???']) or re.search(r"cost\s+of\s+revenue|cost\s+of\s+goods", c, re.I):
+                            if any(k in c for k in ['營業成本', '成本合計']) or re.search(r"cost\s+of\s+revenue|cost\s+of\s+goods", c, re.I):
                                 cost_col = col
                                 break
 
                         if cost_col is not None:
                             cost = pd.to_numeric(df_pivot[cost_col], errors='coerce')
-                            df_quarterly['瘥??] = ((df_quarterly['?'] - cost) / df_quarterly['?'] * 100).round(2)
+                            df_quarterly['毛利率'] = ((df_quarterly['營收'] - cost) / df_quarterly['營收'] * 100).round(2)
                         else:
-                            df_quarterly['瘥??] = float('nan')
-                            print(f"?? ?⊥??曉瘥/?甈?嚗?冽?雿? {[str(c) for c in df_pivot.columns[:15]]}")
-                            # ?? Fix C: 鋆? yfinance 瘥????????????????????????
+                            df_quarterly['毛利率'] = float('nan')
+                            print(f"⚠️ 無法找到毛利/成本欄位，可用欄位: {[str(c) for c in df_pivot.columns[:15]]}")
+                            # ── Fix C: 補充 yfinance 毛利率 ──────────────────────
                             try:
                                 import yfinance as _yf_gps
                                 for _sfx_g in ('.TW', '.TWO'):
@@ -1261,24 +1260,24 @@ class StockDataLoader:
                                         if _gp_r and _rv_r:
                                             for _qc in _qi_g.columns:
                                                 _qts = f"{_qc.year}Q{((_qc.month-1)//3)+1}"
-                                                _mk = df_quarterly['摮?漲璅惜'] == _qts
+                                                _mk = df_quarterly['季度標籤'] == _qts
                                                 if _mk.any():
                                                     _gv = float(_qi_g.loc[_gp_r, _qc])
                                                     _rv = float(_qi_g.loc[_rv_r, _qc])
                                                     if _rv > 0 and not pd.isna(_gv):
-                                                        df_quarterly.loc[_mk, '瘥??] = round(_gv / _rv * 100, 2)
-                                            _non_nan = df_quarterly['瘥??].notna().sum()
-                                            print(f'[瘥? yfinance鋆? {stock_id}{_sfx_g}: ?aN={_non_nan}')
+                                                        df_quarterly.loc[_mk, '毛利率'] = round(_gv / _rv * 100, 2)
+                                            _non_nan = df_quarterly['毛利率'].notna().sum()
+                                            print(f'[毛利率] yfinance補充 {stock_id}{_sfx_g}: 非NaN={_non_nan}')
                                             if _non_nan > 0:
                                                 break
                             except Exception as _egp:
-                                print(f'[瘥? yfinance鋆?憭望?: {_egp}')
+                                print(f'[毛利率] yfinance補充失敗: {_egp}')
 
-            # ===== 5b) EPS嚗??∠?擗?=====
+            # ===== 5b) EPS：每股盈餘 =====
             eps_col = None
             for col in df_pivot.columns:
                 c = str(col)
-                if any(k in c for k in ['瘥??', '?箸瘥', 'EPS']) or re.search(r"basic\s*eps|earnings\s*per\s*share", c, re.I):
+                if any(k in c for k in ['每股盈餘', '基本每股', 'EPS']) or re.search(r"basic\s*eps|earnings\s*per\s*share", c, re.I):
                     eps_col = col
                     break
             if eps_col is not None:
@@ -1286,26 +1285,26 @@ class StockDataLoader:
             else:
                 df_quarterly['EPS'] = float('nan')
 
-            # ===== 5d) 瘥???湛?yfinance quarterly_income_stmt嚗??蝔梁摰對? =====
-            if not is_finance and df_quarterly['瘥??].isna().all():
+            # ===== 5d) 毛利率備援：yfinance quarterly_income_stmt（含舊名稱相容） =====
+            if not is_finance and df_quarterly['毛利率'].isna().all():
                 try:
                     import yfinance as _yf_gp
                     for _yf_sfx in ('.TW', '.TWO'):
                         _tk_gp = _yf_gp.Ticker(f"{stock_id}{_yf_sfx}")
-                        # yfinance ??.2.36: quarterly_income_stmt; ????quarterly_financials
+                        # yfinance ≥0.2.36: quarterly_income_stmt; 舊版用 quarterly_financials
                         _qfin = (getattr(_tk_gp, 'quarterly_income_stmt', None)
                                  or getattr(_tk_gp, 'quarterly_financials', None))
                         if _qfin is not None and not _qfin.empty:
                             break
                     if _qfin is not None and not _qfin.empty:
-                        # ??GrossProfit ??Revenue嚗?蝔格?雿??詨捆嚗?
+                        # 取 GrossProfit 與 Revenue（多種欄位名相容）
                         _gp_row = next((r for r in _qfin.index if 'Gross' in str(r) and 'Profit' in str(r)), None)
                         if _gp_row is None:
                             _gp_row = next((r for r in _qfin.index if 'GrossProfit' in str(r).replace(' ', '')), None)
                         _rv_row = next((r for r in _qfin.index if 'Total' in str(r) and 'Revenue' in str(r)), None)
-                        if _rv_row is None:   # ?嚗peratingRevenue / 隞餅? Revenue
+                        if _rv_row is None:   # 備援：OperatingRevenue / 任意 Revenue
                             _rv_row = next((r for r in _qfin.index if 'Revenue' in str(r)), None)
-                        print(f'[yfinance 瘥? {stock_id}: gp={_gp_row}, rv={_rv_row}, cols={list(_qfin.index)[:6]}')
+                        print(f'[yfinance 毛利率] {stock_id}: gp={_gp_row}, rv={_rv_row}, cols={list(_qfin.index)[:6]}')
                         if _gp_row and _rv_row:
                             _yf_updated = 0
                             for _col in _qfin.columns:
@@ -1314,82 +1313,82 @@ class StockDataLoader:
                                     _yr_q = _ts.year; _mo_q = _ts.month
                                     _q_q  = ((_mo_q - 1) // 3) + 1
                                     _lbl  = f"{_yr_q}Q{_q_q}"
-                                    _mk   = df_quarterly.index[df_quarterly['摮?漲璅惜'] == _lbl]
-                                    if len(_mk) and pd.isna(df_quarterly.loc[_mk[0], '瘥??]):
+                                    _mk   = df_quarterly.index[df_quarterly['季度標籤'] == _lbl]
+                                    if len(_mk) and pd.isna(df_quarterly.loc[_mk[0], '毛利率']):
                                         _gp_v = float(_qfin.loc[_gp_row, _col])
                                         _rv_v = float(_qfin.loc[_rv_row, _col])
                                         if (not pd.isna(_gp_v) and not pd.isna(_rv_v)
                                                 and abs(_rv_v) > 0):
-                                            df_quarterly.loc[_mk[0], '瘥??] = round(_gp_v / _rv_v * 100, 2)
+                                            df_quarterly.loc[_mk[0], '毛利率'] = round(_gp_v / _rv_v * 100, 2)
                                             _yf_updated += 1
                                 except Exception: pass
                             if _yf_updated > 0:
-                                print(f'[yfinance 瘥? {stock_id}: ??{_yf_updated} 摮?)
+                                print(f'[yfinance 毛利率] {stock_id}: ✅ {_yf_updated} 季')
                 except Exception as _e_yf_gp:
-                    print(f'[yfinance 瘥? {stock_id}: {_e_yf_gp}')
+                    print(f'[yfinance 毛利率] {stock_id}: {_e_yf_gp}')
 
-            # ===== 5e) 銝?嚗?璆剖?? + 瘛典??敺?銝隞?income statement pivot ??嚗?====
+            # ===== 5e) 三率：營業利益率 + 淨利率（從同一份 income statement pivot 提取）=====
             if not is_finance:
-                # ?平?拍? (Operating Income)
+                # 營業利益 (Operating Income)
                 _oi_col = None
                 for col in df_pivot.columns:
                     c = str(col)
-                    if any(k in c for k in ['?平?拍?', '璆剖??拍?', '?平??']) or \
+                    if any(k in c for k in ['營業利益', '業務利益', '營業損益']) or \
                        re.search(r"operating.*(income|profit|loss)", c, re.I):
                         _oi_col = col; break
                 if _oi_col is not None:
                     _oi = pd.to_numeric(df_pivot[_oi_col], errors='coerce')
-                    _rev_denom = pd.to_numeric(df_quarterly['?'], errors='coerce').replace(0, float('nan'))
-                    df_quarterly['?平?拍???] = (_oi.values / _rev_denom.values * 100).round(2)
-                    print(f'[銝?] {stock_id}: ?平?拍???{_oi_col}')
+                    _rev_denom = pd.to_numeric(df_quarterly['營收'], errors='coerce').replace(0, float('nan'))
+                    df_quarterly['營業利益率'] = (_oi.values / _rev_denom.values * 100).round(2)
+                    print(f'[三率] {stock_id}: 營業利益率={_oi_col}')
                 else:
-                    df_quarterly['?平?拍???] = float('nan')
+                    df_quarterly['營業利益率'] = float('nan')
 
-                # 蝔?蝝? / ?祆?瘛典 (Net Income)
+                # 稅後純益 / 本期淨利 (Net Income)
                 _ni_col = None
                 for col in df_pivot.columns:
                     c = str(col)
-                    if any(k in c for k in ['蝔?蝝?', '?祆?瘛典', '?祆???', '蝔?瘛典',
-                                             '瘛典嚗楊??', '瘛冽???, '蝜潛??平?桐??祆?瘛典']) or \
+                    if any(k in c for k in ['稅後純益', '本期淨利', '本期損益', '稅後淨利',
+                                             '淨利（淨損）', '淨損益', '繼續營業單位本期淨利']) or \
                        re.search(r"net.*(income|profit|loss)|profit.*after.*tax", c, re.I):
                         _ni_col = col; break
                 if _ni_col is not None:
                     _ni = pd.to_numeric(df_pivot[_ni_col], errors='coerce')
-                    _rev_denom = pd.to_numeric(df_quarterly['?'], errors='coerce').replace(0, float('nan'))
-                    df_quarterly['瘛典??] = (_ni.values / _rev_denom.values * 100).round(2)
-                    print(f'[銝?] {stock_id}: 瘛典??{_ni_col}')
+                    _rev_denom = pd.to_numeric(df_quarterly['營收'], errors='coerce').replace(0, float('nan'))
+                    df_quarterly['淨利率'] = (_ni.values / _rev_denom.values * 100).round(2)
+                    print(f'[三率] {stock_id}: 淨利率={_ni_col}')
                 else:
-                    df_quarterly['瘛典??] = float('nan')
+                    df_quarterly['淨利率'] = float('nan')
             else:
-                # ???∴?銝?蝞???瘥??蝔勗歇?寧蝔?蝝???
-                df_quarterly['?平?拍???] = float('nan')
-                df_quarterly['瘛典??]     = float('nan')
+                # 金融股：不計算三率（毛利率名稱已改為稅後純益率）
+                df_quarterly['營業利益率'] = float('nan')
+                df_quarterly['淨利率']     = float('nan')
 
-            # ===== 6) 皜???摨?=====
-            df_quarterly = df_quarterly.dropna(subset=['?']).copy()
-            # ?????∴??迂鞎?嚗?鞈?憭梁?嚗?銝?砍?賂??蕪鞎
+            # ===== 6) 清洗與排序 =====
+            df_quarterly = df_quarterly.dropna(subset=['營收']).copy()
+            # ✅ 金融股：允許負數營收（投資損失等）；一般公司：過濾負數
             if not is_finance:
-                df_quarterly = df_quarterly[df_quarterly['?'] > 0].copy()
-            df_quarterly = df_quarterly.drop_duplicates(subset=['摮?漲璅惜'], keep='last')
-            df_quarterly = df_quarterly.sort_values(['撟游漲', '摮?漲']).tail(12).reset_index(drop=True)
+                df_quarterly = df_quarterly[df_quarterly['營收'] > 0].copy()
+            df_quarterly = df_quarterly.drop_duplicates(subset=['季度標籤'], keep='last')
+            df_quarterly = df_quarterly.sort_values(['年度', '季度']).tail(12).reset_index(drop=True)
 
             if df_quarterly.empty:
-                return None, "?亦??摮?漲鞈?嚗?質府?砍/鞈?皞??餈僑摮?嚗?
+                return None, "查無有效季度資料（可能該公司/資料源未提供近年季報）"
 
-            # ?? ?摮?璅? date 甈?嚗?鞈?閮箸?銵冽霈????????????????
+            # ── 加入季末標準 date 欄位，供資料診斷儀表板讀取 ──────────────
             _QTR_END = {1: '03-31', 2: '06-30', 3: '09-30', 4: '12-31'}
             df_quarterly['date'] = (
-                df_quarterly['撟游漲'].astype(int).astype(str) + '-'
-                + df_quarterly['摮?漲'].astype(int).map(_QTR_END)
+                df_quarterly['年度'].astype(int).astype(str) + '-'
+                + df_quarterly['季度'].astype(int).map(_QTR_END)
             )
 
-            print(f"????頛 {len(df_quarterly)} 蝑迤摨西???)
-            df_quarterly['?臬????] = is_finance
+            print(f"✓ 成功載入 {len(df_quarterly)} 筆季度資料")
+            df_quarterly['是否金融股'] = is_finance
 
-            # ???日嚗炎?交?行?鞎?
-            if (df_quarterly['?'] < 0).any():
-                print(f"?? ?潛鞎?嚗??={is_finance}嚗?")
-                neg_data = df_quarterly[df_quarterly['?'] < 0][['摮?漲璅惜', '?']]
+            # ✅ 除錯：檢查是否有負數營收
+            if (df_quarterly['營收'] < 0).any():
+                print(f"⚠️ 發現負數營收（金融股={is_finance}）:")
+                neg_data = df_quarterly[df_quarterly['營收'] < 0][['季度標籤', '營收']]
                 print(neg_data.to_string(index=False))
 
             _stamp_finreport_attrs(df_quarterly, 'qtr', _qtr_src)   # v18.202 E2
@@ -1398,17 +1397,17 @@ class StockDataLoader:
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return None, f"頛?航炊: {str(e)}"
+            return None, f"載入錯誤: {str(e)}"
 
     def get_quarterly_bs_cf(_self, stock_id):
         """
-        ??餈?12 摮?????Ｚ??菔” + ?暸?瘚???摨????冽??閮???
-        ?甈?嚗迤摨行?蝐? ??鞎, 摮疏, 鞈?臬嚗??箏?憪?憿??桐?嚗?????
-        鞈?靘?嚗inMind TaiwanStockBalanceSheet + TaiwanStockCashFlowsStatement
+        取得近 12 季的「資產負債表 + 現金流量」時序資料，用於前瞻動能計算。
+        回傳欄位：季度標籤, 合約負債, 存貨, 資本支出（皆為原始金額，單位：千元或元）
+        資料來源：FinMind TaiwanStockBalanceSheet + TaiwanStockCashFlowsStatement
         """
         try:
             import os as _os_bscf, datetime as _dt_bscf
-            _qtr_extra_src = 'unknown'   # v18.202 E2嚗迤鞎∪-extra 鞈?皞?finmind / finmind_mops / missing嚗?
+            _qtr_extra_src = 'unknown'   # v18.202 E2：季財報-extra 資料源（finmind / finmind_mops / missing）
             _tok = _os_bscf.environ.get('FINMIND_TOKEN', '')
             _start = (_dt_bscf.date.today() - _dt_bscf.timedelta(days=365 * 3)).strftime('%Y-%m-%d')
             _hdrs = {'Authorization': f'Bearer {_tok}'} if _tok else {}
@@ -1422,31 +1421,31 @@ class StockDataLoader:
                 print(f'[BS/CF] {stock_id} {dataset}: status={_j.get("status")} rows={len(_j.get("data",[]))}')
                 return _j.get('data', []) if _j.get('status') == 200 else []
 
-            # ?? Balance Sheet ????????????????????????????????????????
+            # ── Balance Sheet ────────────────────────────────────────
             _bs_rows = _fm_fetch('TaiwanStockBalanceSheet')
-            _bs_map = {}   # {date ??{type ??value}}
+            _bs_map = {}   # {date → {type → value}}
             for _row in _bs_rows:
                 _d = _row.get('date', '')
                 _bs_map.setdefault(_d, {})[_row.get('type', '')] = _row
                 _bs_map[_d][_row.get('origin_name', '')] = _row
 
-            # ?? Cash Flow ????????????????????????????????????????????
+            # ── Cash Flow ────────────────────────────────────────────
             _cf_rows = _fm_fetch('TaiwanStockCashFlowsStatement')
-            _cf_map = {}   # {date ??{type ??value}}
+            _cf_map = {}   # {date → {type → value}}
             for _row in _cf_rows:
                 _d = _row.get('date', '')
                 _cf_map.setdefault(_d, {})[_row.get('type', '')] = _row
                 _cf_map[_d][_row.get('origin_name', '')] = _row
 
             if not _bs_rows and not _cf_rows:
-                return None, f"{stock_id} BS+CF嚗inMind ?∟???
-            _qtr_extra_src = 'finmind'   # v18.202 E2嚗S/CF 銝餅??賭葉
+                return None, f"{stock_id} BS+CF：FinMind 無資料"
+            _qtr_extra_src = 'finmind'   # v18.202 E2：BS/CF 主源命中
 
-            # ?? 敶???曄?摮?漲?交? ??????????????????????????????
+            # ── 彙整所有出現的季度日期 ──────────────────────────────
             _all_dates = sorted(set(list(_bs_map.keys()) + list(_cf_map.keys())))
 
             def _val(d_map, d, keys):
-                """敺?d_map[d] 鋆⊥??芸????洵銝???嗅?""
+                """從 d_map[d] 裡按優先順序取第一個非零值"""
                 slot = d_map.get(d, {})
                 for k in keys:
                     r = slot.get(k)
@@ -1460,23 +1459,23 @@ class StockDataLoader:
             _CL_KEYS = ['CurrentContractLiabilities', 'NonCurrentContractLiabilities',
                         'ContractLiabilities', 'ContractLiabilitiesCurrent',
                         'ContractLiabilitiesNonCurrent',
-                        '??鞎', '??鞎-瘚?', '??鞎嚗???,
-                        '??鞎-????, '??鞎嚗?瘚?',
-                        '憟?鞎', '?甈暸?']
+                        '合約負債', '合約負債-流動', '合約負債－流動',
+                        '合約負債-非流動', '合約負債－非流動',
+                        '契約負債', '預收款項']
             _INV_KEYS = ['Inventories', 'InventoriesNet', 'Inventories_Net',
-                         '摮疏', '摮疏瘛券?', '??摮疏']
+                         '存貨', '存貨淨額', '商品存貨']
             _CX_KEYS  = ['AcquisitionOfPropertyPlantAndEquipment',
                          'PropertyAndPlantAndEquipment',
-                         '??銝??Ｕ??踹?閮剖?', '鞈潛蔭銝??Ｕ??踹?閮剖?', '鞈?臬']
-            # ??PP&E?暸?瘚嚗皜祈都撱??之鞈??嚗?
+                         '取得不動產、廠房及設備', '購置不動產、廠房及設備', '資本支出']
+            # 處分PP&E現金流入（偵測賣廠等重大資產處分）
             _DISP_KEYS = ['ProceedsFromDisposalOfPropertyPlantAndEquipment',
                           'SaleOfPropertyPlantAndEquipment',
                           'DisposalOfPropertyPlantAndEquipment',
-                          '??銝??Ｕ??踹?閮剖?銋????,
-                          '?箏銝??Ｕ??踹?閮剖??嗅',
-                          '???箏?鞈?嗅']
+                          '處分不動產、廠房及設備之現金流入',
+                          '出售不動產、廠房及設備收入',
+                          '處分固定資產收入']
 
-            # 撱箇? DataFrame 靘?蝝??菜芋蝟?撠?str.contains ??舫?嚗?
+            # 建立 DataFrame 供合約負債模糊比對（str.contains 最可靠）
             _bs_df_raw = pd.DataFrame(_bs_rows) if _bs_rows else pd.DataFrame()
             _has_bs_df = (not _bs_df_raw.empty and
                           'type' in _bs_df_raw.columns and
@@ -1493,11 +1492,11 @@ class StockDataLoader:
                     _lbl = f'{_yr}Q{_qt}'
                 except: continue
 
-                # ?? ??鞎嚗ataFrame str.contains嚗??舫?嚗項????dash 霈?嚗??
+                # ── 合約負債：DataFrame str.contains（最可靠，涵蓋所有 dash 變體）──
                 _cl = float('nan')
                 if _has_bs_df:
                     _cl_rows = _bs_df_raw[(_bs_df_raw['date'] == _d) &
-                                          _bs_df_raw['type'].str.contains('??鞎', na=False)]
+                                          _bs_df_raw['type'].str.contains('合約負債', na=False)]
                     if len(_cl_rows) > 0:
                         _cl_vals = pd.to_numeric(
                             _cl_rows['value'].astype(str).str.replace(',', '', regex=False),
@@ -1506,55 +1505,55 @@ class StockDataLoader:
                         if len(_cl_vals) > 0:
                             _cl = float(_cl_vals.sum())
                             print(f'[BS/CF] {stock_id} {_d} CL={_cl:.0f} ({len(_cl_rows)} rows via contains)')
-                # ?嚗移蝣?key ?交 + dict fuzzy
+                # 備援：精確 key 查找 + dict fuzzy
                 if isinstance(_cl, float) and _cl != _cl:  # isnan
                     _cl = _val(_bs_map, _d, _CL_KEYS)
                     if isinstance(_cl, float) and _cl != _cl:
                         _slot = _bs_map.get(_d, {})
                         _parts = [abs(float(str(_v.get('value', 0)).replace(',', '') or 0))
                                   for _k, _v in _slot.items()
-                                  if '??鞎' in str(_k) and isinstance(_v, dict)]
+                                  if '合約負債' in str(_k) and isinstance(_v, dict)]
                         _parts = [p for p in _parts if p > 0]
                         if _parts: _cl = sum(_parts)
 
                 _inv  = _val(_bs_map, _d, _INV_KEYS)
                 _cx   = _val(_cf_map, _d, _CX_KEYS)
                 _disp = _val(_cf_map, _d, _DISP_KEYS)
-                _records.append({'摮?漲璅惜': _lbl, '??鞎': _cl, '摮疏': _inv,
-                                  '鞈?臬': _cx, '??鞈?暸?瘚': _disp})
+                _records.append({'季度標籤': _lbl, '合約負債': _cl, '存貨': _inv,
+                                  '資本支出': _cx, '處分資產現金流入': _disp})
 
             if not _records:
-                return None, f"{stock_id} BS+CF嚗?圾?仃??
+                return None, f"{stock_id} BS+CF：日期解析失敗"
 
             df_extra = pd.DataFrame(_records)
-            df_extra = df_extra.drop_duplicates(subset=['摮?漲璅惜'], keep='last')
-            df_extra = df_extra.sort_values('摮?漲璅惜').tail(12).reset_index(drop=True)
-            # ?? ?摮?璅? date 甈?嚗?鞈?閮箸?銵冽霈????????????????
+            df_extra = df_extra.drop_duplicates(subset=['季度標籤'], keep='last')
+            df_extra = df_extra.sort_values('季度標籤').tail(12).reset_index(drop=True)
+            # ── 加入季末標準 date 欄位，供資料診斷儀表板讀取 ──────────────
             _QME = {1: '03-31', 2: '06-30', 3: '09-30', 4: '12-31'}
             def _qe2date(lbl):
                 try: return f'{lbl[:4]}-{_QME[int(lbl[5])]}'
                 except: return None
-            df_extra['date'] = df_extra['摮?漲璅惜'].apply(_qe2date)
+            df_extra['date'] = df_extra['季度標籤'].apply(_qe2date)
 
-            # ?? MOPS ?嚗inMind ???啣?蝝??菜?嚗???敺?1 摮???????????
-            # 靘?嚗ops.twse.com.tw/mops/web/ajax_t164sb03 (?蔥鞈鞎銵?
-            # 閫貊璇辣嚗?敺?1 摮?_cl ??NaN嚗??N?4 ?Ｙ?嚗?
+            # ── MOPS 備援：FinMind 抓不到合約負債時，補抓最後 1 季 ──────────
+            # 來源：mops.twse.com.tw/mops/web/ajax_t164sb03 (合併資產負債表)
+            # 觸發條件：最後 1 季 _cl 為 NaN（避免 N×4 慢爆）
             try:
                 _last_cl_nan = (len(df_extra) > 0 and
-                                pd.isna(df_extra['??鞎'].iloc[-1]))
+                                pd.isna(df_extra['合約負債'].iloc[-1]))
                 if _last_cl_nan:
                     from tw_stock_data_fetcher import (fetch_mops_financials as _fmf,
                                                        build_proxy_session as _bps_mops)
-                    _last_lbl = df_extra['摮?漲璅惜'].iloc[-1]
+                    _last_lbl = df_extra['季度標籤'].iloc[-1]
                     _yr_m = int(_last_lbl[:4]); _q_m = int(_last_lbl[5])
                     _sess_m = _bps_mops()
                     _mops_df = _fmf(stock_id, _yr_m, _q_m, _sess_m)
                     _cl_mops = float('nan')
                     if _mops_df is not None and not _mops_df.empty:
-                        # MOPS 銵冽?虜??[???, ??] ?拇? flat ?澆?
+                        # MOPS 表格通常為 [會計項目, 金額] 兩欄 flat 格式
                         _flat = _mops_df.astype(str)
                         _mask = _flat.apply(
-                            lambda row: row.str.contains('??鞎', na=False).any(),
+                            lambda row: row.str.contains('合約負債', na=False).any(),
                             axis=1)
                         _hit = _flat[_mask]
                         _vals = []
@@ -1570,30 +1569,30 @@ class StockDataLoader:
                         if _vals:
                             _cl_mops = float(sum(_vals))
                     if _cl_mops == _cl_mops and _cl_mops > 0:
-                        df_extra.loc[df_extra.index[-1], '??鞎'] = _cl_mops
-                        _qtr_extra_src = 'finmind_mops'   # v18.202 E2嚗OPS 鋆?蝝???
-                        print(f'[BS/CF/MOPS] {stock_id} {_last_lbl}: ??CL={_cl_mops:.0f} (??賭葉)')
+                        df_extra.loc[df_extra.index[-1], '合約負債'] = _cl_mops
+                        _qtr_extra_src = 'finmind_mops'   # v18.202 E2：MOPS 補合約負債
+                        print(f'[BS/CF/MOPS] {stock_id} {_last_lbl}: ✅ CL={_cl_mops:.0f} (備援命中)')
                     else:
-                        print(f'[BS/CF/MOPS] {stock_id} {_last_lbl}: ?? MOPS 鈭衣??鞎蝘嚗?賣迨?∠甇日?嚗?)
+                        print(f'[BS/CF/MOPS] {stock_id} {_last_lbl}: ⚠️ MOPS 亦無合約負債科目（可能此股無此項）')
             except Exception as _e_mops:
-                print(f'[BS/CF/MOPS] ?? {type(_e_mops).__name__}: {_e_mops}')
+                print(f'[BS/CF/MOPS] ⚠️ {type(_e_mops).__name__}: {_e_mops}')
 
-            print(f'[BS/CF] {stock_id}: ??{len(df_extra)} 摮?CL={df_extra["??鞎"].notna().sum()} INV={df_extra["摮疏"].notna().sum()} CX={df_extra["鞈?臬"].notna().sum()} DISP={df_extra["??鞈?暸?瘚"].notna().sum()}')
+            print(f'[BS/CF] {stock_id}: ✅ {len(df_extra)} 季 CL={df_extra["合約負債"].notna().sum()} INV={df_extra["存貨"].notna().sum()} CX={df_extra["資本支出"].notna().sum()} DISP={df_extra["處分資產現金流入"].notna().sum()}')
             _stamp_finreport_attrs(df_extra, 'qtr_extra', _qtr_extra_src)   # v18.202 E2
             return df_extra, None
 
         except Exception as _e_bscf:
             import traceback; traceback.print_exc()
-            return None, f"BS+CF 頛?航炊: {_e_bscf}"
+            return None, f"BS+CF 載入錯誤: {_e_bscf}"
 
 
-# ?? 璅∠?蝝撘?MJ 鞎∪擃炎?????豢? ?????????????????????
-@st.cache_data(ttl=CACHE_TTL["price_data"], show_spinner=False)
+# ── 模組級函式：MJ 財報體檢所需原始數據 ─────────────────────
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
     """
-    敺?FinMind ????唬?摮???Ｚ??菔”????”???”嚗?
-    閮? MJ 擃頂??????
-    ? dict嚗仃??? {"error": "..."}??
+    從 FinMind 抓取最新一季資產負債表、現金流量表、損益表，
+    計算 MJ 體系所需指標。
+    回傳 dict；失敗時回傳 {"error": "..."}。
     """
     import os as _os_ffs, requests as _rq_ffs, datetime as _dt_ffs
 
@@ -1613,14 +1612,14 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
             _j = _r.json()
             _st = _j.get("status")
             if _st != 200:
-                print(f"[fetch_fin/{dataset}] ??00??: status={_st} msg={_j.get('msg','')}")
+                print(f"[fetch_fin/{dataset}] 非200回應: status={_st} msg={_j.get('msg','')}")
             return _j.get("data", []) if _st == 200 else [], _st
         except Exception as _e:
             print(f"[fetch_fin/{dataset}] {_e}")
             return [], None
 
-    # 3 ??dataset 敶潭迨?函? ??銝西???_fm 蝝蝡?requests??曹澈?航????蝺?摰嚗?
-    # map 靽?嚗?銝閫??????_ds_ffs 銝?湛?蝮質?瘙銝?嚗inMind ???箸?撠??塚???
+    # 3 個 dataset 彼此獨立 → 並行抓（_fm 純獨立 requests、無共享可變狀態，線程安全）。
+    # map 保序，故下方解包順序與 _ds_ffs 一致；總請求數不變（FinMind 限額為每小時制）。
     from concurrent.futures import ThreadPoolExecutor as _TPE_ffs
     _ds_ffs = ("TaiwanStockBalanceSheet", "TaiwanStockCashFlowsStatement",
                "TaiwanStockFinancialStatements")
@@ -1629,22 +1628,22 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
     (_bs_rows, _bs_st), (_cf_rows, _cf_st), (_is_rows, _is_st) = _fm_res
 
     if not _bs_rows and not _cf_rows:
-        # ???Token ?? vs ?∠巨?祈澈?∟???
+        # 區分 Token 問題 vs 股票本身無資料
         _statuses = [s for s in [_bs_st, _cf_st] if s is not None]
         if not _tok:
-            _err = f"{stock_id}嚗閮剖? FINMIND_TOKEN嚗瘜閰Ｚ瓷??
+            _err = f"{stock_id}：未設定 FINMIND_TOKEN，無法查詢財報"
         elif any(s in (401, 403) for s in _statuses):
-            _err = f"{stock_id}嚗INMIND_TOKEN ?⊥??歇??嚗TTP {_statuses[0]}嚗?
+            _err = f"{stock_id}：FINMIND_TOKEN 無效或已過期（HTTP {_statuses[0]}）"
         else:
-            _err = (f"{stock_id}嚗inMind ?⊥迨?∠巨鞎∪鞈?"
-                    f"嚗?賜?唳??銝??? FinMind 鞈?皞??芣??")
+            _err = (f"{stock_id}：FinMind 無此股票財報資料"
+                    f"（可能為新掛牌、未上市、或 FinMind 資料源尚未收錄）")
         return {"error": _err}
 
     def _build(rows):
-        """?? (date,key) 憭??潸?蝒???憭抒?撠潦?
-        FinMind 撠?鈭蟡剁?靘? 6770嚗??憭? type=Revenue 雿?origin_name 銝?
-        嚗?閮? + 摮??株?嚗??亦 last-wins 摮??格?閬???嚗???rev 鋡思?隡啜?
-        om/nm ?箇 >100% ??雓祆????max(|val|) 隞乩?霅?閮?澆?蝘??""
+        """同一 (date,key) 多筆值衝突時取最大絕對值。
+        FinMind 對某些股票（例如 6770）會回傳多筆 type=Revenue 但 origin_name 不同
+        （合計行 + 子科目行）；若用 last-wins 子科目會覆蓋合計，導致 rev 被低估、
+        om/nm 出現 >100% 的荒謬比率。改取 max(|val|) 以保證合計優於子科目。"""
         m: dict = {}
         for r in rows:
             d = r.get("date", "")
@@ -1667,7 +1666,7 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
 
     _dates = sorted(set(list(_bs.keys()) + list(_cf.keys())))
     if not _dates:
-        return {"error": f"{stock_id}嚗瓷?望?圾?仃??}
+        return {"error": f"{stock_id}：財報日期解析失敗"}
 
     _lat = _dates[-1]
     _prv = _dates[-2] if len(_dates) >= 2 else _lat
@@ -1686,7 +1685,7 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
         return 0.0
 
     def _vsum(m, d, keys):
-        """?蜇 keys 銝剜????嗆?雿??冽?蟡冽?+撣單狡????內?銵剁?"""
+        """加總 keys 中所有非零欄位（用於應收票據+帳款需分開列示的報表）"""
         slot = m.get(d, {})
         total = 0.0
         for k in keys:
@@ -1700,143 +1699,143 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
                     pass
         return total
 
-    cash   = _v(_bs, _lat, ["CashAndCashEquivalents", "?暸????嗥??, "Cash",
-                              "?暸???銵?甈?, "摨怠??暸????嗥??])
-    assets = _v(_bs, _lat, ["TotalAssets", "鞈蝮質?", "鞈??", "鞈蝮賡?",
-                              "鞈蝮質?嚗???", "Assets"])
-    liab   = _v(_bs, _lat, ["TotalLiabilities", "鞎蝮質?", "鞎??", "鞎蝮賡?",
-                             "Liabilities", "鞎??嚗???", "鞎蝮賡?嚗???",
-                             "鞎蝮質?嚗???"])
-    cur_assets = _v(_bs, _lat, ["CurrentAssets", "瘚?鞈??", "瘚?鞈蝮質?",
-                                  "瘚?鞈", "瘚?鞈蝮賡?"])
-    cur_liab = _v(_bs, _lat, ["CurrentLiabilities", "瘚?鞎??", "瘚?鞎蝮質?",
-                                "瘚?鞎", "瘚?鞎蝮賡?"])
-    # FinMind 銝?摰?靘??萄?閮?蝮質?嚗?亦 瘚?+?????詨?
-    _non_cur_liab = _v(_bs, _lat, ["NoncurrentLiabilities", "?????萄?閮?,
-                                    "?????萇蜇閮?, "??????])
+    cash   = _v(_bs, _lat, ["CashAndCashEquivalents", "現金及約當現金", "Cash",
+                              "現金及銀行存款", "庫存現金及約當現金"])
+    assets = _v(_bs, _lat, ["TotalAssets", "資產總計", "資產合計", "資產總額",
+                              "資產總計（千元）", "Assets"])
+    liab   = _v(_bs, _lat, ["TotalLiabilities", "負債總計", "負債合計", "負債總額",
+                             "Liabilities", "負債合計（千元）", "負債總額（千元）",
+                             "負債總計（千元）"])
+    cur_assets = _v(_bs, _lat, ["CurrentAssets", "流動資產合計", "流動資產總計",
+                                  "流動資產", "流動資產總額"])
+    cur_liab = _v(_bs, _lat, ["CurrentLiabilities", "流動負債合計", "流動負債總計",
+                                "流動負債", "流動負債總額"])
+    # FinMind 不一定提供「負債合計」彙總行，直接用 流動+非流動 相加
+    _non_cur_liab = _v(_bs, _lat, ["NoncurrentLiabilities", "非流動負債合計",
+                                    "非流動負債總計", "非流動負債"])
     if liab == 0 and (cur_liab > 0 or _non_cur_liab > 0):
         liab = cur_liab + _non_cur_liab
-        print(f"[fetch_fin] {stock_id} 鞎???亦嚗??瘚?({cur_liab:.0f})+????{_non_cur_liab:.0f})={liab:.0f}??)
-    # FinMind 銝?摰?靘??Ｗ?閮?蝮質?嚗?亦 瘚?+?????詨?
-    _non_cur_assets = _v(_bs, _lat, ["NoncurrentAssets", "?????Ｗ?閮?,
-                                      "?????Ｙ蜇閮?, "??????])
+        print(f"[fetch_fin] {stock_id} 負債合計查無，改用 流動({cur_liab:.0f})+非流動({_non_cur_liab:.0f})={liab:.0f}千")
+    # FinMind 不一定提供「資產合計」彙總行，直接用 流動+非流動 相加
+    _non_cur_assets = _v(_bs, _lat, ["NoncurrentAssets", "非流動資產合計",
+                                      "非流動資產總計", "非流動資產"])
     if assets == 0 and (cur_assets > 0 or _non_cur_assets > 0):
         assets = cur_assets + _non_cur_assets
-        print(f"[fetch_fin] {stock_id} 鞈???亦嚗??瘚?({cur_assets:.0f})+????{_non_cur_assets:.0f})={assets:.0f}??)
-    # AR嚗1 ??蝮賢???蝷箇?蟡冽?+撣單狡+??鈭綽??踹???閮???嚗?
-    # 瘨菔?嚗??澆?嚗楊憿???鈭綽?+ IFRS ?祈??澆?嚗???鈭綽?/嚗?靽犖嚗? ?怎??澆?
-    # + em-dash嚗?嚗?敶ａ????-嚗郭??嚗?銝車霈? + ?典耦?祈?嚗?+ ?耦?祈?()
+        print(f"[fetch_fin] {stock_id} 資產合計查無，改用 流動({cur_assets:.0f})+非流動({_non_cur_assets:.0f})={assets:.0f}千")
+    # AR：L1 先加總分開列示的票據+帳款+關係人（避免與合計行重疊）
+    # 涵蓋：舊格式（淨額/關係人）+ IFRS 括號格式（非關係人）/（關係人）+ 含稅格式
+    # + em-dash（－）半形連字號（-）波折號（—）三種變體 + 全形括號（）+ 半形括號()
     ar = _vsum(_bs, _lat, [
-        "?蟡冽?瘛券?", "?撣單狡瘛券?", "?撣單狡嚗?靽犖瘛券?", "?甈暸?",
-        "?撣單狡嚗???鈭綽?", "?撣單狡嚗?靽犖嚗?,
-        "?撣單狡嚗???鈭綽?瘛券?", "?撣單狡嚗?靽犖嚗楊憿?,
-        "?撣單狡嚗???鈭箸楊憿?,          # em-dash ??靽犖瘛券?
-        "?蟡冽?嚗???鈭綽?", "?蟡冽?嚗?靽犖嚗?,
-        "?撣單狡-??靽犖", "?撣單狡-??鈭?,
-        "?撣單狡????鈭?, "?撣單狡??靽犖",          # ?典耦?湔???
-        "?撣單狡 - ??靽犖", "?撣單狡 - ??鈭?,      # 撣嗥征??
-        "?蟡冽?嚗???鈭箸楊憿?, "?蟡冽?嚗?靽犖瘛券?",  # 蟡冽? em-dash
-        "?撣單狡-??靽犖瘛券?", "?撣單狡-??鈭箸楊憿?,   # ?耦 + 瘛券?
-        "?撣單狡(??靽犖)", "?撣單狡(??鈭?",         # ?耦?祈?
+        "應收票據淨額", "應收帳款淨額", "應收帳款－關係人淨額", "應收款項",
+        "應收帳款（非關係人）", "應收帳款（關係人）",
+        "應收帳款（非關係人）淨額", "應收帳款（關係人）淨額",
+        "應收帳款－非關係人淨額",          # em-dash 非關係人淨額
+        "應收票據（非關係人）", "應收票據（關係人）",
+        "應收帳款-非關係人", "應收帳款-關係人",
+        "應收帳款—非關係人", "應收帳款—關係人",          # 全形破折號
+        "應收帳款 - 非關係人", "應收帳款 - 關係人",      # 帶空白
+        "應收票據－非關係人淨額", "應收票據－關係人淨額",  # 票據 em-dash
+        "應收帳款-非關係人淨額", "應收帳款-關係人淨額",   # 半形 + 淨額
+        "應收帳款(非關係人)", "應收帳款(關係人)",         # 半形括號
     ])
-    # L2 ??L1 = 0嚗??雿萄?蝷箇???銵?銝? L1 瘛瑕?嚗??銴?蝞?
+    # L2 若 L1 = 0，改抓合併列示的合計行（不與 L1 混加，避免重複計算）
     if ar == 0:
-        ar = _vsum(_bs, _lat, ["?撣單狡?巨??, "?撣單狡?巨?楊憿?,
-                                "?蟡冽??董甈暹楊憿?,                    # ?啣?
-                                "?蟡冽????嗅董甈?, "?撣單狡",
-                                "?撣單狡嚗蝔?", "?撣單狡瘛券?嚗蝔?"])
+        ar = _vsum(_bs, _lat, ["應收帳款及票據", "應收帳款及票據淨額",
+                                "應收票據及帳款淨額",                    # 新增
+                                "應收票據及應收帳款", "應收帳款",
+                                "應收帳款（含稅）", "應收帳款淨額（含稅）"])
     if ar == 0:
-        ar = _v(_bs, _lat, ["AccountsReceivable", "?撣單狡瘛券?", "?撣單狡",
-                             "NoteAndAccountsReceivable", "?撣單狡?巨???嗆狡",
-                             "?蟡冽??董甈?, "?撣單狡嚗楊憿?", "鞎踵??甈曉??嗡??甈?,
-                             "鞎踵??隞??嗆狡",                          # ?啣?嚗?鞈??隡?
-                             "?撣單狡嚗楊憿?, "鞎踵??甈?,
-                             "?甈暸?", "?甈暸???", "?撣單狡?隞??嗆狡",
+        ar = _v(_bs, _lat, ["AccountsReceivable", "應收帳款淨額", "應收帳款",
+                             "NoteAndAccountsReceivable", "應收帳款及票據應收款",
+                             "應收票據及帳款", "應收帳款（淨額）", "貿易應收款及其他應收款",
+                             "貿易及其他應收款",                          # 新增：外資掛牌台企
+                             "應收帳款，淨額", "貿易應收款",
+                             "應收款項", "應收款項合計", "應收帳款及其他應收款",
                              "ReceivablesNet", "NetReceivables",
-                             "??鞈", "撌亦??甈?, "?撣單狡??蝝???,
-                             "?蟡冽????嗅董甈?,
-                             "?撣單狡嚗???鈭綽?", "?撣單狡嚗?靽犖嚗?])
-    ap     = _v(_bs, _lat, ["AccountsPayable", "??撣單狡",
-                             "NoteAndAccountsPayable", "??撣單狡?巨??隞狡",
-                             "??蟡冽??董甈?, "鞎踵???甈?])
-    inv    = _v(_bs, _lat, ["Inventories", "摮疏", "摮疏瘛券?"])
-    inv_p  = _v(_bs, _prv, ["Inventories", "摮疏", "摮疏瘛券?"])
-    ppe    = _v(_bs, _lat, ["PropertyPlantAndEquipmentNet", "銝??Ｕ??踹?閮剖?瘛券?",
-                             "?箏?鞈瘛券?", "銝??Ｗ??踹?閮剖?",
-                             "PropertyPlantAndEquipment", "銝??Ｗ??踹?閮剖?瘛券?",
-                             "銝??Ｕ??踹?閮剖?"])
-    lt_inv = _v(_bs, _lat, ["LongTermInvestments", "?瑟???", "?⊥???銋?鞈?])
-    # ?? v10.57.0 ?啣?嚗J 擃炎鋆???嚗?瘥? / ?暸???鞈???/ EPS嚗??
-    prepaid = _v(_bs, _lat, ["Prepayments", "??甈暸?", "??鞎餌", "??鞎冽狡",
-                              "????甈?, "?嗡???甈暸?"])
-    other_nca = _v(_bs, _lat, ["OtherNoncurrentAssets", "?嗡???????,
-                                "?嗡??????Ｗ?閮?])
-    # ?箸 EPS嚗S嚗?
-    eps_v = _v(_is, _lat, ["BasicEarningsPerShare", "?箸瘥??", "瘥??",
-                            "EPS", "Earnings Per Share", "蝔???∠?擗?])
+                             "合約資產", "工程應收款", "應收帳款及合約資產",
+                             "應收票據及應收帳款",
+                             "應收帳款（非關係人）", "應收帳款（關係人）"])
+    ap     = _v(_bs, _lat, ["AccountsPayable", "應付帳款",
+                             "NoteAndAccountsPayable", "應付帳款及票據應付款",
+                             "應付票據及帳款", "貿易應付款"])
+    inv    = _v(_bs, _lat, ["Inventories", "存貨", "存貨淨額"])
+    inv_p  = _v(_bs, _prv, ["Inventories", "存貨", "存貨淨額"])
+    ppe    = _v(_bs, _lat, ["PropertyPlantAndEquipmentNet", "不動產、廠房及設備淨額",
+                             "固定資產淨額", "不動產廠房及設備",
+                             "PropertyPlantAndEquipment", "不動產廠房及設備淨額",
+                             "不動產、廠房及設備"])
+    lt_inv = _v(_bs, _lat, ["LongTermInvestments", "長期投資", "採權益法之投資"])
+    # ── v10.57.0 新增：MJ 體檢補充原料（速動比率 / 現金再投資比率 / EPS）──
+    prepaid = _v(_bs, _lat, ["Prepayments", "預付款項", "預付費用", "預付貨款",
+                              "預付投資款", "其他預付款項"])
+    other_nca = _v(_bs, _lat, ["OtherNoncurrentAssets", "其他非流動資產",
+                                "其他非流動資產合計"])
+    # 基本 EPS（IS）
+    eps_v = _v(_is, _lat, ["BasicEarningsPerShare", "基本每股盈餘", "每股盈餘",
+                            "EPS", "Earnings Per Share", "稀釋每股盈餘"])
 
     ocf    = _v(_cf, _lat, ["CashFlowsFromOperatingActivities",
-                             "?平瘣餃?銋楊?暸?瘚嚗??綽?", "靘?平瘣餃?銋????])
+                             "營業活動之淨現金流入（流出）", "來自營業活動之現金流量"])
     icf    = _v(_cf, _lat, ["CashFlowsFromInvestingActivities",
-                             "??瘣餃?銋楊?暸?瘚嚗??綽?", "靘??瘣餃?銋????])
+                             "投資活動之淨現金流入（流出）", "來自投資活動之現金流量"])
     fncf   = _v(_cf, _lat, ["CashFlowsFromFinancingActivities",
-                             "蝐?瘣餃?銋楊?暸?瘚嚗??綽?", "靘蝐?瘣餃?銋????])
+                             "籌資活動之淨現金流入（流出）", "來自籌資活動之現金流量"])
     capex  = abs(_v(_cf, _lat, ["AcquisitionOfPropertyPlantAndEquipment",
-                                 "??銝??Ｕ??踹?閮剖?", "鞈潛蔭銝??Ｕ??踹?閮剖?", "鞈?臬"]))
-    div_paid = abs(_v(_cf, _lat, ["CashDividendsPaid", "?潭?暸??∪", "?暸??∪"]))
+                                 "取得不動產、廠房及設備", "購置不動產、廠房及設備", "資本支出"]))
+    div_paid = abs(_v(_cf, _lat, ["CashDividendsPaid", "發放現金股利", "現金股利"]))
 
-    rev    = _v(_is, _lat, ["Revenue", "?平?嗅??", "?平?嗅", "NetRevenue",
-                              "OperatingRevenue", "?平蝮賣??, "?平瘛冽??,
-                              "?瑁疏?嗅瘛券?", "?瑁疏?嗅"])
-    cogs   = abs(_v(_is, _lat, ["CostOfGoodsSold", "?平?", "?瑕?",
-                                 "OperatingCosts", "?平蝮賣???]))
-    oper_income = _v(_is, _lat, ["OperatingIncome", "?平?拍?嚗?憭梧?", "?平?拍?",
+    rev    = _v(_is, _lat, ["Revenue", "營業收入合計", "營業收入", "NetRevenue",
+                              "OperatingRevenue", "營業總收入", "營業淨收入",
+                              "銷貨收入淨額", "銷貨收入"])
+    cogs   = abs(_v(_is, _lat, ["CostOfGoodsSold", "營業成本", "銷售成本",
+                                 "OperatingCosts", "營業總成本"]))
+    oper_income = _v(_is, _lat, ["OperatingIncome", "營業利益（損失）", "營業利益",
                                   "Operating Income", "OperatingProfit",
-                                  "?平瘛典", "?平??"])
-    net_ni = _v(_is, _lat, ["NetIncome", "?祆?瘛典嚗楊??", "瘛典", "蝔?瘛典",
-                              "ProfitLoss", "?祆?蝬???蝮賡?",
-                              "甇詨惇?潭??砍璆凋蜓銋楊?抬?瘛冽?嚗?])
-    # ?? Sanity: oi/ni 銝?憭扳 rev ? 1.2嚗雿鈭?摮??株炊????????
+                                  "營業淨利", "營業損益"])
+    net_ni = _v(_is, _lat, ["NetIncome", "本期淨利（淨損）", "淨利", "稅後淨利",
+                              "ProfitLoss", "本期綜合損益總額",
+                              "歸屬於母公司業主之淨利（淨損）"])
+    # ── Sanity: oi/ni 不應大於 rev × 1.2（單位錯亂或子科目誤抓）──────
     if rev > 0:
         if abs(oper_income) > rev * 1.2:
-            print(f"[fetch_fin] {stock_id} ?? oper_income={oper_income:.0f} > rev={rev:.0f}?1.2嚗?隡潸炊??蝘嚗?蝵桃 0")
+            print(f"[fetch_fin] {stock_id} ⚠️ oper_income={oper_income:.0f} > rev={rev:.0f}×1.2，疑似誤抓子科目，重置為 0")
             oper_income = 0
         if abs(net_ni) > rev * 1.2:
-            print(f"[fetch_fin] {stock_id} ?? net_ni={net_ni:.0f} > rev={rev:.0f}?1.2嚗?隡潸炊??蝘嚗?蝵桃 0")
+            print(f"[fetch_fin] {stock_id} ⚠️ net_ni={net_ni:.0f} > rev={rev:.0f}×1.2，疑似誤抓子科目，重置為 0")
             net_ni = 0
 
-    rev_p  = _v(_is, _prv, ["Revenue", "?平?嗅??", "?平?嗅"])
+    rev_p  = _v(_is, _prv, ["Revenue", "營業收入合計", "營業收入"])
     ar_p   = _v(_bs, _prv, [
-        "AccountsReceivable", "?撣單狡瘛券?", "?撣單狡",
-        "?撣單狡嚗???鈭綽?", "?撣單狡嚗?靽犖嚗?,
-        "?撣單狡嚗???鈭綽?瘛券?", "?撣單狡?巨??, "?蟡冽????嗅董甈?,
-        "?撣單狡嚗蝔?",
+        "AccountsReceivable", "應收帳款淨額", "應收帳款",
+        "應收帳款（非關係人）", "應收帳款（關係人）",
+        "應收帳款（非關係人）淨額", "應收帳款及票據", "應收票據及應收帳款",
+        "應收帳款（含稅）",
     ])
-    equity = _v(_bs, _lat, ["TotalEquity", "甈?蝮賡?", "?⊥甈???",
-                             "TotalStockholdersEquity", "?⊥甈?蝮賡?",
+    equity = _v(_bs, _lat, ["TotalEquity", "權益總額", "股東權益合計",
+                             "TotalStockholdersEquity", "股東權益總額",
                              "EquityAttributableToOwnersOfParent",
-                             "甇詨惇?潭??砍璆凋蜓銋???閮?,
-                             "甈???"])
-    # ??⊿?嚗quity < 0.1% of assets ???航?摮??株???嚗??assets?iab ??
+                             "歸屬於母公司業主之權益合計",
+                             "權益合計"])
+    # 理智校驗：equity < 0.1% of assets → 可能抓到子項目而非合計，改用 assets−liab 重算
     if 0 < equity < assets * 0.001 and liab > 0:
         recalc = max(assets - liab, 0)
-        print(f"[fetch_fin] {stock_id} equity={equity:.0f}???撮甈?隤日?嚗equity/assets:.6%}嚗??寧 assets-liab={recalc:.0f}??)
+        print(f"[fetch_fin] {stock_id} equity={equity:.0f}千 疑似欄位誤配（{equity/assets:.6%}），改用 assets-liab={recalc:.0f}千")
         equity = recalc
-    # Fallback: Assets = Liabilities + Equity嚗FRS ??撘?????嚗?
+    # Fallback: Assets = Liabilities + Equity（IFRS 恆等式，雙向兜底）
     if liab == 0 and assets > 0 and equity > 0:
         liab = max(assets - equity, 0)
-        print(f"[fetch_fin] {stock_id} 鞎甈??亦鞈?嚗??鞈-甈? 閮?: {round(liab/1e3)}??)
+        print(f"[fetch_fin] {stock_id} 負債欄位查無資料，改用 資產-權益 計算: {round(liab/1e3)}千")
     if assets == 0 and equity > 0 and liab > 0:
         assets = equity + liab
-        print(f"[fetch_fin] {stock_id} 鞈甈??亦鞈?嚗??甈?+鞎 閮?: {round(assets/1e3)}??)
+        print(f"[fetch_fin] {stock_id} 資產欄位查無資料，改用 權益+負債 計算: {round(assets/1e3)}千")
 
-    # 璅∠?瘥???嚗? BS ???雿??憭批潘???銵虜?舀?憭抒?嚗?
-    # 甇????key嚗?文敶??耦蝛箇嚗Ⅱ靽? ??蝮?閮??典耦蝛箇?澆??賢??
+    # 模糊比對兜底：從 BS 所有欄位取最大值（合計行通常是最大的）
+    # 正規化 key：去除全形/半形空白，確保「負 債 總 計」等全形空白格式能匹配
     _bs_slot = _bs.get(_lat, {})
     def _fuzzy_bs(_inc, _exc=()):
         _best = 0.0
         for _fk, _fvv in _bs_slot.items():
-            _fks = str(_fk).replace(' ', '').replace('?', '')
+            _fks = str(_fk).replace(' ', '').replace('　', '')
             if all(_i in _fks for _i in _inc) and not any(_e in _fks for _e in _exc):
                 try:
                     _ffv = float(str(_fvv).replace(",", "") or 0)
@@ -1846,83 +1845,83 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
                     pass
         return _best
     if assets == 0:
-        assets = _fuzzy_bs(["鞈"], ["鞎", "鞈", "?辣"])
+        assets = _fuzzy_bs(["資產"], ["負債", "資本", "遞延"])
         if assets > 0:
-            print(f"[fetch_fin] {stock_id} assets 璅∠?瘥?: {assets:.0f}??)
+            print(f"[fetch_fin] {stock_id} assets 模糊比對: {assets:.0f}千")
     if liab == 0:
-        liab = _fuzzy_bs(["鞎"], ["鞈", "皞?", "甈?"])
+        liab = _fuzzy_bs(["負債"], ["資產", "準備", "權益"])
         if liab == 0:
-            # ?曉祝嚗宏?扎????歹??踹????菜???蝘鋡恍??
-            liab = _fuzzy_bs(["鞎"], ["鞈", "甈?"])
+            # 放寬：移除「準備」排除（避免「負債準備」類科目被錯排）
+            liab = _fuzzy_bs(["負債"], ["資產", "權益"])
         if liab > 0:
-            print(f"[fetch_fin] {stock_id} liab 璅∠?瘥?: {liab:.0f}??)
+            print(f"[fetch_fin] {stock_id} liab 模糊比對: {liab:.0f}千")
         else:
-            # 摰憭望?嚗??BS ???雿?蝔曹?閮箸
+            # 完全失敗：印出 BS 所有欄位名稱供診斷
             _all_bs_keys = sorted(_bs_slot.keys())
-            print(f"[fetch_fin] {stock_id} liab 璅∠??典仃??"
+            print(f"[fetch_fin] {stock_id} liab 模糊全失敗 "
                   f"bs_keys={_all_bs_keys[:30]}")
     if ar == 0:
-        ar = _fuzzy_bs(["?"], ["?拇", "?敺?", "?∪極", "?辣", "?蝔?])
+        ar = _fuzzy_bs(["應收"], ["利息", "所得稅", "員工", "遞延", "退稅"])
         if ar == 0:
-            ar = _fuzzy_bs(["??鞈"])  # IFRS 15 ??鞈
+            ar = _fuzzy_bs(["合約資產"])  # IFRS 15 合約資產
         if ar > 0:
-            print(f"[fetch_fin] {stock_id} ar 璅∠?瘥?: {ar:.0f}??)
+            print(f"[fetch_fin] {stock_id} ar 模糊比對: {ar:.0f}千")
 
-    # ?? Pandas regex 蝯扔??嚗迤閬???征?賢???str.contains嚗??典耦蝛箇蝘 ??
+    # ── Pandas regex 終極兜底：正規化所有空白後做 str.contains，抓全形空白科目 ──
     if (ar == 0 or liab == 0) and _bs_slot:
         try:
             import pandas as _pd_regex
             _bsdf = _pd_regex.DataFrame(
                 list(_bs_slot.items()), columns=['type', 'value']
             )
-            _bsdf['type_n'] = _bsdf['type'].str.replace(r'\s+|?', '', regex=True)
+            _bsdf['type_n'] = _bsdf['type'].str.replace(r'\s+|　', '', regex=True)
             _bsdf['val_n'] = _pd_regex.to_numeric(
                 _bsdf['value'].astype(str).str.replace(',', '', regex=False),
                 errors='coerce'
             )
             _bsdf = _bsdf[_bsdf['val_n'].notna() & (_bsdf['val_n'] > 0)]
             if ar == 0:
-                _ar_mask = (_bsdf['type_n'].str.contains('?撣單狡|?蟡冽?', regex=True, na=False) &
-                            ~_bsdf['type_n'].str.contains('?拇|?敺?|?∪極|?辣|?蝔?, regex=True, na=False))
+                _ar_mask = (_bsdf['type_n'].str.contains('應收帳款|應收票據', regex=True, na=False) &
+                            ~_bsdf['type_n'].str.contains('利息|所得稅|員工|遞延|退稅', regex=True, na=False))
                 if _ar_mask.any():
                     ar = float(_bsdf.loc[_ar_mask, 'val_n'].max())
-                    print(f"[fetch_fin] {stock_id} ar pandas-regex??: {ar:.0f}??"
+                    print(f"[fetch_fin] {stock_id} ar pandas-regex兜底: {ar:.0f}千 "
                           f"type={_bsdf.loc[_ar_mask, 'type'].iloc[0]!r}")
             if liab == 0:
-                _lb_mask = (_bsdf['type_n'].str.contains('鞎蝮質?|鞎??|鞎蝮賡?', regex=True, na=False) &
-                            ~_bsdf['type_n'].str.contains('???瘚?鞎', regex=True, na=False))
+                _lb_mask = (_bsdf['type_n'].str.contains('負債總計|負債合計|負債總額', regex=True, na=False) &
+                            ~_bsdf['type_n'].str.contains('非流動|流動負債', regex=True, na=False))
                 if _lb_mask.any():
                     liab = float(_bsdf.loc[_lb_mask, 'val_n'].max())
-                    print(f"[fetch_fin] {stock_id} liab pandas-regex??: {liab:.0f}??"
+                    print(f"[fetch_fin] {stock_id} liab pandas-regex兜底: {liab:.0f}千 "
                           f"type={_bsdf.loc[_lb_mask, 'type'].iloc[0]!r}")
         except Exception as _e_regex:
-            print(f"[fetch_fin] {stock_id} pandas-regex???啣虜: {_e_regex}")
+            print(f"[fetch_fin] {stock_id} pandas-regex兜底異常: {_e_regex}")
 
-    # ?? FinMind ????str.contains ??嚗?璅?蝘?賢?嚗????餌?嚗??
+    # ── FinMind 原始列 str.contains 兜底（非標準科目命名，如力積電等）──
     if ar == 0 and _bs_rows:
         try:
             import pandas as _pd_ar_sc
             _bs_df_sc = _pd_ar_sc.DataFrame(_bs_rows)
             if not _bs_df_sc.empty and 'date' in _bs_df_sc.columns and 'type' in _bs_df_sc.columns:
                 _lat_sc = _bs_df_sc[_bs_df_sc['date'] == _lat].copy()
-                _excl_kw = '?拇|?敺?|?∪極|?辣|?蝔?
+                _excl_kw = '利息|所得稅|員工|遞延|退稅'
                 _on_col = (_lat_sc['origin_name'] if 'origin_name' in _lat_sc.columns
                            else _pd_ar_sc.Series([''] * len(_lat_sc), index=_lat_sc.index))
                 _ar_mask = (
-                    (_lat_sc['type'].str.contains('?撣單狡', na=False) |
-                     _on_col.str.contains('?撣單狡', na=False)) &
+                    (_lat_sc['type'].str.contains('應收帳款', na=False) |
+                     _on_col.str.contains('應收帳款', na=False)) &
                     ~_lat_sc['type'].str.contains(_excl_kw, na=False)
                 )
                 _ar_match_sc = _lat_sc[_ar_mask]
                 if not _ar_match_sc.empty:
                     ar = float(_ar_match_sc['value'].max() or 0)
                     if ar > 0:
-                        print(f"[fetch_fin] {stock_id} ar str.contains??: {ar:.0f}??"
+                        print(f"[fetch_fin] {stock_id} ar str.contains兜底: {ar:.0f}千 "
                               f"types={list(_ar_match_sc['type'].values)[:3]}")
         except Exception as _e_ar_sc:
-            print(f"[fetch_fin] {stock_id} ar str.contains???啣虜: {_e_ar_sc}")
+            print(f"[fetch_fin] {stock_id} ar str.contains兜底異常: {_e_ar_sc}")
 
-    # ?? yfinance ?嚗?隞?嗥??甈??岫鋆?????????????????????????
+    # ── yfinance 備援：對仍為零的關鍵欄位嘗試補值 ────────────────────────
     if ar == 0 or liab == 0 or assets == 0:
         try:
             import yfinance as _yf_ffs, pandas as _pd_yf_ffs
@@ -1960,66 +1959,66 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
                     if _var > 0:
                         ar = _var; _filled_yf.append("ar")
                 if _filled_yf:
-                    print(f"[fetch_fin] {stock_id} yfinance?鋆?{_filled_yf}: "
-                          f"assets={assets:.0f} liab={liab:.0f} ar={ar:.0f} ??)
-                    # ??yfinance 鋆? assets/equity嚗?閰虫?甈?IFRS identity
+                    print(f"[fetch_fin] {stock_id} yfinance備援補值 {_filled_yf}: "
+                          f"assets={assets:.0f} liab={liab:.0f} ar={ar:.0f} 千")
+                    # 若 yfinance 補了 assets/equity，再試一次 IFRS identity
                     if liab == 0 and assets > 0 and equity > 0:
                         liab = max(assets - equity, 0)
                     if assets == 0 and equity > 0 and liab > 0:
                         assets = equity + liab
         except Exception as _e_yf:
-            print(f"[fetch_fin] {stock_id} yfinance??啣虜: {_e_yf}")
+            print(f"[fetch_fin] {stock_id} yfinance備援異常: {_e_yf}")
 
     _zero_fields = [f for f, v in [("ar", ar), ("ppe", ppe), ("liab", liab), ("equity", equity)] if v == 0]
     if _zero_fields:
         _all_bs_keys = list((_bs.get(_lat) or {}).keys())
-        print(f"[fetch_fin] {stock_id} ?嗅潭?雿?{_zero_fields} ?券BS甈?({len(_all_bs_keys)})={_all_bs_keys}")
-        # AR ?券憭望???憭?閰佗???鞈嚗FRS 15嚗? 鞎踵??甈?/ ?甈暸?嚗??怠?荔?
+        print(f"[fetch_fin] {stock_id} 零值欄位={_zero_fields} 全部BS欄位({len(_all_bs_keys)})={_all_bs_keys}")
+        # AR 全部失敗時額外嘗試：合約資產（IFRS 15）/ 貿易應收款 / 應收款項（不含利息）
         if ar == 0 and _all_bs_keys:
-            for _extra_ar in ["??鞈", "瘚???鞈", "鞎踵??隞??嗆狡??,
-                               "?甈暸?嚗??恍?靽犖嚗?, "?剜??甈?]:
+            for _extra_ar in ["合約資產", "流動合約資產", "貿易及其他應收款項",
+                               "應收款項（不含關係人）", "短期應收款"]:
                 _ev = _bs_slot.get(_extra_ar)
                 if _ev:
                     try:
                         _ef = float(str(_ev).replace(',', ''))
                         if _ef > 0:
                             ar = _ef
-                            print(f"[fetch_fin] {stock_id} ar 鋆??亙? '{_extra_ar}': {ar:.0f}??)
+                            print(f"[fetch_fin] {stock_id} ar 補充別名 '{_extra_ar}': {ar:.0f}千")
                             break
                     except Exception:
                         pass
 
-    # ?蝯?sanity check嚗iab/assets < 1% ???撮摮??株炊???雿??嗥? cur+noncur嚗?
-    # ?啣?????萸?甈?靘那?瘀??岫 IFRS identity嚗quity ?冽迨撌脰◤靽格迤??
+    # 最終 sanity check：liab/assets < 1% → 疑似子科目誤配（非零但近零的 cur+noncur）
+    # 印出所有含「負債」的欄位供診斷；嘗試 IFRS identity（equity 在此已被修正過）
     if 0 < liab < assets * 0.01 and assets > 0:
         _liab_keys = [(k, _bs_slot.get(k)) for k in sorted(_bs_slot.keys())
-                      if '鞎' in str(k) and '鞈' not in str(k)]
-        print(f"[fetch_fin] {stock_id} ?? liab={liab:.0f} ??{liab/assets:.4%} of assets={assets:.0f}嚗?
-              f"cur_liab={cur_liab:.0f} ncl={_non_cur_liab:.0f}嚗?
-              f"鞎甈?={_liab_keys[:10]}")
-        # ??IFRS identity ?岫靽格迤嚗quity 撌脣 1700-1703 ?◤靽格迤??assets-old_liab ??assets嚗?
-        # 甇斗? equity ??assets嚗???assets - equity 銝銵??寧 fuzzy 撘瑕??銝甈?
-        _liab_fuzzy2 = _fuzzy_bs(["鞎"], ["鞈", "甈?"])
+                      if '負債' in str(k) and '資產' not in str(k)]
+        print(f"[fetch_fin] {stock_id} ⚠️ liab={liab:.0f} 僅 {liab/assets:.4%} of assets={assets:.0f}，"
+              f"cur_liab={cur_liab:.0f} ncl={_non_cur_liab:.0f}，"
+              f"負債欄位={_liab_keys[:10]}")
+        # 用 IFRS identity 嘗試修正（equity 已在 1700-1703 處被修正為 assets-old_liab ≈ assets）
+        # 此時 equity ≈ assets，故用 assets - equity 不可行；改用 fuzzy 強制再跑一次
+        _liab_fuzzy2 = _fuzzy_bs(["負債"], ["資產", "權益"])
         if _liab_fuzzy2 > liab * 5:
             liab = _liab_fuzzy2
-            print(f"[fetch_fin] {stock_id} liab sanity 靽格迤 via fuzzy: {liab:.0f}??)
+            print(f"[fetch_fin] {stock_id} liab sanity 修正 via fuzzy: {liab:.0f}千")
 
-    # AR sanity嚗r/摮???< 0.5% ???撮摮??株炊??憒?靽犖?撟曉???
+    # AR sanity：ar/季收入 < 0.5% → 疑似子科目誤配（如關係人應收幾千元）
     if 0 < ar < (rev * 0.005) and rev > 0:
         _ar_keys = [(k, _bs_slot.get(k)) for k in sorted(_bs_slot.keys())
-                    if '?' in str(k) and '?拇' not in str(k) and '?敺?' not in str(k)]
-        print(f"[fetch_fin] {stock_id} ?? ar={ar:.0f}????{ar/(rev*4)*360:.1f}憭抬?"
-              f"?甈?={_ar_keys[:10]}")
-        _ar_fuzzy2 = _fuzzy_bs(["?"], ["?拇", "?敺?", "?∪極", "?辣", "?蝔?])
+                    if '應收' in str(k) and '利息' not in str(k) and '所得稅' not in str(k)]
+        print(f"[fetch_fin] {stock_id} ⚠️ ar={ar:.0f}千 僅 {ar/(rev*4)*360:.1f}天，"
+              f"應收欄位={_ar_keys[:10]}")
+        _ar_fuzzy2 = _fuzzy_bs(["應收"], ["利息", "所得稅", "員工", "遞延", "退稅"])
         if _ar_fuzzy2 > ar * 5:
             ar = _ar_fuzzy2
-            print(f"[fetch_fin] {stock_id} ar sanity 靽格迤 via fuzzy: {ar:.0f}??)
+            print(f"[fetch_fin] {stock_id} ar sanity 修正 via fuzzy: {ar:.0f}千")
 
     cash_ratio = round(cash / assets * 100, 1) if assets > 0 else 0
     debt_ratio = round(liab / assets * 100, 1) if assets > 0 else 0
     gp         = rev - cogs
     gm         = round(gp / rev * 100, 1) if rev > 0 else 0
-    # 撟游?嚗摮?摮?? 4嚗誑??DSO/DPO 鋡思?隡?4 ??憭拇?箸?蝯曹? 360 憭?
+    # 年化：單季數字 × 4，以免 DSO/DPO 被低估 4 倍；天數基準統一 360 天
     ar_days = round(ar / (rev * 4) * 360, 1) if rev > 0 and ar > 0 else 0
     ap_days = round(ap / (cogs * 4) * 360, 1) if cogs > 0 and ap > 0 else 0
     fcf        = round(ocf - capex)
@@ -2027,50 +2026,50 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
     rev_chg    = round((rev - rev_p) / abs(rev_p) * 100, 1) if rev_p != 0 else None
 
     print(f"[fetch_fin] {stock_id} {_lat}: cash={cash_ratio}% debt={debt_ratio}% "
-          f"OCF={round(ocf/1e6,1)}?曇 AR_days={ar_days} AP_days={ap_days}")
+          f"OCF={round(ocf/1e6,1)}百萬 AR_days={ar_days} AP_days={ap_days}")
 
     return {
         "stock_id":         stock_id,
         "period":           _lat,
-        "?暸?雿蜇鞈(%)":  cash_ratio,
-        "鞎瘥?(%)":      debt_ratio,
-        "OCF(??":          round(ocf),
-        "ICF(??":          round(icf),
-        "蝐?CF(??":       round(fncf),
-        "?芰?暸?瘚???":   fcf,
-        "鞈?臬(??":     round(capex),
-        "?撣單狡憭拇":     ar_days,
-        "??撣單狡憭拇":     ap_days,
-        "瘥??%)":        gm,
-        "?平?嗅(??":      round(rev),
-        "瘥(??":          round(gp),
-        "?平?拍?(??":      round(oper_income),
-        "蝔?瘛典(??":      round(net_ni),
-        "?⊥甈?(??":      round(equity),
-        "瘚?鞈(??":      round(cur_assets),
-        "????????":    round(max(liab - cur_liab, 0)),
-        "?平?(??":      round(cogs),
-        "OCF蝚西?":          "甇? if ocf > 0 else "鞎?,
-        "ICF蝚西?":          "甇? if icf > 0 else "鞎?,
-        "蝐?CF蝚西?":       "甇? if fncf > 0 else "鞎?,
-        "?撣單狡摮????%)": ar_chg,
-        "?摮????%)":     rev_chg,
-        "蝮質?????":        round(assets),
-        "蝮質?????":        round(liab),
-        "瘚?鞎(??":      round(cur_liab),
-        "摮疏(??":          round(inv),
-        "摮疏??(??":      round(inv_p),
-        "?暸??∪(??":      round(div_paid),
-        "?箏?鞈(??":      round(ppe),
-        "?瑟???(??":      round(lt_inv),
-        # ?? v10.57.0 ?啣?嚗J 擃炎??嚗? ????
-        "?暸????嗥????": round(cash),
-        "?撣單狡(??":      round(ar),
+        "現金佔總資產(%)":  cash_ratio,
+        "負債比率(%)":      debt_ratio,
+        "OCF(千)":          round(ocf),
+        "ICF(千)":          round(icf),
+        "籌資CF(千)":       round(fncf),
+        "自由現金流(千)":   fcf,
+        "資本支出(千)":     round(capex),
+        "應收帳款天數":     ar_days,
+        "應付帳款天數":     ap_days,
+        "毛利率(%)":        gm,
+        "營業收入(千)":      round(rev),
+        "毛利(千)":          round(gp),
+        "營業利益(千)":      round(oper_income),
+        "稅後淨利(千)":      round(net_ni),
+        "股東權益(千)":      round(equity),
+        "流動資產(千)":      round(cur_assets),
+        "非流動負債(千)":    round(max(liab - cur_liab, 0)),
+        "營業成本(千)":      round(cogs),
+        "OCF符號":          "正" if ocf > 0 else "負",
+        "ICF符號":          "正" if icf > 0 else "負",
+        "籌資CF符號":       "正" if fncf > 0 else "負",
+        "應收帳款季增率(%)": ar_chg,
+        "營收季增率(%)":     rev_chg,
+        "總資產(千)":        round(assets),
+        "總負債(千)":        round(liab),
+        "流動負債(千)":      round(cur_liab),
+        "存貨(千)":          round(inv),
+        "存貨前期(千)":      round(inv_p),
+        "現金股利(千)":      round(div_paid),
+        "固定資產(千)":      round(ppe),
+        "長期投資(千)":      round(lt_inv),
+        # ── v10.57.0 新增：MJ 體檢原料（5 個）──
+        "現金及約當現金(千)": round(cash),
+        "應收帳款(千)":      round(ar),
         "EPS":               round(eps_v, 2) if eps_v else 0,
-        "??甈暸?(??":      round(prepaid),
-        "?嗡?????????": round(other_nca),
+        "預付款項(千)":      round(prepaid),
+        "其他非流動資產(千)": round(other_nca),
         "is_finance":        stock_id.startswith(('28', '58')),
-        # ?? ?? slot ?湧嚗?閮箸??颲具PI ?仃??/ 甇方?⊥迨蝘 / 閰脰?砍迤??0???
+        # ── 原始 slot 暴露：供診斷頁分辨「API 真失敗 / 此股無此科目 / 該股本季為 0」──
         "_bs_slot_latest":   dict(_bs_slot),
         "_cf_slot_latest":   dict(_cf.get(_lat, {})),
         "_is_slot_latest":   dict(_is.get(_lat, {})),
@@ -2079,7 +2078,7 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
 
 
 def fetch_fund_nav(fund_id: str):
-    """?粹?瘛典???MoneyDJ via NAS proxy + BeautifulSoup"""
+    """基金淨值 — MoneyDJ via NAS proxy + BeautifulSoup"""
     try:
         from proxy_helper import fetch_url as _fu_nav
         from bs4 import BeautifulSoup as _BS
@@ -2107,8 +2106,7 @@ def fetch_fund_nav(fund_id: str):
                     continue
         return None
     except Exception as _e:
-        print(f'[fetch_fund_nav] ??{fund_id}: {_e}')
+        print(f'[fetch_fund_nav] ❌ {fund_id}: {_e}')
         return None
-
 
 

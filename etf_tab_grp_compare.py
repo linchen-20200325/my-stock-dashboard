@@ -1,14 +1,13 @@
-﻿from data_config import CACHE_TTL
-"""ETF 憭??寞活閰?瘥? Tab (v18.223)??
+"""ETF 多檔批次評分比較 Tab (v18.223)。
 
-UI嚗extarea 憭?頛詨嚗?憭?10 瑼??啗?舐? .TW嚗? ThreadPool 銝西???5y ??
-    7 蝬剖漲璅???甈???5 ??蝑?摨”??
+UI：textarea 多檔輸入（最多 10 檔，台股可省 .TW）→ ThreadPool 並行抓 5y →
+    7 維度標準化加權 → 5 星評等排序表。
 
-銴?Ｘ?撅歹??園?蝞?嚗?
+複用既有層（零重算）：
 - etf_fetch: fetch_etf_price / fetch_etf_dividends / fetch_etf_info
 - etf_calc: calc_total_return_1y / calc_current_yield / calc_sharpe / calc_mdd / calc_cagr
-- etf_quality.compute_etf_quality: ? yield_cv 摮?嚗??拍?蝛拙?摨佗?
-- etf_scoring_helpers.compute_etf_composite_score: 7 蝬剖漲??
+- etf_quality.compute_etf_quality: 借用 yield_cv 子分（殖利率穩定度）
+- etf_scoring_helpers.compute_etf_composite_score: 7 維度合成
 """
 from __future__ import annotations
 
@@ -32,7 +31,7 @@ _TOKEN_RE = _re.compile(r'[A-Za-z0-9.]+')
 
 
 def parse_etf_codes(raw: str, limit: int = 10) -> list[str]:
-    """閫??憭? ETF嚗?/蝛箸/??嚗??normalize_etf_ticker SSOT ???啗蝝?4-6 蝣潸?? .TW??""
+    """解析多檔 ETF（逗號/空格/換行）。共用 normalize_etf_ticker SSOT — 台股純 4-6 碼自動補 .TW。"""
     if not raw:
         return []
     _out: list[str] = []
@@ -49,57 +48,57 @@ def parse_etf_codes(raw: str, limit: int = 10) -> list[str]:
 
 
 def _yield_valuation_zone(cur_yield: float | None, avg_yield: float | None) -> str:
-    """7% 摮隡啣潸眺鞈?? ???∪? etf_tab_single L262-298 摮急樴??乓?
+    """7% 存股估值買賣點 — 鏡像 etf_tab_single L262-298 孫慶龍策略。
 
-    ? 5y 撟喳?畾???潭??文?嚗??"????
+    需 5y 平均殖利率有值才判定，否則 "—"。
     """
     if not avg_yield or avg_yield <= 0 or cur_yield is None:
-        return '??
+        return '—'
     if cur_yield >= 7:
-        return '? 撘瑞?鞎琿?
+        return '🟢 強烈買進'
     if cur_yield <= 3:
-        return '? ?脣鈭?'
+        return '🔴 獲利了結'
     if cur_yield <= 5:
-        return '? ?拙漲皜Ⅳ'
-    return '??銝剜扳???
+        return '🟡 適度減碼'
+    return '⚪ 中性持有'
 
 
 def _dividend_health_label(cur_yield: float | None,
                            total_ret_1y: float | None,
                            cagr_3y: float | None) -> str:
-    """??亙熒摨????∪? etf_tab_single L231-246 MK 獢 #1+#2??
+    """配息健康度 — 鏡像 etf_tab_single L231-246 MK 框架 #1+#2。
 
-    ?急?梢 ??畾??= ?? ???急 < 畾??= ?祇?靘菔? ?嚗?
-    ?⊿??舐?亦? 3Y CAGR ??7% ?? ???血? ???
+    含息報酬 ≥ 殖利率 = 雙贏 ✅；含息 < 殖利率 = 本金侵蝕 🔴；
+    無配息直接看 3Y CAGR ≥ 7% 達標 ✅ 否則 🟡。
     """
     if cur_yield is None or cur_yield <= 0:
         if cagr_3y is None:
-            return '漎?鞈?銝雲'
-        return '???⊥雿?璅? if cagr_3y >= 7 else '? ?⊥銝??'
+            return '⬜ 資料不足'
+        return '✅ 無息但達標' if cagr_3y >= 7 else '🟡 無息且未達標'
     if total_ret_1y is None:
-        return '漎?1Y ?梢蝻?
+        return '⬜ 1Y 報酬缺'
     if total_ret_1y < cur_yield:
-        return f'? ???{total_ret_1y - cur_yield:+.1f}pp'
-    return f'???? {total_ret_1y - cur_yield:+.1f}pp'
+        return f'🔴 吃本金 {total_ret_1y - cur_yield:+.1f}pp'
+    return f'✅ 雙贏 {total_ret_1y - cur_yield:+.1f}pp'
 
 
 def _fetch_one_etf(ticker: str) -> dict:
-    """?格? ETF 5y ?? + 7 蝬剖漲?? + 4 SSOT 鋆?嚗?皞Ｗ/7%隡啣???亙熒/?釭嚗?蝔??剁???st.* ?游??""
+    """單檔 ETF 5y 抓取 + 7 維度指標 + 4 SSOT 補欄（折溢價/7%估值/配息健康/品質）。線程安全：無 st.* 直呼。"""
     _r = {
         'ticker': ticker, 'name': '', 'error': None,
         'price': None, 'total_ret_1y': None, 'cagr_3y': None,
         'sharpe': None, 'mdd': None,
         'expense_ratio': None, 'aum': None,
         'div_yield': None, 'beta': None, 'quality': None,
-        # v18.224嚗??格?????4 SSOT 甈?
+        # v18.224：補單檔分析的 4 SSOT 欄
         'premium_pct': None, 'stale_nav': False,
-        'avg_yield_5y': None, 'valuation_zone': '??,
-        'dividend_health': '漎?鞈?銝雲',
+        'avg_yield_5y': None, 'valuation_zone': '—',
+        'dividend_health': '⬜ 資料不足',
     }
     try:
         _df = fetch_etf_price(ticker, period='5y')
         if _df is None or _df.empty or 'Close' not in _df.columns:
-            _r['error'] = '??K 蝺???
+            _r['error'] = '無 K 線資料'
             return _r
         _divs = fetch_etf_dividends(ticker)
         _info = fetch_etf_info(ticker) or {}
@@ -114,10 +113,10 @@ def _fetch_one_etf(ticker: str) -> dict:
         _r['expense_ratio'] = _info.get('annualReportExpenseRatio')
         _r['aum'] = _info.get('totalAssets')
         _r['beta'] = _info.get('beta') or _info.get('beta3Year')
-        # compute_etf_quality ??@st.cache_data(ttl=CACHE_TTL["daily_snapshot"]) ??蝺??批?怠??剁?Streamlit cache ?芸葆 lock嚗?
+        # compute_etf_quality 有 @st.cache_data(ttl=86400) — 線程內呼叫安全（Streamlit cache 自帶 lock）
         _r['quality'] = compute_etf_quality(ticker)
 
-        # v18.224嚗? SSOT 鋆?嚗?皞Ｗ / 7% 隡啣?/ ??亙熒摨佗?
+        # v18.224：4 SSOT 補欄（折溢價 / 7% 估值 / 配息健康度）
         try:
             _pd_res = calc_premium_discount(_info, _df, ticker)
             _r['premium_pct'] = _pd_res.get('premium_pct')
@@ -138,55 +137,55 @@ def _fetch_one_etf(ticker: str) -> dict:
 
 
 def render_etf_grp_compare() -> None:
-    """憭? ETF ?寞活閰?瘥?銝餃????7 蝬剖漲?? 5 ? PK 銵具?""
-    st.markdown('### ?? 憭? ETF 閰?瘥? ??7 蝬剖漲?? 5 ??蝑?)
+    """多檔 ETF 批次評分比較主入口 — 7 維度加權 5 星制 PK 表。"""
+    st.markdown('### 📊 多檔 ETF 評分比較 — 7 維度加權 5 星評等')
     st.caption(
-        '頛詨?憭?10 瑼?ETF嚗?/蝛箸/??嚗?∠??詨??芸?鋆?.TW嚗?'
-        '蝟餌絞銝西???5y ?豢? + 蝞?7 蝬剖漲嚗?Y 蝝舐? / 3Y CAGR / 憭 / MDD / '
-        '鞎餌??/ AUM / 畾?帘摰漲嚗? ?? ??1~5 ??蝑帖??PK??
+        '輸入最多 10 檔 ETF（逗號/空格/換行；台股純數字自動補 .TW），'
+        '系統並行抓 5y 數據 + 算 7 維度（1Y 累積 / 3Y CAGR / 夏普 / MDD / '
+        '費用率 / AUM / 殖利率穩定度）→ 加權 → 1~5 星評等橫向 PK。'
     )
 
     raw = st.text_area(
-        'ETF 隞?Ⅳ嚗?/蝛箸/??嚗?憭?10 瑼?',
+        'ETF 代碼（逗號/空格/換行；最多 10 檔）',
         value='0050 0056 00878 00919 00929',
         height=80, key='_etf_grp_input',
     )
     tickers = parse_etf_codes(raw, limit=10)
     if not tickers:
-        st.info('隢撓?亥撠?1 瑼?ETF 隞?Ⅳ??)
+        st.info('請輸入至少 1 檔 ETF 代碼。')
         return
-    st.caption(f'?? 敺???{", ".join(tickers)}嚗 {len(tickers)} 瑼?')
+    st.caption(f'📋 待評分：{", ".join(tickers)}（共 {len(tickers)} 檔）')
 
-    if not st.button('? ???寞活閰?', type='primary',
+    if not st.button('🎯 開始批次評分', type='primary',
                      use_container_width=True, key='_etf_grp_run'):
-        st.info('? 暺??寞??蒂銵? 5y ?豢? + 閮? 7 蝬剖漲嚗?甈?~20s嚗歇敹怠?蝘?嚗?)
+        st.info('💡 點上方按鈕並行抓 5y 數據 + 計算 7 維度（首次 ~20s，已快取秒回）。')
         return
 
-    # 敹怠???rerun ??嚗ey ??tickers tuple嚗?
+    # 快取防 rerun 重跑（key 含 tickers tuple）
     _cache_key = f'_etf_grp_results_{hash(tuple(tickers))}'
     rows = st.session_state.get(_cache_key)
     if rows is None:
         rows = []
-        prog = st.progress(0.0, text=f'?寞活閰?銝哨?{len(tickers)} 瑼蒂銵?...')
+        prog = st.progress(0.0, text=f'批次評分中（{len(tickers)} 檔並行）...')
         with ThreadPoolExecutor(max_workers=5) as _ex:
             _futs = {_ex.submit(_fetch_one_etf, _t): _t for _t in tickers}
             _done = 0
             for _fut in as_completed(_futs):
                 _done += 1
                 prog.progress(_done / len(tickers),
-                              text=f'[{_done}/{len(tickers)}] 摰?')
+                              text=f'[{_done}/{len(tickers)}] 完成')
                 try:
                     rows.append(_fut.result())
                 except Exception as _e:
                     rows.append({'ticker': _futs[_fut],
                                  'error': f'{type(_e).__name__}: {str(_e)[:50]}'})
         prog.empty()
-        # 蝬剜?頛詨????嚗s_completed ?臬???摨?
+        # 維持輸入順序排列（as_completed 是完成順序）
         _order = {_t: _i for _i, _t in enumerate(tickers)}
         rows.sort(key=lambda r: _order.get(r['ticker'], 999))
         st.session_state[_cache_key] = rows
 
-    # ??閰?
+    # 合成評分
     for _r in rows:
         if _r.get('error'):
             _r['composite'] = None
@@ -194,82 +193,81 @@ def render_etf_grp_compare() -> None:
             continue
         _r['composite'], _r['stars'] = compute_etf_composite_score(_r)
 
-    # ?? 蝯梯?????
+    # ── 統計卡 ──
     _n_ok = sum(1 for r in rows if r.get('stars'))
     _n_5 = sum(1 for r in rows if r.get('stars') == 5)
     _n_4 = sum(1 for r in rows if r.get('stars') == 4)
     _n_3 = sum(1 for r in rows if r.get('stars') == 3)
     _n_low = sum(1 for r in rows if r.get('stars') and r['stars'] <= 2)
     cols = st.columns(5)
-    cols[0].metric('?? 5 ??, _n_5)
-    cols[1].metric('潃?4 ??, _n_4)
-    cols[2].metric('??3 ??, _n_3)
-    cols[3].metric('? ?? ??, _n_low)
-    cols[4].metric('????憭望?', len(rows) - _n_ok)
+    cols[0].metric('🌟 5 星', _n_5)
+    cols[1].metric('⭐ 4 星', _n_4)
+    cols[2].metric('✨ 3 星', _n_3)
+    cols[3].metric('💧 ≤2 星', _n_low)
+    cols[4].metric('❌ 抓取失敗', len(rows) - _n_ok)
 
-    # ?? 閰?銵???
+    # ── 評分表 ──
     def _stars_str(s):
-        return ('?? * s + '?? * (5 - s)) if s else '??
+        return ('★' * s + '☆' * (5 - s)) if s else '—'
 
     df = pd.DataFrame([{
-        '隞??':     r['ticker'],
-        '?迂':     r.get('name', ''),
-        '??':     _stars_str(r.get('stars')),
-        '蝬???:   r.get('composite'),
-        '撣':     r.get('price'),
-        # v18.224嚗?皞Ｗ SSOT嚗tale ?葆 ??嚗?
-        '?滯??':  ('?? NAV stale' if r.get('stale_nav')
+        '代號':     r['ticker'],
+        '名稱':     r.get('name', ''),
+        '星等':     _stars_str(r.get('stars')),
+        '綜合分':   r.get('composite'),
+        '市價':     r.get('price'),
+        # v18.224：折溢價 SSOT（stale 時帶 ⚠️）
+        '折溢價%':  ('⚠️ NAV stale' if r.get('stale_nav')
                     else r.get('premium_pct')),
-        '1Y 蝝舐?%': r.get('total_ret_1y'),
+        '1Y 累積%': r.get('total_ret_1y'),
         '3Y CAGR%': r.get('cagr_3y'),
-        '憭??:   r.get('sharpe'),
+        '夏普值':   r.get('sharpe'),
         'MDD%':     r.get('mdd'),
-        '鞎餌??':  (r['expense_ratio'] * 100
+        '費用率%':  (r['expense_ratio'] * 100
                     if r.get('expense_ratio') is not None else None),
-        'AUM(??':  (r['aum'] / 1e8
+        'AUM(億)':  (r['aum'] / 1e8
                     if r.get('aum') and r['aum'] > 0 else None),
-        '畾??':  r.get('div_yield'),
-        '5Y??%':  r.get('avg_yield_5y'),
-        '7%隡啣?:   r.get('valuation_zone', '??),
-        '??亙熒': r.get('dividend_health', '漎?),
-        '?酉':     r.get('error') or '',
+        '殖利率%':  r.get('div_yield'),
+        '5Y均殖%':  r.get('avg_yield_5y'),
+        '7%估值':   r.get('valuation_zone', '—'),
+        '配息健康': r.get('dividend_health', '⬜'),
+        '備註':     r.get('error') or '',
     } for r in rows])
 
-    # ??嚗???擃?雿?None 畾踹?嚗?
+    # 排序：綜合分高→低（None 殿後）
     df = df.sort_values(
-        by='蝬???, ascending=False, na_position='last', kind='stable',
+        by='綜合分', ascending=False, na_position='last', kind='stable',
     )
     st.dataframe(
         df, hide_index=True, use_container_width=True,
         column_config={
-            '蝬???:   st.column_config.NumberColumn('蝬???, format='%.2f'),
-            '?滯??':  st.column_config.Column(
-                '?滯??',
-                help='(撣 ??NAV) / NAV ? 100嚗? +1% 霅衣內?蜓?? ETF NAV stale 憿舐內 ??'),
-            '1Y 蝝舐?%': st.column_config.NumberColumn('1Y 蝝舐?%', format='%.2f'),
+            '綜合分':   st.column_config.NumberColumn('綜合分', format='%.2f'),
+            '折溢價%':  st.column_config.Column(
+                '折溢價%',
+                help='(市價 − NAV) / NAV × 100；> +1% 警示。主動式 ETF NAV stale 顯示 ⚠️'),
+            '1Y 累積%': st.column_config.NumberColumn('1Y 累積%', format='%.2f'),
             '3Y CAGR%': st.column_config.NumberColumn('3Y CAGR%', format='%.2f'),
-            '憭??:   st.column_config.NumberColumn('憭??, format='%.2f'),
+            '夏普值':   st.column_config.NumberColumn('夏普值', format='%.2f'),
             'MDD%':     st.column_config.NumberColumn('MDD%', format='%.2f'),
-            '鞎餌??':  st.column_config.NumberColumn('鞎餌??', format='%.2f'),
-            'AUM(??':  st.column_config.NumberColumn('AUM(??', format='%,.1f'),
-            '畾??':  st.column_config.NumberColumn('畾??', format='%.2f'),
-            '5Y??%':  st.column_config.NumberColumn(
-                '5Y??%', format='%.2f',
-                help='餈?5 撟游像???拍?嚗重?園? 7% 摮??隡啣澆皞?'),
-            '7%隡啣?:   st.column_config.TextColumn(
-                '7%隡啣?,
-                help='摮急樴??伐?畾?7%?撘瑞?鞎琿?/ 5%~7%?芯葉??/ 3%~5%?皜Ⅳ / ??%??脣鈭?'),
-            '??亙熒': st.column_config.TextColumn(
-                '??亙熒',
-                help='MK 獢 #1+#2嚗?臬????畾??= ??韐?< 畾??= ????),
+            '費用率%':  st.column_config.NumberColumn('費用率%', format='%.2f'),
+            'AUM(億)':  st.column_config.NumberColumn('AUM(億)', format='%,.1f'),
+            '殖利率%':  st.column_config.NumberColumn('殖利率%', format='%.2f'),
+            '5Y均殖%':  st.column_config.NumberColumn(
+                '5Y均殖%', format='%.2f',
+                help='近 5 年平均殖利率（孫慶龍 7% 存股聖經估值基準）'),
+            '7%估值':   st.column_config.TextColumn(
+                '7%估值',
+                help='孫慶龍策略：殖利率≥7%🟢強烈買進 / 5%~7%⚪中性 / 3%~5%🟡減碼 / ≤3%🔴獲利了結'),
+            '配息健康': st.column_config.TextColumn(
+                '配息健康',
+                help='MK 框架 #1+#2：含息報酬 ≥ 殖利率 = ✅雙贏；< 殖利率 = 🔴吃本金'),
         },
     )
     st.caption(
-        '? **7 蝬剜???*嚗?Y 蝝舐? 25% / 3Y CAGR 20% / 憭 15% / MDD 15% / '
-        '鞎餌??12% / AUM 8% / 畾?帘摰漲 5%??
-        '**????**嚗???嚗???.80 5?0.65 4?0.50 3?0.35 2??0.35 1??
-        '蝻箄???摮??rescale ??甈???
-        '**4 SSOT 鋆?**嚗?皞Ｗ嚗alc_premium_discount嚗? 7%隡啣潘?calc_avg_yield + 摮急樴??伐?'
-        '/ ??亙熒嚗K 獢 #1+#2 ??韐?????/ ?釭??嚗歇?急蝬?????
+        '💡 **7 維權重**：1Y 累積 25% / 3Y CAGR 20% / 夏普 15% / MDD 15% / '
+        '費用率 12% / AUM 8% / 殖利率穩定度 5%。'
+        '**星等映射**（綜合分）：≥0.80 5★、≥0.65 4★、≥0.50 3★、≥0.35 2★、<0.35 1★。'
+        '缺資料因子自動 rescale 有效權重。'
+        '**4 SSOT 補欄**：折溢價（calc_premium_discount）/ 7%估值（calc_avg_yield + 孫慶龍策略）'
+        '/ 配息健康（MK 框架 #1+#2 ✅雙贏/🔴吃本金）/ 品質星等（已含於綜合分）。'
     )
-

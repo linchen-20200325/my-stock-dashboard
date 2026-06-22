@@ -1,18 +1,17 @@
 """
 台股 AI 戰情室 v3.0 集中設定檔 (§11) — 優化版
 整合分析建議：ATR停損、Sharpe動能、時間停損、滑價修正
-
-【v2.0 重構】所有常數已遷移至 shared.constants，本檔案改為導入模式
 """
 
-from shared.constants import (
-    # RSI
-    RSI_OVERBOUGHT, RSI_OVERSOLD,
-    # MA
-    MA_SHORT, MA_MID, MA_LONG, MA_ANNUAL,
-    # Exposure
-    EXPOSURE_BULL, EXPOSURE_NEUTRAL, EXPOSURE_BEAR,
-)
+# ── 市場判斷閾值 ──────────────────────────────────────────────
+MARKET_SCORE_BULL    = 3     # 總分 >= 3 判定為多頭
+MARKET_SCORE_NEUTRAL = 2     # 總分 == 2 判定為中性
+
+# ── 均線參數 ──────────────────────────────────────────────────
+MA_SHORT  = 20
+MA_MID    = 60
+MA_LONG   = 120
+MA_ANNUAL = 240   # 年線
 
 # ── 風控參數（優化版）────────────────────────────────────────
 MAX_POSITION_PER_STOCK  = 0.10   # 單股最大持倉比重 10%
@@ -59,15 +58,21 @@ WEIGHT_TABLES = {
 
 # ── 選股篩選條件 ──────────────────────────────────────────────
 TOP_N_STOCKS    = 10
-# RSI_OVERBOUGHT 和 RSI_OVERSOLD 已統一在 shared.constants（見頂部 import）
+RSI_OVERBOUGHT  = 70
+RSI_OVERSOLD    = 30
 MIN_LIQUIDITY   = 500
 
 # ── 回測參數（優化版：滑價提高至 0.003）─────────────────────
-# BACKTEST_INIT_CASH、BACKTEST_COMMISSION、WFT_TRAIN_YEARS、WFT_TEST_MONTHS 已統一在 shared.constants（見頂部 import）
+BACKTEST_INIT_CASH    = 1_000_000
+BACKTEST_COMMISSION   = 0.001425    # 台股手續費 0.1425%
 BACKTEST_SLIPPAGE     = 0.003       # 滑價：提高至 0.3%（更貼近實戰）
+WFT_TRAIN_YEARS       = 3
+WFT_TEST_MONTHS       = 12
 
 # ── 市場曝險比例（依 market_regime）────────────────────────
-# EXPOSURE_BULL、EXPOSURE_NEUTRAL、EXPOSURE_BEAR 已統一在 shared.constants（見頂部 import）
+EXPOSURE_BULL    = 0.80   # 多頭：80% 持股
+EXPOSURE_NEUTRAL = 0.50   # 中性：50% 持股
+EXPOSURE_BEAR    = 0.20   # 空頭：20% 持股
 
 # ── 韭菜指數警戒門檻 ─────────────────────────────────────────
 LEEK_HIGH_THRESHOLD  = 35.0   # 超過此值 = 散戶過熱，警戒

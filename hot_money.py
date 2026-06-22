@@ -1,15 +1,14 @@
-﻿from data_config import CACHE_TTL
 # -*- coding: utf-8 -*-
-"""hot_money.py ???梢??葫嚗?閫漱??憭? ? ?舐?嚗?+ ??菜葫
+"""hot_money.py — 熱錢監測：三角交叉（外資 × 匯率） + 背離偵測
 
-?游???user 銝??`a731802d-app.py`嚗??Streamlit demo嚗?靽?蝝撘?+
-build_signals ?摩嚗I render ?典???tab_macro.py ?Ｘ?鞈?皞?銴 yfinance
-TWD=X DataFrame + ?Ｘ? finmind_get fetcher嚗??踹????澆 FinMind??
+整合自 user 上傳的 `a731802d-app.py`（單頁 Streamlit demo）；保留純函式 +
+build_signals 邏輯，UI render 部分接 tab_macro.py 既有資料源（複用 yfinance
+TWD=X DataFrame + 既有 finmind_get fetcher），避免重複呼叫 FinMind。
 
-閮剛?嚗? CLAUDE.md 禮2 銝?湛?嚗?
-- 蝝撘?`build_signals` / `_twd_df_to_series` ??streamlit 靘陷嚗皜?
-- `render_hot_money_section` ?交 caller 撌脫???_twd_df + token嚗??鞈?series
-- FinMind 憭望? / 蝛箄???敺??券?蝝?憿舐內 warning + ?迫蝜芸?嚗?
+設計（與 CLAUDE.md §2 一致）：
+- 純函式 `build_signals` / `_twd_df_to_series` 無 streamlit 依賴，可測
+- `render_hot_money_section` 接收 caller 已有的 _twd_df + token，自取外資 series
+- FinMind 失敗 / 空資料一律安全降級（顯示 warning + 停止繪圖）
 """
 from __future__ import annotations
 
@@ -19,36 +18,36 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-# ??閰梯圾霈嚗???璆剛???
+# 狀態白話解讀（供非專業讀者）
 STATE_TEXT = {
-    "?郊瘚": "憭?鞈?甇???亥撣?銝血?甇交??啣馳?????嗾瘛具???湛???閮???,
-    "?郊瘚": "憭?敺撣?綽??啣撟??甇亥粥鞎嗯????箄???蝣綽??征??,
-    "?嚚?Ｗ?瘜撣?: "?啣馳?＊?潘?雿?鞈蒂?芸?甇亥眺頞撣虜隞?”?梢撌脣?乓?瘜?臬?閫??"
-                          "撠?脣??敺?航???憟??澆???霅西死??,
-    "?嚚眺?日??抵?": "憭??刻眺頞撣??啣馳?餃韏啗眸?眺?文?質◤?箏???舀??嗡?鞈?憭??抵?嚗?
-                            "?舐?閮?鋡怎????雓寞?閫????,
-    "?嚚撣???: "?啣馳?＊韏啗眸嚗??∪????箇撠?鞈??????賣迤敺撣?銵?ｇ?"
-                      "???∪??臬?賢?????,
-    "皞怠?瘚": "憭?撠?鞎瑁?嚗?之?湔?撟喉?鞈?皞怠???雿???撘瑯?,
-    "皞怠?瘚": "憭?撠?鞈??嚗?之?湔?撟喉?鞈?皞怠??征雿???撘瑯?,
-    "銝剜改?閫??: "憭?鞎瑁都???⊥?憿舀??鞈??閫???怎皜?閮???,
+    "同步流入": "外資資金正流入股市，並同步推升新台幣——資金動向乾淨、方向一致，偏多訊號。",
+    "同步流出": "外資從股市撤出，新台幣同步走貶——資金流出訊號明確，偏空。",
+    "背離｜熱錢停泊匯市": "台幣明顯升值，但外資並未同步買超股市。這常代表熱錢已匯入、停泊在匯市觀望，"
+                          "尚未進場——往往是行情前奏，值得提高警覺。",
+    "背離｜買盤遭拋匯掩蓋": "外資在買超股市，台幣卻在走貶。買盤可能被出口商拋匯或其他資金外流掩蓋，"
+                            "匯率訊號被稀釋，需謹慎解讀。",
+    "背離｜匯市先撤": "台幣明顯走貶，但股市還沒出現對等賣壓。資金可能正從匯市先行撤離，"
+                      "留意股市是否落後反應。",
+    "溫和流入": "外資小幅買超，匯率大致持平，資金溫和偏多但訊號不強。",
+    "溫和流出": "外資小幅賣超，匯率大致持平，資金溫和偏空但訊號不強。",
+    "中性／觀望": "外資買賣與匯率都無明顯方向，資金處於觀望，暫無清楚訊號。",
 }
-DIVERGENCE_STATES = {"?嚚?Ｗ?瘜撣?, "?嚚眺?日??抵?", "?嚚撣???}
+DIVERGENCE_STATES = {"背離｜熱錢停泊匯市", "背離｜買盤遭拋匯掩蓋", "背離｜匯市先撤"}
 
 
-# ????????????????????????????????????????????????????????????????????????
-# 蝝撘?靽∟?閮?嚗 streamlit 靘陷嚗?
-# ????????????????????????????????????????????????????????????????????????
+# ────────────────────────────────────────────────────────────────────────
+# 純函式：信號計算（無 streamlit 依賴）
+# ────────────────────────────────────────────────────────────────────────
 def build_signals(flow_df: pd.DataFrame, fx_df: pd.DataFrame,
                    window: int, flow_thr: float, fx_thr: float) -> pd.DataFrame:
-    """?蔥蝐Ⅳ???蝞遝???蒂???????????
+    """合併籌碼與匯率、計算滾動訊號並分類狀態（向量化）。
 
     Args:
-        flow_df: columns=[date, foreign_net_yi]嚗?鞈眺鞈?? ??嚗?
-        fx_df:   columns=[date, usdtwd]嚗SD/TWD ?單??舐?嚗?
-        window:  皛曉?蝒鈭斗??交
-        flow_thr: 憭?蝝航?鞎瑁都頞?瑼鳴???嚗?
-        fx_thr:  ?啣馳蝝航??眸?瑼鳴?%嚗?
+        flow_df: columns=[date, foreign_net_yi]（外資買賣超 億元）
+        fx_df:   columns=[date, usdtwd]（USD/TWD 即期匯率）
+        window:  滾動窗格交易日數
+        flow_thr: 外資累計買賣超門檻（億元）
+        fx_thr:  台幣累計升貶門檻（%）
 
     Returns:
         DataFrame[date, foreign_net_yi, usdtwd, twd_apprec, roll_flow,
@@ -65,7 +64,7 @@ def build_signals(flow_df: pd.DataFrame, fx_df: pd.DataFrame,
     if df.empty:
         return pd.DataFrame(columns=cols)
 
-    # ?啣馳?眸 (%)嚗SD/TWD 銝? = ?啣馳?潘?????甇?潔誨銵典??潘??渲死嚗?
+    # 台幣升貶 (%)：USD/TWD 下跌 = 台幣升值（取負號讓正值代表升值，直覺）
     df["twd_apprec"] = -df["usdtwd"].pct_change() * 100.0
     df["roll_flow"]   = df["foreign_net_yi"].rolling(window, min_periods=1).sum()
     df["roll_apprec"] = df["twd_apprec"].rolling(window, min_periods=1).sum()
@@ -77,30 +76,30 @@ def build_signals(flow_df: pd.DataFrame, fx_df: pd.DataFrame,
     conds = [
         (f == 1) & (x == 1),
         (f == -1) & (x == -1),
-        (x == 1) & (f <= 0),     # ???臬?嚗撟??雿?鞈?鞎?
-        (f == 1) & (x == -1),    # ??抵?嚗?鞈眺雿撟?眸
-        (x == -1) & (f >= 0),    # ?臬??嚗撟?眸雿撣鞈??
+        (x == 1) & (f <= 0),     # 停泊匯市：台幣升但外資沒買
+        (f == 1) & (x == -1),    # 拋匯掩蓋：外資買但台幣貶
+        (x == -1) & (f >= 0),    # 匯市先撤：台幣貶但股市無賣壓
         (f == 1) & (x == 0),
         (f == -1) & (x == 0),
     ]
-    labels = ["?郊瘚", "?郊瘚", "?嚚?Ｗ?瘜撣?, "?嚚眺?日??抵?",
-              "?嚚撣???, "皞怠?瘚", "皞怠?瘚"]
-    df["state"] = np.select(conds, labels, default="銝剜改?閫??)
+    labels = ["同步流入", "同步流出", "背離｜熱錢停泊匯市", "背離｜買盤遭拋匯掩蓋",
+              "背離｜匯市先撤", "溫和流入", "溫和流出"]
+    df["state"] = np.select(conds, labels, default="中性／觀望")
     df["is_divergence"] = df["state"].isin(DIVERGENCE_STATES)
     df["interpretation"] = df["state"].map(STATE_TEXT)
     return df
 
 
 def _twd_df_to_series(twd_df: pd.DataFrame) -> pd.DataFrame:
-    """yfinance TWD=X DataFrame ??璅? [date, usdtwd] ?澆???
+    """yfinance TWD=X DataFrame → 標準 [date, usdtwd] 格式。
 
-    ?舀憭車 column ??'close' / 'Close' / 'Adj Close'嚗? datetime index??
-    憯撓?????征 DataFrame嚗aller 憿舐內 warning嚗?
+    支援多種 column 名（'close' / 'Close' / 'Adj Close'）與 datetime index。
+    壞輸入 → 回空 DataFrame（caller 顯示 warning）。
     """
     if twd_df is None or twd_df.empty:
         return pd.DataFrame(columns=["date", "usdtwd"])
     df = twd_df.copy()
-    # column 璅???
+    # column 標準化
     close_col = None
     for c in ("close", "Close", "Adj Close", "adj_close"):
         if c in df.columns:
@@ -108,10 +107,10 @@ def _twd_df_to_series(twd_df: pd.DataFrame) -> pd.DataFrame:
             break
     if close_col is None:
         return pd.DataFrame(columns=["date", "usdtwd"])
-    # index ?舀????reset ?箔?
+    # index 是日期 → reset 出來
     if df.index.name in (None, "Date", "date") and not pd.api.types.is_integer_dtype(df.index):
         df = df.reset_index()
-    # ??date column
+    # 找 date column
     date_col = None
     for c in ("date", "Date", "index"):
         if c in df.columns:
@@ -124,41 +123,41 @@ def _twd_df_to_series(twd_df: pd.DataFrame) -> pd.DataFrame:
     out["date"] = pd.to_datetime(out["date"]).dt.tz_localize(None)
     out["usdtwd"] = pd.to_numeric(out["usdtwd"], errors="coerce")
     out = out.dropna(subset=["usdtwd"])
-    out = out[out["usdtwd"] > 0]   # ?蕪? / -1 蝻箏?
+    out = out[out["usdtwd"] > 0]   # 過濾假日 / -1 缺值
     return out.sort_values("date").reset_index(drop=True)
 
 
-# ????????????????????????????????????????????????????????????????????????
-# 鞈???嚗??冽??finmind_get嚗eading_indicators.py嚗?
-# ????????????????????????????????????????????????????????????????????????
-@st.cache_data(ttl=CACHE_TTL["financial_data"], show_spinner=False)
+# ────────────────────────────────────────────────────────────────────────
+# 資料取得：複用既有 finmind_get（leading_indicators.py）
+# ────────────────────────────────────────────────────────────────────────
+@st.cache_data(ttl=1800, show_spinner=False)
 def fetch_foreign_flow_series(days: int, token: str) -> tuple[pd.DataFrame, str]:
-    """??餈?N 憭拙?鞈眺鞈??嚗???leading_indicators.finmind_get嚗?
+    """抓最近 N 天外資買賣超（複用 leading_indicators.finmind_get）。
 
     Returns:
-        (df[date, foreign_net_yi ??], error_msg or "")
+        (df[date, foreign_net_yi 億元], error_msg or "")
     """
     try:
         from leading_indicators import finmind_get
         end_d = _dt.date.today()
-        start_d = end_d - _dt.timedelta(days=days + 14)   # 憭?撟曉予鞎瑟??vs 鈭斗??亦楨銵?
+        start_d = end_d - _dt.timedelta(days=days + 14)   # 多抓幾天買日曆 vs 交易日緩衝
         df = finmind_get("TaiwanStockTotalInstitutionalInvestors",
                           "", start_d.strftime("%Y%m%d"),
                           end_d.strftime("%Y%m%d"), token or "")
     except Exception as e:
-        return pd.DataFrame(columns=["date", "foreign_net_yi"]), f"FinMind ??憭望?嚗e}"
+        return pd.DataFrame(columns=["date", "foreign_net_yi"]), f"FinMind 抓取失敗：{e}"
 
     if df is None or df.empty:
-        return pd.DataFrame(columns=["date", "foreign_net_yi"]), "?∟????喉??航?粹?鈭斗??亙???"
+        return pd.DataFrame(columns=["date", "foreign_net_yi"]), "無資料回傳（可能為非交易日區間）"
 
-    # ?蕪??鞈??伐???Foreign_Investor / 憭??鞈?蝑?擃?
+    # 過濾「外資」類別（含 Foreign_Investor / 外資及陸資 等變體）
     name_col = next((c for c in ("name", "institutional_investors") if c in df.columns), None)
     if name_col is None:
-        return pd.DataFrame(columns=["date", "foreign_net_yi"]), f"FinMind 蝻粹??交?嚗ols={list(df.columns)[:8]}嚗?
-    mask = df[name_col].astype(str).str.contains("Foreign|憭?", case=False, na=False, regex=True)
+        return pd.DataFrame(columns=["date", "foreign_net_yi"]), f"FinMind 缺類別欄（cols={list(df.columns)[:8]}）"
+    mask = df[name_col].astype(str).str.contains("Foreign|外資", case=False, na=False, regex=True)
     fdf = df.loc[mask].copy()
     if fdf.empty:
-        return pd.DataFrame(columns=["date", "foreign_net_yi"]), "FinMind ??Foreign 憿鞈?"
+        return pd.DataFrame(columns=["date", "foreign_net_yi"]), "FinMind 無 Foreign 類別資料"
 
     fdf["net"] = pd.to_numeric(fdf["buy"], errors="coerce") - pd.to_numeric(fdf["sell"], errors="coerce")
     out = (fdf.groupby("date", as_index=False)["net"].sum()
@@ -168,31 +167,31 @@ def fetch_foreign_flow_series(days: int, token: str) -> tuple[pd.DataFrame, str]
     return out.sort_values("date").reset_index(drop=True), ""
 
 
-# ????????????????????????????????????????????????????????????????????????
-# v1.2 蝝??惜 helper嚗???啁?Ｙ?????streamlit 皜脫?嚗策 AI prompt ?剁?
-# ????????????????????????????????????????????????????????????????????????
+# ────────────────────────────────────────────────────────────────────────
+# v1.2 純資料層 helper：取最新熱錢狀態，無 streamlit 渲染（給 AI prompt 用）
+# ────────────────────────────────────────────────────────────────────────
 def get_latest_hot_money_state(twd_df: pd.DataFrame, token: str = "",
                                 days: int = 180, window: int = 5,
                                 flow_thr: float = 50.0,
                                 fx_thr: float = 0.5) -> dict | None:
-    """蝝??惜嚗???啁?Ｖ?閫漱?霈嚗?靘陷 streamlit??
+    """純資料層：取最新熱錢三角交叉判讀，不依賴 streamlit。
 
-    ?箔?暻澆??剁?tab_macro ??AI 擐葉蝮賜???撣?prompt ?閬?Ｘ?閬?
-    雿?`render_hot_money_section` ?批 st.markdown / st.spinner 蝑葡??
-    ?⊥??湔銴? helper ?賢蝝?蝞?頛胯?
+    為什麼存在：tab_macro 的 AI 首席總經分析師 prompt 需要熱錢摘要，
+    但 `render_hot_money_section` 內含 st.markdown / st.spinner 等渲染，
+    無法直接複用。本 helper 抽出純計算邏輯。
 
     Returns:
         dict | None:
             {
-              'state':           '皞怠?瘚' / '?郊瘚' / ...,
-              'interpretation':  閰?state ?閰梯圾霈嚗?哨?,
-              'foreign_net_yi':  ??啣?鞈眺鞈??嚗???,
-              'roll_flow':       餈?window ?亦敞閮?鞈???嚗?
-              'usdtwd':          ???USD/TWD,
-              'roll_apprec':     餈?window ?亙撟?敞閮?鞎塚?%嚗?
+              'state':           '溫和流出' / '同步流入' / ...,
+              'interpretation':  該 state 的白話解讀（截短）,
+              'foreign_net_yi':  最新外資買賣超（億元）,
+              'roll_flow':       近 window 日累計外資（億元）,
+              'usdtwd':          最新 USD/TWD,
+              'roll_apprec':     近 window 日台幣累計升貶（%）,
               'date':            'YYYY-MM-DD',
             }
-            twd_df / FinMind 憭望???None??
+            twd_df / FinMind 失敗回 None。
     """
     fx_df = _twd_df_to_series(twd_df)
     if fx_df.empty:
@@ -215,87 +214,87 @@ def get_latest_hot_money_state(twd_df: pd.DataFrame, token: str = "",
     }
 
 
-# ????????????????????????????????????????????????????????????????????????
-# UI render嚗 caller expander ?折＊蝷箏??港?閫漱????
-# ????????????????????????????????????????????????????????????????????????
+# ────────────────────────────────────────────────────────────────────────
+# UI render：在 caller expander 內顯示完整三角交叉視圖
+# ────────────────────────────────────────────────────────────────────────
 def render_hot_money_section(twd_df: pd.DataFrame, token: str = "",
                                 key_prefix: str = "hot_money") -> None:
-    """皜脫??梢銝?鈭文?瘛勗漲閬???
+    """渲染熱錢三角交叉深度視圖。
 
     Args:
-        twd_df: caller 撌脫???yfinance TWD=X DataFrame嚗tw2.get('?啣撟???)嚗?
+        twd_df: caller 已抓的 yfinance TWD=X DataFrame（_tw2.get('新台幣匯率')）
         token:  FinMind token
-        key_prefix: widget key ?韌?踹?銵?
+        key_prefix: widget key 前綴避免衝突
     """
     fx_df = _twd_df_to_series(twd_df)
     if fx_df.empty:
-        st.warning("?? ?⊥?啣馳?舐?鞈?嚗aller ?歇??TWD=X嚗??⊥?閮??梢閮???)
+        st.warning("⚠️ 無新台幣匯率資料（caller 應已抓 TWD=X）；無法計算熱錢訊號。")
         return
 
-    # ?批 panel ????inline columns 銝情??sidebar
+    # 控制 panel — 用 inline columns 不污染 sidebar
     cc1, cc2, cc3, cc4 = st.columns([1, 1, 1, 1])
-    days = cc1.slider("??憭拇", 60, 365, 180, step=30,
+    days = cc1.slider("回看天數", 60, 365, 180, step=30,
                        key=f"{key_prefix}_days",
-                       help="??餈?N ????鞈?+ ?舐?")
-    window = cc2.slider("閫撖??潘?鈭斗??伐?", 3, 20, 5,
+                       help="抓最近 N 個日曆日的外資 + 匯率")
+    window = cc2.slider("觀察窗格（交易日）", 3, 20, 5,
                           key=f"{key_prefix}_window",
-                          help="餈?N ?亦敞閮?瑟??)
-    flow_thr = cc3.slider("憭?蝝航??瑼鳴???", 10, 300, 50, step=10,
+                          help="近 N 日累計判斷方向")
+    flow_thr = cc3.slider("外資累計門檻（億）", 10, 300, 50, step=10,
                             key=f"{key_prefix}_flow_thr")
-    fx_thr = cc4.slider("?啣馳?眸?瑼鳴?%嚗?, 0.1, 2.0, 0.5, step=0.1,
+    fx_thr = cc4.slider("台幣升貶門檻（%）", 0.1, 2.0, 0.5, step=0.1,
                           key=f"{key_prefix}_fx_thr")
 
-    with st.spinner("? ??FinMind 憭?鞎瑁都頞?.."):
+    with st.spinner("📡 抓 FinMind 外資買賣超..."):
         flow_df, ferr = fetch_foreign_flow_series(days, token)
     if ferr:
         st.warning(ferr)
     if flow_df.empty:
-        st.info("?⊥???憭?鞈?嚗?蝣箄? FINMIND_TOKEN ?雯頝胯?)
+        st.info("無法取得外資資料；請確認 FINMIND_TOKEN 與網路。")
         return
 
     sig = build_signals(flow_df, fx_df, window, flow_thr, fx_thr)
     if sig.empty:
-        st.info("憭??????????鈭斗??伐???云?哨?嚗?)
+        st.info("外資與匯率資料沒有重疊的交易日（區間太短？）。")
         return
 
     latest = sig.iloc[-1]
 
-    # ??啣霈
-    st.markdown(f"**?? ??啣霈嚗pd.Timestamp(latest['date']).date()}嚗?*")
+    # 最新判讀
+    st.markdown(f"**📍 最新判讀（{pd.Timestamp(latest['date']).date()}）**")
     box = (st.warning if latest["is_divergence"]
-           else (st.success if latest["state"] == "?郊瘚"
-                 else st.error if latest["state"] == "?郊瘚"
+           else (st.success if latest["state"] == "同步流入"
+                 else st.error if latest["state"] == "同步流出"
                  else st.info))
-    box(f"**{latest['state']}**??{latest['interpretation']}")
+    box(f"**{latest['state']}**　—　{latest['interpretation']}")
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("??啣?鞈眺鞈??", f"{latest['foreign_net_yi']:.1f} ??,
-                help="甇??鞎瑁?(鞈??脰撣?嚗?嚗都頞?)
-    m2.metric(f"餈window}?亦敞閮?鞈?, f"{latest['roll_flow']:.0f} ??)
-    m3.metric("??啁????啣馳", f"{latest['usdtwd']:.3f}",
-                help="?詨?銝?嚗撟???潦?)
-    m4.metric(f"餈window}?亙撟??鞎?, f"{latest['roll_apprec']:+.2f} %")
+    m1.metric("最新外資買賣超", f"{latest['foreign_net_yi']:.1f} 億",
+                help="正＝買超(資金進股市)，負＝賣超。")
+    m2.metric(f"近{window}日累計外資", f"{latest['roll_flow']:.0f} 億")
+    m3.metric("最新美元/台幣", f"{latest['usdtwd']:.3f}",
+                help="數字下降＝台幣升值。")
+    m4.metric(f"近{window}日台幣升貶", f"{latest['roll_apprec']:+.2f} %")
 
-    # 銝?鈭文?鞊⊿???
-    st.markdown("**?妣 銝?鈭文?鞊⊿???*")
-    st.caption("璈怨遘嚗?鞈敞閮眺鞈??嚗萵頠賂??啣馳蝝航??眸?銝??郊瘚嚗椰銝??郊瘚嚗?
-                "撌虫?/?喃?撠??嚗??Ｕ??脰敶ｇ???唬?蝵柴?)
+    # 三角交叉象限圖
+    st.markdown("**🧭 三角交叉象限圖**")
+    st.caption("橫軸＝外資累計買賣超，縱軸＝台幣累計升貶。右上＝同步流入，左下＝同步流出，"
+                "左上/右下對角區＝背離。黑色菱形＝最新位置。")
     plot = sig.dropna(subset=["roll_flow", "roll_apprec"]).copy()
     try:
         import altair as alt
         scale = alt.Scale(
-            domain=["?郊瘚", "?郊瘚", "?嚚?Ｗ?瘜撣?, "?嚚眺?日??抵?",
-                    "?嚚撣???, "皞怠?瘚", "皞怠?瘚", "銝剜改?閫??],
+            domain=["同步流入", "同步流出", "背離｜熱錢停泊匯市", "背離｜買盤遭拋匯掩蓋",
+                    "背離｜匯市先撤", "溫和流入", "溫和流出", "中性／觀望"],
             range=["#16a34a", "#dc2626", "#f59e0b", "#f97316", "#eab308",
                    "#86efac", "#fca5a5", "#94a3b8"])
         pts = alt.Chart(plot).mark_circle(size=70, opacity=0.55).encode(
-            x=alt.X("roll_flow:Q", title=f"餈window}?亙?鞈敞閮眺鞈??(??"),
-            y=alt.Y("roll_apprec:Q", title=f"餈window}?亙撟??鞎?%)"),
-            color=alt.Color("state:N", scale=scale, title="???),
-            tooltip=[alt.Tooltip("date:T", title="?交?"),
-                     alt.Tooltip("roll_flow:Q", title="蝝航?鞎瑁都頞???", format=".0f"),
-                     alt.Tooltip("roll_apprec:Q", title="蝝航??眸(%)", format=".2f"),
-                     alt.Tooltip("state:N", title="???)])
+            x=alt.X("roll_flow:Q", title=f"近{window}日外資累計買賣超(億)"),
+            y=alt.Y("roll_apprec:Q", title=f"近{window}日台幣升貶(%)"),
+            color=alt.Color("state:N", scale=scale, title="狀態"),
+            tooltip=[alt.Tooltip("date:T", title="日期"),
+                     alt.Tooltip("roll_flow:Q", title="累計買賣超(億)", format=".0f"),
+                     alt.Tooltip("roll_apprec:Q", title="累計升貶(%)", format=".2f"),
+                     alt.Tooltip("state:N", title="狀態")])
         v = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(strokeDash=[4, 4], color="#888").encode(x="x:Q")
         h = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(strokeDash=[4, 4], color="#888").encode(y="y:Q")
         last = alt.Chart(plot.tail(1)).mark_point(
@@ -304,52 +303,51 @@ def render_hot_money_section(twd_df: pd.DataFrame, token: str = "",
         st.altair_chart((pts + v + h + last).properties(height=360),
                           use_container_width=True)
     except Exception as _ce:
-        # ??抒′??撠? fund v18.240嚗?altair 憭望?????fallback
-        # st.scatter_chart嚗?撅支? altair ???賂?嚗蝝”?潮?蝝?
-        st.caption(f"?? 鞊⊿??葡?仃??{type(_ce).__name__}嚗??寥＊蝷箏?憪?”嚗?)
+        # 預防性硬化（對齊 fund v18.240）：altair 失敗時不再 fallback
+        # st.scatter_chart（底層仍 altair 會再炸），改純表格降級
+        st.caption(f"⚠️ 象限圖渲染失敗（{type(_ce).__name__}），改顯示原始數據表：")
         _t = plot.tail(20)[["date", "roll_flow", "roll_apprec", "state"]].copy()
         _t["date"] = pd.to_datetime(_t["date"]).dt.date
         st.dataframe(
-            _t.rename(columns={"date": "?交?", "roll_flow": f"餈window}?亙?鞈???",
-                                  "roll_apprec": f"餈window}?亙?鞎?%)", "state": "???}),
+            _t.rename(columns={"date": "日期", "roll_flow": f"近{window}日外資(億)",
+                                  "roll_apprec": f"近{window}日升貶(%)", "state": "狀態"}),
             use_container_width=True, hide_index=True, height=320)
 
-    # ???????迎?bar/line 摨惜銋 altair ??銝雿菟??
+    # 時序圖（雙保險：bar/line 底層也是 altair → 一併防呆）
     cc_a, cc_b = st.columns(2)
     with cc_a:
-        st.markdown("**憭?瘥鞎瑁都頞???嚗?*")
+        st.markdown("**外資每日買賣超（億元）**")
         try:
             st.bar_chart(sig.set_index("date")["foreign_net_yi"], height=220)
         except Exception as _be:
-            st.caption(f"?? bar chart 憭望?嚗type(_be).__name__}嚗??寥＊蝷箏偏畾菜??")
+            st.caption(f"⚠️ bar chart 失敗（{type(_be).__name__}），改顯示尾段數據：")
             st.dataframe(sig[["date", "foreign_net_yi"]].tail(10),
                           use_container_width=True, hide_index=True)
     with cc_b:
-        st.markdown("**蝢?/?啣馳嚗????啣馳?潘?**")
+        st.markdown("**美元/台幣（下降＝台幣升值）**")
         try:
             st.line_chart(sig.set_index("date")["usdtwd"], height=220)
         except Exception as _le:
-            st.caption(f"?? line chart 憭望?嚗type(_le).__name__}嚗??寥＊蝷箏偏畾菜??")
+            st.caption(f"⚠️ line chart 失敗（{type(_le).__name__}），改顯示尾段數據：")
             st.dataframe(sig[["date", "usdtwd"]].tail(10),
                           use_container_width=True, hide_index=True)
 
-    # ?鈭辣皜
-    st.markdown("**?? 餈??鈭辣**")
+    # 背離事件清單
+    st.markdown("**⚠️ 近期背離事件**")
     div = sig[sig["is_divergence"]].copy()
     if div.empty:
-        st.success("閫撖???芸皜砍?＊?嚗????之?港??氬?)
+        st.success("觀察區間內未偵測到明顯背離，資金訊號大致一致。")
     else:
         show = div.sort_values("date", ascending=False).head(15).copy()
-        show["?交?"] = show["date"].dt.date
+        show["日期"] = show["date"].dt.date
         show = show.rename(columns={
-            "state": "???,
-            "roll_flow": f"餈window}?亙?鞈???",
-            "roll_apprec": f"餈window}?亙?鞎?%)",
-            "interpretation": "閫??",
+            "state": "狀態",
+            "roll_flow": f"近{window}日外資(億)",
+            "roll_apprec": f"近{window}日升貶(%)",
+            "interpretation": "解讀",
         })
-        show[f"餈window}?亙?鞈???"] = show[f"餈window}?亙?鞈???"].round(0)
-        show[f"餈window}?亙?鞎?%)"] = show[f"餈window}?亙?鞎?%)"].round(2)
+        show[f"近{window}日外資(億)"] = show[f"近{window}日外資(億)"].round(0)
+        show[f"近{window}日升貶(%)"] = show[f"近{window}日升貶(%)"].round(2)
         st.dataframe(
-            show[["?交?", "???, f"餈window}?亙?鞈???", f"餈window}?亙?鞎?%)", "閫??"]],
+            show[["日期", "狀態", f"近{window}日外資(億)", f"近{window}日升貶(%)", "解讀"]],
             use_container_width=True, hide_index=True)
-
