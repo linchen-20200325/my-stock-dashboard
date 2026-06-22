@@ -8,6 +8,10 @@ import pandas as pd
 import numpy as np
 from typing import Optional, Tuple
 from shared.colors import TRAFFIC_YELLOW
+from shared.thresholds import (
+    YIELD_HIGH, YIELD_MID, YIELD_LOW,
+    YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC,
+)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -290,23 +294,23 @@ def calc_dividend_yield_357(price: float, eps_ttm: float,
     est_yield = round(est_div / price * 100, 2)
 
     # 357 價位計算（以估算股利反推）
-    p_cheap    = round(est_div / 0.07, 1)  # 7% → 便宜
-    p_fair     = round(est_div / 0.05, 1)  # 5% → 合理
-    p_expensive= round(est_div / 0.03, 1)  # 3% → 昂貴
+    p_cheap    = round(est_div / YIELD_HIGH_DEC, 1)  # 7% → 便宜
+    p_fair     = round(est_div / YIELD_MID_DEC, 1)   # 5% → 合理
+    p_expensive= round(est_div / YIELD_LOW_DEC, 1)   # 3% → 昂貴
 
     # 連續配息加分
     stable = div_years >= 5
 
-    if est_yield >= 7 and stable:
+    if est_yield >= YIELD_HIGH and stable:
         signal, color = "🟢 甜甜價（7%+連續5年）", G
         msg = f"預估殖利率 {est_yield:.2f}% ≥ 7% 且連續配息 {div_years} 年 — 策略1 存股首選"
-    elif est_yield >= 7:
+    elif est_yield >= YIELD_HIGH:
         signal, color = "🟢 高殖利率（配息不穩定）", G
         msg = f"殖利率 {est_yield:.2f}% 高，但連續配息僅 {div_years} 年（<5年），需確認配息穩定性"
-    elif est_yield >= 5:
+    elif est_yield >= YIELD_MID:
         signal, color = "🟡 合理（5~7%）", Y
         msg = f"預估殖利率 {est_yield:.2f}%，位於合理區間，可分批布局"
-    elif est_yield >= 3:
+    elif est_yield >= YIELD_LOW:
         signal, color = "🔴 昂貴（3~5%）", R
         msg = f"預估殖利率 {est_yield:.2f}%，位於昂貴區，持有但不追高"
     else:

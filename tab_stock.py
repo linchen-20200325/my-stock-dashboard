@@ -22,6 +22,7 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.thresholds import YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC
 from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
 
 
@@ -1578,7 +1579,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             1 if health2 >= 80 else 0,
             1 if _reg_op == 'bull' else 0,
             1 if (vcp2 and vcp2.get('contracting')) else 0,
-            1 if (avg_div2 > 0 and price2 > 0 and price2 <= round(avg_div2/0.05, 1)) else 0,
+            1 if (avg_div2 > 0 and price2 > 0 and price2 <= round(avg_div2/YIELD_MID_DEC, 1)) else 0,
         ])
         if _reg_op == 'bear':
             _op_a = f'大盤空頭格局，{sid2} 無論評分多高，先降倉至20%以下'
@@ -1634,9 +1635,9 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         st.markdown('---')
         st.markdown('#### 💰 B. 357殖利率評價 [策略1]')
         if avg_div2 > 0 and price2 > 0:
-            _cp2 = round(avg_div2/0.07, 1)
-            _fp2 = round(avg_div2/0.05, 1)
-            _dp2 = round(avg_div2/0.03, 1)
+            _cp2 = round(avg_div2/YIELD_HIGH_DEC, 1)
+            _fp2 = round(avg_div2/YIELD_MID_DEC, 1)
+            _dp2 = round(avg_div2/YIELD_LOW_DEC, 1)
             if price2 <= _cp2:
                 _ba = f'現價 {price2:.1f} ≤ 便宜價 {_cp2:.1f}（殖利率>7%），積極買進區'
                 _bb = '可大膽買進，股息都進口袋'
@@ -1654,9 +1655,9 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             _bb = '以技術面健康度為主要判斷'
         st.markdown(teacher_conclusion('孫慶龍', f'{sid2} 現價{price2:.1f} vs 357區間', _ba, _bb), unsafe_allow_html=True)
         if avg_div2 > 0:
-            cheap2=round(avg_div2/0.07,1)
-            fair2=round(avg_div2/0.05,1)
-            dear2=round(avg_div2/0.03,1)
+            cheap2=round(avg_div2/YIELD_HIGH_DEC,1)
+            fair2=round(avg_div2/YIELD_MID_DEC,1)
+            dear2=round(avg_div2/YIELD_LOW_DEC,1)
             if price2<=cheap2:
                 sig2,sc2='🟢便宜價 — 積極買進',TRAFFIC_GREEN
             elif price2<=fair2:
@@ -1773,9 +1774,9 @@ padding:12px 16px;margin:8px 0;">
                     _ttm_series = pd.Series([float(avg_div2)] * len(_rdates_riv))
 
                 # ── 3. 計算河流帶：P = TTM 股利 / 殖利率閾值（逐日） ──
-                _band7_riv = (_ttm_series / 0.07).round(2)
-                _band5_riv = (_ttm_series / 0.05).round(2)
-                _band3_riv = (_ttm_series / 0.03).round(2)
+                _band7_riv = (_ttm_series / YIELD_HIGH_DEC).round(2)
+                _band5_riv = (_ttm_series / YIELD_MID_DEC).round(2)
+                _band3_riv = (_ttm_series / YIELD_LOW_DEC).round(2)
 
                 _cur_div_riv = float(_ttm_series.dropna().iloc[-1]) if not _ttm_series.dropna().empty else 0
                 _p7r = float(_band7_riv.dropna().iloc[-1]) if not _band7_riv.dropna().empty else 0
@@ -3063,9 +3064,9 @@ padding:12px 16px;margin:8px 0;">
             if cx2 and cx2 > 0:
                 _fund_str2.append(f'資本支出={cx2/1e8:.1f}億')
             if avg_div2 > 0 and price2 > 0:
-                _cp2_ai = round(avg_div2/0.07, 1)
-                _fp2_ai = round(avg_div2/0.05, 1)
-                _dp2_ai = round(avg_div2/0.03, 1)
+                _cp2_ai = round(avg_div2/YIELD_HIGH_DEC, 1)
+                _fp2_ai = round(avg_div2/YIELD_MID_DEC, 1)
+                _dp2_ai = round(avg_div2/YIELD_LOW_DEC, 1)
                 _zone2 = ('便宜' if price2 <= _cp2_ai else '合理' if price2 <= _fp2_ai
                           else '昂貴' if price2 <= _dp2_ai else '超過昂貴')
                 _fund_str2.append(f'357估值={_zone2}（便宜:{_cp2_ai}/合理:{_fp2_ai}/昂貴:{_dp2_ai}）')

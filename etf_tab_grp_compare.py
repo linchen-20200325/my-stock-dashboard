@@ -26,6 +26,7 @@ from etf_calc import (
 from etf_quality import compute_etf_quality
 from etf_scoring_helpers import compute_etf_composite_score
 from etf_helpers import normalize_etf_ticker
+from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
 
 _TOKEN_RE = _re.compile(r'[A-Za-z0-9.]+')
 
@@ -54,11 +55,11 @@ def _yield_valuation_zone(cur_yield: float | None, avg_yield: float | None) -> s
     """
     if not avg_yield or avg_yield <= 0 or cur_yield is None:
         return '—'
-    if cur_yield >= 7:
+    if cur_yield >= YIELD_HIGH:
         return '🟢 強烈買進'
-    if cur_yield <= 3:
+    if cur_yield <= YIELD_LOW:
         return '🔴 獲利了結'
-    if cur_yield <= 5:
+    if cur_yield <= YIELD_MID:
         return '🟡 適度減碼'
     return '⚪ 中性持有'
 

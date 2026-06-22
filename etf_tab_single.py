@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import streamlit as st
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
 
 
 def render_etf_single(gemini_fn=None):
@@ -268,19 +269,19 @@ def render_etf_single(gemini_fn=None):
     cc.metric('近5年平均殖利率', f'{avg_yield:.2f}%' if avg_yield else 'N/A')
     cd.metric('現今殖利率', f'{cur_yield:.2f}%')
     if avg_yield > 0:
-        if cur_yield >= 7:
+        if cur_yield >= YIELD_HIGH:
             _colored_box('🟢 <b>強烈買進（特價）</b>：殖利率 ≥ 7%，現值低估，值得分批佈局', 'green')
             _teacher_conclusion('孫慶龍',
                                 f'現金殖利率 {cur_yield:.1f}%（5年均 {avg_yield:.1f}%）',
                                 '殖利率 ≥ 7%，低估特價區，強烈買進',
                                 '分批佈局，停損設 -15%')
-        elif cur_yield <= 3:
+        elif cur_yield <= YIELD_LOW:
             _colored_box('🔴 <b>獲利了結（昂貴）</b>：殖利率 ≤ 3%，現值高估，考慮減碼', 'red')
             _teacher_conclusion('孫慶龍',
                                 f'現金殖利率 {cur_yield:.1f}%（5年均 {avg_yield:.1f}%）',
                                 '殖利率 ≤ 3%，高估昂貴區，獲利了結',
                                 '分批出清，等待殖利率回升到 5% 以上')
-        elif cur_yield <= 5:
+        elif cur_yield <= YIELD_MID:
             _colored_box('🟡 <b>適度減碼（合理）</b>：殖利率 ≤ 5%，估值合理偏高', 'yellow')
             _teacher_conclusion('孫慶龍',
                                 f'現金殖利率 {cur_yield:.1f}%（5年均 {avg_yield:.1f}%）',
