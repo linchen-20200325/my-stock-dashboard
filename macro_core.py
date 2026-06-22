@@ -39,6 +39,12 @@ import pandas as pd
 
 from proxy_helper import fetch_url
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.fred_series import (
+    FRED_BSCICP02,
+    FRED_ISPMANPMI,
+    FRED_NAPM,
+    FRED_PHILLY_FED,
+)
 
 __version__ = "1.0.0"
 
@@ -521,7 +527,7 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 
     # ── 方案 1+2: FRED NAPM / ISPMANPMI（max_age_days 時效檢查）──
     if fred_api_key:
-        for sid, lbl in [('NAPM', 'FRED NAPM'), ('ISPMANPMI', 'FRED ISPMANPMI')]:
+        for sid, lbl in [(FRED_NAPM, 'FRED NAPM'), (FRED_ISPMANPMI, 'FRED ISPMANPMI')]:
             try:
                 df = fetch_fred(sid, fred_api_key, n=36)
                 if df.empty or len(df) < 5:
@@ -651,7 +657,7 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
     #   標 is_proxy=True，UI 顯示「Phil Fed 替代計」。
     if fred_api_key:
         try:
-            df = fetch_fred('GACDFSA066MSFRBPHI', fred_api_key, n=36)
+            df = fetch_fred(FRED_PHILLY_FED, fred_api_key, n=36)
             if not df.empty and len(df) >= 5:
                 df = df.tail(24).copy()
                 last_date = pd.to_datetime(df['date'].iloc[-1]).date()
@@ -666,7 +672,7 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
                         'value': v, 'date': str(last_date),
                         'label': 'Phil Fed 製造業擴散（轉 PMI 刻度）',
                         'source': 'PhilFed-Proxy', 'is_proxy': True,
-                        'series_id': 'GACDFSA066MSFRBPHI',
+                        'series_id': FRED_PHILLY_FED,
                         'dates':  [str(pd.to_datetime(d).date()) for d in df['date']],
                         'values': [round(float(x), 1) for x in df['value']],
                         'proxy_note': '⚠️ 替代指標：Phil Fed 製造業擴散指數，'
@@ -682,7 +688,7 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
     #   UI 必須以 is_proxy=True 標註，且分數刻度與 PMI 不同。
     if fred_api_key:
         try:
-            df = fetch_fred('BSCICP02USM460S', fred_api_key, n=36)
+            df = fetch_fred(FRED_BSCICP02, fred_api_key, n=36)
             if not df.empty and len(df) >= 5:
                 df = df.tail(24)
                 last_date = pd.to_datetime(df['date'].iloc[-1]).date()
@@ -695,7 +701,7 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
                         'value': v, 'date': str(last_date),
                         'label': 'OECD US Business Confidence (Proxy)',
                         'source': 'OECD-Proxy', 'is_proxy': True,
-                        'series_id': 'BSCICP02USM460S',
+                        'series_id': FRED_BSCICP02,
                         'dates':  [str(pd.to_datetime(d).date()) for d in df['date']],
                         'values': [round(float(x), 2) for x in df['value']],
                         'proxy_note': '⚠️ 替代指標：OECD 美國商業信心指數。'
