@@ -13,6 +13,9 @@ exit_signals.py — 三維出場訊號綜合判斷（個股 / 個股組合共用
 """
 from __future__ import annotations
 
+# v18.241 E11: 月線正乖離門檻從 shared SSOT 引入
+from shared.signal_thresholds import MA20_POSITIVE_DEVIATION_THRESHOLD_PCT
+
 import json
 import re
 
@@ -77,7 +80,8 @@ def compute_tech_bearish(df, k=None, d=None) -> dict:
 
         if ma240 and p < ma240:
             reasons.append('跌破年線 MA240')
-        if ma20 and (p - ma20) / ma20 * 100 > 15:
+        # v18.241 E11: 月線正乖離門檻從 SSOT 引入
+        if ma20 and (p - ma20) / ma20 * 100 > MA20_POSITIVE_DEVIATION_THRESHOLD_PCT:
             reasons.append(f'月線正乖離過大 {(p - ma20) / ma20 * 100:+.0f}%')
         if ma5 and p < ma5:
             reasons.append('跌破 5MA（短線轉弱）')

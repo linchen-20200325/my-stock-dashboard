@@ -6,6 +6,11 @@ Author: AI戰情室 v4.0
 import pandas as pd
 import numpy as np
 from shared.colors import TRAFFIC_YELLOW
+# v18.241 E13: VIX / 外資期貨風險門檻從 shared SSOT 引入
+from shared.signal_thresholds import (
+    VIX_HIGH_RISK_THRESHOLD, VIX_MEDIUM_RISK_THRESHOLD,
+    FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS, FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS,
+)
 
 
 class V4StrategyEngine:
@@ -72,8 +77,8 @@ class V4StrategyEngine:
         except (TypeError, ValueError):
             futures = 0
 
-        # 紅燈：高風險
-        if vix > 25 or futures < -20000:
+        # 紅燈：高風險 — v18.241 E13: 門檻從 SSOT 引入
+        if vix > VIX_HIGH_RISK_THRESHOLD or futures < FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS:
             return {
                 "status":       "🔴 紅燈",
                 "level":        "High Risk",
@@ -83,8 +88,8 @@ class V4StrategyEngine:
                 "vix":          vix,
                 "futures":      futures,
             }
-        # 黃燈：中度風險
-        elif vix > 20 or futures < -10000:
+        # 黃燈：中度風險 — v18.241 E13: 門檻從 SSOT 引入
+        elif vix > VIX_MEDIUM_RISK_THRESHOLD or futures < FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS:
             return {
                 "status":       "🟡 黃燈",
                 "level":        "Medium Risk",

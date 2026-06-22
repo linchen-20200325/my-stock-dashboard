@@ -14,6 +14,10 @@ from typing import Any, Optional
 
 import pandas as pd
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+# v18.241 E1+E2: 抽 inline magic 到 shared SSOT（CLAUDE.md §3.3）
+from shared.signal_thresholds import (
+    HEALTH_WEIGHT_JQ, HEALTH_WEIGHT_SCORE, HEALTH_FNET_BONUS, CONFIDENCE_SOURCE_COUNT,
+)
 
 # 季末日對照（DataFrame 內「季度標籤 2024Q4」→「2024-12-31」用）
 _QE_MAP = {'1': '03-31', '2': '06-30', '3': '09-30', '4': '12-31'}
@@ -109,8 +113,11 @@ def calc_traffic_light(
 
     _regime  = _mkt.get('regime', 'neutral')
     _defense = (_score < 2 and abs(_fut_net) > 30000 and _fut_net < 0)
+    # v18.241 E1: 健康評分權重從 SSOT 引入（原 0.4/0.4/20 inline）
     _health  = round(
-        _jqavg * 0.4 + min(_score / 5 * 100, 100) * 0.4 + (20 if _fnet > 0 else 0), 1
+        _jqavg * HEALTH_WEIGHT_JQ
+        + min(_score / CONFIDENCE_SOURCE_COUNT * 100, 100) * HEALTH_WEIGHT_SCORE
+        + (HEALTH_FNET_BONUS if _fnet > 0 else 0), 1
     )
 
     # 校準腳本可注入測試門檻；正式呼叫不傳 → 用模組常數
@@ -145,7 +152,8 @@ def calc_traffic_light(
         ('先行指標 (期貨/PCR/韭菜)',      bool(li_latest is not None and not li_latest.empty)),
         ('ADL 騰落指標',                  bool(_cd.get('adl') is not None)),
     ]
-    _conf = round(sum(_ok for _, _ok in _conf_sources) / 5 * 100)
+    # v18.241 E2: confidence 分子分母從 SSOT 引入
+    _conf = round(sum(_ok for _, _ok in _conf_sources) / CONFIDENCE_SOURCE_COUNT * 100)
     _missing = [_name for _name, _ok in _conf_sources if not _ok]
     return {
         'color': _color, 'icon': _icon, 'label': _label,

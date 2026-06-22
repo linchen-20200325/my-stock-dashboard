@@ -6,6 +6,9 @@
 
 import sys  # v18.241 D6: calc_atr_stop 例外路徑寫 stderr 用
 
+# v18.241 E10: ATR% 風險分級從 shared SSOT 引入
+from shared.signal_thresholds import ATR_PCT_LOW, ATR_PCT_HIGH
+
 try:
     from config import RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES
 except ImportError:
@@ -88,8 +91,8 @@ def calc_momentum_score(df) -> float:
         _lo = df['low']  if 'low'  in df.columns else close
         _tr = (_hi - _lo).rolling(14).mean().iloc[-1]
         _atr_pct = _tr / close.iloc[-1] if close.iloc[-1] > 0 else 0.02
-        # ATR% < 3% = 低波動性質，穩健；ATR% > 5% = 高波動，酌扣
-        atr_score = 2 if _atr_pct < 0.03 else (1 if _atr_pct < 0.05 else 0)
+        # v18.241 E10: ATR% 分級從 shared.signal_thresholds 引入（原 0.03/0.05 inline）
+        atr_score = 2 if _atr_pct < ATR_PCT_LOW else (1 if _atr_pct < ATR_PCT_HIGH else 0)
     else:
         atr_score = 1
 
