@@ -8,7 +8,8 @@
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
 - [ ] **S-PROV-1** §2.2 DataPoint provenance 模型尚未統一(現以 DataFrame + meta dict / failure token 承載);`macro_core.fetch_fred()` 等回傳補 source/fetched_at 欄位
-- [ ] **S-PIT-1** §2.3 ⚠️ `backtest_engine.py` 是否確實實作 vintage 對齊?程式碼層待釐清
+- [x] **S-PIT-1** §2.3 v18.245 audit 結案:`backtest_engine.py` vintage **對齊正確**(walk_forward_test train/test 嚴格時序切割無重疊);**另議**:walk_forward_test 未實際拿 train_df 做參數優化,屬設計不完整非 vintage 問題,後續處理
+- [ ] **S-WFT-1**(新增,從 S-PIT-1 衍生)`backtest_engine.walk_forward_test` 未實際拿 train_df 做策略參數優化,僅做時間切割 → walk-forward 設計不完整,需評估是否引入 train phase
 - [ ] **S-SCHEMA-1** §3.1 ⚠️ pandera 是否加 requirements + 逐 fetcher 落地 schema?(評估 ~200ms 啟動 cost)
 - [ ] **S-RECON-1** §4.3 雙演算法對帳尚未落地(健康評分 / 月營收 YoY / 殖利率 — 缺對照演算法)
 - [x] **S-GRAY-1** §8.3 灰色地帶 `macro_helpers.py` 是否該抽 config-loader 至 L0(輕度 I/O 讀 JSON)— **v18.244 完成**:loader 抽至 `shared/macro_calibration.py`(L0),`macro_helpers` 改 import,介面 0 改
@@ -16,7 +17,7 @@
 - [ ] **S-GRAY-3** §8.3 灰色地帶 `app.py`(7,300 LOC)是否該下沉部分計算邏輯至 L2
 - [ ] **S-MED** Bootstrap-audit 中項 81 條(M)— W5-1/W5-2 已收一輪;其餘需逐一檢視
 
-**ROI 建議排序**(S-GRAY-1 已完成):S-PROV-1(影響資料可信度) → S-PIT-1(影響回測正確性) → S-GRAY-3(歷史包袱大但價值高) → S-GRAY-2(daily_checklist 拆檔) → S-RECON-1(雙演算法對帳) → S-SCHEMA-1(ROI 偏低)。
+**ROI 建議排序**(S-GRAY-1 / S-PIT-1 已完成):S-PROV-1(影響資料可信度) → S-GRAY-3(歷史包袱大但價值高) → S-GRAY-2(daily_checklist 拆檔) → S-RECON-1(雙演算法對帳) → S-WFT-1(walk-forward 設計補完) → S-SCHEMA-1(ROI 偏低)。
 
 ---
 
