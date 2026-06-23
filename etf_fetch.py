@@ -997,9 +997,14 @@ def fetch_etf_manager(ticker: str):
                         pass
                 if _since:
                     print(f'[MDJ/manager] ✅(KV) {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
-                    return {'name': _name, 'since': _since, 'tenure_days': _days}
+                    # S-PROV-1 phase 11 v18.257 — provenance(schema-additive)
+                    return {'name': _name, 'since': _since, 'tenure_days': _days,
+                            'source': f'MoneyDJ:{_endpoint}:KV',
+                            'fetched_at': pd.Timestamp.now('UTC').isoformat()}
                 if _best is None:   # 名字有、到職日缺 → 暫存，續查其他頁
-                    _best = {'name': _name, 'since': None, 'tenure_days': None}
+                    _best = {'name': _name, 'since': None, 'tenure_days': None,
+                             'source': f'MoneyDJ:{_endpoint}:KV',
+                             'fetched_at': pd.Timestamp.now('UTC').isoformat()}
                     print(f'[MDJ/manager] (KV) {_t} = {_name} via {_endpoint}，無到職日，續查其他頁')
         except Exception as _ekv:
             print(f'[MDJ/manager] KV parse 略過 {_endpoint}: {type(_ekv).__name__}')
@@ -1037,9 +1042,14 @@ def fetch_etf_manager(ticker: str):
                     pass
             if _since:
                 print(f'[MDJ/manager] ✅ {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
-                return {'name': _name, 'since': _since, 'tenure_days': _days}
+                # S-PROV-1 phase 11 v18.257 — provenance(schema-additive)
+                return {'name': _name, 'since': _since, 'tenure_days': _days,
+                        'source': f'MoneyDJ:{_endpoint}:regex',
+                        'fetched_at': pd.Timestamp.now('UTC').isoformat()}
             if _best is None:
-                _best = {'name': _name, 'since': None, 'tenure_days': None}
+                _best = {'name': _name, 'since': None, 'tenure_days': None,
+                         'source': f'MoneyDJ:{_endpoint}:regex',
+                         'fetched_at': pd.Timestamp.now('UTC').isoformat()}
                 print(f'[MDJ/manager] (regex) {_t} = {_name} via {_endpoint}，無到職日，續查其他頁')
         except Exception as _e:
             _err_trace.append(f'{_endpoint}: regex 例外 {type(_e).__name__}')
@@ -1056,6 +1066,9 @@ def fetch_etf_manager(ticker: str):
         _sitca = _fetch_sitca_manager(_t)
         if _sitca and _sitca.get('name'):
             print(f'[SITCA/manager] ✅ {_t} = {_sitca["name"]}')
+            # S-PROV-1 phase 11 v18.257 — provenance(schema-additive)
+            _sitca.setdefault('source', 'SITCA:fund-manager-table')
+            _sitca.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
             return _sitca
         else:
             _err_trace.append('sitca: 多 URL/多 column 比對全失敗')
@@ -1064,8 +1077,10 @@ def fetch_etf_manager(ticker: str):
     _yu = _fetch_yuanta_active_etf_meta(_t)
     if _yu and _yu.get('manager'):
         print(f'[Yuanta/manager] ✅ {_t} = {_yu["manager"]}')
+        # S-PROV-1 phase 11 v18.257 — provenance(schema-additive,既有 'source' 保留)
         return {'name': _yu['manager'], 'since': None, 'tenure_days': None,
-                'source': 'yuanta-official'}
+                'source': 'Yuanta:official',
+                'fetched_at': pd.Timestamp.now('UTC').isoformat()}
     elif _yu is not None:
         _err_trace.append('yuanta: 200 但 regex 無經理人')
     else:
