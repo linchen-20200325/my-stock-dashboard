@@ -160,13 +160,19 @@ def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
 
     v18.228 集中化：portfolio / single / grp_compare / backtest 跨 tab 同檔
     ETF 從 2~3 次 yfinance call → 1 次（cache key 只剩 ticker）。
+
+    S-PROV-1 v18.251 phase 7:成功時 df.attrs 含 source/fetched_at(§2.2)。
     """
     try:
         df = yf.Ticker(ticker).history(period='max', auto_adjust=True)
         if df.empty:
             return pd.DataFrame()
         df.index = pd.to_datetime(df.index).tz_localize(None)
-        return df.ffill()
+        out = df.ffill()
+        # S-PROV-1 v18.251:provenance via DataFrame.attrs(§2.2)
+        out.attrs["source"] = f"Yahoo:{ticker}:history_max_adj"
+        out.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+        return out
     except Exception as e:
         # S-H3 v18.244:L1 不可 st.error → 改 print log,caller 依 empty DataFrame 判斷
         print(f'[etf_fetch] ❌ 無法取得 {ticker} 價格:{type(e).__name__}: {e}')
@@ -177,6 +183,7 @@ def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
     """取得 ETF 歷史價格（auto_adjust=True 還原權息）。
 
     v18.228 起改為共用 'max' 底層 + 記憶體切片。公開簽章不變，呼叫端 0 改動。
+    S-PROV-1 v18.251:provenance attrs 從底層繼承(切片後顯式 copy 保留)。
     """
     df = _fetch_etf_price_max(ticker)
     if df.empty:
@@ -185,17 +192,26 @@ def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
     if days is None or len(df) == 0:
         return df
     cutoff = df.index.max() - pd.Timedelta(days=days)
-    return df.loc[df.index >= cutoff]
+    sliced = df.loc[df.index >= cutoff]
+    # v18.251 S-PROV-1:.loc 切片可能 lose attrs,顯式 copy 保留血緣
+    sliced.attrs = dict(df.attrs)
+    return sliced
 
 
 @st.cache_data(ttl=TTL_1HOUR, max_entries=10)
 def fetch_etf_dividends(ticker: str) -> pd.Series:
-    """取得 ETF 歷史配息"""
+    """取得 ETF 歷史配息。
+
+    S-PROV-1 v18.251:成功時 s.attrs 含 source/fetched_at(§2.2)。
+    """
     try:
         divs = yf.Ticker(ticker).dividends
         if divs.empty:
             return pd.Series(dtype=float)
         divs.index = pd.to_datetime(divs.index).tz_localize(None)
+        # S-PROV-1 v18.251:provenance via Series.attrs
+        divs.attrs["source"] = f"Yahoo:{ticker}:dividends"
+        divs.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
         return divs
     except Exception:
         return pd.Series(dtype=float)
