@@ -379,7 +379,12 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
         _capture_finmind_meta('price', _j)   # v18.201 D2：紀錄 last_update + fetched_at
         if _j.get('status') == 200 and _j.get('data'):
             print(f'[FM-Raw price] {stock_id}: ✅ {len(_j["data"])} 筆（SDK 未載入，走 HTTP 備援）')
-            return pd.DataFrame(_j['data'])
+            _df_out = pd.DataFrame(_j['data'])
+            # S-PROV-1 phase 15 v18.261 — provenance(schema-additive)
+            if not _df_out.empty:
+                _df_out['source'] = 'FinMind:TaiwanStockPrice:raw_http'
+                _df_out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
+            return _df_out
         print(f'[FM-Raw price] {stock_id}: status={_j.get("status")} msg={_j.get("msg","")}')
     except Exception as _e:
         print(f'[FM-Raw price] {stock_id}: ❌ {_e}')
