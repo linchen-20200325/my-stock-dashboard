@@ -120,10 +120,27 @@ def _render_global_risk_radar(fred_api_key: str = "",
             _src = _lt.get('label', '—')
             _note = _lt.get('note', '—')
             _sig = _lt.get('signal', '⬜')
+            # S-RECON-1 phase 2 v18.255 — 殖利率燈附「FRED vs Yahoo」對帳 chip
+            _rec_chip = ''
+            _rec = _lt.get('reconcile') if isinstance(_lt, dict) else None
+            if isinstance(_rec, dict) and _rec.get('status') in ('agree', 'disagree', 'a_missing', 'b_missing'):
+                _rec_status = _rec.get('status', '')
+                _rec_emoji = {'agree': '✅', 'disagree': '⚠️',
+                              'a_missing': '⬜', 'b_missing': '⬜'}.get(_rec_status, '⬜')
+                _rec_color = {'agree': '#22c55e', 'disagree': '#ef4444'}.get(_rec_status, '#888888')
+                _va, _vb = _rec.get('value_a'), _rec.get('value_b')
+                _va_t = f'{_va:.3f}' if isinstance(_va, (int, float)) else '—'
+                _vb_t = f'{_vb:.3f}' if isinstance(_vb, (int, float)) else '—'
+                _rec_chip = (
+                    f'  \n<span style="color:{_rec_color};font-size:11px;">'
+                    f'{_rec_emoji} 對帳：{_rec.get("source_a","")}={_va_t} '
+                    f'vs {_rec.get("source_b","")}={_vb_t}（{_rec_status}）</span>'
+                )
             st.markdown(
                 f'**{_label}**：{_sig}  \n'
                 f'<span style="color:#8b949e;font-size:12px;">{_note}</span>  \n'
-                f'<span style="color:{TRAFFIC_NEUTRAL};font-size:11px;">資料源：{_src}</span>',
+                f'<span style="color:{TRAFFIC_NEUTRAL};font-size:11px;">資料源：{_src}</span>'
+                f'{_rec_chip}',
                 unsafe_allow_html=True,
             )
         st.caption('💡 雷達為「短線急殺領先指標」（1～5 日視角），與上方長/短期總經（季級）互補。'

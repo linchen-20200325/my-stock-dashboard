@@ -18,7 +18,7 @@
 - [x] **S-PIT-1** §2.3 v18.245 audit 結案:`backtest_engine.py` vintage **對齊正確**(walk_forward_test train/test 嚴格時序切割無重疊);**另議**:walk_forward_test 未實際拿 train_df 做參數優化,屬設計不完整非 vintage 問題,後續處理
 - [ ] **S-WFT-1**(新增,從 S-PIT-1 衍生)`backtest_engine.walk_forward_test` 未實際拿 train_df 做策略參數優化,僅做時間切割 → walk-forward 設計不完整,需評估是否引入 train phase
 - [ ] **S-SCHEMA-1** §3.1 ⚠️ pandera 是否加 requirements + 逐 fetcher 落地 schema?(評估 ~200ms 啟動 cost)
-- [⚙️] **S-RECON-1** §4.3 雙演算法對帳;v18.252 第 1 階段:新建 `reconcile.py`(L2 Compute 純函式)+ 16/16 unit tests。提供 `reconcile_pair`(通用)/ `reconcile_us10y_yield`(FRED DGS10 vs Yahoo ^TNX/10, 5bp 容差)/ `reconcile_monthly_revenue_yoy`(自算 vs FinMind)。caller 整合待後續(目前為純獨立工具模組,可被 risk_radar / tab_macro 隨時引用)
+- [⚙️] **S-RECON-1** §4.3 雙演算法對帳;v18.252 第 1 階段:新建 `reconcile.py`(L2 Compute 純函式)+ 16/16 unit tests。提供 `reconcile_pair`(通用)/ `reconcile_us10y_yield`(FRED DGS10 vs Yahoo ^TNX/10, 5bp 容差)/ `reconcile_monthly_revenue_yoy`(自算 vs FinMind)。**v18.255 第 2 階段**:`risk_radar._signal_yield_10y_shock` 接入 reconcile,額外抓 `^TNX` 與 FRED DGS10 比對,結果以 schema-additive `reconcile` 欄寫入返回 dict;`tab_macro.py` 10 燈 expander 新增「✅/⚠️ 對帳 chip」;3 新 unit tests(agree/disagree/missing)+ 既有 3 test 不破。月營收 YoY caller 整合可後續加入。
 - [x] **S-GRAY-1** §8.3 灰色地帶 `macro_helpers.py` 是否該抽 config-loader 至 L0(輕度 I/O 讀 JSON)— **v18.244 完成**:loader 抽至 `shared/macro_calibration.py`(L0),`macro_helpers` 改 import,介面 0 改
 - [ ] **S-GRAY-2** §8.3 灰色地帶 `daily_checklist.py` 跨 L1+L2+L3 是否該拆檔
 - [ ] **S-GRAY-3** §8.3 灰色地帶 `app.py`(7,300 LOC)是否該下沉部分計算邏輯至 L2

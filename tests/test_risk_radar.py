@@ -160,6 +160,31 @@ class TestYield10yShock:
             d = rr._signal_yield_10y_shock("KEY")
         assert "🔴" in d["signal"]
 
+    # S-RECON-1 phase 2 v18.255 — 雙源對帳 FRED DGS10 vs Yahoo ^TNX
+    def test_reconcile_agree(self):
+        # FRED=4.52, TNX=45.3 → TNX/10=4.53,差 1bp 在 5bp 容差內
+        with patch.object(rr, "fetch_fred", return_value=_fred([4.50, 4.52])), \
+             patch.object(rr, "fetch_yf_close", return_value=_yf([45.3])):
+            d = rr._signal_yield_10y_shock("KEY")
+        assert "reconcile" in d
+        assert d["reconcile"]["status"] == "agree"
+        assert d["reconcile"]["agree"] is True
+
+    def test_reconcile_disagree(self):
+        # FRED=4.52, TNX=50.0 → TNX/10=5.00,差 48bp >> 5bp 容差
+        with patch.object(rr, "fetch_fred", return_value=_fred([4.50, 4.52])), \
+             patch.object(rr, "fetch_yf_close", return_value=_yf([50.0])):
+            d = rr._signal_yield_10y_shock("KEY")
+        assert d["reconcile"]["status"] == "disagree"
+        assert d["reconcile"]["agree"] is False
+
+    def test_reconcile_tnx_missing(self):
+        # FRED ok, Yahoo 空 → reconcile b_missing
+        with patch.object(rr, "fetch_fred", return_value=_fred([4.50, 4.52])), \
+             patch.object(rr, "fetch_yf_close", return_value=pd.Series(dtype=float)):
+            d = rr._signal_yield_10y_shock("KEY")
+        assert d["reconcile"]["status"] == "b_missing"
+
 
 # ──────────────────────────────────────────────────────────────
 # 5. MOVE level
