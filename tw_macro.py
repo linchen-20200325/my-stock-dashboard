@@ -102,10 +102,15 @@ def fetch_twse_breadth() -> dict:
             'z_breadth':  float | None,  max(-3, min(3, breadth/20))
             'date':       str,
             'error':      str | None,
+            'source':     str,           血緣標識 (S-PROV-1 v18.249)
+            'fetched_at': str,           UTC ISO (S-PROV-1 v18.249)
         }
     """
+    # S-PROV-1 v18.249 phase 5:provenance schema(§2.2)
+    _now_iso = pd.Timestamp.now('UTC').isoformat()
     result = {'adv': None, 'dec': None, 'breadth': None,
-              'z_breadth': None, 'date': '', 'error': None}
+              'z_breadth': None, 'date': '', 'error': None,
+              'source': 'TWSE:MI_INDEX:MS', 'fetched_at': _now_iso}
 
     r = fetch_url(TWSE_MI_INDEX_URL,
                   params={'response': 'json', 'type': 'MS'}, timeout=12)
@@ -347,11 +352,16 @@ def fetch_cbc_m1b_m2() -> dict:
             'tier_used':      1 | 2 | 3 | None,
             'is_proxy_tier':  bool,            tier 3 才為 True
             'error':          str | None,
+            'source':         str,             血緣標識,依 tier 動態 (v18.249)
+            'fetched_at':     str,             UTC ISO (v18.249)
         }
     """
+    # S-PROV-1 v18.249 phase 5:provenance schema(§2.2)
+    _now_iso = pd.Timestamp.now('UTC').isoformat()
     result = {
         'm1b_yoy': None, 'm2_yoy': None, 'gap': None,
         'tier_used': None, 'is_proxy_tier': False, 'error': None,
+        'source': 'CBC:M1B_M2:unknown', 'fetched_at': _now_iso,
     }
 
     # ── Tier 1 ──
@@ -361,6 +371,7 @@ def fetch_cbc_m1b_m2() -> dict:
             result['m1b_yoy'], result['m2_yoy'] = out
             result['gap']        = round(out[0] - out[1], 2)
             result['tier_used']  = 1
+            result['source']     = 'CBC:ms1.json:tier1'
             return result
 
     # ── Tier 2 ──
@@ -369,6 +380,7 @@ def fetch_cbc_m1b_m2() -> dict:
         result['m1b_yoy'], result['m2_yoy'] = out
         result['gap']       = round(out[0] - out[1], 2)
         result['tier_used'] = 2
+        result['source']    = 'CBC:EF15M01:tier2'
         return result
 
     # ── Tier 3 ──
@@ -378,6 +390,7 @@ def fetch_cbc_m1b_m2() -> dict:
         result['gap']            = round(out[0] - out[1], 2)
         result['tier_used']      = 3
         result['is_proxy_tier']  = True
+        result['source']         = 'Yahoo:^TWII:proxy_tier3'
         return result
 
     result['error'] = "三層備援全部失敗"
@@ -620,6 +633,8 @@ def fetch_ndc_signal_history(months_back: int = 12,
         'score_latest': None, 'score_prev': None, 'score_prev2': None,
         'trend': [], 'inflection': '⬜ 資料不足',
         'date_latest': '', 'source': None, 'error': None,
+        # S-PROV-1 v18.249:provenance fetched_at(source 既有,無需改 schema)
+        'fetched_at': pd.Timestamp.now('UTC').isoformat(),
     }
     # v18.177 chain：dgtw PRIMARY（免費 NDC OpenData）→ FinMind FALLBACK（付費牆）
     sub = _dgtw_ndc_indicator_series(
@@ -690,6 +705,8 @@ def fetch_ndc_leading_index(months_back: int = 18,
         'smooth6m': None, 'prev_s6m': None,
         'inflection': '⬜ 資料不足', 'trend': [],
         'date_latest': '', 'source': None, 'error': None,
+        # S-PROV-1 v18.249:provenance fetched_at(source 既有)
+        'fetched_at': pd.Timestamp.now('UTC').isoformat(),
     }
     # v18.177 chain：dgtw PRIMARY → FinMind FALLBACK
     sub = _dgtw_ndc_indicator_series(
@@ -766,6 +783,8 @@ def fetch_foreign_consecutive_days(days_back: int = 30,
         'consec_days': None, 'reversed': False, 'today_net': None,
         'prev_streak': None, 'inflection': '⬜ 資料不足',
         'date_latest': '', 'source': None, 'error': None,
+        # S-PROV-1 v18.249:provenance fetched_at(source 既有)
+        'fetched_at': pd.Timestamp.now('UTC').isoformat(),
     }
     today    = _dt.date.today()
     end_dt   = today.strftime("%Y-%m-%d")
