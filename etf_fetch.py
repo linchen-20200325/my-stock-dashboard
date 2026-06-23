@@ -341,6 +341,9 @@ def fetch_etf_meta_moneydj(ticker: str) -> dict:
 
     if _out:
         print(f'[MDJ/meta] OK {_t} = {list(_out.keys())}')
+        # S-PROV-1 phase 12 v18.258 — provenance(schema-additive)
+        _out['source'] = 'MoneyDJ:Basic0004'
+        _out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
     else:
         print(f'[MDJ/meta] {_t}: 200 但無欄位匹配')
     return _out
