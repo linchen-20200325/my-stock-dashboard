@@ -257,6 +257,8 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     cache key = (series_id, api_key, n)；copy-on-read 防 caller mutation 污染。
     """
     if not api_key:
+        # W5-2 §1: 沉默 return empty 改補 log,但不 raise(caller 已透過 empty 判斷 fallback)
+        print(f"[macro_core/fred] {series_id} 跳過:無 api_key")
         return pd.DataFrame()
 
     import time as _time
@@ -278,6 +280,8 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         timeout=20,
     )
     if r is None:
+        # W5-2 §1: fetch 失敗補 log(caller 走 fallback 鏈,故不 raise)
+        print(f"[macro_core/fred] {series_id} fetch_url 回 None(network/timeout)")
         return pd.DataFrame()
     try:
         obs = r.json().get("observations", [])
@@ -285,6 +289,8 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         print(f"[macro_core/fred] {series_id} JSON 解析失敗: {e}")
         return pd.DataFrame()
     if not obs:
+        # W5-2 §1: FRED 回 200 但 observations 空 — 補 log
+        print(f"[macro_core/fred] {series_id} observations 為空(可能新 series 尚未發布)")
         return pd.DataFrame()
     df = pd.DataFrame(obs)
     df = df[df["value"] != "."].copy()

@@ -429,7 +429,9 @@ def fetch_single(symbol, period="60d"):
     if _os2.path.exists(_ck2) and (time.time()-_os2.path.getmtime(_ck2))/60 < 30:
         try:
             with open(_ck2,'rb') as _f: return _pk2.load(_f)
-        except: pass
+        except (OSError, EOFError, _pk2.UnpicklingError) as _e_pkl:
+            # W5-2 §1: pickle 反序列化失敗(壞檔/版本不容)補 log,fallback 重新 fetch
+            print(f"[daily_checklist yf cache] {symbol} pkl 載入失敗,重抓:{_e_pkl}")
     # 美元指數備援 symbol 清單
     _sym_list = [symbol]
     if symbol in ('DX-Y.NYB', 'DX=F'):
@@ -744,8 +746,11 @@ def bar_chart_institutional(inst_dict, title="三大法人買賣超（堆疊柱�
             if not isinstance(_val, dict): continue
             _matched = next((k for k in _inst_keys if k in str(_name)), None)
             if _matched:
-                try: _data_by[_matched] = float(_val.get('net', 0) or 0)
-                except: pass
+                try:
+                    _data_by[_matched] = float(_val.get('net', 0) or 0)
+                except (ValueError, TypeError) as _e_inst:
+                    # W5-2 §1: 三大法人 net 解析失敗補 log
+                    print(f"[daily_checklist inst-flow] {_matched} net 解析失敗:{_e_inst}")
     # 若無日期維度，做單日橫向堆疊
     fig = go.Figure()
     for _ik in _inst_keys:
