@@ -1076,9 +1076,9 @@ def render_data_health_raw():
             rows.append(_row('基金經理人',
                              str(_dt_r.date.today()) if _mgr_name else None, 'static',
                              optional=True,
-                             error_msg=(None if _mgr_name
-                                        else st.session_state.get(
-                                            '_etf_manager_last_err', {}).get(
+                             # S-H3 v18.244:讀 module-level accessor(原 st.session_state)
+                             error_msg=(None if _mgr_name else
+                                        __import__('etf_fetch').get_etf_manager_last_err().get(
                                             tk.replace('.tw', '.TW'))),
                              source='MoneyDJ / SITCA / Yuanta',
                              endpoint='Basic0004/0001/0006/0011 → SITCA → 官網',
@@ -1255,7 +1255,8 @@ def render_data_health_raw():
                                 source='MoneyDJ', endpoint='Basic0001.xdjhtm',
                                 proxy=True))
                         else:
-                            _last_err = (st.session_state.get('_etf_manager_last_err') or {}).get(_tk_p)
+                            # S-H3 v18.244:讀 module-level accessor(原 st.session_state)
+                            _last_err = (__import__('etf_fetch').get_etf_manager_last_err()).get(_tk_p)
                             # v1.1：主動式 ETF Yuanta 也失敗 → 黃燈 na（公開資料受限）
                             _err_str = (
                                 '主動式 ETF — 公開資料受限'

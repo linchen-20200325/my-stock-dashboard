@@ -2,12 +2,36 @@
 ETF 抓取層（fetch layer）
 從 etf_dashboard.py 抽出的純 I/O 函式：價格 / 配息 / 基本資訊 / 費用率 / NAV / 類股漲跌
 無內部依賴；可被 etf_calc、etf_render、tab_* 模組安全 import。
+
+S-H3 v18.244(CLAUDE.md §8.2 修正):L1 不得用 `st.error/st.warning/st.session_state`
+真 UI 呼叫。原 4 處 violation:
+- L147 / L1581:`st.error/st.warning` → 改 `print()` log,caller 自行偵測 empty DataFrame
+- L1024 / L1747:`st.session_state.setdefault('_etf_*_last_err', {})` 側通道錯誤儲存
+  → 改 module-level `_ETF_MANAGER_LAST_ERR` / `_ETF_INDEX_LAST_ERR` dict +
+    `get_etf_manager_last_err()` / `get_etf_index_last_err()` accessor,
+    UI(`health_inspector.py`)讀取改用 accessor。
 """
 import streamlit as st
 import pandas as pd
 import yfinance as yf
 
 from shared.ttls import TTL_30MIN, TTL_1HOUR, TTL_2HOUR, TTL_1DAY, TTL_7DAY
+
+
+# S-H3 v18.244:diagnostic 錯誤儲存從 st.session_state 下移至 module-level dict
+# UI 讀取走 get_etf_manager_last_err() / get_etf_index_last_err() accessor。
+_ETF_MANAGER_LAST_ERR: dict = {}
+_ETF_INDEX_LAST_ERR: dict = {}
+
+
+def get_etf_manager_last_err() -> dict:
+    """Diagnostic 面板 accessor:回最近一次 ETF manager fetch 失敗原因(by ticker)。"""
+    return dict(_ETF_MANAGER_LAST_ERR)
+
+
+def get_etf_index_last_err() -> dict:
+    """Diagnostic 面板 accessor:回最近一次 ETF index fetch 失敗原因(by ticker)。"""
+    return dict(_ETF_INDEX_LAST_ERR)
 
 
 def _fetch_news_for(ticker: str, name: str = "", n: int = 4) -> str:
@@ -144,7 +168,8 @@ def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
         df.index = pd.to_datetime(df.index).tz_localize(None)
         return df.ffill()
     except Exception as e:
-        st.error(f'❌ 無法取得 {ticker} 價格：{e}')
+        # S-H3 v18.244:L1 不可 st.error → 改 print log,caller 依 empty DataFrame 判斷
+        print(f'[etf_fetch] ❌ 無法取得 {ticker} 價格:{type(e).__name__}: {e}')
         return pd.DataFrame()
 
 
@@ -855,7 +880,8 @@ def fetch_etf_manager(ticker: str):
     -------
     dict | None
         成功：{'name': '張三', 'since': '2024-04-15', 'tenure_days': 400}
-        失敗：None；失敗原因寫入 st.session_state['_etf_manager_last_err'][ticker]
+        失敗：None;失敗原因寫入 _ETF_MANAGER_LAST_ERR[ticker]
+              (UI 透過 get_etf_manager_last_err() accessor 讀,S-H3 v18.244)
     """
     import re as _re_mg
     from datetime import date as _date_mg
@@ -1018,13 +1044,8 @@ def fetch_etf_manager(ticker: str):
         if is_active_etf(_t):
             _err_trace.append('yuanta: 3 URL 全 fail')
 
-    # 全部失敗 — 寫 session_state 給診斷面板讀
-    try:
-        if st is not None:
-            _store = st.session_state.setdefault('_etf_manager_last_err', {})
-            _store[_t] = ' | '.join(_err_trace) if _err_trace else 'unknown'
-    except Exception:
-        pass
+    # S-H3 v18.244:全部失敗 — 寫 module-level dict 給診斷面板讀(原 st.session_state)
+    _ETF_MANAGER_LAST_ERR[_t] = ' | '.join(_err_trace) if _err_trace else 'unknown'
     return None
 
 
@@ -1578,7 +1599,8 @@ def _fetch_sector_returns(tickers: tuple, period: str) -> dict:
                     pct = round((float(series.iloc[-1]) / float(series.iloc[0]) - 1) * 100, 2)
                     result[t] = pct
     except Exception as e:
-        st.warning(f'類股資料抓取部分失敗：{e}')
+        # S-H3 v18.244:L1 不可 st.warning → 改 print log
+        print(f'[etf_fetch/sector] ⚠️ 類股資料抓取部分失敗:{type(e).__name__}: {e}')
     return result
 
 
@@ -1742,11 +1764,7 @@ def fetch_etf_underlying_index(ticker: str):
             return _idx
         _err_trace.append(f'{_endpoint}: 200 但 regex 無指數')
 
-    try:
-        if st is not None:
-            _store = st.session_state.setdefault('_etf_index_last_err', {})
-            _store[_t] = ' | '.join(_err_trace) if _err_trace else 'unknown'
-    except Exception:
-        pass
+    # S-H3 v18.244:寫 module-level dict 給診斷面板讀(原 st.session_state)
+    _ETF_INDEX_LAST_ERR[_t] = ' | '.join(_err_trace) if _err_trace else 'unknown'
     print(f'[MDJ/index] FAIL {_t} — {_err_trace[-1] if _err_trace else "no trace"}')
     return None
