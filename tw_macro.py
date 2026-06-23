@@ -877,7 +877,13 @@ def fetch_pmi_history(months: int = 18, token: str = "") -> Optional[pd.DataFram
 
     Returns
     -------
-    pd.DataFrame[date, value] sorted asc 或 None。
+    pd.DataFrame  欄位:
+        - `date` (Timestamp):資料歸屬日(normalized 月底)
+        - `value` (float):PMI 數值(已過濾合理範圍)
+        - `source` (str):血緣標識,"FinMind:TaiwanEconomicIndicator:PMI"(S-PROV-1 v18.247)
+        - `fetched_at` (str):本次抓取 UTC ISO(S-PROV-1 v18.247)
+
+    失敗時回傳 None。
     """
     from shared.signal_thresholds import PMI_VALID_MAX, PMI_VALID_MIN
     if not token:
@@ -910,4 +916,8 @@ def fetch_pmi_history(months: int = 18, token: str = "") -> Optional[pd.DataFram
     _df = _df.dropna(subset=['value']).sort_values('date').reset_index(drop=True)
     _df = _df[(_df['value'] >= PMI_VALID_MIN) & (_df['value'] <= PMI_VALID_MAX)].reset_index(drop=True)
     print(f'[tw_macro/pmi-hist] ✅ {len(_df)} months')
-    return _df[['date', 'value']]
+    out = _df[['date', 'value']].copy()
+    # S-PROV-1 v18.247 phase 3:provenance schema(§2.2)
+    out['source'] = 'FinMind:TaiwanEconomicIndicator:PMI'
+    out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
+    return out
