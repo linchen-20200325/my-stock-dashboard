@@ -2077,11 +2077,23 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
         "_cf_slot_latest":   dict(_cf.get(_lat, {})),
         "_is_slot_latest":   dict(_is.get(_lat, {})),
         "_period_latest":    _lat,
+        # S-PROV-1 v18.250 phase 6:provenance(§2.2)
+        "source":            "FinMind:FinancialStatements",
+        "fetched_at":        pd.Timestamp.now('UTC').isoformat(),
     }
 
 
 def fetch_fund_nav(fund_id: str):
-    """基金淨值 — MoneyDJ via NAS proxy + BeautifulSoup"""
+    """基金淨值 — MoneyDJ via NAS proxy + BeautifulSoup
+
+    Returns
+    -------
+    dict | None
+        成功:{'date': str, 'nav': float, 'source': 'MoneyDJ:YP010001', 'fetched_at': UTC ISO}
+        失敗:None
+
+    S-PROV-1 v18.250 phase 6:provenance(§2.2)
+    """
     try:
         from proxy_helper import fetch_url as _fu_nav
         from bs4 import BeautifulSoup as _BS
@@ -2104,7 +2116,12 @@ def fetch_fund_nav(fund_id: str):
                     _date = _cells[0].get_text(strip=True)
                     _nav = float(_cells[1].get_text(strip=True).replace(',', ''))
                     if _nav > 0:
-                        return {'date': _date, 'nav': _nav}
+                        return {
+                            'date': _date, 'nav': _nav,
+                            # S-PROV-1 v18.250:provenance
+                            'source': 'MoneyDJ:YP010001',
+                            'fetched_at': pd.Timestamp.now('UTC').isoformat(),
+                        }
                 except (ValueError, IndexError):
                     continue
         return None
