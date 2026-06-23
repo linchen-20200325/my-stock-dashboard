@@ -160,6 +160,10 @@ def fetch_twii_ohlcv(start: _dt.date, end: _dt.date) -> pd.DataFrame:
             "volume": ind.get("volume", [None] * len(ts)),
         })
         df = df.dropna(subset=["close"]).reset_index(drop=True)
+        # S-PROV-1 phase 13 v18.259 — provenance(schema-additive)
+        if not df.empty:
+            df["source"] = "Yahoo:^TWII:chart"
+            df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
         print(f"[twii_ohlcv] ✅ {len(df)} rows ({start}~{end})")
         return df
     except Exception as e:
@@ -193,6 +197,10 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
                         - pd.to_numeric(fi.get("sell"), errors="coerce").fillna(0)) / 1e8
     out = fi.groupby("date", as_index=False)["foreign_buy"].sum()
     out["date"] = pd.to_datetime(out["date"]).dt.date
+    # S-PROV-1 phase 13 v18.259 — provenance(schema-additive)
+    if not out.empty:
+        out["source"] = "FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign"
+        out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
     return out
 
 
@@ -213,7 +221,12 @@ def fetch_finmind_margin(start: _dt.date, end: _dt.date, token: str) -> pd.DataF
     out.columns = ["date", "margin_balance"]
     out["date"] = pd.to_datetime(out["date"]).dt.date
     out["margin_balance"] = pd.to_numeric(out["margin_balance"], errors="coerce")
-    return out.dropna(subset=["margin_balance"]).reset_index(drop=True)
+    out = out.dropna(subset=["margin_balance"]).reset_index(drop=True)
+    # S-PROV-1 phase 13 v18.259 — provenance(schema-additive)
+    if not out.empty:
+        out["source"] = "FinMind:TaiwanStockTotalMarginPurchaseShortSale"
+        out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+    return out
 
 
 def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
