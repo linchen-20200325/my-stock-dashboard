@@ -308,7 +308,7 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     out = df.dropna(subset=["value"]).sort_values("date").reset_index(drop=True)
     # v18.246 S-PROV-1:provenance schema(§2.2)— source 標識 + 抓取時間
     out["source"] = f"FRED:{series_id}"
-    out["fetched_at"] = pd.Timestamp.utcnow().isoformat()
+    out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
     _FRED_CACHE[key] = (now, out.copy())
     return out
 
@@ -358,7 +358,7 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
         # Series 無 column 概念,改用 pandas 內建 attrs dict 承載血緣。
         # caller 不存取 attrs 時無感;需要追溯時 s.attrs["source"] / s.attrs["fetched_at"]。
         s.attrs["source"] = f"Yahoo:{ticker}"
-        s.attrs["fetched_at"] = pd.Timestamp.utcnow().isoformat()
+        s.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
         _YF_CLOSE_CACHE[key] = (now, s.copy())
         return s
     except Exception as e:
