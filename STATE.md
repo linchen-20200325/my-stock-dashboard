@@ -7,7 +7,7 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
-- [ ] **S-PROV-1** §2.2 DataPoint provenance 模型尚未統一(現以 DataFrame + meta dict / failure token 承載);`macro_core.fetch_fred()` 等回傳補 source/fetched_at 欄位
+- [⚙️] **S-PROV-1** §2.2 DataPoint provenance 補洞;v18.246 第 1 階段:`macro_core.fetch_fred()` 已加 `source`(`"FRED:<sid>"`)+ `fetched_at`(UTC ISO)欄,schema-additive,77/77 risk_radar tests 全綠;後續階段:`fetch_yf_close` / FinMind / TWSE / CBC 等其餘 fetcher
 - [x] **S-PIT-1** §2.3 v18.245 audit 結案:`backtest_engine.py` vintage **對齊正確**(walk_forward_test train/test 嚴格時序切割無重疊);**另議**:walk_forward_test 未實際拿 train_df 做參數優化,屬設計不完整非 vintage 問題,後續處理
 - [ ] **S-WFT-1**(新增,從 S-PIT-1 衍生)`backtest_engine.walk_forward_test` 未實際拿 train_df 做策略參數優化,僅做時間切割 → walk-forward 設計不完整,需評估是否引入 train phase
 - [ ] **S-SCHEMA-1** §3.1 ⚠️ pandera 是否加 requirements + 逐 fetcher 落地 schema?(評估 ~200ms 啟動 cost)
