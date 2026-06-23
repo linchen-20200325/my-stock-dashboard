@@ -787,6 +787,8 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     from concurrent.futures import ThreadPoolExecutor as _TPE_pmi
     today = _dt.date.today()
     errs: list[str] = []
+    # S-PROV-1 v18.254 phase 9:provenance fetched_at(orchestrator level)
+    _fetched_at = pd.Timestamp.now('UTC').isoformat()
 
     # v18.240 SSOT：source 註冊清單抽到模組級 PMI_SOURCE_REGISTRY（見檔末）
     # 新增 source = 在 registry append 1 entry，driver 不動。
@@ -810,7 +812,10 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
             print(f'[macro_core/TW-PMI] ✅ 採用 {_nm}（9 源並行，依優先序）')
             # v18.225 T1：命中即 snapshot 持久化，作為後續全失敗時的 stale fallback
             _macro_cache_save('tw_pmi', _results[_nm])
-            return _results[_nm]
+            # S-PROV-1 v18.254:provenance fetched_at(orchestrator-level)
+            _hit = dict(_results[_nm])
+            _hit['fetched_at'] = _fetched_at
+            return _hit
     err_msg = ' | '.join(errs) or 'all 10 stages failed'
     print(f'[macro_core/TW-PMI] ❌ 10 段並行全失敗：{err_msg}')
     # v18.225 T1：10 段全失敗 → 讀 stale cache（90 天 TTL），UI 端顯示 🟡 而非 🔴
@@ -821,9 +826,12 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
         _stale['source'] = f'stale-cache({_stale_src})'
         _stale['is_stale'] = True
         _stale['stale_err'] = err_msg
+        # S-PROV-1 v18.254:fetched_at 為「本次嘗試時間」(stale 內容已含原 cached_at)
+        _stale['fetched_at'] = _fetched_at
         print(f'[macro_core/TW-PMI] ⚠️ 採用 stale-cache (cached_at={_stale.get("cached_at","?")[:10]})')
         return _stale
-    return {'_err_pmi': err_msg, 'value': None}
+    return {'_err_pmi': err_msg, 'value': None,
+            'source': 'TW_PMI:all_tiers_failed', 'fetched_at': _fetched_at}
 
 
 def _pmi_src_cier_en_monthly(today, max_age_days, errs):
