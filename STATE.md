@@ -7,7 +7,14 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
-- [⚙️] **S-PROV-1** §2.2 DataPoint provenance 補洞;v18.246 第 1 階段:`macro_core.fetch_fred()` 已加 `source`(`"FRED:<sid>"`)+ `fetched_at`(UTC ISO)欄,schema-additive,77/77 risk_radar tests 全綠;後續階段:`fetch_yf_close` / FinMind / TWSE / CBC 等其餘 fetcher
+- [⚙️] **S-PROV-1** §2.2 DataPoint provenance 補洞;v18.246-250 完成 phase 1-6:
+  * phase 1(#262):`macro_core.fetch_fred` (DataFrame columns)
+  * phase 2(#263):`macro_core.fetch_yf_close` (Series.attrs)
+  * phase 3(#265):`tw_macro.fetch_pmi_history` (DataFrame columns)
+  * phase 4(#266):`tw_macro.fetch_finmind_foreign_investor` (dict keys)
+  * phase 5(#267):tw_macro 5 fetchers batch(含 CBC tier-aware source)
+  * phase 6(#268):`data_loader.fetch_fund_nav` + `fetch_financial_statements`
+  * 後續:macro_core PMI source registry / ETF fetcher / 12 指標融合處 score 出口
 - [x] **S-PIT-1** §2.3 v18.245 audit 結案:`backtest_engine.py` vintage **對齊正確**(walk_forward_test train/test 嚴格時序切割無重疊);**另議**:walk_forward_test 未實際拿 train_df 做參數優化,屬設計不完整非 vintage 問題,後續處理
 - [ ] **S-WFT-1**(新增,從 S-PIT-1 衍生)`backtest_engine.walk_forward_test` 未實際拿 train_df 做策略參數優化,僅做時間切割 → walk-forward 設計不完整,需評估是否引入 train phase
 - [ ] **S-SCHEMA-1** §3.1 ⚠️ pandera 是否加 requirements + 逐 fetcher 落地 schema?(評估 ~200ms 啟動 cost)
