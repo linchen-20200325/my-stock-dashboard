@@ -886,7 +886,9 @@ class StockDataLoader:
                                             'revenue': _rv2 * 1000,
                                             'date': f'{_yr}-{_today_rv.month:02d}-01',
                                             'yoy': _yoy2})
-                                except: pass
+                                except (ValueError, TypeError, KeyError) as _e_mops_r2:
+                                    # W5-1 §1: bare except → narrow + log (per-row parse fail in MOPS revenue fallback 2)
+                                    print(f'[MOPS-Rev2] {stock_id} {_yr}-{_today_rv.month:02d} row parse skip: {_e_mops_r2}')
                         if _mops_rows2:
                             df_revenue = _pd_mops.DataFrame(_mops_rows2)
                             df_revenue['date'] = _pd_mops.to_datetime(df_revenue['date'])
@@ -963,7 +965,9 @@ class StockDataLoader:
                                 if _rv > 0:
                                     _mops_rows.append({'revenue': _rv * 1000,
                                                        'date': f'{_y}-{_today.month:02d}-01'})
-                            except: pass
+                            except (ValueError, TypeError, KeyError) as _e_mops_r:
+                                # W5-1 §1: bare except → narrow + log (per-row parse fail in MOPS revenue fallback 1)
+                                print(f'[MOPS-Rev] {stock_id} {_y}-{_today.month:02d} row parse skip: {_e_mops_r}')
                 if _mops_rows:
                     df_revenue = _pd_rv.DataFrame(_mops_rows)
                     df_revenue['date'] = _pd_rv.to_datetime(df_revenue['date'])
@@ -1031,7 +1035,9 @@ class StockDataLoader:
                         stock_id=stock_id, start_date=start_str)
                     if df_fin is not None and not df_fin.empty:
                         _qtr_src = 'finmind_sdk'   # v18.202 E2
-                except Exception: pass
+                except Exception as _e_fin_sdk:
+                    # W5-1 §1: bare except → log (FinMind SDK 季財報 fallback 失敗)
+                    print(f'[FinMind-SDK 季報] {stock_id}: {_e_fin_sdk}')
 
             if df_fin is None or df_fin.empty:
                 # ── 備援: yfinance 季度 ──
@@ -1340,7 +1346,9 @@ class StockDataLoader:
                                                 and abs(_rv_v) > 0):
                                             df_quarterly.loc[_mk[0], '毛利率'] = round(_gp_v / _rv_v * 100, 2)
                                             _yf_updated += 1
-                                except Exception: pass
+                                except (ValueError, TypeError, KeyError) as _e_yfq:
+                                    # W5-1 §1: bare except → narrow + log (yfinance 毛利率單季 parse 失敗)
+                                    print(f'[yfinance 毛利率] {stock_id} col={_col} skip: {_e_yfq}')
                             if _yf_updated > 0:
                                 print(f'[yfinance 毛利率] {stock_id}: ✅ {_yf_updated} 季')
                 except Exception as _e_yf_gp:
@@ -1464,7 +1472,13 @@ class StockDataLoader:
             _all_dates = sorted(set(list(_bs_map.keys()) + list(_cf_map.keys())))
 
             def _val(d_map, d, keys):
-                """從 d_map[d] 裡按優先順序取第一個非零值"""
+                """從 d_map[d] 裡按優先順序取第一個非零值
+
+                W5-1 §1 註明:回傳 NaN 即為「無此欄位/無效值」的顯式旗標(caller 需 isna 檢查),
+                每 key 每季 parse fail 全量 log 會 noise 過大(BS/CF 跨多 key×多季);
+                此處將 bare except 收窄為 (ValueError, TypeError, AttributeError) 但維持 silent skip,
+                NaN 出口為下游可偵測信號(§1 三條件:顯式 + 旗標達成)。
+                """
                 slot = d_map.get(d, {})
                 for k in keys:
                     r = slot.get(k)
@@ -1472,7 +1486,8 @@ class StockDataLoader:
                         try:
                             v = float(str(r.get('value', 0)).replace(',', '') or 0)
                             if v != 0: return abs(v)
-                        except: pass
+                        except (ValueError, TypeError, AttributeError):
+                            pass
                 return float('nan')
 
             _CL_KEYS = ['CurrentContractLiabilities', 'NonCurrentContractLiabilities',
