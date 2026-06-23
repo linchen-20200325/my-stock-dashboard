@@ -354,6 +354,11 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
         close = result["indicators"]["quote"][0]["close"]
         s = pd.Series(close, index=pd.to_datetime(ts, unit="s"), dtype=float).dropna()
         s.name = ticker
+        # v18.246 S-PROV-1 phase 2:provenance via Series.attrs(§2.2)
+        # Series 無 column 概念,改用 pandas 內建 attrs dict 承載血緣。
+        # caller 不存取 attrs 時無感;需要追溯時 s.attrs["source"] / s.attrs["fetched_at"]。
+        s.attrs["source"] = f"Yahoo:{ticker}"
+        s.attrs["fetched_at"] = pd.Timestamp.utcnow().isoformat()
         _YF_CLOSE_CACHE[key] = (now, s.copy())
         return s
     except Exception as e:
@@ -376,6 +381,8 @@ def fetch_yf_close(ticker: str, range_: str = "2y", interval: str = "1d") -> pd.
     Returns
     -------
     pd.Series  index 為 DatetimeIndex,value 為收盤價。失敗時回傳空 Series。
+               provenance(S-PROV-1 v18.246):成功時 `s.attrs` 含
+               `source="Yahoo:<ticker>"` + `fetched_at=UTC ISO`。
     """
     s = _fetch_yf_close_base(ticker, interval)
     if s.empty:
@@ -384,7 +391,10 @@ def fetch_yf_close(ticker: str, range_: str = "2y", interval: str = "1d") -> pd.
     if days is None:
         return s
     cutoff = s.index.max() - pd.Timedelta(days=days)
-    return s.loc[s.index >= cutoff]
+    sliced = s.loc[s.index >= cutoff]
+    # v18.246 S-PROV-1:pandas .loc 切片可能 lose attrs,顯式 copy 保留血緣
+    sliced.attrs = dict(s.attrs)
+    return sliced
 
 
 def fetch_yf_latest(tickers: tuple[str, ...]) -> dict[str, Optional[float]]:
