@@ -11,31 +11,6 @@ from shared.ttls import TTL_1HOUR
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ── Proxy 存活快取（模組層級，60s TTL，避免代理斷線拖垮所有連線）──────────
-_proxy_health: dict = {}  # {url: (is_alive, checked_at)}
-_PROXY_TTL = 60
-
-def _proxy_alive(url: str, timeout: float = 2.0) -> bool:
-    """TCP 快測代理是否可達；結果快取 60s。"""
-    import socket, time as _t
-    from urllib.parse import urlparse
-    now = _t.time()
-    if url in _proxy_health:
-        alive, ts = _proxy_health[url]
-        if now - ts < _PROXY_TTL:
-            return alive
-    try:
-        _p = urlparse(url)
-        _h, _port = _p.hostname or 'localhost', _p.port or 3128
-        with socket.create_connection((_h, _port), timeout=timeout):
-            alive = True
-    except Exception:
-        alive = False
-    _proxy_health[url] = (alive, now)
-    if not alive:
-        print(f'[Proxy] ⚠️ {url} 無法連線，本輪跳過代理直連')
-    return alive
-
 def _bps():
     try:
         from tw_stock_data_fetcher import build_proxy_session as _b
@@ -46,20 +21,6 @@ def _bps():
     return s
 
 import streamlit as st
-
-def get_nas_proxy():
-    """從 proxy_helper 讀取代理設定，並加做 TCP 存活檢測。"""
-    try:
-        from proxy_helper import get_proxy_config as _gpc
-        _cfg = _gpc()
-    except Exception:
-        _cfg = None
-    if not _cfg:
-        return None
-    _url = _cfg.get('http', '')
-    if _url and _proxy_alive(_url):
-        return _cfg
-    return None
 
 DISABLE_TWSE: bool = True  # 🚫 TWSE 已永久停用
 
