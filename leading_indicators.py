@@ -455,7 +455,9 @@ def twse_volume(yyyymm):
                     if 100 < v < 20000:
                         result[dk] = v
                         break
-                except Exception: pass
+                except (ValueError, TypeError, KeyError):
+                    # W5-2 §1: twse_volume 月度資料 row 解析失敗,silent skip(NaN/keep prior 為顯式旗標)
+                    continue
         return result
 
     print(f"[VOL] twse_volume({yyyymm}) 開始")
@@ -543,7 +545,9 @@ def twse_volume_daily(ymd8):
                     try:
                         amt = round(float(str(row[idx]).replace(",","")) / 1e8, 1)
                         if 100 < amt < 20000: return amt
-                    except Exception: pass
+                    except (ValueError, TypeError, IndexError):
+                        # W5-2 §1: twse_volume_daily row 解析失敗 silent skip(下游 None 為顯式旗標)
+                        continue
         return None
     except Exception as _e:  # v18.241 D3 (§1 Fail Loud)
         print(f"[twse_volume_daily] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)
@@ -694,7 +698,9 @@ def taifex_large_trader(date_ymd):
                            headers=TAIFEX_HDR, timeout=15)
             r.encoding = "utf-8"
             if len(r.text) > 200: html = r.text
-        except Exception: pass
+        except (requests.RequestException, requests.Timeout) as _e_tx:
+            # W5-2 §1: TAIFEX 直連失敗(走 POST fallback),補 log
+            print(f"[leading_indicators TAIFEX] 直連失敗,改 POST:{_e_tx}")
     if not html:
         html = taifex_post(
             "https://www.taifex.com.tw/cht/3/largeTraderFutQry",
