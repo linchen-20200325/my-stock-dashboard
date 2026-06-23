@@ -3,6 +3,12 @@ tw_stock_data_fetcher.py — 台股財報抓取模組（Proxy-aware）
 
 強制走 NAS Proxy 路由，支援 Goodinfo / MOPS 備援。
 與 data_loader.fetch_fin_data() 回傳格式相容。
+
+§8.2 例外:本檔為 L1 Data 但 import streamlit,屬 CLAUDE.md §8.2.A EX-CACHE-1 + EX-L0-1
+複合例外:
+  - L119 `st.secrets`: bootstrap 讀 FINMIND_TOKEN(同 config.py 模式)
+  - L485/525/747 `@st.cache_data`: 部署架構核心 cache
+無 `st.session_state` / `st.error` / `st.markdown` 等真 UI 呼叫,符合例外條件。
 """
 
 from __future__ import annotations
@@ -14,7 +20,7 @@ from typing import Any
 
 import pandas as pd
 import requests
-import streamlit as st
+import streamlit as st  # §8.2 EX-CACHE-1 + EX-L0-1 — 詳見 module docstring
 from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
