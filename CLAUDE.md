@@ -9,10 +9,10 @@
 
 ---
 
-## §0. BOOTSTRAP 紀錄（首次填寫 2026-06-22；v3 升級 2026-06-22 新增 §8）
+## §0. 填寫紀錄（首次填寫 2026-06-22；v3 升級 2026-06-22 新增 §8；步驟 4 收尾 2026-06-23）
 
-> 完整稽核流程完成後再依 template 步驟 4 改名「§0. 填寫紀錄」。
-> 目前狀態：**步驟 2 完成（填寫 + v3 §8 增補）→ 待步驟 3（回溯稽核違憲清單）→ 步驟 4 收尾**。
+> Bootstrap 流程全 4 步完成,§0 已從「BOOTSTRAP 紀錄」改名為「填寫紀錄」。
+> 完整收尾證據按時序記錄如下。
 
 **步驟 1｜探查專案** — 已完成,三組並行 Explore agent 掃描,涵蓋：
 - meta-docs（README/STATE/ARCHITECTURE/SPEC/DATASTATION/STRATEGY_MANUAL/MACRO_CALIBRATION）
@@ -34,9 +34,24 @@
 - §4.6 領域邊界（9 種 TW 股市特有狀態）
 - §8 架構先行 — 7 層分層 + 5 條硬規則 + 3 處灰色地帶（v3 增補,evidence: ARCHITECTURE.md §1-§7 + SPEC.md §5）
 
-**步驟 3｜回溯稽核** — 待使用者確認 §2 後啟動,將分模組輸出「違憲清單（檔名 + 行號 + 違反哪條 + 高/中/低）」,**只報告先別修**。
+**步驟 3｜回溯稽核** — 已完成,違憲清單分高/中/低三級;以下 W 系列 + S-H 系列 PR 逐一收斂：
+- W1（v18.241 群 A/B/C）：14 處 SSOT 抽出 + EX-CACHE-1/EX-L0-1/EX-AI-1 例外登記
+- W3a/W3b（#253）：4 處 inline magic SSOT 抽出 + 收斂 §3.3 表
+- W4（#252）：刪死碼 get_nas_proxy 群
+- W5-1（#254）：data_loader 5 處 except:pass 收窄 + log
+- W5-2（#255）：9 處 except/empty 補 log + 註解
+- W5-3（#256）：tw_stock_data_fetcher 加註 §8.2.A EX-CACHE-1+EX-L0-1 例外
+- S-H1/H3/H4/H5/H6（#257）：Stock §8.2 5 項違憲全結案
+  - S-H4：merrill_clock fetch_pmi_history 下沉 tw_macro（L2→L1 重構）
+  - S-H1：data_loader 死碼 safe_fetch_strict 刪除
+  - S-H3：etf_fetch 4 處 st.error/warning/session_state → print + module-level dict + accessor
+  - S-H5/H6：app.py + etf_dashboard 直呼 L1 → EX-PASSTHRU-1 例外登記（類比 Fund F-H6）
 
-**步驟 4｜收尾** — 全部確認後改本 §0 為「填寫紀錄」並保留證據。
+**步驟 4｜收尾** — 已完成。
+- §3.3 反捏造 ❌ 0 項（原 14 類 magic number 全 SSOT 化）
+- §8.2 高項違憲 0 項（S-H1/H3/H4 真重構；S-H5/H6 EX-PASSTHRU-1 例外登記）
+- §8.2.A 例外清單：EX-L0-1 / EX-CACHE-1 / EX-AI-1 / EX-PASSTHRU-1
+- 證據：全部 commit history + PR description 保留於 origin/main。
 
 ---
 
