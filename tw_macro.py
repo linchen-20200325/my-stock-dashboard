@@ -856,3 +856,58 @@ def fetch_tw_market_snapshot(days_back: int = 7) -> dict:
         'fii':     fetch_finmind_foreign_investor(days_back=days_back),
         'm1b_m2':  fetch_cbc_m1b_m2(),
     }
+
+
+# ══════════════════════════════════════════════════════════════
+# TW PMI 月度歷史 — FinMind TaiwanEconomicIndicator(merrill_clock 共用)
+# S-H4 v18.243:從 `merrill_clock.py`(L2 Compute)下沉至 L1 Data,
+# 修正 CLAUDE.md §8.2「L2 不得 import proxy_helper」違憲。caller(merrill_clock)
+# 改 `from tw_macro import fetch_pmi_history` 並從 `config.FINMIND_TOKEN` 取 token。
+# ══════════════════════════════════════════════════════════════
+@_ttl_cache(ttl_sec=600, maxsize=4)
+def fetch_pmi_history(months: int = 18, token: str = "") -> Optional[pd.DataFrame]:
+    """從 FinMind 抓台灣 PMI 月度歷史(含當期),merrill 時鐘 YoY 算用。
+
+    Parameters
+    ----------
+    months : int
+        往回抓的月數(實際抓略多,容週末/假日 lag)。
+    token : str
+        FinMind API token。空 → 回 None(免費版有 dataset 限制)。
+
+    Returns
+    -------
+    pd.DataFrame[date, value] sorted asc 或 None。
+    """
+    from shared.signal_thresholds import PMI_VALID_MAX, PMI_VALID_MIN
+    if not token:
+        return None
+    _start = (_dt.date.today() - _dt.timedelta(days=months * 31)).strftime('%Y-%m-%d')
+    _r = fetch_url(
+        FINMIND_BASE,
+        params={'dataset': 'TaiwanEconomicIndicator',
+                'start_date': _start, 'token': token},
+        timeout=15)
+    if _r is None:
+        print('[tw_macro/pmi-hist] fetch_url None(proxy 失敗)')
+        return None
+    if _r.status_code != 200:
+        print(f'[tw_macro/pmi-hist] HTTP {_r.status_code}')
+        return None
+    try:
+        _data = (_r.json() or {}).get('data') or []
+    except Exception as _e:
+        print(f'[tw_macro/pmi-hist] JSON 解析失敗:{type(_e).__name__}')
+        return None
+    _rows = [d for d in _data
+             if 'PMI' in str(d.get('name', '')) or '製造業' in str(d.get('name', ''))]
+    if not _rows:
+        print('[tw_macro/pmi-hist] FinMind 無 PMI series')
+        return None
+    _df = pd.DataFrame(_rows)
+    _df['date'] = pd.to_datetime(_df['date']).dt.normalize()
+    _df['value'] = pd.to_numeric(_df['value'], errors='coerce')
+    _df = _df.dropna(subset=['value']).sort_values('date').reset_index(drop=True)
+    _df = _df[(_df['value'] >= PMI_VALID_MIN) & (_df['value'] <= PMI_VALID_MAX)].reset_index(drop=True)
+    print(f'[tw_macro/pmi-hist] ✅ {len(_df)} months')
+    return _df[['date', 'value']]
