@@ -228,16 +228,9 @@ class DataPoint:
 | `BULLRUN_VOL_THRESHOLD` | 1.3× | config.py:73 | ✅ SSOT |
 | `_CPI_THRESHOLD` (merrill clock) | 2.0% | merrill_clock.py:56 | ✅ named const |
 | `ANNUAL_MA` | 240 trading days | config.py:14 | ✅ SSOT |
-| 健康評分加權 | 0.4 / 0.4 / 0.2 | macro_helpers.py:113 | ❌ **inline magic** |
-| Recession logit coef | -1.5 / -0.8 | macro_core.py:1307 | ❌ **inline magic** |
-| PMI 有效範圍 | [30, 70] | merrill_clock.py:107 | ❌ **inline magic**（應抽到 `shared/`） |
-| 252（trading days/yr） | 年化常數 | macro_signal_lookback_tw.py:238 | ❌ **inline magic** |
-| Foreign 5D / Margin / M1B-M2 / TWII 20D | -500 / 3400 / -2 / -5 | macro_signal_lookback_tw.py:280-304 | ❌ **inline magic** |
-| 40d merge_asof tolerance | 40 days | macro_core.py:1336 | ❌ **inline magic** |
-| 6 trend lookback | 6 values | macro_core.py:1366 | ❌ **inline magic** |
-| 5/5 confidence weight | 5 sources | macro_helpers.py:148 | ❌ **inline magic** |
+| `signal_thresholds.*`（19 個語意常數） | 252 / 健康評分加權 / 4 個 TW 麥邊閾值 / VIX/Foreign futures / ATR%/MA20/合約負債/ETF 折溢價 / Recession logit / PMI 有效範圍 / merge_asof 40d / trend lookback 6 等 | shared/signal_thresholds.py v18.241+v18.242 | ✅ SSOT（v18.241 群 E 收 13 + v18.242 W3b 補 6:macro_core / merrill_clock 4 site + recession_probability / PMI filter / merge_asof / trend lookback） |
 
-❌ 標記 **8 項**列入步驟 3 audit 高優先稽核項。
+❌ 標記 **0 項**(原 8 項已全數 W3a/W3b 收斂)。
 
 **其他規則**：
 - `fillna` / `ffill` / `dropna` 必須顯式呼叫 + log 受影響筆數

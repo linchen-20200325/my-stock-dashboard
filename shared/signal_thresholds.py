@@ -120,3 +120,33 @@ CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT: float = 80.0
 ACTIVE_ETF_PREMIUM_MAX_PCT: float = 2.0
 """主動式 ETF |折溢價| 門檻（單位：%）。
 > 2% → NAV 可能 stale。原 etf_calc.py:272 inline `_ACTIVE_PREM_MAX`"""
+
+
+# ════════════════════════════════════════════════════════════════
+# Macro 通用領域邊界（macro_core.py / merrill_clock.py）v18.242 W3b
+# ════════════════════════════════════════════════════════════════
+
+RECESSION_LOGIT_COEF_SPREAD: float = -1.5
+"""衰退機率 logit 回歸 — 利差 (10Y-3M) 係數。對齊 Fund 端同名常數。
+logit = COEF_SPREAD * spread_10y3m + COEF_INTERCEPT,經 sigmoid → recession prob。
+原 macro_core.py:1307 inline"""
+
+RECESSION_LOGIT_COEF_INTERCEPT: float = -0.8
+"""衰退機率 logit 回歸 — 截距項。原 macro_core.py:1307 inline"""
+
+PMI_VALID_MIN: float = 30.0
+"""PMI 採購經理指數合理下限（歷史極端衰退底部）。
+< 30 視為解析錯誤過濾。對應 CLAUDE.md §3.2 + §4.2 不變量。原 merrill_clock.py:107 inline"""
+
+PMI_VALID_MAX: float = 70.0
+"""PMI 採購經理指數合理上限（歷史極端擴張頂部）。
+> 70 視為解析錯誤過濾。原 merrill_clock.py:107 inline"""
+
+MACRO_MERGE_ASOF_TOLERANCE_DAYS: int = 40
+"""跨頻 merge_asof tolerance（單位：日曆日）。
+月 macro vs 日 series 對齊用,40 日覆蓋一個月內任意營業日 backward join。
+對應 CLAUDE.md §2.3 + §4.5 時序對齊。原 macro_core.py:1336 inline"""
+
+MACRO_TREND_LOOKBACK_PERIODS: int = 6
+"""macro snapshot trend arrow lookback 視窗（單位：期,月度資料即 6 個月）。
+用於 make_indicator() 的 trend 箭頭計算。原 macro_core.py:1366 inline"""

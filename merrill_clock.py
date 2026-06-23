@@ -15,6 +15,7 @@ import datetime as _dt
 import os as _os
 import pandas as pd
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.signal_thresholds import PMI_VALID_MAX, PMI_VALID_MIN  # v18.242 W3b SSOT consume
 
 # 階段名 → (建議資產, 配色)。配色與既有 GitHub 風格對齊。
 _QUADRANT_MAP = {
@@ -103,8 +104,8 @@ def fetch_pmi_history(months: int = 18) -> pd.DataFrame | None:
         _df['date'] = pd.to_datetime(_df['date']).dt.normalize()
         _df['value'] = pd.to_numeric(_df['value'], errors='coerce')
         _df = _df.dropna(subset=['value']).sort_values('date').reset_index(drop=True)
-        # 過濾合理範圍（30-70）
-        _df = _df[(_df['value'] >= 30) & (_df['value'] <= 70)].reset_index(drop=True)
+        # 過濾合理範圍（PMI_VALID_MIN/MAX,SSOT in shared/signal_thresholds.py）
+        _df = _df[(_df['value'] >= PMI_VALID_MIN) & (_df['value'] <= PMI_VALID_MAX)].reset_index(drop=True)
         print(f'[merrill_clock/pmi-hist] ✅ {len(_df)} months')
         return _df[['date', 'value']]
     except Exception as _e:

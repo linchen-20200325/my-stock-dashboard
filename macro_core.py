@@ -45,6 +45,12 @@ from shared.fred_series import (
     FRED_NAPM,
     FRED_PHILLY_FED,
 )
+from shared.signal_thresholds import (  # v18.242 W3b SSOT consume
+    MACRO_MERGE_ASOF_TOLERANCE_DAYS,
+    MACRO_TREND_LOOKBACK_PERIODS,
+    RECESSION_LOGIT_COEF_INTERCEPT,
+    RECESSION_LOGIT_COEF_SPREAD,
+)
 
 __version__ = "1.0.0"
 
@@ -1304,7 +1310,7 @@ def recession_probability(spread_10y3m: Optional[float]) -> Optional[float]:
     """
     if spread_10y3m is None:
         return None
-    logit = -1.5 * spread_10y3m - 0.8
+    logit = RECESSION_LOGIT_COEF_SPREAD * spread_10y3m + RECESSION_LOGIT_COEF_INTERCEPT
     return round(1 / (1 + math.exp(-logit)) * 100, 1)
 
 
@@ -1333,7 +1339,7 @@ def spread_series(
     ds2 = df_short[["date", "value"]].rename(columns={"value": "v_s"}).sort_values("date")
     m = pd.merge_asof(
         dl2, ds2, on="date",
-        tolerance=pd.Timedelta("40d"), direction="backward",
+        tolerance=pd.Timedelta(days=MACRO_MERGE_ASOF_TOLERANCE_DAYS), direction="backward",
     ).dropna().set_index("date")
     return (m["v_l"] - m["v_s"]).tail(n_pts)
 
@@ -1363,7 +1369,7 @@ def make_indicator(
     """
     trend = ""
     if series is not None and len(series) >= 3:
-        trend = trend_arrow([float(x) for x in series.tail(6).tolist()])
+        trend = trend_arrow([float(x) for x in series.tail(MACRO_TREND_LOOKBACK_PERIODS).tolist()])
     return {
         "key":    key,
         "name":   name,
