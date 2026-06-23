@@ -142,7 +142,10 @@ class DataPoint:
 - 季財報用「公告日」（45 天後）對齊,**不可**用季末日
 - 跨市場 merge_asof 用 backward + tolerance="40d"（macro_core.py:1336）
 
-⚠️ **待 audit 確認項**：`backtest_engine.py` 是否確實實作 vintage 對齊？目前僅文件存證,程式碼層待步驟 3 釐清。
+✅ **S-PIT-1 v18.245 audit 結果**:`backtest_engine.py` vintage **對齊正確**:
+- `walk_forward_test`(L144):train/test 嚴格時序切割,`train_df = bt_df[index >= train_start & index < test_start]` + `test_df = bt_df[index >= test_start & index <= test_end]`,完全無重疊
+- `run_backtest`(L87):透過 `backtesting` 套件 `Backtest(bt_df, ...)`,套件內部 PIT-safe
+- ⚠️ **另議**:`walk_forward_test` 未實際拿 `train_df` 做 strategy 參數優化(僅做時間切割直接用 test_df 回測),屬「walk-forward 設計不完整」非 vintage 問題,可入 BACKLOG 後續處理
 
 ### 2.4 Freshness — Max Staleness
 
