@@ -365,7 +365,12 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
                         (out["m2"] / out["m2"].shift(12) - 1) * 100
     out = out[(out["date"] >= start) & (out["date"] <= end)]
     print(f"[finmind_m1m2] ✅ CBC PXWeb {len(out)} rows")
-    return out[["date", "m1b", "m2", "m1b_m2_gap"]]
+    out = out[["date", "m1b", "m2", "m1b_m2_gap"]].copy()
+    # S-PROV-1 phase 14 v18.260 — provenance(schema-additive)
+    if not out.empty:
+        out["source"] = "CBC:PXWeb:EF19M01+EF21M01"
+        out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+    return out
 
 
 # ════════════════════════════════════════════════════════════════
@@ -466,6 +471,10 @@ def fetch_tw_pmi_history(start: _dt.date, end: _dt.date) -> pd.DataFrame:
                 continue
             _df = _df[(_df["date"] >= start) & (_df["date"] <= end)].reset_index(drop=True)
             print(f"[tw_pmi] ✅ data.gov.tw {len(_df)} rows ({start}~{end})")
+            # S-PROV-1 phase 14 v18.260 — provenance(schema-additive)
+            if not _df.empty:
+                _df["source"] = "data.gov.tw:dataset:6100"
+                _df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
             return _df
         except Exception as _e_outer:
             print(f"[tw_pmi] outer {type(_e_outer).__name__}: {_e_outer}")

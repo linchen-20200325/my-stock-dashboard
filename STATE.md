@@ -18,6 +18,7 @@
   * **phase 11**(v18.257):`etf_fetch.fetch_etf_manager` 5 return point 補 source/fetched_at(MoneyDJ KV / regex / SITCA / Yuanta;原 Yuanta 已有 source 鍵 upgrade 為 `Yuanta:official` 標準格式)
   * **phase 12**(v18.258):`etf_fetch.fetch_etf_meta_moneydj` 加 source/fetched_at(`MoneyDJ:Basic0004`,成功 path only)
   * **phase 13**(v18.259):`update_macro_history.py` 3 fetcher 補 source/fetched_at(`Yahoo:^TWII:chart` / `FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign` / `FinMind:TaiwanStockTotalMarginPurchaseShortSale`)
+  * **phase 14**(v18.260):`update_macro_history.py` 2 fetcher 補 source/fetched_at(`CBC:PXWeb:EF19M01+EF21M01` / `data.gov.tw:dataset:6100`)— bootstrap historical data 全鏈追蹤完整
   * 後續:12 指標融合處 score 出口
 - [x] **S-PIT-1** §2.3 v18.245 audit 結案:`backtest_engine.py` vintage **對齊正確**(walk_forward_test train/test 嚴格時序切割無重疊);**另議**:walk_forward_test 未實際拿 train_df 做參數優化,屬設計不完整非 vintage 問題,後續處理
 - [ ] **S-WFT-1**(新增,從 S-PIT-1 衍生)`backtest_engine.walk_forward_test` 未實際拿 train_df 做策略參數優化,僅做時間切割 → walk-forward 設計不完整,需評估是否引入 train phase
