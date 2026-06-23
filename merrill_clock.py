@@ -7,15 +7,19 @@
     → 過熱 / 復甦 / 停滯 / 衰退 四象限 + 對應資產配置建議。
 
 資料來源：
-- PMI 歷史：FinMind TaiwanEconomicIndicator（與 macro_core.py:786 同 API）
+- PMI 歷史：FinMind TaiwanEconomicIndicator（透過 tw_macro.fetch_pmi_history,
+  v18.243 S-H4 已下沉至 L1 Data,本檔屬 L2 不可直接 import proxy_helper）
 - CPI YoY：由呼叫端從 macro_info['us_core_cpi'] 傳入（避免重複抓）
+
+v18.243 S-H4(CLAUDE.md §8.2 修正):原 `fetch_pmi_history` + `_get_finmind_token`
+在本檔(L2 Compute)直接 import `proxy_helper`(L1),違反「L2 不得 import
+requests/proxy_helper」硬規則。已將 fetcher 下沉至 `tw_macro.py`(L1),本檔
+透過 `from tw_macro import fetch_pmi_history` 取資料,token 統一從
+`config.FINMIND_TOKEN`(EX-L0-1 例外:已登記 secrets bootstrap)。
 """
 from __future__ import annotations
-import datetime as _dt
-import os as _os
 import pandas as pd
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from shared.signal_thresholds import PMI_VALID_MAX, PMI_VALID_MIN  # v18.242 W3b SSOT consume
 
 # 階段名 → (建議資產, 配色)。配色與既有 GitHub 風格對齊。
 _QUADRANT_MAP = {
@@ -57,60 +61,8 @@ _ASSET_TABLE: dict[str, dict[str, str]] = {
 _CPI_THRESHOLD = 2.0
 
 
-def _get_finmind_token() -> str | None:
-    """從 env 或 Streamlit secrets 取得 FINMIND_TOKEN。"""
-    _tok = _os.environ.get('FINMIND_TOKEN')
-    if _tok:
-        return _tok
-    try:
-        import streamlit as _st
-        return (_st.secrets or {}).get('FINMIND_TOKEN')
-    except Exception:
-        return None
-
-
-def fetch_pmi_history(months: int = 18) -> pd.DataFrame | None:
-    """從 FinMind 抓台灣 PMI 月度歷史（含當期）。
-
-    Returns
-    -------
-    pd.DataFrame[date, value] sorted by date asc，失敗回 None。
-    """
-    _tok = _get_finmind_token()
-    if not _tok:
-        return None
-    try:
-        from proxy_helper import fetch_url as _fu
-        _start = (_dt.date.today() - _dt.timedelta(days=months * 31)).strftime('%Y-%m-%d')
-        _r = _fu(
-            'https://api.finmindtrade.com/api/v4/data',
-            params={'dataset': 'TaiwanEconomicIndicator',
-                    'start_date': _start, 'token': _tok},
-            timeout=15)
-        if _r is None:
-            print('[merrill_clock/pmi-hist] fetch_url None（proxy 失敗）')
-            return None
-        if _r.status_code != 200:
-            print(f'[merrill_clock/pmi-hist] HTTP {_r.status_code}')
-            return None
-        _data = (_r.json() or {}).get('data') or []
-        # 篩 name 含 PMI 或 製造業
-        _rows = [d for d in _data
-                 if 'PMI' in str(d.get('name', '')) or '製造業' in str(d.get('name', ''))]
-        if not _rows:
-            print('[merrill_clock/pmi-hist] FinMind 無 PMI series')
-            return None
-        _df = pd.DataFrame(_rows)
-        _df['date'] = pd.to_datetime(_df['date']).dt.normalize()
-        _df['value'] = pd.to_numeric(_df['value'], errors='coerce')
-        _df = _df.dropna(subset=['value']).sort_values('date').reset_index(drop=True)
-        # 過濾合理範圍（PMI_VALID_MIN/MAX,SSOT in shared/signal_thresholds.py）
-        _df = _df[(_df['value'] >= PMI_VALID_MIN) & (_df['value'] <= PMI_VALID_MAX)].reset_index(drop=True)
-        print(f'[merrill_clock/pmi-hist] ✅ {len(_df)} months')
-        return _df[['date', 'value']]
-    except Exception as _e:
-        print(f'[merrill_clock/pmi-hist] ❌ {type(_e).__name__}: {_e}')
-        return None
+# S-H4 v18.243:`fetch_pmi_history` + `_get_finmind_token` 已下沉至 `tw_macro.py`(L1)。
+# 本檔僅做純函式計算 + UI render,符合 L2 Compute / L4 Render 邊界。
 
 
 def compute_clock_state(pmi_yoy_chg: float, cpi_yoy: float) -> dict:
@@ -212,10 +164,12 @@ def render_merrill_clock(pmi_now: float | None, cpi_yoy: float | None):
     呼叫端傳入當期 PMI 與當期 CPI YoY；本模組負責抓 PMI 歷史算 YoY。
     """
     import streamlit as _st
+    from tw_macro import fetch_pmi_history as _fetch_pmi_history_l1
+    from config import FINMIND_TOKEN as _FINMIND_TOKEN
     if pmi_now is None or cpi_yoy is None:
         _st.caption('⚪ 美林時鐘：缺 PMI 或 CPI 當期值，跳過')
         return
-    _hist = fetch_pmi_history(months=18)
+    _hist = _fetch_pmi_history_l1(months=18, token=_FINMIND_TOKEN)
     if _hist is None or len(_hist) < 13:
         _st.caption(f'⚪ 美林時鐘：PMI 歷史不足 12+ 月（目前 {len(_hist) if _hist is not None else 0}），跳過')
         return

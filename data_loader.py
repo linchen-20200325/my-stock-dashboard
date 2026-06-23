@@ -92,41 +92,10 @@ def _yf_dl(symbol, **kwargs):
 _TWSE_DL = _bps_dl()
 from stock_names import get_stock_name
 
-# ── v4.5 嚴格安全抓取框架 ─────────────────────────────────────────────────
-def safe_fetch_strict(data_name: str, fetch_func, ttl: int = 600):
-    """
-    嚴格版安全抓取：抓不到絕不使用舊資料，直接回傳失敗狀態。
-    - 成功：寫入 st.session_state.success_cache（TTL 由呼叫方管理）
-    - 失敗：回傳 {'status': 'failed', 'value': None, 'message': '...'}
-    - 日期邊界：跨日自動視為過期（不跨日使用昨天快取）
-    """
-    _today_str = datetime.date.today().isoformat()
-    # 檢查 session_state 快取
-    _sc = getattr(st.session_state, '__dict__', {})
-    _cache = st.session_state.get('success_cache', {}) if hasattr(st, 'session_state') else {}
-    _entry = _cache.get(data_name)
-    if _entry and _entry.get('date') == _today_str:
-        _age = datetime.datetime.now().timestamp() - _entry.get('ts', 0)
-        if _age < ttl:
-            return _entry['data'], 'success'
-    # 實際抓取
-    try:
-        result = fetch_func()
-        if result is not None:
-            if not hasattr(st.session_state, 'success_cache') or \
-               not isinstance(st.session_state.get('success_cache'), dict):
-                st.session_state['success_cache'] = {}
-            st.session_state['success_cache'][data_name] = {
-                'data': result,
-                'date': _today_str,
-                'ts': datetime.datetime.now().timestamp(),
-            }
-            return result, 'success'
-    except Exception as _e:
-        print(f'[safe_fetch] {data_name} ❌ {type(_e).__name__}: {_e}')
-    # 失敗：明確標記，不回傳任何舊值
-    return {'status': 'failed', 'value': None,
-            'message': f'{data_name} 暫時無法取得最新資料'}, 'failed'
+# S-H1 v18.244:`safe_fetch_strict` 為死碼(grep 全 repo 唯一引用為定義本身),
+# 已刪除以同時修復 §8.2「L1 不得用 st.session_state」違憲(原使用
+# `st.session_state['success_cache']` 作為 session-level 緩存)。
+# 若日後需要嚴格安全抓取框架,應在 L3 service 層實作,不再放 L1 fetcher。
 
 
 _T86_DAY_CACHE: dict = {}  # {日期字串: {股票代碼: {外資,投信,自營商}}} 進程級快取，多股共用
