@@ -25,32 +25,9 @@ _QE_MAP = {'1': '03-31', '2': '06-30', '3': '09-30', '4': '12-31'}
 # v18.140 校準收斂門檻：health 低於此值觸發 🔴 防禦；regime=bull 需 score ≥ 此值才升 🟢
 # v18.143+：優先讀 macro_thresholds.json（由季度 recalibrate workflow 經 PR 審閱後寫入），
 # 缺檔則 fall back 至模組預設常數
-HEALTH_DEFENSE_THRESHOLD = 35
-BULL_MIN_SCORE = 4
-
-
-def _load_calibrated_thresholds() -> tuple[int, int]:
-    """讀 macro_thresholds.json，回傳 (HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE)。
-
-    缺檔 / 解析失敗 / 值越界 → silently 回 module 預設，不噴錯。
-    Production 流程不應因設定檔損毀而連帶崩潰。
-    """
-    import json as _json
-    import os as _os
-    _path = _os.path.join(_os.path.dirname(__file__), 'macro_thresholds.json')
-    try:
-        if _os.path.exists(_path):
-            with open(_path, 'r', encoding='utf-8') as _f:
-                _cfg = _json.load(_f)
-            _h = int(_cfg.get('HEALTH_DEFENSE_THRESHOLD', HEALTH_DEFENSE_THRESHOLD))
-            _s = int(_cfg.get('BULL_MIN_SCORE', BULL_MIN_SCORE))
-            # 越界守門：health ∈ [20, 60]、score ∈ [1, 6]
-            if 20 <= _h <= 60 and 1 <= _s <= 6:
-                return _h, _s
-    except Exception:
-        pass
-    return HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE
-
+# S-GRAY-1 v18.244:loader I/O 已下沉 `shared/macro_calibration.py`(L0 Infra),
+# 本檔僅做 module-level call 後 expose 常數,符合 L2 「純函式 / 無 I/O」邊界。
+from shared.macro_calibration import load_calibrated_thresholds as _load_calibrated_thresholds
 
 HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE = _load_calibrated_thresholds()
 

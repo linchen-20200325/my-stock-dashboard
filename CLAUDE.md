@@ -479,7 +479,7 @@ except ImportError:
 
 ### 8.3 灰色地帶（待 step 3 audit 確認是否違憲）
 
-- **`macro_helpers.py`**：分類 L2 但有輕度 I/O（讀 `macro_thresholds.json`）→ audit 看是否該抽 config-loader 到 L0
+- ~~`macro_helpers.py`：分類 L2 但有輕度 I/O（讀 `macro_thresholds.json`）→ audit 看是否該抽 config-loader 到 L0~~ **S-GRAY-1 v18.244 已修**:loader 抽至 `shared/macro_calibration.py`(L0),`macro_helpers` 改 import,介面 0 改
 - **`daily_checklist.py`**：跨 L1+L2+L3(fetch + cache + 摘要 + pkl 持久化)→ audit 看是否該拆檔
 - **`app.py`**：7,300 LOC,部分計算邏輯可能該下沉到 L2 → audit 看抽取規模
 
