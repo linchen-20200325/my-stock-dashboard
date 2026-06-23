@@ -115,7 +115,7 @@ class DataPoint:
 **現況**：本專案**尚未**統一以 `DataPoint` 攜帶 provenance,多以 `DataFrame + meta dict / failure token` 方式承載。
 - macro 失敗以 token 字串（如 `"FAIL:CIER:timeout"`）回傳供診斷（SPEC.md §4）
 - proxy_helper 的 cache layer 攜帶 `X-Cache-*` header 作為來源追蹤
-- 步驟 3 audit 須點名缺血緣的關鍵 path,後續逐步補上。
+- ✅ **S-PROV-1 v18.246 第 1 階段**:`macro_core.fetch_fred()` 已加 `source` + `fetched_at` 兩欄(schema-additive,既有 caller 無感)。其他 fetcher(`fetch_yf_close` / FinMind / TWSE / CBC 等)後續逐步補上。
 
 ### 2.3 Point-in-Time — 防 Lookahead
 

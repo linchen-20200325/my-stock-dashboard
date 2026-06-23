@@ -250,11 +250,20 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
 
     Returns
     -------
-    pd.DataFrame  欄位: ['date' (Timestamp), 'value' (float)],已排序去除空值。
-                  失敗時回傳空 DataFrame。
+    pd.DataFrame  欄位:
+        - `date` (Timestamp):資料歸屬日(observation_date)
+        - `value` (float):指標數值(已排序去除空值)
+        - `source` (str):血緣標識,例如 "FRED:DGS10"(S-PROV-1 v18.246 新增)
+        - `fetched_at` (str):本次抓取的 UTC ISO 時間字串(S-PROV-1 v18.246 新增)
 
-    v18.231 P1-S3：module-level TTL dict（30min）跨呼叫共享，
-    cache key = (series_id, api_key, n)；copy-on-read 防 caller mutation 污染。
+    失敗時回傳空 DataFrame(無欄位,caller 須先 `df.empty` 判斷)。
+
+    v18.231 P1-S3:module-level TTL dict(30min)跨呼叫共享,
+    cache key = (series_id, api_key, n);copy-on-read 防 caller mutation 污染。
+
+    v18.246 S-PROV-1(§2.2 provenance):新增 `source` + `fetched_at` 兩欄,
+    讓下游能追溯資料來源 + 抓取時間。schema-additive,既有 caller(讀 date/value)
+    無需修改;新 caller 可選用 provenance 欄位做血緣追蹤。
     """
     if not api_key:
         # W5-2 §1: 沉默 return empty 改補 log,但不 raise(caller 已透過 empty 判斷 fallback)
@@ -297,6 +306,9 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df["date"]  = pd.to_datetime(df["date"])
     out = df.dropna(subset=["value"]).sort_values("date").reset_index(drop=True)
+    # v18.246 S-PROV-1:provenance schema(§2.2)— source 標識 + 抓取時間
+    out["source"] = f"FRED:{series_id}"
+    out["fetched_at"] = pd.Timestamp.utcnow().isoformat()
     _FRED_CACHE[key] = (now, out.copy())
     return out
 
