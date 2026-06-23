@@ -352,11 +352,17 @@ def fetch_etf_info(ticker: str) -> dict:
 
     yfinance.info 主源（含 Beta、海外 ETF 必要）→ MoneyDJ Basic0004 補齊
     AUM/expense（yfinance 海外 IP 經常被擋時自動補位，台股 ETF only）。
+
+    S-PROV-1 v18.253:回傳 dict 含 source + fetched_at 兩個 key(§2.2)。
     """
+    # S-PROV-1 v18.253:provenance
+    _fetched_at = pd.Timestamp.now('UTC').isoformat()
     try:
         _info = yf.Ticker(ticker).info or {}
+        _src = f"Yahoo:{ticker}:info"
     except Exception:
         _info = {}
+        _src = f"Yahoo:{ticker}:info:failed"
 
     # 補齊：yfinance.info 空或缺 AUM/expense 時，從 MoneyDJ Basic0004 fetch
     _t = (ticker or '').upper()
@@ -374,6 +380,12 @@ def fetch_etf_info(ticker: str) -> dict:
             if _meta.get('zh_name') and not any(
                     '一' <= _c <= '鿿' for _c in str(_info.get('longName', ''))):
                 _info['longName'] = _meta['zh_name']
+            # 若靠 MoneyDJ 補了東西,更新 source 表示 hybrid
+            if not _src.endswith(':failed') and (_meta.get('aum_twd') or _meta.get('expense')):
+                _src = f"Yahoo:{ticker}:info+MoneyDJ:Basic0004"
+    # S-PROV-1 v18.253:provenance
+    _info['source'] = _src
+    _info['fetched_at'] = _fetched_at
     return _info
 
 
