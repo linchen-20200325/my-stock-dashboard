@@ -162,13 +162,19 @@ def fetch_finmind_foreign_investor(days_back: int = 7) -> dict:
     -------
     dict
         {
-            'fii_net':  int | None,    外資淨買超(元)
-            'z_fii':    float | None,  max(-3, min(3, fii_net / 5e9))
-            'date':     str,
-            'error':    str | None,
+            'fii_net':    int | None,    外資淨買超(元)
+            'z_fii':      float | None,  max(-3, min(3, fii_net / 5e9))
+            'date':       str,
+            'error':      str | None,
+            'source':     str,           血緣標識 (S-PROV-1 v18.248 新增)
+            'fetched_at': str,           本次抓取 UTC ISO (S-PROV-1 v18.248 新增)
         }
     """
-    result = {'fii_net': None, 'z_fii': None, 'date': '', 'error': None}
+    # S-PROV-1 v18.248 phase 4:provenance schema(§2.2)— 全路徑(含 error)皆攜帶
+    _now_iso = pd.Timestamp.now('UTC').isoformat()
+    _src = 'FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign_Investor'
+    result = {'fii_net': None, 'z_fii': None, 'date': '', 'error': None,
+              'source': _src, 'fetched_at': _now_iso}
 
     today    = _dt.date.today()
     end_dt   = today.strftime("%Y-%m-%d")
