@@ -1336,6 +1336,21 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
     start = (_dt.date.today() - _dt.timedelta(days=days + 10)).strftime('%Y-%m-%d')
     _df_stale = None       # 備援：FinMind 過舊資料
     _days_stale: int | None = None
+    # S-PROV-1 phase 10 v18.256 — provenance helper(schema-additive,既有 caller 無感)
+    _fetched_at_iso = pd.Timestamp.now('UTC').isoformat()
+
+    def _attach_prov(_d, _src):
+        """為返回 DataFrame 補 source / fetched_at 兩欄(若已存在則不覆蓋)。"""
+        try:
+            if _d is None or _d.empty:
+                return _d
+            if 'source' not in _d.columns:
+                _d = _d.assign(source=_src)
+            if 'fetched_at' not in _d.columns:
+                _d = _d.assign(fetched_at=_fetched_at_iso)
+            return _d
+        except Exception:  # noqa: BLE001
+            return _d
 
     # 即時報價類來源（goodinfo/TWSE/MoneyDJ/yfinance）回的是「最後一筆已公告淨值」，
     # 但若硬戳 today，遇週末/假日會與 yfinance 收盤日（上一交易日）對不上而 inner-join 落空。
@@ -1381,7 +1396,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                 _df_stale   = _df[['date', 'nav']]   # 保留，供 path 4 備援
                 print(f'[ETF NAV] {code} {_ds1}(field={_nav_field}): {len(_df)} 筆, 最新={_latest_d}, 距今={_days_stale}d')
                 if _days_stale <= 14:          # 14天內視為可用（含連假/公告延遲）
-                    return _df_stale
+                    return _attach_prov(_df_stale, f'FinMind:{_ds1}')
                 print(f'[ETF NAV] {_ds1} {code} 資料較舊({_days_stale}d)，嘗試其他來源')
                 break   # 找到資料就不再嘗試第二個 dataset
             else:
@@ -1433,7 +1448,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                 _row_gi = {'date': _last_bd, 'nav': _nav_gi}
                 if _prem_gi is not None: _row_gi['premium_pct'] = _prem_gi
                 print(f'[ETF NAV] {code} goodinfo: nav={_nav_gi} prem={_prem_gi}%')
-                return pd.DataFrame([_row_gi])
+                return _attach_prov(pd.DataFrame([_row_gi]), 'Goodinfo:StockDetail')
             else:
                 print(f'[ETF NAV] {code} goodinfo: 找不到淨值欄位')
         else:
@@ -1488,7 +1503,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                 print(f'[ETF NAV] TWSE {_op_id2}: 找不到 {code}'); continue
             _out2 = _parse_twse_row(_match.iloc[0].to_dict(), _op_id2)
             if _out2:
-                return pd.DataFrame([_out2])
+                return _attach_prov(pd.DataFrame([_out2]), f'TWSE:OpenAPI:ETF:{_op_id2}')
         except Exception as _e2:
             print(f'[ETF NAV] TWSE {_op_id2} {code}: {_e2}')
 
@@ -1530,7 +1545,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                     _row_q['premium_pct'] = _prem_q
                 print(f'[ETF NAV] MoneyDJ-Q(Basic0001) {_etfid_mdj}: '
                       f'nav={_nav_q} price={_price_q} prem={_prem_q}%')
-                return pd.DataFrame([_row_q])
+                return _attach_prov(pd.DataFrame([_row_q]), 'MoneyDJ:Basic0001')
             print(f'[ETF NAV] MoneyDJ-Q {_etfid_mdj}: 200 但 KV 無淨值 '
                   f'(keys={list(_kv_q)[:8]})')
         else:
@@ -1567,7 +1582,8 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                         break
             if _nav_mdj and _nav_mdj > 0:
                 print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: nav={_nav_mdj} date={_date_mdj}')
-                return pd.DataFrame([{'date': _date_mdj, 'nav': _nav_mdj}])
+                return _attach_prov(pd.DataFrame([{'date': _date_mdj, 'nav': _nav_mdj}]),
+                                    'MoneyDJ:Basic0003')
             print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: 200 但 regex 無 date+nav pair')
         else:
             _code_st = _r_mdj.status_code if _r_mdj is not None else 'None'
@@ -1586,7 +1602,8 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                 _nav3 = _info3.get('navPrice') or _info3.get('regularMarketNAV')
                 if _nav3 and float(_nav3) > 0:
                     print(f'[ETF NAV] yfinance {code}{_sfx3}: navPrice={_nav3}')
-                    return pd.DataFrame([{'date': _last_bd, 'nav': float(_nav3)}])
+                    return _attach_prov(pd.DataFrame([{'date': _last_bd, 'nav': float(_nav3)}]),
+                                        f'Yahoo:navPrice:{code}{_sfx3}')
                 break  # 沒資料，不 retry
             except Exception as _e3:
                 _e3s = str(_e3)
@@ -1600,7 +1617,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
     # ── 最終兜底：FinMind 過舊資料（goodinfo/MoneyDJ/yfinance 全部失敗時）────
     if _df_stale is not None and not _df_stale.empty:
         print(f'[ETF NAV] {code} 最終兜底: FinMind過舊資料({_days_stale}d)，所有即時來源失敗')
-        return _df_stale
+        return _attach_prov(_df_stale, 'FinMind:fallback_stale')
 
     return pd.DataFrame()
 

@@ -14,7 +14,8 @@
   * phase 4(#266):`tw_macro.fetch_finmind_foreign_investor` (dict keys)
   * phase 5(#267):tw_macro 5 fetchers batch(含 CBC tier-aware source)
   * phase 6(#268):`data_loader.fetch_fund_nav` + `fetch_financial_statements`
-  * 後續:macro_core PMI source registry / ETF fetcher / 12 指標融合處 score 出口
+  * **phase 10**(v18.256):`etf_fetch.fetch_etf_nav_history` 5-tier 全 7 return point 補 source/fetched_at(centralized `_attach_prov` helper:FinMind/Goodinfo/TWSE/MoneyDJ/Yahoo + stale fallback)
+  * 後續:macro_core PMI source registry / 12 指標融合處 score 出口
 - [x] **S-PIT-1** §2.3 v18.245 audit 結案:`backtest_engine.py` vintage **對齊正確**(walk_forward_test train/test 嚴格時序切割無重疊);**另議**:walk_forward_test 未實際拿 train_df 做參數優化,屬設計不完整非 vintage 問題,後續處理
 - [ ] **S-WFT-1**(新增,從 S-PIT-1 衍生)`backtest_engine.walk_forward_test` 未實際拿 train_df 做策略參數優化,僅做時間切割 → walk-forward 設計不完整,需評估是否引入 train phase
 - [ ] **S-SCHEMA-1** §3.1 ⚠️ pandera 是否加 requirements + 逐 fetcher 落地 schema?(評估 ~200ms 啟動 cost)
