@@ -2,6 +2,24 @@
 
 > 極簡狀態檔。歷史 PR 紀錄見 git log；技術細節見 `ARCHITECTURE.md` / `DATASTATION.md` / `STRATEGY_MANUAL.md`。
 
+## 🟡 Open — CLAUDE.md Bootstrap-audit 後續(2026-06-23 step 4 收尾後盤點)
+
+> Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
+> 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
+
+- [ ] **S-PROV-1** §2.2 DataPoint provenance 模型尚未統一(現以 DataFrame + meta dict / failure token 承載);`macro_core.fetch_fred()` 等回傳補 source/fetched_at 欄位
+- [ ] **S-PIT-1** §2.3 ⚠️ `backtest_engine.py` 是否確實實作 vintage 對齊?程式碼層待釐清
+- [ ] **S-SCHEMA-1** §3.1 ⚠️ pandera 是否加 requirements + 逐 fetcher 落地 schema?(評估 ~200ms 啟動 cost)
+- [ ] **S-RECON-1** §4.3 雙演算法對帳尚未落地(健康評分 / 月營收 YoY / 殖利率 — 缺對照演算法)
+- [ ] **S-GRAY-1** §8.3 灰色地帶 `macro_helpers.py` 是否該抽 config-loader 至 L0(輕度 I/O 讀 JSON)
+- [ ] **S-GRAY-2** §8.3 灰色地帶 `daily_checklist.py` 跨 L1+L2+L3 是否該拆檔
+- [ ] **S-GRAY-3** §8.3 灰色地帶 `app.py`(7,300 LOC)是否該下沉部分計算邏輯至 L2
+- [ ] **S-MED** Bootstrap-audit 中項 81 條(M)— W5-1/W5-2 已收一輪;其餘需逐一檢視
+
+**ROI 建議排序**:S-GRAY-1(scope 小最易動) → S-PROV-1(影響資料可信度) → S-PIT-1(影響回測正確性) → S-GRAY-3(歷史包袱大但價值高) → S-GRAY-2(daily_checklist 拆檔) → S-RECON-1(雙演算法對帳) → S-SCHEMA-1(ROI 偏低)。
+
+---
+
 ## 專案定位
 - **產品**：台股 / ETF 多 Tab 投資儀表板（市場 / 個股 / 組合 / 總經 / ETF）
 - **技術棧**：Streamlit + pandas + Plotly + altair（<5）+ FinMind + yfinance + Gemini AI
