@@ -1,6 +1,6 @@
 {
   "note": "由 update_etf_managers.py（GitHub Actions）自動維護的 ETF 經理人持久檔。app 讀此檔當『換手偵測』基準，跨容器重啟仍存活（取代僅存活於 /tmp 的舊機制）。請勿手動編輯。",
-  "updated_at": "2026-06-16T13:27:21.893625+00:00",
+  "updated_at": "2026-06-23T00:13:20.656053+00:00",
   "managers": {
     "0050.TW": {
       "history": [],
@@ -8,7 +8,7 @@
       "name": "陳重銓",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "0051.TW": {
       "history": [
@@ -23,7 +23,7 @@
       "name": "程惇亞",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "006208.TW": {
       "history": [],
@@ -31,7 +31,7 @@
       "name": "洪珮甄",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00692.TW": {
       "history": [],
@@ -39,7 +39,7 @@
       "name": "溫芳儀",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00850.TW": {
       "history": [],
@@ -47,7 +47,7 @@
       "name": "邱鉦淵",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "0056.TW": {
       "history": [],
@@ -55,7 +55,7 @@
       "name": "陳威志",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00713.TW": {
       "history": [],
@@ -63,7 +63,7 @@
       "name": "蔡宗勳",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00701.TW": {
       "history": [],
@@ -71,7 +71,7 @@
       "name": "江宇騰",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00878.TW": {
       "history": [],
@@ -79,7 +79,7 @@
       "name": "江宇騰",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00900.TW": {
       "history": [
@@ -94,7 +94,7 @@
       "name": "洪珮甄",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00915.TW": {
       "history": [],
@@ -102,7 +102,7 @@
       "name": "李郁馨",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00918.TW": {
       "history": [],
@@ -110,7 +110,7 @@
       "name": "郭修誠",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00919.TW": {
       "history": [],
@@ -118,7 +118,7 @@
       "name": "謝明志",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00929.TW": {
       "history": [],
@@ -126,7 +126,7 @@
       "name": "許忠成",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00936.TW": {
       "history": [],
@@ -134,7 +134,7 @@
       "name": "黃鈺民",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00939.TW": {
       "history": [],
@@ -142,7 +142,7 @@
       "name": "林良一",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00940.TW": {
       "history": [],
@@ -150,7 +150,7 @@
       "name": "邱鉦淵",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00881.TW": {
       "history": [],
@@ -158,7 +158,7 @@
       "name": "蘇鼎宇",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00891.TW": {
       "history": [],
@@ -166,7 +166,7 @@
       "name": "張圭慧",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00892.TW": {
       "history": [],
@@ -174,7 +174,7 @@
       "name": "又又",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00893.TW": {
       "history": [],
@@ -182,7 +182,7 @@
       "name": "游凱卉",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00935.TW": {
       "history": [],
@@ -190,7 +190,7 @@
       "name": "林怡君",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00679B.TW": {
       "history": [],
@@ -198,7 +198,7 @@
       "name": "周宜縉",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00687B.TW": {
       "history": [],
@@ -206,7 +206,7 @@
       "name": "陳思翰",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00937B.TW": {
       "history": [],
@@ -214,7 +214,7 @@
       "name": "曾盈甄",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00980A.TW": {
       "history": [],
@@ -222,7 +222,7 @@
       "name": "游景德",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00981A.TW": {
       "history": [],
@@ -230,7 +230,7 @@
       "name": "陳釧瑤",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     },
     "00982A.TW": {
       "history": [],
@@ -238,7 +238,7 @@
       "name": "陳沅易",
       "since": null,
       "tenure_days": null,
-      "last_seen": "2026-06-16"
+      "last_seen": "2026-06-22"
     }
   }
 }
