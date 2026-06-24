@@ -910,7 +910,12 @@ def build_leading_indicators(start, end, token="", progress_cb=None):
             "選PCR":pcr_dict.get(d), "外(選)":opt_data.get(d),
             "未平倉口數":lt.get("未平倉"), "韭菜指數":mtx_data.get(d),
         })
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    # S-PROV-1 phase 18 v18.264 — provenance(多源 aggregator,記錄完整鏈)
+    if not df.empty:
+        df["source"] = "TWSE+FinMind+TAIFEX:leading_indicators:full"
+        df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+    return df
 
 
 
@@ -1265,6 +1270,10 @@ def build_leading_fast(days=7, token=""):
                 _pk_li.dump(df, _f_li)
         except Exception:
             pass
+    # S-PROV-1 phase 18 v18.264 — provenance(schema-additive)
+    if not df.empty:
+        df["source"] = "FinMind+TAIFEX:leading_indicators:fast"
+        df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
     return df
 
 
