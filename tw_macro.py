@@ -946,3 +946,156 @@ def fetch_pmi_history(months: int = 18, token: str = "") -> Optional[pd.DataFram
     out['source'] = 'FinMind:TaiwanEconomicIndicator:PMI'
     out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
     return out
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# v18.270 — TW 央行政策階段判讀 4 大缺口補完
+# (1) TW CPI YoY  (2) TW 失業率  (3) CBC 重貼現率  (4) USDTWD spot
+# 對齊 §7 alignment / §8 architecture
+# ════════════════════════════════════════════════════════════════════════════
+
+# FinMind TaiwanMacroEconomics 指標關鍵字(含模糊比對 fallback)
+_TW_CPI_YOY_KEYS = (
+    '消費者物價指數(CPI)-總指數年增率(%)',
+    '消費者物價基本分類指數(CPI)-總指數(原始值)年增率(%)',
+    'CPI 年增率',
+    '消費者物價指數',
+    '物價指數年增率',
+    'CPI',
+)
+_TW_UNEMP_KEYS = (
+    '失業率(%)',
+    '失業率',
+)
+
+
+@_ttl_cache(ttl_sec=900, maxsize=8)  # 15min;CPI 月後 5-7 天發布,無需更頻繁
+def fetch_tw_cpi_yoy(months_back: int = 24, token: str = "") -> Optional[pd.DataFrame]:
+    """抓 TW 消費者物價指數 CPI 年增率(% YoY)月頻歷史。
+
+    來源:FinMind TaiwanMacroEconomics(主計總處原始)。
+    Unit: % YoY(對齊 macro_core.MACRO_THRESHOLDS.CPI 範圍 [-5, 20])。
+    發布延遲:月後 ~5-7 天;修正風險:低(主計總處權威)。
+
+    Returns
+    -------
+    pd.DataFrame[date, value, source, fetched_at] | None
+        由舊到新排序;找不到回 None(per §1 fail loud,不偽造)。
+    """
+    sub = _finmind_macro_series(_TW_CPI_YOY_KEYS, months_back=months_back, token=token)
+    if sub is None or sub.empty:
+        print(f'[tw_macro/cpi_yoy] FinMind 無 CPI YoY 資料(keys={_TW_CPI_YOY_KEYS[:2]}…)')
+        return None
+    # §3.2 sanity:CPI YoY ∈ [-5, 20]
+    sub = sub[(sub['value'] >= -5) & (sub['value'] <= 20)].reset_index(drop=True)
+    if sub.empty:
+        print('[tw_macro/cpi_yoy] sanity 過濾後資料為空(疑似指標名比對誤觸非 YoY 欄)')
+        return None
+    out = sub.copy()
+    out['source'] = 'FinMind:TaiwanMacroEconomics:CPI_YoY'
+    out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
+    print(f'[tw_macro/cpi_yoy] ✅ {len(out)} months, latest={out.iloc[-1]["value"]:+.2f}%')
+    return out
+
+
+@_ttl_cache(ttl_sec=900, maxsize=8)
+def fetch_tw_unemployment(months_back: int = 24, token: str = "") -> Optional[pd.DataFrame]:
+    """抓 TW 失業率(% level)月頻歷史。
+
+    來源:FinMind TaiwanMacroEconomics(主計總處勞動力統計)。
+    Unit: % level(歷史範圍 [3.6, 6.0])。
+    發布延遲:月後 ~22 天(較慢);修正風險:極低。
+
+    Returns
+    -------
+    pd.DataFrame[date, value, source, fetched_at] | None
+    """
+    sub = _finmind_macro_series(_TW_UNEMP_KEYS, months_back=months_back, token=token)
+    if sub is None or sub.empty:
+        print(f'[tw_macro/unemp] FinMind 無失業率資料(keys={_TW_UNEMP_KEYS})')
+        return None
+    # §3.2 sanity:失業率 ∈ [2, 8]
+    sub = sub[(sub['value'] >= 2) & (sub['value'] <= 8)].reset_index(drop=True)
+    if sub.empty:
+        print('[tw_macro/unemp] sanity 過濾後資料為空')
+        return None
+    out = sub.copy()
+    out['source'] = 'FinMind:TaiwanMacroEconomics:Unemployment'
+    out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
+    print(f'[tw_macro/unemp] ✅ {len(out)} months, latest={out.iloc[-1]["value"]:.2f}%')
+    return out
+
+
+@_ttl_cache(ttl_sec=3600, maxsize=4)  # 1hr;政策利率變動極少
+def fetch_cbc_discount_rate(months_back: int = 24, fred_api_key: str = "") -> Optional[pd.DataFrame]:
+    """抓 CBC 重貼現率(% level)月頻歷史。
+
+    來源:FRED INTDSRTWM193N(IMF International Financial Statistics 月頻)。
+    Unit: % level(歷史範圍 [1.125, 2.875])。
+    發布延遲:央行理監事會公告即時,FRED 月後 1-2 月;修正風險:無(政策利率不修)。
+
+    Returns
+    -------
+    pd.DataFrame[date, value, source, fetched_at] | None
+    """
+    if not fred_api_key:
+        print('[tw_macro/cbc_rate] fred_api_key 空,跳過')
+        return None
+    # 避免迴圈 import:lazy import macro_core(macro_core.py 屬同層 L1,可互相 lazy import)
+    from macro_core import fetch_fred  # noqa: PLC0415
+    from shared.fred_series import FRED_TW_DISCOUNT_RATE  # noqa: PLC0415
+
+    df = fetch_fred(FRED_TW_DISCOUNT_RATE, fred_api_key, n=max(months_back, 24))
+    if df is None or df.empty:
+        print(f'[tw_macro/cbc_rate] FRED {FRED_TW_DISCOUNT_RATE} 無資料')
+        return None
+    # §3.2 sanity:重貼現率 ∈ [0, 5]
+    df = df[(df['value'] >= 0) & (df['value'] <= 5)].reset_index(drop=True)
+    if df.empty:
+        print('[tw_macro/cbc_rate] sanity 過濾後資料為空')
+        return None
+    # fetch_fred 已附 source/fetched_at(S-PROV-1 phase 1),改寫 source 標籤明確指出語意
+    out = df.copy()
+    out['source'] = f'FRED:{FRED_TW_DISCOUNT_RATE}:CBC_DiscountRate'
+    print(f'[tw_macro/cbc_rate] ✅ {len(out)} months, latest={out.iloc[-1]["value"]:.3f}%')
+    return out
+
+
+@_ttl_cache(ttl_sec=3600, maxsize=4)
+def fetch_usdtwd_close(days_back: int = 180) -> Optional[pd.DataFrame]:
+    """抓 USD/TWD 日匯率收盤序列。
+
+    來源:Yahoo Chart API `TWD=X`(走 NAS proxy)。
+    Unit: TWD/USD(數字越大 = 台幣越貶,歷史 ~[28, 35])。
+    發布延遲:EOD 翌日;修正風險:無。
+
+    Returns
+    -------
+    pd.DataFrame[date, value, source, fetched_at] | None
+
+    Notes
+    -----
+    `daily_checklist.py` 既有用 yfinance 直抓 TWD=X,此 fetcher 走 macro_core 的
+    proxy 化 Chart API path,作 macro 模組統一入口。caller 兩種皆可用。
+    """
+    # lazy import 避免 import loop
+    from macro_core import fetch_yf_close  # noqa: PLC0415
+
+    # range_ 取較寬期(180d 約 6 月,足供 60D MA + 趨勢計算)
+    s = fetch_yf_close('TWD=X', range_=f'{max(days_back, 60)}d')
+    if s is None or s.empty:
+        print('[tw_macro/usdtwd] Yahoo TWD=X 無資料')
+        return None
+    # §3.2 sanity:USDTWD ∈ [25, 40]
+    s = s[(s >= 25) & (s <= 40)]
+    if s.empty:
+        print('[tw_macro/usdtwd] sanity 過濾後資料為空')
+        return None
+    out = pd.DataFrame({
+        'date': pd.to_datetime(s.index).normalize(),
+        'value': s.values,
+        'source': 'Yahoo:TWD=X:Close',
+        'fetched_at': pd.Timestamp.now('UTC').isoformat(),
+    }).reset_index(drop=True)
+    print(f'[tw_macro/usdtwd] ✅ {len(out)} days, latest={out.iloc[-1]["value"]:.3f}')
+    return out

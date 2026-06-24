@@ -602,3 +602,127 @@ def classify_short_term_regime(
         'action': action,
         'components': components,
     }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# v18.270 — TW 央行政策階段衍生函式
+# Spec(§7 對齊):純函式無 I/O,搭配 tw_macro.fetch_* 上游
+# ════════════════════════════════════════════════════════════════════════════
+
+def calc_real_rate(rate_pct: Optional[float],
+                   cpi_yoy_pct: Optional[float]) -> Optional[float]:
+    """實質利率(%) = 名目政策利率(%) − CPI YoY(%)。
+
+    Args
+    ----
+    rate_pct: CBC 重貼現率或銀行間隔夜拆款 (% level)
+    cpi_yoy_pct: CPI 年增率 (% YoY)
+
+    Returns
+    -------
+    float | None
+        實質利率;任一輸入為 None / NaN → None(§1 不偽造)。
+
+    Notes
+    -----
+    經濟學上,實質利率為負(rate < CPI)= 寬鬆;為正且 > 1% = 緊縮。
+    """
+    if rate_pct is None or cpi_yoy_pct is None:
+        return None
+    try:
+        rr = float(rate_pct) - float(cpi_yoy_pct)
+        if pd.isna(rr):
+            return None
+        return round(rr, 3)
+    except (TypeError, ValueError):
+        return None
+
+
+def classify_rate_cycle(rate_series: Optional[pd.Series],
+                        lookback_months: int = 6,
+                        epsilon: float = 0.05) -> str:
+    """依政策利率近 N 月變化分類「升息中 / 持平 / 降息中」。
+
+    Args
+    ----
+    rate_series: 時間序 % level(date index ascending),最少需 2 筆。
+    lookback_months: 比較窗口,預設 6 月(對齊台灣央行季度理監事會節奏)。
+    epsilon: 視為「持平」的容差(% pts),預設 0.05% = 5bp。
+
+    Returns
+    -------
+    str: '🟢 升息中' / '⚪ 持平' / '🔴 降息中' / '⬜ 資料不足'
+    """
+    if rate_series is None:
+        return '⬜ 資料不足'
+    try:
+        s = pd.Series(rate_series).dropna()
+    except (TypeError, ValueError):
+        return '⬜ 資料不足'
+    if len(s) < 2:
+        return '⬜ 資料不足'
+    s_tail = s.tail(min(lookback_months, len(s)))
+    delta = float(s_tail.iloc[-1]) - float(s_tail.iloc[0])
+    if abs(delta) < epsilon:
+        return '⚪ 持平'
+    return '🟢 升息中' if delta > 0 else '🔴 降息中'
+
+
+def calc_twd_trend(usdtwd_series: Optional[pd.Series],
+                   window_days: int = 60) -> Optional[dict]:
+    """USDTWD 60 日趨勢:回 latest / 60D MA / 斜率(% pts/月)。
+
+    Args
+    ----
+    usdtwd_series: USD/TWD 日序列(數字越大 = 台幣越貶)。
+    window_days: 滾動窗口,預設 60(約 2 個月)。
+
+    Returns
+    -------
+    dict | None
+        {
+          'latest': float,                # 最新匯率
+          'ma_60d': float | None,         # 60 日均線(資料不足回 None)
+          'slope_per_month': float|None,  # 線性斜率 (TWD/USD per 月,正=台幣貶)
+          'direction': str,               # '🔴 台幣貶' / '🟢 台幣升' / '⚪ 持平'
+        }
+        輸入無效回 None。
+    """
+    if usdtwd_series is None:
+        return None
+    try:
+        s = pd.Series(usdtwd_series).dropna()
+    except (TypeError, ValueError):
+        return None
+    if s.empty:
+        return None
+    latest = float(s.iloc[-1])
+    out: dict = {
+        'latest': round(latest, 4),
+        'ma_60d': None,
+        'slope_per_month': None,
+        'direction': '⚪ 持平',
+    }
+    if len(s) < window_days:
+        return out
+    tail = s.tail(window_days)
+    out['ma_60d'] = round(float(tail.mean()), 4)
+    # 線性斜率(per trading day → per month ≈ 21 交易日)
+    xs = list(range(len(tail)))
+    ys = tail.values
+    n = len(xs)
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    num = sum((xs[i] - mean_x) * (ys[i] - mean_y) for i in range(n))
+    den = sum((xs[i] - mean_x) ** 2 for i in range(n))
+    if den == 0:
+        return out
+    slope_per_day = num / den
+    slope_per_month = slope_per_day * 21
+    out['slope_per_month'] = round(slope_per_month, 4)
+    # 月斜率 > 0.1 (~0.3%) 算貶值方向;< -0.1 算升值
+    if slope_per_month > 0.1:
+        out['direction'] = '🔴 台幣貶'
+    elif slope_per_month < -0.1:
+        out['direction'] = '🟢 台幣升'
+    return out
