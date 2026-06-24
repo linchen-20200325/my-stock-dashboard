@@ -167,19 +167,19 @@ def calc_valuation_zone(price: float, eps_ttm: float, bvps: float,
     # PE 評估
     if eps_ttm and eps_ttm > 0 and price > 0:
         pe = round(price / eps_ttm, 1)
-        pe_zone, pe_color = _zone(pe, hist_pe_mean, hist_pe_std)
+        pe_zone, _ = _zone(pe, hist_pe_mean, hist_pe_std)
         result.update({"pe": pe, "pe_zone": pe_zone})
     else:
-        pe_color = N; pe_zone = "EPS<0（虧損）"
+        pe_zone = "EPS<0（虧損）"
         result.update({"pe": None, "pe_zone": pe_zone})
 
     # PB 評估
     if bvps and bvps > 0 and price > 0:
         pb = round(price / bvps, 2)
-        pb_zone, pb_color = _zone(pb, hist_pb_mean, hist_pb_std)
+        pb_zone, _ = _zone(pb, hist_pb_mean, hist_pb_std)
         result.update({"pb": pb, "pb_zone": pb_zone})
     else:
-        pb_color = N; pb_zone = "無資料"
+        pb_zone = "無資料"
         result.update({"pb": None, "pb_zone": pb_zone})
 
     # 綜合訊號（PE 優先，PB 備援）

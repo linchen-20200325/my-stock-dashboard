@@ -39,7 +39,6 @@ def calc_trend_score(df) -> float:
         if col not in df.columns:
             df[col] = close.rolling(period).mean()
     latest  = df.iloc[-1]
-    prev    = df.iloc[-2] if len(df) >= 2 else latest
     c = float(latest['close'])
 
     # 條件1: 價格站上各均線（預設值0，避免無MA被算成站上）
