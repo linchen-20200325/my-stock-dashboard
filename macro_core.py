@@ -417,6 +417,7 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
     pd.DataFrame
         index = DatetimeIndex
         columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+        + S-PROV-1 phase 16 v18.262 schema-additive 'source' + 'fetched_at'
         失敗時回傳空 DataFrame。
     """
     url = f"{YF_CHART_BASE}/{ticker}"
@@ -434,7 +435,12 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
             "Close":  q.get("close"),
             "Volume": q.get("volume"),
         }, index=ts)
-        return df.dropna(subset=["Close"])
+        df = df.dropna(subset=["Close"])
+        # S-PROV-1 phase 16 v18.262 — provenance(schema-additive)
+        if not df.empty:
+            df["source"] = f"Yahoo:chart:{ticker}:{range_}:{interval}"
+            df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+        return df
     except Exception as e:
         print(f"[macro_core/yf_ohlcv] {ticker} 解析失敗: {e}")
         return pd.DataFrame()

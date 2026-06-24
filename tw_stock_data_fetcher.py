@@ -342,6 +342,8 @@ def fetch_goodinfo_financials(
         session = build_proxy_session()
 
     result: dict[str, pd.DataFrame] = {"BS": pd.DataFrame(), "IS": pd.DataFrame(), "CF": pd.DataFrame()}
+    # S-PROV-1 phase 16 v18.262 — provenance(對每張表 DataFrame 加 source/fetched_at columns)
+    _fetched_at = pd.Timestamp.now('UTC').isoformat()
     for report_type in ("BS", "IS", "CF"):
         url = _goodinfo_url(stock_id, report_type)
         resp = proxy_get(session, url)
@@ -350,6 +352,8 @@ def fetch_goodinfo_financials(
         try:
             df = parse_goodinfo_table(resp.text)
             if not df.empty:
+                df["source"] = f"Goodinfo:{report_type}:StockBzPerformance"
+                df["fetched_at"] = _fetched_at
                 result[report_type] = df
         except Exception:
             continue
@@ -396,7 +400,14 @@ def fetch_mops_financials(
         return pd.DataFrame()
     try:
         tables = pd.read_html(resp.text, flavor="lxml")
-        return tables[0] if tables else pd.DataFrame()
+        if not tables:
+            return pd.DataFrame()
+        df = tables[0]
+        # S-PROV-1 phase 16 v18.262 — provenance(schema-additive)
+        if not df.empty:
+            df["source"] = f"MOPS:t164sb03:Y{year}Q{season}"
+            df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+        return df
     except Exception:
         return pd.DataFrame()
 
