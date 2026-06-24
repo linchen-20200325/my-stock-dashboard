@@ -54,8 +54,7 @@ my-stock-dashboard/
 │
 ├── ⚙️ 基礎設施 (Infrastructure)
 │   ├── config.py
-│   ├── stock_names.py
-│   └── financial_debug_helper.py
+│   └── stock_names.py
 │
 └── 📁 支援檔案 (Support Files)
     ├── .streamlit/config.toml
@@ -121,7 +120,6 @@ my-stock-dashboard/
 |------|-----:|------|
 | `config.py` | ~83 | 全域常數：均線週期、因子權重表、停損參數、回測手續費、市場曝險比例等 |
 | `stock_names.py` | ~174 | 台股代號 ↔ 中文名稱靜態映射表 |
-| `financial_debug_helper.py` | ~504 | FinMind 財務欄位別名對應、資料有效性驗證、財務科目分類邏輯 |
 
 ### 1.3 支援檔案說明
 
@@ -220,8 +218,6 @@ my-stock-dashboard/
 |------|------|---------|
 | `config.py` | 純常數（無邏輯） | 所有閾值集中在此，其他層只讀不寫 |
 | `stock_names.py` | 靜態映射表 | 不依賴任何外部 API；冷資料 |
-| `financial_debug_helper.py` | 工具函式 | 欄位別名標準化，隔離 API 格式變動 |
-
 **設計原則**：零外部依賴；任何層可自由引用；變更只影響此層。
 
 ---
