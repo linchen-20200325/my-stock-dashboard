@@ -24,8 +24,7 @@
   * **phase 17**(v18.263):`tw_stock_data_fetcher.fetch_5_years_cash_flow`(僅 ok status)+ `fetch_goodinfo_metrics`(僅實際拿到資料)補 provenance(`FinMind:TaiwanStockCashFlowsStatement:5y_annual` / `Goodinfo:BS_M_QUAR+IS_M_QUAR`)
   * **phase 18**(v18.264):`leading_indicators.build_leading_indicators`(full 版)+ `build_leading_fast`(快速版)補 provenance — 多源 aggregator(`TWSE+FinMind+TAIFEX:leading_indicators:full` / `FinMind+TAIFEX:leading_indicators:fast`)
   * 後續:12 指標融合處 score 出口
-- [x] **S-PIT-1** §2.3 v18.245 audit 結案:`backtest_engine.py` vintage **對齊正確**(walk_forward_test train/test 嚴格時序切割無重疊);**另議**:walk_forward_test 未實際拿 train_df 做參數優化,屬設計不完整非 vintage 問題,後續處理
-- [ ] **S-WFT-1**(新增,從 S-PIT-1 衍生)`backtest_engine.walk_forward_test` 未實際拿 train_df 做策略參數優化,僅做時間切割 → walk-forward 設計不完整,需評估是否引入 train phase
+- [x] **S-PIT-1** §2.3 v18.245 audit 結案;v18.265 **策略回測功能整體移除**(刪 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py`),`S-WFT-1` 自動結案無 follow-up;`tw_backtest.py`(macro 拐點驗證)+ `calibrate_macro_traffic.py`(macro 校準)獨立業務保留
 - [ ] **S-SCHEMA-1** §3.1 ⚠️ pandera 是否加 requirements + 逐 fetcher 落地 schema?(評估 ~200ms 啟動 cost)
 - [⚙️] **S-RECON-1** §4.3 雙演算法對帳;v18.252 第 1 階段:新建 `reconcile.py`(L2 Compute 純函式)+ 16/16 unit tests。提供 `reconcile_pair`(通用)/ `reconcile_us10y_yield`(FRED DGS10 vs Yahoo ^TNX/10, 5bp 容差)/ `reconcile_monthly_revenue_yoy`(自算 vs FinMind)。**v18.255 第 2 階段**:`risk_radar._signal_yield_10y_shock` 接入 reconcile,額外抓 `^TNX` 與 FRED DGS10 比對,結果以 schema-additive `reconcile` 欄寫入返回 dict;`tab_macro.py` 10 燈 expander 新增「✅/⚠️ 對帳 chip」;3 新 unit tests(agree/disagree/missing)+ 既有 3 test 不破。月營收 YoY caller 整合可後續加入。
 - [x] **S-GRAY-1** §8.3 灰色地帶 `macro_helpers.py` 是否該抽 config-loader 至 L0(輕度 I/O 讀 JSON)— **v18.244 完成**:loader 抽至 `shared/macro_calibration.py`(L0),`macro_helpers` 改 import,介面 0 改

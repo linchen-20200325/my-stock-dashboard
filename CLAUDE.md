@@ -119,33 +119,28 @@ class DataPoint:
 
 ### 2.3 Point-in-Time — 防 Lookahead
 
-本專案**有回測需求**：`backtest_engine.py` 實作 MA crossover / MA+RSI、walk-forward **3yr train / 12mo test**(evidence: ARCHITECTURE.md §4 strategy 層)。歷史運算**必須**只用「決策當下真實可得」的資料。
+本專案**無策略回測**(v18.265 移除 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py`)。Macro 拐點驗證(`tw_backtest.py` SPX/TWII 倒掛翻正)+ macro 校準歷史驗算(`calibrate_macro_traffic.py`)仍須遵守 PIT,**禁止 lookahead**。
 
-**各來源發布延遲 + 修正風險**：
+**各來源發布延遲 + 修正風險**:
 
 | 來源 | 指標 | 發布延遲 | 修正風險 | PIT 對齊鍵 |
 |---|---|---|---|---|
-| FRED | CPI / NFP | 月後 ~13 天 | **是**（隨後 1-2 月常修） | release_date,**禁止**用 observation_date |
-| FinMind | 季財報 | 季後 ~45 天 | **是**（審計修正） | 公告日 |
+| FRED | CPI / NFP | 月後 ~13 天 | **是**(隨後 1-2 月常修) | release_date,**禁止**用 observation_date |
+| FinMind | 季財報 | 季後 ~45 天 | **是**(審計修正) | 公告日 |
 | FinMind | 月營收 | 月後 ~10 天 | 低 | 公告日 |
 | FinMind | 月度 PMI | 月後 ~5-10 天 | 低 | 公告日 |
 | CIER / data.gov.tw | TW PMI | 月後第 1 營業日 | 無 | 發布日 |
-| CBC | M1B/M2 | 月後 ~5-7 天 | **未明**（待 audit） | 公告日 |
-| MOF | 進出口 | 月後 ~8-10 天 | **是**（後續月修 ±5%） | 公告日 |
+| CBC | M1B/M2 | 月後 ~5-7 天 | **未明**(待 audit) | 公告日 |
+| MOF | 進出口 | 月後 ~8-10 天 | **是**(後續月修 ±5%) | 公告日 |
 | TWSE / TPEX | 收盤行情 / 法人 | 同日盤後 ~14:30 TW | 低 | 交易日 + 17:00 後可信 |
 | TAIFEX | 期貨 / 選擇權 / PCR | 同日盤後 ~14:00 TW | 無 | 交易日 |
-| Yahoo Finance | OHLCV | EOD 16:00 ET ≈ 翌日 04:00 TW | 無 | 交易日（TW 用 T+1 才齊） |
+| Yahoo Finance | OHLCV | EOD 16:00 ET ≈ 翌日 04:00 TW | 無 | 交易日(TW 用 T+1 才齊) |
 | IMF | M1B 備援 | 月後 1-2 月 | 可能 | 公告日 |
 
-**回測對齊規則**：
-- FRED CPI 用 `release_date` 而非 `observation_date`（修正後值不可回填到過去決策）
-- 季財報用「公告日」（45 天後）對齊,**不可**用季末日
-- 跨市場 merge_asof 用 backward + tolerance="40d"（macro_core.py:1336）
-
-✅ **S-PIT-1 v18.245 audit 結果**:`backtest_engine.py` vintage **對齊正確**:
-- `walk_forward_test`(L144):train/test 嚴格時序切割,`train_df = bt_df[index >= train_start & index < test_start]` + `test_df = bt_df[index >= test_start & index <= test_end]`,完全無重疊
-- `run_backtest`(L87):透過 `backtesting` 套件 `Backtest(bt_df, ...)`,套件內部 PIT-safe
-- ⚠️ **另議**:`walk_forward_test` 未實際拿 `train_df` 做 strategy 參數優化(僅做時間切割直接用 test_df 回測),屬「walk-forward 設計不完整」非 vintage 問題,可入 BACKLOG 後續處理
+**對齊規則**:
+- FRED CPI 用 `release_date` 而非 `observation_date`(修正後值不可回填到過去決策)
+- 季財報用「公告日」(45 天後)對齊,**不可**用季末日
+- 跨市場 merge_asof 用 backward + tolerance="40d"(macro_core.py:1336)
 
 ### 2.4 Freshness — Max Staleness
 
@@ -435,7 +430,7 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 |---|---|---|
 | **L0 Infra** | 常數 / TTL / 門檻 / 全域 config | `config.py`、`shared/ttls.py`、`shared/thresholds.py`、`shared/health_thresholds.py`、`shared/fred_series.py` |
 | **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`、`data_registry.py`、`proxy_helper.py`、`update_macro_history.py`、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`、`tw_stock_data_fetcher.py` |
-| **L2 Compute** | 純函式運算 / 評分 / 策略 / 回測 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`merrill_clock.py`、`etf_calc.py`、`etf_quality.py`、`backtest_engine.py`、`risk_control.py`、`exit_signals.py`、`macro_signal_lookback_tw.py` |
+| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`merrill_clock.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`、`macro_signal_lookback_tw.py` |
 | **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_engine.py`、`ai_structured_summary.py`、`unified_decision.py`、`daily_checklist.py` |
 | **L4 Render** | 圖表生成 / 通用 UI 元件（無 Streamlit container） | `chart_plotter.py`、`etf_render.py`、`ui_widgets.py` |
 | **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`tab_mj_health_diff.py`、`etf_dashboard.py`、`etf_tab_*.py` |

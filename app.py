@@ -65,7 +65,6 @@ from data_loader import StockDataLoader, _LOADER_VERSION  # noqa: E402
 # ── v3.0 新增模組（§5-§11）──────────────────────────────────
 from etf_dashboard import (  # noqa: E402
     render_etf_single, render_etf_portfolio,
-    # v18.182 ARCHIVED: render_etf_backtest 回測暫封存
     render_etf_ai,
     render_sector_heatmap,
 )
@@ -1552,15 +1551,11 @@ with tab_etf_grp:
     render_etf_portfolio(gemini_fn=gemini_call)
     st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
 
-    # ── ② 歷史回測（v18.182 ARCHIVED 暫封存，模組 etf_tab_backtest.py 保留磁碟）──
-    # render_etf_backtest(gemini_fn=gemini_call)
-    # st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
-
-    # ── ③ 葡萄串領息法（自動讀取持股做月配息評估）──
+    # ── ② 葡萄串領息法（自動讀取持股做月配息評估）──
     render_grape_ladder(gemini_fn=gemini_call)
     st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
 
-    # ── ④ AI 綜合評斷 + 自由提問（壓軸區，整合所有上方分析）──
+    # ── ③ AI 綜合評斷 + 自由提問（壓軸區，整合所有上方分析）──
     render_etf_ai(gemini_fn=gemini_call)
 
 # ══════════════════════════════════════════════════════════════
@@ -1569,15 +1564,6 @@ with tab_etf_grp:
 with tab_etf_margin:
     from tab_etf_margin_simulator import render_etf_margin_simulator
     render_etf_margin_simulator()
-
-# ══════════════════════════════════════════════════════════════
-# v18.182 ARCHIVED: 🧪 回測找參數 Tab 暫封存
-# 模組檔 tab_backtest_optimization.py + backtest_engine.py + tw_backtest.py 完整保留磁碟
-# 未來啟用：取消上方 import (etf_dashboard) + tab tuple + 以下 with-block 註解即可
-# ══════════════════════════════════════════════════════════════
-# with tab_backtest:
-#     from tab_backtest_optimization import render_backtest_optimization_tab
-#     render_backtest_optimization_tab()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: 7% 高殖利率防禦網（Screener Mode）

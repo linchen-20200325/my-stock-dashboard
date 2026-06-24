@@ -1,7 +1,6 @@
 """ETF 共用純函式 — Phase 7B 抽 closure 為 module-level。
 
 零 Streamlit / Plotly 依賴；任何 module 皆可直接 import。
-- norm_return / norm_lower_better：雷達圖五維分數正規化（etf_tab_backtest）
 - auto_role：MK 框架 #9 核心/衛星分類（etf_tab_portfolio）
 - normalize_etf_ticker：ETF 代號規範化 SSOT（純 4-6 碼補 .TW；v18.224）
 - bare_etf_code：ETF 裸碼 SSOT（strip .TW/.TWO；v18.234）— normalize 反向
@@ -11,35 +10,6 @@ from __future__ import annotations
 import re as _re_etf_helpers
 
 _TW_PURE_RE = _re_etf_helpers.compile(r'^\d{4,6}[A-Z]?$')
-
-
-def norm_return(v: float, lo: float = -50, mid: float = 0, hi: float = 50) -> float:
-    """報酬類指標 0-100 正規化，越大越好。
-
-    分段線性：v ≥ hi → 100；v ≤ lo → 0；mid 對應 50。
-    """
-    if v >= hi:
-        return 100
-    if v <= lo:
-        return 0
-    if v >= mid:
-        return 50 + (v - mid) / (hi - mid) * 50
-    return (v - lo) / (mid - lo) * 50
-
-
-def norm_lower_better(v: float, best: float = 5, mid: float = 20, worst: float = 35) -> float:
-    """風險類指標 0-100 正規化（先取絕對值），越小越好。
-
-    分段線性：|v| ≤ best → 100；|v| ≥ worst → 0；mid 對應 50。
-    """
-    v = abs(v)
-    if v <= best:
-        return 100
-    if v >= worst:
-        return 0
-    if v <= mid:
-        return 100 - (v - best) / (mid - best) * 50
-    return 50 - (v - mid) / (worst - mid) * 50
 
 
 # MK 框架 #9：核心持股白名單（高股息大型 / 全市場 / 債券）
