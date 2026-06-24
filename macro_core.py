@@ -233,6 +233,12 @@ MACRO_THRESHOLDS: dict = {
     "CBC_RATE":    {"yellow_above": 2.0, "red_above": 2.5},
     # USDTWD:>32 yellow / >33 red(台幣明顯貶值,外資撤離壓力)
     "USDTWD":      {"green_below": 30.5, "yellow_above": 32.0, "red_above": 33.0},
+    # v18.271 China macro 5 zone(對稱 Fund v19.113):服務中國終端需求 + 全球流動性判讀
+    "CHN_CLI":     {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},
+    "CHN_PMI":     {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},
+    "CHN_CPI":     {"green_low": 1.0, "green_high": 3.0, "yellow_above": 4.0, "red_above": 5.0},
+    "CHN_M2":      {"red_below": 5.0, "green_above": 9.0},
+    "USDCNY":      {"green_below": 7.0, "yellow_above": 7.2, "red_above": 7.4},
 }
 
 

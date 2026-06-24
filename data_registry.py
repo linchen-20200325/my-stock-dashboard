@@ -383,6 +383,45 @@ DATA_REGISTRY: list[dict[str, Any]] = [
      'ping_url':'https://query1.finance.yahoo.com/v8/finance/chart/TWD=X?range=5d&interval=1d'},
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # 🇨🇳 China macro(v18.271 方向 B,服務台積電終端需求 + 全球流動性判讀)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    {'category':'🇨🇳 中國總經', 'name':'中國 OECD 領先指標', 'source':'FRED',
+     'endpoint':'fred.stlouisfed.org/series/CHNLOLITONOSTSAM',
+     'identifier':'CHNLOLITONOSTSAM',
+     'frequency':'monthly', 'requires_key':'FRED_API_KEY',
+     'usage':'OECD 中國綜合領先指標(PMI 替代,trend=100;月後 ~60 天),v18.271 新增',
+     'state_key':'macro_info.chn_cli.value', 'pingable':True,
+     'ping_url':'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CHNLOLITONOSTSAM'},
+    {'category':'🇨🇳 中國總經', 'name':'中國商業信心(PMI proxy)', 'source':'FRED',
+     'endpoint':'fred.stlouisfed.org/series/BSCICP03CNM665S',
+     'identifier':'BSCICP03CNM665S',
+     'frequency':'monthly', 'requires_key':'FRED_API_KEY',
+     'usage':'OECD 中國商業信心(對稱 US BSCICP02;月後 ~60 天),v18.271 新增',
+     'state_key':'macro_info.chn_pmi.value', 'pingable':True,
+     'ping_url':'https://fred.stlouisfed.org/graph/fredgraph.csv?id=BSCICP03CNM665S'},
+    {'category':'🇨🇳 中國總經', 'name':'中國 CPI 年增率', 'source':'FRED',
+     'endpoint':'fred.stlouisfed.org/series/CPALTT01CNM659N',
+     'identifier':'CPALTT01CNM659N',
+     'frequency':'monthly', 'requires_key':'FRED_API_KEY',
+     'usage':'OECD 中國 CPI YoY(% YoY,月後 ~30 天),v18.271 新增',
+     'state_key':'macro_info.chn_cpi.value', 'pingable':True,
+     'ping_url':'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPALTT01CNM659N'},
+    {'category':'🇨🇳 中國總經', 'name':'中國 M2 廣義貨幣', 'source':'FRED',
+     'endpoint':'fred.stlouisfed.org/series/MABMM301CNM189S',
+     'identifier':'MABMM301CNM189S',
+     'frequency':'monthly', 'requires_key':'FRED_API_KEY',
+     'usage':'M2 廣義貨幣(信貸脈衝 proxy;月後 ~30 天),v18.271 新增',
+     'state_key':'macro_info.chn_m2.value', 'pingable':True,
+     'ping_url':'https://fred.stlouisfed.org/graph/fredgraph.csv?id=MABMM301CNM189S'},
+    {'category':'🇨🇳 中國總經', 'name':'USDCNY 匯率', 'source':'FRED',
+     'endpoint':'fred.stlouisfed.org/series/DEXCHUS',
+     'identifier':'DEXCHUS',
+     'frequency':'daily', 'requires_key':'FRED_API_KEY',
+     'usage':'CNY/USD 日匯率(已在 Fund 端 FX 換匯生產驗證),v18.271 新增',
+     'state_key':'macro_info.usdcny.value', 'pingable':True,
+     'ping_url':'https://fred.stlouisfed.org/graph/fredgraph.csv?id=DEXCHUS'},
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 🏦 七、ETF / 基金
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     {'category':'🏦 ETF / 基金', 'name':'ETF K線 OHLCV', 'source':'yfinance',

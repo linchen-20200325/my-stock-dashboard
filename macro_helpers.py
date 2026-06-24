@@ -668,6 +668,37 @@ def classify_rate_cycle(rate_series: Optional[pd.Series],
     return '🟢 升息中' if delta > 0 else '🔴 降息中'
 
 
+def calc_china_credit_impulse_proxy(m2_series: Optional[pd.Series],
+                                    lag_months: int = 12) -> Optional[float]:
+    """中國信貸脈衝 proxy:M2 YoY 與 N 月前 M2 YoY 的差(% pts)。
+
+    真正信貸脈衝 = Δ(信貸/GDP),需社融存量 + GDP,無乾淨 FRED 來源;
+    M2 YoY 變化是粗略貨幣寬鬆代理。對稱 Fund 端同名函式。
+
+    Args
+    ----
+    m2_series: M2 YoY % 月頻時間序(date index ascending,**需已 YoY**)。
+    lag_months: 比較期,預設 12 月。
+
+    Returns
+    -------
+    float | None
+        正值 = 12 月內 M2 加速(寬鬆中)、負值 = 緊縮中;
+        資料不足 N+1 筆 → None(§1 不偽造)。
+    """
+    if m2_series is None:
+        return None
+    try:
+        s = pd.Series(m2_series).dropna()
+    except (TypeError, ValueError):
+        return None
+    if len(s) < lag_months + 1:
+        return None
+    cur = float(s.iloc[-1])
+    prev = float(s.iloc[-(lag_months + 1)])
+    return round(cur - prev, 3)
+
+
 def calc_twd_trend(usdtwd_series: Optional[pd.Series],
                    window_days: int = 60) -> Optional[dict]:
     """USDTWD 60 日趨勢:回 latest / 60D MA / 斜率(% pts/月)。
