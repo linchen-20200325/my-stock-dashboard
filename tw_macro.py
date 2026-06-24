@@ -1099,3 +1099,68 @@ def fetch_usdtwd_close(days_back: int = 180) -> Optional[pd.DataFrame]:
     }).reset_index(drop=True)
     print(f'[tw_macro/usdtwd] ✅ {len(out)} days, latest={out.iloc[-1]["value"]:.3f}')
     return out
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# v18.271 — China macro 5 指標(方向 B,對稱 Fund v19.113)
+# 服務:台積電/出口企業終端需求 + 全球流動性二把交椅判讀
+# ════════════════════════════════════════════════════════════════════════════
+
+# SSOT specs:對應 shared/fred_series 的 5 個 China 常數(避免重複定義 string literal)
+# DEXCHUS 日頻 ~2y;其餘 4 條月頻 ~10y
+def _china_fred_specs():
+    """SSOT lookup 避免 import 順序 issue。"""
+    from shared.fred_series import (  # noqa: PLC0415
+        FRED_CHN_CPI,
+        FRED_CHN_M2,
+        FRED_CHN_OECD_CLI,
+        FRED_CHN_PMI,
+        FRED_USDCNY,
+    )
+    return [
+        (FRED_USDCNY,         500),
+        (FRED_CHN_OECD_CLI,   120),
+        (FRED_CHN_CPI,        120),
+        (FRED_CHN_M2,         120),
+        (FRED_CHN_PMI,        120),
+    ]
+
+
+@_ttl_cache(ttl_sec=1800, maxsize=4)  # 30min;OECD 月頻發布
+def fetch_china_macro(fred_api_key: str = "") -> dict:
+    """並行抓 5 條 China macro FRED series。
+
+    Returns
+    -------
+    dict[series_id, pd.DataFrame]
+        key 為 FRED series ID,value 為 macro_core.fetch_fred 結果。
+        失敗 series 對應空 DataFrame;api_key 空 → 空 dict。
+
+    §1 fail loud:單條失敗回空 DataFrame + caller 自己判 .empty,
+    不偽造數值。
+    """
+    if not fred_api_key:
+        print('[tw_macro/china_macro] fred_api_key 空,跳過')
+        return {}
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+    from macro_core import fetch_fred  # noqa: PLC0415
+
+    specs = _china_fred_specs()
+    result: dict = {}
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futs = {pool.submit(fetch_fred, sid, fred_api_key, n): sid for sid, n in specs}
+        for fut in futs:
+            sid = futs[fut]
+            try:
+                df = fut.result()
+                result[sid] = df
+                if df is not None and not df.empty:
+                    print(f'[tw_macro/china_macro/{sid}] ✅ {len(df)} pts')
+                else:
+                    print(f'[tw_macro/china_macro/{sid}] ⚠️ empty')
+            except Exception as e:
+                print(f'[tw_macro/china_macro/{sid}] 失敗: {type(e).__name__}: {e}')
+                import pandas as _pd  # noqa: PLC0415
+                result[sid] = _pd.DataFrame()
+    return result

@@ -25,3 +25,12 @@ FRED_BSCICP02: str = "BSCICP02USM460S"       # OECD US Business Confidence (PMI 
 # ── TW central bank / FX (v18.270 補 TW 央行政策階段判讀) ──────────
 FRED_TW_DISCOUNT_RATE: str = "INTDSRTWM193N"  # CBC 重貼現率(月頻,FRED 載 1961-)
 FRED_USDTWD: str = "DEXTAUS"                  # USD/TWD 日匯率(FRED 載 1983-,Yahoo TWD=X 主、本條備援)
+
+# ── China macro (v18.271 方向 B 補完,對稱 Fund v19.113) ────────
+# 用途:台積電/出口企業終端需求 + 全球流動性二把交椅(中國)
+# 注意:FRED 收錄 OECD MEI / IMF IFS 中國資料,月後 ~60 天延遲
+FRED_USDCNY: str = "DEXCHUS"                  # CNY/USD 日匯率(Fund 端命名 FRED_CNH_USD,Stock 統一 USDCNY)
+FRED_CHN_OECD_CLI: str = "CHNLOLITONOSTSAM"   # OECD 中國綜合領先指標(PMI 替代,trend=100)
+FRED_CHN_CPI: str = "CPALTT01CNM659N"         # OECD 中國 CPI 年增率(% YoY)
+FRED_CHN_M2: str = "MABMM301CNM189S"          # 中國 M2 廣義貨幣(信貸脈衝 proxy)
+FRED_CHN_PMI: str = "BSCICP03CNM665S"         # OECD 中國商業信心(PMI proxy)
