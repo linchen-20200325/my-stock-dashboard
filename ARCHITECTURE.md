@@ -4,7 +4,9 @@
 >
 > 本文件為系統架構師視角的唯讀規格書，不含任何實作程式碼。
 >
-> **v18.182 起 UI 入口暫封存**：「🧪 回測找參數」頂層 Tab + ETF 組合 Tab 內「② 歷史回測」sub-section 暫不渲染（user 反饋暫不使用）；下文提及的 `backtest_engine.py` / `etf_tab_backtest.py` / `tab_backtest_optimization.py` / `tw_backtest.py` 模組磁碟保留完整，未來啟用只需 grep `v18.182 ARCHIVED:` 取消註解即可。架構描述未變。
+> **v18.265 策略回測整體移除**:`backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py` 三檔已刪除(共 ~986 LOC);MA 交叉/MA+RSI/Walk-Forward Test/ETF 歷史回測功能不再提供。下文歷史段落仍會提及這些模組以說明演進脈絡,但**目前 codebase 不含**。`tw_backtest.py`(macro 拐點驗證)+ `calibrate_macro_traffic.py`(macro 校準)為獨立業務模組,**保留**。
+>
+> **v18.182~v18.264 期間** UI 入口已封存 + 模組磁碟保留;v18.265 一併刪檔結案。
 
 ---
 

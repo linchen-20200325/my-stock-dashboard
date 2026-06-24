@@ -50,5 +50,4 @@ from etf_render import (  # noqa: F401
 # ── 四大 tab 入口（Phase 6 已抽出）──────────────────────────
 from etf_tab_single import render_etf_single  # noqa: F401
 from etf_tab_portfolio import render_etf_portfolio  # noqa: F401
-from etf_tab_backtest import render_etf_backtest  # noqa: F401
 from etf_tab_ai import render_etf_ai  # noqa: F401

@@ -53,13 +53,6 @@ RSI_OVERBOUGHT  = 70
 RSI_OVERSOLD    = 30
 MIN_LIQUIDITY   = 500
 
-# ── 回測參數（優化版：滑價提高至 0.003）─────────────────────
-BACKTEST_INIT_CASH    = 1_000_000
-BACKTEST_COMMISSION   = 0.001425    # 台股手續費 0.1425%
-BACKTEST_SLIPPAGE     = 0.003       # 滑價：提高至 0.3%（更貼近實戰）
-WFT_TRAIN_YEARS       = 3
-WFT_TEST_MONTHS       = 12
-
 # ── 市場曝險比例（依 market_regime）────────────────────────
 EXPOSURE_BULL    = 0.80   # 多頭：80% 持股
 EXPOSURE_NEUTRAL = 0.50   # 中性：50% 持股
