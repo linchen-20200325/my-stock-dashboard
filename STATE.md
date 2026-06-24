@@ -22,6 +22,7 @@
   * **phase 15**(v18.261):`data_loader._fetch_finmind_price_raw` 補 provenance(`FinMind:TaiwanStockPrice:raw_http`)
   * **phase 16**(v18.262):`macro_core.fetch_yf_ohlcv` + `tw_stock_data_fetcher.fetch_goodinfo_financials`(3 表 BS/IS/CF)+ `fetch_mops_financials`(年季識別)補 provenance(`Yahoo:chart:<ticker>:<range>:<interval>` / `Goodinfo:<BS|IS|CF>:StockBzPerformance` / `MOPS:t164sb03:Y<year>Q<season>`)
   * **phase 17**(v18.263):`tw_stock_data_fetcher.fetch_5_years_cash_flow`(僅 ok status)+ `fetch_goodinfo_metrics`(僅實際拿到資料)補 provenance(`FinMind:TaiwanStockCashFlowsStatement:5y_annual` / `Goodinfo:BS_M_QUAR+IS_M_QUAR`)
+  * **phase 18**(v18.264):`leading_indicators.build_leading_indicators`(full 版)+ `build_leading_fast`(快速版)補 provenance — 多源 aggregator(`TWSE+FinMind+TAIFEX:leading_indicators:full` / `FinMind+TAIFEX:leading_indicators:fast`)
   * 後續:12 指標融合處 score 出口
 - [x] **S-PIT-1** §2.3 v18.245 audit 結案:`backtest_engine.py` vintage **對齊正確**(walk_forward_test train/test 嚴格時序切割無重疊);**另議**:walk_forward_test 未實際拿 train_df 做參數優化,屬設計不完整非 vintage 問題,後續處理
 - [ ] **S-WFT-1**(新增,從 S-PIT-1 衍生)`backtest_engine.walk_forward_test` 未實際拿 train_df 做策略參數優化,僅做時間切割 → walk-forward 設計不完整,需評估是否引入 train phase
