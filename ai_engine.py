@@ -20,7 +20,6 @@ generate_daily_report / generate_quick_summary）皆回傳 **str**，
 否則應改為 dataclass + is_llm_generated=True 旗標。
 """
 import requests
-import json
 import datetime
 import time
 import re

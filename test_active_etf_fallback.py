@@ -10,9 +10,8 @@ test_active_etf_fallback.py — 主動式 ETF Yuanta fallback + 異常分級
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 
 import etf_fetch
 

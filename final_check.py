@@ -5,7 +5,7 @@ final_check.py — 系統健診終極驗證腳本
 用法：python3 final_check.py
 環境變數：FINMIND_TOKEN, PROXY_URL（選填）
 """
-import os, sys, datetime, warnings, requests
+import os, datetime, warnings, requests
 warnings.filterwarnings('ignore')
 import pandas as pd
 

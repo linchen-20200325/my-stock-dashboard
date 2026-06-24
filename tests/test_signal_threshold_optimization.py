@@ -14,7 +14,6 @@ if str(_REPO_ROOT) not in sys.path:
 from macro_signal_lookback_tw import TwSignalSpec  # noqa: E402
 from macro_validation_tw import TwiiCrisisEvent  # noqa: E402
 from signal_threshold_optimization import (  # noqa: E402
-    DRIFT_THRESHOLD_PCT,
     make_default_grid,
     optimize_signal_threshold,
 )

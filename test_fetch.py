@@ -4,7 +4,7 @@ test_fetch.py — 先行驗證：FRED CPI + FinMind NDC
 在終端機執行：python3 test_fetch.py
 目標：印出真實日期與數值
 """
-import os, sys, datetime, warnings, requests
+import os, datetime, warnings, requests
 warnings.filterwarnings('ignore')
 import pandas as pd
 

@@ -11,7 +11,6 @@ test_market_strategy.py — market_strategy step 3c 遷移驗證
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 import market_strategy
 

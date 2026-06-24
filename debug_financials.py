@@ -2,8 +2,7 @@
 debug_financials.py — 探勘 FinMind API 對 2330 真實回傳的欄位名稱
 執行：python debug_financials.py
 """
-import os, sys, requests, json
-from pprint import pprint
+import os, requests
 
 STOCK_ID = "2330"
 TOKEN = os.environ.get("FINMIND_TOKEN", "")

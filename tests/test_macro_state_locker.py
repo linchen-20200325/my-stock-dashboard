@@ -18,7 +18,6 @@ from macro_state_locker import (
     MacroStateLocker,
     load_macro_state,
     calculate_system_state,
-    _DEFAULT_STATE,
 )
 
 

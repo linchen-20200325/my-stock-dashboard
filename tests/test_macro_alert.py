@@ -447,8 +447,7 @@ class TestFetchMacroSnapshotEdgeCases:
 # 整合測試：render_macro_alerts（mock streamlit）
 # ═══════════════════════════════════════════════════════════════
 import sys
-import types
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from macro_alert import render_macro_alerts
 

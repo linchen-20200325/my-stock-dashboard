@@ -8,7 +8,6 @@ Part B: 線上整合測試（需 Streamlit Cloud / proxy 環境）
 import os, sys, datetime, warnings
 warnings.filterwarnings('ignore')
 import pandas as pd
-import numpy as np
 
 PASS, FAIL = '✅', '❌'
 

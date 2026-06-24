@@ -13,7 +13,6 @@
 
 import pytest
 import pandas as pd
-import numpy as np
 
 from scoring_engine import (
     calc_quality_score,
@@ -888,7 +887,7 @@ class TestCheckVcpAtrFilter:
         """ATR5 < ATR20×0.8：先大波動後小波動 → pass=True"""
         from scoring_engine import check_vcp_atr_filter
         # 前25天大波動（atr_pct=0.05），最後5天小波動（close-only）
-        import pandas as pd, numpy as np
+        import pandas as pd
         prices = [100 + i for i in range(30)]
         hi = [p * 1.05 for p in prices[:25]] + [p * 1.001 for p in prices[25:]]
         lo = [p * 0.95 for p in prices[:25]] + [p * 0.999 for p in prices[25:]]
