@@ -1129,3 +1129,27 @@ def apply_china_modifier(main_score: Optional[float],
         "china": round(c_clipped, 2),
         "multiplier": round(multiplier, 4),
     }
+
+
+def get_china_snapshot(fred_api_key: str) -> dict:
+    """v18.276 L2 一站式 wrapper:抓取 + 組裝 China macro snapshot。
+
+    對稱 Fund v19.118 `services.macro_service.get_china_snapshot`。
+    存在意義:讓 L5 UI(tab_macro)用單一 L2 介面取 China 資料,**無需**
+    擴充 EX-PASSTHRU-1 例外清單(此前該例外僅含 data_loader / etf_fetch)。
+    本函式 thin wrapper,僅串接 L1 tw_macro.fetch_china_macro + 本檔
+    china_macro_snapshot,5 行邏輯。
+
+    Args
+    ----
+    fred_api_key: FRED API key,空字串或 <30 字元 → 回空 dict(AppTest 守衛)
+
+    Returns
+    -------
+    dict: snapshot 結構同 china_macro_snapshot(),5 key + credit_impulse_proxy;
+          fred_api_key 缺時回 {} ,caller 應檢查 truthy 後再 compute_china_subscore。
+    """
+    if not fred_api_key or len(str(fred_api_key).strip()) < 30:
+        return {}
+    from tw_macro import fetch_china_macro  # noqa: PLC0415
+    return china_macro_snapshot(fetch_china_macro(fred_api_key))
