@@ -120,6 +120,41 @@ def test_snapshot_usdcny_red():
     assert "🔴" in out["usdcny"]["zone"]
 
 
+def test_snapshot_m3_level_to_yoy_green():
+    """v18.273 校正:M3 level series 漲 10% YoY → 🟢 綠(寬鬆)"""
+    from shared.fred_series import FRED_CHN_M2
+    dates = pd.date_range('2025-01-01', periods=13, freq='ME')
+    levels = [250 * (1 + 0.10 * i / 12) for i in range(13)]
+    df = pd.DataFrame({
+        "date": dates, "value": levels,
+        "source": ["FRED:test"] * 13, "fetched_at": ["2026-06-24"] * 13,
+    })
+    out = china_macro_snapshot({FRED_CHN_M2: df})
+    assert "🟢" in out["m2_yoy"]["zone"]
+    assert 9.0 <= out["m2_yoy"]["value"] <= 11.0
+
+
+def test_snapshot_m3_level_to_yoy_red_tight():
+    """v18.273:M3 level 12 月只漲 4% → YoY 4% → 🔴(緊縮)"""
+    from shared.fred_series import FRED_CHN_M2
+    dates = pd.date_range('2025-01-01', periods=13, freq='ME')
+    levels = [250 + i * (10/12) for i in range(13)]  # 漲 10 兆 = 4%
+    df = pd.DataFrame({
+        "date": dates, "value": levels,
+        "source": ["FRED:test"] * 13, "fetched_at": ["2026-06-24"] * 13,
+    })
+    out = china_macro_snapshot({FRED_CHN_M2: df})
+    assert "🔴" in out["m2_yoy"]["zone"]
+
+
+def test_snapshot_m3_short_series_no_yoy():
+    """v18.273:M3 level 不足 13 筆 → YoY 不可算 → ⬜ 無資料(§1 fail loud)"""
+    from shared.fred_series import FRED_CHN_M2
+    out = china_macro_snapshot({FRED_CHN_M2: _make_df(280.0)})
+    assert out["m2_yoy"]["zone"] == "⬜ 無資料"
+    assert out["m2_yoy"]["value"] is None
+
+
 # ══════════════════════════════════════════════════════════════
 # 3. compute_china_subscore
 # ══════════════════════════════════════════════════════════════
