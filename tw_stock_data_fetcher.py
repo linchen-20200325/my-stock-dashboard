@@ -701,6 +701,7 @@ def fetch_5_years_cash_flow(stock_code: str, token: str = "") -> dict:
                     "ocf_5y": round(ocf_5y), "years": len(years_avail)}
 
         ratio = round(ocf_5y / denom_5y * 100, 1)
+        # S-PROV-1 phase 17 v18.263 — provenance(schema-additive,僅 ok status)
         return {
             "status":     "ok",
             "ratio":      ratio,
@@ -711,6 +712,8 @@ def fetch_5_years_cash_flow(stock_code: str, token: str = "") -> dict:
             "inv_inc_5y": round(inv_inc_5y),
             "div_5y":     round(div_5y),
             "denom_5y":   round(denom_5y),
+            "source":     "FinMind:TaiwanStockCashFlowsStatement:5y_annual",
+            "fetched_at": pd.Timestamp.now('UTC').isoformat(),
         }
 
     except Exception as _e:
@@ -819,6 +822,11 @@ def fetch_goodinfo_metrics(
 
         if _rev is not None and _ar and _ar > 0 and _rev > 0:
             result["dso"] = round(360 / (_rev * 4 / _ar), 1)
+
+        # S-PROV-1 phase 17 v18.263 — provenance(僅在實際拿到資料時寫入)
+        if any(result.get(k) is not None for k in ("assets", "liab", "ar", "revenue")):
+            result["source"] = "Goodinfo:BS_M_QUAR+IS_M_QUAR"
+            result["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
 
     except Exception as exc:
         result["error"] = str(exc)
