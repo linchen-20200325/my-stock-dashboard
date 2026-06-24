@@ -14,7 +14,6 @@ import re
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 import leading_indicators as li
 

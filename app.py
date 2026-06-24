@@ -56,7 +56,6 @@ def _bps():
         s = requests.Session()
     s.verify = False
     return s
-import yfinance as yf  # noqa: E402
 
 print('[INFO] main.py v3.0 戰情室 載入完成')
 

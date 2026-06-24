@@ -36,7 +36,6 @@ def _bps():
 
 _TWSE_S = _bps()
 from bs4 import BeautifulSoup
-from io import StringIO
 from datetime import datetime, timedelta, date
 FINMIND_TOKEN = os.environ.get('FINMIND_TOKEN', '')
 

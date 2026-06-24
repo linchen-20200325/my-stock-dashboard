@@ -647,7 +647,7 @@ class StockDataLoader:
                         _capture_finmind_meta('inst', {})   # v18.201 D2
                     else:
                         _sdk_used = False
-                except Exception as e:
+                except Exception:
                     _sdk_used = False
             else:
                 _sdk_used = False

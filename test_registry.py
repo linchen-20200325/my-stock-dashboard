@@ -1,6 +1,6 @@
 """Smoke-test for data_registry freshness logic (mirrors etf_dashboard.py §0)."""
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 
 TODAY = pd.Timestamp(date.today())
 

@@ -455,7 +455,6 @@ def plot_quarterly_chart(df_quarterly, stock_id, stock_name):
 
     # 金融股：若毛利率欄位不存在或全是空值，標題不顯示「與毛利率」，並加小字備註
     has_gm = ('毛利率' in df_quarterly.columns) and (pd.to_numeric(df_quarterly.get('毛利率'), errors='coerce').notna().any())
-    title_text = '季營收柱狀圖 + 季毛利率曲線圖（雙Y軸）' if has_gm else '季營收柱狀圖'
 
 
     # ========== 季營收柱狀圖 ==========

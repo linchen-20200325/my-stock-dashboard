@@ -183,7 +183,6 @@ def calc_valuation_zone(price: float, eps_ttm: float, bvps: float,
         result.update({"pb": None, "pb_zone": pb_zone})
 
     # 綜合訊號（PE 優先，PB 備援）
-    primary_color = pe_color if result['pe'] else pb_color
     primary_zone  = pe_zone  if result['pe'] else pb_zone
 
     if "便宜" in primary_zone or "特價" in primary_zone:

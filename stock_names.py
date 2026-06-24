@@ -5,7 +5,6 @@
 
 import os
 import pickle
-import hashlib
 import datetime
 import requests
 

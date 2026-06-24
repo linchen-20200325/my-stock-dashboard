@@ -1,14 +1,12 @@
 """tests/test_macro_validation_tw.py — Phase C 台股總經 tab 歷史驗證引擎 (v18.150)."""
 from __future__ import annotations
 
-import datetime as dt
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from macro_validation_tw import (
-    TwiiCrisisEvent,
     detect_twii_crisis_events,
     load_twii_close_from_parquet,
 )

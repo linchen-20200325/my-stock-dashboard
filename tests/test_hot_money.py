@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from hot_money import (
     DIVERGENCE_STATES,

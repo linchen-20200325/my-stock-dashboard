@@ -9,11 +9,9 @@ test_tw_backtest.py — TWII 倒掛翻正回測單元測試
 """
 from __future__ import annotations
 
-from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-import pytest
 
 import tw_backtest
 
