@@ -25,14 +25,13 @@
   * **phase 18**(v18.264):`leading_indicators.build_leading_indicators`(full 版)+ `build_leading_fast`(快速版)補 provenance — 多源 aggregator(`TWSE+FinMind+TAIFEX:leading_indicators:full` / `FinMind+TAIFEX:leading_indicators:fast`)
   * 後續:12 指標融合處 score 出口
 - [x] **S-PIT-1** §2.3 v18.245 audit 結案;v18.265 **策略回測功能整體移除**(刪 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py`),`S-WFT-1` 自動結案無 follow-up;`tw_backtest.py`(macro 拐點驗證)+ `calibrate_macro_traffic.py`(macro 校準)獨立業務保留
-- [ ] **S-SCHEMA-1** §3.1 ⚠️ pandera 是否加 requirements + 逐 fetcher 落地 schema?(評估 ~200ms 啟動 cost)
+- [⛔ WONTFIX] **S-SCHEMA-1** §3.1 pandera — 套 §-1 工作準則:未實際遇過 schema bug + 拖慢冷啟動 ~200ms + 半做覆蓋不全。v18.265 結案
 - [⚙️] **S-RECON-1** §4.3 雙演算法對帳;v18.252 第 1 階段:新建 `reconcile.py`(L2 Compute 純函式)+ 16/16 unit tests。提供 `reconcile_pair`(通用)/ `reconcile_us10y_yield`(FRED DGS10 vs Yahoo ^TNX/10, 5bp 容差)/ `reconcile_monthly_revenue_yoy`(自算 vs FinMind)。**v18.255 第 2 階段**:`risk_radar._signal_yield_10y_shock` 接入 reconcile,額外抓 `^TNX` 與 FRED DGS10 比對,結果以 schema-additive `reconcile` 欄寫入返回 dict;`tab_macro.py` 10 燈 expander 新增「✅/⚠️ 對帳 chip」;3 新 unit tests(agree/disagree/missing)+ 既有 3 test 不破。月營收 YoY caller 整合可後續加入。
 - [x] **S-GRAY-1** §8.3 灰色地帶 `macro_helpers.py` 是否該抽 config-loader 至 L0(輕度 I/O 讀 JSON)— **v18.244 完成**:loader 抽至 `shared/macro_calibration.py`(L0),`macro_helpers` 改 import,介面 0 改
-- [ ] **S-GRAY-2** §8.3 灰色地帶 `daily_checklist.py` 跨 L1+L2+L3 是否該拆檔
-- [ ] **S-GRAY-3** §8.3 灰色地帶 `app.py`(7,300 LOC)是否該下沉部分計算邏輯至 L2
-- [ ] **S-MED** Bootstrap-audit 中項 81 條(M)— W5-1/W5-2 已收一輪;其餘需逐一檢視
-
-**ROI 建議排序**(S-GRAY-1 / S-PIT-1 已完成):S-PROV-1(影響資料可信度) → S-GRAY-3(歷史包袱大但價值高) → S-GRAY-2(daily_checklist 拆檔) → S-RECON-1(雙演算法對帳) → S-WFT-1(walk-forward 設計補完) → S-SCHEMA-1(ROI 偏低)。
+- [⛔ WONTFIX] **S-GRAY-2** `daily_checklist.py` 跨層拆檔 — 套 §-1:未實際 bug,user 仍在用無投訴。v18.265 結案
+- [⛔ WONTFIX] **S-GRAY-3** `app.py` 7,300 LOC 下沉 — 套 §-1:沒 bug、運作正常、重構風險 > 收益。v18.265 結案
+- [⛔ WONTFIX] **S-PROV-1 phase 19+** 剩餘 fetcher provenance — 套 §-1:邊際效益遞減,核心 40+ fetcher 已涵蓋。v18.265 結案
+- [ ] **S-MED** Bootstrap-audit 中項 81 條(M)— W5-1/W5-2 已收一輪;其餘**遵 §-1 等實際 bug 觸發再收**,不主動清
 
 ---
 
