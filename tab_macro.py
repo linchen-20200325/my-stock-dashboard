@@ -3050,6 +3050,25 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 f'｜外資空單>3萬⚠️  前五大>1萬⚠️  PCR<100偏空'
             )
 
+        # S-PROV-1 UI chip v18.265 — provenance(source + fetched_at,從 df 末筆讀)
+        try:
+            _li_prov_src = None
+            _li_prov_at = None
+            if "source" in df_li_show.columns and not df_li_show.empty:
+                _li_prov_src = str(df_li_show["source"].iloc[-1])
+            if "fetched_at" in df_li_show.columns and not df_li_show.empty:
+                _li_prov_at = str(df_li_show["fetched_at"].iloc[-1])[:19]
+            if _li_prov_src or _li_prov_at:
+                st.markdown(
+                    f"<div style='font-size:10px;color:#888;padding:3px 8px;"
+                    f"background:#0d1117;border-radius:4px;margin:2px 0 6px 0'>"
+                    f"📍 來源:{_li_prov_src or '—'}　🕐 抓取:{_li_prov_at or '—'} UTC"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+        except Exception:
+            pass
+
         # ── ② 主表格（render_leading_table，已內含深色主題CSS）──────────
         st.markdown(render_leading_table(df_li_show), unsafe_allow_html=True)
 
