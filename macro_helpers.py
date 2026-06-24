@@ -757,3 +757,258 @@ def calc_twd_trend(usdtwd_series: Optional[pd.Series],
     elif slope_per_month < -0.1:
         out['direction'] = '🟢 台幣升'
     return out
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# v18.272 — China 副盤(snapshot + sub-score + sub-regime)
+# 對稱 Fund v19.114 的 services/macro_service.py 同名函式,演算法 100% 一致
+#
+# 設計決策(對齊 §-1 + §8.1 step 6):
+# - 副盤獨立,**不**接入主 compute_macro_health(避免改變既有評分歷史可信度)
+# - 5 因子等權 0.20 each(CLI/PMI/CPI/M2/USDCNY)
+# - 4 級 regime + USDCNY > 7.4 fx_alert 獨立 flag
+# - 全缺 → return None(§1 fail loud,不偽 50 中性)
+# ════════════════════════════════════════════════════════════════════════════
+
+# China zone(對齊 §3.2 合理範圍 + macro_core.MACRO_THRESHOLDS v18.271 5 項)
+_CHINA_SUBSCORE_THRESHOLDS = {
+    "CHN_CLI":   {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},
+    "CHN_PMI":   {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},
+    "CHN_CPI":   {"green_low": 1.0, "green_high": 3.0, "yellow_above": 4.0, "red_above": 5.0},
+    "CHN_M2":    {"red_below": 5.0, "green_above": 9.0},
+    "USDCNY":    {"green_below": 7.0, "yellow_above": 7.2, "red_above": 7.4},
+}
+
+
+def _classify_china_zone(value: Optional[float], rules: dict) -> str:
+    """通用 traffic 分類:依 rules dict → 字串。"""
+    if value is None or pd.isna(value):
+        return "⬜ 無資料"
+    v = float(value)
+    if "red_above" in rules and v > rules["red_above"]:
+        return "🔴 紅"
+    if "red_below" in rules and v < rules["red_below"]:
+        return "🔴 紅"
+    if "yellow_above" in rules and v > rules["yellow_above"]:
+        return "🟡 黃"
+    if "yellow_below" in rules and v < rules["yellow_below"]:
+        return "🟡 黃"
+    if "green_above" in rules and v > rules["green_above"]:
+        return "🟢 綠"
+    if "green_below" in rules and v < rules["green_below"]:
+        return "🟢 綠"
+    if "green_low" in rules and "green_high" in rules:
+        if rules["green_low"] <= v <= rules["green_high"]:
+            return "🟢 綠"
+    return "⚪ 中性"
+
+
+def china_macro_snapshot(china_dict: dict) -> dict:
+    """組裝 tw_macro.fetch_china_macro 結果為簡單 snapshot。
+
+    Args
+    ----
+    china_dict: dict[series_id, DataFrame]
+        tw_macro.fetch_china_macro() 回傳;每個 DataFrame 含
+        [date, value, source, fetched_at] 至少欄位。
+
+    Returns
+    -------
+    dict 包含 5 個 key:cli/pmi/cpi_yoy/m2_yoy/usdcny,
+    每個對應 {"value", "date", "zone", "source"};
+    + "credit_impulse_proxy"(M2 YoY 12 月變化,§4.3 衍生)。
+    """
+    # SSOT 從 shared/fred_series 引入(對應 tw_macro._china_fred_specs)
+    from shared.fred_series import (  # noqa: PLC0415
+        FRED_CHN_CPI,
+        FRED_CHN_M2,
+        FRED_CHN_OECD_CLI,
+        FRED_CHN_PMI,
+        FRED_USDCNY,
+    )
+
+    def _extract(sid: str, threshold_key: str) -> dict:
+        df = china_dict.get(sid) if china_dict else None
+        out = {"value": None, "date": None, "zone": "⬜ 無資料", "source": None}
+        if df is None or df.empty:
+            return out
+        try:
+            last = df.iloc[-1]
+            v = float(last["value"])
+            d = pd.Timestamp(last["date"]).strftime("%Y-%m-%d")
+            out["value"] = round(v, 4)
+            out["date"] = d
+            out["zone"] = _classify_china_zone(v, _CHINA_SUBSCORE_THRESHOLDS.get(threshold_key, {}))
+            out["source"] = str(last.get("source", f"FRED:{sid}"))
+        except (KeyError, ValueError, TypeError) as e:
+            print(f"[china_macro_snapshot/{sid}] extract 失敗: {e}")
+        return out
+
+    snapshot = {
+        "cli":     _extract(FRED_CHN_OECD_CLI, "CHN_CLI"),
+        "pmi":     _extract(FRED_CHN_PMI, "CHN_PMI"),
+        "cpi_yoy": _extract(FRED_CHN_CPI, "CHN_CPI"),
+        "m2_yoy":  _extract(FRED_CHN_M2, "CHN_M2"),
+        "usdcny":  _extract(FRED_USDCNY, "USDCNY"),
+    }
+
+    m2_df = china_dict.get(FRED_CHN_M2) if china_dict else None
+    if m2_df is not None and not m2_df.empty:
+        try:
+            m2_yoy_series = m2_df["value"].astype(float)
+            snapshot["credit_impulse_proxy"] = calc_china_credit_impulse_proxy(m2_yoy_series)
+        except (KeyError, ValueError, TypeError) as e:
+            print(f"[china_macro_snapshot/credit_impulse] {e}")
+            snapshot["credit_impulse_proxy"] = None
+    else:
+        snapshot["credit_impulse_proxy"] = None
+
+    return snapshot
+
+
+# ── 5 因子各自打分(0/25/50/100,對應紅/黃綠 zone)──
+def _score_china_cli(v: Optional[float]) -> Optional[float]:
+    """CLI 評分:>100 擴張 100 / 99-100 中性 50 / 98-99 收縮 25 / <98 衰退 0"""
+    if v is None or pd.isna(v):
+        return None
+    v = float(v)
+    if v > 100.0:  return 100.0
+    if v >= 99.0:  return 50.0
+    if v >= 98.0:  return 25.0
+    return 0.0
+
+
+def _score_china_pmi(v: Optional[float]) -> Optional[float]:
+    """PMI proxy 評分:同 CLI 結構"""
+    return _score_china_cli(v)
+
+
+def _score_china_cpi(v: Optional[float]) -> Optional[float]:
+    """CPI YoY 評分:1-3% 理想 100 / 0-1 或 3-4 中性 50 / >4 過熱 0 / <0 通縮 0"""
+    if v is None or pd.isna(v):
+        return None
+    v = float(v)
+    if 1.0 <= v <= 3.0:  return 100.0
+    if 0.0 <= v < 1.0 or 3.0 < v <= 4.0:  return 50.0
+    return 0.0
+
+
+def _score_china_m2(v: Optional[float]) -> Optional[float]:
+    """M2 YoY 評分:>=9% 寬鬆 100 / 5-9% 中性 50 / <5% 緊縮 0"""
+    if v is None or pd.isna(v):
+        return None
+    v = float(v)
+    if v >= 9.0:  return 100.0
+    if v >= 5.0:  return 50.0
+    return 0.0
+
+
+def _score_china_usdcny(v: Optional[float]) -> Optional[float]:
+    """USDCNY 評分:<7.0 強勢 100 / 7.0-7.2 中性 50 / 7.2-7.4 偏弱 25 / >7.4 大貶 0"""
+    if v is None or pd.isna(v):
+        return None
+    v = float(v)
+    if v < 7.0:  return 100.0
+    if v <= 7.2: return 50.0
+    if v <= 7.4: return 25.0
+    return 0.0
+
+
+def compute_china_subscore(snapshot: dict) -> Optional[dict]:
+    """5 因子等權 0.20 each 計算 China 副盤分數。
+
+    Args
+    ----
+    snapshot: china_macro_snapshot() 回傳結果
+
+    Returns
+    -------
+    dict | None:
+        {"score": float|None, "factors": {...}, "n_available": int, "n_total": 5}
+        全缺 → None(§1 fail loud,**不**偽 50 中性)。
+    """
+    if not snapshot:
+        return None
+    scorers = [
+        ("cli",    "cli",     _score_china_cli),
+        ("pmi",    "pmi",     _score_china_pmi),
+        ("cpi",    "cpi_yoy", _score_china_cpi),
+        ("m2",     "m2_yoy",  _score_china_m2),
+        ("usdcny", "usdcny",  _score_china_usdcny),
+    ]
+    factors = {}
+    scores = []
+    for short, snap_key, scorer in scorers:
+        entry = snapshot.get(snap_key, {})
+        val = entry.get("value") if isinstance(entry, dict) else None
+        s = scorer(val)
+        factors[short] = {"value": val, "score": s}
+        if s is not None:
+            scores.append(s)
+    n_avail = len(scores)
+    if n_avail == 0:
+        return None
+    avg = round(sum(scores) / n_avail, 2)
+    return {"score": avg, "factors": factors, "n_available": n_avail, "n_total": 5}
+
+
+def classify_china_regime(snapshot: dict) -> dict:
+    """從 China snapshot 推導 4 級 regime + USDCNY 警示 flag。
+
+    Levels:
+      🟢 擴張:CLI > 100 AND PMI > 100
+      🟡 減速:CLI < 99 OR PMI < 99(但非衰退)
+      🔴 衰退/緊縮:(CLI < 98 AND PMI < 98) OR M2 < 5%
+      ⚪ 中性:其餘
+      🚨 fx_alert flag(獨立):USDCNY > 7.4
+
+    Returns:
+        {"regime": str, "fx_alert": bool, "reason": str}
+    """
+    if not snapshot:
+        return {"regime": "⬜ 資料不足", "fx_alert": False, "reason": "snapshot 空"}
+
+    def _val(k: str):
+        entry = snapshot.get(k, {})
+        return entry.get("value") if isinstance(entry, dict) else None
+
+    cli = _val("cli")
+    pmi = _val("pmi")
+    m2 = _val("m2_yoy")
+    usdcny = _val("usdcny")
+
+    fx_alert = (usdcny is not None and not pd.isna(usdcny) and float(usdcny) > 7.4)
+
+    if cli is None and pmi is None:
+        return {"regime": "⬜ 資料不足", "fx_alert": fx_alert,
+                "reason": "CLI/PMI 雙缺"}
+
+    cli_red = (cli is not None and float(cli) < 98.0)
+    pmi_red = (pmi is not None and float(pmi) < 98.0)
+    m2_tight = (m2 is not None and float(m2) < 5.0)
+    if (cli_red and pmi_red) or m2_tight:
+        reasons = []
+        if cli_red and pmi_red:
+            reasons.append(f"CLI={cli:.1f} & PMI={pmi:.1f} 雙紅")
+        if m2_tight:
+            reasons.append(f"M2={m2:.1f}% 緊縮")
+        return {"regime": "🔴 衰退/緊縮", "fx_alert": fx_alert,
+                "reason": "; ".join(reasons)}
+
+    cli_green = (cli is not None and float(cli) > 100.0)
+    pmi_green = (pmi is not None and float(pmi) > 100.0)
+    if cli_green and pmi_green:
+        return {"regime": "🟢 擴張", "fx_alert": fx_alert,
+                "reason": f"CLI={cli:.1f} & PMI={pmi:.1f} 雙綠"}
+
+    cli_slow = (cli is not None and float(cli) < 99.0)
+    pmi_slow = (pmi is not None and float(pmi) < 99.0)
+    if cli_slow or pmi_slow:
+        which = []
+        if cli_slow:  which.append(f"CLI={cli:.1f}")
+        if pmi_slow:  which.append(f"PMI={pmi:.1f}")
+        return {"regime": "🟡 減速", "fx_alert": fx_alert,
+                "reason": " / ".join(which) + " <99"}
+
+    return {"regime": "⚪ 中性", "fx_alert": fx_alert,
+            "reason": f"CLI={cli}, PMI={pmi} 皆 99-100 區間"}
