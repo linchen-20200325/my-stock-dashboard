@@ -212,10 +212,9 @@ def fred_get_next_release_date(series_id: str, api_key: str) -> Optional[_dt.dat
 
 
 # ══════════════════════════════════════════════════════════════
-# 統一閾值表 — 僅限「全球/美國」指標
-#   兩邊共用一份標準,避免同一個 VIX 在兩個系統有兩套判讀。
-#   台灣獨有指標(PCR / 外資期貨 / BIAS240 等)請放在 stock 端自有模組,
-#   不要混進這張表,以免污染 fund 端的全球視角。
+# 統一閾值表
+#   全球/美國指標兩 repo 共用一份;台灣指標(v18.270 起)併入此表,
+#   stock 端為主消費者,fund 端跨幣別配置需要時可借用。
 # ══════════════════════════════════════════════════════════════
 MACRO_THRESHOLDS: dict = {
     "VIX":         {"green_below": 18, "yellow_above": 22, "red_above": 30},
@@ -228,6 +227,12 @@ MACRO_THRESHOLDS: dict = {
     "YIELD_10Y3M": {"red_below": 0.0, "yellow_below": 0.5},
     "M2_YOY":      {"red_below": 0.0, "green_above": 5.0},
     "FED_BS_YOY":  {"red_below": -5.0, "green_above": 5.0},
+    # v18.270 TW 央行政策階段判讀:CPI YoY / 失業率 / CBC 重貼現率 / USDTWD
+    "TW_CPI_YOY":  {"green_low": 1.0, "green_high": 2.0, "yellow_above": 2.5, "red_above": 3.0},
+    "TW_UNEMP":    {"green_below": 3.7, "yellow_above": 4.0, "red_above": 4.5},
+    "CBC_RATE":    {"yellow_above": 2.0, "red_above": 2.5},
+    # USDTWD:>32 yellow / >33 red(台幣明顯貶值,外資撤離壓力)
+    "USDTWD":      {"green_below": 30.5, "yellow_above": 32.0, "red_above": 33.0},
 }
 
 

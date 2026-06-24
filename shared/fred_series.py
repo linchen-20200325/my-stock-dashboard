@@ -21,3 +21,7 @@ FRED_PHILLY_FED: str = "GACDFSA066MSFRBPHI"  # Philadelphia Fed manufacturing di
 
 # ── Activity / Sentiment (Proxies) ─────────────────────────────────
 FRED_BSCICP02: str = "BSCICP02USM460S"       # OECD US Business Confidence (PMI proxy)
+
+# ── TW central bank / FX (v18.270 補 TW 央行政策階段判讀) ──────────
+FRED_TW_DISCOUNT_RATE: str = "INTDSRTWM193N"  # CBC 重貼現率(月頻,FRED 載 1961-)
+FRED_USDTWD: str = "DEXTAUS"                  # USD/TWD 日匯率(FRED 載 1983-,Yahoo TWD=X 主、本條備援)
