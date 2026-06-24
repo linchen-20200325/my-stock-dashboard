@@ -1107,8 +1107,6 @@ class StockDataLoader:
             # 有些資料會用 type 表示季度/年度；先把 type 轉成字串便於判斷
             if 'type' in df_work.columns:
                 df_work['type'] = df_work['type'].astype(str)
-                type_uniques = sorted(df_work['type'].dropna().unique().tolist())
-
                 # 常見季度型態：Q1/Q2/Q3/Q4、1Q/2Q...、季報、Quarter、季
                 q_mask = df_work['type'].str.contains(r"(?:^Q[1-4]$|^[1-4]Q$|季|季報|quarter)", case=False, na=False)
                 df_q = df_work[q_mask].copy()

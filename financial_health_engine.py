@@ -306,11 +306,11 @@ def _derive_basic_from_fin_data(fin_data: dict) -> dict:
     """當 AI 失效但 fin_data 有效時，從原始財報數據直接計算基本指標。"""
     cash_pct = fin_data.get("現金佔總資產(%)", 0) or 0
     if cash_pct >= 25:
-        cash_status, cash_icon = "Pass", "🟢"
+        cash_icon = "🟢"
     elif cash_pct >= 10:
-        cash_status, cash_icon = "Acceptable", "🟡"
+        cash_icon = "🟡"
     else:
-        cash_status, cash_icon = "Fail", "🔴"
+        cash_icon = "🔴"
 
     ocf_k = fin_data.get("OCF(千)", 0) or 0
     # 單位防呆：FinMind/MOPS 均回傳千元（OCF(千) key 已標示）
@@ -361,9 +361,6 @@ def _derive_basic_from_fin_data(fin_data: dict) -> dict:
 
     # 雷達基本估分（無AI，只做粗略分級）
     gm = fin_data.get("毛利率(%)", 0) or 0
-    rev = fin_data.get("營業收入(千)", 0) or 0
-    ni = fin_data.get("稅後淨利(千)", 0) or 0
-    npm = round(ni / rev * 100, 1) if rev > 0 else 0
 
     def _score(val, thresholds):  # thresholds: [(>=val, score), ...]
         for thr, sc in thresholds:
