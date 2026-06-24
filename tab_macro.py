@@ -176,6 +176,99 @@ def _render_global_risk_radar(fred_api_key: str = "",
             print(f'[risk_radar/dual_verdict] {type(_e_syn).__name__}: {_e_syn}')
 
 
+def _render_china_drag_panel(fred_api_key: str = "",
+                             main_health: float | None = None) -> None:
+    """v18.276 中國拖累唯讀面板 — 4 個數字 + regime + USDCNY FX 警示。
+
+    顯示 China 副盤對主分的乘法 modifier 結果,但**不改變**任何既有 UI 數字:
+    panel 只 READ main_health(tl['health'] from calc_traffic_light, 0-100 scale),
+    COMPUTE multiplier + composite,RENDER NEW markdown。
+    既有的 traffic-light 主分卡(tab_macro.py:299)+ 今日市場總覽 4 KPI 完全不動。
+
+    顯示(對稱 Fund v19.118,Stock 主分原生 0-100 無需 scale):
+      - 主分(綜合健康度): main_health / 100
+      - 中國副盤:         china_subscore / 100(0=最差,100=最好)
+      - 乘子:             multiplier ∈ [0.7, 1.0]
+      - 折扣後:           main × multiplier / 100
+      - 4 級 regime + USDCNY > 7.4 fx_alert(若有)
+
+    §1 fail loud:
+      - fred_api_key 缺/AppTest → caption '⬜ 未設,跳過'(無 HTTP 撞 timeout)
+      - main_health 缺(健康燈未算)→ caption '⬜ 等待主分'
+      - 5 條 FRED series 全敗 → caption '⬜ 中國資料不足'
+      - 任何例外 → caption error,caller try/except 包覆,不擋整個 tab
+
+    §8.2 分層:lazy import L2 macro_helpers.get_china_snapshot(本檔 v18.276 加),
+              無 L1 直呼,無需擴充 EX-PASSTHRU-1 例外清單。
+    """
+    # AppTest / 缺 key 守衛(對齊 _render_global_risk_radar L51)
+    if not fred_api_key or len(str(fred_api_key).strip()) < 30:
+        st.caption("🇨🇳 中國拖累 China Drag:⬜ 未設 FRED key,跳過")
+        return
+    if main_health is None:
+        st.caption("🇨🇳 中國拖累 China Drag:⬜ 等待主分(健康燈未算)")
+        return
+
+    try:
+        from macro_helpers import (  # noqa: PLC0415
+            apply_china_modifier,
+            classify_china_regime,
+            compute_china_subscore,
+            get_china_snapshot,
+        )
+        _snap = get_china_snapshot(fred_api_key)
+        if not _snap:
+            st.caption("🇨🇳 中國拖累 China Drag:⬜ 中國資料不足(5 條 series 全敗)")
+            return
+
+        _china_sub = compute_china_subscore(_snap)
+        _china_score = _china_sub.get("score") if _china_sub else None
+        _regime = classify_china_regime(_china_sub) if _china_sub else None
+        _regime_label = _regime.get("regime") if _regime else "—"
+        _regime_color = _regime.get("color") if _regime else "#888"
+        _fx_alert = _regime.get("fx_alert") if _regime else None
+
+        _mod = apply_china_modifier(main_health, _china_score)
+        if _mod is None:
+            st.caption("🇨🇳 中國拖累 China Drag:⬜ 計算失敗")
+            return
+        _multiplier = _mod["multiplier"]
+        _composite = _mod["composite"]
+    except Exception as _e:  # noqa: BLE001
+        st.caption(f"🇨🇳 中國拖累 China Drag:⚠️ 取數失敗 {type(_e).__name__}: {_e}")
+        return
+
+    # ── 渲染:標題列 + 4-column 唯讀卡 ─────────────────────────────
+    st.markdown(
+        f'<div style="border-left:4px solid {_regime_color};padding:8px 12px;'
+        f'background:#0d1117;margin:8px 0;border-radius:4px;">'
+        f'<b style="color:#e6edf3;">🇨🇳 中國拖累 China Drag</b>  '
+        f'<span style="color:{_regime_color};font-weight:bold;">{_regime_label}</span>'
+        f'{("  ⚠️ " + _fx_alert) if _fx_alert else ""}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    _c1, _c2, _c3, _c4 = st.columns(4)
+    with _c1:
+        st.metric("主分(綜合健康度)", f"{main_health:.1f} / 100")
+    with _c2:
+        if _china_score is None:
+            st.metric("中國副盤", "—")
+        else:
+            st.metric("中國副盤", f"{_china_score:.1f} / 100")
+    with _c3:
+        st.metric("乘子", f"{_multiplier:.3f}",
+                  help="0.7~1.0,中國越差扣得越多,只懲罰不加成")
+    with _c4:
+        st.metric("折扣後主分", f"{_composite:.1f} / 100",
+                  delta=f"{_composite - main_health:+.1f}",
+                  delta_color="inverse")
+    st.caption(
+        "ℹ️ 唯讀展示:本面板**不改變**上方主分卡與今日市場總覽,僅示意「若 China 副盤納入主分」的折扣強度。"
+        "資料源:5 條 FRED OECD MEI(CLI/PMI/CPI/M2/USDCNY)。"
+    )
+
+
 def render_tab_macro():
     # ─ Late imports（避免循環 import）─
     import datetime
@@ -4279,6 +4372,19 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 f'第二環（確認燃料）：{_r2_html}<br>'
                 f'第三環（點火訊號）：{_r3_html}</div>'
                 f'</div>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════
+    # v18.276 中國拖累唯讀面板 — Section 八 之後、Section 九 之前
+    # 4 數字唯讀展示:不改變上方主分卡與今日市場總覽,僅示意 China 副盤折扣強度
+    # ══════════════════════════════════════════════════════════════
+    try:
+        import os as _os_cd
+        _fred_key_cd = (_os_cd.environ.get('FRED_API_KEY') or
+                        (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
+        _main_health_cd = (st.session_state.get('warroom_summary') or {}).get('health_score')
+        _render_china_drag_panel(_fred_key_cd, _main_health_cd)
+    except Exception as _cd_e:  # noqa: BLE001
+        print(f"[tab_macro/china_drag] {type(_cd_e).__name__}: {_cd_e}")
 
     # ══════════════════════════════════════════════════════════════
     # SECTION 九: 總經 AI 投資決策分析（五維度綜合研判）

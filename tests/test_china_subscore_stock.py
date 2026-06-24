@@ -399,3 +399,75 @@ def test_modifier_symmetric_with_fund():
 #      ✅ test_modifier_china_clipped_to_valid_range
 #   3. main 越界 / 非數值 (clip / 回 None)
 #      ✅ test_modifier_composite_clipped + invalid_types
+
+
+# ══════════════════════════════════════════════════════════════
+# 5. get_china_snapshot — v18.276 L2 thin wrapper(對稱 Fund v19.118)
+#    避免 L5 UI 直呼 L1 tw_macro.fetch_china_macro,§8.2 分層守衛
+# ══════════════════════════════════════════════════════════════
+
+def test_get_china_snapshot_empty_key_returns_empty_dict():
+    """fail-safe:fred_api_key 空/短 → 空 dict,不呼叫 L1 fetcher(AppTest 守衛)"""
+    from macro_helpers import get_china_snapshot
+    assert get_china_snapshot("") == {}
+    assert get_china_snapshot(None) == {}  # type: ignore[arg-type]
+    # <30 字元被視為 AppTest fake key(對齊 _render_global_risk_radar 守衛)
+    assert get_china_snapshot("short-fake") == {}
+
+
+def test_get_china_snapshot_delegates_to_l1_then_l2(monkeypatch):
+    """wrapper 串接:tw_macro.fetch_china_macro → macro_helpers.china_macro_snapshot"""
+    import macro_helpers as _mh
+
+    _called = {"fetch": 0}
+
+    def _fake_fetch(api_key):
+        _called["fetch"] += 1
+        # 確認 wrapper 傳遞了正確 key 給 L1
+        assert len(api_key) >= 30
+        return {}  # 空 dict 模擬「FRED 全失敗」
+
+    monkeypatch.setattr("tw_macro.fetch_china_macro", _fake_fetch)
+    out = _mh.get_china_snapshot("fake-key-with-enough-length-for-truthy-30+")
+    assert _called["fetch"] == 1
+    # china_macro_snapshot({}) 應回 5 key + credit_impulse_proxy(每個 value=None)
+    assert set(out.keys()) >= {"cli", "pmi", "cpi_yoy", "m2_yoy", "usdcny"}
+    for k in ("cli", "pmi", "cpi_yoy", "m2_yoy", "usdcny"):
+        assert out[k]["value"] is None  # §1 fail loud:不偽造數值
+
+
+def test_get_china_snapshot_with_real_data_passthrough(monkeypatch):
+    """wrapper 對非空 L1 結果做正確 pass-through(不丟欄位、不改值)"""
+    import macro_helpers as _mh
+    from shared.fred_series import FRED_CHN_OECD_CLI
+
+    _df = pd.DataFrame({
+        "date": pd.to_datetime(["2026-04-01", "2026-05-01"]),
+        "value": [99.5, 100.2],
+        "source": [f"FRED:{FRED_CHN_OECD_CLI}", f"FRED:{FRED_CHN_OECD_CLI}"],
+        "fetched_at": ["2026-06-01T00:00:00Z"] * 2,
+    })
+
+    def _fake_fetch(api_key):  # noqa: ARG001
+        return {FRED_CHN_OECD_CLI: _df}
+
+    monkeypatch.setattr("tw_macro.fetch_china_macro", _fake_fetch)
+    out = _mh.get_china_snapshot("fake-key-with-enough-length-for-truthy-30+")
+    assert out["cli"]["value"] == 100.2  # 最新一筆
+    assert out["cli"]["source"] == f"FRED:{FRED_CHN_OECD_CLI}"
+    # 其餘 4 series 缺 → value=None
+    for k in ("pmi", "cpi_yoy", "m2_yoy", "usdcny"):
+        assert out[k]["value"] is None
+
+
+def test_get_china_snapshot_symmetric_with_fund_interface():
+    """跨專案對稱:Stock 與 Fund 同名同簽名同行為(空 key fail-safe)"""
+    from macro_helpers import get_china_snapshot as _stock_wrapper
+    # Stock 端 wrapper 簽名應與 Fund 等價:str → dict
+    import inspect
+    _sig = inspect.signature(_stock_wrapper)
+    _params = list(_sig.parameters.values())
+    assert len(_params) == 1, "wrapper 應只收 1 個參數(對稱 Fund)"
+    assert _params[0].name == "fred_api_key"
+    # 空 key 行為一致(回 {} 而非 None / raise)
+    assert _stock_wrapper("") == {}
