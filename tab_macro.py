@@ -605,6 +605,16 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         )
         st.markdown('#### 📊 總經五時域總結（長期 ｜ 中期 ｜ 短線急殺 ｜ 籌碼 ｜ 新聞）')
         render_five_bucket_bar(_5b)
+        # v18.284：下方 section 桶歸屬目錄(物理重排 80 條跨 section 依賴風險高,改用標籤導航)
+        st.caption(
+            "📑 **下方 sections 桶歸屬**："
+            "🌳 長期 → §七 資金/估值 ｜ "
+            "📈 中期 → §一 國際／§二 台股大盤／§六 美股科技／§八 總經拼圖 ｜ "
+            "⚡ 短線急殺 → §五 ADL 廣度 ｜ "
+            "🧩 籌碼 → §三 大戶籌碼 ｜ "
+            "📰 新聞 → §十一 AI 總裁決 ｜ "
+            "🧠 跨桶 → §九 AI 投資決策"
+        )
         st.divider()
     except Exception as _e_5b:
         print(f'[tab_macro/五桶] {type(_e_5b).__name__}: {_e_5b}')
@@ -2874,7 +2884,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         'dji': intl_s.get('道瓊工業 DJI'),
     }
 
-    st.markdown(section_header('一','🌍 國際市場動態（影響台股的全球指標）','🌐'), unsafe_allow_html=True)
+    st.markdown(section_header('一','📈 中期｜🌍 國際市場動態（影響台股的全球指標）','🌐'), unsafe_allow_html=True)
     _sox1 = intl_s.get('費城半導體 SOX')
     _dji1 = intl_s.get('道瓊工業 DJI')
     _dxy1 = intl_s.get('美元指數 DXY')
@@ -3019,7 +3029,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                        'USD/JPY 急貶（carry 平倉）多伴隨風險資產同步下殺。XCCY 基差、穩定幣 SSR 因免費資料源不可得，未納入。')
 
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
-    st.markdown(section_header('二','🇹🇼 台股大盤（今日漲跌 + 台幣匯率）','🇹🇼'),unsafe_allow_html=True)
+    st.markdown(section_header('二','📈 中期｜🇹🇼 台股大盤（今日漲跌 + 台幣匯率）','🇹🇼'),unsafe_allow_html=True)
     _twii2 = tw_s.get('台股加權指數')
     _twd2 = tw_s.get('新台幣匯率')
     if _twii2 and _twd2:
@@ -3114,7 +3124,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ════════════════════════════════════════════════════════════════════
     # 三、大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標
     # ════════════════════════════════════════════════════════════════════
-    st.markdown(section_header('三','🧮 大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標','🧮'),unsafe_allow_html=True)
+    st.markdown(section_header('三','🧩 籌碼｜🧮 大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標','🧮'),unsafe_allow_html=True)
 
     if inst:
         _fk3 = next((k for k in inst if '外資' in k and '陸資' in k), None) or next((k for k in inst if '外資' in k), None)
@@ -3593,7 +3603,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
     st.markdown('<hr style="border-color:#21262d;margin:8px 0;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:4px 0;">📊 市場廣度</div>', unsafe_allow_html=True)
-    st.markdown(section_header('五','📊 全市場健康度 × 騰落指標（ADL）','📉'),unsafe_allow_html=True)
+    st.markdown(section_header('五','⚡ 短線急殺｜📊 全市場健康度 × 騰落指標（ADL）','📉'),unsafe_allow_html=True)
     _adl5 = st.session_state.get('cl_data', {}).get('adl')
     _mkt5 = st.session_state.get('mkt_info', {})
     if _adl5 is not None and not _adl5.empty:
@@ -3907,7 +3917,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
     st.markdown('<hr style="border-color:#21262d;margin:8px 0;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:4px 0;">🌐 國際市場</div>', unsafe_allow_html=True)
-    st.markdown(section_header('六','🖥️ 美股科技巨頭（台股明天的風向球）','🖥️'),unsafe_allow_html=True)
+    st.markdown(section_header('六','📈 中期｜🖥️ 美股科技巨頭（台股明天的風向球）','🖥️'),unsafe_allow_html=True)
     _sox6 = intl_s.get('費城半導體 SOX') or tech_s.get('費城半導體 SOX')
     _nvda6 = next((tech_s[k] for k in tech_s if 'NVDA' in k or '輝達' in k), None)
     if _sox6:
@@ -3968,7 +3978,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         st.markdown(f'<div style="color:#c9d1d9;font-size:13px;padding:3px 0;">• {_tc2}</div>', unsafe_allow_html=True)
 
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
-    st.markdown(section_header('七','💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
+    st.markdown(section_header('七','🌳 長期｜💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
 
     # ── M1B-M2 年增率（FinMind）──────────────────────────────
     _m1b_info = st.session_state.get('m1b_m2_info')
@@ -4042,7 +4052,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ══════════════════════════════════════════════════════════════
     # SECTION 八: 總經拼圖 v4.0 (景氣位階 × 前瞻需求 × 全球風險)
     # ══════════════════════════════════════════════════════════════
-    st.markdown(section_header('八','🌐 總經拼圖 v4.0（景氣位階 × 前瞻需求 × 全球風險）','🌐'),unsafe_allow_html=True)
+    st.markdown(section_header('八','📈 中期｜🌐 總經拼圖 v4.0（景氣位階 × 前瞻需求 × 全球風險）','🌐'),unsafe_allow_html=True)
 
     # ── 🔰 故事化白話解讀（純疊加；解釋三塊拼圖如何「合在一起看」，非重複各 KPI 副標）──
     with st.expander('🔰 這張「總經拼圖」在拼什麼？三塊怎麼一起看？'):
@@ -4489,7 +4499,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ══════════════════════════════════════════════════════════════
     # SECTION 九: 總經 AI 投資決策分析（五維度綜合研判）
     # ══════════════════════════════════════════════════════════════
-    st.markdown(section_header('九', '🧠 總經 AI 投資決策分析', '🧠'), unsafe_allow_html=True)
+    st.markdown(section_header('九', '🧠 跨桶｜總經 AI 投資決策分析', '🧠'), unsafe_allow_html=True)
 
     # ── 安全取數 ────────────────────────────────────────────────
     _ai_vix  = float(_m8_vix.get('current', 0))  if _m8_vix else None
@@ -4725,7 +4735,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # SECTION 十一: 🤖 AI 總裁決（實體狀態鎖架構）
     # 前端唯讀 macro_state.json；LLM 運算由觸發按鈕在背景執行並寫檔
     # ══════════════════════════════════════════════════════════════
-    st.markdown(section_header('十一', '🤖 AI 總裁決', '🤖'), unsafe_allow_html=True)
+    st.markdown(section_header('十一', '📰 新聞 ｜🤖 AI 總裁決', '🤖'), unsafe_allow_html=True)
 
     with st.expander('🤖 AI 總裁決 — 實體狀態鎖架構（唯讀）', expanded=True):
         _verdict_hdr_c1, _verdict_hdr_c2, _verdict_hdr_c3 = st.columns([4, 1, 1])
