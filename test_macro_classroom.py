@@ -221,3 +221,60 @@ class TestTabMacroWiring:
 #   1. tl=None / {} → explainer graceful skip,不 raise ✅
 #   2. 教室章節數量 / 內文長度漂移 → test 鎖 ≥ 10 章 + body ≥ 100 字 ✅
 #   3. SSOT 閾值改動但 classroom 沒同步 → test 對齊 macro_helpers ✅
+
+
+class TestFactCorrectionsV18279:
+    """v18.279 — 查證後事實修正回歸守衛(防數字被改回錯誤版本)。
+
+    來源:2026-06-25 四路平行查證(CIER / 國發會 / TWSE / FRED / ISM / CBOE 交叉)。
+    """
+
+    def _all_text(self):
+        from macro_classroom import _PRINCIPLE_CHAPTERS
+        return "\n".join(b for _, b in _PRINCIPLE_CHAPTERS)
+
+    def test_no_fabricated_tw_pmi_pre2012(self):
+        """台灣官方 PMI 2012/7 才創編 — 不可出現 2008/2009 的台灣 PMI 數值。
+
+        原造假值:2008/12=33.7、2009/3=49.6。必須移除。
+        """
+        t = self._all_text()
+        assert "33.7" not in t, "造假的 TW PMI 2008/12=33.7 不可復現"
+        assert "49.6" not in t, "造假的 TW PMI 2009/3=49.6 不可復現"
+        # 須明示 CIER 創編年份
+        assert "2012" in t and "創編" in t
+
+    def test_2015_foreign_net_buy_not_sell(self):
+        """2015 全年外資是淨買超 +422 億,非賣超(符號修正)"""
+        t = self._all_text()
+        assert "淨買超" in t and "422" in t
+
+    def test_ndc_blue_light_record_corrected(self):
+        """國發會藍燈:dot-com 15 月才是史上最長(非海嘯 16 月)"""
+        t = self._all_text()
+        assert "**15** 月藍燈" in t and "史上最長" in t
+        # 不可再宣稱海嘯「連 16 月藍燈(史上最長)」
+        assert "連 16 月藍燈(史上最長)" not in t
+
+    def test_margin_2000_peak_corrected(self):
+        """融資史上最高在 2000/4 = 5,956 億(非 2000/2 = 4500 億)"""
+        t = self._all_text()
+        assert "5,956 億" in t
+        assert "4500 億" not in t
+
+    def test_merrill_clock_citation_disclaimer(self):
+        """美林矩陣帶免責 + 無捏造的『高峰 現金 +5.7%』"""
+        t = self._all_text()
+        assert "各方引用略有出入" in t
+        assert "+5.7%" not in t
+
+    def test_yield_inversion_not_all_time_deepest(self):
+        """倒掛『1981 年來最深』非『史上最深』"""
+        t = self._all_text()
+        assert "1981 年來最深" in t
+        assert "-1.1%**(史上最深)" not in t
+
+    def test_vix_intraday_close_distinguished(self):
+        """VIX 89.5 盤中 vs 82.7 收盤須標明"""
+        t = self._all_text()
+        assert "盤中史上最高" in t and "收盤史上最高" in t
