@@ -149,3 +149,35 @@ render_principle_classroom()
         at = AppTest.from_string(drv, default_timeout=60)
         at.run()
         _assert_no_uncaught(at, "render_principle_classroom shim")
+
+    def test_render_five_bucket_bar_red(self):
+        """v18.284: 總經五桶 bar — 全紅情境 render（compute + render 串接無例外）"""
+        from streamlit.testing.v1 import AppTest
+        drv = _build_driver('''
+from macro_helpers import compute_five_bucket_summary
+from tab_macro import render_five_bucket_bar
+_summary = compute_five_bucket_summary(
+    macro_info={"vix":{"current":35},"ism_pmi":{"value":44},"us_core_cpi":{"yoy":4.5},
+                "tw_export":{"yoy":-8},"ndc_signal":{"score":14}},
+    warroom_summary={"health_score":30,"jingqi_avg":35},
+    m1b_m2_info={"gap":-0.5}, bias_info={"bias_240":25},
+    news_items=[{"is_systemic":True},{"is_systemic":True}],
+)
+render_five_bucket_bar(_summary)
+''')
+        at = AppTest.from_string(drv, default_timeout=90)
+        at.run()
+        _assert_no_uncaught(at, "render_five_bucket_bar(red)")
+        assert len(at.markdown) > 5, "五桶 bar render 元素太少"
+
+    def test_render_five_bucket_bar_empty_gray(self):
+        """v18.284: 空 session_state → 五桶全 ⬜ 未載入（不偽綠 / 不 KeyError）"""
+        from streamlit.testing.v1 import AppTest
+        drv = _build_driver('''
+from macro_helpers import compute_five_bucket_summary
+from tab_macro import render_five_bucket_bar
+render_five_bucket_bar(compute_five_bucket_summary())
+''')
+        at = AppTest.from_string(drv, default_timeout=90)
+        at.run()
+        _assert_no_uncaught(at, "render_five_bucket_bar(empty)")

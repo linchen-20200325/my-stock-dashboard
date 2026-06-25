@@ -28,6 +28,13 @@ from shared.signal_thresholds import (
     FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS,  # -10000 口：外資期貨黃線
     FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS,    # -20000 口：外資期貨紅線
 )
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_YELLOW, TRAFFIC_RED
+
+# ── 燈號 → 色 / emoji / 嚴重度排序（bar + chart + 詳細表共用）──
+LEVEL_COLOR = {"green": TRAFFIC_GREEN, "yellow": TRAFFIC_YELLOW,
+               "red": TRAFFIC_RED, "gray": "#6e7681"}
+LEVEL_EMOJI = {"green": "🟢", "yellow": "🟡", "red": "🔴", "gray": "⬜"}
+LEVEL_RANK = {"green": 1, "yellow": 2, "red": 3}   # gray 不參與 worst 計算
 
 # ════════════════════════════════════════════════════════════════
 # 鏡像 macro_core.MACRO_THRESHOLDS（L1，L0 不可 import）— drift test 守護
@@ -50,6 +57,15 @@ BUCKET_META = {
     "short": {"emoji": "⚡", "title": "短線急殺", "sub": "即時 risk-off"},
     "chips": {"emoji": "🧩", "title": "籌碼",   "sub": "大戶定位 日線"},
     "news":  {"emoji": "📰", "title": "新聞",   "sub": "系統性風險掃描"},
+}
+
+# 各桶 × 燈號 → 狀態短語（bar 上的 1 句 label）
+BUCKET_LEVEL_LABEL = {
+    "long":  {"green": "結構健康", "yellow": "結構轉折", "red": "結構防禦", "gray": "未載入"},
+    "mid":   {"green": "循環健康", "yellow": "局部走弱", "red": "循環惡化", "gray": "未載入"},
+    "short": {"green": "短線平靜", "yellow": "短線警戒", "red": "急殺風險", "gray": "未載入"},
+    "chips": {"green": "籌碼安定", "yellow": "籌碼分歧", "red": "籌碼危險", "gray": "未載入"},
+    "news":  {"green": "無系統風險", "yellow": "風險新聞", "red": "系統性警報", "gray": "未掃描"},
 }
 
 # 新聞桶：系統性風險命中「則數」→ 燈號（DESIGN：UI 判讀規則，非金融閾值）
@@ -181,3 +197,21 @@ def classify_danger(value: Optional[float], spec: DangerSpec) -> str:
     if (spec.yellow_lo is not None and v <= spec.yellow_lo) or v >= spec.yellow:
         return "yellow"
     return "green"
+
+
+def aggregate_level(levels: list[str]) -> str:
+    """桶燈號 = 旗下指標取最危險者（紅>黃>綠）。全部 gray（未載入）→ gray。"""
+    loaded = [lv for lv in levels if lv in LEVEL_RANK]
+    if not loaded:
+        return "gray"
+    return max(loaded, key=lambda lv: LEVEL_RANK[lv])
+
+
+def fmt_value(value: Optional[float], spec: DangerSpec) -> str:
+    """依 spec.decimals + unit 格式化顯示值。None → '—'。"""
+    if value is None:
+        return "—"
+    try:
+        return f"{float(value):.{spec.decimals}f}{spec.unit}"
+    except (TypeError, ValueError):
+        return f"{value}{spec.unit}"

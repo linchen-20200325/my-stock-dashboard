@@ -269,6 +269,50 @@ def _render_china_drag_panel(fred_api_key: str = "",
     )
 
 
+def render_five_bucket_bar(summary: dict) -> None:
+    """v18.284 — 頂部總經五桶總結 bar（5 columns × emoji+燈號+1句）+ 可展開指標明細。
+
+    順序鎖定：🌳長期 → 📈中期 → ⚡短線急殺 → 🧩籌碼 → 📰新聞。
+    桶燈號 / headline 由 macro_helpers.compute_five_bucket_summary 算好；本函式只渲染。
+    明細區讓 user 一眼看出「哪個指標逼近危險線」（值 + 燈號對照 SPEC §11）。
+    """
+    from shared.macro_buckets import BUCKET_ORDER, BUCKET_META, LEVEL_EMOJI
+
+    _cols = st.columns(len(BUCKET_ORDER))
+    for _col, _key in zip(_cols, BUCKET_ORDER):
+        _meta = BUCKET_META[_key]
+        _d = summary.get(_key) or {}
+        _color = _d.get('color', '#6e7681')
+        _emoji = _d.get('emoji', '⬜')
+        _label = _d.get('label', '—')
+        _headline = _d.get('headline', '')
+        with _col:
+            st.markdown(
+                f'''<div style="border-left:4px solid {_color};padding:8px 12px;
+background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:4px;min-height:104px;">
+<div style="font-size:0.72em;color:#888;letter-spacing:0.5px;">{_meta['sub']}</div>
+<div style="font-size:1.0em;font-weight:700;margin-top:2px;">{_meta['emoji']} {_meta['title']}: <span style="color:{_color};">{_emoji} {_label}</span></div>
+<div style="font-size:0.8em;color:#bbb;margin-top:4px;line-height:1.35;">{_headline}</div>
+</div>''',
+                unsafe_allow_html=True,
+            )
+
+    with st.expander('🔍 五桶指標明細（值 vs 危險線 — 對照 SPEC §11）', expanded=False):
+        _dcols = st.columns(len(BUCKET_ORDER))
+        for _dcol, _key in zip(_dcols, BUCKET_ORDER):
+            _meta = BUCKET_META[_key]
+            _d = summary.get(_key) or {}
+            with _dcol:
+                st.markdown(f"**{_meta['emoji']} {_meta['title']}**")
+                for _it in _d.get('details', []):
+                    _ic = LEVEL_EMOJI.get(_it['danger'], '⬜')
+                    st.markdown(
+                        f"<div style='font-size:0.78em;line-height:1.5;'>{_ic} {_it['label']}："
+                        f"<b>{_it['value_str']}</b></div>",
+                        unsafe_allow_html=True,
+                    )
+
+
 def render_tab_macro():
     # ─ Late imports（避免循環 import）─
     import datetime
@@ -515,6 +559,28 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         _render_global_risk_radar(_rr_fred_key, slow_verdict=_slow_v)
     except Exception as _e_rr:
         print(f'[tab_macro/risk_radar] {type(_e_rr).__name__}: {_e_rr}')
+
+    # ══ v18.284 — 📊 總經五桶總結 bar（長期/中期/短線急殺/籌碼/新聞）══
+    # 頂部一眼判讀整版危險度；門檻讀 shared.macro_buckets SSOT，未載入桶顯示 ⬜（§1 Fail Loud）。
+    try:
+        from macro_helpers import compute_five_bucket_summary
+        _wr5 = st.session_state.get('warroom_summary') or {}
+        _5b = compute_five_bucket_summary(
+            macro_info=st.session_state.get('macro_info'),
+            mkt_info=st.session_state.get('mkt_info'),
+            warroom_summary=_wr5,
+            m1b_m2_info=st.session_state.get('m1b_m2_info'),
+            bias_info=st.session_state.get('bias_info'),
+            cl_data=st.session_state.get('cl_data'),
+            li_latest=st.session_state.get('li_latest'),
+            jingqi_info={'avg': _wr5.get('jingqi_avg')},
+            news_items=st.session_state.get('_macro_news_items'),
+        )
+        st.markdown('#### 📊 總經五時域總結（長期 ｜ 中期 ｜ 短線急殺 ｜ 籌碼 ｜ 新聞）')
+        render_five_bucket_bar(_5b)
+        st.divider()
+    except Exception as _e_5b:
+        print(f'[tab_macro/五桶] {type(_e_5b).__name__}: {_e_5b}')
 
     st.markdown('<div style="background:#0a1628;border:1px solid #1f6feb;border-radius:12px;padding:16px;margin-bottom:12px;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:18px;font-weight:900;color:#58a6ff;margin-bottom:8px;">🌍 今日市場總覽 — 現在適合買股票嗎？</div>', unsafe_allow_html=True)
@@ -4657,6 +4723,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         if _do_verdict:
             with st.spinner('📡 正在抓取財經新聞 + 呼叫 Gemini AI（約 15~30 秒）…'):
                 _v_news = _fetch_macro_news(5)
+                # v18.284：stash 供頂部「五桶·新聞」燈號讀取（系統性風險命中數 → 紅/黃/綠）
+                st.session_state['_macro_news_items'] = _v_news
                 _v_news_titles = [_n['title'] for _n in _v_news]
                 # 組裝量化數據快照供 AI 判讀
                 _vix_d  = _macro_info.get('vix') or {}

@@ -102,3 +102,94 @@ def test_high_bad_red_ge_yellow():
             assert s.red >= s.yellow, f"{s.key} high_bad red<yellow"
         elif s.direction == "low_bad":
             assert s.red <= s.yellow, f"{s.key} low_bad red>yellow"
+
+
+# ──────────────────────────────────────────────────────────
+# 4. aggregate_level / fmt_value
+# ──────────────────────────────────────────────────────────
+def test_aggregate_level():
+    assert mb.aggregate_level(["green", "yellow", "red"]) == "red"
+    assert mb.aggregate_level(["green", "yellow", "gray"]) == "yellow"
+    assert mb.aggregate_level(["green", "green"]) == "green"
+    assert mb.aggregate_level(["gray", "gray"]) == "gray"   # 全未載入
+    assert mb.aggregate_level([]) == "gray"
+
+
+def test_fmt_value():
+    vix = mb.SPECS_BY_KEY["vix"]      # decimals=1 unit=""
+    margin = mb.SPECS_BY_KEY["margin"]  # decimals=0 unit="億"
+    assert mb.fmt_value(22.34, vix) == "22.3"
+    assert mb.fmt_value(3400, margin) == "3400億"
+    assert mb.fmt_value(None, vix) == "—"
+
+
+# ──────────────────────────────────────────────────────────
+# 5. compute_five_bucket_summary（L2 macro_helpers）
+# ──────────────────────────────────────────────────────────
+def test_compute_all_buckets_present():
+    from macro_helpers import compute_five_bucket_summary
+    out = compute_five_bucket_summary()
+    assert set(out.keys()) == set(mb.BUCKET_ORDER)
+    for b in mb.BUCKET_ORDER:
+        assert out[b]["level"] in ("green", "yellow", "red", "gray")
+        assert out[b]["emoji"] in mb.LEVEL_EMOJI.values()
+        assert isinstance(out[b]["details"], list)
+
+
+def test_compute_empty_is_gray():
+    """全 None → 每桶 gray（§1：不偽綠）。"""
+    from macro_helpers import compute_five_bucket_summary
+    out = compute_five_bucket_summary()
+    for b in mb.BUCKET_ORDER:
+        assert out[b]["level"] == "gray", f"{b} 應 gray"
+
+
+def test_compute_red_scenario():
+    import pandas as pd
+    from macro_helpers import compute_five_bucket_summary
+    out = compute_five_bucket_summary(
+        macro_info={
+            "vix": {"current": 35},          # ≥30 → short red
+            "ism_pmi": {"value": 44},         # <46 → mid red
+            "us_core_cpi": {"yoy": 4.5},      # >4 → mid red
+            "tw_export": {"yoy": -8},         # <-5 → mid red
+            "ndc_signal": {"score": 14},      # ≤16 → long red
+        },
+        warroom_summary={"health_score": 30},  # <35 → long red
+        m1b_m2_info={"gap": -0.5},             # <0 → long red
+        bias_info={"bias_240": 25},            # >20 → mid red
+        cl_data={"adl": pd.DataFrame({"ad_ratio": [30]}), "margin": 3500},  # adl<35 / margin>3400
+        news_items=[{"is_systemic": True}, {"is_systemic": True}],  # 2 → news red
+    )
+    assert out["long"]["level"] == "red"
+    assert out["mid"]["level"] == "red"
+    assert out["short"]["level"] == "red"
+    assert out["chips"]["level"] == "red"
+    assert out["news"]["level"] == "red"
+
+
+def test_compute_green_scenario():
+    from macro_helpers import compute_five_bucket_summary
+    out = compute_five_bucket_summary(
+        macro_info={
+            "vix": {"current": 15},
+            "ism_pmi": {"value": 55},
+            "us_core_cpi": {"yoy": 2.0},
+            "tw_export": {"yoy": 5},
+            "ndc_signal": {"score": 28},
+        },
+        warroom_summary={"health_score": 70},
+        m1b_m2_info={"gap": 2.0},
+        bias_info={"bias_240": 5},
+        news_items=[],   # 0 systemic → news green
+    )
+    assert out["long"]["level"] == "green"
+    assert out["mid"]["level"] == "green"
+    assert out["short"]["level"] == "green"   # vix green（adl/fut gray 被忽略）
+    assert out["news"]["level"] == "green"
+
+
+def test_compute_news_yellow_on_single_systemic():
+    from macro_helpers import compute_five_bucket_summary
+    out = compute_five_bucket_summary(news_items=[{"is_systemic": True}, {"is_systemic": False}])
+    assert out["news"]["level"] == "yellow"
