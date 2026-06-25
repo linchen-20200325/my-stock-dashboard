@@ -170,6 +170,20 @@ render_five_bucket_bar(_summary)
         _assert_no_uncaught(at, "render_five_bucket_bar(red)")
         assert len(at.markdown) > 5, "五桶 bar render 元素太少"
 
+    def test_add_danger_hlines(self):
+        """v18.284: 圖表危險標準線 helper — VIX 用 SSOT 22(非舊 25)、yref=y2、band 不炸"""
+        import plotly.graph_objects as go
+        from tab_macro import add_danger_hlines
+        f = go.Figure()
+        add_danger_hlines(f, 'vix')             # high_bad → 22 / 30
+        add_danger_hlines(f, 'adl', yref='y2')  # low_bad on y2 → 50 / 35
+        add_danger_hlines(f, 'ndc_signal')      # band → 4 線
+        add_danger_hlines(f, 'nope')            # 未知 key → no-op
+        ys = sorted(s.y0 for s in f.layout.shapes)
+        assert 22.0 in ys and 30.0 in ys, "VIX 標準線應為 SSOT 22/30"
+        assert 25.0 not in ys, "VIX 不該再用舊的 inline 25"
+        assert len(f.layout.shapes) == 8, "VIX2 + ADL2 + NDC4 = 8 條線"
+
     def test_render_five_bucket_bar_empty_gray(self):
         """v18.284: 空 session_state → 五桶全 ⬜ 未載入（不偽綠 / 不 KeyError）"""
         from streamlit.testing.v1 import AppTest

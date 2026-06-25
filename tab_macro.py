@@ -313,6 +313,33 @@ background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:4px;min-height
                     )
 
 
+def add_danger_hlines(fig, key: str, yref=None) -> None:
+    """v18.284 — 在 plotly 圖加該指標的黃/紅危險標準線（讀 shared.macro_buckets SSOT）。
+
+    一看就知道現值超過哪條線 = 違規。門檻同頂部五桶 bar、SPEC §11，同源不漂移。
+    high_bad/low_bad 各 2 線；band 4 線。yref：多軸圖指定 'y2' 等（預設主軸）。
+    """
+    from shared.macro_buckets import SPECS_BY_KEY, LEVEL_COLOR
+    _spec = SPECS_BY_KEY.get(key)
+    if _spec is None:
+        return
+    _pairs = [(_spec.yellow, LEVEL_COLOR['yellow'], '🟡 黃線'),
+              (_spec.red, LEVEL_COLOR['red'], '🔴 紅線')]
+    if _spec.direction == 'band':
+        _pairs += [(_spec.yellow_lo, LEVEL_COLOR['yellow'], '🟡 黃線'),
+                   (_spec.red_lo, LEVEL_COLOR['red'], '🔴 紅線')]
+    for _y, _c, _lbl in _pairs:
+        if _y is None:
+            continue
+        _kw = dict(y=_y, line_dash='dash', line_color=_c, opacity=0.6,
+                   annotation_text=f'{_lbl} {_y:g}{_spec.unit}',
+                   annotation_position='top left',
+                   annotation_font=dict(size=9, color=_c))
+        if yref:
+            _kw['yref'] = yref
+        fig.add_hline(**_kw)
+
+
 def render_tab_macro():
     # ─ Late imports（避免循環 import）─
     import datetime
@@ -3761,6 +3788,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         ))
         # 零軸
         _fig_adl.add_hline(y=0, line_dash='dash', line_color='#484f58', opacity=0.5)
+        # v18.284：上漲佔比（y2 軸 0-100）危險標準線 — 50 黃 / 35 紅（廣度崩），讀 SSOT
+        add_danger_hlines(_fig_adl, 'adl', yref='y2')
         _fig_adl.update_layout(
             title=dict(text='台股騰落線（ADL）— 衡量多數股票是否真的在漲', font=dict(color='#8b949e', size=13)),
             height=320, plot_bgcolor='#0e1117', paper_bgcolor='#0e1117',
@@ -4141,19 +4170,18 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         if _m8_vix and _m8_vix.get('dates'):
             _vcur8 = _m8_vix.get('current', 0)
             _vma8  = _m8_vix.get('ma20', 0)
-            _vc8   = TRAFFIC_RED if _vcur8 >= 30 else (TRAFFIC_YELLOW if _vcur8 >= 20 else TRAFFIC_GREEN)
+            # v18.284：VIX 燈號門檻統一至 SSOT（macro_buckets / MACRO_THRESHOLDS：22 黃 / 30 紅）
+            _vc8   = TRAFFIC_RED if _vcur8 >= 30 else (TRAFFIC_YELLOW if _vcur8 >= 22 else TRAFFIC_GREEN)
             _vl8   = ('🚨 恐慌衝頂，強制空手' if _vcur8 >= 30 else
-                      ('⚠️ 市場緊張，降低持倉' if _vcur8 >= 20 else '✅ 市場平靜'))
+                      ('⚠️ 市場緊張，降低持倉' if _vcur8 >= 22 else '✅ 市場平靜'))
             import plotly.graph_objects as _go8
             _vfig8 = _go8.Figure()
             _vfig8.add_trace(_go8.Scatter(
                 x=_m8_vix['dates'], y=_m8_vix['values'],
                 mode='lines', line=dict(color='#58a6ff', width=1.5),
                 fill='tozeroy', fillcolor='rgba(88,166,255,0.08)', name='VIX'))
-            _vfig8.add_hline(y=25, line_dash='dash', line_color=TRAFFIC_YELLOW, opacity=0.6,
-                             annotation_text='25 警戒', annotation_font_color=TRAFFIC_YELLOW)
-            _vfig8.add_hline(y=30, line_dash='dash', line_color=TRAFFIC_RED, opacity=0.6,
-                             annotation_text='30 危機', annotation_font_color=TRAFFIC_RED)
+            # v18.284：危險標準線改讀 SSOT（22 黃 / 30 紅），與頂部五桶 bar、SPEC §11 同源
+            add_danger_hlines(_vfig8, 'vix')
             _vfig8.add_annotation(x=_m8_vix['dates'][-1], y=_vcur8,
                                   text=f'<b>{_vcur8}</b>', showarrow=True, arrowhead=2,
                                   font=dict(color=_vc8, size=12),
@@ -4168,7 +4196,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                            font=dict(size=11, color=_vc8), x=0))
             st.plotly_chart(_vfig8, width='stretch')
         else:
-            st.markdown(kpi('VIX 恐慌指數', '待取得', '≥25警戒 / ≥30危機→強制空手', '#484f58', '#0d1117'), unsafe_allow_html=True)
+            st.markdown(kpi('VIX 恐慌指數', '待取得', '≥22警戒 / ≥30危機→強制空手', '#484f58', '#0d1117'), unsafe_allow_html=True)
 
     # v18.194 fail trace：失敗 fetcher 錯誤碼浮上 UI（仿 Fund v19.43 RadarFailTrace）
     # 三狀態：① _macro_info 為空 → 未刷新或 outer 80s timeout 全失敗；② 有 _err_* → 局部失敗；③ 全綠 → 不顯示
