@@ -55,66 +55,76 @@ def compute_tab_coverage(state: dict | None = None) -> list[dict]:
 
     rows = []
 
-    # ── 🌐 總經:macro_info 12 指標 + M1B-M2 + 領先指標 ──
+    # ── 🌐 總經:macro_info 6 指標 + M1B-M2 + 領先指標 ──
+    # v18.282 修正:用真實 session_state key(原 v18.280 key 名全錯導致永遠紅燈)
+    # 實際 macro_info 寫於 tab_macro.py:1862 _job_macro,key 為:
+    #   vix / ism_pmi / us_core_cpi / fed_funds / ndc_signal / tw_export
     _ma = _get("macro_info") or {}
     _mi = _get("m1b_m2_info") or {}
     _li = _get("li_latest")
-    # macro_info 關鍵指標(對齊 macro_core 主指標)
-    _macro_keys = ["pmi", "vix", "cpi", "us10y", "dxy", "hy_spread",
-                   "yield_10y2y", "m2", "fed_bs", "sahm"]
+    _macro_keys = ["vix", "ism_pmi", "us_core_cpi", "fed_funds",
+                   "ndc_signal", "tw_export"]
     _macro_have = sum(1 for k in _macro_keys
                       if isinstance(_ma, dict) and _ma.get(k) is not None)
     _macro_total = len(_macro_keys)
     _macro_extra = int(bool(_mi)) + int(_li is not None)
     _macro_have_all = _macro_have + _macro_extra
     _macro_total_all = _macro_total + 2
-    _e1, _c1 = _coverage_emoji(_macro_have_all, _macro_total_all) if _ma else ("⬜", _C_IDLE)
+    # 判 macro_info「有實質資料」:排除純 _ 開頭 meta key(_loaded_at / _all_failed)
+    _ma_loaded = isinstance(_ma, dict) and any(
+        not str(k).startswith("_") for k in _ma)
+    _e1, _c1 = _coverage_emoji(_macro_have_all, _macro_total_all) if _ma_loaded else ("⬜", _C_IDLE)
     rows.append({
         "tab": "🌐 總經",
         "emoji": _e1, "color": _c1,
-        "ratio_txt": f"{_macro_have_all}/{_macro_total_all}" if _ma else "未載入",
-        "detail": (f"macro {_macro_have}/{_macro_total} ｜ "
+        "ratio_txt": f"{_macro_have_all}/{_macro_total_all}" if _ma_loaded else "未載入",
+        "detail": (f"VIX/ISM/CPI/Fed/NDC/出口 {_macro_have}/{_macro_total} ｜ "
                    f"M1B-M2 {'✓' if _mi else '✗'} ｜ 領先 {'✓' if _li is not None else '✗'}")
-                  if _ma else "在 🌐 總經 Tab 按更新觸發",
+                  if _ma_loaded else "在 🌐 總經 Tab 按更新觸發",
         "action": "缺值 → 看下方 API Key / Proxy 診斷",
     })
 
-    # ── 📈 個股:t2_data ──
+    # ── 📈 個股:t2_data 為單一個股 metrics dict(present = 已查)──
     _t2 = _get("t2_data") or {}
-    _e2, _c2 = _coverage_emoji(1, 1) if _t2 else ("⬜", _C_IDLE)
+    _t2_loaded = isinstance(_t2, dict) and bool(_t2)
+    _e2, _c2 = _coverage_emoji(1, 1) if _t2_loaded else ("⬜", _C_IDLE)
     rows.append({
         "tab": "📈 個股",
         "emoji": _e2, "color": _c2,
-        "ratio_txt": f"{len(_t2)} 檔" if _t2 else "未查",
-        "detail": (f"已載入 {len(_t2)} 檔個股資料" if _t2
+        "ratio_txt": "已查" if _t2_loaded else "未查",
+        "detail": (f"個股資料已載入（{len(_t2)} 欄）" if _t2_loaded
                    else "在 📈 個股 Tab 查股票代號觸發"),
         "action": "缺資料 → TWSE / FinMind / Yahoo fallback chain",
     })
 
-    # ── 💰 籌碼:cl_data(三大法人 / 融資 / 期貨)──
+    # ── 💰 籌碼:cl_data(法人 inst / 融資 margin / 廣度 adl)──
+    # 實際 cl_data 寫於 tab_macro.py:1046,key 為:
+    #   intl / tw / tech / inst（三大法人）/ margin（融資）/ adl（騰落）
     _cl = _get("cl_data") or {}
-    _cl_keys = ["margin", "foreign", "trust", "futures"]
-    _cl_have = sum(1 for k in _cl_keys if isinstance(_cl, dict) and _cl.get(k) is not None)
+    _cl_keys = [("inst", "法人"), ("margin", "融資"), ("adl", "廣度")]
+    _cl_have = sum(1 for k, _ in _cl_keys
+                   if isinstance(_cl, dict) and _cl.get(k) is not None)
     _e3, _c3 = _coverage_emoji(_cl_have, len(_cl_keys)) if _cl else ("⬜", _C_IDLE)
     rows.append({
         "tab": "💰 籌碼面",
         "emoji": _e3, "color": _c3,
         "ratio_txt": f"{_cl_have}/{len(_cl_keys)}" if _cl else "未載入",
-        "detail": (f"融資 {'✓' if (_cl or {}).get('margin') is not None else '✗'} ｜ "
-                   f"外資 {'✓' if (_cl or {}).get('foreign') is not None else '✗'} ｜ "
-                   f"期貨 {'✓' if (_cl or {}).get('futures') is not None else '✗'}")
-                  if _cl else "在 個股 / 總經 Tab 載入籌碼觸發",
-        "action": "缺資料 → TWSE 三大法人 / TAIFEX 期貨 API",
+        "detail": (" ｜ ".join(
+            f"{_lbl} {'✓' if (_cl or {}).get(_k) is not None else '✗'}"
+            for _k, _lbl in _cl_keys)
+            if _cl else "在 🌐 總經 Tab 載入籌碼觸發"),
+        "action": "缺資料 → TWSE 三大法人 / 融資餘額 API",
     })
 
-    # ── 🏦 ETF:etf_single_data ──
+    # ── 🏦 ETF:etf_single_data 為單一 ETF dict(present = 已查)──
     _e1d = _get("etf_single_data") or {}
-    _e4, _c4 = _coverage_emoji(1, 1) if _e1d else ("⬜", _C_IDLE)
+    _etf_loaded = isinstance(_e1d, dict) and bool(_e1d)
+    _e4, _c4 = _coverage_emoji(1, 1) if _etf_loaded else ("⬜", _C_IDLE)
     rows.append({
         "tab": "🏦 ETF",
         "emoji": _e4, "color": _c4,
-        "ratio_txt": f"{len(_e1d)} 檔" if _e1d else "未查",
-        "detail": (f"已載入 {len(_e1d)} 檔 ETF" if _e1d
+        "ratio_txt": "已查" if _etf_loaded else "未查",
+        "detail": ("ETF 資料已載入" if _etf_loaded
                    else "在 🏦 ETF Tab 查 ETF 代號觸發"),
         "action": "缺資料 → etf_fetch fallback chain",
     })
