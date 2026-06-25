@@ -1,0 +1,72 @@
+name: "PR Check（pytest fast + AppTest slow）"
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ════════════════════════════════════════════════════════════
+  # Fast lane — pytest -m "not slow"(預設;單元測試 ~秒級)
+  # 失敗即阻擋 merge
+  # ════════════════════════════════════════════════════════════
+  fast-checks:
+    name: "Fast checks (pytest unit, ~30s)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run pytest fast lane
+        run: pytest -v
+
+  # ════════════════════════════════════════════════════════════
+  # Slow lane — AppTest(單測約 1-30s)
+  # 非阻擋(continue-on-error),作為 informational signal
+  # 對齊 Fund pr-check.yml 結構 + v18.283 引入
+  # ════════════════════════════════════════════════════════════
+  slow-tests:
+    name: "Slow tests (AppTest, informational)"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: fast-checks
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run AppTest (slow lane)
+        env:
+          FRED_API_KEY: "ci-test-key"
+          GEMINI_API_KEY: "ci-test-key"
+          FINMIND_TOKEN: "ci-test-token"
+        run: pytest -v -m slow --tb=short
