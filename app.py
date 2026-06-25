@@ -1598,6 +1598,11 @@ with tab_screener:
 # TAB: 資料診斷（Raw Data only）
 # ══════════════════════════════════════════════════════════════
 with tab_diag:
+    # v18.280 — 學 Fund 架構 + 預設視角:覆蓋率表(用戶視角)放最上方,
+    # API Key / Proxy 雙跑(developer 視角)放後。對齊 Fund tab5 Section ⓪。
+    from data_coverage import render_data_coverage
+    render_data_coverage()
+    st.markdown('---')
     render_api_diagnostic()
     st.markdown('---')
     render_data_health_raw()
