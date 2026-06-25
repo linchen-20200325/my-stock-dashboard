@@ -4917,9 +4917,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
 
 
-    # v18.277 — 📚 總經原理小教室(永久 expander,for 新手隨時可查)
-    try:
-        from macro_classroom import render_principle_classroom
-        render_principle_classroom()
-    except Exception as _e_cls:
-        print(f"[macro_classroom/classroom] {type(_e_cls).__name__}: {_e_cls}")
+    # v18.281 — 📚 總經原理教室已搬至「📖 系統說明書」Tab(合併成單一說明書)。
+    # 此處留指引,不再於總經 Tab 重複渲染。
+    st.caption("📖 想看總經原理教室(景氣循環 / PMI / 殖利率倒掛 / 美林時鐘 等 10 章)?"
+               "→ 已移至「📖 系統說明書」Tab,含資料來源完整地圖 + 4 大師策略。")

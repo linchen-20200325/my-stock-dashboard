@@ -6,7 +6,10 @@ import types
 
 
 def _stub_st():
-    if "streamlit" in sys.modules and getattr(sys.modules["streamlit"], "_stub", False):
+    # v18.281 — 不覆蓋既有 test stub(避免污染其他 test 檔的完整 stub)
+    _existing = sys.modules.get("streamlit")
+    if _existing is not None and (getattr(_existing, "_stub", False)
+                                  or getattr(_existing, "_is_test_stub", False)):
         return
     m = types.ModuleType("streamlit")
     m._stub = True

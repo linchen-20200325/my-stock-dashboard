@@ -40,6 +40,17 @@ def _stub_streamlit():
         setattr(_mod, _name, _noop)
     _mod.expander = _ctx
 
+    # v18.281 — tab_edu 用 @st.cache_data 裝飾,stub 需支援
+    # 兩種呼叫:@st.cache_data 與 @st.cache_data(ttl=...)
+    def _cache_data(*a, **k):
+        if a and callable(a[0]):
+            return a[0]
+        return lambda f: f
+    _mod.cache_data = _cache_data
+    _mod.cache_resource = _cache_data
+    _mod.columns = lambda spec, **k: [_ctx() for _ in
+                                      range(spec if isinstance(spec, int) else len(spec))]
+
     class _SS(dict):
         def get(self, k, default=None):
             return super().get(k, default)
@@ -95,24 +106,24 @@ class TestTrafficLightExplainer:
 
 class TestPrincipleClassroom:
     def test_render_no_raise(self):
-        from macro_classroom import render_principle_classroom
+        from tab_edu import render_principle_classroom
         render_principle_classroom()
 
     def test_at_least_10_chapters(self):
-        from macro_classroom import _PRINCIPLE_CHAPTERS
+        from tab_edu import _PRINCIPLE_CHAPTERS
         assert len(_PRINCIPLE_CHAPTERS) >= 10, (
             f"教室應 ≥ 10 章,實際 {len(_PRINCIPLE_CHAPTERS)} 章"
         )
 
     def test_all_chapters_have_body(self):
-        from macro_classroom import _PRINCIPLE_CHAPTERS
+        from tab_edu import _PRINCIPLE_CHAPTERS
         for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
             assert _t.strip(), f"第 {_i+1} 章標題空"
             assert len(_b.strip()) > 100, f"第 {_i+1} 章內文 < 100 字"
 
     def test_tw_local_chapters_present(self):
         """確認 TW 在地章節(外資/韭菜/M1B-M2)存在,證明 Stock 版有適配而非純拷貝 Fund"""
-        from macro_classroom import _PRINCIPLE_CHAPTERS
+        from tab_edu import _PRINCIPLE_CHAPTERS
         _titles = " ".join(_t for _t, _ in _PRINCIPLE_CHAPTERS)
         assert "外資" in _titles, "缺『外資籌碼』章(TW 股市核心)"
         assert "韭菜" in _titles, "缺『韭菜指數』章(TW 反指標)"
@@ -123,21 +134,21 @@ class TestChapterDepthEnhancement:
     """v18.278 — 每章必須含 白話 + 📐 公式 + 📜 案例 三層深度"""
 
     def test_every_chapter_has_formula_section(self):
-        from macro_classroom import _PRINCIPLE_CHAPTERS
+        from tab_edu import _PRINCIPLE_CHAPTERS
         for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
             assert "📐" in _b, (
                 f"第 {_i+1} 章 ({_t[:20]}) 缺 📐 數學定義段"
             )
 
     def test_every_chapter_has_history_case_section(self):
-        from macro_classroom import _PRINCIPLE_CHAPTERS
+        from tab_edu import _PRINCIPLE_CHAPTERS
         for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
             assert "📜" in _b, (
                 f"第 {_i+1} 章 ({_t[:20]}) 缺 📜 歷史案例段"
             )
 
     def test_chapters_substantially_longer(self):
-        from macro_classroom import _PRINCIPLE_CHAPTERS
+        from tab_edu import _PRINCIPLE_CHAPTERS
         for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
             assert len(_b.strip()) > 400, (
                 f"第 {_i+1} 章 ({_t[:20]}) body {len(_b.strip())} 字 < 400(深化未達標)"
@@ -145,7 +156,7 @@ class TestChapterDepthEnhancement:
 
     def test_chapters_have_twii_specific_cases(self):
         """歷史案例段必須含 TWII / TW PMI / 外資 等 TW 在地數據"""
-        from macro_classroom import _PRINCIPLE_CHAPTERS
+        from tab_edu import _PRINCIPLE_CHAPTERS
         _all = " ".join(_b for _, _b in _PRINCIPLE_CHAPTERS)
         # 至少 3 章應含 TWII / TW PMI / 外資 等 TW 本地 keyword
         _tw_keywords = ["TWII", "TW PMI", "TW 50", "台股"]
@@ -155,7 +166,7 @@ class TestChapterDepthEnhancement:
         )
 
     def test_chapters_have_numeric_dates_in_cases(self):
-        from macro_classroom import _PRINCIPLE_CHAPTERS
+        from tab_edu import _PRINCIPLE_CHAPTERS
         import re
         for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
             _hist_idx = _b.find("📜")
@@ -189,32 +200,31 @@ class TestTabMacroWiring:
         assert "render_traffic_light_explainer" in self.src
         assert "from macro_classroom import" in self.src
 
-    def test_imports_classroom(self):
-        assert "render_principle_classroom" in self.src
+    def test_classroom_moved_to_manual(self):
+        """v18.281: 教室已從 tab_macro 移至 tab_edu(系統說明書)。
+        tab_macro 不再渲染教室,只留指引 caption。"""
+        # tab_macro 不應再呼叫 render_principle_classroom()
+        assert "render_principle_classroom()" not in self.src, \
+            "教室應已移出 tab_macro(改在 tab_edu 系統說明書)"
+        # 應留指引到「系統說明書」
+        assert "系統說明書" in self.src, "tab_macro 應留指引到系統說明書 Tab"
 
     def test_explainer_after_traffic_light_render(self):
-        """explainer 必須緊跟 _render_traffic_light call 之後"""
+        """explainer 必須緊跟 _render_traffic_light call 之後(留在 tab_macro)"""
         _tl_render_idx = self.src.find("_render_traffic_light(_tl_placeholder, _tl_final")
         _exp_idx = self.src.find("render_traffic_light_explainer(_tl_final)")
         assert _tl_render_idx > 0 and _exp_idx > 0
         assert _exp_idx > _tl_render_idx, "explainer 應在 traffic light render 之後"
-        # 接點應在 100 字內(緊鄰)
         assert _exp_idx - _tl_render_idx < 500, "explainer 太遠離 traffic light"
 
-    def test_classroom_at_function_end(self):
-        """classroom 應在 render_tab_macro 函式末尾(包覆 try/except 在 4 空格函式級)"""
-        # 找包覆 classroom call 的 try 區塊
-        _marker = "# v18.277 — 📚 總經原理小教室"
-        _idx = self.src.find(_marker)
-        assert _idx > 0, "classroom 區塊註解缺失"
-        # comment 行起始 indent 應 = 4(函式級)
-        _line_start = self.src.rfind("\n", 0, _idx) + 1
-        _indent = _idx - _line_start
-        assert _indent == 4, f"classroom try 包覆應 4 空格,實際 {_indent}"
-        # classroom 應在檔尾(後面 < 300 字元)
-        _tail = self.src[_idx:]
-        assert "render_principle_classroom()" in _tail
-        assert len(_tail) < 400, "classroom 不在函式末尾(後面還有太多內容)"
+    def test_classroom_rendered_in_tab_edu(self):
+        """v18.281: 教室現由 tab_edu(系統說明書)渲染"""
+        import pathlib
+        _edu = (pathlib.Path(__file__).parent / "tab_edu.py").read_text(encoding="utf-8")
+        assert "render_principle_classroom()" in _edu, \
+            "tab_edu(系統說明書)應呼叫 render_principle_classroom"
+        assert "系統說明書" in _edu, "tab_edu 標題應為系統說明書"
+        assert "資料來源完整地圖" in _edu, "tab_edu 應含資料來源完整地圖(學 Fund Section ⓪)"
 
 
 # v18.277 §6 自審「3 個最容易出錯的輸入」:
@@ -230,7 +240,7 @@ class TestFactCorrectionsV18279:
     """
 
     def _all_text(self):
-        from macro_classroom import _PRINCIPLE_CHAPTERS
+        from tab_edu import _PRINCIPLE_CHAPTERS
         return "\n".join(b for _, b in _PRINCIPLE_CHAPTERS)
 
     def test_no_fabricated_tw_pmi_pre2012(self):
