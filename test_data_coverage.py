@@ -53,10 +53,11 @@ class TestComputeTabCoverage:
                 assert f in r, f"缺欄位 {f}"
 
     def test_macro_full_coverage_green(self):
+        """v18.282: 用真實 macro_info key(vix/ism_pmi/us_core_cpi/...)"""
         from data_coverage import compute_tab_coverage
-        _full_macro = {k: 1.0 for k in
-                       ["pmi", "vix", "cpi", "us10y", "dxy", "hy_spread",
-                        "yield_10y2y", "m2", "fed_bs", "sahm"]}
+        _full_macro = {k: {"current": 1.0} for k in
+                       ["vix", "ism_pmi", "us_core_cpi", "fed_funds",
+                        "ndc_signal", "tw_export"]}
         rows = compute_tab_coverage(state={
             "macro_info": _full_macro,
             "m1b_m2_info": {"v": 1},
@@ -65,29 +66,54 @@ class TestComputeTabCoverage:
         macro_row = next(r for r in rows if "總經" in r["tab"])
         assert macro_row["emoji"] == "🟢"
 
-    def test_macro_partial_yellow_or_red(self):
+    def test_macro_meta_only_is_idle(self):
+        """只有 _loaded_at meta key(全 fetch 失敗)→ 未觸發,非綠"""
         from data_coverage import compute_tab_coverage
-        # 只有 3/12 → 紅
         rows = compute_tab_coverage(state={
-            "macro_info": {"pmi": 1, "vix": 1, "cpi": 1},
+            "macro_info": {"_loaded_at": "2026-06-25", "_all_failed": True},
+        })
+        macro_row = next(r for r in rows if "總經" in r["tab"])
+        assert macro_row["emoji"] == "⬜"
+
+    def test_macro_partial_red(self):
+        from data_coverage import compute_tab_coverage
+        # 只有 2/6 macro + 無 M1B/領先 → 紅
+        rows = compute_tab_coverage(state={
+            "macro_info": {"vix": {"current": 1}, "ism_pmi": {"current": 1}},
         })
         macro_row = next(r for r in rows if "總經" in r["tab"])
         assert macro_row["emoji"] == "🔴"
 
     def test_stock_loaded_green(self):
+        """t2_data 為單一個股 metrics dict(present = 已查)"""
         from data_coverage import compute_tab_coverage
-        rows = compute_tab_coverage(state={"t2_data": {"2330": {}, "2454": {}}})
+        rows = compute_tab_coverage(state={"t2_data": {"d": "台積電", "df": [1, 2]}})
         stock_row = next(r for r in rows if "個股" in r["tab"])
         assert stock_row["emoji"] == "🟢"
-        assert "2" in stock_row["ratio_txt"]
+        assert stock_row["ratio_txt"] == "已查"
 
     def test_chips_partial(self):
+        """cl_data 真實 key:inst / margin / adl"""
         from data_coverage import compute_tab_coverage
         rows = compute_tab_coverage(state={
-            "cl_data": {"margin": 1, "foreign": 1}  # 2/4
+            "cl_data": {"inst": [1], "margin": [1]}  # 2/3(無 adl)
         })
         chip_row = next(r for r in rows if "籌碼" in r["tab"])
         assert chip_row["emoji"] == "🟡"
+
+    def test_chips_full_green(self):
+        from data_coverage import compute_tab_coverage
+        rows = compute_tab_coverage(state={
+            "cl_data": {"inst": [1], "margin": [1], "adl": [1]}  # 3/3
+        })
+        chip_row = next(r for r in rows if "籌碼" in r["tab"])
+        assert chip_row["emoji"] == "🟢"
+
+    def test_etf_loaded_green(self):
+        from data_coverage import compute_tab_coverage
+        rows = compute_tab_coverage(state={"etf_single_data": {"aum": 100, "cur_yield": 5}})
+        etf_row = next(r for r in rows if "ETF" in r["tab"])
+        assert etf_row["emoji"] == "🟢"
 
     def test_render_no_raise(self):
         from data_coverage import render_data_coverage
