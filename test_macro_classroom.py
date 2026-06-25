@@ -119,6 +119,54 @@ class TestPrincipleClassroom:
         assert "M1B" in _titles, "缺『M1B-M2』章(TW 在地動能)"
 
 
+class TestChapterDepthEnhancement:
+    """v18.278 — 每章必須含 白話 + 📐 公式 + 📜 案例 三層深度"""
+
+    def test_every_chapter_has_formula_section(self):
+        from macro_classroom import _PRINCIPLE_CHAPTERS
+        for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
+            assert "📐" in _b, (
+                f"第 {_i+1} 章 ({_t[:20]}) 缺 📐 數學定義段"
+            )
+
+    def test_every_chapter_has_history_case_section(self):
+        from macro_classroom import _PRINCIPLE_CHAPTERS
+        for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
+            assert "📜" in _b, (
+                f"第 {_i+1} 章 ({_t[:20]}) 缺 📜 歷史案例段"
+            )
+
+    def test_chapters_substantially_longer(self):
+        from macro_classroom import _PRINCIPLE_CHAPTERS
+        for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
+            assert len(_b.strip()) > 400, (
+                f"第 {_i+1} 章 ({_t[:20]}) body {len(_b.strip())} 字 < 400(深化未達標)"
+            )
+
+    def test_chapters_have_twii_specific_cases(self):
+        """歷史案例段必須含 TWII / TW PMI / 外資 等 TW 在地數據"""
+        from macro_classroom import _PRINCIPLE_CHAPTERS
+        _all = " ".join(_b for _, _b in _PRINCIPLE_CHAPTERS)
+        # 至少 3 章應含 TWII / TW PMI / 外資 等 TW 本地 keyword
+        _tw_keywords = ["TWII", "TW PMI", "TW 50", "台股"]
+        _hits = sum(1 for kw in _tw_keywords if kw in _all)
+        assert _hits >= 3, (
+            f"TW 在地數據覆蓋不足:只 {_hits} / 4 個 keyword 命中"
+        )
+
+    def test_chapters_have_numeric_dates_in_cases(self):
+        from macro_classroom import _PRINCIPLE_CHAPTERS
+        import re
+        for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
+            _hist_idx = _b.find("📜")
+            assert _hist_idx > 0
+            _hist_section = _b[_hist_idx:]
+            _years = re.findall(r"(?:19[89]\d|20[012]\d)", _hist_section)
+            assert len(_years) >= 3, (
+                f"第 {_i+1} 章 ({_t[:20]}) 案例段年份 < 3 個(實際 {len(_years)}個)"
+            )
+
+
 class TestSSOTImport:
     """確保從 macro_helpers SSOT 引入閾值,不出現 inline magic"""
 
