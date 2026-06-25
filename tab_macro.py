@@ -2750,6 +2750,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         st.session_state.get('li_latest'),
     )
     _render_traffic_light(_tl_placeholder, _tl_final, st.session_state.get('mkt_info', {}))
+    # v18.277 — 為何這個顏色?(展開講判讀規則 + 推導,for 新手)
+    try:
+        from macro_classroom import render_traffic_light_explainer
+        render_traffic_light_explainer(_tl_final)
+    except Exception as _e_exp:
+        print(f"[macro_classroom/explainer] {type(_e_exp).__name__}: {_e_exp}")
     if _tl_final:
         st.session_state['warroom_summary'] = {
             'traffic_light': _tl_final['label'],
@@ -4909,3 +4915,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         else:
             st.caption('▲ 點擊上方「執行 AI 裁決」，AI 將綜合量化數據與即時新聞生成完整戰情報告。')
 
+
+
+    # v18.277 — 📚 總經原理小教室(永久 expander,for 新手隨時可查)
+    try:
+        from macro_classroom import render_principle_classroom
+        render_principle_classroom()
+    except Exception as _e_cls:
+        print(f"[macro_classroom/classroom] {type(_e_cls).__name__}: {_e_cls}")
