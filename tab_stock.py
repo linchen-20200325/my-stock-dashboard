@@ -2342,6 +2342,27 @@ padding:12px 16px;margin:8px 0;">
                         _ic = (TRAFFIC_GREEN if _ind['signal'] == '🟢' else
                                TRAFFIC_YELLOW if _ind['signal'] == '🟡' else
                                TRAFFIC_RED if _ind['signal'] == '🔴' else '#8b949e')
+                        # S-RECON-1 v18.303: 月營收 YoY 對帳 chip
+                        # I1 carries `reconcile` dict when self_calc vs FinMind 都有值
+                        _recon_chip = ''
+                        _rec = _ind.get('reconcile') if isinstance(_ind, dict) else None
+                        if _rec is not None:
+                            _rec_status = _rec.get('status', '')
+                            _rec_a = _rec.get('value_a')
+                            _rec_b = _rec.get('value_b')
+                            if _rec_status == 'agree':
+                                _recon_chip = (
+                                    f'<div style="font-size:10px;color:{TRAFFIC_GREEN};margin-top:2px;">'
+                                    f'✅ 雙源對帳:自算 {_rec_a:+.2f}% ≈ FinMind {_rec_b:+.2f}%'
+                                    f'</div>'
+                                )
+                            elif _rec_status == 'disagree':
+                                _recon_chip = (
+                                    f'<div style="font-size:10px;color:{TRAFFIC_YELLOW};margin-top:2px;">'
+                                    f'⚠️ 雙源分歧:自算 {_rec_a:+.2f}% vs FinMind {_rec_b:+.2f}%'
+                                    f' (Δ={_rec.get("delta_abs",0):.2f}pct)'
+                                    f'</div>'
+                                )
                         st.markdown(
                             f'<div style="background:#0d1117;border-left:3px solid {_ic};'
                             f'padding:6px 10px;border-radius:0 4px 4px 0;margin:3px 0;">'
@@ -2349,6 +2370,7 @@ padding:12px 16px;margin:8px 0;">
                             f'{_ind["signal"]} {_ind["name"]}</div>'
                             f'<div style="font-size:11px;color:#e6edf3;margin:1px 0;">{_ind["value"]}</div>'
                             f'<div style="font-size:10px;color:#8b949e;">{_ind["detail"]}</div>'
+                            f'{_recon_chip}'
                             f'</div>', unsafe_allow_html=True
                         )
                 _li_col_idx += 1
