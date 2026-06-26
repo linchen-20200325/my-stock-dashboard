@@ -51,7 +51,10 @@ def _weekly_macd_turn_negative(close: pd.Series) -> bool:
         macd = s.ewm(span=3, adjust=False).mean() - s.ewm(span=5, adjust=False).mean()
         hist = (macd - macd.ewm(span=3, adjust=False).mean()).tolist()
         return len(hist) >= 2 and hist[-2] > 0 and hist[-1] <= 0
-    except Exception:
+    except Exception as e:
+        # S-MED v18.304: silent → narrow + stderr log
+        import sys as _sys
+        print(f'[exit_signals/_weekly_macd_turn_negative] fail: {type(e).__name__}: {e}', file=_sys.stderr)
         return False
 
 
@@ -99,8 +102,10 @@ def compute_tech_bearish(df, k=None, d=None) -> dict:
 
         out.update(bearish=(strong or len(reasons) >= 2),
                    reasons=reasons, hits=len(reasons), strong=strong)
-    except Exception:
-        pass
+    except Exception as e:
+        # S-MED v18.304: silent → narrow + stderr log;return partial `out` (caller-safe)
+        import sys as _sys
+        print(f'[exit_signals/compute_tech_bearish] fail: {type(e).__name__}: {e}', file=_sys.stderr)
     return out
 
 

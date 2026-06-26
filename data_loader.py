@@ -869,7 +869,9 @@ class StockDataLoader:
                             _rev_src = 'mops'   # v18.202 E2
                             print(f'[MOPS-Rev] {stock_id}: ✅ {len(df_revenue)} 筆')
                             break
-                    except: continue
+                    except Exception as _e_mops_url:  # S-MED v18.304: narrow + log
+                        print(f'[MOPS-Rev] {stock_id} {_mops_url_rv} 抓取失敗: {type(_e_mops_url).__name__}: {_e_mops_url}')
+                        continue
                 if df_revenue is not None: break
         except Exception as _eM_rv:
             print(f'[MOPS-Rev] {stock_id}: {_eM_rv}')
@@ -1496,7 +1498,9 @@ class StockDataLoader:
                     _ts = pd.Timestamp(_d)
                     _yr = _ts.year; _qt = ((_ts.month - 1) // 3) + 1
                     _lbl = f'{_yr}Q{_qt}'
-                except: continue
+                except Exception as _e_qtr_parse:  # S-MED v18.304: narrow + log
+                    print(f'[QtrExtra] date parse skip {_d}: {type(_e_qtr_parse).__name__}: {_e_qtr_parse}')
+                    continue
 
                 # ── 合約負債：DataFrame str.contains（最可靠，涵蓋所有 dash 變體）──
                 _cl = float('nan')
