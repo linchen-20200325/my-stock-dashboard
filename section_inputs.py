@@ -52,6 +52,8 @@ class SectionInputs:
     jingqi_info: Optional[dict] = None
     news_items: Optional[list] = None
     last_inst: Optional[dict] = None  # C1-B:_ov_inst 雙源 fallback 用
+    cl_ts: str = ''                   # C1-C:cl_data 的時間戳(_mi_upd / _cl_ts_str / _wr_ts 三 caller 共用)
+    futures_net: int = 0              # C1-C:期貨多空淨額(int,0 為 fail-safe 預設,匹配 evaluate_market_status_v4_final 介面)
 
 
 def load_section_inputs(state: dict) -> SectionInputs:
@@ -104,4 +106,6 @@ def load_section_inputs(state: dict) -> SectionInputs:
         jingqi_info=jq,
         news_items=state.get('_macro_news_items'),
         last_inst=state.get('_last_inst'),
+        cl_ts=state.get('cl_ts', '') or '',
+        futures_net=int(state.get('futures_net', 0) or 0),
     )

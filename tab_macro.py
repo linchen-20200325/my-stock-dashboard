@@ -720,10 +720,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 <div style="font-size:11px;color:#484f58;">每次操作前先看這裡，5分鐘掌握今日全局</div>
 </div>''', unsafe_allow_html=True)
 
-    _wr_mkt  = st.session_state.get('mkt_info', {})
-    _wr_cd   = st.session_state.get('cl_data', {})
-    _wr_bias = st.session_state.get('bias_info', {})
-    _wr_m1b  = st.session_state.get('m1b_m2_info', {})
+    # C1-C v18.289:走 section_inputs.load_section_inputs SSOT(對齊 5 桶 + 戰情概覽)
+    from section_inputs import load_section_inputs as _load_si_wr
+    _wr_inp  = _load_si_wr(st.session_state)
+    _wr_mkt  = _wr_inp.mkt_info or {}
+    _wr_cd   = _wr_inp.cl_data or {}
+    _wr_bias = _wr_inp.bias_info or {}
+    _wr_m1b  = _wr_inp.m1b_m2_info or {}
     _wr_inst = _wr_cd.get('inst', {})
     _wr_fk   = next((k for k in _wr_inst if '外資' in k), None)
     if _wr_fk is None:
@@ -731,11 +734,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     _wr_fnet = _wr_inst.get(_wr_fk,{}).get('net', None) if _wr_fk else None
     _wr_margin = _wr_cd.get('margin')
     _wr_adl  = _wr_cd.get('adl')
-    _wr_ts   = st.session_state.get('cl_ts','')
+    _wr_ts   = _wr_inp.cl_ts
     # 以交通燈有效 regime 為主，確保與頂部卡片結論一致
     _wr_reg  = _tl_eff_reg or (_wr_mkt.get('regime','neutral') if _wr_mkt else 'neutral')
     # v4 引擎：解耦趨勢與位階，取得精準操作建議
-    _wr_fut_net = int(st.session_state.get('futures_net', 0) or 0)
+    _wr_fut_net = _wr_inp.futures_net
     _v4 = evaluate_market_status_v4_final(
         _wr_bias.get('price', 0) or 0,
         _wr_bias.get('ma240', 0) or 0,
