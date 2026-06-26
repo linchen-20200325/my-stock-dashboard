@@ -88,6 +88,15 @@ def test_radar_and_bucket_bar_gated_pre_load():
         "C1-Z v18.293:§七(🌳 長期) 物理位置應在 §一(📈 中期) 之前。"
         f" 實際: §七 byte offset={_pos_seven}, §一 byte offset={_pos_one}"
     )
+    # C1-Z1 v18.294 物理重排:§五(⚡ 短殺) 必須在 §三(🧩 籌碼) 之前出現,對齊 5 桶 reading order。
+    _pos_five  = src.find("section_header('五'")
+    _pos_three = src.find("section_header('三'")
+    assert _pos_five > 0,  "找不到 §五 section_header"
+    assert _pos_three > 0, "找不到 §三 section_header"
+    assert _pos_five < _pos_three, (
+        "C1-Z1 v18.294:§五(⚡ 短線急殺) 物理位置應在 §三(🧩 籌碼) 之前。"
+        f" 實際: §五 byte offset={_pos_five}, §三 byte offset={_pos_three}"
+    )
 
 
 @pytest.mark.slow
