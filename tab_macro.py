@@ -2955,12 +2955,24 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     bc,dc = st.columns(2)
     with bc:
         if '10Y公債殖利率' in intl:
-            st.plotly_chart(sparkline(intl['10Y公債殖利率'],'10Y公債殖利率',TRAFFIC_RED),
-                            width='stretch',config={'displayModeBar':False})
+            _sp_10y = sparkline(intl['10Y公債殖利率'],'10Y公債殖利率',TRAFFIC_RED)
+            # v18.286:加 SSOT 危險標準線(MACRO_THRESHOLDS.US10Y 4.5/5.0)
+            try:
+                add_danger_hlines(_sp_10y, 'us10y')
+            except Exception:
+                pass
+            st.plotly_chart(_sp_10y, width='stretch',
+                            config={'displayModeBar':False})
     with dc:
         if '美元指數 DXY' in intl:
-            st.plotly_chart(sparkline(intl['美元指數 DXY'],'美元指數 DXY','#ffd700'),
-                            width='stretch',config={'displayModeBar':False})
+            _sp_dxy = sparkline(intl['美元指數 DXY'],'美元指數 DXY','#ffd700')
+            # v18.286:加 SSOT 危險標準線(MACRO_THRESHOLDS.DXY 105/110)
+            try:
+                add_danger_hlines(_sp_dxy, 'dxy')
+            except Exception:
+                pass
+            st.plotly_chart(_sp_dxy, width='stretch',
+                            config={'displayModeBar':False})
 
     # ══ 全球資金流向（世界區域股市 × 跨資產 Risk-on/off 代理指標）═══════════
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">', unsafe_allow_html=True)
