@@ -470,9 +470,13 @@ def fetch_macro_compass(range_: str = "6mo") -> dict:
     避開 yfinance 直連被 Streamlit Cloud IP 限流。失敗欄位填 None，UI 端優雅降級。
 
     Returns dict:
-      vix  : {'value', 'series', 'dates', 'signal':(light, label, color)} | None
+      vix  : {'value', 'series', 'dates', 'signal':(light, label, color),
+              'source', 'fetched_at'} | None
       tnx  : 同上                                                          | None
       gspc : 同上 + {'ma60', 'ma60_series'}                                | None
+
+    v18.295 S-PROV-1 phase 2:每個 ticker 的 dict 補 `source` + `fetched_at`
+    (從 fetch_yf_close 的 s.attrs 透傳),caller 無此欄位讀取者完全無感。
     """
     out: dict = {'vix': None, 'tnx': None, 'gspc': None}
 
@@ -506,6 +510,9 @@ def fetch_macro_compass(range_: str = "6mo") -> dict:
                 'series': [round(float(x), 2) for x in tail.tolist()],
                 'dates':  [d.strftime('%Y-%m-%d') for d in tail.index],
                 'signal': _sig_vix(v),
+                # v18.295 S-PROV-1 phase 2:provenance 透傳自 s.attrs
+                'source': s.attrs.get('source', 'Yahoo:^VIX'),
+                'fetched_at': s.attrs.get('fetched_at', ''),
             }
     except Exception as e:
         print(f'[macro_compass] VIX fetch failed: {e}')
@@ -521,6 +528,9 @@ def fetch_macro_compass(range_: str = "6mo") -> dict:
                 'series': [round(float(x), 3) for x in tail.tolist()],
                 'dates':  [d.strftime('%Y-%m-%d') for d in tail.index],
                 'signal': _sig_tnx(t),
+                # v18.295 S-PROV-1 phase 2:provenance 透傳自 s.attrs
+                'source': s.attrs.get('source', 'Yahoo:^TNX'),
+                'fetched_at': s.attrs.get('fetched_at', ''),
             }
     except Exception as e:
         print(f'[macro_compass] TNX fetch failed: {e}')
@@ -542,6 +552,9 @@ def fetch_macro_compass(range_: str = "6mo") -> dict:
                 'ma60_series': [None if pd.isna(x) else round(float(x), 2) for x in ma_tail.tolist()],
                 'dates': [d.strftime('%Y-%m-%d') for d in tail.index],
                 'signal': _sig_gspc(g, ma60),
+                # v18.295 S-PROV-1 phase 2:provenance 透傳自 s.attrs
+                'source': s.attrs.get('source', 'Yahoo:^GSPC'),
+                'fetched_at': s.attrs.get('fetched_at', ''),
             }
     except Exception as e:
         print(f'[macro_compass] GSPC fetch failed: {e}')
