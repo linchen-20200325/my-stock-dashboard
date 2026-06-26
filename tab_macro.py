@@ -2913,6 +2913,81 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         'dji': intl_s.get('道瓊工業 DJI'),
     }
 
+    # ══════════════════════════════════════════════════════════════
+    # SECTION 七: 資金環境 × 估值 (C1-Z v18.293 物理重排前置至 §一)
+    # 對齊 5 桶 reading order:🌳 長期 → §七 為首
+    # ══════════════════════════════════════════════════════════════
+    st.markdown(section_header('七','🌳 長期｜💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
+
+    # ── M1B-M2 年增率（FinMind）──────────────────────────────
+    _m1b_info = st.session_state.get('m1b_m2_info')
+    _bias_info = st.session_state.get('bias_info')
+
+    # ── 弘爺 × 孫慶龍 結論（標題下方直接顯示）──────────────────
+    _macro_concl = []
+    if _m1b_info:
+        _diff2 = _m1b_info.get('m1b_yoy', 0) - _m1b_info.get('m2_yoy', 0)
+        if _diff2 > 0:
+            _macro_concl.append(f'✅ M1B-M2={_diff2:+.2f}% 正值 → 策略3：資金行情啟動，大膽做多！（領先大盤3~6月）')
+        elif _diff2 > -2:
+            _macro_concl.append(f'⚠️ M1B-M2={_diff2:+.2f}% 接近0 → 策略3：資金動能趨緩，減碼等待訊號確認')
+        else:
+            _macro_concl.append(f'🔴 M1B-M2={_diff2:+.2f}% 負值 → 策略3：資金撤離，空手觀望！')
+    if _bias_info:
+        _bv2 = _bias_info.get('bias_240', 0)
+        if _bv2 > 20:
+            _macro_concl.append(f'⚠️ 年線乖離 {_bv2:+.1f}% 過大 → 策略1：開始分批減碼（乖離>20%啟動停利）')
+        elif _bv2 < -20:
+            _macro_concl.append(f'✅ 年線乖離 {_bv2:+.1f}% 嚴重低估 → 策略1：左側交易最佳布局區，大膽加碼！')
+        else:
+            _macro_concl.append(f'✅ 年線乖離 {_bv2:+.1f}% 正常 → 策略1：可持股，按計畫操作')
+    for _mc2 in _macro_concl:
+        _mc3 = _mc2.replace('✅','').replace('⚠️','').replace('🔴','').strip()
+        if '→' in _mc3:
+            _ind7, _res7 = _mc3.split('→', 1)
+            _col7 = TRAFFIC_RED if any(k in _mc2 for k in ['🔴','⚠️']) else TRAFFIC_GREEN
+            _tchr7 = '弘爺' if 'M1B' in _mc2 else '孫慶龍'
+            st.markdown(teacher_conclusion(_tchr7, _ind7.strip(), _res7.strip(), color=_col7), unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div style="color:#c9d1d9;font-size:12px;padding:2px 6px;">• {_mc2}</div>', unsafe_allow_html=True)
+
+    # v18.169：3 卡 → 2 卡精簡（月線乖離併入年線副標；詳細訊號歸頂部拐點面板）
+    _m_cols = st.columns(2)
+    with _m_cols[0]:
+        if _m1b_info:
+            _m1b_v  = _m1b_info.get('m1b_yoy', 0)
+            _m2_v   = _m1b_info.get('m2_yoy', 0)
+            _diff   = round(_m1b_v - _m2_v, 2)
+            _mc     = '#da3633' if _diff > 0 else '#2ea043'
+            _ml     = '✅ 資金流入股市' if _diff > 0 else '🔴 資金撤離股市'
+            _proxy_note = '（大盤動能代理估算）' if _m1b_info.get('is_proxy') else ''
+            st.markdown(kpi('M1B-M2 差距', f'{_diff:+.2f}%{_proxy_note}',
+                            f'M1B:{_m1b_info.get("m1b_yoy",0):.1f}%  M2:{_m1b_info.get("m2_yoy",0):.1f}%  {_ml}', _mc, '#0d1117'), unsafe_allow_html=True)
+        else:
+            st.markdown(kpi('M1B-M2 差距', '抓取中', '更新總經數據後自動計算', '#484f58', '#0d1117'), unsafe_allow_html=True)
+
+    with _m_cols[1]:
+        if _bias_info:
+            _bias_v = _bias_info.get('bias_240', 0)
+            _bias_20 = _bias_info.get('bias_20', 0)
+            _bc     = TRAFFIC_RED if _bias_v > 20 else (TRAFFIC_GREEN if _bias_v < -20 else TRAFFIC_YELLOW)
+            _bl     = ('⚠️ 乖離過大，考慮減碼' if _bias_v > 20
+                       else ('✅ 嚴重低估，可積極布局' if _bias_v < -20
+                       else '⚪ 乖離正常區間'))
+            _est_note = '（估算）' if _bias_info.get('is_estimated') else ''
+            _days_note = f" {_bias_info.get('data_days',0)}天資料" if _bias_info.get('is_estimated') else ''
+            # 月線乖離併入副標（過熱/超賣時加 emoji 提示）
+            _bl20_short = ('⚠️過熱' if _bias_20 > 10 else
+                           ('✅機會' if _bias_20 < -10 else '正常'))
+            st.markdown(kpi(f'年線乖離率(240MA){_est_note}', f'{_bias_v:+.1f}%',
+                            f'{_bl}{_days_note}　｜　月線20MA: {_bias_20:+.1f}% ({_bl20_short})',
+                            _bc, '#0d1117'), unsafe_allow_html=True)
+        else:
+            st.markdown(kpi('年線乖離率(240MA)', '計算中', '大盤收盤/年線（月線乖離併顯示）', '#484f58', '#0d1117'), unsafe_allow_html=True)
+
+    st.caption('📖 完整乖離訊號與門檻判讀 → 詳見頂部「📊 拐點詳細分析」第 2 面向')
+    st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
+
     st.markdown(section_header('一','📈 中期｜🌍 國際市場動態（影響台股的全球指標）','🌐'), unsafe_allow_html=True)
     _sox1 = intl_s.get('費城半導體 SOX')
     _dji1 = intl_s.get('道瓊工業 DJI')
@@ -4018,76 +4093,6 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     for _tc2 in _concl_tech:
         st.markdown(f'<div style="color:#c9d1d9;font-size:13px;padding:3px 0;">• {_tc2}</div>', unsafe_allow_html=True)
 
-    st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
-    st.markdown(section_header('七','🌳 長期｜💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
-
-    # ── M1B-M2 年增率（FinMind）──────────────────────────────
-    _m1b_info = st.session_state.get('m1b_m2_info')
-    _bias_info = st.session_state.get('bias_info')
-
-    # ── 弘爺 × 孫慶龍 結論（標題下方直接顯示）──────────────────
-    _macro_concl = []
-    if _m1b_info:
-        _diff2 = _m1b_info.get('m1b_yoy', 0) - _m1b_info.get('m2_yoy', 0)
-        if _diff2 > 0:
-            _macro_concl.append(f'✅ M1B-M2={_diff2:+.2f}% 正值 → 策略3：資金行情啟動，大膽做多！（領先大盤3~6月）')
-        elif _diff2 > -2:
-            _macro_concl.append(f'⚠️ M1B-M2={_diff2:+.2f}% 接近0 → 策略3：資金動能趨緩，減碼等待訊號確認')
-        else:
-            _macro_concl.append(f'🔴 M1B-M2={_diff2:+.2f}% 負值 → 策略3：資金撤離，空手觀望！')
-    if _bias_info:
-        _bv2 = _bias_info.get('bias_240', 0)
-        if _bv2 > 20:
-            _macro_concl.append(f'⚠️ 年線乖離 {_bv2:+.1f}% 過大 → 策略1：開始分批減碼（乖離>20%啟動停利）')
-        elif _bv2 < -20:
-            _macro_concl.append(f'✅ 年線乖離 {_bv2:+.1f}% 嚴重低估 → 策略1：左側交易最佳布局區，大膽加碼！')
-        else:
-            _macro_concl.append(f'✅ 年線乖離 {_bv2:+.1f}% 正常 → 策略1：可持股，按計畫操作')
-    for _mc2 in _macro_concl:
-        _mc3 = _mc2.replace('✅','').replace('⚠️','').replace('🔴','').strip()
-        if '→' in _mc3:
-            _ind7, _res7 = _mc3.split('→', 1)
-            _col7 = TRAFFIC_RED if any(k in _mc2 for k in ['🔴','⚠️']) else TRAFFIC_GREEN
-            _tchr7 = '弘爺' if 'M1B' in _mc2 else '孫慶龍'
-            st.markdown(teacher_conclusion(_tchr7, _ind7.strip(), _res7.strip(), color=_col7), unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div style="color:#c9d1d9;font-size:12px;padding:2px 6px;">• {_mc2}</div>', unsafe_allow_html=True)
-
-    # v18.169：3 卡 → 2 卡精簡（月線乖離併入年線副標；詳細訊號歸頂部拐點面板）
-    _m_cols = st.columns(2)
-    with _m_cols[0]:
-        if _m1b_info:
-            _m1b_v  = _m1b_info.get('m1b_yoy', 0)
-            _m2_v   = _m1b_info.get('m2_yoy', 0)
-            _diff   = round(_m1b_v - _m2_v, 2)
-            _mc     = '#da3633' if _diff > 0 else '#2ea043'
-            _ml     = '✅ 資金流入股市' if _diff > 0 else '🔴 資金撤離股市'
-            _proxy_note = '（大盤動能代理估算）' if _m1b_info.get('is_proxy') else ''
-            st.markdown(kpi('M1B-M2 差距', f'{_diff:+.2f}%{_proxy_note}',
-                            f'M1B:{_m1b_info.get("m1b_yoy",0):.1f}%  M2:{_m1b_info.get("m2_yoy",0):.1f}%  {_ml}', _mc, '#0d1117'), unsafe_allow_html=True)
-        else:
-            st.markdown(kpi('M1B-M2 差距', '抓取中', '更新總經數據後自動計算', '#484f58', '#0d1117'), unsafe_allow_html=True)
-
-    with _m_cols[1]:
-        if _bias_info:
-            _bias_v = _bias_info.get('bias_240', 0)
-            _bias_20 = _bias_info.get('bias_20', 0)
-            _bc     = TRAFFIC_RED if _bias_v > 20 else (TRAFFIC_GREEN if _bias_v < -20 else TRAFFIC_YELLOW)
-            _bl     = ('⚠️ 乖離過大，考慮減碼' if _bias_v > 20
-                       else ('✅ 嚴重低估，可積極布局' if _bias_v < -20
-                       else '⚪ 乖離正常區間'))
-            _est_note = '（估算）' if _bias_info.get('is_estimated') else ''
-            _days_note = f" {_bias_info.get('data_days',0)}天資料" if _bias_info.get('is_estimated') else ''
-            # 月線乖離併入副標（過熱/超賣時加 emoji 提示）
-            _bl20_short = ('⚠️過熱' if _bias_20 > 10 else
-                           ('✅機會' if _bias_20 < -10 else '正常'))
-            st.markdown(kpi(f'年線乖離率(240MA){_est_note}', f'{_bias_v:+.1f}%',
-                            f'{_bl}{_days_note}　｜　月線20MA: {_bias_20:+.1f}% ({_bl20_short})',
-                            _bc, '#0d1117'), unsafe_allow_html=True)
-        else:
-            st.markdown(kpi('年線乖離率(240MA)', '計算中', '大盤收盤/年線（月線乖離併顯示）', '#484f58', '#0d1117'), unsafe_allow_html=True)
-
-    st.caption('📖 完整乖離訊號與門檻判讀 → 詳見頂部「📊 拐點詳細分析」第 2 面向')
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════
