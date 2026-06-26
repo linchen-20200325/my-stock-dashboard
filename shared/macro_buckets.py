@@ -46,6 +46,11 @@ _CPI_YELLOW = 3.5    # 對齊 MACRO_THRESHOLDS['CPI']['yellow_above']
 _CPI_RED    = 4.0    # 對齊 MACRO_THRESHOLDS['CPI']['red_above']
 _PMI_YELLOW = 50.0   # 對齊 MACRO_THRESHOLDS['PMI']['yellow_below']（<50 收縮）
 _PMI_RED    = 46.0   # 對齊 MACRO_THRESHOLDS['PMI']['red_below']（<46 嚴重收縮）
+# v18.286 — 補入 SSOT 鏡像(原僅五桶用指標,本版加 10Y / DXY 給 sparkline 標準線用)
+_US10Y_YELLOW = 4.5  # 對齊 MACRO_THRESHOLDS['US10Y']['yellow_above']
+_US10Y_RED    = 5.0  # 對齊 MACRO_THRESHOLDS['US10Y']['red_above']
+_DXY_YELLOW   = 105.0  # 對齊 MACRO_THRESHOLDS['DXY']['yellow_above']
+_DXY_RED      = 110.0  # 對齊 MACRO_THRESHOLDS['DXY']['red_above']
 
 # ════════════════════════════════════════════════════════════════
 # 桶 meta：順序鎖定 + emoji + 副標（對齊下方詳細區由上而下閱讀序）
@@ -128,6 +133,13 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     DangerSpec("vix", "VIX 恐慌指數", "short", "", "high_bad",
                yellow=_VIX_YELLOW, red=_VIX_RED, decimals=1,
                note="≥22 警戒 / ≥30 流動性危機強制空手", source="SSOT:MACRO_THRESHOLDS.VIX"),
+    # v18.286:10Y / DXY 加入註冊表(供 tab_macro 國際指標 sparkline 用)
+    DangerSpec("us10y", "10Y 公債殖利率", "mid", "%", "high_bad",
+               yellow=_US10Y_YELLOW, red=_US10Y_RED, decimals=2,
+               note="≥4.5 警戒 / ≥5.0 緊縮", source="SSOT:MACRO_THRESHOLDS.US10Y"),
+    DangerSpec("dxy", "美元指數 DXY", "mid", "", "high_bad",
+               yellow=_DXY_YELLOW, red=_DXY_RED, decimals=1,
+               note="≥105 警戒 / ≥110 強勢美元壓力", source="SSOT:MACRO_THRESHOLDS.DXY"),
     DangerSpec("adl", "ADL 漲跌家數比", "short", "%", "low_bad",
                yellow=50.0, red=35.0, decimals=1,
                note="<50 廣度轉弱 / <35 廣度崩（大型股獨撐）", source="DESIGN:市場廣度慣例"),
