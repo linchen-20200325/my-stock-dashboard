@@ -165,6 +165,46 @@ class TestOverviewSectionIntegration:
         assert not any(gate_inputs), "全空時 gate 應為 False"
 
 
+class TestTrafficLightSectionIntegration:
+    """C1-D v18.290:紅綠燈 section 解 bundle 等價性。
+
+    對齊 tab_macro.py:495-499 原寫法。calc_traffic_light 介面接 4 dict-like 參數,
+    `_tm_jq_init` 為關鍵 — 須是 dict(空 `{}` 也可,None 會 AttributeError)。
+    """
+    def test_traffic_light_inputs_all_dict_like(self):
+        """全空 state → 4 input 全部走 `or {}` fallback,確保 calc_traffic_light 不炸。"""
+        out = load_section_inputs({})
+        _mkt = out.mkt_info or {}
+        _jq  = out.jingqi_info or {}
+        _cd  = out.cl_data or {}
+        _li  = out.li_latest  # 可為 None,calc_traffic_light 自處
+        assert isinstance(_mkt, dict)
+        assert isinstance(_jq, dict)
+        assert isinstance(_cd, dict)
+        # _jq.get('avg', 50) 不可炸
+        assert _jq.get('avg', 50) == 50
+
+    def test_traffic_light_jingqi_from_session_state_real(self):
+        """session_state['jingqi_info'] 真實 dict → calc 直接用 'avg' key。"""
+        state = {
+            'mkt_info': {'regime': 'bull'},
+            'jingqi_info': {'avg': 65.0, 'regime': 'bull'},
+            'cl_data': {'inst': {}},
+            'li_latest': {'date': '2026-06-26'},
+        }
+        out = load_section_inputs(state)
+        assert (out.jingqi_info or {}).get('avg', 50) == 65.0
+        assert out.li_latest['date'] == '2026-06-26'
+
+    def test_traffic_light_jingqi_fallback_to_warroom(self):
+        """jingqi_info 缺 + warroom 存 jingqi_avg → 合成 dict 仍提供 'avg' key。"""
+        state = {
+            'warroom_summary': {'jingqi_avg': 48},
+        }
+        out = load_section_inputs(state)
+        assert (out.jingqi_info or {}).get('avg', 50) == 48
+
+
 class TestWarroomSectionIntegration:
     """C1-C v18.289:今日作戰室 section 解 bundle 等價性。
 
