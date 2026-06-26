@@ -492,10 +492,13 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
 
     if _cache_fresh and not _is_refreshing:
         # 快取新鮮 → 立即計算燈號（含資料新鮮度標記）
-        _tm_mkt_init = st.session_state.get('mkt_info', {})
-        _tm_jq_init  = st.session_state.get('jingqi_info', {})
-        _tm_cd_init  = st.session_state.get('cl_data', {})
-        _tm_li_init  = st.session_state.get('li_latest')
+        # C1-D v18.290:走 section_inputs SSOT(對齊 5 桶 + 戰情概覽 + 今日作戰室)
+        from section_inputs import load_section_inputs as _load_si_tl
+        _tl_inp      = _load_si_tl(st.session_state)
+        _tm_mkt_init = _tl_inp.mkt_info or {}
+        _tm_jq_init  = _tl_inp.jingqi_info or {}
+        _tm_cd_init  = _tl_inp.cl_data or {}
+        _tm_li_init  = _tl_inp.li_latest
         _tl_init     = calc_traffic_light(_tm_mkt_init, _tm_jq_init, _tm_cd_init, _tm_li_init)
         _render_traffic_light(_tl_placeholder, _tl_init, _tm_mkt_init)
     else:
