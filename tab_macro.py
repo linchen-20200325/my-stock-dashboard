@@ -662,15 +662,18 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
     # 五步流程說明已整合至主導覽列，此處不重複顯示
 
     # ══ 戰情概覽（一眼看清今日市場）══════════════════════════
-    _ov_mkt  = st.session_state.get('mkt_info', {})
-    _ov_jq   = st.session_state.get('jingqi_info', {})
-    _ov_cd   = st.session_state.get('cl_data', {})
+    # C1-B v18.288:走 section_inputs.load_section_inputs SSOT(對齊 5 桶 summary)
+    from section_inputs import load_section_inputs as _load_si_ov
+    _ov_inp  = _load_si_ov(st.session_state)
+    _ov_mkt  = _ov_inp.mkt_info or {}
+    _ov_jq   = _ov_inp.jingqi_info or {}
+    _ov_cd   = _ov_inp.cl_data or {}
     # inst 優先從 cl_data，fallback 到獨立緩存的 _last_inst
-    _ov_inst = _ov_cd.get('inst') or st.session_state.get('_last_inst', {})
+    _ov_inst = _ov_cd.get('inst') or (_ov_inp.last_inst or {})
     # 外資 key 匹配：TWSE 格式「外資及陸資(不含外資自營商)」或 FinMind 格式「外資」
     _ov_fk   = next((k for k in _ov_inst if '外資' in k), None)
     _ov_margin = _ov_cd.get('margin')
-    _ov_bias = st.session_state.get('bias_info', {})
+    _ov_bias = _ov_inp.bias_info or {}
 
     if _show_market_data and any([_ov_mkt, _ov_jq, _ov_cd]):
         _ov_cols = st.columns(4)
