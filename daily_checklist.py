@@ -971,23 +971,9 @@ def analyze_20d_chips_from_df(df) -> dict:
         return {'error': str(_edf), 'signal': '⚫ 計算失敗'}
 
 
-def calc_stats(df):
-    """計算股票統計數據（last/pct/status）"""
-    if df is None or df.empty: return None
-    col = next((c for c in ['close','Close'] if c in df.columns), None)
-    if not col: return None
-    s = df[col].dropna()
-    if len(s) < 2: return None
-    last = float(s.iloc[-1])
-    prev = float(s.iloc[-2])
-    pct  = (last - prev) / prev * 100 if prev else 0
-    ma5  = float(s.tail(5).mean())
-    ma20 = float(s.tail(20).mean()) if len(s) >= 20 else ma5
-    if last > ma5 > ma20:   status = '多頭排列↑'
-    elif last < ma5 < ma20: status = '空頭排列↓'
-    else:                   status = '整理中'
-    return {'last': round(last,2), 'pct': round(pct,2),
-            'status': status, 'chg': round(last-prev,2)}
+# v18.301 §8.3 拆檔:calc_stats 已提取至 shared/stats_helpers.py(L0 純函式)。
+# 此處保 re-export 維持向後相容(tab_macro.py:358 等 caller 0 改)。
+from shared.stats_helpers import calc_stats  # noqa: F401
 
 
 # ═══════════════════════════════════════════════════════════
