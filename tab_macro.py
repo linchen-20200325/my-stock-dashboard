@@ -371,6 +371,63 @@ def render_tab_macro():
         _bps, _fetch_macro_news, _get_fm_token, _tw_now_str, gemini_call,
     )
 
+    # ── on_click handler(提前定義,供 empty state + 主流程共用)──
+    def _on_refresh_click():
+        """on_click callback：全清快取（pickle + st.cache_data + proxy URL cache
+        + 總經相關 session_state），確保拿到真正最新資料，零殘留。
+        """
+        try:
+            from daily_checklist import _pkl_clear_all
+            _pkl_clear_all()
+        except Exception as _e_clr:
+            print(f'[Cache] pkl clear failed: {_e_clr}')
+        try:
+            st.cache_data.clear()
+            print('[Cache] 🗑️ st.cache_data cleared')
+        except Exception as _e_sc:
+            print(f'[Cache] st.cache_data clear failed: {_e_sc}')
+        try:
+            import proxy_helper as _ph_clr
+            _ph_clr._URL_CACHE.clear()
+            _ph_clr.reset_proxy_cache()
+            print('[Cache] 🗑️ proxy URL cache + config cache cleared')
+        except Exception as _e_ph:
+            print(f'[Cache] proxy clear failed: {_e_ph}')
+        for _k in ('cl_data', 'cl_ts', 'mkt_info', 'jingqi_info', 'li_latest',
+                   'warroom_summary', '_last_inst', '_last_inst_date',
+                   '_last_margin', 'futures_net', 'adl_debug_msg'):
+            st.session_state.pop(_k, None)
+        print('[Cache] 🗑️ session_state macro keys cleared')
+        st.session_state['_is_refreshing'] = True
+
+    # ── Empty state gate(v18.286)──────────────────────────────
+    # 對齊 Fund tab1 行為:未載入總經資料前只顯示標題+按鈕,避免說明卡擾人
+    _macro_loaded = bool(
+        st.session_state.get('cl_data')
+        or st.session_state.get('mkt_info')
+        or st.session_state.get('chips_loaded')
+    )
+    if not _macro_loaded:
+        st.markdown(
+            '<div style="padding:12px 0 8px;">'
+            '<span style="font-size:22px;font-weight:900;color:#e6edf3;">🌍 總經位階評估</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        _do_refresh_es = st.button(
+            '🚀 一鍵更新全部數據（總經 + 籌碼 + 先行指標）',
+            key='cl_refresh',
+            on_click=_on_refresh_click,
+            use_container_width=True,
+            type='primary',
+            help='點此一次抓取所有總經、籌碼、先行指標資料（約 30~50 秒）',
+        )
+        if _do_refresh_es:
+            st.session_state['chips_loaded'] = True
+            st.session_state.pop('cl_data', None)
+        st.info('👉 點擊上方按鈕載入總經資料')
+        return
+
     # ════════════════════════════════════════════════════════
     # 【模組一】紅綠燈決策儀表板（st.empty 佔位符修復版）
     # 修復：先挖洞（placeholder）→ 資料到位後回填，杜絕未審先判
@@ -878,34 +935,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     else:
         st.success(f'✅ FinMind Token 已設定（{_fm_tok_now[:12]}...）', icon='🔑')
 
-    def _on_refresh_click():
-        """on_click callback：全清快取（pickle + st.cache_data + proxy URL cache
-        + 總經相關 session_state），確保拿到真正最新資料，零殘留。
-        """
-        try:
-            from daily_checklist import _pkl_clear_all
-            _pkl_clear_all()
-        except Exception as _e_clr:
-            print(f'[Cache] pkl clear failed: {_e_clr}')
-        try:
-            st.cache_data.clear()
-            print('[Cache] 🗑️ st.cache_data cleared')
-        except Exception as _e_sc:
-            print(f'[Cache] st.cache_data clear failed: {_e_sc}')
-        try:
-            import proxy_helper as _ph_clr
-            _ph_clr._URL_CACHE.clear()
-            _ph_clr.reset_proxy_cache()
-            print('[Cache] 🗑️ proxy URL cache + config cache cleared')
-        except Exception as _e_ph:
-            print(f'[Cache] proxy clear failed: {_e_ph}')
-        # 清除總經 tab session_state 殘留資料，避免新舊混雜
-        for _k in ('cl_data', 'cl_ts', 'mkt_info', 'jingqi_info', 'li_latest',
-                   'warroom_summary', '_last_inst', '_last_inst_date',
-                   '_last_margin', 'futures_net', 'adl_debug_msg'):
-            st.session_state.pop(_k, None)
-        print('[Cache] 🗑️ session_state macro keys cleared')
-        st.session_state['_is_refreshing'] = True
+    # v18.286:_on_refresh_click 已在 render_tab_macro 開頭定義(empty state 共用)
 
     cb1, cb2 = st.columns([5, 5])
     with cb1:
