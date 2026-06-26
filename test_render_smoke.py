@@ -97,6 +97,25 @@ def test_radar_and_bucket_bar_gated_pre_load():
         "C1-Z1 v18.294:§五(⚡ 短線急殺) 物理位置應在 §三(🧩 籌碼) 之前。"
         f" 實際: §五 byte offset={_pos_five}, §三 byte offset={_pos_three}"
     )
+    # C1-Z2 v18.297 物理重排:§六/§八(📈 中期) 必須與 §一/§二 集中,在 §五 之前出現。
+    _pos_six   = src.find("section_header('六'")
+    _pos_eight = src.find("section_header('八'")
+    assert _pos_six > 0,   "找不到 §六 section_header"
+    assert _pos_eight > 0, "找不到 §八 section_header"
+    assert _pos_six < _pos_five, (
+        "C1-Z2 v18.297:§六(📈 中期 美股科技) 應在 §五(短殺) 之前。"
+        f" 實際: §六={_pos_six}, §五={_pos_five}"
+    )
+    assert _pos_eight < _pos_five, (
+        "C1-Z2 v18.297:§八(📈 中期 總經拼圖) 應在 §五(短殺) 之前。"
+        f" 實際: §八={_pos_eight}, §五={_pos_five}"
+    )
+    # 9 section 完整順序:七→一→二→六→八→五→三→九→十一
+    _pos_nine   = src.find("section_header('九'")
+    _pos_eleven = src.find("section_header('十一'")
+    assert _pos_seven < _pos_one < _pos_six < _pos_eight < _pos_five < _pos_three < _pos_nine < _pos_eleven, (
+        "C1-Z2 v18.297:9 sections 物理順序應為 七→一→二→六→八→五→三→九→十一"
+    )
 
 
 @pytest.mark.slow
