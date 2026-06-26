@@ -62,6 +62,23 @@ def _assert_no_uncaught(at, label: str):
         pytest.fail(f"{label} 有 uncaught exception:\n" + "\n".join(msgs))
 
 
+def test_radar_and_bucket_bar_gated_pre_load():
+    """v18.285 靜態守衛(fast lane):全球風險雷達 + 五桶 bar 必須 gate 在
+    _show_market_data 後 — 未載入資料(尚無快取/過期)時不顯示,對齊紅綠燈「尚無資料」。
+    full render AppTest 在無 proxy/secrets 環境會 hang,故用 source pattern 檢查防回歸。"""
+    import re
+    src = open("/home/user/my-stock-dashboard/tab_macro.py", encoding="utf-8").read()
+    # 雷達 call 緊接在 if _show_market_data: 之後
+    assert re.search(
+        r"if _show_market_data:\s*\n\s+_render_global_risk_radar", src
+    ), "全球風險雷達未 gate 在 _show_market_data(未載入會跑獨立 fetch + 顯示多餘面板)"
+    # 五桶 bar 的 try 緊接在 if _show_market_data: 之後
+    assert re.search(
+        r"if _show_market_data:\s*\n\s+try:\s*\n\s+from macro_helpers import "
+        r"compute_five_bucket_summary", src
+    ), "五桶 bar 未 gate 在 _show_market_data(未載入會顯示多餘面板)"
+
+
 @pytest.mark.slow
 class TestRenderSmoke:
     """v18.283 — 改動 render 路徑 smoke test"""

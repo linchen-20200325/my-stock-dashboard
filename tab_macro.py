@@ -583,41 +583,48 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
                 'icon':   _icon,
                 'action': f"{_lt.get('detail','')}；建議持股 {_lt.get('suggest_pct','--')}",
             }
-        _render_global_risk_radar(_rr_fred_key, slow_verdict=_slow_v)
+        # v18.285：未載入資料(尚無快取/快取過期)時不渲染雷達 — 對齊紅綠燈「尚無資料」狀態。
+        # 雷達原本會在按「🚀 一鍵更新全部數據」前就跑獨立 FRED/Yahoo fetch + 顯示面板,
+        # 與上方「燈號等待中」矛盾。改 gate 在 _show_market_data 後,與紅綠燈同步出現。
+        if _show_market_data:
+            _render_global_risk_radar(_rr_fred_key, slow_verdict=_slow_v)
     except Exception as _e_rr:
         print(f'[tab_macro/risk_radar] {type(_e_rr).__name__}: {_e_rr}')
 
     # ══ v18.284 — 📊 總經五桶總結 bar（長期/中期/短線急殺/籌碼/新聞）══
-    # 頂部一眼判讀整版危險度；門檻讀 shared.macro_buckets SSOT，未載入桶顯示 ⬜（§1 Fail Loud）。
-    try:
-        from macro_helpers import compute_five_bucket_summary
-        _wr5 = st.session_state.get('warroom_summary') or {}
-        _5b = compute_five_bucket_summary(
-            macro_info=st.session_state.get('macro_info'),
-            mkt_info=st.session_state.get('mkt_info'),
-            warroom_summary=_wr5,
-            m1b_m2_info=st.session_state.get('m1b_m2_info'),
-            bias_info=st.session_state.get('bias_info'),
-            cl_data=st.session_state.get('cl_data'),
-            li_latest=st.session_state.get('li_latest'),
-            jingqi_info={'avg': _wr5.get('jingqi_avg')},
-            news_items=st.session_state.get('_macro_news_items'),
-        )
-        st.markdown('#### 📊 總經五時域總結（長期 ｜ 中期 ｜ 短線急殺 ｜ 籌碼 ｜ 新聞）')
-        render_five_bucket_bar(_5b)
-        # v18.284：下方 section 桶歸屬目錄(物理重排 80 條跨 section 依賴風險高,改用標籤導航)
-        st.caption(
-            "📑 **下方 sections 桶歸屬**："
-            "🌳 長期 → §七 資金/估值 ｜ "
-            "📈 中期 → §一 國際／§二 台股大盤／§六 美股科技／§八 總經拼圖 ｜ "
-            "⚡ 短線急殺 → §五 ADL 廣度 ｜ "
-            "🧩 籌碼 → §三 大戶籌碼 ｜ "
-            "📰 新聞 → §十一 AI 總裁決 ｜ "
-            "🧠 跨桶 → §九 AI 投資決策"
-        )
-        st.divider()
-    except Exception as _e_5b:
-        print(f'[tab_macro/五桶] {type(_e_5b).__name__}: {_e_5b}')
+    # 頂部一眼判讀整版危險度；門檻讀 shared.macro_buckets SSOT。
+    # v18.285：未載入資料時不顯示(對齊紅綠燈「尚無資料」+ 雷達 gate)，避免 pre-load 多餘面板。
+    # 載入後(_show_market_data=True)五桶才以真實燈色出現,符合「summarize 已載入資料」語意。
+    if _show_market_data:
+        try:
+            from macro_helpers import compute_five_bucket_summary
+            _wr5 = st.session_state.get('warroom_summary') or {}
+            _5b = compute_five_bucket_summary(
+                macro_info=st.session_state.get('macro_info'),
+                mkt_info=st.session_state.get('mkt_info'),
+                warroom_summary=_wr5,
+                m1b_m2_info=st.session_state.get('m1b_m2_info'),
+                bias_info=st.session_state.get('bias_info'),
+                cl_data=st.session_state.get('cl_data'),
+                li_latest=st.session_state.get('li_latest'),
+                jingqi_info={'avg': _wr5.get('jingqi_avg')},
+                news_items=st.session_state.get('_macro_news_items'),
+            )
+            st.markdown('#### 📊 總經五時域總結（長期 ｜ 中期 ｜ 短線急殺 ｜ 籌碼 ｜ 新聞）')
+            render_five_bucket_bar(_5b)
+            # v18.284：下方 section 桶歸屬目錄(物理重排 80 條跨 section 依賴風險高,改用標籤導航)
+            st.caption(
+                "📑 **下方 sections 桶歸屬**："
+                "🌳 長期 → §七 資金/估值 ｜ "
+                "📈 中期 → §一 國際／§二 台股大盤／§六 美股科技／§八 總經拼圖 ｜ "
+                "⚡ 短線急殺 → §五 ADL 廣度 ｜ "
+                "🧩 籌碼 → §三 大戶籌碼 ｜ "
+                "📰 新聞 → §十一 AI 總裁決 ｜ "
+                "🧠 跨桶 → §九 AI 投資決策"
+            )
+            st.divider()
+        except Exception as _e_5b:
+            print(f'[tab_macro/五桶] {type(_e_5b).__name__}: {_e_5b}')
 
     st.markdown('<div style="background:#0a1628;border:1px solid #1f6feb;border-radius:12px;padding:16px;margin-bottom:12px;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:18px;font-weight:900;color:#58a6ff;margin-bottom:8px;">🌍 今日市場總覽 — 現在適合買股票嗎？</div>', unsafe_allow_html=True)
