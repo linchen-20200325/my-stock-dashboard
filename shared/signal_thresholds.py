@@ -150,3 +150,19 @@ MACRO_MERGE_ASOF_TOLERANCE_DAYS: int = 40
 MACRO_TREND_LOOKBACK_PERIODS: int = 6
 """macro snapshot trend arrow lookback 視窗（單位：期,月度資料即 6 個月）。
 用於 make_indicator() 的 trend 箭頭計算。原 macro_core.py:1366 inline"""
+
+
+# ════════════════════════════════════════════════════════════════
+# 三大法人 sanity check(§3.2 v18.299)
+# ════════════════════════════════════════════════════════════════
+
+INST_NET_OUTLIER_VOLUME_RATIO: float = 5.0
+"""三大法人單日買賣超 outlier 判定門檻(倍數)。
+CLAUDE.md §3.2:|inst_net_shares| > 30D 均量 × 5.0 視為異常筆,可能為:
+- 大宗交易 / 鉅額委託(非正常市場行為,投資判斷不能依此)
+- FinMind/TWSE 解析錯誤(欄位錯位、單位誤判)
+- 該股流動性極差(小型股,30D 均量本身偏低 → ratio 容易爆表)
+觸發後 caller 應:(a) log 告警 + (b) 旗標 is_outlier=True,**不**靜默使用。
+
+數值依據:依台股法人散戶結構,正常單日法人淨買賣超約 5-15% 均量。
+> 5× 均量 = > 500% 比率,屬統計極端尾部,需人工檢視。"""
