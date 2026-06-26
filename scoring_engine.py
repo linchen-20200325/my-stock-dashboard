@@ -714,6 +714,7 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
     # ─────────────────────────────────────────────────
     # 模組一 I1：月營收 YoY 連續 3 月正成長且加速
     # ─────────────────────────────────────────────────
+    _i1_reconcile = None  # S-RECON-1 v18.303: dual-algorithm reconcile
     try:
         if rev_df is not None and not rev_df.empty and 'yoy' in rev_df.columns:
             _yoy = pd.to_numeric(rev_df['yoy'], errors='coerce').dropna()
@@ -731,14 +732,36 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
                 else:
                     _sig = '🔴'; _detail = f'最新月YoY {_latest:+.1f}%，月營收年減中'
                 _val = f'近3月: {_last3.iloc[-3]:+.1f}% → {_last3.iloc[-2]:+.1f}% → {_last3.iloc[-1]:+.1f}%'
+
+                # S-RECON-1 v18.303: §4.3 dual-algorithm reconcile
+                # 自算 YoY = (revenue[-1]/revenue[-13] - 1) * 100 vs FinMind/MOPS 預算 yoy 欄
+                # 兩源若分歧 (>0.1pct) 視為一處需 audit
+                if 'revenue' in rev_df.columns and len(rev_df) >= 13:
+                    try:
+                        from reconcile import reconcile_monthly_revenue_yoy
+                        _rev_series = pd.to_numeric(rev_df['revenue'], errors='coerce')
+                        _r_now = float(_rev_series.iloc[-1])
+                        _r_yago = float(_rev_series.iloc[-13])
+                        if _r_yago > 0:
+                            _self_yoy = (_r_now / _r_yago - 1.0) * 100.0
+                            _i1_reconcile = reconcile_monthly_revenue_yoy(
+                                self_calc_yoy_pct=_self_yoy,
+                                finmind_yoy_pct=_latest,
+                            )
+                    except Exception as _e_recon:
+                        # Reconcile is observability — never block I1 signal
+                        print(f'[I1-reconcile] skip: {_e_recon}')
             else:
                 _sig = '⚪'; _val = 'N/A'; _detail = '月營收資料不足（需≥3月）'
         else:
             _sig = '⚪'; _val = 'N/A'; _detail = '月營收尚未載入'
     except Exception:
         _sig = '⚪'; _val = 'N/A'; _detail = '計算錯誤'
-    results.append({'id': 'I1', 'module': '模組一', 'name': '月營收YoY加速',
-                     'signal': _sig, 'value': _val, 'detail': _detail})
+    _i1_result = {'id': 'I1', 'module': '模組一', 'name': '月營收YoY加速',
+                  'signal': _sig, 'value': _val, 'detail': _detail}
+    if _i1_reconcile is not None:
+        _i1_result['reconcile'] = _i1_reconcile
+    results.append(_i1_result)
 
     # ─────────────────────────────────────────────────
     # 模組一 I2：月營收 3M/12M MA 黃金交叉
