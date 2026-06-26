@@ -314,12 +314,20 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.DataFrame(obs)
     df = df[df["value"] != "."].copy()
-    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+    # v18.306:強制 float64(pd.to_numeric 對 int-only series 如 PAYEMS/HSN1F 會
+    # 推得 int64;pandera MacroFredSchema 要求 float64,鎖死避免 schema 飄移)
+    df["value"] = pd.to_numeric(df["value"], errors="coerce").astype("float64")
     df["date"]  = pd.to_datetime(df["date"])
     out = df.dropna(subset=["value"]).sort_values("date").reset_index(drop=True)
     # v18.246 S-PROV-1:provenance schema(§2.2)— source 標識 + 抓取時間
     out["source"] = f"FRED:{series_id}"
     out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+    # v18.306 Pandera Phase A pilot:出口契約驗(best-effort,pandera 不在時不阻斷)
+    try:
+        from shared.schemas import validate_fred  # noqa: PLC0415
+        validate_fred(out)
+    except ImportError:
+        pass
     _FRED_CACHE[key] = (now, out.copy())
     return out
 

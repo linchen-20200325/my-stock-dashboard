@@ -238,7 +238,7 @@ class TestHealthGrade:
     def test_grade_a_80_above(self):
         label, color, css, emoji = health_grade(80)
         assert label == '優質優良'
-        assert color == '#3fb950'
+        assert color == '#22c55e'
         assert css == 'health-A'
         assert emoji == '🟢'
 
@@ -248,7 +248,7 @@ class TestHealthGrade:
     def test_grade_b_50_to_79(self):
         label, color, css, emoji = health_grade(60)
         assert label == '震盪盤整'
-        assert color == '#d29922'
+        assert color == '#eab308'
         assert css == 'health-B'
         assert emoji == '🟡'
 
@@ -261,7 +261,7 @@ class TestHealthGrade:
     def test_grade_c_below_50(self):
         label, color, css, emoji = health_grade(30)
         assert label == '弱勢危險'
-        assert color == '#f85149'
+        assert color == '#ef4444'
         assert css == 'health-C'
         assert emoji == '🔴'
 

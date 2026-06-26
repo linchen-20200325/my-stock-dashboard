@@ -24,14 +24,14 @@ class TestCondBadge:
     def test_truthy_uses_green(self):
         # ok=True → 綠色 #3fb950
         html = cond_badge(True, 'A 已達成')
-        assert '#3fb950' in html
+        assert '#22c55e' in html
         assert '#484f58' not in html
 
     def test_falsy_uses_gray(self):
         # ok=False → 灰色 #484f58
         html = cond_badge(False, 'B 未達成')
         assert '#484f58' in html
-        assert '#3fb950' not in html
+        assert '#22c55e' not in html
 
     def test_label_embedded(self):
         html = cond_badge(True, '自訂條件 X=42.5')
@@ -112,19 +112,19 @@ class TestTrafficLight:
 
     def test_good_cond_green(self):
         color, label = traffic_light(0, True, False, '達標', '未達')
-        assert color == '#3fb950'
+        assert color == '#22c55e'
         assert '🟢' in label
         assert '達標' in label
 
     def test_bad_cond_red(self):
         color, label = traffic_light(0, False, True, '達標', '未達')
-        assert color == '#f85149'
+        assert color == '#ef4444'
         assert '🔴' in label
         assert '未達' in label
 
     def test_neither_yellow_default(self):
         color, label = traffic_light(0, False, False, 'g', 'b')
-        assert color == '#d29922'
+        assert color == '#eab308'
         assert label == '⚪ 觀察'
 
     def test_custom_neutral_label(self):
@@ -134,13 +134,13 @@ class TestTrafficLight:
     def test_good_takes_precedence_over_bad(self):
         # 兩個 cond 同時 True，good 優先
         color, label = traffic_light(0, True, True, '好', '壞')
-        assert color == '#3fb950'
+        assert color == '#22c55e'
         assert '好' in label
 
     def test_value_arg_unused_but_accepted(self):
         # value 目前未用，純為 API 預留位置；任何型別都應接受
         color, _ = traffic_light(None, True, False, 'g', 'b')
-        assert color == '#3fb950'
+        assert color == '#22c55e'
 
 
 class TestBeginnerKpi:
@@ -307,7 +307,7 @@ class TestTeacherConclusion:
     def test_neutral_default_yellow(self):
         # 既非正面也非負面 → 黃色 #d29922
         html = teacher_conclusion('蔡森', '中性指標', '持平觀察')
-        assert '#d29922' in html
+        assert '#eab308' in html
 
     def test_manual_color_overrides(self):
         html = teacher_conclusion('蔡森', 'X', '強勢', color='#000fff')
@@ -348,17 +348,17 @@ class TestSignalBox:
 
     def test_green_color(self):
         html = signal_box('OK', 'green')
-        assert '#3fb950' in html
+        assert '#22c55e' in html
         assert '#0d2818' in html
 
     def test_red_color(self):
         html = signal_box('Danger', 'red')
-        assert '#f85149' in html
+        assert '#ef4444' in html
         assert '#2a0d0d' in html
 
     def test_yellow_color(self):
         html = signal_box('Watch', 'yellow')
-        assert '#d29922' in html
+        assert '#eab308' in html
         assert '#2a1f00' in html
 
     def test_blue_color(self):

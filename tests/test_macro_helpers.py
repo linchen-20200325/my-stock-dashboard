@@ -47,7 +47,7 @@ class TestCalcTrafficLight:
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl is not None
         assert tl['icon'] == '🟢'
-        assert tl['color'] == '#3fb950'
+        assert tl['color'] == '#22c55e'
         assert '多頭' in tl['label']
         assert tl['regime'] == 'bull'
 
@@ -265,7 +265,7 @@ class TestDetectMkGoldenInflection:
         sig = detect_mk_golden_inflection(3.0, 3.3, 5.25, 5.33)
         assert sig is not None
         assert sig['strength'] == 'strong'
-        assert sig['color'] == '#3fb950'
+        assert sig['color'] == '#22c55e'
         assert '⭐' in sig['icon']
         assert 'MK 黃金拐點' in sig['label']
 
@@ -281,7 +281,7 @@ class TestDetectMkGoldenInflection:
         sig = detect_mk_golden_inflection(3.2, 3.3, 5.25, 5.33)
         assert sig is not None
         assert sig['strength'] == 'weak'
-        assert sig['color'] == '#d29922'
+        assert sig['color'] == '#eab308'
         assert 'MK 拐點觀察中' in sig['label']
 
     def test_no_signal_cpi_rising(self):

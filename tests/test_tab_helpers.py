@@ -125,21 +125,21 @@ class TestFinalRecommendation:
         # health≥80:+3, mf≥75:+3, 便宜:+2, 多頭:+1 = 9 ≥ 7
         label, color = final_recommendation(row, self.SCORE_MAP)
         assert '積極' in label
-        assert color == '#3fb950'
+        assert color == '#22c55e'
 
     def test_watch_medium(self):
         row = {'stock_id': '2317', '_health': 60, '_val': '合理', '_trend': '多頭'}
         # health≥50:+1, mf≥55:+1, 合理:+1, 多頭:+1 = 4
         label, color = final_recommendation(row, self.SCORE_MAP)
         assert '觀察' in label
-        assert color == '#d29922'
+        assert color == '#eab308'
 
     def test_wait_low(self):
         row = {'stock_id': '0050', '_health': 30, '_val': '昂貴', '_trend': '空頭'}
         # 全 0 點
         label, color = final_recommendation(row, self.SCORE_MAP)
         assert '等待' in label
-        assert color == '#f85149'
+        assert color == '#ef4444'
 
     def test_missing_keys_default_to_wait(self):
         # 缺所有可選 key + stock_id 不在 score_map → 全 0
