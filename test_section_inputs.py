@@ -38,6 +38,9 @@ class TestLoadSectionInputsEquivalence:
         # C1-C v18.289:cl_ts 空字串,futures_net=0 為 fail-safe 預設(對齊原 int(...) or 0)
         assert out.cl_ts == ''
         assert out.futures_net == 0
+        # C1-F v18.292:
+        assert out.last_inst_date is None
+        assert out.last_margin is None
         # jingqi_info 在 warroom 為空 dict + 無 session_state['jingqi_info'] → None
         # 對齊 §1 Fail Loud:無資料時不偽造空 dict
         assert out.jingqi_info is None
@@ -163,6 +166,66 @@ class TestOverviewSectionIntegration:
         # 對齊 tab_macro:675 `if _show_market_data and any([_ov_mkt, _ov_jq, _ov_cd])`
         gate_inputs = [out.mkt_info or {}, out.jingqi_info or {}, out.cl_data or {}]
         assert not any(gate_inputs), "全空時 gate 應為 False"
+
+
+class TestRegistrySectionIntegration:
+    """C1-F v18.292:戰情區塊摘要 v3 Registry 解 bundle 等價性。
+
+    對齊 tab_macro.py:2132-2250 原寫法。Registry 區塊一口氣讀 10 個 session_state keys,
+    本是 C1 系列收斂幅度最大的單筆 PR(10 reads → 1 load_section_inputs)。
+    """
+    def test_registry_full_bundle(self):
+        state = {
+            'cl_data': {
+                'intl': {'SPX': 'df'}, 'tw': {'TWII': 'df'}, 'tech': {'SOX': 'df'},
+                'adl': 'df', 'inst': {'外資及陸資': {'net': 32}},
+                'inst_date': '2026-06-26', 'margin': 1500,
+            },
+            '_last_inst': {'外資': {'net': 99}},
+            '_last_inst_date': '2026-06-25',
+            '_last_margin': 1300,
+            'cl_ts': '2026-06-26 17:00:00',
+            'jingqi_info': {'avg': 60},
+            'bias_info': {'bias_240': 5.2, 'bias_20': 1.1},
+            'm1b_m2_info': {'m1b_yoy': 7.5, 'm2_yoy': 5.0},
+            'macro_info': {'vix': {'date': '2026-06-26', 'value': 18}},
+            'li_latest': 'df_li',
+        }
+        out = load_section_inputs(state)
+        # 10 個 registry section 用到的欄位全部對齊
+        assert out.cl_data['intl']['SPX'] == 'df'
+        assert out.last_inst['外資']['net'] == 99
+        assert out.last_inst_date == '2026-06-25'
+        assert out.last_margin == 1300
+        assert out.cl_ts == '2026-06-26 17:00:00'
+        assert out.jingqi_info == {'avg': 60}
+        assert out.bias_info['bias_240'] == 5.2
+        assert out.m1b_m2_info['m1b_yoy'] == 7.5
+        assert out.macro_info['vix']['value'] == 18
+        assert out.li_latest == 'df_li'
+
+    def test_registry_inst_fallback_to_last_inst(self):
+        """cl_data 無 inst → _last_inst 接力。對應 tab_macro:2173 原 fallback 鏈。"""
+        state = {
+            'cl_data': {},  # 無 inst
+            '_last_inst': {'外資': {'net': -5}},
+            '_last_inst_date': '2026-06-25',
+        }
+        out = load_section_inputs(state)
+        _inst = out.cl_data.get('inst') or (out.last_inst or {})
+        assert _inst['外資']['net'] == -5
+        _date = (out.cl_data.get('inst_date') or out.last_inst_date)
+        assert _date == '2026-06-25'
+
+    def test_registry_margin_fallback_to_last_margin(self):
+        """cl_data['margin'] 缺 → _last_margin 接力。對應 tab_macro:2186 原 fallback。"""
+        state = {
+            'cl_data': {},
+            '_last_margin': 850,
+        }
+        out = load_section_inputs(state)
+        _margin = out.cl_data.get('margin') or out.last_margin
+        assert _margin == 850
 
 
 class TestTrafficLightSectionIntegration:
