@@ -541,14 +541,17 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
             classify_long_term_regime as _cls_lt,
             detect_mk_golden_inflection as _det_mk2,
         )
-        _mi_d = st.session_state.get('macro_info') or {}
+        # C1-E v18.291:雙視角 macro_info 走 section_inputs SSOT。
+        # _fi_streak_cache 死碼移除(無 downstream consumer,grep 全檔僅此一處)。
+        from section_inputs import load_section_inputs as _load_si_lt
+        _lt_inp = _load_si_lt(st.session_state)
+        _mi_d = _lt_inp.macro_info or {}
         _cpi_d  = _mi_d.get('us_core_cpi') or {}
         _fed_d  = _mi_d.get('fed_funds') or {}
         _ndc_d  = _mi_d.get('ndc_signal') or {}
         _pmi_d  = _mi_d.get('ism_pmi') or {}
         _vix_d  = _mi_d.get('vix') or {}
         _exp_d  = _mi_d.get('tw_export') or {}
-        _fi_st_d = st.session_state.get('_fi_streak_cache') or {}
 
         _mk_for_lt = _det_mk2(
             cpi_yoy=_cpi_d.get('yoy'),
@@ -2865,13 +2868,17 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         with _mkt_placeholder.container():
             st.info('📡 請點擊「🚀 一鍵更新全部數據」載入大盤數據')
     # ── ③ 資料到位後，回填紅綠燈佔位符（修復「未審先判」Bug）────
+    # C1-E v18.291:走 section_inputs SSOT(對齊 C1-D 紅綠燈初次計算路徑)
+    from section_inputs import load_section_inputs as _load_si_tl2
+    _tl2_inp = _load_si_tl2(st.session_state)
+    _tl2_mkt = _tl2_inp.mkt_info or {}
     _tl_final = calc_traffic_light(
-        st.session_state.get('mkt_info', {}),
-        st.session_state.get('jingqi_info', {}),
-        st.session_state.get('cl_data', {}),
-        st.session_state.get('li_latest'),
+        _tl2_mkt,
+        _tl2_inp.jingqi_info or {},
+        _tl2_inp.cl_data or {},
+        _tl2_inp.li_latest,
     )
-    _render_traffic_light(_tl_placeholder, _tl_final, st.session_state.get('mkt_info', {}))
+    _render_traffic_light(_tl_placeholder, _tl_final, _tl2_mkt)
     # v18.277 — 為何這個顏色?(展開講判讀規則 + 推導,for 新手)
     try:
         from macro_classroom import render_traffic_light_explainer
@@ -2882,7 +2889,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         st.session_state['warroom_summary'] = {
             'traffic_light': _tl_final['label'],
             'health_score':  _tl_final['health'],
-            'regime': st.session_state.get('mkt_info', {}).get('regime', 'neutral'),
+            'regime': _tl2_mkt.get('regime', 'neutral'),
             'market_score':  _tl_final['score'],
             'jingqi_avg':    _tl_final['jqavg'],
             'leek_index':    _tl_final['leek'],
