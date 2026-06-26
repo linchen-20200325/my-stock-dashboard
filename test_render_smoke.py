@@ -62,6 +62,23 @@ def _assert_no_uncaught(at, label: str):
         pytest.fail(f"{label} 有 uncaught exception:\n" + "\n".join(msgs))
 
 
+def test_radar_and_bucket_bar_gated_pre_load():
+    """v18.285 靜態守衛(fast lane):全球風險雷達 + 五桶 bar 必須 gate 在
+    _show_market_data 後 — 未載入資料(尚無快取/過期)時不顯示,對齊紅綠燈「尚無資料」。
+    full render AppTest 在無 proxy/secrets 環境會 hang,故用 source pattern 檢查防回歸。"""
+    import re
+    src = open("/home/user/my-stock-dashboard/tab_macro.py", encoding="utf-8").read()
+    # 雷達 call 緊接在 if _show_market_data: 之後
+    assert re.search(
+        r"if _show_market_data:\s*\n\s+_render_global_risk_radar", src
+    ), "全球風險雷達未 gate 在 _show_market_data(未載入會跑獨立 fetch + 顯示多餘面板)"
+    # 五桶 bar 的 try 緊接在 if _show_market_data: 之後
+    assert re.search(
+        r"if _show_market_data:\s*\n\s+try:\s*\n\s+from macro_helpers import "
+        r"compute_five_bucket_summary", src
+    ), "五桶 bar 未 gate 在 _show_market_data(未載入會顯示多餘面板)"
+
+
 @pytest.mark.slow
 class TestRenderSmoke:
     """v18.283 — 改動 render 路徑 smoke test"""
@@ -149,3 +166,49 @@ render_principle_classroom()
         at = AppTest.from_string(drv, default_timeout=60)
         at.run()
         _assert_no_uncaught(at, "render_principle_classroom shim")
+
+    def test_render_five_bucket_bar_red(self):
+        """v18.284: 總經五桶 bar — 全紅情境 render（compute + render 串接無例外）"""
+        from streamlit.testing.v1 import AppTest
+        drv = _build_driver('''
+from macro_helpers import compute_five_bucket_summary
+from tab_macro import render_five_bucket_bar
+_summary = compute_five_bucket_summary(
+    macro_info={"vix":{"current":35},"ism_pmi":{"value":44},"us_core_cpi":{"yoy":4.5},
+                "tw_export":{"yoy":-8},"ndc_signal":{"score":14}},
+    warroom_summary={"health_score":30,"jingqi_avg":35},
+    m1b_m2_info={"gap":-0.5}, bias_info={"bias_240":25},
+    news_items=[{"is_systemic":True},{"is_systemic":True}],
+)
+render_five_bucket_bar(_summary)
+''')
+        at = AppTest.from_string(drv, default_timeout=90)
+        at.run()
+        _assert_no_uncaught(at, "render_five_bucket_bar(red)")
+        assert len(at.markdown) > 5, "五桶 bar render 元素太少"
+
+    def test_add_danger_hlines(self):
+        """v18.284: 圖表危險標準線 helper — VIX 用 SSOT 22(非舊 25)、yref=y2、band 不炸"""
+        import plotly.graph_objects as go
+        from tab_macro import add_danger_hlines
+        f = go.Figure()
+        add_danger_hlines(f, 'vix')             # high_bad → 22 / 30
+        add_danger_hlines(f, 'adl', yref='y2')  # low_bad on y2 → 50 / 35
+        add_danger_hlines(f, 'ndc_signal')      # band → 4 線
+        add_danger_hlines(f, 'nope')            # 未知 key → no-op
+        ys = sorted(s.y0 for s in f.layout.shapes)
+        assert 22.0 in ys and 30.0 in ys, "VIX 標準線應為 SSOT 22/30"
+        assert 25.0 not in ys, "VIX 不該再用舊的 inline 25"
+        assert len(f.layout.shapes) == 8, "VIX2 + ADL2 + NDC4 = 8 條線"
+
+    def test_render_five_bucket_bar_empty_gray(self):
+        """v18.284: 空 session_state → 五桶全 ⬜ 未載入（不偽綠 / 不 KeyError）"""
+        from streamlit.testing.v1 import AppTest
+        drv = _build_driver('''
+from macro_helpers import compute_five_bucket_summary
+from tab_macro import render_five_bucket_bar
+render_five_bucket_bar(compute_five_bucket_summary())
+''')
+        at = AppTest.from_string(drv, default_timeout=90)
+        at.run()
+        _assert_no_uncaught(at, "render_five_bucket_bar(empty)")

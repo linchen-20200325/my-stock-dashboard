@@ -269,6 +269,77 @@ def _render_china_drag_panel(fred_api_key: str = "",
     )
 
 
+def render_five_bucket_bar(summary: dict) -> None:
+    """v18.284 — 頂部總經五桶總結 bar（5 columns × emoji+燈號+1句）+ 可展開指標明細。
+
+    順序鎖定：🌳長期 → 📈中期 → ⚡短線急殺 → 🧩籌碼 → 📰新聞。
+    桶燈號 / headline 由 macro_helpers.compute_five_bucket_summary 算好；本函式只渲染。
+    明細區讓 user 一眼看出「哪個指標逼近危險線」（值 + 燈號對照 SPEC §11）。
+    """
+    from shared.macro_buckets import BUCKET_ORDER, BUCKET_META, LEVEL_EMOJI
+
+    _cols = st.columns(len(BUCKET_ORDER))
+    for _col, _key in zip(_cols, BUCKET_ORDER):
+        _meta = BUCKET_META[_key]
+        _d = summary.get(_key) or {}
+        _color = _d.get('color', '#6e7681')
+        _emoji = _d.get('emoji', '⬜')
+        _label = _d.get('label', '—')
+        _headline = _d.get('headline', '')
+        with _col:
+            st.markdown(
+                f'''<div style="border-left:4px solid {_color};padding:8px 12px;
+background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:4px;min-height:104px;">
+<div style="font-size:0.72em;color:#888;letter-spacing:0.5px;">{_meta['sub']}</div>
+<div style="font-size:1.0em;font-weight:700;margin-top:2px;">{_meta['emoji']} {_meta['title']}: <span style="color:{_color};">{_emoji} {_label}</span></div>
+<div style="font-size:0.8em;color:#bbb;margin-top:4px;line-height:1.35;">{_headline}</div>
+</div>''',
+                unsafe_allow_html=True,
+            )
+
+    with st.expander('🔍 五桶指標明細（值 vs 危險線 — 對照 SPEC §11）', expanded=False):
+        _dcols = st.columns(len(BUCKET_ORDER))
+        for _dcol, _key in zip(_dcols, BUCKET_ORDER):
+            _meta = BUCKET_META[_key]
+            _d = summary.get(_key) or {}
+            with _dcol:
+                st.markdown(f"**{_meta['emoji']} {_meta['title']}**")
+                for _it in _d.get('details', []):
+                    _ic = LEVEL_EMOJI.get(_it['danger'], '⬜')
+                    st.markdown(
+                        f"<div style='font-size:0.78em;line-height:1.5;'>{_ic} {_it['label']}："
+                        f"<b>{_it['value_str']}</b></div>",
+                        unsafe_allow_html=True,
+                    )
+
+
+def add_danger_hlines(fig, key: str, yref=None) -> None:
+    """v18.284 — 在 plotly 圖加該指標的黃/紅危險標準線（讀 shared.macro_buckets SSOT）。
+
+    一看就知道現值超過哪條線 = 違規。門檻同頂部五桶 bar、SPEC §11，同源不漂移。
+    high_bad/low_bad 各 2 線；band 4 線。yref：多軸圖指定 'y2' 等（預設主軸）。
+    """
+    from shared.macro_buckets import SPECS_BY_KEY, LEVEL_COLOR
+    _spec = SPECS_BY_KEY.get(key)
+    if _spec is None:
+        return
+    _pairs = [(_spec.yellow, LEVEL_COLOR['yellow'], '🟡 黃線'),
+              (_spec.red, LEVEL_COLOR['red'], '🔴 紅線')]
+    if _spec.direction == 'band':
+        _pairs += [(_spec.yellow_lo, LEVEL_COLOR['yellow'], '🟡 黃線'),
+                   (_spec.red_lo, LEVEL_COLOR['red'], '🔴 紅線')]
+    for _y, _c, _lbl in _pairs:
+        if _y is None:
+            continue
+        _kw = dict(y=_y, line_dash='dash', line_color=_c, opacity=0.6,
+                   annotation_text=f'{_lbl} {_y:g}{_spec.unit}',
+                   annotation_position='top left',
+                   annotation_font=dict(size=9, color=_c))
+        if yref:
+            _kw['yref'] = yref
+        fig.add_hline(**_kw)
+
+
 def render_tab_macro():
     # ─ Late imports（避免循環 import）─
     import datetime
@@ -512,9 +583,48 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
                 'icon':   _icon,
                 'action': f"{_lt.get('detail','')}；建議持股 {_lt.get('suggest_pct','--')}",
             }
-        _render_global_risk_radar(_rr_fred_key, slow_verdict=_slow_v)
+        # v18.285：未載入資料(尚無快取/快取過期)時不渲染雷達 — 對齊紅綠燈「尚無資料」狀態。
+        # 雷達原本會在按「🚀 一鍵更新全部數據」前就跑獨立 FRED/Yahoo fetch + 顯示面板,
+        # 與上方「燈號等待中」矛盾。改 gate 在 _show_market_data 後,與紅綠燈同步出現。
+        if _show_market_data:
+            _render_global_risk_radar(_rr_fred_key, slow_verdict=_slow_v)
     except Exception as _e_rr:
         print(f'[tab_macro/risk_radar] {type(_e_rr).__name__}: {_e_rr}')
+
+    # ══ v18.284 — 📊 總經五桶總結 bar（長期/中期/短線急殺/籌碼/新聞）══
+    # 頂部一眼判讀整版危險度；門檻讀 shared.macro_buckets SSOT。
+    # v18.285：未載入資料時不顯示(對齊紅綠燈「尚無資料」+ 雷達 gate)，避免 pre-load 多餘面板。
+    # 載入後(_show_market_data=True)五桶才以真實燈色出現,符合「summarize 已載入資料」語意。
+    if _show_market_data:
+        try:
+            from macro_helpers import compute_five_bucket_summary
+            _wr5 = st.session_state.get('warroom_summary') or {}
+            _5b = compute_five_bucket_summary(
+                macro_info=st.session_state.get('macro_info'),
+                mkt_info=st.session_state.get('mkt_info'),
+                warroom_summary=_wr5,
+                m1b_m2_info=st.session_state.get('m1b_m2_info'),
+                bias_info=st.session_state.get('bias_info'),
+                cl_data=st.session_state.get('cl_data'),
+                li_latest=st.session_state.get('li_latest'),
+                jingqi_info={'avg': _wr5.get('jingqi_avg')},
+                news_items=st.session_state.get('_macro_news_items'),
+            )
+            st.markdown('#### 📊 總經五時域總結（長期 ｜ 中期 ｜ 短線急殺 ｜ 籌碼 ｜ 新聞）')
+            render_five_bucket_bar(_5b)
+            # v18.284：下方 section 桶歸屬目錄(物理重排 80 條跨 section 依賴風險高,改用標籤導航)
+            st.caption(
+                "📑 **下方 sections 桶歸屬**："
+                "🌳 長期 → §七 資金/估值 ｜ "
+                "📈 中期 → §一 國際／§二 台股大盤／§六 美股科技／§八 總經拼圖 ｜ "
+                "⚡ 短線急殺 → §五 ADL 廣度 ｜ "
+                "🧩 籌碼 → §三 大戶籌碼 ｜ "
+                "📰 新聞 → §十一 AI 總裁決 ｜ "
+                "🧠 跨桶 → §九 AI 投資決策"
+            )
+            st.divider()
+        except Exception as _e_5b:
+            print(f'[tab_macro/五桶] {type(_e_5b).__name__}: {_e_5b}')
 
     st.markdown('<div style="background:#0a1628;border:1px solid #1f6feb;border-radius:12px;padding:16px;margin-bottom:12px;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:18px;font-weight:900;color:#58a6ff;margin-bottom:8px;">🌍 今日市場總覽 — 現在適合買股票嗎？</div>', unsafe_allow_html=True)
@@ -2781,7 +2891,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         'dji': intl_s.get('道瓊工業 DJI'),
     }
 
-    st.markdown(section_header('一','🌍 國際市場動態（影響台股的全球指標）','🌐'), unsafe_allow_html=True)
+    st.markdown(section_header('一','📈 中期｜🌍 國際市場動態（影響台股的全球指標）','🌐'), unsafe_allow_html=True)
     _sox1 = intl_s.get('費城半導體 SOX')
     _dji1 = intl_s.get('道瓊工業 DJI')
     _dxy1 = intl_s.get('美元指數 DXY')
@@ -2926,7 +3036,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                        'USD/JPY 急貶（carry 平倉）多伴隨風險資產同步下殺。XCCY 基差、穩定幣 SSR 因免費資料源不可得，未納入。')
 
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
-    st.markdown(section_header('二','🇹🇼 台股大盤（今日漲跌 + 台幣匯率）','🇹🇼'),unsafe_allow_html=True)
+    st.markdown(section_header('二','📈 中期｜🇹🇼 台股大盤（今日漲跌 + 台幣匯率）','🇹🇼'),unsafe_allow_html=True)
     _twii2 = tw_s.get('台股加權指數')
     _twd2 = tw_s.get('新台幣匯率')
     if _twii2 and _twd2:
@@ -3021,7 +3131,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ════════════════════════════════════════════════════════════════════
     # 三、大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標
     # ════════════════════════════════════════════════════════════════════
-    st.markdown(section_header('三','🧮 大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標','🧮'),unsafe_allow_html=True)
+    st.markdown(section_header('三','🧩 籌碼｜🧮 大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標','🧮'),unsafe_allow_html=True)
 
     if inst:
         _fk3 = next((k for k in inst if '外資' in k and '陸資' in k), None) or next((k for k in inst if '外資' in k), None)
@@ -3500,7 +3610,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
     st.markdown('<hr style="border-color:#21262d;margin:8px 0;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:4px 0;">📊 市場廣度</div>', unsafe_allow_html=True)
-    st.markdown(section_header('五','📊 全市場健康度 × 騰落指標（ADL）','📉'),unsafe_allow_html=True)
+    st.markdown(section_header('五','⚡ 短線急殺｜📊 全市場健康度 × 騰落指標（ADL）','📉'),unsafe_allow_html=True)
     _adl5 = st.session_state.get('cl_data', {}).get('adl')
     _mkt5 = st.session_state.get('mkt_info', {})
     if _adl5 is not None and not _adl5.empty:
@@ -3695,6 +3805,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         ))
         # 零軸
         _fig_adl.add_hline(y=0, line_dash='dash', line_color='#484f58', opacity=0.5)
+        # v18.284：上漲佔比（y2 軸 0-100）危險標準線 — 50 黃 / 35 紅（廣度崩），讀 SSOT
+        add_danger_hlines(_fig_adl, 'adl', yref='y2')
         _fig_adl.update_layout(
             title=dict(text='台股騰落線（ADL）— 衡量多數股票是否真的在漲', font=dict(color='#8b949e', size=13)),
             height=320, plot_bgcolor='#0e1117', paper_bgcolor='#0e1117',
@@ -3812,7 +3924,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
     st.markdown('<hr style="border-color:#21262d;margin:8px 0;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:4px 0;">🌐 國際市場</div>', unsafe_allow_html=True)
-    st.markdown(section_header('六','🖥️ 美股科技巨頭（台股明天的風向球）','🖥️'),unsafe_allow_html=True)
+    st.markdown(section_header('六','📈 中期｜🖥️ 美股科技巨頭（台股明天的風向球）','🖥️'),unsafe_allow_html=True)
     _sox6 = intl_s.get('費城半導體 SOX') or tech_s.get('費城半導體 SOX')
     _nvda6 = next((tech_s[k] for k in tech_s if 'NVDA' in k or '輝達' in k), None)
     if _sox6:
@@ -3873,7 +3985,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         st.markdown(f'<div style="color:#c9d1d9;font-size:13px;padding:3px 0;">• {_tc2}</div>', unsafe_allow_html=True)
 
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
-    st.markdown(section_header('七','💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
+    st.markdown(section_header('七','🌳 長期｜💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
 
     # ── M1B-M2 年增率（FinMind）──────────────────────────────
     _m1b_info = st.session_state.get('m1b_m2_info')
@@ -3947,7 +4059,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ══════════════════════════════════════════════════════════════
     # SECTION 八: 總經拼圖 v4.0 (景氣位階 × 前瞻需求 × 全球風險)
     # ══════════════════════════════════════════════════════════════
-    st.markdown(section_header('八','🌐 總經拼圖 v4.0（景氣位階 × 前瞻需求 × 全球風險）','🌐'),unsafe_allow_html=True)
+    st.markdown(section_header('八','📈 中期｜🌐 總經拼圖 v4.0（景氣位階 × 前瞻需求 × 全球風險）','🌐'),unsafe_allow_html=True)
 
     # ── 🔰 故事化白話解讀（純疊加；解釋三塊拼圖如何「合在一起看」，非重複各 KPI 副標）──
     with st.expander('🔰 這張「總經拼圖」在拼什麼？三塊怎麼一起看？'):
@@ -4075,19 +4187,18 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         if _m8_vix and _m8_vix.get('dates'):
             _vcur8 = _m8_vix.get('current', 0)
             _vma8  = _m8_vix.get('ma20', 0)
-            _vc8   = TRAFFIC_RED if _vcur8 >= 30 else (TRAFFIC_YELLOW if _vcur8 >= 20 else TRAFFIC_GREEN)
+            # v18.284：VIX 燈號門檻統一至 SSOT（macro_buckets / MACRO_THRESHOLDS：22 黃 / 30 紅）
+            _vc8   = TRAFFIC_RED if _vcur8 >= 30 else (TRAFFIC_YELLOW if _vcur8 >= 22 else TRAFFIC_GREEN)
             _vl8   = ('🚨 恐慌衝頂，強制空手' if _vcur8 >= 30 else
-                      ('⚠️ 市場緊張，降低持倉' if _vcur8 >= 20 else '✅ 市場平靜'))
+                      ('⚠️ 市場緊張，降低持倉' if _vcur8 >= 22 else '✅ 市場平靜'))
             import plotly.graph_objects as _go8
             _vfig8 = _go8.Figure()
             _vfig8.add_trace(_go8.Scatter(
                 x=_m8_vix['dates'], y=_m8_vix['values'],
                 mode='lines', line=dict(color='#58a6ff', width=1.5),
                 fill='tozeroy', fillcolor='rgba(88,166,255,0.08)', name='VIX'))
-            _vfig8.add_hline(y=25, line_dash='dash', line_color=TRAFFIC_YELLOW, opacity=0.6,
-                             annotation_text='25 警戒', annotation_font_color=TRAFFIC_YELLOW)
-            _vfig8.add_hline(y=30, line_dash='dash', line_color=TRAFFIC_RED, opacity=0.6,
-                             annotation_text='30 危機', annotation_font_color=TRAFFIC_RED)
+            # v18.284：危險標準線改讀 SSOT（22 黃 / 30 紅），與頂部五桶 bar、SPEC §11 同源
+            add_danger_hlines(_vfig8, 'vix')
             _vfig8.add_annotation(x=_m8_vix['dates'][-1], y=_vcur8,
                                   text=f'<b>{_vcur8}</b>', showarrow=True, arrowhead=2,
                                   font=dict(color=_vc8, size=12),
@@ -4102,7 +4213,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                            font=dict(size=11, color=_vc8), x=0))
             st.plotly_chart(_vfig8, width='stretch')
         else:
-            st.markdown(kpi('VIX 恐慌指數', '待取得', '≥25警戒 / ≥30危機→強制空手', '#484f58', '#0d1117'), unsafe_allow_html=True)
+            st.markdown(kpi('VIX 恐慌指數', '待取得', '≥22警戒 / ≥30危機→強制空手', '#484f58', '#0d1117'), unsafe_allow_html=True)
 
     # v18.194 fail trace：失敗 fetcher 錯誤碼浮上 UI（仿 Fund v19.43 RadarFailTrace）
     # 三狀態：① _macro_info 為空 → 未刷新或 outer 80s timeout 全失敗；② 有 _err_* → 局部失敗；③ 全綠 → 不顯示
@@ -4395,7 +4506,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ══════════════════════════════════════════════════════════════
     # SECTION 九: 總經 AI 投資決策分析（五維度綜合研判）
     # ══════════════════════════════════════════════════════════════
-    st.markdown(section_header('九', '🧠 總經 AI 投資決策分析', '🧠'), unsafe_allow_html=True)
+    st.markdown(section_header('九', '🧠 跨桶｜總經 AI 投資決策分析', '🧠'), unsafe_allow_html=True)
 
     # ── 安全取數 ────────────────────────────────────────────────
     _ai_vix  = float(_m8_vix.get('current', 0))  if _m8_vix else None
@@ -4631,7 +4742,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # SECTION 十一: 🤖 AI 總裁決（實體狀態鎖架構）
     # 前端唯讀 macro_state.json；LLM 運算由觸發按鈕在背景執行並寫檔
     # ══════════════════════════════════════════════════════════════
-    st.markdown(section_header('十一', '🤖 AI 總裁決', '🤖'), unsafe_allow_html=True)
+    st.markdown(section_header('十一', '📰 新聞 ｜🤖 AI 總裁決', '🤖'), unsafe_allow_html=True)
 
     with st.expander('🤖 AI 總裁決 — 實體狀態鎖架構（唯讀）', expanded=True):
         _verdict_hdr_c1, _verdict_hdr_c2, _verdict_hdr_c3 = st.columns([4, 1, 1])
@@ -4657,6 +4768,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         if _do_verdict:
             with st.spinner('📡 正在抓取財經新聞 + 呼叫 Gemini AI（約 15~30 秒）…'):
                 _v_news = _fetch_macro_news(5)
+                # v18.284：stash 供頂部「五桶·新聞」燈號讀取（系統性風險命中數 → 紅/黃/綠）
+                st.session_state['_macro_news_items'] = _v_news
                 _v_news_titles = [_n['title'] for _n in _v_news]
                 # 組裝量化數據快照供 AI 判讀
                 _vix_d  = _macro_info.get('vix') or {}

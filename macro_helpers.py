@@ -1153,3 +1153,119 @@ def get_china_snapshot(fred_api_key: str) -> dict:
         return {}
     from tw_macro import fetch_china_macro  # noqa: PLC0415
     return china_macro_snapshot(fetch_china_macro(fred_api_key))
+
+
+# ════════════════════════════════════════════════════════════════
+# v18.284 — 總經五桶總結（長期/中期/短線急殺/籌碼/新聞）純函式
+#   閾值全讀 shared.macro_buckets SSOT；本函式只負責「取值 → 分級 → 聚合」。
+# ════════════════════════════════════════════════════════════════
+def compute_five_bucket_summary(
+    macro_info: Optional[dict] = None,
+    mkt_info: Optional[dict] = None,
+    warroom_summary: Optional[dict] = None,
+    m1b_m2_info: Optional[dict] = None,
+    bias_info: Optional[dict] = None,
+    cl_data: Optional[dict] = None,
+    li_latest: Any = None,
+    jingqi_info: Optional[dict] = None,
+    news_items: Optional[list] = None,
+) -> dict:
+    """總經五桶總結純函式。
+
+    吃各 session_state 片段 → 回五桶 summary，每桶含燈號 + headline + 指標明細。
+    門檻全部讀 `shared.macro_buckets.BUCKET_DANGER_SPECS`（SSOT），**不在此 inline**。
+
+    Returns
+    -------
+    dict: {bucket: {level, label, headline, color, emoji, details:[...]}}，
+          bucket ∈ long/mid/short/chips/news。
+
+    §1 Fail Loud：缺值 → 該指標 gray（未載入），桶全 gray → ⬜，**不**偽綠。
+    §4.1：foreign_net 因 inst net 單位待確認，v1 暫不接（保持 gray 不誤判）。
+    """
+    from shared.macro_buckets import (
+        BUCKET_ORDER, BUCKET_LEVEL_LABEL, LEVEL_COLOR, LEVEL_EMOJI,
+        specs_for_bucket, classify_danger, aggregate_level, fmt_value,
+    )
+
+    macro_info = macro_info or {}
+
+    def _g(d, *keys):
+        cur = d
+        for k in keys:
+            if not isinstance(cur, dict):
+                return None
+            cur = cur.get(k)
+        return cur
+
+    def _num(x):
+        if x is None:
+            return None
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+
+    def _df_last(df, col):
+        """DataFrame 末列某欄 → float / None。"""
+        try:
+            if (df is not None and hasattr(df, "empty") and not df.empty
+                    and col in df.columns):
+                return float(df[col].iloc[-1])
+        except Exception:
+            return None
+        return None
+
+    _news_sys = None
+    if news_items is not None:
+        try:
+            _news_sys = float(sum(1 for h in news_items
+                                  if isinstance(h, dict) and h.get("is_systemic")))
+        except Exception:
+            _news_sys = None
+
+    values = {
+        "health":        _num(_g(warroom_summary, "health_score")),
+        "ndc_signal":    _num(_g(macro_info, "ndc_signal", "score")),
+        "m1b_m2_gap":    _num(_g(m1b_m2_info, "gap")),
+        "ism_pmi":       _num(_g(macro_info, "ism_pmi", "value")),
+        "us_core_cpi":   _num(_g(macro_info, "us_core_cpi", "yoy")),
+        "tw_export":     _num(_g(macro_info, "tw_export", "yoy")),
+        "bias_240":      _num(_g(bias_info, "bias_240")),
+        "vix":           _num(_g(macro_info, "vix", "current")),
+        "adl":           _df_last(_g(cl_data, "adl"), "ad_ratio"),
+        "fut_net":       _df_last(li_latest, "外資大小"),
+        "margin":        _num(_g(cl_data, "margin")),
+        "jingqi":        _num(_g(jingqi_info, "avg")),
+        "foreign_net":   None,   # §4.1 inst net 單位待確認 → 暫保持 gray，不誤判
+        "news_systemic": _news_sys,
+    }
+
+    out: dict = {}
+    for bucket in BUCKET_ORDER:
+        details = []
+        for s in specs_for_bucket(bucket):
+            v = values.get(s.key)
+            details.append({
+                "key": s.key, "label": s.label,
+                "value_str": fmt_value(v, s),
+                "danger": classify_danger(v, s), "note": s.note,
+            })
+        blevel = aggregate_level([d["danger"] for d in details])
+        if blevel == "gray":
+            headline = "尚未載入（按更新 / 執行 AI 裁決）"
+        elif blevel == "green":
+            _n_ok = sum(1 for d in details if d["danger"] == "green")
+            headline = f"{_n_ok} 項指標全綠"
+        else:
+            d0 = next(d for d in details if d["danger"] == blevel)
+            headline = f"{d0['label']} {d0['value_str']}｜{d0['note']}"
+        out[bucket] = {
+            "level": blevel,
+            "label": BUCKET_LEVEL_LABEL[bucket][blevel],
+            "headline": headline,
+            "color": LEVEL_COLOR[blevel],
+            "emoji": LEVEL_EMOJI[blevel],
+            "details": details,
+        }
+    return out

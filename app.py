@@ -1215,6 +1215,34 @@ if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
 # AI 總經戰情 — 新聞抓取 + LLM 研判 工具函數
 # ══════════════════════════════════════════════════════════════
 
+# v18.284：系統性風險關鍵字（戰爭/地緣/銀行倒閉/崩盤/黑天鵝）— 總經五桶「新聞桶」燈號用。
+# 命中者標 is_systemic=True 並排序最優先；對齊 Fund news_repository.SYSTEMIC_RISK_KEYWORDS。
+# 非 magic number（為關鍵字配置 data），單一 consumer（_fetch_macro_news）故就近 module-level 定義。
+_SYSTEMIC_RISK_KEYWORDS = [
+    # 戰爭 / 地緣政治
+    "war", "invasion", "ukraine", "russia", "israel", "gaza", "iran",
+    "taiwan strait", "south china sea", "north korea", "missile",
+    "drone strike", "sanctions", "embargo", "geopolitical", "nuclear",
+    # 金融危機 / 破產
+    "bankrupt", "bankruptcy", "collapse", "default", "bailout",
+    "lehman", "credit suisse", "svb", "silicon valley bank",
+    "signature bank", "first republic",
+    "bank failure", "bank run", "deposit run", "liquidity crisis",
+    "systemic risk", "contagion", "meltdown",
+    # 央行緊急動作
+    "emergency rate", "qt halt", "qe restart", "discount window",
+    "fdic", "bail-in", "bail in",
+    # 市場崩盤訊號
+    "circuit breaker", "trading halt", "vix spike",
+    "credit spread widening", "yield curve invert",
+    "flight to safety", "panic selling", "rout", "selloff",
+    # 中文
+    "戰爭", "戰事", "侵略", "倒閉", "破產", "雷曼", "金融危機",
+    "信用緊縮", "崩盤", "黑天鵝", "系統性風險", "流動性危機",
+    "兌付危機", "擠兌", "違約",
+]
+
+
 @st.cache_data(ttl=TTL_30MIN, show_spinner=False, max_entries=10)
 def _fetch_macro_news(n: int = 5) -> list:
     """抓取全球總經財經新聞 — 中英雙語多源（系統性風險偵測用）。
@@ -1272,17 +1300,21 @@ def _fetch_macro_news(n: int = 5) -> list:
                 _summ  = _re2.sub(r'<[^>]+>', '', _summ)[:300].strip()
                 _pub   = str(_e.get('published', ''))[:16]
                 if _title:
+                    # v18.284：系統性風險偵測（title+summary 命中關鍵字 → is_systemic）
+                    _txt_chk = (_title + ' ' + _summ).lower()
+                    _is_sys = any(_kw in _txt_chk for _kw in _SYSTEMIC_RISK_KEYWORDS)
                     _by_src[_src].append({'title': _title, 'summary': _summ,
-                                          'source': _src, 'published': _pub})
+                                          'source': _src, 'published': _pub,
+                                          'is_systemic': _is_sys})
                 if len(_by_src[_src]) >= _per_src:
                     break
             print(f'[AI-News/{_src}] ✅ {len(_by_src[_src])} 則')
         except Exception as _ne:
             print(f'[AI-News/{_src}] ❌ {_ne}')
 
-    # round-robin 混合各源，依序去重
+    # round-robin 混合各源，依序去重 → 先收齊全池（不提早截斷）
     _seen: set[str] = set()
-    _out: list = []
+    _pool: list = []
     _max_round = max((len(v) for v in _by_src.values()), default=0)
     for _i in range(_max_round):
         for _src, _items in _by_src.items():
@@ -1290,10 +1322,12 @@ def _fetch_macro_news(n: int = 5) -> list:
                 _t = _items[_i]['title']
                 if _t and _t not in _seen:
                     _seen.add(_t)
-                    _out.append(_items[_i])
-                    if len(_out) >= n:
-                        return _out
-    return _out[:n]
+                    _pool.append(_items[_i])
+    # v18.284：系統性風險新聞永遠排前（戰爭/倒閉/崩盤命中），其餘維持 round-robin 來源混合序，
+    # 再截斷至 n。→ AI 與「新聞桶」燈號皆優先看到系統性事件，避免被一般財經洗版漏看。
+    _sys = [x for x in _pool if x.get('is_systemic')]
+    _gen = [x for x in _pool if not x.get('is_systemic')]
+    return (_sys + _gen)[:n]
 
 
 def _rss_items_from_bytes(_content) -> list:
