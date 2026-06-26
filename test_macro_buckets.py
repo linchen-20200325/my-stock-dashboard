@@ -23,6 +23,21 @@ def test_mirror_matches_macro_core():
     assert mb._CPI_RED == MACRO_THRESHOLDS["CPI"]["red_above"]
     assert mb._PMI_YELLOW == MACRO_THRESHOLDS["PMI"]["yellow_below"]
     assert mb._PMI_RED == MACRO_THRESHOLDS["PMI"]["red_below"]
+    # v18.286 加入 10Y / DXY 鏡像
+    assert mb._US10Y_YELLOW == MACRO_THRESHOLDS["US10Y"]["yellow_above"]
+    assert mb._US10Y_RED == MACRO_THRESHOLDS["US10Y"]["red_above"]
+    assert mb._DXY_YELLOW == MACRO_THRESHOLDS["DXY"]["yellow_above"]
+    assert mb._DXY_RED == MACRO_THRESHOLDS["DXY"]["red_above"]
+
+
+def test_us10y_dxy_specs_registered():
+    """v18.286:us10y / dxy 加入 SPECS_BY_KEY 供 chart hline 使用。"""
+    assert "us10y" in mb.SPECS_BY_KEY
+    assert "dxy" in mb.SPECS_BY_KEY
+    _y = mb.SPECS_BY_KEY["us10y"]
+    assert _y.yellow == 4.5 and _y.red == 5.0
+    _d = mb.SPECS_BY_KEY["dxy"]
+    assert _d.yellow == 105.0 and _d.red == 110.0
 
 
 def test_imported_ssot_constants_used():

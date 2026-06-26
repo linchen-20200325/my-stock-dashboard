@@ -141,9 +141,9 @@ st.markdown(f"""<style>
 # ════════════════════════════════════════════════════════════════
 # HELPERS
 # ════════════════════════════════════════════════════════════════
-def parse_stocks(raw):
-    stocks = re.split(r'[,\s\n；，]+', raw.strip())
-    return [s.strip() for s in stocks if s.strip() and re.match(r'^\d{4,6}[A-Z]?$', s.strip())]
+# v18.302 §8.3 app.py 拆檔:parse_stocks 已提至 shared/parse_helpers.py(L0)。
+# 此處保 re-export 維持向後相容(tab_stock_grp.py:52 等 caller 0 改)。
+from shared.parse_helpers import parse_stocks  # noqa: F401
 
 # ── Gemini 金鑰池（做法 B：多帳號 key 自動換手，分散額度 / 速率限制）──────
 # 讀 GEMINI_API_KEY + GEMINI_API_KEY_2 .. _6（st.secrets 優先，os.environ fallback）。

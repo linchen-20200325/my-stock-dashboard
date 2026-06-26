@@ -1158,6 +1158,55 @@ class TestCalcLeadingIndicatorsDetail:
 
 
 # ══════════════════════════════════════════════════════════════
+# S-RECON-1 v18.303 — I1 月營收 YoY 雙演算法對帳
+# ══════════════════════════════════════════════════════════════
+
+class TestI1MonthlyRevenueReconcile:
+    """I1 carries reconcile dict when self_calc YoY (revenue[-1]/revenue[-13]-1)
+    matches FinMind/MOPS provided 'yoy' field (within 0.1pct)."""
+
+    def test_i1_reconcile_agree(self):
+        """13 個月一致 revenue + 對應 yoy → reconcile status='agree'"""
+        # 自算: (110 / 100 - 1) * 100 = 10.0; FinMind yoy = 10.0 → agree
+        revenue = [100] * 12 + [110]
+        yoy = [5.0] * 12 + [10.0]
+        rev_df = pd.DataFrame({'revenue': revenue, 'yoy': yoy})
+        results = calc_leading_indicators_detail(rev_df=rev_df)
+        i1 = next(r for r in results if r['id'] == 'I1')
+        assert 'reconcile' in i1
+        assert i1['reconcile']['status'] == 'agree'
+
+    def test_i1_reconcile_disagree(self):
+        """自算 vs FinMind yoy 差距 > 0.1pct → status='disagree'"""
+        revenue = [100] * 12 + [110]
+        yoy = [5.0] * 12 + [15.0]   # FinMind 15% vs 自算 10% → disagree
+        rev_df = pd.DataFrame({'revenue': revenue, 'yoy': yoy})
+        results = calc_leading_indicators_detail(rev_df=rev_df)
+        i1 = next(r for r in results if r['id'] == 'I1')
+        assert 'reconcile' in i1
+        assert i1['reconcile']['status'] == 'disagree'
+
+    def test_i1_no_reconcile_when_short(self):
+        """資料 < 13 個月 → I1 仍能計算但無 reconcile 欄"""
+        rev_df = pd.DataFrame({
+            'revenue': [100, 105, 110],
+            'yoy': [5.0, 8.0, 12.0],
+        })
+        results = calc_leading_indicators_detail(rev_df=rev_df)
+        i1 = next(r for r in results if r['id'] == 'I1')
+        assert i1['signal'] == '🟢'   # I1 signal 仍正常
+        assert 'reconcile' not in i1   # 資料不足無對帳
+
+    def test_i1_no_reconcile_when_no_revenue_col(self):
+        """無 revenue 欄(僅 yoy)→ 無 reconcile,I1 signal 不破"""
+        rev_df = pd.DataFrame({'yoy': [5.0, 8.0, 12.0]})
+        results = calc_leading_indicators_detail(rev_df=rev_df)
+        i1 = next(r for r in results if r['id'] == 'I1')
+        assert i1['signal'] == '🟢'
+        assert 'reconcile' not in i1
+
+
+# ══════════════════════════════════════════════════════════════
 # 24. 補齊邊界路徑（Bollinger squeeze break + VCP exception）
 # ══════════════════════════════════════════════════════════════
 

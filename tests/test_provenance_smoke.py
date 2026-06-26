@@ -94,3 +94,63 @@ def test_yf_ohlcv_provenance_naming():
     assert "Yahoo:chart" in src, "fetch_yf_ohlcv source 命名須含 Yahoo:chart"
     # fetch_fred provenance(phase 1)
     assert 'FRED:' in src, "fetch_fred source 命名須含 FRED:"
+
+
+# ── 5a. macro_core.fetch_ism_pmi:source 命名 SSOT 精確度(v18.296 phase 3) ──
+def test_ism_pmi_source_includes_specific_endpoint():
+    """S-PROV-1 phase 3 v18.296 — fetch_ism_pmi 7 段備援的 source 必須帶
+    具體 endpoint / series ID,不可只標 'FRED' / 'MacroMicro' 等模糊字串。"""
+    src = _read("macro_core.py")
+    # FRED 路徑須帶 series ID
+    assert "'source': f'FRED:{sid}'" in src or '"source": f"FRED:{sid}"' in src, \
+        "fetch_ism_pmi FRED 段 source 須帶 series ID 變數"
+    # 各 fallback 路徑須帶具體 endpoint
+    assert "'MacroMicro:us-ism-mfg-pmi'" in src, "MacroMicro 段 source 須含 chart slug"
+    assert "'ISM:ismworld.org'" in src, "ISM World 段 source 須含 host"
+    assert "'DBnomics:ISM/pmi/pm'" in src, "DBnomics 段 source 須含 dataset 路徑"
+    # PhilFed / OECD proxy 路徑須帶 FRED series ID + :proxy 標記
+    assert "f'FRED:{FRED_PHILLY_FED}:proxy'" in src, \
+        "PhilFed-Proxy 段 source 須帶 series ID + :proxy"
+    assert "f'FRED:{FRED_BSCICP02}:proxy'" in src, \
+        "OECD-Proxy 段 source 須帶 series ID + :proxy"
+    # err path 也須帶 source
+    assert "'ISM-PMI:all_7_stages_failed'" in src, \
+        "fetch_ism_pmi 7 段全失敗 err 回傳也須帶 source"
+
+
+# ── 5. macro_core.fetch_macro_compass:provenance 透傳 ──
+def test_macro_compass_carries_provenance(monkeypatch):
+    """S-PROV-1 phase 2 v18.295 — fetch_macro_compass(成功 path)三 ticker dict
+    各 entry 須含 source + fetched_at(透傳自底層 fetch_yf_close 的 s.attrs)。"""
+    try:
+        import macro_core
+    except ImportError as e:
+        pytest.skip(f"macro_core import failed: {e}")
+
+    # 構造帶 attrs 的 fake Series(模擬 fetch_yf_close 回傳),
+    # 走 monkeypatch 替換 fetch_yf_close 避免真實 NAS proxy 抓取。
+    def _fake_yf_close(ticker, range_="2y", interval="1d"):
+        idx = pd.date_range("2026-01-01", periods=100, freq="D")
+        s = pd.Series(range(100), index=idx, dtype=float, name=ticker)
+        s.attrs["source"] = f"Yahoo:{ticker}"
+        s.attrs["fetched_at"] = "2026-06-26T12:00:00+00:00"
+        return s
+
+    monkeypatch.setattr(macro_core, "fetch_yf_close", _fake_yf_close, raising=True)
+
+    out = macro_core.fetch_macro_compass(range_="6mo")
+
+    # 三 ticker 各自有 dict
+    for key in ("vix", "tnx", "gspc"):
+        entry = out.get(key)
+        assert entry is not None, f"compass['{key}'] 應有 dict"
+        assert "source" in entry, f"compass['{key}'] 須有 source 欄"
+        assert "fetched_at" in entry, f"compass['{key}'] 須有 fetched_at 欄"
+        assert entry["source"].startswith("Yahoo:"), (
+            f"compass['{key}']['source'] 應以 'Yahoo:' 開頭,"
+            f"實際 = {entry['source']}"
+        )
+        assert entry["fetched_at"] == "2026-06-26T12:00:00+00:00", (
+            f"compass['{key}']['fetched_at'] 應透傳自 s.attrs,"
+            f"實際 = {entry['fetched_at']}"
+        )

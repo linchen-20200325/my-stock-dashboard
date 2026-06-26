@@ -73,10 +73,49 @@ def test_radar_and_bucket_bar_gated_pre_load():
         r"if _show_market_data:\s*\n\s+_render_global_risk_radar", src
     ), "全球風險雷達未 gate 在 _show_market_data(未載入會跑獨立 fetch + 顯示多餘面板)"
     # 五桶 bar 的 try 緊接在 if _show_market_data: 之後
+    # (允許 try: 與 from 之間夾註解行 — C1-A v18.287 後內有 SSOT 引用註)
     assert re.search(
-        r"if _show_market_data:\s*\n\s+try:\s*\n\s+from macro_helpers import "
-        r"compute_five_bucket_summary", src
+        r"if _show_market_data:\s*\n\s+try:\s*\n"
+        r"(?:\s*#[^\n]*\n)*"  # 0+ 註解行
+        r"\s+from macro_helpers import compute_five_bucket_summary", src
     ), "五桶 bar 未 gate 在 _show_market_data(未載入會顯示多餘面板)"
+    # C1-Z v18.293 物理重排:§七(長期) 必須在 §一(中期) 之前出現,對齊 5 桶 reading order。
+    _pos_seven = src.find("section_header('七'")
+    _pos_one   = src.find("section_header('一'")
+    assert _pos_seven > 0, "找不到 §七 section_header"
+    assert _pos_one > 0, "找不到 §一 section_header"
+    assert _pos_seven < _pos_one, (
+        "C1-Z v18.293:§七(🌳 長期) 物理位置應在 §一(📈 中期) 之前。"
+        f" 實際: §七 byte offset={_pos_seven}, §一 byte offset={_pos_one}"
+    )
+    # C1-Z1 v18.294 物理重排:§五(⚡ 短殺) 必須在 §三(🧩 籌碼) 之前出現,對齊 5 桶 reading order。
+    _pos_five  = src.find("section_header('五'")
+    _pos_three = src.find("section_header('三'")
+    assert _pos_five > 0,  "找不到 §五 section_header"
+    assert _pos_three > 0, "找不到 §三 section_header"
+    assert _pos_five < _pos_three, (
+        "C1-Z1 v18.294:§五(⚡ 短線急殺) 物理位置應在 §三(🧩 籌碼) 之前。"
+        f" 實際: §五 byte offset={_pos_five}, §三 byte offset={_pos_three}"
+    )
+    # C1-Z2 v18.297 物理重排:§六/§八(📈 中期) 必須與 §一/§二 集中,在 §五 之前出現。
+    _pos_six   = src.find("section_header('六'")
+    _pos_eight = src.find("section_header('八'")
+    assert _pos_six > 0,   "找不到 §六 section_header"
+    assert _pos_eight > 0, "找不到 §八 section_header"
+    assert _pos_six < _pos_five, (
+        "C1-Z2 v18.297:§六(📈 中期 美股科技) 應在 §五(短殺) 之前。"
+        f" 實際: §六={_pos_six}, §五={_pos_five}"
+    )
+    assert _pos_eight < _pos_five, (
+        "C1-Z2 v18.297:§八(📈 中期 總經拼圖) 應在 §五(短殺) 之前。"
+        f" 實際: §八={_pos_eight}, §五={_pos_five}"
+    )
+    # 9 section 完整順序:七→一→二→六→八→五→三→九→十一
+    _pos_nine   = src.find("section_header('九'")
+    _pos_eleven = src.find("section_header('十一'")
+    assert _pos_seven < _pos_one < _pos_six < _pos_eight < _pos_five < _pos_three < _pos_nine < _pos_eleven, (
+        "C1-Z2 v18.297:9 sections 物理順序應為 七→一→二→六→八→五→三→九→十一"
+    )
 
 
 @pytest.mark.slow

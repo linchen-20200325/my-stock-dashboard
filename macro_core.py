@@ -470,9 +470,13 @@ def fetch_macro_compass(range_: str = "6mo") -> dict:
     避開 yfinance 直連被 Streamlit Cloud IP 限流。失敗欄位填 None，UI 端優雅降級。
 
     Returns dict:
-      vix  : {'value', 'series', 'dates', 'signal':(light, label, color)} | None
+      vix  : {'value', 'series', 'dates', 'signal':(light, label, color),
+              'source', 'fetched_at'} | None
       tnx  : 同上                                                          | None
       gspc : 同上 + {'ma60', 'ma60_series'}                                | None
+
+    v18.295 S-PROV-1 phase 2:每個 ticker 的 dict 補 `source` + `fetched_at`
+    (從 fetch_yf_close 的 s.attrs 透傳),caller 無此欄位讀取者完全無感。
     """
     out: dict = {'vix': None, 'tnx': None, 'gspc': None}
 
@@ -506,6 +510,9 @@ def fetch_macro_compass(range_: str = "6mo") -> dict:
                 'series': [round(float(x), 2) for x in tail.tolist()],
                 'dates':  [d.strftime('%Y-%m-%d') for d in tail.index],
                 'signal': _sig_vix(v),
+                # v18.295 S-PROV-1 phase 2:provenance 透傳自 s.attrs
+                'source': s.attrs.get('source', 'Yahoo:^VIX'),
+                'fetched_at': s.attrs.get('fetched_at', ''),
             }
     except Exception as e:
         print(f'[macro_compass] VIX fetch failed: {e}')
@@ -521,6 +528,9 @@ def fetch_macro_compass(range_: str = "6mo") -> dict:
                 'series': [round(float(x), 3) for x in tail.tolist()],
                 'dates':  [d.strftime('%Y-%m-%d') for d in tail.index],
                 'signal': _sig_tnx(t),
+                # v18.295 S-PROV-1 phase 2:provenance 透傳自 s.attrs
+                'source': s.attrs.get('source', 'Yahoo:^TNX'),
+                'fetched_at': s.attrs.get('fetched_at', ''),
             }
     except Exception as e:
         print(f'[macro_compass] TNX fetch failed: {e}')
@@ -542,6 +552,9 @@ def fetch_macro_compass(range_: str = "6mo") -> dict:
                 'ma60_series': [None if pd.isna(x) else round(float(x), 2) for x in ma_tail.tolist()],
                 'dates': [d.strftime('%Y-%m-%d') for d in tail.index],
                 'signal': _sig_gspc(g, ma60),
+                # v18.295 S-PROV-1 phase 2:provenance 透傳自 s.attrs
+                'source': s.attrs.get('source', 'Yahoo:^GSPC'),
+                'fetched_at': s.attrs.get('fetched_at', ''),
             }
     except Exception as e:
         print(f'[macro_compass] GSPC fetch failed: {e}')
@@ -594,7 +607,9 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
                 print(f'[macro_core/PMI/FRED] ✅ {sid}={v} date={last_date}')
                 return {
                     'value': v, 'date': str(last_date), 'label': lbl,
-                    'source': 'FRED', 'is_proxy': False, 'series_id': sid,
+                    # S-PROV-1 v18.296 phase 3:source 帶 series ID(SSOT 精確度)
+                    'source': f'FRED:{sid}', 'is_proxy': False, 'series_id': sid,
+                    'fetched_at': pd.Timestamp.now('UTC').isoformat(),
                     'dates':  [str(pd.to_datetime(d).date()) for d in df['date']],
                     'values': [round(float(x), 1) for x in df['value']],
                 }
@@ -623,8 +638,10 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
                     print(f'[macro_core/PMI/MacroMicro] ✅ {v} date={date}')
                     return {'value': v, 'date': date,
                             'label': 'MacroMicro ISM PMI',
-                            'source': 'MacroMicro', 'is_proxy': False,
-                            'series_id': '950'}
+                            # S-PROV-1 v18.296 phase 3:source 帶 chart ID(SSOT 精確度)
+                            'source': 'MacroMicro:us-ism-mfg-pmi', 'is_proxy': False,
+                            'series_id': '950',
+                            'fetched_at': pd.Timestamp.now('UTC').isoformat()}
     except Exception as e:
         errs.append(f'MacroMicro:{type(e).__name__}')
         print(f'[macro_core/PMI/MacroMicro] ❌ {e}')
@@ -657,8 +674,10 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
                     print(f'[macro_core/PMI/ISM] ✅ {v} date={date or "?"}')
                     return {'value': v, 'date': date,
                             'label': 'ISM World Official',
-                            'source': 'ISM', 'is_proxy': False,
-                            'series_id': 'ismworld.org'}
+                            # S-PROV-1 v18.296 phase 3:source 帶 endpoint host
+                            'source': 'ISM:ismworld.org', 'is_proxy': False,
+                            'series_id': 'ismworld.org',
+                            'fetched_at': pd.Timestamp.now('UTC').isoformat()}
     except Exception as e:
         errs.append(f'ISM:{type(e).__name__}')
         print(f'[macro_core/PMI/ISM] ❌ {e}')
@@ -693,8 +712,10 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
                         print(f'[macro_core/PMI/DBnomics] ✅ {v} date={date}')
                         return {'value': v, 'date': date,
                                 'label': 'DBnomics ISM/pmi/pm',
-                                'source': 'DBnomics', 'is_proxy': False,
-                                'series_id': 'ISM/pmi/pm'}
+                                # S-PROV-1 v18.296 phase 3:source 帶 DBnomics dataset 路徑
+                                'source': 'DBnomics:ISM/pmi/pm', 'is_proxy': False,
+                                'series_id': 'ISM/pmi/pm',
+                                'fetched_at': pd.Timestamp.now('UTC').isoformat()}
                     else:
                         print(f'[macro_core/PMI/DBnomics] ⚠️ '
                               f'最新={period_str} v={v} age={age}d 不通過防呆')
@@ -722,8 +743,10 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
                     return {
                         'value': v, 'date': str(last_date),
                         'label': 'Phil Fed 製造業擴散（轉 PMI 刻度）',
-                        'source': 'PhilFed-Proxy', 'is_proxy': True,
+                        # S-PROV-1 v18.296 phase 3:source 帶 FRED series ID(proxy 標記)
+                        'source': f'FRED:{FRED_PHILLY_FED}:proxy', 'is_proxy': True,
                         'series_id': FRED_PHILLY_FED,
+                        'fetched_at': pd.Timestamp.now('UTC').isoformat(),
                         'dates':  [str(pd.to_datetime(d).date()) for d in df['date']],
                         'values': [round(float(x), 1) for x in df['value']],
                         'proxy_note': '⚠️ 替代指標：Phil Fed 製造業擴散指數，'
@@ -751,8 +774,10 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
                     return {
                         'value': v, 'date': str(last_date),
                         'label': 'OECD US Business Confidence (Proxy)',
-                        'source': 'OECD-Proxy', 'is_proxy': True,
+                        # S-PROV-1 v18.296 phase 3:source 帶 FRED series ID(proxy 標記)
+                        'source': f'FRED:{FRED_BSCICP02}:proxy', 'is_proxy': True,
                         'series_id': FRED_BSCICP02,
+                        'fetched_at': pd.Timestamp.now('UTC').isoformat(),
                         'dates':  [str(pd.to_datetime(d).date()) for d in df['date']],
                         'values': [round(float(x), 2) for x in df['value']],
                         'proxy_note': '⚠️ 替代指標：OECD 美國商業信心指數。'
@@ -767,7 +792,10 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 
     err_msg = ' | '.join(errs) or 'all 7 stages failed'
     print(f'[macro_core/PMI] ❌ 7 段備援全失敗：{err_msg}')
-    return {'_err_pmi': err_msg, 'value': None}
+    # S-PROV-1 v18.296 phase 3:err path 也帶 provenance(diagnostic 用途)
+    return {'_err_pmi': err_msg, 'value': None,
+            'source': 'ISM-PMI:all_7_stages_failed',
+            'fetched_at': pd.Timestamp.now('UTC').isoformat()}
 
 
 # ══════════════════════════════════════════════════════════════
