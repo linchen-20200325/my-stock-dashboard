@@ -597,18 +597,21 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
     # 載入後(_show_market_data=True)五桶才以真實燈色出現,符合「summarize 已載入資料」語意。
     if _show_market_data:
         try:
+            # C1-A v18.287:走 section_inputs.load_section_inputs SSOT,
+            # 後續 C1-B+ 其他 section 也接同個 helper,降低物理重排耦合。
             from macro_helpers import compute_five_bucket_summary
-            _wr5 = st.session_state.get('warroom_summary') or {}
+            from section_inputs import load_section_inputs
+            _inp = load_section_inputs(st.session_state)
             _5b = compute_five_bucket_summary(
-                macro_info=st.session_state.get('macro_info'),
-                mkt_info=st.session_state.get('mkt_info'),
-                warroom_summary=_wr5,
-                m1b_m2_info=st.session_state.get('m1b_m2_info'),
-                bias_info=st.session_state.get('bias_info'),
-                cl_data=st.session_state.get('cl_data'),
-                li_latest=st.session_state.get('li_latest'),
-                jingqi_info={'avg': _wr5.get('jingqi_avg')},
-                news_items=st.session_state.get('_macro_news_items'),
+                macro_info=_inp.macro_info,
+                mkt_info=_inp.mkt_info,
+                warroom_summary=_inp.warroom_summary,
+                m1b_m2_info=_inp.m1b_m2_info,
+                bias_info=_inp.bias_info,
+                cl_data=_inp.cl_data,
+                li_latest=_inp.li_latest,
+                jingqi_info=_inp.jingqi_info,
+                news_items=_inp.news_items,
             )
             st.markdown('#### 📊 總經五時域總結（長期 ｜ 中期 ｜ 短線急殺 ｜ 籌碼 ｜ 新聞）')
             render_five_bucket_bar(_5b)
