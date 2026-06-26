@@ -17,7 +17,12 @@
 """
 from __future__ import annotations
 
+import sys
+
 import pandas as pd
+
+# S-MED v18.304: 5 處 silent `except Exception:` 改 narrow + stderr log
+# 介面保留(None / (None, None) / dict),caller 不需改
 
 
 def calc_rsi(df, period=14):
@@ -31,7 +36,8 @@ def calc_rsi(df, period=14):
         rsi = 100 - (100 / (1 + rs))
         val = rsi.iloc[-1]
         return round(float(val), 1) if pd.notna(val) else None
-    except Exception:
+    except Exception as e:
+        print(f'[tech_indicators/calc_rsi] period={period} fail: {type(e).__name__}: {e}', file=sys.stderr)
         return None
 
 
@@ -45,7 +51,8 @@ def calc_ibs(df):
         if h == l:
             return 0.5
         return round((c - l) / (h - l), 3)
-    except Exception:
+    except Exception as e:
+        print(f'[tech_indicators/calc_ibs] fail: {type(e).__name__}: {e}', file=sys.stderr)
         return None
 
 
@@ -59,7 +66,8 @@ def calc_volume_ratio(df, period=5):
         if avg_vol == 0:
             return None
         return round(today_vol / avg_vol, 2)
-    except Exception:
+    except Exception as e:
+        print(f'[tech_indicators/calc_volume_ratio] period={period} fail: {type(e).__name__}: {e}', file=sys.stderr)
         return None
 
 
@@ -78,7 +86,8 @@ def calc_kd(df, period=9):
         if pd.isna(k_val) or pd.isna(d_val):
             return None, None
         return round(float(k_val), 1), round(float(d_val), 1)
-    except Exception:
+    except Exception as e:
+        print(f'[tech_indicators/calc_kd] period={period} fail: {type(e).__name__}: {e}', file=sys.stderr)
         return None, None
 
 
@@ -104,7 +113,8 @@ def calc_bollinger(df, window=20, mult=2):
             'price': round(float(df['close'].iloc[-1]), 2),
             'near_upper': float(df['close'].iloc[-1]) >= float(_u) * 0.97,
         }
-    except Exception:
+    except Exception as e:
+        print(f'[tech_indicators/calc_bollinger] window={window} fail: {type(e).__name__}: {e}', file=sys.stderr)
         return None
 
 

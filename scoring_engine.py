@@ -497,7 +497,10 @@ def calc_quality_score(quarterly_df=None) -> dict:
         return {'sq': sq, 'sq_label': sq_label,
                 'gm_trend': gm_trend, 'rev_trend': rev_trend,
                 'gm_level': round(gm_level, 1)}
-    except Exception:
+    except Exception as _e_sq:
+        # S-MED v18.304: silent → narrow + stderr log;return _empty (caller-safe)
+        import sys as _sys_sq
+        print(f'[scoring_engine/calc_quality_score] fail: {type(_e_sq).__name__}: {_e_sq}', file=_sys_sq.stderr)
         return _empty
 
 # ── 前瞻成長動能分數 (FGMS) ────────────────────────────────

@@ -31,7 +31,14 @@
 - [⛔ WONTFIX] **S-GRAY-2** `daily_checklist.py` 跨層拆檔 — 套 §-1:未實際 bug,user 仍在用無投訴。v18.265 結案
 - [⛔ WONTFIX] **S-GRAY-3** `app.py` 7,300 LOC 下沉 — 套 §-1:沒 bug、運作正常、重構風險 > 收益。v18.265 結案
 - [⛔ WONTFIX] **S-PROV-1 phase 19+** 剩餘 fetcher provenance — 套 §-1:邊際效益遞減,核心 40+ fetcher 已涵蓋。v18.265 結案
-- [ ] **S-MED** Bootstrap-audit 中項 81 條(M)— W5-1/W5-2 已收一輪;其餘**遵 §-1 等實際 bug 觸發再收**,不主動清
+- [⚙️] **S-MED** Bootstrap-audit 中項 81 條(M)— W5-1/W5-2 + **v18.304 Top-10 sweep** 已收兩輪:
+  * **v18.304(本批 10 項)**:
+    - `data_loader.py:872,1499` 2 處 bare `except: continue` → narrow + log
+    - `tech_indicators.py:34/48/62/81/107` 5 處 silent `except Exception:` → stderr log (calc_rsi/ibs/volume_ratio/kd/bollinger)
+    - `exit_signals.py:54,102` 2 處 silent → stderr log (_weekly_macd_turn_negative / compute_tech_bearish)
+    - `scoring_engine.py:500` 1 處 silent → stderr log (calc_quality_score)
+  * 介面 0 改;只把「失敗時靜默」改成「失敗時 stderr 留軌跡」,便於生產 debug
+  * 剩餘 ~71 條**遵 §-1 等實際 bug 觸發再收**,不主動清
 
 ---
 
