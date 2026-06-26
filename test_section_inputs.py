@@ -1,11 +1,14 @@
-"""test_section_inputs.py — C1-A/C1-B v18.287→v18.288 守衛
+"""test_section_inputs.py — C1-A/B/C v18.287→v18.289 守衛
 
 CLAUDE.md §8.1 配套:確保 section_inputs 抽出後 behavioral equivalence,
-caller(tab_macro 5 桶 summary + 戰情概覽)解 bundle 後與直接讀 session_state 完全等價。
+caller(tab_macro 5 桶 summary + 戰情概覽 + 今日作戰室)解 bundle 後與直接讀 session_state 完全等價。
 
 C1-B v18.288 升級:
 - jingqi_info 優先讀 session_state 真實 dict,fallback 合成 `{'avg': warroom['jingqi_avg']}`
 - 新增 last_inst 欄位
+
+C1-C v18.289 升級:
+- 新增 cl_ts(str)+ futures_net(int)欄位,匹配 evaluate_market_status_v4_final 介面
 """
 from __future__ import annotations
 
@@ -32,6 +35,9 @@ class TestLoadSectionInputsEquivalence:
         assert out.li_latest is None
         assert out.news_items is None
         assert out.last_inst is None
+        # C1-C v18.289:cl_ts 空字串,futures_net=0 為 fail-safe 預設(對齊原 int(...) or 0)
+        assert out.cl_ts == ''
+        assert out.futures_net == 0
         # jingqi_info 在 warroom 為空 dict + 無 session_state['jingqi_info'] → None
         # 對齊 §1 Fail Loud:無資料時不偽造空 dict
         assert out.jingqi_info is None
@@ -53,6 +59,8 @@ class TestLoadSectionInputsEquivalence:
             'li_latest': {'date': '2026-06-26'},
             '_macro_news_items': [{'title': 'A'}, {'title': 'B'}],
             '_last_inst': {'外資': {'net': 99}},
+            'cl_ts': '2026-06-26 17:00:00',
+            'futures_net': -5,
         }
         out = load_section_inputs(state)
         assert out.macro_info == {'us_core_cpi': {'yoy': 3.1}}
@@ -66,6 +74,9 @@ class TestLoadSectionInputsEquivalence:
         assert out.last_inst['外資']['net'] == 99
         # 無 session_state['jingqi_info'] → 合成 {'avg': warroom['jingqi_avg']}
         assert out.jingqi_info == {'avg': 28}
+        # C1-C
+        assert out.cl_ts == '2026-06-26 17:00:00'
+        assert out.futures_net == -5
 
     def test_jingqi_info_real_dict_preferred(self):
         """C1-B v18.288:session_state['jingqi_info'] 真實 dict 存在 → 優先用,
@@ -152,6 +163,51 @@ class TestOverviewSectionIntegration:
         # 對齊 tab_macro:675 `if _show_market_data and any([_ov_mkt, _ov_jq, _ov_cd])`
         gate_inputs = [out.mkt_info or {}, out.jingqi_info or {}, out.cl_data or {}]
         assert not any(gate_inputs), "全空時 gate 應為 False"
+
+
+class TestWarroomSectionIntegration:
+    """C1-C v18.289:今日作戰室 section 解 bundle 等價性。
+
+    對齊 tab_macro.py:723-738 原寫法。今日作戰室同時讀 6 keys + 走 v4 引擎。
+    """
+    def test_warroom_full_bundle(self):
+        state = {
+            'mkt_info': {'regime': 'bull', 'exposure_pct': 80},
+            'cl_data': {
+                'inst': {'外資': {'net': 32.1}},
+                'margin': 1500,
+                'adl': 1.05,
+            },
+            'bias_info': {'price': 17500, 'ma240': 16800, 'bias_240': 4.2},
+            'm1b_m2_info': {'gap': 0.8},
+            'cl_ts': '2026-06-26 17:00:00',
+            'futures_net': 1200,
+        }
+        out = load_section_inputs(state)
+        assert out.mkt_info['regime'] == 'bull'
+        assert out.cl_data['margin'] == 1500
+        assert out.cl_data['adl'] == 1.05
+        assert out.bias_info['price'] == 17500
+        assert out.bias_info['ma240'] == 16800
+        assert out.m1b_m2_info['gap'] == 0.8
+        assert out.cl_ts == '2026-06-26 17:00:00'
+        assert out.futures_net == 1200
+
+    def test_futures_net_coercion(self):
+        """futures_net 走 int(... or 0)幾種怪輸入:None / float / 字串數字 / 空字串。"""
+        assert load_section_inputs({'futures_net': None}).futures_net == 0
+        assert load_section_inputs({'futures_net': 1500}).futures_net == 1500
+        assert load_section_inputs({'futures_net': -250.7}).futures_net == -250
+        assert load_section_inputs({'futures_net': '300'}).futures_net == 300
+        assert load_section_inputs({'futures_net': ''}).futures_net == 0
+        assert load_section_inputs({'futures_net': 0}).futures_net == 0
+
+    def test_cl_ts_falsy_coerce_to_empty_str(self):
+        """cl_ts 走 str fallback,None / 缺值 / 空字串都回 ''(對齊 _wr_ts 原寫法)。"""
+        assert load_section_inputs({'cl_ts': None}).cl_ts == ''
+        assert load_section_inputs({}).cl_ts == ''
+        assert load_section_inputs({'cl_ts': ''}).cl_ts == ''
+        assert load_section_inputs({'cl_ts': '2026-06-26'}).cl_ts == '2026-06-26'
 
 
 class TestComputeFiveBucketIntegration:
