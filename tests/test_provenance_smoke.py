@@ -94,3 +94,41 @@ def test_yf_ohlcv_provenance_naming():
     assert "Yahoo:chart" in src, "fetch_yf_ohlcv source 命名須含 Yahoo:chart"
     # fetch_fred provenance(phase 1)
     assert 'FRED:' in src, "fetch_fred source 命名須含 FRED:"
+
+
+# ── 5. macro_core.fetch_macro_compass:provenance 透傳 ──
+def test_macro_compass_carries_provenance(monkeypatch):
+    """S-PROV-1 phase 2 v18.295 — fetch_macro_compass(成功 path)三 ticker dict
+    各 entry 須含 source + fetched_at(透傳自底層 fetch_yf_close 的 s.attrs)。"""
+    try:
+        import macro_core
+    except ImportError as e:
+        pytest.skip(f"macro_core import failed: {e}")
+
+    # 構造帶 attrs 的 fake Series(模擬 fetch_yf_close 回傳),
+    # 走 monkeypatch 替換 fetch_yf_close 避免真實 NAS proxy 抓取。
+    def _fake_yf_close(ticker, range_="2y", interval="1d"):
+        idx = pd.date_range("2026-01-01", periods=100, freq="D")
+        s = pd.Series(range(100), index=idx, dtype=float, name=ticker)
+        s.attrs["source"] = f"Yahoo:{ticker}"
+        s.attrs["fetched_at"] = "2026-06-26T12:00:00+00:00"
+        return s
+
+    monkeypatch.setattr(macro_core, "fetch_yf_close", _fake_yf_close, raising=True)
+
+    out = macro_core.fetch_macro_compass(range_="6mo")
+
+    # 三 ticker 各自有 dict
+    for key in ("vix", "tnx", "gspc"):
+        entry = out.get(key)
+        assert entry is not None, f"compass['{key}'] 應有 dict"
+        assert "source" in entry, f"compass['{key}'] 須有 source 欄"
+        assert "fetched_at" in entry, f"compass['{key}'] 須有 fetched_at 欄"
+        assert entry["source"].startswith("Yahoo:"), (
+            f"compass['{key}']['source'] 應以 'Yahoo:' 開頭,"
+            f"實際 = {entry['source']}"
+        )
+        assert entry["fetched_at"] == "2026-06-26T12:00:00+00:00", (
+            f"compass['{key}']['fetched_at'] 應透傳自 s.attrs,"
+            f"實際 = {entry['fetched_at']}"
+        )
