@@ -2129,7 +2129,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 }
 
             # ── 大盤/總經：國際、台股、科技指數（日更新，固定清單確保永遠顯示 20 筆）──
-            _cl_reg = st.session_state.get('cl_data', {})
+            # C1-F v18.292:整個 registry 區塊 10 處 session_state.get 收斂成 1 處 SectionInputs
+            from section_inputs import load_section_inputs as _load_si_reg
+            _reg_inp = _load_si_reg(st.session_state)
+            _cl_reg = _reg_inp.cl_data or {}
             _intl_d = _cl_reg.get('intl') or {}
             for _rn in INTL_MAP:
                 _rdf = _intl_d.get(_rn)
@@ -2170,8 +2173,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _reg_missing(_acname0, category='大盤', frequency='daily')
 
             # ── 三大法人 + 融資餘額（籌碼面，日更新）────────────────────
-            _cl_inst_reg = _cl_reg.get('inst') or st.session_state.get('_last_inst') or {}
-            _inst_date_reg = (_cl_reg.get('inst_date') or st.session_state.get('_last_inst_date'))
+            _cl_inst_reg = _cl_reg.get('inst') or (_reg_inp.last_inst or {})
+            _inst_date_reg = (_cl_reg.get('inst_date') or _reg_inp.last_inst_date)
             try:
                 _inst_ds = str(_inst_date_reg)[:10] if _inst_date_reg else 'N/A'
             except Exception:
@@ -2183,7 +2186,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _reg_new[_iname] = {'last_updated': _inst_ds, 'rows': 1, 'category': '大盤', 'frequency': 'daily'}
                 else:
                     _reg_missing(_iname, category='大盤', frequency='daily')
-            _margin_reg2 = _cl_reg.get('margin') or st.session_state.get('_last_margin')
+            _margin_reg2 = _cl_reg.get('margin') or _reg_inp.last_margin
             if _margin_reg2:
                 _reg_new['融資餘額（台股）'] = {'last_updated': _inst_ds, 'rows': 1, 'category': '大盤', 'frequency': 'daily'}
             else:
@@ -2191,19 +2194,19 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
             # ── 旌旗指數 + 乖離率（日更新）──────────────────────────────
             # 用 cl_ts 作為代理日期（這些指標沒有獨立時間戳）
-            _cl_ts_proxy = st.session_state.get('cl_ts', '')
+            _cl_ts_proxy = _reg_inp.cl_ts
             try:
                 import re as _re_ts_reg
                 _m_ts = _re_ts_reg.search(r'(\d{4}-\d{2}-\d{2})', _cl_ts_proxy)
                 _proxy_date = _m_ts.group(1) if _m_ts else 'N/A'
             except Exception:
                 _proxy_date = 'N/A'
-            _jq_reg3 = st.session_state.get('jingqi_info') or {}
+            _jq_reg3 = _reg_inp.jingqi_info or {}
             if _jq_reg3.get('avg') is not None:
                 _reg_new['旌旗指數（上漲佔比）'] = {'last_updated': _proxy_date, 'rows': 1, 'category': '大盤', 'frequency': 'daily'}
             else:
                 _reg_missing('旌旗指數（上漲佔比）', category='大盤', frequency='daily')
-            _bias_reg3 = st.session_state.get('bias_info') or {}
+            _bias_reg3 = _reg_inp.bias_info or {}
             for _bk, _bn in [('bias_240', 'TWII 年線乖離率'), ('bias_20', 'TWII 月線乖離率')]:
                 if _bias_reg3.get(_bk) is not None:
                     _reg_new[_bn] = {'last_updated': _proxy_date, 'rows': 1, 'category': '大盤', 'frequency': 'daily'}
@@ -2211,7 +2214,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _reg_missing(_bn, category='大盤', frequency='daily')
 
             # ── M1B / M2 貨幣資金（月更新）──────────────────────────────
-            _m1b_reg3 = st.session_state.get('m1b_m2_info') or {}
+            _m1b_reg3 = _reg_inp.m1b_m2_info or {}
             for _mk, _mn in [('m1b_yoy', 'M1B 資金活水年增率'), ('m2_yoy', 'M2 廣義貨幣年增率')]:
                 if _m1b_reg3.get(_mk) is not None:
                     _reg_new[_mn] = {'last_updated': _proxy_date, 'rows': 1, 'category': '大盤', 'frequency': 'monthly'}
@@ -2224,7 +2227,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 _reg_missing('M1B-M2 資金缺口', category='大盤', frequency='monthly')
 
             # ── 宏觀指標（月/日更新）────────────────────────────────────
-            _macro_reg3 = st.session_state.get('macro_info') or {}
+            _macro_reg3 = _reg_inp.macro_info or {}
             for _mkey, _mname, _mfreq in [
                 ('vix',         'VIX 波動率指數',      'daily'),
                 ('us_core_cpi', '美國核心CPI年增率',   'monthly'),
@@ -2247,7 +2250,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _reg_missing(_mname, category='大盤', frequency=_mfreq)
 
             # ── 先行指標：按來源拆 5 細項（大盤，日更新）────────────────
-            _li_reg = st.session_state.get('li_latest')
+            _li_reg = _reg_inp.li_latest
             _li_groups = {
                 '[先行指標] 三大法人現貨':    ['外資', '投信', '自營'],
                 '[先行指標] 外資期貨留倉':    ['外資大小'],
