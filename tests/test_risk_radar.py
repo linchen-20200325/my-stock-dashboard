@@ -53,6 +53,47 @@ class TestConstants:
         assert d["value"] is None
 
 
+class TestLevelCutoffConstants:
+    """v18.317 — level 型燈號 cut-off 抽 SSOT 常數（§3.3）。
+    守 ① 常數值 + 排序、② _signal_* 判讀確實用這組常數（邊界值驗證）。"""
+
+    def test_constants_values_and_order(self):
+        assert (rr.VIX_WARN_LEVEL, rr.VIX_PANIC_LEVEL) == (25.0, 30.0)
+        assert rr.VIX_WARN_LEVEL < rr.VIX_PANIC_LEVEL
+        assert (rr.VIX_TERM_WARN, rr.VIX_TERM_PANIC) == (1.00, 1.10)
+        assert rr.VIX_TERM_WARN < rr.VIX_TERM_PANIC
+        assert (rr.MOVE_WARN_LEVEL, rr.MOVE_PANIC_LEVEL) == (110.0, 130.0)
+        assert rr.MOVE_WARN_LEVEL < rr.MOVE_PANIC_LEVEL
+        assert (rr.PCR_WARN, rr.PCR_PANIC) == (1.00, 1.20)
+        assert rr.PCR_WARN < rr.PCR_PANIC
+
+    def test_vix_panic_boundary_uses_constant(self):
+        # 剛好 = PANIC（delta 不觸發：[29]*7 + [30] → +3.4%）→ 紅
+        with patch.object(rr, "fetch_yf_close",
+                          return_value=_yf([29.0] * 7 + [rr.VIX_PANIC_LEVEL])):
+            d = rr._signal_vix_level()
+        assert "🔴" in d["signal"]
+
+    def test_move_warn_boundary_uses_constant(self):
+        with patch.object(rr, "fetch_yf_close",
+                          return_value=_yf([100.0] * 7 + [rr.MOVE_WARN_LEVEL])):
+            d = rr._signal_move_level()
+        assert "🟡" in d["signal"]
+
+    def test_pcr_panic_boundary_uses_constant(self):
+        with patch.object(rr, "fetch_yf_close",
+                          return_value=_yf([1.0] * 7 + [rr.PCR_PANIC])):
+            d = rr._signal_put_call_ratio()
+        assert "🔴" in d["signal"]
+
+    def test_vix_term_warn_boundary_uses_constant(self):
+        # ratio = 20/20 = 1.00 = VIX_TERM_WARN → 黃
+        with patch.object(rr, "fetch_yf_close",
+                          side_effect=[_yf([20.0] * 8), _yf([20.0] * 8)]):
+            d = rr._signal_vix_term_struct()
+        assert "🟡" in d["signal"]
+
+
 # ──────────────────────────────────────────────────────────────
 # 1. VIX level
 # ──────────────────────────────────────────────────────────────

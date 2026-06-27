@@ -56,6 +56,25 @@ _RADAR_KEYS = (
     "asia_overnight",
 )
 
+# ════════════════════════════════════════════════════════════════
+# v18.317 — 雷達「level 型」燈號 cut-off（SSOT）
+# §3.3 反捏造：原本散在各 _signal_* 函式內的 inline magic number 抽成具名常數。
+# 同時供 ① 各 signal 函式的 lvl 判讀、② Tab 卡片 sparkline 的 SPEC 線
+# （tab_macro._radar_threshold_lines import 本區常數 → 燈色與 SPEC 線永遠同源）。
+#
+# 僅抽「trend 所繪量 == 判讀量」的 4 燈（VIX 級距 / VIX 期限 / MOVE / Put-Call）；
+# delta/結構型燈（10Y/SOX/sector/SPX/asia/HY-delta）trend 與判讀非同量，
+# 無 natural level 線，維持原 inline（不在本次 SPEC 線範圍，避免誤導）。
+# ════════════════════════════════════════════════════════════════
+VIX_WARN_LEVEL = 25.0       # VIX 絕對值 ≥ → 🟡 警戒
+VIX_PANIC_LEVEL = 30.0      # VIX 絕對值 ≥ → 🔴 警報（流動性危機）
+VIX_TERM_WARN = 1.00        # VIX/VIX3M ≥ → 🟡（後端逆轉，急殺前兆）
+VIX_TERM_PANIC = 1.10       # VIX/VIX3M ≥ → 🔴（極端 backwardation）
+MOVE_WARN_LEVEL = 110.0     # MOVE ≥ → 🟡（債券波動升高）
+MOVE_PANIC_LEVEL = 130.0    # MOVE ≥ → 🔴（債券恐慌）
+PCR_WARN = 1.00             # CBOE Put/Call ≥ → 🟡（偏空）
+PCR_PANIC = 1.20            # CBOE Put/Call ≥ → 🔴（散戶恐慌極端）
+
 
 def _color_from(level: int) -> str:
     return {0: GREEN, 1: YELLOW, 2: RED}.get(level, GRAY)
@@ -98,13 +117,14 @@ def _signal_vix_level() -> dict:
         cur = float(s.iloc[-1])
         prev = float(s.iloc[-2])
         delta_pct = (cur - prev) / prev * 100 if prev else 0.0
-        if cur >= 30 or delta_pct >= 20:
+        if cur >= VIX_PANIC_LEVEL or delta_pct >= 20:
             lvl = 2
-        elif cur >= 25 or delta_pct >= 10:
+        elif cur >= VIX_WARN_LEVEL or delta_pct >= 10:
             lvl = 1
         else:
             lvl = 0
-        note = f"VIX={cur:.1f}（單日 {delta_pct:+.1f}%）｜>30 或 +20% 為紅燈"
+        note = (f"VIX={cur:.1f}（單日 {delta_pct:+.1f}%）"
+                f"｜>{VIX_PANIC_LEVEL:.0f} 或 +20% 為紅燈")
         trend = [round(x, 2) for x in s.tail(8).tolist()]
         return _build(lvl, round(cur, 2), round(prev, 2), note,
                       "Yahoo ^VIX 日線", trend)
@@ -226,13 +246,14 @@ def _signal_vix_term_struct() -> dict:
         ratio = df["vix"] / df["v3m"]
         cur = float(ratio.iloc[-1])
         prev = float(ratio.iloc[-2])
-        if cur >= 1.10:
+        if cur >= VIX_TERM_PANIC:
             lvl = 2
-        elif cur >= 1.00:
+        elif cur >= VIX_TERM_WARN:
             lvl = 1
         else:
             lvl = 0
-        note = f"VIX/VIX3M={cur:.3f}｜>1 = 後端逆轉（急殺前兆）｜>1.1 = 紅燈"
+        note = (f"VIX/VIX3M={cur:.3f}｜>{VIX_TERM_WARN:.0f} = 後端逆轉（急殺前兆）"
+                f"｜>{VIX_TERM_PANIC:.2f} = 紅燈")
         trend = [round(x, 3) for x in ratio.tail(8).tolist()]
         return _build(lvl, round(cur, 3), round(prev, 3), note, _label, trend)
     except Exception as e:  # noqa: BLE001
@@ -311,13 +332,14 @@ def _signal_move_level() -> dict:
             return _empty("MOVE 抓取不足 2 筆", "Yahoo ^MOVE 日線")
         cur = float(s.iloc[-1])
         prev = float(s.iloc[-2])
-        if cur >= 130:
+        if cur >= MOVE_PANIC_LEVEL:
             lvl = 2
-        elif cur >= 110:
+        elif cur >= MOVE_WARN_LEVEL:
             lvl = 1
         else:
             lvl = 0
-        note = f"MOVE={cur:.1f}｜>130 = 紅燈（債券恐慌）｜>110 = 黃燈"
+        note = (f"MOVE={cur:.1f}｜>{MOVE_PANIC_LEVEL:.0f} = 紅燈（債券恐慌）"
+                f"｜>{MOVE_WARN_LEVEL:.0f} = 黃燈")
         trend = [round(x, 1) for x in s.tail(8).tolist()]
         return _build(lvl, round(cur, 1), round(prev, 1), note,
                       "Yahoo ^MOVE 日線", trend)
@@ -418,13 +440,14 @@ def _signal_put_call_ratio() -> dict:
             )
         cur = float(s.iloc[-1])
         prev = float(s.iloc[-2])
-        if cur >= 1.20:
+        if cur >= PCR_PANIC:
             lvl = 2
-        elif cur >= 1.00:
+        elif cur >= PCR_WARN:
             lvl = 1
         else:
             lvl = 0
-        note = f"Put/Call={cur:.2f}｜>1.2 = 紅燈（散戶恐慌極端）｜>1.0 = 黃燈"
+        note = (f"Put/Call={cur:.2f}｜>{PCR_PANIC:.1f} = 紅燈（散戶恐慌極端）"
+                f"｜>{PCR_WARN:.0f} = 黃燈")
         trend = [round(x, 2) for x in s.tail(8).tolist()]
         return _build(lvl, round(cur, 2), round(prev, 2), note, _label, trend)
     except Exception as e:  # noqa: BLE001

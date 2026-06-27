@@ -35,17 +35,115 @@ from tab_helpers import safe_get
 
 
 # ════════════════════════════════════════════════════════════════
+# v18.317 — 總經指標 sparkline 小卡（鏡像 fund tab1_macro v19.187）
+# 短線雷達 / 全球風險桶共用：燈號 + 值 + 白話 + mini sparkline + SPEC 線。
+# SPEC 線 cut-off import 自 risk_radar SSOT 常數 → 卡片燈色與 SPEC 線同源
+# （§3.3 反捏造：禁止 inline magic；threshold 與 _signal_* 判讀同一組常數）。
+# ════════════════════════════════════════════════════════════════
+def _radar_threshold_lines(key: str) -> list:
+    """回傳該 radar 信號 sparkline 的 SPEC threshold 線 [(y, dash, color, txt), ...]。
+
+    僅「trend 所繪量 == 判讀量」的 4 燈有 natural level 線（VIX 級距 / VIX 期限 /
+    MOVE / Put-Call）；其餘 delta/結構型燈（10Y/SOX/sector/SPX/亞夜/HY-delta）
+    trend 與判讀非同量，回 [] 不畫線（避免誤導）。cut-off 全 import 自 risk_radar SSOT。
+    """
+    try:
+        from risk_radar import (
+            VIX_WARN_LEVEL, VIX_PANIC_LEVEL,
+            VIX_TERM_WARN, VIX_TERM_PANIC,
+            MOVE_WARN_LEVEL, MOVE_PANIC_LEVEL,
+            PCR_WARN, PCR_PANIC,
+        )
+    except Exception:
+        return []
+    if key == 'vix_level':
+        return [(VIX_WARN_LEVEL, 'dot', '#d29922', f'警戒 {VIX_WARN_LEVEL:.0f}'),
+                (VIX_PANIC_LEVEL, 'dash', '#f85149', f'恐慌 {VIX_PANIC_LEVEL:.0f}')]
+    if key == 'vix_term_struct':
+        return [(VIX_TERM_WARN, 'dot', '#d29922', f'倒掛 {VIX_TERM_WARN:.2f}'),
+                (VIX_TERM_PANIC, 'dash', '#f85149', f'極端 {VIX_TERM_PANIC:.2f}')]
+    if key == 'move_level':
+        return [(MOVE_WARN_LEVEL, 'dot', '#d29922', f'警戒 {MOVE_WARN_LEVEL:.0f}'),
+                (MOVE_PANIC_LEVEL, 'dash', '#f85149', f'恐慌 {MOVE_PANIC_LEVEL:.0f}')]
+    if key == 'put_call_ratio':
+        return [(PCR_WARN, 'dot', '#d29922', f'偏空 {PCR_WARN:.1f}'),
+                (PCR_PANIC, 'dash', '#f85149', f'恐慌 {PCR_PANIC:.1f}')]
+    return []
+
+
+def _make_radar_sparkline(trend: list, key: str, color: str):
+    """產生 radar 卡用的迷你 sparkline + SPEC threshold 線。trend < 2 筆 → None。"""
+    if not trend or len(trend) < 2:
+        return None
+    try:
+        import plotly.graph_objects as _go_r
+        _fig = _go_r.Figure()
+        _fig.add_trace(_go_r.Scatter(
+            y=trend, mode='lines+markers',
+            line=dict(color=color, width=2),
+            marker=dict(size=4, color=color),
+            showlegend=False,
+            hovertemplate='%{y:.2f}<extra></extra>',
+        ))
+        for _y, _dash, _lcolor, _txt in _radar_threshold_lines(key):
+            _fig.add_hline(
+                y=_y, line_dash=_dash, line_color=_lcolor, line_width=1.2,
+                opacity=0.65, annotation_text=_txt,
+                annotation_position='top right',
+                annotation_font=dict(size=8, color=_lcolor),
+            )
+        _fig.update_layout(
+            height=70, margin=dict(l=2, r=2, t=2, b=2),
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            xaxis=dict(visible=False, fixedrange=True),
+            yaxis=dict(visible=False, fixedrange=True),
+            showlegend=False,
+        )
+        return _fig
+    except Exception:
+        return None
+
+
+def _render_macro_indicator_card(title: str, signal: str, color: str,
+                                 value_str: str, note: str, label: str,
+                                 trend, spark_key: str) -> None:
+    """通用總經指標卡（燈號 + 值 + 白話 + mini sparkline + SPEC 線）。
+    **須在 `with st.columns(...)[i]:` 容器內呼叫**。spark_key 決定 SPEC 線（無則純線）。
+    """
+    st.markdown(
+        f"<div style='background:#0d1117;border:2px solid {color};"
+        f"border-radius:10px;padding:10px 12px 6px;margin:4px 0;min-height:150px;"
+        f"display:flex;flex-direction:column;justify-content:space-between'>"
+        f"<div>"
+        f"<div style='color:#888;font-size:10px;letter-spacing:1px'>{title}</div>"
+        f"<div style='color:{color};font-size:15px;font-weight:800;margin:4px 0 6px'>{signal}</div>"
+        f"<div style='color:#fff;font-weight:700;font-size:14px'>值 {value_str}</div>"
+        f"</div>"
+        f"<div style='color:#aaa;font-size:9px;border-top:1px solid #30363d;"
+        f"padding-top:4px;margin-top:4px;line-height:1.3'>{note}"
+        f"<br/><span style='color:#555'>{label}</span></div>"
+        f"</div>", unsafe_allow_html=True)
+    _sp = _make_radar_sparkline(trend, spark_key, color)
+    if _sp is not None:
+        st.plotly_chart(_sp, use_container_width=True,
+                        key=f"mcard_sp_{spark_key}",
+                        config={"displayModeBar": False})
+
+
+# ════════════════════════════════════════════════════════════════
 # v18.172 全球風險雷達（10 燈短線急殺訊號）— 鏡像 fund v19.20
-# 設計：與紅綠燈卡（慢總經）互補，補 1～5 日動量/情緒/位階訊號
+# v18.317：原頂部「10 燈格子」改為比照基金的 🌍 全球風險「桶」(群組 banner +
+# 整體狀態 bar + sparkline 小卡 + Raw 細節收合 + 雙速合議)，並從總覽頂部下移
+# 至「短線急殺」桶之後(全球視角接續本土短線)。資料源仍為 risk_radar。
 # AppTest 保護門：fred_api_key < 30 字元 → 完全跳過（避開 4×~15s 序列 HTTP）
 # ════════════════════════════════════════════════════════════════
-def _render_global_risk_radar(fred_api_key: str = "",
-                              slow_verdict: dict | None = None) -> None:
-    """渲染 10 燈短線風險雷達（VIX / VIX/3M / HY OAS / 10Y / MOVE / SPX DMA /
-    SOX / Sector / P/C / Asia 夜盤）+ 整體 level banner + 細節 expander。
+def _render_global_risk_bucket(fred_api_key: str = "",
+                               slow_verdict: dict | None = None) -> None:
+    """渲染 🌍 全球風險桶：10 燈短線雷達（VIX / VIX/3M / HY OAS / 10Y / MOVE /
+    SPX DMA / SOX / Sector / P/C / Asia 夜盤）改桶卡片樣式。
 
     v18.173：若 slow_verdict 提供（dict with level/score/color/icon/action），
-    於 10 燈之下渲染「🤝 雙速合議」banner — 慢總經 verdict × 短線雷達 level
+    於卡片之下渲染「🤝 雙速合議」banner — 慢總經 verdict × 短線雷達 level
     → 單一行動建議（adopt_slow / downgrade_1 / downgrade_2 / override_defense）。"""
     # AppTest 保護門：測試環境 key 通常 <30 字元 → 直接跳過避開 HTTP 撞 timeout
     if not fred_api_key or len(str(fred_api_key).strip()) < 30:
@@ -62,11 +160,11 @@ def _render_global_risk_radar(fred_api_key: str = "",
         st.warning(f'⚠️ 風險雷達抓取失敗：{type(_e_rd).__name__}: {_e_rd}')
         return
 
-    st.markdown(
-        '#### 📡 全球風險雷達 — 10 燈短線急殺訊號',
-        help='1～5 日動量/情緒/位階訊號，與上方慢總經紅綠燈互補。'
-             '紅燈 ≥4 = 極端警報；紅燈 ≥2 = 警報；紅+黃 ≥4 = 警戒'
-    )
+    # ── 🌍 全球風險桶群組 banner（與其他桶一致的分隔條）──
+    from shared.macro_buckets import bucket_group_banner_html as _bgb_g
+    st.markdown(_bgb_g('global', 0), unsafe_allow_html=True)
+
+    # ── 整體狀態 bar（沿用 summarize_radar 的 10 燈計數）──
     _banner_txt = (
         f'🔴 {_rs["red"]}　🟡 {_rs["yellow"]}　🟢 {_rs["green"]}　⬜ {_rs["gray"]}'
     )
@@ -74,15 +172,16 @@ def _render_global_risk_radar(fred_api_key: str = "",
         f'<div style="background:#0d1117;border:2px solid {_rs["color"]};'
         f'border-radius:8px;padding:10px 14px;margin:4px 0 10px 0;">'
         f'<div style="color:#8b949e;font-size:12px;margin-bottom:4px;">'
-        f'⚡ 短線雷達整體狀態（10 燈）</div>'
+        f'⚡ 短線雷達整體狀態（10 燈）｜1～5 日動量/情緒/位階，與本土短線急殺互補</div>'
         f'<div style="color:{_rs["color"]};font-size:20px;font-weight:700;">'
         f'{_rs["level"]}</div>'
-        f'<div style="color:#c9d1d9;font-size:13px;margin-top:6px;">{_banner_txt}</div>'
+        f'<div style="color:#c9d1d9;font-size:13px;margin-top:6px;">{_banner_txt}'
+        f'　<span style="color:#8b949e;">紅 ≥4 極端警報 / ≥2 警報 / 紅+黃 ≥4 警戒</span></div>'
         f'</div>',
         unsafe_allow_html=True,
     )
 
-    # 10 燈 grid — 5 cols × 2 rows
+    # ── sparkline 小卡（10 燈，3/row）──
     _light_labels = {
         'vix_level':       'VIX 級距',
         'vix_term_struct': 'VIX/3M',
@@ -96,25 +195,24 @@ def _render_global_risk_radar(fred_api_key: str = "",
         'asia_overnight':  '亞洲夜盤',
     }
     _keys = list(_light_labels.keys())
-    for _row_start in (0, 5):
-        _cols = st.columns(5)
-        for _i, _k in enumerate(_keys[_row_start:_row_start + 5]):
+    for _row_start in range(0, len(_keys), 3):
+        _cols = st.columns(3)
+        for _i, _k in enumerate(_keys[_row_start:_row_start + 3]):
             _lt = _radar.get(_k) or {}
-            _sig = _lt.get('signal', '⬜')
+            _sig = _lt.get('signal', '⬜ 無資料')
+            _color = _lt.get('color', '#888')
             _val = _lt.get('value')
             _val_txt = f'{_val}' if _val is not None else '—'
+            _note = _lt.get('note', '—')
+            _src = _lt.get('label', '—')
+            _trend = _lt.get('trend') or []
             with _cols[_i]:
-                st.markdown(
-                    f'<div style="background:#0d1117;border-left:4px solid {_lt.get("color","#888")};'
-                    f'border-radius:4px;padding:6px 10px;margin:2px 0;">'
-                    f'<div style="color:#8b949e;font-size:11px;">{_light_labels[_k]}</div>'
-                    f'<div style="color:#e6edf3;font-size:14px;font-weight:600;">{_sig}</div>'
-                    f'<div style="color:#8b949e;font-size:11px;margin-top:2px;">{_val_txt}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
+                _render_macro_indicator_card(
+                    title=_light_labels[_k], signal=_sig, color=_color,
+                    value_str=_val_txt, note=_note, label=_src,
+                    trend=_trend, spark_key=_k)
 
-    with st.expander('📡 10 燈細節 — 每燈觸發解釋 + 資料源', expanded=False):
+    with st.expander('🌍 10 燈細節 — 每燈觸發解釋 + 資料源', expanded=False):
         for _k, _label in _light_labels.items():
             _lt = _radar.get(_k) or {}
             _src = _lt.get('label', '—')
@@ -659,13 +757,17 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
     except Exception as _e_lts:
         print(f'[tab_macro/長短期雙視角] {type(_e_lts).__name__}: {_e_lts}')
 
-    # ── v18.172/v18.173 📡 全球風險雷達 + 🤝 雙速合議 ──────────────────
+    # ── v18.172/v18.173 全球風險雷達資料準備（render 已下移）──────────────
+    # v18.317：10 燈雷達 render 從總覽頂部下移至「短線急殺」桶之後的 🌍 全球風險桶
+    # （見下方 _render_global_risk_bucket 呼叫）。此處僅備妥 _rr_fred_key / _slow_v，
+    # 並 pre-init 以保證下移後的呼叫點變數必定存在（即使本 try 中途 raise）。
+    _rr_fred_key = ''
+    _slow_v = None
     try:
         _rr_fred_key = (os.environ.get('FRED_API_KEY') or
                         (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
         # v18.173：把 v18.171 dual-view 算出的長期 regime _lt 映射成 slow_verdict
         # 校準：_cls_lt score 範圍 ~[-2,+2]，乘 5 對齊 fund synth 期望的 ~[-10,+10]
-        _slow_v = None
         if _lt and isinstance(_lt, dict) and _lt.get('regime'):
             _reg = str(_lt['regime'])
             _icon = _reg.split()[0] if _reg.split() else '⚪'
@@ -676,11 +778,6 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
                 'icon':   _icon,
                 'action': f"{_lt.get('detail','')}；建議持股 {_lt.get('suggest_pct','--')}",
             }
-        # v18.285：未載入資料(尚無快取/快取過期)時不渲染雷達 — 對齊紅綠燈「尚無資料」狀態。
-        # 雷達原本會在按「🚀 一鍵更新全部數據」前就跑獨立 FRED/Yahoo fetch + 顯示面板,
-        # 與上方「燈號等待中」矛盾。改 gate 在 _show_market_data 後,與紅綠燈同步出現。
-        if _show_market_data:
-            _render_global_risk_radar(_rr_fred_key, slow_verdict=_slow_v)
     except Exception as _e_rr:
         print(f'[tab_macro/risk_radar] {type(_e_rr).__name__}: {_e_rr}')
 
@@ -718,9 +815,10 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
                 unsafe_allow_html=True)
             render_five_bucket_bar(_5b)
             # v18.310：下方各桶已加「桶群組 banner」分隔(取代純文字目錄)，此處保留簡短導航
+            # v18.317：🌍 全球風險桶(10 燈雷達)插在 ⚡ 短線急殺 與 🧩 籌碼 之間
             st.caption(
-                "📑 下方深度分析依此 5 桶順序排列，每桶有醒目分隔 banner："
-                "🌳 長期 → 📈 中期 → ⚡ 短線急殺 → 🧩 籌碼 → 🧠 AI 綜合決策"
+                "📑 下方深度分析依桶順序排列，每桶有醒目分隔 banner："
+                "🌳 長期 → 📈 中期 → ⚡ 短線急殺 → 🌍 全球風險 → 🧩 籌碼 → 🧠 AI 綜合決策"
             )
             st.divider()
         except Exception as _e_5b:
@@ -4090,6 +4188,14 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
     st.markdown('<hr style="border-color:#21262d;margin:8px 0;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:4px 0;">🌐 國際市場</div>', unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════════════════════
+    # 🌍 全球風險桶（v18.317：10 燈短線雷達從總覽頂部下移至此，本土短線急殺 → 全球視角）
+    #   資料源 risk_radar.detect_risk_radar；render gate 對齊其他桶（_show_market_data）。
+    # ════════════════════════════════════════════════════════════════════
+    if _show_market_data:
+        _render_global_risk_bucket(_rr_fred_key, slow_verdict=_slow_v)
+
     # ════════════════════════════════════════════════════════════════════
     # 三、大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標
     # ════════════════════════════════════════════════════════════════════

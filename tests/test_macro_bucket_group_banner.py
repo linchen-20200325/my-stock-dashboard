@@ -43,6 +43,16 @@ def test_bucket_badge_shows_index():
     assert "桶 1/5" in h
 
 
+def test_global_group_renders():
+    """v18.317 🌍 全球風險群組(10 燈雷達改桶)— 與 ai 同走特例 meta,badge=雷達。"""
+    h = bucket_group_banner_html("global", 0)
+    assert BUCKET_GROUP_COLOR["global"] in h
+    assert "🌍" in h
+    assert "全球風險" in h
+    assert "雷達" in h   # global badge 用「雷達」非「桶 N/5」
+    assert "桶 0/5" not in h
+
+
 def test_bad_key_fail_loud():
     with pytest.raises(KeyError):
         bucket_group_banner_html("nonexistent", 1)

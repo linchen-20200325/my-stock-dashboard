@@ -1,4 +1,4 @@
-"""v18.173 雙速合議 UI 接線測試 — _render_global_risk_radar slow_verdict 路徑。
+"""v18.173 雙速合議 UI 接線測試 — _render_global_risk_bucket slow_verdict 路徑。
 
 驗證重點：
 1. slow_verdict=None → 不渲染合議 banner（純 10 燈雷達）
@@ -77,13 +77,13 @@ class TestSlowVerdictNone:
         """slow_verdict=None → 10 燈渲染但不呼叫 synth banner。"""
         with patch('risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
              patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
-            tab_macro._render_global_risk_radar(_FRED_KEY, slow_verdict=None)
+            tab_macro._render_global_risk_bucket(_FRED_KEY, slow_verdict=None)
 
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
                     if c.args and isinstance(c.args[0], str)]
         joined = ' '.join(md_calls)
         # 應渲染雷達 heading 但不渲染合議 banner
-        assert '全球風險雷達' in joined
+        assert '全球風險' in joined  # v18.317 桶 banner 標題
         assert '雙速合議' not in joined
 
 
@@ -96,7 +96,7 @@ class TestSlowVerdictProvided:
         # 所有 yf 抓平靜資料 → 雷達應為平靜
         with patch('risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
              patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
-            tab_macro._render_global_risk_radar(_FRED_KEY,
+            tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_calm_slow_v())
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
                     if c.args and isinstance(c.args[0], str)]
@@ -117,7 +117,7 @@ class TestSlowVerdictProvided:
 
         with patch('risk_radar.fetch_yf_close', side_effect=_yf_red), \
              patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
-            tab_macro._render_global_risk_radar(_FRED_KEY,
+            tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_calm_slow_v())
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
                     if c.args and isinstance(c.args[0], str)]
@@ -144,7 +144,7 @@ class TestSlowVerdictProvided:
 
         with patch('risk_radar.fetch_yf_close', side_effect=_yf_red), \
              patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.82])):  # HY +32bp 紅
-            tab_macro._render_global_risk_radar(_FRED_KEY,
+            tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_calm_slow_v())
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
                     if c.args and isinstance(c.args[0], str)]
@@ -163,7 +163,7 @@ class TestSlowVerdictDefense:
         partial = {'level': '🟡 過熱期'}  # 缺 score/color/icon/action
         with patch('risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
              patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
-            tab_macro._render_global_risk_radar(_FRED_KEY, slow_verdict=partial)
+            tab_macro._render_global_risk_bucket(_FRED_KEY, slow_verdict=partial)
         # 不爆即 pass — 應仍渲染合議 banner
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
                     if c.args and isinstance(c.args[0], str)]
@@ -176,13 +176,13 @@ class TestSlowVerdictDefense:
              patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])), \
              patch('risk_radar.synthesize_dual_verdict',
                    side_effect=RuntimeError('synth boom')):
-            tab_macro._render_global_risk_radar(_FRED_KEY,
+            tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_calm_slow_v())
         # 雷達 heading 應該仍渲染（10 燈在 synth 之前）
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
                     if c.args and isinstance(c.args[0], str)]
         joined = ' '.join(md_calls)
-        assert '全球風險雷達' in joined
+        assert '全球風險' in joined  # v18.317 桶 banner 標題
         # 但合議 banner 因例外而沒渲染
         assert '雙速合議' not in joined
 
@@ -195,7 +195,7 @@ class TestAppTestGuardWithSlowVerdict:
         """短 key + slow_verdict → 仍然完全跳過渲染（不執行任何 markdown）。"""
         with patch('risk_radar.fetch_yf_close') as _m_yf, \
              patch('risk_radar.fetch_fred') as _m_fred:
-            tab_macro._render_global_risk_radar('short', slow_verdict=_calm_slow_v())
+            tab_macro._render_global_risk_bucket('short', slow_verdict=_calm_slow_v())
             _m_yf.assert_not_called()
             _m_fred.assert_not_called()
         stub_st.markdown.assert_not_called()
@@ -221,7 +221,7 @@ class TestWarningBranchWithSlowVerdict:
 
         with patch('risk_radar.fetch_yf_close', side_effect=_yf_yellow), \
              patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
-            tab_macro._render_global_risk_radar(_FRED_KEY,
+            tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_calm_slow_v())
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
                     if c.args and isinstance(c.args[0], str)]
@@ -245,7 +245,7 @@ class TestWarningBranchWithSlowVerdict:
 
         with patch('risk_radar.fetch_yf_close', side_effect=_yf_yellow), \
              patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
-            tab_macro._render_global_risk_radar(_FRED_KEY,
+            tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_bear_slow_v())
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
                     if c.args and isinstance(c.args[0], str)]
