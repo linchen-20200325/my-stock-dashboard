@@ -26,6 +26,7 @@ from shared.signal_thresholds import (
     MULTIFACTOR_ENTRY_MIN,
 )
 from tab_helpers import (
+    classify_trend_4tier,
     final_recommendation,
     format_condition_emoji,
     parse_cash_flow_ratio,
@@ -228,16 +229,8 @@ def render_stock_grp():
                 health4, _ = calc_health_score(df4, rsi4, ibs4, vr4, k4, d4, bb4)
                 grade4, grade_color4, _, emoji4 = health_grade(health4)
 
-                if ma20_4 and ma100_4 and price4 > ma20_4 > ma100_4:
-                    trend4 = '📈多頭'
-                elif ma20_4 and ma100_4 and price4 < ma20_4 < ma100_4:
-                    trend4 = '📉空頭'
-                elif ma100_4 and price4 > ma100_4:
-                    trend4 = '📊多箱'
-                elif price4 > 0:
-                    trend4 = '📊空箱'
-                else:
-                    trend4 = '⚪無資料'
+                # v18.328 PR-C P1:4 段趨勢判定走 SSOT(個股 Tab K 線註解共用同函式)
+                trend4, _ = classify_trend_4tier(price4, ma20_4, ma100_4)
 
                 val4 = '⚪無股利'
                 if avg_div4 > 0 and price4 > 0:
