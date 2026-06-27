@@ -934,34 +934,18 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
     # v18.286:_on_refresh_click 已在 render_tab_macro 開頭定義(empty state 共用)
 
-    cb1, cb2 = st.columns([5, 5])
-    with cb1:
-        # [v10.55.0] 合併雙按鈕為單一「一鍵更新」— 解決原「更新總經」+「載入籌碼面」雙按鈕造成的 UX 混淆
-        do_refresh = st.button('🚀 一鍵更新全部數據（總經 + 籌碼 + 先行指標）',
-                               key='cl_refresh',
-                               on_click=_on_refresh_click, use_container_width=True,
-                               type='primary',
-                               help='點此一次抓取所有總經、籌碼、先行指標資料（約 30~50 秒）— 冷啟動為避免逾時，預設只載入輕量資料')
-        # 點下時同步啟用 chips_loaded（讓 Phase 2 lazy-load 改成 full-load）
-        if do_refresh:
-            st.session_state['chips_loaded'] = True
-            st.session_state.pop('cl_data', None)  # 強制重抓含籌碼版
-    with cb2:
-        _chips_loaded = st.session_state.get('chips_loaded', False)
-        if _chips_loaded:
-            st.markdown(
-                f'<div style="font-size:12px;color:{TRAFFIC_GREEN};text-align:center;'
-                'padding:8px;border:1px solid #21262d;border-radius:6px;background:#0d1117;">'
-                '✅ 籌碼面已載入<br>'
-                '<span style="font-size:10px;color:#8b949e;">下次點按鈕即重新抓取</span></div>',
-                unsafe_allow_html=True)
-        else:
-            st.markdown(
-                '<div style="font-size:12px;color:#8b949e;text-align:center;'
-                'padding:8px;border:1px dashed #30363d;border-radius:6px;background:#0d1117;">'
-                '⏸️ 籌碼面尚未載入<br>'
-                '<span style="font-size:10px;color:#484f58;">點左側按鈕即可載入</span></div>',
-                unsafe_allow_html=True)
+    # v18.312：移除「✅ 籌碼面已載入 / ⏸️ 尚未載入」狀態框(user 反饋「多一個按鈕」感),
+    # 按鈕改全寬單欄。籌碼載入狀態改由按鈕下方時間戳列 + 各 section empty state 表達。
+    # [v10.55.0] 合併雙按鈕為單一「一鍵更新」— 解決原「更新總經」+「載入籌碼面」雙按鈕 UX 混淆
+    do_refresh = st.button('🚀 一鍵更新全部數據（總經 + 籌碼 + 先行指標）',
+                           key='cl_refresh',
+                           on_click=_on_refresh_click, use_container_width=True,
+                           type='primary',
+                           help='點此一次抓取所有總經、籌碼、先行指標資料（約 30~50 秒）— 冷啟動為避免逾時，預設只載入輕量資料')
+    # 點下時同步啟用 chips_loaded（讓 Phase 2 lazy-load 改成 full-load）
+    if do_refresh:
+        st.session_state['chips_loaded'] = True
+        st.session_state.pop('cl_data', None)  # 強制重抓含籌碼版
 
     # ── 時間戳列（合併按鈕後從 cb3 移到下方獨立一行） ──
     _now_ts = _tw_now_str()
