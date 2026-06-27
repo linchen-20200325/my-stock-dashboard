@@ -26,7 +26,7 @@ from shared.stock_buckets import render_stock_toc_html, section_header_html
 from shared.thresholds import YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC
 from shared.ttls import TTL_1DAY
 # v18.325 PR-C: 健康度分級 + 龍頭資本支出門檻改用既有 SSOT（原 inline，§3.3 反捏造）
-from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN, HEALTH_LABEL_MID_MIN
+from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
 from shared.signal_thresholds import CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT
 from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
 
@@ -1137,7 +1137,7 @@ padding:14px 18px;margin-bottom:12px;">
         if health2 >= HEALTH_GRADE_A_MIN:
             _ha = f'健康度 {health2:.0f}分，技術面強勢'
             _hb = '確認大盤方向後可建倉，停損設月線下方'
-        elif health2 >= HEALTH_LABEL_MID_MIN:
+        elif health2 >= HEALTH_GRADE_B_MIN:
             _ha = f'健康度 {health2:.0f}分，中性偏多，尚未達進場標準'
             _hb = '等待突破80分或放量突破前高再行動'
         else:

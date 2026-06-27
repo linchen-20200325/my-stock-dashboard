@@ -573,23 +573,25 @@ financial_health 因 prompt/code 雙表徵 + 真漂移 → SSOT 有「修 bug」
 | `MARGIN_BALANCE_WARN_THRESHOLD_YI` | 2500 | 融資黃線（daily_checklist + tab_macro 4 處） |
 | `BREADTH_BULL/NEUTRAL/BEAR_PCT` | 60/40/20 | 市場廣度 jq_ratio/ADL regime（tab_macro 多處） |
 | `TNX_VALUATION_PRESSURE_PCT` / `TNX_NEUTRAL_PCT` | 4.5 / 3.5 | macro_compass 殖利率燈號（保行為） |
-| `HEALTH_LABEL_MID_MIN` | 60 | 個股 tab 健康度標籤中間級 |
 
 **唯一行為變動（user 核准）**：`macro_compass._sig_vix` 黃線 **25→22**，複用
 `MACRO_THRESHOLDS['VIX']`，對齊 C2（v19.157-160）全站統一黃線 22。macro_compass 原為 C2 漏網。
 
-### §15.3 ⚠️ 分歧旗標（各自具名保行為，待 user 決定是否統一）
+### §15.3 ✅ 分歧統一收斂（PR-E v18.327，user MK 邏輯拍板「全面對齊標準值」）
 
-PR-D 過程發現 3 組同概念門檻在不同卡片用不同值。本版**各自具名保行為**並登記於此，待統一：
+PR-D 過程發現 3 組同概念門檻在不同卡片用不同值（會讓使用者看到自打架結論，如 health2=55
+標籤顯示弱勢、評語卻說可分批布局）。user 2026-06-27 依 MK（郭俊宏）風險邏輯**全面對齊標準值**，
+移除分歧變體常數，行為變動如下：
 
-| 概念 | 標準值 | 分歧值 | 分歧位置 | 對應常數 |
+| 概念 | 統一值 | 原分歧值 → | 位置 | MK 依據 |
 |---|---|---|---|---|
-| 融資黃線 | 2500 | **2800** | tab_macro「SQL 邏輯卡片」(4289) | `MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI` |
-| 廣度黃線 | 40（regime 中性線） | **30** | tab_macro 全市場健康度 beginner KPI(880) | `BREADTH_KPI_YELLOW_PCT` |
-| 健康度中間級 | 50（`HEALTH_GRADE_B_MIN` 評語/分級） | **60** | tab_stock 標籤(1137) | `HEALTH_LABEL_MID_MIN` |
+| 健康度中間級 | **50**（`HEALTH_GRADE_B_MIN`） | 60 下修 | tab_stock 標籤(1137) | 50 = 經典榮枯線（PMI 擴張/衰退界），標籤與評語一致 |
+| 融資黃線 | **2500**（`MARGIN_BALANCE_WARN_THRESHOLD_YI`） | 2800 下修 | tab_macro SQL 卡片(4289) | 籌碼面提早預警，更早捕捉散戶過度樂觀 |
+| 廣度黃線 | **40**（`BREADTH_NEUTRAL_PCT`） | 30 上修 | tab_macro 全市場健康度 KPI(880) | 與 regime 中性線對齊，提供預警緩衝區 |
 
-→ 三者皆「同一指標、不同卡片用不同門檻」，使用者可能看到不一致結論（如 health2=55 標籤顯示
-弱勢、評語卻說可分批布局）。**建議統一**，但屬行為變動，留待 user 點頭後另案處理。
+- 分歧變體常數（`MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI` / `BREADTH_KPI_YELLOW_PCT` /
+  `HEALTH_LABEL_MID_MIN`）已**全數移除**，標籤與評語/regime 從此一致，無語意矛盾。
+- `tests/test_ssot_b_class_guard.py::TestDivergenceHarmonized` 守「分歧常數已移除 + 消費端走標準值」。
 
 ### §15.4 TNX vs US10Y 刻意不同源（非分歧，設計）
 
