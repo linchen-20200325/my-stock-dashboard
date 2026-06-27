@@ -53,6 +53,26 @@ def test_global_group_renders():
     assert "桶 0/5" not in h
 
 
+def test_pivot_and_cashflow_groups_render():
+    """v18.321 🔮 拐點 / 💵 現金流向 群組 banner(分組化收尾)— 特例 meta + 自訂 badge。"""
+    hp = bucket_group_banner_html("pivot", 0)
+    assert BUCKET_GROUP_COLOR["pivot"] in hp
+    assert "🔮" in hp and "拐點" in hp and "拐點" in hp
+    assert "桶 0/5" not in hp
+    hc = bucket_group_banner_html("cashflow", 0)
+    assert BUCKET_GROUP_COLOR["cashflow"] in hc
+    assert "💵" in hc and "現金流向" in hc and "金流" in hc
+    assert "桶 0/5" not in hc
+
+
+def test_tab_macro_inserts_pivot_cashflow_banners():
+    """tab_macro 必須在拐點 + 現金流向區塊插入 group banner。"""
+    import tab_macro
+    src = open(tab_macro.__file__, encoding="utf-8").read()
+    assert "_bgb_pv('pivot'" in src, "tab_macro 缺 🔮 拐點 banner"
+    assert "_bgb_cf('cashflow'" in src, "tab_macro 缺 💵 現金流向 banner"
+
+
 def test_bad_key_fail_loud():
     with pytest.raises(KeyError):
         bucket_group_banner_html("nonexistent", 1)
