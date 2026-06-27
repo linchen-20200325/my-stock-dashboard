@@ -21,7 +21,8 @@ from shared.stock_buckets import (
 
 
 def test_section_order_complete():
-    assert STOCK_SECTION_ORDER == ["entry", "tech", "fundamental", "financials", "ai"]
+    # v18.308 PR-D：chips 升級為一級可導航桶（介於 tech 與 fundamental）
+    assert STOCK_SECTION_ORDER == ["entry", "tech", "chips", "fundamental", "financials", "ai"]
     for k in STOCK_SECTION_ORDER:
         assert k in STOCK_SECTION_META
         meta = STOCK_SECTION_META[k]
@@ -44,6 +45,16 @@ def test_toc_has_all_anchors():
     for k in STOCK_SECTION_ORDER:
         assert f'#{STOCK_SECTION_META[k]["anchor"]}' in toc
     assert toc.count('<a href="#sec-') == len(STOCK_SECTION_ORDER)
+
+
+def test_chips_is_navigable_bucket():
+    """v18.308 PR-D：籌碼為一級桶，有獨立 anchor + TOC chip。"""
+    assert "chips" in STOCK_SECTION_ORDER
+    h = section_header_html("chips")
+    assert 'id="sec-chips"' in h
+    assert "籌碼定位" in h
+    toc = render_stock_toc_html()
+    assert "#sec-chips" in toc
 
 
 def test_color_override():
