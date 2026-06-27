@@ -500,11 +500,30 @@ def render_tab_macro():
         _bps, _fetch_macro_news, _get_fm_token, _tw_now_str, gemini_call,
     )
 
-    # ── on_click handler(提前定義,供 empty state + 主流程共用)──
-    def _on_refresh_click():
-        """on_click callback：全清快取（pickle + st.cache_data + proxy URL cache
-        + 總經相關 session_state），確保拿到真正最新資料，零殘留。
+    # ── on_click handlers(提前定義,供主流程共用)──
+    def _macro_session_reset():
+        """pop 總經相關 session_state keys（scoped）。
+
+        v18.329：**只清總經自己的 session_state**，不碰其他 tab 的 @st.cache_data
+        快取。正常更新走此路徑＝吃既有 TTL 暖快取，秒級且不拖累個股 / ETF / 健診頁。
         """
+        for _k in ('cl_data', 'cl_ts', 'mkt_info', 'jingqi_info', 'li_latest',
+                   'warroom_summary', '_last_inst', '_last_inst_date',
+                   '_last_margin', 'futures_net', 'adl_debug_msg'):
+            st.session_state.pop(_k, None)
+        st.session_state['_is_refreshing'] = True
+
+    def _on_refresh_click():
+        """正常更新 on_click：只清總經 session_state，吃既有 @st.cache_data TTL 暖快取。
+
+        v18.329：移除原本的全站 `st.cache_data.clear()`（會炸掉個股 / ETF / 健診的
+        快取，導致每次更新總經後全站都要冷啟重抓 → 又慢又奇怪）。要零殘留改用下方
+        『🆕 強制重抓』。對齊 Fund `clear_tab1_macro_caches` 的 scoped 行為。
+        """
+        _macro_session_reset()
+
+    def _on_force_clear_click():
+        """強制重抓 on_click：全清 pkl + st.cache_data + proxy URL cache + 總經 session_state。"""
         try:
             from daily_checklist import _pkl_clear_all
             _pkl_clear_all()
@@ -512,22 +531,18 @@ def render_tab_macro():
             print(f'[Cache] pkl clear failed: {_e_clr}')
         try:
             st.cache_data.clear()
-            print('[Cache] 🗑️ st.cache_data cleared')
+            print('[Cache] 🗑️ st.cache_data cleared (force)')
         except Exception as _e_sc:
             print(f'[Cache] st.cache_data clear failed: {_e_sc}')
         try:
             import proxy_helper as _ph_clr
             _ph_clr._URL_CACHE.clear()
             _ph_clr.reset_proxy_cache()
-            print('[Cache] 🗑️ proxy URL cache + config cache cleared')
+            print('[Cache] 🗑️ proxy URL cache + config cache cleared (force)')
         except Exception as _e_ph:
             print(f'[Cache] proxy clear failed: {_e_ph}')
-        for _k in ('cl_data', 'cl_ts', 'mkt_info', 'jingqi_info', 'li_latest',
-                   'warroom_summary', '_last_inst', '_last_inst_date',
-                   '_last_margin', 'futures_net', 'adl_debug_msg'):
-            st.session_state.pop(_k, None)
-        print('[Cache] 🗑️ session_state macro keys cleared')
-        st.session_state['_is_refreshing'] = True
+        _macro_session_reset()
+        print('[Cache] 🗑️ 強制重抓：全快取清除完成')
 
     # ── Empty state gate(v18.286)──────────────────────────────
     # 對齊 Fund tab1 行為:未載入總經資料前只顯示標題+按鈕,避免說明卡擾人
@@ -545,8 +560,20 @@ def render_tab_macro():
         on_click=_on_refresh_click,
         use_container_width=True,
         type='primary',
-        help='點此一次抓取所有總經、籌碼、先行指標資料（約 30~50 秒）— 冷啟動為避免逾時，預設只載入輕量資料',
+        help='抓取總經 / 籌碼 / 先行指標（吃 30 分內暖快取，通常數秒；冷啟動約 30~50 秒）。'
+             'v18.329：不再清掉個股 / ETF / 健診等其他頁快取。',
     )
+    # v18.329：強制重抓另立按鈕（對齊 Fund「🆕 強制重抓最新（清快取）」）。
+    # 正常更新走暖快取＝快；要零殘留才按這顆（會一併清掉其他頁快取，較慢）。
+    do_force = st.button(
+        '🆕 強制重抓最新（清快取）',
+        key='cl_force_refresh',
+        on_click=_on_force_clear_click,
+        use_container_width=True,
+        help='完全清除快取（pkl + st.cache_data + proxy）後重抓，確保零殘留；'
+             '較慢，且會一併清掉個股 / ETF 等其他頁快取。',
+    )
+    do_refresh = bool(do_refresh or do_force)
     if do_refresh:
         st.session_state['chips_loaded'] = True
         st.session_state.pop('cl_data', None)
