@@ -16,6 +16,20 @@ import requests
 from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
+# v18.323: MJ 財報體檢門檻從 shared SSOT 引入（§3.3 反捏造）。
+# prompt 文字仍保留人類可讀數字，由 tests/test_financial_health_ssot.py golden test 釘住一致。
+from shared.financial_health_thresholds import (
+    MJ_CASH_RATIO_SAFE_PCT, MJ_CASH_RATIO_WATCH_PCT,
+    MJ_DSO_FAST_DAYS, MJ_DSO_SLOW_DAYS,
+    MJ_CASHFLOW_RATIO_MIN_PCT, MJ_CASHFLOW_ADEQUACY_MIN_PCT, MJ_CASH_REINVEST_MIN_PCT,
+    MJ_DEBT_RATIO_EXCELLENT_PCT, MJ_DEBT_RATIO_PASS_PCT, MJ_DEBT_RATIO_WARN_PCT,
+    MJ_LONG_TERM_FUNDING_MIN_PCT,
+    MJ_CURRENT_RATIO_MIN_PCT, MJ_QUICK_RATIO_MIN_PCT,
+    MJ_GROSS_MARGIN_GOOD_PCT, MJ_MOS_STRONG_PCT, MJ_NET_MARGIN_PASS_PCT,
+    MJ_ROE_LEVERAGE_CHECK_PCT, MJ_DUPONT_LEVERAGE_DEBT_PCT,
+    MJ_EARNINGS_QUALITY_MIN_PCT,
+)
+
 
 # ── Survival Module Prompt（存活能力：3大生死指標）──────────
 _SURVIVAL_PROMPT = """\
@@ -143,7 +157,7 @@ _PROFITABILITY_PROMPT = """\
 
 ## 1. 營業毛利率 (Gross Margin)
 - 計算：毛利(千) / 營業收入(千)
-- 判定：> 20% (Good)；≤ 20% (Hard Work)。
+- 判定：> 40% (Good)；≤ 40% (Hard Work)。
 
 ## 2. 營業利益率 (Operating Margin)
 - 計算：營業利益(千) / 營業收入(千)
@@ -162,7 +176,7 @@ _PROFITABILITY_PROMPT = """\
 - 計算：稅後淨利(千) / 股東權益(千)
 - 判定：> 20% (Top Tier)；10%~20% (Good)；< 10% (Weak)。
 - 防呆：若 ROE > 15%，強制檢查負債比率(%)。
-  - 負債比 > 60% → Leverage_Warning = "High Debt Ratio (>60%)"
+  - 負債比 > 65% → Leverage_Warning = "High Debt Ratio (>65%)"
   - 其他 → Leverage_Warning = "None"
 
 # Input Data
@@ -178,7 +192,7 @@ _PROFITABILITY_PROMPT = """\
     "Operating_Margin": {{"Value": "XX.X%", "Core_Business_Profitable": "Yes | No"}},
     "Margin_Of_Safety": {{"Value": "XX.X%", "Status": "Strong | Weak"}},
     "Net_Margin": {{"Value": "XX.X%", "Status": "Pass | Thin Profit | Fail"}},
-    "ROE": {{"Value": "XX.X%", "Leverage_Warning": "None | High Debt Ratio (>60%)"}},
+    "ROE": {{"Value": "XX.X%", "Leverage_Warning": "None | High Debt Ratio (>65%)"}},
     "Final_Insight": "綜合短評（50字以內，點出最關鍵的獲利品質特徵）"
   }}
 }}"""
@@ -305,9 +319,9 @@ def _extract_json(raw: str) -> dict:
 def _derive_basic_from_fin_data(fin_data: dict) -> dict:
     """當 AI 失效但 fin_data 有效時，從原始財報數據直接計算基本指標。"""
     cash_pct = fin_data.get("現金佔總資產(%)", 0) or 0
-    if cash_pct >= 25:
+    if cash_pct >= MJ_CASH_RATIO_SAFE_PCT:
         cash_icon = "🟢"
-    elif cash_pct >= 10:
+    elif cash_pct >= MJ_CASH_RATIO_WATCH_PCT:
         cash_icon = "🟡"
     else:
         cash_icon = "🔴"
@@ -331,9 +345,9 @@ def _derive_basic_from_fin_data(fin_data: dict) -> dict:
     if not debt_pct:
         debt_icon = "⚪"
         debt_pct = 0
-    elif debt_pct <= 40:
+    elif debt_pct <= MJ_DEBT_RATIO_EXCELLENT_PCT:
         debt_icon = "🟢"
-    elif debt_pct <= 60:
+    elif debt_pct <= MJ_DEBT_RATIO_PASS_PCT:
         debt_icon = "🟡"
     else:
         debt_icon = "🔴"
@@ -369,9 +383,10 @@ def _derive_basic_from_fin_data(fin_data: dict) -> dict:
         return 20
 
     radar = {
-        "存活能力": _score(cash_pct, [(25, 80), (10, 60)]),
+        # MJ 生死關門檻走 SSOT；其餘為 radar 估分曲線斷點（單用途，保 inline）
+        "存活能力": _score(cash_pct, [(MJ_CASH_RATIO_SAFE_PCT, 80), (MJ_CASH_RATIO_WATCH_PCT, 60)]),
         "經營能力": _score(ap_days - ar_days if ar_days > 0 else -999, [(10, 80), (0, 60), (-30, 40)]),
-        "獲利能力": _score(gm, [(40, 80), (20, 60), (10, 40)]),
+        "獲利能力": _score(gm, [(MJ_GROSS_MARGIN_GOOD_PCT, 80), (20, 60), (10, 40)]),
         "財務結構": _score(100 - debt_pct if debt_pct > 0 else -999, [(60, 80), (40, 60), (20, 40)]),
         "償債能力": 60 if ocf_k > 0 else 30,
     }
@@ -394,13 +409,13 @@ def _derive_basic_from_fin_data(fin_data: dict) -> dict:
 
 def _no_ai_survival(fd: dict) -> dict:
     cash = fd.get("現金佔總資產(%)", 0) or 0
-    cr_st = "Pass" if cash >= 25 else ("Acceptable" if cash >= 10 else "Fail")
+    cr_st = "Pass" if cash >= MJ_CASH_RATIO_SAFE_PCT else ("Acceptable" if cash >= MJ_CASH_RATIO_WATCH_PCT else "Fail")
     ar = fd.get("應收帳款天數", 0) or 0
     # ar=0 代表資料查無，而非真的 0 天；用 N/A 避免誤判為 Pass
     if ar == 0:
         dso_st, dso_val = "N/A", "N/A (資料不足)"
     else:
-        dso_st = "Pass" if ar < 15 else ("Acceptable" if ar <= 90 else "Fail")
+        dso_st = "Pass" if ar < MJ_DSO_FAST_DAYS else ("Acceptable" if ar <= MJ_DSO_SLOW_DAYS else "Fail")
         dso_val = f"{ar:.1f} 天"
     ocf = fd.get("OCF(千)", 0) or 0
     cl = fd.get("流動負債(千)", 0) or 0
@@ -411,7 +426,7 @@ def _no_ai_survival(fd: dict) -> dict:
     inv = fd.get("存貨(千)", 0) or 0
     inv_p = fd.get("存貨前期(千)", 0) or 0
     a_val = round(ocf / cl * 100, 1) if cl > 0 else None
-    a_st = ("Pass" if a_val and a_val > 100 else "Fail") if a_val is not None else "N/A"
+    a_st = ("Pass" if a_val and a_val > MJ_CASHFLOW_RATIO_MIN_PCT else "Fail") if a_val is not None else "N/A"
     # B項：現金流量允當比率
     # 1. 呼叫端預填 5 年精確值（fetch_5_years_cash_flow）→ 優先採用
     # 2. 預填 status=error（API 失敗）→ N/A，避免單季誤導
@@ -422,7 +437,7 @@ def _no_ai_survival(fd: dict) -> dict:
     if _b5_status == "ok" and _b5.get("ratio") is not None:
         b_val     = _b5["ratio"]
         b_display = _b5["label"]                          # e.g. "127.3%（5年實際）"
-        b_st      = "Pass" if b_val >= 100 else "Fail"
+        b_st      = "Pass" if b_val >= MJ_CASHFLOW_ADEQUACY_MIN_PCT else "Fail"
     elif _b5_status == "insufficient_data":
         b_val, b_display, b_st = None, f"N/A（{_b5.get('label','上市未滿5年')}）", "Fail"
     elif _b5_status == "error":
@@ -435,9 +450,9 @@ def _no_ai_survival(fd: dict) -> dict:
         else:
             b_val = round(ocf / _b_denom * 100, 1)
             b_display = f"{b_val:.1f}%(1Q估)"
-            b_st = "Pass" if b_val >= 100 else "Fail"
+            b_st = "Pass" if b_val >= MJ_CASHFLOW_ADEQUACY_MIN_PCT else "Fail"
     c_val = round((ocf - div) / (ppe + lt) * 100, 1) if (ppe + lt) > 0 else None
-    c_st = ("Pass" if c_val and c_val > 10 else "Fail") if c_val is not None else "N/A"
+    c_st = ("Pass" if c_val and c_val > MJ_CASH_REINVEST_MIN_PCT else "Fail") if c_val is not None else "N/A"
     rule_st = "Pass" if (a_st in ("Pass", "N/A") and b_st in ("Pass", "N/A") and c_st in ("Pass", "N/A")) else "Fail"
     verdict = f"Cash={cr_st} DSO={dso_st} 100-100-10={rule_st}（無AI，原始計算）"
     return {"Survival_Module": {
@@ -504,11 +519,12 @@ def _no_ai_profitability(fd: dict) -> dict:
     nm_val = "N/A (rev 單位異常)" if _bad_nm else f"{nm:.1f}%"
     mos_val = "N/A (rev 單位異常)" if _bad_om else f"{mos:.1f}%"
     return {"Profitability_Module": {
-        "Gross_Margin": {"Value": f"{gm:.1f}%", "Status": "Good" if gm >= 40 else "Average"},
+        "Gross_Margin": {"Value": f"{gm:.1f}%", "Status": "Good" if gm >= MJ_GROSS_MARGIN_GOOD_PCT else "Average"},
         "Operating_Margin": {"Value": om_val, "Core_Business_Profitable": "N/A" if _bad_om else ("Yes" if om > 0 else "No")},
-        "Margin_Of_Safety": {"Value": mos_val, "Status": "N/A" if _bad_om else ("Strong" if mos >= 20 else ("Acceptable" if mos >= 0 else "Weak"))},
-        "Net_Margin": {"Value": nm_val, "Status": "N/A" if _bad_nm else ("Pass" if nm >= 10 else ("Thin Profit" if nm >= 0 else "Loss"))},
-        "ROE": {"Value": f"{roe:.1f}%", "Leverage_Warning": "槓桿膨脹警報" if roe > 15 and debt > 65 else "None"},
+        # v18.323 漂移修正：安全邊際 Strong 線 20→60（對齊 MJ 經典標準，保三階）
+        "Margin_Of_Safety": {"Value": mos_val, "Status": "N/A" if _bad_om else ("Strong" if mos >= MJ_MOS_STRONG_PCT else ("Acceptable" if mos >= 0 else "Weak"))},
+        "Net_Margin": {"Value": nm_val, "Status": "N/A" if _bad_nm else ("Pass" if nm >= MJ_NET_MARGIN_PASS_PCT else ("Thin Profit" if nm >= 0 else "Loss"))},
+        "ROE": {"Value": f"{roe:.1f}%", "Leverage_Warning": "槓桿膨脹警報" if roe > MJ_ROE_LEVERAGE_CHECK_PCT and debt > MJ_DUPONT_LEVERAGE_DEBT_PCT else "None"},
         "Final_Insight": "原始數據直接計算（無 AI 分析）",
     }}
 
@@ -545,7 +561,7 @@ def _no_ai_financial_structure(fd: dict) -> dict:
             lt_st, lt_val = "N/A", "N/A (股東權益資料異常)"
         else:
             lt_ratio = round((eq + lt_liab) / ppe * 100, 1)
-            lt_st = "Pass" if lt_ratio >= 100 else "Fail"
+            lt_st = "Pass" if lt_ratio >= MJ_LONG_TERM_FUNDING_MIN_PCT else "Fail"
             lt_val = f"{lt_ratio:.1f}%"
     else:
         lt_st, lt_val = "Pass", "N/A (輕資產)"
@@ -555,7 +571,7 @@ def _no_ai_financial_structure(fd: dict) -> dict:
     elif debt == 0:
         debt_st, debt_val = "N/A", "N/A (負債資料不足)"
     else:
-        debt_st = "Pass" if debt < 60 else ("Warning" if debt <= 70 else "Fail")
+        debt_st = "Pass" if debt < MJ_DEBT_RATIO_PASS_PCT else ("Warning" if debt <= MJ_DEBT_RATIO_WARN_PCT else "Fail")
         debt_val = f"{debt:.1f}%"
     return {"Financial_Structure_Module": {
         "Debt_Ratio": {"Value": debt_val, "Status": debt_st},
@@ -580,14 +596,14 @@ def _no_ai_solvency(fd: dict) -> dict:
         }}
     cr = round(ca / cl * 100, 1)
     qr = round((ca - inv) / cl * 100, 1)
-    cr_st = "Pass" if cr > 300 else "Fail_Initial"
-    qr_st = "Pass" if qr > 150 else "Fail_Initial"
+    cr_st = "Pass" if cr > MJ_CURRENT_RATIO_MIN_PCT else "Fail_Initial"
+    qr_st = "Pass" if qr > MJ_QUICK_RATIO_MIN_PCT else "Fail_Initial"
     cross = cr_st == "Fail_Initial" or qr_st == "Fail_Initial"
     if not cross:
         verdict, cv = "Pass", "No"
-    elif cash_pct > 25:
+    elif cash_pct > MJ_CASH_RATIO_SAFE_PCT:
         verdict, cv = "Exception_Pass (條件A：現金充足)", "Yes"
-    elif 0 < ar_days <= 15:
+    elif 0 < ar_days <= MJ_DSO_FAST_DAYS:
         verdict, cv = "Exception_Pass (條件B：天天收現)", "Yes"
     else:
         verdict, cv = "Fail", "Yes"
@@ -613,10 +629,10 @@ def _no_ai_advanced_diagnostic(fd: dict) -> dict:
         eq_val, eq_st = "N/A (本業虧損，不適用此指標)", "N/A"
     else:
         eq_pct = round(ocf / ni * 100, 1)
-        eq_val, eq_st = f"{eq_pct:.1f}%", "Pass" if eq_pct >= 100 else "Fail"
+        eq_val, eq_st = f"{eq_pct:.1f}%", "Pass" if eq_pct >= MJ_EARNINGS_QUALITY_MIN_PCT else "Fail"
     roe = round((ni * 4) / eq * 100, 1) if eq > 0 else 0  # 年化：單季 NI × 4
-    dupont = ("槓桿膨脹警報" if roe > 15 and debt > 65 else
-              ("健康成長" if roe > 15 else
+    dupont = ("槓桿膨脹警報" if roe > MJ_ROE_LEVERAGE_CHECK_PCT and debt > MJ_DUPONT_LEVERAGE_DEBT_PCT else
+              ("健康成長" if roe > MJ_ROE_LEVERAGE_CHECK_PCT else
                ("ROE 偏低，成長動能不足" if roe > 0 else "⚠️ ROE 為負，本業虧損")))
     if ar_chg is not None and rev_chg is not None and inv_p > 0:
         inv_chg = round((inv - inv_p) / abs(inv_p) * 100, 1)

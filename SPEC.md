@@ -476,3 +476,42 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 ### §12.4 版面（維持）
 
 - 上方 = 整體結論（⑤ 最終綜合建議 teacher_conclusion）；下方 = Raw 明細（③④ 排行表 / 🏥 批次財報體檢）+ 🤖 AI 綜合判讀，**已符合**「上結論／下 Raw+AI」，本次不重排。
+
+## §13 MJ 財報體檢門檻 SSOT + 3 漂移修正（`financial_health_engine.py`，v18.323）
+
+> user 2026-06-27 深層 SSOT 第 1 階段（PR-A）。`financial_health_engine.py` 的 MJ
+> 「4 力 1 棒子 + 現金流矩陣」門檻原同時硬寫在 **AI prompt 文字** 與 **6 個 `_no_ai_*`
+> fallback 計算**兩處。本節為審計結論與決策紀錄。SSOT 落於 `shared/financial_health_thresholds.py`。
+
+### §13.1 SSOT 化策略（prompt 與 code 雙表徵）
+
+- **code 端**（6 個 `_no_ai_*` + `_derive_basic_from_fin_data`）：inline 數字 → `import` 常數，消滅計算端 magic number。
+- **prompt 端**：MJ 門檻數字寫在自然語言 prompt 內（如「Pass (綠燈)：>= 25%」），**不** f-string 模板化（避免破壞既有 `{{ }}` JSON 轉義、降低 AI 解析風險）；改由 `tests/test_financial_health_ssot.py` **golden test** 釘住「prompt 文字內數值 == SSOT 常數」，任一邊漂移測試即紅。
+- radar 估分曲線（`_derive` 的 `_score`）僅 MJ 生死關門檻（現金 25/10、毛利 Good 40）走 SSOT，其餘 radar 專屬曲線斷點屬單用途，保 inline。
+
+### §13.2 MJ 門檻常數表（`shared/financial_health_thresholds.py`）
+
+| 常數 | 值 | 用途 |
+|---|---|---|
+| `MJ_CASH_RATIO_SAFE_PCT` / `_WATCH_PCT` | 25 / 10 | 氣長（現金/總資產）安全/注意線 |
+| `MJ_DSO_FAST_DAYS` / `_SLOW_DAYS` | 15 / 90 | 收現速度（DSO）快/慢線；亦為償債交叉驗證條件 B |
+| `MJ_CASHFLOW_RATIO_MIN_PCT` / `_ADEQUACY_MIN_PCT` / `MJ_CASH_REINVEST_MIN_PCT` | 100 / 100 / 10 | 現金流自給「100-100-10 法則」A/B/C |
+| `MJ_DEBT_RATIO_EXCELLENT_PCT` / `_PASS_PCT` / `_WARN_PCT` | 40 / 60 / 70 | 負債結構：優秀/安全/警戒線 |
+| `MJ_LONG_TERM_FUNDING_MIN_PCT` | 100 | 以長支長比率 |
+| `MJ_CURRENT_RATIO_MIN_PCT` / `MJ_QUICK_RATIO_MIN_PCT` | 300 / 150 | 流動/速動比率（MJ 極嚴標準） |
+| `MJ_GROSS_MARGIN_GOOD_PCT` | 40 | 毛利率 Good 線（**漂移2修正**） |
+| `MJ_MOS_STRONG_PCT` | 60 | 經營安全邊際 Strong 線（**漂移3修正**） |
+| `MJ_NET_MARGIN_PASS_PCT` | 10 | 稅後淨利率 Pass 線 |
+| `MJ_ROE_LEVERAGE_CHECK_PCT` | 15 | ROE 槓桿防呆觸發線 |
+| `MJ_DUPONT_LEVERAGE_DEBT_PCT` | 65 | 杜邦槓桿膨脹警報負債門檻（**漂移1修正**，與結構線 60 刻意分離） |
+| `MJ_EARNINGS_QUALITY_MIN_PCT` | 100 | 盈餘品質（OCF/淨利） |
+
+### §13.3 3 處漂移收斂決策（git blame 證實同 commit `4ebe5bc` 手誤、非後期調參）
+
+| 漂移 | prompt vs code | 決策 | no-AI 輸出影響 |
+|---|---|---|---|
+| **1. 負債槓桿警報** | prof prompt 60 vs prof code 65（advanced 兩端皆 65） | **名稱分離**：一般負債結構安全線 `MJ_DEBT_RATIO_PASS_PCT=60`（不同用途）與杜邦槓桿警報 `MJ_DUPONT_LEVERAGE_DEBT_PCT=65` 各自具名；修 prof prompt 60→65 對齊其 code + advanced | 無（僅 AI prompt 文字對齊） |
+| **2. 毛利率 Good** | prompt >20% vs code >=40% | **對齊 40%**（保 code 現值，修 prompt 20→40），合 MJ「高毛利才是護城河」 | 無（AI 變嚴格） |
+| **3. 安全邊際 Strong** | prompt >60% vs code >=20% | **對齊 60%**（MJ 經典：安全邊際>60% 表毛利衰退 40% 本業仍不虧；修 code bug 20→60，保三階 Strong/Acceptable/Weak） | 20–60% MOS 由 Strong→Acceptable |
+
+- golden test `tests/test_financial_health_ssot.py` 守 3 漂移修正 + prompt/code 一致；`tests/test_financial_health_engine.py` 既有負債 45→Pass / 65→Warning / 75→Fail 邊界不受影響（仍釘 60/70）。

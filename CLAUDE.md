@@ -269,6 +269,7 @@ class DataPoint:
 | `_CPI_THRESHOLD` (merrill clock) | 2.0% | merrill_clock.py:56 | ✅ named const |
 | `ANNUAL_MA` | 240 trading days | config.py:14 | ✅ SSOT |
 | `signal_thresholds.*`（26 個語意常數） | 252 / 健康評分加權 / 4 個 TW 麥邊閾值 / VIX/Foreign futures / ATR%/MA20/合約負債/ETF 折溢價 / Recession logit / PMI 有效範圍 / merge_asof 40d / trend lookback 6 / **個股組合操作狀態燈(量縮/近20MA/乖離過熱)+多因子評級(A75/B55)+入選70+利空信心50** 等 | shared/signal_thresholds.py v18.241+v18.242+v18.322 | ✅ SSOT（v18.241 群 E 收 13 + v18.242 W3b 補 6 + v18.322 補 7:個股組合 SSOT 化 + 退役舊評分,詳見 SPEC §12） |
+| `financial_health_thresholds.MJ_*`（19 個 MJ 門檻） | 現金 25/10 / DSO 15/90 / 100-100-10 / 負債 40/60/70 / 流動·速動 300/150 / 毛利 40 / 安全邊際 60 / 淨利 10 / ROE 15 / 杜邦槓桿 65 / 盈餘品質 100 等 | shared/financial_health_thresholds.py v18.323 | ✅ SSOT（financial_health_engine 6 個 `_no_ai_*` code 端引入；prompt 端由 golden test 釘一致；含 3 漂移修正,詳見 SPEC §13） |
 
 ❌ 標記 **0 項**(原 8 項已全數 W3a/W3b 收斂)。
 
