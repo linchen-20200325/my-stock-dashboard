@@ -129,3 +129,37 @@ def safe_ma(df: pd.DataFrame, n: int) -> float:
     if len(df) >= n:
         return float(df['close'].tail(n).mean())
     return float(df['close'].mean())
+
+
+def classify_trend_4tier(price: float, ma20: float | None,
+                          ma_long: float | None) -> tuple[str, str]:
+    """v18.328 PR-C P1:4 段趨勢判定 SSOT(個股 Tab + 組合 Tab 共用)。
+
+    4 段邏輯(price = current, ma20 / ma_long = 兩條均線):
+    - price > ma20 > ma_long  → 多頭(MA 多頭排列)
+    - price < ma20 < ma_long  → 空頭(MA 空頭排列)
+    - price > ma_long (但非多頭排列) → 多箱(站上長均但短均未多頭)
+    - 其他 → 空箱
+
+    Args:
+        price: 當前收盤價
+        ma20: 短均線(20 日)。None → 回('⚪無資料', neutral color)
+        ma_long: 長均線(預設 MA100,組合 + 個股 K 線註解皆用)。None → 同上
+
+    Returns:
+        (label_str, color_hex):label 帶 emoji,color 對應 traffic color
+
+    SSOT 政策:本函式統一兩 Tab 的 4 段趨勢判定。原違憲:
+    - tab_stock.py:1426 inline MA20/MA100 4 段
+    - tab_stock_grp.py:231 inline MA20/MA100 4 段
+    - 兩處邏輯完全相同但 inline 各自實作。
+    """
+    if not (ma20 and ma_long and price > 0):
+        return '⚪無資料', TRAFFIC_YELLOW
+    if price > ma20 > ma_long:
+        return '📈 多頭', TRAFFIC_GREEN
+    if price < ma20 < ma_long:
+        return '📉 空頭', TRAFFIC_RED
+    if price > ma_long:
+        return '📊 多箱', TRAFFIC_YELLOW
+    return '📊 空箱', TRAFFIC_YELLOW

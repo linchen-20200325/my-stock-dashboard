@@ -400,3 +400,43 @@ US10Y 桶 regime 用 5.0），屬不同用途。原 macro_core.py:499 inline。"
 
 TNX_NEUTRAL_PCT: float = 3.5
 """macro_compass TNX 中性**黃線**：3.5~4.5% → 🟡 中性區；< 3.5% → 🟢 寬鬆有利。原 macro_core.py:500 inline。"""
+
+
+# ════════════════════════════════════════════════════════════════
+# 進場操作層:停利停損 / 量比 / 趨勢分級(v18.328 PR-C 稽核三項違憲)
+# user 2026-06-27 audit 提出 P1/P2/P3:個股 Tab 進場操作邏輯統一 SSOT,
+# 兩 Tab(個股 / 個股組合)未來共用此處常數。
+# ════════════════════════════════════════════════════════════════
+
+# ── 停利停損(個股 Tab 進場操作建議區 / PR-C P2)──
+STOP_PROFIT_T1_PCT: float = 5.0
+"""停利目標 1:短線先入袋(+5%)。原 tab_stock.py:575 inline `_cur_p * 1.05`。"""
+
+STOP_PROFIT_T2_PCT: float = 10.0
+"""停利目標 2:波段目標(+10%)。原 tab_stock.py:576 inline `_cur_p * 1.10`。"""
+
+STOP_LOSS_DEFAULT_PCT: float = 8.0
+"""預設停損:跌破認賠(-8%)。原 tab_stock.py:577 inline `_cur_p * 0.92`。
+注意:與 ATR_STOP_FIXED_PCT(8% / scoring_engine 風控)同值但語意分離 —
+本常數是「個股 Tab 顯示用建議值」,後者是「ATR 失敗 fallback」。"""
+
+# ── 量比軸線(個股三段 + 組合兩段,設計差保留但 SSOT 化 / PR-C P3)──
+VOLUME_RATIO_SURGE: float = 1.5
+"""量比異常放量:≥1.5× 20 日均量 → 🟢 強訊號。
+個股 Tab 健康度卡片(原 inline 1.5)。原 tab_stock.py:1041 inline。"""
+
+VOLUME_RATIO_MILD: float = 1.0
+"""量比溫和放量:≥1.0× 但 <1.5× → 🟡 中性偏多。
+個股 Tab 健康度卡片(原 inline 1.0)。原 tab_stock.py:1041 inline。"""
+
+VOLUME_RATIO_DRY: float = 0.5
+"""量比嚴重量縮:<0.5× 20 日均量 → 🟡 量能不足警示。
+個股 Tab 警示列(原 inline 0.5)。原 tab_stock.py:1024 inline。
+注意:與 GRP_VOL_SHRINK_RATIO(0.7,組合 Tab 操作狀態燈量縮)刻意分開 —
+個股用較嚴(0.5,嚴重量縮才警示),組合用較鬆(0.7,操作狀態燈),屬不同顆粒度設計。"""
+
+# ── 趨勢分級 MA 配置(兩 Tab 應共用 / PR-C P1)──
+TREND_USE_MA60: bool = True
+"""趨勢判定主 MA 選擇:True=MA60(短中期更靈敏,個股 / 組合 Tab 統一);
+False=MA100(舊組合 Tab 行為,保留旗標供 A/B 比較)。
+原違憲:個股用 MA60 vs 組合用 MA100,同股雙 Tab 判斷反差。"""
