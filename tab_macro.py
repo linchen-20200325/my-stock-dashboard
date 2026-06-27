@@ -679,6 +679,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
     <div style="font-size:12px;color:#484f58;">綜合健康度</div>
     <div style="font-size:36px;font-weight:900;color:{tl["color"]};">{tl["health"]:.0f}</div>
     <div style="font-size:11px;color:#484f58;">/ 100分｜信心{tl["conf"]}%</div>
+    <div style="font-size:10px;color:#6e7681;margin-top:3px;max-width:170px;line-height:1.3;">📊 台股籌碼 / 技術面<br>（全球美股面看下方各桶）</div>
   </div>
 </div></div>''', unsafe_allow_html=True)
 
