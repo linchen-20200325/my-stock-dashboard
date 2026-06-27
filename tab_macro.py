@@ -696,16 +696,9 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         except Exception as _e_5b:
             print(f'[tab_macro/五桶] {type(_e_5b).__name__}: {_e_5b}')
 
-    st.markdown('<div style="background:#0a1628;border:1px solid #1f6feb;border-radius:12px;padding:16px;margin-bottom:12px;">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:18px;font-weight:900;color:#58a6ff;margin-bottom:8px;">🌍 今日市場總覽 — 現在適合買股票嗎？</div>', unsafe_allow_html=True)
-    st.markdown(f'''<div style="font-size:13px;color:#c9d1d9;line-height:1.8;">
-投資前先看大環境，就像出門前先看天氣預報。這個頁面告訴你：<br>
-• <b style="color:{TRAFFIC_GREEN};">現在是多頭市場（晴天）</b> → 可以積極找好股票買進<br>
-• <b style="color:{TRAFFIC_YELLOW};">現在是震盪整理（多雲）</b> → 謹慎操作，小量買進<br>
-• <b style="color:{TRAFFIC_RED};">現在是空頭市場（下雨）</b> → 先保留現金，等待機會<br>
-</div>''', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
+    # v18.311：移除冗餘「今日市場總覽 — 現在適合買股票嗎？」天氣解說 box(晴天/多雲/下雨)。
+    # 頂部已有「📊 總經總結儀表板 + 五桶 bar」(L679),此天氣解說與其重複 → 刪除,讓總結 bar 當頂。
+    # 多空白話解讀保留為「點開才看」expander(收合,不佔版面)。
     # ── 🔰 故事化白話解讀（純疊加；解碼上方燈號卡片的數字，不重複多空說明）──
     with st.expander('🔰 看不懂上面那張燈號卡片的數字？點我 30 秒讀懂'):
         st.markdown('''卡片上的每個數字，用一句話看懂：
