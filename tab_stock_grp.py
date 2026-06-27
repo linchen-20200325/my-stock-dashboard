@@ -359,6 +359,39 @@ def render_stock_grp():
         score_t3    = t3_data['score_t3']
         risk_alerts = t3_data.get('risk_alerts', [])
 
+        # ── 📊 投資組合綜合總結 banner(v18.327 PR-B 頂部 KPI 摘要)──
+        # 設計:Tab 三層化「上總結 / 中 raw data / 下 AI 評比」上層,5 個 metric 一目了然
+        _total_n = len(results_t3)
+        _health_vals = [_r.get('健康度', 0) or 0 for _r in results_t3]
+        _avg_health = sum(_health_vals) / _total_n if _total_n else 0
+        _max_health = max(_health_vals) if _health_vals else 0
+        _entry_pass_n = sum(1 for _s in score_t3
+                            if (_s.get('total', 0) or 0) >= MULTIFACTOR_ENTRY_MIN)
+        _top_pick = max(score_t3, key=lambda _s: _s.get('total', 0) or 0) if score_t3 else None
+        _top_pick_str = (f"{_top_pick.get('stock_id', '—')} "
+                         f"({_top_pick.get('total', 0):.0f}分)"
+                         if _top_pick else '—')
+        _risk_n = len(risk_alerts)
+        _bk_c1, _bk_c2, _bk_c3, _bk_c4, _bk_c5 = st.columns(5)
+        _bk_c1.metric('組合檔數', f'{_total_n} 檔',
+                      help='本次批次分析涵蓋的股票數量')
+        _avg_health_color = ('🟢' if _avg_health >= HEALTH_GRADE_A_MIN
+                             else '🟡' if _avg_health >= HEALTH_GRADE_B_MIN
+                             else '🔴')
+        _bk_c2.metric('平均健康度', f'{_avg_health:.0f}',
+                      delta=_avg_health_color,
+                      help=f'組合平均健康度(0-100);A 級≥{HEALTH_GRADE_A_MIN} / '
+                           f'B 級≥{HEALTH_GRADE_B_MIN}')
+        _bk_c3.metric(f'多因子 ≥{MULTIFACTOR_ENTRY_MIN:.0f} 候選',
+                      f'{_entry_pass_n}/{_total_n}',
+                      help=f'多因子總分達 {MULTIFACTOR_ENTRY_MIN:.0f} 分以上的檔數(積極布局候選)')
+        _bk_c4.metric('最強檔', _top_pick_str,
+                      help='多因子總分最高的代碼')
+        _bk_c5.metric('風控警示', f'{_risk_n} 項',
+                      delta=('🔴 注意' if _risk_n > 0 else '🟢 清淡'),
+                      delta_color='inverse',
+                      help='系統觸發的風控警示數量(下方有詳情)')
+
         # ── 🔰 故事化白話：兩套評分一次搞懂（純疊加，零動計算）──
         with st.expander('🔰 這頁怎麼看？兩套排行 + 多因子一次搞懂'):
             st.markdown('''這頁同時用**兩套評分**幫你比較多檔股票，角度不同、互相參照：
@@ -1138,7 +1171,20 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 else:
                     st.success('✅ 未發現財報紅旗異常')
 
-    # ── AI 投資組合綜合判讀 ───────────────────────────────────────
+    # ══ 📊 MJ 趨勢分數（v18.189）+ 🎯 三階段濾網（v19.58）═══════════
+    # v18.223 一鍵化：吃 batch 跑完時鎖定的 codes（t3_batch_codes），自動跑 MJ + picker + AI。
+    # 不再依賴 stock_list_t3（避免 textarea 改動觸發重跑），改 textarea 後須按「批次分析」才更新。
+    _batch_codes = st.session_state.get('t3_batch_codes')
+    if _batch_codes:
+        _bc_list = list(_batch_codes)
+        _render_mj_trend_section(_bc_list, auto_run=True)
+        _render_stage_picker_section(_bc_list, auto_run=True)
+    elif stock_list_t3:
+        st.info('💡 上方按「🚀 批次分析」會自動串跑 MJ 趨勢分數 + 三階段濾網 + AI 三型建議。')
+
+    # ── 🤖 AI 投資組合綜合判讀(v18.327 PR-B 搬至最下方 — Tab 三層化下層)──
+    # 設計:讀 raw data 區(③④⑤ 多因子 / 汰弱 + 體檢 + MJ 趨勢 / 三階段)所有指標 →
+    # 結構化 prompt → Gemini 判讀。位於 Tab 最下方,確保 user 看完所有資料後才看 AI。
     if results_t3:
         st.markdown('---')
         st.markdown("""<div style="margin:16px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#76e3ea18,#0d1117);border-left:4px solid #76e3ea;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#76e3ea;">🤖 AI 投資組合綜合判讀</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">台股資深基金經理人 · 強弱排序 · 汰弱留強 · 風險診斷</span></div>""", unsafe_allow_html=True)
@@ -1179,7 +1225,8 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                     f"技術: 均線={_ma_p} RSI={_rsi_p} {_vcp_p} | "
                     f"籌碼: 外資{'買超' if _fb_p>0 else '賣超'}{abs(_fb_p)/1e8:.1f}億 | "
                     f"基本面: EPS={_fd_p.get('近4季EPS','-')} 毛利={_fd_p.get('毛利率%','-')}% "
-                    f"殖利率={_fd_p.get('殖利率%','-')} SQ品質={_fd_p.get('SQ評分','-')} FGMS={_fd_p.get('FGMS','-')} | "
+                    f"殖利率={_fd_p.get('殖利率%','-')} SQ品質={_fd_p.get('SQ評分','-')} "
+                    f"FGMS={_fd_p.get('FGMS','-')} P/B={_fd_p.get('P/B評價','-')} | "
                     f"財報體檢: DNA={_dna_p} 現金水位={_fhp.get('cash_ratio_value','-') if _fhp else '-'} "
                     f"OCF={_fhp.get('ocf_value','-') if _fhp else '-'} 負債比={_fhp.get('debt_ratio_value','-') if _fhp else '-'} 雷達均分={_rad_avg_p}"
                 )
@@ -1244,17 +1291,6 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
             st.markdown(_t3ai_cached)
         elif not _t3ai_btn:
             st.caption('▲ 點擊上方按鈕，AI 將生成投資組合強弱排序矩陣與汰弱留強建議。')
-
-    # ══ 📊 MJ 趨勢分數（v18.189）+ 🎯 三階段濾網（v19.58）═══════════
-    # v18.223 一鍵化：吃 batch 跑完時鎖定的 codes（t3_batch_codes），自動跑 MJ + picker + AI。
-    # 不再依賴 stock_list_t3（避免 textarea 改動觸發重跑），改 textarea 後須按「批次分析」才更新。
-    _batch_codes = st.session_state.get('t3_batch_codes')
-    if _batch_codes:
-        _bc_list = list(_batch_codes)
-        _render_mj_trend_section(_bc_list, auto_run=True)
-        _render_stage_picker_section(_bc_list, auto_run=True)
-    elif stock_list_t3:
-        st.info('💡 上方按「🚀 批次分析」會自動串跑 MJ 趨勢分數 + 三階段濾網 + AI 三型建議。')
 
 
 def _render_stage_picker_section(stock_list: list[str], *,
