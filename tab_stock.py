@@ -25,6 +25,9 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_Y
 from shared.stock_buckets import render_stock_toc_html, section_header_html
 from shared.thresholds import YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC
 from shared.ttls import TTL_1DAY
+# v18.325 PR-C: 健康度分級 + 龍頭資本支出門檻改用既有 SSOT（原 inline，§3.3 反捏造）
+from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
+from shared.signal_thresholds import CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT
 from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
 
 
@@ -1131,7 +1134,7 @@ padding:14px 18px;margin-bottom:12px;">
         st.markdown('#### 🏥 A. 個股健康度評分（0~100）')
         st.caption('🔰 指標白話：RSI >70 過熱、<30 超賣｜KD 黃金交叉（K 升破 D）偏多、死亡交叉偏空｜'
                    'IBS 看收盤落在當日高低點的位置（越高越強）｜量比＝今日量 ÷ 近期均量（>1 放量）。')
-        if health2 >= 80:
+        if health2 >= HEALTH_GRADE_A_MIN:
             _ha = f'健康度 {health2:.0f}分，技術面強勢'
             _hb = '確認大盤方向後可建倉，停損設月線下方'
         elif health2 >= 60:
@@ -1239,9 +1242,9 @@ padding:14px 18px;margin-bottom:12px;">
                 _price_pos = '多箱整理，等待突破'
             else:
                 _price_pos = '空箱整理，謹慎操作'
-        _verdict_color = TRAFFIC_GREEN if health2>=80 else (TRAFFIC_YELLOW if health2>=50 else TRAFFIC_RED)
-        _verdict = ('持股不動，佛系等待；所有指標均表現優異，繼續持有。' if health2>=80
-                    else ('等待突破訊號，不追高；多空交戰，方向未明，可分批布局。' if health2>=50
+        _verdict_color = TRAFFIC_GREEN if health2>=HEALTH_GRADE_A_MIN else (TRAFFIC_YELLOW if health2>=HEALTH_GRADE_B_MIN else TRAFFIC_RED)
+        _verdict = ('持股不動，佛系等待；所有指標均表現優異，繼續持有。' if health2>=HEALTH_GRADE_A_MIN
+                    else ('等待突破訊號，不追高；多空交戰，方向未明，可分批布局。' if health2>=HEALTH_GRADE_B_MIN
                           else '降低倉位或觀望；趨勢偏弱，以保本為優先。'))
         st.markdown(f"""<div style="background:#161b22;border:1px solid {_verdict_color};
 border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margin:8px 0;">
@@ -1646,7 +1649,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         st.markdown('#### 💡 即時操作建議（規則引擎）')
         _reg_op = st.session_state.get('mkt_info', {}).get('regime', 'neutral')
         _sig_count = sum([
-            1 if health2 >= 80 else 0,
+            1 if health2 >= HEALTH_GRADE_A_MIN else 0,
             1 if _reg_op == 'bull' else 0,
             1 if (vcp2 and vcp2.get('contracting')) else 0,
             1 if (avg_div2 > 0 and price2 > 0 and price2 <= round(avg_div2/YIELD_MID_DEC, 1)) else 0,
@@ -3279,7 +3282,7 @@ padding:12px 16px;margin:8px 0;">
                 if _cap_v and _cap_v > 0:
                     _cl_r = (locals().get('cl2') or 0) / _cap_v * 100
                     _cx_r = (locals().get('cx2') or 0) / _cap_v * 100
-                    _is_lead = '✅ 符合龍頭高成長特徵' if (_cl_r >= 50 or _cx_r >= 80) else '未達龍頭門檻'
+                    _is_lead = '✅ 符合龍頭高成長特徵' if (_cl_r >= 50 or _cx_r >= CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT) else '未達龍頭門檻'
                     _lead_str2 = (f'合約負債/股本={_cl_r:.0f}%、資本支出/股本={_cx_r:.0f}% → {_is_lead}'
                                   '（孫慶龍龍多：合約負債≥股本50%=客戶預付旺、資本支出≥股本80%=積極擴產）')
                 else:

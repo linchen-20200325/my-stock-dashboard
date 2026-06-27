@@ -29,6 +29,8 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
+# v18.325 PR-C: 融資餘額紅線改用既有 SSOT（原散落 inline 3400，§3.3 反捏造）
+from shared.signal_thresholds import MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI
 
 from macro_helpers import calc_traffic_light, rp_entry, rp_scalar, rp_ts
 from tab_helpers import safe_get
@@ -942,7 +944,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _wr_v4_hint = '｜'.join(_v4_bits)
 
         # 風險警示收集（v5：純融資餘額判斷）
-        if _wr_margin and _wr_margin > 3400:
+        if _wr_margin and _wr_margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
             _wr_warns.append(('🔴', f'融資 {_wr_margin:.0f}億 極度危險，散戶過熱，不宜追高'))
         elif _wr_margin and _wr_margin > 2500:
             _wr_warns.append(('🟡', f'融資 {_wr_margin:.0f}億 警戒，注意風險'))
@@ -2165,7 +2167,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 )
                 if _mkt_loaded:
                     if margin:
-                        if margin > 3400:
+                        if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
                             _mkt_loaded['signals'].append('🔴 融資極度危險（>3400億）')
                         elif margin > 2500:
                             _mkt_loaded['signals'].append('⚠️ 融資警戒（>2500億）')
@@ -2179,7 +2181,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _mkt_fb = get_market_assessment(df_index=None, foreign_net=_foreign_net_loaded)
                     if _mkt_fb:
                         if margin:
-                            if margin > 3400:
+                            if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
                                 _mkt_fb['signals'].append('🔴 融資極度危險（>3400億）')
                             elif margin > 2500:
                                 _mkt_fb['signals'].append('⚠️ 融資警戒（>2500億）')
@@ -4279,7 +4281,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         except Exception as _bc_err:
             st.caption(f'外資 {_bc_vals[0]:+.1f}億 ｜ 投信 {_bc_vals[1]:+.1f}億 ｜ 自營商 {_bc_vals[2]:+.1f}億')
     if margin:
-        if margin >= 3400:
+        if margin >= MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
             _sql_mc = TRAFFIC_RED
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '極度危險，嚴防多殺多 → 行情尾端'

@@ -8,6 +8,8 @@ import requests, pandas as pd, datetime, os, time, re
 import urllib3
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.ttls import TTL_1HOUR
+# v18.325 PR-C: 融資餘額紅線改用既有 SSOT（原 inline 3400，§3.3 反捏造）
+from shared.signal_thresholds import MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -811,8 +813,8 @@ def margin_card(margin):
                 '<div style="font-size:11px;color:#484f58;">融資餘額</div>'
                 f'<div style="font-size:12px;color:{TRAFFIC_YELLOW};margin-top:6px;">⏳ 抓取中（TWSE 15:30後更新）</div>'
                 '<div style="font-size:10px;color:#484f58;margin-top:4px;">收盤後點「更新全部總經數據」重試</div></div>')
-    mc=TRAFFIC_RED if margin>3400 else (TRAFFIC_YELLOW if margin>2500 else TRAFFIC_GREEN)
-    label='🔴超過3400億高危' if margin>3400 else ('⚡超過2500億警戒' if margin>2500 else '✅安全水位')
+    mc=TRAFFIC_RED if margin>MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI else (TRAFFIC_YELLOW if margin>2500 else TRAFFIC_GREEN)
+    label='🔴超過3400億高危' if margin>MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI else ('⚡超過2500億警戒' if margin>2500 else '✅安全水位')
     return (f'<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;padding:14px;">'
             f'<div style="font-size:11px;color:#484f58;">融資餘額</div>'
             f'<div style="font-size:28px;font-weight:900;color:{mc};">{margin:.0f}'
