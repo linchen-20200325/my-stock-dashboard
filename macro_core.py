@@ -50,6 +50,8 @@ from shared.signal_thresholds import (  # v18.242 W3b SSOT consume
     MACRO_TREND_LOOKBACK_PERIODS,
     RECESSION_LOGIT_COEF_INTERCEPT,
     RECESSION_LOGIT_COEF_SPREAD,
+    TNX_VALUATION_PRESSURE_PCT,  # v18.326 PR-D: macro_compass TNX 門檻
+    TNX_NEUTRAL_PCT,
 )
 
 __version__ = "1.0.0"
@@ -489,15 +491,16 @@ def fetch_macro_compass(range_: str = "6mo") -> dict:
     out: dict = {'vix': None, 'tnx': None, 'gspc': None}
 
     def _sig_vix(v):
-        # Phase 1 規格：>25 黃 / >30 綠（恐慌貪婪區=逢低加碼時機）
-        if v > 30: return ('🟢', '恐慌貪婪區（準備跌深就買）', TRAFFIC_GREEN)
-        if v > 25: return ('🟡', '波動加劇', TRAFFIC_YELLOW)
+        # v18.326 PR-D：黃線 25→22 對齊 C2 全站統一（複用 MACRO_THRESHOLDS['VIX'] SSOT）。
+        # >red_above(30) 綠（恐慌貪婪區=逢低加碼）/ >yellow_above(22) 黃（波動加劇）/ 其餘綠（平靜）
+        if v > MACRO_THRESHOLDS['VIX']['red_above']: return ('🟢', '恐慌貪婪區（準備跌深就買）', TRAFFIC_GREEN)
+        if v > MACRO_THRESHOLDS['VIX']['yellow_above']: return ('🟡', '波動加劇', TRAFFIC_YELLOW)
         return ('🟢', '市場平靜', TRAFFIC_GREEN)
 
     def _sig_tnx(t):
-        # 估值壓力：≥4.5% 紅 / 3.5–4.5 黃 / <3.5 綠（寬鬆）
-        if t >= 4.5: return ('🔴', '估值壓力（科技股不利）', TRAFFIC_RED)
-        if t >= 3.5: return ('🟡', '中性區', TRAFFIC_YELLOW)
+        # 估值壓力：≥4.5% 紅 / 3.5–4.5 黃 / <3.5 綠（寬鬆）— v18.326 PR-D SSOT 化（保行為）
+        if t >= TNX_VALUATION_PRESSURE_PCT: return ('🔴', '估值壓力（科技股不利）', TRAFFIC_RED)
+        if t >= TNX_NEUTRAL_PCT: return ('🟡', '中性區', TRAFFIC_YELLOW)
         return ('🟢', '寬鬆有利', TRAFFIC_GREEN)
 
     def _sig_gspc(g, ma):

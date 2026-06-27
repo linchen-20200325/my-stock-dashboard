@@ -30,7 +30,16 @@ import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
 # v18.325 PR-C: 融資餘額紅線改用既有 SSOT（原散落 inline 3400，§3.3 反捏造）
-from shared.signal_thresholds import MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI
+# v18.326 PR-D: 融資黃線 + 市場廣度門檻 SSOT
+from shared.signal_thresholds import (
+    MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
+    MARGIN_BALANCE_WARN_THRESHOLD_YI,
+    MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI,
+    BREADTH_BULL_PCT,
+    BREADTH_NEUTRAL_PCT,
+    BREADTH_BEAR_PCT,
+    BREADTH_KPI_YELLOW_PCT,
+)
 
 from macro_helpers import calc_traffic_light, rp_entry, rp_scalar, rp_ts
 from tab_helpers import safe_get
@@ -877,7 +886,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         with _ov_cols[1]:
             _ov_jqp = _ov_jq.get('avg',None) if _ov_jq else None
             if _ov_jqp is not None:
-                _ov_jc = TRAFFIC_GREEN if _ov_jqp>=60 else (TRAFFIC_YELLOW if _ov_jqp>=30 else TRAFFIC_RED)
+                _ov_jc = TRAFFIC_GREEN if _ov_jqp>=BREADTH_BULL_PCT else (TRAFFIC_YELLOW if _ov_jqp>=BREADTH_KPI_YELLOW_PCT else TRAFFIC_RED)
                 st.markdown(beginner_kpi('全市場健康度', f'{_ov_jqp:.0f}%', '有幾%的股票站在均線之上', _ov_jc, '>60%才適合積極買進'), unsafe_allow_html=True)
             else:
                 st.markdown(kpi('旌旗指數', '--', '掃描後顯示', '#484f58', '#0d1117'), unsafe_allow_html=True)
@@ -946,7 +955,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         # 風險警示收集（v5：純融資餘額判斷）
         if _wr_margin and _wr_margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
             _wr_warns.append(('🔴', f'融資 {_wr_margin:.0f}億 極度危險，散戶過熱，不宜追高'))
-        elif _wr_margin and _wr_margin > 2500:
+        elif _wr_margin and _wr_margin > MARGIN_BALANCE_WARN_THRESHOLD_YI:
             _wr_warns.append(('🟡', f'融資 {_wr_margin:.0f}億 警戒，注意風險'))
 
         if _wr_bias:
@@ -983,7 +992,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
              (_wr_fnet or 0) > 0, '外資買超=跟著走'),
             ('融資餘額',
              f'{_wr_margin:.0f}億' if _wr_margin else '未取得 (N/A)',
-             not _wr_margin or _wr_margin <= 2500,
+             not _wr_margin or _wr_margin <= MARGIN_BALANCE_WARN_THRESHOLD_YI,
              '>2500億警戒，>3400億極危'),
             ('年線位置', f'乖離{_wr_bias.get("bias_240",0):+.1f}%' if _wr_bias else '未知',
              not _wr_bias or abs(_wr_bias.get("bias_240",0)) < 20, '超過±20%要警惕'),
@@ -1342,10 +1351,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _jq_ratio_src = None  # 無資料時不設定，不顯示錯誤數值
             if _jq_ratio_src and _jq_ratio_src != '預設值':
                 _jq_ratio = float(_jq_ratio)
-                _jq_pos  = '80~100%' if _jq_ratio>=60 else ('50~70%' if _jq_ratio>=40 else ('20~40%' if _jq_ratio>=20 else '0~20%'))
-                _jq_reg  = 'bull' if _jq_ratio>=60 else ('neutral' if _jq_ratio>=40 else 'bear')
-                _jq_col  = TRAFFIC_GREEN if _jq_ratio>=60 else (TRAFFIC_YELLOW if _jq_ratio>=40 else TRAFFIC_RED)
-                _jq_lbl  = '🟢 多頭積極' if _jq_ratio>=60 else ('🟡 中性均衡' if _jq_ratio>=40 else '🔴 保守防禦')
+                _jq_pos  = '80~100%' if _jq_ratio>=BREADTH_BULL_PCT else ('50~70%' if _jq_ratio>=BREADTH_NEUTRAL_PCT else ('20~40%' if _jq_ratio>=BREADTH_BEAR_PCT else '0~20%'))
+                _jq_reg  = 'bull' if _jq_ratio>=BREADTH_BULL_PCT else ('neutral' if _jq_ratio>=BREADTH_NEUTRAL_PCT else 'bear')
+                _jq_col  = TRAFFIC_GREEN if _jq_ratio>=BREADTH_BULL_PCT else (TRAFFIC_YELLOW if _jq_ratio>=BREADTH_NEUTRAL_PCT else TRAFFIC_RED)
+                _jq_lbl  = '🟢 多頭積極' if _jq_ratio>=BREADTH_BULL_PCT else ('🟡 中性均衡' if _jq_ratio>=BREADTH_NEUTRAL_PCT else '🔴 保守防禦')
                 _jq_src_note = f'（來源：{_jq_ratio_src}）'
                 st.session_state['jingqi_info'] = {
                     'avg':_jq_ratio,'pos':_jq_pos,'regime':_jq_reg,
@@ -2169,7 +2178,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     if margin:
                         if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
                             _mkt_loaded['signals'].append('🔴 融資極度危險（>3400億）')
-                        elif margin > 2500:
+                        elif margin > MARGIN_BALANCE_WARN_THRESHOLD_YI:
                             _mkt_loaded['signals'].append('⚠️ 融資警戒（>2500億）')
                         else:
                             _mkt_loaded['signals'].append(f'✅ 融資安全（{margin:.0f}億）')
@@ -2183,7 +2192,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                         if margin:
                             if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
                                 _mkt_fb['signals'].append('🔴 融資極度危險（>3400億）')
-                            elif margin > 2500:
+                            elif margin > MARGIN_BALANCE_WARN_THRESHOLD_YI:
                                 _mkt_fb['signals'].append('⚠️ 融資警戒（>2500億）')
                             else:
                                 _mkt_fb['signals'].append(f'✅ 融資安全（{margin:.0f}億）')
@@ -4049,14 +4058,14 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         with _adl_cols[3]:
             # 廣度健康評分：0-100（對應全市場健康度）
             _breadth_score = round(_adl_ratio)  # 直接用上漲佔比%當分數
-            _bs_color = TRAFFIC_GREEN if _breadth_score>=60 else (TRAFFIC_YELLOW if _breadth_score>=40 else TRAFFIC_RED)
-            _bs_label = '🟢 廣度健康' if _breadth_score>=60 else ('🟡 中性' if _breadth_score>=40 else '🔴 廣度不足')
+            _bs_color = TRAFFIC_GREEN if _breadth_score>=BREADTH_BULL_PCT else (TRAFFIC_YELLOW if _breadth_score>=BREADTH_NEUTRAL_PCT else TRAFFIC_RED)
+            _bs_label = '🟢 廣度健康' if _breadth_score>=BREADTH_BULL_PCT else ('🟡 中性' if _breadth_score>=BREADTH_NEUTRAL_PCT else '🔴 廣度不足')
             st.markdown(kpi('全市場健康度', f'{_breadth_score}分', _bs_label, _bs_color, '#0d1117'), unsafe_allow_html=True)
             # 同步更新旌旗指數（如果尚未由 ADL 計算）
             if not st.session_state.get('jingqi_info'):
                 st.session_state['jingqi_info'] = {
-                    'avg': _adl_ratio, 'pos': ('80~100%' if _adl_ratio>=60 else ('50~70%' if _adl_ratio>=40 else '20~40%')),
-                    'regime': ('bull' if _adl_ratio>=60 else ('neutral' if _adl_ratio>=40 else 'bear')),
+                    'avg': _adl_ratio, 'pos': ('80~100%' if _adl_ratio>=BREADTH_BULL_PCT else ('50~70%' if _adl_ratio>=BREADTH_NEUTRAL_PCT else '20~40%')),
+                    'regime': ('bull' if _adl_ratio>=BREADTH_BULL_PCT else ('neutral' if _adl_ratio>=BREADTH_NEUTRAL_PCT else 'bear')),
                     'color': _bs_color, 'label': _bs_label, 'source': 'ADL廣度',
                     'pct20':_adl_ratio,'pct60':_adl_ratio*0.9,'pct120':_adl_ratio*0.8,'pct240':_adl_ratio*0.7,
                 }
@@ -4286,7 +4295,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '極度危險，嚴防多殺多 → 行情尾端'
             _sql_mact = '全面減碼，勿追高，準備逃命'
-        elif margin >= 2800:
+        elif margin >= MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI:
             _sql_mc = TRAFFIC_YELLOW
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '水位偏高，籌碼凌亂 → 警戒操作'
