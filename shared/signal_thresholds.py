@@ -369,3 +369,39 @@ POS_ATR_MULTIPLIER: float = 1.5
 """動態部位停損 ATR 倍數：Stop = Entry - 1.5×ATR14。原 scoring_engine.py:1223 inline"""
 POS_MAX_STOP_PCT: float = 0.85
 """動態部位最大停損保護：stop_loss 不低於 entry×0.85（最大停損 15%）。原 scoring_engine.py:1224 inline"""
+
+
+# ════════════════════════════════════════════════════════════════
+# 融資餘額警戒黃線 + 市場廣度 + macro_compass 殖利率（v18.326 PR-C 稽核 B 類）
+# user 2026-06-27 跨檔稽核補抽。divergent 值各自具名（保行為），不一致處於 SPEC §15 旗標待統一。
+# ════════════════════════════════════════════════════════════════
+
+MARGIN_BALANCE_WARN_THRESHOLD_YI: float = 2500.0
+"""融資餘額**黃線**警戒值（億 TWD）。> 2500 億 → 🟡 警戒（紅線 3400 見 MARGIN_BALANCE_OVERHEAT）。
+原 daily_checklist:816 / tab_macro:949,986,2172,2186 inline。"""
+
+MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI: float = 2800.0
+"""⚠️ 融資黃線**分歧變體**（億 TWD）：tab_macro「SQL 邏輯卡片」(4289) 用 2800 而非標準 2500。
+此為跨卡片不一致（SPEC §15 旗標）；本版各自具名保行為，待 user 決定是否統一為 2500。原 tab_macro:4289 inline。"""
+
+BREADTH_BULL_PCT: float = 60.0
+"""市場廣度（jq_ratio / ADL 上漲佔比 %）多頭線：≥60% → 🟢 多頭積極 / bull regime。
+原 tab_macro:880,1345-1348,4052-4053,4058-4059 inline。"""
+
+BREADTH_NEUTRAL_PCT: float = 40.0
+"""市場廣度中性線：40~60% → 🟡 中性均衡 / neutral regime；< 40% → bear。原 tab_macro 同上 inline。"""
+
+BREADTH_BEAR_PCT: float = 20.0
+"""市場廣度位階標籤底線：≥20% → '20~40%' 位階；< 20% → '0~20%'（極弱）。原 tab_macro:1345 inline。"""
+
+BREADTH_KPI_YELLOW_PCT: float = 30.0
+"""⚠️ 廣度黃線**分歧變體**：「全市場健康度」beginner KPI(880) 用 30 而非 regime 中性線 40。
+此為跨卡片不一致（SPEC §15 旗標）；本版各自具名保行為，待 user 決定是否統一為 40。原 tab_macro:880 inline。"""
+
+TNX_VALUATION_PRESSURE_PCT: float = 4.5
+"""macro_compass 10Y 殖利率(TNX)估值壓力**紅線**：≥4.5% → 🔴 估值壓力（科技股不利）。
+注意：與 MACRO_THRESHOLDS['US10Y'] 的 red_above=5.0 **刻意不同源**（compass 快訊用較嚴 4.5，
+US10Y 桶 regime 用 5.0），屬不同用途。原 macro_core.py:499 inline。"""
+
+TNX_NEUTRAL_PCT: float = 3.5
+"""macro_compass TNX 中性**黃線**：3.5~4.5% → 🟡 中性區；< 3.5% → 🟢 寬鬆有利。原 macro_core.py:500 inline。"""
