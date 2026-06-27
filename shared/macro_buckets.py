@@ -227,3 +227,51 @@ def fmt_value(value: Optional[float], spec: DangerSpec) -> str:
         return f"{float(value):.{spec.decimals}f}{spec.unit}"
     except (TypeError, ValueError):
         return f"{value}{spec.unit}"
+
+
+# ════════════════════════════════════════════════════════════════
+# v18.310 Bug-總經版面：桶群組大分隔 banner(把載入後散落的 deep section
+#   視覺歸位成 5+1 桶群組)。純字串 builder,零 streamlit(§8.2 L0)。
+#   st.markdown 呼叫留在 L5 tab_macro。
+# ════════════════════════════════════════════════════════════════
+
+# 桶群組主色(視覺區隔用;與既有 LEVEL_COLOR 燈號色不同維度)
+BUCKET_GROUP_COLOR = {
+    "long":  "#3fb950",   # 🌳 長期 — 綠
+    "mid":   "#58a6ff",   # 📈 中期 — 藍
+    "short": "#f0883e",   # ⚡ 短線急殺 — 橙
+    "chips": "#a371f7",   # 🧩 籌碼 — 紫
+    "news":  "#d2a8ff",   # 📰 新聞 — 淺紫
+    "ai":    "#76e3ea",   # 🧠 AI 綜合 — 青
+}
+
+# AI 群組(跨桶 AI + 新聞 AI 裁決)非 5 桶之一,meta 另列
+_AI_GROUP_META = {"emoji": "🧠", "title": "AI 綜合決策", "sub": "跨桶 AI 投資決策 × 新聞 AI 總裁決"}
+
+
+def bucket_group_banner_html(bucket_key: str, idx: int, total: int = 5) -> str:
+    """產生桶群組大分隔 banner HTML(載入後 deep section 視覺歸位)。
+
+    Args
+    ----
+    bucket_key: BUCKET_ORDER 之一,或 "ai"(AI 綜合群組)
+    idx: 第幾桶(1-based,顯示「桶 idx/total」)
+    total: 桶總數(預設 5)
+
+    Returns
+    -------
+    str: 全寬漸層 banner HTML。缺 key → raise KeyError(§1 Fail Loud)。
+    """
+    meta = _AI_GROUP_META if bucket_key == "ai" else BUCKET_META[bucket_key]
+    color = BUCKET_GROUP_COLOR[bucket_key]  # KeyError on bad key = Fail Loud
+    _badge = f"桶 {idx}/{total}" if bucket_key != "ai" else "綜合"
+    return (
+        f'<div style="margin:34px 0 10px;padding:12px 18px;'
+        f'background:linear-gradient(90deg,{color}2b,{color}0a,#0d1117);'
+        f'border-left:6px solid {color};border-radius:0 10px 10px 0;">'
+        f'<span style="font-size:12px;color:{color};font-weight:700;opacity:0.85;">'
+        f'{_badge}</span>'
+        f'<div style="font-size:18px;font-weight:900;color:{color};margin-top:2px;">'
+        f'{meta["emoji"]} {meta["title"]}</div>'
+        f'<div style="font-size:12px;color:#8b949e;margin-top:2px;">{meta["sub"]}</div></div>'
+    )
