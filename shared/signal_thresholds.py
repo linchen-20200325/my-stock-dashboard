@@ -200,3 +200,172 @@ MULTIFACTOR_GRADE_B_MIN: float = 55.0
 MULTIFACTOR_ENTRY_MIN: float = 70.0
 """多因子總分「入選候選」門檻（0-100）。≥70 → 列為可進場候選（③ 多因子排行）。
 原 tab_stock_grp.py:521 inline"""
+
+
+# ════════════════════════════════════════════════════════════════
+# scoring_engine 評分曲線 / 交易濾網斷點（v18.324 全抽，user 2026-06-27 指定）
+# ─────────────────────────────────────────────────────────────────
+# 說明：本區塊收 scoring_engine.py 各「判斷門檻」(value→score/label/signal 的比較斷點)。
+# **不收**：指標視窗期(MA5/20/60/120、RSI14、ATR14、rolling 20)=TA 慣例非判斷門檻、
+#   評分輸出值(2/1/0 子分、/6 /3 *100 正規化)=評分刻度結構、數學防呆(1e-10)、
+#   年化倍數(×4)、日數慣例(360/365)、自然零界(>0)。
+# 前綴分名（MOM_/RISK_/RS_/SQ_/FGMS_/LEAD_/CL_/BOLL_/FAKEOUT_/RR_/ATR_STOP_/
+#   TIME_STOP_/VCP_/SQUEEZE_/POS_）確保「同數字不同義」不被硬湊成同一常數。
+# ════════════════════════════════════════════════════════════════
+
+# ── 動能分數（calc_momentum_score）────────────────────────────
+MOM_SHARPE_GOOD: float = 0.5
+"""Sharpe-like 動能（Return20/Sigma20 年化代理）優分門檻：>0.5 → 2 分。原 scoring_engine.py:89 inline"""
+
+# ── 風險分數（calc_risk_score）波動率分級 ─────────────────────
+RISK_VOL_VERYLOW_RATIO: float = 0.02
+"""日波動率（20D std）極低門檻：<2% → +1 分（ETF/權值股）。原 scoring_engine.py:206 inline"""
+
+RISK_VOL_LOW_RATIO: float = 0.035
+"""日波動率正常低門檻：<3.5% → +1 分（原 3% 門檻已鬆寬）；≥3.5% 視為高波動高風險。原 scoring_engine.py:207 inline"""
+
+# ── RS 相對強度（calc_rs_score）────────────────────────────────
+# 無大盤基準時：個股絕對漲幅(%) 映射分數
+RS_ABS_RET_T1_PCT: float = 50.0
+"""RS 絕對漲幅 T1：≥50% → 100 分。原 scoring_engine.py:278 inline"""
+RS_ABS_RET_T2_PCT: float = 30.0
+"""RS 絕對漲幅 T2：≥30% → 90 分。原 scoring_engine.py:279 inline"""
+RS_ABS_RET_T3_PCT: float = 15.0
+"""RS 絕對漲幅 T3：≥15% → 75 分。原 scoring_engine.py:280 inline"""
+RS_ABS_RET_T4_PCT: float = 5.0
+"""RS 絕對漲幅 T4：≥5% → 60 分。原 scoring_engine.py:281 inline"""
+# 有大盤基準時：RS = 個股漲幅 / |大盤漲幅| 分段
+RS_BAND_T1: float = 2.0
+"""RS 相對強度 T1：≥2.0 → 100 分（強勢）。原 scoring_engine.py:288 inline"""
+RS_BAND_T2: float = 1.5
+"""RS 相對強度 T2：≥1.5 → 90 分。原 scoring_engine.py:289 inline"""
+RS_BAND_T3: float = 1.0
+"""RS 相對強度 T3：≥1.0 → 75 分（與大盤同步）。原 scoring_engine.py:290 inline"""
+RS_BAND_T4: float = 0.5
+"""RS 相對強度 T4：≥0.5 → 55 分；≥0 → 40；<0 → 20（弱勢）。原 scoring_engine.py:291 inline"""
+
+# ── 獲利品質 SQ（calc_quality_score）─────────────────────────
+SQ_GM_TREND_DELTA_PCT: float = 1.0
+"""毛利率趨勢顯著門檻：近2季均 - 前2季均 > +1pp → ↑；< -1pp → ↓；其間 → 持穩。原 scoring_engine.py:470 inline"""
+SQ_REV_UP_RATIO: float = 1.02
+"""營收趨勢↑門檻：近2季均 > 前2季均 × 1.02（成長>2%）。原 scoring_engine.py:477 inline"""
+SQ_GM_LEVEL_HIGH_PCT: float = 50.0
+"""毛利率絕對值高分線：≥50% → SGM=100。原 scoring_engine.py:488 inline"""
+SQ_GM_LEVEL_LOW_PCT: float = 10.0
+"""毛利率絕對值低分線：≤10% → SGM=40；10~50% 線性內插。原 scoring_engine.py:489 inline"""
+SQ_GOOD_MIN: float = 75.0
+"""SQ 獲利品質「優質」標籤下限（≠ 多因子總分 75，本為毛利×營收交叉品質分）。原 scoring_engine.py:496 inline"""
+SQ_STABLE_MIN: float = 55.0
+"""SQ「穩健」標籤下限。原 scoring_engine.py:497 inline"""
+SQ_FAIR_MIN: float = 40.0
+"""SQ「普通」標籤下限；< 40 → 弱。原 scoring_engine.py:498 inline"""
+
+# ── 前瞻成長動能 FGMS（calc_forward_momentum_score）─────────
+FGMS_W_CL: float = 0.40
+"""FGMS 維度權重 — 合約負債動能。原 scoring_engine.py:657 inline"""
+FGMS_W_INV: float = 0.30
+"""FGMS 維度權重 — 存貨營收背離率。原 scoring_engine.py:657 inline"""
+FGMS_W_THREE: float = 0.20
+"""FGMS 維度權重 — 三率趨勢。原 scoring_engine.py:657 inline"""
+FGMS_W_CAPEX: float = 0.10
+"""FGMS 維度權重 — 資本支出強度。原 scoring_engine.py:657 inline"""
+FGMS_CL_RATIO_STRONG: float = 0.5
+"""合約負債 CL Ratio（最新CL/近4季均營收）強門檻：>0.5。原 scoring_engine.py:572 inline"""
+FGMS_CL_RATIO_MID: float = 0.2
+"""CL Ratio 中門檻：>0.2 → 55 分。原 scoring_engine.py:574 inline"""
+FGMS_CL_RATIO_LOW: float = 0.05
+"""CL Ratio 低門檻：>0.05 → 40 分。原 scoring_engine.py:575 inline"""
+FGMS_CL_QOQ_UP_PCT: float = 10.0
+"""CL QoQ 加速門檻：>10% → 動能向上。原 scoring_engine.py:572 inline"""
+FGMS_CL_QOQ_DOWN_PCT: float = -10.0
+"""CL QoQ 衰退門檻：<-10% → 20 分。原 scoring_engine.py:576 inline"""
+FGMS_DIV_T1_PCT: float = 15.0
+"""存貨營收背離率（Rev YoY - 存貨天數 YoY）T1：>15% → 100 分（賣得快）。原 scoring_engine.py:611 inline"""
+FGMS_DIV_T2_PCT: float = 5.0
+"""背離率 T2：>5% → 75 分。原 scoring_engine.py:612 inline"""
+FGMS_DIV_T3_PCT: float = -5.0
+"""背離率 T3：≥-5% → 50 分。原 scoring_engine.py:613 inline"""
+FGMS_DIV_T4_PCT: float = -15.0
+"""背離率 T4：≥-15% → 30 分；< -15% → 10 分。原 scoring_engine.py:614 inline"""
+FGMS_REV_YOY_GOOD_PCT: float = 10.0
+"""無背離資料時的營收 YoY 退路門檻：>10% → 65；>0 → 50；其餘 30。原 scoring_engine.py:617 inline"""
+FGMS_RATE_DELTA_PCT: float = 0.5
+"""三率（毛利/營益/淨利率）趨勢顯著門檻：近2季均 vs 前2季均差 > ±0.5pp 計入。原 scoring_engine.py:632 inline"""
+FGMS_CAPEX_T1_PCT: float = 20.0
+"""資本支出 YoY T1：>20% → 100 分（積極擴產）。原 scoring_engine.py:649 inline"""
+FGMS_CAPEX_T2_PCT: float = -20.0
+"""資本支出 YoY T2：>-20% → 45 分；≤-20% → 20 分。原 scoring_engine.py:651 inline"""
+FGMS_LABEL_T1: float = 75.0
+"""FGMS「前景亮麗」標籤下限。原 scoring_engine.py:679 inline"""
+FGMS_LABEL_T2: float = 60.0
+"""FGMS「動能向上」標籤下限。原 scoring_engine.py:680 inline"""
+FGMS_LABEL_T3: float = 45.0
+"""FGMS「持平觀察」標籤下限。原 scoring_engine.py:681 inline"""
+FGMS_LABEL_T4: float = 30.0
+"""FGMS「動能減弱」標籤下限；< 30 → 前景偏弱。原 scoring_engine.py:682 inline"""
+
+# ── 基本面先行指標 narrative（calc_leading_indicators_detail）─
+LEAD_CL_QOQ_SURGE_PCT: float = 20.0
+"""I3 合約負債 QoQ 爆增：>20% → 🟢。原 scoring_engine.py:820 inline"""
+LEAD_CL_QOQ_UP_PCT: float = 5.0
+"""I3 合約負債 QoQ 穩健：>5% → 🟢；>-5% → 🟡 持平。原 scoring_engine.py:822 inline"""
+LEAD_CL_QOQ_DOWN_PCT: float = -5.0
+"""I3 合約負債 QoQ 下降：≤-5% → 🔴。原 scoring_engine.py:824 inline"""
+LEAD_ASSET_DISPOSAL_RATIO: float = 2.0
+"""I4/I5 重大資產處分偵測：處分資產現金流入 / CapEx_TTM > 2.0 → 事件驅動。原 scoring_engine.py:870,922 inline"""
+LEAD_CAPEX_RATIO_CHG_UP_PCT: float = 15.0
+"""I4 資本支出/營收比率 YoY 顯著上升：>15% → 🟢 積極擴產。原 scoring_engine.py:885 inline"""
+LEAD_CAPEX_RATIO_CHG_DOWN_PCT: float = -20.0
+"""I4 CapEx 比率 YoY 收縮容忍：>-20% → 🟡；≤-20% → 🔴 縮減投資。原 scoring_engine.py:891 inline"""
+LEAD_INV_QOQ_DROP_PCT: float = -10.0
+"""I5 存貨/銷售比 QoQ 大降：<-10% → 🟢 快速去化。原 scoring_engine.py:943,949 inline"""
+LEAD_INV_QOQ_RISE_PCT: float = 15.0
+"""I5 存貨/銷售比 QoQ 上升容忍：<15% → 🟡；≥15% → 🔴 積壓風險。原 scoring_engine.py:953 inline"""
+
+# ── 大師級量化因子 check_*（v3.2）─────────────────────────────
+CL_SURGE_YOY_PCT: float = 30.0
+"""合約負債大增（隱形冠軍因子）YoY 門檻：>30% 且 ratio>10% → 隱形冠軍潛力。原 scoring_engine.py:1096 inline"""
+CL_SURGE_RATIO_PCT: float = 10.0
+"""合約負債/資本額比率門檻：>10%。原 scoring_engine.py:1096 inline"""
+CL_GROWTH_YOY_PCT: float = 15.0
+"""合約負債成長中標籤門檻：YoY >15%。原 scoring_engine.py:1099 inline"""
+BOLL_BW_WIDE_PCT: float = 3.0
+"""布林帶寬爆發門檻：今日帶寬 >3%。原 scoring_engine.py:1128 inline"""
+BOLL_BW_TIGHT_PCT: float = 2.0
+"""布林帶寬壓縮門檻：今日帶寬 <2% → 蓄勢待發。原 scoring_engine.py:1131 inline"""
+BOLL_UPPER_PROXIMITY: float = 0.98
+"""布林突破收盤逼近上軌比例：收盤 ≥ 上軌×0.98。原 scoring_engine.py:1128 inline"""
+FAKEOUT_VOL_RATIO: float = 3.0
+"""假突破爆量門檻：成交量 > 20日均量 ×3。原 scoring_engine.py:1153 inline"""
+FAKEOUT_TAIL_RATIO: float = 0.6
+"""假突破長上影線門檻：(最高-收盤)/(最高-最低) >0.6 → 主力出貨。原 scoring_engine.py:1153 inline"""
+RS_STRONG_DAYS_MIN: int = 3
+"""相對強度強勢股門檻：近N日中至少 3 天個股漲幅 > 大盤。原 scoring_engine.py:1179 inline"""
+
+# ── 風控 / 部位（calc_rr_ratio / calc_atr_stop / check_time_stop / VCP / squeeze / position）──
+RR_DEFAULT_TARGET_GAIN: float = 0.15
+"""盈虧比預設目標漲幅：entry × (1+0.15) = +15%。原 scoring_engine.py:1190 inline"""
+RR_MIN: float = 2.0
+"""盈虧比通過門檻：≥2.0 才顯示（模組四剔除 <2）。原 scoring_engine.py:1196 inline"""
+ATR_STOP_MULTIPLIER: float = 1.5
+"""ATR 動態停損預設倍數：Stop = Entry - 1.5×ATR14。原 scoring_engine.py:978 inline default"""
+ATR_STOP_FIXED_PCT: float = 8.0
+"""ATR 計算失敗/資料不足時的固定停損百分比：8%（stop = entry×0.92）。原 scoring_engine.py:986,988 inline"""
+TIME_STOP_MIN_GAIN: float = 0.02
+"""時間停損最低報酬門檻：持有滿 max_days 但報酬 <2% → 建議換股。原 scoring_engine.py:1016 inline default"""
+TIME_STOP_MAX_DAYS: int = 15
+"""時間停損最大持有天數：超過 15 天且報酬不足 → 觸發。原 scoring_engine.py:1016 inline default"""
+VCP_ATR_CONTRACTION_RATIO: float = 0.8
+"""VCP 波動收縮確認：ATR5 < ATR20 ×0.8。原 scoring_engine.py:1050 inline"""
+SQUEEZE_SHORT_RATIO_MIN: float = 0.3
+"""軋空加分券資比門檻：>30%（short_ratio>0.3）。原 scoring_engine.py:1071 inline"""
+SQUEEZE_INST_BUY_DAYS_MIN: int = 3
+"""軋空加分法人連買門檻：≥3 天。原 scoring_engine.py:1071 inline"""
+SQUEEZE_BONUS: int = 5
+"""軋空加分分數：券資比+法人連買同時成立 → 總分 +5（上限 100）。原 scoring_engine.py:1072 inline"""
+POS_MAX_RISK_PCT: float = 0.015
+"""動態部位單筆最大虧損比例：總資金 ×1.5%。原 scoring_engine.py:1208 inline default"""
+POS_ATR_MULTIPLIER: float = 1.5
+"""動態部位停損 ATR 倍數：Stop = Entry - 1.5×ATR14。原 scoring_engine.py:1223 inline"""
+POS_MAX_STOP_PCT: float = 0.85
+"""動態部位最大停損保護：stop_loss 不低於 entry×0.85（最大停損 15%）。原 scoring_engine.py:1224 inline"""
