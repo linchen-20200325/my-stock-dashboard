@@ -8,9 +8,35 @@ import sys  # v18.241 D6: calc_atr_stop 例外路徑寫 stderr 用
 
 # v18.241 E10: ATR% 風險分級從 shared SSOT 引入
 # v18.322: 多因子 A/B 評級門檻從 shared SSOT 引入（§3.3 反捏造）
+# v18.324: scoring_engine 全部評分曲線 / 交易濾網斷點抽 SSOT（user 指定）
 from shared.signal_thresholds import (
     ATR_PCT_LOW, ATR_PCT_HIGH,
     MULTIFACTOR_GRADE_A_MIN, MULTIFACTOR_GRADE_B_MIN,
+    MOM_SHARPE_GOOD,
+    RISK_VOL_VERYLOW_RATIO, RISK_VOL_LOW_RATIO,
+    RS_ABS_RET_T1_PCT, RS_ABS_RET_T2_PCT, RS_ABS_RET_T3_PCT, RS_ABS_RET_T4_PCT,
+    RS_BAND_T1, RS_BAND_T2, RS_BAND_T3, RS_BAND_T4,
+    SQ_GM_TREND_DELTA_PCT, SQ_REV_UP_RATIO, SQ_GM_LEVEL_HIGH_PCT, SQ_GM_LEVEL_LOW_PCT,
+    SQ_GOOD_MIN, SQ_STABLE_MIN, SQ_FAIR_MIN,
+    FGMS_W_CL, FGMS_W_INV, FGMS_W_THREE, FGMS_W_CAPEX,
+    FGMS_CL_RATIO_STRONG, FGMS_CL_RATIO_MID, FGMS_CL_RATIO_LOW,
+    FGMS_CL_QOQ_UP_PCT, FGMS_CL_QOQ_DOWN_PCT,
+    FGMS_DIV_T1_PCT, FGMS_DIV_T2_PCT, FGMS_DIV_T3_PCT, FGMS_DIV_T4_PCT,
+    FGMS_REV_YOY_GOOD_PCT, FGMS_RATE_DELTA_PCT,
+    FGMS_CAPEX_T1_PCT, FGMS_CAPEX_T2_PCT,
+    FGMS_LABEL_T1, FGMS_LABEL_T2, FGMS_LABEL_T3, FGMS_LABEL_T4,
+    LEAD_CL_QOQ_SURGE_PCT, LEAD_CL_QOQ_UP_PCT, LEAD_CL_QOQ_DOWN_PCT,
+    LEAD_ASSET_DISPOSAL_RATIO, LEAD_CAPEX_RATIO_CHG_UP_PCT, LEAD_CAPEX_RATIO_CHG_DOWN_PCT,
+    LEAD_INV_QOQ_DROP_PCT, LEAD_INV_QOQ_RISE_PCT,
+    CL_SURGE_YOY_PCT, CL_SURGE_RATIO_PCT, CL_GROWTH_YOY_PCT,
+    BOLL_BW_WIDE_PCT, BOLL_BW_TIGHT_PCT, BOLL_UPPER_PROXIMITY,
+    FAKEOUT_VOL_RATIO, FAKEOUT_TAIL_RATIO, RS_STRONG_DAYS_MIN,
+    RR_DEFAULT_TARGET_GAIN, RR_MIN,
+    ATR_STOP_MULTIPLIER, ATR_STOP_FIXED_PCT,
+    TIME_STOP_MIN_GAIN, TIME_STOP_MAX_DAYS,
+    VCP_ATR_CONTRACTION_RATIO,
+    SQUEEZE_SHORT_RATIO_MIN, SQUEEZE_INST_BUY_DAYS_MIN, SQUEEZE_BONUS,
+    POS_MAX_RISK_PCT, POS_ATR_MULTIPLIER, POS_MAX_STOP_PCT,
 )
 
 try:
@@ -86,7 +112,7 @@ def calc_momentum_score(df) -> float:
     ret20  = (close.iloc[-1] / close.iloc[-20] - 1) if len(close) >= 20 else 0
     sigma20 = close.pct_change().rolling(20).std().iloc[-1] if len(close) >= 20 else 0.01
     sharpe_20 = ret20 / (sigma20 * (20 ** 0.5) + 1e-10)  # 年化 Sharpe 代理
-    sharpe_score = 2 if sharpe_20 > 0.5 else (1 if sharpe_20 > 0 else 0)
+    sharpe_score = 2 if sharpe_20 > MOM_SHARPE_GOOD else (1 if sharpe_20 > 0 else 0)
 
     # ③ ATR 動態停損空間（股票波動度 vs 風險）
     if len(df) >= 14:
@@ -203,8 +229,8 @@ def calc_risk_score(df) -> float:
 
     # 波動率分級（修正：台股日波動率通常1.5%-6%）
     vol_pct = close.pct_change().rolling(20).std().iloc[-1]
-    if   vol_pct < 0.02:  score += 1   # 極低波動（ETF/權值股）
-    elif vol_pct < 0.035: score += 1   # 正常低波動（原門檻3%已鬆寬）
+    if   vol_pct < RISK_VOL_VERYLOW_RATIO:  score += 1   # 極低波動（ETF/權值股）
+    elif vol_pct < RISK_VOL_LOW_RATIO: score += 1   # 正常低波動（原門檻3%已鬆寬）
     # 3.5%~5% → 0分，>5% → 0分（高波動高風險）
 
     # RSI 不超買
@@ -275,20 +301,20 @@ def calc_rs_score(df, df_index=None, period=250):
         if idx_chg == 0:
             # 無大盤基準：直接用絕對漲幅映射，不套入相對公式
             # 避免與有基準時的 rs 數值系統不同造成混淆
-            if stock_chg >= 50:   return 100
-            elif stock_chg >= 30: return 90
-            elif stock_chg >= 15: return 75
-            elif stock_chg >= 5:  return 60
+            if stock_chg >= RS_ABS_RET_T1_PCT:   return 100
+            elif stock_chg >= RS_ABS_RET_T2_PCT: return 90
+            elif stock_chg >= RS_ABS_RET_T3_PCT: return 75
+            elif stock_chg >= RS_ABS_RET_T4_PCT:  return 60
             elif stock_chg >= 0:  return 50
             else:                 return max(20, 50 + stock_chg)
         else:
             rs = stock_chg / abs(idx_chg)
 
         # 映射到 0-100 分
-        if rs >= 2.0:   return 100
-        elif rs >= 1.5: return 90
-        elif rs >= 1.0: return 75
-        elif rs >= 0.5: return 55
+        if rs >= RS_BAND_T1:   return 100
+        elif rs >= RS_BAND_T2: return 90
+        elif rs >= RS_BAND_T3: return 75
+        elif rs >= RS_BAND_T4: return 55
         elif rs >= 0.0: return 40
         else:           return 20
     except Exception as _e:  # v18.241 D4 (§1 Fail Loud): rs_score 異常時保留 50 dummy 以維 caller 介面，但記 stderr 讓問題可見
@@ -467,14 +493,14 @@ def calc_quality_score(quarterly_df=None) -> dict:
         gm_recent = gm_vals.iloc[-2:].mean()
         gm_prev   = gm_vals.iloc[-4:-2].mean() if len(gm_vals) >= 4 else gm_vals.iloc[:-2].mean()
         gm_diff   = gm_recent - gm_prev
-        if   gm_diff >  1.0: gm_trend = '↑'
-        elif gm_diff < -1.0: gm_trend = '↓'
+        if   gm_diff >  SQ_GM_TREND_DELTA_PCT: gm_trend = '↑'
+        elif gm_diff < -SQ_GM_TREND_DELTA_PCT: gm_trend = '↓'
         else:                gm_trend = '→'   # 持穩
 
         # 營收趨勢：近2季平均 vs 前2季平均（需成長>2%才算↑）
         rev_recent = rev_vals.iloc[-2:].mean()
         rev_prev   = rev_vals.iloc[-4:-2].mean() if len(rev_vals) >= 4 else rev_vals.iloc[:-2].mean()
-        rev_trend  = '↑' if rev_prev > 0 and rev_recent > rev_prev * 1.02 else '↓'
+        rev_trend  = '↑' if rev_prev > 0 and rev_recent > rev_prev * SQ_REV_UP_RATIO else '↓'
 
         # 交叉評分 Sraw
         if   gm_trend == '↑' and rev_trend == '↑': sraw = 2.0
@@ -485,17 +511,17 @@ def calc_quality_score(quarterly_df=None) -> dict:
 
         # SGM_Level：毛利率絕對值評分（40~100）
         gm_level = float(gm_vals.iloc[-1])
-        if   gm_level >= 50: sgm = 100.0
-        elif gm_level <= 10: sgm = 40.0
-        else:                sgm = 40.0 + (gm_level - 10) / 40.0 * 60.0
+        if   gm_level >= SQ_GM_LEVEL_HIGH_PCT: sgm = 100.0
+        elif gm_level <= SQ_GM_LEVEL_LOW_PCT: sgm = 40.0
+        else:                sgm = 40.0 + (gm_level - SQ_GM_LEVEL_LOW_PCT) / 40.0 * 60.0
 
         # SQ 合成：Sraw 正規化至 0~100
         sraw_norm = (sraw + 2.0) / 4.0 * 100.0
         sq = round(0.4 * sgm + 0.6 * sraw_norm, 1)
 
-        if   sq >= 75: sq_label = '優質'
-        elif sq >= 55: sq_label = '穩健'
-        elif sq >= 40: sq_label = '普通'
+        if   sq >= SQ_GOOD_MIN: sq_label = '優質'
+        elif sq >= SQ_STABLE_MIN: sq_label = '穩健'
+        elif sq >= SQ_FAIR_MIN: sq_label = '普通'
         else:          sq_label = '弱'
 
         return {'sq': sq, 'sq_label': sq_label,
@@ -569,11 +595,11 @@ def calc_forward_momentum_score(quarterly_df=None, bs_cf_df=None,
                     cl_ratio  = float(np.clip(cl_latest / rev_avg, 0, 5))
                     cl_qoq    = _qoq_pct(cl_series)   # QoQ 加速？
                     # 評分：CL Ratio 深度 + QoQ 動能雙軌
-                    if   cl_ratio > 0.5 and not pd.isna(cl_qoq) and cl_qoq > 10: cl_score = 100
-                    elif cl_ratio > 0.5 or (not pd.isna(cl_qoq) and cl_qoq > 10): cl_score = 75
-                    elif cl_ratio > 0.2:  cl_score = 55
-                    elif cl_ratio > 0.05: cl_score = 40
-                    elif not pd.isna(cl_qoq) and cl_qoq < -10: cl_score = 20
+                    if   cl_ratio > FGMS_CL_RATIO_STRONG and not pd.isna(cl_qoq) and cl_qoq > FGMS_CL_QOQ_UP_PCT: cl_score = 100
+                    elif cl_ratio > FGMS_CL_RATIO_STRONG or (not pd.isna(cl_qoq) and cl_qoq > FGMS_CL_QOQ_UP_PCT): cl_score = 75
+                    elif cl_ratio > FGMS_CL_RATIO_MID:  cl_score = 55
+                    elif cl_ratio > FGMS_CL_RATIO_LOW: cl_score = 40
+                    elif not pd.isna(cl_qoq) and cl_qoq < FGMS_CL_QOQ_DOWN_PCT: cl_score = 20
                     else:                 cl_score = 35
                 else:
                     cl_score = None  # rev_avg 無效
@@ -608,13 +634,13 @@ def calc_forward_momentum_score(quarterly_df=None, bs_cf_df=None,
                 inv_days_yoy = float('nan')
             if not pd.isna(rev_yoy) and not pd.isna(inv_days_yoy):
                 divergence = rev_yoy - inv_days_yoy   # 正值 = 好（賣得快）
-                if   divergence > 15:  inv_score = 100
-                elif divergence > 5:   inv_score = 75
-                elif divergence >= -5: inv_score = 50
-                elif divergence >= -15:inv_score = 30
+                if   divergence > FGMS_DIV_T1_PCT:  inv_score = 100
+                elif divergence > FGMS_DIV_T2_PCT:   inv_score = 75
+                elif divergence >= FGMS_DIV_T3_PCT: inv_score = 50
+                elif divergence >= FGMS_DIV_T4_PCT:inv_score = 30
                 else:                  inv_score = 10
             elif not pd.isna(rev_yoy):
-                inv_score = 65 if rev_yoy > 10 else (50 if rev_yoy > 0 else 30)
+                inv_score = 65 if rev_yoy > FGMS_REV_YOY_GOOD_PCT else (50 if rev_yoy > 0 else 30)
 
         # ══════════════════════════════════════════════════════
         # 維度 3 — 三率趨勢（20%）
@@ -629,8 +655,8 @@ def calc_forward_momentum_score(quarterly_df=None, bs_cf_df=None,
                         _rates_total += 1
                         _recent = _rs.iloc[-2:].mean()
                         _prev   = _rs.iloc[-4:-2].mean() if len(_rs) >= 4 else _rs.iloc[:-2].mean()
-                        if _recent > _prev + 0.5: _rates_up += 1
-                        elif _recent < _prev - 0.5: _rates_up -= 1  # 惡化
+                        if _recent > _prev + FGMS_RATE_DELTA_PCT: _rates_up += 1
+                        elif _recent < _prev - FGMS_RATE_DELTA_PCT: _rates_up -= 1  # 惡化
             if _rates_total > 0:
                 _ratio = _rates_up / _rates_total   # -1 ~ +1
                 three_rate_score = round(50 + _ratio * 50, 1)   # 0 ~ 100
@@ -646,15 +672,15 @@ def calc_forward_momentum_score(quarterly_df=None, bs_cf_df=None,
                 cx_prev  = cx_series.iloc[-8:-4].sum() if len(cx_series) >= 8 else cx_series.head(4).sum()
                 if cx_prev > 0:
                     cx_yoy = float(np.clip((cx_now - cx_prev) / cx_prev * 100, -100, 100))
-                    if   cx_yoy > 20:  capex_score = 100
+                    if   cx_yoy > FGMS_CAPEX_T1_PCT:  capex_score = 100
                     elif cx_yoy > 0:   capex_score = 70
-                    elif cx_yoy > -20: capex_score = 45
+                    elif cx_yoy > FGMS_CAPEX_T2_PCT: capex_score = 45
                     else:              capex_score = 20
 
         # ══════════════════════════════════════════════════════
         # 動態加權（缺少維度時重新分配）
         # ══════════════════════════════════════════════════════
-        _w = {'cl': 0.40, 'inv': 0.30, 'three': 0.20, 'capex': 0.10}
+        _w = {'cl': FGMS_W_CL, 'inv': FGMS_W_INV, 'three': FGMS_W_THREE, 'capex': FGMS_W_CAPEX}
         _scores = {'cl': cl_score, 'inv': inv_score, 'three': three_rate_score, 'capex': capex_score}
 
         # 無合約負債（服務業/金融）→ 把 CL 40% 移到三率
@@ -676,10 +702,10 @@ def calc_forward_momentum_score(quarterly_df=None, bs_cf_df=None,
         fgms = sum(_w[k] * _scores[k] for k in _w if _scores[k] is not None and _w[k] > 0) / total_w
         fgms = round(fgms, 1)
 
-        if   fgms >= 75: fgms_label = '前景亮麗'
-        elif fgms >= 60: fgms_label = '動能向上'
-        elif fgms >= 45: fgms_label = '持平觀察'
-        elif fgms >= 30: fgms_label = '動能減弱'
+        if   fgms >= FGMS_LABEL_T1: fgms_label = '前景亮麗'
+        elif fgms >= FGMS_LABEL_T2: fgms_label = '動能向上'
+        elif fgms >= FGMS_LABEL_T3: fgms_label = '持平觀察'
+        elif fgms >= FGMS_LABEL_T4: fgms_label = '動能減弱'
         else:            fgms_label = '前景偏弱'
 
         return {
@@ -817,11 +843,11 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
                 _prev = float(_cl.iloc[-2]); _now = float(_cl.iloc[-1])
                 if _prev > 0:
                     _qoq = (_now - _prev) / _prev * 100
-                    if _qoq > 20:
+                    if _qoq > LEAD_CL_QOQ_SURGE_PCT:
                         _sig = '🟢'; _detail = f'合約負債單季爆增 {_qoq:+.1f}%，預收訂單大幅增加'
-                    elif _qoq > 5:
+                    elif _qoq > LEAD_CL_QOQ_UP_PCT:
                         _sig = '🟢'; _detail = f'合約負債穩健增加 {_qoq:+.1f}%，訂單能見度提升'
-                    elif _qoq > -5:
+                    elif _qoq > LEAD_CL_QOQ_DOWN_PCT:
                         _sig = '🟡'; _detail = f'合約負債持平（{_qoq:+.1f}%），訂單穩定'
                     else:
                         _sig = '🔴'; _detail = f'合約負債減少 {_qoq:+.1f}%，訂單能見度下降'
@@ -867,7 +893,7 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
                 _rv_prev = float(_rv.iloc[-8:-4].sum()) if len(_rv) >= 8 else float(_rv.head(4).sum())
 
                 # ── 重大資產處分偵測（Edge Case: 賣廠/轉型股）────────
-                _event_driven = (_cx_ttm > 0 and _disp_ttm / _cx_ttm > 2.0)
+                _event_driven = (_cx_ttm > 0 and _disp_ttm / _cx_ttm > LEAD_ASSET_DISPOSAL_RATIO)
 
                 if _rv_ttm > 0 and _rv_prev > 0:
                     _ratio_now  = _cx_ttm  / _rv_ttm
@@ -882,13 +908,13 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
                         _detail = (f'⚠️ 事件驅動：偵測到重大資產處分現金流入 {_disp_b:.1f}億'
                                    f'（約{_disp_ttm/_cx_ttm:.1f}×CapEx），'
                                    f'資本支出比較基期失真，移出純成長評估')
-                    elif _ratio_chg > 15:
+                    elif _ratio_chg > LEAD_CAPEX_RATIO_CHG_UP_PCT:
                         _sig = '🟢'; _detail = f'資本支出/營收比率YoY上升{_ratio_chg:.0f}%，積極擴產訊號'
                         _val = f'CapEx率: {_ratio_now*100:.1f}% (YoY {_ratio_chg:+.0f}%)'
                     elif _ratio_chg > 0:
                         _sig = '🟡'; _detail = f'資本支出/營收比率小幅提升{_ratio_chg:.0f}%，維持投入'
                         _val = f'CapEx率: {_ratio_now*100:.1f}% (YoY {_ratio_chg:+.0f}%)'
-                    elif _ratio_chg > -20:
+                    elif _ratio_chg > LEAD_CAPEX_RATIO_CHG_DOWN_PCT:
                         _sig = '🟡'; _detail = f'資本支出/營收比率小幅收縮{_ratio_chg:.0f}%，尚可'
                         _val = f'CapEx率: {_ratio_now*100:.1f}% (YoY {_ratio_chg:+.0f}%)'
                     else:
@@ -919,7 +945,7 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
             _cx5   = pd.to_numeric(bs_cf_df.get('資本支出', pd.Series(dtype=float)), errors='coerce').fillna(0)
             _disp5_ttm = float(_disp5.tail(4).sum())
             _cx5_ttm   = float(_cx5.tail(4).sum())
-            _i5_event_driven = (_cx5_ttm > 0 and _disp5_ttm / _cx5_ttm > 2.0)
+            _i5_event_driven = (_cx5_ttm > 0 and _disp5_ttm / _cx5_ttm > LEAD_ASSET_DISPOSAL_RATIO)
 
         if (bs_cf_df is not None and not bs_cf_df.empty and '存貨' in bs_cf_df.columns
                 and qtr_df is not None and not qtr_df.empty and '營收' in qtr_df.columns):
@@ -940,17 +966,17 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
                     _pct_chg  = (_last_r - _prev_r) / _prev_r * 100
                     _val = f'存貨率: {_last_r:.2f}x (QoQ {_pct_chg:+.0f}%)'
 
-                    if _i5_event_driven and _pct_chg < -10:
+                    if _i5_event_driven and _pct_chg < LEAD_INV_QOQ_DROP_PCT:
                         # 存貨急降但同期有重大資產處分 → 可能是廠房移轉帶走存貨
                         _sig = '🟡'
                         _detail = f'⚠️ 事件驅動：存貨大降{_pct_chg:.0f}%，但同期偵測重大資產處分，去化原因需確認'
                     elif _all_down and len(_ratios) >= 3:
                         _sig = '🟢'; _detail = f'存貨/銷售比連續{len(_ratios)}季下降，去化速度加快'
-                    elif _pct_chg < -10:
+                    elif _pct_chg < LEAD_INV_QOQ_DROP_PCT:
                         _sig = '🟢'; _detail = f'存貨/銷售比單季大降{_pct_chg:.0f}%，庫存快速去化'
                     elif _pct_chg < 0:
                         _sig = '🟡'; _detail = f'存貨/銷售比下降{_pct_chg:.0f}%，庫存略有改善'
-                    elif _pct_chg < 15:
+                    elif _pct_chg < LEAD_INV_QOQ_RISE_PCT:
                         _sig = '🟡'; _detail = f'存貨/銷售比小幅上升{_pct_chg:.0f}%，尚在合理範圍'
                     else:
                         _sig = '🔴'; _detail = f'存貨/銷售比上升{_pct_chg:.0f}%，庫存積壓風險'
@@ -975,7 +1001,7 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
     return results
 
 # ── ATR 動態停損計算 ────────────────────────────────────────
-def calc_atr_stop(df, entry_price: float, multiplier: float = 1.5) -> dict:
+def calc_atr_stop(df, entry_price: float, multiplier: float = ATR_STOP_MULTIPLIER) -> dict:
     """
     ATR 動態停損點
     Stop_Loss = Entry - (multiplier × ATR14)
@@ -983,8 +1009,8 @@ def calc_atr_stop(df, entry_price: float, multiplier: float = 1.5) -> dict:
     """
     if df is None or len(df) < 14:
         # 刻意降級：資料不足 → 固定 8% 停損，error=None 表非異常路徑
-        return {'stop_loss': round(entry_price * 0.92, 2),
-                'atr': None, 'stop_pct': 8.0,
+        return {'stop_loss': round(entry_price * (1 - ATR_STOP_FIXED_PCT / 100), 2),
+                'atr': None, 'stop_pct': ATR_STOP_FIXED_PCT,
                 'method': 'fixed_8pct', 'error': None}
     try:
         hi = df['high'] if 'high' in df.columns else df['close']
@@ -1006,14 +1032,14 @@ def calc_atr_stop(df, entry_price: float, multiplier: float = 1.5) -> dict:
         # 改：(1) bare → except Exception (2) stderr log (3) error 欄位讓 caller 可追溯。
         print(f"[calc_atr_stop] ATR 計算失敗 entry={entry_price}, 降級到固定 8% 停損: "
               f"{type(e).__name__}: {e}", file=sys.stderr)
-        return {'stop_loss': round(entry_price * 0.92, 2),
-                'atr': None, 'stop_pct': 8.0,
+        return {'stop_loss': round(entry_price * (1 - ATR_STOP_FIXED_PCT / 100), 2),
+                'atr': None, 'stop_pct': ATR_STOP_FIXED_PCT,
                 'method': 'fixed_8pct', 'error': f"{type(e).__name__}: {e}"}
 
 # ── 時間停損判斷 ────────────────────────────────────────────
 def check_time_stop(entry_price: float, current_price: float,
                     hold_days: int,
-                    min_gain: float = 0.02, max_days: int = 15) -> dict:
+                    min_gain: float = TIME_STOP_MIN_GAIN, max_days: int = TIME_STOP_MAX_DAYS) -> dict:
     """
     時間停損：防止資金被低效套牢（溫水煮青蛙效應）
     持倉超過 max_days 天但報酬不足 min_gain → 建議換股
@@ -1047,11 +1073,11 @@ def check_vcp_atr_filter(df) -> dict:
         atr20 = float(tr.rolling(20).mean().iloc[-1])
         result['atr5']  = round(atr5, 2)
         result['atr20'] = round(atr20, 2)
-        if atr20 > 0 and atr5 < atr20 * 0.8:
+        if atr20 > 0 and atr5 < atr20 * VCP_ATR_CONTRACTION_RATIO:
             result['pass']  = True
-            result['label'] = f'✅ VCP收縮確認（ATR5={atr5:.2f} < ATR20×0.8={atr20*0.8:.2f}）'
+            result['label'] = f'✅ VCP收縮確認（ATR5={atr5:.2f} < ATR20×{VCP_ATR_CONTRACTION_RATIO}={atr20*VCP_ATR_CONTRACTION_RATIO:.2f}）'
         else:
-            result['label'] = f'⏳ 波動未收縮（ATR5={atr5:.2f}，ATR20×0.8={atr20*0.8:.2f}）'
+            result['label'] = f'⏳ 波動未收縮（ATR5={atr5:.2f}，ATR20×{VCP_ATR_CONTRACTION_RATIO}={atr20*VCP_ATR_CONTRACTION_RATIO:.2f}）'
     except Exception:
         result['label'] = '計算失敗'
     return result
@@ -1068,11 +1094,11 @@ def calc_short_squeeze_bonus(short_ratio: float = 0.0,
     """
     bonus = 0
     label = ''
-    if short_ratio > 0.3 and inst_consecutive_buy >= 3:
-        bonus = 5
-        label = (f'🔥 軋空加分 +5（券資比{short_ratio*100:.0f}%'
+    if short_ratio > SQUEEZE_SHORT_RATIO_MIN and inst_consecutive_buy >= SQUEEZE_INST_BUY_DAYS_MIN:
+        bonus = SQUEEZE_BONUS
+        label = (f'🔥 軋空加分 +{SQUEEZE_BONUS}（券資比{short_ratio*100:.0f}%'
                  f' + 法人連買{inst_consecutive_buy}天）')
-    elif short_ratio > 0.3:
+    elif short_ratio > SQUEEZE_SHORT_RATIO_MIN:
         label = f'⚠️ 高券資比{short_ratio*100:.0f}%，法人連買天數不足'
     return {'bonus': bonus, 'label': label, 'short_ratio': short_ratio,
             'inst_consecutive_buy': inst_consecutive_buy}
@@ -1093,10 +1119,10 @@ def check_contract_liability_surge(cl_current, cl_prev_year, paid_in_capital) ->
     ratio = (cl_current / paid_in_capital * 100) if paid_in_capital and paid_in_capital > 0 else 0
     result['yoy_pct'] = round(yoy, 1)
     result['cl_ratio'] = round(ratio, 1)
-    if yoy > 30 and ratio > 10:
+    if yoy > CL_SURGE_YOY_PCT and ratio > CL_SURGE_RATIO_PCT:
         result['is_surge'] = True
         result['label'] = '🌟 隱形冠軍潛力（合約負債大增）'
-    elif yoy > 15:
+    elif yoy > CL_GROWTH_YOY_PCT:
         result['label'] = '📈 合約負債成長中'
     return result
 
@@ -1125,10 +1151,10 @@ def check_bollinger_squeeze(df) -> dict:
     close_now = float(close.iloc[-1])
     upper_now = float(upper.iloc[-1])
 
-    if bw_today > 3 and bw_avg5 < 3 and close_now >= upper_now * 0.98:
+    if bw_today > BOLL_BW_WIDE_PCT and bw_avg5 < BOLL_BW_WIDE_PCT and close_now >= upper_now * BOLL_UPPER_PROXIMITY:
         result['is_squeeze_break'] = True
         result['label'] = '🚀 布林帶突破—動能發動點'
-    elif bw_today < 2:
+    elif bw_today < BOLL_BW_TIGHT_PCT:
         result['label'] = '🔵 帶寬收縮中（蓄勢待發）'
     return result
 
@@ -1150,7 +1176,7 @@ def check_fake_breakout(df) -> dict:
     vol_ratio = vol / (avg_v + 1e-10)
     tail_ratio= (high - close) / (high - low + 1e-10)
 
-    if vol_ratio > 3 and high >= hi20 and tail_ratio > 0.6:
+    if vol_ratio > FAKEOUT_VOL_RATIO and high >= hi20 and tail_ratio > FAKEOUT_TAIL_RATIO:
         result['is_fake'] = True
         result['label'] = '☠️ 異常量假突破警告（主力出貨）'
     return result
@@ -1176,8 +1202,8 @@ def check_relative_strength(df, df_index=None, days=5) -> dict:
         beats = int((stock_ret > 0).sum())
 
     result['strong_days'] = beats
-    result['is_strong']   = beats >= 3
-    result['label'] = f'💪 強勢股（{beats}/{days}天超大盤）' if beats >= 3 else f'弱勢（{beats}/{days}天）'
+    result['is_strong']   = beats >= RS_STRONG_DAYS_MIN
+    result['label'] = f'💪 強勢股（{beats}/{days}天超大盤）' if beats >= RS_STRONG_DAYS_MIN else f'弱勢（{beats}/{days}天）'
     return result
 
 def calc_rr_ratio(entry_price, stop_loss, target_price=None) -> dict:
@@ -1187,13 +1213,13 @@ def calc_rr_ratio(entry_price, stop_loss, target_price=None) -> dict:
     盈虧比 < 2 → 模組四：直接剔除不顯示
     """
     if target_price is None:
-        target_price = entry_price * 1.15   # 預設目標+15%
+        target_price = entry_price * (1 + RR_DEFAULT_TARGET_GAIN)   # 預設目標+15%
     risk   = entry_price - stop_loss
     reward = target_price - entry_price
     if risk <= 0:
         return {'rr': 0, 'pass': False, 'label': '停損設定有誤'}
     rr = round(reward / risk, 2)
-    passed = rr >= 2.0
+    passed = rr >= RR_MIN
     return {
         'rr': rr,
         'pass': passed,
@@ -1205,7 +1231,7 @@ def calc_rr_ratio(entry_price, stop_loss, target_price=None) -> dict:
 def calculate_position_size(total_capital_twd: float,
                              entry_price: float,
                              atr_value: float,
-                             max_risk_pct: float = 0.015) -> dict:
+                             max_risk_pct: float = POS_MAX_RISK_PCT) -> dict:
     """
     模組三：動態停損 + 建議買入股數
     Stop_Loss = Entry - 1.5×ATR14
@@ -1220,8 +1246,8 @@ def calculate_position_size(total_capital_twd: float,
     Returns:
         dict: stop_loss/position_size/max_risk/lots
     """
-    stop_loss   = round(entry_price - 1.5 * atr_value, 2)
-    stop_loss   = max(stop_loss, entry_price * 0.85)  # 最大停損15%保護
+    stop_loss   = round(entry_price - POS_ATR_MULTIPLIER * atr_value, 2)
+    stop_loss   = max(stop_loss, entry_price * POS_MAX_STOP_PCT)  # 最大停損15%保護
     risk_per_sh = entry_price - stop_loss
     if risk_per_sh <= 0:
         return {'error': '停損計算失敗（ATR過大或進場價過低）'}

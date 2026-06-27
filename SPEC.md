@@ -515,3 +515,40 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 | **3. 安全邊際 Strong** | prompt >60% vs code >=20% | **對齊 60%**（MJ 經典：安全邊際>60% 表毛利衰退 40% 本業仍不虧；修 code bug 20→60，保三階 Strong/Acceptable/Weak） | 20–60% MOS 由 Strong→Acceptable |
 
 - golden test `tests/test_financial_health_ssot.py` 守 3 漂移修正 + prompt/code 一致；`tests/test_financial_health_engine.py` 既有負債 45→Pass / 65→Warning / 75→Fail 邊界不受影響（仍釘 60/70）。
+
+## §14 scoring_engine 評分曲線 / 交易濾網斷點全抽 SSOT（v18.324）
+
+> 深層 SSOT 第 2 階段（PR-B）。audit 結論原建議：scoring_engine 的單用途評分曲線斷點屬
+> §8.1 step 6「用不到的抽象」，登記 EX-SCORE-1 例外即可、不大抽。**user 2026-06-27 覆寫**
+> 此建議，明示「全部抽成常數」。本節記錄落地範圍與分名原則。
+
+### §14.1 抽取範圍（純等值替換，行為不變）
+
+`scoring_engine.py` 各「判斷門檻」(value→score/label/signal 的比較斷點)全部抽至
+`shared/signal_thresholds.py`（單一 import 源，延續既有 ATR_PCT/MULTIFACTOR 先例），涵蓋：
+- **評分函式**：動能 Sharpe(`MOM_*`)、風險波動率(`RISK_*`)、RS 相對強度(`RS_*`)、
+  獲利品質 SQ(`SQ_*`)、前瞻動能 FGMS 含維度權重 + 曲線(`FGMS_*`)
+- **先行指標 narrative**：I3 合約負債 / I4 CapEx / I5 存貨 的 🟢🟡🔴 斷點(`LEAD_*`)
+- **大師級因子 check_***：合約負債大增(`CL_*`)、布林壓縮(`BOLL_*`)、假突破(`FAKEOUT_*`)、
+  相對強度天數(`RS_STRONG_DAYS_MIN`)
+- **風控 / 部位**：盈虧比(`RR_*`)、ATR 停損(`ATR_STOP_*`)、時間停損(`TIME_STOP_*`)、
+  VCP 收縮(`VCP_*`)、軋空加分(`SQUEEZE_*`)、動態部位(`POS_*`)
+
+### §14.2 不抽（明確排除，非判斷門檻）
+
+指標視窗期（MA5/20/60/120、RSI14、ATR14、rolling 20）= TA 慣例；評分輸出值（2/1/0 子分、
+`/6 /3 *100` 正規化）= 評分刻度結構；數學防呆（`1e-10`）；年化倍數（`×4`）；日數慣例（360/365）；
+自然零界（`>0`）。這些非「判斷閾值」，抽取無助於 SSOT 反增噪音。
+
+### §14.3 前綴分名「同數字不同義」不耦合（不變量）
+
+SQ 標籤 `75` ≠ FGMS 標籤 `75` ≠ 多因子總分 `75` —— 三者同值但語意獨立，各自具名
+（`SQ_GOOD_MIN` / `FGMS_LABEL_T1` / `MULTIFACTOR_GRADE_A_MIN`），改其一不牽動其餘。
+此為避開 F-GRAY-4（Fund 端）「多用途閾值機械式 swap」教訓的關鍵守則，
+`tests/test_scoring_thresholds_ssot.py` 守此不變量 + 行為不變 smoke。
+
+### §14.4 對照 financial_health（§13）的策略差異
+
+financial_health 因 prompt/code 雙表徵 + 真漂移 → SSOT 有「修 bug」實益；scoring_engine
+為純單用途曲線 → 抽取為**形式 SSOT**（無 bug 可修，純消滅 inline magic）。兩者落地手法
+（前綴分名、行為不變）一致，但 ROI 性質不同，已如實記錄供日後評估。
