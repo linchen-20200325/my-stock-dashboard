@@ -3060,6 +3060,45 @@ padding:12px 16px;margin:8px 0;">
                 _zone2 = ('便宜' if price2 <= _cp2_ai else '合理' if price2 <= _fp2_ai
                           else '昂貴' if price2 <= _dp2_ai else '超過昂貴')
                 _fund_str2.append(f'357估值={_zone2}（便宜:{_cp2_ai}/合理:{_fp2_ai}/昂貴:{_dp2_ai}）')
+            # v18.327 PR-B:AI prompt 補 P/B 估值帶狀分級(PR-A 已 SSOT 化)
+            try:
+                from shared.stock_buckets import classify_pb_level, get_pb_bands
+                _bps_ai = fetch_bps(sid2)
+                if _bps_ai > 0 and price2 > 0:
+                    _pb_raw_ai = price2 / _bps_ai
+                    _ind_ai = fetch_industry_category(sid2)
+                    _bands_ai = get_pb_bands(_ind_ai)
+                    _pb_lvl_ai = classify_pb_level(_pb_raw_ai, _bands_ai)
+                    _fund_str2.append(
+                        f'P/B 帶狀估值=PB:{_pb_raw_ai:.2f} {_pb_lvl_ai} '
+                        f'(產業帶 低:{_bands_ai[0]}/中:{_bands_ai[1]}/高:{_bands_ai[2]})'
+                    )
+            except Exception:
+                pass
+            # v18.327 PR-B:AI prompt 補 MJ 趨勢分數合議(月+季 65/35)
+            try:
+                from datetime import date as _date_ai
+                from mj_snapshot_io import (
+                    current_finmind_yyyymm as _cfymm_ai,
+                    list_snapshots as _ls_ai,
+                    load_snapshot as _ld_ai,
+                    save_snapshot as _sv_ai,
+                )
+                from mj_trend_score import compute_one_stock_trend as _cost_ai
+                _ymm_ai = _cfymm_ai(_date_ai.today())
+                _mj_row_ai = _cost_ai(
+                    sid=sid2, yyyymm_curr=_ymm_ai, token=FINMIND_TOKEN, w_monthly=0.65,
+                    fetch_financial_statements=fetch_financial_statements,
+                    analyze_financial_health=analyze_financial_health,
+                    list_snapshots=_ls_ai, load_snapshot=_ld_ai, save_snapshot=_sv_ai,
+                )
+                _fund_str2.append(
+                    f"MJ 趨勢分數(月+季 65/35)={_mj_row_ai.get('label', '—')} "
+                    f"(合分 {_mj_row_ai.get('score', 0):+.2f},月分 {_mj_row_ai.get('mon_sub', 0):+.2f}/"
+                    f"季分 {_mj_row_ai.get('mj_sub', 0):+.2f})"
+                )
+            except Exception:
+                pass
             _fund_data2 = '\n'.join(_fund_str2) if _fund_str2 else '基本面資料不足'
             # ── 彙整財報體檢結果 ──────────────────────────────────
             _fh_res2 = st.session_state.get(f'_fh_{sid2}', {})
