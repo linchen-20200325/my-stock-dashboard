@@ -130,6 +130,10 @@ def test_fetch_etf_manager_falls_back_to_yuanta(monkeypatch):
 
 def test_expense_ratio_uses_yuanta_for_active_etf(monkeypatch):
     """SITCA + MDJ 都回 None，主動式 ETF 應拿 Yuanta 的費用率。"""
+    # get_etf_expense_ratio_safe 的 primary 是 fetch_etf_meta_moneydj(Basic0004),
+    # 必須一併 mock 回 None — 否則 CI(NAS proxy 可達)會抓到真資料 → 提早 return,
+    # 永遠走不到 Yuanta 分支(本機 proxy 不可達才會「碰巧」過)。網路相依改為確定性。
+    monkeypatch.setattr(etf_fetch, 'fetch_etf_meta_moneydj', lambda t: None)
     monkeypatch.setattr(etf_fetch, 'fetch_sitca_expense_ratio', lambda t: None)
     monkeypatch.setattr(etf_fetch, 'fetch_moneydj_expense_ratio', lambda t: None)
     monkeypatch.setattr(etf_fetch, '_fetch_yuanta_active_etf_meta',
