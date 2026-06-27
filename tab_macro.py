@@ -2094,9 +2094,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     except Exception as _e_gov2:
                         print(f'[Export/gov-mof] ❌ {type(_e_gov2).__name__}: {_e_gov2}')
 
-                    # 靜態備援：所有方案失敗時回傳最後已知穩定歷史數據
-                    print('[Export/fallback] ⚠️ 所有方案失敗，使用靜態備援 2026-03')
-                    return {'tw_export': {'yoy': 18.9, 'date': '2026-03-01', 'source': '靜態備援'}}
+                    # v18.330 §1 Fail Loud：所有方案全失敗 → **不捏造**任何數值。
+                    # 原本回傳一組寫死的歷史出口假值，會灌進總經儀表板、MK 拐點與 AI
+                    # 摘要（違 §1 寧可炸不可造假）。改回空 dict（不貢獻 tw_export key）→
+                    # 下游各 consumer 退為「待取得」placeholder（誠實顯示無資料）；失敗
+                    # 事實由本 log 記錄供診斷（§2.4 可觀測性）。
+                    print('[Export/fallback] ⚠️ 所有方案全失敗 → 回空（不捏造假值），UI 顯示「待取得」')
+                    return {}
 
                 # ── 並行執行（5 個獨立資料源同時跑，總時間 = max 而非 sum）──────
                 # v10.61.0: 改手動 executor 管理，as_completed timeout 後 shutdown(wait=False)
