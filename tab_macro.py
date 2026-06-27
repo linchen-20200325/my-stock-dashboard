@@ -1118,11 +1118,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
     if do_refresh:
         _fetch_ph = st.empty()
-        _fetch_ph.info(
-            '⏳ 載入指數行情中…' if not _load_heavy
-            else '⏳ 並發抓取全部市場數據中，請稍候...'
-        )
-        if True:  # noqa
+        # v18.333：改用 st.spinner 動畫載入指示（對齊 Fund tab1 行為）。原本只有
+        # 靜態 st.info 文字 + 按鈕殘留 → 阻塞抓取時畫面看似凍結、分不清是否載完。
+        # spinner 在整個抓取期間動畫旋轉，結束自動消失，使用者一眼看出「進行中」。
+        with st.spinner('🚀 並行抓取 總經 + 籌碼 + 先行指標中…（約 30~60 秒，請稍候）'):
             import time as _t_spd
             _t_start = _t_spd.time()
 
