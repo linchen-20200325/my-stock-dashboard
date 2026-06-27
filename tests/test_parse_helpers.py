@@ -112,8 +112,35 @@ class TestEdgeCases:
 # 5. Back-compat re-export
 # ════════════════════════════════════════════════════════════════
 class TestBackCompat:
+    @pytest.mark.slow
     def test_app_reexport(self):
-        """app.parse_stocks 應仍可 import(re-export shim)。"""
-        from app import parse_stocks as ps_old
-        from shared.parse_helpers import parse_stocks as ps_new
-        assert ps_old is ps_new
+        """app.parse_stocks 應仍可 import(re-export shim)。
+
+        以 **subprocess** 驗證,原因:
+        1. `import app` 會跑整支 monolith(app.py 模組級即 render 全 app,~60s),
+           本質是 e2e,故標記 @slow(對齊 pytest.ini「單測 >5s」定義)。
+        2. 其他 test 檔(test_data_coverage / test_macro_classroom)在 collection
+           時把 sys.modules['streamlit'] 換成不完整 stub,且 tab_macro 等子模組
+           會 cache 該 stub 的 `st` 參照 → 同 process 內 import app 必炸。subprocess
+           有乾淨 sys.modules + 真 streamlit,徹底避開污染(§5 冪等性/可重現性)。
+        """
+        import os
+        import subprocess
+        import sys
+        import textwrap
+
+        _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _code = textwrap.dedent("""
+            from app import parse_stocks as a
+            from shared.parse_helpers import parse_stocks as b
+            assert a is b, 'app.parse_stocks 不是 shared.parse_helpers.parse_stocks'
+            print('REEXPORT_OK')
+        """)
+        r = subprocess.run(
+            [sys.executable, "-c", _code],
+            cwd=_repo_root, capture_output=True, text=True, timeout=180,
+        )
+        assert r.returncode == 0 and "REEXPORT_OK" in r.stdout, (
+            "app re-export shim 驗證失敗:\n"
+            f"stdout: {r.stdout[-1000:]}\nstderr: {r.stderr[-2000:]}"
+        )

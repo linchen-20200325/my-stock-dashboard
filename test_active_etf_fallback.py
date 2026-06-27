@@ -119,7 +119,9 @@ def test_fetch_etf_manager_falls_back_to_yuanta(monkeypatch):
     r = etf_fetch.fetch_etf_manager('00980A.TW')
     assert r is not None, f'Yuanta fallback 失敗 — calls: {_calls}'
     assert r['name'] == '王五'
-    assert r.get('source') == 'yuanta-official'
+    # v18.257 S-PROV-1 phase 11:fetch_etf_manager 的 source 升級為 Provenance
+    # 慣例 'Provider:Dataset'(對齊 'FRED:<sid>' / 'Yahoo:^VIX'),etf_fetch.py:1085。
+    assert r.get('source') == 'Yuanta:official'
 
 
 # ════════════════════════════════════════════════════════════

@@ -43,7 +43,11 @@ def test_trend_arrow_strictly_down():
 
 
 def test_trend_arrow_recent_rebound():
-    assert macro_core.trend_arrow([5, 4, 3, 2, 3]) == "最近反彈 ↗"
+    # trend_arrow 的「持續下降」門檻為 neg >= len(diffs)-1（容忍 1 個非降）。
+    # [5,4,3,2,3] = 3 降 + 末點 1 升 → neg=3 >= 3 → 仍判「持續下降」(設計如此,
+    # 自 v18.209 未變)。要實際觸發「最近反彈」分支需 ≥2 個非降 diff:
+    # [5,4,3,4,5] → diffs=[-1,-1,+1,+1], neg=2 < 3 且末點升 → 「最近反彈 ↗」。
+    assert macro_core.trend_arrow([5, 4, 3, 4, 5]) == "最近反彈 ↗"
 
 
 def test_trend_arrow_too_short():
@@ -160,7 +164,9 @@ def test_fetch_yf_close_goes_through_proxy_helper(monkeypatch):
     s = macro_core.fetch_yf_close("^VIX", range_="5d")
 
     assert captured["url"].endswith("/^VIX")
-    assert captured["params"]["range"] == "5d"
+    # v18.229 設計:底層 _fetch_yf_close_base 固定向 API 取 range="2y"(單次快取),
+    # 再於記憶體依 range_ 切片。故 API 端 param 永遠是 "2y",range_="5d" 由切片實現。
+    assert captured["params"]["range"] == "2y"
     assert len(s) == 3
     assert float(s.iloc[-1]) == 27.8
     assert s.name == "^VIX"

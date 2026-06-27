@@ -257,32 +257,39 @@ def _pcr_df(pcr_val):
 
 class TestRenderLeadingTablePCR(unittest.TestCase):
     """PCR 顏色（v18.158 台股紅綠化）：
-    < 80 → 紅(#f85149) 看多/漲；> 120 → 綠(#3fb950) 看空/跌；80~120 → 無色
+    < 80 → 紅 看多/漲；> 120 → 綠 看空/跌；80~120 → 無色
+
+    v19.68 起 leading_indicators 由 shared.colors SSOT 取色(TRAFFIC_RED/GREEN,
+    Tailwind #ef4444/#22c55e,原 GitHub #f85149/#3fb950)。本測試**直接引 SSOT**
+    斷言,避免硬編 hex 隨色票升級而 drift(§3.3 反捏造:常數從 SSOT 引入)。
     """
+    from shared.colors import TRAFFIC_RED as _RED, TRAFFIC_GREEN as _GREEN
+    _RED_HEX = _RED.lstrip("#")
+    _GREEN_HEX = _GREEN.lstrip("#")
 
     def test_pcr_below_80_red(self):
         html = render_leading_table(_pcr_df(65.0))
-        self.assertIn("f85149", html)
+        self.assertIn(self._RED_HEX, html)
 
     def test_pcr_above_120_green(self):
         html = render_leading_table(_pcr_df(135.0))
-        self.assertIn("3fb950", html)
+        self.assertIn(self._GREEN_HEX, html)
 
     def test_pcr_neutral_no_data_color(self):
         # 100.0 在 80~120 之間，PCR 欄不應有顏色；其餘欄全 None
         html = render_leading_table(_pcr_df(100.0))
-        self.assertNotIn("f85149", html)
-        self.assertNotIn("3fb950", html)
+        self.assertNotIn(self._RED_HEX, html)
+        self.assertNotIn(self._GREEN_HEX, html)
 
     def test_pcr_boundary_80_no_red(self):
         # 剛好 80 不觸發紅色（n < 80 為假）
         html = render_leading_table(_pcr_df(80.0))
-        self.assertNotIn("f85149", html)
+        self.assertNotIn(self._RED_HEX, html)
 
     def test_pcr_boundary_120_no_green(self):
         # 剛好 120 不觸發綠色（n > 120 為假）
         html = render_leading_table(_pcr_df(120.0))
-        self.assertNotIn("3fb950", html)
+        self.assertNotIn(self._GREEN_HEX, html)
 
 
 if __name__ == "__main__":
