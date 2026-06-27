@@ -38,8 +38,14 @@ from shared.signal_thresholds import (
     FGMS_LABEL_T3,
     SQ_GOOD_MIN,
     SQ_STABLE_MIN,
+    STOP_LOSS_DEFAULT_PCT,
+    STOP_PROFIT_T1_PCT,
+    STOP_PROFIT_T2_PCT,
+    VOLUME_RATIO_DRY,
+    VOLUME_RATIO_MILD,
+    VOLUME_RATIO_SURGE,
 )
-from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
+from tab_helpers import classify_trend_4tier, format_condition_emoji, parse_cash_flow_ratio, safe_ma
 from sidebar_health import kline_end_date
 # v18.326 ── BPS / industry_category fetcher 已 SSOT 化(原私有 _fetch_*,組合 Tab 共用)──
 from data_loader import fetch_bps, fetch_industry_category
@@ -572,16 +578,17 @@ padding:14px 18px;margin-bottom:12px;">
         _cur_p  = float(df2['close'].iloc[-1]) if df2 is not None and not df2.empty else 0
         _hi20_p = float(df2['high'].tail(20).max()) if df2 is not None and len(df2) >= 5 else 0
         _lo20_p = float(df2['low'].tail(20).min())  if df2 is not None and len(df2) >= 5 else 0
-        _tp1_p  = round(_cur_p * 1.05, 2)
-        _tp2_p  = round(_cur_p * 1.10, 2)
-        _sl_p   = round(_cur_p * 0.92, 2)
+        # v18.328 PR-C P2:停利停損改走 SSOT(shared/signal_thresholds)
+        _tp1_p  = round(_cur_p * (1 + STOP_PROFIT_T1_PCT / 100), 2)
+        _tp2_p  = round(_cur_p * (1 + STOP_PROFIT_T2_PCT / 100), 2)
+        _sl_p   = round(_cur_p * (1 - STOP_LOSS_DEFAULT_PCT / 100), 2)
         _rr_p   = round((_tp1_p - _cur_p) / max(_cur_p - _sl_p, 0.01), 2)
         with _sp_c1:
-            st.markdown(kpi('停利目標1 (+5%)', f'{_tp1_p}', '短線先入袋', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
+            st.markdown(kpi(f'停利目標1 (+{STOP_PROFIT_T1_PCT:.0f}%)', f'{_tp1_p}', '短線先入袋', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
         with _sp_c2:
-            st.markdown(kpi('停利目標2 (+10%)', f'{_tp2_p}', '波段目標', '#58a6ff', '#0d1f3c'), unsafe_allow_html=True)
+            st.markdown(kpi(f'停利目標2 (+{STOP_PROFIT_T2_PCT:.0f}%)', f'{_tp2_p}', '波段目標', '#58a6ff', '#0d1f3c'), unsafe_allow_html=True)
         with _sp_c3:
-            st.markdown(kpi('建議停損 (-8%)', f'{_sl_p}', '跌破認賠', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
+            st.markdown(kpi(f'建議停損 (-{STOP_LOSS_DEFAULT_PCT:.0f}%)', f'{_sl_p}', '跌破認賠', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
         with _sp_c4:
             st.markdown(kpi('盈虧比', f'{_rr_p}x', '≥1.5 較理想', '#ffd700', '#1a1000'), unsafe_allow_html=True)
         _sp_c5, _sp_c6 = st.columns(2)
@@ -1017,7 +1024,7 @@ padding:14px 18px;margin-bottom:12px;">
                     _tech_al.insert(0,('🔴','MA5下穿MA10','看跌',  '短均死叉，趨勢轉弱'))
                 elif _m5>_m10 and _m5p<=_m10p:
                     _tech_al.insert(0,('🟢','MA5上穿MA10','看漲','短均黃金交叉，轉強'))
-            if vr2 and vr2 < 0.5:
+            if vr2 and vr2 < VOLUME_RATIO_DRY:
                 _tech_al.append(('🟡','量能不足','觀察',f'量比={vr2:.2f}，市場觀望'))
             if k2 and d2:
                 if k2<d2 and k2>20:
@@ -1034,8 +1041,8 @@ padding:14px 18px;margin-bottom:12px;">
                 rsi_txt = '超買⚠️' if rsi2 and rsi2>70 else ('超賣反彈' if rsi2 and rsi2<30 else '中性')
                 st.markdown(kpi('RSI(14)',f'{rsi2}' if rsi2 else '-',rsi_txt,rsi_c,rsi_c),unsafe_allow_html=True)
             with ind2:
-                vr_c = TRAFFIC_GREEN if vr2 and vr2>=1.5 else (TRAFFIC_YELLOW if vr2 and vr2>=1.0 else '#484f58')
-                vr_txt = '異常放量' if vr2 and vr2>=1.5 else ('溫和放量' if vr2 and vr2>=1.0 else '量縮')
+                vr_c = TRAFFIC_GREEN if vr2 and vr2>=VOLUME_RATIO_SURGE else (TRAFFIC_YELLOW if vr2 and vr2>=VOLUME_RATIO_MILD else '#484f58')
+                vr_txt = '異常放量' if vr2 and vr2>=VOLUME_RATIO_SURGE else ('溫和放量' if vr2 and vr2>=VOLUME_RATIO_MILD else '量縮')
                 st.markdown(kpi('量比(5日)',f'{vr2}' if vr2 else '-',vr_txt,vr_c,vr_c),unsafe_allow_html=True)
             with ind3:
                 ibs_c = TRAFFIC_GREEN if ibs2 is not None and ibs2<=0.2 else (TRAFFIC_RED if ibs2 is not None and ibs2>=0.8 else '#58a6ff')
@@ -1415,23 +1422,24 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         else:
             if t2d.get('err'):
                 st.error(f'❌ {t2d["err"]}')
-        # ── K線動態趨勢建議 ──
+        # ── K線動態趨勢建議(SSOT: tab_helpers.classify_trend_4tier,組合 Tab 共用)──
         if df2 is not None and 'MA20' in df2.columns and 'MA100' in df2.columns:
             _kp = price2
             _km20 = float(df2['MA20'].iloc[-1])
             _km100 = float(df2['MA100'].iloc[-1])
-            if _kp > _km20 > _km100:
-                _trend_msg = f'📈 多頭排列：股價 {_kp:.1f} ＞ MA20 {_km20:.1f} ＞ MA100 {_km100:.1f} — 宏爺：可持股，大盤多頭才做個股'
-                _tc = TRAFFIC_GREEN
-            elif _kp < _km20 < _km100:
-                _trend_msg = f'📉 空頭排列：股價 {_kp:.1f} ＜ MA20 {_km20:.1f} ＜ MA100 {_km100:.1f} — 宏爺：不做多，嚴格停損'
-                _tc = TRAFFIC_RED
-            elif _kp > _km100:
-                _trend_msg = f'📊 多箱整理：股價在 MA100 之上 — 宏爺：等待站上 MA20({_km20:.1f})確認方向'
-                _tc = TRAFFIC_YELLOW
+            _trend_lbl, _tc = classify_trend_4tier(_kp, _km20, _km100)
+            if '多頭' in _trend_lbl:
+                _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＞ MA20 {_km20:.1f} ＞ MA100 {_km100:.1f}'
+                              ' — 宏爺：可持股，大盤多頭才做個股')
+            elif '空頭' in _trend_lbl:
+                _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＜ MA20 {_km20:.1f} ＜ MA100 {_km100:.1f}'
+                              ' — 宏爺：不做多，嚴格停損')
+            elif '多箱' in _trend_lbl:
+                _trend_msg = (f'{_trend_lbl}：股價在 MA100 之上'
+                              f' — 宏爺：等待站上 MA20({_km20:.1f})確認方向')
             else:
-                _trend_msg = '📊 空箱整理：股價低於 MA100 — 宏爺：耐心等待多頭訊號，不摸底'
-                _tc = TRAFFIC_YELLOW
+                _trend_msg = (f'{_trend_lbl}：股價低於 MA100'
+                              ' — 宏爺：耐心等待多頭訊號，不摸底')
             st.markdown(f'<div style="border-left:4px solid {_tc};padding:10px 14px;background:#0d1117;border-radius:0 8px 8px 0;font-size:13px;font-weight:700;color:{_tc};margin:8px 0;">{_trend_msg}</div>', unsafe_allow_html=True)
 
         # K線均線結論（安全版）
