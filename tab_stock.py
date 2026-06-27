@@ -22,6 +22,7 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.stock_buckets import render_stock_toc_html, section_header_html
 from shared.thresholds import YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC
 from shared.ttls import TTL_1DAY
 from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
@@ -655,7 +656,10 @@ padding:14px 18px;margin-bottom:12px;">
   <div style="font-size:18px;font-weight:700;">{_trend_label}</div>
 </div></div>''', unsafe_allow_html=True)
 
-        st.markdown("""<div style="margin:20px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#f0883e18,#0d1117);border-left:4px solid #f0883e;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#f0883e;">💰 建議價格 & 進出場區間</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">停利停損 · 風報比 · 進場條件 · 倉位計算</span></div>""", unsafe_allow_html=True)
+        # v18.307 Bug2 PR-C：頂部目錄（一眼看全貌 + 錨點跳轉）
+        st.markdown(render_stock_toc_html(), unsafe_allow_html=True)
+        # v18.307 Bug2 PR-C：section header 改走 shared/stock_buckets SSOT（DRY）
+        st.markdown(section_header_html("entry"), unsafe_allow_html=True)
         # ══ 0. 停利停損 + 支撐壓力 ═══════════════════════════════
         st.markdown('---')
         st.markdown('#### 🎯 停利停損建議 + 近期支撐壓力')
@@ -1066,7 +1070,7 @@ padding:14px 18px;margin-bottom:12px;">
                 '策略1：「不要聽老闆說什麼，要看他做什麼」— 最誠實的領先指標</div>'
                 '</div>', unsafe_allow_html=True)
 
-        st.markdown("""<div style="margin:24px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#58a6ff18,#0d1117);border-left:4px solid #58a6ff;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#58a6ff;">📈 技術面分析</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">健康度評分 · VCP波幅收縮 · K線技術圖 · 即時操作建議</span></div>""", unsafe_allow_html=True)
+        st.markdown(section_header_html("tech"), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
         # ══ A. 健康度評分 ══════════════════════════════════════
         st.markdown('#### 🏥 A. 個股健康度評分（0~100）')
         st.caption('🔰 指標白話：RSI >70 過熱、<30 超賣｜KD 黃金交叉（K 升破 D）偏多、死亡交叉偏空｜'
@@ -1637,7 +1641,8 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         except Exception as _ce:
             pass
 
-        st.markdown(f"""<div style="margin:24px 0 8px;padding:8px 16px;background:linear-gradient(90deg,{TRAFFIC_GREEN}18,#0d1117);border-left:4px solid {TRAFFIC_GREEN};border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:{TRAFFIC_GREEN};">📊 基本面分析</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">357殖利率評價 · 財報領先指標 · 月營收趨勢 · 六大先行指標</span></div>""", unsafe_allow_html=True)
+        # v18.307 Bug2 PR-C SSOT（color_override 傳實際 TRAFFIC_GREEN 常數，防色票漂移）
+        st.markdown(section_header_html("fundamental", color_override=TRAFFIC_GREEN), unsafe_allow_html=True)
         # ══ B. 357 評價 ════════════════════════════════════════
         st.markdown('---')
         st.markdown('#### 💰 B. 357殖利率評價 [策略1]')
@@ -2529,7 +2534,7 @@ padding:12px 16px;margin:8px 0;">
                 if _mc in df2.columns:
                     _ma_above2[_mn] = price2 > float(df2[_mc].iloc[-1])
 
-        st.markdown("""<div style="margin:24px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#d2a8ff18,#0d1117);border-left:4px solid #d2a8ff;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#d2a8ff;">🏥 體檢表</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">策略2 · 4力1棒子 · 現金流矩陣 · OPM護城河</span></div>""", unsafe_allow_html=True)
+        st.markdown(section_header_html("financials"), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
 
         # ── 🔰 故事化白話：財報名詞快查（純疊加；放在體檢 expander 外，避免巢狀）──
         with st.expander('🔰 看懂下面這些財報名詞（新手必看，30 秒）'):
@@ -3000,7 +3005,7 @@ padding:12px 16px;margin:8px 0;">
         _chip_radar_summary = render_chip_radar(sid2)
 
         # ══ 🤖 AI 首席顧問總結 ═══════════════════════════════════
-        st.markdown("""<div style="margin:28px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#76e3ea18,#0d1117);border-left:4px solid #76e3ea;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#76e3ea;">🤖 AI 首席顧問總結</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">技術面 · 三大法人 · 集保大戶籌碼 · 基本面 · 財報體檢（策略2）· 總經｜五維綜合評估</span></div>""", unsafe_allow_html=True)
+        st.markdown(section_header_html("ai"), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
 
         _ai_sum_key = f'_ai_sum_{sid2}'
         _ai_sum_cached = st.session_state.get(_ai_sum_key, '')
