@@ -264,6 +264,58 @@ def _fetch_bps(sid: str) -> float:
     return 0.0
 
 
+def _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2) -> dict:
+    """v18.309 Bug2 Stage 1：compute-once 跨段依賴 — AI 摘要與顯示段執行順序解耦。
+
+    背景：個股面板有 4 組值「在顯示段算、3000 行後 AI 摘要跨段引用」
+    (籌碼 _con20/_cty20/_sig20、相對強度 _rs_val、股本 _capital、先行指標
+    _li_*)，導致物理重排會讓 AI 摘要落 fallback「未取得」(§1 靜默降級)。
+
+    本函式於資料載入後**一次算完**這 4 組值 → AI 摘要改讀本 dict，與顯示段
+    執行順序解耦，Stage 2 才能安全物理重排。顯示段仍各自重算自己 local(值相同)。
+
+    各組獨立 try：某組失敗 → 該 key 缺席，AI 端既有 guard 落 fallback(行為等價)。
+    純函式(除 _fetch_share_capital 帶 @cache I/O)，可單測 graceful degradation。
+
+    Returns
+    -------
+    dict：可能含 con20/cty20/sig20 / rs_val / capital / li_results/li_green/
+    li_yellow/li_red；任何輸入異常 → 缺對應 key(不 raise，不偽造)。
+    """
+    from daily_checklist import analyze_20d_chips_from_df
+    from scoring_engine import calc_rs_score, calc_leading_indicators_detail
+    xsec: dict = {}
+    # 1) 籌碼集中度(原 L1438 籌碼顯示段)— 只依賴 df2
+    try:
+        _c = analyze_20d_chips_from_df(df2)
+        if isinstance(_c, dict) and not _c.get('error'):
+            xsec['con20'] = _c['concentration']
+            xsec['cty20'] = _c['continuity']
+            xsec['sig20'] = _c['signal']
+    except Exception:
+        pass
+    # 2) RS 相對強度(原 L902 進場顯示段)— 只依賴 df2
+    try:
+        xsec['rs_val'] = calc_rs_score(df2)
+    except Exception:
+        pass
+    # 3) 股本(原 L1049 龍頭預警段)— 只依賴 sid2(帶 cache I/O)
+    try:
+        xsec['capital'] = _fetch_share_capital(sid2)
+    except Exception:
+        pass
+    # 4) 基本面 6 大先行指標(原 L2320 基本面段)— 依賴 rev2/qtr2/qtr_extra2
+    try:
+        _li = calc_leading_indicators_detail(rev_df=rev2, qtr_df=qtr2, bs_cf_df=qtr_extra2)
+        xsec['li_results'] = _li
+        xsec['li_green'] = sum(1 for _r in _li if _r['signal'] == '🟢')
+        xsec['li_yellow'] = sum(1 for _r in _li if _r['signal'] == '🟡')
+        xsec['li_red'] = sum(1 for _r in _li if _r['signal'] == '🔴')
+    except Exception:
+        pass
+    return xsec
+
+
 def render_tab_stock():
     # ─ Late imports（避免循環 import）─
     import datetime
@@ -445,6 +497,10 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         if (qtr2 is None or qtr2.empty) and st.session_state.get(f'_last_qtr_{sid2}') is not None:
             qtr2 = st.session_state[f'_last_qtr_{sid2}']
             _qtr2_cached = True
+
+        # v18.309 Bug2 Stage 1：compute-once 跨段依賴(資料載入完成後一次算完)。
+        # AI 摘要(L3200+)改讀 _xsec → 與顯示段執行順序解耦，Stage 2 物理重排才安全。
+        _xsec = _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2)
 
         # v18.197 ══ 📊 資料新鮮度條（截止日 + 抓取時間 + age + fallback 警示 + 強制重抓）══
         _fetched_at = t2d.get('fetched_at')
@@ -3202,22 +3258,24 @@ padding:12px 16px;margin:8px 0;">
                 _sr_str2 = ' | '.join(_sr_parts2)
             except Exception:
                 _sr_str2 = '（支撐壓力/停利停損未計算）'
+            # v18.309 Bug2 Stage 1：改讀 _xsec(compute-once,資料載入後算)→ 與顯示段
+            # 執行順序解耦。key 缺席(該組計算失敗)→ except / get None 落 fallback(行為等價)。
             try:
-                _conc_str2 = (f'集中度={_con20:+.1f}%（大戶外資+投信淨買佔成交量）| '
-                              f'延續性={_cty20:.0f}%（買超日佔比）| 訊號={_sig20}')
+                _conc_str2 = (f'集中度={_xsec["con20"]:+.1f}%（大戶外資+投信淨買佔成交量）| '
+                              f'延續性={_xsec["cty20"]:.0f}%（買超日佔比）| 訊號={_xsec["sig20"]}')
             except Exception:
                 _conc_str2 = '（近20日籌碼集中度未取得）'
             try:
-                _li_str2 = (f'總覽 🟢×{_li_green} 🟡×{_li_yellow} 🔴×{_li_red}；'
+                _li_str2 = (f'總覽 🟢×{_xsec["li_green"]} 🟡×{_xsec["li_yellow"]} 🔴×{_xsec["li_red"]}；'
                             + '；'.join(f'{_r["signal"]}{_r["name"]}={_r["value"]}'
-                                       for _r in _li_results[:8]))
+                                       for _r in _xsec["li_results"][:8]))
             except Exception:
                 _li_str2 = '（基本面先行指標未計算）'
-            _rs_v = locals().get('_rs_val')
+            _rs_v = _xsec.get('rs_val')
             _rs_str2 = (f'{_rs_v:.0f} 分（≥75 強勢領漲、50-75 中性、<50 落後大盤；相對加權指數）'
                         if isinstance(_rs_v, (int, float)) else '（未計算）')
             try:
-                _cap_v = locals().get('_capital')
+                _cap_v = _xsec.get('capital')
                 if _cap_v and _cap_v > 0:
                     _cl_r = (locals().get('cl2') or 0) / _cap_v * 100
                     _cx_r = (locals().get('cx2') or 0) / _cap_v * 100
