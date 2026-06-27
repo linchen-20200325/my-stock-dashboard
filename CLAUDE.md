@@ -268,7 +268,7 @@ class DataPoint:
 | `BULLRUN_VOL_THRESHOLD` | 1.3× | config.py:73 | ✅ SSOT |
 | `_CPI_THRESHOLD` (merrill clock) | 2.0% | merrill_clock.py:56 | ✅ named const |
 | `ANNUAL_MA` | 240 trading days | config.py:14 | ✅ SSOT |
-| `signal_thresholds.*`（19 個語意常數） | 252 / 健康評分加權 / 4 個 TW 麥邊閾值 / VIX/Foreign futures / ATR%/MA20/合約負債/ETF 折溢價 / Recession logit / PMI 有效範圍 / merge_asof 40d / trend lookback 6 等 | shared/signal_thresholds.py v18.241+v18.242 | ✅ SSOT（v18.241 群 E 收 13 + v18.242 W3b 補 6:macro_core / merrill_clock 4 site + recession_probability / PMI filter / merge_asof / trend lookback） |
+| `signal_thresholds.*`（26 個語意常數） | 252 / 健康評分加權 / 4 個 TW 麥邊閾值 / VIX/Foreign futures / ATR%/MA20/合約負債/ETF 折溢價 / Recession logit / PMI 有效範圍 / merge_asof 40d / trend lookback 6 / **個股組合操作狀態燈(量縮/近20MA/乖離過熱)+多因子評級(A75/B55)+入選70+利空信心50** 等 | shared/signal_thresholds.py v18.241+v18.242+v18.322 | ✅ SSOT（v18.241 群 E 收 13 + v18.242 W3b 補 6 + v18.322 補 7:個股組合 SSOT 化 + 退役舊評分,詳見 SPEC §12） |
 
 ❌ 標記 **0 項**(原 8 項已全數 W3a/W3b 收斂)。
 

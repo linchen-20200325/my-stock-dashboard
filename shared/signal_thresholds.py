@@ -166,3 +166,37 @@ CLAUDE.md §3.2:|inst_net_shares| > 30D 均量 × 5.0 視為異常筆,可能為:
 
 數值依據:依台股法人散戶結構,正常單日法人淨買賣超約 5-15% 均量。
 > 5× 均量 = > 500% 比率,屬統計極端尾部,需人工檢視。"""
+
+
+# ════════════════════════════════════════════════════════════════
+# 個股組合（tab_stock_grp）— 操作狀態燈 + 多因子評級（v18.322 SSOT 化）
+# 原 inline 散落於 tab_stock_grp.py / scoring_engine.py，本版抽出。
+# 詳見 SPEC.md「個股組合評分門檻 SSOT」。同步退役「舊評分」(④ 汰弱留強改純健康度排)。
+# ════════════════════════════════════════════════════════════════
+
+GRP_VOL_SHRINK_RATIO: float = 0.7
+"""操作狀態燈「量縮」判定：當日量 < 20 日均量 × 0.7。
+配合健康度 A 級 + 多頭 + 近 20MA → 🔵 加碼燈（量縮打底蓄勢）。原 tab_stock_grp.py:299 inline"""
+
+GRP_NEAR_MA20_BIAS_PCT: float = 3.0
+"""操作狀態燈「近 20MA」判定：|MA20 乖離率| < 3%（單位：%）。
+貼近月線視為位階健康，為 🔵 加碼燈條件之一。原 tab_stock_grp.py:300 inline"""
+
+GRP_BIAS_OVERHEAT_WARN_PCT: float = 25.0
+"""操作狀態燈「乖離過熱」警示：MA20 乖離率 > +25%（單位：%）→ 🟡 警示燈。
+短線漲多偏離月線過大。原 tab_stock_grp.py:303 inline"""
+
+GRP_NEWS_BEARISH_CONFIDENCE_MIN: float = 50.0
+"""組合風控「利空新聞」採信門檻：AI 情緒 confidence ≥ 50 才計入利空。
+低於 50 視為雜訊不計。原 tab_stock_grp.py:601 inline"""
+
+MULTIFACTOR_GRADE_A_MIN: float = 75.0
+"""多因子總分 A 級下限（0-100）。≥75 → A（強）。原 scoring_engine.py:355 inline。
+與健康度分級（HEALTH_GRADE_A_MIN=80）為不同評分體系，門檻各自獨立。"""
+
+MULTIFACTOR_GRADE_B_MIN: float = 55.0
+"""多因子總分 B 級下限（0-100）。≥55 → B（中）；< 55 → C（弱）。原 scoring_engine.py:357 inline"""
+
+MULTIFACTOR_ENTRY_MIN: float = 70.0
+"""多因子總分「入選候選」門檻（0-100）。≥70 → 列為可進場候選（③ 多因子排行）。
+原 tab_stock_grp.py:521 inline"""
