@@ -433,6 +433,21 @@ def render_tab_macro():
         or st.session_state.get('mkt_info')
         or st.session_state.get('chips_loaded')
     )
+    # v18.315：一鍵更新按鈕移到「最外層」(總是顯示在最上面)，取代原「空狀態 + 主流程
+    # 埋在中間」兩顆同 key 按鈕(user 反饋:應在最外層就開始跑、內層按鈕取消)。
+    # do_refresh 供下方主流程「點更新 → 清舊燈號 + 重抓」沿用。
+    do_refresh = st.button(
+        '🚀 一鍵更新全部數據（總經 + 籌碼 + 先行指標）',
+        key='cl_refresh',
+        on_click=_on_refresh_click,
+        use_container_width=True,
+        type='primary',
+        help='點此一次抓取所有總經、籌碼、先行指標資料（約 30~50 秒）— 冷啟動為避免逾時，預設只載入輕量資料',
+    )
+    if do_refresh:
+        st.session_state['chips_loaded'] = True
+        st.session_state.pop('cl_data', None)
+
     if not _macro_loaded:
         st.markdown(
             '<div style="padding:12px 0 8px;">'
@@ -440,17 +455,6 @@ def render_tab_macro():
             '</div>',
             unsafe_allow_html=True,
         )
-        _do_refresh_es = st.button(
-            '🚀 一鍵更新全部數據（總經 + 籌碼 + 先行指標）',
-            key='cl_refresh',
-            on_click=_on_refresh_click,
-            use_container_width=True,
-            type='primary',
-            help='點此一次抓取所有總經、籌碼、先行指標資料（約 30~50 秒）',
-        )
-        if _do_refresh_es:
-            st.session_state['chips_loaded'] = True
-            st.session_state.pop('cl_data', None)
         st.info('👉 點擊上方按鈕載入總經資料')
         return
 
@@ -958,22 +962,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     else:
         st.success(f'✅ FinMind Token 已設定（{_fm_tok_now[:12]}...）', icon='🔑')
 
-    # v18.286:_on_refresh_click 已在 render_tab_macro 開頭定義(empty state 共用)
+    # v18.315：原埋在中間的「一鍵更新」按鈕已移除 — 改由 render_tab_macro 最外層頂部
+    # 的唯一按鈕觸發(解決 user 反饋「內層多一顆按鈕」+「應在最外層就開始跑」)。
+    # do_refresh 沿用頂部按鈕的回傳值(同一函式作用域)，下方清舊燈號邏輯不變。
 
-    # v18.312：移除「✅ 籌碼面已載入 / ⏸️ 尚未載入」狀態框(user 反饋「多一個按鈕」感),
-    # 按鈕改全寬單欄。籌碼載入狀態改由按鈕下方時間戳列 + 各 section empty state 表達。
-    # [v10.55.0] 合併雙按鈕為單一「一鍵更新」— 解決原「更新總經」+「載入籌碼面」雙按鈕 UX 混淆
-    do_refresh = st.button('🚀 一鍵更新全部數據（總經 + 籌碼 + 先行指標）',
-                           key='cl_refresh',
-                           on_click=_on_refresh_click, use_container_width=True,
-                           type='primary',
-                           help='點此一次抓取所有總經、籌碼、先行指標資料（約 30~50 秒）— 冷啟動為避免逾時，預設只載入輕量資料')
-    # 點下時同步啟用 chips_loaded（讓 Phase 2 lazy-load 改成 full-load）
-    if do_refresh:
-        st.session_state['chips_loaded'] = True
-        st.session_state.pop('cl_data', None)  # 強制重抓含籌碼版
-
-    # ── 時間戳列（合併按鈕後從 cb3 移到下方獨立一行） ──
+    # ── 時間戳列（按鈕移頂部後保留此資料新鮮度列） ──
     _now_ts = _tw_now_str()
     _last_ts = st.session_state.get('cl_ts', '尚未更新')
     _ts_color = TRAFFIC_GREEN if _last_ts != '尚未更新' else '#484f58'
