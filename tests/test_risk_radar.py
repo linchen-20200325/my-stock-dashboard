@@ -64,8 +64,7 @@ class TestLevelCutoffConstants:
         assert rr.VIX_TERM_WARN < rr.VIX_TERM_PANIC
         assert (rr.MOVE_WARN_LEVEL, rr.MOVE_PANIC_LEVEL) == (110.0, 130.0)
         assert rr.MOVE_WARN_LEVEL < rr.MOVE_PANIC_LEVEL
-        assert (rr.PCR_WARN, rr.PCR_PANIC) == (1.00, 1.20)
-        assert rr.PCR_WARN < rr.PCR_PANIC
+        # v18.320：PCR_WARN/PANIC 已移除（Put/Call 燈下線）
 
     def test_vix_panic_boundary_uses_constant(self):
         # 剛好 = PANIC（delta 不觸發：[29]*7 + [30] → +3.4%）→ 紅
@@ -80,11 +79,7 @@ class TestLevelCutoffConstants:
             d = rr._signal_move_level()
         assert "🟡" in d["signal"]
 
-    def test_pcr_panic_boundary_uses_constant(self):
-        with patch.object(rr, "fetch_yf_close",
-                          return_value=_yf([1.0] * 7 + [rr.PCR_PANIC])):
-            d = rr._signal_put_call_ratio()
-        assert "🔴" in d["signal"]
+    # v18.320 test_pcr_panic_boundary_uses_constant 已移除（Put/Call 燈下線）
 
     def test_vix_term_warn_boundary_uses_constant(self):
         # ratio = 20/20 = 1.00 = VIX_TERM_WARN → 黃
@@ -341,30 +336,12 @@ class TestSectorRotation:
         assert "⬜" in d["signal"]
 
 
-# ──────────────────────────────────────────────────────────────
-# 9. Put/Call ratio
-# ──────────────────────────────────────────────────────────────
-class TestPutCallRatio:
-    def test_calm(self):
-        with patch.object(rr, "fetch_yf_close", return_value=_yf([0.7] * 8)):
-            d = rr._signal_put_call_ratio()
-        assert "🟢" in d["signal"]
-
-    def test_yellow_1_0(self):
-        with patch.object(rr, "fetch_yf_close",
-                          return_value=_yf([0.85] * 7 + [1.05])):
-            d = rr._signal_put_call_ratio()
-        assert "🟡" in d["signal"]
-
-    def test_red_extreme(self):
-        with patch.object(rr, "fetch_yf_close",
-                          return_value=_yf([0.9] * 7 + [1.25])):
-            d = rr._signal_put_call_ratio()
-        assert "🔴" in d["signal"]
+# v18.320 — 原「9. Put/Call ratio」測試已移除：四源全死、該燈下線
+#           （_signal_put_call_ratio / _resolve_put_call 已刪）。
 
 
 # ──────────────────────────────────────────────────────────────
-# 9b. v18.181 多源 fallback chain（VIX3M + Put/Call CBOE CSV 救援）
+# 9b. v18.181 多源 fallback chain（VIX3M CBOE CSV 救援）
 # ──────────────────────────────────────────────────────────────
 class TestCboeCsvHelper:
     def _mk_resp(self, text: str, status: int = 200):
@@ -406,14 +383,7 @@ class TestResolveVix3m:
         assert "Yahoo ^VIX3M" in src
         assert not s.empty
 
-    def test_falls_through_to_vxv(self):
-        def _mock(t, **kw):
-            if t == "^VIX3M":
-                return pd.Series(dtype=float)
-            return _yf([16.0] * 8)
-        with patch.object(rr, "fetch_yf_close", side_effect=_mock):
-            s, src = rr._resolve_vix3m()
-        assert "Yahoo ^VXV" in src
+    # v18.320 test_falls_through_to_vxv 已移除：^VXV 已停更（回 0.0000），chain 不再含。
 
     def test_falls_through_to_cboe(self):
         csv = "DATE,CLOSE\n2026-01-02,15.0\n2026-01-03,16.0\n"
@@ -435,40 +405,7 @@ class TestResolveVix3m:
         assert src == ""
 
 
-class TestResolvePutCall:
-    def test_yahoo_cpc_primary_wins(self):
-        with patch.object(rr, "fetch_yf_close", return_value=_yf([0.8] * 8)):
-            s, src = rr._resolve_put_call()
-        assert "Yahoo ^CPC" in src
-        assert not s.empty
-
-    def test_falls_through_to_cpce(self):
-        def _mock(t, **kw):
-            if t == "^CPC":
-                return pd.Series(dtype=float)
-            return _yf([0.9] * 8)
-        with patch.object(rr, "fetch_yf_close", side_effect=_mock):
-            s, src = rr._resolve_put_call()
-        assert "Yahoo ^CPCE" in src
-
-    def test_falls_through_to_cboe_csv(self):
-        csv = "DATE,CLOSE\n2026-01-02,0.85\n2026-01-03,0.90\n"
-        from unittest.mock import MagicMock
-        cboe_resp = MagicMock()
-        cboe_resp.status_code = 200
-        cboe_resp.text = csv
-        with patch.object(rr, "fetch_yf_close", return_value=pd.Series(dtype=float)), \
-             patch("proxy_helper.fetch_url", return_value=cboe_resp):
-            s, src = rr._resolve_put_call()
-        assert "CBOE CPC_History.csv" in src
-        assert not s.empty
-
-    def test_all_sources_fail(self):
-        with patch.object(rr, "fetch_yf_close", return_value=pd.Series(dtype=float)), \
-             patch("proxy_helper.fetch_url", return_value=None):
-            s, src = rr._resolve_put_call()
-        assert s.empty
-        assert src == ""
+# v18.320 TestResolvePutCall 已移除：_resolve_put_call 已刪（Put/Call 四源全死下線）。
 
 
 class TestVixTermStructCboeFallback:
@@ -494,24 +431,11 @@ class TestVixTermStructCboeFallback:
         assert "🟢" in d["signal"]
 
 
-class TestPutCallCboeFallback:
-    def test_uses_cboe_label_when_yahoo_dead(self):
-        """v18.181 ^CPC/^CPCE Yahoo 全失敗 → CBOE CSV 救援。"""
-        csv = "DATE,CLOSE\n2026-01-02,0.85\n2026-01-03,1.25\n"
-        from unittest.mock import MagicMock
-        cboe_resp = MagicMock()
-        cboe_resp.status_code = 200
-        cboe_resp.text = csv
-        with patch.object(rr, "fetch_yf_close", return_value=pd.Series(dtype=float)), \
-             patch("proxy_helper.fetch_url", return_value=cboe_resp):
-            d = rr._signal_put_call_ratio()
-        assert "CBOE CPC_History.csv" in d["label"]
-        # 末值 1.25 ≥ 1.20 → 紅燈
-        assert "🔴" in d["signal"]
+# v18.320 TestPutCallCboeFallback 已移除：CBOE CPC/CPCE CSV → AccessDenied，該燈下線。
 
 
 # ──────────────────────────────────────────────────────────────
-# 10. Asia overnight
+# 9. Asia overnight
 # ──────────────────────────────────────────────────────────────
 class TestAsiaOvernight:
     def test_calm(self):
@@ -552,8 +476,8 @@ class TestDetectRiskRadar:
     EXPECTED_KEYS = {
         "vix_level", "vix_term_struct", "hy_oas_delta", "yield_10y_shock",
         "move_level", "spx_trend_break", "sox_drop", "sector_rotation",
-        "put_call_ratio", "asia_overnight",
-    }
+        "asia_overnight",
+    }  # v18.320：put_call_ratio 下線 → 9 燈
     EXPECTED_FIELDS = {"signal", "color", "value", "prev", "note", "label", "trend"}
 
     def test_all_keys_present(self):

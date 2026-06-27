@@ -52,7 +52,6 @@ def _radar_threshold_lines(key: str) -> list:
             VIX_WARN_LEVEL, VIX_PANIC_LEVEL,
             VIX_TERM_WARN, VIX_TERM_PANIC,
             MOVE_WARN_LEVEL, MOVE_PANIC_LEVEL,
-            PCR_WARN, PCR_PANIC,
         )
     except Exception:
         return []
@@ -65,9 +64,7 @@ def _radar_threshold_lines(key: str) -> list:
     if key == 'move_level':
         return [(MOVE_WARN_LEVEL, 'dot', '#d29922', f'警戒 {MOVE_WARN_LEVEL:.0f}'),
                 (MOVE_PANIC_LEVEL, 'dash', '#f85149', f'恐慌 {MOVE_PANIC_LEVEL:.0f}')]
-    if key == 'put_call_ratio':
-        return [(PCR_WARN, 'dot', '#d29922', f'偏空 {PCR_WARN:.1f}'),
-                (PCR_PANIC, 'dash', '#f85149', f'恐慌 {PCR_PANIC:.1f}')]
+    # v18.320 put_call_ratio 燈下線（四源全死），其 SPEC 線一併移除
     return []
 
 
@@ -191,7 +188,6 @@ def _render_global_risk_bucket(fred_api_key: str = "",
         'spx_trend_break': 'SPX 均線',
         'sox_drop':        'SOX 日跌',
         'sector_rotation': '防禦/攻擊',
-        'put_call_ratio':  'Put/Call',
         'asia_overnight':  '亞洲夜盤',
     }
     _keys = list(_light_labels.keys())

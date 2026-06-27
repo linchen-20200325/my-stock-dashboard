@@ -30,19 +30,17 @@ class TestRadarThresholdLinesSSOT:
         lines = tab_macro._radar_threshold_lines("move_level")
         assert [lines[0][0], lines[1][0]] == [rr.MOVE_WARN_LEVEL, rr.MOVE_PANIC_LEVEL]
 
-    def test_pcr_matches_rr_constants(self):
-        lines = tab_macro._radar_threshold_lines("put_call_ratio")
-        assert [lines[0][0], lines[1][0]] == [rr.PCR_WARN, rr.PCR_PANIC]
+    # v18.320 test_pcr_matches_rr_constants 已移除（Put/Call 燈下線）
 
     def test_delta_structural_keys_no_lines(self):
-        """trend 所繪量 != 判讀量 的燈 → 不畫線（避免誤導）。"""
+        """trend 所繪量 != 判讀量 的燈（含已下線的 put_call_ratio）→ 不畫線。"""
         for k in ("hy_oas_delta", "yield_10y_shock", "sox_drop",
                   "sector_rotation", "spx_trend_break", "asia_overnight",
-                  "nonexistent"):
+                  "put_call_ratio", "nonexistent"):
             assert tab_macro._radar_threshold_lines(k) == []
 
     def test_each_line_has_4_fields(self):
-        for k in ("vix_level", "vix_term_struct", "move_level", "put_call_ratio"):
+        for k in ("vix_level", "vix_term_struct", "move_level"):
             for line in tab_macro._radar_threshold_lines(k):
                 assert len(line) == 4
                 _y, _dash, _color, _txt = line

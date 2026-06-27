@@ -129,13 +129,11 @@ class TestSlowVerdictProvided:
     def test_extreme_radar_overrides_any_slow(self, stub_st):
         """雷達極端警報（≥4 紅燈）→ 強制覆蓋為立即減倉防守，慢總經暫不採信。"""
         def _yf_red(t, **kw):
-            # 多紅燈確保 ≥4 紅
+            # 多紅燈確保 ≥4 紅（v18.320：P/C 燈下線，改靠 VIX/MOVE/SOX/亞夜 + HY 湊 5 紅）
             if t == '^VIX':
                 return _yf([22.0] * 7 + [32.0])
             if t == '^MOVE':
                 return _yf([105.0] * 7 + [135.0])
-            if t == '^CPC':
-                return _yf([0.9] * 7 + [1.25])
             if t == '^SOX':
                 return _yf([5500.0] * 7 + [5280.0])  # -4%
             if t in ('^N225', '^HSI'):
@@ -207,16 +205,17 @@ class TestAppTestGuardWithSlowVerdict:
 class TestWarningBranchWithSlowVerdict:
     def test_warning_radar_with_bull_slow_observes(self, stub_st):
         """4 黃燈（紅+黃 ≥4）+ 慢樂觀 → 警戒觀察，暫緩加碼。"""
-        # 構造 4 黃燈（VIX yellow / MOVE yellow / SOX yellow / P/C yellow）
+        # 構造 4 黃燈（VIX yellow / VIX期限 yellow / MOVE yellow / SOX yellow）
+        # v18.320：原以 P/C 湊第 4 黃，該燈下線後改用 vix_term（VIX/VIX3M=26/25=1.04）
         def _yf_yellow(t, **kw):
             if t == '^VIX':
                 return _yf([20.0] * 6 + [24.0, 26.0])  # 黃 (>=25)
+            if t == '^VIX3M':
+                return _yf([25.0] * 8)  # VIX/VIX3M=26/25=1.04 → 黃（vix_term）
             if t == '^MOVE':
                 return _yf([95.0] * 7 + [115.0])  # 黃 (>=110)
             if t == '^SOX':
                 return _yf([5500.0] * 7 + [5390.0])  # 黃 -2%
-            if t == '^CPC':
-                return _yf([0.85] * 7 + [1.05])  # 黃 >=1.0
             return _yf([100.0] * 30)
 
         with patch('risk_radar.fetch_yf_close', side_effect=_yf_yellow), \
@@ -235,12 +234,12 @@ class TestWarningBranchWithSlowVerdict:
         def _yf_yellow(t, **kw):
             if t == '^VIX':
                 return _yf([20.0] * 6 + [24.0, 26.0])
+            if t == '^VIX3M':
+                return _yf([25.0] * 8)  # v18.320 vix_term 黃（取代已下線的 P/C）
             if t == '^MOVE':
                 return _yf([95.0] * 7 + [115.0])
             if t == '^SOX':
                 return _yf([5500.0] * 7 + [5390.0])
-            if t == '^CPC':
-                return _yf([0.85] * 7 + [1.05])
             return _yf([100.0] * 30)
 
         with patch('risk_radar.fetch_yf_close', side_effect=_yf_yellow), \
