@@ -30,6 +30,9 @@ from tab_helpers import (
     format_condition_emoji,
     parse_cash_flow_ratio,
 )
+# v18.326 ── P/B 帶狀 SSOT + BPS / industry fetcher SSOT(個股 Tab 共用)──
+from shared.stock_buckets import classify_pb_level, get_pb_bands
+from data_loader import fetch_bps, fetch_industry_category
 
 
 def render_stock_grp():
@@ -425,12 +428,26 @@ def render_stock_grp():
                     _fgms3 = f"{_fg_r3['fgms']:.0f}({_fg_r3['fgms_label']})"
             except Exception:
                 pass
+            # P/B 估值分級(SSOT: shared.stock_buckets + data_loader)
+            _pb_eval3 = '-'
+            try:
+                _price_num3 = float(str(_r3.get('現價', '0')).replace(',', ''))
+                if _price_num3 > 0:
+                    _bps_v3 = fetch_bps(_sid3)
+                    if _bps_v3 > 0:
+                        _pb_raw3 = _price_num3 / _bps_v3
+                        _ind3 = fetch_industry_category(_sid3)
+                        _bands3 = get_pb_bands(_ind3)
+                        _pb_eval3 = f'{_pb_raw3:.2f} {classify_pb_level(_pb_raw3, _bands3)}'
+            except Exception:
+                pass
             _fund_map[_sid3] = {
                 '近4季EPS': f'{_eps3:.2f}' if _eps3 is not None else '-',
                 '毛利率%':  f'{_gp3:.1f}'  if _gp3  is not None else '-',
                 '殖利率%':  f'{_avg3:.1f}' if _avg3  is not None else '-',
                 'SQ評分':   _sq3   if _sq3   is not None else '-',
                 'FGMS':     _fgms3 if _fgms3 is not None else '-',
+                'P/B評價':  _pb_eval3,
             }
 
         # ── ⑤ 最終綜合建議卡 ──────────────────────────────────
@@ -541,6 +558,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                         'SQ評分':   _fd.get('SQ評分',   '-'),
                         'FGMS前瞻': _fd.get('FGMS',     '-'),
                         '殖利率%':  _fd.get('殖利率%',  '-'),
+                        'P/B評價':  _fd.get('P/B評價',  '-'),
                         '評級': _r.get('grade', '-'),
                     })
                 _rank_df = pd.DataFrame(_rank_rows)
@@ -552,6 +570,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                                  'SQ評分':   st.column_config.TextColumn('SQ品質分'),
                                  'FGMS前瞻': st.column_config.TextColumn('FGMS前瞻'),
                                  '殖利率%':  st.column_config.TextColumn('殖利率%'),
+                                 'P/B評價':  st.column_config.TextColumn('P/B 估值（產業帶狀）'),
                              })
             else:
                 st.info('多因子評分資料載入中')
@@ -1299,7 +1318,7 @@ def _render_mj_trend_section(stock_list: list[str], *,
         load_snapshot,
         save_snapshot,
     )
-    from mj_trend_score import compute_trend_score
+    from mj_trend_score import compute_one_stock_trend, compute_trend_score  # noqa: F401
 
     _st.markdown('---')
     _st.markdown(
@@ -1348,111 +1367,19 @@ def _render_mj_trend_section(stock_list: list[str], *,
         for i, sid in enumerate(stock_list, 1):
             prog.progress(i / len(stock_list),
                           text=f'[{i}/{len(stock_list)}] {sid} 趨勢計算中...')
-            row = _compute_one_stock_trend(
+            row = compute_one_stock_trend(
                 sid, yyyymm_curr, _TOK, float(_w_mon),
                 fetch_financial_statements=fetch_financial_statements,
                 analyze_financial_health=analyze_financial_health,
                 list_snapshots=list_snapshots,
                 load_snapshot=load_snapshot,
                 save_snapshot=save_snapshot,
-                compute_trend_score=compute_trend_score,
             )
             rows.append(row)
         prog.empty()
         _st.session_state[_mj_cache_key] = rows
 
     _render_mj_trend_table(rows, pd, _st, yyyymm_curr)
-
-
-def _compute_one_stock_trend(
-    sid: str,
-    yyyymm_curr: str,
-    token: str,
-    w_monthly: float,
-    *,
-    fetch_financial_statements,
-    analyze_financial_health,
-    list_snapshots,
-    load_snapshot,
-    save_snapshot,
-    compute_trend_score,
-) -> dict:
-    """單檔流程：抓月營收 → 補抓 MJ 季財報 → 跑 compute_trend_score。
-
-    例外永遠 graceful — 單檔失敗不阻斷批次。
-    """
-    row: dict = {
-        'sid': sid, 'label': '—', 'label_code': 'error', 'score': 0.0,
-        'mon_sub': 0.0, 'mj_sub': 0.0, 'note': '',
-        'snap_ym': '', 'snap_stale': None,
-    }
-    monthly_3m: list[dict] = []
-    mj_snaps: list[dict] = []
-
-    # ── 1. 月營收 3 期 ──────────────────────────────────────────
-    try:
-        from monthly_revenue_screener import compute_yoy_mom, fetch_monthly_revenue
-        df_rev = fetch_monthly_revenue(sid, months=15)
-        stats = compute_yoy_mom(df_rev) if df_rev is not None and not df_rev.empty else {}
-        # compute_yoy_mom 回 {yoy_last3: [M-2, M-1, M], mom_last: float}
-        yoy_last3 = (stats or {}).get('yoy_last3') or []
-        mom_last = (stats or {}).get('mom_last')
-        if isinstance(yoy_last3, list) and yoy_last3:
-            for j, yoy in enumerate(yoy_last3):
-                if yoy is None:
-                    continue
-                m_dict = {'yoy_pct': yoy}
-                if j == len(yoy_last3) - 1 and mom_last is not None:
-                    m_dict['mom_pct'] = mom_last
-                monthly_3m.append(m_dict)
-    except Exception as e:  # pragma: no cover - defensive
-        row['note'] += f'月營收抓取失敗 ({type(e).__name__}); '
-
-    # ── 2. MJ 季財報快照（不足 3 季自動補抓本季）───────────────
-    try:
-        yms = list_snapshots(sid)
-        # 若本季快照缺，自動補抓
-        if yyyymm_curr not in yms:
-            try:
-                fin = fetch_financial_statements(sid, token)
-                if fin and not fin.get('error'):
-                    mj = analyze_financial_health(token, sid, fin, news_context='')
-                    if isinstance(mj, dict):
-                        save_snapshot(sid, yyyymm_curr, mj)
-                        yms = list_snapshots(sid)  # refresh
-            except Exception as e_in:  # pragma: no cover - defensive
-                row['note'] += f'本季 MJ 補抓失敗 ({type(e_in).__name__}); '
-
-        # v18.199 ── 記錄實採最新快照季 + 是否落後（快照新鮮度條用）──
-        if yms:
-            row['snap_ym'] = yms[0]
-            row['snap_stale'] = (yms[0] != yyyymm_curr)
-
-        # 取近 3 季（list_snapshots 已降序：新→舊）
-        for ym in yms[:3]:
-            snap = load_snapshot(sid, ym)
-            if isinstance(snap, dict):
-                mj_snaps.append(snap)
-        # compute_mj_trend_subscore 期望 list[oldest..latest]，反轉之
-        mj_snaps.reverse()
-    except Exception as e:  # pragma: no cover - defensive
-        row['note'] += f'MJ 快照載入失敗 ({type(e).__name__}); '
-
-    # ── 3. 合議 ─────────────────────────────────────────────────
-    try:
-        out = compute_trend_score(monthly_3m, mj_snaps, w_monthly=w_monthly)
-        row['label'] = out['label']
-        row['label_code'] = out['label_code']
-        row['score'] = out['score']
-        row['mon_sub'] = out['monthly_subscore']
-        row['mj_sub'] = out['mj_subscore']
-        row['mon_detail'] = out['monthly_detail']
-        row['mj_detail'] = out['mj_detail']
-        if not monthly_3m and not mj_snaps:
-            row['note'] += '月+季資料皆缺; '
-    except Exception as e:  # pragma: no cover - defensive
-        row['note'] += f'合議失敗 ({type(e).__name__}); '
-    return row
 
 
 _TREND_SORT_ORDER = {

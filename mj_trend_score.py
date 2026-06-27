@@ -213,3 +213,94 @@ def compute_trend_score(
         "monthly_detail": mon_detail,
         "mj_detail": mj_detail,
     }
+
+
+def compute_one_stock_trend(
+    sid: str,
+    yyyymm_curr: str,
+    token: str,
+    w_monthly: float,
+    *,
+    fetch_financial_statements,
+    analyze_financial_health,
+    list_snapshots,
+    load_snapshot,
+    save_snapshot,
+) -> dict:
+    """單檔 MJ 趨勢分數編排（SSOT,個股 Tab + 組合 Tab 共用）。
+
+    流程：抓月營收 → 補抓 MJ 季財報 → 跑 compute_trend_score。
+    例外永遠 graceful — 單檔失敗不阻斷批次。
+
+    依賴注入維持本模組純編排特性（不 hard import L1 fetcher）。
+
+    Returns: dict {sid, label, label_code, score, mon_sub, mj_sub,
+                   mon_detail, mj_detail, snap_ym, snap_stale, note}
+    """
+    row: dict = {
+        "sid": sid, "label": "—", "label_code": "error", "score": 0.0,
+        "mon_sub": 0.0, "mj_sub": 0.0, "note": "",
+        "snap_ym": "", "snap_stale": None,
+    }
+    monthly_3m: list[dict] = []
+    mj_snaps: list[dict] = []
+
+    # ── 1. 月營收 3 期 ──────────────────────────────────────────
+    try:
+        from monthly_revenue_screener import compute_yoy_mom, fetch_monthly_revenue
+        df_rev = fetch_monthly_revenue(sid, months=15)
+        stats = compute_yoy_mom(df_rev) if df_rev is not None and not df_rev.empty else {}
+        yoy_last3 = (stats or {}).get("yoy_last3") or []
+        mom_last = (stats or {}).get("mom_last")
+        if isinstance(yoy_last3, list) and yoy_last3:
+            for j, yoy in enumerate(yoy_last3):
+                if yoy is None:
+                    continue
+                m_dict: dict = {"yoy_pct": yoy}
+                if j == len(yoy_last3) - 1 and mom_last is not None:
+                    m_dict["mom_pct"] = mom_last
+                monthly_3m.append(m_dict)
+    except Exception as e:  # pragma: no cover - defensive
+        row["note"] += f"月營收抓取失敗 ({type(e).__name__}); "
+
+    # ── 2. MJ 季財報快照（不足 3 季自動補抓本季）───────────────
+    try:
+        yms = list_snapshots(sid)
+        if yyyymm_curr not in yms:
+            try:
+                fin = fetch_financial_statements(sid, token)
+                if fin and not fin.get("error"):
+                    mj = analyze_financial_health(token, sid, fin, news_context="")
+                    if isinstance(mj, dict):
+                        save_snapshot(sid, yyyymm_curr, mj)
+                        yms = list_snapshots(sid)
+            except Exception as e_in:  # pragma: no cover - defensive
+                row["note"] += f"本季 MJ 補抓失敗 ({type(e_in).__name__}); "
+
+        if yms:
+            row["snap_ym"] = yms[0]
+            row["snap_stale"] = (yms[0] != yyyymm_curr)
+
+        for ym in yms[:3]:
+            snap = load_snapshot(sid, ym)
+            if isinstance(snap, dict):
+                mj_snaps.append(snap)
+        mj_snaps.reverse()  # oldest..latest
+    except Exception as e:  # pragma: no cover - defensive
+        row["note"] += f"MJ 快照載入失敗 ({type(e).__name__}); "
+
+    # ── 3. 合議 ─────────────────────────────────────────────────
+    try:
+        out = compute_trend_score(monthly_3m, mj_snaps, w_monthly=w_monthly)
+        row["label"] = out["label"]
+        row["label_code"] = out["label_code"]
+        row["score"] = out["score"]
+        row["mon_sub"] = out["monthly_subscore"]
+        row["mj_sub"] = out["mj_subscore"]
+        row["mon_detail"] = out["monthly_detail"]
+        row["mj_detail"] = out["mj_detail"]
+        if not monthly_3m and not mj_snaps:
+            row["note"] += "月+季資料皆缺; "
+    except Exception as e:  # pragma: no cover - defensive
+        row["note"] += f"合議失敗 ({type(e).__name__}); "
+    return row

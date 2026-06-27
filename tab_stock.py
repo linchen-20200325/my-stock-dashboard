@@ -22,14 +22,27 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
-from shared.stock_buckets import render_stock_toc_html, section_header_html
+from shared.stock_buckets import (
+    get_pb_bands as _get_pb_bands_ssot,
+    pb_bands_label as _pb_bands_label_ssot,
+    render_stock_toc_html,
+    section_header_html,
+)
 from shared.thresholds import YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC
 from shared.ttls import TTL_1DAY
 # v18.325 PR-C: 健康度分級 + 龍頭資本支出門檻改用既有 SSOT（原 inline，§3.3 反捏造）
 from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
-from shared.signal_thresholds import CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT
+from shared.signal_thresholds import (
+    CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT,
+    FGMS_LABEL_T2,
+    FGMS_LABEL_T3,
+    SQ_GOOD_MIN,
+    SQ_STABLE_MIN,
+)
 from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
 from sidebar_health import kline_end_date
+# v18.326 ── BPS / industry_category fetcher 已 SSOT 化(原私有 _fetch_*,組合 Tab 共用)──
+from data_loader import fetch_bps, fetch_industry_category
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
@@ -103,169 +116,7 @@ def _fetch_pbratio_from_twse(sid: str) -> float:
         return 0.0
 
 
-# ── 產業別 P/B 閾值對照表（金融 / 成長科技 / 製造 default）─────────────
-_PB_BANDS_FINANCIAL = (0.5, 0.9, 1.2)   # 金融保險 / 銀行業
-_PB_BANDS_GROWTH    = (1.5, 2.5, 4.0)   # 半導體 / 電子 / 光電 / 通信網路 / 電腦周邊 / 其他電子
-_PB_BANDS_MFG       = (0.8, 1.5, 2.5)   # 製造業 default
-
-_FINANCIAL_INDUSTRIES = ('金融保險業', '銀行業', '證券業', '保險業', '金融業')
-_GROWTH_INDUSTRIES = (
-    '半導體業', '電子工業', '光電業', '通信網路業',
-    '電腦及週邊設備業', '其他電子業', '電子零組件業',
-)
-
-
-def _get_pb_bands(industry: str | None) -> tuple[float, float, float]:
-    """v18.175：依產業類別回傳 P/B 河流圖橫帶閾值（低/中/高）。
-
-    - 金融業：(0.5, 0.9, 1.2) — 銀行資產驅動，PB<1 屬正常
-    - 成長科技：(1.5, 2.5, 4.0) — 高 ROE / 智財權溢價
-    - 製造業 default：(0.8, 1.5, 2.5) — 慣例值（保持 v18.174 行為）
-    """
-    if not industry:
-        return _PB_BANDS_MFG
-    _ind = str(industry)
-    if any(_kw in _ind for _kw in _FINANCIAL_INDUSTRIES):
-        return _PB_BANDS_FINANCIAL
-    if any(_kw in _ind for _kw in _GROWTH_INDUSTRIES):
-        return _PB_BANDS_GROWTH
-    return _PB_BANDS_MFG
-
-
-def _pb_bands_label(industry: str | None) -> str:
-    """v18.175：產業別閾值標籤 — 用於 caption 顯示。"""
-    if not industry:
-        return '製造業預設'
-    _ind = str(industry)
-    if any(_kw in _ind for _kw in _FINANCIAL_INDUSTRIES):
-        return f'金融業（{_ind}）'
-    if any(_kw in _ind for _kw in _GROWTH_INDUSTRIES):
-        return f'成長科技（{_ind}）'
-    return f'製造業（{_ind}）'
-
-
-@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
-def _fetch_industry_category(sid: str) -> str:
-    """v18.175：從 FinMind TaiwanStockInfo 抓個股產業類別字串。失敗回 ''。
-
-    用於 P/B 河流圖閾值動態調整（金融/成長科技/製造）。1 日快取。
-    """
-    import os as _os_ic
-    import requests as _rq_ic
-    try:
-        _tok = _os_ic.environ.get('FINMIND_TOKEN', '')
-        _p = {'dataset': 'TaiwanStockInfo', 'data_id': sid}
-        if _tok:
-            _p['token'] = _tok
-        _r = _rq_ic.get('https://api.finmindtrade.com/api/v4/data',
-                        params=_p, timeout=15)
-        _data = _r.json().get('data', []) if _r.status_code == 200 else []
-        if not _data:
-            return ''
-        for _row in _data:
-            _ind = _row.get('industry_category', '')
-            if _ind:
-                return str(_ind)
-        return ''
-    except Exception:
-        return ''
-
-
-@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
-def _fetch_bps_from_finmind(sid: str) -> float:
-    """v18.174：FinMind TaiwanStockBalanceSheet 計算最新季度每股淨值（BPS）。
-
-    公式：BPS = 股東權益總額 / 流通在外普通股股數
-         流通股數 = 普通股股本 / 面額 10 元（台股慣例）
-
-    PRIMARY 資料源 — 比 yfinance bookValue 即時且涵蓋 TPEx。
-    抓近 540 日 BS（保證有近兩季資料），取最近一筆 date 兩個欄位：
-      - 股東權益總額：type ∈ {Equity, TotalEquity} 或 origin_name 含 '股東權益'/'權益總額'
-      - 普通股股本：  type ∈ {CommonStock, OrdinaryShare, ShareCapital} 或 origin_name 含 '股本'
-
-    Sanity 守門：BPS ∈ (0.1, 5000)。範圍外回 0.0（避免單位錯抓壞數）。
-    BPS 季變動低頻 → 快取 1 日。
-    """
-    import os as _os_bf
-    import datetime as _dt_bf
-    import requests as _rq_bf
-    try:
-        _tok = _os_bf.environ.get('FINMIND_TOKEN', '')
-        _start = (_dt_bf.date.today() - _dt_bf.timedelta(days=540)).strftime('%Y-%m-%d')
-        _p = {'dataset': 'TaiwanStockBalanceSheet', 'data_id': sid, 'start_date': _start}
-        if _tok:
-            _p['token'] = _tok
-        _r = _rq_bf.get('https://api.finmindtrade.com/api/v4/data',
-                        params=_p, timeout=15)
-        _data = _r.json().get('data', []) if _r.status_code == 200 else []
-        if not _data:
-            return 0.0
-        _dates = sorted({_row.get('date', '') for _row in _data}, reverse=True)
-        _latest = _dates[0] if _dates else ''
-        _equity = 0.0
-        _common_stock = 0.0
-        for _row in _data:
-            if _row.get('date') != _latest:
-                continue
-            _t = str(_row.get('type', ''))
-            _nm = str(_row.get('origin_name', ''))
-            try:
-                _v = float(str(_row.get('value', 0) or 0).replace(',', ''))
-            except (TypeError, ValueError):
-                continue
-            if _v <= 0:
-                continue
-            # 股東權益總額（優先取「合計/總額」避免父子科目混淆）
-            if (not _equity and (_t in ('Equity', 'TotalEquity', 'StockholdersEquity')
-                                  or '股東權益總額' in _nm or '權益總額' in _nm
-                                  or '股東權益合計' in _nm or '權益合計' in _nm)):
-                _equity = _v
-            # 普通股股本（用於算流通股數）
-            elif (not _common_stock and (_t in ('CommonStock', 'OrdinaryShare', 'ShareCapital')
-                                          or '普通股股本' in _nm
-                                          or ('股本' in _nm and '特別股' not in _nm))):
-                _common_stock = _v
-        if _equity <= 0 or _common_stock <= 0:
-            return 0.0
-        # BPS = 股東權益 / (股本/10 元面額)
-        _shares_outstanding = _common_stock / 10.0
-        _bps = _equity / _shares_outstanding
-        # Sanity：台股 BPS 合理範圍 0.1 ~ 5000 元，超出回 0.0 由 yfinance 接手
-        if not (0.1 < _bps < 5000):
-            return 0.0
-        return float(_bps)
-    except Exception:
-        return 0.0
-
-
-@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
-def _fetch_bps(sid: str) -> float:
-    """每股淨值（BPS）— v18.174 修正資料源：FinMind BS PRIMARY，yfinance FALLBACK。
-
-    舊版單靠 yfinance.Ticker().info['bookValue']，台股季報切換時段常落後
-    1-3 個月或缺值；新版改先走 FinMind TaiwanStockBalanceSheet 算最新季度
-    BPS（公式：股東權益總額 / (普通股股本 / 10 元面額)），失敗才退回 yfinance。
-
-    BPS 季變動低頻 → 快取 1 日，避免每次 Streamlit rerun 都阻塞網路呼叫。
-    """
-    # PRIMARY: FinMind BS（最新季度，台股權威）
-    _bps_fm = _fetch_bps_from_finmind(sid)
-    if _bps_fm > 0:
-        return _bps_fm
-    # FALLBACK: yfinance bookValue（可能 stale，但比沒有強）
-    try:
-        import yfinance as _yf_pb
-        for _sfx_pb in ('.TW', '.TWO'):
-            try:
-                _info_pb = _yf_pb.Ticker(f'{sid}{_sfx_pb}').info or {}
-                _bps_v = _info_pb.get('bookValue')
-                if _bps_v and float(_bps_v) > 0:
-                    return float(_bps_v)
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return 0.0
+# v18.326 ── P/B 帶狀已下沉 shared/stock_buckets.py SSOT(組合 Tab 共用)
 
 
 def _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2) -> dict:
@@ -2051,15 +1902,15 @@ padding:12px 16px;margin:8px 0;">
             _bps_val = _cur_price_pb_pre / _twse_pb
             _bps_source = 'TWSE BWIBBU_d 官方 PBratio 反推'
         else:
-            # SECONDARY + FALLBACK: 透過 _fetch_bps（FinMind PRIMARY → yfinance fallback）
-            _bps_val = _fetch_bps(sid2)
+            # SECONDARY + FALLBACK: data_loader.fetch_bps(FinMind PRIMARY → yfinance fallback)
+            _bps_val = fetch_bps(sid2)
             if _bps_val > 0:
                 _bps_source = 'FinMind TaiwanStockBalanceSheet 季度 / yfinance bookValue'
 
-        # 產業別閾值
-        _industry = _fetch_industry_category(sid2)
-        _PB_LOW, _PB_MID, _PB_HIGH = _get_pb_bands(_industry)
-        _industry_label = _pb_bands_label(_industry)
+        # 產業別閾值(SSOT: shared.stock_buckets + data_loader.fetch_industry_category)
+        _industry = fetch_industry_category(sid2)
+        _PB_LOW, _PB_MID, _PB_HIGH = _get_pb_bands_ssot(_industry)
+        _industry_label = _pb_bands_label_ssot(_industry)
 
         if df2 is not None and not df2.empty and _bps_val > 0:
             _b_lo_pb = round(_bps_val * _PB_LOW, 2)
@@ -2301,7 +2152,7 @@ padding:12px 16px;margin:8px 0;">
                         _sq_lbl = _sq_res['sq_label']
                         _sq_gm = _sq_res['gm_trend']
                         _sq_rv = _sq_res['rev_trend']
-                        _sq_c  = TRAFFIC_GREEN if _sq_v >= 75 else (TRAFFIC_YELLOW if _sq_v >= 55 else TRAFFIC_RED)
+                        _sq_c  = TRAFFIC_GREEN if _sq_v >= SQ_GOOD_MIN else (TRAFFIC_YELLOW if _sq_v >= SQ_STABLE_MIN else TRAFFIC_RED)
                         st.markdown(
                             f'<div style="background:#0d1117;border-left:3px solid {_sq_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
                             f'<span style="font-size:11px;color:#8b949e;">🎓 獲利品質 SQ</span>　'
@@ -2321,7 +2172,7 @@ padding:12px 16px;margin:8px 0;">
                     if _fgms_r.get('fgms') is not None:
                         _fv = _fgms_r['fgms']
                         _fl = _fgms_r['fgms_label']
-                        _fc = TRAFFIC_GREEN if _fv >= 60 else (TRAFFIC_YELLOW if _fv >= 45 else TRAFFIC_RED)
+                        _fc = TRAFFIC_GREEN if _fv >= FGMS_LABEL_T2 else (TRAFFIC_YELLOW if _fv >= FGMS_LABEL_T3 else TRAFFIC_RED)
                         # 子維度摘要（得分）
                         _fd_parts = []
                         if _fgms_r['cl_momentum']    is not None:
@@ -2365,6 +2216,54 @@ padding:12px 16px;margin:8px 0;">
                     import traceback as _tb2
                     print(f'[FGMS_UI] 顯示錯誤: {_efgms2}')
                     _tb2.print_exc()
+
+        # ── 📊 MJ 趨勢分數合議（月+季雙頻率,單檔模式)──
+        # SSOT:呼叫 mj_trend_score.compute_one_stock_trend(),與組合 Tab 同一函式
+        try:
+            from datetime import date as _date_mj
+            from mj_snapshot_io import (
+                current_finmind_yyyymm as _cfymm,
+                list_snapshots as _ls_snap,
+                load_snapshot as _ld_snap,
+                save_snapshot as _sv_snap,
+            )
+            from mj_trend_score import compute_one_stock_trend as _cost
+            _ymm_curr = _cfymm(_date_mj.today())
+            _mj_row = _cost(
+                sid=sid2, yyyymm_curr=_ymm_curr, token=FINMIND_TOKEN, w_monthly=0.65,
+                fetch_financial_statements=fetch_financial_statements,
+                analyze_financial_health=analyze_financial_health,
+                list_snapshots=_ls_snap, load_snapshot=_ld_snap, save_snapshot=_sv_snap,
+            )
+            _mj_score = float(_mj_row.get('score', 0.0))
+            _mj_label = _mj_row.get('label', '—')
+            _mj_code = _mj_row.get('label_code', 'error')
+            _mj_color = {
+                'strong_up': TRAFFIC_GREEN, 'up': TRAFFIC_GREEN,
+                'neutral': TRAFFIC_NEUTRAL,
+                'down': TRAFFIC_YELLOW, 'strong_down': TRAFFIC_RED,
+                'error': TRAFFIC_NEUTRAL,
+            }.get(_mj_code, TRAFFIC_NEUTRAL)
+            _mon_sub = float(_mj_row.get('mon_sub', 0.0))
+            _mj_sub = float(_mj_row.get('mj_sub', 0.0))
+            _snap_ym = _mj_row.get('snap_ym') or '—'
+            _snap_stale = _mj_row.get('snap_stale')
+            _fresh_tag = ('🟢 最新' if _snap_stale is False
+                          else ('🟡 落後' if _snap_stale is True else '⬜ 無快照'))
+            _mj_note = (_mj_row.get('note') or '').strip().rstrip(';')
+            _note_line = (f'<div style="font-size:11px;color:#8b949e;margin-top:3px;">⚠️ {_mj_note}</div>'
+                          if _mj_note else '')
+            st.markdown(
+                f'<div style="background:#0d1117;border-left:3px solid {_mj_color};'
+                f'padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
+                f'<span style="font-size:11px;color:#8b949e;">📊 MJ 趨勢分數合議（月+季 65/35）</span>　'
+                f'<span style="font-size:13px;font-weight:700;color:{_mj_color};">{_mj_label}（合分 {_mj_score:+.2f}）</span>'
+                f'<span style="font-size:11px;color:#8b949e;margin-left:8px;">月分 {_mon_sub:+.2f} · 季分 {_mj_sub:+.2f} · 快照 {_snap_ym} {_fresh_tag}</span>'
+                f'{_note_line}'
+                f'</div>', unsafe_allow_html=True
+            )
+        except Exception as _emj:
+            print(f'[MJ_TREND_UI] 顯示錯誤: {_emj}')
 
         # ══ D2. 基本面先行指標（6大指標）══════════════════════
         st.markdown('---')
