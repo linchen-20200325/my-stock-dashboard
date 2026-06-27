@@ -1425,9 +1425,12 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                 f'</div>', unsafe_allow_html=True
             )
 
-        # ══ G. 近 20 日籌碼集中度（外資+投信 vs 總成交量）═══════════
+        # ══ 籌碼定位（近 20 日外資+投信 vs 總成交量）═══════════
+        # v18.308 Bug2 PR-D：籌碼原地升級為一級可導航桶（加 bucket header + anchor）。
+        # 不物理搬移 code：_con20/_cty20/_sig20 於下方計算、L3203 AI 摘要跨段引用，
+        # 搬移會讓 AI 摘要永遠落 fallback「未取得」= §1 靜默降級，故原地升級。
         st.markdown('---')
-        st.markdown('#### 🔬 G. 近 20 日籌碼集中度')
+        st.markdown(section_header_html("chips"), unsafe_allow_html=True)
         st.caption('🔰 指標白話：集中度＝大戶（外資+投信）淨買量佔總成交量的比例，正值越高＝大戶默默吸貨（偏多）、'
                    '負值＝倒貨；延續性＝最近多少比例的交易日持續買超。資料直接取自下方 K 線的三大法人/成交量。')
         # v18.196 直算（df2 已含三大法人欄）— 移除 spinner 避免視覺跳動、

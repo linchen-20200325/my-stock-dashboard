@@ -23,7 +23,9 @@ _FUNDAMENTAL_GREEN = "#22c55e"  # 對齊 shared.colors.TRAFFIC_GREEN（drift tes
 # ════════════════════════════════════════════════════════════════
 # section 桶 meta：順序鎖定 + emoji + 主色 + 副標（對齊由上而下閱讀序）
 # ════════════════════════════════════════════════════════════════
-STOCK_SECTION_ORDER = ["entry", "tech", "fundamental", "financials", "ai"]
+# 順序鎖定 = render_tab_stock 由上而下實際 anchor 行序
+# （chips 實體位於 tech section 內，anchor 行號介於 tech 與 fundamental 之間）
+STOCK_SECTION_ORDER = ["entry", "tech", "chips", "fundamental", "financials", "ai"]
 
 STOCK_SECTION_META = {
     "entry": {
@@ -34,9 +36,15 @@ STOCK_SECTION_META = {
     },
     "tech": {
         "emoji": "📈", "title": "技術面分析", "color": "#58a6ff",
-        "sub": "健康度評分 · VCP波幅收縮 · K線技術圖 · 籌碼集中度 · 即時操作建議",
+        "sub": "健康度評分 · VCP波幅收縮 · K線技術圖 · 即時操作建議",
         "anchor": "sec-tech",
         "toc": "技術面",
+    },
+    "chips": {
+        "emoji": "🧩", "title": "籌碼定位", "color": "#3aa2f5",
+        "sub": "近20日外資+投信集中度 · 延續性 · 吸籌 / 倒貨訊號",
+        "anchor": "sec-chips",
+        "toc": "籌碼",
     },
     "fundamental": {
         "emoji": "📊", "title": "基本面分析", "color": _FUNDAMENTAL_GREEN,
