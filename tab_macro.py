@@ -2932,6 +2932,23 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     from shared.macro_buckets import bucket_group_banner_html as _bgb
     st.markdown(_bgb('long', 1), unsafe_allow_html=True)
     st.markdown(section_header('七','🌳 長期｜💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
+    # v18.313 桶輕量總結 bar(範本:長期座標)— 整體燈號 + 各指標 chip + SPEC §11，
+    # 詳細 raw 維持下方 expander 收合。復用 compute_five_bucket_summary 該桶 summary。
+    try:
+        from macro_helpers import compute_five_bucket_summary as _cfbs_lt
+        from section_inputs import load_section_inputs as _lsi_lt
+        from shared.macro_buckets import bucket_summary_bar_html as _bsb
+        _inp_lt = _lsi_lt(st.session_state)
+        _5b_lt = _cfbs_lt(
+            macro_info=_inp_lt.macro_info, mkt_info=_inp_lt.mkt_info,
+            warroom_summary=_inp_lt.warroom_summary, m1b_m2_info=_inp_lt.m1b_m2_info,
+            bias_info=_inp_lt.bias_info, cl_data=_inp_lt.cl_data,
+            li_latest=_inp_lt.li_latest, jingqi_info=_inp_lt.jingqi_info,
+            news_items=_inp_lt.news_items,
+        )
+        st.markdown(_bsb('long', _5b_lt.get('long', {})), unsafe_allow_html=True)
+    except Exception as _e_bsb_lt:
+        print(f'[tab_macro/長期總結bar] {type(_e_bsb_lt).__name__}: {_e_bsb_lt}')
 
     # ── M1B-M2 年增率（FinMind）──────────────────────────────
     _m1b_info = st.session_state.get('m1b_m2_info')

@@ -61,3 +61,38 @@ def test_top_summary_dashboard_present():
     import tab_macro
     src = open(tab_macro.__file__, encoding="utf-8").read()
     assert "總經總結儀表板" in src
+
+
+# ════════════════════════════════════════════════════════════════
+# v18.313 桶輕量總結 bar
+# ════════════════════════════════════════════════════════════════
+
+def test_bucket_summary_bar_with_data():
+    from shared.macro_buckets import bucket_summary_bar_html
+    s = {'color': '#3fb950', 'emoji': '🟢', 'label': '結構健康', 'details': [
+        {'danger': 'green', 'label': 'M1B-M2', 'value_str': '5.2pt'},
+        {'danger': 'yellow', 'label': '年線乖離', 'value_str': '+18%'},
+        {'danger': 'red', 'label': 'X', 'value_str': '9'},
+    ]}
+    h = bucket_summary_bar_html('long', s)
+    assert '整體狀態' in h and '結構健康' in h
+    assert 'M1B-M2' in h and '5.2pt' in h
+    assert 'SPEC §11' in h
+    # 燈號計數
+    assert '🔴 1' in h and '🟡 1' in h and '🟢 1' in h
+
+
+def test_bucket_summary_bar_empty_fail_safe():
+    """空 summary → 顯示『未載入』+ 引導,不 raise / 不偽造數字(§1)。"""
+    from shared.macro_buckets import bucket_summary_bar_html
+    h = bucket_summary_bar_html('long', {})
+    assert '未載入' in h
+    assert '尚未載入資料' in h
+
+
+def test_tab_macro_long_bucket_has_summary_bar():
+    """tab_macro 長期桶(範本)必須接 bucket_summary_bar_html。"""
+    import tab_macro
+    src = open(tab_macro.__file__, encoding='utf-8').read()
+    assert 'bucket_summary_bar_html' in src
+    assert "_bsb('long'" in src
