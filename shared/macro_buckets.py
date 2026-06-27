@@ -237,16 +237,23 @@ def fmt_value(value: Optional[float], spec: DangerSpec) -> str:
 
 # 桶群組主色(視覺區隔用;與既有 LEVEL_COLOR 燈號色不同維度)
 BUCKET_GROUP_COLOR = {
-    "long":  "#3fb950",   # 🌳 長期 — 綠
-    "mid":   "#58a6ff",   # 📈 中期 — 藍
-    "short": "#f0883e",   # ⚡ 短線急殺 — 橙
-    "chips": "#a371f7",   # 🧩 籌碼 — 紫
-    "news":  "#d2a8ff",   # 📰 新聞 — 淺紫
-    "ai":    "#76e3ea",   # 🧠 AI 綜合 — 青
+    "long":   "#3fb950",   # 🌳 長期 — 綠
+    "mid":    "#58a6ff",   # 📈 中期 — 藍
+    "short":  "#f0883e",   # ⚡ 短線急殺 — 橙
+    "global": "#e3b341",   # 🌍 全球風險 — 金（v18.317：10 燈雷達改桶）
+    "chips":  "#a371f7",   # 🧩 籌碼 — 紫
+    "news":   "#d2a8ff",   # 📰 新聞 — 淺紫
+    "ai":     "#76e3ea",   # 🧠 AI 綜合 — 青
 }
 
 # AI 群組(跨桶 AI + 新聞 AI 裁決)非 5 桶之一,meta 另列
 _AI_GROUP_META = {"emoji": "🧠", "title": "AI 綜合決策", "sub": "跨桶 AI 投資決策 × 新聞 AI 總裁決"}
+
+# v18.317 全球風險群組(10 燈短線雷達改桶):亦非 5 桶 DangerSpec 之一,meta 另列。
+# 資料源為 risk_radar.detect_risk_radar(自帶 color/label/value/trend),非 BUCKET_DANGER_SPECS,
+# 故與 "ai" 同走特例 meta(badge 顯示「雷達」而非「桶 N/5」)。
+_GLOBAL_GROUP_META = {"emoji": "🌍", "title": "全球風險",
+                      "sub": "美股/國際 1-5 日急殺速度（10 燈雷達）"}
 
 
 def bucket_group_banner_html(bucket_key: str, idx: int, total: int = 5) -> str:
@@ -254,7 +261,7 @@ def bucket_group_banner_html(bucket_key: str, idx: int, total: int = 5) -> str:
 
     Args
     ----
-    bucket_key: BUCKET_ORDER 之一,或 "ai"(AI 綜合群組)
+    bucket_key: BUCKET_ORDER 之一,或 "ai"(AI 綜合群組)/"global"(全球風險群組)
     idx: 第幾桶(1-based,顯示「桶 idx/total」)
     total: 桶總數(預設 5)
 
@@ -262,9 +269,11 @@ def bucket_group_banner_html(bucket_key: str, idx: int, total: int = 5) -> str:
     -------
     str: 全寬漸層 banner HTML。缺 key → raise KeyError(§1 Fail Loud)。
     """
-    meta = _AI_GROUP_META if bucket_key == "ai" else BUCKET_META[bucket_key]
+    _special_meta = {"ai": _AI_GROUP_META, "global": _GLOBAL_GROUP_META}
+    _special_badge = {"ai": "綜合", "global": "雷達"}
+    meta = _special_meta.get(bucket_key) or BUCKET_META[bucket_key]
     color = BUCKET_GROUP_COLOR[bucket_key]  # KeyError on bad key = Fail Loud
-    _badge = f"桶 {idx}/{total}" if bucket_key != "ai" else "綜合"
+    _badge = _special_badge.get(bucket_key) or f"桶 {idx}/{total}"
     return (
         f'<div style="margin:34px 0 10px;padding:12px 18px;'
         f'background:linear-gradient(90deg,{color}2b,{color}0a,#0d1117);'

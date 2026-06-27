@@ -69,9 +69,10 @@ def test_radar_and_bucket_bar_gated_pre_load():
     import re
     src = open("/home/user/my-stock-dashboard/tab_macro.py", encoding="utf-8").read()
     # 雷達 call 緊接在 if _show_market_data: 之後
+    # v18.317:函式改名 _render_global_risk_bucket(10 燈雷達改桶,從頂部下移至短線急殺後)
     assert re.search(
-        r"if _show_market_data:\s*\n\s+_render_global_risk_radar", src
-    ), "全球風險雷達未 gate 在 _show_market_data(未載入會跑獨立 fetch + 顯示多餘面板)"
+        r"if _show_market_data:\s*\n\s+_render_global_risk_bucket", src
+    ), "全球風險桶未 gate 在 _show_market_data(未載入會跑獨立 fetch + 顯示多餘面板)"
     # 五桶 bar 的 try 緊接在 if _show_market_data: 之後
     # (允許 try: 與 from 之間夾註解行 — C1-A v18.287 後內有 SSOT 引用註)
     assert re.search(
