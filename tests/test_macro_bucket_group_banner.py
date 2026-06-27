@@ -90,9 +90,18 @@ def test_bucket_summary_bar_empty_fail_safe():
     assert '尚未載入資料' in h
 
 
-def test_tab_macro_long_bucket_has_summary_bar():
-    """tab_macro 長期桶(範本)必須接 bucket_summary_bar_html。"""
+def test_tab_macro_buckets_have_summary_bar():
+    """tab_macro 各資料桶(long/mid/short/news)接 render_macro_bucket_summary_bar；
+    §三 籌碼(chips)保留原樣不加(user 2026-06-27 指定)。"""
     import tab_macro
     src = open(tab_macro.__file__, encoding='utf-8').read()
     assert 'bucket_summary_bar_html' in src
-    assert "_bsb('long'" in src
+    for key in ('long', 'mid', 'short', 'news'):
+        assert f"render_macro_bucket_summary_bar('{key}')" in src, f"缺 {key} 桶總結 bar"
+    # 籌碼桶不可有總結 bar(保留原樣)
+    assert "render_macro_bucket_summary_bar('chips')" not in src, "籌碼桶不應加總結 bar(user 指定保留)"
+
+
+def test_render_macro_bucket_summary_bar_callable():
+    import tab_macro
+    assert callable(getattr(tab_macro, 'render_macro_bucket_summary_bar', None))
