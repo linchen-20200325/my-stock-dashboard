@@ -975,7 +975,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             + (f'<div style="font-size:11px;color:#484f58;margin-top:4px;">更新時間：{_wr_ts}</div>' if _wr_ts else '') +
             '</div>', unsafe_allow_html=True)
 
-        # 今日5分鐘清單
+        # 今日5分鐘清單 — v18.318：5 列垂直清單 → 5 欄總結小卡（比照桶卡片視覺）
         st.markdown('##### ✅ 今日操作前 5 分鐘清單')
         _cl_items = [
             ('大盤燈號', '🟢 多頭' if _wr_reg=='bull' else ('🔴 空頭防禦' if _wr_reg=='bear' else '🟡 震盪'),
@@ -990,17 +990,23 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
              not _wr_bias or abs(_wr_bias.get("bias_240",0)) < 20, '超過±20%要警惕'),
             ('持股比例', f'建議{_wr_exp}', _wr_reg!='bear', '按建議比例，不要滿倉'),
         ]
-        for _name, _val, _ok, _tip in _cl_items:
+        _cl_cols = st.columns(len(_cl_items))
+        for _ccol, (_name, _val, _ok, _tip) in zip(_cl_cols, _cl_items):
             _ic = '✅' if _ok else '⚠️'
             _vc = TRAFFIC_GREEN if _ok else TRAFFIC_RED
-            st.markdown(
-                f'<div style="display:flex;align-items:center;padding:5px 8px;margin:2px 0;'
-                f'background:#0d1117;border-radius:6px;border:1px solid #21262d;">'
-                f'<span style="font-size:16px;width:28px;">{_ic}</span>'
-                f'<span style="font-size:13px;color:#c9d1d9;width:80px;">{_name}</span>'
-                f'<span style="font-size:13px;color:{_vc};font-weight:700;flex:1;">{_val}</span>'
-                f'<span style="font-size:11px;color:#484f58;">{_tip}</span>'
-                f'</div>', unsafe_allow_html=True)
+            with _ccol:
+                st.markdown(
+                    f"<div style='background:#0d1117;border:1px solid #21262d;"
+                    f"border-top:3px solid {_vc};border-radius:8px;padding:8px 10px;"
+                    f"margin:2px 0;min-height:108px;display:flex;flex-direction:column;"
+                    f"justify-content:space-between;'>"
+                    f"<div>"
+                    f"<div style='font-size:11px;color:#8b949e;'>{_ic} {_name}</div>"
+                    f"<div style='font-size:15px;font-weight:800;color:{_vc};"
+                    f"margin:5px 0;line-height:1.25;'>{_val}</div>"
+                    f"</div>"
+                    f"<div style='font-size:10px;color:#484f58;line-height:1.3;'>{_tip}</div>"
+                    f"</div>", unsafe_allow_html=True)
 
         # 風險警示
         if _wr_warns:
