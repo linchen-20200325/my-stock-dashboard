@@ -18,9 +18,5 @@ from __future__ import annotations
 
 HEALTH_GRADE_A_MIN: int = 80  # 優質優良（A）下界
 HEALTH_GRADE_B_MIN: int = 50  # 震盪盤整（B）下界；低於此為弱勢危險（C）
-
-# v18.326 PR-D：個股 tab 健康度「標籤中間級」下界。
-# ⚠️ 分歧旗標：tab_stock 標籤用 60 為中間級，但同檔評語/分級用 HEALTH_GRADE_B_MIN=50，
-#    同一 health2 在 50~60 間「標籤=弱勢、評語=可分批布局」不一致（SPEC §15 旗標待統一）。
-#    本版各自具名保行為，待 user 決定是否對齊 50。原 tab_stock.py:1137 inline。
-HEALTH_LABEL_MID_MIN: int = 60
+# v18.327：個股 tab 健康度標籤中間級原 inline 60，已統一下修對齊 HEALTH_GRADE_B_MIN=50
+# （MK「50 榮枯線」邏輯，消除「標籤=弱勢、評語=可分批布局」前後矛盾）。標籤與評語同走本 B 級線。

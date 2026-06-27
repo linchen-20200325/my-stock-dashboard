@@ -34,11 +34,9 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_Y
 from shared.signal_thresholds import (
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
     MARGIN_BALANCE_WARN_THRESHOLD_YI,
-    MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI,
     BREADTH_BULL_PCT,
     BREADTH_NEUTRAL_PCT,
     BREADTH_BEAR_PCT,
-    BREADTH_KPI_YELLOW_PCT,
 )
 
 from macro_helpers import calc_traffic_light, rp_entry, rp_scalar, rp_ts
@@ -886,7 +884,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         with _ov_cols[1]:
             _ov_jqp = _ov_jq.get('avg',None) if _ov_jq else None
             if _ov_jqp is not None:
-                _ov_jc = TRAFFIC_GREEN if _ov_jqp>=BREADTH_BULL_PCT else (TRAFFIC_YELLOW if _ov_jqp>=BREADTH_KPI_YELLOW_PCT else TRAFFIC_RED)
+                _ov_jc = TRAFFIC_GREEN if _ov_jqp>=BREADTH_BULL_PCT else (TRAFFIC_YELLOW if _ov_jqp>=BREADTH_NEUTRAL_PCT else TRAFFIC_RED)
                 st.markdown(beginner_kpi('全市場健康度', f'{_ov_jqp:.0f}%', '有幾%的股票站在均線之上', _ov_jc, '>60%才適合積極買進'), unsafe_allow_html=True)
             else:
                 st.markdown(kpi('旌旗指數', '--', '掃描後顯示', '#484f58', '#0d1117'), unsafe_allow_html=True)
@@ -4295,7 +4293,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '極度危險，嚴防多殺多 → 行情尾端'
             _sql_mact = '全面減碼，勿追高，準備逃命'
-        elif margin >= MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI:
+        elif margin >= MARGIN_BALANCE_WARN_THRESHOLD_YI:
             _sql_mc = TRAFFIC_YELLOW
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '水位偏高，籌碼凌亂 → 警戒操作'
