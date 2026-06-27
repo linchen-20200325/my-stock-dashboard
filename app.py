@@ -72,8 +72,23 @@ from api_diagnostic import render_api_diagnostic  # noqa: E402
 from grape_ladder import render_grape_ladder  # noqa: E402
 from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA  # noqa: E402
 
-api_key       = st.secrets.get('GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY', ''))  # [Fixed] st.secrets 優先
-FINMIND_TOKEN = st.secrets.get('FINMIND_TOKEN',  os.environ.get('FINMIND_TOKEN', ''))   # [Fixed] st.secrets 優先
+def _get_secret(_key: str) -> str:
+    """st.secrets 優先,降級 os.environ。
+
+    st.secrets 在「無 secrets.toml」(本機 / CI fast lane)會 raise
+    StreamlitSecretNotFoundError;在「streamlit 被 test stub 取代」時甚至缺
+    `secrets` 屬性(AttributeError)。以 try/except 降級確保 app import 不炸
+    (對齊 config.py EX-L0-1 + Fund data_registry 的 st.secrets guard)。
+    """
+    try:
+        _v = st.secrets.get(_key, '')
+    except Exception:
+        _v = ''
+    return _v or os.environ.get(_key, '')
+
+
+api_key       = _get_secret('GEMINI_API_KEY')   # [Fixed] st.secrets 優先 + 缺失降級
+FINMIND_TOKEN = _get_secret('FINMIND_TOKEN')    # [Fixed] st.secrets 優先 + 缺失降級
 
 # [Fixed] 同步到 os.environ，讓子模組頂層讀取能拿到正確值
 if FINMIND_TOKEN:

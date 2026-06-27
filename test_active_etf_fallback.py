@@ -119,7 +119,9 @@ def test_fetch_etf_manager_falls_back_to_yuanta(monkeypatch):
     r = etf_fetch.fetch_etf_manager('00980A.TW')
     assert r is not None, f'Yuanta fallback 失敗 — calls: {_calls}'
     assert r['name'] == '王五'
-    assert r.get('source') == 'yuanta-official'
+    # v18.257 S-PROV-1 phase 11:fetch_etf_manager 的 source 升級為 Provenance
+    # 慣例 'Provider:Dataset'(對齊 'FRED:<sid>' / 'Yahoo:^VIX'),etf_fetch.py:1085。
+    assert r.get('source') == 'Yuanta:official'
 
 
 # ════════════════════════════════════════════════════════════
@@ -128,6 +130,10 @@ def test_fetch_etf_manager_falls_back_to_yuanta(monkeypatch):
 
 def test_expense_ratio_uses_yuanta_for_active_etf(monkeypatch):
     """SITCA + MDJ 都回 None，主動式 ETF 應拿 Yuanta 的費用率。"""
+    # get_etf_expense_ratio_safe 的 primary 是 fetch_etf_meta_moneydj(Basic0004),
+    # 必須一併 mock 回 None — 否則 CI(NAS proxy 可達)會抓到真資料 → 提早 return,
+    # 永遠走不到 Yuanta 分支(本機 proxy 不可達才會「碰巧」過)。網路相依改為確定性。
+    monkeypatch.setattr(etf_fetch, 'fetch_etf_meta_moneydj', lambda t: None)
     monkeypatch.setattr(etf_fetch, 'fetch_sitca_expense_ratio', lambda t: None)
     monkeypatch.setattr(etf_fetch, 'fetch_moneydj_expense_ratio', lambda t: None)
     monkeypatch.setattr(etf_fetch, '_fetch_yuanta_active_etf_meta',

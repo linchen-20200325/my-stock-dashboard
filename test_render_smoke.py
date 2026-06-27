@@ -42,9 +42,8 @@ _REAL_CL_DATA = {
 def _build_driver(body: str) -> str:
     """共用 driver:sys.path + 灌 session_state"""
     return f'''
-import sys
-sys.path.insert(0, "/home/user/my-stock-dashboard")
-import os
+import sys, os
+sys.path.insert(0, os.getcwd())   # CI 可攜:repo root(非硬編 /home/user)
 os.environ["FRED_API_KEY"] = "x" * 32
 import streamlit as st
 {body}
@@ -67,7 +66,7 @@ def test_radar_and_bucket_bar_gated_pre_load():
     _show_market_data 後 — 未載入資料(尚無快取/過期)時不顯示,對齊紅綠燈「尚無資料」。
     full render AppTest 在無 proxy/secrets 環境會 hang,故用 source pattern 檢查防回歸。"""
     import re
-    src = open("/home/user/my-stock-dashboard/tab_macro.py", encoding="utf-8").read()
+    src = open("tab_macro.py", encoding="utf-8").read()   # CI 可攜:相對 repo root
     # 雷達 call 緊接在 if _show_market_data: 之後
     # v18.317:函式改名 _render_global_risk_bucket(10 燈雷達改桶,從頂部下移至短線急殺後)
     assert re.search(

@@ -65,8 +65,12 @@ def test_fetch_market_data_handles_no_fii(monkeypatch):
 # ══════════════════════════════════════════════════════════════
 
 def _build_synthetic_twii_df(rows: int = 200) -> pd.DataFrame:
-    """生出 200 個交易日的合成 ^TWII 資料,確保 MA120 計算到位。"""
-    idx = pd.date_range('2025-09-01', periods=rows, freq='B')
+    """生出 200 個交易日的合成 ^TWII 資料,確保 MA120 計算到位。
+
+    末筆錨定「今天」(end=now),避免硬編起始日隨時間推移觸發
+    market_strategy 的 `_days_old > 7` 過舊保護 → 測試隨日曆 rot。
+    """
+    idx = pd.date_range(end=pd.Timestamp.now().normalize(), periods=rows, freq='B')
     closes = [20000 + i * 5 for i in range(rows)]
     return pd.DataFrame({
         'Open':   [c - 10 for c in closes],
