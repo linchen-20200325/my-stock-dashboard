@@ -874,9 +874,12 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
 
 > 💡 看燈前先按上方「🚀 一鍵更新全部數據」，燈號才會反映「今天」而不是過期資料。''')
 
-    st.divider()
+    # v18.334：抓取進行中隱藏「今日市場總覽」標題（避免空標題在資料到位前先冒出，
+    # 載入時只留下方 spinner）。非抓取（含抓完 rerun）照常顯示。
+    if not do_refresh:
+        st.divider()
 
-    st.markdown("""<div style="padding:6px 0 4px;">
+        st.markdown("""<div style="padding:6px 0 4px;">
 <span style="font-size:20px;font-weight:900;color:#e6edf3;">🌍 今日市場總覽</span>
 <span style="font-size:11px;color:#484f58;margin-left:10px;">決定：現在能買嗎？大盤水位？</span>
 </div>""", unsafe_allow_html=True)
@@ -918,7 +921,9 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         st.markdown('')
 
     # ══ 今日作戰室（最重要：一眼看清今天該做什麼）══════════════
-    st.markdown('''<div style="background:linear-gradient(135deg,#0a1628,#0d2040);
+    # v18.334：抓取進行中隱藏標題（與下方空狀態一致，載入時只留 spinner）。
+    if not do_refresh:
+        st.markdown('''<div style="background:linear-gradient(135deg,#0a1628,#0d2040);
 border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 <div style="font-size:18px;font-weight:900;color:#58a6ff;margin-bottom:4px;">
 🎯 今日作戰室 — 現在該做什麼？</div>
@@ -1064,7 +1069,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 unsafe_allow_html=True)
 
         st.markdown('<hr style="border-color:#21262d;margin:12px 0;">', unsafe_allow_html=True)
-    else:
+    elif not do_refresh:
+        # v18.334：抓取進行中不顯示「點擊載入」空狀態（與標題一致，載入時只留 spinner）
         st.info('📡 點擊「🚀 一鍵更新全部數據」載入今日作戰室')
         st.markdown('<hr style="border-color:#21262d;margin:12px 0;">', unsafe_allow_html=True)
 
@@ -1097,12 +1103,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         f'<span style="color:{_ts_color};">上次更新：{_last_ts}</span>'
         f'</div>', unsafe_allow_html=True)
 
-    # ── 使用者點了更新 → 立即清除舊燈號，避免誤導 ──
+    # ── 使用者點了更新 → 立即清空頂部燈號 placeholder ──
+    # v18.334：抓取時不再於頂部顯示「正在重新載入」訊息。user 要求載入時只保留
+    # 下方 spinner 一個下載指示，頂部與各區塊空狀態不重複冒出來。
     if do_refresh:
-        _tl_placeholder.info(
-            '⏳ **正在重新載入市場數據...**\n\n'
-            '燈號將在更新完成後顯示，請稍候。'
-        )
+        _tl_placeholder.empty()
 
     # ── 市場狀態卡 placeholder（等資料載入後才更新）──────────────
     _mkt_placeholder = st.empty()
