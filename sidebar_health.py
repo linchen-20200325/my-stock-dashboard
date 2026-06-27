@@ -77,19 +77,27 @@ def _collect_src_counts(t2d: dict) -> dict:
     return _counts
 
 
-def _kline_end_date(df) -> str:
-    """從個股 df 取 K 線截止日（index 或 date 欄）。"""
+def kline_end_date(df) -> str:
+    """從個股 price df 取 K 線截止日字串（取不到回 ""）。
+
+    v18.328 bugfix：個股 price df 經 reset_index(drop=True)（RangeIndex，日期在
+    'date' 欄）。原邏輯先試 pd.to_datetime(df.index[-1])，把整數 index（如 249）
+    當 epoch 納秒 → 假 1970-01-01，且該 Timestamp 非 NaT 致 'date' 欄 fallback
+    被跳過（§1 寧可炸不可造假）。改為：優先 'date' 欄；僅當 index 真為
+    DatetimeIndex 才用 index；皆不可得回 ""（顯示端轉 "—"，不捏造日期）。
+    tab_stock 資料新鮮度條共用本函式，避免雙處邏輯漂移。
+    """
     try:
         if df is None or (hasattr(df, "empty") and df.empty):
             return ""
-        if hasattr(df, "index") and len(df.index):
-            import pandas as _pd
-            _d = _pd.to_datetime(df.index[-1])
-            if _d is not None and not _pd.isna(_d):
-                return _d.strftime("%Y-%m-%d")
+        import pandas as _pd
+        _d = None
         if "date" in getattr(df, "columns", []):
-            import pandas as _pd
-            return _pd.to_datetime(df["date"].iloc[-1]).strftime("%Y-%m-%d")
+            _d = _pd.to_datetime(df["date"].iloc[-1], errors="coerce")
+        elif isinstance(getattr(df, "index", None), _pd.DatetimeIndex) and len(df.index):
+            _d = _pd.to_datetime(df.index[-1], errors="coerce")
+        if _d is not None and not _pd.isna(_d):
+            return _d.strftime("%Y-%m-%d")
     except Exception:
         return ""
     return ""
@@ -116,7 +124,7 @@ def render_sidebar_data_health(session_state) -> None:
                 _age_txt = f" · {_fmt_age(_sec)}"
             except Exception:
                 _age_txt = ""
-        _kend = _kline_end_date(_t2d.get("df"))
+        _kend = kline_end_date(_t2d.get("df"))
         _kend_txt = f" · K線 {_kend}" if _kend else ""
         _domain_emojis.append(_emoji)
         _lines.append(f"{_emoji} 個股 {_nm}{_age_txt}{_kend_txt}")
