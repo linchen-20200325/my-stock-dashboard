@@ -1572,27 +1572,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     return _mk_s()
 
                 # ── 1. VIX ──────────────────────────────────────────────────────────
-                def _fetch_vix():
-                    try:
-                        import yfinance as _yf_vix
-                        _df_v = _yf_vix.download('^VIX', period='3mo', interval='1d',
-                                                  progress=False, auto_adjust=True)
-                        if _df_v is None or _df_v.empty:
-                            return {'_err_vix': 'yfinance empty'}
-                        if hasattr(_df_v.columns, 'nlevels') and _df_v.columns.nlevels > 1:
-                            _df_v.columns = _df_v.columns.get_level_values(0)
-                        _df_v = _df_v.dropna(subset=['Close'])
-                        _vv = [round(float(v), 1) for v in _df_v['Close']]
-                        _vd = [str(d)[:10] for d in _df_v.index]
-                        if len(_vv) < 3:
-                            return {'_err_vix': 'not enough data'}
-                        _s20 = _vv[-20:] if len(_vv) >= 20 else _vv
-                        print(f'[Macro/VIX] ✅ current={_vv[-1]} date={_vd[-1]}')
-                        return {'vix': {'current': _vv[-1], 'ma20': round(sum(_s20)/len(_s20), 1),
-                                        'dates': _vd[-60:], 'values': _vv[-60:], 'date': _vd[-1]}}
-                    except Exception as _e_vix:
-                        print(f'[Macro/VIX] ❌ {_e_vix}')
-                        return {'_err_vix': str(_e_vix)[:80]}
+                # v18.332 Tier2 2-D slice 1：抽至 L1 macro_snapshot.fetch_vix_block（可單測）。
+                from macro_snapshot import fetch_vix_block as _fetch_vix
 
                 # ── 2. CPI（美國核心 CPI YoY，series CPILFESL）─────────────────────
                 #   v18.142 修：原本誤用 CPIAUCSL（總體 CPI All Items），與 UI 標籤
