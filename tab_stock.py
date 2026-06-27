@@ -29,6 +29,7 @@ from shared.ttls import TTL_1DAY
 from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
 from shared.signal_thresholds import CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT
 from tab_helpers import format_condition_emoji, parse_cash_flow_ratio, safe_ma
+from sidebar_health import kline_end_date
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
@@ -506,16 +507,10 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         _xsec = _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2)
 
         # v18.197 ══ 📊 資料新鮮度條（截止日 + 抓取時間 + age + fallback 警示 + 強制重抓）══
+        # v18.328 bugfix：K 線截止日改用 sidebar_health.kline_end_date() 共用 canonical。
+        # 個股 price df 為 reset_index(drop=True)（RangeIndex，日期在 'date' 欄），
+        # 原 pd.to_datetime(df2.index[-1]) 把整數 index 當 epoch 納秒 → 假 1970-01-01（§1）。
         _fetched_at = t2d.get('fetched_at')
-        _df_end_date = None
-        try:
-            if df2 is not None and not df2.empty:
-                if hasattr(df2, 'index') and len(df2.index):
-                    _df_end_date = pd.to_datetime(df2.index[-1])
-                if (_df_end_date is None or pd.isna(_df_end_date)) and 'date' in df2.columns:
-                    _df_end_date = pd.to_datetime(df2['date'].iloc[-1])
-        except Exception:
-            _df_end_date = None
         _fresh_cols = st.columns([5, 1])
         with _fresh_cols[0]:
             if _fetched_at is not None:
@@ -523,7 +518,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                 _age_color = TRAFFIC_GREEN if _age_min < 60 else (TRAFFIC_YELLOW if _age_min < 240 else TRAFFIC_RED)
                 _age_label = (f'{int(_age_min)} 分鐘前' if _age_min < 60
                               else f'{_age_min/60:.1f} 小時前')
-                _end_str = _df_end_date.strftime('%Y-%m-%d') if _df_end_date is not None else '—'
+                _end_str = kline_end_date(df2) or '—'
                 _attrs = (df2.attrs or {}) if (df2 is not None and hasattr(df2, 'attrs')) else {}
                 _ps = str(_attrs.get('price_src', 'unknown'))
                 _is = str(_attrs.get('inst_src', 'unknown'))
