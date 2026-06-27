@@ -7,7 +7,11 @@
 import sys  # v18.241 D6: calc_atr_stop 例外路徑寫 stderr 用
 
 # v18.241 E10: ATR% 風險分級從 shared SSOT 引入
-from shared.signal_thresholds import ATR_PCT_LOW, ATR_PCT_HIGH
+# v18.322: 多因子 A/B 評級門檻從 shared SSOT 引入（§3.3 反捏造）
+from shared.signal_thresholds import (
+    ATR_PCT_LOW, ATR_PCT_HIGH,
+    MULTIFACTOR_GRADE_A_MIN, MULTIFACTOR_GRADE_B_MIN,
+)
 
 try:
     from config import RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES
@@ -352,9 +356,9 @@ def score_single_stock(df, stock_id='', stock_name='', **kwargs) -> dict:
 
     mom_sig = momentum_signal(df)
 
-    if total >= 75:
+    if total >= MULTIFACTOR_GRADE_A_MIN:
         grade = 'A'
-    elif total >= 55:
+    elif total >= MULTIFACTOR_GRADE_B_MIN:
         grade = 'B'
     else:
         grade = 'C'

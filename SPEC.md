@@ -436,3 +436,43 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 
 > 桶燈號 = 該桶所有指標分級取**最危險者**（紅>黃>綠>灰未載入）。籌碼/新聞桶資料屬
 > Phase 2（需按「🚀 一鍵更新全部數據」/「執行 AI 裁決」），未載入時顯示 ⬜ 而非偽綠（§1 Fail Loud）。
+
+---
+
+## §12 個股組合（`tab_stock_grp.py`）評分門檻 SSOT + 舊評分退役（v18.322）
+
+> user 2026-06-27 要求：個股組合頁的計算/指標/判斷須維持 §3.3 SSOT；違反者收斂 +
+> 結論入 SPEC。本節為審計結論與決策紀錄。
+
+### §12.1 「舊評分」退役（Option A）
+
+- **決策**：移除「④ 汰弱留強」原本的 0-10「舊評分」(`old_score4`)，④ 改以**純健康度**排序。
+- **理由**（3 點）：
+  1. 已被「多因子評分 0-100」(`scoring_engine.score_single_stock`，含景氣動態權重) 大幅取代；連 AI ⑤ 綜合判讀都優先用 `total`、舊評分僅當 fallback。
+  2. **重複計算**：舊評分內的「健康度÷50」「估值便宜+3」與同表的健康度欄、357評價欄同源再算一次。
+  3. **名實不符**：頁面「🔰 怎麼看」自述 ④ = 「健康度（均線／RSI／KD／量比／布林）」，但實際排序鍵是舊評分（含估值/VCP/合約負債）。退役後 ④ 真的以健康度排，名實一致。
+- **影響**：④ 表移除「評分 ⭐」欄；排序由 `['舊評分','健康度']` → `健康度` 單鍵。AI ⑤ fallback 由 `舊評分` → `健康度`。**多因子 ③ 排行不受影響**。
+
+### §12.2 個股組合判斷門檻 SSOT（原 inline → `shared/signal_thresholds.py`）
+
+| 常數 | 值 | 用途 | 原 inline 位置 |
+|---|---|---|---|
+| `GRP_VOL_SHRINK_RATIO` | 0.7 | 操作狀態燈「量縮」(量<20日均量×0.7) | tab_stock_grp.py:298 |
+| `GRP_NEAR_MA20_BIAS_PCT` | 3.0 | 操作狀態燈「近20MA」(\|乖離\|<3%) | tab_stock_grp.py:299 |
+| `GRP_BIAS_OVERHEAT_WARN_PCT` | 25.0 | 操作狀態燈「乖離過熱」(>+25%→🟡) | tab_stock_grp.py:302 |
+| `GRP_NEWS_BEARISH_CONFIDENCE_MIN` | 50.0 | 利空新聞採信門檻(AI confidence≥50) | tab_stock_grp.py:600 |
+| `MULTIFACTOR_GRADE_A_MIN` | 75.0 | 多因子總分 A 級下限 | scoring_engine.py:355 |
+| `MULTIFACTOR_GRADE_B_MIN` | 55.0 | 多因子總分 B 級下限 | scoring_engine.py:357 |
+| `MULTIFACTOR_ENTRY_MIN` | 70.0 | 多因子「入選候選」門檻 | tab_stock_grp.py:520 |
+
+- 健康度分級 `80/50` 改 import 既有 `HEALTH_GRADE_A_MIN`/`HEALTH_GRADE_B_MIN`（原 inline 於 tab_stock_grp.py:300/564）。
+- **多因子分級(75/A,55/B) ≠ 健康度分級(80/A,50/B)**：兩套評分體系，門檻各自獨立，**不可耦合相等**（`tests/test_grp_ssot.py` 守此不變量）。
+
+### §12.3 單一個股 vs 個股組合「評分不同」— 維持（user 確認）
+
+- 兩頁本就不同引擎：**單一**以健康度(6技術)+四維基本面深挖一檔；**組合**以多因子0-100(動態權重)排序 + 批次財報體檢 + MJ趨勢 + **綜合評論**。
+- user 2026-06-27 明示：「組合一定會跟單一不同，因為要綜合評論+評分，這可以維持」→ **不統一跨頁總分**，此差異為設計，非違憲。
+
+### §12.4 版面（維持）
+
+- 上方 = 整體結論（⑤ 最終綜合建議 teacher_conclusion）；下方 = Raw 明細（③④ 排行表 / 🏥 批次財報體檢）+ 🤖 AI 綜合判讀，**已符合**「上結論／下 Raw+AI」，本次不重排。

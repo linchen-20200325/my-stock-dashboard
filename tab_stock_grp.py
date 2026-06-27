@@ -16,6 +16,15 @@ import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.thresholds import YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC
+# v18.322 §3.3 SSOT：健康度分級 + 操作狀態燈 / 多因子入選門檻
+from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
+from shared.signal_thresholds import (
+    GRP_VOL_SHRINK_RATIO,
+    GRP_NEAR_MA20_BIAS_PCT,
+    GRP_BIAS_OVERHEAT_WARN_PCT,
+    GRP_NEWS_BEARISH_CONFIDENCE_MIN,
+    MULTIFACTOR_ENTRY_MIN,
+)
 from tab_helpers import (
     final_recommendation,
     format_condition_emoji,
@@ -241,19 +250,10 @@ def render_stock_grp():
 
                 vcp_ok4 = vcp4 and vcp4['contracting']
 
-                # ── 汰弱留強舊評分 ─────────────────────────────
-                old_score4 = 0
-                if '多頭' in trend4:
-                    old_score4 += 2
-                if '便宜' in val4:
-                    old_score4 += 3
-                elif '合理' in val4:
-                    old_score4 += 1
-                if vcp_ok4:
-                    old_score4 += 2
-                if cl4 and cl4 > 0:
-                    old_score4 += 1
-                old_score4 += round(health4 / 50, 0)
+                # v18.322 「舊評分」已退役（Option A，見 SPEC「個股組合評分門檻 SSOT」）：
+                #   原 0-10 簡易加權分（趨勢/估值/VCP/合約負債/健康度÷50）與健康度欄、
+                #   357評價欄重複計算，且名實不符（④ 自述「健康度」卻以舊評分排）。
+                #   → ④ 汰弱留強改以「純健康度」排序（對齊頁面說明）。
 
                 # 出場訊號：技術 + 籌碼兩維（利空新聞第三維由「AI 掃利空」鈕後補）
                 _ex_tech4 = compute_tech_bearish(df4, k=k4, d=d4)
@@ -274,7 +274,6 @@ def render_stock_grp():
 
 
 
-                    '舊評分': int(old_score4),
                     '_health': health4, '_val': val4, '_trend': trend4,
                     '_ex_tech': _ex_tech4, '_ex_chip_sig': _ex_chip_sig4,
                     # 資料診斷專用欄位（health_inspector 讀取）
@@ -296,11 +295,11 @@ def render_stock_grp():
                         _bias4   = (_p4 - _ma20_4) / _ma20_4 * 100 if _ma20_4 else 0
                         _vol4    = float(df4['volume'].iloc[-1])      if 'volume' in df4.columns else 0
                         _avgvol4 = float(df4['volume'].tail(20).mean()) if 'volume' in df4.columns else 1
-                        _shrink4 = _avgvol4 > 0 and _vol4 < _avgvol4 * 0.7
-                        _near20_4= abs(_bias4) < 3
-                        if health4 >= 80 and '多頭' in str(trend4) and _shrink4 and _near20_4:
+                        _shrink4 = _avgvol4 > 0 and _vol4 < _avgvol4 * GRP_VOL_SHRINK_RATIO
+                        _near20_4= abs(_bias4) < GRP_NEAR_MA20_BIAS_PCT
+                        if health4 >= HEALTH_GRADE_A_MIN and '多頭' in str(trend4) and _shrink4 and _near20_4:
                             _status4 = '🔵 加碼'
-                        elif _bias4 > 25:
+                        elif _bias4 > GRP_BIAS_OVERHEAT_WARN_PCT:
                             _status4 = '🟡 警示'
                         elif '昂貴' in str(val4) or '超貴' in str(val4):
                             _status4 = '🟠 減碼'
@@ -325,7 +324,7 @@ def render_stock_grp():
                     'stock_id': sid4, '代碼': sid4, '名稱': '失敗', '現價': '-',
                     '健康度': 0, '評級': '-', 'RSI': '-', '量比': '-',
                     'IBS': '-', 'KD': '-', '趨勢': '-', '357評價': '-',
-                    'VCP': '-', '合約負債': '-', '舊評分': 0,
+                    'VCP': '-', '合約負債': '-',
                     '_health': 0, '_val': '-', '_trend': '-',
                 })
             time.sleep(0.2)
@@ -518,7 +517,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
             st.caption('🔰 另三欄基本面白話：SQ品質分＝獲利品質（賺得乾不乾淨）、FGMS前瞻＝前瞻成長動能（未來成長力道），皆 0~100 越高越好；EPS／毛利率／殖利率為對照。')
             # 動態：找出最高分與門檻達標數
             _top_score_r = max(score_t3, key=lambda r: r.get('total', 0)) if score_t3 else None
-            _pass70 = [r for r in score_t3 if r.get('total', 0) >= 70]
+            _pass70 = [r for r in score_t3 if r.get('total', 0) >= MULTIFACTOR_ENTRY_MIN]
             if _top_score_r:
                 _mf3c = f'最高分 {_top_score_r["stock_id"]} {_top_score_r.get("total",0):.0f}分，{len(_pass70)}/{len(score_t3)} 支≥70分'
                 _mf3a = '≥70分方可列入候選，其餘繼續觀察'
@@ -560,9 +559,9 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
         with col_right:
             st.markdown('##### ④ 汰弱留強明細')
             st.caption('健康度 · 357評價 · VCP · KD · RSI')
-            # 動態：計算被淘汰（健康度<50 或 357超貴）的數量
+            # 動態：計算被淘汰（健康度 < B 級 或 357超貴）的數量
             _elim_n = sum(1 for r in results_t3
-                          if r.get('健康度', 100) < 50 or '超貴' in str(r.get('357評價', '')))
+                          if r.get('健康度', 100) < HEALTH_GRADE_B_MIN or '超貴' in str(r.get('357評價', '')))
             _keep_n = len(results_t3) - _elim_n
             if _elim_n > 0:
                 _e4c = f'{_elim_n} 支被淘汰（健康<50 或 357超貴），剩 {_keep_n} 支候選'
@@ -598,7 +597,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 with _scan_c2:
                     if _grp_sent:
                         _nh = sum(1 for v in _grp_sent.values()
-                                  if v and v.get('label') == '利空' and v.get('confidence', 0) >= 50)
+                                  if v and v.get('label') == '利空' and v.get('confidence', 0) >= GRP_NEWS_BEARISH_CONFIDENCE_MIN)
                         st.caption(f'✅ 已掃描；偵測 {_nh} 檔利空。出場欄＝三維計分（🔴3／🟠2／🟡1／🟢0）')
                     else:
                         st.caption('出場欄目前為「技術＋籌碼」兩維；按左鈕加入「利空新聞(LLM)」第三維')
@@ -612,11 +611,12 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                                                  _grp_sent.get(_sid3))
                     _row['出場'] = f'{_ev3["icon"]} {_ev3["score"]}/3'
                     _elim_rows.append(_row)
-                df_cmp = pd.DataFrame(_elim_rows).sort_values(['舊評分', '健康度'], ascending=[False, False]).reset_index(drop=True)
+                # v18.322 Option A：舊評分退役 → ④ 汰弱留強改以「純健康度」排序（對齊頁面說明）
+                df_cmp = pd.DataFrame(_elim_rows).sort_values('健康度', ascending=False).reset_index(drop=True)
                 # 確保名稱欄位存在
                 if '名稱' not in df_cmp.columns and '代碼' in df_cmp.columns:
                     df_cmp.insert(0, '名稱', df_cmp['代碼'])
-                _col_order = [c for c in ['名稱','代碼','現價','出場','操作狀態','健康度','評級','舊評分',
+                _col_order = [c for c in ['名稱','代碼','現價','出場','操作狀態','健康度','評級',
                                            'RSI','KD','量比','IBS','趨勢','357評價','VCP',
                                            '合約負債','近4季EPS','毛利率%','殖利率%']
                               if c in df_cmp.columns]
@@ -628,7 +628,6 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                                  '現價':     st.column_config.TextColumn('現價'),
                                  '出場':     st.column_config.TextColumn('出場', width='small', help='三維出場訊號：🔴3=強烈出場 / 🟠2=建議減碼 / 🟡1=留意 / 🟢0=清淡（利空新聞需按「AI 掃利空」）'),
                                  '健康度':   st.column_config.NumberColumn('健康度',  format='%d 🏥'),
-                                 '舊評分':   st.column_config.NumberColumn('評分',    format='%d ⭐'),
                                  '近4季EPS': st.column_config.TextColumn('近4Q EPS'),
                                  '毛利率%':  st.column_config.TextColumn('毛利率%'),
                                  '殖利率%':  st.column_config.TextColumn('殖利率%'),
@@ -1140,7 +1139,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 _sid_p = _rp.get('stock_id', _rp.get('代碼',''))
                 _nm_p  = _rp.get('stock_name', _rp.get('名稱', _sid_p))
                 _ht_p  = _rp.get('_health', 0)
-                _sc_p  = _rp.get('total', _rp.get('舊評分', 0))
+                _sc_p  = _rp.get('total', _rp.get('健康度', 0))
                 _fd_p  = _fund_map.get(_sid_p, {})
                 _fhp   = _fh_t3_cached.get(_sid_p, {})
                 _dna_p = _fhp.get('business_model_dna', 'N/A') if _fhp else 'N/A'
@@ -1171,14 +1170,14 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
             # ── 依綜合評分排出強弱順序（重用上方已算好的資料）──────────
             _ranked_t3 = sorted(
                 results_t3,
-                key=lambda _r: _r.get('total', _r.get('舊評分', 0)) or 0,
+                key=lambda _r: _r.get('total', _r.get('健康度', 0)) or 0,
                 reverse=True,
             )
             _strong_lines = []
             for _ri, _rr in enumerate(_ranked_t3, 1):
                 _sid_r = _rr.get('stock_id', _rr.get('代碼', ''))
                 _nm_r  = _rr.get('stock_name', _rr.get('名稱', _sid_r))
-                _sc_r  = _rr.get('total', _rr.get('舊評分', 0)) or 0
+                _sc_r  = _rr.get('total', _rr.get('健康度', 0)) or 0
                 _ht_r  = _rr.get('_health', 0) or 0
                 _ma_r  = '均線多頭排列' if (_rr.get('ma_above', 0) or 0) >= 2 else '均線空頭排列'
                 _fb_r  = _rr.get('foreign_buy', 0) or 0
