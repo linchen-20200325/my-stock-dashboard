@@ -676,17 +676,21 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
                 jingqi_info=_inp.jingqi_info,
                 news_items=_inp.news_items,
             )
-            st.markdown('#### 📊 總經五時域總結（長期 ｜ 中期 ｜ 短線急殺 ｜ 籌碼 ｜ 新聞）')
+            # v18.310：五桶 bar 升級為頂部「總結儀表板」(user 反饋「上方總結 bar 不夠顯眼」)
+            st.markdown(
+                '<div style="margin:6px 0 4px;padding:10px 16px;'
+                'background:linear-gradient(90deg,#1f6feb22,#0d1117);'
+                'border:1px solid #1f6feb55;border-radius:10px;">'
+                '<span style="font-size:16px;font-weight:900;color:#58a6ff;">'
+                '📊 總經總結儀表板</span>'
+                '<span style="font-size:12px;color:#8b949e;margin-left:8px;">'
+                '五時域一眼判讀：長期 ｜ 中期 ｜ 短線急殺 ｜ 籌碼 ｜ 新聞</span></div>',
+                unsafe_allow_html=True)
             render_five_bucket_bar(_5b)
-            # v18.284：下方 section 桶歸屬目錄(物理重排 80 條跨 section 依賴風險高,改用標籤導航)
+            # v18.310：下方各桶已加「桶群組 banner」分隔(取代純文字目錄)，此處保留簡短導航
             st.caption(
-                "📑 **下方 sections 桶歸屬**："
-                "🌳 長期 → §七 資金/估值 ｜ "
-                "📈 中期 → §一 國際／§二 台股大盤／§六 美股科技／§八 總經拼圖 ｜ "
-                "⚡ 短線急殺 → §五 ADL 廣度 ｜ "
-                "🧩 籌碼 → §三 大戶籌碼 ｜ "
-                "📰 新聞 → §十一 AI 總裁決 ｜ "
-                "🧠 跨桶 → §九 AI 投資決策"
+                "📑 下方深度分析依此 5 桶順序排列，每桶有醒目分隔 banner："
+                "🌳 長期 → 📈 中期 → ⚡ 短線急殺 → 🧩 籌碼 → 🧠 AI 綜合決策"
             )
             st.divider()
         except Exception as _e_5b:
@@ -2947,6 +2951,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # SECTION 七: 資金環境 × 估值 (C1-Z v18.293 物理重排前置至 §一)
     # 對齊 5 桶 reading order:🌳 長期 → §七 為首
     # ══════════════════════════════════════════════════════════════
+    # v18.310 桶群組 banner：載入後 deep section 視覺歸位成 5 桶(user 反饋「版面太散」)
+    from shared.macro_buckets import bucket_group_banner_html as _bgb
+    st.markdown(_bgb('long', 1), unsafe_allow_html=True)
     st.markdown(section_header('七','🌳 長期｜💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
 
     # ── M1B-M2 年增率（FinMind）──────────────────────────────
@@ -3018,6 +3025,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     st.caption('📖 完整乖離訊號與門檻判讀 → 詳見頂部「📊 拐點詳細分析」第 2 面向')
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
 
+    from shared.macro_buckets import bucket_group_banner_html as _bgb  # v18.310 桶群組 banner
+    st.markdown(_bgb('mid', 2), unsafe_allow_html=True)
     st.markdown(section_header('一','📈 中期｜🌍 國際市場動態（影響台股的全球指標）','🌐'), unsafe_allow_html=True)
     _sox1 = intl_s.get('費城半導體 SOX')
     _dji1 = intl_s.get('道瓊工業 DJI')
@@ -3781,6 +3790,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ══════════════════════════════════════════════════════════════
     # SECTION 九: 總經 AI 投資決策分析（五維度綜合研判）
     # ══════════════════════════════════════════════════════════════
+    from shared.macro_buckets import bucket_group_banner_html as _bgb  # v18.310 桶群組 banner
+    st.markdown(_bgb('short', 3), unsafe_allow_html=True)
     st.markdown(section_header('五','⚡ 短線急殺｜📊 全市場健康度 × 騰落指標（ADL）','📉'),unsafe_allow_html=True)
     _adl5 = st.session_state.get('cl_data', {}).get('adl')
     _mkt5 = st.session_state.get('mkt_info', {})
@@ -4098,6 +4109,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # ════════════════════════════════════════════════════════════════════
     # 三、大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標
     # ════════════════════════════════════════════════════════════════════
+    from shared.macro_buckets import bucket_group_banner_html as _bgb  # v18.310 桶群組 banner
+    st.markdown(_bgb('chips', 4), unsafe_allow_html=True)
     st.markdown(section_header('三','🧩 籌碼｜🧮 大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標','🧮'),unsafe_allow_html=True)
 
     if inst:
@@ -4575,6 +4588,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
 
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
+    # v18.310 桶群組 banner：AI 綜合(跨桶 AI §九 + 新聞 AI 裁決 §十一)
+    from shared.macro_buckets import bucket_group_banner_html as _bgb
+    st.markdown(_bgb('ai', 6), unsafe_allow_html=True)
     st.markdown(section_header('九', '🧠 跨桶｜總經 AI 投資決策分析', '🧠'), unsafe_allow_html=True)
 
     # ── 安全取數 ────────────────────────────────────────────────
