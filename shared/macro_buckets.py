@@ -237,13 +237,15 @@ def fmt_value(value: Optional[float], spec: DangerSpec) -> str:
 
 # 桶群組主色(視覺區隔用;與既有 LEVEL_COLOR 燈號色不同維度)
 BUCKET_GROUP_COLOR = {
-    "long":   "#3fb950",   # 🌳 長期 — 綠
-    "mid":    "#58a6ff",   # 📈 中期 — 藍
-    "short":  "#f0883e",   # ⚡ 短線急殺 — 橙
-    "global": "#e3b341",   # 🌍 全球風險 — 金（v18.317：10 燈雷達改桶）
-    "chips":  "#a371f7",   # 🧩 籌碼 — 紫
-    "news":   "#d2a8ff",   # 📰 新聞 — 淺紫
-    "ai":     "#76e3ea",   # 🧠 AI 綜合 — 青
+    "long":     "#3fb950",   # 🌳 長期 — 綠
+    "mid":      "#58a6ff",   # 📈 中期 — 藍
+    "short":    "#f0883e",   # ⚡ 短線急殺 — 橙
+    "global":   "#e3b341",   # 🌍 全球風險 — 金（v18.317：10 燈雷達改桶）
+    "pivot":    "#ff7b72",   # 🔮 拐點 — 珊瑚紅（v18.321：景氣反轉偵測）
+    "cashflow": "#39c5cf",   # 💵 現金流向 — 青綠（v18.321：熱錢三角交叉）
+    "chips":    "#a371f7",   # 🧩 籌碼 — 紫
+    "news":     "#d2a8ff",   # 📰 新聞 — 淺紫
+    "ai":       "#76e3ea",   # 🧠 AI 綜合 — 青
 }
 
 # AI 群組(跨桶 AI + 新聞 AI 裁決)非 5 桶之一,meta 另列
@@ -253,7 +255,14 @@ _AI_GROUP_META = {"emoji": "🧠", "title": "AI 綜合決策", "sub": "跨桶 AI
 # 資料源為 risk_radar.detect_risk_radar(自帶 color/label/value/trend),非 BUCKET_DANGER_SPECS,
 # 故與 "ai" 同走特例 meta(badge 顯示「雷達」而非「桶 N/5」)。
 _GLOBAL_GROUP_META = {"emoji": "🌍", "title": "全球風險",
-                      "sub": "美股/國際 1-5 日急殺速度（10 燈雷達）"}
+                      "sub": "美股/國際 1-5 日急殺速度（9 燈雷達）"}
+
+# v18.321 拐點 / 現金流向群組:深度分析區塊(非 5 桶 DangerSpec),meta 另列。
+# 與 "ai"/"global" 同走特例(badge 顯示自訂短語而非「桶 N/5」)。
+_PIVOT_GROUP_META = {"emoji": "🔮", "title": "拐點",
+                     "sub": "六大面向 × MK 黃金拐點（景氣反轉偵測）"}
+_CASHFLOW_GROUP_META = {"emoji": "💵", "title": "現金流向",
+                        "sub": "熱錢三角交叉（外資 × 匯率 × 背離）"}
 
 
 def bucket_group_banner_html(bucket_key: str, idx: int, total: int = 5) -> str:
@@ -269,8 +278,12 @@ def bucket_group_banner_html(bucket_key: str, idx: int, total: int = 5) -> str:
     -------
     str: 全寬漸層 banner HTML。缺 key → raise KeyError(§1 Fail Loud)。
     """
-    _special_meta = {"ai": _AI_GROUP_META, "global": _GLOBAL_GROUP_META}
-    _special_badge = {"ai": "綜合", "global": "雷達"}
+    _special_meta = {
+        "ai": _AI_GROUP_META, "global": _GLOBAL_GROUP_META,
+        "pivot": _PIVOT_GROUP_META, "cashflow": _CASHFLOW_GROUP_META,
+    }
+    _special_badge = {"ai": "綜合", "global": "雷達",
+                      "pivot": "拐點", "cashflow": "金流"}
     meta = _special_meta.get(bucket_key) or BUCKET_META[bucket_key]
     color = BUCKET_GROUP_COLOR[bucket_key]  # KeyError on bad key = Fail Loud
     _badge = _special_badge.get(bucket_key) or f"桶 {idx}/{total}"

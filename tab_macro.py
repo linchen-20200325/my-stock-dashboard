@@ -811,10 +811,11 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
                 unsafe_allow_html=True)
             render_five_bucket_bar(_5b)
             # v18.310：下方各桶已加「桶群組 banner」分隔(取代純文字目錄)，此處保留簡短導航
-            # v18.317：🌍 全球風險桶(10 燈雷達)插在 ⚡ 短線急殺 與 🧩 籌碼 之間
+            # v18.317：🌍 全球風險桶(雷達)；v18.321：🔮 拐點 + 💵 現金流向 加群組 banner
             st.caption(
                 "📑 下方深度分析依桶順序排列，每桶有醒目分隔 banner："
-                "🌳 長期 → 📈 中期 → ⚡ 短線急殺 → 🌍 全球風險 → 🧩 籌碼 → 🧠 AI 綜合決策"
+                "🔮 拐點 → 💵 現金流向 → 🌳 長期 → 📈 中期 → ⚡ 短線急殺 → "
+                "🌍 全球風險 → 🧩 籌碼 → 🧠 AI 綜合決策"
             )
             st.divider()
         except Exception as _e_5b:
@@ -2886,6 +2887,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _pivot_overall = f'⚪ 訊號分歧：多頭{_bull_pts} vs 空頭{_bear_pts}，方向待確認'
             _pivot_color   = TRAFFIC_YELLOW
 
+        # v18.321：🔮 拐點群組 banner（與其他桶一致的分隔條，分組化收尾）
+        from shared.macro_buckets import bucket_group_banner_html as _bgb_pv
+        st.markdown(_bgb_pv('pivot', 0), unsafe_allow_html=True)
+
         st.markdown(f'<div style="background:#161b22;border-left:4px solid {_pivot_color};'
                     f'border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;'
                     f'font-size:13px;font-weight:600;color:{_pivot_color};">'
@@ -2979,6 +2984,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 )
 
         if _twd_df is not None and not _twd_df.empty:
+            # v18.321：💵 現金流向群組 banner（與其他桶一致的分隔條，分組化收尾）
+            from shared.macro_buckets import bucket_group_banner_html as _bgb_cf
+            st.markdown(_bgb_cf('cashflow', 0), unsafe_allow_html=True)
             # v18.319：現金流向 Raw（三角交叉 + sliders）預設收合（要看才打開），
             #          比照基金面板「Raw data 縮起來」；互動內容不動。
             with st.expander("💵 熱錢深度監測 — 三角交叉（外資 × 匯率 × 背離）",
