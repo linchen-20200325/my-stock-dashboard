@@ -1160,8 +1160,29 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 _tok_adl = os.environ.get('FINMIND_TOKEN','') or FINMIND_TOKEN
                 return fetch_adl(days=60, token=_tok_adl)
 
+            # v18.331 (2-C)：先行指標併入平行池。原 v8 因 Colab worker thread 中 requests
+            # 受阻而移出池、改主流程序列呼叫（拖慢 ~15-55s）；現平台為 Streamlit Cloud，
+            # 池內 inst/margin/adl 等 requests job 運作正常，該平台限制已不適用。
+            # import + reload 留在主執行緒（importlib.reload 非 thread-safe），worker thread
+            # 內只呼叫純抓取 build_leading_fast（不碰 UI）。失敗時下游既有 fallback（保留舊
+            # li_latest）兜底，最壞只是先行指標顯示舊資料，不致崩潰。
+            _li_tok = _get_fm_token() or FINMIND_TOKEN or os.environ.get('FINMIND_TOKEN', '')
+            _li_build_fn = None
+            try:
+                import importlib as _il_li
+                import leading_indicators as _li_mod
+                _il_li.reload(_li_mod)
+                _li_build_fn = _li_mod.build_leading_fast
+                print(f'[先行指標] v={getattr(_li_mod, "LI_VERSION", "?")} token={bool(_li_tok)}（併池）')
+            except Exception as _e_li_imp:
+                print(f'[先行指標] ❌ import 失敗 {type(_e_li_imp).__name__}: {_e_li_imp}')
+
+            def _job_li():
+                if _li_build_fn is None:
+                    return None
+                return _li_build_fn(days=14, token=_li_tok)
+
             # ── 並發執行（yfinance 最慢，先丟進去）─────────────
-            # [v8] li 移出 TPE，在主流程直接呼叫（Colab worker thread 中 requests 可能受阻）
             # [Phase 2] 輕量任務（永遠跑，~30s 內完成）
             _jobs = {
                 'intl':         _job_intl,
@@ -1177,11 +1198,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     'inst':         _job_inst,
                     'margin':       _job_margin,
                     'adl':          _job_adl,
+                    'li':           _job_li,   # v18.331 2-C：先行指標併池
                 })
                 _job_timeouts.update({
                     'inst': 25,
                     'margin': 25,
                     'adl': 55,
+                    'li': 80,   # build_leading_fast 內部 thread join(timeout=80)
                 })
             _results = {}
             # [BUG FIX] as_completed global timeout 從 50s 改為 110s
@@ -1284,31 +1307,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     st.session_state['adl_debug_msg'] = '來源均無回應（yfinance + TWSE MI_INDEX），詳見 Colab [ADL] 輸出'
                 else:
                     st.session_state.pop('adl_debug_msg', None)
-                # 先行指標：強制 reload + UI 進度顯示
-                df_li_a   = None
-                _li_tok   = _get_fm_token() or FINMIND_TOKEN or os.environ.get('FINMIND_TOKEN','')
-                _li_ph    = st.empty()
-                _li_lines = []
-                def _li_log(msg):
-                    print(f'[先行指標] {msg}', flush=True)
-                    _li_lines.append(msg)
-                    _li_ph.info('📡 先行指標載入中…\n' + '\n'.join(_li_lines[-5:]))
-                try:
-                    import importlib
-                    import leading_indicators as _li_mod
-                    importlib.reload(_li_mod)
-                    _li_log(f'v={getattr(_li_mod,"LI_VERSION","?")} token={bool(_li_tok)}')
-                    df_li_a = _li_mod.build_leading_fast(days=14, token=_li_tok)
-                    if df_li_a is not None and not df_li_a.empty:
-                        _li_log(f'✅ 成功 {len(df_li_a)} 筆')
-                    else:
-                        _li_log('⚠️ 回傳空資料，請查 Colab 輸出')
-                except Exception as _li_err:
-                    import traceback as _tb
-                    _li_log(f'❌ {type(_li_err).__name__}: {_li_err}')
-                    print(_tb.format_exc())
-                finally:
-                    _li_ph.empty()
+                # v18.331 (2-C)：先行指標已併入上方平行池（job 'li'），此處只讀結果，
+                # 不再主流程序列呼叫。失敗時下游既有 fallback（下方）保留舊 li_latest。
+                df_li_a = _results.get('li')
+                if df_li_a is not None and not (hasattr(df_li_a, 'empty') and df_li_a.empty):
+                    print(f'[先行指標] ✅ 併池成功 {len(df_li_a)} 筆')
+                else:
+                    print('[先行指標] ⚠️ 併池回空/None — 下游保留舊快取')
             else:
                 # 冷啟動跳過重資料：沿用舊 cl_data 或 None
                 inst       = _prev_cl.get('inst') or {}
