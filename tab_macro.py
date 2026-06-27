@@ -760,46 +760,30 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
     _ov_cd   = _ov_inp.cl_data or {}
     # inst 優先從 cl_data，fallback 到獨立緩存的 _last_inst
     _ov_inst = _ov_cd.get('inst') or (_ov_inp.last_inst or {})
-    # 外資 key 匹配：TWSE 格式「外資及陸資(不含外資自營商)」或 FinMind 格式「外資」
-    _ov_fk   = next((k for k in _ov_inst if '外資' in k), None)
-    _ov_margin = _ov_cd.get('margin')
-    _ov_bias = _ov_inp.bias_info or {}
 
+    # v18.316 去重(user 2026-06-27「按桶歸屬各留一處」+「5 分鐘清單為主」):
+    # 外資 / 融資 / 年線乖離 / 持股 的「唯一家」= 下方「今日 5 分鐘清單」,
+    # 今日市場總覽卡片不再重列這 4 個值(原 4 卡刪外資卡 + 年線卡 + regime 卡的持股副標),
+    # 僅保留「大盤多空方向」+「全市場健康度(旌旗)」(後者清單未涵蓋)。
+    # 風險警示仍只在觸發危險門檻時跳;§三 籌碼桶內部敘述不動。
     if _show_market_data and any([_ov_mkt, _ov_jq, _ov_cd]):
-        _ov_cols = st.columns(4)
-        # 大盤
+        _ov_cols = st.columns(2)
+        # 大盤多空方向(持股比例見下方 5 分鐘清單,此處不重列)
         with _ov_cols[0]:
             # 以交通燈有效 regime 為主，確保與頂部卡片結論一致
             _ov_reg = _tl_eff_reg or (_ov_mkt.get('regime','neutral') if _ov_mkt else 'neutral')
             _ov_lbl = {'bull':'🟢 多頭','neutral':'🟡 震盪','bear':'🔴 空頭防禦'}.get(_ov_reg,'⚪')
-            _ov_exp = _ov_mkt.get('exposure_pct','--') if _ov_mkt else '--'
-            st.markdown(beginner_kpi('今日市場狀態', _ov_lbl, f'建議持股比例 {_ov_exp}',
+            st.markdown(beginner_kpi('今日市場狀態', _ov_lbl, '大盤多空方向（持股比例見下方清單）',
                             TRAFFIC_GREEN if _ov_reg=='bull' else (TRAFFIC_RED if _ov_reg=='bear' else TRAFFIC_YELLOW),
                             '#0d1117'), unsafe_allow_html=True)
-        # 外資籌碼
+        # 旌旗/廣度(全市場健康度 — 5 分鐘清單未涵蓋,保留唯一)
         with _ov_cols[1]:
-            _ov_fnet = _ov_inst.get(_ov_fk,{}).get('net',None) if _ov_fk else None
-            if _ov_fnet is not None:
-                _ov_fc = '#da3633' if _ov_fnet > 0 else '#2ea043'
-                st.markdown(beginner_kpi('大戶今日', f'{_ov_fnet:+.1f}億', '外資淨買賣（+買 -賣）', _ov_fc, '正數=大戶在買，跟著買較安全'), unsafe_allow_html=True)
-            else:
-                st.markdown(kpi('外資現貨', '--', '更新後顯示', '#484f58', '#0d1117'), unsafe_allow_html=True)
-        # 旌旗/廣度
-        with _ov_cols[2]:
             _ov_jqp = _ov_jq.get('avg',None) if _ov_jq else None
             if _ov_jqp is not None:
                 _ov_jc = TRAFFIC_GREEN if _ov_jqp>=60 else (TRAFFIC_YELLOW if _ov_jqp>=30 else TRAFFIC_RED)
                 st.markdown(beginner_kpi('全市場健康度', f'{_ov_jqp:.0f}%', '有幾%的股票站在均線之上', _ov_jc, '>60%才適合積極買進'), unsafe_allow_html=True)
             else:
                 st.markdown(kpi('旌旗指數', '--', '掃描後顯示', '#484f58', '#0d1117'), unsafe_allow_html=True)
-        # 乖離率
-        with _ov_cols[3]:
-            _ov_b240 = _ov_bias.get('bias_240', None) if _ov_bias else None
-            if _ov_b240 is not None:
-                _ov_bc = TRAFFIC_RED if abs(_ov_b240) > 20 else TRAFFIC_GREEN
-                st.markdown(beginner_kpi('大盤位置', f'{_ov_b240:+.1f}%', '偏離年均線多少（過高=貴）', _ov_bc, '>+20%過熱；<-20%便宜'), unsafe_allow_html=True)
-            else:
-                st.markdown(kpi('年線乖離', '--', '更新後顯示', '#484f58', '#0d1117'), unsafe_allow_html=True)
         st.markdown('')
 
     # ══ 今日作戰室（最重要：一眼看清今天該做什麼）══════════════
