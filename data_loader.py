@@ -21,7 +21,7 @@ import requests as _req_dl
 import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
 from proxy_helper import fetch_url as _fetch_url_dl
-from shared.ttls import TTL_1HOUR
+from shared.ttls import TTL_1DAY, TTL_1HOUR
 
 # v18.201 D2：FinMind dataset 後台 update 時間追蹤
 # raw fetcher 從 response top-level 取 `last_update`，SDK 路徑無此欄位故留空
@@ -2088,6 +2088,115 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
         "source":            "FinMind:FinancialStatements",
         "fetched_at":        pd.Timestamp.now('UTC').isoformat(),
     }
+
+
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
+def fetch_industry_category(sid: str) -> str:
+    """v18.326 SSOT(原 tab_stock.py 私有 _fetch_industry_category 抽出)。
+
+    從 FinMind TaiwanStockInfo 抓個股產業類別字串。失敗回 ''。
+    用於 P/B 河流圖閾值動態調整(金融 / 成長科技 / 製造)。1 日快取。
+    """
+    import os as _os_ic
+    import requests as _rq_ic
+    try:
+        _tok = _os_ic.environ.get('FINMIND_TOKEN', '')
+        _p = {'dataset': 'TaiwanStockInfo', 'data_id': sid}
+        if _tok:
+            _p['token'] = _tok
+        _r = _rq_ic.get('https://api.finmindtrade.com/api/v4/data',
+                        params=_p, timeout=15)
+        _data = _r.json().get('data', []) if _r.status_code == 200 else []
+        if not _data:
+            return ''
+        for _row in _data:
+            _ind = _row.get('industry_category', '')
+            if _ind:
+                return str(_ind)
+        return ''
+    except Exception:
+        return ''
+
+
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
+def fetch_bps_from_finmind(sid: str) -> float:
+    """v18.326 SSOT(原 tab_stock.py 私有 _fetch_bps_from_finmind 抽出)。
+
+    FinMind TaiwanStockBalanceSheet 計算最新季度每股淨值(BPS)。
+    公式:BPS = 股東權益總額 / 流通在外普通股股數
+          流通股數 = 普通股股本 / 面額 10 元(台股慣例)
+    Sanity 守門:BPS ∈ (0.1, 5000)。範圍外回 0.0。
+    """
+    import os as _os_bf
+    import datetime as _dt_bf
+    import requests as _rq_bf
+    try:
+        _tok = _os_bf.environ.get('FINMIND_TOKEN', '')
+        _start = (_dt_bf.date.today() - _dt_bf.timedelta(days=540)).strftime('%Y-%m-%d')
+        _p = {'dataset': 'TaiwanStockBalanceSheet', 'data_id': sid, 'start_date': _start}
+        if _tok:
+            _p['token'] = _tok
+        _r = _rq_bf.get('https://api.finmindtrade.com/api/v4/data',
+                        params=_p, timeout=15)
+        _data = _r.json().get('data', []) if _r.status_code == 200 else []
+        if not _data:
+            return 0.0
+        _dates = sorted({_row.get('date', '') for _row in _data}, reverse=True)
+        _latest = _dates[0] if _dates else ''
+        _equity = 0.0
+        _common_stock = 0.0
+        for _row in _data:
+            if _row.get('date') != _latest:
+                continue
+            _t = str(_row.get('type', ''))
+            _nm = str(_row.get('origin_name', ''))
+            try:
+                _v = float(str(_row.get('value', 0) or 0).replace(',', ''))
+            except (TypeError, ValueError):
+                continue
+            if _v <= 0:
+                continue
+            if (not _equity and (_t in ('Equity', 'TotalEquity', 'StockholdersEquity')
+                                  or '股東權益總額' in _nm or '權益總額' in _nm
+                                  or '股東權益合計' in _nm or '權益合計' in _nm)):
+                _equity = _v
+            elif (not _common_stock and (_t in ('CommonStock', 'OrdinaryShare', 'ShareCapital')
+                                          or '普通股股本' in _nm
+                                          or ('股本' in _nm and '特別股' not in _nm))):
+                _common_stock = _v
+        if _equity <= 0 or _common_stock <= 0:
+            return 0.0
+        _shares_outstanding = _common_stock / 10.0
+        _bps = _equity / _shares_outstanding
+        if not (0.1 < _bps < 5000):
+            return 0.0
+        return float(_bps)
+    except Exception:
+        return 0.0
+
+
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
+def fetch_bps(sid: str) -> float:
+    """v18.326 SSOT(原 tab_stock.py 私有 _fetch_bps 抽出)。
+
+    每股淨值(BPS)。PRIMARY:FinMind BS;FALLBACK:yfinance bookValue。
+    """
+    _bps_fm = fetch_bps_from_finmind(sid)
+    if _bps_fm > 0:
+        return _bps_fm
+    try:
+        import yfinance as _yf_pb
+        for _sfx_pb in ('.TW', '.TWO'):
+            try:
+                _info_pb = _yf_pb.Ticker(f'{sid}{_sfx_pb}').info or {}
+                _bps_v = _info_pb.get('bookValue')
+                if _bps_v and float(_bps_v) > 0:
+                    return float(_bps_v)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return 0.0
 
 
 def fetch_fund_nav(fund_id: str):

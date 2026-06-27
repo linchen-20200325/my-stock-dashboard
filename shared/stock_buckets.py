@@ -95,6 +95,67 @@ def section_header_html(key: str, color_override: str | None = None) -> str:
     )
 
 
+# ════════════════════════════════════════════════════════════════
+# P/B 估值帶狀 SSOT(v18.326)— 個股 Tab + 組合 Tab 共用
+# ════════════════════════════════════════════════════════════════
+# 產業別 P/B 閾值對照表(低 / 中 / 高 — 三條河流圖橫帶界線)
+PB_BANDS_FINANCIAL = (0.5, 0.9, 1.2)   # 金融保險業 / 銀行 — 資產驅動,PB<1 屬正常
+PB_BANDS_GROWTH = (1.5, 2.5, 4.0)      # 半導體 / 電子 / 光電 / 通信 — 高 ROE 智財權溢價
+PB_BANDS_MFG = (0.8, 1.5, 2.5)         # 製造業 default — 慣例值
+
+_FINANCIAL_INDUSTRY_KEYWORDS = ('金融保險業', '銀行業', '證券業', '保險業', '金融業')
+_GROWTH_INDUSTRY_KEYWORDS = (
+    '半導體業', '電子工業', '光電業', '通信網路業',
+    '電腦及週邊設備業', '其他電子業', '電子零組件業',
+)
+
+
+def get_pb_bands(industry: str | None) -> tuple[float, float, float]:
+    """產業類別 → P/B 河流圖橫帶閾值(低 / 中 / 高)。"""
+    if not industry:
+        return PB_BANDS_MFG
+    ind = str(industry)
+    if any(kw in ind for kw in _FINANCIAL_INDUSTRY_KEYWORDS):
+        return PB_BANDS_FINANCIAL
+    if any(kw in ind for kw in _GROWTH_INDUSTRY_KEYWORDS):
+        return PB_BANDS_GROWTH
+    return PB_BANDS_MFG
+
+
+def pb_bands_label(industry: str | None) -> str:
+    """產業類別 → 標籤字串,供 UI caption 顯示。"""
+    if not industry:
+        return '製造業預設'
+    ind = str(industry)
+    if any(kw in ind for kw in _FINANCIAL_INDUSTRY_KEYWORDS):
+        return f'金融業({ind})'
+    if any(kw in ind for kw in _GROWTH_INDUSTRY_KEYWORDS):
+        return f'成長科技({ind})'
+    return f'製造業({ind})'
+
+
+def classify_pb_level(pb_value: float, bands: tuple[float, float, float]) -> str:
+    """把 P/B 值依產業別 bands 分為 便宜 / 合理 / 偏貴 / 超貴 燈號(供組合 Tab 列表顯示)。
+
+    Args:
+        pb_value: 當前 P/B(>0 才有效)
+        bands: get_pb_bands(industry) 的回傳 (low, mid, high)
+
+    Returns:
+        '🟢 便宜' / '🟢 合理' / '🟡 偏貴' / '🔴 超貴' / '—'(無效值)
+    """
+    if pb_value is None or pb_value <= 0:
+        return '—'
+    low, mid, high = bands
+    if pb_value < low:
+        return '🟢 便宜'
+    if pb_value < mid:
+        return '🟢 合理'
+    if pb_value < high:
+        return '🟡 偏貴'
+    return '🔴 超貴'
+
+
 def render_stock_toc_html() -> str:
     """產生頂部目錄 HTML（一排桶 chip，錨點跳轉到各 section）。
 
