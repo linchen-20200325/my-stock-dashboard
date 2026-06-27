@@ -2895,8 +2895,21 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     f'font-size:13px;font-weight:600;color:{_pivot_color};">'
                     f'{_pivot_overall}</div>', unsafe_allow_html=True)
 
-        with st.expander('📊 拐點詳細分析 — 六大面向 + MK 黃金拐點', expanded=True):
-            if pivot_signals:
+        # v18.319：六大面向 → verdict 小卡格（比照桶卡片，常駐可見），
+        #          完整訊號敘述 + 判斷參考收進 Raw expander（要看才打開）。
+        st.markdown('##### 📊 拐點詳細分析 — 六大面向 + MK 黃金拐點')
+        if pivot_signals:
+            _pv_cols = st.columns(3)
+            for _pi, (_label, _icon, _color, _detail) in enumerate(pivot_signals):
+                with _pv_cols[_pi % 3]:
+                    st.markdown(
+                        f"<div style='background:#0d1117;border:1px solid #21262d;"
+                        f"border-top:3px solid {_color};border-radius:8px;"
+                        f"padding:8px 10px;margin:3px 0;min-height:54px;"
+                        f"display:flex;align-items:center;'>"
+                        f"<span style='color:{_color};font-weight:700;font-size:13px;'>"
+                        f"{_icon} {_label}</span></div>", unsafe_allow_html=True)
+            with st.expander('🔍 拐點六大面向 — 完整訊號明細 + 判斷參考', expanded=False):
                 for _label, _icon, _color, _detail in pivot_signals:
                     st.markdown(
                         f'<div style="background:#0d1117;border-left:3px solid {_color};'
@@ -2904,11 +2917,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                         f'<span style="color:{_color};font-weight:600;">{_icon} {_label}</span>'
                         f'<br><span style="color:#8b949e;font-size:12px;">{_detail}</span>'
                         f'</div>', unsafe_allow_html=True)
-            else:
-                st.info('尚無足夠資料計算拐點，請點擊「🚀 一鍵更新全部數據」')
-
-            # 拐點參考表 → 已移至 Tab5 策略手冊
-            st.caption('📖 拐點判斷參考表 → 詳見「策略手冊」Tab')
+                # 拐點參考表 → 已移至 Tab5 策略手冊
+                st.caption('📖 拐點判斷參考表 → 詳見「策略手冊」Tab')
+        else:
+            st.info('尚無足夠資料計算拐點，請點擊「🚀 一鍵更新全部數據」')
 
         # ── 熱錢深度監測（三角交叉：外資 × 匯率 × 背離偵測）─────────────
         # 拉到 expander 同層 sibling — Streamlit 禁止 expander 巢狀（原 #101 為 bug）
@@ -2971,8 +2983,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 )
 
         if _twd_df is not None and not _twd_df.empty:
+            # v18.319：現金流向 Raw（三角交叉 + sliders）預設收合（要看才打開），
+            #          比照基金面板「Raw data 縮起來」；互動內容不動。
             with st.expander("💵 熱錢深度監測 — 三角交叉（外資 × 匯率 × 背離）",
-                             expanded=True):
+                             expanded=False):
                 st.caption(
                     "上方「台幣升貶」訊號的深化版：把**外資買賣超**與**台幣匯率**"
                     "做交叉分析，找出「背離」時刻——例如台幣升值但外資沒買，"
