@@ -275,3 +275,64 @@ def bucket_group_banner_html(bucket_key: str, idx: int, total: int = 5) -> str:
         f'{meta["emoji"]} {meta["title"]}</div>'
         f'<div style="font-size:12px;color:#8b949e;margin-top:2px;">{meta["sub"]}</div></div>'
     )
+
+
+# ════════════════════════════════════════════════════════════════
+# v18.313 桶輕量總結 bar(user 反饋:每桶頂部加「整體狀態」橫條,raw 收 expander)。
+#   復用 compute_five_bucket_summary 該桶 summary(color/emoji/label/details),
+#   不新增資料線。純字串 builder,零 streamlit(§8.2 L0)。
+# ════════════════════════════════════════════════════════════════
+def bucket_summary_bar_html(bucket_key: str, bucket_summary: dict) -> str:
+    """桶輕量總結 bar:整體燈號 + 🔴🟡🟢 計數 + 各指標 chip + SPEC §11 參考。
+
+    Args
+    ----
+    bucket_key: BUCKET_ORDER 之一(或 "ai")
+    bucket_summary: compute_five_bucket_summary()[bucket_key]，含
+                    color / emoji / label / details(list of {danger,label,value_str})
+
+    Returns
+    -------
+    str: 全寬輕量橫條 HTML。資料缺 → 顯示「未載入」(不 raise,§1 不偽造數字)。
+    """
+    meta = _AI_GROUP_META if bucket_key == "ai" else BUCKET_META[bucket_key]
+    gcolor = BUCKET_GROUP_COLOR.get(bucket_key, "#6e7681")
+    _s = bucket_summary or {}
+    light_color = _s.get("color", "#6e7681")
+    light_emoji = _s.get("emoji", "⬜")
+    light_label = _s.get("label", "未載入")
+    details = _s.get("details", []) or []
+
+    n_red = sum(1 for d in details if d.get("danger") == "red")
+    n_yellow = sum(1 for d in details if d.get("danger") == "yellow")
+    n_green = sum(1 for d in details if d.get("danger") == "green")
+
+    # 各指標 chip(燈號 + 名稱 + 值)
+    chips = []
+    for d in details:
+        _ic = LEVEL_EMOJI.get(d.get("danger"), "⬜")
+        chips.append(
+            f'<span style="display:inline-block;margin:2px 4px;padding:2px 8px;'
+            f'border-radius:10px;background:#161b22;border:1px solid #21262d;'
+            f'font-size:11px;color:#c9d1d9;">'
+            f'{_ic} {d.get("label", "")}：<b>{d.get("value_str", "—")}</b></span>'
+        )
+    chips_html = "".join(chips) if chips else (
+        '<span style="font-size:11px;color:#8b949e;">尚未載入資料 — 點上方「🚀 一鍵更新全部數據」</span>'
+    )
+
+    return (
+        f'<div style="margin:8px 0 10px;padding:10px 14px;'
+        f'background:linear-gradient(90deg,{gcolor}14,#0d1117);'
+        f'border:1px solid {gcolor}44;border-radius:8px;">'
+        f'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;">'
+        f'<span style="font-size:13px;font-weight:900;color:{gcolor};">'
+        f'{meta["emoji"]} {meta["title"]} 整體狀態</span>'
+        f'<span style="font-size:13px;font-weight:700;color:{light_color};">'
+        f'{light_emoji} {light_label}</span>'
+        f'<span style="font-size:12px;color:#8b949e;">'
+        f'🔴 {n_red} ｜ 🟡 {n_yellow} ｜ 🟢 {n_green}</span>'
+        f'<span style="font-size:10px;color:#484f58;margin-left:auto;">'
+        f'📋 門檻見 SPEC §11 危險門檻表</span></div>'
+        f'<div style="margin-top:6px;">{chips_html}</div></div>'
+    )

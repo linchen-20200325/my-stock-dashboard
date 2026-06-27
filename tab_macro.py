@@ -313,6 +313,32 @@ background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:4px;min-height
                     )
 
 
+def render_macro_bucket_summary_bar(bucket_key: str) -> None:
+    """v18.314 — 桶輕量總結 bar：整體燈號 + 各指標 chip + SPEC §11 參考。
+
+    user 反饋:每桶(除 §三 籌碼保留原樣)頂部加「整體狀態」簡圖,raw data 收下方。
+    復用 compute_five_bucket_summary 該桶 summary(color/emoji/label/details),
+    **不新增資料線**。各桶獨立呼叫(自足,不建跨 section 變數依賴 → 利於未來重排)。
+    失敗 stderr log 不阻斷主流程(§1:空資料 → bar 顯示「未載入」,不偽造數字)。
+    """
+    try:
+        from macro_helpers import compute_five_bucket_summary
+        from section_inputs import load_section_inputs
+        from shared.macro_buckets import bucket_summary_bar_html
+        _inp = load_section_inputs(st.session_state)
+        _5b = compute_five_bucket_summary(
+            macro_info=_inp.macro_info, mkt_info=_inp.mkt_info,
+            warroom_summary=_inp.warroom_summary, m1b_m2_info=_inp.m1b_m2_info,
+            bias_info=_inp.bias_info, cl_data=_inp.cl_data,
+            li_latest=_inp.li_latest, jingqi_info=_inp.jingqi_info,
+            news_items=_inp.news_items,
+        )
+        st.markdown(bucket_summary_bar_html(bucket_key, _5b.get(bucket_key, {})),
+                    unsafe_allow_html=True)
+    except Exception as _e_bsb:
+        print(f'[tab_macro/{bucket_key}總結bar] {type(_e_bsb).__name__}: {_e_bsb}')
+
+
 def add_danger_hlines(fig, key: str, yref=None) -> None:
     """v18.284 — 在 plotly 圖加該指標的黃/紅危險標準線（讀 shared.macro_buckets SSOT）。
 
@@ -2932,6 +2958,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     from shared.macro_buckets import bucket_group_banner_html as _bgb
     st.markdown(_bgb('long', 1), unsafe_allow_html=True)
     st.markdown(section_header('七','🌳 長期｜💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
+    # v18.313/314 桶輕量總結 bar(整體燈號 + 指標 chip + SPEC §11)；詳細 raw 維持下方收合。
+    render_macro_bucket_summary_bar('long')
 
     # ── M1B-M2 年增率（FinMind）──────────────────────────────
     _m1b_info = st.session_state.get('m1b_m2_info')
@@ -3005,6 +3033,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     from shared.macro_buckets import bucket_group_banner_html as _bgb  # v18.310 桶群組 banner
     st.markdown(_bgb('mid', 2), unsafe_allow_html=True)
     st.markdown(section_header('一','📈 中期｜🌍 國際市場動態（影響台股的全球指標）','🌐'), unsafe_allow_html=True)
+    render_macro_bucket_summary_bar('mid')  # v18.314 桶輕量總結 bar
     _sox1 = intl_s.get('費城半導體 SOX')
     _dji1 = intl_s.get('道瓊工業 DJI')
     _dxy1 = intl_s.get('美元指數 DXY')
@@ -3770,6 +3799,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     from shared.macro_buckets import bucket_group_banner_html as _bgb  # v18.310 桶群組 banner
     st.markdown(_bgb('short', 3), unsafe_allow_html=True)
     st.markdown(section_header('五','⚡ 短線急殺｜📊 全市場健康度 × 騰落指標（ADL）','📉'),unsafe_allow_html=True)
+    render_macro_bucket_summary_bar('short')  # v18.314 桶輕量總結 bar
     _adl5 = st.session_state.get('cl_data', {}).get('adl')
     _mkt5 = st.session_state.get('mkt_info', {})
     if _adl5 is not None and not _adl5.empty:
@@ -4805,6 +4835,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # 前端唯讀 macro_state.json；LLM 運算由觸發按鈕在背景執行並寫檔
     # ══════════════════════════════════════════════════════════════
     st.markdown(section_header('十一', '📰 新聞 ｜🤖 AI 總裁決', '🤖'), unsafe_allow_html=True)
+    render_macro_bucket_summary_bar('news')  # v18.314 桶輕量總結 bar(新聞系統性風險)
 
     with st.expander('🤖 AI 總裁決 — 實體狀態鎖架構（唯讀）', expanded=True):
         _verdict_hdr_c1, _verdict_hdr_c2, _verdict_hdr_c3 = st.columns([4, 1, 1])
