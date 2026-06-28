@@ -16,6 +16,13 @@
 
 ## 已完成 commits(reverse chrono)
 
+### A2 (v18.383) — cache_layer PKL_DIR env 注入(解 L0↔L0)
+- **檔案**: `shared/cache_layer.py` + `src/config/data_config.py`
+- **拔毒**: 原 `from src.config import PKL_DIR` 反向 import L0(L0↔L0 hardcode 設計味道)→ 改 `os.environ.get('STK_PKL_DIR', '/tmp/stock_cache')`,兩 file 同源 env
+- **caller 介面**: 完全不變(`from shared.cache_layer import ...` / `from src.config import PKL_DIR`)
+- **驗證**: smoke + full pytest 2220/0 fail
+- **commit**: 待 push
+
 ### C-1+C-2+C-3 (v18.382) — 5 個 inline magic 補抽 SSOT
 - **檔案**: shared/signal_thresholds.py + scoring_helpers.py:165 + etf_calc.py:901-907 + macro_helpers.py:948-949
 - **拔毒**:

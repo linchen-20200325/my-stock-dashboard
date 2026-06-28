@@ -24,5 +24,7 @@ TTL_CONFIG = {
     "historical":      TTL_1DAY,    # 24 小時 — 歷史/不常變的資料
 }
 
-# pickle 快取根目錄（Streamlit Cloud /tmp 重啟後自動清除）
-PKL_DIR = "/tmp/stock_cache"
+# pickle 快取根目錄(Streamlit Cloud /tmp 重啟後自動清除)
+# A2 v18.383:env 注入(`STK_PKL_DIR`)解 shared/cache_layer.py 反向 import L0(L0↔L0 hardcode 設計味道)
+import os as _os_cfg
+PKL_DIR = _os_cfg.environ.get('STK_PKL_DIR', '/tmp/stock_cache')

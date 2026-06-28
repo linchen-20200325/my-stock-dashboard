@@ -20,7 +20,9 @@ from __future__ import annotations
 import os
 import sys
 
-from src.config import PKL_DIR as _PKL_DIR
+# A2 v18.383:改 env 注入(STK_PKL_DIR),解原 `from src.config import PKL_DIR` L0↔L0 反向 import 設計味道。
+# src/config/data_config.py 同步用 env(預設 '/tmp/stock_cache'),caller 介面不變。
+_PKL_DIR = os.environ.get('STK_PKL_DIR', '/tmp/stock_cache')
 
 _CACHE_SENTINEL = object()
 
