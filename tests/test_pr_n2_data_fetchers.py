@@ -14,13 +14,17 @@ import unittest
 class TestDailyDataFetchersModule(unittest.TestCase):
 
     @staticmethod
-    def _has_import_stmt(src: str, mod: str) -> bool:
+    def _has_module_level_import(src: str, mod: str) -> bool:
+        """檢查 module-level(top-of-file)是否 import 指定模組。
+        允許 function-local lazy import(符合 §8.2.A EX-CACHE-1 例外)。
+        """
         import ast
         try:
             tree = ast.parse(src)
         except SyntaxError:
             return False
-        for node in ast.walk(tree):
+        # 只看 Module body 直接子節點(不 walk 進 function/class)
+        for node in tree.body:
             if isinstance(node, ast.Import):
                 if any(alias.name.split('.')[0] == mod for alias in node.names):
                     return True
@@ -33,12 +37,15 @@ class TestDailyDataFetchersModule(unittest.TestCase):
         import daily_data_fetchers  # noqa
         from daily_data_fetchers import fetch_single, fetch_flow_snapshot  # noqa
 
-    def test_no_streamlit_import(self):
-        """daily_data_fetchers 不依賴 streamlit(本檔尚未引入 @st.cache_data)。"""
+    def test_no_module_level_streamlit_import(self):
+        """daily_data_fetchers module-level 不依賴 streamlit。
+        允許 function-local lazy import(EX-CACHE-1 例外:條件 @st.cache_data 或
+        secrets fallback,本檔 PR-N3 起 _get_finmind_token 用 lazy 模式)。
+        """
         with open('daily_data_fetchers.py', encoding='utf-8') as f:
             src = f.read()
-        assert not self._has_import_stmt(src, 'streamlit'), \
-            'daily_data_fetchers 不應 import streamlit'
+        assert not self._has_module_level_import(src, 'streamlit'), \
+            'daily_data_fetchers module-level 不應 import streamlit(允許 function-local)'
 
     def test_reexport_identity(self):
         """daily_checklist 的 fetch_single/fetch_flow_snapshot IS 新模組同物件。"""
