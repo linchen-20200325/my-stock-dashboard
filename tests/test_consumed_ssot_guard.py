@@ -16,18 +16,18 @@ def _src(path):
 
 class TestMarginBalanceConsumed:
     def test_imports_and_no_inline(self):
-        for f in ("src/services/daily_checklist.py", "tab_macro.py"):
+        for f in ("src/services/daily_checklist.py", "src/ui/tabs/tab_macro.py"):
             src = _src(f)
             assert "MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI" in src, f"{f} 未 import 融資紅線 SSOT"
         # 不得再有 inline 的 3400 程式比較；顯示標籤「>3400億」用 (?!\s*億) 排除
         code_cmp = re.compile(r"(>=|>)\s*3400(?!\s*億)")
         assert not code_cmp.search(_src("src/services/daily_checklist.py"))
-        assert not code_cmp.search(_src("tab_macro.py"))
+        assert not code_cmp.search(_src("src/ui/tabs/tab_macro.py"))
 
 
 class TestHealthGradeConsumed:
     def test_imports_and_no_inline(self):
-        src = _src("tab_stock.py")
+        src = _src("src/ui/tabs/tab_stock.py")
         assert "HEALTH_GRADE_A_MIN" in src and "HEALTH_GRADE_B_MIN" in src
         assert "CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT" in src
         # health2 不得再 inline 比較 80 / 50；龍頭資本支出不得再 inline 80

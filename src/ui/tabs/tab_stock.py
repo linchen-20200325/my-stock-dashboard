@@ -55,7 +55,7 @@ from shared.signal_thresholds import (
     VOLUME_RATIO_MILD,
     VOLUME_RATIO_SURGE,
 )
-from tab_helpers import (
+from src.ui.tabs.tab_helpers import (
     classify_bias_zone,            # v18.336 PR-H4:月線/年線乖離分層 SSOT
     classify_rs_zone,              # v18.337 PR-H5:RS 數值評級 SSOT
     classify_stock_status_lamp,    # v18.336 PR-H4:操作狀態燈 SSOT
@@ -63,7 +63,7 @@ from tab_helpers import (
     compute_stop_levels,           # v18.336 PR-H4:停利停損 SSOT
     format_condition_emoji, parse_cash_flow_ratio, safe_ma,
 )
-from sidebar_health import kline_end_date
+from src.ui.pages import kline_end_date
 # v18.326 ── BPS / industry_category fetcher 已 SSOT 化(原私有 _fetch_*,組合 Tab 共用)──
 from src.data.core import fetch_bps, fetch_industry_category
 
@@ -240,8 +240,8 @@ def render_tab_stock():
     )
     from scoring_helpers import calc_fundamental_score, calc_health_score, health_grade
     from src.compute.scoring import calc_rs_score, rs_slope
-    from ui_widgets import kpi, signal_box, teacher_conclusion
-    from chart_plotter import plot_combined_chart, plot_quarterly_chart, plot_revenue_chart
+    from src.ui.render import kpi, signal_box, teacher_conclusion
+    from src.ui.render import plot_combined_chart, plot_quarterly_chart, plot_revenue_chart
     from src.data.core import fetch_financial_statements
     # app.py 內部 helper
     from app import (

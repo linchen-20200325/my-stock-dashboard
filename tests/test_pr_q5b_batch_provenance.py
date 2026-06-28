@@ -19,14 +19,14 @@ class TestQ5bMarkersInSource(unittest.TestCase):
             return f.read()
 
     def test_tab_stock_picker_2(self):
-        src = self._read('tab_stock_picker.py')
+        src = self._read('src/ui/tabs/tab_stock_picker.py')
         self.assertIn('[_fetch_fs_safe]', src)
         self.assertIn('src.data.core.data_loader.fetch_financial_statements', src)
         self.assertIn('[_fetch_quarterly_is]', src)
         self.assertIn('FinMind:TaiwanStockFinancialStatements', src)
 
     def test_etf_tab_grp_compare_1(self):
-        src = self._read('etf_tab_grp_compare.py')
+        src = self._read('src/ui/etf/etf_tab_grp_compare.py')
         self.assertIn('[_fetch_one_etf]', src)
         self.assertIn('etf_fetch(7-metrics aggregator)', src)
 
@@ -48,7 +48,7 @@ class TestQ5bMarkersInSource(unittest.TestCase):
         self.assertIn('src.data.core.data_loader._fetch_tpex_inst_fallback:TPEx 三大法人', src)
 
     def test_tab_stock_2(self):
-        src = self._read('tab_stock.py')
+        src = self._read('src/ui/tabs/tab_stock.py')
         # _fetch_share_capital + _fetch_pbratio_from_twse 新增 success-path log
         self.assertIn('FinMind:TaiwanStockBalanceSheet', src)
         self.assertIn('TWSE:OpenAPI:BWIBBU_d(via yield_screener)', src)
@@ -57,10 +57,10 @@ class TestQ5bMarkersInSource(unittest.TestCase):
 class TestImports(unittest.TestCase):
 
     def test_tab_stock_picker(self):
-        import tab_stock_picker  # noqa
+        from src.ui.tabs import tab_stock_picker  # noqa
 
     def test_etf_tab_grp_compare(self):
-        import etf_tab_grp_compare  # noqa
+        from src.ui.etf import etf_tab_grp_compare  # noqa
 
     def test_yield_screener(self):
         import yield_screener  # noqa
@@ -72,7 +72,7 @@ class TestImports(unittest.TestCase):
         from src.data.core import data_loader  # noqa
 
     def test_tab_stock(self):
-        import tab_stock  # noqa
+        from src.ui.tabs import tab_stock  # noqa
 
 
 if __name__ == "__main__":

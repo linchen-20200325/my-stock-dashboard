@@ -21,7 +21,7 @@ class TestComputeStopLevels:
     """停利停損 SSOT 計算。"""
 
     def test_basic_compute(self):
-        from tab_helpers import compute_stop_levels
+        from src.ui.tabs import compute_stop_levels
         import pytest
         r = compute_stop_levels(100.0)
         assert r is not None
@@ -34,15 +34,15 @@ class TestComputeStopLevels:
         assert r['loss_pct'] == 8.0
 
     def test_none_price(self):
-        from tab_helpers import compute_stop_levels
+        from src.ui.tabs import compute_stop_levels
         assert compute_stop_levels(None) is None
 
     def test_zero_price(self):
-        from tab_helpers import compute_stop_levels
+        from src.ui.tabs import compute_stop_levels
         assert compute_stop_levels(0) is None
 
     def test_negative_price(self):
-        from tab_helpers import compute_stop_levels
+        from src.ui.tabs import compute_stop_levels
         assert compute_stop_levels(-5) is None
 
 
@@ -52,41 +52,41 @@ class TestClassifyBiasZone:
     """乖離分層 SSOT(對應 STOCK_BIAS_DEEP/OVERHEAT/MILD)。"""
 
     def test_none(self):
-        from tab_helpers import classify_bias_zone
+        from src.ui.tabs import classify_bias_zone
         label, color = classify_bias_zone(None)
         assert '無資料' in label
 
     def test_deep_negative_below_minus_20(self):
         """STOCK_BIAS_DEEP_DEVIATION_PCT=20 → bias < -20% = 深度負乖離。"""
-        from tab_helpers import classify_bias_zone
+        from src.ui.tabs import classify_bias_zone
         label, color = classify_bias_zone(-25.0)
         assert '深度負乖離' in label
         assert '布局' in label
 
     def test_overheat_above_plus_20(self):
-        from tab_helpers import classify_bias_zone
+        from src.ui.tabs import classify_bias_zone
         label, color = classify_bias_zone(+25.0)
         assert '過熱正乖離' in label
         assert '出場' in label
 
     def test_mild_between_15_and_20_positive(self):
-        from tab_helpers import classify_bias_zone
+        from src.ui.tabs import classify_bias_zone
         label, color = classify_bias_zone(+17.0)
         assert '中度乖離' in label
 
     def test_mild_between_15_and_20_negative(self):
-        from tab_helpers import classify_bias_zone
+        from src.ui.tabs import classify_bias_zone
         label, color = classify_bias_zone(-17.0)
         assert '中度乖離' in label
 
     def test_neutral_within_15(self):
-        from tab_helpers import classify_bias_zone
+        from src.ui.tabs import classify_bias_zone
         label, color = classify_bias_zone(+5.0)
         assert '中性區' in label
 
     def test_boundary_exact_minus_15(self):
         """|bias| = 15% 應為中性(strict > 才中度)。"""
-        from tab_helpers import classify_bias_zone
+        from src.ui.tabs import classify_bias_zone
         label, color = classify_bias_zone(-15.0)
         assert '中性區' in label
 
@@ -98,7 +98,7 @@ class TestClassifyStockStatusLamp:
 
     def test_blue_addon_four_conditions_all_met(self):
         """🔵 加碼:健康 A 級 + 多頭 + 量縮 + 近 20MA。"""
-        from tab_helpers import classify_stock_status_lamp
+        from src.ui.tabs import classify_stock_status_lamp
         # HEALTH_GRADE_A_MIN=80, GRP_VOL_SHRINK_RATIO=0.7,
         # GRP_NEAR_MA20_BIAS_PCT=3
         r = classify_stock_status_lamp(
@@ -109,7 +109,7 @@ class TestClassifyStockStatusLamp:
 
     def test_yellow_warn_overheat_bias(self):
         """🟡 警示:bias > GRP_BIAS_OVERHEAT_WARN_PCT(25%)。"""
-        from tab_helpers import classify_stock_status_lamp
+        from src.ui.tabs import classify_stock_status_lamp
         r = classify_stock_status_lamp(
             health_score=70, trend_label='📈 多頭',
             bias_pct=30.0, vol_ratio=1.0,
@@ -117,7 +117,7 @@ class TestClassifyStockStatusLamp:
         assert r == '🟡 警示'
 
     def test_orange_reduce_expensive_valuation(self):
-        from tab_helpers import classify_stock_status_lamp
+        from src.ui.tabs import classify_stock_status_lamp
         r = classify_stock_status_lamp(
             health_score=70, trend_label='📊 多箱',
             bias_pct=10.0, vol_ratio=1.0,
@@ -125,7 +125,7 @@ class TestClassifyStockStatusLamp:
         assert r == '🟠 減碼'
 
     def test_orange_super_expensive(self):
-        from tab_helpers import classify_stock_status_lamp
+        from src.ui.tabs import classify_stock_status_lamp
         r = classify_stock_status_lamp(
             health_score=70, trend_label='📊 多箱',
             bias_pct=10.0, vol_ratio=1.0,
@@ -133,7 +133,7 @@ class TestClassifyStockStatusLamp:
         assert r == '🟠 減碼'
 
     def test_neutral_default(self):
-        from tab_helpers import classify_stock_status_lamp
+        from src.ui.tabs import classify_stock_status_lamp
         r = classify_stock_status_lamp(
             health_score=50, trend_label='📊 空箱',
             bias_pct=5.0, vol_ratio=1.2,
@@ -142,7 +142,7 @@ class TestClassifyStockStatusLamp:
 
     def test_blue_blocked_by_low_health(self):
         """健康 < A 級(80)→ 不觸發 🔵 即使其他條件全 OK。"""
-        from tab_helpers import classify_stock_status_lamp
+        from src.ui.tabs import classify_stock_status_lamp
         r = classify_stock_status_lamp(
             health_score=70, trend_label='📈 多頭',
             bias_pct=2.0, vol_ratio=0.5,
@@ -151,7 +151,7 @@ class TestClassifyStockStatusLamp:
         assert r != '🔵 加碼'
 
     def test_blue_blocked_by_not_bull(self):
-        from tab_helpers import classify_stock_status_lamp
+        from src.ui.tabs import classify_stock_status_lamp
         r = classify_stock_status_lamp(
             health_score=85, trend_label='📊 多箱',
             bias_pct=2.0, vol_ratio=0.5,
@@ -159,7 +159,7 @@ class TestClassifyStockStatusLamp:
         assert r != '🔵 加碼'
 
     def test_none_inputs_default_neutral(self):
-        from tab_helpers import classify_stock_status_lamp
+        from src.ui.tabs import classify_stock_status_lamp
         r = classify_stock_status_lamp(None, None, None, None, None)
         assert r == '⚪'
 
@@ -170,13 +170,13 @@ class TestCallerMigration:
     """個股 + 個股組合 Tab 已改用 SSOT。"""
 
     def test_tab_stock_imports_three_helpers(self):
-        src = open('tab_stock.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert 'classify_stock_status_lamp' in src
         assert 'classify_bias_zone' in src
         assert 'compute_stop_levels' in src
 
     def test_tab_stock_uses_compute_stop_levels(self):
-        src = open('tab_stock.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         # SSOT 呼叫存在
         assert 'compute_stop_levels(_cur_p)' in src
         # 原 inline 計算已淨空(L591-593 hardcode)
@@ -185,14 +185,14 @@ class TestCallerMigration:
 
     def test_tab_stock_has_operation_radar(self):
         """個股 Tab 新增「📊 操作雷達」4 卡。"""
-        src = open('tab_stock.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert '📊 操作雷達' in src
         assert "classify_stock_status_lamp(" in src
         assert 'classify_bias_zone(_bias20_pct)' in src
         assert 'classify_bias_zone(_bias240_pct)' in src
 
     def test_tab_stock_grp_uses_status_lamp_ssot(self):
-        src = open('tab_stock_grp.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8').read()
         assert 'classify_stock_status_lamp' in src
         # 原 inline 4 段 if 已淨空
         assert "_status4 = '🔵 加碼'" not in src
@@ -202,10 +202,10 @@ class TestCallerMigration:
 
 class TestModulesImportable:
     def test_tab_helpers_clean(self):
-        import tab_helpers  # noqa: F401
+        from src.ui.tabs import tab_helpers  # noqa: F401
 
     def test_tab_stock_clean(self):
-        import tab_stock  # noqa: F401
+        from src.ui.tabs import tab_stock  # noqa: F401
 
     def test_tab_stock_grp_clean(self):
-        import tab_stock_grp  # noqa: F401
+        from src.ui.tabs import tab_stock_grp  # noqa: F401

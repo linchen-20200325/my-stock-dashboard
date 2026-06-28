@@ -227,19 +227,19 @@ class TestCallerMigration:
         assert "ETF_QUICK_SIGMA_DISASTER * _std" not in src
 
     def test_etf_tab_single_uses_classify_deep_sigma(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert 'classify_etf_deep_sigma' in src
         # inline z-score 5 段已淨空
         assert "if _z <= ETF_SIGMA_DEEP_BUY:" not in src
 
     def test_portfolio_uses_calc_portfolio_stress_test(self):
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert 'calc_portfolio_stress_test' in src
         # inline beta loop 已抽掉(剩 caller render)
         assert "beta_i  = info_i.get('beta')" not in src
 
     def test_portfolio_uses_compute_etf_annual_cashflow(self):
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert 'compute_etf_annual_cashflow' in src
         # 月度 inline loop 已淨空(_pay_months variable 已刪)
         assert '_pay_months = sorted(set' not in src
@@ -255,7 +255,7 @@ class TestImportContract:
         assert 'ETF_QUICK_SIGMA_DISASTER,' not in src
 
     def test_etf_single_no_direct_sigma_imports(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         # ETF_SIGMA_* 4 個應該不再被 single 直引
         assert 'ETF_SIGMA_BUY,' not in src
         assert 'ETF_SIGMA_DEEP_BUY,' not in src
@@ -269,7 +269,7 @@ class TestModulesImportable:
         from src.compute.etf import etf_calc  # noqa: F401
 
     def test_etf_tab_single_clean(self):
-        import etf_tab_single  # noqa: F401
+        from src.ui.etf import etf_tab_single  # noqa: F401
 
     def test_etf_tab_portfolio_clean(self):
-        import etf_tab_portfolio  # noqa: F401
+        from src.ui.etf import etf_tab_portfolio  # noqa: F401

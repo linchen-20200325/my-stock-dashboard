@@ -1,4 +1,4 @@
-"""tab_etf_margin_simulator.py — ETF 質借倒金字塔加碼模擬器 UI (v18.162).
+"""src/ui/tabs/tab_etf_margin_simulator.py — ETF 質借倒金字塔加碼模擬器 UI (v18.162).
 
 接 etf_margin_simulator 引擎 + yfinance 歷史價，提供：
 - 4 風格 preset 選擇 + 景氣階段對應建議

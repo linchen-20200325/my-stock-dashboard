@@ -23,7 +23,7 @@ APP_SRC  = APP_PATH.read_text(encoding="utf-8")
 # v18.33x 三層重排:ADL/M1B 的 tw_macro 委派由 app.py(L6)下沉至 tab_macro.py(L5 UI Tab),
 # 符合 §8.2「L6 App 不直接持有 L1 fetcher」。委派「存在性」斷言改掃 tab_macro.py;
 # app.py 端仍保「不得 inline 直連 MI_INDEX / cbc.gov.tw」的負向守衛(下方 test 不變)。
-TAB_MACRO_PATH = Path(__file__).resolve().parent.parent / "tab_macro.py"
+TAB_MACRO_PATH = Path(__file__).resolve().parent.parent / "src/ui/tabs/tab_macro.py"
 TAB_MACRO_SRC  = TAB_MACRO_PATH.read_text(encoding="utf-8")
 
 
@@ -35,7 +35,7 @@ def test_adl_fallback_uses_tw_macro_breadth():
     """ADL 備援區塊應 import tw_macro.fetch_twse_breadth(現於 tab_macro.py)。"""
     # v18.360 F-6.2:sweeper 已將 import path 改為 src.data.macro
     assert "from src.data.macro import fetch_twse_breadth" in TAB_MACRO_SRC, \
-        "tab_macro.py ADL 備援區塊未委派 fetch_twse_breadth(src.data.macro)"
+        "src/ui/tabs/tab_macro.py ADL 備援區塊未委派 fetch_twse_breadth(src.data.macro)"
 
 
 def test_app_no_inline_mi_index_get():
@@ -58,4 +58,4 @@ def test_app_no_inline_cbc_url():
 def test_app_uses_tw_macro_m1b_m2():
     """M1B 區塊應委派 tw_macro.fetch_cbc_m1b_m2(現於 tab_macro.py)。"""
     assert "fetch_cbc_m1b_m2" in TAB_MACRO_SRC, \
-        "tab_macro.py 未引用 tw_macro.fetch_cbc_m1b_m2"
+        "src/ui/tabs/tab_macro.py 未引用 tw_macro.fetch_cbc_m1b_m2"

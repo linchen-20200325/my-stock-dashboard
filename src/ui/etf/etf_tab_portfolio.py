@@ -44,7 +44,7 @@ def render_etf_portfolio(gemini_fn=None):
     # ─ Late imports（避免循環 import）─
     import numpy as np
     import pandas as pd
-    from etf_dashboard import (
+    from src.ui.etf.etf_tab_single import (
         _check_sector_exposure, _colored_box, _compute_etf_warroom_row,
         _plot_correlation, _plot_holdings_overlap, _render_weakness_table,
         render_etf_holdings, _teacher_conclusion,

@@ -27,7 +27,7 @@ class TestG1P3_RebalTolerance:
         assert 1 <= st_mod.PORTFOLIO_REBAL_TOLERANCE_DEFAULT_PCT <= 15
 
     def test_no_inline_in_portfolio(self):
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert "', 1, 15, 5," not in src
         assert 'PORTFOLIO_REBAL_TOLERANCE_DEFAULT_PCT' in src
 
@@ -43,7 +43,7 @@ class TestG1P1_CorrThreshold:
         assert 0.5 < st_mod.ETF_CORR_HIGH_THRESHOLD < 1.0
 
     def test_no_inline_in_portfolio(self):
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert 'val > 0.85' not in src
         assert '> 0.85，資產同質性過高' not in src
         assert 'ETF_CORR_HIGH_THRESHOLD' in src
@@ -62,7 +62,7 @@ class TestG1P2_OverlapThresholds:
                 > st_mod.PORTFOLIO_OVERLAP_WEIGHT_THRESHOLD_PCT)
 
     def test_no_inline_in_portfolio(self):
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert "30.0 if _method_key == 'weight' else 50.0" not in src
         assert 'PORTFOLIO_OVERLAP_WEIGHT_THRESHOLD_PCT' in src
         assert 'PORTFOLIO_OVERLAP_JACCARD_THRESHOLD_PCT' in src
@@ -81,7 +81,7 @@ class TestG2_StressTest:
         assert st_mod.PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT > 0
 
     def test_no_inline_in_portfolio(self):
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert '* (-0.20) * total_value' not in src
         assert "'red' if loss_pct > 20 else 'green'" not in src
         assert '⚠️ 超過20%' not in src
@@ -111,7 +111,7 @@ class TestG2_VaR:
         assert st_mod.PORTFOLIO_VAR_MONTHLY_WARN_PCT > 0
 
     def test_no_inline_in_portfolio(self):
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert '_port_ret.quantile(0.05)' not in src
         assert '_port_ret.quantile(0.01)' not in src
         assert 'abs(_m99) / total_value > 0.10' not in src

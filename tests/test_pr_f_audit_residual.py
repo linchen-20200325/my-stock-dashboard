@@ -103,7 +103,7 @@ class TestU10_BollingerBands:
         assert st_mod.BB_DROP_OUT_RATIO < st_mod.BB_NEAR_UPPER_RATIO
 
     def test_no_inline_in_tab_stock(self):
-        src = open('tab_stock.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert '_bb_upper * 0.97' not in src
         assert '_bb_upper * 0.95' not in src
         assert 'BB_NEAR_UPPER_RATIO' in src
@@ -123,8 +123,8 @@ class TestU11_MarginBalance:
                 < st_mod.MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI)
 
     def test_no_inline_in_tab_stock(self):
-        """tab_stock.py 不再有 inline 2500 / 3400 比較。"""
-        src = open('tab_stock.py', encoding='utf-8').read()
+        """src/ui/tabs/tab_stock.py 不再有 inline 2500 / 3400 比較。"""
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert '_wr_margin2 < 2500' not in src
         assert '_wr_margin2 > 3400' not in src
         assert 'MARGIN_BALANCE_WARN_THRESHOLD_YI' in src
@@ -142,7 +142,7 @@ class TestU12_RsBands:
         assert st_mod.STOCK_RS_STRONG_MIN > st_mod.STOCK_RS_NEUTRAL_MIN
 
     def test_no_inline_in_tab_stock(self):
-        src = open('tab_stock.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert '_rs_val >= 75' not in src
         assert '_rs_val >= 50' not in src
         assert 'STOCK_RS_STRONG_MIN' in src
@@ -162,7 +162,7 @@ class TestU13_BiasDeviation:
                 < st_mod.STOCK_BIAS_OVERHEAT_PCT)
 
     def test_no_inline_in_tab_stock(self):
-        src = open('tab_stock.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert '_bias_i < -20' not in src
         assert '_bias_i > 20' not in src
         assert '_bias_20_i > 15' not in src

@@ -106,24 +106,24 @@ class TestTrafficLightExplainer:
 
 class TestPrincipleClassroom:
     def test_render_no_raise(self):
-        from tab_edu import render_principle_classroom
+        from src.ui.tabs import render_principle_classroom
         render_principle_classroom()
 
     def test_at_least_10_chapters(self):
-        from tab_edu import _PRINCIPLE_CHAPTERS
+        from src.ui.tabs import _PRINCIPLE_CHAPTERS
         assert len(_PRINCIPLE_CHAPTERS) >= 10, (
             f"教室應 ≥ 10 章,實際 {len(_PRINCIPLE_CHAPTERS)} 章"
         )
 
     def test_all_chapters_have_body(self):
-        from tab_edu import _PRINCIPLE_CHAPTERS
+        from src.ui.tabs import _PRINCIPLE_CHAPTERS
         for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
             assert _t.strip(), f"第 {_i+1} 章標題空"
             assert len(_b.strip()) > 100, f"第 {_i+1} 章內文 < 100 字"
 
     def test_tw_local_chapters_present(self):
         """確認 TW 在地章節(外資/韭菜/M1B-M2)存在,證明 Stock 版有適配而非純拷貝 Fund"""
-        from tab_edu import _PRINCIPLE_CHAPTERS
+        from src.ui.tabs import _PRINCIPLE_CHAPTERS
         _titles = " ".join(_t for _t, _ in _PRINCIPLE_CHAPTERS)
         assert "外資" in _titles, "缺『外資籌碼』章(TW 股市核心)"
         assert "韭菜" in _titles, "缺『韭菜指數』章(TW 反指標)"
@@ -134,21 +134,21 @@ class TestChapterDepthEnhancement:
     """v18.278 — 每章必須含 白話 + 📐 公式 + 📜 案例 三層深度"""
 
     def test_every_chapter_has_formula_section(self):
-        from tab_edu import _PRINCIPLE_CHAPTERS
+        from src.ui.tabs import _PRINCIPLE_CHAPTERS
         for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
             assert "📐" in _b, (
                 f"第 {_i+1} 章 ({_t[:20]}) 缺 📐 數學定義段"
             )
 
     def test_every_chapter_has_history_case_section(self):
-        from tab_edu import _PRINCIPLE_CHAPTERS
+        from src.ui.tabs import _PRINCIPLE_CHAPTERS
         for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
             assert "📜" in _b, (
                 f"第 {_i+1} 章 ({_t[:20]}) 缺 📜 歷史案例段"
             )
 
     def test_chapters_substantially_longer(self):
-        from tab_edu import _PRINCIPLE_CHAPTERS
+        from src.ui.tabs import _PRINCIPLE_CHAPTERS
         for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
             assert len(_b.strip()) > 400, (
                 f"第 {_i+1} 章 ({_t[:20]}) body {len(_b.strip())} 字 < 400(深化未達標)"
@@ -156,7 +156,7 @@ class TestChapterDepthEnhancement:
 
     def test_chapters_have_twii_specific_cases(self):
         """歷史案例段必須含 TWII / TW PMI / 外資 等 TW 在地數據"""
-        from tab_edu import _PRINCIPLE_CHAPTERS
+        from src.ui.tabs import _PRINCIPLE_CHAPTERS
         _all = " ".join(_b for _, _b in _PRINCIPLE_CHAPTERS)
         # 至少 3 章應含 TWII / TW PMI / 外資 等 TW 本地 keyword
         _tw_keywords = ["TWII", "TW PMI", "TW 50", "台股"]
@@ -166,7 +166,7 @@ class TestChapterDepthEnhancement:
         )
 
     def test_chapters_have_numeric_dates_in_cases(self):
-        from tab_edu import _PRINCIPLE_CHAPTERS
+        from src.ui.tabs import _PRINCIPLE_CHAPTERS
         import re
         for _i, (_t, _b) in enumerate(_PRINCIPLE_CHAPTERS):
             _hist_idx = _b.find("📜")
@@ -193,7 +193,7 @@ class TestTabMacroWiring:
 
     def setup_method(self):
         import pathlib
-        _src = pathlib.Path(__file__).resolve().parent.parent / "tab_macro.py"
+        _src = pathlib.Path(__file__).resolve().parent.parent / "src/ui/tabs/tab_macro.py"
         self.src = _src.read_text(encoding="utf-8")
 
     def test_imports_explainer(self):
@@ -220,7 +220,7 @@ class TestTabMacroWiring:
     def test_classroom_rendered_in_tab_edu(self):
         """v18.281: 教室現由 tab_edu(系統說明書)渲染"""
         import pathlib
-        _edu = (pathlib.Path(__file__).resolve().parent.parent / "tab_edu.py").read_text(encoding="utf-8")
+        _edu = (pathlib.Path(__file__).resolve().parent.parent / "src/ui/tabs/tab_edu.py").read_text(encoding="utf-8")
         assert "render_principle_classroom()" in _edu, \
             "tab_edu(系統說明書)應呼叫 render_principle_classroom"
         assert "系統說明書" in _edu, "tab_edu 標題應為系統說明書"
@@ -240,7 +240,7 @@ class TestFactCorrectionsV18279:
     """
 
     def _all_text(self):
-        from tab_edu import _PRINCIPLE_CHAPTERS
+        from src.ui.tabs import _PRINCIPLE_CHAPTERS
         return "\n".join(b for _, b in _PRINCIPLE_CHAPTERS)
 
     def test_no_fabricated_tw_pmi_pre2012(self):

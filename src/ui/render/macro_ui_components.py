@@ -1,4 +1,4 @@
-"""macro_ui_components.py — 總經 tab 用的 plotly + HTML 渲染元件 (L4 Render)。
+"""src/ui/render/macro_ui_components.py — 總經 tab 用的 plotly + HTML 渲染元件 (L4 Render)。
 
 v18.344 PR-N1 從 daily_checklist.py 抽出純 UI 元件部分:
 - _hex2rgba / _base_layout: plotly 配色/版型 helper

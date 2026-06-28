@@ -14,7 +14,7 @@ import re
 
 import pandas as pd
 
-from sidebar_health import kline_end_date
+from src.ui.pages import kline_end_date
 
 
 def _real_price_df(last_date="2026-06-26", n=250):
@@ -57,7 +57,7 @@ class TestNoBuggyPatternRemains:
     """釘住：兩處消費端都不得再殘留 `to_datetime(...index[-1])` 假日期 antipattern。"""
 
     def test_tab_stock_uses_shared_helper(self):
-        src = open("tab_stock.py", encoding="utf-8").read()
+        src = open("src/ui/tabs/tab_stock.py", encoding="utf-8").read()
         assert "from sidebar_health import kline_end_date" in src
         assert "kline_end_date(df2)" in src
         # 舊 bug 變數整段移除（_df_end_date 不得再出現於可執行碼）
@@ -66,7 +66,7 @@ class TestNoBuggyPatternRemains:
         assert not re.search(r"_df_end_date\s*=\s*pd\.to_datetime", src)
 
     def test_sidebar_health_helper_guards_datetimeindex(self):
-        src = open("sidebar_health.py", encoding="utf-8").read()
+        src = open("src/ui/pages/sidebar_health.py", encoding="utf-8").read()
         assert "def kline_end_date(" in src
         assert "DatetimeIndex" in src  # 僅當真 DatetimeIndex 才用 index
         assert "_kline_end_date" not in src  # 舊私有名已退役

@@ -25,7 +25,7 @@ from shared.signal_thresholds import (
     GRP_NEWS_BEARISH_CONFIDENCE_MIN,
     MULTIFACTOR_ENTRY_MIN,
 )
-from tab_helpers import (
+from src.ui.tabs.tab_helpers import (
     classify_stock_status_lamp,    # v18.336 PR-H4:操作狀態燈 SSOT
     classify_trend_4tier,
     final_recommendation,
@@ -49,7 +49,7 @@ def render_stock_grp():
         calc_kd, calc_bollinger, calc_vcp,
     )
     from scoring_helpers import calc_health_score, health_grade
-    from ui_widgets import teacher_conclusion
+    from src.ui.render import teacher_conclusion
     from financial_health_engine import analyze_financial_health
     from src.services import build_structured_summary_prompt
     from src.data.etf import _fetch_news_for
@@ -1313,7 +1313,7 @@ def _render_stage_picker_section(stock_list: list[str], *,
     import streamlit as _st  # noqa: F811
 
     from app import gemini_call  # late import 沿用 render_stock_grp 同模式避循環
-    from tab_stock_picker import render_tab_stock_picker
+    from src.ui.tabs.tab_stock_picker import render_tab_stock_picker
 
     _st.markdown('---')
     _st.markdown(

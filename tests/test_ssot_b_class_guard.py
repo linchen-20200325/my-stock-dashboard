@@ -40,8 +40,8 @@ class TestDivergenceHarmonized:
         assert not hasattr(ht, "HEALTH_LABEL_MID_MIN"), "健康度 60 分歧變體應已移除"
 
     def test_consumers_use_standard(self):
-        tm = _src("tab_macro.py")
-        ts = _src("tab_stock.py")
+        tm = _src("src/ui/tabs/tab_macro.py")
+        ts = _src("src/ui/tabs/tab_stock.py")
         # 融資 SQL 卡片 + 廣度 KPI 皆改用標準常數，不得殘留分歧
         assert "MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI" not in tm
         assert "BREADTH_KPI_YELLOW_PCT" not in tm
@@ -67,7 +67,7 @@ class TestVixAlignedToC2:
 
 class TestConsumersWired:
     def test_no_inline_residual(self):
-        tm = _src("tab_macro.py")
+        tm = _src("src/ui/tabs/tab_macro.py")
         dc = _src("src/services/daily_checklist.py")
         mc = _src("src/data/macro/macro_core.py")
         # 融資黃線

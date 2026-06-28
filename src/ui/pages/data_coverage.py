@@ -1,4 +1,4 @@
-"""data_coverage.py — 前 N Tab 資料覆蓋率檢查表(v18.280)
+"""src/ui/pages/data_coverage.py — 前 N Tab 資料覆蓋率檢查表(v18.280)
 
 學 Fund 端 ui/tab5_data_guard.py Section ⓪ 的「預設視角」:
 user 關心的是「我的某個 Tab 有沒有資料」,而非只看「TWSE API 通不通」。

@@ -1,4 +1,4 @@
-"""tab_macro.py 共用純函式 — Phase 7A-Ext（2026-05-16）。
+"""src/ui/tabs/tab_macro.py 共用純函式 — Phase 7A-Ext（2026-05-16）。
 
 零 Streamlit / Plotly 依賴，純資料計算。從 tab_macro.render_tab_macro
 抽出供 unit test 與未來模組共用。

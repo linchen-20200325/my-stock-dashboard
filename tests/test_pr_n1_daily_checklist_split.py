@@ -55,13 +55,13 @@ class TestNewModulesImportable(unittest.TestCase):
         assert not self._has_import_stmt(src, 'requests'), 'L2 macro_compute 不得 import requests'
 
     def test_macro_ui_components_imports(self):
-        import macro_ui_components  # noqa
-        from macro_ui_components import (  # noqa
+        from src.ui.render import macro_ui_components  # noqa
+        from src.ui.render import (  # noqa
             COLORS_7, _hex2rgba, _base_layout,
             sparkline, multi_chart, bar_chart_institutional,
             stat_card, margin_card, section_header,
         )
-        with open('macro_ui_components.py', encoding='utf-8') as f:
+        with open('src/ui/render/macro_ui_components.py', encoding='utf-8') as f:
             src = f.read()
         assert not self._has_import_stmt(src, 'requests'), 'L4 ui_components 不得 import requests'
         # session_state 寫入檢測(import 不算):用 AST 找 Attribute access st.session_state
@@ -124,7 +124,7 @@ class TestPureFunctionBehavior(unittest.TestCase):
         self.assertEqual(r['signal'], '⚫ 資料不足')
 
     def test_hex2rgba(self):
-        from macro_ui_components import _hex2rgba
+        from src.ui.render import _hex2rgba
         self.assertEqual(_hex2rgba('#58a6ff'), 'rgba(88,166,255,0.12)')
         self.assertEqual(_hex2rgba('#58a6ff', alpha=0.5), 'rgba(88,166,255,0.5)')
         # invalid input fallback
@@ -165,7 +165,7 @@ class TestReExportIdentity(unittest.TestCase):
             COLORS_7, sparkline, multi_chart, bar_chart_institutional,
             stat_card, margin_card, section_header,
         )
-        from macro_ui_components import (
+        from src.ui.render import (
             COLORS_7 as _C, sparkline as _sp, multi_chart as _mc,
             bar_chart_institutional as _bc, stat_card as _sc,
             margin_card as _mg, section_header as _sh,

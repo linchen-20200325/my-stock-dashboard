@@ -46,7 +46,7 @@ def render_etf_single(gemini_fn=None):
     # ─ Late imports（避免循環 import）─
     import pandas as pd
     from datetime import timedelta
-    from etf_dashboard import (
+    from src.ui.etf.etf_tab_portfolio import (
         # 渲染類
         _colored_box, _plot_etf_chart, _render_bias, render_etf_holdings,
         _teacher_conclusion, macro_allocation_banner,

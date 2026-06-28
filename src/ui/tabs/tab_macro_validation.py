@@ -1,4 +1,4 @@
-"""tab_macro_validation.py — 台股總經 tab 歷史驗證 UI section (v18.161 v2 edge UI).
+"""src/ui/tabs/tab_macro_validation.py — 台股總經 tab 歷史驗證 UI section (v18.161 v2 edge UI).
 
 對應 tab_macro.py section 十「📊 總經訊號歷史驗證」.
 

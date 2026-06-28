@@ -90,11 +90,11 @@ class TestEtfCalcStderrLog:
 
 class TestTabStockSilentToStderr:
     def test_share_capital_has_stderr_marker(self):
-        src = open('tab_stock.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert '[_fetch_share_capital] swallow:' in src
 
     def test_pbratio_has_stderr_marker(self):
-        src = open('tab_stock.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert '[_fetch_pbratio_from_twse] swallow:' in src
 
 
@@ -132,7 +132,7 @@ class TestModulesImportable:
         from src.compute.etf import etf_calc  # noqa
 
     def test_tab_stock(self):
-        import tab_stock  # noqa
+        from src.ui.tabs import tab_stock  # noqa
 
     def test_leading_indicators(self):
         from src.data.macro import leading_indicators  # noqa

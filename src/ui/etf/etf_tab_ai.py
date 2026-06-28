@@ -16,7 +16,7 @@ import streamlit as st
 
 
 def render_etf_ai(gemini_fn=None):
-    from etf_dashboard import MACRO_ALLOC, _fetch_news_for, macro_allocation_banner
+    from src.ui.etf import MACRO_ALLOC, _fetch_news_for, macro_allocation_banner
 
     mkt_info = st.session_state.get('mkt_info', {})
     regime   = mkt_info.get('regime', 'neutral')

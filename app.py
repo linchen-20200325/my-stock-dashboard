@@ -62,13 +62,13 @@ print('[INFO] main.py v3.0 戰情室 載入完成')
 from src.data.core import StockDataLoader, _LOADER_VERSION  # noqa: E402
 # ── 新增模組（根據說明書 v1.0）──────────────────────────────
 # ── v3.0 新增模組（§5-§11）──────────────────────────────────
-from etf_dashboard import (  # noqa: E402
+from src.ui.etf import (  # noqa: E402
     render_etf_single, render_etf_portfolio,
     render_etf_ai,
     render_sector_heatmap,
 )
 from health_inspector import render_data_health_raw  # noqa: E402
-from api_diagnostic import render_api_diagnostic  # noqa: E402
+from src.ui.pages import render_api_diagnostic  # noqa: E402
 from grape_ladder import render_grape_ladder  # noqa: E402
 from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA  # noqa: E402
 
@@ -679,14 +679,14 @@ from scoring_helpers import (  # noqa: E402
 # ════════════════════════════════════════════════════════════════
 # 初學者友善說明系統 — 已抽出至 ui_widgets.py（PR P2-B Phase 2）
 # ════════════════════════════════════════════════════════════════
-from ui_widgets import (  # noqa: E402
+from src.ui.render import (  # noqa: E402
     traffic_light, show_term_help,
 )
 # P2-B Phase 5 A/B/C/D: 4 個 TAB 全部已抽到獨立模組（app.py 9208→1394 行，−85%）
-from tab_edu import render_tab_edu  # noqa: E402
-from tab_stock_grp import render_stock_grp  # noqa: E402
-from tab_stock import render_tab_stock  # noqa: E402
-from tab_macro import render_tab_macro  # noqa: E402
+from src.ui.tabs import render_tab_edu  # noqa: E402
+from src.ui.tabs import render_stock_grp  # noqa: E402
+from src.ui.tabs import render_tab_stock  # noqa: E402
+from src.ui.tabs import render_tab_macro  # noqa: E402
 
 # 在先行指標 section 使用
 _TERM_HELP_LI = show_term_help('PCR') + show_term_help('ADL') + show_term_help('M1B-M2')
@@ -1147,7 +1147,7 @@ with st.sidebar:
 
     # ── v18.203 F2：全局資料健康總覽（聚合個股六源 + 總經羅盤 → 一眼看哪舊）──
     try:
-        from sidebar_health import render_sidebar_data_health
+        from src.ui.pages import render_sidebar_data_health
         render_sidebar_data_health(st.session_state)
     except Exception as _e_sbh:
         print(f'[sidebar_health] {type(_e_sbh).__name__}: {_e_sbh}')
@@ -1642,7 +1642,7 @@ with tab_etf:
     with _etf_sub_tabs[0]:
         render_etf_single(gemini_fn=gemini_call)
     with _etf_sub_tabs[1]:
-        from etf_tab_grp_compare import render_etf_grp_compare
+        from src.ui.etf import render_etf_grp_compare
         render_etf_grp_compare()
 
 # ══════════════════════════════════════════════════════════════
@@ -1664,7 +1664,7 @@ with tab_etf_grp:
 # TAB: ETF 質借倒金字塔加碼模擬器 (v18.162)
 # ══════════════════════════════════════════════════════════════
 with tab_etf_margin:
-    from tab_etf_margin_simulator import render_etf_margin_simulator
+    from src.ui.tabs import render_etf_margin_simulator
     render_etf_margin_simulator()
 
 # ══════════════════════════════════════════════════════════════
@@ -1676,7 +1676,7 @@ with tab_screener:
 
     # ── 🎯 智慧選股（三階段濾網 + AI 三型建議）— 接續高息網候選清單 ──
     st.markdown('---')
-    from tab_stock_picker import render_tab_stock_picker
+    from src.ui.tabs import render_tab_stock_picker
     render_tab_stock_picker(gemini_fn=gemini_call, candidates=_picker_candidates)
 
 # ══════════════════════════════════════════════════════════════
@@ -1703,14 +1703,14 @@ with tab_screener:
 with tab_diag:
     # v18.280 — 學 Fund 架構 + 預設視角:覆蓋率表(用戶視角)放最上方,
     # API Key / Proxy 雙跑(developer 視角)放後。對齊 Fund tab5 Section ⓪。
-    from data_coverage import render_data_coverage
+    from src.ui.pages import render_data_coverage
     render_data_coverage()
     st.markdown('---')
     render_api_diagnostic()
     st.markdown('---')
     render_data_health_raw()
     st.markdown('---')
-    from calibration_ui import render_calibration_panel
+    from src.ui.pages import render_calibration_panel
     render_calibration_panel()
 
 # ══════════════════════════════════════════════════════════════

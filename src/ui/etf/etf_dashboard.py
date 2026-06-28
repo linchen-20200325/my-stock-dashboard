@@ -36,7 +36,7 @@ from src.compute.etf import (  # noqa: F401
 )
 
 # ── render 層 ────────────────────────────────────────────────
-from etf_render import (  # noqa: F401
+from src.ui.render import (  # noqa: F401
     MACRO_ALLOC, MACRO_DESC,
     macro_allocation_banner, _colored_box, _teacher_conclusion,
     _plot_etf_chart, _plot_correlation, _plot_holdings_overlap, _render_bias,
@@ -48,6 +48,6 @@ from etf_render import (  # noqa: F401
 )
 
 # ── 四大 tab 入口（Phase 6 已抽出）──────────────────────────
-from etf_tab_single import render_etf_single  # noqa: F401
-from etf_tab_portfolio import render_etf_portfolio  # noqa: F401
-from etf_tab_ai import render_etf_ai  # noqa: F401
+from src.ui.etf.etf_tab_single import render_etf_single  # noqa: F401
+from src.ui.etf.etf_tab_portfolio import render_etf_portfolio  # noqa: F401
+from src.ui.etf.etf_tab_ai import render_etf_ai  # noqa: F401

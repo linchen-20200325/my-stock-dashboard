@@ -118,5 +118,5 @@ def render_traffic_light_explainer(tl: Optional[dict]) -> None:
 # ════════════════════════════════════════════════════════════════
 def render_principle_classroom() -> None:  # noqa: D401 — 向後相容 shim
     """已搬至 tab_edu(系統說明書)。保留 shim 避免舊 caller 壞掉。"""
-    from tab_edu import render_principle_classroom as _rpc
+    from src.ui.tabs import render_principle_classroom as _rpc
     _rpc()

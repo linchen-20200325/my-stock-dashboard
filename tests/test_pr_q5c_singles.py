@@ -53,11 +53,11 @@ class TestQ5cMarkers(unittest.TestCase):
             'CBOE:', src)
 
     def test_tab_edu(self):
-        src = self._read('tab_edu.py')
+        src = self._read('src/ui/tabs/tab_edu.py')
         self.assertIn("'FRED:{series_id}:units={units}:months={months}'", src)
 
     def test_tab_etf_margin_simulator(self):
-        src = self._read('tab_etf_margin_simulator.py')
+        src = self._read('src/ui/tabs/tab_etf_margin_simulator.py')
         self.assertIn("'yfinance:{symbol}:{years}y:auto_adjust'", src)
 
 
@@ -82,10 +82,10 @@ class TestImports(unittest.TestCase):
         import risk_radar  # noqa
 
     def test_tab_edu(self):
-        import tab_edu  # noqa
+        from src.ui.tabs import tab_edu  # noqa
 
     def test_tab_etf_margin_simulator(self):
-        import tab_etf_margin_simulator  # noqa
+        from src.ui.tabs import tab_etf_margin_simulator  # noqa
 
 
 if __name__ == "__main__":

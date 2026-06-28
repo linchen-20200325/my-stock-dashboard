@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-import tab_macro
+from src.ui.tabs import tab_macro
 
 
 # ────────────────────────────────────────────────────────────────────────

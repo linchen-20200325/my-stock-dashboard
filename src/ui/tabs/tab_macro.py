@@ -40,7 +40,7 @@ from shared.signal_thresholds import (
 )
 
 from src.compute.macro import calc_traffic_light, rp_entry, rp_scalar, rp_ts
-from tab_helpers import safe_get
+from src.ui.tabs.tab_helpers import safe_get
 
 
 # ════════════════════════════════════════════════════════════════
@@ -503,7 +503,7 @@ def render_tab_macro():
     )
     from src.services import get_market_assessment
     from src.data.macro import render_leading_table
-    from ui_widgets import beginner_kpi, cond_badge, kpi, teacher_conclusion
+    from src.ui.render import beginner_kpi, cond_badge, kpi, teacher_conclusion
     # app.py 內部 helper（v18.192：還原 section 十一 → 重新需要 _fetch_macro_news / gemini_call）
     from app import (
         _bps, _fetch_macro_news, _get_fm_token, _tw_now_str, gemini_call,

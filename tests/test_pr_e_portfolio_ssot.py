@@ -20,7 +20,7 @@ class TestEtfVcpMinDaysSSOT:
         assert 'ETF_VCP_MIN_DAYS' in src
 
     def test_no_inline_in_etf_tab_single(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert 'len(df) < 210' not in src
         assert 'ETF_VCP_MIN_DAYS' in src
 
@@ -57,7 +57,7 @@ class TestEtfPortfolioNoSilentExcept:
 
     def test_no_bare_pass_in_portfolio(self):
         """etf_tab_portfolio 不應有「except Exception: pass」(裸 pass 模式)。"""
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         # 常見裸 pass 縮排:8/12/16/20 spaces
         assert 'except Exception:\n            pass' not in src
         assert 'except Exception:\n                pass' not in src
@@ -65,7 +65,7 @@ class TestEtfPortfolioNoSilentExcept:
 
     def test_diagnostic_prints_present(self):
         """補 log 後應該至少有 5 個 [etf_tab_portfolio] print 標籤。"""
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert src.count('[etf_tab_portfolio]') >= 5
 
 

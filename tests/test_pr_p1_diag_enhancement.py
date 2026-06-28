@@ -21,7 +21,7 @@ import unittest
 class TestDiagTableEnhanced(unittest.TestCase):
 
     def setUp(self):
-        with open('tab_macro.py', encoding='utf-8') as f:
+        with open('src/ui/tabs/tab_macro.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_freshness_caution_banner(self):
@@ -63,7 +63,7 @@ class TestDiagTableEnhanced(unittest.TestCase):
 
 class TestImports(unittest.TestCase):
     def test_tab_macro(self):
-        import tab_macro  # noqa
+        from src.ui.tabs import tab_macro  # noqa
 
 
 if __name__ == "__main__":

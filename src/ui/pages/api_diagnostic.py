@@ -1,4 +1,4 @@
-"""api_diagnostic.py — API Key & 連線根因診斷面板
+"""src/ui/pages/api_diagnostic.py — API Key & 連線根因診斷面板
 
 掛在 tab_diag 第一格，用來釐清「Key 已設但全站抓不到資料」的常見根因：
 1. st.secrets 是否能 parse（TOML 格式錯會整段 fallback 到空）

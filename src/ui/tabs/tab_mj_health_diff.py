@@ -1,4 +1,4 @@
-"""tab_mj_health_diff.py — v18.188「📊 MJ 體檢變化」批次 Tab
+"""src/ui/tabs/tab_mj_health_diff.py — v18.188「📊 MJ 體檢變化」批次 Tab
 
 v18.188 重寫：從 v18.186 單股 selectbox 改成「text_area 多檔 batch」模式，
 鏡像 `tab_stock_grp.py` 個股組合介面：

@@ -76,7 +76,7 @@ def test_macro_info_keys_overlap_danger_specs():
 
 
 def test_data_coverage_consumes_macro_info_keys_ssot():
-    """data_coverage._macro_keys 必須來自 SSOT(非各自寫死)。
+    """src.ui.pages.data_coverage._macro_keys 必須來自 SSOT(非各自寫死)。
     以行為驗證:macro_info 放滿 SSOT key → 認列數 == len(SSOT)。"""
     import sys
     import types
@@ -85,7 +85,7 @@ def test_data_coverage_consumes_macro_info_keys_ssot():
         _m = types.ModuleType("streamlit")
         _m.session_state = {}
         sys.modules["streamlit"] = _m
-    from data_coverage import compute_tab_coverage
+    from src.ui.pages import compute_tab_coverage
     _macro = {k: {"current": 1.0} for k in mb.MACRO_INFO_KEYS}
     rows = compute_tab_coverage(state={"macro_info": _macro})
     macro_row = next(r for r in rows if "總經" in r["tab"])

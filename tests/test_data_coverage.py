@@ -45,14 +45,14 @@ _stub_st()
 
 class TestComputeTabCoverage:
     def test_empty_state_all_idle(self):
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         rows = compute_tab_coverage(state={})
         assert len(rows) == 4
         # 全空 → 全部 ⬜ 未觸發
         assert all(r["emoji"] == "⬜" for r in rows)
 
     def test_returns_4_tabs(self):
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         rows = compute_tab_coverage(state={})
         tabs = [r["tab"] for r in rows]
         assert any("總經" in t for t in tabs)
@@ -61,14 +61,14 @@ class TestComputeTabCoverage:
         assert any("ETF" in t for t in tabs)
 
     def test_each_row_has_required_fields(self):
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         for r in compute_tab_coverage(state={}):
             for f in ("tab", "emoji", "color", "ratio_txt", "detail", "action"):
                 assert f in r, f"缺欄位 {f}"
 
     def test_macro_full_coverage_green(self):
         """v18.282: 用真實 macro_info key；v18.349 由 SSOT MACRO_INFO_KEYS 派生"""
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         from shared.macro_buckets import MACRO_INFO_KEYS
         _full_macro = {k: {"current": 1.0} for k in MACRO_INFO_KEYS}
         rows = compute_tab_coverage(state={
@@ -86,7 +86,7 @@ class TestComputeTabCoverage:
     def test_macro_coverage_uses_ssot_keys(self):
         """v18.349: data_coverage 認列的 macro key 數 = SSOT 清單長度。
         缺 1 個 SSOT key → 非滿分(覆蓋率隨 SSOT 連動,證明非寫死)。"""
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         from shared.macro_buckets import MACRO_INFO_KEYS
         # 只放滿全部 SSOT key 但缺 M1B/領先 → have=6/total=8 → 75% → 🟡
         _macro = {k: {"current": 1.0} for k in MACRO_INFO_KEYS}
@@ -97,7 +97,7 @@ class TestComputeTabCoverage:
 
     def test_macro_meta_only_is_idle(self):
         """只有 _loaded_at meta key(全 fetch 失敗)→ 未觸發,非綠"""
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         rows = compute_tab_coverage(state={
             "macro_info": {"_loaded_at": "2026-06-25", "_all_failed": True},
         })
@@ -105,7 +105,7 @@ class TestComputeTabCoverage:
         assert macro_row["emoji"] == "⬜"
 
     def test_macro_partial_red(self):
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         # 只有 2/6 macro + 無 M1B/領先 → 紅
         rows = compute_tab_coverage(state={
             "macro_info": {"vix": {"current": 1}, "ism_pmi": {"current": 1}},
@@ -115,7 +115,7 @@ class TestComputeTabCoverage:
 
     def test_stock_loaded_green(self):
         """t2_data 為單一個股 metrics dict(present = 已查)"""
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         rows = compute_tab_coverage(state={"t2_data": {"d": "台積電", "df": [1, 2]}})
         stock_row = next(r for r in rows if "個股" in r["tab"])
         assert stock_row["emoji"] == "🟢"
@@ -123,7 +123,7 @@ class TestComputeTabCoverage:
 
     def test_chips_partial(self):
         """cl_data 真實 key:inst / margin / adl"""
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         rows = compute_tab_coverage(state={
             "cl_data": {"inst": [1], "margin": [1]}  # 2/3(無 adl)
         })
@@ -131,7 +131,7 @@ class TestComputeTabCoverage:
         assert chip_row["emoji"] == "🟡"
 
     def test_chips_full_green(self):
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         rows = compute_tab_coverage(state={
             "cl_data": {"inst": [1], "margin": [1], "adl": [1]}  # 3/3
         })
@@ -139,11 +139,11 @@ class TestComputeTabCoverage:
         assert chip_row["emoji"] == "🟢"
 
     def test_etf_loaded_green(self):
-        from data_coverage import compute_tab_coverage
+        from src.ui.pages import compute_tab_coverage
         rows = compute_tab_coverage(state={"etf_single_data": {"aum": 100, "cur_yield": 5}})
         etf_row = next(r for r in rows if "ETF" in r["tab"])
         assert etf_row["emoji"] == "🟢"
 
     def test_render_no_raise(self):
-        from data_coverage import render_data_coverage
+        from src.ui.pages import render_data_coverage
         render_data_coverage()  # 空 session_state stub,不 raise

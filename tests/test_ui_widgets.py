@@ -1,7 +1,7 @@
-"""ui_widgets.py 純函式 unit test — Phase 7F（cond_badge）+ Phase 7G（其餘 9 函式 + 常數補測）。"""
+"""src/ui/render/ui_widgets.py 純函式 unit test — Phase 7F（cond_badge）+ Phase 7G（其餘 9 函式 + 常數補測）。"""
 from __future__ import annotations
 
-from ui_widgets import (
+from src.ui.render import (
     TERM_EXPLAIN,
     _STRATEGY_MAP,
     _to_strategy,

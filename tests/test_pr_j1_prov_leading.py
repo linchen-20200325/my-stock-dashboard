@@ -134,7 +134,7 @@ class TestUIChipRendered:
     """tab_stock D2 chip 段已加 _src_chip。"""
 
     def test_tab_stock_has_source_chip(self):
-        src = open('tab_stock.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert '_src_chip' in src
         assert '📡 來源' in src
         assert "_ind.get('source_chain')" in src
@@ -147,7 +147,7 @@ class TestModulesImportable:
         from src.compute.scoring import scoring_engine  # noqa: F401
 
     def test_tab_stock_clean(self):
-        import tab_stock  # noqa: F401
+        from src.ui.tabs import tab_stock  # noqa: F401
 
     def test_li_source_map_defined(self):
         from src.compute.scoring import _LI_SOURCE_CHAINS

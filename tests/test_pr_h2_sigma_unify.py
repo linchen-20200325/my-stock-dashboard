@@ -154,11 +154,11 @@ class TestEtfSingleUsesSSOT:
     """etf_tab_single MK#11 已改用 calc_sigma_metrics SSOT。"""
 
     def test_etf_single_imports_sigma_metrics(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert 'calc_sigma_metrics' in src
 
     def test_etf_single_uses_metrics_dict(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert 'calc_sigma_metrics(df, window=252)' in src
         # 舊 inline 已淨空
         assert "df['Close'].pct_change().tail(252).dropna()" not in src
@@ -172,16 +172,16 @@ class TestUxAnnotation:
         assert '⚡短線' in src
 
     def test_etf_single_has_long_term_prefix(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert '📅 長線' in src or '📅長線' in src
 
     def test_etf_single_has_disambiguation_caption(self):
         """應加 caption 說明兩套 σ 的時間尺度差異。"""
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert '不同時間尺度' in src
 
     def test_portfolio_column_header_disambiguated(self):
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert '⚡短線 σ 位階' in src
 
 
@@ -193,7 +193,7 @@ class TestModulesImportable:
         from src.compute.etf import etf_calc  # noqa: F401
 
     def test_etf_tab_single_clean(self):
-        import etf_tab_single  # noqa: F401
+        from src.ui.etf import etf_tab_single  # noqa: F401
 
     def test_etf_tab_portfolio_clean(self):
-        import etf_tab_portfolio  # noqa: F401
+        from src.ui.etf import etf_tab_portfolio  # noqa: F401

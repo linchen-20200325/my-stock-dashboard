@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 
 
-def _src(p="tab_macro.py"):
+def _src(p="src/ui/tabs/tab_macro.py"):
     return open(p, encoding="utf-8").read()
 
 

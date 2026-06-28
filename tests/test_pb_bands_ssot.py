@@ -77,21 +77,21 @@ class TestDataLoaderSSOTPublic:
 
 class TestTabStockNoPrivateFetchers:
     def test_no_inline_pb_bands_constants(self):
-        """tab_stock.py 不再 inline 定義 _PB_BANDS_*(已下沉 shared/stock_buckets)。"""
-        src = open('tab_stock.py', encoding='utf-8').read()
+        """src/ui/tabs/tab_stock.py 不再 inline 定義 _PB_BANDS_*(已下沉 shared/stock_buckets)。"""
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert '_PB_BANDS_FINANCIAL = (0.5' not in src
         assert '_PB_BANDS_GROWTH    = (1.5' not in src
         assert '_PB_BANDS_MFG       = (0.8' not in src
 
     def test_imports_ssot_from_shared(self):
-        """tab_stock.py 已 import shared.stock_buckets P/B SSOT。"""
-        src = open('tab_stock.py', encoding='utf-8').read()
+        """src/ui/tabs/tab_stock.py 已 import shared.stock_buckets P/B SSOT。"""
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert 'get_pb_bands' in src
         assert 'pb_bands_label' in src
 
     def test_no_private_fetch_definitions(self):
-        """tab_stock.py 不再 def 私有 _fetch_bps / _fetch_industry_category(已下沉 data_loader)。"""
-        src = open('tab_stock.py', encoding='utf-8').read()
+        """src/ui/tabs/tab_stock.py 不再 def 私有 _fetch_bps / _fetch_industry_category(已下沉 data_loader)。"""
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert 'def _fetch_bps_from_finmind(' not in src
         assert 'def _fetch_bps(' not in src
         assert 'def _fetch_industry_category(' not in src
@@ -100,7 +100,7 @@ class TestTabStockNoPrivateFetchers:
 class TestTabStockGrpHasPB:
     def test_imports_pb_ssot(self):
         """組合 Tab 已 import P/B SSOT + data_loader fetcher。"""
-        src = open('tab_stock_grp.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8').read()
         assert 'classify_pb_level' in src
         assert 'get_pb_bands' in src
         assert 'fetch_bps' in src
@@ -108,7 +108,7 @@ class TestTabStockGrpHasPB:
 
     def test_pb_eval_column_added(self):
         """組合 Tab 多因子排行已加 P/B 評價欄。"""
-        src = open('tab_stock_grp.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8').read()
         assert "'P/B評價'" in src
 
 
@@ -121,11 +121,11 @@ class TestMJTrendSSOT:
 
     def test_grp_uses_ssot(self):
         """組合 Tab 走 SSOT,不再有 file-local _compute_one_stock_trend。"""
-        src = open('tab_stock_grp.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8').read()
         assert 'def _compute_one_stock_trend(' not in src
         assert 'compute_one_stock_trend' in src  # 是 import 來的
 
     def test_individual_tab_uses_ssot(self):
         """個股 Tab 已引入 compute_one_stock_trend(MJ 趨勢分數)。"""
-        src = open('tab_stock.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert 'compute_one_stock_trend' in src

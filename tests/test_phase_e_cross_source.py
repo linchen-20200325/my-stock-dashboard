@@ -78,14 +78,14 @@ class TestPmiSignalRegistration:
 # ════════════════════════════════════════════════════════════════
 class TestPhase4UiSource:
     def test_render_function_exists(self):
-        import tab_macro_validation
+        from src.ui.tabs import tab_macro_validation
         assert hasattr(tab_macro_validation, "_render_phase4_cross_source_matrix")
         assert callable(tab_macro_validation._render_phase4_cross_source_matrix)
 
     def test_render_wired_after_phase3(self):
         """確認 Phase E render 在 Phase 3 命中表之後 + 自動校準之前的順序。"""
         import inspect
-        import tab_macro_validation
+        from src.ui.tabs import tab_macro_validation
         src = inspect.getsource(tab_macro_validation._render_phase3_signal_section)
         p4 = src.find("_render_phase4_cross_source_matrix")
         auto = src.find("_render_phase3_auto_calibration")
@@ -96,7 +96,7 @@ class TestPhase4UiSource:
     def test_render_uses_evaluate_signal_at_event(self):
         """Phase 4 應該複用既有 evaluate_signal_at_event 邏輯（避免重新發明引擎）。"""
         import inspect
-        import tab_macro_validation
+        from src.ui.tabs import tab_macro_validation
         src = inspect.getsource(
             tab_macro_validation._render_phase4_cross_source_matrix)
         assert "evaluate_signal_at_event" in src
@@ -104,7 +104,7 @@ class TestPhase4UiSource:
     def test_render_outputs_consensus_row(self):
         """矩陣末列必須是「多源共識」總計。"""
         import inspect
-        import tab_macro_validation
+        from src.ui.tabs import tab_macro_validation
         src = inspect.getsource(
             tab_macro_validation._render_phase4_cross_source_matrix)
         assert "多源共識" in src

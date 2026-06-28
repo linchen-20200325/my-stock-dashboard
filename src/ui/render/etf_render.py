@@ -9,7 +9,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from src.data.etf import _fetch_news_for, _fetch_sector_returns
-from src.services import build_structured_summary_prompt
+from src.services.ai_structured_summary import build_structured_summary_prompt  # v18.361 F-6.5:直打 submod 避 services↔ui.render circular
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
@@ -66,7 +66,7 @@ def _colored_box(text: str, color: str = 'green') -> None:
 def _teacher_conclusion(teacher: str, indicator_val: str, conclusion: str,
                         action: str = '', color: str | None = None) -> None:
     """ETF dashboard 策略結論卡（teacher 字串透過 ui_widgets._to_strategy 對應到 策略1/2/3 顯示）"""
-    from ui_widgets import _to_strategy as _t2s
+    from src.ui.render.ui_widgets import _to_strategy as _t2s
     if color is None:
         _neg_kw = ['警戒', '危險', '賣超', '空單', '減碼', '停損', '撤離', '跌破', '過熱', '回調', '降倉', '空頭', '侵蝕', '高估']
         _pos_kw = ['強勢', '買超', '多頭', '安全', '健康', '買進', '加碼', '流入', '突破', '進攻', '上漲', '低估', '特價']

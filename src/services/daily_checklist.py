@@ -58,7 +58,7 @@ HDR = {
     "X-Requested-With": "XMLHttpRequest",
 }
 # v18.344 PR-N1:COLORS_7 抽至 macro_ui_components.py(L4 Render),re-export 維持相容
-from macro_ui_components import COLORS_7  # noqa: F401
+from src.ui.render.macro_ui_components import COLORS_7  # noqa: F401  # v18.361 F-6.5:直打 submod 避 __init__ 順序 circular
 INTL_MAP = {"道瓊工業 DJI":"^DJI","納斯達克 IXIC":"^IXIC","費城半導體 SOX":"^SOX","10Y公債殖利率":"^TNX","美元指數 DXY":"DX-Y.NYB"}
 INTL_UNIT = {k:("%" if "殖利率" in k else "指數") for k in INTL_MAP}
 TW_MAP   = {"台股加權指數":"^TWII","新台幣匯率":"TWD=X"}
@@ -117,7 +117,7 @@ from src.data.daily import fetch_adl, _adl_selftest  # noqa: F401
 # v18.344 PR-N1:UI 渲染元件抽至 macro_ui_components.py(L4 Render),re-export 維持相容。
 # 8 個函式:_hex2rgba / _base_layout / sparkline / multi_chart /
 # bar_chart_institutional / stat_card / margin_card / section_header
-from macro_ui_components import (  # noqa: F401
+from src.ui.render.macro_ui_components import (  # noqa: F401  # v18.361 F-6.5:直打 submod 避 circular
     _hex2rgba,
     _base_layout,
     sparkline,

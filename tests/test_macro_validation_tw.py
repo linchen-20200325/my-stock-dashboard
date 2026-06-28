@@ -106,20 +106,20 @@ def test_detect_twii_multiple_events_with_recovery():
 # UI source-level checks
 # ════════════════════════════════════════════════════════════════
 def test_ui_section_in_tab_macro_source():
-    """tab_macro.py 必須 import render_history_validation_section 且呼叫。"""
-    src = (Path(__file__).parent.parent / "tab_macro.py").read_text(encoding="utf-8")
+    """src/ui/tabs/tab_macro.py 必須 import render_history_validation_section 且呼叫。"""
+    src = (Path(__file__).parent.parent / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
     assert "from tab_macro_validation import render_history_validation_section" in src
     assert "render_history_validation_section()" in src
 
 def test_ui_module_exposes_render_function():
-    """tab_macro_validation.py 必須 export render_history_validation_section."""
-    import tab_macro_validation as tmv
+    """src/ui/tabs/tab_macro_validation.py 必須 export render_history_validation_section."""
+    from src.ui.tabs import tab_macro_validation as tmv
     assert hasattr(tmv, "render_history_validation_section")
     assert callable(tmv.render_history_validation_section)
 
 def test_ui_validation_section_before_ai_verdict():
     """v18.156 user 要求：歷史驗證 section（十）必須在 AI 總裁決（十一）之前。"""
-    src = (Path(__file__).parent.parent / "tab_macro.py").read_text(encoding="utf-8")
+    src = (Path(__file__).parent.parent / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
     idx_validation = src.find("render_history_validation_section()")
     idx_ai_verdict = src.find("section_header('十一'")
     assert idx_validation > 0 and idx_ai_verdict > 0

@@ -12,7 +12,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import risk_radar as rr
-import tab_macro
+from src.ui.tabs import tab_macro
 
 
 class TestRadarThresholdLinesSSOT:

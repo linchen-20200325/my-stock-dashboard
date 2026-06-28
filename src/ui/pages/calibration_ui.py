@@ -1,4 +1,4 @@
-"""calibration_ui.py — 紅綠燈系統校準的 Streamlit UI 面板
+"""src/ui/pages/calibration_ui.py — 紅綠燈系統校準的 Streamlit UI 面板
 
 設計
 ----

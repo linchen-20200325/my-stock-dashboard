@@ -66,7 +66,7 @@ def test_radar_and_bucket_bar_gated_pre_load():
     _show_market_data 後 — 未載入資料(尚無快取/過期)時不顯示,對齊紅綠燈「尚無資料」。
     full render AppTest 在無 proxy/secrets 環境會 hang,故用 source pattern 檢查防回歸。"""
     import re
-    src = open("tab_macro.py", encoding="utf-8").read()   # CI 可攜:相對 repo root
+    src = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()   # CI 可攜:相對 repo root
     # 雷達 call 緊接在 if _show_market_data: 之後
     # v18.317:函式改名 _render_global_risk_bucket(10 燈雷達改桶,從頂部下移至短線急殺後)
     assert re.search(
@@ -133,7 +133,7 @@ class TestRenderSmoke:
         """tab_edu:v18.281 系統說明書 + 教室合併 + 資料地圖 ⓪"""
         from streamlit.testing.v1 import AppTest
         drv = _build_driver('''
-from tab_edu import render_tab_edu
+from src.ui.tabs import render_tab_edu
 render_tab_edu()
 ''')
         at = AppTest.from_string(drv, default_timeout=90)
@@ -149,7 +149,7 @@ render_tab_edu()
 st.session_state["macro_info"] = {_REAL_MACRO_INFO!r}
 st.session_state["cl_data"] = {_REAL_CL_DATA!r}
 st.session_state["t2_data"] = {{"d": "stub", "df": [1, 2]}}
-from data_coverage import render_data_coverage
+from src.ui.pages import render_data_coverage
 render_data_coverage()
 ''')
         at = AppTest.from_string(drv, default_timeout=60)
@@ -160,7 +160,7 @@ render_data_coverage()
         """data_coverage:空 session_state → 全 ⬜ 未觸發(防 KeyError)"""
         from streamlit.testing.v1 import AppTest
         drv = _build_driver('''
-from data_coverage import render_data_coverage
+from src.ui.pages import render_data_coverage
 render_data_coverage()
 ''')
         at = AppTest.from_string(drv, default_timeout=60)
@@ -171,7 +171,7 @@ render_data_coverage()
         """api_diagnostic:Key 遮罩 + secrets 解析(此環境無 secrets 走降級路徑)"""
         from streamlit.testing.v1 import AppTest
         drv = _build_driver('''
-from api_diagnostic import render_api_diagnostic
+from src.ui.pages import render_api_diagnostic
 render_api_diagnostic()
 ''')
         at = AppTest.from_string(drv, default_timeout=60)
@@ -211,7 +211,7 @@ render_principle_classroom()
         from streamlit.testing.v1 import AppTest
         drv = _build_driver('''
 from src.compute.macro import compute_five_bucket_summary
-from tab_macro import render_five_bucket_bar
+from src.ui.tabs import render_five_bucket_bar
 _summary = compute_five_bucket_summary(
     macro_info={"vix":{"current":35},"ism_pmi":{"value":44},"us_core_cpi":{"yoy":4.5},
                 "tw_export":{"yoy":-8},"ndc_signal":{"score":14}},
@@ -229,7 +229,7 @@ render_five_bucket_bar(_summary)
     def test_add_danger_hlines(self):
         """v18.284: 圖表危險標準線 helper — VIX 用 SSOT 22(非舊 25)、yref=y2、band 不炸"""
         import plotly.graph_objects as go
-        from tab_macro import add_danger_hlines
+        from src.ui.tabs import add_danger_hlines
         f = go.Figure()
         add_danger_hlines(f, 'vix')             # high_bad → 22 / 30
         add_danger_hlines(f, 'adl', yref='y2')  # low_bad on y2 → 50 / 35
@@ -245,7 +245,7 @@ render_five_bucket_bar(_summary)
         from streamlit.testing.v1 import AppTest
         drv = _build_driver('''
 from src.compute.macro import compute_five_bucket_summary
-from tab_macro import render_five_bucket_bar
+from src.ui.tabs import render_five_bucket_bar
 render_five_bucket_bar(compute_five_bucket_summary())
 ''')
         at = AppTest.from_string(drv, default_timeout=90)

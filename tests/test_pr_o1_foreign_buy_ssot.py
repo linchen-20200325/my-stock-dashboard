@@ -22,7 +22,7 @@ class TestForeignBuyPopulated(unittest.TestCase):
 
     def test_results_t3_writes_foreign_buy(self):
         """results_t3.append 應包含 foreign_buy 欄(原 bug:從未寫入)。"""
-        with open('tab_stock_grp.py', encoding='utf-8') as f:
+        with open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8') as f:
             src = f.read()
         # 防 regression:確認 PR-O1 加的 foreign_buy 寫入點還在
         self.assertIn("'foreign_buy': _fb4", src,
@@ -30,7 +30,7 @@ class TestForeignBuyPopulated(unittest.TestCase):
 
     def test_fb_computed_from_df_foreign_col(self):
         """_fb4 應從 df['外資'] 計算(SSOT 對齊 data_loader L286 張單位)。"""
-        with open('tab_stock_grp.py', encoding='utf-8') as f:
+        with open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8') as f:
             src = f.read()
         self.assertIn("df4['外資'].tail(20)", src,
                       '_fb4 計算應讀近 20 日 df[外資] 累計')
@@ -41,7 +41,7 @@ class TestDisplayUnitsCorrect(unittest.TestCase):
 
     def test_port_lines_display_uses_lots(self):
         """L1217-area 主 AI prompt 應用「張」單位。"""
-        with open('tab_stock_grp.py', encoding='utf-8') as f:
+        with open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8') as f:
             src = f.read()
         # 新顯示串
         self.assertIn("外資近20日", src, 'AI prompt 應有「外資近20日」字樣')
@@ -72,7 +72,7 @@ class TestUnitAnnotationAdded(unittest.TestCase):
 class TestImports(unittest.TestCase):
 
     def test_tab_stock_grp(self):
-        import tab_stock_grp  # noqa
+        from src.ui.tabs import tab_stock_grp  # noqa
 
     def test_data_loader(self):
         from src.data.core import data_loader  # noqa

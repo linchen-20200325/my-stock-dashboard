@@ -52,7 +52,7 @@ class TestFetchVixBlock:
 
 class TestTabMacroWired:
     def test_tab_macro_imports_extracted_vix(self):
-        src = open('tab_macro.py', encoding='utf-8').read()
+        src = open('src/ui/tabs/tab_macro.py', encoding='utf-8').read()
         assert 'from macro_snapshot import fetch_vix_block as _fetch_vix' in src
         # 原 inline def 已移除（不得殘留兩份）
         assert 'def _fetch_vix' not in src
