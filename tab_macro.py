@@ -416,18 +416,24 @@ background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:4px;min-height
                     )
 
 
-def render_macro_bucket_summary_bar(bucket_key: str) -> None:
+def render_macro_bucket_summary_bar(bucket_key: str, with_cards: bool = False) -> None:
     """v18.314 — 桶輕量總結 bar：整體燈號 + 各指標 chip + SPEC §11 參考。
 
     user 反饋:每桶(除 §三 籌碼保留原樣)頂部加「整體狀態」簡圖,raw data 收下方。
     復用 compute_five_bucket_summary 該桶 summary(color/emoji/label/details),
     **不新增資料線**。各桶獨立呼叫(自足,不建跨 section 變數依賴 → 利於未來重排)。
     失敗 stderr log 不阻斷主流程(§1:空資料 → bar 顯示「未載入」,不偽造數字)。
+
+    with_cards (v18.338)：True 時於 bar 下方加 Fund 式指標卡片網格(小圖 + 值 +
+    燈號 + SPEC)。user 2026-06-28「總經像基金那樣分組 + 小圖 + SPEC」，先套 🌳 長期桶
+    當模板；同一次 compute 共用，不重複算。
     """
     try:
         from macro_helpers import compute_five_bucket_summary
         from section_inputs import load_section_inputs
-        from shared.macro_buckets import bucket_summary_bar_html
+        from shared.macro_buckets import (
+            bucket_indicator_cards_html, bucket_summary_bar_html,
+        )
         _inp = load_section_inputs(st.session_state)
         _5b = compute_five_bucket_summary(
             macro_info=_inp.macro_info, mkt_info=_inp.mkt_info,
@@ -436,8 +442,11 @@ def render_macro_bucket_summary_bar(bucket_key: str) -> None:
             li_latest=_inp.li_latest, jingqi_info=_inp.jingqi_info,
             news_items=_inp.news_items,
         )
-        st.markdown(bucket_summary_bar_html(bucket_key, _5b.get(bucket_key, {})),
+        _bsum = _5b.get(bucket_key, {})
+        st.markdown(bucket_summary_bar_html(bucket_key, _bsum),
                     unsafe_allow_html=True)
+        if with_cards:
+            st.markdown(bucket_indicator_cards_html(_bsum), unsafe_allow_html=True)
     except Exception as _e_bsb:
         print(f'[tab_macro/{bucket_key}總結bar] {type(_e_bsb).__name__}: {_e_bsb}')
 
@@ -3088,8 +3097,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     from shared.macro_buckets import bucket_group_banner_html as _bgb
     st.markdown(_bgb('long', 1), unsafe_allow_html=True)
     st.markdown(section_header('七','🌳 長期｜💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
+    # v18.338：🌳 長期桶 = Fund 式分組卡片模板（小圖 + 值 + 燈號 + SPEC）。滿意後再套其餘 4 桶。
     # v18.313/314 桶輕量總結 bar(整體燈號 + 指標 chip + SPEC §11)；詳細 raw 維持下方收合。
-    render_macro_bucket_summary_bar('long')
+    render_macro_bucket_summary_bar('long', with_cards=True)  # v18.338 Fund 式分組卡片模板
 
     # ── M1B-M2 年增率（FinMind）──────────────────────────────
     _m1b_info = st.session_state.get('m1b_m2_info')

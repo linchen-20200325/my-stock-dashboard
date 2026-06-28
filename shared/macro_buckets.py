@@ -95,8 +95,9 @@ class DangerSpec:
     decimals: int = 1
     yellow_lo: Optional[float] = None   # band 低側黃線
     red_lo: Optional[float] = None      # band 低側紅線
-    note: str = ""         # 業務語意
+    note: str = ""         # 業務語意（= SPEC 卡片註解）
     source: str = ""       # 門檻來源（SSOT:... 或 DESIGN）
+    emoji: str = ""        # 指標小圖（v18.338 Fund 式卡片網格用；空 → 卡片 fallback 📊）
 
 
 # ════════════════════════════════════════════════════════════════
@@ -106,13 +107,16 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     # ── 🌳 長期：結構 / 景氣位階 ──
     DangerSpec("health", "總經健康評分", "long", "", "low_bad",
                yellow=_HEALTH_YELLOW, red=_HEALTH_RED, decimals=0,
-               note="<35 防禦 / <50 轉弱", source="SSOT:HEALTH_DEFENSE_THRESHOLD(35)+DESIGN(50)"),
+               note="<35 防禦 / <50 轉弱", source="SSOT:HEALTH_DEFENSE_THRESHOLD(35)+DESIGN(50)",
+               emoji="🩺"),
     DangerSpec("ndc_signal", "NDC 景氣對策燈號", "long", "分", "band",
                yellow=32.0, red=38.0, yellow_lo=23.0, red_lo=16.0, decimals=0,
-               note="9-16 藍衰退 / 23-31 綠穩定 / 38+ 紅過熱", source="DESIGN:NDC 燈號 9藍-45紅"),
+               note="9-16 藍衰退 / 23-31 綠穩定 / 38+ 紅過熱", source="DESIGN:NDC 燈號 9藍-45紅",
+               emoji="🚦"),
     DangerSpec("m1b_m2_gap", "M1B-M2 資金動能", "long", "%", "low_bad",
                yellow=1.0, red=0.0, decimals=2,
-               note="≥1 黃金交叉 / <0 死亡交叉", source="DESIGN:資金動能交叉慣例"),
+               note="≥1 黃金交叉 / <0 死亡交叉", source="DESIGN:資金動能交叉慣例",
+               emoji="💰"),
 
     # ── 📈 中期：景氣循環 ──
     DangerSpec("ism_pmi", "台灣 PMI", "mid", "", "low_bad",
@@ -404,4 +408,52 @@ def chips_empty_state_html(attempted: bool, token_present: bool) -> str:
         f'{icon} 籌碼資料未顯示</span>'
         f'<div style="font-size:12px;color:#c9d1d9;margin-top:5px;'
         f'line-height:1.55;">{msg}</div></div>'
+    )
+
+
+# ════════════════════════════════════════════════════════════════
+# v18.338 — 桶指標 Fund 式卡片網格（user 2026-06-28：總經資料像基金那樣
+#   分組 + 小圖 + SPEC）。每指標一張卡：小圖 + 名稱 + 值(燈號色) + SPEC 註解。
+#   復用 compute_five_bucket_summary()[bucket] details，不新增資料線。
+#   純字串 builder，零 streamlit（L0）。先做 🌳 長期桶當模板。
+# ════════════════════════════════════════════════════════════════
+def bucket_indicator_cards_html(bucket_summary: dict) -> str:
+    """桶指標 Fund 式卡片網格 HTML。
+
+    Args
+    ----
+    bucket_summary: compute_five_bucket_summary()[bucket_key]，含
+                    details(list of {key, label, value_str, danger, note})。
+
+    Returns
+    -------
+    str: flex-wrap 卡片網格 HTML。每卡 = 小圖(SPECS_BY_KEY[key].emoji) + 名稱
+         + 燈號 + 值 + SPEC 註解(spec.note)。
+    details 缺 → 「未載入」提示（§1 不偽造數字，不空字串）。
+    """
+    details = (bucket_summary or {}).get("details", []) or []
+    if not details:
+        return ('<div style="font-size:12px;color:#8b949e;padding:8px 4px;">'
+                '尚未載入資料 — 點上方「🚀 一鍵更新全部數據」</div>')
+    cards = []
+    for d in details:
+        _spec = SPECS_BY_KEY.get(d.get("key"))
+        _emoji = (_spec.emoji if _spec and _spec.emoji else "📊")
+        _dg = d.get("danger", "gray")
+        _lc = LEVEL_COLOR.get(_dg, "#6e7681")
+        _le = LEVEL_EMOJI.get(_dg, "⬜")
+        cards.append(
+            f'<div style="flex:1 1 160px;min-width:148px;background:#0d1117;'
+            f'border:1px solid #21262d;border-left:3px solid {_lc};'
+            f'border-radius:8px;padding:10px 12px;">'
+            f'<div style="font-size:12px;color:#8b949e;">'
+            f'{_emoji} {d.get("label", "")}</div>'
+            f'<div style="font-size:20px;font-weight:800;color:{_lc};margin:3px 0;">'
+            f'{_le} {d.get("value_str", "—")}</div>'
+            f'<div style="font-size:10px;color:#6e7681;line-height:1.4;">'
+            f'📋 {d.get("note", "")}</div></div>'
+        )
+    return (
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 12px;">'
+        + "".join(cards) + '</div>'
     )
