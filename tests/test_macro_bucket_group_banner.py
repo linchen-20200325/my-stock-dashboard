@@ -85,12 +85,15 @@ def test_tab_macro_inserts_five_banners():
     """src/ui/tabs/tab_macro.py + 抽出的 section_*.py 必須在 5 個桶叢集前插入 group banner。
     F-7.1 B-2/B-3/B-5:short/ai/long 桶 _bgb call 搬到各 section_*.py;檢查合集。"""
     from src.ui.tabs import tab_macro
-    from src.ui.tabs.macro import section_short, section_ai, section_long, section_chips
+    from src.ui.tabs.macro import (
+        section_short, section_ai, section_long, section_chips, section_ai_cross,
+    )
     src = (open(tab_macro.__file__, encoding="utf-8").read()
            + open(section_short.__file__, encoding="utf-8").read()
            + open(section_ai.__file__, encoding="utf-8").read()
            + open(section_long.__file__, encoding="utf-8").read()
-           + open(section_chips.__file__, encoding="utf-8").read())
+           + open(section_chips.__file__, encoding="utf-8").read()
+           + open(section_ai_cross.__file__, encoding="utf-8").read())
     for key in ("'long'", "'mid'", "'short'", "'chips'", "'ai'"):
         assert f"_bgb({key}" in src, f"tab_macro 缺 {key} 桶 banner"
 
