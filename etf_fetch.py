@@ -1881,3 +1881,55 @@ def fetch_etf_underlying_index(ticker: str):
     _prov_log('fetch_etf_underlying_index', 'MoneyDJ:3-urls-all-fail',
               _t, 'None:no-match')
     return None
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# v18.358 PR-R1 §8.2 A7:從 etf_calc.compute_etf_peer_ranking 抽出 yfinance I/O。
+# L1 Data 層負責批次抓 close prices(可多 ticker 一次抓);L2 Compute(etf_calc)
+# 負責 pure compute(percentile / median / period 切片)。caller (compute_etf_peer_ranking)
+# 介面 0 改。
+# ═══════════════════════════════════════════════════════════════════════
+@st.cache_data(ttl=TTL_1HOUR, max_entries=50, show_spinner=False)
+def fetch_etf_peer_history(tickers: tuple, period: str = '2y') -> pd.DataFrame:
+    """批次抓多檔 ETF 收盤價歷史(L1 Data,純 I/O)。
+
+    Parameters
+    ----------
+    tickers : tuple[str, ...]
+        ETF ticker 列表(self + peers),tuple 以利 @st.cache_data hash。
+    period : str
+        yfinance period 字串(預設 '2y')。
+
+    Returns
+    -------
+    pd.DataFrame
+        columns=tickers,index=date,values=Close。
+        抓不到或全空回空 DataFrame(caller 用 .empty 判)。
+    """
+    _all = list(tickers)
+    try:
+        _hist = yf.download(_all, period=period, auto_adjust=True,
+                            progress=False, threads=False)
+        # yf.download 多 ticker 回 MultiIndex (column 0=field, 1=ticker);單一回扁平
+        if isinstance(_hist.columns, pd.MultiIndex):
+            _close = _hist['Close']
+        else:
+            _close = _hist[['Close']].rename(columns={'Close': _all[0]})
+        if _close is None or _close.empty:
+            _prov_log('fetch_etf_peer_history',
+                      f'yfinance:batch:period={period}',
+                      f'{_all[0]}+{len(_all)-1}peers', 'empty')
+            return pd.DataFrame()
+        _prov_log('fetch_etf_peer_history',
+                  f'yfinance:batch:period={period}',
+                  f'{_all[0]}+{len(_all)-1}peers', f'df:{_close.shape}')
+        return _close
+    except Exception as _e:
+        import traceback as _tb_pr
+        print(f'[fetch_etf_peer_history] {_all[0]} ❌ {type(_e).__name__}: {_e}')
+        _tb_pr.print_exc()
+        _prov_log('fetch_etf_peer_history',
+                  f'yfinance:batch:period={period}',
+                  f'{_all[0]}+{len(_all)-1}peers',
+                  f'None:exc:{type(_e).__name__}')
+        return pd.DataFrame()

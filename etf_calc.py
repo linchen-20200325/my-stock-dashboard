@@ -6,7 +6,8 @@ ETF 計算層（calc layer）
 import sys  # v18.339 PR-J3 S-MED 真高風險:silent except 改 stderr log
 import streamlit as st
 import pandas as pd
-import yfinance as yf
+# v18.358 PR-R1 §8.2 A7 修:原 `import yfinance as yf` 為 L2 違規(L2 不得 HTTP I/O)。
+# yfinance 唯一用途(compute_etf_peer_ranking L587)已抽至 etf_fetch.fetch_etf_peer_history(L1)。
 from datetime import timedelta
 
 from etf_fetch import (
@@ -584,14 +585,11 @@ def compute_etf_peer_ranking(ticker: str, periods: tuple = (63, 126, 252)) -> di
     _all = [ticker] + _peers
     _result: dict = {'category': _category, 'peers': _peers}
     try:
-        _hist = yf.download(_all, period='2y', auto_adjust=True,
-                            progress=False, threads=False)
-        # yf.download 多 ticker 回 MultiIndex (column 0=field, 1=ticker)；單一回扁平
-        if isinstance(_hist.columns, pd.MultiIndex):
-            _close = _hist['Close']
-        else:
-            _close = _hist[['Close']].rename(columns={'Close': _all[0]})
-        if _close.empty:
+        # v18.358 PR-R1 §8.2 A7:HTTP I/O 抽至 L1(etf_fetch.fetch_etf_peer_history)。
+        # 本函式從此變純 L2 Compute(percentile/median/period 切片)。
+        from etf_fetch import fetch_etf_peer_history
+        _close = fetch_etf_peer_history(tuple(_all), period='2y')
+        if _close is None or _close.empty:
             return {'_err': 'yfinance 抓不到價格', 'category': _category, 'peers': _peers}
         for _p in periods:
             if len(_close) < _p + 1:
