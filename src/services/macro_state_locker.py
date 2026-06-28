@@ -73,48 +73,25 @@ _PROMPT_TEMPLATE = """\
 
 
 def _default_gemini_call(prompt: str) -> str:
-    """內建 Gemini API 呼叫，自動 fallback 多模型。"""
+    """內建 Gemini API 呼叫,自動 fallback 多模型。
+    A1 v18.386:HTTP 細節抽至 src.services.ai_fetcher.post_gemini SSOT。"""
     _key = os.environ.get("GEMINI_API_KEY", "")
     if not _key:
         return "⚠️ 缺少 GEMINI_API_KEY"
-    _models = [
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
-    ]
-    import requests  # 延遲 import，測試環境可 mock
-
-    for _model in _models:
-        try:
-            _r = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent",
-                params={"key": _key},
-                json={
-                    "systemInstruction": {"parts": [{"text": _PERSONA}]},
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.3, "maxOutputTokens": 600},
-                },
-                timeout=120,
-            )
-            if _r.status_code == 200:
-                _d = _r.json()
-                _cands = _d.get("candidates", [])
-                if _cands:
-                    _parts = _cands[0].get("content", {}).get("parts", [])
-                    if _parts and _parts[0].get("text"):
-                        return _parts[0]["text"]
-                    if _cands[0].get("finishReason") == "SAFETY":
-                        continue
-            elif _r.status_code in (404, 400):
-                continue
-            elif _r.status_code == 429:
-                time.sleep(5)
-                continue
-        except Exception as _e:
-            print(f"[MacroStateLocker/{_model}] {type(_e).__name__}: {_e}")
-            time.sleep(1)
-    return "⚠️ AI 服務暫時無法使用（已嘗試所有模型）"
+    from src.services.ai_fetcher import post_gemini
+    text, _ = post_gemini(
+        _key, prompt,
+        models=["gemini-2.5-flash-lite", "gemini-2.5-flash",
+                "gemini-2.0-flash", "gemini-2.0-flash-lite"],
+        persona=_PERSONA,
+        temperature=0.3,
+        max_tokens=600,
+        timeout=120,
+        retries_per_model=1,
+        retry_after_parse=False,
+        inter_model_sleep=0,
+    )
+    return text or "⚠️ AI 服務暫時無法使用(已嘗試所有模型)"
 
 
 class MacroStateLocker:

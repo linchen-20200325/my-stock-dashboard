@@ -16,6 +16,14 @@
 
 ## 已完成 commits(reverse chrono)
 
+### A1 (v18.386) — Gemini API 5 caller 統一至 ai_fetcher.py
+- **檔案**: `src/services/ai_fetcher.py`(NEW)+ ai_engine.py × 3 caller + financial_health_engine.py × 1 + macro_state_locker.py × 1
+- **拔毒**: 5 處散落 Gemini call(retry/payload/timeout/model fallback)→ 統一 `post_gemini(api_key, prompt, *, models, persona, temperature, max_tokens, timeout, retries_per_model, retry_after_parse, inter_model_sleep, extra_generation_config, safety_settings, headers)`
+- **新拓展**: `extra_generation_config`(topP/topK)+ `safety_settings`(BLOCK_NONE × 4)涵蓋 ai_engine call 1 的特殊 payload
+- **回傳 tuple**: `(text, model_used_or_error)` — caller 自決失敗訊息 / emoji header
+- **驗證**: 4 unit test(_build_payload + _extract_text)+ full pytest 2220/0 fail
+- **commit**: 待 push
+
 ### B-S2 (v18.385) — Section 2 拐點偵測抽至 macro/section_state.py
 - **檔案**: `src/ui/tabs/tab_macro.py` + `src/ui/tabs/macro/section_state.py`(NEW)
 - **拔毒**: render_tab_macro line 2186-2565(380 LOC)§二 拐點偵測 + 市場狀態卡抽出。tab_macro 3402 → 3025 LOC(-11%)

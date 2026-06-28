@@ -385,89 +385,32 @@ def analyze_stock_trend(api_key, stock_id, stock_name, df, fundamental_summary=N
         # 避免「函式名暗示能抓但實際永遠回空」誤導 caller 與 LLM
 
         headers = {"Content-Type": "application/json"}
-        payload = {
-            "systemInstruction": {"parts": [{"text": _PERSONA}]},
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": 0.4,
-                "maxOutputTokens": 16384,
-                "topP": 0.95,
-                "topK": 40
-            },
-            "safetySettings": [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-            ]
-        }
+        # A1 v18.386:payload params 改傳給 wrapper(post_gemini 內部 build)
+        _SAFETY_BLOCK_NONE = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ]
 
         # 優先使用穩定、配額較寬鬆的模型
         model_attempts = [
-            "gemini-3-pro-preview",           # 最新版 Pro（優先，需付費）
-            "gemini-3-flash-preview",         # 最新版 Flash（次優先，有免費額度）
-            "gemini-2.0-flash-exp",           # 實驗版，通常配額較多
-            "gemini-1.5-flash-latest",        # 穩定版 Flash
-            "gemini-1.5-pro-latest",          # 穩定版 Pro
-            "gemini-2.5-flash"                # 新版 Flash
+            "gemini-3-pro-preview", "gemini-3-flash-preview",
+            "gemini-2.0-flash-exp", "gemini-1.5-flash-latest",
+            "gemini-1.5-pro-latest", "gemini-2.5-flash",
         ]
-
-        last_error = None
-
-        for idx, model_name in enumerate(model_attempts):
-            # 非第一個模型時，等待 3 秒避免速率限制
-            if idx > 0:
-                time.sleep(3)  # 移除 print，靜默等待
-            try:
-                # gemini-3 preview 需走 v1beta；其餘走 v1
-                api_ver = "v1beta" if model_name.startswith("gemini-3") else "v1"
-                url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model_name}:generateContent"
-
-                # ✅ 每次請求前稍微延遲，避免觸發速率限制
-                model_success = False
-                for attempt in range(3):
-                    if attempt > 0:
-                        # 重試時等待更久
-                        delay = min(15, 3 * (2 ** attempt))
-                        time.sleep(delay)  # 移除 print，靜默等待
-
-                    response = requests.post(f"{url}?key={api_key}", headers=headers, json=payload, timeout=90)
-
-                    if response.status_code == 200:
-                        result = response.json()
-                        if 'candidates' in result and len(result['candidates']) > 0:
-                            text = result['candidates'][0]['content']['parts'][0]['text']
-                            return f"### 🧬 AI 戰情室：全方位深度解析\n\n{text}\n\n---\n**使用模型**: {model_name}"
-                        last_error = f"{model_name} HTTP 200 但回傳格式異常: {str(result)[:300]}"
-                        break
-
-                    if response.status_code == 429:
-                        try:
-                            err = response.json()
-                            msg = err.get("error", {}).get("message", "")
-                            m = re.search(r"Please retry in ([0-9.]+)s", msg)
-                            # 限制最長等待時間為 10 秒，避免等太久
-                            wait_s = min(10, float(m.group(1)) if m else (2 ** attempt) * 2)
-                        except Exception:
-                            wait_s = min(10, (2 ** attempt) * 2)
-
-                        last_error = f"{model_name} HTTP 429 (attempt {attempt+1}/3): quota/rate limit"
-                        time.sleep(wait_s)  # 移除 print，靜默等待
-                        continue  # 繼續下一次重試
-
-                    # 其他 HTTP 錯誤（400, 404, 500 等）直接跳過這個模型
-                    last_error = f"{model_name} HTTP {response.status_code}: {response.text[:800]}"
-                    break  # 跳出重試迴圈，嘗試下一個模型
-
-                # 如果這個模型的所有重試都失敗了，繼續嘗試下一個模型
-                if not model_success:
-                    continue  # 移除 print，靜默切換到下一個模型
-
-            except Exception as e:
-                last_error = f"{model_name} Exception: {str(e)}"
-                continue  # 移除 print，靜默嘗試下一個模型
-
-        return f"❌ 所有模型皆無法連線，請檢查 API Key / 額度 / 網路狀態\n\n最後錯誤：{last_error}"
+        # A1 v18.386:HTTP 細節抽至 src.services.ai_fetcher.post_gemini SSOT
+        from src.services.ai_fetcher import post_gemini
+        text, used_or_err = post_gemini(
+            api_key, prompt, models=model_attempts, headers=headers,
+            persona=_PERSONA, temperature=0.4, max_tokens=16384, timeout=90,
+            retries_per_model=3, retry_after_parse=True, inter_model_sleep=3.0,
+            extra_generation_config={"topP": 0.95, "topK": 40},
+            safety_settings=_SAFETY_BLOCK_NONE,
+        )
+        if text:
+            return f"### 🧬 AI 戰情室:全方位深度解析\n\n{text}\n\n---\n**使用模型**: {used_or_err}"
+        return f"❌ 所有模型皆無法連線,請檢查 API Key / 額度 / 網路狀態\n\n最後錯誤:{used_or_err}"
 
     except Exception as e:
         return f"系統錯誤: {str(e)}"
@@ -601,50 +544,24 @@ def analyze_leading_indicators(api_key, df_leading):
         ]
         prompt = "\n".join(lines)
 
-        payload = {
-            "systemInstruction": {"parts": [{"text": _PERSONA}]},
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 4096},
-            "safetySettings": [
+        # A1 v18.386:HTTP 細節抽至 src.services.ai_fetcher.post_gemini SSOT
+        from src.services.ai_fetcher import post_gemini
+        text, used_or_err = post_gemini(
+            api_key, prompt,
+            models=["gemini-2.5-flash-preview-04-17", "gemini-2.0-flash-exp",
+                    "gemini-1.5-flash-latest", "gemini-1.5-pro-latest", "gemini-2.5-flash"],
+            persona=_PERSONA, temperature=0.3, max_tokens=4096, timeout=90,
+            retries_per_model=3, retry_after_parse=True, inter_model_sleep=3.0,
+            safety_settings=[
                 {"category":"HARM_CATEGORY_HARASSMENT","threshold":"BLOCK_NONE"},
                 {"category":"HARM_CATEGORY_HATE_SPEECH","threshold":"BLOCK_NONE"},
                 {"category":"HARM_CATEGORY_SEXUALLY_EXPLICIT","threshold":"BLOCK_NONE"},
                 {"category":"HARM_CATEGORY_DANGEROUS_CONTENT","threshold":"BLOCK_NONE"},
-            ]
-        }
-        headers = {"Content-Type": "application/json"}
-        model_attempts = [
-            "gemini-2.5-flash-preview-04-17","gemini-2.0-flash-exp",
-            "gemini-1.5-flash-latest","gemini-1.5-pro-latest","gemini-2.5-flash",
-        ]
-        last_error = None
-        for midx, model_name in enumerate(model_attempts):
-            if midx > 0: time.sleep(3)
-            try:
-                api_ver = "v1beta" if "preview" in model_name else "v1"
-                url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model_name}:generateContent"
-                for attempt in range(3):
-                    if attempt > 0: time.sleep(min(15, 3*(2**attempt)))
-                    resp = requests.post(f"{url}?key={api_key}", headers=headers, json=payload, timeout=90)
-                    if resp.status_code == 200:
-                        result = resp.json()
-                        if "candidates" in result and result["candidates"]:
-                            text = result["candidates"][0]["content"]["parts"][0]["text"]
-                            return f"### 📡 AI 先行指標籌碼研判\n\n{text}\n\n---\n**使用模型**: {model_name}"
-                        last_error = f"{model_name} HTTP 200 但回傳格式異常"; break
-                    if resp.status_code == 429:
-                        try:
-                            msg = resp.json().get("error",{}).get("message","")
-                            m = re.search(r"Please retry in ([0-9.]+)s", msg)
-                            wait_s = min(10, float(m.group(1)) if m else (2**attempt)*2)
-                        except: wait_s = min(10, (2**attempt)*2)
-                        last_error = f"{model_name} HTTP 429 rate limit"
-                        time.sleep(wait_s); continue
-                    last_error = f"{model_name} HTTP {resp.status_code}"; break
-                else: continue
-                break
-            except Exception as e: last_error = f"{model_name} Exception: {str(e)}"; continue
-        return f"❌ 所有模型皆無法連線\n最後錯誤：{last_error}"
+            ],
+        )
+        if text:
+            return f"### 📡 AI 先行指標籌碼研判\n\n{text}\n\n---\n**使用模型**: {used_or_err}"
+        return f"❌ 所有模型皆無法連線\n最後錯誤:{used_or_err}"
     except Exception as e:
         return f"系統錯誤: {str(e)}"
 
@@ -718,27 +635,17 @@ def generate_daily_report(api_key, market_info, top_stocks, risk_alerts=None):
 格式要求：繁體中文、具體有力、避免廢話，適合每日快速閱讀。"""
 
     try:
-        import requests as _rq, time as _t
-        _models = ['gemini-2.0-flash-exp','gemini-1.5-flash-latest',
-                   'gemini-1.5-flash','gemini-2.0-flash','gemini-1.5-pro-latest']
-        for model in _models:
-            try:
-                r = _rq.post(
-                    f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
-                    params={'key': api_key},
-                    json={'contents': [{'parts': [{'text': prompt}]}],
-                          'generationConfig': {'temperature': 0.3, 'maxOutputTokens': 2048}},
-                    timeout=60
-                )
-                if r.status_code == 200:
-                    _d = r.json()
-                    return _d['candidates'][0]['content']['parts'][0]['text']
-                elif r.status_code == 404:
-                    continue  # model not found, try next
-                elif r.status_code == 429:
-                    _t.sleep(2); continue
-            except Exception as _em:
-                print(f'[AI/{model}] {_em}'); _t.sleep(1)
+        # A1 v18.386:HTTP 細節抽至 src.services.ai_fetcher.post_gemini SSOT
+        from src.services.ai_fetcher import post_gemini
+        text, _ = post_gemini(
+            api_key, prompt,
+            models=['gemini-2.0-flash-exp', 'gemini-1.5-flash-latest',
+                    'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro-latest'],
+            temperature=0.3, max_tokens=2048, timeout=60,
+            retries_per_model=1, retry_after_parse=False, inter_model_sleep=0,
+        )
+        if text:
+            return text
     except Exception as e:
         return f'AI 生成失敗：{e}'
     return '⚠️ AI 服務暫時無法使用（請確認 GEMINI_API_KEY 是否正確）'
