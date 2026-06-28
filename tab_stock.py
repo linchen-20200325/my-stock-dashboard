@@ -33,11 +33,20 @@ from shared.ttls import TTL_1DAY
 # v18.325 PR-C: 健康度分級 + 龍頭資本支出門檻改用既有 SSOT（原 inline，§3.3 反捏造）
 from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
 from shared.signal_thresholds import (
+    BB_DROP_OUT_RATIO,
+    BB_NEAR_UPPER_RATIO,
     CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT,
     FGMS_LABEL_T2,
     FGMS_LABEL_T3,
+    MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
+    MARGIN_BALANCE_WARN_THRESHOLD_YI,
     SQ_GOOD_MIN,
     SQ_STABLE_MIN,
+    STOCK_BIAS_DEEP_DEVIATION_PCT,
+    STOCK_BIAS_MILD_DEVIATION_PCT,
+    STOCK_BIAS_OVERHEAT_PCT,
+    STOCK_RS_NEUTRAL_MIN,
+    STOCK_RS_STRONG_MIN,
     STOP_LOSS_DEFAULT_PCT,
     STOP_PROFIT_T1_PCT,
     STOP_PROFIT_T2_PCT,
@@ -679,7 +688,7 @@ padding:14px 18px;margin-bottom:12px;">
             _wr_margin2 = st.session_state.get('cl_data',{}).get('margin', 0) or 0
             _win_conds = [
                 ('🌍 大盤多頭燈號',  _wr_reg2 == 'bull'),
-                ('💰 融資安全(<2500億)', _wr_margin2 < 2500),
+                (f'💰 融資安全(<{MARGIN_BALANCE_WARN_THRESHOLD_YI:.0f}億)', _wr_margin2 < MARGIN_BALANCE_WARN_THRESHOLD_YI),
                 ('🏥 個股健康度≥75', health2 >= 75 if df2 is not None else False),
                 ('💎 非357昂貴區',   '昂貴' not in str(st.session_state.get('t2_data',{}).get('val',''))),
                 ('✋ 已設停損點',     _q3),
@@ -706,7 +715,7 @@ padding:14px 18px;margin-bottom:12px;">
         _ml = st.session_state.get('monthly_loss_pct', 0)
         if _ml < -5:
             _ban_items.append(f'📉 本月已虧損 {abs(_ml):.1f}%（情緒操作風險上升）')
-        if _wr_margin2 > 3400:
+        if _wr_margin2 > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
             _ban_items.append(f'💸 融資 {_wr_margin2:.0f}億 極度過熱（散戶追高期，等待）')
         if _wr_reg2 == 'bear':
             _ban_items.append('🔴 大盤空頭格局（禁止做多）')
@@ -743,8 +752,8 @@ padding:14px 18px;margin-bottom:12px;">
             # 布林帶訊號
             _bb_upper    = (bb2.get('upper', 0) if isinstance(bb2, dict) else 0) or float('inf')
             _bb_ma       = (bb2.get('ma', 0)    if isinstance(bb2, dict) else 0)
-            _bb_near_up  = bool(bb2) and _p2 >= _bb_upper * 0.97
-            _bb_drop_out = bool(bb2) and _p2 < _bb_upper * 0.95 and _p2 > _bb_ma
+            _bb_near_up  = bool(bb2) and _p2 >= _bb_upper * BB_NEAR_UPPER_RATIO
+            _bb_drop_out = bool(bb2) and _p2 < _bb_upper * BB_DROP_OUT_RATIO and _p2 > _bb_ma
 
             # KD 訊號
             _kd_gold = k2 and d2 and k2 > d2  # 黃金交叉方向
@@ -807,13 +816,13 @@ padding:14px 18px;margin-bottom:12px;">
                     _entry.append(f'✅ KD低檔 K={k2:.0f} → 策略1：底部進場區')
                 if rsi2 and rsi2 < 30:
                     _entry.append(f'✅ RSI超賣 {rsi2:.0f} → 反彈機會')
-                if _bias_i < -20:
+                if _bias_i < -STOCK_BIAS_DEEP_DEVIATION_PCT:
                     _entry.append(f'✅ 年線負乖離 {_bias_i:+.0f}% → 策略1：左側布局區')
                 # RS 相對強度
                 try:
                     _rs_val  = calc_rs_score(df2)
                     _rs_up   = rs_slope(df2)
-                    _rs_color= TRAFFIC_GREEN if _rs_val >= 75 else (TRAFFIC_YELLOW if _rs_val >= 50 else TRAFFIC_RED)
+                    _rs_color= TRAFFIC_GREEN if _rs_val >= STOCK_RS_STRONG_MIN else (TRAFFIC_YELLOW if _rs_val >= STOCK_RS_NEUTRAL_MIN else TRAFFIC_RED)
                     _rs_trend= '↑強勢' if _rs_up else ('↓弱勢' if _rs_up is False else '')
                     _entry.append(f'<span style="color:{_rs_color}">📊 RS相對強度 {_rs_val:.0f}分 {_rs_trend}</span>')
                 except Exception:
@@ -834,9 +843,9 @@ padding:14px 18px;margin-bottom:12px;">
                     _exit.append(f'⚠️ KD高檔死叉 K={k2:.0f} → 策略3：開始減碼')
                 if _bb_drop_out:
                     _exit.append('⚠️ 脫離布林上軌 → 策略3：減碼50%')
-                if _bias_20_i > 15:
+                if _bias_20_i > STOCK_BIAS_MILD_DEVIATION_PCT:
                     _exit.append(f'⚠️ 月線乖離 {_bias_20_i:+.0f}% → 過熱，停利部分')
-                if _bias_i > 20:
+                if _bias_i > STOCK_BIAS_OVERHEAT_PCT:
                     _exit.append(f'⚠️ 年線乖離 {_bias_i:+.0f}% → 策略1：分批出場')
                 if _p2 < _ma5:
                     _exit.append(f'⚠️ 跌破5MA({_ma5:.1f}) → 林穎：短線停利')

@@ -20,6 +20,11 @@ from shared.signal_thresholds import (
     ETF_AUM_LOW_YI,
     ETF_AVG_VOL_20D_FAIR_LOTS,
     ETF_AVG_VOL_20D_LOW_LOTS,
+    ETF_QUICK_SIGMA_CHEAP,
+    ETF_QUICK_SIGMA_DISASTER,
+    ETF_QUICK_SIGMA_HIGH,
+    ETF_QUICK_SIGMA_OVERBOUGHT,
+    ETF_QUICK_SIGMA_OVERSOLD,
     ETF_VCP_MIN_DAYS,
     TRADING_DAYS_PER_YEAR,
 )
@@ -78,23 +83,24 @@ def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
             # v18.241 E8: 年化常數從 SSOT 引入
             _std = float(df['Close'].tail(TRADING_DAYS_PER_YEAR).std())  # 近 1 年 daily std
             if _std > 0:
-                _lo3 = _ma20v - 3 * _std
-                _lo2 = _ma20v - 2 * _std
-                _lo1 = _ma20v - 1 * _std
-                _hi15 = _ma20v + 1.5 * _std
-                _hi2 = _ma20v + 2 * _std
+                # v18.331 PR-F U-7:σ位階倍數常數抽 SSOT(shared.signal_thresholds)
+                _lo3 = _ma20v - ETF_QUICK_SIGMA_DISASTER * _std
+                _lo2 = _ma20v - ETF_QUICK_SIGMA_OVERSOLD * _std
+                _lo1 = _ma20v - ETF_QUICK_SIGMA_CHEAP * _std
+                _hi15 = _ma20v + ETF_QUICK_SIGMA_HIGH * _std
+                _hi2 = _ma20v + ETF_QUICK_SIGMA_OVERBOUGHT * _std
                 if _cur < _lo3:
-                    _sigma_emoji, _sigma_label, _sigma_action = '🟢🟢🟢', '股災價(<-3σ)', '大買 50%'
+                    _sigma_emoji, _sigma_label, _sigma_action = '🟢🟢🟢', f'股災價(<-{ETF_QUICK_SIGMA_DISASTER:.0f}σ)', '大買 50%'
                 elif _cur < _lo2:
-                    _sigma_emoji, _sigma_label, _sigma_action = '🟢🟢', '超跌價(<-2σ)', '買 30%'
+                    _sigma_emoji, _sigma_label, _sigma_action = '🟢🟢', f'超跌價(<-{ETF_QUICK_SIGMA_OVERSOLD:.0f}σ)', '買 30%'
                 elif _cur < _lo1:
-                    _sigma_emoji, _sigma_label, _sigma_action = '🟢', '便宜價(<-1σ)', '小買 20%'
+                    _sigma_emoji, _sigma_label, _sigma_action = '🟢', f'便宜價(<-{ETF_QUICK_SIGMA_CHEAP:.0f}σ)', '小買 20%'
                 elif _cur >= _hi2:
-                    _sigma_emoji, _sigma_label, _sigma_action = '🔴', '準備停利(≥+2σ)', '分批停利'
+                    _sigma_emoji, _sigma_label, _sigma_action = '🔴', f'準備停利(≥+{ETF_QUICK_SIGMA_OVERBOUGHT:.0f}σ)', '分批停利'
                 elif _cur >= _hi15:
-                    _sigma_emoji, _sigma_label, _sigma_action = '🟠', '偏高(≥+1.5σ)', '不追高/減碼'
+                    _sigma_emoji, _sigma_label, _sigma_action = '🟠', f'偏高(≥+{ETF_QUICK_SIGMA_HIGH:.1f}σ)', '不追高/減碼'
                 else:
-                    _sigma_emoji, _sigma_label, _sigma_action = '⚪', '中性區(±1σ)', '靜待訊號'
+                    _sigma_emoji, _sigma_label, _sigma_action = '⚪', f'中性區(±{ETF_QUICK_SIGMA_CHEAP:.0f}σ)', '靜待訊號'
 
         # 30 日 sparkline
         _spark = [float(x) for x in df['Close'].tail(30).tolist()]

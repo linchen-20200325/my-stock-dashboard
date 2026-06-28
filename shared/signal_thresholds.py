@@ -525,3 +525,68 @@ ETF_AUM_LOW_YI: float = 5.0
 
 ETF_AUM_FAIR_YI: float = 10.0
 """ETF AUM 規模黃燈門檻(億 TWD)。5 ~ 10 億 → 🟡 流動性偏弱。原 etf_calc.py:429 inline。"""
+
+
+# ════════════════════════════════════════════════════════════════
+# ETF 衛星 σ 位階分級(quick_signals 用)(v18.331 PR-F U-7)
+# 注意:與 ETF_SIGMA_DEEP_BUY/BUY/REDUCE/STOP_PROFIT(PR-D 抽,etf_tab_single 用)
+# 是不同算法 — 本組是 etf_calc._quick_signals「跌了就買」5 段(MA20 ± n×σ),
+# PR-D 那組是 etf_tab_single「年化波動率 z-score」4 段。兩組同為 σ 語意但顆粒不同。
+# ════════════════════════════════════════════════════════════════
+
+ETF_QUICK_SIGMA_DISASTER: float = 3.0
+"""ETF 衛星 σ位階「股災價」:close < MA20 - 3σ → 🟢🟢🟢 大買 50%。
+原 etf_calc.py:81 inline `3 * _std`。"""
+
+ETF_QUICK_SIGMA_OVERSOLD: float = 2.0
+"""ETF 衛星 σ位階「超跌價」:close < MA20 - 2σ → 🟢🟢 買 30%。
+原 etf_calc.py:82 inline `2 * _std`。"""
+
+ETF_QUICK_SIGMA_CHEAP: float = 1.0
+"""ETF 衛星 σ位階「便宜價」:close < MA20 - 1σ → 🟢 小買 20%。
+原 etf_calc.py:83 inline `1 * _std`。"""
+
+ETF_QUICK_SIGMA_HIGH: float = 1.5
+"""ETF 衛星 σ位階「偏高」:close ≥ MA20 + 1.5σ → 🟠 不追高 / 減碼。
+原 etf_calc.py:84 inline `1.5 * _std`。"""
+
+ETF_QUICK_SIGMA_OVERBOUGHT: float = 2.0
+"""ETF 衛星 σ位階「準備停利」:close ≥ MA20 + 2σ → 🔴 分批停利。
+原 etf_calc.py:85 inline `2 * _std`。與 OVERSOLD 同值但語意分離(下行 vs 上行)。"""
+
+
+# ════════════════════════════════════════════════════════════════
+# 個股 Tab 補強 SSOT(v18.331 PR-F U-10 / U-12 / U-13)
+# user 2026-06-27 audit 殘留個股 Tab inline magic 收尾。
+# ════════════════════════════════════════════════════════════════
+
+# ── 布林帶邊界(U-10)──
+BB_NEAR_UPPER_RATIO: float = 0.97
+"""布林帶「貼近上軌」訊號:close >= upper × 0.97 → 強勢突破預警。
+原 tab_stock.py:746 inline。"""
+
+BB_DROP_OUT_RATIO: float = 0.95
+"""布林帶「跌出上軌」訊號:close < upper × 0.95 且 close > ma → 動能轉弱。
+原 tab_stock.py:747 inline。"""
+
+# ── RS 帶狀(U-12)──
+STOCK_RS_STRONG_MIN: float = 75.0
+"""個股 RS 相對強度「強勢」門檻:RS ≥ 75 → 跑贏大盤明顯。
+原 tab_stock.py:809 inline。"""
+
+STOCK_RS_NEUTRAL_MIN: float = 50.0
+"""個股 RS 相對強度「中性」門檻:50 ≤ RS < 75 → 與大盤同步。
+< 50 → 弱勢(落後大盤)。原 tab_stock.py:809 inline。"""
+
+# ── 月線乖離(U-13)──
+STOCK_BIAS_OVERHEAT_PCT: float = 20.0
+"""個股年線(MA240)正乖離過熱警示:bias > +20% → 分批出場建議。
+原 tab_stock.py:981 inline `_bias_i > 20`(已部分使用 SSOT 化)。"""
+
+STOCK_BIAS_DEEP_DEVIATION_PCT: float = 20.0
+"""個股年線負乖離布局區:bias < -20% → 左側布局訊號。
+原 tab_stock.py:952 inline `_bias_i < -20`。與 OVERHEAT 同值但語意分離。"""
+
+STOCK_BIAS_MILD_DEVIATION_PCT: float = 15.0
+"""個股月線(MA20)中度乖離警示:|bias| > 15% → 短線過熱 / 過冷。
+原 tab_stock.py:803/830/832 inline 多處。"""
