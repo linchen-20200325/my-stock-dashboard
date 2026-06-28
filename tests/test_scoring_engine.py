@@ -5,7 +5,7 @@
   calc_trend_score / calc_momentum_score / momentum_signal
   chip_score / calc_chip_score / calc_volume_score / calc_risk_score
   stock_score / score_single_stock / rank_stocks
-  calc_fundamental_score / calc_atr_stop / check_time_stop
+  calc_revenue_yoy_score / calc_atr_stop / check_time_stop
   check_contract_liability_surge / check_bollinger_squeeze
   check_fake_breakout / calc_rr_ratio / calculate_position_size
   calc_rs_score
@@ -28,7 +28,7 @@ from src.compute.scoring import (
     stock_score,
     score_single_stock,
     rank_stocks,
-    calc_fundamental_score,
+    calc_revenue_yoy_score,
     calc_atr_stop,
     check_time_stop,
     check_contract_liability_surge,
@@ -439,39 +439,39 @@ class TestRankStocks:
 
 
 # ══════════════════════════════════════════════════════════════
-# 11. calc_fundamental_score
+# 11. calc_revenue_yoy_score
 # ══════════════════════════════════════════════════════════════
 
 class TestCalcFundamentalScore:
 
     def test_none_returns_50(self):
-        assert calc_fundamental_score(None) == pytest.approx(50.0)
+        assert calc_revenue_yoy_score(None) == pytest.approx(50.0)
 
     def test_empty_df_returns_50(self):
-        assert calc_fundamental_score(pd.DataFrame()) == pytest.approx(50.0)
+        assert calc_revenue_yoy_score(pd.DataFrame()) == pytest.approx(50.0)
 
     def test_strong_yoy_all_conditions_100(self):
         """3 個月 YoY 均>0、加速、>15% → 4/4 = 100.0"""
         df = pd.DataFrame({"yoy": [18.0, 19.0, 20.0]})
-        assert calc_fundamental_score(df) == pytest.approx(100.0)
+        assert calc_revenue_yoy_score(df) == pytest.approx(100.0)
 
     def test_negative_yoy_still_accelerating_gives_partial(self):
         """YoY 均為負但最後一期改善中（-5,-3,-1）→ 僅 ② 加速得分 = 1/4 = 25.0"""
         df = pd.DataFrame({"yoy": [-5.0, -3.0, -1.0]})
-        assert calc_fundamental_score(df) == pytest.approx(25.0)
+        assert calc_revenue_yoy_score(df) == pytest.approx(25.0)
 
     def test_auto_yoy_from_revenue_column(self):
         """無 yoy 欄位時，自動用 revenue 的 pct_change(12) 計算"""
         revenues = [1_000_000] * 12 + [1_200_000, 1_250_000, 1_300_000]
         df = pd.DataFrame({"revenue": revenues})
-        score = calc_fundamental_score(df)
+        score = calc_revenue_yoy_score(df)
         # 3 個月 YoY 均>0（20%/25%/30%）+ 加速 + >15% → 100.0
         assert score == pytest.approx(100.0)
 
     def test_partial_growth_gets_partial_score(self):
         """2/3 個月 YoY>0（第一個月為負）→ 僅部分得分"""
         df = pd.DataFrame({"yoy": [-2.0, 5.0, 10.0]})
-        score = calc_fundamental_score(df)
+        score = calc_revenue_yoy_score(df)
         assert 0.0 < score < 100.0
 
 
@@ -1456,12 +1456,12 @@ class TestCalcFundamentalScoreEdge:
     def test_no_yoy_data_after_dropna_returns_50(self):
         """所有 yoy 為 NaN → dropna 後 len < 1 → return 50.0（line 413）"""
         df = pd.DataFrame({'yoy': [float('nan')] * 5})
-        assert calc_fundamental_score(df) == 50.0
+        assert calc_revenue_yoy_score(df) == 50.0
 
     def test_exception_path_returns_50(self):
         """無法計算時 → except: return 50.0（lines 427-428）"""
         df = pd.DataFrame({'yoy': ['bad', 'data', 'here']})
-        assert calc_fundamental_score(df) == 50.0
+        assert calc_revenue_yoy_score(df) == 50.0
 
 
 def _make_bs_cf(n=8, has_capex=True, has_cl=False, has_inv=True, capex_vals=None,

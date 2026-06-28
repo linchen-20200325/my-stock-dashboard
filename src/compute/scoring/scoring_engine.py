@@ -368,7 +368,7 @@ def score_single_stock(df, stock_id='', stock_name='', **kwargs) -> dict:
     v_score = calc_volume_score(df)
     r_score = calc_risk_score(df)
     # 基本面分數（月營收YoY動能）
-    f_score = calc_fundamental_score(kwargs.get('revenue_df'))
+    f_score = calc_revenue_yoy_score(kwargs.get('revenue_df'))
 
     regime = kwargs.get('regime', 'neutral')
     total = stock_score(t_score, m_score, c_score, v_score, r_score, f_score, regime=regime)
@@ -425,7 +425,7 @@ def rank_stocks(results: list) -> list:
 # ════════════════════════════════════════════════════════════
 
 # ── 基本面分數（月營收YoY動能）──────────────────────────────
-def calc_fundamental_score(revenue_df=None, yoy_months: int = 3) -> float:
+def calc_revenue_yoy_score(revenue_df=None, yoy_months: int = 3) -> float:
     """
     基本面動能分數（0-100）
     月營收 YoY 連續成長 + 加速度判斷
@@ -454,8 +454,8 @@ def calc_fundamental_score(revenue_df=None, yoy_months: int = 3) -> float:
         if recent['yoy'].iloc[-1] > 15:
             score += 1
         return round(min(score / total * 100, 100), 1)
-    except Exception as _e:  # v18.241 D5 (§1 Fail Loud): calc_fundamental_score 異常時保留 50.0 dummy 以維 caller，記 stderr
-        print(f"[calc_fundamental_score] swallow → 中性 50.0: {type(_e).__name__}: {_e}", file=sys.stderr)
+    except Exception as _e:  # v18.241 D5 (§1 Fail Loud): calc_revenue_yoy_score 異常時保留 50.0 dummy 以維 caller，記 stderr
+        print(f"[calc_revenue_yoy_score] swallow → 中性 50.0: {type(_e).__name__}: {_e}", file=sys.stderr)
         return 50.0
 
 # ── 獲利品質得分 (SQ) ────────────────────────────────────────
