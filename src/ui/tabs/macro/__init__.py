@@ -32,25 +32,29 @@
   → render_section_news_ai  (§十一 News AI)
 
 ═══════════════════════════════════════════════════════════════════════════
-🚧 殘餘 tab_macro.py(1611 LOC)未抽出的內容(屬 §8.2 分層治理)
+🚧 殘餘 tab_macro.py(1445 LOC)未抽出的內容(屬 §8.2 分層治理)
 ═══════════════════════════════════════════════════════════════════════════
 
-【已下沉至 src/data/macro/macro_snapshot.py】
+【已下沉至 src/data/macro/macro_snapshot.py(L1 Data)】
 - ✅ P3-D1 v18.389:_job_macro 5 sub-fetcher(VIX/CPI/Fed/PMI/NDC/Export)
                    共 604 LOC → fetch_*_block(),_job_macro 縮為 65 LOC orchestrator
 - ✅ P3-D2 v18.389:_job_m1b 89 LOC → fetch_m1b_m2_block(3-Tier:CBC/FRED/IMF)
 - ✅ P3-D3 v18.389:_job_bias 43 LOC → compute_twii_bias(L2 純函式)
 
+【已下沉至 src/services/macro_fetch_orchestrator.py(L3 Service)】
+- ✅ P3-D4 v18.389:7-job orchestrator(intl/tw/tech/inst/margin/adl/li)+
+                   ThreadPoolExecutor + FinMind inst rescue 共 230 LOC →
+                   fetch_macro_bundle(),caller 留 st.spinner + session_state writes
+
 【仍留 tab_macro.py(行號隨修改變動,以 grep 為準)】
 - L162-232 紅綠燈卡(_tl_placeholder lifecycle,跨 5 處 ref)
 - L303-341 五桶 bar 渲染
 - L371-558 戰情概覽 + 今日作戰室
-- L605-840 7 個 _job_*(intl/tw/tech/inst/margin/adl/li)+ ThreadPoolExecutor
-- Registry patch(個股/ETF data_registry session 更新)
+- Registry patch(個股/ETF data_registry session 更新,~165 LOC)
+- session_state writes 收尾(cl_data / cl_ts / li_latest / _last_inst 等)
 
-剩餘最大未動段:7-job orchestrator(L605-840)— ThreadPoolExecutor 邏輯
-含 timeout / cancel / FinMind inst rescue;若要繼續下沉,候選去處:
-src/services/macro_fetch_orchestrator.py。屬另一場戰役。
+剩餘真不可抽:紅綠燈 placeholder lifecycle(streamlit st.empty 跨 def 反模式)。
+剩餘可動:Registry patch 可抽 service,但 ROI 低、user 沒指派 → §-1。
 
 ═══════════════════════════════════════════════════════════════════════════
 📐 PEP 562 lazy forward(caller 可用 `from src.ui.tabs.macro import X` 取)
