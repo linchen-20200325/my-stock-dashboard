@@ -7,6 +7,15 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
+- [x] **S-AUDIT-RUN-M**(v18.343 PR-M1,2026-06-28)— #2 S-MED Tier 1 真高風險 3 處收尾(PR #374)
+  * **痛點**:剩餘 71 條 audit 後抽真高風險 3 處,user 主動 override §-1 要求清掃
+  * **修法**(介面 0 改,只把「失敗時靜默」改成「失敗時 stderr 留軌跡」):
+    - `ai_engine.py:502` `generate_quick_summary`:bare `except:` → typed + stderr(含 name + exc 類型);原吞 IndexError/KeyError/ZeroDivisionError/TypeError
+    - `data_loader.py:617` `_fetch_stock_name_inner`:bare `except:` → typed + stderr(含 stock_id);下游 fallback 走 `get_stock_name(L621)`
+    - `proxy_helper.py:79` `_load_proxy_config` secrets 區段:`except Exception: pass` → typed + stderr;下游 fallback 走 `os.environ`
+  * 測試:`tests/test_pr_m1_smed_tier1.py` +7(capture stderr 驗 marker + name + import smoke);全綠
+  * 剩餘 ~7-10 GRAY zone(etf_fetch/leading_indicators/tab_stock 等)套 §-1 等實際 bug 觸發再收
+
 - [x] **S-AUDIT-RUN-L**(v18.341~342 PR-L1+L2,2026-06-28)— 總經抓資料完整化 user bug fix
   * **PR-L1**(#372, v18.341):tab_macro.py:2152-2179 outer trio (M1B/bias/macro) 改 as_completed + partial preserve。原 v10.61.0「zombie self-destruct」設計 — `result(timeout=30/30/80)` + `shutdown(wait=False)` 任一慢源就被 cutoff;v18.331 把 `build_leading_fast` 併入 _job_macro 後常超 80s → _macro_res 整包變 None,partial 全丟。修法:timeout 拉到 200s + 對齊內部好 pattern (L2105-2138) + 寫 session_state 沿用 truthy 守護(partial 場景 stale 不被 None 蓋,§1)
   * **PR-L2**(#373, v18.342):`leading_indicators.build_leading_fast` 加 stale cache fallback。週末/假日 4 FinMind API 全空 → return None → UI 整段空白。新增 2 個 L0 helper(`_load_stale_pickle` / `_mark_stale`),內部 2 處 fallback path(rows 空 / _fm_ok=False+filled=0)改返回過期 pickle + `is_stale=True` attrs(§2.4);`tab_macro.py:4401` render 前讀 attrs(copy 前讀),命中標橙色 chip「📦 顯示上次有效資料(N 分鐘前)」。fresh path 補修清舊 attrs 避免標籤殘留。
