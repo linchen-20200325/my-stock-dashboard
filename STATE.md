@@ -5,6 +5,17 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P0-4 (v18.372) — app.py 4 個 dead fn 刪除
+- **檔案**: `app.py`
+- **拔毒**: 嚴格 grep 確認 0 caller(任何形式皆無)後刪 4 個 public/private fn:
+  - `calc_jingqi` (line 1024, 51 LOC)
+  - `render_market_overview` (line 1075, 32 LOC)
+  - `render_top_rankings` (line 1107, 23 LOC)
+  - `_run_llm_analysis` (line 1559, 78 LOC)
+  - 共刪 184 LOC,app.py 1722→1538
+- **驗證**: ast.parse OK + full pytest 2213/0 fail
+- **commit**: 待 push
+
 ### P0-1 (v18.371) — stock_names.py I/O 抽 L1 fetcher
 - **檔案**: `src/config/stock_names.py` + `src/data/core/stock_names_fetcher.py`(NEW)
 - **拔毒**: L0 config 含 requests/yfinance HTTP I/O(嚴重違憲)→ I/O + cache 邏輯抽 L1 fetcher。stock_names.py 留 _STATIC_NAMES const + get_stock_name/refresh_name_cache thin shim(lazy import L1)
