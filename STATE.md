@@ -7,11 +7,17 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
-- [x] **S-AUDIT-RUN-Q**(v18.351~354 PR-Q1~Q4,2026-06-28)— S-PROV-1 phase 19,4 連 PR 覆蓋 27 fetcher
-  * **PR-Q4**(#386, v18.354)收尾 batch:daily_data_fetchers 6 + tw_macro 2 + app.py fetch_quarterly_extra 1 = 9 個。`_prov_log` helper 對齊 etf_fetch v18.352 模式
-  * 累計 hot path 幾乎全清(app / etf_fetch / tab_macro / daily_data_fetchers / tw_macro)
-  * 剩 ~30 個 small / single-use fetcher 套 §-1 等 user 觸發再續
-  * 4 PR 加 ~40 守衛測全綠
+- [x] **S-AUDIT-RUN-Q**(v18.351~357 PR-Q1~Q5c,2026-06-28)— **S-PROV-1 phase 19 全套收齊 = 100% 覆蓋**
+  * **7 連 PR / 58 fetcher / ~80 守衛測** — phase 1-18 已覆蓋 40+ 核心 fetcher,本系列把剩餘所有 fetcher 補完
+  * **Q1**(#382,v18.351)app.py hot path 5
+  * **Q2**(#383,v18.352)etf_fetch 7;新增 `_prov_log()` helper SSOT 模式
+  * **Q3**(#385,v18.353)tab_macro 集中注入 fetched_at 6(1 edit 涵蓋 14 returns)
+  * **Q4**(#386,v18.354)daily_data_fetchers + tw_macro + app 9
+  * **Q5a**(#387,v18.355)macro_signal_lookback 8 + nas_server 4 = 12
+  * **Q5b**(#388,v18.356)6 檔 batch 11
+  * **Q5c**(#389,v18.357)8 single-use 收尾
+  * **策略**:DataFrame → `df.attrs.setdefault`;Series → `series.attrs`;tuple/scalar → stderr audit trail;dict → schema-additive 'source'+'fetched_at' key
+  * **S-PROV-1 結案**:STATE.md L51 「phase 19+ WONTFIX」此次 user override 後實際完成;§2.2 audit trail 全 fetcher 完整化
   * **PR-Q1**(#382, v18.351):app.py top 5 hot path(fetch_price_data / fetch_dividend_data / fetch_financials / fetch_revenue / fetch_quarterly)— DataFrame 走 attrs.setdefault,tuple return 走 stderr audit trail,介面 0 改
   * **PR-Q2**(#383, v18.352):etf_fetch.py 7 個(fetch_sitca_expense_ratio / fetch_moneydj_expense_ratio / _fetch_holdings_yahoo_tw / fetch_etf_holdings / _fetch_sitca_manager / fetch_etf_zh_name / fetch_etf_underlying_index)— 新增 module-level `_prov_log()` helper,7 fetcher 主 return 點呼叫
   * **PR-Q3**(#385, v18.353):tab_macro.py 6 closure wrappers(`_fetch_vix/cpi/pmi/ndc/export/fed_funds`)— 在 `_job_macro` 收尾集中 `setdefault('fetched_at')`,1 處 edit 涵蓋 14 處 return point(各自已有 'source' key),schema-additive
