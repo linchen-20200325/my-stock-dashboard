@@ -26,6 +26,7 @@ from shared.signal_thresholds import (
     MULTIFACTOR_ENTRY_MIN,
 )
 from tab_helpers import (
+    classify_stock_status_lamp,    # v18.336 PR-H4:操作狀態燈 SSOT
     classify_trend_4tier,
     final_recommendation,
     format_condition_emoji,
@@ -282,7 +283,7 @@ def render_stock_grp():
                     '_fetch_err':  _d4.get('error'),
                 })
 
-                # ── 操作狀態燈 🔵🟠🟡 ──────────────────────────
+                # ── 操作狀態燈 🔵🟠🟡(v18.336 PR-H4:抽至 classify_stock_status_lamp SSOT)
                 try:
                     _status4 = '⚪'
                     if df4 is not None and not df4.empty:
@@ -291,18 +292,15 @@ def render_stock_grp():
                         _bias4   = (_p4 - _ma20_4) / _ma20_4 * 100 if _ma20_4 else 0
                         _vol4    = float(df4['volume'].iloc[-1])      if 'volume' in df4.columns else 0
                         _avgvol4 = float(df4['volume'].tail(20).mean()) if 'volume' in df4.columns else 1
-                        _shrink4 = _avgvol4 > 0 and _vol4 < _avgvol4 * GRP_VOL_SHRINK_RATIO
-                        _near20_4= abs(_bias4) < GRP_NEAR_MA20_BIAS_PCT
-                        if health4 >= HEALTH_GRADE_A_MIN and '多頭' in str(trend4) and _shrink4 and _near20_4:
-                            _status4 = '🔵 加碼'
-                        elif _bias4 > GRP_BIAS_OVERHEAT_WARN_PCT:
-                            _status4 = '🟡 警示'
-                        elif '昂貴' in str(val4) or '超貴' in str(val4):
-                            _status4 = '🟠 減碼'
+                        _vol_ratio4 = _vol4 / _avgvol4 if _avgvol4 > 0 else None
+                        _status4 = classify_stock_status_lamp(
+                            health_score=health4, trend_label=trend4,
+                            bias_pct=_bias4, vol_ratio=_vol_ratio4,
+                            valuation_label=val4)
                     if results_t3:
                         results_t3[-1]['操作狀態'] = _status4
-                except Exception:
-                    pass
+                except Exception as _e_lamp:
+                    print(f'[tab_stock_grp 狀態燈] {sid4} {type(_e_lamp).__name__}: {_e_lamp}')
 
                 # ── 多因子評分 ─────────────────────────────────
                 if df4 is not None and not df4.empty:
