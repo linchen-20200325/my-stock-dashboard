@@ -53,3 +53,37 @@ def fetch_vix_block() -> dict:
     except Exception as _e_vix:
         print(f'[Macro/VIX] ❌ {_e_vix}')
         return {'_err_vix': str(_e_vix)[:80]}
+
+
+def fetch_twii_2y_for_ma240():
+    """抓 ^TWII 2 年 OHLCV(MA240 計算用)。
+
+    P1-1c v18.376 深層拔毒:從 tab_macro.py:973 抽出(L5→L1)。
+    auto_adjust=True + MultiIndex 展平。資料不足 240 天回 None(caller fallback)。
+
+    Returns:
+        pd.DataFrame | None:DataFrame 含 'Close' 欄;失敗或不足回 None。
+    """
+    try:
+        import yfinance as _yf_bias
+        import pandas as _pd_bias
+        df = _yf_bias.download('^TWII', period='2y', progress=False, auto_adjust=True)
+        if df is not None and isinstance(df.columns, _pd_bias.MultiIndex):
+            try:
+                df.columns = df.columns.get_level_values(0)
+                print(f'[Bias] MultiIndex → 展平欄位: {list(df.columns)}')
+            except Exception as _mi_e:
+                print(f'[Bias] MultiIndex 展平失敗: {_mi_e}')
+        if df is not None and len(df) >= 240:
+            try:
+                df.attrs.setdefault('source', 'yfinance:^TWII:2y:1d')
+                df.attrs.setdefault('fetched_at', _pd_bias.Timestamp.now('UTC').isoformat())
+            except Exception:
+                pass
+            print(f'[Bias] yfinance ^TWII 2y 抓到 {len(df)} 天,欄位={list(df.columns)[:4]}')
+            return df
+        print(f'[Bias] yfinance 2y 資料不足 ({len(df) if df is not None else 0} 天)')
+        return None
+    except Exception as _e:
+        print(f'[Bias] yfinance ^TWII 2y 失敗: {_e}')
+        return None

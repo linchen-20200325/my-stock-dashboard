@@ -5,6 +5,12 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P1-1c (v18.376) — tab_macro yfinance ^TWII 2y 抽 L1
+- **檔案**: `src/ui/tabs/tab_macro.py` + `src/data/macro/macro_snapshot.py`
+- **拔毒**: tab_macro.py:973 line `import yfinance as _yf_bias; yf.download('^TWII', period='2y')` 違憲 → 抽 `fetch_twii_2y_for_ma240()` 至 L1 macro_snapshot.py(同檔有 vix block 模式),tab_macro 改 lazy import + thin call
+- **驗證**: ast.parse + full pytest 2213/0 fail
+- **commit**: 待 push
+
 ### P1-1b (v18.375) — yield_screener fetch_dividend_history 抽 L1
 - **檔案**: `src/ui/tabs/yield_screener.py` + `src/data/stock/dividend_fetcher.py`(NEW)
 - **拔毒**: line 70-125 fetch_dividend_history 整段含 yfinance + NAS proxy 注入 + 配息聚合 → 整檔搬至 L1。yield_screener 留 thin re-export(`from src.data.stock.dividend_fetcher import fetch_annual_dividends as fetch_dividend_history`)

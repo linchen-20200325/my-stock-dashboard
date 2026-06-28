@@ -968,25 +968,15 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _cc_b = 'Close' if (_twii is not None and 'Close' in getattr(_twii,'columns',[])) else 'close'
                     _n_existing = len(_twii) if _twii is not None and not _twii.empty else 0
                     if _n_existing < 240:
-                        # 重新抓 2 年完整資料，確保 MA240 正確
+                        # P1-1c v18.376:抽至 L1 fetch_twii_2y_for_ma240
                         try:
-                            import yfinance as _yf_bias
-                            import pandas as _pd_bias
-                            _twii_2y = _yf_bias.download('^TWII', period='2y',
-                                                          progress=False, auto_adjust=True)
-                            # yfinance 1.x 可能返回 MultiIndex columns，需展平
-                            if _twii_2y is not None and isinstance(_twii_2y.columns, _pd_bias.MultiIndex):
-                                try:
-                                    _twii_2y.columns = _twii_2y.columns.get_level_values(0)
-                                    print(f'[Bias] MultiIndex → 展平欄位: {list(_twii_2y.columns)}')
-                                except Exception as _mi_e:
-                                    print(f'[Bias] MultiIndex 展平失敗: {_mi_e}')
+                            from src.data.macro.macro_snapshot import fetch_twii_2y_for_ma240
+                            _twii_2y = fetch_twii_2y_for_ma240()
                             if _twii_2y is not None and len(_twii_2y) >= 240:
                                 _twii = _twii_2y
                                 _cc_b = 'Close'
-                                print(f'[Bias] yfinance ^TWII 2y 抓到 {len(_twii_2y)} 天，欄位={list(_twii_2y.columns)[:4]}')
                             else:
-                                print(f'[Bias] yfinance 2y 資料不足 ({len(_twii_2y) if _twii_2y is not None else 0} 天)，使用現有 {_n_existing} 天')
+                                print(f'[Bias] 2y 資料不足,使用現有 {_n_existing} 天')
                         except Exception as _yf_b_e:
                             print(f'[Bias] yfinance 2y 失敗: {_yf_b_e}')
                     if _twii is None or _twii.empty:
