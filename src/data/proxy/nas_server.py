@@ -33,12 +33,14 @@ import urllib3
 # 4 fetcher (_fetch_institutional / _fetch_margin_balance / _fetch_export_yoy /
 # _fetch_business_indicator) 共用 stderr audit trail。NAS server module,
 # 介面 0 改 caller(Streamlit Cloud → /api endpoint)。
+# P2-1 v18.380:_prov_log 統一至 src/data/core/provenance.py
+from src.data.core.provenance import prov_log as _prov_log_unified
+
+
 def _prov_log(fn_name: str, source: str, result_summary: str):
-    """§2.2 provenance — stderr 記 source/fetched_at。"""
+    """§2.2 provenance — backward-compat shim(無 ticker 場景)。"""
     try:
-        _now = datetime.datetime.utcnow().isoformat() + 'Z'
-        print(f'[{fn_name}] source={source} fetched_at={_now} '
-              f'result={result_summary}', file=_sys_prov_nas.stderr)
+        _prov_log_unified(fn_name, source, result_summary)
     except Exception:
         pass
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

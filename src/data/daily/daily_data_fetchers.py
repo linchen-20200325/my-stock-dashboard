@@ -29,12 +29,14 @@ from src.config import TTL_CONFIG as _TTL_CFG
 # 6 fetcher (fetch_single / fetch_flow_snapshot / _fetch_otc_via_finmind /
 # fetch_institutional / fetch_adl / fetch_margin_balance) 共用 audit trail。
 # 介面 0 改(對齊 etf_fetch._prov_log 既有模式,PR-Q2 v18.352)。
+# P2-1 v18.380:_prov_log 統一至 src/data/core/provenance.py
+from src.data.core.provenance import prov_log as _prov_log_unified
+
+
 def _prov_log(fn_name: str, source: str, ticker: str, result_summary: str):
-    """§2.2 provenance audit trail — stderr 記 source/fetched_at,不破 caller 簽章。"""
+    """§2.2 provenance — backward-compat shim。"""
     try:
-        _now = pd.Timestamp.now('UTC').isoformat()
-        print(f'[{fn_name}] ticker={ticker} source={source} fetched_at={_now} '
-              f'result={result_summary}', file=_sys_prov_ddf.stderr)
+        _prov_log_unified(fn_name, source, result_summary, ticker=ticker)
     except Exception:
         pass
 

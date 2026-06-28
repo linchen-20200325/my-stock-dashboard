@@ -24,15 +24,14 @@ from shared.ttls import TTL_30MIN, TTL_1HOUR, TTL_2HOUR, TTL_1DAY, TTL_7DAY
 # 7 fetcher (sitca_expense / moneydj_expense / yahoo_tw_holdings /
 # etf_holdings / sitca_manager / etf_zh_name / etf_underlying_index)
 # 共用一個 stderr audit trail。介面 0 改:fetcher return 不動。
-def _prov_log(fn_name: str, source: str, ticker: str, result_summary: str):
-    """§2.2 provenance audit trail — stderr 記 source/fetched_at,不破 caller 簽章。
+# P2-1 v18.380:_prov_log 統一收攏至 src/data/core/provenance.py(原 3 處同名異簽名)
+from src.data.core.provenance import prov_log as _prov_log_unified
 
-    用於 scalar/dict/str return 的 fetcher;DataFrame return 應另用 df.attrs(schema-additive)。
-    """
+
+def _prov_log(fn_name: str, source: str, ticker: str, result_summary: str):
+    """§2.2 provenance — backward-compat shim,thin wrapper to unified SSOT。"""
     try:
-        _now = pd.Timestamp.now('UTC').isoformat()
-        print(f'[{fn_name}] ticker={ticker} source={source} fetched_at={_now} '
-              f'result={result_summary}', file=_sys_prov_ef.stderr)
+        _prov_log_unified(fn_name, source, result_summary, ticker=ticker)
     except Exception:
         pass
 

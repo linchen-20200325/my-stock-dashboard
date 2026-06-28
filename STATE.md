@@ -5,6 +5,12 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P2-1 (v18.380) — _prov_log 3 處統一至 provenance.py
+- **檔案**: `src/data/core/provenance.py`(NEW)+ etf_fetch.py / daily_data_fetchers.py / nas_server.py 改 thin shim
+- **拔毒**: 3 處同名異簽名 _prov_log → 統一 SSOT `prov_log(fn_name, source, result_summary, ticker='')`,3 caller 改 thin wrapper(backward compat)
+- **驗證**: full pytest 2213/0 fail
+- **commit**: 待 push
+
 ### P1-5bcd (v18.379) — 6 個 0-caller dead fn 跨 3 檔刪
 - **檔案**:
   - `src/data/macro/leading_indicators.py`:刪 build_dataset(line 762)+ render_table(line 809),共 117 LOC
