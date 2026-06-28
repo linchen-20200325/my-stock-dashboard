@@ -4634,21 +4634,65 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
 # ── ④ 資料來源診斷（收合，供進階使用者確認）─────────────────────
         with st.expander('🔍 資料來源診斷（點此確認各欄數據正確性）', expanded=False):
+            # v18.350 PR-P1:加 TTL + 備援優先級兩欄,SSOT 對齊「資料診斷 Tab」(app.py:1649
+            # tab_diag),避免 user 誤把 30min 快取舊值當「即時」。dict 升級為 4-tuple:
+            # (來源主鏈, 公式, TTL, 備援優先級或 single-source 標註)。
             _diag_cols = {
-                '外資大小':       ('FinMind TX+MTX 期貨留倉 / TAIFEX futContractsDate備援', '外資大台淨口 + 外資小台淨口×0.25'),
-                '前五大留倉':     ('TAIFEX largeTraderFutQry POST',                         '前五大買方所有契約 − 賣方所有契約'),
-                '前十大留倉':     ('TAIFEX largeTraderFutQry POST',                         '前十大買方所有契約 − 賣方所有契約'),
-                '選PCR':          ('TAIFEX pcRatio POST',                                   'Put未平倉量 / Call未平倉量 × 100'),
-                '外(選)':         ('TAIFEX callsAndPutsDate POST',                          'BC金額 − SC金額 − BP金額 + SP金額'),
-                '韭菜指數':       ('TAIFEX futContractsDate+futDailyMarketReport',          '(法人空方MTX OI − 法人多方MTX OI) / 全體MTX OI × 100'),
-                '外資/投信/自營': ('TWSE BFI82U',                                           '三大法人現貨買賣差額（億元）'),
-                '成交量':         ('TWSE FMTQIK 月報',                                      '每日全市場成交金額（億元）'),
+                '外資大小':       ('FinMind TX+MTX 期貨留倉',
+                                   '外資大台淨口 + 外資小台淨口×0.25',
+                                   '30 分(build_leading_fast pickle)',
+                                   '① FinMind TX → ② FinMind MTX → ③ TAIFEX futContractsDate 備援'),
+                '前五大留倉':     ('TAIFEX largeTraderFutQry POST',
+                                   '前五大買方所有契約 − 賣方所有契約',
+                                   '30 分(同上)',
+                                   '單一源(免費 FinMind 無此資料)'),
+                '前十大留倉':     ('TAIFEX largeTraderFutQry POST',
+                                   '前十大買方所有契約 − 賣方所有契約',
+                                   '30 分(同上)',
+                                   '單一源'),
+                '選PCR':          ('TAIFEX pcRatio POST',
+                                   'Put未平倉量 / Call未平倉量 × 100',
+                                   '30 分(同上)',
+                                   '① TAIFEX → ② FinMind TXO 法人估算(備援)'),
+                '外(選)':         ('TAIFEX callsAndPutsDate POST',
+                                   'BC金額 − SC金額 − BP金額 + SP金額',
+                                   '30 分(同上)',
+                                   '單一源'),
+                '韭菜指數':       ('TAIFEX futContractsDate+futDailyMarketReport',
+                                   '(法人空方MTX OI − 法人多方MTX OI) / 全體MTX OI × 100',
+                                   '30 分(同上)',
+                                   '① TAIFEX → ② FinMind 法人空多比估算(備援)'),
+                '外資/投信/自營': ('TWSE BFI82U(via Squid Proxy)',
+                                   '三大法人現貨買賣差額(億元)',
+                                   '10 分(TTL_CONFIG[institutional])',
+                                   '① TWSE → ② FinMind → ③ pkl Cache(過期)'),
+                '成交量':         ('TWSE FMTQIK 月報',
+                                   '每日全市場成交金額(億元)',
+                                   '10 分(TTL_CONFIG[volume])',
+                                   '① TWSE OpenAPI → ② YFinance → ③ Cache'),
             }
-            for _col, (_src, _formula) in _diag_cols.items():
+            # 頂部全域註腳:cache 新鮮度告示
+            st.markdown(
+                '<div style="font-size:11px;color:#f0883e;background:#0d1117;'
+                'padding:6px 10px;border-left:3px solid #f0883e;margin:4px 0 10px;">'
+                '💡 <b>注意 cache 新鮮度</b>:本表所列指標多走 30 分鐘 pickle 快取 + '
+                'st.cache_data。週末/假日 4 個 FinMind API 全空時 leading_fast 會 fallback '
+                '到過期 pickle(已標 📦 stale chip)。「即時」≠「最新交易日」,以畫面上方'
+                '「資料期間」caption 為準。</div>',
+                unsafe_allow_html=True)
+            for _col, _tup in _diag_cols.items():
+                # 向下相容:舊 2-tuple 仍 fallback(避免外部 caller 改 dict 時崩)
+                if len(_tup) == 4:
+                    _src, _formula, _ttl, _fallback = _tup
+                else:
+                    _src, _formula = _tup[0], _tup[1]
+                    _ttl, _fallback = '-', '-'
                 st.markdown(
-                    f'<div style="font-size:12px;color:#8b949e;padding:2px 0;">'
-                    f'<b style="color:#c9d1d9;">{_col}</b> → 來源：{_src}<br>'
-                    f'&nbsp;&nbsp;&nbsp;公式：{_formula}</div>',
+                    f'<div style="font-size:12px;color:#8b949e;padding:3px 0;">'
+                    f'<b style="color:#c9d1d9;">{_col}</b> → 主來源:{_src}<br>'
+                    f'&nbsp;&nbsp;&nbsp;公式:{_formula}<br>'
+                    f'&nbsp;&nbsp;&nbsp;⏱ TTL:{_ttl}<br>'
+                    f'&nbsp;&nbsp;&nbsp;🔀 備援優先級:{_fallback}</div>',
                     unsafe_allow_html=True
                 )
             # [BUG FIX] 最新一筆原始值 - 用 pd.isna 確保 NaN 不造成 format error
