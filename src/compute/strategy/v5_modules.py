@@ -377,7 +377,7 @@ def get_defensive_allocation(macro_level: str) -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     print("=" * 60)
-    print("src.compute.strategy.v5_modules.py 自動化邊界測試")
+    print("src/compute/strategy/v5_modules.py 自動化邊界測試")
     print("=" * 60)
 
     import traceback

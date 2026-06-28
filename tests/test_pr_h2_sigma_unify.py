@@ -139,7 +139,7 @@ class TestEtfCalcUsesSSOT:
     def test_etf_calc_imports_sigma_metrics(self):
         """v18.335 PR-H3 multi-line import 後仍可偵測。"""
         src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
-        assert 'from etf_helpers import' in src
+        assert 'from src.compute.etf.etf_helpers import' in src
         assert 'calc_sigma_metrics' in src
 
     def test_etf_calc_uses_metrics_dict(self):
@@ -187,10 +187,10 @@ class TestUxAnnotation:
 
 class TestModulesImportable:
     def test_etf_helpers_clean(self):
-        import etf_helpers  # noqa: F401
+        from src.compute.etf import etf_helpers  # noqa: F401
 
     def test_etf_calc_clean(self):
-        import etf_calc  # noqa: F401
+        from src.compute.etf import etf_calc  # noqa: F401
 
     def test_etf_tab_single_clean(self):
         import etf_tab_single  # noqa: F401

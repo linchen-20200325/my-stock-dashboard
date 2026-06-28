@@ -72,7 +72,7 @@ class TestNasServerProvenance(unittest.TestCase):
 class TestImports(unittest.TestCase):
 
     def test_macro_signal_lookback_tw_imports(self):
-        import macro_signal_lookback_tw  # noqa
+        from src.compute.macro import macro_signal_lookback_tw  # noqa
         from src.compute.macro import _attach_prov
         import pandas as pd
         _s = pd.Series([1, 2, 3], name='TEST')

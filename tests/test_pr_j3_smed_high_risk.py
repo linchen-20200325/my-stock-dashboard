@@ -110,7 +110,7 @@ class TestLiToYiMgLog:
 
 class TestV5BollingerNoLookahead:
     def test_no_bfill_in_squeeze_calc(self):
-        src = open('src.compute.strategy.v5_modules.py', encoding='utf-8').read()
+        src = open('src/compute/strategy/v5_modules.py', encoding='utf-8').read()
         # bfill 已移除(避免 lookahead)
         assert "fillna(method='bfill')" not in src
         assert "ffill().dropna()" in src
@@ -129,7 +129,7 @@ class TestScoringFillnaAnnotated:
 
 class TestModulesImportable:
     def test_etf_calc(self):
-        import etf_calc  # noqa
+        from src.compute.etf import etf_calc  # noqa
 
     def test_tab_stock(self):
         import tab_stock  # noqa
@@ -138,10 +138,10 @@ class TestModulesImportable:
         from src.data.macro import leading_indicators  # noqa
 
     def test_v5_modules(self):
-        import v5_modules  # noqa
+        from src.compute.strategy import v5_modules  # noqa
 
     def test_scoring_engine(self):
-        import scoring_engine  # noqa
+        from src.compute.scoring import scoring_engine  # noqa
 
 
 # ─────────── G. v5 squeeze 仍能正常運作(no regression) ───────────

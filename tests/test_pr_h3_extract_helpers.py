@@ -220,7 +220,7 @@ class TestCallerMigration:
 
     def test_etf_calc_uses_classify_quick_sigma(self):
         src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
-        assert 'from etf_helpers import' in src
+        assert 'from src.compute.etf.etf_helpers import' in src
         assert 'classify_etf_quick_sigma' in src
         # inline 5 段 if-elif 已淨空
         assert "'🟢🟢🟢', f'⚡短線 股災價" not in src
@@ -263,10 +263,10 @@ class TestImportContract:
 
 class TestModulesImportable:
     def test_etf_helpers_clean(self):
-        import etf_helpers  # noqa: F401
+        from src.compute.etf import etf_helpers  # noqa: F401
 
     def test_etf_calc_clean(self):
-        import etf_calc  # noqa: F401
+        from src.compute.etf import etf_calc  # noqa: F401
 
     def test_etf_tab_single_clean(self):
         import etf_tab_single  # noqa: F401

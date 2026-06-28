@@ -77,7 +77,7 @@ def test_radar_and_bucket_bar_gated_pre_load():
     assert re.search(
         r"if _show_market_data:\s*\n\s+try:\s*\n"
         r"(?:\s*#[^\n]*\n)*"  # 0+ 註解行
-        r"\s+from macro_helpers import compute_five_bucket_summary", src
+        r"\s+from src\.compute\.macro import compute_five_bucket_summary", src
     ), "五桶 bar 未 gate 在 _show_market_data(未載入會顯示多餘面板)"
     # C1-Z v18.293 物理重排:§七(長期) 必須在 §一(中期) 之前出現,對齊 5 桶 reading order。
     _pos_seven = src.find("section_header('七'")

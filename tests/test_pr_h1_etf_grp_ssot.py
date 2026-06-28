@@ -18,7 +18,7 @@ class TestImportContract:
     def test_grp_compare_imports_liquidity_score(self):
         src = open('etf_tab_grp_compare.py', encoding='utf-8').read()
         assert 'calc_liquidity_score' in src
-        assert 'from etf_calc import' in src
+        assert 'from src.compute.etf import' in src
 
     def test_grp_compare_imports_tracking_error(self):
         src = open('etf_tab_grp_compare.py', encoding='utf-8').read()

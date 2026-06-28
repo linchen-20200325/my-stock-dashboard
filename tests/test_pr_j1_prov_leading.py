@@ -144,7 +144,7 @@ class TestUIChipRendered:
 
 class TestModulesImportable:
     def test_scoring_engine_clean(self):
-        import scoring_engine  # noqa: F401
+        from src.compute.scoring import scoring_engine  # noqa: F401
 
     def test_tab_stock_clean(self):
         import tab_stock  # noqa: F401
