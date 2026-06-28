@@ -203,7 +203,7 @@ else:
 
     print('\n[B3] 2330 季報日期')
     try:
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from data_loader import StockDataLoader
         loader = StockDataLoader()
         qtr, err = loader.get_quarterly_data('2330')

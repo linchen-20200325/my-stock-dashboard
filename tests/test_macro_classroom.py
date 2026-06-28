@@ -193,7 +193,7 @@ class TestTabMacroWiring:
 
     def setup_method(self):
         import pathlib
-        _src = pathlib.Path(__file__).parent / "tab_macro.py"
+        _src = pathlib.Path(__file__).resolve().parent.parent / "tab_macro.py"
         self.src = _src.read_text(encoding="utf-8")
 
     def test_imports_explainer(self):
@@ -220,7 +220,7 @@ class TestTabMacroWiring:
     def test_classroom_rendered_in_tab_edu(self):
         """v18.281: 教室現由 tab_edu(系統說明書)渲染"""
         import pathlib
-        _edu = (pathlib.Path(__file__).parent / "tab_edu.py").read_text(encoding="utf-8")
+        _edu = (pathlib.Path(__file__).resolve().parent.parent / "tab_edu.py").read_text(encoding="utf-8")
         assert "render_principle_classroom()" in _edu, \
             "tab_edu(系統說明書)應呼叫 render_principle_classroom"
         assert "系統說明書" in _edu, "tab_edu 標題應為系統說明書"

@@ -16,13 +16,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-APP_PATH = Path(__file__).parent / "app.py"
+# v18.359 (Phase 2 F-1.3): 本檔由 root 搬入 tests/,APP/TAB_MACRO 改走 parent.parent 取 repo root。
+APP_PATH = Path(__file__).resolve().parent.parent / "app.py"
 APP_SRC  = APP_PATH.read_text(encoding="utf-8")
 
 # v18.33x 三層重排:ADL/M1B 的 tw_macro 委派由 app.py(L6)下沉至 tab_macro.py(L5 UI Tab),
 # 符合 §8.2「L6 App 不直接持有 L1 fetcher」。委派「存在性」斷言改掃 tab_macro.py;
 # app.py 端仍保「不得 inline 直連 MI_INDEX / cbc.gov.tw」的負向守衛(下方 test 不變)。
-TAB_MACRO_PATH = Path(__file__).parent / "tab_macro.py"
+TAB_MACRO_PATH = Path(__file__).resolve().parent.parent / "tab_macro.py"
 TAB_MACRO_SRC  = TAB_MACRO_PATH.read_text(encoding="utf-8")
 
 

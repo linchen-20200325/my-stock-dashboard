@@ -7,6 +7,11 @@ import types
 
 def _stub_st():
     # v18.281 — 不覆蓋既有 test stub(避免污染其他 test 檔的完整 stub)
+    # v18.359 Phase 2 F-1.3 — 本檔由 root 搬入 tests/ 後字母順序變早於 test_etf_* /
+    #   test_hot_money / test_exit_signals,而那些模組頂部用 @st.cache_data 裝飾。
+    #   原本 root → tests 分階段 collect,tests 階段先 import 完真 streamlit 不受
+    #   本 stub 影響;搬入後字母順序失序,本 stub 必須含 cache_data / cache_resource
+    #   的 no-op decorator,否則後續 import etf_calc / hot_money 等模組會炸。
     _existing = sys.modules.get("streamlit")
     if _existing is not None and (getattr(_existing, "_stub", False)
                                   or getattr(_existing, "_is_test_stub", False)):
@@ -23,6 +28,15 @@ def _stub_st():
         return None
     for n in ("markdown", "caption"):
         setattr(m, n, _noop)
+
+    # 支援 @st.cache_data 與 @st.cache_data(ttl=...) 兩種呼叫
+    def _cache_data(*a, **k):
+        if a and callable(a[0]):
+            return a[0]
+        return lambda f: f
+    m.cache_data = _cache_data
+    m.cache_resource = _cache_data
+
     sys.modules["streamlit"] = m
 
 
