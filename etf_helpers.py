@@ -76,26 +76,25 @@ def normalize_etf_ticker(raw: str | None) -> str:
 def yield_valuation_zone(cur_yield, avg_yield):
     """7% 存股估值買賣點分級(孫慶龍策略)。
 
+    ETF 場景必須有 5y 平均殖利率作為估值脈絡,否則回 '—'。
+
     Args:
         cur_yield: 當前殖利率 %
-        avg_yield: 5y 平均殖利率 %(需有值才判定)
+        avg_yield: 5y 平均殖利率 %(None 或 ≤0 → 不判定)
 
     Returns:
         '🟢 強烈買進' / '🔴 獲利了結' / '🟡 適度減碼' / '⚪ 中性持有' / '—'
 
-    SSOT:三 Tab 共用(單檔 / 多檔 / 組合)。
-    原 etf_tab_grp_compare.py:53-66 + etf_tab_single.py:272-295 inline 各自實作。
+    SSOT:三 Tab 共用(單檔 / 多檔 / 組合)。內部 delegate to
+    shared.thresholds.classify_yield_zone(v18.331 PR-F U-8 統一判別函式)。
+    本 wrapper 額外要求 avg_yield 必須有值(ETF 場景),保留原 etf_tab_grp_compare contract。
     """
-    from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
-    if not avg_yield or avg_yield <= 0 or cur_yield is None:
+    from shared.thresholds import classify_yield_zone
+    # ETF 場景:None 視為無 avg → N/A(個股場景可省 avg,classify_yield_zone 允許)
+    if avg_yield is None:
         return '—'
-    if cur_yield >= YIELD_HIGH:
-        return '🟢 強烈買進'
-    if cur_yield <= YIELD_LOW:
-        return '🔴 獲利了結'
-    if cur_yield <= YIELD_MID:
-        return '🟡 適度減碼'
-    return '⚪ 中性持有'
+    label, _code = classify_yield_zone(cur_yield, avg_yield)
+    return label
 
 
 def dividend_health_label(cur_yield, total_ret_1y, cagr_3y):
