@@ -7,6 +7,17 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
+- [x] **S-AUDIT-RUN-J**(v18.338~339 PR-J1+J3,2026-06-28)— S-PROV-1 後續 + S-MED 真高風險收尾
+  * **PR-J1**(#369, v18.338):`scoring_engine.calc_leading_indicators_detail` 6 指標 dict 補 `source_chain` 欄(§2.2 provenance 出口)+ tab_stock D2 chip 加「📡 來源」渲染 + `_LI_SOURCE_CHAINS` static map + `_resolve_li_source` helper(優先吃 df.attrs['source'] / 'source' 欄,fallback 靜態);14 test 全綠
+  * **PR-J3**(#370, v18.339):S-MED audit 285 候選抽真高風險 **16 處** 修(原 71 條估值不準):
+    - etf_calc.py 9 處 calc 函式 silent except → stderr log(yield / total_return / vcp / volume / tracking_error / mdd / cagr / sharpe)
+    - tab_stock.py 2 處 helper(share_capital + pbratio_from_twse)silent return 0.0 → stderr log
+    - leading_indicators._to_yi_mg(融資融券單位轉換)silent → stderr log
+    - **v5_modules detect_bollinger_breakout** 移除 `fillna(method='bfill')`(§2.3 lookahead 違憲)→ 改 `ffill().dropna()`
+    - scoring_engine 3 處 fillna(0) for sum() 加註解(NaN 數學等價 0,非偽造);17 test 全綠
+  * 介面 0 改(全 silent → observable);剩餘 ~245 候選屬合法 pattern(typed except parse guard / 迴圈跳壞筆 / merge 補 0),套 §-1「未實際 bug → 不動」維持
+  * 累計:430/430 test 全綠;**S-PROV-1 A 級完成 + S-MED 真高風險清完**
+
 - [⚙️] **S-PROV-1** §2.2 DataPoint provenance 補洞;v18.246-250 完成 phase 1-6:
   * phase 1(#262):`macro_core.fetch_fred` (DataFrame columns)
   * phase 2(#263):`macro_core.fetch_yf_close` (Series.attrs)
