@@ -16,6 +16,15 @@
 
 ## 已完成 commits(reverse chrono)
 
+### B-S2 (v18.385) — Section 2 拐點偵測抽至 macro/section_state.py
+- **檔案**: `src/ui/tabs/tab_macro.py` + `src/ui/tabs/macro/section_state.py`(NEW)
+- **拔毒**: render_tab_macro line 2186-2565(380 LOC)§二 拐點偵測 + 市場狀態卡抽出。tab_macro 3402 → 3025 LOC(-11%)
+- **closure 4 個 explicit pass**: `_mkt_info, _mkt_placeholder, _tl_placeholder, cd`(extremely manageable)
+- **F-7.1 累計**: 5387 → 3025 LOC(**-43.8%**)
+- **test fix**: 3 處 source-string assert 改合集(tab_macro + section_state)
+- **驗證**: full pytest 2220/0 fail
+- **commit**: 待 push
+
 ### A4 (v18.384) — pct_change YoY helper 3 處統一
 - **檔案**: `shared/calc_helpers.py`(NEW)+ macro_helpers.py:860 + scoring_engine.py:446 + msl_tw.py:191
 - **拔毒**: 3 處 `series.pct_change(N) * 100.0` pattern → 抽 `pct_change_yoy(series, periods=12, multiplier=100.0)`

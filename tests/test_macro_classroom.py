@@ -208,9 +208,13 @@ class TestTabMacroWiring:
     """靜態檢查 tab_macro.py 兩處 wire 點"""
 
     def setup_method(self):
+        # F-7.1 B-S2 v18.385:S2(拐點偵測)抽至 macro/section_state.py;
+        # explainer + _render_traffic_light call 也搬。檢查合集。
         import pathlib
-        _src = pathlib.Path(__file__).resolve().parent.parent / "src/ui/tabs/tab_macro.py"
-        self.src = _src.read_text(encoding="utf-8")
+        _root = pathlib.Path(__file__).resolve().parent.parent
+        _tm = (_root / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
+        _ss = (_root / "src/ui/tabs/macro/section_state.py").read_text(encoding="utf-8")
+        self.src = _tm + _ss
 
     def test_imports_explainer(self):
         assert "render_traffic_light_explainer" in self.src

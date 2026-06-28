@@ -66,11 +66,14 @@ def test_pivot_and_cashflow_groups_render():
 
 
 def test_tab_macro_inserts_pivot_cashflow_banners():
-    """tab_macro 必須在拐點 + 現金流向區塊插入 group banner。"""
+    """tab_macro 必須在拐點 + 現金流向區塊插入 group banner。
+    F-7.1 B-S2:拐點 banner 搬至 macro/section_state.py;檢查合集。"""
     from src.ui.tabs import tab_macro
-    src = open(tab_macro.__file__, encoding="utf-8").read()
-    assert "_bgb_pv('pivot'" in src, "tab_macro 缺 🔮 拐點 banner"
-    assert "_bgb_cf('cashflow'" in src, "tab_macro 缺 💵 現金流向 banner"
+    from src.ui.tabs.macro import section_state
+    src = (open(tab_macro.__file__, encoding="utf-8").read()
+           + open(section_state.__file__, encoding="utf-8").read())
+    assert "_bgb_pv('pivot'" in src, "tab_macro/section_state 缺 🔮 拐點 banner"
+    assert "_bgb_cf('cashflow'" in src, "tab_macro/section_state 缺 💵 現金流向 banner"
 
 
 def test_bad_key_fail_loud():
