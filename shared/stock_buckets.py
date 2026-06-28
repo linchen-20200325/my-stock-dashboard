@@ -20,6 +20,17 @@ from __future__ import annotations
 # 此處 fundamental 用 hex 鏡像，drift test 守護）。
 _FUNDAMENTAL_GREEN = "#22c55e"  # 對齊 shared.colors.TRAFFIC_GREEN（drift test 斷言相等）
 
+# ── 桶結論燈號 emoji + 色（v18.337 user：每桶 Bar 上加「一句結論 + 燈號」）──
+# 對齊 shared.colors.TRAFFIC_*；L0 不 import shared.colors（同 _FUNDAMENTAL_GREEN 鏡像慣例），
+# 由 test_stock_buckets drift test 斷言相等，非腦補。
+_LIGHT_EMOJI = {"green": "🟢", "yellow": "🟡", "red": "🔴", "gray": "⬜"}
+_LIGHT_COLOR = {
+    "green":  "#22c55e",   # TRAFFIC_GREEN
+    "yellow": "#eab308",   # TRAFFIC_YELLOW
+    "red":    "#ef4444",   # TRAFFIC_RED
+    "gray":   "#8b949e",
+}
+
 # ════════════════════════════════════════════════════════════════
 # section 桶 meta：順序鎖定 + emoji + 主色 + 副標（對齊由上而下閱讀序）
 # ════════════════════════════════════════════════════════════════
@@ -67,7 +78,12 @@ STOCK_SECTION_META = {
 }
 
 
-def section_header_html(key: str, color_override: str | None = None) -> str:
+def section_header_html(
+    key: str,
+    color_override: str | None = None,
+    level: str | None = None,
+    headline: str | None = None,
+) -> str:
     """產生單一 section 漸層標題 HTML（取代 tab_stock 5 處 inline 字串，DRY）。
 
     Args
@@ -75,14 +91,33 @@ def section_header_html(key: str, color_override: str | None = None) -> str:
     key: STOCK_SECTION_ORDER 之一
     color_override: 若 caller 想用 shared.colors 的實際常數（如 TRAFFIC_GREEN）
                     覆蓋 meta 內鏡像 hex，可傳入（避免色票漂移）。
+    level: 燈號 'green'|'yellow'|'red'|'gray'（v18.337）。給定時於 Bar 上加
+           「🟢/🟡/🔴/⬜ + 一句結論」。None = 不顯示（向下相容，既有呼叫無感）。
+    headline: 一句結論摘要（搭配 level 顯示）。level 給定但 headline 空 → 只顯示燈號。
 
     Returns
     -------
     str: <div> 漸層標題 HTML（含 anchor id，供 TOC 錨點跳轉）。
     缺 key → raise KeyError（§1 Fail Loud，不偽造空標題）。
+    非法 level → 視為 'gray'（不偽綠，§1）。
     """
     meta = STOCK_SECTION_META[key]  # KeyError on bad key = Fail Loud
     color = color_override or meta["color"]
+    # 桶結論：燈號 + 一句話（同一個 Bar 內第二行，user「結論直接放桶 Bar 上面」）
+    _concl_html = ""
+    if level is not None:
+        _lv = level if level in _LIGHT_EMOJI else "gray"
+        _lc = _LIGHT_COLOR[_lv]
+        _head = (headline or "").strip()
+        _head_html = (
+            f'<span style="font-size:12px;font-weight:700;color:{_lc};'
+            f'margin-left:6px;">{_head}</span>' if _head else ""
+        )
+        _concl_html = (
+            f'<div style="margin-top:4px;">'
+            f'<span style="font-size:13px;">{_LIGHT_EMOJI[_lv]}</span>'
+            f'{_head_html}</div>'
+        )
     return (
         f'<div id="{meta["anchor"]}" '
         f'style="margin:24px 0 8px;padding:8px 16px;'
@@ -91,8 +126,98 @@ def section_header_html(key: str, color_override: str | None = None) -> str:
         f'<span style="font-size:15px;font-weight:900;color:{color};">'
         f'{meta["emoji"]} {meta["title"]}</span>'
         f'<span style="font-size:11px;color:#8b949e;margin-left:8px;">'
-        f'{meta["sub"]}</span></div>'
+        f'{meta["sub"]}</span>'
+        f'{_concl_html}</div>'
     )
+
+
+def compute_stock_section_levels(
+    *,
+    health: float | None = None,
+    rs_val: float | None = None,
+    chips_sig: str | None = None,
+    chips_con: float | None = None,
+    li_green: int | None = None,
+    li_yellow: int | None = None,
+    li_red: int | None = None,
+) -> dict[str, dict]:
+    """個股 6 section 桶結論燈號 + 一句話（v18.337，純函式，吃**已算好**的訊號）。
+
+    user 2026-06-28：個股每桶 Bar 上加「一句結論 + 燈號」。本函式吃 tab_stock
+    在資料載入後 compute-once 的訊號（health2 / _xsec rs_val·sig20·con20·li_*），
+    回各 section 的 {level, headline}，供 section_header_html(level=, headline=)。
+
+    門檻全走 SSOT（§3.3 反捏造）：
+      - tech：HEALTH_GRADE_A_MIN(80) / HEALTH_GRADE_B_MIN(50)（shared.health_thresholds）
+      - entry：STOCK_RS_STRONG_MIN(75) / STOCK_RS_NEUTRAL_MIN(50)（shared.signal_thresholds）
+      - fundamental：六大先行指標「最差燈號」聚合（紅>黃>綠，同 macro aggregate_level）
+      - chips：sig20 類別（吸籌/倒貨/中性）— 無數值門檻
+
+    §1 Fail Loud：任何缺值 → gray「未算/待展開」，**不偽綠**。
+    financials / ai 為 on-demand（資料在 section 內才抓），本函式一律回 gray + 提示
+    「展開後評定」，避免用 top 不存在的值偽造（§4.3 不另起對照算法造成不一致）。
+
+    Returns
+    -------
+    dict：{section_key: {"level": str, "headline": str}}，涵蓋全 6 個 section。
+    """
+    from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
+    from shared.signal_thresholds import STOCK_RS_NEUTRAL_MIN, STOCK_RS_STRONG_MIN
+
+    out: dict[str, dict] = {}
+
+    # ── entry：RS 相對強度（進場就緒度 proxy）──
+    if rs_val is None:
+        out["entry"] = {"level": "gray", "headline": "進場訊號待算"}
+    else:
+        _rs = float(rs_val)
+        if _rs >= STOCK_RS_STRONG_MIN:
+            out["entry"] = {"level": "green", "headline": f"RS 相對強度 {_rs:.0f} 分 強勢"}
+        elif _rs >= STOCK_RS_NEUTRAL_MIN:
+            out["entry"] = {"level": "yellow", "headline": f"RS 相對強度 {_rs:.0f} 分 中性"}
+        else:
+            out["entry"] = {"level": "red", "headline": f"RS 相對強度 {_rs:.0f} 分 弱勢"}
+
+    # ── tech：健康度評分（A/B/C）──
+    if health is None:
+        out["tech"] = {"level": "gray", "headline": "健康度待算"}
+    else:
+        _h = float(health)
+        if _h >= HEALTH_GRADE_A_MIN:
+            out["tech"] = {"level": "green", "headline": f"健康度 {_h:.0f} 分 體質強（A）"}
+        elif _h >= HEALTH_GRADE_B_MIN:
+            out["tech"] = {"level": "yellow", "headline": f"健康度 {_h:.0f} 分 中性（B）"}
+        else:
+            out["tech"] = {"level": "red", "headline": f"健康度 {_h:.0f} 分 偏弱（C）"}
+
+    # ── chips：20 日籌碼訊號（吸籌/倒貨/中性）──
+    if not chips_sig:
+        out["chips"] = {"level": "gray", "headline": "籌碼訊號待算"}
+    else:
+        _con_txt = f"　集中度 {float(chips_con):.0f}%" if chips_con is not None else ""
+        if "吸籌" in chips_sig:
+            out["chips"] = {"level": "green", "headline": f"20 日吸籌{_con_txt}"}
+        elif "倒貨" in chips_sig:
+            out["chips"] = {"level": "red", "headline": f"20 日倒貨{_con_txt}"}
+        else:
+            out["chips"] = {"level": "yellow", "headline": f"20 日籌碼中性{_con_txt}"}
+
+    # ── fundamental：六大先行指標燈號聚合（最差燈號）──
+    if li_green is None and li_yellow is None and li_red is None:
+        out["fundamental"] = {"level": "gray", "headline": "先行指標待算"}
+    else:
+        _g, _y, _r = int(li_green or 0), int(li_yellow or 0), int(li_red or 0)
+        _lv = "red" if _r > 0 else ("yellow" if _y > 0 else "green")
+        out["fundamental"] = {
+            "level": _lv,
+            "headline": f"六大先行指標 🟢{_g} 🟡{_y} 🔴{_r}",
+        }
+
+    # ── financials / ai：on-demand，於 section 內才抓 → gray 不偽造（§1）──
+    out["financials"] = {"level": "gray", "headline": "展開下方體檢表後評定 MJ 等級"}
+    out["ai"] = {"level": "gray", "headline": "點下方按鈕生成 AI 五維評估"}
+
+    return out
 
 
 # ════════════════════════════════════════════════════════════════

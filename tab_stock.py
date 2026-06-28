@@ -23,6 +23,7 @@ import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.stock_buckets import (
+    compute_stock_section_levels,
     get_pb_bands as _get_pb_bands_ssot,
     pb_bands_label as _pb_bands_label_ssot,
     render_stock_toc_html,
@@ -372,6 +373,19 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         # AI 摘要(L3200+)改讀 _xsec → 與顯示段執行順序解耦，Stage 2 物理重排才安全。
         _xsec = _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2)
 
+        # v18.337 user：每桶 Bar 上加「一句結論 + 燈號」。用上方 compute-once 的訊號
+        # (health2 + _xsec rs_val/sig20/con20/li_*) 一次算出 6 桶結論，傳給各 section_header。
+        # financials/ai 為 on-demand → 回 gray「展開後評定」(§1 不偽造)。
+        _sec_lv = compute_stock_section_levels(
+            health=health2,
+            rs_val=_xsec.get('rs_val'),
+            chips_sig=_xsec.get('sig20'),
+            chips_con=_xsec.get('con20'),
+            li_green=_xsec.get('li_green'),
+            li_yellow=_xsec.get('li_yellow'),
+            li_red=_xsec.get('li_red'),
+        )
+
         # v18.197 ══ 📊 資料新鮮度條（截止日 + 抓取時間 + age + fallback 警示 + 強制重抓）══
         # v18.328 bugfix：K 線截止日改用 sidebar_health.kline_end_date() 共用 canonical。
         # 個股 price df 為 reset_index(drop=True)（RangeIndex，日期在 'date' 欄），
@@ -579,7 +593,7 @@ padding:14px 18px;margin-bottom:12px;">
         # v18.307 Bug2 PR-C：頂部目錄（一眼看全貌 + 錨點跳轉）
         st.markdown(render_stock_toc_html(), unsafe_allow_html=True)
         # v18.307 Bug2 PR-C：section header 改走 shared/stock_buckets SSOT（DRY）
-        st.markdown(section_header_html("entry"), unsafe_allow_html=True)
+        st.markdown(section_header_html("entry", **_sec_lv["entry"]), unsafe_allow_html=True)
         # ══ 0. 停利停損 + 支撐壓力 ═══════════════════════════════
         st.markdown('---')
         st.markdown('#### 🎯 停利停損建議 + 近期支撐壓力')
@@ -991,7 +1005,7 @@ padding:14px 18px;margin-bottom:12px;">
                 '策略1：「不要聽老闆說什麼，要看他做什麼」— 最誠實的領先指標</div>'
                 '</div>', unsafe_allow_html=True)
 
-        st.markdown(section_header_html("tech"), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
+        st.markdown(section_header_html("tech", **_sec_lv["tech"]), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
         # ══ A. 健康度評分 ══════════════════════════════════════
         st.markdown('#### 🏥 A. 個股健康度評分（0~100）')
         st.caption('🔰 指標白話：RSI >70 過熱、<30 超賣｜KD 黃金交叉（K 升破 D）偏多、死亡交叉偏空｜'
@@ -1351,7 +1365,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         # 不物理搬移 code：_con20/_cty20/_sig20 於下方計算、L3203 AI 摘要跨段引用，
         # 搬移會讓 AI 摘要永遠落 fallback「未取得」= §1 靜默降級，故原地升級。
         st.markdown('---')
-        st.markdown(section_header_html("chips"), unsafe_allow_html=True)
+        st.markdown(section_header_html("chips", **_sec_lv["chips"]), unsafe_allow_html=True)
         st.caption('🔰 指標白話：集中度＝大戶（外資+投信）淨買量佔總成交量的比例，正值越高＝大戶默默吸貨（偏多）、'
                    '負值＝倒貨；延續性＝最近多少比例的交易日持續買超。資料直接取自下方 K 線的三大法人/成交量。')
         # v18.196 直算（df2 已含三大法人欄）— 移除 spinner 避免視覺跳動、
@@ -1567,7 +1581,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             pass
 
         # v18.307 Bug2 PR-C SSOT（color_override 傳實際 TRAFFIC_GREEN 常數，防色票漂移）
-        st.markdown(section_header_html("fundamental", color_override=TRAFFIC_GREEN), unsafe_allow_html=True)
+        st.markdown(section_header_html("fundamental", color_override=TRAFFIC_GREEN, **_sec_lv["fundamental"]), unsafe_allow_html=True)
         # ══ B. 357 評價 ════════════════════════════════════════
         st.markdown('---')
         st.markdown('#### 💰 B. 357殖利率評價 [策略1]')
@@ -2507,7 +2521,7 @@ padding:12px 16px;margin:8px 0;">
                 if _mc in df2.columns:
                     _ma_above2[_mn] = price2 > float(df2[_mc].iloc[-1])
 
-        st.markdown(section_header_html("financials"), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
+        st.markdown(section_header_html("financials", **_sec_lv["financials"]), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
 
         # ── 🔰 故事化白話：財報名詞快查（純疊加；放在體檢 expander 外，避免巢狀）──
         with st.expander('🔰 看懂下面這些財報名詞（新手必看，30 秒）'):
@@ -2978,7 +2992,7 @@ padding:12px 16px;margin:8px 0;">
         _chip_radar_summary = render_chip_radar(sid2)
 
         # ══ 🤖 AI 首席顧問總結 ═══════════════════════════════════
-        st.markdown(section_header_html("ai"), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
+        st.markdown(section_header_html("ai", **_sec_lv["ai"]), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
 
         _ai_sum_key = f'_ai_sum_{sid2}'
         _ai_sum_cached = st.session_state.get(_ai_sum_key, '')
