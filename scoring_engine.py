@@ -720,10 +720,54 @@ def calc_forward_momentum_score(quarterly_df=None, bs_cf_df=None,
         return _empty
 
 # ── 基本面先行指標細項（6 指標）────────────────────────────
+
+# S-PROV-1 PR-J1 v18.338: 6 先行指標靜態 source_chain map（§2.2 provenance 出口）
+# 各指標的資料源以「主 + (備援鏈)」格式宣告;UI 渲染為「📡 來源:...」chip。
+# 若入參 df 帶 attrs['source'] 或 'source' 欄,優先用即時值覆蓋。
+_LI_SOURCE_CHAINS = {
+    'I1': 'FinMind:TaiwanStockMonthRevenue (+ MOPS / Goodinfo fallback)',
+    'I2': 'FinMind:TaiwanStockMonthRevenue (+ MOPS / Goodinfo fallback)',
+    'I3': 'FinMind:TaiwanStockBalanceSheet',
+    'I4': 'FinMind:TaiwanStockCashFlowsStatement + TaiwanStockFinancialStatements',
+    'I5': 'FinMind:TaiwanStockBalanceSheet + TaiwanStockFinancialStatements',
+    'I6': '—（無免費資料源,需付費補）',
+}
+
+
+def _resolve_li_source(default: str, *dfs) -> str:
+    """從輸入 df 抽即時 source(attrs / 'source' 欄)優先覆蓋靜態 default。
+
+    Fail-safe:任何 df 無 source / 不可讀 → 回 default,不 raise。
+    """
+    _hits = []
+    for _d in dfs:
+        if _d is None:
+            continue
+        # 1) DataFrame.attrs['source']
+        try:
+            _s = getattr(_d, 'attrs', {}).get('source')
+            if _s and _s not in _hits:
+                _hits.append(_s)
+                continue
+        except Exception:
+            pass
+        # 2) 'source' column 第一個非空值
+        try:
+            if hasattr(_d, 'columns') and 'source' in _d.columns and not _d.empty:
+                _v = _d['source'].dropna()
+                if len(_v) > 0:
+                    _s = str(_v.iloc[0])
+                    if _s and _s not in _hits:
+                        _hits.append(_s)
+        except Exception:
+            pass
+    return ' / '.join(_hits) if _hits else default
+
+
 def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> list:
     """
     6 大基本面先行指標，每項回傳 dict：
-      id, module, name, signal (🟢/🟡/🔴/⚪), value (str), detail (str)
+      id, module, name, signal (🟢/🟡/🔴/⚪), value (str), detail (str), source_chain (str)
 
     模組一：高頻業績前瞻（月營收衍生指標）
       I1 — YoY連續3個月正成長且加速
@@ -738,6 +782,8 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
 
     模組四：籌碼深度前瞻
       I6 — 董監持股（需外部資料，目前顯示 N/A）
+
+    v18.338 S-PROV-1 PR-J1:每 dict 加 `source_chain` 欄(§2.2 provenance)。
     """
     import pandas as pd
     import numpy as np
@@ -791,7 +837,8 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
     except Exception:
         _sig = '⚪'; _val = 'N/A'; _detail = '計算錯誤'
     _i1_result = {'id': 'I1', 'module': '模組一', 'name': '月營收YoY加速',
-                  'signal': _sig, 'value': _val, 'detail': _detail}
+                  'signal': _sig, 'value': _val, 'detail': _detail,
+                  'source_chain': _resolve_li_source(_LI_SOURCE_CHAINS['I1'], rev_df)}
     if _i1_reconcile is not None:
         _i1_result['reconcile'] = _i1_reconcile
     results.append(_i1_result)
@@ -831,7 +878,8 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
     except Exception:
         _sig = '⚪'; _val = 'N/A'; _detail = '計算錯誤'
     results.append({'id': 'I2', 'module': '模組一', 'name': '3M/12M均線交叉',
-                     'signal': _sig, 'value': _val, 'detail': _detail})
+                     'signal': _sig, 'value': _val, 'detail': _detail,
+                     'source_chain': _resolve_li_source(_LI_SOURCE_CHAINS['I2'], rev_df)})
 
     # ─────────────────────────────────────────────────
     # 模組二 I3：合約負債 QoQ 成長率
@@ -865,7 +913,8 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
     except Exception:
         _sig = '⚪'; _val = 'N/A'; _detail = '計算錯誤'
     results.append({'id': 'I3', 'module': '模組二', 'name': '合約負債QoQ',
-                     'signal': _sig, 'value': _val, 'detail': _detail})
+                     'signal': _sig, 'value': _val, 'detail': _detail,
+                     'source_chain': _resolve_li_source(_LI_SOURCE_CHAINS['I3'], bs_cf_df)})
 
     # ─────────────────────────────────────────────────
     # 模組二 I4：資本支出強度（CapEx / Revenue YoY 變化）
@@ -929,7 +978,8 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
     except Exception:
         _sig = '⚪'; _val = 'N/A'; _detail = '計算錯誤'
     results.append({'id': 'I4', 'module': '模組二', 'name': 'CapEx強度',
-                     'signal': _sig, 'value': _val, 'detail': _detail})
+                     'signal': _sig, 'value': _val, 'detail': _detail,
+                     'source_chain': _resolve_li_source(_LI_SOURCE_CHAINS['I4'], bs_cf_df, qtr_df)})
 
     # ─────────────────────────────────────────────────
     # 模組三 I5：存貨銷售比連續下降
@@ -989,14 +1039,16 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
     except Exception:
         _sig = '⚪'; _val = 'N/A'; _detail = '計算錯誤'
     results.append({'id': 'I5', 'module': '模組三', 'name': '存貨去化速度',
-                     'signal': _sig, 'value': _val, 'detail': _detail})
+                     'signal': _sig, 'value': _val, 'detail': _detail,
+                     'source_chain': _resolve_li_source(_LI_SOURCE_CHAINS['I5'], bs_cf_df, qtr_df)})
 
     # ─────────────────────────────────────────────────
     # 模組四 I6：董監持股連續增加（目前無免費資料源）
     # ─────────────────────────────────────────────────
     results.append({'id': 'I6', 'module': '模組四', 'name': '董監持股',
                      'signal': '⚪', 'value': 'N/A',
-                     'detail': '需要付費資料源（FinMind 免費版無此資料）'})
+                     'detail': '需要付費資料源（FinMind 免費版無此資料）',
+                     'source_chain': _LI_SOURCE_CHAINS['I6']})
 
     return results
 
