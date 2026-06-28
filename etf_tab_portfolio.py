@@ -144,10 +144,11 @@ def render_etf_portfolio(gemini_fn=None):
                     _price = float(_df_p['Close'].iloc[-1])
                     try:
                         _p_end = pd.to_datetime(_df_p.index[-1])
-                    except Exception:
+                    except Exception as _e_pend:
+                        print(f'[etf_tab_portfolio] {_tk} 收盤日期解析失敗:{type(_e_pend).__name__}')
                         _p_end = None
-            except Exception:
-                pass
+            except Exception as _e_price:
+                print(f'[etf_tab_portfolio] {_tk} 收盤價抓取失敗:{type(_e_price).__name__}: {_e_price}')
             try:
                 _div_s = fetch_etf_dividends(_tk)
                 if _div_s is not None and not _div_s.empty:
@@ -155,12 +156,12 @@ def render_etf_portfolio(gemini_fn=None):
                     _div_s.index = pd.to_datetime(_div_s.index, errors='coerce')
                     try:
                         _div_s.index = _div_s.index.tz_localize(None)
-                    except Exception:
-                        pass
+                    except Exception as _e_tz:
+                        print(f'[etf_tab_portfolio] {_tk} 配息 index tz strip 失敗:{type(_e_tz).__name__}')
                     _recent = _div_s[_div_s.index >= _cutoff]
                     _div_amt = float(_recent.sum()) * _shares
-            except Exception:
-                pass
+            except Exception as _e_div:
+                print(f'[etf_tab_portfolio] {_tk} 配息抓取失敗:{type(_e_div).__name__}: {_e_div}')
             return (_price, _div_amt, _p_end)
 
         _workers = min(len(rows), 6)
@@ -173,7 +174,8 @@ def render_etf_portfolio(gemini_fn=None):
                 _tk = _futs[_fut]
                 try:
                     _p, _d, _pe = _fut.result()
-                except Exception:
+                except Exception as _e_fut:
+                    print(f'[etf_tab_portfolio] {_tk} fetch future 失敗:{type(_e_fut).__name__}: {_e_fut}')
                     _p, _d, _pe = 0.0, 0.0, None
                 _cur_prices[_tk] = _p
                 _div_received[_tk] = _d
@@ -263,8 +265,8 @@ def render_etf_portfolio(gemini_fn=None):
                      help='清快取後重新抓取最新現價與配息（不需重填表格）'):
             try:
                 st.cache_data.clear()
-            except Exception:
-                pass
+            except Exception as _e_clr:
+                print(f'[etf_tab_portfolio] cache_data.clear() 失敗:{type(_e_clr).__name__}')
             st.rerun()
 
     # ── 持股明細表 ──
@@ -276,7 +278,8 @@ def render_etf_portfolio(gemini_fn=None):
             code = _bare(tk)
             n = _gsn_etf(code)
             return n if n and n != code else (fetch_etf_info(tk).get('shortName') or fetch_etf_info(tk).get('longName') or tk)
-    except Exception:
+    except Exception as _e_nm:
+        print(f'[etf_tab_portfolio] _etf_name helper 初始化失敗:{type(_e_nm).__name__}')
         def _etf_name(tk): return tk
     overview_df = pd.DataFrame([{
         'ETF':       r['ticker'],
@@ -609,7 +612,8 @@ def render_etf_portfolio(gemini_fn=None):
         beta_i  = info_i.get('beta') or info_i.get('beta3Year') or 1.0
         try:
             beta_i = float(beta_i)
-        except Exception:
+        except Exception as _e_beta:
+            print(f"[etf_tab_portfolio] {r['ticker']} beta cast 失敗:{type(_e_beta).__name__},fallback 1.0")
             beta_i = 1.0
         est_loss       = r['actual_pct'] / 100 * beta_i * (-0.20) * total_value
         total_stress  += est_loss
@@ -1025,7 +1029,8 @@ def _render_oauth_panel(_gsp) -> bool:
         _cur_title = ''
         try:
             _cur_title = _gsp.get_sheet_title()
-        except Exception:
+        except Exception as _e_gst:
+            print(f'[etf_tab_portfolio] get_sheet_title 失敗:{type(_e_gst).__name__}: {_e_gst}')
             _cur_title = ''
         _sid_now = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
         if _cur_title:
