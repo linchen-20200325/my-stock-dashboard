@@ -56,6 +56,7 @@ from shared.signal_thresholds import (
 )
 from tab_helpers import (
     classify_bias_zone,            # v18.336 PR-H4:月線/年線乖離分層 SSOT
+    classify_rs_zone,              # v18.337 PR-H5:RS 數值評級 SSOT
     classify_stock_status_lamp,    # v18.336 PR-H4:操作狀態燈 SSOT
     classify_trend_4tier,
     compute_stop_levels,           # v18.336 PR-H4:停利停損 SSOT
@@ -668,6 +669,67 @@ padding:14px 18px;margin-bottom:12px;">
             st.markdown(kpi('K 線趨勢', _trend_lbl_radar,
                             '多頭/空頭/多箱/空箱', _tc_radar, '#1a1a0d'),
                         unsafe_allow_html=True)
+
+        # ── v18.337 PR-H5:⚙️ 多因子評分(3 卡 — 對標個股組合 Tab P2 補齊)
+        # SQ 獲利品質 / FGMS 前瞻動能 / RS 相對強度 — 三維 0-100 評分
+        st.markdown('#### ⚙️ 多因子評分')
+        _mf_c1, _mf_c2, _mf_c3 = st.columns(3)
+        # 卡 1:SQ 獲利品質(對標個股組合 L431-439)
+        _sq_label = '⚪ 無資料'
+        _sq_color = '#666'
+        try:
+            from scoring_engine import calc_quality_score as _cqs2
+            _sq_r2 = _cqs2(qtr2)
+            if _sq_r2 and _sq_r2.get('sq') is not None:
+                _sq_v2 = _sq_r2['sq']
+                _sq_lbl2 = _sq_r2.get('sq_label', '')
+                _sq_label = f"{_sq_v2:.0f}({_sq_lbl2})"
+                # SQ_GOOD_MIN=75 / SQ_STABLE_MIN=55(shared.signal_thresholds)
+                from shared.signal_thresholds import SQ_GOOD_MIN, SQ_STABLE_MIN
+                _sq_color = (TRAFFIC_GREEN if _sq_v2 >= SQ_GOOD_MIN
+                             else (TRAFFIC_YELLOW if _sq_v2 >= SQ_STABLE_MIN else TRAFFIC_RED))
+        except Exception as _e_sq:
+            print(f'[tab_stock H5 SQ] {sid2} {type(_e_sq).__name__}: {_e_sq}')
+        with _mf_c1:
+            st.markdown(kpi('SQ 獲利品質', _sq_label, '75 優 / 55 中 / <55 弱',
+                            _sq_color, '#0d1f0d'), unsafe_allow_html=True)
+        # 卡 2:FGMS 前瞻動能(對標個股組合 L440-454)
+        _fgms_label = '⚪ 無資料'
+        _fgms_color = '#666'
+        try:
+            from scoring_engine import calc_forward_momentum_score as _cfgms2
+            _is_fin2 = bool(qtr2['是否金融股'].iloc[0]) if (qtr2 is not None and '是否金融股' in qtr2.columns) else False
+            _fg_r2 = _cfgms2(qtr2, qtr_extra2, is_finance=_is_fin2)
+            if _fg_r2 and _fg_r2.get('fgms') is not None:
+                _fgms_v2 = _fg_r2['fgms']
+                _fgms_lbl2 = _fg_r2.get('fgms_label', '')
+                _fgms_label = f"{_fgms_v2:.0f}({_fgms_lbl2})"
+                # FGMS_LABEL_T1=75 / T2=60 / T3=45(shared.signal_thresholds)
+                from shared.signal_thresholds import (
+                    FGMS_LABEL_T1, FGMS_LABEL_T2,
+                )
+                _fgms_color = (TRAFFIC_GREEN if _fgms_v2 >= FGMS_LABEL_T1
+                               else (TRAFFIC_YELLOW if _fgms_v2 >= FGMS_LABEL_T2 else TRAFFIC_RED))
+        except Exception as _e_fg:
+            print(f'[tab_stock H5 FGMS] {sid2} {type(_e_fg).__name__}: {_e_fg}')
+        with _mf_c2:
+            st.markdown(kpi('FGMS 前瞻動能', _fgms_label, 'T1≥75 / T2≥60 / T3≥45',
+                            _fgms_color, '#0d1818'), unsafe_allow_html=True)
+        # 卡 3:RS 相對強度(classify_rs_zone SSOT)
+        _rs_v_card = _xsec.get('rs_val') if isinstance(locals().get('_xsec'), dict) else None
+        _rs_slope_card = None
+        try:
+            from scoring_engine import rs_slope as _rsslope_h5
+            if _rs_v_card is None:
+                from scoring_engine import calc_rs_score as _crs_h5
+                _rs_v_card = _crs_h5(df2)
+            _rs_slope_card = _rsslope_h5(df2)
+        except Exception as _e_rs:
+            print(f'[tab_stock H5 RS] {sid2} {type(_e_rs).__name__}: {_e_rs}')
+        _rs_lbl_card, _rs_color_card = classify_rs_zone(_rs_v_card, _rs_slope_card)
+        with _mf_c3:
+            st.markdown(kpi('RS 相對強度', _rs_lbl_card, '≥75 強 / 50-75 中 / <50 弱',
+                            _rs_color_card, '#1a1a0d'), unsafe_allow_html=True)
 
         _sp_c5, _sp_c6 = st.columns(2)
         _dist_hi = round((_hi20_p/_cur_p-1)*100, 1) if _cur_p > 0 else 0
