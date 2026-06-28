@@ -12,7 +12,10 @@ from etf_fetch import (
     fetch_etf_price, fetch_etf_dividends, fetch_etf_info,
     fetch_etf_nav_history, _get_etf_launch_price,
 )
-from etf_helpers import calc_sigma_metrics  # v18.334 PR-H2:σ 計算 SSOT
+from etf_helpers import (
+    calc_sigma_metrics,           # v18.334 PR-H2:σ 計算 SSOT
+    classify_etf_quick_sigma,     # v18.335 PR-H3:⚡短線 σ 分級 SSOT
+)
 from shared.ttls import TTL_15MIN, TTL_1HOUR
 # v18.241 E8+E9: 抽 inline magic 到 shared SSOT
 from shared.signal_thresholds import (
@@ -21,11 +24,7 @@ from shared.signal_thresholds import (
     ETF_AUM_LOW_YI,
     ETF_AVG_VOL_20D_FAIR_LOTS,
     ETF_AVG_VOL_20D_LOW_LOTS,
-    ETF_QUICK_SIGMA_CHEAP,
-    ETF_QUICK_SIGMA_DISASTER,
-    ETF_QUICK_SIGMA_HIGH,
-    ETF_QUICK_SIGMA_OVERBOUGHT,
-    ETF_QUICK_SIGMA_OVERSOLD,
+    # v18.335 PR-H3:ETF_QUICK_SIGMA_* 5 個由 classify_etf_quick_sigma 內部消費,移除 etf_calc 直引
     ETF_VCP_MIN_DAYS,
     TRADING_DAYS_PER_YEAR,
 )
@@ -80,30 +79,12 @@ def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
         _bias20 = round((_cur - _ma20v) / _ma20v * 100, 2) if (_ma20v and _ma20v > 0) else None
         _bias60 = round((_cur - _ma60v) / _ma60v * 100, 2) if (_ma60v and _ma60v > 0) else None
 
-        # ⚡ 短線 σ 位階(MA20 ± nσ 5 段戰情燈號 — 衛星「跌了就買」分級)
-        # 與 etf_tab_single.py MK#11「📅 長線 σ」(MA240 z-score)為**不同時間尺度**,
-        # 給不同建議天經地義(類比 MA20 vs MA60 信號差);文案前綴明示避免 user 困惑。
+        # ⚡ 短線 σ 位階(v18.335 PR-H3:抽至 etf_helpers.classify_etf_quick_sigma SSOT)
+        # 與 etf_tab_single.py「📅 長線 σ」為不同時間尺度,文案前綴消歧義。
         _sigma_label, _sigma_action, _sigma_emoji = None, None, None
-        if _ma20v is not None and _sig['std_price']:
-            _std = _sig['std_price']
-            # v18.331 PR-F U-7:σ位階倍數常數抽 SSOT(shared.signal_thresholds)
-            _lo3 = _ma20v - ETF_QUICK_SIGMA_DISASTER * _std
-            _lo2 = _ma20v - ETF_QUICK_SIGMA_OVERSOLD * _std
-            _lo1 = _ma20v - ETF_QUICK_SIGMA_CHEAP * _std
-            _hi15 = _ma20v + ETF_QUICK_SIGMA_HIGH * _std
-            _hi2 = _ma20v + ETF_QUICK_SIGMA_OVERBOUGHT * _std
-            if _cur < _lo3:
-                _sigma_emoji, _sigma_label, _sigma_action = '🟢🟢🟢', f'⚡短線 股災價(<-{ETF_QUICK_SIGMA_DISASTER:.0f}σ)', '大買 50%'
-            elif _cur < _lo2:
-                _sigma_emoji, _sigma_label, _sigma_action = '🟢🟢', f'⚡短線 超跌價(<-{ETF_QUICK_SIGMA_OVERSOLD:.0f}σ)', '買 30%'
-            elif _cur < _lo1:
-                _sigma_emoji, _sigma_label, _sigma_action = '🟢', f'⚡短線 便宜價(<-{ETF_QUICK_SIGMA_CHEAP:.0f}σ)', '小買 20%'
-            elif _cur >= _hi2:
-                _sigma_emoji, _sigma_label, _sigma_action = '🔴', f'⚡短線 準備停利(≥+{ETF_QUICK_SIGMA_OVERBOUGHT:.0f}σ)', '分批停利'
-            elif _cur >= _hi15:
-                _sigma_emoji, _sigma_label, _sigma_action = '🟠', f'⚡短線 偏高(≥+{ETF_QUICK_SIGMA_HIGH:.1f}σ)', '不追高/減碼'
-            else:
-                _sigma_emoji, _sigma_label, _sigma_action = '⚪', f'⚡短線 中性區(±{ETF_QUICK_SIGMA_CHEAP:.0f}σ)', '靜待訊號'
+        _qsig = classify_etf_quick_sigma(_cur, _ma20v, _sig['std_price'])
+        if _qsig is not None:
+            _sigma_emoji, _sigma_label, _sigma_action = _qsig
 
         # 30 日 sparkline
         _spark = [float(x) for x in df['Close'].tail(30).tolist()]
@@ -449,6 +430,60 @@ def calc_liquidity_score(df: pd.DataFrame, aum=None) -> dict:
     if not _reasons:
         _reasons.append('流動性與規模皆充足')
     return {'level': _level, 'avg_vol_20d': _avg, 'reasons': _reasons}
+
+
+def calc_portfolio_stress_test(rows: list, total_value: float,
+                                drop_pct: float | None = None) -> dict:
+    """v18.335 PR-H3:投組壓力測試 SSOT(S&P500 假設下跌 drop_pct 估 Beta 加權虧損)。
+
+    原 etf_tab_portfolio.py:622-650 inline 已抽出。
+
+    Args:
+        rows: 投組明細 list[dict],每筆需含 'ticker' / 'actual_pct'
+        total_value: 投組總市值(元)
+        drop_pct: 假設市場下跌幅度(預設 PORTFOLIO_STRESS_TEST_DROP_PCT = -20%)
+
+    Returns:
+        dict {
+          'per_etf': list[dict {'ETF', 'Beta', '實際權重%', '預估虧損(元)', '_loss': float}],
+          'total_loss': float,         # 總虧損(元,正負同 drop_pct)
+          'loss_pct': float,           # |total_loss| / total_value × 100
+          'drop_pct': float,           # 實際使用的下跌幅度
+        }
+
+    SSOT 政策:任何投組層壓力測試呼叫本函式,不再 inline Beta 加權計算。
+    Beta cast 失敗 fallback 1.0 + 對應 print log(fail loud)。
+    """
+    from shared.signal_thresholds import PORTFOLIO_STRESS_TEST_DROP_PCT
+    if drop_pct is None:
+        drop_pct = PORTFOLIO_STRESS_TEST_DROP_PCT
+    _per_etf = []
+    _total_loss = 0.0
+    _drop_ratio = drop_pct / 100
+    for r in rows:
+        _info = fetch_etf_info(r['ticker'])
+        _beta = _info.get('beta') or _info.get('beta3Year') or 1.0
+        try:
+            _beta = float(_beta)
+        except Exception as _e_beta:
+            print(f"[calc_portfolio_stress_test] {r['ticker']} beta cast 失敗:"
+                  f'{type(_e_beta).__name__},fallback 1.0')
+            _beta = 1.0
+        _loss = r['actual_pct'] / 100 * _beta * _drop_ratio * total_value
+        _total_loss += _loss
+        _per_etf.append({
+            'ETF': r['ticker'], 'Beta': round(_beta, 2),
+            '實際權重%': r['actual_pct'],
+            '預估虧損(元)': f'{_loss:,.0f}',
+            '_loss': _loss,
+        })
+    _loss_pct = (abs(_total_loss) / total_value * 100) if total_value > 0 else 0.0
+    return {
+        'per_etf': _per_etf,
+        'total_loss': _total_loss,
+        'loss_pct': _loss_pct,
+        'drop_pct': drop_pct,
+    }
 
 
 def calc_tracking_error(df: pd.DataFrame, bench_df: pd.DataFrame) -> float:

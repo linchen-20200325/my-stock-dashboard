@@ -52,6 +52,9 @@ def render_etf_portfolio(gemini_fn=None):
         fetch_etf_dividends, fetch_etf_holdings, fetch_etf_info, fetch_etf_price,
         macro_allocation_banner,
     )
+    # v18.335 PR-H3:壓力測試 + 年現金流彙整獨立函式 SSOT
+    from etf_calc import calc_portfolio_stress_test
+    from etf_helpers import compute_etf_annual_cashflow
 
     mkt_info = st.session_state.get('mkt_info', {})
     regime   = mkt_info.get('regime', 'neutral')
@@ -620,28 +623,15 @@ def render_etf_portfolio(gemini_fn=None):
             f'{_r["代號"]} 連{_r.get("連敗季數", 0)}季輸{_r.get("benchmark", "大盤")}(建議換被動式)'
             for _r in _switch_targets) if _switch_targets else '無主動式 ETF 連 2 季輸盤')
 
-    # ── 壓力測試（S&P500 下跌20%）────────────────────────────
-    st.markdown('#### 🧨 壓力測試（模擬 S&P 500 下跌 20%）')
-    stress_results = []
-    total_stress   = 0.0
-    for r in rows:
-        info_i  = fetch_etf_info(r['ticker'])
-        beta_i  = info_i.get('beta') or info_i.get('beta3Year') or 1.0
-        try:
-            beta_i = float(beta_i)
-        except Exception as _e_beta:
-            print(f"[etf_tab_portfolio] {r['ticker']} beta cast 失敗:{type(_e_beta).__name__},fallback 1.0")
-            beta_i = 1.0
-        est_loss       = (r['actual_pct'] / 100 * beta_i
-                          * (PORTFOLIO_STRESS_TEST_DROP_PCT / 100) * total_value)
-        total_stress  += est_loss
-        stress_results.append({
-            'ETF': r['ticker'], 'Beta': round(beta_i, 2),
-            '實際權重%': r['actual_pct'],
-            '預估虧損(元)': f'{est_loss:,.0f}',
-        })
+    # ── 壓力測試（v18.335 PR-H3:抽至 etf_calc.calc_portfolio_stress_test SSOT）─
+    st.markdown(f'#### 🧨 壓力測試（模擬 S&P 500 下跌 {abs(PORTFOLIO_STRESS_TEST_DROP_PCT):.0f}%）')
+    _stress = calc_portfolio_stress_test(rows, total_value)
+    # 渲染表格(剔除內部 _loss 欄)
+    stress_results = [{k: v for k, v in r.items() if not k.startswith('_')}
+                      for r in _stress['per_etf']]
+    total_stress = _stress['total_loss']
     st.dataframe(pd.DataFrame(stress_results), use_container_width=True, hide_index=True)
-    loss_pct = abs(total_stress) / total_value * 100
+    loss_pct = _stress['loss_pct']
     _stress_warn = loss_pct > PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT
     color    = 'red' if _stress_warn else 'green'
     _colored_box(
@@ -732,6 +722,7 @@ def render_etf_portfolio(gemini_fn=None):
     # ── 配息日曆 × 年度現金流預估 ──────────────────────────────
     st.markdown('#### 💰 配息日曆 × 年度現金流預估')
     st.caption('依過去12個月配息紀錄 × 持有股數（市值/現價）推估未來現金流入')
+    # v18.335 PR-H3:彙整邏輯抽至 etf_helpers.compute_etf_annual_cashflow SSOT
     _div_data = []
     _monthly_cf = {m: 0.0 for m in range(1, 13)}
     with st.spinner('抓取配息資料...'):
@@ -739,29 +730,18 @@ def render_etf_portfolio(gemini_fn=None):
             _div_s  = fetch_etf_dividends(r['ticker'])
             _price  = _cur_prices.get(r['ticker'], 0)
             _shares = int(r['current_value'] / _price) if _price > 0 else 0
-            if _div_s.empty or _shares == 0:
+            _cf = compute_etf_annual_cashflow(_div_s, _shares, lookback_days=365)
+            if _cf is None:
                 continue
-            _cutoff  = pd.Timestamp.now() - pd.DateOffset(years=1)
-            _recent  = _div_s[_div_s.index >= _cutoff]
-            if _recent.empty:
-                continue
-            _sum = _recent.sum()
-            _annual_per_share = float(np.ravel(_sum)[0]) if hasattr(_sum, '__len__') else float(_sum)
-            _n_pay = len(_recent)
-            _est_income = _annual_per_share * _shares
             _div_data.append({
                 'ETF': r['ticker'],
                 '持有股數': _shares,
-                '近1年每股配息': round(_annual_per_share, 4),
-                '預估年收入(元)': round(_est_income),
-                '配息次數/年': _n_pay,
+                '近1年每股配息': round(_cf['annual_per_share'], 4),
+                '預估年收入(元)': round(_cf['estimated_income']),
+                '配息次數/年': _cf['n_payments'],
             })
-            # 月度分配（依歷史配息月份）
-            _pay_months = sorted(set(_recent.index.month.tolist()))
-            for _m in _pay_months:
-                _ms = _recent[_recent.index.month == _m].sum()
-                _month_div = (float(np.ravel(_ms)[0]) if hasattr(_ms, '__len__') else float(_ms)) * _shares
-                _monthly_cf[_m] = _monthly_cf.get(_m, 0) + _month_div
+            for _m, _amt in _cf['monthly_distribution'].items():
+                _monthly_cf[_m] = _monthly_cf.get(_m, 0) + _amt
 
     if _div_data:
         _div_df = pd.DataFrame(_div_data)
