@@ -26,7 +26,7 @@ def _clear_module_caches() -> None:
     故此污染**僅存在於測試環境**(同一 pytest process 內跨測試殘留)。
     """
     try:
-        import tw_macro
+        from src.data.macro import tw_macro
         for _name in dir(tw_macro):
             _fn = getattr(tw_macro, _name, None)
             _clear = getattr(_fn, "cache_clear", None)
@@ -36,7 +36,7 @@ def _clear_module_caches() -> None:
         pass
 
     try:
-        import macro_core
+        from src.data.macro import macro_core
         for _name in dir(macro_core):
             if _name.endswith("_CACHE"):
                 _obj = getattr(macro_core, _name, None)

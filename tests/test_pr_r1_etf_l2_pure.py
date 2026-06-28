@@ -48,13 +48,13 @@ class TestEtfCalcL2Pure(unittest.TestCase):
 
     def test_no_proxy_helper_module_level(self):
         self.assertFalse(self._module_level_imports('proxy_helper'),
-                         'etf_calc 不得 import proxy_helper (§8.2 L2 rule)')
+                         'etf_calc 不得 from src.data.proxy import proxy_helper (§8.2 L2 rule)')
 
 
 class TestEtfFetchPeerHistoryExists(unittest.TestCase):
 
     def test_function_exists(self):
-        from etf_fetch import fetch_etf_peer_history
+        from src.data.etf import fetch_etf_peer_history
         import inspect
         sig = inspect.signature(fetch_etf_peer_history)
         params = list(sig.parameters.keys())
@@ -80,7 +80,7 @@ class TestSourceMarker(unittest.TestCase):
         self.assertIn('from etf_fetch import fetch_etf_peer_history', src)
 
     def test_etf_fetch_new_fn_marker(self):
-        src = open('etf_fetch.py', encoding='utf-8').read()
+        src = open('src/data/etf/etf_fetch.py', encoding='utf-8').read()
         self.assertIn('v18.358 PR-R1 §8.2 A7', src)
         self.assertIn('def fetch_etf_peer_history(', src)
 

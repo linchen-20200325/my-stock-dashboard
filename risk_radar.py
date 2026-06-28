@@ -35,7 +35,7 @@ from typing import Optional
 
 import pandas as pd
 
-from macro_core import fetch_fred, fetch_yf_close
+from src.data.macro import fetch_fred, fetch_yf_close
 
 GREEN = "#22c55e"
 YELLOW = "#eab308"
@@ -144,7 +144,7 @@ def _fetch_cboe_csv(short_name: str) -> pd.Series:
     """
     import io
 
-    from proxy_helper import fetch_url
+    from src.data.proxy import fetch_url
     try:
         url = ("https://cdn.cboe.com/api/global/us_indices/"
                f"daily_prices/{short_name}_History.csv")

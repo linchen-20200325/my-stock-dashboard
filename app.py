@@ -50,7 +50,7 @@ def _tw_now_str(): return _tw_now().strftime('%Y-%m-%d %H:%M')
 
 def _bps():
     try:
-        from tw_stock_data_fetcher import build_proxy_session as _b
+        from src.data.stock import build_proxy_session as _b
         s = _b()
     except Exception:
         s = requests.Session()
@@ -59,7 +59,7 @@ def _bps():
 
 print('[INFO] main.py v3.0 戰情室 載入完成')
 
-from data_loader import StockDataLoader, _LOADER_VERSION  # noqa: E402
+from src.data.core import StockDataLoader, _LOADER_VERSION  # noqa: E402
 # ── 新增模組（根據說明書 v1.0）──────────────────────────────
 # ── v3.0 新增模組（§5-§11）──────────────────────────────────
 from etf_dashboard import (  # noqa: E402
@@ -368,7 +368,7 @@ def fetch_dividend_data(sid):
     # ── 備援2: yfinance（v18.209 K5：改走 yf_proxy.cached_dividends，proxy+cache 統一）──
     if avg_div == 0:
         try:
-            from yf_proxy import cached_dividends as _yp_div
+            from src.data.proxy import cached_dividends as _yp_div
             divs = _yp_div(f'{sid}.TW')
             if divs is not None and len(divs) > 0:
                 divs.index = pd.DatetimeIndex(divs.index).tz_localize(None)
@@ -445,7 +445,7 @@ def fetch_financials(sid, industry: str = ""):
     """
     import datetime as _dtf
     try:
-        from tw_stock_data_fetcher import build_proxy_session as _bps_fin
+        from src.data.stock import build_proxy_session as _bps_fin
         _rq_f = _bps_fin()
     except Exception:
         import requests as _rq_f_fallback
@@ -1198,7 +1198,7 @@ def render_macro_compass():
 
     def _do_fetch():
         try:
-            from macro_core import fetch_macro_compass as _fmc
+            from src.data.macro import fetch_macro_compass as _fmc
             _data = _fmc()
         except Exception as e:
             print(f'[render_macro_compass] fetch failed: {e}')
@@ -1329,7 +1329,7 @@ def _fetch_macro_news(n: int = 5) -> list:
         print('[AI-News] ⚠️ feedparser 未安裝，跳過新聞抓取')
         return []
     try:
-        from proxy_helper import fetch_url as _furl_news
+        from src.data.proxy import fetch_url as _furl_news
     except ImportError:
         _furl_news = None
 
@@ -1449,7 +1449,7 @@ def _fetch_stock_news(stock_id: str, stock_name: str = "", n: int = 5, recency: 
             _diag.append('feedparser/urllib 匯入失敗')
         return []
     try:
-        from proxy_helper import fetch_url as _furl_sn, nas_relay_fetch as _nas_rf
+        from src.data.proxy import fetch_url as _furl_sn, nas_relay_fetch as _nas_rf
     except ImportError:
         _furl_sn = None
         _nas_rf = None

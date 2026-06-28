@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from etf_calc import calc_weakness_metrics, _auto_bench_for_etf
-from etf_fetch import is_active_etf
+from src.data.etf import is_active_etf
 
 
 class TestActivePassiveClassification:

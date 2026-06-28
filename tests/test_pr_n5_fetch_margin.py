@@ -19,7 +19,7 @@ import unittest
 class TestFetchMarginBalanceExtracted(unittest.TestCase):
 
     def test_importable(self):
-        from daily_data_fetchers import fetch_margin_balance  # noqa
+        from src.data.daily import fetch_margin_balance  # noqa
         import inspect
         sig = inspect.signature(fetch_margin_balance)
         self.assertIn('date_str', sig.parameters)
@@ -27,7 +27,7 @@ class TestFetchMarginBalanceExtracted(unittest.TestCase):
 
     def test_reexport_identity(self):
         from daily_checklist import fetch_margin_balance as _m1
-        from daily_data_fetchers import fetch_margin_balance as _m2
+        from src.data.daily import fetch_margin_balance as _m2
         self.assertIs(_m1, _m2)
 
     def test_daily_checklist_no_inline_def(self):

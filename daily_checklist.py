@@ -18,7 +18,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def _bps():
     try:
-        from tw_stock_data_fetcher import build_proxy_session as _b
+        from src.data.stock import build_proxy_session as _b
         s = _b()
     except Exception:
         s = requests.Session()
@@ -77,13 +77,13 @@ from shared.macro_compute import (
 # ═══════════════════════════════════════════════
 # 三大法人 (v18.346 PR-N3 抽至 daily_data_fetchers.py)
 # ═══════════════════════════════════════════════
-from daily_data_fetchers import fetch_institutional  # noqa: F401
+from src.data.daily import fetch_institutional  # noqa: F401
 
 
 # ═══════════════════════════════════════════════
 # 融資餘額 — v18.348 PR-N5 抽至 daily_data_fetchers.py
 # ═══════════════════════════════════════════════
-from daily_data_fetchers import fetch_margin_balance  # noqa: F401
+from src.data.daily import fetch_margin_balance  # noqa: F401
 
 
 
@@ -96,20 +96,20 @@ from shared.macro_compute import evaluate_market_status_v4_final  # noqa: F401
 # yfinance (v18.345 PR-N2 抽至 daily_data_fetchers.py)
 # ═══════════════════════════════════════════════
 # caller 用 `from daily_checklist import fetch_single` 形式,re-export 維持 0 改動
-from daily_data_fetchers import (  # noqa: F401
+from src.data.daily import (  # noqa: F401
     fetch_single,
     fetch_flow_snapshot,
 )
 
 # v18.346 PR-N3:_fetch_otc_via_finmind 抽至 daily_data_fetchers.py
-from daily_data_fetchers import _fetch_otc_via_finmind  # noqa: F401
+from src.data.daily import _fetch_otc_via_finmind  # noqa: F401
 
 
 
 # ═════════════════════════════════════════════════════
 # 騰落指標（ADL）— v18.347 PR-N4 抽至 daily_data_fetchers.py
 # ═════════════════════════════════════════════════════
-from daily_data_fetchers import fetch_adl, _adl_selftest  # noqa: F401
+from src.data.daily import fetch_adl, _adl_selftest  # noqa: F401
 
 
 

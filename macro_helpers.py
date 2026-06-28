@@ -1151,7 +1151,7 @@ def get_china_snapshot(fred_api_key: str) -> dict:
     """
     if not fred_api_key or len(str(fred_api_key).strip()) < 30:
         return {}
-    from tw_macro import fetch_china_macro  # noqa: PLC0415
+    from src.data.macro import fetch_china_macro  # noqa: PLC0415
     return china_macro_snapshot(fetch_china_macro(fred_api_key))
 
 

@@ -23,7 +23,7 @@ def fetch_market_data():
     （走 NAS proxy，避免雲端 IP 被 TWSE 限流）。回傳 schema 不變，仍為
     {'foreign_net': 元(float), 'date': 'YYYYMMDD'}；外部呼叫端不需修改。
     """
-    from tw_macro import fetch_finmind_foreign_investor
+    from src.data.macro import fetch_finmind_foreign_investor
     snap = fetch_finmind_foreign_investor(days_back=7)
     if snap.get('error') or snap.get('fii_net') is None:
         if snap.get('error'):
@@ -197,7 +197,7 @@ def get_market_assessment(df_index=None, foreign_net=None,
     if df_index is None:
         # [step 3c] yfinance.Ticker 直連 → macro_core.fetch_yf_ohlcv（走 NAS proxy 直打 Chart API）
         try:
-            from macro_core import fetch_yf_ohlcv
+            from src.data.macro import fetch_yf_ohlcv
             _df = fetch_yf_ohlcv('^TWII', range_='9mo', interval='1d')
             if _df.empty:
                 print('[MarketStrategy] 大盤數據失敗: macro_core 回傳空 DataFrame')

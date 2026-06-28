@@ -12,9 +12,9 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-import macro_core
+from src.data.macro import macro_core
 import macro_helpers
-import tw_macro
+from src.data.macro import tw_macro
 
 
 # ══════════════════════════════════════════════════════════════

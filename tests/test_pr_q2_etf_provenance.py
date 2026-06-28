@@ -20,7 +20,7 @@ class TestEtfFetchProvenanceMarkers(unittest.TestCase):
     """7 處 PR-Q2 marker 都在 source code(防 regression)。"""
 
     def setUp(self):
-        with open('etf_fetch.py', encoding='utf-8') as f:
+        with open('src/data/etf/etf_fetch.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_prov_log_helper_defined(self):
@@ -61,7 +61,7 @@ class TestInterfaceUnchanged(unittest.TestCase):
 
     def setUp(self):
         import ast
-        with open('etf_fetch.py', encoding='utf-8') as f:
+        with open('src/data/etf/etf_fetch.py', encoding='utf-8') as f:
             tree = ast.parse(f.read())
         self.fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
 
@@ -84,9 +84,9 @@ class TestInterfaceUnchanged(unittest.TestCase):
 
 class TestImport(unittest.TestCase):
     def test_etf_fetch_imports(self):
-        import etf_fetch  # noqa
+        from src.data.etf import etf_fetch  # noqa
         # _prov_log 可呼叫
-        from etf_fetch import _prov_log
+        from src.data.etf import _prov_log
         _prov_log('test_fn', 'test_source', 'TEST', 'unit_test')
 
 

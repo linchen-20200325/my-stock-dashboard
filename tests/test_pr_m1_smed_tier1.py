@@ -56,7 +56,7 @@ class TestGenerateQuickSummaryStderrLog:
 
 class TestStockNameInnerStderrLog:
     def test_marker_in_source(self):
-        src = open('data_loader.py', encoding='utf-8').read()
+        src = open('src/data/core/data_loader.py', encoding='utf-8').read()
         assert '[_fetch_stock_name_inner] swallow' in src
         # 原 bare `except:\n                pass` 已收掉
         assert 'except:\n                pass\n\n            if stock_name == stock_id' not in src
@@ -66,7 +66,7 @@ class TestStockNameInnerStderrLog:
 
 class TestProxyConfigSecretsStderrLog:
     def test_marker_in_source(self):
-        src = open('proxy_helper.py', encoding='utf-8').read()
+        src = open('src/data/proxy/proxy_helper.py', encoding='utf-8').read()
         assert '[_load_proxy_config/secrets] swallow' in src
         # 原 except Exception:\n        pass 已替換為 typed + stderr
         # (新版含 _e_sec 變數名 + print)
@@ -80,7 +80,7 @@ class TestImports:
         import ai_engine  # noqa
 
     def test_data_loader(self):
-        import data_loader  # noqa
+        from src.data.core import data_loader  # noqa
 
     def test_proxy_helper(self):
-        import proxy_helper  # noqa
+        from src.data.proxy import proxy_helper  # noqa

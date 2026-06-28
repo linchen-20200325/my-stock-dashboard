@@ -27,7 +27,7 @@ def test_fetch_fred_carries_source_columns(monkeypatch):
     """phase 1 v18.246 — fetch_fred(成功 path)DataFrame 須含 schema-additive
     source/fetched_at columns(SSOT: macro_core.py)。"""
     try:
-        import macro_core
+        from src.data.macro import macro_core
     except ImportError as e:
         pytest.skip(f"macro_core import failed: {e}")
 
@@ -65,7 +65,7 @@ def test_fetch_fred_carries_source_columns(monkeypatch):
 def test_leading_fast_carries_provenance_columns():
     """phase 18 v18.264 — build_leading_fast 在有效資料 path 須帶
     source + fetched_at columns(schema-additive,靜態檢查)。"""
-    src = _read("leading_indicators.py")
+    src = _read("src/data/macro/leading_indicators.py")
     assert 'df["source"]' in src, "build_leading_fast 須有 df['source'] 寫入(phase 18)"
     assert 'df["fetched_at"]' in src or "df['fetched_at']" in src, \
         "build_leading_fast 須有 fetched_at 寫入"
@@ -79,7 +79,7 @@ def test_leading_fast_carries_provenance_columns():
 def test_mops_financials_provenance_naming():
     """phase 16 v18.262 — fetch_mops_financials 須帶 source/fetched_at,
     且 source 含 `MOPS:t164sb03:Y<year>Q<season>` 命名(SSOT 命名約定)。"""
-    src = _read("tw_stock_data_fetcher.py")
+    src = _read("src/data/stock/tw_stock_data_fetcher.py")
     assert "MOPS:t164sb03" in src, "fetch_mops_financials 命名約定須含 MOPS:t164sb03"
     assert "Goodinfo:" in src, "fetch_goodinfo_financials 須有 Goodinfo: 命名"
     assert "FinMind:TaiwanStockCashFlowsStatement" in src, \
@@ -90,7 +90,7 @@ def test_mops_financials_provenance_naming():
 def test_yf_ohlcv_provenance_naming():
     """phase 16 v18.262 — fetch_yf_ohlcv 須帶 Yahoo:chart:<ticker>:<range>:<interval>
     命名(SSOT)。"""
-    src = _read("macro_core.py")
+    src = _read("src/data/macro/macro_core.py")
     assert "Yahoo:chart" in src, "fetch_yf_ohlcv source 命名須含 Yahoo:chart"
     # fetch_fred provenance(phase 1)
     assert 'FRED:' in src, "fetch_fred source 命名須含 FRED:"
@@ -100,7 +100,7 @@ def test_yf_ohlcv_provenance_naming():
 def test_ism_pmi_source_includes_specific_endpoint():
     """S-PROV-1 phase 3 v18.296 — fetch_ism_pmi 7 段備援的 source 必須帶
     具體 endpoint / series ID,不可只標 'FRED' / 'MacroMicro' 等模糊字串。"""
-    src = _read("macro_core.py")
+    src = _read("src/data/macro/macro_core.py")
     # FRED 路徑須帶 series ID
     assert "'source': f'FRED:{sid}'" in src or '"source": f"FRED:{sid}"' in src, \
         "fetch_ism_pmi FRED 段 source 須帶 series ID 變數"
@@ -123,7 +123,7 @@ def test_macro_compass_carries_provenance(monkeypatch):
     """S-PROV-1 phase 2 v18.295 — fetch_macro_compass(成功 path)三 ticker dict
     各 entry 須含 source + fetched_at(透傳自底層 fetch_yf_close 的 s.attrs)。"""
     try:
-        import macro_core
+        from src.data.macro import macro_core
     except ImportError as e:
         pytest.skip(f"macro_core import failed: {e}")
 

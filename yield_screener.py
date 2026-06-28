@@ -30,7 +30,7 @@ def fetch_twse_yield_pe() -> pd.DataFrame:
         DataFrame with columns: 代碼 / 名稱 / 本益比 / 殖利率(%) / 股價淨值比
         失敗回傳空 DataFrame（呼叫端用 .empty 檢查）
     """
-    from proxy_helper import fetch_url
+    from src.data.proxy import fetch_url
     try:
         _resp = fetch_url(TWSE_BWIBBU_URL, timeout=15)
         if _resp is None or getattr(_resp, 'status_code', 0) != 200:
@@ -87,7 +87,7 @@ def fetch_dividend_history(ticker: str) -> pd.Series:
     _ek = ('HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy')
     _bak = {k: _os.environ.get(k) for k in _ek}
     try:
-        from proxy_helper import get_proxy_config
+        from src.data.proxy import get_proxy_config
         _proxy_dict = get_proxy_config() or {}
         _px_url = _proxy_dict.get('https') or _proxy_dict.get('http')
         if _px_url:
@@ -131,7 +131,7 @@ def fetch_dividend_history(ticker: str) -> pd.Series:
 def _proxy_status_badge() -> str:
     """回傳 HTML badge 顯示 NAS 中繼站狀態（不實際發送請求，僅看 secrets）。"""
     try:
-        from proxy_helper import get_proxy_config
+        from src.data.proxy import get_proxy_config
         _p = get_proxy_config()
         if _p:
             return (f'<span style="background:#0a2818;color:{TRAFFIC_GREEN};padding:3px 10px;'

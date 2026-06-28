@@ -37,7 +37,7 @@ from typing import Callable, Optional
 import numpy as np
 import pandas as pd
 
-from proxy_helper import fetch_url
+from src.data.proxy import fetch_url
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.fred_series import (
     FRED_BSCICP02,

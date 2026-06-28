@@ -82,7 +82,7 @@ def _run_single_stock_diff(
 
     回傳 row dict 供結果表渲染。
     """
-    from data_loader import fetch_financial_statements
+    from src.data.core import fetch_financial_statements
 
     row: dict[str, Any] = {
         "代碼": sid,

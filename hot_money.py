@@ -139,7 +139,7 @@ def fetch_foreign_flow_series(days: int, token: str) -> tuple[pd.DataFrame, str]
         (df[date, foreign_net_yi 億元], error_msg or "")
     """
     try:
-        from leading_indicators import finmind_get
+        from src.data.macro import finmind_get
         end_d = _dt.date.today()
         start_d = end_d - _dt.timedelta(days=days + 14)   # 多抓幾天買日曆 vs 交易日緩衝
         df = finmind_get("TaiwanStockTotalInstitutionalInvestors",

@@ -152,7 +152,7 @@ def backtest_twii_turning_points(
 
     # ── 抓 T10Y2Y 25Y ─────────────────────────────────────────────
     try:
-        from macro_core import fetch_fred as _ff_tw
+        from src.data.macro import fetch_fred as _ff_tw
         df_t = _ff_tw("T10Y2Y", fred_api_key, n=8000)
     except Exception as e:
         out["note"] = f"T10Y2Y 抓取異常：{str(e)[:80]}"
@@ -171,7 +171,7 @@ def backtest_twii_turning_points(
 
     # ── 抓 ^TWII 全歷史（多 range 備援）───────────────────────────
     try:
-        from macro_core import fetch_yf_close as _fyf_tw
+        from src.data.macro import fetch_yf_close as _fyf_tw
     except ImportError as e:
         out["note"] = f"macro_core.fetch_yf_close import 失敗：{e}"
         return out

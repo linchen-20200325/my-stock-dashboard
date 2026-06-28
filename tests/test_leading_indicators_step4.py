@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import leading_indicators as li
+from src.data.macro import leading_indicators as li
 
 
 # ══════════════════════════════════════════════════════════════
@@ -37,7 +37,7 @@ def test_twse_volume_uses_primary_when_fmtqik_ok(monkeypatch):
     def fake_get(url, params=None, headers=None, timeout=None):
         return _FakeResp()
 
-    import macro_core
+    from src.data.macro import macro_core
     def _fail_mc(*a, **kw):
         captured["mc_called"] = True
         return pd.DataFrame()
@@ -82,7 +82,7 @@ def test_twse_volume_fallback_via_macro_core(monkeypatch):
 
     monkeypatch.setattr(li._TWSE_S, "get",
                         lambda *a, **kw: _FailResp())
-    import macro_core
+    from src.data.macro import macro_core
     monkeypatch.setattr(macro_core, "fetch_yf_ohlcv", fake_ohlcv)
 
     out = li.twse_volume("202405")
@@ -111,7 +111,7 @@ def test_twse_volume_fallback_filters_by_month(monkeypatch):
             return {"stat": "ERR"}
 
     monkeypatch.setattr(li._TWSE_S, "get", lambda *a, **kw: _FailResp())
-    import macro_core
+    from src.data.macro import macro_core
     monkeypatch.setattr(macro_core, "fetch_yf_ohlcv",
                         lambda *a, **kw: df)
 
@@ -127,7 +127,7 @@ def test_twse_volume_returns_empty_on_total_failure(monkeypatch):
             return {"stat": "ERR"}
 
     monkeypatch.setattr(li._TWSE_S, "get", lambda *a, **kw: _FailResp())
-    import macro_core
+    from src.data.macro import macro_core
     monkeypatch.setattr(macro_core, "fetch_yf_ohlcv",
                         lambda *a, **kw: pd.DataFrame())
 

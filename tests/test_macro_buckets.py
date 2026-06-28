@@ -10,7 +10,7 @@ import math
 import pytest
 
 from shared import macro_buckets as mb
-from macro_core import MACRO_THRESHOLDS
+from src.data.macro import MACRO_THRESHOLDS
 
 
 # ──────────────────────────────────────────────────────────

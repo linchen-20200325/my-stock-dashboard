@@ -26,7 +26,7 @@ def _fetch_fred_series_edu(series_id: str, units: str = 'lin', months: int = 24)
     try:
         import os as _o
         import pandas as _pd
-        from proxy_helper import fetch_url as _fu
+        from src.data.proxy import fetch_url as _fu
         _key = (_o.environ.get('FRED_API_KEY')
                 or (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else '') or '')
         if not _key:
@@ -151,7 +151,7 @@ def render_tab_edu():
     # v17: 新增「即時數值 + 24M 趨勢圖」chip + sparkline，使用 shared/macro_card 共用模組
     with st.expander('📖 指標解讀手冊 — 數字 + 趨勢 + 完整教學', expanded=True):
         try:
-            from data_registry import (
+            from src.data.core import (
                 get_categories, get_by_category, get_edu, get_edu_count,
                 render_edu_card_html,
             )

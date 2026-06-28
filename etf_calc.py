@@ -10,7 +10,7 @@ import pandas as pd
 # yfinance 唯一用途(compute_etf_peer_ranking L587)已抽至 etf_fetch.fetch_etf_peer_history(L1)。
 from datetime import timedelta
 
-from etf_fetch import (
+from src.data.etf import (
     fetch_etf_price, fetch_etf_dividends, fetch_etf_info,
     fetch_etf_nav_history, _get_etf_launch_price,
 )
@@ -587,7 +587,7 @@ def compute_etf_peer_ranking(ticker: str, periods: tuple = (63, 126, 252)) -> di
     try:
         # v18.358 PR-R1 §8.2 A7:HTTP I/O 抽至 L1(etf_fetch.fetch_etf_peer_history)。
         # 本函式從此變純 L2 Compute(percentile/median/period 切片)。
-        from etf_fetch import fetch_etf_peer_history
+        from src.data.etf import fetch_etf_peer_history
         _close = fetch_etf_peer_history(tuple(_all), period='2y')
         if _close is None or _close.empty:
             return {'_err': 'yfinance 抓不到價格', 'category': _category, 'peers': _peers}
@@ -835,7 +835,7 @@ def compute_etf_weakness_row(ticker: str, name: str = '',
     """高階組裝：抓 ETF / benchmark 價格 → 算 returns → 呼叫 calc_weakness_metrics
     + 抓經理人。回傳給 UI 使用的整列 dict。
     """
-    from etf_fetch import is_active_etf, fetch_etf_manager
+    from src.data.etf import is_active_etf, fetch_etf_manager
     _bench = bench_ticker or _auto_bench_for_etf(ticker)
     _is_act = is_active_etf(ticker)
 

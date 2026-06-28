@@ -113,7 +113,7 @@ def render_etf_single(gemini_fn=None):
 
     # 中文名優先：MoneyDJ 抓取（cache 7 天，主動式 ETF 含 'A' 後綴也支援）
     # → fallback 至 yfinance longName/shortName（多為英文）→ 最後用 ticker
-    from etf_fetch import fetch_etf_zh_name as _fetch_zh_n
+    from src.data.etf import fetch_etf_zh_name as _fetch_zh_n
     _zh_name = _fetch_zh_n(ticker)
     etf_name = _zh_name or info.get('longName') or info.get('shortName') or ticker
     # 費用率走 SITCA primary（台股 ETF 官方，海外 IP 走 NAS proxy）→ yfinance fallback
@@ -142,7 +142,7 @@ def render_etf_single(gemini_fn=None):
     # ── 基金經理人 + 異動偵測（ETF 表現與經理人相關，換手須提醒）──────
     if ticker.endswith(('.TW', '.TWO')):
         try:
-            from etf_fetch import fetch_etf_manager, track_etf_manager_change
+            from src.data.etf import fetch_etf_manager, track_etf_manager_change
             _mgr = fetch_etf_manager(ticker)
             _chg = track_etf_manager_change(ticker, _mgr)
             if _mgr and _mgr.get('name'):
@@ -681,7 +681,7 @@ def render_etf_single(gemini_fn=None):
                       and (not expense) and (_nav_value is None))
     # v1.1：主動式 ETF Yuanta fallback 仍抓不到時 → 視為「公開資料受限」
     try:
-        from etf_fetch import is_active_etf as _is_act_etf
+        from src.data.etf import is_active_etf as _is_act_etf
         _is_active = _is_act_etf(ticker)
     except ImportError:
         _is_active = False
@@ -736,7 +736,7 @@ def render_etf_single(gemini_fn=None):
     _ai_sum_key = f'etf_ai_sum_{ticker}'
     if st.button('🧠 生成 AI 白話總結', key=_ai_sum_key, use_container_width=True):
         from ai_structured_summary import build_structured_summary_prompt
-        from etf_fetch import _fetch_news_for
+        from src.data.etf import _fetch_news_for
 
         _sections = [
             {

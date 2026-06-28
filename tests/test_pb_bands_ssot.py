@@ -67,7 +67,7 @@ class TestClassifyPBLevel:
 class TestDataLoaderSSOTPublic:
     def test_public_fetchers_exist(self):
         """data_loader 已加 3 個 public fetcher,個股 + 組合 Tab 共用。"""
-        import data_loader as dl
+        from src.data.core import data_loader as dl
         assert hasattr(dl, 'fetch_bps'), 'data_loader 缺 fetch_bps()'
         assert hasattr(dl, 'fetch_industry_category'), \
             'data_loader 缺 fetch_industry_category()'

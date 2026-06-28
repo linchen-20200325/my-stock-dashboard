@@ -13,7 +13,7 @@ import pytest
 import pandas as pd
 from unittest.mock import patch
 
-from macro_alert import (
+from src.data.macro import (
     _classify_level,
     check_macro_alerts,
     alert_summary,
@@ -449,7 +449,7 @@ class TestFetchMacroSnapshotEdgeCases:
 import sys
 from unittest.mock import MagicMock, patch
 
-from macro_alert import render_macro_alerts
+from src.data.macro import render_macro_alerts
 
 
 def _make_st_mock():

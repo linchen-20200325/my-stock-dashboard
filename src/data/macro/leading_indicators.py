@@ -27,7 +27,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def _bps():
     try:
-        from tw_stock_data_fetcher import build_proxy_session as _b
+        from src.data.stock import build_proxy_session as _b
         s = _b()
     except Exception:
         s = requests.Session()
@@ -496,7 +496,7 @@ def twse_volume(yyyymm):
     print(f"[VOL] FMTQIK {yyyymm} 改用 macro_core ^TWII Volume 備援")
     # ── [Step 4] 備援：macro_core.fetch_yf_ohlcv（走 NAS proxy 直打 Yahoo Chart API）
     try:
-        from macro_core import fetch_yf_ohlcv as _mc_ohlcv
+        from src.data.macro import fetch_yf_ohlcv as _mc_ohlcv
         _df_yf = _mc_ohlcv("^TWII", range_="9mo", interval="1d")
         if not _df_yf.empty and "Volume" in _df_yf.columns:
             _res_yf = {}

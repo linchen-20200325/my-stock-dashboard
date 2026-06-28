@@ -57,7 +57,7 @@ class TestUnitAnnotationAdded(unittest.TestCase):
     """data_loader.py L709 fill_cols 鄰近含單位註解(SSOT 文檔化)。"""
 
     def test_data_loader_has_unit_annotation(self):
-        with open('data_loader.py', encoding='utf-8') as f:
+        with open('src/data/core/data_loader.py', encoding='utf-8') as f:
             src = f.read()
         # 新增的 SSOT 對齊註記
         self.assertIn('PR-O1 SSOT 對齊註記', src)
@@ -75,7 +75,7 @@ class TestImports(unittest.TestCase):
         import tab_stock_grp  # noqa
 
     def test_data_loader(self):
-        import data_loader  # noqa
+        from src.data.core import data_loader  # noqa
 
 
 if __name__ == "__main__":

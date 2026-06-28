@@ -1068,7 +1068,7 @@ def _render_cloud_storage(edited_df):
     - 未設定：顯示 OAuth 登入引導 / Sheet ID 設定
     - 已設定：提供「載入既有 / 儲存當前 / 刪除」三組操作
     """
-    import gsheet_portfolio as _gsp
+    from src.data.portfolio import gsheet_portfolio as _gsp
 
     with st.expander('💾 雲端儲存 (Google Sheet)', expanded=False):
         # ── OAuth 設定 / Sheet ID 設定 ──────────────────────────────

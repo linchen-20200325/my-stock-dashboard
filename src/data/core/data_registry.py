@@ -7,7 +7,7 @@
   • 純宣告式：未來新增資料源只要加一筆 dict，無需改診斷頁
 
 使用方式：
-    from data_registry import DATA_REGISTRY, get_state_value, ping_endpoint
+    from src.data.core import DATA_REGISTRY, get_state_value, ping_endpoint
     for entry in DATA_REGISTRY:
         ...
 
@@ -583,7 +583,7 @@ def ping_endpoint(entry: dict, timeout: int = 8) -> dict:
     import time as _t
     _start = _t.time()
     try:
-        from proxy_helper import fetch_url
+        from src.data.proxy import fetch_url
         _resp = fetch_url(entry['ping_url'], timeout=timeout)
         _elapsed = int((_t.time() - _start) * 1000)
         if _resp is None:

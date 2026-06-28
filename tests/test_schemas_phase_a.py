@@ -107,7 +107,7 @@ def test_validate_fred_rejects_fetched_at_without_T():
 def test_macro_core_fetch_fred_wired_to_validate():
     """macro_core.fetch_fred 末尾的 try/except + validate_fred wiring 不該
     影響空 api_key 早返情境(回空 DataFrame),也不該影響無 obs 早返。"""
-    from macro_core import fetch_fred
+    from src.data.macro import fetch_fred
     # empty api_key → early return empty DataFrame, schema not invoked
     out = fetch_fred("DGS10", api_key="")
     assert isinstance(out, pd.DataFrame)

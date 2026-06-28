@@ -63,7 +63,7 @@ def _fetch_news_for(ticker: str, name: str = "", n: int = 4) -> str:
     except ImportError:
         return ""
     try:
-        from proxy_helper import fetch_url as _furl, nas_relay_fetch as _nasf
+        from src.data.proxy import fetch_url as _furl, nas_relay_fetch as _nasf
     except ImportError:
         _furl = _nasf = None
     _feeds = [
@@ -259,7 +259,7 @@ def fetch_etf_meta_moneydj(ticker: str) -> dict:
 
     _url = f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}'
     try:
-        from proxy_helper import fetch_url as _fu_meta
+        from src.data.proxy import fetch_url as _fu_meta
         _r = _fu_meta(_url, headers={'Referer': 'https://www.moneydj.com/'},
                       timeout=12, attempts=2)
         if _r is None or _r.status_code != 200:
@@ -420,7 +420,7 @@ def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
     -------
     float | None  比例形式（0.0036 = 0.36%）；找不到 ticker 或抓取失敗回 None。
     """
-    from proxy_helper import fetch_url as _fu_sit
+    from src.data.proxy import fetch_url as _fu_sit
     import pandas as _pd_sit, re as _re_sit
     from etf_helpers import bare_etf_code as _bare
     _t = _bare(ticker)
@@ -490,7 +490,7 @@ def fetch_moneydj_expense_ratio(ticker: str):
     _url = f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}'
     try:
         # 走 fetch_url（NAS Squid → 直連 → NAS 中繼站 fallback，PR #100）
-        from proxy_helper import fetch_url as _fu_mdje
+        from src.data.proxy import fetch_url as _fu_mdje
         _r = _fu_mdje(_url, headers={'Referer': 'https://www.moneydj.com/'},
                       timeout=12, attempts=2)
         if _r is None or _r.status_code != 200:
@@ -535,7 +535,7 @@ def _fetch_holdings_yahoo_tw(symbol_yf: str):
     """
     import re as _re_y
     try:
-        from proxy_helper import fetch_url as _fu_y
+        from src.data.proxy import fetch_url as _fu_y
     except Exception:
         return None
     _url = f'https://tw.stock.yahoo.com/quote/{symbol_yf}/holding'
@@ -710,7 +710,7 @@ def fetch_etf_holdings(ticker: str):
         _txt = None
         # ── 2a. proxy_helper 主源 ───
         try:
-            from proxy_helper import fetch_url as _fu_h
+            from src.data.proxy import fetch_url as _fu_h
             _r = _fu_h(_url, timeout=15, attempts=2)
             if _r is not None and _r.status_code == 200:
                 _r.encoding = 'utf-8'
@@ -836,7 +836,7 @@ def _fetch_yuanta_active_etf_meta(ticker: str) -> dict | None:
     for _url in _urls:
         _txt = None
         try:
-            from proxy_helper import fetch_url as _fu_y
+            from src.data.proxy import fetch_url as _fu_y
             _r = _fu_y(_url, timeout=12, attempts=2)
             if _r is not None and _r.status_code == 200 and len(_r.text or '') > 500:
                 _r.encoding = 'utf-8'
@@ -977,7 +977,7 @@ def fetch_etf_manager(ticker: str):
         _endpoint = _url.split('/')[-1].split('?')[0]
         # ── 1. proxy_helper（NAS Squid 台灣 IP）主源 ─────────────
         try:
-            from proxy_helper import fetch_url as _fu_mg
+            from src.data.proxy import fetch_url as _fu_mg
             _r = _fu_mg(_url, timeout=12, attempts=2)
             if _r is not None and _r.status_code == 200 and len(_r.text or '') > 500:
                 _r.encoding = 'utf-8'
@@ -1262,7 +1262,7 @@ def _fetch_sitca_manager(ticker: str):
     -------
     dict | None  {'name': ..., 'since': None, 'tenure_days': None}（任期 SITCA 通常不揭露）
     """
-    from proxy_helper import fetch_url as _fu_sm
+    from src.data.proxy import fetch_url as _fu_sm
     import pandas as _pd_sm
     from etf_helpers import bare_etf_code as _bare
     _t = _bare(ticker)
@@ -1423,7 +1423,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
     _last_bd = _last_business_day(_dt.date.today())
 
     # ── 1. FinMind ETF NAV（試兩個 dataset 名稱 + 多種欄位名稱）───────────
-    from proxy_helper import fetch_url as _fu_etfnav  # NAS 中繼 fallback
+    from src.data.proxy import fetch_url as _fu_etfnav  # NAS 中繼 fallback
     for _ds1 in ['TaiwanETFNetAssetValue', 'TaiwanStockETFNAV']:
         try:
             _p = {'dataset': _ds1, 'data_id': code, 'start_date': start}
@@ -1743,7 +1743,7 @@ def fetch_etf_zh_name(ticker: str):
     ]
     for _url in _urls:
         try:
-            from proxy_helper import fetch_url as _fu_zh
+            from src.data.proxy import fetch_url as _fu_zh
             _r = _fu_zh(_url, headers={'Referer': 'https://www.moneydj.com/'},
                         timeout=12, attempts=1)
             if _r is None or _r.status_code != 200:
@@ -1804,7 +1804,7 @@ def fetch_etf_underlying_index(ticker: str):
         _txt = None
         _endpoint = _url.split('/')[-1].split('?')[0]
         try:
-            from proxy_helper import fetch_url as _fu_ui
+            from src.data.proxy import fetch_url as _fu_ui
             _r = _fu_ui(_url, timeout=12, attempts=2)
             if _r is not None and _r.status_code == 200 and len(_r.text or '') > 500:
                 _r.encoding = 'utf-8'

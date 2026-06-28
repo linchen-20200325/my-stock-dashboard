@@ -72,7 +72,7 @@ def _build_dynamic_name_cache() -> dict:
     HDR = {'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}
     result = {}
     try:
-        from proxy_helper import fetch_url as _furl_sn  # 強制走 NAS proxy（雲端直連 TWSE/TPEx 易 403）
+        from src.data.proxy import fetch_url as _furl_sn  # 強制走 NAS proxy（雲端直連 TWSE/TPEx 易 403）
     except ImportError:
         _furl_sn = None
 

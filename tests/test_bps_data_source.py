@@ -22,7 +22,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _stub_streamlit_cache(monkeypatch):
     """讓 @st.cache_data decorator 變成 no-op，避免測試間 cache 串擾。"""
-    import data_loader
+    from src.data.core import data_loader
     monkeypatch.setattr(data_loader.fetch_bps_from_finmind, 'clear', lambda: None,
                          raising=False)
     monkeypatch.setattr(data_loader.fetch_bps, 'clear', lambda: None, raising=False)
@@ -53,7 +53,7 @@ def _mk_finmind_resp(rows: list[dict]) -> MagicMock:
 class TestBpsFormula:
     def test_tsmc_like_realistic_values(self):
         """模擬類 TSMC：股東權益 3.5 兆元 / 股本 2,593 億 → BPS ≈ 135 元。"""
-        import data_loader
+        from src.data.core import data_loader
         rows = [
             {'date': '2026-03-31', 'type': 'TotalEquity',
              'origin_name': '股東權益總額', 'value': '3500000000000'},
@@ -66,7 +66,7 @@ class TestBpsFormula:
 
     def test_financial_stock_like_low_pb(self):
         """模擬金融股：股東權益 1 兆元 / 股本 800 億 → BPS = 125 元。"""
-        import data_loader
+        from src.data.core import data_loader
         rows = [
             {'date': '2026-03-31', 'type': 'StockholdersEquity',
              'origin_name': '股東權益合計', 'value': '1000000000000'},
@@ -84,7 +84,7 @@ class TestBpsFormula:
 class TestPrimaryFallback:
     def test_finmind_primary_skips_yfinance(self):
         """FinMind 有資料 → 不打 yfinance。"""
-        import data_loader
+        from src.data.core import data_loader
         rows = [
             {'date': '2026-03-31', 'type': 'Equity',
              'origin_name': '股東權益總額', 'value': '500000000000'},
@@ -99,7 +99,7 @@ class TestPrimaryFallback:
 
     def test_finmind_empty_falls_back_to_yfinance(self):
         """FinMind 回空 → yfinance fallback。"""
-        import data_loader
+        from src.data.core import data_loader
         empty_resp = _mk_finmind_resp([])
         fake_yf_info = {'bookValue': 88.5}
         fake_ticker = MagicMock()
@@ -111,7 +111,7 @@ class TestPrimaryFallback:
 
     def test_all_sources_fail_returns_zero(self):
         """FinMind + yfinance 都失敗 → 0.0（call site 用 if bps > 0 守門）。"""
-        import data_loader
+        from src.data.core import data_loader
         empty_resp = _mk_finmind_resp([])
         fake_ticker = MagicMock()
         fake_ticker.info = {}
@@ -127,7 +127,7 @@ class TestPrimaryFallback:
 class TestSanityGuard:
     def test_absurdly_high_bps_returns_zero(self):
         """異常高 BPS（如資料單位錯抓成元誤算成千元）→ 0.0 守住。"""
-        import data_loader
+        from src.data.core import data_loader
         rows = [
             {'date': '2026-03-31', 'type': 'Equity',
              'origin_name': '股東權益總額', 'value': '3500000000000000'},
@@ -140,7 +140,7 @@ class TestSanityGuard:
 
     def test_absurdly_low_bps_returns_zero(self):
         """異常低 BPS（< 0.1）→ 0.0。"""
-        import data_loader
+        from src.data.core import data_loader
         rows = [
             {'date': '2026-03-31', 'type': 'Equity',
              'origin_name': '股東權益總額', 'value': '100'},
@@ -158,7 +158,7 @@ class TestSanityGuard:
 class TestLatestQuarterOnly:
     def test_picks_latest_date_only(self):
         """提供 3 季資料 → 只用最新一季（Q1 2026）算。"""
-        import data_loader
+        from src.data.core import data_loader
         rows = [
             {'date': '2025-09-30', 'type': 'Equity',
              'origin_name': '股東權益總額', 'value': '900000000000'},
@@ -184,7 +184,7 @@ class TestLatestQuarterOnly:
 class TestFieldDisambiguation:
     def test_skips_preferred_stock(self):
         """特別股股本不應被誤抓為普通股股本。"""
-        import data_loader
+        from src.data.core import data_loader
         rows = [
             {'date': '2026-03-31', 'type': 'Equity',
              'origin_name': '股東權益總額', 'value': '1000000000000'},
@@ -199,7 +199,7 @@ class TestFieldDisambiguation:
 
     def test_total_equity_preferred_over_substaff(self):
         """有「股東權益總額」科目時正確識別。"""
-        import data_loader
+        from src.data.core import data_loader
         rows = [
             {'date': '2026-03-31', 'type': 'TotalEquity',
              'origin_name': '股東權益總額', 'value': '2000000000000'},
@@ -216,7 +216,7 @@ class TestFieldDisambiguation:
 # ════════════════════════════════════════════════════════════════════
 class TestDefensive:
     def test_http_500_returns_zero(self):
-        import data_loader
+        from src.data.core import data_loader
         bad_resp = MagicMock()
         bad_resp.status_code = 500
         bad_resp.json.return_value = {}
@@ -227,7 +227,7 @@ class TestDefensive:
 
     def test_missing_equity_field_returns_zero(self):
         """有股本但無股東權益 → 算不出 BPS → 0.0。"""
-        import data_loader
+        from src.data.core import data_loader
         rows = [
             {'date': '2026-03-31', 'type': 'CommonStock',
              'origin_name': '普通股股本', 'value': '100000000000'},
@@ -238,7 +238,7 @@ class TestDefensive:
 
     def test_missing_common_stock_returns_zero(self):
         """有股東權益但無股本 → 算不出流通股數 → 0.0。"""
-        import data_loader
+        from src.data.core import data_loader
         rows = [
             {'date': '2026-03-31', 'type': 'TotalEquity',
              'origin_name': '股東權益總額', 'value': '1000000000000'},

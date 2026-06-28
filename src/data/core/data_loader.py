@@ -20,7 +20,7 @@ import streamlit as st
 import requests as _req_dl
 import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
-from proxy_helper import fetch_url as _fetch_url_dl
+from src.data.proxy import fetch_url as _fetch_url_dl
 from shared.ttls import TTL_1DAY, TTL_1HOUR
 
 # v18.201 D2：FinMind dataset 後台 update 時間追蹤
@@ -60,7 +60,7 @@ def _stamp_finreport_attrs(df, src_key: str, src_val: str):
 
 def _bps_dl():
     try:
-        from tw_stock_data_fetcher import build_proxy_session as _b
+        from src.data.stock import build_proxy_session as _b
         s = _b()
     except Exception:
         s = _req_dl.Session()
@@ -71,7 +71,7 @@ def _yf_dl(symbol, **kwargs):
     """yfinance download，透過 os.environ 注入 proxy（相容新舊版 yfinance）。"""
     import os as _os_yfd
     try:
-        from tw_stock_data_fetcher import _load_proxy_config as _lpc_yfd
+        from src.data.stock import _load_proxy_config as _lpc_yfd
         _px_url = ((_lpc_yfd() or {}).get('https') or (_lpc_yfd() or {}).get('http') or None)
     except Exception:
         _px_url = None
@@ -1577,7 +1577,7 @@ class StockDataLoader:
                 _last_cl_nan = (len(df_extra) > 0 and
                                 pd.isna(df_extra['合約負債'].iloc[-1]))
                 if _last_cl_nan:
-                    from tw_stock_data_fetcher import (fetch_mops_financials as _fmf,
+                    from src.data.stock import (fetch_mops_financials as _fmf,
                                                        build_proxy_session as _bps_mops)
                     _last_lbl = df_extra['季度標籤'].iloc[-1]
                     _yr_m = int(_last_lbl[:4]); _q_m = int(_last_lbl[5])
@@ -2236,7 +2236,7 @@ def fetch_fund_nav(fund_id: str):
     S-PROV-1 v18.250 phase 6:provenance(§2.2)
     """
     try:
-        from proxy_helper import fetch_url as _fu_nav
+        from src.data.proxy import fetch_url as _fu_nav
         from bs4 import BeautifulSoup as _BS
         _r = _fu_nav(
             f'https://www.moneydj.com/funddj/yb/YP010001.djhtm?a={fund_id}',

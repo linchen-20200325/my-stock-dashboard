@@ -33,7 +33,7 @@ from typing import Optional
 
 import pandas as pd
 
-from proxy_helper import fetch_url
+from src.data.proxy import fetch_url
 
 __version__ = "1.1.0"
 
@@ -331,7 +331,7 @@ def _try_cbc_ef15m01() -> Optional[tuple]:
 def _try_twii_proxy() -> Optional[tuple]:
     """Tier 3:^TWII 動能代理(走 macro_core 經 NAS proxy)。"""
     try:
-        from macro_core import fetch_yf_close
+        from src.data.macro import fetch_yf_close
     except ImportError:
         return None
     twii = fetch_yf_close("^TWII", range_="6mo")
@@ -1051,7 +1051,7 @@ def fetch_cbc_discount_rate(months_back: int = 24, fred_api_key: str = "") -> Op
         print('[tw_macro/cbc_rate] fred_api_key 空,跳過')
         return None
     # 避免迴圈 import:lazy import macro_core(macro_core.py 屬同層 L1,可互相 lazy import)
-    from macro_core import fetch_fred  # noqa: PLC0415
+    from src.data.macro import fetch_fred  # noqa: PLC0415
     from shared.fred_series import FRED_TW_DISCOUNT_RATE  # noqa: PLC0415
 
     df = fetch_fred(FRED_TW_DISCOUNT_RATE, fred_api_key, n=max(months_back, 24))
@@ -1088,7 +1088,7 @@ def fetch_usdtwd_close(days_back: int = 180) -> Optional[pd.DataFrame]:
     proxy 化 Chart API path,作 macro 模組統一入口。caller 兩種皆可用。
     """
     # lazy import 避免 import loop
-    from macro_core import fetch_yf_close  # noqa: PLC0415
+    from src.data.macro import fetch_yf_close  # noqa: PLC0415
 
     # range_ 取較寬期(180d 約 6 月,足供 60D MA + 趨勢計算)
     s = fetch_yf_close('TWD=X', range_=f'{max(days_back, 60)}d')
@@ -1153,7 +1153,7 @@ def fetch_china_macro(fred_api_key: str = "") -> dict:
         return {}
     from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
 
-    from macro_core import fetch_fred  # noqa: PLC0415
+    from src.data.macro import fetch_fred  # noqa: PLC0415
 
     specs = _china_fred_specs()
     result: dict = {}

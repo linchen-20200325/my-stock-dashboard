@@ -44,7 +44,7 @@ class TestMacroSignalLookbackTwProvenance(unittest.TestCase):
 class TestNasServerProvenance(unittest.TestCase):
 
     def setUp(self):
-        with open('nas_server.py', encoding='utf-8') as f:
+        with open('src/data/proxy/nas_server.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_prov_log_helper(self):
@@ -83,7 +83,7 @@ class TestImports(unittest.TestCase):
     def test_nas_server_ast_parse(self):
         """nas_server.py 用 AST parse 避 FastAPI runtime boot。"""
         import ast
-        with open('nas_server.py', encoding='utf-8') as f:
+        with open('src/data/proxy/nas_server.py', encoding='utf-8') as f:
             ast.parse(f.read())
 
 

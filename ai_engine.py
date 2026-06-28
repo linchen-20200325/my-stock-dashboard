@@ -515,7 +515,7 @@ def analyze_leading_indicators(api_key, df_leading):
     if df_leading is None or df_leading.empty:
         return "⚠️ 無先行指標數據可分析"
     try:
-        from leading_indicators import build_ai_data_table
+        from src.data.macro import build_ai_data_table
         data_table = build_ai_data_table(df_leading)
         if "外資大小" in df_leading.columns:
             vals = [v for v in df_leading["外資大小"].tolist() if v is not None]

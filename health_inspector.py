@@ -245,7 +245,7 @@ def render_data_health_raw():
             _lines = []
             _ok = True
             try:
-                from proxy_helper import get_proxy_config, get_nas_relay, fetch_url
+                from src.data.proxy import get_proxy_config, get_nas_relay, fetch_url
                 # 1) 代理偵測（密碼遮蔽，不外洩 secret）
                 _pc = get_proxy_config()
                 if _pc and _pc.get('http'):
@@ -272,7 +272,7 @@ def render_data_health_raw():
                 except Exception as _eip:
                     _lines.append(f'🌐 出口 IP 測試略過：{type(_eip).__name__}')
                 # 3) 台灣 Yahoo 股市直測（國內版 Yahoo，海外 IP 可直連）
-                from etf_fetch import _fetch_holdings_yahoo_tw, fetch_etf_holdings
+                from src.data.etf import _fetch_holdings_yahoo_tw, fetch_etf_holdings
                 try:
                     _yh = _fetch_holdings_yahoo_tw('0050.TW')
                     if _yh:
@@ -328,7 +328,7 @@ def render_data_health_raw():
     _fred_key_hi = (_os_hi.environ.get('FRED_API_KEY') or
                     (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
     try:
-        from macro_core import fred_get_next_release_date as _fred_nrd
+        from src.data.macro import fred_get_next_release_date as _fred_nrd
     except Exception:
         _fred_nrd = None
 
@@ -1068,7 +1068,7 @@ def render_data_health_raw():
                              proxy=True))
             # 基金經理人（ETF 表現與經理人相關，換手須提醒）
             try:
-                from etf_fetch import fetch_etf_manager as _fem_r
+                from src.data.etf import fetch_etf_manager as _fem_r
                 _mgr_r = _fem_r(tk)
             except Exception:
                 _mgr_r = None
@@ -1136,7 +1136,7 @@ def render_data_health_raw():
 
             # ────── 主動 ETF 經理人 / 持股探測 ──────
             try:
-                from etf_fetch import is_active_etf, fetch_etf_manager, fetch_etf_holdings
+                from src.data.etf import is_active_etf, fetch_etf_manager, fetch_etf_holdings
             except ImportError:
                 is_active_etf = fetch_etf_manager = fetch_etf_holdings = None
 
@@ -1177,7 +1177,7 @@ def render_data_health_raw():
                         st.markdown(f'**🎯 探測對象：`{_tk_probe}`** → `{_url_probe}`')
                         # 源 1：proxy_helper.fetch_url
                         try:
-                            from proxy_helper import fetch_url as _fu_d
+                            from src.data.proxy import fetch_url as _fu_d
                             _r_p = _fu_d(_url_probe, timeout=12, attempts=2)
                             if _r_p is None:
                                 st.error('❌ **proxy_helper.fetch_url** 回 None（proxy 全失敗或 403×2 後降級也失敗）')

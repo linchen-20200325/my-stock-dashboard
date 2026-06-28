@@ -13,7 +13,7 @@ P2-B Phase 7C：fetch / calc / render 三層分檔重構（2026-05-16）
 """
 
 # ── fetch 層 ─────────────────────────────────────────────────
-from etf_fetch import (  # noqa: F401
+from src.data.etf import (  # noqa: F401
     _fetch_news_for, _TW_ETF_LAUNCH_PRICE, _get_etf_launch_price,
     fetch_etf_price, fetch_etf_dividends, fetch_etf_info,
     fetch_sitca_expense_ratio, fetch_moneydj_expense_ratio,

@@ -65,7 +65,7 @@ from tab_helpers import (
 )
 from sidebar_health import kline_end_date
 # v18.326 ── BPS / industry_category fetcher 已 SSOT 化(原私有 _fetch_*,組合 Tab 共用)──
-from data_loader import fetch_bps, fetch_industry_category
+from src.data.core import fetch_bps, fetch_industry_category
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
@@ -242,7 +242,7 @@ def render_tab_stock():
     from scoring_engine import calc_rs_score, rs_slope
     from ui_widgets import kpi, signal_box, teacher_conclusion
     from chart_plotter import plot_combined_chart, plot_quarterly_chart, plot_revenue_chart
-    from data_loader import fetch_financial_statements
+    from src.data.core import fetch_financial_statements
     # app.py 內部 helper
     from app import (
         _fetch_stock_news, api_key,
@@ -2712,7 +2712,7 @@ padding:12px 16px;margin:8px 0;">
                         else:
                             # B項：預填 5 年現金流量允當比率（精確版）
                             try:
-                                from tw_stock_data_fetcher import fetch_5_years_cash_flow
+                                from src.data.stock import fetch_5_years_cash_flow
                                 _fin_raw['b_item_5y'] = fetch_5_years_cash_flow(sid2, FINMIND_TOKEN)
                             except Exception:
                                 pass  # fallback 到 1Q 估算

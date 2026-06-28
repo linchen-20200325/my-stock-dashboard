@@ -43,7 +43,7 @@ def _bps():
     """Squid Proxy session(對齊 daily_checklist._bps 行為)。"""
     import requests as _rq
     try:
-        from tw_stock_data_fetcher import build_proxy_session as _b
+        from src.data.stock import build_proxy_session as _b
         s = _b()
     except Exception:
         s = _rq.Session()
@@ -94,7 +94,7 @@ def fetch_single(symbol, period: str = "60d"):
     # v18.209 K5:改走 yf_proxy.cached_history(內含 proxy env + st.cache_data 1h),
     # 加 pkl 30min cache 兩層保護 → 跨 process 重啟存活 + 同 process 內秒讀。
     try:
-        from yf_proxy import cached_history as _yp_hist
+        from src.data.proxy import cached_history as _yp_hist
         h = None
         for _sym in _sym_list:
             _h = _yp_hist(_sym, period=period)
@@ -216,7 +216,7 @@ def fetch_institutional(date_str: str | None = None):
         return _inst_cached
 
     try:
-        from proxy_helper import fetch_url as _furl_i
+        from src.data.proxy import fetch_url as _furl_i
         _base_dt_i = datetime.datetime.now()
         for _di in range(7):
             _d = _base_dt_i - datetime.timedelta(days=_di)
@@ -328,7 +328,7 @@ def fetch_adl(days: int = 60, token=None):
         import yfinance as _yf_adl
         import os as _os_yf
         try:
-            from tw_stock_data_fetcher import _load_proxy_config as _lpc_adl
+            from src.data.stock import _load_proxy_config as _lpc_adl
             _yf_px = (_lpc_adl() or {})
             _yf_px = _yf_px.get('https') or _yf_px.get('http') or None
         except Exception:
@@ -459,7 +459,7 @@ def fetch_margin_balance(date_str=None):
     # 方案0: FinMind TaiwanStockTotalMarginPurchaseShortSale (v6 新增)
     # 治本:海外 IP 也可達,原 TWSE/HiStock/Goodinfo/Yahoo/cnyes 全部需要台灣 IP
     try:
-        from leading_indicators import finmind_get as _fm_mb
+        from src.data.macro import finmind_get as _fm_mb
         _tok_mb = os.environ.get('FINMIND_TOKEN', '')
         _start_mb = (_now_mb - datetime.timedelta(days=10)).strftime('%Y%m%d')
         _df_mb0 = _fm_mb('TaiwanStockTotalMarginPurchaseShortSale', '', _start_mb, _ds_mb, _tok_mb)
@@ -512,7 +512,7 @@ def fetch_margin_balance(date_str=None):
     # 對齊 leading_indicators._twse_margin_day 已驗證有效邏輯:頂層 data/fields,
     # 欄名偵測「融資...餘額」(排除「限」),reversed 取彙總列,仟元÷100,000=億
     try:
-        from proxy_helper import fetch_url as _furl_mb
+        from src.data.proxy import fetch_url as _furl_mb
         _hdr_mb = {'Referer': 'https://www.twse.com.tw/zh/trading/margin/mi-margn.html'}
         _hit_mb = False
         for _sel_mb in ('MS', 'ALL'):
@@ -555,7 +555,7 @@ def fetch_margin_balance(date_str=None):
 
     # 方案B: HiStock 網頁爬蟲(公開,BeautifulSoup)
     try:
-        from proxy_helper import fetch_url as _furl_hi
+        from src.data.proxy import fetch_url as _furl_hi
         from bs4 import BeautifulSoup as _BS_mb
         _rh = _furl_hi('https://histock.tw/stock/margin.aspx', timeout=12)
         if _rh is not None:
@@ -572,7 +572,7 @@ def fetch_margin_balance(date_str=None):
 
     # 方案C: Goodinfo 加權指數融資融券日統計(公開 HTML,BeautifulSoup)
     try:
-        from proxy_helper import fetch_url as _furl_gi
+        from src.data.proxy import fetch_url as _furl_gi
         from bs4 import BeautifulSoup as _BS_gi
         _gi_url = ('https://goodinfo.tw/tw/ShowMarginChart.asp'
                    '?STOCK_ID=%E5%8A%A0%E6%AC%8A%E6%8C%87%E6%95%B8'
@@ -620,7 +620,7 @@ def fetch_margin_balance(date_str=None):
 
     # 方案D: Yahoo 股市資券餘額(HTML,整頁正則)
     try:
-        from proxy_helper import fetch_url as _furl_yh
+        from src.data.proxy import fetch_url as _furl_yh
         from bs4 import BeautifulSoup as _BS_yh
         _ry = _furl_yh('https://tw.stock.yahoo.com/margin-balance', timeout=12)
         if _ry is not None:
@@ -638,7 +638,7 @@ def fetch_margin_balance(date_str=None):
 
     # 方案E: 鉅亨網盤後資券餘額(HTML,整頁正則)
     try:
-        from proxy_helper import fetch_url as _furl_cy
+        from src.data.proxy import fetch_url as _furl_cy
         from bs4 import BeautifulSoup as _BS_cy
         _rc = _furl_cy('https://www.cnyes.com/twstock/a_margin.aspx', timeout=12)
         if _rc is not None:

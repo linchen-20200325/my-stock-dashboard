@@ -57,10 +57,10 @@ class TestDivergenceHarmonized:
 
 class TestVixAlignedToC2:
     def test_macro_compass_vix_yellow_is_22(self):
-        from macro_core import MACRO_THRESHOLDS
+        from src.data.macro import MACRO_THRESHOLDS
         assert MACRO_THRESHOLDS['VIX']['yellow_above'] == 22
         assert MACRO_THRESHOLDS['VIX']['red_above'] == 30
-        src = _src("macro_core.py")
+        src = _src("src/data/macro/macro_core.py")
         assert "if v > 25:" not in src
         assert "MACRO_THRESHOLDS['VIX']['yellow_above']" in src
 
@@ -69,7 +69,7 @@ class TestConsumersWired:
     def test_no_inline_residual(self):
         tm = _src("tab_macro.py")
         dc = _src("daily_checklist.py")
-        mc = _src("macro_core.py")
+        mc = _src("src/data/macro/macro_core.py")
         # 融資黃線
         assert not re.search(r"(>|<=)\s*2500(?!\s*億)", tm)
         assert not re.search(r"margin>2500", dc)

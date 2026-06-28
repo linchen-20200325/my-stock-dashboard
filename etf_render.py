@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-from etf_fetch import _fetch_news_for, _fetch_sector_returns
+from src.data.etf import _fetch_news_for, _fetch_sector_returns
 from ai_structured_summary import build_structured_summary_prompt
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
@@ -272,7 +272,7 @@ def render_etf_holdings(ticker: str, holdings: dict = None, top_n: int = 15,
          元件 ID 衝突 StreamlitDuplicateElementId）；未傳則以 ticker 當基底。
     """
     if holdings is None:
-        from etf_fetch import fetch_etf_holdings
+        from src.data.etf import fetch_etf_holdings
         with st.spinner(f'抓取 {ticker} 成分股清單...'):
             holdings = fetch_etf_holdings(ticker)
     if not holdings:

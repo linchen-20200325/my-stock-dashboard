@@ -102,7 +102,7 @@ class TestTabStockSilentToStderr:
 
 class TestLiToYiMgLog:
     def test_to_yi_mg_marker_in_source(self):
-        src = open('leading_indicators.py', encoding='utf-8').read()
+        src = open('src/data/macro/leading_indicators.py', encoding='utf-8').read()
         assert '[_to_yi_mg] cast fail:' in src
 
 
@@ -135,7 +135,7 @@ class TestModulesImportable:
         import tab_stock  # noqa
 
     def test_leading_indicators(self):
-        import leading_indicators  # noqa
+        from src.data.macro import leading_indicators  # noqa
 
     def test_v5_modules(self):
         import v5_modules  # noqa

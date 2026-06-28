@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import streamlit as st
 
-from etf_fetch import fetch_etf_price, fetch_etf_dividends, fetch_etf_info
+from src.data.etf import fetch_etf_price, fetch_etf_dividends, fetch_etf_info
 from etf_calc import (
     calc_total_return_1y, calc_current_yield,
     calc_sharpe, calc_mdd, calc_cagr,

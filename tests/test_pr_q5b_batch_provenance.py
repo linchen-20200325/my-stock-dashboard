@@ -43,7 +43,7 @@ class TestQ5bMarkersInSource(unittest.TestCase):
         self.assertIn("'FinMind:TaiwanStockMonthRevenue:batch(all-market)'", src)
 
     def test_data_loader_2(self):
-        src = self._read('data_loader.py')
+        src = self._read('src/data/core/data_loader.py')
         self.assertIn('data_loader._fetch_twse_inst_fallback:TWSE T86', src)
         self.assertIn('data_loader._fetch_tpex_inst_fallback:TPEx 三大法人', src)
 
@@ -69,7 +69,7 @@ class TestImports(unittest.TestCase):
         import monthly_revenue_screener  # noqa
 
     def test_data_loader(self):
-        import data_loader  # noqa
+        from src.data.core import data_loader  # noqa
 
     def test_tab_stock(self):
         import tab_stock  # noqa

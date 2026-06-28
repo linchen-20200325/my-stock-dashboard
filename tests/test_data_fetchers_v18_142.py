@@ -13,8 +13,8 @@ from pathlib import Path
 
 _ROOT = Path(__file__).parent.parent
 _TAB_MACRO = (_ROOT / "tab_macro.py").read_text(encoding="utf-8")
-_DATA_REG = (_ROOT / "data_registry.py").read_text(encoding="utf-8")
-_MACRO_CORE = (_ROOT / "macro_core.py").read_text(encoding="utf-8")
+_DATA_REG = (_ROOT / "src/data/core/data_registry.py").read_text(encoding="utf-8")
+_MACRO_CORE = (_ROOT / "src/data/macro/macro_core.py").read_text(encoding="utf-8")
 _TAB_EDU = (_ROOT / "tab_edu.py").read_text(encoding="utf-8")
 
 

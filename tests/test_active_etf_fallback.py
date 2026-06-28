@@ -13,7 +13,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 
-import etf_fetch
+from src.data.etf import etf_fetch
 
 
 # ════════════════════════════════════════════════════════════
@@ -32,7 +32,7 @@ def test_yuanta_fetcher_returns_none_for_empty_ticker():
 
 def test_yuanta_fetcher_all_urls_fail(monkeypatch):
     """proxy_helper 全部回 None → Yuanta fetcher return None，不爆。"""
-    import proxy_helper
+    from src.data.proxy import proxy_helper
     monkeypatch.setattr(proxy_helper, 'fetch_url', lambda *a, **kw: None)
     r = etf_fetch._fetch_yuanta_active_etf_meta('00980A.TW')
     assert r is None
@@ -40,7 +40,7 @@ def test_yuanta_fetcher_all_urls_fail(monkeypatch):
 
 def test_yuanta_fetcher_parses_manager(monkeypatch):
     """HTML 含「經理人：張三」格式 → 應抓到 manager='張三'。"""
-    import proxy_helper
+    from src.data.proxy import proxy_helper
     _html = '''
     <html><body>
     <div class="profile">
@@ -67,7 +67,7 @@ def test_yuanta_fetcher_parses_manager(monkeypatch):
 
 def test_yuanta_fetcher_parses_multi_managers(monkeypatch):
     """多人共管「張三 / 李四」應正確解析。"""
-    import proxy_helper
+    from src.data.proxy import proxy_helper
     _html = '經理人：張三 / 李四'
     _resp = MagicMock()
     _resp.status_code = 200
@@ -87,7 +87,7 @@ def test_yuanta_fetcher_parses_multi_managers(monkeypatch):
 def test_fetch_etf_manager_falls_back_to_yuanta(monkeypatch):
     """MoneyDJ 3 端點 + SITCA 全失敗時，主動式 ETF 應走 Yuanta。"""
     # MoneyDJ 全部 fail
-    import proxy_helper
+    from src.data.proxy import proxy_helper
     _resp_fail = MagicMock()
     _resp_fail.status_code = 200
     _resp_fail.text = 'x' * 600  # 200 但無經理人 regex 不命中

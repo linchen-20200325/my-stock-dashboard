@@ -330,7 +330,7 @@ def _check_one_stock(ticker: str, today, yf) -> dict:
 def _fetch_fs_safe(stock_id: str) -> dict:
     """安全包裝 data_loader.fetch_financial_statements。失敗回 {}。"""
     try:
-        from data_loader import fetch_financial_statements
+        from src.data.core import fetch_financial_statements
         _r = fetch_financial_statements(stock_id)
         _result = _r if isinstance(_r, dict) and 'error' not in _r else {}
         # v18.356 PR-Q5b S-PROV-1 phase 19
@@ -869,7 +869,7 @@ def _check_major_holders(stock_id: str) -> str:
 def _generate_ai_report(gemini_fn, qualified: list[dict], all_results: list[dict]) -> str:
     """用白話結構化摘要元件，把三關卡篩選結果翻成人話報告。"""
     from ai_structured_summary import build_structured_summary_prompt
-    from etf_fetch import _fetch_news_for
+    from src.data.etf import _fetch_news_for
 
     # ── 第 1 節：通過名單（含為何入選）─────────────────────────
     _pick_lines = []

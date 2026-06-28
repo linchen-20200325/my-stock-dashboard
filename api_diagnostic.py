@@ -119,7 +119,7 @@ def render_api_diagnostic():
     # ── §3 PROXY 配置診斷（最容易害死全站的兇手）─────────
     st.markdown('---')
     st.markdown('#### 🚧 Proxy 配置診斷（最常見的「全部抓不到」根因）')
-    from proxy_helper import get_proxy_config
+    from src.data.proxy import get_proxy_config
     proxy_cfg = get_proxy_config()
     if proxy_cfg:
         st.warning(

@@ -498,11 +498,11 @@ def render_tab_macro():
         fetch_single, multi_chart, section_header, sparkline, stat_card,
         COLORS_7, INTL_MAP, INTL_UNIT, TECH_MAP, TW_MAP, TW_UNIT,
     )
-    from macro_alert import (
+    from src.data.macro import (
         check_macro_alerts, fetch_macro_snapshot, render_macro_alerts,
     )
     from market_strategy import get_market_assessment
-    from leading_indicators import render_leading_table
+    from src.data.macro import render_leading_table
     from ui_widgets import beginner_kpi, cond_badge, kpi, teacher_conclusion
     # app.py 內部 helper（v18.192：還原 section 十一 → 重新需要 _fetch_macro_news / gemini_call）
     from app import (
@@ -544,7 +544,7 @@ def render_tab_macro():
         except Exception as _e_sc:
             print(f'[Cache] st.cache_data clear failed: {_e_sc}')
         try:
-            import proxy_helper as _ph_clr
+            from src.data.proxy import proxy_helper as _ph_clr
             _ph_clr._URL_CACHE.clear()
             _ph_clr.reset_proxy_cache()
             print('[Cache] 🗑️ proxy URL cache + config cache cleared (force)')
@@ -1184,7 +1184,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             _li_build_fn = None
             try:
                 import importlib as _il_li
-                import leading_indicators as _li_mod
+                from src.data.macro import leading_indicators as _li_mod
                 _il_li.reload(_li_mod)
                 _li_build_fn = _li_mod.build_leading_fast
                 print(f'[先行指標] v={getattr(_li_mod, "LI_VERSION", "?")} token={bool(_li_tok)}（併池）')
@@ -1418,7 +1418,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 # 內含 Tier 1 (CBC ms1.json) + Tier 2 (CPX EF15M01) + Tier 3 (^TWII proxy)
                 # 全部走 NAS proxy,取代原本散落的 CPX EF01M01/EF17M01 + ms1.json 直連
                 try:
-                    from tw_macro import fetch_cbc_m1b_m2 as _tw_cbc
+                    from src.data.macro import fetch_cbc_m1b_m2 as _tw_cbc
                     _cbc_snap = _tw_cbc()
                     if _cbc_snap.get('m1b_yoy') is not None:
                         _src_label = ('TWII-proxy' if _cbc_snap.get('is_proxy_tier')
@@ -1434,7 +1434,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 # ── 路徑 2：FRED（台灣 M1B/M2，fetch_url + FRED_API_KEY）──
                 try:
                     import os as _os_m1f
-                    from proxy_helper import fetch_url as _fu_m1
+                    from src.data.proxy import fetch_url as _fu_m1
                     _fred_key_m1 = (_os_m1f.environ.get('FRED_API_KEY') or
                                     (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
                     _fp_m1 = {'api_key': _fred_key_m1} if _fred_key_m1 else {}
@@ -1469,7 +1469,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 # ── 路徑 2b：IMF DataMapper API（FRED 備援，全球可達）──
                 try:
                     # MABMM301 = M2 年增率%, MANMM101 = M1 年增率% (IMF IFS)
-                    from proxy_helper import fetch_url as _fu_imf  # 強制走 NAS proxy（一致性；失敗自動降級直連）
+                    from src.data.proxy import fetch_url as _fu_imf  # 強制走 NAS proxy（一致性；失敗自動降級直連）
                     _imf_m1_r = _fu_imf(
                         'https://www.imf.org/external/datamapper/api/v1/MANMM101/TW', timeout=15, attempts=1)
                     _imf_m2_r = _fu_imf(
@@ -1567,7 +1567,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     from requests.adapters import HTTPAdapter as _HA
                     from urllib3.util.retry import Retry as _Rt
                     try:
-                        from proxy_helper import get_proxies as _gp
+                        from src.data.proxy import get_proxies as _gp
                         _px = _gp()
                     except Exception:
                         _px = None
@@ -1601,7 +1601,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _cpi_errs = []
                     # ── 方案0: FRED 公開 fredgraph.csv（CPILFESL，無需 key）────────
                     try:
-                        from proxy_helper import fetch_url as _fu_cpi
+                        from src.data.proxy import fetch_url as _fu_cpi
                         _r0 = _fu_cpi('https://fred.stlouisfed.org/graph/fredgraph.csv',
                                       params={'id': 'CPILFESL'},
                                       timeout=10, attempts=1)
@@ -1633,7 +1633,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     # ── 方案1: FRED API（CPILFESL + API key 加速）────────────────
                     try:
                         import os as _os_cpi_f
-                        from proxy_helper import fetch_url as _fu_cpi
+                        from src.data.proxy import fetch_url as _fu_cpi
                         _fred_key_cpi = (_os_cpi_f.environ.get('FRED_API_KEY') or
                                          (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
                         _cpi_start = (_dt_cpi.datetime.now() - _dt_cpi.timedelta(days=365*3)).strftime('%Y-%m-%d')
@@ -1717,7 +1717,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     _ff_errs = []
                     # ── 方案0: FRED 公開 fredgraph.csv（無需 key）────────────────
                     try:
-                        from proxy_helper import fetch_url as _fu_ff
+                        from src.data.proxy import fetch_url as _fu_ff
                         _r0 = _fu_ff('https://fred.stlouisfed.org/graph/fredgraph.csv',
                                      params={'id': 'FEDFUNDS'},
                                      timeout=10, attempts=1)
@@ -1747,7 +1747,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     # ── 方案1: FRED API（FEDFUNDS + API key）────────────────────
                     try:
                         import os as _os_ff_f
-                        from proxy_helper import fetch_url as _fu_ff
+                        from src.data.proxy import fetch_url as _fu_ff
                         _fred_key_ff = (_os_ff_f.environ.get('FRED_API_KEY') or
                                         (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
                         _ff_start = (_dt_ff.datetime.now() - _dt_ff.timedelta(days=365*2)).strftime('%Y-%m-%d')
@@ -1789,7 +1789,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 #   點不必動），但內容是台灣 PMI；UI 顯示為「🇹🇼 台灣製造業 PMI」。
                 def _fetch_pmi():
                     """v3 薄殼：呼叫 macro_core.fetch_tw_pmi()，回傳台灣 CIER PMI。"""
-                    from macro_core import fetch_tw_pmi as _ftp
+                    from src.data.macro import fetch_tw_pmi as _ftp
                     _result = _ftp()
                     if _result.get('value') is not None:
                         return {'ism_pmi': _result}
@@ -1800,7 +1800,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 #    舊源全廢（FinMind/NDC JSON/CKAN/行動版 HTML 都失效），改抓第三方。
                 def _fetch_ndc():
                     import re as _re_ndc
-                    from proxy_helper import fetch_url as _fu_ndc
+                    from src.data.proxy import fetch_url as _fu_ndc
                     from bs4 import BeautifulSoup as _BS_ndc
 
                     # 方案 A: StockFeel 股感（每月更新文章，HTML 含「綜合分數 39」）
@@ -1868,7 +1868,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     #   stat.gov.tw 是 DGBAS 官方點資料頁，每月更新最新 YoY，HTML 含
                     #   「出口年增率 ... 12.3%」格式；走 fetch_url（NAS 中繼站）取台灣 IP。
                     try:
-                        from proxy_helper import fetch_url as _fu_stat
+                        from src.data.proxy import fetch_url as _fu_stat
                         from bs4 import BeautifulSoup as _BS_stat
                         _stat_url = ('https://www.stat.gov.tw/Point.aspx?'
                                      'sid=t.8&n=3587&sms=11480')
@@ -1932,7 +1932,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
                     # 方案MOF: 財政部統計處 CSV — 透過 NAS proxy（台灣 IP 可直接存取）
                     try:
-                        from proxy_helper import fetch_url as _fu_ex
+                        from src.data.proxy import fetch_url as _fu_ex
                         _now_ex = _dt_ex.date.today()
                         _mof_found = False
                         # v10.61.0: 月份迴圈從 4 砍到 2（當月+上月），避免最壞 8 URL × ~12s = 100s
@@ -1968,7 +1968,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     # 方案DGTW: data.gov.tw dataset 6053「海關進出口貿易統計」CSV
                     #   v18.142：deep-research 確認 6053 月更（NDC 官方）；走 NAS proxy
                     try:
-                        from proxy_helper import fetch_url as _fu_ex
+                        from src.data.proxy import fetch_url as _fu_ex
                         for _meta_url_ex in (
                             'https://data.gov.tw/api/v2/rest/dataset/6053',
                             'https://data.gov.tw/api/v1/rest/dataset/6053',
@@ -2843,7 +2843,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
         # ── 6. 台灣領先指標拐點（景氣對策 / 領先指標 / 外資連續日數）─────
         try:
-            from tw_macro import (
+            from src.data.macro import (
                 fetch_ndc_signal_history as _f_ndc_h,
                 fetch_ndc_leading_index as _f_ndc_li,
                 fetch_foreign_consecutive_days as _f_fi_streak,
@@ -4254,7 +4254,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         try:
             if not _load_heavy:
                 raise RuntimeError('未按一鍵更新，跳過 TWSE breadth 即時抓取')
-            from tw_macro import fetch_twse_breadth
+            from src.data.macro import fetch_twse_breadth
             _bd = fetch_twse_breadth()
             _up_v, _dn_v = _bd.get('adv'), _bd.get('dec')
             if _up_v is not None and _dn_v is not None and (_up_v + _dn_v) > 50:

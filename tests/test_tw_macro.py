@@ -12,7 +12,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 
-import tw_macro
+from src.data.macro import tw_macro
 
 
 def _mock_resp(json_data):

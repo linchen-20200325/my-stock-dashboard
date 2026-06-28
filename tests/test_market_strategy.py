@@ -33,7 +33,7 @@ def test_fetch_market_data_delegates_to_tw_macro(monkeypatch):
 
     # 注意: market_strategy.fetch_market_data 內 import tw_macro,
     # 因此必須 patch tw_macro module 的函式
-    import tw_macro
+    from src.data.macro import tw_macro
     monkeypatch.setattr(tw_macro, 'fetch_finmind_foreign_investor', fake_finmind)
 
     out = market_strategy.fetch_market_data()
@@ -43,7 +43,7 @@ def test_fetch_market_data_delegates_to_tw_macro(monkeypatch):
 
 
 def test_fetch_market_data_handles_finmind_error(monkeypatch):
-    import tw_macro
+    from src.data.macro import tw_macro
     monkeypatch.setattr(tw_macro, 'fetch_finmind_foreign_investor',
                         lambda days_back=7: {'fii_net': None, 'error': 'mocked'})
 
@@ -52,7 +52,7 @@ def test_fetch_market_data_handles_finmind_error(monkeypatch):
 
 
 def test_fetch_market_data_handles_no_fii(monkeypatch):
-    import tw_macro
+    from src.data.macro import tw_macro
     monkeypatch.setattr(tw_macro, 'fetch_finmind_foreign_investor',
                         lambda days_back=7: {'fii_net': None, 'error': None})
 
@@ -90,9 +90,9 @@ def test_get_market_assessment_fallback_via_macro_core(monkeypatch):
         captured['interval'] = interval
         return _build_synthetic_twii_df()
 
-    # market_strategy.get_market_assessment 內以 from macro_core import fetch_yf_ohlcv
+    # market_strategy.get_market_assessment 內以 from src.data.macro import fetch_yf_ohlcv
     # 形式取用,需 patch 在 macro_core 上
-    import macro_core
+    from src.data.macro import macro_core
     monkeypatch.setattr(macro_core, 'fetch_yf_ohlcv', fake_ohlcv)
 
     res = market_strategy.get_market_assessment(
@@ -110,7 +110,7 @@ def test_get_market_assessment_fallback_via_macro_core(monkeypatch):
 
 
 def test_get_market_assessment_fallback_returns_none_on_empty(monkeypatch):
-    import macro_core
+    from src.data.macro import macro_core
     monkeypatch.setattr(macro_core, 'fetch_yf_ohlcv',
                         lambda *a, **kw: pd.DataFrame())
 

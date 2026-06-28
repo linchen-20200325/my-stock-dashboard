@@ -93,7 +93,7 @@ def test_fred_empty_returns_insufficient(monkeypatch):
     """FRED 抓到 < 1000 obs → 拒絕回測。"""
     def _empty_fred(sid, key, n=250):
         return pd.DataFrame(columns=['date', 'value'])
-    import macro_core
+    from src.data.macro import macro_core
     monkeypatch.setattr(macro_core, 'fetch_fred', _empty_fred)
     out = tw_backtest.backtest_twii_turning_points('dummy')
     assert out['source_ok'] is False
@@ -127,7 +127,7 @@ def test_full_mock_pipeline(monkeypatch):
             return twii_series
         return pd.Series(dtype=float)
 
-    import macro_core
+    from src.data.macro import macro_core
     monkeypatch.setattr(macro_core, 'fetch_fred', _mock_fred)
     monkeypatch.setattr(macro_core, 'fetch_yf_close', _mock_yf)
     out = tw_backtest.backtest_twii_turning_points('dummy')

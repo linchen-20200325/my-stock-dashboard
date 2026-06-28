@@ -191,7 +191,7 @@ def fetch_chip_concentration(ticker: str) -> dict:
 
     _url = TWSTHR_URL.format(ticker=_tk)
     try:
-        from proxy_helper import fetch_url
+        from src.data.proxy import fetch_url
         _resp = fetch_url(_url, headers={'User-Agent': _rnd.choice(_UA_POOL)},
                           timeout=15, attempts=3)
     except Exception as _fe:

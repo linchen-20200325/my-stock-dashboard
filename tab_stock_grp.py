@@ -34,7 +34,7 @@ from tab_helpers import (
 )
 # v18.326 ── P/B 帶狀 SSOT + BPS / industry fetcher SSOT(個股 Tab 共用)──
 from shared.stock_buckets import classify_pb_level, get_pb_bands
-from data_loader import fetch_bps, fetch_industry_category
+from src.data.core import fetch_bps, fetch_industry_category
 
 
 def render_stock_grp():
@@ -52,7 +52,7 @@ def render_stock_grp():
     from ui_widgets import teacher_conclusion
     from financial_health_engine import analyze_financial_health
     from ai_structured_summary import build_structured_summary_prompt
-    from etf_fetch import _fetch_news_for
+    from src.data.etf import _fetch_news_for
     from daily_checklist import analyze_20d_chips_from_df
     from exit_signals import (
         compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
@@ -67,7 +67,7 @@ def render_stock_grp():
     )
     # data_loader 可能也提供 fetch_financial_statements
     try:
-        from data_loader import fetch_financial_statements
+        from src.data.core import fetch_financial_statements
     except ImportError:
         from app import fetch_financial_statements
 
@@ -714,7 +714,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 _fd3 = fetch_financial_statements(sid, _fk3)
                 if not _fd3.get('error'):
                     try:
-                        from tw_stock_data_fetcher import fetch_5_years_cash_flow
+                        from src.data.stock import fetch_5_years_cash_flow
                         _fd3['b_item_5y'] = fetch_5_years_cash_flow(sid, _fk3)
                     except Exception:
                         pass
@@ -1352,7 +1352,7 @@ def _render_mj_trend_section(stock_list: list[str], *,
 
     import streamlit as _st  # noqa: F811 — explicit local alias
     from src.config import FINMIND_TOKEN as _TOK
-    from data_loader import fetch_financial_statements
+    from src.data.core import fetch_financial_statements
     from financial_health_engine import analyze_financial_health
     from mj_health_diff import diff_mj_health  # noqa: F401 — used transitively by score
     from mj_snapshot_io import (

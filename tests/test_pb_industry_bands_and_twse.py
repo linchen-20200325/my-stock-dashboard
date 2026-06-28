@@ -23,7 +23,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _clear_caches():
     """每個 case 前後清快取，避免 streamlit cache_data 串擾。"""
-    import data_loader
+    from src.data.core import data_loader
     import tab_stock
     try:
         tab_stock._fetch_pbratio_from_twse.clear()
@@ -170,7 +170,7 @@ class TestIndustryLabel:
 # ════════════════════════════════════════════════════════════════════
 class TestFetchIndustryCategory:
     def test_extracts_industry_from_finmind(self):
-        import data_loader
+        from src.data.core import data_loader
         rows = [{'stock_id': '2330', 'industry_category': '半導體業',
                   'stock_name': '台積電'}]
         with patch('requests.get', return_value=_mk_finmind_resp(rows)):
@@ -178,20 +178,20 @@ class TestFetchIndustryCategory:
         assert ind == '半導體業'
 
     def test_empty_data_returns_empty_string(self):
-        import data_loader
+        from src.data.core import data_loader
         with patch('requests.get', return_value=_mk_finmind_resp([])):
             ind = data_loader.fetch_industry_category('IC_TST_8002')
         assert ind == ''
 
     def test_no_industry_field_returns_empty(self):
-        import data_loader
+        from src.data.core import data_loader
         rows = [{'stock_id': '2330', 'stock_name': '台積電'}]
         with patch('requests.get', return_value=_mk_finmind_resp(rows)):
             ind = data_loader.fetch_industry_category('IC_TST_8003')
         assert ind == ''
 
     def test_http_500_returns_empty(self):
-        import data_loader
+        from src.data.core import data_loader
         bad_resp = MagicMock()
         bad_resp.status_code = 500
         bad_resp.json.return_value = {}

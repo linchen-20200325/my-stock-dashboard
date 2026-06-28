@@ -21,7 +21,7 @@ class TestDailyDataFetchersProvenance(unittest.TestCase):
     """daily_data_fetchers 6 fetcher 主成功路徑都呼叫 _prov_log。"""
 
     def setUp(self):
-        with open('daily_data_fetchers.py', encoding='utf-8') as f:
+        with open('src/data/daily/daily_data_fetchers.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_prov_log_helper_defined(self):
@@ -55,7 +55,7 @@ class TestDailyDataFetchersProvenance(unittest.TestCase):
 class TestTwMacroProvenance(unittest.TestCase):
 
     def setUp(self):
-        with open('tw_macro.py', encoding='utf-8') as f:
+        with open('src/data/macro/tw_macro.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_fetch_cbc_ms1_rows_logged(self):
@@ -79,12 +79,12 @@ class TestAppFetchQuarterlyExtraProvenance(unittest.TestCase):
 class TestImports(unittest.TestCase):
 
     def test_daily_data_fetchers(self):
-        import daily_data_fetchers  # noqa
-        from daily_data_fetchers import _prov_log
+        from src.data.daily import daily_data_fetchers  # noqa
+        from src.data.daily import _prov_log
         _prov_log('test_fn', 'test_source', 'TEST', 'unit_test')
 
     def test_tw_macro(self):
-        import tw_macro  # noqa
+        from src.data.macro import tw_macro  # noqa
 
     def test_app_ast_parse(self):
         """app.py 用 AST parse 驗證(避開 streamlit secrets pre-existing env bug)。"""
