@@ -499,7 +499,12 @@ def generate_quick_summary(df, name):
         pct = (change / df.iloc[-2]['close']) * 100
         color = "🔴" if change > 0 else "🟢" if change < 0 else "⚪"
         return f"{color} {name} 收盤：{latest['close']} ({change:+.2f} / {pct:+.2f}%) | 量 {int(latest['volume'])} 張"
-    except:
+    except Exception as _e:
+        # v18.343 PR-M1 S-MED:bare except → typed + stderr。原 silent 吞 IndexError /
+        # KeyError(欄位缺)/ ZeroDivisionError(yesterday close=0)/ TypeError(NaN);
+        # 返回值不變(數據載入中)避免 UI 行為改變,僅補可觀測性。
+        print(f'[generate_quick_summary] swallow ({name}): {type(_e).__name__}: {_e}',
+              file=__import__('sys').stderr)
         return "數據載入中..."
 
 def analyze_leading_indicators(api_key, df_leading):
