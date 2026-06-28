@@ -2142,6 +2142,20 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 _r.setdefault('_loaded_at', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 if not any(k for k in _r if not k.startswith('_')):
                     _r['_all_failed'] = True
+                # v18.353 PR-Q3 S-PROV-1 phase 19:集中注入 fetched_at 到每個 sub-dict。
+                # 6 wrappers (_fetch_vix/cpi/pmi/ndc/export/fed_funds) 已有 'source' key
+                # (各自 dict 內,如 'FRED/fredgraph.csv' / 'BLS' / 'MOF-CSV' 等),
+                # 集中 setdefault('fetched_at') 比改 14 處 return point 乾淨。schema-additive,
+                # caller 0 改;§2.2 provenance(source + fetched_at)完整化。
+                try:
+                    _now_macro_prov = datetime.datetime.utcnow().isoformat() + 'Z'
+                    for _k_prov, _v_prov in _r.items():
+                        if _k_prov.startswith('_'):
+                            continue  # 跳過 meta key(_loaded_at / _all_failed)
+                        if isinstance(_v_prov, dict):
+                            _v_prov.setdefault('fetched_at', _now_macro_prov)
+                except Exception as _e_prov:
+                    print(f'[Macro/prov] inject fetched_at fail: {_e_prov}')
                 print(f'[Macro] 完成 keys={[k for k in _r.keys() if not k.startswith("_")]}')
                 return _r
 
