@@ -25,7 +25,7 @@ class TestQ5cMarkers(unittest.TestCase):
             return f.read()
 
     def test_macro_snapshot_vix(self):
-        src = self._read('src/ui/render/macro_snapshot.py')
+        src = self._read('src/data/macro/macro_snapshot.py')  # P1-2 v18.373:搬到 L1
         self.assertIn("'source': 'yfinance:^VIX:3mo:1d'", src)
 
     def test_chip_radar(self):
@@ -64,7 +64,7 @@ class TestQ5cMarkers(unittest.TestCase):
 class TestImports(unittest.TestCase):
 
     def test_macro_snapshot(self):
-        from src.ui.render import macro_snapshot  # noqa
+        from src.data.macro import macro_snapshot  # noqa  # P1-2 v18.373:搬到 L1
 
     def test_chip_radar(self):
         from src.ui.tabs import chip_radar  # noqa

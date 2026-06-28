@@ -1048,7 +1048,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
                 # ── 1. VIX ──────────────────────────────────────────────────────────
                 # v18.332 Tier2 2-D slice 1：抽至 L1 macro_snapshot.fetch_vix_block（可單測）。
-                from src.ui.render import fetch_vix_block as _fetch_vix
+                from src.data.macro import fetch_vix_block as _fetch_vix  # P1-2 v18.373:macro_snapshot 搬到 L1
 
                 # ── 2. CPI（美國核心 CPI YoY，series CPILFESL）─────────────────────
                 #   v18.142 修：原本誤用 CPIAUCSL（總體 CPI All Items），與 UI 標籤

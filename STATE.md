@@ -5,6 +5,14 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P1-2 (v18.373) — macro_snapshot 整檔搬至 L1
+- **檔案**: `src/ui/render/macro_snapshot.py` → `src/data/macro/macro_snapshot.py`
+- **拔毒**: L4 render 含 yfinance.download HTTP I/O,檔頭自標 "L1 fetchers" 卻放 render/。git mv 整檔搬位 + 4 caller 改 import path
+- **caller 改**: src/ui/tabs/tab_macro.py:1051 + tests/test_pr_q5c_singles.py:28,67 + tests/test_macro_snapshot.py:11,56
+- **__init__ 同步**: src/ui/render/__init__.py 移除,src/data/macro/__init__.py 加入
+- **驗證**: full pytest 2213/0 fail
+- **commit**: 待 push
+
 ### P0-4 (v18.372) — app.py 4 個 dead fn 刪除
 - **檔案**: `app.py`
 - **拔毒**: 嚴格 grep 確認 0 caller(任何形式皆無)後刪 4 個 public/private fn:

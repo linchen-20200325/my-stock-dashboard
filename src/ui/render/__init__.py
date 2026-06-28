@@ -1,10 +1,14 @@
-"""src/ui/render/ — L4 圖表 / 通用 UI 元件 / macro snapshot。PEP 562 lazy forward。"""
+"""src/ui/render/ — L4 圖表 / 通用 UI 元件。PEP 562 lazy forward。
+
+P1-2 v18.373:macro_snapshot.py 搬至 src/data/macro/macro_snapshot.py(L1)
+— 原檔含 yfinance.download HTTP I/O,符合 L1 fetcher 定位。
+"""
 from . import (  # noqa: F401
-    chart_plotter, etf_render, ui_widgets, macro_ui_components, macro_snapshot,
+    chart_plotter, etf_render, ui_widgets, macro_ui_components,
 )
 
 _SUBMODULES = (
-    chart_plotter, etf_render, ui_widgets, macro_ui_components, macro_snapshot,
+    chart_plotter, etf_render, ui_widgets, macro_ui_components,
 )
 
 
