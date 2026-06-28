@@ -14,7 +14,7 @@ import unittest
 class TestMacroSignalLookbackTwProvenance(unittest.TestCase):
 
     def setUp(self):
-        with open('macro_signal_lookback_tw.py', encoding='utf-8') as f:
+        with open('src/compute/macro/macro_signal_lookback_tw.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_attach_prov_helper(self):
@@ -73,7 +73,7 @@ class TestImports(unittest.TestCase):
 
     def test_macro_signal_lookback_tw_imports(self):
         import macro_signal_lookback_tw  # noqa
-        from macro_signal_lookback_tw import _attach_prov
+        from src.compute.macro import _attach_prov
         import pandas as pd
         _s = pd.Series([1, 2, 3], name='TEST')
         _attach_prov(_s, 'test_source')

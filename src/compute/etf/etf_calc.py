@@ -14,7 +14,7 @@ from src.data.etf import (
     fetch_etf_price, fetch_etf_dividends, fetch_etf_info,
     fetch_etf_nav_history, _get_etf_launch_price,
 )
-from etf_helpers import (
+from src.compute.etf.etf_helpers import (
     calc_sigma_metrics,           # v18.334 PR-H2:σ 計算 SSOT
     classify_etf_quick_sigma,     # v18.335 PR-H3:⚡短線 σ 分級 SSOT
 )
@@ -272,7 +272,7 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
     import pandas as _pd_prem
     import re as _re_prem
     import datetime as _dt_prem
-    from etf_helpers import bare_etf_code as _bare
+    from src.compute.etf.etf_helpers import bare_etf_code as _bare
     _code_clean = _bare(ticker)
     _is_active_etf = bool(_re_prem.match(r'^\d{4,5}[A-Z]$', _code_clean))
     # v18.241 E9: 主動式 ETF prem 門檻從 SSOT 引入（原 _ACTIVE_PREM_MAX inline）
@@ -819,7 +819,7 @@ def _auto_bench_for_etf(ticker: str) -> str:
 
     .TW / .TWO / 純數字 → ^TWII（台股加權）；其他 → ^GSPC（S&P 500）
     """
-    from etf_helpers import bare_etf_code as _bare
+    from src.compute.etf.etf_helpers import bare_etf_code as _bare
     _t = (ticker or '').upper().strip()
     if _t.endswith('.TW') or _t.endswith('.TWO') or _t.replace('.', '').isalnum() and any(c.isdigit() for c in _t[:4]):
         _code = _bare(_t)

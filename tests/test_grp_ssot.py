@@ -29,7 +29,7 @@ class TestGrpSSOTConstants:
 
 class TestScoringEngineGradeSSOT:
     def test_grade_uses_ssot_not_inline(self):
-        import scoring_engine
+        from src.compute.scoring import scoring_engine
         src = open(scoring_engine.__file__, encoding="utf-8").read()
         assert "MULTIFACTOR_GRADE_A_MIN" in src
         assert "MULTIFACTOR_GRADE_B_MIN" in src

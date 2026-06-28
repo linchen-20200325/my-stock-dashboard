@@ -85,7 +85,7 @@ class TestEtfSigmaThresholds:
         # single 改用 classify_etf_deep_sigma(PR-H3)
         assert 'classify_etf_deep_sigma' in src
         # 常數仍被 etf_helpers SSOT 消費
-        helpers_src = open('etf_helpers.py', encoding='utf-8').read()
+        helpers_src = open('src/compute/etf/etf_helpers.py', encoding='utf-8').read()
         assert 'ETF_SIGMA_DEEP_BUY' in helpers_src
         assert 'ETF_SIGMA_STOP_PROFIT' in helpers_src
 
@@ -94,7 +94,7 @@ class TestEtfHelpersSSOT:
     """P1 — yield_valuation_zone / dividend_health_label 抽 etf_helpers SSOT。"""
 
     def test_functions_in_etf_helpers(self):
-        import etf_helpers
+        from src.compute.etf import etf_helpers
         assert hasattr(etf_helpers, 'yield_valuation_zone'), \
             'etf_helpers 缺 yield_valuation_zone()'
         assert hasattr(etf_helpers, 'dividend_health_label'), \
@@ -110,7 +110,7 @@ class TestEtfHelpersSSOT:
         assert 'dividend_health_label' in src
 
     def test_yield_valuation_zone_behavior(self):
-        from etf_helpers import yield_valuation_zone
+        from src.compute.etf import yield_valuation_zone
         # 7%+ 強烈買進
         assert '強烈買進' in yield_valuation_zone(7.5, 5.0)
         # 3%- 獲利了結
@@ -124,7 +124,7 @@ class TestEtfHelpersSSOT:
         assert yield_valuation_zone(5.0, 0) == '—'
 
     def test_dividend_health_label_behavior(self):
-        from etf_helpers import dividend_health_label
+        from src.compute.etf import dividend_health_label
         # 含息 >= 殖利率 → 雙贏
         assert '雙贏' in dividend_health_label(5.0, 10.0, None)
         # 含息 < 殖利率 → 吃本金

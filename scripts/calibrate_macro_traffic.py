@@ -238,7 +238,7 @@ def _build_features_at(df: pd.DataFrame, t: int) -> Optional[_Features]:
 def _features_to_traffic_light(f: _Features) -> dict:
     """以特徵組成 mkt_info → 呼叫 calc_traffic_light（cache 模式餵真實值）。"""
     from market_strategy import market_regime
-    from macro_helpers import calc_traffic_light
+    from src.compute.macro import calc_traffic_light
     fb = 0 if pd.isna(f.foreign_buy) else float(f.foreign_buy)
     mg = None if pd.isna(f.m1b_m2_gap) else float(f.m1b_m2_gap)
     mp = None if pd.isna(f.m1b_m2_prev) else float(f.m1b_m2_prev)
@@ -425,7 +425,7 @@ def _backtest_with_inputs_cache(df: pd.DataFrame) -> list[dict]:
 
 def evaluate_thresholds(cache: list[dict], h_thr: int, s_thr: int) -> dict:
     """用 (h_thr, s_thr) 重決所有 cache 行的色，回傳 precision/recall。"""
-    from macro_helpers import calc_traffic_light
+    from src.compute.macro import calc_traffic_light
     rows = []
     for c in cache:
         tl = calc_traffic_light(
@@ -801,7 +801,7 @@ def build_report(metrics: dict, df_twii: pd.DataFrame, mode: str) -> str:
     md.append("")
     # v18.141：動態讀現行門檻，不再寫死「health<40」舊文字
     try:
-        from macro_helpers import (  # noqa: PLC0415
+        from src.compute.macro import (  # noqa: PLC0415
             BULL_MIN_SCORE as _BMS,
             HEALTH_DEFENSE_THRESHOLD as _HDT,
         )
@@ -948,7 +948,7 @@ def main():
 
     # ── --optimize：walk-forward 找最佳門檻 + 寫 proposal/json ──
     if args.optimize:
-        from macro_helpers import HEALTH_DEFENSE_THRESHOLD as _H_CUR, BULL_MIN_SCORE as _S_CUR
+        from src.compute.macro import HEALTH_DEFENSE_THRESHOLD as _H_CUR, BULL_MIN_SCORE as _S_CUR
         print(f"[calibrate] 跑 walk-forward 驗證（{args.n_folds} 折）...")
         wf = walk_forward_validate(df, n_folds=args.n_folds,
                                    h_default=_H_CUR, s_default=_S_CUR)

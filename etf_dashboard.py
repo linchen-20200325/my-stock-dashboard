@@ -25,7 +25,7 @@ from src.data.etf import (  # noqa: F401
 )
 
 # ── calc 層 ──────────────────────────────────────────────────
-from etf_calc import (  # noqa: F401
+from src.compute.etf import (  # noqa: F401
     _compute_etf_warroom_row,
     calc_current_yield, calc_total_return_1y, calc_avg_yield,
     check_vcp_signal, calc_premium_discount,

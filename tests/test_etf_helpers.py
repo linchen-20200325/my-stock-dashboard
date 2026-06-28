@@ -1,4 +1,4 @@
-"""etf_helpers.py 純函式 unit test — Phase 7B。
+"""src/compute/etf/etf_helpers.py 純函式 unit test — Phase 7B。
 
 v18.306 S-AUDIT-1:`norm_return` / `norm_lower_better` 為 backtest 退役(v18.265 #284)
 連帶移除函式,但本 test 未同步;skip 全檔 import-time 防 collection ImportError。
@@ -15,7 +15,7 @@ pytest.skip(
     allow_module_level=True,
 )
 
-from etf_helpers import _CORE_TICKERS, auto_role, norm_lower_better, norm_return  # noqa: E402, F401
+from src.compute.etf import _CORE_TICKERS, auto_role, norm_lower_better, norm_return  # noqa: E402, F401
 
 
 class TestNormReturn:

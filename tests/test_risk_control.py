@@ -13,7 +13,7 @@
 """
 
 import pytest
-from risk_control import (
+from src.compute.risk import (
     portfolio_exposure,
     stop_loss_trigger,
     trailing_stop_trigger,
@@ -427,7 +427,7 @@ class TestCheckStopLossCompat:
     """check_stop_loss 是 check_exit 的舊版相容包裝"""
 
     def setup_method(self):
-        from risk_control import RiskController
+        from src.compute.risk import RiskController
         self.rc = RiskController()
 
     def test_check_stop_loss_no_exit(self):

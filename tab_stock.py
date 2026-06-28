@@ -183,7 +183,7 @@ def _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2) -> dict:
     li_yellow/li_red；任何輸入異常 → 缺對應 key(不 raise，不偽造)。
     """
     from daily_checklist import analyze_20d_chips_from_df
-    from scoring_engine import calc_rs_score, calc_leading_indicators_detail
+    from src.compute.scoring import calc_rs_score, calc_leading_indicators_detail
     xsec: dict = {}
     # 1) 籌碼集中度(原 L1438 籌碼顯示段)— 只依賴 df2
     try:
@@ -223,12 +223,12 @@ def render_tab_stock():
     import plotly.graph_objects as go
     from src.config import FINMIND_TOKEN
     # 外部模組
-    from v4_strategy_engine import V4StrategyEngine
+    from src.compute.strategy import V4StrategyEngine
     from daily_checklist import analyze_20d_chips_from_df
-    from exit_signals import (
+    from src.compute.scoring import (
         compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
     )
-    from v5_modules import (
+    from src.compute.strategy import (
         analyze_fundamental_leading,
         calc_dividend_yield_357,
         detect_bollinger_breakout,
@@ -239,7 +239,7 @@ def render_tab_stock():
         calc_kd, calc_bollinger, calc_vcp,
     )
     from scoring_helpers import calc_fundamental_score, calc_health_score, health_grade
-    from scoring_engine import calc_rs_score, rs_slope
+    from src.compute.scoring import calc_rs_score, rs_slope
     from ui_widgets import kpi, signal_box, teacher_conclusion
     from chart_plotter import plot_combined_chart, plot_quarterly_chart, plot_revenue_chart
     from src.data.core import fetch_financial_statements
@@ -714,7 +714,7 @@ padding:14px 18px;margin-bottom:12px;">
         _sq_label = '⚪ 無資料'
         _sq_color = '#666'
         try:
-            from scoring_engine import calc_quality_score as _cqs2
+            from src.compute.scoring import calc_quality_score as _cqs2
             _sq_r2 = _cqs2(qtr2)
             if _sq_r2 and _sq_r2.get('sq') is not None:
                 _sq_v2 = _sq_r2['sq']
@@ -733,7 +733,7 @@ padding:14px 18px;margin-bottom:12px;">
         _fgms_label = '⚪ 無資料'
         _fgms_color = '#666'
         try:
-            from scoring_engine import calc_forward_momentum_score as _cfgms2
+            from src.compute.scoring import calc_forward_momentum_score as _cfgms2
             _is_fin2 = bool(qtr2['是否金融股'].iloc[0]) if (qtr2 is not None and '是否金融股' in qtr2.columns) else False
             _fg_r2 = _cfgms2(qtr2, qtr_extra2, is_finance=_is_fin2)
             if _fg_r2 and _fg_r2.get('fgms') is not None:
@@ -755,9 +755,9 @@ padding:14px 18px;margin-bottom:12px;">
         _rs_v_card = _xsec.get('rs_val') if isinstance(locals().get('_xsec'), dict) else None
         _rs_slope_card = None
         try:
-            from scoring_engine import rs_slope as _rsslope_h5
+            from src.compute.scoring import rs_slope as _rsslope_h5
             if _rs_v_card is None:
-                from scoring_engine import calc_rs_score as _crs_h5
+                from src.compute.scoring import calc_rs_score as _crs_h5
                 _rs_v_card = _crs_h5(df2)
             _rs_slope_card = _rsslope_h5(df2)
         except Exception as _e_rs:
@@ -2329,7 +2329,7 @@ padding:12px 16px;margin:8px 0;">
                         )
                 # 獲利品質得分 (SQ)
                 try:
-                    from scoring_engine import calc_quality_score as _cqs
+                    from src.compute.scoring import calc_quality_score as _cqs
                     _sq_res = _cqs(qtr2)
                     if _sq_res.get('sq') is not None:
                         _sq_v = _sq_res['sq']
@@ -2348,7 +2348,7 @@ padding:12px 16px;margin:8px 0;">
                     pass
                 # 前瞻成長動能分數 (FGMS)
                 try:
-                    from scoring_engine import calc_forward_momentum_score as _cfgms
+                    from src.compute.scoring import calc_forward_momentum_score as _cfgms
                     _is_fin2 = bool(qtr2.get('是否金融股', pd.Series([False])).iloc[0]) if qtr2 is not None and '是否金融股' in qtr2.columns else False
                     print(f'[FGMS_UI] qtr2={qtr2 is not None and not qtr2.empty}, qtr_extra2={qtr_extra2 is not None and not qtr_extra2.empty}')
                     _fgms_r = _cfgms(qtr2, qtr_extra2, is_finance=_is_fin2)
@@ -2453,7 +2453,7 @@ padding:12px 16px;margin:8px 0;">
         st.markdown('---')
         st.markdown('#### 🔬 D2. 基本面先行指標（6大指標）')
         try:
-            from scoring_engine import calc_leading_indicators_detail as _cli_fn
+            from src.compute.scoring import calc_leading_indicators_detail as _cli_fn
             _li_results = _cli_fn(rev_df=rev2, qtr_df=qtr2, bs_cf_df=qtr_extra2)
             _li_green = sum(1 for _r in _li_results if _r['signal'] == '🟢')
             _li_yellow = sum(1 for _r in _li_results if _r['signal'] == '🟡')
@@ -2541,7 +2541,7 @@ padding:12px 16px;margin:8px 0;">
 
         # ── D2 動態投資建議（基於6大先行指標合成）──────────────
         try:
-            from scoring_engine import calc_leading_indicators_detail as _cli_fn2
+            from src.compute.scoring import calc_leading_indicators_detail as _cli_fn2
             _li2 = _cli_fn2(rev_df=rev2, qtr_df=qtr2, bs_cf_df=qtr_extra2)
             _li2_map = {r['id']: r for r in _li2}
 

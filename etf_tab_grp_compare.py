@@ -23,16 +23,16 @@ import pandas as pd
 import streamlit as st
 
 from src.data.etf import fetch_etf_price, fetch_etf_dividends, fetch_etf_info
-from etf_calc import (
+from src.compute.etf import (
     calc_total_return_1y, calc_current_yield,
     calc_sharpe, calc_mdd, calc_cagr,
     calc_avg_yield, calc_premium_discount,
     # v18.333 PR-H1:R-2 P1 — 多檔 Tab 補流動性 + 追蹤誤差(SSOT 已寫無 caller)
     calc_liquidity_score, calc_tracking_error, auto_detect_benchmark,
 )
-from etf_quality import compute_etf_quality
+from src.compute.etf import compute_etf_quality
 from etf_scoring_helpers import compute_etf_composite_score
-from etf_helpers import (
+from src.compute.etf import (
     dividend_health_label as _dividend_health_label,
     normalize_etf_ticker,
     yield_valuation_zone as _yield_valuation_zone,

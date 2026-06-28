@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from exit_signals import (
+from src.compute.scoring import (
     compute_tech_bearish,
     evaluate_exit_signals,
     parse_news_sentiment,

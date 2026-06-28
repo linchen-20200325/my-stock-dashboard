@@ -21,7 +21,7 @@ from typing import Literal, Optional
 import numpy as np
 import pandas as pd
 
-from macro_validation_tw import TwiiCrisisEvent
+from src.compute.macro import TwiiCrisisEvent
 
 Direction = Literal["above", "below"]
 NormalizeMethod = Literal["zscore", "minmax"]

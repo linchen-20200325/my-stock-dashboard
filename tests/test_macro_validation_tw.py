@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from macro_validation_tw import (
+from src.compute.macro import (
     detect_twii_crisis_events,
     load_twii_close_from_parquet,
 )

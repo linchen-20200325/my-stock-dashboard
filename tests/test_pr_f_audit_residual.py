@@ -24,7 +24,7 @@ class TestU7_EtfQuickSigma:
     def test_no_inline_in_etf_calc(self):
         """v18.335 PR-H3:etf_calc 已改用 classify_etf_quick_sigma SSOT,
         ETF_QUICK_SIGMA_* 常數由 etf_helpers 內部消費(不再直引)。"""
-        src = open('etf_calc.py', encoding='utf-8').read()
+        src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
         # 函式內 inline 已退役
         assert '- 3 * _std' not in src
         assert '- 2 * _std' not in src
@@ -34,7 +34,7 @@ class TestU7_EtfQuickSigma:
         # etf_calc 改用 classify_etf_quick_sigma(PR-H3 抽離分級邏輯)
         assert 'classify_etf_quick_sigma' in src
         # 常數仍被 etf_helpers SSOT 消費
-        helpers_src = open('etf_helpers.py', encoding='utf-8').read()
+        helpers_src = open('src/compute/etf/etf_helpers.py', encoding='utf-8').read()
         assert 'ETF_QUICK_SIGMA_DISASTER' in helpers_src
         assert 'ETF_QUICK_SIGMA_OVERBOUGHT' in helpers_src
 
@@ -83,8 +83,8 @@ class TestU8_ClassifyYieldZone:
         assert code == 'na'
 
     def test_etf_helpers_delegates_to_classify(self):
-        """etf_helpers.yield_valuation_zone 應 delegate 給 classify_yield_zone。"""
-        from etf_helpers import yield_valuation_zone
+        """src.compute.etf.etf_helpers.yield_valuation_zone 應 delegate 給 classify_yield_zone。"""
+        from src.compute.etf import yield_valuation_zone
         from shared.thresholds import classify_yield_zone
         # 同輸入應回同 label
         for cur, avg in [(7.5, 5.0), (2.5, 5.0), (4.0, 5.0), (6.0, 5.0)]:

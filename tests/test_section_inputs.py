@@ -316,7 +316,7 @@ class TestWarroomSectionIntegration:
 class TestComputeFiveBucketIntegration:
     def test_pipeline_no_data(self):
         """空 session_state → compute_five_bucket_summary 不 raise,全 gray。"""
-        from macro_helpers import compute_five_bucket_summary
+        from src.compute.macro import compute_five_bucket_summary
         out = load_section_inputs({})
         result = compute_five_bucket_summary(
             macro_info=out.macro_info,

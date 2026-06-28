@@ -18,7 +18,7 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from etf_helpers import (
+from src.compute.etf import (
     classify_etf_deep_sigma,
     classify_etf_quick_sigma,
     compute_etf_annual_cashflow,
@@ -133,9 +133,9 @@ class TestClassifyEtfDeepSigma:
 class TestCalcPortfolioStressTest:
     """投組壓力測試 S&P500 下跌 Beta 加權虧損。"""
 
-    @patch('etf_calc.fetch_etf_info')
+    @patch('src.compute.etf.etf_calc.fetch_etf_info')
     def test_basic_two_etf_portfolio(self, mock_info):
-        from etf_calc import calc_portfolio_stress_test
+        from src.compute.etf import calc_portfolio_stress_test
         mock_info.side_effect = [{'beta': 1.0}, {'beta': 0.5}]
         rows = [
             {'ticker': 'A', 'actual_pct': 60},
@@ -150,18 +150,18 @@ class TestCalcPortfolioStressTest:
         assert abs(r['loss_pct'] - 16.0) < 1e-6
         assert len(r['per_etf']) == 2
 
-    @patch('etf_calc.fetch_etf_info')
+    @patch('src.compute.etf.etf_calc.fetch_etf_info')
     def test_beta_cast_failure_fallback_to_one(self, mock_info):
-        from etf_calc import calc_portfolio_stress_test
+        from src.compute.etf import calc_portfolio_stress_test
         mock_info.return_value = {'beta': 'invalid'}
         rows = [{'ticker': 'X', 'actual_pct': 100}]
         r = calc_portfolio_stress_test(rows, total_value=1_000_000)
         # fallback beta=1.0 → loss = -200,000
         assert abs(r['total_loss'] - (-200_000)) < 1
 
-    @patch('etf_calc.fetch_etf_info')
+    @patch('src.compute.etf.etf_calc.fetch_etf_info')
     def test_custom_drop_pct(self, mock_info):
-        from etf_calc import calc_portfolio_stress_test
+        from src.compute.etf import calc_portfolio_stress_test
         mock_info.return_value = {'beta': 1.0}
         rows = [{'ticker': 'A', 'actual_pct': 100}]
         r = calc_portfolio_stress_test(rows, total_value=1_000_000, drop_pct=-30.0)
@@ -219,7 +219,7 @@ class TestCallerMigration:
     """inline 已淨空 — caller 已改 SSOT。"""
 
     def test_etf_calc_uses_classify_quick_sigma(self):
-        src = open('etf_calc.py', encoding='utf-8').read()
+        src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
         assert 'from etf_helpers import' in src
         assert 'classify_etf_quick_sigma' in src
         # inline 5 段 if-elif 已淨空
@@ -249,7 +249,7 @@ class TestImportContract:
     """import 收斂 — 舊常數直引已移除(由 SSOT 函式內部消費)。"""
 
     def test_etf_calc_no_direct_quick_sigma_imports(self):
-        src = open('etf_calc.py', encoding='utf-8').read()
+        src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
         # ETF_QUICK_SIGMA_* 5 個應該不再被 etf_calc 直引
         assert 'ETF_QUICK_SIGMA_CHEAP,' not in src
         assert 'ETF_QUICK_SIGMA_DISASTER,' not in src

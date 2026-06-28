@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from macro_validation_tw import (
+from src.compute.macro import (
     DEFAULT_PARQUET_CACHE_DIR,
     detect_twii_crisis_events,
     load_twii_close_from_parquet,
@@ -214,7 +214,7 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
     else:
         # 跑訊號回看
         from dataclasses import replace as _replace
-        from macro_signal_lookback_tw import (
+        from src.compute.macro import (
             DEFAULT_TW_SIGNALS,
             compute_signal_hit_rate,
             fetch_all_tw_signal_series,
@@ -305,7 +305,7 @@ def _render_phase3_signal_section(events: list, cache_dir: Path) -> None:
     series_by_key = cached_p3.get("series_by_key")
     if not series_by_key:
         return  # 舊 cache 沒存 series，等下次按按鈕
-    from macro_signal_lookback_tw import compute_signal_precision
+    from src.compute.macro import compute_signal_precision
     st.markdown("---")
     st.markdown("#### 📐 訊號精確率分析（forward-looking · v18.163）")
     st.caption(
@@ -366,7 +366,7 @@ def _render_phase4_cross_source_matrix(events, specs, series_by_key,
     - 單元格：✅ 提前 Xd / ⚪ 未命中 / — 無資料
     讓 user 一眼看出「在 2020 COVID 那場，哪 5 個資料源同時發警報，哪 2 個失靈」。
     """
-    from macro_signal_lookback_tw import evaluate_signal_at_event
+    from src.compute.macro import evaluate_signal_at_event
 
     with st.expander("📡 跨資料源比對視角矩陣（Phase E）", expanded=False):
         st.caption(

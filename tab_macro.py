@@ -39,7 +39,7 @@ from shared.signal_thresholds import (
     BREADTH_BEAR_PCT,
 )
 
-from macro_helpers import calc_traffic_light, rp_entry, rp_scalar, rp_ts
+from src.compute.macro import calc_traffic_light, rp_entry, rp_scalar, rp_ts
 from tab_helpers import safe_get
 
 
@@ -313,7 +313,7 @@ def _render_china_drag_panel(fred_api_key: str = "",
         return
 
     try:
-        from macro_helpers import (  # noqa: PLC0415
+        from src.compute.macro import (  # noqa: PLC0415
             apply_china_modifier,
             classify_china_regime,
             compute_china_subscore,
@@ -429,7 +429,7 @@ def render_macro_bucket_summary_bar(bucket_key: str, with_cards: bool = False) -
     當模板；同一次 compute 共用，不重複算。
     """
     try:
-        from macro_helpers import compute_five_bucket_summary
+        from src.compute.macro import compute_five_bucket_summary
         from section_inputs import load_section_inputs
         from shared.macro_buckets import (
             bucket_indicator_cards_html, bucket_summary_bar_html,
@@ -491,7 +491,7 @@ def render_tab_macro():
     from macro_state_locker import (
         MacroStateLocker, calculate_system_state, load_macro_state,
     )
-    from v4_strategy_engine import V4StrategyEngine
+    from src.compute.strategy import V4StrategyEngine
     from daily_checklist import (
         _fetch_otc_via_finmind, calc_stats, evaluate_market_status_v4_final,
         fetch_adl, fetch_flow_snapshot, fetch_institutional, fetch_margin_balance,
@@ -764,7 +764,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
     # v18.173：_lt hoist 到 try 外，供下方雙速合議使用
     _lt = None
     try:
-        from macro_helpers import (
+        from src.compute.macro import (
             classify_long_term_regime as _cls_lt,
             detect_mk_golden_inflection as _det_mk2,
         )
@@ -831,7 +831,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         try:
             # C1-A v18.287:走 section_inputs.load_section_inputs SSOT,
             # 後續 C1-B+ 其他 section 也接同個 helper,降低物理重排耦合。
-            from macro_helpers import compute_five_bucket_summary
+            from src.compute.macro import compute_five_bucket_summary
             from section_inputs import load_section_inputs
             _inp = load_section_inputs(st.session_state)
             _5b = compute_five_bucket_summary(
@@ -2920,7 +2920,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         # 規則：CPI 月降 + Fed Funds 月降/持平 → ⭐ 強訊號（多頭最佳買點）
         # 邏輯純函式集中於 macro_helpers.detect_mk_golden_inflection（可單測）
         try:
-            from macro_helpers import detect_mk_golden_inflection as _det_mk
+            from src.compute.macro import detect_mk_golden_inflection as _det_mk
             _mi_mk = st.session_state.get('macro_info') or {}
             _cpi_mk = _mi_mk.get('us_core_cpi') or {}
             _fed_mk = _mi_mk.get('fed_funds') or {}

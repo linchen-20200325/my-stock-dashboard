@@ -181,7 +181,7 @@ def test_fmt_value():
 # 5. compute_five_bucket_summary（L2 macro_helpers）
 # ──────────────────────────────────────────────────────────
 def test_compute_all_buckets_present():
-    from macro_helpers import compute_five_bucket_summary
+    from src.compute.macro import compute_five_bucket_summary
     out = compute_five_bucket_summary()
     assert set(out.keys()) == set(mb.BUCKET_ORDER)
     for b in mb.BUCKET_ORDER:
@@ -192,7 +192,7 @@ def test_compute_all_buckets_present():
 
 def test_compute_empty_is_gray():
     """全 None → 每桶 gray（§1：不偽綠）。"""
-    from macro_helpers import compute_five_bucket_summary
+    from src.compute.macro import compute_five_bucket_summary
     out = compute_five_bucket_summary()
     for b in mb.BUCKET_ORDER:
         assert out[b]["level"] == "gray", f"{b} 應 gray"
@@ -200,7 +200,7 @@ def test_compute_empty_is_gray():
 
 def test_compute_red_scenario():
     import pandas as pd
-    from macro_helpers import compute_five_bucket_summary
+    from src.compute.macro import compute_five_bucket_summary
     out = compute_five_bucket_summary(
         macro_info={
             "vix": {"current": 35},          # ≥30 → short red
@@ -223,7 +223,7 @@ def test_compute_red_scenario():
 
 
 def test_compute_green_scenario():
-    from macro_helpers import compute_five_bucket_summary
+    from src.compute.macro import compute_five_bucket_summary
     out = compute_five_bucket_summary(
         macro_info={
             "vix": {"current": 15},
@@ -244,7 +244,7 @@ def test_compute_green_scenario():
 
 
 def test_compute_news_yellow_on_single_systemic():
-    from macro_helpers import compute_five_bucket_summary
+    from src.compute.macro import compute_five_bucket_summary
     out = compute_five_bucket_summary(news_items=[{"is_systemic": True}, {"is_systemic": False}])
     assert out["news"]["level"] == "yellow"
 

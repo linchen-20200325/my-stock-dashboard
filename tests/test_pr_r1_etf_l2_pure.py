@@ -22,7 +22,7 @@ class TestEtfCalcL2Pure(unittest.TestCase):
     """etf_calc 已無 yfinance / requests / proxy_helper module-level import。"""
 
     def setUp(self):
-        with open('etf_calc.py', encoding='utf-8') as f:
+        with open('src/compute/etf/etf_calc.py', encoding='utf-8') as f:
             self.tree = ast.parse(f.read())
 
     def _module_level_imports(self, mod_prefix: str):
@@ -63,7 +63,7 @@ class TestEtfFetchPeerHistoryExists(unittest.TestCase):
 
     def test_caller_unchanged(self):
         """compute_etf_peer_ranking 簽章不變(caller compat)。"""
-        from etf_calc import compute_etf_peer_ranking
+        from src.compute.etf import compute_etf_peer_ranking
         import inspect
         sig = inspect.signature(compute_etf_peer_ranking)
         params = list(sig.parameters.keys())
@@ -74,7 +74,7 @@ class TestEtfFetchPeerHistoryExists(unittest.TestCase):
 class TestSourceMarker(unittest.TestCase):
 
     def test_etf_calc_a7_marker(self):
-        src = open('etf_calc.py', encoding='utf-8').read()
+        src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
         self.assertIn('PR-R1 §8.2 A7', src)
         # 確認從 etf_fetch import 新 fetcher
         self.assertIn('from src.data.etf import fetch_etf_peer_history', src)

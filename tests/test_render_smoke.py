@@ -210,7 +210,7 @@ render_principle_classroom()
         """v18.284: 總經五桶 bar — 全紅情境 render（compute + render 串接無例外）"""
         from streamlit.testing.v1 import AppTest
         drv = _build_driver('''
-from macro_helpers import compute_five_bucket_summary
+from src.compute.macro import compute_five_bucket_summary
 from tab_macro import render_five_bucket_bar
 _summary = compute_five_bucket_summary(
     macro_info={"vix":{"current":35},"ism_pmi":{"value":44},"us_core_cpi":{"yoy":4.5},
@@ -244,7 +244,7 @@ render_five_bucket_bar(_summary)
         """v18.284: 空 session_state → 五桶全 ⬜ 未載入（不偽綠 / 不 KeyError）"""
         from streamlit.testing.v1 import AppTest
         drv = _build_driver('''
-from macro_helpers import compute_five_bucket_summary
+from src.compute.macro import compute_five_bucket_summary
 from tab_macro import render_five_bucket_bar
 render_five_bucket_bar(compute_five_bucket_summary())
 ''')

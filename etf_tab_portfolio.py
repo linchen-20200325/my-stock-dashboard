@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from etf_helpers import auto_role
+from src.compute.etf import auto_role
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.signal_thresholds import (
     ETF_CORR_HIGH_THRESHOLD,
@@ -53,8 +53,8 @@ def render_etf_portfolio(gemini_fn=None):
         macro_allocation_banner,
     )
     # v18.335 PR-H3:壓力測試 + 年現金流彙整獨立函式 SSOT
-    from etf_calc import calc_portfolio_stress_test
-    from etf_helpers import compute_etf_annual_cashflow
+    from src.compute.etf import calc_portfolio_stress_test
+    from src.compute.etf import compute_etf_annual_cashflow
 
     mkt_info = st.session_state.get('mkt_info', {})
     regime   = mkt_info.get('regime', 'neutral')
@@ -109,7 +109,7 @@ def render_etf_portfolio(gemini_fn=None):
         return
 
     # ── 解析 data_editor 表格 → rows（1 張 = 1000 股換算）─────
-    from etf_helpers import normalize_etf_ticker
+    from src.compute.etf import normalize_etf_ticker
     rows = []
     for _, _row in edited_df.iterrows():
         _tk_raw = normalize_etf_ticker(_row.get('股票代號'))
@@ -289,7 +289,7 @@ def render_etf_portfolio(gemini_fn=None):
     # 查詢 ETF 名稱（去掉 .TW/.TWO 後綴後查 stock_names）
     try:
         from src.config import get_stock_name as _gsn_etf
-        from etf_helpers import bare_etf_code as _bare
+        from src.compute.etf import bare_etf_code as _bare
         def _etf_name(tk):
             code = _bare(tk)
             n = _gsn_etf(code)
@@ -1144,7 +1144,7 @@ def _render_cloud_storage(edited_df):
             if edited_df is None or len(edited_df) == 0:
                 st.warning('⚠️ 目前表格為空，請先填入持股')
             else:
-                from etf_helpers import normalize_etf_ticker
+                from src.compute.etf import normalize_etf_ticker
                 _rows_to_save = []
                 for _r in edited_df.to_dict('records'):
                     _rows_to_save.append({

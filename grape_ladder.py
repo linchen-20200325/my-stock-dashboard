@@ -104,7 +104,7 @@ def recommend_income_ladder(
     _low_quality: list[str] = []
     if min_stars >= 2:
         try:
-            from etf_quality import compute_etf_quality
+            from src.compute.etf import compute_etf_quality
             _filtered: list[str] = []
             for _t in _cands:
                 _q = compute_etf_quality(_t)

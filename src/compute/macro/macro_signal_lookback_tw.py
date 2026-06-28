@@ -1,4 +1,4 @@
-"""macro_signal_lookback_tw.py — 台股總經訊號歷史回看引擎 (v18.159, Phase 3).
+"""src/compute/macro/macro_signal_lookback_tw.py — 台股總經訊號歷史回看引擎 (v18.159, Phase 3).
 
 User 需求：「基金有這測試總經的預測力，台股沒有看到」.
 
@@ -34,7 +34,7 @@ from typing import Callable, Literal, Optional
 
 import pandas as pd
 
-from macro_validation_tw import DEFAULT_PARQUET_CACHE_DIR, TwiiCrisisEvent
+from src.compute.macro.macro_validation_tw import DEFAULT_PARQUET_CACHE_DIR, TwiiCrisisEvent
 
 
 # v18.355 PR-Q5a — S-PROV-1 phase 19 helper

@@ -19,14 +19,14 @@ import pytest
 # ════════════════════════════════════════════════════════════════
 class TestPmiFetcher:
     def test_missing_parquet_returns_empty_series(self):
-        from macro_signal_lookback_tw import fetch_pmi_below_50_series
+        from src.compute.macro import fetch_pmi_below_50_series
         with tempfile.TemporaryDirectory() as tmpdir:
             s = fetch_pmi_below_50_series(Path(tmpdir))
         assert s.empty
         assert s.name == "PMI_BELOW_50"
 
     def test_parses_valid_parquet(self):
-        from macro_signal_lookback_tw import fetch_pmi_below_50_series
+        from src.compute.macro import fetch_pmi_below_50_series
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             df = pd.DataFrame({
@@ -41,7 +41,7 @@ class TestPmiFetcher:
         assert s.name == "PMI_BELOW_50"
 
     def test_parquet_missing_pmi_column_returns_empty(self):
-        from macro_signal_lookback_tw import fetch_pmi_below_50_series
+        from src.compute.macro import fetch_pmi_below_50_series
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             # 缺 pmi 欄位
@@ -59,12 +59,12 @@ class TestPmiFetcher:
 # ════════════════════════════════════════════════════════════════
 class TestPmiSignalRegistration:
     def test_pmi_in_TW_SIGNAL_FETCHERS(self):
-        from macro_signal_lookback_tw import TW_SIGNAL_FETCHERS
+        from src.compute.macro import TW_SIGNAL_FETCHERS
         assert "PMI_BELOW_50" in TW_SIGNAL_FETCHERS
         assert callable(TW_SIGNAL_FETCHERS["PMI_BELOW_50"])
 
     def test_pmi_in_DEFAULT_TW_SIGNALS(self):
-        from macro_signal_lookback_tw import DEFAULT_TW_SIGNALS
+        from src.compute.macro import DEFAULT_TW_SIGNALS
         pmi_specs = [s for s in DEFAULT_TW_SIGNALS if s.key == "PMI_BELOW_50"]
         assert len(pmi_specs) == 1
         spec = pmi_specs[0]

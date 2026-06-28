@@ -18,7 +18,7 @@ class TestSourceChainEmitted:
     """所有 I1~I6 dict 都帶 source_chain 鍵。"""
 
     def test_all_six_have_source_chain(self):
-        from scoring_engine import calc_leading_indicators_detail
+        from src.compute.scoring import calc_leading_indicators_detail
         # 全 None 路徑(都是 ⚪)依然要有 source_chain
         results = calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None)
         assert len(results) == 6
@@ -28,7 +28,7 @@ class TestSourceChainEmitted:
             assert len(_r['source_chain']) > 0
 
     def test_static_defaults_per_indicator(self):
-        from scoring_engine import calc_leading_indicators_detail
+        from src.compute.scoring import calc_leading_indicators_detail
         results = calc_leading_indicators_detail()
         _m = {r['id']: r['source_chain'] for r in results}
         # I1/I2 月營收
@@ -50,12 +50,12 @@ class TestResolveLiSource:
     """source 解析 helper:attrs / 'source' 欄 / fallback。"""
 
     def test_none_inputs_returns_default(self):
-        from scoring_engine import _resolve_li_source
+        from src.compute.scoring import _resolve_li_source
         r = _resolve_li_source('DEFAULT_X')
         assert r == 'DEFAULT_X'
 
     def test_df_attrs_source_wins_over_default(self):
-        from scoring_engine import _resolve_li_source
+        from src.compute.scoring import _resolve_li_source
         _df = pd.DataFrame({'x': [1, 2, 3]})
         _df.attrs['source'] = 'FinMind:Live:Test'
         r = _resolve_li_source('STATIC_DEFAULT', _df)
@@ -64,7 +64,7 @@ class TestResolveLiSource:
         assert 'STATIC_DEFAULT' not in r
 
     def test_source_column_used_when_no_attrs(self):
-        from scoring_engine import _resolve_li_source
+        from src.compute.scoring import _resolve_li_source
         _df = pd.DataFrame({
             'x': [1, 2, 3],
             'source': ['FinMind:Col:Test', 'FinMind:Col:Test', None],
@@ -73,7 +73,7 @@ class TestResolveLiSource:
         assert 'FinMind:Col:Test' in r
 
     def test_multiple_dfs_dedupe(self):
-        from scoring_engine import _resolve_li_source
+        from src.compute.scoring import _resolve_li_source
         _d1 = pd.DataFrame({'x': [1]})
         _d1.attrs['source'] = 'S_A'
         _d2 = pd.DataFrame({'x': [1]})
@@ -86,13 +86,13 @@ class TestResolveLiSource:
         assert 'S_B' in r
 
     def test_empty_df_falls_back_to_default(self):
-        from scoring_engine import _resolve_li_source
+        from src.compute.scoring import _resolve_li_source
         _df = pd.DataFrame()
         r = _resolve_li_source('FALLBACK_OK', _df)
         assert r == 'FALLBACK_OK'
 
     def test_corrupt_df_does_not_raise(self):
-        from scoring_engine import _resolve_li_source
+        from src.compute.scoring import _resolve_li_source
         # 不可 hash 的物件當 df → 不該 raise
         r = _resolve_li_source('SAFE', 'not a df', 12345, None)
         # 字串 'not a df' 沒有 attrs / columns,fallback
@@ -105,7 +105,7 @@ class TestLiveAttrsWiring:
     """當 caller 傳入帶 attrs['source'] 的 df 時,出口應反映即時 source。"""
 
     def test_rev_df_attrs_propagates_to_i1(self):
-        from scoring_engine import calc_leading_indicators_detail
+        from src.compute.scoring import calc_leading_indicators_detail
         _rev = pd.DataFrame({
             'date': pd.date_range('2024-01-01', periods=13, freq='ME'),
             'revenue': [100 + i * 5 for i in range(13)],
@@ -118,7 +118,7 @@ class TestLiveAttrsWiring:
         assert 'FinMind:TaiwanStockMonthRevenue:live' in _m['I2']['source_chain']
 
     def test_bs_cf_attrs_propagates_to_i3_i4_i5(self):
-        from scoring_engine import calc_leading_indicators_detail
+        from src.compute.scoring import calc_leading_indicators_detail
         _bs = pd.DataFrame()
         _bs.attrs['source'] = 'FinMind:BS:live'
         results = calc_leading_indicators_detail(bs_cf_df=_bs)
@@ -150,5 +150,5 @@ class TestModulesImportable:
         import tab_stock  # noqa: F401
 
     def test_li_source_map_defined(self):
-        from scoring_engine import _LI_SOURCE_CHAINS
+        from src.compute.scoring import _LI_SOURCE_CHAINS
         assert set(_LI_SOURCE_CHAINS.keys()) == {'I1', 'I2', 'I3', 'I4', 'I5', 'I6'}

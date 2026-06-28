@@ -1109,7 +1109,7 @@ def render_top_rankings(results: list, top_n: int = 10):
     if not results:
         st.info('尚無評分資料')
         return
-    from scoring_engine import rank_stocks as _rank
+    from src.compute.scoring import rank_stocks as _rank
     ranked = _rank(results)[:top_n]
     if not ranked:
         st.info('尚無有效評分資料')

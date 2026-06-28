@@ -79,7 +79,7 @@ def test_emit_thresholds_json_no_change_returns_false():
 
 
 def test_macro_helpers_reads_json_override():
-    """macro_helpers._load_calibrated_thresholds 應正確讀 JSON 覆蓋預設。"""
+    """src.compute.macro.macro_helpers._load_calibrated_thresholds 應正確讀 JSON 覆蓋預設。"""
     import sys
     from scripts.calibrate_macro_traffic import emit_thresholds_json
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -93,7 +93,7 @@ def test_macro_helpers_reads_json_override():
         assert payload['BULL_MIN_SCORE'] == 5
         # 簡 sanity：模組常數應落在合理範圍（讀現行 repo 內 JSON 或預設）
         sys.modules.pop('macro_helpers', None)
-        from macro_helpers import HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE
+        from src.compute.macro import HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE
         assert 20 <= HEALTH_DEFENSE_THRESHOLD <= 60
         assert 1 <= BULL_MIN_SCORE <= 6
 

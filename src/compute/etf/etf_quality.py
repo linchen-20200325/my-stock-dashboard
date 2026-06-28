@@ -17,7 +17,7 @@ import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.ttls import TTL_1DAY
-from etf_dashboard import (
+from src.data.etf import (  # v18.360 F-6.3:L2→L5 反向違憲修正(原 from etf_dashboard,實際定義在 L1)
     fetch_etf_info, fetch_etf_dividends, get_etf_expense_ratio_safe,
 )
 

@@ -11,8 +11,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from macro_signal_lookback_tw import TwSignalSpec  # noqa: E402
-from macro_validation_tw import TwiiCrisisEvent  # noqa: E402
+from src.compute.macro import TwSignalSpec  # noqa: E402
+from src.compute.macro import TwiiCrisisEvent  # noqa: E402
 from signal_threshold_optimization import (  # noqa: E402
     make_default_grid,
     optimize_signal_threshold,

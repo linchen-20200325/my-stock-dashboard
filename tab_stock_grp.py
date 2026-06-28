@@ -54,7 +54,7 @@ def render_stock_grp():
     from ai_structured_summary import build_structured_summary_prompt
     from src.data.etf import _fetch_news_for
     from daily_checklist import analyze_20d_chips_from_df
-    from exit_signals import (
+    from src.compute.scoring import (
         compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
     )
     # app.py 內部 helper
@@ -161,7 +161,7 @@ def render_stock_grp():
         score_t3   = []          # 多因子評分結果
 
         prog_t3 = st.progress(0, text='批次分析中...')
-        from scoring_engine import score_single_stock as _sss
+        from src.compute.scoring import score_single_stock as _sss
         from src.config import get_stock_name as _gsn
         import threading as _threading
         _t3_loader_lock = _threading.Lock()  # FinMind dl 非線程安全，需串行保護
@@ -445,7 +445,7 @@ def render_stock_grp():
             # 獲利品質得分 (SQ)
             _sq3 = None
             try:
-                from scoring_engine import calc_quality_score as _cqs3
+                from src.compute.scoring import calc_quality_score as _cqs3
                 _sq_r3 = _cqs3(_qtr3)
                 if _sq_r3.get('sq') is not None:
                     _sq3 = f"{_sq_r3['sq']:.0f}({_sq_r3['sq_label']})"
@@ -459,7 +459,7 @@ def render_stock_grp():
                     _qex3, _ = fetch_quarterly_extra(_sid3)
                 except Exception:
                     pass
-                from scoring_engine import calc_forward_momentum_score as _cfgms3
+                from src.compute.scoring import calc_forward_momentum_score as _cfgms3
                 _is_fin3 = bool(_qtr3['是否金融股'].iloc[0]) if _qtr3 is not None and '是否金融股' in _qtr3.columns else False
                 _fg_r3 = _cfgms3(_qtr3, _qex3, is_finance=_is_fin3)
                 if _fg_r3.get('fgms') is not None:
@@ -581,7 +581,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 _mf3a = '等待評分載入'
             st.markdown(teacher_conclusion('孫慶龍', '多因子總分排行', _mf3c, _mf3a), unsafe_allow_html=True)
             if score_t3:
-                from scoring_engine import rank_stocks as _rk3
+                from src.compute.scoring import rank_stocks as _rk3
                 _ranked3 = _rk3(score_t3)
                 _rank_rows = []
                 for _ri, _r in enumerate(_ranked3):

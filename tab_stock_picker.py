@@ -114,7 +114,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
 
     # ── 解析清單（高息網勾選 + 手動輸入，合併去重）─────────────
     import re as _re_pk
-    from etf_helpers import bare_etf_code as _bare
+    from src.compute.etf import bare_etf_code as _bare
     _extra: list[str] = []
     _bad:   list[str] = []
     for _c0 in _re_pk.split(r'[,\s、，;；]+', (_extra_raw or '').strip()):

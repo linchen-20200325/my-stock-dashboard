@@ -65,7 +65,7 @@ def render_etf_single(gemini_fn=None):
 
     st.markdown('#### 🔍 輸入 ETF 代號')
     col_l, col_r = st.columns([2, 1])
-    from etf_helpers import normalize_etf_ticker
+    from src.compute.etf import normalize_etf_ticker
     ticker    = normalize_etf_ticker(col_l.text_input(
         'ETF 代號（台股純數字自動補 .TW，如 0050 或 0050.TW | 美國：SPY、QQQ）',
         value='0050', key='etf_s_ticker'))
@@ -180,7 +180,7 @@ def render_etf_single(gemini_fn=None):
 
     # ── 自製品質評等（4 因子：AUM / 費用率 / 殖利率穩定度 / Beta）──
     try:
-        from etf_quality import compute_etf_quality, render_quality_badge
+        from src.compute.etf import compute_etf_quality, render_quality_badge
         _quality = compute_etf_quality(ticker)
         render_quality_badge(_quality)
     except Exception as _e_q:
@@ -479,7 +479,7 @@ def render_etf_single(gemini_fn=None):
     # 給不同建議天經地義(類比 MA20 vs MA60);標題前綴「📅 長線」明示避免 user 困惑。
     st.markdown('#### 🎯 📅 長線 σ 量化買點(MK 框架:年線基準,跌了就買)')
     st.caption('💡 與戰情室「⚡ 短線 σ」(月線基準)為不同時間尺度,訊號差異屬正常。')
-    from etf_helpers import calc_sigma_metrics, classify_etf_deep_sigma
+    from src.compute.etf import calc_sigma_metrics, classify_etf_deep_sigma
     _sig_metrics = calc_sigma_metrics(df, window=252)
     if _sig_metrics['n'] >= 252:
         _cur_p = float(df['Close'].iloc[-1])

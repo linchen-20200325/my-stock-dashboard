@@ -14,12 +14,12 @@ from typing import Optional
 
 import pandas as pd
 
-from macro_signal_lookback_tw import (
+from src.compute.macro import (
     TwSignalSpec,
     compute_signal_precision,
     evaluate_signal_at_event,
 )
-from macro_validation_tw import TwiiCrisisEvent
+from src.compute.macro import TwiiCrisisEvent
 
 # 折 drift > 此 % 視為 overfitting；超過半數折 drift 過此 → 回退預設
 DRIFT_THRESHOLD_PCT = 30.0

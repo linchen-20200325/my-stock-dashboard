@@ -183,7 +183,7 @@ class TestSSOTImport:
 
     def test_imports_from_ssot(self):
         import macro_classroom
-        from macro_helpers import BULL_MIN_SCORE, HEALTH_DEFENSE_THRESHOLD
+        from src.compute.macro import BULL_MIN_SCORE, HEALTH_DEFENSE_THRESHOLD
         assert macro_classroom.HEALTH_DEFENSE_THRESHOLD == HEALTH_DEFENSE_THRESHOLD
         assert macro_classroom.BULL_MIN_SCORE == BULL_MIN_SCORE
 

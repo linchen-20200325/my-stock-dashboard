@@ -1,4 +1,4 @@
-"""macro_validation_tw.py — 台股總經 tab 歷史驗證引擎 (v18.150 Phase C).
+"""src/compute/macro/macro_validation_tw.py — 台股總經 tab 歷史驗證引擎 (v18.150 Phase C).
 
 User 需求：「兩邊都可以做回測來驗證台股的總經 tab 與基金（全球的）總經 tab」.
 

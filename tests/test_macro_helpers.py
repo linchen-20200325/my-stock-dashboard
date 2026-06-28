@@ -1,10 +1,10 @@
-"""macro_helpers.py 純函式 unit test — Phase 7A-Ext / 7E。"""
+"""src/compute/macro/macro_helpers.py 純函式 unit test — Phase 7A-Ext / 7E。"""
 from __future__ import annotations
 
 import pandas as pd
 import pytest
 
-from macro_helpers import (
+from src.compute.macro import (
     BULL_MIN_SCORE,
     HEALTH_DEFENSE_THRESHOLD,
     calc_traffic_light,

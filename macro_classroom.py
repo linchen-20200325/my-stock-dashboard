@@ -27,7 +27,7 @@ from typing import Optional
 import streamlit as st
 
 # 從 SSOT 取門檻,讓教室講解「為何 35 / 4 是切點」時對得上 production 行為
-from macro_helpers import BULL_MIN_SCORE, HEALTH_DEFENSE_THRESHOLD
+from src.compute.macro import BULL_MIN_SCORE, HEALTH_DEFENSE_THRESHOLD
 
 
 # ════════════════════════════════════════════════════════════════

@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 from src.data.macro import macro_core
-import macro_helpers
+from src.compute.macro import macro_helpers
 from src.data.macro import tw_macro
 
 

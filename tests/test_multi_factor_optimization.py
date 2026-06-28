@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from macro_validation_tw import TwiiCrisisEvent
+from src.compute.macro import TwiiCrisisEvent
 from multi_factor_optimization import (
     FACTOR_POOL,
     FACTOR_POOL_BY_KEY,
@@ -312,7 +312,7 @@ class TestV18_168NewFactors:
 
     def test_all_new_factors_in_registry(self):
         """3 個新 key 都要在 TW_SIGNAL_FETCHERS registry 內可路由."""
-        from macro_signal_lookback_tw import TW_SIGNAL_FETCHERS
+        from src.compute.macro import TW_SIGNAL_FETCHERS
         for key in ("TWSE_VOL_RATIO", "MARGIN_GROWTH_5D", "TWII_REALIZED_VOL_20D"):
             assert key in TW_SIGNAL_FETCHERS, f"{key} 未註冊 TW_SIGNAL_FETCHERS"
 
