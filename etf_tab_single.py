@@ -36,10 +36,7 @@ from shared.signal_thresholds import (
     ETF_PREMIUM_FAIR_DISCOUNT_PCT,
     ETF_PREMIUM_FAIR_PREMIUM_PCT,
     ETF_PREMIUM_HIGH_PREMIUM_PCT,
-    ETF_SIGMA_BUY,
-    ETF_SIGMA_DEEP_BUY,
-    ETF_SIGMA_REDUCE,
-    ETF_SIGMA_STOP_PROFIT,
+    # v18.335 PR-H3:ETF_SIGMA_* 4 個由 classify_etf_deep_sigma 內部消費,移除直引
     ETF_TRACKING_ERROR_MAX_PCT,
     ETF_VCP_MIN_DAYS,
 )
@@ -482,25 +479,19 @@ def render_etf_single(gemini_fn=None):
     # 給不同建議天經地義(類比 MA20 vs MA60);標題前綴「📅 長線」明示避免 user 困惑。
     st.markdown('#### 🎯 📅 長線 σ 量化買點(MK 框架:年線基準,跌了就買)')
     st.caption('💡 與戰情室「⚡ 短線 σ」(月線基準)為不同時間尺度,訊號差異屬正常。')
-    from etf_helpers import calc_sigma_metrics
+    from etf_helpers import calc_sigma_metrics, classify_etf_deep_sigma
     _sig_metrics = calc_sigma_metrics(df, window=252)
     if _sig_metrics['n'] >= 252:
-        _sigma_pct = _sig_metrics['std_pct_annual']
         _cur_p = float(df['Close'].iloc[-1])
-        _ma240 = _sig_metrics['ma240']
-        if _ma240 and _sigma_pct:
+        # v18.335 PR-H3:分級邏輯抽至 classify_etf_deep_sigma SSOT
+        _dsig = classify_etf_deep_sigma(_cur_p, _sig_metrics['ma240'],
+                                         _sig_metrics['std_pct_annual'])
+        if _dsig is not None:
+            _label, _color, _action = _dsig
+            _ma240 = _sig_metrics['ma240']
+            _sigma_pct = _sig_metrics['std_pct_annual']
             _bias_pct = (_cur_p - _ma240) / _ma240 * 100
             _z = _bias_pct / _sigma_pct
-            if _z <= ETF_SIGMA_DEEP_BUY:
-                _label, _color, _action = f'🟢 📅長線 極佳買點(≤ {ETF_SIGMA_DEEP_BUY:.0f}σ)', 'green', '大跌大買 — 大幅加碼，剩餘資金主力投入'
-            elif _z <= ETF_SIGMA_BUY:
-                _label, _color, _action = f'🟢 📅長線 進場買點({ETF_SIGMA_DEEP_BUY:.0f}σ ~ {ETF_SIGMA_BUY:.0f}σ)', 'green', '小跌小買 — 投入 20–30% 資金'
-            elif _z <= ETF_SIGMA_REDUCE:
-                _label, _color, _action = f'🟡 📅長線 持平區(±{ETF_SIGMA_REDUCE:.0f}σ 內)', 'yellow', f'保留現金，等待 ≤ {ETF_SIGMA_BUY:.0f}σ 進場'
-            elif _z <= ETF_SIGMA_STOP_PROFIT:
-                _label, _color, _action = f'🟠 📅長線 偏高(+{ETF_SIGMA_REDUCE:.0f}σ ~ +{ETF_SIGMA_STOP_PROFIT:.0f}σ)', 'yellow', '不追高；衛星部位可考慮停利'
-            else:
-                _label, _color, _action = f'🔴 📅長線 極端偏高(≥ +{ETF_SIGMA_STOP_PROFIT:.0f}σ)', 'red', f'建議減碼；勿在 +{ETF_SIGMA_STOP_PROFIT:.0f}σ 以上加碼'
             _colored_box(
                 f'<b>{_label}</b><br>'
                 f'目前 {_cur_p:.2f} vs MA240 {_ma240:.2f} → '

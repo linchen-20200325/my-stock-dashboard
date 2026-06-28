@@ -137,8 +137,10 @@ class TestEtfCalcUsesSSOT:
     """etf_calc 已改用 calc_sigma_metrics SSOT,不再 inline std。"""
 
     def test_etf_calc_imports_sigma_metrics(self):
+        """v18.335 PR-H3 multi-line import 後仍可偵測。"""
         src = open('etf_calc.py', encoding='utf-8').read()
-        assert 'from etf_helpers import calc_sigma_metrics' in src
+        assert 'from etf_helpers import' in src
+        assert 'calc_sigma_metrics' in src
 
     def test_etf_calc_uses_metrics_dict(self):
         src = open('etf_calc.py', encoding='utf-8').read()

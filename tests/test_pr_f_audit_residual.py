@@ -22,6 +22,8 @@ class TestU7_EtfQuickSigma:
         assert st_mod.ETF_QUICK_SIGMA_OVERBOUGHT == 2.0
 
     def test_no_inline_in_etf_calc(self):
+        """v18.335 PR-H3:etf_calc 已改用 classify_etf_quick_sigma SSOT,
+        ETF_QUICK_SIGMA_* 常數由 etf_helpers 內部消費(不再直引)。"""
         src = open('etf_calc.py', encoding='utf-8').read()
         # 函式內 inline 已退役
         assert '- 3 * _std' not in src
@@ -29,8 +31,12 @@ class TestU7_EtfQuickSigma:
         assert '- 1 * _std' not in src
         assert '+ 1.5 * _std' not in src
         assert '+ 2 * _std' not in src
-        assert 'ETF_QUICK_SIGMA_DISASTER' in src
-        assert 'ETF_QUICK_SIGMA_OVERBOUGHT' in src
+        # etf_calc 改用 classify_etf_quick_sigma(PR-H3 抽離分級邏輯)
+        assert 'classify_etf_quick_sigma' in src
+        # 常數仍被 etf_helpers SSOT 消費
+        helpers_src = open('etf_helpers.py', encoding='utf-8').read()
+        assert 'ETF_QUICK_SIGMA_DISASTER' in helpers_src
+        assert 'ETF_QUICK_SIGMA_OVERBOUGHT' in helpers_src
 
 
 class TestU8_ClassifyYieldZone:

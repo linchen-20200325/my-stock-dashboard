@@ -157,6 +157,143 @@ def calc_sigma_metrics(df, window: int = 252) -> dict:
     return _out
 
 
+def classify_etf_quick_sigma(cur: float, ma20: float,
+                              std_price: float) -> tuple[str, str, str] | None:
+    """v18.335 PR-H3:⚡短線 σ 位階分級 SSOT(MA20±nσ 5 段戰情燈號)。
+
+    原 etf_calc.py:_compute_etf_warroom_row inline hardcode 已抽出。
+
+    Args:
+        cur: 當前收盤價
+        ma20: 20 日均線
+        std_price: 近 1 年日 close 標準差(來自 calc_sigma_metrics['std_price'])
+
+    Returns:
+        (emoji, label, action) tuple,任一參數無效時回 None。
+        emoji/label 已含「⚡短線」前綴(PR-H2 UX 標註)。
+
+    SSOT 政策:任何用 MA20±nσ 戰情燈號的場景均應呼叫本函式,不再 inline 5 段判斷。
+    分級邏輯與閾值來自 shared.signal_thresholds.ETF_QUICK_SIGMA_*(v18.331 PR-F U-7)。
+    """
+    from shared.signal_thresholds import (
+        ETF_QUICK_SIGMA_CHEAP, ETF_QUICK_SIGMA_DISASTER,
+        ETF_QUICK_SIGMA_HIGH, ETF_QUICK_SIGMA_OVERBOUGHT,
+        ETF_QUICK_SIGMA_OVERSOLD,
+    )
+    if cur is None or ma20 is None or not std_price or std_price <= 0:
+        return None
+    _lo3 = ma20 - ETF_QUICK_SIGMA_DISASTER * std_price
+    _lo2 = ma20 - ETF_QUICK_SIGMA_OVERSOLD * std_price
+    _lo1 = ma20 - ETF_QUICK_SIGMA_CHEAP * std_price
+    _hi15 = ma20 + ETF_QUICK_SIGMA_HIGH * std_price
+    _hi2 = ma20 + ETF_QUICK_SIGMA_OVERBOUGHT * std_price
+    if cur < _lo3:
+        return ('🟢🟢🟢', f'⚡短線 股災價(<-{ETF_QUICK_SIGMA_DISASTER:.0f}σ)', '大買 50%')
+    if cur < _lo2:
+        return ('🟢🟢', f'⚡短線 超跌價(<-{ETF_QUICK_SIGMA_OVERSOLD:.0f}σ)', '買 30%')
+    if cur < _lo1:
+        return ('🟢', f'⚡短線 便宜價(<-{ETF_QUICK_SIGMA_CHEAP:.0f}σ)', '小買 20%')
+    if cur >= _hi2:
+        return ('🔴', f'⚡短線 準備停利(≥+{ETF_QUICK_SIGMA_OVERBOUGHT:.0f}σ)', '分批停利')
+    if cur >= _hi15:
+        return ('🟠', f'⚡短線 偏高(≥+{ETF_QUICK_SIGMA_HIGH:.1f}σ)', '不追高/減碼')
+    return ('⚪', f'⚡短線 中性區(±{ETF_QUICK_SIGMA_CHEAP:.0f}σ)', '靜待訊號')
+
+
+def classify_etf_deep_sigma(cur: float, ma240: float,
+                             std_pct_annual: float) -> tuple[str, str, str] | None:
+    """v18.335 PR-H3:📅長線 σ 位階分級 SSOT(MA240 z-score 4 段教學)。
+
+    原 etf_tab_single.py:MK#11 σ 卡 inline 已抽出。
+
+    Args:
+        cur: 當前收盤價
+        ma240: 240 日均線(年線)
+        std_pct_annual: 年化百分比波動率(來自 calc_sigma_metrics['std_pct_annual'])
+
+    Returns:
+        (label, color, action) tuple — label 含「📅長線」前綴 + emoji。
+        color ∈ {'green', 'yellow', 'red'} 供 _colored_box 用。
+        任一參數無效時回 None。
+
+    SSOT 政策:MA240 z-score 教學量化買點均呼叫本函式;
+    閾值來自 shared.signal_thresholds.ETF_SIGMA_*(PR-D 已抽)。
+    """
+    from shared.signal_thresholds import (
+        ETF_SIGMA_BUY, ETF_SIGMA_DEEP_BUY,
+        ETF_SIGMA_REDUCE, ETF_SIGMA_STOP_PROFIT,
+    )
+    if cur is None or ma240 is None or not std_pct_annual or std_pct_annual <= 0:
+        return None
+    _bias_pct = (cur - ma240) / ma240 * 100
+    _z = _bias_pct / std_pct_annual
+    if _z <= ETF_SIGMA_DEEP_BUY:
+        return (f'🟢 📅長線 極佳買點(≤ {ETF_SIGMA_DEEP_BUY:.0f}σ)', 'green',
+                '大跌大買 — 大幅加碼，剩餘資金主力投入')
+    if _z <= ETF_SIGMA_BUY:
+        return (f'🟢 📅長線 進場買點({ETF_SIGMA_DEEP_BUY:.0f}σ ~ {ETF_SIGMA_BUY:.0f}σ)',
+                'green', '小跌小買 — 投入 20–30% 資金')
+    if _z <= ETF_SIGMA_REDUCE:
+        return (f'🟡 📅長線 持平區(±{ETF_SIGMA_REDUCE:.0f}σ 內)', 'yellow',
+                f'保留現金，等待 ≤ {ETF_SIGMA_BUY:.0f}σ 進場')
+    if _z <= ETF_SIGMA_STOP_PROFIT:
+        return (f'🟠 📅長線 偏高(+{ETF_SIGMA_REDUCE:.0f}σ ~ +{ETF_SIGMA_STOP_PROFIT:.0f}σ)',
+                'yellow', '不追高；衛星部位可考慮停利')
+    return (f'🔴 📅長線 極端偏高(≥ +{ETF_SIGMA_STOP_PROFIT:.0f}σ)', 'red',
+            f'建議減碼；勿在 +{ETF_SIGMA_STOP_PROFIT:.0f}σ 以上加碼')
+
+
+def compute_etf_annual_cashflow(div_series, shares: int,
+                                 lookback_days: int = 365) -> dict | None:
+    """v18.335 PR-H3:ETF 單檔近 N 日年化配息預估 + 月度分配 SSOT。
+
+    原 etf_tab_portfolio.py:721-753 inline 年現金流彙整邏輯抽出為純函式。
+    純計算層(L2),零 Streamlit / fetch I/O 依賴;caller 負責先 fetch_etf_dividends。
+
+    Args:
+        div_series: ETF 歷史配息 pandas Series(index 為 ex-dividend date)
+        shares: 持有股數(整數;0 視為未持有)
+        lookback_days: 回看窗口(預設 365,即近 1 年)
+
+    Returns:
+        dict {
+          'annual_per_share': float,   # 近 N 日每股配息總額
+          'estimated_income': float,    # annual_per_share × shares
+          'n_payments': int,            # 近 N 日配息次數
+          'monthly_distribution': dict, # {1: amount, 2: amount, ..., 12: amount} 月度
+        }
+        無持股 / 無近期配息 → None(caller 跳過此 ETF)。
+
+    SSOT 政策:投組層年配息估算的核心彙整邏輯;
+    portfolio Tab 對每檔 ETF 呼叫一次,再加總得組合總現金流。
+    """
+    import numpy as _np
+    import pandas as _pd
+    if div_series is None or len(div_series) == 0 or shares <= 0:
+        return None
+    _cutoff = _pd.Timestamp.now() - _pd.DateOffset(days=lookback_days)
+    _recent = div_series[div_series.index >= _cutoff]
+    if _recent.empty:
+        return None
+    _sum = _recent.sum()
+    _annual_per_share = (float(_np.ravel(_sum)[0])
+                          if hasattr(_sum, '__len__') else float(_sum))
+    _n_pay = len(_recent)
+    _est_income = _annual_per_share * shares
+    _monthly = {m: 0.0 for m in range(1, 13)}
+    for _m in sorted(set(_recent.index.month.tolist())):
+        _ms = _recent[_recent.index.month == _m].sum()
+        _month_div = ((float(_np.ravel(_ms)[0]) if hasattr(_ms, '__len__')
+                       else float(_ms)) * shares)
+        _monthly[_m] += _month_div
+    return {
+        'annual_per_share': _annual_per_share,
+        'estimated_income': _est_income,
+        'n_payments': _n_pay,
+        'monthly_distribution': _monthly,
+    }
+
+
 def dividend_health_label(cur_yield, total_ret_1y, cagr_3y):
     """配息健康度分級(MK 框架 #1+#2)。
 

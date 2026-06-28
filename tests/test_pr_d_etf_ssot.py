@@ -75,13 +75,19 @@ class TestEtfSigmaThresholds:
                 < st_mod.ETF_SIGMA_STOP_PROFIT)
 
     def test_no_inline_in_single(self):
+        """v18.335 PR-H3:single 已改用 classify_etf_deep_sigma SSOT,
+        ETF_SIGMA_* 常數由 etf_helpers 內部消費(不再直引)。"""
         src = open('etf_tab_single.py', encoding='utf-8').read()
         assert '_z <= -2' not in src
         assert '_z <= -1' not in src
         assert '_z <= 1' not in src
         assert '_z <= 2' not in src
-        assert 'ETF_SIGMA_DEEP_BUY' in src
-        assert 'ETF_SIGMA_STOP_PROFIT' in src
+        # single 改用 classify_etf_deep_sigma(PR-H3)
+        assert 'classify_etf_deep_sigma' in src
+        # 常數仍被 etf_helpers SSOT 消費
+        helpers_src = open('etf_helpers.py', encoding='utf-8').read()
+        assert 'ETF_SIGMA_DEEP_BUY' in helpers_src
+        assert 'ETF_SIGMA_STOP_PROFIT' in helpers_src
 
 
 class TestEtfHelpersSSOT:
