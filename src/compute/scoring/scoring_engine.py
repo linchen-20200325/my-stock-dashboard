@@ -43,6 +43,18 @@ try:
     from src.config import RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES
 except ImportError:
     RSI_OVERBOUGHT=70; RSI_OVERSOLD=30
+
+
+def compute_rsi(close, period: int = 14):
+    """通用 RSI 計算(0-100;simple-mean smoothing,非 Wilder)。
+    P0-3 v18.370 深層拔毒:從 calc_buy_signal / calc_exit_signal 內 inline 重複 4 行抽出。
+    """
+    delta = close.diff()
+    gain = delta.clip(lower=0).rolling(period).mean()
+    loss = (-delta.clip(upper=0)).rolling(period).mean()
+    return 100 - 100 / (1 + gain / (loss + 1e-10))
+
+
     WEIGHT_TABLES = {
         'bull':    {'trend':0.30,'momentum':0.25,'chip':0.20,'volume':0.15,'risk':0.05,'fundamental':0.05},
         'neutral': {'trend':0.25,'momentum':0.20,'chip':0.20,'volume':0.15,'risk':0.10,'fundamental':0.10},
@@ -98,12 +110,9 @@ def calc_momentum_score(df) -> float:
         return 0.0   # 資料不足→0分，不得假中性分
     close = df['close']
 
-    # ① RSI 區間評分
+    # ① RSI 區間評分(P0-3 v18.370 抽 compute_rsi SSOT)
     if 'RSI' not in df.columns:
-        delta = close.diff()
-        gain  = delta.clip(lower=0).rolling(14).mean()
-        loss  = (-delta.clip(upper=0)).rolling(14).mean()
-        df['RSI'] = 100 - 100 / (1 + gain / (loss + 1e-10))
+        df['RSI'] = compute_rsi(close)
     rsi = df['RSI'].iloc[-1]
     rsi_score = 2 if RSI_OVERSOLD < rsi < RSI_OVERBOUGHT else (1 if rsi <= RSI_OVERSOLD else 0)
 
@@ -233,12 +242,9 @@ def calc_risk_score(df) -> float:
     elif vol_pct < RISK_VOL_LOW_RATIO: score += 1   # 正常低波動（原門檻3%已鬆寬）
     # 3.5%~5% → 0分，>5% → 0分（高波動高風險）
 
-    # RSI 不超買
+    # RSI 不超買(P0-3 v18.370 抽 compute_rsi SSOT)
     if 'RSI' not in df.columns:
-        delta = close.diff()
-        gain  = delta.clip(lower=0).rolling(14).mean()
-        loss  = (-delta.clip(upper=0)).rolling(14).mean()
-        df['RSI'] = 100 - 100 / (1 + gain / (loss + 1e-10))
+        df['RSI'] = compute_rsi(close)
     rsi_val = df['RSI'].iloc[-1]
     if not (rsi_val != rsi_val):   # NaN check
         if rsi_val < RSI_OVERBOUGHT:
