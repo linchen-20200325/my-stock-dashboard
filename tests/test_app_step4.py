@@ -33,8 +33,9 @@ TAB_MACRO_SRC  = TAB_MACRO_PATH.read_text(encoding="utf-8")
 
 def test_adl_fallback_uses_tw_macro_breadth():
     """ADL 備援區塊應 import tw_macro.fetch_twse_breadth(現於 tab_macro.py)。"""
-    assert "from tw_macro import fetch_twse_breadth" in TAB_MACRO_SRC, \
-        "tab_macro.py ADL 備援區塊未委派 tw_macro.fetch_twse_breadth"
+    # v18.360 F-6.2:sweeper 已將 import path 改為 src.data.macro
+    assert "from src.data.macro import fetch_twse_breadth" in TAB_MACRO_SRC, \
+        "tab_macro.py ADL 備援區塊未委派 fetch_twse_breadth(src.data.macro)"
 
 
 def test_app_no_inline_mi_index_get():

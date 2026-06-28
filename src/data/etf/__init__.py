@@ -5,4 +5,10 @@ from .etf_fetch import (  # noqa: F401
     _get_etf_launch_price,
     _fetch_news_for,
     _fetch_holdings_yahoo_tw,
+    _fetch_sector_returns,
+    _prov_log,
+    _TW_ETF_LAUNCH_PRICE,
+    _NAV_MIN,
+    _NAV_MAX,
+    _safe_float,
 )
