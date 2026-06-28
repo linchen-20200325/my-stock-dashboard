@@ -974,47 +974,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 return None
 
             def _job_bias():
+                # P3-D3 v18.389:純函式下沉 src/data/macro/macro_snapshot.compute_twii_bias
+                # closure dep: tw_raw.get('台股加權指數')
                 try:
-                    # tw_raw 只有 90 天，MA240 需要另外抓 2 年資料
-                    _twii = tw_raw.get('台股加權指數')
-                    _cc_b = 'Close' if (_twii is not None and 'Close' in getattr(_twii,'columns',[])) else 'close'
-                    _n_existing = len(_twii) if _twii is not None and not _twii.empty else 0
-                    if _n_existing < 240:
-                        # P1-1c v18.376:抽至 L1 fetch_twii_2y_for_ma240
-                        try:
-                            from src.data.macro.macro_snapshot import fetch_twii_2y_for_ma240
-                            _twii_2y = fetch_twii_2y_for_ma240()
-                            if _twii_2y is not None and len(_twii_2y) >= 240:
-                                _twii = _twii_2y
-                                _cc_b = 'Close'
-                            else:
-                                print(f'[Bias] 2y 資料不足,使用現有 {_n_existing} 天')
-                        except Exception as _yf_b_e:
-                            print(f'[Bias] yfinance 2y 失敗: {_yf_b_e}')
-                    if _twii is None or _twii.empty:
-                        return None
-                    # 寬鬆欄位查找：Close / close / Adj Close
-                    if _cc_b not in _twii.columns:
-                        _cc_b = next((c for c in _twii.columns if str(c).lower() in ('close','adj close','adjclose')), None)
-                        if _cc_b is None:
-                            print(f'[Bias] 找不到 Close 欄，現有欄位={list(_twii.columns)[:6]}')
-                            return None
-                    _cs = _twii[_cc_b].dropna()
-                    _n  = len(_cs)
-                    _lp = float(_cs.iloc[-1])
-                    _ma20  = float(_cs.tail(min(20,_n)).mean())
-                    _ma60  = float(_cs.tail(min(60,_n)).mean())
-                    _ma120 = float(_cs.tail(min(120,_n)).mean())
-                    _ma240 = float(_cs.tail(min(240,_n)).mean())
-                    print(f'[Bias] price={_lp:.0f} MA240={_ma240:.0f} bias240={((_lp-_ma240)/_ma240*100):.1f}% (n={_n})')
-                    return {
-                        'bias_20':  round((_lp-_ma20) /_ma20 *100, 1) if _ma20  else 0,
-                        'bias_60':  round((_lp-_ma60) /_ma60 *100, 1) if _ma60  else 0,
-                        'bias_240': round((_lp-_ma240)/_ma240*100, 1) if _ma240 else 0,
-                        'price':_lp,'ma20':_ma20,'ma60':_ma60,'ma120':_ma120,'ma240':_ma240,
-                        'data_days':_n,'is_estimated':_n<240
-                    }
-                except Exception:
+                    from src.data.macro.macro_snapshot import compute_twii_bias
+                    return compute_twii_bias(tw_raw.get('台股加權指數'))
+                except Exception as _bias_e:
+                    print(f'[Bias] compute_twii_bias 失敗: {_bias_e}')
                     return None
 
             def _job_macro():

@@ -55,6 +55,64 @@ def fetch_vix_block() -> dict:
         return {'_err_vix': str(_e_vix)[:80]}
 
 
+def compute_twii_bias(twii_local) -> dict | None:
+    """從 TWII 日線 df 算 MA20/60/120/240 + bias_*。
+
+    P3-D3 v18.389 深層拔毒:從 tab_macro.py:976-1018 `_job_bias` inline def 抽出(L5→L1)。
+    若 `twii_local` 資料不足 240 天(冷啟動 / 90 天 cache),fallback `fetch_twii_2y_for_ma240()`。
+    全空仍回 None(§1 Fail Loud)。
+
+    參數:
+        twii_local: pd.DataFrame | None  ^TWII OHLCV(由 tab_macro 並行 fetch 結果取)
+
+    Returns:
+        dict | None:
+            {bias_20/60/240, price, ma20/60/120/240, data_days, is_estimated}
+            data_days < 240 時 is_estimated=True(caller 顯示「估算」chip)。
+            twii 全空 / Close 欄缺失 / fetch 全敗 → None。
+    """
+    _twii = twii_local
+    _cc_b = 'Close' if (_twii is not None and 'Close' in getattr(_twii, 'columns', [])) else 'close'
+    _n_existing = len(_twii) if _twii is not None and not _twii.empty else 0
+    if _n_existing < 240:
+        try:
+            _twii_2y = fetch_twii_2y_for_ma240()
+            if _twii_2y is not None and len(_twii_2y) >= 240:
+                _twii = _twii_2y
+                _cc_b = 'Close'
+            else:
+                print(f'[Bias] 2y 資料不足,使用現有 {_n_existing} 天')
+        except Exception as _yf_b_e:
+            print(f'[Bias] yfinance 2y 失敗: {_yf_b_e}')
+    if _twii is None or _twii.empty:
+        return None
+    # 寬鬆欄位查找:Close / close / Adj Close
+    if _cc_b not in _twii.columns:
+        _cc_b = next((c for c in _twii.columns
+                      if str(c).lower() in ('close', 'adj close', 'adjclose')), None)
+        if _cc_b is None:
+            print(f'[Bias] 找不到 Close 欄,現有欄位={list(_twii.columns)[:6]}')
+            return None
+    _cs = _twii[_cc_b].dropna()
+    _n = len(_cs)
+    if _n == 0:
+        return None
+    _lp = float(_cs.iloc[-1])
+    _ma20 = float(_cs.tail(min(20, _n)).mean())
+    _ma60 = float(_cs.tail(min(60, _n)).mean())
+    _ma120 = float(_cs.tail(min(120, _n)).mean())
+    _ma240 = float(_cs.tail(min(240, _n)).mean())
+    print(f'[Bias] price={_lp:.0f} MA240={_ma240:.0f} '
+          f'bias240={((_lp-_ma240)/_ma240*100):.1f}% (n={_n})')
+    return {
+        'bias_20':  round((_lp - _ma20) / _ma20 * 100, 1) if _ma20 else 0,
+        'bias_60':  round((_lp - _ma60) / _ma60 * 100, 1) if _ma60 else 0,
+        'bias_240': round((_lp - _ma240) / _ma240 * 100, 1) if _ma240 else 0,
+        'price': _lp, 'ma20': _ma20, 'ma60': _ma60, 'ma120': _ma120, 'ma240': _ma240,
+        'data_days': _n, 'is_estimated': _n < 240,
+    }
+
+
 def fetch_twii_2y_for_ma240():
     """抓 ^TWII 2 年 OHLCV(MA240 計算用)。
 
