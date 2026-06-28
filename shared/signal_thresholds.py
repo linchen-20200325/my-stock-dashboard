@@ -497,3 +497,31 @@ ETF_SIGMA_REDUCE: float = 1.0
 ETF_SIGMA_STOP_PROFIT: float = 2.0
 """σ位階停利:≥ 2σ → 🔴 停利(深度過熱)。
 原 etf_tab_single.py:479 inline。"""
+
+
+# ════════════════════════════════════════════════════════════════
+# ETF VCP 訊號最低資料量(v18.330 PR-E U-4)
+# ════════════════════════════════════════════════════════════════
+
+ETF_VCP_MIN_DAYS: int = 210
+"""ETF VCP 形態判定最低資料量(交易日)。< 210 天 → 顯示「資料不足」不判 VCP。
+210 ≈ 10 個月,確保有足夠樣本看到波幅收縮 + MA200 站上。
+原 etf_calc.py:222 + etf_tab_single.py:344 兩處 inline `< 210` 重複。"""
+
+
+# ════════════════════════════════════════════════════════════════
+# ETF 流動性評分閾值(v18.330 PR-E U-6)
+# 原 etf_calc.py:392-437 calc_liquidity_score 內 inline 4 處,本次抽 SSOT。
+# ════════════════════════════════════════════════════════════════
+
+ETF_AVG_VOL_20D_LOW_LOTS: int = 500
+"""ETF 20 日均量流動性紅燈門檻(張)。< 500 張 → 🔴 流動性風險。原 etf_calc.py:416 inline。"""
+
+ETF_AVG_VOL_20D_FAIR_LOTS: int = 1000
+"""ETF 20 日均量流動性黃燈門檻(張)。500 ~ 1000 張 → 🟡 流動性偏弱。原 etf_calc.py:419 inline。"""
+
+ETF_AUM_LOW_YI: float = 5.0
+"""ETF AUM 規模紅燈門檻(億 TWD)。< 5 億 → 🔴 流動性風險。原 etf_calc.py:426 inline。"""
+
+ETF_AUM_FAIR_YI: float = 10.0
+"""ETF AUM 規模黃燈門檻(億 TWD)。5 ~ 10 億 → 🟡 流動性偏弱。原 etf_calc.py:429 inline。"""

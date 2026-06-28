@@ -41,6 +41,7 @@ from shared.signal_thresholds import (
     ETF_SIGMA_REDUCE,
     ETF_SIGMA_STOP_PROFIT,
     ETF_TRACKING_ERROR_MAX_PCT,
+    ETF_VCP_MIN_DAYS,
 )
 
 
@@ -341,8 +342,8 @@ def render_etf_single(gemini_fn=None):
             missing.append('未站上200MA')
         if not vcp['vol_confirm']:
             missing.append('量能不足')
-        if len(df) < 210:
-            missing.append('資料不足210天')
+        if len(df) < ETF_VCP_MIN_DAYS:
+            missing.append(f'資料不足{ETF_VCP_MIN_DAYS}天')
         _miss_str = ' | '.join(missing) if missing else '波幅尚未收縮'
         st.info('⏳ VCP 條件未滿足：' + _miss_str)
         _teacher_conclusion('春哥',

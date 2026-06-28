@@ -14,7 +14,15 @@ from etf_fetch import (
 )
 from shared.ttls import TTL_15MIN, TTL_1HOUR
 # v18.241 E8+E9: 抽 inline magic 到 shared SSOT
-from shared.signal_thresholds import TRADING_DAYS_PER_YEAR, ACTIVE_ETF_PREMIUM_MAX_PCT
+from shared.signal_thresholds import (
+    ACTIVE_ETF_PREMIUM_MAX_PCT,
+    ETF_AUM_FAIR_YI,
+    ETF_AUM_LOW_YI,
+    ETF_AVG_VOL_20D_FAIR_LOTS,
+    ETF_AVG_VOL_20D_LOW_LOTS,
+    ETF_VCP_MIN_DAYS,
+    TRADING_DAYS_PER_YEAR,
+)
 
 
 @st.cache_data(ttl=TTL_15MIN, max_entries=50, show_spinner=False)
@@ -219,7 +227,7 @@ def check_vcp_signal(df: pd.DataFrame) -> dict:
     """春哥 VCP 波幅收縮偵測"""
     r = {'signal': False, 'above_ma50': False, 'above_ma200': False,
          'vol_confirm': False, 'weekly_ranges': [], 'stop_loss': None}
-    if df is None or len(df) < 210:
+    if df is None or len(df) < ETF_VCP_MIN_DAYS:
         return r
     try:
         close  = df['Close']
@@ -393,10 +401,11 @@ def calc_liquidity_score(df: pd.DataFrame, aum=None) -> dict:
     df  : 含 Volume 欄的 ETF 價格 df（fetch_etf_price 回傳即可）
     aum : 規模（新台幣元），來自 fetch_etf_info()['totalAssets']；None 則只看均量
 
-    判分（取最嚴重的等級）
-      🟢 正常       avg_vol_20d >= 1000 張 且 aum >= 10 億
-      🟡 流動性偏弱  500 <= avg_vol_20d < 1000 或 5 億 <= aum < 10 億
-      🔴 流動性風險  avg_vol_20d < 500 或 aum < 5 億
+    判分（取最嚴重的等級;閾值 SSOT: shared/signal_thresholds.py）
+      🟢 正常       avg_vol_20d >= ETF_AVG_VOL_20D_FAIR_LOTS 張 且 aum >= ETF_AUM_FAIR_YI 億
+      🟡 流動性偏弱  ETF_AVG_VOL_20D_LOW_LOTS <= avg_vol_20d < ETF_AVG_VOL_20D_FAIR_LOTS
+                    或 ETF_AUM_LOW_YI 億 <= aum < ETF_AUM_FAIR_YI 億
+      🔴 流動性風險  avg_vol_20d < ETF_AVG_VOL_20D_LOW_LOTS 或 aum < ETF_AUM_LOW_YI 億
 
     Returns
     -------
@@ -409,22 +418,22 @@ def calc_liquidity_score(df: pd.DataFrame, aum=None) -> dict:
         return {'level': '⚪', 'avg_vol_20d': None, 'reasons': ['資料不足']}
 
     _level = '🟢'
-    if _avg < 500:
+    if _avg < ETF_AVG_VOL_20D_LOW_LOTS:
         _level = '🔴'
-        _reasons.append(f'20日均量僅 {_avg:,.0f} 張（< 500）')
-    elif _avg < 1000:
+        _reasons.append(f'20日均量僅 {_avg:,.0f} 張（< {ETF_AVG_VOL_20D_LOW_LOTS}）')
+    elif _avg < ETF_AVG_VOL_20D_FAIR_LOTS:
         _level = '🟡'
-        _reasons.append(f'20日均量 {_avg:,.0f} 張（< 1000）')
+        _reasons.append(f'20日均量 {_avg:,.0f} 張（< {ETF_AVG_VOL_20D_FAIR_LOTS}）')
 
     try:
         if aum is not None and aum > 0:
             _aum_e = float(aum) / 1e8  # 換成「億」
-            if _aum_e < 5:
+            if _aum_e < ETF_AUM_LOW_YI:
                 _level = '🔴'
-                _reasons.append(f'規模僅 {_aum_e:.1f} 億（< 5）')
-            elif _aum_e < 10 and _level == '🟢':
+                _reasons.append(f'規模僅 {_aum_e:.1f} 億（< {ETF_AUM_LOW_YI:.0f}）')
+            elif _aum_e < ETF_AUM_FAIR_YI and _level == '🟢':
                 _level = '🟡'
-                _reasons.append(f'規模 {_aum_e:.1f} 億（< 10）')
+                _reasons.append(f'規模 {_aum_e:.1f} 億（< {ETF_AUM_FAIR_YI:.0f}）')
     except (TypeError, ValueError):
         pass
 
