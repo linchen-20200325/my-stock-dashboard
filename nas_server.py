@@ -25,8 +25,22 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.responses import Response as _RawResponse
 from pydantic import BaseModel
 from typing import Optional
-import requests, datetime, os
+import requests, datetime, os, sys as _sys_prov_nas
 import urllib3
+
+
+# v18.355 PR-Q5a — S-PROV-1 phase 19 helper
+# 4 fetcher (_fetch_institutional / _fetch_margin_balance / _fetch_export_yoy /
+# _fetch_business_indicator) 共用 stderr audit trail。NAS server module,
+# 介面 0 改 caller(Streamlit Cloud → /api endpoint)。
+def _prov_log(fn_name: str, source: str, result_summary: str):
+    """§2.2 provenance — stderr 記 source/fetched_at。"""
+    try:
+        _now = datetime.datetime.utcnow().isoformat() + 'Z'
+        print(f'[{fn_name}] source={source} fetched_at={_now} '
+              f'result={result_summary}', file=_sys_prov_nas.stderr)
+    except Exception:
+        pass
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = FastAPI(title="NAS 中繼站", version="1.0.0")
@@ -117,6 +131,8 @@ def _fetch_institutional(date_str: Optional[str] = None):
                     foreign = next((v for k, v in raw.items() if "外資" in k), 0)
                 trust = next((v for k, v in raw.items() if "投信" in k), 0)
                 print(f"[NAS/institutional] ✅ {ds}: 外資={foreign:.1f} 投信={trust:.1f} 自營={dealer:.1f}億")
+                _prov_log('_fetch_institutional', f'TWSE:BFI82U(NAS direct):date={ds}',
+                          f'dict:3-investors')
                 return {
                     "外資及陸資": {"net": round(foreign, 2)},
                     "投信":       {"net": round(trust, 2)},
@@ -125,6 +141,8 @@ def _fetch_institutional(date_str: Optional[str] = None):
             except Exception as e:
                 print(f"[NAS/institutional/{ds}] {url.split('/')[-1]}: {e}")
     print("[NAS/institutional] ❌ 所有日期/來源失敗")
+    _prov_log('_fetch_institutional', 'TWSE:BFI82U(NAS direct):all-dates-fail',
+              'None:5-days-all-fail')
     return None
 
 
@@ -169,16 +187,24 @@ def _fetch_margin_balance(date_str: Optional[str] = None):
                     result = round(v / 100_000, 1)
                     if 500 < result < 10000:
                         print(f"[NAS/margin_balance] ✅ {ds}: {result}億")
+                        _prov_log('_fetch_margin_balance',
+                                  f'TWSE:MI_MARGN(NAS direct):date={ds}:仟元÷100000',
+                                  f'float:{result}億')
                         return result
                 elif v > 1_000_000:
                     result = round(v / 10_000, 1)
                     if 500 < result < 10000:
                         print(f"[NAS/margin_balance] ✅ {ds}: {result}億(萬元)")
+                        _prov_log('_fetch_margin_balance',
+                                  f'TWSE:MI_MARGN(NAS direct):date={ds}:萬元÷10000',
+                                  f'float:{result}億')
                         return result
         except Exception as e:
             print(f"[NAS/margin_balance/{ds}] {e}")
 
     print("[NAS/margin_balance] ❌ 所有日期失敗")
+    _prov_log('_fetch_margin_balance', 'TWSE:MI_MARGN(NAS direct):all-dates-fail',
+              'None:4-days-all-fail')
     return None
 
 
@@ -203,12 +229,17 @@ def _fetch_export_yoy():
                             yoy = float(str(parts[2]).replace("%", ""))
                             date_str = parts[0]
                             print(f"[NAS/export_yoy] ✅ {date_str}: {yoy}%")
+                            _prov_log('_fetch_export_yoy',
+                                      f'MOF:trade(NAS direct):{url[-40:]}',
+                                      f'dict:value={yoy}%:date={date_str}')
                             return {"value": yoy, "date": date_str}
                         except Exception:
                             continue
         except Exception as e:
             print(f"[NAS/export_yoy] {url}: {e}")
     print("[NAS/export_yoy] ❌ 所有來源失敗")
+    _prov_log('_fetch_export_yoy', 'MOF:trade(NAS direct):all-urls-fail',
+              'None:2-urls-all-fail')
     return None
 
 
@@ -235,10 +266,15 @@ def _fetch_business_indicator():
                         "date":   str(latest.get("date") or latest.get("yearMonth") or ""),
                     }
                     print(f"[NAS/business_indicator] ✅ {result}")
+                    _prov_log('_fetch_business_indicator',
+                              f'NDC:{url[-30:]}(NAS direct)',
+                              f'dict:signal={result["signal"]}:score={result["score"]}')
                     return result
         except Exception as e:
             print(f"[NAS/business_indicator] {url}: {e}")
     print("[NAS/business_indicator] ❌ 所有來源失敗")
+    _prov_log('_fetch_business_indicator', 'NDC(NAS direct):all-urls-fail',
+              'None:2-urls-all-fail')
     return None
 
 

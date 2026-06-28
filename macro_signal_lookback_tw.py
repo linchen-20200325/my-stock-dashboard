@@ -27,6 +27,7 @@ User 需求：「基金有這測試總經的預測力，台股沒有看到」.
 """
 from __future__ import annotations
 
+import sys as _sys_prov_msl
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal, Optional
@@ -34,6 +35,23 @@ from typing import Callable, Literal, Optional
 import pandas as pd
 
 from macro_validation_tw import DEFAULT_PARQUET_CACHE_DIR, TwiiCrisisEvent
+
+
+# v18.355 PR-Q5a — S-PROV-1 phase 19 helper
+# 8 fetch_*_series wrapper 共用,§2.2 provenance via Series.attrs(schema-additive)
+# 對齊 PR-Q2 etf_fetch._prov_log v18.352 既有模式。
+def _attach_prov(series: pd.Series, source: str) -> pd.Series:
+    """Schema-additive 寫 source + fetched_at 到 Series.attrs。"""
+    try:
+        if hasattr(series, 'attrs'):
+            series.attrs.setdefault('source', source)
+            series.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        _now = series.attrs.get('fetched_at', '?') if hasattr(series, 'attrs') else '?'
+        print(f'[{series.name}] source={source} fetched_at={_now} '
+              f'result=series:{len(series)}pts', file=_sys_prov_msl.stderr)
+    except Exception:
+        pass
+    return series
 # v18.241 E3-E7: 抽 inline magic 到 shared SSOT（CLAUDE.md §3.3）
 from shared.signal_thresholds import (
     TRADING_DAYS_PER_YEAR,
@@ -119,7 +137,7 @@ def fetch_foreign_sell_5d_series(
            .rolling(window=5, min_periods=5)
            .sum())
     s.name = "FOREIGN_SELL_5D"
-    return s.dropna()
+    return _attach_prov(s.dropna(), 'data_cache:finmind_inst.parquet:foreign_buy.rolling(5).sum')
 
 
 def fetch_margin_balance_series(
@@ -136,7 +154,7 @@ def fetch_margin_balance_series(
            .sort_index()
            / 1e8)
     s.name = "MARGIN_BALANCE"
-    return s.dropna()
+    return _attach_prov(s.dropna(), 'data_cache:finmind_margin.parquet:margin_balance/1e8')
 
 
 def fetch_m1b_m2_diff_series(
@@ -156,7 +174,7 @@ def fetch_m1b_m2_diff_series(
            .sort_index()
            .diff())
     s.name = "M1B_M2_DIFF"
-    return s.dropna()
+    return _attach_prov(s.dropna(), 'data_cache:finmind_m1m2.parquet:m1b_m2_gap.diff')
 
 
 def fetch_twii_drop_20d_series(
@@ -172,7 +190,7 @@ def fetch_twii_drop_20d_series(
            .sort_index()
            .pct_change(20) * 100.0)
     s.name = "TWII_DROP_20D"
-    return s.dropna()
+    return _attach_prov(s.dropna(), 'data_cache:twii_ohlcv.parquet:close.pct_change(20)')
 
 
 # v18.168：擴 3 個 parquet 衍生因子（成交量比 / 融資增速 / 已實現波動率）
@@ -200,7 +218,7 @@ def fetch_twse_vol_ratio_series(
         return pd.Series(dtype=float, name="TWSE_VOL_RATIO")
     z = (ratio - mu) / sd
     z.name = "TWSE_VOL_RATIO"
-    return z.dropna()
+    return _attach_prov(z.dropna(), 'data_cache:twii_ohlcv.parquet:volume/SMA60-1 z-score')
 
 
 def fetch_margin_growth_5d_series(
@@ -222,7 +240,7 @@ def fetch_margin_growth_5d_series(
            / 1e8)
     s = s.diff(5)
     s.name = "MARGIN_GROWTH_5D"
-    return s.dropna()
+    return _attach_prov(s.dropna(), 'data_cache:finmind_margin.parquet:margin_balance/1e8.diff(5)')
 
 
 def fetch_twii_realized_vol_20d_series(
@@ -244,7 +262,7 @@ def fetch_twii_realized_vol_20d_series(
     # v18.241 E3: 年化常數從 SSOT 引入
     vol = rets.rolling(window=20, min_periods=20).std() * (TRADING_DAYS_PER_YEAR ** 0.5) * 100.0
     vol.name = "TWII_REALIZED_VOL_20D"
-    return vol.dropna()
+    return _attach_prov(vol.dropna(), 'data_cache:twii_ohlcv.parquet:close.pct_change.rolling(20).std×√252')
 
 
 def fetch_pmi_below_50_series(
@@ -263,7 +281,7 @@ def fetch_pmi_below_50_series(
            .astype(float)
            .sort_index())
     s.name = "PMI_BELOW_50"
-    return s.dropna()
+    return _attach_prov(s.dropna(), 'data_cache:tw_pmi.parquet:pmi(monthly)')
 
 
 # Registry：key → fetcher（從 spec.key 拿對應 series fetcher）
