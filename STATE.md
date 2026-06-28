@@ -7,6 +7,13 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
+- [x] **S-AUDIT-RUN-K**(v18.340 PR-K1,2026-06-28)— 先行指標表 empty state 三狀態 fail-loud(PR #371)
+  * **痛點**:user 對比 6/14 截圖反問「原來的 table 呢?」→ Audit 結論無 code regression(`leading_indicators.py` 6/14→6/28 commits 全 schema-additive),根因為 4 個 FinMind API(TX/MTX/TXO/三大法人)全要 `FINMIND_TOKEN`,缺/失效 → 422 → 整表空。原 `tab_macro.py:4657 elif cd:` 分支沒明指 `FINMIND_TOKEN`,user 找不到救法
+  * **修法**:對齊 PR #362 v18.336 `chips_empty_state_html` 三狀態分流模式,新增 `shared/macro_buckets.py:leading_table_empty_state_html(attempted, token_present)` — 未載入(灰)/ 已試+無token(橙,明指 `FINMIND_TOKEN`)/ 已試+有token(橙,歸因額度/週末/失效),純字串 builder L0
+  * **wiring**:`tab_macro.py:4657-4671` 兩分支(`elif cd:` + `else:`)合併用新 helper,`attempted` 從 `cd ∪ cl_ts ∪ chips_loaded` 合取,`token_present` 從 `st.secrets ∪ os.environ` 合取(沿用 L4279-4286 同款邏輯,兩處診斷一致)
+  * **測試**:test_macro_buckets.py +4(三狀態文案 / valid div / 不偽造),本檔 29 passed;tests/ 全套 1920 passed
+  * **資料抓取本身不動**(§-1:無 code regression → 不重構);只改 empty state 視覺診斷
+
 - [x] **S-AUDIT-RUN-J**(v18.338~339 PR-J1+J3,2026-06-28)— S-PROV-1 後續 + S-MED 真高風險收尾
   * **PR-J1**(#369, v18.338):`scoring_engine.calc_leading_indicators_detail` 6 指標 dict 補 `source_chain` 欄(§2.2 provenance 出口)+ tab_stock D2 chip 加「📡 來源」渲染 + `_LI_SOURCE_CHAINS` static map + `_resolve_li_source` helper(優先吃 df.attrs['source'] / 'source' 欄,fallback 靜態);14 test 全綠
   * **PR-J3**(#370, v18.339):S-MED audit 285 候選抽真高風險 **16 處** 修(原 71 條估值不準):
