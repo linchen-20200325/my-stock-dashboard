@@ -3,6 +3,17 @@ from plotly.subplots import make_subplots
 import pandas as pd
 import streamlit as st
 
+# v18.360 Phase 2 F-5.1 — 統一 dark theme layout 基礎,避免 3 處 plot 函式重複硬碼。
+# 不可變 dict;caller 用 `**_DARK_LAYOUT_BASE` 展開,各圖再加 height / margin / xaxis 等專屬。
+# 不抽 height / margin 因 3 圖各自需求差異大,強合反破封裝。
+_DARK_LAYOUT_BASE = {
+    "plot_bgcolor": "#0e1117",
+    "paper_bgcolor": "#0e1117",
+    "font": dict(color="white", size=16),
+    "hovermode": "x unified",
+}
+
+
 def _get_gp_range(df_quarterly, pad_abs=8.0, pad_ratio=0.20, pad_cap=18.0, min_span=16.0):
     """毛利率右軸區間：避免波動被誇大，同時允許負毛利率被看見"""
     try:
@@ -260,11 +271,8 @@ def plot_combined_chart(df, stock_id, stock_name, show_ma_dict, k_line_type="一
     initial_range = [df['date'].iloc[-display_days], df['date'].iloc[-1]]
 
     fig.update_layout(
+        **_DARK_LAYOUT_BASE,
         height=1300,
-        plot_bgcolor='#0e1117',
-        paper_bgcolor='#0e1117',
-        font=dict(color='white', size=16),
-        hovermode='x unified',
         margin=dict(l=10, r=10, t=100, b=20),
         uirevision=chart_revision,
         xaxis=dict(
@@ -381,11 +389,8 @@ def plot_revenue_chart(df_revenue, stock_id, stock_name):
 
     # ========== 版面配置 ==========
     fig.update_layout(
+        **_DARK_LAYOUT_BASE,
         height=550,
-        plot_bgcolor='#0e1117',
-        paper_bgcolor='#0e1117',
-        font=dict(color='white', size=16),
-        hovermode='x unified',
         margin=dict(l=60, r=60, t=100, b=40),  # 增加上邊距
         title={
             'text': f"{stock_id} {stock_name} 月營收與年增率",
@@ -501,11 +506,8 @@ def plot_quarterly_chart(df_quarterly, stock_id, stock_name):
     y_range = _get_revenue_range(df_quarterly['營收'])
 
     fig.update_layout(
+        **_DARK_LAYOUT_BASE,
         height=500,
-        plot_bgcolor='#0e1117',
-        paper_bgcolor='#0e1117',
-        font=dict(color='white', size=16),
-        hovermode='x unified',
         margin=dict(l=60, r=60, t=100, b=40),
         title={
             'text': (f"{stock_id} {stock_name} 季營收與毛利率" if gp_available else f"{stock_id} {stock_name} 季營收"),
