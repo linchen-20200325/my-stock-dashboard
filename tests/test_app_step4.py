@@ -24,7 +24,10 @@ APP_SRC  = APP_PATH.read_text(encoding="utf-8")
 # 符合 §8.2「L6 App 不直接持有 L1 fetcher」。委派「存在性」斷言改掃 tab_macro.py;
 # app.py 端仍保「不得 inline 直連 MI_INDEX / cbc.gov.tw」的負向守衛(下方 test 不變)。
 TAB_MACRO_PATH = Path(__file__).resolve().parent.parent / "src/ui/tabs/tab_macro.py"
-TAB_MACRO_SRC  = TAB_MACRO_PATH.read_text(encoding="utf-8")
+# F-7.1 B-2:ADL fallback 區搬至 macro/section_short.py;source 檢查改合集。
+TAB_MACRO_SRC  = TAB_MACRO_PATH.read_text(encoding="utf-8") + (
+    Path(__file__).resolve().parent.parent / "src/ui/tabs/macro/section_short.py"
+).read_text(encoding="utf-8")
 
 
 # ══════════════════════════════════════════════════════════════

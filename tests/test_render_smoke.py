@@ -66,7 +66,9 @@ def test_radar_and_bucket_bar_gated_pre_load():
     _show_market_data 後 — 未載入資料(尚無快取/過期)時不顯示,對齊紅綠燈「尚無資料」。
     full render AppTest 在無 proxy/secrets 環境會 hang,故用 source pattern 檢查防回歸。"""
     import re
-    src = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()   # CI 可攜:相對 repo root
+    # F-7.1 B-2:§五 section_header 搬到 macro/section_short.py;source 改合集。
+    src = (open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
+           + open("src/ui/tabs/macro/section_short.py", encoding="utf-8").read())
     # 雷達 call 緊接在 if _show_market_data: 之後
     # v18.317:函式改名 _render_global_risk_bucket(10 燈雷達改桶,從頂部下移至短線急殺後)
     assert re.search(
@@ -89,13 +91,16 @@ def test_radar_and_bucket_bar_gated_pre_load():
         f" 實際: §七 byte offset={_pos_seven}, §一 byte offset={_pos_one}"
     )
     # C1-Z1 v18.294 物理重排:§五(⚡ 短殺) 必須在 §三(🧩 籌碼) 之前出現,對齊 5 桶 reading order。
-    _pos_five  = src.find("section_header('五'")
-    _pos_three = src.find("section_header('三'")
-    assert _pos_five > 0,  "找不到 §五 section_header"
+    # F-7.1 B-2 (v18.365):§五 整段抽至 macro/section_short.py;改檢 tab_macro.py 內
+    # render_section_short() call 位置(代表 §五 在 reading order 內的入口)vs §三 位置。
+    _tm_src = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
+    _pos_five  = _tm_src.find("render_section_short(")
+    _pos_three = _tm_src.find("section_header('三'")
+    assert _pos_five > 0,  "找不到 render_section_short() call"
     assert _pos_three > 0, "找不到 §三 section_header"
     assert _pos_five < _pos_three, (
         "C1-Z1 v18.294:§五(⚡ 短線急殺) 物理位置應在 §三(🧩 籌碼) 之前。"
-        f" 實際: §五 byte offset={_pos_five}, §三 byte offset={_pos_three}"
+        f" 實際: render_section_short() byte offset={_pos_five}, §三 byte offset={_pos_three}"
     )
     # C1-Z2 v18.297 物理重排:§六/§八(📈 中期) 必須與 §一/§二 集中,在 §五 之前出現。
     _pos_six   = src.find("section_header('六'")
