@@ -39,6 +39,14 @@
     - `scoring_engine.py:500` 1 處 silent → stderr log (calc_quality_score)
   * 介面 0 改;只把「失敗時靜默」改成「失敗時 stderr 留軌跡」,便於生產 debug
   * 剩餘 ~71 條**遵 §-1 等實際 bug 觸發再收**,不主動清
+- [x] **S-AUDIT-RUN-H**(v18.333~337 PR-H1~H5,2026-06-28)— R-1/R-2/R-3 三方 audit 後續補齊 5 連 PR
+  * **PR-H1**(#363, v18.333):多檔 ETF Tab 補 calc_liquidity_score + calc_tracking_error SSOT(R-2 P1「SSOT 寫不用」現象)
+  * **PR-H2**(#364, v18.334):σ 計算統一 — 新 `etf_helpers.calc_sigma_metrics` SSOT + UX 加「⚡短線」/「📅長線」文案標註消除 user 對「同檔不同訊號」困惑(R-3 部分統一方案)
+  * **PR-H3**(#365, v18.335):抽 4 個獨立函式 SSOT — `classify_etf_quick_sigma` / `classify_etf_deep_sigma` / `calc_portfolio_stress_test` / `compute_etf_annual_cashflow`(R-2 P2 + R-3 D)
+  * **PR-H4**(#366, v18.336):個股 Tab 新「📊 操作雷達」4 卡 + 3 個 SSOT(`compute_stop_levels` / `classify_bias_zone` / `classify_stock_status_lamp`)+ 個股組合 inline 4 段 if → SSOT 共用(R-1 P1)
+  * **PR-H5**(#367, v18.337):個股 Tab 新「⚙️ 多因子評分」3 卡(SQ/FGMS/RS)對標個股組合 + 新 `classify_rs_zone` SSOT(R-1 P2)
+  * 測試:5 個新 test 檔共 108 項 + 既有 PR-D/E/F/G 共 77 項 全 185/185 綠
+  * audit 結論:R-1/R-2/R-3 三方 35+ 缺漏項評估完畢,全 P1+P2 收尾,P3 屬「進階分析」維持現況
 - [x] **S-AUDIT-U9**(v18.332 PR-G,2026-06-28)— `etf_tab_portfolio.py` 深度 audit 後續修補
   * audit:深度探索 agent 跑 C1-C6 6 維度違憲分類,**C2~C6 全 clean**,僅 C1 命中 8 處
   * 收斂:`shared/signal_thresholds.py` 新增「ETF 投組 Tab 投組特有 SSOT」9 常數
