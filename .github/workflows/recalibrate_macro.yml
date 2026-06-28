@@ -46,7 +46,7 @@ jobs:
           PROXY_URL: ${{ secrets.PROXY_URL }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
         run: |
-          python calibrate_macro_traffic.py \
+          python scripts/calibrate_macro_traffic.py \
             --range ${{ github.event.inputs.range || '5y' }} \
             --optimize \
             --n-folds ${{ github.event.inputs.n_folds || '4' }} \

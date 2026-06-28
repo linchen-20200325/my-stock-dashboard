@@ -48,9 +48,9 @@ jobs:
           NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
         run: |
           if [ "${{ github.event.inputs.bootstrap }}" = "true" ]; then
-            python update_macro_history.py --bootstrap --years ${{ github.event.inputs.years || '20' }}
+            python scripts/update_macro_history.py --bootstrap --years ${{ github.event.inputs.years || '20' }}
           else
-            python update_macro_history.py
+            python scripts/update_macro_history.py
           fi
 
       - name: Commit and Push Changes
