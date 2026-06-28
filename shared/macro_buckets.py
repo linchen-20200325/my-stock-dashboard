@@ -175,6 +175,22 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
 # 快速查表
 SPECS_BY_KEY: dict[str, DangerSpec] = {s.key: s for s in BUCKET_DANGER_SPECS}
 
+# ════════════════════════════════════════════════════════════════
+# v18.349 — session_state["macro_info"] 核心指標 key 契約（SSOT）
+#   「🔎 資料診斷」覆蓋率表(data_coverage._macro_keys) + tab_macro 寫入端
+#   has-data 判定(_macro_has_data) 共用此單一清單，杜絕 v18.282 那種
+#   「key 名各自寫死 → 漂移 → 覆蓋率永遠紅燈」(data_coverage.py:59 留疤)。
+#
+#   注意維度差異：此為 macro_info dict 的「key 存在性」契約（含 fed_funds，
+#   無門檻判讀需求），與 BUCKET_DANGER_SPECS（危險門檻註冊表，含 health /
+#   m1b_m2_gap 等衍生指標、且不含 fed_funds）不同維度，不可混用。
+#   其中 5 個（除 fed_funds）同時是 DangerSpec key → test 斷言 ⊆ SPECS_BY_KEY，
+#   擋下 key 打錯（v18.282 正是此類 typo 導致永遠紅燈）。
+# ════════════════════════════════════════════════════════════════
+MACRO_INFO_KEYS: tuple[str, ...] = (
+    "vix", "ism_pmi", "us_core_cpi", "fed_funds", "ndc_signal", "tw_export",
+)
+
 
 def specs_for_bucket(bucket: str) -> list[DangerSpec]:
     """取某桶的所有 DangerSpec（依註冊順序）。"""

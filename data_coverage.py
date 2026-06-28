@@ -14,6 +14,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+# v18.349 — macro_info 核心指標 key 契約走 SSOT(L0)，與 tab_macro 寫入端共用，
+# 杜絕 v18.282 那種 key 名各自寫死 → 漂移 → 覆蓋率永遠紅燈。
+from shared.macro_buckets import MACRO_INFO_KEYS
+
 # 色票(對齊 shared/colors 但本檔不 import 避免循環,診斷頁用內聯 hex)
 _C_GREEN = "#3fb950"
 _C_YELLOW = "#d29922"
@@ -57,13 +61,14 @@ def compute_tab_coverage(state: dict | None = None) -> list[dict]:
 
     # ── 🌐 總經:macro_info 6 指標 + M1B-M2 + 領先指標 ──
     # v18.282 修正:用真實 session_state key(原 v18.280 key 名全錯導致永遠紅燈)
-    # 實際 macro_info 寫於 tab_macro.py:1862 _job_macro,key 為:
+    # 實際 macro_info 寫於 tab_macro.py _job_macro,key 為:
     #   vix / ism_pmi / us_core_cpi / fed_funds / ndc_signal / tw_export
+    # v18.349:此清單下沉 shared.macro_buckets.MACRO_INFO_KEYS(SSOT)，與
+    #   tab_macro 寫入端 has-data 判定共用,杜絕 v18.282 類 key 漂移再現。
     _ma = _get("macro_info") or {}
     _mi = _get("m1b_m2_info") or {}
     _li = _get("li_latest")
-    _macro_keys = ["vix", "ism_pmi", "us_core_cpi", "fed_funds",
-                   "ndc_signal", "tw_export"]
+    _macro_keys = list(MACRO_INFO_KEYS)
     _macro_have = sum(1 for k in _macro_keys
                       if isinstance(_ma, dict) and _ma.get(k) is not None)
     _macro_total = len(_macro_keys)
