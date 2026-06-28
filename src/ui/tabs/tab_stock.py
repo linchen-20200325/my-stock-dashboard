@@ -233,7 +233,7 @@ def render_tab_stock():
         calc_dividend_yield_357,
         detect_bollinger_breakout,
     )
-    from financial_health_engine import analyze_financial_health, no_ai_overall_verdict
+    from src.services import analyze_financial_health, no_ai_overall_verdict
     from src.compute.strategy import (
         calc_rsi, calc_ibs, calc_volume_ratio,
         calc_kd, calc_bollinger, calc_vcp,

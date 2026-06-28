@@ -67,7 +67,7 @@ from src.ui.etf import (  # noqa: E402
     render_etf_ai,
     render_sector_heatmap,
 )
-from health_inspector import render_data_health_raw  # noqa: E402
+from src.ui.pages import render_data_health_raw  # noqa: E402
 from src.ui.pages import render_api_diagnostic  # noqa: E402
 from src.ui.tabs import render_grape_ladder  # noqa: E402
 from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA  # noqa: E402

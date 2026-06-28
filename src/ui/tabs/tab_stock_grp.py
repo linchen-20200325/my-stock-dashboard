@@ -50,7 +50,7 @@ def render_stock_grp():
     )
     from src.compute.scoring import calc_health_score, health_grade
     from src.ui.render import teacher_conclusion
-    from financial_health_engine import analyze_financial_health
+    from src.services import analyze_financial_health
     from src.services import build_structured_summary_prompt
     from src.data.etf import _fetch_news_for
     from src.services import analyze_20d_chips_from_df
@@ -1353,7 +1353,7 @@ def _render_mj_trend_section(stock_list: list[str], *,
     import streamlit as _st  # noqa: F811 — explicit local alias
     from src.config import FINMIND_TOKEN as _TOK
     from src.data.core import fetch_financial_statements
-    from financial_health_engine import analyze_financial_health
+    from src.services import analyze_financial_health
     from src.compute.health import diff_mj_health  # noqa: F401 — used transitively by score
     from src.compute.health import (
         current_finmind_yyyymm,
