@@ -105,7 +105,9 @@ def _fetch_share_capital(sid: str) -> float:
                 except (TypeError, ValueError):
                     continue
         return 0.0
-    except Exception:
+    except Exception as _e:
+        import sys as _sys
+        print(f'[_fetch_share_capital] swallow: {type(_e).__name__}: {_e}', file=_sys.stderr)
         return 0.0
 
 
@@ -135,7 +137,9 @@ def _fetch_pbratio_from_twse(sid: str) -> float:
         if not (0.01 < _pb_v < 100):
             return 0.0
         return _pb_v
-    except Exception:
+    except Exception as _e:
+        import sys as _sys
+        print(f'[_fetch_pbratio_from_twse] swallow: {type(_e).__name__}: {_e}', file=_sys.stderr)
         return 0.0
 
 
