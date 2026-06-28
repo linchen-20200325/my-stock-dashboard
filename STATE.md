@@ -5,6 +5,12 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P0-1 (v18.371) — stock_names.py I/O 抽 L1 fetcher
+- **檔案**: `src/config/stock_names.py` + `src/data/core/stock_names_fetcher.py`(NEW)
+- **拔毒**: L0 config 含 requests/yfinance HTTP I/O(嚴重違憲)→ I/O + cache 邏輯抽 L1 fetcher。stock_names.py 留 _STATIC_NAMES const + get_stock_name/refresh_name_cache thin shim(lazy import L1)
+- **驗證**: smoke(static lookup 台積電 ✓ + unknown fallback ✓);full pytest 2213/0 fail
+- **commit**: 待 push
+
 ### P0-3 (v18.370,commit a08786b) — RSI 計算抽 compute_rsi SSOT
 - **檔案**: `src/compute/scoring/scoring_engine.py`
 - **拔毒**: line 104-106 + 239-241 同檔重複 4 行 RSI 邏輯 → 抽 `compute_rsi(close, period=14)` 純函式,2 處 caller 改 1 行 call
