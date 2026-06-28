@@ -58,7 +58,7 @@ class TestNoBuggyPatternRemains:
 
     def test_tab_stock_uses_shared_helper(self):
         src = open("src/ui/tabs/tab_stock.py", encoding="utf-8").read()
-        assert "from sidebar_health import kline_end_date" in src
+        assert "from src.ui.pages import kline_end_date" in src
         assert "kline_end_date(df2)" in src
         # 舊 bug 變數整段移除（_df_end_date 不得再出現於可執行碼）
         assert "_df_end_date" not in src
