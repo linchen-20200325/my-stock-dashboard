@@ -610,205 +610,38 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         # 靜態 st.info 文字 + 按鈕殘留 → 阻塞抓取時畫面看似凍結、分不清是否載完。
         # spinner 在整個抓取期間動畫旋轉，結束自動消失，使用者一眼看出「進行中」。
         with st.spinner('🚀 並行抓取 總經 + 籌碼 + 先行指標中…（約 30~60 秒，請稍候）'):
-            import time as _t_spd
-            _t_start = _t_spd.time()
-
-            # ── 並發任務定義 ────────────────────────────────────
-            # v18.193 perf: 3 個 job 內部從 ticker 序列改為內層 ThreadPoolExecutor 並行
-            #             (原 N×fetch_single 序列 → max(t)；fetch_single /tmp pickle 30 分鐘
-            #             cache 不變、DX-Y.NYB→DX=F→UUP 備援邏輯不變)
-            def _parallel_fetch(_mp, **_kw):
-                _max_w = max(1, len(_mp))
-                with ThreadPoolExecutor(max_workers=_max_w) as _e_in:
-                    _f_in = {_e_in.submit(fetch_single, _s, **_kw): _n for _n, _s in _mp.items()}
-                    return {_f_in[_ft]: _ft.result() for _ft in _f_in}
-
-            def _job_intl():
-                return _parallel_fetch(INTL_MAP)
-
-            def _job_tw():
-                # 9mo ≈ 195 交易日，確保 ^TWII 有足夠 bars 計算 MA120（需120筆）
-                return _parallel_fetch(TW_MAP, period='9mo')
-
-            def _job_tech():
-                return _parallel_fetch(TECH_MAP)
-
-            def _job_inst():
-                return fetch_institutional()
-
-            def _job_margin():
-                try:
-                    return fetch_margin_balance()
-                except Exception as _em:
-                    print(f'[融資] ❌ {_em}')
-                    return None
-
-            def _job_adl():
-                _tok_adl = os.environ.get('FINMIND_TOKEN','') or FINMIND_TOKEN
-                return fetch_adl(days=60, token=_tok_adl)
-
-            # v18.331 (2-C)：先行指標併入平行池。原 v8 因 Colab worker thread 中 requests
-            # 受阻而移出池、改主流程序列呼叫（拖慢 ~15-55s）；現平台為 Streamlit Cloud，
-            # 池內 inst/margin/adl 等 requests job 運作正常，該平台限制已不適用。
-            # import + reload 留在主執行緒（importlib.reload 非 thread-safe），worker thread
-            # 內只呼叫純抓取 build_leading_fast（不碰 UI）。失敗時下游既有 fallback（保留舊
-            # li_latest）兜底，最壞只是先行指標顯示舊資料，不致崩潰。
-            _li_tok = _get_fm_token() or FINMIND_TOKEN or os.environ.get('FINMIND_TOKEN', '')
-            _li_build_fn = None
-            try:
-                import importlib as _il_li
-                from src.data.macro import leading_indicators as _li_mod
-                _il_li.reload(_li_mod)
-                _li_build_fn = _li_mod.build_leading_fast
-                print(f'[先行指標] v={getattr(_li_mod, "LI_VERSION", "?")} token={bool(_li_tok)}（併池）')
-            except Exception as _e_li_imp:
-                print(f'[先行指標] ❌ import 失敗 {type(_e_li_imp).__name__}: {_e_li_imp}')
-
-            def _job_li():
-                if _li_build_fn is None:
-                    return None
-                return _li_build_fn(days=14, token=_li_tok)
-
-            # ── 並發執行（yfinance 最慢，先丟進去）─────────────
-            # [Phase 2] 輕量任務（永遠跑，~30s 內完成）
-            _jobs = {
-                'intl':         _job_intl,
-                'tw':           _job_tw,
-                'tech':         _job_tech,
-            }
-            _job_timeouts = {
-                'intl': 30, 'tw': 30, 'tech': 30,
-            }
-            # [Phase 2] 重量任務（按鈕觸發或手動 refresh 才跑）
-            if _load_heavy:
-                _jobs.update({
-                    'inst':         _job_inst,
-                    'margin':       _job_margin,
-                    'adl':          _job_adl,
-                    'li':           _job_li,   # v18.331 2-C：先行指標併池
-                })
-                _job_timeouts.update({
-                    'inst': 25,
-                    'margin': 25,
-                    'adl': 55,
-                    'li': 80,   # build_leading_fast 內部 thread join(timeout=80)
-                })
-            _results = {}
-            # [BUG FIX] as_completed global timeout 從 50s 改為 110s
-            # 原因：li job 內部 thread join(timeout=80)，50 < 80 導致 TimeoutError 崩潰
-            # 並用 try/except TimeoutError 包住迴圈，確保其他6個 job 結果不因 li 超時而丟失
-            # [BUG FIX] shutdown(wait=False) — 消除 `with TPE` 阻塞 7-20 分鐘的問題
-            # 原理：手動管理 executor，超時後立即 cancel 未開始任務
-            _AS_COMPLETED_TIMEOUT = max(_job_timeouts.values()) + 20
-            _exc = ThreadPoolExecutor(max_workers=len(_jobs))
-            _futs = {_exc.submit(fn): name for name, fn in _jobs.items()}
-            try:
-                try:
-                    for _fut in as_completed(_futs, timeout=_AS_COMPLETED_TIMEOUT):
-                        name = _futs[_fut]
-                        _t_limit = _job_timeouts.get(name, 20)
-                        try:
-                            _results[name] = _fut.result(timeout=_t_limit)
-                            print(f'[並發] ✅ {name} ({_t_spd.time()-_t_start:.1f}s)')
-                        except Exception as _fe:
-                            _results[name] = None
-                            print(f'[並發] ❌ {name}: {type(_fe).__name__}: {_fe}')
-                except TimeoutError:
-                    print(f'[並發] ⚠️ as_completed {_AS_COMPLETED_TIMEOUT}s 超時，補救已完成結果')
-                    for _fut, _name in _futs.items():
-                        if _name not in _results:
-                            if _fut.done():
-                                try:
-                                    _results[_name] = _fut.result(timeout=1)
-                                    print(f'[並發] ✅ {_name} 補救成功')
-                                except Exception as _fe2:
-                                    _results[_name] = None
-                            else:
-                                _results[_name] = None
-                                print(f'[並發] ⏰ {_name} 確認超時')
-            finally:
-                # [BUG FIX] 關鍵：立即取消未開始任務，不等待執行中的 thread
-                try:
-                    _exc.shutdown(wait=False, cancel_futures=True)
-                except TypeError:
-                    _exc.shutdown(wait=False)  # Python < 3.9
-            # 補齊所有未收到結果的 job
-            for _name in _jobs:
-                if _name not in _results:
-                    _results[_name] = None
-                    print(f'[並發] ⏰ {_name} 超時')
-            
-            # ── 解包結果 ────────────────────────────────────────
-            intl_raw  = _results.get('intl') or {}
-            tw_raw    = _results.get('tw') or {}
-            tech_raw  = _results.get('tech') or {}
-
-            # [Phase 2] 重量區塊：cl_data 已存在則沿用舊值，否則 None
-            _prev_cl  = st.session_state.get('cl_data') or {}
-            if _load_heavy:
-                inst_res  = _results.get('inst') or (None, None)
-                inst, inst_date = inst_res if isinstance(inst_res, tuple) else (inst_res, None)
-                # 如果 inst 是空的，用 FinMind TaiwanStockTotalInstitutionalInvestors 補救
-                if not inst:
-                    print('[並發] inst 為空，用 FinMind 補救...')
-                    try:
-                        _fm_t = _get_fm_token()
-                        _start_i = (datetime.date.today()-datetime.timedelta(days=5)).strftime('%Y-%m-%d')
-                        _ri = _bps().get('https://api.finmindtrade.com/api/v4/data',
-                            params={'dataset':'TaiwanStockTotalInstitutionalInvestors',
-                                    'start_date':_start_i,'token':_fm_t},
-                            headers={'Authorization':f'Bearer {_fm_t}'}, timeout=15)
-                        _ji = _ri.json()
-                        print(f'[FinMind-Inst] status={_ji.get("status")} rows={len(_ji.get("data",[]))}')
-                        if _ji.get('status')==200 and _ji.get('data'):
-                            _df_i = pd.DataFrame(_ji['data'])
-                            _ld_i = _df_i['date'].max()
-                            _df_i = _df_i[_df_i['date']==_ld_i]
-                            _df_i['buy']  = pd.to_numeric(_df_i.get('buy',  0), errors='coerce').fillna(0)
-                            _df_i['sell'] = pd.to_numeric(_df_i.get('sell', 0), errors='coerce').fillna(0)
-                            _df_i['_net'] = ((_df_i['buy'] - _df_i['sell']) / 1e8).round(2)
-                            # FinMind name 欄為英文 key（Foreign_Investor / Investment_Trust / Dealer_*）
-                            # 與 tw_macro.py:151 / hot_money.py:157 一致採英文匹配，中文為向下相容
-                            inst = {}
-                            for _nm, _net in zip(_df_i['name'].astype(str), _df_i['_net']):
-                                _nl = _nm.lower()
-                                if 'foreign' in _nl or '外資' in _nm:
-                                    inst.setdefault('_f', 0)
-                                    inst['_f'] = round(inst['_f'] + _net, 2)
-                                elif 'investment_trust' in _nl or '投信' in _nm:
-                                    inst['投信'] = {'net': _net}
-                                elif 'dealer' in _nl or '自營' in _nm:
-                                    inst.setdefault('_d', 0)
-                                    inst['_d'] = round(inst['_d'] + _net, 2)
-                            if '_f' in inst:
-                                inst['外資及陸資'] = {'net': inst.pop('_f')}
-                            if '_d' in inst:
-                                inst['自營商'] = {'net': inst.pop('_d')}
-                            inst_date = _ld_i
-                            print(f'[FinMind-Inst] ✅ {inst}')
-                    except Exception as _ei:
-                        print(f'[FinMind-Inst] ❌ {_ei}')
-                margin       = _results.get('margin')
-                df_adl_raw   = _results.get('adl')
-                if df_adl_raw is None:
-                    st.session_state['adl_debug_msg'] = '來源均無回應（yfinance + TWSE MI_INDEX），詳見 Colab [ADL] 輸出'
-                else:
-                    st.session_state.pop('adl_debug_msg', None)
-                # v18.331 (2-C)：先行指標已併入上方平行池（job 'li'），此處只讀結果，
-                # 不再主流程序列呼叫。失敗時下游既有 fallback（下方）保留舊 li_latest。
-                df_li_a = _results.get('li')
-                if df_li_a is not None and not (hasattr(df_li_a, 'empty') and df_li_a.empty):
-                    print(f'[先行指標] ✅ 併池成功 {len(df_li_a)} 筆')
-                else:
-                    print('[先行指標] ⚠️ 併池回空/None — 下游保留舊快取')
+            # P3-D4 v18.389:7-job orchestrator 下沉 src/services/macro_fetch_orchestrator
+            from src.services.macro_fetch_orchestrator import fetch_macro_bundle
+            _bundle = fetch_macro_bundle(
+                load_heavy=_load_heavy,
+                prev_cl_data=st.session_state.get('cl_data') or {},
+                fm_token=(_get_fm_token() or FINMIND_TOKEN
+                          or os.environ.get('FINMIND_TOKEN', '')),
+                li_token=(_get_fm_token() or FINMIND_TOKEN
+                          or os.environ.get('FINMIND_TOKEN', '')),
+                bps_session=_bps(),
+                intl_map=INTL_MAP, tw_map=TW_MAP, tech_map=TECH_MAP,
+                fetch_single=fetch_single,
+                fetch_institutional=fetch_institutional,
+                fetch_margin_balance=fetch_margin_balance,
+                fetch_adl=fetch_adl,
+            )
+            intl_raw   = _bundle['intl_raw']
+            tw_raw     = _bundle['tw_raw']
+            tech_raw   = _bundle['tech_raw']
+            inst       = _bundle['inst']
+            inst_date  = _bundle['inst_date']
+            margin     = _bundle['margin']
+            df_adl_raw = _bundle['df_adl_raw']
+            df_li_a    = _bundle['df_li_a']
+            # 冷啟動時 df_li_a=None,沿用既有 session_state['li_latest'](保 cache)
+            if not _load_heavy and df_li_a is None:
+                df_li_a = st.session_state.get('li_latest')
+            # ADL debug msg(失敗時設,成功時 pop)
+            if _bundle.get('adl_debug_msg'):
+                st.session_state['adl_debug_msg'] = _bundle['adl_debug_msg']
             else:
-                # 冷啟動跳過重資料：沿用舊 cl_data 或 None
-                inst       = _prev_cl.get('inst') or {}
-                inst_date  = _prev_cl.get('inst_date')
-                margin     = _prev_cl.get('margin')
-                df_adl_raw = _prev_cl.get('adl')
-                df_li_a    = st.session_state.get('li_latest')
-                print('[Phase 2] 冷啟動跳過 inst/margin/adl/li（按鈕載入）')
+                st.session_state.pop('adl_debug_msg', None)
 
             # ── 儲存主要數據 ─────────────────────────────────────
             st.session_state['cl_data'] = dict(
@@ -816,26 +649,22 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 inst=inst, inst_date=inst_date, margin=margin,
                 adl=df_adl_raw)
             st.session_state['cl_ts'] = _tw_now_str()
-            st.session_state['_is_refreshing'] = False  # 資料就位，解除刷新鎖
-            # 快取最後一次有效的法人/融資資料，供 API 失敗時 fallback 使用
+            st.session_state['_is_refreshing'] = False  # 資料就位,解除刷新鎖
+            # 快取最後一次有效的法人/融資資料,供 API 失敗時 fallback 使用
             if inst:
                 st.session_state['_last_inst'] = inst
                 st.session_state['_last_inst_date'] = inst_date
             if margin:
                 st.session_state['_last_margin'] = margin
 
-            # [BUG FIX] 寬鬆條件：有任何 DataFrame（即使全 '-'）都存入 session_state
-            # 原本 not df_li_a.empty 在 rows 有骨架但全 None 時仍為 True，但若某個版本回 None 或空 DF 則捨棄
+            # [BUG FIX] 寬鬆條件:有任何 DataFrame(即使全 '-')都存入 session_state
             if df_li_a is not None and not df_li_a.empty:
                 st.session_state['li_latest'] = df_li_a
                 print(f'[先行指標] ✅ {len(df_li_a)} 筆 (有效欄={df_li_a.notna().any().sum()})')
             else:
-                # 保留舊資料（若有），避免畫面空白
                 if 'li_latest' not in st.session_state:
                     st.session_state.pop('li_latest', None)
                 print(f'[先行指標] ⚠️ 回傳{"空" if df_li_a is not None else "None"} — 保留舊快取')
-
-            print(f'[並發] 🎉 全部完成 共 {_t_spd.time()-_t_start:.1f}s')
             try:
                 _fetch_ph.empty()
             except Exception:
