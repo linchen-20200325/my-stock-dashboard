@@ -25,6 +25,23 @@ from __future__ import annotations
 import streamlit as st
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
+# v18.329 PR-D:ETF inline magic 抽 SSOT(分級閾值用)
+# 註:多檔/組合 Tab 用 etf_helpers.{yield_valuation_zone,dividend_health_label} 函式,
+# 單檔 Tab 因 UX 設計不同(colored_box + teacher_conclusion 教學模式)維持 inline 條件
+from shared.signal_thresholds import (
+    ETF_CAGR_TARGET_PCT,
+    ETF_DIV_YOY_DECLINE_PCT,
+    ETF_INCEPTION_YEARS_MIN,
+    ETF_PREMIUM_DEEP_DISCOUNT_PCT,
+    ETF_PREMIUM_FAIR_DISCOUNT_PCT,
+    ETF_PREMIUM_FAIR_PREMIUM_PCT,
+    ETF_PREMIUM_HIGH_PREMIUM_PCT,
+    ETF_SIGMA_BUY,
+    ETF_SIGMA_DEEP_BUY,
+    ETF_SIGMA_REDUCE,
+    ETF_SIGMA_STOP_PROFIT,
+    ETF_TRACKING_ERROR_MAX_PCT,
+)
 
 
 def render_etf_single(gemini_fn=None):
@@ -87,8 +104,8 @@ def render_etf_single(gemini_fn=None):
             try:
                 _sec = getattr(st, 'secrets', {})
                 _has_proxy = bool(_sec.get('PROXY_URL') or _sec.get('NAS_PROXY_URL'))
-            except Exception:
-                pass
+            except Exception as _e_secrets:
+                print(f'[etf_tab_single] PROXY_URL secrets 讀取失敗:{type(_e_secrets).__name__}')
         if not _has_proxy:
             st.warning(
                 '⚠️ 未偵測到 **PROXY_URL**：MoneyDJ／TWSE 封鎖海外資料中心 IP'
@@ -217,16 +234,17 @@ def render_etf_single(gemini_fn=None):
             import datetime as _dt_inc
             _incept_yrs = (_dt_inc.datetime.now()
                            - _dt_inc.datetime.fromtimestamp(int(_ep))).days / 365.25
-    except Exception:
-        pass
+    except Exception as _e_inc:
+        print(f'[etf_tab_single] 成立年數推算失敗:{type(_e_inc).__name__}: {_e_inc}')
     if _incept_yrs is None and len(df) > 0:
         _incept_yrs = (df.index[-1] - df.index[0]).days / 365.25
 
     _mc1, _mc2, _mc3, _mc4 = st.columns(4)
     if _div_yoy is None:
         _mc1.metric('配息 12M YoY', 'N/A', delta='—')
-    elif _div_yoy < -10:
-        _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='⚠️ 衰退 > 10%', delta_color='inverse')
+    elif _div_yoy < ETF_DIV_YOY_DECLINE_PCT:
+        _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%',
+                    delta=f'⚠️ 衰退 > {abs(ETF_DIV_YOY_DECLINE_PCT):.0f}%', delta_color='inverse')
     elif _div_yoy < 0:
         _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='略減（< 10%）', delta_color='inverse')
     else:
@@ -241,20 +259,20 @@ def render_etf_single(gemini_fn=None):
         _mc2.metric('含息報酬 − 殖利率', 'N/A', delta='無配息')
     if _cagr3 is None:
         _mc3.metric('近 3Y 年化報酬', 'N/A', delta='資料不足 < 90 日')
-    elif _cagr3 >= 7:
+    elif _cagr3 >= ETF_CAGR_TARGET_PCT:
         _mc3.metric('近 3Y 年化報酬', f'{_cagr3:.1f}%',
-                    delta='✅ 達 7% 定存替代', delta_color='normal')
+                    delta=f'✅ 達 {ETF_CAGR_TARGET_PCT:.0f}% 定存替代', delta_color='normal')
     else:
         _mc3.metric('近 3Y 年化報酬', f'{_cagr3:.1f}%',
-                    delta='🟡 不及 7% 門檻', delta_color='inverse')
+                    delta=f'🟡 不及 {ETF_CAGR_TARGET_PCT:.0f}% 門檻', delta_color='inverse')
     if _incept_yrs is None:
         _mc4.metric('成立年數', 'N/A')
-    elif _incept_yrs >= 3:
+    elif _incept_yrs >= ETF_INCEPTION_YEARS_MIN:
         _mc4.metric('成立年數', f'{_incept_yrs:.1f} 年',
-                    delta='✅ ≥ 3 年（多空考驗）', delta_color='normal')
+                    delta=f'✅ ≥ {ETF_INCEPTION_YEARS_MIN:.0f} 年（多空考驗）', delta_color='normal')
     else:
         _mc4.metric('成立年數', f'{_incept_yrs:.1f} 年',
-                    delta='🟡 未滿 3 年（選舊不選新）', delta_color='inverse')
+                    delta=f'🟡 未滿 {ETF_INCEPTION_YEARS_MIN:.0f} 年（選舊不選新）', delta_color='inverse')
     st.caption(
         '⚠️ 配息來源「**平準金佔比**」需 ETF 公開說明書揭露，本系統暫無穩定 API 來源故不顯示。'
         '**手動查法**：投信官網「基金月報 / 公開說明書」或 MoneyDJ 個別 ETF「收益分配」頁。'
@@ -340,19 +358,19 @@ def render_etf_single(gemini_fn=None):
     # 折溢價建議邏輯
     _pct = prem['premium_pct']
     if _pct is not None:
-        if _pct <= -2:
+        if _pct <= ETF_PREMIUM_DEEP_DISCOUNT_PCT:
             _prem_color  = TRAFFIC_GREEN
             _prem_action = '🟢 強烈買進時機'
             _prem_reason = f'折價 {abs(_pct):.2f}%，低於 NAV 買入，立即為你創造安全邊際'
-        elif _pct <= -0.5:
+        elif _pct <= ETF_PREMIUM_FAIR_DISCOUNT_PCT:
             _prem_color  = '#58a6ff'
             _prem_action = '🔵 合理買進'
             _prem_reason = f'折價 {abs(_pct):.2f}%，略低於 NAV，可正常分批買入'
-        elif _pct <= 1.0:
+        elif _pct <= ETF_PREMIUM_FAIR_PREMIUM_PCT:
             _prem_color  = TRAFFIC_YELLOW
             _prem_action = '🟡 中性觀望'
-            _prem_reason = f'溢價 {_pct:.2f}%（±1% 正常範圍），無需急追'
-        elif _pct <= 3.0:
+            _prem_reason = f'溢價 {_pct:.2f}%（±{ETF_PREMIUM_FAIR_PREMIUM_PCT:.0f}% 正常範圍），無需急追'
+        elif _pct <= ETF_PREMIUM_HIGH_PREMIUM_PCT:
             _prem_color  = TRAFFIC_RED
             _prem_action = '🔴 暫緩買進'
             _prem_reason = f'溢價 {_pct:.2f}%，高於 NAV，追高風險較大，等待回落'
@@ -371,8 +389,8 @@ def render_etf_single(gemini_fn=None):
             try:
                 _sec2 = getattr(st, 'secrets', {})
                 _hp = bool(_sec2.get('PROXY_URL') or _sec2.get('NAS_PROXY_URL'))
-            except Exception:
-                pass
+            except Exception as _e_sec2:
+                print(f'[etf_tab_single] NAV PROXY secrets 讀取失敗:{type(_e_sec2).__name__}')
         _prem_color  = '#8b949e'
         _prem_action = 'ℹ️ 無 NAV 資料'
         _prem_reason = ('FinMind／goodinfo／TWSE／MoneyDJ 皆未回傳淨值（可能為新上市或當日尚未公告）。'
@@ -394,11 +412,11 @@ def render_etf_single(gemini_fn=None):
         unsafe_allow_html=True)
 
     if _pct is not None:
-        _prem_concl = ('折價買進，獲得安全邊際' if _pct <= -0.5
-                       else '中性，無需急追' if _pct <= 1.0
+        _prem_concl = ('折價買進，獲得安全邊際' if _pct <= ETF_PREMIUM_FAIR_DISCOUNT_PCT
+                       else '中性，無需急追' if _pct <= ETF_PREMIUM_FAIR_PREMIUM_PCT
                        else '高溢價，追高風險大，等待回落')
-        _prem_act2  = ('分批買進' if _pct <= -0.5
-                       else '持有觀望' if _pct <= 1.0
+        _prem_act2  = ('分批買進' if _pct <= ETF_PREMIUM_FAIR_DISCOUNT_PCT
+                       else '持有觀望' if _pct <= ETF_PREMIUM_FAIR_PREMIUM_PCT
                        else '暫緩或換標的')
         _teacher_conclusion('宏爺', f'{ticker} 折溢價 {_pct:+.2f}%', _prem_concl, _prem_act2)
 
@@ -407,8 +425,8 @@ def render_etf_single(gemini_fn=None):
               help=None if _pct is not None else 'NAV 抓不到 → 連帶無法計算折溢價（檢查 PROXY_URL 或主動式 ETF 投信無公開 NAV）')
     if te is not None:
         ci.metric(f'追蹤誤差 vs {benchmark}', f'{te:.2f}%')
-        if te > 1.5:
-            ci.markdown(f'<small style="color:{TRAFFIC_YELLOW};">⚠️ 追蹤誤差 >1.5%，注意隱藏成本</small>',
+        if te > ETF_TRACKING_ERROR_MAX_PCT:
+            ci.markdown(f'<small style="color:{TRAFFIC_YELLOW};">⚠️ 追蹤誤差 >{ETF_TRACKING_ERROR_MAX_PCT:.1f}%，注意隱藏成本</small>',
                         unsafe_allow_html=True)
     else:
         ci.metric('追蹤誤差', 'N/A',
@@ -467,16 +485,16 @@ def render_etf_single(gemini_fn=None):
         if _ma240 and _sigma_pct > 0:
             _bias_pct = (_cur_p - _ma240) / _ma240 * 100
             _z = _bias_pct / _sigma_pct
-            if _z <= -2:
-                _label, _color, _action = '🟢 極佳買點（≤ -2σ）', 'green', '大跌大買 — 大幅加碼，剩餘資金主力投入'
-            elif _z <= -1:
-                _label, _color, _action = '🟢 進場買點（-2σ ~ -1σ）', 'green', '小跌小買 — 投入 20–30% 資金'
-            elif _z <= 1:
-                _label, _color, _action = '🟡 持平區（±1σ 內）', 'yellow', '保留現金，等待 ≤ -1σ 進場'
-            elif _z <= 2:
-                _label, _color, _action = '🟠 偏高（+1σ ~ +2σ）', 'yellow', '不追高；衛星部位可考慮停利'
+            if _z <= ETF_SIGMA_DEEP_BUY:
+                _label, _color, _action = f'🟢 極佳買點(≤ {ETF_SIGMA_DEEP_BUY:.0f}σ)', 'green', '大跌大買 — 大幅加碼，剩餘資金主力投入'
+            elif _z <= ETF_SIGMA_BUY:
+                _label, _color, _action = f'🟢 進場買點({ETF_SIGMA_DEEP_BUY:.0f}σ ~ {ETF_SIGMA_BUY:.0f}σ)', 'green', '小跌小買 — 投入 20–30% 資金'
+            elif _z <= ETF_SIGMA_REDUCE:
+                _label, _color, _action = f'🟡 持平區(±{ETF_SIGMA_REDUCE:.0f}σ 內)', 'yellow', f'保留現金，等待 ≤ {ETF_SIGMA_BUY:.0f}σ 進場'
+            elif _z <= ETF_SIGMA_STOP_PROFIT:
+                _label, _color, _action = f'🟠 偏高(+{ETF_SIGMA_REDUCE:.0f}σ ~ +{ETF_SIGMA_STOP_PROFIT:.0f}σ)', 'yellow', '不追高；衛星部位可考慮停利'
             else:
-                _label, _color, _action = '🔴 極端偏高（≥ +2σ）', 'red', '建議減碼；勿在 +2σ 以上加碼'
+                _label, _color, _action = f'🔴 極端偏高(≥ +{ETF_SIGMA_STOP_PROFIT:.0f}σ)', 'red', f'建議減碼；勿在 +{ETF_SIGMA_STOP_PROFIT:.0f}σ 以上加碼'
             _colored_box(
                 f'<b>{_label}</b><br>'
                 f'目前 {_cur_p:.2f} vs MA240 {_ma240:.2f} → '

@@ -68,3 +68,59 @@ def normalize_etf_ticker(raw: str | None) -> str:
     if _TW_PURE_RE.fullmatch(_t):
         return f'{_t}.TW'
     return _t
+
+
+# ── v18.329 PR-D:ETF 三 Tab 共用判別函式 SSOT ──────────────────────
+# 原 etf_tab_grp_compare.py file-local 函式,單檔/多檔/組合 Tab 統一 import。
+
+def yield_valuation_zone(cur_yield, avg_yield):
+    """7% 存股估值買賣點分級(孫慶龍策略)。
+
+    Args:
+        cur_yield: 當前殖利率 %
+        avg_yield: 5y 平均殖利率 %(需有值才判定)
+
+    Returns:
+        '🟢 強烈買進' / '🔴 獲利了結' / '🟡 適度減碼' / '⚪ 中性持有' / '—'
+
+    SSOT:三 Tab 共用(單檔 / 多檔 / 組合)。
+    原 etf_tab_grp_compare.py:53-66 + etf_tab_single.py:272-295 inline 各自實作。
+    """
+    from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
+    if not avg_yield or avg_yield <= 0 or cur_yield is None:
+        return '—'
+    if cur_yield >= YIELD_HIGH:
+        return '🟢 強烈買進'
+    if cur_yield <= YIELD_LOW:
+        return '🔴 獲利了結'
+    if cur_yield <= YIELD_MID:
+        return '🟡 適度減碼'
+    return '⚪ 中性持有'
+
+
+def dividend_health_label(cur_yield, total_ret_1y, cagr_3y):
+    """配息健康度分級(MK 框架 #1+#2)。
+
+    含息報酬 ≥ 殖利率 = 雙贏 ✅;含息 < 殖利率 = 本金侵蝕 🔴;
+    無配息直接看 3Y CAGR ≥ ETF_CAGR_TARGET_PCT 達標 ✅ 否則 🟡。
+
+    Args:
+        cur_yield: 當前殖利率 %
+        total_ret_1y: 近 1 年含息總報酬 %
+        cagr_3y: 近 3 年年化報酬 %
+
+    Returns:
+        '✅ 雙贏 ...pp' / '🔴 吃本金 ...pp' / '✅ 無息但達標' / '🟡 ...' / '⬜ ...'
+
+    SSOT:三 Tab 共用。原 etf_tab_grp_compare.py:69-85 + etf_tab_single.py:183-200 inline。
+    """
+    from shared.signal_thresholds import ETF_CAGR_TARGET_PCT
+    if cur_yield is None or cur_yield <= 0:
+        if cagr_3y is None:
+            return '⬜ 資料不足'
+        return '✅ 無息但達標' if cagr_3y >= ETF_CAGR_TARGET_PCT else '🟡 無息且未達標'
+    if total_ret_1y is None:
+        return '⬜ 1Y 報酬缺'
+    if total_ret_1y < cur_yield:
+        return f'🔴 吃本金 {total_ret_1y - cur_yield:+.1f}pp'
+    return f'✅ 雙贏 {total_ret_1y - cur_yield:+.1f}pp'
