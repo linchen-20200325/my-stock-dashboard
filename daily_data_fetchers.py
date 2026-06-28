@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime
 import os
 import re
+import sys as _sys_prov_ddf
 import time
 
 import pandas as pd
@@ -22,6 +23,20 @@ import pandas as pd
 from shared.cache_layer import _CACHE_SENTINEL, _pkl_get, _pkl_put
 from shared.macro_compute import _recent_date
 from data_config import TTL_CONFIG as _TTL_CFG
+
+
+# v18.354 PR-Q4 — S-PROV-1 phase 19 helper
+# 6 fetcher (fetch_single / fetch_flow_snapshot / _fetch_otc_via_finmind /
+# fetch_institutional / fetch_adl / fetch_margin_balance) 共用 audit trail。
+# 介面 0 改(對齊 etf_fetch._prov_log 既有模式,PR-Q2 v18.352)。
+def _prov_log(fn_name: str, source: str, ticker: str, result_summary: str):
+    """§2.2 provenance audit trail — stderr 記 source/fetched_at,不破 caller 簽章。"""
+    try:
+        _now = pd.Timestamp.now('UTC').isoformat()
+        print(f'[{fn_name}] ticker={ticker} source={source} fetched_at={_now} '
+              f'result={result_summary}', file=_sys_prov_ddf.stderr)
+    except Exception:
+        pass
 
 
 def _bps():
@@ -95,12 +110,16 @@ def fetch_single(symbol, period: str = "60d"):
         elif 'Close' in h.columns:
             h = h.dropna(subset=['Close'])
         if h.empty:
+            _prov_log('fetch_single', 'yf_proxy.cached_history', symbol, 'None:empty')
             return None
         with open(_ck2, 'wb') as _f:
             _pk2.dump(h, _f)
+        _prov_log('fetch_single', 'yf_proxy.cached_history', symbol, f'df:{len(h)}rows')
         return h
     except Exception as e:
         print(f'[yf:{symbol}] {e}')
+        _prov_log('fetch_single', 'yf_proxy.cached_history', symbol,
+                  f'None:exc:{type(e).__name__}')
         return None
 
 
@@ -147,6 +166,8 @@ def fetch_flow_snapshot(period: str = "2y"):
                 _pk_fl.dump(out, _f_fl)
         except Exception:
             pass
+    _prov_log('fetch_flow_snapshot', 'flow_engine+yf_proxy(parallel)',
+              f'period={period}', f'dict:{sum(1 for v in out.values() if v is not None)}/{len(out)}symbols')
     return out
 
 
@@ -155,6 +176,8 @@ def fetch_flow_snapshot(period: str = "2y"):
 # ═══════════════════════════════════════════════
 def _fetch_otc_via_finmind(token: str = ""):
     if not FINMIND_TOKEN:
+        _prov_log('_fetch_otc_via_finmind', 'FinMind:TaiwanStockDaily:OTC',
+                  'OTC', 'None:no-token')
         return None
     try:
         start = (datetime.date.today() - datetime.timedelta(days=90)).strftime('%Y-%m-%d')
@@ -166,9 +189,17 @@ def _fetch_otc_via_finmind(token: str = ""):
             df = pd.DataFrame(j["data"])
             if 'close' in df.columns:
                 df['Date'] = pd.to_datetime(df['date'])
-                return df.sort_values('Date').set_index('Date')[['close']].rename(columns={'close': 'Close'})
+                _result = df.sort_values('Date').set_index('Date')[['close']].rename(columns={'close': 'Close'})
+                _prov_log('_fetch_otc_via_finmind', 'FinMind:TaiwanStockDaily:OTC',
+                          'OTC', f'df:{len(_result)}rows')
+                return _result
     except Exception as e:
         print(f"[OTC] {e}")
+        _prov_log('_fetch_otc_via_finmind', 'FinMind:TaiwanStockDaily:OTC',
+                  'OTC', f'None:exc:{type(e).__name__}')
+        return None
+    _prov_log('_fetch_otc_via_finmind', 'FinMind:TaiwanStockDaily:OTC',
+              'OTC', 'None:no-data')
     return None
 
 
@@ -225,10 +256,14 @@ def fetch_institutional(date_str: str | None = None):
                 elif '自營' in _nm_i:
                     _inst['自營商']['net'] += _net_i
             print(f'[三大法人/BFI82U] ✅ date={_ds} {_inst}')
+            _prov_log('fetch_institutional', 'TWSE:BFI82U(via Squid Proxy)',
+                      date_str or 'recent', f'tuple:date={_ds}')
             return _pkl_put('institutional', (_inst, _ds))
     except Exception as _e_inst:
         print(f'[三大法人/BFI82U] ❌ {type(_e_inst).__name__}: {_e_inst}')
 
+    _prov_log('fetch_institutional', 'TWSE:BFI82U(via Squid Proxy)',
+              date_str or 'recent', 'tuple:empty:all-dates-fail')
     return {}, date_str
 
 
@@ -376,7 +411,10 @@ def fetch_adl(days: int = 60, token=None):
     except Exception:
         pass
 
-    return df.tail(days).reset_index(drop=True)
+    _result_adl = df.tail(days).reset_index(drop=True)
+    _prov_log('fetch_adl', 'yfinance:^TWII(估算 ADL)', f'days={days}',
+              f'df:{len(_result_adl)}rows:proxy={_proxy_n}+exact={_exact_n}')
+    return _result_adl
 
 
 # ── ADL Self-Test(邊界測試)─────────────────────────
@@ -616,4 +654,9 @@ def fetch_margin_balance(date_str=None):
     except Exception as _e_cy:
         print(f'[融資餘額/cnyes] ❌ {type(_e_cy).__name__}: {_e_cy}')
 
+    # fetch_margin_balance: 6 路 fallback 全失敗時 return None
+    # 各成功路徑(FinMind/MI_MARGN/HiStock/Goodinfo/Yahoo/cnyes)的 _pkl_put 已含
+    # source 標記在 print log;此處只記「全敗」的 audit trail。
+    _prov_log('fetch_margin_balance', '6-fallback-all-fail',
+              date_str or 'recent', 'None:all-routes-empty')
     return None
