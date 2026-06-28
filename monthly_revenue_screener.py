@@ -96,9 +96,16 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
             )
         _df["date"] = pd.to_datetime(_df["date"], errors="coerce")
         _df = _df.dropna(subset=["date", "revenue"]).sort_values("date").reset_index(drop=True)
-        return _df[["date", "revenue", "revenue_year", "revenue_month"]] if all(
+        _result = _df[["date", "revenue", "revenue_year", "revenue_month"]] if all(
             c in _df.columns for c in ["revenue_year", "revenue_month"]
         ) else _df[["date", "revenue"]]
+        # v18.356 PR-Q5b S-PROV-1 phase 19
+        try:
+            _result.attrs.setdefault('source', 'FinMind:TaiwanStockMonthRevenue:single')
+            _result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
+        return _result
     except Exception as _e:
         print(f"[mrev-screener] fetch {stock_id} 失敗: {type(_e).__name__}: {_e}")
         return pd.DataFrame()
@@ -149,7 +156,14 @@ def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
             )
         _df["date"] = pd.to_datetime(_df["date"], errors="coerce")
         _df = _df.dropna(subset=["date", "revenue", "stock_id"])
-        return _df[["stock_id", "date", "revenue"]].sort_values(["stock_id", "date"]).reset_index(drop=True)
+        _result_b = _df[["stock_id", "date", "revenue"]].sort_values(["stock_id", "date"]).reset_index(drop=True)
+        # v18.356 PR-Q5b S-PROV-1 phase 19
+        try:
+            _result_b.attrs.setdefault('source', 'FinMind:TaiwanStockMonthRevenue:batch(all-market)')
+            _result_b.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
+        return _result_b
     except Exception as _e:
         print(f"[mrev-screener] batch fetch 失敗: {type(_e).__name__}: {_e}")
         return pd.DataFrame()

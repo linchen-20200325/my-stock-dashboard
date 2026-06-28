@@ -101,6 +101,15 @@ def _fetch_share_capital(sid: str) -> float:
                 try:
                     _v = float(str(_row.get('value', 0) or 0).replace(',', ''))
                     if _v > 0:
+                        # v18.356 PR-Q5b S-PROV-1 phase 19:success-path provenance
+                        try:
+                            import sys as _sys_sc
+                            print(f'[_fetch_share_capital] sid={sid} '
+                                  f'source=FinMind:TaiwanStockBalanceSheet '
+                                  f'fetched_at={_dt_sc.datetime.utcnow().isoformat()}Z '
+                                  f'result=float:{_v}', file=_sys_sc.stderr)
+                        except Exception:
+                            pass
                         return _v
                 except (TypeError, ValueError):
                     continue
@@ -136,6 +145,15 @@ def _fetch_pbratio_from_twse(sid: str) -> float:
         _pb_v = float(_pb)
         if not (0.01 < _pb_v < 100):
             return 0.0
+        # v18.356 PR-Q5b S-PROV-1 phase 19:success-path provenance
+        try:
+            import sys as _sys_pb, datetime as _dt_pb
+            print(f'[_fetch_pbratio_from_twse] sid={sid} '
+                  f'source=TWSE:OpenAPI:BWIBBU_d(via yield_screener) '
+                  f'fetched_at={_dt_pb.datetime.utcnow().isoformat()}Z '
+                  f'result=float:{_pb_v}', file=_sys_pb.stderr)
+        except Exception:
+            pass
         return _pb_v
     except Exception as _e:
         import sys as _sys
