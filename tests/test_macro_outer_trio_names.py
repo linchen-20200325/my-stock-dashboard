@@ -21,7 +21,7 @@ import ast
 
 
 def _render_tab_macro_def() -> ast.FunctionDef:
-    tree = ast.parse(open("tab_macro.py", encoding="utf-8").read())
+    tree = ast.parse(open("src/ui/tabs/tab_macro.py", encoding="utf-8").read())
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name == "render_tab_macro":
             return node
@@ -72,5 +72,5 @@ def test_outer_trio_names_bound_in_render_scope():
 
 def test_concfut_alias_points_to_concurrent_futures_timeouterror():
     """確認 _ConcFutTimeout 來自 concurrent.futures.TimeoutError（非別的東西誤綁）。"""
-    src = open("tab_macro.py", encoding="utf-8").read()
+    src = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
     assert "from concurrent.futures import TimeoutError as _ConcFutTimeout" in src

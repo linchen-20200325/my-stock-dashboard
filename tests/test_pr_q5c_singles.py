@@ -25,66 +25,67 @@ class TestQ5cMarkers(unittest.TestCase):
             return f.read()
 
     def test_macro_snapshot_vix(self):
-        src = self._read('macro_snapshot.py')
+        src = self._read('src/data/macro/macro_snapshot.py')  # P1-2 v18.373:搬到 L1
         self.assertIn("'source': 'yfinance:^VIX:3mo:1d'", src)
 
     def test_chip_radar(self):
-        src = self._read('chip_radar.py')
+        src = self._read('src/ui/tabs/chip_radar.py')
         self.assertIn('[fetch_chip_concentration]', src)
         self.assertIn('norway.twsthr.info', src)
 
     def test_update_etf_managers(self):
-        src = self._read('update_etf_managers.py')
+        # v18.359 F-2 update_etf_managers.py 已搬入 scripts/
+        src = self._read('scripts/update_etf_managers.py')
         self.assertIn('[fetch_manager]', src)
         self.assertIn('MoneyDJ:Basic(multi-page)', src)
 
     def test_market_strategy(self):
-        src = self._read('market_strategy.py')
+        src = self._read('src/services/market_strategy.py')
         self.assertIn("'source': 'tw_macro.fetch_finmind_foreign_investor'", src)
 
     def test_hot_money(self):
-        src = self._read('hot_money.py')
+        src = self._read('src/ui/tabs/hot_money.py')
         self.assertIn('FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign', src)
 
     def test_risk_radar(self):
-        src = self._read('risk_radar.py')
+        src = self._read('src/compute/risk/risk_radar.py')
         self.assertIn("'CBOE:{short_name}_History.csv'", src) or self.assertIn(
             'CBOE:', src)
 
     def test_tab_edu(self):
-        src = self._read('tab_edu.py')
+        src = self._read('src/ui/tabs/tab_edu.py')
         self.assertIn("'FRED:{series_id}:units={units}:months={months}'", src)
 
     def test_tab_etf_margin_simulator(self):
-        src = self._read('tab_etf_margin_simulator.py')
+        src = self._read('src/ui/tabs/tab_etf_margin_simulator.py')
         self.assertIn("'yfinance:{symbol}:{years}y:auto_adjust'", src)
 
 
 class TestImports(unittest.TestCase):
 
     def test_macro_snapshot(self):
-        import macro_snapshot  # noqa
+        from src.data.macro import macro_snapshot  # noqa  # P1-2 v18.373:搬到 L1
 
     def test_chip_radar(self):
-        import chip_radar  # noqa
+        from src.ui.tabs import chip_radar  # noqa
 
     def test_update_etf_managers(self):
-        import update_etf_managers  # noqa
+        from scripts import update_etf_managers  # noqa
 
     def test_market_strategy(self):
-        import market_strategy  # noqa
+        from src.services import market_strategy  # noqa
 
     def test_hot_money(self):
-        import hot_money  # noqa
+        from src.ui.tabs import hot_money  # noqa
 
     def test_risk_radar(self):
-        import risk_radar  # noqa
+        from src.compute.risk import risk_radar  # noqa
 
     def test_tab_edu(self):
-        import tab_edu  # noqa
+        from src.ui.tabs import tab_edu  # noqa
 
     def test_tab_etf_margin_simulator(self):
-        import tab_etf_margin_simulator  # noqa
+        from src.ui.tabs import tab_etf_margin_simulator  # noqa
 
 
 if __name__ == "__main__":

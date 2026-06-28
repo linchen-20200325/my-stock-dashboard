@@ -12,7 +12,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-import monthly_revenue_screener as mrs
+from src.ui.tabs import monthly_revenue_screener as mrs
 
 
 # ════════════════════════════════════════════════════════════════════

@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from macro_validation_tw import (
+from src.compute.macro import (
     detect_twii_crisis_events,
     load_twii_close_from_parquet,
 )
@@ -106,25 +106,26 @@ def test_detect_twii_multiple_events_with_recovery():
 # UI source-level checks
 # ════════════════════════════════════════════════════════════════
 def test_ui_section_in_tab_macro_source():
-    """tab_macro.py 必須 import render_history_validation_section 且呼叫。"""
-    src = (Path(__file__).parent.parent / "tab_macro.py").read_text(encoding="utf-8")
+    """src/ui/tabs/tab_macro.py 必須 import render_history_validation_section 且呼叫。"""
+    src = (Path(__file__).parent.parent / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
     assert "from tab_macro_validation import render_history_validation_section" in src
     assert "render_history_validation_section()" in src
 
 def test_ui_module_exposes_render_function():
-    """tab_macro_validation.py 必須 export render_history_validation_section."""
-    import tab_macro_validation as tmv
+    """src/ui/tabs/tab_macro_validation.py 必須 export render_history_validation_section."""
+    from src.ui.tabs import tab_macro_validation as tmv
     assert hasattr(tmv, "render_history_validation_section")
     assert callable(tmv.render_history_validation_section)
 
 def test_ui_validation_section_before_ai_verdict():
-    """v18.156 user 要求：歷史驗證 section（十）必須在 AI 總裁決（十一）之前。"""
-    src = (Path(__file__).parent.parent / "tab_macro.py").read_text(encoding="utf-8")
+    """v18.156 user 要求：歷史驗證 section（十）必須在 AI 總裁決（十一）之前。
+    F-7.1 B-3:§十一 section_header 搬至 macro/section_ai.py;改檢 render_section_ai() call 位置。"""
+    src = (Path(__file__).parent.parent / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
     idx_validation = src.find("render_history_validation_section()")
-    idx_ai_verdict = src.find("section_header('十一'")
+    idx_ai_verdict = src.find("render_section_ai(")
     assert idx_validation > 0 and idx_ai_verdict > 0
     assert idx_validation < idx_ai_verdict, \
-        "歷史驗證（section 十）應在 AI 總裁決（section 十一）之前"
+        "歷史驗證（section 十）應在 AI 總裁決（section 十一,F-7.1 B-3 抽出)之前"
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

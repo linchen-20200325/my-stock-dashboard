@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from inst_sanity import (
+from src.compute.risk import (
     is_inst_net_outlier,
     flag_inst_net_outliers_batch,
     InstNetSanityResult,

@@ -16,7 +16,7 @@ sys.modules.setdefault("streamlit", _st)
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from leading_indicators import (
+from src.data.macro import (
     roc_to_ymd, ymd_to_slash, ymd_to_dash, ymd_display,
     to_num, first_num, months_in_range, extract_date,
     find_data_table, expand_table_elem,
@@ -322,7 +322,7 @@ class TestStaleCacheHelpers(unittest.TestCase):
 
     def test_load_existing_stale_pickle(self):
         """檔案存在 → 返回 (df, age_min)。"""
-        from leading_indicators import _load_stale_pickle
+        from src.data.macro import _load_stale_pickle
         _df, _age = _load_stale_pickle(self._ck)
         self.assertIsNotNone(_df)
         self.assertEqual(len(_df), 1)
@@ -331,7 +331,7 @@ class TestStaleCacheHelpers(unittest.TestCase):
 
     def test_load_missing_returns_none(self):
         """檔案不存在 → 返回 (None, None) 不爆。"""
-        from leading_indicators import _load_stale_pickle
+        from src.data.macro import _load_stale_pickle
         _df, _age = _load_stale_pickle('/nonexistent/path/no.pkl')
         self.assertIsNone(_df)
         self.assertIsNone(_age)
@@ -342,14 +342,14 @@ class TestStaleCacheHelpers(unittest.TestCase):
         _bad_ck = os.path.join(self._tmpdir, 'bad.pkl')
         with open(_bad_ck, 'wb') as _f:
             _f.write(b'not a pickle')
-        from leading_indicators import _load_stale_pickle
+        from src.data.macro import _load_stale_pickle
         _df, _age = _load_stale_pickle(_bad_ck)
         self.assertIsNone(_df)
         self.assertIsNone(_age)
 
     def test_mark_stale_sets_attrs(self):
         """標 is_stale=True + stale_age_min 到 df.attrs。"""
-        from leading_indicators import _mark_stale
+        from src.data.macro import _mark_stale
         _df = pd.DataFrame([{'x': 1}])
         _out = _mark_stale(_df, 90.5)
         self.assertTrue(_out.attrs.get('is_stale'))
@@ -357,12 +357,12 @@ class TestStaleCacheHelpers(unittest.TestCase):
 
     def test_mark_stale_handles_none(self):
         """None df → 返回 None,不爆。"""
-        from leading_indicators import _mark_stale
+        from src.data.macro import _mark_stale
         self.assertIsNone(_mark_stale(None, 30.0))
 
     def test_mark_stale_without_age(self):
         """age_min=None → 只標 is_stale,不寫 age。"""
-        from leading_indicators import _mark_stale
+        from src.data.macro import _mark_stale
         _df = pd.DataFrame([{'x': 1}])
         _out = _mark_stale(_df, None)
         self.assertTrue(_out.attrs.get('is_stale'))

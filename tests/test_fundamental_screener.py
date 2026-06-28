@@ -1,7 +1,7 @@
 """v18.184 fundamental_screener 純函式單元測試（不打網路）。"""
 from __future__ import annotations
 
-from fundamental_screener import (
+from src.compute.screener import (
     ConditionResult,
     _safe_num,
     check_eps_growth_or_turnaround,

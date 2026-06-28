@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-import risk_radar as rr
+from src.compute.risk import risk_radar as rr
 
 
 # ──────────────────────────────────────────────────────────────
@@ -353,24 +353,24 @@ class TestCboeCsvHelper:
 
     def test_parses_cboe_csv(self):
         csv = "DATE,OPEN,HIGH,LOW,CLOSE\n2026-01-02,15.0,16.0,14.5,15.5\n2026-01-03,15.5,16.5,15.0,16.0\n"
-        with patch("proxy_helper.fetch_url", return_value=self._mk_resp(csv)):
+        with patch("src.data.proxy.proxy_helper.fetch_url", return_value=self._mk_resp(csv)):
             s = rr._fetch_cboe_csv("VIX3M")
         assert len(s) == 2
         assert abs(float(s.iloc[-1]) - 16.0) < 1e-6
 
     def test_http_failure_returns_empty(self):
-        with patch("proxy_helper.fetch_url", return_value=None):
+        with patch("src.data.proxy.proxy_helper.fetch_url", return_value=None):
             s = rr._fetch_cboe_csv("CPC")
         assert s.empty
 
     def test_status_500_returns_empty(self):
-        with patch("proxy_helper.fetch_url",
+        with patch("src.data.proxy.proxy_helper.fetch_url",
                    return_value=self._mk_resp("Server Error", status=500)):
             s = rr._fetch_cboe_csv("CPC")
         assert s.empty
 
     def test_missing_close_column_returns_empty(self):
-        with patch("proxy_helper.fetch_url",
+        with patch("src.data.proxy.proxy_helper.fetch_url",
                    return_value=self._mk_resp("DATE,OPEN\n2026-01-02,15.0\n")):
             s = rr._fetch_cboe_csv("VIX3M")
         assert s.empty
@@ -392,14 +392,14 @@ class TestResolveVix3m:
         cboe_resp.status_code = 200
         cboe_resp.text = csv
         with patch.object(rr, "fetch_yf_close", return_value=pd.Series(dtype=float)), \
-             patch("proxy_helper.fetch_url", return_value=cboe_resp):
+             patch("src.data.proxy.proxy_helper.fetch_url", return_value=cboe_resp):
             s, src = rr._resolve_vix3m()
         assert "CBOE VIX3M_History.csv" in src
         assert not s.empty
 
     def test_all_sources_fail_returns_empty(self):
         with patch.object(rr, "fetch_yf_close", return_value=pd.Series(dtype=float)), \
-             patch("proxy_helper.fetch_url", return_value=None):
+             patch("src.data.proxy.proxy_helper.fetch_url", return_value=None):
             s, src = rr._resolve_vix3m()
         assert s.empty
         assert src == ""
@@ -424,7 +424,7 @@ class TestVixTermStructCboeFallback:
                                  index=pd.to_datetime(["2026-01-02", "2026-01-03"]))
             return pd.Series(dtype=float)  # ^VIX3M / ^VXV 都空
         with patch.object(rr, "fetch_yf_close", side_effect=_yf_mock), \
-             patch("proxy_helper.fetch_url", return_value=cboe_resp):
+             patch("src.data.proxy.proxy_helper.fetch_url", return_value=cboe_resp):
             d = rr._signal_vix_term_struct()
         assert "CBOE VIX3M_History.csv" in d["label"]
         # 15/16=0.9375 平靜 / 16/17=0.941 平靜

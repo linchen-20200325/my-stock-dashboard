@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from hot_money import (
+from src.ui.tabs import (
     DIVERGENCE_STATES,
     STATE_TEXT,
     _twd_df_to_series,
@@ -201,7 +201,7 @@ def test_twd_df_to_series_no_close_column_returns_empty():
 def test_hot_money_module_imports_cleanly():
     """整個 hot_money + render 函式 import 不應炸（TypedDict closed= 等）。"""
     import importlib
-    import hot_money as _hm
+    from src.ui.tabs import hot_money as _hm
     importlib.reload(_hm)
     assert callable(_hm.render_hot_money_section)
     assert callable(_hm.build_signals)

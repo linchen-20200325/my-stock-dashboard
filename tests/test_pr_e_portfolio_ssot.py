@@ -15,12 +15,12 @@ class TestEtfVcpMinDaysSSOT:
         assert st_mod.ETF_VCP_MIN_DAYS == 210
 
     def test_no_inline_in_etf_calc(self):
-        src = open('etf_calc.py', encoding='utf-8').read()
+        src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
         assert 'len(df) < 210' not in src
         assert 'ETF_VCP_MIN_DAYS' in src
 
     def test_no_inline_in_etf_tab_single(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert 'len(df) < 210' not in src
         assert 'ETF_VCP_MIN_DAYS' in src
 
@@ -41,7 +41,7 @@ class TestEtfLiquiditySSOT:
         assert st_mod.ETF_AUM_LOW_YI < st_mod.ETF_AUM_FAIR_YI
 
     def test_no_inline_in_etf_calc(self):
-        src = open('etf_calc.py', encoding='utf-8').read()
+        src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
         # 函式內 inline 已退役
         assert '_avg < 500' not in src
         assert '_avg < 1000' not in src
@@ -57,7 +57,7 @@ class TestEtfPortfolioNoSilentExcept:
 
     def test_no_bare_pass_in_portfolio(self):
         """etf_tab_portfolio 不應有「except Exception: pass」(裸 pass 模式)。"""
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         # 常見裸 pass 縮排:8/12/16/20 spaces
         assert 'except Exception:\n            pass' not in src
         assert 'except Exception:\n                pass' not in src
@@ -65,7 +65,7 @@ class TestEtfPortfolioNoSilentExcept:
 
     def test_diagnostic_prints_present(self):
         """補 log 後應該至少有 5 個 [etf_tab_portfolio] print 標籤。"""
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert src.count('[etf_tab_portfolio]') >= 5
 
 
@@ -75,7 +75,7 @@ class TestLiquidityScoreBehavior:
     def test_normal_liquidity(self):
         """高均量 + 高 AUM → 🟢"""
         import pandas as pd
-        from etf_calc import calc_liquidity_score
+        from src.compute.etf import calc_liquidity_score
         # 假造 30 日 5000 張均量
         df = pd.DataFrame({'Volume': [5_000_000] * 30})  # 5M 股 = 5000 張
         result = calc_liquidity_score(df, aum=20_000_000_000)  # 200 億
@@ -84,7 +84,7 @@ class TestLiquidityScoreBehavior:
     def test_low_volume_red(self):
         """均量 < 500 張 → 🔴"""
         import pandas as pd
-        from etf_calc import calc_liquidity_score
+        from src.compute.etf import calc_liquidity_score
         df = pd.DataFrame({'Volume': [200_000] * 30})  # 200 張
         result = calc_liquidity_score(df, aum=20_000_000_000)
         assert result['level'] == '🔴'
@@ -92,7 +92,7 @@ class TestLiquidityScoreBehavior:
     def test_low_aum_red(self):
         """AUM < 5 億 → 🔴"""
         import pandas as pd
-        from etf_calc import calc_liquidity_score
+        from src.compute.etf import calc_liquidity_score
         df = pd.DataFrame({'Volume': [5_000_000] * 30})
         result = calc_liquidity_score(df, aum=300_000_000)  # 3 億
         assert result['level'] == '🔴'
@@ -100,7 +100,7 @@ class TestLiquidityScoreBehavior:
     def test_insufficient_data(self):
         """資料不足(< 5 日)→ ⚪"""
         import pandas as pd
-        from etf_calc import calc_liquidity_score
+        from src.compute.etf import calc_liquidity_score
         df = pd.DataFrame({'Volume': [5_000_000] * 3})
         result = calc_liquidity_score(df, aum=20_000_000_000)
         assert result['level'] == '⚪'

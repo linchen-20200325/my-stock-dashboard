@@ -8,7 +8,7 @@
 import pandas as pd
 import pytest
 
-from etf_calc import (
+from src.compute.etf import (
     build_holdings_overlap_matrix,
     calc_holdings_overlap_pct,
     calc_jaccard_overlap,

@@ -14,7 +14,7 @@ import ast
 _TARGETS = ("_on_refresh_click", "_on_force_clear_click", "_macro_session_reset")
 
 
-def _func_nodes(p="tab_macro.py"):
+def _func_nodes(p="src/ui/tabs/macro/handlers.py"):  # v18.364 F-7.1 B-1:def 已抽至 handlers.py
     tree = ast.parse(open(p, encoding="utf-8").read())
     return {
         n.name: n
@@ -68,7 +68,7 @@ class TestScopedNormalRefresh:
 
     def test_global_cache_clear_only_in_force(self):
         """全檔真實 st.cache_data.clear() 呼叫只能有 1 處（強制重抓）。"""
-        tree = ast.parse(open("tab_macro.py", encoding="utf-8").read())
+        tree = ast.parse(open("src/ui/tabs/macro/handlers.py", encoding="utf-8").read())  # v18.364 F-7.1 B-1
         cnt = sum(
             1 for n in ast.walk(tree)
             if isinstance(n, ast.Attribute) and n.attr == "clear"
@@ -79,7 +79,7 @@ class TestScopedNormalRefresh:
 
 class TestTwoButtons:
     def test_both_button_keys_present(self):
-        src = open("tab_macro.py", encoding="utf-8").read()
+        src = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
         assert "key='cl_refresh'" in src, "缺正常更新按鈕"
         assert "key='cl_force_refresh'" in src, "缺強制重抓按鈕"
         assert "on_click=_on_refresh_click" in src

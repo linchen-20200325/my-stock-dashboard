@@ -34,3 +34,7 @@ desktop.ini
 # Debug protocol artifacts (cleaned up at end of session)
 *.bak
 debug.log
+
+# Runtime data cache (regenerated at runtime; keep dir via .gitkeep)
+data_cache/*.parquet
+data_cache/metadata.json

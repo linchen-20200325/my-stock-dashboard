@@ -15,7 +15,7 @@ import unittest
 class TestFetchAdlExtracted(unittest.TestCase):
 
     def test_fetch_adl_importable(self):
-        from daily_data_fetchers import fetch_adl  # noqa
+        from src.data.daily import fetch_adl  # noqa
         import inspect
         sig = inspect.signature(fetch_adl)
         self.assertIn('days', sig.parameters)
@@ -23,13 +23,13 @@ class TestFetchAdlExtracted(unittest.TestCase):
         self.assertIn('token', sig.parameters)
 
     def test_selftest_importable(self):
-        from daily_data_fetchers import _adl_selftest  # noqa
+        from src.data.daily import _adl_selftest  # noqa
         # 直接執行內建 selftest(不抓網路,純解析邏輯)
         _adl_selftest()  # 若有 regression assert fail 會炸
 
     def test_reexport_identity(self):
-        from daily_checklist import fetch_adl as _a1, _adl_selftest as _s1
-        from daily_data_fetchers import fetch_adl as _a2, _adl_selftest as _s2
+        from src.services import fetch_adl as _a1, _adl_selftest as _s1
+        from src.data.daily import fetch_adl as _a2, _adl_selftest as _s2
         self.assertIs(_a1, _a2)
         self.assertIs(_s1, _s2)
 

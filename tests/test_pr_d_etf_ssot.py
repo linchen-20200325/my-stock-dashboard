@@ -19,7 +19,7 @@ class TestEtfBasicThresholds:
         assert st_mod.ETF_TRACKING_ERROR_MAX_PCT == 1.5
 
     def test_no_inline_in_etf_tab_single(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert '_div_yoy < -10' not in src
         assert '_cagr3 >= 7' not in src
         assert '_incept_yrs >= 3' not in src
@@ -30,7 +30,7 @@ class TestEtfBasicThresholds:
         assert 'ETF_TRACKING_ERROR_MAX_PCT' in src
 
     def test_no_cagr_inline_in_grp_compare(self):
-        src = open('etf_tab_grp_compare.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_grp_compare.py', encoding='utf-8').read()
         assert 'cagr_3y >= 7' not in src  # 改用 SSOT
 
 
@@ -50,7 +50,7 @@ class TestEtfPremiumThresholds:
                 < st_mod.ETF_PREMIUM_HIGH_PREMIUM_PCT)
 
     def test_no_inline_in_single(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert '_pct <= -2' not in src
         assert '_pct <= -0.5' not in src
         assert '_pct <= 1.0' not in src
@@ -77,7 +77,7 @@ class TestEtfSigmaThresholds:
     def test_no_inline_in_single(self):
         """v18.335 PR-H3:single 已改用 classify_etf_deep_sigma SSOT,
         ETF_SIGMA_* 常數由 etf_helpers 內部消費(不再直引)。"""
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert '_z <= -2' not in src
         assert '_z <= -1' not in src
         assert '_z <= 1' not in src
@@ -85,7 +85,7 @@ class TestEtfSigmaThresholds:
         # single 改用 classify_etf_deep_sigma(PR-H3)
         assert 'classify_etf_deep_sigma' in src
         # 常數仍被 etf_helpers SSOT 消費
-        helpers_src = open('etf_helpers.py', encoding='utf-8').read()
+        helpers_src = open('src/compute/etf/etf_helpers.py', encoding='utf-8').read()
         assert 'ETF_SIGMA_DEEP_BUY' in helpers_src
         assert 'ETF_SIGMA_STOP_PROFIT' in helpers_src
 
@@ -94,7 +94,7 @@ class TestEtfHelpersSSOT:
     """P1 — yield_valuation_zone / dividend_health_label 抽 etf_helpers SSOT。"""
 
     def test_functions_in_etf_helpers(self):
-        import etf_helpers
+        from src.compute.etf import etf_helpers
         assert hasattr(etf_helpers, 'yield_valuation_zone'), \
             'etf_helpers 缺 yield_valuation_zone()'
         assert hasattr(etf_helpers, 'dividend_health_label'), \
@@ -102,7 +102,7 @@ class TestEtfHelpersSSOT:
 
     def test_grp_compare_uses_ssot(self):
         """組合比較 Tab 走 SSOT,無 file-local 重複定義。"""
-        src = open('etf_tab_grp_compare.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_grp_compare.py', encoding='utf-8').read()
         assert 'def _yield_valuation_zone(' not in src
         assert 'def _dividend_health_label(' not in src
         # import alias 形式
@@ -110,7 +110,7 @@ class TestEtfHelpersSSOT:
         assert 'dividend_health_label' in src
 
     def test_yield_valuation_zone_behavior(self):
-        from etf_helpers import yield_valuation_zone
+        from src.compute.etf import yield_valuation_zone
         # 7%+ 強烈買進
         assert '強烈買進' in yield_valuation_zone(7.5, 5.0)
         # 3%- 獲利了結
@@ -124,7 +124,7 @@ class TestEtfHelpersSSOT:
         assert yield_valuation_zone(5.0, 0) == '—'
 
     def test_dividend_health_label_behavior(self):
-        from etf_helpers import dividend_health_label
+        from src.compute.etf import dividend_health_label
         # 含息 >= 殖利率 → 雙贏
         assert '雙贏' in dividend_health_label(5.0, 10.0, None)
         # 含息 < 殖利率 → 吃本金
@@ -142,12 +142,12 @@ class TestNoBareExceptInETF:
 
     def test_no_bare_pass_in_etf_tab_single(self):
         """etf_tab_single 不再有「except Exception: pass」(裸 pass)。"""
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         # 裸 except + pass(允許 except 加 log/print)
         assert 'except Exception:\n            pass' not in src
         assert 'except Exception:\n                pass' not in src
 
     def test_no_bare_pass_in_etf_tab_grp_compare(self):
-        src = open('etf_tab_grp_compare.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_grp_compare.py', encoding='utf-8').read()
         assert 'except Exception:\n            pass' not in src
         assert 'except Exception:\n                pass' not in src

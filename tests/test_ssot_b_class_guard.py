@@ -40,8 +40,8 @@ class TestDivergenceHarmonized:
         assert not hasattr(ht, "HEALTH_LABEL_MID_MIN"), "健康度 60 分歧變體應已移除"
 
     def test_consumers_use_standard(self):
-        tm = _src("tab_macro.py")
-        ts = _src("tab_stock.py")
+        tm = _src("src/ui/tabs/tab_macro.py")
+        ts = _src("src/ui/tabs/tab_stock.py")
         # 融資 SQL 卡片 + 廣度 KPI 皆改用標準常數，不得殘留分歧
         assert "MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI" not in tm
         assert "BREADTH_KPI_YELLOW_PCT" not in tm
@@ -57,19 +57,19 @@ class TestDivergenceHarmonized:
 
 class TestVixAlignedToC2:
     def test_macro_compass_vix_yellow_is_22(self):
-        from macro_core import MACRO_THRESHOLDS
+        from src.data.macro import MACRO_THRESHOLDS
         assert MACRO_THRESHOLDS['VIX']['yellow_above'] == 22
         assert MACRO_THRESHOLDS['VIX']['red_above'] == 30
-        src = _src("macro_core.py")
+        src = _src("src/data/macro/macro_core.py")
         assert "if v > 25:" not in src
         assert "MACRO_THRESHOLDS['VIX']['yellow_above']" in src
 
 
 class TestConsumersWired:
     def test_no_inline_residual(self):
-        tm = _src("tab_macro.py")
-        dc = _src("daily_checklist.py")
-        mc = _src("macro_core.py")
+        tm = _src("src/ui/tabs/tab_macro.py")
+        dc = _src("src/services/daily_checklist.py")
+        mc = _src("src/data/macro/macro_core.py")
         # 融資黃線
         assert not re.search(r"(>|<=)\s*2500(?!\s*億)", tm)
         assert not re.search(r"margin>2500", dc)

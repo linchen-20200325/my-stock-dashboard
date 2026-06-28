@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-import tw_macro
+from src.data.macro import tw_macro
 
 
 def _mk_resp(json_data=None, content: bytes | None = None,

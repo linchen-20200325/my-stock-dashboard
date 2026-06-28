@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-import tab_macro
+from src.ui.tabs import tab_macro
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -35,13 +35,18 @@ def _fred(vals: list[float], base_date: str = "2026-06-01") -> pd.DataFrame:
 
 @pytest.fixture
 def stub_st(monkeypatch):
-    """把 tab_macro 內 st.* 替換成 MagicMock，避免 streamlit runtime。"""
+    """把 tab_macro + helpers 內 st.* 替換成 MagicMock，避免 streamlit runtime。"""
     fake = MagicMock()
     fake.columns.return_value = (MagicMock(), MagicMock(), MagicMock(),
                                   MagicMock(), MagicMock())
     fake.expander.return_value.__enter__ = lambda *_a, **_k: MagicMock()
     fake.expander.return_value.__exit__ = lambda *_a, **_k: False
     monkeypatch.setattr(tab_macro, 'st', fake)
+    # v18.363 F-7.1a:_render_global_risk_bucket / _render_china_drag_panel 等
+    #   helper 已抽至 src.ui.tabs.macro.helpers,該模組有自己 import streamlit as st。
+    #   mock 必須同時打 helpers,否則 fn 內 st.markdown 不走 fake。
+    from src.ui.tabs.macro import helpers as _macro_helpers
+    monkeypatch.setattr(_macro_helpers, 'st', fake)
     return fake
 
 
@@ -75,8 +80,8 @@ def _bear_slow_v() -> dict:
 class TestSlowVerdictNone:
     def test_no_slow_verdict_no_synth_banner(self, stub_st):
         """slow_verdict=None → 10 燈渲染但不呼叫 synth banner。"""
-        with patch('risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
-             patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
+        with patch('src.compute.risk.risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
+             patch('src.compute.risk.risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
             tab_macro._render_global_risk_bucket(_FRED_KEY, slow_verdict=None)
 
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
@@ -94,8 +99,8 @@ class TestSlowVerdictProvided:
     def test_calm_radar_with_bull_slow_adopts(self, stub_st):
         """雷達平靜 + 慢樂觀 → adopt_slow，level 含原 slow level。"""
         # 所有 yf 抓平靜資料 → 雷達應為平靜
-        with patch('risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
-             patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
+        with patch('src.compute.risk.risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
+             patch('src.compute.risk.risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
             tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_calm_slow_v())
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
@@ -115,8 +120,8 @@ class TestSlowVerdictProvided:
                 return _yf([105.0] * 7 + [135.0])  # 紅
             return _yf([100.0] * 30)  # 其他保持平靜
 
-        with patch('risk_radar.fetch_yf_close', side_effect=_yf_red), \
-             patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
+        with patch('src.compute.risk.risk_radar.fetch_yf_close', side_effect=_yf_red), \
+             patch('src.compute.risk.risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
             tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_calm_slow_v())
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
@@ -140,8 +145,8 @@ class TestSlowVerdictProvided:
                 return _yf([100.0] * 20 + [97.0])
             return _yf([100.0] * 30)
 
-        with patch('risk_radar.fetch_yf_close', side_effect=_yf_red), \
-             patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.82])):  # HY +32bp 紅
+        with patch('src.compute.risk.risk_radar.fetch_yf_close', side_effect=_yf_red), \
+             patch('src.compute.risk.risk_radar.fetch_fred', return_value=_fred([3.5, 3.82])):  # HY +32bp 紅
             tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_calm_slow_v())
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
@@ -159,8 +164,8 @@ class TestSlowVerdictDefense:
     def test_partial_slow_verdict_uses_defaults(self, stub_st):
         """slow_verdict 缺欄位 → fallback 不爆。"""
         partial = {'level': '🟡 過熱期'}  # 缺 score/color/icon/action
-        with patch('risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
-             patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
+        with patch('src.compute.risk.risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
+             patch('src.compute.risk.risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
             tab_macro._render_global_risk_bucket(_FRED_KEY, slow_verdict=partial)
         # 不爆即 pass — 應仍渲染合議 banner
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
@@ -170,9 +175,9 @@ class TestSlowVerdictDefense:
 
     def test_synth_exception_does_not_break(self, stub_st):
         """synth 拋例外不應中斷整體渲染（catch print）。"""
-        with patch('risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
-             patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])), \
-             patch('risk_radar.synthesize_dual_verdict',
+        with patch('src.compute.risk.risk_radar.fetch_yf_close', return_value=_yf([15.0] * 8)), \
+             patch('src.compute.risk.risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])), \
+             patch('src.compute.risk.risk_radar.synthesize_dual_verdict',
                    side_effect=RuntimeError('synth boom')):
             tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_calm_slow_v())
@@ -191,8 +196,8 @@ class TestSlowVerdictDefense:
 class TestAppTestGuardWithSlowVerdict:
     def test_short_key_skips_even_with_slow_verdict(self, stub_st):
         """短 key + slow_verdict → 仍然完全跳過渲染（不執行任何 markdown）。"""
-        with patch('risk_radar.fetch_yf_close') as _m_yf, \
-             patch('risk_radar.fetch_fred') as _m_fred:
+        with patch('src.compute.risk.risk_radar.fetch_yf_close') as _m_yf, \
+             patch('src.compute.risk.risk_radar.fetch_fred') as _m_fred:
             tab_macro._render_global_risk_bucket('short', slow_verdict=_calm_slow_v())
             _m_yf.assert_not_called()
             _m_fred.assert_not_called()
@@ -218,8 +223,8 @@ class TestWarningBranchWithSlowVerdict:
                 return _yf([5500.0] * 7 + [5390.0])  # 黃 -2%
             return _yf([100.0] * 30)
 
-        with patch('risk_radar.fetch_yf_close', side_effect=_yf_yellow), \
-             patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
+        with patch('src.compute.risk.risk_radar.fetch_yf_close', side_effect=_yf_yellow), \
+             patch('src.compute.risk.risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
             tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_calm_slow_v())
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
@@ -242,8 +247,8 @@ class TestWarningBranchWithSlowVerdict:
                 return _yf([5500.0] * 7 + [5390.0])
             return _yf([100.0] * 30)
 
-        with patch('risk_radar.fetch_yf_close', side_effect=_yf_yellow), \
-             patch('risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
+        with patch('src.compute.risk.risk_radar.fetch_yf_close', side_effect=_yf_yellow), \
+             patch('src.compute.risk.risk_radar.fetch_fred', return_value=_fred([3.5, 3.51])):
             tab_macro._render_global_risk_bucket(_FRED_KEY,
                                                   slow_verdict=_bear_slow_v())
         md_calls = [c.args[0] for c in stub_st.markdown.call_args_list
@@ -263,7 +268,7 @@ class TestThirdAxisOverlay:
     """
 
     def _call(self, **kw):
-        from risk_radar import synthesize_dual_verdict
+        from src.compute.risk import synthesize_dual_verdict
         defaults = dict(
             slow_level="景氣擴張",
             slow_score=6.0,

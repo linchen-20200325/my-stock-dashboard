@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-import tab_stock
+from src.ui.tabs import tab_stock
 
 
 def test_returns_dict_on_none():

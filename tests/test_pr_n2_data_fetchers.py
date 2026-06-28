@@ -34,30 +34,30 @@ class TestDailyDataFetchersModule(unittest.TestCase):
         return False
 
     def test_module_imports(self):
-        import daily_data_fetchers  # noqa
-        from daily_data_fetchers import fetch_single, fetch_flow_snapshot  # noqa
+        from src.data.daily import daily_data_fetchers  # noqa
+        from src.data.daily import fetch_single, fetch_flow_snapshot  # noqa
 
     def test_no_module_level_streamlit_import(self):
         """daily_data_fetchers module-level 不依賴 streamlit。
         允許 function-local lazy import(EX-CACHE-1 例外:條件 @st.cache_data 或
         secrets fallback,本檔 PR-N3 起 _get_finmind_token 用 lazy 模式)。
         """
-        with open('daily_data_fetchers.py', encoding='utf-8') as f:
+        with open('src/data/daily/daily_data_fetchers.py', encoding='utf-8') as f:
             src = f.read()
         assert not self._has_module_level_import(src, 'streamlit'), \
             'daily_data_fetchers module-level 不應 import streamlit(允許 function-local)'
 
     def test_reexport_identity(self):
         """daily_checklist 的 fetch_single/fetch_flow_snapshot IS 新模組同物件。"""
-        from daily_checklist import fetch_single as _s1, fetch_flow_snapshot as _f1
-        from daily_data_fetchers import fetch_single as _s2, fetch_flow_snapshot as _f2
+        from src.services import fetch_single as _s1, fetch_flow_snapshot as _f1
+        from src.data.daily import fetch_single as _s2, fetch_flow_snapshot as _f2
         self.assertIs(_s1, _s2)
         self.assertIs(_f1, _f2)
 
     def test_fetch_single_signature(self):
         """fetch_single 仍接受 symbol + period 參數。"""
         import inspect
-        from daily_data_fetchers import fetch_single
+        from src.data.daily import fetch_single
         sig = inspect.signature(fetch_single)
         params = list(sig.parameters.keys())
         self.assertEqual(params, ['symbol', 'period'])
@@ -66,7 +66,7 @@ class TestDailyDataFetchersModule(unittest.TestCase):
     def test_fetch_flow_snapshot_signature(self):
         """fetch_flow_snapshot 仍接受 period 參數。"""
         import inspect
-        from daily_data_fetchers import fetch_flow_snapshot
+        from src.data.daily import fetch_flow_snapshot
         sig = inspect.signature(fetch_flow_snapshot)
         params = list(sig.parameters.keys())
         self.assertEqual(params, ['period'])

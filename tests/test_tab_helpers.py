@@ -1,4 +1,4 @@
-"""tab_helpers.py 純函式 unit test — Phase 7A。"""
+"""src/ui/tabs/tab_helpers.py 純函式 unit test — Phase 7A。"""
 from __future__ import annotations
 
 import math
@@ -6,7 +6,7 @@ import math
 import pandas as pd
 import pytest
 
-from tab_helpers import (
+from src.ui.tabs import (
     final_recommendation,
     format_condition_emoji,
     parse_cash_flow_ratio,

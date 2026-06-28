@@ -29,7 +29,7 @@ class TestGrpSSOTConstants:
 
 class TestScoringEngineGradeSSOT:
     def test_grade_uses_ssot_not_inline(self):
-        import scoring_engine
+        from src.compute.scoring import scoring_engine
         src = open(scoring_engine.__file__, encoding="utf-8").read()
         assert "MULTIFACTOR_GRADE_A_MIN" in src
         assert "MULTIFACTOR_GRADE_B_MIN" in src
@@ -40,14 +40,14 @@ class TestScoringEngineGradeSSOT:
 
 class TestOldScoreRetired:
     def test_no_old_score_variable_or_column(self):
-        import tab_stock_grp
+        from src.ui.tabs import tab_stock_grp
         src = open(tab_stock_grp.__file__, encoding="utf-8").read()
         assert "old_score4" not in src          # 計算變數已刪
         assert "'舊評分':" not in src            # dict key / column_config 已刪
         assert "['舊評分'," not in src           # col_order 已刪
 
     def test_elim_sorts_by_pure_health(self):
-        import tab_stock_grp
+        from src.ui.tabs import tab_stock_grp
         src = open(tab_stock_grp.__file__, encoding="utf-8").read()
         # ④ 汰弱留強改以純健康度排序（對齊頁面說明）
         assert "sort_values('健康度', ascending=False)" in src
@@ -56,7 +56,7 @@ class TestOldScoreRetired:
 
 class TestGrpThresholdsSSOT:
     def test_imports_ssot_constants(self):
-        import tab_stock_grp
+        from src.ui.tabs import tab_stock_grp
         src = open(tab_stock_grp.__file__, encoding="utf-8").read()
         for name in ("HEALTH_GRADE_A_MIN", "HEALTH_GRADE_B_MIN",
                      "GRP_VOL_SHRINK_RATIO", "GRP_NEAR_MA20_BIAS_PCT",
@@ -65,7 +65,7 @@ class TestGrpThresholdsSSOT:
             assert name in src, f"tab_stock_grp 缺 SSOT import: {name}"
 
     def test_no_inline_opstate_magic(self):
-        import tab_stock_grp
+        from src.ui.tabs import tab_stock_grp
         src = open(tab_stock_grp.__file__, encoding="utf-8").read()
         # 操作狀態燈 / 入選 / 淘汰 不再用 inline 數字
         assert "_vol4 < _avgvol4 * 0.7" not in src

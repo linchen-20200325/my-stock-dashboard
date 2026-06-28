@@ -13,7 +13,7 @@ import pytest
 import pandas as pd
 from unittest.mock import patch
 
-from macro_alert import (
+from src.data.macro import (
     _classify_level,
     check_macro_alerts,
     alert_summary,
@@ -263,72 +263,72 @@ class TestFetchMacroSnapshot:
     確保不發出任何 HTTP 請求。
     """
 
-    @patch('macro_alert._yf_latest', return_value={})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={})
     def test_vix_read_from_session_macro(self, _):
         snap = fetch_macro_snapshot(
             session_macro={'vix': {'current': 22.5}}
         )
         assert snap.get('vix') == pytest.approx(22.5)
 
-    @patch('macro_alert._yf_latest', return_value={})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={})
     def test_cpi_read_from_session_macro(self, _):
         snap = fetch_macro_snapshot(
             session_macro={'us_core_cpi': {'yoy': 3.1}}
         )
         assert snap.get('cpi') == pytest.approx(3.1)
 
-    @patch('macro_alert._yf_latest', return_value={})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={})
     def test_pcr_read_from_session_li(self, _):
         df = pd.DataFrame([{'選PCR': 1.18}, {'選PCR': 1.25}])
         snap = fetch_macro_snapshot(session_li=df)
         assert snap.get('pcr') == pytest.approx(1.25)   # iloc[-1]
 
-    @patch('macro_alert._yf_latest', return_value={})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={})
     def test_none_session_macro_yields_no_vix(self, _):
         snap = fetch_macro_snapshot(session_macro=None)
         assert 'vix' not in snap
 
-    @patch('macro_alert._yf_latest', return_value={})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={})
     def test_empty_session_macro_yields_no_cpi(self, _):
         snap = fetch_macro_snapshot(session_macro={})
         assert 'cpi' not in snap
 
-    @patch('macro_alert._yf_latest', return_value={})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={})
     def test_empty_dataframe_yields_no_pcr(self, _):
         snap = fetch_macro_snapshot(session_li=pd.DataFrame())
         assert 'pcr' not in snap
 
-    @patch('macro_alert._yf_latest', return_value={})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={})
     def test_missing_pcr_column_yields_no_pcr(self, _):
         df = pd.DataFrame([{'外資大小': 5000}])
         snap = fetch_macro_snapshot(session_li=df)
         assert 'pcr' not in snap
 
-    @patch('macro_alert._yf_latest', return_value={})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={})
     def test_pcr_dash_string_is_skipped(self, _):
         df = pd.DataFrame([{'選PCR': '-'}])
         snap = fetch_macro_snapshot(session_li=df)
         assert 'pcr' not in snap
 
-    @patch('macro_alert._yf_latest', return_value={})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={})
     def test_pcr_nan_string_is_skipped(self, _):
         df = pd.DataFrame([{'選PCR': 'nan'}])
         snap = fetch_macro_snapshot(session_li=df)
         assert 'pcr' not in snap
 
-    @patch('macro_alert._yf_latest', return_value={'^TNX': 4.55, 'DX-Y.NYB': 105.2})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={'^TNX': 4.55, 'DX-Y.NYB': 105.2})
     def test_us10y_and_dxy_read_from_yfinance(self, _):
         snap = fetch_macro_snapshot()
         assert snap.get('us10y') == pytest.approx(4.55)
         assert snap.get('dxy')   == pytest.approx(105.2)
 
-    @patch('macro_alert._yf_latest', return_value={'^VIX': 18.3, '^TNX': 4.2, 'DX-Y.NYB': 102.0})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={'^VIX': 18.3, '^TNX': 4.2, 'DX-Y.NYB': 102.0})
     def test_vix_from_yfinance_when_session_missing(self, _):
         # session_macro 中無 vix，應從 yfinance 補抓
         snap = fetch_macro_snapshot(session_macro={'us_core_cpi': {'yoy': 2.5}})
         assert snap.get('vix') == pytest.approx(18.3)
 
-    @patch('macro_alert._yf_latest', return_value={'^TNX': 4.2, 'DX-Y.NYB': 102.0})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={'^TNX': 4.2, 'DX-Y.NYB': 102.0})
     def test_session_vix_takes_priority_over_yfinance(self, mock_yf):
         # session_state 有 vix → 不應把 ^VIX 放入 _need_yf
         snap = fetch_macro_snapshot(
@@ -339,7 +339,7 @@ class TestFetchMacroSnapshot:
         called_tickers = mock_yf.call_args[0][0]
         assert '^VIX' not in called_tickers
 
-    @patch('macro_alert._yf_latest', side_effect=Exception('network error'))
+    @patch('src.data.macro.macro_alert._yf_latest', side_effect=Exception('network error'))
     def test_yfinance_failure_does_not_crash(self, _):
         # yfinance 失敗時，snapshot 仍含 session_state 資料
         snap = fetch_macro_snapshot(
@@ -356,7 +356,7 @@ class TestFetchMacroSnapshot:
 
 class TestIntegration:
 
-    @patch('macro_alert._yf_latest', return_value={'^TNX': 4.55, 'DX-Y.NYB': 105.2})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={'^TNX': 4.55, 'DX-Y.NYB': 105.2})
     def test_full_pipeline_mixed_levels(self, _):
         """
         VIX=22.5→黃, CPI=3.1→黃, us10y=4.55→黃, dxy=105.2→黃, PCR=0.4→紅
@@ -373,7 +373,7 @@ class TestIntegration:
         assert sm['overall'] == 'red'
         assert sm['red_count'] >= 1
 
-    @patch('macro_alert._yf_latest', return_value={'^TNX': 3.8, 'DX-Y.NYB': 99.0})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={'^TNX': 3.8, 'DX-Y.NYB': 99.0})
     def test_full_pipeline_all_green(self, _):
         df = pd.DataFrame([{'選PCR': 0.9}])
         snap = fetch_macro_snapshot(
@@ -409,7 +409,7 @@ class TestIntegration:
 
 class TestFetchMacroSnapshotEdgeCases:
 
-    @patch('macro_alert._yf_latest', return_value={'^TNX': 4.2, 'DX-Y.NYB': 102.0})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={'^TNX': 4.2, 'DX-Y.NYB': 102.0})
     def test_invalid_vix_value_is_ignored(self, _):
         """VIX current = 非數值字串 → TypeError/ValueError → 靜默略過，vix 不寫入"""
         snap = fetch_macro_snapshot(
@@ -418,7 +418,7 @@ class TestFetchMacroSnapshotEdgeCases:
         # vix 應從 yfinance 補抓（或不存在）；不應拋出例外
         assert 'cpi' not in snap or isinstance(snap.get('cpi'), (float, type(None)))
 
-    @patch('macro_alert._yf_latest', return_value={'^TNX': 4.2, 'DX-Y.NYB': 102.0})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={'^TNX': 4.2, 'DX-Y.NYB': 102.0})
     def test_invalid_cpi_value_is_ignored(self, _):
         """CPI yoy = dict（非純量）→ 靜默略過，cpi 不寫入"""
         snap = fetch_macro_snapshot(
@@ -426,7 +426,7 @@ class TestFetchMacroSnapshotEdgeCases:
         )
         assert 'cpi' not in snap
 
-    @patch('macro_alert._yf_latest', return_value={'^TNX': 4.2, 'DX-Y.NYB': 102.0})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={'^TNX': 4.2, 'DX-Y.NYB': 102.0})
     def test_invalid_pcr_value_is_ignored(self, _):
         """選PCR 欄位含無法轉 float 的值 → except 略過，pcr 不寫入"""
         import pandas as pd
@@ -434,7 +434,7 @@ class TestFetchMacroSnapshotEdgeCases:
         snap = fetch_macro_snapshot(session_li=df)
         assert 'pcr' not in snap
 
-    @patch('macro_alert._yf_latest', return_value={'^TNX': 4.2, 'DX-Y.NYB': 102.0})
+    @patch('src.data.macro.macro_alert._yf_latest', return_value={'^TNX': 4.2, 'DX-Y.NYB': 102.0})
     def test_pcr_dash_string_is_ignored(self, _):
         """選PCR = '-' → 被過濾掉，pcr 不寫入"""
         import pandas as pd
@@ -449,7 +449,7 @@ class TestFetchMacroSnapshotEdgeCases:
 import sys
 from unittest.mock import MagicMock, patch
 
-from macro_alert import render_macro_alerts
+from src.data.macro import render_macro_alerts
 
 
 def _make_st_mock():

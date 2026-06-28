@@ -18,8 +18,8 @@ _st.secrets = {}
 sys.modules.setdefault("streamlit", _st)
 
 import shared.financial_health_thresholds as MJ  # noqa: E402
-import financial_health_engine as fhe  # noqa: E402
-from financial_health_engine import _no_ai_profitability  # noqa: E402
+from src.services import financial_health_engine as fhe  # noqa: E402
+from src.services import _no_ai_profitability  # noqa: E402
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 """v18.185 mj_health_diff 純函式單元測試（不打網路/LLM）。"""
 from __future__ import annotations
 
-from mj_health_diff import (
+from src.compute.health import (
     STATUS_SCORES,
     HealthDiffVerdict,
     MetricDiff,

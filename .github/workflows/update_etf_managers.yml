@@ -29,7 +29,7 @@ jobs:
         env:
           # 透過家用 NAS 代理抓 MoneyDJ；在 repo Secrets 設定 PROXY_URL 才會啟用
           PROXY_URL: ${{ secrets.PROXY_URL }}
-        run: python update_etf_managers.py
+        run: python scripts/update_etf_managers.py
 
       - name: Commit and Push Changes
         run: |

@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from etf_helpers import calc_sigma_metrics
+from src.compute.etf import calc_sigma_metrics
 
 
 def _make_df(n: int, seed: int = 42) -> pd.DataFrame:
@@ -138,12 +138,12 @@ class TestEtfCalcUsesSSOT:
 
     def test_etf_calc_imports_sigma_metrics(self):
         """v18.335 PR-H3 multi-line import 後仍可偵測。"""
-        src = open('etf_calc.py', encoding='utf-8').read()
-        assert 'from etf_helpers import' in src
+        src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
+        assert 'from src.compute.etf.etf_helpers import' in src
         assert 'calc_sigma_metrics' in src
 
     def test_etf_calc_uses_metrics_dict(self):
-        src = open('etf_calc.py', encoding='utf-8').read()
+        src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
         assert 'calc_sigma_metrics(df, window=TRADING_DAYS_PER_YEAR)' in src
         # 舊 inline 已淨空
         assert "_std = float(df['Close'].tail(TRADING_DAYS_PER_YEAR).std())" not in src
@@ -154,11 +154,11 @@ class TestEtfSingleUsesSSOT:
     """etf_tab_single MK#11 已改用 calc_sigma_metrics SSOT。"""
 
     def test_etf_single_imports_sigma_metrics(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert 'calc_sigma_metrics' in src
 
     def test_etf_single_uses_metrics_dict(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert 'calc_sigma_metrics(df, window=252)' in src
         # 舊 inline 已淨空
         assert "df['Close'].pct_change().tail(252).dropna()" not in src
@@ -168,32 +168,32 @@ class TestUxAnnotation:
     """文案標註 — 「⚡ 短線」/「📅 長線」前綴消除 user 困惑。"""
 
     def test_etf_calc_has_short_term_prefix(self):
-        src = open('etf_calc.py', encoding='utf-8').read()
+        src = open('src/compute/etf/etf_calc.py', encoding='utf-8').read()
         assert '⚡短線' in src
 
     def test_etf_single_has_long_term_prefix(self):
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert '📅 長線' in src or '📅長線' in src
 
     def test_etf_single_has_disambiguation_caption(self):
         """應加 caption 說明兩套 σ 的時間尺度差異。"""
-        src = open('etf_tab_single.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_single.py', encoding='utf-8').read()
         assert '不同時間尺度' in src
 
     def test_portfolio_column_header_disambiguated(self):
-        src = open('etf_tab_portfolio.py', encoding='utf-8').read()
+        src = open('src/ui/etf/etf_tab_portfolio.py', encoding='utf-8').read()
         assert '⚡短線 σ 位階' in src
 
 
 class TestModulesImportable:
     def test_etf_helpers_clean(self):
-        import etf_helpers  # noqa: F401
+        from src.compute.etf import etf_helpers  # noqa: F401
 
     def test_etf_calc_clean(self):
-        import etf_calc  # noqa: F401
+        from src.compute.etf import etf_calc  # noqa: F401
 
     def test_etf_tab_single_clean(self):
-        import etf_tab_single  # noqa: F401
+        from src.ui.etf import etf_tab_single  # noqa: F401
 
     def test_etf_tab_portfolio_clean(self):
-        import etf_tab_portfolio  # noqa: F401
+        from src.ui.etf import etf_tab_portfolio  # noqa: F401

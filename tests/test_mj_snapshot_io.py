@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mj_snapshot_io import (
+from src.compute.health import (
     _sanitize_sid,
     _sanitize_yyyymm,
     list_all_stocks_with_snapshots,

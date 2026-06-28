@@ -23,8 +23,8 @@ import pytest
 @pytest.fixture(autouse=True)
 def _clear_caches():
     """每個 case 前後清快取，避免 streamlit cache_data 串擾。"""
-    import data_loader
-    import tab_stock
+    from src.data.core import data_loader
+    from src.ui.tabs import tab_stock
     try:
         tab_stock._fetch_pbratio_from_twse.clear()
     except Exception:
@@ -62,46 +62,46 @@ def _mk_finmind_resp(rows: list[dict]) -> MagicMock:
 # ════════════════════════════════════════════════════════════════════
 class TestTwsePbratioFetch:
     def test_finds_target_stock(self):
-        import tab_stock
+        from src.ui.tabs import tab_stock
         df = _mk_twse_df([
             {'代碼': '2330', '名稱': '台積電', '股價淨值比': 5.5},
             {'代碼': '2317', '名稱': '鴻海', '股價淨值比': 1.2},
         ])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert abs(pb - 5.5) < 0.01
 
     def test_target_not_found_returns_zero(self):
-        import tab_stock
+        from src.ui.tabs import tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 5.5}])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('9999')
         assert pb == 0.0
 
     def test_high_pb_passes_sanity(self):
-        import tab_stock
+        from src.ui.tabs import tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 50.0}])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert abs(pb - 50.0) < 0.01
 
     def test_absurd_pb_returns_zero(self):
-        import tab_stock
+        from src.ui.tabs import tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 200.0}])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert pb == 0.0
 
     def test_negative_pb_returns_zero(self):
-        import tab_stock
+        from src.ui.tabs import tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': -1.0}])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert pb == 0.0
 
     def test_empty_df_returns_zero(self):
-        import tab_stock
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=pd.DataFrame()):
+        from src.ui.tabs import tab_stock
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=pd.DataFrame()):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert pb == 0.0
 
@@ -170,7 +170,7 @@ class TestIndustryLabel:
 # ════════════════════════════════════════════════════════════════════
 class TestFetchIndustryCategory:
     def test_extracts_industry_from_finmind(self):
-        import data_loader
+        from src.data.core import data_loader
         rows = [{'stock_id': '2330', 'industry_category': '半導體業',
                   'stock_name': '台積電'}]
         with patch('requests.get', return_value=_mk_finmind_resp(rows)):
@@ -178,20 +178,20 @@ class TestFetchIndustryCategory:
         assert ind == '半導體業'
 
     def test_empty_data_returns_empty_string(self):
-        import data_loader
+        from src.data.core import data_loader
         with patch('requests.get', return_value=_mk_finmind_resp([])):
             ind = data_loader.fetch_industry_category('IC_TST_8002')
         assert ind == ''
 
     def test_no_industry_field_returns_empty(self):
-        import data_loader
+        from src.data.core import data_loader
         rows = [{'stock_id': '2330', 'stock_name': '台積電'}]
         with patch('requests.get', return_value=_mk_finmind_resp(rows)):
             ind = data_loader.fetch_industry_category('IC_TST_8003')
         assert ind == ''
 
     def test_http_500_returns_empty(self):
-        import data_loader
+        from src.data.core import data_loader
         bad_resp = MagicMock()
         bad_resp.status_code = 500
         bad_resp.json.return_value = {}
@@ -206,9 +206,9 @@ class TestFetchIndustryCategory:
 class TestTwseBpsBackCalc:
     def test_back_calc_bps_from_pbratio_and_price(self):
         """模擬：TWSE PBratio=5.0、股價=750 → BPS 反推 = 150。"""
-        import tab_stock
+        from src.ui.tabs import tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 5.0}])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         bps = 750.0 / pb if pb > 0 else 0
         assert 149.0 < bps < 151.0

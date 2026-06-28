@@ -14,7 +14,7 @@ import unittest
 class TestMacroSignalLookbackTwProvenance(unittest.TestCase):
 
     def setUp(self):
-        with open('macro_signal_lookback_tw.py', encoding='utf-8') as f:
+        with open('src/compute/macro/macro_signal_lookback_tw.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_attach_prov_helper(self):
@@ -44,7 +44,7 @@ class TestMacroSignalLookbackTwProvenance(unittest.TestCase):
 class TestNasServerProvenance(unittest.TestCase):
 
     def setUp(self):
-        with open('nas_server.py', encoding='utf-8') as f:
+        with open('src/data/proxy/nas_server.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_prov_log_helper(self):
@@ -72,8 +72,8 @@ class TestNasServerProvenance(unittest.TestCase):
 class TestImports(unittest.TestCase):
 
     def test_macro_signal_lookback_tw_imports(self):
-        import macro_signal_lookback_tw  # noqa
-        from macro_signal_lookback_tw import _attach_prov
+        from src.compute.macro import macro_signal_lookback_tw  # noqa
+        from src.compute.macro import _attach_prov
         import pandas as pd
         _s = pd.Series([1, 2, 3], name='TEST')
         _attach_prov(_s, 'test_source')
@@ -83,7 +83,7 @@ class TestImports(unittest.TestCase):
     def test_nas_server_ast_parse(self):
         """nas_server.py 用 AST parse 避 FastAPI runtime boot。"""
         import ast
-        with open('nas_server.py', encoding='utf-8') as f:
+        with open('src/data/proxy/nas_server.py', encoding='utf-8') as f:
             ast.parse(f.read())
 
 

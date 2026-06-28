@@ -11,7 +11,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from macro_signal_lookback_tw import (  # noqa: E402
+from src.compute.macro import (  # noqa: E402
     DEFAULT_TW_SIGNALS,
     TW_SIGNAL_FETCHERS,
     TwSignalLookback,
@@ -29,7 +29,7 @@ from macro_signal_lookback_tw import (  # noqa: E402
     fetch_twse_vol_ratio_series,
     lookback_all_signals_tw,
 )
-from macro_validation_tw import TwiiCrisisEvent  # noqa: E402
+from src.compute.macro import TwiiCrisisEvent  # noqa: E402
 
 
 # ════════════════════════════════════════════════════════════════
@@ -417,7 +417,7 @@ def test_hit_rate_mixed_coverage_and_hits():
 # ════════════════════════════════════════════════════════════════
 # v18.163：訊號精確率（forward-looking）測試
 # ════════════════════════════════════════════════════════════════
-from macro_signal_lookback_tw import compute_signal_precision  # noqa: E402
+from src.compute.macro import compute_signal_precision  # noqa: E402
 
 
 class TestComputeSignalPrecision:

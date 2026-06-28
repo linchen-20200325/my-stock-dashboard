@@ -17,7 +17,7 @@ import unittest
 class TestMacroFetchedAtInjection(unittest.TestCase):
 
     def setUp(self):
-        with open('tab_macro.py', encoding='utf-8') as f:
+        with open('src/ui/tabs/tab_macro.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_pr_q3_marker_present(self):
@@ -95,7 +95,7 @@ class TestSimulatedInjection(unittest.TestCase):
 
 class TestImport(unittest.TestCase):
     def test_tab_macro(self):
-        import tab_macro  # noqa
+        from src.ui.tabs import tab_macro  # noqa
 
 
 if __name__ == "__main__":

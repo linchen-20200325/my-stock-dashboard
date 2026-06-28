@@ -50,7 +50,7 @@ def _tw_now_str(): return _tw_now().strftime('%Y-%m-%d %H:%M')
 
 def _bps():
     try:
-        from tw_stock_data_fetcher import build_proxy_session as _b
+        from src.data.stock import build_proxy_session as _b
         s = _b()
     except Exception:
         s = requests.Session()
@@ -59,18 +59,18 @@ def _bps():
 
 print('[INFO] main.py v3.0 戰情室 載入完成')
 
-from data_loader import StockDataLoader, _LOADER_VERSION  # noqa: E402
+from src.data.core import StockDataLoader, _LOADER_VERSION  # noqa: E402
 # ── 新增模組（根據說明書 v1.0）──────────────────────────────
 # ── v3.0 新增模組（§5-§11）──────────────────────────────────
-from etf_dashboard import (  # noqa: E402
+from src.ui.etf import (  # noqa: E402
     render_etf_single, render_etf_portfolio,
     render_etf_ai,
     render_sector_heatmap,
 )
-from health_inspector import render_data_health_raw  # noqa: E402
-from api_diagnostic import render_api_diagnostic  # noqa: E402
-from grape_ladder import render_grape_ladder  # noqa: E402
-from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA  # noqa: E402
+from src.ui.pages import render_data_health_raw  # noqa: E402
+from src.ui.pages import render_api_diagnostic  # noqa: E402
+from src.ui.tabs import render_grape_ladder  # noqa: E402
+from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA  # noqa: E402
 
 def _get_secret(_key: str) -> str:
     """st.secrets 優先,降級 os.environ。
@@ -107,7 +107,7 @@ st.set_page_config(page_title='台股AI戰情室 v3.0', layout='wide',
 
 # ── OAuth callback：URL 帶 ?code= 時自動換 token（必須早於其他 query_params 操作）
 try:
-    from oauth_state import handle_oauth_callback as _oauth_cb
+    from src.ui.pages import handle_oauth_callback as _oauth_cb
     _oauth_cb()
 except Exception as _oauth_err:
     print(f'[oauth callback] {_oauth_err}')
@@ -368,7 +368,7 @@ def fetch_dividend_data(sid):
     # ── 備援2: yfinance（v18.209 K5：改走 yf_proxy.cached_dividends，proxy+cache 統一）──
     if avg_div == 0:
         try:
-            from yf_proxy import cached_dividends as _yp_div
+            from src.data.proxy import cached_dividends as _yp_div
             divs = _yp_div(f'{sid}.TW')
             if divs is not None and len(divs) > 0:
                 divs.index = pd.DatetimeIndex(divs.index).tz_localize(None)
@@ -445,7 +445,7 @@ def fetch_financials(sid, industry: str = ""):
     """
     import datetime as _dtf
     try:
-        from tw_stock_data_fetcher import build_proxy_session as _bps_fin
+        from src.data.stock import build_proxy_session as _bps_fin
         _rq_f = _bps_fin()
     except Exception:
         import requests as _rq_f_fallback
@@ -672,21 +672,21 @@ def fetch_quarterly_extra(sid, _ver=2):   # _ver 改變即清除舊快取
 # ════════════════════════════════════════════════════════════════
 # 健康度評分（0~100）— 已抽出至 scoring_helpers.py（PR P2-B Phase 3）
 # ════════════════════════════════════════════════════════════════
-from scoring_helpers import (  # noqa: E402
+from src.compute.scoring import (  # noqa: E402
     health_grade,
 )
 
 # ════════════════════════════════════════════════════════════════
 # 初學者友善說明系統 — 已抽出至 ui_widgets.py（PR P2-B Phase 2）
 # ════════════════════════════════════════════════════════════════
-from ui_widgets import (  # noqa: E402
+from src.ui.render import (  # noqa: E402
     traffic_light, show_term_help,
 )
 # P2-B Phase 5 A/B/C/D: 4 個 TAB 全部已抽到獨立模組（app.py 9208→1394 行，−85%）
-from tab_edu import render_tab_edu  # noqa: E402
-from tab_stock_grp import render_stock_grp  # noqa: E402
-from tab_stock import render_tab_stock  # noqa: E402
-from tab_macro import render_tab_macro  # noqa: E402
+from src.ui.tabs import render_tab_edu  # noqa: E402
+from src.ui.tabs import render_stock_grp  # noqa: E402
+from src.ui.tabs import render_tab_stock  # noqa: E402
+from src.ui.tabs import render_tab_macro  # noqa: E402
 
 # 在先行指標 section 使用
 _TERM_HELP_LI = show_term_help('PCR') + show_term_help('ADL') + show_term_help('M1B-M2')
@@ -909,7 +909,7 @@ with st.sidebar:
     st.markdown('---')
     st.markdown('### 🔐 Google 帳號')
     try:
-        from oauth_state import (
+        from src.ui.pages import (
             get_oauth_cfg as _sb_get_cfg,
             _gsa_secret as _sb_gsa,
             _sheet_id_secret as _sb_sid,
@@ -1021,112 +1021,6 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════════
 
 # ── 旌旗指數計算（站上 MA20/MA60/MA120/MA240 的家數比例）──────
-def calc_jingqi(scan_results):
-    """
-    傳入 Tab5 掃描結果 list，計算旌旗指數
-    scan_results: [{代碼, 趨勢, 健康度, ...}, ...]
-    """
-    if not scan_results:
-        return {}
-    total = len(scan_results)
-    # P4修正：四個維度統一用「健康度門檻」，並附上語意說明
-    # pct20 = 健康度>=40（基本健康，可觀察）
-    # pct60 = 健康度>=60（中等強勢）
-    # pct120= 健康度>=70（強勢）
-    # pct240= 健康度>=80（優質強勢）
-    above_ma20  = sum(1 for r in scan_results if r.get('健康度',0) >= 40)
-    above_ma60  = sum(1 for r in scan_results if r.get('健康度',0) >= 60)
-    above_ma120 = sum(1 for r in scan_results if r.get('健康度',0) >= 70)
-    above_ma240 = sum(1 for r in scan_results if r.get('健康度',0) >= 80)
-    pct20  = round(above_ma20  / total * 100, 1) if total else 0
-    pct60  = round(above_ma60  / total * 100, 1) if total else 0
-    pct120 = round(above_ma120 / total * 100, 1) if total else 0
-    pct240 = round(above_ma240 / total * 100, 1) if total else 0
-    avg    = round((pct20+pct60+pct120+pct240)/4, 1)
-
-    # 動態倉位建議（弘爺策略）
-    if avg >= 60:
-        pos = '80~100%'
-        regime = 'bull'
-        color = TRAFFIC_GREEN
-        label = '🟢 多頭積極'
-    elif avg >= 40:
-        pos = '50~70%'
-        regime = 'neutral'
-        color = TRAFFIC_YELLOW
-        label = '🟡 中性均衡'
-    elif avg >= 20:
-        pos = '20~40%'
-        regime = 'caution'
-        color = TRAFFIC_RED
-        label = '🟠 保守防禦'
-    else:
-        pos = '0~20%'
-        regime = 'bear'
-        color = '#c00000'
-        label = '🔴 極度保守'
-
-    return {
-        'pct20':pct20,'pct60':pct60,'pct120':pct120,'pct240':pct240,
-        'avg':avg,'pos':pos,'regime':regime,'color':color,'label':label,
-        'total':total
-    }
-
-def render_market_overview(market_info: dict):
-    """首頁市場狀態卡 (§9.2)"""
-    if not market_info:
-        st.warning('⚠️ 無法取得大盤數據')
-        return
-    regime   = market_info.get('regime', 'neutral')
-    label    = market_info.get('label', '─')
-    score    = market_info.get('score', 0)
-    mx       = market_info.get('max_score', 4)
-    idx      = market_info.get('index_price', 0)
-    exposure = market_info.get('exposure_pct', '50%')
-    signals  = market_info.get('signals', [])
-    color_map = {'bull': TRAFFIC_GREEN, 'neutral': TRAFFIC_YELLOW, 'bear': TRAFFIC_RED}
-    bg_map    = {'bull': '#0d2818', 'neutral': '#2a1f00', 'bear': '#2a0d0d'}
-    color = color_map.get(regime, '#8b949e')
-    bg    = bg_map.get(regime, '#161b22')
-    st.markdown(f"""
-<div style="background:{bg};border:2px solid {color};border-radius:12px;padding:16px 20px;margin-bottom:12px;">
-  <div style="display:flex;justify-content:space-between;align-items:center;">
-    <div>
-      <span style="font-size:22px;font-weight:900;color:{color};">{label}</span>
-      <span style="font-size:13px;color:#8b949e;margin-left:10px;">評分 {score}/{mx} ｜ 大盤 {idx:,.0f}</span>
-    </div>
-    <div style="text-align:right;">
-      <span style="font-size:15px;color:#e6edf3;">建議持股 <b style="color:{color};">{exposure}</b></span>
-    </div>
-  </div>
-  <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
-    {"".join('<span style="background:#161b22;border-radius:6px;padding:3px 8px;font-size:12px;color:#e6edf3;">' + str(s) + '</span>' for s in signals)}
-  </div>
-</div>""", unsafe_allow_html=True)
-
-def render_top_rankings(results: list, top_n: int = 10):
-    """股票評分排行榜 (§9.1)"""
-    if not results:
-        st.info('尚無評分資料')
-        return
-    from scoring_engine import rank_stocks as _rank
-    ranked = _rank(results)[:top_n]
-    if not ranked:
-        st.info('尚無有效評分資料')
-        return
-    rows = []
-    for i, r in enumerate(ranked):
-        rows.append({
-            '排名': i + 1, '代碼': r.get('stock_id', ''), '名稱': r.get('stock_name', ''),
-            '總分': f"{r.get('total', 0):.1f}", '趨勢': f"{r.get('trend', 0):.0f}",
-            '動能': f"{r.get('momentum', 0):.0f}", '籌碼': f"{r.get('chip', 0):.0f}",
-            '量價': f"{r.get('volume', 0):.0f}", '風險': f"{r.get('risk', 0):.0f}",
-            '評級': r.get('grade', '-'), '動能訊號': '⚡' if r.get('momentum_signal') else '─',
-        })
-    df_rank = pd.DataFrame(rows)
-    st.dataframe(df_rank, use_container_width=True, hide_index=True,
-                 column_config={'總分': st.column_config.ProgressColumn('總分', min_value=0, max_value=100, format='%.1f')})
-
 # ════════════════════════════════════════════════════════════════
 # TABS: 3 主頁籤
 # ════════════════════════════════════════════════════════════════
@@ -1147,7 +1041,7 @@ with st.sidebar:
 
     # ── v18.203 F2：全局資料健康總覽（聚合個股六源 + 總經羅盤 → 一眼看哪舊）──
     try:
-        from sidebar_health import render_sidebar_data_health
+        from src.ui.pages import render_sidebar_data_health
         render_sidebar_data_health(st.session_state)
     except Exception as _e_sbh:
         print(f'[sidebar_health] {type(_e_sbh).__name__}: {_e_sbh}')
@@ -1198,7 +1092,7 @@ def render_macro_compass():
 
     def _do_fetch():
         try:
-            from macro_core import fetch_macro_compass as _fmc
+            from src.data.macro import fetch_macro_compass as _fmc
             _data = _fmc()
         except Exception as e:
             print(f'[render_macro_compass] fetch failed: {e}')
@@ -1329,7 +1223,7 @@ def _fetch_macro_news(n: int = 5) -> list:
         print('[AI-News] ⚠️ feedparser 未安裝，跳過新聞抓取')
         return []
     try:
-        from proxy_helper import fetch_url as _furl_news
+        from src.data.proxy import fetch_url as _furl_news
     except ImportError:
         _furl_news = None
 
@@ -1449,7 +1343,7 @@ def _fetch_stock_news(stock_id: str, stock_name: str = "", n: int = 5, recency: 
             _diag.append('feedparser/urllib 匯入失敗')
         return []
     try:
-        from proxy_helper import fetch_url as _furl_sn, nas_relay_fetch as _nas_rf
+        from src.data.proxy import fetch_url as _furl_sn, nas_relay_fetch as _nas_rf
     except ImportError:
         _furl_sn = None
         _nas_rf = None
@@ -1556,84 +1450,6 @@ def _build_llm_context(macro_info: dict) -> str:
     return '\n'.join(_lines) if _lines else '（量化數據載入中，請先點擊更新總經拼圖）'
 
 
-def _run_llm_analysis(macro_info: dict, news: list) -> dict:
-    """呼叫 Gemini API 進行總經研判，回傳解析後的 dict。
-    使用既有的 gemini_call() 函數（支援 2.5-flash-lite/2.5-flash/2.0-flash 自動 fallback）。
-    錯誤時回傳 {'error': '...'}，不拋出例外。
-    """
-    _macro_str = _build_llm_context(macro_info)
-    _news_lines = []
-    for i, _nw in enumerate(news, 1):
-        _news_lines.append(f'{i}. [{_nw["source"]}] {_nw["title"]}')
-        if _nw.get('summary'):
-            _news_lines.append(f'   {_nw["summary"][:150]}')
-    _news_str = '\n'.join(_news_lines) if _news_lines else '（無法取得今日新聞，請依量化數據判斷）'
-
-    _prompt = (
-        '你是一位管理百億規模的資深量化基金經理，擁有 20 年台股與全球宏觀投資經驗。'
-        '任務：整合量化總經指標與即時財經新聞，為台股投資人提供精確的戰術研判。'
-        '分析需立足於提供的數據事實，避免空泛描述。\n\n'
-        f'分析時間：{_tw_now_str()}（台北時間）\n\n'
-        f'## 當前量化總經數據\n{_macro_str}\n\n'
-        f'## 今日國際財經重大新聞\n{_news_str}\n\n'
-        '## 輸出指令\n'
-        '請整合上述數據與新聞，輸出台股投資研判。\n'
-        '規則：① stock_pct + cash_pct = 100 ② 所有字串值使用繁體中文\n'
-        '③ risk_level：VIX≥30或重大地緣風險→high；VIX 20~30或通膨偏高→medium；其餘→low\n'
-        '只輸出 JSON，不要任何說明文字或 markdown 標記：\n'
-        '{\n'
-        '  "sentiment": "極度恐慌|警戒|中性|樂觀|極度狂熱",\n'
-        '  "sentiment_reason": "市場情緒判定的核心依據（15字以內）",\n'
-        '  "macro_reading": "整合數據與新聞的總經現況精煉解讀（50字以內）",\n'
-        '  "stock_pct": 建議持股水位整數,\n'
-        '  "cash_pct": 建議現金水位整數,\n'
-        '  "action": "一句話具體操作方針，含理由（35字以內）",\n'
-        '  "risk_level": "high|medium|low",\n'
-        '  "key_risk": "當前最大下行風險（20字以內）",\n'
-        '  "opportunity": "當前最大投資機會（20字以內）"\n'
-        '}'
-    )
-
-    _raw = gemini_call(_prompt, max_tokens=600)
-    print(f'[AI-LLM/Gemini] raw={_raw[:120]}')
-    if _raw.startswith('⚠️'):
-        return {'error': _raw}
-    try:
-        _match = re.search(r'\{[\s\S]*\}', _raw)
-        if _match:
-            _parsed = json.loads(_match.group())
-            _s = int(_parsed.get('stock_pct', 50))
-            _parsed['stock_pct'] = max(0, min(100, _s))
-            _parsed['cash_pct']  = 100 - _parsed['stock_pct']
-            return _parsed
-        return {'error': f'JSON 解析失敗，原始回應：{_raw[:100]}'}
-    except Exception as _le:
-        print(f'[AI-LLM/Gemini] ❌ {_le}')
-        return {'error': str(_le)[:150]}
-
-
-
-
-with tab_macro:
-    render_tab_macro()
-
-
-
-
-with tab_stock:
-    render_tab_stock()
-
-
-with tab_stock_grp:
-    render_stock_grp()
-
-
-
-
-with tab_edu:
-    render_tab_edu()
-
-
 # ══════════════════════════════════════════════════════════════
 # TAB: ETF 單一深度診斷 + 多檔批次評分（v18.223 子分頁）
 # ══════════════════════════════════════════════════════════════
@@ -1642,7 +1458,7 @@ with tab_etf:
     with _etf_sub_tabs[0]:
         render_etf_single(gemini_fn=gemini_call)
     with _etf_sub_tabs[1]:
-        from etf_tab_grp_compare import render_etf_grp_compare
+        from src.ui.etf import render_etf_grp_compare
         render_etf_grp_compare()
 
 # ══════════════════════════════════════════════════════════════
@@ -1664,19 +1480,19 @@ with tab_etf_grp:
 # TAB: ETF 質借倒金字塔加碼模擬器 (v18.162)
 # ══════════════════════════════════════════════════════════════
 with tab_etf_margin:
-    from tab_etf_margin_simulator import render_etf_margin_simulator
+    from src.ui.tabs import render_etf_margin_simulator
     render_etf_margin_simulator()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: 7% 高殖利率防禦網（Screener Mode）
 # ══════════════════════════════════════════════════════════════
 with tab_screener:
-    from yield_screener import render_yield_screener
+    from src.ui.tabs import render_yield_screener
     _picker_candidates = render_yield_screener()
 
     # ── 🎯 智慧選股（三階段濾網 + AI 三型建議）— 接續高息網候選清單 ──
     st.markdown('---')
-    from tab_stock_picker import render_tab_stock_picker
+    from src.ui.tabs import render_tab_stock_picker
     render_tab_stock_picker(gemini_fn=gemini_call, candidates=_picker_candidates)
 
 # ══════════════════════════════════════════════════════════════
@@ -1703,14 +1519,14 @@ with tab_screener:
 with tab_diag:
     # v18.280 — 學 Fund 架構 + 預設視角:覆蓋率表(用戶視角)放最上方,
     # API Key / Proxy 雙跑(developer 視角)放後。對齊 Fund tab5 Section ⓪。
-    from data_coverage import render_data_coverage
+    from src.ui.pages import render_data_coverage
     render_data_coverage()
     st.markdown('---')
     render_api_diagnostic()
     st.markdown('---')
     render_data_health_raw()
     st.markdown('---')
-    from calibration_ui import render_calibration_panel
+    from src.ui.pages import render_calibration_panel
     render_calibration_panel()
 
 # ══════════════════════════════════════════════════════════════

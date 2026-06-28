@@ -1,10 +1,10 @@
-"""scoring_helpers.py 純函式 unit test — Phase 7H。"""
+"""src/compute/scoring/scoring_helpers.py 純函式 unit test — Phase 7H。"""
 from __future__ import annotations
 
 import pandas as pd
 import pytest
 
-from scoring_helpers import calc_fundamental_score, calc_health_score, health_grade
+from src.compute.scoring.scoring_helpers import calc_fundamental_score, calc_health_score, health_grade  # v18.362 F-8 R2:直打 submod,避 scoring_engine 內同名 calc_fundamental_score 撞 namespace collision
 
 
 # ─────────────────────── calc_fundamental_score ───────────────────────

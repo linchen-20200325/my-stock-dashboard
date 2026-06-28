@@ -13,7 +13,7 @@ _st.secrets = {}
 sys.modules.setdefault("streamlit", _st)
 
 # requests is a real dep; if missing the import will fail visibly
-from financial_health_engine import (  # noqa: E402
+from src.services import (  # noqa: E402
     _no_ai_financial_structure,
     _no_ai_survival,
 )

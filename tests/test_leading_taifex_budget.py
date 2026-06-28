@@ -21,7 +21,7 @@ import ast
 from shared.macro_buckets import leading_table_empty_state_html
 
 # ── 1. TAIFEX 補強時間預算守衛 ────────────────────────────────────
-LI_SRC = open("leading_indicators.py", encoding="utf-8").read()
+LI_SRC = open("src/data/macro/leading_indicators.py", encoding="utf-8").read()  # F-6.2 後 path
 LI_TREE = ast.parse(LI_SRC)
 
 # li job 在 tab_macro 併發池的 timeout（build_leading_fast 內部 join）；預算須 ≪ 此值，

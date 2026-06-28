@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import gsheet_portfolio as gsp
+from src.data.portfolio import gsheet_portfolio as gsp
 
 
 class _FakeWorksheet:
