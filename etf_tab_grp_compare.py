@@ -25,8 +25,11 @@ from etf_calc import (
 )
 from etf_quality import compute_etf_quality
 from etf_scoring_helpers import compute_etf_composite_score
-from etf_helpers import normalize_etf_ticker
-from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
+from etf_helpers import (
+    dividend_health_label as _dividend_health_label,
+    normalize_etf_ticker,
+    yield_valuation_zone as _yield_valuation_zone,
+)
 
 _TOKEN_RE = _re.compile(r'[A-Za-z0-9.]+')
 
@@ -48,39 +51,8 @@ def parse_etf_codes(raw: str, limit: int = 10) -> list[str]:
     return _out
 
 
-def _yield_valuation_zone(cur_yield: float | None, avg_yield: float | None) -> str:
-    """7% 存股估值買賣點 — 鏡像 etf_tab_single L262-298 孫慶龍策略。
-
-    需 5y 平均殖利率有值才判定，否則 "—"。
-    """
-    if not avg_yield or avg_yield <= 0 or cur_yield is None:
-        return '—'
-    if cur_yield >= YIELD_HIGH:
-        return '🟢 強烈買進'
-    if cur_yield <= YIELD_LOW:
-        return '🔴 獲利了結'
-    if cur_yield <= YIELD_MID:
-        return '🟡 適度減碼'
-    return '⚪ 中性持有'
-
-
-def _dividend_health_label(cur_yield: float | None,
-                           total_ret_1y: float | None,
-                           cagr_3y: float | None) -> str:
-    """配息健康度 — 鏡像 etf_tab_single L231-246 MK 框架 #1+#2。
-
-    含息報酬 ≥ 殖利率 = 雙贏 ✅；含息 < 殖利率 = 本金侵蝕 🔴；
-    無配息直接看 3Y CAGR ≥ 7% 達標 ✅ 否則 🟡。
-    """
-    if cur_yield is None or cur_yield <= 0:
-        if cagr_3y is None:
-            return '⬜ 資料不足'
-        return '✅ 無息但達標' if cagr_3y >= 7 else '🟡 無息且未達標'
-    if total_ret_1y is None:
-        return '⬜ 1Y 報酬缺'
-    if total_ret_1y < cur_yield:
-        return f'🔴 吃本金 {total_ret_1y - cur_yield:+.1f}pp'
-    return f'✅ 雙贏 {total_ret_1y - cur_yield:+.1f}pp'
+# v18.329 PR-D:_yield_valuation_zone / _dividend_health_label 已抽到 etf_helpers.py SSOT
+# (上方 import 重新命名為 _ 前綴維持本檔內呼叫者不變)
 
 
 def _fetch_one_etf(ticker: str) -> dict:
@@ -122,12 +94,12 @@ def _fetch_one_etf(ticker: str) -> dict:
             _pd_res = calc_premium_discount(_info, _df, ticker)
             _r['premium_pct'] = _pd_res.get('premium_pct')
             _r['stale_nav'] = bool(_pd_res.get('stale_nav'))
-        except Exception:
-            pass
+        except Exception as _e_pd:
+            print(f'[etf_tab_grp_compare] {ticker} 折溢價計算失敗:{type(_e_pd).__name__}: {_e_pd}')
         try:
             _r['avg_yield_5y'] = calc_avg_yield(_df, _divs, years=5)
-        except Exception:
-            pass
+        except Exception as _e_ay:
+            print(f'[etf_tab_grp_compare] {ticker} 5y 平均殖利率計算失敗:{type(_e_ay).__name__}: {_e_ay}')
         _r['valuation_zone'] = _yield_valuation_zone(
             _r['div_yield'], _r['avg_yield_5y'])
         _r['dividend_health'] = _dividend_health_label(

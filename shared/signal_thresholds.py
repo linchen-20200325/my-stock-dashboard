@@ -440,3 +440,60 @@ TREND_USE_MA60: bool = True
 """趨勢判定主 MA 選擇:True=MA60(短中期更靈敏,個股 / 組合 Tab 統一);
 False=MA100(舊組合 Tab 行為,保留旗標供 A/B 比較)。
 原違憲:個股用 MA60 vs 組合用 MA100,同股雙 Tab 判斷反差。"""
+
+
+# ════════════════════════════════════════════════════════════════
+# ETF Tab 顯示閾值(v18.329 PR-D ETF audit 三項違憲)
+# user 2026-06-27 audit:ETF 單檔 / 多檔 / 組合三 Tab inline magic 抽出。
+# ════════════════════════════════════════════════════════════════
+
+# ── ETF 基本閾值(PR-D P3)──
+ETF_DIV_YOY_DECLINE_PCT: float = -10.0
+"""ETF 配息 12M YoY 衰退警示:< -10% → 🔴 配息衰退。
+原 etf_tab_single.py:228 inline `_div_yoy < -10`。"""
+
+ETF_INCEPTION_YEARS_MIN: float = 3.0
+"""ETF 成立年數最低門檻:≥ 3 年才算有完整週期樣本(避免追新 ETF)。
+原 etf_tab_single.py:252 inline `_incept_yrs >= 3`。"""
+
+ETF_CAGR_TARGET_PCT: float = 7.0
+"""ETF 3Y CAGR 目標值:≥ 7% → 🟢 達標。對齊長期市場報酬基準。
+原 etf_tab_single.py:244, etf_tab_grp_compare.py:78 兩處 inline `>= 7`。"""
+
+ETF_TRACKING_ERROR_MAX_PCT: float = 1.5
+"""ETF 追蹤誤差最大門檻:> 1.5% → 🟡 警示(追蹤效率不佳)。
+原 etf_tab_single.py:410 inline `te > 1.5`。"""
+
+# ── ETF 折溢價分級(PR-D P2,4 段)──
+ETF_PREMIUM_DEEP_DISCOUNT_PCT: float = -2.0
+"""ETF 折價深度買進區:≤ -2% → 🟢 建議買進(NAV 大幅折價)。
+原 etf_tab_single.py:343 inline。"""
+
+ETF_PREMIUM_FAIR_DISCOUNT_PCT: float = -0.5
+"""ETF 折價合理區:-2% ~ -0.5% → 🔵 合理偏低。
+原 etf_tab_single.py:347 inline。"""
+
+ETF_PREMIUM_FAIR_PREMIUM_PCT: float = 1.0
+"""ETF 中性 / 微溢價區:-0.5% ~ 1% → ⚪ 中性。
+原 etf_tab_single.py:353 inline。"""
+
+ETF_PREMIUM_HIGH_PREMIUM_PCT: float = 3.0
+"""ETF 高溢價暫緩區:1% ~ 3% → 🔴 暫緩;> 3% → 🔴 禁止追高。
+原 etf_tab_single.py:357 inline。"""
+
+# ── σ 位階分級(PR-D P2,4 段 z-score)──
+ETF_SIGMA_DEEP_BUY: float = -2.0
+"""σ位階深度買進:z ≤ -2σ → 🟢 大買訊號(深度超賣)。
+原 etf_tab_single.py:470 inline。"""
+
+ETF_SIGMA_BUY: float = -1.0
+"""σ位階買進:-2σ ~ -1σ → 🔵 小買(輕度超賣)。
+原 etf_tab_single.py:473 inline。"""
+
+ETF_SIGMA_REDUCE: float = 1.0
+"""σ位階減碼:1σ ~ 2σ → 🟡 減碼(輕度過熱)。
+原 etf_tab_single.py:476 inline。"""
+
+ETF_SIGMA_STOP_PROFIT: float = 2.0
+"""σ位階停利:≥ 2σ → 🔴 停利(深度過熱)。
+原 etf_tab_single.py:479 inline。"""
