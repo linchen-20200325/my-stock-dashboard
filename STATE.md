@@ -39,6 +39,17 @@
     - `scoring_engine.py:500` 1 處 silent → stderr log (calc_quality_score)
   * 介面 0 改;只把「失敗時靜默」改成「失敗時 stderr 留軌跡」,便於生產 debug
   * 剩餘 ~71 條**遵 §-1 等實際 bug 觸發再收**,不主動清
+- [x] **S-AUDIT-U9**(v18.332 PR-G,2026-06-28)— `etf_tab_portfolio.py` 深度 audit 後續修補
+  * audit:深度探索 agent 跑 C1-C6 6 維度違憲分類,**C2~C6 全 clean**,僅 C1 命中 8 處
+  * 收斂:`shared/signal_thresholds.py` 新增「ETF 投組 Tab 投組特有 SSOT」9 常數
+    - 再平衡(G1 P3):`PORTFOLIO_REBAL_TOLERANCE_DEFAULT_PCT=5.0`
+    - 同質性(G1 P1):`ETF_CORR_HIGH_THRESHOLD=0.85`
+    - Overlap(G1 P2):`PORTFOLIO_OVERLAP_{WEIGHT,JACCARD}_THRESHOLD_PCT=30/50`
+    - 壓測(G2):`PORTFOLIO_STRESS_TEST_DROP_PCT=-20` / `LOSS_WARN_PCT=20`
+    - VaR(G2):`PORTFOLIO_VAR_{95,99}_PERCENTILE=0.05/0.01` / `MONTHLY_WARN_PCT=10`
+  * `etf_tab_portfolio.py` 8 處 inline → SSOT(L86/493/549/618/627/664/665/689)
+  * 測試:`tests/test_pr_g_etf_portfolio_audit.py` 18/18 + PR-D/E/F 50/50 全綠
+  * portfolio Tab SSOT 健康度 **B → A-**(剩 L405 純 UI 著色 ±10pp,不影響判斷邏輯)
 
 ---
 
