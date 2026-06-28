@@ -49,7 +49,7 @@ class TestDailyDataFetchersModule(unittest.TestCase):
 
     def test_reexport_identity(self):
         """daily_checklist 的 fetch_single/fetch_flow_snapshot IS 新模組同物件。"""
-        from daily_checklist import fetch_single as _s1, fetch_flow_snapshot as _f1
+        from src.services import fetch_single as _s1, fetch_flow_snapshot as _f1
         from src.data.daily import fetch_single as _s2, fetch_flow_snapshot as _f2
         self.assertIs(_s1, _s2)
         self.assertIs(_f1, _f2)

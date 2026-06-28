@@ -29,7 +29,7 @@ def _capture_stderr(fn):
 
 class TestGenerateQuickSummaryStderrLog:
     def test_swallow_logs_to_stderr(self):
-        from ai_engine import generate_quick_summary
+        from src.services import generate_quick_summary
 
         # 觸發 IndexError(空 df 取 iloc[-1])
         class _BadDf:
@@ -46,7 +46,7 @@ class TestGenerateQuickSummaryStderrLog:
         assert 'swallow' in err
 
     def test_marker_in_source(self):
-        src = open('ai_engine.py', encoding='utf-8').read()
+        src = open('src/services/ai_engine.py', encoding='utf-8').read()
         assert '[generate_quick_summary] swallow' in src
         # bare except 已消除
         assert 'except:\n        return "數據載入中..."' not in src
@@ -77,7 +77,7 @@ class TestProxyConfigSecretsStderrLog:
 
 class TestImports:
     def test_ai_engine(self):
-        import ai_engine  # noqa
+        from src.services import ai_engine  # noqa
 
     def test_data_loader(self):
         from src.data.core import data_loader  # noqa

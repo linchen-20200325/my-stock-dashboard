@@ -51,9 +51,9 @@ def render_stock_grp():
     from scoring_helpers import calc_health_score, health_grade
     from ui_widgets import teacher_conclusion
     from financial_health_engine import analyze_financial_health
-    from ai_structured_summary import build_structured_summary_prompt
+    from src.services import build_structured_summary_prompt
     from src.data.etf import _fetch_news_for
-    from daily_checklist import analyze_20d_chips_from_df
+    from src.services import analyze_20d_chips_from_df
     from src.compute.scoring import (
         compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
     )

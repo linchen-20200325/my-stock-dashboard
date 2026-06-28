@@ -9,7 +9,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from src.data.etf import _fetch_news_for, _fetch_sector_returns
-from ai_structured_summary import build_structured_summary_prompt
+from src.services import build_structured_summary_prompt
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 

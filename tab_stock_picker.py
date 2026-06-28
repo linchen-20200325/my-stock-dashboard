@@ -868,7 +868,7 @@ def _check_major_holders(stock_id: str) -> str:
 
 def _generate_ai_report(gemini_fn, qualified: list[dict], all_results: list[dict]) -> str:
     """用白話結構化摘要元件，把三關卡篩選結果翻成人話報告。"""
-    from ai_structured_summary import build_structured_summary_prompt
+    from src.services import build_structured_summary_prompt
     from src.data.etf import _fetch_news_for
 
     # ── 第 1 節：通過名單（含為何入選）─────────────────────────

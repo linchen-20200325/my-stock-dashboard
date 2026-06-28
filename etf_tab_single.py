@@ -735,7 +735,7 @@ def render_etf_single(gemini_fn=None):
     _prem_pct = prem.get('premium_pct') if isinstance(prem, dict) else None
     _ai_sum_key = f'etf_ai_sum_{ticker}'
     if st.button('🧠 生成 AI 白話總結', key=_ai_sum_key, use_container_width=True):
-        from ai_structured_summary import build_structured_summary_prompt
+        from src.services import build_structured_summary_prompt
         from src.data.etf import _fetch_news_for
 
         _sections = [

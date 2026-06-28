@@ -492,7 +492,7 @@ def render_tab_macro():
         MacroStateLocker, calculate_system_state, load_macro_state,
     )
     from src.compute.strategy import V4StrategyEngine
-    from daily_checklist import (
+    from src.services import (
         _fetch_otc_via_finmind, calc_stats, evaluate_market_status_v4_final,
         fetch_adl, fetch_flow_snapshot, fetch_institutional, fetch_margin_balance,
         fetch_single, multi_chart, section_header, sparkline, stat_card,
@@ -501,7 +501,7 @@ def render_tab_macro():
     from src.data.macro import (
         check_macro_alerts, fetch_macro_snapshot, render_macro_alerts,
     )
-    from market_strategy import get_market_assessment
+    from src.services import get_market_assessment
     from src.data.macro import render_leading_table
     from ui_widgets import beginner_kpi, cond_badge, kpi, teacher_conclusion
     # app.py 內部 helper（v18.192：還原 section 十一 → 重新需要 _fetch_macro_news / gemini_call）
@@ -534,7 +534,7 @@ def render_tab_macro():
     def _on_force_clear_click():
         """強制重抓 on_click：全清 pkl + st.cache_data + proxy URL cache + 總經 session_state。"""
         try:
-            from daily_checklist import _pkl_clear_all
+            from src.services import _pkl_clear_all
             _pkl_clear_all()
         except Exception as _e_clr:
             print(f'[Cache] pkl clear failed: {_e_clr}')
@@ -4079,7 +4079,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _adl_ph = st.empty()
         _adl_ph.info('⏳ ADL 資料載入中...')
         try:
-            from daily_checklist import fetch_adl as _fa
+            from src.services import fetch_adl as _fa
             _tok_rt = os.environ.get('FINMIND_TOKEN','') or FINMIND_TOKEN
             _df_rt  = _fa(days=60, token=_tok_rt)
             if _df_rt is not None and not _df_rt.empty:
@@ -5296,7 +5296,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                         + '\n'.join(_pivot_lines)
                     )
 
-                from ai_structured_summary import build_structured_summary_prompt
+                from src.services import build_structured_summary_prompt
                 _sections_macro = [
                     {'name': '現在市場是偏多還偏空（系統幫你下的判斷）',
                      'data': _v_state_json},

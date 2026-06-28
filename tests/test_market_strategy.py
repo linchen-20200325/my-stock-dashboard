@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-import market_strategy
+from src.services import market_strategy
 
 
 # ══════════════════════════════════════════════════════════════

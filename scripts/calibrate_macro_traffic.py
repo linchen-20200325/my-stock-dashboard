@@ -237,7 +237,7 @@ def _build_features_at(df: pd.DataFrame, t: int) -> Optional[_Features]:
 
 def _features_to_traffic_light(f: _Features) -> dict:
     """以特徵組成 mkt_info → 呼叫 calc_traffic_light（cache 模式餵真實值）。"""
-    from market_strategy import market_regime
+    from src.services import market_regime
     from src.compute.macro import calc_traffic_light
     fb = 0 if pd.isna(f.foreign_buy) else float(f.foreign_buy)
     mg = None if pd.isna(f.m1b_m2_gap) else float(f.m1b_m2_gap)
@@ -389,7 +389,7 @@ def _backtest_with_inputs_cache(df: pd.DataFrame) -> list[dict]:
     cache 模式下：df 已含 foreign_buy / m1b_m2_gap 欄位 → 餵真實值給 market_regime
     與 calc_traffic_light（解 TWII-only score 結構性 0~3 問題）。
     """
-    from market_strategy import market_regime
+    from src.services import market_regime
     cache = []
     for t in range(125, len(df) - 20):
         f = _build_features_at(df, t)

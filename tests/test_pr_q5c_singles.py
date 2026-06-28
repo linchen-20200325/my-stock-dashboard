@@ -40,7 +40,7 @@ class TestQ5cMarkers(unittest.TestCase):
         self.assertIn('MoneyDJ:Basic(multi-page)', src)
 
     def test_market_strategy(self):
-        src = self._read('market_strategy.py')
+        src = self._read('src/services/market_strategy.py')
         self.assertIn("'source': 'tw_macro.fetch_finmind_foreign_investor'", src)
 
     def test_hot_money(self):
@@ -73,7 +73,7 @@ class TestImports(unittest.TestCase):
         from scripts import update_etf_managers  # noqa
 
     def test_market_strategy(self):
-        import market_strategy  # noqa
+        from src.services import market_strategy  # noqa
 
     def test_hot_money(self):
         import hot_money  # noqa

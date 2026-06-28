@@ -154,7 +154,7 @@ def _generate_report(gemini_fn, port_d, backtest_d, regime, MACRO_ALLOC,
     _weak_str = st.session_state.get('etf_weakness_summary', '（未計算 — 請先在「組合配置」頁跑主動 ETF 弱勢度檢測）')
 
     # ── 改用共用「白話結構化摘要」元件組 prompt ──────────────
-    from ai_structured_summary import build_structured_summary_prompt
+    from src.services import build_structured_summary_prompt
 
     _hold_data = (
         f'這個組合一共 {len(rows)} 檔｜目前總現值 {port_d.get("total_value",0):,.0f} 元'

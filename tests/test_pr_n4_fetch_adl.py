@@ -28,7 +28,7 @@ class TestFetchAdlExtracted(unittest.TestCase):
         _adl_selftest()  # 若有 regression assert fail 會炸
 
     def test_reexport_identity(self):
-        from daily_checklist import fetch_adl as _a1, _adl_selftest as _s1
+        from src.services import fetch_adl as _a1, _adl_selftest as _s1
         from src.data.daily import fetch_adl as _a2, _adl_selftest as _s2
         self.assertIs(_a1, _a2)
         self.assertIs(_s1, _s2)

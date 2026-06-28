@@ -68,7 +68,7 @@ class TestVixAlignedToC2:
 class TestConsumersWired:
     def test_no_inline_residual(self):
         tm = _src("tab_macro.py")
-        dc = _src("daily_checklist.py")
+        dc = _src("src/services/daily_checklist.py")
         mc = _src("src/data/macro/macro_core.py")
         # 融資黃線
         assert not re.search(r"(>|<=)\s*2500(?!\s*億)", tm)

@@ -201,7 +201,7 @@ def render_data_health_raw():
         if st.button('🩺 立即測試融資餘額（6段備援）',
                      key='btn_test_margin', use_container_width=True):
             try:
-                from daily_checklist import fetch_margin_balance as _fmb_test
+                from src.services import fetch_margin_balance as _fmb_test
                 from src.config import PKL_DIR as _pkl_dir_t
                 import os as _os_t
                 # 只清 margin_balance 快取，不影響其他 fetcher 快取

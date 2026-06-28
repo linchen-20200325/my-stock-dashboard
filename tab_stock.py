@@ -182,7 +182,7 @@ def _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2) -> dict:
     dict：可能含 con20/cty20/sig20 / rs_val / capital / li_results/li_green/
     li_yellow/li_red；任何輸入異常 → 缺對應 key(不 raise，不偽造)。
     """
-    from daily_checklist import analyze_20d_chips_from_df
+    from src.services import analyze_20d_chips_from_df
     from src.compute.scoring import calc_rs_score, calc_leading_indicators_detail
     xsec: dict = {}
     # 1) 籌碼集中度(原 L1438 籌碼顯示段)— 只依賴 df2
@@ -224,7 +224,7 @@ def render_tab_stock():
     from src.config import FINMIND_TOKEN
     # 外部模組
     from src.compute.strategy import V4StrategyEngine
-    from daily_checklist import analyze_20d_chips_from_df
+    from src.services import analyze_20d_chips_from_df
     from src.compute.scoring import (
         compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
     )
@@ -3416,7 +3416,7 @@ padding:12px 16px;margin:8px 0;">
             except Exception:
                 _lead_str2 = '（龍頭預警未計算）'
             # ── 建構白話結構化 Prompt（共用元件 ai_structured_summary）──
-            from ai_structured_summary import build_structured_summary_prompt
+            from src.services import build_structured_summary_prompt
             _sections_ai = [
                 {'name': '這檔現在強不強、位置貴不貴（技術面）',
                  'data': f'{_tech_data2}\nRS 相對強度：{_rs_str2}'},

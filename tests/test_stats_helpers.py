@@ -96,7 +96,7 @@ class TestEdgeCases:
 # ════════════════════════════════════════════════════════════════
 class TestBackCompat:
     def test_daily_checklist_reexport(self):
-        """daily_checklist.calc_stats 應仍可 import(re-export shim)。"""
-        from daily_checklist import calc_stats as cs_old
+        """src.services.daily_checklist.calc_stats 應仍可 import(re-export shim)。"""
+        from src.services import calc_stats as cs_old
         from shared.stats_helpers import calc_stats as cs_new
         assert cs_old is cs_new

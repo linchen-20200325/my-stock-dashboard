@@ -16,12 +16,12 @@ def _src(path):
 
 class TestMarginBalanceConsumed:
     def test_imports_and_no_inline(self):
-        for f in ("daily_checklist.py", "tab_macro.py"):
+        for f in ("src/services/daily_checklist.py", "tab_macro.py"):
             src = _src(f)
             assert "MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI" in src, f"{f} 未 import 融資紅線 SSOT"
         # 不得再有 inline 的 3400 程式比較；顯示標籤「>3400億」用 (?!\s*億) 排除
         code_cmp = re.compile(r"(>=|>)\s*3400(?!\s*億)")
-        assert not code_cmp.search(_src("daily_checklist.py"))
+        assert not code_cmp.search(_src("src/services/daily_checklist.py"))
         assert not code_cmp.search(_src("tab_macro.py"))
 
 

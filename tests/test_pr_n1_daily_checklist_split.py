@@ -135,7 +135,7 @@ class TestReExportIdentity(unittest.TestCase):
     """daily_checklist re-export 必須 IS 新模組同物件(不是 copy)。"""
 
     def test_pkl_helpers_reexported(self):
-        from daily_checklist import _pkl_get, _pkl_put, _pkl_clear_all, _CACHE_SENTINEL
+        from src.services import _pkl_get, _pkl_put, _pkl_clear_all, _CACHE_SENTINEL
         from shared.cache_layer import (
             _pkl_get as _g, _pkl_put as _p, _pkl_clear_all as _c,
             _CACHE_SENTINEL as _s,
@@ -146,7 +146,7 @@ class TestReExportIdentity(unittest.TestCase):
         self.assertIs(_CACHE_SENTINEL, _s)
 
     def test_compute_reexported(self):
-        from daily_checklist import (
+        from src.services import (
             _num, _tw_today_dl, evaluate_market_status_v4_final,
             analyze_20d_chips_from_df,
         )
@@ -161,7 +161,7 @@ class TestReExportIdentity(unittest.TestCase):
         self.assertIs(analyze_20d_chips_from_df, _a)
 
     def test_ui_components_reexported(self):
-        from daily_checklist import (
+        from src.services import (
             COLORS_7, sparkline, multi_chart, bar_chart_institutional,
             stat_card, margin_card, section_header,
         )

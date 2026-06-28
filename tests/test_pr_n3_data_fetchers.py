@@ -27,7 +27,7 @@ class TestNewFetchersExtracted(unittest.TestCase):
         self.assertIn('token', sig.parameters)
 
     def test_reexport_identity(self):
-        from daily_checklist import fetch_institutional as _i1, _fetch_otc_via_finmind as _o1
+        from src.services import fetch_institutional as _i1, _fetch_otc_via_finmind as _o1
         from src.data.daily import fetch_institutional as _i2, _fetch_otc_via_finmind as _o2
         self.assertIs(_i1, _i2)
         self.assertIs(_o1, _o2)
