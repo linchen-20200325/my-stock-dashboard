@@ -7,6 +7,14 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
+- [x] **S-AUDIT-RUN-O**(v18.349 PR-O1,2026-06-28)— SSOT 對齊 audit P0 真 bug(PR #380)
+  * **痛點**:user「資料 vs 診斷 tab 對齊 SSOT」泛指令,audit 後發現 1 個真 bug + 1 個單位矛盾
+  * **bug 1**:`tab_stock_grp.py:1202/1240` 讀 `_rp.get('foreign_buy', 0)` 但 `results_t3.append({...})` 從未寫該欄 → AI prompt 永遠 default 0 → 永遠回「外資 0.0 億」誤導
+  * **bug 2**:即使有值,`/1e8` 假設值在「元」,但 SSOT(`data_loader.py:286 _normalize_inst_pivot` `pv[c] = pv[c] / 1000`)單位是「張」→ 雙重錯
+  * **修法**:`results_t3` 寫入 `_fb4 = df4['外資'].tail(20).sum()`(張);兩處顯示改「外資近20日 X,XXX 張」;`data_loader.py:709` 加 SSOT 對齊註記明示「張」單位
+  * **未動的 P1/P2**(增強非 bug):診斷表加 TTL/備援優先級/技術指標欄 / reconcile 自動監控 — 套 §-1 等 user 明確要才動
+  * 測試:`tests/test_pr_o1_foreign_buy_ssot.py` +6 全綠
+
 - [x] **S-AUDIT-RUN-N**(v18.344~348 PR-N1~N5,2026-06-28)— **C daily_checklist 跨層拆檔全完成**(PR #375/376/377/378/379)
   * **痛點**:user 對話中 override §-1 + WONTFIX,要求做 C(daily_checklist 跨層拆)。原 995 LOC 混 L1+L2+L3+L4,選擇 α 全拆(4 模組)拆成 5 個小 PR 降 blast radius
   * **PR-N1**(#375, v18.344, LOW):cache_layer(70)+ macro_ui_components(180)+ macro_compute(119)抽出;順手修 `st.secrets` headless 場景 bug
