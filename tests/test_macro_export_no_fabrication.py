@@ -10,7 +10,14 @@ import re
 
 
 def _src(p="src/ui/tabs/tab_macro.py"):
-    return open(p, encoding="utf-8").read()
+    # P3-D1 v18.389:_fetch_export 下沉 macro_snapshot.fetch_export_block;
+    # 守衛斷言改掃合集(主檔仍須無 "靜態備援"/"18.9" — 雙檔同步檢查)。
+    base = open(p, encoding="utf-8").read()
+    try:
+        base += open("src/data/macro/macro_snapshot.py", encoding="utf-8").read()
+    except FileNotFoundError:
+        pass
+    return base
 
 
 class TestNoStaticExportFallback:

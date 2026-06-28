@@ -902,570 +902,42 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     return None
 
             def _job_macro():
-                """總經拼圖 v5.2：VIX/CPI/PMI/NDC/Export 並行抓取（NDC 改抓 StockFeel+MacroMicro 雙源）"""
-                import requests as _rq_mc
-                # L2: 使用頂層已匯入的 ThreadPoolExecutor / as_completed
-                _TPE, _asc_mc = ThreadPoolExecutor, as_completed
-                # 兼容 Python 3.8-3.10：concurrent.futures.TimeoutError 與 builtins.TimeoutError 不同類別
-                from concurrent.futures import TimeoutError as _ConcFutTimeout
+                """總經拼圖 v5.3:VIX/CPI/PMI/NDC/Export/Fed 並行抓取(thin orchestrator)。
 
-                def _mk_s():
-                    """NAS proxy Session — 直接套用 proxy_helper.get_proxies()"""
-                    from requests.adapters import HTTPAdapter as _HA
-                    from urllib3.util.retry import Retry as _Rt
-                    try:
-                        from src.data.proxy import get_proxies as _gp
-                        _px = _gp()
-                    except Exception:
-                        _px = None
-                    _s2 = _rq_mc.Session()
-                    _adp = _HA(max_retries=_Rt(total=2, backoff_factor=1.0,
-                               status_forcelist=[429, 503, 504], raise_on_status=False))
-                    _s2.mount('https://', _adp)
-                    _s2.mount('http://', _adp)
-                    if _px:
-                        _s2.proxies.update(_px)
-                    _s2.verify = False
-                    return _s2
+                P3-D1 v18.389:6 sub-fetcher(原 inline 共 604 LOC)全下沉至
+                src/data/macro/macro_snapshot.py fetch_*_block。本 _job_macro 留
+                並發 orchestration + provenance 注入。FRED key / FinMind token 由
+                outer scope 讀(EX-L0-1 st.secrets bootstrap)後顯式傳入。
+                """
+                from src.data.macro.macro_snapshot import (
+                    fetch_vix_block, fetch_cpi_block, fetch_fed_funds_block,
+                    fetch_tw_pmi_block, fetch_ndc_block, fetch_export_block,
+                )
+                _fred_key = (os.environ.get('FRED_API_KEY') or
+                             (st.secrets.get('FRED_API_KEY')
+                              if hasattr(st, 'secrets') else None) or '')
+                _fm_tok = (os.environ.get('FINMIND_TOKEN') or
+                           (st.secrets.get('FINMIND_TOKEN')
+                            if hasattr(st, 'secrets') else None) or '')
 
-                def _mk_s_tw():
-                    """台灣 IP proxy Session（同 _mk_s，保留名稱供既有呼叫相容）"""
-                    return _mk_s()
-
-                # ── 1. VIX ──────────────────────────────────────────────────────────
-                # v18.332 Tier2 2-D slice 1：抽至 L1 macro_snapshot.fetch_vix_block（可單測）。
-                from src.data.macro import fetch_vix_block as _fetch_vix  # P1-2 v18.373:macro_snapshot 搬到 L1
-
-                # ── 2. CPI（美國核心 CPI YoY，series CPILFESL）─────────────────────
-                #   v18.142 修：原本誤用 CPIAUCSL（總體 CPI All Items），與 UI 標籤
-                #   「美國核心 CPI」不符；data_registry.py L46 標 CPILFESL 為準。
-                #   新增方案 0：FRED 公開 fredgraph.csv（無需 API key，最穩）。
-                def _fetch_cpi():
-                    import datetime as _dt_cpi
-                    import io as _io_cpi
-                    import pandas as _pd_cpi
-                    _s = _mk_s()
-                    _cpi_errs = []
-                    # ── 方案0: FRED 公開 fredgraph.csv（CPILFESL，無需 key）────────
-                    try:
-                        from src.data.proxy import fetch_url as _fu_cpi
-                        _r0 = _fu_cpi('https://fred.stlouisfed.org/graph/fredgraph.csv',
-                                      params={'id': 'CPILFESL'},
-                                      timeout=10, attempts=1)
-                        print(f'[Macro/CPI/fredgraph] response={"OK" if _r0 else "None"}')
-                        if _r0 is not None and _r0.status_code == 200:
-                            _df0 = _pd_cpi.read_csv(
-                                _io_cpi.StringIO(_r0.content.decode('utf-8', errors='ignore')))
-                            _df0 = _df0.dropna()
-                            if len(_df0) >= 13:
-                                _vals0 = _pd_cpi.to_numeric(_df0.iloc[:, 1],
-                                                            errors='coerce').dropna()
-                                if len(_vals0) >= 13:
-                                    _yoy = round((_vals0.iloc[-1] / _vals0.iloc[-13] - 1) * 100, 2)
-                                    # v18.169：補 prev_yoy 供 MK 黃金拐點偵測（CPI 月度變化）
-                                    _prev_yoy = (round((_vals0.iloc[-2] / _vals0.iloc[-14] - 1) * 100, 2)
-                                                 if len(_vals0) >= 14 else None)
-                                    _date = str(_df0.iloc[-1, 0])[:10]
-                                    print(f'[Macro/CPI/fredgraph] ✅ YoY={_yoy:.2f}% prev={_prev_yoy} date={_date}')
-                                    return {'us_core_cpi': {'yoy': _yoy, 'prev_yoy': _prev_yoy,
-                                                            'date': _date,
-                                                            'source': 'FRED/fredgraph.csv',
-                                                            'series_id': 'CPILFESL'}}
-                            _cpi_errs.append(f'fredgraph:rows<13({len(_df0)})')
-                        else:
-                            _cpi_errs.append(f'fredgraph:HTTP{_r0.status_code if _r0 else "None"}')
-                    except Exception as _e:
-                        _cpi_errs.append(f'fredgraph:{type(_e).__name__}')
-                        print(f'[Macro/CPI/fredgraph] ❌ {_e}')
-                    # ── 方案1: FRED API（CPILFESL + API key 加速）────────────────
-                    try:
-                        import os as _os_cpi_f
-                        from src.data.proxy import fetch_url as _fu_cpi
-                        _fred_key_cpi = (_os_cpi_f.environ.get('FRED_API_KEY') or
-                                         (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
-                        _cpi_start = (_dt_cpi.datetime.now() - _dt_cpi.timedelta(days=365*3)).strftime('%Y-%m-%d')
-                        _cpi_end   = _dt_cpi.datetime.now().strftime('%Y-%m-%d')
-                        _cpi_p = {'series_id': 'CPILFESL', 'file_type': 'json',
-                                  'sort_order': 'asc', 'limit': 36,
-                                  'observation_start': _cpi_start,
-                                  'observation_end': _cpi_end}
-                        if _fred_key_cpi:
-                            _cpi_p['api_key'] = _fred_key_cpi
-                        _rc1 = _fu_cpi('https://api.stlouisfed.org/fred/series/observations',
-                                       params=_cpi_p, timeout=12, attempts=1)
-                        print(f'[Macro/CPI/FRED-API] response={"OK" if _rc1 else "None"}')
-                        if _rc1 is not None:
-                            _obs_c = [o for o in _rc1.json().get('observations', [])
-                                      if o.get('value', '.') != '.']
-                            if len(_obs_c) >= 13:
-                                _vals_c = [float(o['value']) for o in _obs_c]
-                                _yoy = round((_vals_c[-1] / _vals_c[-13] - 1) * 100, 2)
-                                # v18.169：補 prev_yoy 供 MK 黃金拐點偵測
-                                _prev_yoy = (round((_vals_c[-2] / _vals_c[-14] - 1) * 100, 2)
-                                             if len(_vals_c) >= 14 else None)
-                                _date = _obs_c[-1]['date']
-                                print(f'[Macro/CPI/FRED-API] ✅ YoY={_yoy:.2f}% prev={_prev_yoy} date={_date}')
-                                return {'us_core_cpi': {'yoy': _yoy, 'prev_yoy': _prev_yoy,
-                                                        'date': _date,
-                                                        'source': 'FRED-API',
-                                                        'series_id': 'CPILFESL'}}
-                    except Exception as _e:
-                        _cpi_errs.append(f'FRED-API:{type(_e).__name__}')
-                        print(f'[Macro/CPI/FRED-API] ❌ {_e}')
-                    # ── 方案2: BLS API（CUSR0000SA0L1E 核心 CPI SA）───────────────
-                    try:
-                        _rc = _s.post('https://api.bls.gov/publicAPI/v2/timeseries/data/',
-                                      json={'seriesid': ['CUSR0000SA0L1E'],
-                                            'startyear': str(_dt_cpi.date.today().year - 2),
-                                            'endyear':   str(_dt_cpi.date.today().year)},
-                                      headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'},
-                                      timeout=15, verify=False)
-                        print(f'[Macro/CPI/BLS] status={_rc.status_code}')
-                        if _rc.status_code == 200:
-                            _j = _rc.json()
-                            _obs = (_j.get('Results') or {}).get('series', [{}])[0].get('data', [])
-                            if len(_obs) >= 13:
-                                _s2 = sorted([o for o in _obs if o.get('period', 'M13') != 'M13'],
-                                             key=lambda x: (x['year'], x['period']))
-                                _valid = []
-                                for _o in _s2:
-                                    try:
-                                        _v = float(str(_o.get('value', '')).replace(',', ''))
-                                        if _v > 0:
-                                            _valid.append((_o, _v))
-                                    except Exception:
-                                        pass
-                                if len(_valid) >= 13:
-                                    _ents = [o for o, _ in _valid]
-                                    _vals = [v for _, v in _valid]
-                                    _yoy = round((_vals[-1] / _vals[-13] - 1) * 100, 2)
-                                    # v18.169：補 prev_yoy 供 MK 黃金拐點偵測
-                                    _prev_yoy = (round((_vals[-2] / _vals[-14] - 1) * 100, 2)
-                                                 if len(_vals) >= 14 else None)
-                                    _last = _ents[-1]
-                                    _date = f"{_last['year']}-{int(_last['period'][1:]):02d}-01"
-                                    print(f'[Macro/CPI/BLS] ✅ YoY={_yoy:.2f}% prev={_prev_yoy} date={_date}')
-                                    return {'us_core_cpi': {'yoy': _yoy, 'prev_yoy': _prev_yoy,
-                                                            'date': _date,
-                                                            'source': 'BLS',
-                                                            'series_id': 'CUSR0000SA0L1E'}}
-                    except Exception as _e:
-                        _cpi_errs.append(f'BLS:{type(_e).__name__}')
-                        print(f'[Macro/CPI/BLS] ❌ {_e}')
-                    return {'_err_cpi': ' | '.join(_cpi_errs) or 'all failed'}
-
-                # ── 2b. Fed Funds Rate（FRED FEDFUNDS，月均有效利率）─────────────
-                #   v18.169：MK 黃金拐點偵測需 CPI YoY × Fed Rate 同步月度比較。
-                #   兩層備援：① fredgraph.csv 公開無 key ② FRED API 帶 key 加速。
-                def _fetch_fed_funds():
-                    import datetime as _dt_ff
-                    import io as _io_ff
-                    import pandas as _pd_ff
-                    _ff_errs = []
-                    # ── 方案0: FRED 公開 fredgraph.csv（無需 key）────────────────
-                    try:
-                        from src.data.proxy import fetch_url as _fu_ff
-                        _r0 = _fu_ff('https://fred.stlouisfed.org/graph/fredgraph.csv',
-                                     params={'id': 'FEDFUNDS'},
-                                     timeout=10, attempts=1)
-                        print(f'[Macro/FedFunds/fredgraph] response={"OK" if _r0 else "None"}')
-                        if _r0 is not None and _r0.status_code == 200:
-                            _df0 = _pd_ff.read_csv(
-                                _io_ff.StringIO(_r0.content.decode('utf-8', errors='ignore')))
-                            _df0 = _df0.dropna()
-                            if len(_df0) >= 2:
-                                _vals0 = _pd_ff.to_numeric(_df0.iloc[:, 1],
-                                                           errors='coerce').dropna()
-                                if len(_vals0) >= 2:
-                                    _curr = round(float(_vals0.iloc[-1]), 2)
-                                    _prev = round(float(_vals0.iloc[-2]), 2)
-                                    _date = str(_df0.iloc[-1, 0])[:10]
-                                    print(f'[Macro/FedFunds/fredgraph] ✅ {_prev:.2f}%→{_curr:.2f}% date={_date}')
-                                    return {'fed_funds': {'current': _curr, 'prev': _prev,
-                                                          'date': _date,
-                                                          'source': 'FRED/fredgraph.csv',
-                                                          'series_id': 'FEDFUNDS'}}
-                            _ff_errs.append(f'fredgraph:rows<2({len(_df0)})')
-                        else:
-                            _ff_errs.append(f'fredgraph:HTTP{_r0.status_code if _r0 else "None"}')
-                    except Exception as _e:
-                        _ff_errs.append(f'fredgraph:{type(_e).__name__}')
-                        print(f'[Macro/FedFunds/fredgraph] ❌ {_e}')
-                    # ── 方案1: FRED API（FEDFUNDS + API key）────────────────────
-                    try:
-                        import os as _os_ff_f
-                        from src.data.proxy import fetch_url as _fu_ff
-                        _fred_key_ff = (_os_ff_f.environ.get('FRED_API_KEY') or
-                                        (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
-                        _ff_start = (_dt_ff.datetime.now() - _dt_ff.timedelta(days=365*2)).strftime('%Y-%m-%d')
-                        _ff_end = _dt_ff.datetime.now().strftime('%Y-%m-%d')
-                        _ff_p = {'series_id': 'FEDFUNDS', 'file_type': 'json',
-                                 'sort_order': 'asc', 'limit': 24,
-                                 'observation_start': _ff_start,
-                                 'observation_end': _ff_end}
-                        if _fred_key_ff:
-                            _ff_p['api_key'] = _fred_key_ff
-                        _rc1 = _fu_ff('https://api.stlouisfed.org/fred/series/observations',
-                                      params=_ff_p, timeout=12, attempts=1)
-                        print(f'[Macro/FedFunds/FRED-API] response={"OK" if _rc1 else "None"}')
-                        if _rc1 is not None:
-                            _obs_f = [o for o in _rc1.json().get('observations', [])
-                                      if o.get('value', '.') != '.']
-                            if len(_obs_f) >= 2:
-                                _vals_f = [float(o['value']) for o in _obs_f]
-                                _curr = round(_vals_f[-1], 2)
-                                _prev = round(_vals_f[-2], 2)
-                                _date = _obs_f[-1]['date']
-                                print(f'[Macro/FedFunds/FRED-API] ✅ {_prev:.2f}%→{_curr:.2f}% date={_date}')
-                                return {'fed_funds': {'current': _curr, 'prev': _prev,
-                                                      'date': _date,
-                                                      'source': 'FRED-API',
-                                                      'series_id': 'FEDFUNDS'}}
-                    except Exception as _e:
-                        _ff_errs.append(f'FRED-API:{type(_e).__name__}')
-                        print(f'[Macro/FedFunds/FRED-API] ❌ {_e}')
-                    return {'_err_fed_funds': ' | '.join(_ff_errs) or 'all failed'}
-
-                # ── 3. 台灣 PMI（CIER 中華經濟研究院）────────────────────────────
-                #   v3：Stock 端定位是台股視角，應抓「台灣製造業 PMI」（CIER 中華
-                #   經濟研究院每月第一個工作日公布），而非美國 ISM PMI。
-                #   舊版誤抓美國 ISM 導致與在地景氣脫節，且 ISM 自 2016-08 後 FRED
-                #   斷供，三段爬蟲備援也常掛。改呼叫 macro_core.fetch_tw_pmi()
-                #   共用函式（4 段備援：MacroMicro → CIER → StockFeel → 鉅亨）。
-                #   注意：session_state key 仍為 'ism_pmi' 以維持向後相容（14 處讀取
-                #   點不必動），但內容是台灣 PMI；UI 顯示為「🇹🇼 台灣製造業 PMI」。
-                def _fetch_pmi():
-                    """v3 薄殼：呼叫 macro_core.fetch_tw_pmi()，回傳台灣 CIER PMI。"""
-                    from src.data.macro import fetch_tw_pmi as _ftp
-                    _result = _ftp()
-                    if _result.get('value') is not None:
-                        return {'ism_pmi': _result}
-                    # 失敗：只回傳 _err_pmi（不再帶 value:None junk 進 macro_info）
-                    return {'_err_pmi': _result.get('_err_pmi', '4 段備援全失敗')}
-
-                # ── 4. NDC 景氣對策信號 v2 — StockFeel + MacroMicro 雙源（v10.57.0 復活）
-                #    舊源全廢（FinMind/NDC JSON/CKAN/行動版 HTML 都失效），改抓第三方。
-                def _fetch_ndc():
-                    import re as _re_ndc
-                    from src.data.proxy import fetch_url as _fu_ndc
-                    from bs4 import BeautifulSoup as _BS_ndc
-
-                    # 方案 A: StockFeel 股感（每月更新文章，HTML 含「綜合分數 39」）
-                    try:
-                        _sf_url = ('https://www.stockfeel.com.tw/'
-                                   '%E6%99%AF%E6%B0%A3%E5%B0%8D%E7%AD%96%E4%BF%A1%E8%99%9F-'
-                                   '%E6%99%AF%E6%B0%A3%E6%8C%87%E6%A8%99-%E7%B7%A8%E5%88%B6-'
-                                   '%E5%9C%8B%E7%99%BC%E6%9C%83/')
-                        _sf_r = _fu_ndc(_sf_url, timeout=12, attempts=1)
-                        if _sf_r is not None:
-                            _sf_r.encoding = 'utf-8'
-                            _txt_sf = _BS_ndc(_sf_r.text, 'html.parser').get_text(' ', strip=True)
-                            # 找最近一筆「YYYY年M月.*?綜合(?:判斷)?分數.*?N分」
-                            _m_sf = _re_ndc.search(
-                                r'(20\d{2})\s*年\s*(\d{1,2})\s*月[^。]{0,80}?綜合(?:判斷)?分數[^\d]{0,15}(\d{1,2})\s*分',
-                                _txt_sf)
-                            if _m_sf:
-                                _yr_sf, _mo_sf, _sc_sf = _m_sf.group(1), _m_sf.group(2), int(_m_sf.group(3))
-                                if 9 <= _sc_sf <= 45:
-                                    _date_sf = f'{_yr_sf}-{int(_mo_sf):02d}-01'
-                                    print(f'[NDC/StockFeel] ✅ score={_sc_sf} date={_date_sf}')
-                                    return {'ndc_signal': {'score': _sc_sf, 'signal': None,
-                                                           'date': _date_sf, 'source': 'StockFeel'}}
-                            print('[NDC/StockFeel] ⚠️ 未匹配「YYYY年M月...綜合分數N分」')
-                    except Exception as _e_sf:
-                        print(f'[NDC/StockFeel] ❌ {type(_e_sf).__name__}: {_e_sf}')
-
-                    # 方案 B: MacroMicro 財經 M 平方（UGC Charts 公開頁面）
-                    try:
-                        _mm_url = 'https://www.macromicro.me/collections/10/tw-monitoring-indicators-relative'
-                        _mm_r = _fu_ndc(_mm_url, timeout=12, attempts=1)
-                        if _mm_r is not None:
-                            _mm_r.encoding = 'utf-8'
-                            _txt_mm = _BS_ndc(_mm_r.text, 'html.parser').get_text(' ', strip=True)
-                            _m_mm = _re_ndc.search(
-                                r'景氣對策信號[^。]{0,200}?(\d{1,2})\s*分',
-                                _txt_mm)
-                            if _m_mm:
-                                _sc_mm = int(_m_mm.group(1))
-                                if 9 <= _sc_mm <= 45:
-                                    print(f'[NDC/MacroMicro] ✅ score={_sc_mm}')
-                                    return {'ndc_signal': {'score': _sc_mm, 'signal': None,
-                                                           'date': '', 'source': 'MacroMicro'}}
-                            print('[NDC/MacroMicro] ⚠️ 未匹配「景氣對策信號...N分」')
-                    except Exception as _e_mm:
-                        print(f'[NDC/MacroMicro] ❌ {type(_e_mm).__name__}: {_e_mm}')
-
-                    print('[NDC] ⚠️ 雙源皆失敗，回 _err_ndc 標記（v18.194 UI fail trace）')
-                    return {'_err_ndc': 'StockFeel + MacroMicro 雙源皆失敗'}
-
-                # ── 5. 台灣出口 YoY ─────────────────────────────────────────
-                def _fetch_export():
-                    import pandas as _pd7
-                    import io as _io_ex
-                    import os as _os_ex
-                    import re as _re_ex
-                    import datetime as _dt_ex
-                    _s_ex = _mk_s()
-                    _s_ex.verify = False
-                    _s_ex.headers.update({'User-Agent': 'Mozilla/5.0',
-                                          'Accept': 'application/json'})
-
-                    # 方案 0 (2026-06 新增): 中華民國統計資訊網 stat.gov.tw 出口年增率
-                    # 為什麼放首位？
-                    #   stat.gov.tw 是 DGBAS 官方點資料頁，每月更新最新 YoY，HTML 含
-                    #   「出口年增率 ... 12.3%」格式；走 fetch_url（NAS 中繼站）取台灣 IP。
-                    try:
-                        from src.data.proxy import fetch_url as _fu_stat
-                        from bs4 import BeautifulSoup as _BS_stat
-                        _stat_url = ('https://www.stat.gov.tw/Point.aspx?'
-                                     'sid=t.8&n=3587&sms=11480')
-                        _r_stat = _fu_stat(_stat_url, timeout=12, attempts=1)
-                        if _r_stat is not None and _r_stat.status_code == 200:
-                            _r_stat.encoding = 'utf-8'
-                            _txt_stat = _BS_stat(_r_stat.text, 'html.parser').get_text(' ', strip=True)
-                            # 模式：「2026年4月 出口年增率 18.9%」or「出口年增率 ... 18.9」
-                            _m_stat = _re_ex.search(
-                                r'(20\d{2})\s*年\s*(\d{1,2})\s*月[^。]{0,80}?'
-                                r'出口[^。]{0,30}?年增率?[^\d\-]{0,15}(-?\d{1,3}\.\d)\s*%?',
-                                _txt_stat)
-                            if _m_stat:
-                                _yr_s, _mo_s = int(_m_stat.group(1)), int(_m_stat.group(2))
-                                _yoy_s = float(_m_stat.group(3))
-                                if 1 <= _mo_s <= 12 and -80 <= _yoy_s <= 200:
-                                    _date_s = f'{_yr_s}-{_mo_s:02d}'
-                                    print(f'[Export/stat.gov.tw] ✅ YoY={_yoy_s:.2f}% date={_date_s}')
-                                    return {'tw_export': {'yoy': _yoy_s, 'date': _date_s,
-                                                          'source': 'stat.gov.tw'}}
-                            print('[Export/stat.gov.tw] ❌ HTML 未含可解析 YoY')
-                        else:
-                            print(f'[Export/stat.gov.tw] ❌ HTTP {getattr(_r_stat, "status_code", "None")}')
-                    except Exception as _e_stat:
-                        print(f'[Export/stat.gov.tw] ❌ {type(_e_stat).__name__}: {_e_stat}')
-
-                    # 方案FM: FinMind TaiwanEconomicIndicator 出口相關指標
-                    try:
-                        _fm_tok_ex = (_os_ex.environ.get('FINMIND_TOKEN') or
-                                      (st.secrets.get('FINMIND_TOKEN') if hasattr(st, 'secrets') else None))
-                        if _fm_tok_ex:
-                            _ex_start_fm = (_dt_ex.date.today() - _dt_ex.timedelta(days=365*2)).strftime('%Y-%m-%d')
-                            _fm_ex_r = _s_ex.get(
-                                'https://api.finmindtrade.com/api/v4/data',
-                                params={'dataset': 'TaiwanEconomicIndicator',
-                                        'start_date': _ex_start_fm, 'token': _fm_tok_ex},
-                                timeout=10)
-                            if _fm_ex_r.status_code == 200:
-                                _fm_ex_data = _fm_ex_r.json().get('data', [])
-                                # 尋找出口相關指標（外銷訂單 or 出口）
-                                for _kw_ex in ('出口', '外銷', 'export', 'Export'):
-                                    _ex_rows = [r for r in _fm_ex_data
-                                                if _kw_ex in str(r.get('indicator', ''))]
-                                    if _ex_rows:
-                                        _ex_rows.sort(key=lambda r: r.get('date', ''))
-                                        # 找同類指標最新 13 筆算 YoY
-                                        _ind_name = _ex_rows[-1].get('indicator')
-                                        _same = [r for r in _ex_rows if r.get('indicator') == _ind_name]
-                                        if len(_same) >= 13:
-                                            _cur_ex = float(_same[-1].get('value', 0) or 0)
-                                            _prev_ex = float(_same[-13].get('value', 1) or 1)
-                                            if _prev_ex != 0:
-                                                _yoy_ex = round((_cur_ex - _prev_ex) / abs(_prev_ex) * 100, 2)
-                                                _date_ex = str(_same[-1].get('date', ''))[:7]
-                                                print(f'[Export/FinMind] ✅ YoY={_yoy_ex:.2f}% date={_date_ex} ind={_ind_name}')
-                                                return {'tw_export': {'yoy': _yoy_ex, 'date': _date_ex,
-                                                                      'source': f'FinMind/{_ind_name}'}}
-                                        break
-                    except Exception as _e_fm_ex:
-                        print(f'[Export/FinMind] ❌ {type(_e_fm_ex).__name__}: {_e_fm_ex}')
-
-                    # 方案MOF: 財政部統計處 CSV — 透過 NAS proxy（台灣 IP 可直接存取）
-                    try:
-                        from src.data.proxy import fetch_url as _fu_ex
-                        _now_ex = _dt_ex.date.today()
-                        _mof_found = False
-                        # v10.61.0: 月份迴圈從 4 砍到 2（當月+上月），避免最壞 8 URL × ~12s = 100s
-                        # 拖爆 as_completed 70s timeout；MOF 通常上月就有，找不到再讓使用者手動重抓
-                        for _m_off in range(0, 2):
-                            if _mof_found:
-                                break
-                            _chk = (_now_ex.replace(day=1) - _dt_ex.timedelta(days=_m_off * 30))
-                            for _mof_url in [
-                                f'https://service.mof.gov.tw/public/Data/statistic/trade/excel/{_chk.year}{_chk.month:02d}.csv',
-                                f'https://service.mof.gov.tw/public/Data/statistic/trade/html/{_chk.year}{_chk.month:02d}.csv',
-                            ]:
-                                try:
-                                    _r_mof = _fu_ex(_mof_url, timeout=10, attempts=1)
-                                    if _r_mof is not None and len(_r_mof.content) > 500:
-                                        _df_mof = _pd7.read_csv(
-                                            _io_ex.StringIO(_r_mof.content.decode('utf-8-sig', errors='ignore')),
-                                            header=None)
-                                        _vals_mof = _pd7.to_numeric(_df_mof.iloc[:, 1], errors='coerce').dropna()
-                                        if len(_vals_mof) >= 13:
-                                            _yoy_mof = round((_vals_mof.iloc[-1] - _vals_mof.iloc[-13]) /
-                                                             abs(_vals_mof.iloc[-13]) * 100, 2)
-                                            print(f'[Export/MOF] ✅ YoY={_yoy_mof:.2f}% url={_mof_url[-25:]}')
-                                            _mof_found = True
-                                            return {'tw_export': {'yoy': _yoy_mof,
-                                                                  'date': f'{_chk.year}-{_chk.month:02d}',
-                                                                  'source': 'MOF-proxy'}}
-                                except Exception:
-                                    continue
-                    except Exception as _e_mof:
-                        print(f'[Export/MOF] ❌ {type(_e_mof).__name__}: {_e_mof}')
-
-                    # 方案DGTW: data.gov.tw dataset 6053「海關進出口貿易統計」CSV
-                    #   v18.142：deep-research 確認 6053 月更（NDC 官方）；走 NAS proxy
-                    try:
-                        from src.data.proxy import fetch_url as _fu_ex
-                        for _meta_url_ex in (
-                            'https://data.gov.tw/api/v2/rest/dataset/6053',
-                            'https://data.gov.tw/api/v1/rest/dataset/6053',
-                        ):
-                            try:
-                                _rm_ex = _fu_ex(_meta_url_ex, timeout=10, attempts=1,
-                                                headers={'Accept': 'application/json'})
-                                if _rm_ex is None or _rm_ex.status_code != 200:
-                                    continue
-                                _jm_ex = _rm_ex.json()
-                                _res_ex = (_jm_ex.get('result', {}).get('resources')
-                                           or _jm_ex.get('resources')
-                                           or _jm_ex.get('result', {}).get('distribution')
-                                           or [])
-                                _csv_url_ex = None
-                                for _it in _res_ex:
-                                    _fmt = str(_it.get('format', '')).upper()
-                                    _u = (_it.get('url') or _it.get('resourceDownloadUrl')
-                                          or _it.get('downloadUrl'))
-                                    if _fmt in ('CSV', 'TEXT', 'XLS', 'XLSX') and _u:
-                                        _csv_url_ex = _u
-                                        break
-                                if not _csv_url_ex:
-                                    continue
-                                _rc_ex = _fu_ex(_csv_url_ex, timeout=15, attempts=2)
-                                if _rc_ex is None or _rc_ex.status_code != 200:
-                                    continue
-                                _df_dgtw = _pd7.read_csv(_io_ex.StringIO(
-                                    _rc_ex.content.decode('utf-8-sig', errors='ignore')))
-                                # 找出口值欄（含「出口」字、不含「增/率/比」字）
-                                _val_k = next((c for c in _df_dgtw.columns
-                                               if '出口' in str(c) and not any(
-                                                   _x in str(c) for _x in ('增', '率', '比', '差'))), None)
-                                _dt_k = next((c for c in _df_dgtw.columns
-                                              if any(_x in str(c) for _x in ('年月', '月份', '日期', 'DATE', 'date'))), None)
-                                if _val_k and _dt_k and len(_df_dgtw) >= 13:
-                                    _df_dgtw = _df_dgtw.dropna(subset=[_val_k]).copy()
-                                    _df_dgtw[_val_k] = _pd7.to_numeric(
-                                        _df_dgtw[_val_k].astype(str).str.replace(',', ''),
-                                        errors='coerce')
-                                    _df_dgtw = _df_dgtw.dropna(subset=[_val_k])
-                                    if len(_df_dgtw) >= 13:
-                                        _cur_d = float(_df_dgtw[_val_k].iloc[-1])
-                                        _prv_d = float(_df_dgtw[_val_k].iloc[-13])
-                                        if _prv_d != 0:
-                                            _yoy_d = round((_cur_d - _prv_d) / abs(_prv_d) * 100, 2)
-                                            _date_d = str(_df_dgtw[_dt_k].iloc[-1])[:7]
-                                            print(f'[Export/data.gov.tw-6053] ✅ YoY={_yoy_d:.2f}% date={_date_d}')
-                                            return {'tw_export': {'yoy': _yoy_d, 'date': _date_d,
-                                                                  'source': 'data.gov.tw/6053'}}
-                            except Exception:
-                                continue
-                    except Exception as _e_dgtw:
-                        print(f'[Export/data.gov.tw-6053] ❌ {type(_e_dgtw).__name__}: {_e_dgtw}')
-
-                    # 方案FRED: FRED CSV（XTEXVA01TWM664S，OECD MEI，延遲 2-3 月）
-                    #   v18.142 修：原本用 VALEXPTWM052N（IMF IFS，延遲 ~13 月）→ user
-                    #   永遠看到「91 天前」。改 XTEXVA01TWM664S 立刻變新（deep-research 確認）。
-                    try:
-                        _ex_start = (_dt_ex.datetime.now() - _dt_ex.timedelta(days=365*5)).strftime('%Y-%m-%d')
-                        _ex_end   = _dt_ex.datetime.now().strftime('%Y-%m-%d')
-                        _fred_key_ex = (_os_ex.environ.get('FRED_API_KEY') or
-                                        (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
-                        _fred_ex_p = {'id': 'XTEXVA01TWM664S', 'observation_start': _ex_start,
-                                      'observation_end': _ex_end}
-                        if _fred_key_ex:
-                            _fred_ex_p['api_key'] = _fred_key_ex
-                        _r_fred = _fu_ex('https://fred.stlouisfed.org/graph/fredgraph.csv',
-                                         params=_fred_ex_p, timeout=8, attempts=1)
-                        print(f'[Export/FRED-XTEXVA01TWM664S] response={"OK" if _r_fred else "None"}')
-                        if _r_fred is not None and _r_fred.text.strip():
-                            _df_fred = _pd7.read_csv(
-                                _io_ex.StringIO(_r_fred.text),
-                                names=['date', 'value'], skiprows=1)
-                            _df_fred['value'] = _pd7.to_numeric(_df_fred['value'], errors='coerce')
-                            _df_fred = _df_fred.dropna(subset=['value'])
-                            if len(_df_fred) >= 13:
-                                _cur_f = float(_df_fred['value'].iloc[-1])
-                                _prev_f = float(_df_fred['value'].iloc[-13])
-                                if _prev_f and _prev_f != 0:
-                                    _yoy_f = round((_cur_f - _prev_f) / abs(_prev_f) * 100, 2)
-                                    _date_f = str(_df_fred['date'].iloc[-1])[:7]
-                                    print(f'[Export/FRED-XTEXVA01TWM664S] ✅ YoY={_yoy_f:.2f}% date={_date_f}')
-                                    return {'tw_export': {'yoy': _yoy_f, 'date': _date_f,
-                                                          'source': 'FRED/XTEXVA01TWM664S'}}
-                    except Exception as _e_fred:
-                        print(f'[Export/FRED-XTEXVA01TWM664S] ❌ {type(_e_fred).__name__}: {_e_fred}')
-
-                    # 方案2: data.gov.tw CKAN — 財政部進出口統計（加 Accept header 防空 body）
-                    try:
-                        _pkg2 = _s_ex.get(
-                            'https://data.gov.tw/api/3/action/package_search',
-                            params={'q': '進出口貿易統計', 'fq': 'organization:mof', 'rows': 5},
-                            headers={'Accept': 'application/json'},
-                            timeout=5)
-                        _pkg2_j = _pkg2.json()
-                        _res_id2 = None
-                        for _pk2 in ((_pkg2_j.get('result') or {}).get('results') or []):
-                            for _rs2 in (_pk2.get('resources') or []):
-                                if _rs2.get('format', '').upper() in ('CSV', 'TEXT'):
-                                    _res_id2 = _rs2.get('url') or _rs2.get('download_url')
-                                    break
-                            if _res_id2:
-                                break
-                        if _res_id2:
-                            _csv_ex = _s_ex.get(_res_id2, timeout=10)
-                            _df_ex = _pd7.read_csv(
-                                _io_ex.StringIO(_csv_ex.content.decode('utf-8-sig', errors='ignore')))
-                            _val_k = next((c for c in _df_ex.columns
-                                           if '出口' in c and '值' in c and '增' not in c), None)
-                            _dt_k = next((c for c in _df_ex.columns
-                                          if '年月' in c or '月份' in c or 'DATE' in c.upper()), None)
-                            if _val_k and _dt_k and len(_df_ex) >= 13:
-                                _df_ex = _df_ex.dropna(subset=[_val_k])
-                                _cur = float(str(_df_ex[_val_k].iloc[-1]).replace(',', ''))
-                                _prev = float(str(_df_ex[_val_k].iloc[-13]).replace(',', ''))
-                                if _prev != 0:
-                                    _yoy = round((_cur - _prev) / abs(_prev) * 100, 2)
-                                    _dv = str(_df_ex[_dt_k].iloc[-1])[:7]
-                                    print(f'[Export/gov-mof] ✅ YoY={_yoy:.2f}% date={_dv}')
-                                    return {'tw_export': {'yoy': _yoy, 'date': _dv, 'source': 'MOF-CSV'}}
-                        print(f'[Export/gov-mof] ❌ res_id={_res_id2}')
-                    except Exception as _e_gov2:
-                        print(f'[Export/gov-mof] ❌ {type(_e_gov2).__name__}: {_e_gov2}')
-
-                    # v18.330 §1 Fail Loud：所有方案全失敗 → **不捏造**任何數值。
-                    # 原本回傳一組寫死的歷史出口假值，會灌進總經儀表板、MK 拐點與 AI
-                    # 摘要（違 §1 寧可炸不可造假）。改回空 dict（不貢獻 tw_export key）→
-                    # 下游各 consumer 退為「待取得」placeholder（誠實顯示無資料）；失敗
-                    # 事實由本 log 記錄供診斷（§2.4 可觀測性）。
-                    print('[Export/fallback] ⚠️ 所有方案全失敗 → 回空（不捏造假值），UI 顯示「待取得」')
-                    return {}
-
-                # ── 並行執行（5 個獨立資料源同時跑，總時間 = max 而非 sum）──────
-                # v10.61.0: 改手動 executor 管理，as_completed timeout 後 shutdown(wait=False)
-                # 立刻逃離；避免 with-block 退出時 shutdown(wait=True) 卡在 stuck thread 上等
-                # ~240s（fetch_url 三層重試 × 8 個 MOF URL）拖爆外層 _fut_macro.result(80s)。
+                # ── 並行 6 source(v10.61.0 手動 executor + shutdown(wait=False))──
+                # 立即 cancel 未完成,避免 stuck thread 拖外層 80s timeout。
+                _fetchers = {
+                    'vix':       fetch_vix_block,
+                    'cpi':       lambda: fetch_cpi_block(fred_api_key=_fred_key),
+                    'pmi':       fetch_tw_pmi_block,
+                    'ndc':       fetch_ndc_block,
+                    'export':    lambda: fetch_export_block(
+                                     fred_api_key=_fred_key, finmind_token=_fm_tok),
+                    'fed_funds': lambda: fetch_fed_funds_block(fred_api_key=_fred_key),
+                }
                 _r = {}
-                _pool_mc = _TPE(max_workers=6)  # v18.169: 5→6 加 fed_funds
+                _pool_mc = ThreadPoolExecutor(max_workers=6)
                 try:
-                    _futs_mc = {
-                        _pool_mc.submit(_fetch_vix):        'vix',
-                        _pool_mc.submit(_fetch_cpi):        'cpi',
-                        _pool_mc.submit(_fetch_pmi):        'pmi',
-                        _pool_mc.submit(_fetch_ndc):        'ndc',
-                        _pool_mc.submit(_fetch_export):     'export',
-                        _pool_mc.submit(_fetch_fed_funds):  'fed_funds',  # v18.169 MK 拐點
-                    }
+                    _futs_mc = {_pool_mc.submit(fn): name
+                                for name, fn in _fetchers.items()}
                     try:
-                        for _fut_mc in _asc_mc(_futs_mc, timeout=70):
+                        for _fut_mc in as_completed(_futs_mc, timeout=70):
                             try:
                                 _part = _fut_mc.result()
                                 if _part:
@@ -1473,27 +945,25 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                             except Exception as _e:
                                 print(f'[Macro] ❌ {_futs_mc.get(_fut_mc, "?")}: {_e}')
                     except (TimeoutError, _ConcFutTimeout):
-                        # 70s 到仍有 future 未完成：取消未完成者，保留已收到的 partial _r
+                        # 70s 到仍有 future 未完成:取消未完成者,保留已收到的 partial _r
                         _stuck = [_futs_mc[_f] for _f in _futs_mc if not _f.done()]
                         for _f_pending in _futs_mc:
                             if not _f_pending.done():
                                 _f_pending.cancel()
-                        print(f'[Macro] ⏰ as_completed 70s timeout，未完成={_stuck}，保留已收到 keys={list(_r.keys())}')
+                        print(f'[Macro] ⏰ as_completed 70s timeout,未完成={_stuck},保留 keys={list(_r.keys())}')
                 finally:
-                    # wait=False：不等 stuck thread 自然結束（thread 會 zombie 在背景跑完後自滅）
-                    # 避免 with-block 預設 wait=True 把 _job_macro 卡到 240s
                     _pool_mc.shutdown(wait=False)
 
-                # Failsafe：即使全失敗也回傳 partial 標記（不回 None），讓診斷頁能區分
-                # 「沒抓」vs「抓過全失敗」；macro_info 至少有時間戳供 UX 判斷
-                _r.setdefault('_loaded_at', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                # Failsafe + provenance — 即使全失敗也回傳 partial 標記(不回 None),
+                # 讓診斷頁能區分「沒抓」vs「抓過全失敗」;macro_info 至少有時間戳供 UX 判斷。
+                _r.setdefault('_loaded_at',
+                              datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 if not any(k for k in _r if not k.startswith('_')):
                     _r['_all_failed'] = True
                 # v18.353 PR-Q3 S-PROV-1 phase 19:集中注入 fetched_at 到每個 sub-dict。
-                # 6 wrappers (_fetch_vix/cpi/pmi/ndc/export/fed_funds) 已有 'source' key
-                # (各自 dict 內,如 'FRED/fredgraph.csv' / 'BLS' / 'MOF-CSV' 等),
-                # 集中 setdefault('fetched_at') 比改 14 處 return point 乾淨。schema-additive,
-                # caller 0 改;§2.2 provenance(source + fetched_at)完整化。
+                # 6 fetchers (vix/cpi/pmi/ndc/export/fed_funds) 各自已有 'source' key
+                # (FRED/BLS/MOF-CSV 等),集中 setdefault('fetched_at') 比改 14 處 return
+                # point 乾淨,§2.2 provenance(source + fetched_at)完整化。schema-additive。
                 try:
                     _now_macro_prov = datetime.datetime.utcnow().isoformat() + 'Z'
                     for _k_prov, _v_prov in _r.items():
