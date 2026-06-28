@@ -116,11 +116,14 @@ def test_radar_and_bucket_bar_gated_pre_load():
         f" 實際: §八={_pos_eight}, §五={_pos_five}"
     )
     # 9 section 完整順序:七→一→二→六→八→五→三→九→十一
+    # F-7.1 B-3:§十一 section_header 搬至 macro/section_ai.py;改檢 render_section_ai() call 位置。
+    _tm_src2 = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
     _pos_nine   = src.find("section_header('九'")
-    _pos_eleven = src.find("section_header('十一'")
-    assert _pos_seven < _pos_one < _pos_six < _pos_eight < _pos_five < _pos_three < _pos_nine < _pos_eleven, (
-        "C1-Z2 v18.297:9 sections 物理順序應為 七→一→二→六→八→五→三→九→十一"
+    _pos_eleven = _tm_src2.find("render_section_ai(")
+    assert _pos_seven < _pos_one < _pos_six < _pos_eight < _pos_five < _pos_three < _pos_nine, (
+        "C1-Z2 v18.297:9 sections 物理順序(扣 §十一,已抽出)應為 七→一→二→六→八→五→三→九"
     )
+    assert _pos_eleven > 0, "找不到 render_section_ai() call(§十一 AI 總裁決)"
 
 
 @pytest.mark.slow
