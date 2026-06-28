@@ -30,80 +30,49 @@ import streamlit as st
 DISABLE_TWSE: bool = True  # 🚫 TWSE 已永久停用
 
 
-# ── 快取基礎設施 (v4.5) ───────────────────────────────────────────────────
-from data_config import TTL_CONFIG as _TTL_CFG, PKL_DIR as _PKL_DIR
-_CACHE_SENTINEL = object()  # 區別快取未命中與合法 None 值
-
-def _pkl_get(key: str, ttl: int):
-    """讀取 pickle 快取；未命中或過期返回 _CACHE_SENTINEL。"""
-    import pickle as _pk_, time as _tm_
-    _path = f'{_PKL_DIR}/{key}.pkl'
-    try:
-        if os.path.exists(_path) and _tm_.time() - os.path.getmtime(_path) < ttl:
-            with open(_path, 'rb') as _f_:
-                _v_ = _pk_.load(_f_)
-            if _v_ is not None:
-                print(f'[Cache] ✅ {key} 命中（ttl={ttl}s）')
-                return _v_
-    except Exception:
-        pass
-    return _CACHE_SENTINEL
-
-def _pkl_put(key: str, value):
-    """寫入 pickle 快取（本次執行成功的資料）後 return value。"""
-    import pickle as _pk_
-    try:
-        os.makedirs(_PKL_DIR, exist_ok=True)
-        with open(f'{_PKL_DIR}/{key}.pkl', 'wb') as _f_:
-            _pk_.dump(value, _f_)
-    except Exception:
-        pass
-    return value
-
-def _pkl_clear_all():
-    """強制刷新：清除所有 pickle 快取檔案（供前端「強制更新」按鈕使用）。"""
-    import glob as _glob_
-    _removed = 0
-    for _f_ in _glob_.glob(f'{_PKL_DIR}/*.pkl'):
-        try:
-            os.remove(_f_)
-            _removed += 1
-        except Exception:
-            pass
-    print(f'[Cache] 🗑️ 已清除 {_removed} 個快取檔案')
+# ── 快取基礎設施 (v18.344 PR-N1 抽至 shared/cache_layer.py)─────────────
+# 原 v4.5 SSOT cache 邏輯遷出,保留 re-export 維持向後相容(caller 不必改)。
+from data_config import TTL_CONFIG as _TTL_CFG, PKL_DIR as _PKL_DIR  # noqa: F401
+from shared.cache_layer import (
+    _CACHE_SENTINEL,  # noqa: F401
+    _pkl_get,         # noqa: F401
+    _pkl_put,         # noqa: F401
+    _pkl_clear_all,   # noqa: F401
+)
 
 
 import plotly.graph_objects as go
 
-FINMIND_TOKEN = (getattr(st, 'secrets', {}).get('FINMIND_TOKEN', '')
-                 or os.environ.get('FINMIND_TOKEN', ''))
+# v18.344 PR-N1:`st.secrets.get(...)` 即使無 secrets.toml 也會觸發 StreamlitSecretNotFoundError
+# (st.secrets 物件 lazy parse),原 getattr 防護不夠;改 try/except 包,僅在 secrets.toml
+# 存在時走 st.secrets,否則 fallback 到 os.environ(headless / CLI test 場景無 secrets)。
+try:
+    FINMIND_TOKEN = (getattr(st, 'secrets', {}).get('FINMIND_TOKEN', '')
+                     or os.environ.get('FINMIND_TOKEN', ''))
+except Exception:
+    FINMIND_TOKEN = os.environ.get('FINMIND_TOKEN', '')
 HDR = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "application/json, text/javascript, */*; q=0.01",
     "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
     "X-Requested-With": "XMLHttpRequest",
 }
-COLORS_7 = ["#58a6ff",TRAFFIC_GREEN,"#ffd700",TRAFFIC_RED,"#bc8cff","#79c0ff","#ff9f43"]
+# v18.344 PR-N1:COLORS_7 抽至 macro_ui_components.py(L4 Render),re-export 維持相容
+from macro_ui_components import COLORS_7  # noqa: F401
 INTL_MAP = {"道瓊工業 DJI":"^DJI","納斯達克 IXIC":"^IXIC","費城半導體 SOX":"^SOX","10Y公債殖利率":"^TNX","美元指數 DXY":"DX-Y.NYB"}
 INTL_UNIT = {k:("%" if "殖利率" in k else "指數") for k in INTL_MAP}
 TW_MAP   = {"台股加權指數":"^TWII","新台幣匯率":"TWD=X"}
 TW_UNIT  = {"台股加權指數":"pts","新台幣匯率":"TWD/USD"}
 TECH_MAP = {"台積電 ADR":"TSM","微軟 MSFT":"MSFT","蘋果 AAPL":"AAPL","谷歌 GOOGL":"GOOGL","輝達 NVDA":"NVDA","AMD":"AMD","博通 AVGO":"AVGO"}
 
-def _num(s):
-    try: return float(str(s).replace(",","").replace(" ","").replace("+",""))
-    except: return None
-
-_TW_TZ_DL = datetime.timezone(datetime.timedelta(hours=8))
-
-def _tw_today_dl():
-    return datetime.datetime.now(_TW_TZ_DL).date()
-
-def _recent_date(fmt="%Y%m%d"):
-    d = _tw_today_dl()
-    # 週末直接退到週五
-    while d.weekday() >= 5: d -= datetime.timedelta(days=1)
-    return d.strftime(fmt)
+# v18.344 PR-N1:_num / _TW_TZ_DL / _tw_today_dl / _recent_date 抽至 shared/macro_compute.py
+# (L2 純函式),re-export 維持向後相容(無 caller 直引但保險起見)
+from shared.macro_compute import (
+    _num,           # noqa: F401
+    _TW_TZ_DL,      # noqa: F401
+    _tw_today_dl,   # noqa: F401
+    _recent_date,   # noqa: F401
+)
 
 # ═══════════════════════════════════════════════
 # 三大法人（NAS 中繼站）— 收盤後15:30才有當日資料
@@ -387,41 +356,8 @@ def fetch_margin_balance(date_str=None):
     return None
 
 
-def evaluate_market_status_v4_final(current_price: float, ma_240: float,
-                                    futures_net_oi: int) -> dict:
-    """台股 AI 戰情室 v4.0 核心引擎（專注共同基金與總經）"""
-    current_price = current_price or 1.0
-    ma_240 = ma_240 or current_price
-    futures_net_oi = futures_net_oi or 0
-
-    bias_240 = ((current_price - ma_240) / ma_240) * 100
-    is_bull_market = current_price >= (ma_240 * 0.99)
-    is_overheated = bias_240 > 20.0
-    is_foreign_hedging = futures_net_oi < -30000
-
-    if is_bull_market:
-        if is_overheated or is_foreign_hedging:
-            signal = "🟡 多頭過熱 / 震盪警戒"
-            action = "大盤乖離與外資避險過高。建議暫停積極型基金單筆申購，轉為定期定額，並拉高防禦型/平衡型基金權重。"
-            hold_ratio = "50% - 70%"
-        else:
-            signal = "🟢 強勢多頭"
-            action = "均線多頭排列且籌碼穩定。建議擴大核心部位，增加成長型股票基金曝險。"
-            hold_ratio = "80% - 100%"
-    else:
-        signal = "🔴 空頭防禦"
-        action = "跌破年線，趨勢偏空。維持既有定期定額，單筆操作宜觀望。"
-        hold_ratio = "20% - 40%"
-
-    return {
-        "Signal": signal,
-        "Action_Advice": action,
-        "Suggested_Holding": hold_ratio,
-        "Bias_240": round(bias_240, 2),
-        "Is_Bull": is_bull_market,
-        "Is_Overheated": is_overheated,
-        "Is_Foreign_Hedging": is_foreign_hedging,
-    }
+# v18.344 PR-N1:evaluate_market_status_v4_final 抽至 shared/macro_compute.py(L2 純函式)
+from shared.macro_compute import evaluate_market_status_v4_final  # noqa: F401
 
 
 # ═══════════════════════════════════════════════
@@ -702,133 +638,19 @@ def _adl_selftest():
 
 
 
-def _hex2rgba(color, alpha=0.12):
-    try:
-        c=color.lstrip('#'); r,g,b=int(c[0:2],16),int(c[2:4],16),int(c[4:6],16)
-        return f"rgba({r},{g},{b},{alpha})"
-    except: return "rgba(88,166,255,0.12)"
-
-def _base_layout(title="", height=260):
-    return dict(title=dict(text=title,font=dict(color="#8b949e",size=12)),
-                height=height,plot_bgcolor="#0e1117",paper_bgcolor="#0e1117",
-                font=dict(color="#e6edf3",size=11),
-                margin=dict(l=8,r=8,t=35,b=20),
-                xaxis=dict(gridcolor="#21262d",showgrid=True,zeroline=False),
-                yaxis=dict(gridcolor="#21262d",showgrid=True,zeroline=False),
-                legend=dict(bgcolor="rgba(0,0,0,0)",font=dict(size=10)))
-
-def sparkline(df, title="", color="#58a6ff"):
-    col=next((c for c in ['close','Close'] if c in df.columns),None)
-    if col is None: return go.Figure()
-    s=df[col].dropna().tail(45)
-    fig=go.Figure(go.Scatter(x=list(s.index),y=list(s.values),mode='lines',
-                             line=dict(color=color,width=2),fill='tozeroy',
-                             fillcolor=_hex2rgba(color) if color.startswith('#') else color))
-    fig.update_layout(**_base_layout(title,200)); return fig
-
-def multi_chart(data_dict, title="", norm=False, height=250):
-    fig=go.Figure()
-    for i,(name,df) in enumerate(data_dict.items()):
-        col=next((c for c in ['close','Close'] if c in df.columns),None)
-        if col is None: continue
-        s=df[col].dropna().tail(45)
-        y=(s/s.iloc[0]*100).round(2) if (norm and len(s)>0) else s
-        fig.add_trace(go.Scatter(x=list(s.index),y=list(y.values),mode='lines',name=name,
-                                 line=dict(color=COLORS_7[i%len(COLORS_7)],width=2)))
-    fig.update_layout(**_base_layout(title,height)); return fig
-
-def bar_chart_institutional(inst_dict, title="三大法人買賣超（堆疊柱狀圖）", height=300):
-    """升級版：堆疊柱狀圖（三大法人各自一欄，顏色區分）"""
-    # 分離三個法人
-    _inst_keys = ['外資', '投信', '自營商']
-    _inst_colors = {'外資': '#58a6ff', '投信': TRAFFIC_GREEN, '自營商': '#bc8cff'}
-    # 初始化為 float（修復：原為 [] 導致 >= 比較 TypeError）
-    _data_by = {k: 0.0 for k in _inst_keys}
-    # inst_dict 格式: {法人名: {net, buy, sell, ...}}
-    if inst_dict and isinstance(inst_dict, dict):
-        for _name, _val in inst_dict.items():
-            if '合計' in _name: continue
-            if not isinstance(_val, dict): continue
-            _matched = next((k for k in _inst_keys if k in str(_name)), None)
-            if _matched:
-                try:
-                    _data_by[_matched] = float(_val.get('net', 0) or 0)
-                except (ValueError, TypeError) as _e_inst:
-                    # W5-2 §1: 三大法人 net 解析失敗補 log
-                    print(f"[daily_checklist inst-flow] {_matched} net 解析失敗:{_e_inst}")
-    # 若無日期維度，做單日橫向堆疊
-    fig = go.Figure()
-    for _ik in _inst_keys:
-        _v = float(_data_by.get(_ik, 0.0))  # 確保是 float
-        _c = '#da3633' if _v > 0 else ('#2ea043' if _v < 0 else '#388bfd')
-        fig.add_trace(go.Bar(
-            name=_ik, x=[_ik], y=[_v],
-            marker_color=_inst_colors.get(_ik, _c),
-            text=[f'{_v:+.1f}億'],
-            textposition='outside',
-            cliponaxis=False,
-            opacity=0.9,
-        ))
-    # 若全部為 0（API 未回傳或節假日），加入 annotation 提示
-    _total = sum(float(v) for v in _data_by.values())
-    _all_zero = all(v == 0.0 for v in _data_by.values())
-    _layout = _base_layout(title, height)
-    _layout.update({
-        'barmode': 'group',
-        'showlegend': True,
-        'legend': {'orientation': 'h', 'y': 1.08, 'font': {'size': 10, 'color': '#8b949e'}},
-        'shapes': [{'type': 'line', 'x0': -0.5, 'x1': 2.5, 'y0': 0, 'y1': 0,
-                    'line': {'color': '#484f58', 'width': 1, 'dash': 'dot'}}],
-        'annotations': [{'text': f'合計: {_total:+.1f}億',
-                         'xref': 'paper', 'yref': 'paper', 'x': 0.98, 'y': 0.95,
-                         'showarrow': False, 'font': {'size': 12, 'color': '#da3633' if _total > 0 else ('#2ea043' if _total < 0 else '#388bfd')}}]
-    })
-    if _all_zero:
-        # 所有值為 0：填充佔位 bar 讓圖表不空白，並加提示文字
-        for _ik in _inst_keys:
-            fig.add_trace(go.Bar(
-                name=_ik, x=[_ik], y=[0.001],
-                marker_color='#21262d', opacity=0.3,
-                showlegend=False,
-            ))
-        _layout['annotations'] = [{'text': '⚠️ 資料待更新（收盤後 15:30 取得）',
-                                    'xref': 'paper', 'yref': 'paper', 'x': 0.5, 'y': 0.5,
-                                    'showarrow': False, 'font': {'size': 13, 'color': TRAFFIC_YELLOW}}]
-    fig.update_layout(**_layout)
-    return fig
-
-def stat_card(name, stats, unit="", has_data=True):
-    if not has_data or stats is None:
-        return (f'<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;'
-                f'padding:12px;text-align:center;opacity:0.5;"><div style="font-size:10px;color:#484f58;">{name}</div>'
-                f'<div style="font-size:13px;color:#484f58;">載入中...</div></div>')
-    pct=stats.get('pct',0); pc='#da3633' if pct>0 else ('#2ea043' if pct<0 else '#388bfd'); arrow='▲' if pct>0 else ('▼' if pct<0 else '─')
-    return (f'<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;padding:12px;text-align:center;">'
-            f'<div style="font-size:10px;color:#484f58;">{name}</div>'
-            f'<div style="font-size:18px;font-weight:900;color:#e6edf3;">{stats.get("last","?")} '
-            f'<span style="font-size:10px;color:#8b949e;">{unit}</span></div>'
-            f'<div style="font-size:12px;font-weight:700;color:{pc};">{arrow} {abs(pct):.2f}%</div>'
-            f'<div style="font-size:10px;color:#484f58;">{stats.get("status","")}</div></div>')
-
-def margin_card(margin):
-    if margin is None:
-        return ('<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;padding:14px;">'
-                '<div style="font-size:11px;color:#484f58;">融資餘額</div>'
-                f'<div style="font-size:12px;color:{TRAFFIC_YELLOW};margin-top:6px;">⏳ 抓取中（TWSE 15:30後更新）</div>'
-                '<div style="font-size:10px;color:#484f58;margin-top:4px;">收盤後點「更新全部總經數據」重試</div></div>')
-    mc=TRAFFIC_RED if margin>MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI else (TRAFFIC_YELLOW if margin>MARGIN_BALANCE_WARN_THRESHOLD_YI else TRAFFIC_GREEN)
-    label='🔴超過3400億高危' if margin>MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI else ('⚡超過2500億警戒' if margin>MARGIN_BALANCE_WARN_THRESHOLD_YI else '✅安全水位')
-    return (f'<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;padding:14px;">'
-            f'<div style="font-size:11px;color:#484f58;">融資餘額</div>'
-            f'<div style="font-size:28px;font-weight:900;color:{mc};">{margin:.0f}'
-            f'<span style="font-size:12px;">億</span></div>'
-            f'<div style="font-size:10px;color:#8b949e;">{label}</div></div>')
-
-def section_header(num, title, icon=""):
-    return (f'<div style="background:linear-gradient(90deg,#161b22,transparent);'
-            f'border-left:3px solid #1f6feb;border-radius:0 6px 6px 0;'
-            f'padding:8px 14px;margin:16px 0 10px 0;">'
-            f'<span style="color:#1f6feb;font-weight:700;">{icon} {num}、{title}</span></div>')
+# v18.344 PR-N1:UI 渲染元件抽至 macro_ui_components.py(L4 Render),re-export 維持相容。
+# 8 個函式:_hex2rgba / _base_layout / sparkline / multi_chart /
+# bar_chart_institutional / stat_card / margin_card / section_header
+from macro_ui_components import (  # noqa: F401
+    _hex2rgba,
+    _base_layout,
+    sparkline,
+    multi_chart,
+    bar_chart_institutional,
+    stat_card,
+    margin_card,
+    section_header,
+)
 
 def analyze_20d_chips(stock_id: str) -> dict:
     """
@@ -933,47 +755,10 @@ def analyze_20d_chips(stock_id: str) -> dict:
         return {'error': str(_e20), 'signal': '⚫ 計算失敗'}
 
 
-def analyze_20d_chips_from_df(df) -> dict:
-    """近 20 日籌碼集中度 — 直接複用個股 K 線已載入的 df（含 外資/投信/volume 欄，
-    單位皆為張），免重複呼叫 FinMind（規避 quota 失敗）。
-    回傳格式與 analyze_20d_chips 完全相同；欄位不足時回 error 供呼叫端退回 API 版。"""
-    try:
-        import pandas as _pd
-        if df is None or len(df) < 5:
-            return {'error': 'df資料不足', 'signal': '⚫ 資料不足'}
-        if not all(c in df.columns for c in ('外資', '投信', 'volume')):
-            return {'error': 'df缺法人/量欄', 'signal': '⚫ 資料不足'}
-        _d   = df.tail(20)
-        _net = (_pd.to_numeric(_d['外資'], errors='coerce').fillna(0)
-                + _pd.to_numeric(_d['投信'], errors='coerce').fillna(0))
-        _vol = _pd.to_numeric(_d['volume'], errors='coerce').fillna(0)
-        if not (_net != 0).any():        # 法人欄全為 0 → df 未載到籌碼，退回 API 版
-            return {'error': 'df法人欄全為0', 'signal': '⚫ 資料不足'}
-        _tot_net = float(_net.sum())
-        _tot_vol = float(_vol.sum())
-        if _tot_vol <= 0:
-            return {'error': '成交量為0', 'signal': '⚫ 資料不足'}
-        _concentration = _tot_net / _tot_vol * 100
-        _pos_days   = int((_net > 0).sum())
-        _continuity = _pos_days / len(_d) * 100
-        if _concentration > 5 and _continuity > 50:
-            _signal = '🔥 大戶吸籌'
-        elif _concentration < -5:
-            _signal = '🔴 大戶倒貨'
-        else:
-            _signal = '🟡 籌碼發散'
-        return {
-            'concentration': round(_concentration, 2),
-            'continuity':    round(_continuity, 1),
-            'signal':        _signal,
-            'days':          len(_d),
-            'pos_days':      _pos_days,
-            'total_net_k':   round(_tot_net / 1e3, 1),
-            'total_vol_k':   round(_tot_vol / 1e3, 1),
-            'error':         None,
-        }
-    except Exception as _edf:
-        return {'error': str(_edf), 'signal': '⚫ 計算失敗'}
+# v18.344 PR-N1:analyze_20d_chips_from_df 抽至 shared/macro_compute.py(L2 純函式)。
+# 三個 caller (tab_macro / tab_stock x2 / tab_stock_grp) 用 `from daily_checklist
+# import analyze_20d_chips_from_df` 形式,re-export 維持 0 caller 改動。
+from shared.macro_compute import analyze_20d_chips_from_df  # noqa: F401
 
 
 # v18.301 §8.3 拆檔:calc_stats 已提取至 shared/stats_helpers.py(L0 純函式)。
