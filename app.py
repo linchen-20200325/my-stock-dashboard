@@ -311,6 +311,11 @@ def fetch_price_data(sid, days):
     result = df.tail(days).reset_index(drop=True)
     try:
         result.attrs.update(df.attrs)
+        # v18.351 PR-Q1 S-PROV-1 phase 19:確保 source/fetched_at 存在(§2.2)。
+        # data_loader.get_combined_data 內部 fetchers (phase 15/16) 已寫 attrs;
+        # 若上游缺(備援路徑),setdefault 補通用標籤 — 不覆蓋既有值
+        result.attrs.setdefault('source', 'app:fetch_price_data:data_loader.get_combined_data')
+        result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
     except Exception:
         pass
     _save_cache('price', sid, (result, name), str(days))
@@ -418,6 +423,17 @@ def fetch_dividend_data(sid):
         except Exception as _eTD:
             pass
 
+    # v18.351 PR-Q1 S-PROV-1 phase 19:stderr 記 provenance(§2.2 audit trail)。
+    # 介面 0 改:return 仍是 (avg_div, yearly, source) 3-tuple,caller 由 source 欄已可追溯;
+    # fetched_at 走 stderr log(tuple 增欄會破 caller)
+    try:
+        import sys as _sys_prov
+        _now = pd.Timestamp.now('UTC').isoformat()
+        print(f'[fetch_dividend_data] sid={sid} source={source or "FAIL"} '
+              f'fetched_at={_now} avg_div={avg_div:.4f} years={len(yearly)}',
+              file=_sys_prov.stderr)
+    except Exception:
+        pass
     return avg_div, yearly, source
 
 @st.cache_data(ttl=TTL_1HOUR, max_entries=10)
@@ -565,6 +581,17 @@ def fetch_financials(sid, industry: str = ""):
 
     def _fmt(v): return f"{v/1e8:.1f}" if v else "-"
     print(f"[FIN] {sid}: cl={_fmt(cl)}億  cx={_fmt(cx)}億  capex={_fmt(_capex)}億")
+    # v18.351 PR-Q1 S-PROV-1 phase 19:stderr 記 provenance(§2.2)。
+    # 介面 0 改:cl_src/cx_src/cx_src_capex 3 個 source 欄已在 tuple 內,fetched_at 走 stderr。
+    try:
+        import sys as _sys_prov_fin
+        _now_f = pd.Timestamp.now('UTC').isoformat()
+        print(f'[fetch_financials] sid={sid} cl_src={cl_src or "-"} cx_src={cx_src or "-"} '
+              f'capex_src={cx_src_capex or "-"} fetched_at={_now_f} '
+              f'errors={len(fetch_errors)}',
+              file=_sys_prov_fin.stderr)
+    except Exception:
+        pass
     return cl, cx, _capex, cl_src, cx_src, cx_src_capex, fetch_errors
 
 
@@ -575,6 +602,15 @@ def fetch_revenue(sid):
         result = loader.get_monthly_revenue(sid)
         if result is None:
             return None, '月營收：內部回傳None'
+        # v18.351 PR-Q1 S-PROV-1 phase 19:DataFrame 走 attrs(schema-additive)
+        _df_attr = result[0] if isinstance(result, tuple) else result
+        try:
+            if hasattr(_df_attr, 'attrs'):
+                _df_attr.attrs.setdefault('source',
+                    'app:fetch_revenue:data_loader.get_monthly_revenue')
+                _df_attr.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
         if isinstance(result, tuple):
             return result
         return result, None  # single value
@@ -589,6 +625,15 @@ def fetch_quarterly(sid, _ver=4):   # _ver 改變即清除舊快取
         result = loader.get_quarterly_data(sid)
         if result is None:
             return None, '季財報：內部回傳None'
+        # v18.351 PR-Q1 S-PROV-1 phase 19:DataFrame 走 attrs(schema-additive)
+        _df_attr_q = result[0] if isinstance(result, tuple) else result
+        try:
+            if hasattr(_df_attr_q, 'attrs'):
+                _df_attr_q.attrs.setdefault('source',
+                    'app:fetch_quarterly:data_loader.get_quarterly_data')
+                _df_attr_q.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
         if isinstance(result, tuple):
             return result
         return result, None
