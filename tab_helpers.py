@@ -177,6 +177,39 @@ def classify_stock_status_lamp(health_score: float | None,
     return '⚪'
 
 
+def classify_rs_zone(rs_val: float | None,
+                      rs_slope_up: bool | None = None) -> tuple[str, str]:
+    """v18.337 PR-H5:RS 相對強度數值評級 SSOT(個股 + 個股組合 Tab 共用)。
+
+    原 tab_stock.py:894-896 inline RS 分級 + 三色判定抽出。
+    閾值來自 shared.signal_thresholds.STOCK_RS_STRONG_MIN(75)/NEUTRAL_MIN(50)。
+
+    Args:
+        rs_val: RS 相對強度分數(0-100,來自 scoring_engine.calc_rs_score)
+        rs_slope_up: True=強勢上升 / False=弱勢下降 / None=未判斷
+
+    Returns:
+        (label, color):
+        - rs ≥ 75 → '🟢 強勢 {rs:.0f}分 {slope_arrow}' / TRAFFIC_GREEN
+        - 50 ≤ rs < 75 → '🟡 中性 {rs:.0f}分 {slope_arrow}' / TRAFFIC_YELLOW
+        - rs < 50 → '🔴 弱勢 {rs:.0f}分 {slope_arrow}' / TRAFFIC_RED
+        - rs = None → '⚪ 無資料' / TRAFFIC_YELLOW
+
+    SSOT 政策:任何 RS 視覺化呼叫本函式。
+    """
+    from shared.signal_thresholds import (
+        STOCK_RS_NEUTRAL_MIN, STOCK_RS_STRONG_MIN,
+    )
+    if rs_val is None:
+        return '⚪ RS 無資料', TRAFFIC_YELLOW
+    _arrow = '↑強勢' if rs_slope_up else ('↓弱勢' if rs_slope_up is False else '')
+    if rs_val >= STOCK_RS_STRONG_MIN:
+        return f'🟢 強勢 {rs_val:.0f}分 {_arrow}'.strip(), TRAFFIC_GREEN
+    if rs_val >= STOCK_RS_NEUTRAL_MIN:
+        return f'🟡 中性 {rs_val:.0f}分 {_arrow}'.strip(), TRAFFIC_YELLOW
+    return f'🔴 弱勢 {rs_val:.0f}分 {_arrow}'.strip(), TRAFFIC_RED
+
+
 def compute_stop_levels(price: float | None) -> dict | None:
     """v18.336 PR-H4:停利停損價位 SSOT(個股 Tab 顯著視覺化 + 組合 Tab 可擴充)。
 
