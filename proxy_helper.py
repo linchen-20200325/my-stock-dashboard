@@ -76,8 +76,15 @@ def get_proxy_config() -> dict | None:
         elif 'proxy' in _sec:
             _p   = _sec['proxy']
             _url = f"http://{_p['username']}:{_p['password']}@{_p['endpoint']}"
-    except Exception:
-        pass
+    except Exception as _e_sec:
+        # v18.343 PR-M1 S-MED:silent pass → stderr。原吞 (a) streamlit 沒裝
+        # (ImportError),(b) st.secrets 無此 keys (KeyError),(c) proxy dict
+        # 缺 username/password/endpoint (KeyError) — (a) 合法降級到 os.environ;
+        # (b)(c) 是 config 寫錯,admin 該看到。下游 fallback 仍走 os.environ。
+        # 介面 0 改,只補可觀測性。
+        print(f'[_load_proxy_config/secrets] swallow: '
+              f'{type(_e_sec).__name__}: {_e_sec}',
+              file=__import__('sys').stderr)
 
     if not _url:
         _url = (_os.environ.get('PROXY_URL')

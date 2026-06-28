@@ -614,8 +614,12 @@ class StockDataLoader:
                     match = stock_info[stock_info['stock_id'] == stock_id]
                     if not match.empty:
                         stock_name = match.iloc[0]['stock_name']
-            except:
-                pass
+            except Exception as _e_si:
+                # v18.343 PR-M1 S-MED:bare except → typed + stderr。FinMind SDK
+                # taiwan_stock_info 偶爾 quota/timeout/empty,原 silent pass 下游 fallback
+                # 到 get_stock_name(L621),功能不變,僅補軌跡讓 quota 問題立刻可見。
+                print(f'[_fetch_stock_name_inner] swallow ({stock_id}): '
+                      f'{type(_e_si).__name__}: {_e_si}', file=sys.stderr)
 
             if stock_name == stock_id:
                 stock_name = get_stock_name(stock_id)
