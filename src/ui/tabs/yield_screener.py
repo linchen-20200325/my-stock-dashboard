@@ -66,63 +66,9 @@ def fetch_twse_yield_pe() -> pd.DataFrame:
 # ══════════════════════════════════════════════════════════════════════════════
 # ② 單檔配息歷史 — yfinance Ticker.dividends（透過 NAS proxy）
 # ══════════════════════════════════════════════════════════════════════════════
-@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
-def fetch_dividend_history(ticker: str) -> pd.Series:
-    """取得單檔股票的歷史配息（按年合計）。
-
-    Args:
-        ticker: 純台股代碼如 '2330' / '6770'，自動補 .TW
-
-    Returns:
-        Series：index=西元年, values=該年現金配息合計（元）；無資料回傳空 Series
-    """
-    import os as _os
-    try:
-        import yfinance as yf
-    except ImportError:
-        print('[yield_screener] yfinance 未安裝')
-        return pd.Series(dtype=float)
-
-    # 注入 NAS proxy 至 env（yfinance/requests 會自動讀取）
-    _ek = ('HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy')
-    _bak = {k: _os.environ.get(k) for k in _ek}
-    try:
-        from src.data.proxy import get_proxy_config
-        _proxy_dict = get_proxy_config() or {}
-        _px_url = _proxy_dict.get('https') or _proxy_dict.get('http')
-        if _px_url:
-            for k in _ek:
-                _os.environ[k] = _px_url
-    except Exception:
-        pass
-
-    _t = ticker.strip().upper()
-    if not _t.endswith('.TW') and not _t.endswith('.TWO'):
-        _t = f'{_t}.TW'
-
-    try:
-        _y = yf.Ticker(_t)
-        _div = _y.dividends
-        if _div is None or len(_div) == 0:
-            return pd.Series(dtype=float)
-        _annual = _div.groupby(_div.index.year).sum().astype(float)
-        # v18.356 PR-Q5b S-PROV-1 phase 19:Series 走 attrs
-        try:
-            _annual.attrs.setdefault('source', f'yfinance.Ticker({_t}).dividends')
-            _annual.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
-        except Exception:
-            pass
-        return _annual
-    except Exception as _e:
-        print(f'[yield_screener] dividend fetch 失敗 {ticker}: {_e}')
-        return pd.Series(dtype=float)
-    finally:
-        # 還原環境變數，避免污染其他模組
-        for k, v in _bak.items():
-            if v is None:
-                _os.environ.pop(k, None)
-            else:
-                _os.environ[k] = v
+# P1-1b v18.375:fetch_dividend_history 整檔搬至 src/data/stock/dividend_fetcher.py(L1)
+# 此處改 backward-compat re-export(走 lazy import,caller 介面不變)
+from src.data.stock.dividend_fetcher import fetch_annual_dividends as fetch_dividend_history  # noqa: F401
 
 
 # ══════════════════════════════════════════════════════════════════════════════

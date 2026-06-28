@@ -31,10 +31,13 @@ class TestQ5bMarkersInSource(unittest.TestCase):
         self.assertIn('etf_fetch(7-metrics aggregator)', src)
 
     def test_yield_screener_2(self):
-        src = self._read('src/ui/tabs/yield_screener.py')
+        # P1-1b v18.375:fetch_dividend_history 整檔搬至 src/data/stock/dividend_fetcher.py。
+        # source check 改合集(yield_screener 仍有 fetch_twse_yield_pe + thin re-export)。
+        src = (self._read('src/ui/tabs/yield_screener.py')
+               + self._read('src/data/stock/dividend_fetcher.py'))
         # fetch_twse_yield_pe — DataFrame attrs
         self.assertIn("'TWSE:OpenAPI:BWIBBU_d'", src)
-        # fetch_dividend_history — Series attrs
+        # fetch_dividend_history → 改 fetch_annual_dividends — Series attrs
         self.assertIn('yfinance.Ticker', src)
 
     def test_monthly_revenue_screener_2(self):

@@ -5,6 +5,13 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P1-1b (v18.375) — yield_screener fetch_dividend_history 抽 L1
+- **檔案**: `src/ui/tabs/yield_screener.py` + `src/data/stock/dividend_fetcher.py`(NEW)
+- **拔毒**: line 70-125 fetch_dividend_history 整段含 yfinance + NAS proxy 注入 + 配息聚合 → 整檔搬至 L1。yield_screener 留 thin re-export(`from src.data.stock.dividend_fetcher import fetch_annual_dividends as fetch_dividend_history`)
+- **EX-CACHE-1 例外**: L1 fetcher 用 @st.cache_data,允許(只 cache 不用 session_state/UI)
+- **驗證**: full pytest 2213/0 fail(1 test source 對齊改合集)
+- **commit**: 待 push
+
 ### P1-1a (v18.374) — tab_stock_picker yfinance 直呼抽 L1
 - **檔案**: `src/ui/tabs/tab_stock_picker.py` + `src/data/stock/picker_fetcher.py`(NEW)
 - **拔毒**: line 283 L5 UI 內 `yf.Ticker(...).history(...)` HTTP I/O 違憲 → 抽 `fetch_stock_history_1y(ticker)` 至 L1。_check_one_stock 內改 call helper(yf param 保留 backward compat,內部 dead 不再用)
