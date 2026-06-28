@@ -4654,21 +4654,21 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         except Exception:
             pass
 
-    elif cd:
-        # 已有其他總經數據但先行指標失敗 → 顯示診斷
-        with st.expander('⚠️ 先行指標載入失敗 — 診斷說明', expanded=True):
-            st.warning('先行指標尚未載入，請重新點擊「🚀 一鍵更新全部數據」')
-            st.markdown('''<div style="font-size:12px;color:#8b949e;line-height:1.8;">
-<b>可能原因：</b><br>
-① TAIFEX 在 Colab 常被封鎖 → 外資大小/PCR/韭菜仍可從 FinMind 取得<br>
-② FinMind API 速率限制 → 等待 10 分鐘後重試<br>
-③ 非交易日（週末/假日）→ 資料期間無新增屬正常<br><br>
-<b>✅ 免費可用（不需 Token）：</b><br>
-• 外資大小 TX+MTX | 選PCR(FinMind) | 外(選) | 三大法人買賣 | 成交量 | ADL<br>
-• TAIFEX 可達時自動補充：前五大/前十大/精確PCR/未平倉/韭菜精確值<br>
-</div>''', unsafe_allow_html=True)
     else:
-        st.info('📡 請點擊「🚀 一鍵更新全部數據」自動載入先行指標')
+        # v18.340 §1 Fail Loud：對齊 PR #362 chips_empty_state 三狀態分流(table 專屬 helper)。
+        # user 2026-06-28「原來的 table 呢?」(對比 6/14 截圖)→ 真正根因常是 FINMIND_TOKEN
+        # 缺失/失效,舊文案沒明指,user 找不到救法。新 helper 明確分流:
+        #   未載入(灰) / 已試+無token(橙明指 FINMIND_TOKEN) / 已試+有token(橙歸因額度/週末)。
+        from shared.macro_buckets import leading_table_empty_state_html as _li_es
+        _attempted_li = bool(cd) or bool(st.session_state.get('cl_ts')) or bool(
+            st.session_state.get('chips_loaded'))
+        try:
+            _fm_present_li = bool((getattr(st, 'secrets', {}) or {}).get('FINMIND_TOKEN')
+                                  or os.environ.get('FINMIND_TOKEN', ''))
+        except Exception:
+            _fm_present_li = bool(os.environ.get('FINMIND_TOKEN', ''))
+        st.markdown(_li_es(attempted=_attempted_li, token_present=_fm_present_li),
+                    unsafe_allow_html=True)
 
     # 宏爺判斷方式 → 已移至 Tab 5 策略手冊
 
