@@ -119,7 +119,9 @@ def calc_momentum_score(df) -> float:
     # ② Sharpe-like 動能（20日）
     # Return20 / Sigma20：緩步上漲 > 暴漲暴跌
     ret20  = (close.iloc[-1] / close.iloc[-20] - 1) if len(close) >= 20 else 0
-    sigma20 = close.pct_change().rolling(20).std().iloc[-1] if len(close) >= 20 else 0.01
+    # E-2 v18.387:抽 shared/calc_helpers.daily_return_rolling_std SSOT
+    from shared.calc_helpers import daily_return_rolling_std as _drrs
+    sigma20 = _drrs(close, 20).iloc[-1] if len(close) >= 20 else 0.01
     sharpe_20 = ret20 / (sigma20 * (20 ** 0.5) + 1e-10)  # 年化 Sharpe 代理
     sharpe_score = 2 if sharpe_20 > MOM_SHARPE_GOOD else (1 if sharpe_20 > 0 else 0)
 
@@ -236,8 +238,9 @@ def calc_risk_score(df) -> float:
     close = df['close']
     score = 0; total = 3
 
-    # 波動率分級（修正：台股日波動率通常1.5%-6%）
-    vol_pct = close.pct_change().rolling(20).std().iloc[-1]
+    # 波動率分級(修正:台股日波動率通常1.5%-6%) — E-2 v18.387:抽 SSOT
+    from shared.calc_helpers import daily_return_rolling_std as _drrs
+    vol_pct = _drrs(close, 20).iloc[-1]
     if   vol_pct < RISK_VOL_VERYLOW_RATIO:  score += 1   # 極低波動（ETF/權值股）
     elif vol_pct < RISK_VOL_LOW_RATIO: score += 1   # 正常低波動（原門檻3%已鬆寬）
     # 3.5%~5% → 0分，>5% → 0分（高波動高風險）

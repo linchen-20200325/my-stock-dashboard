@@ -19,3 +19,17 @@ def pct_change_yoy(series, periods: int = 12, multiplier: float = 100.0):
     - src/compute/macro/macro_signal_lookback_tw.py:191 TWII 20D 跌幅(日頻 20)
     """
     return series.pct_change(periods) * multiplier
+
+
+def daily_return_rolling_std(close, window: int = 20):
+    """日報酬率波動率(`close.pct_change().rolling(N).std()`)。
+
+    E-2 v18.387 抽自 scoring_engine.py:122,240 inline pattern。
+
+    參數:
+        close: pd.Series 收盤價(日頻)
+        window: rolling 視窗,預設 20
+
+    回傳:pd.Series(日報酬率 N-day std);caller 通常取 `.iloc[-1]`。
+    """
+    return close.pct_change().rolling(window).std()
