@@ -247,6 +247,15 @@ def fetch_cbc_ms1_rows(url: str, *, min_rows: int = 1,
         return None
     if log_label:
         print(f"[{log_label}] ✅ {url[-40:]} 取到 {len(data)} 行")
+    # v18.354 PR-Q4 S-PROV-1 phase 19:stderr audit trail(不破 caller list return)
+    try:
+        import sys as _sys_prov_cbc
+        _now_cbc = pd.Timestamp.now('UTC').isoformat()
+        print(f'[fetch_cbc_ms1_rows] source=CBC:ms1.json:{url[-40:]} '
+              f'fetched_at={_now_cbc} result=list:{len(data)}rows',
+              file=_sys_prov_cbc.stderr)
+    except Exception:
+        pass
     return data
 
 
@@ -1163,4 +1172,15 @@ def fetch_china_macro(fred_api_key: str = "") -> dict:
                 print(f'[tw_macro/china_macro/{sid}] 失敗: {type(e).__name__}: {e}')
                 import pandas as _pd  # noqa: PLC0415
                 result[sid] = _pd.DataFrame()
+    # v18.354 PR-Q4 S-PROV-1 phase 19:aggregator 級 audit trail
+    # (內部 5 條 fetch_fred 已各自 phase 1 寫 attrs;此處記彙整成果)
+    try:
+        import sys as _sys_prov_chn
+        _now_chn = pd.Timestamp.now('UTC').isoformat()
+        _ok = sum(1 for _df in result.values() if _df is not None and not _df.empty)
+        print(f'[fetch_china_macro] source=FRED:china_macro(5-series-parallel) '
+              f'fetched_at={_now_chn} result=dict:{_ok}/{len(result)}series',
+              file=_sys_prov_chn.stderr)
+    except Exception:
+        pass
     return result

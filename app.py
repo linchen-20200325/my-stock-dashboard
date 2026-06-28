@@ -649,6 +649,15 @@ def fetch_quarterly_extra(sid, _ver=2):   # _ver 改變即清除舊快取
         result = loader.get_quarterly_bs_cf(sid)
         if result is None:
             return None, 'BS/CF：內部回傳None'
+        # v18.354 PR-Q4 S-PROV-1 phase 19:DataFrame 走 attrs(對齊 fetch_quarterly 模式)
+        _df_attr_qe = result[0] if isinstance(result, tuple) else result
+        try:
+            if hasattr(_df_attr_qe, 'attrs'):
+                _df_attr_qe.attrs.setdefault('source',
+                    'app:fetch_quarterly_extra:data_loader.get_quarterly_bs_cf')
+                _df_attr_qe.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
         if isinstance(result, tuple):
             return result
         return result, None
