@@ -123,8 +123,12 @@ def test_bucket_summary_bar_empty_fail_safe():
 def test_tab_macro_buckets_have_summary_bar():
     """tab_macro 各資料桶(long/mid/short/news)接 render_macro_bucket_summary_bar；
     §三 籌碼(chips)保留原樣不加(user 2026-06-27 指定)。"""
+    # F-7.1a:bucket_summary_bar_html string 在 helper 抽出到 macro/helpers.py,
+    # bucket call 仍在 tab_macro.py。檢查兩處合集。
     from src.ui.tabs import tab_macro
-    src = open(tab_macro.__file__, encoding='utf-8').read()
+    from src.ui.tabs.macro import helpers as _macro_helpers
+    src = (open(tab_macro.__file__, encoding='utf-8').read()
+           + open(_macro_helpers.__file__, encoding='utf-8').read())
     assert 'bucket_summary_bar_html' in src
     # 用 prefix 比對（不含右括號）：long 自 v18.338 起帶 with_cards=True 選參，
     # 桶仍有接 summary bar，斷言放寬以容許額外 kwarg（intent 不變）。

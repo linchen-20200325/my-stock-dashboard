@@ -35,13 +35,18 @@ def _fred(vals: list[float], base_date: str = "2026-06-01") -> pd.DataFrame:
 
 @pytest.fixture
 def stub_st(monkeypatch):
-    """把 tab_macro 內 st.* 替換成 MagicMock，避免 streamlit runtime。"""
+    """把 tab_macro + helpers 內 st.* 替換成 MagicMock，避免 streamlit runtime。"""
     fake = MagicMock()
     fake.columns.return_value = (MagicMock(), MagicMock(), MagicMock(),
                                   MagicMock(), MagicMock())
     fake.expander.return_value.__enter__ = lambda *_a, **_k: MagicMock()
     fake.expander.return_value.__exit__ = lambda *_a, **_k: False
     monkeypatch.setattr(tab_macro, 'st', fake)
+    # v18.363 F-7.1a:_render_global_risk_bucket / _render_china_drag_panel 等
+    #   helper 已抽至 src.ui.tabs.macro.helpers,該模組有自己 import streamlit as st。
+    #   mock 必須同時打 helpers,否則 fn 內 st.markdown 不走 fake。
+    from src.ui.tabs.macro import helpers as _macro_helpers
+    monkeypatch.setattr(_macro_helpers, 'st', fake)
     return fake
 
 
