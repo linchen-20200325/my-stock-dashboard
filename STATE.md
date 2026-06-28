@@ -5,6 +5,15 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P1-5bcd (v18.379) — 6 個 0-caller dead fn 跨 3 檔刪
+- **檔案**:
+  - `src/data/macro/leading_indicators.py`:刪 build_dataset(line 762)+ render_table(line 809),共 117 LOC
+  - `src/services/daily_checklist.py`:刪 get_export_yoy(line 250)+ get_business_indicator(line 255),含 @st.cache_data decorator
+  - `src/data/core/data_registry.py`:刪 get_pingable_endpoints(line 573)+ get_summary_stats(line 602)
+- **拔毒**: 全 grep 確認 0 caller(任何形式)
+- **驗證**: 3 檔 ast.parse + full pytest 2213/0 fail
+- **commit**: 待 push
+
 ### P1-5a (v18.378) — financial_health_engine.py 刪 6 個 dead analyze_*_module
 - **檔案**: `src/services/financial_health_engine.py`
 - **拔毒**: 6 個 0-caller def(analyze_survival/operating/profitability/financial_structure/solvency/advanced_diagnostic_module),全 grep 確認 0 caller(含動態 import / multiprocessing)

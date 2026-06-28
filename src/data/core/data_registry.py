@@ -570,10 +570,6 @@ def get_by_category(category: str) -> list[dict]:
     return [e for e in DATA_REGISTRY if e.get('category') == category]
 
 
-def get_pingable_endpoints() -> list[dict]:
-    """取得可即時測試的端點清單"""
-    return [e for e in DATA_REGISTRY if e.get('pingable') and e.get('ping_url')]
-
 
 def ping_endpoint(entry: dict, timeout: int = 8) -> dict:
     """即時測試單一端點連線。
@@ -597,28 +593,6 @@ def ping_endpoint(entry: dict, timeout: int = 8) -> dict:
         _elapsed = int((_t.time() - _start) * 1000)
         return {'ok': False, 'status': None, 'elapsed_ms': _elapsed,
                 'error': str(_e)[:80]}
-
-
-def get_summary_stats() -> dict:
-    """計算註冊表摘要統計"""
-    _total = len(DATA_REGISTRY)
-    _connected = sum(1 for e in DATA_REGISTRY if e.get('state_key'))
-    _pingable = sum(1 for e in DATA_REGISTRY if e.get('pingable'))
-    _need_key = sum(1 for e in DATA_REGISTRY if e.get('requires_key'))
-    _by_cat = {}
-    for _e in DATA_REGISTRY:
-        _c = _e.get('category', '其他')
-        _by_cat[_c] = _by_cat.get(_c, 0) + 1
-    return {
-        'total': _total,
-        'connected': _connected,
-        'pingable': _pingable,
-        'need_key': _need_key,
-        'by_category': _by_cat,
-    }
-
-
-# ══════════════════════════════════════════════════════════════════════════════
 # 📖 EDU_GUIDE — 指標解讀手冊（依 identifier 對應）
 # ══════════════════════════════════════════════════════════════════════════════
 # 設計原則：新人看了就懂。每筆指標回答 6 個問題：

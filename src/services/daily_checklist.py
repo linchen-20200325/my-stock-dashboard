@@ -246,11 +246,3 @@ from shared.stats_helpers import calc_stats  # noqa: F401
 # v5.0 Wrapper 函數 — NAS 優先，快取裝飾，統一 N/A 邏輯
 # ═══════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False, max_entries=10)
-def get_export_yoy() -> dict | None:
-    return None
-
-
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False, max_entries=10)
-def get_business_indicator() -> dict | None:
-    return None
