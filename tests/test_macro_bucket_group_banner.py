@@ -79,12 +79,14 @@ def test_bad_key_fail_loud():
 
 
 def test_tab_macro_inserts_five_banners():
-    """src/ui/tabs/tab_macro.py + 抽出的 section_*.py 必須在 5 個桶叢集前插入 group banner。"""
-    # F-7.1 B-2:short 桶 _bgb call 搬到 macro/section_short.py;檢查合集。
+    """src/ui/tabs/tab_macro.py + 抽出的 section_*.py 必須在 5 個桶叢集前插入 group banner。
+    F-7.1 B-2/B-3/B-5:short/ai/long 桶 _bgb call 搬到各 section_*.py;檢查合集。"""
     from src.ui.tabs import tab_macro
-    from src.ui.tabs.macro import section_short
+    from src.ui.tabs.macro import section_short, section_ai, section_long
     src = (open(tab_macro.__file__, encoding="utf-8").read()
-           + open(section_short.__file__, encoding="utf-8").read())
+           + open(section_short.__file__, encoding="utf-8").read()
+           + open(section_ai.__file__, encoding="utf-8").read()
+           + open(section_long.__file__, encoding="utf-8").read())
     for key in ("'long'", "'mid'", "'short'", "'chips'", "'ai'"):
         assert f"_bgb({key}" in src, f"tab_macro 缺 {key} 桶 banner"
 
@@ -126,16 +128,19 @@ def test_bucket_summary_bar_empty_fail_safe():
 def test_tab_macro_buckets_have_summary_bar():
     """tab_macro 各資料桶(long/mid/short/news)接 render_macro_bucket_summary_bar；
     §三 籌碼(chips)保留原樣不加(user 2026-06-27 指定)。"""
-    # F-7.1 a/B-2/B-3:bucket_summary_bar_html 在 macro/helpers.py,short/news 桶 call 在
-    # macro/section_short.py + section_ai.py,其他 bucket call 仍在 tab_macro.py。檢查 4 處合集。
+    # F-7.1 a/B-2/B-3/B-5:bucket_summary_bar_html 在 macro/helpers.py;
+    # short/news/long 桶 call 在 section_short.py / section_ai.py / section_long.py;
+    # 其他 bucket call 仍在 tab_macro.py。檢查 5 處合集。
     from src.ui.tabs import tab_macro
     from src.ui.tabs.macro import helpers as _macro_helpers
     from src.ui.tabs.macro import section_short as _section_short
     from src.ui.tabs.macro import section_ai as _section_ai
+    from src.ui.tabs.macro import section_long as _section_long
     src = (open(tab_macro.__file__, encoding='utf-8').read()
            + open(_macro_helpers.__file__, encoding='utf-8').read()
            + open(_section_short.__file__, encoding='utf-8').read()
-           + open(_section_ai.__file__, encoding='utf-8').read())
+           + open(_section_ai.__file__, encoding='utf-8').read()
+           + open(_section_long.__file__, encoding='utf-8').read())
     assert 'bucket_summary_bar_html' in src
     # 用 prefix 比對（不含右括號）：long 自 v18.338 起帶 with_cards=True 選參，
     # 桶仍有接 summary bar，斷言放寬以容許額外 kwarg（intent 不變）。

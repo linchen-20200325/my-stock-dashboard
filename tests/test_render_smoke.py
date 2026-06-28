@@ -66,9 +66,10 @@ def test_radar_and_bucket_bar_gated_pre_load():
     _show_market_data 後 — 未載入資料(尚無快取/過期)時不顯示,對齊紅綠燈「尚無資料」。
     full render AppTest 在無 proxy/secrets 環境會 hang,故用 source pattern 檢查防回歸。"""
     import re
-    # F-7.1 B-2:§五 section_header 搬到 macro/section_short.py;source 改合集。
+    # F-7.1 B-2/B-5:§一/§五/§六/§七 等 section_header 搬到 macro/section_short.py + section_long.py;source 改合集。
     src = (open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
-           + open("src/ui/tabs/macro/section_short.py", encoding="utf-8").read())
+           + open("src/ui/tabs/macro/section_short.py", encoding="utf-8").read()
+           + open("src/ui/tabs/macro/section_long.py", encoding="utf-8").read())
     # 雷達 call 緊接在 if _show_market_data: 之後
     # v18.317:函式改名 _render_global_risk_bucket(10 燈雷達改桶,從頂部下移至短線急殺後)
     assert re.search(
@@ -81,50 +82,25 @@ def test_radar_and_bucket_bar_gated_pre_load():
         r"(?:\s*#[^\n]*\n)*"  # 0+ 註解行
         r"\s+from src\.compute\.macro import compute_five_bucket_summary", src
     ), "五桶 bar 未 gate 在 _show_market_data(未載入會顯示多餘面板)"
-    # C1-Z v18.293 物理重排:§七(長期) 必須在 §一(中期) 之前出現,對齊 5 桶 reading order。
-    _pos_seven = src.find("section_header('七'")
-    _pos_one   = src.find("section_header('一'")
-    assert _pos_seven > 0, "找不到 §七 section_header"
-    assert _pos_one > 0, "找不到 §一 section_header"
-    assert _pos_seven < _pos_one, (
-        "C1-Z v18.293:§七(🌳 長期) 物理位置應在 §一(📈 中期) 之前。"
-        f" 實際: §七 byte offset={_pos_seven}, §一 byte offset={_pos_one}"
-    )
-    # C1-Z1 v18.294 物理重排:§五(⚡ 短殺) 必須在 §三(🧩 籌碼) 之前出現,對齊 5 桶 reading order。
-    # F-7.1 B-2 (v18.365):§五 整段抽至 macro/section_short.py;改檢 tab_macro.py 內
-    # render_section_short() call 位置(代表 §五 在 reading order 內的入口)vs §三 位置。
+    # F-7.1 B-2~B-5:§七/§一/§五/§六/§八/§十一 全部 section header 抽至各 section_*.py;
+    # 此 test 改檢 tab_macro 內各 render_section_*() call 順序(reading order 入口)。
+    # 仍留 tab_macro 的 §三 籌碼(未抽,B-3 audit 後評估 S8 CHIPS 留作 future batch)+ §九 (data wait try)
     _tm_src = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
-    _pos_five  = _tm_src.find("render_section_short(")
-    _pos_three = _tm_src.find("section_header('三'")
-    assert _pos_five > 0,  "找不到 render_section_short() call"
-    assert _pos_three > 0, "找不到 §三 section_header"
-    assert _pos_five < _pos_three, (
-        "C1-Z1 v18.294:§五(⚡ 短線急殺) 物理位置應在 §三(🧩 籌碼) 之前。"
-        f" 實際: render_section_short() byte offset={_pos_five}, §三 byte offset={_pos_three}"
+    _pos_long   = _tm_src.find("render_section_long(")    # §七/§一/§六 入口
+    _pos_mid    = _tm_src.find("render_section_mid(")     # §八 入口
+    _pos_short  = _tm_src.find("render_section_short(")   # §五 入口
+    _pos_three  = _tm_src.find("section_header('三'")     # §三 籌碼(未抽,留 tab_macro)
+    _pos_ai     = _tm_src.find("render_section_ai(")      # §十一 入口
+    for name, pos in [('render_section_long', _pos_long), ('render_section_mid', _pos_mid),
+                      ('render_section_short', _pos_short), ("section_header('三'", _pos_three),
+                      ('render_section_ai', _pos_ai)]:
+        assert pos > 0, f"找不到 {name}"
+    # reading order:long(§七一六) → mid(§八) → short(§五) → chips(§三) → ai(§十一)
+    assert _pos_long < _pos_mid < _pos_short < _pos_three < _pos_ai, (
+        f"C1-Z2 v18.297:section call 順序錯。"
+        f" 實際: long={_pos_long}, mid={_pos_mid}, short={_pos_short}, "
+        f"chips(三)={_pos_three}, ai={_pos_ai}"
     )
-    # C1-Z2 v18.297 物理重排:§六/§八(📈 中期) 必須與 §一/§二 集中,在 §五 之前出現。
-    # F-7.1 B-4:§八 section_header 搬至 macro/section_mid.py;改檢 render_section_mid() call 位置。
-    _pos_six   = src.find("section_header('六'")
-    _pos_eight = _tm_src.find("render_section_mid(")
-    assert _pos_six > 0,   "找不到 §六 section_header"
-    assert _pos_eight > 0, "找不到 render_section_mid() call(§八 中期 總經拼圖)"
-    assert _pos_six < _pos_five, (
-        "C1-Z2 v18.297:§六(📈 中期 美股科技) 應在 §五(短殺) 之前。"
-        f" 實際: §六={_pos_six}, §五={_pos_five}"
-    )
-    assert _pos_eight < _pos_five, (
-        "C1-Z2 v18.297:§八(📈 中期 總經拼圖,F-7.1 B-4 抽出) 應在 §五(短殺) 之前。"
-        f" 實際: render_section_mid()={_pos_eight}, render_section_short()={_pos_five}"
-    )
-    # 9 section 完整順序:七→一→二→六→八→五→三→九→十一
-    # F-7.1 B-3:§十一 section_header 搬至 macro/section_ai.py;改檢 render_section_ai() call 位置。
-    _tm_src2 = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
-    _pos_nine   = src.find("section_header('九'")
-    _pos_eleven = _tm_src2.find("render_section_ai(")
-    assert _pos_seven < _pos_one < _pos_six < _pos_eight < _pos_five < _pos_three < _pos_nine, (
-        "C1-Z2 v18.297:9 sections 物理順序(扣 §十一,已抽出)應為 七→一→二→六→八→五→三→九"
-    )
-    assert _pos_eleven > 0, "找不到 render_section_ai() call(§十一 AI 總裁決)"
 
 
 @pytest.mark.slow
