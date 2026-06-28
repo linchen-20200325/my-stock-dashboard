@@ -7,6 +7,18 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
+- [x] **S-AUDIT-RUN-Q**(v18.351~353 PR-Q1+Q2+Q3,2026-06-28)— S-PROV-1 phase 19 啟動,3 連 PR 覆蓋 18 fetcher
+  * **PR-Q1**(#382, v18.351):app.py top 5 hot path(fetch_price_data / fetch_dividend_data / fetch_financials / fetch_revenue / fetch_quarterly)— DataFrame 走 attrs.setdefault,tuple return 走 stderr audit trail,介面 0 改
+  * **PR-Q2**(#383, v18.352):etf_fetch.py 7 個(fetch_sitca_expense_ratio / fetch_moneydj_expense_ratio / _fetch_holdings_yahoo_tw / fetch_etf_holdings / _fetch_sitca_manager / fetch_etf_zh_name / fetch_etf_underlying_index)— 新增 module-level `_prov_log()` helper,7 fetcher 主 return 點呼叫
+  * **PR-Q3**(#385, v18.353):tab_macro.py 6 closure wrappers(`_fetch_vix/cpi/pmi/ndc/export/fed_funds`)— 在 `_job_macro` 收尾集中 `setdefault('fetched_at')`,1 處 edit 涵蓋 14 處 return point(各自已有 'source' key),schema-additive
+  * 測試:tests/test_pr_q1+q2+q3_*.py +28 全綠;phase 19 累計覆蓋 18 fetcher
+  * 剩餘 ~40 個 small fetcher(monthly_revenue_screener / yield_screener / tab_stock_picker / 其他)邊際效益遞減,套 §-1 等 user 指示再續
+
+- [x] **S-AUDIT-RUN-P**(v18.350 PR-P1,2026-06-28)— SSOT 對齊 audit P1 先行指標診斷表增強(PR #381)
+  * 先行指標 expander `_diag_cols` 升 4-tuple:(來源主鏈, 公式, TTL, 備援優先級),頂部加 cache 新鮮度橙色告示
+  * 對齊 TTL_CONFIG(institutional/volume 10min)+ build_leading_fast 30min pickle SSOT
+  * 守 `if len(_tup) == 4` fallback 兼容 2-tuple(防外部 dict 改錯崩);6 守衛測全綠
+
 - [x] **S-AUDIT-RUN-O**(v18.349 PR-O1,2026-06-28)— SSOT 對齊 audit P0 真 bug(PR #380)
   * **痛點**:user「資料 vs 診斷 tab 對齊 SSOT」泛指令,audit 後發現 1 個真 bug + 1 個單位矛盾
   * **bug 1**:`tab_stock_grp.py:1202/1240` 讀 `_rp.get('foreign_buy', 0)` 但 `results_t3.append({...})` 從未寫該欄 → AI prompt 永遠 default 0 → 永遠回「外資 0.0 億」誤導
