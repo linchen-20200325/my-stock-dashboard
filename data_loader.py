@@ -706,6 +706,13 @@ class StockDataLoader:
             # fillna(0) 保留以維持下游 scoring/strategy 數值穩定，但統計受影響筆數寫 stderr
             # 讓「靜默填補」變成「可觀測填補」。未來理想做法：caller 取 is_imputed DataFrame
             # 旗標 → 由策略層自決是否容忍缺值（見 §8.2.A future enhancement）
+            #
+            # v18.349 PR-O1 SSOT 對齊註記:
+            # - 外資 / 投信 / 自營商 / 主力合計 單位 = **張**(SSOT: _normalize_inst_pivot L286 `/1000` 轉換)
+            #   * 與診斷 tab 顯示的 BFI82U 全市場「億元」單位**不同**:本 df 是個股 net 買賣超(張)
+            #   * caller 若要 億元 = (張 × 1000 × 收盤價) / 1e8
+            # - volume 單位 = **張**(yfinance / FinMind TaiwanStockPrice Trading_Volume)
+            # - 融資餘額 / 融券餘額 單位 = **張**(FinMind TaiwanStockMarginPurchaseShortSale)
             fill_cols = ['volume', '外資', '投信', '自營商', '主力合計']
             _d2_imputed = sum(int(df[c].isna().sum()) for c in fill_cols if c in df.columns)
             if _d2_imputed > 0:
