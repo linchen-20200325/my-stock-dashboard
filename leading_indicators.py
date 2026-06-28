@@ -84,6 +84,14 @@ TAIFEX_HDR = {
 }
 FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
 
+# build_leading_fast §6.5 TAIFEX「補強」段(前五大/前十大/精確韭菜)為逐日序列爬,
+# 最多 14 天 × 每天十幾秒 timeout = 整段可達 ~100s,會超過外層併發池對 li job 的
+# 80s/100s 預算 → 整張表(連已抓到的 FinMind 三大法人/期貨/PCR/融資)一起被砍成空。
+# 對策:給整段 TAIFEX 補強一個總時間預算,超過就 break、用已收到的部分 + FinMind 主
+# 資料組表。25s ≪ 80s li 額度,確保 build_leading_fast 在被砍前先回傳。
+# (此值為效能預算非資料門檻;named const 供 SSOT/測試引用,避免 inline magic。)
+_TAIFEX_ENRICH_BUDGET_S = 25
+
 # ── 工具 ─────────────────────────────────────────────────
 def roc_to_ymd(s):
     s = str(s).strip()
@@ -1240,7 +1248,17 @@ def build_leading_fast(days=7, token=""):
             print(f"[LI-v8] PCR(TAIFEX)略過: {_pe}")
 
     # TAIFEX: 嘗試 target 所有日期（最多14天），每天超時7s
+    # 整段限時 _TAIFEX_ENRICH_BUDGET_S：逐日序列爬若拖過預算 → break，用已收到的
+    # 部分 + FinMind 主資料組表(§1 不靜默：明確 log 切點與已收天數)。
+    _tfx_deadline = _tm_li.monotonic() + _TAIFEX_ENRICH_BUDGET_S
+    _tfx_budget_hit = False
     for _td in target:   # 全部 target 日期
+        if _taifex_reachable and _tm_li.monotonic() > _tfx_deadline:
+            _tfx_budget_hit = True
+            print(f"[TAIFEX] ⏱️ 補強預算 {_TAIFEX_ENRICH_BUDGET_S}s 用罄，"
+                  f"已收 LT={len(taifex_lt)}天 MTX={len(taifex_leek)}天，"
+                  f"其餘日改用 FinMind 估算組表(三大法人/期貨/PCR/融資不受影響)")
+            break
         if _taifex_reachable:
             try:
                 _lt_res = taifex_large_trader(_td)
@@ -1331,8 +1349,12 @@ def build_leading_fast(days=7, token=""):
         except Exception:
             pass
     # S-PROV-1 phase 18 v18.264 — provenance(schema-additive)
+    # TAIFEX 補強逾預算被截斷時,source 標 :taifex-partial,讓 UI/稽核知道前五大/
+    # 精確韭菜可能不全(主資料仍為 FinMind,§2.2 血緣可追)。
     if not df.empty:
-        df["source"] = "FinMind+TAIFEX:leading_indicators:fast"
+        df["source"] = ("FinMind+TAIFEX:leading_indicators:fast:taifex-partial"
+                        if _tfx_budget_hit else
+                        "FinMind+TAIFEX:leading_indicators:fast")
         df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
     return df
 

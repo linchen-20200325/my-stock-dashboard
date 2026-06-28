@@ -458,12 +458,18 @@ def leading_table_empty_state_html(attempted: bool, token_present: bool) -> str:
                "上述 4 個 FinMind API 全部需 token,缺 token → 全 422 → 表格無法渲染。"
                "請在部署 secrets 設定 FINMIND_TOKEN 後,重按「🚀 一鍵更新全部數據」。")
     else:
+        # v18.343:原文案逕指「4 個 FinMind API 全回空 / 額度用罄」,但實測最常見根因是
+        # 先行指標「補強段」(TAIFEX 前五大/精確韭菜)逐日序列爬逾時,整批被併發池砍掉——
+        # 此時 FinMind 主資料(三大法人/期貨/PCR/融資)其實已抓到,只是沒組進表。誤導性
+        # 文案違反 §1 Fail Loud(診斷講錯方向),改為以逾時為首因、額度/token 退為次因。
         icon, color = "⚠️", "#f0883e"
-        msg = ("已嘗試抓取,但 4 個 FinMind API 全回空。"
-               "常見原因:① FinMind 額度用罄(每日 600 次)→ 隔日重試;"
+        msg = ("已嘗試抓取,但先行指標明細表未組出(三大法人摘要/策略燈若已顯示,"
+               "代表 FinMind 主資料其實有抓到)。"
+               "常見原因:① 補強來源(TAIFEX 前五大/精確韭菜)逐日爬逾時被截斷 → "
+               "多按一次「🚀 一鍵更新全部數據」通常即補上(背景已寫快取);"
                "② 非交易日(週末/假日)→ 屬正常,等下個交易日;"
-               "③ token 已失效 → 至 FinMind 後台確認。"
-               "TAIFEX 在海外 IP 常被擋,前五大/精確PCR 等備援來源無法補資料。")
+               "③ FinMind token 失效 / 額度用罄(每日 600 次)→ 至 FinMind 後台確認。"
+               "TAIFEX 在海外 IP 常被擋,前五大/精確PCR 等備援來源可能無法補齊。")
     return (
         f'<div style="margin:8px 0 12px;padding:12px 16px;'
         f'background:linear-gradient(90deg,{color}1f,#0d1117);'
