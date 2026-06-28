@@ -53,6 +53,12 @@ def _fetch_etf_history(symbol: str, years: int) -> pd.Series | None:
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         close = df["Close"].dropna()
+        # v18.357 PR-Q5c S-PROV-1 phase 19:Series attrs
+        try:
+            close.attrs.setdefault('source', f'yfinance:{symbol}:{years}y:auto_adjust')
+            close.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
         return close
     except Exception as e:
         st.error(f"❌ yfinance 抓 {symbol} 失敗：{type(e).__name__}: {e}")

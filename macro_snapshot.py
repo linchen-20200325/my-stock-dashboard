@@ -44,8 +44,12 @@ def fetch_vix_block() -> dict:
             return {'_err_vix': 'not enough data'}
         _s20 = _vv[-20:] if len(_vv) >= 20 else _vv
         print(f'[Macro/VIX] ✅ current={_vv[-1]} date={_vd[-1]}')
+        # v18.357 PR-Q5c S-PROV-1 phase 19:provenance 進入 dict(schema-additive)
+        import datetime as _dt_vp
         return {'vix': {'current': _vv[-1], 'ma20': round(sum(_s20) / len(_s20), 1),
-                        'dates': _vd[-60:], 'values': _vv[-60:], 'date': _vd[-1]}}
+                        'dates': _vd[-60:], 'values': _vv[-60:], 'date': _vd[-1],
+                        'source': 'yfinance:^VIX:3mo:1d',
+                        'fetched_at': _dt_vp.datetime.utcnow().isoformat() + 'Z'}}
     except Exception as _e_vix:
         print(f'[Macro/VIX] ❌ {_e_vix}')
         return {'_err_vix': str(_e_vix)[:80]}

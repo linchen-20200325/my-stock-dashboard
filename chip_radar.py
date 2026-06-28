@@ -244,6 +244,16 @@ def fetch_chip_concentration(ticker: str) -> dict:
     _diag = _table_diag(_tables)
     _err = '' if not _parsed.empty else \
         '找到表格但無法辨識「大戶比例 / 散戶人數」欄位 — 請展開下方診斷面板看實際欄位結構'
+    # v18.357 PR-Q5c S-PROV-1 phase 19
+    try:
+        import sys as _sys_cr, datetime as _dt_cr
+        print(f'[fetch_chip_concentration] ticker={ticker} '
+              f'source=norway.twsthr.info(集保股權分散表) '
+              f'fetched_at={_dt_cr.datetime.utcnow().isoformat()}Z '
+              f'result=dict:df_rows={len(_parsed)}:err={"Y" if _err else "N"}',
+              file=_sys_cr.stderr)
+    except Exception:
+        pass
     return {'df': _parsed, 'err': _err, 'tables': _diag, 'html_head': ''}
 
 

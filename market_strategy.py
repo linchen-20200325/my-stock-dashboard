@@ -31,7 +31,11 @@ def fetch_market_data():
         return {'foreign_net': None, 'date': ''}  # None 表示資料取得失敗，非「零」
     # tw_macro 回 'YYYY-MM-DD'，對齊原 fetch_market_data 回傳的 'YYYYMMDD'
     date_str = str(snap.get('date', '')).replace('-', '')
-    return {'foreign_net': float(snap['fii_net']), 'date': date_str}
+    # v18.357 PR-Q5c S-PROV-1 phase 19:dict 加 source/fetched_at(schema-additive)
+    import datetime as _dt_ms
+    return {'foreign_net': float(snap['fii_net']), 'date': date_str,
+            'source': 'tw_macro.fetch_finmind_foreign_investor',
+            'fetched_at': _dt_ms.datetime.utcnow().isoformat() + 'Z'}
 
 
 # ── 核心：市場狀態判斷 (§5.1) ─────────────────────────────────
