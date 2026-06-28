@@ -1,4 +1,4 @@
-"""src/ui/tabs/macro/section_ai_cross.py — Section 9(§九)跨桶 AI 投資決策 v18.388(B-S8-B 抽出)。
+"""src/ui/tabs/macro/section_cross_ai.py — Section 九 跨桶 AI 投資決策(B-S8-B 抽出,P2 v18.389 rename)。
 
 🧠 跨桶｜總經 AI 投資決策分析(五維度卡:景氣位階 / 配置 / 貨幣 / 美股 / 結論)
 
@@ -12,7 +12,7 @@ session_state 讀(0 寫):
 - bias_info      年線乖離(bias_240)
 
 備註:本檔的 'ai' 桶群組 banner 同時 group §九 + §十一,故 banner setup 留在本檔
-頭部(原 tab_macro:2233-2235),§十一 render_section_ai() 在外層接續呼叫,不重複 emit。
+頭部(原 tab_macro:2233-2235),§十一 render_section_news_ai() 在外層接續呼叫,不重複 emit。
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from src.ui.render.macro_ui_components import section_header
 
 
-def render_section_ai_cross(tech_s: dict, tw_s: dict) -> None:
+def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
     """渲染§九 跨桶 AI 投資決策分析(原 tab_macro line 2233-2452)。"""
     # v18.310 桶群組 banner：AI 綜合(跨桶 AI §九 + 新聞 AI 裁決 §十一)
     from shared.macro_buckets import bucket_group_banner_html as _bgb

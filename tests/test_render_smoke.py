@@ -86,20 +86,20 @@ def test_radar_and_bucket_bar_gated_pre_load():
     # header 抽至各 section_*.py;此 test 改檢 tab_macro 內各 render_section_*()
     # call 順序(reading order 入口)。§三 籌碼 v18.388 後改 render_section_chips(...)。
     _tm_src = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
-    _pos_long   = _tm_src.find("render_section_long(")    # §七/§一/§六 入口
-    _pos_mid    = _tm_src.find("render_section_mid(")     # §八 入口
-    _pos_short  = _tm_src.find("render_section_short(")   # §五 入口
-    _pos_three  = _tm_src.find("render_section_chips(")   # §三 籌碼(B-S8-A 抽)
-    _pos_ai     = _tm_src.find("render_section_ai(")      # §十一 入口
+    _pos_long   = _tm_src.find("render_section_long(")      # §七/§一/§六 入口
+    _pos_mid    = _tm_src.find("render_section_mid(")       # §八 入口
+    _pos_short  = _tm_src.find("render_section_short(")     # §五 入口
+    _pos_three  = _tm_src.find("render_section_chips(")     # §三 籌碼(B-S8-A 抽)
+    _pos_ai     = _tm_src.find("render_section_news_ai(")   # §十一 News AI(P2 v18.389 rename)
     for name, pos in [('render_section_long', _pos_long), ('render_section_mid', _pos_mid),
                       ('render_section_short', _pos_short), ('render_section_chips', _pos_three),
-                      ('render_section_ai', _pos_ai)]:
+                      ('render_section_news_ai', _pos_ai)]:
         assert pos > 0, f"找不到 {name}"
-    # reading order:long(§七一六) → mid(§八) → short(§五) → chips(§三) → ai(§十一)
+    # reading order:long(§七一六) → mid(§八) → short(§五) → chips(§三) → news_ai(§十一)
     assert _pos_long < _pos_mid < _pos_short < _pos_three < _pos_ai, (
         f"C1-Z2 v18.297:section call 順序錯。"
         f" 實際: long={_pos_long}, mid={_pos_mid}, short={_pos_short}, "
-        f"chips(三)={_pos_three}, ai={_pos_ai}"
+        f"chips(三)={_pos_three}, news_ai={_pos_ai}"
     )
 
 

@@ -64,8 +64,8 @@ from src.ui.tabs.macro.handlers import (  # noqa: F401
 )
 # F-7.1 B-2 v18.365:Section 6 短線急殺桶抽至 macro/section_short.py(LOC 4833→4521)
 from src.ui.tabs.macro.section_short import render_section_short  # noqa: F401
-# F-7.1 B-3 v18.366:Section 10/11 AI 總裁決抽至 macro/section_ai.py(LOC 4521→4230)
-from src.ui.tabs.macro.section_ai import render_section_ai  # noqa: F401
+# F-7.1 B-3 v18.366:§十一 News AI 總裁決抽至 macro/section_news_ai.py(P2 v18.389 rename)
+from src.ui.tabs.macro.section_news_ai import render_section_news_ai  # noqa: F401
 # F-7.1 B-4 v18.367:Section 4 (§八) 中期/總經拼圖抽至 macro/section_mid.py(LOC 4230→3797)
 from src.ui.tabs.macro.section_mid import render_section_mid  # noqa: F401
 # F-7.1 B-5 v18.368:Section 3 長期桶 LONG 抽至 macro/section_long.py(LOC 3797→3402)
@@ -74,8 +74,8 @@ from src.ui.tabs.macro.section_long import render_section_long  # noqa: F401
 from src.ui.tabs.macro.section_state import render_section_state  # noqa: F401
 # F-7.1 B-S8-A v18.388:Section 3 籌碼桶抽至 macro/section_chips.py(LOC 3034→~2475)
 from src.ui.tabs.macro.section_chips import render_section_chips  # noqa: F401
-# F-7.1 B-S8-B v18.388:Section 9 跨桶 AI 抽至 macro/section_ai_cross.py(LOC 2476→~2258)
-from src.ui.tabs.macro.section_ai_cross import render_section_ai_cross  # noqa: F401
+# F-7.1 B-S8-B v18.388:§九 跨桶 AI 抽至 macro/section_cross_ai.py(P2 v18.389 rename)
+from src.ui.tabs.macro.section_cross_ai import render_section_cross_ai  # noqa: F401
 
 
 
@@ -2232,8 +2232,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
     # F-7.1 B-S8-A v18.388:Section 3 籌碼桶抽至 macro/section_chips.py(LOC 3034→~2475)。
     render_section_chips(inst, margin, cd)
-    # F-7.1 B-S8-B v18.388:Section 9 跨桶 AI 抽至 macro/section_ai_cross.py(LOC 2476→~2258)。
-    render_section_ai_cross(tech_s, tw_s)
+    # F-7.1 B-S8-B v18.388:§九 跨桶 AI 抽至 macro/section_cross_ai.py(P2 v18.389 rename)。
+    render_section_cross_ai(tech_s, tw_s)
 
     # ══════════════════════════════════════════════════════════════
     # SECTION 十: 📊 總經訊號歷史驗證 — v18.191 ARCHIVED
@@ -2256,7 +2256,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     #     st.caption(f"⚠️ 歷史驗證 section 載入失敗：{_e_hv}")
 
 
-    # F-7.1 B-3:Section 10/11 AI 總裁決抽至 src/ui/tabs/macro/section_ai.py
-    render_section_ai(_macro_info, _tl_eff_reg)
+    # F-7.1 B-3:§十一 News AI 總裁決抽至 src/ui/tabs/macro/section_news_ai.py
+    render_section_news_ai(_macro_info, _tl_eff_reg)
     st.caption("📖 想看總經原理教室(景氣循環 / PMI / 殖利率倒掛 / 美林時鐘 等 10 章)?"
                "→ 已移至「📖 系統說明書」Tab,含資料來源完整地圖 + 4 大師策略。")
