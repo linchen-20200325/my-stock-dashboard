@@ -930,6 +930,7 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
             _rv = pd.to_numeric(qtr_df['營收'], errors='coerce').dropna()
 
             # 處分資產現金流入（有則計算，無則視為 0）
+            # v18.339 PR-J3 S-MED:fillna(0) 為 sum() 場景,NaN 數學等價 0,正確;非資料偽造。
             _disp_ttm = 0.0
             if '處分資產現金流入' in bs_cf_df.columns:
                 _disp = pd.to_numeric(bs_cf_df['處分資產現金流入'], errors='coerce').fillna(0)
@@ -989,6 +990,7 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
     # ─────────────────────────────────────────────────
     try:
         # 重用 I4 已計算的處分資產偵測結果
+        # v18.339 PR-J3 S-MED:fillna(0) 為 sum() 場景,NaN 數學等價 0,正確;非資料偽造。
         _i5_event_driven = False
         if bs_cf_df is not None and '處分資產現金流入' in bs_cf_df.columns:
             _disp5 = pd.to_numeric(bs_cf_df['處分資產現金流入'], errors='coerce').fillna(0)

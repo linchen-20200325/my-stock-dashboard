@@ -3,6 +3,7 @@ ETF 計算層（calc layer）
 從 etf_dashboard.py 抽出的純計算函式：殖利率 / 總報酬 / 折溢價 / 風險指標 / 同儕排名 / 戰情室列計算
 依賴：etf_fetch（單向；calc 永遠不依賴 render）。
 """
+import sys  # v18.339 PR-J3 S-MED 真高風險:silent except 改 stderr log
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -170,7 +171,8 @@ def calc_current_yield(df: pd.DataFrame, divs: pd.Series) -> float:
         annual_div = float(divs[divs.index >= cutoff].sum())
         price = float(df['Close'].iloc[-1])
         return round(annual_div / price * 100, 2) if price > 0 else 0.0
-    except Exception:
+    except Exception as _e:
+        print(f'[calc_current_yield] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
         return 0.0
 
 
@@ -187,7 +189,8 @@ def calc_total_return_1y(df: pd.DataFrame, divs: pd.Series) -> float:
         p_end   = float(df_1y['Close'].iloc[-1])
         div_sum = float(divs[divs.index >= cutoff].sum()) if not divs.empty else 0.0
         return round((p_end - p_start + div_sum) / p_start * 100, 2)
-    except Exception:
+    except Exception as _e:
+        print(f'[calc_total_return_1y] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
         return 0.0
 
 
@@ -209,7 +212,8 @@ def calc_avg_yield(df: pd.DataFrame, divs: pd.Series, years: int = 5) -> float:
             if avg_p > 0:
                 result.append(y_div / avg_p * 100)
         return round(sum(result) / len(result), 2) if result else 0.0
-    except Exception:
+    except Exception as _e:
+        print(f'[calc_avg_yield] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
         return 0.0
 
 
@@ -248,8 +252,8 @@ def check_vcp_signal(df: pd.DataFrame) -> dict:
                 r['vol_confirm'] = vol_now > vol_ma50
                 r['signal'] = (r['above_ma50'] and r['above_ma200']
                                 and shrinking and r['vol_confirm'])
-    except Exception:
-        pass
+    except Exception as _e:
+        print(f'[check_vcp_signal] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
     return r
 
 
@@ -379,7 +383,8 @@ def calc_avg_volume_20d(df: pd.DataFrame) -> float:
         if len(_vol) < 5:
             return None
         return round(float(_vol.mean()) / 1000.0, 1)
-    except Exception:
+    except Exception as _e:
+        print(f'[calc_avg_volume_20d] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
         return None
 
 
@@ -498,7 +503,8 @@ def calc_tracking_error(df: pd.DataFrame, bench_df: pd.DataFrame) -> float:
             return None
         diff = etf_r.loc[common] - bench_r.loc[common]
         return round(float(diff.std() * (252 ** 0.5) * 100), 2)
-    except Exception:
+    except Exception as _e:
+        print(f'[calc_tracking_error] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
         return None
 
 
@@ -508,7 +514,8 @@ def calc_mdd(df: pd.DataFrame) -> float:
         close    = df['Close']
         roll_max = close.cummax()
         return round(float(((close - roll_max) / roll_max * 100).min()), 2)
-    except Exception:
+    except Exception as _e:
+        print(f'[calc_mdd] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
         return None
 
 
@@ -524,7 +531,8 @@ def calc_cagr(df: pd.DataFrame) -> float:
         start = float(df['Close'].iloc[0])
         end   = float(df['Close'].iloc[-1])
         return round(((end / start) ** (1 / y) - 1) * 100, 2)
-    except Exception:
+    except Exception as _e:
+        print(f'[calc_cagr] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
         return 0.0
 
 
@@ -537,7 +545,8 @@ def calc_sharpe(df: pd.DataFrame, rf: float = 5.33) -> float:
         ann_ret = float(ret.mean() * 252 * 100)
         ann_vol = float(ret.std() * (252 ** 0.5) * 100)
         return round((ann_ret - rf) / ann_vol, 2) if ann_vol > 0 else 0.0
-    except Exception:
+    except Exception as _e:
+        print(f'[calc_sharpe] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
         return 0.0
 
 

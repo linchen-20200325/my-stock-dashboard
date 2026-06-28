@@ -221,7 +221,10 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
         return {"bw": None, "signal": "⚪ 資料不足", "color": N,
                 "msg": f"需至少 {window} 根 K 線，目前僅 {len(df)} 根"}
 
-    close = df['close'].ffill().fillna(method='bfill')
+    # v18.339 PR-J3 S-MED:bfill 移除避免 lookahead(未來資料回填過去)。
+    # 改 ffill().dropna() — 起頭缺值丟掉而不是用後續資料偽造,
+    # rolling(window).mean() 後 NaN tail 自然不影響最新一根判斷。
+    close = df['close'].ffill().dropna()
     ma    = close.rolling(window).mean()
     std   = close.rolling(window).std()
 

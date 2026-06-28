@@ -1039,7 +1039,10 @@ def build_leading_fast(days=7, token=""):
         """智能單位轉換 → 億元，自動偵測千元/萬元/元"""
         try:
             v = float(v)
-        except Exception:
+        except Exception as _e_to_yi:
+            import sys as _sys_to_yi
+            print(f'[_to_yi_mg] cast fail: {type(_e_to_yi).__name__}: {_e_to_yi} (val={v!r})',
+                  file=_sys_to_yi.stderr)
             return None
         if pd.isna(v) or v <= 0:
             return None
