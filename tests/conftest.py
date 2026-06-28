@@ -17,6 +17,23 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import pandas as pd
 
+# v18.361 F-6.5 R5:在 conftest load 時(test_data_coverage 之前)捕捉真實 streamlit,
+#   存 backup;autouse fixture 每 test 結束後若 sys.modules['streamlit'] 是 stub
+#   且 caller 真需要 divider 等完整 API,還原回 pristine。
+#   tests/test_data_coverage.py:43 module-level _stub_st() 永久替換,沒 cleanup,
+#   F-6.5 後 collection 順序變,macro_classroom 在它之後跑時 stub 卡住 st.divider。
+try:
+    import streamlit as _STREAMLIT_PRISTINE  # noqa: F401
+except Exception:
+    _STREAMLIT_PRISTINE = None
+
+
+def _restore_streamlit() -> None:
+    """若 sys.modules['streamlit'] 是 stub,還原為 pristine 版本(若有)。"""
+    cur = sys.modules.get("streamlit")
+    if cur is not None and getattr(cur, "_stub", False) and _STREAMLIT_PRISTINE is not None:
+        sys.modules["streamlit"] = _STREAMLIT_PRISTINE
+
 
 def _clear_module_caches() -> None:
     """清空 tw_macro / macro_core 的 module-level in-process 快取。
@@ -49,8 +66,10 @@ def _clear_module_caches() -> None:
 @pytest.fixture(autouse=True)
 def _isolate_module_caches():
     """每個測試前後清空 module-level 快取,杜絕跨測試污染。"""
+    _restore_streamlit()
     _clear_module_caches()
     yield
+    _restore_streamlit()
     _clear_module_caches()
 
 

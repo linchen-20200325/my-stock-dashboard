@@ -26,7 +26,9 @@ def _stub_st():
 
     def _noop(*a, **k):
         return None
-    for n in ("markdown", "caption"):
+    # v18.361 F-6.5 R4:多加 divider(原只 markdown/caption),避 collection 順序變後
+    #   macro_classroom render_principle_classroom 內 st.divider 撞 AttributeError。
+    for n in ("markdown", "caption", "divider"):
         setattr(m, n, _noop)
 
     # 支援 @st.cache_data 與 @st.cache_data(ttl=...) 兩種呼叫
