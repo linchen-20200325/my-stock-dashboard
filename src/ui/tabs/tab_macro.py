@@ -2792,6 +2792,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     st.markdown(section_header('九', '🧠 跨桶｜總經 AI 投資決策分析', '🧠'), unsafe_allow_html=True)
 
     # ── 安全取數 ────────────────────────────────────────────────
+    # v18.388:B-4 (1ee60c3) 把 _m8_* 隨 §八 section 抽至 section_mid local,§九 此處
+    # 仍 reference → render 期 NameError。重抓 macro_info 以保持與 section_mid:58-64 同源。
+    _macro_info_for_s9 = st.session_state.get('macro_info') or {}
+    _m8_vix = _macro_info_for_s9.get('vix')
+    _m8_pmi = _macro_info_for_s9.get('ism_pmi')
+    _m8_exp = _macro_info_for_s9.get('tw_export')
+    _m8_cpi = _macro_info_for_s9.get('us_core_cpi')
     _ai_vix  = float(_m8_vix.get('current', 0))  if _m8_vix else None
     _ai_vma  = float(_m8_vix.get('ma20', 0))     if _m8_vix else None
     _ai_is_cli = bool(_m8_pmi.get('is_oecd_cli', False)) if _m8_pmi else False
