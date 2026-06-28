@@ -4414,6 +4414,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     df_li_show = st.session_state.get('li_latest')
 
     if df_li_show is not None and not df_li_show.empty:
+        # v18.342 PR-L2:預存 is_stale 旗標(copy 前讀,copy 後 attrs 可能丟失)
+        _is_stale_li = bool(getattr(df_li_show, 'attrs', {}).get('is_stale', False))
+        _stale_age_li = getattr(df_li_show, 'attrs', {}).get('stale_age_min')
         # 向前填補 NaN（各欄位用最後一次有效數值補齊，避免 API 部分失敗造成空格）
         _li_num_cols = [c for c in df_li_show.columns if c != '日期']
         df_li_show = df_li_show.copy()
@@ -4428,6 +4431,17 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 f'📅 資料期間：{_d0} ~ {_d1}  共 {len(df_li_show)} 筆  '
                 f'｜外資空單>3萬⚠️  前五大>1萬⚠️  PCR<100偏空'
             )
+            # v18.342 PR-L2:stale fallback 顯示「📦 上次有效資料」chip(§2.4)
+            if _is_stale_li:
+                _age_txt = f'{_stale_age_li:.0f} 分鐘前' if isinstance(
+                    _stale_age_li, (int, float)) else '較早'
+                st.markdown(
+                    f'<div style="display:inline-block;font-size:11px;color:#f0883e;'
+                    f'background:#0d1117;border:1px solid #f0883e;border-radius:4px;'
+                    f'padding:3px 9px;margin:2px 0 8px 0;">'
+                    f'📦 顯示上次有效資料({_age_txt}抓的)— 當次 FinMind 無新資料'
+                    f'(週末/假日/API 額度) → 數值非今日最新</div>',
+                    unsafe_allow_html=True)
 
         # S-PROV-1 UI chip v18.265 — provenance(source + fetched_at,從 df 末筆讀)
         try:

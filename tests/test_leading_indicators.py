@@ -292,5 +292,82 @@ class TestRenderLeadingTablePCR(unittest.TestCase):
         self.assertNotIn(self._GREEN_HEX, html)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# v18.342 PR-L2:_load_stale_pickle + _mark_stale 純函式 helper
+# user 2026-06-28「如果遇假日則抓前一次的」+ §2.4「過期 cache 須帶 is_stale 旗標」。
+# build_leading_fast 全鏈 IO 太多無法整體測,改測抽出的 L0 純 helper(直接 IO pickle
+# 檔 + 標 attrs)。整合行為靠 build_leading_fast 內部 2 處 _load_stale_pickle 呼叫
+# + 2 處 _mark_stale 呼叫,各路徑覆蓋 code review 確認。
+# ─────────────────────────────────────────────────────────────────────────────
+class TestStaleCacheHelpers(unittest.TestCase):
+    """`_load_stale_pickle` + `_mark_stale` 行為單測。"""
+
+    def setUp(self):
+        import os, pickle, tempfile, time
+        self._tmpdir = tempfile.mkdtemp(prefix='test_stale_helpers_')
+        self._ck = os.path.join(self._tmpdir, 'fake.pkl')
+        self._fake_df = pd.DataFrame([
+            {'_date': '20260626', '外資': 100.5, '投信': 5.2, '自營': -10.1,
+             '外資大小': 12000, '選PCR': 95.0},
+        ])
+        with open(self._ck, 'wb') as _f:
+            pickle.dump(self._fake_df, _f)
+        # 設 mtime 為 90 分鐘前(明確過期)
+        _past = time.time() - 90 * 60
+        os.utime(self._ck, (_past, _past))
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+    def test_load_existing_stale_pickle(self):
+        """檔案存在 → 返回 (df, age_min)。"""
+        from leading_indicators import _load_stale_pickle
+        _df, _age = _load_stale_pickle(self._ck)
+        self.assertIsNotNone(_df)
+        self.assertEqual(len(_df), 1)
+        self.assertIsNotNone(_age)
+        self.assertGreater(_age, 60, '預期 age > 60 分鐘')
+
+    def test_load_missing_returns_none(self):
+        """檔案不存在 → 返回 (None, None) 不爆。"""
+        from leading_indicators import _load_stale_pickle
+        _df, _age = _load_stale_pickle('/nonexistent/path/no.pkl')
+        self.assertIsNone(_df)
+        self.assertIsNone(_age)
+
+    def test_load_corrupt_pickle_returns_none(self):
+        """檔案存在但 pickle 壞 → 返回 (None, None) 不爆(§1 fail loud + log)。"""
+        import os
+        _bad_ck = os.path.join(self._tmpdir, 'bad.pkl')
+        with open(_bad_ck, 'wb') as _f:
+            _f.write(b'not a pickle')
+        from leading_indicators import _load_stale_pickle
+        _df, _age = _load_stale_pickle(_bad_ck)
+        self.assertIsNone(_df)
+        self.assertIsNone(_age)
+
+    def test_mark_stale_sets_attrs(self):
+        """標 is_stale=True + stale_age_min 到 df.attrs。"""
+        from leading_indicators import _mark_stale
+        _df = pd.DataFrame([{'x': 1}])
+        _out = _mark_stale(_df, 90.5)
+        self.assertTrue(_out.attrs.get('is_stale'))
+        self.assertEqual(_out.attrs.get('stale_age_min'), 90.5)
+
+    def test_mark_stale_handles_none(self):
+        """None df → 返回 None,不爆。"""
+        from leading_indicators import _mark_stale
+        self.assertIsNone(_mark_stale(None, 30.0))
+
+    def test_mark_stale_without_age(self):
+        """age_min=None → 只標 is_stale,不寫 age。"""
+        from leading_indicators import _mark_stale
+        _df = pd.DataFrame([{'x': 1}])
+        _out = _mark_stale(_df, None)
+        self.assertTrue(_out.attrs.get('is_stale'))
+        self.assertNotIn('stale_age_min', _out.attrs)
+
+
 if __name__ == "__main__":
     unittest.main()
