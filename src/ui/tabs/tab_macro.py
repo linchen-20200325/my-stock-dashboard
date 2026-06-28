@@ -81,7 +81,13 @@ def render_tab_macro():
     import pandas as pd
     import plotly.graph_objects as go
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    from src.config import FINMIND_TOKEN
+    # 外層 trio executor(_job_m1b/_job_bias/_job_macro 並發,L2176-2199)需要 as_completed
+    # 別名與 concurrent.futures.TimeoutError;原本只在 _job_macro 內部定義,
+    # 外層 200s timeout 觸發 except 時 → NameError 全頁炸。函式入口無條件定義。
+    # v18.341 PR-L1 漏補修正(從 main 帶入)。
+    from concurrent.futures import TimeoutError as _ConcFutTimeout
+    _asc_mc = as_completed
+    from src.config import FINMIND_TOKEN  # F-6.1 後正確 path
     # 外部模組
     from src.services import (
         MacroStateLocker, calculate_system_state, load_macro_state,
