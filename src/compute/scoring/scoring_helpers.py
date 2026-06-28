@@ -160,18 +160,20 @@ def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
             score += 15
             details['趨勢'] = ('無MA數據', 15, 30)
 
-    # RSI (20分)
+    # RSI (20分) — C-1 v18.382:50/40 inline 補抽(70/30 已在 config.py SSOT)
     if rsi is not None:
-        if 50 <= rsi <= 70:
+        from shared.signal_thresholds import RSI_STRONG_LOW, RSI_NEUTRAL_WEAK_LOW
+        from src.config import RSI_OVERBOUGHT, RSI_OVERSOLD
+        if RSI_STRONG_LOW <= rsi <= RSI_OVERBOUGHT:
             score += 20
             details['RSI'] = (f'{rsi}（強勢區間）', 20, 20)
-        elif 40 <= rsi < 50:
+        elif RSI_NEUTRAL_WEAK_LOW <= rsi < RSI_STRONG_LOW:
             score += 12
             details['RSI'] = (f'{rsi}（中性偏弱）', 12, 20)
-        elif 30 <= rsi < 40:
+        elif RSI_OVERSOLD <= rsi < RSI_NEUTRAL_WEAK_LOW:
             score += 8
             details['RSI'] = (f'{rsi}（超賣邊緣）', 8,  20)
-        elif rsi < 30:
+        elif rsi < RSI_OVERSOLD:
             score += 14
             details['RSI'] = (f'{rsi}（超賣反彈機會）', 14, 20)
         else:  # >70

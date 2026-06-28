@@ -16,6 +16,15 @@
 
 ## 已完成 commits(reverse chrono)
 
+### C-1+C-2+C-3 (v18.382) — 5 個 inline magic 補抽 SSOT
+- **檔案**: shared/signal_thresholds.py + scoring_helpers.py:165 + etf_calc.py:901-907 + macro_helpers.py:948-949
+- **拔毒**:
+  - C-1:RSI 50/40 入 `RSI_STRONG_LOW/RSI_NEUTRAL_WEAK_LOW`(70/30 已在 config.py)
+  - C-2:ETF 上下漲日數 60 入 `ETF_UP_DOWN_DAYS_THRESHOLD`
+  - C-3:USDCNY 7.2/7.4 補抽 `CHINA_USDCNY_NEUTRAL/WEAK`(P2-3 已抽 7.0)
+- **驗證**: full pytest 2220/0 fail
+- **commit**: 待 push
+
 ### P2-3 (v18.381) — 2 inline magic 入 SSOT
 - **檔案**: `shared/signal_thresholds.py` + `src/compute/macro/macro_helpers.py:947` + `src/compute/scoring/scoring_helpers.py:183`
 - **拔毒**: 加 `CHINA_USDCNY_STRONG=7.0` + `VOLUME_RATIO_SURGE_HIGH=3.0`,2 處 caller 改 lazy import

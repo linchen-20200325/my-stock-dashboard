@@ -27,6 +27,7 @@ from shared.signal_thresholds import (
     ETF_AVG_VOL_20D_FAIR_LOTS,
     ETF_AVG_VOL_20D_LOW_LOTS,
     # v18.335 PR-H3:ETF_QUICK_SIGMA_* 5 個由 classify_etf_quick_sigma 內部消費,移除 etf_calc 直引
+    ETF_UP_DOWN_DAYS_THRESHOLD,  # C-2 v18.382 抽自 inline 60
     ETF_VCP_MIN_DAYS,
     TRADING_DAYS_PER_YEAR,
 )
@@ -898,13 +899,14 @@ def compute_etf_weakness_row(ticker: str, name: str = '',
             _row['動作建議'] = ('⏳ 新經理人 <6 月，再給時間'
                               if _new_manager
                               else '考慮換到大盤被動式 ETF（如 0050）')
-        elif _down > 60 and _up > 60:
+        # C-2 v18.382:60 inline → SSOT
+        elif _down > ETF_UP_DOWN_DAYS_THRESHOLD and _up > ETF_UP_DOWN_DAYS_THRESHOLD:
             _row['燈號'] = '🔴 雙向弱勢'
             _row['動作建議'] = '近期表現雙向落後大盤；觀察 1-2 季'
-        elif _down > 60:
+        elif _down > ETF_UP_DOWN_DAYS_THRESHOLD:
             _row['燈號'] = '🟡 大跌弱勢'
             _row['動作建議'] = '下跌防禦力不足，注意'
-        elif _up > 60:
+        elif _up > ETF_UP_DOWN_DAYS_THRESHOLD:
             _row['燈號'] = '🟡 反彈無力'
             _row['動作建議'] = '反彈追不上大盤，績效落後'
         else:

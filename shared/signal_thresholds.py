@@ -442,9 +442,29 @@ P2-3 v18.381:抽自 src/compute/scoring/scoring_helpers.py:183 inline。"""
 
 CHINA_USDCNY_STRONG: float = 7.0
 """USDCNY <7.0 視為強勢人民幣(中國副盤評分 100 滿分)。
+P2-3 v18.381:抽自 macro_helpers.py:947 inline。"""
 
-P2-3 v18.381:抽自 src/compute/macro/macro_helpers.py:947 inline。
-評分:<7.0→100 / 7.0-7.2→50 / 7.2-7.4→25 / >7.4→0(_score_china_usdcny)。
+CHINA_USDCNY_NEUTRAL: float = 7.2
+"""USDCNY 7.0-7.2 中性區(評分 50)。C-3 v18.382 補抽。"""
+
+CHINA_USDCNY_WEAK: float = 7.4
+"""USDCNY 7.2-7.4 偏弱區(評分 25)、>7.4 大貶區(評分 0)。C-3 v18.382 補抽。"""
+
+# ── RSI 帶區間評分(scoring_helpers 內 5 段)──────────────────
+RSI_STRONG_LOW: float = 50.0
+"""RSI 50-70 強勢區間(scoring_helpers.py:165 評分 20 滿分)。C-1 v18.382 抽自 inline。"""
+
+RSI_NEUTRAL_WEAK_LOW: float = 40.0
+"""RSI 40-50 中性偏弱(scoring_helpers.py:168 評分 12)。C-1 v18.382 抽自 inline。"""
+
+# ── ETF 上下漲日數判定 ───────────────────────────────────────
+ETF_UP_DOWN_DAYS_THRESHOLD: float = 60.0
+"""ETF 近期上漲日 / 下跌日數 >60% 視為強弱訊號(etf_calc.py:901-907)。
+C-2 v18.382 抽自 inline。觸發 🟡/🔴 燈號分流。
+
+P2-3 v18.381 收尾:VOLUME_RATIO_SURGE_HIGH=3.0、CHINA_USDCNY_STRONG=7.0。
+
+註:本檔下方仍有舊段 docstring,以下保留原樣不動。
 注意:與 GRP_VOL_SHRINK_RATIO(0.7,組合 Tab 操作狀態燈量縮)刻意分開 —
 個股用較嚴(0.5,嚴重量縮才警示),組合用較鬆(0.7,操作狀態燈),屬不同顆粒度設計。"""
 
