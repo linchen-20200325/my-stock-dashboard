@@ -238,7 +238,7 @@ def render_tab_stock():
         calc_rsi, calc_ibs, calc_volume_ratio,
         calc_kd, calc_bollinger, calc_vcp,
     )
-    from src.compute.scoring import calc_fundamental_score, calc_health_score, health_grade
+    from src.compute.scoring.scoring_helpers import calc_fundamental_score, calc_health_score, health_grade  # v18.362 F-Q2:直打 submod,避撞 scoring_engine.calc_fundamental_score(同名不同 signature SSOT 違憲,留下個 PR 處理 rename)
     from src.compute.scoring import calc_rs_score, rs_slope
     from src.ui.render import kpi, signal_box, teacher_conclusion
     from src.ui.render import plot_combined_chart, plot_quarterly_chart, plot_revenue_chart

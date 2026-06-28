@@ -61,6 +61,22 @@ def _stub_streamlit():
 _stub_streamlit()
 
 
+# v18.362 F-Q1:強制 reload tab_edu / macro_classroom 重抓當下 stub st
+#   (避 test_data_coverage._stub_st() 已 import 過 → 它們的 `import streamlit as st`
+#    snapshot 到 data_coverage 的舊 stub,後續 macro_classroom 的 stub 換新版無用。)
+def _force_reload_targets():
+    import importlib
+    for _name in ('src.ui.tabs.tab_edu', 'src.ui.tabs.macro_classroom'):
+        if _name in sys.modules:
+            try:
+                importlib.reload(sys.modules[_name])
+            except Exception:
+                pass
+
+
+_force_reload_targets()
+
+
 # ════════════════════════════════════════════════════════════════
 # render_traffic_light_explainer
 # ════════════════════════════════════════════════════════════════
