@@ -4258,6 +4258,24 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     st.markdown(_bgb('chips', 4), unsafe_allow_html=True)
     st.markdown(section_header('三','🧩 籌碼｜🧮 大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標','🧮'),unsafe_allow_html=True)
 
+    # ── v18.336 §1 Fail Loud：三源(法人/融資/先行指標)全空時明確診斷,不靜默空白 ──
+    # user 2026-06-28「§三 籌碼 資料不見了」：三源在缺 FINMIND_TOKEN / 來源無回應時全敗,
+    # 原本 `if inst:` / `if margin:` 靜默跳過 → 整區空白。改為:全空時印診斷卡指出原因 + 救法。
+    _li_probe3 = st.session_state.get('li_latest')
+    _chips_all_empty3 = (not inst) and (not margin) and (
+        _li_probe3 is None or getattr(_li_probe3, 'empty', True))
+    if _chips_all_empty3:
+        from shared.macro_buckets import chips_empty_state_html as _ces3
+        _attempted3 = bool(st.session_state.get('cl_ts')) or bool(
+            st.session_state.get('chips_loaded'))
+        try:
+            _fm_present3 = bool((getattr(st, 'secrets', {}) or {}).get('FINMIND_TOKEN')
+                                or os.environ.get('FINMIND_TOKEN', ''))
+        except Exception:
+            _fm_present3 = bool(os.environ.get('FINMIND_TOKEN', ''))
+        st.markdown(_ces3(attempted=_attempted3, token_present=_fm_present3),
+                    unsafe_allow_html=True)
+
     if inst:
         _fk3 = next((k for k in inst if '外資' in k and '陸資' in k), None) or next((k for k in inst if '外資' in k), None)
         _tk3 = next((k for k in inst if '投信' in k), None)
@@ -4358,7 +4376,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _l4c = '先行指標尚未載入，請點擊「🚀 一鍵更新全部數據」'
         _l4a = ''
         _l4_ind = '外資期貨留倉'
-    st.markdown(teacher_conclusion('宏爺', _l4_ind, _l4c, _l4a), unsafe_allow_html=True)
+    # v18.336：三源全空時上方已有 fail-loud 診斷卡,此處不重複「尚未載入」(避免點過更新仍喊更新)
+    if not _chips_all_empty3:
+        st.markdown(teacher_conclusion('宏爺', _l4_ind, _l4c, _l4a), unsafe_allow_html=True)
 
     # ── 副標籤：欄位確認列（v12 風格）─────────────────────────────────
     st.markdown("""<div style="font-size:11px;color:#484f58;margin:-6px 0 10px 0;">

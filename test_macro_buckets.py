@@ -208,3 +208,41 @@ def test_compute_news_yellow_on_single_systemic():
     from macro_helpers import compute_five_bucket_summary
     out = compute_five_bucket_summary(news_items=[{"is_systemic": True}, {"is_systemic": False}])
     assert out["news"]["level"] == "yellow"
+
+
+# ──────────────────────────────────────────────────────────
+# 4. chips_empty_state_html — v18.336 §1 Fail Loud 籌碼三源全空診斷
+# ──────────────────────────────────────────────────────────
+def test_chips_empty_state_not_attempted():
+    """冷啟動未點更新 → 灰色「尚未載入」提示點按鈕。"""
+    h = mb.chips_empty_state_html(attempted=False, token_present=False)
+    assert "📡" in h and "尚未載入" in h
+    assert "一鍵更新全部數據" in h
+    assert "#6e7681" in h          # 灰
+    assert "FINMIND_TOKEN" not in h  # 未嘗試不該嚇人提 token
+
+
+def test_chips_empty_state_attempted_no_token():
+    """點過更新仍空 + 無 token → 橙色明確指向 FINMIND_TOKEN(最可能根因)。"""
+    h = mb.chips_empty_state_html(attempted=True, token_present=False)
+    assert "⚠️" in h and "FINMIND_TOKEN" in h
+    assert "已嘗試" in h
+    assert "#f0883e" in h          # 橙
+
+
+def test_chips_empty_state_attempted_with_token():
+    """點過更新仍空 + 有 token → 橙色歸因暫時性(來源無回應/額度),不誤指 token 缺失。"""
+    h = mb.chips_empty_state_html(attempted=True, token_present=True)
+    assert "⚠️" in h
+    assert "暫時" in h or "無回應" in h
+    # 有 token 時不該說「偵測不到 FINMIND_TOKEN」
+    assert "偵測不到" not in h
+
+
+def test_chips_empty_state_always_valid_div():
+    """三情境都回合法單一 <div> 容器(不偽造數字、不空字串)。"""
+    for _att in (True, False):
+        for _tok in (True, False):
+            h = mb.chips_empty_state_html(attempted=_att, token_present=_tok)
+            assert h.startswith("<div") and h.rstrip().endswith("</div>")
+            assert "籌碼資料未顯示" in h

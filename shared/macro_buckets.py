@@ -358,3 +358,50 @@ def bucket_summary_bar_html(bucket_key: str, bucket_summary: dict) -> str:
         f'📋 門檻見 SPEC §11 危險門檻表</span></div>'
         f'<div style="margin-top:6px;">{chips_html}</div></div>'
     )
+
+
+# ════════════════════════════════════════════════════════════════
+# v18.336 §1 Fail Loud：籌碼三源(法人/融資/先行指標)全空時的診斷卡。
+#   user 2026-06-28 回報「§三 籌碼 資料不見了」：根因為台股籌碼三源
+#   (TWSE BFI82U / FinMind 融資 / FinMind+TAIFEX 先行指標)在缺 FINMIND_TOKEN
+#   或來源暫無回應時全敗，但 UI 以 `if inst:` / `if margin:` 靜默跳過 → 整區空白。
+#   §1：不可靜默,須明確告知「為何空 + 怎麼救」。純字串 builder,零 streamlit(L0)。
+# ════════════════════════════════════════════════════════════════
+def chips_empty_state_html(attempted: bool, token_present: bool) -> str:
+    """籌碼三源全空時的 fail-loud 診斷卡(§1)。
+
+    Args
+    ----
+    attempted: 是否已嘗試載入重資料(cl_ts / chips_loaded 任一存在)。
+               False = 冷啟動尚未點更新;True = 點過更新但仍空 = 抓取失敗。
+    token_present: 是否偵測得到 FINMIND_TOKEN(st.secrets 或 os.environ)。
+
+    Returns
+    -------
+    str: 診斷卡 HTML。三種情境給不同顏色 + 可執行建議,不偽造數字。
+    """
+    if not attempted:
+        icon, color = "📡", "#6e7681"
+        msg = ("尚未載入 — 點上方「🚀 一鍵更新全部數據」抓取 "
+               "法人聰明錢 / 融資融券 / 先行指標。")
+    elif not token_present:
+        icon, color = "⚠️", "#f0883e"
+        msg = ("已嘗試抓取，但法人 / 融資 / 先行指標三源皆空，且偵測不到 "
+               "<b>FINMIND_TOKEN</b>。台股籌碼三源需 FinMind token 或台灣 IP "
+               "(海外 Streamlit Cloud 直連 TWSE 會被擋) — 請在部署 secrets 設定 "
+               "FINMIND_TOKEN 後，重按「🚀 一鍵更新全部數據」。")
+    else:
+        icon, color = "⚠️", "#f0883e"
+        msg = ("已嘗試抓取，但法人 / 融資 / 先行指標三源皆空。"
+               "常見原因：TWSE / FinMind 暫時無回應或當日尚未出表 — "
+               "請稍後重按「🚀 一鍵更新全部數據」；若持續，請檢查 "
+               "FINMIND_TOKEN 是否已失效 / 額度用罄。")
+    return (
+        f'<div style="margin:8px 0 12px;padding:12px 16px;'
+        f'background:linear-gradient(90deg,{color}1f,#0d1117);'
+        f'border-left:4px solid {color};border-radius:0 8px 8px 0;">'
+        f'<span style="font-size:13px;font-weight:800;color:{color};">'
+        f'{icon} 籌碼資料未顯示</span>'
+        f'<div style="font-size:12px;color:#c9d1d9;margin-top:5px;'
+        f'line-height:1.55;">{msg}</div></div>'
+    )
