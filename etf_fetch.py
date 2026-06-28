@@ -11,11 +11,30 @@ S-H3 v18.244(CLAUDE.md §8.2 修正):L1 不得用 `st.error/st.warning/st.sessio
     `get_etf_manager_last_err()` / `get_etf_index_last_err()` accessor,
     UI(`health_inspector.py`)讀取改用 accessor。
 """
+import sys as _sys_prov_ef
+
 import streamlit as st
 import pandas as pd
 import yfinance as yf
 
 from shared.ttls import TTL_30MIN, TTL_1HOUR, TTL_2HOUR, TTL_1DAY, TTL_7DAY
+
+
+# v18.352 PR-Q2 — S-PROV-1 phase 19 helper
+# 7 fetcher (sitca_expense / moneydj_expense / yahoo_tw_holdings /
+# etf_holdings / sitca_manager / etf_zh_name / etf_underlying_index)
+# 共用一個 stderr audit trail。介面 0 改:fetcher return 不動。
+def _prov_log(fn_name: str, source: str, ticker: str, result_summary: str):
+    """§2.2 provenance audit trail — stderr 記 source/fetched_at,不破 caller 簽章。
+
+    用於 scalar/dict/str return 的 fetcher;DataFrame return 應另用 df.attrs(schema-additive)。
+    """
+    try:
+        _now = pd.Timestamp.now('UTC').isoformat()
+        print(f'[{fn_name}] ticker={ticker} source={source} fetched_at={_now} '
+              f'result={result_summary}', file=_sys_prov_ef.stderr)
+    except Exception:
+        pass
 
 
 # S-H3 v18.244:diagnostic 錯誤儲存從 st.session_state 下移至 module-level dict
@@ -441,11 +460,14 @@ def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
             v = float(m.group(1))
             # SITCA 表格數字常見已是百分比（0.36 = 0.36%），標準化成「比例」回傳
             print(f'[SITCA/expense] ✅ {_t} = {v}% (col={rate_col})')
+            _prov_log('fetch_sitca_expense_ratio', 'SITCA:IN2222_01', _t, f'{v/100.0:.6f}')
             return v / 100.0
         print(f'[SITCA/expense] ⚠️ {_t} 未找到符合 column 的表格 (tables={len(tables)})')
+        _prov_log('fetch_sitca_expense_ratio', 'SITCA:IN2222_01', _t, 'None:no-match')
         return None
     except Exception as e:
         print(f'[SITCA/expense] ❌ {_t}: {type(e).__name__}: {e}')
+        _prov_log('fetch_sitca_expense_ratio', 'SITCA:IN2222_01', _t, f'None:exc:{type(e).__name__}')
         return None
 
 
@@ -482,17 +504,24 @@ def fetch_moneydj_expense_ratio(ticker: str):
         if _mng and _cus:
             _total = float(_mng.group(1)) + float(_cus.group(1))
             print(f'[MoneyDJ/expense] ✅ {_t} = {_total}% (mng={_mng.group(1)}+cus={_cus.group(1)})')
+            _prov_log('fetch_moneydj_expense_ratio', 'MoneyDJ:Basic0004:mng+cus',
+                      _t, f'{_total/100.0:.6f}')
             return _total / 100.0
         # Fallback：找「總費用率 / 內含費用率」單一欄位
         _tot = _re_mdje.search(r'(?:總費用率|內含費用率|費用率)[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%', _txt)
         if _tot:
             _v = float(_tot.group(1))
             print(f'[MoneyDJ/expense] ✅ {_t} = {_v}% (總費用率欄位)')
+            _prov_log('fetch_moneydj_expense_ratio', 'MoneyDJ:Basic0004:total',
+                      _t, f'{_v/100.0:.6f}')
             return _v / 100.0
         print(f'[MoneyDJ/expense] ⚠️ {_t} 頁面無「經理費/保管費/總費用率」欄位')
+        _prov_log('fetch_moneydj_expense_ratio', 'MoneyDJ:Basic0004', _t, 'None:no-match')
         return None
     except Exception as _e:
         print(f'[MoneyDJ/expense] ❌ {_t}: {type(_e).__name__}: {_e}')
+        _prov_log('fetch_moneydj_expense_ratio', 'MoneyDJ:Basic0004',
+                  _t, f'None:exc:{type(_e).__name__}')
         return None
 
 
@@ -568,8 +597,12 @@ def _fetch_holdings_yahoo_tw(symbol_yf: str):
         print(f'[Holdings/YahooTW] BS 解析異常 {symbol_yf}: {type(_eb).__name__}: {_eb}')
     if _out:
         print(f'[Holdings/YahooTW] ✅(HTML) {symbol_yf} {len(_out)} 檔')
+        _prov_log('_fetch_holdings_yahoo_tw', 'Yahoo:tw.stock:quote/holding',
+                  symbol_yf, f'dict:{len(_out)}items')
         return _out
     print(f'[Holdings/YahooTW] ⚪ {symbol_yf} 頁面無可解析持股')
+    _prov_log('_fetch_holdings_yahoo_tw', 'Yahoo:tw.stock:quote/holding',
+              symbol_yf, 'None:no-match')
     return None
 
 
@@ -651,6 +684,8 @@ def fetch_etf_holdings(ticker: str):
                         _out[_enrich_tw_holding_name(_name, _sym)] = round(_w, 4)
                 if _out:
                     print(f'[Holdings/yf] ✅ {_t_yf} {len(_out)} 檔')
+                    _prov_log('fetch_etf_holdings', 'yfinance:funds_data:top_holdings',
+                              _t_yf, f'dict:{len(_out)}items')
                     return _out
     except Exception as _ey:
         print(f'[Holdings/yf] {_t_yf}: {type(_ey).__name__}: {_ey}')
@@ -659,6 +694,8 @@ def fetch_etf_holdings(ticker: str):
     # Yahoo CDN 海外 IP 可直連，繞過 MoneyDJ 對海外 IP 的 403 封鎖
     _yh = _fetch_holdings_yahoo_tw(_t_yf)
     if _yh:
+        _prov_log('fetch_etf_holdings', 'Yahoo:tw:holding(via _fetch_holdings_yahoo_tw)',
+                  _t_yf, f'dict:{len(_yh)}items')
         return _yh
 
     # ── 2. MoneyDJ 三條 URL 嘗試（台股 ETF 備源）────────────────
@@ -714,12 +751,15 @@ def fetch_etf_holdings(ticker: str):
                     break
             if _stocks:
                 print(f'[Holdings/MDJ] ✅ {_t_mdj} {len(_stocks)} 檔 ({_url[-30:]})')
+                _prov_log('fetch_etf_holdings', f'MoneyDJ:{_url[-30:]}',
+                          _t_mdj, f'dict:{len(_stocks)}items')
                 return _stocks
         except Exception as _eh2:
             print(f'[Holdings/MDJ] regex 異常 {_t_mdj} {_url[-30:]}: {type(_eh2).__name__}: {_eh2}')
             continue
 
     print(f'[Holdings] ❌ {_t} — yf/MoneyDJ 三條 URL 全失敗')
+    _prov_log('fetch_etf_holdings', 'all-sources-failed', _t, 'None:all-fail')
     return None
 
 
@@ -1266,10 +1306,13 @@ def _fetch_sitca_manager(ticker: str):
                 _name = _raw.split('、')[0].split(',')[0].split('(')[0].split('（')[0].strip()
                 if 2 <= len(_name) <= 8:
                     print(f'[SITCA/manager] ✅ {_t} = {_name} (url={_url[-30:]})')
+                    _prov_log('_fetch_sitca_manager', f'SITCA:{_url[-30:]}',
+                              _t, f'dict:name={_name}')
                     return {'name': _name, 'since': None, 'tenure_days': None}
         except Exception as e:
             print(f'[SITCA/manager] {_t} {_url[-30:]}: {type(e).__name__}: {e}')
             continue
+    _prov_log('_fetch_sitca_manager', 'SITCA:4-urls-all-fail', _t, 'None:no-match')
     return None
 
 
@@ -1716,10 +1759,13 @@ def fetch_etf_zh_name(ticker: str):
                 if (2 <= len(_name) <= 30 and not _name.isdigit()
                         and any('一' <= _c <= '鿿' for _c in _name)):
                     print(f'[MDJ/zhname] OK {_t} = {_name}')
+                    _prov_log('fetch_etf_zh_name', f'MoneyDJ:{_url[-30:]}',
+                              _t, f'str:{_name}')
                     return _name
         except Exception as _e:
             print(f'[MDJ/zhname] {_t} {_url[-30:]}: {type(_e).__name__}: {_e}')
     print(f'[MDJ/zhname] FAIL {_t}')
+    _prov_log('fetch_etf_zh_name', 'MoneyDJ:3-urls-all-fail', _t, 'None:no-match')
     return None
 
 
@@ -1824,10 +1870,14 @@ def fetch_etf_underlying_index(ticker: str):
 
         if _idx:
             print(f'[MDJ/index] OK {_t} = {_idx} via {_endpoint}')
+            _prov_log('fetch_etf_underlying_index', f'MoneyDJ:{_endpoint}',
+                      _t, f'str:{_idx}')
             return _idx
         _err_trace.append(f'{_endpoint}: 200 但 regex 無指數')
 
     # S-H3 v18.244:寫 module-level dict 給診斷面板讀(原 st.session_state)
     _ETF_INDEX_LAST_ERR[_t] = ' | '.join(_err_trace) if _err_trace else 'unknown'
     print(f'[MDJ/index] FAIL {_t} — {_err_trace[-1] if _err_trace else "no trace"}')
+    _prov_log('fetch_etf_underlying_index', 'MoneyDJ:3-urls-all-fail',
+              _t, 'None:no-match')
     return None
