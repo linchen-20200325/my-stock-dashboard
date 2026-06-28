@@ -2492,6 +2492,14 @@ padding:12px 16px;margin:8px 0;">
                                     f' (Δ={_rec.get("delta_abs",0):.2f}pct)'
                                     f'</div>'
                                 )
+                        # S-PROV-1 PR-J1 v18.338: 資料來源 chip(§2.2 provenance)
+                        _src_chip = ''
+                        _src = _ind.get('source_chain') if isinstance(_ind, dict) else None
+                        if _src:
+                            _src_chip = (
+                                f'<div style="font-size:10px;color:#6e7681;margin-top:2px;'
+                                f'font-style:italic;">📡 來源:{_src}</div>'
+                            )
                         st.markdown(
                             f'<div style="background:#0d1117;border-left:3px solid {_ic};'
                             f'padding:6px 10px;border-radius:0 4px 4px 0;margin:3px 0;">'
@@ -2500,6 +2508,7 @@ padding:12px 16px;margin:8px 0;">
                             f'<div style="font-size:11px;color:#e6edf3;margin:1px 0;">{_ind["value"]}</div>'
                             f'<div style="font-size:10px;color:#8b949e;">{_ind["detail"]}</div>'
                             f'{_recon_chip}'
+                            f'{_src_chip}'
                             f'</div>', unsafe_allow_html=True
                         )
                 _li_col_idx += 1
