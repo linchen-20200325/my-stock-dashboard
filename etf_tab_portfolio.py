@@ -26,6 +26,17 @@ import streamlit as st
 
 from etf_helpers import auto_role
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.signal_thresholds import (
+    ETF_CORR_HIGH_THRESHOLD,
+    PORTFOLIO_OVERLAP_JACCARD_THRESHOLD_PCT,
+    PORTFOLIO_OVERLAP_WEIGHT_THRESHOLD_PCT,
+    PORTFOLIO_REBAL_TOLERANCE_DEFAULT_PCT,
+    PORTFOLIO_STRESS_TEST_DROP_PCT,
+    PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT,
+    PORTFOLIO_VAR_95_PERCENTILE,
+    PORTFOLIO_VAR_99_PERCENTILE,
+    PORTFOLIO_VAR_MONTHLY_WARN_PCT,
+)
 from shared.thresholds import YIELD_MID, YIELD_LOW
 
 
@@ -83,7 +94,9 @@ def render_etf_portfolio(gemini_fn=None):
     # ── 雲端儲存（Google Sheet）─────────────────────────────
     _render_cloud_storage(edited_df)
 
-    tolerance = st.slider('再平衡容忍偏離度（%）', 1, 15, 5, key='etf_p_tol')
+    tolerance = st.slider(
+        '再平衡容忍偏離度（%）', 1, 15,
+        int(PORTFOLIO_REBAL_TOLERANCE_DEFAULT_PCT), key='etf_p_tol')
 
     if st.button('📊 計算組合', key='etf_p_btn', use_container_width=True):
         st.session_state['etf_p_active'] = True
@@ -490,10 +503,11 @@ def render_etf_portfolio(gemini_fn=None):
         for i in range(len(corr)):
             for j in range(i + 1, len(corr)):
                 val = corr.iloc[i, j]
-                if val > 0.85:
+                if val > ETF_CORR_HIGH_THRESHOLD:
                     _colored_box(
                         f'⚠️ <b>{corr.index[i]} × {corr.columns[j]}</b> '
-                        f'相關係數 {val:.2f} > 0.85，資產同質性過高', 'red')
+                        f'相關係數 {val:.2f} > {ETF_CORR_HIGH_THRESHOLD:.2f}，資產同質性過高',
+                        'red')
     else:
         st.warning('資料不足，無法計算相關係數')
 
@@ -545,8 +559,10 @@ def render_etf_portfolio(gemini_fn=None):
             _ov_mat,
             title=f'{"權重 Overlap%" if _method_key == "weight" else "Jaccard%"}（成份股 N={_valid_count}/{len(tickers)}）'
         )
-        # 同質性警示（門檻：權重 > 30%；Jaccard > 50%）
-        _threshold = 30.0 if _method_key == 'weight' else 50.0
+        # 同質性警示（門檻 SSOT:shared.signal_thresholds 投組 Overlap 門檻）
+        _threshold = (PORTFOLIO_OVERLAP_WEIGHT_THRESHOLD_PCT
+                      if _method_key == 'weight'
+                      else PORTFOLIO_OVERLAP_JACCARD_THRESHOLD_PCT)
         _warn_lines = []
         for i in range(len(_ov_mat)):
             for j in range(i + 1, len(_ov_mat)):
@@ -615,7 +631,8 @@ def render_etf_portfolio(gemini_fn=None):
         except Exception as _e_beta:
             print(f"[etf_tab_portfolio] {r['ticker']} beta cast 失敗:{type(_e_beta).__name__},fallback 1.0")
             beta_i = 1.0
-        est_loss       = r['actual_pct'] / 100 * beta_i * (-0.20) * total_value
+        est_loss       = (r['actual_pct'] / 100 * beta_i
+                          * (PORTFOLIO_STRESS_TEST_DROP_PCT / 100) * total_value)
         total_stress  += est_loss
         stress_results.append({
             'ETF': r['ticker'], 'Beta': round(beta_i, 2),
@@ -624,12 +641,14 @@ def render_etf_portfolio(gemini_fn=None):
         })
     st.dataframe(pd.DataFrame(stress_results), use_container_width=True, hide_index=True)
     loss_pct = abs(total_stress) / total_value * 100
-    color    = 'red' if loss_pct > 20 else 'green'
+    _stress_warn = loss_pct > PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT
+    color    = 'red' if _stress_warn else 'green'
     _colored_box(
         f'組合預估總虧損：<b>{total_stress:,.0f} 元</b>（{loss_pct:.1f}%）'
-        + ('&nbsp; ⚠️ 超過20%，建議增加避險部位' if loss_pct > 20 else '&nbsp; ✅ 風險可控'),
+        + (f'&nbsp; ⚠️ 超過{PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT:.0f}%，建議增加避險部位'
+           if _stress_warn else '&nbsp; ✅ 風險可控'),
         color)
-    if loss_pct > 20:
+    if _stress_warn:
         _teacher_conclusion('孫慶龍',
                             f'S&P500↓20% 壓力測試損失 {loss_pct:.1f}%',
                             '尾部風險超標，組合過於進攻型',
@@ -661,8 +680,8 @@ def render_etf_portfolio(gemini_fn=None):
         _port_ret = _port_ret.dropna()
         if len(_port_ret) >= 20:
             # 歷史模擬法
-            _h95 = float(_port_ret.quantile(0.05)) * total_value
-            _h99 = float(_port_ret.quantile(0.01)) * total_value
+            _h95 = float(_port_ret.quantile(PORTFOLIO_VAR_95_PERCENTILE)) * total_value
+            _h99 = float(_port_ret.quantile(PORTFOLIO_VAR_99_PERCENTILE)) * total_value
             # 參數法
             _mu  = float(_port_ret.mean())
             _sig = float(_port_ret.std())
@@ -686,17 +705,18 @@ def render_etf_portfolio(gemini_fn=None):
                 st.metric('99% 日 VaR', f'{abs(_p99):,.0f} 元',
                           f'{abs(_p99)/total_value*100:.2f}% 組合市值')
                 st.caption('金融市場有肥尾效應，歷史模擬法通常比參數法更保守')
-            _var_warn = abs(_m99) / total_value > 0.10
+            _var_warn = abs(_m99) / total_value * 100 > PORTFOLIO_VAR_MONTHLY_WARN_PCT
             _colored_box(
                 f'📅 月度 99% VaR（√21 近似）：<b>{abs(_m99):,.0f} 元</b>'
                 f'（{abs(_m99)/total_value*100:.2f}%）'
-                + ('&nbsp; ⚠️ 超過10%，尾部風險偏高，建議增加防禦部位'
+                + (f'&nbsp; ⚠️ 超過{PORTFOLIO_VAR_MONTHLY_WARN_PCT:.0f}%，'
+                   '尾部風險偏高，建議增加防禦部位'
                    if _var_warn else '&nbsp; ✅ 月度尾部風險在可接受範圍內'),
                 'red' if _var_warn else 'green')
             if _var_warn:
                 _teacher_conclusion('弘爺',
                                     f'月度 99% VaR {abs(_m99)/total_value*100:.2f}%',
-                                    '月度尾部風險 > 10%，組合波動過大',
+                                    f'月度尾部風險 > {PORTFOLIO_VAR_MONTHLY_WARN_PCT:.0f}%，組合波動過大',
                                     '增加低相關資產（如 BND/AGGG），降低整體波動')
             else:
                 _teacher_conclusion('弘爺',

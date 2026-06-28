@@ -590,3 +590,52 @@ STOCK_BIAS_DEEP_DEVIATION_PCT: float = 20.0
 STOCK_BIAS_MILD_DEVIATION_PCT: float = 15.0
 """個股月線(MA20)中度乖離警示:|bias| > 15% → 短線過熱 / 過冷。
 原 tab_stock.py:803/830/832 inline 多處。"""
+
+
+# ════════════════════════════════════════════════════════════════
+# ETF 投組 Tab 投組特有 SSOT(v18.332 PR-G U-9)
+# 2026-06-28 etf_tab_portfolio.py 深度 audit 殘留 8 處 inline magic 收斂。
+# 投組層特有(single/grp 不消費):分散度、再平衡、壓測、VaR。
+# ════════════════════════════════════════════════════════════════
+
+# ── 再平衡(G1 P3)──
+PORTFOLIO_REBAL_TOLERANCE_DEFAULT_PCT: float = 5.0
+"""ETF 投組再平衡容忍偏離預設值 %:|實際-目標| > 5% → 觸發再平衡建議。
+Slider 範圍 1-15,預設 5。原 etf_tab_portfolio.py:86 inline。"""
+
+# ── 分散度(G1 P1+P2)──
+ETF_CORR_HIGH_THRESHOLD: float = 0.85
+"""ETF 投組相關係數「同質性過高」警示:任兩檔 Pearson corr > 0.85
+→ ⚠️ 資產同質性過高。原 etf_tab_portfolio.py:493 inline。"""
+
+PORTFOLIO_OVERLAP_WEIGHT_THRESHOLD_PCT: float = 30.0
+"""ETF 持股重疊(權重 Overlap%)警示:任兩檔權重共同持股加總 > 30%
+→ ⚠️ 建議擇一保留。原 etf_tab_portfolio.py:549 inline(weight branch)。"""
+
+PORTFOLIO_OVERLAP_JACCARD_THRESHOLD_PCT: float = 50.0
+"""ETF 持股重疊(Jaccard 集合)警示:|A∩B|/|A∪B| > 50%
+→ ⚠️ 建議擇一保留。原 etf_tab_portfolio.py:549 inline(jaccard branch)。"""
+
+# ── 壓力測試(G2)──
+PORTFOLIO_STRESS_TEST_DROP_PCT: float = -20.0
+"""ETF 投組壓力測試 S&P500 下跌幅度(%):用於估算 Beta 加權虧損。
+業界常用 -20% 中型空頭情境。原 etf_tab_portfolio.py:618 inline `-0.20`。"""
+
+PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT: float = 20.0
+"""ETF 投組壓測虧損警示門檻(%):組合預估虧損 > 20%
+→ ⚠️ 尾部風險超標,建議增加避險。原 etf_tab_portfolio.py:627/630/632 inline。"""
+
+# ── VaR 風險值(G2)──
+PORTFOLIO_VAR_95_PERCENTILE: float = 0.05
+"""ETF 投組 VaR 95% 信心區間分位數:quantile(0.05)。
+歷史模擬法取最差 5% 分位數,即「100天中95天虧損不超過此值」。
+原 etf_tab_portfolio.py:664 inline。"""
+
+PORTFOLIO_VAR_99_PERCENTILE: float = 0.01
+"""ETF 投組 VaR 99% 信心區間分位數:quantile(0.01)。
+歷史模擬法取最差 1% 分位數(更保守的尾部評估)。
+原 etf_tab_portfolio.py:665 inline。"""
+
+PORTFOLIO_VAR_MONTHLY_WARN_PCT: float = 10.0
+"""ETF 投組月度 99% VaR 警示門檻(%):月度尾部虧損 > 10%
+→ ⚠️ 尾部風險偏高,建議增加防禦部位。原 etf_tab_portfolio.py:689/693/699 inline。"""
