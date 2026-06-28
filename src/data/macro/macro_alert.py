@@ -17,7 +17,7 @@ except ImportError:
     MACRO_ALERT_RULES = []   # fallback，允許不依賴 config 獨立測試
 
 # ── NAS Proxy 遷移：所有 yfinance 抓取改走 macro_core.fetch_yf_latest ──
-from src.data.macro import fetch_yf_latest as _macro_core_yf_latest
+from src.data.macro.macro_core import fetch_yf_latest as _macro_core_yf_latest
 
 
 # ── Streamlit 快取工具（非 Streamlit 環境自動退化為無快取）──────────

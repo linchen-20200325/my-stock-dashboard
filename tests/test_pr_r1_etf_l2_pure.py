@@ -77,7 +77,7 @@ class TestSourceMarker(unittest.TestCase):
         src = open('etf_calc.py', encoding='utf-8').read()
         self.assertIn('PR-R1 §8.2 A7', src)
         # 確認從 etf_fetch import 新 fetcher
-        self.assertIn('from etf_fetch import fetch_etf_peer_history', src)
+        self.assertIn('from src.data.etf import fetch_etf_peer_history', src)
 
     def test_etf_fetch_new_fn_marker(self):
         src = open('src/data/etf/etf_fetch.py', encoding='utf-8').read()

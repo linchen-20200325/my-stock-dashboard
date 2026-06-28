@@ -336,7 +336,7 @@ def _fetch_fs_safe(stock_id: str) -> dict:
         # v18.356 PR-Q5b S-PROV-1 phase 19
         try:
             import sys as _sys_p, datetime as _dt_p
-            print(f'[_fetch_fs_safe] sid={stock_id} source=data_loader.fetch_financial_statements '
+            print(f'[_fetch_fs_safe] sid={stock_id} source=src.data.core.data_loader.fetch_financial_statements '
                   f'fetched_at={_dt_p.datetime.utcnow().isoformat()}Z '
                   f'result=dict:{len(_result)}keys', file=_sys_p.stderr)
         except Exception:

@@ -1,4 +1,11 @@
-"""src/data/stock/ — TW 個股資料 fetcher。"""
-from .tw_stock_data_fetcher import *  # noqa: F401,F403
-# 顯式 re-export _ private 名
-from .tw_stock_data_fetcher import _load_proxy_config  # noqa: F401
+"""src/data/stock/ — TW 個股資料 fetcher。PEP 562 lazy forward,見 macro/__init__.py 註釋。"""
+from . import tw_stock_data_fetcher  # noqa: F401
+
+_SUBMODULES = (tw_stock_data_fetcher,)
+
+
+def __getattr__(name):
+    for sub in _SUBMODULES:
+        if name in vars(sub):
+            return getattr(sub, name)
+    raise AttributeError(f"module 'src.data.stock' has no attribute {name!r}")

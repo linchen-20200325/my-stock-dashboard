@@ -1,5 +1,11 @@
-"""src/data/core/ — 核心資料 fetcher。"""
-from .data_loader import *  # noqa: F401,F403
-from .data_registry import *  # noqa: F401,F403
-# 顯式 re-export _ private 名
-from .data_loader import _LOADER_VERSION  # noqa: F401
+"""src/data/core/ — 核心資料 fetcher。PEP 562 lazy forward,見 macro/__init__.py 註釋。"""
+from . import data_loader, data_registry  # noqa: F401
+
+_SUBMODULES = (data_loader, data_registry)
+
+
+def __getattr__(name):
+    for sub in _SUBMODULES:
+        if name in vars(sub):
+            return getattr(sub, name)
+    raise AttributeError(f"module 'src.data.core' has no attribute {name!r}")
