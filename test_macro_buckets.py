@@ -287,3 +287,47 @@ def test_cards_empty_details_loud_not_blank():
     """details 缺 → 「未載入」提示（§1 不偽造、不空字串）。"""
     assert "尚未載入" in mb.bucket_indicator_cards_html({})
     assert "尚未載入" in mb.bucket_indicator_cards_html({"details": []})
+
+
+# ──────────────────────────────────────────────────────────
+# 6. leading_table_empty_state_html — v18.340 §1 先行指標表三狀態分流
+#    user 2026-06-28「原來的 table 呢?」對比 6/14 截圖 → 4 FinMind API 全敗時
+#    原診斷文案沒明指 FINMIND_TOKEN,user 找不到救法。對齊 PR #362 chips 三狀態
+#    分流模式,table 專屬 helper。
+# ──────────────────────────────────────────────────────────
+def test_leading_table_empty_not_attempted():
+    """冷啟動未點更新 → 灰色「尚未載入」提示點按鈕。"""
+    h = mb.leading_table_empty_state_html(attempted=False, token_present=False)
+    assert "📡" in h and "尚未載入" in h
+    assert "一鍵更新全部數據" in h
+    assert "#6e7681" in h          # 灰
+    assert "FINMIND_TOKEN" not in h  # 未嘗試不該嚇人提 token
+
+
+def test_leading_table_empty_attempted_no_token():
+    """點過更新仍空 + 無 token → 橙色明確指向 FINMIND_TOKEN(最可能根因)。"""
+    h = mb.leading_table_empty_state_html(attempted=True, token_present=False)
+    assert "⚠️" in h and "FINMIND_TOKEN" in h
+    assert "已嘗試" in h
+    assert "#f0883e" in h          # 橙
+    # 4 個 FinMind API 名稱應出現(讓 user 明白範圍)
+    assert "TX" in h and "TXO" in h
+
+
+def test_leading_table_empty_attempted_with_token():
+    """點過更新仍空 + 有 token → 橙色歸因額度/週末,不誤指 token 缺失。"""
+    h = mb.leading_table_empty_state_html(attempted=True, token_present=True)
+    assert "⚠️" in h
+    # 該情境的常見三因
+    assert "額度" in h or "週末" in h or "失效" in h
+    # 有 token 時不該說「偵測不到 FINMIND_TOKEN」
+    assert "偵測不到" not in h
+
+
+def test_leading_table_empty_always_valid_div():
+    """三情境都回合法單一 <div> 容器(不偽造數字、不空字串)。"""
+    for _att in (True, False):
+        for _tok in (True, False):
+            h = mb.leading_table_empty_state_html(attempted=_att, token_present=_tok)
+            assert h.startswith("<div") and h.rstrip().endswith("</div>")
+            assert "先行指標明細表未顯示" in h

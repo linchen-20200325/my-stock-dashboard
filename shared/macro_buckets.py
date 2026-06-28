@@ -412,6 +412,54 @@ def chips_empty_state_html(attempted: bool, token_present: bool) -> str:
 
 
 # ════════════════════════════════════════════════════════════════
+# v18.340 — 先行指標明細表(日期 × 法人/期貨/PCR/融資)專屬 fail-loud。
+#   user 2026-06-28:對照 6/14 截圖,table 不見 = li_latest empty。
+#   原 tab_macro.py:4657 elif 分支只說「請重按更新」+ 一段含糊文案,沒明指
+#   FINMIND_TOKEN(真正最常見根因)。同 PR #362 chips 三狀態分流模式,給 table
+#   專屬 helper:未載入 / 已試+無token / 已試+有token 三色。純字串 builder,L0。
+# ════════════════════════════════════════════════════════════════
+def leading_table_empty_state_html(attempted: bool, token_present: bool) -> str:
+    """先行指標明細表為空時的 fail-loud 診斷卡(§1)。
+
+    Args
+    ----
+    attempted: 是否已嘗試載入(cl_data 任一存在)。False = 冷啟動;True = 點過更新
+               但 li_latest 仍空 = 4 個 FinMind API(TX/MTX/TXO/三大法人)全敗。
+    token_present: 是否偵測得到 FINMIND_TOKEN(st.secrets 或 os.environ)。
+
+    Returns
+    -------
+    str: 診斷卡 HTML,三情境分色給不同建議,不偽造數字。
+    """
+    if not attempted:
+        icon, color = "📡", "#6e7681"
+        msg = ("尚未載入 — 點上方「🚀 一鍵更新全部數據」抓取先行指標"
+               "(外資期貨 / 選擇權PCR / 三大法人 / 融資餘額)。")
+    elif not token_present:
+        icon, color = "⚠️", "#f0883e"
+        msg = ("已嘗試抓取,但先行指標 4 源(期貨 TX/MTX、選擇權 TXO、三大法人、"
+               "融資)全空,且偵測不到 <b>FINMIND_TOKEN</b>。"
+               "上述 4 個 FinMind API 全部需 token,缺 token → 全 422 → 表格無法渲染。"
+               "請在部署 secrets 設定 FINMIND_TOKEN 後,重按「🚀 一鍵更新全部數據」。")
+    else:
+        icon, color = "⚠️", "#f0883e"
+        msg = ("已嘗試抓取,但 4 個 FinMind API 全回空。"
+               "常見原因:① FinMind 額度用罄(每日 600 次)→ 隔日重試;"
+               "② 非交易日(週末/假日)→ 屬正常,等下個交易日;"
+               "③ token 已失效 → 至 FinMind 後台確認。"
+               "TAIFEX 在海外 IP 常被擋,前五大/精確PCR 等備援來源無法補資料。")
+    return (
+        f'<div style="margin:8px 0 12px;padding:12px 16px;'
+        f'background:linear-gradient(90deg,{color}1f,#0d1117);'
+        f'border-left:4px solid {color};border-radius:0 8px 8px 0;">'
+        f'<span style="font-size:13px;font-weight:800;color:{color};">'
+        f'{icon} 先行指標明細表未顯示</span>'
+        f'<div style="font-size:12px;color:#c9d1d9;margin-top:5px;'
+        f'line-height:1.55;">{msg}</div></div>'
+    )
+
+
+# ════════════════════════════════════════════════════════════════
 # v18.338 — 桶指標 Fund 式卡片網格（user 2026-06-28：總經資料像基金那樣
 #   分組 + 小圖 + SPEC）。每指標一張卡：小圖 + 名稱 + 值(燈號色) + SPEC 註解。
 #   復用 compute_five_bucket_summary()[bucket] details，不新增資料線。
