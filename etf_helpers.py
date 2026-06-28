@@ -97,6 +97,66 @@ def yield_valuation_zone(cur_yield, avg_yield):
     return label
 
 
+def calc_sigma_metrics(df, window: int = 252) -> dict:
+    """v18.334 PR-H2:ETF σ 統計指標 SSOT(統一計算層,不統一分級邏輯)。
+
+    R-3 audit 部分統一方案:計算層統一,分級邏輯保留兩套(短/長線分離)。
+    既消除 etf_calc.py:84 vs etf_tab_single.py:482-483 重複實作,
+    又保留各 Tab 的 UX 意圖(快速戰情燈號 vs 教學量化買點)。
+
+    Args:
+        df: ETF 價格 DataFrame(需含 'Close' 欄)
+        window: 取樣視窗(預設 252 交易日 ≈ 1 年)
+
+    Returns:
+        dict {
+          'std_price': float | None,        # 近 window 日「價格」標準差(MA20±nσ 用)
+          'std_pct_annual': float | None,   # 年化「百分比」波動率 %(z-score 用)
+          'ma20': float | None,             # 20 日均線(短線基準 — Quick Sigma)
+          'ma60': float | None,             # 60 日均線(中線基準)
+          'ma240': float | None,            # 240 日均線(長線基準 — Deep Sigma)
+          'n': int,                          # 實際採樣筆數
+        }
+        資料不足時對應欄位為 None,函式不 raise(讓 caller 決定 fallback UI)。
+
+    SSOT 政策:
+      · etf_calc._compute_etf_warroom_row(短線):用 std_price + ma20 → MA20±nσ 5 段
+      · etf_tab_single MK#11 σ 卡(長線):用 std_pct_annual + ma240 → z-score 4 段
+      · 任何新 σ 用途均應從此函式取 metrics,不再 inline 計算
+    """
+    import math as _math
+    _out = {
+        'std_price': None, 'std_pct_annual': None,
+        'ma20': None, 'ma60': None, 'ma240': None,
+        'n': 0,
+    }
+    if df is None or len(df) == 0 or 'Close' not in df.columns:
+        return _out
+    _close = df['Close']
+    _n = len(_close)
+    _out['n'] = _n
+
+    if _n >= 20:
+        _out['ma20'] = float(_close.rolling(20).mean().iloc[-1])
+    if _n >= 60:
+        _out['ma60'] = float(_close.rolling(60).mean().iloc[-1])
+    if _n >= 240:
+        _out['ma240'] = float(_close.rolling(240).mean().iloc[-1])
+
+    if _n >= window:
+        _tail = _close.tail(window)
+        _std_p = float(_tail.std())
+        if _std_p > 0 and not _math.isnan(_std_p):
+            _out['std_price'] = _std_p
+        _ret = _tail.pct_change().dropna()
+        if not _ret.empty:
+            _std_pct = float(_ret.std()) * (window ** 0.5) * 100
+            if _std_pct > 0 and not _math.isnan(_std_pct):
+                _out['std_pct_annual'] = _std_pct
+
+    return _out
+
+
 def dividend_health_label(cur_yield, total_ret_1y, cagr_3y):
     """配息健康度分級(MK 框架 #1+#2)。
 

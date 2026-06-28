@@ -346,8 +346,9 @@ def render_etf_portfolio(gemini_fn=None):
         '市價':         st.column_config.NumberColumn('市價', format='%.2f'),
         '距月線%':      st.column_config.NumberColumn('距 MA20%', format='%+.2f%%',
                           help='相對月線乖離；σ 分級的基準'),
-        'σ位階':        st.column_config.TextColumn('σ 位階', width='medium',
-                          help='-3σ 股災 / -2σ 超跌 / -1σ 便宜 / +2σ 停利'),
+        'σ位階':        st.column_config.TextColumn('⚡短線 σ 位階', width='medium',
+                          help='⚡短線(MA20基準):-3σ 股災 / -2σ 超跌 / -1σ 便宜 / +2σ 停利。'
+                               '單檔 Tab「📅長線 σ」用 MA240 z-score,訊號差異屬不同時間尺度正常。'),
         '1年含息報酬%': st.column_config.NumberColumn('1年含息報酬%', format='%+.2f%%'),
         '走勢':         st.column_config.LineChartColumn('近30日走勢'),
         '健康燈號':     st.column_config.TextColumn('σ 燈號', width='medium',
