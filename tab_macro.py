@@ -2145,32 +2145,47 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 print(f'[Macro] 完成 keys={[k for k in _r.keys() if not k.startswith("_")]}')
                 return _r
 
-            # v10.61.0: 改手動 executor 管理；原本 `with ThreadPoolExecutor as _exc2:`
-            # 在 with 結束時呼叫 shutdown(wait=True)，會等所有 job 自然結束才放行，
-            # 後面 `result(timeout=N)` 形同虛設。改 try/finally + shutdown(wait=False)，
-            # 讓 result(timeout=N) 真的能在 N 秒後 cut over，stuck thread 變 zombie 自滅。
+            # v18.341 PR-L1: 對齊 _job_macro 內部好 pattern(L2105-2138)。
+            # user 2026-06-28「總經抓資料會自動停止沒有抓完成,要直接抓好不可以突然停掉」。
+            # 舊 v10.61.0 設計:per-job `result(timeout=30/30/80)` + `shutdown(wait=False)`
+            # 故意 zombie kill — 任一慢源就被 cutoff,user 看到「中途停掉」。v18.331 把
+            # build_leading_fast 併入 _job_macro 內部 6-job pool 後,_job_macro 偶爾超 80s
+            # 導致 _macro_res = None,partial 結果全丟。
+            # 修法:
+            #   (a) timeout 拉大到 200s 全域(原 max=80),配合內部 _job_macro 已有 70s
+            #       as_completed cancel + 60s 餘裕 + 外層 30s+30s 慢源餘裕
+            #   (b) 改 as_completed loop + partial preserve(任一完成立刻入 dict,不等)
+            #   (c) timeout 到 → 取消未完成 future,但**保留已收到的**(_res_map),
+            #       下方 if _xxx_res 寫入 session_state 仍走原 truthy 守護(不蓋 stale)
+            #   (d) shutdown(wait=False) 維持,因為 future 已 cancel
+            _GLOBAL_TIMEOUT_S = 200   # 寬到讓全 3 job 多半能完成(M1B<30, bias<30, macro 80-180)
             _exc2 = ThreadPoolExecutor(max_workers=3)
+            _res_map = {'m1b': None, 'bias': None, 'macro': None}
             try:
-                _fut_m1b   = _exc2.submit(_job_m1b)
-                _fut_bias  = _exc2.submit(_job_bias)
-                _fut_macro = _exc2.submit(_job_macro)
+                _futs2 = {
+                    _exc2.submit(_job_m1b):   'm1b',
+                    _exc2.submit(_job_bias):  'bias',
+                    _exc2.submit(_job_macro): 'macro',
+                }
                 try:
-                    _m1b_res   = _fut_m1b.result(timeout=30)
-                except Exception:
-                    _m1b_res = None
-                    print('[並發] ⏰ M1B 超時')
-                try:
-                    _bias_res  = _fut_bias.result(timeout=30)
-                except Exception:
-                    _bias_res = None
-                    print('[並發] ⏰ bias 超時')
-                try:
-                    _macro_res = _fut_macro.result(timeout=80)
-                except Exception:
-                    _macro_res = None
-                    print('[並發] ⏰ Macro 超時')
+                    for _fut2 in _asc_mc(_futs2, timeout=_GLOBAL_TIMEOUT_S):
+                        _name2 = _futs2.get(_fut2, '?')
+                        try:
+                            _res_map[_name2] = _fut2.result()
+                        except Exception as _e2:
+                            print(f'[並發] ❌ {_name2}: {type(_e2).__name__}: {_e2}')
+                except (TimeoutError, _ConcFutTimeout):
+                    _stuck2 = [_futs2[_f] for _f in _futs2 if not _f.done()]
+                    for _f_pend in _futs2:
+                        if not _f_pend.done():
+                            _f_pend.cancel()
+                    print(f'[並發] ⏰ outer trio {_GLOBAL_TIMEOUT_S}s timeout，未完成={_stuck2}，'
+                          f'保留 partial={[k for k, v in _res_map.items() if v]}')
             finally:
                 _exc2.shutdown(wait=False)
+            _m1b_res, _bias_res, _macro_res = _res_map['m1b'], _res_map['bias'], _res_map['macro']
+            # 寫入 session_state 保留原 truthy 守護:partial 場景(某 job timeout)→
+            # 既有 stale 不被 None 蓋,user 看到「上次成功的值」而非「資料消失」(§1)
             if _m1b_res:
                 st.session_state['m1b_m2_info'] = _m1b_res
             if _bias_res:
