@@ -180,7 +180,9 @@ def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
 
     # 量比 (15分)
     if vr is not None:
-        if vr > 3.0:
+        # P2-3 v18.381:3.0 inline → shared SSOT
+        from shared.signal_thresholds import VOLUME_RATIO_SURGE_HIGH
+        if vr > VOLUME_RATIO_SURGE_HIGH:
             # P7修正: 量比>3.0是重大消息/主力介入，給高分
             score += 12
             details['量比'] = (f'{vr}（主力介入）', 12, 15)

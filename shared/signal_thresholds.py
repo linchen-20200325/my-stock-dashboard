@@ -432,6 +432,19 @@ VOLUME_RATIO_MILD: float = 1.0
 VOLUME_RATIO_DRY: float = 0.5
 """量比嚴重量縮:<0.5× 20 日均量 → 🟡 量能不足警示。
 個股 Tab 警示列(原 inline 0.5)。原 tab_stock.py:1024 inline。
+
+P2-3 v18.381 補:scoring_helpers.py:183 量比警戒(主力介入)門檻。"""
+
+VOLUME_RATIO_SURGE_HIGH: float = 3.0
+"""量比 >3.0× 視為重大消息 / 主力介入(scoring_helpers 評分)。
+
+P2-3 v18.381:抽自 src/compute/scoring/scoring_helpers.py:183 inline。"""
+
+CHINA_USDCNY_STRONG: float = 7.0
+"""USDCNY <7.0 視為強勢人民幣(中國副盤評分 100 滿分)。
+
+P2-3 v18.381:抽自 src/compute/macro/macro_helpers.py:947 inline。
+評分:<7.0→100 / 7.0-7.2→50 / 7.2-7.4→25 / >7.4→0(_score_china_usdcny)。
 注意:與 GRP_VOL_SHRINK_RATIO(0.7,組合 Tab 操作狀態燈量縮)刻意分開 —
 個股用較嚴(0.5,嚴重量縮才警示),組合用較鬆(0.7,操作狀態燈),屬不同顆粒度設計。"""
 

@@ -5,6 +5,12 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P2-3 (v18.381) — 2 inline magic 入 SSOT
+- **檔案**: `shared/signal_thresholds.py` + `src/compute/macro/macro_helpers.py:947` + `src/compute/scoring/scoring_helpers.py:183`
+- **拔毒**: 加 `CHINA_USDCNY_STRONG=7.0` + `VOLUME_RATIO_SURGE_HIGH=3.0`,2 處 caller 改 lazy import
+- **驗證**: full pytest 2213/0 fail
+- **commit**: 待 push
+
 ### P2-1 (v18.380) — _prov_log 3 處統一至 provenance.py
 - **檔案**: `src/data/core/provenance.py`(NEW)+ etf_fetch.py / daily_data_fetchers.py / nas_server.py 改 thin shim
 - **拔毒**: 3 處同名異簽名 _prov_log → 統一 SSOT `prov_log(fn_name, source, result_summary, ticker='')`,3 caller 改 thin wrapper(backward compat)

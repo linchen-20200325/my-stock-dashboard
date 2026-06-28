@@ -944,7 +944,9 @@ def _score_china_usdcny(v: Optional[float]) -> Optional[float]:
     if v is None or pd.isna(v):
         return None
     v = float(v)
-    if v < 7.0:  return 100.0
+    # P2-3 v18.381:7.0 inline → shared SSOT(7.2/7.4 後續視需求可再抽)
+    from shared.signal_thresholds import CHINA_USDCNY_STRONG
+    if v < CHINA_USDCNY_STRONG: return 100.0
     if v <= 7.2: return 50.0
     if v <= 7.4: return 25.0
     return 0.0
