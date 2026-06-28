@@ -919,6 +919,43 @@ def build_leading_indicators(start, end, token="", progress_cb=None):
 
 
 # ════════════════════════════════════════════════════════════════
+# v18.342 PR-L2:stale cache fallback helper(L0 純函式,易於 unit test)
+# user 2026-06-28「如果遇假日則抓前一次的」+ §2.4「過期 cache 須帶 is_stale 旗標,
+# 禁靜默」。週末/假日 FinMind 自然無新資料,build_leading_fast 返回 None 會讓 UI
+# 整段空白;改:當次抓空 → 改返回最近一次成功的 pickle + is_stale=True attrs。
+# ════════════════════════════════════════════════════════════════
+def _load_stale_pickle(cache_path):
+    """嘗試載入指定 pickle 路徑(忽略 TTL),回傳 (df, age_minutes) 或 (None, None)。"""
+    import os as _os_sp, pickle as _pk_sp, time as _tm_sp, sys as _sys_sp
+    if not _os_sp.path.exists(cache_path):
+        return (None, None)
+    try:
+        _age_sec = _tm_sp.time() - _os_sp.path.getmtime(cache_path)
+        _age_min = round(_age_sec / 60, 1)
+        with open(cache_path, 'rb') as _f:
+            _df = _pk_sp.load(_f)
+        print(f'[LI-v8] 預載過期 pickle age={_age_min}min,當次失敗時用')
+        return (_df, _age_min)
+    except Exception as _e:
+        print(f'[LI-v8] stale cache preload fail: {type(_e).__name__}: {_e}',
+              file=_sys_sp.stderr)
+        return (None, None)
+
+
+def _mark_stale(df, age_min):
+    """在 df.attrs 標記 is_stale=True + stale_age_min(下游 UI chip 用)。"""
+    if df is None:
+        return df
+    try:
+        df.attrs['is_stale'] = True
+        if age_min is not None:
+            df.attrs['stale_age_min'] = age_min
+    except Exception:
+        pass
+    return df
+
+
+# ════════════════════════════════════════════════════════════════
 # 快速版先行指標（只用 FinMind 批次 API，無逐日爬蟲）
 # 資料源：
 #  ① 外資期貨留倉 → FinMind TaiwanFuturesInstitutionalInvestors (TX+MTX)
@@ -944,9 +981,18 @@ def build_leading_fast(days=7, token=""):
     if _os_li.path.exists(_ck_li) and (_tm_li.time() - _os_li.path.getmtime(_ck_li)) / 60 < 30:
         try:
             with open(_ck_li, 'rb') as _f_li:
-                return _pk_li.load(_f_li)
-        except Exception:
-            pass
+                _df_fresh = _pk_li.load(_f_li)
+                # 新鮮 cache → 確保無 is_stale 旗標(同源寫入後直接返回)
+                if hasattr(_df_fresh, 'attrs'):
+                    _df_fresh.attrs.pop('is_stale', None)
+                    _df_fresh.attrs.pop('stale_age_min', None)
+                return _df_fresh
+        except Exception as _e_cf:
+            print(f'[LI-v8] fresh cache load fail: {type(_e_cf).__name__}: {_e_cf}',
+                  file=__import__('sys').stderr)
+
+    # v18.342 PR-L2:預載過期 pickle 供 stale fallback(若當次抓不到再用)。
+    _stale_fallback_df, _stale_age_min = _load_stale_pickle(_ck_li)
     import datetime as _dt
     today  = _dt.date.today()
     s_date = today - _dt.timedelta(days=days + 14)
@@ -1260,11 +1306,23 @@ def build_leading_fast(days=7, token=""):
         })
     if not rows:
         print("[LI-v8] ⚠️ 無資料")
+        # v18.342 PR-L2:無新資料 → 改用過期 pickle(若有),不返回 None。
+        # user「假日抓前一次的」+ §2.4「過期 cache 須帶 is_stale,禁靜默」。
+        if _stale_fallback_df is not None and not getattr(_stale_fallback_df, 'empty', True):
+            print(f'[LI-v8] 📦 fallback to stale pickle (age={_stale_age_min}min)')
+            return _mark_stale(_stale_fallback_df, _stale_age_min)
         return None
     df = pd.DataFrame(rows)
     filled = sum(1 for _, r in df.iterrows()
                  if any(r.get(c) is not None for c in ["外資大小","選PCR","外(選)","外資"]))
     print(f"[LI-v8] ✅ {len(df)} 筆 ({filled} 筆有數據)")
+    # v18.342 PR-L2:當次 FinMind 全空 + 有過期 pickle → 用 pickle + is_stale 旗標
+    # (rows 雖非空但全 None placeholder = 跟 user 視角的「沒抓到」等價,假日場景)
+    if not _fm_ok and filled == 0 and _stale_fallback_df is not None \
+            and not getattr(_stale_fallback_df, 'empty', True):
+        print(f'[LI-v8] 📦 FinMind 全空 + filled=0 → fallback to stale pickle '
+              f'(age={_stale_age_min}min)')
+        return _mark_stale(_stale_fallback_df, _stale_age_min)
     # 只在 FinMind 主來源有回資料時快取；暫時性失敗（_fm_ok=False）不快取，保留下次刷新重試
     if _fm_ok:
         try:
