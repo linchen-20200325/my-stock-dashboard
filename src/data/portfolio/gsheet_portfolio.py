@@ -47,7 +47,7 @@ def _oauth_active() -> bool:
     if st is None:
         return False
     try:
-        from oauth_state import is_oauth_configured
+        from src.ui.pages import is_oauth_configured
     except Exception:
         return False
     if not is_oauth_configured():
@@ -101,7 +101,7 @@ def _has_oauth_tokens() -> bool:
     if st is None:
         return False
     try:
-        from oauth_state import is_oauth_configured
+        from src.ui.pages import is_oauth_configured
     except Exception:
         return False
     if not is_oauth_configured():
@@ -118,7 +118,7 @@ def _build_client():
     讓「列檔挑 Sheet」流程能在 sheet_id 還沒設定前先建 client。
     """
     if _has_oauth_tokens():
-        from oauth_state import _get_oauth_client
+        from src.ui.pages import _get_oauth_client
         cli = _get_oauth_client()
         if cli is not None:
             return cli

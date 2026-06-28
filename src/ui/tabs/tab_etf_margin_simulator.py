@@ -18,7 +18,7 @@ import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.ttls import TTL_1HOUR
-from etf_margin_simulator import (
+from src.compute.etf import (
     LEVERAGE_PRESETS,
     LIQUIDATION_RATIO,
     MARGIN_CALL_RATIO,

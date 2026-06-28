@@ -31,14 +31,14 @@ class TestQ5bMarkersInSource(unittest.TestCase):
         self.assertIn('etf_fetch(7-metrics aggregator)', src)
 
     def test_yield_screener_2(self):
-        src = self._read('yield_screener.py')
+        src = self._read('src/ui/tabs/yield_screener.py')
         # fetch_twse_yield_pe — DataFrame attrs
         self.assertIn("'TWSE:OpenAPI:BWIBBU_d'", src)
         # fetch_dividend_history — Series attrs
         self.assertIn('yfinance.Ticker', src)
 
     def test_monthly_revenue_screener_2(self):
-        src = self._read('monthly_revenue_screener.py')
+        src = self._read('src/ui/tabs/monthly_revenue_screener.py')
         self.assertIn("'FinMind:TaiwanStockMonthRevenue:single'", src)
         self.assertIn("'FinMind:TaiwanStockMonthRevenue:batch(all-market)'", src)
 
@@ -63,10 +63,10 @@ class TestImports(unittest.TestCase):
         from src.ui.etf import etf_tab_grp_compare  # noqa
 
     def test_yield_screener(self):
-        import yield_screener  # noqa
+        from src.ui.tabs import yield_screener  # noqa
 
     def test_monthly_revenue_screener(self):
-        import monthly_revenue_screener  # noqa
+        from src.ui.tabs import monthly_revenue_screener  # noqa
 
     def test_data_loader(self):
         from src.data.core import data_loader  # noqa

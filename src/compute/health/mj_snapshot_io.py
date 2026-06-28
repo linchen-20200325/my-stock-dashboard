@@ -1,4 +1,4 @@
-"""mj_snapshot_io.py — v18.186 MJ 體檢快照持久化層
+"""src/compute/health/mj_snapshot_io.py — v18.186 MJ 體檢快照持久化層
 
 把 `financial_health_engine.analyze_financial_health` 的 JSON 結果落地
 到 `data_cache/mj_snapshots/{sid}_{yyyymm}.json`，供 v18.185

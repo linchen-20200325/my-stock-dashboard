@@ -132,7 +132,7 @@ def _fetch_pbratio_from_twse(sid: str) -> float:
     過濾出指定 sid 的「股價淨值比」欄位。涵蓋全 TWSE 上市股（TPEx 退 FinMind）。
     """
     try:
-        from yield_screener import fetch_twse_yield_pe
+        from src.ui.tabs import fetch_twse_yield_pe
         _df = fetch_twse_yield_pe()
         if _df is None or _df.empty:
             return 0.0
@@ -234,11 +234,11 @@ def render_tab_stock():
         detect_bollinger_breakout,
     )
     from financial_health_engine import analyze_financial_health, no_ai_overall_verdict
-    from tech_indicators import (
+    from src.compute.strategy import (
         calc_rsi, calc_ibs, calc_volume_ratio,
         calc_kd, calc_bollinger, calc_vcp,
     )
-    from scoring_helpers import calc_fundamental_score, calc_health_score, health_grade
+    from src.compute.scoring import calc_fundamental_score, calc_health_score, health_grade
     from src.compute.scoring import calc_rs_score, rs_slope
     from src.ui.render import kpi, signal_box, teacher_conclusion
     from src.ui.render import plot_combined_chart, plot_quarterly_chart, plot_revenue_chart
@@ -571,14 +571,14 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
 
         # ── v18.204 I4：個股 ↔ 總經 regime 聯動（讀總經 Tab mkt_info，跨 Tab 訊號）──
         try:
-            from macro_stock_link import render_macro_stock_backdrop
+            from src.ui.tabs import render_macro_stock_backdrop
             render_macro_stock_backdrop(st.session_state)
         except Exception as _e_msl:
             print(f'[macro_stock_link] {type(_e_msl).__name__}: {_e_msl}')
 
         # ── v18.207 I5：個股 ↔ ETF 投組 / 組合比較 跨 Tab 持倉聯動 banner ──
         try:
-            from portfolio_linkage import render_stock_portfolio_membership
+            from src.ui.tabs import render_stock_portfolio_membership
             render_stock_portfolio_membership(st.session_state, sid2, name2)
         except Exception as _e_pfl:
             print(f'[portfolio_linkage] {type(_e_pfl).__name__}: {_e_pfl}')
@@ -2405,13 +2405,13 @@ padding:12px 16px;margin:8px 0;">
         # SSOT:呼叫 mj_trend_score.compute_one_stock_trend(),與組合 Tab 同一函式
         try:
             from datetime import date as _date_mj
-            from mj_snapshot_io import (
+            from src.compute.health import (
                 current_finmind_yyyymm as _cfymm,
                 list_snapshots as _ls_snap,
                 load_snapshot as _ld_snap,
                 save_snapshot as _sv_snap,
             )
-            from mj_trend_score import compute_one_stock_trend as _cost
+            from src.compute.health import compute_one_stock_trend as _cost
             _ymm_curr = _cfymm(_date_mj.today())
             _mj_row = _cost(
                 sid=sid2, yyyymm_curr=_ymm_curr, token=FINMIND_TOKEN, w_monthly=0.65,
@@ -3150,7 +3150,7 @@ padding:12px 16px;margin:8px 0;">
 
         # ══ 💠 集保籌碼大戶雷達（隨主代碼 sid2 自動查詢；置於 AI 總結上方供其引用）══
         st.markdown('---')
-        from chip_radar import render_chip_radar
+        from src.ui.tabs import render_chip_radar
         _chip_radar_summary = render_chip_radar(sid2)
 
         # ══ 🤖 AI 首席顧問總結 ═══════════════════════════════════
@@ -3271,13 +3271,13 @@ padding:12px 16px;margin:8px 0;">
             # v18.327 PR-B:AI prompt 補 MJ 趨勢分數合議(月+季 65/35)
             try:
                 from datetime import date as _date_ai
-                from mj_snapshot_io import (
+                from src.compute.health import (
                     current_finmind_yyyymm as _cfymm_ai,
                     list_snapshots as _ls_ai,
                     load_snapshot as _ld_ai,
                     save_snapshot as _sv_ai,
                 )
-                from mj_trend_score import compute_one_stock_trend as _cost_ai
+                from src.compute.health import compute_one_stock_trend as _cost_ai
                 _ymm_ai = _cfymm_ai(_date_ai.today())
                 _mj_row_ai = _cost_ai(
                     sid=sid2, yyyymm_curr=_ymm_ai, token=FINMIND_TOKEN, w_monthly=0.65,

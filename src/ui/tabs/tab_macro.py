@@ -57,7 +57,7 @@ def _radar_threshold_lines(key: str) -> list:
     trend 與判讀非同量，回 [] 不畫線（避免誤導）。cut-off 全 import 自 risk_radar SSOT。
     """
     try:
-        from risk_radar import (
+        from src.compute.risk import (
             VIX_WARN_LEVEL, VIX_PANIC_LEVEL,
             VIX_TERM_WARN, VIX_TERM_PANIC,
             MOVE_WARN_LEVEL, MOVE_PANIC_LEVEL,
@@ -155,7 +155,7 @@ def _render_global_risk_bucket(fred_api_key: str = "",
     if not fred_api_key or len(str(fred_api_key).strip()) < 30:
         return
     try:
-        from risk_radar import detect_risk_radar, summarize_radar
+        from src.compute.risk import detect_risk_radar, summarize_radar
     except Exception as _e_imp:
         st.warning(f'⚠️ 風險雷達模組載入失敗：{_e_imp}')
         return
@@ -252,7 +252,7 @@ def _render_global_risk_bucket(fred_api_key: str = "",
     # ── v18.173 🤝 雙速合議（慢總經 × 短線雷達 → 單一行動建議）──────────
     if slow_verdict and isinstance(slow_verdict, dict):
         try:
-            from risk_radar import synthesize_dual_verdict
+            from src.compute.risk import synthesize_dual_verdict
             _syn = synthesize_dual_verdict(
                 slow_level=str(slow_verdict.get('level') or '中性'),
                 slow_score=float(slow_verdict.get('score') or 0.0),
@@ -430,7 +430,7 @@ def render_macro_bucket_summary_bar(bucket_key: str, with_cards: bool = False) -
     """
     try:
         from src.compute.macro import compute_five_bucket_summary
-        from section_inputs import load_section_inputs
+        from src.services import load_section_inputs
         from shared.macro_buckets import (
             bucket_indicator_cards_html, bucket_summary_bar_html,
         )
@@ -488,7 +488,7 @@ def render_tab_macro():
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from src.config import FINMIND_TOKEN
     # 外部模組
-    from macro_state_locker import (
+    from src.services import (
         MacroStateLocker, calculate_system_state, load_macro_state,
     )
     from src.compute.strategy import V4StrategyEngine
@@ -720,7 +720,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
     if _cache_fresh and not _is_refreshing:
         # 快取新鮮 → 立即計算燈號（含資料新鮮度標記）
         # C1-D v18.290:走 section_inputs SSOT(對齊 5 桶 + 戰情概覽 + 今日作戰室)
-        from section_inputs import load_section_inputs as _load_si_tl
+        from src.services import load_section_inputs as _load_si_tl
         _tl_inp      = _load_si_tl(st.session_state)
         _tm_mkt_init = _tl_inp.mkt_info or {}
         _tm_jq_init  = _tl_inp.jingqi_info or {}
@@ -770,7 +770,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
         )
         # C1-E v18.291:雙視角 macro_info 走 section_inputs SSOT。
         # _fi_streak_cache 死碼移除(無 downstream consumer,grep 全檔僅此一處)。
-        from section_inputs import load_section_inputs as _load_si_lt
+        from src.services import load_section_inputs as _load_si_lt
         _lt_inp = _load_si_lt(st.session_state)
         _mi_d = _lt_inp.macro_info or {}
         _cpi_d  = _mi_d.get('us_core_cpi') or {}
@@ -832,7 +832,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
             # C1-A v18.287:走 section_inputs.load_section_inputs SSOT,
             # 後續 C1-B+ 其他 section 也接同個 helper,降低物理重排耦合。
             from src.compute.macro import compute_five_bucket_summary
-            from section_inputs import load_section_inputs
+            from src.services import load_section_inputs
             _inp = load_section_inputs(st.session_state)
             _5b = compute_five_bucket_summary(
                 macro_info=_inp.macro_info,
@@ -897,7 +897,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
 
     # ══ 戰情概覽（一眼看清今日市場）══════════════════════════
     # C1-B v18.288:走 section_inputs.load_section_inputs SSOT(對齊 5 桶 summary)
-    from section_inputs import load_section_inputs as _load_si_ov
+    from src.services import load_section_inputs as _load_si_ov
     _ov_inp  = _load_si_ov(st.session_state)
     _ov_mkt  = _ov_inp.mkt_info or {}
     _ov_jq   = _ov_inp.jingqi_info or {}
@@ -941,7 +941,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 </div>''', unsafe_allow_html=True)
 
     # C1-C v18.289:走 section_inputs.load_section_inputs SSOT(對齊 5 桶 + 戰情概覽)
-    from section_inputs import load_section_inputs as _load_si_wr
+    from src.services import load_section_inputs as _load_si_wr
     _wr_inp  = _load_si_wr(st.session_state)
     _wr_mkt  = _wr_inp.mkt_info or {}
     _wr_cd   = _wr_inp.cl_data or {}
@@ -1587,7 +1587,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
                 # ── 1. VIX ──────────────────────────────────────────────────────────
                 # v18.332 Tier2 2-D slice 1：抽至 L1 macro_snapshot.fetch_vix_block（可單測）。
-                from macro_snapshot import fetch_vix_block as _fetch_vix
+                from src.ui.render import fetch_vix_block as _fetch_vix
 
                 # ── 2. CPI（美國核心 CPI YoY，series CPILFESL）─────────────────────
                 #   v18.142 修：原本誤用 CPIAUCSL（總體 CPI All Items），與 UI 標籤
@@ -2314,7 +2314,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
             # ── 大盤/總經：國際、台股、科技指數（日更新，固定清單確保永遠顯示 20 筆）──
             # C1-F v18.292:整個 registry 區塊 10 處 session_state.get 收斂成 1 處 SectionInputs
-            from section_inputs import load_section_inputs as _load_si_reg
+            from src.services import load_section_inputs as _load_si_reg
             _reg_inp = _load_si_reg(st.session_state)
             _cl_reg = _reg_inp.cl_data or {}
             _intl_d = _cl_reg.get('intl') or {}
@@ -3004,7 +3004,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             expanded=False,
         ):
             try:
-                from tw_backtest import backtest_twii_turning_points as _bt_twii
+                from src.compute.strategy import backtest_twii_turning_points as _bt_twii
                 _bt = _bt_twii(_fred_key_tw_bt)
             except Exception as _bt_e:
                 _bt = {"source_ok": False, "note": str(_bt_e)[:120],
@@ -3066,7 +3066,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     "代表熱錢可能停泊匯市觀望，往往是行情前奏。"
                 )
                 try:
-                    from hot_money import render_hot_money_section
+                    from src.ui.tabs import render_hot_money_section
                     render_hot_money_section(
                         _twd_df, FINMIND_TOKEN, key_prefix="tab_macro_hm")
                 except Exception as _hme:
@@ -3077,7 +3077,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             st.info('📡 請點擊「🚀 一鍵更新全部數據」載入大盤數據')
     # ── ③ 資料到位後，回填紅綠燈佔位符（修復「未審先判」Bug）────
     # C1-E v18.291:走 section_inputs SSOT(對齊 C1-D 紅綠燈初次計算路徑)
-    from section_inputs import load_section_inputs as _load_si_tl2
+    from src.services import load_section_inputs as _load_si_tl2
     _tl2_inp = _load_si_tl2(st.session_state)
     _tl2_mkt = _tl2_inp.mkt_info or {}
     _tl_final = calc_traffic_light(
@@ -3089,7 +3089,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     _render_traffic_light(_tl_placeholder, _tl_final, _tl2_mkt)
     # v18.277 — 為何這個顏色?(展開講判讀規則 + 推導,for 新手)
     try:
-        from macro_classroom import render_traffic_light_explainer
+        from src.ui.tabs import render_traffic_light_explainer
         render_traffic_light_explainer(_tl_final)
     except Exception as _e_exp:
         print(f"[macro_classroom/explainer] {type(_e_exp).__name__}: {_e_exp}")
@@ -3293,7 +3293,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 '</span></div>', unsafe_allow_html=True)
     st.caption('💡 真實基金流量為付費資料；本區以各區域／資產代表性 ETF 的相對強弱當「資金流向代理」'
                '（強勢＝資金流入、弱勢＝流出），風險情緒採 252 日滾動 Z-score＋clip(-3,3) 合成。')
-    import flow_engine as _fe
+    from src.compute.macro import flow_engine as _fe
     if _load_heavy:
         with st.spinner('🌐 載入全球資金流向…'):
             _flow_raw = fetch_flow_snapshot()
@@ -5259,7 +5259,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                         _cl_ss = st.session_state.get('cl_data', {}) or {}
                         _twd_df_ai = (_cl_ss.get('tw', {}) or {}).get('新台幣匯率')
                     if _twd_df_ai is not None and not _twd_df_ai.empty:
-                        from hot_money import get_latest_hot_money_state
+                        from src.ui.tabs import get_latest_hot_money_state
                         _hm = get_latest_hot_money_state(
                             _twd_df_ai, FINMIND_TOKEN or '')
                         if _hm:

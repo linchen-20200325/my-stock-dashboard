@@ -1,4 +1,4 @@
-"""multi_factor_optimization.py — 台股總經多因子權重最佳化 + 高原區 + Walk-Forward (v18.165).
+"""src/compute/scoring/multi_factor_optimization.py — 台股總經多因子權重最佳化 + 高原區 + Walk-Forward (v18.165).
 
 鏡像 fund v18.285（services/multi_factor_optimization.py） — 引擎邏輯完全一致，
 差異僅在 FACTOR_POOL（4 個台股本地訊號）與 CrisisEvent → TwiiCrisisEvent。

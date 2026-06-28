@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-import tw_backtest
+from src.compute.strategy import tw_backtest
 
 
 # ════════════════════════════════════════════════════════════
@@ -147,7 +147,7 @@ def test_full_mock_pipeline(monkeypatch):
 
 def test_get_latest_hot_money_state_empty_twd():
     """空 twd_df → return None。"""
-    import hot_money
+    from src.ui.tabs import hot_money
     r = hot_money.get_latest_hot_money_state(
         pd.DataFrame(columns=['close']), token='')
     assert r is None

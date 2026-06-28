@@ -69,7 +69,7 @@ from src.ui.etf import (  # noqa: E402
 )
 from health_inspector import render_data_health_raw  # noqa: E402
 from src.ui.pages import render_api_diagnostic  # noqa: E402
-from grape_ladder import render_grape_ladder  # noqa: E402
+from src.ui.tabs import render_grape_ladder  # noqa: E402
 from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA  # noqa: E402
 
 def _get_secret(_key: str) -> str:
@@ -107,7 +107,7 @@ st.set_page_config(page_title='台股AI戰情室 v3.0', layout='wide',
 
 # ── OAuth callback：URL 帶 ?code= 時自動換 token（必須早於其他 query_params 操作）
 try:
-    from oauth_state import handle_oauth_callback as _oauth_cb
+    from src.ui.pages import handle_oauth_callback as _oauth_cb
     _oauth_cb()
 except Exception as _oauth_err:
     print(f'[oauth callback] {_oauth_err}')
@@ -672,7 +672,7 @@ def fetch_quarterly_extra(sid, _ver=2):   # _ver 改變即清除舊快取
 # ════════════════════════════════════════════════════════════════
 # 健康度評分（0~100）— 已抽出至 scoring_helpers.py（PR P2-B Phase 3）
 # ════════════════════════════════════════════════════════════════
-from scoring_helpers import (  # noqa: E402
+from src.compute.scoring import (  # noqa: E402
     health_grade,
 )
 
@@ -909,7 +909,7 @@ with st.sidebar:
     st.markdown('---')
     st.markdown('### 🔐 Google 帳號')
     try:
-        from oauth_state import (
+        from src.ui.pages import (
             get_oauth_cfg as _sb_get_cfg,
             _gsa_secret as _sb_gsa,
             _sheet_id_secret as _sb_sid,
@@ -1671,7 +1671,7 @@ with tab_etf_margin:
 # TAB: 7% 高殖利率防禦網（Screener Mode）
 # ══════════════════════════════════════════════════════════════
 with tab_screener:
-    from yield_screener import render_yield_screener
+    from src.ui.tabs import render_yield_screener
     _picker_candidates = render_yield_screener()
 
     # ── 🎯 智慧選股（三階段濾網 + AI 三型建議）— 接續高息網候選清單 ──

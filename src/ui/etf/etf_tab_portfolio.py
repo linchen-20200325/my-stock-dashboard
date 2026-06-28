@@ -232,7 +232,7 @@ def render_etf_portfolio(gemini_fn=None):
     # 鏡像 v18.204 I4 個股端設計：reuse render_macro_stock_backdrop helper
     # （純讀 mkt_info，不分個股/ETF），讓 user 看 ETF 投組時不忘大盤系統性風險背景
     try:
-        from macro_stock_link import render_macro_stock_backdrop
+        from src.ui.tabs import render_macro_stock_backdrop
         render_macro_stock_backdrop(st.session_state)
     except Exception as _e_msl:
         print(f'[macro_stock_link/etf_pf] {type(_e_msl).__name__}: {_e_msl}')
@@ -408,7 +408,7 @@ def render_etf_portfolio(gemini_fn=None):
     _core_pct = _core_value / total_value * 100 if total_value > 0 else 0.0
     _sat_pct  = _sat_value / total_value * 100 if total_value > 0 else 0.0
     try:
-        from portfolio_manager import CoreSatelliteManager as _CSM
+        from src.compute.strategy import CoreSatelliteManager as _CSM
         _mgr = _CSM(total_value, regime=regime)
         _target_core_pct = _mgr.core_ratio * 100
         _target_sat_pct  = _mgr.satellite_ratio * 100
@@ -814,7 +814,7 @@ def _render_oauth_panel(_gsp) -> bool:
     False 代表需要先完成設定，後續 UI 應跳過。
     """
     try:
-        from oauth_state import (
+        from src.ui.pages import (
             get_oauth_cfg, _gsa_secret, _sheet_id_secret,
         )
         from infra.oauth import build_authorize_url

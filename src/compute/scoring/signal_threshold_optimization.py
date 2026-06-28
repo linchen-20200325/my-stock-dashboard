@@ -1,4 +1,4 @@
-"""signal_threshold_optimization.py — MT5-style Phase 3 訊號自動校準 (v18.164).
+"""src/compute/scoring/signal_threshold_optimization.py — MT5-style Phase 3 訊號自動校準 (v18.164).
 
 核心：walk-forward 4 折 grid sweep 找最佳 threshold + 3 重 anti-overfit gate
 （折間票選 / drift > 30% 回退預設 / cap 守門）→ 輸出建議值供 UI session-only

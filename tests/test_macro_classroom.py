@@ -67,16 +67,16 @@ _stub_streamlit()
 
 class TestTrafficLightExplainer:
     def test_none_tl_no_raise(self):
-        from macro_classroom import render_traffic_light_explainer
+        from src.ui.tabs import render_traffic_light_explainer
         render_traffic_light_explainer(None)
 
     def test_empty_dict_no_raise(self):
-        from macro_classroom import render_traffic_light_explainer
+        from src.ui.tabs import render_traffic_light_explainer
         render_traffic_light_explainer({})
 
     def test_full_tl_no_raise(self):
         """完整 tl dict → 走進判讀規則路徑"""
-        from macro_classroom import render_traffic_light_explainer
+        from src.ui.tabs import render_traffic_light_explainer
         _tl = {
             'color': '#f85149',
             'label': '空頭防禦｜降低部位',
@@ -90,7 +90,7 @@ class TestTrafficLightExplainer:
         render_traffic_light_explainer(_tl)
 
     def test_bull_tl_no_raise(self):
-        from macro_classroom import render_traffic_light_explainer
+        from src.ui.tabs import render_traffic_light_explainer
         _tl = {
             'color': '#3fb950',
             'label': '多頭市場｜積極操作',
@@ -182,7 +182,7 @@ class TestSSOTImport:
     """確保從 macro_helpers SSOT 引入閾值,不出現 inline magic"""
 
     def test_imports_from_ssot(self):
-        import macro_classroom
+        from src.ui.tabs import macro_classroom
         from src.compute.macro import BULL_MIN_SCORE, HEALTH_DEFENSE_THRESHOLD
         assert macro_classroom.HEALTH_DEFENSE_THRESHOLD == HEALTH_DEFENSE_THRESHOLD
         assert macro_classroom.BULL_MIN_SCORE == BULL_MIN_SCORE

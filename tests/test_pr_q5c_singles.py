@@ -25,11 +25,11 @@ class TestQ5cMarkers(unittest.TestCase):
             return f.read()
 
     def test_macro_snapshot_vix(self):
-        src = self._read('macro_snapshot.py')
+        src = self._read('src/ui/render/macro_snapshot.py')
         self.assertIn("'source': 'yfinance:^VIX:3mo:1d'", src)
 
     def test_chip_radar(self):
-        src = self._read('chip_radar.py')
+        src = self._read('src/ui/tabs/chip_radar.py')
         self.assertIn('[fetch_chip_concentration]', src)
         self.assertIn('norway.twsthr.info', src)
 
@@ -44,11 +44,11 @@ class TestQ5cMarkers(unittest.TestCase):
         self.assertIn("'source': 'tw_macro.fetch_finmind_foreign_investor'", src)
 
     def test_hot_money(self):
-        src = self._read('hot_money.py')
+        src = self._read('src/ui/tabs/hot_money.py')
         self.assertIn('FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign', src)
 
     def test_risk_radar(self):
-        src = self._read('risk_radar.py')
+        src = self._read('src/compute/risk/risk_radar.py')
         self.assertIn("'CBOE:{short_name}_History.csv'", src) or self.assertIn(
             'CBOE:', src)
 
@@ -64,10 +64,10 @@ class TestQ5cMarkers(unittest.TestCase):
 class TestImports(unittest.TestCase):
 
     def test_macro_snapshot(self):
-        import macro_snapshot  # noqa
+        from src.ui.render import macro_snapshot  # noqa
 
     def test_chip_radar(self):
-        import chip_radar  # noqa
+        from src.ui.tabs import chip_radar  # noqa
 
     def test_update_etf_managers(self):
         from scripts import update_etf_managers  # noqa
@@ -76,10 +76,10 @@ class TestImports(unittest.TestCase):
         from src.services import market_strategy  # noqa
 
     def test_hot_money(self):
-        import hot_money  # noqa
+        from src.ui.tabs import hot_money  # noqa
 
     def test_risk_radar(self):
-        import risk_radar  # noqa
+        from src.compute.risk import risk_radar  # noqa
 
     def test_tab_edu(self):
         from src.ui.tabs import tab_edu  # noqa

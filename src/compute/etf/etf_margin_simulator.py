@@ -1,4 +1,4 @@
-"""etf_margin_simulator.py — ETF 質借倒金字塔加碼模擬器引擎 (v18.162).
+"""src/compute/etf/etf_margin_simulator.py — ETF 質借倒金字塔加碼模擬器引擎 (v18.162).
 
 核心邏輯：
 1. 依景氣階段（復甦/擴張/放緩/衰退）+ 風格 preset（保守/平衡/積極/極限）選加碼觸發表

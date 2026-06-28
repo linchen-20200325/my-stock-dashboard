@@ -133,7 +133,7 @@ def fetch_flow_snapshot(period: str = "2y"):
     import pickle as _pk_fl
     import time as _tm_fl
     from concurrent.futures import ThreadPoolExecutor as _TPE_fl
-    from flow_engine import all_symbols as _all_fl
+    from src.compute.macro import all_symbols as _all_fl
 
     _ck_fl = '/tmp/stock_cache/_flow_snapshot.pkl'
     _os_fl.makedirs('/tmp/stock_cache', exist_ok=True)

@@ -4,7 +4,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from etf_margin_simulator import (
+from src.compute.etf import (
     LEVERAGE_PRESETS,
     LIQUIDATION_RATIO,
     MARGIN_CALL_RATIO,

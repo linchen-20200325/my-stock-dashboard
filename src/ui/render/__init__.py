@@ -1,7 +1,11 @@
-"""src/ui/render/ — L4 圖表 / 通用 UI 元件。PEP 562 lazy forward。"""
-from . import chart_plotter, etf_render, ui_widgets, macro_ui_components  # noqa: F401
+"""src/ui/render/ — L4 圖表 / 通用 UI 元件 / macro snapshot。PEP 562 lazy forward。"""
+from . import (  # noqa: F401
+    chart_plotter, etf_render, ui_widgets, macro_ui_components, macro_snapshot,
+)
 
-_SUBMODULES = (chart_plotter, etf_render, ui_widgets, macro_ui_components)
+_SUBMODULES = (
+    chart_plotter, etf_render, ui_widgets, macro_ui_components, macro_snapshot,
+)
 
 
 def __getattr__(name):

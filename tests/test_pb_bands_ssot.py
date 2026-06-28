@@ -115,7 +115,7 @@ class TestTabStockGrpHasPB:
 class TestMJTrendSSOT:
     def test_compute_one_stock_trend_in_mj_module(self):
         """compute_one_stock_trend 已抽到 mj_trend_score(SSOT,兩 Tab 共用)。"""
-        import mj_trend_score
+        from src.compute.health import mj_trend_score
         assert hasattr(mj_trend_score, 'compute_one_stock_trend'), \
             'mj_trend_score 缺 compute_one_stock_trend()'
 

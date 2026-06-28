@@ -1,7 +1,11 @@
-"""src/ui/pages/ — L5 獨立頁面(sidebar / diagnostics / calibration)。PEP 562 lazy forward。"""
-from . import sidebar_health, calibration_ui, api_diagnostic, data_coverage  # noqa: F401
+"""src/ui/pages/ — L5 獨立頁面(sidebar / diagnostics / calibration / OAuth)。PEP 562 lazy forward。"""
+from . import (  # noqa: F401
+    sidebar_health, calibration_ui, api_diagnostic, data_coverage, oauth_state,
+)
 
-_SUBMODULES = (sidebar_health, calibration_ui, api_diagnostic, data_coverage)
+_SUBMODULES = (
+    sidebar_health, calibration_ui, api_diagnostic, data_coverage, oauth_state,
+)
 
 
 def __getattr__(name):

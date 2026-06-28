@@ -182,7 +182,7 @@ render_api_diagnostic()
         """macro_classroom explainer:None tl graceful(防 v18.281 搬遷後壞)"""
         from streamlit.testing.v1 import AppTest
         drv = _build_driver('''
-from macro_classroom import render_traffic_light_explainer
+from src.ui.tabs import render_traffic_light_explainer
 render_traffic_light_explainer(None)
 render_traffic_light_explainer({})
 render_traffic_light_explainer({
@@ -199,7 +199,7 @@ render_traffic_light_explainer({
         from streamlit.testing.v1 import AppTest
         drv = _build_driver('''
 # 走 shim 路徑(import from macro_classroom 應 re-export 到 tab_edu 的 fn)
-from macro_classroom import render_principle_classroom
+from src.ui.tabs import render_principle_classroom
 render_principle_classroom()
 ''')
         at = AppTest.from_string(drv, default_timeout=60)

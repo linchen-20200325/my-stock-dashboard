@@ -23,8 +23,8 @@ import pandas as pd
 import streamlit as st
 
 from financial_health_engine import analyze_financial_health
-from mj_health_diff import HealthDiffVerdict, diff_mj_health
-from mj_snapshot_io import (
+from src.compute.health import HealthDiffVerdict, diff_mj_health
+from src.compute.health import (
     current_finmind_yyyymm,
     load_latest_two,
     save_snapshot,

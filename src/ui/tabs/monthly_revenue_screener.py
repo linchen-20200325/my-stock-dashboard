@@ -1,4 +1,4 @@
-"""monthly_revenue_screener.py — 月營收進退篩選器
+"""src/ui/tabs/monthly_revenue_screener.py — 月營收進退篩選器
 
 v18.180 新增功能：篩選台股近 3 個月月營收呈現「進步 / 退步」趨勢的標的。
 
@@ -406,7 +406,7 @@ def render_monthly_revenue_screener():
 
         # 同步抓 TWSE 名稱對照
         try:
-            from yield_screener import fetch_twse_yield_pe
+            from src.ui.tabs import fetch_twse_yield_pe
             _df_names = fetch_twse_yield_pe()
             if not _df_names.empty and "代碼" in _df_names.columns:
                 st.session_state["_mrev_namemap"] = dict(zip(

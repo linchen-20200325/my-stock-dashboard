@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import flow_engine as fe
+from src.compute.macro import flow_engine as fe
 
 
 class TestPctReturn(unittest.TestCase):

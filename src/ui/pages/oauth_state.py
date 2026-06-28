@@ -1,4 +1,4 @@
-"""oauth_state.py — OAuth 設定解析 + Google client（PR: ETF Portfolio OAuth）
+"""src/ui/pages/oauth_state.py — OAuth 設定解析 + Google client（PR: ETF Portfolio OAuth）
 
 從 my-Fund-dashboard/ui/helpers/oauth_state.py 移植，並移除 policy_repository
 依賴（股票 dashboard 用 gsheet_portfolio.py 而非 repositories 模式）。

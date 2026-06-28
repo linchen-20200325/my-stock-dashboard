@@ -1,4 +1,4 @@
-"""health_reconcile.py — 健康評分對照演算法(L2 純函式,v18.300)
+"""src/compute/health/health_reconcile.py — 健康評分對照演算法(L2 純函式,v18.300)
 
 CLAUDE.md §4.3:
 - 健康評分:目前單一 path(macro_helpers.calc_traffic_light health 欄位),

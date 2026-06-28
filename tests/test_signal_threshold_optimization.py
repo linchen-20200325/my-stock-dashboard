@@ -13,7 +13,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from src.compute.macro import TwSignalSpec  # noqa: E402
 from src.compute.macro import TwiiCrisisEvent  # noqa: E402
-from signal_threshold_optimization import (  # noqa: E402
+from src.compute.scoring import (  # noqa: E402
     make_default_grid,
     optimize_signal_threshold,
 )

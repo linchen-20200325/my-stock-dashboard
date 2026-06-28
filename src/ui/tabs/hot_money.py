@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""hot_money.py — 熱錢監測：三角交叉（外資 × 匯率） + 背離偵測
+"""src/ui/tabs/hot_money.py — 熱錢監測：三角交叉（外資 × 匯率） + 背離偵測
 
 整合自 user 上傳的 `a731802d-app.py`（單頁 Streamlit demo）；保留純函式 +
 build_signals 邏輯，UI render 部分接 tab_macro.py 既有資料源（複用 yfinance

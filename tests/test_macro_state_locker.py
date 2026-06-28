@@ -14,7 +14,7 @@ import pytest
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from macro_state_locker import (
+from src.services import (
     MacroStateLocker,
     load_macro_state,
     calculate_system_state,
@@ -330,7 +330,7 @@ class TestLoadMacroState:
 # ═══════════════════════════════════════════════════════════════
 # TestDefaultGeminiCall — _default_gemini_call() HTTP paths
 # ═══════════════════════════════════════════════════════════════
-from macro_state_locker import _default_gemini_call
+from src.services import _default_gemini_call
 
 
 class TestDefaultGeminiCall:

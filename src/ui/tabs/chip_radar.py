@@ -1,4 +1,4 @@
-"""chip_radar.py — 💠 集保籌碼大戶雷達（自建爬蟲版）
+"""src/ui/tabs/chip_radar.py — 💠 集保籌碼大戶雷達（自建爬蟲版）
 
 資料來源：norway.twsthr.info `StockHolders.aspx?stock={代號}`（集保戶股權分散表，每週更新）
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from section_inputs import SectionInputs, load_section_inputs
+from src.services import SectionInputs, load_section_inputs
 
 
 # ════════════════════════════════════════════════════════════════

@@ -1,4 +1,4 @@
-"""inst_sanity.py — 三大法人單日買賣超 sanity 檢查(L2 純函式)
+"""src/compute/risk/inst_sanity.py — 三大法人單日買賣超 sanity 檢查(L2 純函式)
 
 CLAUDE.md §3.2 / §4.6 — |inst_net_shares| > 30D 均量 × 5 → 異常旗標。
 v18.299 audit 落地:從 §3.2 「待 audit 落地」改為產線可用 helper。

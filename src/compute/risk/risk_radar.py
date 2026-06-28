@@ -270,7 +270,7 @@ def _signal_yield_10y_shock(fred_api_key: str) -> dict:
         # S-RECON-1 phase 2 v18.255 — 雙源對帳:FRED DGS10 vs Yahoo ^TNX(/10)
         # 不影響原 lvl 判定;reconcile 結果作為輸出旗標,UI 可選擇是否顯示。
         try:
-            from reconcile import reconcile_us10y_yield
+            from src.compute.risk import reconcile_us10y_yield
             tnx_s = fetch_yf_close("^TNX", range_="5d")
             tnx_val = float(tnx_s.iloc[-1]) if not tnx_s.empty else None
             out["reconcile"] = reconcile_us10y_yield(cur, tnx_val)

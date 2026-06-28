@@ -1,4 +1,4 @@
-"""fundamental_screener.py — v18.184 基本面轉強進階篩選器
+"""src/compute/screener/fundamental_screener.py — v18.184 基本面轉強進階篩選器
 
 3 維度組合篩選（可獨立開關），純函式設計易與 v18.180 monthly_revenue_screener
 與未來技術面 / 籌碼面條件層層疊加。

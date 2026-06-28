@@ -2,7 +2,7 @@
 from __future__ import annotations
 import pytest
 
-from reconcile import (
+from src.compute.risk import (
     reconcile_pair,
     reconcile_us10y_yield,
     reconcile_monthly_revenue_yoy,
@@ -96,7 +96,7 @@ class TestReconcileMonthlyRevenueYoy:
 
 def test_module_smoke():
     """import + 3 函式可叫"""
-    import reconcile
+    from src.compute.risk import reconcile
     assert callable(reconcile.reconcile_pair)
     assert callable(reconcile.reconcile_us10y_yield)
     assert callable(reconcile.reconcile_monthly_revenue_yoy)

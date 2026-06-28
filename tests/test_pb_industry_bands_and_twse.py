@@ -67,41 +67,41 @@ class TestTwsePbratioFetch:
             {'代碼': '2330', '名稱': '台積電', '股價淨值比': 5.5},
             {'代碼': '2317', '名稱': '鴻海', '股價淨值比': 1.2},
         ])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert abs(pb - 5.5) < 0.01
 
     def test_target_not_found_returns_zero(self):
         from src.ui.tabs import tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 5.5}])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('9999')
         assert pb == 0.0
 
     def test_high_pb_passes_sanity(self):
         from src.ui.tabs import tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 50.0}])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert abs(pb - 50.0) < 0.01
 
     def test_absurd_pb_returns_zero(self):
         from src.ui.tabs import tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 200.0}])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert pb == 0.0
 
     def test_negative_pb_returns_zero(self):
         from src.ui.tabs import tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': -1.0}])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert pb == 0.0
 
     def test_empty_df_returns_zero(self):
         from src.ui.tabs import tab_stock
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=pd.DataFrame()):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=pd.DataFrame()):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert pb == 0.0
 
@@ -208,7 +208,7 @@ class TestTwseBpsBackCalc:
         """模擬：TWSE PBratio=5.0、股價=750 → BPS 反推 = 150。"""
         from src.ui.tabs import tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 5.0}])
-        with patch('yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         bps = 750.0 / pb if pb > 0 else 0
         assert 149.0 < bps < 151.0

@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-import risk_radar as rr
+from src.compute.risk import risk_radar as rr
 
 
 # ──────────────────────────────────────────────────────────────

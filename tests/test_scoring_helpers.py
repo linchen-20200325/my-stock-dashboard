@@ -1,10 +1,10 @@
-"""scoring_helpers.py 純函式 unit test — Phase 7H。"""
+"""src/compute/scoring/scoring_helpers.py 純函式 unit test — Phase 7H。"""
 from __future__ import annotations
 
 import pandas as pd
 import pytest
 
-from scoring_helpers import calc_fundamental_score, calc_health_score, health_grade
+from src.compute.scoring import calc_fundamental_score, calc_health_score, health_grade
 
 
 # ─────────────────────── calc_fundamental_score ───────────────────────

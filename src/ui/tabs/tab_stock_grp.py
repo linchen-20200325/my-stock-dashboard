@@ -44,11 +44,11 @@ def render_stock_grp():
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from src.config import FINMIND_TOKEN  # noqa: F401  (some sub-features may use)
     # 外部模組
-    from tech_indicators import (
+    from src.compute.strategy import (
         calc_rsi, calc_ibs, calc_volume_ratio,
         calc_kd, calc_bollinger, calc_vcp,
     )
-    from scoring_helpers import calc_health_score, health_grade
+    from src.compute.scoring import calc_health_score, health_grade
     from src.ui.render import teacher_conclusion
     from financial_health_engine import analyze_financial_health
     from src.services import build_structured_summary_prompt
@@ -1354,14 +1354,14 @@ def _render_mj_trend_section(stock_list: list[str], *,
     from src.config import FINMIND_TOKEN as _TOK
     from src.data.core import fetch_financial_statements
     from financial_health_engine import analyze_financial_health
-    from mj_health_diff import diff_mj_health  # noqa: F401 — used transitively by score
-    from mj_snapshot_io import (
+    from src.compute.health import diff_mj_health  # noqa: F401 — used transitively by score
+    from src.compute.health import (
         current_finmind_yyyymm,
         list_snapshots,
         load_snapshot,
         save_snapshot,
     )
-    from mj_trend_score import compute_one_stock_trend, compute_trend_score  # noqa: F401
+    from src.compute.health import compute_one_stock_trend, compute_trend_score  # noqa: F401
 
     _st.markdown('---')
     _st.markdown(

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import risk_radar as rr
+from src.compute.risk import risk_radar as rr
 from src.ui.tabs import tab_macro
 
 

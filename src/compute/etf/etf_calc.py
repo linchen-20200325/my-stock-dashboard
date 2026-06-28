@@ -577,7 +577,7 @@ def compute_etf_peer_ranking(ticker: str, periods: tuple = (63, 126, 252)) -> di
              'category': str, 'peers': list[str]}
       無同儕：{'_err': '同儕資料不足', 'category': ''}
     """
-    from etf_categories import get_peers, get_category_name
+    from src.compute.etf import get_peers, get_category_name
     _peers = get_peers(ticker)
     _category = get_category_name(ticker)
     if len(_peers) < 3:

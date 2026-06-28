@@ -817,7 +817,7 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
                 # 兩源若分歧 (>0.1pct) 視為一處需 audit
                 if 'revenue' in rev_df.columns and len(rev_df) >= 13:
                     try:
-                        from reconcile import reconcile_monthly_revenue_yoy
+                        from src.compute.risk import reconcile_monthly_revenue_yoy
                         _rev_series = pd.to_numeric(rev_df['revenue'], errors='coerce')
                         _r_now = float(_rev_series.iloc[-1])
                         _r_yago = float(_rev_series.iloc[-13])

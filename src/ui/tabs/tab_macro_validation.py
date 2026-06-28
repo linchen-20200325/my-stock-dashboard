@@ -422,7 +422,7 @@ def _render_phase4_cross_source_matrix(events, specs, series_by_key,
 
 def _render_phase3_auto_calibration(events, specs, series_by_key) -> None:
     """🎯 MT5-style threshold 自動校準 — walk-forward + 3 重 anti-overfit gate."""
-    from signal_threshold_optimization import (
+    from src.compute.scoring import (
         make_default_grid, optimize_signal_threshold,
     )
 
@@ -579,7 +579,7 @@ def _render_phase3_auto_calibration(events, specs, series_by_key) -> None:
 def _render_phase3_multi_factor_optimization(events, series_by_key) -> None:
     """🔬 多因子權重最佳化 — 高原評分 + walk-forward OOS 驗證."""
 
-    from multi_factor_optimization import (
+    from src.compute.scoring import (
         FACTOR_POOL_BY_KEY,
         build_plateau_heatmap_2d,
         build_plateau_surface_3d,

@@ -1,4 +1,4 @@
-"""flow_engine.py — 全球資金流向 / 跨資產流動性：純計算層（無 streamlit、無網路 IO）。
+"""src/compute/macro/flow_engine.py — 全球資金流向 / 跨資產流動性：純計算層（無 streamlit、無網路 IO）。
 
 設計理念：真實基金資金流量（EPFR/ICI 美元流入流出）為付費資料、免費源不可得，
 故以各「區域 / 資產類別代表性 ETF」的相對強弱當資金流向「代理指標」：

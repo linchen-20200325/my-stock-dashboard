@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 
 from src.compute.macro import TwiiCrisisEvent
-from multi_factor_optimization import (
+from src.compute.scoring import (
     FACTOR_POOL,
     FACTOR_POOL_BY_KEY,
     build_plateau_heatmap_2d,

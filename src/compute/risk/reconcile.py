@@ -1,4 +1,4 @@
-"""reconcile.py — 雙演算法對帳工具(S-RECON-1 v18.252)
+"""src/compute/risk/reconcile.py — 雙演算法對帳工具(S-RECON-1 v18.252)
 
 §4.3 重算對帳:關鍵指標應有第二種演算法/源頭做交叉驗證,降低單源偏差風險。
 

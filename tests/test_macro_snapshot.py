@@ -8,7 +8,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-import macro_snapshot
+from src.ui.render import macro_snapshot
 
 
 class TestFetchVixBlock:

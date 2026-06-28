@@ -1,4 +1,4 @@
-"""yield_screener.py — 7% 高殖利率防禦網（漏斗篩選器 / Screener Mode）
+"""src/ui/tabs/yield_screener.py — 7% 高殖利率防禦網（漏斗篩選器 / Screener Mode）
 
 資料來源：
   ① 全市場本益比 + 殖利率 + 股價淨值比：TWSE OpenAPI BWIBBU_d（單次抓全市場）

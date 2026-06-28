@@ -31,7 +31,7 @@ from src.compute.etf import (
     calc_liquidity_score, calc_tracking_error, auto_detect_benchmark,
 )
 from src.compute.etf import compute_etf_quality
-from etf_scoring_helpers import compute_etf_composite_score
+from src.compute.etf import compute_etf_composite_score
 from src.compute.etf import (
     dividend_health_label as _dividend_health_label,
     normalize_etf_ticker,

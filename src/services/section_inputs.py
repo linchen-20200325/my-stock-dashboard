@@ -1,4 +1,4 @@
-"""section_inputs.py — Stock tab_macro 共享資料層(L3 service,C1-A v18.287)
+"""src/services/section_inputs.py — Stock tab_macro 共享資料層(L3 service,C1-A v18.287)
 
 CLAUDE.md §8.1 step 1:**單一職責** = 從 streamlit session_state 集中讀取
 tab_macro 各 section / 5 桶所需的 input bundle,讓各 section 不必各自重複

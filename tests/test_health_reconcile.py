@@ -9,7 +9,7 @@ import math
 
 import pytest
 
-from health_reconcile import (
+from src.compute.health import (
     compute_method_b_health,
     reconcile_health_score,
     HEALTH_RECONCILE_TOLERANCE,

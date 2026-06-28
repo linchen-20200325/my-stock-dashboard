@@ -1,4 +1,4 @@
-"""mj_health_diff.py — v18.185 MJ 體檢表跨期變化偵測
+"""src/compute/health/mj_health_diff.py — v18.185 MJ 體檢表跨期變化偵測
 
 對 MJ 林明樟財報體檢（`financial_health_engine.analyze_financial_health`）兩期
 結果做 status 等級比對，逐項偵測「變好 / 變差 / 不變」，回傳 verdict

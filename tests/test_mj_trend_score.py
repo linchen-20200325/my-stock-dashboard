@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from mj_trend_score import (
+from src.compute.health import (
     _label_from_score,
     _safe_num,
     _squash,

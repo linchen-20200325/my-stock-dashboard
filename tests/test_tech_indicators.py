@@ -1,10 +1,10 @@
-"""tech_indicators.py 純函式 unit test — Phase 7H。"""
+"""src/compute/strategy/tech_indicators.py 純函式 unit test — Phase 7H。"""
 from __future__ import annotations
 
 import pandas as pd
 import pytest
 
-from tech_indicators import (
+from src.compute.strategy import (
     calc_bollinger,
     calc_ibs,
     calc_kd,

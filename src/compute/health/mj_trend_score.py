@@ -1,4 +1,4 @@
-"""mj_trend_score.py — v18.189 月+季雙頻率融合進退分數（純函式 zero-IO）
+"""src/compute/health/mj_trend_score.py — v18.189 月+季雙頻率融合進退分數（純函式 zero-IO）
 
 整合兩個頻率：
 - **月營收動能（月頻、權重 65%）**：近 3 月 YoY 平均 + 末月 MoM
@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from mj_health_diff import diff_mj_health
+from src.compute.health.mj_health_diff import diff_mj_health  # v18.362 F-8:直打 submod 避 sibling self circular
 
 # label 由高到低排序，命中第一個 threshold 即回
 _LABEL_THRESHOLDS = [
@@ -247,7 +247,7 @@ def compute_one_stock_trend(
 
     # ── 1. 月營收 3 期 ──────────────────────────────────────────
     try:
-        from monthly_revenue_screener import compute_yoy_mom, fetch_monthly_revenue
+        from src.ui.tabs import compute_yoy_mom, fetch_monthly_revenue
         df_rev = fetch_monthly_revenue(sid, months=15)
         stats = compute_yoy_mom(df_rev) if df_rev is not None and not df_rev.empty else {}
         yoy_last3 = (stats or {}).get("yoy_last3") or []

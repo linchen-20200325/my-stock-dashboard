@@ -14,7 +14,7 @@ from itertools import combinations
 import pandas as pd
 import streamlit as st
 
-from etf_categories import ETF_PEER_GROUPS
+from src.compute.etf import ETF_PEER_GROUPS
 from src.ui.etf import fetch_etf_dividends
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED
 from shared.ttls import TTL_1DAY
