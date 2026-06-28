@@ -1,7 +1,7 @@
 """src/data/stock/ — TW 個股資料 fetcher。PEP 562 lazy forward,見 macro/__init__.py 註釋。"""
-from . import tw_stock_data_fetcher  # noqa: F401
+from . import tw_stock_data_fetcher, picker_fetcher  # noqa: F401
 
-_SUBMODULES = (tw_stock_data_fetcher,)
+_SUBMODULES = (tw_stock_data_fetcher, picker_fetcher)
 
 
 def __getattr__(name):

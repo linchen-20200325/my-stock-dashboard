@@ -5,6 +5,13 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P1-1a (v18.374) — tab_stock_picker yfinance 直呼抽 L1
+- **檔案**: `src/ui/tabs/tab_stock_picker.py` + `src/data/stock/picker_fetcher.py`(NEW)
+- **拔毒**: line 283 L5 UI 內 `yf.Ticker(...).history(...)` HTTP I/O 違憲 → 抽 `fetch_stock_history_1y(ticker)` 至 L1。_check_one_stock 內改 call helper(yf param 保留 backward compat,內部 dead 不再用)
+- **__init__ 同步**: src/data/stock/__init__.py 加 picker_fetcher 入 _SUBMODULES
+- **驗證**: full pytest 2213/0 fail
+- **commit**: 待 push
+
 ### P1-2 (v18.373) — macro_snapshot 整檔搬至 L1
 - **檔案**: `src/ui/render/macro_snapshot.py` → `src/data/macro/macro_snapshot.py`
 - **拔毒**: L4 render 含 yfinance.download HTTP I/O,檔頭自標 "L1 fetchers" 卻放 render/。git mv 整檔搬位 + 4 caller 改 import path

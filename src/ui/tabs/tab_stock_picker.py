@@ -272,21 +272,17 @@ def _blank_pick_result(ticker: str, note: str = '') -> dict:
     }
 
 
-def _check_one_stock(ticker: str, today, yf) -> dict:
+def _check_one_stock(ticker: str, today, yf=None) -> dict:
     """對單檔個股跑完 Stage 1 + Stage 2 — 失敗條件統一回灰色 ❓ 不阻斷流程。
-    全程獨立 requests + yfinance、零 st.* 呼叫 → 線程安全，可丟進 ThreadPoolExecutor。"""
+    全程獨立 requests + yfinance、零 st.* 呼叫 → 線程安全，可丟進 ThreadPoolExecutor。
+
+    P1-1a v18.374:yfinance K 線直呼抽至 L1 fetcher(`src.data.stock.picker_fetcher`)。
+    yf param 保留 backward compat 但內部已不用。
+    """
+    from src.data.stock.picker_fetcher import fetch_stock_history_1y
     _r = _blank_pick_result(ticker)
-    # ── 抓 K 線（yfinance + .TW / .TWO 雙後綴重試）──
-    _df = None
-    for _sfx in ('.TW', '.TWO'):
-        try:
-            _t_yf = yf.Ticker(f'{ticker}{_sfx}')
-            _df_tmp = _t_yf.history(period='1y')
-            if _df_tmp is not None and not _df_tmp.empty and len(_df_tmp) >= 60:
-                _df = _df_tmp
-                break
-        except Exception:
-            continue
+    # ── 抓 K 線(P1-1a:L1 fetcher 內含 .TW/.TWO 雙後綴 fallback)──
+    _df = fetch_stock_history_1y(ticker)
     if _df is None:
         _r['ma20_label'] = '❌ 抓不到 K 線'
         _r['macd_label'] = '❌ 抓不到 K 線'
