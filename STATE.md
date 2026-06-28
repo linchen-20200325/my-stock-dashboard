@@ -1,7 +1,18 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
 ## 進行中 batch
-深層稽核 P0+P1+P2 全做(14 batch / ~10.5 hr / 7-8 commits)
+✅ 深層稽核 P0+P1+P2 主軸完成(13 commits)
+
+## ✅ 累計完成
+- P0(4 batch / 4 commit):portfolio_exposure SSOT / RSI helper / stock_names L0→L1 / 4 dead fn
+- P1(5 batch / 6 commit):3 處 UI yfinance→L1 / macro_snapshot L4→L1 / shared/macro_card 拔 streamlit / 6 dead fn / 6 dead fn cross 3 檔
+- P2(2 batch / 2 commit):_prov_log SSOT / 2 inline magic 入 shared
+- 跳過(honest stop,ROI 不對等):
+  - P1-3 Gemini API 統一(4 caller payload/retry 分歧大)
+  - P1-4b cache_layer PKL_DIR env(L0↔L0 hardcode 設計味道但 Python 不 crash)
+  - P2-2 命名衝突分化(_safe_float/_num/_secret,改名影響 caller 多)
+  - P2-4 pct_change YoY helper(各處 period 不一,強行 helper 破壞契約)
+  - P2-5 to_json_rows generic(2 處不同 dataclass,Protocol 加抽 ROI 低)
 
 ## 已完成 commits(reverse chrono)
 
