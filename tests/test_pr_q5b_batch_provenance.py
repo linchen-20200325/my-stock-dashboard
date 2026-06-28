@@ -21,7 +21,7 @@ class TestQ5bMarkersInSource(unittest.TestCase):
     def test_tab_stock_picker_2(self):
         src = self._read('tab_stock_picker.py')
         self.assertIn('[_fetch_fs_safe]', src)
-        self.assertIn('data_loader.fetch_financial_statements', src)
+        self.assertIn('src.data.core.data_loader.fetch_financial_statements', src)
         self.assertIn('[_fetch_quarterly_is]', src)
         self.assertIn('FinMind:TaiwanStockFinancialStatements', src)
 
@@ -44,8 +44,8 @@ class TestQ5bMarkersInSource(unittest.TestCase):
 
     def test_data_loader_2(self):
         src = self._read('src/data/core/data_loader.py')
-        self.assertIn('data_loader._fetch_twse_inst_fallback:TWSE T86', src)
-        self.assertIn('data_loader._fetch_tpex_inst_fallback:TPEx 三大法人', src)
+        self.assertIn('src.data.core.data_loader._fetch_twse_inst_fallback:TWSE T86', src)
+        self.assertIn('src.data.core.data_loader._fetch_tpex_inst_fallback:TPEx 三大法人', src)
 
     def test_tab_stock_2(self):
         src = self._read('tab_stock.py')

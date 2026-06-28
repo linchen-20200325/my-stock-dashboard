@@ -427,7 +427,7 @@ def test_get_china_snapshot_delegates_to_l1_then_l2(monkeypatch):
         assert len(api_key) >= 30
         return {}  # 空 dict 模擬「FRED 全失敗」
 
-    monkeypatch.setattr("tw_macro.fetch_china_macro", _fake_fetch)
+    monkeypatch.setattr("src.data.macro.tw_macro.fetch_china_macro", _fake_fetch)
     out = _mh.get_china_snapshot("fake-key-with-enough-length-for-truthy-30+")
     assert _called["fetch"] == 1
     # china_macro_snapshot({}) 應回 5 key + credit_impulse_proxy(每個 value=None)
@@ -451,7 +451,7 @@ def test_get_china_snapshot_with_real_data_passthrough(monkeypatch):
     def _fake_fetch(api_key):  # noqa: ARG001
         return {FRED_CHN_OECD_CLI: _df}
 
-    monkeypatch.setattr("tw_macro.fetch_china_macro", _fake_fetch)
+    monkeypatch.setattr("src.data.macro.tw_macro.fetch_china_macro", _fake_fetch)
     out = _mh.get_china_snapshot("fake-key-with-enough-length-for-truthy-30+")
     assert out["cli"]["value"] == 100.2  # 最新一筆
     assert out["cli"]["source"] == f"FRED:{FRED_CHN_OECD_CLI}"
