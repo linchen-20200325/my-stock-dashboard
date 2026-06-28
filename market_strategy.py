@@ -7,7 +7,7 @@ v4.1 [step 3c]：來源切換 — TWSE BFI82U 直連 → tw_macro.fetch_finmind_
               ；yfinance.Ticker 直連 → macro_core.fetch_yf_ohlcv，全部走 NAS proxy
 """
 try:
-    from config import (MARKET_SCORE_BULL, MARKET_SCORE_NEUTRAL,
+    from src.config import (MARKET_SCORE_BULL, MARKET_SCORE_NEUTRAL,
                         EXPOSURE_BULL, EXPOSURE_NEUTRAL, EXPOSURE_BEAR)
 except ImportError:
     MARKET_SCORE_BULL = 3; MARKET_SCORE_NEUTRAL = 2

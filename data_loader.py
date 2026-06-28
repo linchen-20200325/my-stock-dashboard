@@ -90,7 +90,7 @@ def _yf_dl(symbol, **kwargs):
                 _os_yfd.environ[k] = v
 
 _TWSE_DL = _bps_dl()
-from stock_names import get_stock_name
+from src.config import get_stock_name
 
 # S-H1 v18.244:`safe_fetch_strict` 為死碼(grep 全 repo 唯一引用為定義本身),
 # 已刪除以同時修復 §8.2「L1 不得用 st.session_state」違憲(原使用

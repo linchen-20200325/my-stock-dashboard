@@ -486,7 +486,7 @@ def render_tab_macro():
     import pandas as pd
     import plotly.graph_objects as go
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    from config import FINMIND_TOKEN
+    from src.config import FINMIND_TOKEN
     # 外部模組
     from macro_state_locker import (
         MacroStateLocker, calculate_system_state, load_macro_state,

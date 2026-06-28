@@ -25,7 +25,7 @@ import time
 import re
 import pandas as pd
 
-from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA
+from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA
 
 # v18.241 C1: 原 fetch_news_summary 永遠回空字串（L5 架構邊界禁連網），
 # 構成 dead code path（呼叫端 analyze_stock_trend L368-379 永遠不會 trigger 新聞區塊）。

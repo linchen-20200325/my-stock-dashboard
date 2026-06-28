@@ -42,7 +42,7 @@ def render_stock_grp():
     import time
     import pandas as pd
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    from config import FINMIND_TOKEN  # noqa: F401  (some sub-features may use)
+    from src.config import FINMIND_TOKEN  # noqa: F401  (some sub-features may use)
     # 外部模組
     from tech_indicators import (
         calc_rsi, calc_ibs, calc_volume_ratio,
@@ -162,7 +162,7 @@ def render_stock_grp():
 
         prog_t3 = st.progress(0, text='批次分析中...')
         from scoring_engine import score_single_stock as _sss
-        from stock_names    import get_stock_name as _gsn
+        from src.config import get_stock_name as _gsn
         import threading as _threading
         _t3_loader_lock = _threading.Lock()  # FinMind dl 非線程安全，需串行保護
 
@@ -563,7 +563,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
 
         with col_left:
             st.markdown('##### ③ 多因子評分排行')
-            from config import WEIGHT_TABLES as _WT
+            from src.config import WEIGHT_TABLES as _WT
             _w = _WT['neutral']
             st.caption(
                 f"趨勢×{_w['trend']:.2f} + 動能×{_w['momentum']:.2f} + 籌碼×{_w['chip']:.2f} + "
@@ -1351,7 +1351,7 @@ def _render_mj_trend_section(stock_list: list[str], *,
     from datetime import date
 
     import streamlit as _st  # noqa: F811 — explicit local alias
-    from config import FINMIND_TOKEN as _TOK
+    from src.config import FINMIND_TOKEN as _TOK
     from data_loader import fetch_financial_statements
     from financial_health_engine import analyze_financial_health
     from mj_health_diff import diff_mj_health  # noqa: F401 — used transitively by score

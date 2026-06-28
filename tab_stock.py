@@ -221,7 +221,7 @@ def render_tab_stock():
     import datetime
     import pandas as pd
     import plotly.graph_objects as go
-    from config import FINMIND_TOKEN
+    from src.config import FINMIND_TOKEN
     # 外部模組
     from v4_strategy_engine import V4StrategyEngine
     from daily_checklist import analyze_20d_chips_from_df
@@ -344,7 +344,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         vcp2     = calc_vcp(df2)
         health2, details2 = calc_health_score(df2, rsi2, ibs2, vr2, k2, d2, bb2)
         cur_price2 = float(df2['close'].iloc[-1]) if df2 is not None and not df2.empty else 0
-        from stock_names import get_stock_name as _gsn2
+        from src.config import get_stock_name as _gsn2
         _name2_resolved = (name2 if name2 and name2 != sid2 else None) or _gsn2(sid2) or sid2
         st.session_state['t2_data'] = {
             'sid':sid2,'name':_name2_resolved,'df':df2,'err':err2,

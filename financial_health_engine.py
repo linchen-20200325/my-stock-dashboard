@@ -13,7 +13,7 @@ import time
 
 import requests
 
-from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA
+from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 # v18.323: MJ 財報體檢門檻從 shared SSOT 引入（§3.3 反捏造）。

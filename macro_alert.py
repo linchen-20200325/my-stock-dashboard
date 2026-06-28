@@ -12,7 +12,7 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.ttls import TTL_30MIN
 
 try:
-    from config import MACRO_ALERT_RULES
+    from src.config import MACRO_ALERT_RULES
 except ImportError:
     MACRO_ALERT_RULES = []   # fallback，允許不依賴 config 獨立測試
 

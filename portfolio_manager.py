@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Optional
 
 try:
-    from config import EXPOSURE_BULL, EXPOSURE_NEUTRAL, EXPOSURE_BEAR
+    from src.config import EXPOSURE_BULL, EXPOSURE_NEUTRAL, EXPOSURE_BEAR
 except ImportError:
     EXPOSURE_BULL = 0.80; EXPOSURE_NEUTRAL = 0.50; EXPOSURE_BEAR = 0.20
 

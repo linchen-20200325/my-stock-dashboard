@@ -40,7 +40,7 @@ from shared.signal_thresholds import (
 )
 
 try:
-    from config import RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES
+    from src.config import RSI_OVERBOUGHT, RSI_OVERSOLD, WEIGHT_TABLES
 except ImportError:
     RSI_OVERBOUGHT=70; RSI_OVERSOLD=30
     WEIGHT_TABLES = {
@@ -263,7 +263,7 @@ def stock_score(trend, momentum, chip, volume_score, risk_score,
     regime='bull'|'neutral'|'bear' 自動切換因子權重表
     """
     try:
-        from config import WEIGHT_TABLES as _WT
+        from src.config import WEIGHT_TABLES as _WT
     except ImportError:
         _WT = WEIGHT_TABLES  # 用 module-level fallback
     w = _WT.get(regime, _WT['neutral'])

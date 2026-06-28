@@ -17,7 +17,7 @@ import re
 import time
 from typing import Callable
 
-from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA
+from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA
 
 
 # ── 預設 Fail-safe 狀態 ─────────────────────────────────────

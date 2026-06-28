@@ -11,7 +11,7 @@ import pytest
 
 def test_synthetic_walkforward_runs_without_error():
     """合成 ^TWII 跑完整 walk-forward，回 dict 不 raise。"""
-    from calibrate_macro_traffic import synthetic_twii_ohlcv, walk_forward_validate
+    from scripts.calibrate_macro_traffic import synthetic_twii_ohlcv, walk_forward_validate
     df = synthetic_twii_ohlcv(n_days=500, seed=42)
     wf = walk_forward_validate(df, n_folds=4, h_default=35, s_default=4)
     assert isinstance(wf, dict)
@@ -25,7 +25,7 @@ def test_synthetic_walkforward_runs_without_error():
 
 def test_overfit_guard_falls_back_to_default():
     """TWII-only 合成資料 score 結構性偏低 → drift 大 → 應回退預設。"""
-    from calibrate_macro_traffic import synthetic_twii_ohlcv, walk_forward_validate
+    from scripts.calibrate_macro_traffic import synthetic_twii_ohlcv, walk_forward_validate
     df = synthetic_twii_ohlcv(n_days=500, seed=42)
     wf = walk_forward_validate(df, n_folds=4, h_default=35, s_default=4)
     if wf['overfit_warning']:
@@ -35,7 +35,7 @@ def test_overfit_guard_falls_back_to_default():
 
 def test_evaluate_thresholds_returns_metrics():
     """evaluate_thresholds 對任意 (h, s) 都應回完整 metrics dict。"""
-    from calibrate_macro_traffic import (
+    from scripts.calibrate_macro_traffic import (
         _backtest_with_inputs_cache, evaluate_thresholds, synthetic_twii_ohlcv,
     )
     df = synthetic_twii_ohlcv(n_days=300, seed=7)
@@ -49,7 +49,7 @@ def test_evaluate_thresholds_returns_metrics():
 
 def test_threshold_override_affects_color():
     """提高 BULL_MIN_SCORE 必使部分原本 🟢 的日子降級為 🟡。"""
-    from calibrate_macro_traffic import (
+    from scripts.calibrate_macro_traffic import (
         _backtest_with_inputs_cache, evaluate_thresholds, synthetic_twii_ohlcv,
     )
     df = synthetic_twii_ohlcv(n_days=400, seed=1)
@@ -62,7 +62,7 @@ def test_threshold_override_affects_color():
 
 def test_emit_thresholds_json_no_change_returns_false():
     """JSON 內容相同時不應寫檔（避免 git 空 commit）。"""
-    from calibrate_macro_traffic import emit_thresholds_json
+    from scripts.calibrate_macro_traffic import emit_thresholds_json
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, 'thresholds.json')
         # 先寫一次
@@ -81,7 +81,7 @@ def test_emit_thresholds_json_no_change_returns_false():
 def test_macro_helpers_reads_json_override():
     """macro_helpers._load_calibrated_thresholds 應正確讀 JSON 覆蓋預設。"""
     import sys
-    from calibrate_macro_traffic import emit_thresholds_json
+    from scripts.calibrate_macro_traffic import emit_thresholds_json
     with tempfile.TemporaryDirectory() as tmpdir:
         # 重點：_load_calibrated_thresholds 讀的是模組旁邊的 macro_thresholds.json，
         # 用 tempdir 直接模擬該檔不存在的情境
@@ -100,7 +100,7 @@ def test_macro_helpers_reads_json_override():
 
 def test_walk_forward_with_insufficient_data_returns_error():
     """資料太少時應 graceful 回 error，不 raise。"""
-    from calibrate_macro_traffic import synthetic_twii_ohlcv, walk_forward_validate
+    from scripts.calibrate_macro_traffic import synthetic_twii_ohlcv, walk_forward_validate
     df = synthetic_twii_ohlcv(n_days=150)  # < 4 折 × 60 日門檻
     wf = walk_forward_validate(df, n_folds=4)
     assert wf.get('error') is not None
@@ -109,7 +109,7 @@ def test_walk_forward_with_insufficient_data_returns_error():
 
 def test_objective_penalizes_large_deviation():
     """正則項應使「偏離大」的解分數低於「偏離小」。"""
-    from calibrate_macro_traffic import _objective_with_penalty
+    from scripts.calibrate_macro_traffic import _objective_with_penalty
     base_metrics = {
         'n_red_pred': 10, 'n_green_pred': 10,
         'red_precision': 50.0, 'red_recall': 50.0,
@@ -123,7 +123,7 @@ def test_objective_penalizes_large_deviation():
 def test_load_from_cache_missing_returns_none():
     """data_cache/ 缺檔時應 graceful 回 None，不 raise。"""
     import tempfile
-    import calibrate_macro_traffic as cmt
+    from scripts import calibrate_macro_traffic as cmt
     original = cmt._CACHE_DIR
     with tempfile.TemporaryDirectory() as tmpdir:
         cmt._CACHE_DIR = tmpdir  # 指向空目錄
@@ -138,7 +138,7 @@ def test_enrich_with_finmind_handles_missing_files():
     """_enrich_with_finmind 對缺 FinMind 檔應補 NaN 欄位、不 raise。"""
     import datetime as dt
     import tempfile
-    import calibrate_macro_traffic as cmt
+    from scripts import calibrate_macro_traffic as cmt
     original = cmt._CACHE_DIR
     df_twii = pd.DataFrame({
         "Close": [15000.0, 15100.0, 15200.0],
@@ -157,7 +157,7 @@ def test_enrich_with_finmind_handles_missing_files():
 def test_enrich_joins_finmind_inst_correctly(tmp_path):
     """FinMind 檔存在時應左 join 到 TWII index 並維持原資料數值。"""
     import datetime as dt
-    import calibrate_macro_traffic as cmt
+    from scripts import calibrate_macro_traffic as cmt
     original = cmt._CACHE_DIR
     # 建假 finmind_inst.parquet
     inst = pd.DataFrame({

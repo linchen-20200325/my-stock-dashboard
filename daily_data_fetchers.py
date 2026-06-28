@@ -22,7 +22,7 @@ import pandas as pd
 # v18.346 PR-N3:fetch_institutional 用 cache_layer + _bps + FINMIND_TOKEN
 from shared.cache_layer import _CACHE_SENTINEL, _pkl_get, _pkl_put
 from shared.macro_compute import _recent_date
-from data_config import TTL_CONFIG as _TTL_CFG
+from src.config import TTL_CONFIG as _TTL_CFG
 
 
 # v18.354 PR-Q4 — S-PROV-1 phase 19 helper

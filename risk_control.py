@@ -8,7 +8,7 @@ v4.0 更新：
   - RiskController 新增 atr 參數，check_exit() 接受 per-call ATR
 """
 try:
-    from config import (MAX_POSITION_PER_STOCK, MAX_PORTFOLIO_DRAWDOWN,
+    from src.config import (MAX_POSITION_PER_STOCK, MAX_PORTFOLIO_DRAWDOWN,
                         STOP_LOSS_PCT, TRAILING_STOP_PCT, MIN_CASH_RATIO,
                         MAX_POSITIONS, EXPOSURE_BULL, EXPOSURE_NEUTRAL, EXPOSURE_BEAR)
 except ImportError:

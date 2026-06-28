@@ -70,7 +70,7 @@ from etf_dashboard import (  # noqa: E402
 from health_inspector import render_data_health_raw  # noqa: E402
 from api_diagnostic import render_api_diagnostic  # noqa: E402
 from grape_ladder import render_grape_ladder  # noqa: E402
-from persona import TAIWAN_ADVISOR_PERSONA as _PERSONA  # noqa: E402
+from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA  # noqa: E402
 
 def _get_secret(_key: str) -> str:
     """st.secrets 優先,降級 os.environ。

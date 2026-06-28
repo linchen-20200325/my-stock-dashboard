@@ -70,7 +70,7 @@ def render_calibration_panel():
         if _run:
             with st.spinner('抓 ^TWII 中（走 NAS proxy）...'):
                 try:
-                    from calibrate_macro_traffic import (
+                    from scripts.calibrate_macro_traffic import (
                         fetch_twii_ohlcv, run_backtest, compute_metrics,
                         build_report)
                     _df = fetch_twii_ohlcv(_range)

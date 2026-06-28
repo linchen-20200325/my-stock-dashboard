@@ -288,7 +288,7 @@ def render_etf_portfolio(gemini_fn=None):
     # ── 持股明細表 ──
     # 查詢 ETF 名稱（去掉 .TW/.TWO 後綴後查 stock_names）
     try:
-        from stock_names import get_stock_name as _gsn_etf
+        from src.config import get_stock_name as _gsn_etf
         from etf_helpers import bare_etf_code as _bare
         def _etf_name(tk):
             code = _bare(tk)

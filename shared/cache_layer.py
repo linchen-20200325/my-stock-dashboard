@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import sys
 
-from data_config import PKL_DIR as _PKL_DIR
+from src.config import PKL_DIR as _PKL_DIR
 
 _CACHE_SENTINEL = object()
 

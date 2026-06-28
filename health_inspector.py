@@ -202,7 +202,7 @@ def render_data_health_raw():
                      key='btn_test_margin', use_container_width=True):
             try:
                 from daily_checklist import fetch_margin_balance as _fmb_test
-                from data_config import PKL_DIR as _pkl_dir_t
+                from src.config import PKL_DIR as _pkl_dir_t
                 import os as _os_t
                 # 只清 margin_balance 快取，不影響其他 fetcher 快取
                 _mb_pkl = _os_t.path.join(_pkl_dir_t, 'margin_balance.pkl')

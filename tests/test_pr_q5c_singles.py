@@ -34,7 +34,8 @@ class TestQ5cMarkers(unittest.TestCase):
         self.assertIn('norway.twsthr.info', src)
 
     def test_update_etf_managers(self):
-        src = self._read('update_etf_managers.py')
+        # v18.359 F-2 update_etf_managers.py 已搬入 scripts/
+        src = self._read('scripts/update_etf_managers.py')
         self.assertIn('[fetch_manager]', src)
         self.assertIn('MoneyDJ:Basic(multi-page)', src)
 
@@ -69,7 +70,7 @@ class TestImports(unittest.TestCase):
         import chip_radar  # noqa
 
     def test_update_etf_managers(self):
-        import update_etf_managers  # noqa
+        from scripts import update_etf_managers  # noqa
 
     def test_market_strategy(self):
         import market_strategy  # noqa

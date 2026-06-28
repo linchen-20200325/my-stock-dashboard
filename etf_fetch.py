@@ -620,7 +620,7 @@ def _enrich_tw_holding_name(raw_name: str, symbol) -> str:
         return raw_name
     _zh = ''
     try:
-        from stock_names import get_stock_name as _gsn
+        from src.config import get_stock_name as _gsn
         _zh = _gsn(_code) or ''
     except Exception:
         _zh = ''

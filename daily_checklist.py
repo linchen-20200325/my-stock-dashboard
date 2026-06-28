@@ -32,7 +32,7 @@ DISABLE_TWSE: bool = True  # 🚫 TWSE 已永久停用
 
 # ── 快取基礎設施 (v18.344 PR-N1 抽至 shared/cache_layer.py)─────────────
 # 原 v4.5 SSOT cache 邏輯遷出,保留 re-export 維持向後相容(caller 不必改)。
-from data_config import TTL_CONFIG as _TTL_CFG, PKL_DIR as _PKL_DIR  # noqa: F401
+from src.config import TTL_CONFIG as _TTL_CFG, PKL_DIR as _PKL_DIR  # noqa: F401
 from shared.cache_layer import (
     _CACHE_SENTINEL,  # noqa: F401
     _pkl_get,         # noqa: F401
