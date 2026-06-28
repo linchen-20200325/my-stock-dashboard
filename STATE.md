@@ -5,6 +5,14 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P1-5a (v18.378) — financial_health_engine.py 刪 6 個 dead analyze_*_module
+- **檔案**: `src/services/financial_health_engine.py`
+- **拔毒**: 6 個 0-caller def(analyze_survival/operating/profitability/financial_structure/solvency/advanced_diagnostic_module),全 grep 確認 0 caller(含動態 import / multiprocessing)
+- **R2 教訓**: R1 awk 過範圍把 _FINANCIAL_STRUCTURE_PROMPT 等 module-level const 也刪了(test golden 引用),revert + R2 精準 disjoint 4 range 刪 def 留 consts
+- **LOC**: 1115 → 962 (-13.7%,刪 ~153 LOC dead)
+- **驗證**: ast.parse + full pytest 2213/0 fail
+- **commit**: 待 push
+
 ### P1-4a (v18.377) — shared/macro_card.py streamlit 移除 + 刪 6 dead fn
 - **檔案**: `shared/macro_card.py`
 - **拔毒**: L0 含 `import streamlit as st` 違憲 + 6 個 0-caller dead fn(render_macro_card / render_macro_card_grid / build_cards_from_indicators / _esc / render_edu_markdown / _z_color)

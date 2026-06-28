@@ -767,97 +767,6 @@ def no_ai_overall_verdict(fin_data: dict, fh_result: dict) -> dict:
 
 
 # ── Survival Module 入口 ────────────────────────────────────
-def analyze_survival_module(api_key: str, stock_id: str, fin_data: dict) -> dict:
-    """
-    執行存活能力 3 大生死指標分析（氣長/DSO/100-100-10）。
-    失敗時回傳 {"error": True, "Survival_Module": {...fail-safe...}}。
-    """
-    _fs_survival = {
-        "Survival_Module": {
-            "Cash_Ratio":       {"Value": "N/A", "Status": "Fail", "Insight": "資料載入失敗"},
-            "DSO_Speed":        {"Value": "N/A", "Status": "Fail", "Insight": "資料載入失敗"},
-            "Rule_100_100_10":  {
-                "Cash_Flow_Ratio": "N/A", "Cash_Flow_Adequacy": "N/A",
-                "Cash_Reinvestment": "N/A", "Status": "Fail", "Insight": "資料載入失敗",
-            },
-            "Final_Survival_Verdict": "無法判斷（資料不足）",
-        },
-        "error": True,
-    }
-    if not api_key or not fin_data or fin_data.get("error"):
-        if fin_data and not fin_data.get("error"):
-            return _no_ai_survival(fin_data)
-        return _fs_survival
-    try:
-        fin_str = json.dumps(fin_data, ensure_ascii=False, indent=2)
-        prompt = _SURVIVAL_PROMPT.format(financial_data_json=fin_str)
-        raw = _gemini_call(prompt, api_key)
-        if raw.startswith("⚠️"):
-            raise ValueError(raw)
-        result = _extract_json(raw)
-        print(f"[Survival] ✅ {stock_id} verdict={result.get('Survival_Module',{}).get('Final_Survival_Verdict','?')[:20]}")
-        return result
-    except Exception as _e:
-        print(f"[Survival] ❌ {stock_id}: {_e} → 降級計算")
-        return _no_ai_survival(fin_data)
-
-
-def analyze_operating_module(api_key: str, stock_id: str, fin_data: dict) -> dict:
-    """
-    執行經營能力模組：DSO/DIO/DPO 周轉效率 + CCC 資金壓力 + 總資產翻桌率。
-    """
-    _fs_op = {
-        "Operating_Module": {
-            "DSO": "N/A", "DIO": "N/A", "DPO": "N/A",
-            "Complete_Cycle": "N/A", "Cash_Gap_Days": "N/A",
-            "OPM_Strategy": "No", "Asset_Turnover": "N/A",
-            "Verdict": "資料載入失敗，無法分析。",
-        },
-        "error": True,
-    }
-    if not api_key or not fin_data or fin_data.get("error"):
-        if fin_data and not fin_data.get("error"):
-            return _no_ai_operating(fin_data)
-        return _fs_op
-    try:
-        fin_str = json.dumps(fin_data, ensure_ascii=False, indent=2)
-        prompt = _OPERATING_PROMPT.format(financial_data_json=fin_str)
-        raw = _gemini_call(prompt, api_key)
-        if raw.startswith("⚠️"):
-            raise ValueError(raw)
-        result = _extract_json(raw)
-        opm = result.get("Operating_Module", {})
-        print(f"[Operating] ✅ {stock_id} CCC={opm.get('Cash_Gap_Days','?')} turnover={opm.get('Asset_Turnover','?')}")
-        return result
-    except Exception as _e:
-        print(f"[Operating] ❌ {stock_id}: {_e} → 降級計算")
-        return _no_ai_operating(fin_data)
-
-
-def analyze_profitability_module(api_key: str, stock_id: str, fin_data: dict) -> dict:
-    """Part 3 獲利能力模組：5大指標 + 槓桿防呆。"""
-    if not api_key or not fin_data or fin_data.get("error"):
-        if fin_data and not fin_data.get("error"):
-            return _no_ai_profitability(fin_data)
-        return {"Profitability_Module": {"Gross_Margin": {"Value": "N/A", "Status": "N/A"},
-            "Operating_Margin": {"Value": "N/A", "Core_Business_Profitable": "N/A"},
-            "Margin_Of_Safety": {"Value": "N/A", "Status": "N/A"},
-            "Net_Margin": {"Value": "N/A", "Status": "N/A"},
-            "ROE": {"Value": "N/A", "Leverage_Warning": "N/A"},
-            "Final_Insight": "分析資料不足"}}
-    try:
-        fin_str = json.dumps(fin_data, ensure_ascii=False, indent=2)
-        prompt = _PROFITABILITY_PROMPT.format(financial_data_json=fin_str)
-        raw = _gemini_call(prompt, api_key)
-        if raw.startswith("⚠️"):
-            raise ValueError(raw)
-        result = _extract_json(raw)
-        print(f"[Profitability] ✅ {stock_id}")
-        return result
-    except Exception as _e:
-        print(f"[Profitability] ❌ {stock_id}: {_e} → 降級計算")
-        return _no_ai_profitability(fin_data)
-
 
 # ── Financial Structure Module Prompt（財務結構：那根棒子 + 以長支長）──
 _FINANCIAL_STRUCTURE_PROMPT = """\
@@ -899,25 +808,6 @@ _FINANCIAL_STRUCTURE_PROMPT = """\
 }}"""
 
 
-def analyze_financial_structure_module(api_key: str, stock_id: str, fin_data: dict) -> dict:
-    """Part 4 財務結構模組：負債比 + 以長支長比率。"""
-    if not api_key or not fin_data or fin_data.get("error"):
-        if fin_data and not fin_data.get("error"):
-            return _no_ai_financial_structure(fin_data)
-        return {"Financial_Structure_Module": {"Debt_Ratio": {"Value": "N/A", "Status": "N/A"},
-            "Long_Term_Funding_Ratio": {"Value": "N/A", "Status": "N/A"}, "Final_Insight": "分析資料不足"}}
-    try:
-        fin_str = json.dumps(fin_data, ensure_ascii=False, indent=2)
-        prompt = _FINANCIAL_STRUCTURE_PROMPT.format(financial_data_json=fin_str)
-        raw = _gemini_call(prompt, api_key)
-        if raw.startswith("⚠️"):
-            raise ValueError(raw)
-        result = _extract_json(raw)
-        print(f"[FinStructure] ✅ {stock_id}")
-        return result
-    except Exception as _e:
-        print(f"[FinStructure] ❌ {stock_id}: {_e} → 降級計算")
-        return _no_ai_financial_structure(fin_data)
 
 
 # ── Solvency Module Prompt（償債能力：流動/速動比率 + 收現豁免）──
@@ -972,26 +862,6 @@ _SOLVENCY_PROMPT = """\
 }}"""
 
 
-def analyze_solvency_module(api_key: str, stock_id: str, fin_data: dict) -> dict:
-    """Part 5 償債能力模組：流動/速動比率 + 收現行業豁免。"""
-    if not api_key or not fin_data or fin_data.get("error"):
-        if fin_data and not fin_data.get("error"):
-            return _no_ai_solvency(fin_data)
-        return {"Solvency_Module": {"Current_Ratio": {"Value": "N/A", "Status": "N/A"},
-            "Quick_Ratio": {"Value": "N/A", "Status": "N/A"}, "Cross_Validation_Applied": "N/A",
-            "Final_Solvency_Verdict": "N/A", "Final_Insight": "分析資料不足"}}
-    try:
-        fin_str = json.dumps(fin_data, ensure_ascii=False, indent=2)
-        prompt = _SOLVENCY_PROMPT.format(financial_data_json=fin_str)
-        raw = _gemini_call(prompt, api_key)
-        if raw.startswith("⚠️"):
-            raise ValueError(raw)
-        result = _extract_json(raw)
-        print(f"[Solvency] ✅ {stock_id}")
-        return result
-    except Exception as _e:
-        print(f"[Solvency] ❌ {stock_id}: {_e} → 降級計算")
-        return _no_ai_solvency(fin_data)
 
 
 # ── Advanced Diagnostic Module Prompt（綜合診斷：跨表勾稽 + 地雷偵測）──
@@ -1048,29 +918,6 @@ _ADVANCED_DIAGNOSTIC_PROMPT = """\
 }}"""
 
 
-def analyze_advanced_diagnostic_module(api_key: str, stock_id: str, fin_data: dict) -> dict:
-    """Part 6 綜合診斷模組：盈餘品質+杜邦+雙高危機+企業DNA。"""
-    if not api_key or not fin_data or fin_data.get("error"):
-        if fin_data and not fin_data.get("error"):
-            return _no_ai_advanced_diagnostic(fin_data)
-        return {"Advanced_Diagnostic_Module": {"Earnings_Quality": {"Value": "N/A", "Status": "N/A"},
-            "DuPont_Health": "N/A", "Double_High_Warning": "N/A",
-            "Business_DNA": "N/A", "Final_Verdict": "分析資料不足"}}
-    try:
-        fin_str = json.dumps(fin_data, ensure_ascii=False, indent=2)
-        prompt = _ADVANCED_DIAGNOSTIC_PROMPT.format(financial_data_json=fin_str)
-        raw = _gemini_call(prompt, api_key)
-        if raw.startswith("⚠️"):
-            raise ValueError(raw)
-        result = _extract_json(raw)
-        print(f"[AdvDiag] ✅ {stock_id}")
-        return result
-    except Exception as _e:
-        print(f"[AdvDiag] ❌ {stock_id}: {_e} → 降級計算")
-        return _no_ai_advanced_diagnostic(fin_data)
-
-
-# ── 公開入口 ────────────────────────────────────────────────
 def analyze_financial_health(api_key: str, stock_id: str, fin_data: dict,
                              news_context: str = "") -> dict:
     """
