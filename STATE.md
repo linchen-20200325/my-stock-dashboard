@@ -7,6 +7,13 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
+- [x] **S-AUDIT-RUN-R**(v18.358 PR-R1,2026-06-28)— **§8.2 Wave 3 收尾 = §8.2 100% 合規**
+  * Audit (post v18.357) 結論:全 codebase 僅剩 1 個 §8.2 違規 — `etf_calc.py:587` L2 Compute 直呼 `yf.download`(L2 不得 HTTP I/O)
+  * **PR-R1**(#390, v18.358):抽 `compute_etf_peer_ranking` HTTP I/O 到 `etf_fetch.fetch_etf_peer_history`(L1),etf_calc 模組 `import yfinance as yf` 全砍
+  * §8.2 hard rule 100% 合規:L2 Compute(etf_calc)AST 驗證無 yfinance / requests / proxy_helper module-level import
+  * Wave 1 + 2 + 3 全收尾(EX-CACHE-1 + Stock 5 + etf_calc 純化)
+  * 7 守衛測全綠(AST + signature + source marker)
+
 - [x] **S-AUDIT-RUN-Q**(v18.351~357 PR-Q1~Q5c,2026-06-28)— **S-PROV-1 phase 19 全套收齊 = 100% 覆蓋**
   * **7 連 PR / 58 fetcher / ~80 守衛測** — phase 1-18 已覆蓋 40+ 核心 fetcher,本系列把剩餘所有 fetcher 補完
   * **Q1**(#382,v18.351)app.py hot path 5
