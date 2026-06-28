@@ -1,16 +1,128 @@
 # 台股 AI 戰情室 — 技術規格書
 
-> **版本**：v7.1　|　**最後更新**：2026-05-15　|　**狀態**：完成 ✅
+> **版本**:v8.0(2026-06-28 Phase 2 對齊)| **歷史 v7.1**:2026-05-15
 >
-> 本文件為系統架構師視角的唯讀規格書，不含任何實作程式碼。
+> 本文件為系統架構師視角的唯讀規格書,不含任何實作程式碼。
 >
-> **v18.265 策略回測整體移除**:`backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py` 三檔已刪除(共 ~986 LOC);MA 交叉/MA+RSI/Walk-Forward Test/ETF 歷史回測功能不再提供。下文歷史段落仍會提及這些模組以說明演進脈絡,但**目前 codebase 不含**。`tw_backtest.py`(macro 拐點驗證)+ `calibrate_macro_traffic.py`(macro 校準)為獨立業務模組,**保留**。
+> **v18.265 策略回測整體移除**:`backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py` 三檔已刪除(共 ~986 LOC);MA 交叉/MA+RSI/Walk-Forward Test/ETF 歷史回測功能不再提供。下文歷史段落仍會提及這些模組以說明演進脈絡,但**目前 codebase 不含**。`tw_backtest.py`(macro 拐點驗證)為獨立業務模組,**保留**。
 >
-> **v18.182~v18.264 期間** UI 入口已封存 + 模組磁碟保留;v18.265 一併刪檔結案。
+> **v18.359 Phase 2 排毒對齊**(2026-06-28):依 Phase 1 三路審計藍圖完成 F-1.1 ~ F-4。本檔 §0 新增「現況對齊摘要」反映實際狀態;§1-§4 歷史結構保留供追溯。
 
 ---
 
-## 目錄
+## §0. v18.359 現況對齊摘要(Phase 2 收尾)
+
+> Phase 1 三路 Explore 審計揭示 ARCHITECTURE.md v7.1 與實際 codebase 有 295% 模組數差距(19 → 111)、165% LOC 差距。Phase 2 F-1 ~ F-4 完成根目錄結構性清潔;src/ 大樹搬移、SSOT facade、超大檔拆分(F-5 ~ F-8)規劃中,需 user 介入排程。
+
+### 0.1 已完成清潔(Phase 2 F-1 ~ F-4)
+
+| 批次 | 動作 | 影響檔數 |
+|---|---|---|
+| **F-1.1** | 刪 3 `.bak`(scoring_engine / etf_dashboard / leading_indicators)| -3,-4673 LOC |
+| **F-1.3** | 16 個 root `test_*.py` → 13 入 `tests/` / 3 入新建 `scripts/`;root `conftest.py` 併入 `tests/conftest.py` | +1 dir |
+| **F-1.4** | `data_cache/*.parquet` + `metadata.json` `git rm --cached` + `.gitignore` | -5 tracked |
+| **F-2** | 5 個 CLI 維運腳本搬入 `scripts/`(calibrate_macro_traffic / update_macro_history / update_etf_managers / final_check / debug_financials);3 個 `.github/workflows/*.yml` 同步 path | +5 in scripts/ |
+| **F-4** | 刪 2 個真孤兒模組:`merrill_clock.py`(210 LOC,fetch_pmi_history 已 S-H4 下沉至 tw_macro,殘餘 compute/render 0 caller) + `unified_decision.py`(234 LOC,ARCHITECTURE 提及但實際 0 wire 點) | -2,-444 LOC |
+
+### 0.2 已刪檔清單(不再現存,僅見 git history)
+
+| 檔 | 刪除版本 | 原職責 | 取代者 |
+|---|---|---|---|
+| `backtest_engine.py` | v18.265 | MA 交叉 / WFT 回測 | (功能整體下線) |
+| `tab_backtest_optimization.py` | v18.265 | 策略參數優化 UI | (功能整體下線) |
+| `etf_tab_backtest.py` | v18.265 | ETF 歷史回測 | (功能整體下線) |
+| `merrill_clock.py` | v18.359 | PMI×CPI 四象限 | tw_macro.fetch_pmi_history(L1 下沉)|
+| `unified_decision.py` | v18.359 | 統一決策模組 | (從未實際 wire) |
+| `scoring_engine.py.bak` | v18.359 | 舊版備份 | (.gitignore *.bak) |
+| `etf_dashboard.py.bak` | v18.359 | 舊版備份 | (.gitignore *.bak) |
+| `leading_indicators.py.bak` | v18.359 | 舊版備份 | (.gitignore *.bak) |
+
+### 0.3 實際目錄拓樸(2026-06-28 v18.359)
+
+```
+my-stock-dashboard/
+├── app.py                     # L6 唯一入口(1,722 LOC)
+├── README.md / CLAUDE.md / PROCESS.md / STATE.md / SPEC.md /
+├── ARCHITECTURE.md / DATASTATION.md / STRATEGY_MANUAL.md
+├── pytest.ini / requirements.txt / .gitignore
+│
+├── (87 個 .py 散在 root) — 待 F-6 src/ 樹搬移
+│   依檔名前綴隱性分組:
+│   - data_*, daily_data_fetchers           (L1 fetcher)
+│   - macro_*, tw_macro, leading_indicators (L1 macro fetcher)
+│   - etf_*                                 (L1+L2+L4+L5 ETF 全棧)
+│   - tw_stock_data_fetcher                 (L1 個股 fetcher)
+│   - scoring_*, financial_health_*,
+│     v4_strategy_engine, v5_modules        (L2 compute)
+│   - mj_*                                  (L2 散戶情緒)
+│   - risk_*, exit_signals, flow_engine,
+│     hot_money, fundamental_screener,
+│     tech_indicators, inst_sanity,
+│     multi_factor_optimization,
+│     signal_threshold_optimization,
+│     monthly_revenue_screener,
+│     yield_screener                        (L2 compute)
+│   - ai_engine, ai_structured_summary,
+│     market_strategy, daily_checklist,
+│     portfolio_*, health_reconcile,
+│     reconcile, oauth_state,
+│     gsheet_portfolio                      (L3 service)
+│   - chart_plotter, ui_widgets,
+│     tab_helpers, chip_radar, grape_ladder,
+│     sidebar_health, macro_ui_components,
+│     etf_render                            (L4 components)
+│   - tab_*, etf_tab_*, etf_dashboard,
+│     calibration_ui, health_inspector,
+│     data_coverage, api_diagnostic,
+│     macro_classroom, macro_stock_link,
+│     mj_health_diff                        (L5 tabs)
+│   - config, data_config, persona,
+│     stock_names                           (L0 config)
+│   - proxy_helper, yf_proxy, nas_server,
+│     tw_backtest                           (L1 infra + 雜項)
+│
+├── scripts/                   # 維運 + 一次性 CLI(F-2 新建)
+│   ├── calibrate_macro_traffic.py
+│   ├── debug_financials.py
+│   ├── final_check.py
+│   ├── test_fetch.py          # F-1.3 移入(print-based)
+│   ├── test_fetchers.py       # F-1.3 移入(print-based)
+│   ├── test_registry.py       # F-1.3 移入(print-based)
+│   ├── update_etf_managers.py
+│   └── update_macro_history.py
+│
+├── shared/                    # L0 跨層共用常數 / 工具(17 檔)
+├── infra/                     # OAuth 基礎(2 檔)
+├── tests/                     # 全部 pytest(108 檔,2213 collected)
+└── data_cache/.gitkeep        # runtime parquet 已 untrack
+```
+
+### 0.4 程式規模實況(2026-06-28)
+
+| 範圍 | 檔數 | LOC |
+|---|---:|---:|
+| Root `.py`(待 src/ 化)| 87 | ~44,300 |
+| `shared/` | 17 | ~2,550 |
+| `infra/` | 2 | ~200 |
+| `scripts/` | 8 | ~2,800 |
+| `tests/` | 108 | ~18,000 |
+| **TOTAL** | **222** | **~67,850** |
+
+對比 v7.1 宣稱 19 模組 / 21,323 LOC:**檔數 +1,068%、LOC +218%**。
+ARCHITECTURE v7.1 §1.2 / §1.4 數字僅供歷史對照,**勿引為現況**。
+
+### 0.5 待動工項(Phase 2 F-5 ~ F-8,需 user 排程)
+
+| ID | 範圍 | 風險 |
+|---|---|---|
+| **F-5** | SSOT facade(MarketDataFacade / HealthScoreFacade / UIWidgets / ChartFactory) | 🟡 中 |
+| **F-6** | root 87 檔 → `src/{config,data,compute,services,ui}/` 子樹搬移 | 🔴 高(全 import path 影響)|
+| **F-7** | 超大檔拆分:tab_macro 5387 / tab_stock 3471 / data_loader 2273 / etf_fetch 1935 / macro_core 1492 / leading_indicators 1473 / health_inspector 1386 | 🔴 高 |
+| **F-8** | L1/L2 邊界對齊:yfinance 走 facade、FinMind 三大法人雙路徑合併 | 🔴 高 |
+
+---
+
+## 目錄(歷史 v7.1 結構,以下保留供追溯)
 
 1. [目錄結構](#1-目錄結構)
 2. [分層架構](#2-分層架構)
