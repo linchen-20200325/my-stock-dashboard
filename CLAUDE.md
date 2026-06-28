@@ -146,7 +146,7 @@ class DataPoint:
 
 ### 2.3 Point-in-Time — 防 Lookahead
 
-本專案**無策略回測**(v18.265 移除 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py`)。Macro 拐點驗證(`tw_backtest.py` SPX/TWII 倒掛翻正)+ macro 校準歷史驗算(`calibrate_macro_traffic.py`)仍須遵守 PIT,**禁止 lookahead**。
+本專案**無策略回測**(v18.265 移除 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py`)。Macro 拐點驗證(`tw_backtest.py` SPX/TWII 倒掛翻正)+ macro 校準歷史驗算(`scripts/calibrate_macro_traffic.py`,v18.359 F-2 搬入 `scripts/`)仍須遵守 PIT,**禁止 lookahead**。
 
 **各來源發布延遲 + 修正風險**:
 
@@ -196,7 +196,7 @@ class DataPoint:
 
 ### 3.1 邊界契約（Schema）
 
-**現況**：requirements.txt **無 pandera**,現有資料 schema 散落於各 fetcher 的 dict / df parse 邏輯（如 `data_loader.py`、`update_macro_history.py`）。
+**現況**：requirements.txt **無 pandera**,現有資料 schema 散落於各 fetcher 的 dict / df parse 邏輯（如 `data_loader.py`、`scripts/update_macro_history.py`,後者 v18.359 F-2 搬入 `scripts/`）。
 
 **規範**：新增資料流入 / 流出系統的點,**必須**附等效斷言（即使尚未引入 pandera）：
 
@@ -213,7 +213,7 @@ class DataPoint:
 # 不變量: low <= open/close <= high, low <= high
 
 # pmi_df (TW / US PMI)
-{"date": ..., "pmi": float in [30, 70]}   # evidence: merrill_clock.py:107 已強制過濾
+{"date": ..., "pmi": float in [30, 70]}   # v18.359 起改自 shared/signal_thresholds.py:139-143(原 merrill_clock.py:107 已下沉 + 該檔已刪)
 
 # macro_df (FRED / CBC / generic macro)
 {"date": ..., "value": float, "source": str, "as_of": date}
@@ -231,7 +231,7 @@ class DataPoint:
 
 | 指標 | 合理範圍 | Evidence |
 |---|---|---|
-| PMI（採購經理指數） | [30, 70] | merrill_clock.py:107（已強制） |
+| PMI（採購經理指數） | [30, 70] | shared/signal_thresholds.py:139-143(v18.359 merrill_clock.py 已刪,原 inline 已下沉至此) |
 | VIX | [5, 100] | macro_core.py:215 thresholds |
 | CPI YoY (%) | [-5, 20] | macro_core.py:216 |
 | US10Y (%) | [0, 20] | macro_core.py:217 |
@@ -266,7 +266,7 @@ class DataPoint:
 | `RSI_OVERBOUGHT/OVERSOLD` | 70 / 30 | config.py:52-53 | ✅ SSOT |
 | `LEEK_HIGH/LOW` | 35 / 10 | config.py:69-70 | ✅ SSOT |
 | `BULLRUN_VOL_THRESHOLD` | 1.3× | config.py:73 | ✅ SSOT |
-| `_CPI_THRESHOLD` (merrill clock) | 2.0% | merrill_clock.py:56 | ✅ named const |
+| ~~`_CPI_THRESHOLD` (merrill clock)~~ | ~~2.0%~~ | ~~merrill_clock.py:56~~(v18.359 F-4 已刪) | ⚪ 退役 |
 | `ANNUAL_MA` | 240 trading days | config.py:14 | ✅ SSOT |
 | `signal_thresholds.*`（76 個語意常數） | 252 / 健康評分加權 / 4 個 TW 麥邊閾值 / VIX/Foreign futures / ATR%/MA20/合約負債/ETF 折溢價 / Recession logit / PMI 有效範圍 / merge_asof 40d / trend lookback 6 / 個股組合操作狀態燈+多因子評級+入選70+利空信心50 / **scoring_engine 全評分曲線+交易濾網斷點(MOM_/RISK_/RS_/SQ_/FGMS_/LEAD_/CL_/BOLL_/FAKEOUT_/RR_/ATR_STOP_/TIME_STOP_/VCP_/SQUEEZE_/POS_ 共 50 個)** 等 | shared/signal_thresholds.py v18.241→v18.324 | ✅ SSOT（v18.322 補 7 個股組合,詳見 SPEC §12；v18.324 補 50 scoring_engine 全抽,前綴分名防同數字不同義耦合,詳見 SPEC §14） |
 | `financial_health_thresholds.MJ_*`（19 個 MJ 門檻） | 現金 25/10 / DSO 15/90 / 100-100-10 / 負債 40/60/70 / 流動·速動 300/150 / 毛利 40 / 安全邊際 60 / 淨利 10 / ROE 15 / 杜邦槓桿 65 / 盈餘品質 100 等 | shared/financial_health_thresholds.py v18.323 | ✅ SSOT（financial_health_engine 6 個 `_no_ai_*` code 端引入；prompt 端由 golden test 釘一致；含 3 漂移修正,詳見 SPEC §13） |
@@ -456,9 +456,9 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 
 | 層 | 職責 | 代表檔案 |
 |---|---|---|
-| **L0 Infra** | 常數 / TTL / 門檻 / 全域 config | `config.py`、`shared/ttls.py`、`shared/thresholds.py`、`shared/health_thresholds.py`、`shared/fred_series.py` |
-| **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`、`data_registry.py`、`proxy_helper.py`、`update_macro_history.py`、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`、`tw_stock_data_fetcher.py` |
-| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`merrill_clock.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`、`macro_signal_lookback_tw.py` |
+| **L0 Infra** | 常數 / TTL / 門檻 / 全域 config | `src/config/{config,data_config,persona,stock_names}.py`(v18.359 F-6.1 搬入)、`shared/ttls.py`、`shared/thresholds.py`、`shared/health_thresholds.py`、`shared/fred_series.py` |
+| **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`、`data_registry.py`、`proxy_helper.py`、`scripts/update_macro_history.py`(cron CLI,v18.359 F-2 搬入)、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`、`tw_stock_data_fetcher.py` |
+| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、~~`merrill_clock.py`~~(v18.359 F-4 已刪,fetch_pmi_history 已下沉 tw_macro)、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`、`macro_signal_lookback_tw.py` |
 | **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_engine.py`、`ai_structured_summary.py`、`unified_decision.py`、`daily_checklist.py` |
 | **L4 Render** | 圖表生成 / 通用 UI 元件（無 Streamlit container） | `chart_plotter.py`、`etf_render.py`、`ui_widgets.py` |
 | **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`tab_mj_health_diff.py`、`etf_dashboard.py`、`etf_tab_*.py` |

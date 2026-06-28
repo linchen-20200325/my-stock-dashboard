@@ -37,7 +37,7 @@ jobs:
           key: ${{ runner.os }}-pip-macro-history-${{ hashFiles('requirements.txt') }}
 
       - name: Install minimal deps
-        # 只裝 update_macro_history.py 需要的：pandas / pyarrow / requests + proxy_helper deps
+        # 只裝 scripts/update_macro_history.py 需要的：pandas / pyarrow / requests + proxy_helper deps
         run: pip install pandas pyarrow requests urllib3
 
       - name: Fetch historical data
