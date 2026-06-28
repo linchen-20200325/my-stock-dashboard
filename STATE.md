@@ -16,6 +16,13 @@
 
 ## 已完成 commits(reverse chrono)
 
+### A4 (v18.384) — pct_change YoY helper 3 處統一
+- **檔案**: `shared/calc_helpers.py`(NEW)+ macro_helpers.py:860 + scoring_engine.py:446 + msl_tw.py:191
+- **拔毒**: 3 處 `series.pct_change(N) * 100.0` pattern → 抽 `pct_change_yoy(series, periods=12, multiplier=100.0)`
+- **periods param**: 月頻 12(macro_helpers M2 / scoring revenue)+ 日頻 20(msl_tw TWII 20D 跌幅)
+- **驗證**: full pytest 2220/0 fail
+- **commit**: 待 push
+
 ### A2 (v18.383) — cache_layer PKL_DIR env 注入(解 L0↔L0)
 - **檔案**: `shared/cache_layer.py` + `src/config/data_config.py`
 - **拔毒**: 原 `from src.config import PKL_DIR` 反向 import L0(L0↔L0 hardcode 設計味道)→ 改 `os.environ.get('STK_PKL_DIR', '/tmp/stock_cache')`,兩 file 同源 env

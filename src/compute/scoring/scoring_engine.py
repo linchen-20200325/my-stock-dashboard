@@ -443,7 +443,9 @@ def calc_revenue_yoy_score(revenue_df=None, yoy_months: int = 3) -> float:
         if 'yoy' not in revenue_df.columns and 'revenue' in revenue_df.columns:
             revenue_df = revenue_df.copy()
             # W5-2 §4.1: revenue_df 為**月頻**,pct_change(12) = 12 個月 = YoY(非交易日)
-            revenue_df['yoy'] = revenue_df['revenue'].pct_change(12) * 100
+            # A4 v18.384:抽 shared/calc_helpers.pct_change_yoy SSOT
+            from shared.calc_helpers import pct_change_yoy as _pcy
+            revenue_df['yoy'] = _pcy(revenue_df['revenue'])
         recent = revenue_df.dropna(subset=['yoy']).tail(yoy_months)
         if len(recent) < 1:
             return 50.0

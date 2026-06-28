@@ -184,11 +184,13 @@ def fetch_twii_drop_20d_series(
     df = _load_parquet_safe(cache_dir / "twii_ohlcv.parquet", {"date", "close"})
     if df is None:
         return pd.Series(dtype=float, name="TWII_DROP_20D")
-    s = (df.assign(date=pd.to_datetime(df["date"]))
-           .set_index("date")["close"]
-           .astype(float)
-           .sort_index()
-           .pct_change(20) * 100.0)
+    # A4 v18.384:抽 shared/calc_helpers.pct_change_yoy SSOT
+    from shared.calc_helpers import pct_change_yoy as _pcy
+    _close = (df.assign(date=pd.to_datetime(df["date"]))
+                 .set_index("date")["close"]
+                 .astype(float)
+                 .sort_index())
+    s = _pcy(_close, periods=20)
     s.name = "TWII_DROP_20D"
     return _attach_prov(s.dropna(), 'data_cache:twii_ohlcv.parquet:close.pct_change(20)')
 

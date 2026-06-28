@@ -857,7 +857,9 @@ def china_macro_snapshot(china_dict: dict) -> dict:
     if m2_df_raw is not None and not m2_df_raw.empty:
         try:
             tmp = m2_df_raw.copy()
-            tmp["value"] = tmp["value"].astype(float).pct_change(12) * 100.0
+            # A4 v18.384:抽 shared/calc_helpers.pct_change_yoy SSOT
+            from shared.calc_helpers import pct_change_yoy as _pcy
+            tmp["value"] = _pcy(tmp["value"].astype(float))
             tmp = tmp.dropna(subset=["value"])
             if not tmp.empty:
                 m2_yoy_df = tmp
