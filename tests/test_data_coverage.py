@@ -26,9 +26,16 @@ def _stub_st():
 
     def _noop(*a, **k):
         return None
-    # v18.361 F-6.5 R4:多加 divider(原只 markdown/caption),避 collection 順序變後
-    #   macro_classroom render_principle_classroom 內 st.divider 撞 AttributeError。
-    for n in ("markdown", "caption", "divider"):
+    # v18.362 F-8 R2:擴大 noop list — 涵蓋 tab_edu / macro_classroom 用到的全部 st.*
+    # (render_principle_classroom + render_traffic_light_explainer 等)
+    # 防 F-8 / F-6.5 後 collection 順序變,任何 tab 內 st.* 撞 stub AttributeError。
+    for n in ("markdown", "caption", "divider", "expander", "error", "plotly_chart",
+              "warning", "info", "title", "header", "subheader", "write", "code",
+              "metric", "dataframe", "table", "button", "text_input", "selectbox",
+              "multiselect", "slider", "checkbox", "radio", "columns", "container",
+              "spinner", "progress", "tabs", "sidebar", "image", "json", "altair_chart",
+              "bar_chart", "line_chart", "area_chart", "pyplot", "graphviz_chart",
+              "form", "form_submit_button", "empty", "rerun", "experimental_rerun"):
         setattr(m, n, _noop)
 
     # 支援 @st.cache_data 與 @st.cache_data(ttl=...) 兩種呼叫

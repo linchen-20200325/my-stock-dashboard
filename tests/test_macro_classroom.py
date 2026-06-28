@@ -198,7 +198,7 @@ class TestTabMacroWiring:
 
     def test_imports_explainer(self):
         assert "render_traffic_light_explainer" in self.src
-        assert "from macro_classroom import" in self.src
+        assert "from src.ui.tabs import" in self.src or "from src.ui.tabs.macro_classroom import" in self.src
 
     def test_classroom_moved_to_manual(self):
         """v18.281: 教室已從 tab_macro 移至 tab_edu(系統說明書)。
