@@ -161,7 +161,14 @@ def _fetch_cboe_csv(short_name: str) -> pd.Series:
         idx = pd.to_datetime(df[date_col], errors="coerce")
         vals = pd.to_numeric(df[close_col], errors="coerce")
         s = pd.Series(vals.values, index=idx).dropna().sort_index()
-        return s.tail(180)  # 對齊 6mo
+        _result = s.tail(180)  # 對齊 6mo
+        # v18.357 PR-Q5c S-PROV-1 phase 19:Series attrs
+        try:
+            _result.attrs.setdefault('source', f'CBOE:{short_name}_History.csv')
+            _result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
+        return _result
     except Exception as e:  # noqa: BLE001
         print(f"[risk_radar/cboe] {short_name} 失敗: {e}")
         return pd.Series(dtype=float)

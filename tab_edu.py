@@ -43,8 +43,15 @@ def _fetch_fred_series_edu(series_id: str, units: str = 'lin', months: int = 24)
         if len(_pairs) < 3:
             return None
         _pairs.sort(key=lambda x: x[0])
-        return _pd.Series([v for _, v in _pairs],
-                          index=_pd.to_datetime([d for d, _ in _pairs]))
+        _result = _pd.Series([v for _, v in _pairs],
+                             index=_pd.to_datetime([d for d, _ in _pairs]))
+        # v18.357 PR-Q5c S-PROV-1 phase 19:Series attrs
+        try:
+            _result.attrs.setdefault('source', f'FRED:{series_id}:units={units}:months={months}')
+            _result.attrs.setdefault('fetched_at', _pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
+        return _result
     except Exception:
         return None
 

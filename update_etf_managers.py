@@ -136,9 +136,29 @@ def fetch_manager(etfid: str) -> dict | None:
         time.sleep(REQUEST_GAP_SEC)
         if parsed:
             if parsed.get("since"):
+                # v18.357 PR-Q5c S-PROV-1 phase 19
+                try:
+                    import sys as _sys_em, datetime as _dt_em
+                    print(f'[fetch_manager] etfid={etfid} '
+                          f'source=MoneyDJ:Basic(multi-page) '
+                          f'fetched_at={_dt_em.datetime.utcnow().isoformat()}Z '
+                          f'result=dict:name={parsed.get("name","?")}:since={parsed.get("since")}',
+                          file=_sys_em.stderr)
+                except Exception:
+                    pass
                 return parsed          # 名字+到職日齊全，最佳
             if best is None:
                 best = parsed          # 名字有、到職日缺 → 暫存，續查其他頁
+    # v18.357 PR-Q5c:暫存最佳 or None
+    try:
+        import sys as _sys_em2, datetime as _dt_em2
+        print(f'[fetch_manager] etfid={etfid} '
+              f'source=MoneyDJ:Basic(multi-page:fallback) '
+              f'fetched_at={_dt_em2.datetime.utcnow().isoformat()}Z '
+              f'result={"dict:name="+best.get("name","?") if best else "None"}',
+              file=_sys_em2.stderr)
+    except Exception:
+        pass
     return best
 
 

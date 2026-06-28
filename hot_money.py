@@ -165,7 +165,15 @@ def fetch_foreign_flow_series(days: int, token: str) -> tuple[pd.DataFrame, str]
               .assign(foreign_net_yi=lambda d: d["net"] / 1e8)
               .loc[:, ["date", "foreign_net_yi"]])
     out["date"] = pd.to_datetime(out["date"])
-    return out.sort_values("date").reset_index(drop=True), ""
+    _result = out.sort_values("date").reset_index(drop=True)
+    # v18.357 PR-Q5c S-PROV-1 phase 19:DataFrame attrs
+    try:
+        _result.attrs.setdefault('source',
+            'FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign(via leading_indicators.finmind_get)')
+        _result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+    except Exception:
+        pass
+    return _result, ""
 
 
 # ────────────────────────────────────────────────────────────────────────
