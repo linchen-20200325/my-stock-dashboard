@@ -13,6 +13,9 @@ except ImportError:
     MARKET_SCORE_BULL = 3; MARKET_SCORE_NEUTRAL = 2
     EXPOSURE_BULL = 0.8; EXPOSURE_NEUTRAL = 0.5; EXPOSURE_BEAR = 0.2
 
+# P0-2 v18.369 深層拔毒:portfolio_exposure SSOT 收攏至 L2 risk_control(原本兩處同名異實作)
+from src.compute.risk.risk_control import portfolio_exposure  # noqa: F401
+
 
 # ── 外部資料抓取 ──────────────────────────────────────────────
 def fetch_market_data():
@@ -143,22 +146,6 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=1.0,
         'label': {'bull': '🟢 多頭（晴天）', 'neutral': '🟡 震盪（多雲）', 'bear': '🔴 空頭防禦（雨天）'}[regime],
         'm1b_m2_gap': m1b_m2_gap,
     }
-
-
-def portfolio_exposure(regime: str) -> float:
-    """
-    依市場狀態決定建議總持股比例（§6.3）
-
-    bull    → 80%（積極）
-    neutral → 50%（保守）
-    bear    → 20%（觀望，降至30%以下）
-    """
-    mapping = {
-        'bull':    EXPOSURE_BULL,
-        'neutral': EXPOSURE_NEUTRAL,
-        'bear':    EXPOSURE_BEAR,
-    }
-    return mapping.get(regime, EXPOSURE_NEUTRAL)
 
 
 # ── 舊版評分（已棄用，僅保留相容性，新版請使用 market_regime）───
