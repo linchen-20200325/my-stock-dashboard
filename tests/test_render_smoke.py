@@ -82,17 +82,17 @@ def test_radar_and_bucket_bar_gated_pre_load():
         r"(?:\s*#[^\n]*\n)*"  # 0+ 註解行
         r"\s+from src\.compute\.macro import compute_five_bucket_summary", src
     ), "五桶 bar 未 gate 在 _show_market_data(未載入會顯示多餘面板)"
-    # F-7.1 B-2~B-5:§七/§一/§五/§六/§八/§十一 全部 section header 抽至各 section_*.py;
-    # 此 test 改檢 tab_macro 內各 render_section_*() call 順序(reading order 入口)。
-    # 仍留 tab_macro 的 §三 籌碼(未抽,B-3 audit 後評估 S8 CHIPS 留作 future batch)+ §九 (data wait try)
+    # F-7.1 B-2~B-5 + B-S8-A v18.388:§一/§三/§五/§六/§七/§八/§十一 全部 section
+    # header 抽至各 section_*.py;此 test 改檢 tab_macro 內各 render_section_*()
+    # call 順序(reading order 入口)。§三 籌碼 v18.388 後改 render_section_chips(...)。
     _tm_src = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
     _pos_long   = _tm_src.find("render_section_long(")    # §七/§一/§六 入口
     _pos_mid    = _tm_src.find("render_section_mid(")     # §八 入口
     _pos_short  = _tm_src.find("render_section_short(")   # §五 入口
-    _pos_three  = _tm_src.find("section_header('三'")     # §三 籌碼(未抽,留 tab_macro)
+    _pos_three  = _tm_src.find("render_section_chips(")   # §三 籌碼(B-S8-A 抽)
     _pos_ai     = _tm_src.find("render_section_ai(")      # §十一 入口
     for name, pos in [('render_section_long', _pos_long), ('render_section_mid', _pos_mid),
-                      ('render_section_short', _pos_short), ("section_header('三'", _pos_three),
+                      ('render_section_short', _pos_short), ('render_section_chips', _pos_three),
                       ('render_section_ai', _pos_ai)]:
         assert pos > 0, f"找不到 {name}"
     # reading order:long(§七一六) → mid(§八) → short(§五) → chips(§三) → ai(§十一)
