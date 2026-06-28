@@ -883,95 +883,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
             # ── M1B-M2 + 乖離率 並發計算 ──────────────────────
             def _job_m1b():
-                import pandas as _pd_m1
-                _fm_tok_m1 = _get_fm_token()
-                _start_m1 = (datetime.date.today()-datetime.timedelta(days=420)).strftime('%Y-%m-%d')
-
-                # ── [Step 4] 路徑 0：tw_macro.fetch_cbc_m1b_m2 統一委派 ──
-                # 內含 Tier 1 (CBC ms1.json) + Tier 2 (CPX EF15M01) + Tier 3 (^TWII proxy)
-                # 全部走 NAS proxy,取代原本散落的 CPX EF01M01/EF17M01 + ms1.json 直連
-                try:
-                    from src.data.macro import fetch_cbc_m1b_m2 as _tw_cbc
-                    _cbc_snap = _tw_cbc()
-                    if _cbc_snap.get('m1b_yoy') is not None:
-                        _src_label = ('TWII-proxy' if _cbc_snap.get('is_proxy_tier')
-                                      else f'CBC-tier{_cbc_snap.get("tier_used")}')
-                        print(f'[M1B/tw_macro] ✅ {_src_label} '
-                              f'M1B={_cbc_snap["m1b_yoy"]:.2f}% M2={_cbc_snap["m2_yoy"]:.2f}%')
-                        return {'m1b_yoy': _cbc_snap['m1b_yoy'],
-                                'm2_yoy':  _cbc_snap['m2_yoy'],
-                                'source':  _src_label}
-                except Exception as _tw_e:
-                    print(f'[M1B/tw_macro] ❌ {_tw_e}')
-
-                # ── 路徑 2：FRED（台灣 M1B/M2，fetch_url + FRED_API_KEY）──
-                try:
-                    import os as _os_m1f
-                    from src.data.proxy import fetch_url as _fu_m1
-                    _fred_key_m1 = (_os_m1f.environ.get('FRED_API_KEY') or
-                                    (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
-                    _fp_m1 = {'api_key': _fred_key_m1} if _fred_key_m1 else {}
-                    _fred_base_p = {'file_type': 'json', 'sort_order': 'asc', 'limit': 36, **_fp_m1}
-                    _fred_m1b_r = _fu_m1('https://api.stlouisfed.org/fred/series/observations',
-                                         params={'series_id': 'MYAGM1TWA189S', **_fred_base_p}, timeout=12, attempts=1)
-                    _fred_m2_r  = _fu_m1('https://api.stlouisfed.org/fred/series/observations',
-                                         params={'series_id': 'MYAGM2TWA189S', **_fred_base_p}, timeout=12, attempts=1)
-                    if _fred_m1b_r is None or _fred_m2_r is None:
-                        raise ValueError('FRED fetch_url 回傳 None')
-                    print('[M1B/FRED] M1 OK M2 OK')
-                    if True:  # 保留縮排結構
-                        _obs_m1 = [o for o in _fred_m1b_r.json().get('observations', [])
-                                   if o.get('value', '.') != '.']
-                        _obs_m2 = [o for o in _fred_m2_r.json().get('observations', [])
-                                   if o.get('value', '.') != '.']
-                        _df_fred_m1 = _pd_m1.DataFrame(_obs_m1)
-                        _df_fred_m2 = _pd_m1.DataFrame(_obs_m2)
-                        for _dfm in [_df_fred_m1, _df_fred_m2]:
-                            _dfm['value'] = _pd_m1.to_numeric(_dfm['value'], errors='coerce')
-                        _df_fred_m1 = _df_fred_m1.dropna(subset=['value'])
-                        _df_fred_m2 = _df_fred_m2.dropna(subset=['value'])
-                        print(f'[M1B/FRED] M1 rows={len(_df_fred_m1)} M2 rows={len(_df_fred_m2)} last={_df_fred_m1["date"].iloc[-1] if len(_df_fred_m1) else "?"}')
-                        if len(_df_fred_m1) >= 13 and len(_df_fred_m2) >= 13:
-                            _m1b_yoy_f = round((_df_fred_m1['value'].iloc[-1]/_df_fred_m1['value'].iloc[-13]-1)*100, 2)
-                            _m2_yoy_f  = round((_df_fred_m2['value'].iloc[-1]/_df_fred_m2['value'].iloc[-13]-1)*100, 2)
-                            print(f'[M1B/FRED] ✅ M1B={_m1b_yoy_f:.2f}% M2={_m2_yoy_f:.2f}%')
-                            return {'m1b_yoy': _m1b_yoy_f, 'm2_yoy': _m2_yoy_f, 'source': 'FRED'}
-                except Exception as _fred_e:
-                    print(f'[M1B/FRED] ❌ {_fred_e}')
-
-                # ── 路徑 2b：IMF DataMapper API（FRED 備援，全球可達）──
-                try:
-                    # MABMM301 = M2 年增率%, MANMM101 = M1 年增率% (IMF IFS)
-                    from src.data.proxy import fetch_url as _fu_imf  # 強制走 NAS proxy（一致性；失敗自動降級直連）
-                    _imf_m1_r = _fu_imf(
-                        'https://www.imf.org/external/datamapper/api/v1/MANMM101/TW', timeout=15, attempts=1)
-                    _imf_m2_r = _fu_imf(
-                        'https://www.imf.org/external/datamapper/api/v1/MABMM301/TW', timeout=15, attempts=1)
-                    print(f'[M1B/IMF] M1={getattr(_imf_m1_r, "status_code", None)} M2={getattr(_imf_m2_r, "status_code", None)}')
-                    if (_imf_m1_r is not None and _imf_m2_r is not None
-                            and _imf_m1_r.status_code == 200 and _imf_m2_r.status_code == 200):
-                        _imf_m1_j = _imf_m1_r.json()
-                        _imf_m2_j = _imf_m2_r.json()
-                        _imf_m1_vals = _imf_m1_j.get('values', {}).get('MANMM101', {}).get('TW', {})
-                        _imf_m2_vals = _imf_m2_j.get('values', {}).get('MABMM301', {}).get('TW', {})
-                        print(f'[M1B/IMF] M1 years={len(_imf_m1_vals)} M2 years={len(_imf_m2_vals)}')
-                        if _imf_m1_vals and _imf_m2_vals:
-                            # IMF 返回的已是 YoY 年增率%，取最新一年
-                            _imf_m1_sorted = sorted([(k, float(v)) for k, v in _imf_m1_vals.items() if v is not None], key=lambda x: x[0])
-                            _imf_m2_sorted = sorted([(k, float(v)) for k, v in _imf_m2_vals.items() if v is not None], key=lambda x: x[0])
-                            if _imf_m1_sorted and _imf_m2_sorted:
-                                _m1b_yoy_imf = round(_imf_m1_sorted[-1][1], 2)
-                                _m2_yoy_imf  = round(_imf_m2_sorted[-1][1], 2)
-                                print(f'[M1B/IMF] ✅ year={_imf_m1_sorted[-1][0]} M1B={_m1b_yoy_imf:.2f}% M2={_m2_yoy_imf:.2f}%')
-                                return {'m1b_yoy': _m1b_yoy_imf, 'm2_yoy': _m2_yoy_imf, 'source': f'IMF({_imf_m1_sorted[-1][0]})'}
-                except Exception as _imf_e:
-                    print(f'[M1B/IMF] ❌ {_imf_e}')
-
-                # [Step 4] 舊路徑 3 (CBC ms1.json 直連) 已由 tw_macro Tier 1 取代
-
-                # 若所有真實來源都失敗，回傳 None（顯示「待更新」比顯示錯誤數字好）
-                print('[M1B] 所有路徑失敗，回傳 None')
-                return None
+                # P3-D2 v18.389:3-Tier fallback 下沉 macro_snapshot.fetch_m1b_m2_block
+                # FRED_API_KEY closure 由 caller 傳入,函式本身 pure-ish。
+                _fred_key_m1 = (os.environ.get('FRED_API_KEY')
+                                or (st.secrets.get('FRED_API_KEY')
+                                    if hasattr(st, 'secrets') else None) or '')
+                from src.data.macro.macro_snapshot import fetch_m1b_m2_block
+                return fetch_m1b_m2_block(fred_api_key=_fred_key_m1)
 
             def _job_bias():
                 # P3-D3 v18.389:純函式下沉 src/data/macro/macro_snapshot.compute_twii_bias
