@@ -393,6 +393,16 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 > v18.284。「總經」頂部五桶總結 bar、指標圖表上的黃/紅標準線、本表三者**同源** —
 > 全部讀 `shared/macro_buckets.py::BUCKET_DANGER_SPECS`，改門檻只改一處。
 > 目的：一眼看出**哪個指標正逼近危險線**。
+>
+> **v18.338 — Fund 式分組卡片網格（第 4 個同源 surface）**：`bucket_indicator_cards_html`
+> 把某桶 `details` 渲染成卡片網格，每張卡 = **小圖**（`DangerSpec.emoji`）+ 名稱 +
+> 燈號值 + **SPEC 註解**（`DangerSpec.note`，即本表「綠/黃/紅」語意）。先套用 🌳 長期桶
+> 當模板（`render_macro_bucket_summary_bar('long', with_cards=True)`，tab_macro §七）；
+> 其餘 4 桶待 user 確認後續套。小圖：總經健康評分 🩺 / NDC 🚦 / M1B-M2 💰。
+>
+> **相關**：個股面板（`tab_stock`）6 桶 Bar 亦於 v18.337 加「一句結論 + 燈號」
+> （`compute_stock_section_levels` → `section_header_html(level=, headline=)`），
+> 門檻同走 SSOT（健康度 `HEALTH_GRADE_*` / RS `RS_SCORE_*` / 先行指標最差燈號聚合）。
 
 **門檻來源透明度**（`DangerSpec.source`）:
 - 🔵 **官方 / SSOT**：有既有常數背書（`MACRO_THRESHOLDS` 鏡像由 `test_macro_buckets.py` 守漂移；或直接 import `signal_thresholds`）。

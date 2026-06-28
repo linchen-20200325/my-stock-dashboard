@@ -126,8 +126,10 @@ def test_tab_macro_buckets_have_summary_bar():
     import tab_macro
     src = open(tab_macro.__file__, encoding='utf-8').read()
     assert 'bucket_summary_bar_html' in src
+    # 用 prefix 比對（不含右括號）：long 自 v18.338 起帶 with_cards=True 選參，
+    # 桶仍有接 summary bar，斷言放寬以容許額外 kwarg（intent 不變）。
     for key in ('long', 'mid', 'short', 'news'):
-        assert f"render_macro_bucket_summary_bar('{key}')" in src, f"缺 {key} 桶總結 bar"
+        assert f"render_macro_bucket_summary_bar('{key}'" in src, f"缺 {key} 桶總結 bar"
     # 籌碼桶不可有總結 bar(保留原樣)
     assert "render_macro_bucket_summary_bar('chips')" not in src, "籌碼桶不應加總結 bar(user 指定保留)"
 

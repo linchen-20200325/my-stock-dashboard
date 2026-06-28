@@ -416,18 +416,24 @@ background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:4px;min-height
                     )
 
 
-def render_macro_bucket_summary_bar(bucket_key: str) -> None:
+def render_macro_bucket_summary_bar(bucket_key: str, with_cards: bool = False) -> None:
     """v18.314 — 桶輕量總結 bar：整體燈號 + 各指標 chip + SPEC §11 參考。
 
     user 反饋:每桶(除 §三 籌碼保留原樣)頂部加「整體狀態」簡圖,raw data 收下方。
     復用 compute_five_bucket_summary 該桶 summary(color/emoji/label/details),
     **不新增資料線**。各桶獨立呼叫(自足,不建跨 section 變數依賴 → 利於未來重排)。
     失敗 stderr log 不阻斷主流程(§1:空資料 → bar 顯示「未載入」,不偽造數字)。
+
+    with_cards (v18.338)：True 時於 bar 下方加 Fund 式指標卡片網格(小圖 + 值 +
+    燈號 + SPEC)。user 2026-06-28「總經像基金那樣分組 + 小圖 + SPEC」，先套 🌳 長期桶
+    當模板；同一次 compute 共用，不重複算。
     """
     try:
         from macro_helpers import compute_five_bucket_summary
         from section_inputs import load_section_inputs
-        from shared.macro_buckets import bucket_summary_bar_html
+        from shared.macro_buckets import (
+            bucket_indicator_cards_html, bucket_summary_bar_html,
+        )
         _inp = load_section_inputs(st.session_state)
         _5b = compute_five_bucket_summary(
             macro_info=_inp.macro_info, mkt_info=_inp.mkt_info,
@@ -436,8 +442,11 @@ def render_macro_bucket_summary_bar(bucket_key: str) -> None:
             li_latest=_inp.li_latest, jingqi_info=_inp.jingqi_info,
             news_items=_inp.news_items,
         )
-        st.markdown(bucket_summary_bar_html(bucket_key, _5b.get(bucket_key, {})),
+        _bsum = _5b.get(bucket_key, {})
+        st.markdown(bucket_summary_bar_html(bucket_key, _bsum),
                     unsafe_allow_html=True)
+        if with_cards:
+            st.markdown(bucket_indicator_cards_html(_bsum), unsafe_allow_html=True)
     except Exception as _e_bsb:
         print(f'[tab_macro/{bucket_key}總結bar] {type(_e_bsb).__name__}: {_e_bsb}')
 
@@ -3088,8 +3097,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     from shared.macro_buckets import bucket_group_banner_html as _bgb
     st.markdown(_bgb('long', 1), unsafe_allow_html=True)
     st.markdown(section_header('七','🌳 長期｜💰 資金環境 × 估值（M1B-M2 + 年線乖離）','💰'),unsafe_allow_html=True)
+    # v18.338：🌳 長期桶 = Fund 式分組卡片模板（小圖 + 值 + 燈號 + SPEC）。滿意後再套其餘 4 桶。
     # v18.313/314 桶輕量總結 bar(整體燈號 + 指標 chip + SPEC §11)；詳細 raw 維持下方收合。
-    render_macro_bucket_summary_bar('long')
+    render_macro_bucket_summary_bar('long', with_cards=True)  # v18.338 Fund 式分組卡片模板
 
     # ── M1B-M2 年增率（FinMind）──────────────────────────────
     _m1b_info = st.session_state.get('m1b_m2_info')
@@ -4258,6 +4268,24 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     st.markdown(_bgb('chips', 4), unsafe_allow_html=True)
     st.markdown(section_header('三','🧩 籌碼｜🧮 大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標','🧮'),unsafe_allow_html=True)
 
+    # ── v18.336 §1 Fail Loud：三源(法人/融資/先行指標)全空時明確診斷,不靜默空白 ──
+    # user 2026-06-28「§三 籌碼 資料不見了」：三源在缺 FINMIND_TOKEN / 來源無回應時全敗,
+    # 原本 `if inst:` / `if margin:` 靜默跳過 → 整區空白。改為:全空時印診斷卡指出原因 + 救法。
+    _li_probe3 = st.session_state.get('li_latest')
+    _chips_all_empty3 = (not inst) and (not margin) and (
+        _li_probe3 is None or getattr(_li_probe3, 'empty', True))
+    if _chips_all_empty3:
+        from shared.macro_buckets import chips_empty_state_html as _ces3
+        _attempted3 = bool(st.session_state.get('cl_ts')) or bool(
+            st.session_state.get('chips_loaded'))
+        try:
+            _fm_present3 = bool((getattr(st, 'secrets', {}) or {}).get('FINMIND_TOKEN')
+                                or os.environ.get('FINMIND_TOKEN', ''))
+        except Exception:
+            _fm_present3 = bool(os.environ.get('FINMIND_TOKEN', ''))
+        st.markdown(_ces3(attempted=_attempted3, token_present=_fm_present3),
+                    unsafe_allow_html=True)
+
     if inst:
         _fk3 = next((k for k in inst if '外資' in k and '陸資' in k), None) or next((k for k in inst if '外資' in k), None)
         _tk3 = next((k for k in inst if '投信' in k), None)
@@ -4358,7 +4386,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _l4c = '先行指標尚未載入，請點擊「🚀 一鍵更新全部數據」'
         _l4a = ''
         _l4_ind = '外資期貨留倉'
-    st.markdown(teacher_conclusion('宏爺', _l4_ind, _l4c, _l4a), unsafe_allow_html=True)
+    # v18.336：三源全空時上方已有 fail-loud 診斷卡,此處不重複「尚未載入」(避免點過更新仍喊更新)
+    if not _chips_all_empty3:
+        st.markdown(teacher_conclusion('宏爺', _l4_ind, _l4c, _l4a), unsafe_allow_html=True)
 
     # ── 副標籤：欄位確認列（v12 風格）─────────────────────────────────
     st.markdown("""<div style="font-size:11px;color:#484f58;margin:-6px 0 10px 0;">

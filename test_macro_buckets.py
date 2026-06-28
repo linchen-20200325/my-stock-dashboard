@@ -208,3 +208,82 @@ def test_compute_news_yellow_on_single_systemic():
     from macro_helpers import compute_five_bucket_summary
     out = compute_five_bucket_summary(news_items=[{"is_systemic": True}, {"is_systemic": False}])
     assert out["news"]["level"] == "yellow"
+
+
+# ──────────────────────────────────────────────────────────
+# 4. chips_empty_state_html — v18.336 §1 Fail Loud 籌碼三源全空診斷
+# ──────────────────────────────────────────────────────────
+def test_chips_empty_state_not_attempted():
+    """冷啟動未點更新 → 灰色「尚未載入」提示點按鈕。"""
+    h = mb.chips_empty_state_html(attempted=False, token_present=False)
+    assert "📡" in h and "尚未載入" in h
+    assert "一鍵更新全部數據" in h
+    assert "#6e7681" in h          # 灰
+    assert "FINMIND_TOKEN" not in h  # 未嘗試不該嚇人提 token
+
+
+def test_chips_empty_state_attempted_no_token():
+    """點過更新仍空 + 無 token → 橙色明確指向 FINMIND_TOKEN(最可能根因)。"""
+    h = mb.chips_empty_state_html(attempted=True, token_present=False)
+    assert "⚠️" in h and "FINMIND_TOKEN" in h
+    assert "已嘗試" in h
+    assert "#f0883e" in h          # 橙
+
+
+def test_chips_empty_state_attempted_with_token():
+    """點過更新仍空 + 有 token → 橙色歸因暫時性(來源無回應/額度),不誤指 token 缺失。"""
+    h = mb.chips_empty_state_html(attempted=True, token_present=True)
+    assert "⚠️" in h
+    assert "暫時" in h or "無回應" in h
+    # 有 token 時不該說「偵測不到 FINMIND_TOKEN」
+    assert "偵測不到" not in h
+
+
+def test_chips_empty_state_always_valid_div():
+    """三情境都回合法單一 <div> 容器(不偽造數字、不空字串)。"""
+    for _att in (True, False):
+        for _tok in (True, False):
+            h = mb.chips_empty_state_html(attempted=_att, token_present=_tok)
+            assert h.startswith("<div") and h.rstrip().endswith("</div>")
+            assert "籌碼資料未顯示" in h
+
+
+# ──────────────────────────────────────────────────────────
+# 5. bucket_indicator_cards_html — v18.338 Fund 式分組卡片網格
+# ──────────────────────────────────────────────────────────
+def test_long_specs_have_emoji():
+    """🌳 長期桶 3 指標都有小圖（卡片網格用），其餘桶預設空字串。"""
+    for k in ("health", "ndc_signal", "m1b_m2_gap"):
+        assert mb.SPECS_BY_KEY[k].emoji, f"{k} 缺 emoji"
+    # 未指定 emoji 的指標預設空字串（向下相容）
+    assert mb.SPECS_BY_KEY["vix"].emoji == ""
+
+
+def test_cards_render_emoji_value_note():
+    bs = {"details": [
+        {"key": "health", "label": "總經健康評分", "value_str": "41",
+         "danger": "yellow", "note": "<35 防禦 / <50 轉弱"},
+        {"key": "m1b_m2_gap", "label": "M1B-M2 資金動能", "value_str": "-13.86%",
+         "danger": "red", "note": "≥1 黃金交叉 / <0 死亡交叉"},
+    ]}
+    h = mb.bucket_indicator_cards_html(bs)
+    assert "🩺" in h and "💰" in h            # 小圖
+    assert "41" in h and "-13.86%" in h        # 值
+    assert "防禦" in h and "黃金交叉" in h      # SPEC 註解
+    assert "🟡" in h and "🔴" in h             # 燈號
+    # 燈號色（紅/黃）入卡
+    assert mb.LEVEL_COLOR["red"] in h and mb.LEVEL_COLOR["yellow"] in h
+
+
+def test_cards_unknown_key_fallback_emoji():
+    """details key 無對應 spec → fallback 📊（不爆）。"""
+    h = mb.bucket_indicator_cards_html(
+        {"details": [{"key": "nonexist", "label": "X", "value_str": "1",
+                      "danger": "green", "note": "n"}]})
+    assert "📊" in h and "X" in h
+
+
+def test_cards_empty_details_loud_not_blank():
+    """details 缺 → 「未載入」提示（§1 不偽造、不空字串）。"""
+    assert "尚未載入" in mb.bucket_indicator_cards_html({})
+    assert "尚未載入" in mb.bucket_indicator_cards_html({"details": []})
