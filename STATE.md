@@ -7,12 +7,15 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
-- [x] **S-AUDIT-RUN-Q**(v18.351~353 PR-Q1+Q2+Q3,2026-06-28)— S-PROV-1 phase 19 啟動,3 連 PR 覆蓋 18 fetcher
+- [x] **S-AUDIT-RUN-Q**(v18.351~354 PR-Q1~Q4,2026-06-28)— S-PROV-1 phase 19,4 連 PR 覆蓋 27 fetcher
+  * **PR-Q4**(#386, v18.354)收尾 batch:daily_data_fetchers 6 + tw_macro 2 + app.py fetch_quarterly_extra 1 = 9 個。`_prov_log` helper 對齊 etf_fetch v18.352 模式
+  * 累計 hot path 幾乎全清(app / etf_fetch / tab_macro / daily_data_fetchers / tw_macro)
+  * 剩 ~30 個 small / single-use fetcher 套 §-1 等 user 觸發再續
+  * 4 PR 加 ~40 守衛測全綠
   * **PR-Q1**(#382, v18.351):app.py top 5 hot path(fetch_price_data / fetch_dividend_data / fetch_financials / fetch_revenue / fetch_quarterly)— DataFrame 走 attrs.setdefault,tuple return 走 stderr audit trail,介面 0 改
   * **PR-Q2**(#383, v18.352):etf_fetch.py 7 個(fetch_sitca_expense_ratio / fetch_moneydj_expense_ratio / _fetch_holdings_yahoo_tw / fetch_etf_holdings / _fetch_sitca_manager / fetch_etf_zh_name / fetch_etf_underlying_index)— 新增 module-level `_prov_log()` helper,7 fetcher 主 return 點呼叫
   * **PR-Q3**(#385, v18.353):tab_macro.py 6 closure wrappers(`_fetch_vix/cpi/pmi/ndc/export/fed_funds`)— 在 `_job_macro` 收尾集中 `setdefault('fetched_at')`,1 處 edit 涵蓋 14 處 return point(各自已有 'source' key),schema-additive
-  * 測試:tests/test_pr_q1+q2+q3_*.py +28 全綠;phase 19 累計覆蓋 18 fetcher
-  * 剩餘 ~40 個 small fetcher(monthly_revenue_screener / yield_screener / tab_stock_picker / 其他)邊際效益遞減,套 §-1 等 user 指示再續
+  * 測試:tests/test_pr_q1+q2+q3+q4_*.py 41 全綠;phase 19 累計覆蓋 27 fetcher
 
 - [x] **S-AUDIT-RUN-P**(v18.350 PR-P1,2026-06-28)— SSOT 對齊 audit P1 先行指標診斷表增強(PR #381)
   * 先行指標 expander `_diag_cols` 升 4-tuple:(來源主鏈, 公式, TTL, 備援優先級),頂部加 cache 新鮮度橙色告示
