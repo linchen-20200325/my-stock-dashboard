@@ -7,6 +7,12 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
+- [x] **S-AUDIT-RUN-L**(v18.341~342 PR-L1+L2,2026-06-28)— 總經抓資料完整化 user bug fix
+  * **PR-L1**(#372, v18.341):tab_macro.py:2152-2179 outer trio (M1B/bias/macro) 改 as_completed + partial preserve。原 v10.61.0「zombie self-destruct」設計 — `result(timeout=30/30/80)` + `shutdown(wait=False)` 任一慢源就被 cutoff;v18.331 把 `build_leading_fast` 併入 _job_macro 後常超 80s → _macro_res 整包變 None,partial 全丟。修法:timeout 拉到 200s + 對齊內部好 pattern (L2105-2138) + 寫 session_state 沿用 truthy 守護(partial 場景 stale 不被 None 蓋,§1)
+  * **PR-L2**(#373, v18.342):`leading_indicators.build_leading_fast` 加 stale cache fallback。週末/假日 4 FinMind API 全空 → return None → UI 整段空白。新增 2 個 L0 helper(`_load_stale_pickle` / `_mark_stale`),內部 2 處 fallback path(rows 空 / _fm_ok=False+filled=0)改返回過期 pickle + `is_stale=True` attrs(§2.4);`tab_macro.py:4401` render 前讀 attrs(copy 前讀),命中標橙色 chip「📦 顯示上次有效資料(N 分鐘前)」。fresh path 補修清舊 attrs 避免標籤殘留。
+  * 測試:tests/test_leading_indicators.py +6(TestStaleCacheHelpers,existing/missing/corrupt + set/None/no-age 三組對偶);本檔 53 passed
+  * 行為矩陣:平日新資料 30min 內 fresh(不變)/ 週末 30min 後顯示上週五的 + stale chip / 全新環境抓不到仍走 PR-K1 fail-loud 卡
+
 - [x] **S-AUDIT-RUN-K**(v18.340 PR-K1,2026-06-28)— 先行指標表 empty state 三狀態 fail-loud(PR #371)
   * **痛點**:user 對比 6/14 截圖反問「原來的 table 呢?」→ Audit 結論無 code regression(`leading_indicators.py` 6/14→6/28 commits 全 schema-additive),根因為 4 個 FinMind API(TX/MTX/TXO/三大法人)全要 `FINMIND_TOKEN`,缺/失效 → 422 → 整表空。原 `tab_macro.py:4657 elif cd:` 分支沒明指 `FINMIND_TOKEN`,user 找不到救法
   * **修法**:對齊 PR #362 v18.336 `chips_empty_state_html` 三狀態分流模式,新增 `shared/macro_buckets.py:leading_table_empty_state_html(attempted, token_present)` — 未載入(灰)/ 已試+無token(橙,明指 `FINMIND_TOKEN`)/ 已試+有token(橙,歸因額度/週末/失效),純字串 builder L0
