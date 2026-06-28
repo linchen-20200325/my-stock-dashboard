@@ -5,6 +5,14 @@
 
 ## 已完成 commits(reverse chrono)
 
+### P1-4a (v18.377) — shared/macro_card.py streamlit 移除 + 刪 6 dead fn
+- **檔案**: `shared/macro_card.py`
+- **拔毒**: L0 含 `import streamlit as st` 違憲 + 6 個 0-caller dead fn(render_macro_card / render_macro_card_grid / build_cards_from_indicators / _esc / render_edu_markdown / _z_color)
+- **保留**: calc_z_score / make_sparkline(tab_edu.py:158 唯一 caller 真用)
+- **LOC**: ~290 → 81(-72%)
+- **驗證**: smoke(z + sparkline OK + dir 確認 dead 全刪)+ full pytest 2213/0 fail
+- **commit**: 待 push
+
 ### P1-1c (v18.376) — tab_macro yfinance ^TWII 2y 抽 L1
 - **檔案**: `src/ui/tabs/tab_macro.py` + `src/data/macro/macro_snapshot.py`
 - **拔毒**: tab_macro.py:973 line `import yfinance as _yf_bias; yf.download('^TWII', period='2y')` 違憲 → 抽 `fetch_twii_2y_for_ma240()` 至 L1 macro_snapshot.py(同檔有 vix block 模式),tab_macro 改 lazy import + thin call
