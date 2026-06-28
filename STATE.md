@@ -7,6 +7,16 @@
 > Bootstrap 4 步流程已完成(§0 改名「填寫紀錄」#258)，§3.3 反捏造 / §8.2 高項違憲皆 0。
 > 以下為**步驟 3 audit 中發現但本輪未動**的 ⚠️ / 灰色地帶 / 補洞項目，下個 session 入口。
 
+- [x] **S-AUDIT-RUN-N**(v18.344~348 PR-N1~N5,2026-06-28)— **C daily_checklist 跨層拆檔全完成**(PR #375/376/377/378/379)
+  * **痛點**:user 對話中 override §-1 + WONTFIX,要求做 C(daily_checklist 跨層拆)。原 995 LOC 混 L1+L2+L3+L4,選擇 α 全拆(4 模組)拆成 5 個小 PR 降 blast radius
+  * **PR-N1**(#375, v18.344, LOW):cache_layer(70)+ macro_ui_components(180)+ macro_compute(119)抽出;順手修 `st.secrets` headless 場景 bug
+  * **PR-N2**(#376, v18.345, LOW):daily_data_fetchers 新檔 +fetch_single+fetch_flow_snapshot(coupled pair)
+  * **PR-N3**(#377, v18.346, LOW):+_fetch_otc_via_finmind+fetch_institutional;`_get_finmind_token` lazy import streamlit(EX-CACHE-1 例外規範化)
+  * **PR-N4**(#378, v18.347, MEDIUM):+fetch_adl(yfinance+ADL公式+cache+log)+_adl_selftest
+  * **PR-N5**(#379, v18.348, MEDIUM-HIGH):+fetch_margin_balance(6 路 fallback:FinMind/MI_MARGN/HiStock/Goodinfo/Yahoo/cnyes)
+  * **最終戰績**:`daily_checklist.py` 995→256 LOC(**減 74%**);7 caller 全 0 改動(re-export identity test 守護);22 個守衛測全綠
+  * **S-GRAY-2 結案**:原 STATE.md L64 「WONTFIX」改為「✅ 已執行(v18.344-348)」;§8.3 灰色地帶 daily_checklist 跨層拆已實際完成
+
 - [x] **S-AUDIT-RUN-M**(v18.343 PR-M1,2026-06-28)— #2 S-MED Tier 1 真高風險 3 處收尾(PR #374)
   * **痛點**:剩餘 71 條 audit 後抽真高風險 3 處,user 主動 override §-1 要求清掃
   * **修法**(介面 0 改,只把「失敗時靜默」改成「失敗時 stderr 留軌跡」):
