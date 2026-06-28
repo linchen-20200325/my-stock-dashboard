@@ -55,6 +55,45 @@ def test_imported_ssot_constants_used():
 
 
 # ──────────────────────────────────────────────────────────
+# 1b. MACRO_INFO_KEYS — macro_info dict key 契約 SSOT(v18.349)
+#     data_coverage 覆蓋率表 + tab_macro has-data 判定共用，杜絕 v18.282 漂移
+# ──────────────────────────────────────────────────────────
+def test_macro_info_keys_contract():
+    """釘 macro_info 6 核心 key 契約;順序 + 內容(防誤刪/誤加)。"""
+    assert mb.MACRO_INFO_KEYS == (
+        "vix", "ism_pmi", "us_core_cpi", "fed_funds", "ndc_signal", "tw_export",
+    )
+    # tuple(不可變) → 避免 caller 意外 mutate 污染 SSOT
+    assert isinstance(mb.MACRO_INFO_KEYS, tuple)
+
+
+def test_macro_info_keys_overlap_danger_specs():
+    """漂移守門:除 fed_funds(無門檻判讀)外,其餘 5 key 必須是 DangerSpec key。
+    這正是 v18.282 那種 key typo 的攔截點 — 打錯字會在此 fail。"""
+    _overlap = set(mb.MACRO_INFO_KEYS) - {"fed_funds"}
+    _missing = _overlap - set(mb.SPECS_BY_KEY)
+    assert not _missing, f"MACRO_INFO_KEYS 含非 DangerSpec key(疑似 typo): {_missing}"
+
+
+def test_data_coverage_consumes_macro_info_keys_ssot():
+    """data_coverage._macro_keys 必須來自 SSOT(非各自寫死)。
+    以行為驗證:macro_info 放滿 SSOT key → 認列數 == len(SSOT)。"""
+    import sys
+    import types
+    # 最小 streamlit stub(macro_buckets 不需 st,但 data_coverage import st)
+    if "streamlit" not in sys.modules:
+        _m = types.ModuleType("streamlit")
+        _m.session_state = {}
+        sys.modules["streamlit"] = _m
+    from data_coverage import compute_tab_coverage
+    _macro = {k: {"current": 1.0} for k in mb.MACRO_INFO_KEYS}
+    rows = compute_tab_coverage(state={"macro_info": _macro})
+    macro_row = next(r for r in rows if "總經" in r["tab"])
+    # have = len(SSOT)(全部 6 核心命中), total = len(SSOT)+2(M1B + 領先)
+    assert macro_row["ratio_txt"] == f"{len(mb.MACRO_INFO_KEYS)}/{len(mb.MACRO_INFO_KEYS) + 2}"
+
+
+# ──────────────────────────────────────────────────────────
 # 2. classify_danger
 # ──────────────────────────────────────────────────────────
 def test_classify_high_bad():

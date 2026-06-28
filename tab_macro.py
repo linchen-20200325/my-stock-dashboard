@@ -3671,7 +3671,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         '_err_export': '外銷訂單 YoY',
     }
     _macro_errs = {k: v for k, v in _macro_info.items() if k.startswith('_err_')}
-    _macro_has_data = any(k in _macro_info for k in ('vix', 'us_core_cpi', 'fed_funds', 'ism_pmi', 'ndc_signal', 'tw_export'))
+    # v18.349:6 個核心 macro_info key 走 SSOT,與「🔎 資料診斷」覆蓋率表
+    #   (data_coverage._macro_keys)共用同一清單,杜絕 v18.282 類 key 漂移。
+    from shared.macro_buckets import MACRO_INFO_KEYS
+    _macro_has_data = any(k in _macro_info for k in MACRO_INFO_KEYS)
     if not _macro_has_data and _macro_info.get('_loaded_at'):
         with st.expander('🚨 總經拼圖全部失敗 — 點開看可能原因', expanded=True):
             st.markdown(f"- **載入時間**：`{_macro_info.get('_loaded_at', 'N/A')}`")

@@ -53,11 +53,10 @@ class TestComputeTabCoverage:
                 assert f in r, f"缺欄位 {f}"
 
     def test_macro_full_coverage_green(self):
-        """v18.282: 用真實 macro_info key(vix/ism_pmi/us_core_cpi/...)"""
+        """v18.282: 用真實 macro_info key；v18.349 由 SSOT MACRO_INFO_KEYS 派生"""
         from data_coverage import compute_tab_coverage
-        _full_macro = {k: {"current": 1.0} for k in
-                       ["vix", "ism_pmi", "us_core_cpi", "fed_funds",
-                        "ndc_signal", "tw_export"]}
+        from shared.macro_buckets import MACRO_INFO_KEYS
+        _full_macro = {k: {"current": 1.0} for k in MACRO_INFO_KEYS}
         rows = compute_tab_coverage(state={
             "macro_info": _full_macro,
             "m1b_m2_info": {"v": 1},
@@ -65,6 +64,22 @@ class TestComputeTabCoverage:
         })
         macro_row = next(r for r in rows if "總經" in r["tab"])
         assert macro_row["emoji"] == "🟢"
+        # 分母 = 核心 6 key + M1B-M2 + 領先 = SSOT 長度 + 2(漂移守門:
+        #   改 MACRO_INFO_KEYS → 覆蓋率分母自動跟著,不再各自寫死)
+        _expect = f"{len(MACRO_INFO_KEYS) + 2}/{len(MACRO_INFO_KEYS) + 2}"
+        assert macro_row["ratio_txt"] == _expect
+
+    def test_macro_coverage_uses_ssot_keys(self):
+        """v18.349: data_coverage 認列的 macro key 數 = SSOT 清單長度。
+        缺 1 個 SSOT key → 非滿分(覆蓋率隨 SSOT 連動,證明非寫死)。"""
+        from data_coverage import compute_tab_coverage
+        from shared.macro_buckets import MACRO_INFO_KEYS
+        # 只放滿全部 SSOT key 但缺 M1B/領先 → have=6/total=8 → 75% → 🟡
+        _macro = {k: {"current": 1.0} for k in MACRO_INFO_KEYS}
+        rows = compute_tab_coverage(state={"macro_info": _macro})
+        macro_row = next(r for r in rows if "總經" in r["tab"])
+        # have = len(SSOT)，total = len(SSOT)+2
+        assert macro_row["ratio_txt"] == f"{len(MACRO_INFO_KEYS)}/{len(MACRO_INFO_KEYS) + 2}"
 
     def test_macro_meta_only_is_idle(self):
         """只有 _loaded_at meta key(全 fetch 失敗)→ 未觸發,非綠"""
