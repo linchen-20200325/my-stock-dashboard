@@ -257,6 +257,19 @@ def render_stock_grp():
                 _ex_chip4 = analyze_20d_chips_from_df(df4)
                 _ex_chip_sig4 = _ex_chip4.get('signal', '') if isinstance(_ex_chip4, dict) else ''
 
+                # v18.349 PR-O1:foreign_buy 真 bug 修。原 L1202/L1240 讀 _rp.get('foreign_buy', 0)
+                # 但 results_t3 從未寫此欄 → AI prompt 永遠顯示「外資 0.0 億買超」誤導。
+                # 設 = 近 20 日 df['外資'] 累計(單位: 張),由下游顯示時改用「張」單位
+                # (原 /1e8 顯示「億」是假設元的舊 bug,本 PR 一併修)。
+                _fb4 = 0.0
+                try:
+                    if df4 is not None and not df4.empty and '外資' in df4.columns:
+                        import pandas as _pd_fb
+                        _fb4 = float(_pd_fb.to_numeric(
+                            df4['外資'].tail(20), errors='coerce').fillna(0).sum())
+                except Exception as _e_fb:
+                    print(f'[tab_stock_grp foreign_buy] {sid4} {type(_e_fb).__name__}: {_e_fb}')
+
                 results_t3.append({
                     'stock_id': sid4,
                     '代碼': sid4, '名稱': name4 or sid4, '現價': f'{price4:.2f}',
@@ -272,6 +285,7 @@ def render_stock_grp():
 
 
                     '_health': health4, '_val': val4, '_trend': trend4,
+                    'foreign_buy': _fb4,  # v18.349 PR-O1:近 20 日 df['外資'] 累計(張),SSOT 對齊 data_loader L286 /1000
                     '_ex_tech': _ex_tech4, '_ex_chip_sig': _ex_chip_sig4,
                     # 資料診斷專用欄位（health_inspector 讀取）
                     '_price_date': (str(df4['date'].iloc[-1])[:10]
@@ -1211,10 +1225,11 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                     _dim_p = ''
                 _rad_p = _fhp.get('radar_scores', {}) if _fhp else {}
                 _rad_avg_p = f"{sum(_rad_p.values())/len(_rad_p):.1f}" if _rad_p else '-'
+                # v18.349 PR-O1:單位「張」(SSOT data_loader.py:286 /1000 後),原 /1e8「億」是錯誤假設元的舊 bug
                 _port_lines.append(
                     f"[{_sid_p} {_nm_p}] 健康度={_ht_p:.0f} 評分={_sc_p:.0f}{_dim_p} | "
                     f"技術: 均線={_ma_p} RSI={_rsi_p} {_vcp_p} | "
-                    f"籌碼: 外資{'買超' if _fb_p>0 else '賣超'}{abs(_fb_p)/1e8:.1f}億 | "
+                    f"籌碼: 外資近20日{'買超' if _fb_p>0 else '賣超'}{abs(_fb_p):,.0f}張 | "
                     f"基本面: EPS={_fd_p.get('近4季EPS','-')} 毛利={_fd_p.get('毛利率%','-')}% "
                     f"殖利率={_fd_p.get('殖利率%','-')} SQ品質={_fd_p.get('SQ評分','-')} "
                     f"FGMS={_fd_p.get('FGMS','-')} P/B={_fd_p.get('P/B評價','-')} | "
@@ -1238,9 +1253,10 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 _ht_r  = _rr.get('_health', 0) or 0
                 _ma_r  = '均線多頭排列' if (_rr.get('ma_above', 0) or 0) >= 2 else '均線空頭排列'
                 _fb_r  = _rr.get('foreign_buy', 0) or 0
+                # v18.349 PR-O1:單位「張」(同上),原 /1e8「億」是錯誤假設元的舊 bug
                 _strong_lines.append(
                     f"第{_ri}名 [{_sid_r} {_nm_r}] 綜合評分={_sc_r:.0f} 健康度={_ht_r:.0f} | "
-                    f"{_ma_r}、外資{'買超' if _fb_r > 0 else '賣超'}{abs(_fb_r)/1e8:.1f}億"
+                    f"{_ma_r}、外資近20日{'買超' if _fb_r > 0 else '賣超'}{abs(_fb_r):,.0f}張"
                 )
             _strong_str = '\n'.join(_strong_lines) if _strong_lines else '（沒有可排序的股票）'
             # ── 風險診斷字串（大盤格局 + 建議上限 + 系統風控警示）──────
