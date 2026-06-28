@@ -332,7 +332,16 @@ def _fetch_fs_safe(stock_id: str) -> dict:
     try:
         from data_loader import fetch_financial_statements
         _r = fetch_financial_statements(stock_id)
-        return _r if isinstance(_r, dict) and 'error' not in _r else {}
+        _result = _r if isinstance(_r, dict) and 'error' not in _r else {}
+        # v18.356 PR-Q5b S-PROV-1 phase 19
+        try:
+            import sys as _sys_p, datetime as _dt_p
+            print(f'[_fetch_fs_safe] sid={stock_id} source=data_loader.fetch_financial_statements '
+                  f'fetched_at={_dt_p.datetime.utcnow().isoformat()}Z '
+                  f'result=dict:{len(_result)}keys', file=_sys_p.stderr)
+        except Exception:
+            pass
+        return _result
     except Exception as e:
         print(f'[picker/fs] {stock_id}: {type(e).__name__}: {e}')
         return {}
@@ -388,6 +397,15 @@ def _fetch_quarterly_is(stock_id: str) -> dict:
                 continue
             _quarters.setdefault(_d, {})[_t] = _v
         _quarters['_dates'] = sorted([d for d in _quarters if d != '_dates'], reverse=True)
+        # v18.356 PR-Q5b S-PROV-1 phase 19
+        try:
+            import sys as _sys_pq, datetime as _dt_pq
+            print(f'[_fetch_quarterly_is] sid={stock_id} '
+                  f'source=FinMind:TaiwanStockFinancialStatements '
+                  f'fetched_at={_dt_pq.datetime.utcnow().isoformat()}Z '
+                  f'result=dict:{len(_quarters)-1}quarters', file=_sys_pq.stderr)
+        except Exception:
+            pass
         return _quarters
     except Exception as _e:
         print(f'[picker/is] {stock_id}: {type(_e).__name__}: {_e}')

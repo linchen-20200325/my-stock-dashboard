@@ -166,6 +166,13 @@ def _fetch_twse_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
             print(f'[TWSE T86] {stock_id} 補充 {len(rows)} 日')
     except Exception as e:
         print(f'[TWSE T86] {stock_id} 失敗: {e}')
+    # v18.356 PR-Q5b S-PROV-1 phase 19:DataFrame 走 attrs
+    try:
+        if hasattr(df, 'attrs'):
+            df.attrs.setdefault('source', 'data_loader._fetch_twse_inst_fallback:TWSE T86')
+            df.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+    except Exception:
+        pass
     return df
 
 
@@ -262,6 +269,13 @@ def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
             print(f'[TPEx] {stock_id} 補充 {len(rows)} 日')
     except Exception as e:
         print(f'[TPEx] {stock_id} 失敗: {e}')
+    # v18.356 PR-Q5b S-PROV-1 phase 19:DataFrame 走 attrs
+    try:
+        if hasattr(df, 'attrs'):
+            df.attrs.setdefault('source', 'data_loader._fetch_tpex_inst_fallback:TPEx 三大法人')
+            df.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+    except Exception:
+        pass
     return df
 
 

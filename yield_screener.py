@@ -50,7 +50,14 @@ def fetch_twse_yield_pe() -> pd.DataFrame:
         for _c in ['本益比', '殖利率(%)', '股價淨值比']:
             if _c in _df.columns:
                 _df[_c] = pd.to_numeric(_df[_c], errors='coerce')
-        return _df.dropna(subset=['殖利率(%)']).reset_index(drop=True)
+        _result = _df.dropna(subset=['殖利率(%)']).reset_index(drop=True)
+        # v18.356 PR-Q5b S-PROV-1 phase 19:DataFrame 走 attrs
+        try:
+            _result.attrs.setdefault('source', 'TWSE:OpenAPI:BWIBBU_d')
+            _result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
+        return _result
     except Exception as _e:
         print(f'[yield_screener] TWSE BWIBBU 解析失敗：{_e}')
         return pd.DataFrame()
@@ -98,8 +105,14 @@ def fetch_dividend_history(ticker: str) -> pd.Series:
         _div = _y.dividends
         if _div is None or len(_div) == 0:
             return pd.Series(dtype=float)
-        _annual = _div.groupby(_div.index.year).sum()
-        return _annual.astype(float)
+        _annual = _div.groupby(_div.index.year).sum().astype(float)
+        # v18.356 PR-Q5b S-PROV-1 phase 19:Series 走 attrs
+        try:
+            _annual.attrs.setdefault('source', f'yfinance.Ticker({_t}).dividends')
+            _annual.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
+        return _annual
     except Exception as _e:
         print(f'[yield_screener] dividend fetch 失敗 {ticker}: {_e}')
         return pd.Series(dtype=float)
