@@ -131,6 +131,123 @@ def safe_ma(df: pd.DataFrame, n: int) -> float:
     return float(df['close'].mean())
 
 
+def classify_stock_status_lamp(health_score: float | None,
+                                 trend_label: str | None,
+                                 bias_pct: float | None,
+                                 vol_ratio: float | None,
+                                 valuation_label: str | None = None) -> str:
+    """v18.336 PR-H4:操作狀態燈 🔵🟡🟠⚪ SSOT(個股 + 個股組合 Tab 共用)。
+
+    原 tab_stock_grp.py:285-305 inline 抽出。判定邏輯依四維度合議:
+    - 🔵 加碼:健康 A 級(≥HEALTH_GRADE_A_MIN)+ 多頭排列 + 量縮(vol < GRP_VOL_SHRINK_RATIO)+ 近 20MA(|bias| < GRP_NEAR_MA20_BIAS_PCT)
+    - 🟡 警示:MA20 乖離 > GRP_BIAS_OVERHEAT_WARN_PCT(短線漲多)
+    - 🟠 減碼:估值「昂貴 / 超貴」(357 殖利率分級結論)
+    - ⚪ 中性:其餘 / 資料不足
+
+    Args:
+        health_score: 6 因子健康評分 0-100
+        trend_label: 趨勢標籤(`📈 多頭` / `📉 空頭` / `📊 多箱` / `📊 空箱`)— 內含「多頭」字串即過
+        bias_pct: MA20 乖離率 %(可為負)
+        vol_ratio: 當日量 / 20 日均量(0.7 = 量縮 30%)
+        valuation_label: 估值結論(含「昂貴」/「超貴」即觸發 🟠)
+
+    Returns:
+        '🔵 加碼' / '🟡 警示' / '🟠 減碼' / '⚪'(資料不足或中性)
+
+    SSOT 政策:個股 + 個股組合 Tab 共用。閾值來自 shared.signal_thresholds。
+    """
+    from shared.health_thresholds import HEALTH_GRADE_A_MIN
+    from shared.signal_thresholds import (
+        GRP_BIAS_OVERHEAT_WARN_PCT,
+        GRP_NEAR_MA20_BIAS_PCT,
+        GRP_VOL_SHRINK_RATIO,
+    )
+    # 🔵 加碼:四維度合議
+    if (health_score is not None and health_score >= HEALTH_GRADE_A_MIN
+            and trend_label and '多頭' in str(trend_label)
+            and vol_ratio is not None and vol_ratio < GRP_VOL_SHRINK_RATIO
+            and bias_pct is not None and abs(bias_pct) < GRP_NEAR_MA20_BIAS_PCT):
+        return '🔵 加碼'
+    # 🟡 警示:乖離過熱
+    if bias_pct is not None and bias_pct > GRP_BIAS_OVERHEAT_WARN_PCT:
+        return '🟡 警示'
+    # 🟠 減碼:估值偏貴
+    if valuation_label and ('昂貴' in str(valuation_label) or '超貴' in str(valuation_label)):
+        return '🟠 減碼'
+    return '⚪'
+
+
+def compute_stop_levels(price: float | None) -> dict | None:
+    """v18.336 PR-H4:停利停損價位 SSOT(個股 Tab 顯著視覺化 + 組合 Tab 可擴充)。
+
+    依當前價計算 T1 停利 / T2 停利 / Default 停損三個價位。
+    閾值來自 shared.signal_thresholds.STOP_PROFIT_T1/T2_PCT + STOP_LOSS_DEFAULT_PCT(PR-C 已抽 SSOT)。
+
+    Args:
+        price: 當前收盤價(>0)
+
+    Returns:
+        dict {
+          'stop_profit_t1': float,    # price × (1 + T1%/100)
+          'stop_profit_t2': float,    # price × (1 + T2%/100)
+          'stop_loss_default': float,  # price × (1 - LOSS%/100)
+          't1_pct': float / 't2_pct' / 'loss_pct',  # 對應 %(供 label 顯示)
+        }
+        price ≤ 0 或 None → None
+
+    SSOT 政策:停利停損計算統一,任何 Tab 顯示進場後管理價位均呼叫本函式。
+    原 tab_stock.py:591-602 inline,本 PR 抽出為純函式。
+    """
+    from shared.signal_thresholds import (
+        STOP_LOSS_DEFAULT_PCT,
+        STOP_PROFIT_T1_PCT,
+        STOP_PROFIT_T2_PCT,
+    )
+    if not price or price <= 0:
+        return None
+    return {
+        'stop_profit_t1': price * (1 + STOP_PROFIT_T1_PCT / 100),
+        'stop_profit_t2': price * (1 + STOP_PROFIT_T2_PCT / 100),
+        'stop_loss_default': price * (1 - STOP_LOSS_DEFAULT_PCT / 100),
+        't1_pct': STOP_PROFIT_T1_PCT,
+        't2_pct': STOP_PROFIT_T2_PCT,
+        'loss_pct': STOP_LOSS_DEFAULT_PCT,
+    }
+
+
+def classify_bias_zone(bias_pct: float | None) -> tuple[str, str]:
+    """v18.336 PR-H4:月線/年線乖離分層 SSOT(對應 STOCK_BIAS_* 三層)。
+
+    Args:
+        bias_pct: 乖離率 %(可正可負)
+
+    Returns:
+        (label, color):
+        - bias < -OVERHEAT(-20%)  → '🟢 深度負乖離(布局區)' / green
+        - bias > +OVERHEAT(+20%)  → '🔴 過熱正乖離(分批出場)' / red
+        - |bias| > MILD(15%)       → '🟠 中度乖離(注意)' / yellow
+        - 其他                       → '⚪ 中性區' / yellow
+
+    SSOT 政策:閾值 STOCK_BIAS_DEEP_DEVIATION_PCT / STOCK_BIAS_OVERHEAT_PCT /
+    STOCK_BIAS_MILD_DEVIATION_PCT 已在 shared.signal_thresholds(PR-F U-13 已抽)。
+    本函式封裝判斷層,個股 Tab 月線/年線乖離視覺化共用。
+    """
+    from shared.signal_thresholds import (
+        STOCK_BIAS_DEEP_DEVIATION_PCT,
+        STOCK_BIAS_MILD_DEVIATION_PCT,
+        STOCK_BIAS_OVERHEAT_PCT,
+    )
+    if bias_pct is None:
+        return '⚪ 無資料', TRAFFIC_YELLOW
+    if bias_pct < -STOCK_BIAS_DEEP_DEVIATION_PCT:
+        return f'🟢 深度負乖離 ({bias_pct:+.1f}%,布局區)', TRAFFIC_GREEN
+    if bias_pct > STOCK_BIAS_OVERHEAT_PCT:
+        return f'🔴 過熱正乖離 ({bias_pct:+.1f}%,分批出場)', TRAFFIC_RED
+    if abs(bias_pct) > STOCK_BIAS_MILD_DEVIATION_PCT:
+        return f'🟠 中度乖離 ({bias_pct:+.1f}%,注意)', TRAFFIC_YELLOW
+    return f'⚪ 中性區 ({bias_pct:+.1f}%)', TRAFFIC_YELLOW
+
+
 def classify_trend_4tier(price: float, ma20: float | None,
                           ma_long: float | None) -> tuple[str, str]:
     """v18.328 PR-C P1:4 段趨勢判定 SSOT(個股 Tab + 組合 Tab 共用)。

@@ -54,7 +54,13 @@ from shared.signal_thresholds import (
     VOLUME_RATIO_MILD,
     VOLUME_RATIO_SURGE,
 )
-from tab_helpers import classify_trend_4tier, format_condition_emoji, parse_cash_flow_ratio, safe_ma
+from tab_helpers import (
+    classify_bias_zone,            # v18.336 PR-H4:月線/年線乖離分層 SSOT
+    classify_stock_status_lamp,    # v18.336 PR-H4:操作狀態燈 SSOT
+    classify_trend_4tier,
+    compute_stop_levels,           # v18.336 PR-H4:停利停損 SSOT
+    format_condition_emoji, parse_cash_flow_ratio, safe_ma,
+)
 from sidebar_health import kline_end_date
 # v18.326 ── BPS / industry_category fetcher 已 SSOT 化(原私有 _fetch_*,組合 Tab 共用)──
 from data_loader import fetch_bps, fetch_industry_category
@@ -587,19 +593,82 @@ padding:14px 18px;margin-bottom:12px;">
         _cur_p  = float(df2['close'].iloc[-1]) if df2 is not None and not df2.empty else 0
         _hi20_p = float(df2['high'].tail(20).max()) if df2 is not None and len(df2) >= 5 else 0
         _lo20_p = float(df2['low'].tail(20).min())  if df2 is not None and len(df2) >= 5 else 0
-        # v18.328 PR-C P2:停利停損改走 SSOT(shared/signal_thresholds)
-        _tp1_p  = round(_cur_p * (1 + STOP_PROFIT_T1_PCT / 100), 2)
-        _tp2_p  = round(_cur_p * (1 + STOP_PROFIT_T2_PCT / 100), 2)
-        _sl_p   = round(_cur_p * (1 - STOP_LOSS_DEFAULT_PCT / 100), 2)
-        _rr_p   = round((_tp1_p - _cur_p) / max(_cur_p - _sl_p, 0.01), 2)
+        # v18.336 PR-H4:停利停損改走 compute_stop_levels SSOT(tab_helpers)
+        _stop = compute_stop_levels(_cur_p) or {
+            'stop_profit_t1': 0.0, 'stop_profit_t2': 0.0, 'stop_loss_default': 0.0,
+            't1_pct': STOP_PROFIT_T1_PCT, 't2_pct': STOP_PROFIT_T2_PCT,
+            'loss_pct': STOP_LOSS_DEFAULT_PCT,
+        }
+        _tp1_p = round(_stop['stop_profit_t1'], 2)
+        _tp2_p = round(_stop['stop_profit_t2'], 2)
+        _sl_p  = round(_stop['stop_loss_default'], 2)
+        _rr_p  = round((_tp1_p - _cur_p) / max(_cur_p - _sl_p, 0.01), 2) if _cur_p > 0 else 0
         with _sp_c1:
-            st.markdown(kpi(f'停利目標1 (+{STOP_PROFIT_T1_PCT:.0f}%)', f'{_tp1_p}', '短線先入袋', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
+            st.markdown(kpi(f'停利目標1 (+{_stop["t1_pct"]:.0f}%)', f'{_tp1_p}', '短線先入袋', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
         with _sp_c2:
-            st.markdown(kpi(f'停利目標2 (+{STOP_PROFIT_T2_PCT:.0f}%)', f'{_tp2_p}', '波段目標', '#58a6ff', '#0d1f3c'), unsafe_allow_html=True)
+            st.markdown(kpi(f'停利目標2 (+{_stop["t2_pct"]:.0f}%)', f'{_tp2_p}', '波段目標', '#58a6ff', '#0d1f3c'), unsafe_allow_html=True)
         with _sp_c3:
-            st.markdown(kpi(f'建議停損 (-{STOP_LOSS_DEFAULT_PCT:.0f}%)', f'{_sl_p}', '跌破認賠', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
+            st.markdown(kpi(f'建議停損 (-{_stop["loss_pct"]:.0f}%)', f'{_sl_p}', '跌破認賠', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
         with _sp_c4:
             st.markdown(kpi('盈虧比', f'{_rr_p}x', '≥1.5 較理想', '#ffd700', '#1a1000'), unsafe_allow_html=True)
+
+        # ── v18.336 PR-H4:📊 操作雷達(4 卡 — 對稱組合 Tab,個股 Tab P1 補齊)
+        # 整合「狀態燈 + 月線乖離 + 年線乖離 + 量比」四個即時操作維度。
+        st.markdown('#### 📊 操作雷達')
+        _rd_c1, _rd_c2, _rd_c3, _rd_c4 = st.columns(4)
+        # 變數準備(來自既有計算:health2 / df2)
+        _ma20_now  = safe_ma(df2, 20)
+        _ma240_now = safe_ma(df2, 240)
+        _bias20_pct  = ((_cur_p - _ma20_now) / _ma20_now * 100) if (_ma20_now and _cur_p > 0) else None
+        _bias240_pct = ((_cur_p - _ma240_now) / _ma240_now * 100) if (_ma240_now and _cur_p > 0) else None
+        _vol_now_r = (float(df2['volume'].iloc[-1]) / float(df2['volume'].tail(20).mean())
+                       if (df2 is not None and 'volume' in df2.columns and len(df2) >= 20
+                           and float(df2['volume'].tail(20).mean()) > 0)
+                       else None)
+        # MA100 (給 trend 4-tier 用,個股 K 線註解亦用)
+        _ma100_now = safe_ma(df2, 100)
+        _trend_lbl_radar, _tc_radar = classify_trend_4tier(
+            _cur_p, _ma20_now, _ma100_now) if _cur_p > 0 else ('⚪無資料', TRAFFIC_YELLOW)
+        # 估值結論(從既有 357 殖利率分級;若 avg_div2 / cur_yield 已算則可用,否則 '—')
+        _valuation_simple = None
+        try:
+            _cur_yld = (avg_div2 / _cur_p * 100) if (avg_div2 and _cur_p > 0) else None
+            if _cur_yld is not None:
+                from shared.thresholds import classify_yield_zone
+                _, _yld_code = classify_yield_zone(_cur_yld)
+                if _yld_code == 'sell':
+                    _valuation_simple = '昂貴'
+                elif _yld_code == 'reduce':
+                    _valuation_simple = '偏貴'
+        except Exception as _e_yld:
+            print(f'[tab_stock H4 valuation] {sid2} 殖利率分級失敗:{type(_e_yld).__name__}: {_e_yld}')
+        # 卡 1:操作狀態燈(對稱組合 Tab)
+        _status_lamp = classify_stock_status_lamp(
+            health_score=health2, trend_label=_trend_lbl_radar,
+            bias_pct=_bias20_pct, vol_ratio=_vol_now_r,
+            valuation_label=_valuation_simple)
+        with _rd_c1:
+            st.markdown(kpi('狀態燈', _status_lamp, '健康+多頭+量縮+近20MA=🔵',
+                            TRAFFIC_GREEN if '🔵' in _status_lamp else
+                            (TRAFFIC_YELLOW if '🟡' in _status_lamp else
+                             (TRAFFIC_RED if '🟠' in _status_lamp else '#666')),
+                            '#0d1f0d'), unsafe_allow_html=True)
+        # 卡 2:月線乖離分層
+        _bias20_lbl, _bias20_color = classify_bias_zone(_bias20_pct)
+        with _rd_c2:
+            st.markdown(kpi('月線乖離(MA20)', _bias20_lbl, '±15% 中度 / ±20% 過熱',
+                            _bias20_color, '#0d1818'), unsafe_allow_html=True)
+        # 卡 3:年線乖離分層
+        _bias240_lbl, _bias240_color = classify_bias_zone(_bias240_pct)
+        with _rd_c3:
+            st.markdown(kpi('年線乖離(MA240)', _bias240_lbl, '-20% 布局 / +20% 出場',
+                            _bias240_color, '#0d1818'), unsafe_allow_html=True)
+        # 卡 4:趨勢 4-tier
+        with _rd_c4:
+            st.markdown(kpi('K 線趨勢', _trend_lbl_radar,
+                            '多頭/空頭/多箱/空箱', _tc_radar, '#1a1a0d'),
+                        unsafe_allow_html=True)
+
         _sp_c5, _sp_c6 = st.columns(2)
         _dist_hi = round((_hi20_p/_cur_p-1)*100, 1) if _cur_p > 0 else 0
         _dist_lo = round((1-_lo20_p/_cur_p)*100, 1) if _cur_p > 0 else 0
