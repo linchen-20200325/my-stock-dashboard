@@ -10,7 +10,13 @@ import re
 
 
 def _src(p="src/ui/tabs/tab_macro.py"):
-    return open(p, encoding="utf-8").read()
+    # P3-D7 v18.390:今日作戰室搬至 section_warroom.py;掃合集確保 gate 不退化。
+    base = open(p, encoding="utf-8").read()
+    try:
+        base += open("src/ui/tabs/macro/section_warroom.py", encoding="utf-8").read()
+    except FileNotFoundError:
+        pass
+    return base
 
 
 class TestLoadingGate:
