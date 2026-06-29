@@ -65,16 +65,15 @@
 - ✅ D-12 outer trio executor + macro/m1b/bias writes 142 LOC →
         services/macro_trio_orchestrator.run_macro_trio_and_persist
 - ✅ D-13 市場評估 53 LOC → services/market_assessment_apply.compute_and_apply_market_assessment
+- ✅ P0-FIX v18.393 §十一 News AI `_macro_info` NameError 補 + AST 靜態守衛
+- ✅ P1-X v18.393 DataRegistry 275 LOC → services/data_registry_scanner.scan_and_write_data_registry
+                  (8 phase 掃 INTL/TW/TECH/ADL/inst/margin/jingqi/bias/M1B/macro/LI/個股/比較/ETF)
 
-【仍留 tab_macro.py(751 LOC)】
+【仍留 tab_macro.py(488 LOC)】
 - Late imports + 函式入口 + Streamlit button + early gate(~73 LOC,真不可抽)
 - 五桶 bar/戰情/作戰 三個 render_section_* call(orchestrator)
 - session_state writes 收尾(cl_data / cl_ts / li_latest / _last_inst 等)
-- intl/tw/tech/inst/margin/mkt_info bridge + 7 個 render_section_* call
-
-剩餘真不可抽 ~180 LOC(orchestrator + Streamlit button + early gate)。
-其餘 ~570 LOC 屬:導覽/說明 markdown、註解、空行、跨段 state bridge。
-ROI 拐點已過 — 再榨等於儀式。
+- intl/tw/tech/inst/margin/mkt_info bridge + 8 個 render_section_* call
 
 ═══════════════════════════════════════════════════════════════════════════
 📐 PEP 562 lazy forward(caller 可用 `from src.ui.tabs.macro import X` 取)
