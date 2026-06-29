@@ -4,12 +4,12 @@ PEP 562 lazy `__getattr__`(F-6.2 R4 教訓):每次 attr lookup 從 submod 即時
 支援 caller 的 `from src.services import X` 對 monkeypatch.setattr(submod, X) 生效。
 """
 from . import (  # noqa: F401
-    market_strategy, ai_engine, ai_structured_summary, daily_checklist,
+    market_strategy, ai_structured_summary, daily_checklist,
     macro_state_locker, section_inputs, financial_health_engine,
 )
 
 _SUBMODULES = (
-    market_strategy, ai_engine, ai_structured_summary, daily_checklist,
+    market_strategy, ai_structured_summary, daily_checklist,
     macro_state_locker, section_inputs, financial_health_engine,
 )
 
