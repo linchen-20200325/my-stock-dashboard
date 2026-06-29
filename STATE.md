@@ -1,7 +1,18 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
 ## 進行中 batch
-✅ B+D-region 全收尾(PR #394 + #395 已 merge into main)
+✅ D-9 紅綠燈卡(認錯補做)— PR #396 已 merge into main
+
+## 🏁 PR #396 v18.391(merged 2026-06-28)
+**tab_macro.py 1076 → 1012 LOC(−64)** — 認錯補做紅綠燈卡。
+- D-9 `c1e8483`:紅綠燈卡 66 LOC → section_traffic_light(回傳 placeholder/show_market_data/tl_eff_reg 3-tuple)
+- INDEX sync `d3f9a04`
+
+**承認先前 verdict 錯誤**:之前以「placeholder 反模式」擋,但 B-S2 已跨 def 傳 placeholder,argument 自我矛盾。
+累計 tab_macro 5387 → 1012 LOC(-81%)。
+
+---
+
 
 ## 🏁 PR #395 v18.390(merged 2026-06-28)
 **tab_macro.py 1445 → 1076 LOC(−369,−26%)** — 5 commit dashboard 三件套 + Registry patch。
