@@ -102,37 +102,12 @@ def test_detect_twii_multiple_events_with_recovery():
     events = detect_twii_crisis_events(s, drop_threshold=0.20)
     assert len(events) >= 2
 
-# ════════════════════════════════════════════════════════════════
-# UI source-level checks
-# ════════════════════════════════════════════════════════════════
-def test_ui_section_in_tab_macro_source():
-    """v18.395 P5-A4:§十 18 LOC archive 註解搬至 ARCHIVED_FEATURES.md;
-    tab_macro 留 1 行導向標記,復活步驟細節改在文檔內。"""
-    src = (Path(__file__).parent.parent / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
-    archived_md = (Path(__file__).parent.parent / "ARCHIVED_FEATURES.md").read_text(encoding="utf-8")
-    # tab_macro 留 1 行導向標記
-    assert "§十 總經訊號歷史驗證 — v18.191 archived" in src
-    assert "ARCHIVED_FEATURES.md" in src
-    # 復活提示字串在 ARCHIVED_FEATURES.md 內(原 tab_macro 內 commented out)
-    assert "from tab_macro_validation import render_history_validation_section" in archived_md
-    assert "render_history_validation_section()" in archived_md
-
-def test_ui_module_exposes_render_function():
-    """src/ui/tabs/tab_macro_validation.py 必須 export render_history_validation_section."""
-    from src.ui.tabs import tab_macro_validation as tmv
-    assert hasattr(tmv, "render_history_validation_section")
-    assert callable(tmv.render_history_validation_section)
-
-def test_ui_validation_section_before_ai_verdict():
-    """v18.156 user 要求:歷史驗證 section(十)必須在 AI 總裁決(十一)之前。
-    v18.395 P5-A4:§十 18 LOC archive 註解搬至 ARCHIVED_FEATURES.md,tab_macro 留 1 行
-    導向標記;改檢標記行在 render_section_news_ai 之前。"""
-    src = (Path(__file__).parent.parent / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
-    idx_validation = src.find("§十 總經訊號歷史驗證")
-    idx_ai_verdict = src.find("render_section_news_ai(")
-    assert idx_validation > 0 and idx_ai_verdict > 0
-    assert idx_validation < idx_ai_verdict, \
-        "§十 archived 標記應在 News AI 總裁決(section 十一)之前"
+# UI 守衛測試已退役(v18.399 R6 真刪)
+# tab_macro_validation.py 整檔已刪除(audit 確認 UI 0 unique 邏輯,backend
+# macro_validation_tw / macro_signal_lookback_tw / multi_factor_optimization 全保留)。
+# 原 3 個 source-string 守衛測試(test_ui_section_in_tab_macro_source /
+# test_ui_module_exposes_render_function / test_ui_validation_section_before_ai_verdict)
+# 因失去保護對象,同步退役。Backend 邏輯測試(本檔上方 9 個 case)全保留。
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

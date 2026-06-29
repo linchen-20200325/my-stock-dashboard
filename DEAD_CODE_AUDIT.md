@@ -50,7 +50,7 @@ PR #406 audit 邏輯漏的(init re-export 邊界):
 | `src/compute/scoring/scoring_engine.py:1296` | `calculate_position_size` | 6 | (a/b) |
 | `src/compute/screener/fundamental_screener.py:199` | `screen_stocks` | 17 | (a) 高 test ref |
 | `src/compute/screener/fundamental_screener.py:263` | `filter_passed` | 1 | (c) |
-| `src/ui/tabs/tab_macro_validation.py:28` | `render_history_validation_section` | 1 | **半 archive**(留磁碟,ARCHIVED_FEATURES 已記) |
+| ~~`src/ui/tabs/tab_macro_validation.py:28`~~ | ~~`render_history_validation_section`~~ | — | ✅ **v18.399 R6 真刪整檔**(780 LOC)— audit 翻案,UI 0 unique 邏輯;backend `macro_validation_tw` / `macro_signal_lookback_tw` / `multi_factor_optimization` + 12 backend test 全保留 |
 | `src/data/macro/tw_macro.py:875` | `fetch_tw_market_snapshot` | 1 | (b)? |
 | `src/data/macro/tw_macro.py:982` | `fetch_tw_cpi_yoy` | 6 | (c) |
 | `src/data/macro/tw_macro.py:1011` | `fetch_tw_unemployment` | 2 | (b)? |
