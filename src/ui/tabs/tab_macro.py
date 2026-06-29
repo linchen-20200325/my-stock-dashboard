@@ -349,148 +349,21 @@ def render_tab_macro():
             from src.services.jingqi_calc import compute_and_store_jingqi
             compute_and_store_jingqi(df_adl_raw)
 
-            # ── M1B-M2 + 乖離率 並發計算 ──────────────────────
-            def _job_m1b():
-                # P3-D2 v18.389:3-Tier fallback 下沉 macro_snapshot.fetch_m1b_m2_block
-                # FRED_API_KEY closure 由 caller 傳入,函式本身 pure-ish。
-                _fred_key_m1 = (os.environ.get('FRED_API_KEY')
-                                or (st.secrets.get('FRED_API_KEY')
-                                    if hasattr(st, 'secrets') else None) or '')
-                from src.data.macro.macro_snapshot import fetch_m1b_m2_block
-                return fetch_m1b_m2_block(fred_api_key=_fred_key_m1)
-
-            def _job_bias():
-                # P3-D3 v18.389:純函式下沉 src/data/macro/macro_snapshot.compute_twii_bias
-                # closure dep: tw_raw.get('台股加權指數')
-                try:
-                    from src.data.macro.macro_snapshot import compute_twii_bias
-                    return compute_twii_bias(tw_raw.get('台股加權指數'))
-                except Exception as _bias_e:
-                    print(f'[Bias] compute_twii_bias 失敗: {_bias_e}')
-                    return None
-
-            def _job_macro():
-                """總經拼圖 v5.3:VIX/CPI/PMI/NDC/Export/Fed 並行抓取(thin orchestrator)。
-
-                P3-D1 v18.389:6 sub-fetcher(原 inline 共 604 LOC)全下沉至
-                src/data/macro/macro_snapshot.py fetch_*_block。本 _job_macro 留
-                並發 orchestration + provenance 注入。FRED key / FinMind token 由
-                outer scope 讀(EX-L0-1 st.secrets bootstrap)後顯式傳入。
-                """
-                from src.data.macro.macro_snapshot import (
-                    fetch_vix_block, fetch_cpi_block, fetch_fed_funds_block,
-                    fetch_tw_pmi_block, fetch_ndc_block, fetch_export_block,
-                )
-                _fred_key = (os.environ.get('FRED_API_KEY') or
-                             (st.secrets.get('FRED_API_KEY')
-                              if hasattr(st, 'secrets') else None) or '')
-                _fm_tok = (os.environ.get('FINMIND_TOKEN') or
-                           (st.secrets.get('FINMIND_TOKEN')
-                            if hasattr(st, 'secrets') else None) or '')
-
-                # ── 並行 6 source(v10.61.0 手動 executor + shutdown(wait=False))──
-                # 立即 cancel 未完成,避免 stuck thread 拖外層 80s timeout。
-                _fetchers = {
-                    'vix':       fetch_vix_block,
-                    'cpi':       lambda: fetch_cpi_block(fred_api_key=_fred_key),
-                    'pmi':       fetch_tw_pmi_block,
-                    'ndc':       fetch_ndc_block,
-                    'export':    lambda: fetch_export_block(
-                                     fred_api_key=_fred_key, finmind_token=_fm_tok),
-                    'fed_funds': lambda: fetch_fed_funds_block(fred_api_key=_fred_key),
-                }
-                _r = {}
-                _pool_mc = ThreadPoolExecutor(max_workers=6)
-                try:
-                    _futs_mc = {_pool_mc.submit(fn): name
-                                for name, fn in _fetchers.items()}
-                    try:
-                        for _fut_mc in as_completed(_futs_mc, timeout=70):
-                            try:
-                                _part = _fut_mc.result()
-                                if _part:
-                                    _r.update(_part)
-                            except Exception as _e:
-                                print(f'[Macro] ❌ {_futs_mc.get(_fut_mc, "?")}: {_e}')
-                    except (TimeoutError, _ConcFutTimeout):
-                        # 70s 到仍有 future 未完成:取消未完成者,保留已收到的 partial _r
-                        _stuck = [_futs_mc[_f] for _f in _futs_mc if not _f.done()]
-                        for _f_pending in _futs_mc:
-                            if not _f_pending.done():
-                                _f_pending.cancel()
-                        print(f'[Macro] ⏰ as_completed 70s timeout,未完成={_stuck},保留 keys={list(_r.keys())}')
-                finally:
-                    _pool_mc.shutdown(wait=False)
-
-                # Failsafe + provenance — 即使全失敗也回傳 partial 標記(不回 None),
-                # 讓診斷頁能區分「沒抓」vs「抓過全失敗」;macro_info 至少有時間戳供 UX 判斷。
-                _r.setdefault('_loaded_at',
-                              datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                if not any(k for k in _r if not k.startswith('_')):
-                    _r['_all_failed'] = True
-                # v18.353 PR-Q3 S-PROV-1 phase 19:集中注入 fetched_at 到每個 sub-dict。
-                # 6 fetchers (vix/cpi/pmi/ndc/export/fed_funds) 各自已有 'source' key
-                # (FRED/BLS/MOF-CSV 等),集中 setdefault('fetched_at') 比改 14 處 return
-                # point 乾淨,§2.2 provenance(source + fetched_at)完整化。schema-additive。
-                try:
-                    _now_macro_prov = datetime.datetime.utcnow().isoformat() + 'Z'
-                    for _k_prov, _v_prov in _r.items():
-                        if _k_prov.startswith('_'):
-                            continue  # 跳過 meta key(_loaded_at / _all_failed)
-                        if isinstance(_v_prov, dict):
-                            _v_prov.setdefault('fetched_at', _now_macro_prov)
-                except Exception as _e_prov:
-                    print(f'[Macro/prov] inject fetched_at fail: {_e_prov}')
-                print(f'[Macro] 完成 keys={[k for k in _r.keys() if not k.startswith("_")]}')
-                return _r
-
-            # v18.341 PR-L1: 對齊 _job_macro 內部好 pattern(L2105-2138)。
-            # user 2026-06-28「總經抓資料會自動停止沒有抓完成,要直接抓好不可以突然停掉」。
-            # 舊 v10.61.0 設計:per-job `result(timeout=30/30/80)` + `shutdown(wait=False)`
-            # 故意 zombie kill — 任一慢源就被 cutoff,user 看到「中途停掉」。v18.331 把
-            # build_leading_fast 併入 _job_macro 內部 6-job pool 後,_job_macro 偶爾超 80s
-            # 導致 _macro_res = None,partial 結果全丟。
-            # 修法:
-            #   (a) timeout 拉大到 200s 全域(原 max=80),配合內部 _job_macro 已有 70s
-            #       as_completed cancel + 60s 餘裕 + 外層 30s+30s 慢源餘裕
-            #   (b) 改 as_completed loop + partial preserve(任一完成立刻入 dict,不等)
-            #   (c) timeout 到 → 取消未完成 future,但**保留已收到的**(_res_map),
-            #       下方 if _xxx_res 寫入 session_state 仍走原 truthy 守護(不蓋 stale)
-            #   (d) shutdown(wait=False) 維持,因為 future 已 cancel
-            _GLOBAL_TIMEOUT_S = 200   # 寬到讓全 3 job 多半能完成(M1B<30, bias<30, macro 80-180)
-            _exc2 = ThreadPoolExecutor(max_workers=3)
-            _res_map = {'m1b': None, 'bias': None, 'macro': None}
-            try:
-                _futs2 = {
-                    _exc2.submit(_job_m1b):   'm1b',
-                    _exc2.submit(_job_bias):  'bias',
-                    _exc2.submit(_job_macro): 'macro',
-                }
-                try:
-                    for _fut2 in _asc_mc(_futs2, timeout=_GLOBAL_TIMEOUT_S):
-                        _name2 = _futs2.get(_fut2, '?')
-                        try:
-                            _res_map[_name2] = _fut2.result()
-                        except Exception as _e2:
-                            print(f'[並發] ❌ {_name2}: {type(_e2).__name__}: {_e2}')
-                except (TimeoutError, _ConcFutTimeout):
-                    _stuck2 = [_futs2[_f] for _f in _futs2 if not _f.done()]
-                    for _f_pend in _futs2:
-                        if not _f_pend.done():
-                            _f_pend.cancel()
-                    print(f'[並發] ⏰ outer trio {_GLOBAL_TIMEOUT_S}s timeout，未完成={_stuck2}，'
-                          f'保留 partial={[k for k, v in _res_map.items() if v]}')
-            finally:
-                _exc2.shutdown(wait=False)
-            _m1b_res, _bias_res, _macro_res = _res_map['m1b'], _res_map['bias'], _res_map['macro']
-            # 寫入 session_state 保留原 truthy 守護:partial 場景(某 job timeout)→
-            # 既有 stale 不被 None 蓋,user 看到「上次成功的值」而非「資料消失」(§1)
-            if _m1b_res:
-                st.session_state['m1b_m2_info'] = _m1b_res
-            if _bias_res:
-                st.session_state['bias_info']   = _bias_res
-            if _macro_res:
-                st.session_state['macro_info']  = _macro_res
+            # ── M1B-M2 + 乖離率 + 6-source macro 並發 ─────────
+            # P3-D12 v18.392:抽至 src/services/macro_trio_orchestrator。
+            # truthy guard 在 service 內,partial 場景不蓋 stale(§1)。
+            from src.services.macro_trio_orchestrator import run_macro_trio_and_persist
+            _fred_key_tr = (os.environ.get('FRED_API_KEY') or
+                            (st.secrets.get('FRED_API_KEY')
+                             if hasattr(st, 'secrets') else None) or '')
+            _fm_tok_tr = (os.environ.get('FINMIND_TOKEN') or
+                          (st.secrets.get('FINMIND_TOKEN')
+                           if hasattr(st, 'secrets') else None) or '')
+            run_macro_trio_and_persist(
+                tw_raw=tw_raw,
+                fred_api_key=_fred_key_tr,
+                fm_token=_fm_tok_tr,
+            )
 
             # ── 計算市場狀態（用已載入資料，不另外發請求）
             try:

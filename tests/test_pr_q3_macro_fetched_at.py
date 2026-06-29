@@ -17,7 +17,8 @@ import unittest
 class TestMacroFetchedAtInjection(unittest.TestCase):
 
     def setUp(self):
-        with open('src/ui/tabs/tab_macro.py', encoding='utf-8') as f:
+        # P3-D12 v18.392:setdefault('fetched_at') loop 搬至 macro_trio_orchestrator。
+        with open('src/services/macro_trio_orchestrator.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_pr_q3_marker_present(self):
