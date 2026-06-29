@@ -1,0 +1,159 @@
+"""src/compute/risk/schemas.py — pandera schema POC(v18.397 P5-A5)。
+
+§3.1 邊界契約落地 — 從 dict / assert 散落驗證轉為 pandera SchemaModel。
+
+POC 範圍:
+- `OHLCVSchema`:股價 OHLCV DataFrame(TWSE / Yahoo / FinMind 共通)
+- `MacroDFSchema`:macro_info dict 的 DataFrame 變體
+- `MonthlyRevenueSchema`:月營收 DataFrame
+
+設計考量:
+1. pandera 安裝開銷(~50ms cold start)— 但有 `requirements.txt` pinned,production deploy 已含
+2. lazy import:本檔 top-level `import pandera as pa`,caller 才付開銷
+3. **schema validation 是 opt-in**:fetcher 不強制 validate,caller 在需要時主動 `Schema.validate(df)` 即可
+4. 違反 schema → raise pandera.SchemaError(§1 fail loud 對齊)
+
+對外 API:
+- OHLCVSchema, MacroDFSchema, MonthlyRevenueSchema(pandera DataFrameSchema instances)
+- `try_validate(df, schema, *, lazy=True) -> tuple[DataFrame, list[str]]`:
+  非 raise wrapper,回 (validated_df_or_original, errors_list);適合 audit mode
+
+§-1 對齊:
+- 不主動推 pandera 進 fetcher production path(避免破壞既有契約)
+- 提供 schema 工具讓未來新功能 / audit panel 採用
+"""
+from __future__ import annotations
+
+try:
+    import pandera.pandas as pa  # pandera >=0.20 lazy path
+    PANDERA_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    try:
+        import pandera as pa
+        PANDERA_AVAILABLE = True
+    except ImportError:
+        pa = None
+        PANDERA_AVAILABLE = False
+
+import pandas as pd
+
+
+def _make_ohlcv_schema():
+    """OHLCV 股價 DataFrame 共通 schema。
+
+    覆蓋:
+    - OHLC 4 欄 non-null + >= 0
+    - volume non-null + >= 0
+    - 不變量:low ≤ min(open, close), high ≥ max(open, close), low ≤ high
+    """
+    if not PANDERA_AVAILABLE:
+        return None
+
+    def _ohlc_invariants(df):
+        # low ≤ open / close ≤ high;low ≤ high;volume ≥ 0
+        ok_low_open = (df['low'] <= df['open']).all()
+        ok_low_close = (df['low'] <= df['close']).all()
+        ok_high_open = (df['high'] >= df['open']).all()
+        ok_high_close = (df['high'] >= df['close']).all()
+        ok_low_high = (df['low'] <= df['high']).all()
+        return ok_low_open and ok_low_close and ok_high_open and ok_high_close and ok_low_high
+
+    return pa.DataFrameSchema(
+        columns={
+            'open':   pa.Column(float, checks=pa.Check.ge(0), nullable=False),
+            'high':   pa.Column(float, checks=pa.Check.ge(0), nullable=False),
+            'low':    pa.Column(float, checks=pa.Check.ge(0), nullable=False),
+            'close':  pa.Column(float, checks=pa.Check.ge(0), nullable=False),
+            'volume': pa.Column('int64', checks=pa.Check.ge(0), nullable=False),
+        },
+        checks=[
+            pa.Check(_ohlc_invariants, error='OHLC invariants violated'),
+        ],
+        strict=False,  # 允許 extra columns(provenance 欄位等)
+    )
+
+
+def _make_monthly_revenue_schema():
+    """月營收 DataFrame schema(§3.1 範例)。
+
+    覆蓋:
+    - `date` datetime / ascending / unique
+    - `revenue_twd` > 0(月營收為正,§4.6「停業時應為 NaN 而非 0」)
+    """
+    if not PANDERA_AVAILABLE:
+        return None
+    return pa.DataFrameSchema(
+        columns={
+            'date': pa.Column(
+                'datetime64[ns]',
+                checks=[
+                    pa.Check(lambda s: s.is_monotonic_increasing,
+                             error='date 必須升序排列'),
+                    pa.Check(lambda s: s.is_unique,
+                             error='date 必須 unique'),
+                ],
+                nullable=False,
+            ),
+            # revenue 為正,允許 NaN(停業 / 等公布狀態)
+            'revenue_twd': pa.Column(
+                float,
+                checks=pa.Check(
+                    lambda s: ((s > 0) | s.isna()).all(),
+                    error='revenue_twd 必須為正或 NaN(§4.6 月營收三態)',
+                ),
+                nullable=True,
+            ),
+        },
+        strict=False,
+    )
+
+
+def _make_macro_df_schema():
+    """macro 通用 DataFrame schema(date + value + source + as_of)。
+
+    對齊 §3.1 範例:
+    - `date` datetime / ascending
+    - `value` float
+    - `source` str(§2.2 provenance)
+    - `as_of` date(§2.3 PIT)
+    """
+    if not PANDERA_AVAILABLE:
+        return None
+    return pa.DataFrameSchema(
+        columns={
+            'date':   pa.Column('datetime64[ns]', nullable=False),
+            'value':  pa.Column(float, nullable=True),
+            'source': pa.Column(str, nullable=True, required=False),
+            'as_of':  pa.Column(nullable=True, required=False),  # 任意 date 型
+        },
+        strict=False,
+    )
+
+
+# 模組 level instances(lazy,首次 import 才 init)
+OHLCVSchema = _make_ohlcv_schema()
+MonthlyRevenueSchema = _make_monthly_revenue_schema()
+MacroDFSchema = _make_macro_df_schema()
+
+
+def try_validate(df: pd.DataFrame, schema, *, lazy: bool = True) -> tuple:
+    """非-raise 的 validation wrapper(audit mode)。
+
+    Args:
+        df: 待驗 DataFrame
+        schema: pandera DataFrameSchema instance(本檔 3 個 schema 之一)
+        lazy: True → pandera lazy=True(收集所有 error 後 raise);False → 遇第一個 raise
+
+    Returns:
+        (validated_df, errors):
+        - schema 通過 → (df, [])
+        - schema 失敗 → (df 原樣, error message list)
+        - pandera 不可用 → (df, ['pandera not installed'])
+    """
+    if not PANDERA_AVAILABLE or schema is None:
+        return df, ['pandera not installed or schema unavailable']
+    try:
+        validated = schema.validate(df, lazy=lazy)
+        return validated, []
+    except Exception as e:  # pandera.errors.SchemaError or SchemaErrors
+        return df, [str(e)]
