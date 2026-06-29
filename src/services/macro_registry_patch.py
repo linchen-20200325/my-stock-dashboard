@@ -19,6 +19,12 @@ from __future__ import annotations
 
 import streamlit as st
 
+# v18.394 SSOT 修法:category 對齊 static DATA_REGISTRY 的 11 個 emoji label。
+from shared.data_categories import (
+    CAT_CHIPS, CAT_ETF, CAT_INTL, CAT_STOCK,
+    CAT_TW_MACRO, CAT_TW_MARKET, CAT_US_MACRO,
+)
+
 
 def patch_registry(
     *,
@@ -64,10 +70,10 @@ def patch_registry(
             # DataFrame 型資料
             for _lbl, _key, _f in [('價格走勢', 'df', 'daily'), ('月營收', 'rev', 'monthly'),
                                    ('季財報', 'qtr', 'quarterly')]:
-                _rp[f'{_spfx} | {_lbl}'] = rp_entry(_t2rp.get(_key), '個股', _f)
+                _rp[f'{_spfx} | {_lbl}'] = rp_entry(_t2rp.get(_key), CAT_STOCK, _f)
             # cl/cx 為 fetch_financials 回傳的純量金額(非 DataFrame),須用 rp_scalar
-            _rp[f'{_spfx} | 現金流量'] = rp_scalar(_t2rp.get('cl'), '個股', 'quarterly', _proxy_rp)
-            _rp[f'{_spfx} | 資產負債'] = rp_scalar(_t2rp.get('cx'), '個股', 'quarterly', _proxy_rp)
+            _rp[f'{_spfx} | 現金流量'] = rp_scalar(_t2rp.get('cl'), CAT_STOCK, 'quarterly', _proxy_rp)
+            _rp[f'{_spfx} | 資產負債'] = rp_scalar(_t2rp.get('cx'), CAT_STOCK, 'quarterly', _proxy_rp)
             # 年度股利(list of dicts)
             import datetime as _dt_yr_rp
             _yr_rp = _t2rp.get('yearly') or []
@@ -81,21 +87,21 @@ def patch_registry(
                 else:
                     _yr_date = _proxy_rp
                 _rp[f'{_spfx} | 年度股利'] = {'last_updated': _yr_date,
-                                              'rows': len(_yr_rp), 'category': '個股', 'frequency': 'yearly'}
+                                              'rows': len(_yr_rp), 'category': CAT_STOCK, 'frequency': 'yearly'}
             else:
                 _rp[f'{_spfx} | 年度股利'] = {'last_updated': 'N/A', 'rows': 0,
-                                              'category': '個股', 'frequency': 'yearly', 'missing': True}
+                                              'category': CAT_STOCK, 'frequency': 'yearly', 'missing': True}
             # 健康度評分(純量)
-            _rp[f'{_spfx} | 健康度評分'] = rp_scalar(_t2rp.get('health'), '個股', 'daily', _proxy_rp)
+            _rp[f'{_spfx} | 健康度評分'] = rp_scalar(_t2rp.get('health'), CAT_STOCK, 'daily', _proxy_rp)
             # 技術指標:各自獨立
-            _rp[f'{_spfx} | RSI'] = rp_scalar(_t2rp.get('rsi'), '個股', 'daily', _proxy_rp)
-            _rp[f'{_spfx} | KD (K值)'] = rp_scalar(_t2rp.get('k'), '個股', 'daily', _proxy_rp)
-            _rp[f'{_spfx} | IBS 內部強弱'] = rp_scalar(_t2rp.get('ibs'), '個股', 'daily', _proxy_rp)
-            _rp[f'{_spfx} | 量比 VR'] = rp_scalar(_t2rp.get('vr'), '個股', 'daily', _proxy_rp)
-            _rp[f'{_spfx} | 布林帶'] = rp_scalar(_t2rp.get('bb'), '個股', 'daily', _proxy_rp)
-            _rp[f'{_spfx} | VCP 波幅收縮'] = rp_scalar(_t2rp.get('vcp'), '個股', 'daily', _proxy_rp)
+            _rp[f'{_spfx} | RSI'] = rp_scalar(_t2rp.get('rsi'), CAT_STOCK, 'daily', _proxy_rp)
+            _rp[f'{_spfx} | KD (K值)'] = rp_scalar(_t2rp.get('k'), CAT_STOCK, 'daily', _proxy_rp)
+            _rp[f'{_spfx} | IBS 內部強弱'] = rp_scalar(_t2rp.get('ibs'), CAT_STOCK, 'daily', _proxy_rp)
+            _rp[f'{_spfx} | 量比 VR'] = rp_scalar(_t2rp.get('vr'), CAT_STOCK, 'daily', _proxy_rp)
+            _rp[f'{_spfx} | 布林帶'] = rp_scalar(_t2rp.get('bb'), CAT_STOCK, 'daily', _proxy_rp)
+            _rp[f'{_spfx} | VCP 波幅收縮'] = rp_scalar(_t2rp.get('vcp'), CAT_STOCK, 'daily', _proxy_rp)
             # 財報延伸(合約負債/存貨/資本支出時序)
-            _rp[f'{_spfx} | 合約負債/資本支出'] = rp_entry(_t2rp.get('qtr_extra'), '個股', 'quarterly')
+            _rp[f'{_spfx} | 合約負債/資本支出'] = rp_entry(_t2rp.get('qtr_extra'), CAT_STOCK, 'quarterly')
         else:
             _spfx0 = '[個股] — 尚未搜尋'
             for _lbl0, _f0 in [
@@ -106,61 +112,64 @@ def patch_registry(
                 ('VCP 波幅收縮', 'daily'), ('合約負債/資本支出', 'quarterly'),
             ]:
                 _rp[f'{_spfx0} | {_lbl0}'] = {'last_updated': 'N/A', 'rows': 0,
-                                              'category': '個股', 'frequency': _f0, 'missing': True}
+                                              'category': CAT_STOCK, 'frequency': _f0, 'missing': True}
 
         # ── 比較排行 ──────────────────────────────────────────────────
         _t3rp = st.session_state.get('t3_data')
         if _t3rp and _t3rp.get('results'):
             _rp['[比較] 多股比較排行'] = {'last_updated': _proxy_rp, 'rows': len(_t3rp['results']),
-                                          'category': '個股', 'frequency': 'daily'}
+                                          'category': CAT_STOCK, 'frequency': 'daily'}
         else:
             _rp['[比較] 多股比較排行'] = {'last_updated': 'N/A', 'rows': 0,
-                                          'category': '個股', 'frequency': 'daily', 'missing': True}
+                                          'category': CAT_STOCK, 'frequency': 'daily', 'missing': True}
 
         # ── ETF 單一 ──────────────────────────────────────────────────
         _e1rp = st.session_state.get('etf_single_data') or {}
         _etkrp = _e1rp.get('ticker', '')
         _epfxrp = f'[ETF] {_etkrp} {_e1rp.get("name","")}'.strip() if _etkrp else '[ETF] — 尚未搜尋'
-        _rp[f'{_epfxrp} | 價格走勢'] = rp_entry(_e1rp.get('price_df'), 'ETF', 'daily')
-        _rp[f'{_epfxrp} | 現金殖利率'] = rp_scalar(_e1rp.get('cur_yield'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | 近5年平均殖利率'] = rp_scalar(_e1rp.get('avg_yield'), 'ETF', 'yearly', _proxy_rp)
-        _rp[f'{_epfxrp} | 近1年含息總報酬'] = rp_scalar(_e1rp.get('total_ret'), 'ETF', 'daily', _proxy_rp)
+        _rp[f'{_epfxrp} | 價格走勢'] = rp_entry(_e1rp.get('price_df'), CAT_ETF, 'daily')
+        _rp[f'{_epfxrp} | 現金殖利率'] = rp_scalar(_e1rp.get('cur_yield'), CAT_ETF, 'daily', _proxy_rp)
+        _rp[f'{_epfxrp} | 近5年平均殖利率'] = rp_scalar(_e1rp.get('avg_yield'), CAT_ETF, 'yearly', _proxy_rp)
+        _rp[f'{_epfxrp} | 近1年含息總報酬'] = rp_scalar(_e1rp.get('total_ret'), CAT_ETF, 'daily', _proxy_rp)
         _e1_prem = (_e1rp.get('premium') or {})
-        _rp[f'{_epfxrp} | 折溢價率'] = rp_scalar(_e1_prem.get('premium_pct'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | 淨值 (NAV)'] = rp_scalar(_e1_prem.get('nav'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | 追蹤誤差'] = rp_scalar(_e1rp.get('te'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | VCP 波幅收縮'] = rp_scalar(_e1rp.get('vcp'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | 內控費用率'] = rp_scalar(_e1rp.get('expense'), 'ETF', 'yearly', _proxy_rp)
-        _rp[f'{_epfxrp} | Beta'] = rp_scalar(_e1rp.get('beta'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | AuM 規模'] = rp_scalar(_e1rp.get('aum'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | KD 技術指標'] = rp_scalar(_e1rp.get('k_val'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | 年線乖離率 BIAS240'] = rp_scalar(_e1rp.get('bias240'), 'ETF', 'daily', _proxy_rp)
+        _rp[f'{_epfxrp} | 折溢價率'] = rp_scalar(_e1_prem.get('premium_pct'), CAT_ETF, 'daily', _proxy_rp)
+        _rp[f'{_epfxrp} | 淨值 (NAV)'] = rp_scalar(_e1_prem.get('nav'), CAT_ETF, 'daily', _proxy_rp)
+        _rp[f'{_epfxrp} | 追蹤誤差'] = rp_scalar(_e1rp.get('te'), CAT_ETF, 'daily', _proxy_rp)
+        _rp[f'{_epfxrp} | VCP 波幅收縮'] = rp_scalar(_e1rp.get('vcp'), CAT_ETF, 'daily', _proxy_rp)
+        _rp[f'{_epfxrp} | 內控費用率'] = rp_scalar(_e1rp.get('expense'), CAT_ETF, 'yearly', _proxy_rp)
+        _rp[f'{_epfxrp} | Beta'] = rp_scalar(_e1rp.get('beta'), CAT_ETF, 'daily', _proxy_rp)
+        _rp[f'{_epfxrp} | AuM 規模'] = rp_scalar(_e1rp.get('aum'), CAT_ETF, 'daily', _proxy_rp)
+        _rp[f'{_epfxrp} | KD 技術指標'] = rp_scalar(_e1rp.get('k_val'), CAT_ETF, 'daily', _proxy_rp)
+        _rp[f'{_epfxrp} | 年線乖離率 BIAS240'] = rp_scalar(_e1rp.get('bias240'), CAT_ETF, 'daily', _proxy_rp)
 
         # ── ETF 組合 ──────────────────────────────────────────────────
         _e2rp = st.session_state.get('etf_portfolio_data') or {}
         if _e2rp.get('rows'):
             _e2n = len(_e2rp['rows'])
             _rp[f'[ETF組合] 再平衡分析（{_e2n}檔）'] = {'last_updated': _proxy_rp, 'rows': _e2n,
-                                                       'category': 'ETF', 'frequency': 'daily'}
+                                                       'category': CAT_ETF, 'frequency': 'daily'}
         else:
             _rp['[ETF組合] 再平衡分析'] = {'last_updated': 'N/A', 'rows': 0,
-                                          'category': 'ETF', 'frequency': 'daily', 'missing': True}
+                                          'category': CAT_ETF, 'frequency': 'daily', 'missing': True}
 
         # ── ETF 回測 ──────────────────────────────────────────────────
         _e3rp = st.session_state.get('etf_backtest_data') or {}
         if _e3rp.get('cagr') is not None:
             _e3n = len(_e3rp.get('weights', {}))
             _rp[f'[ETF回測] 回測績效（{_e3n}檔）'] = {'last_updated': _proxy_rp, 'rows': _e3n,
-                                                     'category': 'ETF', 'frequency': 'daily'}
+                                                     'category': CAT_ETF, 'frequency': 'daily'}
         else:
             _rp['[ETF回測] 回測績效'] = {'last_updated': 'N/A', 'rows': 0,
-                                        'category': 'ETF', 'frequency': 'daily', 'missing': True}
+                                        'category': CAT_ETF, 'frequency': 'daily', 'missing': True}
 
-        # 若大盤項目完全缺失(DataRegistry 建立時拋出 exception),從 cl_data 補建
-        if not any(v.get('category') == '大盤' for v in _rp.values()):
+        # 若大盤層項目(INTL/TW/TECH/籌碼/總經)完全缺失,從 cl_data 補建。
+        # v18.394 SSOT:檢查 4 個 SSOT category(CAT_INTL/CAT_TW_MARKET/CAT_CHIPS/CAT_TW_MACRO/CAT_US_MACRO),
+        # 取代原 '大盤' 單一字串(scanner 已分散成 5 個 SSOT category,不會再有單一 '大盤')。
+        _market_cats = {CAT_INTL, CAT_TW_MARKET, CAT_CHIPS, CAT_TW_MACRO, CAT_US_MACRO}
+        if not any(v.get('category') in _market_cats for v in _rp.values()):
             _cd_rb = st.session_state.get('cl_data', {})
             if _cd_rb:
-                def _rb_add(_n, _df, _cat='大盤', _freq='daily'):
+                def _rb_add(_n, _df, _cat=CAT_TW_MARKET, _freq='daily'):
                     if isinstance(_df, _pd_rp.DataFrame) and not _df.empty:
                         _rp[_n] = {'last_updated': rp_ts(_df), 'rows': len(_df),
                                    'category': _cat, 'frequency': _freq}
@@ -168,41 +177,45 @@ def patch_registry(
                         _rp[_n] = {'last_updated': 'N/A', 'rows': 0,
                                    'category': _cat, 'frequency': _freq, 'missing': True}
                 for _n in intl_map:
-                    _rb_add(_n, (_cd_rb.get('intl') or {}).get(_n))
+                    _rb_add(_n, (_cd_rb.get('intl') or {}).get(_n), _cat=CAT_INTL)
                 for _n in tw_map:
-                    _rb_add(_n, (_cd_rb.get('tw') or {}).get(_n))
+                    _rb_add(_n, (_cd_rb.get('tw') or {}).get(_n), _cat=CAT_TW_MARKET)
                 for _n in tech_map:
-                    _rb_add(_n, (_cd_rb.get('tech') or {}).get(_n))
-                _rb_add('ADL 市場廣度', _cd_rb.get('adl'))
+                    _rb_add(_n, (_cd_rb.get('tech') or {}).get(_n), _cat=CAT_INTL)
+                _rb_add('ADL 市場廣度', _cd_rb.get('adl'), _cat=CAT_TW_MARKET)
                 _inst_rb = _cd_rb.get('inst') or {}
                 for _ik, _iname in [('外資及陸資', '三大法人 外資買賣超'),
                                     ('投信', '三大法人 投信買賣超'),
                                     ('自營商', '三大法人 自營商買賣超')]:
                     _rp[_iname] = {'last_updated': 'N/A', 'rows': 1 if _inst_rb.get(_ik) else 0,
-                                   'category': '大盤', 'frequency': 'daily',
+                                   'category': CAT_CHIPS, 'frequency': 'daily',
                                    **({} if _inst_rb.get(_ik) else {'missing': True})}
                 _rp['融資餘額（台股）'] = {
                     'last_updated': 'N/A',
                     'rows': 1 if _cd_rb.get('margin') else 0,
-                    'category': '大盤', 'frequency': 'daily',
+                    'category': CAT_CHIPS, 'frequency': 'daily',
                     **({} if _cd_rb.get('margin') else {'missing': True})}
                 _macro_rb = st.session_state.get('macro_info') or {}
-                for _mk, _mn, _mf in [('vix', 'VIX 波動率指數', 'daily'),
-                                      ('us_core_cpi', '美國核心CPI年增率', 'monthly'),
-                                      ('fed_funds', '美國 Fed Funds Rate', 'monthly'),
-                                      ('ism_pmi', '🇹🇼 台灣 PMI 製造業指數', 'monthly'),
-                                      ('tw_export', '台灣出口年增率', 'monthly'),
-                                      ('ndc_signal', '景氣先行指標（NDC）', 'monthly')]:
+                # v18.394:VIX → 🌐 國際金融;CPI/Fed → 🌍 美國總經;PMI/出口/NDC → 🇹🇼 台灣總經
+                _macro_rb_map = [
+                    ('vix',         'VIX 波動率指數',           'daily',   CAT_INTL),
+                    ('us_core_cpi', '美國核心CPI年增率',         'monthly', CAT_US_MACRO),
+                    ('fed_funds',   '美國 Fed Funds Rate',       'monthly', CAT_US_MACRO),
+                    ('ism_pmi',     '🇹🇼 台灣 PMI 製造業指數',  'monthly', CAT_TW_MACRO),
+                    ('tw_export',   '台灣出口年增率',             'monthly', CAT_TW_MACRO),
+                    ('ndc_signal',  '景氣先行指標（NDC）',        'monthly', CAT_TW_MACRO),
+                ]
+                for _mk, _mn, _mf, _mc in _macro_rb_map:
                     _msub_rb = _macro_rb.get(_mk)
                     if _msub_rb:
                         _raw_rb = ((_msub_rb.get('date') or _msub_rb.get('period')
                                     or (_msub_rb.get('dates') or [''])[-1])
                                    if isinstance(_msub_rb, dict) else None) or _proxy_rp
                         _rp[_mn] = {'last_updated': str(_raw_rb)[:10], 'rows': 1,
-                                    'category': '大盤', 'frequency': _mf}
+                                    'category': _mc, 'frequency': _mf}
                     else:
                         _rp[_mn] = {'last_updated': 'N/A', 'rows': 0,
-                                    'category': '大盤', 'frequency': _mf, 'missing': True}
+                                    'category': _mc, 'frequency': _mf, 'missing': True}
                 print('[RegistryPatch] 大盤項目補建完成')
 
         st.session_state['data_registry'] = _rp

@@ -1519,8 +1519,12 @@ with tab_screener:
 with tab_diag:
     # v18.280 — 學 Fund 架構 + 預設視角:覆蓋率表(用戶視角)放最上方,
     # API Key / Proxy 雙跑(developer 視角)放後。對齊 Fund tab5 Section ⓪。
-    from src.ui.pages import render_data_coverage
+    from src.ui.pages import render_data_coverage, render_data_registry_panel
     render_data_coverage()
+    st.markdown('---')
+    # v18.394 Path C:資料源完整清單(50+ entries by SSOT 11 emoji category)。
+    # coverage tab 4-row 是 Tab 級總覽;此 panel 是資料源級細項。語意分清楚不重複。
+    render_data_registry_panel()
     st.markdown('---')
     render_api_diagnostic()
     st.markdown('---')
