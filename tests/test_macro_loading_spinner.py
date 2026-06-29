@@ -18,11 +18,13 @@ class TestFetchSpinner:
         src = _src()
         assert "with st.spinner('🚀 並行抓取 總經 + 籌碼 + 先行指標中" in src, \
             "抓取未用 st.spinner 動畫載入指示"
-        # spinner 緊接抓取計時起點（確認包住的是抓取段，非他處）
+        # P3-D4 v18.389:spinner 緊接 orchestrator import + call(時間計時內移)
         assert re.search(
-            r"with st\.spinner\([^\n]*並行抓取[^\n]*\):\s*\n\s*import time as _t_spd",
+            r"with st\.spinner\([^\n]*並行抓取[^\n]*\):\s*\n"
+            r"(?:\s*#[^\n]*\n)*"  # 0+ 註解行
+            r"\s*from src\.services\.macro_fetch_orchestrator import fetch_macro_bundle",
             src,
-        ), "spinner 未正確包住抓取 pipeline 起點"
+        ), "spinner 未正確包住 fetch_macro_bundle 呼叫點"
 
     def test_old_static_only_info_replaced(self):
         """舊『_fetch_ph.info(並發抓取全部市場數據中)』靜態唯一指示已移除。"""

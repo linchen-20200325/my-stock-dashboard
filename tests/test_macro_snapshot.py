@@ -52,7 +52,12 @@ class TestFetchVixBlock:
 
 class TestTabMacroWired:
     def test_tab_macro_imports_extracted_vix(self):
+        # P3-D1 v18.389:_job_macro 改 thin orchestrator,fetch_vix_block 從
+        # macro_snapshot 批量 import(`from ... import fetch_vix_block, fetch_cpi_block, ...`)。
         src = open('src/ui/tabs/tab_macro.py', encoding='utf-8').read()
-        assert 'from src.data.macro import fetch_vix_block as _fetch_vix' in src or 'from src.data.macro.macro_snapshot import fetch_vix_block as _fetch_vix' in src
-        # 原 inline def 已移除（不得殘留兩份）
+        assert (
+            'fetch_vix_block' in src
+            and 'from src.data.macro.macro_snapshot import' in src
+        ), "tab_macro 未從 macro_snapshot 引入 fetch_vix_block"
+        # 原 inline def 已移除(不得殘留兩份)
         assert 'def _fetch_vix' not in src

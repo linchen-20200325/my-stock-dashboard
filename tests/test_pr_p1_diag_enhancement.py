@@ -21,7 +21,8 @@ import unittest
 class TestDiagTableEnhanced(unittest.TestCase):
 
     def setUp(self):
-        with open('src/ui/tabs/tab_macro.py', encoding='utf-8') as f:
+        # B-S8-A v18.388:§三 籌碼 + diag table 搬至 section_chips.py
+        with open('src/ui/tabs/macro/section_chips.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_freshness_caution_banner(self):

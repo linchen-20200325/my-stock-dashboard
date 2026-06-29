@@ -59,6 +59,8 @@ def test_app_no_inline_cbc_url():
 
 
 def test_app_uses_tw_macro_m1b_m2():
-    """M1B 區塊應委派 tw_macro.fetch_cbc_m1b_m2(現於 tab_macro.py)。"""
-    assert "fetch_cbc_m1b_m2" in TAB_MACRO_SRC, \
-        "src/ui/tabs/tab_macro.py 未引用 tw_macro.fetch_cbc_m1b_m2"
+    """M1B 區塊應委派 tw_macro.fetch_cbc_m1b_m2(P3-D2 v18.389 後位於 macro_snapshot.py)。"""
+    _snap_src = (Path(__file__).parent.parent
+                 / "src/data/macro/macro_snapshot.py").read_text(encoding="utf-8")
+    assert "fetch_cbc_m1b_m2" in (TAB_MACRO_SRC + _snap_src), \
+        "tab_macro.py / macro_snapshot.py 都未引用 tw_macro.fetch_cbc_m1b_m2"

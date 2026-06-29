@@ -64,14 +64,18 @@ from src.ui.tabs.macro.handlers import (  # noqa: F401
 )
 # F-7.1 B-2 v18.365:Section 6 短線急殺桶抽至 macro/section_short.py(LOC 4833→4521)
 from src.ui.tabs.macro.section_short import render_section_short  # noqa: F401
-# F-7.1 B-3 v18.366:Section 10/11 AI 總裁決抽至 macro/section_ai.py(LOC 4521→4230)
-from src.ui.tabs.macro.section_ai import render_section_ai  # noqa: F401
+# F-7.1 B-3 v18.366:§十一 News AI 總裁決抽至 macro/section_news_ai.py(P2 v18.389 rename)
+from src.ui.tabs.macro.section_news_ai import render_section_news_ai  # noqa: F401
 # F-7.1 B-4 v18.367:Section 4 (§八) 中期/總經拼圖抽至 macro/section_mid.py(LOC 4230→3797)
 from src.ui.tabs.macro.section_mid import render_section_mid  # noqa: F401
 # F-7.1 B-5 v18.368:Section 3 長期桶 LONG 抽至 macro/section_long.py(LOC 3797→3402)
 from src.ui.tabs.macro.section_long import render_section_long  # noqa: F401
 # F-7.1 B-S2 v18.385:Section 2 拐點偵測 / 市場狀態抽至 macro/section_state.py(LOC 3402→3025)
 from src.ui.tabs.macro.section_state import render_section_state  # noqa: F401
+# F-7.1 B-S8-A v18.388:Section 3 籌碼桶抽至 macro/section_chips.py(LOC 3034→~2475)
+from src.ui.tabs.macro.section_chips import render_section_chips  # noqa: F401
+# F-7.1 B-S8-B v18.388:§九 跨桶 AI 抽至 macro/section_cross_ai.py(P2 v18.389 rename)
+from src.ui.tabs.macro.section_cross_ai import render_section_cross_ai  # noqa: F401
 
 
 
@@ -606,205 +610,38 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         # 靜態 st.info 文字 + 按鈕殘留 → 阻塞抓取時畫面看似凍結、分不清是否載完。
         # spinner 在整個抓取期間動畫旋轉，結束自動消失，使用者一眼看出「進行中」。
         with st.spinner('🚀 並行抓取 總經 + 籌碼 + 先行指標中…（約 30~60 秒，請稍候）'):
-            import time as _t_spd
-            _t_start = _t_spd.time()
-
-            # ── 並發任務定義 ────────────────────────────────────
-            # v18.193 perf: 3 個 job 內部從 ticker 序列改為內層 ThreadPoolExecutor 並行
-            #             (原 N×fetch_single 序列 → max(t)；fetch_single /tmp pickle 30 分鐘
-            #             cache 不變、DX-Y.NYB→DX=F→UUP 備援邏輯不變)
-            def _parallel_fetch(_mp, **_kw):
-                _max_w = max(1, len(_mp))
-                with ThreadPoolExecutor(max_workers=_max_w) as _e_in:
-                    _f_in = {_e_in.submit(fetch_single, _s, **_kw): _n for _n, _s in _mp.items()}
-                    return {_f_in[_ft]: _ft.result() for _ft in _f_in}
-
-            def _job_intl():
-                return _parallel_fetch(INTL_MAP)
-
-            def _job_tw():
-                # 9mo ≈ 195 交易日，確保 ^TWII 有足夠 bars 計算 MA120（需120筆）
-                return _parallel_fetch(TW_MAP, period='9mo')
-
-            def _job_tech():
-                return _parallel_fetch(TECH_MAP)
-
-            def _job_inst():
-                return fetch_institutional()
-
-            def _job_margin():
-                try:
-                    return fetch_margin_balance()
-                except Exception as _em:
-                    print(f'[融資] ❌ {_em}')
-                    return None
-
-            def _job_adl():
-                _tok_adl = os.environ.get('FINMIND_TOKEN','') or FINMIND_TOKEN
-                return fetch_adl(days=60, token=_tok_adl)
-
-            # v18.331 (2-C)：先行指標併入平行池。原 v8 因 Colab worker thread 中 requests
-            # 受阻而移出池、改主流程序列呼叫（拖慢 ~15-55s）；現平台為 Streamlit Cloud，
-            # 池內 inst/margin/adl 等 requests job 運作正常，該平台限制已不適用。
-            # import + reload 留在主執行緒（importlib.reload 非 thread-safe），worker thread
-            # 內只呼叫純抓取 build_leading_fast（不碰 UI）。失敗時下游既有 fallback（保留舊
-            # li_latest）兜底，最壞只是先行指標顯示舊資料，不致崩潰。
-            _li_tok = _get_fm_token() or FINMIND_TOKEN or os.environ.get('FINMIND_TOKEN', '')
-            _li_build_fn = None
-            try:
-                import importlib as _il_li
-                from src.data.macro import leading_indicators as _li_mod
-                _il_li.reload(_li_mod)
-                _li_build_fn = _li_mod.build_leading_fast
-                print(f'[先行指標] v={getattr(_li_mod, "LI_VERSION", "?")} token={bool(_li_tok)}（併池）')
-            except Exception as _e_li_imp:
-                print(f'[先行指標] ❌ import 失敗 {type(_e_li_imp).__name__}: {_e_li_imp}')
-
-            def _job_li():
-                if _li_build_fn is None:
-                    return None
-                return _li_build_fn(days=14, token=_li_tok)
-
-            # ── 並發執行（yfinance 最慢，先丟進去）─────────────
-            # [Phase 2] 輕量任務（永遠跑，~30s 內完成）
-            _jobs = {
-                'intl':         _job_intl,
-                'tw':           _job_tw,
-                'tech':         _job_tech,
-            }
-            _job_timeouts = {
-                'intl': 30, 'tw': 30, 'tech': 30,
-            }
-            # [Phase 2] 重量任務（按鈕觸發或手動 refresh 才跑）
-            if _load_heavy:
-                _jobs.update({
-                    'inst':         _job_inst,
-                    'margin':       _job_margin,
-                    'adl':          _job_adl,
-                    'li':           _job_li,   # v18.331 2-C：先行指標併池
-                })
-                _job_timeouts.update({
-                    'inst': 25,
-                    'margin': 25,
-                    'adl': 55,
-                    'li': 80,   # build_leading_fast 內部 thread join(timeout=80)
-                })
-            _results = {}
-            # [BUG FIX] as_completed global timeout 從 50s 改為 110s
-            # 原因：li job 內部 thread join(timeout=80)，50 < 80 導致 TimeoutError 崩潰
-            # 並用 try/except TimeoutError 包住迴圈，確保其他6個 job 結果不因 li 超時而丟失
-            # [BUG FIX] shutdown(wait=False) — 消除 `with TPE` 阻塞 7-20 分鐘的問題
-            # 原理：手動管理 executor，超時後立即 cancel 未開始任務
-            _AS_COMPLETED_TIMEOUT = max(_job_timeouts.values()) + 20
-            _exc = ThreadPoolExecutor(max_workers=len(_jobs))
-            _futs = {_exc.submit(fn): name for name, fn in _jobs.items()}
-            try:
-                try:
-                    for _fut in as_completed(_futs, timeout=_AS_COMPLETED_TIMEOUT):
-                        name = _futs[_fut]
-                        _t_limit = _job_timeouts.get(name, 20)
-                        try:
-                            _results[name] = _fut.result(timeout=_t_limit)
-                            print(f'[並發] ✅ {name} ({_t_spd.time()-_t_start:.1f}s)')
-                        except Exception as _fe:
-                            _results[name] = None
-                            print(f'[並發] ❌ {name}: {type(_fe).__name__}: {_fe}')
-                except TimeoutError:
-                    print(f'[並發] ⚠️ as_completed {_AS_COMPLETED_TIMEOUT}s 超時，補救已完成結果')
-                    for _fut, _name in _futs.items():
-                        if _name not in _results:
-                            if _fut.done():
-                                try:
-                                    _results[_name] = _fut.result(timeout=1)
-                                    print(f'[並發] ✅ {_name} 補救成功')
-                                except Exception as _fe2:
-                                    _results[_name] = None
-                            else:
-                                _results[_name] = None
-                                print(f'[並發] ⏰ {_name} 確認超時')
-            finally:
-                # [BUG FIX] 關鍵：立即取消未開始任務，不等待執行中的 thread
-                try:
-                    _exc.shutdown(wait=False, cancel_futures=True)
-                except TypeError:
-                    _exc.shutdown(wait=False)  # Python < 3.9
-            # 補齊所有未收到結果的 job
-            for _name in _jobs:
-                if _name not in _results:
-                    _results[_name] = None
-                    print(f'[並發] ⏰ {_name} 超時')
-            
-            # ── 解包結果 ────────────────────────────────────────
-            intl_raw  = _results.get('intl') or {}
-            tw_raw    = _results.get('tw') or {}
-            tech_raw  = _results.get('tech') or {}
-
-            # [Phase 2] 重量區塊：cl_data 已存在則沿用舊值，否則 None
-            _prev_cl  = st.session_state.get('cl_data') or {}
-            if _load_heavy:
-                inst_res  = _results.get('inst') or (None, None)
-                inst, inst_date = inst_res if isinstance(inst_res, tuple) else (inst_res, None)
-                # 如果 inst 是空的，用 FinMind TaiwanStockTotalInstitutionalInvestors 補救
-                if not inst:
-                    print('[並發] inst 為空，用 FinMind 補救...')
-                    try:
-                        _fm_t = _get_fm_token()
-                        _start_i = (datetime.date.today()-datetime.timedelta(days=5)).strftime('%Y-%m-%d')
-                        _ri = _bps().get('https://api.finmindtrade.com/api/v4/data',
-                            params={'dataset':'TaiwanStockTotalInstitutionalInvestors',
-                                    'start_date':_start_i,'token':_fm_t},
-                            headers={'Authorization':f'Bearer {_fm_t}'}, timeout=15)
-                        _ji = _ri.json()
-                        print(f'[FinMind-Inst] status={_ji.get("status")} rows={len(_ji.get("data",[]))}')
-                        if _ji.get('status')==200 and _ji.get('data'):
-                            _df_i = pd.DataFrame(_ji['data'])
-                            _ld_i = _df_i['date'].max()
-                            _df_i = _df_i[_df_i['date']==_ld_i]
-                            _df_i['buy']  = pd.to_numeric(_df_i.get('buy',  0), errors='coerce').fillna(0)
-                            _df_i['sell'] = pd.to_numeric(_df_i.get('sell', 0), errors='coerce').fillna(0)
-                            _df_i['_net'] = ((_df_i['buy'] - _df_i['sell']) / 1e8).round(2)
-                            # FinMind name 欄為英文 key（Foreign_Investor / Investment_Trust / Dealer_*）
-                            # 與 tw_macro.py:151 / hot_money.py:157 一致採英文匹配，中文為向下相容
-                            inst = {}
-                            for _nm, _net in zip(_df_i['name'].astype(str), _df_i['_net']):
-                                _nl = _nm.lower()
-                                if 'foreign' in _nl or '外資' in _nm:
-                                    inst.setdefault('_f', 0)
-                                    inst['_f'] = round(inst['_f'] + _net, 2)
-                                elif 'investment_trust' in _nl or '投信' in _nm:
-                                    inst['投信'] = {'net': _net}
-                                elif 'dealer' in _nl or '自營' in _nm:
-                                    inst.setdefault('_d', 0)
-                                    inst['_d'] = round(inst['_d'] + _net, 2)
-                            if '_f' in inst:
-                                inst['外資及陸資'] = {'net': inst.pop('_f')}
-                            if '_d' in inst:
-                                inst['自營商'] = {'net': inst.pop('_d')}
-                            inst_date = _ld_i
-                            print(f'[FinMind-Inst] ✅ {inst}')
-                    except Exception as _ei:
-                        print(f'[FinMind-Inst] ❌ {_ei}')
-                margin       = _results.get('margin')
-                df_adl_raw   = _results.get('adl')
-                if df_adl_raw is None:
-                    st.session_state['adl_debug_msg'] = '來源均無回應（yfinance + TWSE MI_INDEX），詳見 Colab [ADL] 輸出'
-                else:
-                    st.session_state.pop('adl_debug_msg', None)
-                # v18.331 (2-C)：先行指標已併入上方平行池（job 'li'），此處只讀結果，
-                # 不再主流程序列呼叫。失敗時下游既有 fallback（下方）保留舊 li_latest。
-                df_li_a = _results.get('li')
-                if df_li_a is not None and not (hasattr(df_li_a, 'empty') and df_li_a.empty):
-                    print(f'[先行指標] ✅ 併池成功 {len(df_li_a)} 筆')
-                else:
-                    print('[先行指標] ⚠️ 併池回空/None — 下游保留舊快取')
+            # P3-D4 v18.389:7-job orchestrator 下沉 src/services/macro_fetch_orchestrator
+            from src.services.macro_fetch_orchestrator import fetch_macro_bundle
+            _bundle = fetch_macro_bundle(
+                load_heavy=_load_heavy,
+                prev_cl_data=st.session_state.get('cl_data') or {},
+                fm_token=(_get_fm_token() or FINMIND_TOKEN
+                          or os.environ.get('FINMIND_TOKEN', '')),
+                li_token=(_get_fm_token() or FINMIND_TOKEN
+                          or os.environ.get('FINMIND_TOKEN', '')),
+                bps_session=_bps(),
+                intl_map=INTL_MAP, tw_map=TW_MAP, tech_map=TECH_MAP,
+                fetch_single=fetch_single,
+                fetch_institutional=fetch_institutional,
+                fetch_margin_balance=fetch_margin_balance,
+                fetch_adl=fetch_adl,
+            )
+            intl_raw   = _bundle['intl_raw']
+            tw_raw     = _bundle['tw_raw']
+            tech_raw   = _bundle['tech_raw']
+            inst       = _bundle['inst']
+            inst_date  = _bundle['inst_date']
+            margin     = _bundle['margin']
+            df_adl_raw = _bundle['df_adl_raw']
+            df_li_a    = _bundle['df_li_a']
+            # 冷啟動時 df_li_a=None,沿用既有 session_state['li_latest'](保 cache)
+            if not _load_heavy and df_li_a is None:
+                df_li_a = st.session_state.get('li_latest')
+            # ADL debug msg(失敗時設,成功時 pop)
+            if _bundle.get('adl_debug_msg'):
+                st.session_state['adl_debug_msg'] = _bundle['adl_debug_msg']
             else:
-                # 冷啟動跳過重資料：沿用舊 cl_data 或 None
-                inst       = _prev_cl.get('inst') or {}
-                inst_date  = _prev_cl.get('inst_date')
-                margin     = _prev_cl.get('margin')
-                df_adl_raw = _prev_cl.get('adl')
-                df_li_a    = st.session_state.get('li_latest')
-                print('[Phase 2] 冷啟動跳過 inst/margin/adl/li（按鈕載入）')
+                st.session_state.pop('adl_debug_msg', None)
 
             # ── 儲存主要數據 ─────────────────────────────────────
             st.session_state['cl_data'] = dict(
@@ -812,26 +649,22 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                 inst=inst, inst_date=inst_date, margin=margin,
                 adl=df_adl_raw)
             st.session_state['cl_ts'] = _tw_now_str()
-            st.session_state['_is_refreshing'] = False  # 資料就位，解除刷新鎖
-            # 快取最後一次有效的法人/融資資料，供 API 失敗時 fallback 使用
+            st.session_state['_is_refreshing'] = False  # 資料就位,解除刷新鎖
+            # 快取最後一次有效的法人/融資資料,供 API 失敗時 fallback 使用
             if inst:
                 st.session_state['_last_inst'] = inst
                 st.session_state['_last_inst_date'] = inst_date
             if margin:
                 st.session_state['_last_margin'] = margin
 
-            # [BUG FIX] 寬鬆條件：有任何 DataFrame（即使全 '-'）都存入 session_state
-            # 原本 not df_li_a.empty 在 rows 有骨架但全 None 時仍為 True，但若某個版本回 None 或空 DF 則捨棄
+            # [BUG FIX] 寬鬆條件:有任何 DataFrame(即使全 '-')都存入 session_state
             if df_li_a is not None and not df_li_a.empty:
                 st.session_state['li_latest'] = df_li_a
                 print(f'[先行指標] ✅ {len(df_li_a)} 筆 (有效欄={df_li_a.notna().any().sum()})')
             else:
-                # 保留舊資料（若有），避免畫面空白
                 if 'li_latest' not in st.session_state:
                     st.session_state.pop('li_latest', None)
                 print(f'[先行指標] ⚠️ 回傳{"空" if df_li_a is not None else "None"} — 保留舊快取')
-
-            print(f'[並發] 🎉 全部完成 共 {_t_spd.time()-_t_start:.1f}s')
             try:
                 _fetch_ph.empty()
             except Exception:
@@ -879,705 +712,61 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
             # ── M1B-M2 + 乖離率 並發計算 ──────────────────────
             def _job_m1b():
-                import pandas as _pd_m1
-                _fm_tok_m1 = _get_fm_token()
-                _start_m1 = (datetime.date.today()-datetime.timedelta(days=420)).strftime('%Y-%m-%d')
-
-                # ── [Step 4] 路徑 0：tw_macro.fetch_cbc_m1b_m2 統一委派 ──
-                # 內含 Tier 1 (CBC ms1.json) + Tier 2 (CPX EF15M01) + Tier 3 (^TWII proxy)
-                # 全部走 NAS proxy,取代原本散落的 CPX EF01M01/EF17M01 + ms1.json 直連
-                try:
-                    from src.data.macro import fetch_cbc_m1b_m2 as _tw_cbc
-                    _cbc_snap = _tw_cbc()
-                    if _cbc_snap.get('m1b_yoy') is not None:
-                        _src_label = ('TWII-proxy' if _cbc_snap.get('is_proxy_tier')
-                                      else f'CBC-tier{_cbc_snap.get("tier_used")}')
-                        print(f'[M1B/tw_macro] ✅ {_src_label} '
-                              f'M1B={_cbc_snap["m1b_yoy"]:.2f}% M2={_cbc_snap["m2_yoy"]:.2f}%')
-                        return {'m1b_yoy': _cbc_snap['m1b_yoy'],
-                                'm2_yoy':  _cbc_snap['m2_yoy'],
-                                'source':  _src_label}
-                except Exception as _tw_e:
-                    print(f'[M1B/tw_macro] ❌ {_tw_e}')
-
-                # ── 路徑 2：FRED（台灣 M1B/M2，fetch_url + FRED_API_KEY）──
-                try:
-                    import os as _os_m1f
-                    from src.data.proxy import fetch_url as _fu_m1
-                    _fred_key_m1 = (_os_m1f.environ.get('FRED_API_KEY') or
-                                    (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
-                    _fp_m1 = {'api_key': _fred_key_m1} if _fred_key_m1 else {}
-                    _fred_base_p = {'file_type': 'json', 'sort_order': 'asc', 'limit': 36, **_fp_m1}
-                    _fred_m1b_r = _fu_m1('https://api.stlouisfed.org/fred/series/observations',
-                                         params={'series_id': 'MYAGM1TWA189S', **_fred_base_p}, timeout=12, attempts=1)
-                    _fred_m2_r  = _fu_m1('https://api.stlouisfed.org/fred/series/observations',
-                                         params={'series_id': 'MYAGM2TWA189S', **_fred_base_p}, timeout=12, attempts=1)
-                    if _fred_m1b_r is None or _fred_m2_r is None:
-                        raise ValueError('FRED fetch_url 回傳 None')
-                    print('[M1B/FRED] M1 OK M2 OK')
-                    if True:  # 保留縮排結構
-                        _obs_m1 = [o for o in _fred_m1b_r.json().get('observations', [])
-                                   if o.get('value', '.') != '.']
-                        _obs_m2 = [o for o in _fred_m2_r.json().get('observations', [])
-                                   if o.get('value', '.') != '.']
-                        _df_fred_m1 = _pd_m1.DataFrame(_obs_m1)
-                        _df_fred_m2 = _pd_m1.DataFrame(_obs_m2)
-                        for _dfm in [_df_fred_m1, _df_fred_m2]:
-                            _dfm['value'] = _pd_m1.to_numeric(_dfm['value'], errors='coerce')
-                        _df_fred_m1 = _df_fred_m1.dropna(subset=['value'])
-                        _df_fred_m2 = _df_fred_m2.dropna(subset=['value'])
-                        print(f'[M1B/FRED] M1 rows={len(_df_fred_m1)} M2 rows={len(_df_fred_m2)} last={_df_fred_m1["date"].iloc[-1] if len(_df_fred_m1) else "?"}')
-                        if len(_df_fred_m1) >= 13 and len(_df_fred_m2) >= 13:
-                            _m1b_yoy_f = round((_df_fred_m1['value'].iloc[-1]/_df_fred_m1['value'].iloc[-13]-1)*100, 2)
-                            _m2_yoy_f  = round((_df_fred_m2['value'].iloc[-1]/_df_fred_m2['value'].iloc[-13]-1)*100, 2)
-                            print(f'[M1B/FRED] ✅ M1B={_m1b_yoy_f:.2f}% M2={_m2_yoy_f:.2f}%')
-                            return {'m1b_yoy': _m1b_yoy_f, 'm2_yoy': _m2_yoy_f, 'source': 'FRED'}
-                except Exception as _fred_e:
-                    print(f'[M1B/FRED] ❌ {_fred_e}')
-
-                # ── 路徑 2b：IMF DataMapper API（FRED 備援，全球可達）──
-                try:
-                    # MABMM301 = M2 年增率%, MANMM101 = M1 年增率% (IMF IFS)
-                    from src.data.proxy import fetch_url as _fu_imf  # 強制走 NAS proxy（一致性；失敗自動降級直連）
-                    _imf_m1_r = _fu_imf(
-                        'https://www.imf.org/external/datamapper/api/v1/MANMM101/TW', timeout=15, attempts=1)
-                    _imf_m2_r = _fu_imf(
-                        'https://www.imf.org/external/datamapper/api/v1/MABMM301/TW', timeout=15, attempts=1)
-                    print(f'[M1B/IMF] M1={getattr(_imf_m1_r, "status_code", None)} M2={getattr(_imf_m2_r, "status_code", None)}')
-                    if (_imf_m1_r is not None and _imf_m2_r is not None
-                            and _imf_m1_r.status_code == 200 and _imf_m2_r.status_code == 200):
-                        _imf_m1_j = _imf_m1_r.json()
-                        _imf_m2_j = _imf_m2_r.json()
-                        _imf_m1_vals = _imf_m1_j.get('values', {}).get('MANMM101', {}).get('TW', {})
-                        _imf_m2_vals = _imf_m2_j.get('values', {}).get('MABMM301', {}).get('TW', {})
-                        print(f'[M1B/IMF] M1 years={len(_imf_m1_vals)} M2 years={len(_imf_m2_vals)}')
-                        if _imf_m1_vals and _imf_m2_vals:
-                            # IMF 返回的已是 YoY 年增率%，取最新一年
-                            _imf_m1_sorted = sorted([(k, float(v)) for k, v in _imf_m1_vals.items() if v is not None], key=lambda x: x[0])
-                            _imf_m2_sorted = sorted([(k, float(v)) for k, v in _imf_m2_vals.items() if v is not None], key=lambda x: x[0])
-                            if _imf_m1_sorted and _imf_m2_sorted:
-                                _m1b_yoy_imf = round(_imf_m1_sorted[-1][1], 2)
-                                _m2_yoy_imf  = round(_imf_m2_sorted[-1][1], 2)
-                                print(f'[M1B/IMF] ✅ year={_imf_m1_sorted[-1][0]} M1B={_m1b_yoy_imf:.2f}% M2={_m2_yoy_imf:.2f}%')
-                                return {'m1b_yoy': _m1b_yoy_imf, 'm2_yoy': _m2_yoy_imf, 'source': f'IMF({_imf_m1_sorted[-1][0]})'}
-                except Exception as _imf_e:
-                    print(f'[M1B/IMF] ❌ {_imf_e}')
-
-                # [Step 4] 舊路徑 3 (CBC ms1.json 直連) 已由 tw_macro Tier 1 取代
-
-                # 若所有真實來源都失敗，回傳 None（顯示「待更新」比顯示錯誤數字好）
-                print('[M1B] 所有路徑失敗，回傳 None')
-                return None
+                # P3-D2 v18.389:3-Tier fallback 下沉 macro_snapshot.fetch_m1b_m2_block
+                # FRED_API_KEY closure 由 caller 傳入,函式本身 pure-ish。
+                _fred_key_m1 = (os.environ.get('FRED_API_KEY')
+                                or (st.secrets.get('FRED_API_KEY')
+                                    if hasattr(st, 'secrets') else None) or '')
+                from src.data.macro.macro_snapshot import fetch_m1b_m2_block
+                return fetch_m1b_m2_block(fred_api_key=_fred_key_m1)
 
             def _job_bias():
+                # P3-D3 v18.389:純函式下沉 src/data/macro/macro_snapshot.compute_twii_bias
+                # closure dep: tw_raw.get('台股加權指數')
                 try:
-                    # tw_raw 只有 90 天，MA240 需要另外抓 2 年資料
-                    _twii = tw_raw.get('台股加權指數')
-                    _cc_b = 'Close' if (_twii is not None and 'Close' in getattr(_twii,'columns',[])) else 'close'
-                    _n_existing = len(_twii) if _twii is not None and not _twii.empty else 0
-                    if _n_existing < 240:
-                        # P1-1c v18.376:抽至 L1 fetch_twii_2y_for_ma240
-                        try:
-                            from src.data.macro.macro_snapshot import fetch_twii_2y_for_ma240
-                            _twii_2y = fetch_twii_2y_for_ma240()
-                            if _twii_2y is not None and len(_twii_2y) >= 240:
-                                _twii = _twii_2y
-                                _cc_b = 'Close'
-                            else:
-                                print(f'[Bias] 2y 資料不足,使用現有 {_n_existing} 天')
-                        except Exception as _yf_b_e:
-                            print(f'[Bias] yfinance 2y 失敗: {_yf_b_e}')
-                    if _twii is None or _twii.empty:
-                        return None
-                    # 寬鬆欄位查找：Close / close / Adj Close
-                    if _cc_b not in _twii.columns:
-                        _cc_b = next((c for c in _twii.columns if str(c).lower() in ('close','adj close','adjclose')), None)
-                        if _cc_b is None:
-                            print(f'[Bias] 找不到 Close 欄，現有欄位={list(_twii.columns)[:6]}')
-                            return None
-                    _cs = _twii[_cc_b].dropna()
-                    _n  = len(_cs)
-                    _lp = float(_cs.iloc[-1])
-                    _ma20  = float(_cs.tail(min(20,_n)).mean())
-                    _ma60  = float(_cs.tail(min(60,_n)).mean())
-                    _ma120 = float(_cs.tail(min(120,_n)).mean())
-                    _ma240 = float(_cs.tail(min(240,_n)).mean())
-                    print(f'[Bias] price={_lp:.0f} MA240={_ma240:.0f} bias240={((_lp-_ma240)/_ma240*100):.1f}% (n={_n})')
-                    return {
-                        'bias_20':  round((_lp-_ma20) /_ma20 *100, 1) if _ma20  else 0,
-                        'bias_60':  round((_lp-_ma60) /_ma60 *100, 1) if _ma60  else 0,
-                        'bias_240': round((_lp-_ma240)/_ma240*100, 1) if _ma240 else 0,
-                        'price':_lp,'ma20':_ma20,'ma60':_ma60,'ma120':_ma120,'ma240':_ma240,
-                        'data_days':_n,'is_estimated':_n<240
-                    }
-                except Exception:
+                    from src.data.macro.macro_snapshot import compute_twii_bias
+                    return compute_twii_bias(tw_raw.get('台股加權指數'))
+                except Exception as _bias_e:
+                    print(f'[Bias] compute_twii_bias 失敗: {_bias_e}')
                     return None
 
             def _job_macro():
-                """總經拼圖 v5.2：VIX/CPI/PMI/NDC/Export 並行抓取（NDC 改抓 StockFeel+MacroMicro 雙源）"""
-                import requests as _rq_mc
-                # L2: 使用頂層已匯入的 ThreadPoolExecutor / as_completed
-                _TPE, _asc_mc = ThreadPoolExecutor, as_completed
-                # 兼容 Python 3.8-3.10：concurrent.futures.TimeoutError 與 builtins.TimeoutError 不同類別
-                from concurrent.futures import TimeoutError as _ConcFutTimeout
+                """總經拼圖 v5.3:VIX/CPI/PMI/NDC/Export/Fed 並行抓取(thin orchestrator)。
 
-                def _mk_s():
-                    """NAS proxy Session — 直接套用 proxy_helper.get_proxies()"""
-                    from requests.adapters import HTTPAdapter as _HA
-                    from urllib3.util.retry import Retry as _Rt
-                    try:
-                        from src.data.proxy import get_proxies as _gp
-                        _px = _gp()
-                    except Exception:
-                        _px = None
-                    _s2 = _rq_mc.Session()
-                    _adp = _HA(max_retries=_Rt(total=2, backoff_factor=1.0,
-                               status_forcelist=[429, 503, 504], raise_on_status=False))
-                    _s2.mount('https://', _adp)
-                    _s2.mount('http://', _adp)
-                    if _px:
-                        _s2.proxies.update(_px)
-                    _s2.verify = False
-                    return _s2
+                P3-D1 v18.389:6 sub-fetcher(原 inline 共 604 LOC)全下沉至
+                src/data/macro/macro_snapshot.py fetch_*_block。本 _job_macro 留
+                並發 orchestration + provenance 注入。FRED key / FinMind token 由
+                outer scope 讀(EX-L0-1 st.secrets bootstrap)後顯式傳入。
+                """
+                from src.data.macro.macro_snapshot import (
+                    fetch_vix_block, fetch_cpi_block, fetch_fed_funds_block,
+                    fetch_tw_pmi_block, fetch_ndc_block, fetch_export_block,
+                )
+                _fred_key = (os.environ.get('FRED_API_KEY') or
+                             (st.secrets.get('FRED_API_KEY')
+                              if hasattr(st, 'secrets') else None) or '')
+                _fm_tok = (os.environ.get('FINMIND_TOKEN') or
+                           (st.secrets.get('FINMIND_TOKEN')
+                            if hasattr(st, 'secrets') else None) or '')
 
-                def _mk_s_tw():
-                    """台灣 IP proxy Session（同 _mk_s，保留名稱供既有呼叫相容）"""
-                    return _mk_s()
-
-                # ── 1. VIX ──────────────────────────────────────────────────────────
-                # v18.332 Tier2 2-D slice 1：抽至 L1 macro_snapshot.fetch_vix_block（可單測）。
-                from src.data.macro import fetch_vix_block as _fetch_vix  # P1-2 v18.373:macro_snapshot 搬到 L1
-
-                # ── 2. CPI（美國核心 CPI YoY，series CPILFESL）─────────────────────
-                #   v18.142 修：原本誤用 CPIAUCSL（總體 CPI All Items），與 UI 標籤
-                #   「美國核心 CPI」不符；data_registry.py L46 標 CPILFESL 為準。
-                #   新增方案 0：FRED 公開 fredgraph.csv（無需 API key，最穩）。
-                def _fetch_cpi():
-                    import datetime as _dt_cpi
-                    import io as _io_cpi
-                    import pandas as _pd_cpi
-                    _s = _mk_s()
-                    _cpi_errs = []
-                    # ── 方案0: FRED 公開 fredgraph.csv（CPILFESL，無需 key）────────
-                    try:
-                        from src.data.proxy import fetch_url as _fu_cpi
-                        _r0 = _fu_cpi('https://fred.stlouisfed.org/graph/fredgraph.csv',
-                                      params={'id': 'CPILFESL'},
-                                      timeout=10, attempts=1)
-                        print(f'[Macro/CPI/fredgraph] response={"OK" if _r0 else "None"}')
-                        if _r0 is not None and _r0.status_code == 200:
-                            _df0 = _pd_cpi.read_csv(
-                                _io_cpi.StringIO(_r0.content.decode('utf-8', errors='ignore')))
-                            _df0 = _df0.dropna()
-                            if len(_df0) >= 13:
-                                _vals0 = _pd_cpi.to_numeric(_df0.iloc[:, 1],
-                                                            errors='coerce').dropna()
-                                if len(_vals0) >= 13:
-                                    _yoy = round((_vals0.iloc[-1] / _vals0.iloc[-13] - 1) * 100, 2)
-                                    # v18.169：補 prev_yoy 供 MK 黃金拐點偵測（CPI 月度變化）
-                                    _prev_yoy = (round((_vals0.iloc[-2] / _vals0.iloc[-14] - 1) * 100, 2)
-                                                 if len(_vals0) >= 14 else None)
-                                    _date = str(_df0.iloc[-1, 0])[:10]
-                                    print(f'[Macro/CPI/fredgraph] ✅ YoY={_yoy:.2f}% prev={_prev_yoy} date={_date}')
-                                    return {'us_core_cpi': {'yoy': _yoy, 'prev_yoy': _prev_yoy,
-                                                            'date': _date,
-                                                            'source': 'FRED/fredgraph.csv',
-                                                            'series_id': 'CPILFESL'}}
-                            _cpi_errs.append(f'fredgraph:rows<13({len(_df0)})')
-                        else:
-                            _cpi_errs.append(f'fredgraph:HTTP{_r0.status_code if _r0 else "None"}')
-                    except Exception as _e:
-                        _cpi_errs.append(f'fredgraph:{type(_e).__name__}')
-                        print(f'[Macro/CPI/fredgraph] ❌ {_e}')
-                    # ── 方案1: FRED API（CPILFESL + API key 加速）────────────────
-                    try:
-                        import os as _os_cpi_f
-                        from src.data.proxy import fetch_url as _fu_cpi
-                        _fred_key_cpi = (_os_cpi_f.environ.get('FRED_API_KEY') or
-                                         (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
-                        _cpi_start = (_dt_cpi.datetime.now() - _dt_cpi.timedelta(days=365*3)).strftime('%Y-%m-%d')
-                        _cpi_end   = _dt_cpi.datetime.now().strftime('%Y-%m-%d')
-                        _cpi_p = {'series_id': 'CPILFESL', 'file_type': 'json',
-                                  'sort_order': 'asc', 'limit': 36,
-                                  'observation_start': _cpi_start,
-                                  'observation_end': _cpi_end}
-                        if _fred_key_cpi:
-                            _cpi_p['api_key'] = _fred_key_cpi
-                        _rc1 = _fu_cpi('https://api.stlouisfed.org/fred/series/observations',
-                                       params=_cpi_p, timeout=12, attempts=1)
-                        print(f'[Macro/CPI/FRED-API] response={"OK" if _rc1 else "None"}')
-                        if _rc1 is not None:
-                            _obs_c = [o for o in _rc1.json().get('observations', [])
-                                      if o.get('value', '.') != '.']
-                            if len(_obs_c) >= 13:
-                                _vals_c = [float(o['value']) for o in _obs_c]
-                                _yoy = round((_vals_c[-1] / _vals_c[-13] - 1) * 100, 2)
-                                # v18.169：補 prev_yoy 供 MK 黃金拐點偵測
-                                _prev_yoy = (round((_vals_c[-2] / _vals_c[-14] - 1) * 100, 2)
-                                             if len(_vals_c) >= 14 else None)
-                                _date = _obs_c[-1]['date']
-                                print(f'[Macro/CPI/FRED-API] ✅ YoY={_yoy:.2f}% prev={_prev_yoy} date={_date}')
-                                return {'us_core_cpi': {'yoy': _yoy, 'prev_yoy': _prev_yoy,
-                                                        'date': _date,
-                                                        'source': 'FRED-API',
-                                                        'series_id': 'CPILFESL'}}
-                    except Exception as _e:
-                        _cpi_errs.append(f'FRED-API:{type(_e).__name__}')
-                        print(f'[Macro/CPI/FRED-API] ❌ {_e}')
-                    # ── 方案2: BLS API（CUSR0000SA0L1E 核心 CPI SA）───────────────
-                    try:
-                        _rc = _s.post('https://api.bls.gov/publicAPI/v2/timeseries/data/',
-                                      json={'seriesid': ['CUSR0000SA0L1E'],
-                                            'startyear': str(_dt_cpi.date.today().year - 2),
-                                            'endyear':   str(_dt_cpi.date.today().year)},
-                                      headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'},
-                                      timeout=15, verify=False)
-                        print(f'[Macro/CPI/BLS] status={_rc.status_code}')
-                        if _rc.status_code == 200:
-                            _j = _rc.json()
-                            _obs = (_j.get('Results') or {}).get('series', [{}])[0].get('data', [])
-                            if len(_obs) >= 13:
-                                _s2 = sorted([o for o in _obs if o.get('period', 'M13') != 'M13'],
-                                             key=lambda x: (x['year'], x['period']))
-                                _valid = []
-                                for _o in _s2:
-                                    try:
-                                        _v = float(str(_o.get('value', '')).replace(',', ''))
-                                        if _v > 0:
-                                            _valid.append((_o, _v))
-                                    except Exception:
-                                        pass
-                                if len(_valid) >= 13:
-                                    _ents = [o for o, _ in _valid]
-                                    _vals = [v for _, v in _valid]
-                                    _yoy = round((_vals[-1] / _vals[-13] - 1) * 100, 2)
-                                    # v18.169：補 prev_yoy 供 MK 黃金拐點偵測
-                                    _prev_yoy = (round((_vals[-2] / _vals[-14] - 1) * 100, 2)
-                                                 if len(_vals) >= 14 else None)
-                                    _last = _ents[-1]
-                                    _date = f"{_last['year']}-{int(_last['period'][1:]):02d}-01"
-                                    print(f'[Macro/CPI/BLS] ✅ YoY={_yoy:.2f}% prev={_prev_yoy} date={_date}')
-                                    return {'us_core_cpi': {'yoy': _yoy, 'prev_yoy': _prev_yoy,
-                                                            'date': _date,
-                                                            'source': 'BLS',
-                                                            'series_id': 'CUSR0000SA0L1E'}}
-                    except Exception as _e:
-                        _cpi_errs.append(f'BLS:{type(_e).__name__}')
-                        print(f'[Macro/CPI/BLS] ❌ {_e}')
-                    return {'_err_cpi': ' | '.join(_cpi_errs) or 'all failed'}
-
-                # ── 2b. Fed Funds Rate（FRED FEDFUNDS，月均有效利率）─────────────
-                #   v18.169：MK 黃金拐點偵測需 CPI YoY × Fed Rate 同步月度比較。
-                #   兩層備援：① fredgraph.csv 公開無 key ② FRED API 帶 key 加速。
-                def _fetch_fed_funds():
-                    import datetime as _dt_ff
-                    import io as _io_ff
-                    import pandas as _pd_ff
-                    _ff_errs = []
-                    # ── 方案0: FRED 公開 fredgraph.csv（無需 key）────────────────
-                    try:
-                        from src.data.proxy import fetch_url as _fu_ff
-                        _r0 = _fu_ff('https://fred.stlouisfed.org/graph/fredgraph.csv',
-                                     params={'id': 'FEDFUNDS'},
-                                     timeout=10, attempts=1)
-                        print(f'[Macro/FedFunds/fredgraph] response={"OK" if _r0 else "None"}')
-                        if _r0 is not None and _r0.status_code == 200:
-                            _df0 = _pd_ff.read_csv(
-                                _io_ff.StringIO(_r0.content.decode('utf-8', errors='ignore')))
-                            _df0 = _df0.dropna()
-                            if len(_df0) >= 2:
-                                _vals0 = _pd_ff.to_numeric(_df0.iloc[:, 1],
-                                                           errors='coerce').dropna()
-                                if len(_vals0) >= 2:
-                                    _curr = round(float(_vals0.iloc[-1]), 2)
-                                    _prev = round(float(_vals0.iloc[-2]), 2)
-                                    _date = str(_df0.iloc[-1, 0])[:10]
-                                    print(f'[Macro/FedFunds/fredgraph] ✅ {_prev:.2f}%→{_curr:.2f}% date={_date}')
-                                    return {'fed_funds': {'current': _curr, 'prev': _prev,
-                                                          'date': _date,
-                                                          'source': 'FRED/fredgraph.csv',
-                                                          'series_id': 'FEDFUNDS'}}
-                            _ff_errs.append(f'fredgraph:rows<2({len(_df0)})')
-                        else:
-                            _ff_errs.append(f'fredgraph:HTTP{_r0.status_code if _r0 else "None"}')
-                    except Exception as _e:
-                        _ff_errs.append(f'fredgraph:{type(_e).__name__}')
-                        print(f'[Macro/FedFunds/fredgraph] ❌ {_e}')
-                    # ── 方案1: FRED API（FEDFUNDS + API key）────────────────────
-                    try:
-                        import os as _os_ff_f
-                        from src.data.proxy import fetch_url as _fu_ff
-                        _fred_key_ff = (_os_ff_f.environ.get('FRED_API_KEY') or
-                                        (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
-                        _ff_start = (_dt_ff.datetime.now() - _dt_ff.timedelta(days=365*2)).strftime('%Y-%m-%d')
-                        _ff_end = _dt_ff.datetime.now().strftime('%Y-%m-%d')
-                        _ff_p = {'series_id': 'FEDFUNDS', 'file_type': 'json',
-                                 'sort_order': 'asc', 'limit': 24,
-                                 'observation_start': _ff_start,
-                                 'observation_end': _ff_end}
-                        if _fred_key_ff:
-                            _ff_p['api_key'] = _fred_key_ff
-                        _rc1 = _fu_ff('https://api.stlouisfed.org/fred/series/observations',
-                                      params=_ff_p, timeout=12, attempts=1)
-                        print(f'[Macro/FedFunds/FRED-API] response={"OK" if _rc1 else "None"}')
-                        if _rc1 is not None:
-                            _obs_f = [o for o in _rc1.json().get('observations', [])
-                                      if o.get('value', '.') != '.']
-                            if len(_obs_f) >= 2:
-                                _vals_f = [float(o['value']) for o in _obs_f]
-                                _curr = round(_vals_f[-1], 2)
-                                _prev = round(_vals_f[-2], 2)
-                                _date = _obs_f[-1]['date']
-                                print(f'[Macro/FedFunds/FRED-API] ✅ {_prev:.2f}%→{_curr:.2f}% date={_date}')
-                                return {'fed_funds': {'current': _curr, 'prev': _prev,
-                                                      'date': _date,
-                                                      'source': 'FRED-API',
-                                                      'series_id': 'FEDFUNDS'}}
-                    except Exception as _e:
-                        _ff_errs.append(f'FRED-API:{type(_e).__name__}')
-                        print(f'[Macro/FedFunds/FRED-API] ❌ {_e}')
-                    return {'_err_fed_funds': ' | '.join(_ff_errs) or 'all failed'}
-
-                # ── 3. 台灣 PMI（CIER 中華經濟研究院）────────────────────────────
-                #   v3：Stock 端定位是台股視角，應抓「台灣製造業 PMI」（CIER 中華
-                #   經濟研究院每月第一個工作日公布），而非美國 ISM PMI。
-                #   舊版誤抓美國 ISM 導致與在地景氣脫節，且 ISM 自 2016-08 後 FRED
-                #   斷供，三段爬蟲備援也常掛。改呼叫 macro_core.fetch_tw_pmi()
-                #   共用函式（4 段備援：MacroMicro → CIER → StockFeel → 鉅亨）。
-                #   注意：session_state key 仍為 'ism_pmi' 以維持向後相容（14 處讀取
-                #   點不必動），但內容是台灣 PMI；UI 顯示為「🇹🇼 台灣製造業 PMI」。
-                def _fetch_pmi():
-                    """v3 薄殼：呼叫 macro_core.fetch_tw_pmi()，回傳台灣 CIER PMI。"""
-                    from src.data.macro import fetch_tw_pmi as _ftp
-                    _result = _ftp()
-                    if _result.get('value') is not None:
-                        return {'ism_pmi': _result}
-                    # 失敗：只回傳 _err_pmi（不再帶 value:None junk 進 macro_info）
-                    return {'_err_pmi': _result.get('_err_pmi', '4 段備援全失敗')}
-
-                # ── 4. NDC 景氣對策信號 v2 — StockFeel + MacroMicro 雙源（v10.57.0 復活）
-                #    舊源全廢（FinMind/NDC JSON/CKAN/行動版 HTML 都失效），改抓第三方。
-                def _fetch_ndc():
-                    import re as _re_ndc
-                    from src.data.proxy import fetch_url as _fu_ndc
-                    from bs4 import BeautifulSoup as _BS_ndc
-
-                    # 方案 A: StockFeel 股感（每月更新文章，HTML 含「綜合分數 39」）
-                    try:
-                        _sf_url = ('https://www.stockfeel.com.tw/'
-                                   '%E6%99%AF%E6%B0%A3%E5%B0%8D%E7%AD%96%E4%BF%A1%E8%99%9F-'
-                                   '%E6%99%AF%E6%B0%A3%E6%8C%87%E6%A8%99-%E7%B7%A8%E5%88%B6-'
-                                   '%E5%9C%8B%E7%99%BC%E6%9C%83/')
-                        _sf_r = _fu_ndc(_sf_url, timeout=12, attempts=1)
-                        if _sf_r is not None:
-                            _sf_r.encoding = 'utf-8'
-                            _txt_sf = _BS_ndc(_sf_r.text, 'html.parser').get_text(' ', strip=True)
-                            # 找最近一筆「YYYY年M月.*?綜合(?:判斷)?分數.*?N分」
-                            _m_sf = _re_ndc.search(
-                                r'(20\d{2})\s*年\s*(\d{1,2})\s*月[^。]{0,80}?綜合(?:判斷)?分數[^\d]{0,15}(\d{1,2})\s*分',
-                                _txt_sf)
-                            if _m_sf:
-                                _yr_sf, _mo_sf, _sc_sf = _m_sf.group(1), _m_sf.group(2), int(_m_sf.group(3))
-                                if 9 <= _sc_sf <= 45:
-                                    _date_sf = f'{_yr_sf}-{int(_mo_sf):02d}-01'
-                                    print(f'[NDC/StockFeel] ✅ score={_sc_sf} date={_date_sf}')
-                                    return {'ndc_signal': {'score': _sc_sf, 'signal': None,
-                                                           'date': _date_sf, 'source': 'StockFeel'}}
-                            print('[NDC/StockFeel] ⚠️ 未匹配「YYYY年M月...綜合分數N分」')
-                    except Exception as _e_sf:
-                        print(f'[NDC/StockFeel] ❌ {type(_e_sf).__name__}: {_e_sf}')
-
-                    # 方案 B: MacroMicro 財經 M 平方（UGC Charts 公開頁面）
-                    try:
-                        _mm_url = 'https://www.macromicro.me/collections/10/tw-monitoring-indicators-relative'
-                        _mm_r = _fu_ndc(_mm_url, timeout=12, attempts=1)
-                        if _mm_r is not None:
-                            _mm_r.encoding = 'utf-8'
-                            _txt_mm = _BS_ndc(_mm_r.text, 'html.parser').get_text(' ', strip=True)
-                            _m_mm = _re_ndc.search(
-                                r'景氣對策信號[^。]{0,200}?(\d{1,2})\s*分',
-                                _txt_mm)
-                            if _m_mm:
-                                _sc_mm = int(_m_mm.group(1))
-                                if 9 <= _sc_mm <= 45:
-                                    print(f'[NDC/MacroMicro] ✅ score={_sc_mm}')
-                                    return {'ndc_signal': {'score': _sc_mm, 'signal': None,
-                                                           'date': '', 'source': 'MacroMicro'}}
-                            print('[NDC/MacroMicro] ⚠️ 未匹配「景氣對策信號...N分」')
-                    except Exception as _e_mm:
-                        print(f'[NDC/MacroMicro] ❌ {type(_e_mm).__name__}: {_e_mm}')
-
-                    print('[NDC] ⚠️ 雙源皆失敗，回 _err_ndc 標記（v18.194 UI fail trace）')
-                    return {'_err_ndc': 'StockFeel + MacroMicro 雙源皆失敗'}
-
-                # ── 5. 台灣出口 YoY ─────────────────────────────────────────
-                def _fetch_export():
-                    import pandas as _pd7
-                    import io as _io_ex
-                    import os as _os_ex
-                    import re as _re_ex
-                    import datetime as _dt_ex
-                    _s_ex = _mk_s()
-                    _s_ex.verify = False
-                    _s_ex.headers.update({'User-Agent': 'Mozilla/5.0',
-                                          'Accept': 'application/json'})
-
-                    # 方案 0 (2026-06 新增): 中華民國統計資訊網 stat.gov.tw 出口年增率
-                    # 為什麼放首位？
-                    #   stat.gov.tw 是 DGBAS 官方點資料頁，每月更新最新 YoY，HTML 含
-                    #   「出口年增率 ... 12.3%」格式；走 fetch_url（NAS 中繼站）取台灣 IP。
-                    try:
-                        from src.data.proxy import fetch_url as _fu_stat
-                        from bs4 import BeautifulSoup as _BS_stat
-                        _stat_url = ('https://www.stat.gov.tw/Point.aspx?'
-                                     'sid=t.8&n=3587&sms=11480')
-                        _r_stat = _fu_stat(_stat_url, timeout=12, attempts=1)
-                        if _r_stat is not None and _r_stat.status_code == 200:
-                            _r_stat.encoding = 'utf-8'
-                            _txt_stat = _BS_stat(_r_stat.text, 'html.parser').get_text(' ', strip=True)
-                            # 模式：「2026年4月 出口年增率 18.9%」or「出口年增率 ... 18.9」
-                            _m_stat = _re_ex.search(
-                                r'(20\d{2})\s*年\s*(\d{1,2})\s*月[^。]{0,80}?'
-                                r'出口[^。]{0,30}?年增率?[^\d\-]{0,15}(-?\d{1,3}\.\d)\s*%?',
-                                _txt_stat)
-                            if _m_stat:
-                                _yr_s, _mo_s = int(_m_stat.group(1)), int(_m_stat.group(2))
-                                _yoy_s = float(_m_stat.group(3))
-                                if 1 <= _mo_s <= 12 and -80 <= _yoy_s <= 200:
-                                    _date_s = f'{_yr_s}-{_mo_s:02d}'
-                                    print(f'[Export/stat.gov.tw] ✅ YoY={_yoy_s:.2f}% date={_date_s}')
-                                    return {'tw_export': {'yoy': _yoy_s, 'date': _date_s,
-                                                          'source': 'stat.gov.tw'}}
-                            print('[Export/stat.gov.tw] ❌ HTML 未含可解析 YoY')
-                        else:
-                            print(f'[Export/stat.gov.tw] ❌ HTTP {getattr(_r_stat, "status_code", "None")}')
-                    except Exception as _e_stat:
-                        print(f'[Export/stat.gov.tw] ❌ {type(_e_stat).__name__}: {_e_stat}')
-
-                    # 方案FM: FinMind TaiwanEconomicIndicator 出口相關指標
-                    try:
-                        _fm_tok_ex = (_os_ex.environ.get('FINMIND_TOKEN') or
-                                      (st.secrets.get('FINMIND_TOKEN') if hasattr(st, 'secrets') else None))
-                        if _fm_tok_ex:
-                            _ex_start_fm = (_dt_ex.date.today() - _dt_ex.timedelta(days=365*2)).strftime('%Y-%m-%d')
-                            _fm_ex_r = _s_ex.get(
-                                'https://api.finmindtrade.com/api/v4/data',
-                                params={'dataset': 'TaiwanEconomicIndicator',
-                                        'start_date': _ex_start_fm, 'token': _fm_tok_ex},
-                                timeout=10)
-                            if _fm_ex_r.status_code == 200:
-                                _fm_ex_data = _fm_ex_r.json().get('data', [])
-                                # 尋找出口相關指標（外銷訂單 or 出口）
-                                for _kw_ex in ('出口', '外銷', 'export', 'Export'):
-                                    _ex_rows = [r for r in _fm_ex_data
-                                                if _kw_ex in str(r.get('indicator', ''))]
-                                    if _ex_rows:
-                                        _ex_rows.sort(key=lambda r: r.get('date', ''))
-                                        # 找同類指標最新 13 筆算 YoY
-                                        _ind_name = _ex_rows[-1].get('indicator')
-                                        _same = [r for r in _ex_rows if r.get('indicator') == _ind_name]
-                                        if len(_same) >= 13:
-                                            _cur_ex = float(_same[-1].get('value', 0) or 0)
-                                            _prev_ex = float(_same[-13].get('value', 1) or 1)
-                                            if _prev_ex != 0:
-                                                _yoy_ex = round((_cur_ex - _prev_ex) / abs(_prev_ex) * 100, 2)
-                                                _date_ex = str(_same[-1].get('date', ''))[:7]
-                                                print(f'[Export/FinMind] ✅ YoY={_yoy_ex:.2f}% date={_date_ex} ind={_ind_name}')
-                                                return {'tw_export': {'yoy': _yoy_ex, 'date': _date_ex,
-                                                                      'source': f'FinMind/{_ind_name}'}}
-                                        break
-                    except Exception as _e_fm_ex:
-                        print(f'[Export/FinMind] ❌ {type(_e_fm_ex).__name__}: {_e_fm_ex}')
-
-                    # 方案MOF: 財政部統計處 CSV — 透過 NAS proxy（台灣 IP 可直接存取）
-                    try:
-                        from src.data.proxy import fetch_url as _fu_ex
-                        _now_ex = _dt_ex.date.today()
-                        _mof_found = False
-                        # v10.61.0: 月份迴圈從 4 砍到 2（當月+上月），避免最壞 8 URL × ~12s = 100s
-                        # 拖爆 as_completed 70s timeout；MOF 通常上月就有，找不到再讓使用者手動重抓
-                        for _m_off in range(0, 2):
-                            if _mof_found:
-                                break
-                            _chk = (_now_ex.replace(day=1) - _dt_ex.timedelta(days=_m_off * 30))
-                            for _mof_url in [
-                                f'https://service.mof.gov.tw/public/Data/statistic/trade/excel/{_chk.year}{_chk.month:02d}.csv',
-                                f'https://service.mof.gov.tw/public/Data/statistic/trade/html/{_chk.year}{_chk.month:02d}.csv',
-                            ]:
-                                try:
-                                    _r_mof = _fu_ex(_mof_url, timeout=10, attempts=1)
-                                    if _r_mof is not None and len(_r_mof.content) > 500:
-                                        _df_mof = _pd7.read_csv(
-                                            _io_ex.StringIO(_r_mof.content.decode('utf-8-sig', errors='ignore')),
-                                            header=None)
-                                        _vals_mof = _pd7.to_numeric(_df_mof.iloc[:, 1], errors='coerce').dropna()
-                                        if len(_vals_mof) >= 13:
-                                            _yoy_mof = round((_vals_mof.iloc[-1] - _vals_mof.iloc[-13]) /
-                                                             abs(_vals_mof.iloc[-13]) * 100, 2)
-                                            print(f'[Export/MOF] ✅ YoY={_yoy_mof:.2f}% url={_mof_url[-25:]}')
-                                            _mof_found = True
-                                            return {'tw_export': {'yoy': _yoy_mof,
-                                                                  'date': f'{_chk.year}-{_chk.month:02d}',
-                                                                  'source': 'MOF-proxy'}}
-                                except Exception:
-                                    continue
-                    except Exception as _e_mof:
-                        print(f'[Export/MOF] ❌ {type(_e_mof).__name__}: {_e_mof}')
-
-                    # 方案DGTW: data.gov.tw dataset 6053「海關進出口貿易統計」CSV
-                    #   v18.142：deep-research 確認 6053 月更（NDC 官方）；走 NAS proxy
-                    try:
-                        from src.data.proxy import fetch_url as _fu_ex
-                        for _meta_url_ex in (
-                            'https://data.gov.tw/api/v2/rest/dataset/6053',
-                            'https://data.gov.tw/api/v1/rest/dataset/6053',
-                        ):
-                            try:
-                                _rm_ex = _fu_ex(_meta_url_ex, timeout=10, attempts=1,
-                                                headers={'Accept': 'application/json'})
-                                if _rm_ex is None or _rm_ex.status_code != 200:
-                                    continue
-                                _jm_ex = _rm_ex.json()
-                                _res_ex = (_jm_ex.get('result', {}).get('resources')
-                                           or _jm_ex.get('resources')
-                                           or _jm_ex.get('result', {}).get('distribution')
-                                           or [])
-                                _csv_url_ex = None
-                                for _it in _res_ex:
-                                    _fmt = str(_it.get('format', '')).upper()
-                                    _u = (_it.get('url') or _it.get('resourceDownloadUrl')
-                                          or _it.get('downloadUrl'))
-                                    if _fmt in ('CSV', 'TEXT', 'XLS', 'XLSX') and _u:
-                                        _csv_url_ex = _u
-                                        break
-                                if not _csv_url_ex:
-                                    continue
-                                _rc_ex = _fu_ex(_csv_url_ex, timeout=15, attempts=2)
-                                if _rc_ex is None or _rc_ex.status_code != 200:
-                                    continue
-                                _df_dgtw = _pd7.read_csv(_io_ex.StringIO(
-                                    _rc_ex.content.decode('utf-8-sig', errors='ignore')))
-                                # 找出口值欄（含「出口」字、不含「增/率/比」字）
-                                _val_k = next((c for c in _df_dgtw.columns
-                                               if '出口' in str(c) and not any(
-                                                   _x in str(c) for _x in ('增', '率', '比', '差'))), None)
-                                _dt_k = next((c for c in _df_dgtw.columns
-                                              if any(_x in str(c) for _x in ('年月', '月份', '日期', 'DATE', 'date'))), None)
-                                if _val_k and _dt_k and len(_df_dgtw) >= 13:
-                                    _df_dgtw = _df_dgtw.dropna(subset=[_val_k]).copy()
-                                    _df_dgtw[_val_k] = _pd7.to_numeric(
-                                        _df_dgtw[_val_k].astype(str).str.replace(',', ''),
-                                        errors='coerce')
-                                    _df_dgtw = _df_dgtw.dropna(subset=[_val_k])
-                                    if len(_df_dgtw) >= 13:
-                                        _cur_d = float(_df_dgtw[_val_k].iloc[-1])
-                                        _prv_d = float(_df_dgtw[_val_k].iloc[-13])
-                                        if _prv_d != 0:
-                                            _yoy_d = round((_cur_d - _prv_d) / abs(_prv_d) * 100, 2)
-                                            _date_d = str(_df_dgtw[_dt_k].iloc[-1])[:7]
-                                            print(f'[Export/data.gov.tw-6053] ✅ YoY={_yoy_d:.2f}% date={_date_d}')
-                                            return {'tw_export': {'yoy': _yoy_d, 'date': _date_d,
-                                                                  'source': 'data.gov.tw/6053'}}
-                            except Exception:
-                                continue
-                    except Exception as _e_dgtw:
-                        print(f'[Export/data.gov.tw-6053] ❌ {type(_e_dgtw).__name__}: {_e_dgtw}')
-
-                    # 方案FRED: FRED CSV（XTEXVA01TWM664S，OECD MEI，延遲 2-3 月）
-                    #   v18.142 修：原本用 VALEXPTWM052N（IMF IFS，延遲 ~13 月）→ user
-                    #   永遠看到「91 天前」。改 XTEXVA01TWM664S 立刻變新（deep-research 確認）。
-                    try:
-                        _ex_start = (_dt_ex.datetime.now() - _dt_ex.timedelta(days=365*5)).strftime('%Y-%m-%d')
-                        _ex_end   = _dt_ex.datetime.now().strftime('%Y-%m-%d')
-                        _fred_key_ex = (_os_ex.environ.get('FRED_API_KEY') or
-                                        (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
-                        _fred_ex_p = {'id': 'XTEXVA01TWM664S', 'observation_start': _ex_start,
-                                      'observation_end': _ex_end}
-                        if _fred_key_ex:
-                            _fred_ex_p['api_key'] = _fred_key_ex
-                        _r_fred = _fu_ex('https://fred.stlouisfed.org/graph/fredgraph.csv',
-                                         params=_fred_ex_p, timeout=8, attempts=1)
-                        print(f'[Export/FRED-XTEXVA01TWM664S] response={"OK" if _r_fred else "None"}')
-                        if _r_fred is not None and _r_fred.text.strip():
-                            _df_fred = _pd7.read_csv(
-                                _io_ex.StringIO(_r_fred.text),
-                                names=['date', 'value'], skiprows=1)
-                            _df_fred['value'] = _pd7.to_numeric(_df_fred['value'], errors='coerce')
-                            _df_fred = _df_fred.dropna(subset=['value'])
-                            if len(_df_fred) >= 13:
-                                _cur_f = float(_df_fred['value'].iloc[-1])
-                                _prev_f = float(_df_fred['value'].iloc[-13])
-                                if _prev_f and _prev_f != 0:
-                                    _yoy_f = round((_cur_f - _prev_f) / abs(_prev_f) * 100, 2)
-                                    _date_f = str(_df_fred['date'].iloc[-1])[:7]
-                                    print(f'[Export/FRED-XTEXVA01TWM664S] ✅ YoY={_yoy_f:.2f}% date={_date_f}')
-                                    return {'tw_export': {'yoy': _yoy_f, 'date': _date_f,
-                                                          'source': 'FRED/XTEXVA01TWM664S'}}
-                    except Exception as _e_fred:
-                        print(f'[Export/FRED-XTEXVA01TWM664S] ❌ {type(_e_fred).__name__}: {_e_fred}')
-
-                    # 方案2: data.gov.tw CKAN — 財政部進出口統計（加 Accept header 防空 body）
-                    try:
-                        _pkg2 = _s_ex.get(
-                            'https://data.gov.tw/api/3/action/package_search',
-                            params={'q': '進出口貿易統計', 'fq': 'organization:mof', 'rows': 5},
-                            headers={'Accept': 'application/json'},
-                            timeout=5)
-                        _pkg2_j = _pkg2.json()
-                        _res_id2 = None
-                        for _pk2 in ((_pkg2_j.get('result') or {}).get('results') or []):
-                            for _rs2 in (_pk2.get('resources') or []):
-                                if _rs2.get('format', '').upper() in ('CSV', 'TEXT'):
-                                    _res_id2 = _rs2.get('url') or _rs2.get('download_url')
-                                    break
-                            if _res_id2:
-                                break
-                        if _res_id2:
-                            _csv_ex = _s_ex.get(_res_id2, timeout=10)
-                            _df_ex = _pd7.read_csv(
-                                _io_ex.StringIO(_csv_ex.content.decode('utf-8-sig', errors='ignore')))
-                            _val_k = next((c for c in _df_ex.columns
-                                           if '出口' in c and '值' in c and '增' not in c), None)
-                            _dt_k = next((c for c in _df_ex.columns
-                                          if '年月' in c or '月份' in c or 'DATE' in c.upper()), None)
-                            if _val_k and _dt_k and len(_df_ex) >= 13:
-                                _df_ex = _df_ex.dropna(subset=[_val_k])
-                                _cur = float(str(_df_ex[_val_k].iloc[-1]).replace(',', ''))
-                                _prev = float(str(_df_ex[_val_k].iloc[-13]).replace(',', ''))
-                                if _prev != 0:
-                                    _yoy = round((_cur - _prev) / abs(_prev) * 100, 2)
-                                    _dv = str(_df_ex[_dt_k].iloc[-1])[:7]
-                                    print(f'[Export/gov-mof] ✅ YoY={_yoy:.2f}% date={_dv}')
-                                    return {'tw_export': {'yoy': _yoy, 'date': _dv, 'source': 'MOF-CSV'}}
-                        print(f'[Export/gov-mof] ❌ res_id={_res_id2}')
-                    except Exception as _e_gov2:
-                        print(f'[Export/gov-mof] ❌ {type(_e_gov2).__name__}: {_e_gov2}')
-
-                    # v18.330 §1 Fail Loud：所有方案全失敗 → **不捏造**任何數值。
-                    # 原本回傳一組寫死的歷史出口假值，會灌進總經儀表板、MK 拐點與 AI
-                    # 摘要（違 §1 寧可炸不可造假）。改回空 dict（不貢獻 tw_export key）→
-                    # 下游各 consumer 退為「待取得」placeholder（誠實顯示無資料）；失敗
-                    # 事實由本 log 記錄供診斷（§2.4 可觀測性）。
-                    print('[Export/fallback] ⚠️ 所有方案全失敗 → 回空（不捏造假值），UI 顯示「待取得」')
-                    return {}
-
-                # ── 並行執行（5 個獨立資料源同時跑，總時間 = max 而非 sum）──────
-                # v10.61.0: 改手動 executor 管理，as_completed timeout 後 shutdown(wait=False)
-                # 立刻逃離；避免 with-block 退出時 shutdown(wait=True) 卡在 stuck thread 上等
-                # ~240s（fetch_url 三層重試 × 8 個 MOF URL）拖爆外層 _fut_macro.result(80s)。
+                # ── 並行 6 source(v10.61.0 手動 executor + shutdown(wait=False))──
+                # 立即 cancel 未完成,避免 stuck thread 拖外層 80s timeout。
+                _fetchers = {
+                    'vix':       fetch_vix_block,
+                    'cpi':       lambda: fetch_cpi_block(fred_api_key=_fred_key),
+                    'pmi':       fetch_tw_pmi_block,
+                    'ndc':       fetch_ndc_block,
+                    'export':    lambda: fetch_export_block(
+                                     fred_api_key=_fred_key, finmind_token=_fm_tok),
+                    'fed_funds': lambda: fetch_fed_funds_block(fred_api_key=_fred_key),
+                }
                 _r = {}
-                _pool_mc = _TPE(max_workers=6)  # v18.169: 5→6 加 fed_funds
+                _pool_mc = ThreadPoolExecutor(max_workers=6)
                 try:
-                    _futs_mc = {
-                        _pool_mc.submit(_fetch_vix):        'vix',
-                        _pool_mc.submit(_fetch_cpi):        'cpi',
-                        _pool_mc.submit(_fetch_pmi):        'pmi',
-                        _pool_mc.submit(_fetch_ndc):        'ndc',
-                        _pool_mc.submit(_fetch_export):     'export',
-                        _pool_mc.submit(_fetch_fed_funds):  'fed_funds',  # v18.169 MK 拐點
-                    }
+                    _futs_mc = {_pool_mc.submit(fn): name
+                                for name, fn in _fetchers.items()}
                     try:
-                        for _fut_mc in _asc_mc(_futs_mc, timeout=70):
+                        for _fut_mc in as_completed(_futs_mc, timeout=70):
                             try:
                                 _part = _fut_mc.result()
                                 if _part:
@@ -1585,27 +774,25 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                             except Exception as _e:
                                 print(f'[Macro] ❌ {_futs_mc.get(_fut_mc, "?")}: {_e}')
                     except (TimeoutError, _ConcFutTimeout):
-                        # 70s 到仍有 future 未完成：取消未完成者，保留已收到的 partial _r
+                        # 70s 到仍有 future 未完成:取消未完成者,保留已收到的 partial _r
                         _stuck = [_futs_mc[_f] for _f in _futs_mc if not _f.done()]
                         for _f_pending in _futs_mc:
                             if not _f_pending.done():
                                 _f_pending.cancel()
-                        print(f'[Macro] ⏰ as_completed 70s timeout，未完成={_stuck}，保留已收到 keys={list(_r.keys())}')
+                        print(f'[Macro] ⏰ as_completed 70s timeout,未完成={_stuck},保留 keys={list(_r.keys())}')
                 finally:
-                    # wait=False：不等 stuck thread 自然結束（thread 會 zombie 在背景跑完後自滅）
-                    # 避免 with-block 預設 wait=True 把 _job_macro 卡到 240s
                     _pool_mc.shutdown(wait=False)
 
-                # Failsafe：即使全失敗也回傳 partial 標記（不回 None），讓診斷頁能區分
-                # 「沒抓」vs「抓過全失敗」；macro_info 至少有時間戳供 UX 判斷
-                _r.setdefault('_loaded_at', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                # Failsafe + provenance — 即使全失敗也回傳 partial 標記(不回 None),
+                # 讓診斷頁能區分「沒抓」vs「抓過全失敗」;macro_info 至少有時間戳供 UX 判斷。
+                _r.setdefault('_loaded_at',
+                              datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 if not any(k for k in _r if not k.startswith('_')):
                     _r['_all_failed'] = True
                 # v18.353 PR-Q3 S-PROV-1 phase 19:集中注入 fetched_at 到每個 sub-dict。
-                # 6 wrappers (_fetch_vix/cpi/pmi/ndc/export/fed_funds) 已有 'source' key
-                # (各自 dict 內,如 'FRED/fredgraph.csv' / 'BLS' / 'MOF-CSV' 等),
-                # 集中 setdefault('fetched_at') 比改 14 處 return point 乾淨。schema-additive,
-                # caller 0 改;§2.2 provenance(source + fetched_at)完整化。
+                # 6 fetchers (vix/cpi/pmi/ndc/export/fed_funds) 各自已有 'source' key
+                # (FRED/BLS/MOF-CSV 等),集中 setdefault('fetched_at') 比改 14 處 return
+                # point 乾淨,§2.2 provenance(source + fetched_at)完整化。schema-additive。
                 try:
                     _now_macro_prov = datetime.datetime.utcnow().isoformat() + 'Z'
                     for _k_prov, _v_prov in _r.items():
@@ -2226,779 +1413,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     if _show_market_data:
         _render_global_risk_bucket(_rr_fred_key, slow_verdict=_slow_v)
 
-    # ════════════════════════════════════════════════════════════════════
-    # 三、大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標
-    # ════════════════════════════════════════════════════════════════════
-    from shared.macro_buckets import bucket_group_banner_html as _bgb  # v18.310 桶群組 banner
-    st.markdown(_bgb('chips', 4), unsafe_allow_html=True)
-    st.markdown(section_header('三','🧩 籌碼｜🧮 大戶籌碼全貌：法人聰明錢 × 融資融券 × 先行指標','🧮'),unsafe_allow_html=True)
-
-    # ── v18.336 §1 Fail Loud：三源(法人/融資/先行指標)全空時明確診斷,不靜默空白 ──
-    # user 2026-06-28「§三 籌碼 資料不見了」：三源在缺 FINMIND_TOKEN / 來源無回應時全敗,
-    # 原本 `if inst:` / `if margin:` 靜默跳過 → 整區空白。改為:全空時印診斷卡指出原因 + 救法。
-    _li_probe3 = st.session_state.get('li_latest')
-    _chips_all_empty3 = (not inst) and (not margin) and (
-        _li_probe3 is None or getattr(_li_probe3, 'empty', True))
-    if _chips_all_empty3:
-        from shared.macro_buckets import chips_empty_state_html as _ces3
-        _attempted3 = bool(st.session_state.get('cl_ts')) or bool(
-            st.session_state.get('chips_loaded'))
-        try:
-            _fm_present3 = bool((getattr(st, 'secrets', {}) or {}).get('FINMIND_TOKEN')
-                                or os.environ.get('FINMIND_TOKEN', ''))
-        except Exception:
-            _fm_present3 = bool(os.environ.get('FINMIND_TOKEN', ''))
-        st.markdown(_ces3(attempted=_attempted3, token_present=_fm_present3),
-                    unsafe_allow_html=True)
-
-    if inst:
-        _fk3 = next((k for k in inst if '外資' in k and '陸資' in k), None) or next((k for k in inst if '外資' in k), None)
-        _tk3 = next((k for k in inst if '投信' in k), None)
-        _fn3 = inst[_fk3]['net'] if _fk3 else 0
-        _tn3 = inst[_tk3]['net'] if _tk3 else 0
-        if _fn3 >= 100:
-            _hye_c = TRAFFIC_GREEN
-            _hye_ind = f'外資大買超 {_fn3:.1f}億'
-            _hye_concl = '大戶點火，跟著大戶走 → 積極加碼'
-            _hye_act = '趁拉回布局，持股 80~100%'
-        elif _fn3 <= -100:
-            _hye_c = TRAFFIC_RED
-            _hye_ind = f'外資大賣超 {abs(_fn3):.1f}億'
-            _hye_concl = '大戶倒貨，嚴格減碼 → 離場為上'
-            _hye_act = '持股降至 0~30%，停損優先'
-        else:
-            _hye_c = '#8b949e'
-            _hye_ind = f'外資 {_fn3:+.1f}億（觀望區間）'
-            _hye_concl = '資金觀望，區間操作'
-            _hye_act = '持股 50%，高出低進等方向'
-        st.markdown(teacher_conclusion('宏爺', _hye_ind, _hye_concl, color=_hye_c), unsafe_allow_html=True)
-        st.markdown(f'<div style="color:#8b949e;font-size:11px;padding:1px 8px 6px 8px;">→ 建議行動：{_hye_act}</div>', unsafe_allow_html=True)
-        if _tn3 > 5:
-            st.markdown(f'<div style="color:#58a6ff;font-size:12px;padding:2px 6px;">• 投信買超 {_tn3:.1f}億 → 連續買超是加碼訊號</div>', unsafe_allow_html=True)
-        # 三大法人買賣超柱狀圖（直接用 plotly，繞過 st.bar_chart→altair 相容性問題）
-        _zk3 = next((k for k in inst if '自營' in k), None)
-        _bc_vals = [float(_fn3 or 0),
-                    float(_tn3 or 0),
-                    float((inst.get(_zk3) or {}).get('net', 0) or 0)]
-        _bc_colors = ['#58a6ff' if v >= 0 else TRAFFIC_RED for v in _bc_vals] + \
-                     [TRAFFIC_GREEN if _bc_vals[1] >= 0 else TRAFFIC_RED,
-                      '#ffd700' if _bc_vals[2] >= 0 else TRAFFIC_RED]
-        _bc_colors = ['#58a6ff' if _bc_vals[0] >= 0 else TRAFFIC_RED,
-                      TRAFFIC_GREEN if _bc_vals[1] >= 0 else TRAFFIC_RED,
-                      '#ffd700' if _bc_vals[2] >= 0 else TRAFFIC_RED]
-        try:
-            import plotly.graph_objects as _go_bc
-            _fig_bc = _go_bc.Figure(_go_bc.Bar(
-                x=['外資', '投信', '自營商'], y=_bc_vals,
-                marker_color=_bc_colors, text=[f'{v:+.1f}億' for v in _bc_vals],
-                textposition='outside'))
-            _fig_bc.update_layout(
-                height=200, margin=dict(t=30, b=10, l=10, r=10),
-                paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
-                font=dict(color='#e6edf3', size=12),
-                yaxis=dict(showgrid=False, zeroline=True,
-                           zerolinecolor='#484f58', showticklabels=False))
-            st.plotly_chart(_fig_bc, use_container_width=True,
-                            config={'displayModeBar': False})
-        except Exception as _bc_err:
-            st.caption(f'外資 {_bc_vals[0]:+.1f}億 ｜ 投信 {_bc_vals[1]:+.1f}億 ｜ 自營商 {_bc_vals[2]:+.1f}億')
-    if margin:
-        if margin >= MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
-            _sql_mc = TRAFFIC_RED
-            _sql_mind = f'融資餘額 {margin:.0f}億'
-            _sql_mconcl = '極度危險，嚴防多殺多 → 行情尾端'
-            _sql_mact = '全面減碼，勿追高，準備逃命'
-        elif margin >= MARGIN_BALANCE_WARN_THRESHOLD_YI:
-            _sql_mc = TRAFFIC_YELLOW
-            _sql_mind = f'融資餘額 {margin:.0f}億'
-            _sql_mconcl = '水位偏高，籌碼凌亂 → 警戒操作'
-            _sql_mact = '持股降至 50% 以下，避免重倉'
-        else:
-            _sql_mc = TRAFFIC_GREEN
-            _sql_mind = f'融資餘額 {margin:.0f}億'
-            _sql_mconcl = '籌碼乾淨，安全水位 → 可積極布局'
-            _sql_mact = '健康多頭格局，持股 70~100%'
-        st.markdown(teacher_conclusion('孫慶龍', _sql_mind, _sql_mconcl, color=_sql_mc), unsafe_allow_html=True)
-        st.markdown(f'<div style="color:#8b949e;font-size:11px;padding:1px 8px 6px 8px;">→ 建議行動：{_sql_mact}</div>', unsafe_allow_html=True)
-    st.markdown('<hr style="border-color:#21262d;margin:10px 0;">', unsafe_allow_html=True)
-
-    # ── 宏爺外資期貨（先行指標快速結論）─────────────────────────────────
-    _li4 = st.session_state.get('li_latest')
-    if _li4 is not None and not _li4.empty:
-        _fut4 = (float(_li4.iloc[-1].get('外資大小', 0)) if '外資大小' in _li4.columns else None)
-        _pcr4 = (float(_li4.iloc[-1].get('選PCR', 0)) if '選PCR' in _li4.columns else None)
-        if _fut4 is not None:
-            _pcr_txt = f' | PCR {_pcr4:.1f}' if _pcr4 else ''
-            _l4_ind = f'外資期貨 {_fut4:,.0f}口{_pcr_txt}'
-            # 宏爺絕對口數門檻（容錯率最高）
-            if _fut4 <= -30000:
-                _l4c = f'外資期貨空單 {abs(_fut4):,.0f}口 > 3萬口，啟動強制防禦，強制減倉至20%以下，等待空單回補'
-                _l4a = '強制減倉至 20% 以下，嚴禁追高攤平，保護本金'
-            elif _fut4 <= -15000:
-                _l4c = f'外資期貨空單 {abs(_fut4):,.0f}口，空單累積中，大戶動向保守，逢高調節'
-                _l4a = '收回資金，持股降至 50%，等待明確表態'
-            elif _fut4 > 0:
-                _l4c = f'外資期貨多單 {_fut4:,.0f}口，外資期貨翻多，燃料充足，積極作多'
-                _l4a = '順勢重壓強勢股，持股 80~100%'
-            else:
-                _l4c = f'外資期貨微空 {abs(_fut4):,.0f}口，水位正常，依個股技術面操作'
-                _l4a = '持股 70%，現金 30% 備用'
-        else:
-            _l4c = '先行指標欄位異常，請確認 FinMind Token'
-            _l4a = ''
-            _l4_ind = '外資期貨留倉'
-    else:
-        _l4c = '先行指標尚未載入，請點擊「🚀 一鍵更新全部數據」'
-        _l4a = ''
-        _l4_ind = '外資期貨留倉'
-    # v18.336：三源全空時上方已有 fail-loud 診斷卡,此處不重複「尚未載入」(避免點過更新仍喊更新)
-    if not _chips_all_empty3:
-        st.markdown(teacher_conclusion('宏爺', _l4_ind, _l4c, _l4a), unsafe_allow_html=True)
-
-    # ── 副標籤：欄位確認列（v12 風格）─────────────────────────────────
-    st.markdown("""<div style="font-size:11px;color:#484f58;margin:-6px 0 10px 0;">
-✅ 外資期貨留倉口數 &nbsp;｜&nbsp; ✅ 前五大/前十大交易人 &nbsp;｜&nbsp; ✅ 外資選擇權金額 &nbsp;｜&nbsp; ✅ 韭菜指數 &nbsp;｜&nbsp; ✅ PCR
-</div>""", unsafe_allow_html=True)
-
-    # 先行指標隨更新大盤自動載入（執行緒快取版，build_leading_fast）
-    df_li_show = st.session_state.get('li_latest')
-
-    if df_li_show is not None and not df_li_show.empty:
-        # v18.342 PR-L2:預存 is_stale 旗標(copy 前讀,copy 後 attrs 可能丟失)
-        _is_stale_li = bool(getattr(df_li_show, 'attrs', {}).get('is_stale', False))
-        _stale_age_li = getattr(df_li_show, 'attrs', {}).get('stale_age_min')
-        # 向前填補 NaN（各欄位用最後一次有效數值補齊，避免 API 部分失敗造成空格）
-        _li_num_cols = [c for c in df_li_show.columns if c != '日期']
-        df_li_show = df_li_show.copy()
-        df_li_show[_li_num_cols] = df_li_show[_li_num_cols].ffill()
-
-        # ── ① 資料期間 caption ─────────────────────────────────────────
-        _li_dates = df_li_show['日期'].tolist() if '日期' in df_li_show.columns else []
-        if _li_dates:
-            _d0 = _li_dates[0]
-            _d1 = _li_dates[-1]
-            st.caption(
-                f'📅 資料期間：{_d0} ~ {_d1}  共 {len(df_li_show)} 筆  '
-                f'｜外資空單>3萬⚠️  前五大>1萬⚠️  PCR<100偏空'
-            )
-            # v18.342 PR-L2:stale fallback 顯示「📦 上次有效資料」chip(§2.4)
-            if _is_stale_li:
-                _age_txt = f'{_stale_age_li:.0f} 分鐘前' if isinstance(
-                    _stale_age_li, (int, float)) else '較早'
-                st.markdown(
-                    f'<div style="display:inline-block;font-size:11px;color:#f0883e;'
-                    f'background:#0d1117;border:1px solid #f0883e;border-radius:4px;'
-                    f'padding:3px 9px;margin:2px 0 8px 0;">'
-                    f'📦 顯示上次有效資料({_age_txt}抓的)— 當次 FinMind 無新資料'
-                    f'(週末/假日/API 額度) → 數值非今日最新</div>',
-                    unsafe_allow_html=True)
-
-        # S-PROV-1 UI chip v18.265 — provenance(source + fetched_at,從 df 末筆讀)
-        try:
-            _li_prov_src = None
-            _li_prov_at = None
-            if "source" in df_li_show.columns and not df_li_show.empty:
-                _li_prov_src = str(df_li_show["source"].iloc[-1])
-            if "fetched_at" in df_li_show.columns and not df_li_show.empty:
-                _li_prov_at = str(df_li_show["fetched_at"].iloc[-1])[:19]
-            if _li_prov_src or _li_prov_at:
-                st.markdown(
-                    f"<div style='font-size:10px;color:#888;padding:3px 8px;"
-                    f"background:#0d1117;border-radius:4px;margin:2px 0 6px 0'>"
-                    f"📍 來源:{_li_prov_src or '—'}　🕐 抓取:{_li_prov_at or '—'} UTC"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-        except Exception:
-            pass
-
-        # ── ② 主表格（render_leading_table，已內含深色主題CSS）──────────
-        st.markdown(render_leading_table(df_li_show), unsafe_allow_html=True)
-
-        # 欄位說明 → 已移至 Tab 5 策略手冊
-
-
-
-        # ── ③ 進階警示訊號（依建議加入5個條件）──────────────────────────
-        _last_row = df_li_show.iloc[-1] if not df_li_show.empty else {}
-        _fut_net  = _last_row.get('外資大小')
-        _pcr      = _last_row.get('選PCR')
-        _opt_net  = _last_row.get('外(選)')
-        _leek     = _last_row.get('韭菜指數')
-        _foreign  = _last_row.get('外資')  # 現貨外資買賣
-        _trust    = _last_row.get('投信')  # 投信買賣
-        _warnings = []
-
-        # 訊號 1：期權同向崩盤訊號（最強烈）
-        # 期貨大空 + 選擇權外資淨空 → 不惜成本避險
-        try:
-            if _fut_net is not None and float(_fut_net) < -20000:
-                if _opt_net is not None and float(_opt_net) < 0:
-                    _warnings.append(('🔴', '期權同向崩盤警戒',
-                        f'期貨空{abs(float(_fut_net)):,.0f}口 + 選擇權外資淨空{float(_opt_net):,.0f}千元',
-                        '外資「不惜成本」雙向避險，高機率隨即殺盤，建議降倉至30%以下'))
-                elif _fut_net is not None and float(_fut_net) < -30000:
-                    _warnings.append(('🟡', '期貨大空警戒',
-                        f'外資期貨空單 {abs(float(_fut_net)):,.0f} 口（>3萬口門檻）',
-                        '注意流向：若每日持續增加空單才是真訊號；若空單縮減則危機解除'))
-        except Exception:
-            pass
-
-        # 訊號 2：韭菜指數極端值
-        try:
-            if _leek is not None:
-                _leek_f = float(_leek)
-                if _leek_f > 30:
-                    _warnings.append(('🔴', '散戶過度樂觀（韭菜極端多）',
-                        f'法人空多比 +{_leek_f:.1f}%（超過+30%警戒線）',
-                        '散戶一面倒看多，短線見頂訊號，主力容易在此出貨'))
-                elif _leek_f < -30:
-                    _warnings.append(('🟢', '軋空動能極強（韭菜極端空）',
-                        f'法人空多比 {_leek_f:.1f}%（超過-30%機會線）',
-                        '散戶爭相放空，軋空動能強，千萬不要在此放空，逆勢做多機會'))
-        except Exception:
-            pass
-
-        # 訊號 3：外資投信同買（最強籌碼訊號）
-        try:
-            if _foreign is not None and _trust is not None:
-                _f2 = float(_foreign)
-                _t2 = float(_trust)
-                if _f2 > 50 and _t2 > 5:
-                    _warnings.append(('🟢', '外資投信同買（籌碼共鳴）',
-                        f'外資+{_f2:.0f}億 + 投信+{_t2:.1f}億 同步買超',
-                        '外投同買的股票漲幅連續性最強，現貨籌碼最乾淨'))
-                elif _f2 < -100 and _t2 < -5:
-                    _warnings.append(('🔴', '外資投信同賣（籌碼潰散）',
-                        f'外資{_f2:.0f}億 + 投信{_t2:.1f}億 同步賣超',
-                        '雙主力同步出場，下跌壓力沉重'))
-        except Exception:
-            pass
-
-        # 訊號 4：PCR 極端值判斷
-        try:
-            if _pcr is not None:
-                _pcr_f = float(_pcr)
-                if _pcr_f < 80:
-                    _warnings.append(('🔴', '選擇權Put/Call偏低（市場過樂觀）',
-                        f'PCR={_pcr_f:.1f}（<80偏危險，市場保護不足）',
-                        '選擇權市場無人買保護，通常出現在短線頂部'))
-                elif _pcr_f > 150:
-                    _warnings.append(('🟢', '選擇權Put/Call偏高（恐慌區）',
-                        f'PCR={_pcr_f:.1f}（>150偏多，市場過度悲觀）',
-                        '大量買保護代表市場恐慌，通常是逆向布局訊號'))
-        except Exception:
-            pass
-
-        # 訊號 5：成交量萎縮（市場觀望）
-        try:
-            # P4: vectorized str → numeric，避免逐列 Python 呼叫
-            _vols = (pd.to_numeric(
-                df_li_show['成交量'].tail(5).astype(str).str.replace('億','', regex=False),
-                errors='coerce').dropna().tolist()
-                if '成交量' in df_li_show.columns else [])
-            if len(_vols) >= 3:
-                _avg_vol = sum(_vols[:-1]) / len(_vols[:-1])
-                _last_vol = _vols[-1]
-                if _last_vol < _avg_vol * 0.7:
-                    _warnings.append(('🟡', '成交量急萎縮（市場觀望）',
-                        f'今日成交量{_last_vol:.0f}億（前{len(_vols)-1}日均量{_avg_vol:.0f}億的{_last_vol/_avg_vol*100:.0f}%）',
-                        '量縮超過30%代表市場觀望，方向選擇前勿輕易追高'))
-                elif _last_vol > _avg_vol * 1.5:
-                    _warnings.append(('🔵', '成交量急放（趨勢加速）',
-                        f'今日成交量{_last_vol:.0f}億（前均量{_avg_vol:.0f}億的{_last_vol/_avg_vol*100:.0f}%）',
-                        '成交量暴增50%以上，趨勢加速，注意是否配合方向'))
-        except Exception:
-            pass
-
-        if _warnings:
-            for _wc, _wt, _wd, _wa in _warnings:
-                _wcolor = ('#2ea043' if _wc == '🟢' else
-                           '#da3633' if _wc == '🔴' else
-                           TRAFFIC_YELLOW if _wc == '🟡' else '#388bfd')
-                st.markdown(
-                    f'<div style="border-left:5px solid {_wcolor};background:#0d1117;'
-                    f'padding:9px 14px;border-radius:0 8px 8px 0;margin:4px 0;">'
-                    f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">⚡ 進階警示</span><br>'
-                    f'<span style="font-size:14px;font-weight:900;color:{_wcolor};">{_wc} {_wt}</span><br>'
-                    f'<span style="font-size:12px;color:#c9d1d9;">{_wd}</span><br>'
-                    f'<span style="font-size:11px;color:#8b949e;">→ {_wa}</span>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-
-        
-        # ── ⑤ v4.0 總經一票否決 (Task 2) ─────────────────────────────
-        try:
-            _v4_pcr = float(_last_row.get('選PCR') or 100)
-            _v4_fut = float(_last_row.get('外資大小') or 0)
-            _v4_mac = V4StrategyEngine.__new__(V4StrategyEngine)
-            _v4_mac.macro = {'vix': 15, 'foreign_futures': _v4_fut, 'pcr': _v4_pcr}
-            _v4_veto = _v4_mac.check_macro_veto()
-            _v4_c = _v4_veto['color']
-            st.markdown(
-                f'<div style="border-left:5px solid {_v4_c};background:#0d1117;'
-                f'padding:9px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
-                f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">🏛️ v4.0 總經否決權</span><br>'
-                f'<span style="font-size:14px;font-weight:900;color:{_v4_c};">'
-                f'{_v4_veto["status"]} — 最大建議持股 {_v4_veto["max_position"]}%</span><br>'
-                f'<span style="font-size:12px;color:#c9d1d9;">{_v4_veto["msg"]}</span>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-        except Exception as _v4e:
-            pass
-
-
-        # ── v5.0 動態資產配置建議（純現金策略，無 ETF）────────────────
-        try:
-            _v5_fut = float(_last_row.get('外資大小') or 0)
-            if _v5_fut <= -30000:
-                _v5_stock, _v5_cash = 20, 80
-                _v5_strategy = '嚴禁追高攤平，保護本金優先；可留意低基期高殖利率個股'
-                _v5_color = TRAFFIC_RED
-            elif _v5_fut <= -15000:
-                _v5_stock, _v5_cash = 50, 50
-                _v5_strategy = '收回資金，逢高減碼漲多個股，等待期空回補訊號'
-                _v5_color = TRAFFIC_YELLOW
-            elif _v5_fut > 0:
-                _v5_stock, _v5_cash = 90, 10
-                _v5_strategy = '期貨翻多，順勢重壓強勢股，外投同買個股優先布局'
-                _v5_color = TRAFFIC_GREEN
-            else:
-                _v5_stock, _v5_cash = 70, 30
-                _v5_strategy = '水位中性，依個股技術面操作，保留現金彈藥'
-                _v5_color = '#58a6ff'
-            st.markdown(
-                f'<div style="border-left:5px solid {_v5_color};background:#0d1117;'
-                f'padding:9px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
-                f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">💰 v5 動態配置</span><br>'
-                f'<span style="font-size:14px;font-weight:900;color:{_v5_color};">'
-                f'建議股票 {_v5_stock}% ／現金 {_v5_cash}%</span><br>'
-                f'<span style="font-size:12px;color:#c9d1d9;">📌 {_v5_strategy}</span>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-        except Exception:
-            pass
-
-# ── ④ 資料來源診斷（收合，供進階使用者確認）─────────────────────
-        with st.expander('🔍 資料來源診斷（點此確認各欄數據正確性）', expanded=False):
-            # v18.350 PR-P1:加 TTL + 備援優先級兩欄,SSOT 對齊「資料診斷 Tab」(app.py:1649
-            # tab_diag),避免 user 誤把 30min 快取舊值當「即時」。dict 升級為 4-tuple:
-            # (來源主鏈, 公式, TTL, 備援優先級或 single-source 標註)。
-            _diag_cols = {
-                '外資大小':       ('FinMind TX+MTX 期貨留倉',
-                                   '外資大台淨口 + 外資小台淨口×0.25',
-                                   '30 分(build_leading_fast pickle)',
-                                   '① FinMind TX → ② FinMind MTX → ③ TAIFEX futContractsDate 備援'),
-                '前五大留倉':     ('TAIFEX largeTraderFutQry POST',
-                                   '前五大買方所有契約 − 賣方所有契約',
-                                   '30 分(同上)',
-                                   '單一源(免費 FinMind 無此資料)'),
-                '前十大留倉':     ('TAIFEX largeTraderFutQry POST',
-                                   '前十大買方所有契約 − 賣方所有契約',
-                                   '30 分(同上)',
-                                   '單一源'),
-                '選PCR':          ('TAIFEX pcRatio POST',
-                                   'Put未平倉量 / Call未平倉量 × 100',
-                                   '30 分(同上)',
-                                   '① TAIFEX → ② FinMind TXO 法人估算(備援)'),
-                '外(選)':         ('TAIFEX callsAndPutsDate POST',
-                                   'BC金額 − SC金額 − BP金額 + SP金額',
-                                   '30 分(同上)',
-                                   '單一源'),
-                '韭菜指數':       ('TAIFEX futContractsDate+futDailyMarketReport',
-                                   '(法人空方MTX OI − 法人多方MTX OI) / 全體MTX OI × 100',
-                                   '30 分(同上)',
-                                   '① TAIFEX → ② FinMind 法人空多比估算(備援)'),
-                '外資/投信/自營': ('TWSE BFI82U(via Squid Proxy)',
-                                   '三大法人現貨買賣差額(億元)',
-                                   '10 分(TTL_CONFIG[institutional])',
-                                   '① TWSE → ② FinMind → ③ pkl Cache(過期)'),
-                '成交量':         ('TWSE FMTQIK 月報',
-                                   '每日全市場成交金額(億元)',
-                                   '10 分(TTL_CONFIG[volume])',
-                                   '① TWSE OpenAPI → ② YFinance → ③ Cache'),
-            }
-            # 頂部全域註腳:cache 新鮮度告示
-            st.markdown(
-                '<div style="font-size:11px;color:#f0883e;background:#0d1117;'
-                'padding:6px 10px;border-left:3px solid #f0883e;margin:4px 0 10px;">'
-                '💡 <b>注意 cache 新鮮度</b>:本表所列指標多走 30 分鐘 pickle 快取 + '
-                'st.cache_data。週末/假日 4 個 FinMind API 全空時 leading_fast 會 fallback '
-                '到過期 pickle(已標 📦 stale chip)。「即時」≠「最新交易日」,以畫面上方'
-                '「資料期間」caption 為準。</div>',
-                unsafe_allow_html=True)
-            for _col, _tup in _diag_cols.items():
-                # 向下相容:舊 2-tuple 仍 fallback(避免外部 caller 改 dict 時崩)
-                if len(_tup) == 4:
-                    _src, _formula, _ttl, _fallback = _tup
-                else:
-                    _src, _formula = _tup[0], _tup[1]
-                    _ttl, _fallback = '-', '-'
-                st.markdown(
-                    f'<div style="font-size:12px;color:#8b949e;padding:3px 0;">'
-                    f'<b style="color:#c9d1d9;">{_col}</b> → 主來源:{_src}<br>'
-                    f'&nbsp;&nbsp;&nbsp;公式:{_formula}<br>'
-                    f'&nbsp;&nbsp;&nbsp;⏱ TTL:{_ttl}<br>'
-                    f'&nbsp;&nbsp;&nbsp;🔀 備援優先級:{_fallback}</div>',
-                    unsafe_allow_html=True
-                )
-            # [BUG FIX] 最新一筆原始值 - 用 pd.isna 確保 NaN 不造成 format error
-            if len(df_li_show) > 0:
-                _raw = df_li_show.iloc[-1]
-                st.markdown('<br><b style="color:#c9d1d9;font-size:12px;">最新一筆原始值：</b>', unsafe_allow_html=True)
-                _raw_items = []
-                for _c in ['外資大小','前五大留倉','前十大留倉','選PCR','外(選)','韭菜指數','外資','投信','自營']:
-                    _v = _raw.get(_c)
-                    if _v is not None:
-                        try:
-                            import pandas as _pd_raw
-                            if not _pd_raw.isna(_v):  # [BUG FIX] 過濾 NaN 避免 format 崩潰
-                                _raw_items.append(f'{_c}={float(_v):+,.0f}')
-                        except Exception:
-                            _raw_items.append(f'{_c}={_v}')
-                st.code(' | '.join(_raw_items), language=None)
-
-        # ── ⑤ 下載按鈕（Base64 data URL，不依賴 WebSocket）──────
-        try:
-            import base64 as _b64_li
-            _csv_li = df_li_show.to_csv(index=False, encoding='utf-8-sig')
-            _b64_li_data = _b64_li.b64encode(_csv_li.encode('utf-8-sig')).decode()
-            st.markdown(
-                f'<a href="data:text/csv;charset=utf-8-sig;base64,{_b64_li_data}" '
-                f'download="先行指標.csv" '
-                f'style="display:inline-block;padding:5px 14px;background:#21262d;'
-                f'color:#e6edf3;border:1px solid #30363d;border-radius:6px;'
-                f'font-size:13px;text-decoration:none;">⬇️ 下載先行指標 CSV</a>',
-                unsafe_allow_html=True
-            )
-        except Exception:
-            pass
-
-    else:
-        # v18.340 §1 Fail Loud：對齊 PR #362 chips_empty_state 三狀態分流(table 專屬 helper)。
-        # user 2026-06-28「原來的 table 呢?」(對比 6/14 截圖)→ 真正根因常是 FINMIND_TOKEN
-        # 缺失/失效,舊文案沒明指,user 找不到救法。新 helper 明確分流:
-        #   未載入(灰) / 已試+無token(橙明指 FINMIND_TOKEN) / 已試+有token(橙歸因額度/週末)。
-        from shared.macro_buckets import leading_table_empty_state_html as _li_es
-        _attempted_li = bool(cd) or bool(st.session_state.get('cl_ts')) or bool(
-            st.session_state.get('chips_loaded'))
-        try:
-            _fm_present_li = bool((getattr(st, 'secrets', {}) or {}).get('FINMIND_TOKEN')
-                                  or os.environ.get('FINMIND_TOKEN', ''))
-        except Exception:
-            _fm_present_li = bool(os.environ.get('FINMIND_TOKEN', ''))
-        st.markdown(_li_es(attempted=_attempted_li, token_present=_fm_present_li),
-                    unsafe_allow_html=True)
-
-    # 宏爺判斷方式 → 已移至 Tab 5 策略手冊
-
-    # ── 宏爺智能綜合結論 ─────────────────────────────────────────────────────
-    _df_li_c = st.session_state.get('li_latest')
-    if _df_li_c is not None and not _df_li_c.empty:
-        _last_li = _df_li_c.iloc[-1]
-        _fnet = safe_get(_last_li.get('外資大小'))
-        _pcr  = safe_get(_last_li.get('選PCR'))
-        _leek = safe_get(_last_li.get('韭菜指數'))
-        _top5 = safe_get(_last_li.get('前五大留倉'))
-        _opt  = safe_get(_last_li.get('外(選)'))
-        _date = _last_li.get('日期','最新')
-
-        _score = 0
-        _sigs = []
-        if _fnet is not None:
-            if   _fnet < -30000:
-                _score -= 2
-                _sigs.append(f'🔴 期貨空單 {_fnet:,.0f}口（超越3萬危險線）')
-            elif _fnet <      0:
-                _score -= 1
-                _sigs.append(f'⚠️ 期貨淨空 {_fnet:,.0f}口')
-            else:
-                _score += 1
-                _sigs.append(f'✅ 期貨淨多 {_fnet:+,.0f}口')
-        if _pcr is not None:
-            if   _pcr > 130:
-                _score += 1
-                _sigs.append(f'🟢 PCR={_pcr:.0f}（>130強支撐）')
-            elif _pcr > 100:
-                _sigs.append(f'🔵 PCR={_pcr:.0f}（偏多）')
-            else:
-                _score -= 1
-                _sigs.append(f'🔴 PCR={_pcr:.0f}（<100偏空）')
-        if _opt is not None:
-            if   _opt >  10000:
-                _score += 1
-                _sigs.append(f'🟢 外選 +{_opt:,.0f}千元（多方佈局）')
-            elif _opt < -10000:
-                _score -= 1
-                _sigs.append(f'🔴 外選 {_opt:,.0f}千元（空方佈局）')
-            else:
-                _sigs.append(f'⚪ 外選 {_opt:+,.0f}千元（中性）')
-        if _top5 is not None:
-            if   _top5 < -10000:
-                _score -= 1
-                _sigs.append(f'🔴 前五大淨空 {_top5:,.0f}口（警戒）')
-            elif _top5 >       0:
-                _score += 1
-                _sigs.append(f'✅ 前五大淨多 {_top5:+,.0f}口')
-        if _leek is not None:
-            if   _leek > 10:
-                _score -= 1
-                _sigs.append(f'🔴 韭菜指數{_leek:.1f}%（散戶過熱）')
-            elif _leek < -5:
-                _score += 1
-                _sigs.append(f'✅ 韭菜指數{_leek:.1f}%（散戶悲觀）')
-            else:
-                _sigs.append(f'⚪ 韭菜指數{_leek:.1f}%（中性）')
-
-        if   _score <= -3:
-            _vd='🚨 強烈偏空'
-            _vc=TRAFFIC_RED
-            _va='建議大幅降倉，等待空單回補訊號'
-        elif _score <= -1:
-            _vd='🔴 偏空'
-            _vc='#da6d3e'
-            _va='籌碼不穩，建議觀望為主'
-        elif _score ==  0:
-            _vd='⚪ 多空分歧'
-            _vc=TRAFFIC_YELLOW
-            _va='訊號分歧，小倉觀察，詳見策略手冊'
-        elif _score <=  2:
-            _vd='🟢 偏多'
-            _vc=TRAFFIC_GREEN
-            _va='籌碼偏健康，可正常持倉'
-        else:
-            _vd='💚 強烈偏多'
-            _vc='#2ea043'
-            _va='聰明錢明顯佈多，積極持倉'
-
-        st.markdown(
-            f'<div style="background:#0d1117;border:2px solid {_vc}44;border-radius:10px;padding:14px 18px;margin:8px 0;">'
-            f'<div style="font-size:11px;color:#8b949e;margin-bottom:4px;">🎯 {_date} 籌碼綜合判斷</div>'
-            f'<div style="font-size:24px;font-weight:900;color:{_vc};">{_vd}</div>'
-            f'<div style="font-size:13px;color:#c9d1d9;margin:6px 0 10px 0;">{_va}</div>'
-            f'<div style="font-size:12px;color:#484f58;">{" ； ".join(_sigs)}</div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-
-
-    st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
-    # v18.310 桶群組 banner：AI 綜合(跨桶 AI §九 + 新聞 AI 裁決 §十一)
-    from shared.macro_buckets import bucket_group_banner_html as _bgb
-    st.markdown(_bgb('ai', 6), unsafe_allow_html=True)
-    st.markdown(section_header('九', '🧠 跨桶｜總經 AI 投資決策分析', '🧠'), unsafe_allow_html=True)
-
-    # ── 安全取數 ────────────────────────────────────────────────
-    _ai_vix  = float(_m8_vix.get('current', 0))  if _m8_vix else None
-    _ai_vma  = float(_m8_vix.get('ma20', 0))     if _m8_vix else None
-    _ai_is_cli = bool(_m8_pmi.get('is_oecd_cli', False)) if _m8_pmi else False
-    _ai_cli  = float(_m8_pmi.get('value', 100))  if (_m8_pmi and _ai_is_cli) else None
-    _ai_pmi  = float(_m8_pmi.get('value', 50))   if (_m8_pmi and not _ai_is_cli) else None
-    _ai_exp  = float(_m8_exp.get('yoy', 0))      if _m8_exp else None
-    _ai_cpi  = float(_m8_cpi.get('yoy', 0))      if _m8_cpi else None
-    _ai_mi8  = st.session_state.get('m1b_m2_info') or {}
-    _ai_m1b  = float(_ai_mi8['m1b_yoy']) if _ai_mi8.get('m1b_yoy') is not None else None
-    _ai_m2   = float(_ai_mi8['m2_yoy'])  if _ai_mi8.get('m2_yoy') is not None else None
-    _ai_gap  = round(_ai_m1b - _ai_m2, 2) if (_ai_m1b is not None and _ai_m2 is not None) else None
-    _ai_bias = float(st.session_state.get('bias_info', {}).get('bias_240', 0))
-    _ai_sox  = float((tech_s.get('費城半導體 SOX') or {}).get('pct') or 0)
-    _ai_nvda = float((tech_s.get('輝達 NVDA') or {}).get('pct') or 0)
-    _ai_twii_pct = float((tech_s.get('大盤 TWII') or tw_s.get('台股加權指數') or {}).get('pct') or 0)
-
-    # ── ① 目前總經位階 ──────────────────────────────────────────
-    _ai1_lbl, _ai1_clr, _ai1_desc, _ai1_cyc = '資料載入中', '#484f58', '請點擊更新總經拼圖', None
-    _cycle_ref = _ai_cli if _ai_cli is not None else (_ai_pmi if _ai_pmi is not None else None)
-    _cycle_exp = (_cycle_ref >= 100.0) if (_ai_cli is not None) else (_cycle_ref >= 50.0 if _cycle_ref is not None else None)
-    if _ai_exp is not None:
-        _exp_str = f'外銷訂單YoY={_ai_exp:+.1f}%'
-        _cli_str = (f'OECD CLI={_ai_cli:.2f}' if _ai_cli is not None else
-                    f'台灣 PMI={_ai_pmi:.1f}' if _ai_pmi is not None else '')
-        if _cycle_exp and _ai_exp >= 10:
-            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣擴張強勢期 📈', TRAFFIC_RED, 'bull'
-            _ai1_desc = f'{_cli_str}（擴張）× {_exp_str}（強勁需求）— 主升段格局，基本面充分支撐'
-        elif _cycle_exp and _ai_exp > 0:
-            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣溫和擴張 🟢', TRAFFIC_GREEN, 'bull'
-            _ai1_desc = f'{_cli_str}（擴張）× {_exp_str}— 穩步復甦，基本面有撐，持股安全'
-        elif _cycle_exp and _ai_exp <= 0:
-            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣高峰震盪 ⚡', TRAFFIC_YELLOW, 'peak'
-            _ai1_desc = f'{_cli_str}（微擴張）× {_exp_str}— 高位整理，需求疲軟，留意反轉訊號'
-        elif not _cycle_exp and _ai_exp >= 5:
-            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣觸底回升 💎', '#58a6ff', 'recovery'
-            _ai1_desc = f'{_cli_str}（收縮但出口反彈）× {_exp_str}— 左側佈局黃金窗口'
-        elif not _cycle_exp and _ai_exp < 0:
-            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣收縮期 📉', '#8b949e', 'bear'
-            _ai1_desc = f'{_cli_str}（收縮）× {_exp_str}— 多看少做，等待出口數據翻正'
-        else:
-            _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣整理期 🟡', TRAFFIC_YELLOW, 'neutral'
-            _ai1_desc = f'{_cli_str} × {_exp_str}— 方向待確認，保守持股'
-    elif _cycle_ref is not None:
-        _cli_str = f'OECD CLI={_ai_cli:.2f}' if _ai_cli is not None else f'台灣 PMI={_ai_pmi:.1f}'
-        _ai1_lbl = '景氣擴張（出口待確認）' if _cycle_exp else '景氣趨緩（出口待確認）'
-        _ai1_clr = TRAFFIC_GREEN if _cycle_exp else TRAFFIC_YELLOW
-        _ai1_cyc = 'bull' if _cycle_exp else 'neutral'
-        _ai1_desc = f'{_cli_str} — 外銷訂單數據載入中'
-
-    # ── ② 建議配置 ──────────────────────────────────────────────
-    _ai2_lbl, _ai2_clr, _ai2_desc = '計算中', '#484f58', '等待 VIX 及資金數據'
-    if _ai_vix is not None:
-        _r1_ok  = _ai_vix < 20
-        _r2_exp = _ai_exp is not None and _ai_exp >= 10
-        _r2_gap = _ai_gap is not None and _ai_gap >= 1.0
-        _r2_cnt = int(_r2_exp) + int(_r2_gap)
-        _r3_sox = _ai_sox >= 1.5 or _ai_nvda >= 2.0
-        _r3_tw  = _ai_twii_pct > 0
-        _r3_cnt = int(_r3_sox) + int(_r3_tw)
-        _fuel_str = ((' 出口+' if _r2_exp else '') + (' M1B-M2+' if _r2_gap else '')).strip(' +') or '—'
-        if not _r1_ok:
-            _ai2_lbl, _ai2_clr = '⛔ 防禦模式 持股0~20%', TRAFFIC_RED
-            _ai2_desc = f'VIX={_ai_vix:.1f}≥20，大環境風險偏高，現金為王，等待 VIX<20 才考慮進場'
-        elif _r2_cnt >= 2 and _r3_cnt >= 1:
-            _ai2_lbl, _ai2_clr = '🚀 積極進攻 持股80~100%', '#f0e040'
-            _ai2_desc = f'VIX={_ai_vix:.1f}安全 × 燃料充足（{_fuel_str}）× 點火訊號啟動 — 三環齊備，重壓主流'
-        elif _r2_cnt >= 1 and _r3_cnt >= 1:
-            _ai2_lbl, _ai2_clr = '🔥 標準多頭 持股60~80%', TRAFFIC_RED
-            _ai2_desc = f'VIX={_ai_vix:.1f}安全，燃料（{_fuel_str}）有效，順勢佈局強勢個股，跌破10MA停損'
-        elif _r3_cnt >= 1:
-            _ai2_lbl, _ai2_clr = '🛡️ 試探建倉 持股30~50%', TRAFFIC_YELLOW
-            _ai2_desc = '短線點火訊號存在但燃料不足，打帶跑策略，見好就收，嚴設停損'
-        else:
-            _ai2_lbl, _ai2_clr = '⏸️ 保守觀望 持股30%以下', '#8b949e'
-            _ai2_desc = '三環條件均不足，保留現金等待更明確訊號，避免追高'
-
-    # ── ③ 目前貨幣流向 ──────────────────────────────────────────
-    _ai3_lbl, _ai3_clr, _ai3_desc = '待取得 M1B/M2', '#484f58', '央行貨幣數據載入中'
-    if _ai_gap is not None:
-        _gap_str = f'M1B={_ai_m1b:.1f}% M2={_ai_m2:.1f}% Gap={_ai_gap:+.2f}%'
-        if _ai_gap >= 2.0:
-            _ai3_lbl, _ai3_clr = '🔥 熱錢大量流入股市', TRAFFIC_RED
-            _ai3_desc = f'{_gap_str} — 黃金交叉大幅擴散，投機資金湧入，活絡貨幣遠超廣義貨幣'
-        elif _ai_gap >= 1.0:
-            _ai3_lbl, _ai3_clr = '✅ 資金動能轉強', TRAFFIC_GREEN
-            _ai3_desc = f'{_gap_str} — 活絡資金超越廣義貨幣，熱錢進場訊號確立，行情可期'
-        elif _ai_gap >= 0:
-            _ai3_lbl, _ai3_clr = '🟡 資金溫和偏多', TRAFFIC_YELLOW
-            _ai3_desc = f'{_gap_str} — M1B微幅領先，資金偏多但動能尚未爆發，需等待 Gap≥1% 確認'
-        elif _ai_gap > -1.0:
-            _ai3_lbl, _ai3_clr = '⚠️ 資金略偏保守', TRAFFIC_YELLOW
-            _ai3_desc = f'{_gap_str} — M2相對偏高，部分資金仍停留在定存，股市吸引力不足'
-        else:
-            _ai3_lbl, _ai3_clr = '📉 資金明顯外逃', '#8b949e'
-            _ai3_desc = f'{_gap_str} — 死亡交叉，資金轉向固定收益，股市失血，謹慎操作'
-    elif _ai_m1b is not None:
-        _ai3_lbl, _ai3_clr = f'M1B={_ai_m1b:.1f}% M2待取得', '#484f58'
-        _ai3_desc = 'M2 數據未就緒，暫無法判斷 Gap'
-
-    # ── ④ 美股動態 ──────────────────────────────────────────────
-    _ai4_lbl, _ai4_clr, _ai4_desc = '待取得', '#484f58', 'VIX / CPI 數據載入中'
-    if _ai_vix is not None:
-        _cpi_ok  = _ai_cpi is None or _ai_cpi < 3.0
-        _cpi_wrm = _ai_cpi is not None and 3.0 <= _ai_cpi < 4.0
-        _cpi_hot = _ai_cpi is not None and _ai_cpi >= 4.0
-        _cpi_s   = f' CPI={_ai_cpi:.1f}%' if _ai_cpi is not None else ''
-        _sox_s   = f' SOX={_ai_sox:+.1f}%' if _ai_sox else ''
-        _vma_s   = f' MA20={_ai_vma:.1f}' if _ai_vma else ''
-        if _ai_vix < 20 and _cpi_ok and (_ai_sox >= 1.5 or _ai_nvda >= 2.0):
-            _ai4_lbl, _ai4_clr = '🚀 美股強勢，科技領漲', TRAFFIC_RED
-            _ai4_desc = f'VIX={_ai_vix:.1f}（恐慌低）{_sox_s}（半導體點火）{_cpi_s} — 台股跟漲機率高，可積極佈局科技'
-        elif _ai_vix < 20 and _cpi_ok:
-            _ai4_lbl, _ai4_clr = '🟢 美股平穩，降息預期支撐', TRAFFIC_GREEN
-            _ai4_desc = f'VIX={_ai_vix:.1f}{_vma_s}（安全）{_cpi_s} — 無系統性風險，有利個股選股表現'
-        elif _ai_vix < 20 and _cpi_wrm:
-            _ai4_lbl, _ai4_clr = '🟡 美股震盪，通膨黏性制約', TRAFFIC_YELLOW
-            _ai4_desc = f'VIX={_ai_vix:.1f}尚可但{_cpi_s}偏高 — Fed降息預期受壓，資金轉向謹慎，避免過度加槓桿'
-        elif _ai_vix < 20 and _cpi_hot:
-            _ai4_lbl, _ai4_clr = '⚠️ 美股承壓，Fed鷹派升溫', TRAFFIC_YELLOW
-            _ai4_desc = f'VIX={_ai_vix:.1f}{_cpi_s}超標 — 高利率環境延續，外資提款風險升高，注意匯率走勢'
-        elif _ai_vix < 30:
-            _ai4_lbl, _ai4_clr = '🟡 美股波動加劇，謹慎操作', TRAFFIC_YELLOW
-            _ai4_desc = f'VIX={_ai_vix:.1f}（警戒區間 20~30）{_vma_s} — 市場情緒不確定，控制倉位，勿追高'
-        else:
-            _ai4_lbl, _ai4_clr = '🔴 美股恐慌模式，流動性危機', TRAFFIC_RED
-            _ai4_desc = f'VIX={_ai_vix:.1f}≥30 — 全球流動性急凍，強制防禦，任何技術面買訊均視為誘多'
-
-    # ── ⑤ 結論 ──────────────────────────────────────────────────
-    _ai5_pts = []
-    if _ai1_cyc == 'bull':
-        _ai5_pts.append('景氣擴張有基本面支撐')
-    elif _ai1_cyc == 'recovery':
-        _ai5_pts.append('景氣觸底，左側佈局機會')
-    elif _ai1_cyc == 'peak':
-        _ai5_pts.append('高位整理，防範反轉')
-    elif _ai1_cyc == 'bear':
-        _ai5_pts.append('景氣收縮，防禦優先')
-    if _ai_gap is not None:
-        if _ai_gap >= 1.0:
-            _ai5_pts.append(f'M1B-M2 Gap=+{_ai_gap:.1f}% 資金動能正向共振')
-        elif _ai_gap < 0:
-            _ai5_pts.append('M1B-M2死亡交叉，貨幣資金外逃')
-    if _ai_vix is not None:
-        if _ai_vix < 15:
-            _ai5_pts.append(f'VIX={_ai_vix:.1f} 極度平靜')
-        elif _ai_vix < 20:
-            _ai5_pts.append(f'VIX={_ai_vix:.1f} 安全窗口')
-        elif _ai_vix >= 30:
-            _ai5_pts.append(f'VIX={_ai_vix:.1f} 觸發危機，暫停攻擊')
-    if _ai_bias >= 15:
-        _ai5_pts.append(f'年線乖離+{_ai_bias:.1f}% 高估值需嚴設停損')
-    elif _ai_bias <= -5:
-        _ai5_pts.append(f'年線乖離{_ai_bias:.1f}% 超跌逢低佈局')
-    if _ai_exp is not None:
-        if _ai_exp >= 10:
-            _ai5_pts.append(f'外銷訂單YoY={_ai_exp:+.1f}% 出口強勁')
-        elif _ai_exp < -5:
-            _ai5_pts.append(f'外銷訂單YoY={_ai_exp:+.1f}% 出口衰退警訊')
-
-    if _ai5_pts:
-        _ai5_txt = '；'.join(_ai5_pts) + '。'
-        _bull_score = (int(_ai1_cyc in ('bull', 'recovery')) +
-                       int(_ai_gap is not None and _ai_gap >= 1.0) +
-                       int(_ai_vix is not None and _ai_vix < 20) +
-                       int(_ai_exp is not None and _ai_exp >= 0))
-        _bear_score = (int(_ai1_cyc == 'bear') +
-                       int(_ai_gap is not None and _ai_gap < 0) +
-                       int(_ai_vix is not None and _ai_vix >= 30))
-        if _bull_score >= 3 and _bear_score == 0:
-            _ai5_clr, _ai5_icon = TRAFFIC_GREEN, '✅ 整體偏多，積極操作'
-        elif _bear_score >= 2 or (_ai_vix is not None and _ai_vix >= 30):
-            _ai5_clr, _ai5_icon = TRAFFIC_RED, '🚨 整體偏空，防禦為主'
-        elif _bull_score >= 2:
-            _ai5_clr, _ai5_icon = TRAFFIC_YELLOW, '🟡 溫和偏多，精選個股'
-        else:
-            _ai5_clr, _ai5_icon = '#8b949e', '⏸️ 中性觀望，等待訊號'
-    else:
-        _ai5_txt  = '請點擊「更新總經拼圖」載入資料後自動生成結論。'
-        _ai5_clr, _ai5_icon = '#484f58', '⏳ 等待資料'
-
-    # ── 渲染五維度卡片 ────────────────────────────────────────────
-    _aic1, _aic2, _aic3 = st.columns(3)
-    def _ai_card(title, label, desc, color):
-        return (f'<div style="background:#0d1117;border:1px solid {color}44;border-radius:8px;'
-                f'padding:12px;min-height:110px;">'
-                f'<div style="font-size:10px;color:#484f58;margin-bottom:4px;">{title}</div>'
-                f'<div style="font-size:13px;font-weight:700;color:{color};line-height:1.3;">{label}</div>'
-                f'<div style="font-size:11px;color:#8b949e;margin-top:6px;line-height:1.5;">{desc}</div>'
-                f'</div>')
-    with _aic1:
-        st.markdown(_ai_card('① 目前總經位階', _ai1_lbl, _ai1_desc, _ai1_clr), unsafe_allow_html=True)
-    with _aic2:
-        st.markdown(_ai_card('② 建議配置', _ai2_lbl, _ai2_desc, _ai2_clr), unsafe_allow_html=True)
-    with _aic3:
-        st.markdown(_ai_card('③ 目前貨幣流向', _ai3_lbl, _ai3_desc, _ai3_clr), unsafe_allow_html=True)
-
-    _aic4, _aic5 = st.columns(2)
-    with _aic4:
-        st.markdown(_ai_card('④ 美股動態', _ai4_lbl, _ai4_desc, _ai4_clr), unsafe_allow_html=True)
-    with _aic5:
-        st.markdown(
-            f'<div style="background:#0d1117;border:2px solid {_ai5_clr};border-radius:8px;'
-            f'padding:12px;min-height:110px;">'
-            f'<div style="font-size:10px;color:#484f58;margin-bottom:4px;">⑤ 結論</div>'
-            f'<div style="font-size:14px;font-weight:900;color:{_ai5_clr};">{_ai5_icon}</div>'
-            f'<div style="font-size:12px;color:#c9d1d9;margin-top:6px;line-height:1.6;">{_ai5_txt}</div>'
-            f'</div>', unsafe_allow_html=True)
+    # F-7.1 B-S8-A v18.388:Section 3 籌碼桶抽至 macro/section_chips.py(LOC 3034→~2475)。
+    render_section_chips(inst, margin, cd)
+    # F-7.1 B-S8-B v18.388:§九 跨桶 AI 抽至 macro/section_cross_ai.py(P2 v18.389 rename)。
+    render_section_cross_ai(tech_s, tw_s)
 
     # ══════════════════════════════════════════════════════════════
     # SECTION 十: 📊 總經訊號歷史驗證 — v18.191 ARCHIVED
@@ -3021,7 +1439,7 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     #     st.caption(f"⚠️ 歷史驗證 section 載入失敗：{_e_hv}")
 
 
-    # F-7.1 B-3:Section 10/11 AI 總裁決抽至 src/ui/tabs/macro/section_ai.py
-    render_section_ai(_macro_info, _tl_eff_reg)
+    # F-7.1 B-3:§十一 News AI 總裁決抽至 src/ui/tabs/macro/section_news_ai.py
+    render_section_news_ai(_macro_info, _tl_eff_reg)
     st.caption("📖 想看總經原理教室(景氣循環 / PMI / 殖利率倒掛 / 美林時鐘 等 10 章)?"
                "→ 已移至「📖 系統說明書」Tab,含資料來源完整地圖 + 4 大師策略。")

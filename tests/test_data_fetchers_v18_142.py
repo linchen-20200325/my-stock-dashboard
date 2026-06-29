@@ -12,7 +12,12 @@ from pathlib import Path
 
 
 _ROOT = Path(__file__).parent.parent
-_TAB_MACRO = (_ROOT / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
+# P3-D1 v18.389:_job_macro 5 sub-fetcher 下沉至 macro_snapshot.py;
+# 此測試的 source-level 斷言改掃 tab_macro + macro_snapshot 合集。
+_TAB_MACRO = (
+    (_ROOT / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
+    + (_ROOT / "src/data/macro/macro_snapshot.py").read_text(encoding="utf-8")
+)
 _DATA_REG = (_ROOT / "src/data/core/data_registry.py").read_text(encoding="utf-8")
 _MACRO_CORE = (_ROOT / "src/data/macro/macro_core.py").read_text(encoding="utf-8")
 _TAB_EDU = (_ROOT / "src/ui/tabs/tab_edu.py").read_text(encoding="utf-8")

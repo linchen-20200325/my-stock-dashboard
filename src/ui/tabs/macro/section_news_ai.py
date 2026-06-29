@@ -1,6 +1,6 @@
-"""src/ui/tabs/macro/section_ai.py — Section 10/11 AI 總裁決(F-7.1 B-3 抽出)。
+"""src/ui/tabs/macro/section_news_ai.py — Section 十一 News AI 總裁決(F-7.1 B-3 抽出,P2 v18.389 rename)。
 
-🤖 AI 總裁決(實體狀態鎖架構):
+🤖 News AI 總裁決(實體狀態鎖架構):
 - 前端唯讀 macro_state.json
 - LLM 運算由觸發按鈕在背景執行並寫檔
 - 結尾含「教室搬至說明書」指引註解
@@ -22,8 +22,8 @@ from src.services.macro_state_locker import (
 )
 
 
-def render_section_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
-    """渲染 AI 總裁決區(原 tab_macro line 4227-4521)。"""
+def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
+    """渲染§十一 News AI 總裁決區(原 tab_macro line 4227-4521)。"""
     # app.py 內部 helper(lazy import,避 L5→L6 違憲於 module load 時 trigger)
     from app import _fetch_macro_news, gemini_call  # noqa: F401
     # ══════════════════════════════════════════════════════════════

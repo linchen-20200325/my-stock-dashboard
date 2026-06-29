@@ -119,13 +119,13 @@ def test_ui_module_exposes_render_function():
 
 def test_ui_validation_section_before_ai_verdict():
     """v18.156 user 要求：歷史驗證 section（十）必須在 AI 總裁決（十一）之前。
-    F-7.1 B-3:§十一 section_header 搬至 macro/section_ai.py;改檢 render_section_ai() call 位置。"""
+    F-7.1 B-3 + P2 v18.389:§十一 抽至 macro/section_news_ai.py;改檢 render_section_news_ai() call 位置。"""
     src = (Path(__file__).parent.parent / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
     idx_validation = src.find("render_history_validation_section()")
-    idx_ai_verdict = src.find("render_section_ai(")
+    idx_ai_verdict = src.find("render_section_news_ai(")
     assert idx_validation > 0 and idx_ai_verdict > 0
     assert idx_validation < idx_ai_verdict, \
-        "歷史驗證（section 十）應在 AI 總裁決（section 十一,F-7.1 B-3 抽出)之前"
+        "歷史驗證（section 十）應在 News AI 總裁決（section 十一,F-7.1 B-3 抽出)之前"
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
