@@ -6,6 +6,7 @@
 
 | 段落          | 子模組                  | 函式                       | LOC |
 |---------------|------------------------|---------------------------|-----|
+| 🚦 紅綠燈卡 + warroom_summary | section_traffic_light.py | render_traffic_light_top | 110 |
 | 頂部 📊 總經總結儀表板 + 五桶 bar | section_summary_bar.py | render_five_bucket_summary | 60 |
 | 戰情概覽(2-col KPI)    | section_overview.py    | render_section_overview   | 56 |
 | 今日作戰室(5min 清單)  | section_warroom.py     | render_section_warroom    | 188 |
@@ -35,7 +36,7 @@
   → render_section_news_ai  (§十一 News AI)
 
 ═══════════════════════════════════════════════════════════════════════════
-🚧 殘餘 tab_macro.py(1076 LOC)未抽出的內容
+🚧 殘餘 tab_macro.py(1012 LOC)未抽出的內容
 ═══════════════════════════════════════════════════════════════════════════
 
 【已下沉至 src/data/macro/macro_snapshot.py(L1 Data)】
@@ -56,15 +57,21 @@
 - ✅ P3-D6:戰情概覽 35 LOC → section_overview.render_section_overview
 - ✅ P3-D7:今日作戰室 154 LOC → section_warroom.render_section_warroom
 
-【仍留 tab_macro.py(1076 LOC)】
-- 紅綠燈卡 + _tl_placeholder lifecycle(跨 5 處 ref,streamlit st.empty 反模式)
-- 長短期雙視角 / 全球風險雷達資料準備(_lt, _slow_v)
-- Late imports + early gate(函式入口無法搬)
-- session_state writes 收尾(cl_data / cl_ts / li_latest / _last_inst 等)
-- session_state bridge 給 render_section_* call
+【已下沉至 macro/(P3-D9 v18.391 認錯補做)】
+- ✅ 紅綠燈卡 + warroom_summary 寫入 66 LOC → section_traffic_light.py
+  (先前以「placeholder 反模式」擋,但 B-S2 已 cross-def 傳 placeholder,
+  自我矛盾;補做後 caller 接 3-tuple `(placeholder, show_market_data, tl_eff_reg)`)
 
-剩餘真不可抽:紅綠燈 placeholder lifecycle。若要再榨需打包成 dashboard
-section,風險較高(placeholder 物件跨 def 傳遞)。
+【仍留 tab_macro.py(1012 LOC)】
+- 長短期雙視角 / 全球風險雷達資料準備(_lt, _slow_v,~64 LOC,LOW 可抽)
+- 旌旗指數計算 + write(~32 LOC,LOW 可抽)
+- Outer trio executor + macro/m1b/bias session_state writes(~80 LOC,MEDIUM)
+- 市場評估 calc + mkt_info write(~80 LOC,MEDIUM)
+- Late imports + 函式入口 + button + early gate(~73 LOC,真不可抽)
+- render_section_* call + intl/tw/tech/inst/margin bridge(~100 LOC,orchestrator)
+
+剩餘真不可抽 ~180 LOC(orchestrator + Streamlit button + early gate)。
+剩餘可抽 ~280 LOC(D-10~D-13,屬下一場戰役;ROI 拐點接近)。
 
 ═══════════════════════════════════════════════════════════════════════════
 📐 PEP 562 lazy forward(caller 可用 `from src.ui.tabs.macro import X` 取)

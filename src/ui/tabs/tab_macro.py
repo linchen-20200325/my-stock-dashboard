@@ -82,6 +82,8 @@ from src.ui.tabs.macro.section_summary_bar import render_five_bucket_summary  # 
 from src.ui.tabs.macro.section_overview import render_section_overview  # noqa: F401
 # P3-D7 v18.390:今日作戰室抽至 macro/section_warroom.py
 from src.ui.tabs.macro.section_warroom import render_section_warroom  # noqa: F401
+# P3-D9 v18.391:紅綠燈卡抽至 macro/section_traffic_light.py(認錯補做)
+from src.ui.tabs.macro.section_traffic_light import render_traffic_light_top  # noqa: F401
 
 
 
@@ -168,74 +170,10 @@ def render_tab_macro():
         return
 
     # ════════════════════════════════════════════════════════
-    # 【模組一】紅綠燈決策儀表板（st.empty 佔位符修復版）
-    # 修復：先挖洞（placeholder）→ 資料到位後回填，杜絕未審先判
+    # 【模組一】紅綠燈決策儀表板(P3-D9 v18.391:抽至 section_traffic_light)
+    # 回傳 (placeholder, show_market_data, tl_eff_reg);warroom_summary 內部寫。
     # ════════════════════════════════════════════════════════
-
-    # 紅綠燈計算邏輯已抽至 macro_helpers.calc_traffic_light（Phase 7A-Ext）
-
-    # F-7.1 B-1:_render_traffic_light 抽至 src/ui/tabs/macro/handlers.py
-    # ── ① 最頂端先建立佔位符（關鍵：必須在任何計算前建立）───
-    _tl_placeholder = st.empty()
-
-    # ── ② 讀取快取（快取新鮮才顯示燈號，否則顯示等待，避免誤導）──
-    # 設計原則：燈號必須反映「當前資料」而非「過期快取」
-    # 30 分鐘內的快取視為有效；超過則要求重新更新
-    import datetime as _dt_tl
-    _cl_ts_str = st.session_state.get('cl_ts', '')
-    _cache_fresh = False
-    if _cl_ts_str:
-        try:
-            _cl_ts_dt = _dt_tl.datetime.strptime(_cl_ts_str[:16], '%Y-%m-%d %H:%M')
-            _age_min  = (_dt_tl.datetime.now() - _cl_ts_dt).total_seconds() / 60
-            _cache_fresh = _age_min < 30   # 30 分鐘內視為新鮮
-        except Exception:
-            _cache_fresh = False
-
-    # 刷新進行中時隱藏舊資料（避免更新期間顯示過期結論）
-    _is_refreshing = st.session_state.get('_is_refreshing', False)
-    _show_market_data = _cache_fresh and not _is_refreshing
-
-    if _cache_fresh and not _is_refreshing:
-        # 快取新鮮 → 立即計算燈號（含資料新鮮度標記）
-        # C1-D v18.290:走 section_inputs SSOT(對齊 5 桶 + 戰情概覽 + 今日作戰室)
-        from src.services import load_section_inputs as _load_si_tl
-        _tl_inp      = _load_si_tl(st.session_state)
-        _tm_mkt_init = _tl_inp.mkt_info or {}
-        _tm_jq_init  = _tl_inp.jingqi_info or {}
-        _tm_cd_init  = _tl_inp.cl_data or {}
-        _tm_li_init  = _tl_inp.li_latest
-        _tl_init     = calc_traffic_light(_tm_mkt_init, _tm_jq_init, _tm_cd_init, _tm_li_init)
-        _render_traffic_light(_tl_placeholder, _tl_init, _tm_mkt_init)
-    else:
-        # 無快取 or 快取過期 → 顯示等待狀態，不顯示誤導性燈號
-        age_note = f'（上次更新 {_age_min:.0f} 分鐘前，已過期）' if _cl_ts_str and not _cache_fresh else '（尚無資料）'
-        _tl_placeholder.warning(
-            f'⏳ **燈號等待中 {age_note}**\n\n'
-            '燈號將在「🚀 一鍵更新全部數據」完成後自動亮起。\n'
-            '確保資料是今日最新，再做投資判斷。',
-        )
-        _tl_init = None
-
-    # 統一有效市場 regime（確保交通燈與下方卡片結論一致）
-    # 🔴 對應 bear，🟢 對應 bull，🟡 對應 neutral
-    _tl_eff_reg = {'🔴': 'bear', '🟢': 'bull', '🟡': 'neutral'}.get(
-        (_tl_init or {}).get('icon', ''), None
-    )
-
-    # ── 同步寫入 session_state（其他頁面需要的值）────────────
-    if _tl_init:
-        st.session_state['warroom_summary'] = {
-            'traffic_light': _tl_init['label'],
-            'health_score':  _tl_init['health'],
-            'regime': _tm_mkt_init.get('regime', 'neutral'),
-            'market_score':  _tl_init['score'],
-            'jingqi_avg':    _tl_init['jqavg'],
-            'leek_index':    _tl_init['leek'],
-            'foreign_net_bn':_tl_init['fnet'],
-            'futures_net':   _tl_init['fut_net'],
-            'confidence_pct':_tl_init['conf'],
-        }
+    _tl_placeholder, _show_market_data, _tl_eff_reg = render_traffic_light_top()
 
     # ── v18.171 長期 vs 短期 雙視角總經面板（上移至紅綠燈卡正下方）─────
     # 長期 (12M)：景氣大循環位階；短期 (1Q)：對齊台股財報季偏向
