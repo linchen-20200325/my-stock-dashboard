@@ -30,9 +30,10 @@ def fetch_twse_yield_pe() -> pd.DataFrame:
         DataFrame with columns: 代碼 / 名稱 / 本益比 / 殖利率(%) / 股價淨值比
         失敗回傳空 DataFrame（呼叫端用 .empty 檢查）
     """
-    from src.data.proxy import fetch_url
+    # v18.406 R5:L3 wrapper(EX-PASSTHRU-1 Group A 升級)
+    from src.services.yield_screener_service import proxy_fetch_url
     try:
-        _resp = fetch_url(TWSE_BWIBBU_URL, timeout=15)
+        _resp = proxy_fetch_url(TWSE_BWIBBU_URL, timeout=15)
         if _resp is None or getattr(_resp, 'status_code', 0) != 200:
             print('[yield_screener] TWSE BWIBBU 回傳非 200 或 None')
             return pd.DataFrame()
@@ -68,7 +69,8 @@ def fetch_twse_yield_pe() -> pd.DataFrame:
 # ══════════════════════════════════════════════════════════════════════════════
 # P1-1b v18.375:fetch_dividend_history 整檔搬至 src/data/stock/dividend_fetcher.py(L1)
 # 此處改 backward-compat re-export(走 lazy import,caller 介面不變)
-from src.data.stock.dividend_fetcher import fetch_annual_dividends as fetch_dividend_history  # noqa: F401
+# v18.406 R5:走 L3 wrapper
+from src.services.yield_screener_service import get_annual_dividends as fetch_dividend_history  # noqa: F401
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -77,8 +79,9 @@ from src.data.stock.dividend_fetcher import fetch_annual_dividends as fetch_divi
 def _proxy_status_badge() -> str:
     """回傳 HTML badge 顯示 NAS 中繼站狀態（不實際發送請求，僅看 secrets）。"""
     try:
-        from src.data.proxy import get_proxy_config
-        _p = get_proxy_config()
+        # v18.406 R5:走 L3 wrapper
+        from src.services.yield_screener_service import get_proxy_status_config
+        _p = get_proxy_status_config()
         if _p:
             return (f'<span style="background:#0a2818;color:{TRAFFIC_GREEN};padding:3px 10px;'
                     'border-radius:6px;font-size:11px;font-weight:700;">'
