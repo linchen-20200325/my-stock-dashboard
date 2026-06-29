@@ -1,7 +1,47 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
 ## 進行中 batch
-✅ D-10~D-13 全收尾(PR #397 已 merge into main)
+✅ 深挖 P0+P1+P2 全收尾(PR #398 已 merge into main)
+
+## 🏁 PR #398 v18.393(merged 2026-06-29)
+**深挖第三輪:1 真 bug + 1 大塊真不可抽 + 例外清單收齊**(3 件套)
+
+### P0-FIX(真 bug)
+- `tab_macro.py:749` `render_section_news_ai(_macro_info, ...)` `_macro_info` 從 D-12 後未定義
+  → 走入 §十一 News AI 100% NameError 全頁炸
+- 修:L749 前補 `_macro_info = st.session_state.get('macro_info') or {}`
+- 新增 AST 守衛 `test_render_section_news_ai_args_defined_in_scope` 防同類再犯
+- pytest 2220 case 全是 source-string assert,5 個 commit (B-4 → D-13) 沒抓到
+
+### P1-X(真不可抽 第三次誤判 — 275 LOC 完全可抽)
+- `tab_macro.py:373-647` inline DataRegistry 區塊(2 inner def + 8 for 迴圈掃 12 session_state key)
+- 抽 `src/services/data_registry_scanner.py`(324 LOC)
+  - `scan_and_write_data_registry(*, intl_map, tw_map, tech_map) -> None`
+  - 8 phase:大盤(INTL/TW/TECH/ADL) → 籌碼 → 旌旗/乖離 → M1B/M2 → 6 宏觀 → LI 5 細項 → 個股+比較 → ETF 3 細項
+- 對齊 macro_registry_patch / macro_fetch_orchestrator DI 風格
+- tab_macro.py:**751 → 488 LOC(-263)**
+
+### P2-EX(§8.2.A 例外收齊)
+- **5 L1 letter-compliant**(原無條件 import streamlit 軟例外 → 補 try/except + `_NoOpST` fallback):
+  etf_fetch / leading_indicators / yf_proxy / data_loader / tw_stock_data_fetcher
+  fallback 含 cache_data / cache_resource / **secrets**(P2 新增屬性)三屬性
+- **CLAUDE.md §8.2.A 表更新**:
+  - EX-CACHE-1:列出 5 處 file:line(已 letter compliant)
+  - EX-PASSTHRU-1:原 2 處 → 補登錄 7 處(etf_tab_grp_compare / tab_stock_grp / tab_stock / yield_screener / section_mid)
+  - **EX-RENDER-1**(新例外候選):etf_render.py:11 L4 直 import L1 緩解策略
+  - 標準寫法 code block 補 `secrets: dict = {}` 屬性
+
+### 累計
+- tab_macro.py:**5387 → 488 LOC(-91%)**
+- §3.3 反捏造 0 項 / §8.2 高項違憲 0 項 / §8.2.A 例外全 letter compliant
+- pytest 2199 pass / 0 fail / 32 deselected (slow)
+
+### Streamlit 实機驗證(未做,留 user)
+PR merge 後 fetch warm cache → 走 §十一 News AI render path 即驗 P0-FIX
++ 驗整個 DataRegistry 12 key 完整載入。
+
+---
+
 
 ## 🏁 PR #397 v18.392(merged 2026-06-28)
 **tab_macro.py 1012 → 751 LOC(−261,−26%)** — 5 commit。
