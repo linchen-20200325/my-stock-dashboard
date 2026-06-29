@@ -34,7 +34,12 @@ from src.ui.tabs.tab_helpers import (
 )
 # v18.326 ── P/B 帶狀 SSOT + BPS / industry fetcher SSOT(個股 Tab 共用)──
 from shared.stock_buckets import classify_pb_level, get_pb_bands
-from src.data.core import fetch_bps, fetch_industry_category
+# v18.405 R1:5 處 L1 import 集中至 L3 wrapper(EX-PASSTHRU-1 Group A 升級)。
+# 介面對等(alias 保 caller API 不變)。
+from src.services.stock_grp_service import (
+    get_bps as fetch_bps,
+    get_industry_category as fetch_industry_category,
+)
 
 
 def render_stock_grp():
@@ -52,7 +57,7 @@ def render_stock_grp():
     from src.ui.render import teacher_conclusion
     from src.services import analyze_financial_health
     from src.services import build_structured_summary_prompt
-    from src.data.etf import _fetch_news_for
+    from src.services.stock_grp_service import get_news_for as _fetch_news_for  # R1 v18.405
     from src.services import analyze_20d_chips_from_df
     from src.compute.scoring import (
         compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
@@ -65,11 +70,8 @@ def render_stock_grp():
         fetch_quarterly, fetch_quarterly_extra,
         gemini_call, parse_stocks,
     )
-    # data_loader 可能也提供 fetch_financial_statements
-    try:
-        from src.data.core import fetch_financial_statements
-    except ImportError:
-        from app import fetch_financial_statements
+    # v18.405 R1:L3 wrapper 統一,移除原 try/except 雙 path 不一致行為
+    from src.services.stock_grp_service import get_financial_statements as fetch_financial_statements
 
     st.markdown("""<div style="padding:6px 0 4px;">
 <span style="font-size:20px;font-weight:900;color:#e6edf3;">📊 比較 × 排行</span>
@@ -714,7 +716,7 @@ border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
                 _fd3 = fetch_financial_statements(sid, _fk3)
                 if not _fd3.get('error'):
                     try:
-                        from src.data.stock import fetch_5_years_cash_flow
+                        from src.services.stock_grp_service import get_5_years_cash_flow as fetch_5_years_cash_flow  # R1 v18.405
                         _fd3['b_item_5y'] = fetch_5_years_cash_flow(sid, _fk3)
                     except Exception:
                         pass
@@ -1352,7 +1354,7 @@ def _render_mj_trend_section(stock_list: list[str], *,
 
     import streamlit as _st  # noqa: F811 — explicit local alias
     from src.config import FINMIND_TOKEN as _TOK
-    from src.data.core import fetch_financial_statements
+    from src.services.stock_grp_service import get_financial_statements as fetch_financial_statements  # R1 v18.405
     from src.services import analyze_financial_health
     from src.compute.health import diff_mj_health  # noqa: F401 — used transitively by score
     from src.compute.health import (
