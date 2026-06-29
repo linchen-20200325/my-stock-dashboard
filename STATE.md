@@ -1,22 +1,40 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 進行中 batch
-⏸ Dead code audit 邏輯需重做(false positive 多,Tier 3 大部分是 module-internal helper)。
-PR #404 audit 報告保留歷史價值,但 Tier 3 待重新分類後再啟動 Dead phases。
+## 🚀 目前狀態(v18.402)
 
-## ✅ 累計完成(本 session PR #398-#404 + SSOT 收尾)
+✅ Dead code audit 6 輪收斂飽和(真 dead -666 LOC);15 項未完項目清單已給 user
+等待指派(見 chat history)。
 
-| PR | 主題 |
+## 📊 累計度量
+
+| 度量 | 值 |
 |---|---|
-| #398 | P0+P1+P2(_macro_info NameError fix + DataRegistry -275 LOC + 例外收齊) |
-| #399 | P4 C+SSOT(panel + 11 emoji category) |
-| #400 | P5 Batch1(AppTest 实機驗 + version pin + A4 archive 精簡) |
-| #401 | P5 Batch2-5(A3 WONTFIX + B1 L4→L3 重構 + B2 補登 + D1 重 audit) |
-| #402 | P5 Batch6-7(B4 確認 + B5 健康評分雙演算法 §4.3 3/3) |
-| #403 | P5 Batch8-9(pandera POC + app.py 拆檔 audit) |
-| #404 | Dead code audit(52 候選,Tier 3 多 false positive 待重做) |
+| tab_macro.py LOC | 5387 → 488(**-91%**) |
+| Dead code 清除 | -666 LOC(ai_engine -654 + fuzzy_get -12)|
+| §3.3 反捏造違憲 | 0 |
+| §8.2 高項違憲 | 0 |
+| §8.2.A active 例外 | 2(EX-L0-1 / EX-CACHE-1 / EX-PASSTHRU-1)+ 2 退役(EX-AI-1 / EX-RENDER-1)|
+| §4.3 重算對帳 | 3 / 3 落地(US10Y / 月營收 / 健康評分)|
+| pytest | 2226 pass / 10 skip / 36 deselected(slow) |
 
-**累計 tab_macro 5387 → 488 LOC(-91%)** + §3.3 反捏造 0 / §8.2 高項違憲 0 + §8.2.A 4 例外 letter compliant + §4.3 重算對帳 3/3。
+## 📋 本 session PR 清單(#398-#409,12 PR)
+
+| PR | 主題 | 主要結果 |
+|---|---|---|
+| #398 | P0+P1+P2(深挖第三輪)| _macro_info NameError fix + DataRegistry -275 LOC + 例外收齊 |
+| #399 | P4 C+SSOT data_registry live state | panel + 11 emoji category SSOT |
+| #400 | P5 Batch1(AppTest 实機 + version pin + A4 精簡)| pytest 2214 / pin 14 套件 |
+| #401 | P5 Batch2-5(A3 認錯 / B1 L4→L3 / B2 補登 / D1 重 audit)| EX-RENDER-1 退役 |
+| #402 | P5 Batch6-7(B4 確認 + B5 健康評分)| §4.3 3/3 完成 |
+| #403 | P5 Batch8-9(pandera POC + app.py audit)| schemas.py + APP_PY_AUDIT.md |
+| #404 | Dead code audit Round 1(過度樂觀)| 52 候選 |
+| #405 | SSOT + STATE + Dead honest stop | reconcile health SSOT |
+| #406 | Dead audit Round 2(嚴格雙重條件)+ fuzzy_get 真刪 | -12 LOC |
+| #407 | Dead-δ:ai_engine.py 整檔真刪 + EX-AI-1 退役 | **-654 LOC** |
+| #408 | T2 audit Round 4(test source-string 保護)| 0 LOC,記錄發現 |
+| #409 | SSOT FRESHNESS_THRESHOLDS 抽出 + Round 6 honest stop | +13 LOC |
+
+詳細歷史見下方各 PR 區塊。
 
 ## 🏁 PR #400 v18.395(merged 2026-06-29)
 
