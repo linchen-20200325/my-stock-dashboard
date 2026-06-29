@@ -61,6 +61,67 @@ def _assert_no_uncaught(at, label: str):
         pytest.fail(f"{label} 有 uncaught exception:\n" + "\n".join(msgs))
 
 
+def test_render_section_news_ai_args_defined_in_scope():
+    """v18.393 P0-FIX 靜態守衛:render_section_news_ai(_macro_info, _tl_eff_reg)
+    的兩個引數必須在 render_tab_macro() 作用域內已定義。
+
+    歷史教訓:D-12 (a13bb25) 抽 trio executor 後,_macro_info 隨外層代碼搬走,
+    但 §十一 call 仍 reference → 走入 §十一 render path 100% NameError;
+    pytest 2220 case 全是 source-string 檢查,5 個 commit 沒抓到。
+
+    本 test 用 AST 解析 render_tab_macro,確認 call args 在同函式 scope
+    有對應 ast.Assign / ast.AnnAssign / ast.arguments(參數)。
+    """
+    import ast
+    src = open("src/ui/tabs/tab_macro.py", encoding="utf-8").read()
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "render_tab_macro")
+
+    # 收集 render_section_news_ai(...) 的 Name 引數
+    news_ai_args: list[tuple[str, int]] = []
+    for node in ast.walk(fn):
+        if (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "render_section_news_ai"):
+            for a in node.args:
+                if isinstance(a, ast.Name):
+                    news_ai_args.append((a.id, node.lineno))
+    assert news_ai_args, "render_section_news_ai 未在 render_tab_macro 內被呼叫"
+
+    # 收集所有 ast.Assign 的 target Name(同 scope,含 nested for/if)
+    defined_names: set[str] = set(a.arg for a in fn.args.args)
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    defined_names.add(t.id)
+                elif isinstance(t, ast.Tuple):
+                    for elt in t.elts:
+                        if isinstance(elt, ast.Name):
+                            defined_names.add(elt.id)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            defined_names.add(node.target.id)
+        elif isinstance(node, (ast.For, ast.comprehension)) and isinstance(node.target, ast.Name):
+            defined_names.add(node.target.id)
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                defined_names.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                defined_names.add(alias.asname or alias.name.split('.')[0])
+        elif isinstance(node, ast.withitem) and node.optional_vars:
+            if isinstance(node.optional_vars, ast.Name):
+                defined_names.add(node.optional_vars.id)
+
+    for arg_name, lineno in news_ai_args:
+        assert arg_name in defined_names, (
+            f"render_section_news_ai 引數 `{arg_name}` 在 tab_macro.py:{lineno} 引用,"
+            f"但未在 render_tab_macro 作用域內定義 — 走入 §十一 render 會 NameError 全頁炸。"
+            f"見 v18.393 P0-FIX(L749 _macro_info 從 session_state 重讀)。"
+        )
+
+
 def test_radar_and_bucket_bar_gated_pre_load():
     """v18.285 靜態守衛(fast lane):全球風險雷達 + 五桶 bar 必須 gate 在
     _show_market_data 後 — 未載入資料(尚無快取/過期)時不顯示,對齊紅綠燈「尚無資料」。
