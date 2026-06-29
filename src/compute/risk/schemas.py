@@ -157,3 +157,32 @@ def try_validate(df: pd.DataFrame, schema, *, lazy: bool = True) -> tuple:
         return validated, []
     except Exception as e:  # pandera.errors.SchemaError or SchemaErrors
         return df, [str(e)]
+
+
+def validate_in_log_mode(df: pd.DataFrame, schema, label: str = '') -> pd.DataFrame:
+    """log-only validation(POC rollout 模式,v18.404 #3)。
+
+    對齊 user 未完成項目 #3:讓 production fetcher 開始累積 schema 漂移信號,
+    但**不擋 caller**(回傳原 df,只 stderr 出錯)。
+
+    用法(在 production fetcher 結尾):
+        from src.compute.risk.schemas import OHLCVSchema, validate_in_log_mode
+        df = fetch_etf_price(...)
+        return validate_in_log_mode(df, OHLCVSchema, label=f'fetch_etf_price({ticker})')
+
+    Args:
+        df: 待驗 DataFrame
+        schema: pandera schema(可為 None,代表 pandera 不可用)
+        label: log 識別,通常 fetcher fn name + key params
+
+    Returns:
+        df 原樣(不修改,絕不 raise)
+    """
+    import sys
+    if df is None or (hasattr(df, 'empty') and df.empty):
+        return df
+    validated, errors = try_validate(df, schema)
+    if errors and 'pandera not installed' not in errors[0]:
+        msg = f'[pandera-schema/{label}] WARN: {errors[0][:200]}'
+        print(msg, file=sys.stderr)
+    return df  # 絕對回原 df,non-blocking

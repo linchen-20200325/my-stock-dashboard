@@ -244,32 +244,8 @@ def gemini_call(prompt, max_tokens=2048):
             '請確認各把金鑰額度，或稍後再試')
 
 # ── 本地快取（SQLite + Pickle 雙軌）───────────────────────
-_CACHE_DIR = '/tmp/stock_cache'
-os.makedirs(_CACHE_DIR, exist_ok=True)
-
-def _cache_key(prefix, sid, extra=''):
-    raw = f'{prefix}_{sid}_{extra}_{datetime.date.today()}'
-    return os.path.join(_CACHE_DIR, hashlib.md5(raw.encode()).hexdigest() + '.pkl')
-
-def _load_cache(prefix, sid, extra='', ttl_hours=6):
-    path = _cache_key(prefix, sid, extra)
-    if os.path.exists(path):
-        age = (time.time() - os.path.getmtime(path)) / 3600
-        if age < ttl_hours:
-            try:
-                with open(path,'rb') as f:
-                    return pickle.load(f)
-            except Exception:
-                pass
-    return None
-
-def _save_cache(prefix, sid, data, extra=''):
-    path = _cache_key(prefix, sid, extra)
-    try:
-        with open(path,'wb') as f:
-            pickle.dump(data, f)
-    except Exception:
-        pass
+# v18.404 B3-α:cache helper 50 LOC 抽至 shared/app_cache.py(thin shim 保 caller API)。
+from shared.app_cache import _cache_key, _load_cache, _save_cache, _CACHE_DIR  # noqa: F401
 
 @st.cache_resource
 def _get_loader(_v: str = _LOADER_VERSION):
