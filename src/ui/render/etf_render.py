@@ -8,7 +8,9 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-from src.data.etf import _fetch_news_for, _fetch_sector_returns
+# v18.396 P5-B1:L4 → L3 → L1,收斂 cache.clear() anti-pattern。
+# 原 `from src.data.etf import _fetch_news_for, _fetch_sector_returns` 改走 L3 wrapper。
+from src.services.etf_sector_service import get_news_for, get_sector_returns
 from src.services.ai_structured_summary import build_structured_summary_prompt  # v18.361 F-6.5:直打 submod 避 services↔ui.render circular
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
@@ -433,7 +435,7 @@ def _etf_ai_backtest(gemini_fn, cagr, sharpe, mdd, vol, weights, regime):
             # 為回測組合中每檔 ETF 抓取新聞（最多各 2 則）
             _bt_news_lines = []
             for _tk in list(weights.keys())[:4]:
-                _nn = _fetch_news_for(_tk, _tk, 2)
+                _nn = get_news_for(_tk, _tk, 2)
                 if _nn and _nn != '（暫無相關新聞）':
                     _bt_news_lines.append(f'[{_tk}]\n{_nn}')
             _bt_news_str = '\n'.join(_bt_news_lines) if _bt_news_lines else '（暫無相關新聞）'
@@ -590,11 +592,9 @@ def render_sector_heatmap(gemini_fn=None):
         all_tickers.extend(meta.get('sub', []))
     all_tickers = tuple(set(all_tickers))
 
-    if refresh:
-        _fetch_sector_returns.clear()
-
     with st.spinner(f'抓取 {len(all_tickers)} 個標的資料（{period_label}）...'):
-        returns = _fetch_sector_returns(all_tickers, period)
+        # v18.396 P5-B1:cache.clear() 邏輯下沉至 L3 wrapper(refresh kwarg)。
+        returns = get_sector_returns(all_tickers, period, refresh=refresh)
 
     if not returns:
         st.error('❌ 無法取得任何類股資料，請確認網路連線')
@@ -662,7 +662,7 @@ def render_sector_heatmap(gemini_fn=None):
                 {'name': '今天哪些產業在漲、哪些在跌', 'data': ranking},
                 {'name': '錢正在往哪裡跑（資金流向的感覺）', 'data': flow},
             ]
-            news_text = _fetch_news_for('台股', '台股 類股 輪動 產業 盤勢', 5)
+            news_text = get_news_for('台股', '台股 類股 輪動 產業 盤勢', 5)
             prompt = build_structured_summary_prompt(
                 subject_title=f'今天的{market_label}產業表現',
                 sections=sections,

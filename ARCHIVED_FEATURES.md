@@ -17,11 +17,27 @@
 4. 🎯 MT5-style 自動校準(walk-forward + 3 重 anti-overfit gate)
 5. 🔬 多因子權重最佳化(高原區 + walk-forward OOS)
 
-**模組保留磁碟**:
-- `tab_macro_validation.py`(已刪原始 file,但 import path 預留 — user 復活時需重建)
-- `src/compute/macro/macro_validation_tw.py`(留)
-- `src/compute/macro/macro_signal_lookback_tw.py`(留)
-- `src/compute/scoring/multi_factor_optimization.py`(留)
+**「半 archive」架構說明**(v18.395 P5-Batch2 deep-dive 確認的設計):
+
+| Layer | 狀態 |
+|---|---|
+| L6 App `app.py` 不掛 tab_macro_validation | ✅ archived(無 import,UI 不渲染) |
+| L5 UI `src/ui/tabs/tab_macro_validation.py` | 🟡 留磁碟(688 LOC,user 復活時直接 import) |
+| L4 Render(無) | — |
+| L3 Service(無) | — |
+| L2 Compute `src/compute/macro/macro_validation_tw.py` | ✅ live(crisis event detection 邏輯) |
+| L2 Compute `src/compute/macro/macro_signal_lookback_tw.py` | ✅ live(8 fetch_*_series + provenance) |
+| L2 Compute `src/compute/scoring/multi_factor_optimization.py` | ✅ live(weight optimization engine) |
+| L0 SSOT `shared/signal_thresholds.py` | ✅ macro_signal_lookback_tw 用的 4 訊號閾值 |
+| Tests | ✅ 3 test file 還在跑(`test_macro_signal_lookback_tw.py` /<br>`test_multi_factor_optimization.py` / `test_pr_q5a_msl_nas_provenance.py`) |
+
+**這是刻意的設計**:UI 砍掉但後端保留 — user 復活只需在 `app.py` 重 hook,不需重建 compute/scoring 引擎。
+測試還在跑 = 驗證後端邏輯仍 work。
+
+**禁止真刪**(2026-06-29 P5-Batch2 audit 確認):
+- 真刪會破壞 S-PROV-1 守衛測試
+- 真刪會 break compute/__init__.py + scoring/__init__.py re-export(可能影響其他 import path)
+- 留磁碟成本低(~1500 LOC compute 邏輯 + 3 test file)
 
 **復活步驟**(1 分鐘工):
 在 `src/ui/tabs/tab_macro.py` 的 `# F-7.1 B-3:§十一 News AI 總裁決` 之前,加 5 行:
