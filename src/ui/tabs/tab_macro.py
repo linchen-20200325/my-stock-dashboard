@@ -746,6 +746,10 @@ def render_tab_macro():
 
 
     # F-7.1 B-3:§十一 News AI 總裁決抽至 src/ui/tabs/macro/section_news_ai.py
+    # v18.393 P0-FIX:D-12 抽 trio (a13bb25) 後 _macro_info 變數從 render_tab_macro 作用域消失,
+    # 但此處 call 仍 reference → 走入 §十一 render path 100% NameError。
+    # 從 session_state 重讀(由 run_macro_trio_and_persist 在 do_refresh 期寫入)。
+    _macro_info = st.session_state.get('macro_info') or {}
     render_section_news_ai(_macro_info, _tl_eff_reg)
     st.caption("📖 想看總經原理教室(景氣循環 / PMI / 殖利率倒掛 / 美林時鐘 等 10 章)?"
                "→ 已移至「📖 系統說明書」Tab,含資料來源完整地圖 + 4 大師策略。")
