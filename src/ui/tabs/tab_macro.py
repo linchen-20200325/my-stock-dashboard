@@ -84,6 +84,8 @@ from src.ui.tabs.macro.section_overview import render_section_overview  # noqa: 
 from src.ui.tabs.macro.section_warroom import render_section_warroom  # noqa: F401
 # P3-D9 v18.391:紅綠燈卡抽至 macro/section_traffic_light.py(認錯補做)
 from src.ui.tabs.macro.section_traffic_light import render_traffic_light_top  # noqa: F401
+# P3-D10 v18.392:長期 regime + 雷達 slow_verdict 準備抽至 macro/section_long_term.py
+from src.ui.tabs.macro.section_long_term import prepare_long_term_radar  # noqa: F401
 
 
 
@@ -175,70 +177,9 @@ def render_tab_macro():
     # ════════════════════════════════════════════════════════
     _tl_placeholder, _show_market_data, _tl_eff_reg = render_traffic_light_top()
 
-    # ── v18.171 長期 vs 短期 雙視角總經面板（上移至紅綠燈卡正下方）─────
-    # 長期 (12M)：景氣大循環位階；短期 (1Q)：對齊台股財報季偏向
-    # 純函式集中於 macro_helpers.classify_long_term_regime / classify_short_term_regime
-    # v18.173：_lt hoist 到 try 外，供下方雙速合議使用
-    _lt = None
-    try:
-        from src.compute.macro import (
-            classify_long_term_regime as _cls_lt,
-            detect_mk_golden_inflection as _det_mk2,
-        )
-        # C1-E v18.291:雙視角 macro_info 走 section_inputs SSOT。
-        # _fi_streak_cache 死碼移除(無 downstream consumer,grep 全檔僅此一處)。
-        from src.services import load_section_inputs as _load_si_lt
-        _lt_inp = _load_si_lt(st.session_state)
-        _mi_d = _lt_inp.macro_info or {}
-        _cpi_d  = _mi_d.get('us_core_cpi') or {}
-        _fed_d  = _mi_d.get('fed_funds') or {}
-        _ndc_d  = _mi_d.get('ndc_signal') or {}
-        _pmi_d  = _mi_d.get('ism_pmi') or {}
-        _vix_d  = _mi_d.get('vix') or {}
-        _exp_d  = _mi_d.get('tw_export') or {}
-
-        _mk_for_lt = _det_mk2(
-            cpi_yoy=_cpi_d.get('yoy'),
-            cpi_prev_yoy=_cpi_d.get('prev_yoy'),
-            fed_rate=_fed_d.get('current'),
-            fed_prev_rate=_fed_d.get('prev'),
-        )
-        _lt = _cls_lt(
-            cpi_yoy=_cpi_d.get('yoy'),
-            fed_rate=_fed_d.get('current'),
-            fed_prev_rate=_fed_d.get('prev'),
-            ndc_score=_ndc_d.get('score'),
-            pmi=_pmi_d.get('value') or _pmi_d.get('current') or _pmi_d.get('pmi'),
-            mk_signal=_mk_for_lt,
-        )
-        # v18.190: 雙視角 UI 區塊移除（與「拐點偵測 6 面向 + MK」功能重疊，
-        # 雙視角為純加權打分、未經 backtest；保留 _lt 計算供下方雷達雙速合議使用）
-    except Exception as _e_lts:
-        print(f'[tab_macro/長短期雙視角] {type(_e_lts).__name__}: {_e_lts}')
-
-    # ── v18.172/v18.173 全球風險雷達資料準備（render 已下移）──────────────
-    # v18.317：10 燈雷達 render 從總覽頂部下移至「短線急殺」桶之後的 🌍 全球風險桶
-    # （見下方 _render_global_risk_bucket 呼叫）。此處僅備妥 _rr_fred_key / _slow_v，
-    # 並 pre-init 以保證下移後的呼叫點變數必定存在（即使本 try 中途 raise）。
-    _rr_fred_key = ''
-    _slow_v = None
-    try:
-        _rr_fred_key = (os.environ.get('FRED_API_KEY') or
-                        (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
-        # v18.173：把 v18.171 dual-view 算出的長期 regime _lt 映射成 slow_verdict
-        # 校準：_cls_lt score 範圍 ~[-2,+2]，乘 5 對齊 fund synth 期望的 ~[-10,+10]
-        if _lt and isinstance(_lt, dict) and _lt.get('regime'):
-            _reg = str(_lt['regime'])
-            _icon = _reg.split()[0] if _reg.split() else '⚪'
-            _slow_v = {
-                'level':  _reg,
-                'score':  float(_lt.get('score') or 0.0) * 5.0,
-                'color':  _lt.get('color') or '#888',
-                'icon':   _icon,
-                'action': f"{_lt.get('detail','')}；建議持股 {_lt.get('suggest_pct','--')}",
-            }
-    except Exception as _e_rr:
-        print(f'[tab_macro/risk_radar] {type(_e_rr).__name__}: {_e_rr}')
+    # ── v18.171/172/173 長期 regime + 雷達 slow_verdict 準備 ─────
+    # P3-D10 v18.392:抽至 macro/section_long_term.py(64 LOC,LOW)。
+    _lt, _rr_fred_key, _slow_v = prepare_long_term_radar()
 
     # ══ v18.284 — 📊 總經五桶總結 bar（長期/中期/短線急殺/籌碼/新聞）══
     # 門檻讀 shared.macro_buckets SSOT;未載入時不顯示(對齊紅綠燈)。
@@ -403,235 +344,31 @@ def render_tab_macro():
             except Exception:
                 pass
 
-            # ── do_refresh 完成後自動估算旌旗指數（不等掃描）──────
-            _jq_ratio_src = None
-            if df_adl_raw is not None and not df_adl_raw.empty and 'ad_ratio' in df_adl_raw.columns:
-                _jq_ratio_src = 'ADL'
-                _jq_ratio = float(df_adl_raw['ad_ratio'].tail(5).mean())
-            else:
-                # 備援：用大盤漲跌估算（正日=60%上漲，負日=40%）
-                _tw_d = st.session_state.get('cl_data',{}).get('tw',{})
-                _twii_d = _tw_d.get('台股加權指數')
-                if _twii_d is not None and not _twii_d.empty:
-                    _cc_d = 'close' if 'close' in _twii_d.columns else 'Close'
-                    if _cc_d in _twii_d.columns:
-                        _ret5 = _twii_d[_cc_d].pct_change().tail(5)
-                        _up_days = (_ret5 > 0).sum()
-                        _jq_ratio = 40 + _up_days * 5  # 全漲=65%, 全跌=40%
-                        _jq_ratio_src = '大盤估算'
-                else:
-                    _jq_ratio_src = None  # 無資料時不設定，不顯示錯誤數值
-            if _jq_ratio_src and _jq_ratio_src != '預設值':
-                _jq_ratio = float(_jq_ratio)
-                _jq_pos  = '80~100%' if _jq_ratio>=BREADTH_BULL_PCT else ('50~70%' if _jq_ratio>=BREADTH_NEUTRAL_PCT else ('20~40%' if _jq_ratio>=BREADTH_BEAR_PCT else '0~20%'))
-                _jq_reg  = 'bull' if _jq_ratio>=BREADTH_BULL_PCT else ('neutral' if _jq_ratio>=BREADTH_NEUTRAL_PCT else 'bear')
-                _jq_col  = TRAFFIC_GREEN if _jq_ratio>=BREADTH_BULL_PCT else (TRAFFIC_YELLOW if _jq_ratio>=BREADTH_NEUTRAL_PCT else TRAFFIC_RED)
-                _jq_lbl  = '🟢 多頭積極' if _jq_ratio>=BREADTH_BULL_PCT else ('🟡 中性均衡' if _jq_ratio>=BREADTH_NEUTRAL_PCT else '🔴 保守防禦')
-                _jq_src_note = f'（來源：{_jq_ratio_src}）'
-                st.session_state['jingqi_info'] = {
-                    'avg':_jq_ratio,'pos':_jq_pos,'regime':_jq_reg,
-                    'color':_jq_col,'label':_jq_lbl,'total':0,
-                    'source':_jq_ratio_src,
-                    'pct20':_jq_ratio,'pct60':_jq_ratio*0.9,
-                    'pct120':_jq_ratio*0.8,'pct240':_jq_ratio*0.7
-                }
+            # ── do_refresh 完成後自動估算旌旗指數(不等掃描)──────
+            # P3-D11 v18.392:抽至 src/services/jingqi_calc.compute_and_store_jingqi。
+            from src.services.jingqi_calc import compute_and_store_jingqi
+            compute_and_store_jingqi(df_adl_raw)
 
-            # ── M1B-M2 + 乖離率 並發計算 ──────────────────────
-            def _job_m1b():
-                # P3-D2 v18.389:3-Tier fallback 下沉 macro_snapshot.fetch_m1b_m2_block
-                # FRED_API_KEY closure 由 caller 傳入,函式本身 pure-ish。
-                _fred_key_m1 = (os.environ.get('FRED_API_KEY')
-                                or (st.secrets.get('FRED_API_KEY')
-                                    if hasattr(st, 'secrets') else None) or '')
-                from src.data.macro.macro_snapshot import fetch_m1b_m2_block
-                return fetch_m1b_m2_block(fred_api_key=_fred_key_m1)
+            # ── M1B-M2 + 乖離率 + 6-source macro 並發 ─────────
+            # P3-D12 v18.392:抽至 src/services/macro_trio_orchestrator。
+            # truthy guard 在 service 內,partial 場景不蓋 stale(§1)。
+            from src.services.macro_trio_orchestrator import run_macro_trio_and_persist
+            _fred_key_tr = (os.environ.get('FRED_API_KEY') or
+                            (st.secrets.get('FRED_API_KEY')
+                             if hasattr(st, 'secrets') else None) or '')
+            _fm_tok_tr = (os.environ.get('FINMIND_TOKEN') or
+                          (st.secrets.get('FINMIND_TOKEN')
+                           if hasattr(st, 'secrets') else None) or '')
+            run_macro_trio_and_persist(
+                tw_raw=tw_raw,
+                fred_api_key=_fred_key_tr,
+                fm_token=_fm_tok_tr,
+            )
 
-            def _job_bias():
-                # P3-D3 v18.389:純函式下沉 src/data/macro/macro_snapshot.compute_twii_bias
-                # closure dep: tw_raw.get('台股加權指數')
-                try:
-                    from src.data.macro.macro_snapshot import compute_twii_bias
-                    return compute_twii_bias(tw_raw.get('台股加權指數'))
-                except Exception as _bias_e:
-                    print(f'[Bias] compute_twii_bias 失敗: {_bias_e}')
-                    return None
-
-            def _job_macro():
-                """總經拼圖 v5.3:VIX/CPI/PMI/NDC/Export/Fed 並行抓取(thin orchestrator)。
-
-                P3-D1 v18.389:6 sub-fetcher(原 inline 共 604 LOC)全下沉至
-                src/data/macro/macro_snapshot.py fetch_*_block。本 _job_macro 留
-                並發 orchestration + provenance 注入。FRED key / FinMind token 由
-                outer scope 讀(EX-L0-1 st.secrets bootstrap)後顯式傳入。
-                """
-                from src.data.macro.macro_snapshot import (
-                    fetch_vix_block, fetch_cpi_block, fetch_fed_funds_block,
-                    fetch_tw_pmi_block, fetch_ndc_block, fetch_export_block,
-                )
-                _fred_key = (os.environ.get('FRED_API_KEY') or
-                             (st.secrets.get('FRED_API_KEY')
-                              if hasattr(st, 'secrets') else None) or '')
-                _fm_tok = (os.environ.get('FINMIND_TOKEN') or
-                           (st.secrets.get('FINMIND_TOKEN')
-                            if hasattr(st, 'secrets') else None) or '')
-
-                # ── 並行 6 source(v10.61.0 手動 executor + shutdown(wait=False))──
-                # 立即 cancel 未完成,避免 stuck thread 拖外層 80s timeout。
-                _fetchers = {
-                    'vix':       fetch_vix_block,
-                    'cpi':       lambda: fetch_cpi_block(fred_api_key=_fred_key),
-                    'pmi':       fetch_tw_pmi_block,
-                    'ndc':       fetch_ndc_block,
-                    'export':    lambda: fetch_export_block(
-                                     fred_api_key=_fred_key, finmind_token=_fm_tok),
-                    'fed_funds': lambda: fetch_fed_funds_block(fred_api_key=_fred_key),
-                }
-                _r = {}
-                _pool_mc = ThreadPoolExecutor(max_workers=6)
-                try:
-                    _futs_mc = {_pool_mc.submit(fn): name
-                                for name, fn in _fetchers.items()}
-                    try:
-                        for _fut_mc in as_completed(_futs_mc, timeout=70):
-                            try:
-                                _part = _fut_mc.result()
-                                if _part:
-                                    _r.update(_part)
-                            except Exception as _e:
-                                print(f'[Macro] ❌ {_futs_mc.get(_fut_mc, "?")}: {_e}')
-                    except (TimeoutError, _ConcFutTimeout):
-                        # 70s 到仍有 future 未完成:取消未完成者,保留已收到的 partial _r
-                        _stuck = [_futs_mc[_f] for _f in _futs_mc if not _f.done()]
-                        for _f_pending in _futs_mc:
-                            if not _f_pending.done():
-                                _f_pending.cancel()
-                        print(f'[Macro] ⏰ as_completed 70s timeout,未完成={_stuck},保留 keys={list(_r.keys())}')
-                finally:
-                    _pool_mc.shutdown(wait=False)
-
-                # Failsafe + provenance — 即使全失敗也回傳 partial 標記(不回 None),
-                # 讓診斷頁能區分「沒抓」vs「抓過全失敗」;macro_info 至少有時間戳供 UX 判斷。
-                _r.setdefault('_loaded_at',
-                              datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                if not any(k for k in _r if not k.startswith('_')):
-                    _r['_all_failed'] = True
-                # v18.353 PR-Q3 S-PROV-1 phase 19:集中注入 fetched_at 到每個 sub-dict。
-                # 6 fetchers (vix/cpi/pmi/ndc/export/fed_funds) 各自已有 'source' key
-                # (FRED/BLS/MOF-CSV 等),集中 setdefault('fetched_at') 比改 14 處 return
-                # point 乾淨,§2.2 provenance(source + fetched_at)完整化。schema-additive。
-                try:
-                    _now_macro_prov = datetime.datetime.utcnow().isoformat() + 'Z'
-                    for _k_prov, _v_prov in _r.items():
-                        if _k_prov.startswith('_'):
-                            continue  # 跳過 meta key(_loaded_at / _all_failed)
-                        if isinstance(_v_prov, dict):
-                            _v_prov.setdefault('fetched_at', _now_macro_prov)
-                except Exception as _e_prov:
-                    print(f'[Macro/prov] inject fetched_at fail: {_e_prov}')
-                print(f'[Macro] 完成 keys={[k for k in _r.keys() if not k.startswith("_")]}')
-                return _r
-
-            # v18.341 PR-L1: 對齊 _job_macro 內部好 pattern(L2105-2138)。
-            # user 2026-06-28「總經抓資料會自動停止沒有抓完成,要直接抓好不可以突然停掉」。
-            # 舊 v10.61.0 設計:per-job `result(timeout=30/30/80)` + `shutdown(wait=False)`
-            # 故意 zombie kill — 任一慢源就被 cutoff,user 看到「中途停掉」。v18.331 把
-            # build_leading_fast 併入 _job_macro 內部 6-job pool 後,_job_macro 偶爾超 80s
-            # 導致 _macro_res = None,partial 結果全丟。
-            # 修法:
-            #   (a) timeout 拉大到 200s 全域(原 max=80),配合內部 _job_macro 已有 70s
-            #       as_completed cancel + 60s 餘裕 + 外層 30s+30s 慢源餘裕
-            #   (b) 改 as_completed loop + partial preserve(任一完成立刻入 dict,不等)
-            #   (c) timeout 到 → 取消未完成 future,但**保留已收到的**(_res_map),
-            #       下方 if _xxx_res 寫入 session_state 仍走原 truthy 守護(不蓋 stale)
-            #   (d) shutdown(wait=False) 維持,因為 future 已 cancel
-            _GLOBAL_TIMEOUT_S = 200   # 寬到讓全 3 job 多半能完成(M1B<30, bias<30, macro 80-180)
-            _exc2 = ThreadPoolExecutor(max_workers=3)
-            _res_map = {'m1b': None, 'bias': None, 'macro': None}
-            try:
-                _futs2 = {
-                    _exc2.submit(_job_m1b):   'm1b',
-                    _exc2.submit(_job_bias):  'bias',
-                    _exc2.submit(_job_macro): 'macro',
-                }
-                try:
-                    for _fut2 in _asc_mc(_futs2, timeout=_GLOBAL_TIMEOUT_S):
-                        _name2 = _futs2.get(_fut2, '?')
-                        try:
-                            _res_map[_name2] = _fut2.result()
-                        except Exception as _e2:
-                            print(f'[並發] ❌ {_name2}: {type(_e2).__name__}: {_e2}')
-                except (TimeoutError, _ConcFutTimeout):
-                    _stuck2 = [_futs2[_f] for _f in _futs2 if not _f.done()]
-                    for _f_pend in _futs2:
-                        if not _f_pend.done():
-                            _f_pend.cancel()
-                    print(f'[並發] ⏰ outer trio {_GLOBAL_TIMEOUT_S}s timeout，未完成={_stuck2}，'
-                          f'保留 partial={[k for k, v in _res_map.items() if v]}')
-            finally:
-                _exc2.shutdown(wait=False)
-            _m1b_res, _bias_res, _macro_res = _res_map['m1b'], _res_map['bias'], _res_map['macro']
-            # 寫入 session_state 保留原 truthy 守護:partial 場景(某 job timeout)→
-            # 既有 stale 不被 None 蓋,user 看到「上次成功的值」而非「資料消失」(§1)
-            if _m1b_res:
-                st.session_state['m1b_m2_info'] = _m1b_res
-            if _bias_res:
-                st.session_state['bias_info']   = _bias_res
-            if _macro_res:
-                st.session_state['macro_info']  = _macro_res
-
-            # ── 計算市場狀態（用已載入資料，不另外發請求）
-            try:
-                _foreign_net_loaded = 0  # 0 = 尚無資料（market_regime 會顯示「待更新」）
-                for _k, _v in inst.items():
-                    if '外資' in _k:
-                        _net_v = _v.get('net')
-                        if _net_v is not None:
-                            _foreign_net_loaded = float(_net_v) * 1e8
-                        break
-                _twii_df_loaded = tw_raw.get('台股加權指數')
-                print(f'[市場評估] 大盤DF shape={getattr(_twii_df_loaded,"shape",None)}, '
-                      f'columns={list(getattr(_twii_df_loaded,"columns",[]))}, '
-                      f'外資淨={_foreign_net_loaded/1e8:.1f}億')
-                # 取得 M1B-M2 資金活水資料（宏爺評分維度）
-                _m1b2  = st.session_state.get('m1b_m2_info') or {}
-                _m1b2_gap  = (round(float(_m1b2['m1b_yoy']) - float(_m1b2['m2_yoy']), 2)
-                               if _m1b2.get('m1b_yoy') is not None and _m1b2.get('m2_yoy') is not None
-                               else None)
-                _m1b2_prev = _m1b2.get('m1b_m2_gap_prev')  # 上月 gap（若有）
-                _mkt_loaded = get_market_assessment(
-                    df_index=_twii_df_loaded,
-                    foreign_net=_foreign_net_loaded,
-                    m1b_m2_gap=_m1b2_gap,
-                    m1b_m2_prev=_m1b2_prev,
-                )
-                if _mkt_loaded:
-                    if margin:
-                        if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
-                            _mkt_loaded['signals'].append('🔴 融資極度危險（>3400億）')
-                        elif margin > MARGIN_BALANCE_WARN_THRESHOLD_YI:
-                            _mkt_loaded['signals'].append('⚠️ 融資警戒（>2500億）')
-                        else:
-                            _mkt_loaded['signals'].append(f'✅ 融資安全（{margin:.0f}億）')
-                    st.session_state['mkt_info'] = _mkt_loaded
-                    print(f'[市場評估] 成功：{_mkt_loaded.get("label")} 評分{_mkt_loaded.get("score")}')
-                else:
-                    # 備援：直接用 yfinance 重抓
-                    print('[市場評估] df_index 失敗，用 yfinance 備援')
-                    _mkt_fb = get_market_assessment(df_index=None, foreign_net=_foreign_net_loaded)
-                    if _mkt_fb:
-                        if margin:
-                            if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
-                                _mkt_fb['signals'].append('🔴 融資極度危險（>3400億）')
-                            elif margin > MARGIN_BALANCE_WARN_THRESHOLD_YI:
-                                _mkt_fb['signals'].append('⚠️ 融資警戒（>2500億）')
-                            else:
-                                _mkt_fb['signals'].append(f'✅ 融資安全（{margin:.0f}億）')
-                        st.session_state['mkt_info'] = _mkt_fb
-                        print(f'[市場評估] 備援成功：{_mkt_fb.get("label")}')
-            except Exception as _me:
-                print(f'[市場評估 ERROR] {_me}')
-                import traceback
-                traceback.print_exc()
+            # ── 計算市場狀態(用已載入資料,不另外發請求)──────
+            # P3-D13 v18.392:抽至 src/services/market_assessment_apply。
+            from src.services.market_assessment_apply import compute_and_apply_market_assessment
+            compute_and_apply_market_assessment(inst=inst, tw_raw=tw_raw, margin=margin)
         # ── 全域資料登錄中心：掃描所有已載入 DF，寫入 data_registry ────
         try:
             import pandas as _pd_reg

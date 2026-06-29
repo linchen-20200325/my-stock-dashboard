@@ -6,7 +6,8 @@
 
 | 段落          | 子模組                  | 函式                       | LOC |
 |---------------|------------------------|---------------------------|-----|
-| 🚦 紅綠燈卡 + warroom_summary | section_traffic_light.py | render_traffic_light_top | 110 |
+| 🚦 紅綠燈卡 + warroom_summary | section_traffic_light.py | render_traffic_light_top | 112 |
+| 長期 regime + 雷達 slow_verdict 準備 | section_long_term.py | prepare_long_term_radar | 98 |
 | 頂部 📊 總經總結儀表板 + 五桶 bar | section_summary_bar.py | render_five_bucket_summary | 60 |
 | 戰情概覽(2-col KPI)    | section_overview.py    | render_section_overview   | 56 |
 | 今日作戰室(5min 清單)  | section_warroom.py     | render_section_warroom    | 188 |
@@ -36,7 +37,7 @@
   → render_section_news_ai  (§十一 News AI)
 
 ═══════════════════════════════════════════════════════════════════════════
-🚧 殘餘 tab_macro.py(1012 LOC)未抽出的內容
+🚧 殘餘 tab_macro.py(751 LOC)未抽出的內容
 ═══════════════════════════════════════════════════════════════════════════
 
 【已下沉至 src/data/macro/macro_snapshot.py(L1 Data)】
@@ -57,21 +58,23 @@
 - ✅ P3-D6:戰情概覽 35 LOC → section_overview.render_section_overview
 - ✅ P3-D7:今日作戰室 154 LOC → section_warroom.render_section_warroom
 
-【已下沉至 macro/(P3-D9 v18.391 認錯補做)】
-- ✅ 紅綠燈卡 + warroom_summary 寫入 66 LOC → section_traffic_light.py
-  (先前以「placeholder 反模式」擋,但 B-S2 已 cross-def 傳 placeholder,
-  自我矛盾;補做後 caller 接 3-tuple `(placeholder, show_market_data, tl_eff_reg)`)
+【已下沉(P3-D9~D-13 v18.391~v18.392)】
+- ✅ D-9  紅綠燈卡 66 LOC → section_traffic_light(認錯補做)
+- ✅ D-10 雙視角 _lt + 雷達 _slow_v 準備 64 LOC → section_long_term
+- ✅ D-11 旌旗指數 32 LOC → services/jingqi_calc.compute_and_store_jingqi
+- ✅ D-12 outer trio executor + macro/m1b/bias writes 142 LOC →
+        services/macro_trio_orchestrator.run_macro_trio_and_persist
+- ✅ D-13 市場評估 53 LOC → services/market_assessment_apply.compute_and_apply_market_assessment
 
-【仍留 tab_macro.py(1012 LOC)】
-- 長短期雙視角 / 全球風險雷達資料準備(_lt, _slow_v,~64 LOC,LOW 可抽)
-- 旌旗指數計算 + write(~32 LOC,LOW 可抽)
-- Outer trio executor + macro/m1b/bias session_state writes(~80 LOC,MEDIUM)
-- 市場評估 calc + mkt_info write(~80 LOC,MEDIUM)
-- Late imports + 函式入口 + button + early gate(~73 LOC,真不可抽)
-- render_section_* call + intl/tw/tech/inst/margin bridge(~100 LOC,orchestrator)
+【仍留 tab_macro.py(751 LOC)】
+- Late imports + 函式入口 + Streamlit button + early gate(~73 LOC,真不可抽)
+- 五桶 bar/戰情/作戰 三個 render_section_* call(orchestrator)
+- session_state writes 收尾(cl_data / cl_ts / li_latest / _last_inst 等)
+- intl/tw/tech/inst/margin/mkt_info bridge + 7 個 render_section_* call
 
 剩餘真不可抽 ~180 LOC(orchestrator + Streamlit button + early gate)。
-剩餘可抽 ~280 LOC(D-10~D-13,屬下一場戰役;ROI 拐點接近)。
+其餘 ~570 LOC 屬:導覽/說明 markdown、註解、空行、跨段 state bridge。
+ROI 拐點已過 — 再榨等於儀式。
 
 ═══════════════════════════════════════════════════════════════════════════
 📐 PEP 562 lazy forward(caller 可用 `from src.ui.tabs.macro import X` 取)
