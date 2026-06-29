@@ -73,41 +73,12 @@ class TestPmiSignalRegistration:
         assert "PMI" in spec.label
 
 
-# ════════════════════════════════════════════════════════════════
-# §3 Cross-source matrix UI 源碼層測試
-# ════════════════════════════════════════════════════════════════
-class TestPhase4UiSource:
-    def test_render_function_exists(self):
-        from src.ui.tabs import tab_macro_validation
-        assert hasattr(tab_macro_validation, "_render_phase4_cross_source_matrix")
-        assert callable(tab_macro_validation._render_phase4_cross_source_matrix)
-
-    def test_render_wired_after_phase3(self):
-        """確認 Phase E render 在 Phase 3 命中表之後 + 自動校準之前的順序。"""
-        import inspect
-        from src.ui.tabs import tab_macro_validation
-        src = inspect.getsource(tab_macro_validation._render_phase3_signal_section)
-        p4 = src.find("_render_phase4_cross_source_matrix")
-        auto = src.find("_render_phase3_auto_calibration")
-        assert p4 != -1, "Phase 4 必須被 wire 進 Phase 3 section"
-        assert auto != -1
-        assert p4 < auto, "Phase 4 必須在自動校準之前渲染"
-
-    def test_render_uses_evaluate_signal_at_event(self):
-        """Phase 4 應該複用既有 evaluate_signal_at_event 邏輯（避免重新發明引擎）。"""
-        import inspect
-        from src.ui.tabs import tab_macro_validation
-        src = inspect.getsource(
-            tab_macro_validation._render_phase4_cross_source_matrix)
-        assert "evaluate_signal_at_event" in src
-
-    def test_render_outputs_consensus_row(self):
-        """矩陣末列必須是「多源共識」總計。"""
-        import inspect
-        from src.ui.tabs import tab_macro_validation
-        src = inspect.getsource(
-            tab_macro_validation._render_phase4_cross_source_matrix)
-        assert "多源共識" in src
+# UI 源碼層測試已退役(v18.399 R6 真刪)
+# tab_macro_validation.py 整檔已刪除;原 4 個 source-string 守衛測試
+# (test_render_function_exists / test_render_wired_after_phase3 /
+# test_render_uses_evaluate_signal_at_event / test_render_outputs_consensus_row)
+# 因失去保護對象,同步退役。Backend 邏輯測試(本檔上方 PMI fetcher + registry
+# 共 3 個 case)全保留。
 
 
 if __name__ == "__main__":

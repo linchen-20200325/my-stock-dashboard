@@ -22,7 +22,7 @@ User 需求：「基金有這測試總經的預測力，台股沒有看到」.
 ========
 ✅ 收錄：純函式，不依賴 Streamlit
 ✅ 收錄：讀 data_cache/*.parquet → 計算 daily series
-❌ 不收錄：Streamlit 渲染（在 tab_macro_validation.py）
+❌ 不收錄：Streamlit 渲染（原在 tab_macro_validation.py;v18.399 R6 UI 已真刪,本檔 backend 邏輯保留）
 ❌ 不收錄：抓 FinMind / Yahoo（在 update_macro_history.py）
 """
 from __future__ import annotations
