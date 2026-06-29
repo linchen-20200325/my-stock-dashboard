@@ -22,7 +22,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import streamlit as st
 
-from src.data.etf import fetch_etf_price, fetch_etf_dividends, fetch_etf_info
+# v18.406 R4:3 fetcher L3 wrapper(EX-PASSTHRU-1 Group A 升級觸發)。
+from src.services.etf_grp_compare_service import (
+    get_etf_price as fetch_etf_price,
+    get_etf_dividends as fetch_etf_dividends,
+    get_etf_info as fetch_etf_info,
+)
 from src.compute.etf import (
     calc_total_return_1y, calc_current_yield,
     calc_sharpe, calc_mdd, calc_cagr,
