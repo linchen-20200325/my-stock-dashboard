@@ -241,17 +241,9 @@ def proxy_post(
 # ─────────────────────────────────────────────
 # §6 Fuzzy Field Lookup
 # ─────────────────────────────────────────────
-def fuzzy_get(data: dict, field: str, default: float = 0.0) -> float:
-    """Look up a financial field using FIELD_ALIASES; exact match first."""
-    aliases = FIELD_ALIASES.get(field, [field])
-    for alias in aliases:
-        val = data.get(alias)
-        if val is not None:
-            try:
-                return float(val)
-            except (TypeError, ValueError):
-                continue
-    return default
+# v18.398 P5-DEAD-RE-AUDIT:`fuzzy_get(dict 版)` 已刪 — 嚴格雙重條件 audit
+# 確認 0 ref everywhere(prod / test / module-internal 全 0)。
+# DataFrame 版 `fuzzy_get_from_df` 仍 live(被 calc_financial_metrics 用)。
 
 
 def fuzzy_get_from_df(df: pd.DataFrame, field: str, default: float = 0.0) -> float:
