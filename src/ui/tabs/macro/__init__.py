@@ -6,6 +6,9 @@
 
 | 段落          | 子模組                  | 函式                       | LOC |
 |---------------|------------------------|---------------------------|-----|
+| 頂部 📊 總經總結儀表板 + 五桶 bar | section_summary_bar.py | render_five_bucket_summary | 60 |
+| 戰情概覽(2-col KPI)    | section_overview.py    | render_section_overview   | 56 |
+| 今日作戰室(5min 清單)  | section_warroom.py     | render_section_warroom    | 188 |
 | §一 拐點 / §六 現金流向 / §七 長期桶 | section_long.py        | render_section_long       | 426 |
 | §二 拐點偵測 / 市場狀態 | section_state.py       | render_section_state      | 402 |
 | §三 籌碼桶(法人/融資/先行指標) | section_chips.py       | render_section_chips      | 592 |
@@ -32,7 +35,7 @@
   → render_section_news_ai  (§十一 News AI)
 
 ═══════════════════════════════════════════════════════════════════════════
-🚧 殘餘 tab_macro.py(1445 LOC)未抽出的內容(屬 §8.2 分層治理)
+🚧 殘餘 tab_macro.py(1076 LOC)未抽出的內容
 ═══════════════════════════════════════════════════════════════════════════
 
 【已下沉至 src/data/macro/macro_snapshot.py(L1 Data)】
@@ -41,20 +44,27 @@
 - ✅ P3-D2 v18.389:_job_m1b 89 LOC → fetch_m1b_m2_block(3-Tier:CBC/FRED/IMF)
 - ✅ P3-D3 v18.389:_job_bias 43 LOC → compute_twii_bias(L2 純函式)
 
-【已下沉至 src/services/macro_fetch_orchestrator.py(L3 Service)】
+【已下沉至 src/services/(L3 Service)】
 - ✅ P3-D4 v18.389:7-job orchestrator(intl/tw/tech/inst/margin/adl/li)+
                    ThreadPoolExecutor + FinMind inst rescue 共 230 LOC →
-                   fetch_macro_bundle(),caller 留 st.spinner + session_state writes
+                   macro_fetch_orchestrator.fetch_macro_bundle()
+- ✅ P3-D8 v18.390:Registry patch 161 LOC → macro_registry_patch.patch_registry()
+                   (caller 注入 INTL/TW/TECH MAP + rp_entry/scalar/ts 避循環)
 
-【仍留 tab_macro.py(行號隨修改變動,以 grep 為準)】
-- L162-232 紅綠燈卡(_tl_placeholder lifecycle,跨 5 處 ref)
-- L303-341 五桶 bar 渲染
-- L371-558 戰情概覽 + 今日作戰室
-- Registry patch(個股/ETF data_registry session 更新,~165 LOC)
+【已下沉至 src/ui/tabs/macro/ Dashboard 三件套(v18.390 D-5/D-6/D-7)】
+- ✅ P3-D5:五桶 bar 43 LOC → section_summary_bar.render_five_bucket_summary
+- ✅ P3-D6:戰情概覽 35 LOC → section_overview.render_section_overview
+- ✅ P3-D7:今日作戰室 154 LOC → section_warroom.render_section_warroom
+
+【仍留 tab_macro.py(1076 LOC)】
+- 紅綠燈卡 + _tl_placeholder lifecycle(跨 5 處 ref,streamlit st.empty 反模式)
+- 長短期雙視角 / 全球風險雷達資料準備(_lt, _slow_v)
+- Late imports + early gate(函式入口無法搬)
 - session_state writes 收尾(cl_data / cl_ts / li_latest / _last_inst 等)
+- session_state bridge 給 render_section_* call
 
-剩餘真不可抽:紅綠燈 placeholder lifecycle(streamlit st.empty 跨 def 反模式)。
-剩餘可動:Registry patch 可抽 service,但 ROI 低、user 沒指派 → §-1。
+剩餘真不可抽:紅綠燈 placeholder lifecycle。若要再榨需打包成 dashboard
+section,風險較高(placeholder 物件跨 def 傳遞)。
 
 ═══════════════════════════════════════════════════════════════════════════
 📐 PEP 562 lazy forward(caller 可用 `from src.ui.tabs.macro import X` 取)

@@ -40,13 +40,15 @@ class TestDivergenceHarmonized:
         assert not hasattr(ht, "HEALTH_LABEL_MID_MIN"), "健康度 60 分歧變體應已移除"
 
     def test_consumers_use_standard(self):
-        tm = _src("src/ui/tabs/tab_macro.py")
+        # P3-D6 v18.390:_ov_jqp 表達式搬至 section_overview.py;改掃合集。
+        tm = _src("src/ui/tabs/tab_macro.py") + _src("src/ui/tabs/macro/section_overview.py")
         ts = _src("src/ui/tabs/tab_stock.py")
-        # 融資 SQL 卡片 + 廣度 KPI 皆改用標準常數，不得殘留分歧
+        # 融資 SQL 卡片 + 廣度 KPI 皆改用標準常數,不得殘留分歧
         assert "MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI" not in tm
         assert "BREADTH_KPI_YELLOW_PCT" not in tm
-        assert "_ov_jqp>=BREADTH_NEUTRAL_PCT" in tm  # KPI 黃線統一 40
-        # 健康度標籤改用 B 級線 50（與評語一致）
+        # KPI 黃線統一 40(P3-D6 後 section_overview 內含 _ov_jqp >= BREADTH_NEUTRAL_PCT)
+        assert "_ov_jqp >= BREADTH_NEUTRAL_PCT" in tm or "_ov_jqp>=BREADTH_NEUTRAL_PCT" in tm
+        # 健康度標籤改用 B 級線 50(與評語一致)
         assert "HEALTH_LABEL_MID_MIN" not in ts
         assert "health2 >= HEALTH_GRADE_B_MIN" in ts
         # 不得再有 inline 60 標籤 / 2800 / KPI-30

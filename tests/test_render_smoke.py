@@ -75,13 +75,16 @@ def test_radar_and_bucket_bar_gated_pre_load():
     assert re.search(
         r"if _show_market_data:\s*\n\s+_render_global_risk_bucket", src
     ), "全球風險桶未 gate 在 _show_market_data(未載入會跑獨立 fetch + 顯示多餘面板)"
-    # 五桶 bar 的 try 緊接在 if _show_market_data: 之後
-    # (允許 try: 與 from 之間夾註解行 — C1-A v18.287 後內有 SSOT 引用註)
+    # 五桶 bar gate 在 _show_market_data 之後(P3-D5 v18.390 抽出後改 render_five_bucket_summary())
+    # 同時掃 tab_macro(call site)+ section_summary_bar(實作)合集。
+    _smry_src = open("src/ui/tabs/macro/section_summary_bar.py", encoding="utf-8").read()
     assert re.search(
-        r"if _show_market_data:\s*\n\s+try:\s*\n"
+        r"if _show_market_data:\s*\n"
         r"(?:\s*#[^\n]*\n)*"  # 0+ 註解行
-        r"\s+from src\.compute\.macro import compute_five_bucket_summary", src
+        r"\s+render_five_bucket_summary\(\)", src
     ), "五桶 bar 未 gate 在 _show_market_data(未載入會顯示多餘面板)"
+    assert "from src.compute.macro import compute_five_bucket_summary" in _smry_src, \
+        "section_summary_bar 內部應 import compute_five_bucket_summary"
     # F-7.1 B-2~B-5 + B-S8-A v18.388:§一/§三/§五/§六/§七/§八/§十一 全部 section
     # header 抽至各 section_*.py;此 test 改檢 tab_macro 內各 render_section_*()
     # call 順序(reading order 入口)。§三 籌碼 v18.388 後改 render_section_chips(...)。

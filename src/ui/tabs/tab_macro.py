@@ -76,6 +76,12 @@ from src.ui.tabs.macro.section_state import render_section_state  # noqa: F401
 from src.ui.tabs.macro.section_chips import render_section_chips  # noqa: F401
 # F-7.1 B-S8-B v18.388:§九 跨桶 AI 抽至 macro/section_cross_ai.py(P2 v18.389 rename)
 from src.ui.tabs.macro.section_cross_ai import render_section_cross_ai  # noqa: F401
+# P3-D5 v18.390:五桶 bar 抽至 macro/section_summary_bar.py
+from src.ui.tabs.macro.section_summary_bar import render_five_bucket_summary  # noqa: F401
+# P3-D6 v18.390:戰情概覽抽至 macro/section_overview.py
+from src.ui.tabs.macro.section_overview import render_section_overview  # noqa: F401
+# P3-D7 v18.390:今日作戰室抽至 macro/section_warroom.py
+from src.ui.tabs.macro.section_warroom import render_section_warroom  # noqa: F401
 
 
 
@@ -297,48 +303,10 @@ def render_tab_macro():
         print(f'[tab_macro/risk_radar] {type(_e_rr).__name__}: {_e_rr}')
 
     # ══ v18.284 — 📊 總經五桶總結 bar（長期/中期/短線急殺/籌碼/新聞）══
-    # 頂部一眼判讀整版危險度；門檻讀 shared.macro_buckets SSOT。
-    # v18.285：未載入資料時不顯示(對齊紅綠燈「尚無資料」+ 雷達 gate)，避免 pre-load 多餘面板。
-    # 載入後(_show_market_data=True)五桶才以真實燈色出現,符合「summarize 已載入資料」語意。
+    # 門檻讀 shared.macro_buckets SSOT;未載入時不顯示(對齊紅綠燈)。
+    # P3-D5 v18.390:抽至 macro/section_summary_bar.py(43 LOC,internal try/except)。
     if _show_market_data:
-        try:
-            # C1-A v18.287:走 section_inputs.load_section_inputs SSOT,
-            # 後續 C1-B+ 其他 section 也接同個 helper,降低物理重排耦合。
-            from src.compute.macro import compute_five_bucket_summary
-            from src.services import load_section_inputs
-            _inp = load_section_inputs(st.session_state)
-            _5b = compute_five_bucket_summary(
-                macro_info=_inp.macro_info,
-                mkt_info=_inp.mkt_info,
-                warroom_summary=_inp.warroom_summary,
-                m1b_m2_info=_inp.m1b_m2_info,
-                bias_info=_inp.bias_info,
-                cl_data=_inp.cl_data,
-                li_latest=_inp.li_latest,
-                jingqi_info=_inp.jingqi_info,
-                news_items=_inp.news_items,
-            )
-            # v18.310：五桶 bar 升級為頂部「總結儀表板」(user 反饋「上方總結 bar 不夠顯眼」)
-            st.markdown(
-                '<div style="margin:6px 0 4px;padding:10px 16px;'
-                'background:linear-gradient(90deg,#1f6feb22,#0d1117);'
-                'border:1px solid #1f6feb55;border-radius:10px;">'
-                '<span style="font-size:16px;font-weight:900;color:#58a6ff;">'
-                '📊 總經總結儀表板</span>'
-                '<span style="font-size:12px;color:#8b949e;margin-left:8px;">'
-                '五時域一眼判讀：長期 ｜ 中期 ｜ 短線急殺 ｜ 籌碼 ｜ 新聞</span></div>',
-                unsafe_allow_html=True)
-            render_five_bucket_bar(_5b)
-            # v18.310：下方各桶已加「桶群組 banner」分隔(取代純文字目錄)，此處保留簡短導航
-            # v18.317：🌍 全球風險桶(雷達)；v18.321：🔮 拐點 + 💵 現金流向 加群組 banner
-            st.caption(
-                "📑 下方深度分析依桶順序排列，每桶有醒目分隔 banner："
-                "🔮 拐點 → 💵 現金流向 → 🌳 長期 → 📈 中期 → ⚡ 短線急殺 → "
-                "🌍 全球風險 → 🧩 籌碼 → 🧠 AI 綜合決策"
-            )
-            st.divider()
-        except Exception as _e_5b:
-            print(f'[tab_macro/五桶] {type(_e_5b).__name__}: {_e_5b}')
+        render_five_bucket_summary()
 
     # v18.311：移除冗餘「今日市場總覽 — 現在適合買股票嗎？」天氣解說 box(晴天/多雲/下雨)。
     # 頂部已有「📊 總經總結儀表板 + 五桶 bar」(L679),此天氣解說與其重複 → 刪除,讓總結 bar 當頂。
@@ -369,193 +337,13 @@ def render_tab_macro():
     # 五步流程說明已整合至主導覽列，此處不重複顯示
 
     # ══ 戰情概覽（一眼看清今日市場）══════════════════════════
-    # C1-B v18.288:走 section_inputs.load_section_inputs SSOT(對齊 5 桶 summary)
-    from src.services import load_section_inputs as _load_si_ov
-    _ov_inp  = _load_si_ov(st.session_state)
-    _ov_mkt  = _ov_inp.mkt_info or {}
-    _ov_jq   = _ov_inp.jingqi_info or {}
-    _ov_cd   = _ov_inp.cl_data or {}
-    # inst 優先從 cl_data，fallback 到獨立緩存的 _last_inst
-    _ov_inst = _ov_cd.get('inst') or (_ov_inp.last_inst or {})
-
-    # v18.316 去重(user 2026-06-27「按桶歸屬各留一處」+「5 分鐘清單為主」):
-    # 外資 / 融資 / 年線乖離 / 持股 的「唯一家」= 下方「今日 5 分鐘清單」,
-    # 今日市場總覽卡片不再重列這 4 個值(原 4 卡刪外資卡 + 年線卡 + regime 卡的持股副標),
-    # 僅保留「大盤多空方向」+「全市場健康度(旌旗)」(後者清單未涵蓋)。
-    # 風險警示仍只在觸發危險門檻時跳;§三 籌碼桶內部敘述不動。
-    if _show_market_data and any([_ov_mkt, _ov_jq, _ov_cd]):
-        _ov_cols = st.columns(2)
-        # 大盤多空方向(持股比例見下方 5 分鐘清單,此處不重列)
-        with _ov_cols[0]:
-            # 以交通燈有效 regime 為主，確保與頂部卡片結論一致
-            _ov_reg = _tl_eff_reg or (_ov_mkt.get('regime','neutral') if _ov_mkt else 'neutral')
-            _ov_lbl = {'bull':'🟢 多頭','neutral':'🟡 震盪','bear':'🔴 空頭防禦'}.get(_ov_reg,'⚪')
-            st.markdown(beginner_kpi('今日市場狀態', _ov_lbl, '大盤多空方向（持股比例見下方清單）',
-                            TRAFFIC_GREEN if _ov_reg=='bull' else (TRAFFIC_RED if _ov_reg=='bear' else TRAFFIC_YELLOW),
-                            '#0d1117'), unsafe_allow_html=True)
-        # 旌旗/廣度(全市場健康度 — 5 分鐘清單未涵蓋,保留唯一)
-        with _ov_cols[1]:
-            _ov_jqp = _ov_jq.get('avg',None) if _ov_jq else None
-            if _ov_jqp is not None:
-                _ov_jc = TRAFFIC_GREEN if _ov_jqp>=BREADTH_BULL_PCT else (TRAFFIC_YELLOW if _ov_jqp>=BREADTH_NEUTRAL_PCT else TRAFFIC_RED)
-                st.markdown(beginner_kpi('全市場健康度', f'{_ov_jqp:.0f}%', '有幾%的股票站在均線之上', _ov_jc, '>60%才適合積極買進'), unsafe_allow_html=True)
-            else:
-                st.markdown(kpi('旌旗指數', '--', '掃描後顯示', '#484f58', '#0d1117'), unsafe_allow_html=True)
-        st.markdown('')
+    # P3-D6 v18.390:抽至 macro/section_overview.py(2-col KPI:今日市場狀態 + 全市場健康度)。
+    render_section_overview(_tl_eff_reg, _show_market_data)
 
     # ══ 今日作戰室（最重要：一眼看清今天該做什麼）══════════════
-    # v18.334：抓取進行中隱藏標題（與下方空狀態一致，載入時只留 spinner）。
-    if not do_refresh:
-        st.markdown('''<div style="background:linear-gradient(135deg,#0a1628,#0d2040);
-border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
-<div style="font-size:18px;font-weight:900;color:#58a6ff;margin-bottom:4px;">
-🎯 今日作戰室 — 現在該做什麼？</div>
-<div style="font-size:11px;color:#484f58;">每次操作前先看這裡，5分鐘掌握今日全局</div>
-</div>''', unsafe_allow_html=True)
-
-    # C1-C v18.289:走 section_inputs.load_section_inputs SSOT(對齊 5 桶 + 戰情概覽)
-    from src.services import load_section_inputs as _load_si_wr
-    _wr_inp  = _load_si_wr(st.session_state)
-    _wr_mkt  = _wr_inp.mkt_info or {}
-    _wr_cd   = _wr_inp.cl_data or {}
-    _wr_bias = _wr_inp.bias_info or {}
-    _wr_m1b  = _wr_inp.m1b_m2_info or {}
-    _wr_inst = _wr_cd.get('inst', {})
-    _wr_fk   = next((k for k in _wr_inst if '外資' in k), None)
-    if _wr_fk is None:
-        _wr_fk = next((k for k in _wr_inst if '外資' in k), None)
-    _wr_fnet = _wr_inst.get(_wr_fk,{}).get('net', None) if _wr_fk else None
-    _wr_margin = _wr_cd.get('margin')
-    _wr_adl  = _wr_cd.get('adl')
-    _wr_ts   = _wr_inp.cl_ts
-    # 以交通燈有效 regime 為主，確保與頂部卡片結論一致
-    _wr_reg  = _tl_eff_reg or (_wr_mkt.get('regime','neutral') if _wr_mkt else 'neutral')
-    # v4 引擎：解耦趨勢與位階，取得精準操作建議
-    _wr_fut_net = _wr_inp.futures_net
-    _v4 = evaluate_market_status_v4_final(
-        _wr_bias.get('price', 0) or 0,
-        _wr_bias.get('ma240', 0) or 0,
-        _wr_fut_net,
-    )
-    # 持股建議統一用紅綠燈/market_regime 的 exposure_pct（與 ①②一致，不再用 v4 區間）
-    _wr_exp = _wr_mkt.get('exposure_pct', '--') if _wr_mkt else '--'
-
-    if _show_market_data and (_wr_mkt or _wr_cd):
-        # ── 今日唯一結論（大字顯示）──────────────────────────
-        _wr_action = '請先更新總經數據'
-        _wr_action_color = '#484f58'
-        _wr_warns = []
-
-        # 主結論統一以頂部紅綠燈 regime 為準（與燈號/戰情概覽一致，杜絕打架）
-        _wr_reg_map = {
-            'bull':    ('🟢 趨勢偏多 — 可逢回布局核心部位',   TRAFFIC_GREEN),
-            'neutral': ('🟡 方向震盪 — 區間操作、控制部位',   TRAFFIC_YELLOW),
-            'bear':    ('🔴 趨勢偏空 — 優先保留現金、嚴設停損', TRAFFIC_RED),
-        }
-        _wr_base, _wr_action_color = _wr_reg_map.get(_wr_reg, ('請先更新總經數據', '#484f58'))
-        _wr_action = (f'{_wr_base}（建議持股 {_wr_exp}）'
-                      if _wr_exp not in ('--', None, '') else _wr_base)
-        # v4 年線位階資訊 → 降為補充提示，不再覆蓋主結論
-        _v4_bits = [f'年線乖離 {_v4["Bias_240"]:+.1f}%']
-        if not _v4.get('Is_Bull'):
-            _v4_bits.append('股價在年線下')
-        if _v4.get('Is_Overheated'):
-            _v4_bits.append('乖離過熱')
-        if _v4.get('Is_Foreign_Hedging'):
-            _v4_bits.append('外資期貨避險')
-        _wr_v4_hint = '｜'.join(_v4_bits)
-
-        # 風險警示收集（v5：純融資餘額判斷）
-        if _wr_margin and _wr_margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
-            _wr_warns.append(('🔴', f'融資 {_wr_margin:.0f}億 極度危險，散戶過熱，不宜追高'))
-        elif _wr_margin and _wr_margin > MARGIN_BALANCE_WARN_THRESHOLD_YI:
-            _wr_warns.append(('🟡', f'融資 {_wr_margin:.0f}億 警戒，注意風險'))
-
-        if _wr_bias:
-            _b240 = _wr_bias.get('bias_240', 0)
-            if _b240 > 20:
-                _wr_warns.append(('🟡', f'年線乖離 {_b240:+.1f}%，大盤偏高，勿追買'))
-            elif _b240 < -20:
-                _wr_warns.append(('✅', f'年線負乖離 {_b240:+.1f}%，長期布局機會'))
-
-        if _wr_fnet is not None and _wr_fnet < -20:
-            _wr_warns.append(('🔴', f'外資賣超 {abs(_wr_fnet):.1f}億，主力離場，謹慎'))
-
-        if _wr_adl is not None and not _wr_adl.empty and 'ad_ratio' in _wr_adl.columns:
-            _adl_r = float(_wr_adl['ad_ratio'].iloc[-1])
-            if _adl_r < 35:
-                _wr_warns.append(('🔴', f'上漲股票僅 {_adl_r:.0f}%，市場廣度不足，觀望'))
-
-        # 顯示今日結論
-        st.markdown(
-            f'<div style="background:#0a2818;border-left:5px solid {_wr_action_color};'
-            f'border-radius:0 10px 10px 0;padding:14px 18px;margin:8px 0;">'
-            f'<div style="font-size:11px;color:#484f58;margin-bottom:4px;">📌 今日唯一行動建議</div>'
-            f'<div style="font-size:17px;font-weight:900;color:{_wr_action_color};">{_wr_action}</div>'
-            + (f'<div style="font-size:11px;color:#8b949e;margin-top:4px;">📐 年線位階參考：{_wr_v4_hint}</div>' if _wr_v4_hint else '')
-            + (f'<div style="font-size:11px;color:#484f58;margin-top:4px;">更新時間：{_wr_ts}</div>' if _wr_ts else '') +
-            '</div>', unsafe_allow_html=True)
-
-        # 今日5分鐘清單 — v18.318：5 列垂直清單 → 5 欄總結小卡（比照桶卡片視覺）
-        st.markdown('##### ✅ 今日操作前 5 分鐘清單')
-        _cl_items = [
-            ('大盤燈號', '🟢 多頭' if _wr_reg=='bull' else ('🔴 空頭防禦' if _wr_reg=='bear' else '🟡 震盪'),
-             _wr_reg=='bull', '多頭才積極操作'),
-            ('外資方向', f'{"買超" if (_wr_fnet or 0)>0 else "賣超"} {abs(_wr_fnet or 0):.0f}億' if _wr_fnet is not None else '未知',
-             (_wr_fnet or 0) > 0, '外資買超=跟著走'),
-            ('融資餘額',
-             f'{_wr_margin:.0f}億' if _wr_margin else '未取得 (N/A)',
-             not _wr_margin or _wr_margin <= MARGIN_BALANCE_WARN_THRESHOLD_YI,
-             '>2500億警戒，>3400億極危'),
-            ('年線位置', f'乖離{_wr_bias.get("bias_240",0):+.1f}%' if _wr_bias else '未知',
-             not _wr_bias or abs(_wr_bias.get("bias_240",0)) < 20, '超過±20%要警惕'),
-            ('持股比例', f'建議{_wr_exp}', _wr_reg!='bear', '按建議比例，不要滿倉'),
-        ]
-        _cl_cols = st.columns(len(_cl_items))
-        for _ccol, (_name, _val, _ok, _tip) in zip(_cl_cols, _cl_items):
-            _ic = '✅' if _ok else '⚠️'
-            _vc = TRAFFIC_GREEN if _ok else TRAFFIC_RED
-            with _ccol:
-                st.markdown(
-                    f"<div style='background:#0d1117;border:1px solid #21262d;"
-                    f"border-top:3px solid {_vc};border-radius:8px;padding:8px 10px;"
-                    f"margin:2px 0;min-height:108px;display:flex;flex-direction:column;"
-                    f"justify-content:space-between;'>"
-                    f"<div>"
-                    f"<div style='font-size:11px;color:#8b949e;'>{_ic} {_name}</div>"
-                    f"<div style='font-size:15px;font-weight:800;color:{_vc};"
-                    f"margin:5px 0;line-height:1.25;'>{_val}</div>"
-                    f"</div>"
-                    f"<div style='font-size:10px;color:#484f58;line-height:1.3;'>{_tip}</div>"
-                    f"</div>", unsafe_allow_html=True)
-
-        # 風險警示
-        if _wr_warns:
-            st.markdown('##### ⚠️ 今日風險警示')
-            for _wic, _wtxt in _wr_warns:
-                _wbg = '#2a0d0d' if '🔴' in _wic else ('#2a1f00' if '🟡' in _wic else '#0a2818')
-                st.markdown(
-                    f'<div style="background:{_wbg};border-radius:6px;padding:7px 12px;margin:3px 0;'
-                    f'font-size:13px;color:#c9d1d9;">{_wic} {_wtxt}</div>',
-                    unsafe_allow_html=True)
-
-        # 月虧損強制停機警示
-        _monthly_loss = st.session_state.get('monthly_loss_pct', 0)
-        if _monthly_loss < -10:
-            st.markdown(
-                f'<div style="background:#3a0000;border:2px solid {TRAFFIC_RED};border-radius:10px;'
-                f'padding:14px;margin:10px 0;text-align:center;">'
-                f'<div style="font-size:16px;font-weight:900;color:{TRAFFIC_RED};">⛔ 月虧損警示</div>'
-                f'<div style="font-size:13px;color:#c9d1d9;margin-top:6px;">'
-                f'本月虧損已達 {abs(_monthly_loss):.1f}%，建議暫停操作 7 天<br>'
-                f'冷靜後重新評估選股邏輯</div></div>',
-                unsafe_allow_html=True)
-
-        st.markdown('<hr style="border-color:#21262d;margin:12px 0;">', unsafe_allow_html=True)
-    elif not do_refresh:
-        # v18.334：抓取進行中不顯示「點擊載入」空狀態（與標題一致，載入時只留 spinner）
-        st.info('📡 點擊「🚀 一鍵更新全部數據」載入今日作戰室')
-        st.markdown('<hr style="border-color:#21262d;margin:12px 0;">', unsafe_allow_html=True)
+    # P3-D7 v18.390:154 LOC 抽至 macro/section_warroom.py(closure 3:
+    # _tl_eff_reg + _show_market_data + do_refresh)。
+    render_section_warroom(_tl_eff_reg, _show_market_data, do_refresh)
 
     # ── FinMind Token 狀態提示（不發 API，只檢查 env 是否有值）───
     _fm_tok_now = _get_fm_token()
@@ -1186,169 +974,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
     cd     = st.session_state.get('cl_data', {})
 
-    # ── Registry 常態 Patch：每次頁面渲染都更新個股/ETF 部分（不重發請求）──
-    # 個股(t2_data)、ETF、比較排行 是用戶互動後才載入，需在每次 rerun 補入 registry
-    # 注意：不限制 if _rp:，即使總經尚未更新也要讓 ETF/個股 資料進入診斷 Tab
-    try:
-        import pandas as _pd_rp
-        _rp = dict(st.session_state.get('data_registry') or {})
-        # proxy 日期：優先用總經更新時間；未更新過則用今天
-        import datetime as _dt_prp
-        _cl_ts_rp = st.session_state.get('cl_ts', '')
-        try:
-            import re as _re_rp
-            _m_rp = _re_rp.search(r'(\d{4}-\d{2}-\d{2})', _cl_ts_rp)
-            _proxy_rp = _m_rp.group(1) if _m_rp else _dt_prp.date.today().strftime('%Y-%m-%d')
-        except Exception:
-            _proxy_rp = _dt_prp.date.today().strftime('%Y-%m-%d')
-
-        # 移除所有舊的個股 / ETF 單一 / ETF組合 / ETF回測 / 比較 key
-        for _ok in list(_rp.keys()):
-            if (_ok.startswith('[個股]') or _ok.startswith('[比較]')
-                    or (_ok.startswith('[ETF]') and '|' in _ok)
-                    or '[ETF組合]' in _ok or '[ETF回測]' in _ok):
-                del _rp[_ok]
-
-        # ── 個股 ──────────────────────────────────────────────────────
-        _t2rp = st.session_state.get('t2_data')
-        if _t2rp:
-            _spfx = f'[個股] {_t2rp.get("sid","")} {(_t2rp.get("name") or _t2rp.get("sid",""))}'
-            # DataFrame 型資料
-            for _lbl, _key, _f in [('價格走勢','df','daily'),('月營收','rev','monthly'),
-                                    ('季財報','qtr','quarterly')]:
-                _rp[f'{_spfx} | {_lbl}'] = rp_entry(_t2rp.get(_key), '個股', _f)
-            # cl/cx 為 fetch_financials 回傳的純量金額（非 DataFrame），須用 rp_scalar
-            _rp[f'{_spfx} | 現金流量'] = rp_scalar(_t2rp.get('cl'), '個股', 'quarterly', _proxy_rp)
-            _rp[f'{_spfx} | 資產負債'] = rp_scalar(_t2rp.get('cx'), '個股', 'quarterly', _proxy_rp)
-            # 年度股利（list of dicts）
-            import datetime as _dt_yr_rp
-            _yr_rp = _t2rp.get('yearly') or []
-            if _yr_rp:
-                _yr_raw = str(_yr_rp[-1].get('year', ''))[:4]
-                if _yr_raw.isdigit():
-                    _yr_date = f'{_yr_raw}-12-31'
-                    # 若為未來日期（如年度=當年但12月尚未到），截斷至今天
-                    _today_cap = _dt_yr_rp.date.today().strftime('%Y-%m-%d')
-                    _yr_date = min(_yr_date, _today_cap)
-                else:
-                    _yr_date = _proxy_rp
-                _rp[f'{_spfx} | 年度股利'] = {'last_updated': _yr_date,
-                                               'rows': len(_yr_rp), 'category': '個股', 'frequency': 'yearly'}
-            else:
-                _rp[f'{_spfx} | 年度股利'] = {'last_updated': 'N/A', 'rows': 0,
-                                               'category': '個股', 'frequency': 'yearly', 'missing': True}
-            # 健康度評分（純量）
-            _rp[f'{_spfx} | 健康度評分'] = rp_scalar(_t2rp.get('health'), '個股', 'daily', _proxy_rp)
-            # 技術指標：各自獨立
-            _rp[f'{_spfx} | RSI'] = rp_scalar(_t2rp.get('rsi'), '個股', 'daily', _proxy_rp)
-            _rp[f'{_spfx} | KD (K值)'] = rp_scalar(_t2rp.get('k'), '個股', 'daily', _proxy_rp)
-            _rp[f'{_spfx} | IBS 內部強弱'] = rp_scalar(_t2rp.get('ibs'), '個股', 'daily', _proxy_rp)
-            _rp[f'{_spfx} | 量比 VR'] = rp_scalar(_t2rp.get('vr'), '個股', 'daily', _proxy_rp)
-            _rp[f'{_spfx} | 布林帶'] = rp_scalar(_t2rp.get('bb'), '個股', 'daily', _proxy_rp)
-            _rp[f'{_spfx} | VCP 波幅收縮'] = rp_scalar(_t2rp.get('vcp'), '個股', 'daily', _proxy_rp)
-            # 財報延伸（合約負債/存貨/資本支出時序）
-            _rp[f'{_spfx} | 合約負債/資本支出'] = rp_entry(_t2rp.get('qtr_extra'), '個股', 'quarterly')
-        else:
-            _spfx0 = '[個股] — 尚未搜尋'
-            for _lbl0, _f0 in [
-                ('價格走勢','daily'),('月營收','monthly'),('季財報','quarterly'),
-                ('現金流量','quarterly'),('資產負債','quarterly'),('年度股利','yearly'),
-                ('健康度評分','daily'),('RSI','daily'),('KD (K值)','daily'),
-                ('IBS 內部強弱','daily'),('量比 VR','daily'),('布林帶','daily'),
-                ('VCP 波幅收縮','daily'),('合約負債/資本支出','quarterly'),
-            ]:
-                _rp[f'{_spfx0} | {_lbl0}'] = {'last_updated':'N/A','rows':0,'category':'個股','frequency':_f0,'missing':True}
-
-        # ── 比較排行 ──────────────────────────────────────────────────
-        _t3rp = st.session_state.get('t3_data')
-        if _t3rp and _t3rp.get('results'):
-            _rp['[比較] 多股比較排行'] = {'last_updated': _proxy_rp, 'rows': len(_t3rp['results']), 'category': '個股', 'frequency': 'daily'}
-        else:
-            _rp['[比較] 多股比較排行'] = {'last_updated': 'N/A', 'rows': 0, 'category': '個股', 'frequency': 'daily', 'missing': True}
-
-        # ── ETF 單一 ──────────────────────────────────────────────────
-        _e1rp = st.session_state.get('etf_single_data') or {}
-        _etkrp = _e1rp.get('ticker', '')
-        _epfxrp = f'[ETF] {_etkrp} {_e1rp.get("name","")}'.strip() if _etkrp else '[ETF] — 尚未搜尋'
-        _rp[f'{_epfxrp} | 價格走勢'] = rp_entry(_e1rp.get('price_df'), 'ETF', 'daily')
-        _rp[f'{_epfxrp} | 現金殖利率'] = rp_scalar(_e1rp.get('cur_yield'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | 近5年平均殖利率'] = rp_scalar(_e1rp.get('avg_yield'), 'ETF', 'yearly', _proxy_rp)
-        _rp[f'{_epfxrp} | 近1年含息總報酬'] = rp_scalar(_e1rp.get('total_ret'), 'ETF', 'daily', _proxy_rp)
-        _e1_prem = (_e1rp.get('premium') or {})
-        _rp[f'{_epfxrp} | 折溢價率'] = rp_scalar(_e1_prem.get('premium_pct'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | 淨值 (NAV)'] = rp_scalar(_e1_prem.get('nav'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | 追蹤誤差'] = rp_scalar(_e1rp.get('te'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | VCP 波幅收縮'] = rp_scalar(_e1rp.get('vcp'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | 內控費用率'] = rp_scalar(_e1rp.get('expense'), 'ETF', 'yearly', _proxy_rp)
-        _rp[f'{_epfxrp} | Beta'] = rp_scalar(_e1rp.get('beta'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | AuM 規模'] = rp_scalar(_e1rp.get('aum'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | KD 技術指標'] = rp_scalar(_e1rp.get('k_val'), 'ETF', 'daily', _proxy_rp)
-        _rp[f'{_epfxrp} | 年線乖離率 BIAS240'] = rp_scalar(_e1rp.get('bias240'), 'ETF', 'daily', _proxy_rp)
-
-        # ── ETF 組合 ──────────────────────────────────────────────────
-        _e2rp = st.session_state.get('etf_portfolio_data') or {}
-        if _e2rp.get('rows'):
-            _e2n = len(_e2rp['rows'])
-            _rp[f'[ETF組合] 再平衡分析（{_e2n}檔）'] = {'last_updated': _proxy_rp, 'rows': _e2n, 'category': 'ETF', 'frequency': 'daily'}
-        else:
-            _rp['[ETF組合] 再平衡分析'] = {'last_updated': 'N/A', 'rows': 0, 'category': 'ETF', 'frequency': 'daily', 'missing': True}
-
-        # ── ETF 回測 ──────────────────────────────────────────────────
-        _e3rp = st.session_state.get('etf_backtest_data') or {}
-        if _e3rp.get('cagr') is not None:
-            _e3n = len(_e3rp.get('weights', {}))
-            _rp[f'[ETF回測] 回測績效（{_e3n}檔）'] = {'last_updated': _proxy_rp, 'rows': _e3n, 'category': 'ETF', 'frequency': 'daily'}
-        else:
-            _rp['[ETF回測] 回測績效'] = {'last_updated': 'N/A', 'rows': 0, 'category': 'ETF', 'frequency': 'daily', 'missing': True}
-
-        # 若大盤項目完全缺失（DataRegistry 建立時拋出 exception），從 cl_data 補建
-        if not any(v.get('category') == '大盤' for v in _rp.values()):
-            _cd_rb = st.session_state.get('cl_data', {})
-            if _cd_rb:
-                def _rb_add(_n, _df, _cat='大盤', _freq='daily'):
-                    if isinstance(_df, _pd_rp.DataFrame) and not _df.empty:
-                        _rp[_n] = {'last_updated': rp_ts(_df), 'rows': len(_df), 'category': _cat, 'frequency': _freq}
-                    else:
-                        _rp[_n] = {'last_updated': 'N/A', 'rows': 0, 'category': _cat, 'frequency': _freq, 'missing': True}
-                for _n in INTL_MAP:
-                    _rb_add(_n, (_cd_rb.get('intl') or {}).get(_n))
-                for _n in TW_MAP:
-                    _rb_add(_n, (_cd_rb.get('tw') or {}).get(_n))
-                for _n in TECH_MAP:
-                    _rb_add(_n, (_cd_rb.get('tech') or {}).get(_n))
-                _rb_add('ADL 市場廣度', _cd_rb.get('adl'))
-                _inst_rb = _cd_rb.get('inst') or {}
-                for _ik, _iname in [('外資及陸資','三大法人 外資買賣超'),
-                                     ('投信','三大法人 投信買賣超'),
-                                     ('自營商','三大法人 自營商買賣超')]:
-                    _rp[_iname] = {'last_updated': 'N/A', 'rows': 1 if _inst_rb.get(_ik) else 0,
-                                   'category': '大盤', 'frequency': 'daily',
-                                   **({} if _inst_rb.get(_ik) else {'missing': True})}
-                _rp['融資餘額（台股）'] = {'last_updated': 'N/A', 'rows': 1 if _cd_rb.get('margin') else 0,
-                                          'category': '大盤', 'frequency': 'daily',
-                                          **({} if _cd_rb.get('margin') else {'missing': True})}
-                _macro_rb = st.session_state.get('macro_info') or {}
-                for _mk, _mn, _mf in [('vix','VIX 波動率指數','daily'),
-                                       ('us_core_cpi','美國核心CPI年增率','monthly'),
-                                       ('fed_funds','美國 Fed Funds Rate','monthly'),  # v18.169
-                                       ('ism_pmi','🇹🇼 台灣 PMI 製造業指數','monthly'),
-                                       ('tw_export','台灣出口年增率','monthly'),
-                                       ('ndc_signal','景氣先行指標（NDC）','monthly')]:
-                    _msub_rb = _macro_rb.get(_mk)
-                    if _msub_rb:
-                        _raw_rb = ((_msub_rb.get('date') or _msub_rb.get('period')
-                                    or (_msub_rb.get('dates') or [''])[-1])
-                                   if isinstance(_msub_rb, dict) else None) or _proxy_rp
-                        _rp[_mn] = {'last_updated': str(_raw_rb)[:10], 'rows': 1,
-                                    'category': '大盤', 'frequency': _mf}
-                    else:
-                        _rp[_mn] = {'last_updated': 'N/A', 'rows': 0,
-                                    'category': '大盤', 'frequency': _mf, 'missing': True}
-                print('[RegistryPatch] 大盤項目補建完成')
-
-        st.session_state['data_registry'] = _rp
-    except Exception as _rpe:
-        print(f'[RegistryPatch] {_rpe}')
+    # ── Registry 常態 Patch:每次頁面渲染都更新個股/ETF 部分(不重發請求) ──
+    # P3-D8 v18.390:161 LOC 抽至 src/services/macro_registry_patch.py。
+    # INTL/TW/TECH MAP + rp_entry/scalar/ts 由 caller 注入,避 L3→L2 循環。
+    from src.services.macro_registry_patch import patch_registry as _patch_reg
+    _patch_reg(intl_map=INTL_MAP, tw_map=TW_MAP, tech_map=TECH_MAP,
+               rp_entry=rp_entry, rp_scalar=rp_scalar, rp_ts=rp_ts)
 
     intl   = {n:s for n,s in cd.get('intl',{}).items() if s is not None and not s.empty}
     tw     = {n:s for n,s in cd.get('tw',{}).items()   if s is not None and not s.empty}
