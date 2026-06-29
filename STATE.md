@@ -1,7 +1,22 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
 ## 進行中 batch
-✅ B-region UI 拆分 + D-region §8.2 fetch 下沉(PR #394 已 merge,8b48454)
+✅ B+D-region 全收尾(PR #394 + #395 已 merge into main)
+
+## 🏁 PR #395 v18.390(merged 2026-06-28)
+**tab_macro.py 1445 → 1076 LOC(−369,−26%)** — 5 commit dashboard 三件套 + Registry patch。
+- D-5 `ac06da7`:五桶 bar 43 LOC → section_summary_bar
+- D-6 `89ab752`:戰情概覽 35 LOC → section_overview
+- D-7 `98e8005`:今日作戰室 154 LOC → section_warroom
+- D-8 `cfd521f`:Registry patch 161 LOC → services/macro_registry_patch
+- INDEX sync `e9f2e23`
+
+承認前次 deep-dive verdict 過嚴(誤標 5 段「不可抽」), 本 PR 確實抽 4 段。
+全工作累計:tab_macro 5387 → 1076 LOC(−4311,−80%)。
+殘餘 1076 LOC 真不可抽:紅綠燈 placeholder lifecycle(streamlit 反模式)。
+
+---
+
 
 ## 🏁 PR #394 v18.389(merged into main 2026-06-28)
 **tab_macro.py 5387 → 1445 LOC(−3942,−73%)** — 10 commit 累計成果。
