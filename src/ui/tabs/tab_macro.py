@@ -344,38 +344,10 @@ def render_tab_macro():
             except Exception:
                 pass
 
-            # ── do_refresh 完成後自動估算旌旗指數（不等掃描）──────
-            _jq_ratio_src = None
-            if df_adl_raw is not None and not df_adl_raw.empty and 'ad_ratio' in df_adl_raw.columns:
-                _jq_ratio_src = 'ADL'
-                _jq_ratio = float(df_adl_raw['ad_ratio'].tail(5).mean())
-            else:
-                # 備援：用大盤漲跌估算（正日=60%上漲，負日=40%）
-                _tw_d = st.session_state.get('cl_data',{}).get('tw',{})
-                _twii_d = _tw_d.get('台股加權指數')
-                if _twii_d is not None and not _twii_d.empty:
-                    _cc_d = 'close' if 'close' in _twii_d.columns else 'Close'
-                    if _cc_d in _twii_d.columns:
-                        _ret5 = _twii_d[_cc_d].pct_change().tail(5)
-                        _up_days = (_ret5 > 0).sum()
-                        _jq_ratio = 40 + _up_days * 5  # 全漲=65%, 全跌=40%
-                        _jq_ratio_src = '大盤估算'
-                else:
-                    _jq_ratio_src = None  # 無資料時不設定，不顯示錯誤數值
-            if _jq_ratio_src and _jq_ratio_src != '預設值':
-                _jq_ratio = float(_jq_ratio)
-                _jq_pos  = '80~100%' if _jq_ratio>=BREADTH_BULL_PCT else ('50~70%' if _jq_ratio>=BREADTH_NEUTRAL_PCT else ('20~40%' if _jq_ratio>=BREADTH_BEAR_PCT else '0~20%'))
-                _jq_reg  = 'bull' if _jq_ratio>=BREADTH_BULL_PCT else ('neutral' if _jq_ratio>=BREADTH_NEUTRAL_PCT else 'bear')
-                _jq_col  = TRAFFIC_GREEN if _jq_ratio>=BREADTH_BULL_PCT else (TRAFFIC_YELLOW if _jq_ratio>=BREADTH_NEUTRAL_PCT else TRAFFIC_RED)
-                _jq_lbl  = '🟢 多頭積極' if _jq_ratio>=BREADTH_BULL_PCT else ('🟡 中性均衡' if _jq_ratio>=BREADTH_NEUTRAL_PCT else '🔴 保守防禦')
-                _jq_src_note = f'（來源：{_jq_ratio_src}）'
-                st.session_state['jingqi_info'] = {
-                    'avg':_jq_ratio,'pos':_jq_pos,'regime':_jq_reg,
-                    'color':_jq_col,'label':_jq_lbl,'total':0,
-                    'source':_jq_ratio_src,
-                    'pct20':_jq_ratio,'pct60':_jq_ratio*0.9,
-                    'pct120':_jq_ratio*0.8,'pct240':_jq_ratio*0.7
-                }
+            # ── do_refresh 完成後自動估算旌旗指數(不等掃描)──────
+            # P3-D11 v18.392:抽至 src/services/jingqi_calc.compute_and_store_jingqi。
+            from src.services.jingqi_calc import compute_and_store_jingqi
+            compute_and_store_jingqi(df_adl_raw)
 
             # ── M1B-M2 + 乖離率 並發計算 ──────────────────────
             def _job_m1b():
