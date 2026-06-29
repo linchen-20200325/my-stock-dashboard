@@ -25,7 +25,7 @@ from typing import Any
 import streamlit as st
 
 from shared.data_categories import (
-    ALL_CATEGORIES, CAT_FALLBACK, coverage_emoji_for,
+    ALL_CATEGORIES, CAT_FALLBACK, FRESHNESS_THRESHOLDS_DAYS, coverage_emoji_for,
 )
 
 _C_GREEN  = "#3fb950"
@@ -56,15 +56,11 @@ def _freshness_emoji(last_updated: str, frequency: str, missing: bool) -> tuple[
         return ('⬜', _C_IDLE)
     today = _dt.date.today()
     days_old = (today - d).days
-    # frequency-aware thresholds
-    if frequency == 'monthly':
-        warn, crit = 90, 180
-    elif frequency in ('quarterly', 'yearly'):
-        warn, crit = 180, 365
-    elif frequency == 'event':
+    # v18.401 SSOT:frequency-aware thresholds 從 shared.data_categories 引入。
+    if frequency == 'event':
         return ('🟢', _C_GREEN)
-    else:  # daily / weekly / unknown
-        warn, crit = 7, 30
+    warn, crit = FRESHNESS_THRESHOLDS_DAYS.get(
+        frequency, FRESHNESS_THRESHOLDS_DAYS['daily'])
     if days_old <= warn:
         return ('🟢', _C_GREEN)
     if days_old <= crit:
