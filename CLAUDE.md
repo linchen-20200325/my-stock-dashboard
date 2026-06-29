@@ -62,7 +62,7 @@
 - §8 架構先行 — 7 層分層 + 5 條硬規則 + 3 處灰色地帶（v3 增補,evidence: ARCHITECTURE.md §1-§7 + SPEC.md §5）
 
 **步驟 3｜回溯稽核** — 已完成,違憲清單分高/中/低三級;以下 W 系列 + S-H 系列 PR 逐一收斂：
-- W1（v18.241 群 A/B/C）：14 處 SSOT 抽出 + EX-CACHE-1/EX-L0-1/EX-AI-1 例外登記
+- W1（v18.241 群 A/B/C）：14 處 SSOT 抽出 + EX-CACHE-1/EX-L0-1/EX-AI-1 例外登記（EX-AI-1 v18.399 已退役）
 - W3a/W3b（#253）：4 處 inline magic SSOT 抽出 + 收斂 §3.3 表
 - W4（#252）：刪死碼 get_nas_proxy 群
 - W5-1（#254）：data_loader 5 處 except:pass 收窄 + log
