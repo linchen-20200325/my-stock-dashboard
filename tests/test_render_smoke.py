@@ -304,11 +304,12 @@ render_five_bucket_bar(_summary)
         本 test 用 AppTest 真實 invoke render_section_news_ai 並灌真實 macro_info shape,
         驗證函式可以 import + invoke 不炸。
 
-        Note:§十一 內部 lazy import `from app import _fetch_macro_news, gemini_call`,
-        而 app.py module 載入時直接 `st.secrets.get('FINMIND_TOKEN', ...)`(會 raise
-        若無 secrets.toml)。CI 無 secrets → 自動 skip(production deploy 必有 secrets,
-        實機驗仍涵蓋)。靜態 AST 守衛 test_render_section_news_ai_args_defined_in_scope
-        無此依賴,專責 NameError 類回歸防護。
+        Note:§十一 內部 lazy import `from app import gemini_call`(v18.398 P5-B3-β R8
+        起 `_fetch_macro_news` 已抽至 `src.data.news`),而 app.py module 載入時直接
+        `st.secrets.get('FINMIND_TOKEN', ...)`(會 raise 若無 secrets.toml)。CI 無
+        secrets → 自動 skip(production deploy 必有 secrets,實機驗仍涵蓋)。靜態 AST
+        守衛 test_render_section_news_ai_args_defined_in_scope 無此依賴,專責 NameError
+        類回歸防護。
         """
         if not self._has_secrets_toml():
             pytest.skip("無 .streamlit/secrets.toml(§十一 News AI lazy import app.py 必須讀 st.secrets)")

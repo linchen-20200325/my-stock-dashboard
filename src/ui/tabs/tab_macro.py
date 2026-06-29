@@ -18,7 +18,8 @@
     - market_strategy: get_market_assessment
     - leading_indicators: build_leading_fast / render_leading_table
     - ui_widgets: beginner_kpi / kpi / teacher_conclusion
-  * app.py 內部 (5): _bps / _fetch_macro_news / _get_fm_token / _tw_now_str / gemini_call
+  * app.py 內部 (4): _bps / _get_fm_token / _tw_now_str / gemini_call
+  * src/data/news (1): fetch_macro_news(P5-B3-β R8 抽出,原 app._fetch_macro_news)
 
 呼叫端
 ======
@@ -121,10 +122,12 @@ def render_tab_macro():
     from src.services import get_market_assessment
     from src.data.macro import render_leading_table
     from src.ui.render import beginner_kpi, cond_badge, kpi, teacher_conclusion
-    # app.py 內部 helper（v18.192：還原 section 十一 → 重新需要 _fetch_macro_news / gemini_call）
+    # app.py 內部 helper（v18.192：還原 section 十一 → 需要 gemini_call）
     from app import (
-        _bps, _fetch_macro_news, _get_fm_token, _tw_now_str, gemini_call,
+        _bps, _get_fm_token, _tw_now_str, gemini_call,
     )
+    # v18.398 P5-B3-β R8:news fetcher 已抽至 src/data/news
+    from src.data.news import fetch_macro_news as _fetch_macro_news
 
     # F-7.1 B-1:_macro_session_reset / _on_refresh_click / _on_force_clear_click 抽至 src/ui/tabs/macro/handlers.py
     # ── Empty state gate(v18.286)──────────────────────────────

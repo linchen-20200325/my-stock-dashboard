@@ -245,11 +245,15 @@ def render_tab_stock():
     from src.data.core import fetch_financial_statements
     # app.py 內部 helper
     from app import (
-        _fetch_stock_news, api_key,
+        api_key,
         fetch_dividend_data, fetch_financials, fetch_price_data,
         fetch_quarterly, fetch_quarterly_extra, fetch_revenue,
-        gemini_call, generate_ai_comment, render_health_score,
+        gemini_call, render_health_score,
     )
+    # v18.398 P5-B3-β R7:generate_ai_comment 已抽至 L3 service
+    from src.services.app_ai_service import generate_ai_comment
+    # v18.398 P5-B3-β R8:_fetch_stock_news 已抽至 L1 data
+    from src.data.news import fetch_stock_news as _fetch_stock_news
 
     # v18.286 Empty state:解說卡 + 抓取項目 info 改成「資料載入後才出現」(對齊 fund 風格)。
     # 標題 / 操作列 / 載入按鈕永遠顯示;說明性區塊只在有 t2_data 時 render。

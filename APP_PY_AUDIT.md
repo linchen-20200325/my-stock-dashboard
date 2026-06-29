@@ -1,10 +1,21 @@
-# app.py 拆檔 Audit(v18.397 P5-B3,1542 LOC)
+# app.py 拆檔 Audit(v18.398 P5-B3-β,1178 LOC)
+
+## 進度紀錄
+
+- ✅ B3-α(v18.397):cache helper 抽 `shared/app_cache.py`
+- ✅ B3-β R7(v18.398):`generate_ai_comment` 抽 `src/services/app_ai_service.py`(-96 LOC)
+- ✅ B3-β R8(v18.398):`_fetch_macro_news` / `_rss_items_from_bytes` / `_fetch_stock_news`
+  + `_SYSTEMIC_RISK_KEYWORDS` 抽 `src/data/news/news_fetcher.py`(-268 LOC)
+- ⏳ B3-γ(待 user 認可):Render 抽 `src/ui/render/`(~370 LOC)
+- ⏳ B3-δ(待 user 認可):L1 fetcher 抽 `src/data/stock/`(~400 LOC)
+
+app.py:1542 → 1178(-364 LOC,-24%)
 
 ## 規模
 
 | 度量 | 值 |
 |---|---|
-| 總 LOC | 1542 |
+| 總 LOC | 1178(B3-α 後 1542 → B3-β 後 1178) |
 | Top-level def | 28 |
 | Top-level class | 1 (`_AppProxy`) |
 | Tab orchestration block(`with tab_*`)| 6 |
