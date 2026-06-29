@@ -98,3 +98,19 @@ def coverage_emoji_for(category: str) -> str:
     回傳 category 本身(category 本來就含 emoji);若給未知 category 回 `❓`。
     """
     return category if category in ALL_CATEGORIES else '❓ 未分類'
+
+
+# ── Freshness threshold SSOT(v18.401 P5-SSOT-FIX 補抽)──
+# data_registry_panel._freshness_emoji 原 inline `7/30 / 90/180 / 180/365` 三組,
+# 改用此 mapping 集中。frequency → (warn_days, crit_days):
+#   - daily/weekly:7 日內 🟢 / 7~30 🟡 / >30 🔴
+#   - monthly:    90 日內 🟢 / 90~180 🟡 / >180 🔴
+#   - quarterly/yearly:180 日內 🟢 / 180~365 🟡 / >365 🔴
+#   - event:走 caller 特殊 path(always 🟢,觸發型),不在此 mapping
+FRESHNESS_THRESHOLDS_DAYS: dict[str, tuple[int, int]] = {
+    'daily':     (7, 30),
+    'weekly':    (7, 30),
+    'monthly':   (90, 180),
+    'quarterly': (180, 365),
+    'yearly':    (180, 365),
+}
