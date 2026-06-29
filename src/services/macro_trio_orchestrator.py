@@ -64,10 +64,15 @@ def run_macro_trio_and_persist(
             return None
 
     def _job_macro():
-        """6-fetcher 並行(VIX/CPI/PMI/NDC/Export/Fed)+ provenance 注入。"""
+        """7-fetcher 並行(VIX/CPI/PMI/NDC/Export/Fed/US10Y)+ provenance 注入。
+
+        R3 v18.405:加 US10Y 第 7 fetcher,讓 reconcile_panel.US10Y 對帳 row
+        從 ⬜「未觸發」變 production live(FRED DGS10 vs Yahoo ^TNX/10)。
+        """
         from src.data.macro.macro_snapshot import (
             fetch_vix_block, fetch_cpi_block, fetch_fed_funds_block,
             fetch_tw_pmi_block, fetch_ndc_block, fetch_export_block,
+            fetch_us10y_block,  # R3 v18.405
         )
         _fetchers = {
             'vix':       fetch_vix_block,
@@ -77,6 +82,7 @@ def run_macro_trio_and_persist(
             'export':    lambda: fetch_export_block(
                              fred_api_key=fred_api_key, finmind_token=fm_token),
             'fed_funds': lambda: fetch_fed_funds_block(fred_api_key=fred_api_key),
+            'us10y':     lambda: fetch_us10y_block(fred_api_key=fred_api_key),  # R3
         }
         _r: dict = {}
         _pool_mc = ThreadPoolExecutor(max_workers=6)

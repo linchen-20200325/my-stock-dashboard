@@ -409,6 +409,57 @@ def fetch_cpi_block(fred_api_key: str = '') -> dict:
     return {'_err_cpi': ' | '.join(_cpi_errs) or 'all failed'}
 
 
+def fetch_us10y_block(fred_api_key: str = '') -> dict:
+    """美 10 年期殖利率 FRED DGS10(R3 v18.405)。
+
+    對齊 reconcile_panel._get_us10y_pair 需要的 macro_info['us10y']['value']。
+    Yahoo ^TNX 由既有 cl_data.intl['10Y公債殖利率'] 提供(雙源對帳 source B)。
+
+    Tier 0:FRED 公開 fredgraph.csv(無需 key)
+    Tier 1:FRED API(帶 key 加速,可選)
+
+    Returns:
+        {'us10y': {'current': float, 'date': 'YYYY-MM-DD',
+                   'source': str, 'series_id': 'DGS10', 'fetched_at': ISO}}
+        失敗 → {'us10y': {'_err': str, 'current': None}}
+    """
+    import datetime as _dt_u
+    import io as _io_u
+    import pandas as _pd_u
+    _errs = []
+    # Tier 0:FRED 公開 fredgraph.csv
+    try:
+        from src.data.proxy import fetch_url as _fu_u
+        _r0 = _fu_u('https://fred.stlouisfed.org/graph/fredgraph.csv',
+                    params={'id': 'DGS10'},
+                    timeout=10, attempts=1)
+        if _r0 is not None and _r0.status_code == 200:
+            _df0 = _pd_u.read_csv(
+                _io_u.StringIO(_r0.content.decode('utf-8', errors='ignore')))
+            _df0 = _df0.dropna()
+            if len(_df0) >= 1:
+                _vals = _pd_u.to_numeric(_df0.iloc[:, 1], errors='coerce').dropna()
+                if len(_vals) >= 1:
+                    _curr = round(float(_vals.iloc[-1]), 3)
+                    _date = str(_df0.iloc[-1, 0])[:10]
+                    return {'us10y': {
+                        'current': _curr, 'date': _date,
+                        'value': _curr,  # 對齊 reconcile_panel._get_us10y_pair 取 .value
+                        'source': 'FRED/fredgraph.csv:DGS10',
+                        'series_id': 'DGS10',
+                        'fetched_at': _pd_u.Timestamp.now('UTC').isoformat(),
+                    }}
+            _errs.append(f'fredgraph:rows<1({len(_df0)})')
+        else:
+            _errs.append(f'fredgraph:HTTP{_r0.status_code if _r0 else "None"}')
+    except Exception as _e:
+        _errs.append(f'fredgraph:{type(_e).__name__}:{_e}')
+        print(f'[Macro/US10Y/fredgraph] ❌ {_e}')
+    # 全敗
+    print(f'[Macro/US10Y] ⚠️ 全敗 errs={_errs}')
+    return {'us10y': {'_err': '|'.join(_errs), 'current': None, 'value': None}}
+
+
 def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
     """Fed Funds Rate(FEDFUNDS,2 路 fallback)。
 
