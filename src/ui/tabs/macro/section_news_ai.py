@@ -25,7 +25,9 @@ from src.services.macro_state_locker import (
 def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
     """渲染§十一 News AI 總裁決區(原 tab_macro line 4227-4521)。"""
     # app.py 內部 helper(lazy import,避 L5→L6 違憲於 module load 時 trigger)
-    from app import _fetch_macro_news, gemini_call  # noqa: F401
+    from app import gemini_call  # noqa: F401
+    # v18.398 P5-B3-β R8:news fetcher 已抽至 src/data/news
+    from src.data.news import fetch_macro_news as _fetch_macro_news
     # ══════════════════════════════════════════════════════════════
     # SECTION 十一: 🤖 AI 總裁決（實體狀態鎖架構）
     # 前端唯讀 macro_state.json；LLM 運算由觸發按鈕在背景執行並寫檔

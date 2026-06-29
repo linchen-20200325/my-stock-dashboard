@@ -65,11 +65,12 @@ def render_stock_grp():
     # app.py 內部 helper
     from app import (
         _get_loader, _load_cache, _save_cache,
-        _fetch_stock_news,
         fetch_dividend_data, fetch_financials,
         fetch_quarterly, fetch_quarterly_extra,
         gemini_call, parse_stocks,
     )
+    # v18.398 P5-B3-β R8:_fetch_stock_news 已抽至 L1 data
+    from src.data.news import fetch_stock_news as _fetch_stock_news
     # v18.405 R1:L3 wrapper 統一,移除原 try/except 雙 path 不一致行為
     from src.services.stock_grp_service import get_financial_statements as fetch_financial_statements
 
