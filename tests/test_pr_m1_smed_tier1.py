@@ -2,8 +2,8 @@
 
 對齊 v18.339 PR-J3 風格:介面 0 改,只驗 stderr log 寫出。
 
-涵蓋:
-- ai_engine.generate_quick_summary: bare except → typed + stderr
+涵蓋(v18.399 P5-DEAD-δ 後):
+- ~~ai_engine.generate_quick_summary: 整檔已刪~~(0 production caller)
 - data_loader._fetch_stock_name_inner: bare except → typed + stderr
 - proxy_helper._load_proxy_config (secrets path): except Exception:pass → stderr
 
@@ -26,30 +26,8 @@ def _capture_stderr(fn):
 
 
 # ─────────── A. ai_engine.generate_quick_summary ───────────
-
-class TestGenerateQuickSummaryStderrLog:
-    def test_swallow_logs_to_stderr(self):
-        from src.services import generate_quick_summary
-
-        # 觸發 IndexError(空 df 取 iloc[-1])
-        class _BadDf:
-            def __getattr__(self, _):
-                raise IndexError('test trigger')
-
-            class _IL:
-                def __getitem__(self, _): raise IndexError('test trigger')
-            iloc = _IL()
-        r, err = _capture_stderr(lambda: generate_quick_summary(_BadDf(), 'TEST'))
-        assert r == '數據載入中...'
-        assert '[generate_quick_summary]' in err
-        assert 'TEST' in err   # name 應出現在 log
-        assert 'swallow' in err
-
-    def test_marker_in_source(self):
-        src = open('src/services/ai_engine.py', encoding='utf-8').read()
-        assert '[generate_quick_summary] swallow' in src
-        # bare except 已消除
-        assert 'except:\n        return "數據載入中..."' not in src
+# v18.399 P5-DEAD-δ:ai_engine.py 整檔已真刪(0 production caller)。
+# 本 class TestGenerateQuickSummaryStderrLog 隨之退場。
 
 
 # ─────────── B. data_loader._fetch_stock_name_inner ───────────
@@ -76,8 +54,7 @@ class TestProxyConfigSecretsStderrLog:
 # ─────────── D. import smoke ───────────
 
 class TestImports:
-    def test_ai_engine(self):
-        from src.services import ai_engine  # noqa
+    # v18.399 P5-DEAD-δ:test_ai_engine 隨整檔刪除退場。
 
     def test_data_loader(self):
         from src.data.core import data_loader  # noqa
