@@ -16,7 +16,20 @@ except ImportError:
         DataLoader = None
         import warnings
         warnings.warn(f"FinMind DataLoader 無法載入（raw HTTP API 仍可用）：{_e}")
-import streamlit as st
+# §8.2.A EX-CACHE-1:條件 import streamlit + 無 UI 呼叫 fallback。
+# 本檔僅用 @st.cache_data / @st.cache_resource(S-H1 已刪 st.session_state 違憲)。
+try:
+    import streamlit as st
+except ImportError:
+    class _NoOpST:
+        @staticmethod
+        def cache_data(*args, **kwargs):
+            if args and callable(args[0]):
+                return args[0]
+            return lambda f: f
+        cache_resource = cache_data
+        secrets: dict = {}
+    st = _NoOpST()  # noqa
 import requests as _req_dl
 import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)

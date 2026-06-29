@@ -17,7 +17,20 @@ v5 修正：
   3. largeTraderFutQryTbl GET 解析 "43,469 (37,392)" 格式
 """
 import os, re, sys, time  # v18.241 D3: sys.stderr for fail-loud logging
-import streamlit as st
+# §8.2.A EX-CACHE-1:條件 import streamlit + 無 UI 呼叫 fallback。
+# 本檔僅用 @st.cache_data + _safe_cache wrapper(ThreadPool-safe);無真 UI 呼叫。
+try:
+    import streamlit as st
+except ImportError:
+    class _NoOpST:
+        @staticmethod
+        def cache_data(*args, **kwargs):
+            if args and callable(args[0]):
+                return args[0]
+            return lambda f: f
+        cache_resource = cache_data
+        secrets: dict = {}
+    st = _NoOpST()  # noqa
 import pandas as pd
 import requests
 import urllib3

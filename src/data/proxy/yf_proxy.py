@@ -20,7 +20,20 @@ import os as _os
 from contextlib import contextmanager
 
 import pandas as pd
-import streamlit as st
+# §8.2.A EX-CACHE-1:條件 import streamlit + 無 UI 呼叫 fallback。
+# 本檔僅用 @st.cache_data 包 yfinance call,無真 UI 呼叫。
+try:
+    import streamlit as st
+except ImportError:
+    class _NoOpST:
+        @staticmethod
+        def cache_data(*args, **kwargs):
+            if args and callable(args[0]):
+                return args[0]
+            return lambda f: f
+        cache_resource = cache_data
+        secrets: dict = {}
+    st = _NoOpST()  # noqa
 
 from shared.ttls import TTL_1HOUR
 

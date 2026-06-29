@@ -13,7 +13,21 @@ S-H3 v18.244(CLAUDE.md §8.2 修正):L1 不得用 `st.error/st.warning/st.sessio
 """
 import sys as _sys_prov_ef
 
-import streamlit as st
+# §8.2.A EX-CACHE-1:條件 import streamlit + 無 UI 呼叫 fallback。
+# 本檔僅用 @st.cache_data + getattr(st, 'secrets', {}) defensive read,
+# 無 st.session_state / st.error / st.markdown 等真 UI 呼叫(S-H3 已下沉 module-level dict)。
+try:
+    import streamlit as st
+except ImportError:
+    class _NoOpST:
+        @staticmethod
+        def cache_data(*args, **kwargs):
+            if args and callable(args[0]):
+                return args[0]
+            return lambda f: f
+        cache_resource = cache_data
+        secrets: dict = {}
+    st = _NoOpST()  # noqa
 import pandas as pd
 import yfinance as yf
 
