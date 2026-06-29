@@ -23,9 +23,15 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+# v18.394 SSOT 修法:category 對齊 static DATA_REGISTRY 的 11 個 emoji label。
+from shared.data_categories import (
+    CAT_CHIPS, CAT_ETF, CAT_INTL, CAT_STOCK,
+    CAT_TW_MACRO, CAT_TW_MARKET, CAT_US_MACRO,
+)
+
 
 def _reg_add(_reg_new: dict, _rname: str, _rdf: Any,
-             category: str = '大盤', frequency: str = 'daily') -> None:
+             category: str = CAT_TW_MARKET, frequency: str = 'daily') -> None:
     """提取最新時間戳後寫入 registry(不儲存 df 本體,僅保留元資料)。"""
     if not isinstance(_rdf, pd.DataFrame) or _rdf.empty:
         return
@@ -68,7 +74,7 @@ def _reg_add(_reg_new: dict, _rname: str, _rdf: Any,
 
 
 def _reg_missing(_reg_new: dict, _rname: str,
-                 category: str = '大盤', frequency: str = 'daily') -> None:
+                 category: str = CAT_TW_MARKET, frequency: str = 'daily') -> None:
     _reg_new[_rname] = {
         'last_updated': 'N/A', 'rows': 0,
         'category': category, 'frequency': frequency, 'missing': True,
@@ -96,6 +102,8 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
         _reg_new: dict = {}
 
         # ── 大盤/總經:國際、台股、科技指數(日更新,固定清單確保永遠顯示)──
+        # v18.394 SSOT:INTL → 🌐 國際金融 / TW_MAP → 🇹🇼 台股大盤 /
+        #              TECH_MAP → 🌐 國際金融(對齊 static DATA_REGISTRY)
         # C1-F v18.292:整個 registry 區塊 10 處 session_state.get 收斂成 1 處 SectionInputs
         from src.services import load_section_inputs as _load_si_reg
         _reg_inp = _load_si_reg(st.session_state)
@@ -104,43 +112,43 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
         for _rn in intl_map:
             _rdf = _intl_d.get(_rn)
             if isinstance(_rdf, pd.DataFrame) and not _rdf.empty:
-                _reg_add(_reg_new, _rn, _rdf, category='大盤', frequency='daily')
+                _reg_add(_reg_new, _rn, _rdf, category=CAT_INTL, frequency='daily')
             else:
-                _reg_missing(_reg_new, _rn, category='大盤', frequency='daily')
+                _reg_missing(_reg_new, _rn, category=CAT_INTL, frequency='daily')
         _tw_d = _cl_reg.get('tw') or {}
         for _rn in tw_map:
             _rdf = _tw_d.get(_rn)
             if isinstance(_rdf, pd.DataFrame) and not _rdf.empty:
-                _reg_add(_reg_new, _rn, _rdf, category='大盤', frequency='daily')
+                _reg_add(_reg_new, _rn, _rdf, category=CAT_TW_MARKET, frequency='daily')
             else:
-                _reg_missing(_reg_new, _rn, category='大盤', frequency='daily')
+                _reg_missing(_reg_new, _rn, category=CAT_TW_MARKET, frequency='daily')
         _tech_d = _cl_reg.get('tech') or {}
         for _rn in tech_map:
             _rdf = _tech_d.get(_rn)
             if isinstance(_rdf, pd.DataFrame) and not _rdf.empty:
-                _reg_add(_reg_new, _rn, _rdf, category='大盤', frequency='daily')
+                _reg_add(_reg_new, _rn, _rdf, category=CAT_INTL, frequency='daily')
             else:
-                _reg_missing(_reg_new, _rn, category='大盤', frequency='daily')
+                _reg_missing(_reg_new, _rn, category=CAT_INTL, frequency='daily')
 
-        # ── ADL 市場廣度 + 拆 3 細項 ─────────────────────────
+        # ── ADL 市場廣度 + 拆 3 細項 → 🇹🇼 台股大盤 ──────────
         _adl_reg = _cl_reg.get('adl')
         if isinstance(_adl_reg, pd.DataFrame) and not _adl_reg.empty:
-            _reg_add(_reg_new, 'ADL 市場廣度', _adl_reg, category='大盤', frequency='daily')
+            _reg_add(_reg_new, 'ADL 市場廣度', _adl_reg, category=CAT_TW_MARKET, frequency='daily')
             _adl_date_col = '_date' if '_date' in _adl_reg.columns else (
                 'date' if 'date' in _adl_reg.columns else None)
             for _acname, _acol in [('上漲股票家數', 'up'), ('下跌股票家數', 'down'),
                                    ('ADL 累計廣度值', 'adl')]:
                 if _acol in _adl_reg.columns:
                     _acsub = _adl_reg[[c for c in [_adl_date_col, _acol] if c]].copy()
-                    _reg_add(_reg_new, _acname, _acsub, category='大盤', frequency='daily')
+                    _reg_add(_reg_new, _acname, _acsub, category=CAT_TW_MARKET, frequency='daily')
                 else:
-                    _reg_missing(_reg_new, _acname, category='大盤', frequency='daily')
+                    _reg_missing(_reg_new, _acname, category=CAT_TW_MARKET, frequency='daily')
         else:
-            _reg_missing(_reg_new, 'ADL 市場廣度', category='大盤', frequency='daily')
+            _reg_missing(_reg_new, 'ADL 市場廣度', category=CAT_TW_MARKET, frequency='daily')
             for _acname0 in ('上漲股票家數', '下跌股票家數', 'ADL 累計廣度值'):
-                _reg_missing(_reg_new, _acname0, category='大盤', frequency='daily')
+                _reg_missing(_reg_new, _acname0, category=CAT_TW_MARKET, frequency='daily')
 
-        # ── 三大法人 + 融資餘額(籌碼面,日更新) ──────────────
+        # ── 三大法人 + 融資餘額 → 💰 籌碼 ──────────────────
         _cl_inst_reg = _cl_reg.get('inst') or (_reg_inp.last_inst or {})
         _inst_date_reg = (_cl_reg.get('inst_date') or _reg_inp.last_inst_date)
         try:
@@ -152,17 +160,17 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
                             ('自營商',     '三大法人 自營商買賣超')]:
             if _cl_inst_reg.get(_ik) is not None:
                 _reg_new[_iname] = {'last_updated': _inst_ds, 'rows': 1,
-                                    'category': '大盤', 'frequency': 'daily'}
+                                    'category': CAT_CHIPS, 'frequency': 'daily'}
             else:
-                _reg_missing(_reg_new, _iname, category='大盤', frequency='daily')
+                _reg_missing(_reg_new, _iname, category=CAT_CHIPS, frequency='daily')
         _margin_reg2 = _cl_reg.get('margin') or _reg_inp.last_margin
         if _margin_reg2:
             _reg_new['融資餘額（台股）'] = {'last_updated': _inst_ds, 'rows': 1,
-                                       'category': '大盤', 'frequency': 'daily'}
+                                       'category': CAT_CHIPS, 'frequency': 'daily'}
         else:
-            _reg_missing(_reg_new, '融資餘額（台股）', category='大盤', frequency='daily')
+            _reg_missing(_reg_new, '融資餘額（台股）', category=CAT_CHIPS, frequency='daily')
 
-        # ── 旌旗指數 + 乖離率(日更新)──────────────────────
+        # ── 旌旗指數 + 乖離率 → 🇹🇼 台股大盤 ──────────────
         _cl_ts_proxy = _reg_inp.cl_ts
         try:
             import re as _re_ts_reg
@@ -173,41 +181,43 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
         _jq_reg3 = _reg_inp.jingqi_info or {}
         if _jq_reg3.get('avg') is not None:
             _reg_new['旌旗指數（上漲佔比）'] = {'last_updated': _proxy_date, 'rows': 1,
-                                          'category': '大盤', 'frequency': 'daily'}
+                                          'category': CAT_TW_MARKET, 'frequency': 'daily'}
         else:
-            _reg_missing(_reg_new, '旌旗指數（上漲佔比）', category='大盤', frequency='daily')
+            _reg_missing(_reg_new, '旌旗指數（上漲佔比）', category=CAT_TW_MARKET, frequency='daily')
         _bias_reg3 = _reg_inp.bias_info or {}
         for _bk, _bn in [('bias_240', 'TWII 年線乖離率'), ('bias_20', 'TWII 月線乖離率')]:
             if _bias_reg3.get(_bk) is not None:
                 _reg_new[_bn] = {'last_updated': _proxy_date, 'rows': 1,
-                                 'category': '大盤', 'frequency': 'daily'}
+                                 'category': CAT_TW_MARKET, 'frequency': 'daily'}
             else:
-                _reg_missing(_reg_new, _bn, category='大盤', frequency='daily')
+                _reg_missing(_reg_new, _bn, category=CAT_TW_MARKET, frequency='daily')
 
-        # ── M1B / M2 貨幣資金(月更新) ─────────────────────
+        # ── M1B / M2 貨幣資金 → 🇹🇼 台灣總經 ─────────────
         _m1b_reg3 = _reg_inp.m1b_m2_info or {}
         for _mk, _mn in [('m1b_yoy', 'M1B 資金活水年增率'), ('m2_yoy', 'M2 廣義貨幣年增率')]:
             if _m1b_reg3.get(_mk) is not None:
                 _reg_new[_mn] = {'last_updated': _proxy_date, 'rows': 1,
-                                 'category': '大盤', 'frequency': 'monthly'}
+                                 'category': CAT_TW_MACRO, 'frequency': 'monthly'}
             else:
-                _reg_missing(_reg_new, _mn, category='大盤', frequency='monthly')
+                _reg_missing(_reg_new, _mn, category=CAT_TW_MACRO, frequency='monthly')
         if _m1b_reg3.get('m1b_yoy') is not None and _m1b_reg3.get('m2_yoy') is not None:
             _reg_new['M1B-M2 資金缺口'] = {'last_updated': _proxy_date, 'rows': 1,
-                                       'category': '大盤', 'frequency': 'monthly'}
+                                       'category': CAT_TW_MACRO, 'frequency': 'monthly'}
         else:
-            _reg_missing(_reg_new, 'M1B-M2 資金缺口', category='大盤', frequency='monthly')
+            _reg_missing(_reg_new, 'M1B-M2 資金缺口', category=CAT_TW_MACRO, frequency='monthly')
 
-        # ── 宏觀指標(月/日更新)────────────────────────────
+        # ── 宏觀指標:VIX → 🌐 國際金融 / CPI+Fed → 🌍 美國總經 /
+        #              PMI+出口+NDC → 🇹🇼 台灣總經 ─────────
         _macro_reg3 = _reg_inp.macro_info or {}
-        for _mkey, _mname, _mfreq in [
-            ('vix',         'VIX 波動率指數',      'daily'),
-            ('us_core_cpi', '美國核心CPI年增率',   'monthly'),
-            ('fed_funds',   '美國 Fed Funds Rate', 'monthly'),
-            ('ism_pmi',     '🇹🇼 台灣 PMI 製造業指數',  'monthly'),
-            ('tw_export',   '台灣出口年增率',       'monthly'),
-            ('ndc_signal',  '景氣先行指標（NDC）', 'monthly'),
-        ]:
+        _macro_cat_map = {
+            'vix':         (CAT_INTL,     'VIX 波動率指數',           'daily'),
+            'us_core_cpi': (CAT_US_MACRO, '美國核心CPI年增率',         'monthly'),
+            'fed_funds':   (CAT_US_MACRO, '美國 Fed Funds Rate',       'monthly'),
+            'ism_pmi':     (CAT_TW_MACRO, '🇹🇼 台灣 PMI 製造業指數',  'monthly'),
+            'tw_export':   (CAT_TW_MACRO, '台灣出口年增率',             'monthly'),
+            'ndc_signal':  (CAT_TW_MACRO, '景氣先行指標（NDC）',        'monthly'),
+        }
+        for _mkey, (_mcat, _mname, _mfreq) in _macro_cat_map.items():
             _msub = _macro_reg3.get(_mkey)
             if _msub:
                 if isinstance(_msub, dict):
@@ -217,11 +227,11 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
                 else:
                     _mdate = _proxy_date
                 _reg_new[_mname] = {'last_updated': _mdate, 'rows': 1,
-                                    'category': '大盤', 'frequency': _mfreq}
+                                    'category': _mcat, 'frequency': _mfreq}
             else:
-                _reg_missing(_reg_new, _mname, category='大盤', frequency=_mfreq)
+                _reg_missing(_reg_new, _mname, category=_mcat, frequency=_mfreq)
 
-        # ── 先行指標:按來源拆 5 細項(大盤,日更新)────────
+        # ── 先行指標:5 細項 → 💰 籌碼 ─────────────────────
         _li_reg = _reg_inp.li_latest
         _li_groups = {
             '[先行指標] 三大法人現貨':    ['外資', '投信', '自營'],
@@ -235,7 +245,7 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
             for _grp, _cols in _li_groups.items():
                 _vcols = [c for c in _cols if c in _li_reg.columns]
                 if not _vcols:
-                    _reg_missing(_reg_new, _grp, category='大盤', frequency='daily')
+                    _reg_missing(_reg_new, _grp, category=CAT_CHIPS, frequency='daily')
                     continue
                 _sub = _li_reg[_li_date_cols + _vcols].copy()
                 _mask = _sub[_vcols].apply(
@@ -243,14 +253,14 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
                 ).any(axis=1)
                 _sub = _sub[_mask]
                 if not _sub.empty:
-                    _reg_add(_reg_new, _grp, _sub, category='大盤', frequency='daily')
+                    _reg_add(_reg_new, _grp, _sub, category=CAT_CHIPS, frequency='daily')
                 else:
-                    _reg_missing(_reg_new, _grp, category='大盤', frequency='daily')
+                    _reg_missing(_reg_new, _grp, category=CAT_CHIPS, frequency='daily')
         else:
             for _grp in _li_groups:
-                _reg_missing(_reg_new, _grp, category='大盤', frequency='daily')
+                _reg_missing(_reg_new, _grp, category=CAT_CHIPS, frequency='daily')
 
-        # ── 個股細項(5項全部強制顯示,含缺失)──────────────
+        # ── 個股細項 → 🏢 個股財報 ──────────────────────
         _t2d_reg = st.session_state.get('t2_data')
         if _t2d_reg:
             _s2r = _t2d_reg.get('sid', '')
@@ -266,57 +276,57 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
                 _rname = f'{_pfx} | {_lbl}'
                 _f = _lbl_freq[_lbl]
                 if isinstance(_sub, pd.DataFrame) and not _sub.empty:
-                    _reg_add(_reg_new, _rname, _sub, category='個股', frequency=_f)
+                    _reg_add(_reg_new, _rname, _sub, category=CAT_STOCK, frequency=_f)
                 else:
-                    _reg_missing(_reg_new, _rname, category='個股', frequency=_f)
+                    _reg_missing(_reg_new, _rname, category=CAT_STOCK, frequency=_f)
         else:
             _pfx0 = '[個股] — 尚未搜尋'
             for _lbl0, _f0 in [('價格走勢','daily'),('月營收','monthly'),
                                ('季財報','quarterly'),('現金流量','quarterly'),('資產負債','quarterly')]:
-                _reg_missing(_reg_new, f'{_pfx0} | {_lbl0}', category='個股', frequency=_f0)
+                _reg_missing(_reg_new, f'{_pfx0} | {_lbl0}', category=CAT_STOCK, frequency=_f0)
 
-        # ── 比較排行(個股類別)──────────────────────────────
+        # ── 比較排行 → 🏢 個股財報 ──────────────────────
         _t3d_reg = st.session_state.get('t3_data')
         if _t3d_reg and _t3d_reg.get('results'):
             _reg_new['[比較] 多股比較排行'] = {
                 'last_updated': 'N/A', 'rows': len(_t3d_reg['results']),
-                'category': '個股', 'frequency': 'daily',
+                'category': CAT_STOCK, 'frequency': 'daily',
             }
         else:
-            _reg_missing(_reg_new, '[比較] 多股比較排行', category='個股', frequency='daily')
+            _reg_missing(_reg_new, '[比較] 多股比較排行', category=CAT_STOCK, frequency='daily')
 
-        # ── ETF 細項(全部強制顯示)────────────────────────
+        # ── ETF 細項 → 🏦 ETF / 基金 ────────────────────
         _etf1_reg = st.session_state.get('etf_single_data') or {}
         _etf_pdf  = _etf1_reg.get('price_df')
         _etf_tk   = _etf1_reg.get('ticker', '')
         _etf_nm   = _etf1_reg.get('name', '')
         _etf_pfx  = f'[ETF] {_etf_tk} {_etf_nm}'.strip() if _etf_tk else '[ETF] — 尚未搜尋'
         if isinstance(_etf_pdf, pd.DataFrame) and not _etf_pdf.empty:
-            _reg_add(_reg_new, f'{_etf_pfx} | 價格走勢', _etf_pdf, category='ETF', frequency='daily')
+            _reg_add(_reg_new, f'{_etf_pfx} | 價格走勢', _etf_pdf, category=CAT_ETF, frequency='daily')
         else:
-            _reg_missing(_reg_new, f'{_etf_pfx} | 價格走勢', category='ETF', frequency='daily')
+            _reg_missing(_reg_new, f'{_etf_pfx} | 價格走勢', category=CAT_ETF, frequency='daily')
         if _etf1_reg.get('cur_yield') is not None:
             _reg_new[f'{_etf_pfx} | 殖利率與技術分析'] = {
-                'last_updated': 'N/A', 'rows': 1, 'category': 'ETF', 'frequency': 'daily',
+                'last_updated': 'N/A', 'rows': 1, 'category': CAT_ETF, 'frequency': 'daily',
             }
         else:
-            _reg_missing(_reg_new, f'{_etf_pfx} | 殖利率與技術分析', category='ETF', frequency='daily')
+            _reg_missing(_reg_new, f'{_etf_pfx} | 殖利率與技術分析', category=CAT_ETF, frequency='daily')
         _etf2_reg = st.session_state.get('etf_portfolio_data') or {}
         if _etf2_reg.get('rows'):
             _etf2n = len(_etf2_reg['rows'])
             _reg_new[f'[ETF組合] 再平衡分析（{_etf2n}檔）'] = {
-                'last_updated': 'N/A', 'rows': _etf2n, 'category': 'ETF', 'frequency': 'daily',
+                'last_updated': 'N/A', 'rows': _etf2n, 'category': CAT_ETF, 'frequency': 'daily',
             }
         else:
-            _reg_missing(_reg_new, '[ETF組合] 再平衡分析', category='ETF', frequency='daily')
+            _reg_missing(_reg_new, '[ETF組合] 再平衡分析', category=CAT_ETF, frequency='daily')
         _etf3_reg = st.session_state.get('etf_backtest_data') or {}
         if _etf3_reg.get('cagr') is not None:
             _etf3n = len(_etf3_reg.get('weights', {}))
             _reg_new[f'[ETF回測] 回測績效（{_etf3n}檔）'] = {
-                'last_updated': 'N/A', 'rows': _etf3n, 'category': 'ETF', 'frequency': 'daily',
+                'last_updated': 'N/A', 'rows': _etf3n, 'category': CAT_ETF, 'frequency': 'daily',
             }
         else:
-            _reg_missing(_reg_new, '[ETF回測] 回測績效', category='ETF', frequency='daily')
+            _reg_missing(_reg_new, '[ETF回測] 回測績效', category=CAT_ETF, frequency='daily')
 
         st.session_state['data_registry'] = _reg_new
         print(f'[DataRegistry] 已登錄 {len(_reg_new)} 個資料源，類別標籤已寫入')
