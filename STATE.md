@@ -1,7 +1,24 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
 ## 進行中 batch
-✅ P5 Batch1 收尾(PR #400 已 merge into main);P5 Batch2~5 接續
+⏸ Dead code audit 邏輯需重做(false positive 多,Tier 3 大部分是 module-internal helper)。
+PR #404 audit 報告保留歷史價值,但 Tier 3 待重新分類後再啟動 Dead phases。
+
+## ✅ 累計完成(本 session PR #398-#404 + SSOT 收尾)
+
+| PR | 主題 |
+|---|---|
+| #398 | P0+P1+P2(_macro_info NameError fix + DataRegistry -275 LOC + 例外收齊) |
+| #399 | P4 C+SSOT(panel + 11 emoji category) |
+| #400 | P5 Batch1(AppTest 实機驗 + version pin + A4 archive 精簡) |
+| #401 | P5 Batch2-5(A3 WONTFIX + B1 L4→L3 重構 + B2 補登 + D1 重 audit) |
+| #402 | P5 Batch6-7(B4 確認 + B5 健康評分雙演算法 §4.3 3/3) |
+| #403 | P5 Batch8-9(pandera POC + app.py 拆檔 audit) |
+| #404 | Dead code audit(52 候選,Tier 3 多 false positive 待重做) |
+
+**累計 tab_macro 5387 → 488 LOC(-91%)** + §3.3 反捏造 0 / §8.2 高項違憲 0 + §8.2.A 4 例外 letter compliant + §4.3 重算對帳 3/3。
+
+## 🏁 PR #400 v18.395(merged 2026-06-29)
 
 ## 🏁 PR #400 v18.395(merged 2026-06-29)
 **P5 Batch1:C1+C2 AppTest 实機驗 + B6 version pin + A4 archive 精簡**
