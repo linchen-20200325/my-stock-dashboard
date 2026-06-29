@@ -1,7 +1,39 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
 ## 進行中 batch
-✅ P4 C+SSOT 全收尾(PR #399 已 merge into main)
+✅ P5 Batch1 收尾(PR #400 已 merge into main);P5 Batch2~5 接續
+
+## 🏁 PR #400 v18.395(merged 2026-06-29)
+**P5 Batch1:C1+C2 AppTest 实機驗 + B6 version pin + A4 archive 精簡**
+
+接 user「同時做」隊列首批,LOW risk 3 件套:
+
+### C1+C2 AppTest 实機驗
+- 靜態 AST 守衛(已存在)+ runtime AppTest(新增 4 case)雙層守護
+- panel test ✅ 通過 = PR #399 实機驗成功(無需 user 手動部署)
+- News AI test 在無 secrets 環境自動 skip(production 必有)
+
+### B6 version pin
+14 套件加 major version upper bound,實機 env 0 conflicts(不降級 production)
+
+### A4 §十 archive 精簡
+- 18 LOC 復活註解 → `ARCHIVED_FEATURES.md`(新檔)
+- tab_macro 留 1 行導向標記
+- tab_macro:488 → 471 LOC(-17,-3.5%)
+
+### 驗證
+pytest 2214 pass / 0 fail / 36 deselected (slow);slow lane 11 pass / 2 skip
+
+### Batch 2~5 隊列
+- A5 pandera POC
+- B3 app.py 拆檔 audit + 第一批
+- B5 雙演算法對帳 × 3
+- B4 daily_checklist pkl 收尾
+- 改判 4 項(A3 macro_validation 真刪 / B1 etf_render cache.clear 抽 L3 /
+  B2 EX-PASSTHRU-1 12+ 補登錄 / D1 S-MED 710 重 audit)
+
+---
+
 
 ## 🏁 PR #399 v18.394(merged 2026-06-29)
 **data_registry live state — Path C panel + SSOT 11 emoji category**
