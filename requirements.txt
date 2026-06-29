@@ -1,20 +1,37 @@
-streamlit>=1.36.0,<1.41.0
-pandas>=2.0.0
-numpy>=1.24.0
-plotly>=5.18.0
-altair>=4.0.0,<5.0.0
-yfinance>=0.2.36
-FinMind>=0.9.0
-google-generativeai>=0.5.0
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-lxml>=5.3.0
-html5lib>=1.1
-ta>=0.10.2
-nest-asyncio>=1.6.0
-curl-cffi>=0.6.0
-dbnomics>=0.7.0
-feedparser>=6.0.0
-gspread>=6.0.0
-google-auth>=2.0.0
-pandera>=0.20,<1.0
+# v18.395 P5-B6:全套 upper bound pin — 防 major version 釋出意外破壞 production deploy。
+# 策略:floor 維持寬鬆(舊環境相容)+ 主版本 upper bound 阻擋未經測試的破壞性更新。
+# 注意:不降級 production — upper bound 高於目前實際 deploy 的主版本即可。
+
+# ── Streamlit / UI 核心 ────────────────────────────────────────
+streamlit>=1.36.0,<1.60.0
+altair>=4.0.0,<7.0.0
+
+# ── 資料處理(major version stability 高優先)────────────────
+pandas>=2.0.0,<4.0.0
+numpy>=1.24.0,<3.0.0
+plotly>=5.18.0,<7.0.0
+
+# ── 外部 API SDK(active development,寬 upper bound)────────
+yfinance>=0.2.36,<2.0
+FinMind>=0.9.0,<2.0
+google-generativeai>=0.5.0,<2.0
+curl-cffi>=0.6.0,<1.0
+
+# ── HTTP / 解析(major version stable)──────────────────────
+requests>=2.31.0,<3.0.0
+beautifulsoup4>=4.12.0,<5.0.0
+lxml>=5.3.0,<7.0.0
+html5lib>=1.1,<2.0
+
+# ── 工具(major version stable)─────────────────────────────
+ta>=0.10.2,<1.0
+nest-asyncio>=1.6.0,<2.0
+dbnomics>=0.7.0,<2.0
+feedparser>=6.0.0,<7.0
+
+# ── Google API ──────────────────────────────────────────────
+gspread>=6.0.0,<8.0
+google-auth>=2.0.0,<4.0
+
+# ── Schema 驗證 ─────────────────────────────────────────────
+pandera>=0.20,<2.0

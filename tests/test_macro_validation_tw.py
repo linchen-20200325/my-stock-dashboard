@@ -106,10 +106,16 @@ def test_detect_twii_multiple_events_with_recovery():
 # UI source-level checks
 # ════════════════════════════════════════════════════════════════
 def test_ui_section_in_tab_macro_source():
-    """src/ui/tabs/tab_macro.py 必須 import render_history_validation_section 且呼叫。"""
+    """v18.395 P5-A4:§十 18 LOC archive 註解搬至 ARCHIVED_FEATURES.md;
+    tab_macro 留 1 行導向標記,復活步驟細節改在文檔內。"""
     src = (Path(__file__).parent.parent / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
-    assert "from tab_macro_validation import render_history_validation_section" in src
-    assert "render_history_validation_section()" in src
+    archived_md = (Path(__file__).parent.parent / "ARCHIVED_FEATURES.md").read_text(encoding="utf-8")
+    # tab_macro 留 1 行導向標記
+    assert "§十 總經訊號歷史驗證 — v18.191 archived" in src
+    assert "ARCHIVED_FEATURES.md" in src
+    # 復活提示字串在 ARCHIVED_FEATURES.md 內(原 tab_macro 內 commented out)
+    assert "from tab_macro_validation import render_history_validation_section" in archived_md
+    assert "render_history_validation_section()" in archived_md
 
 def test_ui_module_exposes_render_function():
     """src/ui/tabs/tab_macro_validation.py 必須 export render_history_validation_section."""
@@ -118,14 +124,15 @@ def test_ui_module_exposes_render_function():
     assert callable(tmv.render_history_validation_section)
 
 def test_ui_validation_section_before_ai_verdict():
-    """v18.156 user 要求：歷史驗證 section（十）必須在 AI 總裁決（十一）之前。
-    F-7.1 B-3 + P2 v18.389:§十一 抽至 macro/section_news_ai.py;改檢 render_section_news_ai() call 位置。"""
+    """v18.156 user 要求:歷史驗證 section(十)必須在 AI 總裁決(十一)之前。
+    v18.395 P5-A4:§十 18 LOC archive 註解搬至 ARCHIVED_FEATURES.md,tab_macro 留 1 行
+    導向標記;改檢標記行在 render_section_news_ai 之前。"""
     src = (Path(__file__).parent.parent / "src/ui/tabs/tab_macro.py").read_text(encoding="utf-8")
-    idx_validation = src.find("render_history_validation_section()")
+    idx_validation = src.find("§十 總經訊號歷史驗證")
     idx_ai_verdict = src.find("render_section_news_ai(")
     assert idx_validation > 0 and idx_ai_verdict > 0
     assert idx_validation < idx_ai_verdict, \
-        "歷史驗證（section 十）應在 News AI 總裁決（section 十一,F-7.1 B-3 抽出)之前"
+        "§十 archived 標記應在 News AI 總裁決(section 十一)之前"
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

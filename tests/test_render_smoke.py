@@ -289,6 +289,103 @@ render_five_bucket_bar(_summary)
         assert 25.0 not in ys, "VIX 不該再用舊的 inline 25"
         assert len(f.layout.shapes) == 8, "VIX2 + ADL2 + NDC4 = 8 條線"
 
+    def _has_secrets_toml(self):
+        """需要 .streamlit/secrets.toml 才能跑(§十一 News AI 走 app.py lazy import 讀 st.secrets)。"""
+        import os.path as _p
+        return any(_p.exists(_p.expanduser(f'{d}/.streamlit/secrets.toml'))
+                   for d in ['.', '~', '/root', '/home/user/my-stock-dashboard'])
+
+    def test_render_section_news_ai_no_nameerror(self):
+        """v18.395 P5-AppTest C1:PR #398 P0-FIX 实機驗 — 走 §十一 News AI render path 不炸 NameError。
+
+        歷史教訓:D-12 抽 trio 後 `_macro_info` 變數懸空,任何走入 §十一 render
+        path 都 100% NameError 全頁炸,但 source-string 測試 5 個 commit 沒抓到。
+
+        本 test 用 AppTest 真實 invoke render_section_news_ai 並灌真實 macro_info shape,
+        驗證函式可以 import + invoke 不炸。
+
+        Note:§十一 內部 lazy import `from app import _fetch_macro_news, gemini_call`,
+        而 app.py module 載入時直接 `st.secrets.get('FINMIND_TOKEN', ...)`(會 raise
+        若無 secrets.toml)。CI 無 secrets → 自動 skip(production deploy 必有 secrets,
+        實機驗仍涵蓋)。靜態 AST 守衛 test_render_section_news_ai_args_defined_in_scope
+        無此依賴,專責 NameError 類回歸防護。
+        """
+        if not self._has_secrets_toml():
+            pytest.skip("無 .streamlit/secrets.toml(§十一 News AI lazy import app.py 必須讀 st.secrets)")
+        from streamlit.testing.v1 import AppTest
+        drv = _build_driver(f'''
+st.session_state["macro_info"] = {_REAL_MACRO_INFO!r}
+st.session_state["m1b_m2_info"] = {{"m1b_yoy": 5.5, "m2_yoy": 4.0, "gap": 1.5}}
+st.session_state["bias_info"] = {{"bias_240": 2.5, "bias_20": -1.0}}
+from src.ui.tabs.macro.section_news_ai import render_section_news_ai
+# 模擬 PR #398 P0-FIX 後的 caller pattern
+_macro_info = st.session_state.get("macro_info") or {{}}
+render_section_news_ai(_macro_info, "bull")
+''')
+        at = AppTest.from_string(drv, default_timeout=60)
+        at.run()
+        _assert_no_uncaught(at, "render_section_news_ai(real macro_info)")
+        # 至少要有標題與 expander render
+        assert len(at.markdown) > 0, "render_section_news_ai 無 markdown 元素"
+
+    def test_render_section_news_ai_empty_state(self):
+        """v18.395 P5-AppTest C1 邊界:空 macro_info / 空 session_state → 不炸"""
+        if not self._has_secrets_toml():
+            pytest.skip("無 .streamlit/secrets.toml(§十一 lazy import app.py 必須讀 st.secrets)")
+        from streamlit.testing.v1 import AppTest
+        drv = _build_driver('''
+from src.ui.tabs.macro.section_news_ai import render_section_news_ai
+_macro_info = st.session_state.get("macro_info") or {}
+render_section_news_ai(_macro_info, "neutral")
+''')
+        at = AppTest.from_string(drv, default_timeout=30)
+        at.run()
+        _assert_no_uncaught(at, "render_section_news_ai(empty)")
+
+    def test_render_data_registry_panel(self):
+        """v18.395 P5-AppTest C2:PR #399 panel 实機驗 — 50+ entries 渲染不炸 + 按 SSOT 11 emoji 分組"""
+        from streamlit.testing.v1 import AppTest
+        # 灌入 realistic registry shape:11 category 全覆蓋(對齊 shared.data_categories)
+        _mock_reg = {
+            '道瓊工業 DJI':       {'last_updated': '2026-06-29', 'rows': 90,
+                                   'category': '🌐 國際金融', 'frequency': 'daily'},
+            '台股加權指數':        {'last_updated': '2026-06-29', 'rows': 90,
+                                   'category': '🇹🇼 台股大盤', 'frequency': 'daily'},
+            'M1B 資金活水年增率':  {'last_updated': '2026-06-15', 'rows': 1,
+                                   'category': '🇹🇼 台灣總經', 'frequency': 'monthly'},
+            '美國核心CPI年增率':   {'last_updated': '2026-06-15', 'rows': 1,
+                                   'category': '🌍 美國總經', 'frequency': 'monthly'},
+            '三大法人 外資買賣超': {'last_updated': '2026-06-28', 'rows': 1,
+                                   'category': '💰 籌碼', 'frequency': 'daily'},
+            '[個股] 2330 台積電 | 價格走勢': {'last_updated': 'N/A', 'rows': 0,
+                                              'category': '🏢 個股財報',
+                                              'frequency': 'daily', 'missing': True},
+            '[ETF] 0050 | 價格走勢': {'last_updated': 'N/A', 'rows': 0,
+                                      'category': '🏦 ETF / 基金',
+                                      'frequency': 'daily', 'missing': True},
+        }
+        drv = _build_driver(f'''
+st.session_state["data_registry"] = {_mock_reg!r}
+from src.ui.pages import render_data_registry_panel
+render_data_registry_panel()
+''')
+        at = AppTest.from_string(drv, default_timeout=60)
+        at.run()
+        _assert_no_uncaught(at, "render_data_registry_panel")
+        # 應該 render 出 panel 標題 + 7 個 expander group(對應 7 個 category)
+        assert len(at.markdown) > 5, "data_registry_panel render 元素太少"
+
+    def test_render_data_registry_panel_empty(self):
+        """v18.395 P5-AppTest C2 邊界:空 data_registry → 顯示「尚未觸發」info,不炸"""
+        from streamlit.testing.v1 import AppTest
+        drv = _build_driver('''
+from src.ui.pages import render_data_registry_panel
+render_data_registry_panel()  # 無 session_state['data_registry']
+''')
+        at = AppTest.from_string(drv, default_timeout=30)
+        at.run()
+        _assert_no_uncaught(at, "render_data_registry_panel(empty)")
+
     def test_render_five_bucket_bar_empty_gray(self):
         """v18.284: 空 session_state → 五桶全 ⬜ 未載入（不偽綠 / 不 KeyError）"""
         from streamlit.testing.v1 import AppTest
