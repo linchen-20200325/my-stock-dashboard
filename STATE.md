@@ -1,7 +1,39 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
 ## 進行中 batch
-✅ 深挖 P0+P1+P2 全收尾(PR #398 已 merge into main)
+✅ P4 C+SSOT 全收尾(PR #399 已 merge into main)
+
+## 🏁 PR #399 v18.394(merged 2026-06-29)
+**data_registry live state — Path C panel + SSOT 11 emoji category**
+
+### 任務 #4 接續(C 為主 + B 的 SSOT 修法)
+深挖發現 `session_state['data_registry']` 是 dead state(P1-X scanner + P3-D8 patch
+寫 ~80 entries 但 0 reader)+ 3-way category SSOT 漂移。
+
+- **SSOT 11 emoji 集中**:新檔 `shared/data_categories.py`(L0)
+  - 11 CAT_* constants 對齊 static `src.data.core.data_registry`
+  - `category_for(name, fallback)` + `coverage_emoji_for(cat)`
+- **scanner / patch 對齊**:`data_registry_scanner` + `macro_registry_patch` 8 處
+  inline `'大盤'/'個股'/'ETF'` 改 CAT_* 常數(rebuild fallback 5-set 檢查)
+- **Path C panel**:新檔 `src/ui/pages/data_registry_panel.py`(177 LOC)
+  - `compute_registry_groups` + `_freshness_emoji` 純函式易測
+  - 按 11 emoji 分組 expander;🟢🟡🔴⬜ frequency-aware freshness lamp
+  - `app.py:1522-1527` hook 進 🔎 資料診斷 tab(coverage 之後)
+- **15 新測試**:`tests/test_data_registry_panel.py`(category SSOT + freshness +
+  groups + 靜態守衛防 SSOT 再漂移)
+
+### 驗證
+- pytest 2214 pass / 0 fail / 32 deselected(slow)
+- baseline 2199 + 15 新測 = 2214,無回歸
+- 留 user merge 後在 🔎 資料診斷 tab 看新 panel 实機
+
+### Streamlit 实機未驗(留 user)
+PR merge 後在 deployed app 點 🌐 總經 → 🚀 一鍵更新 → 切到 🔎 資料診斷
+→ 看 ⓪ 4-row coverage 之後出現「📋 資料源完整清單」panel 渲染 50+ entries
+按 SSOT 11 emoji category 分組。
+
+---
+
 
 ## 🏁 PR #398 v18.393(merged 2026-06-29)
 **深挖第三輪:1 真 bug + 1 大塊真不可抽 + 例外清單收齊**(3 件套)
