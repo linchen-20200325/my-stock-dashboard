@@ -145,3 +145,100 @@ def reconcile_monthly_revenue_yoy(
         abs_tol=0.1,
         rel_tol=0.05,
     )
+
+
+# ──────────────────────────────────────────────────────────────────
+# 健康評分雙演算法(v18.396 P5-B5 新增,§4.3 補完最後一項)
+# ──────────────────────────────────────────────────────────────────
+# 背景:`compute_macro_health` 目前單一 path(`calc_traffic_light` 內 weighted-avg)。
+# §4.3 要求雙演算法對帳。本檔新增 v2 算法:`min_of_factors`(Liebig 短板原則)
+# 與 v1 對帳。差異超容差 → 警告短板隱藏(arithmetic mean 掩蓋了某因子過弱)。
+
+
+def compute_health_score_arithmetic(
+    jqavg: Optional[float],
+    score_pct: Optional[float],
+    fnet: Optional[float],
+    *,
+    weight_jq: float = 0.4,
+    weight_score: float = 0.4,
+    fnet_bonus: float = 20.0,
+) -> Optional[float]:
+    """v1 健康評分:加權平均(對齊 calc_traffic_light L94-98 既有計算)。
+
+    Health = jqavg × 0.4 + min(score_pct, 100) × 0.4 + (20 if fnet>0 else 0)
+
+    Args:
+        jqavg: 旌旗指數均值(0-100)
+        score_pct: 市場 score 折換成百分比(0-100)
+        fnet: 外資淨買賣超(>0 加 bonus,≤0 不加)
+
+    Returns:
+        健康分數(0-100,round 1 位)或 None(輸入缺值)
+    """
+    if jqavg is None or score_pct is None or fnet is None:
+        return None
+    return round(
+        jqavg * weight_jq
+        + min(score_pct, 100) * weight_score
+        + (fnet_bonus if fnet > 0 else 0),
+        1,
+    )
+
+
+def compute_health_score_min_of_factors(
+    jqavg: Optional[float],
+    score_pct: Optional[float],
+    fnet: Optional[float],
+    *,
+    fnet_penalty_cap: float = 40.0,
+) -> Optional[float]:
+    """v2 健康評分:min-of-factors(Liebig 短板原則 — 木桶最短板決定容量)。
+
+    Health = min(jqavg, min(score_pct, 100), [fnet_penalty_cap if fnet<=0])
+
+    語意:任一因子過弱 → 整體健康度被該因子限制。比 arithmetic mean 更保守,
+    可揭露被「平均」掩蓋的短板因子。
+
+    Args:
+        jqavg / score_pct / fnet: 同 arithmetic 版
+        fnet_penalty_cap: 外資淨賣懲罰上限(視為 40 分壓制)
+
+    Returns:
+        健康分數(0-100,round 1 位)或 None
+    """
+    if jqavg is None or score_pct is None or fnet is None:
+        return None
+    factors = [jqavg, min(score_pct, 100)]
+    if fnet <= 0:
+        factors.append(fnet_penalty_cap)
+    return round(min(factors), 1)
+
+
+def reconcile_health_score(
+    jqavg: Optional[float],
+    score_pct: Optional[float],
+    fnet: Optional[float],
+    *,
+    abs_tol: float = 15.0,
+) -> dict:
+    """健康評分雙演算法對帳(v1 arithmetic vs v2 min_of_factors)。
+
+    對照:weighted-avg(常用)vs min-of-factors(保守 / 短板揭露)。
+    容差:絕對 15 分(健康評分 0-100 量級,15 分內視為一致)。
+
+    Returns:
+        reconcile_pair 標準回傳(name="MACRO_HEALTH")。
+        delta > abs_tol → 警告:arithmetic 可能掩蓋短板因子(查 jqavg / score / fnet)。
+    """
+    v1 = compute_health_score_arithmetic(jqavg, score_pct, fnet)
+    v2 = compute_health_score_min_of_factors(jqavg, score_pct, fnet)
+    return reconcile_pair(
+        name="MACRO_HEALTH",
+        value_a=v1,
+        value_b=v2,
+        source_a="weighted_avg(0.4/0.4/+20)",
+        source_b="min_of_factors(Liebig)",
+        abs_tol=abs_tol,
+        rel_tol=0.30,  # 健康評分本身分散性大,30% rel 容差
+    )
