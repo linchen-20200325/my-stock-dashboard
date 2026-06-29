@@ -160,24 +160,40 @@ def compute_health_score_arithmetic(
     score_pct: Optional[float],
     fnet: Optional[float],
     *,
-    weight_jq: float = 0.4,
-    weight_score: float = 0.4,
-    fnet_bonus: float = 20.0,
+    weight_jq: Optional[float] = None,
+    weight_score: Optional[float] = None,
+    fnet_bonus: Optional[float] = None,
 ) -> Optional[float]:
     """v1 健康評分:加權平均(對齊 calc_traffic_light L94-98 既有計算)。
 
-    Health = jqavg × 0.4 + min(score_pct, 100) × 0.4 + (20 if fnet>0 else 0)
+    Health = jqavg × HEALTH_WEIGHT_JQ + min(score_pct, 100) × HEALTH_WEIGHT_SCORE
+             + (HEALTH_FNET_BONUS if fnet>0 else 0)
+
+    v18.397 SSOT 對齊:預設值從 `macro_helpers` 既有 SSOT
+    (HEALTH_WEIGHT_JQ / HEALTH_WEIGHT_SCORE / HEALTH_FNET_BONUS)引入,
+    取代原 inline 0.4 / 0.4 / 20 預設(§3.3 反捏造)。
 
     Args:
-        jqavg: 旌旗指數均值(0-100)
-        score_pct: 市場 score 折換成百分比(0-100)
-        fnet: 外資淨買賣超(>0 加 bonus,≤0 不加)
+        jqavg / score_pct / fnet: 同前
+        weight_jq / weight_score / fnet_bonus: caller 可覆寫(校準腳本用);
+          None → 用 SSOT 預設。
 
     Returns:
         健康分數(0-100,round 1 位)或 None(輸入缺值)
     """
     if jqavg is None or score_pct is None or fnet is None:
         return None
+    # SSOT lazy import 避 module-level cross-link
+    if weight_jq is None or weight_score is None or fnet_bonus is None:
+        from src.compute.macro.macro_helpers import (
+            HEALTH_WEIGHT_JQ, HEALTH_WEIGHT_SCORE, HEALTH_FNET_BONUS,
+        )
+        if weight_jq is None:
+            weight_jq = HEALTH_WEIGHT_JQ
+        if weight_score is None:
+            weight_score = HEALTH_WEIGHT_SCORE
+        if fnet_bonus is None:
+            fnet_bonus = HEALTH_FNET_BONUS
     return round(
         jqavg * weight_jq
         + min(score_pct, 100) * weight_score
