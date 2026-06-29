@@ -1,7 +1,42 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
 ## 進行中 batch
-✅ 深層稽核 P0+P1+P2 主軸完成(13 commits)
+✅ B-region UI 拆分 + D-region §8.2 fetch 下沉(PR #394 已 merge,8b48454)
+
+## 🏁 PR #394 v18.389(merged into main 2026-06-28)
+**tab_macro.py 5387 → 1445 LOC(−3942,−73%)** — 10 commit 累計成果。
+
+### B-region(UI section 抽出)
+- B-4 hotfix `38d7a10`:_m8_* NameError(production bug,section_mid 抽走後 §九 仍 ref)
+- B-S8-A `b59b072`:§三 籌碼桶 558 LOC → `macro/section_chips.py`
+- B-S8-B `bec36de`:§九 跨桶 AI 220 LOC → `macro/section_cross_ai.py`
+
+### P1+P2(AI 導航優化)
+- `6b4e443`:`macro/__init__.py` INDEX docstring(段落→子模組對照表)+
+  section_ai_cross→section_cross_ai / section_ai→section_news_ai 並列命名
+
+### P3 D-region(§8.2 分層治理)
+- D-3 `28515db`:_job_bias 42 LOC → `macro_snapshot.compute_twii_bias`
+- D-2 `221eb5f`:_job_m1b 89 LOC → `macro_snapshot.fetch_m1b_m2_block`(3-Tier)
+- D-1 `9a32589`:_job_macro 604 LOC → 5 `fetch_*_block`(VIX/CPI/Fed/PMI/NDC/Export)
+- D-4 `370a430`:7-job orchestrator 230 LOC → `services/macro_fetch_orchestrator.fetch_macro_bundle`
+
+### 新增 / 強化模組
+- `src/ui/tabs/macro/` 9 個 section_*.py
+- `src/data/macro/macro_snapshot.py`:89 → 798 LOC(fetch 邏輯集中)
+- `src/services/macro_fetch_orchestrator.py`:270 LOC(NEW)
+
+### SSOT 檢查結論
+0 新違憲。預先存在的 inline magic(100億 / -20000 期空 / 50/100 CLI/PMI 等)留待真實 bug 觸發再 SSOT 化(§-1)。
+
+### 殘餘 tab_macro.py(1445 LOC)
+- 紅綠燈卡(_tl_placeholder lifecycle,反模式不可抽)
+- 戰情概覽 + 作戰室(過小 + closure 多)
+- Registry patch(~165 LOC,可抽但 ROI 低)
+- session_state writes 收尾(UI 邊界)
+
+---
+
 
 ## ✅ 累計完成
 - P0(4 batch / 4 commit):portfolio_exposure SSOT / RSI helper / stock_names L0→L1 / 4 dead fn
