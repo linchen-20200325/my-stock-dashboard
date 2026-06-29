@@ -1,7 +1,20 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
 ## 進行中 batch
-✅ D-9 紅綠燈卡(認錯補做)— PR #396 已 merge into main
+✅ D-10~D-13 全收尾(PR #397 已 merge into main)
+
+## 🏁 PR #397 v18.392(merged 2026-06-28)
+**tab_macro.py 1012 → 751 LOC(−261,−26%)** — 5 commit。
+- D-10 `f257d84`:雙視角 + 雷達準備 64 LOC → section_long_term
+- D-11 `3eb2eeb`:旌旗指數 32 LOC → services/jingqi_calc
+- D-12 `a13bb25`:outer trio executor 142 LOC → services/macro_trio_orchestrator
+- D-13 `fcfe2a5`:市場評估 53 LOC → services/market_assessment_apply
+- INDEX sync `03c175e`
+
+累計 tab_macro 5387 → 751 LOC(-86%)。ROI 拐點已過。
+
+---
+
 
 ## 🏁 PR #396 v18.391(merged 2026-06-28)
 **tab_macro.py 1076 → 1012 LOC(−64)** — 認錯補做紅綠燈卡。
