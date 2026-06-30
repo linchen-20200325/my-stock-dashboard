@@ -53,8 +53,10 @@ class TestQ5bMarkersInSource(unittest.TestCase):
 
     def test_tab_stock_2(self):
         # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 section_357_valuation
+        # R-FETCH-1 v18.412:fetch_share_capital 已搬至 src/data/stock/share_capital_fetcher
         src = (self._read('src/ui/tabs/tab_stock.py')
-               + self._read('src/ui/tabs/stock_sections/section_357_valuation.py'))
+               + self._read('src/ui/tabs/stock_sections/section_357_valuation.py')
+               + self._read('src/data/stock/share_capital_fetcher.py'))
         # _fetch_share_capital + _fetch_pbratio_from_twse 新增 success-path log
         self.assertIn('FinMind:TaiwanStockBalanceSheet', src)
         self.assertIn('TWSE:OpenAPI:BWIBBU_d(via yield_screener)', src)

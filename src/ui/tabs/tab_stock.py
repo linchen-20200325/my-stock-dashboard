@@ -66,58 +66,8 @@ from src.ui.tabs.tab_helpers import (
 from src.ui.pages import kline_end_date
 # v18.326 ── BPS / industry_category fetcher 已 SSOT 化(原私有 _fetch_*,組合 Tab 共用)──
 from src.data.core import fetch_bps, fetch_industry_category
-
-
-@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
-def _fetch_share_capital(sid: str) -> float:
-    """FinMind 抓最新一季股本（普通股股本），回傳原始元值；失敗回 0。
-
-    供龍頭預警區計算「合約負債/資本支出 對 股本比」真實比例（取代舊版 >0 假判斷）。
-    Cache TTL 1 日（股本變動極低頻）。
-    """
-    import os as _os_sc
-    import datetime as _dt_sc
-    import requests as _rq_sc
-    try:
-        _tok = _os_sc.environ.get('FINMIND_TOKEN', '')
-        _start = (_dt_sc.date.today() - _dt_sc.timedelta(days=540)).strftime('%Y-%m-%d')
-        _p = {'dataset': 'TaiwanStockBalanceSheet', 'data_id': sid, 'start_date': _start}
-        if _tok:
-            _p['token'] = _tok
-        _r = _rq_sc.get('https://api.finmindtrade.com/api/v4/data',
-                        params=_p, timeout=15)
-        _data = _r.json().get('data', []) if _r.status_code == 200 else []
-        if not _data:
-            return 0.0
-        _dates = sorted({_row.get('date', '') for _row in _data}, reverse=True)
-        _latest = _dates[0] if _dates else ''
-        for _row in _data:
-            if _row.get('date') != _latest:
-                continue
-            _t = str(_row.get('type', ''))
-            _nm = str(_row.get('origin_name', ''))
-            if (_t in ('CommonStock', 'OrdinaryShare', 'ShareCapital')
-                    or '股本' in _t or '普通股股本' in _nm or '股本' in _nm):
-                try:
-                    _v = float(str(_row.get('value', 0) or 0).replace(',', ''))
-                    if _v > 0:
-                        # v18.356 PR-Q5b S-PROV-1 phase 19:success-path provenance
-                        try:
-                            import sys as _sys_sc
-                            print(f'[_fetch_share_capital] sid={sid} '
-                                  f'source=FinMind:TaiwanStockBalanceSheet '
-                                  f'fetched_at={_dt_sc.datetime.utcnow().isoformat()}Z '
-                                  f'result=float:{_v}', file=_sys_sc.stderr)
-                        except Exception:
-                            pass
-                        return _v
-                except (TypeError, ValueError):
-                    continue
-        return 0.0
-    except Exception as _e:
-        import sys as _sys
-        print(f'[_fetch_share_capital] swallow: {type(_e).__name__}: {_e}', file=_sys.stderr)
-        return 0.0
+# R-FETCH-1 v18.412 ── 股本 fetcher 已搬至 L1(原私有 _fetch_share_capital 在 UI 層違憲)
+from src.data.stock.share_capital_fetcher import fetch_share_capital
 
 
 # v18.326 ── P/B 帶狀已下沉 shared/stock_buckets.py SSOT(組合 Tab 共用)
@@ -135,7 +85,7 @@ def _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2) -> dict:
     執行順序解耦，Stage 2 才能安全物理重排。顯示段仍各自重算自己 local(值相同)。
 
     各組獨立 try：某組失敗 → 該 key 缺席，AI 端既有 guard 落 fallback(行為等價)。
-    純函式(除 _fetch_share_capital 帶 @cache I/O)，可單測 graceful degradation。
+    純函式(除 fetch_share_capital 帶 @cache I/O,R-FETCH-1 v18.412 已搬至 L1),可單測 graceful degradation。
 
     Returns
     -------
@@ -161,7 +111,7 @@ def _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2) -> dict:
         pass
     # 3) 股本(原 L1049 龍頭預警段)— 只依賴 sid2(帶 cache I/O)
     try:
-        xsec['capital'] = _fetch_share_capital(sid2)
+        xsec['capital'] = fetch_share_capital(sid2)
     except Exception:
         pass
     # 4) 基本面 6 大先行指標(原 L2320 基本面段)— 依賴 rev2/qtr2/qtr_extra2
@@ -559,9 +509,10 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
             _p_now   = float(df2['close'].iloc[-1])
             _p_prev  = float(df2['close'].iloc[-2]) if len(df2) >= 2 else _p_now
             _p_chg   = round((_p_now - _p_prev) / _p_prev * 100, 2) if _p_prev else 0
-            _ma20_v  = float(df2['close'].rolling(20).mean().iloc[-1])
-            _ma60_v  = float(df2['close'].rolling(60).mean().iloc[-1]) if len(df2) >= 60 else None
-            _ma120_v = float(df2['close'].rolling(120).mean().iloc[-1]) if len(df2) >= 120 else None
+            # R-CALC-2 v18.412:scalar MA inline → safe_ma SSOT(已 import 自 tab_helpers)
+            _ma20_v  = safe_ma(df2, 20)
+            _ma60_v  = safe_ma(df2, 60)  if len(df2) >= 60  else None
+            _ma120_v = safe_ma(df2, 120) if len(df2) >= 120 else None
             # 趨勢燈號
             _above_ma20  = _p_now > _ma20_v
             _above_ma60  = (_p_now > _ma60_v) if _ma60_v else None

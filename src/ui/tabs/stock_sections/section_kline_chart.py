@@ -103,14 +103,15 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
         )
 
     # K線均線結論(安全版)
+    # R-UI-1 v18.412:inline `<div border-left>` → border_left_banner SSOT
     _trend_msg_safe = _trend_msg if '_trend_msg' in dir() else '⚪ K線資料不足'
     _kl_c = TRAFFIC_GREEN if '多頭' in _trend_msg_safe or '✅' in _trend_msg_safe else (TRAFFIC_RED if '空頭' in _trend_msg_safe else TRAFFIC_YELLOW)
-    st.markdown(
-        f'<div style="background:#0d1117;border-left:3px solid {_kl_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
+    st.markdown(border_left_banner(
+        _kl_c,
         f'<span style="font-size:11px;color:#8b949e;">🎓 宏爺 · 均線排列</span>　'
-        f'<span style="font-size:13px;font-weight:700;color:{_kl_c};">{_trend_msg_safe}</span>'
-        f'</div>', unsafe_allow_html=True
-    )
+        f'<span style="font-weight:700;">{_trend_msg_safe}</span>',
+        padding_y=7, font_size=13,
+    ), unsafe_allow_html=True)
 
     # ── 近5日評分走勢(儲存本次評分到歷史)───────────────────
     _score_hist_key = f'score_hist_{sid2}'

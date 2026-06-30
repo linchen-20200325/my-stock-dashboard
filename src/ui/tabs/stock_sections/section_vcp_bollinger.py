@@ -100,20 +100,21 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
             st.markdown(border_left_banner(_mc2, _msg), unsafe_allow_html=True)
 
     # VCP+布林結論(安全版:加入 _msg 預設值)
+    # R-UI-1 v18.412:inline `<div border-left>` → border_left_banner SSOT
     _msg = _msg if '_msg' in dir() else '⚪ VCP/布林資料不足'
     _vcp_c = TRAFFIC_GREEN if '✅' in _msg or '🟢' in _msg else (TRAFFIC_YELLOW if '⚠️' in _msg else '#484f58')
-    st.markdown(
-        f'<div style="background:#0d1117;border-left:3px solid {_vcp_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
+    st.markdown(border_left_banner(
+        _vcp_c,
         f'<span style="font-size:11px;color:#8b949e;">🎓 策略3 · VCP</span>　'
-        f'<span style="font-size:13px;font-weight:700;color:{_vcp_c};">{_msg}</span>'
-        f'</div>', unsafe_allow_html=True
-    )
+        f'<span style="font-weight:700;">{_msg}</span>',
+        padding_y=7, font_size=13,
+    ), unsafe_allow_html=True)
     if bb2:
         _bb_verdict_safe = _bb_verdict if '_bb_verdict' in dir() else '⚪ 布林資料不足'
         _bb_c = TRAFFIC_GREEN if '✅' in _bb_verdict_safe or '🟢' in _bb_verdict_safe else ('#3aa2f5' if '🔵' in _bb_verdict_safe else TRAFFIC_YELLOW)
-        st.markdown(
-            f'<div style="background:#0d1117;border-left:3px solid {_bb_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
+        st.markdown(border_left_banner(
+            _bb_c,
             f'<span style="font-size:11px;color:#8b949e;">🎓 策略3 · 布林</span>　'
-            f'<span style="font-size:13px;font-weight:700;color:{_bb_c};">{_bb_verdict_safe}</span>'
-            f'</div>', unsafe_allow_html=True
-        )
+            f'<span style="font-weight:700;">{_bb_verdict_safe}</span>',
+            padding_y=7, font_size=13,
+        ), unsafe_allow_html=True)

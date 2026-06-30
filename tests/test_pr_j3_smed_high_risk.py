@@ -90,8 +90,10 @@ class TestEtfCalcStderrLog:
 
 class TestTabStockSilentToStderr:
     def test_share_capital_has_stderr_marker(self):
-        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
-        assert '[_fetch_share_capital] swallow:' in src
+        # R-FETCH-1 v18.412:fetch_share_capital 已搬至 src/data/stock/share_capital_fetcher
+        src = open('src/data/stock/share_capital_fetcher.py',
+                   encoding='utf-8').read()
+        assert '[fetch_share_capital] swallow:' in src
 
     def test_pbratio_has_stderr_marker(self):
         # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 stock_sections.section_357_valuation
