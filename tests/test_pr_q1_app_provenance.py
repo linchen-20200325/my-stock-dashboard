@@ -20,7 +20,8 @@ class TestAppProvenanceMarkersInSource(unittest.TestCase):
     """5 處 PR-Q1 marker 都在 source code(防 regression)。"""
 
     def setUp(self):
-        with open('app.py', encoding='utf-8') as f:
+        # U5 B3-δ v18.405:6 fetcher 已抽至 src/data/stock/app_stock_fetchers.py
+        with open('src/data/stock/app_stock_fetchers.py', encoding='utf-8') as f:
             self.src = f.read()
 
     def test_fetch_price_data_marker(self):
@@ -55,7 +56,8 @@ class TestInterfaceUnchanged(unittest.TestCase):
 
     def setUp(self):
         import ast
-        with open('app.py', encoding='utf-8') as f:
+        # U5 B3-δ v18.405:6 fetcher 已抽至 src/data/stock/app_stock_fetchers.py
+        with open('src/data/stock/app_stock_fetchers.py', encoding='utf-8') as f:
             tree = ast.parse(f.read())
         self.fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
 

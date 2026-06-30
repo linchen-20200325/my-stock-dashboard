@@ -249,11 +249,11 @@ def render_tab_stock():
     from src.ui.render.tab_sections import border_left_banner, box_wrapper_close, box_wrapper_open
     from src.data.core import fetch_financial_statements
     # app.py 內部 helper
-    from app import (
-        api_key,
+    from app import api_key, gemini_call
+    # U5 B3-δ v18.405:6 fetcher 已抽至 L1 src/data/stock/app_stock_fetchers.py
+    from src.data.stock.app_stock_fetchers import (
         fetch_dividend_data, fetch_financials, fetch_price_data,
         fetch_quarterly, fetch_quarterly_extra, fetch_revenue,
-        gemini_call,
     )
     # U5 B3-γ v18.404:render_health_score 已抽至 L4
     from src.ui.render.app_render import render_health_score
