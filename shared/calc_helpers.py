@@ -66,3 +66,24 @@ def calc_bias_pct(price, ma, *, decimals: int | None = None):
         return None
     _bias = (_p - _ma) / _ma * 100.0
     return round(_bias, decimals) if decimals is not None else _bias
+
+
+def calc_bias_pct_series(price, ma):
+    """乖離率 series 版 SSOT = (price - ma) / ma × 100  (%);向量化。
+
+    v18.436 #23:補 calc_bias_pct 的 series 缺口(原 scalar-only 無法覆蓋
+    etf_render.py:237 `(close - ma20) / ma20 * 100` 等 Series 路徑)。
+
+    與 scalar 版同公式 + 同 fail-loud 語意:ma<=0 的位置回 NaN(不捏造、不 ÷0),
+    而非 raise — 因 series 通常含開頭 rolling NaN(ma 尚未成形),逐點 guard 才合理。
+
+    參數:
+        price: pd.Series 當前價序列
+        ma:    pd.Series 移動平均序列(index 對齊 price)
+
+    回傳:
+        pd.Series 乖離率 %;ma<=0 或 NaN 的位置為 NaN。
+    """
+    # ma<=0(含 NaN 比較為 False)→ 該點設 NaN,避免 ÷0 / 捏造
+    _safe_ma = ma.where(ma > 0)
+    return (price - _safe_ma) / _safe_ma * 100.0

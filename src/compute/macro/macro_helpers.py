@@ -1267,7 +1267,12 @@ def compute_five_bucket_summary(
         "fut_net":       _df_last(li_latest, "外資大小"),
         "margin":        _num(_g(cl_data, "margin")),
         "jingqi":        _num(_g(jingqi_info, "avg")),
-        "foreign_net":   None,   # §4.1 inst net 單位待確認 → 暫保持 gray，不誤判
+        # §4.1 inst net 單位待確認 → 故意回 None(§1 fail-safe:寧缺勿錯)。
+        # v18.436 #20:此為「外部資訊阻斷」項,非程式 bug。啟用前置條件:
+        #   確認 FinMind TaiwanStockInstitutionalInvestorsBuySell 的 buy/sell 單位
+        #   (股 vs 千股 vs 億元)→ 才能對齊 spec 門檻判讀。在確認前 None 是正解,
+        #   不可猜單位填值(會誤判紅綠燈)。ForeignFlowSchema(71b310c)已備 schema。
+        "foreign_net":   None,
         "news_systemic": _news_sys,
     }
 

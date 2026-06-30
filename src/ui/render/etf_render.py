@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 # 原 `from src.data.etf import _fetch_news_for, _fetch_sector_returns` 改走 L3 wrapper。
 from src.services.etf_sector_service import get_news_for, get_sector_returns
 from src.services.ai_structured_summary import build_structured_summary_prompt  # v18.361 F-6.5:直打 submod 避 services↔ui.render circular
-from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
+from shared.calc_helpers import calc_bias_pct, calc_bias_pct_series  # R-CALC-3 v18.412 / #23 v18.436
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
@@ -233,7 +233,7 @@ def _render_bias(df: pd.DataFrame, ticker: str) -> None:
         # 視覺化近60日 BIAS(MA20)
         if len(close) >= 60:
             ma20 = close.rolling(20).mean()
-            b20  = (close - ma20) / ma20 * 100
+            b20  = calc_bias_pct_series(close, ma20)  # #23 v18.436:series SSOT(原 inline)
             b20  = b20.dropna().tail(60)
             fig  = go.Figure(go.Bar(
                 x=b20.index, y=b20.values,
