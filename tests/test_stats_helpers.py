@@ -8,11 +8,47 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from shared.stats_helpers import calc_stats
+import math
+
+from shared.stats_helpers import calc_stats, zscore
 
 
 def _df(closes: list[float], col: str = "close") -> pd.DataFrame:
     return pd.DataFrame({col: closes})
+
+
+# ════════════════════════════════════════════════════════════════
+# 0. zscore SSOT(D2 v18.437 — 統一 macro_core.zscore + multi_factor._zscore)
+# ════════════════════════════════════════════════════════════════
+class TestZscore:
+    def test_normal(self):
+        z = zscore(pd.Series([1.0, 2, 3, 4, 5]))
+        assert z.mean() == pytest.approx(0.0, abs=1e-12)
+        assert z.iloc[0] == pytest.approx(-1.2649, abs=1e-3)
+        assert z.iloc[-1] == pytest.approx(1.2649, abs=1e-3)
+
+    def test_zero_std_returns_zeros_no_div_zero(self):
+        z = zscore(pd.Series([3.0, 3.0, 3.0]))
+        assert z.tolist() == [0.0, 0.0, 0.0]
+
+    def test_empty_returns_empty(self):
+        out = zscore(pd.Series([], dtype=float))
+        assert len(out) == 0
+
+    def test_single_element_no_crash(self):
+        # 單元素 std(ddof=1)=NaN → guard 回 0(不捏造、不爆)
+        z = zscore(pd.Series([42.0]))
+        assert z.tolist() == [0.0]
+
+    def test_index_preserved(self):
+        s = pd.Series([10.0, 20, 30], index=["a", "b", "c"])
+        assert list(zscore(s).index) == ["a", "b", "c"]
+
+    def test_macro_core_reexport_delegates(self):
+        # macro_core.zscore 仍可用且委派同一 SSOT 實作(值一致)
+        from src.data.macro import macro_core
+        s = pd.Series([1.0, 2, 4, 8])
+        assert macro_core.zscore(s).round(6).tolist() == zscore(s).round(6).tolist()
 
 
 # ════════════════════════════════════════════════════════════════

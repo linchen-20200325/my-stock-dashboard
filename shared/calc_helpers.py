@@ -68,6 +68,25 @@ def calc_bias_pct(price, ma, *, decimals: int | None = None):
     return round(_bias, decimals) if decimals is not None else _bias
 
 
+def calc_premium_discount_pct(price, nav, *, decimals: int | None = None):
+    """ETF 折溢價% = (price - nav) / nav × 100(scalar 場景 SSOT)。
+
+    D4 v18.437 收斂:etf_calc.calc_premium_discount 內 2 處重寫
+    `(price - nav) / nav * 100`。數學等同 calc_bias_pct(以 nav 為基準),
+    語意為「市價相對淨值的溢/折價」→ 委派 calc_bias_pct 共用唯一公式 + nav<=0 guard,
+    不另抄一份(避免 helper 層自我複製)。
+
+    參數:
+        price: float | None 市價(scalar)
+        nav:   float | None 淨值(scalar)
+        decimals: int | None 四捨五入位數;None 不 round
+
+    Returns:
+        float 折溢價 %;price/nav 為 None 或 nav <= 0 → 回 None(non-fabricating)
+    """
+    return calc_bias_pct(price, nav, decimals=decimals)
+
+
 def calc_bias_pct_series(price, ma):
     """乖離率 series 版 SSOT = (price - ma) / ma × 100  (%);向量化。
 

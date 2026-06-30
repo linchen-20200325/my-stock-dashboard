@@ -1391,13 +1391,13 @@ PMI_SOURCE_REGISTRY: list[tuple[str, Callable]] = [
 # ══════════════════════════════════════════════════════════════
 
 def zscore(s: pd.Series) -> pd.Series:
-    """標準分數(std=0 時回傳全 0,避免除零)。"""
-    if s.empty:
-        return s
-    std = float(s.std())
-    if std == 0 or np.isnan(std):
-        return pd.Series([0.0] * len(s), index=s.index)
-    return (s - s.mean()) / std
+    """標準分數(std=0 時回傳全 0,避免除零)。
+
+    D2 v18.437:實作下沉 shared.stats_helpers.zscore(SSOT);本處保留為向後相容
+    re-export(macro_core 公開數學工具 + test 介面),委派唯一實作避免雙寫。
+    """
+    from shared.stats_helpers import zscore as _z
+    return _z(s)
 
 
 def trend_arrow(vals: list[float]) -> str:

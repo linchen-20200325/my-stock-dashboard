@@ -21,6 +21,7 @@ from typing import Literal, Optional
 import numpy as np
 import pandas as pd
 
+from shared.stats_helpers import zscore as _zscore  # D2 v18.437:z-score SSOT
 from src.compute.macro import TwiiCrisisEvent
 
 Direction = Literal["above", "below"]
@@ -88,14 +89,6 @@ DEFAULT_LAMBDA_STD = 0.5
 DEFAULT_PLATEAU_RADIUS = 1
 DEFAULT_THRESHOLD = 1.0
 DEFAULT_GRID_STEP = 0.2
-
-
-def _zscore(series: pd.Series) -> pd.Series:
-    mu = series.mean()
-    sd = series.std()
-    if not np.isfinite(sd) or sd == 0:
-        return pd.Series(0.0, index=series.index)
-    return (series - mu) / sd
 
 
 def _normalize(series: pd.Series, method: NormalizeMethod, spec_direction: Direction) -> pd.Series:

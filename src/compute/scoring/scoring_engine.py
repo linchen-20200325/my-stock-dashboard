@@ -1196,12 +1196,13 @@ def check_bollinger_squeeze(df) -> dict:
     result = {'is_squeeze_break': False, 'bw_today': None, 'bw_avg5': None, 'label': ''}
     if df is None or len(df) < 25:
         return result
+    from src.compute.strategy.tech_indicators import calc_bollinger_width_series
     close = df['close']
     ma20  = close.rolling(20).mean()
     std20 = close.rolling(20).std()
     upper = ma20 + 2 * std20
-    lower = ma20 - 2 * std20
-    bw = (upper - lower) / ma20 * 100   # 帶寬百分比
+    # D1 v18.437:帶寬% =(upper-lower)/MA×100 = 4σ/MA×100 → 收 SSOT(helper 回比率,×100 轉%)
+    bw = calc_bollinger_width_series(close, 20, 2.0) * 100
 
     bw_today = float(bw.iloc[-1]) if not bw.iloc[-1] != bw.iloc[-1] else 0
     bw_avg5  = float(bw.iloc[-6:-1].mean()) if len(bw) >= 6 else bw_today
