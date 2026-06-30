@@ -138,8 +138,11 @@ def teacher_conclusion(teacher, indicator_val, conclusion, action='', color=None
     # 自動判斷顏色
     if color is None:
         # 台股慣例: 正/漲/多=紅, 負/跌/空=綠, 中性=黃, 預設=藍
-        _neg_kw = ['警戒', '危險', '賣超', '空單', '減碼', '停損', '撤離', '跌破', '過熱', '回調', '降倉', '空頭']
-        _pos_kw = ['強勢', '買超', '多頭', '安全', '健康', '買進', '加碼', '流入', '突破', '進攻', '上漲']
+        # v18.427 Phase 2 Batch 4:_neg_kw 補 '侵蝕' '高估'、_pos_kw 補 '低估' '特價'
+        # (原 etf_render._teacher_conclusion 私有副本擁有的 ETF 殖利率脈絡關鍵字,
+        # 抽至 SSOT 後 etf_render 委派本函式統一)。
+        _neg_kw = ['警戒', '危險', '賣超', '空單', '減碼', '停損', '撤離', '跌破', '過熱', '回調', '降倉', '空頭', '侵蝕', '高估']
+        _pos_kw = ['強勢', '買超', '多頭', '安全', '健康', '買進', '加碼', '流入', '突破', '進攻', '上漲', '低估', '特價']
         if any(k in conclusion+action for k in _neg_kw):
             color = '#2ea043'   # 跌=綠
         elif any(k in conclusion+action for k in _pos_kw):
