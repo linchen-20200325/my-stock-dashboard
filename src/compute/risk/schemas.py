@@ -77,8 +77,13 @@ def _make_monthly_revenue_schema():
     """月營收 DataFrame schema(§3.1 範例)。
 
     覆蓋:
-    - `date` datetime / ascending / unique
-    - `revenue_twd` > 0(月營收為正,§4.6「停業時應為 NaN 而非 0」)
+    - `date` datetime / **單股升序 unique**(全市場 batch 因多 stock_id 同月份 → 不檢 unique)
+    - `revenue` > 0(月營收為正,§4.6「停業時應為 NaN 而非 0」;單位 TWD,FinMind native column)
+
+    v18.433 對齊現實:原 `revenue_twd` 命名 + `date.is_unique` 屬未來 SSOT 設計,
+    但 production fetcher(monthly_revenue_fetcher.py)實際輸出 `revenue` 欄 +
+    batch fetcher 有多 stock_id 同月份重複日期 → schema 鬆綁兩處,避免 false-positive
+    schema_drift log。Strict 設計仍可在新 fetcher 採用。
     """
     if not PANDERA_AVAILABLE:
         return None
@@ -89,17 +94,16 @@ def _make_monthly_revenue_schema():
                 checks=[
                     pa.Check(lambda s: s.is_monotonic_increasing,
                              error='date 必須升序排列'),
-                    pa.Check(lambda s: s.is_unique,
-                             error='date 必須 unique'),
+                    # 注意:不檢 is_unique(batch fetcher 多 stock_id 共用月份)
                 ],
                 nullable=False,
             ),
-            # revenue 為正,允許 NaN(停業 / 等公布狀態)
-            'revenue_twd': pa.Column(
+            # revenue 為正,允許 NaN(停業 / 等公布狀態);FinMind native column 'revenue'
+            'revenue': pa.Column(
                 float,
                 checks=pa.Check(
                     lambda s: ((s > 0) | s.isna()).all(),
-                    error='revenue_twd 必須為正或 NaN(§4.6 月營收三態)',
+                    error='revenue 必須為正或 NaN(§4.6 月營收三態)',
                 ),
                 nullable=True,
             ),

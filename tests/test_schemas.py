@@ -62,7 +62,7 @@ class TestMonthlyRevenueSchema:
     def test_valid_with_nan(self):
         df = pd.DataFrame({
             'date': pd.to_datetime(['2026-01-31', '2026-02-28', '2026-03-31']),
-            'revenue_twd': [1000.0, float('nan'), 1100.0],  # NaN 允許(停業/等公布)
+            'revenue': [1000.0, float('nan'), 1100.0],  # NaN 允許(停業/等公布)
         })
         validated = MonthlyRevenueSchema.validate(df)
         assert len(validated) == 3
@@ -70,7 +70,7 @@ class TestMonthlyRevenueSchema:
     def test_zero_revenue_violation(self):
         df = pd.DataFrame({
             'date': pd.to_datetime(['2026-01-31', '2026-02-28']),
-            'revenue_twd': [1000.0, 0.0],  # 0 違反「正或 NaN」
+            'revenue': [1000.0, 0.0],  # 0 違反「正或 NaN」
         })
         with pytest.raises(Exception):
             MonthlyRevenueSchema.validate(df)
@@ -78,7 +78,7 @@ class TestMonthlyRevenueSchema:
     def test_date_not_monotonic_violation(self):
         df = pd.DataFrame({
             'date': pd.to_datetime(['2026-02-28', '2026-01-31']),  # 反序
-            'revenue_twd': [1000.0, 1100.0],
+            'revenue': [1000.0, 1100.0],
         })
         with pytest.raises(Exception):
             MonthlyRevenueSchema.validate(df)

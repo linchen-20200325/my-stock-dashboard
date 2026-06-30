@@ -95,6 +95,13 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
             _result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
         except Exception:
             pass
+        # Phase 2 pandera Priority 1 v18.433:log-mode schema validation
+        try:
+            from src.compute.risk.schemas import validate_in_log_mode, MonthlyRevenueSchema
+            validate_in_log_mode(_result, MonthlyRevenueSchema,
+                                  label=f'fetch_monthly_revenue:{stock_id}')
+        except Exception:
+            pass
         return _result
     except Exception as _e:
         print(f"[mrev-fetcher] fetch {stock_id} 失敗: {type(_e).__name__}: {_e}")
@@ -149,6 +156,14 @@ def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
         try:
             _result_b.attrs.setdefault('source', 'FinMind:TaiwanStockMonthRevenue:batch(all-market)')
             _result_b.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
+        # Phase 2 pandera Priority 1 v18.433:log-mode schema validation(batch 含 stock_id 多檔)
+        try:
+            from src.compute.risk.schemas import validate_in_log_mode, MonthlyRevenueSchema
+            # batch fetch 每股 sub-DataFrame 取首檔當代表驗(完整驗會誤判 date dup 跨股)
+            validate_in_log_mode(_result_b.head(36), MonthlyRevenueSchema,
+                                  label='fetch_batch_monthly_revenue:sample')
         except Exception:
             pass
         return _result_b

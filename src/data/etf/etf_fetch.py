@@ -217,18 +217,29 @@ def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
 
     v18.228 起改為共用 'max' 底層 + 記憶體切片。公開簽章不變，呼叫端 0 改動。
     S-PROV-1 v18.251:provenance attrs 從底層繼承(切片後顯式 copy 保留)。
+    Phase 2 pandera Priority 1 v18.433:log-mode schema validation(yfinance 大寫,
+    normalize_case=True);失敗只 stderr log,不擋 caller。
     """
     df = _fetch_etf_price_max(ticker)
     if df.empty:
         return df
     days = _PERIOD_TO_DAYS.get(period, 365 * 5)
     if days is None or len(df) == 0:
-        return df
-    cutoff = df.index.max() - pd.Timedelta(days=days)
-    sliced = df.loc[df.index >= cutoff]
-    # v18.251 S-PROV-1:.loc 切片可能 lose attrs,顯式 copy 保留血緣
-    sliced.attrs = dict(df.attrs)
-    return sliced
+        result = df
+    else:
+        cutoff = df.index.max() - pd.Timedelta(days=days)
+        result = df.loc[df.index >= cutoff]
+        # v18.251 S-PROV-1:.loc 切片可能 lose attrs,顯式 copy 保留血緣
+        result.attrs = dict(df.attrs)
+    # Phase 2 pandera Priority 1 v18.433:log-mode schema validation
+    try:
+        from src.compute.risk.schemas import validate_in_log_mode, OHLCVSchema
+        result = validate_in_log_mode(result, OHLCVSchema,
+                                       label=f'fetch_etf_price:{ticker}:{period}',
+                                       normalize_case=True)
+    except Exception:
+        pass
+    return result
 
 
 @st.cache_data(ttl=TTL_1HOUR, max_entries=10)
