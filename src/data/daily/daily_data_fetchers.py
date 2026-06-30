@@ -6,8 +6,10 @@ v18.345 PR-N2 起從 daily_checklist.py 分批抽出 fetcher 群:
 - PR-N4:fetch_adl (yfinance + ADL 公式 + cache + log)
 - 本 PR (N5):fetch_margin_balance (6 路 fallback,MEDIUM-HIGH risk) — 拆檔收尾
 
-§8.2 L1 Data 層:HTTP fetch + cache,**不**得 module-level import streamlit
-(EX-CACHE-1 例外:function-local lazy import OK)。
+§8.2 L1 Data 層:HTTP fetch + cache。
+v18.400 D2:6 fetcher 加 @st.cache_data,改採 EX-CACHE-1 letter-compliant pattern
+(條件 try import streamlit + _NoOpST fallback),既滿足 cache 需求又保持 CLI/pytest
+純 .py 環境可 import 不爆。
 """
 from __future__ import annotations
 
@@ -19,9 +21,24 @@ import time
 
 import pandas as pd
 
+# v18.400 D2:EX-CACHE-1 letter-compliant — 6 fetcher 加 @st.cache_data
+try:
+    import streamlit as st
+except ImportError:
+    class _NoOpST:
+        @staticmethod
+        def cache_data(*args, **kwargs):
+            if args and callable(args[0]):
+                return args[0]
+            return lambda f: f
+        cache_resource = cache_data
+        secrets: dict = {}
+    st = _NoOpST()  # noqa
+
 # v18.346 PR-N3:fetch_institutional 用 cache_layer + _bps + FINMIND_TOKEN
 from shared.cache_layer import _CACHE_SENTINEL, _pkl_get, _pkl_put
 from shared.macro_compute import _recent_date
+from shared.ttls import TTL_30MIN, TTL_1HOUR
 from src.config import TTL_CONFIG as _TTL_CFG
 
 
@@ -74,6 +91,7 @@ FINMIND_TOKEN = _get_finmind_token()
 # ═══════════════════════════════════════════════
 # yfinance 單檔 + 並行批次
 # ═══════════════════════════════════════════════
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_single(symbol, period: str = "60d"):
     """yfinance 單檔抓取(走 yf_proxy 內含 proxy env + cache_data 1h)+ /tmp pickle 30 分快取。
 
@@ -125,6 +143,7 @@ def fetch_single(symbol, period: str = "60d"):
         return None
 
 
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_flow_snapshot(period: str = "2y"):
     """全球資金流向所需的區域 / 跨資產 ETF 收盤序列:並行抓取 + /tmp pickle 快取 30 分。
 
@@ -176,6 +195,7 @@ def fetch_flow_snapshot(period: str = "2y"):
 # ═══════════════════════════════════════════════
 # OTC 指數 (FinMind) — v18.346 PR-N3 抽出
 # ═══════════════════════════════════════════════
+@st.cache_data(ttl=TTL_30MIN, show_spinner=False)
 def _fetch_otc_via_finmind(token: str = ""):
     if not FINMIND_TOKEN:
         _prov_log('_fetch_otc_via_finmind', 'FinMind:TaiwanStockDaily:OTC',
@@ -209,6 +229,7 @@ def _fetch_otc_via_finmind(token: str = ""):
 # 三大法人 (TWSE BFI82U via Squid Proxy) — v18.346 PR-N3 抽出
 # 收盤後 15:30 才有當日資料
 # ═══════════════════════════════════════════════
+@st.cache_data(ttl=TTL_30MIN, show_spinner=False)
 def fetch_institutional(date_str: str | None = None):
     if date_str is None:
         date_str = _recent_date()
@@ -273,6 +294,7 @@ def fetch_institutional(date_str: str | None = None):
 # 騰落指標 (ADL) — v18.347 PR-N4 抽出
 # yfinance ^TWII 估算(🚫 TWSE MI_INDEX 已永久停用)
 # ═════════════════════════════════════════════════════
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_adl(days: int = 60, token=None):
     """騰落指標 ADL v5 — yfinance ^TWII 估算。
 
@@ -440,6 +462,7 @@ def _adl_selftest():
 # 融資餘額 — v18.348 PR-N5 抽出 (MEDIUM-HIGH)
 # 6 路 fallback:FinMind → MI_MARGN → HiStock → Goodinfo → Yahoo → 鉅亨網
 # ═══════════════════════════════════════════════
+@st.cache_data(ttl=TTL_30MIN, show_spinner=False)
 def fetch_margin_balance(date_str=None):
     """融資餘額 — FinMind → MI_MARGN → HiStock → Goodinfo → Yahoo → 鉅亨網,單位:億元
 
