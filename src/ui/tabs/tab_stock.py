@@ -1064,89 +1064,9 @@ padding:14px 18px;margin-bottom:12px;">
             rsi2, vr2, ibs2, k2, d2, bb2, vcp2, cl2,
         )
 
-        # ══ E. VCP + 布林 ══════════════════════════════════════
-        st.markdown('---')
-        st.markdown('#### 🎯 E. VCP波幅收縮 + 布林通道')
-        st.caption('🔰 指標白話：VCP＝股價波動一波比一波小（像彈簧壓緊），常是噴出前的整理；'
-                   '布林通道＝股價的上下軌道，帶寬收縮代表變盤在即、股價貼上軌偏強。')
-        if vcp2 and vcp2.get('contracting'):
-            _sw = vcp2.get('swings', [])
-            _ea = f'VCP確認收縮（{len(_sw)}波段），量能萎縮，等待帶量突破進場'
-            _eb = '突破前高且放量時買入，停損設前波低點'
-        elif vcp2:
-            _sw = vcp2.get('swings', [])
-            _ea = f'VCP尚未形成（{len(_sw)}波段），波動仍大，不宜進場'
-            _eb = '等待更多整理時間，耐心等候'
-        else:
-            _ea = '數據不足，VCP無法計算（需至少30日價格資料）'
-            _eb = ''
-        st.markdown(teacher_conclusion('朱家泓', f'{sid2} VCP型態', _ea, _eb), unsafe_allow_html=True)
-        ec1,ec2=st.columns(2)
-        with ec1:
-            st.markdown('**VCP [Mark Minervini]**')
-            if vcp2:
-                sw=' → '.join([f'{s:.1f}%' for s in vcp2['swings']])
-                vc=TRAFFIC_GREEN if vcp2['contracting'] else TRAFFIC_YELLOW
-                st.markdown(kpi('VCP狀態','✅符合收縮' if vcp2['contracting'] else '⚠️未收縮',
-                                f'波幅：{sw}',vc,vc),unsafe_allow_html=True)
-                if vcp2['contracting']:
-                    st.markdown(signal_box('🔴等待帶量突破頸線','green','確認突破才進場'),unsafe_allow_html=True)
-            else:
-                st.info('數據不足（需≥40日）')
-        with ec2:
-            st.markdown('**布林通道 [策略3]**')
-            if bb2:
-                b1,b2=st.columns(2)
-                with b1:
-                    st.markdown(kpi('現價',f'{bb2["price"]:.2f}','','#e6edf3'),unsafe_allow_html=True)
-                    st.markdown(kpi('布林上軌',f'{bb2["upper"]:.2f}','壓力',TRAFFIC_RED,TRAFFIC_RED),unsafe_allow_html=True)
-                with b2:
-                    bw_c=TRAFFIC_GREEN if bb2['bw']<bb2['bw_mean']*0.7 else TRAFFIC_YELLOW
-                    st.markdown(kpi('帶寬',f'{bb2["bw"]:.1f}%',
-                                    f'均值{bb2["bw_mean"]:.1f}% {"⬇️收縮" if bb2["bw"]<bb2["bw_mean"] else "⬆️擴張"}',
-                                    bw_c,bw_c),unsafe_allow_html=True)
-                    st.markdown(kpi('布林下軌',f'{bb2["lower"]:.2f}','支撐',TRAFFIC_GREEN,TRAFFIC_GREEN),unsafe_allow_html=True)
-                if bb2['bw']<bb2['bw_mean']*0.6:
-                    st.markdown(signal_box('🔵布林帶寬極度收縮','blue','即將爆發，注意量能方向'),unsafe_allow_html=True)
-                if bb2['near_upper']:
-                    st.markdown(signal_box('🟢股價黏近上軌','green','強勢突破訊號，搭配大量更可信'),unsafe_allow_html=True)
-        # ── VCP+布林動態建議 ──
-        _vcp_verdict = ''
-        _bb_verdict  = ''
-        if vcp2:
-            _vcp_verdict = ('✅ VCP確認收縮：等待帶量突破頸線，是高確信進場點 [策略3]'
-                            if vcp2['contracting']
-                            else '⚪ 波幅尚未收縮：等待整理完成後再觀察')
-        if bb2:
-            if bb2['bw'] < bb2['bw_mean']*0.6:
-                _bb_verdict = '🔵 布林帶寬極度收縮：即將爆發，注意量能確認方向 [策略3]'
-            elif bb2['near_upper']:
-                _bb_verdict = '🟢 股價黏近上軌＋強勢：搭配大量是突破確認訊號 [策略3]'
-            else:
-                _bb_verdict = f'⚪ 布林帶寬{bb2["bw"]:.1f}%（均值{bb2["bw_mean"]:.1f}%）：尚未到關鍵位置'
-        if _vcp_verdict or _bb_verdict:
-            for _msg in [m for m in [_vcp_verdict, _bb_verdict] if m]:
-                _mc2 = TRAFFIC_GREEN if '✅' in _msg or '🟢' in _msg else ('#58a6ff' if '🔵' in _msg else '#8b949e')
-                st.markdown(border_left_banner(_mc2, _msg), unsafe_allow_html=True)
-
-        # VCP+布林結論（安全版：加入 _msg 預設值）
-        _msg = _msg if '_msg' in dir() else '⚪ VCP/布林資料不足'
-        _vcp_c = TRAFFIC_GREEN if '✅' in _msg or '🟢' in _msg else (TRAFFIC_YELLOW if '⚠️' in _msg else '#484f58')
-        st.markdown(
-            f'<div style="background:#0d1117;border-left:3px solid {_vcp_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
-            f'<span style="font-size:11px;color:#8b949e;">🎓 策略3 · VCP</span>　'
-            f'<span style="font-size:13px;font-weight:700;color:{_vcp_c};">{_msg}</span>'
-            f'</div>', unsafe_allow_html=True
-        )
-        if bb2:
-            _bb_verdict_safe = _bb_verdict if '_bb_verdict' in dir() else '⚪ 布林資料不足'
-            _bb_c = TRAFFIC_GREEN if '✅' in _bb_verdict_safe or '🟢' in _bb_verdict_safe else ('#3aa2f5' if '🔵' in _bb_verdict_safe else TRAFFIC_YELLOW)
-            st.markdown(
-                f'<div style="background:#0d1117;border-left:3px solid {_bb_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
-                f'<span style="font-size:11px;color:#8b949e;">🎓 策略3 · 布林</span>　'
-                f'<span style="font-size:13px;font-weight:700;color:{_bb_c};">{_bb_verdict_safe}</span>'
-                f'</div>', unsafe_allow_html=True
-            )
+        # ══ E. VCP+布林(U4 Phase 3-E v18.409:抽至 stock_sections.section_vcp_bollinger)══
+        from src.ui.tabs.stock_sections import render_vcp_bollinger_section
+        render_vcp_bollinger_section(sid2, vcp2, bb2)
 
         # ══ 籌碼定位（近 20 日外資+投信 vs 總成交量）═══════════
         # v18.308 Bug2 PR-D：籌碼原地升級為一級可導航桶（加 bucket header + anchor）。
@@ -1196,121 +1116,12 @@ padding:14px 18px;margin-bottom:12px;">
                 st.progress(_cty20 / 100.0,
                             text=f'買超天數佔比 {_cty20:.0f}%')
 
-        # ══ F. K線技術圖 ═══════════════════════════════════════
-        st.markdown('---')
-        st.markdown('#### 📊 F. K線技術圖表（含三大法人籌碼）')
-        _fa = f'{sid2} K線技術'
-        _fb_txt = ''
-        _fc_txt = ''
-        if df2 is not None and not df2.empty and len(df2) >= 20:
-            _p_now_f = float(df2['close'].iloc[-1])
-            _ma20_f  = float(df2['close'].rolling(20).mean().iloc[-1])
-            _cl_trend = '上漲' if float(df2['close'].iloc[-1]) > float(df2['close'].iloc[-5]) else '下跌'
-            _above_f = _p_now_f > _ma20_f
-            _inst_f = st.session_state.get('t2_inst', {})
-            _fnet_f = _inst_f.get('外資', 0) if _inst_f else 0
-            if _above_f and _fnet_f > 0:
-                _fb_txt = '站上月線 + 外資買超，主力進駐訊號，可跟進'
-                _fc_txt = '停損設月線下方'
-            elif _above_f and _fnet_f < 0:
-                _fb_txt = '站上月線但外資賣超，需謹慎確認主力方向'
-                _fc_txt = '等待外資轉買後再行動'
-            elif not _above_f and _fnet_f > 0:
-                _fb_txt = '月線下方但外資買超，可能正在築底'
-                _fc_txt = '等待重回月線確認後再評估'
-            else:
-                _fb_txt = '月線下方且外資賣超，趨勢偏空，暫時迴避'
-                _fc_txt = '等待更明確的多頭訊號'
-            _fa = f'{sid2} 現價{_p_now_f:.1f}（{"站月線" if _above_f else "跌月線"}）| 外資{"買超" if _fnet_f>0 else "賣超" if _fnet_f<0 else "中性"}'
-        else:
-            _fb_txt = '技術資料載入中，請先點擊「🔍 載入完整分析」'
-        st.markdown(teacher_conclusion('朱家泓', _fa, _fb_txt, _fc_txt), unsafe_allow_html=True)
-        if df2 is not None and not df2.empty:
-            fig_k = plot_combined_chart(df2, sid2, name2, show_ma_dict, k_line_type='還原K線' if t2_adjusted else '一般K線')
-            st.plotly_chart(fig_k, width='stretch',
-                            config={'displayModeBar':True,'displaylogo':False,
-                                    'modeBarButtonsToRemove':['lasso2d','select2d']})
-        else:
-            if t2d.get('err'):
-                st.error(f'❌ {t2d["err"]}')
-        # ── K線動態趨勢建議(SSOT: tab_helpers.classify_trend_4tier,組合 Tab 共用)──
-        if df2 is not None and 'MA20' in df2.columns and 'MA100' in df2.columns:
-            _kp = price2
-            _km20 = float(df2['MA20'].iloc[-1])
-            _km100 = float(df2['MA100'].iloc[-1])
-            _trend_lbl, _tc = classify_trend_4tier(_kp, _km20, _km100)
-            if '多頭' in _trend_lbl:
-                _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＞ MA20 {_km20:.1f} ＞ MA100 {_km100:.1f}'
-                              ' — 宏爺：可持股，大盤多頭才做個股')
-            elif '空頭' in _trend_lbl:
-                _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＜ MA20 {_km20:.1f} ＜ MA100 {_km100:.1f}'
-                              ' — 宏爺：不做多，嚴格停損')
-            elif '多箱' in _trend_lbl:
-                _trend_msg = (f'{_trend_lbl}：股價在 MA100 之上'
-                              f' — 宏爺：等待站上 MA20({_km20:.1f})確認方向')
-            else:
-                _trend_msg = (f'{_trend_lbl}：股價低於 MA100'
-                              ' — 宏爺：耐心等待多頭訊號，不摸底')
-            st.markdown(
-                border_left_banner(_tc, _trend_msg, border_width=4,
-                                   font_size=13, padding_y=10, padding_x=14,
-                                   margin_y=8, bold=True),
-                unsafe_allow_html=True,
-            )
-
-        # K線均線結論（安全版）
-        _trend_msg_safe = _trend_msg if '_trend_msg' in dir() else '⚪ K線資料不足'
-        _kl_c = TRAFFIC_GREEN if '多頭' in _trend_msg_safe or '✅' in _trend_msg_safe else (TRAFFIC_RED if '空頭' in _trend_msg_safe else TRAFFIC_YELLOW)
-        st.markdown(
-            f'<div style="background:#0d1117;border-left:3px solid {_kl_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
-            f'<span style="font-size:11px;color:#8b949e;">🎓 宏爺 · 均線排列</span>　'
-            f'<span style="font-size:13px;font-weight:700;color:{_kl_c};">{_trend_msg_safe}</span>'
-            f'</div>', unsafe_allow_html=True
+        # ══ F. K線技術圖(U4 Phase 3-F v18.409:抽至 stock_sections.section_kline_chart)══
+        from src.ui.tabs.stock_sections import render_kline_chart_section
+        render_kline_chart_section(
+            sid2, name2, df2, price2, health2, rsi2,
+            show_ma_dict, t2_adjusted, t2d,
         )
-
-        # ── 近5日評分走勢（儲存本次評分到歷史）───────────────────
-        _score_hist_key = f'score_hist_{sid2}'
-        _score_hist = st.session_state.get(_score_hist_key, [])
-        # 加入今日評分
-        _today_str = datetime.date.today().strftime('%m/%d')
-        _last_entry = _score_hist[-1] if _score_hist else {}
-        if _last_entry.get('date') != _today_str:
-            _score_hist.append({
-                'date':    _today_str,
-                'health':  health2,
-                'rsi':     rsi2 or 0,
-                'total':   0,  # 多因子評分在 Tab3 中
-            })
-            _score_hist = _score_hist[-7:]  # 只保留最近7天
-            st.session_state[_score_hist_key] = _score_hist
-
-        if len(_score_hist) >= 2:
-            st.markdown('---')
-            st.markdown('##### 📈 健康度走勢（近5日）')
-            _fig_sh = go.Figure()
-            _sh_dates  = [r['date']   for r in _score_hist]
-            _sh_health = [r['health'] for r in _score_hist]
-            # 填色區間
-            _fig_sh.add_hrect(y0=80, y1=100, fillcolor='rgba(63,185,80,0.08)',  line_width=0)
-            _fig_sh.add_hrect(y0=50, y1=80,  fillcolor='rgba(210,153,34,0.05)', line_width=0)
-            _fig_sh.add_hrect(y0=0,  y1=50,  fillcolor='rgba(248,81,73,0.05)',  line_width=0)
-            _fig_sh.add_trace(go.Scatter(
-                x=_sh_dates, y=_sh_health, mode='lines+markers',
-                line=dict(color='#58a6ff', width=2.5),
-                marker=dict(size=8, color=[TRAFFIC_GREEN if v>=80 else (TRAFFIC_YELLOW if v>=50 else TRAFFIC_RED)
-                                           for v in _sh_health]),
-                text=[str(v) for v in _sh_health], textposition='top center',
-                hovertemplate='%{x}<br>健康度：%{y:.0f}<extra></extra>'
-            ))
-            _fig_sh.update_layout(
-                height=180, plot_bgcolor='#0e1117', paper_bgcolor='#0e1117',
-                font=dict(color='white',size=10), margin=dict(l=10,r=10,t=10,b=20),
-                xaxis=dict(gridcolor='#21262d'), yaxis=dict(gridcolor='#21262d',range=[0,105]),
-                showlegend=False)
-            st.plotly_chart(_fig_sh, width='stretch', config={'displayModeBar':False})
-            # 評分突變偵測（分數飆升≥20分）
-            if len(_sh_health) >= 2 and _sh_health[-1] - _sh_health[-2] >= 20:
-                st.success(f'🚀 評分突變！健康度從 {_sh_health[-2]:.0f} → {_sh_health[-1]:.0f}（+{_sh_health[-1]-_sh_health[-2]:.0f}），可能是主升段起點！')
 
         # ══ G. AI 五維報告 ══════════════════════════════════════
         st.markdown('---')
