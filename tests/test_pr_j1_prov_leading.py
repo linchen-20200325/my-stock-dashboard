@@ -134,7 +134,9 @@ class TestUIChipRendered:
     """tab_stock D2 chip 段已加 _src_chip。"""
 
     def test_tab_stock_has_source_chip(self):
-        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
+        # U4 Phase 3-D2 v18.408:D2 section 已抽至 stock_sections.section_d2_leading
+        src = open('src/ui/tabs/stock_sections/section_d2_leading.py',
+                   encoding='utf-8').read()
         assert '_src_chip' in src
         assert '📡 來源' in src
         assert "_ind.get('source_chain')" in src
