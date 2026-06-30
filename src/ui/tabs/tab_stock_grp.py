@@ -64,11 +64,13 @@ def render_stock_grp():
         compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
     )
     # app.py 內部 helper
-    from app import (
-        _get_loader, _load_cache, _save_cache,
+    from app import gemini_call, parse_stocks
+    # U5 B3-δ v18.405:5 fetcher + _get_loader 已抽至 L1
+    from shared.app_cache import _load_cache, _save_cache
+    from src.data.stock.app_stock_fetchers import (
+        _get_loader,
         fetch_dividend_data, fetch_financials,
         fetch_quarterly, fetch_quarterly_extra,
-        gemini_call, parse_stocks,
     )
     # v18.398 P5-B3-β R8:_fetch_stock_news 已抽至 L1 data
     from src.data.news import fetch_stock_news as _fetch_stock_news

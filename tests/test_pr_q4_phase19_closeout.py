@@ -70,7 +70,8 @@ class TestTwMacroProvenance(unittest.TestCase):
 class TestAppFetchQuarterlyExtraProvenance(unittest.TestCase):
 
     def test_fetch_quarterly_extra_attrs(self):
-        with open('app.py', encoding='utf-8') as f:
+        # U5 B3-δ v18.405:fetch_quarterly_extra 已抽至 src/data/stock/app_stock_fetchers.py
+        with open('src/data/stock/app_stock_fetchers.py', encoding='utf-8') as f:
             src = f.read()
         self.assertIn("setdefault('source',\n                    'app:fetch_quarterly_extra:data_loader.get_quarterly_bs_cf')",
                       src)
