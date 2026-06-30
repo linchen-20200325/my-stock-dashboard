@@ -118,6 +118,63 @@ def calc_bollinger(df, window=20, mult=2):
         return None
 
 
+# ══════════════════════════════════════════════════════════════
+# C5 v18.403:series-variant — 供 picker 篩選器類 caller 比較相鄰兩日 / 斜率 /
+# 寬度時序使用(現有 calc_kd / calc_bollinger 只回最後一日 scalar,不夠)。
+# ══════════════════════════════════════════════════════════════
+
+def calc_ma_series(close: pd.Series, window: int = 20) -> pd.Series:
+    """N 日移動平均 series(`close.rolling(window).mean()`)。
+
+    Args:
+        close: pd.Series 收盤價(任意 index)
+        window: rolling 視窗,預設 20
+
+    Returns:
+        pd.Series(MA),與 close 等長(前 N-1 個 NaN)
+    """
+    return close.rolling(window).mean()
+
+
+def calc_bollinger_width_series(close: pd.Series, window: int = 20,
+                                k: float = 2.0) -> pd.Series:
+    """布林通道寬度 series(已用 MA 標準化,單位:倍率)。
+
+    寬度公式 = (upper - lower) / MA = 4·std / MA。
+    Picker 用「近 5 日均值 vs 前 20 日均值」判斷開口 / 收斂。
+
+    Args:
+        close: pd.Series 收盤價
+        window: rolling 視窗,預設 20
+        k: σ 倍數,預設 2.0(即 ±2σ)
+
+    Returns:
+        pd.Series(width),與 close 等長(前 N-1 個 NaN);MA=0 時對應位置為 inf
+    """
+    ma = close.rolling(window).mean()
+    std = close.rolling(window).std()
+    return (4 * k * std / 2 / ma)  # = 2k·std / ma;k=2 → 4·std/ma
+
+
+def calc_kd_series(close: pd.Series, high: pd.Series, low: pd.Series,
+                   period: int = 9) -> tuple[pd.Series, pd.Series]:
+    """KD 隨機指標 series(EMA 平滑 com=2),供比較相鄰兩日(黃金/死亡交叉)。
+
+    Args:
+        close / high / low: pd.Series(同 index 等長)
+        period: RSV 窗口,預設 9
+
+    Returns:
+        (k_series, d_series),前 period-1 個 NaN
+    """
+    low_n = low.rolling(period).min()
+    high_n = high.rolling(period).max()
+    rsv = ((close - low_n) / (high_n - low_n).replace(0, 1)) * 100
+    k = rsv.ewm(com=2, adjust=False).mean()
+    d = k.ewm(com=2, adjust=False).mean()
+    return k, d
+
+
 def calc_vcp(df, n_swings=3):
     if df is None or len(df) < 30:
         return None  # relaxed to 30 days

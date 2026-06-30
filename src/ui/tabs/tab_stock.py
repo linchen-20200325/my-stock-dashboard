@@ -245,7 +245,8 @@ def render_tab_stock():
     from src.ui.render import kpi, signal_box, teacher_conclusion
     from src.ui.render import plot_combined_chart, plot_quarterly_chart, plot_revenue_chart
     # U2 v18.401:統一容器框樣式 SSOT(取代 4 處 inline <div style="background..."> 重複)
-    from src.ui.render.tab_sections import box_wrapper_close, box_wrapper_open
+    # U2-b v18.403:再補 border_left_banner 收 3 處 banner pattern
+    from src.ui.render.tab_sections import border_left_banner, box_wrapper_close, box_wrapper_open
     from src.data.core import fetch_financial_statements
     # app.py 內部 helper
     from app import (
@@ -897,8 +898,11 @@ padding:14px 18px;margin-bottom:12px;">
 
         if _ban_items:
             for _bi in _ban_items:
-                st.markdown(f'<div style="background:#2a0d0d;border-left:3px solid {TRAFFIC_RED};border-radius:0 6px 6px 0;padding:7px 12px;margin:3px 0;font-size:12px;color:{TRAFFIC_RED};">'
-                           f'⛔ {_bi}</div>', unsafe_allow_html=True)
+                st.markdown(
+                    border_left_banner(TRAFFIC_RED, f'⛔ {_bi}',
+                                       padding_y=7, margin_y=3, bg='#2a0d0d'),
+                    unsafe_allow_html=True,
+                )
         else:
             st.success('✅ 今日無禁止操作情況，可以正常評估')
 
@@ -1500,7 +1504,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         if _vcp_verdict or _bb_verdict:
             for _msg in [m for m in [_vcp_verdict, _bb_verdict] if m]:
                 _mc2 = TRAFFIC_GREEN if '✅' in _msg or '🟢' in _msg else ('#58a6ff' if '🔵' in _msg else '#8b949e')
-                st.markdown(f'<div style="border-left:3px solid {_mc2};padding:8px 12px;background:#0d1117;border-radius:0 6px 6px 0;font-size:12px;color:{_mc2};margin:4px 0;">{_msg}</div>', unsafe_allow_html=True)
+                st.markdown(border_left_banner(_mc2, _msg), unsafe_allow_html=True)
 
         # VCP+布林結論（安全版：加入 _msg 預設值）
         _msg = _msg if '_msg' in dir() else '⚪ VCP/布林資料不足'
@@ -1624,7 +1628,12 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             else:
                 _trend_msg = (f'{_trend_lbl}：股價低於 MA100'
                               ' — 宏爺：耐心等待多頭訊號，不摸底')
-            st.markdown(f'<div style="border-left:4px solid {_tc};padding:10px 14px;background:#0d1117;border-radius:0 8px 8px 0;font-size:13px;font-weight:700;color:{_tc};margin:8px 0;">{_trend_msg}</div>', unsafe_allow_html=True)
+            st.markdown(
+                border_left_banner(_tc, _trend_msg, border_width=4,
+                                   font_size=13, padding_y=10, padding_x=14,
+                                   margin_y=8, bold=True),
+                unsafe_allow_html=True,
+            )
 
         # K線均線結論（安全版）
         _trend_msg_safe = _trend_msg if '_trend_msg' in dir() else '⚪ K線資料不足'

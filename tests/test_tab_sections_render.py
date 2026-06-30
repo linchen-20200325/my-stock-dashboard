@@ -8,6 +8,7 @@ import pytest
 
 from src.ui.render.tab_sections import (
     alert_box,
+    border_left_banner,
     box_wrapper_close,
     box_wrapper_open,
     section_header,
@@ -75,6 +76,31 @@ class TestAlertBox:
         html = alert_box('success', '完成')
         assert 'border-left:4px solid #2ea043' in html
         assert '✅' in html
+
+
+class TestBorderLeftBanner:
+    def test_default_3px_border_dark_bg(self):
+        html = border_left_banner('#f85149', '⛔ 警示文字')
+        assert 'border-left:3px solid #f85149' in html
+        assert 'background:#0d1117' in html
+        assert '⛔ 警示文字' in html
+        assert 'color:#f85149' in html
+        assert 'font-weight:700' not in html  # 預設 non-bold
+
+    def test_custom_border_width_and_bold(self):
+        html = border_left_banner('#2ea043', 'OK', border_width=4, bold=True)
+        assert 'border-left:4px solid #2ea043' in html
+        assert 'font-weight:700' in html
+
+    def test_custom_bg_for_alert_style(self):
+        html = border_left_banner('#f85149', 'X', bg='#2a0d0d', padding_y=7, margin_y=3)
+        assert 'background:#2a0d0d' in html
+        assert 'padding:7px' in html
+        assert 'margin:3px 0' in html
+
+    def test_html_subtags_allowed_in_text(self):
+        html = border_left_banner('#58a6ff', '價格 <b>100.5</b>')
+        assert '<b>100.5</b>' in html
 
 
 class TestTrafficLightCard:

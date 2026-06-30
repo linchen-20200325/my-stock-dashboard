@@ -124,6 +124,36 @@ def alert_box(level: AlertLevel, title: str, text: str = '') -> str:
     )
 
 
+def border_left_banner(color: str, text: str, *,
+                       border_width: int = 3, font_size: int = 12,
+                       padding_y: int = 8, padding_x: int = 12,
+                       margin_y: int = 4, bold: bool = False,
+                       bg: str = '#0d1117') -> str:
+    """色帶 banner(border-left N px + 圓角右側 + 內距文字),取代 tab_stock.py
+    L900/L1503/L1627 重複的 `<div style="border-left:Npx solid {color};...">` pattern。
+
+    Args:
+        color: border 色 + 文字色(對齊 traffic light:TRAFFIC_RED/YELLOW/GREEN)
+        text: 內文(HTML 字串,caller 可含 <b>/<span> 等子標籤)
+        border_width: 左 border 寬 px(預設 3)
+        font_size: 文字大小 px(預設 12)
+        padding_y / padding_x: 內距 px(預設 8/12)
+        margin_y: 外距 px(預設 4)
+        bold: True → font-weight:700(預設 False)
+        bg: 背景色(預設 #0d1117 深灰)
+
+    Returns:
+        HTML 字串(caller 用 `st.markdown(unsafe_allow_html=True)`)
+    """
+    _weight = ';font-weight:700' if bold else ''
+    return (
+        f'<div style="border-left:{border_width}px solid {color};'
+        f'padding:{padding_y}px {padding_x}px;background:{bg};'
+        f'border-radius:0 6px 6px 0;font-size:{font_size}px;color:{color};'
+        f'margin:{margin_y}px 0{_weight};">{text}</div>'
+    )
+
+
 def traffic_light_card(label: str, color: str, value: str = '') -> str:
     """紅綠燈卡片(取代各檔自定 traffic light 樣式)。
 
