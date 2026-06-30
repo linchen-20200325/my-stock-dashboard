@@ -331,7 +331,11 @@ def fetch_adl(days: int = 60, token=None):
         _age = _tm2.time() - _os2.path.getmtime(_ck)
         if _age < 1800:
             try:
-                _c = _pk.load(open(_ck, 'rb'))
+                # v18.435 WONTFIX-翻案 Bug #2:原 `_pk.load(open(...))` 未用 with,
+                # 若 pickle.load raise,traceback 持有期間 file handle 不釋放;
+                # 改 with block 保證即時關閉。
+                with open(_ck, 'rb') as _f_adl:
+                    _c = _pk.load(_f_adl)
                 if _c is not None and not _c.empty:
                     _alog(f'[ADL] 快取命中 {len(_c)} 筆 (age={_age/60:.1f}min)')
                     return _c

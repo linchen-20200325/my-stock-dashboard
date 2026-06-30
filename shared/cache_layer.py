@@ -28,16 +28,20 @@ _CACHE_SENTINEL = object()
 
 
 def _pkl_get(key: str, ttl: int):
-    """讀取 pickle 快取;未命中或過期返回 _CACHE_SENTINEL。"""
+    """讀取 pickle 快取;未命中或過期返回 _CACHE_SENTINEL。
+
+    v18.435 WONTFIX-翻案 Bug #1:原 `if _v_ is not None: return _v_` 違反 docstring
+    宣告的 sentinel pattern — 把合法 cache 到的 None 當 miss 處理,觸發無謂重抓。
+    pickle 載入成功即視為命中,不論 value 真假;sentinel 才是 miss 唯一信號。
+    """
     import pickle as _pk_, time as _tm_
     _path = f'{_PKL_DIR}/{key}.pkl'
     try:
         if os.path.exists(_path) and _tm_.time() - os.path.getmtime(_path) < ttl:
             with open(_path, 'rb') as _f_:
                 _v_ = _pk_.load(_f_)
-            if _v_ is not None:
-                print(f'[Cache] ✅ {key} 命中（ttl={ttl}s）')
-                return _v_
+            print(f'[Cache] ✅ {key} 命中（ttl={ttl}s）')
+            return _v_
     except Exception as _e:
         # §1:壞 pickle / OSError 記錄但 fallback 重抓(_CACHE_SENTINEL 觸發呼叫端重新 fetch)
         print(f'[Cache] {key} pkl 載入失敗,重抓: {type(_e).__name__}: {_e}',

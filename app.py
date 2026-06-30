@@ -167,6 +167,11 @@ from shared.parse_helpers import parse_stocks  # noqa: F401
 # 任一把遇到 429（速率/額度滿）或 403（無效）時自動換下一把，全部用盡才報錯。
 _GEMINI_KEY_NAMES = ['GEMINI_API_KEY'] + [f'GEMINI_API_KEY_{_i}' for _i in range(2, 7)]
 _gemini_rr = [0]  # round-robin 起手索引（每次呼叫遞增）
+# v18.435 WONTFIX-翻案 Bug #3:多 Streamlit session 併發呼叫 gemini_call 時,
+# _gemini_rr[0] 的讀+寫非 atomic(兩條指令),會讓 round-robin 跳號 →
+# 同一把 hot key 連環打 → 提前 429。加 Lock 序列化 round-robin 增量。
+import threading as _threading_rr
+_gemini_rr_lock = _threading_rr.Lock()
 
 
 def _gemini_keys() -> list:
@@ -190,8 +195,10 @@ def gemini_call(prompt, max_tokens=2048):
     if not _keys:
         return '⚠️ 請設定 GEMINI_API_KEY（可另加 GEMINI_API_KEY_2 ~ _6 分散額度）'
     # round-robin 起手：不同呼叫從不同把 key 開始，自然把負載分散到各帳號
-    _start = _gemini_rr[0] % len(_keys)
-    _gemini_rr[0] = (_gemini_rr[0] + 1) % 1_000_000
+    # v18.435 WONTFIX-翻案 Bug #3:Lock 序列化讀+寫,避免併發 session 跳號
+    with _gemini_rr_lock:
+        _start = _gemini_rr[0] % len(_keys)
+        _gemini_rr[0] = (_gemini_rr[0] + 1) % 1_000_000
     _keys = _keys[_start:] + _keys[:_start]
     # 2026-03 有效模型：1.5系列全部退役，2.5為主力
     _models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash',
