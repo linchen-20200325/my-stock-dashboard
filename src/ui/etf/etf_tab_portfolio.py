@@ -44,13 +44,20 @@ def render_etf_portfolio(gemini_fn=None):
     # ─ Late imports（避免循環 import）─
     import numpy as np
     import pandas as pd
-    from src.ui.etf.etf_tab_single import (
-        _check_sector_exposure, _colored_box, _compute_etf_warroom_row,
-        _plot_correlation, _plot_holdings_overlap, _render_weakness_table,
-        render_etf_holdings, _teacher_conclusion,
-        build_holdings_overlap_matrix, compute_etf_weakness_row,
+    # v18.438 hotfix:同 etf_tab_single 端 —— 原 `from etf_tab_single import (...)` 為錯誤/循環
+    # 來源(這些 helper 實際在 etf_render(L4)/etf_calc(L2)/etf_fetch(L1),tab 從不 module-level
+    # 提供)。改 import 真正 SSOT 來源(§8.2 downward;L1 fetcher 屬 EX-PASSTHRU-1)。
+    from src.ui.render.etf_render import (   # 渲染類
+        _check_sector_exposure, _colored_box, _plot_correlation,
+        _plot_holdings_overlap, _render_weakness_table, render_etf_holdings,
+        _teacher_conclusion, macro_allocation_banner,
+    )
+    from src.compute.etf.etf_calc import (   # 計算類
+        _compute_etf_warroom_row, build_holdings_overlap_matrix,
+        compute_etf_weakness_row,
+    )
+    from src.data.etf.etf_fetch import (     # 抓取類
         fetch_etf_dividends, fetch_etf_holdings, fetch_etf_info, fetch_etf_price,
-        macro_allocation_banner,
     )
     # v18.335 PR-H3:壓力測試 + 年現金流彙整獨立函式 SSOT
     from src.compute.etf import calc_portfolio_stress_test
