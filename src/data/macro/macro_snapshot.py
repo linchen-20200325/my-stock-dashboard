@@ -21,6 +21,23 @@ key 的指標退「待取得」placeholder（誠實顯示無資料）。
 """
 from __future__ import annotations
 
+# v18.400 D1:EX-CACHE-1 letter-compliant — 9 fetcher 加 @st.cache_data(ttl=TTL_1HOUR)
+# 解決原 `_job_macro` 平行呼叫 9 個 fetcher 每次 rerun 重抓的效能與 API quota 問題。
+try:
+    import streamlit as st
+except ImportError:
+    class _NoOpST:
+        @staticmethod
+        def cache_data(*args, **kwargs):
+            if args and callable(args[0]):
+                return args[0]
+            return lambda f: f
+        cache_resource = cache_data
+        secrets: dict = {}
+    st = _NoOpST()  # noqa
+
+from shared.ttls import TTL_1HOUR
+
 
 def _make_proxy_session():
     """NAS proxy Session — 直接套用 proxy_helper.get_proxies(),retry adapter 含 429/503/504。
@@ -47,6 +64,7 @@ def _make_proxy_session():
     return _s
 
 
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_vix_block() -> dict:
     """VIX（^VIX, 3mo, 日線）→ `{'vix': {current, ma20, dates, values, date}}`。
 
@@ -82,6 +100,7 @@ def fetch_vix_block() -> dict:
         return {'_err_vix': str(_e_vix)[:80]}
 
 
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
     """抓 TW M1B/M2 YoY,3 路 fallback。
 
@@ -249,6 +268,7 @@ def compute_twii_bias(twii_local) -> dict | None:
     }
 
 
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_twii_2y_for_ma240():
     """抓 ^TWII 2 年 OHLCV(MA240 計算用)。
 
@@ -290,6 +310,7 @@ def fetch_twii_2y_for_ma240():
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_cpi_block(fred_api_key: str = '') -> dict:
     """美國核心 CPI YoY(CPILFESL,3 路 fallback)。
 
@@ -409,6 +430,7 @@ def fetch_cpi_block(fred_api_key: str = '') -> dict:
     return {'_err_cpi': ' | '.join(_cpi_errs) or 'all failed'}
 
 
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_us10y_block(fred_api_key: str = '') -> dict:
     """美 10 年期殖利率 FRED DGS10(R3 v18.405)。
 
@@ -460,6 +482,7 @@ def fetch_us10y_block(fred_api_key: str = '') -> dict:
     return {'us10y': {'_err': '|'.join(_errs), 'current': None, 'value': None}}
 
 
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
     """Fed Funds Rate(FEDFUNDS,2 路 fallback)。
 
@@ -534,6 +557,7 @@ def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
     return {'_err_fed_funds': ' | '.join(_ff_errs) or 'all failed'}
 
 
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_tw_pmi_block() -> dict:
     """台灣 PMI(CIER 中華經濟研究院,委派 macro_core.fetch_tw_pmi 4 段備援)。
 
@@ -548,6 +572,7 @@ def fetch_tw_pmi_block() -> dict:
     return {'_err_pmi': _result.get('_err_pmi', '4 段備援全失敗')}
 
 
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_ndc_block() -> dict:
     """NDC 景氣對策信號(StockFeel + MacroMicro 雙源,v10.57.0 復活)。
 
@@ -606,6 +631,7 @@ def fetch_ndc_block() -> dict:
     return {'_err_ndc': 'StockFeel + MacroMicro 雙源皆失敗'}
 
 
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     """台灣出口 YoY(5 路 fallback)。
 
