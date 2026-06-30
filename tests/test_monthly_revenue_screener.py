@@ -12,7 +12,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.ui.tabs import monthly_revenue_screener as mrs
+# v18.400 U1:compute 邏輯下沉至 src/compute/health/monthly_revenue_calc.py
+from src.compute.health import monthly_revenue_calc as mrs
 
 
 # ════════════════════════════════════════════════════════════════════

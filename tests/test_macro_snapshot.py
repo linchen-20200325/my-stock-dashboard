@@ -11,6 +11,17 @@ import pytest
 from src.data.macro import macro_snapshot  # P1-2 v18.373:搬到 L1
 
 
+@pytest.fixture(autouse=True)
+def _clear_macro_snapshot_cache():
+    """v18.400 D1:9 fetcher 加 @st.cache_data 後,monkeypatch 會被 cache 短路;
+    每個 test 前清掉 fetch_vix_block 的 cache,確保 mock 生效。"""
+    if hasattr(macro_snapshot.fetch_vix_block, 'clear'):
+        macro_snapshot.fetch_vix_block.clear()
+    yield
+    if hasattr(macro_snapshot.fetch_vix_block, 'clear'):
+        macro_snapshot.fetch_vix_block.clear()
+
+
 class TestFetchVixBlock:
     def test_parses_synthetic_close(self, monkeypatch):
         import yfinance

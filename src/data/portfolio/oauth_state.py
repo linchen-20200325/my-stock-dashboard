@@ -1,20 +1,24 @@
-"""src/ui/pages/oauth_state.py — OAuth 設定解析 + Google client（PR: ETF Portfolio OAuth）
+"""src/data/portfolio/oauth_state.py — OAuth 設定解析 + Google client(v18.400 D4 歸位)
 
-從 my-Fund-dashboard/ui/helpers/oauth_state.py 移植，並移除 policy_repository
-依賴（股票 dashboard 用 gsheet_portfolio.py 而非 repositories 模式）。
+§8.2 layer:L1 Data — OAuth client + token management;與 gsheet_portfolio 同層。
+原位於 `src/ui/pages/oauth_state.py`(命名錯誤,從未渲染 UI),v18.400 D4 搬正:
+- 解除 `src/data/portfolio/gsheet_portfolio.py:50/104/121` 的 L1→L5 反向違憲
+- `handle_oauth_callback()` 內含 st.success/st.error/st.rerun 屬 auth callback flash
+  本質(類比 web framework middleware),允許在 L1(類比 EX-L0-1 streamlit lifecycle)
 
 外部 API
 ========
 - _gsa_secret / _sheet_id_secret  (secrets 讀取)
-- _resolve_oauth_cfg()             (config 優先序：secrets > session_state；每次呼叫動態解析)
-- get_oauth_cfg() / is_oauth_configured()  (動態包裝；caller 必用這兩個，不要直接 import module-level)
+- _resolve_oauth_cfg()             (config 優先序:secrets > session_state;每次呼叫動態解析)
+- get_oauth_cfg() / is_oauth_configured()  (動態包裝;caller 必用這兩個,不要直接 import module-level)
 - _get_oauth_client()              (建 gspread client)
 - handle_oauth_callback()          (URL ?code= 換 token)
 
 呼叫端
 ======
-- app.py：sidebar 渲染前呼叫 handle_oauth_callback()
-- etf_tab_portfolio.py：取 _get_oauth_client() 給 gsheet_portfolio 用
+- app.py:sidebar 渲染前呼叫 handle_oauth_callback()
+- src/data/portfolio/gsheet_portfolio.py:取 _get_oauth_client() 給 gspread 用(L1→L1 同層)
+- src/ui/etf/etf_tab_portfolio.py:取 get_oauth_cfg / _gsa_secret / _sheet_id_secret 顯示登入狀態(L5→L1 EX-PASSTHRU-1)
 """
 from __future__ import annotations
 

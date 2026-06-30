@@ -246,8 +246,10 @@ def compute_one_stock_trend(
     mj_snaps: list[dict] = []
 
     # ── 1. 月營收 3 期 ──────────────────────────────────────────
+    # v18.400 U1:原 `from src.ui.tabs import ...` 為 L2→L5 反向違憲,改 import L1+L2 正確層
     try:
-        from src.ui.tabs import compute_yoy_mom, fetch_monthly_revenue
+        from src.compute.health.monthly_revenue_calc import compute_yoy_mom
+        from src.data.stock.monthly_revenue_fetcher import fetch_monthly_revenue
         df_rev = fetch_monthly_revenue(sid, months=15)
         stats = compute_yoy_mom(df_rev) if df_rev is not None and not df_rev.empty else {}
         yoy_last3 = (stats or {}).get("yoy_last3") or []

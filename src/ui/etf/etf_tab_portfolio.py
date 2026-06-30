@@ -814,7 +814,8 @@ def _render_oauth_panel(_gsp) -> bool:
     False 代表需要先完成設定，後續 UI 應跳過。
     """
     try:
-        from src.ui.pages import (
+        # v18.400 D4:oauth_state 從 src/ui/pages 歸位至 src/data/portfolio(L5→L1 EX-PASSTHRU-1)
+        from src.data.portfolio.oauth_state import (
             get_oauth_cfg, _gsa_secret, _sheet_id_secret,
         )
         from infra.oauth import build_authorize_url

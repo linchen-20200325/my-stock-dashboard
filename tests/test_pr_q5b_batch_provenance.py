@@ -41,7 +41,8 @@ class TestQ5bMarkersInSource(unittest.TestCase):
         self.assertIn('yfinance.Ticker', src)
 
     def test_monthly_revenue_screener_2(self):
-        src = self._read('src/ui/tabs/monthly_revenue_screener.py')
+        # v18.400 U1:fetch 下沉至 src/data/stock/monthly_revenue_fetcher.py
+        src = self._read('src/data/stock/monthly_revenue_fetcher.py')
         self.assertIn("'FinMind:TaiwanStockMonthRevenue:single'", src)
         self.assertIn("'FinMind:TaiwanStockMonthRevenue:batch(all-market)'", src)
 
