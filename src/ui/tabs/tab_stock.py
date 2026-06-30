@@ -244,6 +244,8 @@ def render_tab_stock():
     from shared.calc_helpers import calc_bias_pct
     from src.ui.render import kpi, signal_box, teacher_conclusion
     from src.ui.render import plot_combined_chart, plot_quarterly_chart, plot_revenue_chart
+    # U2 v18.401:統一容器框樣式 SSOT(取代 4 處 inline <div style="background..."> 重複)
+    from src.ui.render.tab_sections import box_wrapper_close, box_wrapper_open
     from src.data.core import fetch_financial_statements
     # app.py 內部 helper
     from app import (
@@ -825,7 +827,7 @@ padding:14px 18px;margin-bottom:12px;">
         _mc_cols = st.columns([3, 2])
 
         with _mc_cols[0]:
-            st.markdown('<div style="background:#0a1628;border:1px solid #1f6feb;border-radius:10px;padding:12px;">', unsafe_allow_html=True)
+            st.markdown(box_wrapper_open('primary', padding=12), unsafe_allow_html=True)
             st.markdown('**📋 SOP 進場強制檢核表（4關卡全通過才顯示建議）**')
             _wr_reg_chk = st.session_state.get('mkt_info', {}).get('regime','neutral')
             _price_chk  = float(df2['close'].iloc[-1]) if df2 is not None and not df2.empty else 0
@@ -978,7 +980,7 @@ padding:14px 18px;margin-bottom:12px;">
             _sig_cols = st.columns(3)
 
             with _sig_cols[0]:
-                st.markdown('<div style="background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:10px;">', unsafe_allow_html=True)
+                st.markdown(box_wrapper_open('neutral'), unsafe_allow_html=True)
                 st.markdown('**📈 進場訊號**')
                 _entry = []
                 if _bull_align:
@@ -1007,7 +1009,7 @@ padding:14px 18px;margin-bottom:12px;">
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with _sig_cols[1]:
-                st.markdown('<div style="background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:10px;">', unsafe_allow_html=True)
+                st.markdown(box_wrapper_open('neutral'), unsafe_allow_html=True)
                 st.markdown('**📉 減碼/出場訊號**')
                 _exit = []
                 if _bear_align:
@@ -1049,7 +1051,7 @@ padding:14px 18px;margin-bottom:12px;">
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with _sig_cols[2]:
-                st.markdown('<div style="background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:10px;">', unsafe_allow_html=True)
+                st.markdown(box_wrapper_open('neutral'), unsafe_allow_html=True)
                 st.markdown('**🎯 目標 + 停損**')
                 st.markdown(f'<div style="font-size:12px;color:#c9d1d9;padding:2px 0;">📌 現價：<b>{_p2:.2f}</b></div>', unsafe_allow_html=True)
                 st.markdown(f'<div style="font-size:12px;color:{TRAFFIC_GREEN};padding:2px 0;">🎯 初步目標（策略3 一比一對稱）：<b>{_target1:.2f}</b></div>', unsafe_allow_html=True)
