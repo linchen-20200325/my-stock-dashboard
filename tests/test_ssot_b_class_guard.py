@@ -41,8 +41,10 @@ class TestDivergenceHarmonized:
 
     def test_consumers_use_standard(self):
         # P3-D6 v18.390:_ov_jqp 表達式搬至 section_overview.py;改掃合集。
+        # U4 Phase 3-A v18.407:健康度標籤搬至 section_health_score.py;同改合集。
         tm = _src("src/ui/tabs/tab_macro.py") + _src("src/ui/tabs/macro/section_overview.py")
-        ts = _src("src/ui/tabs/tab_stock.py")
+        ts = (_src("src/ui/tabs/tab_stock.py")
+              + _src("src/ui/tabs/stock_sections/section_health_score.py"))
         # 融資 SQL 卡片 + 廣度 KPI 皆改用標準常數,不得殘留分歧
         assert "MARGIN_BALANCE_WARN_HIGH_THRESHOLD_YI" not in tm
         assert "BREADTH_KPI_YELLOW_PCT" not in tm
