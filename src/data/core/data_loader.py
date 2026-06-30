@@ -917,19 +917,11 @@ class StockDataLoader:
         # ── 方案B: FinMind TaiwanStockMonthRevenue（API，需Token）──
         if df_revenue is None and _tok:
             try:
-                import requests as _rq_fm_rv
-                _r = _rq_fm_rv.get(
-                    FINMIND_API_URL,
-                    params={'dataset': 'TaiwanStockMonthRevenue',
-                            'data_id': stock_id,
-                            'start_date': start_str,
-                            'token': _tok},
-                    headers={'Authorization': f'Bearer {_tok}'},
-                    timeout=20)
-                _j = _r.json()
-                print(f'[FM-Rev] {stock_id}: status={_j.get("status")} rows={len(_j.get("data",[]))}')
-                if _j.get('status') == 200 and _j.get('data'):
-                    _df = _pd_rv.DataFrame(_j['data'])
+                from src.data.core.finmind_client import finmind_get  # D5 step2 v18.437 SSOT client
+                _df = finmind_get('TaiwanStockMonthRevenue', data_id=stock_id,
+                                  start_date=start_str, token=_tok, timeout=20)
+                print(f'[FM-Rev] {stock_id}: rows={len(_df)}')
+                if not _df.empty:
                     # 欄位：date, revenue, revenue_year, revenue_month
                     # 統一欄位名
                     _rename = {}
@@ -1015,24 +1007,18 @@ class StockDataLoader:
             df_fin = None
             _qtr_src = 'unknown'   # v18.202 E2：季財報資料源（finmind_rest / finmind_sdk / yfinance / missing）
             try:
-                import os as _os_q; import requests as _rq_q
+                import os as _os_q
+                from src.data.core.finmind_client import finmind_get  # D5 step2 v18.437 SSOT client
                 _tok_q = _os_q.environ.get('FINMIND_TOKEN', '')
                 # 免費版：TaiwanStockFinancialStatement（無s）；付費版：有s；兩個都試
                 _df_q_tmp = None
                 for _ds_q in ['TaiwanStockFinancialStatement', 'TaiwanStockFinancialStatements']:
                     try:
-                        _pq = {'dataset': _ds_q, 'data_id': stock_id, 'start_date': start_str}
-                        if _tok_q: _pq['token'] = _tok_q  # FinMind v4 需要 token 在 params
-                        _resp_q = _rq_q.get(FINMIND_API_URL,
-                            params=_pq,
-                            headers={'Authorization': f'Bearer {_tok_q}'} if _tok_q else {},
-                            timeout=25)
-                        _jd_q = _resp_q.json()
-                        print(f'[季財報REST/{_ds_q}] {stock_id} status={_jd_q.get("status")}, rows={len(_jd_q.get("data",[]))}')
-                        if _jd_q.get('data'):
-                            _types = list(set(r.get('type','') for r in _jd_q['data'][:30]))
-                        if _jd_q.get('status') == 200 and _jd_q.get('data'):
-                            _df_q_tmp = pd.DataFrame(_jd_q['data'])
+                        _df_resp_q = finmind_get(_ds_q, data_id=stock_id,
+                                                 start_date=start_str, token=_tok_q, timeout=25)
+                        print(f'[季財報REST/{_ds_q}] {stock_id} rows={len(_df_resp_q)}')
+                        if not _df_resp_q.empty:
+                            _df_q_tmp = _df_resp_q
                             break
                     except Exception as _eq2:
                         print(f'[季財報REST/{_ds_q}] {_eq2}')
