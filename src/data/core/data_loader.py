@@ -2146,10 +2146,23 @@ def fetch_industry_category(sid: str) -> str:
                         params=_p, timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
+            try:
+                from src.data.core.provenance import prov_log
+                prov_log('fetch_industry_category',
+                         'FinMind:TaiwanStockInfo', 'empty', ticker=sid)
+            except Exception:
+                pass
             return ''
         for _row in _data:
             _ind = _row.get('industry_category', '')
             if _ind:
+                try:
+                    from src.data.core.provenance import prov_log
+                    prov_log('fetch_industry_category',
+                             'FinMind:TaiwanStockInfo',
+                             f'str:{_ind}', ticker=sid)
+                except Exception:
+                    pass
                 return str(_ind)
         return ''
     except Exception:
@@ -2208,6 +2221,13 @@ def fetch_bps_from_finmind(sid: str) -> float:
         _bps = _equity / _shares_outstanding
         if not (0.1 < _bps < 5000):
             return 0.0
+        try:
+            from src.data.core.provenance import prov_log
+            prov_log('fetch_bps_from_finmind',
+                     'FinMind:TaiwanStockBalanceSheet',
+                     f'float:{_bps:.2f}:as_of={_latest}', ticker=sid)
+        except Exception:
+            pass
         return float(_bps)
     except Exception:
         return 0.0
@@ -2221,6 +2241,7 @@ def fetch_bps(sid: str) -> float:
     """
     _bps_fm = fetch_bps_from_finmind(sid)
     if _bps_fm > 0:
+        # fetch_bps_from_finmind 內已 prov_log,fetch_bps 不重複
         return _bps_fm
     try:
         import yfinance as _yf_pb
@@ -2229,6 +2250,14 @@ def fetch_bps(sid: str) -> float:
                 _info_pb = _yf_pb.Ticker(f'{sid}{_sfx_pb}').info or {}
                 _bps_v = _info_pb.get('bookValue')
                 if _bps_v and float(_bps_v) > 0:
+                    try:
+                        from src.data.core.provenance import prov_log
+                        prov_log('fetch_bps',
+                                 f'yfinance:Ticker({sid}{_sfx_pb}).info.bookValue',
+                                 f'float:{_bps_v}:fallback_from=FinMind_BS',
+                                 ticker=sid)
+                    except Exception:
+                        pass
                     return float(_bps_v)
             except Exception:
                 continue
