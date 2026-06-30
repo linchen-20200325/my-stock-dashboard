@@ -231,47 +231,15 @@ def taifex_post(url, form, _timeout_get=2, _timeout_post=5, _max_retry=1):
 # FinMind API
 # ════════════════════════════════════════════════════════
 def finmind_get(dataset, data_id, start_ymd, end_ymd, token=""):
+    """FinMind API v4 查詢 → DataFrame(data_id 空字串不送出避免 422;自動重試 2 次)。
+
+    D5 v18.437:實作下沉 `src/data/core/finmind_client.py`(L1 SSOT,收斂全專案
+    ~12 處手寫 FinMind GET 樣板)。本處保留原 positional 介面 + 行為
+    (start/end 皆送、timeout=25、retries=2),thin re-export 不影響既有 caller。
     """
-    呼叫 FinMind API v4，回傳 DataFrame
-    ・data_id 空字串不送出（避免 422）
-    ・自動重試 2 次，每次獨立 Session
-    """
-    params = {
-        "dataset":    dataset,
-        "start_date": ymd_to_dash(start_ymd),
-        "end_date":   ymd_to_dash(end_ymd),
-    }
-    if data_id:
-        params["data_id"] = data_id
-    if token:
-        params["token"] = token
-    hdrs = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json",
-    }
-    if token:
-        hdrs["Authorization"] = f"Bearer {token}"
-    for _attempt in range(2):
-        try:
-            sess = requests.Session()
-            sess.headers.update(hdrs)
-            r = sess.get(FINMIND_URL, params=params, timeout=25)
-            sess.close()
-            d = r.json()
-            status = d.get("status")
-            if status == 200:
-                df = pd.DataFrame(d.get("data", []))
-                print(f"[FinMind] {dataset} ✅ {len(df)} rows")
-                return df
-            else:
-                print(f"[FinMind] {dataset} HTTP={r.status_code} status={status} msg={d.get('msg','')}")
-                return pd.DataFrame()
-        except Exception as _fe:
-            print(f"[FinMind] {dataset} attempt {_attempt+1} ❌ {_fe}")
-            if _attempt == 1:
-                return pd.DataFrame()
-            time.sleep(1)
-    return pd.DataFrame()
+    from src.data.core.finmind_client import finmind_get as _fm_client
+    return _fm_client(dataset, data_id=data_id, start_date=start_ymd,
+                      end_date=end_ymd, token=token, timeout=25, retries=2)
 
 @_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def finmind_fut_oi(start_ymd, end_ymd, token=""):
