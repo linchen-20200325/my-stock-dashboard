@@ -799,34 +799,9 @@ padding:14px 18px;margin-bottom:12px;">
             _tp1_p, _tp2_p, _hi20_p, _lo20_p, _sl_p,
             gemini_call,
         )
-        # ══ 龍頭預警區（孫慶龍龍多策略最高等級）══════════════════
-        # cl2 / cx2 為 FinMind 原始元值；對「股本」算真實比例（取代舊版 >0 假判斷）
-        _is_dragon = False
-        _dragon_reasons = []
-        try:
-            _capital = _fetch_share_capital(sid2)  # 股本（元）
-            if _capital > 0:
-                if cl2 is not None and cl2 > 0 and cl2 / _capital >= 0.5:
-                    _dragon_reasons.append(
-                        f'合約負債 {cl2/1e8:.1f}億（達股本 {cl2/_capital*100:.0f}% → 未來3-6月訂單保障）')
-                    _is_dragon = True
-                if cx2 is not None and cx2 > 0 and cx2 / _capital >= 0.8:
-                    _dragon_reasons.append(
-                        f'資本支出 {cx2/1e8:.1f}億（達股本 {cx2/_capital*100:.0f}% → 大擴廠，看好未來需求）')
-                    _is_dragon = True
-        except Exception:
-            pass
-
-        if _is_dragon:
-            st.markdown(
-                '<div style="background:linear-gradient(135deg,#2a1f00,#3d2d00);'
-                'border:2px solid #ffd700;border-radius:10px;padding:12px 16px;margin-bottom:10px;">'
-                '<div style="font-size:14px;font-weight:900;color:#ffd700;margin-bottom:6px;">'
-                '🏆 龍頭預警區 — 極稀有高成長標的</div>' +
-                ''.join(f'<div style="font-size:12px;color:#ffe066;padding:2px 0;">• {r}</div>' for r in _dragon_reasons) +
-                '<div style="font-size:11px;color:#997a00;margin-top:4px;">'
-                '策略1：「不要聽老闆說什麼，要看他做什麼」— 最誠實的領先指標</div>'
-                '</div>', unsafe_allow_html=True)
+        # ══ 龍頭預警區(U4 Phase 3-Dragon v18.411:抽至 stock_sections.section_dragon_alert)══
+        from src.ui.tabs.stock_sections import render_dragon_alert_section
+        render_dragon_alert_section(cl2, cx2, _xsec.get("capital", 0))
 
         st.markdown(section_header_html("tech", **_sec_lv["tech"]), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
         # ══ A. 健康度評分(U4 Phase 3-A v18.407:抽至 stock_sections.section_health_score)══
@@ -840,53 +815,9 @@ padding:14px 18px;margin-bottom:12px;">
         from src.ui.tabs.stock_sections import render_vcp_bollinger_section
         render_vcp_bollinger_section(sid2, vcp2, bb2)
 
-        # ══ 籌碼定位（近 20 日外資+投信 vs 總成交量）═══════════
-        # v18.308 Bug2 PR-D：籌碼原地升級為一級可導航桶（加 bucket header + anchor）。
-        # 不物理搬移 code：_con20/_cty20/_sig20 於下方計算、L3203 AI 摘要跨段引用，
-        # 搬移會讓 AI 摘要永遠落 fallback「未取得」= §1 靜默降級，故原地升級。
-        st.markdown('---')
-        st.markdown(section_header_html("chips", **_sec_lv["chips"]), unsafe_allow_html=True)
-        st.caption('🔰 指標白話：集中度＝大戶（外資+投信）淨買量佔總成交量的比例，正值越高＝大戶默默吸貨（偏多）、'
-                   '負值＝倒貨；延續性＝最近多少比例的交易日持續買超。資料直接取自下方 K 線的三大法人/成交量。')
-        # v18.196 直算（df2 已含三大法人欄）— 移除 spinner 避免視覺跳動、
-        # 移除 analyze_20d_chips(sid2) fallback 避免第二次 FinMind API 呼叫
-        _chip20 = analyze_20d_chips_from_df(df2)
-        if _chip20.get('error'):
-            st.caption(f'⚫ 籌碼集中度取得失敗：{_chip20["error"]}')
-        else:
-            _sig20  = _chip20['signal']
-            _con20  = _chip20['concentration']   # % 集中度
-            _cty20  = _chip20['continuity']       # % 延續性
-            _days20 = _chip20['days']
-            _pos20  = _chip20['pos_days']
-            _sig20_c = (TRAFFIC_RED if '吸籌' in _sig20
-                        else ('#da3633' if '倒貨' in _sig20 else TRAFFIC_YELLOW))
-            st.markdown(
-                f'<div style="background:#0d1117;border:1px solid {_sig20_c};'
-                f'border-radius:8px;padding:10px 14px;margin:6px 0;">'
-                f'<span style="font-size:14px;font-weight:900;color:{_sig20_c};">'
-                f'{_sig20}</span>'
-                f'<span style="font-size:11px;color:#8b949e;margin-left:12px;">'
-                f'近 {_days20} 日 | 外+投累計 {_chip20["total_net_k"]:.1f}千張 | '
-                f'成交量 {_chip20["total_vol_k"]:.1f}千張</span>'
-                f'</div>', unsafe_allow_html=True)
-            _g20c1, _g20c2 = st.columns(2)
-            with _g20c1:
-                st.metric(
-                    label='指標A：集中度（外+投淨買／總量）',
-                    value=f'{_con20:+.2f}%',
-                    delta='吸籌' if _con20 >= 0 else '倒貨',
-                    delta_color='normal' if _con20 >= 0 else 'inverse',
-                    help='> +5% 且延續性 > 50% → 大戶吸籌；< -5% → 大戶倒貨')
-                st.progress(min(abs(_con20) / 20.0, 1.0),
-                            text=f'集中度絕對值 {abs(_con20):.1f}% / 20%上限')
-            with _g20c2:
-                st.metric(
-                    label=f'指標B：延續性（{_days20}日中買超 {_pos20} 天）',
-                    value=f'{_cty20:.0f}%',
-                    help='> 50% 表示多數交易日外+投持續買超')
-                st.progress(_cty20 / 100.0,
-                            text=f'買超天數佔比 {_cty20:.0f}%')
+        # ══ 籌碼定位 20 日(U4 Phase 3-Chips20D v18.411:抽至 stock_sections.section_chips_20d)══
+        from src.ui.tabs.stock_sections import render_chips_20d_section
+        render_chips_20d_section(df2, _sec_lv["chips"])
 
         # ══ F. K線技術圖(U4 Phase 3-F v18.409:抽至 stock_sections.section_kline_chart)══
         from src.ui.tabs.stock_sections import render_kline_chart_section
