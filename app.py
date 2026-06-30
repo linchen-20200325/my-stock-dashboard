@@ -106,8 +106,9 @@ st.set_page_config(page_title='台股AI戰情室 v3.0', layout='wide',
                    page_icon='📊', initial_sidebar_state='collapsed')
 
 # ── OAuth callback：URL 帶 ?code= 時自動換 token（必須早於其他 query_params 操作）
+# v18.400 D4:oauth_state 已從 src/ui/pages 歸位 src/data/portfolio
 try:
-    from src.ui.pages import handle_oauth_callback as _oauth_cb
+    from src.data.portfolio.oauth_state import handle_oauth_callback as _oauth_cb
     _oauth_cb()
 except Exception as _oauth_err:
     print(f'[oauth callback] {_oauth_err}')
@@ -784,7 +785,7 @@ with st.sidebar:
     st.markdown('---')
     st.markdown('### 🔐 Google 帳號')
     try:
-        from src.ui.pages import (
+        from src.data.portfolio.oauth_state import (
             get_oauth_cfg as _sb_get_cfg,
             _gsa_secret as _sb_gsa,
             _sheet_id_secret as _sb_sid,

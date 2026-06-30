@@ -26,7 +26,8 @@ Schema (單一 worksheet `portfolios`)：
 ====
 - 純函式 API：is_configured / list_portfolios / load_portfolio / save_portfolio / delete_portfolio
 - 例外不吞，往上拋給 caller（UI 層用 try/except 顯示 st.error）
-- OAuth client 由 oauth_state._get_oauth_client() 提供
+- OAuth client 由 src.data.portfolio.oauth_state._get_oauth_client() 提供
+  (v18.400 D4:原 oauth_state 誤放 src/ui/pages/,已歸位 src/data/portfolio/ 同層)
 """
 from __future__ import annotations
 
@@ -43,11 +44,11 @@ _HEADERS = ['name', 'ticker', 'lots', 'avg_price', 'updated_at']
 
 
 def _oauth_active() -> bool:
-    """OAuth 模式：已設 OAuth Client + 已登入 + 有 sheet id。"""
+    """OAuth 模式:已設 OAuth Client + 已登入 + 有 sheet id。"""
     if st is None:
         return False
     try:
-        from src.ui.pages import is_oauth_configured
+        from src.data.portfolio.oauth_state import is_oauth_configured
     except Exception:
         return False
     if not is_oauth_configured():
@@ -101,7 +102,7 @@ def _has_oauth_tokens() -> bool:
     if st is None:
         return False
     try:
-        from src.ui.pages import is_oauth_configured
+        from src.data.portfolio.oauth_state import is_oauth_configured
     except Exception:
         return False
     if not is_oauth_configured():
@@ -118,7 +119,7 @@ def _build_client():
     讓「列檔挑 Sheet」流程能在 sheet_id 還沒設定前先建 client。
     """
     if _has_oauth_tokens():
-        from src.ui.pages import _get_oauth_client
+        from src.data.portfolio.oauth_state import _get_oauth_client
         cli = _get_oauth_client()
         if cli is not None:
             return cli
