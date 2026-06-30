@@ -134,3 +134,7 @@ try:
 except ImportError:
     FINMIND_TOKEN = _os.environ.get('FINMIND_TOKEN', '')
 
+# Batch 10 v18.412 R-FETCH「附帶」:FinMind API endpoint SSOT
+# 原 22 檔散落 hardcoded URL(37 occurrences),改 import 收 SSOT
+FINMIND_API_URL = 'https://api.finmindtrade.com/api/v4/data'
+

@@ -103,7 +103,7 @@ def _yf_dl(symbol, **kwargs):
                 _os_yfd.environ[k] = v
 
 _TWSE_DL = _bps_dl()
-from src.config import get_stock_name
+from src.config import FINMIND_API_URL, get_stock_name  # Batch 10 v18.412
 
 # S-H1 v18.244:`safe_fetch_strict` 為死碼(grep 全 repo 唯一引用為定義本身),
 # 已刪除以同時修復 §8.2「L1 不得用 st.session_state」違憲(原使用
@@ -357,7 +357,7 @@ def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> 
         if _token:
             _params['token'] = _token
         _r = _bps_dl().get(
-            'https://api.finmindtrade.com/api/v4/data',
+            FINMIND_API_URL,
             params=_params,
             headers={'Authorization': f'Bearer {_token}'} if _token else {},
             timeout=20)
@@ -398,7 +398,7 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
         if _token:
             _params['token'] = _token
         _r = _bps_dl().get(
-            'https://api.finmindtrade.com/api/v4/data',
+            FINMIND_API_URL,
             params=_params,
             headers={'Authorization': f'Bearer {_token}'} if _token else {},
             timeout=20)
@@ -815,7 +815,7 @@ class StockDataLoader:
         if _tok and df_revenue is None:
             try:
                 _r_fm0 = _bps_dl().get(
-                    'https://api.finmindtrade.com/api/v4/data',
+                    FINMIND_API_URL,
                     params={'dataset':'TaiwanStockMonthRevenue',
                             'data_id':stock_id, 'start_date':start_str,
                             'token':_tok},
@@ -840,7 +840,7 @@ class StockDataLoader:
         if df_revenue is None and _tok:
             try:
                 _rfm0 = _bps_dl().get(
-                    'https://api.finmindtrade.com/api/v4/data',
+                    FINMIND_API_URL,
                     params={'dataset':'TaiwanStockMonthRevenue',
                             'data_id':stock_id,'start_date':start_str,'token':_tok},
                     headers={'Authorization':f'Bearer {_tok}'}, timeout=20)
@@ -919,7 +919,7 @@ class StockDataLoader:
             try:
                 import requests as _rq_fm_rv
                 _r = _rq_fm_rv.get(
-                    'https://api.finmindtrade.com/api/v4/data',
+                    FINMIND_API_URL,
                     params={'dataset': 'TaiwanStockMonthRevenue',
                             'data_id': stock_id,
                             'start_date': start_str,
@@ -1023,7 +1023,7 @@ class StockDataLoader:
                     try:
                         _pq = {'dataset': _ds_q, 'data_id': stock_id, 'start_date': start_str}
                         if _tok_q: _pq['token'] = _tok_q  # FinMind v4 需要 token 在 params
-                        _resp_q = _rq_q.get('https://api.finmindtrade.com/api/v4/data',
+                        _resp_q = _rq_q.get(FINMIND_API_URL,
                             params=_pq,
                             headers={'Authorization': f'Bearer {_tok_q}'} if _tok_q else {},
                             timeout=25)
@@ -1454,7 +1454,7 @@ class StockDataLoader:
             def _fm_fetch(dataset):
                 _p = {'dataset': dataset, 'data_id': stock_id, 'start_date': _start}
                 if _tok: _p['token'] = _tok
-                _r = _bps_dl().get('https://api.finmindtrade.com/api/v4/data',
+                _r = _bps_dl().get(FINMIND_API_URL,
                                     params=_p, headers=_hdrs, timeout=20)
                 _j = _r.json()
                 print(f'[BS/CF] {stock_id} {dataset}: status={_j.get("status")} rows={len(_j.get("data",[]))}')
@@ -1654,7 +1654,7 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
             _p["token"] = _tok
         try:
             _r = _rq_ffs.get(
-                "https://api.finmindtrade.com/api/v4/data",
+                FINMIND_API_URL,
                 params=_p, headers=_hdrs, timeout=20,
             )
             _j = _r.json()
@@ -2142,7 +2142,7 @@ def fetch_industry_category(sid: str) -> str:
         _p = {'dataset': 'TaiwanStockInfo', 'data_id': sid}
         if _tok:
             _p['token'] = _tok
-        _r = _rq_ic.get('https://api.finmindtrade.com/api/v4/data',
+        _r = _rq_ic.get(FINMIND_API_URL,
                         params=_p, timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
@@ -2174,7 +2174,7 @@ def fetch_bps_from_finmind(sid: str) -> float:
         _p = {'dataset': 'TaiwanStockBalanceSheet', 'data_id': sid, 'start_date': _start}
         if _tok:
             _p['token'] = _tok
-        _r = _rq_bf.get('https://api.finmindtrade.com/api/v4/data',
+        _r = _rq_bf.get(FINMIND_API_URL,
                         params=_p, timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:

@@ -36,6 +36,7 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.thresholds import YIELD_HIGH
+from src.config import FINMIND_API_URL  # Batch 10 v18.412 SSOT
 
 
 def render_tab_stock_picker(gemini_fn=None, candidates=None,
@@ -378,7 +379,7 @@ def _fetch_quarterly_is(stock_id: str) -> dict:
               'data_id': stock_id, 'start_date': _start}
         if _tok:
             _p['token'] = _tok
-        _r = _rq_q.get('https://api.finmindtrade.com/api/v4/data',
+        _r = _rq_q.get(FINMIND_API_URL,
                        params=_p, timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
@@ -595,7 +596,7 @@ def _check_contract_liab_yoy(stock_id: str) -> str:
               'data_id': stock_id, 'start_date': _start}
         if _tok:
             _p['token'] = _tok
-        _r = _rq_cl.get('https://api.finmindtrade.com/api/v4/data',
+        _r = _rq_cl.get(FINMIND_API_URL,
                          params=_p, timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
@@ -761,7 +762,7 @@ def _check_institutional_buying(stock_id: str) -> str:
               'data_id': stock_id, 'start_date': _start}
         if _tok:
             _p['token'] = _tok
-        _r = _rq_in.get('https://api.finmindtrade.com/api/v4/data',
+        _r = _rq_in.get(FINMIND_API_URL,
                          params=_p, timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
@@ -810,7 +811,7 @@ def _check_major_holders(stock_id: str) -> str:
               'data_id': stock_id, 'start_date': _start}
         if _tok:
             _p['token'] = _tok
-        _r = _rq_mh.get('https://api.finmindtrade.com/api/v4/data',
+        _r = _rq_mh.get(FINMIND_API_URL,
                          params=_p, timeout=15)
         _j = _r.json() if _r.status_code == 200 else {}
         _data = _j.get('data', [])

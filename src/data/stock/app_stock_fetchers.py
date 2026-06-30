@@ -23,6 +23,8 @@ import os
 
 import pandas as pd
 
+from src.config import FINMIND_API_URL  # Batch 10 v18.412 SSOT
+
 try:
     import streamlit as st
 except ImportError:
@@ -144,7 +146,7 @@ def fetch_dividend_data(sid):
         end = datetime.date.today()
         # First try REST API with proper auth
         _div_resp = _make_proxy_session().get(
-            'https://api.finmindtrade.com/api/v4/data',
+            FINMIND_API_URL,
             params={'dataset': 'TaiwanStockDividend', 'data_id': sid,
                     'start_date': (end - datetime.timedelta(days=365 * 6)).strftime('%Y-%m-%d')},
             headers={'Authorization': f'Bearer {_get_finmind_token()}'}, timeout=20)
@@ -273,7 +275,7 @@ def fetch_financials(sid, industry: str = ""):
         _hdrs = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
         if _tok:
             _hdrs["Authorization"] = f"Bearer {_tok}"
-        _r = _rq_f.get("https://api.finmindtrade.com/api/v4/data",
+        _r = _rq_f.get(FINMIND_API_URL,
                        params=_params, headers=_hdrs, timeout=20)
         _j = _r.json()
         _rows = _j.get("data", [])
@@ -345,7 +347,7 @@ def fetch_financials(sid, industry: str = ""):
         _hdrs2 = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
         if _tok:
             _hdrs2["Authorization"] = f"Bearer {_tok}"
-        _r2 = _rq_f.get("https://api.finmindtrade.com/api/v4/data",
+        _r2 = _rq_f.get(FINMIND_API_URL,
                         params=_params2, headers=_hdrs2, timeout=20)
         _j2 = _r2.json()
         _rows2 = _j2.get("data", [])
