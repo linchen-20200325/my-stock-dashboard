@@ -97,18 +97,30 @@ class TestTabStockNoPrivateFetchers:
         assert 'def _fetch_industry_category(' not in src
 
 
+def _grp_combined_src() -> str:
+    """v18.413+ 拆檔後,grp tab 邏輯散在 tab_stock_grp + stock_grp_sections/*.py 全 file。"""
+    import glob
+    paths = ['src/ui/tabs/tab_stock_grp.py']
+    paths += sorted(glob.glob('src/ui/tabs/stock_grp_sections/*.py'))
+    chunks = []
+    for p in paths:
+        with open(p, encoding='utf-8') as f:
+            chunks.append(f.read())
+    return '\n'.join(chunks)
+
+
 class TestTabStockGrpHasPB:
     def test_imports_pb_ssot(self):
-        """組合 Tab 已 import P/B SSOT + data_loader fetcher。"""
-        src = open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8').read()
+        """組合 Tab(含 sections)已 import P/B SSOT + data_loader fetcher。"""
+        src = _grp_combined_src()
         assert 'classify_pb_level' in src
         assert 'get_pb_bands' in src
         assert 'fetch_bps' in src
         assert 'fetch_industry_category' in src
 
     def test_pb_eval_column_added(self):
-        """組合 Tab 多因子排行已加 P/B 評價欄。"""
-        src = open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8').read()
+        """組合 Tab(含 sections)多因子排行已加 P/B 評價欄。"""
+        src = _grp_combined_src()
         assert "'P/B評價'" in src
 
 

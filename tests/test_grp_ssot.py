@@ -38,35 +38,59 @@ class TestScoringEngineGradeSSOT:
         assert "total >= 55" not in src
 
 
+def _grp_combined_src() -> str:
+    """v18.413+ 拆檔後,grp tab 邏輯散在 tab_stock_grp + stock_grp_sections/*.py 全 file。
+
+    本 helper 合併讀,供守衛測「字串存在於組合 tab 任一 module」。
+    """
+    import glob
+
+    paths = ['src/ui/tabs/tab_stock_grp.py']
+    paths += sorted(glob.glob('src/ui/tabs/stock_grp_sections/*.py'))
+    chunks = []
+    for p in paths:
+        with open(p, encoding='utf-8') as f:
+            chunks.append(f.read())
+    return '\n'.join(chunks)
+
+
 class TestOldScoreRetired:
     def test_no_old_score_variable_or_column(self):
-        from src.ui.tabs import tab_stock_grp
-        src = open(tab_stock_grp.__file__, encoding="utf-8").read()
+        src = _grp_combined_src()
         assert "old_score4" not in src          # 計算變數已刪
         assert "'舊評分':" not in src            # dict key / column_config 已刪
         assert "['舊評分'," not in src           # col_order 已刪
 
     def test_elim_sorts_by_pure_health(self):
-        from src.ui.tabs import tab_stock_grp
-        src = open(tab_stock_grp.__file__, encoding="utf-8").read()
-        # ④ 汰弱留強改以純健康度排序（對齊頁面說明）
+        src = _grp_combined_src()
+        # ④ 汰弱留強改以純健康度排序(對齊頁面說明)
         assert "sort_values('健康度', ascending=False)" in src
         assert "sort_values(['舊評分'" not in src
 
 
 class TestGrpThresholdsSSOT:
     def test_imports_ssot_constants(self):
-        from src.ui.tabs import tab_stock_grp
-        src = open(tab_stock_grp.__file__, encoding="utf-8").read()
+        """守衛:grp tab 邏輯使用的 SSOT 常數應出現在 grp tab/sections 任一檔。
+
+        v18.415 Batch 7-3 後:GRP_VOL_SHRINK_RATIO / GRP_NEAR_MA20_BIAS_PCT /
+        GRP_BIAS_OVERHEAT_WARN_PCT 改透過 tab_helpers.classify_stock_status_lamp
+        間接使用(consumer 在 tab_helpers 而非 grp tab),所以這 3 個改測 tab_helpers。
+        """
+        src = _grp_combined_src()
         for name in ("HEALTH_GRADE_A_MIN", "HEALTH_GRADE_B_MIN",
-                     "GRP_VOL_SHRINK_RATIO", "GRP_NEAR_MA20_BIAS_PCT",
-                     "GRP_BIAS_OVERHEAT_WARN_PCT", "GRP_NEWS_BEARISH_CONFIDENCE_MIN",
+                     "GRP_NEWS_BEARISH_CONFIDENCE_MIN",
                      "MULTIFACTOR_ENTRY_MIN"):
-            assert name in src, f"tab_stock_grp 缺 SSOT import: {name}"
+            assert name in src, f"tab_stock_grp(含 sections) 缺 SSOT import: {name}"
+        # 操作狀態燈 3 magic 改測 tab_helpers(consumer SSOT)
+        with open('src/ui/tabs/tab_helpers.py', encoding='utf-8') as f:
+            tab_helpers_src = f.read()
+        for name in ("GRP_VOL_SHRINK_RATIO", "GRP_NEAR_MA20_BIAS_PCT",
+                     "GRP_BIAS_OVERHEAT_WARN_PCT"):
+            assert name in tab_helpers_src, \
+                f"tab_helpers(classify_stock_status_lamp consumer)缺 SSOT: {name}"
 
     def test_no_inline_opstate_magic(self):
-        from src.ui.tabs import tab_stock_grp
-        src = open(tab_stock_grp.__file__, encoding="utf-8").read()
+        src = _grp_combined_src()
         # 操作狀態燈 / 入選 / 淘汰 不再用 inline 數字
         assert "_vol4 < _avgvol4 * 0.7" not in src
         assert "abs(_bias4) < 3" not in src
