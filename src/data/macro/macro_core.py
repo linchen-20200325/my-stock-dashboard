@@ -420,11 +420,23 @@ def fetch_yf_close(ticker: str, range_: str = "2y", interval: str = "1d") -> pd.
 
 
 def fetch_yf_latest(tickers: tuple[str, ...]) -> dict[str, Optional[float]]:
-    """批次抓多個 ticker 最新收盤(空值代表抓不到)。"""
+    """批次抓多個 ticker 最新收盤(空值代表抓不到)。
+
+    S-PROV-1 P0 v18.434:批次結果寫 stderr prov_log。子呼叫 fetch_yf_close
+    內部 Series.attrs 已有 source/fetched_at;此處 prov 識別 batch 聚合場景。
+    """
     out: dict[str, Optional[float]] = {}
     for t in tickers:
         s = fetch_yf_close(t, range_="5d")
         out[t] = round(float(s.iloc[-1]), 4) if not s.empty else None
+    try:
+        from src.data.core.provenance import prov_log
+        _filled = sum(1 for v in out.values() if v is not None)
+        prov_log('fetch_yf_latest', 'Yahoo:batch(5d)->iloc[-1]',
+                 f'dict:{_filled}/{len(tickers)}filled',
+                 ticker=','.join(tickers)[:60])
+    except Exception:
+        pass
     return out
 
 

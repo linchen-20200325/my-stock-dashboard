@@ -312,6 +312,15 @@ def fetch_macro_snapshot(
     except Exception as e:
         print(f'[MacroAlert] yfinance 批次抓取失敗: {e}')
 
+    # S-PROV-1 P0 v18.434:snap dict 補 source/fetched_at(§2.2)。
+    # session_state 命中 vs yfinance 補抓並存,用 source 標籤註明聚合策略。
+    try:
+        import pandas as _pd_ma_prov
+        snap['source'] = 'macro_alert:fetch_macro_snapshot(session+yfinance)'
+        snap['fetched_at'] = _pd_ma_prov.Timestamp.now('UTC').isoformat()
+    except Exception:
+        pass
+
     return snap
 
 

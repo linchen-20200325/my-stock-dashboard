@@ -888,12 +888,18 @@ def fetch_tw_market_snapshot(days_back: int = 7) -> dict:
             'breadth': fetch_twse_breadth() 回傳值,
             'fii':     fetch_finmind_foreign_investor() 回傳值,
             'm1b_m2':  fetch_cbc_m1b_m2() 回傳值,
+            'source':  'tw_macro:aggregate(breadth+fii+m1b_m2)',
+            'fetched_at': UTC ISO timestamp,
         }
+        各子鍵已自帶內部 prov;外層 wrapper prov 用於 audit trail 區分聚合呼叫。
     """
     return {
         'breadth': fetch_twse_breadth(),
         'fii':     fetch_finmind_foreign_investor(days_back=days_back),
         'm1b_m2':  fetch_cbc_m1b_m2(),
+        # S-PROV-1 P0 v18.434:外層 aggregator prov(子鍵 prov pre-existing 保留)
+        'source':     'tw_macro:fetch_tw_market_snapshot(aggregate)',
+        'fetched_at': pd.Timestamp.now('UTC').isoformat(),
     }
 
 
