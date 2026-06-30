@@ -17,6 +17,7 @@ import streamlit as st
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
 from shared.signal_thresholds import (
+    BB_BW_SHRINK_WARN_RATIO,  # Phase 2 Batch 5b v18.429:布林帶寬收縮 warn SSOT
     VOLUME_RATIO_DRY,
     VOLUME_RATIO_MILD,
     VOLUME_RATIO_SURGE,
@@ -149,8 +150,8 @@ def render_health_score_section(
                 st.markdown(kpi('趨勢', '-', '無MA數據', '#484f58'), unsafe_allow_html=True)
         with ind6:
             if bb2:
-                bw_c = TRAFFIC_GREEN if bb2['bw'] < bb2['bw_mean'] * 0.7 else '#58a6ff'
-                bw_txt = '帶寬極縮⚡' if bb2['bw'] < bb2['bw_mean'] * 0.7 else ('黏近上軌' if bb2['near_upper'] else f'均值{bb2["bw_mean"]:.1f}%')
+                bw_c = TRAFFIC_GREEN if bb2['bw'] < bb2['bw_mean'] * BB_BW_SHRINK_WARN_RATIO else '#58a6ff'
+                bw_txt = '帶寬極縮⚡' if bb2['bw'] < bb2['bw_mean'] * BB_BW_SHRINK_WARN_RATIO else ('黏近上軌' if bb2['near_upper'] else f'均值{bb2["bw_mean"]:.1f}%')
                 st.markdown(kpi('布林帶寬', f'{bb2["bw"]:.1f}%', bw_txt, bw_c, bw_c),
                             unsafe_allow_html=True)
             else:

@@ -138,3 +138,8 @@ except ImportError:
 # 原 22 檔散落 hardcoded URL(37 occurrences),改 import 收 SSOT
 FINMIND_API_URL = 'https://api.finmindtrade.com/api/v4/data'
 
+# Batch 8.1 v18.420:TWSE 三大法人 BFI82U endpoint SSOT
+# Batch 8 re-audit:三大法人 4 路中 FinMind(Path 1/3/4)已全 SSOT,僅剩這 1 個
+# TWSE 直連 URL 待集中(dispatcher 統一仍 WONTFIX,因 endpoint 真不同)
+TWSE_BFI82U_URL = 'https://www.twse.com.tw/fund/BFI82U'
+

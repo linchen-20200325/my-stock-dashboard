@@ -19,30 +19,52 @@ import unittest
 
 
 class TestForeignBuyPopulated(unittest.TestCase):
+    """v18.414 Batch 7-2:批次分析(含 foreign_buy 寫入)抽至 section_batch_fetcher.py。"""
+
+    _SECTION_PATH = 'src/ui/tabs/stock_grp_sections/section_batch_fetcher.py'
+    _TAB_PATH = 'src/ui/tabs/tab_stock_grp.py'
+
+    def _read_both(self):
+        with open(self._TAB_PATH, encoding='utf-8') as f:
+            tab = f.read()
+        with open(self._SECTION_PATH, encoding='utf-8') as f:
+            section = f.read()
+        return tab + '\n' + section
 
     def test_results_t3_writes_foreign_buy(self):
         """results_t3.append 應包含 foreign_buy 欄(原 bug:從未寫入)。"""
-        with open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8') as f:
-            src = f.read()
-        # 防 regression:確認 PR-O1 加的 foreign_buy 寫入點還在
-        self.assertIn("'foreign_buy': _fb4", src,
+        combined = self._read_both()
+        # 防 regression:PR-O1 加的 foreign_buy 寫入點仍在(tab 或 section 任一即可)
+        self.assertIn("'foreign_buy': _fb4", combined,
                       'foreign_buy 欄位需被寫入 results_t3(PR-O1 修)')
 
     def test_fb_computed_from_df_foreign_col(self):
         """_fb4 應從 df['外資'] 計算(SSOT 對齊 data_loader L286 張單位)。"""
-        with open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8') as f:
-            src = f.read()
-        self.assertIn("df4['外資'].tail(20)", src,
+        combined = self._read_both()
+        self.assertIn("df4['外資'].tail(20)", combined,
                       '_fb4 計算應讀近 20 日 df[外資] 累計')
 
 
 class TestDisplayUnitsCorrect(unittest.TestCase):
-    """顯示單位「張」非「億」(原 bug:/1e8 假設「元」是錯的)。"""
+    """顯示單位「張」非「億」(原 bug:/1e8 假設「元」是錯的)。
+
+    v18.417 Batch 7-5:AI prompt 建構抽至 section_ai_portfolio.py;
+    本 test 改 grep tab + 所有 section file 任一即可。
+    """
+
+    def _grp_combined_src(self) -> str:
+        import glob
+        paths = ['src/ui/tabs/tab_stock_grp.py']
+        paths += sorted(glob.glob('src/ui/tabs/stock_grp_sections/*.py'))
+        chunks = []
+        for p in paths:
+            with open(p, encoding='utf-8') as f:
+                chunks.append(f.read())
+        return '\n'.join(chunks)
 
     def test_port_lines_display_uses_lots(self):
-        """L1217-area 主 AI prompt 應用「張」單位。"""
-        with open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8') as f:
-            src = f.read()
+        """主 AI prompt 應用「張」單位(可在 tab_stock_grp 或 section_ai_portfolio)。"""
+        src = self._grp_combined_src()
         # 新顯示串
         self.assertIn("外資近20日", src, 'AI prompt 應有「外資近20日」字樣')
         # 不應再有 /1e8 後直接接「億」(舊 bug pattern)

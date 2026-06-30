@@ -24,7 +24,12 @@ import streamlit as st
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.stock_buckets import get_pb_bands as _get_pb_bands_ssot
 from shared.stock_buckets import pb_bands_label as _pb_bands_label_ssot
-from shared.thresholds import YIELD_HIGH_DEC, YIELD_LOW_DEC, YIELD_MID_DEC
+from shared.thresholds import (
+    YIELD_HIGH_DEC,
+    YIELD_LOW_DEC,
+    YIELD_MID_DEC,
+    classify_stock_357_price,  # Batch 9 v18.418:357 SSOT helper
+)
 from src.ui.render.tab_sections import border_left_banner  # R-UI-1 v18.412
 from shared.ttls import TTL_1DAY
 from src.data.core import fetch_bps, fetch_industry_category
@@ -83,41 +88,42 @@ def render_357_valuation_section(sid2: str, name2: str, df2, price2,
         t2d: tab2 data dict(從 session_state)用於 div_src
     """
     # ══ B. 357 評價 ════════════════════════════════════════
+    # Batch 9 v18.418:走 SSOT(shared/thresholds.classify_stock_357_price)。
+    # 原 inline 兩段重複 if-elif(計算 cheap/fair/dear 二次 + 分級判斷二次)收為一次,
+    # 各 caller-side label dict 對應各自 UX 措辭(教師結論 vs 結論卡)。
     st.markdown('---')
     st.markdown('#### 💰 B. 357殖利率評價 [策略1]')
-    if avg_div2 > 0 and price2 > 0:
-        _cp2 = round(avg_div2 / YIELD_HIGH_DEC, 1)
-        _fp2 = round(avg_div2 / YIELD_MID_DEC, 1)
-        _dp2 = round(avg_div2 / YIELD_LOW_DEC, 1)
-        if price2 <= _cp2:
-            _ba = f'現價 {price2:.1f} ≤ 便宜價 {_cp2:.1f}（殖利率>7%），積極買進區'
-            _bb = '可大膽買進，股息都進口袋'
-        elif price2 <= _fp2:
-            _ba = f'現價 {price2:.1f} 在合理區 {_cp2:.1f}–{_fp2:.1f}（殖利率5-7%）'
-            _bb = '可分批布局，勿一次梭哈'
-        elif price2 <= _dp2:
-            _ba = f'現價 {price2:.1f} 在昂貴區 {_fp2:.1f}–{_dp2:.1f}（殖利率3-5%）'
-            _bb = '謹慎，等回調至合理價再進場'
-        else:
-            _ba = f'現價 {price2:.1f} > 昂貴價 {_dp2:.1f}（殖利率<3%），嚴禁追高'
-            _bb = '放下，等大跌再看'
-    else:
-        _ba = '無股利資料，無法套用357評價'
-        _bb = '以技術面健康度為主要判斷'
+    _code357, _targets = classify_stock_357_price(price2, avg_div2)
+    # 教師結論文案(arg: range 描述 + 操作建議)
+    _TEACHER_LABELS = {
+        'cheap':      lambda p, t: (
+            f'現價 {p:.1f} ≤ 便宜價 {t["cheap"]:.1f}（殖利率>7%），積極買進區',
+            '可大膽買進，股息都進口袋'),
+        'fair':       lambda p, t: (
+            f'現價 {p:.1f} 在合理區 {t["cheap"]:.1f}–{t["fair"]:.1f}（殖利率5-7%）',
+            '可分批布局，勿一次梭哈'),
+        'dear':       lambda p, t: (
+            f'現價 {p:.1f} 在昂貴區 {t["fair"]:.1f}–{t["dear"]:.1f}（殖利率3-5%）',
+            '謹慎，等回調至合理價再進場'),
+        'overpriced': lambda p, t: (
+            f'現價 {p:.1f} > 昂貴價 {t["dear"]:.1f}（殖利率<3%），嚴禁追高',
+            '放下，等大跌再看'),
+        'na':         lambda p, t: (
+            '無股利資料，無法套用357評價',
+            '以技術面健康度為主要判斷'),
+    }
+    _ba, _bb = _TEACHER_LABELS[_code357](price2, _targets)
     st.markdown(teacher_conclusion('孫慶龍', f'{sid2} 現價{price2:.1f} vs 357區間', _ba, _bb),
                 unsafe_allow_html=True)
-    if avg_div2 > 0:
-        cheap2 = round(avg_div2 / YIELD_HIGH_DEC, 1)
-        fair2 = round(avg_div2 / YIELD_MID_DEC, 1)
-        dear2 = round(avg_div2 / YIELD_LOW_DEC, 1)
-        if price2 <= cheap2:
-            sig2, sc2 = '🟢便宜價 — 積極買進', TRAFFIC_GREEN
-        elif price2 <= fair2:
-            sig2, sc2 = '🟡合理價 — 可分批布局', TRAFFIC_YELLOW
-        elif price2 <= dear2:
-            sig2, sc2 = '🔴昂貴價 — 謹慎操作', TRAFFIC_RED
-        else:
-            sig2, sc2 = '🔴超過昂貴 — 避免追高', TRAFFIC_RED
+    if _code357 != 'na':
+        # 結論卡 sig/顏色
+        _BOX_LABELS = {
+            'cheap':      ('🟢便宜價 — 積極買進',  TRAFFIC_GREEN),
+            'fair':       ('🟡合理價 — 可分批布局', TRAFFIC_YELLOW),
+            'dear':       ('🔴昂貴價 — 謹慎操作',   TRAFFIC_RED),
+            'overpriced': ('🔴超過昂貴 — 避免追高', TRAFFIC_RED),
+        }
+        sig2, sc2 = _BOX_LABELS[_code357]
         st.markdown(f"""<div style="background:#161b22;border:2px solid {sc2};border-radius:10px;
 padding:12px 16px;margin:8px 0;">
 <div style="font-size:16px;font-weight:900;color:{sc2};">{sig2}</div>
@@ -127,9 +133,9 @@ padding:12px 16px;margin:8px 0;">
 </div></div>""", unsafe_allow_html=True)
         v1, v2, v3, v4 = st.columns(4)
         for vc, vl, vp, vcol in [(v1, '現價', price2, '#58a6ff'),
-                                  (v2, '🟢便宜(7%)', cheap2, TRAFFIC_GREEN),
-                                  (v3, '🟡合理(5%)', fair2, TRAFFIC_YELLOW),
-                                  (v4, '🔴昂貴(3%)', dear2, TRAFFIC_RED)]:
+                                  (v2, '🟢便宜(7%)', _targets['cheap'], TRAFFIC_GREEN),
+                                  (v3, '🟡合理(5%)', _targets['fair'],  TRAFFIC_YELLOW),
+                                  (v4, '🔴昂貴(3%)', _targets['dear'],  TRAFFIC_RED)]:
             with vc:
                 st.markdown(kpi(vl, f'{vp:.1f}', '', vcol, vcol), unsafe_allow_html=True)
         if yearly2:

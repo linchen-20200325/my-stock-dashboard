@@ -61,3 +61,44 @@ def classify_yield_zone(cur_yield: float | None,
     if cur_yield <= YIELD_MID:
         return '🟡 適度減碼', 'reduce'
     return '⚪ 中性持有', 'neutral'
+
+
+def classify_stock_357_price(price: float | None,
+                              avg_div: float | None) -> tuple[str, dict]:
+    """v18.418 Batch 9:個股 357 殖利率估值 SSOT 函式。
+
+    給定當前股價 + 5 年均股利,反推殖利率 → 4 段分級(對齊孫慶龍 357 估值法則)。
+    回 (code, targets) — code 為語意化的 zone 識別,targets 為三檔目標價字典。
+
+    Args:
+        price: 當前股價(元)
+        avg_div: 5 年平均年股利(元)
+
+    Returns:
+        (code, targets):
+        - code:
+          - 'cheap'      價 ≤ 便宜價(殖利率 ≥ 7%) → 強烈買進
+          - 'fair'       便宜價 < 價 ≤ 合理價(殖利率 5%~7%) → 分批布局
+          - 'dear'       合理價 < 價 ≤ 昂貴價(殖利率 3%~5%) → 謹慎
+          - 'overpriced' 價 > 昂貴價(殖利率 < 3%) → 避免追高
+          - 'na'         無資料(price ≤ 0 或 avg_div ≤ 0)
+        - targets: {'cheap': cp, 'fair': fp, 'dear': dp}
+          反推 3 段目標價(round 1 位小數);na 時為 {}。
+
+    與 classify_yield_zone() 等價(都用同 SSOT 常數),
+    差別:本函式吃 price+avg_div 而非 cur_yield,並回傳 targets dict 供 UI 直接顯示。
+    """
+    if price is None or avg_div is None or price <= 0 or avg_div <= 0:
+        return 'na', {}
+    targets = {
+        'cheap': round(avg_div / YIELD_HIGH_DEC, 1),
+        'fair':  round(avg_div / YIELD_MID_DEC,  1),
+        'dear':  round(avg_div / YIELD_LOW_DEC,  1),
+    }
+    if price <= targets['cheap']:
+        return 'cheap', targets
+    if price <= targets['fair']:
+        return 'fair', targets
+    if price <= targets['dear']:
+        return 'dear', targets
+    return 'overpriced', targets

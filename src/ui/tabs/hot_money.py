@@ -12,12 +12,9 @@ TWD=X DataFrame + 既有 finmind_get fetcher），避免重複呼叫 FinMind。
 """
 from __future__ import annotations
 
-import datetime as _dt
-
 import numpy as np
 import pandas as pd
 import streamlit as st
-from shared.ttls import TTL_30MIN
 
 # 狀態白話解讀（供非專業讀者）
 STATE_TEXT = {
@@ -129,51 +126,12 @@ def _twd_df_to_series(twd_df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ────────────────────────────────────────────────────────────────────────
-# 資料取得：複用既有 finmind_get（leading_indicators.py）
+# 資料取得:v18.425 Phase 2 Batch 3a — fetch_foreign_flow_series 下沉 L1
+# (src/data/macro/foreign_flow_fetcher.py)解 R-UI-FETCH-1 §8.2 違規。
+# 本 re-export 維持 backward compat,既有 caller(render_hot_money_section /
+# tab_macro 內 get_latest_hot_money_state)無需改 import path。
 # ────────────────────────────────────────────────────────────────────────
-@st.cache_data(ttl=TTL_30MIN, show_spinner=False)
-def fetch_foreign_flow_series(days: int, token: str) -> tuple[pd.DataFrame, str]:
-    """抓最近 N 天外資買賣超（複用 leading_indicators.finmind_get）。
-
-    Returns:
-        (df[date, foreign_net_yi 億元], error_msg or "")
-    """
-    try:
-        from src.data.macro import finmind_get
-        end_d = _dt.date.today()
-        start_d = end_d - _dt.timedelta(days=days + 14)   # 多抓幾天買日曆 vs 交易日緩衝
-        df = finmind_get("TaiwanStockTotalInstitutionalInvestors",
-                          "", start_d.strftime("%Y%m%d"),
-                          end_d.strftime("%Y%m%d"), token or "")
-    except Exception as e:
-        return pd.DataFrame(columns=["date", "foreign_net_yi"]), f"FinMind 抓取失敗：{e}"
-
-    if df is None or df.empty:
-        return pd.DataFrame(columns=["date", "foreign_net_yi"]), "無資料回傳（可能為非交易日區間）"
-
-    # 過濾「外資」類別（含 Foreign_Investor / 外資及陸資 等變體）
-    name_col = next((c for c in ("name", "institutional_investors") if c in df.columns), None)
-    if name_col is None:
-        return pd.DataFrame(columns=["date", "foreign_net_yi"]), f"FinMind 缺類別欄（cols={list(df.columns)[:8]}）"
-    mask = df[name_col].astype(str).str.contains("Foreign|外資", case=False, na=False, regex=True)
-    fdf = df.loc[mask].copy()
-    if fdf.empty:
-        return pd.DataFrame(columns=["date", "foreign_net_yi"]), "FinMind 無 Foreign 類別資料"
-
-    fdf["net"] = pd.to_numeric(fdf["buy"], errors="coerce") - pd.to_numeric(fdf["sell"], errors="coerce")
-    out = (fdf.groupby("date", as_index=False)["net"].sum()
-              .assign(foreign_net_yi=lambda d: d["net"] / 1e8)
-              .loc[:, ["date", "foreign_net_yi"]])
-    out["date"] = pd.to_datetime(out["date"])
-    _result = out.sort_values("date").reset_index(drop=True)
-    # v18.357 PR-Q5c S-PROV-1 phase 19:DataFrame attrs
-    try:
-        _result.attrs.setdefault('source',
-            'FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign(via leading_indicators.finmind_get)')
-        _result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
-    except Exception:
-        pass
-    return _result, ""
+from src.data.macro.foreign_flow_fetcher import fetch_foreign_flow_series  # noqa: F401
 
 
 # ────────────────────────────────────────────────────────────────────────

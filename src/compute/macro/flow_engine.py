@@ -11,36 +11,14 @@ from __future__ import annotations
 
 import math
 
-# ── 世界區域股市（資金流向代理：相對報酬排名）────────────────────────────
-REGIONAL_ETFS = {
-    "美國 SPY": "SPY",
-    "歐洲 VGK": "VGK",
-    "日本 EWJ": "EWJ",
-    "中國 FXI": "FXI",
-    "新興市場 EEM": "EEM",
-    "台灣 EWT": "EWT",
-}
-
-# ── 跨資產原始序列（風險情緒分數用；MOVE 可能抓不到→自動略過）──────────────
-CROSS_ASSET_ETFS = {
-    "股票 SPY": "SPY",
-    "長天期美債 TLT": "TLT",
-    "高收益債 HYG": "HYG",
-    "投資級債 LQD": "LQD",
-    "黃金 GLD": "GLD",
-    "美元 UUP": "UUP",
-    "美元日圓 USDJPY": "JPY=X",
-    "VIX 波動率": "^VIX",
-    "美債波動 MOVE": "^MOVE",
-}
-
-
-def all_symbols() -> dict:
-    """區域 + 跨資產合併後的 {顯示名: yfinance 代號}（含重複代號如 SPY，抓取端會去重）。"""
-    m = {}
-    m.update(REGIONAL_ETFS)
-    m.update(CROSS_ASSET_ETFS)
-    return m
+# v18.424 Phase 2 Batch 2b:REGIONAL_ETFS / CROSS_ASSET_ETFS / all_symbols 下沉 L0
+# (shared/etf_universe.py)解 L1→L2 反向 import(daily_data_fetchers.py:158)。
+# 本 re-export 維持 backward compat,既有 L2 caller(flow_engine 內 + 下游 macro_compute)無感。
+from shared.etf_universe import (  # noqa: F401
+    REGIONAL_ETFS,
+    CROSS_ASSET_ETFS,
+    all_symbols,
+)
 
 
 def to_close_list(df) -> list:

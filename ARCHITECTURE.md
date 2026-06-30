@@ -1,14 +1,18 @@
 # 台股 AI 戰情室 — 技術規格書
 
-> **版本**:v9.0(2026-06-30 Phase 1 唯讀全域排毒 audit 對齊)| 前版 v8.0:2026-06-28 | 歷史 v7.1:2026-05-15
+> **版本**:v9.2(2026-06-30 Phase 1 second-pass 唯讀全域 audit + Phase 2 收尾對齊)| v9.1:doc accuracy | v9.0:Batch 1~10 後 | 歷史 v7.1:2026-05-15
 >
 > 本文件為系統架構師視角的唯讀規格書,不含任何實作程式碼。
 >
 > **v18.265 策略回測整體移除**:`backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py` 三檔已刪除(共 ~986 LOC);MA 交叉/MA+RSI/Walk-Forward Test/ETF 歷史回測功能不再提供。下文歷史段落仍會提及這些模組以說明演進脈絡,但**目前 codebase 不含**。`tw_backtest.py`(macro 拐點驗證)為獨立業務模組,**保留**。
 >
-> **v18.359 Phase 2 排毒對齊**(2026-06-28):依 Phase 1 三路審計藍圖完成 F-1.1 ~ F-4。本檔 §0 新增「現況對齊摘要」反映實際狀態;§1-§4 歷史結構保留供追溯。
+> **v18.359 Phase 2 排毒對齊**(2026-06-28):依 Phase 1 三路審計藍圖完成 F-1.1 ~ F-4。
 >
-> **v18.411 Phase 1 唯讀全域排毒 audit**(2026-06-30):5 路並行 Explore agent 全域掃描收齊。**重大進度**:F-6 子樹搬移已 100% 完成(原列「待動工」)、F-7 tab_macro/tab_stock 兩大超大檔已分別降至 488 LOC / 1,670 LOC(-91% / -54.5%)、F-8 部分對齊(三大法人雙路徑職責確認、yfinance facade 部分落地)。新 audit 揭示 **真重複殘餘 4 大 fetcher + 4 大計算 SSOT 缺口 + 12 處 UI inline HTML 殘留**,§0 補上 0.6 ~ 0.8 對應段落。
+> **v18.411 Phase 1 唯讀全域排毒 audit**(2026-06-30):5 路並行 agent 全域掃描;§0.6~§0.8 列 R-FETCH-1~4 + R-CALC-1~4 + R-UI-1~2 殘餘。
+>
+> **v18.412~420 Phase 2 動工批**(2026-06-30):Batch 1a/1b/2/3/4/6/10/10b + Batch 7-1~7-5 + Batch 8.1 + Batch 9 + Batch 9-2 全做,Batch 5/8 audit 翻案 WONTFIX;**所有 §0.6/§0.7/§0.8 列出殘餘全消(✅ 或 ⊘ WONTFIX 有證據)**。
+>
+> **v18.421 Phase 1 second-pass(2026-06-30 本批)**:4 路 fresh audit agent(SSOT/重複/§8.2/跨 tab 一致性)+ 直接 LOC 掃描;新發現 §0.11 補錄(2 處 EX-CACHE-1 letter compliance 違反 + 2 處 UI 層定義 L1 fetcher + 9 處 L1→L2 反向 import + 3 處 magic number 散落)。
 
 ---
 
@@ -123,44 +127,45 @@ my-stock-dashboard/
 
 LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 
-### 0.5 已完成項目進度(v18.359 → v18.411)
+### 0.5 已完成項目進度(v18.359 → v18.420)
 
 | ID | 原狀態 | 現狀態 | 證據 |
 |---|---|---|---|
 | **F-5** | 待動工 | ⚠️ 部分:`src/services/` 19 檔已建立但仍以 wrapper 為主,full facade(MarketDataFacade)未實作 | `src/services/` 樹存在 |
 | **F-6** | 待動工(🔴 高) | ✅ **100% 完成** | 87 root .py → src/ 各子目錄 + 0 root 殘留 + 130+ 修補 import |
-| **F-7** | 待動工(🔴 高) | ✅ **大部分完成** | tab_macro 5387→488(-91%)、tab_stock 3672→1670(-54.5%);data_loader 2286 / etf_fetch 1948 / macro_core 1492 / leading_indicators 1391 / health_inspector 1386 經 audit 無進一步拆檔必要(內聚力強) |
-| **F-8** | 待動工(🔴 高) | ⚠️ 部分:三大法人雙路徑已 v18.244 確認職責不同(T86 / BFI82U / FinMind 各司其職);yfinance 部分走 yf_proxy facade,FinMind 仍 34 處 URL 散落 | 0.7 表 4 |
+| **F-7** | 待動工(🔴 高) | ✅ **完成** | tab_macro 5387→488(-91%)、tab_stock 3672→1670(-54.5%)、**tab_stock_grp 3673→303(-91.8%,Batch 7 全 5 子批 v18.413~417)**;data_loader 2286 / etf_fetch 1948 / macro_core 1492 / leading_indicators 1391 / health_inspector 1386 經 audit 無進一步拆檔必要(內聚力強) |
+| **F-8** | 待動工(🔴 高) | ✅ **大部分完成** | FinMind URL 全集中(Batch 10 / 10b v18.412,29 + 12 處,共 22 檔)+ TWSE BFI82U URL 集中(Batch 8.1 v18.420);三大法人 4 路 dispatcher WONTFIX(audit 證實職責不同);yfinance 走 yf_proxy facade。 |
 
-### 0.6 真重複殘餘 — 4 大 fetcher 雙寫(待 user 排程)
+### 0.6 真重複殘餘 — 4 大 fetcher 雙寫(post-Batch-3/5/8/10/10b/8.1 收尾)
 
-| ID | 重複項 | 散落位置 | 嚴重度 |
+| ID | 重複項 | 散落位置 | 嚴重度 / 結果 |
 |---|---|---|---|
-| **R-FETCH-1** | 股本 `_fetch_share_capital` | `src/ui/tabs/tab_stock.py:71`(UI 層 L1 fetcher,§8.2 違憲)| 🟡 中 — 已被 `_precompute_xsec` 集中呼叫,但位置錯層;應遷至 `src/data/stock/` |
-| **R-FETCH-2** | 月營收 fetcher | `src/data/core/data_loader.py:802-999` `get_monthly_revenue()`(3 段 FM0/FM/MOPS) + `src/data/stock/monthly_revenue_fetcher.py:47,104`(僅 FM)+ `src/data/stock/app_stock_fetchers.py:405`(wrapper)| 🔴 高 — 同 dataset 三條路 |
-| **R-FETCH-3** | 三大法人 | `data_loader.py:161` `_fetch_twse_inst_fallback` + `daily_data_fetchers.py:233` `fetch_institutional` + `leading_indicators.py:580` `twse_institutional_day` + `nas_server.py:94` NAS gateway | 🟡 中 — v18.244 audit 確認職責不同(個股 / 大盤 / 先行指標 / 代理),非真重複,但缺中央 dispatcher |
-| **R-FETCH-4** | 配息 | `app_stock_fetchers.py:129` `fetch_dividend_data`(3 源備援)vs `dividend_fetcher.py:27` `fetch_annual_dividends`(yfinance 單源)| 🟡 中 — 個股 / ETF 雙寫,可共用 base |
-| **附帶** | FinMind URL hardcode | `data_loader.py(10)` + `app_stock_fetchers.py(3)` + `macro_core.py / etf_fetch.py / daily_data_fetchers.py` 共 34 處 | 🟢 低 — 該集中至 `data_registry` template |
+| ~~**R-FETCH-1**~~ | ~~股本 `_fetch_share_capital`~~ | ✅ **Batch 3 v18.412 已遷至 `src/data/stock/share_capital_fetcher.py`** | ✅ 完成 |
+| ~~**R-FETCH-2**~~ | ~~月營收 fetcher 3 條路~~ | Batch 5 audit(v18.412 + 重啟 audit v18.420)確認:同 dataset 但 3 條路 wrapper 各自負責不同 downstream(個股深度 / 健康度趨勢 / 全市場 batch),endpoint level 已被 Batch 10 收 SSOT,wrapper 差異有理由保留 | ⊘ **WONTFIX**(2 次 audit 證實) |
+| ~~**R-FETCH-3**~~ | ~~三大法人 4 路~~ | Batch 8 audit(v18.412 + 重啟 audit v18.420)確認:4 路中 3 路 FinMind 已全 SSOT(via FINMIND_API_URL),Path 2 TWSE BFI82U URL **Batch 8.1 v18.420 已收**;dispatcher 統一仍 WONTFIX(endpoint 業務差異真實) | ⊘ **dispatcher WONTFIX / URL ✅** |
+| **R-FETCH-4** | 配息 | `app_stock_fetchers.py:129` `fetch_dividend_data`(3 源備援)vs `dividend_fetcher.py:27` `fetch_annual_dividends`(yfinance 單源)| ⊘ **WONTFIX**(v18.420 audit:output format / 5y cutoff / fallback chain 差異大,共用 helper 收益不抵增加耦合) |
+| ~~**附帶** FinMind URL~~ | ~~34 處 hardcode~~ | ✅ **Batch 10 + 10b v18.412 全收**(22 檔 → `FINMIND_API_URL` SSOT)+ **Batch 8.1 v18.420 補 TWSE_BFI82U_URL** | ✅ 完成 |
 
-### 0.7 真重複殘餘 — 4 大計算 SSOT 缺口(待 user 排程)
+### 0.7 真重複殘餘 — 4 大計算 SSOT 缺口(post-Batch-1a/1b/4/6/9/9-2 收尾)
 
-| ID | 缺口 | 散落位置 | 嚴重度 |
-|---|---|---|---|
-| **R-CALC-1** | RSI 雙寫 | `src/compute/strategy/tech_indicators.py:28` `calc_rsi()` + `src/compute/scoring/scoring_engine.py:48` `compute_rsi()` 同公式異名 | 🟡 中 — 演算法等價,擇一即可 |
-| **R-CALC-2** | MA scalar inline 殘留 31 處 | `tab_stock.py:562-564`(3)+ `etf_tab_single.py:581-582`(2)+ `etf_helpers.py:140,142`(2)+ `market_strategy.py:219-226`(4)+ `section_when_buy_sell.py:247-248` 等 | 🟡 中 — `safe_ma` / `calc_ma_series` 已 SSOT,但 inline `.rolling().mean().iloc[-1]` 仍散落 |
-| **R-CALC-3** | 乖離率 inline 漏網 5 處 | `macro_snapshot.py:261` + `etf_tab_single.py:519,532,589,600`(4)+ `section_state.py:51-52` | 🟢 低 — C1 v18.401 抽 8 處,但 5 處新增/漏網 |
-| **R-CALC-4** | 健康評分三套未對帳 | `macro_helpers.py:94-98` Method A(加權)+ `health_reconcile.py:64-106` Method B(等權)+ `risk/reconcile.py:158-202` `compute_health_score_arithmetic` / `_min_of_factors`(短板)| 🔴 高 — §4.3 對帳函式已建,但**未嵌入生產 render 路徑**(只在 audit panel) |
-| **附帶** | 趨勢分類 inline 8 處 | `scoring_helpers.py:141-152` + `scoring_engine.py:92-98` + `stats_helpers.py:55` | 🟢 低 — `classify_trend_4tier` 已 SSOT |
-| **附帶** | 殖利率三層未統一 | `etf_calc.py:168` + `etf_helpers.py:249` + `v5_modules.py:273` + `tab_stock_picker.py:457-463` inline | 🟢 低 — 個股 vs ETF 公式不同(365 day vs groupby.sum),需業務決策 |
+| ID | 缺口 | 結果 |
+|---|---|---|
+| ~~**R-CALC-1**~~ | ~~RSI 雙寫~~ | ✅ **Batch 1b v18.412 已收**:`calc_rsi` thin wrapper 委派 `compute_rsi` 數學 kernel |
+| ~~**R-CALC-2**~~ | ~~MA scalar inline 殘留 31 處~~ | ✅ **Batch 4 v18.412 已收**(5 子批,`safe_ma` SSOT) |
+| ~~**R-CALC-3**~~ | ~~乖離率 inline 漏網 5 處~~ | ✅ **Batch 1a v18.412 已收**(`calc_bias_pct` SSOT)+ Batch 9 v18.418 補 `classify_stock_357_price` |
+| ~~**R-CALC-4**~~ | ~~健康評分三套未對帳~~ | ✅ **Batch 6 v18.412 已嵌入 production**:`macro_helpers.calc_traffic_light` 內呼 `reconcile_health_score`,差異 > tolerance 時 stderr 輸出(§4.3 對帳已落地)|
+| ~~**附帶** 趨勢分類 inline 8 處~~ | ~~scoring_helpers + scoring_engine + stats_helpers~~ | ⊘ **WONTFIX**(v18.420 audit:這些是 scoring fn,非 label classification fn;`classify_trend_4tier` SSOT 已存,scoring fn 是別的物件;`stats_helpers.py` 不存在) |
+| ~~**附帶** 殖利率三層未統一~~ | ~~etf_calc + etf_helpers + v5_modules + tab_stock_picker~~ | ⊘ **WONTFIX**(個股 vs ETF 公式不同 — 365-day rolling vs groupby.sum,業務需求差異);ETF tab_single 已 Batch 9-2 v18.419 走 `classify_yield_zone` SSOT |
+| **附帶** | 配息 helper(R-FETCH-4 別表) | 已歸 0.6 表 → WONTFIX |
 
-### 0.8 真重複殘餘 — UI inline HTML / Tab 模組化缺口
+### 0.8 真重複殘餘 — UI inline HTML / Tab 模組化缺口(post-Batch-2/7 收尾)
 
-| ID | 缺口 | 散落位置 | 嚴重度 |
-|---|---|---|---|
-| **R-UI-1** | inline `<div style="background:...border-left:...">` 殘留 12 處 | `tab_stock.py:229,277,575,1666`(4)+ `tab_stock_grp.py:525,710,1201`(3)+ `section_357_valuation.py:120,159`(2)+ `section_health_score.py:178`(1)+ macro section ~8 處 | 🟢 低 — `tab_sections.box_wrapper_open/close` + `border_left_banner` SSOT 已建,但 U2-b migration 未竟尾 |
-| **R-UI-2** | `tab_stock_grp.py`(1509 LOC)未走 section 模組化 | 個股組合 Tab 仍有自行計算的 fundamental 邏輯(行 L407+)| 🟡 中 — 個股 Tab 已抽 13 section,組合 Tab 落後一輪 |
-| **附帶** | plotly 圖表重複 | 0 處 ✅ | 已透過 `chart_plotter.plot_combined_chart / revenue / quarterly` SSOT |
-| **附帶** | ETF KPI 跨 Tab 共用 | ✅ | `src.compute.etf` 已 SSOT,3 大 ETF Tab 共用 23 個 helper |
+| ID | 缺口 | 結果 |
+|---|---|---|
+| **R-UI-1** | inline border-left HTML(現 51 處) | ⊘ **WONTFIX**(v18.420 audit):Batch 2 v18.412 已收 SSOT-able 簡單 banner;殘留 51 處全是 multi-line bespoke shapes(gradient bg / nested divs / dynamic color / 多段文字),強制套 `border_left_banner` 會擴大 API surface 或在 caller 端 wrap inline,反 SSOT 初衷 |
+| ~~**R-UI-2**~~ | ~~`tab_stock_grp.py`(1509 LOC)未走 section 模組化~~ | ✅ **Batch 7 全 5 子批 v18.413~417 完成**:1509 → 303 LOC(-79.9%),抽 5 個 section 模組(market_status / batch_fetcher / portfolio_summary / financial_health / ai_portfolio) |
+| **附帶** | plotly 圖表重複 | 0 處 ✅ |
+| **附帶** | ETF KPI 跨 Tab 共用 | ✅ `src.compute.etf` SSOT,3 大 ETF Tab 共用 23 個 helper |
 
 ### 0.9 已 SSOT 化的優良範例(audit 驗證)
 
@@ -181,12 +186,76 @@ LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 
 ### 0.10 0 違憲確認
 
-- ✅ **0 root 業務 .py**(只有 app.py 1 檔)
+- ✅ **0 root 業務 .py**(只有 app.py 1 檔,642 LOC,純 router + orchestrator)
 - ✅ **0 dead public function**(P5-DEAD 6 輪審計收斂飽和;`_fetch_share_capital` / `_precompute_xsec` 確認有 caller)
 - ✅ **0 commented-out function 區塊**(`# def` / `# class` 全清)
 - ✅ **0 stale 路徑註解**(指向已不存在的檔案 0 處;`# 已移除` / `# 已下沉` 註解皆指向有效新位置)
 - ✅ **0 §3.3 反捏造違憲**(原 14 類 magic number 全 SSOT 化)
 - ✅ **0 §8.2 高項違憲**(EX-AI-1 / EX-RENDER-1 已退役;只剩 EX-L0-1 / EX-CACHE-1 / EX-PASSTHRU-1 三類已登錄例外)
+- ✅ **0 L1 → L2/L3 上行 import**(2026-06-30 grep 驗證 `src/data/` 無 `from src.compute|src.services`)
+- ✅ **0 L2 → L3 上行 import**(grep 驗證 `src/compute/` 無 `from src.services`)
+- ✅ **0 L3 → L4/L5 上行 import**(grep 驗證 `src/services/` 無 `from src.ui`,daily_checklist 2 處 `from src.ui.render.macro_ui_components` 為 L4 import 合規)
+
+### 0.11 v18.421 Phase 1 second-pass 新發現(2026-06-30)
+
+> 此節為「fresh audit」找到的真正新問題,未在 §0.6~§0.8(已動工完批的清單)裡。
+> 4 路並行 agent + 直接 grep 掃描證實如下。
+
+**🔴 §8.2.A EX-CACHE-1 letter compliance 違反(2 處)**
+
+| ID | 位置 | 證據 | 嚴重度 |
+|---|---|---|---|
+| **V1** | `src/compute/etf/etf_calc.py:7` | 直接 `import streamlit as st`,無 try/except + `_NoOpST` fallback;CLAUDE.md §8.2.A 規定 EX-CACHE-1 例外**必須** letter compliant(L2 Compute 不應依賴 streamlit 運行時) | 🟡 中 |
+| **V2** | `src/compute/etf/etf_quality.py:16` | 同 V1 | 🟡 中 |
+
+→ 修法:加 `try: import streamlit as st / except ImportError: class _NoOpST: ... st = _NoOpST()` 包裝,對齊 EX-CACHE-1 P2-EX v18.393 標準寫法。
+
+**🟡 L1 → L2 反向 import(9 處,潛在 §8.2 違規)**
+
+| 位置 | import | 性質判讀 |
+|---|---|---|
+| `etf_fetch.py` ×8 處 lazy | `from src.compute.etf import bare_etf_code` | `bare_etf_code` 是 pure string helper(strip `.TW` 後綴),語意上是 L0 工具非 L2 compute → 可下沉 `shared/etf_codes.py` |
+| `daily_data_fetchers.py:158` lazy | `from src.compute.macro import all_symbols` | `all_symbols` 是 registry lookup,類似 L0 性質 |
+
+→ 修法:把 `bare_etf_code` / `all_symbols` 下沉至 `shared/`(L0),L1+L2+L5 都從 L0 import,反向違規消除。
+
+**🔴 UI 層定義 L1 fetcher(2 處,EX-PASSTHRU-1 例外規範違反)**
+
+| ID | 位置 | 證據 |
+|---|---|---|
+| **R-UI-FETCH-1** | `src/ui/tabs/hot_money.py:135` | `def fetch_foreign_flow_series(days, token) -> tuple[pd.DataFrame, str]` 直接定義在 L5 UI Tab,非 EX-PASSTHRU-1 容許的 pass-through |
+| **R-UI-FETCH-2** | `src/ui/tabs/chip_radar.py:180` | `@st.cache_data def fetch_chip_concentration(ticker: str)` 同上 + 內含 `pd.read_html` 業務 parsing |
+
+→ 修法:遷至 `src/data/stock/`(新建 `chip_fetcher.py` 或併入 `app_stock_fetchers.py`),UI Tab 改 lazy import。
+
+**🟡 真重複 helper(D10 從 Agent 2)**
+
+| 位置 | 重複內容 |
+|---|---|
+| `src/ui/render/etf_render.py:69-93` 私有 `_teacher_conclusion` + `_to_strategy` 色彩判斷 | 與 `src/ui/render/ui_widgets.py:127 teacher_conclusion` + `_to_strategy` 邏輯 1:1 重複 |
+
+→ 修法:etf_render 刪除私有版,import + 委派 ui_widgets SSOT。
+
+**🟡 magic number 散落(3 類,翻案候選)**
+
+| 類 | 數值 | 位置 | 判讀 |
+|---|---|---|---|
+| 停損係數 | 0.92 / 0.93 / 0.07(ATR%) | `etf_calc.py:236` / `section_when_buy_sell.py:218` / `section_psy_checklist.py:49` | 同「停損設置」用不同係數,但業務語意可能 ETF vs 個股 vs ATR 三種,需 user 確認 |
+| 布林上軌貼近 | 0.995 / 0.97 / 0.99 | `v5_modules.py:247` / `tech_indicators.py:118` / `section_when_buy_sell.py:218` | 同「貼近布林上軌」用 3 個係數;**疑似真 bug** 或 3 種強度判斷 |
+| 量縮警示 / 動作 | 0.7 / 0.6 / 0.5 | `section_health_score.py:152,153` / `section_vcp_bollinger.py:71,77,91` / `section_short.py:186,334` | 可能 warning(0.7)vs action(0.6)兩層;翻案候選:SSOT 化為 `VOL_SHRINK_WARN_PCT=0.7` + `VOL_SHRINK_ACTION_PCT=0.6` |
+
+**⊘ Agent 4 假警報澄清**
+
+| 議題 | Agent 4 主張 | 實際 |
+|---|---|---|
+| 毛利率單位風險(section_financial_health.py:165 直取 `.get('Value')` 可能是 '20.5%' 或 '0.205')| 🔴 高風險 | ✅ 假警報:`financial_health_engine.py:504` 已 `f"{gm:.1f}%"` 永遠格式化(永遠帶 `%`),Value 永遠是 `'20.5%'` 字串 |
+| 組合 Tab 缺技術評分 vs 個股 Tab 有完整評分 | 🟡 設計缺失 | 🟡 設計選擇,非 bug:組合 Tab 已嵌 `score_single_stock` 多因子 + `_fund_map` 基本面,只是不重複個股 Tab 的健康度單檔深度。組合 vs 單檔 UX 分工合理 |
+
+**📌 doc accuracy 修正**
+
+- 上版 §0.5 寫 app.py「7,300 LOC orchestrator」 → 實際 642 LOC(原 R7+R8 + U5 B3 抽完後)
+- 上版 §0.8 寫「R-UI-1 inline 殘留 12 處」 → 實際 51 處,但 audit 確認皆為 multi-line bespoke(`border_left_banner` SSOT 套不下),維持 WONTFIX
+- 上版 §0.7 寫「stats_helpers.py:55 趨勢分類 inline」 → 該檔不存在,過時 reference
 
 ---
 

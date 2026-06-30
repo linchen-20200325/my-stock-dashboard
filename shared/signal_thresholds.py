@@ -616,6 +616,16 @@ BB_DROP_OUT_RATIO: float = 0.95
 """布林帶「跌出上軌」訊號:close < upper × 0.95 且 close > ma → 動能轉弱。
 原 tab_stock.py:747 inline。"""
 
+# ── 布林帶寬收縮 2-tier(Phase 2 Batch 5b v18.429)──
+BB_BW_SHRINK_WARN_RATIO: float = 0.7
+"""布林帶寬「收縮警示」threshold:bw < bw_mean × 0.7 → KPI 變綠 / 「帶寬極縮 ⚡」標籤。
+3 caller:section_health_score.py:152,153 + section_vcp_bollinger.py:71"""
+
+BB_BW_SHRINK_ACTION_RATIO: float = 0.6
+"""布林帶寬「極度收縮」action threshold:bw < bw_mean × 0.6 → 訊號框 + verdict
+「布林帶寬極度收縮:即將爆發」。2 caller:section_vcp_bollinger.py:77,91。
+SSOT 設計:warn(0.7)→ action(0.6)兩 tier 漸進判讀。"""
+
 # ── RS 帶狀(U-12)──
 STOCK_RS_STRONG_MIN: float = 75.0
 """個股 RS 相對強度「強勢」門檻:RS ≥ 75 → 跑贏大盤明顯。

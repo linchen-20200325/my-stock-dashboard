@@ -4,7 +4,21 @@ ETF 計算層（calc layer）
 依賴：etf_fetch（單向；calc 永遠不依賴 render）。
 """
 import sys  # v18.339 PR-J3 S-MED 真高風險:silent except 改 stderr log
-import streamlit as st
+
+# §8.2.A EX-CACHE-1 v18.422:條件 import streamlit + 無 UI 呼叫 fallback。
+# 本檔僅用 @st.cache_data 裝飾器(L37 / L563 / L833),無 st.session_state /
+# st.error / st.markdown 等真 UI 呼叫 → 對齊 P2-EX v18.393 letter compliant 標準。
+try:
+    import streamlit as st
+except ImportError:
+    class _NoOpST:
+        @staticmethod
+        def cache_data(*args, **kwargs):
+            if args and callable(args[0]):
+                return args[0]
+            return lambda f: f
+        cache_resource = cache_data
+    st = _NoOpST()  # noqa
 import pandas as pd
 # v18.358 PR-R1 §8.2 A7 修:原 `import yfinance as yf` 為 L2 違規(L2 不得 HTTP I/O)。
 # yfinance 唯一用途(compute_etf_peer_ranking L587)已抽至 etf_fetch.fetch_etf_peer_history(L1)。
@@ -20,6 +34,8 @@ from src.compute.etf.etf_helpers import (
 )
 from shared.calc_helpers import calc_bias_pct  # C1 v18.401:乖離率 SSOT
 from shared.ttls import TTL_15MIN, TTL_1HOUR
+# Phase 2 Batch 5a v18.428:停損 0.92 → 1 - STOP_LOSS_PCT(0.08) SSOT(config.py:19)
+from src.config import STOP_LOSS_PCT
 # v18.241 E8+E9: 抽 inline magic 到 shared SSOT
 from shared.signal_thresholds import (
     ACTIVE_ETF_PREMIUM_MAX_PCT,
@@ -233,7 +249,9 @@ def check_vcp_signal(df: pd.DataFrame) -> dict:
         ma200  = float(close.rolling(200).mean().iloc[-1])
         r['above_ma50']  = last_c > ma50
         r['above_ma200'] = last_c > ma200
-        r['stop_loss']   = round(last_c * 0.92, 2)
+        # Phase 2 Batch 5a v18.428:0.92 → (1 - STOP_LOSS_PCT) SSOT(config.py:19,
+        # STOP_LOSS_PCT=0.08 即 -8% 固定停損)。語意對等,值不變。
+        r['stop_loss']   = round(last_c * (1 - STOP_LOSS_PCT), 2)
 
         # 週K波幅（近5週）
         df_w = df.resample('W').agg({'High':'max','Low':'min',

@@ -15,6 +15,10 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.signal_thresholds import (  # Phase 2 Batch 5b v18.429:布林帶寬收縮 2-tier SSOT
+    BB_BW_SHRINK_ACTION_RATIO,
+    BB_BW_SHRINK_WARN_RATIO,
+)
 from src.ui.render import kpi, signal_box, teacher_conclusion
 from src.ui.render.tab_sections import border_left_banner
 
@@ -68,13 +72,13 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
                 st.markdown(kpi('布林上軌', f'{bb2["upper"]:.2f}', '壓力', TRAFFIC_RED, TRAFFIC_RED),
                             unsafe_allow_html=True)
             with b2:
-                bw_c = TRAFFIC_GREEN if bb2['bw'] < bb2['bw_mean'] * 0.7 else TRAFFIC_YELLOW
+                bw_c = TRAFFIC_GREEN if bb2['bw'] < bb2['bw_mean'] * BB_BW_SHRINK_WARN_RATIO else TRAFFIC_YELLOW
                 st.markdown(kpi('帶寬', f'{bb2["bw"]:.1f}%',
                                 f'均值{bb2["bw_mean"]:.1f}% {"⬇️收縮" if bb2["bw"] < bb2["bw_mean"] else "⬆️擴張"}',
                                 bw_c, bw_c), unsafe_allow_html=True)
                 st.markdown(kpi('布林下軌', f'{bb2["lower"]:.2f}', '支撐', TRAFFIC_GREEN, TRAFFIC_GREEN),
                             unsafe_allow_html=True)
-            if bb2['bw'] < bb2['bw_mean'] * 0.6:
+            if bb2['bw'] < bb2['bw_mean'] * BB_BW_SHRINK_ACTION_RATIO:
                 st.markdown(signal_box('🔵布林帶寬極度收縮', 'blue', '即將爆發，注意量能方向'),
                             unsafe_allow_html=True)
             if bb2['near_upper']:
@@ -88,7 +92,7 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
                         if vcp2['contracting']
                         else '⚪ 波幅尚未收縮：等待整理完成後再觀察')
     if bb2:
-        if bb2['bw'] < bb2['bw_mean'] * 0.6:
+        if bb2['bw'] < bb2['bw_mean'] * BB_BW_SHRINK_ACTION_RATIO:
             _bb_verdict = '🔵 布林帶寬極度收縮：即將爆發，注意量能確認方向 [策略3]'
         elif bb2['near_upper']:
             _bb_verdict = '🟢 股價黏近上軌＋強勢：搭配大量是突破確認訊號 [策略3]'

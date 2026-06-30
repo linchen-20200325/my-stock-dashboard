@@ -29,7 +29,9 @@ class TestQ5cMarkers(unittest.TestCase):
         self.assertIn("'source': 'yfinance:^VIX:3mo:1d'", src)
 
     def test_chip_radar(self):
-        src = self._read('src/ui/tabs/chip_radar.py')
+        # v18.426 Phase 2 Batch 3b:fetch_chip_concentration 下沉至 L1
+        # src/data/stock/chip_concentration_fetcher.py(原 chip_radar.py:180 為 R-UI-FETCH-2 違憲)
+        src = self._read('src/data/stock/chip_concentration_fetcher.py')
         self.assertIn('[fetch_chip_concentration]', src)
         self.assertIn('norway.twsthr.info', src)
 
@@ -44,7 +46,9 @@ class TestQ5cMarkers(unittest.TestCase):
         self.assertIn("'source': 'tw_macro.fetch_finmind_foreign_investor'", src)
 
     def test_hot_money(self):
-        src = self._read('src/ui/tabs/hot_money.py')
+        # v18.425 Phase 2 Batch 3a:fetch_foreign_flow_series 下沉至 L1
+        # src/data/macro/foreign_flow_fetcher.py(原 hot_money.py:135 為 R-UI-FETCH-1 違憲)
+        src = self._read('src/data/macro/foreign_flow_fetcher.py')
         self.assertIn('FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign', src)
 
     def test_risk_radar(self):
