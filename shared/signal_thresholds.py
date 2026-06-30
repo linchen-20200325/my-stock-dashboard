@@ -607,10 +607,18 @@ ETF_QUICK_SIGMA_OVERBOUGHT: float = 2.0
 # user 2026-06-27 audit 殘留個股 Tab inline magic 收尾。
 # ════════════════════════════════════════════════════════════════
 
-# ── 布林帶邊界(U-10)──
+# ── 布林帶邊界 2-tier(LOOSE warning / STRICT action,U-10 + Batch 5d v18.432)──
 BB_NEAR_UPPER_RATIO: float = 0.97
-"""布林帶「貼近上軌」訊號:close >= upper × 0.97 → 強勢突破預警。
-原 tab_stock.py:746 inline。"""
+"""布林帶「貼近上軌」LOOSE tier(3% tolerance):close >= upper × 0.97 → 強勢突破預警。
+原 tab_stock.py:746 inline,U-10 v18.331 抽出。
+caller:tab_stock.py / section_when_buy_sell.py / tech_indicators.py(calc_bollinger 結果 dict)
+語意:篩選/掃描用,寬鬆判斷「靠近上軌」涵蓋更多 candidates。"""
+
+BB_NEAR_UPPER_STRICT_RATIO: float = 0.995
+"""布林帶「貼近上軌」STRICT tier(0.5% tolerance):close >= upper × 0.995 → 短線爆發買點(嚴格)。
+v18.432 Batch 5d 抽出。
+caller:src/compute/strategy/v5_modules.py:247(布林通道訊號 fn)
+語意:訊號層 action,嚴格門檻避免假突破誤判;與 LOOSE 0.97 形成 2-tier 漸進判讀。"""
 
 BB_DROP_OUT_RATIO: float = 0.95
 """布林帶「跌出上軌」訊號:close < upper × 0.95 且 close > ma → 動能轉弱。

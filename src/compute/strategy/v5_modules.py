@@ -14,6 +14,7 @@ from shared.thresholds import (
 )
 # v18.241 E12: 龍多股篩選門檻從 shared SSOT 引入
 from shared.signal_thresholds import (
+    BB_NEAR_UPPER_STRICT_RATIO,  # Phase 2 Batch 5d v18.432:布林貼近上軌 STRICT tier SSOT
     CONTRACT_LIABILITY_YOY_GROWTH_THRESHOLD_PCT,
     CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT,
 )
@@ -244,7 +245,9 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
     bw_pct  = round(float((bw_hist.tail(120) < bw).mean() * 100), 1)
 
     # 訊號判斷
-    near_upper = close_now >= upper * 0.995
+    # v18.432 Batch 5d:0.995 → BB_NEAR_UPPER_STRICT_RATIO SSOT(STRICT tier,訊號層 action 用嚴格門檻)
+    # 對應 LOOSE tier BB_NEAR_UPPER_RATIO=0.97(tech_indicators / tab_stock 篩選用,寬鬆 3% tolerance)
+    near_upper = close_now >= upper * BB_NEAR_UPPER_STRICT_RATIO
     bw_squeeze = bw_pct < 20  # 帶寬在近120日最低20%
 
     if near_upper and bw > 3:

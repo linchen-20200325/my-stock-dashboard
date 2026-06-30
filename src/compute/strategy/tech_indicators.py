@@ -21,6 +21,9 @@ import sys
 
 import pandas as pd
 
+# Phase 2 Batch 5d v18.432:布林貼近上軌 LOOSE tier SSOT(原 0.97 inline,calc_bollinger 'near_upper')
+from shared.signal_thresholds import BB_NEAR_UPPER_RATIO
+
 # S-MED v18.304: 5 處 silent `except Exception:` 改 narrow + stderr log
 # 介面保留(None / (None, None) / dict),caller 不需改
 
@@ -115,7 +118,7 @@ def calc_bollinger(df, window=20, mult=2):
             'bw':    round(float(_bw), 2),
             'bw_mean': round(float(bw.mean()) if 'bw' in dir() else 0, 2),
             'price': round(float(df['close'].iloc[-1]), 2),
-            'near_upper': float(df['close'].iloc[-1]) >= float(_u) * 0.97,
+            'near_upper': float(df['close'].iloc[-1]) >= float(_u) * BB_NEAR_UPPER_RATIO,
         }
     except Exception as e:
         print(f'[tech_indicators/calc_bollinger] window={window} fail: {type(e).__name__}: {e}', file=sys.stderr)
