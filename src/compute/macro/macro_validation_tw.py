@@ -31,36 +31,13 @@ from typing import Optional
 
 import pandas as pd
 
-DEFAULT_PARQUET_CACHE_DIR = Path("data_cache")
-
-
-# ════════════════════════════════════════════════════════════════
-# Parquet 讀取
-# ════════════════════════════════════════════════════════════════
-def load_twii_close_from_parquet(
-    cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
-) -> pd.Series:
-    """讀 twii_ohlcv.parquet → close pd.Series indexed by date (Timestamp).
-
-    twii_ohlcv 為 OHLCV 多欄；本函式只取 close 欄。
-    """
-    path = cache_dir / "twii_ohlcv.parquet"
-    if not path.exists():
-        return pd.Series(dtype=float, name="twii_close")
-    try:
-        df = pd.read_parquet(path)
-        if df.empty or "date" not in df.columns or "close" not in df.columns:
-            return pd.Series(dtype=float, name="twii_close")
-        df = df.copy()
-        df["date"] = pd.to_datetime(df["date"])
-        s = (df.set_index("date")["close"]
-               .astype(float)
-               .sort_index())
-        s.name = "twii_close"
-        return s.dropna()
-    except Exception as e:  # noqa: BLE001
-        print(f"[macro_validation_tw/load_twii] 讀檔失敗：{e}")
-        return pd.Series(dtype=float, name="twii_close")
+# C4 v18.402:Parquet I/O 抽 L1(落實 §8.2 L2 純函式契約)。
+# DEFAULT_PARQUET_CACHE_DIR + load_twii_close_from_parquet 均歸位
+# `src/data/macro/macro_cache_reader.py`;本檔 import alias 維持原 caller 介面。
+from src.data.macro.macro_cache_reader import (  # noqa: E402
+    DEFAULT_PARQUET_CACHE_DIR,
+    load_twii_close as load_twii_close_from_parquet,
+)
 
 
 # ════════════════════════════════════════════════════════════════
