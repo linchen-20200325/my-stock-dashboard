@@ -123,44 +123,45 @@ my-stock-dashboard/
 
 LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 
-### 0.5 已完成項目進度(v18.359 → v18.411)
+### 0.5 已完成項目進度(v18.359 → v18.420)
 
 | ID | 原狀態 | 現狀態 | 證據 |
 |---|---|---|---|
 | **F-5** | 待動工 | ⚠️ 部分:`src/services/` 19 檔已建立但仍以 wrapper 為主,full facade(MarketDataFacade)未實作 | `src/services/` 樹存在 |
 | **F-6** | 待動工(🔴 高) | ✅ **100% 完成** | 87 root .py → src/ 各子目錄 + 0 root 殘留 + 130+ 修補 import |
-| **F-7** | 待動工(🔴 高) | ✅ **大部分完成** | tab_macro 5387→488(-91%)、tab_stock 3672→1670(-54.5%);data_loader 2286 / etf_fetch 1948 / macro_core 1492 / leading_indicators 1391 / health_inspector 1386 經 audit 無進一步拆檔必要(內聚力強) |
-| **F-8** | 待動工(🔴 高) | ⚠️ 部分:三大法人雙路徑已 v18.244 確認職責不同(T86 / BFI82U / FinMind 各司其職);yfinance 部分走 yf_proxy facade,FinMind 仍 34 處 URL 散落 | 0.7 表 4 |
+| **F-7** | 待動工(🔴 高) | ✅ **完成** | tab_macro 5387→488(-91%)、tab_stock 3672→1670(-54.5%)、**tab_stock_grp 3673→303(-91.8%,Batch 7 全 5 子批 v18.413~417)**;data_loader 2286 / etf_fetch 1948 / macro_core 1492 / leading_indicators 1391 / health_inspector 1386 經 audit 無進一步拆檔必要(內聚力強) |
+| **F-8** | 待動工(🔴 高) | ✅ **大部分完成** | FinMind URL 全集中(Batch 10 / 10b v18.412,29 + 12 處,共 22 檔)+ TWSE BFI82U URL 集中(Batch 8.1 v18.420);三大法人 4 路 dispatcher WONTFIX(audit 證實職責不同);yfinance 走 yf_proxy facade。 |
 
-### 0.6 真重複殘餘 — 4 大 fetcher 雙寫(待 user 排程)
+### 0.6 真重複殘餘 — 4 大 fetcher 雙寫(post-Batch-3/5/8/10/10b/8.1 收尾)
 
-| ID | 重複項 | 散落位置 | 嚴重度 |
+| ID | 重複項 | 散落位置 | 嚴重度 / 結果 |
 |---|---|---|---|
-| **R-FETCH-1** | 股本 `_fetch_share_capital` | `src/ui/tabs/tab_stock.py:71`(UI 層 L1 fetcher,§8.2 違憲)| 🟡 中 — 已被 `_precompute_xsec` 集中呼叫,但位置錯層;應遷至 `src/data/stock/` |
-| **R-FETCH-2** | 月營收 fetcher | `src/data/core/data_loader.py:802-999` `get_monthly_revenue()`(3 段 FM0/FM/MOPS) + `src/data/stock/monthly_revenue_fetcher.py:47,104`(僅 FM)+ `src/data/stock/app_stock_fetchers.py:405`(wrapper)| 🔴 高 — 同 dataset 三條路 |
-| **R-FETCH-3** | 三大法人 | `data_loader.py:161` `_fetch_twse_inst_fallback` + `daily_data_fetchers.py:233` `fetch_institutional` + `leading_indicators.py:580` `twse_institutional_day` + `nas_server.py:94` NAS gateway | 🟡 中 — v18.244 audit 確認職責不同(個股 / 大盤 / 先行指標 / 代理),非真重複,但缺中央 dispatcher |
-| **R-FETCH-4** | 配息 | `app_stock_fetchers.py:129` `fetch_dividend_data`(3 源備援)vs `dividend_fetcher.py:27` `fetch_annual_dividends`(yfinance 單源)| 🟡 中 — 個股 / ETF 雙寫,可共用 base |
-| **附帶** | FinMind URL hardcode | `data_loader.py(10)` + `app_stock_fetchers.py(3)` + `macro_core.py / etf_fetch.py / daily_data_fetchers.py` 共 34 處 | 🟢 低 — 該集中至 `data_registry` template |
+| ~~**R-FETCH-1**~~ | ~~股本 `_fetch_share_capital`~~ | ✅ **Batch 3 v18.412 已遷至 `src/data/stock/share_capital_fetcher.py`** | ✅ 完成 |
+| ~~**R-FETCH-2**~~ | ~~月營收 fetcher 3 條路~~ | Batch 5 audit(v18.412 + 重啟 audit v18.420)確認:同 dataset 但 3 條路 wrapper 各自負責不同 downstream(個股深度 / 健康度趨勢 / 全市場 batch),endpoint level 已被 Batch 10 收 SSOT,wrapper 差異有理由保留 | ⊘ **WONTFIX**(2 次 audit 證實) |
+| ~~**R-FETCH-3**~~ | ~~三大法人 4 路~~ | Batch 8 audit(v18.412 + 重啟 audit v18.420)確認:4 路中 3 路 FinMind 已全 SSOT(via FINMIND_API_URL),Path 2 TWSE BFI82U URL **Batch 8.1 v18.420 已收**;dispatcher 統一仍 WONTFIX(endpoint 業務差異真實) | ⊘ **dispatcher WONTFIX / URL ✅** |
+| **R-FETCH-4** | 配息 | `app_stock_fetchers.py:129` `fetch_dividend_data`(3 源備援)vs `dividend_fetcher.py:27` `fetch_annual_dividends`(yfinance 單源)| ⊘ **WONTFIX**(v18.420 audit:output format / 5y cutoff / fallback chain 差異大,共用 helper 收益不抵增加耦合) |
+| ~~**附帶** FinMind URL~~ | ~~34 處 hardcode~~ | ✅ **Batch 10 + 10b v18.412 全收**(22 檔 → `FINMIND_API_URL` SSOT)+ **Batch 8.1 v18.420 補 TWSE_BFI82U_URL** | ✅ 完成 |
 
-### 0.7 真重複殘餘 — 4 大計算 SSOT 缺口(待 user 排程)
+### 0.7 真重複殘餘 — 4 大計算 SSOT 缺口(post-Batch-1a/1b/4/6/9/9-2 收尾)
 
-| ID | 缺口 | 散落位置 | 嚴重度 |
-|---|---|---|---|
-| **R-CALC-1** | RSI 雙寫 | `src/compute/strategy/tech_indicators.py:28` `calc_rsi()` + `src/compute/scoring/scoring_engine.py:48` `compute_rsi()` 同公式異名 | 🟡 中 — 演算法等價,擇一即可 |
-| **R-CALC-2** | MA scalar inline 殘留 31 處 | `tab_stock.py:562-564`(3)+ `etf_tab_single.py:581-582`(2)+ `etf_helpers.py:140,142`(2)+ `market_strategy.py:219-226`(4)+ `section_when_buy_sell.py:247-248` 等 | 🟡 中 — `safe_ma` / `calc_ma_series` 已 SSOT,但 inline `.rolling().mean().iloc[-1]` 仍散落 |
-| **R-CALC-3** | 乖離率 inline 漏網 5 處 | `macro_snapshot.py:261` + `etf_tab_single.py:519,532,589,600`(4)+ `section_state.py:51-52` | 🟢 低 — C1 v18.401 抽 8 處,但 5 處新增/漏網 |
-| **R-CALC-4** | 健康評分三套未對帳 | `macro_helpers.py:94-98` Method A(加權)+ `health_reconcile.py:64-106` Method B(等權)+ `risk/reconcile.py:158-202` `compute_health_score_arithmetic` / `_min_of_factors`(短板)| 🔴 高 — §4.3 對帳函式已建,但**未嵌入生產 render 路徑**(只在 audit panel) |
-| **附帶** | 趨勢分類 inline 8 處 | `scoring_helpers.py:141-152` + `scoring_engine.py:92-98` + `stats_helpers.py:55` | 🟢 低 — `classify_trend_4tier` 已 SSOT |
-| **附帶** | 殖利率三層未統一 | `etf_calc.py:168` + `etf_helpers.py:249` + `v5_modules.py:273` + `tab_stock_picker.py:457-463` inline | 🟢 低 — 個股 vs ETF 公式不同(365 day vs groupby.sum),需業務決策 |
+| ID | 缺口 | 結果 |
+|---|---|---|
+| ~~**R-CALC-1**~~ | ~~RSI 雙寫~~ | ✅ **Batch 1b v18.412 已收**:`calc_rsi` thin wrapper 委派 `compute_rsi` 數學 kernel |
+| ~~**R-CALC-2**~~ | ~~MA scalar inline 殘留 31 處~~ | ✅ **Batch 4 v18.412 已收**(5 子批,`safe_ma` SSOT) |
+| ~~**R-CALC-3**~~ | ~~乖離率 inline 漏網 5 處~~ | ✅ **Batch 1a v18.412 已收**(`calc_bias_pct` SSOT)+ Batch 9 v18.418 補 `classify_stock_357_price` |
+| ~~**R-CALC-4**~~ | ~~健康評分三套未對帳~~ | ✅ **Batch 6 v18.412 已嵌入 production**:`macro_helpers.calc_traffic_light` 內呼 `reconcile_health_score`,差異 > tolerance 時 stderr 輸出(§4.3 對帳已落地)|
+| ~~**附帶** 趨勢分類 inline 8 處~~ | ~~scoring_helpers + scoring_engine + stats_helpers~~ | ⊘ **WONTFIX**(v18.420 audit:這些是 scoring fn,非 label classification fn;`classify_trend_4tier` SSOT 已存,scoring fn 是別的物件;`stats_helpers.py` 不存在) |
+| ~~**附帶** 殖利率三層未統一~~ | ~~etf_calc + etf_helpers + v5_modules + tab_stock_picker~~ | ⊘ **WONTFIX**(個股 vs ETF 公式不同 — 365-day rolling vs groupby.sum,業務需求差異);ETF tab_single 已 Batch 9-2 v18.419 走 `classify_yield_zone` SSOT |
+| **附帶** | 配息 helper(R-FETCH-4 別表) | 已歸 0.6 表 → WONTFIX |
 
-### 0.8 真重複殘餘 — UI inline HTML / Tab 模組化缺口
+### 0.8 真重複殘餘 — UI inline HTML / Tab 模組化缺口(post-Batch-2/7 收尾)
 
-| ID | 缺口 | 散落位置 | 嚴重度 |
-|---|---|---|---|
-| **R-UI-1** | inline `<div style="background:...border-left:...">` 殘留 12 處 | `tab_stock.py:229,277,575,1666`(4)+ `tab_stock_grp.py:525,710,1201`(3)+ `section_357_valuation.py:120,159`(2)+ `section_health_score.py:178`(1)+ macro section ~8 處 | 🟢 低 — `tab_sections.box_wrapper_open/close` + `border_left_banner` SSOT 已建,但 U2-b migration 未竟尾 |
-| **R-UI-2** | `tab_stock_grp.py`(1509 LOC)未走 section 模組化 | 個股組合 Tab 仍有自行計算的 fundamental 邏輯(行 L407+)| 🟡 中 — 個股 Tab 已抽 13 section,組合 Tab 落後一輪 |
-| **附帶** | plotly 圖表重複 | 0 處 ✅ | 已透過 `chart_plotter.plot_combined_chart / revenue / quarterly` SSOT |
-| **附帶** | ETF KPI 跨 Tab 共用 | ✅ | `src.compute.etf` 已 SSOT,3 大 ETF Tab 共用 23 個 helper |
+| ID | 缺口 | 結果 |
+|---|---|---|
+| **R-UI-1** | inline border-left HTML(現 51 處) | ⊘ **WONTFIX**(v18.420 audit):Batch 2 v18.412 已收 SSOT-able 簡單 banner;殘留 51 處全是 multi-line bespoke shapes(gradient bg / nested divs / dynamic color / 多段文字),強制套 `border_left_banner` 會擴大 API surface 或在 caller 端 wrap inline,反 SSOT 初衷 |
+| ~~**R-UI-2**~~ | ~~`tab_stock_grp.py`(1509 LOC)未走 section 模組化~~ | ✅ **Batch 7 全 5 子批 v18.413~417 完成**:1509 → 303 LOC(-79.9%),抽 5 個 section 模組(market_status / batch_fetcher / portfolio_summary / financial_health / ai_portfolio) |
+| **附帶** | plotly 圖表重複 | 0 處 ✅ |
+| **附帶** | ETF KPI 跨 Tab 共用 | ✅ `src.compute.etf` SSOT,3 大 ETF Tab 共用 23 個 helper |
 
 ### 0.9 已 SSOT 化的優良範例(audit 驗證)
 
