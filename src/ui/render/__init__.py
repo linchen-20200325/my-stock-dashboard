@@ -5,10 +5,12 @@ P1-2 v18.373:macro_snapshot.py 搬至 src/data/macro/macro_snapshot.py(L1)
 """
 from . import (  # noqa: F401
     chart_plotter, etf_render, ui_widgets, macro_ui_components, tab_sections,
+    app_render,
 )
 
 _SUBMODULES = (
     chart_plotter, etf_render, ui_widgets, macro_ui_components, tab_sections,
+    app_render,
 )
 
 
