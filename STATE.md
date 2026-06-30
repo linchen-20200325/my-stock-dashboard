@@ -1,10 +1,30 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🚀 目前狀態(v18.429 — Phase 2 全 5 batch 收尾後 post-merge audit ✅ PASS)
+## 🚀 目前狀態(v18.436 — post-PR#433 連續批次:pandera + prov 收尾 + WONTFIX 翻案 + 全做 audit)
 
-✅ **Phase 2 全完成**(2026-06-30 PR #429~#433 共 5 PR 合併)。
-✅ Post-merge SSOT + §8.2 audit:0 高風險違規,僅 2 個中風險 SSOT 微缺口(WONTFIX 候選)。
-等待 user 指派下一輪工作。
+✅ **Phase 2 全完成**(2026-06-30 PR #429~#433 共 5 PR 合併,base v18.429)。
+✅ **post-merge 連續批次**(2026-06-30,branch `claude/dazzling-turing-QxI9m`,未開 PR):
+- **v18.430-432**:scoring_helpers:239 BW shrink SSOT 漏網 + EX-OAUTH-1 正式登錄 + SSOT-BB-MULTI 2-tier(布林近上軌 0.97 LOOSE / 0.995 STRICT)
+- **v18.433-434 pandera POC**:P1 落地 3 hot-path fetcher(OHLCV/ETF/月營收)+ P2 補 PMI/ForeignFlow schema + P3 補 4 macro 時序(cpi/unemp/discount/usdtwd)log-mode 驗證
+- **v18.434 S-PROV-1 收尾**:ETF 2 + macro 3 漏網 fetcher prov;個股 4 fetcher prov(其餘大批 audit 重盤後確認 pre-existing 已 prov)
+- **v18.435 WONTFIX 翻案(深挖)**:S-MED 仍 0 真 bug,但 §8.3 灰色地帶深挖找出 4 個真 latent bug 並修:
+  - cache_layer sentinel violation(合法 None 被當 miss)
+  - daily_data_fetchers pickle.load file handle leak(無 with block)
+  - app.py _gemini_rr round-robin race(讀+寫非 atomic → 加 Lock)
+  - stock_names_fetcher _dynamic_cache rebind race(改 .clear()+.update() in-place)
+- **v18.436 全做 audit(7 維度 + 對抗驗證,78 候選→32 survived)**:
+  - C:8 inline magic SSOT 化(外資期貨防禦/VPOC/經理任期/FGMS 退路/KD/IBS/量比/547 回測)
+  - #21:health_inspector「待補抓」空承諾 → 誠實導引手動更新
+  - #23:calc_bias_pct_series series SSOT(etf_render inline 收斂)
+  - #22/#20:doc 對齊(inst_sanity helper 已落地待 consumer / foreign_net 單位外部阻斷)
+  - #25:false-positive(R1 wrapper 5/5 在用,分散 section 檔)
+
+✅ **架構淨檢(v18.436 全域 audit)**:§8.2 分層違規維度 = **0**(除已登錄 EX-* 例外)。
+
+### 殘餘待辦(全 LOW / 非阻斷,§-1 預設停手)
+- 測試覆蓋:9 模組(v4_strategy_engine 等核心 + L1 fetcher)無獨立測試 — v18.436 補測批進行中
+- pandera P3 長尾:30+ dict-return fetcher 無 tabular shape,維持 WONTFIX(無法套 DataFrame schema)
+- foreign_net 啟用:待外部確認 FinMind buy/sell 單位(非程式項)
 
 ## 📊 累計度量(v18.429)
 
