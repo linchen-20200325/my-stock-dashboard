@@ -80,4 +80,11 @@
 ⏳ **Phase 2-5 動工建議**:每 phase 由 user 明確授權 + 跑完 streamlit 視覺驗證後再進下一 phase。
 單次 session 內不再連續推進,避免「視覺驗證盲點」造成 UI 隱性破壞。
 
-**目前 tab_stock.py 保持 3477 LOC,等 user 啟動 Phase 2 命令再單獨動工。**
+**目前 tab_stock.py 保持 3478 LOC,等 user 啟動 Phase 2 命令再單獨動工。**
+
+## v18.405 進度補註
+
+- U5 B3-δ(app.py L1 fetcher 抽 src/data/stock/app_stock_fetchers.py)已交付(獨立工作,-376 LOC)
+- U4 Phase 2 真實 section 抽出仍**未啟動** — 因抽 1 段需傳 10-30+ args 並手動驗 UI,
+  風險顯著高於 U5 B3-δ 的 L1 fetcher 抽出(L1 純 I/O 函式無 UI 副作用)
+- Phase 2 動工時建議:每 section 一次 commit,push 後手動跑 streamlit 視覺驗收,再進下一段
