@@ -37,6 +37,7 @@ except ImportError:
 
 # v18.346 PR-N3:fetch_institutional 用 cache_layer + _bps + FINMIND_TOKEN
 from shared.cache_layer import _CACHE_SENTINEL, _pkl_get, _pkl_put
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.macro_compute import _recent_date
 from shared.ttls import TTL_30MIN, TTL_1HOUR
 from src.config import TTL_CONFIG as _TTL_CFG
@@ -203,7 +204,7 @@ def _fetch_otc_via_finmind(token: str = ""):
         return None
     try:
         start = (datetime.date.today() - datetime.timedelta(days=90)).strftime('%Y-%m-%d')
-        r = _bps().get("https://api.finmindtrade.com/api/v4/data",
+        r = _bps().get(FINMIND_API_URL,
                        params={"dataset": "TaiwanStockDaily", "data_id": "OTC", "start_date": start},
                        headers={"Authorization": f"Bearer {FINMIND_TOKEN}"}, timeout=20)
         j = r.json()

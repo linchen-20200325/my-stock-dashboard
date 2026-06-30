@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
+
 import os
 import time
 import streamlit as st
@@ -141,7 +143,7 @@ def render_api_diagnostic():
         keys = {r['name']: r['val'] for r in rows}
         tests = [
             ('FinMind (需 token)',
-             'https://api.finmindtrade.com/api/v4/data',
+             FINMIND_API_URL,
              {'dataset': 'TaiwanStockInfo', 'stock_id': '2330',
               'token': keys.get('FINMIND_TOKEN', '')}),
             ('Gemini API (需 key)',

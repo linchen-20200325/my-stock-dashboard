@@ -39,6 +39,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from shared.ttls import TTL_3DAY, TTL_7DAY
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 
 # ─────────────────────────────────────────────
 # §1 Constants
@@ -587,7 +588,7 @@ def fetch_5_years_cash_flow(stock_code: str, token: str = "") -> dict:
 
         session = build_proxy_session()
         r = session.get(
-            "https://api.finmindtrade.com/api/v4/data",
+            FINMIND_API_URL,
             params=params,
             headers={"User-Agent": random.choice(_USER_AGENTS)},
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),

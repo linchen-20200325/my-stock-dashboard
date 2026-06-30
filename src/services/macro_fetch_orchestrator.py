@@ -19,6 +19,8 @@
 """
 from __future__ import annotations
 
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
+
 import datetime as _dt
 import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -199,7 +201,7 @@ def fetch_macro_bundle(
                 import pandas as _pd
                 _start_i = (_dt.date.today() - _dt.timedelta(days=5)).strftime('%Y-%m-%d')
                 _ri = bps_session.get(
-                    'https://api.finmindtrade.com/api/v4/data',
+                    FINMIND_API_URL,
                     params={'dataset': 'TaiwanStockTotalInstitutionalInvestors',
                             'start_date': _start_i, 'token': fm_token},
                     headers={'Authorization': f'Bearer {fm_token}'},

@@ -7,6 +7,7 @@ daily_checklist.py v6.0 — Squid Proxy 模式
 import requests, pandas as pd, datetime, os, time, re
 import urllib3
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.ttls import TTL_1HOUR
 # v18.325 PR-C: 融資餘額紅線改用既有 SSOT（原 inline 3400，§3.3 反捏造）
 from shared.signal_thresholds import (
@@ -143,7 +144,7 @@ def analyze_20d_chips(stock_id: str) -> dict:
     try:
         import pandas as _pd20
         _start = (_dt20.date.today() - _dt20.timedelta(days=50)).strftime('%Y-%m-%d')
-        _base  = 'https://api.finmindtrade.com/api/v4/data'
+        _base  = FINMIND_API_URL
         _hdrs  = {'Authorization': f'Bearer {FINMIND_TOKEN}'} if FINMIND_TOKEN else {}
         _common = {'token': FINMIND_TOKEN} if FINMIND_TOKEN else {}
 

@@ -33,8 +33,9 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.ttls import TTL_6HOUR
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 
-FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
+FINMIND_URL = FINMIND_API_URL
 
 
 def _get_token() -> str:

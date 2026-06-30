@@ -37,6 +37,7 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.calc_helpers import calc_bias_pct
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.ttls import TTL_1HOUR
 
 
@@ -690,7 +691,7 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
         if finmind_token:
             _ex_start_fm = (_dt_ex.date.today() - _dt_ex.timedelta(days=365 * 2)).strftime('%Y-%m-%d')
             _fm_ex_r = _s_ex.get(
-                'https://api.finmindtrade.com/api/v4/data',
+                FINMIND_API_URL,
                 params={'dataset': 'TaiwanEconomicIndicator',
                         'start_date': _ex_start_fm, 'token': finmind_token},
                 timeout=10)

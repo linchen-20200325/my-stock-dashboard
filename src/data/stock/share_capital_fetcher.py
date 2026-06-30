@@ -27,6 +27,7 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.ttls import TTL_1DAY
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
@@ -51,7 +52,7 @@ def fetch_share_capital(sid: str) -> float:
         _p = {'dataset': 'TaiwanStockBalanceSheet', 'data_id': sid, 'start_date': _start}
         if _tok:
             _p['token'] = _tok
-        _r = _rq_sc.get('https://api.finmindtrade.com/api/v4/data',
+        _r = _rq_sc.get(FINMIND_API_URL,
                         params=_p, timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:

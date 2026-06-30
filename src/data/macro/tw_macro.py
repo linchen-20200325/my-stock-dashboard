@@ -34,6 +34,7 @@ from typing import Optional
 import pandas as pd
 
 from shared.ttls import TTL_10MIN, TTL_15MIN, TTL_30MIN, TTL_1HOUR
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from src.data.proxy import fetch_url
 
 __version__ = "1.1.0"
@@ -71,7 +72,7 @@ def _ttl_cache(ttl_sec: int, maxsize: int = 32):
 
 # ── 各端點 URL ────────────────────────────────────────────
 TWSE_MI_INDEX_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
-FINMIND_BASE      = "https://api.finmindtrade.com/api/v4/data"
+FINMIND_BASE      = FINMIND_API_URL
 CBC_MS1_URLS      = [
     # v18.240 SSOT — CBC ms1.json 端點清單；tw_macro._try_cbc_ms1 與
     # update_macro_history.fetch_finmind_m1m2 共用，與 fetch_cbc_ms1_rows
