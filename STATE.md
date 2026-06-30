@@ -1,6 +1,13 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🚀 目前狀態(v18.436 — post-PR#433 連續批次:pandera + prov 收尾 + WONTFIX 翻案 + 全做 audit)
+## 🚀 目前狀態(v18.437 — 清碼/死碼深掃 + SSOT 收斂批次)
+
+✅ **v18.437 清碼/死碼深掃 + SSOT 收斂**(2026-06-30,branch `claude/dazzling-turing-QxI9m`,8 commit 已推送,測試 2514 pass / 0 fail):
+- **死碼**(`47629fe`):真死碼 3 處刪(`build_ai_data_table` 0-caller / `get_proxies` 被末尾別名遮蔽的無快取 def / scoring_engine 不可達 `WEIGHT_TABLES`)+ ~53 未用 import 機械清(ruff F401,以 F821 + 全測試交叉驗)。**翻案排除**:tab_stock/tab_macro 87 個 import(被 source-string SSOT 守衛 + except handler `ThreadPoolExecutor` NameError 防護綁定,機械清會 regression)+ `emoji_to_hex`(跨 repo auto-sync 檔,DO NOT EDIT)。
+- **D1/D2/D4 計算層重複公式 → SSOT**(`af7da37`,+12 測試,數值等價驗證):布林帶寬(scoring_engine 走 `calc_bollinger_width_series`)/ z-score(`macro_core` + `multi_factor` → `shared.stats_helpers.zscore`)/ ETF 折溢價(etf_calc → `calc_premium_discount_pct` 委派 calc_bias_pct,不另抄)。v5_modules 布林**翻案不收**(upper/lower 為回傳值,走 series helper 反成雙重計算)。
+- **D3 pkl 磁碟快取 → cache_layer SSOT**(`6b54763`):`fetch_single` + `fetch_flow_snapshot` 收(同檔 fetch_institutional 模式,inline 30 分 magic → TTL_30MIN)。`fetch_adl`/`build_leading_fast` **翻案不收**(自訂 _alog / PR-L2 stale-fallback 富快取,非簡單樣板)。
+- **D6 provenance log → prov_log SSOT**(`f052415`):8 站手寫多行 stderr provenance print 收斂為 `prov_log()`。
+- **D5 FinMind client 正規重構**(`69a462a`/`732e0f5`/`4ccd09a`,+8 測試,§8 user 核准):新增 `src/data/core/finmind_client.py`(L1 SSOT,零行為漂移設計)+ `leading_indicators.finmind_get` 改 thin re-export;遷 4 站 plain-requests GET。**深查翻案(最重要)**:audit 原報「~12 站重複」,實測剩 ~14 站「看似重複、語意實不同」— Proxy Session 站(帶 NAS Squid 代理 + Retry + verify=False,geo-block 繞道核心)+ HTTP-status-gating 站(gate on resp.status_code 而非 JSON status)暫遷後 **7 測試紅 → 全還原**,確認**不可機械收斂**,理由寫入 finmind_client docstring「適用範圍」防再誤報。
 
 ✅ **Phase 2 全完成**(2026-06-30 PR #429~#433 共 5 PR 合併,base v18.429)。
 ✅ **post-merge 連續批次**(2026-06-30,branch `claude/dazzling-turing-QxI9m`,未開 PR):
