@@ -52,7 +52,9 @@ class TestQ5bMarkersInSource(unittest.TestCase):
         self.assertIn('src.data.core.data_loader._fetch_tpex_inst_fallback:TPEx 三大法人', src)
 
     def test_tab_stock_2(self):
-        src = self._read('src/ui/tabs/tab_stock.py')
+        # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 section_357_valuation
+        src = (self._read('src/ui/tabs/tab_stock.py')
+               + self._read('src/ui/tabs/stock_sections/section_357_valuation.py'))
         # _fetch_share_capital + _fetch_pbratio_from_twse 新增 success-path log
         self.assertIn('FinMind:TaiwanStockBalanceSheet', src)
         self.assertIn('TWSE:OpenAPI:BWIBBU_d(via yield_screener)', src)
