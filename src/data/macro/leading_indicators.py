@@ -35,7 +35,7 @@ import pandas as pd
 import requests
 import urllib3
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
+from src.config import FINMIND_API_URL, TWSE_BFI82U_URL  # Batch 10b v18.412 + Batch 8.1 v18.420 SSOT
 from shared.ttls import TTL_30MIN
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -580,7 +580,7 @@ def twse_volume_daily(ymd8):
 @_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def twse_institutional_day(date_ymd):
     try:
-        r = _TWSE_S.get("https://www.twse.com.tw/fund/BFI82U",
+        r = _TWSE_S.get(TWSE_BFI82U_URL,
                         params={"response":"json","dayDate":date_ymd},
                         headers=TWSE_HDR, timeout=15)
         d = r.json()
