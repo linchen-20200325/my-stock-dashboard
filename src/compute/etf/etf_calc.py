@@ -4,7 +4,21 @@ ETF 計算層（calc layer）
 依賴：etf_fetch（單向；calc 永遠不依賴 render）。
 """
 import sys  # v18.339 PR-J3 S-MED 真高風險:silent except 改 stderr log
-import streamlit as st
+
+# §8.2.A EX-CACHE-1 v18.422:條件 import streamlit + 無 UI 呼叫 fallback。
+# 本檔僅用 @st.cache_data 裝飾器(L37 / L563 / L833),無 st.session_state /
+# st.error / st.markdown 等真 UI 呼叫 → 對齊 P2-EX v18.393 letter compliant 標準。
+try:
+    import streamlit as st
+except ImportError:
+    class _NoOpST:
+        @staticmethod
+        def cache_data(*args, **kwargs):
+            if args and callable(args[0]):
+                return args[0]
+            return lambda f: f
+        cache_resource = cache_data
+    st = _NoOpST()  # noqa
 import pandas as pd
 # v18.358 PR-R1 §8.2 A7 修:原 `import yfinance as yf` 為 L2 違規(L2 不得 HTTP I/O)。
 # yfinance 唯一用途(compute_etf_peer_ranking L587)已抽至 etf_fetch.fetch_etf_peer_history(L1)。
