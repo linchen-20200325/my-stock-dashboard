@@ -11,6 +11,8 @@ Phase 3(中風險 section,v18.407):
 - section_357_valuation: B 357 殖利率評價 + 殖利率/PE/PB 3 河流圖
 - section_strategy_conclusion: 策略 1 結論(月營收/毛利率/SQ/FGMS) + MJ 趨勢分數合議
 - section_d2_leading: D2 基本面先行 6 大指標 + 動態投資建議
+- section_vcp_bollinger: E VCP 波幅收縮 + 布林通道(v18.409 U4 Phase 3-E)
+- section_kline_chart: F K線技術圖 + 健康度走勢(v18.409 U4 Phase 3-F)
 
 後續 Phase 3-4 將陸續加入更多 section。
 """
@@ -28,6 +30,9 @@ from src.ui.tabs.stock_sections.section_financial_leading import (
 from src.ui.tabs.stock_sections.section_health_score import (
     render_health_score_section,
 )
+from src.ui.tabs.stock_sections.section_kline_chart import (
+    render_kline_chart_section,
+)
 from src.ui.tabs.stock_sections.section_op_recommendation import (
     render_op_recommendation_section,
 )
@@ -38,14 +43,19 @@ from src.ui.tabs.stock_sections.section_revenue import render_revenue_trend_sect
 from src.ui.tabs.stock_sections.section_strategy_conclusion import (
     render_strategy_conclusion_section,
 )
+from src.ui.tabs.stock_sections.section_vcp_bollinger import (
+    render_vcp_bollinger_section,
+)
 
 __all__ = [
     'render_357_valuation_section',
     'render_d2_leading_section',
     'render_financial_leading_section',
     'render_health_score_section',
+    'render_kline_chart_section',
     'render_op_recommendation_section',
     'render_psy_checklist_section',
     'render_revenue_trend_section',
     'render_strategy_conclusion_section',
+    'render_vcp_bollinger_section',
 ]
