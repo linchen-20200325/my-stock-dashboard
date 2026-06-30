@@ -27,7 +27,6 @@ User 需求：「基金有這測試總經的預測力，台股沒有看到」.
 """
 from __future__ import annotations
 
-import sys as _sys_prov_msl
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal, Optional
@@ -46,9 +45,8 @@ def _attach_prov(series: pd.Series, source: str) -> pd.Series:
         if hasattr(series, 'attrs'):
             series.attrs.setdefault('source', source)
             series.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
-        _now = series.attrs.get('fetched_at', '?') if hasattr(series, 'attrs') else '?'
-        print(f'[{series.name}] source={source} fetched_at={_now} '
-              f'result=series:{len(series)}pts', file=_sys_prov_msl.stderr)
+        from src.data.core.provenance import prov_log
+        prov_log(str(series.name), source, f'series:{len(series)}pts')
     except Exception:
         pass
     return series

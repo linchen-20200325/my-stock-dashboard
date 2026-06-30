@@ -328,16 +328,12 @@ def _fetch_fs_safe(stock_id: str) -> dict:
     """安全包裝 data_loader.fetch_financial_statements。失敗回 {}。"""
     try:
         from src.data.core import fetch_financial_statements
+        from src.data.core.provenance import prov_log
         _r = fetch_financial_statements(stock_id)
         _result = _r if isinstance(_r, dict) and 'error' not in _r else {}
-        # v18.356 PR-Q5b S-PROV-1 phase 19
-        try:
-            import sys as _sys_p, datetime as _dt_p
-            print(f'[_fetch_fs_safe] sid={stock_id} source=src.data.core.data_loader.fetch_financial_statements '
-                  f'fetched_at={_dt_p.datetime.utcnow().isoformat()}Z '
-                  f'result=dict:{len(_result)}keys', file=_sys_p.stderr)
-        except Exception:
-            pass
+        # v18.356 PR-Q5b S-PROV-1 phase 19 — prov_log emits [_fetch_fs_safe] marker
+        prov_log('_fetch_fs_safe', 'src.data.core.data_loader.fetch_financial_statements',
+                 f'dict:{len(_result)}keys', ticker=stock_id)
         return _result
     except Exception as e:
         print(f'[picker/fs] {stock_id}: {type(e).__name__}: {e}')
@@ -372,6 +368,7 @@ def _fetch_quarterly_is(stock_id: str) -> dict:
     import os as _os_q
     import datetime as _dt_q
     import requests as _rq_q
+    from src.data.core.provenance import prov_log
     try:
         _tok = _os_q.environ.get('FINMIND_TOKEN', '')
         _start = (_dt_q.date.today() - _dt_q.timedelta(days=900)).strftime('%Y-%m-%d')
@@ -394,15 +391,9 @@ def _fetch_quarterly_is(stock_id: str) -> dict:
                 continue
             _quarters.setdefault(_d, {})[_t] = _v
         _quarters['_dates'] = sorted([d for d in _quarters if d != '_dates'], reverse=True)
-        # v18.356 PR-Q5b S-PROV-1 phase 19
-        try:
-            import sys as _sys_pq, datetime as _dt_pq
-            print(f'[_fetch_quarterly_is] sid={stock_id} '
-                  f'source=FinMind:TaiwanStockFinancialStatements '
-                  f'fetched_at={_dt_pq.datetime.utcnow().isoformat()}Z '
-                  f'result=dict:{len(_quarters)-1}quarters', file=_sys_pq.stderr)
-        except Exception:
-            pass
+        # v18.356 PR-Q5b S-PROV-1 phase 19 — prov_log emits [_fetch_quarterly_is] marker
+        prov_log('_fetch_quarterly_is', 'FinMind:TaiwanStockFinancialStatements',
+                 f'dict:{len(_quarters)-1}quarters', ticker=stock_id)
         return _quarters
     except Exception as _e:
         print(f'[picker/is] {stock_id}: {type(_e).__name__}: {_e}')

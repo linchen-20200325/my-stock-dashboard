@@ -28,6 +28,7 @@ except ImportError:
 
 from shared.ttls import TTL_1DAY
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
+from src.data.core.provenance import prov_log
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
@@ -70,14 +71,8 @@ def fetch_share_capital(sid: str) -> float:
                     _v = float(str(_row.get('value', 0) or 0).replace(',', ''))
                     if _v > 0:
                         # v18.356 PR-Q5b S-PROV-1 phase 19:success-path provenance
-                        try:
-                            import sys as _sys_sc
-                            print(f'[fetch_share_capital] sid={sid} '
-                                  f'source=FinMind:TaiwanStockBalanceSheet '
-                                  f'fetched_at={_dt_sc.datetime.utcnow().isoformat()}Z '
-                                  f'result=float:{_v}', file=_sys_sc.stderr)
-                        except Exception:
-                            pass
+                        prov_log('fetch_share_capital', 'FinMind:TaiwanStockBalanceSheet',
+                                 f'float:{_v}', ticker=sid)
                         return _v
                 except (TypeError, ValueError):
                     continue
