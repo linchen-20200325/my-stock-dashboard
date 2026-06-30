@@ -46,12 +46,25 @@ class TestForeignBuyPopulated(unittest.TestCase):
 
 
 class TestDisplayUnitsCorrect(unittest.TestCase):
-    """顯示單位「張」非「億」(原 bug:/1e8 假設「元」是錯的)。"""
+    """顯示單位「張」非「億」(原 bug:/1e8 假設「元」是錯的)。
+
+    v18.417 Batch 7-5:AI prompt 建構抽至 section_ai_portfolio.py;
+    本 test 改 grep tab + 所有 section file 任一即可。
+    """
+
+    def _grp_combined_src(self) -> str:
+        import glob
+        paths = ['src/ui/tabs/tab_stock_grp.py']
+        paths += sorted(glob.glob('src/ui/tabs/stock_grp_sections/*.py'))
+        chunks = []
+        for p in paths:
+            with open(p, encoding='utf-8') as f:
+                chunks.append(f.read())
+        return '\n'.join(chunks)
 
     def test_port_lines_display_uses_lots(self):
-        """L1217-area 主 AI prompt 應用「張」單位。"""
-        with open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8') as f:
-            src = f.read()
+        """主 AI prompt 應用「張」單位(可在 tab_stock_grp 或 section_ai_portfolio)。"""
+        src = self._grp_combined_src()
         # 新顯示串
         self.assertIn("外資近20日", src, 'AI prompt 應有「外資近20日」字樣')
         # 不應再有 /1e8 後直接接「億」(舊 bug pattern)

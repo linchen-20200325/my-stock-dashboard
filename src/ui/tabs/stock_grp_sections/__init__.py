@@ -7,11 +7,13 @@
 - Batch 7-2(v18.414):section_batch_fetcher — 批次抓取 + 計算 + 評分 + 風控警示
 - Batch 7-3(v18.415):section_portfolio_summary — KPI banner + ⑤ + RS + ③④
 - Batch 7-4(v18.416):section_financial_health — 批次財報體檢(5 模組 expander)
-
-後續 Batch 7-5 將加入 ai_portfolio。
+- Batch 7-5(v18.417):section_ai_portfolio — AI 投資組合綜合判讀(Tab 三層化下層)
 """
 from __future__ import annotations
 
+from src.ui.tabs.stock_grp_sections.section_ai_portfolio import (
+    render_ai_portfolio_section,
+)
 from src.ui.tabs.stock_grp_sections.section_batch_fetcher import (
     run_batch_fetch,
 )
@@ -26,6 +28,7 @@ from src.ui.tabs.stock_grp_sections.section_portfolio_summary import (
 )
 
 __all__ = [
+    'render_ai_portfolio_section',
     'render_financial_health_section',
     'render_market_status_section',
     'render_portfolio_summary_section',
