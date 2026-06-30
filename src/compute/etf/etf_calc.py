@@ -18,6 +18,7 @@ from src.compute.etf.etf_helpers import (
     calc_sigma_metrics,           # v18.334 PR-H2:σ 計算 SSOT
     classify_etf_quick_sigma,     # v18.335 PR-H3:⚡短線 σ 分級 SSOT
 )
+from shared.calc_helpers import calc_bias_pct  # C1 v18.401:乖離率 SSOT
 from shared.ttls import TTL_15MIN, TTL_1HOUR
 # v18.241 E8+E9: 抽 inline magic 到 shared SSOT
 from shared.signal_thresholds import (
@@ -79,8 +80,8 @@ def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
         _sig = calc_sigma_metrics(df, window=TRADING_DAYS_PER_YEAR)
         _ma20v = _sig['ma20']
         _ma60v = _sig['ma60']
-        _bias20 = round((_cur - _ma20v) / _ma20v * 100, 2) if (_ma20v and _ma20v > 0) else None
-        _bias60 = round((_cur - _ma60v) / _ma60v * 100, 2) if (_ma60v and _ma60v > 0) else None
+        _bias20 = calc_bias_pct(_cur, _ma20v, decimals=2)
+        _bias60 = calc_bias_pct(_cur, _ma60v, decimals=2)
 
         # ⚡ 短線 σ 位階(v18.335 PR-H3:抽至 etf_helpers.classify_etf_quick_sigma SSOT)
         # 與 etf_tab_single.py「📅 長線 σ」為不同時間尺度,文案前綴消歧義。

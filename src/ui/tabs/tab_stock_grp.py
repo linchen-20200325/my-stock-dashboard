@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from shared.calc_helpers import calc_bias_pct  # C1 v18.401:乖離率 SSOT
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.thresholds import YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC
 # v18.322 §3.3 SSOT：健康度分級 + 操作狀態燈 / 多因子入選門檻
@@ -306,7 +307,7 @@ def render_stock_grp():
                     if df4 is not None and not df4.empty:
                         _p4      = float(df4['close'].iloc[-1])
                         _ma20_4  = float(df4['close'].tail(20).mean())
-                        _bias4   = (_p4 - _ma20_4) / _ma20_4 * 100 if _ma20_4 else 0
+                        _bias4   = calc_bias_pct(_p4, _ma20_4) or 0
                         _vol4    = float(df4['volume'].iloc[-1])      if 'volume' in df4.columns else 0
                         _avgvol4 = float(df4['volume'].tail(20).mean()) if 'volume' in df4.columns else 1
                         _vol_ratio4 = _vol4 / _avgvol4 if _avgvol4 > 0 else None

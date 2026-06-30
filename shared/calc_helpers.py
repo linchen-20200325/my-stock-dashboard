@@ -33,3 +33,36 @@ def daily_return_rolling_std(close, window: int = 20):
     回傳:pd.Series(日報酬率 N-day std);caller 通常取 `.iloc[-1]`。
     """
     return close.pct_change().rolling(window).std()
+
+
+def calc_bias_pct(price, ma, *, decimals: int | None = None):
+    """乖離率 = (price - ma) / ma × 100  (%);scalar 場景 SSOT。
+
+    C1 v18.401 收斂:tab_stock.py 4 處 + etf_calc.py 2 處 + etf_helpers.py 2 處
+    重寫 `(price - ma) / ma * 100`(同公式,fall-loud guard 不一致)。
+
+    參數:
+        price: float | None 當前價(scalar)
+        ma:    float | None 移動平均(scalar)
+        decimals: int | None 四捨五入位數;None 不 round
+
+    Returns:
+        float 乖離率 %;若 price/ma 為 None 或 ma <= 0 → 回 None(non-fabricating)
+
+    範例:
+        calc_bias_pct(110, 100)             # 10.0
+        calc_bias_pct(95.3, 100, decimals=1)  # -4.7
+        calc_bias_pct(100, 0)               # None(避免 ZeroDivisionError + 不捏造)
+        calc_bias_pct(None, 100)            # None
+    """
+    if price is None or ma is None:
+        return None
+    try:
+        _ma = float(ma)
+        _p = float(price)
+    except (TypeError, ValueError):
+        return None
+    if _ma <= 0:
+        return None
+    _bias = (_p - _ma) / _ma * 100.0
+    return round(_bias, decimals) if decimals is not None else _bias
