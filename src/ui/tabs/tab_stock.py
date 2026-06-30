@@ -240,6 +240,8 @@ def render_tab_stock():
     )
     from src.compute.scoring.scoring_helpers import calc_fundamental_score, calc_health_score, health_grade  # v18.362 F-Q2:直打 submod,避撞 scoring_engine.calc_fundamental_score(同名不同 signature SSOT 違憲,留下個 PR 處理 rename)
     from src.compute.scoring import calc_rs_score, rs_slope
+    # C1 v18.401:乖離率公式 SSOT(取代 4 處 inline (price-MA)/MA*100)
+    from shared.calc_helpers import calc_bias_pct
     from src.ui.render import kpi, signal_box, teacher_conclusion
     from src.ui.render import plot_combined_chart, plot_quarterly_chart, plot_revenue_chart
     from src.data.core import fetch_financial_statements
@@ -660,8 +662,8 @@ padding:14px 18px;margin-bottom:12px;">
         # 變數準備(來自既有計算:health2 / df2)
         _ma20_now  = safe_ma(df2, 20)
         _ma240_now = safe_ma(df2, 240)
-        _bias20_pct  = ((_cur_p - _ma20_now) / _ma20_now * 100) if (_ma20_now and _cur_p > 0) else None
-        _bias240_pct = ((_cur_p - _ma240_now) / _ma240_now * 100) if (_ma240_now and _cur_p > 0) else None
+        _bias20_pct  = calc_bias_pct(_cur_p, _ma20_now)  if _cur_p > 0 else None
+        _bias240_pct = calc_bias_pct(_cur_p, _ma240_now) if _cur_p > 0 else None
         _vol_now_r = (float(df2['volume'].iloc[-1]) / float(df2['volume'].tail(20).mean())
                        if (df2 is not None and 'volume' in df2.columns and len(df2) >= 20
                            and float(df2['volume'].tail(20).mean()) > 0)
@@ -917,8 +919,8 @@ padding:14px 18px;margin-bottom:12px;">
             # 趨勢排列
             _bull_align  = _p2 > _ma20 > _ma60   # 多頭排列
             _bear_align  = _p2 < _ma20 < _ma60   # 空頭排列
-            _bias_i      = round((_p2 - _ma240) / _ma240 * 100, 1) if _ma240 else 0
-            _bias_20_i   = round((_p2 - _ma20) / _ma20 * 100, 1)   if _ma20  else 0
+            _bias_i      = calc_bias_pct(_p2, _ma240, decimals=1) or 0
+            _bias_20_i   = calc_bias_pct(_p2, _ma20,  decimals=1) or 0
 
             # 布林帶訊號
             _bb_upper    = (bb2.get('upper', 0) if isinstance(bb2, dict) else 0) or float('inf')

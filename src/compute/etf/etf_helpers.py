@@ -219,13 +219,16 @@ def classify_etf_deep_sigma(cur: float, ma240: float,
     SSOT 政策:MA240 z-score 教學量化買點均呼叫本函式;
     閾值來自 shared.signal_thresholds.ETF_SIGMA_*(PR-D 已抽)。
     """
+    from shared.calc_helpers import calc_bias_pct  # C1 v18.401:乖離率 SSOT
     from shared.signal_thresholds import (
         ETF_SIGMA_BUY, ETF_SIGMA_DEEP_BUY,
         ETF_SIGMA_REDUCE, ETF_SIGMA_STOP_PROFIT,
     )
     if cur is None or ma240 is None or not std_pct_annual or std_pct_annual <= 0:
         return None
-    _bias_pct = (cur - ma240) / ma240 * 100
+    _bias_pct = calc_bias_pct(cur, ma240)
+    if _bias_pct is None:
+        return None
     _z = _bias_pct / std_pct_annual
     if _z <= ETF_SIGMA_DEEP_BUY:
         return (f'🟢 📅長線 極佳買點(≤ {ETF_SIGMA_DEEP_BUY:.0f}σ)', 'green',
