@@ -911,6 +911,8 @@ def _fetch_yuanta_active_etf_meta(ticker: str) -> dict | None:
                   f'manager={_out.get("manager")} '
                   f'expense={_out.get("expense")} '
                   f'nav={_out.get("nav_latest")}')
+            # S-PROV-1 P0 v18.434:dict 已有 'source':'yuanta-official',補 fetched_at(§2.2)
+            _out.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
             return _out
     return None
 
@@ -1732,6 +1734,9 @@ def _fetch_sector_returns(tickers: tuple, period: str) -> dict:
     except Exception as e:
         # S-H3 v18.244:L1 不可 st.warning → 改 print log
         print(f'[etf_fetch/sector] ⚠️ 類股資料抓取部分失敗:{type(e).__name__}: {e}')
+    # S-PROV-1 P0 v18.434:批次 yf.download 結果 prov_log(§2.2)
+    _prov_log('_fetch_sector_returns', f'yfinance:batch:period={period}',
+              f'{len(tickers)}tickers', f'dict:{len(result)}items')
     return result
 
 
