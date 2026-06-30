@@ -509,9 +509,10 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
             _p_now   = float(df2['close'].iloc[-1])
             _p_prev  = float(df2['close'].iloc[-2]) if len(df2) >= 2 else _p_now
             _p_chg   = round((_p_now - _p_prev) / _p_prev * 100, 2) if _p_prev else 0
-            _ma20_v  = float(df2['close'].rolling(20).mean().iloc[-1])
-            _ma60_v  = float(df2['close'].rolling(60).mean().iloc[-1]) if len(df2) >= 60 else None
-            _ma120_v = float(df2['close'].rolling(120).mean().iloc[-1]) if len(df2) >= 120 else None
+            # R-CALC-2 v18.412:scalar MA inline → safe_ma SSOT(已 import 自 tab_helpers)
+            _ma20_v  = safe_ma(df2, 20)
+            _ma60_v  = safe_ma(df2, 60)  if len(df2) >= 60  else None
+            _ma120_v = safe_ma(df2, 120) if len(df2) >= 120 else None
             # 趨勢燈號
             _above_ma20  = _p_now > _ma20_v
             _above_ma60  = (_p_now > _ma60_v) if _ma60_v else None
