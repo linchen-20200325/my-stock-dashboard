@@ -91,6 +91,63 @@ class TestU8_ClassifyYieldZone:
             assert yield_valuation_zone(cur, avg) == classify_yield_zone(cur, avg)[0]
 
 
+class TestBatch9_Classify357Price:
+    """Batch 9 v18.418 — shared.thresholds 新增 classify_stock_357_price() SSOT。
+
+    section_357_valuation.py 用於收 inline 兩段重複 if-elif(price/avg_div 反推殖利率)。
+    """
+
+    def test_function_exists(self):
+        from shared.thresholds import classify_stock_357_price
+        assert callable(classify_stock_357_price)
+
+    def test_cheap_zone_yield_over_7(self):
+        """avg_div=7 元 / price=80 → yield≈8.75% ≥ 7% → cheap。"""
+        from shared.thresholds import classify_stock_357_price
+        code, targets = classify_stock_357_price(price=80, avg_div=7)
+        assert code == 'cheap'
+        # cheap 目標價 = avg_div / 0.07 = 100
+        assert targets['cheap'] == 100.0
+        assert targets['fair'] == 140.0
+        assert targets['dear'] == round(7 / 0.03, 1)
+
+    def test_fair_zone_yield_5_to_7(self):
+        """avg_div=5 元 / price=85 → yield≈5.88% → fair(5%~7%)。"""
+        from shared.thresholds import classify_stock_357_price
+        code, _ = classify_stock_357_price(price=85, avg_div=5)
+        assert code == 'fair'
+
+    def test_dear_zone_yield_3_to_5(self):
+        """avg_div=3 元 / price=85 → yield≈3.53% → dear(3%~5%)。"""
+        from shared.thresholds import classify_stock_357_price
+        code, _ = classify_stock_357_price(price=85, avg_div=3)
+        assert code == 'dear'
+
+    def test_overpriced_yield_under_3(self):
+        """avg_div=1 元 / price=100 → yield=1% < 3% → overpriced。"""
+        from shared.thresholds import classify_stock_357_price
+        code, _ = classify_stock_357_price(price=100, avg_div=1)
+        assert code == 'overpriced'
+
+    def test_na_when_inputs_invalid(self):
+        from shared.thresholds import classify_stock_357_price
+        assert classify_stock_357_price(price=0, avg_div=5) == ('na', {})
+        assert classify_stock_357_price(price=100, avg_div=0) == ('na', {})
+        assert classify_stock_357_price(price=None, avg_div=5) == ('na', {})
+        assert classify_stock_357_price(price=100, avg_div=None) == ('na', {})
+
+    def test_targets_match_yield_dec_formula(self):
+        """三檔目標價公式與 YIELD_*_DEC 一致。"""
+        from shared.thresholds import (
+            YIELD_HIGH_DEC, YIELD_LOW_DEC, YIELD_MID_DEC,
+            classify_stock_357_price,
+        )
+        _, targets = classify_stock_357_price(price=50, avg_div=2.5)
+        assert targets['cheap'] == round(2.5 / YIELD_HIGH_DEC, 1)
+        assert targets['fair']  == round(2.5 / YIELD_MID_DEC,  1)
+        assert targets['dear']  == round(2.5 / YIELD_LOW_DEC,  1)
+
+
 class TestU10_BollingerBands:
     """U-10 — 個股 Tab 布林帶邊界抽 SSOT。"""
 
