@@ -541,6 +541,28 @@ def _build_llm_context(macro_info: dict) -> str:
 
 
 # ══════════════════════════════════════════════════════════════
+# TAB 1/3/4/10 render 綁定 — v18.439 修復
+# 94a257d「chore(dead): 刪 4 個 0-caller dead fn」誤把這 4 個
+# `with tab_X: render_tab_X()` 渲染綁定當死碼刪掉,導致
+# 總經 / 個股 / 個股組合 / 教學 四個分頁全空白(0 內容)。
+# render_* 採「tab 內 lazy import」:① 避免 app ↔ tab 循環 import
+# ② 杜絕 module-level import 被 ruff F401 當未用再刪的回歸。
+# ══════════════════════════════════════════════════════════════
+with tab_macro:
+    from src.ui.tabs import render_tab_macro
+    render_tab_macro()
+with tab_stock:
+    from src.ui.tabs import render_tab_stock
+    render_tab_stock()
+with tab_stock_grp:
+    from src.ui.tabs import render_stock_grp
+    render_stock_grp()
+with tab_edu:
+    from src.ui.tabs import render_tab_edu
+    render_tab_edu()
+
+
+# ══════════════════════════════════════════════════════════════
 # TAB: ETF 單一深度診斷 + 多檔批次評分（v18.223 子分頁）
 # ══════════════════════════════════════════════════════════════
 with tab_etf:
