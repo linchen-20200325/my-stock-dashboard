@@ -497,6 +497,20 @@ ETF_TRACKING_ERROR_MAX_PCT: float = 1.5
 """ETF 追蹤誤差最大門檻:> 1.5% → 🟡 警示(追蹤效率不佳)。
 原 etf_tab_single.py:410 inline `te > 1.5`。"""
 
+# ── ETF 星等映射(C2 v18.402,4 段門檻 5 顆星)──
+ETF_RATING_EXCELLENT_MIN: float = 0.80
+"""ETF 加權分 5★(優異):score ≥ 0.80。"""
+
+ETF_RATING_VERY_GOOD_MIN: float = 0.65
+"""ETF 加權分 4★(很好):0.65 ≤ score < 0.80。"""
+
+ETF_RATING_GOOD_MIN: float = 0.50
+"""ETF 加權分 3★(尚可):0.50 ≤ score < 0.65。"""
+
+ETF_RATING_FAIR_MIN: float = 0.35
+"""ETF 加權分 2★(普通):0.35 ≤ score < 0.50;< 0.35 → 1★。
+原 etf_scoring_helpers.py:78-87 + etf_quality.py:147-156 inline 4 數字共用。"""
+
 # ── ETF 折溢價分級(PR-D P2,4 段)──
 ETF_PREMIUM_DEEP_DISCOUNT_PCT: float = -2.0
 """ETF 折價深度買進區:≤ -2% → 🟢 建議買進(NAV 大幅折價)。

@@ -33,6 +33,7 @@ from typing import Optional
 
 import pandas as pd
 
+from shared.ttls import TTL_10MIN, TTL_15MIN, TTL_30MIN, TTL_1HOUR
 from src.data.proxy import fetch_url
 
 __version__ = "1.1.0"
@@ -87,7 +88,7 @@ CBC_EF15M01_URL   = "https://cpx.cbc.gov.tw/API/DataAPI/Get"
 # TWSE 市場寬度
 # ══════════════════════════════════════════════════════════════
 
-@_ttl_cache(ttl_sec=600, maxsize=4)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
 def fetch_twse_breadth() -> dict:
     """
     從 TWSE MI_INDEX 抓上漲/下跌家數,計算市場寬度。
@@ -153,7 +154,7 @@ def fetch_twse_breadth() -> dict:
 # FinMind 三大法人籌碼
 # ══════════════════════════════════════════════════════════════
 
-@_ttl_cache(ttl_sec=600, maxsize=8)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
 def fetch_finmind_foreign_investor(days_back: int = 7) -> dict:
     """
     從 FinMind 抓最近 N 天的外資買賣超(免費 API,無需 token)。
@@ -217,6 +218,7 @@ def fetch_finmind_foreign_investor(days_back: int = 7) -> dict:
 # 中央銀行 M1B / M2(三層備援)
 # ══════════════════════════════════════════════════════════════
 
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
 def fetch_cbc_ms1_rows(url: str, *, min_rows: int = 1,
                        log_label: Optional[str] = None,
                        **fetch_kwargs) -> Optional[list]:
@@ -342,7 +344,7 @@ def _try_twii_proxy() -> Optional[tuple]:
     return (chg20, round(chg60 / 3, 2))
 
 
-@_ttl_cache(ttl_sec=600, maxsize=4)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
 def fetch_cbc_m1b_m2() -> dict:
     """
     抓中央銀行 M1B / M2 月資料 YoY 變動率。三層備援:
@@ -617,7 +619,7 @@ def _finmind_macro_series(indicator_keys: tuple, months_back: int = 18,
     return sub
 
 
-@_ttl_cache(ttl_sec=600, maxsize=8)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
 def fetch_ndc_signal_history(months_back: int = 12,
                              token: str = "") -> dict:
     """抓景氣對策信號分數歷史（月頻），偵測連 2 月反轉拐點。
@@ -688,6 +690,7 @@ def fetch_ndc_signal_history(months_back: int = 12,
     return result
 
 
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
 def fetch_ndc_leading_index(months_back: int = 18,
                             token: str = "") -> dict:
     """抓領先指標綜合指數歷史，計算 6M smoothed 變化率與翻揚拐點。
@@ -767,7 +770,7 @@ def fetch_ndc_leading_index(months_back: int = 18,
     return result
 
 
-@_ttl_cache(ttl_sec=600, maxsize=8)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
 def fetch_foreign_consecutive_days(days_back: int = 30,
                                    token: str = "") -> dict:
     """抓外資最近 N 日買賣超，計算連續同向日數與反轉拐點。
@@ -872,6 +875,7 @@ def fetch_foreign_consecutive_days(days_back: int = 30,
 # 整合 API — 一次抓回三大台股總經因子
 # ══════════════════════════════════════════════════════════════
 
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
 def fetch_tw_market_snapshot(days_back: int = 7) -> dict:
     """
     一次抓回三大台股總經因子(寬度 / 外資 / M1B-M2),供 TPI 計算使用。
@@ -898,7 +902,7 @@ def fetch_tw_market_snapshot(days_back: int = 7) -> dict:
 # 修正 CLAUDE.md §8.2「L2 不得 import proxy_helper」違憲。caller(merrill_clock)
 # 改 `from tw_macro import fetch_pmi_history` 並從 `config.FINMIND_TOKEN` 取 token。
 # ══════════════════════════════════════════════════════════════
-@_ttl_cache(ttl_sec=600, maxsize=4)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
 def fetch_pmi_history(months: int = 18, token: str = "") -> Optional[pd.DataFrame]:
     """從 FinMind 抓台灣 PMI 月度歷史(含當期),merrill 時鐘 YoY 算用。
 
@@ -978,7 +982,7 @@ _TW_UNEMP_KEYS = (
 )
 
 
-@_ttl_cache(ttl_sec=900, maxsize=8)  # 15min;CPI 月後 5-7 天發布,無需更頻繁
+@_ttl_cache(ttl_sec=TTL_15MIN, maxsize=8)  # CPI 月後 5-7 天發布,無需更頻繁
 def fetch_tw_cpi_yoy(months_back: int = 24, token: str = "") -> Optional[pd.DataFrame]:
     """抓 TW 消費者物價指數 CPI 年增率(% YoY)月頻歷史。
 
@@ -1007,7 +1011,7 @@ def fetch_tw_cpi_yoy(months_back: int = 24, token: str = "") -> Optional[pd.Data
     return out
 
 
-@_ttl_cache(ttl_sec=900, maxsize=8)
+@_ttl_cache(ttl_sec=TTL_15MIN, maxsize=8)
 def fetch_tw_unemployment(months_back: int = 24, token: str = "") -> Optional[pd.DataFrame]:
     """抓 TW 失業率(% level)月頻歷史。
 
@@ -1035,7 +1039,7 @@ def fetch_tw_unemployment(months_back: int = 24, token: str = "") -> Optional[pd
     return out
 
 
-@_ttl_cache(ttl_sec=3600, maxsize=4)  # 1hr;政策利率變動極少
+@_ttl_cache(ttl_sec=TTL_1HOUR, maxsize=4)  # 1hr;政策利率變動極少
 def fetch_cbc_discount_rate(months_back: int = 24, fred_api_key: str = "") -> Optional[pd.DataFrame]:
     """抓 CBC 重貼現率(% level)月頻歷史。
 
@@ -1070,7 +1074,7 @@ def fetch_cbc_discount_rate(months_back: int = 24, fred_api_key: str = "") -> Op
     return out
 
 
-@_ttl_cache(ttl_sec=3600, maxsize=4)
+@_ttl_cache(ttl_sec=TTL_1HOUR, maxsize=4)
 def fetch_usdtwd_close(days_back: int = 180) -> Optional[pd.DataFrame]:
     """抓 USD/TWD 日匯率收盤序列。
 
@@ -1135,7 +1139,7 @@ def _china_fred_specs():
     ]
 
 
-@_ttl_cache(ttl_sec=1800, maxsize=4)  # 30min;OECD 月頻發布
+@_ttl_cache(ttl_sec=TTL_30MIN, maxsize=4)  # OECD 月頻發布
 def fetch_china_macro(fred_api_key: str = "") -> dict:
     """並行抓 5 條 China macro FRED series。
 

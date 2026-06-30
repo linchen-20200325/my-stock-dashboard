@@ -106,18 +106,10 @@ class TwSignalLookback:
 # ════════════════════════════════════════════════════════════════
 # 4 個本地訊號的 series fetcher（讀 Parquet → 計算 daily series）
 # ════════════════════════════════════════════════════════════════
-def _load_parquet_safe(path: Path, required_cols: set) -> Optional[pd.DataFrame]:
-    """安全讀 Parquet — 缺檔 / 壞檔 / 缺欄 → 回 None。"""
-    if not path.exists():
-        return None
-    try:
-        df = pd.read_parquet(path)
-        if df.empty or not required_cols.issubset(df.columns):
-            return None
-        return df
-    except Exception as e:  # noqa: BLE001
-        print(f"[macro_signal_lookback_tw/load] {path.name} 讀檔失敗：{e}")
-        return None
+# C4 v18.402:Parquet I/O 抽 L1(落實 §8.2 L2 純函式契約)。
+# 原 `_load_parquet_safe` 已歸位 `src/data/macro/macro_cache_reader.py`,
+# 本檔 import alias 維持 8 處 internal caller 介面。
+from src.data.macro.macro_cache_reader import load_parquet_safe as _load_parquet_safe  # noqa: E402
 
 
 def fetch_foreign_sell_5d_series(

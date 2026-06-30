@@ -1,12 +1,20 @@
 """ETF 7 維度評分合成 — 線性標準化 + 加權合成 + 星等映射。
 
-v18.223：服務 etf_tab_grp_compare 多檔批次評分。
-維度：1Y累積 / 3Y CAGR / 夏普 / MDD / 費用率 / AUM / 殖利率穩定度
-星等映射沿用 etf_quality：≥0.80 5★ / ≥0.65 4★ / ≥0.50 3★ / ≥0.35 2★ / <0.35 1★。
+v18.223:服務 etf_tab_grp_compare 多檔批次評分。
+維度:1Y累積 / 3Y CAGR / 夏普 / MDD / 費用率 / AUM / 殖利率穩定度
+星等映射沿用 etf_quality:≥ETF_RATING_EXCELLENT_MIN 5★ ... <ETF_RATING_FAIR_MIN 1★
+(C2 v18.402:4 個門檻已抽 shared/signal_thresholds.py:ETF_RATING_*)
 """
 from __future__ import annotations
 
 import math
+
+from shared.signal_thresholds import (  # C2 v18.402:ETF 星等 SSOT
+    ETF_RATING_EXCELLENT_MIN,
+    ETF_RATING_FAIR_MIN,
+    ETF_RATING_GOOD_MIN,
+    ETF_RATING_VERY_GOOD_MIN,
+)
 
 _WEIGHTS = {
     'total_ret_1y': 0.25,
@@ -75,13 +83,13 @@ def compute_etf_composite_score(row: dict) -> tuple[float | None, int | None]:
     if _valid_w <= 0:
         return None, None
     _score = _weighted / _valid_w
-    if _score >= 0.80:
+    if _score >= ETF_RATING_EXCELLENT_MIN:
         _stars = 5
-    elif _score >= 0.65:
+    elif _score >= ETF_RATING_VERY_GOOD_MIN:
         _stars = 4
-    elif _score >= 0.50:
+    elif _score >= ETF_RATING_GOOD_MIN:
         _stars = 3
-    elif _score >= 0.35:
+    elif _score >= ETF_RATING_FAIR_MIN:
         _stars = 2
     else:
         _stars = 1

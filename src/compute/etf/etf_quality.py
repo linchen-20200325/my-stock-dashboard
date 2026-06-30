@@ -16,6 +16,12 @@ import pandas as pd
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.signal_thresholds import (  # C2 v18.402:ETF 星等 SSOT
+    ETF_RATING_EXCELLENT_MIN,
+    ETF_RATING_FAIR_MIN,
+    ETF_RATING_GOOD_MIN,
+    ETF_RATING_VERY_GOOD_MIN,
+)
 from shared.ttls import TTL_1DAY
 from src.data.etf import (  # v18.360 F-6.3:L2→L5 反向違憲修正(原 from etf_dashboard,實際定義在 L1)
     fetch_etf_info, fetch_etf_dividends, get_etf_expense_ratio_safe,
@@ -143,14 +149,14 @@ def compute_etf_quality(ticker: str) -> dict:
         return {'stars': None, '_err': '4 因子全缺資料', 'factors': _factors}
     _score = _weighted / _valid_w
     _weakest = min(_valid_pairs, key=lambda x: x[1])[0]
-    # 5 顆星映射
-    if _score >= 0.80:
+    # 5 顆星映射(C2 v18.402:閾值已抽 shared/signal_thresholds.py:ETF_RATING_*)
+    if _score >= ETF_RATING_EXCELLENT_MIN:
         _stars = 5
-    elif _score >= 0.65:
+    elif _score >= ETF_RATING_VERY_GOOD_MIN:
         _stars = 4
-    elif _score >= 0.50:
+    elif _score >= ETF_RATING_GOOD_MIN:
         _stars = 3
-    elif _score >= 0.35:
+    elif _score >= ETF_RATING_FAIR_MIN:
         _stars = 2
     else:
         _stars = 1

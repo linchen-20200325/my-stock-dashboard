@@ -25,8 +25,13 @@ def _show_threshold_status():
             _cfg = _json.load(_fp)
     except Exception:
         return
-    _h = _cfg.get('HEALTH_DEFENSE_THRESHOLD', 35)
-    _s = _cfg.get('BULL_MIN_SCORE', 4)
+    # C3 v18.402:fallback default 改引 SSOT(shared/macro_calibration.py)
+    from shared.macro_calibration import (
+        BULL_MIN_SCORE_DEFAULT,
+        HEALTH_DEFENSE_THRESHOLD_DEFAULT,
+    )
+    _h = _cfg.get('HEALTH_DEFENSE_THRESHOLD', HEALTH_DEFENSE_THRESHOLD_DEFAULT)
+    _s = _cfg.get('BULL_MIN_SCORE', BULL_MIN_SCORE_DEFAULT)
     _ts = _cfg.get('last_calibrated') or '尚未校準（使用預設）'
     _method = _cfg.get('method', '')
     st.caption(f'🤖 **現行門檻**：HEALTH `<{_h}` 觸發 🔴 防禦、SCORE `≥{_s}` 升 🟢 多頭　'
