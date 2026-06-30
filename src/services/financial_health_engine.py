@@ -9,9 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-import time
 
-import requests
 
 from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW

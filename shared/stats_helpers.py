@@ -18,6 +18,30 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+import numpy as np
+import pandas as pd
+
+
+def zscore(s: "pd.Series") -> "pd.Series":
+    """標準分數 z = (s - mean) / std(L0 SSOT)。
+
+    D2 v18.437 收斂:統一原 `macro_core.zscore` + `multi_factor_optimization._zscore`
+    兩份近乎逐字相同實作(僅 std=0 guard 寫法略異)。採較廣的 `not np.isfinite` guard
+    (同時涵蓋 NaN 與 inf),避免除零 / 不捏造。
+
+    參數:
+        s: pd.Series 數值序列
+
+    回傳:
+        pd.Series z-score;空序列原樣返回;std=0 或非有限 → 全 0(同 index)。
+    """
+    if s.empty:
+        return s
+    sd = float(s.std())
+    if not np.isfinite(sd) or sd == 0:
+        return pd.Series(0.0, index=s.index)
+    return (s - s.mean()) / sd
+
 
 def calc_stats(df: Any) -> Optional[dict]:
     """計算股票統計數據(last / pct / status / chg)。

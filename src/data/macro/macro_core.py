@@ -420,11 +420,23 @@ def fetch_yf_close(ticker: str, range_: str = "2y", interval: str = "1d") -> pd.
 
 
 def fetch_yf_latest(tickers: tuple[str, ...]) -> dict[str, Optional[float]]:
-    """批次抓多個 ticker 最新收盤(空值代表抓不到)。"""
+    """批次抓多個 ticker 最新收盤(空值代表抓不到)。
+
+    S-PROV-1 P0 v18.434:批次結果寫 stderr prov_log。子呼叫 fetch_yf_close
+    內部 Series.attrs 已有 source/fetched_at;此處 prov 識別 batch 聚合場景。
+    """
     out: dict[str, Optional[float]] = {}
     for t in tickers:
         s = fetch_yf_close(t, range_="5d")
         out[t] = round(float(s.iloc[-1]), 4) if not s.empty else None
+    try:
+        from src.data.core.provenance import prov_log
+        _filled = sum(1 for v in out.values() if v is not None)
+        prov_log('fetch_yf_latest', 'Yahoo:batch(5d)->iloc[-1]',
+                 f'dict:{_filled}/{len(tickers)}filled',
+                 ticker=','.join(tickers)[:60])
+    except Exception:
+        pass
     return out
 
 
@@ -462,6 +474,15 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
         if not df.empty:
             df["source"] = f"Yahoo:chart:{ticker}:{range_}:{interval}"
             df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+        # Phase 2 pandera Priority 1 v18.433 — log-mode schema validation
+        # (yfinance OHLCV 大寫 column,normalize_case=True);失敗只 stderr log,不擋 caller
+        try:
+            from src.compute.risk.schemas import validate_in_log_mode, OHLCVSchema
+            df = validate_in_log_mode(df, OHLCVSchema,
+                                       label=f'fetch_yf_ohlcv:{ticker}:{range_}',
+                                       normalize_case=True)
+        except Exception:
+            pass
         return df
     except Exception as e:
         print(f"[macro_core/yf_ohlcv] {ticker} 解析失敗: {e}")
@@ -1370,13 +1391,13 @@ PMI_SOURCE_REGISTRY: list[tuple[str, Callable]] = [
 # ══════════════════════════════════════════════════════════════
 
 def zscore(s: pd.Series) -> pd.Series:
-    """標準分數(std=0 時回傳全 0,避免除零)。"""
-    if s.empty:
-        return s
-    std = float(s.std())
-    if std == 0 or np.isnan(std):
-        return pd.Series([0.0] * len(s), index=s.index)
-    return (s - s.mean()) / std
+    """標準分數(std=0 時回傳全 0,避免除零)。
+
+    D2 v18.437:實作下沉 shared.stats_helpers.zscore(SSOT);本處保留為向後相容
+    re-export(macro_core 公開數學工具 + test 介面),委派唯一實作避免雙寫。
+    """
+    from shared.stats_helpers import zscore as _z
+    return _z(s)
 
 
 def trend_arrow(vals: list[float]) -> str:

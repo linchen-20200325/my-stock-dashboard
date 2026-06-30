@@ -32,7 +32,7 @@ from src.compute.etf.etf_helpers import (
     calc_sigma_metrics,           # v18.334 PR-H2:σ 計算 SSOT
     classify_etf_quick_sigma,     # v18.335 PR-H3:⚡短線 σ 分級 SSOT
 )
-from shared.calc_helpers import calc_bias_pct  # C1 v18.401:乖離率 SSOT
+from shared.calc_helpers import calc_bias_pct, calc_premium_discount_pct  # C1/D4:乖離率+折溢價 SSOT
 from shared.ttls import TTL_15MIN, TTL_1HOUR
 # Phase 2 Batch 5a v18.428:停損 0.92 → 1 - STOP_LOSS_PCT(0.08) SSOT(config.py:19)
 from src.config import STOP_LOSS_PCT
@@ -45,6 +45,7 @@ from shared.signal_thresholds import (
     ETF_AVG_VOL_20D_LOW_LOTS,
     # v18.335 PR-H3:ETF_QUICK_SIGMA_* 5 個由 classify_etf_quick_sigma 內部消費,移除 etf_calc 直引
     ETF_UP_DOWN_DAYS_THRESHOLD,  # C-2 v18.382 抽自 inline 60
+    ETF_MANAGER_TENURE_NEW_DAYS,  # v18.436 #5 抽自 inline 180
     ETF_VCP_MIN_DAYS,
     TRADING_DAYS_PER_YEAR,
 )
@@ -352,7 +353,7 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                         _row = _merged.iloc[-1]  # 最近一筆同日配對
                         _nav_v = float(_row['nav'])
                         _pr_v  = float(_row['Close'])
-                        _prem  = round((_pr_v - _nav_v) / _nav_v * 100, 2)
+                        _prem  = calc_premium_discount_pct(_pr_v, _nav_v, decimals=2)  # D4 SSOT
                         if _is_active_etf and abs(_prem) > _ACTIVE_PREM_MAX:
                             print(f'[折溢價-B/stale-G2] {ticker}: prem={_prem}% > ±{_ACTIVE_PREM_MAX}%')
                             return _stale_payload
@@ -373,7 +374,7 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                         if _gap <= 4:
                             _nav_v = float(_nav_df['nav'].iloc[-1])
                             _pr_v  = float(_price_s['Close'].iloc[-1])
-                            _prem  = round((_pr_v - _nav_v) / _nav_v * 100, 2)
+                            _prem  = calc_premium_discount_pct(_pr_v, _nav_v, decimals=2)  # D4 SSOT
                             if _is_active_etf and abs(_prem) > _ACTIVE_PREM_MAX:
                                 print(f'[折溢價-B2/stale-G2] {ticker}: prem={_prem}% > ±{_ACTIVE_PREM_MAX}%')
                                 return _stale_payload
@@ -912,7 +913,7 @@ def compute_etf_weakness_row(ticker: str, name: str = '',
         _down = _row['大跌弱勢率%'] or 0
         _up = _row['反彈弱勢率%'] or 0
         _streak = _row['連敗季數'] or 0
-        _new_manager = isinstance(_tenure_days, int) and _tenure_days < 180
+        _new_manager = isinstance(_tenure_days, int) and _tenure_days < ETF_MANAGER_TENURE_NEW_DAYS
         if _streak >= 2:
             _row['燈號'] = f'🚨 連續{_streak}季輸盤'
             _row['動作建議'] = ('⏳ 新經理人 <6 月，再給時間'

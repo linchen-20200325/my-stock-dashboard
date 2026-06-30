@@ -121,22 +121,35 @@ def _build_dynamic_name_cache(static_fallback: dict | None = None) -> dict:
 _dynamic_cache: dict = _load_dynamic_cache()
 
 
+def _replace_dynamic_cache(new_cache: dict) -> None:
+    """v18.435 WONTFIX-翻案 Bug #4:in-place 更新 _dynamic_cache,不 rebind 全域名。
+
+    原作 `_dynamic_cache = new_cache` rebind 全域,會與 lookup_via_yfinance 內
+    `_dynamic_cache[stock_id] = _n` 競爭 — 若刷新與 lookup 併發,lookup 的 setitem
+    可能落在已被棄置的舊 dict 上(reference 已被新 rebind 取代)→ 寫入永久遺失。
+
+    改 .clear() + .update():全域變數始終指向同一 dict 物件,所有 setitem 一致命中。
+    CPython 下 dict.clear()/update() 各自於單一 C-level 操作完成(GIL 保護),不需鎖。
+    """
+    _dynamic_cache.clear()
+    _dynamic_cache.update(new_cache)
+
+
 def _ensure_cache(static_fallback: dict | None = None) -> dict:
     """確保動態快取存在;若空白或過期則嘗試重新抓取。
     只有在新快取筆數多於舊快取時才取代,避免 API 失敗時以少量靜態資料覆蓋大快取。"""
-    global _dynamic_cache
     if not _dynamic_cache or _is_cache_stale():
         new_cache = _build_dynamic_name_cache(static_fallback=static_fallback)
         if len(new_cache) > len(_dynamic_cache):
-            _dynamic_cache = new_cache
+            _replace_dynamic_cache(new_cache)
             _save_dynamic_cache(_dynamic_cache)
     return _dynamic_cache
 
 
 def refresh_name_cache(static_fallback: dict | None = None) -> int:
     """強制重新抓取並更新快取。回傳新快取大小。"""
-    global _dynamic_cache
-    _dynamic_cache = _build_dynamic_name_cache(static_fallback=static_fallback)
+    new_cache = _build_dynamic_name_cache(static_fallback=static_fallback)
+    _replace_dynamic_cache(new_cache)
     _save_dynamic_cache(_dynamic_cache)
     return len(_dynamic_cache)
 
@@ -149,7 +162,7 @@ def lookup_via_yfinance(stock_id: str) -> str | None:
             _info = yf.Ticker(f'{stock_id}{suffix}').fast_info
             _n = getattr(_info, 'company_name', None)
             if _n and _n not in (f'{stock_id}{suffix}', stock_id, ''):
-                # 同時寫回 cache 供下次使用
+                # 同時寫回 cache 供下次使用(in-place setitem,不 rebind)
                 _dynamic_cache[stock_id] = _n
                 return _n
     except Exception:

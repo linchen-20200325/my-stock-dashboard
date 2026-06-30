@@ -449,7 +449,6 @@ def fetch_us10y_block(fred_api_key: str = '') -> dict:
                    'source': str, 'series_id': 'DGS10', 'fetched_at': ISO}}
         失敗 → {'us10y': {'_err': str, 'current': None}}
     """
-    import datetime as _dt_u
     import io as _io_u
     import pandas as _pd_u
     _errs = []

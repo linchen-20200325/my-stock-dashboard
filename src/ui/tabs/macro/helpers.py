@@ -13,17 +13,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
-from shared.signal_thresholds import (
-    MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
-    MARGIN_BALANCE_WARN_THRESHOLD_YI,
-    BREADTH_BULL_PCT,
-    BREADTH_NEUTRAL_PCT,
-    BREADTH_BEAR_PCT,
-)
+from shared.colors import TRAFFIC_NEUTRAL
 
-from src.compute.macro import calc_traffic_light, rp_entry, rp_scalar, rp_ts
-from src.ui.tabs.tab_helpers import safe_get
 
 
 # ════════════════════════════════════════════════════════════════

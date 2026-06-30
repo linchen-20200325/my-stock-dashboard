@@ -26,7 +26,6 @@ NDC 命中：peak 月 score 比峰前 N 月低 ≥drop_pts（預設 4 分；NDC 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -34,7 +33,8 @@ import pandas as pd
 # C4 v18.402:Parquet I/O 抽 L1(落實 §8.2 L2 純函式契約)。
 # DEFAULT_PARQUET_CACHE_DIR + load_twii_close_from_parquet 均歸位
 # `src/data/macro/macro_cache_reader.py`;本檔 import alias 維持原 caller 介面。
-from src.data.macro.macro_cache_reader import (  # noqa: E402
+# 本檔不直接用,屬「再匯出」供 macro_signal_lookback_tw / test 沿用舊介面(F401 豁免)。
+from src.data.macro.macro_cache_reader import (  # noqa: E402,F401
     DEFAULT_PARQUET_CACHE_DIR,
     load_twii_close as load_twii_close_from_parquet,
 )

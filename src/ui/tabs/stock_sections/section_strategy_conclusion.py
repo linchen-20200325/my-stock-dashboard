@@ -14,7 +14,6 @@
 """
 from __future__ import annotations
 
-import datetime
 from datetime import date as _date_mj
 
 import pandas as pd

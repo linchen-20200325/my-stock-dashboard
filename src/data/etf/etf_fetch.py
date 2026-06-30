@@ -11,7 +11,6 @@ S-H3 v18.244(CLAUDE.md §8.2 修正):L1 不得用 `st.error/st.warning/st.sessio
     `get_etf_manager_last_err()` / `get_etf_index_last_err()` accessor,
     UI(`health_inspector.py`)讀取改用 accessor。
 """
-import sys as _sys_prov_ef
 
 # §8.2.A EX-CACHE-1:條件 import streamlit + 無 UI 呼叫 fallback。
 # 本檔僅用 @st.cache_data + getattr(st, 'secrets', {}) defensive read,
@@ -217,18 +216,29 @@ def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
 
     v18.228 起改為共用 'max' 底層 + 記憶體切片。公開簽章不變，呼叫端 0 改動。
     S-PROV-1 v18.251:provenance attrs 從底層繼承(切片後顯式 copy 保留)。
+    Phase 2 pandera Priority 1 v18.433:log-mode schema validation(yfinance 大寫,
+    normalize_case=True);失敗只 stderr log,不擋 caller。
     """
     df = _fetch_etf_price_max(ticker)
     if df.empty:
         return df
     days = _PERIOD_TO_DAYS.get(period, 365 * 5)
     if days is None or len(df) == 0:
-        return df
-    cutoff = df.index.max() - pd.Timedelta(days=days)
-    sliced = df.loc[df.index >= cutoff]
-    # v18.251 S-PROV-1:.loc 切片可能 lose attrs,顯式 copy 保留血緣
-    sliced.attrs = dict(df.attrs)
-    return sliced
+        result = df
+    else:
+        cutoff = df.index.max() - pd.Timedelta(days=days)
+        result = df.loc[df.index >= cutoff]
+        # v18.251 S-PROV-1:.loc 切片可能 lose attrs,顯式 copy 保留血緣
+        result.attrs = dict(df.attrs)
+    # Phase 2 pandera Priority 1 v18.433:log-mode schema validation
+    try:
+        from src.compute.risk.schemas import validate_in_log_mode, OHLCVSchema
+        result = validate_in_log_mode(result, OHLCVSchema,
+                                       label=f'fetch_etf_price:{ticker}:{period}',
+                                       normalize_case=True)
+    except Exception:
+        pass
+    return result
 
 
 @st.cache_data(ttl=TTL_1HOUR, max_entries=10)
@@ -900,6 +910,8 @@ def _fetch_yuanta_active_etf_meta(ticker: str) -> dict | None:
                   f'manager={_out.get("manager")} '
                   f'expense={_out.get("expense")} '
                   f'nav={_out.get("nav_latest")}')
+            # S-PROV-1 P0 v18.434:dict 已有 'source':'yuanta-official',補 fetched_at(§2.2)
+            _out.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
             return _out
     return None
 
@@ -1721,6 +1733,9 @@ def _fetch_sector_returns(tickers: tuple, period: str) -> dict:
     except Exception as e:
         # S-H3 v18.244:L1 不可 st.warning → 改 print log
         print(f'[etf_fetch/sector] ⚠️ 類股資料抓取部分失敗:{type(e).__name__}: {e}')
+    # S-PROV-1 P0 v18.434:批次 yf.download 結果 prov_log(§2.2)
+    _prov_log('_fetch_sector_returns', f'yfinance:batch:period={period}',
+              f'{len(tickers)}tickers', f'dict:{len(result)}items')
     return result
 
 

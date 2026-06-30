@@ -42,6 +42,7 @@ from src.compute.etf import (
     normalize_etf_ticker,
     yield_valuation_zone as _yield_valuation_zone,
 )
+from src.data.core.provenance import prov_log
 
 _TOKEN_RE = _re.compile(r'[A-Za-z0-9.]+')
 
@@ -146,14 +147,9 @@ def _fetch_one_etf(ticker: str) -> dict:
         _r['error'] = f'{type(_e).__name__}: {str(_e)[:50]}'
     # v18.356 PR-Q5b S-PROV-1 phase 19:aggregator 級 audit trail
     # (內部 6 個子 fetcher 各自 phase 10-12/Q2 已寫 attrs;此處記彙整成果)
-    try:
-        import sys as _sys_petf, datetime as _dt_petf
-        print(f'[_fetch_one_etf] ticker={ticker} '
-              f'source=etf_fetch(7-metrics aggregator) '
-              f'fetched_at={_dt_petf.datetime.utcnow().isoformat()}Z '
-              f'result=dict:error={_r.get("error") or "OK"}', file=_sys_petf.stderr)
-    except Exception:
-        pass
+    # prov_log emits [_fetch_one_etf] marker
+    prov_log('_fetch_one_etf', 'etf_fetch(7-metrics aggregator)',
+             f'dict:error={_r.get("error") or "OK"}', ticker=ticker)
     return _r
 
 

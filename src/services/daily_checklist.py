@@ -4,13 +4,13 @@ daily_checklist.py v6.0 — Squid Proxy 模式
 🔄 融資餘額：5 段備援 — rwd MI_MARGN → HiStock → Goodinfo → Yahoo → 鉅亨網（仟元÷100,000=億）
 🔄 ADL / yfinance / FinMind：不受 geo-block 影響，直連
 """
-import requests, pandas as pd, datetime, os, time, re
+import requests, os
 import urllib3
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
-from shared.ttls import TTL_1HOUR
 # v18.325 PR-C: 融資餘額紅線改用既有 SSOT（原 inline 3400，§3.3 反捏造）
-from shared.signal_thresholds import (
+# 融資紅/黃線門檻屬本服務的 SSOT 消費契約(consumed_ssot guard 釘),
+# 即使主邏輯已下沉 daily_data_fetchers,仍保留 import 作消費標記(F401 豁免)。
+from shared.signal_thresholds import (  # noqa: F401
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
     MARGIN_BALANCE_WARN_THRESHOLD_YI,  # v18.326 PR-D: 融資黃線
 )
@@ -42,7 +42,6 @@ from shared.cache_layer import (
 )
 
 
-import plotly.graph_objects as go
 
 # v18.344 PR-N1:`st.secrets.get(...)` 即使無 secrets.toml 也會觸發 StreamlitSecretNotFoundError
 # (st.secrets 物件 lazy parse),原 getattr 防護不夠;改 try/except 包,僅在 secrets.toml

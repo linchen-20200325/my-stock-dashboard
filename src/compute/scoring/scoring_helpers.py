@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import pandas as _pd_fs
 
+from shared.signal_thresholds import BB_BW_SHRINK_WARN_RATIO  # v18.430 Batch 5b 漏網收尾
 from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
 
 
@@ -183,45 +184,51 @@ def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
     # 量比 (15分)
     if vr is not None:
         # P2-3 v18.381:3.0 inline → shared SSOT
-        from shared.signal_thresholds import VOLUME_RATIO_SURGE_HIGH
+        # v18.436 #8:1.5/1.0/0.5 改用既有 VOLUME_RATIO_SURGE/MILD/DRY SSOT(原 inline 重複定義)
+        from shared.signal_thresholds import (
+            VOLUME_RATIO_SURGE_HIGH, VOLUME_RATIO_SURGE,
+            VOLUME_RATIO_MILD, VOLUME_RATIO_DRY,
+        )
         if vr > VOLUME_RATIO_SURGE_HIGH:
             # P7修正: 量比>3.0是重大消息/主力介入，給高分
             score += 12
             details['量比'] = (f'{vr}（主力介入）', 12, 15)
-        elif 1.5 <= vr <= 3.0:
+        elif VOLUME_RATIO_SURGE <= vr <= VOLUME_RATIO_SURGE_HIGH:
             score += 15
             details['量比'] = (f'{vr}（異常放量）', 15, 15)
-        elif 1.0 <= vr < 1.5:
+        elif VOLUME_RATIO_MILD <= vr < VOLUME_RATIO_SURGE:
             score += 10
             details['量比'] = (f'{vr}（溫和放量）', 10, 15)
-        elif 0.5 <= vr < 1.0:
+        elif VOLUME_RATIO_DRY <= vr < VOLUME_RATIO_MILD:
             score += 5
             details['量比'] = (f'{vr}（量縮整理）', 5,  15)
         else:
             score += 2
             details['量比'] = (f'{vr}（極度縮量）', 2,  15)
 
-    # IBS (10分)
+    # IBS (10分) — v18.436 #9:0.2/0.8 inline → SSOT
     if ibs is not None:
-        if ibs <= 0.2:
+        from shared.signal_thresholds import IBS_OVERSOLD_THRESHOLD, IBS_OVERBOUGHT_THRESHOLD
+        if ibs <= IBS_OVERSOLD_THRESHOLD:
             score += 10
             details['IBS'] = (f'{ibs}（收低≤20%，隔日易反彈）', 10, 10)
-        elif ibs >= 0.8:
+        elif ibs >= IBS_OVERBOUGHT_THRESHOLD:
             score += 2
             details['IBS'] = (f'{ibs}（收高≥80%，隔日易賣壓）', 2,  10)
         else:
             score += 6
             details['IBS'] = (f'{ibs}（中性）', 6, 10)
 
-    # KD (15分)
+    # KD (15分) — v18.436 #7:20/80 inline → SSOT
     if k_val is not None and d_val is not None:
-        if k_val > d_val and k_val < 80:
+        from shared.signal_thresholds import KD_OVERBOUGHT_LEVEL, KD_OVERSOLD_LEVEL
+        if k_val > d_val and k_val < KD_OVERBOUGHT_LEVEL:
             score += 15
             details['KD'] = (f'K={k_val} D={d_val}（黃金交叉）', 15, 15)
-        elif k_val > d_val and k_val >= 80:
+        elif k_val > d_val and k_val >= KD_OVERBOUGHT_LEVEL:
             score += 8
             details['KD'] = (f'K={k_val} D={d_val}（高檔黃叉注意）', 8, 15)
-        elif k_val < d_val and k_val > 20:
+        elif k_val < d_val and k_val > KD_OVERSOLD_LEVEL:
             score += 5
             details['KD'] = (f'K={k_val} D={d_val}（死亡交叉）', 5, 15)
         else:
@@ -236,7 +243,10 @@ def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
         elif bb['price'] > bb['ma']:
             score += 6
             details['布林'] = ('站上中軌', 6, 10)
-        elif bb['bw'] < bb['bw_mean'] * 0.7:
+        elif bb['bw'] < bb['bw_mean'] * BB_BW_SHRINK_WARN_RATIO:
+            # v18.430 Batch 5b 漏網收尾:0.7 改 SSOT(BB_BW_SHRINK_WARN_RATIO=0.7)
+            # 註:scoring fn 用 WARN 級門檻(同 section_health_score / section_vcp_bollinger KPI),
+            # 雖然 label 寫「極度收縮」與 ACTION 級訊號框同字串,但歷史上即用 0.7 評 9 分(從寬給分)
             score += 9
             details['布林'] = ('帶寬極度收縮（即將爆發）', 9, 10)
         else:

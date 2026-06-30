@@ -22,27 +22,9 @@ _URL_CACHE: dict = {}   # key=(url, params_frozen) → (timestamp, response_text
 _URL_CACHE_TTL = 300
 
 
-def get_proxies() -> dict | None:
-    """
-    標準 requests proxies 字典，供 requests.get(..., proxies=get_proxies()) 使用。
-    優先讀取 os.environ["PROXY_URL"]，其次 st.secrets["PROXY_URL"]。
-    格式：http://帳號:密碼@yourname.synology.me:3128
-    """
-    import os as _os2
-    _url = _os2.environ.get('PROXY_URL') or _os2.environ.get('NAS_PROXY_URL')
-    if not _url:
-        try:
-            import streamlit as _st2
-            _sec2 = getattr(_st2, 'secrets', {})
-            _url = _sec2.get('PROXY_URL') or _sec2.get('NAS_PROXY_URL')
-            if not _url and 'proxy' in _sec2:
-                _p2 = _sec2['proxy']
-                _url = f"http://{_p2['username']}:{_p2['password']}@{_p2['endpoint']}"
-        except Exception:
-            pass
-    if _url:
-        return {'http': _url, 'https': _url}
-    return None
+# get_proxies() 定義於本檔末尾,為 get_proxy_config 的向下相容別名(含 TTL 快取)。
+# 原本檔頭另有一份無快取的獨立 def,於 module load 時即被末尾別名覆寫(永不被呼叫,
+# ruff F811 確認),屬死碼,已於清碼批次移除 — 唯一實作集中在 get_proxy_config。
 
 
 def reset_proxy_cache():

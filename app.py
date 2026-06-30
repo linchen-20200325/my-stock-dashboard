@@ -1,13 +1,8 @@
 import streamlit as st
-import pandas as pd
 import datetime
 import os
 import re
-import time
 import requests
-import json
-import pickle
-import hashlib
 import sys
 
 # ── Streamlit Cloud 防護（PR #82/#86 升級版）────────────────
@@ -19,7 +14,6 @@ import sys
 # 改為把 globals dict 塞 proxy.__dict__，每次都 refresh，徹底解耦。
 import types as _types  # noqa: E402
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from shared.ttls import TTL_30MIN, TTL_1HOUR
 
 class _AppProxy(_types.ModuleType):
     """Proxy：`from app import X` → 從 proxy 自己 dict 拿 live globals。"""
@@ -59,7 +53,6 @@ def _bps():
 
 print('[INFO] main.py v3.0 戰情室 載入完成')
 
-from src.data.core import StockDataLoader, _LOADER_VERSION  # noqa: E402
 # ── 新增模組（根據說明書 v1.0）──────────────────────────────
 # ── v3.0 新增模組（§5-§11）──────────────────────────────────
 from src.ui.etf import (  # noqa: E402
@@ -167,6 +160,11 @@ from shared.parse_helpers import parse_stocks  # noqa: F401
 # 任一把遇到 429（速率/額度滿）或 403（無效）時自動換下一把，全部用盡才報錯。
 _GEMINI_KEY_NAMES = ['GEMINI_API_KEY'] + [f'GEMINI_API_KEY_{_i}' for _i in range(2, 7)]
 _gemini_rr = [0]  # round-robin 起手索引（每次呼叫遞增）
+# v18.435 WONTFIX-翻案 Bug #3:多 Streamlit session 併發呼叫 gemini_call 時,
+# _gemini_rr[0] 的讀+寫非 atomic(兩條指令),會讓 round-robin 跳號 →
+# 同一把 hot key 連環打 → 提前 429。加 Lock 序列化 round-robin 增量。
+import threading as _threading_rr
+_gemini_rr_lock = _threading_rr.Lock()
 
 
 def _gemini_keys() -> list:
@@ -190,8 +188,10 @@ def gemini_call(prompt, max_tokens=2048):
     if not _keys:
         return '⚠️ 請設定 GEMINI_API_KEY（可另加 GEMINI_API_KEY_2 ~ _6 分散額度）'
     # round-robin 起手：不同呼叫從不同把 key 開始，自然把負載分散到各帳號
-    _start = _gemini_rr[0] % len(_keys)
-    _gemini_rr[0] = (_gemini_rr[0] + 1) % 1_000_000
+    # v18.435 WONTFIX-翻案 Bug #3:Lock 序列化讀+寫,避免併發 session 跳號
+    with _gemini_rr_lock:
+        _start = _gemini_rr[0] % len(_keys)
+        _gemini_rr[0] = (_gemini_rr[0] + 1) % 1_000_000
     _keys = _keys[_start:] + _keys[:_start]
     # 2026-03 有效模型：1.5系列全部退役，2.5為主力
     _models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash',
@@ -270,9 +270,6 @@ from src.data.stock.app_stock_fetchers import (  # noqa: E402,F401
 # ════════════════════════════════════════════════════════════════
 # 健康度評分（0~100）— 已抽出至 scoring_helpers.py（PR P2-B Phase 3）
 # ════════════════════════════════════════════════════════════════
-from src.compute.scoring import (  # noqa: E402
-    health_grade,
-)
 
 # ════════════════════════════════════════════════════════════════
 # 初學者友善說明系統 — 已抽出至 ui_widgets.py（PR P2-B Phase 2）
@@ -281,10 +278,6 @@ from src.ui.render import (  # noqa: E402
     traffic_light, show_term_help,
 )
 # P2-B Phase 5 A/B/C/D: 4 個 TAB 全部已抽到獨立模組（app.py 9208→1394 行，−85%）
-from src.ui.tabs import render_tab_edu  # noqa: E402
-from src.ui.tabs import render_stock_grp  # noqa: E402
-from src.ui.tabs import render_tab_stock  # noqa: E402
-from src.ui.tabs import render_tab_macro  # noqa: E402
 
 # 在先行指標 section 使用
 _TERM_HELP_LI = show_term_help('PCR') + show_term_help('ADL') + show_term_help('M1B-M2')

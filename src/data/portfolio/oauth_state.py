@@ -6,6 +6,11 @@
 - `handle_oauth_callback()` 內含 st.success/st.error/st.rerun 屬 auth callback flash
   本質(類比 web framework middleware),允許在 L1(類比 EX-L0-1 streamlit lifecycle)
 
+§8.2.A 例外:**EX-OAUTH-1**(v18.431 正式登錄,見 CLAUDE.md §8.2.A 例外清單表)
+- L1 含真 UI 呼叫(st.success/st.error/st.rerun),超出 EX-CACHE-1 範圍
+- 類比 EX-L0-1 將 streamlit lifecycle 視為部署框架特性(非業務 UI)
+- 升級觸發條件:若未來新增多 OAuth provider → 升級 L4 framework adapter
+
 外部 API
 ========
 - _gsa_secret / _sheet_id_secret  (secrets 讀取)

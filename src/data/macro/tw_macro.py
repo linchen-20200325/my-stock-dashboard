@@ -888,12 +888,18 @@ def fetch_tw_market_snapshot(days_back: int = 7) -> dict:
             'breadth': fetch_twse_breadth() 回傳值,
             'fii':     fetch_finmind_foreign_investor() 回傳值,
             'm1b_m2':  fetch_cbc_m1b_m2() 回傳值,
+            'source':  'tw_macro:aggregate(breadth+fii+m1b_m2)',
+            'fetched_at': UTC ISO timestamp,
         }
+        各子鍵已自帶內部 prov;外層 wrapper prov 用於 audit trail 區分聚合呼叫。
     """
     return {
         'breadth': fetch_twse_breadth(),
         'fii':     fetch_finmind_foreign_investor(days_back=days_back),
         'm1b_m2':  fetch_cbc_m1b_m2(),
+        # S-PROV-1 P0 v18.434:外層 aggregator prov(子鍵 prov pre-existing 保留)
+        'source':     'tw_macro:fetch_tw_market_snapshot(aggregate)',
+        'fetched_at': pd.Timestamp.now('UTC').isoformat(),
     }
 
 
@@ -959,6 +965,12 @@ def fetch_pmi_history(months: int = 18, token: str = "") -> Optional[pd.DataFram
     # S-PROV-1 v18.247 phase 3:provenance schema(§2.2)
     out['source'] = 'FinMind:TaiwanEconomicIndicator:PMI'
     out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
+    # Phase 2 pandera Priority 2 v18.434:log-mode PMI schema(範圍 [30,70] + date ascending)
+    try:
+        from src.compute.risk.schemas import validate_in_log_mode, PMISchema
+        validate_in_log_mode(out, PMISchema, label=f'fetch_pmi_history:months={months}')
+    except Exception:
+        pass
     return out
 
 
@@ -1009,6 +1021,12 @@ def fetch_tw_cpi_yoy(months_back: int = 24, token: str = "") -> Optional[pd.Data
     out['source'] = 'FinMind:TaiwanMacroEconomics:CPI_YoY'
     out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
     print(f'[tw_macro/cpi_yoy] ✅ {len(out)} months, latest={out.iloc[-1]["value"]:+.2f}%')
+    # Phase 2 pandera P3 v18.436 #24:macro 時序 schema(date+value+source)log-mode
+    try:
+        from src.compute.risk.schemas import validate_in_log_mode, MacroDFSchema
+        validate_in_log_mode(out, MacroDFSchema, label='fetch_tw_cpi_yoy')
+    except Exception:
+        pass
     return out
 
 
@@ -1037,6 +1055,12 @@ def fetch_tw_unemployment(months_back: int = 24, token: str = "") -> Optional[pd
     out['source'] = 'FinMind:TaiwanMacroEconomics:Unemployment'
     out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
     print(f'[tw_macro/unemp] ✅ {len(out)} months, latest={out.iloc[-1]["value"]:.2f}%')
+    # Phase 2 pandera P3 v18.436 #24
+    try:
+        from src.compute.risk.schemas import validate_in_log_mode, MacroDFSchema
+        validate_in_log_mode(out, MacroDFSchema, label='fetch_tw_unemployment')
+    except Exception:
+        pass
     return out
 
 
@@ -1072,6 +1096,12 @@ def fetch_cbc_discount_rate(months_back: int = 24, fred_api_key: str = "") -> Op
     out = df.copy()
     out['source'] = f'FRED:{FRED_TW_DISCOUNT_RATE}:CBC_DiscountRate'
     print(f'[tw_macro/cbc_rate] ✅ {len(out)} months, latest={out.iloc[-1]["value"]:.3f}%')
+    # Phase 2 pandera P3 v18.436 #24
+    try:
+        from src.compute.risk.schemas import validate_in_log_mode, MacroDFSchema
+        validate_in_log_mode(out, MacroDFSchema, label='fetch_cbc_discount_rate')
+    except Exception:
+        pass
     return out
 
 
@@ -1112,6 +1142,12 @@ def fetch_usdtwd_close(days_back: int = 180) -> Optional[pd.DataFrame]:
         'fetched_at': pd.Timestamp.now('UTC').isoformat(),
     }).reset_index(drop=True)
     print(f'[tw_macro/usdtwd] ✅ {len(out)} days, latest={out.iloc[-1]["value"]:.3f}')
+    # Phase 2 pandera P3 v18.436 #24
+    try:
+        from src.compute.risk.schemas import validate_in_log_mode, MacroDFSchema
+        validate_in_log_mode(out, MacroDFSchema, label='fetch_usdtwd_close')
+    except Exception:
+        pass
     return out
 
 

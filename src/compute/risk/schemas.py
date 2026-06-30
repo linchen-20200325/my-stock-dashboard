@@ -77,8 +77,13 @@ def _make_monthly_revenue_schema():
     """月營收 DataFrame schema(§3.1 範例)。
 
     覆蓋:
-    - `date` datetime / ascending / unique
-    - `revenue_twd` > 0(月營收為正,§4.6「停業時應為 NaN 而非 0」)
+    - `date` datetime / **單股升序 unique**(全市場 batch 因多 stock_id 同月份 → 不檢 unique)
+    - `revenue` > 0(月營收為正,§4.6「停業時應為 NaN 而非 0」;單位 TWD,FinMind native column)
+
+    v18.433 對齊現實:原 `revenue_twd` 命名 + `date.is_unique` 屬未來 SSOT 設計,
+    但 production fetcher(monthly_revenue_fetcher.py)實際輸出 `revenue` 欄 +
+    batch fetcher 有多 stock_id 同月份重複日期 → schema 鬆綁兩處,避免 false-positive
+    schema_drift log。Strict 設計仍可在新 fetcher 採用。
     """
     if not PANDERA_AVAILABLE:
         return None
@@ -89,17 +94,16 @@ def _make_monthly_revenue_schema():
                 checks=[
                     pa.Check(lambda s: s.is_monotonic_increasing,
                              error='date 必須升序排列'),
-                    pa.Check(lambda s: s.is_unique,
-                             error='date 必須 unique'),
+                    # 注意:不檢 is_unique(batch fetcher 多 stock_id 共用月份)
                 ],
                 nullable=False,
             ),
-            # revenue 為正,允許 NaN(停業 / 等公布狀態)
-            'revenue_twd': pa.Column(
+            # revenue 為正,允許 NaN(停業 / 等公布狀態);FinMind native column 'revenue'
+            'revenue': pa.Column(
                 float,
                 checks=pa.Check(
                     lambda s: ((s > 0) | s.isna()).all(),
-                    error='revenue_twd 必須為正或 NaN(§4.6 月營收三態)',
+                    error='revenue 必須為正或 NaN(§4.6 月營收三態)',
                 ),
                 nullable=True,
             ),
@@ -130,10 +134,79 @@ def _make_macro_df_schema():
     )
 
 
+def _make_pmi_schema():
+    """PMI(採購經理指數)DataFrame schema(P2 v18.434)。
+
+    對齊 §3.2 範圍表 + §4.2 不變量:
+    - `date` datetime / ascending(月度,normalized 月底)
+    - `value` float in [30, 70](PMI 合理範圍,shared/signal_thresholds.PMI_VALID_MIN/MAX)
+    - `source` str(§2.2 provenance,e.g. "FinMind:TaiwanEconomicIndicator:PMI")
+
+    fetcher:tw_macro.fetch_pmi_history
+    """
+    if not PANDERA_AVAILABLE:
+        return None
+    from shared.signal_thresholds import PMI_VALID_MIN, PMI_VALID_MAX
+    return pa.DataFrameSchema(
+        columns={
+            'date':   pa.Column(
+                'datetime64[ns]',
+                checks=pa.Check(lambda s: s.is_monotonic_increasing,
+                                error='PMI date 必須升序'),
+                nullable=False,
+            ),
+            'value':  pa.Column(
+                float,
+                checks=pa.Check.in_range(PMI_VALID_MIN, PMI_VALID_MAX,
+                                          include_min=True, include_max=True,
+                                          error=f'PMI value 須 ∈ [{PMI_VALID_MIN}, {PMI_VALID_MAX}](§3.2)'),
+                nullable=False,
+            ),
+            'source': pa.Column(str, nullable=True, required=False),
+        },
+        strict=False,
+    )
+
+
+def _make_foreign_flow_schema():
+    """外資資金流量 DataFrame schema(P2 v18.434)。
+
+    對齊 §3.1 範例:
+    - `date` datetime / ascending(交易日)
+    - `foreign_net_yi` float(億 TWD,可正可負;§4.6 三大法人單日買賣超合理性)
+      範圍寬鬆 [-9999, 9999] 億 — 防 unit confusion(若爆界很可能單位寫錯)
+
+    fetcher:foreign_flow_fetcher.fetch_foreign_flow_series
+    """
+    if not PANDERA_AVAILABLE:
+        return None
+    return pa.DataFrameSchema(
+        columns={
+            'date':   pa.Column(
+                'datetime64[ns]',
+                checks=pa.Check(lambda s: s.is_monotonic_increasing,
+                                error='foreign flow date 須升序'),
+                nullable=False,
+            ),
+            # 億 TWD,sanity check 防單位混淆(元 vs 億 = 1e8 倍誤差)
+            'foreign_net_yi': pa.Column(
+                float,
+                checks=pa.Check.in_range(-9999, 9999,
+                                          include_min=True, include_max=True,
+                                          error='foreign_net_yi 須在 ±9999 億內(§4.1 單位)'),
+                nullable=True,
+            ),
+        },
+        strict=False,
+    )
+
+
 # 模組 level instances(lazy,首次 import 才 init)
 OHLCVSchema = _make_ohlcv_schema()
 MonthlyRevenueSchema = _make_monthly_revenue_schema()
 MacroDFSchema = _make_macro_df_schema()
+PMISchema = _make_pmi_schema()
+ForeignFlowSchema = _make_foreign_flow_schema()
 
 
 def try_validate(df: pd.DataFrame, schema, *, lazy: bool = True) -> tuple:

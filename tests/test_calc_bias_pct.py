@@ -8,7 +8,13 @@ import math
 
 import pytest
 
-from shared.calc_helpers import calc_bias_pct
+import pandas as pd
+
+from shared.calc_helpers import (
+    calc_bias_pct,
+    calc_bias_pct_series,
+    calc_premium_discount_pct,
+)
 
 
 class TestCalcBiasPct:
@@ -59,6 +65,74 @@ class TestCalcBiasPct:
         result = calc_bias_pct(150.5, 148.2, decimals=2)
         assert result is not None and not math.isnan(result)
         assert result == pytest.approx(1.55, abs=0.01)
+
+
+class TestCalcBiasPctSeries:
+    """#23 v18.436 — series 版 SSOT(etf_render BIAS(MA20) 圖)。"""
+
+    def test_basic_series(self):
+        price = pd.Series([110.0, 90.0, 100.0])
+        ma = pd.Series([100.0, 100.0, 100.0])
+        out = calc_bias_pct_series(price, ma)
+        assert out.tolist() == pytest.approx([10.0, -10.0, 0.0])
+
+    def test_same_formula_as_scalar(self):
+        # series 版每點須與 scalar 版同值
+        price = pd.Series([150.5, 120.0])
+        ma = pd.Series([148.2, 100.0])
+        out = calc_bias_pct_series(price, ma)
+        assert out.iloc[0] == pytest.approx(calc_bias_pct(150.5, 148.2))
+        assert out.iloc[1] == pytest.approx(calc_bias_pct(120.0, 100.0))
+
+    def test_ma_zero_becomes_nan_not_divzero(self):
+        # ma<=0 的點 → NaN(§1 fail-safe,不 ÷0、不捏造)
+        price = pd.Series([100.0, 100.0])
+        ma = pd.Series([0.0, 50.0])
+        out = calc_bias_pct_series(price, ma)
+        assert math.isnan(out.iloc[0])
+        assert out.iloc[1] == pytest.approx(100.0)
+
+    def test_ma_nan_propagates_nan(self):
+        # rolling 開頭 ma=NaN(未成形)→ 該點 NaN,不污染後續
+        price = pd.Series([100.0, 110.0])
+        ma = pd.Series([float('nan'), 100.0])
+        out = calc_bias_pct_series(price, ma)
+        assert math.isnan(out.iloc[0])
+        assert out.iloc[1] == pytest.approx(10.0)
+
+    def test_negative_ma_becomes_nan(self):
+        price = pd.Series([100.0])
+        ma = pd.Series([-50.0])
+        out = calc_bias_pct_series(price, ma)
+        assert math.isnan(out.iloc[0])
+
+
+class TestCalcPremiumDiscountPct:
+    """D4 v18.437 — ETF 折溢價% SSOT(委派 calc_bias_pct,以 nav 為基準)。"""
+
+    def test_premium_positive(self):
+        # 市價 110 / 淨值 100 → +10% 溢價
+        assert calc_premium_discount_pct(110, 100) == pytest.approx(10.0)
+
+    def test_discount_negative_with_round(self):
+        # 市價 95.346 / 淨值 100 → -4.654%,decimals=2 → -4.65
+        assert calc_premium_discount_pct(95.346, 100, decimals=2) == -4.65
+
+    def test_zero_nav_returns_none_not_div_zero(self):
+        # nav=0 → None(§1 fail-safe,不 ÷0、不捏造)
+        assert calc_premium_discount_pct(100, 0) is None
+
+    def test_negative_nav_returns_none(self):
+        assert calc_premium_discount_pct(100, -50) is None
+
+    def test_none_inputs_return_none(self):
+        assert calc_premium_discount_pct(None, 100) is None
+        assert calc_premium_discount_pct(100, None) is None
+
+    def test_matches_inline_formula(self):
+        # 與原 inline round((price-nav)/nav*100, 2) 等值
+        for pr, nav in [(110, 100), (50.5, 50.0), (98.2, 100.0)]:
+            assert calc_premium_discount_pct(pr, nav, decimals=2) == round((pr - nav) / nav * 100, 2)
 
 
 if __name__ == "__main__":

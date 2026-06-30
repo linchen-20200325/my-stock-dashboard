@@ -17,7 +17,6 @@ import datetime as _dt
 import os
 
 import pandas as pd
-import requests
 
 try:
     import streamlit as st
@@ -33,9 +32,7 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.ttls import TTL_6HOUR
-from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
-
-FINMIND_URL = FINMIND_API_URL
+from src.data.core.finmind_client import finmind_get  # D5 step2 v18.437 SSOT client
 
 
 def _get_token() -> str:
@@ -62,21 +59,15 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
     _end = _dt.date.today()
     _start = (_end - _dt.timedelta(days=months * 31 + 31)).strftime("%Y-%m-%d")
     try:
-        _r = requests.get(
-            FINMIND_URL,
-            params={
-                "dataset": "TaiwanStockMonthRevenue",
-                "data_id": stock_id,
-                "start_date": _start,
-                "token": _tok,
-            },
-            headers={"Authorization": f"Bearer {_tok}"},
+        _df = finmind_get(
+            "TaiwanStockMonthRevenue",
+            data_id=stock_id,
+            start_date=_start,
+            token=_tok,
             timeout=20,
         )
-        _j = _r.json()
-        if _j.get("status") != 200 or not _j.get("data"):
+        if _df.empty:
             return pd.DataFrame()
-        _df = pd.DataFrame(_j["data"])
         if "revenue" not in _df.columns:
             return pd.DataFrame()
         if "date" not in _df.columns and "revenue_year" in _df.columns:
@@ -93,6 +84,13 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
         try:
             _result.attrs.setdefault('source', 'FinMind:TaiwanStockMonthRevenue:single')
             _result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
+        # Phase 2 pandera Priority 1 v18.433:log-mode schema validation
+        try:
+            from src.compute.risk.schemas import validate_in_log_mode, MonthlyRevenueSchema
+            validate_in_log_mode(_result, MonthlyRevenueSchema,
+                                  label=f'fetch_monthly_revenue:{stock_id}')
         except Exception:
             pass
         return _result
@@ -118,21 +116,15 @@ def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
     _end = _dt.date.today()
     _start = (_end - _dt.timedelta(days=months * 31 + 31)).strftime("%Y-%m-%d")
     try:
-        _r = requests.get(
-            FINMIND_URL,
-            params={
-                "dataset": "TaiwanStockMonthRevenue",
-                "start_date": _start,
-                "token": _tok,
-            },
-            headers={"Authorization": f"Bearer {_tok}"},
+        _df = finmind_get(
+            "TaiwanStockMonthRevenue",
+            start_date=_start,
+            token=_tok,
             timeout=60,
         )
-        _j = _r.json()
-        if _j.get("status") != 200 or not _j.get("data"):
-            print(f"[mrev-fetcher] batch status={_j.get('status')} msg={_j.get('msg', '')}")
+        if _df.empty:
+            print("[mrev-fetcher] batch fetch 回空(status!=200 或無資料)")
             return pd.DataFrame()
-        _df = pd.DataFrame(_j["data"])
         if "revenue" not in _df.columns or "stock_id" not in _df.columns:
             return pd.DataFrame()
         if "date" not in _df.columns and "revenue_year" in _df.columns:
@@ -149,6 +141,14 @@ def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
         try:
             _result_b.attrs.setdefault('source', 'FinMind:TaiwanStockMonthRevenue:batch(all-market)')
             _result_b.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
+        except Exception:
+            pass
+        # Phase 2 pandera Priority 1 v18.433:log-mode schema validation(batch 含 stock_id 多檔)
+        try:
+            from src.compute.risk.schemas import validate_in_log_mode, MonthlyRevenueSchema
+            # batch fetch 每股 sub-DataFrame 取首檔當代表驗(完整驗會誤判 date dup 跨股)
+            validate_in_log_mode(_result_b.head(36), MonthlyRevenueSchema,
+                                  label='fetch_batch_monthly_revenue:sample')
         except Exception:
             pass
         return _result_b

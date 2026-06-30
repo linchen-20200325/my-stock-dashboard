@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.responses import Response as _RawResponse
 from pydantic import BaseModel
 from typing import Optional
-import requests, datetime, os, sys as _sys_prov_nas
+import requests, datetime, os
 import urllib3
 
 

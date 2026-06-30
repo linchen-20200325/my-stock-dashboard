@@ -18,8 +18,12 @@ from typing import Literal
 import pandas as pd
 
 # ── 維持率門檻（台股保守實務值）─────────────────────────────
-MARGIN_CALL_RATIO = 140.0  # %，低於此追繳保證金
-LIQUIDATION_RATIO = 130.0  # %，低於此強制平倉
+# v18.436 #2 翻案結論:此兩常數為「ETF 質借模擬」單一功能專屬風控門檻,
+# 唯一 caller = 本模組 + tab_etf_margin_simulator.py(同功能 UI)。已是具名 SSOT,
+# 屬正確的 domain-local 放置 — 不外移至 shared/(§-1:單功能常數移共用層 = 多餘抽象,
+# 反增跨模組依賴)。若未來其他風控模組需共用維持率,再升格 shared/。
+MARGIN_CALL_RATIO = 140.0  # %，低於此追繳保證金（本功能 SSOT）
+LIQUIDATION_RATIO = 130.0  # %，低於此強制平倉（本功能 SSOT）
 
 # ── 4 風格 × 3 階梯觸發表（drawdown_pct → leverage_add_pct）───
 #  drawdown_pct: 從歷史最高點回撤幅度（正數，%）

@@ -583,11 +583,15 @@ def render_data_health_raw():
                     str(item.get('year', ''))[:7] or None)
             if not date:
                 if _ma_never:
-                    # 整批沒抓 — 黃燈友善提示（系統會自動補抓）
+                    # 整批沒抓 — 黃燈友善提示。
+                    # v18.436 #21 翻案:原訊息「系統下次背景輪詢自動處理」是空承諾 —
+                    # session_state['macro_info'] 只在 user 點「🚀 一鍵更新」時才填,
+                    # 無任何背景 scheduler 會補(cron 只更新 history parquet,不碰 session)。
+                    # 改為誠實導引使用者手動觸發,對齊 L561 註解。
                     rows.append({**{'資料名稱': label, '頻率': _FREQ_LBL.get(freq, freq),
                                     '來源': src, '端點': ep, 'Proxy': '✅' if px else '—'},
-                                 '最後更新': '🟡 待補抓（系統下次背景輪詢自動處理）',
-                                 '日期': '—', '狀態': '🟡'})
+                                 '最後更新': '⚪ 尚未抓取（請至「🌐 總經」分頁點「🚀 一鍵更新」）',
+                                 '日期': '—', '狀態': '⚪'})
                     continue
                 if _ma_all_failed:
                     err = (f'抓取失敗（{_ma_loaded_at}）｜全部 5 段備援均無回應；'

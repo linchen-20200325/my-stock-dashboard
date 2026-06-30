@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import math
 import datetime
-from typing import Any
 
 import pandas as pd
 import streamlit as st

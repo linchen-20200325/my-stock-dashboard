@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import datetime
-import sys as _sys_pb
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -33,6 +32,7 @@ from shared.thresholds import (
 from src.ui.render.tab_sections import border_left_banner  # R-UI-1 v18.412
 from shared.ttls import TTL_1DAY
 from src.data.core import fetch_bps, fetch_industry_category
+from src.data.core.provenance import prov_log
 from src.ui.render import kpi, teacher_conclusion
 
 
@@ -58,13 +58,8 @@ def _fetch_pbratio_from_twse(sid: str) -> float:
         if not (0.01 < _pb_v < 100):
             return 0.0
         # v18.356 PR-Q5b S-PROV-1 phase 19:success-path provenance
-        try:
-            print(f'[_fetch_pbratio_from_twse] sid={sid} '
-                  f'source=TWSE:OpenAPI:BWIBBU_d(via yield_screener) '
-                  f'fetched_at={datetime.datetime.utcnow().isoformat()}Z '
-                  f'result=float:{_pb_v}', file=_sys_pb.stderr)
-        except Exception:
-            pass
+        prov_log('_fetch_pbratio_from_twse', 'TWSE:OpenAPI:BWIBBU_d(via yield_screener)',
+                 f'float:{_pb_v}', ticker=sid)
         return _pb_v
     except Exception as _e:
         import sys as _sys

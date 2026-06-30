@@ -18,7 +18,6 @@ caller(本檔 `render_hot_money_section` / tab_macro.py)無需改 import path。
 from __future__ import annotations
 
 import datetime as _dt
-import sys as _sys_prov
 
 import pandas as pd
 
@@ -36,6 +35,7 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.ttls import TTL_30MIN
+from src.data.core.provenance import prov_log
 
 
 @st.cache_data(ttl=TTL_30MIN, show_spinner=False)
@@ -85,12 +85,15 @@ def fetch_foreign_flow_series(days: int, token: str) -> tuple[pd.DataFrame, str]
     except Exception:
         pass
     # provenance log
+    prov_log('fetch_foreign_flow_series',
+             'FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign',
+             f'days={days}:DataFrame:rows={len(_result)}')
+    # Phase 2 pandera Priority 2 v18.434:log-mode foreign flow schema
+    # (date ascending + foreign_net_yi 億 TWD ∈ ±9999 防單位混淆)
     try:
-        print(f'[fetch_foreign_flow_series] days={days} '
-              f'source=FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign '
-              f'fetched_at={_dt.datetime.utcnow().isoformat()}Z '
-              f'result=DataFrame:rows={len(_result)}',
-              file=_sys_prov.stderr)
+        from src.compute.risk.schemas import validate_in_log_mode, ForeignFlowSchema
+        validate_in_log_mode(_result, ForeignFlowSchema,
+                              label=f'fetch_foreign_flow_series:days={days}')
     except Exception:
         pass
     return _result, ""

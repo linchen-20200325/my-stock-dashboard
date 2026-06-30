@@ -16,8 +16,6 @@ from __future__ import annotations
 import datetime
 import os
 import re
-import sys as _sys_prov_ddf
-import time
 
 import pandas as pd
 
@@ -98,16 +96,13 @@ def fetch_single(symbol, period: str = "60d"):
 
     跨 process 重啟存活(pkl)+ 同 process 內秒讀(yf_proxy cache_data)兩層保護。
     """
-    import os as _os2, pickle as _pk2, hashlib as _hs2
-    _ck2 = '/tmp/stock_cache/' + _hs2.md5(f'yf_{symbol}_{period}'.encode()).hexdigest() + '.pkl'
-    _os2.makedirs('/tmp/stock_cache', exist_ok=True)
-    if _os2.path.exists(_ck2) and (time.time() - _os2.path.getmtime(_ck2)) / 60 < 30:
-        try:
-            with open(_ck2, 'rb') as _f:
-                return _pk2.load(_f)
-        except (OSError, EOFError, _pk2.UnpicklingError) as _e_pkl:
-            # W5-2 §1: pickle 反序列化失敗(壞檔/版本不容)補 log,fallback 重新 fetch
-            print(f"[daily_checklist yf cache] {symbol} pkl 載入失敗,重抓:{_e_pkl}")
+    import hashlib as _hs2
+    # D3 v18.437:pkl 快取改用 cache_layer SSOT(_pkl_get/_pkl_put,同檔 fetch_institutional 模式);
+    # key 沿用 md5(yf_{symbol}_{period}),TTL 30 分。壞檔 fallback 重抓由 _pkl_get 內建(§1 stderr log)。
+    _ck2 = _hs2.md5(f'yf_{symbol}_{period}'.encode()).hexdigest()
+    _c2 = _pkl_get(_ck2, TTL_30MIN)
+    if _c2 is not _CACHE_SENTINEL:
+        return _c2
     # 美元指數備援 symbol 清單
     _sym_list = [symbol]
     if symbol in ('DX-Y.NYB', 'DX=F'):
@@ -133,8 +128,7 @@ def fetch_single(symbol, period: str = "60d"):
         if h.empty:
             _prov_log('fetch_single', 'yf_proxy.cached_history', symbol, 'None:empty')
             return None
-        with open(_ck2, 'wb') as _f:
-            _pk2.dump(h, _f)
+        _pkl_put(_ck2, h)
         _prov_log('fetch_single', 'yf_proxy.cached_history', symbol, f'df:{len(h)}rows')
         return h
     except Exception as e:
@@ -151,20 +145,13 @@ def fetch_flow_snapshot(period: str = "2y"):
     回 {顯示名: DataFrame}(沿用 fetch_single 結構)。只在核心 SPY 抓到時才寫快取,
     避免暫時性全失敗被黏住。供總經 tab「全球資金流向」一節使用。
     """
-    import os as _os_fl
-    import pickle as _pk_fl
-    import time as _tm_fl
     from concurrent.futures import ThreadPoolExecutor as _TPE_fl
     from shared.etf_universe import all_symbols as _all_fl  # Phase 2 Batch 2b v18.424:L1→L0 直 import,解 L1→L2 反向違規
 
-    _ck_fl = '/tmp/stock_cache/_flow_snapshot.pkl'
-    _os_fl.makedirs('/tmp/stock_cache', exist_ok=True)
-    if _os_fl.path.exists(_ck_fl) and (_tm_fl.time() - _os_fl.path.getmtime(_ck_fl)) / 60 < 30:
-        try:
-            with open(_ck_fl, 'rb') as _f_fl:
-                return _pk_fl.load(_f_fl)
-        except Exception:
-            pass
+    # D3 v18.437:pkl 快取改用 cache_layer SSOT(key=_flow_snapshot,TTL 30 分)。
+    _c_fl = _pkl_get('_flow_snapshot', TTL_30MIN)
+    if _c_fl is not _CACHE_SENTINEL:
+        return _c_fl
 
     _syms = _all_fl()                      # {名稱: 代號}
     _uniq = sorted(set(_syms.values()))    # 去重後實際抓取(SPY 等共用代號只抓一次)
@@ -182,12 +169,8 @@ def fetch_flow_snapshot(period: str = "2y"):
 
     out = {name: _by_sym.get(sym) for name, sym in _syms.items()}
 
-    if _by_sym.get('SPY') is not None:     # 核心抓到才快取
-        try:
-            with open(_ck_fl, 'wb') as _f_fl:
-                _pk_fl.dump(out, _f_fl)
-        except Exception:
-            pass
+    if _by_sym.get('SPY') is not None:     # 核心抓到才快取(避免暫時全失敗被黏住)
+        _pkl_put('_flow_snapshot', out)
     _prov_log('fetch_flow_snapshot', 'flow_engine+yf_proxy(parallel)',
               f'period={period}', f'dict:{sum(1 for v in out.values() if v is not None)}/{len(out)}symbols')
     return out
@@ -331,7 +314,11 @@ def fetch_adl(days: int = 60, token=None):
         _age = _tm2.time() - _os2.path.getmtime(_ck)
         if _age < 1800:
             try:
-                _c = _pk.load(open(_ck, 'rb'))
+                # v18.435 WONTFIX-翻案 Bug #2:原 `_pk.load(open(...))` 未用 with,
+                # 若 pickle.load raise,traceback 持有期間 file handle 不釋放;
+                # 改 with block 保證即時關閉。
+                with open(_ck, 'rb') as _f_adl:
+                    _c = _pk.load(_f_adl)
                 if _c is not None and not _c.empty:
                     _alog(f'[ADL] 快取命中 {len(_c)} 筆 (age={_age/60:.1f}min)')
                     return _c

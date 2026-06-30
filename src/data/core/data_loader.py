@@ -917,19 +917,11 @@ class StockDataLoader:
         # ── 方案B: FinMind TaiwanStockMonthRevenue（API，需Token）──
         if df_revenue is None and _tok:
             try:
-                import requests as _rq_fm_rv
-                _r = _rq_fm_rv.get(
-                    FINMIND_API_URL,
-                    params={'dataset': 'TaiwanStockMonthRevenue',
-                            'data_id': stock_id,
-                            'start_date': start_str,
-                            'token': _tok},
-                    headers={'Authorization': f'Bearer {_tok}'},
-                    timeout=20)
-                _j = _r.json()
-                print(f'[FM-Rev] {stock_id}: status={_j.get("status")} rows={len(_j.get("data",[]))}')
-                if _j.get('status') == 200 and _j.get('data'):
-                    _df = _pd_rv.DataFrame(_j['data'])
+                from src.data.core.finmind_client import finmind_get  # D5 step2 v18.437 SSOT client
+                _df = finmind_get('TaiwanStockMonthRevenue', data_id=stock_id,
+                                  start_date=start_str, token=_tok, timeout=20)
+                print(f'[FM-Rev] {stock_id}: rows={len(_df)}')
+                if not _df.empty:
                     # 欄位：date, revenue, revenue_year, revenue_month
                     # 統一欄位名
                     _rename = {}
@@ -1015,24 +1007,18 @@ class StockDataLoader:
             df_fin = None
             _qtr_src = 'unknown'   # v18.202 E2：季財報資料源（finmind_rest / finmind_sdk / yfinance / missing）
             try:
-                import os as _os_q; import requests as _rq_q
+                import os as _os_q
+                from src.data.core.finmind_client import finmind_get  # D5 step2 v18.437 SSOT client
                 _tok_q = _os_q.environ.get('FINMIND_TOKEN', '')
                 # 免費版：TaiwanStockFinancialStatement（無s）；付費版：有s；兩個都試
                 _df_q_tmp = None
                 for _ds_q in ['TaiwanStockFinancialStatement', 'TaiwanStockFinancialStatements']:
                     try:
-                        _pq = {'dataset': _ds_q, 'data_id': stock_id, 'start_date': start_str}
-                        if _tok_q: _pq['token'] = _tok_q  # FinMind v4 需要 token 在 params
-                        _resp_q = _rq_q.get(FINMIND_API_URL,
-                            params=_pq,
-                            headers={'Authorization': f'Bearer {_tok_q}'} if _tok_q else {},
-                            timeout=25)
-                        _jd_q = _resp_q.json()
-                        print(f'[季財報REST/{_ds_q}] {stock_id} status={_jd_q.get("status")}, rows={len(_jd_q.get("data",[]))}')
-                        if _jd_q.get('data'):
-                            _types = list(set(r.get('type','') for r in _jd_q['data'][:30]))
-                        if _jd_q.get('status') == 200 and _jd_q.get('data'):
-                            _df_q_tmp = pd.DataFrame(_jd_q['data'])
+                        _df_resp_q = finmind_get(_ds_q, data_id=stock_id,
+                                                 start_date=start_str, token=_tok_q, timeout=25)
+                        print(f'[季財報REST/{_ds_q}] {stock_id} rows={len(_df_resp_q)}')
+                        if not _df_resp_q.empty:
+                            _df_q_tmp = _df_resp_q
                             break
                     except Exception as _eq2:
                         print(f'[季財報REST/{_ds_q}] {_eq2}')
@@ -2146,10 +2132,23 @@ def fetch_industry_category(sid: str) -> str:
                         params=_p, timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
+            try:
+                from src.data.core.provenance import prov_log
+                prov_log('fetch_industry_category',
+                         'FinMind:TaiwanStockInfo', 'empty', ticker=sid)
+            except Exception:
+                pass
             return ''
         for _row in _data:
             _ind = _row.get('industry_category', '')
             if _ind:
+                try:
+                    from src.data.core.provenance import prov_log
+                    prov_log('fetch_industry_category',
+                             'FinMind:TaiwanStockInfo',
+                             f'str:{_ind}', ticker=sid)
+                except Exception:
+                    pass
                 return str(_ind)
         return ''
     except Exception:
@@ -2208,6 +2207,13 @@ def fetch_bps_from_finmind(sid: str) -> float:
         _bps = _equity / _shares_outstanding
         if not (0.1 < _bps < 5000):
             return 0.0
+        try:
+            from src.data.core.provenance import prov_log
+            prov_log('fetch_bps_from_finmind',
+                     'FinMind:TaiwanStockBalanceSheet',
+                     f'float:{_bps:.2f}:as_of={_latest}', ticker=sid)
+        except Exception:
+            pass
         return float(_bps)
     except Exception:
         return 0.0
@@ -2221,6 +2227,7 @@ def fetch_bps(sid: str) -> float:
     """
     _bps_fm = fetch_bps_from_finmind(sid)
     if _bps_fm > 0:
+        # fetch_bps_from_finmind 內已 prov_log,fetch_bps 不重複
         return _bps_fm
     try:
         import yfinance as _yf_pb
@@ -2229,6 +2236,14 @@ def fetch_bps(sid: str) -> float:
                 _info_pb = _yf_pb.Ticker(f'{sid}{_sfx_pb}').info or {}
                 _bps_v = _info_pb.get('bookValue')
                 if _bps_v and float(_bps_v) > 0:
+                    try:
+                        from src.data.core.provenance import prov_log
+                        prov_log('fetch_bps',
+                                 f'yfinance:Ticker({sid}{_sfx_pb}).info.bookValue',
+                                 f'float:{_bps_v}:fallback_from=FinMind_BS',
+                                 ticker=sid)
+                    except Exception:
+                        pass
                     return float(_bps_v)
             except Exception:
                 continue
