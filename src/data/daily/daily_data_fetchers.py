@@ -155,7 +155,7 @@ def fetch_flow_snapshot(period: str = "2y"):
     import pickle as _pk_fl
     import time as _tm_fl
     from concurrent.futures import ThreadPoolExecutor as _TPE_fl
-    from src.compute.macro import all_symbols as _all_fl
+    from shared.etf_universe import all_symbols as _all_fl  # Phase 2 Batch 2b v18.424:L1→L0 直 import,解 L1→L2 反向違規
 
     _ck_fl = '/tmp/stock_cache/_flow_snapshot.pkl'
     _os_fl.makedirs('/tmp/stock_cache', exist_ok=True)
