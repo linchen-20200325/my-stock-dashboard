@@ -32,6 +32,7 @@ import pandas as pd
 import yfinance as yf
 
 from shared.ttls import TTL_30MIN, TTL_1HOUR, TTL_2HOUR, TTL_1DAY, TTL_7DAY
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 
 
 # v18.352 PR-Q2 — S-PROV-1 phase 19 helper
@@ -1441,7 +1442,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
         try:
             _p = {'dataset': _ds1, 'data_id': code, 'start_date': start}
             if token: _p['token'] = token
-            _r = _fu_etfnav('https://api.finmindtrade.com/api/v4/data', params=_p,
+            _r = _fu_etfnav(FINMIND_API_URL, params=_p,
                             timeout=15, attempts=1)
             if _r is None:
                 print(f'[ETF NAV] FinMind {_ds1} {code}: fetch_url 回 None（含 NAS 中繼皆失敗）')

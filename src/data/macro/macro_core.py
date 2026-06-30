@@ -39,6 +39,7 @@ import pandas as pd
 
 from src.data.proxy import fetch_url
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.fred_series import (
     FRED_BSCICP02,
     FRED_ISPMANPMI,
@@ -1251,7 +1252,7 @@ def _pmi_src_finmind(today, max_age_days, errs):
             _start = (today - _dt.timedelta(days=180)).strftime('%Y-%m-%d')
             # 走 fetch_url（NAS Squid → 直連 → NAS 中繼站 fallback，PR #100）
             _r_fm = fetch_url(
-                'https://api.finmindtrade.com/api/v4/data',
+                FINMIND_API_URL,
                 params={'dataset': 'TaiwanEconomicIndicator',
                         'start_date': _start, 'token': _tok},
                 timeout=12, attempts=1)

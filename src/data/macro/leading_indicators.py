@@ -35,6 +35,7 @@ import pandas as pd
 import requests
 import urllib3
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.ttls import TTL_30MIN
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -95,7 +96,7 @@ TAIFEX_HDR = {
     "Content-Type": "application/x-www-form-urlencoded",
     "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
 }
-FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
+FINMIND_URL = FINMIND_API_URL
 
 # build_leading_fast §6.5 TAIFEX「補強」段(前五大/前十大/精確韭菜)為逐日序列爬,
 # 最多 14 天 × 每天十幾秒 timeout = 整段可達 ~100s,會超過外層併發池對 li job 的
