@@ -25,10 +25,11 @@ from __future__ import annotations
 import streamlit as st
 from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
-# v18.329 PR-D:ETF inline magic 抽 SSOT(分級閾值用)
-# 註:多檔/組合 Tab 用 etf_helpers.{yield_valuation_zone,dividend_health_label} 函式,
-# 單檔 Tab 因 UX 設計不同(colored_box + teacher_conclusion 教學模式)維持 inline 條件
+from shared.thresholds import classify_yield_zone
+# Batch 9-2 v18.419:策略二「7% 存股估值」改 call classify_yield_zone SSOT。
+# 原 YIELD_HIGH/MID/LOW 直接 import 已不需要(SSOT 函式內部消費)。
+# 4 段對齊 strong_buy/neutral/reduce/sell,UI 措辭(_colored_box + _teacher_conclusion)
+# 仍各自 dispatch 保留 ETF 教學脈絡。
 from shared.signal_thresholds import (
     ETF_CAGR_TARGET_PCT,
     ETF_DIV_YOY_DECLINE_PCT,
@@ -285,37 +286,47 @@ def render_etf_single(gemini_fn=None):
     cc, cd    = st.columns(2)
     cc.metric('近5年平均殖利率', f'{avg_yield:.2f}%' if avg_yield else 'N/A')
     cd.metric('現今殖利率', f'{cur_yield:.2f}%')
-    if avg_yield > 0:
-        if cur_yield >= YIELD_HIGH:
-            _colored_box('🟢 <b>強烈買進（特價）</b>：殖利率 ≥ 7%，現值低估，值得分批佈局', 'green')
-            _teacher_conclusion('孫慶龍',
-                                f'現金殖利率 {cur_yield:.1f}%（5年均 {avg_yield:.1f}%）',
-                                '殖利率 ≥ 7%，低估特價區，強烈買進',
-                                '分批佈局，停損設 -15%')
-        elif cur_yield <= YIELD_LOW:
-            _colored_box('🔴 <b>獲利了結（昂貴）</b>：殖利率 ≤ 3%，現值高估，考慮減碼', 'red')
-            _teacher_conclusion('孫慶龍',
-                                f'現金殖利率 {cur_yield:.1f}%（5年均 {avg_yield:.1f}%）',
-                                '殖利率 ≤ 3%，高估昂貴區，獲利了結',
-                                '分批出清，等待殖利率回升到 5% 以上')
-        elif cur_yield <= YIELD_MID:
-            _colored_box('🟡 <b>適度減碼（合理）</b>：殖利率 ≤ 5%，估值合理偏高', 'yellow')
-            _teacher_conclusion('孫慶龍',
-                                f'現金殖利率 {cur_yield:.1f}%（5年均 {avg_yield:.1f}%）',
-                                '殖利率 3%~5%，估值合理偏高，適度減碼',
-                                '不宜重倉，等待 5% 以上再加碼')
-        else:
-            st.info(f'殖利率 {cur_yield:.1f}% 位於 5%~7% 合理區間，中性持有')
-            _teacher_conclusion('孫慶龍',
-                                f'現金殖利率 {cur_yield:.1f}%（5年均 {avg_yield:.1f}%）',
-                                '殖利率 5%~7% 合理區間，中性持有',
-                                '可持有，待殖利率 ≥ 7% 再加碼')
-    else:
-        st.info('ℹ️ 無充足配息歷史，套用回測頁評估價差績效')
+    # Batch 9-2 v18.419:走 shared.thresholds.classify_yield_zone SSOT。
+    # 原 inline if-elif(4 段對齊 strong_buy/sell/reduce/neutral)收 SSOT;
+    # UI 各自 dispatch(_colored_box + _teacher_conclusion)文字保留 ETF 教學脈絡。
+    _, _zone_code = classify_yield_zone(cur_yield, avg_yield=avg_yield)
+    _ZONE_UX = {
+        'strong_buy': {
+            'box': ('🟢 <b>強烈買進（特價）</b>:殖利率 ≥ 7%,現值低估,值得分批佈局', 'green'),
+            'tc':  ('殖利率 ≥ 7%,低估特價區,強烈買進',
+                    '分批佈局,停損設 -15%'),
+        },
+        'neutral': {
+            'box': None,  # 中性區改用 st.info,不畫 colored_box
+            'tc':  ('殖利率 5%~7% 合理區間,中性持有',
+                    '可持有,待殖利率 ≥ 7% 再加碼'),
+        },
+        'reduce': {
+            'box': ('🟡 <b>適度減碼（合理）</b>:殖利率 ≤ 5%,估值合理偏高', 'yellow'),
+            'tc':  ('殖利率 3%~5%,估值合理偏高,適度減碼',
+                    '不宜重倉,等待 5% 以上再加碼'),
+        },
+        'sell': {
+            'box': ('🔴 <b>獲利了結（昂貴）</b>:殖利率 ≤ 3%,現值高估,考慮減碼', 'red'),
+            'tc':  ('殖利率 ≤ 3%,高估昂貴區,獲利了結',
+                    '分批出清,等待殖利率回升到 5% 以上'),
+        },
+    }
+    if _zone_code == 'na':
+        st.info('ℹ️ 無充足配息歷史,套用回測頁評估價差績效')
         _teacher_conclusion('孫慶龍',
                             '配息歷史不足',
-                            '無法套用 7% 存股聖經，改看回測 CAGR',
+                            '無法套用 7% 存股聖經,改看回測 CAGR',
                             '前往「ETF回測」確認年化報酬是否 ≥ 8%')
+    else:
+        _ux = _ZONE_UX[_zone_code]
+        if _ux['box'] is not None:
+            _colored_box(_ux['box'][0], _ux['box'][1])
+        else:
+            st.info(f'殖利率 {cur_yield:.1f}% 位於 5%~7% 合理區間,中性持有')
+        _teacher_conclusion('孫慶龍',
+                            f'現金殖利率 {cur_yield:.1f}%（5年均 {avg_yield:.1f}%）',
+                            _ux['tc'][0], _ux['tc'][1])
 
     # ── 策略三：VCP 突破 ──────────────────────────────────────
     st.markdown('#### 🧠 策略三：VCP 波幅收縮突破')
