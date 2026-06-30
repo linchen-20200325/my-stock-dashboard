@@ -1,38 +1,90 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🚀 目前狀態(v18.402)
+## 🚀 目前狀態(v18.429 — Phase 2 全 5 batch 收尾後 post-merge audit ✅ PASS)
 
-✅ Dead code audit 6 輪收斂飽和(真 dead -666 LOC);15 項未完項目清單已給 user
-等待指派(見 chat history)。
+✅ **Phase 2 全完成**(2026-06-30 PR #429~#433 共 5 PR 合併)。
+✅ Post-merge SSOT + §8.2 audit:0 高風險違規,僅 2 個中風險 SSOT 微缺口(WONTFIX 候選)。
+等待 user 指派下一輪工作。
 
-## 📊 累計度量
+## 📊 累計度量(v18.429)
 
 | 度量 | 值 |
 |---|---|
 | tab_macro.py LOC | 5387 → 488(**-91%**) |
+| tab_stock.py LOC | 3672 → 1621(**-55.9%**) |
+| tab_stock_grp.py LOC | 3673 → 303(**-91.8%**, Phase 2 Batch 7 全 5 子批) |
+| app.py LOC | 7300 → 642(pure router + orchestrator)|
 | Dead code 清除 | -666 LOC(ai_engine -654 + fuzzy_get -12)|
 | §3.3 反捏造違憲 | 0 |
-| §8.2 高項違憲 | 0 |
-| §8.2.A active 例外 | 2(EX-L0-1 / EX-CACHE-1 / EX-PASSTHRU-1)+ 2 退役(EX-AI-1 / EX-RENDER-1)|
+| §8.2 hard rule 違憲 | 0(grep 驗證:L1 import streamlit 全 EX-CACHE-1 letter compliant;L2 無 I/O;0 反向 import)|
+| §8.2.A active 例外 | 3(EX-L0-1 / EX-CACHE-1 7 處 / EX-PASSTHRU-1 25+ 處)+ 2 退役(EX-AI-1 / EX-RENDER-1)|
 | §4.3 重算對帳 | 3 / 3 落地(US10Y / 月營收 / 健康評分)|
-| pytest | 2226 pass / 10 skip / 36 deselected(slow) |
+| §5 SSOT 收斂 | 6 處 magic SSOT(Batch 5a 停損 + 5b 布林帶寬 2-tier);乖離 / RSI / MA / 健康評分 / FinMind URL / TWSE URL 等已全 SSOT |
+| pytest | 2294 pass / 10 skip / 14 deselected |
+| Phase 2 累計 PR | #429~#433(5 PR 全 merged)+ 早期 #398~#428(34 PR)= 39 PR |
 
-## 📋 本 session PR 清單(#398-#409,12 PR)
+## 📋 Phase 2 全 batch PR 清單(#429-#433,5 PR + 早期 #428 起算 6 PR)
 
 | PR | 主題 | 主要結果 |
 |---|---|---|
-| #398 | P0+P1+P2(深挖第三輪)| _macro_info NameError fix + DataRegistry -275 LOC + 例外收齊 |
-| #399 | P4 C+SSOT data_registry live state | panel + 11 emoji category SSOT |
-| #400 | P5 Batch1(AppTest 实機 + version pin + A4 精簡)| pytest 2214 / pin 14 套件 |
-| #401 | P5 Batch2-5(A3 認錯 / B1 L4→L3 / B2 補登 / D1 重 audit)| EX-RENDER-1 退役 |
-| #402 | P5 Batch6-7(B4 確認 + B5 健康評分)| §4.3 3/3 完成 |
-| #403 | P5 Batch8-9(pandera POC + app.py audit)| schemas.py + APP_PY_AUDIT.md |
-| #404 | Dead code audit Round 1(過度樂觀)| 52 候選 |
-| #405 | SSOT + STATE + Dead honest stop | reconcile health SSOT |
-| #406 | Dead audit Round 2(嚴格雙重條件)+ fuzzy_get 真刪 | -12 LOC |
-| #407 | Dead-δ:ai_engine.py 整檔真刪 + EX-AI-1 退役 | **-654 LOC** |
-| #408 | T2 audit Round 4(test source-string 保護)| 0 LOC,記錄發現 |
-| #409 | SSOT FRESHNESS_THRESHOLDS 抽出 + Round 6 honest stop | +13 LOC |
+| #429 | Phase 2 Batch 1(R-CALC-3 乖離 + R-CALC-1 RSI 雙 SSOT)| 乖離 inline 8 處 → calc_bias_pct SSOT;RSI thin wrapper |
+| #430 | Phase 2 Batch 2+3+4(R-UI-1 border-left + R-FETCH-1 股本 + R-CALC-2 MA scalar)| inline HTML SSOT;_fetch_share_capital UI→L1 搬移;safe_ma 5 子批 |
+| #431 | Phase 2 Batch 6+10(健康評分對帳 production + FinMind URL SSOT 17/37)| §4.3 health reconcile embed in calc_traffic_light;首批 17 處 URL |
+| #432 | Phase 2 A+B+C(Batch 10b URL 收尾 + Batch 8 三大法人 WONTFIX + Batch 7-1 起步)| 12 檔 FinMind URL 全集中;tab_stock_grp section 化 51 LOC 抽出 |
+| #433 | **Phase 2 全 5 batch 收尾**:tab_stock_grp 拆檔 + L0 helper + L1 fetcher + magic SSOT | 18 commit,9 個 batch 累計:Batch 7-2~7-5(-1117 LOC)+ Batch 8.1(BFI82U URL)+ Batch 9/9-2(357 殖利率 SSOT)+ Phase 2 V1/V2/L0/R-UI-FETCH/D10/magic 全做 |
+
+## 🏁 PR #433(v18.429,merged 2026-06-30 commit bbb282b)
+
+### 累計成果
+
+**檔案搬移 / 新建**:
+- ✅ 5 個 stock_grp_sections/ 模組(market_status / batch_fetcher / portfolio_summary / financial_health / ai_portfolio)
+- ✅ 2 個 L0 shared helper:`shared/etf_codes.py`(bare_etf_code)+ `shared/etf_universe.py`(REGIONAL_ETFS + CROSS_ASSET_ETFS + all_symbols)
+- ✅ 2 個 L1 fetcher 遷層:`src/data/macro/foreign_flow_fetcher.py`(R-UI-FETCH-1)+ `src/data/stock/chip_concentration_fetcher.py`(R-UI-FETCH-2)
+- ✅ 新增 2 個 SSOT 常數:`BB_BW_SHRINK_WARN_RATIO=0.7` + `BB_BW_SHRINK_ACTION_RATIO=0.6`(布林帶寬 2-tier)
+- ✅ ARCHITECTURE.md 升 v9.2 + §0.11 audit findings doc
+
+**架構違規收斂**:
+- ✅ §8.2 L1→L2 反向 import 9 處全消除(bare_etf_code + all_symbols 下沉 L0)
+- ✅ §8.2 EX-CACHE-1 letter compliance:etf_calc / etf_quality 補 try/except + _NoOpST
+- ✅ §8.2 R-UI-FETCH-1/2 違憲消除(2 個 L1 fetcher 從 UI 抽出)
+- ✅ D10 真重複消除(etf_render._teacher_conclusion 委派 ui_widgets SSOT)
+- ✅ 6 處 magic number 收 SSOT(停損 0.92 → STOP_LOSS_PCT;布林帶寬 0.7/0.6 × 5)
+
+**audit 翻案 WONTFIX(documented 證據)**:
+- ⊘ Batch 5 月營收 3 路(endpoint 已 SSOT,wrapper 差異有理由)
+- ⊘ Batch 8 三大法人 dispatcher 統一(4 路真不同 endpoint)
+- ⊘ Batch 9 cross-file 個股 vs ETF 殖利率(公式真不同)
+- ⊘ R-FETCH-4 配息 base(output format / fallback chain 差異大)
+- ⊘ R-UI-1 51 處 border-left 殘留(全 multi-line bespoke shapes)
+- ⊘ 停損 0.93 / 0.07 / 布林近上軌 0.995 / 0.97(各自單 use + 不同概念)
+
+### Post-merge audit ✅ PASS
+
+| 項目 | 結果 |
+|---|---|
+| §8.2 hard rule violations | **0** |
+| L1→L2 / L2→L3 / L3→L4+ 反向 import | **0** |
+| 新檔 foreign_flow / chip_concentration | EX-CACHE-1 letter compliant + S-PROV-1 phase 19 ✅ |
+| etf_render._teacher_conclusion shim | 23 caller 確認 ✅ |
+| L0 helper re-export shim | backward compat ✅(無 caller 改動需要)|
+| SSOT 微缺口(audit 候選,非阻斷)| 3 處 — 詳見下方「未做的 minor 候選」|
+
+### 未做的 minor SSOT 候選(audit 找到但未動工,非緊急)
+
+| ID | 位置 | 內容 | 建議 |
+|---|---|---|---|
+| **SSOT-BB-MULTI** | tech_indicators.py:118(0.97)+ v4_strategy_engine.py:338(0.99)+ v5_modules.py:247(0.995)| 3 個布林近上軌 inline 不同精度,`BB_NEAR_UPPER_RATIO=0.97` SSOT 已存但未全 caller 引用 | 翻案 candidate:可能 3 個精度故意分流;或統一至 SSOT |
+| **scoring_helpers:239 漏網** | `bb['bw'] < bb['bw_mean'] * 0.7` | Batch 5b 漏掃的第 6 處 BB_BW_SHRINK_WARN_RATIO candidate | 直接替換,3 LOC + 1 import |
+| **oauth_state.py L1 直 import streamlit** | src/data/portfolio/oauth_state.py:25 | 已 documented (D4 v18.400 歸位)但未正式登錄成 §8.2.A EX-OAUTH-1 例外 | doc-only:CLAUDE.md §8.2.A 補例外行 |
+
+## 📋 早期 session PR 清單(#398-#428,33 PR — 歷史保留)
+
+| PR | 主題 | 主要結果 |
+|---|---|---|
+| #398-#409 | governance + Dead code audit 6 輪 + pandera POC + S-MED | -666 LOC dead;详见前版 STATE |
+| #410-#428 | F-Q / R / D / C / U 系列(structural refactor 收尾)| tab_macro/stock 拆檔大量結案 |
+| #429-#433 | **Phase 2 全 5 batch(本批)**| 見上方詳述 |
 
 詳細歷史見下方各 PR 區塊。
 
