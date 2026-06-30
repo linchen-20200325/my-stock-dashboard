@@ -93,4 +93,12 @@ def fetch_foreign_flow_series(days: int, token: str) -> tuple[pd.DataFrame, str]
               file=_sys_prov.stderr)
     except Exception:
         pass
+    # Phase 2 pandera Priority 2 v18.434:log-mode foreign flow schema
+    # (date ascending + foreign_net_yi 億 TWD ∈ ±9999 防單位混淆)
+    try:
+        from src.compute.risk.schemas import validate_in_log_mode, ForeignFlowSchema
+        validate_in_log_mode(_result, ForeignFlowSchema,
+                              label=f'fetch_foreign_flow_series:days={days}')
+    except Exception:
+        pass
     return _result, ""

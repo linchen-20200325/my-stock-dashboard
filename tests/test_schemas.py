@@ -14,17 +14,21 @@ import pytest
 from src.compute.risk.schemas import (
     PANDERA_AVAILABLE,
     OHLCVSchema, MonthlyRevenueSchema, MacroDFSchema,
+    PMISchema, ForeignFlowSchema,
     try_validate,
 )
 
 
 def test_module_smoke():
-    """import 路徑 + 3 schema instance 存在(installed 才非 None)"""
+    """import 路徑 + 5 schema instance 存在(installed 才非 None)。
+    v18.434 P2 補:PMISchema + ForeignFlowSchema。"""
     from src.compute.risk import schemas
     assert hasattr(schemas, 'PANDERA_AVAILABLE')
     assert hasattr(schemas, 'OHLCVSchema')
     assert hasattr(schemas, 'MonthlyRevenueSchema')
     assert hasattr(schemas, 'MacroDFSchema')
+    assert hasattr(schemas, 'PMISchema')
+    assert hasattr(schemas, 'ForeignFlowSchema')
     assert callable(schemas.try_validate)
 
 
@@ -82,6 +86,52 @@ class TestMonthlyRevenueSchema:
         })
         with pytest.raises(Exception):
             MonthlyRevenueSchema.validate(df)
+
+
+@pytest.mark.skipif(not PANDERA_AVAILABLE, reason='pandera not installed')
+class TestPMISchema:
+    """P2 v18.434 — PMI schema 範圍 + ascending 檢查"""
+    def test_valid(self):
+        df = pd.DataFrame({
+            'date': pd.to_datetime(['2026-01-31', '2026-02-28', '2026-03-31']),
+            'value': [50.5, 52.0, 48.3],
+        })
+        assert len(PMISchema.validate(df)) == 3
+
+    def test_pmi_out_of_range_violation(self):
+        df = pd.DataFrame({
+            'date': pd.to_datetime(['2026-01-31', '2026-02-28']),
+            'value': [50.0, 75.0],  # 75 > PMI_VALID_MAX(70)
+        })
+        with pytest.raises(Exception):
+            PMISchema.validate(df)
+
+    def test_date_descending_violation(self):
+        df = pd.DataFrame({
+            'date': pd.to_datetime(['2026-02-28', '2026-01-31']),  # 反序
+            'value': [50.0, 52.0],
+        })
+        with pytest.raises(Exception):
+            PMISchema.validate(df)
+
+
+@pytest.mark.skipif(not PANDERA_AVAILABLE, reason='pandera not installed')
+class TestForeignFlowSchema:
+    """P2 v18.434 — 外資資金流量 schema(可正可負 + 單位 sanity check)"""
+    def test_valid_with_negative(self):
+        df = pd.DataFrame({
+            'date': pd.to_datetime(['2026-06-01', '2026-06-02', '2026-06-03']),
+            'foreign_net_yi': [120.5, -85.3, 0.0],  # 正/負/零都合法
+        })
+        assert len(ForeignFlowSchema.validate(df)) == 3
+
+    def test_unit_confusion_violation(self):
+        df = pd.DataFrame({
+            'date': pd.to_datetime(['2026-06-01']),
+            'foreign_net_yi': [1.5e8],  # 元的單位寫成億 → 爆 9999 上限
+        })
+        with pytest.raises(Exception):
+            ForeignFlowSchema.validate(df)
 
 
 class TestTryValidate:

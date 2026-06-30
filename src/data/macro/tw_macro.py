@@ -965,6 +965,12 @@ def fetch_pmi_history(months: int = 18, token: str = "") -> Optional[pd.DataFram
     # S-PROV-1 v18.247 phase 3:provenance schema(§2.2)
     out['source'] = 'FinMind:TaiwanEconomicIndicator:PMI'
     out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
+    # Phase 2 pandera Priority 2 v18.434:log-mode PMI schema(範圍 [30,70] + date ascending)
+    try:
+        from src.compute.risk.schemas import validate_in_log_mode, PMISchema
+        validate_in_log_mode(out, PMISchema, label=f'fetch_pmi_history:months={months}')
+    except Exception:
+        pass
     return out
 
 

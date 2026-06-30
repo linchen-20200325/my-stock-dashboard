@@ -186,11 +186,14 @@ def test_cbc_m1b_m2_all_fail(monkeypatch):
 # ══════════════════════════════════════════════════════════════
 
 def test_snapshot_returns_three_factors(monkeypatch):
-    """fetch_tw_market_snapshot 應回 breadth / fii / m1b_m2 三個 sub-dict。"""
+    """fetch_tw_market_snapshot 應回 breadth / fii / m1b_m2 三個 sub-dict
+    (v18.434 S-PROV-1 P0 後額外帶 source / fetched_at 兩個聚合 prov key)。"""
     monkeypatch.setattr(tw_macro, 'fetch_url', lambda *a, **kw: None)
     monkeypatch.setattr(tw_macro, '_try_twii_proxy', lambda: None)
     snap = tw_macro.fetch_tw_market_snapshot()
-    assert set(snap.keys()) == {'breadth', 'fii', 'm1b_m2'}
+    # 三個 sub-dict + 兩個聚合 prov key(源頭與抓取時間;§2.2)
+    assert {'breadth', 'fii', 'm1b_m2'} <= set(snap.keys())
+    assert 'source' in snap and 'fetched_at' in snap
     # 全部失敗的情況下,每個 sub-dict 應該都有 error
     assert snap['breadth']['error'] is not None
     assert snap['fii']['error']     is not None
