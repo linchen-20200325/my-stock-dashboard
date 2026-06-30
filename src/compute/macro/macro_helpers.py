@@ -97,6 +97,27 @@ def calc_traffic_light(
         + (HEALTH_FNET_BONUS if _fnet > 0 else 0), 1
     )
 
+    # R-CALC-4 v18.412:Method A ↔ Method B 雙演算法對帳(§4.3)
+    # 嵌入 production render 路徑(原只在 reconcile_panel diagnostic page);
+    # drift_warning / extreme_divergence 走 stderr log,**不改 UI 行為**(觀測性升級)。
+    try:
+        from src.compute.health.health_reconcile import reconcile_health_score as _reconcile
+        _rec = _reconcile(_health, jqavg=_jqavg, score=_score, fnet=_fnet)
+        if not _rec.within_tolerance:
+            import sys as _sys_rec
+            print(f'[health_reconcile] {_rec.reason} '
+                  f'method_a={_rec.method_a} method_b={_rec.method_b:.1f} '
+                  f'diff={_rec.diff:+.1f} abs_diff={_rec.abs_diff:.1f}',
+                  file=_sys_rec.stderr)
+    except Exception as _e_rec:
+        # 對帳失敗不影響主路徑(§1 fail loud 範圍外:這是觀測性,主邏輯仍走 Method A)
+        try:
+            import sys as _sys_rec_err
+            print(f'[health_reconcile] swallow: {type(_e_rec).__name__}: {_e_rec}',
+                  file=_sys_rec_err.stderr)
+        except Exception:
+            pass
+
     # 校準腳本可注入測試門檻；正式呼叫不傳 → 用模組常數
     _h_thr = health_defense_threshold if health_defense_threshold is not None else HEALTH_DEFENSE_THRESHOLD
     _s_thr = bull_min_score if bull_min_score is not None else BULL_MIN_SCORE
