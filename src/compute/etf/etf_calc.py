@@ -45,6 +45,7 @@ from shared.signal_thresholds import (
     ETF_AVG_VOL_20D_LOW_LOTS,
     # v18.335 PR-H3:ETF_QUICK_SIGMA_* 5 個由 classify_etf_quick_sigma 內部消費,移除 etf_calc 直引
     ETF_UP_DOWN_DAYS_THRESHOLD,  # C-2 v18.382 抽自 inline 60
+    ETF_MANAGER_TENURE_NEW_DAYS,  # v18.436 #5 抽自 inline 180
     ETF_VCP_MIN_DAYS,
     TRADING_DAYS_PER_YEAR,
 )
@@ -912,7 +913,7 @@ def compute_etf_weakness_row(ticker: str, name: str = '',
         _down = _row['大跌弱勢率%'] or 0
         _up = _row['反彈弱勢率%'] or 0
         _streak = _row['連敗季數'] or 0
-        _new_manager = isinstance(_tenure_days, int) and _tenure_days < 180
+        _new_manager = isinstance(_tenure_days, int) and _tenure_days < ETF_MANAGER_TENURE_NEW_DAYS
         if _streak >= 2:
             _row['燈號'] = f'🚨 連續{_streak}季輸盤'
             _row['動作建議'] = ('⏳ 新經理人 <6 月，再給時間'

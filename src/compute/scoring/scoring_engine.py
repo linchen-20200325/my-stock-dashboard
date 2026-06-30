@@ -23,6 +23,7 @@ from shared.signal_thresholds import (
     FGMS_CL_QOQ_UP_PCT, FGMS_CL_QOQ_DOWN_PCT,
     FGMS_DIV_T1_PCT, FGMS_DIV_T2_PCT, FGMS_DIV_T3_PCT, FGMS_DIV_T4_PCT,
     FGMS_REV_YOY_GOOD_PCT, FGMS_RATE_DELTA_PCT,
+    FGMS_NO_DIV_GOOD_SCORE, FGMS_NO_DIV_POSITIVE_SCORE, FGMS_NO_DIV_DECLINE_SCORE,  # v18.436 #6
     FGMS_CAPEX_T1_PCT, FGMS_CAPEX_T2_PCT,
     FGMS_LABEL_T1, FGMS_LABEL_T2, FGMS_LABEL_T3, FGMS_LABEL_T4,
     LEAD_CL_QOQ_SURGE_PCT, LEAD_CL_QOQ_UP_PCT, LEAD_CL_QOQ_DOWN_PCT,
@@ -651,7 +652,9 @@ def calc_forward_momentum_score(quarterly_df=None, bs_cf_df=None,
                 elif divergence >= FGMS_DIV_T4_PCT:inv_score = 30
                 else:                  inv_score = 10
             elif not pd.isna(rev_yoy):
-                inv_score = 65 if rev_yoy > FGMS_REV_YOY_GOOD_PCT else (50 if rev_yoy > 0 else 30)
+                inv_score = (FGMS_NO_DIV_GOOD_SCORE if rev_yoy > FGMS_REV_YOY_GOOD_PCT
+                             else (FGMS_NO_DIV_POSITIVE_SCORE if rev_yoy > 0
+                                   else FGMS_NO_DIV_DECLINE_SCORE))
 
         # ══════════════════════════════════════════════════════
         # 維度 3 — 三率趨勢（20%）

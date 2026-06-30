@@ -89,7 +89,10 @@ def calc_traffic_light(
                 pass
 
     _regime  = _mkt.get('regime', 'neutral')
-    _defense = (_score < 2 and abs(_fut_net) > 30000 and _fut_net < 0)
+    # v18.436 #3:外資期貨防禦門檻 SSOT 化
+    from shared.signal_thresholds import FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD
+    _defense = (_score < 2 and abs(_fut_net) > FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD
+                and _fut_net < 0)
     # v18.241 E1: 健康評分權重從 SSOT 引入（原 0.4/0.4/20 inline）
     _health  = round(
         _jqavg * HEALTH_WEIGHT_JQ

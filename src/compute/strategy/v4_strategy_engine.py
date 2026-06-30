@@ -10,6 +10,7 @@ from shared.colors import TRAFFIC_YELLOW
 from shared.signal_thresholds import (
     VIX_HIGH_RISK_THRESHOLD, VIX_MEDIUM_RISK_THRESHOLD,
     FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS, FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS,
+    VPOC_PRESSURE_DISTANCE_THRESHOLD,  # v18.436 #4
 )
 
 
@@ -211,7 +212,7 @@ class V4StrategyEngine:
             }
 
         distance = (vpoc_price - current_price) / current_price if current_price > 0 else 0
-        has_pressure = current_price < vpoc_price and distance < 0.15
+        has_pressure = current_price < vpoc_price and distance < VPOC_PRESSURE_DISTANCE_THRESHOLD
 
         if has_pressure:
             msg = f"⚠️ 上方 {vpoc_price:.1f} 元附近有近{lookback}日最大量套牢賣壓（距離 {distance*100:.1f}%），突破前觀望"

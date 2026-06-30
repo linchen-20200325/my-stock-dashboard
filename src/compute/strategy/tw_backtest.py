@@ -210,13 +210,15 @@ def backtest_twii_turning_points(
 
     # ── 對每事件計算 TWII +6M/+12M/+18M 報酬 ──────────────────────
     today = pd.Timestamp.today().normalize()
+    # v18.436 #10:18 月回測完整度門檻 547 inline → SSOT(同值原寫兩處)
+    from shared.signal_thresholds import BACKTEST_18M_DAYS_THRESHOLD
     enriched: list = []
     for ev in events:
         t0 = ev["date"]
         r6  = _forward_return(out["twii_series"], t0, 182)
         r12 = _forward_return(out["twii_series"], t0, 365)
-        r18 = _forward_return(out["twii_series"], t0, 547)
-        complete = (today - t0).days >= 547 and r18 is not None
+        r18 = _forward_return(out["twii_series"], t0, BACKTEST_18M_DAYS_THRESHOLD)
+        complete = (today - t0).days >= BACKTEST_18M_DAYS_THRESHOLD and r18 is not None
         enriched.append({
             "date": t0,
             "t10y2y_min_pre": ev["t10y2y_min_pre"],

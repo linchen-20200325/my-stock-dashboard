@@ -704,3 +704,65 @@ PORTFOLIO_VAR_99_PERCENTILE: float = 0.01
 PORTFOLIO_VAR_MONTHLY_WARN_PCT: float = 10.0
 """ETF 投組月度 99% VaR 警示門檻(%):月度尾部虧損 > 10%
 → ⚠️ 尾部風險偏高,建議增加防禦部位。原 etf_tab_portfolio.py:689/693/699 inline。"""
+
+
+# ════════════════════════════════════════════════════════════════
+# v18.436「全做」audit 翻案 — 8 處 inline magic 收 SSOT(#3-10)
+# user 2026-06-30 全域深挖 audit 找出;此段補抽,語意化各門檻。
+# ════════════════════════════════════════════════════════════════
+
+# ── #3 外資期貨防禦訊號(macro_helpers 健康評分)──
+FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD: int = 30000
+"""外資期貨淨部位「大空單防禦訊號」門檻(單位:口,絕對值)。
+macro_helpers.compute_macro_health:健康評分 <2 且外資淨空單 |部位| >30000 口
+且方向為空(<0)→ 觸發 _defense 防禦旗標。約 75 億 TWD 規模。
+原 src/compute/macro/macro_helpers.py:92 inline。注意:與 v4_strategy_engine 的
+FOREIGN_FUTURES_HIGH/MEDIUM_RISK(-20000/-10000)語意不同 — 後者是分級紅黃燈,
+本常數是健康評分內的單一防禦觸發,刻意分離。"""
+
+# ── #4 VPOC 套牢賣壓距離(v4_strategy_engine Task 3)──
+VPOC_PRESSURE_DISTANCE_THRESHOLD: float = 0.15
+"""VPOC(體積加權最大量價位)套牢賣壓距離門檻(比例,0.15=15%)。
+當前價 < VPOC 且 (VPOC-現價)/現價 < 0.15 → 判定上方有近 N 日最大量套牢賣壓。
+原 src/compute/strategy/v4_strategy_engine.py:214 inline。"""
+
+# ── #5 ETF 基金經理新任門檻(etf_calc 經理人燈號)──
+ETF_MANAGER_TENURE_NEW_DAYS: int = 180
+"""ETF 基金經理「新任」判定門檻(單位:天,約 6 個月)。
+任期 <180 天視為新經理人,表現待觀察 → UI 顯示「再給時間」建議。
+原 src/compute/etf/etf_calc.py:915 inline。"""
+
+# ── #6 FGMS 存貨營收背離 — 無背離資料時的 YoY 退路評分 ──
+FGMS_NO_DIV_GOOD_SCORE: int = 65
+"""FGMS 存貨/營收背離無 inv_days 資料時:營收 YoY >FGMS_REV_YOY_GOOD_PCT(10%)
+→ 退路評分 65。原 src/compute/scoring/scoring_engine.py:654 inline。"""
+
+FGMS_NO_DIV_POSITIVE_SCORE: int = 50
+"""FGMS 退路:營收 YoY >0 但未達 good → 評分 50。原 scoring_engine.py:654 inline。"""
+
+FGMS_NO_DIV_DECLINE_SCORE: int = 30
+"""FGMS 退路:營收 YoY <=0 → 評分 30。原 scoring_engine.py:654 inline。"""
+
+# ── #7 KD 超買 / 超賣邊界(scoring_helpers 健康度 KD 評分)──
+KD_OVERBOUGHT_LEVEL: float = 80.0
+"""KD 高檔區邊界:K>80 黃金交叉視為「高檔黃叉注意」(評分降)。
+原 src/compute/scoring/scoring_helpers.py:222 inline。"""
+
+KD_OVERSOLD_LEVEL: float = 20.0
+"""KD 低檔區邊界:K>20 且死亡交叉視為一般死叉(評分 5);K<=20 為超賣不另扣。
+原 src/compute/scoring/scoring_helpers.py:225 inline。與 KD_OVERBOUGHT_LEVEL 對稱。"""
+
+# ── #9 IBS(內結構 Internal Bar Strength)反彈 / 賣壓邊界 ──
+IBS_OVERSOLD_THRESHOLD: float = 0.2
+"""IBS 收低門檻(比例):IBS<=0.2(收當日區間低 20% 內)→ 隔日易反彈(評分 +10)。
+原 src/compute/scoring/scoring_helpers.py:207 inline。"""
+
+IBS_OVERBOUGHT_THRESHOLD: float = 0.8
+"""IBS 收高門檻(比例):IBS>=0.8(收當日區間高 20% 內)→ 隔日易賣壓(評分 +2)。
+原 src/compute/scoring/scoring_helpers.py:210 inline。"""
+
+# ── #10 18 個月回測完整度門檻(tw_backtest 拐點驗證)──
+BACKTEST_18M_DAYS_THRESHOLD: int = 547
+"""18 個月前向報酬「資料完整」判定門檻(單位:日,547≈18.2 月)。
+拐點事件距今 >=547 天且 r18 非空 → 標記該事件回測完整。
+原 src/compute/strategy/tw_backtest.py:218-219 inline(同值寫兩處)。"""
