@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 # 原 `from src.data.etf import _fetch_news_for, _fetch_sector_returns` 改走 L3 wrapper。
 from src.services.etf_sector_service import get_news_for, get_sector_returns
 from src.services.ai_structured_summary import build_structured_summary_prompt  # v18.361 F-6.5:直打 submod 避 services↔ui.render circular
+from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
@@ -227,7 +228,7 @@ def _render_bias(df: pd.DataFrame, ticker: str) -> None:
         if len(close) >= n:
             ma  = float(close.rolling(n).mean().iloc[-1])
             cur = float(close.iloc[-1])
-            bias = (cur - ma) / ma * 100
+            bias = calc_bias_pct(cur, ma) or 0.0  # R-CALC-3 SSOT
             if bias > 10:
                 hint = '🔴 嚴重高估，注意拉回'
             elif bias > 5:

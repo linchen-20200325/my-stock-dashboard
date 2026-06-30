@@ -26,15 +26,19 @@ import pandas as pd
 
 
 def calc_rsi(df, period=14):
+    """RSI scalar adapter — 回傳最新 RSI(0-100,round 1 位)或 None。
+
+    R-CALC-1 v18.412:雙寫收斂 — 數學 kernel 委派 scoring_engine.compute_rsi
+    (series API),本函式為 UI scalar 適配器(取 last + round + guard + log)。
+    Epsilon 從原本 `loss.replace(0,1e-9)` 改為 compute_rsi 的 `loss + 1e-10`,
+    在 round(1) 精度下等價(極端 loss=0 兩者皆映射到 RSI≈100)。
+    """
     try:
         if df is None or len(df) < period + 1:
             return None
-        delta = df['close'].diff()
-        gain = delta.clip(lower=0).rolling(period).mean()
-        loss = (-delta.clip(upper=0)).rolling(period).mean()
-        rs = gain / loss.replace(0, 1e-9)
-        rsi = 100 - (100 / (1 + rs))
-        val = rsi.iloc[-1]
+        from src.compute.scoring.scoring_engine import compute_rsi
+        rsi_series = compute_rsi(df['close'], period=period)
+        val = rsi_series.iloc[-1]
         return round(float(val), 1) if pd.notna(val) else None
     except Exception as e:
         print(f'[tech_indicators/calc_rsi] period={period} fail: {type(e).__name__}: {e}', file=sys.stderr)

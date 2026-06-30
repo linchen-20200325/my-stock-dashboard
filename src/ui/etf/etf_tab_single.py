@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
 # v18.329 PR-D:ETF inline magic 抽 SSOT(分級閾值用)
@@ -490,7 +491,7 @@ def render_etf_single(gemini_fn=None):
             _label, _color, _action = _dsig
             _ma240 = _sig_metrics['ma240']
             _sigma_pct = _sig_metrics['std_pct_annual']
-            _bias_pct = (_cur_p - _ma240) / _ma240 * 100
+            _bias_pct = calc_bias_pct(_cur_p, _ma240) or 0.0  # R-CALC-3 SSOT
             _z = _bias_pct / _sigma_pct
             _colored_box(
                 f'<b>{_label}</b><br>'
@@ -529,7 +530,7 @@ def render_etf_single(gemini_fn=None):
         _colored_box(
             f'<b>{_t5_label}</b><br>'
             f'Close {_close_now:.2f} vs MA60 {_ma60_now:.2f}（'
-            f'{(_close_now-_ma60_now)/_ma60_now*100:+.2f}%）<br>'
+            f'{calc_bias_pct(_close_now, _ma60_now) or 0:+.2f}%）<br>'
             f'MA60 20 日斜率：{_ma60_slope:+.2f}%（{"上彎 ↗" if _ma60_up else "下彎 ↘"}）<br>'
             f'<b>建議</b>：{_t5_action}',
             _t5_color,
@@ -586,7 +587,7 @@ def render_etf_single(gemini_fn=None):
             _colored_box(
                 f'🟢🟢 <b>跌破季線：波段大買點（超跌）</b><br>'
                 f'市價 {_cur_price:.2f} &lt; MA60 {_ma60_v:.2f}'
-                f'（{(_cur_price-_ma60_v)/_ma60_v*100:+.2f}%）<br>'
+                f'（{calc_bias_pct(_cur_price, _ma60_v) or 0:+.2f}%）<br>'
                 f'<b>MK 提醒</b>：跌破季線視為波段超跌，分批加碼黃金區',
                 'green')
             _teacher_conclusion('郭俊宏',
@@ -597,7 +598,7 @@ def render_etf_single(gemini_fn=None):
             _colored_box(
                 f'🟢 <b>跌破月線：短線小買點</b><br>'
                 f'市價 {_cur_price:.2f} &lt; MA20 {_ma20:.2f}'
-                f'（{(_cur_price-_ma20)/_ma20*100:+.2f}%）<br>'
+                f'（{calc_bias_pct(_cur_price, _ma20) or 0:+.2f}%）<br>'
                 f'<b>MK 提醒</b>：跌破月線可小量加碼',
                 'green')
             _teacher_conclusion('郭俊宏',
