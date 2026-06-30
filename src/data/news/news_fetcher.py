@@ -173,6 +173,7 @@ def rss_items_from_bytes(_content) -> list:
         return []
 
 
+@st.cache_data(ttl=TTL_30MIN, show_spinner=False, max_entries=50)
 def fetch_stock_news(stock_id: str, stock_name: str = "", n: int = 5,
                      recency: str = "", _diag=None) -> list:
     """抓取個股相關新聞(Google News RSS 中英文雙搜尋)。失敗時回傳空串列。
@@ -181,6 +182,7 @@ def fetch_stock_news(stock_id: str, stock_name: str = "", n: int = 5,
     recency:Google News 時間運算子(如 '6m' 近半年 / '7d'),空字串=不限。
     每則含 link 與排序用 _ts,並依發布時間新→舊排序。
     _diag:傳入 list 時逐 feed 記錄抓取狀態(proxy/直連 · HTTP · entries · 錯誤)供 UI 診斷。
+        (underscore-prefix 命名:streamlit cache_data 自動跳過此 arg hash)
     """
     try:
         import feedparser as _fp
