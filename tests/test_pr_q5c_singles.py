@@ -29,7 +29,9 @@ class TestQ5cMarkers(unittest.TestCase):
         self.assertIn("'source': 'yfinance:^VIX:3mo:1d'", src)
 
     def test_chip_radar(self):
-        src = self._read('src/ui/tabs/chip_radar.py')
+        # v18.426 Phase 2 Batch 3b:fetch_chip_concentration 下沉至 L1
+        # src/data/stock/chip_concentration_fetcher.py(原 chip_radar.py:180 為 R-UI-FETCH-2 違憲)
+        src = self._read('src/data/stock/chip_concentration_fetcher.py')
         self.assertIn('[fetch_chip_concentration]', src)
         self.assertIn('norway.twsthr.info', src)
 
