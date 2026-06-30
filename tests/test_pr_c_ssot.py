@@ -83,11 +83,22 @@ class TestClassifyTrend4Tier:
         assert '無資料' in label2
 
     def test_two_tabs_use_ssot(self):
-        """兩 Tab 必須 import classify_trend_4tier 走 SSOT。"""
+        """兩 Tab 必須走 classify_trend_4tier SSOT(可直接 import,或 import 至 section)。
+
+        Batch 7-2 v18.414:tab_stock_grp 批次分析邏輯抽至
+        stock_grp_sections/section_batch_fetcher.py(classify_trend_4tier 隨之搬移)。
+        本 test 改 grep section 目錄。
+        """
         src_stock = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         src_grp = open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8').read()
+        src_grp_section = open(
+            'src/ui/tabs/stock_grp_sections/section_batch_fetcher.py',
+            encoding='utf-8').read()
         assert 'classify_trend_4tier' in src_stock
-        assert 'classify_trend_4tier' in src_grp
+        assert (
+            'classify_trend_4tier' in src_grp
+            or 'classify_trend_4tier' in src_grp_section
+        ), 'classify_trend_4tier 必須出現在 tab_stock_grp 或 section_batch_fetcher'
 
     def test_no_inline_4tier_in_grp(self):
         """組合 Tab 原 inline 4 段邏輯已退役。"""

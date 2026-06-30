@@ -27,8 +27,6 @@ from shared.signal_thresholds import (
     MULTIFACTOR_ENTRY_MIN,
 )
 from src.ui.tabs.tab_helpers import (
-    classify_stock_status_lamp,    # v18.336 PR-H4:操作狀態燈 SSOT
-    classify_trend_4tier,
     final_recommendation,
     format_condition_emoji,
     parse_cash_flow_ratio,
@@ -50,26 +48,19 @@ def render_stock_grp():
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from src.config import FINMIND_TOKEN  # noqa: F401  (some sub-features may use)
     # 外部模組
-    from src.compute.strategy import (
-        calc_rsi, calc_ibs, calc_volume_ratio,
-        calc_kd, calc_bollinger, calc_vcp,
-    )
-    from src.compute.scoring import calc_health_score, health_grade
     from src.ui.render import teacher_conclusion
     from src.services import analyze_financial_health
     from src.services import build_structured_summary_prompt
     from src.services.stock_grp_service import get_news_for as _fetch_news_for  # R1 v18.405
-    from src.services import analyze_20d_chips_from_df
     from src.compute.scoring import (
-        compute_tech_bearish, judge_news_sentiment_cached, evaluate_exit_signals,
+        judge_news_sentiment_cached, evaluate_exit_signals,
     )
     # app.py 內部 helper
     from app import gemini_call, parse_stocks
     # U5 B3-δ v18.405:5 fetcher + _get_loader 已抽至 L1
-    from shared.app_cache import _load_cache, _save_cache
+    # Batch 7-2 v18.414:_get_loader / _load_cache / fetch_financials / 技術指標 全移至 section_batch_fetcher
     from src.data.stock.app_stock_fetchers import (
-        _get_loader,
-        fetch_dividend_data, fetch_financials,
+        fetch_dividend_data,
         fetch_quarterly, fetch_quarterly_extra,
     )
     # v18.398 P5-B3-β R8:_fetch_stock_news 已抽至 L1 data
@@ -106,206 +97,10 @@ def render_stock_grp():
     elif t3_run_btn:
         st.warning('⚠️ 請先在上方輸入至少一個有效股票代碼，再按「🚀 批次分析」')
 
-    # ══ 批次分析邏輯 ════════════════════════════════════════════
+    # ══ 批次分析邏輯(Batch 7-2 v18.414:抽至 stock_grp_sections.section_batch_fetcher)══
     if t3_run_btn and stock_list_t3:
-        loader_t3  = _get_loader()
-        results_t3 = []          # 汰弱留強（健康度）結果
-        score_t3   = []          # 多因子評分結果
-
-        prog_t3 = st.progress(0, text='批次分析中...')
-        from src.compute.scoring import score_single_stock as _sss
-        from src.config import get_stock_name as _gsn
-        import threading as _threading
-        _t3_loader_lock = _threading.Lock()  # FinMind dl 非線程安全，需串行保護
-
-        # ── 並發抓取（ThreadPoolExecutor，最多3個同時）────────
-        def _fetch_single_t3(sid4):
-            # 先檢查本地緩存（v2 prefix 強制清除舊錯誤 cache）
-            _cached = _load_cache('t3v2', sid4, ttl_hours=4)
-            if _cached:
-                return _cached
-            try:
-                # get_combined_data 共享 FinMind dl 實例，需加鎖確保線程安全
-                with _t3_loader_lock:
-                    _df4_raw, _err4, _name4 = loader_t3.get_combined_data(sid4, 360, True)
-                df4   = _df4_raw.tail(300).reset_index(drop=True) if _df4_raw is not None and not _df4_raw.empty else None
-                # _name4 可能就是 sid4（get_stock_name fallback），需確認是真正的名稱
-                name4 = (_name4 if _name4 and _name4 != sid4 else None) or _gsn(sid4) or sid4
-                avg_div4, _, _ = fetch_dividend_data(sid4)
-                cl4, cx4, _capex4, _cl_src4, _cx_src4, _, _fin_errs4 = fetch_financials(sid4, industry='')
-                result4 = {'sid': sid4, 'df': df4, 'name': name4,
-                           'avg_div': avg_div4, 'cl': cl4, 'cx': cx4}
-                # 空 K 線標記 error 並跳過快取（避免 4hr 內持續空轉）
-                if df4 is None or df4.empty:
-                    result4['error'] = _err4 or '無 K 線資料（yfinance + FinMind 雙源皆空）'
-                else:
-                    _save_cache('t3v2', sid4, result4)
-                return result4
-            except Exception as _e4:
-                return {'sid': sid4, 'error': str(_e4)}
-
-        _t3_futures = {}
-        with ThreadPoolExecutor(max_workers=3) as _t3_exec:
-            for sid4 in stock_list_t3:
-                _t3_futures[_t3_exec.submit(_fetch_single_t3, sid4)] = sid4
-        _t3_fetched = {}
-        for _fut, _sid in _t3_futures.items():
-            try:
-                _t3_fetched[_sid] = _fut.result()
-            except Exception:
-                _t3_fetched[_sid] = {'sid': _sid, 'error': 'timeout'}
-
-        for i4, sid4 in enumerate(stock_list_t3):
-            prog_t3.progress((i4 + 1) / len(stock_list_t3),
-                             text=f'分析 {sid4} ({i4+1}/{len(stock_list_t3)})...')
-            try:
-                _d4     = _t3_fetched.get(sid4, {})
-                df4     = _d4.get('df')
-                # 名稱優先: loader返回值 > stock_names靜態字典 > 代碼本身
-                _raw_name4 = _d4.get('name', '')
-                name4   = (_raw_name4 if _raw_name4 and _raw_name4 != sid4
-                           else _gsn(sid4))
-                avg_div4= _d4.get('avg_div', 0)
-                cl4     = _d4.get('cl')
-                cx4     = _d4.get('cx')
-                _fin_st4= {}
-
-                price4  = float(df4['close'].iloc[-1]) if df4 is not None and not df4.empty else 0
-                ma20_4  = float(df4['MA20'].iloc[-1])  if df4 is not None and 'MA20'  in df4.columns else None
-                ma100_4 = float(df4['MA100'].iloc[-1]) if df4 is not None and 'MA100' in df4.columns else None
-                rsi4    = calc_rsi(df4)
-                ibs4 = calc_ibs(df4)
-                vr4     = calc_volume_ratio(df4)
-                k4, d4  = calc_kd(df4)
-                bb4  = calc_bollinger(df4)
-                vcp4    = calc_vcp(df4) if df4 is not None and len(df4) >= 30 else None
-                health4, _ = calc_health_score(df4, rsi4, ibs4, vr4, k4, d4, bb4)
-                grade4, grade_color4, _, emoji4 = health_grade(health4)
-
-                # v18.328 PR-C P1:4 段趨勢判定走 SSOT(個股 Tab K 線註解共用同函式)
-                trend4, _ = classify_trend_4tier(price4, ma20_4, ma100_4)
-
-                val4 = '⚪無股利'
-                if avg_div4 > 0 and price4 > 0:
-                    ch4, fa4, de4 = avg_div4/YIELD_HIGH_DEC, avg_div4/YIELD_MID_DEC, avg_div4/YIELD_LOW_DEC
-                    if price4 <= ch4:
-                        val4 = '🟢便宜'
-                    elif price4 <= fa4:
-                        val4 = '🟡合理'
-                    elif price4 <= de4:
-                        val4 = '🔴昂貴'
-                    else:
-                        val4 = '🔴超貴'
-
-                vcp_ok4 = vcp4 and vcp4['contracting']
-
-                # v18.322 「舊評分」已退役（Option A，見 SPEC「個股組合評分門檻 SSOT」）：
-                #   原 0-10 簡易加權分（趨勢/估值/VCP/合約負債/健康度÷50）與健康度欄、
-                #   357評價欄重複計算，且名實不符（④ 自述「健康度」卻以舊評分排）。
-                #   → ④ 汰弱留強改以「純健康度」排序（對齊頁面說明）。
-
-                # 出場訊號：技術 + 籌碼兩維（利空新聞第三維由「AI 掃利空」鈕後補）
-                _ex_tech4 = compute_tech_bearish(df4, k=k4, d=d4)
-                _ex_chip4 = analyze_20d_chips_from_df(df4)
-                _ex_chip_sig4 = _ex_chip4.get('signal', '') if isinstance(_ex_chip4, dict) else ''
-
-                # v18.349 PR-O1:foreign_buy 真 bug 修。原 L1202/L1240 讀 _rp.get('foreign_buy', 0)
-                # 但 results_t3 從未寫此欄 → AI prompt 永遠顯示「外資 0.0 億買超」誤導。
-                # 設 = 近 20 日 df['外資'] 累計(單位: 張),由下游顯示時改用「張」單位
-                # (原 /1e8 顯示「億」是假設元的舊 bug,本 PR 一併修)。
-                _fb4 = 0.0
-                try:
-                    if df4 is not None and not df4.empty and '外資' in df4.columns:
-                        import pandas as _pd_fb
-                        _fb4 = float(_pd_fb.to_numeric(
-                            df4['外資'].tail(20), errors='coerce').fillna(0).sum())
-                except Exception as _e_fb:
-                    print(f'[tab_stock_grp foreign_buy] {sid4} {type(_e_fb).__name__}: {_e_fb}')
-
-                results_t3.append({
-                    'stock_id': sid4,
-                    '代碼': sid4, '名稱': name4 or sid4, '現價': f'{price4:.2f}',
-                    '健康度': health4, '評級': f'{emoji4}{grade4}',
-                    'RSI':  f'{rsi4}' if rsi4 else '-',
-                    '量比': f'{vr4}' if vr4 else '-',
-                    'IBS':  f'{ibs4}' if ibs4 is not None else '-',
-                    'KD':   f'K{k4}/D{d4}' if k4 else '-',
-                    '趨勢': trend4, '357評價': val4,
-                    'VCP':  '✅收縮' if vcp_ok4 else '⚪',
-                     '合約負債': f'{cl4/1e8:.1f}億' if cl4 and cl4 > 0 else '-',
-
-
-
-                    '_health': health4, '_val': val4, '_trend': trend4,
-                    'foreign_buy': _fb4,  # v18.349 PR-O1:近 20 日 df['外資'] 累計(張),SSOT 對齊 data_loader L286 /1000
-                    '_ex_tech': _ex_tech4, '_ex_chip_sig': _ex_chip_sig4,
-                    # 資料診斷專用欄位（health_inspector 讀取）
-                    '_price_date': (str(df4['date'].iloc[-1])[:10]
-                                    if df4 is not None and not df4.empty
-                                    and 'date' in df4.columns else None),
-                    '_cl_ok':      bool(cl4 and cl4 > 0),
-                    '_cx_ok':      bool(cx4 and cx4 > 0),
-                    '_has_div':    bool(avg_div4 and avg_div4 > 0),
-                    '_fetch_err':  _d4.get('error'),
-                })
-
-                # ── 操作狀態燈 🔵🟠🟡(v18.336 PR-H4:抽至 classify_stock_status_lamp SSOT)
-                try:
-                    _status4 = '⚪'
-                    if df4 is not None and not df4.empty:
-                        _p4      = float(df4['close'].iloc[-1])
-                        _ma20_4  = float(df4['close'].tail(20).mean())
-                        _bias4   = calc_bias_pct(_p4, _ma20_4) or 0
-                        _vol4    = float(df4['volume'].iloc[-1])      if 'volume' in df4.columns else 0
-                        _avgvol4 = float(df4['volume'].tail(20).mean()) if 'volume' in df4.columns else 1
-                        _vol_ratio4 = _vol4 / _avgvol4 if _avgvol4 > 0 else None
-                        _status4 = classify_stock_status_lamp(
-                            health_score=health4, trend_label=trend4,
-                            bias_pct=_bias4, vol_ratio=_vol_ratio4,
-                            valuation_label=val4)
-                    if results_t3:
-                        results_t3[-1]['操作狀態'] = _status4
-                except Exception as _e_lamp:
-                    print(f'[tab_stock_grp 狀態燈] {sid4} {type(_e_lamp).__name__}: {_e_lamp}')
-
-                # ── 多因子評分 ─────────────────────────────────
-                if df4 is not None and not df4.empty:
-                    try:
-                        # 重用第一階段已抓好的 df4（get_combined_data days=360 的 tail(300)），
-                        # 不再以 days=300 重打一次 API（原本每檔 get_combined_data 跑兩次純浪費）。
-                        _n4_use = name4 or _gsn(sid4)
-                        sf = _sss(df4, sid4, _n4_use)
-                        score_t3.append(sf)
-                    except Exception:
-                        pass
-
-            except Exception:
-                results_t3.append({
-                    'stock_id': sid4, '代碼': sid4, '名稱': '失敗', '現價': '-',
-                    '健康度': 0, '評級': '-', 'RSI': '-', '量比': '-',
-                    'IBS': '-', 'KD': '-', '趨勢': '-', '357評價': '-',
-                    'VCP': '-', '合約負債': '-',
-                    '_health': 0, '_val': '-', '_trend': '-',
-                })
-            time.sleep(0.2)
-
-        prog_t3.empty()
-
-        # ── AI 風控警示 ────────────────────────────────────────
-        _t3_mkt = st.session_state.get('mkt_info', {}) or {}  # 從 Tab1 更新後取得
-        risk_alerts_t3 = []
-        if _t3_mkt.get('regime') == 'bear':
-            risk_alerts_t3.append('大盤偏空，建議降低持股至20%以下')
-        if _t3_mkt.get('foreign_net', 0) < -5e9:
-            risk_alerts_t3.append('外資大量賣超，注意籌碼面壓力')
-
-        st.session_state['t3_data'] = {
-            'results':     results_t3,
-            'score_t3':    score_t3,
-            'risk_alerts': risk_alerts_t3,
-        }
-        # v18.223：一鍵串接 — 鎖定 batch 當下 codes，下方 MJ + picker 自動跑全程
-        st.session_state['t3_batch_codes'] = tuple(stock_list_t3)
+        from src.ui.tabs.stock_grp_sections import run_batch_fetch
+        run_batch_fetch(stock_list_t3)
 
     # ══ 顯示結果 ════════════════════════════════════════════════
     t3_data = st.session_state.get('t3_data')

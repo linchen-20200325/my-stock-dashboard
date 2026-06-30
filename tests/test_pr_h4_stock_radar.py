@@ -192,12 +192,20 @@ class TestCallerMigration:
         assert 'classify_bias_zone(_bias240_pct)' in src
 
     def test_tab_stock_grp_uses_status_lamp_ssot(self):
+        """v18.414 Batch 7-2:批次分析(含 classify_stock_status_lamp 呼叫)抽至 section_batch_fetcher。"""
         src = open('src/ui/tabs/tab_stock_grp.py', encoding='utf-8').read()
-        assert 'classify_stock_status_lamp' in src
-        # 原 inline 4 段 if 已淨空
-        assert "_status4 = '🔵 加碼'" not in src
-        assert "_status4 = '🟡 警示'" not in src
-        assert "_status4 = '🟠 減碼'" not in src
+        src_section = open(
+            'src/ui/tabs/stock_grp_sections/section_batch_fetcher.py',
+            encoding='utf-8').read()
+        assert (
+            'classify_stock_status_lamp' in src
+            or 'classify_stock_status_lamp' in src_section
+        ), 'classify_stock_status_lamp 必須出現在 tab_stock_grp 或 section_batch_fetcher'
+        # 原 inline 4 段 if 已淨空(兩處都應沒有)
+        for _src_to_check in (src, src_section):
+            assert "_status4 = '🔵 加碼'" not in _src_to_check
+            assert "_status4 = '🟡 警示'" not in _src_to_check
+            assert "_status4 = '🟠 減碼'" not in _src_to_check
 
 
 class TestModulesImportable:
