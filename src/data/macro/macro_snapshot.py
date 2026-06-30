@@ -36,6 +36,7 @@ except ImportError:
         secrets: dict = {}
     st = _NoOpST()  # noqa
 
+from shared.calc_helpers import calc_bias_pct
 from shared.ttls import TTL_1HOUR
 
 
@@ -257,12 +258,14 @@ def compute_twii_bias(twii_local) -> dict | None:
     _ma60 = float(_cs.tail(min(60, _n)).mean())
     _ma120 = float(_cs.tail(min(120, _n)).mean())
     _ma240 = float(_cs.tail(min(240, _n)).mean())
+    # R-CALC-3 v18.412:乖離率公式 SSOT 收(`(p-ma)/ma*100` → calc_bias_pct)
+    _b240_log = calc_bias_pct(_lp, _ma240, decimals=1) or 0
     print(f'[Bias] price={_lp:.0f} MA240={_ma240:.0f} '
-          f'bias240={((_lp-_ma240)/_ma240*100):.1f}% (n={_n})')
+          f'bias240={_b240_log:.1f}% (n={_n})')
     return {
-        'bias_20':  round((_lp - _ma20) / _ma20 * 100, 1) if _ma20 else 0,
-        'bias_60':  round((_lp - _ma60) / _ma60 * 100, 1) if _ma60 else 0,
-        'bias_240': round((_lp - _ma240) / _ma240 * 100, 1) if _ma240 else 0,
+        'bias_20':  calc_bias_pct(_lp, _ma20,  decimals=1) or 0,
+        'bias_60':  calc_bias_pct(_lp, _ma60,  decimals=1) or 0,
+        'bias_240': calc_bias_pct(_lp, _ma240, decimals=1) or 0,
         'price': _lp, 'ma20': _ma20, 'ma60': _ma60, 'ma120': _ma120, 'ma240': _ma240,
         'data_days': _n, 'is_estimated': _n < 240,
     }

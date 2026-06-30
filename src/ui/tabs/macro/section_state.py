@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
 from src.config import FINMIND_TOKEN  # noqa: F401
 from src.compute.macro import calc_traffic_light  # noqa: F401
@@ -48,8 +49,9 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
             _above60   = _idx2 > _ma60
             _above120  = _idx2 > _ma120
             _above200  = _idx2 > _ma200 if _ma200 else None
-            _d60  = (_idx2-_ma60)/_ma60*100
-            _d120 = (_idx2-_ma120)/_ma120*100
+            # R-CALC-3 v18.412:乖離率公式 SSOT(calc_bias_pct)
+            _d60  = calc_bias_pct(_idx2, _ma60)  or 0.0
+            _d120 = calc_bias_pct(_idx2, _ma120) or 0.0
     
             if _turn_up and _above60 and _above120:
                 pivot_signals.append(('均線多頭確認','🟢',TRAFFIC_GREEN,
