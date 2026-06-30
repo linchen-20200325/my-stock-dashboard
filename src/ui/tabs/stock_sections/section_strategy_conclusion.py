@@ -26,6 +26,7 @@ from shared.colors import (
     TRAFFIC_RED,
     TRAFFIC_YELLOW,
 )
+from src.ui.render.tab_sections import border_left_banner  # R-UI-1 v18.412
 from shared.signal_thresholds import (
     FGMS_LABEL_T1,
     FGMS_LABEL_T2,
@@ -71,12 +72,12 @@ def render_strategy_conclusion_section(
                 _rv_sig = ('✅ 月營收YoY連續加速' if _rv_trend and _rv_latest > 0
                            else ('⚠️ 月營收成長趨緩' if _rv_latest > 0 else '🔴 月營收年減'))
                 _rv_c = TRAFFIC_GREEN if '✅' in _rv_sig else (TRAFFIC_RED if '🔴' in _rv_sig else TRAFFIC_YELLOW)
-                st.markdown(
-                    f'<div style="background:#0d1117;border-left:3px solid {_rv_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
+                st.markdown(border_left_banner(
+                    _rv_c,
                     f'<span style="font-size:11px;color:#8b949e;">🎓 策略1 · 月營收</span>　'
-                    f'<span style="font-size:13px;font-weight:700;color:{_rv_c};">{_rv_sig}（YoY:{_rv_latest:+.1f}%）</span>'
-                    f'</div>', unsafe_allow_html=True
-                )
+                    f'<span style="font-weight:700;">{_rv_sig}（YoY:{_rv_latest:+.1f}%）</span>',
+                    padding_y=7, font_size=13,
+                ), unsafe_allow_html=True)
             else:
                 st.caption('月營收資料不足，無法判斷趨勢')
         else:
@@ -93,12 +94,12 @@ def render_strategy_conclusion_section(
                     _gp_msg = (f'✅ {_gp_now:.1f}%（高毛利≥30%，護城河寬）' if _gp_now >= 30
                                else f'⚠️ {_gp_now:.1f}%（中等毛利20~30%）' if _gp_now >= 20
                                else f'🔴 {_gp_now:.1f}%（低毛利<20%）')
-                    st.markdown(
-                        f'<div style="background:#0d1117;border-left:3px solid {_gp_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
+                    st.markdown(border_left_banner(
+                        _gp_c,
                         f'<span style="font-size:11px;color:#8b949e;">🎓 陳重銘 · 毛利率</span>　'
-                        f'<span style="font-size:13px;font-weight:700;color:{_gp_c};">{_gp_msg}</span>'
-                        f'</div>', unsafe_allow_html=True
-                    )
+                        f'<span style="font-weight:700;">{_gp_msg}</span>',
+                        padding_y=7, font_size=13,
+                    ), unsafe_allow_html=True)
             # 獲利品質得分 (SQ)
             try:
                 from src.compute.scoring import calc_quality_score as _cqs
@@ -109,13 +110,13 @@ def render_strategy_conclusion_section(
                     _sq_gm = _sq_res['gm_trend']
                     _sq_rv = _sq_res['rev_trend']
                     _sq_c = TRAFFIC_GREEN if _sq_v >= SQ_GOOD_MIN else (TRAFFIC_YELLOW if _sq_v >= SQ_STABLE_MIN else TRAFFIC_RED)
-                    st.markdown(
-                        f'<div style="background:#0d1117;border-left:3px solid {_sq_c};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
+                    st.markdown(border_left_banner(
+                        _sq_c,
                         f'<span style="font-size:11px;color:#8b949e;">🎓 獲利品質 SQ</span>　'
-                        f'<span style="font-size:13px;font-weight:700;color:{_sq_c};">SQ {_sq_v:.0f}分 · {_sq_lbl}</span>'
-                        f'<span style="font-size:11px;color:#8b949e;margin-left:8px;">毛利{_sq_gm} 營收{_sq_rv}</span>'
-                        f'</div>', unsafe_allow_html=True
-                    )
+                        f'<span style="font-weight:700;">SQ {_sq_v:.0f}分 · {_sq_lbl}</span>'
+                        f'<span style="font-size:11px;color:#8b949e;margin-left:8px;">毛利{_sq_gm} 營收{_sq_rv}</span>',
+                        padding_y=7, font_size=13,
+                    ), unsafe_allow_html=True)
             except Exception:
                 pass
             # 前瞻成長動能分數 (FGMS)
@@ -161,13 +162,14 @@ def render_strategy_conclusion_section(
                     _rate_str = '  '.join(_rate_parts)
                     _rate_line = (f'<div style="font-size:11px;color:#8b949e;margin-top:3px;">📊 三率實值：{_rate_str}</div>'
                                   if _rate_str else '')
-                    st.markdown(
-                        f'<div style="background:#0d1117;border-left:3px solid {_fc};padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
+                    st.markdown(border_left_banner(
+                        _fc,
                         f'<span style="font-size:11px;color:#8b949e;">🔭 前瞻動能 FGMS</span>　'
-                        f'<span style="font-size:13px;font-weight:700;color:{_fc};">FGMS {_fv:.0f}分 · {_fl}</span>'
+                        f'<span style="font-weight:700;">FGMS {_fv:.0f}分 · {_fl}</span>'
                         f'<span style="font-size:11px;color:#8b949e;margin-left:8px;">{_fd_str}</span>'
-                        f'{_rate_line}'
-                        f'</div>', unsafe_allow_html=True
+                        f'{_rate_line}',
+                        padding_y=7, font_size=13,
+                    ), unsafe_allow_html=True
                     )
             except Exception as _efgms2:
                 import traceback as _tb2
