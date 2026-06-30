@@ -253,8 +253,10 @@ def render_tab_stock():
         api_key,
         fetch_dividend_data, fetch_financials, fetch_price_data,
         fetch_quarterly, fetch_quarterly_extra, fetch_revenue,
-        gemini_call, render_health_score,
+        gemini_call,
     )
+    # U5 B3-γ v18.404:render_health_score 已抽至 L4
+    from src.ui.render.app_render import render_health_score
     # v18.398 P5-B3-β R7:generate_ai_comment 已抽至 L3 service
     from src.services.app_ai_service import generate_ai_comment
     # v18.398 P5-B3-β R8:_fetch_stock_news 已抽至 L1 data
