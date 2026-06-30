@@ -1,13 +1,8 @@
 import streamlit as st
-import pandas as pd
 import datetime
 import os
 import re
-import time
 import requests
-import json
-import pickle
-import hashlib
 import sys
 
 # ── Streamlit Cloud 防護（PR #82/#86 升級版）────────────────
@@ -19,7 +14,6 @@ import sys
 # 改為把 globals dict 塞 proxy.__dict__，每次都 refresh，徹底解耦。
 import types as _types  # noqa: E402
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from shared.ttls import TTL_30MIN, TTL_1HOUR
 
 class _AppProxy(_types.ModuleType):
     """Proxy：`from app import X` → 從 proxy 自己 dict 拿 live globals。"""
@@ -59,7 +53,6 @@ def _bps():
 
 print('[INFO] main.py v3.0 戰情室 載入完成')
 
-from src.data.core import StockDataLoader, _LOADER_VERSION  # noqa: E402
 # ── 新增模組（根據說明書 v1.0）──────────────────────────────
 # ── v3.0 新增模組（§5-§11）──────────────────────────────────
 from src.ui.etf import (  # noqa: E402
@@ -277,9 +270,6 @@ from src.data.stock.app_stock_fetchers import (  # noqa: E402,F401
 # ════════════════════════════════════════════════════════════════
 # 健康度評分（0~100）— 已抽出至 scoring_helpers.py（PR P2-B Phase 3）
 # ════════════════════════════════════════════════════════════════
-from src.compute.scoring import (  # noqa: E402
-    health_grade,
-)
 
 # ════════════════════════════════════════════════════════════════
 # 初學者友善說明系統 — 已抽出至 ui_widgets.py（PR P2-B Phase 2）
@@ -288,10 +278,6 @@ from src.ui.render import (  # noqa: E402
     traffic_light, show_term_help,
 )
 # P2-B Phase 5 A/B/C/D: 4 個 TAB 全部已抽到獨立模組（app.py 9208→1394 行，−85%）
-from src.ui.tabs import render_tab_edu  # noqa: E402
-from src.ui.tabs import render_stock_grp  # noqa: E402
-from src.ui.tabs import render_tab_stock  # noqa: E402
-from src.ui.tabs import render_tab_macro  # noqa: E402
 
 # 在先行指標 section 使用
 _TERM_HELP_LI = show_term_help('PCR') + show_term_help('ADL') + show_term_help('M1B-M2')

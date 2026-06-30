@@ -1374,19 +1374,3 @@ def render_leading_table(df):
             h += f'<td><span style="{_s}">{_f}</span></td>' if _s else f'<td>{_f}</td>'
         h += "</tr>\n"
     return h + "</tbody></table>"
-
-
-def build_ai_data_table(df):
-    """把 DataFrame 轉成給 AI 用的純文字表格"""
-    COLS = ["日期","成交量","外資","投信","自營","外資大小","前五大留倉","前十大留倉","選PCR","外(選)","未平倉口數","韭菜指數"]
-    lines = ["\t".join(COLS)]
-    for _, row in df.iterrows():
-        vals = []
-        for c in COLS:
-            v = row.get(c)
-            if v is None or (isinstance(v, float) and pd.isna(v)): vals.append("-")
-            elif isinstance(v, float): vals.append(f"{v:.1f}")
-            elif isinstance(v, int): vals.append(f"{v:,}")
-            else: vals.append(str(v))
-        lines.append("\t".join(vals))
-    return "\n".join(lines)

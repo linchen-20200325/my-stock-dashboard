@@ -56,12 +56,6 @@ def compute_rsi(close, period: int = 14):
     return 100 - 100 / (1 + gain / (loss + 1e-10))
 
 
-    WEIGHT_TABLES = {
-        'bull':    {'trend':0.30,'momentum':0.25,'chip':0.20,'volume':0.15,'risk':0.05,'fundamental':0.05},
-        'neutral': {'trend':0.25,'momentum':0.20,'chip':0.20,'volume':0.15,'risk':0.10,'fundamental':0.10},
-        'bear':    {'trend':0.15,'momentum':0.10,'chip':0.15,'volume':0.15,'risk':0.25,'fundamental':0.20},
-    }
-
 # ── 1. 趨勢分數 ───────────────────────────────────────────────
 def calc_trend_score(df) -> float:
     """

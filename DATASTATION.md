@@ -83,7 +83,6 @@ from leading_indicators import (
     build_leading_fast,   # 主入口：純 FinMind，無 TAIFEX 爬蟲
     finmind_get,          # FinMind API v4 單次查詢
     taifex_pcr,           # 選擇權 PCR 批量查詢
-    build_ai_data_table,  # DataFrame → AI 純文字表格
 )
 
 df_leading = build_leading_fast(days=7, token=FINMIND_TOKEN)
@@ -91,8 +90,6 @@ df_leading = build_leading_fast(days=7, token=FINMIND_TOKEN)
 #   日期 / 成交量 / 外資淨買超 / 投信淨買超 / 自營淨買超
 #   外資大小單 / 前五大留倉 / 前十大留倉
 #   選PCR / 外(選)未平倉 / 韭菜指數
-
-ai_table = build_ai_data_table(df_leading)   # → str（tab-separated）
 ```
 
 ---

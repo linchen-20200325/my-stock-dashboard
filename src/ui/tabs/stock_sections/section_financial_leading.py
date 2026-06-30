@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_YELLOW
 from src.ui.render import kpi, teacher_conclusion
 
 
