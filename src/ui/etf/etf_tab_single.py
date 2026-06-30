@@ -48,15 +48,21 @@ def render_etf_single(gemini_fn=None):
     # ─ Late imports（避免循環 import）─
     import pandas as pd
     from datetime import timedelta
-    from src.ui.etf.etf_tab_portfolio import (
-        # 渲染類
+    # v18.438 hotfix:原 `from etf_tab_portfolio import (...)` 為錯誤/循環來源 —
+    # 這些 helper 實際定義於 etf_render(L4)/etf_calc(L2)/etf_fetch(L1),
+    # etf_tab_portfolio 從不在 module level 提供它們(只在自己函式內 lazy import),
+    # 故 render_etf_single 一執行就 `ImportError: cannot import name '_colored_box'`(production 炸)。
+    # 改 import 真正 SSOT 來源(§8.2 L5→L4/L2/L1 downward;L1 fetcher 屬 EX-PASSTHRU-1)。
+    from src.ui.render.etf_render import (   # 渲染類
         _colored_box, _plot_etf_chart, _render_bias, render_etf_holdings,
         _teacher_conclusion, macro_allocation_banner,
-        # 計算類
+    )
+    from src.compute.etf.etf_calc import (   # 計算類
         auto_detect_benchmark, calc_avg_yield, calc_cagr, calc_current_yield,
         calc_premium_discount, calc_total_return_1y, calc_tracking_error,
         check_vcp_signal, compute_etf_peer_ranking,
-        # 抓取類
+    )
+    from src.data.etf.etf_fetch import (     # 抓取類
         fetch_etf_dividends, fetch_etf_info, fetch_etf_nav_history,
         fetch_etf_price, get_etf_expense_ratio_safe, _get_etf_launch_price,
     )
