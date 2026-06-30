@@ -94,7 +94,9 @@ class TestTabStockSilentToStderr:
         assert '[_fetch_share_capital] swallow:' in src
 
     def test_pbratio_has_stderr_marker(self):
-        src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
+        # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 stock_sections.section_357_valuation
+        src = open('src/ui/tabs/stock_sections/section_357_valuation.py',
+                   encoding='utf-8').read()
         assert '[_fetch_pbratio_from_twse] swallow:' in src
 
 

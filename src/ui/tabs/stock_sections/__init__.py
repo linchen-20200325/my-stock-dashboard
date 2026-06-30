@@ -8,11 +8,15 @@ Phase 2(低風險 section):
 
 Phase 3(中風險 section,v18.407):
 - section_health_score: A 健康度評分 + v4/v5 卡片(SVG 量表 + 6 技術指標 + 6 進階卡)
+- section_357_valuation: B 357 殖利率評價 + 殖利率/PE/PB 3 河流圖
 
 後續 Phase 3-4 將陸續加入更多 section。
 """
 from __future__ import annotations
 
+from src.ui.tabs.stock_sections.section_357_valuation import (
+    render_357_valuation_section,
+)
 from src.ui.tabs.stock_sections.section_financial_leading import (
     render_financial_leading_section,
 )
@@ -28,6 +32,7 @@ from src.ui.tabs.stock_sections.section_psy_checklist import (
 from src.ui.tabs.stock_sections.section_revenue import render_revenue_trend_section
 
 __all__ = [
+    'render_357_valuation_section',
     'render_financial_leading_section',
     'render_health_score_section',
     'render_op_recommendation_section',
