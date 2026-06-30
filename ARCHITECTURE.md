@@ -1,18 +1,20 @@
 # 台股 AI 戰情室 — 技術規格書
 
-> **版本**:v8.0(2026-06-28 Phase 2 對齊)| **歷史 v7.1**:2026-05-15
+> **版本**:v9.0(2026-06-30 Phase 1 唯讀全域排毒 audit 對齊)| 前版 v8.0:2026-06-28 | 歷史 v7.1:2026-05-15
 >
 > 本文件為系統架構師視角的唯讀規格書,不含任何實作程式碼。
 >
 > **v18.265 策略回測整體移除**:`backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py` 三檔已刪除(共 ~986 LOC);MA 交叉/MA+RSI/Walk-Forward Test/ETF 歷史回測功能不再提供。下文歷史段落仍會提及這些模組以說明演進脈絡,但**目前 codebase 不含**。`tw_backtest.py`(macro 拐點驗證)為獨立業務模組,**保留**。
 >
 > **v18.359 Phase 2 排毒對齊**(2026-06-28):依 Phase 1 三路審計藍圖完成 F-1.1 ~ F-4。本檔 §0 新增「現況對齊摘要」反映實際狀態;§1-§4 歷史結構保留供追溯。
+>
+> **v18.411 Phase 1 唯讀全域排毒 audit**(2026-06-30):5 路並行 Explore agent 全域掃描收齊。**重大進度**:F-6 子樹搬移已 100% 完成(原列「待動工」)、F-7 tab_macro/tab_stock 兩大超大檔已分別降至 488 LOC / 1,670 LOC(-91% / -54.5%)、F-8 部分對齊(三大法人雙路徑職責確認、yfinance facade 部分落地)。新 audit 揭示 **真重複殘餘 4 大 fetcher + 4 大計算 SSOT 缺口 + 12 處 UI inline HTML 殘留**,§0 補上 0.6 ~ 0.8 對應段落。
 
 ---
 
-## §0. v18.359 現況對齊摘要(Phase 2 收尾)
+## §0. v18.411 現況對齊摘要(2026-06-30 唯讀 audit)
 
-> Phase 1 三路 Explore 審計揭示 ARCHITECTURE.md v7.1 與實際 codebase 有 295% 模組數差距(19 → 111)、165% LOC 差距。Phase 2 F-1 ~ F-4 完成根目錄結構性清潔;src/ 大樹搬移、SSOT facade、超大檔拆分(F-5 ~ F-8)規劃中,需 user 介入排程。
+> 本批 5 路並行 Explore agent 完成最新一輪全域掃描。ARCHITECTURE v7.1 與實際 codebase 落差已大幅收斂:檔數 222 → 312、LOC 67,850 → 80,520(差距現為 +19%),src/ 子樹搬移 100% 完成、tab_macro/tab_stock 兩大怪檔已破半,但仍有 4 處 fetcher 真重複、4 處計算 SSOT 缺口待收。
 
 ### 0.1 已完成清潔(Phase 2 F-1 ~ F-4)
 
@@ -37,88 +39,154 @@
 | `etf_dashboard.py.bak` | v18.359 | 舊版備份 | (.gitignore *.bak) |
 | `leading_indicators.py.bak` | v18.359 | 舊版備份 | (.gitignore *.bak) |
 
-### 0.3 實際目錄拓樸(2026-06-28 v18.359)
+### 0.3 實際目錄拓樸(2026-06-30 v18.411)
 
 ```
 my-stock-dashboard/
-├── app.py                     # L6 唯一入口(1,722 LOC)
+├── app.py                     # L6 唯一入口(642 LOC,已從 1,722 經 R7+R8+B3-γ+B3-δ 四輪重構收斂)
 ├── README.md / CLAUDE.md / PROCESS.md / STATE.md / SPEC.md /
-├── ARCHITECTURE.md / DATASTATION.md / STRATEGY_MANUAL.md
+├── ARCHITECTURE.md / DATASTATION.md / STRATEGY_MANUAL.md /
+├── ARCHIVED_FEATURES.md / DEAD_CODE_AUDIT.md / TAB_STOCK_AUDIT.md /
+├── APP_PY_AUDIT.md
 ├── pytest.ini / requirements.txt / .gitignore
 │
-├── (87 個 .py 散在 root) — 待 F-6 src/ 樹搬移
-│   依檔名前綴隱性分組:
-│   - data_*, daily_data_fetchers           (L1 fetcher)
-│   - macro_*, tw_macro, leading_indicators (L1 macro fetcher)
-│   - etf_*                                 (L1+L2+L4+L5 ETF 全棧)
-│   - tw_stock_data_fetcher                 (L1 個股 fetcher)
-│   - scoring_*, financial_health_*,
-│     v4_strategy_engine, v5_modules        (L2 compute)
-│   - mj_*                                  (L2 散戶情緒)
-│   - risk_*, exit_signals, flow_engine,
-│     hot_money, fundamental_screener,
-│     tech_indicators, inst_sanity,
-│     multi_factor_optimization,
-│     signal_threshold_optimization,
-│     monthly_revenue_screener,
-│     yield_screener                        (L2 compute)
-│   - ai_engine, ai_structured_summary,
-│     market_strategy, daily_checklist,
-│     portfolio_*, health_reconcile,
-│     reconcile, oauth_state,
-│     gsheet_portfolio                      (L3 service)
-│   - chart_plotter, ui_widgets,
-│     tab_helpers, chip_radar, grape_ladder,
-│     sidebar_health, macro_ui_components,
-│     etf_render                            (L4 components)
-│   - tab_*, etf_tab_*, etf_dashboard,
-│     calibration_ui, health_inspector,
-│     data_coverage, api_diagnostic,
-│     macro_classroom, macro_stock_link,
-│     mj_health_diff                        (L5 tabs)
-│   - config, data_config, persona,
-│     stock_names                           (L0 config)
-│   - proxy_helper, yf_proxy, nas_server,
-│     tw_backtest                           (L1 infra + 雜項)
+├── src/                       # 164 .py(F-6.1~F-6.5 全做完,0 root 殘留)
+│   ├── config/                # 5 檔(L0)— FINMIND_TOKEN / persona / stock_names / data_config
+│   ├── data/                  # 32 檔(L1)
+│   │   ├── core/      (5)     # data_loader / fetch_bps / fetch_industry_category
+│   │   ├── stock/     (6)     # tw_stock_data_fetcher / monthly_revenue_fetcher / app_stock_fetchers
+│   │   ├── etf/       (2)     # etf_fetch / etf_dividend
+│   │   ├── macro/     (7)     # macro_core / tw_macro / leading_indicators / macro_snapshot
+│   │   ├── proxy/     (4)     # proxy_helper / yf_proxy / nas_server / get_proxy_config
+│   │   ├── news/      (2)     # news_fetcher(stock + macro)
+│   │   ├── portfolio/ (3)     # gsheet_portfolio / oauth_state(D4 已歸位)
+│   │   └── daily/     (2)     # daily_data_fetchers / daily_checklist
+│   ├── compute/               # 39 檔(L2)
+│   │   ├── scoring/   (6)     # scoring_engine / scoring_helpers / tech_indicators
+│   │   ├── strategy/  (6)     # V4StrategyEngine / V5 modules / tech_indicators series
+│   │   ├── health/    (6)     # financial_health_engine / mj_trend_score / monthly_revenue_calc
+│   │   ├── risk/      (6)     # risk_control / exit_signals / reconcile
+│   │   ├── etf/       (7)     # etf_calc / etf_quality / etf_helpers / σ 統一層
+│   │   ├── macro/     (5)     # macro_helpers / macro_signal_lookback_tw
+│   │   └── screener/  (2)     # monthly_revenue_screener / yield_screener
+│   ├── services/              # 19 檔(L3 業務編排)
+│   │   ├── ai_*               # ai_structured_summary / app_ai_service / market_strategy
+│   │   ├── etf_*              # etf_grp_compare_service / etf_sector_service
+│   │   ├── stock_grp_service  # tab_stock_grp 共用
+│   │   ├── data_registry_*    # scanner / panel(L3 wrapper)
+│   │   └── macro_*            # macro_fetch_orchestrator / macro_trio_orchestrator
+│   └── ui/                    # 68 檔(L4 + L5)
+│       ├── render/    (7)     # chart_plotter / tab_sections SSOT / app_render
+│       ├── pages/     (8)     # health_inspector / api_diagnostic / data_coverage
+│       ├── etf/       (6)     # etf_dashboard / etf_tab_{single,portfolio,grp_compare}
+│       └── tabs/      (38)
+│           ├── stock_sections/ (14) # 個股 Tab 已抽 13 section + __init__
+│           ├── macro/          (15) # 總經 Tab 已抽 10+ section + handlers + helpers
+│           ├── tab_stock.py / tab_stock_grp.py / tab_stock_picker.py
+│           ├── tab_mj_health_diff.py / tab_edu.py / tab_macro.py
+│           ├── monthly_revenue_screener.py / yield_screener.py
+│           └── chip_radar.py / hot_money.py
 │
-├── scripts/                   # 維運 + 一次性 CLI(F-2 新建)
-│   ├── calibrate_macro_traffic.py
-│   ├── debug_financials.py
-│   ├── final_check.py
-│   ├── test_fetch.py          # F-1.3 移入(print-based)
-│   ├── test_fetchers.py       # F-1.3 移入(print-based)
-│   ├── test_registry.py       # F-1.3 移入(print-based)
-│   ├── update_etf_managers.py
-│   └── update_macro_history.py
+├── shared/                    # L0 跨層常數 / 工具(20 檔)
+│   ├── signal_thresholds.py   # 76+ 語意常數(scoring 50+ / 個股組合 7 / financial 19)
+│   ├── financial_health_thresholds.py  # MJ 19 門檻
+│   ├── calc_helpers.py        # calc_bias_pct SSOT(收 8 處 inline 乖離率)
+│   ├── stock_buckets.py / macro_buckets.py / data_categories.py
+│   ├── thresholds.py / ttls.py / colors.py / health_thresholds.py
+│   ├── fred_series.py / macro_calibration.py / macro_card.py
+│   ├── macro_compute.py / parse_helpers.py / cache_layer.py
+│   ├── stats_helpers.py / app_cache.py / schemas.py(pandera POC)
+│   └── __init__.py
 │
-├── shared/                    # L0 跨層共用常數 / 工具(17 檔)
 ├── infra/                     # OAuth 基礎(2 檔)
-├── tests/                     # 全部 pytest(108 檔,2213 collected)
+├── scripts/                   # 維運 + CLI(9 檔)
+│   ├── calibrate_macro_traffic.py / update_macro_history.py(.yml cron)
+│   ├── update_etf_managers.py / debug_financials.py / final_check.py
+│   ├── test_fetch.py / test_fetchers.py / test_registry.py(print-based)
+│   └── quick_merge.sh(skip-PR whitelist 用)
+│
+├── tests/                     # 115 .py(pytest 2287 pass / 10 skip / 14 deselected)
 └── data_cache/.gitkeep        # runtime parquet 已 untrack
 ```
 
-### 0.4 程式規模實況(2026-06-28)
+### 0.4 程式規模實況(2026-06-30 audit 確認)
 
-| 範圍 | 檔數 | LOC |
-|---|---:|---:|
-| Root `.py`(待 src/ 化)| 87 | ~44,300 |
-| `shared/` | 17 | ~2,550 |
-| `infra/` | 2 | ~200 |
-| `scripts/` | 8 | ~2,800 |
-| `tests/` | 108 | ~18,000 |
-| **TOTAL** | **222** | **~67,850** |
+| 範圍 | 檔數 | LOC | 變化 vs v18.359 |
+|---|---:|---:|---|
+| Root `.py` | **1**(app.py)| 642 | -86 檔 / -43,658 LOC(F-6 完成)|
+| `src/` | 164 | ~50,800 | **新建大樹**(從 root 搬入)|
+| `shared/` | 20 | ~3,400 | +3 檔 / +850(SSOT 收斂)|
+| `infra/` | 2 | ~200 | 持平 |
+| `scripts/` | 9 | ~3,200 | +1 檔 / +400(quick_merge.sh)|
+| `tests/` | 115 | ~22,000 | +7 檔 / +4,000(新 SSOT test 補)|
+| **TOTAL** | **312** | **~80,520** | **+90 檔 / +12,670 LOC** |
 
-對比 v7.1 宣稱 19 模組 / 21,323 LOC:**檔數 +1,068%、LOC +218%**。
-ARCHITECTURE v7.1 §1.2 / §1.4 數字僅供歷史對照,**勿引為現況**。
+LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 
-### 0.5 待動工項(Phase 2 F-5 ~ F-8,需 user 排程)
+### 0.5 已完成項目進度(v18.359 → v18.411)
 
-| ID | 範圍 | 風險 |
+| ID | 原狀態 | 現狀態 | 證據 |
+|---|---|---|---|
+| **F-5** | 待動工 | ⚠️ 部分:`src/services/` 19 檔已建立但仍以 wrapper 為主,full facade(MarketDataFacade)未實作 | `src/services/` 樹存在 |
+| **F-6** | 待動工(🔴 高) | ✅ **100% 完成** | 87 root .py → src/ 各子目錄 + 0 root 殘留 + 130+ 修補 import |
+| **F-7** | 待動工(🔴 高) | ✅ **大部分完成** | tab_macro 5387→488(-91%)、tab_stock 3672→1670(-54.5%);data_loader 2286 / etf_fetch 1948 / macro_core 1492 / leading_indicators 1391 / health_inspector 1386 經 audit 無進一步拆檔必要(內聚力強) |
+| **F-8** | 待動工(🔴 高) | ⚠️ 部分:三大法人雙路徑已 v18.244 確認職責不同(T86 / BFI82U / FinMind 各司其職);yfinance 部分走 yf_proxy facade,FinMind 仍 34 處 URL 散落 | 0.7 表 4 |
+
+### 0.6 真重複殘餘 — 4 大 fetcher 雙寫(待 user 排程)
+
+| ID | 重複項 | 散落位置 | 嚴重度 |
+|---|---|---|---|
+| **R-FETCH-1** | 股本 `_fetch_share_capital` | `src/ui/tabs/tab_stock.py:71`(UI 層 L1 fetcher,§8.2 違憲)| 🟡 中 — 已被 `_precompute_xsec` 集中呼叫,但位置錯層;應遷至 `src/data/stock/` |
+| **R-FETCH-2** | 月營收 fetcher | `src/data/core/data_loader.py:802-999` `get_monthly_revenue()`(3 段 FM0/FM/MOPS) + `src/data/stock/monthly_revenue_fetcher.py:47,104`(僅 FM)+ `src/data/stock/app_stock_fetchers.py:405`(wrapper)| 🔴 高 — 同 dataset 三條路 |
+| **R-FETCH-3** | 三大法人 | `data_loader.py:161` `_fetch_twse_inst_fallback` + `daily_data_fetchers.py:233` `fetch_institutional` + `leading_indicators.py:580` `twse_institutional_day` + `nas_server.py:94` NAS gateway | 🟡 中 — v18.244 audit 確認職責不同(個股 / 大盤 / 先行指標 / 代理),非真重複,但缺中央 dispatcher |
+| **R-FETCH-4** | 配息 | `app_stock_fetchers.py:129` `fetch_dividend_data`(3 源備援)vs `dividend_fetcher.py:27` `fetch_annual_dividends`(yfinance 單源)| 🟡 中 — 個股 / ETF 雙寫,可共用 base |
+| **附帶** | FinMind URL hardcode | `data_loader.py(10)` + `app_stock_fetchers.py(3)` + `macro_core.py / etf_fetch.py / daily_data_fetchers.py` 共 34 處 | 🟢 低 — 該集中至 `data_registry` template |
+
+### 0.7 真重複殘餘 — 4 大計算 SSOT 缺口(待 user 排程)
+
+| ID | 缺口 | 散落位置 | 嚴重度 |
+|---|---|---|---|
+| **R-CALC-1** | RSI 雙寫 | `src/compute/strategy/tech_indicators.py:28` `calc_rsi()` + `src/compute/scoring/scoring_engine.py:48` `compute_rsi()` 同公式異名 | 🟡 中 — 演算法等價,擇一即可 |
+| **R-CALC-2** | MA scalar inline 殘留 31 處 | `tab_stock.py:562-564`(3)+ `etf_tab_single.py:581-582`(2)+ `etf_helpers.py:140,142`(2)+ `market_strategy.py:219-226`(4)+ `section_when_buy_sell.py:247-248` 等 | 🟡 中 — `safe_ma` / `calc_ma_series` 已 SSOT,但 inline `.rolling().mean().iloc[-1]` 仍散落 |
+| **R-CALC-3** | 乖離率 inline 漏網 5 處 | `macro_snapshot.py:261` + `etf_tab_single.py:519,532,589,600`(4)+ `section_state.py:51-52` | 🟢 低 — C1 v18.401 抽 8 處,但 5 處新增/漏網 |
+| **R-CALC-4** | 健康評分三套未對帳 | `macro_helpers.py:94-98` Method A(加權)+ `health_reconcile.py:64-106` Method B(等權)+ `risk/reconcile.py:158-202` `compute_health_score_arithmetic` / `_min_of_factors`(短板)| 🔴 高 — §4.3 對帳函式已建,但**未嵌入生產 render 路徑**(只在 audit panel) |
+| **附帶** | 趨勢分類 inline 8 處 | `scoring_helpers.py:141-152` + `scoring_engine.py:92-98` + `stats_helpers.py:55` | 🟢 低 — `classify_trend_4tier` 已 SSOT |
+| **附帶** | 殖利率三層未統一 | `etf_calc.py:168` + `etf_helpers.py:249` + `v5_modules.py:273` + `tab_stock_picker.py:457-463` inline | 🟢 低 — 個股 vs ETF 公式不同(365 day vs groupby.sum),需業務決策 |
+
+### 0.8 真重複殘餘 — UI inline HTML / Tab 模組化缺口
+
+| ID | 缺口 | 散落位置 | 嚴重度 |
+|---|---|---|---|
+| **R-UI-1** | inline `<div style="background:...border-left:...">` 殘留 12 處 | `tab_stock.py:229,277,575,1666`(4)+ `tab_stock_grp.py:525,710,1201`(3)+ `section_357_valuation.py:120,159`(2)+ `section_health_score.py:178`(1)+ macro section ~8 處 | 🟢 低 — `tab_sections.box_wrapper_open/close` + `border_left_banner` SSOT 已建,但 U2-b migration 未竟尾 |
+| **R-UI-2** | `tab_stock_grp.py`(1509 LOC)未走 section 模組化 | 個股組合 Tab 仍有自行計算的 fundamental 邏輯(行 L407+)| 🟡 中 — 個股 Tab 已抽 13 section,組合 Tab 落後一輪 |
+| **附帶** | plotly 圖表重複 | 0 處 ✅ | 已透過 `chart_plotter.plot_combined_chart / revenue / quarterly` SSOT |
+| **附帶** | ETF KPI 跨 Tab 共用 | ✅ | `src.compute.etf` 已 SSOT,3 大 ETF Tab 共用 23 個 helper |
+
+### 0.9 已 SSOT 化的優良範例(audit 驗證)
+
+| 範圍 | 集中位置 | 收斂效果 |
 |---|---|---|
-| **F-5** | SSOT facade(MarketDataFacade / HealthScoreFacade / UIWidgets / ChartFactory) | 🟡 中 |
-| **F-6** | root 87 檔 → `src/{config,data,compute,services,ui}/` 子樹搬移 | 🔴 高(全 import path 影響)|
-| **F-7** | 超大檔拆分:tab_macro 5387 / tab_stock 3471 / data_loader 2273 / etf_fetch 1935 / macro_core 1492 / leading_indicators 1473 / health_inspector 1386 | 🔴 高 |
-| **F-8** | L1/L2 邊界對齊:yfinance 走 facade、FinMind 三大法人雙路徑合併 | 🔴 高 |
+| 信號閾值 | `shared/signal_thresholds.py` | 76+ 常數(scoring 50 + 個股組合 7 + MJ 19)|
+| MJ 財健門檻 | `shared/financial_health_thresholds.py` | 19 個 |
+| 乖離率公式 | `shared/calc_helpers.py:calc_bias_pct` | 8 處 inline 已收(剩 5 處新增/漏網)|
+| 趨勢分類 | `src/ui/tabs/tab_helpers.py:classify_trend_4tier` | SSOT(剩 8 處 inline 待收)|
+| MA series | `src/compute/strategy/tech_indicators.py:calc_ma_series` | series 版 SSOT(scalar 版散落)|
+| RS 評分 | `src/compute/scoring.calc_rs_score / rs_slope` | SSOT |
+| ETF σ | `src/compute/etf/etf_helpers.py:calc_sigma_metrics` | SSOT(個股缺對應)|
+| 紅綠燈 | `shared/colors.py:TRAFFIC_{GREEN,YELLOW,RED,NEUTRAL}` | SSOT |
+| UI 容器 | `src/ui/render/tab_sections.py:box_wrapper_open/close + border_left_banner` | SSOT(12 處 inline 殘留)|
+| 圖表生成 | `src/ui/render/chart_plotter.py:plot_*` | SSOT(0 處重複)|
+| TTL | `shared/ttls.py:TTL_{15MIN,30MIN,1HOUR,...}` | SSOT |
+| 27 資料源 | `src/data/core/data_registry.py` + `macro_core.PMI_SOURCE_REGISTRY` | SSOT registry |
+
+### 0.10 0 違憲確認
+
+- ✅ **0 root 業務 .py**(只有 app.py 1 檔)
+- ✅ **0 dead public function**(P5-DEAD 6 輪審計收斂飽和;`_fetch_share_capital` / `_precompute_xsec` 確認有 caller)
+- ✅ **0 commented-out function 區塊**(`# def` / `# class` 全清)
+- ✅ **0 stale 路徑註解**(指向已不存在的檔案 0 處;`# 已移除` / `# 已下沉` 註解皆指向有效新位置)
+- ✅ **0 §3.3 反捏造違憲**(原 14 類 magic number 全 SSOT 化)
+- ✅ **0 §8.2 高項違憲**(EX-AI-1 / EX-RENDER-1 已退役;只剩 EX-L0-1 / EX-CACHE-1 / EX-PASSTHRU-1 三類已登錄例外)
 
 ---
 
