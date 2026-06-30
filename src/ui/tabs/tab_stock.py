@@ -823,90 +823,14 @@ padding:14px 18px;margin-bottom:12px;">
         # ══ 進出場訊號（多位老師方法整合）═══════════════════════
         st.markdown('---')
 
-        # ══ 操作前心理檢查 + 勝利方程式 ═══════════════════════
-        st.markdown('---')
-        st.markdown('#### 🧠 操作前必做：心理檢查 + 勝利方程式')
-
-        _mc_cols = st.columns([3, 2])
-
-        with _mc_cols[0]:
-            st.markdown(box_wrapper_open('primary', padding=12), unsafe_allow_html=True)
-            st.markdown('**📋 SOP 進場強制檢核表（4關卡全通過才顯示建議）**')
-            _wr_reg_chk = st.session_state.get('mkt_info', {}).get('regime','neutral')
-            _price_chk  = float(df2['close'].iloc[-1]) if df2 is not None and not df2.empty else 0
-            _open5_chk  = float(df2['close'].iloc[-6]) if df2 is not None and len(df2)>=6 else _price_chk
-            _surge_chk  = round((_price_chk - _open5_chk) / max(_open5_chk,1) * 100, 1)
-            _stop_chk   = round(_price_chk - 1.5 * (_atr2_val if '_atr2_val' in dir() else _price_chk*0.07), 2)  # noqa: F821
-            _q1 = st.checkbox(
-                f'① 確認非空頭格局（目前：{_wr_reg_chk}）',
-                value=_wr_reg_chk != 'bear', key=f't2_q1_{sid2}',
-                disabled=_wr_reg_chk == 'bear'
-            )
-            _q2 = st.checkbox(
-                f'② 確認未追高超過5%（近5日漲幅：{_surge_chk:+.1f}%）',
-                value=abs(_surge_chk) <= 5, key=f't2_q2_{sid2}',
-                disabled=abs(_surge_chk) > 10
-            )
-            _q3 = st.checkbox(
-                f'③ 確認停損價（跌破 {_stop_chk} 元無條件出場）',
-                key=f't2_q3_{sid2}'
-            )
-            _all_checked = _q1 and _q2 and _q3
-            if _all_checked:
-                st.success('✅ 心理狀態良好，可以繼續評估操作')
-            else:
-                st.warning('⚠️ 尚有項目未確認，建議先暫停，避免情緒化操作')
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with _mc_cols[1]:
-            st.markdown(f'<div style="background:#0a1628;border:1px solid {TRAFFIC_GREEN};border-radius:10px;padding:12px;">', unsafe_allow_html=True)
-            st.markdown('**🏆 勝利方程式（需全部符合）**')
-            _wr_mkt2 = st.session_state.get('mkt_info', {})
-            _wr_reg2 = _wr_mkt2.get('regime','neutral') if _wr_mkt2 else 'neutral'
-            _wr_margin2 = st.session_state.get('cl_data',{}).get('margin', 0) or 0
-            _win_conds = [
-                ('🌍 大盤多頭燈號',  _wr_reg2 == 'bull'),
-                (f'💰 融資安全(<{MARGIN_BALANCE_WARN_THRESHOLD_YI:.0f}億)', _wr_margin2 < MARGIN_BALANCE_WARN_THRESHOLD_YI),
-                ('🏥 個股健康度≥75', health2 >= 75 if df2 is not None else False),
-                ('💎 非357昂貴區',   '昂貴' not in str(st.session_state.get('t2_data',{}).get('val',''))),
-                ('✋ 已設停損點',     _q3),
-            ]
-            _win_count = sum(1 for _, v in _win_conds if v)
-            for _wn, _wv in _win_conds:
-                _wc = TRAFFIC_GREEN if _wv else TRAFFIC_RED
-                _wi = '✅' if _wv else '❌'
-                st.markdown(f'<div style="font-size:12px;color:{_wc};padding:2px 0;">{_wi} {_wn}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div style="margin-top:8px;font-size:13px;font-weight:700;color:{TRAFFIC_GREEN if _win_count>=4 else TRAFFIC_RED};">'
-                       f'{"🚀 符合 " + str(_win_count) + "/5，可以考慮操作" if _win_count>=4 else "⛔ 僅符合 " + str(_win_count) + "/5，建議等待"}'
-                       f'</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # 今日禁止操作清單
-        st.markdown('#### 🚫 今日禁止操作情況（有任何一項→今天暫停）')
-        _ban_items = []
-        _wr_mkt3 = st.session_state.get('mkt_info', {})
-        _wr_price = float(df2['close'].iloc[-1]) if df2 is not None and not df2.empty else 0
-        _wr_open  = float(df2['close'].iloc[-5]) if df2 is not None and len(df2)>=5 else _wr_price
-        _today_surge = round((_wr_price - _wr_open) / max(_wr_open,1) * 100, 1) if _wr_open else 0
-        if abs(_today_surge) > 4:
-            _ban_items.append(f'📈 個股近5日漲幅 {_today_surge:+.1f}% 超過4%（追高風險）')
-        _ml = st.session_state.get('monthly_loss_pct', 0)
-        if _ml < -5:
-            _ban_items.append(f'📉 本月已虧損 {abs(_ml):.1f}%（情緒操作風險上升）')
-        if _wr_margin2 > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
-            _ban_items.append(f'💸 融資 {_wr_margin2:.0f}億 極度過熱（散戶追高期，等待）')
-        if _wr_reg2 == 'bear':
-            _ban_items.append('🔴 大盤空頭格局（禁止做多）')
-
-        if _ban_items:
-            for _bi in _ban_items:
-                st.markdown(
-                    border_left_banner(TRAFFIC_RED, f'⛔ {_bi}',
-                                       padding_y=7, margin_y=3, bg='#2a0d0d'),
-                    unsafe_allow_html=True,
-                )
-        else:
-            st.success('✅ 今日無禁止操作情況，可以正常評估')
+        # ══ 心理檢查 + 勝利方程式 + 禁止操作(U4 Phase 2-Psy v18.406:抽至 stock_sections.section_psy_checklist)══
+        # 注意:原 inline 用 `_atr2_val if '_atr2_val' in dir() else None` 防 NameError,
+        # _atr2_val 是否定義取決於上游 try/except 計算;extracted 函式統一以 kwarg 傳遞
+        from src.ui.tabs.stock_sections import render_psy_checklist_section
+        render_psy_checklist_section(
+            sid2, df2, health2,
+            _atr2_val=_atr2_val if '_atr2_val' in dir() else None,  # noqa: F821
+        )
 
         st.markdown('---')
         st.markdown('#### 🎯 什麼時候買？什麼時候賣？')
@@ -1694,63 +1618,10 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         # ══ G. AI 五維報告 ══════════════════════════════════════
         st.markdown('---')
 
-        # ── 即時文字建議（Rule-based，不需 AI API）──────────────
-        st.markdown('#### 💡 即時操作建議（規則引擎）')
-        _reg_op = st.session_state.get('mkt_info', {}).get('regime', 'neutral')
-        _sig_count = sum([
-            1 if health2 >= HEALTH_GRADE_A_MIN else 0,
-            1 if _reg_op == 'bull' else 0,
-            1 if (vcp2 and vcp2.get('contracting')) else 0,
-            1 if (avg_div2 > 0 and price2 > 0 and price2 <= round(avg_div2/YIELD_MID_DEC, 1)) else 0,
-        ])
-        if _reg_op == 'bear':
-            _op_a = f'大盤空頭格局，{sid2} 無論評分多高，先降倉至20%以下'
-            _op_b = '市場趨勢優先，個股強不等於能賺錢'
-        elif _sig_count >= 3:
-            _op_a = f'{_sig_count}個訊號共振（健康度+大盤+VCP+估值），可積極進場'
-            _op_b = '分批建倉，停損設健康度跌破60'
-        elif _sig_count >= 2:
-            _op_a = f'{_sig_count}個訊號共振，中性偏多，可小倉試水溫'
-            _op_b = '輕倉試探，等待更多確認訊號'
-        else:
-            _op_a = f'只有{_sig_count}個訊號，條件不足，今日不操作 {sid2}'
-            _op_b = '耐心等待，寧可錯過勿強求'
-        st.markdown(teacher_conclusion('宏爺', f'{sid2} 共振訊號 {_sig_count}/4', _op_a, _op_b), unsafe_allow_html=True)
-        try:
-            _mkt_top_g = st.session_state.get('mkt_info', {})
-            _m1b_top_g = st.session_state.get('m1b_m2_info', {})
-            _bias_g    = st.session_state.get('bias_info', {})
-            _m1b_diff_g= _m1b_top_g.get('m1b_yoy',0)-_m1b_top_g.get('m2_yoy',0) if _m1b_top_g else 0
-            # 取 Tab3 最近分析的外資資料
-            _cd_g = st.session_state.get('cl_data',{})
-            _inst_g = _cd_g.get('inst',{})
-            _fk_g = next((k for k in _inst_g if '外資' in k), None)
-            _tk_g = next((k for k in _inst_g if '投信' in k), None)
-            _comment_data = {
-                'health':      health2,
-                'score':       0,  # Tab3 多因子評分（此處無法取得，用0）
-                'rsi':         rsi2,
-                'vcp_ok':      bool(vcp2 and isinstance(vcp2,dict) and vcp2.get('contracting')),
-                'bias_240':    _bias_g.get('bias_240', 0),
-                'bias_20':     _bias_g.get('bias_20', 0),
-                'val_label':   _357_label2 if '_357_label2' in dir() else '',  # noqa: F821
-                'trend':       _trend_text2 if '_trend_text2' in dir() else '',  # noqa: F821
-                'cl':          cl2 / 1e8 if cl2 and cl2 > 0 else 0,
-                'cx':          cx2 / 1e8 if cx2 and cx2 > 0 else 0,
-                'foreign_buy': _inst_g.get(_fk_g,{}).get('net',0) if _fk_g else 0,
-                'trust_buy':   _inst_g.get(_tk_g,{}).get('net',0) if _tk_g else 0,
-                'm1b_diff':    _m1b_diff_g,
-            }
-            _comment_txt = generate_ai_comment(_comment_data)
-            if _comment_txt:
-                st.markdown(
-                    '<div style="background:#0d1117;border:1px solid #30363d;'
-                    'border-radius:10px;padding:14px;margin-bottom:10px;'
-                    'font-size:13px;color:#c9d1d9;line-height:1.7;">'
-                    + _comment_txt.replace(chr(10), '<br>') +
-                    '</div>', unsafe_allow_html=True)
-        except Exception as _ce:
-            pass
+        # ── 即時文字建議(U4 Phase 2-OpRec v18.406:抽至 stock_sections.section_op_recommendation)──
+        from src.ui.tabs.stock_sections import render_op_recommendation_section
+        render_op_recommendation_section(sid2, health2, vcp2, avg_div2, price2,
+                                          rsi2, cl2, cx2)
 
         # v18.307 Bug2 PR-C SSOT（color_override 傳實際 TRAFFIC_GREEN 常數，防色票漂移）
         st.markdown(section_header_html("fundamental", color_override=TRAFFIC_GREEN, **_sec_lv["fundamental"]), unsafe_allow_html=True)
@@ -2179,127 +2050,17 @@ padding:12px 16px;margin:8px 0;">
             st.caption('ℹ️ 股價淨值比河流圖：TWSE/FinMind/yfinance 三路徑皆無 BPS 資料，跳過。')
 
         # ══ C. 領先指標 ════════════════════════════════════════
-        st.markdown('---')
-        st.markdown('#### 🔬 C. 公司真的在賺錢嗎？（財報領先指標）')
-        if cl2 and cl2 > 0 and cx2 and cx2 > 0:
-            _ca = f'合約負債 {cl2/1e8:.1f}億 + 資本支出 {cx2/1e8:.1f}億，雙重確認龍多股'
-            _cb = '基本面強勢，適合長期持有'
-        elif cl2 and cl2 > 0:
-            _ca = f'合約負債 {cl2/1e8:.1f}億（訂單豐沛），資本支出資料不足'
-            _cb = '基本面良好，但擴廠意願待確認'
-        elif cx2 and cx2 > 0:
-            _ca = f'資本支出 {cx2/1e8:.1f}億（積極擴產），合約負債資料不足'
-            _cb = '擴廠意願強，但訂單能見度待確認'
-        else:
-            _ca = '合約負債+資本支出均無資料（可能為金融股或資料源限制）'
-            _cb = '請至 MOPS 或年報查閱'
-        st.markdown(teacher_conclusion('孫慶龍', f'{sid2} 財報領先指標', _ca, _cb), unsafe_allow_html=True)
-        st.markdown(
-            '<div style="background:#0a1628;border-left:3px solid #bc8cff;padding:8px 12px;'
-            'border-radius:0 6px 6px 0;margin-bottom:8px;font-size:12px;color:#c9d1d9;">'
-            '💡 這兩個財報數字能預測未來3-6個月的獲利方向：'
-            '<br>📌 <b>合約負債</b> = 客戶已付錢但還沒出貨的訂單 → 越高代表訂單很多、業績有保障'
-            '<br>📌 <b>資本支出</b> = 公司花錢蓋廠房買設備 → 越高代表看好未來、準備大幅擴產'
-            '<br>⭐ 兩個都很高 = 策略1所說的「龍多股」，是存股首選'
-            '</div>', unsafe_allow_html=True)
-        fc1,fc2=st.columns(2)
-        cl_ok=cl2 is not None and cl2>0
-        cx_ok=cx2 is not None and cx2>0
-        _cl_st = _fin_st2.get('contract_liabilities') if '_fin_st2' in dir() else None  # noqa: F821
-        _cx_st = _fin_st2.get('fixed_assets')         if '_fin_st2' in dir() else None  # noqa: F821
-        _cl_label = "--" if cl_ok else '無數據'
-        _cx_label = "--" if cx_ok else '無數據'
-        _cl_color_map = {'ok':TRAFFIC_GREEN,'missing':TRAFFIC_YELLOW,'not_applicable':'#484f58','fetch_error':TRAFFIC_RED}
-        _cx_color_map = {'ok':'#58a6ff','missing':TRAFFIC_YELLOW,'not_applicable':'#484f58','fetch_error':TRAFFIC_RED}
-        with fc1:
-            _cl_val_txt = f'{cl2/1e8:.1f}億' if cl_ok else '抓取失敗'
-            _cl_c = '#2ea043' if cl_ok else '#da3633'
-            st.markdown(kpi('合約負債', _cl_val_txt,
-                            '>股本50%→未來3-6月訂單保障', _cl_c,
-                            _cl_c if cl_ok else '#21262d'),unsafe_allow_html=True)
-            if not cl_ok:
-                st.caption('來源：FinMind — 抓取失敗或無此財報')
-        with fc2:
-            _cx_val_txt = f'{cx2/1e8:.1f}億' if cx_ok else '抓取失敗'
-            _cx_c = '#2ea043' if cx_ok else '#da3633'
-            st.markdown(kpi('固定資產/資本支出', _cx_val_txt,
-                            '>股本80%→大擴廠看好未來需求', _cx_c,
-                            _cx_c if cx_ok else '#21262d'),unsafe_allow_html=True)
-            if not cx_ok:
-                st.caption(f'來源：{_cl_src2 or _cx_src2 or "未知"}')
-        if not cl_ok and not cx_ok:
-            _na = (not _fin_errs2 and not cl_ok and not cx_ok)
-            _fe = bool(_fin_errs2)
-            if _na:
-                st.info('ℹ️ 此產業（金融/保險等）不適用合約負債/固定資產指標，可跳過')
-            elif _fe:
-                # 顯示具體錯誤給使用者
-                _err_src = (_cl_src2 + '/' + _cx_src2).strip('/')
-                _err_msg = '; '.join(_fin_errs2) if _fin_errs2 else '抓取失敗'
-                st.error(f'❌ 財報資料抓取失敗 — 來源:{_err_src or "三源均未命中"} | 錯誤:{_err_msg}')
-                st.caption('💡 可能原因：① FinMind Token 失效 ② MOPS 暫時無回應 ③ 個股無此財報')
-            else:
-                st.info('ℹ️ 查無揭露：服務業/軟體業通常無此數據，可跳過')
-                st.caption(f'來源：{_cl_src2 or _cx_src2 or "未知"}')
-        # 財報結論：依合約負債+固定資產狀態給出判斷
-        _fin_color = TRAFFIC_GREEN if cl_ok and cx_ok else (TRAFFIC_YELLOW if cl_ok or cx_ok else '#484f58')
-        _fin_label = ('✅ 龍多確認：合約負債高＋資本支出高 = 訂單滿、擴廠中' if cl_ok and cx_ok
-                      else ('⚠️ 部分訊號：' + ('合約負債充裕' if cl_ok else '資本支出積極')
-                            if cl_ok or cx_ok else '⚪ 資料不足，無法判斷'))
-        st.markdown(
-            f'<div style="background:#0d1117;border-left:4px solid {_fin_color};'
-            f'padding:10px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
-            f'<span style="font-size:12px;color:#8b949e;">🎓 策略1 · 財報領先指標</span><br>'
-            f'<span style="font-size:14px;font-weight:800;color:{_fin_color};">{_fin_label}</span><br>'
-            f'<span style="font-size:11px;color:#8b949e;">兩指標均高 = 龍多股首選；詳細門檻見「策略手冊」Tab</span>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+        # ══ C. 財報領先指標(U4 Phase 2-C v18.406:抽至 stock_sections.section_financial_leading)══
+        from src.ui.tabs.stock_sections import render_financial_leading_section
+        render_financial_leading_section(sid2, cl2, cx2,
+                                          _cl_src2=_cl_src2, _cx_src2=_cx_src2,
+                                          _fin_errs2=_fin_errs2)
 
-        # ══ D. 月營收 + 季毛利率 ══════════════════════════════
-        st.markdown('---')
-        st.markdown('#### 📈 D. 公司每月賺多少錢？（營收趨勢）')
-        _d_ind = f'{sid2} 月營收YoY%'
-        _da = '月營收數據尚未載入'
-        _db = ''
-        if rev2 is not None and not rev2.empty and len(rev2) >= 3:
-            _yoy_col = next((c for c in rev2.columns if 'yoy' in str(c).lower() or '年增' in str(c) or 'YoY' in str(c)), None)
-            if _yoy_col:
-                _yoy3 = pd.to_numeric(rev2[_yoy_col].tail(3), errors='coerce').dropna()
-                if len(_yoy3) >= 2:
-                    _avg_y = float(_yoy3.mean())
-                    _last_y = float(_yoy3.iloc[-1])
-                    _d_ind = f'{sid2} 近3月平均YoY {_avg_y:+.1f}%'
-                    if _avg_y > 15 and (_yoy3 > 0).all():
-                        _da = f'近3月YoY平均 {_avg_y:+.1f}%（最新 {_last_y:+.1f}%），業績爆發，重點關注'
-                        _db = '配合技術面買點可進場'
-                    elif _avg_y > 0:
-                        _da = f'近3月YoY平均 {_avg_y:+.1f}%，溫和成長'
-                        _db = '持續追蹤，等待加速跡象'
-                    else:
-                        _da = f'近3月YoY平均 {_avg_y:+.1f}%，業績衰退'
-                        _db = '不管K線多好看，先觀望'
-        st.markdown(teacher_conclusion('孫慶龍', _d_ind, _da, _db), unsafe_allow_html=True)
-        st.markdown(
-            f'<div style="background:#0a1628;border-left:3px solid {TRAFFIC_GREEN};padding:8px 12px;'
-            'border-radius:0 6px 6px 0;margin-bottom:8px;font-size:12px;color:#c9d1d9;">'
-            '💡 月營收年增率（YoY%）= 今年這個月比去年同月多賺了幾%'
-            '<br>🟢 <b>連續3個月YoY>15%</b> = 業績爆發，股價可能跟著漲'
-            '<br>🔴 <b>連續3個月YoY<0%</b> = 業績衰退，要小心'
-            '</div>', unsafe_allow_html=True)
-        if rev2 is not None and not rev2.empty:
-            if _rev2_cached:
-                st.caption('⚠️ 月營收使用快取資料（本次 API 未回應）')
-            st.plotly_chart(plot_revenue_chart(rev2,sid2,name2),
-                            width='stretch',config={'displayModeBar':False})
-        else:
-            st.warning('⚠️ 月營收數據暫無（請確認 FINMIND_TOKEN 是否正確，或重新載入）')
-            st.caption('💡 首次查詢需網路抓取，若持續失敗請檢查 Token 或稍後重試')
-        if qtr2 is not None and not qtr2.empty:
-            if _qtr2_cached:
-                st.caption('⚠️ 季財報使用快取資料（本次 API 未回應）')
-            st.plotly_chart(plot_quarterly_chart(qtr2,sid2,name2),
-                            width='stretch',config={'displayModeBar':False})
+        # ══ D. 月營收 + 季毛利率(U4 Phase 2-D v18.406:抽至 stock_sections.section_revenue)══
+        from src.ui.tabs.stock_sections import render_revenue_trend_section
+        render_revenue_trend_section(sid2, name2, rev2, qtr2,
+                                      _rev2_cached=_rev2_cached,
+                                      _qtr2_cached=_qtr2_cached)
         with st.expander('📖 策略1 結論', expanded=True):
             if rev2 is not None and not rev2.empty and 'yoy' in rev2.columns:
                 _yoy_last3 = rev2['yoy'].dropna().tail(3).tolist()
