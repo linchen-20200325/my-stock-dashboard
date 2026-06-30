@@ -9,6 +9,11 @@ from __future__ import annotations
 
 import re as _re_etf_helpers
 
+# v18.423 Phase 2 Batch 2:bare_etf_code 下沉 L0(shared/etf_codes.py)解 L1→L2 反向 import。
+# 本 re-export 維持 backward compat,既有 caller(本檔 auto_role / etf_calc / tab_stock_picker
+# / etf_tab_portfolio)無需改 import path。
+from shared.etf_codes import bare_etf_code  # noqa: F401
+
 _TW_PURE_RE = _re_etf_helpers.compile(r'^\d{4,6}[A-Z]?$')
 
 
@@ -18,24 +23,6 @@ _CORE_TICKERS: frozenset[str] = frozenset({
     '00940', '00946', '00713B', '00679B', '00937B',
     'BND', 'AGG', 'VTI', 'VOO', 'SPY', 'VT', 'SCHD', 'VEA', 'VWO', 'VNQ',
 })
-
-
-def bare_etf_code(raw: str | None) -> str:
-    """ETF 裸碼 SSOT — strip `.TW` / `.TWO` 後綴並回大寫去空白；normalize_etf_ticker 的反向操作。
-
-    場景：外部 API URL（yuanta / SITCA）/ 內部 lookup key / 中文名 enrich /
-    is_active_etf 白名單比對 共用，避免 6+ 處 inline `.replace().upper()` 飄移。
-
-    範例：
-      '0050.TW'    → '0050'
-      '00982A.TWO' → '00982A'（主動式 ETF 字母後綴保留）
-      '  0050.tw ' → '0050'（大小寫無關 + 去空白）
-      'SPY'        → 'SPY'（無 .TW 後綴原樣）
-      ''/None      → ''
-    """
-    if not raw:
-        return ''
-    return str(raw).strip().upper().replace('.TWO', '').replace('.TW', '')
 
 
 def auto_role(tk: str | None) -> str:
