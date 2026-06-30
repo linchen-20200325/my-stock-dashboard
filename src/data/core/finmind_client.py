@@ -14,6 +14,27 @@ boilerplate。caller 端各自的 parse / 欄位處理仍留在原處(本來就 
 `leading_indicators.finmind_get` 改為 thin re-export,行為(timeout=25, retries=2)不變。
 
 §8.2:L1 Data,可被 L1/L2/L3/L5 import;不 import streamlit / 上層。
+
+適用範圍(D5 step2 實證結論 — 勿再機械收斂)
+=============================================
+本 client 僅適用「plain requests + 以 JSON body `status==200` 判讀」的 FinMind v4 GET。
+已收斂 4 站:monthly_revenue_fetcher ×2、data_loader 月營收方案B、data_loader 季財報REST。
+
+以下 ~14 站「看似重複,語意實不同」,經實測(暫遷後 7 測試紅 → 全數還原)確認**不可收斂**,維持原樣:
+- **Proxy Session 站**(`_bps_dl()` / `_bps()` / `_make_proxy_session()` / `_rq_f` / `proxy_helper.fetch_url`):
+  帶 NAS Squid proxy 路由 + Retry adapter + `verify=False`(geo-block 繞道核心)。
+  本 client 用 plain `requests.get`(verify=True、無代理、無 retry)→ 會丟失代理鏈直接失敗。
+  涵蓋 data_loader(_fetch_finmind_inst/price_raw、月營收方案0、get_quarterly_extra、
+  fetch_financial_statements 多走 _bps_dl)、app_stock_fetchers(fetch_dividend_data/financials)、
+  daily_data_fetchers(_fetch_otc_via_finmind)、macro_core(_pmi_src_finmind 走 fetch_url)。
+- **HTTP-status-gating 站**:gate on `resp.status_code==200`(HTTP)而非 JSON `status==200`,
+  或消費 status_code 區分 401/403 token 錯誤 / 消費 JSON `msg` 區分額度上限 vs 無資料。
+  與本 client 的 JSON-status 語意不同,收斂會改變判讀。涵蓋 share_capital_fetcher、
+  tab_stock_picker(_fetch_quarterly_is / _check_* 等)、data_loader(fetch_industry_category /
+  fetch_bps_from_finmind)。
+
+若未來要納入上述:需先讓 client 支援「proxy session 注入」+「HTTP-status 模式 / 回傳 status_code」
+(屬另案設計,§8 先對齊),**禁止為了 DRY 硬收而丟失代理 / 改變 status 判讀**。
 """
 from __future__ import annotations
 
