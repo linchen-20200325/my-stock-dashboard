@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import pandas as _pd_fs
 
+from shared.signal_thresholds import BB_BW_SHRINK_WARN_RATIO  # v18.430 Batch 5b 漏網收尾
 from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
 
 
@@ -236,7 +237,10 @@ def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
         elif bb['price'] > bb['ma']:
             score += 6
             details['布林'] = ('站上中軌', 6, 10)
-        elif bb['bw'] < bb['bw_mean'] * 0.7:
+        elif bb['bw'] < bb['bw_mean'] * BB_BW_SHRINK_WARN_RATIO:
+            # v18.430 Batch 5b 漏網收尾:0.7 改 SSOT(BB_BW_SHRINK_WARN_RATIO=0.7)
+            # 註:scoring fn 用 WARN 級門檻(同 section_health_score / section_vcp_bollinger KPI),
+            # 雖然 label 寫「極度收縮」與 ACTION 級訊號框同字串,但歷史上即用 0.7 評 9 分(從寬給分)
             score += 9
             details['布林'] = ('帶寬極度收縮（即將爆發）', 9, 10)
         else:
