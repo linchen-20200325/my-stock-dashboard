@@ -31,11 +31,13 @@ _INLINE_TABS = ["tab_heatmap", "tab_screener", "tab_etf",
 
 
 def test_render_fn_tabs_wired():
-    """4 個 render-fn 分頁:既要 `with tab_X:` 又要呼叫 render_X()。"""
+    """4 個 render-fn 分頁:既要 `with tab_X:` 又要引用 render_X(經 _render_tab_isolated 隔離呼叫)。"""
     src = _src()
     for tab, fn in _RENDER_TABS:
         assert f"with {tab}:" in src, f"app.py 未綁定 `with {tab}:`(回歸:該分頁會空白)"
-        assert f"{fn}()" in src, f"app.py 未呼叫 `{fn}()`(回歸:該分頁會空白)"
+        assert fn in src, f"app.py 未引用 `{fn}`(回歸:該分頁會空白)"
+    # v18.440:render 改經隔離器呼叫 — 確保隔離器存在(單 tab 例外不拖垮全頁)
+    assert "_render_tab_isolated" in src, "app.py 缺 per-tab 渲染隔離器"
 
 
 def test_all_tabs_have_with_block():

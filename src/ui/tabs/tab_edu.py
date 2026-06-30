@@ -298,11 +298,16 @@ def render_tab_edu():
                             unsafe_allow_html=True)
                         # ─ Sparkline（有 series 才畫）─
                         if _series is not None and len(_series) >= 2:
+                            # v18.440 修:make_sparkline 簽章為
+                            # (values, dates, height, line_color, threshold_warn, threshold_crit)
+                            # 原呼叫傳了不存在的 high_is_bad / lookback → TypeError
+                            # (教學分頁原本未綁定渲染,故此 latent bug 一直沒被觸發)。
+                            # lookback=60 改 slice 最後 60 點;轉 list 確保 make_sparkline 內
+                            # values[-1] 不踩 pandas label-index。high_is_bad 上方 Z 卡已用,sparkline 不需。
                             _fig = make_sparkline(
-                                _series,
+                                list(_series)[-60:],
                                 threshold_warn=_tw, threshold_crit=_tc,
-                                high_is_bad=(_hib if _hib is not None else True),
-                                lookback=60, height=70,
+                                height=70,
                             )
                             if _fig is not None:
                                 st.plotly_chart(
