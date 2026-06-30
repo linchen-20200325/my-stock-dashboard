@@ -642,7 +642,9 @@ def _check_contract_liab_yoy(stock_id: str) -> str:
 def _check_ma20_uptrend(df) -> str:
     """股價 > MA20 且 MA20 翻揚（近 5 日 MA20 斜率為正）。"""
     try:
-        _ma20 = df['Close'].rolling(20).mean()
+        # C5 v18.403:MA series 計算下沉 L2 SSOT
+        from src.compute.strategy.tech_indicators import calc_ma_series
+        _ma20 = calc_ma_series(df['Close'], window=20)
         if len(_ma20.dropna()) < 5:
             return '❓ 不足 25 日'
         _cur = float(df['Close'].iloc[-1])
@@ -694,13 +696,12 @@ def _check_bollinger_opening(df) -> str:
     故此處自行 rolling 計算整段 band-width series。
     """
     try:
+        # C5 v18.403:bandwidth series 計算下沉 L2 SSOT
+        from src.compute.strategy.tech_indicators import calc_bollinger_width_series
         _close = df['Close']
         if len(_close.dropna()) < 25:
             return '❓ 不足 25 日'
-        _ma = _close.rolling(20).mean()
-        _std = _close.rolling(20).std()
-        _width = (_ma + 2 * _std - (_ma - 2 * _std)) / _ma  # = 4*std/ma 標準化寬度
-        _width = _width.dropna()
+        _width = calc_bollinger_width_series(_close, window=20, k=2.0).dropna()
         if len(_width) < 25:
             return '❓ 不足 25 日'
         _recent = _width.iloc[-5:].mean()
@@ -725,13 +726,11 @@ def _check_kd_golden_cross(df) -> str:
     的交叉，故此處自行算 K/D series。
     """
     try:
+        # C5 v18.403:KD series 計算下沉 L2 SSOT
+        from src.compute.strategy.tech_indicators import calc_kd_series
         if len(df) < 11:
             return '❓ 不足 9 日'
-        _low_n = df['Low'].rolling(9).min()
-        _high_n = df['High'].rolling(9).max()
-        _rsv = ((df['Close'] - _low_n) / (_high_n - _low_n).replace(0, 1)) * 100
-        _k = _rsv.ewm(com=2, adjust=False).mean()
-        _d = _k.ewm(com=2, adjust=False).mean()
+        _k, _d = calc_kd_series(df['Close'], df['High'], df['Low'], period=9)
         _k = _k.dropna()
         _d = _d.dropna()
         if len(_k) < 2 or len(_d) < 2:
