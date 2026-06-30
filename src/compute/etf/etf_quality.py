@@ -13,7 +13,21 @@ import datetime as _dt
 import math
 
 import pandas as pd
-import streamlit as st
+
+# §8.2.A EX-CACHE-1 v18.422:條件 import streamlit + 無 UI 呼叫 fallback。
+# 本檔僅用 @st.cache_data 裝飾器(L109),無 st.session_state / st.error / st.markdown
+# 等真 UI 呼叫 → 對齊 P2-EX v18.393 letter compliant 標準。
+try:
+    import streamlit as st
+except ImportError:
+    class _NoOpST:
+        @staticmethod
+        def cache_data(*args, **kwargs):
+            if args and callable(args[0]):
+                return args[0]
+            return lambda f: f
+        cache_resource = cache_data
+    st = _NoOpST()  # noqa
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.signal_thresholds import (  # C2 v18.402:ETF 星等 SSOT
