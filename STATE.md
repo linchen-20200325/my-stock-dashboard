@@ -1,6 +1,18 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🚀 目前狀態(v18.437 — 清碼/死碼深掃 + SSOT 收斂批次)
+## 🚀 目前狀態(v18.438→441 — 清碼上線後 4 個 production latent bug 連修)
+
+✅ **v18.438→441 production 修復連鎖**(2026-06-30,已全 merge 到 main;起因:v18.437 清碼 merge 觸發 Streamlit 重新部署,暴露一批**久未執行/未綁定**的渲染路徑潛伏 bug。逐一 fail-loud 修 + 補守衛測試):
+- **v18.438(PR #435)**:ETF 單檔/組合分頁 `ImportError: cannot import name '_colored_box'` —— `render_etf_single/portfolio` late-import 互相從「對方 tab」拉 21+15 個 helper,但這些 helper 實在 `etf_render`(L4)/`etf_calc`(L2)/`etf_fetch`(L1)。改指向真 SSOT 來源,打斷 tab↔tab 循環。守衛 `test_etf_tab_imports.py`。
+- **v18.439(PR #436)**:總經/個股/個股組合/教學 **4 分頁全空白** —— `94a257d`「chore(dead): 刪 4 個 0-caller dead fn」誤把 `with tab_X: render_tab_X()` 綁定當死碼刪掉(pre-existing,早於本 session)。還原綁定(tab 內 lazy import 免循環 + 免 F401 再刪)。守衛 `test_app_tab_wiring.py`。
+- **v18.440(PR #437)**:教學分頁 `render_tab_edu` → `make_sparkline` 傳了已移除的 `high_is_bad/lookback` → TypeError **拖垮全頁**。對齊簽章(`list(_series)[-60:]`)+ **4 分頁 per-tab try/except 隔離**(`_render_tab_isolated`:單分頁錯只在該 tab st.error,不再拖垮全頁)。
+- **v18.441(PR #438)**:ETF 折溢價對 0050.TW 顯示假 **+5.16%**(實際 -0.12%)—— `calc_premium_discount` Path B2 假日兜底拿過時 NAV(06/29≈104)配當日市價(07/01≈109.45)硬配。加「NAV 早於市價 ≥1 天 → stale」守衛(與 G1 同原則)+ 全路徑回 `nav_date`/`price_date`,UI 標「NAV 最新日 X｜市價日 Y」。守衛 `test_premium_stale_guard.py`。
+- **SSOT / §8.2 檢查**:4 修全數過 —— 沿用既有 SSOT(`calc_premium_discount_pct` D4 / render/calc/fetch 真來源)、無新 inline magic、L5→L4/L2/L1 與 L6→L5 皆 downward、L1 fetcher 屬 EX-PASSTHRU-1、無新增反向 import。測試 **2514→2522 pass / 0 fail**。
+- **教訓**:這批 bug 都是「分頁久未綁定渲染 → code 與 helper 簽章漂移 + 空測試覆蓋走不到」造成;已補 per-tab 隔離(單分頁錯不拖垮全頁)+ 3 支守衛測試釘綁定/簽章。
+
+---
+
+## 🗂 前一階段(v18.437 — 清碼/死碼深掃 + SSOT 收斂批次)
 
 ✅ **v18.437 清碼/死碼深掃 + SSOT 收斂**(2026-06-30,branch `claude/dazzling-turing-QxI9m`,8 commit 已推送,測試 2514 pass / 0 fail):
 - **死碼**(`47629fe`):真死碼 3 處刪(`build_ai_data_table` 0-caller / `get_proxies` 被末尾別名遮蔽的無快取 def / scoring_engine 不可達 `WEIGHT_TABLES`)+ ~53 未用 import 機械清(ruff F401,以 F821 + 全測試交叉驗)。**翻案排除**:tab_stock/tab_macro 87 個 import(被 source-string SSOT 守衛 + except handler `ThreadPoolExecutor` NameError 防護綁定,機械清會 regression)+ `emoji_to_hex`(跨 repo auto-sync 檔,DO NOT EDIT)。
