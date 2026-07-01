@@ -129,3 +129,71 @@ def test_no_direct_requests_or_yfinance_import():
     pattern = re.compile(r'^\s*(?:import|from)\s+(requests|yfinance)\b', re.MULTILINE)
     matches = pattern.findall(src)
     assert not matches, f'market_strategy 不應 import {matches}'
+
+
+# ══════════════════════════════════════════════════════════════
+# v18.449:市場廣度 ad_ratio 真值接線 — production bug:
+# 原碼 ad_ratio 預設 1.0 + 門檻 `>1.0`，恰好同值 → 此因子從未真正生效過，
+# UI 上「❌ 市場廣度偏弱 (1.00)」永遠是同一個寫死值。修法：改選填(None=不評分，
+# 同 m1b_m2_gap 慣例)+ 真實資料源用 0-100% 百分比尺度(MARKET_BREADTH_NEUTRAL_PCT=50)。
+# ══════════════════════════════════════════════════════════════
+
+_MR_BASE_KW = dict(
+    index_close=110.0, ma60=105.0, ma120=100.0, foreign_buy=1e8,
+    ma60_prev=104.0, ma60_above_3d=True, ma120_above_3d=True, ma120_rising=True,
+)
+
+
+def test_market_regime_ad_ratio_none_skips_breadth_signal():
+    """ad_ratio=None(未傳)→ 不產生市場廣度 signal，也不計入 max_score。"""
+    r = market_strategy.market_regime(**_MR_BASE_KW, ad_ratio=None)
+    assert not any('市場廣度' in s for s in r['signals']), \
+        '未傳 ad_ratio 不該假裝有市場廣度資料'
+    # 固定 4 項保底(MA60+斜率+MA120+斜率+外資)= 4.0，未傳 ad_ratio/m1b_m2_gap 不加分母
+    assert r['max_score'] == 4.0
+
+
+def test_market_regime_ad_ratio_real_value_above_neutral():
+    """真實 ad_ratio(如 67.7%，> 50 中性線)→ 正向 + 計分,顯示百分比不是舊的比值格式。"""
+    r = market_strategy.market_regime(**_MR_BASE_KW, ad_ratio=67.7)
+    assert any('市場廣度正向' in s and '67.7%' in s for s in r['signals']), r['signals']
+    assert r['max_score'] == 5.0  # 4 保底 + ad_ratio 1
+
+
+def test_market_regime_ad_ratio_below_neutral_is_weak():
+    """ad_ratio < 50(如 45.0%)→ 廣度偏弱,不計分,但仍計入 max_score 分母。"""
+    r = market_strategy.market_regime(**_MR_BASE_KW, ad_ratio=45.0)
+    assert any('市場廣度偏弱' in s and '45.0%' in s for s in r['signals']), r['signals']
+    assert r['max_score'] == 5.0
+
+
+def test_market_regime_ad_ratio_scale_is_percentage_not_ratio():
+    """回歸守衛:ad_ratio=1.0(舊門檻剛好卡在這個數字)在新的 0-100% 尺度下應判定為
+    「偏弱」(1.0% 遠低於 50% 中性線),而非舊碼裡曾經誤判的邊界值。"""
+    r = market_strategy.market_regime(**_MR_BASE_KW, ad_ratio=1.0)
+    assert any('市場廣度偏弱' in s for s in r['signals'])
+
+
+def test_market_regime_max_score_accounts_for_both_optional_factors():
+    """ad_ratio 與 m1b_m2_gap 皆提供 → max_score = 4(保底) + 1 + 1 = 6。"""
+    r = market_strategy.market_regime(**_MR_BASE_KW, ad_ratio=60.0, m1b_m2_gap=0.5)
+    assert r['max_score'] == 6.0
+
+
+def test_get_market_assessment_forwards_ad_ratio(monkeypatch):
+    """get_market_assessment 需把 ad_ratio 轉發給 market_regime,不可在中途遺失
+    (v18.449 bug 的關鍵環節之一:get_market_assessment 原本連參數都沒有)。"""
+    _idx = pd.date_range(end=pd.Timestamp.now(), periods=130, freq='D')
+    df = pd.DataFrame({
+        'Close': [100.0] * 130,
+        'Volume': [1000.0] * 130,
+    }, index=_idx)
+    captured = {}
+    _orig = market_strategy.market_regime
+
+    def _spy(*a, **kw):
+        captured.update(kw)
+        return _orig(*a, **kw)
+    monkeypatch.setattr(market_strategy, 'market_regime', _spy)
+    market_strategy.get_market_assessment(df_index=df, foreign_net=0, ad_ratio=72.3)
+    assert captured.get('ad_ratio') == 72.3
