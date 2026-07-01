@@ -13,6 +13,9 @@ except ImportError:
     MARKET_SCORE_BULL = 3; MARKET_SCORE_NEUTRAL = 2
     EXPOSURE_BULL = 0.8; EXPOSURE_NEUTRAL = 0.5; EXPOSURE_BEAR = 0.2
 
+# v18.449:市場廣度中性門檻 SSOT(原 inline `1.0`，尺度語意錯誤，見下方 market_regime docstring）
+from shared.signal_thresholds import MARKET_BREADTH_NEUTRAL_PCT
+
 # P0-2 v18.369 深層拔毒:portfolio_exposure SSOT 收攏至 L2 risk_control(原本兩處同名異實作)
 from src.compute.risk.risk_control import portfolio_exposure  # noqa: F401
 
@@ -42,7 +45,7 @@ def fetch_market_data():
 
 
 # ── 核心：市場狀態判斷 (§5.1) ─────────────────────────────────
-def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=1.0,
+def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
                   ma60_prev=None, ma120_prev=None, vol_today=0, avg_vol_20=1,
                   m1b_m2_gap=None, m1b_m2_prev=None,
                   ma60_above_3d=False, ma60_below_3d=False,
@@ -53,6 +56,12 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=1.0,
     新增：MA60 連三日遲滯區間（Hysteresis）+ MA斜率過濾 + 宏爺 M1B-M2
 
     ma60_above_3d / ma60_below_3d: 最近3日收盤均站上/均跌破 MA60（防盤整雙巴）
+    ad_ratio:    float | None — 市場廣度(0-100% 上漲家數佔比,`fetch_adl` 的
+                 `ad_ratio` 欄位)；None = 不納入評分(選填,同 m1b_m2_gap 慣例)。
+                 v18.449 修復:原預設 `1.0` + 門檻 `>1.0` 是誤把「比值」尺度
+                 套用在「0-100% 百分比」資料源上，兩者恰好同值導致此因子從未
+                 真正生效（永遠顯示同一個寫死的 1.00）；改預設 None + 選填，
+                 未傳入時誠實不計分/不顯示，而非塞一個假中性值(§1 寧缺勿假)。
     m1b_m2_gap:  float | None — M1B年增率 - M2年增率（百分點）
     m1b_m2_prev: float | None — 上月 gap，用於判斷趨勢方向
     """
@@ -103,12 +112,13 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=1.0,
     else:
         signals.append(f'❌ 外資賣超 {abs(foreign_buy)/1e8:.1f}億')
 
-    # ④ 市場廣度
-    if ad_ratio > 1.0:
-        score += 1
-        signals.append(f'✅ 市場廣度正向 ({ad_ratio:.2f})')
-    else:
-        signals.append(f'❌ 市場廣度偏弱 ({ad_ratio:.2f})')
+    # ④ 市場廣度（選填，不傳則略過，同 m1b_m2_gap 慣例 — 未接真值前不假裝中性）
+    if ad_ratio is not None:
+        if ad_ratio > MARKET_BREADTH_NEUTRAL_PCT:
+            score += 1
+            signals.append(f'✅ 市場廣度正向 ({ad_ratio:.1f}%)')
+        else:
+            signals.append(f'❌ 市場廣度偏弱 ({ad_ratio:.1f}%)')
 
     # ⑤ 宏爺 M1B-M2 資金活水（選填，不傳則略過，向後相容）
     if m1b_m2_gap is not None:
@@ -135,7 +145,14 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=1.0,
     if _bullrun:
         signals.append(f'💹 瘋牛模式：成交量 {vol_today/avg_vol_20:.1f}x 均量')
 
-    _max = 6 if m1b_m2_gap is not None else 5
+    # v18.449:max_score 須反映「實際可拿到的滿分」——固定 4 項一定會評（MA60/MA60斜率
+    # /MA120/MA120斜率共 3.0 + 外資 1.0 = 4.0），ad_ratio/m1b_m2_gap 未傳入時不該計入
+    # 分母（否則分母恆虛高 1，score/max_score 永遠達不到滿分,即使全部訊號皆正向）。
+    _max = 4.0
+    if ad_ratio is not None:
+        _max += 1
+    if m1b_m2_gap is not None:
+        _max += 1
 
     return {
         'regime': regime,
@@ -173,12 +190,13 @@ def market_score(index_price, ma200, foreign_buy, volume, avg_volume=1000):
 
 
 def get_market_assessment(df_index=None, foreign_net=None,
-                          m1b_m2_gap=None, m1b_m2_prev=None):
+                          m1b_m2_gap=None, m1b_m2_prev=None, ad_ratio=None):
     """
     整合版市場評估（v4.0 升級版）
     同時輸出 regime (bull/neutral/bear) 與舊版 score
     m1b_m2_gap:  M1B年增率 - M2年增率（百分點）；None = 不納入評分
     m1b_m2_prev: 上月 gap，用於判斷趨勢方向
+    ad_ratio:    市場廣度(0-100% 上漲家數佔比)；None = 不納入評分(v18.449 新增)
     """
     import pandas as pd
     if df_index is None:
@@ -256,7 +274,7 @@ def get_market_assessment(df_index=None, foreign_net=None,
         foreign_net = mkt.get('foreign_net') or 0
 
     regime_result = market_regime(
-        current_price, ma60, ma120, foreign_net,
+        current_price, ma60, ma120, foreign_net, ad_ratio=ad_ratio,
         ma60_prev=ma60_prev, ma120_prev=None,
         vol_today=vol_today, avg_vol_20=avg_vol,
         m1b_m2_gap=m1b_m2_gap, m1b_m2_prev=m1b_m2_prev,

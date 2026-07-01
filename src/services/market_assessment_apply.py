@@ -27,6 +27,7 @@ def compute_and_apply_market_assessment(
     inst: dict,
     tw_raw: dict,
     margin,
+    df_adl=None,
 ) -> None:
     """計算市場狀態 + 寫 st.session_state['mkt_info']。
 
@@ -34,11 +35,15 @@ def compute_and_apply_market_assessment(
         inst: 三大法人 dict({外資/陸資, 投信, 自營商: {'net': ...}})
         tw_raw: 台股 raw OHLCV dict(由 fetch_macro_bundle 取)
         margin: 融資餘額(億)或 None
+        df_adl: ADL DataFrame(由 fetch_adl 取得,含 `ad_ratio` 欄位)或 None。
+                v18.449 新增:市場廣度真值來源;None = 不納入評分(§1 寧缺勿假,
+                不塞假中性值)。
 
     內部處理:
         - 從 inst 取「外資」淨買賣 net(億)→ 乘 1e8 還原元
         - tw_raw.get('台股加權指數')→ 大盤 DF
         - session_state.m1b_m2_info → M1B-M2 gap
+        - df_adl 最後一列的 ad_ratio → 市場廣度(選填)
         - get_market_assessment(...)主路徑,空時 df_index=None 備援
         - 融資 signals append 三段燈
         - 寫 mkt_info session_state
@@ -65,11 +70,22 @@ def compute_and_apply_market_assessment(
                      if _m1b2.get('m1b_yoy') is not None and _m1b2.get('m2_yoy') is not None
                      else None)
         _m1b2_prev = _m1b2.get('m1b_m2_gap_prev')  # 上月 gap(若有)
+        # 市場廣度真值(v18.449):df_adl 最後一列的 ad_ratio(0-100% 上漲家數佔比)。
+        # 無資料/空值 → None(不納入評分,§1 寧缺勿假,不塞假中性值)。
+        _ad_ratio_loaded = None
+        try:
+            if df_adl is not None and not df_adl.empty and 'ad_ratio' in df_adl.columns:
+                _v_adr = df_adl['ad_ratio'].iloc[-1]
+                if _v_adr == _v_adr:  # NaN 自身不等於自身
+                    _ad_ratio_loaded = float(_v_adr)
+        except Exception as _e_adr:
+            print(f'[市場評估] ad_ratio 解析失敗(不納入評分):{type(_e_adr).__name__}: {_e_adr}')
         _mkt_loaded = get_market_assessment(
             df_index=_twii_df_loaded,
             foreign_net=_foreign_net_loaded,
             m1b_m2_gap=_m1b2_gap,
             m1b_m2_prev=_m1b2_prev,
+            ad_ratio=_ad_ratio_loaded,
         )
         if _mkt_loaded:
             _append_margin_signals(_mkt_loaded, margin)
@@ -78,7 +94,8 @@ def compute_and_apply_market_assessment(
         else:
             # 備援:直接用 yfinance 重抓
             print('[市場評估] df_index 失敗,用 yfinance 備援')
-            _mkt_fb = get_market_assessment(df_index=None, foreign_net=_foreign_net_loaded)
+            _mkt_fb = get_market_assessment(df_index=None, foreign_net=_foreign_net_loaded,
+                                            ad_ratio=_ad_ratio_loaded)
             if _mkt_fb:
                 _append_margin_signals(_mkt_fb, margin)
                 st.session_state['mkt_info'] = _mkt_fb

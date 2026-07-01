@@ -1,6 +1,19 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🚀 目前狀態(v18.438→442 — 清碼上線後 5 個 production latent bug 連修)
+## 🚀 目前狀態(v18.443→449 — ETF 折溢價真實來源接線 + 總經 NameError + 市場廣度真值)
+
+✅ **v18.449**:市場廣度(市場廣度 chip)真值接線 + 頂部燈號 vs 五桶關係說明。user 質疑「五桶全紅但頂部仍顯示多頭」是否矛盾 —— 查證後**非 bug**,是設計上刻意分工(頂部=短期戰術訊號,只看 MA120 趨勢 + health;五桶=多時域風險分層,任一項亮紅即整桶紅)。但查證過程中意外發現真技術債:`market_strategy.market_regime()` 的 `ad_ratio`(市場廣度)參數預設 `1.0` + 門檻 `>1.0`,兩者恰好同值 → 此因子**從未真正生效過**,UI 上「❌ 市場廣度偏弱」永遠是同一個寫死值,且 `get_market_assessment()` 從未有這個參數可傳。user 明確要求「我都要真值+判斷過的」。修法:①改 `ad_ratio=None` 選填(同 `m1b_m2_gap` 慣例,未接真值前誠實不計分,不塞假中性值);② SSOT `MARKET_BREADTH_NEUTRAL_PCT=50.0`(0-100% 百分比尺度,對齊 `fetch_adl` 真實資料源與五桶 `adl` DangerSpec,修正原碼「比值尺度門檻套百分比資料源」的尺度錯誤);③ 打通 `tab_macro.py`(`df_adl_raw`,早就抓到手但從未傳出)→ `compute_and_apply_market_assessment`→ `get_market_assessment`→ `market_regime` 全鏈路;④ 修正 `max_score` 分母(原碼 5/6 恆虛高 1,因 ad_ratio 從未真正達標過)。頂部卡片新增 `st.caption` 說明兩組指標評估範疇不同。測試 +10(`test_market_strategy.py` 6 + `test_market_assessment_apply.py` 4)。全 suite 2548 passed。
+
+✅ **v18.447(PR #446)**:總經分頁全頁炸 `NameError: name 'render_section_mid' is not defined`(v18.440 per-tab 隔離器攔到,其他分頁不受影響)。根因:`section_long.py` 結尾殘留一行 F-7.1 B-4 抽出 `section_mid.py` 時沒清乾淨的雜物呼叫,該檔從未 import 它。真正呼叫鏈已在 `tab_macro.py`(orchestrator)正確存在。修:刪雜物呼叫(不補 import,否則重複渲染兩次)。掃描全部 macro section 檔案排除另 2 個誤判(皆為 docstring 內文字)。守衛 `test_macro_section_render_wiring.py`。
+
+✅ **v18.443→446(#442-445,4 輪疊代)**:ETF 折溢價 endpoint 三次猜錯 + user 親自用 Chrome DevTools 抓包才找到真相的完整過程 ——
+- v18.443/444:猜測 `openapi.twse.com.tw/v1/ETF/TaiwanStock*`(其實是 FinMind dataset 命名慣例,TWSE OpenAPI 無此路徑,一路 404)+ 修正代理機制誤用(`nas_relay_fetch` 只認 FastAPI 中繼站 `NAS_BASE_URL`,user 實際設的是 Squid `PROXY_URL`)。
+- v18.445:改猜 `mis.twse.com.tw/stock/etf_nav.jsp`(舊站改版前路徑,新站已無)。
+- **user 親自用 DevTools Network 面板**打開官方頁面「ETF發行單位變動及預估淨值揭露專區」,抓到背後真正呼叫的 API:`mis.twse.com.tw/stock/data/all_etf.txt`,並展開 JSON 用 0050/0051 真實數值驗算欄位對映(`g == (e-f)/f×100` 皆吻合)。
+- v18.446:接上正確 endpoint。仍抓不到值 → v18.448 追查發現兩個真根因:①`fetch_url(attempts=1)` 既有 bug(403 降級直連需連續 2 次,attempts=1 時第 1 次 403 直接放棄永遠到不了直連);②TWSE MIS 是舊式 Java/Tomcat 系統,瀏覽器實測請求帶 `JSESSIONID` cookie,暗示資料端點需要有效 session。改自建 `requests.Session()`:先 GET 揭露頁面暖身建立 session,再用同 session 取 `all_etf.txt`,「Squid 代理→直連」兩層明確 fallback。
+- **教訓**:endpoint 存在性/欄位語意純靠網路搜尋猜測風險極高(v18.443/444/445 三次全錯);user 親自用瀏覽器 DevTools 反查才是唯一可靠方法,之後遇到類似「資料抓不到」問題應優先請 user 協助抓包,而非繼續猜。
+
+---
 
 ✅ **v18.442(PR #440)**:ETF 折溢價對 0050.TW 又顯示假 **+5.07%「🔴 嚴禁追高」**(wantgoo 同日 -0.13%)—— 與 v18.441 **不同一條**:即時來源(yfinance navPrice / goodinfo)回「最後已公告淨值」被 `fetch_etf_nav_history` 硬戳 `_last_bd`(今日),0050 案該 NAV 實為 104.03(=06/29 過時值)被戳成 07/01 → 與當日市價 109.3 **同日** inner-join 成功、日期守門員 G1/G3 全過(**日期被造假成同日,擋不到**),算出假 +5.07%。原 G2 上限守門員(|prem|>2%)只對**主動式**生效,被動式 0050 漏接。修:新增 SSOT `PASSIVE_ETF_PREMIUM_MAX_PCT=3.0` + L2 `etf_premium_sanity_max(is_active)`,`calc_premium_discount` Path A/B/B2 上限守門員擴及全 ETF(超限回 stale + `stale_reason='nav_value_stale'`,UI 顯示「⏳ NAV 資料延遲」而非假溢價);近期淨值表同步過濾 |折溢價%|>上限的假列。守衛 `test_premium_stale_guard.py`(+3 case)。**誠實備註**:修後 0050 折溢價卡會顯示 N/A(NAV 來源給的是過時值),等 FinMind/TWSE 更新到同日才顯示真 -0.13% —— §1 寧缺勿假,不再拿過時 NAV 假配。
 

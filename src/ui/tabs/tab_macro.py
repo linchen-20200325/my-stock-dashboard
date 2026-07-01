@@ -371,7 +371,8 @@ def render_tab_macro():
             # ── 計算市場狀態(用已載入資料,不另外發請求)──────
             # P3-D13 v18.392:抽至 src/services/market_assessment_apply。
             from src.services.market_assessment_apply import compute_and_apply_market_assessment
-            compute_and_apply_market_assessment(inst=inst, tw_raw=tw_raw, margin=margin)
+            compute_and_apply_market_assessment(inst=inst, tw_raw=tw_raw, margin=margin,
+                                                df_adl=df_adl_raw)
         # ── 全域資料登錄中心:掃描所有已載入 DF → 寫 data_registry ────
         # P1-X v18.393:275 LOC 抽至 src/services/data_registry_scanner.py(L3 service)。
         # caller 注入 INTL/TW/TECH MAP 對齊 macro_registry_patch / macro_fetch_orchestrator
