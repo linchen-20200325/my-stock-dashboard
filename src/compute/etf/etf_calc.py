@@ -215,8 +215,15 @@ def calc_total_return_1y(df: pd.DataFrame, divs: pd.Series) -> float:
         return 0.0
 
 
-def calc_avg_yield(df: pd.DataFrame, divs: pd.Series, years: int = 5) -> float:
-    """近N年平均殖利率（孫慶龍7%公式）"""
+def calc_avg_yield(df: pd.DataFrame, divs: pd.Series, years: int = 5,
+                    require_full_years: bool = False) -> float | None:
+    """近N年平均殖利率（孫慶龍7%公式）。
+
+    require_full_years=True 時,若實際有效年度桶數 < years(如年輕 ETF 只上市 1 年,
+    5 個年度桶只有 1 桶有資料),回傳 None(§1 寧缺勿假),避免把「1 年均殖」誤標為
+    「N 年均殖」顯示給使用者(production bug:00981A 上市 <1 年卻顯示「5Y均殖%」)。
+    預設 False 維持既有呼叫端行為不變。
+    """
     if df.empty or divs.empty:
         return 0.0
     try:
@@ -232,6 +239,8 @@ def calc_avg_yield(df: pd.DataFrame, divs: pd.Series, years: int = 5) -> float:
             avg_p = float(df_y['Close'].mean())
             if avg_p > 0:
                 result.append(y_div / avg_p * 100)
+        if require_full_years and len(result) < years:
+            return None
         return round(sum(result) / len(result), 2) if result else 0.0
     except Exception as _e:
         print(f'[calc_avg_yield] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
@@ -594,14 +603,24 @@ def calc_mdd(df: pd.DataFrame) -> float:
         return None
 
 
-def calc_cagr(df: pd.DataFrame) -> float:
-    """年化報酬率 CAGR(%)"""
+def calc_cagr(df: pd.DataFrame, expected_years: float | None = None) -> float | None:
+    """年化報酬率 CAGR(%)。
+
+    expected_years:呼叫端宣稱的年期窗口(如「3Y CAGR」傳 3)。若提供且實際資料跨度
+    不足該年期的 90%(容許假日/資料缺口誤差),視為資料不足,回傳 None(§1 寧缺勿假)。
+    根因:calc_cagr 本身只看拿到的 df 跨度,無法得知呼叫端「宣稱」的年期 —— 年輕 ETF
+    (如上市僅 13 個月)被切 3 年窗只切到 13 個月資料,仍照樣外推年化,產生
+    「3Y CAGR」191% 這類不可能數字(production bug:00981A)。
+    預設 None 維持既有呼叫端行為不變(僅原本的 30 天下限)。
+    """
     try:
         if len(df) < 2:
             return 0.0
         days  = (df.index[-1] - df.index[0]).days
         if days < 30:
             return 0.0
+        if expected_years is not None and days < expected_years * 365.25 * 0.9:
+            return None
         y     = days / 365.25
         start = float(df['Close'].iloc[0])
         end   = float(df['Close'].iloc[-1])

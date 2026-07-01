@@ -28,6 +28,10 @@ from src.services.etf_grp_compare_service import (
     get_etf_dividends as fetch_etf_dividends,
     get_etf_info as fetch_etf_info,
 )
+# v18.452:中文名優先 MoneyDJ(fetch_etf_zh_name),與 etf_tab_single.py 同一 SSOT 抓法。
+# 舊寫法只用 yfinance shortName/longName,對台股 ETF 常回發行商英文名(如 "Yuanta")
+# 而非商品名 —— production bug:00981A.TW 名稱欄顯示錯誤。
+from src.data.etf import fetch_etf_zh_name as _fetch_zh_n
 from src.compute.etf import (
     calc_total_return_1y, calc_current_yield,
     calc_sharpe, calc_mdd, calc_cagr,
@@ -93,12 +97,16 @@ def _fetch_one_etf(ticker: str) -> dict:
             return _r
         _divs = fetch_etf_dividends(ticker)
         _info = fetch_etf_info(ticker) or {}
-        _r['name'] = (_info.get('shortName') or _info.get('longName')
+        # 中文名優先 MoneyDJ(同 etf_tab_single.py SSOT)→ fallback yfinance → ticker
+        _zh_name = _fetch_zh_n(ticker)
+        _r['name'] = (_zh_name or _info.get('shortName') or _info.get('longName')
                       or ticker)[:30]
         _r['price'] = round(float(_df['Close'].iloc[-1]), 2)
         _r['total_ret_1y'] = calc_total_return_1y(_df, _divs)
         _r['div_yield'] = calc_current_yield(_df, _divs)
-        _r['cagr_3y'] = calc_cagr(_df)
+        # expected_years=3:「3Y CAGR%」欄位宣稱 3 年窗,資料跨度不足 90% 回 None
+        # 而非外推(§1 寧缺勿假;production bug:年輕 ETF 假 191% CAGR)
+        _r['cagr_3y'] = calc_cagr(_df, expected_years=3)
         _r['sharpe'] = calc_sharpe(_df)
         _r['mdd'] = calc_mdd(_df)
         _r['expense_ratio'] = _info.get('annualReportExpenseRatio')
@@ -115,7 +123,9 @@ def _fetch_one_etf(ticker: str) -> dict:
         except Exception as _e_pd:
             print(f'[etf_tab_grp_compare] {ticker} 折溢價計算失敗:{type(_e_pd).__name__}: {_e_pd}')
         try:
-            _r['avg_yield_5y'] = calc_avg_yield(_df, _divs, years=5)
+            # require_full_years=True:「5Y均殖%」欄位宣稱 5 個完整年度桶,不足則 None
+            # (production bug:年輕 ETF 只 1 年資料卻顯示「5Y均殖%」誤導)
+            _r['avg_yield_5y'] = calc_avg_yield(_df, _divs, years=5, require_full_years=True)
         except Exception as _e_ay:
             print(f'[etf_tab_grp_compare] {ticker} 5y 平均殖利率計算失敗:{type(_e_ay).__name__}: {_e_ay}')
         _r['valuation_zone'] = _yield_valuation_zone(
