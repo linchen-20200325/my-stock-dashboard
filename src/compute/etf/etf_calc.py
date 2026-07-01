@@ -345,11 +345,13 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                         _gap_days = (_price_latest - _nav_date_used).days
                         if _gap_days >= 1:
                             print(f'[折溢價-B/stale-G1] {ticker}: NAV={_nav_d_only} 落後 {_gap_days}d')
-                            return _stale_payload
+                            return {**_stale_payload, 'nav_date': _nav_d_only,
+                                    'price_date': _price_latest.date()}
                         # G3：雙源同步落後 — NAV 早於前一交易日，配對 OK 但整體資料過時
                         if _nav_d_only < _PREV_BD:
                             print(f'[折溢價-B/stale-G3] {ticker}: NAV={_nav_d_only} < prev BD {_PREV_BD}')
-                            return _stale_payload
+                            return {**_stale_payload, 'nav_date': _nav_d_only,
+                                    'price_date': _price_latest.date()}
                         _row = _merged.iloc[-1]  # 最近一筆同日配對
                         _nav_v = float(_row['nav'])
                         _pr_v  = float(_row['Close'])
@@ -370,6 +372,16 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                         _price_s = _price_s.sort_index()
                         _nav_last_d = _nav_df.index.max()
                         _price_last_d = _price_s.index.max()
+                        # v18.441 修:NAV 比市價舊 ≥1 天 → 拿過時 NAV 配「當日已變動的市價」會
+                        # 產生假溢價(例 0050:06/29 NAV≈104 配 07/01 價≈109.45 → 假 +5.16%,
+                        # 實際同日折溢價僅 -0.12%)。與 Path B 的 G1 同原則(NAV 不得早於市價),
+                        # 標 stale 不硬配;原 gap<=4 兜底僅適用 NAV 同日或較新(假日 NAV 提前公布)。
+                        if (_price_last_d - _nav_last_d).days >= 1:
+                            print(f'[折溢價-B2/stale-G1b] {ticker}: NAV日 {_nav_last_d.date()} '
+                                  f'早於市價日 {_price_last_d.date()} → stale(避免假溢價)')
+                            return {**_stale_payload,
+                                    'nav_date': _nav_last_d.date(),
+                                    'price_date': _price_last_d.date()}
                         _gap = abs((_price_last_d - _nav_last_d).days)
                         if _gap <= 4:
                             _nav_v = float(_nav_df['nav'].iloc[-1])
@@ -384,7 +396,8 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                                   f'nav={_nav_v} price={_pr_v} prem={_prem}%')
                             return {'nav': _nav_v, 'price': _pr_v,
                                     'premium_pct': _prem, 'warning': _prem > 1.0,
-                                    'data_date': _dd}
+                                    'data_date': _dd, 'nav_date': _nav_last_d.date(),
+                                    'price_date': _price_last_d.date()}
                         print(f'[折溢價-B2] {ticker}: nav日與價日落差 {_gap}d >4，不配對')
 
         print(f'[折溢價] {ticker}: 所有路徑失敗，回傳 N/A')

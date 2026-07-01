@@ -397,7 +397,11 @@ def render_etf_single(gemini_fn=None):
     elif prem.get('stale_nav'):
         _prem_color  = '#8b949e'
         _prem_action = '⏳ NAV 資料延遲'
-        _prem_reason = 'NAV 資料早於前一交易日（FinMind/yfinance 同步延遲），暫不顯示折溢價以免誤判'
+        # v18.441:標出 NAV 最新日 vs 市價日,讓使用者看到「跨日錯位」是假溢價來源
+        _nd_s, _pd_s = prem.get('nav_date'), prem.get('price_date')
+        _dates_s = f'（NAV 最新日 {_nd_s}｜市價日 {_pd_s}）' if (_nd_s and _pd_s) else ''
+        _prem_reason = (f'NAV 最新日早於市價日{_dates_s} —— 拿過時 NAV 配當日已變動的市價會'
+                        '算出假溢價(§1 寧缺勿假),等 NAV 更新到與市價同日才顯示折溢價。')
     else:
         import os as _os_prx2
         _hp = bool(_os_prx2.environ.get('PROXY_URL') or _os_prx2.environ.get('NAS_PROXY_URL'))
