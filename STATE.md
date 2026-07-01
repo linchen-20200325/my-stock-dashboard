@@ -1,6 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🚀 目前狀態(v18.443→449 — ETF 折溢價真實來源接線 + 總經 NameError + 市場廣度真值)
+## 🚀 目前狀態(v18.452→453 — 6 處 undefined-name 崩潰 + ETF 假資料 + 個股組合負債比不一致,PR #451 已 merge)
+
+✅ **v18.452→453(PR #451,2026-07-01)**:user 回報「個股」「總經」「個股組合」三分頁陸續出錯 + 附完整 production log,逐一 root cause 確認全部同一根因(大檔案抽出成獨立模組時漏搬 import/變數):
+- **ETF 多檔比較假資料**:名稱欄只用 yfinance shortName(常回發行商英文名,非商品名)→ 改用既有 SSOT `fetch_etf_zh_name()`(MoneyDJ 中文名,原本只有 etf_tab_single.py 在用)。`calc_cagr`/`calc_avg_yield` 新增可選 `expected_years`/`require_full_years` 嚴格模式:年輕 ETF(如上市僅 13 個月)資料跨度不足宣稱年期時回 `None`(§1 寧缺勿假),不再外推出「00981A 假 191% 3Y CAGR」這類不可能數字。兩參數皆預設維持舊行為。
+- **6 處 undefined-name 崩潰**(用 pyflakes 全域靜態掃描一次找出,而非等 production log 逐一現形):`section_short.py`(總經 §5 短線急殺桶)缺 `TRAFFIC_GREEN/RED/YELLOW`/`os`/`plotly.graph_objects`/`BREADTH_BULL_PCT`/`BREADTH_NEUTRAL_PCT`/`add_danger_hlines` 共 8 處 import,ADL 資料一載入就 100% 全頁炸;`section_357_valuation.py`(個股 357 評價)結尾殘留一段完全重複且用未定義 `cheap2/fair2/dear2` 寫死的舊邏輯,直接刪除;`tab_stock_picker.py` 的 `_check_dividend_5y` 傳入未定義 `_t_yf`,導致「智慧選股」Stage 1/2 兩張表對任何股票都 100% NameError、整檔回退成全 ❓N/A(v18.374 抽 L1 fetcher 時漏改)—— 改用 `fetch_stock_history_1y` 已解析出的正確後綴建構真正的 `yfinance.Ticker`。另 2 處(`section_news_ai.py` 缺 `json`/`datetime`、`section_state.py` 缺 `pd`)尚未在 production 現形但屬同一顆未爆彈,一併清除。新增 `tests/test_no_undefined_names.py`(pyflakes 全域靜態守衛,CI 補裝),較功能測試更早、更全面攔截此類回歸;每個修復皆用 `git stash` 驗證「還原前程式碼 → 測試精準重現原始錯誤」。
+- **個股組合負債比判定不一致**:盤點 3 張健檢表格(批次財報體檢/MJ趨勢分數/智慧選股)後確認唯一真衝突是負債比 ——「批次財報體檢」用 40/60% 三級門檻,「智慧選股」Stage 1 獨立重算卻只用 <50% 二分,同一檔股票兩處顯示不同顏色。三率三升等其餘欄位盤點後確認是水準 vs 趨勢的不同面向,非同一事實重複,故不強行合併;Stage 2 六項籌碼技術指標與 MJ 月營收分皆為獨有資訊,維持現狀(user 核准此範圍,§8 對齊後才動工)。修法:`_check_debt_ratio` 新增可選 `fh_result` 參數,個股組合場景直接沿用 `analyze_financial_health()` 已算好的判定(該版本另有負債比為 0 時的重算 fallback,品質更完整);無 `fh_result` 的呼叫端(高息網等)行為不變。
+- 測試 2508 pass(fast lane)+ 新增 34 個測試(ETF 10 + undefined-name 守衛 7 + picker 17)。SSOT/§8.2 影響:無新增 SSOT 常數(沿用既有 `shared.colors`/`shared.signal_thresholds`/`analyze_financial_health`),無新增例外,無跨層反向 import。
+
+---
 
 ✅ **v18.449**:市場廣度(市場廣度 chip)真值接線 + 頂部燈號 vs 五桶關係說明。user 質疑「五桶全紅但頂部仍顯示多頭」是否矛盾 —— 查證後**非 bug**,是設計上刻意分工(頂部=短期戰術訊號,只看 MA120 趨勢 + health;五桶=多時域風險分層,任一項亮紅即整桶紅)。但查證過程中意外發現真技術債:`market_strategy.market_regime()` 的 `ad_ratio`(市場廣度)參數預設 `1.0` + 門檻 `>1.0`,兩者恰好同值 → 此因子**從未真正生效過**,UI 上「❌ 市場廣度偏弱」永遠是同一個寫死值,且 `get_market_assessment()` 從未有這個參數可傳。user 明確要求「我都要真值+判斷過的」。修法:①改 `ad_ratio=None` 選填(同 `m1b_m2_gap` 慣例,未接真值前誠實不計分,不塞假中性值);② SSOT `MARKET_BREADTH_NEUTRAL_PCT=50.0`(0-100% 百分比尺度,對齊 `fetch_adl` 真實資料源與五桶 `adl` DangerSpec,修正原碼「比值尺度門檻套百分比資料源」的尺度錯誤);③ 打通 `tab_macro.py`(`df_adl_raw`,早就抓到手但從未傳出)→ `compute_and_apply_market_assessment`→ `get_market_assessment`→ `market_regime` 全鏈路;④ 修正 `max_score` 分母(原碼 5/6 恆虛高 1,因 ad_ratio 從未真正達標過)。頂部卡片新增 `st.caption` 說明兩組指標評估範疇不同。測試 +10(`test_market_strategy.py` 6 + `test_market_assessment_apply.py` 4)。全 suite 2548 passed。
 
