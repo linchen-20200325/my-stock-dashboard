@@ -320,13 +320,19 @@ def _render_pe_river(sid2: str, name2: str, df2, qtr2) -> None:
     _qs = qtr2.sort_values(['年度', '季度']).reset_index(drop=True).copy()
     _qs['ttm_eps'] = pd.to_numeric(_qs['EPS'], errors='coerce').rolling(4, min_periods=4).sum()
     # 公告生效日:季末 + 60 天(涵蓋台股財報公告期 Q1=5/15、Q2=8/14、Q3=11/14、年報 3/31)
-    _qs['announce'] = pd.to_datetime(_qs['date'], errors='coerce') + pd.Timedelta(days=60)
+    # v18.454 hotfix:.astype('datetime64[ns]') 統一時間精度 — qtr2['date'] 為 FinMind
+    # 字串日期(pd.to_datetime 推得 datetime64[us]),df2['date'] 則來自 data_loader 的
+    # `.dt.date`(Python date object,再經下方 pd.to_datetime 推得 datetime64[s])。
+    # 兩側精度不同,merge_asof 直接炸 MergeError(production bug:「個股」分頁全炸,
+    # user 回報 incompatible merge keys dtype('<M8[s]') / dtype('<M8[us]'))。
+    _qs['announce'] = (pd.to_datetime(_qs['date'], errors='coerce')
+                        + pd.Timedelta(days=60)).astype('datetime64[ns]')
     _qa = _qs.dropna(subset=['ttm_eps', 'announce']).sort_values('announce').reset_index(drop=True)
 
     # ── 2. asof 對應到日線:每個交易日採用該日之前最後一筆已公告的 TTM EPS ──
     _rdates_pe = pd.to_datetime(
         df2['date'] if 'date' in df2.columns else pd.RangeIndex(len(df2)),
-        errors='coerce').reset_index(drop=True)
+        errors='coerce').astype('datetime64[ns]').reset_index(drop=True)
     _rclose_pe = pd.to_numeric(df2['close'], errors='coerce').reset_index(drop=True)
     _df_p = pd.DataFrame({'date': _rdates_pe, 'close': _rclose_pe}).sort_values('date').reset_index(drop=True)
     _df_a = _qa[['announce', 'ttm_eps']].rename(columns={'announce': 'date'})

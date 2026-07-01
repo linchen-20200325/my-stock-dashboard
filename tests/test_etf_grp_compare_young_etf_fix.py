@@ -26,7 +26,7 @@ import pandas as pd
 import pytest
 
 import src.ui.etf.etf_tab_grp_compare as grp
-from src.compute.etf.etf_calc import calc_avg_yield, calc_cagr
+from src.compute.etf.etf_calc import calc_avg_yield, calc_cagr, calc_total_return_1y
 
 
 def _price_df(n_days: int) -> pd.DataFrame:
@@ -95,6 +95,33 @@ class TestAvgYieldRequireFullYears:
         assert r is not None and r != 0.0
 
 
+class TestTotalReturn1yRequireFullPeriod:
+    """v18.454:年輕 ETF「1Y累積%」不得把上市至今報酬誤標為 1 年報酬(user 截圖
+    00981A 顯示「1Y累積 212.26%」—— 上市僅 13 個月,p_start 實為上市首日低價)。"""
+
+    def test_young_etf_short_history_returns_none(self):
+        """實際資料跨度僅 300 天(< 365 天的 90% = 328.5 天)+ require_full_period=True
+        → 應回 None,不得把「上市至今報酬」誤標為「1Y累積」。"""
+        df = _price_df(300)
+        divs = pd.Series(dtype=float)
+        r = calc_total_return_1y(df, divs, require_full_period=True)
+        assert r is None, f'資料跨度僅 300 天(<365*90%),不應算出 1Y 報酬:{r}'
+
+    def test_mature_etf_full_history_computes_real_value(self):
+        """資料跨度 ≥ 365 天(容差內)→ 正常算出數值,不誤殺老牌 ETF。"""
+        df = _price_df(500)
+        divs = pd.Series(dtype=float)
+        r = calc_total_return_1y(df, divs, require_full_period=True)
+        assert r is not None
+
+    def test_backward_compat_default_false(self):
+        """require_full_period 預設 False → 維持舊行為(短窗仍會算出數字)。"""
+        df = _price_df(300)
+        divs = pd.Series(dtype=float)
+        r = calc_total_return_1y(df, divs)
+        assert r is not None and r != 0.0
+
+
 # ── B. _fetch_one_etf 名稱來源 + 端到端布線 ──────────────────────
 
 class _FakeQuality(dict):
@@ -154,6 +181,27 @@ class TestFetchOneEtfNameFix:
         r = grp._fetch_one_etf('0050.TW')
         assert r['cagr_3y'] is not None
         assert r['avg_yield_5y'] is not None
+
+    def test_young_etf_1y_return_is_none_not_fake_212pct(self, monkeypatch):
+        """v18.454:年輕 ETF(資料跨度僅 300 天,<365*90%)不得顯示假「1Y累積%」
+        (user 截圖 00981A 顯示「1Y累積 212.26%」—— 實為上市至今報酬,非真 1 年報酬)。"""
+        _patch_fetch_one_etf_deps(
+            monkeypatch, df=_price_df(300), divs=pd.Series(dtype=float),
+            info={'shortName': 'Young Active ETF'}, zh_name='主動新進 ETF',
+        )
+        r = grp._fetch_one_etf('00981A.TW')
+        assert r['total_ret_1y'] is None, (
+            f'資料跨度僅 300 天,不應顯示 1Y累積% 數字:{r["total_ret_1y"]}'
+        )
+
+    def test_mature_etf_1y_return_still_populates(self, monkeypatch):
+        """老牌 ETF(資料跨度 ≥ 365 天)修復後仍應正常顯示 1Y 累積%,不誤殺。"""
+        _patch_fetch_one_etf_deps(
+            monkeypatch, df=_price_df(1900), divs=_divs_5_years(),
+            info={'shortName': 'Mature ETF'}, zh_name='老牌 ETF',
+        )
+        r = grp._fetch_one_etf('0050.TW')
+        assert r['total_ret_1y'] is not None
 
 
 if __name__ == '__main__':

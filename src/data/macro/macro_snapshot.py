@@ -119,7 +119,14 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
         fred_api_key: str  FRED API key(空字串 = 不嘗試 FRED 路徑,跳到 IMF)
 
     Returns:
-        dict | None: {'m1b_yoy': float, 'm2_yoy': float, 'source': str}
+        dict | None: {'m1b_yoy': float, 'm2_yoy': float, 'gap': float, 'source': str}
+
+    v18.454 hotfix:三個 return 皆補回 'gap' 欄(=round(m1b_yoy - m2_yoy, 2))。
+    根因:tw_macro.fetch_cbc_m1b_m2() Tier 0 本就算好 gap,但此函式重新打包
+    dict 時漏帶,導致 session_state['m1b_m2_info'] 從未有 'gap' 鍵 →
+    macro_helpers.py 依 .get('gap') 算頂部燈號/KPI 卡恆得 None → UI 顯示「—」;
+    而 section_long.py 的「策略3」區塊是自己重算 m1b_yoy-m2_yoy(未依賴此鍵),
+    才會出現「頂部顯示 —,下方策略3卻顯示真實 -12.63%」的不一致(user 回報)。
     """
     import pandas as _pd_m1
 
@@ -134,6 +141,7 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
                   f'M1B={_cbc_snap["m1b_yoy"]:.2f}% M2={_cbc_snap["m2_yoy"]:.2f}%')
             return {'m1b_yoy': _cbc_snap['m1b_yoy'],
                     'm2_yoy':  _cbc_snap['m2_yoy'],
+                    'gap':     _cbc_snap.get('gap'),
                     'source':  _src_label}
     except Exception as _tw_e:
         print(f'[M1B/tw_macro] ❌ {_tw_e}')
@@ -170,7 +178,8 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
             _m2_yoy_f = round((_df_fred_m2['value'].iloc[-1] /
                                _df_fred_m2['value'].iloc[-13] - 1) * 100, 2)
             print(f'[M1B/FRED] ✅ M1B={_m1b_yoy_f:.2f}% M2={_m2_yoy_f:.2f}%')
-            return {'m1b_yoy': _m1b_yoy_f, 'm2_yoy': _m2_yoy_f, 'source': 'FRED'}
+            return {'m1b_yoy': _m1b_yoy_f, 'm2_yoy': _m2_yoy_f,
+                    'gap': round(_m1b_yoy_f - _m2_yoy_f, 2), 'source': 'FRED'}
     except Exception as _fred_e:
         print(f'[M1B/FRED] ❌ {_fred_e}')
 
@@ -203,6 +212,7 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
                     print(f'[M1B/IMF] ✅ year={_imf_m1_sorted[-1][0]} '
                           f'M1B={_m1b_yoy_imf:.2f}% M2={_m2_yoy_imf:.2f}%')
                     return {'m1b_yoy': _m1b_yoy_imf, 'm2_yoy': _m2_yoy_imf,
+                            'gap': round(_m1b_yoy_imf - _m2_yoy_imf, 2),
                             'source': f'IMF({_imf_m1_sorted[-1][0]})'}
     except Exception as _imf_e:
         print(f'[M1B/IMF] ❌ {_imf_e}')

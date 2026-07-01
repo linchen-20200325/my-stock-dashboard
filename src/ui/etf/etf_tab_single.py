@@ -198,12 +198,20 @@ def render_etf_single(gemini_fn=None):
 
     # ── 策略一：以息養股避雷 ─────────────────────────────────────
     st.markdown('#### 🧠 策略一：以息養股避雷')
-    total_ret = calc_total_return_1y(df, divs)
+    # require_full_period=True:「近1年含息總報酬」宣稱 1 年窗,資料跨度不足 90% 回 None
+    # 而非把「上市至今報酬」誤標為「1Y」(§1 寧缺勿假,同源修正見 etf_calc.calc_total_return_1y)。
+    total_ret = calc_total_return_1y(df, divs, require_full_period=True)
     cur_yield = calc_current_yield(df, divs)
     ca, cb    = st.columns(2)
-    ca.metric('近1年含息總報酬', f'{total_ret:.2f}%')
+    ca.metric('近1年含息總報酬', f'{total_ret:.2f}%' if total_ret is not None else 'N/A')
     cb.metric('現金殖利率（近12M）', f'{cur_yield:.2f}%')
-    if cur_yield > 0 and total_ret < cur_yield:
+    if total_ret is None:
+        st.info('ℹ️ 上市未滿 1 年，資料不足以計算真實「近1年」總報酬（避免用上市至今報酬誤導）')
+        _teacher_conclusion('郭俊宏',
+                            '上市未滿 1 年，資料不足',
+                            '無法套用近1年報酬策略',
+                            '待滿 1 年歷史後再評估')
+    elif cur_yield > 0 and total_ret < cur_yield:
         _colored_box('⚠️ <b>紅燈警示</b>：賺了股息賠了價差，侵蝕本金中，<b>不宜作為核心資產</b>', 'red')
         _teacher_conclusion('郭俊宏',
                             f'含息總報酬 {total_ret:.1f}% < 殖利率 {cur_yield:.1f}%',
@@ -258,7 +266,9 @@ def render_etf_single(gemini_fn=None):
         _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='略減（< 10%）', delta_color='inverse')
     else:
         _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='✅ 增長 / 持平', delta_color='normal')
-    if cur_yield > 0 and total_ret < cur_yield:
+    if total_ret is None:
+        _mc2.metric('含息報酬 − 殖利率', 'N/A', delta='上市未滿1年')
+    elif cur_yield > 0 and total_ret < cur_yield:
         _mc2.metric('含息報酬 − 殖利率', f'{total_ret - cur_yield:+.1f}pp',
                     delta='🔴 本金侵蝕', delta_color='inverse')
     elif cur_yield > 0:

@@ -102,7 +102,9 @@ def _fetch_one_etf(ticker: str) -> dict:
         _r['name'] = (_zh_name or _info.get('shortName') or _info.get('longName')
                       or ticker)[:30]
         _r['price'] = round(float(_df['Close'].iloc[-1]), 2)
-        _r['total_ret_1y'] = calc_total_return_1y(_df, _divs)
+        # require_full_period=True:「1Y累積%」欄位宣稱 1 年窗,資料跨度不足 90% 回 None
+        # 而非把「上市至今報酬」誤標為「1Y累積」(production bug:年輕 ETF 假 212%)
+        _r['total_ret_1y'] = calc_total_return_1y(_df, _divs, require_full_period=True)
         _r['div_yield'] = calc_current_yield(_df, _divs)
         # expected_years=3:「3Y CAGR%」欄位宣稱 3 年窗,資料跨度不足 90% 回 None
         # 而非外推(§1 寧缺勿假;production bug:年輕 ETF 假 191% CAGR)
