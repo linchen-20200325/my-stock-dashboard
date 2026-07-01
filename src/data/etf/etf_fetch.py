@@ -1427,7 +1427,7 @@ def _fetch_all_etf_json(session, proxies, verify, timeout):
 
 
 @st.cache_data(ttl=TTL_15MIN, max_entries=100, show_spinner=False)
-def fetch_etf_official_premium(ticker: str, ver: int = 5) -> dict | None:
+def fetch_etf_official_premium(ticker: str, ver: int = 6) -> dict | None:
     """抓 TWSE 官方「全體投信 ETF 即時預估淨值揭露」聚合 feed(繞 geo-block)。
 
     v18.446:改用 **經瀏覽器 DevTools Network 面板實測確認**的正確端點
@@ -1447,8 +1447,14 @@ def fetch_etf_official_premium(ticker: str, ver: int = 5) -> dict | None:
     永遠不會嘗試直連 —— 改自建 session 後不再依賴 `fetch_url`,直接做「Squid 代理 → 直連」
     兩層 fallback。
 
-    回應結構:**頂層是陣列**,每個元素代表「一家投信公司」的區塊,各自帶
-    `msgArray`(該投信旗下所有 ETF)。欄位(依實測):
+    v18.450 hotfix:production log 證實 v18.448 連線已成功(HTTP 200 + json() 正常),
+    但解析卡在「回應非預期陣列結構」——**回應頂層其實不是裸陣列,是 `{"a1": [...]}`**
+    (一個物件,鍵名剛好叫 "a1")。先前對照瀏覽器 DevTools JSON 樹狀展開畫面時,誤把
+    這個 "a1" 當成 devtools 內部的陣列索引標示,實際上它就是回應本體的 key。已改為
+    dict/list 兩種頂層皆相容解析。
+
+    回應結構:**頂層是物件,鍵 `a1` 對應陣列**(24 個「投信公司」區塊,各自帶
+    `msgArray`——該投信旗下所有 ETF)。欄位(依實測):
       a=代號  b=簡稱  c=已發行受益權單位數  d=與前日差異數
       **e=成交價(市價)**  **f=投信預估淨值(iNAV)**  **g=折溢價率(%) = (e-f)/f×100**
       h=前一營業日單位淨值  i=日期(YYYYMMDD)  j=時間(HH:MM:SS)  k=flag
@@ -1493,8 +1499,20 @@ def fetch_etf_official_premium(ticker: str, ver: int = 5) -> dict | None:
         print(f'[ETF 折溢價/MIS] {code}: 代理+直連皆失敗,走既有 NAV 鏈')
         return None
     try:
+        # v18.450 hotfix:production log 證實連線成功(HTTP 200 + json() 正常解析),
+        # 但真實回應**不是**裸陣列 —— 是 `{"a1": [...24 個投信區塊...]}`,外層多包一層
+        # 物件、鍵名剛好叫 "a1"(先前對照瀏覽器 DevTools JSON 樹狀展開時，把這個當成
+        # devtools 的內部陣列索引標示，誤判成裸陣列 —— 實際上它就是回應本體的 key)。
+        # 相容處理:list 直接用;dict 則優先取 "a1"，找不到就退而在所有 value 裡找第一個
+        # list-of-dict(防止 key 名稱未來改變)。
+        if isinstance(_blocks, dict):
+            _candidate = _blocks.get('a1')
+            if not isinstance(_candidate, list):
+                _candidate = next((v for v in _blocks.values() if isinstance(v, list)), None)
+            _blocks = _candidate
         if not isinstance(_blocks, list):
-            print(f'[ETF 折溢價/MIS] {code}: all_etf.txt 回應非預期陣列結構')
+            print(f'[ETF 折溢價/MIS] {code}: all_etf.txt 回應非預期結構(非 list 也非'
+                  f' {{"a1": [...]}})')
             return None
         _row = None
         for _blk in _blocks:

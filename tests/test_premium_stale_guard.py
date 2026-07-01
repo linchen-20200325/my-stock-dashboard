@@ -15,6 +15,18 @@ import pytest
 import src.compute.etf.etf_calc as ec
 
 
+@pytest.fixture(autouse=True)
+def _force_official_premium_miss(monkeypatch):
+    """v18.450:本檔測試的是 calc_premium_discount 的**舊 5 段 NAV 鏈**(Path A/B/B2),
+    但 v18.443 起 Path 0(fetch_etf_official_premium,MIS 官方即時源)排在最前面。
+    `@st.cache_data` 的快取跨測試檔案持續存在(同一 pytest process),若
+    tests/test_etf_official_premium.py 先跑並留下 0050.TW 的 mock 結果快取,本檔測試會
+    在無感情況下命中該快取,而非測試原本要驗證的舊鏈邏輯 —— 曾造成 4 個測試失敗
+    (單獨跑本檔會過,和其他檔一起跑全 suite 才會現形,典型測試汙染)。
+    強制 Path 0 回 None,讓每個測試都乾淨落到本檔真正要測的舊鏈。"""
+    monkeypatch.setattr(ec, 'fetch_etf_official_premium', lambda *a, **k: None)
+
+
 def _nav_hist(dates, navs):
     return pd.DataFrame({'date': [str(d) for d in dates], 'nav': navs})
 
