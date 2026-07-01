@@ -189,7 +189,8 @@ def calc_current_yield(df: pd.DataFrame, divs: pd.Series) -> float:
         return 0.0
     try:
         cutoff = df.index[-1] - timedelta(days=365)
-        annual_div = float(divs[divs.index >= cutoff].sum())
+        _didx = divs.index.tz_localize(None) if divs.index.tz is not None else divs.index
+        annual_div = float(divs[_didx >= cutoff].sum())
         price = float(df['Close'].iloc[-1])
         return round(annual_div / price * 100, 2) if price > 0 else 0.0
     except Exception as _e:
@@ -222,7 +223,8 @@ def calc_total_return_1y(df: pd.DataFrame, divs: pd.Series,
                 return None
         p_start = float(df_1y['Close'].iloc[0])
         p_end   = float(df_1y['Close'].iloc[-1])
-        div_sum = float(divs[divs.index >= cutoff].sum()) if not divs.empty else 0.0
+        _didx = divs.index.tz_localize(None) if (not divs.empty and divs.index.tz is not None) else divs.index
+        div_sum = float(divs[_didx >= cutoff].sum()) if not divs.empty else 0.0
         return round((p_end - p_start + div_sum) / p_start * 100, 2)
     except Exception as _e:
         print(f'[calc_total_return_1y] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
@@ -242,11 +244,12 @@ def calc_avg_yield(df: pd.DataFrame, divs: pd.Series, years: int = 5,
         return 0.0
     try:
         now = df.index[-1]
+        _didx = divs.index.tz_localize(None) if divs.index.tz is not None else divs.index
         result = []
         for y in range(years):
             y_start = now - timedelta(days=365 * (y + 1))
             y_end   = now - timedelta(days=365 * y)
-            y_div   = float(divs[(divs.index >= y_start) & (divs.index < y_end)].sum())
+            y_div   = float(divs[(_didx >= y_start) & (_didx < y_end)].sum())
             df_y    = df[(df.index >= y_start) & (df.index < y_end)]
             if df_y.empty or y_div <= 0:
                 continue
@@ -279,8 +282,8 @@ def check_vcp_signal(df: pd.DataFrame) -> dict:
         r['stop_loss']   = round(last_c * (1 - STOP_LOSS_PCT), 2)
 
         # 週K波幅（近5週）
-        df_w = df.resample('W').agg({'High':'max','Low':'min',
-                                       'Close':'last','Volume':'sum'}).dropna()
+        df_w = df.resample('W-SUN').agg({'High':'max','Low':'min',
+                                         'Close':'last','Volume':'sum'}).dropna()
         if len(df_w) >= 6:
             ranges = []
             for i in range(-5, 0):

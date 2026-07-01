@@ -44,6 +44,11 @@ def _tw_now_str(): return _tw_now().strftime('%Y-%m-%d %H:%M')
 
 def _bps():
     try:
+        import urllib3 as _ul3
+        _ul3.disable_warnings(_ul3.exceptions.InsecureRequestWarning)
+    except Exception:
+        pass
+    try:
         from src.data.stock import build_proxy_session as _b
         s = _b()
     except Exception:
@@ -109,11 +114,6 @@ except Exception as _oauth_err:
 # ── App 初始化閘門（每個 Session 僅執行一次，防重複迴圈）────────────
 if '_app_boot_done' not in st.session_state:
     st.session_state['_app_boot_done'] = True
-    # 首次啟動清除舊快取，後續 rerun 不再執行（防 API Storm）
-    try:
-        st.cache_data.clear()
-    except Exception:
-        pass
     # [Phase 3] 從 URL query_params 恢復關鍵狀態（手機斷線重連可保留設定）
     try:
         _qp = st.query_params
@@ -429,13 +429,6 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════════
 # ── Sidebar ────────────────────
 with st.sidebar:
-    st.markdown('<div style="text-align:center;padding:8px 0;font-size:15px;font-weight:900;color:#e6edf3;">&#128202; 台股AI戰情室 v3.0</div>', unsafe_allow_html=True)
-    st.markdown('---')
-    _today_sb = datetime.date.today()
-    _wd_sb = {0:'一',1:'二',2:'三',3:'四',4:'五',5:'六',6:'日'}[_today_sb.weekday()]
-    _trade_sb = '✅ 交易日' if _today_sb.weekday() < 5 else '❌ 非交易日'
-    st.caption(f'{_today_sb.strftime("%Y/%m/%d")} 週{_wd_sb}  {_trade_sb}')
-    st.markdown('---')
     if st.button('🔄 強制刷新數據', key='_sb_force_refresh', use_container_width=True,
                  help='清除所有快取並重新抓取最新資料'):
         st.cache_data.clear()

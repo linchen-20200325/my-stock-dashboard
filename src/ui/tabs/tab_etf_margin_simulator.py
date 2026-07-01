@@ -61,7 +61,7 @@ def _fetch_etf_history(symbol: str, years: int) -> pd.Series | None:
             pass
         return close
     except Exception as e:
-        st.error(f"❌ yfinance 抓 {symbol} 失敗：{type(e).__name__}: {e}")
+        print(f"[_fetch_etf_history] {symbol} 失敗：{type(e).__name__}: {e}")
         return None
 
 

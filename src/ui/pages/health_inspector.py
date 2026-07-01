@@ -1077,13 +1077,18 @@ def render_data_health_raw():
             except Exception:
                 _mgr_r = None
             _mgr_name = (_mgr_r or {}).get('name')
+            # S-H3 v18.244:讀 module-level accessor(原 st.session_state)
+            _mgr_last_err = None
+            if not _mgr_name:
+                try:
+                    from src.data.etf.etf_fetch import get_etf_manager_last_err as _get_mgr_err
+                    _mgr_last_err = _get_mgr_err().get(tk.replace('.tw', '.TW'))
+                except Exception:
+                    pass
             rows.append(_row('基金經理人',
                              str(_dt_r.date.today()) if _mgr_name else None, 'static',
                              optional=True,
-                             # S-H3 v18.244:讀 module-level accessor(原 st.session_state)
-                             error_msg=(None if _mgr_name else
-                                        __import__('etf_fetch').get_etf_manager_last_err().get(
-                                            tk.replace('.tw', '.TW'))),
+                             error_msg=_mgr_last_err,
                              source='MoneyDJ / SITCA / Yuanta',
                              endpoint='Basic0004/0001/0006/0011 → SITCA → 官網',
                              proxy=True))
@@ -1260,7 +1265,11 @@ def render_data_health_raw():
                                 proxy=True))
                         else:
                             # S-H3 v18.244:讀 module-level accessor(原 st.session_state)
-                            _last_err = (__import__('etf_fetch').get_etf_manager_last_err()).get(_tk_p)
+                            try:
+                                from src.data.etf.etf_fetch import get_etf_manager_last_err as _gele
+                                _last_err = _gele().get(_tk_p)
+                            except Exception:
+                                _last_err = None
                             # v1.1：主動式 ETF Yuanta 也失敗 → 黃燈 na（公開資料受限）
                             _err_str = (
                                 '主動式 ETF — 公開資料受限'

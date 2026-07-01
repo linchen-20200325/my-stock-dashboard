@@ -1254,8 +1254,9 @@ def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
             _rec['first_seen'] = _today
         _rec.update({'name': _name, 'since': (manager or {}).get('since'),
                      'last_seen': _today})
-        # 首次紀錄此 ticker 時設 first_seen（容器存活期內當任期備援）
-        _rec.setdefault('first_seen', _today)
+        # 首次紀錄此 ticker 時設 first_seen：優先用持久檔的值，避免容器重啟後
+        # tenure 歸零導致全部顯示「新任」；只有持久檔也沒有時才設為今天。
+        _rec.setdefault('first_seen', _repo_rec.get('first_seen') or _today)
         _rec.setdefault('history', _rec.get('history', []))
         _db[_key] = _rec
 

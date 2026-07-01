@@ -170,8 +170,9 @@ def render_etf_single(gemini_fn=None):
                     _tenure_txt = '任期未揭露'
                 mc1, mc2 = st.columns([1, 1])
                 mc1.metric('基金經理人', _mgr['name'])
-                mc2.metric('任期', _tenure_txt,
-                           help='ETF 績效與經理人選股/換股策略高度相關，任期越短越需觀察。')
+                _tenure_help = ('ETF 績效與經理人選股/換股策略高度相關，任期越短越需觀察。'
+                                + ('（任期資料不足，以系統首見日估算）' if _chg.get('tenure_approx') else ''))
+                mc2.metric('任期', _tenure_txt, help=_tenure_help)
                 if _chg.get('changed'):
                     _colored_box(
                         f'🔁 <b>經理人異動</b>：<b>{_chg["prev"]}</b> → '
@@ -233,9 +234,10 @@ def render_etf_single(gemini_fn=None):
     # ── MK 框架 #1+#2+#7：配息健康度 + 3Y 年化報酬（汰弱五項中前兩項 + 留強 3-3-3 第二項）──
     st.markdown('#### 💧 配息健康度 + 年化報酬（MK 框架燈號）')
     _now2 = df.index[-1]
-    _12m_div = float(divs[(divs.index >= _now2 - timedelta(days=365))].sum()) if not divs.empty else 0.0
-    _prev12m_div = float(divs[(divs.index >= _now2 - timedelta(days=730))
-                              & (divs.index < _now2 - timedelta(days=365))].sum()) if not divs.empty else 0.0
+    _divs_idx = divs.index.tz_localize(None) if (not divs.empty and divs.index.tz is not None) else divs.index
+    _12m_div = float(divs[(_divs_idx >= _now2 - timedelta(days=365))].sum()) if not divs.empty else 0.0
+    _prev12m_div = float(divs[(_divs_idx >= _now2 - timedelta(days=730))
+                              & (_divs_idx < _now2 - timedelta(days=365))].sum()) if not divs.empty else 0.0
     _div_yoy = ((_12m_div - _prev12m_div) / _prev12m_div * 100) if _prev12m_div > 0 else None
     _3y_cutoff = _now2 - timedelta(days=365 * 3)
     _df_3y = df[df.index >= _3y_cutoff]
