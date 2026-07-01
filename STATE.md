@@ -1,6 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🚀 目前狀態(v18.452→453 — 6 處 undefined-name 崩潰 + ETF 假資料 + 個股組合負債比不一致,PR #451 已 merge)
+## 🚀 目前狀態(v18.454 — M1B-M2 恆「—」+ 個股 MergeError 全炸 + ETF 假 1Y 報酬,PR #453 已 merge)
+
+✅ **v18.454(PR #453,2026-07-01)**:user 回報 4 項 production 問題,2 個獨立 agent 交叉驗證後逐一 root cause,3 項可修即修 + 2 項需 user 協助(誠實回報,不猜測):
+- **總經頁「M1B-M2 資金動能」頂部燈號恆顯示「—」**(但下方「策略3」區塊正確顯示 -12.63%):`tw_macro.fetch_cbc_m1b_m2()` 本就算好 `gap`,但 `macro_snapshot.fetch_m1b_m2_block()` 重新打包 dict 時,CBC/FRED/IMF 三個 return 路徑全部漏帶 `'gap'` 鍵 → `session_state['m1b_m2_info']` 從未有此鍵 → `macro_helpers.py` 算頂部燈號/KPI 卡(依 `.get('gap')`)恆得 None → 顯示「—」;「策略3」區塊是自己內聯重算 `m1b_yoy-m2_yoy`(不依賴此鍵)才不受影響。補回三路徑 `gap` 欄(schema-additive)。守衛 `test_m1b_m2_gap_wiring.py`(+4)。
+- **「個股」分頁整頁 MergeError 崩潰**(`incompatible merge keys dtype('<M8[s]') and dtype('<M8[us]')`,v18.440 per-tab 隔離器攔到不拖垮其他分頁):`section_357_valuation.py:333` PE 本益比河流圖 `merge_asof` 兩側日期精度不同 —— 股價側(data_loader `.dt.date` 物件經 `pd.to_datetime` → `datetime64[s]`)vs 季報側(FinMind 字串日期 `pd.to_datetime` → `datetime64[us]`),兩側從未顯式對齊精度。pandas merge_asof 要求兩側 key dtype 完全一致(含精度),不同即炸。兩側補 `.astype('datetime64[ns]')`。守衛 `test_pe_river_merge_dtype.py`(+4 純邏輯 + 1 slow AppTest)。
+- **ETF 多檔比較表「1Y累積%」對年輕 ETF 顯示假 212%**(user 截圖 00981A 上市僅 13 個月):與 v18.452 `calc_cagr` 同源根因 —— `calc_total_return_1y` 只看「有沒有資料」不看「是否真橫跨 1 年」,年輕 ETF 的 `p_start` 實為上市首日低價而非真 365 天前價格。新增可選 `require_full_period`,資料跨度不足 365 天 90% 回 None(§1 寧缺勿假);兩 ETF UI 呼叫端(single/grp_compare)補齊 None 顯示 N/A。守衛併入 `test_etf_grp_compare_young_etf_fix.py`(+5)。
+- **需 user 協助的 2 項(WONTFIX 待輸入,誠實回報不猜測)**:①ETF 中文名仍顯示發行商英文名 —— `fetch_etf_zh_name` 靠讀 MoneyDJ `<title>` regex,連 0050 都 FAIL,疑 MoneyDJ 改版標題格式;需 user 用瀏覽器 DevTools 複製真實 `<title>` 內容(對齊 v18.443-446 教訓:endpoint/格式純猜三次全錯,user 抓包才可靠)。②MJ 季財報分恆為 0 —— 需連續 2 季 snapshot 才能算 delta,但 snapshot 存本機 `data_cache/mj_snapshots/`(.gitignore,Streamlit Cloud 重啟即清空),永遠湊不齊 2 季 → 架構決策(改存 GitHub / Google Sheets 等持久層),待 user 定奪。
+- 測試 2520 pass(fast lane)。SSOT/§8.2:無新增 SSOT 常數 / 無新增例外 / 無跨層反向 import;M1B-M2 修復為「正確透傳 tw_macro 早已算好的 gap」而非消費端重算。
+
+---
+
+## 🗂 前一階段(v18.452→453 — 6 處 undefined-name 崩潰 + ETF 假資料 + 個股組合負債比不一致,PR #451 已 merge)
 
 ✅ **v18.452→453(PR #451,2026-07-01)**:user 回報「個股」「總經」「個股組合」三分頁陸續出錯 + 附完整 production log,逐一 root cause 確認全部同一根因(大檔案抽出成獨立模組時漏搬 import/變數):
 - **ETF 多檔比較假資料**:名稱欄只用 yfinance shortName(常回發行商英文名,非商品名)→ 改用既有 SSOT `fetch_etf_zh_name()`(MoneyDJ 中文名,原本只有 etf_tab_single.py 在用)。`calc_cagr`/`calc_avg_yield` 新增可選 `expected_years`/`require_full_years` 嚴格模式:年輕 ETF(如上市僅 13 個月)資料跨度不足宣稱年期時回 `None`(§1 寧缺勿假),不再外推出「00981A 假 191% 3Y CAGR」這類不可能數字。兩參數皆預設維持舊行為。
