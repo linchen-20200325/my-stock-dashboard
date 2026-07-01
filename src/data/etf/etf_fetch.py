@@ -1392,28 +1392,36 @@ def _safe_float(s, strip_chars: str = ',%') -> float | None:
 
 
 @st.cache_data(ttl=TTL_15MIN, max_entries=100, show_spinner=False)
-def fetch_etf_official_premium(ticker: str, ver: int = 3) -> dict | None:
-    """抓 TWSE 官方「ETF 即時估計淨值 + 折溢價」(繞 geo-block)。
+def fetch_etf_official_premium(ticker: str, ver: int = 4) -> dict | None:
+    """抓 TWSE 官方「全體投信 ETF 即時預估淨值揭露」聚合 feed(繞 geo-block)。
 
-    v18.445:改用 TWSE MIS **即時預估淨值揭露** 端點
-    `https://mis.twse.com.tw/stock/etf_nav.jsp?ex=tse`(官方「ETF 申贖資訊及即時淨值揭露
-    專區」JSON feed)。這是 wantgoo 等站盤中即時折溢價的同源,**盤中每 ~15 秒更新**。
-    回傳 `msgArray` 每檔欄位(官方介接格式 ver 1.5):
-      a=代號 b=簡稱 e=前日已公告淨值 **f=即時估計淨值(iNAV)** **g=折溢價率(%)**
-      **h=市價/參考價** i=日期(YYYYMMDD) j=時間
+    v18.446:改用 **經瀏覽器 DevTools Network 面板實測確認**的正確端點
+    `https://mis.twse.com.tw/stock/data/all_etf.txt` —— 對應官方頁面「ETF發行單位變動及
+    預估淨值揭露專區」(`mis.twse.com.tw/stock/various-areas/etf-price/
+    indicator-disclosure-etf`)背後打的 API,每 15 秒輪詢一次。
 
-    取代 v18.443/444 誤用的 `openapi.twse.com.tw/v1/ETF/TaiwanStock*`(那組是 FinMind
-    風格 dataset 名,TWSE OpenAPI 無此路徑 → 404,故從未抓到值 → 一路掉回 yfinance 過時
-    navPrice → 假折溢價)。
+    v18.443/444/445 均猜錯 endpoint(`openapi.twse.com.tw/v1/ETF/TaiwanStock*` 是
+    FinMind dataset 名非 TWSE 真實路徑;`etf_nav.jsp` 是舊站改版前的猜測,新站已無此
+    路徑),兩者從未真的抓到值,一路 fallback 到 yfinance 過時 navPrice → 假折溢價。
+    這次的 URL + 欄位對映已用瀏覽器實際連線驗證(0050 / 0051 皆驗算 `g` 與 `(e-f)/f`
+    吻合)。
 
-    走 `fetch_url`(Squid `PROXY_URL` → 直連 → FastAPI 中繼站 `NAS_BASE_URL`,家用台灣
-    IP)。僅台股 ETF(代號首碼數字)。**完全未設代理 → 回 None**(MIS 會 geo-block,不空
-    試 + 測試不觸網),呼叫端(`etf_calc.calc_premium_discount`)自動 fallback 既有 5 段
-    NAV 鏈。§8.2:L1 Data,經 src.data.proxy(L1)取數。
+    回應結構:**頂層是陣列**,每個元素代表「一家投信公司」的區塊,各自帶
+    `msgArray`(該投信旗下所有 ETF)。欄位(依實測):
+      a=代號  b=簡稱  c=已發行受益權單位數  d=與前日差異數
+      **e=成交價(市價)**  **f=投信預估淨值(iNAV)**  **g=折溢價率(%) = (e-f)/f×100**
+      h=前一營業日單位淨值  i=日期(YYYYMMDD)  j=時間(HH:MM:SS)  k=flag
+
+    需跨全部投信區塊找目標代號(0050 位於元大投信區塊)。走 `fetch_url`(Squid
+    `PROXY_URL` → 直連 → FastAPI 中繼站 `NAS_BASE_URL`,家用台灣 IP)。僅台股 ETF
+    (代號首碼數字)。**完全未設代理 → 回 None**(不空試 + 測試不觸網),呼叫端
+    (`etf_calc.calc_premium_discount`)自動 fallback 既有 5 段 NAV 鏈。§8.2:L1 Data,
+    經 src.data.proxy(L1)取數。
 
     Returns
     -------
-    dict {'nav'(=iNAV),'price','premium_pct','source'[,'data_date']} 或 None
+    dict {'nav'(=投信預估淨值),'price'(=成交價),'premium_pct','source'[,'data_date']}
+    或 None
     """
     from shared.etf_codes import bare_etf_code as _bare
     code = _bare(ticker)
@@ -1427,48 +1435,60 @@ def fetch_etf_official_premium(ticker: str, ver: int = 3) -> dict | None:
         print(f'[ETF 折溢價/MIS] {code}: 未設任何代理(PROXY_URL / NAS_BASE_URL),'
               '略過 → 走既有 NAV 鏈')
         return None
-    _hdr = {'Referer': 'https://mis.twse.com.tw/stock/fibest.jsp',
-            'Accept': 'application/json, text/plain, */*'}
-    # ex=tse(上市 ETF)+ ex=otc(上櫃 ETF)
-    for _ex in ('tse', 'otc'):
-        _url = f'https://mis.twse.com.tw/stock/etf_nav.jsp?ex={_ex}'
-        try:
-            # fetch_url 自動走 Squid(PROXY_URL)→ 直連 → FastAPI 中繼站(NAS_BASE_URL)
-            _r = _fu(_url, headers=_hdr, timeout=15, attempts=1)
-            if _r is None or getattr(_r, 'status_code', 0) != 200:
+    _hdr = {
+        'Referer': ('https://mis.twse.com.tw/stock/various-areas/etf-price/'
+                    'indicator-disclosure-etf?lang=zhHant'),
+        'Accept': 'application/json, text/plain, */*',
+    }
+    _url = 'https://mis.twse.com.tw/stock/data/all_etf.txt'
+    try:
+        # fetch_url 自動走 Squid(PROXY_URL)→ 直連 → FastAPI 中繼站(NAS_BASE_URL)
+        _r = _fu(_url, headers=_hdr, timeout=15, attempts=1)
+        if _r is None or getattr(_r, 'status_code', 0) != 200:
+            print(f'[ETF 折溢價/MIS] {code}: all_etf.txt '
+                  f'HTTP {getattr(_r, "status_code", None)}(代理未連上或站點異常)')
+            return None
+        _blocks = _r.json()
+        if not isinstance(_blocks, list):
+            print(f'[ETF 折溢價/MIS] {code}: all_etf.txt 回應非預期陣列結構')
+            return None
+        _row = None
+        for _blk in _blocks:
+            if not isinstance(_blk, dict):
                 continue
-            _j = _r.json()
-            _arr = _j.get('msgArray') if isinstance(_j, dict) else None
-            if not _arr:
-                continue
-            _row = next((x for x in _arr
-                         if str(x.get('a', '')).strip() == code), None)
-            if _row is None:
-                continue
-            _inav = _safe_float(_row.get('f'))   # 即時估計淨值(iNAV)
-            _price = _safe_float(_row.get('h'))  # 市價 / 參考價
-            _prem = _safe_float(_row.get('g'))   # 折溢價率(%)
-            # g 缺 → 由 iNAV+市價 反推(fail loud 保底)
-            if _prem is None and _inav and _price and _inav > 0:
-                _prem = round((_price - _inav) / _inav * 100, 2)
-            _date = str(_row.get('i', '')).strip()   # YYYYMMDD
-            _time = str(_row.get('j', '')).strip()
-            if _inav and _inav > 0 and _prem is not None:
-                _dd = (f'{_date[:4]}/{_date[4:6]}/{_date[6:]}'
-                       if len(_date) == 8 and _date.isdigit() else (_date or None))
-                print(f'[ETF 折溢價/MIS] ✅ {code}: iNAV={_inav} 市價={_price} '
-                      f'折溢價={_prem}% ({_dd} {_time} via 家用台灣 IP)')
-                _prov_log('fetch_etf_official_premium',
-                          f'TWSE-MIS:etf_nav:{_ex}', code, f'prem={_prem}%')
-                _out = {'nav': _inav, 'price': _price, 'premium_pct': _prem,
-                        'source': f'TWSE-MIS:etf_nav:{_ex}'}
-                if _dd:
-                    _out['data_date'] = _dd
-                return _out
-        except Exception as _e:
-            print(f'[ETF 折溢價/MIS] {code} ex={_ex}: {type(_e).__name__}: {_e}')
-    print(f'[ETF 折溢價/MIS] {code}: MIS etf_nav 未回傳 {code}'
-          '(檢查代理是否連上台灣 IP;非交易時段 MIS 亦可能無即時值)')
+            for _m in (_blk.get('msgArray') or []):
+                if str(_m.get('a', '')).strip() == code:
+                    _row = _m
+                    break
+            if _row is not None:
+                break
+        if _row is None:
+            print(f'[ETF 折溢價/MIS] {code}: 全 24 家投信區塊皆無此代號')
+            return None
+        _price = _safe_float(_row.get('e'))  # 成交價(市價)
+        _nav = _safe_float(_row.get('f'))    # 投信/總代理人預估淨值(iNAV)
+        _prem = _safe_float(_row.get('g'))   # 折溢價率(%)
+        # g 缺 → 由 (成交價-淨值)/淨值 反推(fail loud 保底)
+        if _prem is None and _nav and _price and _nav > 0:
+            _prem = round((_price - _nav) / _nav * 100, 2)
+        _date = str(_row.get('i', '')).strip()  # YYYYMMDD
+        _time = str(_row.get('j', '')).strip()
+        if _nav and _nav > 0 and _prem is not None:
+            _dd = (f'{_date[:4]}/{_date[4:6]}/{_date[6:]}'
+                   if len(_date) == 8 and _date.isdigit() else (_date or None))
+            print(f'[ETF 折溢價/MIS] ✅ {code}: 淨值={_nav} 成交價={_price} '
+                  f'折溢價={_prem}% ({_dd} {_time} via 家用台灣 IP)')
+            _prov_log('fetch_etf_official_premium', 'TWSE-MIS:all_etf',
+                      code, f'prem={_prem}%')
+            _out = {'nav': _nav, 'price': _price, 'premium_pct': _prem,
+                    'source': 'TWSE-MIS:all_etf'}
+            if _dd:
+                _out['data_date'] = _dd
+            return _out
+    except Exception as _e:
+        print(f'[ETF 折溢價/MIS] {code}: {type(_e).__name__}: {_e}')
+    print(f'[ETF 折溢價/MIS] {code}: MIS all_etf 未回傳可用值'
+          '(檢查代理是否連上台灣 IP;非交易時段可能無即時值)')
     return None
 
 
