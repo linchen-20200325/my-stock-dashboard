@@ -115,5 +115,61 @@ def test_resolved_ticker_used_for_dividend_ticker_not_bare_code():
     assert _seen.get('symbol') == '2330.TW', _seen
 
 
+# ── v18.453:負債比與「批次財報體檢」判定一致化(去除同頁兩處門檻不一致)──
+
+class TestDebtRatioReuseFinancialHealth:
+    """user 回報「個股組合」頁面同一檔股票,上方財報體檢顯示🟡,下方智慧選股卻顯示✅
+    (40/60% 三級 vs 舊版 <50% 二分,同一個負債比字面數字被兩套門檻各判一次)。
+
+    修法:_check_debt_ratio 新增可選 fh_result 參數,個股組合場景已有
+    analyze_financial_health() 結果時直接沿用其 Status,兩處必然一致。
+    """
+
+    def test_reuses_fh_status_pass(self):
+        from src.ui.tabs.tab_stock_picker import _check_debt_ratio
+        fh = {'financial_structure_module': {'Debt_Ratio': {'Value': '35.0%', 'Status': 'Pass'}}}
+        assert _check_debt_ratio({}, fh) == '✅ 35.0%'
+
+    def test_reuses_fh_status_warning(self):
+        from src.ui.tabs.tab_stock_picker import _check_debt_ratio
+        fh = {'financial_structure_module': {'Debt_Ratio': {'Value': '52.0%', 'Status': 'Warning'}}}
+        assert _check_debt_ratio({}, fh) == '⚠️ 52.0%'
+
+    def test_reuses_fh_status_fail(self):
+        from src.ui.tabs.tab_stock_picker import _check_debt_ratio
+        fh = {'financial_structure_module': {'Debt_Ratio': {'Value': '75.0%', 'Status': 'Fail'}}}
+        assert _check_debt_ratio({}, fh) == '❌ 75.0%'
+
+    def test_45pct_no_longer_disagrees_with_financial_health(self):
+        """回歸核心案例:45% 負債比。舊版 Stage 1(<50% 二分)判 ✅,財報體檢
+        (<40% Pass / 40-60% Warning)判 🟡 Warning —— 同頁兩種顏色。
+        修復後 Stage 1 直接沿用財報體檢的 Warning,不再各說各話。"""
+        from src.ui.tabs.tab_stock_picker import _check_debt_ratio
+        fh = {'financial_structure_module': {'Debt_Ratio': {'Value': '45.0%', 'Status': 'Warning'}}}
+        _stage1_result = _check_debt_ratio({'負債比率(%)': 45.0}, fh)
+        assert _stage1_result.startswith('⚠️'), (
+            f'Stage 1 應與財報體檢一致判 Warning,而非獨立算出的 ✅:{_stage1_result}'
+        )
+
+    def test_falls_back_to_independent_calc_when_no_fh_result(self):
+        """fh_result=None(如「高息網」等未跑財報體檢的呼叫端)→ 行為與改動前完全相同。"""
+        from src.ui.tabs.tab_stock_picker import _check_debt_ratio
+        assert _check_debt_ratio({'負債比率(%)': 45.0}, None) == '✅ 45.0%'
+        assert _check_debt_ratio({'負債比率(%)': 65.0}, None) == '❌ 65.0%'
+
+    def test_falls_back_when_fh_status_is_na(self):
+        """財報體檢對此股判 N/A(如金融股/資料不足)時,不放棄 —— 落回獨立計算。"""
+        from src.ui.tabs.tab_stock_picker import _check_debt_ratio
+        fh = {'financial_structure_module': {'Debt_Ratio': {'Value': 'N/A', 'Status': 'N/A'}}}
+        assert _check_debt_ratio({'負債比率(%)': 45.0}, fh) == '✅ 45.0%'
+
+    def test_check_one_stock_threads_fh_result_through(self):
+        """端到端:_check_one_stock 收到 fh_result 時,debt_ratio_label 真的沿用財報體檢判定。"""
+        from src.ui.tabs.tab_stock_picker import _check_one_stock
+        fh = {'financial_structure_module': {'Debt_Ratio': {'Value': '45.0%', 'Status': 'Warning'}}}
+        result = _check_one_stock('2330', datetime.date.today(), fh_result=fh)
+        assert result['debt_ratio_label'] == '⚠️ 45.0%'
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
