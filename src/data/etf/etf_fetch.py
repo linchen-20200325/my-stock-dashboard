@@ -1391,8 +1391,43 @@ def _safe_float(s, strip_chars: str = ',%') -> float | None:
         return None
 
 
+def _fetch_all_etf_json(session, proxies, verify, timeout):
+    """對 MIS all_etf.txt 做「暖身 + 正式請求」兩段式抓取，回傳 parsed JSON 或 None。
+
+    v18.448:TWSE MIS 是舊式 Java/Tomcat 系統(`.jsp` 端點遍布),瀏覽器 DevTools 實測
+    確認請求會帶 `JSESSIONID` cookie —— 這類系統常見設計是資料端點需要「先訪問過前台頁面
+    建立 session」才會正常回應，裸 GET data 端點（無 cookie）容易被拒。故本函式先 GET
+    揭露頁面（讓 session cookie 寫入同一個 `requests.Session()`），再用同一個 session
+    取 `all_etf.txt`（沿用 cookie）。任何一步非 200 即視為失敗，回 None 讓呼叫端記錄原因。
+    """
+    _disclosure_url = ('https://mis.twse.com.tw/stock/various-areas/etf-price/'
+                        'indicator-disclosure-etf?lang=zhHant')
+    _data_url = 'https://mis.twse.com.tw/stock/data/all_etf.txt'
+    _hdr = {
+        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                       'AppleWebKit/537.36 (KHTML, like Gecko) '
+                       'Chrome/124.0.0.0 Safari/537.36'),
+        'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
+    }
+    _r_warmup = session.get(_disclosure_url, headers=_hdr, proxies=proxies,
+                            verify=verify, timeout=timeout)
+    if _r_warmup.status_code != 200:
+        print(f'[ETF 折溢價/MIS] 暖身請求 HTTP {_r_warmup.status_code}'
+              f'(揭露頁面本身連不上,建立 session 失敗)')
+        return None, _r_warmup.status_code
+    _r = session.get(_data_url,
+                     headers={**_hdr, 'Referer': _disclosure_url,
+                              'Accept': 'application/json, text/plain, */*'},
+                     proxies=proxies, verify=verify, timeout=timeout)
+    if _r.status_code != 200:
+        print(f'[ETF 折溢價/MIS] all_etf.txt HTTP {_r.status_code}'
+              f'(暖身 OK 但正式資料端點被拒,可能仍需其他驗證)')
+        return None, _r.status_code
+    return _r.json(), 200
+
+
 @st.cache_data(ttl=TTL_15MIN, max_entries=100, show_spinner=False)
-def fetch_etf_official_premium(ticker: str, ver: int = 4) -> dict | None:
+def fetch_etf_official_premium(ticker: str, ver: int = 5) -> dict | None:
     """抓 TWSE 官方「全體投信 ETF 即時預估淨值揭露」聚合 feed(繞 geo-block)。
 
     v18.446:改用 **經瀏覽器 DevTools Network 面板實測確認**的正確端點
@@ -1403,8 +1438,14 @@ def fetch_etf_official_premium(ticker: str, ver: int = 4) -> dict | None:
     v18.443/444/445 均猜錯 endpoint(`openapi.twse.com.tw/v1/ETF/TaiwanStock*` 是
     FinMind dataset 名非 TWSE 真實路徑;`etf_nav.jsp` 是舊站改版前的猜測,新站已無此
     路徑),兩者從未真的抓到值,一路 fallback 到 yfinance 過時 navPrice → 假折溢價。
-    這次的 URL + 欄位對映已用瀏覽器實際連線驗證(0050 / 0051 皆驗算 `g` 與 `(e-f)/f`
-    吻合)。
+
+    v18.448:v18.446 上線後 endpoint 正確,但仍未抓到值。改用**自建 session 兩段式請求**
+    (`_fetch_all_etf_json`):先 GET 揭露頁面(暖身,讓 MIS 這套舊式 Java/Tomcat 系統
+    寫入 `JSESSIONID`——瀏覽器 DevTools 實測請求確實帶此 cookie,裸 GET data 端點無 cookie
+    易被拒),再用同一 session 取 `all_etf.txt`。同時修正 `fetch_url(attempts=1)` 的既有
+    bug:該函式的降級直連只在「連續 2 次 403」才觸發,`attempts=1` 時 1 次 403 就直接放棄,
+    永遠不會嘗試直連 —— 改自建 session 後不再依賴 `fetch_url`,直接做「Squid 代理 → 直連」
+    兩層 fallback。
 
     回應結構:**頂層是陣列**,每個元素代表「一家投信公司」的區塊,各自帶
     `msgArray`(該投信旗下所有 ETF)。欄位(依實測):
@@ -1412,11 +1453,9 @@ def fetch_etf_official_premium(ticker: str, ver: int = 4) -> dict | None:
       **e=成交價(市價)**  **f=投信預估淨值(iNAV)**  **g=折溢價率(%) = (e-f)/f×100**
       h=前一營業日單位淨值  i=日期(YYYYMMDD)  j=時間(HH:MM:SS)  k=flag
 
-    需跨全部投信區塊找目標代號(0050 位於元大投信區塊)。走 `fetch_url`(Squid
-    `PROXY_URL` → 直連 → FastAPI 中繼站 `NAS_BASE_URL`,家用台灣 IP)。僅台股 ETF
-    (代號首碼數字)。**完全未設代理 → 回 None**(不空試 + 測試不觸網),呼叫端
-    (`etf_calc.calc_premium_discount`)自動 fallback 既有 5 段 NAV 鏈。§8.2:L1 Data,
-    經 src.data.proxy(L1)取數。
+    需跨全部投信區塊找目標代號(0050 位於元大投信區塊)。僅台股 ETF(代號首碼數字)。
+    **完全未設代理 → 回 None**(不空試 + 測試不觸網),呼叫端(`etf_calc.calc_premium_discount`)
+    自動 fallback 既有 5 段 NAV 鏈。§8.2:L1 Data。
 
     Returns
     -------
@@ -1428,27 +1467,32 @@ def fetch_etf_official_premium(ticker: str, ver: int = 4) -> dict | None:
     # 僅台股 ETF(海外 ETF 走 yfinance;TWSE 無資料)
     if not code or not code[:1].isdigit():
         return None
-    # 無任何代理(Squid PROXY_URL 或 FastAPI NAS_BASE_URL 皆無)→ MIS 會 geo-block,
-    # 不空試(亦讓測試環境不觸網),直接讓呼叫端走既有鏈。
-    from src.data.proxy import fetch_url as _fu, get_proxy_config, get_nas_relay
-    if get_proxy_config() is None and get_nas_relay() is None:
-        print(f'[ETF 折溢價/MIS] {code}: 未設任何代理(PROXY_URL / NAS_BASE_URL),'
+    from src.data.proxy.proxy_helper import get_proxy_config
+    _proxy_cfg = get_proxy_config()
+    if _proxy_cfg is None:
+        print(f'[ETF 折溢價/MIS] {code}: 未設 PROXY_URL/NAS_PROXY_URL,'
               '略過 → 走既有 NAV 鏈')
         return None
-    _hdr = {
-        'Referer': ('https://mis.twse.com.tw/stock/various-areas/etf-price/'
-                    'indicator-disclosure-etf?lang=zhHant'),
-        'Accept': 'application/json, text/plain, */*',
-    }
-    _url = 'https://mis.twse.com.tw/stock/data/all_etf.txt'
+    import requests as _requests
+    _blocks = None
+    # Squid 代理(家用台灣 IP)優先;失敗才降級直連(Streamlit Cloud 美國 IP 大概率仍被擋,
+    # 但保留此路徑對齊 fetch_url 既有「代理→直連」慣例,不平白少一次機會)。
+    for _label, _proxies, _verify in (('Squid代理', _proxy_cfg, False),
+                                       ('直連', {}, True)):
+        try:
+            _sess = _requests.Session()
+            _blocks, _status = _fetch_all_etf_json(_sess, _proxies, _verify, timeout=15)
+            if _blocks is not None:
+                print(f'[ETF 折溢價/MIS] {code}: 經{_label}成功取得 all_etf.txt')
+                break
+            print(f'[ETF 折溢價/MIS] {code}: 經{_label}失敗(HTTP {_status}),嘗試下一步')
+        except Exception as _e_conn:
+            print(f'[ETF 折溢價/MIS] {code}: 經{_label}例外 '
+                  f'{type(_e_conn).__name__}: {_e_conn}')
+    if _blocks is None:
+        print(f'[ETF 折溢價/MIS] {code}: 代理+直連皆失敗,走既有 NAV 鏈')
+        return None
     try:
-        # fetch_url 自動走 Squid(PROXY_URL)→ 直連 → FastAPI 中繼站(NAS_BASE_URL)
-        _r = _fu(_url, headers=_hdr, timeout=15, attempts=1)
-        if _r is None or getattr(_r, 'status_code', 0) != 200:
-            print(f'[ETF 折溢價/MIS] {code}: all_etf.txt '
-                  f'HTTP {getattr(_r, "status_code", None)}(代理未連上或站點異常)')
-            return None
-        _blocks = _r.json()
         if not isinstance(_blocks, list):
             print(f'[ETF 折溢價/MIS] {code}: all_etf.txt 回應非預期陣列結構')
             return None
@@ -1477,7 +1521,7 @@ def fetch_etf_official_premium(ticker: str, ver: int = 4) -> dict | None:
             _dd = (f'{_date[:4]}/{_date[4:6]}/{_date[6:]}'
                    if len(_date) == 8 and _date.isdigit() else (_date or None))
             print(f'[ETF 折溢價/MIS] ✅ {code}: 淨值={_nav} 成交價={_price} '
-                  f'折溢價={_prem}% ({_dd} {_time} via 家用台灣 IP)')
+                  f'折溢價={_prem}% ({_dd} {_time})')
             _prov_log('fetch_etf_official_premium', 'TWSE-MIS:all_etf',
                       code, f'prem={_prem}%')
             _out = {'nav': _nav, 'price': _price, 'premium_pct': _prem,
@@ -1488,7 +1532,7 @@ def fetch_etf_official_premium(ticker: str, ver: int = 4) -> dict | None:
     except Exception as _e:
         print(f'[ETF 折溢價/MIS] {code}: {type(_e).__name__}: {_e}')
     print(f'[ETF 折溢價/MIS] {code}: MIS all_etf 未回傳可用值'
-          '(檢查代理是否連上台灣 IP;非交易時段可能無即時值)')
+          '(非交易時段可能無即時值)')
     return None
 
 
