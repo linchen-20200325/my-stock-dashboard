@@ -421,6 +421,3 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         st.markdown(f'<div style="color:#c9d1d9;font-size:13px;padding:3px 0;">• {_tc2}</div>', unsafe_allow_html=True)
     
     st.markdown('<hr style="border-color:#21262d;margin:14px 0;">',unsafe_allow_html=True)
-    
-    # F-7.1 B-4:Section 4 (§八) 中期 / 總經拼圖抽至 src/ui/tabs/macro/section_mid.py
-    render_section_mid(_load_heavy, intl_s, tech_s, tw_s)
