@@ -283,13 +283,19 @@ def _check_one_stock(ticker: str, today, yf=None) -> dict:
     from src.data.stock.picker_fetcher import fetch_stock_history_1y
     _r = _blank_pick_result(ticker)
     # ── 抓 K 線(P1-1a:L1 fetcher 內含 .TW/.TWO 雙後綴 fallback)──
-    _df = fetch_stock_history_1y(ticker)
+    _df, _resolved_ticker = fetch_stock_history_1y(ticker)
     if _df is None:
         _r['ma20_label'] = '❌ 抓不到 K 線'
         _r['macd_label'] = '❌ 抓不到 K 線'
         _r['kd_label'] = '❌ 抓不到 K 線'
         _r['boll_label'] = '❌ 抓不到 K 線'
         return _r
+    # v18.452 hotfix:5Y 配息檢查需要 yfinance.Ticker 物件(讀 .dividends),
+    # 原碼引用未定義的 `_t_yf` → 每檔必炸 NameError,ThreadPoolExecutor 捕獲後
+    # 整檔回退成全 ❓N/A(production bug:Stage 1/2 兩張表無論輸入什麼股票全部
+    # 顯示 N/A、0/9、0/6)。改用 fetch_stock_history_1y 已解析出的正確後綴建構。
+    import yfinance as _yf_mod
+    _t_yf = _yf_mod.Ticker(_resolved_ticker)
 
     # ── 一次抓財報（多個 Stage 1 helpers 共用）──────────────
     _fs = _fetch_fs_safe(ticker)

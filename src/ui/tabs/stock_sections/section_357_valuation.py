@@ -146,32 +146,6 @@ padding:12px 16px;margin:8px 0;">
             st.plotly_chart(fig_d, width='stretch', config={'displayModeBar': False})
     else:
         st.warning('⚠️ 無配息記錄（成長股）— 建議改用本益比評估')
-    # ── 357 動態建議 ──
-    _asset_type = '📈 大盤' if sid2 in ('^TWII', 'TAIEX') else '📊 個股'
-    if avg_div2 > 0:
-        _grade = ("便宜價🟢 — 策略1：積極買進！" if price2 <= cheap2
-                  else ("合理價🟡 — 策略1：可分批布局，等殖利率拉升再加碼" if price2 <= fair2
-                        else ("昂貴價🔴 — 策略1：謹慎操作，等待回檔再進場" if price2 <= dear2
-                              else "超過昂貴價🔴 — 策略1：絕對不追高，等待大幅修正")))
-        _357_verdict = f'**{sid2} {name2}** 現價 {price2:.1f} 處於 {_grade}，近5年均股利 {avg_div2:.2f} 元'
-        _357_c = TRAFFIC_GREEN if price2 <= cheap2 else (TRAFFIC_YELLOW if price2 <= fair2 else TRAFFIC_RED)
-        st.markdown(
-            f'{_asset_type} **`{sid2}` {name2}** ｜ 策略1·357法則判斷'
-        )
-        # R-UI-1 v18.412:inline `<div border-left>` → border_left_banner SSOT
-        st.markdown(border_left_banner(
-            _357_c, _357_verdict,
-            border_width=4, padding_y=10, padding_x=14, font_size=13, margin_y=6,
-            bold=True, bg='#161b22',
-        ), unsafe_allow_html=True)
-        # 357結論:直接顯示當前評估,不導向策略手冊
-        st.markdown(border_left_banner(
-            _357_c,
-            f'<span style="font-size:12px;color:#8b949e;">{_asset_type} <code>{sid2}</code> {name2} ｜ 🎓 策略1 · 357法則判斷</span><br>'
-            f'<span style="font-size:14px;font-weight:800;">{_357_verdict}</span><br>'
-            f'<span style="font-size:11px;color:#8b949e;">判讀邏輯：殖利率≥7%=便宜大買；5-7%=合理；3-5%=偏貴持有；&lt;3%=昂貴停利</span>',
-            border_width=4, padding_y=10, padding_x=14, margin_y=6,
-        ), unsafe_allow_html=True)
 
     # ── 估值河流圖(357殖利率河流,逐日 TTM)────────────────────
     st.caption('🔰 河流圖怎麼看：把「便宜／合理／昂貴」三種估值水位畫成色帶，看股價（線）落在哪一條 —— '

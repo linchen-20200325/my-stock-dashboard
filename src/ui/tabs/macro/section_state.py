@@ -10,6 +10,7 @@ closure params(4 explicit pass):
 """
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412

@@ -9,12 +9,17 @@ closure params(explicit pass,因原 render_tab_macro 內 local var):
 """
 from __future__ import annotations
 
+import os
+
+import plotly.graph_objects as go
 import streamlit as st
 
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.signal_thresholds import BREADTH_BULL_PCT, BREADTH_NEUTRAL_PCT
 from src.config import FINMIND_TOKEN  # noqa: F401
 from src.ui.render.macro_ui_components import section_header
 from src.ui.render.ui_widgets import kpi, teacher_conclusion
-from src.ui.tabs.macro.helpers import render_macro_bucket_summary_bar
+from src.ui.tabs.macro.helpers import add_danger_hlines, render_macro_bucket_summary_bar
 
 
 def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
