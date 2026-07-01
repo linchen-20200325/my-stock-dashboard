@@ -79,6 +79,38 @@ def test_passive_premium_under_cap_still_shows(monkeypatch):
     assert out.get('stale_nav') is not True
 
 
+def test_relay_official_premium_wins(monkeypatch):
+    """v18.443:NAS 中繼站(家用台灣 IP)抓到 TWSE 官方同 snapshot 折溢價 → 直接採用,
+    不再落到會產生假溢價的 yfinance navPrice 路徑。"""
+    # 中繼站命中官方值(0050 真實 -0.13%),同時讓 NAV history 回一個「會算出假溢價」的
+    # 過時值,證明 path 0 優先、根本不碰後面的假溢價鏈。
+    monkeypatch.setattr(ec, 'fetch_etf_official_premium',
+                        lambda *a, **k: {'nav': 109.58, 'price': 109.45,
+                                         'premium_pct': -0.13, 'source': 'NAS中繼:TWSE',
+                                         'data_date': '2026-07-01'})
+    _today = datetime.date.today()
+    monkeypatch.setattr(ec, 'fetch_etf_nav_history',
+                        lambda *a, **k: _nav_hist([_today], [104.03]))  # 過時假值,不該被用到
+    df = pd.DataFrame({'Close': [109.3]}, index=pd.to_datetime([str(_today)]))
+
+    out = ec.calc_premium_discount({}, df, '0050.TW')
+    assert out['premium_pct'] == pytest.approx(-0.13, abs=0.001), f'應採官方 -0.13%:{out}'
+    assert out.get('stale_nav') is not True
+    assert out.get('data_date') == '2026-07-01'
+
+
+def test_relay_official_still_capped(monkeypatch):
+    """中繼站官方值若仍 > 合理上限(疑官方資料未更新)→ 仍守 §1 寧缺勿假回 stale。"""
+    monkeypatch.setattr(ec, 'fetch_etf_official_premium',
+                        lambda *a, **k: {'nav': 100.0, 'price': 105.0,
+                                         'premium_pct': 5.0, 'source': 'NAS中繼:TWSE'})
+    _today = datetime.date.today()
+    df = pd.DataFrame({'Close': [105.0]}, index=pd.to_datetime([str(_today)]))
+    out = ec.calc_premium_discount({}, df, '0050.TW')
+    assert out['premium_pct'] is None, out
+    assert out.get('stale_reason') == 'nav_value_stale'
+
+
 def test_active_etf_cap_tighter_at_2pct(monkeypatch):
     """主動式(代號末碼字母,如 00982A)上限較嚴(±2%)— 2.5% 溢價即應攔 stale。"""
     _today = datetime.date.today()

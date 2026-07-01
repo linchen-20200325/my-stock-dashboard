@@ -26,7 +26,7 @@ from datetime import timedelta
 
 from src.data.etf import (
     fetch_etf_price, fetch_etf_dividends, fetch_etf_info,
-    fetch_etf_nav_history, _get_etf_launch_price,
+    fetch_etf_nav_history, fetch_etf_official_premium, _get_etf_launch_price,
 )
 from src.compute.etf.etf_helpers import (
     calc_sigma_metrics,           # v18.334 PR-H2:σ 計算 SSOT
@@ -312,6 +312,26 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                       'warning': False, 'stale_nav': True}
     try:
         if ticker:
+            # ── 路徑 0(v18.443):NAS 中繼站(家用台灣 IP)抓 TWSE 官方同 snapshot 折溢價 ──
+            # 繞過 Streamlit Cloud 美國 IP 對 TWSE/goodinfo/MoneyDJ 的 geo-block;TWSE 折溢價
+            # dataset 的 nav+市價+折溢價 同源一致(無跨來源日期錯位假溢價)。中繼站未設定
+            # (NAS_BASE_URL 缺)→ 回 None → 自動 fallback 既有 5 段鏈(行為 0 改)。
+            _off = fetch_etf_official_premium(ticker)
+            if _off and _off.get('premium_pct') is not None:
+                _pv = float(_off['premium_pct'])
+                if abs(_pv) > _PREM_MAX:  # 官方值仍超合理上限 → 疑資料未更新,§1 寧缺勿假
+                    print(f'[折溢價-中繼站/stale] {ticker}: prem={_pv}% > ±{_PREM_MAX}%')
+                    return {**_stale_payload, 'stale_reason': 'nav_value_stale',
+                            'premium_raw': round(_pv, 2), 'prem_max': _PREM_MAX,
+                            'nav': _off.get('nav'), 'price': _off.get('price')}
+                print(f"[折溢價-中繼站] {ticker}: nav={_off.get('nav')} prem={_pv}% "
+                      '(TWSE官方 via 家用台灣 IP)')
+                _ret0 = {'nav': _off.get('nav'), 'price': _off.get('price'),
+                         'premium_pct': _pv, 'warning': _pv > 1.0}
+                if _off.get('data_date'):
+                    _ret0['data_date'] = _off['data_date']
+                return _ret0
+
             _nav_hist = fetch_etf_nav_history(ticker, days=10)
             if not _nav_hist.empty and 'nav' in _nav_hist.columns:
                 _last = _nav_hist.iloc[-1]

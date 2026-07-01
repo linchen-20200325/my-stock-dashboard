@@ -1391,6 +1391,76 @@ def _safe_float(s, strip_chars: str = ',%') -> float | None:
         return None
 
 
+@st.cache_data(ttl=TTL_30MIN, max_entries=100, show_spinner=False)
+def fetch_etf_official_premium(ticker: str, ver: int = 1) -> dict | None:
+    """用 NAS FastAPI 中繼站(家用台灣 IP)抓 TWSE 官方 ETF 折溢價率。
+
+    v18.443:解「Streamlit Cloud 美國 IP → TWSE/goodinfo/MoneyDJ 全 geo-block →
+    掉到 yfinance navPrice 過時值 → 假折溢價」。TWSE OpenAPI 折溢價率 dataset 是
+    **同一 snapshot 的 nav + 市價 + 折溢價**(內部一致,無跨來源日期錯位),經家用台灣 IP
+    的中繼站(`proxy_helper.nas_relay_fetch`,即 `nas_server.py` 的 `/proxy` 端點)代抓。
+
+    僅台股 ETF(代號首碼數字)。**未設定中繼站(NAS_BASE_URL)→ 回 None**,呼叫端
+    (`etf_calc.calc_premium_discount`)自動 fallback 至既有 5 段 NAV 鏈(行為 0 改,
+    純失敗路徑增益)。§8.2:L1 Data,經 src.data.proxy(L1)取數。
+
+    Returns
+    -------
+    dict {'nav','price','premium_pct','source'[,'data_date']} 或 None
+    """
+    from shared.etf_codes import bare_etf_code as _bare
+    code = _bare(ticker)
+    # 僅台股 ETF(海外 ETF 走 yfinance;TWSE 無資料)
+    if not code or not code[:1].isdigit():
+        return None
+    # 中繼站(FastAPI /proxy)未設定 NAS_BASE_URL → 不動既有鏈
+    from src.data.proxy import get_nas_relay, nas_relay_fetch
+    if get_nas_relay() is None:
+        print(f'[ETF 折溢價/中繼站] {code}: 未設定 NAS_BASE_URL(FastAPI 中繼站),'
+              '略過 → 走既有 NAV 鏈')
+        return None
+    for _ds in ('TaiwanStockPremiumDiscountRatio', 'TaiwanStockNetValue'):
+        _url = f'https://openapi.twse.com.tw/v1/ETF/{_ds}'
+        try:
+            _r = nas_relay_fetch(_url, timeout=15)
+            if _r is None or getattr(_r, 'status_code', 0) != 200:
+                continue
+            _rows = _r.json()
+            if not isinstance(_rows, list):
+                continue
+            _row = next((x for x in _rows
+                         if str(x.get('證券代號') or x.get('Code')
+                                or x.get('code') or '').strip() == code), None)
+            if _row is None:
+                continue
+            _nav = next((v for v in (_safe_float(_row.get(k))
+                         for k in ('單位淨值', '淨值', 'NetAssetValue', 'nav'))
+                         if v is not None), None)
+            _price = next((v for v in (_safe_float(_row.get(k))
+                           for k in ('收盤價', 'ClosingPrice', 'close', '市價'))
+                           if v is not None), None)
+            _pk = next((k for k in _row if '折溢價' in str(k)), None)
+            _prem = _safe_float(_row.get(_pk)) if _pk else None
+            if _prem is None and _nav and _price and _nav > 0:
+                _prem = round((_price - _nav) / _nav * 100, 2)
+            _dk = next((k for k in _row if str(k) in ('日期', 'Date', 'date')), None)
+            _dd = _row.get(_dk) if _dk else None
+            if _nav and _nav > 0 and _prem is not None:
+                print(f'[ETF 折溢價/中繼站] ✅ {code} {_ds}: nav={_nav} price={_price} '
+                      f'prem={_prem}% date={_dd} (TWSE 官方 via 家用台灣 IP)')
+                _prov_log('fetch_etf_official_premium', f'NAS中繼:TWSE:{_ds}',
+                          code, f'prem={_prem}%')
+                _out = {'nav': _nav, 'price': _price, 'premium_pct': _prem,
+                        'source': f'NAS中繼:TWSE:{_ds}'}
+                if _dd:
+                    _out['data_date'] = _dd
+                return _out
+        except Exception as _e:
+            print(f'[ETF 折溢價/中繼站] {code} {_ds}: {type(_e).__name__}: {_e}')
+    print(f'[ETF 折溢價/中繼站] {code}: 中繼站有設定但 TWSE 兩 dataset 皆無 {code} 資料')
+    return None
+
+
 @st.cache_data(ttl=TTL_2HOUR, show_spinner=False, max_entries=10)
 def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.DataFrame":
     """ETF 歷史淨值及折溢價（最近 N 個交易日）
