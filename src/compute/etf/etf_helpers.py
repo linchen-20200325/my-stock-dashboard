@@ -34,6 +34,32 @@ def auto_role(tk: str | None) -> str:
     return '核心' if code in _CORE_TICKERS else '衛星'
 
 
+def etf_premium_sanity_max(is_active: bool) -> float:
+    """ETF |折溢價| 合理上限（%）— 超過視為 NAV 過時配當日市價的假溢價 SSOT。
+
+    純函式，無 I/O。calc 層(etf_calc.calc_premium_discount)與 UI 層(etf_tab_single
+    近期淨值表)共用同一判準,避免「合理折溢價」門檻在兩層各寫一份而漂移。
+
+    Parameters
+    ----------
+    is_active : bool
+        主動式 ETF(代號末碼字母,如 00982A)為 True。
+
+    Returns
+    -------
+    float
+        主動式 → ACTIVE_ETF_PREMIUM_MAX_PCT(2.0,NAV T+1 易延遲取較嚴);
+        被動式 → PASSIVE_ETF_PREMIUM_MAX_PCT(3.0,對齊高溢價帶頂,保留海外連結型真溢價)。
+
+    v18.442:0050 假 +5.07% production bug — 原 G2 上限守門員只對主動式生效,被動式漏接。
+    """
+    from shared.signal_thresholds import (
+        ACTIVE_ETF_PREMIUM_MAX_PCT,
+        PASSIVE_ETF_PREMIUM_MAX_PCT,
+    )
+    return ACTIVE_ETF_PREMIUM_MAX_PCT if is_active else PASSIVE_ETF_PREMIUM_MAX_PCT
+
+
 def normalize_etf_ticker(raw: str | None) -> str:
     """ETF 代號規範化 SSOT — 純 4-6 碼台股自動補 .TW；其餘原樣大寫去空白。
 

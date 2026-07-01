@@ -397,11 +397,23 @@ def render_etf_single(gemini_fn=None):
     elif prem.get('stale_nav'):
         _prem_color  = '#8b949e'
         _prem_action = '⏳ NAV 資料延遲'
-        # v18.441:標出 NAV 最新日 vs 市價日,讓使用者看到「跨日錯位」是假溢價來源
         _nd_s, _pd_s = prem.get('nav_date'), prem.get('price_date')
-        _dates_s = f'（NAV 最新日 {_nd_s}｜市價日 {_pd_s}）' if (_nd_s and _pd_s) else ''
-        _prem_reason = (f'NAV 最新日早於市價日{_dates_s} —— 拿過時 NAV 配當日已變動的市價會'
-                        '算出假溢價(§1 寧缺勿假),等 NAV 更新到與市價同日才顯示折溢價。')
+        # v18.442:兩種 stale — 值過時(推算溢價超合理上限) vs 跨日錯位(NAV 日早於市價日)
+        if prem.get('stale_reason') == 'nav_value_stale':
+            _raw = prem.get('premium_raw')
+            _cap = prem.get('prem_max')
+            _nav_v, _pr_v = prem.get('nav'), prem.get('price')
+            _navpr = (f'（NAV {_nav_v}｜市價 {_pr_v}）'
+                      if (_nav_v is not None and _pr_v is not None) else '')
+            _prem_reason = (
+                f'即時來源回傳的 NAV{_navpr} 推算折溢價達 {_raw:+.2f}%,超出 ETF 合理套利上限 '
+                f'±{_cap:.0f}% —— 研判抓到的是「過時 NAV 配當日已上漲的市價」(NAV 尚未更新),'
+                '並非真實溢價(§1 寧缺勿假)。等 NAV 更新到與市價同日才顯示折溢價。')
+        else:
+            # v18.441:標出 NAV 最新日 vs 市價日,讓使用者看到「跨日錯位」是假溢價來源
+            _dates_s = f'（NAV 最新日 {_nd_s}｜市價日 {_pd_s}）' if (_nd_s and _pd_s) else ''
+            _prem_reason = (f'NAV 最新日早於市價日{_dates_s} —— 拿過時 NAV 配當日已變動的市價會'
+                            '算出假溢價(§1 寧缺勿假),等 NAV 更新到與市價同日才顯示折溢價。')
     else:
         import os as _os_prx2
         _hp = bool(_os_prx2.environ.get('PROXY_URL') or _os_prx2.environ.get('NAS_PROXY_URL'))
@@ -454,6 +466,12 @@ def render_etf_single(gemini_fn=None):
 
     # ── 歷史淨值及折溢價表 ────────────────────────────────────
     import pandas as _pd_navtbl
+    # v18.442:表格與上方折溢價卡共用同一「合理折溢價上限」SSOT,避免即時來源硬戳今日的
+    # 過時 NAV(0050 案 104.03 配 109.3 → 假 +5.07%)在此表格以假 5.07% 顯示。
+    from src.compute.etf.etf_helpers import bare_etf_code as _bare_navtbl, etf_premium_sanity_max
+    import re as _re_navtbl
+    _is_active_navtbl = bool(_re_navtbl.match(r'^\d{4,5}[A-Z]$', _bare_navtbl(ticker)))
+    _prem_cap_navtbl = etf_premium_sanity_max(_is_active_navtbl)
     _nav_hist = fetch_etf_nav_history(ticker, days=35)
     if not _nav_hist.empty and 'nav' in _nav_hist.columns and not df.empty:
         try:
@@ -466,12 +484,24 @@ def render_etf_single(gemini_fn=None):
             if not _merged.empty:
                 _merged['折溢價']  = (_merged['Close'] - _merged['nav']).round(2)
                 _merged['折溢價%'] = ((_merged['Close'] - _merged['nav']) / _merged['nav'] * 100).round(2)
-                _display = _merged.reset_index()[['date','Close','nav','折溢價','折溢價%']].tail(20)
-                _display.columns = ['日期','市價','淨值','折溢價','折溢價%']
-                _display['日期'] = _display['日期'].dt.strftime('%Y/%m/%d')
-                st.markdown(f'**{ticker} 近期淨值及折溢價**（折溢價% = (市價-淨值)/淨值×100）')
-                st.dataframe(_display.sort_values('日期', ascending=False),
-                             use_container_width=True, hide_index=True)
+                # v18.442:剔除 |折溢價%| > 上限的列 = NAV 過時配當日市價的假溢價(§1 寧缺勿假)。
+                _n_raw = len(_merged)
+                _merged = _merged[_merged['折溢價%'].abs() <= _prem_cap_navtbl]
+                _n_drop = _n_raw - len(_merged)
+                if not _merged.empty:
+                    _display = _merged.reset_index()[['date','Close','nav','折溢價','折溢價%']].tail(20)
+                    _display.columns = ['日期','市價','淨值','折溢價','折溢價%']
+                    _display['日期'] = _display['日期'].dt.strftime('%Y/%m/%d')
+                    st.markdown(f'**{ticker} 近期淨值及折溢價**（折溢價% = (市價-淨值)/淨值×100）')
+                    st.dataframe(_display.sort_values('日期', ascending=False),
+                                 use_container_width=True, hide_index=True)
+                    if _n_drop:
+                        st.caption(f'⚠️ 已隱藏 {_n_drop} 筆疑似 NAV 過時的假折溢價'
+                                   f'（|折溢價%| > ±{_prem_cap_navtbl:.0f}%,§1 寧缺勿假）。')
+                elif _n_drop:
+                    st.caption(f'⏳ {ticker} 近期淨值：抓到的 NAV 疑未更新'
+                               f'（推算折溢價 > ±{_prem_cap_navtbl:.0f}%,拿過時 NAV 配當日市價 → 假溢價),'
+                               '已依 §1 寧缺勿假略過;等 NAV 更新到與市價同日再顯示。')
         except Exception as _ne:
             print(f'[ETF NAV Table] {_ne}')
 

@@ -121,6 +121,20 @@ ACTIVE_ETF_PREMIUM_MAX_PCT: float = 2.0
 """主動式 ETF |折溢價| 門檻（單位：%）。
 > 2% → NAV 可能 stale。原 etf_calc.py:272 inline `_ACTIVE_PREM_MAX`"""
 
+PASSIVE_ETF_PREMIUM_MAX_PCT: float = 3.0
+"""被動式 ETF |折溢價| 合理上限（單位：%）。超過視為 NAV 過時配當日市價的假溢價。
+
+v18.442:0050 production bug — 即時來源(yfinance navPrice / goodinfo)回「最後一筆
+已公告淨值」並被 fetch_etf_nav_history 硬戳 `_last_bd`(今日)。若該 NAV 實為數日前值
+(0050 案 104.03=06/29 淨值),配當日已上漲的市價(109.3)→ 同日 inner-join 成功、日期
+守門員(G1/G3)全過(日期已被造假成今日),但算出假 +5.07%「嚴禁追高」。原 G2 上限守門員
+只對主動式生效(`_is_active_etf`),被動式 0050 漏接 → 補此常數。
+
+值 = 3.0 對齊 ETF_PREMIUM_HIGH_PREMIUM_PCT 帶頂(> 3% 原即「禁止追高」極端區):被動式
+(尤其深度套利的大型市值型)真實溢價幾乎不越 1%,>3% 幾可斷定為 NAV 未更新;同時保留海外
+連結型 ETF(如 00646)隔夜跳空的真實 1-3% 溢價顯示,避免誤殺。主動式(NAV T+1 易延遲)仍取
+較嚴的 2%。§1 寧缺勿假:超限一律回 stale(顯示「NAV 資料延遲」)而非假折溢價。"""
+
 
 # ════════════════════════════════════════════════════════════════
 # Macro 通用領域邊界（macro_core.py / merrill_clock.py）v18.242 W3b
