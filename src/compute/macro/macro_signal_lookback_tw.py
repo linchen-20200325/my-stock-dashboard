@@ -27,11 +27,14 @@ User 需求：「基金有這測試總經的預測力，台股沒有看到」.
 """
 from __future__ import annotations
 
+import logging as _mslt_log
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal, Optional
 
 import pandas as pd
+
+_logger = _mslt_log.getLogger(__name__)
 
 from src.compute.macro.macro_validation_tw import DEFAULT_PARQUET_CACHE_DIR, TwiiCrisisEvent
 
@@ -360,7 +363,7 @@ def fetch_all_tw_signal_series(
         try:
             out[spec.key] = fn(cache_dir)
         except Exception as e:  # noqa: BLE001
-            print(f"[macro_signal_lookback_tw] {spec.key} fetch 失敗：{e}")
+            _logger.warning('[macro_signal_lookback_tw] %s fetch 失敗: %s', spec.key, e)
             out[spec.key] = pd.Series(dtype=float, name=spec.key)
     return out
 

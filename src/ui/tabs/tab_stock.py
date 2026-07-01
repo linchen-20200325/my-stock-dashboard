@@ -261,7 +261,8 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         ibs2     = calc_ibs(df2)
         vr2      = calc_volume_ratio(df2)
         k2, d2   = calc_kd(df2)
-        bb2      = calc_bollinger(df2)
+        bb2          = calc_bollinger(df2)
+        bb_breakout2 = detect_bollinger_breakout(df2)  # B9: 預算一次，避免 section_health_score 重算
         vcp2     = calc_vcp(df2)
         health2, details2 = calc_health_score(df2, rsi2, ibs2, vr2, k2, d2, bb2)
         cur_price2 = float(df2['close'].iloc[-1]) if df2 is not None and not df2.empty else 0
@@ -272,7 +273,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
             'avg_div':avg_div2,'yearly':yearly2,'div_src':div_src2,
             'cl':cl2,'cx':cx2,'rev':rev2,'qtr':qtr2,'qtr_extra':qtr_extra2,
             'cl_src': _cl_src2,'cx_src': _cx_src2,'fin_errs': _fin_errs2,
-            'rsi':rsi2,'ibs':ibs2,'vr':vr2,'k':k2,'d':d2,'bb':bb2,'vcp':vcp2,
+            'rsi':rsi2,'ibs':ibs2,'vr':vr2,'k':k2,'d':d2,'bb':bb2,'bb_breakout':bb_breakout2,'vcp':vcp2,
             'health':health2,'details':details2,'price':cur_price2,
             'fetched_at': pd.Timestamp.now(),
         }
@@ -298,6 +299,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         k2=t2d['k']
         d2=t2d['d']
         bb2=t2d['bb']
+        bb_breakout2=t2d.get('bb_breakout')
         vcp2=t2d['vcp']
         avg_div2=t2d['avg_div']
         yearly2=t2d['yearly']
@@ -762,6 +764,7 @@ padding:14px 18px;margin-bottom:12px;">
         render_health_score_section(
             sid2, health2, details2, df2, price2, qtr2, yearly2, avg_div2,
             rsi2, vr2, ibs2, k2, d2, bb2, vcp2, cl2,
+            bb_breakout2=bb_breakout2,
         )
 
         # ══ E. VCP+布林(U4 Phase 3-E v18.409:抽至 stock_sections.section_vcp_bollinger)══

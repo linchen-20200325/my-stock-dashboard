@@ -1,5 +1,4 @@
 LI_VERSION = "v8-finmind-20260323"
-print(f"[leading_indicators] loaded {LI_VERSION}")
 """
 📊 法人買賣 + 先行指標系統 v8
 =================================================

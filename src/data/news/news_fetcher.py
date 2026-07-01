@@ -10,6 +10,10 @@
 """
 from __future__ import annotations
 
+import logging as _news_log
+
+_logger = _news_log.getLogger(__name__)
+
 try:
     import streamlit as st
 except ImportError:
@@ -68,7 +72,7 @@ def fetch_macro_news(n: int = 5) -> list:
         import html as _h
         import re as _re2
     except ImportError:
-        print('[AI-News] ⚠️ feedparser 未安裝，跳過新聞抓取')
+        _logger.warning('[AI-News] feedparser 未安裝，跳過新聞抓取')
         return []
     try:
         from src.data.proxy import fetch_url as _furl_news
@@ -119,9 +123,9 @@ def fetch_macro_news(n: int = 5) -> list:
                                           'is_systemic': _is_sys})
                 if len(_by_src[_src]) >= _per_src:
                     break
-            print(f'[AI-News/{_src}] ✅ {len(_by_src[_src])} 則')
+            _logger.debug('[AI-News/%s] %d 則', _src, len(_by_src[_src]))
         except Exception as _ne:
-            print(f'[AI-News/{_src}] ❌ {_ne}')
+            _logger.warning('[AI-News/%s] 抓取失敗: %s', _src, _ne)
 
     # round-robin 混合各源,依序去重 → 先收齊全池(不提早截斷)
     _seen: set[str] = set()
@@ -263,11 +267,11 @@ def fetch_stock_news(stock_id: str, stock_name: str = "", n: int = 5,
                     break
             if _diag is not None:
                 _diag.append(f'{_src}: {_via} → 收 {len(_out)} 則')
-            print(f'[StockNews/{_src}] ✅ {stock_id} 累計 {len(_out)} 則')
+            _logger.debug('[StockNews/%s] %s 累計 %d 則', _src, stock_id, len(_out))
         except Exception as _ne:
             if _diag is not None:
                 _diag.append(f'{_src}: ❌ {_via} {type(_ne).__name__}: {str(_ne)[:80]}')
-            print(f'[StockNews/{_src}] ❌ {_ne}')
+            _logger.warning('[StockNews/%s] 抓取失敗: %s', _src, _ne)
         if len(_out) >= n:
             break
     _out.sort(key=lambda _x: _x.get('_ts', 0.0), reverse=True)  # 新→舊

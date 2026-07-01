@@ -53,16 +53,7 @@ def render_strategy_conclusion_section(
         analyze_financial_health: callback(token, sid, fin, news_context)→ dict
     """
     with st.expander('📖 策略1 結論', expanded=True):
-        if rev2 is not None and not rev2.empty and 'yoy' in rev2.columns:
-            _yoy_last3 = rev2['yoy'].dropna().tail(3).tolist()
-            if len(_yoy_last3) >= 2:
-                _yoy_trend = all(_yoy_last3[i] > _yoy_last3[i - 1] for i in range(1, len(_yoy_last3)))
-                _yoy_latest = _yoy_last3[-1]
-                _rev_signal = ('✅ 月營收YoY連續加速' if _yoy_trend and _yoy_latest > 0
-                               else ('⚠️ 月營收成長趨緩' if _yoy_latest > 0 else '🔴 月營收年減'))
-                st.markdown(f'<div style="color:#c9d1d9;font-size:13px;padding:3px 0;">• {_rev_signal}（最近YoY: {_yoy_latest:+.1f}%）</div>',
-                            unsafe_allow_html=True)
-        # 月營收結論(移入 if 內,避免 _rev_signal 未定義)
+        # A17: 月營收 YoY 只渲染一次（border_left_banner 格式，移除原重複的 <div> 版本）
         if rev2 is not None and not rev2.empty and 'yoy' in rev2.columns:
             _yoy_s2 = rev2['yoy'].dropna().tail(3).tolist()
             if _yoy_s2:

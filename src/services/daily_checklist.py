@@ -4,8 +4,11 @@ daily_checklist.py v6.0 — Squid Proxy 模式
 🔄 融資餘額：5 段備援 — rwd MI_MARGN → HiStock → Goodinfo → Yahoo → 鉅亨網（仟元÷100,000=億）
 🔄 ADL / yfinance / FinMind：不受 geo-block 影響，直連
 """
+import logging as _cl_log
 import requests, os
 import urllib3
+
+_logger = _cl_log.getLogger(__name__)
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 # v18.325 PR-C: 融資餘額紅線改用既有 SSOT（原 inline 3400，§3.3 反捏造）
 # 融資紅/黃線門檻屬本服務的 SSOT 消費契約(consumed_ssot guard 釘),
@@ -214,8 +217,8 @@ def analyze_20d_chips(stock_id: str) -> dict:
         else:
             _signal = '🟡 籌碼發散'
 
-        print(f'[20d_chips/{stock_id}] 集中度={_concentration:.2f}% 延續性={_continuity:.0f}% '
-              f'days={len(_df)} signal={_signal}')
+        _logger.debug('[20d_chips/%s] 集中度=%.2f%% 延續性=%.0f%% days=%d signal=%s',
+                      stock_id, _concentration, _continuity, len(_df), _signal)
         return {
             'concentration': round(_concentration, 2),   # %（可正可負）
             'continuity':    round(_continuity, 1),       # 0~100%
@@ -227,7 +230,7 @@ def analyze_20d_chips(stock_id: str) -> dict:
             'error':         None,
         }
     except Exception as _e20:
-        print(f'[20d_chips/{stock_id}] ❌ {type(_e20).__name__}: {_e20}')
+        _logger.warning('[20d_chips/%s] 計算失敗: %s: %s', stock_id, type(_e20).__name__, _e20)
         return {'error': str(_e20), 'signal': '⚫ 計算失敗'}
 
 

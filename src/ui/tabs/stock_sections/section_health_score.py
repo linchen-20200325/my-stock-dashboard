@@ -38,6 +38,7 @@ def render_health_score_section(
     sid2: str, health2, details2,
     df2, price2, qtr2, yearly2, avg_div2,
     rsi2, vr2, ibs2, k2, d2, bb2, vcp2, cl2,
+    bb_breakout2=None,  # B9: pre-computed detect_bollinger_breakout result
 ) -> None:
     """A. 個股健康度評分(0~100) + v4/v5 卡片群。
 
@@ -67,15 +68,6 @@ def render_health_score_section(
         _hb = '不要強求，另找更好標的'
     st.markdown(teacher_conclusion('宏爺', f'{sid2} 健康度 {health2:.0f}分', _ha, _hb),
                 unsafe_allow_html=True)
-    # 評分信心區間說明(_score_help 變數定義保留語意,但實際從未渲染:對齊原 inline 行為)
-    _ = (
-        '<div style="background:#0a1628;border-left:3px solid #58a6ff;'
-        'padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:8px;font-size:11px;color:#8b949e;">'
-        '📊 <b>評分不是保證,是機率</b>:'
-        '健康度80分 → 歷史勝率約65%(10次中6-7次對)。'
-        '停損紀律決定你能否從對的那幾次賺夠錢。'
-        '</div>'
-    )
 
     ha, hb = st.columns([1, 2])
     with ha:
@@ -280,9 +272,9 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
         if df2 is not None and not df2.empty and len(df2) >= 20:
             _v5_r1, _v5_r2, _v5_r3 = st.columns(3)
 
-            # Task 9: Bollinger Breakout
+            # Task 9: Bollinger Breakout — B9: 使用從 tab_stock 預先計算的結果
             with _v5_r1:
-                _bb5 = detect_bollinger_breakout(df2)
+                _bb5 = bb_breakout2 if bb_breakout2 is not None else detect_bollinger_breakout(df2)
                 _bb5c = _bb5['color']
                 st.markdown(
                     f'<div style="background:#0d1117;border:1px solid {_bb5c};'

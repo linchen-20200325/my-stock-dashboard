@@ -92,5 +92,5 @@ def render_op_recommendation_section(sid2: str, health2,
                 'font-size:13px;color:#c9d1d9;line-height:1.7;">'
                 + _comment_txt.replace(chr(10), '<br>') +
                 '</div>', unsafe_allow_html=True)
-    except Exception:
-        pass
+    except Exception as _ai_err:
+        st.warning(f'⚠️ AI 分析暫時無法使用（{type(_ai_err).__name__}），以上為規則引擎建議。')

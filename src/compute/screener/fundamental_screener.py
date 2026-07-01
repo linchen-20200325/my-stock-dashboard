@@ -27,8 +27,11 @@
 """
 from __future__ import annotations
 
+import logging as _fs_log
 from dataclasses import dataclass, field
 from typing import Any, Callable
+
+_logger = _fs_log.getLogger(__name__)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -244,17 +247,15 @@ def screen_stocks(
                         if isinstance(r, ConditionResult):
                             conds[r.code] = r
                     except Exception as e:
-                        print(
-                            f"[fund_screener] extra_check 失敗 ({sid}): "
-                            f"{type(e).__name__}: {e}"
-                        )
+                        _logger.warning('[fund_screener] extra_check 失敗 (%s): %s: %s',
+                                        sid, type(e).__name__, e)
 
             passed = bool(conds) and all(c.passed for c in conds.values())
             results.append(
                 ScreenResult(stock_id=sid, passed=passed, conditions=conds)
             )
         except Exception as e:
-            print(f"[fund_screener] 單股 screen 異常: {type(e).__name__}: {e}")
+            _logger.warning('[fund_screener] 單股 screen 異常: %s: %s', type(e).__name__, e)
             continue
 
     return results
