@@ -1555,7 +1555,7 @@ def fetch_etf_official_premium(ticker: str, ver: int = 6) -> dict | None:
 
 
 @st.cache_data(ttl=TTL_2HOUR, show_spinner=False, max_entries=10)
-def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.DataFrame":
+def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 5) -> "pd.DataFrame":
     """ETF 歷史淨值及折溢價（最近 N 個交易日）
 
     資料來源優先順序（5 段備援 + 1 兜底）：
@@ -1808,33 +1808,60 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 4) -> "pd.Data
                             timeout=12, attempts=2)
         if _r_mdj is not None and _r_mdj.status_code == 200:
             _r_mdj.encoding = 'utf-8'
-            _nav_mdj, _date_mdj = None, _last_bd
-            # 策略：Basic0003 淨值表格 row = 日期 + 單位淨值。掃最近一筆 (date, nav) pair
-            # 典型格式：<td>2026/05/30</td><td>24.5678</td>
-            _pairs = _re_mdj.findall(
-                r'(\d{4}[/\-](?:1[0-2]|0?[1-9])[/\-](?:3[01]|[12]\d|0?[1-9]))'
-                r'[^\d]{0,40}?(\d{1,4}\.\d{2,6})',
-                _r_mdj.text)
-            if _pairs:
-                # 取日期最新者
-                def _parse_d(_s):
+            # v18.451 hotfix:原 regex 假設「日期後 40 字內接著數字」，但 user 提供實測
+            # HTML 證實這是**正規 <table>**(CSS class 分欄,如 <td class="col08">)，
+            # 日期/淨值中間隔了市價/折溢價等其他 <td>(遠超過 40 字)→ regex 從未真的
+            # 抓到過(production log「200 但 regex 無 date+nav pair」),一路 fallback 到
+            # yfinance 過時 navPrice,導致「近期淨值及折溢價」表格顯示錯位假折溢價。
+            #
+            # 改用 BeautifulSoup 逐 <tr> 解析,不依賴 class 名稱(user 提供的實測 HTML
+            # 顯示市價與折溢價欄位「共用」class="col09",class 名稱不可靠,故只依「同一列
+            # 恰有 4 個 <td>、第一格是日期格式」定位,以此為錨點)：
+            #   td[0]=日期 td[1]=淨值 td[2]=市價 td[3]=折溢價%(負值包 <span class="negative">,
+            #   get_text() 會自動取出內層文字,不受影響)。
+            # 同一列的 nav/price/premium_pct 同源同日,無跨欄位錯位風險 —— 比原本「NAV 走
+            # MoneyDJ、市價走 yfinance 再事後 inner-join」更根本,直接消除這整類 bug。
+            _records_mdj: list[dict] = []
+            try:
+                from bs4 import BeautifulSoup as _BS4_mdj
+                _soup_mdj = _BS4_mdj(_r_mdj.text, 'lxml')
+                _date_re_mdj = _re_mdj.compile(r'^\d{4}[/\-]\d{1,2}[/\-]\d{1,2}$')
+                for _tr_mdj in _soup_mdj.find_all('tr'):
+                    _tds_mdj = _tr_mdj.find_all('td')
+                    if len(_tds_mdj) != 4:
+                        continue
+                    _txt0_mdj = _tds_mdj[0].get_text(strip=True)
+                    if not _date_re_mdj.match(_txt0_mdj):
+                        continue
+                    _nav_v_mdj = _safe_float(_tds_mdj[1].get_text(strip=True))
+                    if _nav_v_mdj is None or not (_NAV_MIN < _nav_v_mdj < _NAV_MAX):
+                        continue
                     try:
-                        _y, _m_, _d_ = (int(x) for x in _s.replace('-', '/').split('/'))
-                        return _dt.date(_y, _m_, _d_)
+                        _y_m, _m_m, _d_m = (int(x) for x in _txt0_mdj.replace('-', '/').split('/'))
+                        _date_v_mdj = _dt.date(_y_m, _m_m, _d_m)
                     except (ValueError, IndexError):
-                        return _dt.date.min
-                _pairs.sort(key=lambda p: _parse_d(p[0]), reverse=True)
-                for _ds, _vs in _pairs:
-                    _v = _safe_float(_vs)
-                    if _v is not None and _NAV_MIN < _v < _NAV_MAX:
-                        _nav_mdj = _v
-                        _date_mdj = _parse_d(_ds)
-                        break
-            if _nav_mdj and _nav_mdj > 0:
-                print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: nav={_nav_mdj} date={_date_mdj}')
-                return _attach_prov(pd.DataFrame([{'date': _date_mdj, 'nav': _nav_mdj}]),
-                                    'MoneyDJ:Basic0003')
-            print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: 200 但 regex 無 date+nav pair')
+                        continue
+                    _rec_mdj = {'date': _date_v_mdj, 'nav': _nav_v_mdj}
+                    _price_v_mdj = _safe_float(_tds_mdj[2].get_text(strip=True))
+                    if _price_v_mdj is not None and _price_v_mdj > 0:
+                        _rec_mdj['price'] = _price_v_mdj
+                    _prem_v_mdj = _safe_float(_tds_mdj[3].get_text(strip=True))
+                    if _prem_v_mdj is not None:
+                        _rec_mdj['premium_pct'] = _prem_v_mdj
+                    _records_mdj.append(_rec_mdj)
+            except Exception as _e_bs_mdj:
+                print(f'[ETF NAV] MoneyDJ {_etfid_mdj} BS4 解析例外: '
+                      f'{type(_e_bs_mdj).__name__}: {_e_bs_mdj}')
+            if _records_mdj:
+                _records_mdj.sort(key=lambda r: r['date'])  # 升冪(對齊其他來源慣例)
+                _df_mdj = pd.DataFrame(_records_mdj)
+                _last_rec_mdj = _records_mdj[-1]
+                print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: {len(_df_mdj)} 筆(最新 '
+                      f'{_last_rec_mdj["date"]} nav={_last_rec_mdj["nav"]} '
+                      f'price={_last_rec_mdj.get("price")} '
+                      f'prem={_last_rec_mdj.get("premium_pct")}%)')
+                return _attach_prov(_df_mdj, 'MoneyDJ:Basic0003')
+            print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: 200 但表格解析無有效列(頁面結構可能已變)')
         else:
             _code_st = _r_mdj.status_code if _r_mdj is not None else 'None'
             print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: HTTP {_code_st}')
