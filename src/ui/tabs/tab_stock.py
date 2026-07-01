@@ -735,12 +735,14 @@ padding:14px 18px;margin-bottom:12px;">
         st.markdown('---')
 
         # ══ 心理檢查 + 勝利方程式 + 禁止操作(U4 Phase 2-Psy v18.406:抽至 stock_sections.section_psy_checklist)══
-        # 注意:原 inline 用 `_atr2_val if '_atr2_val' in dir() else None` 防 NameError,
-        # _atr2_val 是否定義取決於上游 try/except 計算;extracted 函式統一以 kwarg 傳遞
+        # v18.452:原 `_atr2_val if '_atr2_val' in dir() else None` 是抽出時的殘留防呆 —
+        # `_atr2_val` 在本函式從未被賦值,`dir()` 恆為 False,等效恆為 None,改直寫消除
+        # undefined-name 假訊號(見 tests/test_no_undefined_names.py)。render_psy_checklist_section
+        # 對 None 已有文件化 fallback(用價格 × 7% 估算停損距離),行為不變。
         from src.ui.tabs.stock_sections import render_psy_checklist_section
         render_psy_checklist_section(
             sid2, df2, health2,
-            _atr2_val=_atr2_val if '_atr2_val' in dir() else None,  # noqa: F821
+            _atr2_val=None,
         )
 
         # ══ 什麼時候買?什麼時候賣?(U4 Phase 3-WBS v18.410:抽至 stock_sections.section_when_buy_sell)══

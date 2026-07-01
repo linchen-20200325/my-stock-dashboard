@@ -42,13 +42,17 @@ from src.config import FINMIND_API_URL  # Batch 10 v18.412 SSOT
 def render_tab_stock_picker(gemini_fn=None, candidates=None,
                               source_label: str = '高息網',
                               key_prefix: str = 'picker',
-                              *, auto_run: bool = False):
+                              *, auto_run: bool = False,
+                              fh_map: dict | None = None):
     """v19.58：source_label + key_prefix 抽參數，個股組合 tab 共用此函式（不複製 Stage 1/2/3 邏輯）。
 
     candidates: pandas.DataFrame，需含 '代碼' 欄。為 None / 空 → 顯示 info 提示。
     source_label: 候選清單來源顯示名（高息網 / 個股組合輸入 / ...）。
     key_prefix: 所有 st.* widget key 前綴，避免同一頁多處渲染碰撞。
     auto_run: v18.223 — True 時跳過「開始三階段篩選」按鈕直接跑，AI 三型報告也自動生成（cache 防 rerun 重跑）。
+    fh_map: v18.453 — dict[代碼, analyze_financial_health() 結果]。個股組合 tab 已跑過
+    「批次財報體檢」時傳入,Stage 1 負債比檢查會直接沿用其判定(避免同頁兩處門檻不一致);
+    高息網等未跑財報體檢的呼叫端省略此參數即可,行為與改動前完全相同。
     """
     # ─ Late imports（避免循環 import + 啟動時間）─
     import datetime as _dt_sp
@@ -151,7 +155,8 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         with st.spinner(f'三階段篩選中（{len(_tickers)} 檔，並行）...'):
             with ThreadPoolExecutor(max_workers=5) as _pick_exec:
                 _pick_futs = {
-                    _pick_exec.submit(_check_one_stock, _tk, _today, yf): _i
+                    _pick_exec.submit(_check_one_stock, _tk, _today, yf,
+                                      (fh_map or {}).get(_tk)): _i
                     for _i, _tk in enumerate(_tickers)
                 }
             for _fut, _i in _pick_futs.items():
@@ -183,7 +188,9 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
     st.caption('💡 通過數 = 9 項實作條件中過的個數；5+ 通過視為基本面健康。'
                '「應收周轉」穩定 = 季變動 < 30%；「存貨周轉」OK = 年化 > 4 次；'
                '「資本支出」積極 = CapEx > 股東權益 5%；「淨流動值」OK = 流動資產 > 總負債；'
-               '「合約負債」OK = YoY > 20% 且連 2 季增。')
+               '「合約負債」OK = YoY > 20% 且連 2 季增。'
+               + ('「負債比」判定與上方「批次財報體檢」共用同一套門檻（不會兩處顯示不同顏色）。'
+                  if fh_map else ''))
 
     # ── Stage 2：籌碼 + 技術 ──────────────────────────────────
     st.markdown('#### ⚡ Stage 2：籌碼與技術面鎖定（發動訊號）')
@@ -273,30 +280,40 @@ def _blank_pick_result(ticker: str, note: str = '') -> dict:
     }
 
 
-def _check_one_stock(ticker: str, today, yf=None) -> dict:
+def _check_one_stock(ticker: str, today, yf=None, fh_result: dict | None = None) -> dict:
     """對單檔個股跑完 Stage 1 + Stage 2 — 失敗條件統一回灰色 ❓ 不阻斷流程。
     全程獨立 requests + yfinance、零 st.* 呼叫 → 線程安全，可丟進 ThreadPoolExecutor。
 
     P1-1a v18.374:yfinance K 線直呼抽至 L1 fetcher(`src.data.stock.picker_fetcher`)。
     yf param 保留 backward compat 但內部已不用。
+
+    fh_result:v18.453 — 個股組合場景已由「批次財報體檢」算好的
+    analyze_financial_health() 結果(dict,鍵含 financial_structure_module 等 6 子模組)。
+    有提供時,負債比檢查直接沿用其判定,避免同一頁兩處門檻不一致。
     """
     from src.data.stock.picker_fetcher import fetch_stock_history_1y
     _r = _blank_pick_result(ticker)
     # ── 抓 K 線(P1-1a:L1 fetcher 內含 .TW/.TWO 雙後綴 fallback)──
-    _df = fetch_stock_history_1y(ticker)
+    _df, _resolved_ticker = fetch_stock_history_1y(ticker)
     if _df is None:
         _r['ma20_label'] = '❌ 抓不到 K 線'
         _r['macd_label'] = '❌ 抓不到 K 線'
         _r['kd_label'] = '❌ 抓不到 K 線'
         _r['boll_label'] = '❌ 抓不到 K 線'
         return _r
+    # v18.452 hotfix:5Y 配息檢查需要 yfinance.Ticker 物件(讀 .dividends),
+    # 原碼引用未定義的 `_t_yf` → 每檔必炸 NameError,ThreadPoolExecutor 捕獲後
+    # 整檔回退成全 ❓N/A(production bug:Stage 1/2 兩張表無論輸入什麼股票全部
+    # 顯示 N/A、0/9、0/6)。改用 fetch_stock_history_1y 已解析出的正確後綴建構。
+    import yfinance as _yf_mod
+    _t_yf = _yf_mod.Ticker(_resolved_ticker)
 
     # ── 一次抓財報（多個 Stage 1 helpers 共用）──────────────
     _fs = _fetch_fs_safe(ticker)
     _qis = _fetch_quarterly_is(ticker)   # 多季損益表（三率三升 + PE TTM 共用）
 
     # ── Stage 1 條件 ──────────────────────────────────────────
-    _r['debt_ratio_label']  = _check_debt_ratio(_fs)
+    _r['debt_ratio_label']  = _check_debt_ratio(_fs, fh_result)
     _r['three_rate_label']  = _check_three_rate_growth(_qis)
     _r['div_5y_label']      = _check_dividend_5y(_df, _t_yf)
     _r['pe_zone_label']     = _check_pe_zone(_qis, _df)
@@ -344,8 +361,27 @@ def _fetch_fs_safe(stock_id: str) -> dict:
 # Stage 1 純函式（基本面）
 # ══════════════════════════════════════════════════════════════
 
-def _check_debt_ratio(fs: dict) -> str:
-    """負債比 < 50%（金融股例外，但本版簡化不分業）。"""
+def _check_debt_ratio(fs: dict, fh_result: dict | None = None) -> str:
+    """負債比健康度。
+
+    v18.453:個股組合場景已有「批次財報體檢」(analyze_financial_health)結果時
+    (fh_result 非 None),直接沿用其 financial_structure_module.Debt_Ratio 判定 ——
+    與本函式舊版各自獨立計算相比,同一檔股票不會在「財報體檢」顯示🟡、「智慧選股」
+    卻顯示✅(user 回報:兩張表門檻不一致造成混淆,40/60% 三級 vs 本函式舊版 <50%
+    二分)。financial_health_engine 版本另有負債比為 0 時從原始科目重算的 fallback,
+    判定更完整。無 fh_result(如「高息網」等未跑財報體檢的呼叫場景)則維持原邏輯。
+    """
+    if fh_result:
+        _fsm = fh_result.get('financial_structure_module', {}).get('Debt_Ratio', {})
+        _status = _fsm.get('Status')
+        _val = _fsm.get('Value', '')
+        if _status == 'Pass':
+            return f'✅ {_val}'
+        if _status == 'Warning':
+            return f'⚠️ {_val}'
+        if _status == 'Fail':
+            return f'❌ {_val}'
+        # Status 為 N/A(如金融股/資料不足)→ 落回下方獨立計算,不放棄判定機會
     if not fs:
         return '❓ 無財報'
     _ratio = fs.get('負債比率(%)')

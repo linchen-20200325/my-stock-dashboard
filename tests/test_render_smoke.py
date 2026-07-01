@@ -406,6 +406,46 @@ render_section_short(False, {}, {})
         at.run()
         _assert_no_uncaught(at, "render_section_short(空 session_state)")
 
+    def test_render_section_short_populated_adl_no_undefined_names(self):
+        """v18.452:production 事故 — 總經分頁全頁炸
+        `NameError: name 'TRAFFIC_GREEN' is not defined`(section_short.py:174)。
+
+        根因:F-7.1 B-2 把「短線急殺桶」從 tab_macro.py 抽成獨立模組時,遺漏原本
+        外層 scope 才有的 8 個 import(TRAFFIC_GREEN/RED/YELLOW、os、go、
+        BREADTH_BULL_PCT/NEUTRAL_PCT、add_danger_hlines)。空 session_state 測試
+        (上一個 test)完全繞過這些 undefined name(df_adl 為 None 時整段跳過),
+        production 只有在 ADL 資料真的載入後才會炸 —— 這正是使用者實測命中的分支。
+
+        本測試灌入真實形狀的 ADL DataFrame(對齊 fetch_adl 回傳欄位:
+        date/up/down/ad/ad_ratio/adl/adl_ma20)+ 大盤 K 線,強制走入 KPI 卡片
+        （TRAFFIC_GREEN/RED）、廣度評分（BREADTH_BULL_PCT/NEUTRAL_PCT）、
+        騰落線圖（plotly go.Figure + add_danger_hlines）等原本會炸的路徑。"""
+        from streamlit.testing.v1 import AppTest
+        drv = _build_driver('''
+import pandas as pd
+_dates = pd.date_range('2026-06-15', periods=10, freq='D')
+_adl_df = pd.DataFrame({
+    'date': _dates,
+    'up': [500, 520, 480, 600, 610, 590, 620, 630, 640, 650],
+    'down': [300, 290, 320, 250, 240, 260, 230, 220, 210, 200],
+    'ad': [200, 230, 160, 350, 370, 330, 390, 410, 430, 450],
+    'ad_ratio': [62.5, 64.2, 60.0, 70.6, 71.8, 69.4, 72.9, 74.1, 75.3, 76.5],
+    'adl': [1000, 1230, 1390, 1740, 2110, 2440, 2830, 3240, 3670, 4120],
+    'adl_ma20': [900, 950, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700],
+})
+_twii_df = pd.DataFrame({
+    'close': [22000.0, 22050.0, 22100.0, 22200.0, 22300.0,
+              22250.0, 22400.0, 22500.0, 22600.0, 22700.0],
+}, index=_dates)
+st.session_state["cl_data"] = {"adl": _adl_df}
+from src.ui.tabs.macro.section_short import render_section_short
+render_section_short(True, {"台股加權指數": _twii_df}, {"台股加權指數": {"pct": 0.8}})
+''')
+        at = AppTest.from_string(drv, default_timeout=60)
+        at.run()
+        _assert_no_uncaught(at, "render_section_short(populated ADL)")
+        assert len(at.markdown) > 0, "render_section_short(populated) 無 markdown 元素"
+
     def test_render_five_bucket_bar_empty_gray(self):
         """v18.284: 空 session_state → 五桶全 ⬜ 未載入（不偽綠 / 不 KeyError）"""
         from streamlit.testing.v1 import AppTest

@@ -82,7 +82,8 @@ def render_stock_grp():
     if _batch_codes:
         _bc_list = list(_batch_codes)
         _render_mj_trend_section(_bc_list, auto_run=True)
-        _render_stage_picker_section(_bc_list, auto_run=True)
+        # v18.453:轉傳批次財報體檢結果,讓 Stage 1 負債比檢查與其判定一致
+        _render_stage_picker_section(_bc_list, auto_run=True, fh_map=_fh_t3_cached)
     elif stock_list_t3:
         st.info('💡 上方按「🚀 批次分析」會自動串跑 MJ 趨勢分數 + 三階段濾網 + AI 三型建議。')
 
@@ -101,13 +102,18 @@ def render_stock_grp():
 
 
 def _render_stage_picker_section(stock_list: list[str], *,
-                                  auto_run: bool = False) -> None:
+                                  auto_run: bool = False,
+                                  fh_map: dict | None = None) -> None:
     """v19.58 個股組合內三階段濾網 — 直接拿 stock_list_t3 為 candidates，共用 picker 子函式。
 
     v18.223：auto_run=True 串接「批次分析」一鍵流程（picker 跳過按鈕直接跑、AI 也自動）。
     與 _render_mj_trend_section 互補：MJ 趨勢分數看「最近 3 月/3 季的進步退步」，
     三階段濾網看「當下是否進場（基本面 9 項 ＋ 籌碼技術 6 項 ＋ AI 三型建議）」。
     共用 data_loader.fetch_financial_statements + financial_health_engine（與 MJ 同源）。
+
+    fh_map:v18.453 — 上方「批次財報體檢」已算好的 dict[代碼, analyze_financial_health()
+    結果],轉傳給 render_tab_stock_picker 讓 Stage 1 負債比檢查直接沿用同一判定,
+    修 user 回報「財報體檢顯示🟡、智慧選股卻顯示✅」的門檻不一致問題。
     """
     import pandas as pd
     import streamlit as _st  # noqa: F811
@@ -135,6 +141,7 @@ def _render_stage_picker_section(stock_list: list[str], *,
         source_label='個股組合輸入',
         key_prefix='picker_t3',
         auto_run=auto_run,
+        fh_map=fh_map,
     )
 
 

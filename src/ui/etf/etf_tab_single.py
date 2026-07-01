@@ -231,7 +231,10 @@ def render_etf_single(gemini_fn=None):
     _div_yoy = ((_12m_div - _prev12m_div) / _prev12m_div * 100) if _prev12m_div > 0 else None
     _3y_cutoff = _now2 - timedelta(days=365 * 3)
     _df_3y = df[df.index >= _3y_cutoff]
-    _cagr3 = calc_cagr(_df_3y) if len(_df_3y) >= 30 else None
+    # expected_years=3:僅切窗(_3y_cutoff)+ 列數守門(>=30)不足以判斷「是否真有 3 年
+    # 資料」——年輕 ETF(如上市 13 個月)切窗後仍可能 >=30 列,但 calc_cagr 內部
+    # expected_years 檢查會再擋一次跨度不足(§1 寧缺勿假,production bug 同源修正)。
+    _cagr3 = calc_cagr(_df_3y, expected_years=3) if len(_df_3y) >= 30 else None
     # MK 框架 #6：成立年數（yfinance firstTradeDateEpochUtc primary，df span fallback）
     _incept_yrs = None
     try:
@@ -288,14 +291,22 @@ def render_etf_single(gemini_fn=None):
 
     # ── 策略二：7% 存股估值 ─────────────────────────────────────
     st.markdown('#### 🧠 策略二：7% 存股估值買賣點')
-    avg_yield = calc_avg_yield(df, divs, years=5)
+    # require_full_years=True:年輕 ETF(資料跨度不足 5 個完整年度桶)回 None,
+    # 不得把「1 年均殖」誤標為「5 年均殖」顯示(§1 寧缺勿假,同源修正見 etf_calc.calc_avg_yield)。
+    avg_yield = calc_avg_yield(df, divs, years=5, require_full_years=True)
     cc, cd    = st.columns(2)
     cc.metric('近5年平均殖利率', f'{avg_yield:.2f}%' if avg_yield else 'N/A')
     cd.metric('現今殖利率', f'{cur_yield:.2f}%')
     # Batch 9-2 v18.419:走 shared.thresholds.classify_yield_zone SSOT。
     # 原 inline if-elif(4 段對齊 strong_buy/sell/reduce/neutral)收 SSOT;
     # UI 各自 dispatch(_colored_box + _teacher_conclusion)文字保留 ETF 教學脈絡。
-    _, _zone_code = classify_yield_zone(cur_yield, avg_yield=avg_yield)
+    # v18.452:avg_yield=None 需先攔為 'na' —— classify_yield_zone() 對「個股場景省略
+    # avg_yield(引數預設值 None)」與「ETF 場景 avg_yield 資料不足」語意不同,只有
+    # avg_yield<=0 才視為無估值脈絡,None 會被當成「個股模式」直接用 cur_yield 誤判。
+    if avg_yield is None:
+        _zone_code = 'na'
+    else:
+        _, _zone_code = classify_yield_zone(cur_yield, avg_yield=avg_yield)
     _ZONE_UX = {
         'strong_buy': {
             'box': ('🟢 <b>強烈買進（特價）</b>:殖利率 ≥ 7%,現值低估,值得分批佈局', 'green'),
