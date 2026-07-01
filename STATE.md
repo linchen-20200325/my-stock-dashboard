@@ -1,6 +1,10 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🚀 目前狀態(v18.438→441 — 清碼上線後 4 個 production latent bug 連修)
+## 🚀 目前狀態(v18.438→442 — 清碼上線後 5 個 production latent bug 連修)
+
+✅ **v18.442(PR #440)**:ETF 折溢價對 0050.TW 又顯示假 **+5.07%「🔴 嚴禁追高」**(wantgoo 同日 -0.13%)—— 與 v18.441 **不同一條**:即時來源(yfinance navPrice / goodinfo)回「最後已公告淨值」被 `fetch_etf_nav_history` 硬戳 `_last_bd`(今日),0050 案該 NAV 實為 104.03(=06/29 過時值)被戳成 07/01 → 與當日市價 109.3 **同日** inner-join 成功、日期守門員 G1/G3 全過(**日期被造假成同日,擋不到**),算出假 +5.07%。原 G2 上限守門員(|prem|>2%)只對**主動式**生效,被動式 0050 漏接。修:新增 SSOT `PASSIVE_ETF_PREMIUM_MAX_PCT=3.0` + L2 `etf_premium_sanity_max(is_active)`,`calc_premium_discount` Path A/B/B2 上限守門員擴及全 ETF(超限回 stale + `stale_reason='nav_value_stale'`,UI 顯示「⏳ NAV 資料延遲」而非假溢價);近期淨值表同步過濾 |折溢價%|>上限的假列。守衛 `test_premium_stale_guard.py`(+3 case)。**誠實備註**:修後 0050 折溢價卡會顯示 N/A(NAV 來源給的是過時值),等 FinMind/TWSE 更新到同日才顯示真 -0.13% —— §1 寧缺勿假,不再拿過時 NAV 假配。
+
+---
 
 ✅ **v18.438→441 production 修復連鎖**(2026-06-30,已全 merge 到 main;起因:v18.437 清碼 merge 觸發 Streamlit 重新部署,暴露一批**久未執行/未綁定**的渲染路徑潛伏 bug。逐一 fail-loud 修 + 補守衛測試):
 - **v18.438(PR #435)**:ETF 單檔/組合分頁 `ImportError: cannot import name '_colored_box'` —— `render_etf_single/portfolio` late-import 互相從「對方 tab」拉 21+15 個 helper,但這些 helper 實在 `etf_render`(L4)/`etf_calc`(L2)/`etf_fetch`(L1)。改指向真 SSOT 來源,打斷 tab↔tab 循環。守衛 `test_etf_tab_imports.py`。
