@@ -197,8 +197,18 @@ def calc_current_yield(df: pd.DataFrame, divs: pd.Series) -> float:
         return 0.0
 
 
-def calc_total_return_1y(df: pd.DataFrame, divs: pd.Series) -> float:
-    """近1年含息總報酬率(%)"""
+def calc_total_return_1y(df: pd.DataFrame, divs: pd.Series,
+                          require_full_period: bool = False) -> float | None:
+    """近1年含息總報酬率(%)。
+
+    v18.454:require_full_period=True 時,若 df_1y 實際資料跨度不足 365 天的
+    90%(如年輕 ETF 上市未滿 1 年),回傳 None(§1 寧缺勿假)。根因與
+    calc_cagr 的 expected_years 同源:len(df_1y)>=2 只保證「有資料」,不保證
+    「真的橫跨 1 年」——年輕 ETF 全部歷史都落在 365 天窗內,p_start 其實是
+    上市首日價(常為低價)而非 365 天前的價格,算出的百分比因此虛高
+    (production bug:00981A 上市 13 個月卻顯示「1Y累積 212%」)。
+    預設 False 維持既有呼叫端行為不變。
+    """
     if df.empty:
         return 0.0
     try:
@@ -206,6 +216,10 @@ def calc_total_return_1y(df: pd.DataFrame, divs: pd.Series) -> float:
         df_1y = df[df.index >= cutoff]
         if len(df_1y) < 2:
             return 0.0
+        if require_full_period:
+            _span_days = (df_1y.index[-1] - df_1y.index[0]).days
+            if _span_days < 365 * 0.9:
+                return None
         p_start = float(df_1y['Close'].iloc[0])
         p_end   = float(df_1y['Close'].iloc[-1])
         div_sum = float(divs[divs.index >= cutoff].sum()) if not divs.empty else 0.0
