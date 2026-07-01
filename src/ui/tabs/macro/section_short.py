@@ -28,6 +28,11 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
     render_macro_bucket_summary_bar('short')  # v18.314 桶輕量總結 bar
     _adl5 = st.session_state.get('cl_data', {}).get('adl')
     _mkt5 = st.session_state.get('mkt_info', {})
+    # v18.450 hotfix:df_adl 只在 132 行(_load_heavy 補救分支)被賦值,Python 因此把它
+    # 視為整個函式的區域變數 —— 但 72 行早於該賦值就讀取,production 炸
+    # UnboundLocalError。此處補初始化(與 _adl5 同一 session_state 來源),132 行的
+    # 補救邏輯仍可在需要時覆寫。
+    df_adl = _adl5
     if _adl5 is not None and not _adl5.empty:
         _ac5 = next((c for c in _adl5.columns if 'adl' in c.lower()), _adl5.columns[0])
         _adl_vals5 = _adl5[_ac5].dropna().tail(5)

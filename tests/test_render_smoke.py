@@ -387,6 +387,25 @@ render_data_registry_panel()  # 無 session_state['data_registry']
         at.run()
         _assert_no_uncaught(at, "render_data_registry_panel(empty)")
 
+    def test_render_section_short_no_unbound_local_error(self):
+        """v18.450:production 事故 — 總經分頁全頁炸
+        `UnboundLocalError: cannot access local variable 'df_adl' where it is not
+        associated with a value`(section_short.py:72)。根因:`df_adl` 只在函式
+        132 行(_load_heavy 補救分支)被賦值,Python 因此把它視為整個函式的區域變數,
+        但 72 行早於任何賦值就讀取 → 無論 _load_heavy 為何都會炸(空 session_state
+        時最先觸發,幾乎每個冷啟動 session 都會中招)。
+
+        本測試複現原始崩潰條件:空 session_state(無 cl_data.adl)+ 呼叫
+        render_section_short,確認真實 render 不再拋例外。"""
+        from streamlit.testing.v1 import AppTest
+        drv = _build_driver('''
+from src.ui.tabs.macro.section_short import render_section_short
+render_section_short(False, {}, {})
+''')
+        at = AppTest.from_string(drv, default_timeout=60)
+        at.run()
+        _assert_no_uncaught(at, "render_section_short(空 session_state)")
+
     def test_render_five_bucket_bar_empty_gray(self):
         """v18.284: 空 session_state → 五桶全 ⬜ 未載入（不偽綠 / 不 KeyError）"""
         from streamlit.testing.v1 import AppTest

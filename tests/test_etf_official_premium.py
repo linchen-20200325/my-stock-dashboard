@@ -1,9 +1,11 @@
-"""tests/test_etf_official_premium.py — v18.448 TWSE MIS 全體投信 ETF 淨值解析守衛。
+"""tests/test_etf_official_premium.py — v18.450 TWSE MIS 全體投信 ETF 淨值解析守衛。
 
 fetch_etf_official_premium 抓 `mis.twse.com.tw/stock/data/all_etf.txt`(user 用瀏覽器
-DevTools Network 面板實測確認的真實 endpoint)。回應頂層是「投信」區塊陣列,每區塊帶
-`msgArray`(該投信旗下 ETF)。本測試釘死欄位對映(a=代號 / e=成交價 / f=投信預估淨值
-/ g=折溢價率% / h=前一營業日淨值),用真實 0050/0051 數值驗算過:
+DevTools Network 面板實測確認的真實 endpoint)。**回應頂層其實是物件 `{"a1": [...]}`**
+(v18.446 誤判成裸陣列,production log 證實連線成功但解析失敗才發現這個結構差異 —— 見
+`test_response_is_dict_wrapped_not_bare_list` 回歸守衛)。`a1` 的值才是「投信」區塊陣列,
+每區塊帶 `msgArray`(該投信旗下 ETF)。本測試釘死欄位對映(a=代號 / e=成交價 /
+f=投信預估淨值 / g=折溢價率% / h=前一營業日淨值),用真實 0050/0051 數值驗算過:
   g == (e - f) / f * 100(0050: (109.35-109.69)/109.69*100 ≈ -0.31 ✓)
 避免日後誤把 e(市價)與 f(淨值)接反 → 又算出假溢價。
 
@@ -19,8 +21,8 @@ import src.data.etf.etf_fetch as ef
 import src.data.proxy.proxy_helper as ph
 
 
-# 頂層為「投信區塊」陣列 — 真實 all_etf.txt 結構(user DevTools 實測,2026/07/01 13:30:45)
-_ALL_ETF_PAYLOAD = [
+# 「投信區塊」陣列本體(24 家投信各自的 msgArray)
+_ISSUER_BLOCKS = [
     {'refURL': 'https://www.jkoam.com/etf/predict', 'userDelay': '15000',
      'rtMessage': 'OK', 'rtCode': '0000'},  # 無 msgArray 的投信區塊(防呆用)
     {
@@ -37,6 +39,9 @@ _ALL_ETF_PAYLOAD = [
     },
     {},  # 空區塊(真實 payload 最後一筆是 {})
 ]
+
+# 真實 all_etf.txt 頂層結構(v18.450 修正):物件包一層,鍵名 "a1"，值才是投信區塊陣列。
+_ALL_ETF_PAYLOAD = {'a1': _ISSUER_BLOCKS}
 
 
 def _patch_proxy_and_mis(monkeypatch, payload=_ALL_ETF_PAYLOAD):
@@ -132,6 +137,26 @@ def test_ticker_not_found_in_any_block(monkeypatch):
     _patch_proxy_and_mis(monkeypatch)
     out = ef.fetch_etf_official_premium('00999.TW')
     assert out is None
+
+
+def test_response_is_dict_wrapped_not_bare_list(monkeypatch):
+    """v18.450 回歸守衛:production log 證實 v18.446/448 連線已成功(HTTP 200 + json()
+    正常),但解析卡在「回應非預期陣列結構」—— 回應頂層其實是 `{"a1": [...]}`(物件包一層,
+    鍵名剛好叫 "a1"),先前誤判成裸陣列。此測試直接餵 dict-wrapped payload(而非本檔其他
+    測試常用的裸 list),確保不會再退回誤判。"""
+    _patch_proxy_and_mis(monkeypatch, {'a1': _ISSUER_BLOCKS})
+    out = ef.fetch_etf_official_premium('0050.TW')
+    assert out is not None, '{"a1": [...]} 結構應能正確解析,不得誤判為「非預期結構」'
+    assert out['premium_pct'] == pytest.approx(-0.31)
+
+
+def test_response_dict_with_unknown_key_still_parses(monkeypatch):
+    """鍵名若非 "a1"(TWSE 未來若改變內部命名)→ 仍應在 dict 的所有 value 裡找到
+    list-of-dict 並正確解析,不因鍵名寫死而脆弱。"""
+    _patch_proxy_and_mis(monkeypatch, {'some_other_key': _ISSUER_BLOCKS})
+    out = ef.fetch_etf_official_premium('0050.TW')
+    assert out is not None
+    assert out['premium_pct'] == pytest.approx(-0.31)
 
 
 if __name__ == '__main__':
