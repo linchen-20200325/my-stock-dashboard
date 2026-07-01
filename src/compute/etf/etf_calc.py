@@ -37,8 +37,9 @@ from shared.ttls import TTL_15MIN, TTL_1HOUR
 # Phase 2 Batch 5a v18.428:停損 0.92 → 1 - STOP_LOSS_PCT(0.08) SSOT(config.py:19)
 from src.config import STOP_LOSS_PCT
 # v18.241 E8+E9: 抽 inline magic 到 shared SSOT
+# v18.442:ACTIVE_ETF_PREMIUM_MAX_PCT 直引移除 — 折溢價上限改由 etf_helpers.etf_premium_sanity_max
+#         (主/被動分流)內部引 SSOT,見 calc_premium_discount。
 from shared.signal_thresholds import (
-    ACTIVE_ETF_PREMIUM_MAX_PCT,
     ETF_AUM_FAIR_YI,
     ETF_AUM_LOW_YI,
     ETF_AVG_VOL_20D_FAIR_LOTS,
@@ -293,11 +294,12 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
     import pandas as _pd_prem
     import re as _re_prem
     import datetime as _dt_prem
-    from src.compute.etf.etf_helpers import bare_etf_code as _bare
+    from src.compute.etf.etf_helpers import bare_etf_code as _bare, etf_premium_sanity_max
     _code_clean = _bare(ticker)
     _is_active_etf = bool(_re_prem.match(r'^\d{4,5}[A-Z]$', _code_clean))
     # v18.241 E9: 主動式 ETF prem 門檻從 SSOT 引入（原 _ACTIVE_PREM_MAX inline）
-    _ACTIVE_PREM_MAX = ACTIVE_ETF_PREMIUM_MAX_PCT
+    # v18.442:上限守門員擴及被動式(0050 假 +5.07% bug),主/被動各取 SSOT 門檻。
+    _PREM_MAX = etf_premium_sanity_max(_is_active_etf)
 
     def _prev_business_day(_d):
         _d2 = _d - _dt_prem.timedelta(days=1)
@@ -320,9 +322,12 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                     _price_val = _last.get('price', None)
                     if _prem_val is not None and not _pd_prem.isna(_prem_val):
                         _pv = float(_prem_val)
-                        if _is_active_etf and abs(_pv) > _ACTIVE_PREM_MAX:
-                            print(f'[折溢價-A/stale] {ticker}: prem={_pv}% > ±{_ACTIVE_PREM_MAX}%')
-                            return _stale_payload
+                        # v18.442:上限守門員擴及被動式(原僅 _is_active_etf)。>門檻視為
+                        # NAV 未更新的假溢價 → §1 寧缺勿假。
+                        if abs(_pv) > _PREM_MAX:
+                            print(f'[折溢價-A/stale] {ticker}: prem={_pv}% > ±{_PREM_MAX}%')
+                            return {**_stale_payload, 'stale_reason': 'nav_value_stale',
+                                    'premium_raw': round(_pv, 2), 'prem_max': _PREM_MAX}
                         _latest_nav = float(_last['nav'])
                         _pr = float(_price_val) if _price_val else (_latest_nav * (1 + _pv / 100))
                         print(f'[折溢價-A] {ticker}: nav={_latest_nav} prem={_pv}% (TWSE直讀)')
@@ -356,9 +361,18 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                         _nav_v = float(_row['nav'])
                         _pr_v  = float(_row['Close'])
                         _prem  = calc_premium_discount_pct(_pr_v, _nav_v, decimals=2)  # D4 SSOT
-                        if _is_active_etf and abs(_prem) > _ACTIVE_PREM_MAX:
-                            print(f'[折溢價-B/stale-G2] {ticker}: prem={_prem}% > ±{_ACTIVE_PREM_MAX}%')
-                            return _stale_payload
+                        # v18.442:0050 假 +5.07% bug 核心修 — 即時來源(yfinance navPrice
+                        # /goodinfo)回「最後已公告淨值」被硬戳今日,配當日市價 inner-join 成功
+                        # (日期造假成同日 → G1/G3 全過),但 NAV 實為數日前值 → 假溢價。原 G2 上限
+                        # 守門員只擋主動式,被動式 0050 漏接 → 擴及被動式(_PREM_MAX)。
+                        if abs(_prem) > _PREM_MAX:
+                            print(f'[折溢價-B/stale-G2] {ticker}: prem={_prem}% > ±{_PREM_MAX}% '
+                                  f'(nav={_nav_v} price={_pr_v} 疑 NAV 未更新)')
+                            return {**_stale_payload, 'nav_date': _nav_d_only,
+                                    'price_date': _price_latest.date(),
+                                    'stale_reason': 'nav_value_stale',
+                                    'premium_raw': _prem, 'prem_max': _PREM_MAX,
+                                    'nav': _nav_v, 'price': _pr_v}
                         print(f'[折溢價-B] {ticker}: date={_nav_d_only} nav={_nav_v} price={_pr_v} prem={_prem}%')
                         return {'nav': _nav_v, 'price': _pr_v,
                                 'premium_pct': _prem, 'warning': _prem > 1.0,
@@ -387,9 +401,15 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
                             _nav_v = float(_nav_df['nav'].iloc[-1])
                             _pr_v  = float(_price_s['Close'].iloc[-1])
                             _prem  = calc_premium_discount_pct(_pr_v, _nav_v, decimals=2)  # D4 SSOT
-                            if _is_active_etf and abs(_prem) > _ACTIVE_PREM_MAX:
-                                print(f'[折溢價-B2/stale-G2] {ticker}: prem={_prem}% > ±{_ACTIVE_PREM_MAX}%')
-                                return _stale_payload
+                            # v18.442:上限守門員擴及被動式(同 Path B)。
+                            if abs(_prem) > _PREM_MAX:
+                                print(f'[折溢價-B2/stale-G2] {ticker}: prem={_prem}% > ±{_PREM_MAX}%')
+                                return {**_stale_payload,
+                                        'nav_date': _nav_last_d.date(),
+                                        'price_date': _price_last_d.date(),
+                                        'stale_reason': 'nav_value_stale',
+                                        'premium_raw': _prem, 'prem_max': _PREM_MAX,
+                                        'nav': _nav_v, 'price': _pr_v}
                             _dd = min(_nav_last_d, _price_last_d).date()
                             print(f'[折溢價-B2/假日兜底] {ticker}: nav日={_nav_last_d.date()} '
                                   f'價日={_price_last_d.date()} gap={_gap}d '

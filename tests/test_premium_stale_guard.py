@@ -49,5 +49,47 @@ def test_same_day_pairing_correct(monkeypatch):
     assert out.get('stale_nav') is not True
 
 
+def test_passive_etf_fake_premium_capped(monkeypatch):
+    """0050 真實案(v18.442):即時來源(yfinance navPrice/goodinfo)把過時 NAV(104.03,實為
+    數日前值)硬戳「今日」→ 與當日市價(109.3)同日 inner-join 成功、日期守門員全過,但算出
+    假 +5.07%「嚴禁追高」。被動式上限守門員(±3%)應攔為 stale,不得顯示假溢價。"""
+    _today = datetime.date.today()
+    # NAV 戳今日(= price 日),值為過時 104.03 → 日期守門員 G1/G3 攔不到(日期已同日)
+    monkeypatch.setattr(ec, 'fetch_etf_nav_history',
+                        lambda *a, **k: _nav_hist([_today], [104.03]))
+    df = pd.DataFrame({'Close': [109.3]}, index=pd.to_datetime([str(_today)]))
+
+    out = ec.calc_premium_discount({}, df, '0050.TW')
+    assert out['premium_pct'] is None, f'被動式假 +5% 應攔為 None(§1 寧缺勿假):{out}'
+    assert out.get('stale_nav') is True
+    assert out.get('stale_reason') == 'nav_value_stale', out
+    # 保留推算值供 UI 說明「超出合理套利範圍」
+    assert out.get('premium_raw') == pytest.approx(5.07, abs=0.05), out
+
+
+def test_passive_premium_under_cap_still_shows(monkeypatch):
+    """被動式真實小溢價(< 3% 上限)不得被誤殺 — 2% 溢價應正常顯示。"""
+    _today = datetime.date.today()
+    monkeypatch.setattr(ec, 'fetch_etf_nav_history',
+                        lambda *a, **k: _nav_hist([_today], [100.0]))
+    df = pd.DataFrame({'Close': [102.0]}, index=pd.to_datetime([str(_today)]))
+
+    out = ec.calc_premium_discount({}, df, '0050.TW')
+    assert out['premium_pct'] == pytest.approx(2.0, abs=0.02), out
+    assert out.get('stale_nav') is not True
+
+
+def test_active_etf_cap_tighter_at_2pct(monkeypatch):
+    """主動式(代號末碼字母,如 00982A)上限較嚴(±2%)— 2.5% 溢價即應攔 stale。"""
+    _today = datetime.date.today()
+    monkeypatch.setattr(ec, 'fetch_etf_nav_history',
+                        lambda *a, **k: _nav_hist([_today], [100.0]))
+    df = pd.DataFrame({'Close': [102.5]}, index=pd.to_datetime([str(_today)]))
+
+    out = ec.calc_premium_discount({}, df, '00982A.TW')
+    assert out['premium_pct'] is None, f'主動式 2.5% > ±2% 應攔:{out}'
+    assert out.get('stale_reason') == 'nav_value_stale', out
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
