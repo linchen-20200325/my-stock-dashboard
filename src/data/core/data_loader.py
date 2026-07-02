@@ -343,6 +343,57 @@ def _normalize_inst_pivot(df_raw: pd.DataFrame) -> pd.DataFrame:
     return pv
 
 
+def _fetch_finmind_margin_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> tuple:
+    """FinMind 原始 API 備援 — 個股融資融券（TaiwanStockMarginPurchaseShortSale）。
+
+    SDK 失敗時的 fallback，邏輯對齊 _fetch_finmind_inst_raw。
+    回傳 (df, src_label)：df 已 merge 融資/融券欄位；src_label='finmind_raw' 或 'missing'。
+    """
+    import os
+    _token = os.environ.get('FINMIND_TOKEN', '')
+    _end_str = datetime.date.today().strftime('%Y-%m-%d')
+    try:
+        _params = {
+            'dataset': 'TaiwanStockMarginPurchaseShortSale',
+            'data_id': stock_id,
+            'start_date': start_str,
+            'end_date': _end_str,
+        }
+        if _token:
+            _params['token'] = _token
+        _r = _bps_dl().get(
+            FINMIND_API_URL,
+            params=_params,
+            headers={'Authorization': f'Bearer {_token}'} if _token else {},
+            timeout=20,
+        )
+        _j = _r.json()
+        _capture_finmind_meta('margin', _j)
+        if _j.get('status') == 200 and _j.get('data'):
+            _df_m = pd.DataFrame(_j['data'])
+            _df_m['date'] = pd.to_datetime(_df_m['date']).dt.date
+            if 'MarginPurchaseTodayBalance' in _df_m.columns:
+                _df_m = _df_m[['date', 'MarginPurchaseTodayBalance', 'ShortSaleTodayBalance']].copy()
+                _df_m.rename(columns={
+                    'MarginPurchaseTodayBalance': '融資餘額',
+                    'ShortSaleTodayBalance': '融券餘額',
+                }, inplace=True)
+                _df_m['融資餘額'] = pd.to_numeric(_df_m['融資餘額'], errors='coerce')
+                _df_m['融券餘額'] = pd.to_numeric(_df_m['融券餘額'], errors='coerce')
+                df['date'] = pd.to_datetime(df['date']).dt.date
+                df = pd.merge(df, _df_m, on='date', how='left')
+                _nz = (df.get('融資餘額', pd.Series(dtype=float)) != 0).sum()
+                print(f'[FM-Raw margin] {stock_id}: ✅ {len(_j["data"])} 筆 融資非零={_nz}')
+                return df, 'finmind_raw'
+            print(f'[FM-Raw margin] {stock_id}: 找不到 MarginPurchaseTodayBalance, '
+                  f'cols={list(_df_m.columns)[:8]}')
+        else:
+            print(f'[FM-Raw margin] {stock_id}: status={_j.get("status")} msg={_j.get("msg", "")}')
+    except Exception as _e:
+        print(f'[FM-Raw margin] {stock_id}: ❌ {_e}')
+    return df, 'missing'
+
+
 def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> pd.DataFrame:
     """FinMind 原始 API 備援（不依賴 Python SDK）
     - 有 FINMIND_TOKEN: 使用 token 提高速率限制
@@ -700,33 +751,32 @@ class StockDataLoader:
                     _inst_src = 'missing'
 
             # ========== 5. 融資融券 ==========
-            try:
-                df_margin = _self.dl.taiwan_stock_margin_purchase_short_sale(
-                    stock_id=stock_id,
-                    start_date=start_str
-                )
-
-                if not df_margin.empty:
-                    df_margin['date'] = pd.to_datetime(df_margin['date']).dt.date
-
-                    margin_data = df_margin[['date', 'MarginPurchaseTodayBalance', 'ShortSaleTodayBalance']].copy()
-                    margin_data.rename(columns={
-                        'MarginPurchaseTodayBalance': '融資餘額',
-                        'ShortSaleTodayBalance': '融券餘額'
-                    }, inplace=True)
-
-                    margin_data['融資餘額'] = pd.to_numeric(margin_data['融資餘額'], errors='coerce')
-                    margin_data['融券餘額'] = pd.to_numeric(margin_data['融券餘額'], errors='coerce')
-
-                    df = pd.merge(df, margin_data, on='date', how='left')
-                    _margin_src = 'finmind_sdk'
-                    _capture_finmind_meta('margin', {})   # v18.201 D2
-                else:
-                    _margin_src = 'missing'
-
-            except Exception as e:
-                print(f"融資數據錯誤: {e}")
-                _margin_src = 'missing'
+            _margin_sdk_ok = False
+            if _self.dl is not None:
+                try:
+                    df_margin = _self.dl.taiwan_stock_margin_purchase_short_sale(
+                        stock_id=stock_id,
+                        start_date=start_str
+                    )
+                    if not df_margin.empty:
+                        df_margin['date'] = pd.to_datetime(df_margin['date']).dt.date
+                        margin_data = df_margin[['date', 'MarginPurchaseTodayBalance',
+                                                 'ShortSaleTodayBalance']].copy()
+                        margin_data.rename(columns={
+                            'MarginPurchaseTodayBalance': '融資餘額',
+                            'ShortSaleTodayBalance': '融券餘額'
+                        }, inplace=True)
+                        margin_data['融資餘額'] = pd.to_numeric(margin_data['融資餘額'], errors='coerce')
+                        margin_data['融券餘額'] = pd.to_numeric(margin_data['融券餘額'], errors='coerce')
+                        df = pd.merge(df, margin_data, on='date', how='left')
+                        _margin_src = 'finmind_sdk'
+                        _capture_finmind_meta('margin', {})
+                        _margin_sdk_ok = True
+                except Exception as e:
+                    print(f"融資數據 SDK 錯誤: {e}")
+            if not _margin_sdk_ok:
+                # SDK 不可用 / 無資料 → FinMind Raw HTTP API 備援（對齊 inst 降級邏輯）
+                df, _margin_src = _fetch_finmind_margin_raw(stock_id, df, start_str)
 
             # ========== 6. 數據清洗 ==========
             # v18.241 D2 (CLAUDE.md §1 Fail Loud) 刻意取捨 + 可視化：

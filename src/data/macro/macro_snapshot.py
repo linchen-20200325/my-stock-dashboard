@@ -606,6 +606,7 @@ def fetch_ndc_block() -> dict:
         if _sf_r is not None:
             _sf_r.encoding = 'utf-8'
             _txt_sf = _BS_ndc(_sf_r.text, 'html.parser').get_text(' ', strip=True)
+            # 方案 A1: 嚴格 regex（不跨句號，原始模式）
             _m_sf = _re_ndc.search(
                 r'(20\d{2})\s*年\s*(\d{1,2})\s*月[^。]{0,80}?綜合(?:判斷)?分數[^\d]{0,15}(\d{1,2})\s*分',
                 _txt_sf)
@@ -613,10 +614,35 @@ def fetch_ndc_block() -> dict:
                 _yr_sf, _mo_sf, _sc_sf = _m_sf.group(1), _m_sf.group(2), int(_m_sf.group(3))
                 if 9 <= _sc_sf <= 45:
                     _date_sf = f'{_yr_sf}-{int(_mo_sf):02d}-01'
-                    print(f'[NDC/StockFeel] ✅ score={_sc_sf} date={_date_sf}')
+                    print(f'[NDC/StockFeel-A1] ✅ score={_sc_sf} date={_date_sf}')
                     return {'ndc_signal': {'score': _sc_sf, 'signal': None,
                                            'date': _date_sf, 'source': 'StockFeel'}}
-            print('[NDC/StockFeel] ⚠️ 未匹配「YYYY年M月...綜合分數N分」')
+            # 方案 A2: 寬鬆 regex（允許跨句號，re.DOTALL；抓最近年月 + 分數）
+            _m_sf2 = _re_ndc.search(
+                r'(20\d{2})\s*年\s*(\d{1,2})\s*月.{0,300}?(?:綜合(?:判斷)?分數|景氣對策信號).{0,60}?(\d{1,2})\s*分',
+                _txt_sf, _re_ndc.DOTALL)
+            if _m_sf2:
+                _yr_sf2, _mo_sf2, _sc_sf2 = _m_sf2.group(1), _m_sf2.group(2), int(_m_sf2.group(3))
+                if 9 <= _sc_sf2 <= 45:
+                    _date_sf2 = f'{_yr_sf2}-{int(_mo_sf2):02d}-01'
+                    print(f'[NDC/StockFeel-A2] ✅ score={_sc_sf2} date={_date_sf2}')
+                    return {'ndc_signal': {'score': _sc_sf2, 'signal': None,
+                                           'date': _date_sf2, 'source': 'StockFeel'}}
+            # 方案 A3: 只抓「對策信號總分/綜合分數 N 分」近年月
+            _m_sf3 = _re_ndc.search(
+                r'(?:對策信號|綜合分數|景氣燈號).{0,20}?(\d{2})\s*分',
+                _txt_sf)
+            if _m_sf3:
+                _sc_sf3 = int(_m_sf3.group(1))
+                if 9 <= _sc_sf3 <= 45:
+                    # 補日期：從文中取最近年月
+                    _dm3 = _re_ndc.search(r'(20\d{2})\s*年\s*(\d{1,2})\s*月', _txt_sf)
+                    _d3 = (f'{_dm3.group(1)}-{int(_dm3.group(2)):02d}-01'
+                           if _dm3 else '')
+                    print(f'[NDC/StockFeel-A3] ✅ score={_sc_sf3} date={_d3}')
+                    return {'ndc_signal': {'score': _sc_sf3, 'signal': None,
+                                           'date': _d3, 'source': 'StockFeel'}}
+            print('[NDC/StockFeel] ⚠️ A1/A2/A3 均未匹配')
     except Exception as _e_sf:
         print(f'[NDC/StockFeel] ❌ {type(_e_sf).__name__}: {_e_sf}')
 
@@ -725,6 +751,24 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                         break
     except Exception as _e_fm_ex:
         print(f'[Export/FinMind] ❌ {type(_e_fm_ex).__name__}: {_e_fm_ex}')
+
+    # 方案 FRED-API: FRED series API(比 fredgraph.csv 更穩定, 需 fred_api_key)
+    if fred_api_key:
+        try:
+            from src.data.macro.macro_core import fetch_fred as _fetch_fred_api
+            _df_fredapi = _fetch_fred_api('XTEXVA01TWM664S', fred_api_key, n=60)
+            if not _df_fredapi.empty and len(_df_fredapi) >= 13:
+                _df_fredapi = _df_fredapi.sort_values('date')
+                _cur_fa = float(_df_fredapi['value'].iloc[-1])
+                _prev_fa = float(_df_fredapi['value'].iloc[-13])
+                if _prev_fa and _prev_fa != 0:
+                    _yoy_fa = round((_cur_fa - _prev_fa) / abs(_prev_fa) * 100, 2)
+                    _date_fa = str(_df_fredapi['date'].iloc[-1])[:10]
+                    print(f'[Export/FRED-API] ✅ YoY={_yoy_fa:.2f}% date={_date_fa}')
+                    return {'tw_export': {'yoy': _yoy_fa, 'date': _date_fa,
+                                          'source': 'FRED-API/XTEXVA01TWM664S'}}
+        except Exception as _e_fa:
+            print(f'[Export/FRED-API] ❌ {_e_fa}')
 
     # 方案 MOF: 財政部統計處 CSV — 透過 NAS proxy(台灣 IP)
     try:

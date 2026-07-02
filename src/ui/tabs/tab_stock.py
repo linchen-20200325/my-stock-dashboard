@@ -366,7 +366,8 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                     'missing': '🔴 缺失', 'unknown': '⬜ 未知',
                 }
                 _MARGIN_LABEL = {
-                    'finmind_sdk': '🟢 FinMind', 'missing': '🔴 缺失', 'unknown': '⬜ 未知',
+                    'finmind_sdk': '🟢 FinMind', 'finmind_raw': '🟠 FinMind HTTP(降級)',
+                    'missing': '🔴 缺失', 'unknown': '⬜ 未知',
                 }
                 # v18.201 D2：FinMind 後台 update + 抓取時間 hover tooltip
                 def _fm_tooltip(_key: str, _label: str) -> str:
@@ -448,7 +449,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                 _degraded = (
                     _ps in ('finmind_sdk', 'finmind_raw', 'yahoo_fallback')
                     or _is in ('finmind_raw', 'twse', 'tpex', 'missing')
-                    or _ms == 'missing'
+                    or _ms in ('finmind_raw', 'missing')
                 )
                 # v18.202 E2：財報三段降級也納入警示
                 _fin_degraded = (
