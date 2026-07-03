@@ -1,6 +1,53 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🚀 目前狀態(v18.458 — 財報領先指標 capex 顯示修正)
+## 🔍 2026-07-03 全面稽核待修清單（跨 Tab 稽核）
+
+> Claude 逐檔讀取所有 Tab 後彙整，對照 2026-07-03 真實市場數值確認。
+> 修完一項請在前面改為 ✅，並在括號內標版本號。
+
+### 🔴 HIGH（影響判斷正確性）
+
+- ✅ **[H1] VIX 雙重綠燈** (v18.459) — `src/data/macro/macro_core.py:518` `_sig_vix()`：VIX > 30 改為 ⚫「極端恐慌（逢低加碼訊號）」`#8b949e` 深灰色，與正常平靜 🟢 明確區分。
+
+- ✅ **[H2] Bloomberg RSS 靜默死亡** (v18.459) — `src/data/news/news_fetcher.py:97`：移除 `feeds.bloomberg.com/markets/news.rss`，並更新 docstring。
+
+- ✅ **[H3] Investing.com RSS 封鎖** (N/A) — 稽核確認 stock dashboard 的 `news_fetcher.py` **從未包含** Investing.com；此項僅存在於 Fund dashboard（已在 Fund 端修除）。
+
+### 🟡 MEDIUM（資料品質或門檻偏差）
+
+- ✅ **[M1] CHN_PMI 標籤錯誤** (v18.459) — 修正為 CHN_BCI：
+  - `macro_core.py:241` key 名 `CHN_PMI` → `CHN_BCI`（加版本 comment）
+  - `macro_helpers.py:800` `_CHINA_SUBSCORE_THRESHOLDS` key 同步更新
+  - `classify_china_regime()` 的 reason 字串 `PMI=xx` → `BCI=xx`（兩端）
+  - China Drag 面板 caption 加 `⚠️ BCI=OECD 商業信心指數(BSCICP03CNM665S,基準值 100 ≠ PMI 50 榮枯線)` 說明
+
+- ✅ **[M2] USDTWD 顏色盲區** (WONTFIX-cosmetic) — 稽核確認 `MACRO_THRESHOLDS['USDTWD']` 在 stock dashboard **未被任何 signal 渲染程式讀取**（USDTWD 訊號走 `calc_twd_trend()` 斜率邏輯，不用絕對閾值）。此 dict 僅文件參考，30.5-32.0 盲區不影響實際 UI 輸出。`MACRO_THRESHOLDS` 的 F-GRAY-4 注解說明此特性，故無需修。
+
+- ⬜ **[M3] ISM PMI 備援刻度衝突** (WONTFIX — 稽核確認 `fetch_ism_pmi()` 為 dead code，UI 未呼叫) — `macro_core.py:609`：Production UI 的 `ism_pmi` session_state key 實際由 `fetch_tw_pmi_block()` 填入台灣 PMI（14 處讀取點），`fetch_ism_pmi()` 僅在 tests 有 ref。OECD 備援顯示問題不存在於實際 UI。無需修改。
+
+- ⬜ **[M4] AAII 情緒調查抓取脆弱** — `src` 中的 AAII HTML scraping：AAII.com 加強 Cloudflare 防護與 JS 渲染，3 段 URL fallback 仍高失敗率，週頻情緒數據常缺失。
+
+- ⬜ **[M5] FT RSS 需訂閱** — `src/data/news/news_fetcher.py` 中的 `www.ft.com/rss/home/uk`：免費版返回空內容，建議移除。
+
+### ⚪ LOW（邊界設計或 UX 微調）
+
+- ⬜ **[L1] CBC_RATE 永遠卡邊界** — `macro_core.py:236`：`yellow_above: 2.0`，台灣央行重貼現率目前剛好 2.0%，燈號永遠在邊界跳動。
+
+- ⬜ **[L2] USDCNY 門檻長期無綠** — `macro_core.py:244`：`green_below: 7.0`，人民幣 2022 年後走弱，長期 7.1-7.3，門檻形同虛設。
+
+- ⬜ **[L3] Yahoo Finance RSS 格式待驗** — `news_fetcher.py` 的 Yahoo Finance RSS URL 為舊版格式，Yahoo 已多次更改 endpoint，建議驗證是否仍有效。
+
+---
+
+## 🚀 目前狀態(v18.459 — HIGH/MEDIUM 稽核修正)
+
+✅ **v18.459(2026-07-03)**:稽核項目修正:
+- **[H1] VIX 雙重綠燈**：`_sig_vix()` VIX > 30 改 ⚫「極端恐慌（逢低加碼訊號）」深灰色，與平靜 🟢 明確區分。`src/data/macro/macro_core.py`
+- **[H2] Bloomberg RSS 死亡**：移除 `feeds.bloomberg.com/markets/news.rss`，更新 docstring 來源列表。`src/data/news/news_fetcher.py`
+- **[M1] CHN_PMI→CHN_BCI**：`MACRO_THRESHOLDS` key 重命名、`_CHINA_SUBSCORE_THRESHOLDS` key 重命名、`classify_china_regime()` reason 字串全改 BCI、China Drag 面板 caption 加 OECD 刻度說明。`macro_core.py` + `macro_helpers.py` + `ui/tabs/macro/helpers.py`
+- **[M2] USDTWD 盲區**：稽核確認為文件參考 dict，不影響實際 UI（訊號走斜率邏輯）。WONTFIX。
+
+## 🚀 前一狀態(v18.458 — 財報領先指標 capex 顯示修正)
 
 ✅ **v18.458(2026-07-03)**:財報領先指標 section 標籤與數據修正:
 - **`section_financial_leading` 仍顯示 PP&E 存量標榜「資本支出」**:Task#20 修復了龍頭預警(dragon_alert)的比較邏輯，但同一個 `_capex2`(CF 季資本支出)未傳給財報領先指標 section，UI 仍用 PP&E 存量(cx2)且標籤顯示「資本支出」造成誤導。

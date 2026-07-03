@@ -1,0 +1,14 @@
+=== 2026/7/3 ¤W¤È 06:16:08 ===
+Status:  M infra/oauth.py
+ M src/data/core/data_loader.py
+?? do_git_stock.vbs
+?? git_stock_log.txt
+
+Add: 
+Commit: [main 860ecb6] fix(oauth): prompt=select_account consent to prevent auto-selecting wrong Google account (v19.293 port)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Push: To https://github.com/linchen-20200325/my-stock-dashboard.git
+   ba13e4c..860ecb6  main -> main
+
+=== Done ===

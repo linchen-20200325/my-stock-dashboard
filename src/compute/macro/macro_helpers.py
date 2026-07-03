@@ -797,7 +797,7 @@ def calc_twd_trend(usdtwd_series: Optional[pd.Series],
 # China zone(對齊 §3.2 合理範圍 + macro_core.MACRO_THRESHOLDS v18.271 5 項)
 _CHINA_SUBSCORE_THRESHOLDS = {
     "CHN_CLI":   {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},
-    "CHN_PMI":   {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},
+    "CHN_BCI":   {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},  # v18.459: renamed from CHN_PMI
     "CHN_CPI":   {"green_low": 1.0, "green_high": 3.0, "yellow_above": 4.0, "red_above": 5.0},
     "CHN_M2":    {"red_below": 5.0, "green_above": 9.0},
     "USDCNY":    {"green_below": 7.0, "yellow_above": 7.2, "red_above": 7.4},
@@ -1021,10 +1021,10 @@ def compute_china_subscore(snapshot: dict) -> Optional[dict]:
 def classify_china_regime(snapshot: dict) -> dict:
     """從 China snapshot 推導 4 級 regime + USDCNY 警示 flag。
 
-    Levels:
-      🟢 擴張:CLI > 100 AND PMI > 100
-      🟡 減速:CLI < 99 OR PMI < 99(但非衰退)
-      🔴 衰退/緊縮:(CLI < 98 AND PMI < 98) OR M2 < 5%
+    Levels(BCI = OECD 商業信心 BSCICP03CNM665S，基準值 100，≠ PMI 50 榮枯線):
+      🟢 擴張:CLI > 100 AND BCI > 100
+      🟡 減速:CLI < 99 OR BCI < 99(但非衰退)
+      🔴 衰退/緊縮:(CLI < 98 AND BCI < 98) OR M2 < 5%
       ⚪ 中性:其餘
       🚨 fx_alert flag(獨立):USDCNY > 7.4
 
@@ -1055,7 +1055,7 @@ def classify_china_regime(snapshot: dict) -> dict:
     if (cli_red and pmi_red) or m2_tight:
         reasons = []
         if cli_red and pmi_red:
-            reasons.append(f"CLI={cli:.1f} & PMI={pmi:.1f} 雙紅")
+            reasons.append(f"CLI={cli:.1f} & BCI={pmi:.1f} 雙紅")
         if m2_tight:
             reasons.append(f"M2={m2:.1f}% 緊縮")
         return {"regime": "🔴 衰退/緊縮", "fx_alert": fx_alert,
@@ -1065,19 +1065,19 @@ def classify_china_regime(snapshot: dict) -> dict:
     pmi_green = (pmi is not None and float(pmi) > 100.0)
     if cli_green and pmi_green:
         return {"regime": "🟢 擴張", "fx_alert": fx_alert,
-                "reason": f"CLI={cli:.1f} & PMI={pmi:.1f} 雙綠"}
+                "reason": f"CLI={cli:.1f} & BCI={pmi:.1f} 雙綠"}
 
     cli_slow = (cli is not None and float(cli) < 99.0)
     pmi_slow = (pmi is not None and float(pmi) < 99.0)
     if cli_slow or pmi_slow:
         which = []
         if cli_slow:  which.append(f"CLI={cli:.1f}")
-        if pmi_slow:  which.append(f"PMI={pmi:.1f}")
+        if pmi_slow:  which.append(f"BCI={pmi:.1f}")
         return {"regime": "🟡 減速", "fx_alert": fx_alert,
                 "reason": " / ".join(which) + " <99"}
 
     return {"regime": "⚪ 中性", "fx_alert": fx_alert,
-            "reason": f"CLI={cli}, PMI={pmi} 皆 99-100 區間"}
+            "reason": f"CLI={cli}, BCI={pmi} 皆 99-100 區間"}
 
 
 # ════════════════════════════════════════════════════════════════════════════

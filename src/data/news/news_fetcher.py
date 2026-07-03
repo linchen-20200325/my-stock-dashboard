@@ -62,8 +62,9 @@ def fetch_macro_news(n: int = 5) -> list:
     """抓取全球總經財經新聞 — 中英雙語多源(系統性風險偵測用)。
 
     來源：CNYES鉅亨 / 經濟日報 / Google News(中) / Google News(英) /
-          Yahoo Finance / CNBC Economy / Bloomberg Markets
+          Yahoo Finance / CNBC Economy
           (v18.458: Reuters feeds.reuters.com removed — dead since June 2020)
+          (v18.459: Bloomberg feeds.bloomberg.com removed — blocked for non-subscribers)
     策略：每源最多取 3 則 → 全池去重(依標題)→ 不依時間排序(部分 RSS 無 published),
           採「每源 round-robin」混合產出,確保中英來源都被納入 AI 判讀。
     ttl=TTL_30MIN:每 30 分鐘自動更新一次快取。
@@ -94,7 +95,7 @@ def fetch_macro_news(n: int = 5) -> list:
         # v18.457: Reuters feeds.reuters.com dead since June 2020 (all 404) — removed
         ('CNBC Economy', 'https://search.cnbc.com/rs/search/combinedcms/view.xml'
                          '?partnerId=wrss01&id=20910258'),
-        ('Bloomberg',    'https://feeds.bloomberg.com/markets/news.rss'),
+        # v18.459: Bloomberg feeds.bloomberg.com/markets/news.rss dead — blocked for non-subscribers — removed
     ]
     _per_src = 3  # 每源上限,避免單一來源洗版
     _by_src: dict[str, list] = {}

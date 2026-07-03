@@ -342,7 +342,8 @@ def _render_china_drag_panel(fred_api_key: str = "",
                   delta_color="inverse")
     st.caption(
         "ℹ️ 唯讀展示:本面板**不改變**上方主分卡與今日市場總覽,僅示意「若 China 副盤納入主分」的折扣強度。"
-        "資料源:5 條 FRED OECD MEI(CLI/PMI/CPI/M2/USDCNY)。"
+        "資料源:5 條 FRED OECD MEI(CLI/BCI/CPI/M2/USDCNY)。"
+        "⚠️ BCI=OECD 商業信心指數(BSCICP03CNM665S,基準值 100 ≠ PMI 50 榮枯線)。"
     )
 
 

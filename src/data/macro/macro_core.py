@@ -238,7 +238,7 @@ MACRO_THRESHOLDS: dict = {
     "USDTWD":      {"green_below": 30.5, "yellow_above": 32.0, "red_above": 33.0},
     # v18.271 China macro 5 zone(對稱 Fund v19.113):服務中國終端需求 + 全球流動性判讀
     "CHN_CLI":     {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},
-    "CHN_PMI":     {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},
+    "CHN_BCI":     {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},  # v18.459: renamed CHN_PMI→CHN_BCI (BSCICP03CNM665S = OECD Business Confidence, NOT PMI)
     "CHN_CPI":     {"green_low": 1.0, "green_high": 3.0, "yellow_above": 4.0, "red_above": 5.0},
     "CHN_M2":      {"red_below": 5.0, "green_above": 9.0},
     "USDCNY":      {"green_below": 7.0, "yellow_above": 7.2, "red_above": 7.4},
@@ -514,8 +514,9 @@ def fetch_macro_compass(range_: str = "6mo") -> dict:
 
     def _sig_vix(v):
         # v18.326 PR-D：黃線 25→22 對齊 C2 全站統一（複用 MACRO_THRESHOLDS['VIX'] SSOT）。
-        # >red_above(30) 綠（恐慌貪婪區=逢低加碼）/ >yellow_above(22) 黃（波動加劇）/ 其餘綠（平靜）
-        if v > MACRO_THRESHOLDS['VIX']['red_above']: return ('🟢', '恐慌貪婪區（準備跌深就買）', TRAFFIC_GREEN)
+        # v18.459 Bug Fix：>red_above(30) 改⚫（恐慌≠平靜，不可同為🟢）
+        # >red_above(30) 黑（極端恐慌，逢低加碼訊號）/ >yellow_above(22) 黃（波動加劇）/ 其餘綠（市場平靜）
+        if v > MACRO_THRESHOLDS['VIX']['red_above']: return ('⚫', '極端恐慌（逢低加碼訊號）', '#8b949e')
         if v > MACRO_THRESHOLDS['VIX']['yellow_above']: return ('🟡', '波動加劇', TRAFFIC_YELLOW)
         return ('🟢', '市場平靜', TRAFFIC_GREEN)
 
