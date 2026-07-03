@@ -297,7 +297,9 @@ primary_stock = '2330'
 with st.sidebar:
     st.markdown('<div style="text-align:center;padding:8px 0;font-size:15px;font-weight:900;color:#e6edf3;">&#128202; 台股AI戰情室 v3.0</div>', unsafe_allow_html=True)
     st.markdown('---')
-    _today_sb = datetime.date.today()
+    # v18.461 FIX: 使用台灣時區（UTC+8），避免 Streamlit Cloud UTC 服務器在 00:00~08:00 TW 顯示昨天日期
+    _TW_TZ_SB = datetime.timezone(datetime.timedelta(hours=8))
+    _today_sb = datetime.datetime.now(_TW_TZ_SB).date()
     _wd_sb = {0:'一',1:'二',2:'三',3:'四',4:'五',5:'六',6:'日'}[_today_sb.weekday()]
     _trade_sb = '✅ 交易日' if _today_sb.weekday() < 5 else '❌ 非交易日'
     st.caption(f'{_today_sb.strftime("%Y/%m/%d")} 週{_wd_sb}  {_trade_sb}')
