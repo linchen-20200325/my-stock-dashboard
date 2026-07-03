@@ -1930,23 +1930,57 @@ def _fetch_sector_returns(tickers: tuple, period: str) -> dict:
     return result
 
 
+def _fetch_etf_zh_name_finmind(ticker: str) -> str | None:
+    """v18.455:FinMind TaiwanStockInfo.stock_name 取 ETF 中文商品名（結構化，最可靠）。
+
+    stock_id 不帶 .TW/.TWO 後綴;stock_name 即官方中文名(0050→元大台灣50)。
+    同 dataset 的 industry_category 早已在 fetch_industry_category 穩定運作。
+    失敗/非中文/查無 → None(呼叫端 fallback MoneyDJ)。
+    """
+    import os as _os_fn
+    import re as _re_fn
+    import requests as _rq_fn
+    _bare = _re_fn.sub(r'\.(TW|TWO)$', '', (ticker or '').replace('.tw', '.TW').strip())
+    if not _bare:
+        return None
+    # token 選填(FinMind 無 token 亦可 rate-limited 查詢);讀 secrets 失敗不可中斷
+    _tok = _os_fn.environ.get('FINMIND_TOKEN', '')
+    if not _tok:
+        try:
+            _tok = getattr(st, 'secrets', {}).get('FINMIND_TOKEN', '') or ''
+        except Exception:
+            _tok = ''
+    try:
+        _p = {'dataset': 'TaiwanStockInfo', 'data_id': _bare}
+        if _tok:
+            _p['token'] = _tok
+        _r = _rq_fn.get(FINMIND_API_URL, params=_p, timeout=15)
+        _data = _r.json().get('data', []) if _r.status_code == 200 else []
+        for _row in _data:
+            _nm = str(_row.get('stock_name', '') or '').strip()
+            # 只取真中文名(含 CJK,非純數字/英數,2-30 字)
+            if (2 <= len(_nm) <= 30 and not _nm.isdigit()
+                    and any('一' <= _c <= '鿿' for _c in _nm)):
+                return _nm
+    except Exception as _e:
+        print(f'[FinMind/zhname] {_bare}: {type(_e).__name__}: {_e}')
+    return None
+
+
 @st.cache_data(ttl=TTL_7DAY, max_entries=500, show_spinner=False)
 def fetch_etf_zh_name(ticker: str):
-    """從 MoneyDJ 抓 ETF 中文名稱（yfinance 對台股 ETF 只有英文 longName）。
+    """取 ETF 中文名稱（yfinance 對台股 ETF 只有英文 longName/發行商名）。
 
-    抓取策略：MoneyDJ Basic 系列頁面（Basic0003/0004/0001）的 <title> 標籤
-    格式為「{中文名}-{代號}.TW-ETF{頁面類型} - MoneyDJ理財網」，regex 擷取首段中文。
+    v18.455 來源優先序:
+      1. FinMind TaiwanStockInfo.stock_name（官方結構化，最可靠）— PRIMARY
+      2. MoneyDJ Basic 系列 <title> regex（MoneyDJ 疑改版格式，原為唯一來源
+         但連 0050 都 FAIL，降為 fallback）
 
-    例：
-      <title>主動群益台灣強棒-00982A.TW-ETF淨值表格 - MoneyDJ理財網</title>
-      → 主動群益台灣強棒
-
-      <title>元大台灣50-0050.TW-ETF基本資料 - MoneyDJ理財網</title>
-      → 元大台灣50
+    MoneyDJ <title> 格式（fallback 用）:「{中文名}-{代號}.TW-ETF{頁面類型} - MoneyDJ理財網」
 
     Returns
     -------
-    str | None  中文名（2-30 字）；找不到回 None（呼叫端應 fallback 至 yfinance）
+    str | None  中文名（2-30 字）；全敗回 None（呼叫端應 fallback 至 yfinance）
     """
     import re as _re_zh
     _t = (ticker or '').replace('.tw', '.TW').strip()
@@ -1955,7 +1989,15 @@ def fetch_etf_zh_name(ticker: str):
     if '.' not in _t:
         _t = f'{_t}.TW'
 
-    # Basic0003（淨值表格）通常最快、最穩；fallback 0004/0001
+    # ── PRIMARY:FinMind TaiwanStockInfo.stock_name(結構化中文名) ──
+    _fm_name = _fetch_etf_zh_name_finmind(_t)
+    if _fm_name:
+        print(f'[FinMind/zhname] OK {_t} = {_fm_name}')
+        _prov_log('fetch_etf_zh_name', 'FinMind:TaiwanStockInfo:stock_name',
+                  _t, f'str:{_fm_name}')
+        return _fm_name
+
+    # ── fallback:MoneyDJ Basic0003（淨值表格）通常最快、最穩；再 fallback 0004/0001 ──
     _urls = [
         f'https://www.moneydj.com/ETF/X/Basic/Basic0003.xdjhtm?etfid={_t}',
         f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}',
@@ -1984,8 +2026,8 @@ def fetch_etf_zh_name(ticker: str):
                     return _name
         except Exception as _e:
             print(f'[MDJ/zhname] {_t} {_url[-30:]}: {type(_e).__name__}: {_e}')
-    print(f'[MDJ/zhname] FAIL {_t}')
-    _prov_log('fetch_etf_zh_name', 'MoneyDJ:3-urls-all-fail', _t, 'None:no-match')
+    print(f'[zhname] FAIL {_t}（FinMind + MoneyDJ 皆無中文名）')
+    _prov_log('fetch_etf_zh_name', 'FinMind+MoneyDJ:all-fail', _t, 'None:no-match')
     return None
 
 

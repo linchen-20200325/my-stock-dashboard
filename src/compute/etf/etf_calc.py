@@ -661,6 +661,34 @@ def calc_sharpe(df: pd.DataFrame, rf: float = 5.33) -> float:
         return 0.0
 
 
+def calc_beta(df: pd.DataFrame, bench_df: pd.DataFrame,
+              min_overlap: int = 60) -> float | None:
+    """v18.455:以日報酬回歸估 ETF 對基準的 Beta（yfinance .info 缺 beta 時的備援）。
+
+    Beta = cov(etf_ret, bench_ret) / var(bench_ret)。台股主動式 ETF yfinance
+    通常無 beta，改由自身 vs 自動偵測基準(TW→0050.TW)的價格歷史估算。
+
+    對齊兩側交易日(inner join by index)後才算,避免日期不齊污染共變異數;
+    有效重疊 < min_overlap(預設 60 交易日)→ 回 None(§1 寧缺勿假,不硬估)。
+    """
+    try:
+        if df is None or bench_df is None or df.empty or bench_df.empty:
+            return None
+        _e_ret = df['Close'].pct_change()
+        _b_ret = bench_df['Close'].pct_change()
+        _pair = pd.concat([_e_ret, _b_ret], axis=1, join='inner').dropna()
+        if len(_pair) < min_overlap:
+            return None
+        _cov = _pair.iloc[:, 0].cov(_pair.iloc[:, 1])
+        _var = _pair.iloc[:, 1].var()
+        if _var is None or _var == 0 or pd.isna(_var):
+            return None
+        return round(float(_cov / _var), 2)
+    except Exception as _e:
+        print(f'[calc_beta] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
+        return None
+
+
 def auto_detect_benchmark(ticker: str) -> str:
     t = ticker.upper()
     if t.endswith('.TW') or t.endswith('.TWO'):
