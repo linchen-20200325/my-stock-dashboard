@@ -76,7 +76,12 @@
 - **MJ 季財報分恆為 0 根因**:`data_cache/mj_snapshots/` 在 Streamlit Cloud 為 ephemeral 存儲,重啟即清空,永遠湊不齊 2 季 snapshot → `compute_mj_trend_subscore` 回 `(0.0, {"reason": "insufficient_snapshots"})`。
 - **解法**:在 `fetch_financial_statements` return dict 加 `prev_period_data` 欄位(用同一個 730 天 FinMind call 裡 `_dates[-2]` 的資料計算上季關鍵指標,約 50 行,無額外 API call)。`compute_one_stock_trend` 保存本季快照後,若 `len(yms) < 2` 則立即用 `prev_period_data` 呼叫 `analyze_financial_health("", sid, prev_period_data, "")` 補存上季快照。每次重啟後第一次抓財報就能湊足 2 季 → `mj_trend` 正常計算。`src/data/core/data_loader.py` + `src/compute/health/mj_trend_score.py`。
 
-✅ **v18.455(2026-07-03)**:ETF 中文名抓不到根因確認並修復:
+✅ **v18.455 補強（PR #455,2026-07-03，另一 session）**:上條 attempts=2 已修 MoneyDJ 路徑;本 PR **另加**兩項:
+- **ETF 中文名多一路官方來源**:`fetch_etf_zh_name` 改以 **FinMind `TaiwanStockInfo.stock_name`（官方結構化中文名）為 PRIMARY**、MoneyDJ `<title>` 降 fallback。理由:FinMind 為結構化 API（同 dataset 的 `industry_category` 早已穩定運作），不依賴 HTML `<title>` 格式或 proxy-403 降級,兩路互為備援更穩。`_fetch_etf_zh_name_finmind` 新增於 `etf_fetch.py`;token 選填、讀 secrets 失敗不中斷。
+- **Beta 缺值回歸估算**:yfinance `.info` 對台股主動式 ETF 常無 beta（單檔頁顯示 N/A）。新增 L2 純函式 `calc_beta(df, bench_df)`（cov/var,自身 vs 自動偵測基準 0050.TW,inner-join 對齊交易日,有效重疊 <60 交易日回 None）。單檔頁 yfinance 無 beta 時採用,help text 標明來源。測試 `test_etf_zh_name_and_beta.py`（+9）。SSOT/§8.2:calc_beta 為 L2 純函式無 I/O;FinMind 查詢沿用 `FINMIND_API_URL` SSOT;無跨層反向 import。
+- ⚠️ **注意**:main 上 `test_china_macro_stock.py`（2 個）+ `test_resample_audit.py`（1 個）為紅 —— 係 v18.459 `CHN_PMI`→`CHN_BCI` rename 後測試未同步更新（與本 ETF PR 無關,屬 china macro 稽核批的收尾項）。
+
+✅ **v18.455（2026-07-03，attempts=2 修）**:ETF 中文名抓不到根因確認並修復:
 - **ETF 中文名仍顯示英文名**:web_fetch MoneyDJ 確認標題格式 `元大台灣50-0050.TW-ETF淨值表格 - MoneyDJ理財網` 完全符合既有 regex,**非格式問題**。真正根因是 `fetch_etf_zh_name` 呼叫 `fetch_url(attempts=1)`,而 proxy_helper 降級直連邏輯需 `_block >= 2` 才觸發(line 172),`attempts=1` 在第一次 403 時 break 出迴圈(`_block=1`,未達 2),直連路徑永遠到不了。`fetch_url` default 是 `attempts=3`;ETF 中文名有 7 天 cache,延遲可接受。改 `attempts=2` 即可讓 proxy-403→直連正確運作。`src/data/etf/etf_fetch.py:1968`。
 
 ✅ **v18.454(PR #453,2026-07-01)**:user 回報 4 項 production 問題,2 個獨立 agent 交叉驗證後逐一 root cause,3 項可修即修 + 2 項需 user 協助(誠實回報,不猜測):
