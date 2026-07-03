@@ -58,9 +58,9 @@ def render_etf_single(gemini_fn=None):
         _teacher_conclusion, macro_allocation_banner,
     )
     from src.compute.etf.etf_calc import (   # 計算類
-        auto_detect_benchmark, calc_avg_yield, calc_cagr, calc_current_yield,
-        calc_premium_discount, calc_total_return_1y, calc_tracking_error,
-        check_vcp_signal, compute_etf_peer_ranking,
+        auto_detect_benchmark, calc_avg_yield, calc_beta, calc_cagr,
+        calc_current_yield, calc_premium_discount, calc_total_return_1y,
+        calc_tracking_error, check_vcp_signal, compute_etf_peer_ranking,
     )
     from src.data.etf.etf_fetch import (     # 抓取類
         fetch_etf_dividends, fetch_etf_info, fetch_etf_nav_history,
@@ -127,6 +127,14 @@ def render_etf_single(gemini_fn=None):
     # 費用率走 SITCA primary（台股 ETF 官方，海外 IP 走 NAS proxy）→ yfinance fallback
     expense  = get_etf_expense_ratio_safe(ticker)
     beta     = info.get('beta') or info.get('beta3Year')
+    # v18.455:yfinance 對台股主動式 ETF 常無 beta → 用自身 vs 基準(TW→0050.TW)
+    # 價格歷史回歸估算(§1:重疊 <60 交易日回 None,不硬估)。
+    _beta_src = 'yfinance'
+    if not beta and bench_df is not None and not bench_df.empty:
+        _beta_calc = calc_beta(df, bench_df)
+        if _beta_calc is not None:
+            beta = _beta_calc
+            _beta_src = f'回歸 vs {benchmark}'
     aum      = info.get('totalAssets')
 
     st.markdown(f'### 🏦 {etf_name} ({ticker})')
@@ -136,7 +144,8 @@ def render_etf_single(gemini_fn=None):
     c2.metric('內扣費用率', f'{expense*100:.2f}%' if expense else 'N/A',
               help=None if expense else '主動式/私募 ETF 投信未揭露，或抓取失敗（詳見資料診斷 Tab）')
     c3.metric('Beta', f'{float(beta):.2f}' if beta else 'N/A',
-              help=None if beta else 'yfinance .info 無資料（海外 IP 或主動式 ETF）')
+              help=(f'資料來源：{_beta_src}（vs 基準日報酬回歸）' if beta and _beta_src != 'yfinance'
+                    else (None if beta else 'yfinance .info 無資料，且價格重疊不足 60 交易日無法回歸估算')))
     c4.metric('AUM', f'{aum/1e9:.1f}B USD' if aum and aum > 1e6 else 'N/A',
               help=None if (aum and aum > 1e6) else '主動式/私募 ETF 規模未揭露，或 yfinance .info 海外 IP 受限')
 
