@@ -103,7 +103,7 @@ def _yf_dl(symbol, **kwargs):
                 _os_yfd.environ[k] = v
 
 _TWSE_DL = _bps_dl()
-from src.config import FINMIND_API_URL, get_stock_name  # Batch 10 v18.412
+from src.config import FINMIND_API_URL, FINMIND_TOKEN as _FINMIND_TOKEN_CFG, get_stock_name  # Batch 10 v18.412; _FINMIND_TOKEN_CFG reads st.secrets at import time
 
 # S-H1 v18.244:`safe_fetch_strict` 為死碼(grep 全 repo 唯一引用為定義本身),
 # 已刪除以同時修復 §8.2「L1 不得用 st.session_state」違憲(原使用
@@ -350,7 +350,9 @@ def _fetch_finmind_margin_raw(stock_id: str, df: pd.DataFrame, start_str: str) -
     回傳 (df, src_label)：df 已 merge 融資/融券欄位；src_label='finmind_raw' 或 'missing'。
     """
     import os
-    _token = os.environ.get('FINMIND_TOKEN', '')
+    # _FINMIND_TOKEN_CFG 在 module load 時從 st.secrets 讀取；os.environ 作為 fallback
+    # （Streamlit Cloud 的 secrets 不會自動寫入 os.environ，必須明確讀取）
+    _token = _FINMIND_TOKEN_CFG or os.environ.get('FINMIND_TOKEN', '')
     _end_str = datetime.date.today().strftime('%Y-%m-%d')
     try:
         _params = {
@@ -400,7 +402,7 @@ def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> 
     - 無 token: 匿名請求（FinMind 公開資料，限速 3 req/min，仍可取得）
     """
     import os
-    _token = os.environ.get('FINMIND_TOKEN', '')
+    _token = _FINMIND_TOKEN_CFG or os.environ.get('FINMIND_TOKEN', '')
     _end_str = datetime.date.today().strftime('%Y-%m-%d')
     try:
         _params = {'dataset': 'TaiwanStockInstitutionalInvestorsBuySell',
@@ -442,7 +444,7 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
     呼叫端沿用既有 rename 與單位處理；失敗回空 DataFrame。
     """
     import os
-    _token = os.environ.get('FINMIND_TOKEN', '')
+    _token = _FINMIND_TOKEN_CFG or os.environ.get('FINMIND_TOKEN', '')
     try:
         _params = {'dataset': 'TaiwanStockPrice', 'data_id': stock_id,
                    'start_date': start_str, 'end_date': end_str}
@@ -481,7 +483,8 @@ class StockDataLoader:
     def __init__(self):
         import os
         self.dl = DataLoader() if DataLoader is not None else None  # [Fixed] DataLoader 未安裝時不崩潰
-        _fm_token    = os.environ.get('FINMIND_TOKEN', '')
+        # _FINMIND_TOKEN_CFG: st.secrets 優先（Streamlit Cloud secrets ≠ os.environ）
+        _fm_token    = _FINMIND_TOKEN_CFG or os.environ.get('FINMIND_TOKEN', '')
         _fm_user     = os.environ.get('FINMIND_USER', '')
         _fm_password = os.environ.get('FINMIND_PASSWORD', '')
         try:
@@ -2112,6 +2115,98 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
     print(f"[fetch_fin] {stock_id} {_lat}: cash={cash_ratio}% debt={debt_ratio}% "
           f"OCF={round(ocf/1e6,1)}百萬 AR_days={ar_days} AP_days={ap_days}")
 
+    # ── prev_period_data：供 MJ trend 季際比較 bootstrap（v18.456）─────────────────
+    # 用已抓到的 730 天 FinMind 資料再計算上一季指標，避免 Streamlit Cloud 重啟後
+    # 快照清空導致 mj_trend 恆為 0。不做模糊比對/yfinance 兜底（零值時 analyze 給 N/A 即可）。
+    _prev_period_data: dict = {}
+    if len(_dates) >= 2:
+        _pp = _prv                                          # 上一季日期
+        _pp_prv = _dates[-3] if len(_dates) >= 3 else _prv  # 上上季（for 存貨前期）
+        _pp_cash   = _v(_bs, _pp, ["CashAndCashEquivalents", "現金及約當現金", "Cash", "現金及銀行存款"])
+        _pp_assets = _v(_bs, _pp, ["TotalAssets", "資產總計", "資產合計", "資產總額"])
+        _pp_cur_a  = _v(_bs, _pp, ["CurrentAssets", "流動資產合計", "流動資產總計", "流動資產"])
+        _pp_cur_l  = _v(_bs, _pp, ["CurrentLiabilities", "流動負債合計", "流動負債總計", "流動負債"])
+        _pp_ncl    = _v(_bs, _pp, ["NoncurrentLiabilities", "非流動負債合計", "非流動負債總計", "非流動負債"])
+        _pp_liab   = _v(_bs, _pp, ["TotalLiabilities", "負債總計", "負債合計", "負債總額"])
+        if _pp_liab == 0 and (_pp_cur_l > 0 or _pp_ncl > 0):
+            _pp_liab = _pp_cur_l + _pp_ncl
+        if _pp_assets == 0 and _pp_cur_a > 0:
+            _pp_nca = _v(_bs, _pp, ["NoncurrentAssets", "非流動資產合計", "非流動資產"])
+            _pp_assets = _pp_cur_a + _pp_nca
+        _pp_equity = _v(_bs, _pp, ["TotalEquity", "權益總額", "股東權益合計", "股東權益總額", "權益合計"])
+        if _pp_liab == 0 and _pp_assets > 0 and _pp_equity > 0:
+            _pp_liab = max(_pp_assets - _pp_equity, 0)
+        if _pp_assets == 0 and _pp_equity > 0 and _pp_liab > 0:
+            _pp_assets = _pp_equity + _pp_liab
+        _pp_inv    = _v(_bs, _pp, ["Inventories", "存貨", "存貨淨額"])
+        _pp_inv_p  = _v(_bs, _pp_prv, ["Inventories", "存貨", "存貨淨額"])
+        _pp_ppe    = _v(_bs, _pp, ["PropertyPlantAndEquipmentNet", "不動產、廠房及設備淨額",
+                                    "固定資產淨額", "不動產廠房及設備淨額"])
+        _pp_lt_inv = _v(_bs, _pp, ["LongTermInvestments", "長期投資", "採權益法之投資"])
+        _pp_ar     = _v(_bs, _pp, ["AccountsReceivable", "應收帳款淨額", "應收帳款",
+                                    "應收帳款（非關係人）淨額", "應收帳款及票據",
+                                    "應收票據及應收帳款", "應收帳款（含稅）"])
+        _pp_ap     = _v(_bs, _pp, ["AccountsPayable", "應付帳款",
+                                    "應付帳款及票據應付款", "應付票據及帳款"])
+        _pp_rev    = _v(_is, _pp, ["Revenue", "營業收入合計", "營業收入", "NetRevenue", "OperatingRevenue"])
+        _pp_cogs   = abs(_v(_is, _pp, ["CostOfGoodsSold", "營業成本", "銷售成本", "OperatingCosts"]))
+        _pp_gp     = _pp_rev - _pp_cogs
+        _pp_oi     = _v(_is, _pp, ["OperatingIncome", "營業利益（損失）", "營業利益", "OperatingProfit"])
+        _pp_ni     = _v(_is, _pp, ["NetIncome", "本期淨利（淨損）", "淨利", "稅後淨利", "ProfitLoss"])
+        _pp_ocf    = _v(_cf, _pp, ["CashFlowsFromOperatingActivities",
+                                    "營業活動之淨現金流入（流出）", "來自營業活動之現金流量"])
+        _pp_capex  = abs(_v(_cf, _pp, ["AcquisitionOfPropertyPlantAndEquipment",
+                                        "取得不動產、廠房及設備", "資本支出"]))
+        _pp_div    = abs(_v(_cf, _pp, ["CashDividendsPaid", "發放現金股利", "現金股利"]))
+
+        _pp_cash_ratio = round(_pp_cash / _pp_assets * 100, 1) if _pp_assets > 0 else 0
+        _pp_debt_ratio = round(_pp_liab / _pp_assets * 100, 1) if _pp_assets > 0 else 0
+        _pp_gm         = round(_pp_gp / _pp_rev * 100, 1) if _pp_rev > 0 else 0
+        _pp_ar_days    = round(_pp_ar / (_pp_rev * 4) * 360, 1) if _pp_rev > 0 and _pp_ar > 0 else 0
+        _pp_ap_days    = round(_pp_ap / (_pp_cogs * 4) * 360, 1) if _pp_cogs > 0 and _pp_ap > 0 else 0
+
+        _prev_period_data = {
+            "stock_id":           stock_id,
+            "period":             _pp,
+            "現金佔總資產(%)":    _pp_cash_ratio,
+            "負債比率(%)":        _pp_debt_ratio,
+            "OCF(千)":            round(_pp_ocf),
+            "ICF(千)":            0,
+            "籌資CF(千)":         0,
+            "自由現金流(千)":     round(_pp_ocf - _pp_capex),
+            "資本支出(千)":       round(_pp_capex),
+            "應收帳款天數":       _pp_ar_days,
+            "應付帳款天數":       _pp_ap_days,
+            "毛利率(%)":          _pp_gm,
+            "營業收入(千)":       round(_pp_rev),
+            "毛利(千)":           round(_pp_gp),
+            "營業利益(千)":       round(_pp_oi),
+            "稅後淨利(千)":       round(_pp_ni),
+            "股東權益(千)":       round(_pp_equity),
+            "流動資產(千)":       round(_pp_cur_a),
+            "非流動負債(千)":     round(max(_pp_liab - _pp_cur_l, 0)),
+            "營業成本(千)":       round(_pp_cogs),
+            "OCF符號":            "正" if _pp_ocf > 0 else "負",
+            "ICF符號":            "負",
+            "籌資CF符號":         "負",
+            "應收帳款季增率(%)":  None,
+            "營收季增率(%)":      None,
+            "總資產(千)":         round(_pp_assets),
+            "總負債(千)":         round(_pp_liab),
+            "流動負債(千)":       round(_pp_cur_l),
+            "存貨(千)":           round(_pp_inv),
+            "存貨前期(千)":       round(_pp_inv_p),
+            "現金股利(千)":       round(_pp_div),
+            "固定資產(千)":       round(_pp_ppe),
+            "長期投資(千)":       round(_pp_lt_inv),
+            "現金及約當現金(千)": round(_pp_cash),
+            "應收帳款(千)":       round(_pp_ar),
+            "EPS":                0,
+            "預付款項(千)":       0,
+            "其他非流動資產(千)": 0,
+            "is_finance":         stock_id.startswith(('28', '58')),
+        }
+
     return {
         "stock_id":         stock_id,
         "period":           _lat,
@@ -2161,6 +2256,8 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
         # S-PROV-1 v18.250 phase 6:provenance(§2.2)
         "source":            "FinMind:FinancialStatements",
         "fetched_at":        pd.Timestamp.now('UTC').isoformat(),
+        # v18.456: 上季關鍵指標，供 mj_trend bootstrap（ephemeral 重啟後仍可計算 2 季對比）
+        "prev_period_data":  _prev_period_data,
     }
 
 

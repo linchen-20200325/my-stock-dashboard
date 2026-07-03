@@ -111,7 +111,7 @@ def render_tab_edu():
              '2hr cache',
              'fallback chain 內部處理'),
             ('📰 新聞 RSS', '🌐 總經',
-             'Google News / Reuters / Bloomberg / CNBC',
+             'Google News / Bloomberg / CNBC / Yahoo Finance',  # v18.458: Reuters removed (dead since 2020)
              '即時',
              '個別失敗 → 其他源繼續'),
             ('🤖 AI 摘要', '🌐 總經 / 📈 個股',

@@ -276,6 +276,23 @@ def compute_one_stock_trend(
                     if isinstance(mj, dict):
                         save_snapshot(sid, yyyymm_curr, mj)
                         yms = list_snapshots(sid)
+                        # v18.456: bootstrap 上季快照，防 Streamlit Cloud 重啟後 mj_trend 恆為 0
+                        # fetch_financial_statements 本已抓 730 天，_dates 一定含上季資料
+                        if len(yms) < 2:
+                            _ppd = fin.get("prev_period_data") or {}
+                            _pp_period = _ppd.get("period", "")
+                            if _pp_period and len(_pp_period) >= 7:
+                                _pp_ym = f"{_pp_period[:4]}{_pp_period[5:7]}"
+                                if _pp_ym and _pp_ym < yyyymm_curr and _pp_ym not in yms:
+                                    try:
+                                        _mj_prev = analyze_financial_health(
+                                            "", sid, _ppd, news_context=""
+                                        )
+                                        if isinstance(_mj_prev, dict):
+                                            save_snapshot(sid, _pp_ym, _mj_prev)
+                                            yms = list_snapshots(sid)
+                                    except Exception as _e_pp:
+                                        row["note"] += f"上季 bootstrap 失敗 ({type(_e_pp).__name__}); "
             except Exception as e_in:  # pragma: no cover - defensive
                 row["note"] += f"本季 MJ 補抓失敗 ({type(e_in).__name__}); "
 

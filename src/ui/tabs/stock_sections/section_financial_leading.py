@@ -19,28 +19,34 @@ from src.ui.render import kpi, teacher_conclusion
 def render_financial_leading_section(sid2: str, cl2, cx2,
                                       _cl_src2: str = '',
                                       _cx_src2: str = '',
-                                      _fin_errs2=None) -> None:
+                                      _fin_errs2=None,
+                                      *,
+                                      capex=None) -> None:
     """C. 公司真的在賺錢嗎?(財報領先指標:合約負債 + 固定資產/資本支出)。
 
     Args:
         sid2: 股票代碼
         cl2: 合約負債(元;None / 0 視為無資料)
-        cx2: 固定資產/資本支出(元;None / 0 視為無資料)
+        cx2: 固定資產(PP&E, BS 存量;None / 0 視為無資料)
         _cl_src2: 合約負債資料來源(FinMind / MOPS / ...)
         _cx_src2: 固定資產資料來源
         _fin_errs2: 抓取錯誤訊息 list(空 → 視為「不適用」)
+        capex: CF 季資本支出(元;流量。優先於 cx2 PP&E 存量顯示)
     """
+    # v18.458: 優先用 CF 季資本支出顯示;cx2 為 PP&E 存量 fallback
+    _cx_for_display = capex if (capex is not None and capex > 0) else cx2
+    _cx_label = '季資本支出' if (capex is not None and capex > 0) else '固定資產/資本支出'
     _fin_errs2 = _fin_errs2 or []
     st.markdown('---')
     st.markdown('#### 🔬 C. 公司真的在賺錢嗎？（財報領先指標）')
-    if cl2 and cl2 > 0 and cx2 and cx2 > 0:
-        _ca = f'合約負債 {cl2 / 1e8:.1f}億 + 資本支出 {cx2 / 1e8:.1f}億，雙重確認龍多股'
+    if cl2 and cl2 > 0 and _cx_for_display and _cx_for_display > 0:
+        _ca = f'合約負債 {cl2 / 1e8:.1f}億 + {_cx_label} {_cx_for_display / 1e8:.1f}億，雙重確認龍多股'
         _cb = '基本面強勢，適合長期持有'
     elif cl2 and cl2 > 0:
-        _ca = f'合約負債 {cl2 / 1e8:.1f}億（訂單豐沛），資本支出資料不足'
+        _ca = f'合約負債 {cl2 / 1e8:.1f}億（訂單豐沛），{_cx_label}資料不足'
         _cb = '基本面良好，但擴廠意願待確認'
-    elif cx2 and cx2 > 0:
-        _ca = f'資本支出 {cx2 / 1e8:.1f}億（積極擴產），合約負債資料不足'
+    elif _cx_for_display and _cx_for_display > 0:
+        _ca = f'{_cx_label} {_cx_for_display / 1e8:.1f}億（積極擴產），合約負債資料不足'
         _cb = '擴廠意願強，但訂單能見度待確認'
     else:
         _ca = '合約負債+資本支出均無資料（可能為金融股或資料源限制）'
@@ -57,7 +63,7 @@ def render_financial_leading_section(sid2: str, cl2, cx2,
         '</div>', unsafe_allow_html=True)
     fc1, fc2 = st.columns(2)
     cl_ok = cl2 is not None and cl2 > 0
-    cx_ok = cx2 is not None and cx2 > 0
+    cx_ok = _cx_for_display is not None and _cx_for_display > 0  # v18.458: 用 _cx_for_display
     with fc1:
         _cl_val_txt = f'{cl2 / 1e8:.1f}億' if cl_ok else '抓取失敗'
         _cl_c = '#2ea043' if cl_ok else '#da3633'
@@ -67,9 +73,9 @@ def render_financial_leading_section(sid2: str, cl2, cx2,
         if not cl_ok:
             st.caption('來源：FinMind — 抓取失敗或無此財報')
     with fc2:
-        _cx_val_txt = f'{cx2 / 1e8:.1f}億' if cx_ok else '抓取失敗'
+        _cx_val_txt = f'{_cx_for_display / 1e8:.1f}億' if cx_ok else '抓取失敗'
         _cx_c = '#2ea043' if cx_ok else '#da3633'
-        st.markdown(kpi('固定資產/資本支出', _cx_val_txt,
+        st.markdown(kpi(_cx_label, _cx_val_txt,
                         '>股本80%→大擴廠看好未來需求', _cx_c,
                         _cx_c if cx_ok else '#21262d'), unsafe_allow_html=True)
         if not cx_ok:

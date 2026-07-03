@@ -1965,7 +1965,7 @@ def fetch_etf_zh_name(ticker: str):
         try:
             from src.data.proxy import fetch_url as _fu_zh
             _r = _fu_zh(_url, headers={'Referer': 'https://www.moneydj.com/'},
-                        timeout=12, attempts=1)
+                        timeout=12, attempts=2)  # v18.455: attempts=1 bug fix — 403 需連續2次才觸發直連降級
             if _r is None or _r.status_code != 200:
                 continue
             _r.encoding = 'utf-8'

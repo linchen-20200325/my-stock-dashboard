@@ -271,7 +271,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         st.session_state['t2_data'] = {
             'sid':sid2,'name':_name2_resolved,'df':df2,'err':err2,
             'avg_div':avg_div2,'yearly':yearly2,'div_src':div_src2,
-            'cl':cl2,'cx':cx2,'rev':rev2,'qtr':qtr2,'qtr_extra':qtr_extra2,
+            'cl':cl2,'cx':cx2,'capex':_capex2,'rev':rev2,'qtr':qtr2,'qtr_extra':qtr_extra2,
             'cl_src': _cl_src2,'cx_src': _cx_src2,'fin_errs': _fin_errs2,
             'rsi':rsi2,'ibs':ibs2,'vr':vr2,'k':k2,'d':d2,'bb':bb2,'bb_breakout':bb_breakout2,'vcp':vcp2,
             'health':health2,'details':details2,'price':cur_price2,
@@ -305,6 +305,7 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         yearly2=t2d['yearly']
         cl2=t2d['cl']
         cx2=t2d['cx']
+        _capex2=t2d.get('capex')   # v18.457 Task#20: CF 資本支出(實際支出，區別 cx2 固定資產存量)
         _cl_src2=t2d.get('cl_src','')
         _cx_src2=t2d.get('cx_src','')
         _fin_errs2=t2d.get('fin_errs',[])
@@ -324,6 +325,19 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         # v18.309 Bug2 Stage 1：compute-once 跨段依賴(資料載入完成後一次算完)。
         # AI 摘要(L3200+)改讀 _xsec → 與顯示段執行順序解耦，Stage 2 物理重排才安全。
         _xsec = _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2)
+
+        # v18.457 Task#18：寫入 t2_inst，供 section_kline_chart / section_health_score 讀取
+        # df2 已含外資/投信欄（T86/TPEX merge，單位：張），取最後一日作為當前方向指標
+        if df2 is not None and not df2.empty and '外資' in df2.columns and '投信' in df2.columns:
+            try:
+                st.session_state['t2_inst'] = {
+                    '外資': float(df2['外資'].iloc[-1] or 0),
+                    '投信': float(df2['投信'].iloc[-1] or 0),
+                }
+            except Exception:
+                pass
+        elif 't2_inst' not in st.session_state:
+            st.session_state['t2_inst'] = {}
 
         # v18.337 user：每桶 Bar 上加「一句結論 + 燈號」。用上方 compute-once 的訊號
         # (health2 + _xsec rs_val/sig20/con20/li_*) 一次算出 6 桶結論，傳給各 section_header。
@@ -757,7 +771,7 @@ padding:14px 18px;margin-bottom:12px;">
         )
         # ══ 龍頭預警區(U4 Phase 3-Dragon v18.411:抽至 stock_sections.section_dragon_alert)══
         from src.ui.tabs.stock_sections import render_dragon_alert_section
-        render_dragon_alert_section(cl2, cx2, _xsec.get("capital", 0))
+        render_dragon_alert_section(cl2, cx2, _xsec.get("capital", 0), capex=_capex2)  # v18.457 Task#20
 
         st.markdown(section_header_html("tech", **_sec_lv["tech"]), unsafe_allow_html=True)  # v18.307 Bug2 PR-C SSOT
         # ══ A. 健康度評分(U4 Phase 3-A v18.407:抽至 stock_sections.section_health_score)══
@@ -803,7 +817,8 @@ padding:14px 18px;margin-bottom:12px;">
         from src.ui.tabs.stock_sections import render_financial_leading_section
         render_financial_leading_section(sid2, cl2, cx2,
                                           _cl_src2=_cl_src2, _cx_src2=_cx_src2,
-                                          _fin_errs2=_fin_errs2)
+                                          _fin_errs2=_fin_errs2,
+                                          capex=_capex2)  # v18.458: CF 季資本支出(流量)
 
         # ══ D. 月營收 + 季毛利率(U4 Phase 2-D v18.406:抽至 stock_sections.section_revenue)══
         from src.ui.tabs.stock_sections import render_revenue_trend_section

@@ -1,12 +1,33 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🚀 目前狀態(v18.454 — M1B-M2 恆「—」+ 個股 MergeError 全炸 + ETF 假 1Y 報酬,PR #453 已 merge)
+## 🚀 目前狀態(v18.458 — 財報領先指標 capex 顯示修正)
+
+✅ **v18.458(2026-07-03)**:財報領先指標 section 標籤與數據修正:
+- **`section_financial_leading` 仍顯示 PP&E 存量標榜「資本支出」**:Task#20 修復了龍頭預警(dragon_alert)的比較邏輯，但同一個 `_capex2`(CF 季資本支出)未傳給財報領先指標 section，UI 仍用 PP&E 存量(cx2)且標籤顯示「資本支出」造成誤導。
+- **修法**:`render_financial_leading_section` 新增 `capex=None` kw-only 參數；若 capex > 0 則優先以「季資本支出」顯示，cx2 PP&E 作 fallback(標籤改為「固定資產/資本支出」)。tab_stock.py 呼叫端加 `capex=_capex2`(與 dragon_alert 一致)。`section_financial_leading.py` + `tab_stock.py`
+
+## 🚀 前一狀態(v18.457 — t2_inst 修 + Reuters RSS 移除 + 龍頭預警 capex 修 + MJ bootstrap)
+
+✅ **v18.457(2026-07-03)**:Stock dashboard 4 項修復:
+- **Task#18 `t2_inst` session key 從未寫入**:`section_kline_chart`(K線敘事「外資買超/賣超」)與 `section_health_score`(v4 籌碼 foreign_net/trust_net)讀 `st.session_state['t2_inst']` 但整個 tab_stock.py 從未寫這個 key → K線敘事恆用 `_fnet_f=0`(顯示「外資中性」)，v4 籌碼欄位恆為 0。修法：在 `_xsec` 計算後、各 section 渲染前，從 df2(已含 T86/TPEX 外資/投信欄，單位張)取最後一日寫入 `t2_inst`。`src/ui/tabs/tab_stock.py`
+- **Task#19 Reuters RSS dead**:`news_fetcher.py` 移除 `feeds.reuters.com/reuters/businessNews`(dead since 2020-06),每次新聞抓取白費 timeout。`src/data/news/news_fetcher.py`
+- **Task#20 龍頭預警「大擴廠」用 PP&E 存量(cx2)而非 capex(季流量)**:製造業 PP&E 存量動輒數倍股本，幾乎永遠觸發龍頭預警(假正例)。fetch_financials 本就同時抓 BS PP&E 和 CF 資本支出，但 `_capex2`(CF 資本支出)被丟棄未存入 t2_data。修法：t2_data 加 `capex` 欄，傳給 `render_dragon_alert_section`；龍頭預警優先用 CF capex 比較，PP&E 作 fallback(當 CF 資料取不到時)。`tab_stock.py` + `section_dragon_alert.py`
+- (含 v18.455/v18.456)ETF 中文名 + MJ 季財報 bootstrap 同批推送
+
+## 🚀 前一狀態(v18.456 — ETF 中文名 attempts=1 bug 修 + MJ 季財報 bootstrap 修)
+
+✅ **v18.456(2026-07-03)**:MJ 季財報分 bootstrap 修:
+- **MJ 季財報分恆為 0 根因**:`data_cache/mj_snapshots/` 在 Streamlit Cloud 為 ephemeral 存儲,重啟即清空,永遠湊不齊 2 季 snapshot → `compute_mj_trend_subscore` 回 `(0.0, {"reason": "insufficient_snapshots"})`。
+- **解法**:在 `fetch_financial_statements` return dict 加 `prev_period_data` 欄位(用同一個 730 天 FinMind call 裡 `_dates[-2]` 的資料計算上季關鍵指標,約 50 行,無額外 API call)。`compute_one_stock_trend` 保存本季快照後,若 `len(yms) < 2` 則立即用 `prev_period_data` 呼叫 `analyze_financial_health("", sid, prev_period_data, "")` 補存上季快照。每次重啟後第一次抓財報就能湊足 2 季 → `mj_trend` 正常計算。`src/data/core/data_loader.py` + `src/compute/health/mj_trend_score.py`。
+
+✅ **v18.455(2026-07-03)**:ETF 中文名抓不到根因確認並修復:
+- **ETF 中文名仍顯示英文名**:web_fetch MoneyDJ 確認標題格式 `元大台灣50-0050.TW-ETF淨值表格 - MoneyDJ理財網` 完全符合既有 regex,**非格式問題**。真正根因是 `fetch_etf_zh_name` 呼叫 `fetch_url(attempts=1)`,而 proxy_helper 降級直連邏輯需 `_block >= 2` 才觸發(line 172),`attempts=1` 在第一次 403 時 break 出迴圈(`_block=1`,未達 2),直連路徑永遠到不了。`fetch_url` default 是 `attempts=3`;ETF 中文名有 7 天 cache,延遲可接受。改 `attempts=2` 即可讓 proxy-403→直連正確運作。`src/data/etf/etf_fetch.py:1968`。
 
 ✅ **v18.454(PR #453,2026-07-01)**:user 回報 4 項 production 問題,2 個獨立 agent 交叉驗證後逐一 root cause,3 項可修即修 + 2 項需 user 協助(誠實回報,不猜測):
 - **總經頁「M1B-M2 資金動能」頂部燈號恆顯示「—」**(但下方「策略3」區塊正確顯示 -12.63%):`tw_macro.fetch_cbc_m1b_m2()` 本就算好 `gap`,但 `macro_snapshot.fetch_m1b_m2_block()` 重新打包 dict 時,CBC/FRED/IMF 三個 return 路徑全部漏帶 `'gap'` 鍵 → `session_state['m1b_m2_info']` 從未有此鍵 → `macro_helpers.py` 算頂部燈號/KPI 卡(依 `.get('gap')`)恆得 None → 顯示「—」;「策略3」區塊是自己內聯重算 `m1b_yoy-m2_yoy`(不依賴此鍵)才不受影響。補回三路徑 `gap` 欄(schema-additive)。守衛 `test_m1b_m2_gap_wiring.py`(+4)。
 - **「個股」分頁整頁 MergeError 崩潰**(`incompatible merge keys dtype('<M8[s]') and dtype('<M8[us]')`,v18.440 per-tab 隔離器攔到不拖垮其他分頁):`section_357_valuation.py:333` PE 本益比河流圖 `merge_asof` 兩側日期精度不同 —— 股價側(data_loader `.dt.date` 物件經 `pd.to_datetime` → `datetime64[s]`)vs 季報側(FinMind 字串日期 `pd.to_datetime` → `datetime64[us]`),兩側從未顯式對齊精度。pandas merge_asof 要求兩側 key dtype 完全一致(含精度),不同即炸。兩側補 `.astype('datetime64[ns]')`。守衛 `test_pe_river_merge_dtype.py`(+4 純邏輯 + 1 slow AppTest)。
 - **ETF 多檔比較表「1Y累積%」對年輕 ETF 顯示假 212%**(user 截圖 00981A 上市僅 13 個月):與 v18.452 `calc_cagr` 同源根因 —— `calc_total_return_1y` 只看「有沒有資料」不看「是否真橫跨 1 年」,年輕 ETF 的 `p_start` 實為上市首日低價而非真 365 天前價格。新增可選 `require_full_period`,資料跨度不足 365 天 90% 回 None(§1 寧缺勿假);兩 ETF UI 呼叫端(single/grp_compare)補齊 None 顯示 N/A。守衛併入 `test_etf_grp_compare_young_etf_fix.py`(+5)。
-- **需 user 協助的 2 項(WONTFIX 待輸入,誠實回報不猜測)**:①ETF 中文名仍顯示發行商英文名 —— `fetch_etf_zh_name` 靠讀 MoneyDJ `<title>` regex,連 0050 都 FAIL,疑 MoneyDJ 改版標題格式;需 user 用瀏覽器 DevTools 複製真實 `<title>` 內容(對齊 v18.443-446 教訓:endpoint/格式純猜三次全錯,user 抓包才可靠)。②MJ 季財報分恆為 0 —— 需連續 2 季 snapshot 才能算 delta,但 snapshot 存本機 `data_cache/mj_snapshots/`(.gitignore,Streamlit Cloud 重啟即清空),永遠湊不齊 2 季 → 架構決策(改存 GitHub / Google Sheets 等持久層),待 user 定奪。
+- **MJ 季財報分恆為 0**(待定):需連續 2 季 snapshot 才能算 delta,但 snapshot 存本機 `data_cache/mj_snapshots/`(.gitignore,Streamlit Cloud 重啟即清空),永遠湊不齊 2 季 → 架構決策(改存 GitHub / Google Sheets 等持久層),待 user 定奪。
 - 測試 2520 pass(fast lane)。SSOT/§8.2:無新增 SSOT 常數 / 無新增例外 / 無跨層反向 import;M1B-M2 修復為「正確透傳 tw_macro 早已算好的 gap」而非消費端重算。
 
 ---
