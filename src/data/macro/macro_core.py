@@ -233,7 +233,7 @@ MACRO_THRESHOLDS: dict = {
     # v18.270 TW 央行政策階段判讀:CPI YoY / 失業率 / CBC 重貼現率 / USDTWD
     "TW_CPI_YOY":  {"green_low": 1.0, "green_high": 2.0, "yellow_above": 2.5, "red_above": 3.0},
     "TW_UNEMP":    {"green_below": 3.7, "yellow_above": 4.0, "red_above": 4.5},
-    "CBC_RATE":    {"yellow_above": 2.0, "red_above": 2.5},
+    "CBC_RATE":    {"yellow_above": 2.125, "red_above": 2.5},  # v18.460: 2.0→2.125 現行 2.0% 不再卡邊界;下一升息步幅 2.125%
     # USDTWD:>32 yellow / >33 red(台幣明顯貶值,外資撤離壓力)
     "USDTWD":      {"green_below": 30.5, "yellow_above": 32.0, "red_above": 33.0},
     # v18.271 China macro 5 zone(對稱 Fund v19.113):服務中國終端需求 + 全球流動性判讀
@@ -241,7 +241,7 @@ MACRO_THRESHOLDS: dict = {
     "CHN_BCI":     {"green_above": 100.0, "yellow_below": 99.0, "red_below": 98.0},  # v18.459: renamed CHN_PMI→CHN_BCI (BSCICP03CNM665S = OECD Business Confidence, NOT PMI)
     "CHN_CPI":     {"green_low": 1.0, "green_high": 3.0, "yellow_above": 4.0, "red_above": 5.0},
     "CHN_M2":      {"red_below": 5.0, "green_above": 9.0},
-    "USDCNY":      {"green_below": 7.0, "yellow_above": 7.2, "red_above": 7.4},
+    "USDCNY":      {"green_below": 7.1, "yellow_above": 7.3, "red_above": 7.45},  # v18.460: 7.0→7.1/7.2→7.3/7.4→7.45 人民幣 2022 後走弱,舊 green_below 7.0 已 2+ 年無法到達
 }
 
 

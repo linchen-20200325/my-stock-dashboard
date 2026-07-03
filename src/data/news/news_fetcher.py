@@ -1,4 +1,4 @@
-"""src/data/news/news_fetcher.py — 新聞 RSS L1 fetcher(v18.398 P5-B3-β R8).
+"""src/data/news/news_fetcher.py — 新聞 RSS L1 fetcher(v18.398 P5-B3-β R8; v18.460 CNYES→CNA).
 
 從 app.py:1052-1297 抽出(EX-CACHE-1 pattern,@st.cache_data 條件 import)。
 
@@ -61,10 +61,11 @@ SYSTEMIC_RISK_KEYWORDS = [
 def fetch_macro_news(n: int = 5) -> list:
     """抓取全球總經財經新聞 — 中英雙語多源(系統性風險偵測用)。
 
-    來源：CNYES鉅亨 / 經濟日報 / Google News(中) / Google News(英) /
+    來源：中央社財經 / 經濟日報 / Google News(中) / Google News(英) /
           Yahoo Finance / CNBC Economy
           (v18.458: Reuters feeds.reuters.com removed — dead since June 2020)
           (v18.459: Bloomberg feeds.bloomberg.com removed — blocked for non-subscribers)
+          (v18.460: CNYES 鉅亨 www.cnyes.com/rss/cat/headline removed — dead 404 redirect)
     策略：每源最多取 3 則 → 全池去重(依標題)→ 不依時間排序(部分 RSS 無 published),
           採「每源 round-robin」混合產出,確保中英來源都被納入 AI 判讀。
     ttl=TTL_30MIN:每 30 分鐘自動更新一次快取。
@@ -83,7 +84,9 @@ def fetch_macro_news(n: int = 5) -> list:
 
     # 中文優先(在地系統性風險解讀),英文補強(黑天鵝國際同步)
     _feeds = [
-        ('鉅亨網',       'https://www.cnyes.com/rss/cat/headline'),
+        # v18.460: 鉅亨網 https://www.cnyes.com/rss/cat/headline 已死亡(重定向至 /twstock/error.htm 404)
+        # 改用中央社財經 RSS(台灣官方通訊社,最具公信力的中文財經來源)
+        ('中央社財經',   'https://www.cna.com.tw/rssfeed/news/afe.aspx'),
         ('經濟日報',     'https://money.udn.com/rssfeed/news/1001/5589/12017?ch=money'),
         ('Google中文',   'https://news.google.com/rss/search'
                          '?q=%E5%8F%B0%E8%82%A1+%E8%81%AF%E6%BA%96%E6%9C%83+%E5%88%A9%E7%8E%87+%E5%B9%B3%E5%84%B9'

@@ -25,21 +25,30 @@
 
 - ⬜ **[M3] ISM PMI 備援刻度衝突** (WONTFIX — 稽核確認 `fetch_ism_pmi()` 為 dead code，UI 未呼叫) — `macro_core.py:609`：Production UI 的 `ism_pmi` session_state key 實際由 `fetch_tw_pmi_block()` 填入台灣 PMI（14 處讀取點），`fetch_ism_pmi()` 僅在 tests 有 ref。OECD 備援顯示問題不存在於實際 UI。無需修改。
 
-- ⬜ **[M4] AAII 情緒調查抓取脆弱** — `src` 中的 AAII HTML scraping：AAII.com 加強 Cloudflare 防護與 JS 渲染，3 段 URL fallback 仍高失敗率，週頻情緒數據常缺失。
+- ⬜ **[M4] AAII 情緒調查抓取脆弱** (WONTFIX — 稽核確認 stock dashboard **從未使用 AAII**，grep 全 src/ 無任何 aaii/AAII 字串，此項為誤植。無需修改。)
 
-- ⬜ **[M5] FT RSS 需訂閱** — `src/data/news/news_fetcher.py` 中的 `www.ft.com/rss/home/uk`：免費版返回空內容，建議移除。
+- ⬜ **[M5] FT RSS 需訂閱** (WONTFIX — 稽核確認 `src/data/news/news_fetcher.py` **從未包含** FT RSS URL，此項為誤植。無需修改。)
 
 ### ⚪ LOW（邊界設計或 UX 微調）
 
-- ⬜ **[L1] CBC_RATE 永遠卡邊界** — `macro_core.py:236`：`yellow_above: 2.0`，台灣央行重貼現率目前剛好 2.0%，燈號永遠在邊界跳動。
+- ✅ **[L1] CBC_RATE 永遠卡邊界** (v18.460) — `macro_core.py:236`：`yellow_above: 2.0 → 2.125`，現行 2.0% 不再卡邊界，下一升息步幅為 2.125%。
 
-- ⬜ **[L2] USDCNY 門檻長期無綠** — `macro_core.py:244`：`green_below: 7.0`，人民幣 2022 年後走弱，長期 7.1-7.3，門檻形同虛設。
+- ✅ **[L2] USDCNY 門檻長期無綠** (v18.460) — `macro_core.py:244`：`green_below: 7.0→7.1 / yellow_above: 7.2→7.3 / red_above: 7.4→7.45`，對齊人民幣 2022 後 7.1~7.35 實際區間。
 
-- ⬜ **[L3] Yahoo Finance RSS 格式待驗** — `news_fetcher.py` 的 Yahoo Finance RSS URL 為舊版格式，Yahoo 已多次更改 endpoint，建議驗證是否仍有效。
+- ✅ **[L3] Yahoo Finance RSS 格式待驗** (v18.460) — `news_fetcher.py:94`：`https://finance.yahoo.com/news/rssindex` 實測確認 HTTP 200 + application/xml，格式正確。同批亦發現 **鉅亨網 CNYES RSS 已死亡**（`/rss/cat/headline` 重定向至 `/twstock/error.htm` 404），改換 **中央社財經 RSS**（`https://www.cna.com.tw/rssfeed/news/afe.aspx`，台灣官方通訊社）。
 
 ---
 
-## 🚀 目前狀態(v18.459 — HIGH/MEDIUM 稽核修正)
+## 🚀 目前狀態(v18.460 — LOW 稽核修正 + 綜合重新檢查)
+
+✅ **v18.460(2026-07-03)**:LOW 稽核項目修正 + 全面重新確認:
+- **[L1] CBC_RATE 邊界**：`MACRO_THRESHOLDS["CBC_RATE"] yellow_above: 2.0→2.125`，現行 2.0% 顯示🟢，避免邊界跳動。`src/data/macro/macro_core.py`
+- **[L2] USDCNY 門檻**：`MACRO_THRESHOLDS["USDCNY"]` 三區更新：`green_below 7.0→7.1 / yellow_above 7.2→7.3 / red_above 7.4→7.45`，對齊人民幣 2022 後實際弱勢區間。`src/data/macro/macro_core.py`
+- **[M4] AAII**：稽核確認 stock dashboard 從未使用 AAII（grep 無命中），WONTFIX。
+- **[M5] FT RSS**：稽核確認 news_fetcher.py 從未包含 FT RSS URL，WONTFIX。
+- **[L3] Yahoo Finance RSS + CNYES 死亡**：Yahoo Finance `news/rssindex` 實測 HTTP 200 確認正常 ✅；同批發現 CNYES 鉅亨 `/rss/cat/headline` 重定向 404 死亡 → 改換中央社財經 RSS `https://www.cna.com.tw/rssfeed/news/afe.aspx`。`src/data/news/news_fetcher.py`
+
+## 🚀 前一狀態(v18.459 — HIGH/MEDIUM 稽核修正)
 
 ✅ **v18.459(2026-07-03)**:稽核項目修正:
 - **[H1] VIX 雙重綠燈**：`_sig_vix()` VIX > 30 改 ⚫「極端恐慌（逢低加碼訊號）」深灰色，與平靜 🟢 明確區分。`src/data/macro/macro_core.py`
