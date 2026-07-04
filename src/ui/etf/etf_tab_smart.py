@@ -106,7 +106,7 @@ def render_std_band_section(ticker: str | None = None, key_suffix: str = '') -> 
     from src.compute.etf.etf_smart_analysis import compute_std_bands
 
     _key = f'etf_smart_std{key_suffix}'
-    with st.expander('📐 標準差買賣參考帶', expanded=False):
+    with st.expander('📐 標準差買賣參考帶', expanded=True):
         st.caption(
             '根據過去 252 個交易日（約一年）的滾動均值與標準差，判斷目前價格處於哪個區間。'
             '越靠近 -2σ = 歷史相對低點，可能買進時機；越靠近 +2σ = 相對高點，注意風險。'
@@ -126,9 +126,7 @@ def render_std_band_section(ticker: str | None = None, key_suffix: str = '') -> 
             key=f'{_key}_window',
         )
 
-        if not st.button('📊 計算', key=f'{_key}_btn', use_container_width=True):
-            return
-
+        # 自動計算(不需按鈕):代號由上方帶入即算,融入診斷結果
         with st.spinner(f'載入 {_ticker} 價格中...'):
             try:
                 _df = _cached_price(_ticker)
@@ -256,8 +254,7 @@ def render_correlation_finder(ticker: str | None = None, key_suffix: str = '') -
     from src.compute.etf.etf_categories import ETF_PEER_GROUPS
     from src.compute.etf.etf_smart_analysis import build_holdings_set, find_best_diversifiers
 
-    _key = f'etf_smart_corr{key_suffix}'
-    with st.expander('🔗 ETF 分散度分析 — 找最佳互補標的', expanded=False):
+    with st.expander('🔗 ETF 分散度分析 — 找最佳互補標的', expanded=True):
         st.caption(
             '以目前標的為基準，系統從台灣主要 ETF 中找出三維度（價格相關、持股重疊、產業類別）'
             '綜合最不相關的前 10 檔，作為投資組合分散的候選標的。'
@@ -269,9 +266,7 @@ def render_correlation_finder(ticker: str | None = None, key_suffix: str = '') -
             return
         st.caption(f'📌 分析標的：**{_ticker}**')
 
-        if not st.button('🔍 計算分散度', key=f'{_key}_btn', use_container_width=True):
-            return
-
+        # 自動計算(不需按鈕);此區塊會抓 ~30 檔 ETF,首次約 10-20 秒,之後走 cache
         # ── 建立 universe（ETF_PEER_GROUPS 所有 + 輸入本身）──
         _universe: set[str] = {_ticker}
         for _lst in ETF_PEER_GROUPS.values():
@@ -447,7 +442,7 @@ def render_333_section(ticker: str | None = None, key_suffix: str = '') -> None:
     from src.compute.etf.etf_smart_analysis import check_333_criteria
 
     _key = f'etf_smart_333{key_suffix}'
-    with st.expander('🎯 MK 3-3-3 優質標的篩選', expanded=False):
+    with st.expander('🎯 MK 3-3-3 優質標的篩選', expanded=True):
         st.caption(
             '郭俊宏（MK）老師核心篩選原則：'
             '**① 成立 >3 年**（歷經牛熊考驗）｜'
@@ -468,9 +463,7 @@ def render_333_section(ticker: str | None = None, key_suffix: str = '') -> None:
             help='啟用後會下載同類 ETF 的歷史報酬進行排名比較，約需 15-30 秒',
         )
 
-        if not st.button('🔍 評估', key=f'{_key}_btn', use_container_width=True):
-            return
-
+        # 自動計算(不需按鈕):C1/C2 即算;C3 同儕排名較慢,預設關,勾選才跑
         # 取歷史（5 年）
         with st.spinner(f'載入 {_ticker} 5 年歷史資料中…'):
             try:

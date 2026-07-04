@@ -44,7 +44,9 @@ from shared.signal_thresholds import (
 )
 
 
-def render_etf_single(gemini_fn=None):
+def render_etf_single(gemini_fn=None, before_ai_hook=None):
+    """before_ai_hook: 可選 callable，於「AI 白話總結」之前呼叫(用來把 smart 分析區塊
+    插在 AI 之前 → AI 置底)。診斷成功(過 gate + 有資料)才會執行。"""
     # ─ Late imports（避免循環 import）─
     import pandas as pd
     from datetime import timedelta
@@ -800,6 +802,12 @@ def render_etf_single(gemini_fn=None):
         '_err_expense': _err_expense,
         '_err_nav':     _err_nav,
     }
+
+    # 版面:smart 分析區塊(標準差帶/分散度/3-3-3)插在 AI 之前 → AI 白話總結置底
+    if before_ai_hook is not None:
+        st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
+        before_ai_hook()
+        st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
 
     # ── AI 白話結構化總結（取代舊的統一決策三卡片）─────────────
     st.markdown('### 🧠 AI 白話總結')

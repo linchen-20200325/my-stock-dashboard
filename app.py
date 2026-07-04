@@ -639,16 +639,16 @@ with tab_etf_main:
     ])
 
     with tab_etf:
-        render_etf_single(gemini_fn=gemini_call)
-        st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
         from src.ui.etf.etf_tab_smart import (
             render_std_band_section, render_correlation_finder, render_333_section,
         )
-        # 三個 smart 區塊統一吃上方「開始診斷」的代號（不再各自帶獨立輸入框）
-        _etf_s_tk = st.session_state.get('etf_s_active')
-        render_333_section(_etf_s_tk, key_suffix='_single')
-        render_std_band_section(_etf_s_tk, key_suffix='_single')
-        render_correlation_finder(_etf_s_tk, key_suffix='_single')
+        # 三個 smart 區塊統一吃「開始診斷」代號,且插在 AI 白話總結之前(hook)→ AI 置底
+        def _etf_single_smart():
+            _tk = st.session_state.get('etf_s_active')
+            render_333_section(_tk, key_suffix='_single')
+            render_std_band_section(_tk, key_suffix='_single')
+            render_correlation_finder(_tk, key_suffix='_single')
+        render_etf_single(gemini_fn=gemini_call, before_ai_hook=_etf_single_smart)
 
     with tab_etf_compare:
         from src.ui.etf import render_etf_grp_compare
@@ -659,8 +659,6 @@ with tab_etf_main:
         st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
         render_grape_ladder(gemini_fn=gemini_call)
         st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
-        render_etf_ai(gemini_fn=gemini_call)
-        st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
         from src.ui.etf.etf_tab_smart import (
             render_std_band_section, render_correlation_finder, render_333_section,
             render_smart_ticker_input,
@@ -670,6 +668,9 @@ with tab_etf_main:
         render_333_section(_etf_grp_tk, key_suffix='_grp')
         render_std_band_section(_etf_grp_tk, key_suffix='_grp')
         render_correlation_finder(_etf_grp_tk, key_suffix='_grp')
+        # AI 置底（移到 smart 區塊之後）
+        st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
+        render_etf_ai(gemini_fn=gemini_call)
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 4: 工具箱（資料診斷 + 教學）
