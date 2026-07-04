@@ -1,5 +1,33 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏗️ 2026-07-04 全台股基本面選股網（MOPS 路線）— 建置中（Phase 1a/1b 已上線）
+
+> 使用者要求:選股網起始名單要涵蓋**全台股**(不是現在的上市 845 檔),用基本面篩選。
+> POC 確認免費路線的天花板 + 資料源,分階段建。**此為跨 session 專案,進度記於此。**
+
+### 可行性 POC 結論（GitHub Actions 實測，見 scripts/poc_*.py）
+- **FinMind date-bulk 財報 = 免費 tier 不放行**（回 400「Your level is register」）→ 全 9 項免費 bulk 不可行。
+- **MOPS 彙總報表可行**（免費、一次全市場、GitHub IP 不被 geo-block）:
+  - 網域 `mopsov.twse.com.tw`(舊 `mops.twse.com.tw` 回錯誤頁)
+  - `ajax_t163sb04` = **綜合損益表彙總**(營收/營業成本/毛利/營益/淨利/EPS)→ 三率#2 + 估值#4
+  - `ajax_t163sb05` = **資產負債表彙總**(資產總計/負債總計/流動資產/權益總計)→ 負債比#1 + 淨值#8
+  - POST `TYPEK`(sii/otc)+ `year`(民國)+ `season`(01-04);全市場(上市~1011/上櫃~740)
+- **MOPS 只能 cover 4/9 項**(彙總表只有摘要欄;應收#5/存貨#6/CapEx#7/合約負債#9 需明細,MOPS 無)。
+- **決策:兩層漏斗** — 第一層 MOPS bulk 全市場 4 項基本面初篩 → survivors 取代現在的估值 pool;
+  第二層對小名單跑完整 9 項+籌碼+殖利率(per-stock,量少不爆 API)。
+
+### 進度
+- ✅ **Phase 1a**(PR #463):`src/data/stock/mops_bulk_fetcher.py`(L1)— fetch_mops_income_bulk /
+  fetch_mops_balance_bulk + `_parse_mops_aggregate` 純函式(多產業表格、金融業缺欄容錯)。4 測綠。
+- ✅ **Phase 1b**(PR #464):`scripts/update_fundamentals_snapshot.py` + `.github/workflows/update_fundamentals.yml`
+  — 抓上市+上櫃存 `data_cache/fundamentals/*.parquet`(子目錄不受 gitignore)+ latest.json;
+  季 cron + 手動觸發;`latest_published_quarter` 依公告截止日推季別。3 測綠。
+- ⬜ **待做:實機驗證**(手動觸發 update_fundamentals workflow 抓真 MOPS + 產生首份快取)
+- ⬜ **Phase 2**:L2 `fundamental_prescreen.py`(讀 parquet 算 4 項 → 全市場通過名單)
+- ⬜ **Phase 3**:L3 service + 接選股網 UI(取代估值 pool)+ 降級 fallback
+
+---
+
 ## 🎯 2026-07-04 v18.466 — 選股網漏斗式 + ETF 單檔診斷代號統一（使用者回報 2 bug）
 
 > 使用者截圖回報：① 選股網入口是「殖利率前50」不是全市場基本面；② ETF 單檔診斷下方 3 個
