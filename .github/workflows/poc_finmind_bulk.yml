@@ -1,0 +1,31 @@
+name: POC FinMind date-bulk 可行性驗證
+
+# 一次性可行性驗證：FinMind 3 個財報表「只給 date、不給 data_id」能否回全市場逐股。
+# 用 GitHub runner（網路不被 agent proxy 擋）+ 既有 FINMIND_TOKEN secret 實測。
+# 手動觸發，輸出看 Actions log；不寫任何檔、不動 production。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  poc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Run FinMind date-bulk POC
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: python scripts/poc_finmind_bulk.py
