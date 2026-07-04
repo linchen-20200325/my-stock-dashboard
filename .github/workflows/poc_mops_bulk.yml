@@ -1,0 +1,29 @@
+name: POC MOPS 彙總報表 可行性驗證
+
+# 一次性可行性驗證：MOPS(公開資訊觀測站)「整季全公司彙總報表」能否一次抓全市場財報。
+# MOPS 是公開資料，不需 token。GitHub runner 網路不被 agent proxy 擋。
+# 手動觸發，輸出看 Actions log；不寫任何檔、不動 production。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  poc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Run MOPS bulk POC
+        run: python scripts/poc_mops_bulk.py
