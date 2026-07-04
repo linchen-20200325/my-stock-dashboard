@@ -806,7 +806,13 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     # 版面:smart 分析區塊(標準差帶/分散度/3-3-3)插在 AI 之前 → AI 白話總結置底
     if before_ai_hook is not None:
         st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
-        before_ai_hook()
+        try:
+            before_ai_hook()   # smart 區塊出錯不得拖垮整個 ETF 診斷(AI/成分股等仍要顯示)
+        except Exception as _e_hook:
+            import traceback as _tb_hook
+            print(f'[etf_single] before_ai_hook 失敗:{type(_e_hook).__name__}: {_e_hook}')
+            _tb_hook.print_exc()
+            st.warning('⚠️ 智慧分析區塊發生錯誤,已略過(不影響其他診斷結果)')
         st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
 
     # ── AI 白話結構化總結（取代舊的統一決策三卡片）─────────────

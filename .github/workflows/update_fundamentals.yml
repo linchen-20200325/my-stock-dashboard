@@ -35,7 +35,9 @@ jobs:
           python-version: '3.11'
 
       - name: Install deps
-        run: pip install pandas pyarrow lxml requests
+        # 用完整 requirements:import mops_bulk_fetcher 會觸發 src/data/stock/__init__ 的
+        # sibling eager import(tw_stock_data_fetcher 需 bs4 等),裝齊避免 ModuleNotFoundError。
+        run: pip install -r requirements.txt
 
       - name: Fetch fundamentals snapshot
         run: |
