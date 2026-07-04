@@ -149,19 +149,34 @@ def _normalize_ticker(t: str) -> str:
     return t
 
 
-def build_holdings_set(holdings: list | None, top_n: int = 15) -> set:
-    """從 fetch_etf_holdings 回傳的 list-of-dict 建立 set（取前 N 檔代號）。"""
-    if not holdings:
+def build_holdings_set(holdings, top_n: int = 15) -> set:
+    """從 fetch_etf_holdings 回傳值建立代號 set（取前 N 檔）。
+
+    容錯（§1）：list / DataFrame / dict / Series / None 皆安全,任何非預期格式都
+    回傳能拿到的部分而非 raise（避免自動計算時單一 ETF 格式異常拖垮整個分散度區塊）。
+    """
+    if holdings is None:
         return set()
+    # 統一成 list-of-record（DataFrame 先轉;其餘用 list() 強制迭代,失敗即空）
+    if isinstance(holdings, pd.DataFrame):
+        records = holdings.head(top_n).to_dict('records') if not holdings.empty else []
+    else:
+        try:
+            records = list(holdings)[:top_n]
+        except Exception:
+            return set()
     codes: set[str] = set()
-    for h in holdings[:top_n]:
-        if isinstance(h, dict):
-            sym = h.get('symbol') or h.get('Symbol') or h.get('code') or ''
-        else:
-            sym = str(h)
-        sym = sym.strip().upper()
-        if sym:
-            codes.add(sym)
+    for h in records:
+        try:
+            if isinstance(h, dict):
+                sym = h.get('symbol') or h.get('Symbol') or h.get('code') or ''
+            else:
+                sym = str(h)
+            sym = str(sym).strip().upper()
+            if sym:
+                codes.add(sym)
+        except Exception:
+            continue
     return codes
 
 

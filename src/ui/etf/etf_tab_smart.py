@@ -296,8 +296,12 @@ def render_correlation_finder(ticker: str | None = None, key_suffix: str = '') -
         _prog = st.progress(0, '取得持股資料中...')
         for _i, _t in enumerate(_tickers_to_fetch):
             _prog.progress((_i + 1) / len(_tickers_to_fetch), f'取得 {_t} 持股...')
-            _raw_h = _cached_holdings(_t)
-            _holdings_map[_t] = build_holdings_set(_raw_h, top_n=15)
+            try:
+                _raw_h = _cached_holdings(_t)
+                _holdings_map[_t] = build_holdings_set(_raw_h, top_n=15)
+            except Exception as _eh:   # 單一 ETF 持股格式異常 → 略過,不拖垮整區塊
+                print(f'[etf_tab_smart] holdings {_t} 略過:{type(_eh).__name__}: {_eh}')
+                _holdings_map[_t] = set()
         _prog.empty()
 
         # ── 計算分散度 ──
