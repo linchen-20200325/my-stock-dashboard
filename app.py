@@ -461,22 +461,15 @@ st.markdown(
 from src.ui.render.app_render import render_macro_compass  # noqa: E402
 render_macro_compass()
 
-# v18.182 ARCHIVED: 🧪 回測找參數 Tab 暫封存
-# 未來啟用：(1) tuple 加回 tab_backtest 在 tab_etf_margin 之後 tab_diag 之前
-# (2) labels 加回 '🧪 回測找參數' 對應位置 (3) 取消下方 with tab_backtest 區塊註解
-# v18.187 ARCHIVED: 📈 月營收進退 Tab 暫封存（FinMind batch endpoint 已不支援免費 tier）
-# 未來啟用：(1) tuple 加回 tab_rev_screener 在 tab_screener 之後 tab_mj_diff 之前
-# (2) labels 加回 '📈 月營收進退' 對應位置 (3) 取消下方 with tab_rev_screener 區塊註解
-# v18.189 ARCHIVED: 📊 MJ 體檢變化 Tab 暫封存（功能改整合至「🏆 個股組合」批次體檢區塊下方）
-# 未來啟用：(1) tuple 加回 tab_mj_diff 在 tab_screener 之後 tab_etf 之前
-# (2) labels 加回 '📊 MJ 體檢變化' 對應位置 (3) 取消下方 with tab_mj_diff 區塊註解
-tab_macro, tab_heatmap, tab_stock, tab_stock_grp, tab_screener, tab_etf, tab_etf_grp, tab_etf_margin, tab_diag, tab_edu = st.tabs([
-    '🌍 總經', '🗺️ 產業熱力圖', '🔬 個股', '🏆 個股組合',
-    '💎 高息網', '🏦 ETF', '⚖️ ETF組合', '💰 ETF質借模擬', '🔎 資料診斷', '📚 教學',
+# v18.182 ARCHIVED: 🧪 回測找參數 / v18.187 ARCHIVED: 📈 月營收進退 / v18.189 ARCHIVED: 📊 MJ 體檢變化
+# 各暫封存模組保留磁碟，啟用方式見各 ARCHIVED 原始注解。
+# v18.463: UI 重構 — 10 平鋪 Tab → 4 大群組 + Sub-tabs（sub-tab 變數名稱維持不變，測試仍通過）
+tab_market, tab_stocks, tab_etf_main, tab_tools = st.tabs([
+    '🌍 市場環境', '🔬 選股', '🏦 ETF', '🔧 工具箱',
 ])
 
 # ══════════════════════════════════════════════════════════════
-# TAB 1: 總體經濟
+# 全域多空紅綠燈（Tab 外，永遠可見）
 # ══════════════════════════════════════════════════════════════
 
 # ── 全域多空紅綠燈（頁面最頂端）─────────────────────────────
@@ -540,16 +533,7 @@ def _build_llm_context(macro_info: dict) -> str:
 
 
 # ══════════════════════════════════════════════════════════════
-# TAB 1/3/4/10 render 綁定 — v18.439 修復 + v18.440 per-tab 隔離
-# 94a257d「chore(dead): 刪 4 個 0-caller dead fn」誤把這 4 個
-# `with tab_X: render_tab_X()` 渲染綁定當死碼刪掉,導致
-# 總經 / 個股 / 個股組合 / 教學 四個分頁全空白(0 內容)。
-# render_* 採「tab 內 lazy import」:① 避免 app ↔ tab 循環 import
-# ② 杜絕 module-level import 被 ruff F401 當未用再刪的回歸。
-# v18.440:這 4 分頁久未綁定渲染 → code 與 helper 簽章已漂移(如 tab_edu
-# 呼叫 make_sparkline 傳了已移除的 high_is_bad/lookback → TypeError 拖垮全頁)。
-# 改各自 try/except 隔離:單一分頁出錯只在該 tab st.error(§1 fail-loud 可見),
-# 不再拖垮其他分頁 / 全頁。
+# render 隔離器 — v18.439/v18.440 修復：單 tab 出錯不拖垮全頁
 # ══════════════════════════════════════════════════════════════
 def _render_tab_isolated(_render, _label):
     """單一 tab render 隔離:例外不拖垮全頁,改在該 tab st.error + stderr full traceback。"""
@@ -562,110 +546,101 @@ def _render_tab_isolated(_render, _label):
         print(f'[tab:{_label}] render error:\n{_tb_t.format_exc()}', file=_sys_t.stderr)
 
 
-with tab_macro:
-    from src.ui.tabs import render_tab_macro
-    _render_tab_isolated(render_tab_macro, '總經')
-with tab_stock:
-    from src.ui.tabs import render_tab_stock
-    _render_tab_isolated(render_tab_stock, '個股')
-with tab_stock_grp:
-    from src.ui.tabs import render_stock_grp
-    _render_tab_isolated(render_stock_grp, '個股組合')
-with tab_edu:
-    from src.ui.tabs import render_tab_edu
-    _render_tab_isolated(render_tab_edu, '教學')
+# ══════════════════════════════════════════════════════════════
+# GROUP 1: 市場環境（總經 + 產業熱力圖）
+# ══════════════════════════════════════════════════════════════
+with tab_market:
+    tab_macro, tab_heatmap = st.tabs(['🌍 總經', '🗺️ 產業熱力圖'])
 
+    with tab_macro:
+        from src.ui.tabs import render_tab_macro
+        _render_tab_isolated(render_tab_macro, '總經')
+
+    with tab_heatmap:
+        render_sector_heatmap(gemini_fn=gemini_call)
 
 # ══════════════════════════════════════════════════════════════
-# TAB: ETF 單一深度診斷 + 多檔批次評分（v18.223 子分頁）
+# GROUP 2: 選股（個股 + 個股組合 + 選股網）
 # ══════════════════════════════════════════════════════════════
-with tab_etf:
-    _etf_sub_tabs = st.tabs(['🔍 單檔深度診斷', '📊 多檔評分比較'])
-    with _etf_sub_tabs[0]:
+with tab_stocks:
+    tab_stock, tab_stock_grp, tab_screener = st.tabs(['🔬 個股', '🏆 個股組合', '🔭 選股網'])
+
+    with tab_stock:
+        from src.ui.tabs import render_tab_stock
+        _render_tab_isolated(render_tab_stock, '個股')
+
+    with tab_stock_grp:
+        from src.ui.tabs import render_stock_grp
+        _render_tab_isolated(render_stock_grp, '個股組合')
+
+    with tab_screener:
+        # v18.463: 選股網 — AI 置頂卡（結果生成後自動填入）
+        _screener_ai_md = next(
+            (v for k, v in st.session_state.items() if '_ai_md_' in k and v),
+            None,
+        )
+        with st.expander(
+            '🤖 AI 選股建議' + (' ✅ 已生成，點此展開' if _screener_ai_md else ' — 完成下方篩選後結果顯示於此'),
+            expanded=bool(_screener_ai_md),
+        ):
+            if _screener_ai_md:
+                st.markdown(_screener_ai_md)
+            else:
+                st.info('完成下方篩選流程，點「🤖 生成 AI 三型建議報告」後，結果同步顯示此處。')
+        # 選股 Pipeline（高息篩選 → 三階段深度分析，無分隔線）
+        from src.ui.tabs import render_yield_screener, render_tab_stock_picker
+        _picker_candidates = render_yield_screener()
+        render_tab_stock_picker(gemini_fn=gemini_call, candidates=_picker_candidates)
+
+# ══════════════════════════════════════════════════════════════
+# GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合 + 質借模擬）
+# ══════════════════════════════════════════════════════════════
+with tab_etf_main:
+    tab_etf, tab_etf_compare, tab_etf_grp, tab_etf_margin = st.tabs([
+        '🔍 單檔診斷', '📊 多檔比較', '⚖️ ETF 組合', '💰 質借模擬',
+    ])
+
+    with tab_etf:
         render_etf_single(gemini_fn=gemini_call)
-    with _etf_sub_tabs[1]:
+
+    with tab_etf_compare:
         from src.ui.etf import render_etf_grp_compare
         render_etf_grp_compare()
 
-# ══════════════════════════════════════════════════════════════
-# TAB: ETF 組合戰情室（4 區段整合：組合配置 + 歷史回測 + AI + 葡萄串）
-# ══════════════════════════════════════════════════════════════
-with tab_etf_grp:
-    # ── ① 組合配置與再平衡（唯一輸入來源，下游模組共享 etf_portfolio_rows）──
-    render_etf_portfolio(gemini_fn=gemini_call)
-    st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
+    with tab_etf_grp:
+        render_etf_portfolio(gemini_fn=gemini_call)
+        st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
+        render_grape_ladder(gemini_fn=gemini_call)
+        st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
+        render_etf_ai(gemini_fn=gemini_call)
 
-    # ── ② 葡萄串領息法（自動讀取持股做月配息評估）──
-    render_grape_ladder(gemini_fn=gemini_call)
-    st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
-
-    # ── ③ AI 綜合評斷 + 自由提問（壓軸區，整合所有上方分析）──
-    render_etf_ai(gemini_fn=gemini_call)
+    with tab_etf_margin:
+        from src.ui.tabs import render_etf_margin_simulator
+        render_etf_margin_simulator()
 
 # ══════════════════════════════════════════════════════════════
-# TAB: ETF 質借倒金字塔加碼模擬器 (v18.162)
+# GROUP 4: 工具箱（資料診斷 + 教學）
 # ══════════════════════════════════════════════════════════════
-with tab_etf_margin:
-    from src.ui.tabs import render_etf_margin_simulator
-    render_etf_margin_simulator()
+with tab_tools:
+    tab_diag, tab_edu = st.tabs(['🔎 資料診斷', '📚 教學'])
 
-# ══════════════════════════════════════════════════════════════
-# TAB: 7% 高殖利率防禦網（Screener Mode）
-# ══════════════════════════════════════════════════════════════
-with tab_screener:
-    from src.ui.tabs import render_yield_screener
-    _picker_candidates = render_yield_screener()
+    with tab_diag:
+        from src.ui.pages import render_data_coverage, render_data_registry_panel, render_reconcile_panel
+        render_data_coverage()
+        st.markdown('---')
+        render_data_registry_panel()
+        st.markdown('---')
+        render_reconcile_panel()
+        st.markdown('---')
+        render_api_diagnostic()
+        st.markdown('---')
+        render_data_health_raw()
+        st.markdown('---')
+        from src.ui.pages import render_calibration_panel
+        render_calibration_panel()
 
-    # ── 🎯 智慧選股（三階段濾網 + AI 三型建議）— 接續高息網候選清單 ──
-    st.markdown('---')
-    from src.ui.tabs import render_tab_stock_picker
-    render_tab_stock_picker(gemini_fn=gemini_call, candidates=_picker_candidates)
-
-# ══════════════════════════════════════════════════════════════
-# TAB: 月營收進退篩選（v18.180） — v18.187 ARCHIVED
-# FinMind TaiwanStockMonthRevenue batch endpoint (無 data_id) 已不支援免費/sponsor tier
-# 模組 monthly_revenue_screener.py 保留磁碟，未來啟用：取消下方註解即可
-# ══════════════════════════════════════════════════════════════
-# with tab_rev_screener:
-#     from monthly_revenue_screener import render_monthly_revenue_screener
-#     render_monthly_revenue_screener()
-
-# ══════════════════════════════════════════════════════════════
-# TAB: MJ 體檢變化（v18.186 / v18.188 batch 版） — v18.189 ARCHIVED
-# 功能改整合至「🏆 個股組合」批次體檢區塊下方「📊 MJ 趨勢分數」新區塊
-# 模組 tab_mj_health_diff.py 與 mj_trend_score.py 保留磁碟，未來啟用：取消下方註解
-# ══════════════════════════════════════════════════════════════
-# with tab_mj_diff:
-#     from tab_mj_health_diff import render_mj_health_diff_tab
-#     render_mj_health_diff_tab()
-
-# ══════════════════════════════════════════════════════════════
-# TAB: 資料診斷（Raw Data only）
-# ══════════════════════════════════════════════════════════════
-with tab_diag:
-    # v18.280 — 學 Fund 架構 + 預設視角:覆蓋率表(用戶視角)放最上方,
-    # API Key / Proxy 雙跑(developer 視角)放後。對齊 Fund tab5 Section ⓪。
-    from src.ui.pages import render_data_coverage, render_data_registry_panel, render_reconcile_panel
-    render_data_coverage()
-    st.markdown('---')
-    # v18.394 Path C:資料源完整清單(50+ entries by SSOT 11 emoji category)。
-    # coverage tab 4-row 是 Tab 級總覽;此 panel 是資料源級細項。語意分清楚不重複。
-    render_data_registry_panel()
-    st.markdown('---')
-    # v18.403 #8+#12:§4.3 雙演算法對帳 panel(US10Y / 月營收 / 健康評分)。
-    render_reconcile_panel()
-    st.markdown('---')
-    render_api_diagnostic()
-    st.markdown('---')
-    render_data_health_raw()
-    st.markdown('---')
-    from src.ui.pages import render_calibration_panel
-    render_calibration_panel()
-
-# ══════════════════════════════════════════════════════════════
-# TAB: 產業熱力圖
-# ══════════════════════════════════════════════════════════════
-with tab_heatmap:
-    render_sector_heatmap(gemini_fn=gemini_call)
+    with tab_edu:
+        from src.ui.tabs import render_tab_edu
+        _render_tab_isolated(render_tab_edu, '教學')
 
 st.markdown('<div style="text-align:center;font-size:10px;color:#484f58;padding:8px 0;">⚠️ 台股AI戰情室 v3.0 · 僅供學術研究，非投資建議，盈虧自負</div>', unsafe_allow_html=True)

@@ -107,10 +107,9 @@ def render_yield_screener():
     """
     _hdr_cols = st.columns([4, 1])
     with _hdr_cols[0]:
-        st.markdown('### 💎 7% 高殖利率防禦網')
         st.caption(
-            '🎯 **漏斗篩選 (Screener Mode)**：先 TWSE 全市場一次抓殖利率/本益比，'
-            '再依 Slider 條件過濾 → 對單檔做配息深度檢驗'
+            '🎯 **高殖利率漏斗篩選**：先 TWSE 全市場掃描殖利率/本益比，'
+            '再依條件過濾候選清單 → 傳入下方三階段深度分析'
         )
     with _hdr_cols[1]:
         st.markdown(_proxy_status_badge(), unsafe_allow_html=True)
@@ -145,7 +144,7 @@ def render_yield_screener():
     st.success(f'✅ TWSE 全市場資料就緒：共 **{len(_df_all)}** 檔上市股票')
 
     # ── ② 動態篩選器 ──────────────────────────────────────
-    st.markdown('#### 🎚️ 篩選條件')
+    st.markdown('#### 1️⃣ 設定篩選條件')
     with st.expander('💡 這些數字代表什麼？（殖利率 · 本益比 · 股價淨值比 · 7% 防禦網）', expanded=False):
         st.markdown(
             '- **殖利率(%)**＝每年配息 ÷ 股價，是買進當下的「現金回報率」。**越高越好**；預設門檻 7%＝存股族防禦甜甜價（明顯高於定存/債券）。\n'
@@ -184,7 +183,7 @@ def render_yield_screener():
         return None
 
     # ── ③ 候選清單 ────────────────────────────────────────
-    st.markdown(f'#### 📋 候選清單（共 **{len(_df_filt)}** 檔通過篩選）')
+    st.markdown(f'#### 2️⃣ 初選清單（共 **{len(_df_filt)}** 檔通過）')
     st.dataframe(
         _df_filt, use_container_width=True, hide_index=True,
         column_config={
@@ -196,98 +195,95 @@ def render_yield_screener():
         },
     )
 
-    # ── ④ 單檔深度檢驗 ────────────────────────────────────
-    st.markdown('---')
-    st.markdown('#### 🔍 單檔深度檢驗（配息歷史）')
-    st.caption('從候選清單下拉選擇 **或** 直接輸入代號（含不在清單內的股票，例：6770）')
+    # ── ④ 單檔配息歷史深度檢驗（置底摺疊，選填）────────────
+    with st.expander('🔍 配息歷史深度檢驗（展開查看單檔配息詳情）', expanded=False):
+        st.caption('從候選清單下拉選擇 **或** 直接輸入代號（含不在清單內的股票，例：6770）')
 
-    _options  = [f'{r["代碼"]} {r["名稱"]}' for _, r in _df_filt.iterrows()]
-    _opt_none = '— 請選擇 —'
-    _sel_col, _input_col = st.columns([2, 1])
-    with _sel_col:
-        _sel = st.selectbox(
-            '從候選清單選擇',
-            [_opt_none] + _options,
-            key='ys_sel'
-        )
-    with _input_col:
-        _typed = st.text_input(
-            '或輸入代號',
-            value='',
-            key='ys_typed',
-            placeholder='例：6770'
-        )
+        _options  = [f'{r["代碼"]} {r["名稱"]}' for _, r in _df_filt.iterrows()]
+        _opt_none = '— 請選擇 —'
+        _sel_col, _input_col = st.columns([2, 1])
+        with _sel_col:
+            _sel = st.selectbox(
+                '從候選清單選擇',
+                [_opt_none] + _options,
+                key='ys_sel'
+            )
+        with _input_col:
+            _typed = st.text_input(
+                '或輸入代號',
+                value='',
+                key='ys_typed',
+                placeholder='例：6770'
+            )
 
-    _ticker = ''
-    if _typed.strip():
-        _ticker = _typed.strip().split()[0]
-    elif _sel and _sel != _opt_none:
-        _ticker = _sel.split()[0]
+        _ticker = ''
+        if _typed.strip():
+            _ticker = _typed.strip().split()[0]
+        elif _sel and _sel != _opt_none:
+            _ticker = _sel.split()[0]
 
-    if not _ticker:
-        st.info('💡 從上方表格挑一檔，或直接輸入代號（如 6770）查看歷史配息')
-        return _df_filt
+        if not _ticker:
+            st.info('💡 從上方表格挑一檔，或直接輸入代號（如 6770）查看歷史配息')
+        else:
+            # ── ⑤ 抓配息歷史 ─────────────────────────────────────
+            _disp_name = _ticker
+            _row_match = _df_all[_df_all['代碼'] == _ticker]
+            if not _row_match.empty:
+                _disp_name = f'{_ticker} {_row_match.iloc[0]["名稱"]}'
 
-    # ── ⑤ 抓配息歷史 ─────────────────────────────────────
-    _disp_name = _ticker
-    _row_match = _df_all[_df_all['代碼'] == _ticker]
-    if not _row_match.empty:
-        _disp_name = f'{_ticker} {_row_match.iloc[0]["名稱"]}'
+            st.markdown(f'##### 📊 {_disp_name} — 歷史配息（近 10 年）')
+            with st.spinner(f'正在抓取 {_ticker} 配息資料…'):
+                _div_series = fetch_dividend_history(_ticker)
 
-    st.markdown(f'##### 📊 {_disp_name} — 歷史配息（近 10 年）')
-    with st.spinner(f'正在抓取 {_ticker} 配息資料…'):
-        _div_series = fetch_dividend_history(_ticker)
+            if _div_series.empty:
+                st.warning(
+                    f'⚠️ **該標的近期無穩定配息資料**\n\n'
+                    f'`{_ticker}` 在 yfinance 查無配息記錄。常見原因：\n'
+                    f'- 公司歷年虧損 / 配息斷層（如 6770 力積電部分年度）\n'
+                    f'- 新上市未滿一年\n'
+                    f'- 代號錯誤或非台股上市公司\n'
+                    f'- yfinance 海外資料源延遲'
+                )
+            else:
+                # 只保留近 10 年
+                _div_recent = _div_series.tail(10)
 
-    if _div_series.empty:
-        st.warning(
-            f'⚠️ **該標的近期無穩定配息資料**\n\n'
-            f'`{_ticker}` 在 yfinance 查無配息記錄。常見原因：\n'
-            f'- 公司歷年虧損 / 配息斷層（如 6770 力積電部分年度）\n'
-            f'- 新上市未滿一年\n'
-            f'- 代號錯誤或非台股上市公司\n'
-            f'- yfinance 海外資料源延遲'
-        )
-        return _df_filt
+                # ⑤a 長條圖
+                _chart_df = pd.DataFrame({'年度': _div_recent.index.astype(str),
+                                          '現金配息(元)': _div_recent.values})
+                st.bar_chart(_chart_df.set_index('年度'), use_container_width=True)
 
-    # 只保留近 10 年
-    _div_recent = _div_series.tail(10)
+                # ⑤b 統計摘要
+                _years_paid = int((_div_recent > 0).sum())
+                _avg_div    = float(_div_recent.mean())
+                _max_div    = float(_div_recent.max())
+                _last_div   = float(_div_recent.iloc[-1]) if len(_div_recent) else 0.0
+                _stat_c1, _stat_c2, _stat_c3, _stat_c4 = st.columns(4)
+                with _stat_c1:
+                    st.metric('近 10 年配息年數', f'{_years_paid} 年')
+                with _stat_c2:
+                    st.metric('平均配息', f'{_avg_div:.2f} 元')
+                with _stat_c3:
+                    st.metric('歷史最高配息', f'{_max_div:.2f} 元')
+                with _stat_c4:
+                    st.metric('最近一年', f'{_last_div:.2f} 元')
 
-    # ⑤a 長條圖
-    _chart_df = pd.DataFrame({'年度': _div_recent.index.astype(str),
-                              '現金配息(元)': _div_recent.values})
-    st.bar_chart(_chart_df.set_index('年度'), use_container_width=True)
+                # ⑤c 穩定度評等
+                if _years_paid >= 8:
+                    st.success(f'✅ 近 10 年配息 {_years_paid} 年（≥8 年），配息穩定度極佳')
+                elif _years_paid >= 5:
+                    st.success(f'✅ 近 10 年配息 {_years_paid} 年（≥5 年），配息穩定度佳')
+                elif _years_paid >= 3:
+                    st.warning(f'🟡 近 10 年配息 {_years_paid} 年（3–4 年），穩定度中等，需再觀察')
+                else:
+                    st.error(f'🔴 近 10 年配息僅 {_years_paid} 年（<3 年），配息不穩定，存股風險高')
 
-    # ⑤b 統計摘要
-    _years_paid = int((_div_recent > 0).sum())
-    _avg_div    = float(_div_recent.mean())
-    _max_div    = float(_div_recent.max())
-    _last_div   = float(_div_recent.iloc[-1]) if len(_div_recent) else 0.0
-    _stat_c1, _stat_c2, _stat_c3, _stat_c4 = st.columns(4)
-    with _stat_c1:
-        st.metric('近 10 年配息年數', f'{_years_paid} 年')
-    with _stat_c2:
-        st.metric('平均配息', f'{_avg_div:.2f} 元')
-    with _stat_c3:
-        st.metric('歷史最高配息', f'{_max_div:.2f} 元')
-    with _stat_c4:
-        st.metric('最近一年', f'{_last_div:.2f} 元')
-
-    # ⑤c 穩定度評等
-    if _years_paid >= 8:
-        st.success(f'✅ 近 10 年配息 {_years_paid} 年（≥8 年），配息穩定度極佳')
-    elif _years_paid >= 5:
-        st.success(f'✅ 近 10 年配息 {_years_paid} 年（≥5 年），配息穩定度佳')
-    elif _years_paid >= 3:
-        st.warning(f'🟡 近 10 年配息 {_years_paid} 年（3–4 年），穩定度中等，需再觀察')
-    else:
-        st.error(f'🔴 近 10 年配息僅 {_years_paid} 年（<3 年），配息不穩定，存股風險高')
-
-    # ⑤d 原始資料表
-    with st.expander('📑 原始配息資料表', expanded=False):
-        _raw_df = pd.DataFrame({
-            '年度': _div_recent.index.astype(int),
-            '現金配息(元)': _div_recent.round(4).values,
-        })
-        st.dataframe(_raw_df, use_container_width=True, hide_index=True)
+                # ⑤d 原始資料表
+                with st.expander('📑 原始配息資料表', expanded=False):
+                    _raw_df = pd.DataFrame({
+                        '年度': _div_recent.index.astype(int),
+                        '現金配息(元)': _div_recent.round(4).values,
+                    })
+                    st.dataframe(_raw_df, use_container_width=True, hide_index=True)
 
     return _df_filt

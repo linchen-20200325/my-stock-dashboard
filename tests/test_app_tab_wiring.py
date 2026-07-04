@@ -1,10 +1,13 @@
-"""tests/test_app_tab_wiring.py — v18.439 回歸守衛。
+"""tests/test_app_tab_wiring.py — v18.439 回歸守衛（v18.463 更新說明）。
 
 production 事故:commit 94a257d「chore(dead): 刪 4 個 0-caller dead fn」誤把
 app.py 內 `with tab_X: render_tab_X()` 4 個分頁渲染綁定當死碼刪掉,導致
 總經 / 個股 / 個股組合 / 教學 四個分頁全空白(0 內容),且無測試攔到。
 
-本守衛:app.py 必須綁定全部 10 個 tab,且 4 個 render entrypoint 確實被呼叫。
+v18.463 UI 重構：10 平鋪 Tab → 4 大群組（市場環境 / 選股 / ETF / 工具箱）+ sub-tabs。
+sub-tab 變數名稱維持不變（tab_macro / tab_heatmap / tab_stock 等），本守衛無需修改。
+
+本守衛:app.py 必須綁定全部 10 個 tab（現為 sub-tabs）,且 4 個 render entrypoint 確實被呼叫。
 """
 from __future__ import annotations
 
@@ -41,7 +44,7 @@ def test_render_fn_tabs_wired():
 
 
 def test_all_tabs_have_with_block():
-    """全部 10 個 st.tabs 分頁都要有 with-block(沒有 = 空白分頁)。"""
+    """全部 10 個 sub-tab 變數都要有 with-block(沒有 = 空白分頁)。v18.463: 現為 4 群組內的 sub-tabs。"""
     src = _src()
     for tab in [t for t, _ in _RENDER_TABS] + _INLINE_TABS:
         assert f"with {tab}:" in src, f"app.py 缺 `with {tab}:` → 該分頁空白"

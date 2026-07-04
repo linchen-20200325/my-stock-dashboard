@@ -59,10 +59,8 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
     import pandas as pd
     import yfinance as yf
 
-    st.markdown('### 🎯 智慧選股 — 三階段濾網')
-    st.caption(f'專業台股投資策略：① 基本面防禦 → ② 籌碼技術 → ③ AI 綜合建議。'
-               f'從上方「{source_label}」候選清單勾選標的，系統自動跑三階段篩選並提供配置建議。')
-    st.caption('💡 全 15 項條件實作完成：Stage 1 基本面 ×9 + Stage 2 籌碼技術 ×6 + Stage 3 AI 建議。')
+    st.caption(f'從上方「{source_label}」候選清單勾選標的，系統自動跑三階段篩選並提供配置建議。'
+               f'全 15 項條件：3️⃣ 基本面 ×9 → 4️⃣ 籌碼技術 ×6 → 5️⃣ AI 綜合建議。')
 
     with st.expander('💡 三階段濾網在篩什麼？（基本面 → 籌碼技術 → AI）', expanded=False):
         st.markdown(
@@ -169,8 +167,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         st.session_state[_pick_cache_key] = results
 
     # ── Stage 1：基本面表 ─────────────────────────────────────
-    st.markdown('---')
-    st.markdown('#### 📊 Stage 1：基本面防禦與成長')
+    st.markdown('#### 3️⃣ 基本面防禦篩選')
     _s1_df = pd.DataFrame([{
         '代號':       r['ticker'],
         '負債比':     r['debt_ratio_label'],
@@ -193,7 +190,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
                   if fh_map else ''))
 
     # ── Stage 2：籌碼 + 技術 ──────────────────────────────────
-    st.markdown('#### ⚡ Stage 2：籌碼與技術面鎖定（發動訊號）')
+    st.markdown('#### 4️⃣ 籌碼與技術鎖定')
     _s2_df = pd.DataFrame([{
         '代號':       r['ticker'],
         'MA20 站穩':  r['ma20_label'],
@@ -217,8 +214,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         st.warning('⚠️ 觀察清單中沒有同時通過 Stage 1 (5/9) + Stage 2 (3/6) 的標的')
 
     # ── Stage 3：AI 綜合建議 ──────────────────────────────────
-    st.markdown('---')
-    st.markdown('#### 🧠 Stage 3：AI 綜合操作建議')
+    st.markdown('#### 5️⃣ AI 綜合操作建議')
     if not gemini_fn:
         st.warning('⚠️ 未設定 GEMINI_API_KEY，無法生成 AI 建議')
         return

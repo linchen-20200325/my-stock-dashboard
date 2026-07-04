@@ -164,6 +164,18 @@ def render_tab_macro():
         st.session_state['chips_loaded'] = True
         st.session_state.pop('cl_data', None)
 
+    # ── AI 總結卡（置頂，讀取 section_news_ai 生成結果）────────
+    # session_state key 由 section_news_ai.py 寫入 '_macro_ai_report'
+    _macro_ai_top = st.session_state.get('_macro_ai_report', '')
+    with st.expander(
+        '🤖 AI 總經戰情摘要' + (' ✅ 已生成，點此展開' if _macro_ai_top else ' — 載入資料後點底部「分析」按鈕，結果顯示此處'),
+        expanded=bool(_macro_ai_top),
+    ):
+        if _macro_ai_top:
+            st.markdown(_macro_ai_top)
+        else:
+            st.info('點擊上方「🚀 一鍵更新全部數據」載入資料，再點底部「⚡ 生成 AI 總結分析」，結果同步顯示此處。')
+
     if not _macro_loaded:
         st.markdown(
             '<div style="padding:12px 0 8px;">'
