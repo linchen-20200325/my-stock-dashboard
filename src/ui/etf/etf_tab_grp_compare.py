@@ -89,6 +89,8 @@ def _fetch_one_etf(ticker: str) -> dict:
         'liquidity_avg_vol_20d': None,
         'liquidity_reasons': [],
         'tracking_error': None,
+        # 標準差(σ)建議買賣價位(252 交易日滾動 μ±σ):強買 -2σ / 減碼 +2σ / 現在幾個 σ
+        'sigma_buy': None, 'sigma_sell': None, 'sigma_z': None,
     }
     try:
         _df = fetch_etf_price(ticker, period='5y')
@@ -102,6 +104,16 @@ def _fetch_one_etf(ticker: str) -> dict:
         _r['name'] = (_zh_name or _info.get('shortName') or _info.get('longName')
                       or ticker)[:30]
         _r['price'] = round(float(_df['Close'].iloc[-1]), 2)
+        # 標準差建議買賣價位(借用 L2 compute_std_bands,同單檔診斷 σ 買賣帶)
+        try:
+            from src.compute.etf.etf_smart_analysis import compute_std_bands  # noqa: PLC0415
+            _sb = compute_std_bands(_df['Close'], window=252)
+            if _sb.get('has_data'):
+                _r['sigma_buy'] = round(float(_sb['lower_2s']), 2)   # -2σ 強買
+                _r['sigma_sell'] = round(float(_sb['upper_2s']), 2)  # +2σ 減碼
+                _r['sigma_z'] = round(float(_sb['sigma_z']), 2)      # 現價離均線幾個 σ
+        except Exception as _e_sb:
+            print(f'[etf_tab_grp_compare] {ticker} σ 帶計算失敗:{type(_e_sb).__name__}: {_e_sb}')
         # require_full_period=True:「1Y累積%」欄位宣稱 1 年窗,資料跨度不足 90% 回 None
         # 而非把「上市至今報酬」誤標為「1Y累積」(production bug:年輕 ETF 假 212%)
         _r['total_ret_1y'] = calc_total_return_1y(_df, _divs, require_full_period=True)
@@ -263,6 +275,10 @@ def render_etf_grp_compare() -> None:
         # v18.333 PR-H1:流動性 + 追蹤誤差 SSOT
         '流動性':   r.get('liquidity_level', '⚪'),
         '追蹤誤差%': r.get('tracking_error'),
+        # 標準差建議買賣價位(σ 買賣帶)
+        'σ強買≤':   r.get('sigma_buy'),
+        'σ減碼≥':   r.get('sigma_sell'),
+        'σ位階':    r.get('sigma_z'),
         '備註':     r.get('error') or '',
     } for r in rows])
 
@@ -301,6 +317,15 @@ def render_etf_grp_compare() -> None:
                 '追蹤誤差%', format='%.2f',
                 help='vs 自動偵測基準(台股→0050.TW / 美股→^GSPC):'
                      '> 1.5% 警示;被動式 ETF 應越低越好'),
+            'σ強買≤':   st.column_config.NumberColumn(
+                'σ強買≤', format='%.2f',
+                help='標準差建議「強力買進」價位(252 日滾動 μ−2σ);市價 ≤ 此價 = 歷史相對低點'),
+            'σ減碼≥':   st.column_config.NumberColumn(
+                'σ減碼≥', format='%.2f',
+                help='標準差建議「減碼」價位(μ+2σ);市價 ≥ 此價 = 歷史相對高點'),
+            'σ位階':    st.column_config.NumberColumn(
+                'σ位階', format='%+.2f',
+                help='現價離均線幾個 σ:負=偏低(便宜)、正=偏高(貴);約 ±2 為極端'),
         },
     )
     st.caption(
@@ -312,4 +337,6 @@ def render_etf_grp_compare() -> None:
         '/ 配息健康（MK 框架 #1+#2 ✅雙贏/🔴吃本金）/ 品質星等（已含於綜合分）'
         '/ 流動性（calc_liquidity_score 20D 均量+AUM）'
         '/ 追蹤誤差（calc_tracking_error vs 自動偵測 benchmark）。'
+        ' **σ 建議買賣價位**（compute_std_bands 252 日）：σ強買≤（μ−2σ 相對低點）'
+        '/ σ減碼≥（μ+2σ 相對高點）/ σ位階（現價離均線幾個 σ）。'
     )
