@@ -287,6 +287,39 @@ def find_best_diversifiers(
     return df.head(top_n).reset_index(drop=True)
 
 
+def find_diversifiers_by_category(
+    ticker: str,
+    price_pivot: pd.DataFrame,
+    holdings_map: dict[str, set],
+    *,
+    per_category: int = 10,
+    w_price: float = 0.40,
+    w_holdings: float = 0.40,
+    w_category: float = 0.20,
+) -> "dict[str, pd.DataFrame]":
+    """分散度分析按 ETF 大類分組:對全 universe 算分後,依 ETF_PEER_GROUPS 各類取前 per_category。
+
+    回傳 {類別名: DataFrame}（欄同 find_best_diversifiers,按分散指數降序）。
+    同屬多類的 ETF 會出現在每個所屬類別;某類無成員入榜則不列該類。空 → {}。
+    """
+    from src.compute.etf.etf_categories import ETF_PEER_GROUPS  # noqa: PLC0415
+    _full = find_best_diversifiers(
+        ticker, price_pivot, holdings_map,
+        w_price=w_price, w_holdings=w_holdings, w_category=w_category,
+        top_n=10 ** 6,   # 取全部候選,後續按類別分組
+    )
+    if _full.empty:
+        return {}
+    t = _normalize_ticker(ticker)
+    out: "dict[str, pd.DataFrame]" = {}
+    for _cat, _members in ETF_PEER_GROUPS.items():
+        _norm = {_normalize_ticker(m) for m in _members} - {t}
+        _sub = _full[_full['ticker'].isin(_norm)].head(per_category).reset_index(drop=True)
+        if not _sub.empty:
+            out[_cat] = _sub
+    return out
+
+
 # ── MK 3-3-3 原則篩選 ────────────────────────────────────────────────────────
 
 def check_333_criteria(
