@@ -593,15 +593,24 @@ with tab_stocks:
         render_tab_stock_picker(gemini_fn=gemini_call, candidates=_picker_candidates)
 
 # ══════════════════════════════════════════════════════════════
-# GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合 + 質借模擬）
+# GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合）
+# v18.464: 移除質借模擬 Tab；新增標準差買賣帶 + 分散度分析到單檔 & 組合
+# v18.465: 新增 MK 3-3-3 原則評估（成立>3年 / 3年年化>7% / 同儕前1/3）
 # ══════════════════════════════════════════════════════════════
 with tab_etf_main:
-    tab_etf, tab_etf_compare, tab_etf_grp, tab_etf_margin = st.tabs([
-        '🔍 單檔診斷', '📊 多檔比較', '⚖️ ETF 組合', '💰 質借模擬',
+    tab_etf, tab_etf_compare, tab_etf_grp = st.tabs([
+        '🔍 單檔診斷', '📊 多檔比較', '⚖️ ETF 組合',
     ])
 
     with tab_etf:
         render_etf_single(gemini_fn=gemini_call)
+        st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
+        from src.ui.etf.etf_tab_smart import (
+            render_std_band_section, render_correlation_finder, render_333_section,
+        )
+        render_333_section(key_suffix='_single')
+        render_std_band_section(key_suffix='_single')
+        render_correlation_finder(key_suffix='_single')
 
     with tab_etf_compare:
         from src.ui.etf import render_etf_grp_compare
@@ -613,10 +622,13 @@ with tab_etf_main:
         render_grape_ladder(gemini_fn=gemini_call)
         st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
         render_etf_ai(gemini_fn=gemini_call)
-
-    with tab_etf_margin:
-        from src.ui.tabs import render_etf_margin_simulator
-        render_etf_margin_simulator()
+        st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
+        from src.ui.etf.etf_tab_smart import (
+            render_std_band_section, render_correlation_finder, render_333_section,
+        )
+        render_333_section(key_suffix='_grp')
+        render_std_band_section(key_suffix='_grp')
+        render_correlation_finder(key_suffix='_grp')
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 4: 工具箱（資料診斷 + 教學）
