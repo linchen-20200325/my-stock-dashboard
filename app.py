@@ -593,15 +593,26 @@ with tab_stocks:
         from src.ui.tabs.yield_screener import fetch_twse_yield_pe, render_yield_confirm
         # Step 1: 靜默取 TWSE 全市場資料，殖利率前 50 作為初始候選池（使用者可手動補充代碼）
         _twse_scrn = fetch_twse_yield_pe()
-        _top_cands = (
-            _twse_scrn.nlargest(50, '殖利率(%)').reset_index(drop=True)
-            if not _twse_scrn.empty else None
-        )
+        # v18.xxx+1: 候選池品質過濾 — 先排除價值陷阱，再取殖利率前 50
         if not _twse_scrn.empty:
+            _pool = _twse_scrn.copy()
+            _pe_col = '本益比'    if '本益比'    in _pool.columns else None
+            _yd_col = '殖利率(%)' if '殖利率(%)' in _pool.columns else None
+            _before = len(_pool)
+            if _pe_col:
+                # 排除 PE ≤ 0（虧損股）或 PE > 100（估值異常）
+                _pool = _pool[(_pool[_pe_col] > 0) & (_pool[_pe_col] < 100)]
+            if _yd_col:
+                # 排除殖利率 > 12%（配息可能即將削減）; 保留 ≥ 2%（真正配息股）
+                _pool = _pool[(_pool[_yd_col] >= 2.0) & (_pool[_yd_col] <= 12.0)]
+            _after = len(_pool)
+            _top_cands = _pool.nlargest(50, '殖利率(%)').reset_index(drop=True)
             st.caption(
-                f'📊 候選池：TWSE 全市場 {len(_twse_scrn)} 檔，'
-                f'取殖利率前 50 作為初始候選（可在下方手動補充代碼）'
+                f'📊 候選池：全市場 {_before} 檔 → 品質過濾後 {_after} 檔'
+                f'（排除虧損 / PE>100 / 殖利率<2% 或 >12%）→ 取前 50（可手動補充代碼）'
             )
+        else:
+            _top_cands = None
         # Step 2: 三階段篩選 S1+S2（skip_s3=True 跳過 AI，通過清單存入 session_state）
         render_tab_stock_picker(
             gemini_fn=gemini_call, candidates=_top_cands,
