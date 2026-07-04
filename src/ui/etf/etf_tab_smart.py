@@ -12,7 +12,6 @@
 """
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 import streamlit as st
@@ -252,7 +251,9 @@ def render_correlation_finder(ticker: str | None = None, key_suffix: str = '') -
     ticker: 由呼叫端傳入的分析標的（同 render_std_band_section）。
     """
     from src.compute.etf.etf_categories import ETF_PEER_GROUPS
-    from src.compute.etf.etf_smart_analysis import build_holdings_set, find_best_diversifiers
+    from src.compute.etf.etf_smart_analysis import (
+        build_holdings_set, find_diversifiers_by_category,
+    )
 
     with st.expander('🔗 ETF 分散度分析 — 找最佳互補標的', expanded=True):
         st.caption(
@@ -304,77 +305,64 @@ def render_correlation_finder(ticker: str | None = None, key_suffix: str = '') -
                 _holdings_map[_t] = set()
         _prog.empty()
 
-        # ── 計算分散度 ──
+        # ── 計算分散度（按大類分組，每類前 10）──
         with st.spinner('計算三維分散度...'):
-            _result_df = find_best_diversifiers(
+            _by_cat = find_diversifiers_by_category(
                 ticker=_ticker,
                 price_pivot=_price_pivot,
                 holdings_map=_holdings_map,
-                top_n=10,
+                per_category=10,
             )
 
-        if _result_df is None or _result_df.empty:
+        if not _by_cat:
             st.warning('⚠️ 資料不足，無法計算分散度（需至少 20 個共同交易日）')
             return
 
-        # ── 查 ETF 中文名稱 ──
-        import pandas as _pd
-        _zh_names = []
-        for _t in _result_df['ticker']:
-            _zh_names.append(_cached_zh_name(_t))
-        _result_df.insert(1, '名稱', _zh_names)
-
-        # 格式化顯示
-        _display = _result_df.copy()
-        _display['分散指數'] = _display['分散指數'].apply(lambda x: f'{x:.3f}')
-        _display['價格相關'] = _display['價格相關'].apply(lambda x: f'{x:+.3f}')
-        _display['持股重疊%'] = _display['持股重疊%'].apply(
-            lambda x: f'{x:.1f}%' if x is not None and not (isinstance(x, float) and math.isnan(x)) else '—'
-        )
-        _display['類別差異'] = _display['類別差異'].apply(lambda x: f'{x:.3f}')
-        _display = _display.drop(columns=['可用維度'])
-
         _input_zh = _cached_zh_name(_ticker)
-        st.markdown(f'#### 🏆 與 {_input_zh} ({_ticker}) 最不相關的 10 檔 ETF')
+        st.markdown(f'#### 🏆 與 {_input_zh}（{_ticker}）最不相關的分散標的 — 按大類分組')
         st.caption(
             '分散指數越高（接近 1）= 與您輸入的 ETF 越不相關，加入組合後分散效果越好。'
-            '| 價格相關：越接近 -1 越好 | 持股重疊%：越低越好 | 類別差異：越接近 1 越好'
+            '每個大類各列該類最能分散的前 10 檔（不足則全列）。'
         )
-        st.dataframe(_display, use_container_width=True, hide_index=True)
+        for _cat, _cdf in _by_cat.items():
+            _render_cat_diversifier_chart(_cat, _cdf, _ticker)
 
-        # ── 橫向 bar chart ──
-        try:
-            import plotly.graph_objects as go
-            _vals = [float(_result_df['分散指數'].iloc[i]) for i in range(len(_result_df))]
-            _labels = [
-                f"{_result_df['ticker'].iloc[i]}<br>{_result_df['名稱'].iloc[i]}"
-                for i in range(len(_result_df))
-            ]
-            _colors = [
-                '#16a085' if v >= 0.7 else '#1abc9c' if v >= 0.5 else '#3498db'
-                for v in _vals
-            ]
-            fig2 = go.Figure(go.Bar(
-                y=list(reversed(_labels)),
-                x=list(reversed(_vals)),
-                orientation='h',
-                marker_color=list(reversed(_colors)),
-                text=[f'{v:.3f}' for v in reversed(_vals)],
-                textposition='outside',
-            ))
-            fig2.update_layout(
-                template='plotly_dark',
-                height=380,
-                margin=dict(l=10, r=60, t=30, b=20),
-                xaxis_title='分散指數（越高越好）',
-                title=f'vs {_ticker} — 最佳分散標的前 10',
-                xaxis=dict(range=[0, 1.05]),
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-        except ImportError:
-            pass
-        except Exception as _fe2:
-            st.caption(f'圖表渲染失敗：{_fe2}')
+
+def _render_cat_diversifier_chart(cat_name: str, cdf, input_ticker: str) -> None:
+    """渲染單一大類的分散度橫向 bar chart（含中文名）+ 明細 expander。cdf 欄同 find_best_diversifiers。"""
+    _names = [_cached_zh_name(_t) for _t in cdf['ticker']]
+    _vals = [float(v) for v in cdf['分散指數']]
+    _labels = [f'{_t}<br>{_n}' for _t, _n in zip(cdf['ticker'], _names)]
+    _colors = ['#16a085' if v >= 0.7 else '#1abc9c' if v >= 0.5 else '#3498db' for v in _vals]
+    st.markdown(f'##### 📁 {cat_name}（{len(cdf)} 檔）')
+    try:
+        import plotly.graph_objects as go  # noqa: PLC0415
+        _fig = go.Figure(go.Bar(
+            y=list(reversed(_labels)), x=list(reversed(_vals)), orientation='h',
+            marker_color=list(reversed(_colors)),
+            text=[f'{v:.3f}' for v in reversed(_vals)], textposition='outside',
+        ))
+        _fig.update_layout(
+            template='plotly_dark', height=max(160, 42 * len(cdf) + 55),
+            margin=dict(l=10, r=60, t=10, b=20),
+            xaxis_title='分散指數（越高越好）', xaxis=dict(range=[0, 1.05]),
+        )
+        st.plotly_chart(_fig, use_container_width=True,
+                        key=f'divcat_{cat_name}_{input_ticker}')
+    except ImportError:
+        pass
+    except Exception as _fe:
+        st.caption(f'圖表渲染失敗：{_fe}')
+    # 明細表(價格相關/持股重疊/類別差異)收在 expander,避免版面過長
+    with st.expander(f'📋 {cat_name} 明細', expanded=False):
+        import pandas as _pd  # noqa: PLC0415
+        _d = cdf.copy()
+        _d.insert(1, '名稱', _names)
+        _d['持股重疊%'] = _d['持股重疊%'].apply(
+            lambda x: f'{x:.1f}%' if x is not None
+            and not (isinstance(x, float) and _pd.isna(x)) else '—')
+        _d = _d.drop(columns=['可用維度'], errors='ignore')
+        st.dataframe(_d, use_container_width=True, hide_index=True)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
