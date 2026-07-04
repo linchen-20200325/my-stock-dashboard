@@ -1,5 +1,40 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🎯 2026-07-04 v18.466 — 選股網漏斗式 + ETF 單檔診斷代號統一（使用者回報 2 bug）
+
+> 使用者截圖回報：① 選股網入口是「殖利率前50」不是全市場基本面；② ETF 單檔診斷下方 3 個
+> 智慧區塊各自帶獨立輸入框（顯示 0050），沒吃上方「開始診斷」的代號（00981）。經對齊採
+> 「漏斗式（受 FinMind API 額度限制的折衷）」+「單檔 & 組合都改」。
+
+### 修正一：選股網「漏斗式」— 殖利率不再當入口排序閘門
+- `app.py`（選股網組裝）：入口由 `nlargest(50, 殖利率)` → 改 `nsmallest(PICKER_DEEP_SCAN_N, 本益比)`。
+  全市場 → 基本面/估值初篩（排除虧損/PE>100/殖利率<2%或>12%）→ **依估值便宜度**取前 50 深跑三階段
+  → 殖利率移到最後的「殖利率確認」欄位（`render_yield_confirm` 已在，方向本就正確）。`source_label`
+  由「高殖利率前50」→「估值優選」。
+- `src/ui/tabs/tab_stock_picker.py`：新增 SSOT 常數 `PICKER_S1_MIN_PASS=6`（基本面門檻由 5/9→**6/9**，
+  使用者要求更嚴）、`PICKER_S2_MIN_PASS=3`、`PICKER_DEEP_SCAN_N=50`。通過門檻與 3 處 caption 全改用常數。
+- ⚠️ 物理限制：三階段每檔 ~7 支 API（2 yfinance + 5 FinMind），全市場 845 檔即時深跑會爆 FinMind
+  額度，故深掃檔數仍設上限（multiselect ≤30）。真「全台股跑基本面」需批次快取（未採，工程較大）。
+  此為使用者確認的漏斗式折衷。
+
+### 修正二：ETF 單檔診斷下方 3 區塊統一吃「上方那一個代號」
+- `src/ui/etf/etf_tab_smart.py`：`render_std_band_section` / `render_correlation_finder` /
+  `render_333_section` 三函式簽名改 `(ticker, key_suffix)`，**移除各自的獨立 ETF 代號 text_input**
+  與失效的 `etf_g_active` fallback；無代號時 fail-loud 顯示提示（不再顯示假的 0050）。
+  新增 `render_smart_ticker_input()`：組合頁專用單一共用輸入框（3 框收斂成 1 框）。
+- `app.py`：單檔頁三區塊改吃 `session_state['etf_s_active']`（上方「開始診斷」代號）；組合頁（無單一
+  主代號，`etf_p_active` 只是布林旗標）改用 `render_smart_ticker_input('_grp')` 一個共用輸入框驅動三區塊。
+- 順手修：`etf_tab_smart.py` 補 `TYPE_CHECKING import pandas`，清掉 693004c 遺留的 `test_no_undefined_names`
+  紅測（`"pd.DataFrame"` 字串註解 undefined name ×3）。
+
+### 驗證
+- 新增 `tests/test_etf_smart_ticker_wiring.py`（4 測）+ `tests/test_picker_funnel.py`（3 測），全綠。
+- AppTest 實機 smoke：ticker=None 顯示 3 提示不炸；組合頁只剩 1 共用輸入框；exception=0。
+- 全套件：`test_no_undefined_names` 由紅轉綠；本次改動零新增失敗。剩餘紅測 = 既有（china macro
+  CHN_BCI ×2 + resample audit ×1，屬 v18.459 改名遺留）+ risk_radar ×3（網路/測試順序污染，單獨跑全過）。
+
+---
+
 ## 🔍 2026-07-03 全面稽核待修清單（跨 Tab 稽核）
 
 > Claude 逐檔讀取所有 Tab 後彙整，對照 2026-07-03 真實市場數值確認。

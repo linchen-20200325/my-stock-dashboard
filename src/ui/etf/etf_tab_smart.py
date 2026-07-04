@@ -13,8 +13,12 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import streamlit as st
+
+if TYPE_CHECKING:  # 僅供 "pd.DataFrame" 字串型別註解解析用，不在 runtime import（L5 無 pandas 依賴）
+    import pandas as pd
 
 # L5 UI 模組 — streamlit 永遠可用，不需 no-op fallback
 # @st.cache_data 供跨 session 共享 + TTL 自動失效（EX-PASSTHRU-1 / EX-CACHE-1 精神）
@@ -66,12 +70,39 @@ def _normalize(t: str) -> str:
     return t
 
 
+# 三個 smart 區塊共用的「請先輸入代號」提示（單檔頁吃上方診斷代號；組合頁吃共用輸入框）
+_SMART_NO_TICKER_HINT = (
+    '💡 請於上方輸入 ETF 代號（單檔頁點「🔍 開始診斷」；組合頁於下方三項分析上方輸入）'
+)
+
+
+def render_smart_ticker_input(key_suffix: str = '', *, default: str = '0050') -> str:
+    """組合頁專用：單一 ETF 代號輸入框，供下方「標準差帶 / 分散度 / 3-3-3」三項分析共用。
+
+    取代原本三個區塊各自的獨立輸入框（收斂成一個）。單檔頁不用此函式，
+    而是由呼叫端傳入上方「開始診斷」的代號（session_state['etf_s_active']）。
+
+    回傳：正規化後代號（含 .TW），無有效輸入時回傳 ''。
+    """
+    _raw = st.text_input(
+        'ETF 代號（下方 標準差帶 / 分散度 / 3-3-3 三項分析共用）',
+        value=default,
+        key=f'etf_smart_shared{key_suffix}_ticker',
+        placeholder='如 0050 或 00878',
+    )
+    return _normalize(_raw)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Section 1：標準差買賣參考帶
 # ──────────────────────────────────────────────────────────────────────────────
 
-def render_std_band_section(key_suffix: str = '') -> None:
-    """在目前頁面渲染 ETF 標準差買賣參考帶（expandable）。"""
+def render_std_band_section(ticker: str | None = None, key_suffix: str = '') -> None:
+    """在目前頁面渲染 ETF 標準差買賣參考帶（expandable）。
+
+    ticker: 由呼叫端傳入的分析標的（單檔頁＝上方「開始診斷」代號；
+    組合頁＝共用輸入框代號）。不再於本區塊內開獨立輸入框。
+    """
     from src.compute.etf.etf_smart_analysis import compute_std_bands
 
     _key = f'etf_smart_std{key_suffix}'
@@ -81,18 +112,13 @@ def render_std_band_section(key_suffix: str = '') -> None:
             '越靠近 -2σ = 歷史相對低點，可能買進時機；越靠近 +2σ = 相對高點，注意風險。'
         )
 
-        # 讀取 session_state 預填 ticker
-        _default = st.session_state.get('etf_s_active') or st.session_state.get('etf_g_active', '0050')
-        _default = _default.replace('.TW', '').replace('.TWO', '') if _default else '0050'
+        _ticker = _normalize(ticker) if ticker else ''
+        if not _ticker:
+            st.info(_SMART_NO_TICKER_HINT)
+            return
+        st.caption(f'📌 分析標的：**{_ticker}**')
 
-        c1, c2 = st.columns([2, 1])
-        _raw = c1.text_input(
-            'ETF 代號',
-            value=_default,
-            key=f'{_key}_ticker',
-            placeholder='如 0050 或 0050.TW',
-        )
-        _win = c2.selectbox(
+        _win = st.selectbox(
             '觀察窗口（交易日）',
             options=[120, 252, 500],
             index=1,
@@ -101,11 +127,6 @@ def render_std_band_section(key_suffix: str = '') -> None:
         )
 
         if not st.button('📊 計算', key=f'{_key}_btn', use_container_width=True):
-            return
-
-        _ticker = _normalize(_raw)
-        if not _ticker:
-            st.warning('請輸入有效的 ETF 代號')
             return
 
         with st.spinner(f'載入 {_ticker} 價格中...'):
@@ -227,34 +248,28 @@ def render_std_band_section(key_suffix: str = '') -> None:
 # Section 2：ETF 分散度分析
 # ──────────────────────────────────────────────────────────────────────────────
 
-def render_correlation_finder(key_suffix: str = '') -> None:
-    """在目前頁面渲染 ETF 三維分散度分析（expandable）。"""
+def render_correlation_finder(ticker: str | None = None, key_suffix: str = '') -> None:
+    """在目前頁面渲染 ETF 三維分散度分析（expandable）。
+
+    ticker: 由呼叫端傳入的分析標的（同 render_std_band_section）。
+    """
     from src.compute.etf.etf_categories import ETF_PEER_GROUPS
     from src.compute.etf.etf_smart_analysis import build_holdings_set, find_best_diversifiers
 
     _key = f'etf_smart_corr{key_suffix}'
     with st.expander('🔗 ETF 分散度分析 — 找最佳互補標的', expanded=False):
         st.caption(
-            '輸入一檔 ETF，系統從台灣主要 ETF 中找出三維度（價格相關、持股重疊、產業類別）'
+            '以目前標的為基準，系統從台灣主要 ETF 中找出三維度（價格相關、持股重疊、產業類別）'
             '綜合最不相關的前 10 檔，作為投資組合分散的候選標的。'
         )
 
-        _default = st.session_state.get('etf_s_active') or st.session_state.get('etf_g_active', '0050')
-        _default = (_default or '0050').replace('.TW', '').replace('.TWO', '')
-
-        _raw = st.text_input(
-            'ETF 代號',
-            value=_default,
-            key=f'{_key}_ticker',
-            placeholder='如 0050 或 00878',
-        )
+        _ticker = _normalize(ticker) if ticker else ''
+        if not _ticker:
+            st.info(_SMART_NO_TICKER_HINT)
+            return
+        st.caption(f'📌 分析標的：**{_ticker}**')
 
         if not st.button('🔍 計算分散度', key=f'{_key}_btn', use_container_width=True):
-            return
-
-        _ticker = _normalize(_raw)
-        if not _ticker:
-            st.warning('請輸入有效的 ETF 代號')
             return
 
         # ── 建立 universe（ETF_PEER_GROUPS 所有 + 輸入本身）──
@@ -420,8 +435,10 @@ def _render_333_result(ticker: str, r: dict) -> None:
         st.caption(f'⏳ 距離 3 年門檻還需 {remain:.1f} 年（{int(remain * 12)} 個月）')
 
 
-def render_333_section(key_suffix: str = '') -> None:
+def render_333_section(ticker: str | None = None, key_suffix: str = '') -> None:
     """在目前頁面渲染 MK 3-3-3 原則評估（expandable）。
+
+    ticker: 由呼叫端傳入的分析標的（同 render_std_band_section）。
 
     C1: 成立 > 3 年
     C2: 過去 3 年年化報酬 > 7%
@@ -438,17 +455,13 @@ def render_333_section(key_suffix: str = '') -> None:
             '**③ 同儕前 1/3**（績效中前段，有上升潛力）'
         )
 
-        _default = st.session_state.get('etf_s_active') or st.session_state.get('etf_g_active', '0050')
-        _default = (_default or '0050').replace('.TW', '').replace('.TWO', '')
+        _ticker = _normalize(ticker) if ticker else ''
+        if not _ticker:
+            st.info(_SMART_NO_TICKER_HINT)
+            return
+        st.caption(f'📌 分析標的：**{_ticker}**')
 
-        c1, c2 = st.columns([3, 2])
-        _raw = c1.text_input(
-            'ETF 代號',
-            value=_default,
-            key=f'{_key}_ticker',
-            placeholder='如 00878 或 00982A',
-        )
-        _run_peer = c2.checkbox(
+        _run_peer = st.checkbox(
             '啟用同儕排名（較慢）',
             value=False,
             key=f'{_key}_peer',
@@ -456,11 +469,6 @@ def render_333_section(key_suffix: str = '') -> None:
         )
 
         if not st.button('🔍 評估', key=f'{_key}_btn', use_container_width=True):
-            return
-
-        _ticker = _normalize(_raw)
-        if not _ticker:
-            st.warning('請輸入有效的 ETF 代號')
             return
 
         # 取歷史（5 年）
