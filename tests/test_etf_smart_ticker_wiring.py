@@ -52,7 +52,9 @@ def test_app_wires_single_tab_to_etf_s_active():
     with open('app.py', encoding='utf-8') as f:
         app_src = f.read()
     assert "st.session_state.get('etf_s_active')" in app_src
-    assert "render_333_section(_etf_s_tk, key_suffix='_single')" in app_src
+    # 單檔頁:smart 區塊經 before_ai_hook 插在 AI 之前 → AI 置底
+    assert "render_333_section(_tk, key_suffix='_single')" in app_src
+    assert "before_ai_hook=_etf_single_smart" in app_src
     # 組合頁改用共用輸入框
     assert "render_smart_ticker_input(key_suffix='_grp')" in app_src
     assert "render_333_section(_etf_grp_tk, key_suffix='_grp')" in app_src
