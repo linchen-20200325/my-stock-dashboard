@@ -590,33 +590,39 @@ with tab_stocks:
         # v18.xxx: 選股 Pipeline（倒序）— 三階段 S1/S2 → 殖利率確認
         # 原始正序（殖利率篩選→三階段）已改為：先跑 S1/S2，通過後再顯示殖利率資訊
         from src.ui.tabs import render_tab_stock_picker
+        from src.ui.tabs.tab_stock_picker import PICKER_DEEP_SCAN_N
         from src.ui.tabs.yield_screener import fetch_twse_yield_pe, render_yield_confirm
-        # Step 1: 靜默取 TWSE 全市場資料，殖利率前 50 作為初始候選池（使用者可手動補充代碼）
+        # v18.466 漏斗式：全市場 → 基本面/估值初篩 → 依「估值便宜度」排序取前 N 深跑三階段。
+        # 殖利率不再當入口排序閘門（原 nlargest 殖利率），降為最後的「殖利率確認」欄位。
         _twse_scrn = fetch_twse_yield_pe()
-        # v18.xxx+1: 候選池品質過濾 — 先排除價值陷阱，再取殖利率前 50
         if not _twse_scrn.empty:
             _pool = _twse_scrn.copy()
             _pe_col = '本益比'    if '本益比'    in _pool.columns else None
             _yd_col = '殖利率(%)' if '殖利率(%)' in _pool.columns else None
             _before = len(_pool)
             if _pe_col:
-                # 排除 PE ≤ 0（虧損股）或 PE > 100（估值異常）
+                # 基本面初篩：排除 PE ≤ 0（虧損股）或 PE > 100（估值異常 / 價值陷阱）
                 _pool = _pool[(_pool[_pe_col] > 0) & (_pool[_pe_col] < 100)]
             if _yd_col:
-                # 排除殖利率 > 12%（配息可能即將削減）; 保留 ≥ 2%（真正配息股）
+                # 排除殖利率 > 12%（配息恐削減 / 價值陷阱）; 保留 ≥ 2%（配息股）
                 _pool = _pool[(_pool[_yd_col] >= 2.0) & (_pool[_yd_col] <= 12.0)]
             _after = len(_pool)
-            _top_cands = _pool.nlargest(50, '殖利率(%)').reset_index(drop=True)
+            # 排序改用「估值便宜度」（本益比由低到高）作為中性主篩 —— 取代原「殖利率前 50」入口閘門
+            if _pe_col:
+                _top_cands = _pool.nsmallest(PICKER_DEEP_SCAN_N, _pe_col).reset_index(drop=True)
+            else:
+                _top_cands = _pool.head(PICKER_DEEP_SCAN_N).reset_index(drop=True)
             st.caption(
-                f'📊 候選池：全市場 {_before} 檔 → 品質過濾後 {_after} 檔'
-                f'（排除虧損 / PE>100 / 殖利率<2% 或 >12%）→ 取前 50（可手動補充代碼）'
+                f'📊 候選池：全市場 {_before} 檔 → 基本面初篩後 {_after} 檔'
+                f'（排除虧損 / PE>100 / 殖利率<2% 或 >12%）→ 依估值便宜度取前 {PICKER_DEEP_SCAN_N} 檔'
+                f'深跑三階段（殖利率移至最後確認，不再當入口排序）'
             )
         else:
             _top_cands = None
         # Step 2: 三階段篩選 S1+S2（skip_s3=True 跳過 AI，通過清單存入 session_state）
         render_tab_stock_picker(
             gemini_fn=gemini_call, candidates=_top_cands,
-            source_label='高殖利率前50', skip_s3=True,
+            source_label='估值優選', skip_s3=True,
         )
         # Step 3: 殖利率確認（S1/S2 通過標的）
         _s1s2_pass = st.session_state.get('picker_s1s2_qualified_tickers', [])
@@ -638,9 +644,11 @@ with tab_etf_main:
         from src.ui.etf.etf_tab_smart import (
             render_std_band_section, render_correlation_finder, render_333_section,
         )
-        render_333_section(key_suffix='_single')
-        render_std_band_section(key_suffix='_single')
-        render_correlation_finder(key_suffix='_single')
+        # 三個 smart 區塊統一吃上方「開始診斷」的代號（不再各自帶獨立輸入框）
+        _etf_s_tk = st.session_state.get('etf_s_active')
+        render_333_section(_etf_s_tk, key_suffix='_single')
+        render_std_band_section(_etf_s_tk, key_suffix='_single')
+        render_correlation_finder(_etf_s_tk, key_suffix='_single')
 
     with tab_etf_compare:
         from src.ui.etf import render_etf_grp_compare
@@ -655,10 +663,13 @@ with tab_etf_main:
         st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
         from src.ui.etf.etf_tab_smart import (
             render_std_band_section, render_correlation_finder, render_333_section,
+            render_smart_ticker_input,
         )
-        render_333_section(key_suffix='_grp')
-        render_std_band_section(key_suffix='_grp')
-        render_correlation_finder(key_suffix='_grp')
+        # 組合頁無單一主代號 → 用一個共用輸入框驅動下方三項分析（取代原本各自 3 個輸入框）
+        _etf_grp_tk = render_smart_ticker_input(key_suffix='_grp')
+        render_333_section(_etf_grp_tk, key_suffix='_grp')
+        render_std_band_section(_etf_grp_tk, key_suffix='_grp')
+        render_correlation_finder(_etf_grp_tk, key_suffix='_grp')
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 4: 工具箱（資料診斷 + 教學）

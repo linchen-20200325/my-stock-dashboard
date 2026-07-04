@@ -38,6 +38,12 @@ import streamlit as st
 from shared.thresholds import YIELD_HIGH
 from src.config import FINMIND_API_URL  # Batch 10 v18.412 SSOT
 
+# ── 三階段濾網門檻（SSOT，§3.3 反捏造：禁止 inline magic number）─────────────
+# v18.466：使用者要求「基本面當主篩、門檻拉高到 6/9」。原 inline `>= 5` / `>= 3` 抽出集中。
+PICKER_S1_MIN_PASS = 6   # Stage 1 基本面：9 項中至少通過項數（進入通過清單門檻）
+PICKER_S2_MIN_PASS = 3   # Stage 2 籌碼技術：6 項中至少通過項數
+PICKER_DEEP_SCAN_N = 50  # 選股網候選池深掃檔數上限（依估值排序取前 N，控管 FinMind API 用量）
+
 
 def render_tab_stock_picker(gemini_fn=None, candidates=None,
                               source_label: str = '高息網',
@@ -65,7 +71,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
 
     with st.expander('💡 三階段濾網在篩什麼？（基本面 → 籌碼技術 → AI）', expanded=False):
         st.markdown(
-            '**Stage 1 · 基本面防禦（9 項）**：負債比、三率三升（毛利/營益/淨利率同步走高）、連續 5 年配息且均殖利率>7%、本益比估值區、應收帳款週轉、存貨週轉、資本支出/股東權益、淨值比、合約負債 YoY。→ 過 5 項以上視為體質健康。\n\n'
+            '**Stage 1 · 基本面防禦（9 項）**：負債比、三率三升（毛利/營益/淨利率同步走高）、連續 5 年配息且均殖利率>7%、本益比估值區、應收帳款週轉、存貨週轉、資本支出/股東權益、淨值比、合約負債 YoY。→ 過 6 項以上（PICKER_S1_MIN_PASS）視為體質健康。\n\n'
             '**Stage 2 · 籌碼技術（6 項）**：站上 20MA 且上彎、MACD 翻多、KD 黃金交叉、布林通道開口、三大法人買超、集保大戶持股增加。→ 抓「便宜又剛要發動」的時機。\n\n'
             '**Stage 3 · AI 綜合建議**：把上述量化結果＋新聞餵給 AI，輸出客觀的進場/觀望總結與配置權重。\n\n'
             '🎯 核心邏輯：**先用基本面排除地雷，再用籌碼技術抓發動點** —— 避免買到便宜卻沒人要的「價值陷阱」。'
@@ -183,7 +189,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         'S1 通過':    f"{r['s1_pass_cnt']}/9",
     } for r in results])
     st.dataframe(_s1_df, hide_index=True, use_container_width=True)
-    st.caption('💡 通過數 = 9 項實作條件中過的個數；5+ 通過視為基本面健康。'
+    st.caption(f'💡 通過數 = 9 項實作條件中過的個數；{PICKER_S1_MIN_PASS}+ 通過視為基本面健康。'
                '「應收周轉」穩定 = 季變動 < 30%；「存貨周轉」OK = 年化 > 4 次；'
                '「資本支出」積極 = CapEx > 股東權益 5%；「淨流動值」OK = 流動資產 > 總負債；'
                '「合約負債」OK = YoY > 20% 且連 2 季增。'
@@ -203,16 +209,19 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         'S2 通過':    f"{r['s2_pass_cnt']}/6",
     } for r in results])
     st.dataframe(_s2_df, hide_index=True, use_container_width=True)
-    st.caption('💡 S1 ≥ 5/9 且 S2 ≥ 3/6 → 進入 Stage 3 AI 重點分析。'
+    st.caption(f'💡 S1 ≥ {PICKER_S1_MIN_PASS}/9 且 S2 ≥ {PICKER_S2_MIN_PASS}/6 → 進入 Stage 3 AI 重點分析。'
                '「布林開口」= 近 5 日 band 寬度 > 前 20 日 1.3 倍；'
                '「投信買超」= 近 5 日連續買超；「大戶持股」= ≥1000 張級距近 2 週比例增加。')
 
-    # ── 通過清單（門檻：S1 ≥ 5/9 & S2 ≥ 3/6）─────────────────
-    _qualified = [r for r in results if r['s1_pass_cnt'] >= 5 and r['s2_pass_cnt'] >= 3]
+    # ── 通過清單（門檻 SSOT：S1 ≥ PICKER_S1_MIN_PASS/9 & S2 ≥ PICKER_S2_MIN_PASS/6）──
+    _qualified = [r for r in results
+                  if r['s1_pass_cnt'] >= PICKER_S1_MIN_PASS
+                  and r['s2_pass_cnt'] >= PICKER_S2_MIN_PASS]
     if _qualified:
         st.success(f'✅ 通過兩階段濾網：{len(_qualified)} 檔 → {[r["ticker"] for r in _qualified]}')
     else:
-        st.warning('⚠️ 觀察清單中沒有同時通過 Stage 1 (5/9) + Stage 2 (3/6) 的標的')
+        st.warning(f'⚠️ 觀察清單中沒有同時通過 Stage 1 ({PICKER_S1_MIN_PASS}/9) '
+                   f'+ Stage 2 ({PICKER_S2_MIN_PASS}/6) 的標的')
 
     # v18.xxx: skip_s3 模式 — 倒序選股流程，跳過 AI S3，將通過清單存入 session_state 供下方殖利率確認使用
     if skip_s3:
