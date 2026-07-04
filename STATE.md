@@ -39,7 +39,15 @@
 
 ---
 
-## 🚀 目前狀態(v18.460 — LOW 稽核修正 + 綜合重新檢查)
+## 🚀 目前狀態(v18.462 — OAuth 搶帳號漏洞修復)
+
+✅ **v18.462(2026-07-04)**:修復 OAuth 搶帳號漏洞（嚴格 state 驗證）:
+- **根因**:`handle_oauth_callback()` 舊版在「本 session 無 `_oauth_state`」時退回放行，讓未啟動 OAuth 的分頁能接受別的 session 的授權碼。
+- **修法**:`src/data/portfolio/oauth_state.py` — 改為嚴格版：只要 URL 帶了 state 就必須完全相符，否則一律略過。
+
+---
+
+## 🚀 前一狀態(v18.460 — LOW 稽核修正 + 綜合重新檢查)
 
 ✅ **v18.460(2026-07-03)**:LOW 稽核項目修正 + 全面重新確認:
 - **[L1] CBC_RATE 邊界**：`MACRO_THRESHOLDS["CBC_RATE"] yellow_above: 2.0→2.125`，現行 2.0% 顯示🟢，避免邊界跳動。`src/data/macro/macro_core.py`

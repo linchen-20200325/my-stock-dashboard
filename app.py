@@ -316,6 +316,7 @@ with st.sidebar:
     try:
         from src.data.portfolio.oauth_state import (
             get_oauth_cfg as _sb_get_cfg,
+            get_login_state as _sb_login_state,
             _gsa_secret as _sb_gsa,
             _sheet_id_secret as _sb_sid,
         )
@@ -328,10 +329,12 @@ with st.sidebar:
     _sb_logged = bool(st.session_state.get('gsheet_tokens'))
     if _sb_oc:
         if _sb_logged:
-            st.success('🟢 已登入')
+            _sb_email = st.session_state.get('gsheet_email', '')
+            st.success(f'🟢 已登入{("：" + _sb_email) if _sb_email else ""}')
             if st.button('🚪 登出', key='btn_oauth_logout_sb',
                           use_container_width=True):
-                st.session_state.pop('gsheet_tokens', None)
+                for _k in ('gsheet_tokens', 'gsheet_email', '_oauth_state'):
+                    st.session_state.pop(_k, None)
                 st.rerun()
             # ── Google Sheet ID（集中於帳號區；ETF 組合面板可從 Drive 挑選/新建）──
             _sb_sid_cur = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
@@ -349,7 +352,8 @@ with st.sidebar:
             else:
                 st.caption('💡 未設定 — 貼上 URL/ID 或到「ETF 組合」Tab 挑選')
         elif _sb_buildurl and _sb_cfg:
-            _sb_url = _sb_buildurl(_sb_cfg['client_id'], _sb_cfg['redirect_uri'])
+            _sb_url = _sb_buildurl(_sb_cfg['client_id'], _sb_cfg['redirect_uri'],
+                                   state=_sb_login_state())
             st.link_button('🔐 用 Google 登入', _sb_url, use_container_width=True)
             st.caption('登入後 ETF 組合 Tab 可雲端存取')
     elif _sb_gsa and _sb_sid:

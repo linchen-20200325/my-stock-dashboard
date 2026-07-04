@@ -32,8 +32,10 @@ import streamlit as st
 from infra.oauth import (
     OAuthError,
     build_credentials_from_tokens,
+    decode_id_token_email,
     ensure_fresh_tokens,
     exchange_code_for_tokens,
+    generate_state,
 )
 
 
@@ -84,6 +86,21 @@ def is_oauth_configured() -> bool:
     return _resolve_oauth_cfg() is not None
 
 
+def get_login_state() -> str:
+    """回傳本 session 專屬的 OAuth state（沒有就產生一個並存進 session_state）。
+
+    修「登入互相踢掉」核心：每個瀏覽器 session 各有一組隨機 state，寫進 authorize URL；
+    Google 回呼帶回同一 state，`handle_oauth_callback()` 只認 state 相符者 →
+    別的 session / 分頁發起的授權碼不會被本 session 吞掉，反之亦然。
+    產一次後在本 session 內固定（跨 rerun 穩定），登入成功後清除。
+    """
+    _s = st.session_state.get("_oauth_state")
+    if not _s:
+        _s = generate_state()
+        st.session_state["_oauth_state"] = _s
+    return _s
+
+
 def _get_oauth_client():
     """從 session_state 的 tokens 建一個 gspread client，順便 ensure 過期前 refresh。"""
     cfg = _resolve_oauth_cfg()
@@ -110,13 +127,27 @@ def handle_oauth_callback() -> None:
         return
     _qp = st.query_params
     if "code" in _qp and "gsheet_tokens" not in st.session_state:
+        # 修「登入互相踢掉 / 搶帳號」嚴格版（v18.462）：
+        # 只認本 session 發起的授權碼。
+        # 判斷邏輯：只要 URL 帶了 state，就必須和本 session 的 _oauth_state 完全相符，
+        # 否則一律略過（不吞碼、不報錯）。
+        # 修補舊版漏洞：舊版「_expected_state 為 None 時放行」會讓任何沒啟動 OAuth
+        # 的 session（全新分頁 / server 重啟後殘留分頁）也能搶到別的 session 的授權碼。
+        # 退化處理：server 重啟遺失 session_state → user 需重按登入，是可接受的行為。
+        _expected_state = st.session_state.get("_oauth_state")
+        _got_state = _qp.get("state")
+        if _got_state and _got_state != _expected_state:
+            return  # 嚴格拒絕：URL 帶了 state 但不符本 session → 屬於別的 session
         try:
             _tokens = exchange_code_for_tokens(
                 _qp["code"], cfg["client_id"],
                 cfg["client_secret"], cfg["redirect_uri"])
             st.session_state["gsheet_tokens"] = _tokens
+            st.session_state["gsheet_email"] = decode_id_token_email(_tokens)
+            st.session_state.pop("_oauth_state", None)  # 用完即棄，下次登入重新產
             st.query_params.clear()
-            st.success("✅ Google 登入成功")
+            _email = st.session_state.get("gsheet_email", "")
+            st.success(f"✅ Google 登入成功{('：' + _email) if _email else ''}")
             st.rerun()
         except OAuthError as _oe:
             st.error(f"❌ OAuth 失敗：{_oe}")

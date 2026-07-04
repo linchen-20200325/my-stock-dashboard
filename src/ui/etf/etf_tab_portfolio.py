@@ -823,7 +823,7 @@ def _render_oauth_panel(_gsp) -> bool:
     try:
         # v18.400 D4:oauth_state 從 src/ui/pages 歸位至 src/data/portfolio(L5→L1 EX-PASSTHRU-1)
         from src.data.portfolio.oauth_state import (
-            get_oauth_cfg, _gsa_secret, _sheet_id_secret,
+            get_oauth_cfg, get_login_state, _gsa_secret, _sheet_id_secret,
         )
         from infra.oauth import build_authorize_url
     except Exception as _ie:
@@ -840,14 +840,17 @@ def _render_oauth_panel(_gsp) -> bool:
     if _oauth_configured:
         if _logged_in:
             _c_st1, _c_st2 = st.columns([3, 1])
-            _c_st1.success('🟢 已用 Google 登入（OAuth）')
+            _oauth_email = st.session_state.get('gsheet_email', '')
+            _c_st1.success(f'🟢 已用 Google 登入（OAuth）{("：" + _oauth_email) if _oauth_email else ""}')
             if _c_st2.button('🚪 登出', key='etf_p_oauth_logout',
                               use_container_width=True):
-                st.session_state.pop('gsheet_tokens', None)
+                for _k in ('gsheet_tokens', 'gsheet_email', '_oauth_state'):
+                    st.session_state.pop(_k, None)
                 st.rerun()
         else:
             _login_url = build_authorize_url(
-                _oauth_cfg['client_id'], _oauth_cfg['redirect_uri'])
+                _oauth_cfg['client_id'], _oauth_cfg['redirect_uri'],
+                state=get_login_state())
             st.info('ℹ️ 尚未登入 Google — 點下方按鈕完成登入即可使用個人 Sheet。')
             st.link_button('🔐 用 Google 登入', _login_url,
                             use_container_width=True)
