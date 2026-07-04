@@ -287,3 +287,96 @@ def render_yield_screener():
                     st.dataframe(_raw_df, use_container_width=True, hide_index=True)
 
     return _df_filt
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⑤ 殖利率確認 — 倒序選股流程第二步（S1/S2 通過後呼叫）
+# ══════════════════════════════════════════════════════════════════════════════
+def render_yield_confirm(tickers: list, df_all: 'pd.DataFrame') -> None:
+    """顯示通過 S1/S2 標的的殖利率 / 本益比確認表。
+
+    v18.xxx: 倒序選股流程 — render_tab_stock_picker(skip_s3=True) 完成後呼叫，
+    以 TWSE 全市場資料顯示通過標的的殖利率資訊作為最終確認。
+
+    tickers: 通過 S1/S2 的股票代碼 list（空 list → 顯示提示）
+    df_all:  fetch_twse_yield_pe() 回傳的全市場 DataFrame
+    """
+    if not tickers:
+        st.info('💡 完成上方三階段篩選（按「🎯 開始三階段篩選」），通過的標的殖利率資訊將顯示於此。')
+        return
+    if df_all is None or df_all.empty:
+        st.warning('⚠️ TWSE 殖利率資料不可用，無法確認殖利率')
+        return
+
+    st.markdown('---')
+    st.markdown('#### 💰 殖利率確認 — S1/S2 通過標的')
+    st.caption(f'通過基本面(S1) + 籌碼技術(S2)兩階段篩選的 **{len(tickers)}** 檔標的之殖利率資訊（TWSE 資料）')
+
+    _sel = (df_all[df_all['代碼'].isin(tickers)]
+            .sort_values('殖利率(%)', ascending=False)
+            .reset_index(drop=True))
+
+    if _sel.empty:
+        st.info(f'通過標的（{", ".join(tickers)}）不在 TWSE 殖利率資料庫（可能為 ETF 或特殊代號）')
+        return
+
+    st.dataframe(
+        _sel[['代碼', '名稱', '殖利率(%)', '本益比', '股價淨值比']],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            '殖利率(%)':  st.column_config.NumberColumn('殖利率', format='%.2f%%'),
+            '本益比':     st.column_config.NumberColumn('本益比', format='%.2f'),
+            '股價淨值比': st.column_config.NumberColumn('PBR',   format='%.2f'),
+        },
+    )
+
+    # 配息歷史深度檢驗
+    with st.expander('🔍 配息歷史深度檢驗（查看通過標的單檔配息詳情）', expanded=False):
+        st.caption('從通過標的中選擇，或直接輸入代號')
+        _opt_list = [f'{r["代碼"]} {r["名稱"]}' for _, r in _sel.iterrows()]
+        _opt_none = '— 請選擇 —'
+        _sc1, _sc2 = st.columns([2, 1])
+        with _sc1:
+            _pick = st.selectbox('從通過標的選擇', [_opt_none] + _opt_list, key='ysc_sel')
+        with _sc2:
+            _typed_c = st.text_input('或輸入代號', value='', key='ysc_typed', placeholder='例：6770')
+
+        _ticker_c = ''
+        if _typed_c.strip():
+            _ticker_c = _typed_c.strip().split()[0]
+        elif _pick and _pick != _opt_none:
+            _ticker_c = _pick.split()[0]
+
+        if not _ticker_c:
+            st.info('💡 選擇或輸入代號查看配息歷史')
+        else:
+            _disp_c = _ticker_c
+            _row_c = df_all[df_all['代碼'] == _ticker_c]
+            if not _row_c.empty:
+                _disp_c = f'{_ticker_c} {_row_c.iloc[0]["名稱"]}'
+            st.markdown(f'##### 📊 {_disp_c} — 歷史配息（近 10 年）')
+            with st.spinner(f'正在抓取 {_ticker_c} 配息資料…'):
+                _div_c = fetch_dividend_history(_ticker_c)
+            if _div_c.empty:
+                st.warning(f'⚠️ {_ticker_c} 查無配息記錄（可能未配息 / 新上市 / 代號錯誤）')
+            else:
+                _d10_c = _div_c.tail(10)
+                _chart_c = pd.DataFrame({
+                    '年度': _d10_c.index.astype(str),
+                    '現金配息(元)': _d10_c.values,
+                })
+                st.bar_chart(_chart_c.set_index('年度'), use_container_width=True)
+                _yp_c = int((_d10_c > 0).sum())
+                _ca, _cb, _cc = st.columns(3)
+                _ca.metric('近10年配息年數', f'{_yp_c} 年')
+                _cb.metric('平均配息', f'{float(_d10_c.mean()):.2f} 元')
+                _cc.metric('最近一年', f'{float(_d10_c.iloc[-1]):.2f} 元' if len(_d10_c) else '—')
+                if _yp_c >= 8:
+                    st.success(f'✅ {_yp_c}/10 年配息，穩定度極佳')
+                elif _yp_c >= 5:
+                    st.success(f'✅ {_yp_c}/10 年配息，穩定度佳')
+                elif _yp_c >= 3:
+                    st.warning(f'🟡 {_yp_c}/10 年配息，穩定度中等')
+                else:
+                    st.error(f'🔴 {_yp_c}/10 年，配息不穩定，存股風險高')

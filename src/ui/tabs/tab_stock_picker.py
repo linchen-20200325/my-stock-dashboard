@@ -43,7 +43,8 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
                               source_label: str = '高息網',
                               key_prefix: str = 'picker',
                               *, auto_run: bool = False,
-                              fh_map: dict | None = None):
+                              fh_map: dict | None = None,
+                              skip_s3: bool = False):
     """v19.58：source_label + key_prefix 抽參數，個股組合 tab 共用此函式（不複製 Stage 1/2/3 邏輯）。
 
     candidates: pandas.DataFrame，需含 '代碼' 欄。為 None / 空 → 顯示 info 提示。
@@ -212,6 +213,13 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         st.success(f'✅ 通過兩階段濾網：{len(_qualified)} 檔 → {[r["ticker"] for r in _qualified]}')
     else:
         st.warning('⚠️ 觀察清單中沒有同時通過 Stage 1 (5/9) + Stage 2 (3/6) 的標的')
+
+    # v18.xxx: skip_s3 模式 — 倒序選股流程，跳過 AI S3，將通過清單存入 session_state 供下方殖利率確認使用
+    if skip_s3:
+        st.session_state[f'{key_prefix}_s1s2_qualified_tickers'] = (
+            [r['ticker'] for r in _qualified]
+        )
+        return
 
     # ── Stage 3：AI 綜合建議 ──────────────────────────────────
     st.markdown('#### 5️⃣ AI 綜合操作建議')

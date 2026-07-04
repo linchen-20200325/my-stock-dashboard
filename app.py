@@ -587,10 +587,29 @@ with tab_stocks:
                 st.markdown(_screener_ai_md)
             else:
                 st.info('完成下方篩選流程，點「🤖 生成 AI 三型建議報告」後，結果同步顯示此處。')
-        # 選股 Pipeline（高息篩選 → 三階段深度分析，無分隔線）
-        from src.ui.tabs import render_yield_screener, render_tab_stock_picker
-        _picker_candidates = render_yield_screener()
-        render_tab_stock_picker(gemini_fn=gemini_call, candidates=_picker_candidates)
+        # v18.xxx: 選股 Pipeline（倒序）— 三階段 S1/S2 → 殖利率確認
+        # 原始正序（殖利率篩選→三階段）已改為：先跑 S1/S2，通過後再顯示殖利率資訊
+        from src.ui.tabs import render_tab_stock_picker
+        from src.ui.tabs.yield_screener import fetch_twse_yield_pe, render_yield_confirm
+        # Step 1: 靜默取 TWSE 全市場資料，殖利率前 50 作為初始候選池（使用者可手動補充代碼）
+        _twse_scrn = fetch_twse_yield_pe()
+        _top_cands = (
+            _twse_scrn.nlargest(50, '殖利率(%)').reset_index(drop=True)
+            if not _twse_scrn.empty else None
+        )
+        if not _twse_scrn.empty:
+            st.caption(
+                f'📊 候選池：TWSE 全市場 {len(_twse_scrn)} 檔，'
+                f'取殖利率前 50 作為初始候選（可在下方手動補充代碼）'
+            )
+        # Step 2: 三階段篩選 S1+S2（skip_s3=True 跳過 AI，通過清單存入 session_state）
+        render_tab_stock_picker(
+            gemini_fn=gemini_call, candidates=_top_cands,
+            source_label='高殖利率前50', skip_s3=True,
+        )
+        # Step 3: 殖利率確認（S1/S2 通過標的）
+        _s1s2_pass = st.session_state.get('picker_s1s2_qualified_tickers', [])
+        render_yield_confirm(_s1s2_pass, _twse_scrn)
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合）
