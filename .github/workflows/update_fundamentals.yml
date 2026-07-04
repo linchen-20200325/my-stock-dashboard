@@ -1,0 +1,58 @@
+name: Update Fundamentals Snapshot (Quarterly)
+
+# 全台股基本面季快照:每季財報公布後,抓 MOPS 全市場損益+資產負債彙總 → parquet,
+# commit 進 repo 供選股網讀取(不再即時打 API)。手動可觸發(含回補指定季)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      roc_year:
+        description: '民國年（留空=自動抓最新已公布季）'
+        required: false
+        default: ''
+      season:
+        description: '季別 1-4（留空=自動）'
+        required: false
+        default: ''
+  schedule:
+    # 每季財報公布後（Q4年報~3/31、Q1~5/15、Q2~8/14、Q3~11/14）；抓公布後隔幾天
+    # UTC 06:00 = TW 14:00
+    - cron: '0 6 20 3,5,8,11 *'
+
+permissions:
+  contents: write
+
+jobs:
+  update-fundamentals:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install pandas pyarrow lxml requests
+
+      - name: Fetch fundamentals snapshot
+        run: |
+          if [ -n "${{ github.event.inputs.roc_year }}" ] && [ -n "${{ github.event.inputs.season }}" ]; then
+            python scripts/update_fundamentals_snapshot.py --roc-year ${{ github.event.inputs.roc_year }} --season ${{ github.event.inputs.season }}
+          else
+            python scripts/update_fundamentals_snapshot.py
+          fi
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add data_cache/fundamentals/
+          if git diff --staged --quiet; then
+            echo "→ data_cache/fundamentals/ 無變更，跳過 commit"
+          else
+            git commit -m "🤖 基本面季快照更新：$(date +%Y-%m-%d)"
+            git push
+          fi
