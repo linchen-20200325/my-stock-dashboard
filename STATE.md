@@ -1,6 +1,6 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🎨 2026-07-04 ETF 單檔診斷 UI 三連改（v18.467/468 + hotfix,使用者截圖回報）
+## 🎨 2026-07-04 ETF UI 四連改（v18.467/468/469 + hotfix,使用者截圖回報）
 
 - **v18.467**：ETF 三個智慧區塊(σ 買賣帶/分散度/MK 3-3-3)**去按鈕改自動計算**(輸入代號即算)、
   expander `expanded=True` 直接顯示;**AI 白話總結移到最下方**(單檔:`render_etf_single` 加
@@ -13,8 +13,11 @@
 - **v18.468**：分散度分析改**按大類分組**(市值型/高股息/半導體/Smart Beta/債券,每類前 10)。
   L2 新增 `find_diversifiers_by_category`(純函式);UI 每類一張 bar chart + 明細 expander。
   ⚠️ 現有分類無「海外/平衡型」(使用者舉例),要加需擴充 `ETF_PEER_GROUPS`(待議)。
+- **v18.469**：多檔 ETF 評分比較表補**標準差(σ)建議買賣價位 3 欄**(σ強買≤ μ−2σ / σ減碼≥ μ+2σ /
+  σ位階)。`etf_tab_grp_compare._score_one_etf` 借用 L2 `compute_std_bands`(5y 價已抓),σ 算失敗 try/except 容錯。
 
-驗證:build_holdings 7 + diversifiers_by_category 4 + etf wiring + undefined-names 全綠;AppTest smoke。
+驗證:build_holdings 7 + diversifiers_by_category 4 + etf wiring + undefined-names 全綠;AppTest smoke;
+compute_std_bands 回傳鍵實測正確。
 
 ---
 
