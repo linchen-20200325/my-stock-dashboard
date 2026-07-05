@@ -116,6 +116,25 @@ def _get_oauth_client():
     return gspread.authorize(creds)
 
 
+def _oauth_state_ok(expected_state, got_state) -> bool:
+    """OAuth state 檢查(v19.63 修「登入無限迴圈」)。純函式,易測。
+
+    只有『本 session 確實發起過 OAuth(有 expected_state)且 URL 回傳 state 不符』
+    才拒絕(= 別的 session 發起的授權碼)。session_state 在外部轉跳 / Streamlit Cloud
+    app 重啟間可能遺失(expected=None)——此時**放行**,否則正常使用者會卡在
+    「登入→回來又說沒登入」的無限迴圈(舊 v18.462 嚴格版把 expected=None 也拒絕)。
+
+    truth table:
+      expected=ABC, got=ABC  → True (正常登入)
+      expected=None, got=ABC → True (session 遺失 → 放行,修迴圈)
+      expected=ABC, got=XYZ  → False(真·別的 session → 擋)
+      expected=ABC, got=None → True (URL 未帶 state)
+    """
+    if expected_state and got_state and got_state != expected_state:
+        return False
+    return True
+
+
 def handle_oauth_callback() -> None:
     """OAuth callback：URL 帶 ?code=... 時自動換 token。
 
@@ -127,17 +146,13 @@ def handle_oauth_callback() -> None:
         return
     _qp = st.query_params
     if "code" in _qp and "gsheet_tokens" not in st.session_state:
-        # 修「登入互相踢掉 / 搶帳號」嚴格版（v18.462）：
-        # 只認本 session 發起的授權碼。
-        # 判斷邏輯：只要 URL 帶了 state，就必須和本 session 的 _oauth_state 完全相符，
-        # 否則一律略過（不吞碼、不報錯）。
-        # 修補舊版漏洞：舊版「_expected_state 為 None 時放行」會讓任何沒啟動 OAuth
-        # 的 session（全新分頁 / server 重啟後殘留分頁）也能搶到別的 session 的授權碼。
-        # 退化處理：server 重啟遺失 session_state → user 需重按登入，是可接受的行為。
+        # state 檢查(v19.63 修「登入無限迴圈」):只有『本 session 有發起(expected)
+        # 且 URL state 不符』才拒絕;session_state 在外部轉跳/app 重啟間遺失
+        # (expected=None)時放行,避免正常登入卡死。詳見 _oauth_state_ok docstring。
         _expected_state = st.session_state.get("_oauth_state")
         _got_state = _qp.get("state")
-        if _got_state and _got_state != _expected_state:
-            return  # 嚴格拒絕：URL 帶了 state 但不符本 session → 屬於別的 session
+        if not _oauth_state_ok(_expected_state, _got_state):
+            return  # 別的 session 發起的授權碼 → 不吞
         try:
             _tokens = exchange_code_for_tokens(
                 _qp["code"], cfg["client_id"],
