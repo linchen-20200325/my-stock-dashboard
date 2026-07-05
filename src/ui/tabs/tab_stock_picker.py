@@ -255,12 +255,24 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         '布林開口':   r['boll_label'],
         '投信買超':   r['inst_label'],
         '大戶持股':   r['major_label'],
+        '位階(追高)': r.get('overheat_label', '❓ N/A'),
         'S2 通過':    f"{r['s2_pass_cnt']}/6",
     } for r in results])
     st.dataframe(_s2_df, hide_index=True, use_container_width=True)
     st.caption(f'💡 S1 ≥ {PICKER_S1_MIN_PASS}/9 且 S2 ≥ {PICKER_S2_MIN_PASS}/6 → 進入 Stage 3 AI 重點分析。'
                '「布林開口」= 近 5 日 band 寬度 > 前 20 日 1.3 倍；'
                '「投信買超」= 近 5 日連續買超；「大戶持股」= ≥1000 張級距近 2 週比例增加。')
+
+    # ── ⚠️ 追高風險警示(v19.62：位階過熱 = 遠離均線 / RSI 過熱)──
+    _hot = [r for r in results
+            if str(r.get('overheat_label', '')).startswith(('🔴', '🟡'))]
+    if _hot:
+        _hot_txt = '、'.join(f"{r['ticker']}({str(r['overheat_label']).split('｜')[0][2:]})"
+                             for r in _hot)
+        st.warning(f'🚫 **追高風險**：{len(_hot)} 檔位階偏高 → {_hot_txt}')
+        st.caption('💡 「位階」是把「熱門」降級成**警示**：新聞越熱、股價常已噴出，'
+                   '**遠離均線 / RSI 過熱 = 題材已發酵，追高風險大**。體質好也要等**拉回**再進，'
+                   '別追在頭部。')
 
     # ── 🎛️ 自訂必過條件（v19.61：改打勾格子，一次全看得到，比下拉選單好操作）──
     st.markdown('#### 🎛️ 自訂必過條件（可選）')
@@ -365,6 +377,7 @@ def _blank_pick_result(ticker: str, note: str = '') -> dict:
         'inst_label':         '❓ N/A',
         'major_label':        '❓ N/A',
         's2_pass_cnt':        0,
+        'overheat_label':     '❓ N/A',   # 位階(追高風險)
     }
 
 
@@ -426,6 +439,15 @@ def _check_one_stock(ticker: str, today, yf=None, fh_result: dict | None = None)
     _r['s2_pass_cnt'] = sum(1 for k in ('ma20_label', 'macd_label', 'kd_label',
                                           'boll_label', 'inst_label', 'major_label')
                               if _r[k].startswith('✅'))
+
+    # ── 位階過熱(追高風險 v19.62):遠離 MA20 / RSI 過熱 → 別追高 ──
+    try:
+        from src.compute.strategy.overextension import overextension_label
+        _close = _df['Close'] if 'Close' in _df.columns else _df.iloc[:, 0]
+        _r['overheat_label'] = overextension_label(_close)
+    except Exception as _e_oh:
+        print(f'[picker] {ticker} overheat: {type(_e_oh).__name__}: {_e_oh}')
+        _r['overheat_label'] = '❓ N/A'
     return _r
 
 
