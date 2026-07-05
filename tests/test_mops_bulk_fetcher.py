@@ -88,3 +88,69 @@ def test_empty_html_returns_empty():
 def test_no_code_column_skipped():
     html = "<html><body><table><tr><th>名稱</th></tr><tr><td>台積電</td></tr></table></body></html>"
     assert _parse_mops_aggregate(html, _IS_FIELD_MAP).empty
+
+
+# ── 重試 / 退避(_fetch_bulk)───────────────────────────────────────────
+import src.data.stock.mops_bulk_fetcher as _mbf  # noqa: E402
+
+
+class _Resp:
+    def __init__(self, status_code, text=""):
+        self.status_code = status_code
+        self.text = text
+
+
+class _FakeRequests:
+    """依 script 逐次回傳:值為 int→拋 Timeout;為 _Resp→回該 response。"""
+
+    def __init__(self, script):
+        self._script = list(script)
+        self.calls = 0
+
+    def post(self, *a, **k):
+        item = self._script[self.calls]
+        self.calls += 1
+        if isinstance(item, _Resp):
+            return item
+        raise TimeoutError("connect timeout")  # 模擬 ConnectTimeout
+
+
+def _run(monkeypatch, script):
+    fake = _FakeRequests(script)
+    monkeypatch.setattr(_mbf, "requests", fake)
+    slept: list = []
+    html = _mbf._fetch_bulk("ajax_t163sb04", "sii", 115, 1,
+                            _sleep=lambda s: slept.append(s))
+    return html, fake, slept
+
+
+def test_retry_recovers_after_transient_timeout(monkeypatch):
+    # 前兩次 timeout,第 3 次成功 → 應回 HTML、共打 3 次、退避 2 次(8、16 秒)
+    html, fake, slept = _run(monkeypatch, [0, 0, _Resp(200, "<ok/>")])
+    assert html == "<ok/>"
+    assert fake.calls == 3
+    assert slept == [8, 16]
+
+
+def test_retry_exhausts_all_attempts(monkeypatch):
+    # 全 timeout → 回 None、共打 _MAX_RETRIES 次、退避 (_MAX_RETRIES-1) 次
+    html, fake, slept = _run(monkeypatch, [0] * _mbf._MAX_RETRIES)
+    assert html is None
+    assert fake.calls == _mbf._MAX_RETRIES
+    assert len(slept) == _mbf._MAX_RETRIES - 1
+
+
+def test_permanent_4xx_not_retried(monkeypatch):
+    # 400 屬永久錯誤 → 立刻放棄,不重試、不退避
+    html, fake, slept = _run(monkeypatch, [_Resp(400, "bad")])
+    assert html is None
+    assert fake.calls == 1
+    assert slept == []
+
+
+def test_5xx_is_retried(monkeypatch):
+    # 503 屬暫時性 → 重試;第 2 次 200 成功
+    html, fake, slept = _run(monkeypatch, [_Resp(503), _Resp(200, "<ok/>")])
+    assert html == "<ok/>"
+    assert fake.calls == 2
+    assert slept == [8]
