@@ -25,8 +25,46 @@ from typing import Any
 
 import streamlit as st
 
+from shared.position_throttle import compute_position_throttle
 from src.compute.macro import calc_traffic_light
 from src.ui.tabs.macro.handlers import _render_traffic_light
+
+# 油門帶顏色(對齊姿態 icon)
+_THROTTLE_COLORS = {'🟢': '#26a641', '🟡': '#d29922', '🟠': '#db6d28', '🔴': '#da3633'}
+
+
+def render_position_throttle(tl) -> None:
+    """總經『建議持股油門』儀表(v19.62)——姿態油門,非進出開關。
+
+    tl: calc_traffic_light / compute_macro_health 輸出(含 health/regime/defense)。
+    無 health → 靜默略過(不炸)。
+    """
+    if not isinstance(tl, dict) or tl.get('health') is None:
+        return
+    _health = float(tl.get('health'))
+    _thr = compute_position_throttle(
+        _health, regime=tl.get('regime'), defense=bool(tl.get('defense')))
+    _c = _THROTTLE_COLORS.get(_thr['icon'], '#8b949e')
+    _lo, _hi, _mid = _thr['lo_pct'], _thr['hi_pct'], _thr['mid_pct']
+    _veto = ('&nbsp;<span style="color:#da3633;">（⚠️ 總經否決：無視技術面多頭，'
+             '強制壓低上界）</span>' if _thr['regime_capped'] else '')
+    st.markdown(
+        f'<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;'
+        f'padding:10px 14px;margin:6px 0 2px;">'
+        f'<b>🎚️ 建議持股油門</b>&nbsp; {_thr["icon"]} <b>{_thr["posture"]}</b>'
+        f'&nbsp;→ 建議持股 <b>{_lo}–{_hi}%</b>（中值 {_mid}%）{_veto}'
+        f'<div style="position:relative;height:14px;background:#21262d;border-radius:7px;'
+        f'margin:8px 0 4px;">'
+        f'<div style="position:absolute;left:{_lo}%;width:{max(_hi - _lo, 1)}%;height:100%;'
+        f'background:{_c};border-radius:7px;"></div>'
+        f'<div style="position:absolute;left:calc({_mid}% - 1px);top:-3px;width:2px;'
+        f'height:20px;background:#f0f6fc;"></div></div>'
+        f'<span style="font-size:11px;color:#8b949e;">0%（全現金） ← 總經健康分 '
+        f'{_health:.0f} → 100%（滿倉）</span></div>',
+        unsafe_allow_html=True,
+    )
+    st.caption('💡 這是「**姿態油門**」：總經只決定你**該持股幾成**（積極↔防守），'
+               '不是「全進全出」開關。總經惡化時上界會被壓低，但個別強勢股仍可各自判斷。')
 
 
 def render_traffic_light_top() -> tuple[Any, bool, str | None]:
