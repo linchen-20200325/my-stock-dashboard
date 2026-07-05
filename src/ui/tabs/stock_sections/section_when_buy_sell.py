@@ -84,6 +84,31 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
         _bias_i      = calc_bias_pct(_p2, _ma240, decimals=1) or 0
         _bias_20_i   = calc_bias_pct(_p2, _ma20,  decimals=1) or 0
 
+        # ── 🧭 加碼三問(規則化,防攤平弱勢 / 追高;v19.62 Feature 3)──
+        try:
+            from shared.position_throttle import assess_add_gate
+            from src.compute.etf.etf_smart_analysis import compute_std_bands
+            _sb = compute_std_bands(df2['close'], window=252)
+            _sz = _sb.get('sigma_z') if _sb.get('has_data') else None
+            _ms = st.session_state.get('macro_state', {}) or {}
+            _macro_def = bool(_ms.get('defense')) or (_ms.get('regime') in ('bear', 'caution'))
+            _gate = assess_add_gate(_sz, _bear_align, _macro_def)
+            _glabel = '🟢 可考慮加碼' if _gate['can_add'] else '🔴 不建議加碼'
+            _rows = ''.join(
+                f'<div style="font-size:12px;color:#c9d1d9;margin-top:2px;">'
+                f'{"✅" if ok else "❌"} {name} '
+                f'<span style="color:#8b949e;">— {note}</span></div>'
+                for name, ok, note in _gate['checks'])
+            st.markdown(
+                f'<div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;'
+                f'padding:10px 14px;margin:6px 0;">'
+                f'<b>🧭 加碼三問</b>：<b>{_glabel}</b>{_rows}</div>',
+                unsafe_allow_html=True)
+            st.caption('💡 三個都 ✅ 才考慮加碼 —— **σ 夠低(不追高)＋ 趨勢沒壞(不攤平弱勢)'
+                       '＋ 總經沒防守**。任一 ❌ 就先別加，等條件到齊再說。')
+        except Exception as _e_gate:
+            print(f'[when_buy_sell] add_gate: {type(_e_gate).__name__}: {_e_gate}')
+
         # 布林帶訊號
         _bb_upper    = (bb2.get('upper', 0) if isinstance(bb2, dict) else 0) or float('inf')
         _bb_ma       = (bb2.get('ma', 0)    if isinstance(bb2, dict) else 0)
