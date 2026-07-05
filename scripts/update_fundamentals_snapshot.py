@@ -11,15 +11,20 @@
 全部失敗 → exit 1。§5 冪等:同季重跑覆蓋同檔,不產生重複。
 
 用法(GitHub Actions / 本地):
-  python scripts/update_fundamentals_snapshot.py                # 自動抓最新已公布季
-  python scripts/update_fundamentals_snapshot.py --roc-year 114 --season 4   # 指定季(回補)
+  python scripts/update_fundamentals_snapshot.py                # 自動:本季 + 去年同季(缺才補)
+  python scripts/update_fundamentals_snapshot.py --roc-year 114 --season 1   # 只回補『那一季』(省時)
   python scripts/update_fundamentals_snapshot.py --markets sii  # 只抓上市
+
+抓幾季:自動模式抓「本季 + 去年同季(YoY 用)」,但去年同季已在快取就略過;手動指定
+--roc-year/--season 則『只抓那一季』(回補用,不連去年一起抓)。latest.json 由磁碟實況重算,
+補舊季不會把最新指標往回移。
 """
 from __future__ import annotations
 
 import argparse
 import datetime as _dt
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -36,6 +41,36 @@ from src.data.stock.mops_bulk_fetcher import (  # noqa: E402
 CACHE_DIR = Path("data_cache/fundamentals")
 ALL_MARKETS = ["sii", "otc"]
 _PROV_COLS = ("source", "fetched_at", "market", "roc_year", "season")
+_FNAME_RE = re.compile(r"^(?:sii|otc)_(\d+)Q(\d)\.parquet$")
+
+
+def _scan_cached_quarters(cache_dir: Path) -> set[tuple[int, int]]:
+    """掃 data_cache/fundamentals/ 下已存在的 parquet → {(民國年, season)} 集合。"""
+    out: set[tuple[int, int]] = set()
+    for p in cache_dir.glob("*.parquet"):
+        m = _FNAME_RE.match(p.name)
+        if m:
+            out.add((int(m.group(1)), int(m.group(2))))
+    return out
+
+
+def _write_latest_json(cache_dir: Path) -> tuple[int, int] | None:
+    """由『磁碟實況』重算 latest.json:latest = 現存最新季,prev = 該季去年同季(存在才填)。
+
+    補抓舊季(如 114Q1)不會把 latest 指標往回移;補齊去年同季後 prev 自動補上。
+    回傳 (roc_year, season) 供 log;無任何 parquet 回 None。
+    """
+    quarters = _scan_cached_quarters(cache_dir)
+    if not quarters:
+        return None
+    roc_year, season = max(quarters)                 # tuple 比較 = 先比年再比季
+    prev_available = (roc_year - 1, season) in quarters
+    (cache_dir / "latest.json").write_text(json.dumps({
+        "roc_year": roc_year, "season": season,
+        "prev_roc_year": (roc_year - 1) if prev_available else None,  # YoY 可用才填
+        "updated_at": pd.Timestamp.now("UTC").isoformat(),
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    return roc_year, season
 
 
 def latest_published_quarter(today: _dt.date) -> tuple[int, int]:
@@ -77,17 +112,33 @@ def main(argv=None) -> int:
     ap.add_argument("--markets", default="sii,otc", help="逗號分隔:sii,otc")
     args = ap.parse_args(argv)
 
-    if args.roc_year and args.season:
+    manual = bool(args.roc_year and args.season)
+    if manual:
         roc_year, season = args.roc_year, args.season
     else:
         roc_year, season = latest_published_quarter(_dt.date.today())
     markets = [m.strip() for m in args.markets.split(",") if m.strip() in ALL_MARKETS]
-
-    # 本季 + 去年同季（供三率三升 YoY 比較）；去年同季抓不到不阻擋本季
-    prev_year = roc_year - 1
-    quarters = [(roc_year, season), (prev_year, season)]
-    print(f"[fundamentals] 目標季別:民國{roc_year} 第{season}季（+ 去年同季 民國{prev_year} 供 YoY），市場={markets}")
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 抓哪幾季:
+    #  - 手動指定季別 → 只抓那一季（回補用,不連去年同季一起抓 → 省時,user 2026-07-05 要求）
+    #  - 自動最新季   → 抓本季 + 去年同季（供三率三升 YoY）;但去年同季若『已在快取』就略過,
+    #                   避免每季 cron 都重抓一次舊資料（§5 冪等 + 省時）
+    prev_year = roc_year - 1
+    quarters = [(roc_year, season)]
+    if manual:
+        print(f"[fundamentals] 手動回補單季:民國{roc_year} 第{season}季,市場={markets}")
+    else:
+        prev_cached = all(
+            (CACHE_DIR / f"{m}_{prev_year}Q{season}.parquet").exists() for m in markets
+        )
+        if prev_cached:
+            print(f"[fundamentals] 目標季別:民國{roc_year} 第{season}季,市場={markets}"
+                  f"（去年同季 民國{prev_year} 已在快取 → 略過,省時）")
+        else:
+            quarters.append((prev_year, season))
+            print(f"[fundamentals] 目標季別:民國{roc_year} 第{season}季（+ 去年同季 民國{prev_year} 供 YoY,"
+                  f"快取缺 → 一併補抓）,市場={markets}")
 
     wrote_current, total_rows = 0, 0
     for (_ry, _sn) in quarters:
@@ -99,21 +150,18 @@ def main(argv=None) -> int:
             path = CACHE_DIR / f"{typek}_{_ry}Q{_sn}.parquet"
             df.to_parquet(path, compression="snappy", index=False)
             print(f"[fundamentals] ✅ {typek} 民國{_ry}Q{_sn}: {len(df)} 檔 → {path}")
-            if _ry == roc_year:   # 只有本季計入「成敗」判斷
+            if _ry == roc_year:   # 只有『主要目標季』計入成敗判斷
                 wrote_current += 1
                 total_rows += len(df)
 
     if wrote_current == 0:
-        print("[fundamentals] ❌ 本季所有市場都失敗,未更新快照")
+        print(f"[fundamentals] ❌ 目標季 民國{roc_year}Q{season} 所有市場都失敗,未更新指標")
         return 1
 
-    (CACHE_DIR / "latest.json").write_text(json.dumps({
-        "roc_year": roc_year, "season": season,
-        "prev_roc_year": prev_year,   # 去年同季(三率三升 YoY 用)
-        "markets_written": wrote_current, "total_rows": total_rows,
-        "updated_at": pd.Timestamp.now("UTC").isoformat(),
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[fundamentals] 完成:本季 {wrote_current}/{len(markets)} 市場、共 {total_rows} 檔（+ 去年同季 YoY）")
+    # latest.json 由磁碟實況重算(補舊季不會把指標往回移;prev 存在才標 YoY 可用)
+    latest = _write_latest_json(CACHE_DIR)
+    print(f"[fundamentals] 完成:目標季 {wrote_current}/{len(markets)} 市場、共 {total_rows} 檔"
+          f"；latest.json 指向 {latest}")
     return 0
 
 

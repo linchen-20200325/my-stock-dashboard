@@ -95,9 +95,11 @@ import src.data.stock.mops_bulk_fetcher as _mbf  # noqa: E402
 
 
 class _Resp:
-    def __init__(self, status_code, text=""):
+    def __init__(self, status_code, text="", headers=None, url="https://mopsov.twse.com.tw/x"):
         self.status_code = status_code
         self.text = text
+        self.headers = headers or {}
+        self.url = url
 
 
 class _FakeRequests:
@@ -154,3 +156,12 @@ def test_5xx_is_retried(monkeypatch):
     assert html == "<ok/>"
     assert fake.calls == 2
     assert slept == [8]
+
+
+def test_307_redirect_not_retried(monkeypatch):
+    # 307 轉址(MOPS 暫時性節流)→ 立刻放棄,不重試、不退避(短退避清不掉 IP 節流)
+    html, fake, slept = _run(
+        monkeypatch, [_Resp(307, headers={"Location": "https://blocked.example/x"})])
+    assert html is None
+    assert fake.calls == 1
+    assert slept == []
