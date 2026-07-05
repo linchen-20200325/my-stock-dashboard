@@ -92,6 +92,33 @@ def test_empty_dir_writes_nothing(tmp_path):
     assert not (tmp_path / "latest.json").exists()
 
 
+# ── _parse_seasons ─────────────────────────────────────────────────────
+import pytest  # noqa: E402
+
+from scripts.update_fundamentals_snapshot import _parse_seasons  # noqa: E402
+
+
+def test_parse_seasons_single_and_multi():
+    assert _parse_seasons("1") == [1]
+    assert _parse_seasons("2,3,4") == [2, 3, 4]
+    assert _parse_seasons("1,2,3,4") == [1, 2, 3, 4]
+    assert _parse_seasons(" 2 , 3 ") == [2, 3]        # 容空白
+    assert _parse_seasons("3,3,2") == [3, 2]          # 去重保序
+
+
+def test_parse_seasons_empty():
+    assert _parse_seasons(None) == []
+    assert _parse_seasons("") == []
+    assert _parse_seasons("  ") == []
+
+
+def test_parse_seasons_invalid_raises():
+    with pytest.raises(ValueError):
+        _parse_seasons("5")            # 超出 1-4
+    with pytest.raises(ValueError):
+        _parse_seasons("abc")          # 非數字
+
+
 # ── main() 抓幾季的決策(手動=單季 / 自動=本季+缺才補去年同季)──────────
 import scripts.update_fundamentals_snapshot as _ufs  # noqa: E402
 
@@ -115,6 +142,17 @@ def test_manual_mode_fetches_single_quarter(monkeypatch, tmp_path):
     assert rc == 0
     # 只抓 114Q1 一季(不連 113Q1 去年同季一起抓)
     assert calls == [(114, 1, "sii")]
+
+
+def test_manual_mode_multi_season(monkeypatch, tmp_path):
+    # --season 2,3,4 → 一次補三季(不連去年同季),latest 仍不被舊季往回移
+    _touch_parquet(tmp_path, "sii", 115, 1)     # 已有最新季
+    calls = _patch_main(monkeypatch, tmp_path)
+    rc = _ufs.main(["--roc-year", "114", "--season", "2,3,4", "--markets", "sii"])
+    assert rc == 0
+    assert set(calls) == {(114, 2, "sii"), (114, 3, "sii"), (114, 4, "sii")}
+    meta = json.loads((tmp_path / "latest.json").read_text())
+    assert (meta["roc_year"], meta["season"]) == (115, 1)   # 補舊季不動最新指標
 
 
 def test_auto_mode_skips_prev_when_cached(monkeypatch, tmp_path):
