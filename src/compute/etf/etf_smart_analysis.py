@@ -215,6 +215,46 @@ def price_corr_warn_label(price_corr) -> str:
     return '⚠️ 高度同向' if _pc >= PRICE_CORR_HIGH_WARN else ''
 
 
+# 空頭相關(危機失效)門檻:t 下跌最凶的這比例交易日,拿來算相關(捕捉「崩盤一起跌」)。
+DOWNSIDE_QUANTILE: float = 0.20
+DOWNSIDE_CORR_HIGH_WARN: float = 0.7
+
+
+def _downside_corr_series(ret: pd.DataFrame, t: str,
+                          down_quantile: float = DOWNSIDE_QUANTILE):
+    """各 peer 在『t 跌最凶的 down_quantile 交易日』的相關性(pd.Series;資料不足回 None)。
+
+    分散靠平時相關性,但崩盤時相關性常趨近 1(一起跌)。此函式只看 t 最差的那些日子,
+    量化「危機時的真實相關」,揭穿假分散。純函式。
+    """
+    if t not in ret.columns:
+        return None
+    _tr = ret[t].dropna()
+    if len(_tr) < 20:
+        return None
+    _thr = _tr.quantile(down_quantile)
+    _bad = _tr[_tr <= _thr].index
+    if len(_bad) < 5:
+        return None
+    _sub = ret.loc[_bad]
+    if t not in _sub.columns:
+        return None
+    return _sub.corr()[t].drop(labels=[t], errors='ignore')
+
+
+def downside_corr_warn_label(dc) -> str:
+    """空頭相關 → 警示:≥0.7 → '🔴 崩盤一起跌';否則 ''。純函式。"""
+    if dc is None:
+        return ''
+    try:
+        _v = float(dc)
+    except (TypeError, ValueError):
+        return ''
+    if _v != _v:
+        return ''
+    return '🔴 崩盤一起跌' if _v >= DOWNSIDE_CORR_HIGH_WARN else ''
+
+
 def find_best_diversifiers(
     ticker: str,
     price_pivot: pd.DataFrame,
@@ -253,6 +293,7 @@ def find_best_diversifiers(
 
     # 相關係數（ticker vs 其他所有）
     corr_row = ret.corr()[t].drop(labels=[t], errors='ignore')
+    _dc_row = _downside_corr_series(ret, t)   # 空頭相關(危機失效)
 
     # 類別向量
     cat_v_t = _category_vector(t, ETF_PEER_GROUPS)
@@ -289,10 +330,18 @@ def find_best_diversifiers(
         sim  = _wp * pr_norm + _wh * jac + _wc * cat_sim
         divs = round(1.0 - sim, 4)
 
+        # 空頭相關(危機失效):t 跌最凶那些日子的相關(資料不足 → None)
+        _dc = None
+        if _dc_row is not None and peer in _dc_row.index:
+            _dcv = _dc_row[peer]
+            if math.isfinite(_dcv):
+                _dc = round(float(_dcv), 3)
+
         rows.append({
             'ticker':    peer,
             '分散指數':  divs,
             '價格相關':  round(pr, 3),
+            '空頭相關':  _dc,
             '持股重疊%': round(jac * 100, 1) if has_h else None,
             '類別差異':  round(1.0 - cat_sim, 3),
             '可用維度':  3 if has_h else 2,

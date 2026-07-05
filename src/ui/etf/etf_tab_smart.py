@@ -354,10 +354,11 @@ def _render_cat_diversifier_chart(cat_name: str, cdf, input_ticker: str) -> None
     except Exception as _fe:
         st.caption(f'圖表渲染失敗：{_fe}')
 
-    # ⚠️ 價格高度同向警示(v19.63):分散指數是綜合的,可能掩蓋「價格其實高度同向」。
-    # 崩盤時高相關者仍會一起跌 → 分散效果有限,別只看分散指數。
+    # ⚠️ 價格 / 空頭相關警示(v19.63):分散指數是綜合的,可能掩蓋「價格其實高度同向」;
+    # 且分散在**崩盤時常失效**(相關趨近 1)→ 用「空頭相關」揭穿假分散。
     from src.compute.etf.etf_smart_analysis import (  # noqa: PLC0415
-        PRICE_CORR_HIGH_WARN, price_corr_warn_label,
+        DOWNSIDE_CORR_HIGH_WARN, PRICE_CORR_HIGH_WARN,
+        downside_corr_warn_label, price_corr_warn_label,
     )
     _hot = [(_t, _n, float(_pc)) for _t, _n, _pc in zip(cdf['ticker'], _names, cdf['價格相關'])
             if price_corr_warn_label(_pc)]
@@ -365,13 +366,20 @@ def _render_cat_diversifier_chart(cat_name: str, cdf, input_ticker: str) -> None
         _txt = '、'.join(f'{_t} {_n}(相關 {_pc:.2f})' for _t, _n, _pc in _hot)
         st.warning(f'⚠️ 本類 {len(_hot)} 檔**價格高度同向**（相關 ≥ {PRICE_CORR_HIGH_WARN:.1f}）：'
                    f'{_txt}。分散指數雖不低,但**崩盤時仍會一起跌**,分散效果有限,別只看分散指數。')
+    _crash = [(_t, _n, float(_dc)) for _t, _n, _dc in zip(cdf['ticker'], _names, cdf['空頭相關'])
+              if downside_corr_warn_label(_dc)]
+    if _crash:
+        _ctxt = '、'.join(f'{_t} {_n}(空頭相關 {_dc:.2f})' for _t, _n, _dc in _crash)
+        st.error(f'🔴 本類 {len(_crash)} 檔**崩盤時會一起跌**（空頭相關 ≥ {DOWNSIDE_CORR_HIGH_WARN:.1f}）：'
+                 f'{_ctxt}。真正的抗跌分散要靠**不同資產類別(債券/現金)**,不是挑不相關的股票型 ETF。')
 
-    # 明細表(價格相關/持股重疊/類別差異)收在 expander,避免版面過長
+    # 明細表(價格相關/空頭相關/持股重疊/類別差異)收在 expander,避免版面過長
     with st.expander(f'📋 {cat_name} 明細', expanded=False):
         import pandas as _pd  # noqa: PLC0415
         _d = cdf.copy()
         _d.insert(1, '名稱', _names)
         _d['價格警示'] = _d['價格相關'].apply(price_corr_warn_label)  # v19.63
+        _d['空頭警示'] = _d['空頭相關'].apply(downside_corr_warn_label)  # v19.63
         _d['持股重疊%'] = _d['持股重疊%'].apply(
             lambda x: f'{x:.1f}%' if x is not None
             and not (isinstance(x, float) and _pd.isna(x)) else '—')
