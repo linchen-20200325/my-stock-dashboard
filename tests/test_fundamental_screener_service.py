@@ -66,6 +66,36 @@ def test_survivor_ids_empty_when_none_pass(monkeypatch):
     svc._clear(svc._prescreen_cached)
 
 
+def test_gate_pool_intersects_survivors(patched):
+    # TWSE 池 5 檔,只有 2330 是存活股 → 交集只剩 2330
+    pool = pd.DataFrame({"代碼": ["2330", "1234", "5678", "9999", "0050"],
+                         "本益比": [20, 10, 15, 8, 18]})
+    svc._clear(svc._prescreen_cached)
+    out, info = svc.gate_pool_by_fundamentals(pool, refresh=True)
+    assert list(out["代碼"]) == ["2330"]
+    assert info["survivors"] == 1 and info["matched"] == 1 and info["note"] == ""
+
+
+def test_gate_pool_graceful_when_snapshot_fails(monkeypatch):
+    # 快照載入 raise → 不阻擋,回原 pool + 警語(UI 韌性)
+    def _boom():
+        raise FileNotFoundError("no snapshot")
+    monkeypatch.setattr(svc, "load_fundamentals_snapshot", _boom)
+    svc._clear(svc._prescreen_cached)
+    pool = pd.DataFrame({"代碼": ["2330"], "本益比": [20]})
+    out, info = svc.gate_pool_by_fundamentals(pool, refresh=True)
+    assert len(out) == 1                       # 原封不動
+    assert info["matched"] is None and "載入失敗" in info["note"]
+    svc._clear(svc._prescreen_cached)
+
+
+def test_gate_pool_missing_code_col(patched):
+    pool = pd.DataFrame({"股號": ["2330"], "本益比": [20]})   # 無 '代碼' 欄
+    out, info = svc.gate_pool_by_fundamentals(pool, refresh=True)
+    assert len(out) == 1 and info["matched"] is None
+    assert "缺股號欄" in info["note"]
+
+
 def test_real_service_smoke():
     from src.data.stock.fundamentals_snapshot_loader import FUNDAMENTALS_CACHE_DIR
     if not (FUNDAMENTALS_CACHE_DIR / "latest.json").exists():

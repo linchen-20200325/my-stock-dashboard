@@ -592,37 +592,46 @@ with tab_stocks:
         from src.ui.tabs import render_tab_stock_picker
         from src.ui.tabs.tab_stock_picker import PICKER_DEEP_SCAN_N
         from src.ui.tabs.yield_screener import fetch_twse_yield_pe, render_yield_confirm
-        # v18.466 漏斗式：全市場 → 基本面/估值初篩 → 依「估值便宜度」排序取前 N 深跑三階段。
-        # 殖利率不再當入口排序閘門（原 nlargest 殖利率），降為最後的「殖利率確認」欄位。
+        # Phase 2 全台股基本面漏斗（L6→L3）：先用 MOPS 全市場季快照跑「四項全過」初篩
+        #   ①負債比<50% ②三率三升 YoY ③淨流動值>0 ④EPS>0
+        # → 交集 TWSE 估值池 → PE/殖利率確認 → 依估值便宜度取前 N 深跑三階段。
+        # gate_pool_by_fundamentals 內含 fail-loud + UI 韌性（快照缺 → 退回估值篩選）。
+        from src.services.fundamental_screener_service import gate_pool_by_fundamentals
+        _fund_cnt = None
         _twse_scrn = fetch_twse_yield_pe()
         if not _twse_scrn.empty:
             _pool = _twse_scrn.copy()
             _pe_col = '本益比'    if '本益比'    in _pool.columns else None
             _yd_col = '殖利率(%)' if '殖利率(%)' in _pool.columns else None
-            _before = len(_pool)
+            # ① 全台股基本面初篩：四項全過（與 TWSE 估值池取交集）
+            _pool, _gate = gate_pool_by_fundamentals(_pool)
+            _fund_cnt = _gate['matched']
             if _pe_col:
-                # 基本面初篩：排除 PE ≤ 0（虧損股）或 PE > 100（估值異常 / 價值陷阱）
+                # ② 估值 sanity：排除 PE ≤ 0（虧損）或 PE > 100（估值異常 / 價值陷阱）
                 _pool = _pool[(_pool[_pe_col] > 0) & (_pool[_pe_col] < 100)]
             if _yd_col:
-                # 排除殖利率 > 12%（配息恐削減 / 價值陷阱）; 保留 ≥ 2%（配息股）
+                # ③ 殖利率 sanity：排除 > 12%（配息恐削減 / 價值陷阱）；保留 ≥ 2%（配息股）
                 _pool = _pool[(_pool[_yd_col] >= 2.0) & (_pool[_yd_col] <= 12.0)]
             _after = len(_pool)
-            # 排序改用「估值便宜度」（本益比由低到高）作為中性主篩 —— 取代原「殖利率前 50」入口閘門
+            # 依「估值便宜度」（本益比由低到高）取前 N 深掃
             if _pe_col:
                 _top_cands = _pool.nsmallest(PICKER_DEEP_SCAN_N, _pe_col).reset_index(drop=True)
             else:
                 _top_cands = _pool.head(PICKER_DEEP_SCAN_N).reset_index(drop=True)
+            _fund_seg = (f'基本面四項全過 {_gate["survivors"]} 檔 ∩ 估值池 → {_fund_cnt} 檔 → '
+                         if _fund_cnt is not None else '')
             st.caption(
-                f'📊 候選池：全市場 {_before} 檔 → 基本面初篩後 {_after} 檔'
+                f'📊 全台股基本面漏斗：{_fund_seg}PE/殖利率確認後 {_after} 檔'
                 f'（排除虧損 / PE>100 / 殖利率<2% 或 >12%）→ 依估值便宜度取前 {PICKER_DEEP_SCAN_N} 檔'
-                f'深跑三階段（殖利率移至最後確認，不再當入口排序）'
+                f'深跑三階段（殖利率移至最後確認）{_gate["note"]}'
             )
         else:
             _top_cands = None
         # Step 2: 三階段篩選 S1+S2（skip_s3=True 跳過 AI，通過清單存入 session_state）
         render_tab_stock_picker(
             gemini_fn=gemini_call, candidates=_top_cands,
-            source_label='估值優選', skip_s3=True,
+            source_label='基本面優選' if _fund_cnt is not None else '估值優選',
+            skip_s3=True,
         )
         # Step 3: 殖利率確認（S1/S2 通過標的）
         _s1s2_pass = st.session_state.get('picker_s1s2_qualified_tickers', [])
