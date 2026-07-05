@@ -590,8 +590,12 @@ with tab_stocks:
         # v18.xxx: 選股 Pipeline（倒序）— 三階段 S1/S2 → 殖利率確認
         # 原始正序（殖利率篩選→三階段）已改為：先跑 S1/S2，通過後再顯示殖利率資訊
         from src.ui.tabs import render_tab_stock_picker
-        from src.ui.tabs.tab_stock_picker import PICKER_DEEP_SCAN_N
+        from src.ui.tabs.tab_stock_picker import (
+            PICKER_DEEP_SCAN_N, render_prescreen_panel,
+        )
         from src.ui.tabs.yield_screener import fetch_twse_yield_pe, render_yield_confirm
+        # v19.64：全台股基本面初篩「結果面板」——把 Phase 2 後端算出的四項全過存活池攤出來看
+        render_prescreen_panel()
         # Phase 2 全台股基本面漏斗（L6→L3）：先用 MOPS 全市場季快照跑「四項全過」初篩
         #   ①負債比<50% ②三率三升 YoY ③淨流動值>0 ④EPS>0
         # → 交集 TWSE 估值池 → PE/殖利率確認 → 依估值便宜度取前 N 深跑三階段。
