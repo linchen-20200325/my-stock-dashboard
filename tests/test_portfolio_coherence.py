@@ -60,3 +60,30 @@ def test_thresholds_are_ssot():
     assert lvl != 'warn'
     lvl2, _ = coherence_note('積極', bond_pct=BOND_HIGH_PCT)
     assert lvl2 != 'info'
+
+
+# ── 核心/衛星(#4)────────────────────────────────────────────────────────
+from src.compute.etf.portfolio_coherence import (  # noqa: E402
+    assess_core_satellite,
+    classify_core_satellite,
+)
+
+
+def test_classify_core_satellite():
+    assert classify_core_satellite('0050.TW') == '核心'     # 市值型
+    assert classify_core_satellite('006208.TW') == '核心'
+    assert classify_core_satellite('00878.TW') == '衛星'    # 高股息
+    assert classify_core_satellite('00891.TW') == '衛星'    # 半導體
+    assert classify_core_satellite('00679B.TW') == '債券'
+    assert classify_core_satellite('2330.TW') == '衛星'     # 個股 → 衛星
+
+
+def test_assess_core_satellite_ratio():
+    rows = [
+        {'ticker': '0050.TW', 'value': 50},      # 核心
+        {'ticker': '00878.TW', 'value': 30},     # 衛星
+        {'ticker': '00679B.TW', 'value': 20},    # 債券
+    ]
+    r = assess_core_satellite(rows)
+    assert r['core_pct'] == 50.0 and r['satellite_pct'] == 30.0 and r['bond_pct'] == 20.0
+    assert abs(r['core_pct'] + r['satellite_pct'] + r['bond_pct'] - 100) < 0.1
