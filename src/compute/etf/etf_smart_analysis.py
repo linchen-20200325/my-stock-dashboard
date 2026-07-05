@@ -197,6 +197,24 @@ def _cosine(v1: list[float], v2: list[float]) -> float:
     return dot / (n1 * n2)
 
 
+# 價格相關警示門檻(v19.63):分散指數是綜合的,可能掩蓋「價格其實高度同向」。
+# 明細/圖旁標出來,避免只看分散指數被誤導(崩盤時高相關者仍會一起跌)。
+PRICE_CORR_HIGH_WARN: float = 0.7
+
+
+def price_corr_warn_label(price_corr) -> str:
+    """價格相關(Pearson)→ 警示標籤。≥0.7 → '⚠️ 高度同向';否則 ''。純函式。"""
+    if price_corr is None:
+        return ''
+    try:
+        _pc = float(price_corr)
+    except (TypeError, ValueError):
+        return ''
+    if _pc != _pc:  # NaN
+        return ''
+    return '⚠️ 高度同向' if _pc >= PRICE_CORR_HIGH_WARN else ''
+
+
 def find_best_diversifiers(
     ticker: str,
     price_pivot: pd.DataFrame,
