@@ -45,4 +45,6 @@ def test_app_entry_no_longer_yield_ranked():
         '選股網入口應改用 nsmallest(PICKER_DEEP_SCAN_N, 本益比) 估值排序')
     # source_label 不再自稱「高殖利率前50」
     assert "source_label='高殖利率前50'" not in app_src
-    assert "source_label='估值優選'" in app_src
+    # Phase 2:入口套「全台股基本面存活池」閘門，label 為條件式「基本面優選 / 估值優選」
+    assert "gate_pool_by_fundamentals" in app_src, '選股網入口應接上全台股基本面存活池閘門'
+    assert "基本面優選" in app_src and "估值優選" in app_src
