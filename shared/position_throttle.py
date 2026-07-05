@@ -71,3 +71,36 @@ def compute_position_throttle(
         'lo_pct': lo, 'hi_pct': hi, 'mid_pct': round((lo + hi) / 2),
         'posture': posture, 'icon': icon, 'regime_capped': capped,
     }
+
+
+# ── 加碼決策關卡(Feature 3:規則化加碼,防攤平弱勢 / 追高)──────────────────
+ADD_SIGMA_MAX: float = -1.0
+"""加碼位階門檻:σ z-score 須 ≤ 此(在 -1σ 以下才加碼,不追高)。"""
+
+
+def assess_add_gate(sigma_z: float | None, trend_bearish: bool,
+                    macro_defensive: bool) -> dict:
+    """加碼三問(規則化)——三個都過才給加碼綠燈,防「感覺便宜就加 / 攤平弱勢」。
+
+    ① 位階夠低:sigma_z ≤ ADD_SIGMA_MAX(-1σ 以下,不追高)
+    ② 趨勢沒壞:非空頭排列(不是攤平弱勢股)
+    ③ 總經沒轉防守
+
+    Returns:
+        {can_add: bool, checks: [(名稱, ok, 備註)], blocked_by: [未過的名稱]}
+    """
+    _pos_ok = sigma_z is not None and sigma_z <= ADD_SIGMA_MAX
+    _trend_ok = not bool(trend_bearish)
+    _macro_ok = not bool(macro_defensive)
+    checks = [
+        ('位階夠低（σ ≤ -1，不追高）', _pos_ok,
+         f'σ={sigma_z:+.2f}' if sigma_z is not None else 'σ 未知'),
+        ('趨勢沒壞（非空頭排列，不攤平弱勢）', _trend_ok,
+         '空頭排列 ⚠️' if trend_bearish else '非空頭'),
+        ('總經沒轉防守', _macro_ok, '總經防禦中 ⚠️' if macro_defensive else 'OK'),
+    ]
+    return {
+        'can_add': _pos_ok and _trend_ok and _macro_ok,
+        'checks': checks,
+        'blocked_by': [name for name, ok, _ in checks if not ok],
+    }
