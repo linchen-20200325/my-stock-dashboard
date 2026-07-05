@@ -2,13 +2,13 @@
 from . import (  # noqa: F401
     etf_calc, etf_quality, etf_helpers,
     etf_categories, etf_margin_simulator, etf_scoring_helpers,
-    etf_smart_analysis,
+    etf_smart_analysis, etf_recommendation,
 )
 
 _SUBMODULES = (
     etf_calc, etf_quality, etf_helpers,
     etf_categories, etf_margin_simulator, etf_scoring_helpers,
-    etf_smart_analysis,
+    etf_smart_analysis, etf_recommendation,
 )
 
 

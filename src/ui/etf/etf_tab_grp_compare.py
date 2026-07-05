@@ -41,6 +41,7 @@ from src.compute.etf import (
 )
 from src.compute.etf import compute_etf_quality
 from src.compute.etf import compute_etf_composite_score
+from src.compute.etf import recommend_etf_actions
 from src.compute.etf import (
     dividend_health_label as _dividend_health_label,
     normalize_etf_ticker,
@@ -234,6 +235,12 @@ def render_etf_grp_compare() -> None:
             continue
         _r['composite'], _r['stars'] = compute_etf_composite_score(_r)
 
+    # 留/觀察/換 建議(讀既有分數,不重算;含同類重疊偵測)—— 需在 composite 算完後
+    _verdicts = recommend_etf_actions(rows)
+    for _r, _v in zip(rows, _verdicts):
+        _r['rec_verdict'] = f"{_v['icon']} {_v['verdict']}"
+        _r['rec_reason'] = _v.get('reason_text', '')
+
     # ── 統計卡 ──
     _n_ok = sum(1 for r in rows if r.get('stars'))
     _n_5 = sum(1 for r in rows if r.get('stars') == 5)
@@ -254,6 +261,7 @@ def render_etf_grp_compare() -> None:
     df = pd.DataFrame([{
         '代號':     r['ticker'],
         '名稱':     r.get('name', ''),
+        '🚦 建議':  r.get('rec_verdict', ''),
         '星等':     _stars_str(r.get('stars')),
         '綜合分':   r.get('composite'),
         '市價':     r.get('price'),
@@ -279,6 +287,7 @@ def render_etf_grp_compare() -> None:
         'σ強買≤':   r.get('sigma_buy'),
         'σ減碼≥':   r.get('sigma_sell'),
         'σ位階':    r.get('sigma_z'),
+        '建議理由': r.get('rec_reason', ''),
         '備註':     r.get('error') or '',
     } for r in rows])
 
@@ -289,6 +298,11 @@ def render_etf_grp_compare() -> None:
     st.dataframe(
         df, hide_index=True, use_container_width=True,
         column_config={
+            '🚦 建議':  st.column_config.TextColumn(
+                '🚦 建議',
+                help='由既有分數彙整(不重算):綜合分≥0.65(4★)且無紅旗=✅留下;'
+                     '<0.35(1★)或紅旗=🔻考慮換;其餘=⚠️觀察。'
+                     '紅旗=流動性高風險🔴 / 配息吃本金🔴。詳見「建議理由」欄。'),
             '綜合分':   st.column_config.NumberColumn('綜合分', format='%.2f'),
             '折溢價%':  st.column_config.Column(
                 '折溢價%',
@@ -326,6 +340,9 @@ def render_etf_grp_compare() -> None:
             'σ位階':    st.column_config.NumberColumn(
                 'σ位階', format='%+.2f',
                 help='現價離均線幾個 σ:負=偏低(便宜)、正=偏高(貴);約 ±2 為極端'),
+            '建議理由': st.column_config.TextColumn(
+                '建議理由', width='large',
+                help='彙整綜合分 / 紅旗 / 加碼時機 / 同類重疊的一句話說明'),
         },
     )
     st.caption(
@@ -339,4 +356,15 @@ def render_etf_grp_compare() -> None:
         '/ 追蹤誤差（calc_tracking_error vs 自動偵測 benchmark）。'
         ' **σ 建議買賣價位**（compute_std_bands 252 日）：σ強買≤（μ−2σ 相對低點）'
         '/ σ減碼≥（μ+2σ 相對高點）/ σ位階（現價離均線幾個 σ）。'
+    )
+    st.info(
+        '🚦 **怎麼看「留 / 觀察 / 換」**（把上面各欄一句話收斂,**不是投資建議**,決策仍在你）：\n\n'
+        '- **✅ 留下**：綜合分 ≥0.65（4★↑）且沒紅旗 —— 體質好,續抱；價位偏低時可分批加碼。\n'
+        '- **⚠️ 觀察**：綜合分中段（2★~3★),或體質好但踩到 1 個紅旗 —— 先別加碼,下一季再看。\n'
+        '- **🔻 考慮換**：綜合分 <0.35（1★）或紅旗嚴重 —— 想想有沒有同類更好的可替換。\n'
+        '- **紅旗**：流動性🔴（量小/規模小不好進出）、配息🔴吃本金（領到的息 < 賠掉的價差）。\n'
+        '- **同類重疊**：若你同一類（如高股息、市值型）買了 2 檔以上,系統會提示「留分數最高那檔、其餘擇一」'
+        '—— 真正的抗跌分散來自**不同資產類別（股 vs 債 vs 現金）**,不是多買幾檔同質 ETF。\n\n'
+        '⚠️ 綜合分只評「體質」,沒把你的**買進成本 / 資產配置需求**算進去；'
+        '真的要賣前,請一併看「7%估值 / σ位階（是不是剛好貴）」與你的整體股債比。'
     )
