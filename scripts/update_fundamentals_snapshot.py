@@ -83,31 +83,37 @@ def main(argv=None) -> int:
         roc_year, season = latest_published_quarter(_dt.date.today())
     markets = [m.strip() for m in args.markets.split(",") if m.strip() in ALL_MARKETS]
 
-    print(f"[fundamentals] 目標季別:民國{roc_year} 第{season}季,市場={markets}")
+    # 本季 + 去年同季（供三率三升 YoY 比較）；去年同季抓不到不阻擋本季
+    prev_year = roc_year - 1
+    quarters = [(roc_year, season), (prev_year, season)]
+    print(f"[fundamentals] 目標季別:民國{roc_year} 第{season}季（+ 去年同季 民國{prev_year} 供 YoY），市場={markets}")
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    wrote, total_rows = 0, 0
-    for typek in markets:
-        df = _fetch_market(typek, roc_year, season)
-        if df.empty:
-            print(f"[fundamentals] ❌ {typek} 抓取失敗 → 保留上季 parquet(不覆蓋)")
-            continue
-        path = CACHE_DIR / f"{typek}_{roc_year}Q{season}.parquet"
-        df.to_parquet(path, compression="snappy", index=False)
-        print(f"[fundamentals] ✅ {typek}: {len(df)} 檔 → {path}")
-        wrote += 1
-        total_rows += len(df)
+    wrote_current, total_rows = 0, 0
+    for (_ry, _sn) in quarters:
+        for typek in markets:
+            df = _fetch_market(typek, _ry, _sn)
+            if df.empty:
+                print(f"[fundamentals] ❌ {typek} 民國{_ry}Q{_sn} 抓取失敗 → 保留舊 parquet(不覆蓋)")
+                continue
+            path = CACHE_DIR / f"{typek}_{_ry}Q{_sn}.parquet"
+            df.to_parquet(path, compression="snappy", index=False)
+            print(f"[fundamentals] ✅ {typek} 民國{_ry}Q{_sn}: {len(df)} 檔 → {path}")
+            if _ry == roc_year:   # 只有本季計入「成敗」判斷
+                wrote_current += 1
+                total_rows += len(df)
 
-    if wrote == 0:
-        print("[fundamentals] ❌ 所有市場都失敗,未更新任何快照")
+    if wrote_current == 0:
+        print("[fundamentals] ❌ 本季所有市場都失敗,未更新快照")
         return 1
 
     (CACHE_DIR / "latest.json").write_text(json.dumps({
         "roc_year": roc_year, "season": season,
-        "markets_written": wrote, "total_rows": total_rows,
+        "prev_roc_year": prev_year,   # 去年同季(三率三升 YoY 用)
+        "markets_written": wrote_current, "total_rows": total_rows,
         "updated_at": pd.Timestamp.now("UTC").isoformat(),
     }, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[fundamentals] 完成:{wrote}/{len(markets)} 市場、共 {total_rows} 檔")
+    print(f"[fundamentals] 完成:本季 {wrote_current}/{len(markets)} 市場、共 {total_rows} 檔（+ 去年同季 YoY）")
     return 0
 
 
