@@ -78,3 +78,37 @@ def get_survivor_ids(*, refresh: bool = False) -> list[str]:
     if surv is None or surv.empty:
         return []
     return [str(s) for s in surv["stock_id"].tolist()]
+
+
+def gate_pool_by_fundamentals(
+    pool_df: pd.DataFrame,
+    code_col: str = "代碼",
+    *,
+    refresh: bool = False,
+) -> tuple[pd.DataFrame, dict]:
+    """外部候選池(含 code_col 股號欄)∩ 基本面存活池 → (過濾後 pool, info)。
+
+    選股網漏斗第一關:把 TWSE 估值池收斂到「四項全過」的基本面存活股。
+
+    info: {'survivors': int|None, 'matched': int|None, 'note': str}
+      - survivors: 存活池大小(None=快照不可用)
+      - matched:   交集後檔數(None=未套用閘門)
+      - note:      給 UI 顯示的警語(''=正常)
+
+    §1 fail-loud + UI 韌性:快照缺 / 存活池空 / 無 code_col → **不阻擋**,回原 pool +
+    警語(讓 caller 退回估值篩選,不炸整頁、不造假)。
+    """
+    try:
+        ids = set(get_survivor_ids(refresh=refresh))
+    except Exception as _e:  # noqa: BLE001 — UI 韌性:初篩不可用不炸選股網
+        print(f"[fund_screener_service] 基本面初篩不可用:{type(_e).__name__}: {_e}")
+        return pool_df, {"survivors": None, "matched": None,
+                         "note": f"（⚠️ 基本面快照載入失敗：{_e}；暫以估值篩選）"}
+    if not ids:
+        return pool_df, {"survivors": 0, "matched": None,
+                         "note": "（⚠️ 基本面存活池為空，暫以估值篩選）"}
+    if code_col not in pool_df.columns:
+        return pool_df, {"survivors": len(ids), "matched": None,
+                         "note": "（⚠️ 候選池缺股號欄，暫以估值篩選）"}
+    out = pool_df[pool_df[code_col].astype(str).str.strip().isin(ids)]
+    return out, {"survivors": len(ids), "matched": len(out), "note": ""}
