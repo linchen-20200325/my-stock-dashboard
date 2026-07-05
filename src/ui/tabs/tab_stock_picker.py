@@ -156,17 +156,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
             value='', key=f'{key_prefix}_extra_codes',
             help='手動補進想一起跑三階段的個股，會與上方勾選自動合併、去重；台股代號 4-6 碼')
 
-    # v18.223：auto_run 模式跳過按鈕（由上方批次分析一鍵串接）
-    if not auto_run:
-        if not st.button('🎯 開始三階段篩選', key=f'{key_prefix}_btn',
-                         use_container_width=True, type='primary'):
-            if _t3_mode:
-                st.info(f'💡 按「🎯 開始三階段篩選」分析 {len(_codes)} 檔（並行 ~30s）')
-            else:
-                st.info('💡 勾選候選股票後按「🎯 開始三階段篩選」')
-            return
-
-    # ── 解析清單（高息網勾選 + 手動輸入，合併去重）─────────────
+    # ── 解析清單（勾選 + 手動輸入，合併去重）——移到按鈕前，供「已跑過」旗標綁定 ──
     import re as _re_pk
     from src.compute.etf import bare_etf_code as _bare
     _extra: list[str] = []
@@ -180,16 +170,31 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         else:
             _bad.append(_c0)
     _tickers = list(dict.fromkeys(list(_sel) + _extra))
-    if _extra:
-        st.caption(f'➕ 已併入手動代碼 {len(_extra)} 檔：{", ".join(_extra)}')
     if _bad:
         st.warning(f'⚠️ 略過無法識別的代碼：{", ".join(_bad)}（台股代號應為 4-6 碼數字）')
     if not _tickers:
-        st.error('❌ 請至少勾選一檔候選股票，或於上方手動輸入代碼')
+        st.info('💡 請至少勾選一檔候選股票，或於上方手動輸入代碼')
         return
     if len(_tickers) > 30:
         st.warning(f'⚠️ 超過 30 檔（{len(_tickers)}），僅取前 30 檔避免 API 風暴')
         _tickers = _tickers[:30]
+    if _extra:
+        st.caption(f'➕ 已併入手動代碼 {len(_extra)} 檔：{", ".join(_extra)}')
+
+    # v18.223：auto_run 跳過按鈕。v19.61：按一次後用 session_state 記住「已跑過這組股票」，
+    # 之後動下方「自訂條件」勾選觸發 rerun 也不會讓結果消失（旗標 key 綁定 ticker 集合 →
+    # 只有『換候選股票』才需要重按，動條件不會重跑昂貴的三階段掃描）。
+    _ran_key = f'{key_prefix}_ran_{hash(tuple(_tickers))}'
+    if not auto_run:
+        if st.button('🎯 開始三階段篩選', key=f'{key_prefix}_btn',
+                     use_container_width=True, type='primary'):
+            st.session_state[_ran_key] = True
+        if not st.session_state.get(_ran_key):
+            if _t3_mode:
+                st.info(f'💡 按「🎯 開始三階段篩選」分析 {len(_codes)} 檔（並行 ~30s）')
+            else:
+                st.info('💡 勾選候選股票後按「🎯 開始三階段篩選」')
+            return
 
     # ── 跑三階段篩選（ThreadPoolExecutor 並行，v18.223 加 cache 防 rerun 重跑）──
     # 原本序列跑 N 檔，每檔 ~2 yfinance + ~4 FinMind ≈ 上百次阻塞請求逐一等。
@@ -257,21 +262,25 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
                '「布林開口」= 近 5 日 band 寬度 > 前 20 日 1.3 倍；'
                '「投信買超」= 近 5 日連續買超；「大戶持股」= ≥1000 張級距近 2 週比例增加。')
 
-    # ── 🎛️ 自訂必過條件（v19.60 使用者要求：勾 15 項中的任意項 + 至少過 N 項）──
+    # ── 🎛️ 自訂必過條件（v19.61：改打勾格子，一次全看得到，比下拉選單好操作）──
     st.markdown('#### 🎛️ 自訂必過條件（可選）')
-    _name_to_key = {name: key for key, name in PICKER_ALL_CONDITIONS}
-    _sel_names = st.multiselect(
-        '從 15 項中挑「你要求的條件」（留空 = 用預設 S1≥6 且 S2≥3）',
-        [name for _, name in PICKER_ALL_CONDITIONS],
-        default=[], key=f'{key_prefix}_cond_select',
-        help='基本面 9 項 + 籌碼技術 6 項；勾選後可設定「至少過幾項」')
-    _sel_keys = [_name_to_key[n] for n in _sel_names]
+    st.caption('勾你要求的條件，再設下方「至少過幾項」；全部不勾 = 用預設 S1≥6 且 S2≥3。'
+               '（勾選會即時重篩，不會重跑三階段掃描）')
+    _sel_keys: list[str] = []
+    for _grp_title, _grp_conds in (('基本面 9 項', PICKER_S1_CONDITIONS),
+                                   ('籌碼技術 6 項', PICKER_S2_CONDITIONS)):
+        st.markdown(f'**{_grp_title}**')
+        _cb_cols = st.columns(3)
+        for _ci, (_ck, _cname) in enumerate(_grp_conds):
+            if _cb_cols[_ci % 3].checkbox(_cname, key=f'{key_prefix}_cb_{_ck}'):
+                _sel_keys.append(_ck)
     _min_pass = len(_sel_keys)
     if _sel_keys:
+        # key 綁定勾選數量：改變勾選數時重置 value（避免舊值 > 新上限的 clamp 錯誤）
         _min_pass = st.number_input(
             f'這些條件裡至少要過幾項（1 ~ {len(_sel_keys)}）',
             min_value=1, max_value=len(_sel_keys), value=len(_sel_keys),
-            step=1, key=f'{key_prefix}_cond_minpass')
+            step=1, key=f'{key_prefix}_cond_minpass_{len(_sel_keys)}')
 
     # ── 通過清單：自訂條件優先；未啟用則走預設門檻（S1≥6 & S2≥3，SSOT）──
     _custom = filter_by_custom_conditions(results, _sel_keys, int(_min_pass))
