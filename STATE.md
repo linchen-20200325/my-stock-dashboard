@@ -1,6 +1,6 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🎨 2026-07-04 ETF UI 四連改（v18.467/468/469 + hotfix,使用者截圖回報）
+## 🎨 2026-07-04 ETF UI 五連改（v18.467/468/469/470 + hotfix,使用者截圖回報）
 
 - **v18.467**：ETF 三個智慧區塊(σ 買賣帶/分散度/MK 3-3-3)**去按鈕改自動計算**(輸入代號即算)、
   expander `expanded=True` 直接顯示;**AI 白話總結移到最下方**(單檔:`render_etf_single` 加
@@ -15,6 +15,10 @@
   ⚠️ 現有分類無「海外/平衡型」(使用者舉例),要加需擴充 `ETF_PEER_GROUPS`(待議)。
 - **v18.469**：多檔 ETF 評分比較表補**標準差(σ)建議買賣價位 3 欄**(σ強買≤ μ−2σ / σ減碼≥ μ+2σ /
   σ位階)。`etf_tab_grp_compare._score_one_etf` 借用 L2 `compute_std_bands`(5y 價已抓),σ 算失敗 try/except 容錯。
+- **v18.470**：`ETF_PEER_GROUPS` 分類**5 類 → 10 類**(全台股掛牌 ETF):新增 海外美股/海外陸股/
+  原物料商品/不動產REITs/特別股(+ 債券補 00937B)。分散度分組自動多出這些類。48 不重複代號。
+  ⚠️ 平衡型/多資產 TW-listed ETF 稀少,未建獨立類(標的不足)。原物料為期貨型('U' 後綴,yfinance
+  可能無資料 → 抓不到自動略過)。
 
 驗證:build_holdings 7 + diversifiers_by_category 4 + etf wiring + undefined-names 全綠;AppTest smoke;
 compute_std_bands 回傳鍵實測正確。
