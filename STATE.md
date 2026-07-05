@@ -1,5 +1,25 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🟢 2026-07-05(下午) ETF 多檔「留/觀察/換」建議 + ETF 組合「每月配息明細」+ §4.1 混幣修（v19.64）
+
+> 使用者兩個截圖回饋:①多檔比較「看不出哪些留哪些賣」②ETF 組合想看每月月配息(參考基金面板)。
+
+**① ETF 多檔比較加「🚦 留/觀察/換」建議欄（PR 本批）**
+- L0 `shared/etf_recommendation_thresholds.py`(留 0.65↑/換 0.35↓ 切點 + σ位階 ±1 加碼時機 + 同類重疊門檻 SSOT)。
+- L2 `src/compute/etf/etf_recommendation.py`(純函式):`recommend_etf_actions(rows)` 讀既有分數(綜合分/流動性/配息健康/估值/σ)→ 留/觀察/換 + 紅旗降級(流動性🔴/吃本金🔴)+ **同類重疊偵測**(同類≥2 檔留分數最高、其餘擇一)。不重算指標。
+- L5 `etf_tab_grp_compare.py` 加「🚦 建議」+「建議理由」兩欄 + 白話 st.info 說明。14 測試。
+
+**② ETF 組合加「📅 每月配息明細（ETF × 12 月）」（PR 本批）**
+- 基金面板(截圖 TLZF9/JFZN3)**不在本 repo**(那是共同基金,本 app 純 ETF)→ 照其精神用 ETF 積木自組。
+- L0 `shared/dividend_frequency.py`(配息次數→月配/雙月配/季配/半年配/年配 門檻 SSOT)。
+- L2 `src/compute/etf/etf_dividend_schedule.py`(純函式):`build_monthly_dividend_rows(holdings, usdtwd_rate)` → ETF×月矩陣 + 頻率 + 幣別 + 年合計。
+- L5 `etf_tab_portfolio.py` 配息日曆段:新增每月明細矩陣(頻率/幣別/配息月份/1~12月/年合計+組合合計列)。15 測試。
+- **§4.1 混幣 bug 修**:原碼把美元 ETF(BND)配息「當台幣」直接加進組合年現金流/殖利率/月度圖。改抓 USD/TWD(TWD=X)換算;抓不到→該檔標⚠️未換匯、不計入 TWD 總額(§1 fail loud)。全台股組合數值不變。
+
+**驗證**:29 新測試全綠 + 347 ETF 測試無 regression;UI 矩陣塊實跑合成混幣資料(BND 換匯 3840、組合合計 5700 正確)。
+
+---
+
 ## 🚀 2026-07-05 全台股基本面選股網完工 + 投資框架四層強化 + OAuth 修（v18.472→v19.63）
 
 > 使用者一路回饋，本 session 交付：Phase 2 選股網、投資框架四層改進、多個實測 bug 修。
