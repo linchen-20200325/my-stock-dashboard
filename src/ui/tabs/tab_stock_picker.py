@@ -68,6 +68,55 @@ PICKER_S2_CONDITIONS = [
 PICKER_ALL_CONDITIONS = PICKER_S1_CONDITIONS + PICKER_S2_CONDITIONS
 
 
+def render_prescreen_panel(*, refresh: bool = False) -> None:
+    """全台股基本面初篩結果面板（v19.64）：顯示四項全過存活池 + 明細。
+
+    接線 Phase 2 後端（fundamental_prescreen L2 / screener_service L3）——原本只當
+    隱形閘門過濾候選池，這裡把「哪些股票四項全過、各項數值」直接攤給使用者看。
+    唯讀顯示既有 L3 資料；快照缺 → 靜默略過（不炸選股網）。
+    """
+    import pandas as pd  # noqa: PLC0415 — 本檔 pandas 為局部 import
+    try:
+        from src.services.fundamental_screener_service import get_fundamental_prescreen
+        _df, _meta = get_fundamental_prescreen(refresh=refresh)
+    except Exception as _e:  # noqa: BLE001 — 面板不可用不炸選股網
+        st.caption(f'（全台股基本面初篩結果暫不可用：{type(_e).__name__}）')
+        return
+    if _df is None or _df.empty:
+        st.caption('（全台股基本面初篩：尚無快照，請先跑 Update Fundamentals workflow）')
+        return
+    _surv = _df[_df['survivor']]
+    _q = f"民國{_meta.get('roc_year')}Q{_meta.get('season')}"
+    _yoy = ('（三率三升 YoY vs 去年同季）' if _meta.get('prev_roc_year') is not None
+            else '（缺去年同季→三率三升不判）')
+    with st.expander(
+            f'🔬 全台股基本面初篩結果 — 四項全過 {len(_surv)}/{len(_df)} 檔 · {_q}{_yoy}',
+            expanded=False):
+        st.caption('四項：①負債比<50% ②三率三升 YoY（毛利/營益/淨利率 本季>去年同季）'
+                   '③淨流動值>0（流動資產>總負債）④EPS>0。**四項全過**才入選股網候選池。')
+        _show_all = st.checkbox('顯示全市場（否則只看四項全過）', value=False,
+                                key='prescreen_show_all')
+        _v = _df if _show_all else _surv
+        if _v.empty:
+            st.info('目前無四項全過的標的。')
+            return
+        _yn = {True: '✅', False: '❌'}
+        _tbl = pd.DataFrame({
+            '代號':      _v['stock_id'].astype(str),
+            '負債比%':   (_v['debt_ratio'] * 100).round(1),
+            '毛利率%':   (_v['gross_margin'] * 100).round(1),
+            '營益率%':   (_v['op_margin'] * 100).round(1),
+            '淨利率%':   (_v['net_margin'] * 100).round(1),
+            'EPS':       _v['eps'].round(2),
+            '負債':      _v['pass_debt'].map(_yn),
+            '三率三升':  _v['pass_three_rise'].map(_yn),
+            '淨流動':    _v['pass_net_current'].map(_yn),
+            'EPS>0':     _v['pass_eps_positive'].map(_yn),
+            '通過':      _v['pass_count'].astype(str) + '/4',
+        }).sort_values(['通過', 'EPS'], ascending=[False, False])
+        st.dataframe(_tbl, hide_index=True, use_container_width=True)
+
+
 def _label_passes(label) -> bool:
     """單項條件是否通過：label 開頭為 '✅'（同 s1/s2_pass_cnt 判定）。"""
     return isinstance(label, str) and label.startswith('✅')
