@@ -148,6 +148,14 @@ def _fetch_bulk(endpoint: str, typek: str, roc_year: int, season: int,
                       f"(第 {attempt}/{max_retries} 次) → 等 {wait}s 重試")
                 _sleep(wait)
                 continue
+            # 3xx 轉址:多半是 MOPS 對 CI runner 的暫時性 IP 節流(轉去非資料頁),
+            # 也可能是網域真的搬家。log Location + 最終 URL 供下次判斷(不在 8-24s 內
+            # 重試 → IP 節流靠短退避清不掉,重試只是白跑 9 分鐘 job)。
+            if 300 <= r.status_code < 400:
+                loc = r.headers.get("Location", "(無 Location header)")
+                print(f"[mops_bulk] {endpoint} {typek} HTTP={r.status_code} 轉址→{loc} "
+                      f"(最終 URL={r.url}) → 放棄:疑似 MOPS 暫時性節流,稍後重跑")
+                return None
             print(f"[mops_bulk] {endpoint} {typek} HTTP={r.status_code} → 放棄")
             return None
         except Exception as _e:
