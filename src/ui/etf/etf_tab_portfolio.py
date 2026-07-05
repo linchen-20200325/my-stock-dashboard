@@ -235,6 +235,37 @@ def render_etf_portfolio(gemini_fn=None):
     # ── 共享給下游模組（葡萄串領息法 / AI 評斷）──
     st.session_state['etf_portfolio_rows'] = rows
 
+    # ── 🧭 股債比 + 總經一致性(v19.63 #2/#3):真抗跌來自債券/現金,非挑不相關股票 ──
+    try:
+        from src.compute.etf.portfolio_coherence import (
+            assess_stock_bond, coherence_note,
+        )
+        _sb = assess_stock_bond(
+            [{'ticker': r['ticker'], 'value': r['current_value']} for r in rows])
+        _ms = st.session_state.get('macro_state', {}) or {}
+        _posture = ''
+        if _ms.get('health') is not None:
+            from shared.position_throttle import compute_position_throttle
+            _posture = compute_position_throttle(
+                _ms.get('health'), regime=_ms.get('regime'),
+                defense=bool(_ms.get('defense')))['posture']
+        _segs = ''
+        if _sb['stock_pct'] > 0:
+            _segs += (f'<div style="width:{_sb["stock_pct"]}%;background:#3498db;'
+                      f'text-align:center;">股 {_sb["stock_pct"]:.0f}%</div>')
+        if _sb['bond_pct'] > 0:
+            _segs += (f'<div style="width:{_sb["bond_pct"]}%;background:#16a085;'
+                      f'text-align:center;">債 {_sb["bond_pct"]:.0f}%</div>')
+        st.markdown(
+            '**🧭 股債比**（真正的抗跌來自債券/現金,不是挑不相關的股票型 ETF）'
+            f'<div style="display:flex;height:16px;border-radius:8px;overflow:hidden;'
+            f'margin:6px 0;font-size:11px;color:#fff;">{_segs}</div>',
+            unsafe_allow_html=True)
+        _lvl, _cmsg = coherence_note(_posture, _sb['bond_pct'])
+        {'warn': st.warning, 'info': st.info, 'ok': st.success}.get(_lvl, st.caption)(_cmsg)
+    except Exception as _e_sb:
+        print(f'[portfolio_coherence] {type(_e_sb).__name__}: {_e_sb}')
+
     # ── v18.208 I6：ETF 投組 ↔ 總經 regime 跨 Tab 聯動 banner ──
     # 鏡像 v18.204 I4 個股端設計：reuse render_macro_stock_backdrop helper
     # （純讀 mkt_info，不分個股/ETF），讓 user 看 ETF 投組時不忘大盤系統性風險背景
