@@ -353,11 +353,25 @@ def _render_cat_diversifier_chart(cat_name: str, cdf, input_ticker: str) -> None
         pass
     except Exception as _fe:
         st.caption(f'圖表渲染失敗：{_fe}')
+
+    # ⚠️ 價格高度同向警示(v19.63):分散指數是綜合的,可能掩蓋「價格其實高度同向」。
+    # 崩盤時高相關者仍會一起跌 → 分散效果有限,別只看分散指數。
+    from src.compute.etf.etf_smart_analysis import (  # noqa: PLC0415
+        PRICE_CORR_HIGH_WARN, price_corr_warn_label,
+    )
+    _hot = [(_t, _n, float(_pc)) for _t, _n, _pc in zip(cdf['ticker'], _names, cdf['價格相關'])
+            if price_corr_warn_label(_pc)]
+    if _hot:
+        _txt = '、'.join(f'{_t} {_n}(相關 {_pc:.2f})' for _t, _n, _pc in _hot)
+        st.warning(f'⚠️ 本類 {len(_hot)} 檔**價格高度同向**（相關 ≥ {PRICE_CORR_HIGH_WARN:.1f}）：'
+                   f'{_txt}。分散指數雖不低,但**崩盤時仍會一起跌**,分散效果有限,別只看分散指數。')
+
     # 明細表(價格相關/持股重疊/類別差異)收在 expander,避免版面過長
     with st.expander(f'📋 {cat_name} 明細', expanded=False):
         import pandas as _pd  # noqa: PLC0415
         _d = cdf.copy()
         _d.insert(1, '名稱', _names)
+        _d['價格警示'] = _d['價格相關'].apply(price_corr_warn_label)  # v19.63
         _d['持股重疊%'] = _d['持股重疊%'].apply(
             lambda x: f'{x:.1f}%' if x is not None
             and not (isinstance(x, float) and _pd.isna(x)) else '—')
