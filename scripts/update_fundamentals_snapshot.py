@@ -11,13 +11,14 @@
 全部失敗 → exit 1。§5 冪等:同季重跑覆蓋同檔,不產生重複。
 
 用法(GitHub Actions / 本地):
-  python scripts/update_fundamentals_snapshot.py                # 自動:本季 + 去年同季(缺才補)
-  python scripts/update_fundamentals_snapshot.py --roc-year 114 --season 1   # 只回補『那一季』(省時)
-  python scripts/update_fundamentals_snapshot.py --markets sii  # 只抓上市
+  python scripts/update_fundamentals_snapshot.py                       # 自動:本季 + 去年同季(缺才補)
+  python scripts/update_fundamentals_snapshot.py --roc-year 114 --season 1      # 回補單季
+  python scripts/update_fundamentals_snapshot.py --roc-year 114 --season 2,3,4  # 一次回補多季
+  python scripts/update_fundamentals_snapshot.py --markets sii         # 只抓上市
 
 抓幾季:自動模式抓「本季 + 去年同季(YoY 用)」,但去年同季已在快取就略過;手動指定
---roc-year/--season 則『只抓那一季』(回補用,不連去年一起抓)。latest.json 由磁碟實況重算,
-補舊季不會把最新指標往回移。
+--roc-year/--season 則『只抓那些季』(回補用,不連去年一起抓)。--season 可逗號分隔多季
+(如 2,3,4)一次補齊。latest.json 由磁碟實況重算,補舊季不會把最新指標往回移。
 """
 from __future__ import annotations
 
@@ -92,6 +93,26 @@ def latest_published_quarter(today: _dt.date) -> tuple[int, int]:
     return cal_year - 1911, season
 
 
+def _parse_seasons(raw: str | None) -> list[int]:
+    """'2' → [2];'2,3,4' → [2,3,4];'1,2,3,4' → 全年。驗證 ∈{1,2,3,4}、去重保序。
+
+    空/None → []。含非法值 raise ValueError(fail-loud,不靜默吞)。
+    """
+    if raw is None or str(raw).strip() == "":
+        return []
+    out: list[int] = []
+    for tok in str(raw).split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        v = int(tok)                       # 非數字 → ValueError
+        if v not in (1, 2, 3, 4):
+            raise ValueError(f"season 超出範圍:{v}(需 1-4)")
+        if v not in out:
+            out.append(v)
+    return out
+
+
 def _fetch_market(typek: str, roc_year: int, season: int) -> pd.DataFrame:
     """抓單一市場 損益+資產負債 → merge 成每檔一列;任一表空 → 回空(fail-loud)。"""
     inc = fetch_mops_income_bulk(typek, roc_year, season)
@@ -108,27 +129,31 @@ def _fetch_market(typek: str, roc_year: int, season: int) -> pd.DataFrame:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--roc-year", type=int, default=None, help="民國年(預設自動最新)")
-    ap.add_argument("--season", type=int, default=None, choices=[1, 2, 3, 4])
+    ap.add_argument("--season", type=str, default=None,
+                    help="季別 1-4;可逗號分隔多季回補,如 2,3,4 或 1,2,3,4(留空=自動最新季)")
     ap.add_argument("--markets", default="sii,otc", help="逗號分隔:sii,otc")
     args = ap.parse_args(argv)
 
-    manual = bool(args.roc_year and args.season)
-    if manual:
-        roc_year, season = args.roc_year, args.season
-    else:
-        roc_year, season = latest_published_quarter(_dt.date.today())
+    seasons = _parse_seasons(args.season)
+    manual = bool(args.roc_year and seasons)
     markets = [m.strip() for m in args.markets.split(",") if m.strip() in ALL_MARKETS]
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     # 抓哪幾季:
-    #  - 手動指定季別 → 只抓那一季（回補用,不連去年同季一起抓 → 省時,user 2026-07-05 要求）
+    #  - 手動指定季別 → 只抓那些季（回補用,不連去年同季;支援多季一次補,如 114 的 2,3,4）
     #  - 自動最新季   → 抓本季 + 去年同季（供三率三升 YoY）;但去年同季若『已在快取』就略過,
     #                   避免每季 cron 都重抓一次舊資料（§5 冪等 + 省時）
-    prev_year = roc_year - 1
-    quarters = [(roc_year, season)]
     if manual:
-        print(f"[fundamentals] 手動回補單季:民國{roc_year} 第{season}季,市場={markets}")
+        roc_year = args.roc_year
+        primary = [(roc_year, s) for s in seasons]   # 這些季全算「主要目標」
+        fetch_quarters = list(primary)
+        _sn_txt = "、".join(f"Q{s}" for s in seasons)
+        print(f"[fundamentals] 手動回補:民國{roc_year} {_sn_txt}(共 {len(seasons)} 季),市場={markets}")
     else:
+        roc_year, season = latest_published_quarter(_dt.date.today())
+        primary = [(roc_year, season)]
+        fetch_quarters = list(primary)
+        prev_year = roc_year - 1
         prev_cached = all(
             (CACHE_DIR / f"{m}_{prev_year}Q{season}.parquet").exists() for m in markets
         )
@@ -136,12 +161,13 @@ def main(argv=None) -> int:
             print(f"[fundamentals] 目標季別:民國{roc_year} 第{season}季,市場={markets}"
                   f"（去年同季 民國{prev_year} 已在快取 → 略過,省時）")
         else:
-            quarters.append((prev_year, season))
+            fetch_quarters.append((prev_year, season))
             print(f"[fundamentals] 目標季別:民國{roc_year} 第{season}季（+ 去年同季 民國{prev_year} 供 YoY,"
                   f"快取缺 → 一併補抓）,市場={markets}")
 
-    wrote_current, total_rows = 0, 0
-    for (_ry, _sn) in quarters:
+    primary_set = set(primary)
+    wrote_primary, total_rows = 0, 0
+    for (_ry, _sn) in fetch_quarters:
         for typek in markets:
             df = _fetch_market(typek, _ry, _sn)
             if df.empty:
@@ -150,17 +176,17 @@ def main(argv=None) -> int:
             path = CACHE_DIR / f"{typek}_{_ry}Q{_sn}.parquet"
             df.to_parquet(path, compression="snappy", index=False)
             print(f"[fundamentals] ✅ {typek} 民國{_ry}Q{_sn}: {len(df)} 檔 → {path}")
-            if _ry == roc_year:   # 只有『主要目標季』計入成敗判斷
-                wrote_current += 1
+            if (_ry, _sn) in primary_set:   # 主要目標季才計入成敗判斷
+                wrote_primary += 1
                 total_rows += len(df)
 
-    if wrote_current == 0:
-        print(f"[fundamentals] ❌ 目標季 民國{roc_year}Q{season} 所有市場都失敗,未更新指標")
+    if wrote_primary == 0:
+        print("[fundamentals] ❌ 所有主要目標季/市場都失敗,未更新指標")
         return 1
 
     # latest.json 由磁碟實況重算(補舊季不會把指標往回移;prev 存在才標 YoY 可用)
     latest = _write_latest_json(CACHE_DIR)
-    print(f"[fundamentals] 完成:目標季 {wrote_current}/{len(markets)} 市場、共 {total_rows} 檔"
+    print(f"[fundamentals] 完成:成功寫入 {wrote_primary} 個(市場×季)、共 {total_rows} 檔"
           f"；latest.json 指向 {latest}")
     return 0
 

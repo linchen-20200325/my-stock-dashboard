@@ -11,7 +11,7 @@ on:
         required: false
         default: ''
       season:
-        description: '季別 1-4（留空=自動）'
+        description: '季別 1-4；可逗號分隔多季回補如 2,3,4（留空=自動）'
         required: false
         default: ''
   schedule:
