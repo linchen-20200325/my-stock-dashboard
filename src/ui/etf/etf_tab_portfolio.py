@@ -780,8 +780,12 @@ def render_etf_portfolio(gemini_fn=None):
     st.markdown('#### 💰 配息日曆 × 年度現金流預估')
     st.caption('依過去12個月配息紀錄 × 持有股數（市值/現價）推估未來現金流入')
     # v18.335 PR-H3:彙整邏輯抽至 etf_helpers.compute_etf_annual_cashflow SSOT
+    # v19.64:同時收 per-ETF 月度明細 → etf_dividend_schedule 畫「ETF × 12 月」矩陣。
+    from src.compute.etf.etf_dividend_schedule import (
+        build_monthly_dividend_rows, dividend_currency, pay_months_str,
+    )
     _div_data = []
-    _monthly_cf = {m: 0.0 for m in range(1, 13)}
+    _sched_holdings = []  # per-ETF monthly_distribution(原幣別)供每月明細矩陣
     with st.spinner('抓取配息資料...'):
         for r in rows:
             _div_s  = fetch_etf_dividends(r['ticker'])
@@ -797,21 +801,35 @@ def render_etf_portfolio(gemini_fn=None):
                 '預估年收入(元)': round(_cf['estimated_income']),
                 '配息次數/年': _cf['n_payments'],
             })
-            for _m, _amt in _cf['monthly_distribution'].items():
-                _monthly_cf[_m] = _monthly_cf.get(_m, 0) + _amt
+            _sched_holdings.append({
+                'ticker': r['ticker'],
+                'name': _etf_name(r['ticker']),
+                'monthly_distribution': _cf['monthly_distribution'],
+                'n_payments': _cf['n_payments'],
+            })
+
+    # ── §4.1 幣別換算:美元計價 ETF(BND/AGG…)配息是 USD,不可直接加進 TWD。
+    # 若組合含美元 ETF,抓一次 USD/TWD 即期匯率(yfinance TWD=X);抓不到 → fail loud,
+    # 該檔不計入 TWD 總額並標 ⚠️(不腦補匯率)。全台股組合則跳過(rate=None 也不影響)。
+    _has_usd = any(dividend_currency(h['ticker']) == 'USD' for h in _sched_holdings)
+    _usdtwd = None
+    if _has_usd:
+        try:
+            _fx_df = fetch_etf_price('TWD=X', period='5d')
+            if _fx_df is not None and not _fx_df.empty and 'Close' in _fx_df.columns:
+                _usdtwd = float(_fx_df['Close'].iloc[-1])
+        except Exception as _e_fx:
+            print(f'[etf_tab_portfolio] USD/TWD 匯率抓取失敗:{type(_e_fx).__name__}: {_e_fx}')
+    _sched = build_monthly_dividend_rows(_sched_holdings, usdtwd_rate=_usdtwd)
+    _monthly_twd = _sched['monthly_totals']
 
     if _div_data:
         _div_df = pd.DataFrame(_div_data)
         _div_df['預估年收入(元)'] = _div_df['預估年收入(元)'].apply(lambda x: f'{x:,}')
         st.dataframe(_div_df, use_container_width=True, hide_index=True)
-        _total_annual = sum(d['預估年收入(元)'].replace(',', '')
-                            if isinstance(d['預估年收入(元)'], str)
-                            else d['預估年收入(元)']
-                            for d in _div_data
-                            if isinstance(d.get('預估年收入(元)'), (int, float)))
-        # recalc from raw
-        _total_annual_raw = sum(
-            d['近1年每股配息'] * d['持有股數'] for d in _div_data)
+        # v19.64:年現金流 + 組合殖利率改用「換匯後 TWD」總額(§4.1 不混幣)。
+        # 全台股組合時與原 native 加總完全相同;含美元 ETF 時才有差(且更正確)。
+        _total_annual_raw = _sched['annual_total_twd']
         _yoc = _total_annual_raw / total_value * 100 if total_value > 0 else 0
         _colored_box(
             f'💰 組合預估年度現金流入：<b>{_total_annual_raw:,.0f} 元</b>'
@@ -835,24 +853,71 @@ def render_etf_portfolio(gemini_fn=None):
                                 '殖利率偏低，現金流不足以息養股',
                                 '增加 00878/00713 等高息 ETF 比例')
 
-        # 月度現金流長條圖
+        # §4.1:含美元 ETF 但抓不到匯率 → fail loud 提示,不靜默把 USD 當 TWD 加。
+        if _sched['any_needs_fx']:
+            st.warning(
+                '⚠️ 組合含**美元計價 ETF**,但 USD/TWD 匯率抓取失敗 —— '
+                '這幾檔的配息**未換匯、不計入下方 TWD 總額**（避免把美元金額當台幣加）。'
+                '點上方「🔄 強制重抓」可再試。')
+        elif _sched.get('rate_used'):
+            st.caption(f'💱 美元計價 ETF 配息已用 USD/TWD＝{_sched["rate_used"]:.3f} 換算為台幣。')
+
+        # 月度現金流長條圖(已換匯 TWD;全台股組合與原值相同)
         import plotly.graph_objects as _go_div
         _fig_div = _go_div.Figure(_go_div.Bar(
             x=[f'{m}月' for m in range(1, 13)],
-            y=[_monthly_cf[m] for m in range(1, 13)],
+            y=[_monthly_twd[m] for m in range(1, 13)],
             marker_color=TRAFFIC_GREEN,
-            text=[f'{_monthly_cf[m]:,.0f}' if _monthly_cf[m] > 0 else ''
+            text=[f'{_monthly_twd[m]:,.0f}' if _monthly_twd[m] > 0 else ''
                   for m in range(1, 13)],
             textposition='auto',
         ))
         _fig_div.update_layout(
-            title='未來12個月預估配息現金流（元，依歷史月份分配）',
+            title='未來12個月預估配息現金流（TWD，依歷史月份分配）',
             template='plotly_dark', height=260,
             paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
             margin=dict(l=0, r=0, t=32, b=0),
-            yaxis_title='配息金額（元）',
+            yaxis_title='配息金額（TWD）',
         )
         st.plotly_chart(_fig_div, width='stretch')
+
+        # ── 📅 每月配息明細（哪一檔・哪個月・配多少）── v19.64 每月月配息矩陣
+        st.markdown('##### 📅 每月配息明細（哪一檔・哪個月・配多少 TWD）')
+        st.caption('依過去 12 個月配息紀錄 × 你的持有股數推估。每格 = 該檔該月約可領（TWD）；'
+                   '**頻率**看配息次數（月配/季配…），**年合計**是各檔一年總領。')
+        _mx_rows = []
+        for _sr in _sched['rows']:
+            _row_d = {
+                'ETF': _sr['ticker'],
+                '名稱': _sr['name'],
+                '頻率': _sr['freq'],
+                '幣別': ('台幣' if _sr['currency'] == 'TWD'
+                         else ('美元⚠️未換匯' if _sr['needs_fx'] else '美元→台幣')),
+                '配息月份': pay_months_str(_sr['pay_months']),
+            }
+            for _m in range(1, 13):
+                _v = _sr['monthly_twd'].get(_m, 0.0)
+                _row_d[f'{_m}月'] = round(_v) if _v > 0 else 0
+            _row_d['年合計'] = round(_sr['annual_twd'])
+            _mx_rows.append(_row_d)
+        # 依年合計高→低排序(領最多的排前面)
+        _mx_rows.sort(key=lambda d: d.get('年合計', 0), reverse=True)
+        # 加一列組合合計
+        _tot_row = {'ETF': '　組合合計', '名稱': '', '頻率': '', '幣別': '',
+                    '配息月份': ''}
+        for _m in range(1, 13):
+            _tot_row[f'{_m}月'] = round(_monthly_twd[_m])
+        _tot_row['年合計'] = round(_sched['annual_total_twd'])
+        _mx_rows.append(_tot_row)
+        _mx_df = pd.DataFrame(_mx_rows)
+        _month_num_cfg = {f'{_m}月': st.column_config.NumberColumn(
+            f'{_m}月', format='%d') for _m in range(1, 13)}
+        _month_num_cfg['年合計'] = st.column_config.NumberColumn('年合計', format='%d')
+        st.dataframe(_mx_df, use_container_width=True, hide_index=True,
+                     column_config=_month_num_cfg)
+        st.caption('💡 想要「每月都有息」→ 挑不同**配息月份**的 ETF 湊成月月領；'
+                   '同一個月一堆、其他月空白，代表現金流集中，可考慮錯開。'
+                   '（此為**歷史推估**，實際配息與金額以各 ETF 公告為準）')
     else:
         st.info('⏳ 配息資料無法取得（可能為非配息型ETF或yfinance資料限制）')
 
