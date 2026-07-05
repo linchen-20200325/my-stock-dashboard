@@ -263,6 +263,25 @@ def render_etf_portfolio(gemini_fn=None):
             unsafe_allow_html=True)
         _lvl, _cmsg = coherence_note(_posture, _sb['bond_pct'])
         {'warn': st.warning, 'info': st.info, 'ok': st.success}.get(_lvl, st.caption)(_cmsg)
+
+        # ── 🧱 核心/衛星 拆解(v19.63 #4):核心=市值型定期定額不理循環,衛星才戰術 ──
+        from src.compute.etf.portfolio_coherence import assess_core_satellite
+        _cs = assess_core_satellite(
+            [{'ticker': r['ticker'], 'value': r['current_value']} for r in rows])
+        _cs_segs = ''
+        for _k, _pct, _col in (('核心', _cs['core_pct'], '#8957e5'),
+                               ('衛星', _cs['satellite_pct'], '#e67e22'),
+                               ('債券', _cs['bond_pct'], '#16a085')):
+            if _pct > 0:
+                _cs_segs += (f'<div style="width:{_pct}%;background:{_col};'
+                             f'text-align:center;">{_k} {_pct:.0f}%</div>')
+        st.markdown(
+            '**🧱 核心/衛星**（核心=市值型「定期定額、不理循環」；衛星=主題/高息「才做戰術調整」）'
+            f'<div style="display:flex;height:16px;border-radius:8px;overflow:hidden;'
+            f'margin:6px 0;font-size:11px;color:#fff;">{_cs_segs}</div>',
+            unsafe_allow_html=True)
+        st.caption('💡 建議把「相關係數/景氣調整」用在**衛星**那塊,**核心**維持被動不動,'
+                   '避免用分散之名行追漲殺跌之實。')
     except Exception as _e_sb:
         print(f'[portfolio_coherence] {type(_e_sb).__name__}: {_e_sb}')
 

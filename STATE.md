@@ -1,5 +1,31 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚀 2026-07-05 全台股基本面選股網完工 + 投資框架四層強化 + OAuth 修（v18.472→v19.63）
+
+> 使用者一路回饋，本 session 交付：Phase 2 選股網、投資框架四層改進、多個實測 bug 修。
+
+**A. 全台股基本面選股網（Phase 2 完工，PR #473~479）**
+- 季快照 cron 改「公布截止 +1 週」自動每季重抓（4/7、5/22、8/21、11/21）；批次多抓去年同季供三率三升 YoY；`--season` 支援逗號分隔多季回補；MOPS fetcher 加重試+退避、3xx 轉址診斷。
+- 後端 L0→L3：`shared/fundamental_prescreen_thresholds.py`（門檻 SSOT）+ `src/compute/screener/fundamental_prescreen.py`（L2 純函式 4 項）+ `src/data/stock/fundamentals_snapshot_loader.py`（L1）+ `src/services/fundamental_screener_service.py`（L3 + `gate_pool_by_fundamentals`）。
+- 選股網入口從「估值前50」→ **全台股四項全過（負債比<50%/三率三升YoY/淨流動值>0/EPS>0）漏斗**（實測 1969→324 檔）；`tab_stock_picker` 加「自訂必過條件」15 項打勾 + 至少過 N；修「一動就消失要重按」（session_state 已跑過旗標）。
+
+**B. 投資框架四層強化（框架討論後，PR #481~486）**
+- **總經油門**：`shared/position_throttle.py` 健康分→建議持股區間（姿態非開關）+ regime 否決；總經頁紅綠燈下方油門儀表。
+- **選股追高警示**：`src/compute/strategy/overextension.py`（乖離>25%/RSI>70）；選股網 S2 加「位階(追高)」欄。
+- **加碼三問**：`position_throttle.assess_add_gate`（σ≤-1 + 趨勢沒壞 + 總經沒防守）；個股「什麼時候買/賣」加卡。
+- **分散度**：`price_corr_warn_label`（價格高度同向）+ `_downside_corr_series`（空頭相關/危機失效）警示。
+- **ETF 組合**：`src/compute/etf/portfolio_coherence.py` 股債比 + 總經一致性 + 核心/衛星拆解。
+
+**C. 實測 bug 修**
+- **OAuth 登入無限迴圈**（PR #484）：`oauth_state._oauth_state_ok` — session_state 在外部轉跳遺失時不再誤拒授權碼（仍擋真跨 session）。🚫 未寫死 secret、🚫 未關驗證。
+- Google Sheet 讀取：診斷為「app 只認自己 `portfolios` schema / Sheets API 未開 / drive.file scope」→ 建議走「建立新 Sheet」；待使用者回報。
+
+**未竟（使用者已知）**：ETF「平衡型/多資產」類別（TW 標的不足，WONTFIX）；工作分支刪除（環境 git proxy 403，需手動）。
+
+**驗證**：本 session 新增 ~60 測試全綠（prescreen/loader/service/quarter/mops/picker/throttle/overextension/oauth/downside/coherence）。
+
+---
+
 ## 🎨 2026-07-04 ETF UI 五連改（v18.467/468/469/470 + hotfix,使用者截圖回報）
 
 - **v18.467**：ETF 三個智慧區塊(σ 買賣帶/分散度/MK 3-3-3)**去按鈕改自動計算**(輸入代號即算)、

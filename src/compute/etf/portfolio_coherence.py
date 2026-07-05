@@ -59,6 +59,45 @@ def assess_stock_bond(rows) -> dict:
     }
 
 
+# 核心 = 追大盤市值型(定期定額、不理循環);其餘股票型 = 衛星(才做戰術/景氣調整)。
+_CORE_CATEGORIES: frozenset[str] = frozenset({'市值型'})
+
+
+def classify_core_satellite(ticker) -> str:
+    """'債券' / '核心' / '衛星'。債券→債券;市值型 ETF→核心;其餘股票→衛星。"""
+    if classify_asset_class(ticker) == 'bond':
+        return '債券'
+    from src.compute.etf.etf_categories import get_category_name  # noqa: PLC0415
+    if get_category_name(ticker) in _CORE_CATEGORIES:
+        return '核心'
+    return '衛星'
+
+
+def assess_core_satellite(rows) -> dict:
+    """rows: [{ticker, value}] → 核心/衛星/債券 金額 + 佔比。
+
+    Returns {core_pct, satellite_pct, bond_pct, total, ...}。
+    """
+    _buckets = {'核心': 0.0, '衛星': 0.0, '債券': 0.0}
+    for r in rows or []:
+        try:
+            _v = float(r.get('value') or 0)
+        except (TypeError, ValueError):
+            continue
+        if _v <= 0:
+            continue
+        _buckets[classify_core_satellite(r.get('ticker'))] += _v
+    _total = sum(_buckets.values())
+    _pct = {f'{k}_pct': (round(v / _total * 100, 1) if _total else 0.0)
+            for k, v in _buckets.items()}
+    return {
+        'core_pct': _pct['核心_pct'], 'satellite_pct': _pct['衛星_pct'],
+        'bond_pct': _pct['債券_pct'], 'total': _total,
+        'core_value': _buckets['核心'], 'satellite_value': _buckets['衛星'],
+        'bond_value': _buckets['債券'],
+    }
+
+
 def coherence_note(macro_posture, bond_pct: float) -> tuple[str, str]:
     """總經姿態 vs 股債配置一致性 → (level, message)。
 
