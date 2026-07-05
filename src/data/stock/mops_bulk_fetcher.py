@@ -19,6 +19,7 @@ L2 fundamental_prescreen 算 4 項基本面(負債比 / 三率 / 淨流動值 / 
 from __future__ import annotations
 
 import re
+import time
 from io import StringIO
 
 import pandas as pd
@@ -31,6 +32,12 @@ except ImportError:  # 純環境護欄
 MOPS_BULK_BASE = "https://mopsov.twse.com.tw/mops/web/"
 MOPS_IS_ENDPOINT = "ajax_t163sb04"   # 綜合損益表彙總
 MOPS_BS_ENDPOINT = "ajax_t163sb05"   # 資產負債表彙總
+
+# 重試 / 退避(MOPS 對 CI runner 有間歇性連線逾時 / 短暫封鎖;§5 冪等,重抓不產重複)。
+# 純網路例外(timeout / 連線重置)與 5xx / 429 才重試;其餘 4xx 視為永久錯誤直接放棄。
+_MAX_RETRIES = 4          # 總嘗試次數
+_BACKOFF_BASE_SEC = 8     # 第 n 次失敗後等 base * n 秒(8/16/24…),避開短暫節流
+_RETRY_STATUS = {429, 500, 502, 503, 504}
 
 _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
@@ -112,8 +119,13 @@ def _parse_mops_aggregate(html: str, field_map: dict[str, list[str]]) -> pd.Data
 
 
 def _fetch_bulk(endpoint: str, typek: str, roc_year: int, season: int,
-                *, timeout: int = 60) -> str | None:
-    """POST MOPS 彙總 endpoint,回原始 HTML;失敗回 None。"""
+                *, timeout: int = 60, max_retries: int = _MAX_RETRIES,
+                _sleep=time.sleep) -> str | None:
+    """POST MOPS 彙總 endpoint,回原始 HTML;失敗回 None。
+
+    對暫時性失敗(網路 timeout / 連線重置 / 5xx / 429)重試 max_retries 次、
+    退避 _BACKOFF_BASE_SEC * n 秒;永久性 4xx(如 400/404)不重試直接放棄。
+    """
     if requests is None:
         print("[mops_bulk] requests 未安裝")
         return None
@@ -124,16 +136,30 @@ def _fetch_bulk(endpoint: str, typek: str, roc_year: int, season: int,
     }
     hdrs = {"User-Agent": _UA, "Accept": "text/html",
             "Referer": MOPS_BULK_BASE, "Origin": "https://mopsov.twse.com.tw"}
-    try:
-        r = requests.post(MOPS_BULK_BASE + endpoint, data=payload,
-                          headers=hdrs, timeout=timeout)
-        if r.status_code != 200:
-            print(f"[mops_bulk] {endpoint} {typek} HTTP={r.status_code}")
+    for attempt in range(1, max_retries + 1):
+        try:
+            r = requests.post(MOPS_BULK_BASE + endpoint, data=payload,
+                              headers=hdrs, timeout=timeout)
+            if r.status_code == 200:
+                return r.text
+            if r.status_code in _RETRY_STATUS and attempt < max_retries:
+                wait = _BACKOFF_BASE_SEC * attempt
+                print(f"[mops_bulk] {endpoint} {typek} HTTP={r.status_code} "
+                      f"(第 {attempt}/{max_retries} 次) → 等 {wait}s 重試")
+                _sleep(wait)
+                continue
+            print(f"[mops_bulk] {endpoint} {typek} HTTP={r.status_code} → 放棄")
             return None
-        return r.text
-    except Exception as _e:
-        print(f"[mops_bulk] {endpoint} {typek} ❌ {type(_e).__name__}: {_e}")
-        return None
+        except Exception as _e:
+            if attempt < max_retries:
+                wait = _BACKOFF_BASE_SEC * attempt
+                print(f"[mops_bulk] {endpoint} {typek} ❌ {type(_e).__name__} "
+                      f"(第 {attempt}/{max_retries} 次) → 等 {wait}s 重試")
+                _sleep(wait)
+                continue
+            print(f"[mops_bulk] {endpoint} {typek} ❌ {type(_e).__name__}: {_e} → 放棄")
+            return None
+    return None
 
 
 def _fetch_and_parse(endpoint: str, field_map: dict, typek: str,
