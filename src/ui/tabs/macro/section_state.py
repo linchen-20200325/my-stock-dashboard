@@ -384,6 +384,12 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
         _tl2_inp.li_latest,
     )
     _render_traffic_light(_tl_placeholder, _tl_final, _tl2_mkt)
+    # v19.62 — 建議持股油門(姿態非開關):總經健康分 → 建議持股區間
+    try:
+        from src.ui.tabs.macro.section_traffic_light import render_position_throttle
+        render_position_throttle(_tl_final)
+    except Exception as _e_thr:
+        print(f"[position_throttle] {type(_e_thr).__name__}: {_e_thr}")
     # v18.277 — 為何這個顏色?(展開講判讀規則 + 推導,for 新手)
     try:
         from src.ui.tabs import render_traffic_light_explainer
