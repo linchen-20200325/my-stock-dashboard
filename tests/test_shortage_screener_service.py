@@ -126,28 +126,73 @@ def _strong_frame():
     ]
 
 
-def test_run_shortage_scan_end_to_end(monkeypatch):
+def test_run_shortage_scan_survivor_path(monkeypatch):
+    """主路徑：免費基本面存活池 → 逐檔單抓月營收 + 季報 → 計分。"""
     import src.services.shortage_screener_service as svc
 
+    monkeypatch.setattr(svc, "_survivor_pool", lambda max_n: ["1001"])
+    monkeypatch.setattr(svc, "fetch_quarterly_shortage_frame",
+                        lambda sid, quarters=12: _strong_frame())
+    monkeypatch.setattr(svc, "fetch_monthly_revenue",
+                        lambda sid, months=18: _monthly_series(sid, [100 + i * 8 for i in range(18)]))
+    if hasattr(svc._scan_cached, "clear"):
+        svc._scan_cached.clear()
+
+    rows, meta = svc.run_shortage_scan(name_map={"1001": "強缺貨A"})
+    assert "存活池" in meta["pool_source"]
+    assert meta["deep_scanned"] == 1
+    assert rows and "🟥" in rows[0]["訊號強度"]
+    assert rows[0]["名稱"] == "強缺貨A"
+
+
+def test_run_shortage_scan_batch_fallback(monkeypatch):
+    """存活池空 → fallback 全市場月營收批次。"""
+    import src.services.shortage_screener_service as svc
+
+    monkeypatch.setattr(svc, "_survivor_pool", lambda max_n: [])
     monkeypatch.setattr(svc, "fetch_batch_monthly_revenue", lambda months=18: _make_batch())
     monkeypatch.setattr(svc, "fetch_quarterly_shortage_frame",
                         lambda sid, quarters=12: _strong_frame())
     if hasattr(svc._scan_cached, "clear"):
         svc._scan_cached.clear()
 
-    rows, meta = svc.run_shortage_scan(name_map={"1001": "強缺貨A"})
-    assert meta["candidates"] == 2 and meta["deep_scanned"] == 2
-    assert rows, "應有評分結果"
-    top = rows[0]
-    assert "🟥" in top["訊號強度"]            # 強頻框
-    assert top["名稱"] == "強缺貨A" if top["代碼"] == "1001" else True
+    rows, meta = svc.run_shortage_scan()
+    assert "月營收動能" in meta["pool_source"]
+    assert meta["candidates"] == 2
+    assert rows and "🟥" in rows[0]["訊號強度"]
 
 
-def test_run_shortage_scan_empty_batch(monkeypatch):
+def test_run_shortage_scan_all_sources_empty(monkeypatch):
     import src.services.shortage_screener_service as svc
+    monkeypatch.setattr(svc, "_survivor_pool", lambda max_n: [])
     monkeypatch.setattr(svc, "fetch_batch_monthly_revenue", lambda months=18: pd.DataFrame())
     if hasattr(svc._scan_cached, "clear"):
         svc._scan_cached.clear()
     rows, meta = svc.run_shortage_scan()
     assert rows == []
-    assert "無法取得" in meta["note"]
+    assert "sponsor" in meta["note"]
+
+
+# ════════════════════════════════════════════════════════════════
+# AI 三型建議 prompt（純函式）
+# ════════════════════════════════════════════════════════════════
+def test_build_shortage_ai_prompt():
+    from src.services.shortage_screener_service import build_shortage_ai_prompt
+    rows = [
+        {"代碼": "2330", "名稱": "台積電", "缺貨分數": 100.0, "訊號強度": "🟥 強缺貨",
+         "理由": "🟢合約負債YoY+33%", "_tier": "強缺貨"},
+        {"代碼": "1590", "名稱": "亞德客", "缺貨分數": 45.0, "訊號強度": "🟧 中度",
+         "理由": "🟡合約負債YoY+20%", "_tier": "中度"},
+    ]
+    p = build_shortage_ai_prompt(rows, top_n=10, news_text="測試新聞")
+    assert "缺貨 / 供不應求選股候選清單" in p
+    assert "2330 台積電" in p and "1590 亞德客" in p
+    assert "積極型" in p and "穩健型" in p and "保守型" in p
+    assert "45 天" in p or "事後驗證" in p          # 誠實揭露 section
+    assert "測試新聞" in p
+
+
+def test_build_shortage_ai_prompt_empty_rows():
+    from src.services.shortage_screener_service import build_shortage_ai_prompt
+    p = build_shortage_ai_prompt([], top_n=10)
+    assert "沒有掃出" in p          # 空清單顯式標示，不炸

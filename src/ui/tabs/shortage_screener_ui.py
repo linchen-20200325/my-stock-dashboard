@@ -14,7 +14,10 @@ import pandas as pd
 import streamlit as st
 
 from src.data.stock.monthly_revenue_fetcher import _get_token
-from src.services.shortage_screener_service import run_shortage_scan
+from src.services.shortage_screener_service import (
+    build_shortage_ai_prompt,
+    run_shortage_scan,
+)
 from shared.shortage_screen_thresholds import (
     SHORTAGE_DEEP_SCAN_MAX,
     TIER_MID,
@@ -23,8 +26,12 @@ from shared.shortage_screen_thresholds import (
 )
 
 
-def render_shortage_screener() -> None:
-    """缺貨 / 供不應求選股器主畫面。"""
+def render_shortage_screener(gemini_fn=None) -> None:
+    """缺貨 / 供不應求選股器主畫面。
+
+    Args:
+        gemini_fn: 可選 AI 呼叫函式（app.py 傳 gemini_call）；有才顯示 AI 三型報告按鈕。
+    """
     st.markdown("### 🔥 缺貨 / 供不應求選股")
     st.caption(
         "🎯 用四個**間接財務/營運訊號**交叉驗證「市場供不應求」的股票（現貨即時報價難取得，改看財報足跡）："
@@ -49,10 +56,11 @@ def render_shortage_screener() -> None:
             "（DIO＝存貨 ÷（近 4 季成本 ÷ 365），年化避免單季粗估失真）\n"
             "- ④ 月營收 **20 分**：近月 YoY 皆>15% 且逐月遞增→滿分｜皆>15%→12｜部分→5\n\n"
             "**分級**：≥65 🟥 強缺貨訊號｜40–64 🟧 中度｜<40 ⬜ 不明顯\n\n"
-            "⚠️ **誠實揭露（兩段式掃描）**：為避免撞 FinMind 速限，先用便宜的**全市場月營收動能**"
-            f"圈候選池，再深掃前 {SHORTAGE_DEEP_SCAN_MAX} 檔的合約負債/毛利/存貨。代表本器找的是"
-            "「**營收正在成長 + 出現缺貨財務特徵**」的股票；合約負債剛爆、但營收還沒反映的**極早期**"
-            "標的會被漏掉。金融股（代號 28/58）不適用本模型，已排除。\n\n"
+            "⚠️ **誠實揭露（候選池來源）**：為避免撞 FinMind 速限 + 相容免費方案，候選池**優先用**"
+            "選股網那份**免費離線基本面存活池**（四項全過的股票），再逐檔（單股）深掃前 "
+            f"{SHORTAGE_DEEP_SCAN_MAX} 檔的合約負債/毛利/存貨/月營收。代表本器找的是「**基本面健康 + 出現缺貨"
+            "財務特徵**」的股票；只在存活池抓不到時，才退回需 FinMind sponsor 等級的「全市場月營收批次」。"
+            "金融股（代號 28/58）不適用本模型，已排除。\n\n"
             "🚨 **這不是買賣建議**：財報有 ~45 天發布延遲，訊號屬「事後驗證」，請搭配技術面/籌碼面自行判斷。"
         )
 
@@ -76,7 +84,7 @@ def render_shortage_screener() -> None:
             print(f"[shortage-ui] 名稱對照載入失敗: {_en}")
 
         with st.spinner(
-            f"兩段式掃描中：全市場月營收 → 深掃前 {SHORTAGE_DEEP_SCAN_MAX} 檔財報"
+            f"掃描中：基本面存活池 → 深掃前 {SHORTAGE_DEEP_SCAN_MAX} 檔財報（合約負債/毛利/存貨/月營收）"
             "（約 1–3 分鐘，每檔打 FinMind）…"
         ):
             _rows, _meta = run_shortage_scan(refresh=_refresh, name_map=_name_map)
@@ -144,6 +152,36 @@ def render_shortage_screener() -> None:
 
     if _meta:
         st.caption(
-            f"來源：{_meta.get('source', '')}｜候選池 {_meta.get('candidates', '?')} 檔 → "
+            f"候選池來源：{_meta.get('pool_source', '?')}｜{_meta.get('candidates', '?')} 檔 → "
             f"深掃 {_meta.get('deep_scanned', '?')} 檔｜抓取時間 {_meta.get('fetched_at', '')[:19]} UTC"
         )
+
+    # ── AI 三型建議報告（積極 / 穩健 / 保守）─────────────────────
+    st.markdown("---")
+    if not gemini_fn:
+        st.caption("💡 未設定 GEMINI_API_KEY，無法生成 AI 三型建議報告。")
+        return
+    _ai_key = f"_shortage_ai_report_{hash(tuple(str(r.get('代碼', '')) for r in _rows[:10]))}"
+    _clicked = st.button(
+        "🤖 生成缺貨股 AI 三型建議報告（積極 / 穩健 / 保守）",
+        key="shortage_ai_btn", use_container_width=True, type="primary",
+    )
+    if _clicked:
+        _md = st.session_state.get(_ai_key)
+        if _md is None:
+            _news = ""
+            try:  # best-effort 相關新聞（L5→L1 lazy，EX-PASSTHRU-1）
+                from src.data.etf import _fetch_news_for
+                _news = _fetch_news_for("台股", "台股 缺貨 供不應求 產能 漲價 急單", 5)
+            except Exception as _en:
+                print(f"[shortage-ui] news 抓取失敗: {_en}")
+            with st.spinner("AI 三型策略分析中（約 8–12 秒）…"):
+                _prompt = build_shortage_ai_prompt(_rows, top_n=10, news_text=_news)
+                try:
+                    _md = gemini_fn(_prompt)
+                except Exception as _ea:
+                    _md = f"❌ AI 生成失敗：{type(_ea).__name__}: {_ea}"
+            st.session_state[_ai_key] = _md
+        st.markdown(_md)
+    elif st.session_state.get(_ai_key):
+        st.markdown(st.session_state[_ai_key])

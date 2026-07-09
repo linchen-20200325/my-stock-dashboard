@@ -1,5 +1,25 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔧 2026-07-09 缺貨選股：候選池相容免費 FinMind + AI 三型建議報告（v19.66）
+
+> 使用者實測回報「finmind token 沒有」+ 截圖:側邊欄 FinMind ✅ 但缺貨掃描報「月營收全市場資料無法取得」。
+
+**真 bug 診斷（不是 token）**
+- app.py:89/92-93 已把 `st.secrets` 的 token 推進 `os.environ`,抓取器讀得到（側邊欄 ✅ 正確）。
+- 真正失敗是候選池用的**「全市場月營收批次（不帶 data_id）」需 FinMind sponsor tier**,免費/backer 方案不支援 → 回空 → 原錯誤訊息誤標「token/quota?」。
+
+**修法:候選池改「基本面存活池」優先（相容免費方案）**
+- L3 `shortage_screener_service`:候選池**①優先用選股網那份免費離線基本面存活池**（`get_survivor_ids`,四項全過,你的環境確定能跑）→ 逐檔**單股**（data_id,低 tier 也支援）抓月營收 + 合約負債/毛利/存貨;**②僅存活池空時才 fallback** 需 sponsor 的全市場月營收批次。錯誤訊息改精準（區分「快照為空」vs「批次需 sponsor」）。
+- 沿用 L1:`fetch_quarterly_shortage_frame`（季報）+ `fetch_monthly_revenue`（單股月營收,補 C4 的 YoY）。
+
+**AI 三型建議報告（積極 / 穩健 / 保守）**
+- L3 `build_shortage_ai_prompt(rows, top_n, news_text)` 純函式:缺貨排行 → 3 章節（排行/強弱分布/模型限制誠實揭露）+ 三型 overall_question → 重用 `build_structured_summary_prompt`（同個股 AI 報告元件）。
+- L5 缺貨面板加「🤖 生成缺貨股 AI 三型建議報告」按鈕（app.py 傳 `gemini_call`）;best-effort 抓相關新聞;結果 session_state 快取。
+
+**驗證**:35 缺貨測試（+3 新:survivor 路徑 / batch fallback / AI prompt）全綠;191 相關既有測試無 regression;Streamlit AppTest 實跑 render + 點 AI 按鈕產出報告無 crash。
+
+---
+
 ## 🔥 2026-07-09 缺貨 / 供不應求選股（全市場掃描 + 四訊號計分）（v19.65）
 
 > 使用者要「找到有缺貨的股票」,並貼了一份他處 AI 產的單股腳本。盤點後發現 dashboard 已有 8 成積木,
