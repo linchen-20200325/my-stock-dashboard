@@ -124,6 +124,22 @@ def _sum_contract_liab(rows: list) -> dict:
     return out
 
 
+def _finmind_rows_first(datasets: tuple, stock_id: str, start: str, tok: str) -> list:
+    """依序試多個 dataset 名,回第一個非空的 rows(list[dict])。全空/全失敗回 []。
+
+    用於相容 FinMind 免費/付費版 dataset 命名差異(如財報 無s/有s)。
+    """
+    for _ds in datasets:
+        try:
+            _df = finmind_get(_ds, data_id=stock_id, start_date=start, token=tok, timeout=25)
+        except Exception as _e:  # noqa: BLE001 — 換下一個 dataset 名
+            print(f"[qtr-shortage] {stock_id} {_ds} 失敗: {type(_e).__name__}: {_e}")
+            continue
+        if isinstance(_df, pd.DataFrame) and not _df.empty:
+            return _df.to_dict("records")
+    return []
+
+
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def fetch_quarterly_shortage_frame(stock_id: str, quarters: int = 12) -> list[dict]:
     """抓齊缺貨評分所需的季度序列，回「由近到遠」list[dict]。
@@ -142,18 +158,14 @@ def fetch_quarterly_shortage_frame(stock_id: str, quarters: int = 12) -> list[di
         return []
     _start = (_dt.date.today() - _dt.timedelta(days=365 * 3 + 120)).strftime("%Y-%m-%d")
 
-    try:
-        _is = finmind_get("TaiwanStockFinancialStatements", data_id=stock_id,
-                          start_date=_start, token=_tok, timeout=25)
-        _bs = finmind_get("TaiwanStockBalanceSheet", data_id=stock_id,
-                          start_date=_start, token=_tok, timeout=25)
-    except Exception as _e:  # noqa: BLE001 — L1 fail-safe,回 [] 讓 service 跳過該股
-        print(f"[qtr-shortage] {stock_id} fetch 失敗: {type(_e).__name__}: {_e}")
-        return []
-
-    _is_rows = _is.to_dict("records") if isinstance(_is, pd.DataFrame) and not _is.empty else []
-    _bs_rows = _bs.to_dict("records") if isinstance(_bs, pd.DataFrame) and not _bs.empty else []
+    # 損益表:免費版 dataset 名 `TaiwanStockFinancialStatement`(無 s),付費版有 s → 兩個都試
+    # (對齊 data_loader.get_quarterly_data:1068 既有慣例;缺這步 → 免費方案每檔 0 季→全「資料不足」)
+    _is_rows = _finmind_rows_first(
+        ("TaiwanStockFinancialStatement", "TaiwanStockFinancialStatements"),
+        stock_id, _start, _tok)
+    _bs_rows = _finmind_rows_first(("TaiwanStockBalanceSheet",), stock_id, _start, _tok)
     if not _is_rows and not _bs_rows:
+        print(f"[qtr-shortage] {stock_id}: 損益表+資產負債表皆無資料(方案權限/配額/停牌?)")
         return []
 
     _is_idx = _index_rows(_is_rows)

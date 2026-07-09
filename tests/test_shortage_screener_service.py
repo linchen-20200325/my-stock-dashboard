@@ -59,6 +59,28 @@ def test_fetch_quarterly_shortage_frame_parses(monkeypatch):
     assert q1["contract_liab"] is None
 
 
+def test_fetch_frame_free_tier_no_s_dataset(monkeypatch):
+    """免費版損益表 dataset 是 `TaiwanStockFinancialStatement`(無 s) → 也要抓得到。"""
+    import src.data.stock.quarterly_financials_fetcher as qf
+
+    def fake_get(dataset, **kw):
+        if dataset == "TaiwanStockFinancialStatement":   # 無 s（免費版）
+            return _is_rows()
+        if dataset == "TaiwanStockFinancialStatements":  # 有 s（付費版）→ 免費方案回空
+            return pd.DataFrame()
+        if dataset == "TaiwanStockBalanceSheet":
+            return _bs_rows()
+        return pd.DataFrame()
+
+    monkeypatch.setattr(qf, "finmind_get", fake_get)
+    monkeypatch.setenv("FINMIND_TOKEN", "dummy")
+    if hasattr(qf.fetch_quarterly_shortage_frame, "clear"):
+        qf.fetch_quarterly_shortage_frame.clear()
+
+    out = qf.fetch_quarterly_shortage_frame("2330")
+    assert len(out) == 2 and out[0]["revenue"] == 1000   # 無 s 版被採用
+
+
 def test_fetch_frame_no_token_returns_empty(monkeypatch):
     import src.data.stock.quarterly_financials_fetcher as qf
     monkeypatch.delenv("FINMIND_TOKEN", raising=False)
@@ -171,6 +193,20 @@ def test_run_shortage_scan_all_sources_empty(monkeypatch):
     rows, meta = svc.run_shortage_scan()
     assert rows == []
     assert "sponsor" in meta["note"]
+
+
+def test_diagnose_surfaces_zero_quarter_reason(monkeypatch):
+    """存活池有股票、但季報全抓 0 季 → note 要攤開「資料不足 + 0 季」而非只說『無科目』。"""
+    import src.services.shortage_screener_service as svc
+    monkeypatch.setattr(svc, "_survivor_pool", lambda max_n: ["1234", "5678"])
+    monkeypatch.setattr(svc, "fetch_quarterly_shortage_frame", lambda sid, quarters=12: [])
+    monkeypatch.setattr(svc, "fetch_monthly_revenue", lambda sid, months=18: pd.DataFrame())
+    if hasattr(svc._scan_cached, "clear"):
+        svc._scan_cached.clear()
+    rows, meta = svc.run_shortage_scan()
+    assert rows == []
+    assert "資料不足 2 檔" in meta["note"]
+    assert "0 季" in meta["note"]        # 指向 FinMind 權限/配額，非程式 bug
 
 
 # ════════════════════════════════════════════════════════════════

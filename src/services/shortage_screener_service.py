@@ -34,10 +34,14 @@ import pandas as pd
 from shared.shortage_screen_thresholds import (
     SHORTAGE_DEEP_SCAN_MAX,
     SHORTAGE_VERSION,
+    TIER_INSUFFICIENT,
     TIER_MID,
+    TIER_NA,
     TIER_STRONG,
     TIER_WEAK,
 )
+
+_RANKABLE_TIERS = (TIER_STRONG, TIER_MID, TIER_WEAK)
 from shared.ttls import TTL_1DAY
 from src.compute.health.monthly_revenue_calc import classify_trend, compute_yoy_mom
 from src.compute.screener.shortage_screener import rank_shortage, to_rows
@@ -95,8 +99,22 @@ def _survivor_pool(max_n: int) -> list[str]:
         return []
 
 
-def _score_pairs(pairs: list[tuple[str, list | None]]) -> list[dict]:
-    """對 (股號, 月營收YoY或None) 逐檔深抓季報 + 評分 → to_rows。
+def _diagnose(scored: list, n: int) -> str:
+    """無可評分時,把失敗原因攤開(§5 可觀測性):幾檔資料不足、其中幾檔 FinMind 回 0 季。"""
+    _insuff = [s for s in scored if s.tier == TIER_INSUFFICIENT]
+    _zero_q = sum(1 for s in _insuff if "僅 0 季" in s.reason_text)
+    _na_fin = sum(1 for s in scored if s.tier == TIER_NA)
+    _msg = f"⚠️ 深掃 {n} 檔後無可評分：資料不足 {len(_insuff)} 檔"
+    if _zero_q:
+        _msg += (f"（其中 {_zero_q} 檔 FinMind 回 0 季 → 多半是你的 FinMind 方案對「季財報/資產"
+                 f"負債表」的權限或配額限制，非程式問題；可換更高 tier 或改用單股工具查）")
+    if _na_fin:
+        _msg += f"、金融股(不適用) {_na_fin} 檔"
+    return _msg
+
+
+def _score_and_diagnose(pairs: list[tuple[str, list | None]]) -> tuple[list[dict], str]:
+    """對 (股號, 月營收YoY或None) 逐檔深抓季報 + 評分 → (可排名 rows, 診斷 note)。
 
     yoy3 為 None（存活池路徑）→ 逐檔單抓月營收（data_id，低 tier 也支援）補算；
     抓不到 → C4 標資料不足（0 分），C1-C3 仍由季報計分（fail-soft）。
@@ -115,7 +133,10 @@ def _score_pairs(pairs: list[tuple[str, list | None]]) -> list[dict]:
             "quarters": _frame,
             "revenue_yoy_last3": _yoy3,
         })
-    return to_rows(rank_shortage(stocks))
+    _scored = rank_shortage(stocks, include_na=True)
+    _rows = [s.to_row() for s in _scored if s.tier in _RANKABLE_TIERS]
+    _note = "" if _rows else _diagnose(_scored, len(pairs))
+    return _rows, _note
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
@@ -132,11 +153,11 @@ def _scan_cached(max_scan: int) -> tuple[list[dict], dict]:
     _survivors = _survivor_pool(max_scan)
     if _survivors:
         _pairs = [(s, None) for s in _survivors]
-        _rows = _score_pairs(_pairs)
+        _rows, _note = _score_and_diagnose(_pairs)
         return _rows, {
             "candidates": len(_survivors), "deep_scanned": len(_pairs),
             "scored": len(_rows), "pool_source": "基本面存活池（免費離線快照）",
-            "note": "" if _rows else "⚠️ 存活池深掃後無可評分標的（多為財報季數不足或缺科目）",
+            "note": _note,
             "source": "FundamentalsSnapshot(survivors)+FinMind:MonthRevenue(single)+FS+BS",
             "fetched_at": _fetched_at, "version": SHORTAGE_VERSION}
 
@@ -151,11 +172,11 @@ def _scan_cached(max_scan: int) -> tuple[list[dict], dict]:
 
     _pool = _candidate_pool(_batch, max_n=max_scan)
     _pairs = [(c["stock_id"], c["revenue_yoy_last3"]) for c in _pool]
-    _rows = _score_pairs(_pairs)
+    _rows, _note = _score_and_diagnose(_pairs)
     return _rows, {
         "candidates": len(_pool), "deep_scanned": len(_pairs), "scored": len(_rows),
         "pool_source": "全市場月營收動能候選池（sponsor tier）",
-        "note": "" if _rows else "⚠️ 候選池深掃後無可評分標的（多為財報季數不足或缺科目）",
+        "note": _note,
         "source": "FinMind:MonthRevenue(batch)+FS+BS",
         "fetched_at": _fetched_at, "version": SHORTAGE_VERSION}
 
