@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🐛 2026-07-09 缺貨掃描「一檔都抓不到」修:免費版財報 dataset 無 s + 診斷（v19.68）
+
+> 使用者實測:掃描全跳「存活池深掃後無可評分」,一檔都不剩。
+
+**真 bug**:`fetch_quarterly_shortage_frame` 抓損益表只試 `TaiwanStockFinancialStatements`(有 s,付費版)。**免費/backer 版 dataset 名是 `TaiwanStockFinancialStatement`(無 s)** → 免費方案每檔回 0 季 → 全部「資料不足」。(既有 `data_loader.get_quarterly_data:1068` 早就兩個都試,新 fetcher 漏了。)
+
+- 修:抽 `_finmind_rows_first(datasets, ...)` helper,損益表**無 s 優先、有 s 備援**兩個都試(對齊既有慣例);資產負債表加 try/except。
+- 診斷(§5 可觀測性):`_score_and_diagnose` + `_diagnose`——無可評分時 note 攤開「資料不足 N 檔（其中 M 檔 FinMind 回 0 季 → 指向方案權限/配額,非程式 bug）、金融股 K 檔」,不再只丟一句「缺科目」。
+- 驗證:46 缺貨測試(+2:免費版無 s dataset 路徑 / diagnose 攤 0 季原因)全綠。
+
+---
+
 ## 🖥️ 2026-07-09 缺貨選股單機 CLI（scripts/shortage_cli.py）（v19.67）
 
 > 使用者要一支「跟 dashboard 完全一致」的單機 CLI（他處 AI 產的獨立腳本有 3 個雷:revenue_percentage 當 YoY / 原始營收判遞增 / 缺科目填 0）。
