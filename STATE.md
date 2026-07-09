@@ -1,5 +1,22 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔥 2026-07-09 缺貨 / 供不應求選股（全市場掃描 + 四訊號計分）（v19.65）
+
+> 使用者要「找到有缺貨的股票」,並貼了一份他處 AI 產的單股腳本。盤點後發現 dashboard 已有 8 成積木,
+> 那份範例反而踩 3 條憲法紅線(補 0 造假 / inline 魔數 / 直接接 FinMind SDK 繞過分層)。改照本專案分層重做。
+
+**四訊號計分（滿分 100）→ 🟥強 / 🟧中 / ⬜不明顯**
+- ① 合約負債大增(35) ② 毛利率走揚(25) ③ 存貨週轉天數下降(20) ④ 月營收 YoY 連續成長(20)
+- L0 `shared/shortage_screen_thresholds.py`:只放**新語意常數**(四權重 35/25/20/20 + 分級 65/40 + 月營收門檻 15 + 深掃上限 50 + DIO 年化 365)。訊號邊界值(CL YoY 15/30、QoQ 20)**重用** `signal_thresholds.py` 既有 SSOT,不重複定義。
+- L2 `src/compute/screener/shortage_screener.py`(純函式):吃已對齊季度序列 + 月營收 YoY → 四訊號計分 + 分級 + 理由。DIO＝存貨 ÷(近 4 季成本 ÷ 365)年化(比範例單季 ×90 準)。**無合約負債科目 → 0 分並降級**(不補 0、不當壞事);金融股(28/58)不適用;不足 5 季標資料不足。絕不拋。
+- L1 `src/data/stock/quarterly_financials_fetcher.py`:一次抓齊損益(營收/毛利/成本)+ 資產負債(合約負債/存貨),對齊成季度 frame。毛利缺→用營收−成本補(同 data_loader.py:2106,非造假)。EX-CACHE-1。
+- L3 `src/services/shortage_screener_service.py`:**兩段式掃描**——全市場月營收 batch 圈「動能向上」候選池 → 深掃前 50 檔 → 呼叫 L2 排序。TTL_1DAY 快取。
+- L5 `src/ui/tabs/shortage_screener_ui.py` + 選股網加 collapsed expander「🔥 缺貨/供不應求選股」(點按鈕才打 FinMind)。ProgressColumn 排行 + 白話計分規則 + **誠實揭露**(兩段式會漏極早期標的、財報 45 天延遲屬事後驗證、非買賣建議)。
+
+**驗證**:32 新測試全綠(L2 計分各級距 + 邊界:空/不足/金融股/無合約負債/除零/garbage;L1 解析;L3 候選池+端到端)+ 188 相關既有測試無 regression;Streamlit AppTest 實跑 render 路徑(4 metrics + dataframe + column_config 無 crash)。
+
+---
+
 ## 🟢 2026-07-05(下午) ETF 多檔「留/觀察/換」建議 + ETF 組合「每月配息明細」+ §4.1 混幣修（v19.64）
 
 > 使用者兩個截圖回饋:①多檔比較「看不出哪些留哪些賣」②ETF 組合想看每月月配息(參考基金面板)。
