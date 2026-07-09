@@ -587,6 +587,10 @@ with tab_stocks:
                 st.markdown(_screener_ai_md)
             else:
                 st.info('完成下方篩選流程，點「🤖 生成 AI 三型建議報告」後，結果同步顯示此處。')
+        # v19.65: 缺貨 / 供不應求選股（獨立 expander，collapsed，點按鈕才打 FinMind）
+        with st.expander('🔥 缺貨 / 供不應求選股（全市場掃描）', expanded=False):
+            from src.ui.tabs.shortage_screener_ui import render_shortage_screener
+            render_shortage_screener()
         # v18.xxx: 選股 Pipeline（倒序）— 三階段 S1/S2 → 殖利率確認
         # 原始正序（殖利率篩選→三階段）已改為：先跑 S1/S2，通過後再顯示殖利率資訊
         from src.ui.tabs import render_tab_stock_picker

@@ -1,7 +1,7 @@
-"""src/compute/screener/ — 基本面 / 月營收 等篩選器計算。PEP 562 lazy forward。"""
-from . import fundamental_prescreen, fundamental_screener  # noqa: F401
+"""src/compute/screener/ — 基本面 / 月營收 / 缺貨 等篩選器計算。PEP 562 lazy forward。"""
+from . import fundamental_prescreen, fundamental_screener, shortage_screener  # noqa: F401
 
-_SUBMODULES = (fundamental_screener, fundamental_prescreen)
+_SUBMODULES = (fundamental_screener, fundamental_prescreen, shortage_screener)
 
 
 def __getattr__(name):
