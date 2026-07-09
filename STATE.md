@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🖥️ 2026-07-09 缺貨選股單機 CLI（scripts/shortage_cli.py）（v19.67）
+
+> 使用者要一支「跟 dashboard 完全一致」的單機 CLI（他處 AI 產的獨立腳本有 3 個雷:revenue_percentage 當 YoY / 原始營收判遞增 / 缺科目填 0）。
+
+- `scripts/shortage_cli.py`:**薄殼 driver**,直接 import dashboard 的 L1 抓取器（`fetch_quarterly_shortage_frame` + `fetch_monthly_revenue`）+ L2 計分（`rank_shortage` / `score_shortage`）+ `compute_yoy_mom`,**不重寫任何公式/門檻**（SSOT）→ 單機與網頁分數保證一致。修掉那 3 個雷（自算 YoY、判 YoY 加速、缺科目 None 不填 0）。
+- 用法:`export FINMIND_TOKEN=xxx; python scripts/shortage_cli.py 2330 2317`；支援 `--file 清單.txt` / `--json`。金融股(28/58)不抓省額度;抓不到顯式標「資料不足/無科目」不造假。
+- §8.2:歸 `scripts/` 維運 CLI,只 I/O + 呼叫既有 L1/L2,無自有計算。
+- 驗證:9 CLI 測試(format/JSON/輸入組裝/金融股略抓/main 流程/no-token)+ 既有 35 缺貨測試全綠;實跑 entry point(no-token 提示 / dummy token → fail-loud 資料不足,不 crash)。
+
+---
+
 ## 🔧 2026-07-09 缺貨選股：候選池相容免費 FinMind + AI 三型建議報告（v19.66）
 
 > 使用者實測回報「finmind token 沒有」+ 截圖:側邊欄 FinMind ✅ 但缺貨掃描報「月營收全市場資料無法取得」。
