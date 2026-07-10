@@ -369,12 +369,14 @@ def render_tab_macro():
             # P3-D12 v18.392:抽至 src/services/macro_trio_orchestrator。
             # truthy guard 在 service 內,partial 場景不蓋 stale(§1)。
             from src.services.macro_trio_orchestrator import run_macro_trio_and_persist
-            _fred_key_tr = (os.environ.get('FRED_API_KEY') or
-                            (st.secrets.get('FRED_API_KEY')
-                             if hasattr(st, 'secrets') else None) or '')
-            _fm_tok_tr = (os.environ.get('FINMIND_TOKEN') or
-                          (st.secrets.get('FINMIND_TOKEN')
-                           if hasattr(st, 'secrets') else None) or '')
+            def _sec_tr(_k):
+                # v19.81:無 secrets.toml 時 st.secrets.get 會 raise(CI/裸跑)→ env-only
+                try:
+                    return st.secrets.get(_k) if hasattr(st, 'secrets') else None
+                except Exception:
+                    return None
+            _fred_key_tr = (os.environ.get('FRED_API_KEY') or _sec_tr('FRED_API_KEY') or '')
+            _fm_tok_tr = (os.environ.get('FINMIND_TOKEN') or _sec_tr('FINMIND_TOKEN') or '')
             run_macro_trio_and_persist(
                 tw_raw=tw_raw,
                 fred_api_key=_fred_key_tr,

@@ -293,9 +293,12 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
         # 拉到 expander 同層 sibling — Streamlit 禁止 expander 巢狀（原 #101 為 bug）
         # ── v1.2 倒掛翻正後 ^TWII 6/12/18M 表現歷史回測 ────────────────
         import os as _os_tw_bt
-        _fred_key_tw_bt = (_os_tw_bt.environ.get('FRED_API_KEY') or
-                            (st.secrets.get('FRED_API_KEY')
-                             if hasattr(st, 'secrets') else None) or '')
+        try:  # v19.81:無 secrets.toml 時 st.secrets.get 會 raise(CI/裸跑)→ 降級 env-only
+            _sec_fred_tw_bt = (st.secrets.get('FRED_API_KEY')
+                               if hasattr(st, 'secrets') else None)
+        except Exception:
+            _sec_fred_tw_bt = None
+        _fred_key_tw_bt = (_os_tw_bt.environ.get('FRED_API_KEY') or _sec_fred_tw_bt or '')
         with st.expander(
             '📊 歷史回測：美債倒掛翻正後 ^TWII 6/12/18M 表現',
             expanded=False,
