@@ -1,5 +1,25 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📈 2026-07-10 B8 健康度歷史 repo 快照 + A-2 批次抓取真平行（v19.77）
+
+> user 拍板:B8 選「repo 快照 + cron」;A 類只做「批次抓取平行化」(K線快取試點/N+1 未選,不動)。
+
+**B8 健康度走勢後端持久化**(原只存 session_state,App 重啟歸零,趨勢圖累積不起來):
+- **cron script** `scripts/update_health_history.py`:對 `data_cache/health_watchlist.json` 清單逐檔 `get_combined_data(360)` → 同一組 L2 指標 → `calc_health_score` — **零新公式**(SSOT,shortage_cli 薄殼精神,單機分數與網頁保證一致)。寫 `data_cache/health_history.parquet`,**冪等** (date,sid) 重跑覆蓋;§2.3 PIT 鍵 = 該檔最後一根 K 的**交易日**(非執行日,連假重跑不重複)。§4.2 寫出前斷言 health∈[0,100]/close>0。meta json 記成功/失敗清單(§5)。
+- **workflow** `.github/workflows/update_health_history.yml`:工作日 UTC 09:30 = TW 17:30(盤後 TWSE 17:00 資料齊,§4.5;對齊 update_macro_history 同時段慣例)+ 手動 dispatch(可指定代碼)。
+- **L3 service** `src/services/health_history_service.py`:`load_health_history(sid, days)`(讀 parquet,檔缺/壞 → [] + log)+ `merge_score_history`(純函式:cron 底稿 + session 盤中即時點覆蓋同日)。路徑常數 repo-root 相對定位(對齊 fundamentals_snapshot_loader 模式),script 亦 import 同常數(路徑 SSOT)。
+- **UI** `section_kline_chart`:score_hist 底稿改讀快照(L5→L3,合 §8.2 硬規則),快照缺 → 行為同舊(session 累積),§1 不造假。
+- **watchlist 出廠為空**(§1 不腦補持股):填入代碼 commit 後功能才啟動;script 空清單顯式訊息 + exit 0 不 commit。
+
+**A-2 批次抓取真平行**(`section_batch_fetcher`,review 點名):
+- 原全域 Lock 串行保護「FinMind dl 非線程安全」→ K 線抓取實質序列(3 worker 名存實亡)。改 **thread-local loader**(每 worker 各持實例,無共享可變狀態 → 免鎖);`@st.cache_data` 鍵 (stock_id, days) 跨實例共享,快取效益不變;max_workers=3 維持(FinMind 禮貌上限)。
+- 移除計算迴圈尾 0.2 秒固定 sleep(純本地計算段,I/O 已在 ThreadPool 完成,固定延遲無限流意義)— N 檔省 0.2×N 秒。
+- **保守不動**:計算階段維持序列(CPU-bound,GIL 下 ThreadPool 無益;向量化屬大改另議)。
+
+**驗證**:`tests/test_health_history_b8.py` 17 test(公式重用煙霧:多頭>空頭 / PIT 交易日鍵 / (date,sid) 冪等覆蓋 / §4.2 越界拒寫 / watchlist 三態 / service 讀取+同日覆蓋合併 / script main 全離線 e2e + 單檔炸不連坐 / A-2 源碼守衛 + thread-local 隔離行為)全綠;批次 provenance 12 test 無 regression;全套件全綠。
+
+---
+
 ## 🩹 2026-07-10 CI 收官：RSS 雙後端契約統一（v19.76，main CI 最後 2 紅）
 
 > v19.74 治綠後 CI run #428/#430 只剩 2 敗:`test_news_fetcher_coverage` 兩測寫的是 **ET 備援語意**,CI 有 feedparser(主路徑,寬容解析)行為不同必炸;本沙箱原裝不了 feedparser(sgmllib3k build 失敗)所以測不到,手動裝入後 1:1 重現。

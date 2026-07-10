@@ -1,0 +1,62 @@
+name: Update Health History (Daily)
+
+# 健康度歷史每日快照(B8 v19.77,user 2026-07-10 核准「repo 快照 + cron」):
+# 對 data_cache/health_watchlist.json 清單逐檔算 6 因子健康分(重用 UI 同一條
+# L1 抓取 + L2 評分管線,零新公式),append 進 data_cache/health_history.parquet
+# 並 commit → UI 健康度走勢圖跨 App 重啟持久累積。
+#
+# 清單為空 → script 顯式訊息 + exit 0(無 commit);要啟用請編輯 watchlist 填代碼。
+
+on:
+  workflow_dispatch:
+    inputs:
+      stocks:
+        description: '逗號分隔代碼(留空=讀 data_cache/health_watchlist.json)'
+        required: false
+        default: ''
+  schedule:
+    # 工作日 UTC 09:30 = TW 17:30 — 盤後,TWSE 17:00 後資料完整(CLAUDE.md §4.5;
+    # 對齊 update_macro_history.yml 的 UTC 09:00 = TW 17:00 同一時段慣例)
+    - cron: '30 9 * * 1-5'
+
+permissions:
+  contents: write
+
+jobs:
+  update-health-history:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        # 完整 requirements:import src.data.core 會觸發 sibling eager import,
+        # 裝齊避免 ModuleNotFoundError(對齊 update_fundamentals.yml 註解)。
+        run: pip install -r requirements.txt
+
+      - name: Update health history snapshot
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: |
+          if [ -n "${{ github.event.inputs.stocks }}" ]; then
+            python scripts/update_health_history.py --stocks "${{ github.event.inputs.stocks }}"
+          else
+            python scripts/update_health_history.py
+          fi
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add data_cache/health_history.parquet data_cache/health_history_meta.json
+          if git diff --staged --quiet; then
+            echo "→ 健康度歷史無變更(清單空或全敗),跳過 commit"
+          else
+            git commit -m "🤖 健康度歷史快照更新:$(date +%Y-%m-%d)"
+            git push
+          fi
