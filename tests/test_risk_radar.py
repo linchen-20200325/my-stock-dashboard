@@ -434,6 +434,65 @@ class TestVixTermStructCboeFallback:
 # v18.320 TestPutCallCboeFallback 已移除：CBOE CPC/CPCE CSV → AccessDenied，該燈下線。
 
 
+class TestVixTermStructDateAlign:
+    """v19.69 bugfix：同日曆日但 timestamp 時分秒不同 → normalize 到日期後仍要對齊。
+
+    復現使用者回報「VIX/VIX3M 對齊後不足 2 筆」（兩源皆非空卻對不上）。
+    """
+
+    def _yf_intraday(self, vals, hour):
+        """同一批日期、但盤中時間戳固定在 hour 點 → 模擬 Yahoo 各 ticker intraday 差異。"""
+        idx = pd.to_datetime([f"2026-06-0{i+1} {hour:02d}:30:00" for i in range(len(vals))])
+        return pd.Series(vals, index=idx, dtype=float)
+
+    def test_intraday_timestamp_mismatch_still_aligns(self):
+        # ^VIX 戳在 14:30、^VIX3M 戳在 09:30 → 原碼 dropna 全清空；修後 normalize 應對齊
+        def _yf_mock(t, **kw):
+            if t == "^VIX":
+                return self._yf_intraday([26.0, 27.0, 28.0], hour=14)
+            if t == "^VIX3M":
+                return self._yf_intraday([25.0, 25.0, 25.0], hour=9)
+            return pd.Series(dtype=float)
+        with patch.object(rr, "fetch_yf_close", side_effect=_yf_mock):
+            d = rr._signal_vix_term_struct()
+        assert d["value"] is not None, "normalize 後應對齊出比值，非無資料"
+        # 28/25 = 1.12 ≥ PANIC(1.10) → 紅（後端逆轉）
+        assert "🔴" in d["signal"]
+        assert "Yahoo ^VIX / Yahoo ^VIX3M" in d["label"]
+
+    def test_yahoo_vix_intraday_vs_cboe_dateonly_aligns(self):
+        # ^VIX 盤中戳 + VIX3M 走 CBOE(00:00 date-only) → 修前必不對齊，修後應對齊
+        csv = "DATE,CLOSE\n2026-06-01,25.0\n2026-06-02,25.0\n2026-06-03,25.0\n"
+        from unittest.mock import MagicMock
+        cboe_resp = MagicMock(); cboe_resp.status_code = 200; cboe_resp.text = csv
+
+        def _yf_mock(t, **kw):
+            if t == "^VIX":
+                return self._yf_intraday([24.0, 24.5, 24.0], hour=14)
+            return pd.Series(dtype=float)  # ^VIX3M Yahoo 空 → 走 CBOE
+        with patch.object(rr, "fetch_yf_close", side_effect=_yf_mock), \
+             patch("src.data.proxy.proxy_helper.fetch_url", return_value=cboe_resp):
+            d = rr._signal_vix_term_struct()
+        assert d["value"] is not None
+        assert "CBOE VIX3M_History.csv" in d["label"]
+
+    def test_no_overlap_surfaces_last_dates(self):
+        # VIX 停在 6 月、VIX3M 停在 1 月 → 真的無重疊 → note 要攤開兩邊最後日期
+        def _yf_mock(t, **kw):
+            if t == "^VIX":
+                return pd.Series([26.0, 27.0],
+                                 index=pd.to_datetime(["2026-06-01", "2026-06-02"]))
+            if t == "^VIX3M":
+                return pd.Series([25.0, 25.0],
+                                 index=pd.to_datetime(["2026-01-02", "2026-01-03"]))
+            return pd.Series(dtype=float)
+        with patch.object(rr, "fetch_yf_close", side_effect=_yf_mock):
+            d = rr._signal_vix_term_struct()
+        assert "⬜" in d["signal"]
+        assert "無重疊" in d["note"]
+        assert "2026-06-02" in d["note"] and "2026-01-03" in d["note"]
+
+
 # ──────────────────────────────────────────────────────────────
 # 9. Asia overnight
 # ──────────────────────────────────────────────────────────────

@@ -201,9 +201,22 @@ def _signal_vix_term_struct() -> dict:
         _label = f"Yahoo ^VIX / {src3}" if src3 else "Yahoo ^VIX / VIX3M（全源失敗）"
         if sv.empty or s3.empty:
             return _empty("VIX/VIX3M 抓取失敗（Yahoo + CBOE 全源失敗）", _label)
-        df = pd.concat([sv.rename("vix"), s3.rename("v3m")], axis=1).dropna()
+        # v19.69 bugfix：Yahoo 日 bar 時間戳含「時分秒」(非午夜)，且 ^VIX 與 ^VIX3M
+        # 常各停在不同 intraday 時刻（或 VIX3M 走 CBOE 備援 = 00:00 date-only）→
+        # 用原始 timestamp 直接 concat.dropna 會因秒級不等而**全清空** →「對齊後不足 2 筆」。
+        # 正解：同市場日線本該以「日曆日」為對齊鍵 → 兩支都 normalize 到日期再 join。
+        sv = sv.copy(); sv.index = pd.to_datetime(sv.index).normalize()
+        s3 = s3.copy(); s3.index = pd.to_datetime(s3.index).normalize()
+        sv = sv[~sv.index.duplicated(keep="last")]   # 同日多筆(含盤中即時 bar) → 取最後
+        s3 = s3[~s3.index.duplicated(keep="last")]
+        df = pd.concat([sv.rename("vix"), s3.rename("v3m")], axis=1, sort=True).dropna()
         if df.empty or len(df) < 2:
-            return _empty("VIX/VIX3M 對齊後不足 2 筆", _label)
+            # 對齊後仍不足 → 攤開真因（哪支停更 / 無重疊）供資料診斷判讀，不只丟「不足」
+            _sv_last = sv.index.max().date() if len(sv) else "—"
+            _s3_last = s3.index.max().date() if len(s3) else "—"
+            return _empty(
+                f"VIX/VIX3M 無重疊交易日（VIX 至 {_sv_last}／VIX3M 至 {_s3_last}"
+                f"，{src3 or 'VIX3M 源'} 疑停更）", _label)
         ratio = df["vix"] / df["v3m"]
         cur = float(ratio.iloc[-1])
         prev = float(ratio.iloc[-2])

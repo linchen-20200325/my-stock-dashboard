@@ -17,6 +17,9 @@ from shared.signal_thresholds import (
     BB_NEAR_UPPER_STRICT_RATIO,  # Phase 2 Batch 5d v18.432:布林貼近上軌 STRICT tier SSOT
     CONTRACT_LIABILITY_YOY_GROWTH_THRESHOLD_PCT,
     CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT,
+    RS_SIGMA_LEAD_MIN,   # v19.70:RS σ 分級 SSOT（原 1.0/0.3/-0.3 inline，抗跌 RS 選股共用）
+    RS_SIGMA_MILD_MIN,
+    RS_SIGMA_LAG_MAX,
 )
 
 
@@ -104,30 +107,37 @@ def calc_relative_strength(df_stock: pd.DataFrame, df_market: pd.DataFrame,
     """
     R = '#da3633'; G = '#2ea043'; Y = TRAFFIC_YELLOW; N = '#484f58'
 
+    # 各週期同時算出 σ標準化 RS + 原始個股/大盤區間報酬(供顯示，schema-additive)
     def _rs_one(n):
         if len(df_stock) < n or len(df_market) < n:
             return None
         s_ret = (df_stock['close'].iloc[-1] / df_stock['close'].iloc[-n] - 1) * 100
         m_ret = (df_market['close'].iloc[-1] / df_market['close'].iloc[-n] - 1) * 100
         m_std = df_market['close'].pct_change().tail(n).std() * 100
-        return round((s_ret - m_ret) / m_std, 2) if m_std > 0.01 else 0.0
+        _rs = round((s_ret - m_ret) / m_std, 2) if m_std > 0.01 else 0.0
+        return {"rs": _rs, "s_ret": round(s_ret, 2), "m_ret": round(m_ret, 2)}
 
-    scores = {p: _rs_one(p) for p in periods}
-    valid  = [v for v in scores.values() if v is not None]
+    detail = {p: _rs_one(p) for p in periods}
+    scores = {p: (d["rs"] if d else None) for p, d in detail.items()}
+    valid  = [d for d in detail.values() if d is not None]
 
     if not valid:
         return {"rs_scores": scores, "signal": "⚪ 資料不足", "color": N,
-                "avg_rs": None, "msg": "資料不足，無法計算相對強度"}
+                "avg_rs": None, "avg_stock_ret": None, "avg_market_ret": None,
+                "msg": "資料不足，無法計算相對強度"}
 
-    avg_rs = round(sum(valid) / len(valid), 2)
+    avg_rs = round(sum(d["rs"] for d in valid) / len(valid), 2)
+    # v19.70:回原始報酬均值(顯示用)。σRS 排名 + 這兩欄讓 UI 直接標「個股 vs 大盤」超額。
+    avg_stock_ret = round(sum(d["s_ret"] for d in valid) / len(valid), 2)
+    avg_market_ret = round(sum(d["m_ret"] for d in valid) / len(valid), 2)
 
-    if avg_rs >= 1.0:
+    if avg_rs >= RS_SIGMA_LEAD_MIN:
         signal, color = "🔴 逆勢強股（領漲）", R
         msg = f"RS均值 +{avg_rs:.2f}σ — 顯著強於大盤，主力護盤意願高"
-    elif avg_rs >= 0.3:
+    elif avg_rs >= RS_SIGMA_MILD_MIN:
         signal, color = "🟡 偏強（溫和抗跌）", Y
         msg = f"RS均值 +{avg_rs:.2f}σ — 略強於大盤，可列觀察清單"
-    elif avg_rs >= -0.3:
+    elif avg_rs >= RS_SIGMA_LAG_MAX:
         signal, color = "⚪ 同步大盤", N
         msg = f"RS均值 {avg_rs:.2f}σ — 與大盤連動，無特別籌碼支撐"
     else:
@@ -135,7 +145,8 @@ def calc_relative_strength(df_stock: pd.DataFrame, df_market: pd.DataFrame,
         msg = f"RS均值 {avg_rs:.2f}σ — 弱於大盤，空頭環境中優先出清"
 
     return {"rs_scores": scores, "signal": signal, "color": color,
-            "avg_rs": avg_rs, "msg": msg}
+            "avg_rs": avg_rs, "avg_stock_ret": avg_stock_ret,
+            "avg_market_ret": avg_market_ret, "msg": msg}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
