@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🩹 2026-07-10 CI 收官：RSS 雙後端契約統一（v19.76，main CI 最後 2 紅）
+
+> v19.74 治綠後 CI run #428/#430 只剩 2 敗:`test_news_fetcher_coverage` 兩測寫的是 **ET 備援語意**,CI 有 feedparser(主路徑,寬容解析)行為不同必炸;本沙箱原裝不了 feedparser(sgmllib3k build 失敗)所以測不到,手動裝入後 1:1 重現。
+
+- **production 修**:`rss_items_from_bytes` feedparser 主路徑補「無 title / 空 title 條目一律略過」(ET 備援本就如此;原樣回傳會讓空標題新聞流入下游渲染與關鍵字統計 — 真 bug,非只是測試紅)。
+- **測試修**:`test_malformed_xml` 改後端相依契約 — feedparser 寬容解析殘缺 feed 為 feature(real-world RSS 常輕微 malformed,全丟=掉真新聞),ET 嚴格回 [];共同不變量:回 list、不 raise、無空 title。
+- **驗證**:兩後端都跑(有 feedparser 16/16 + meta_path 遮蔽模擬 ET 備援 16/16);全套件 2,885 passed / 0 failed(沙箱補裝 feedparser 後與 CI 依賴面一致)。
+
+---
+
 ## 🧰 2026-07-10 review B/D 類收斂：診斷盲區登錄 + pandera 阻擋 + cache 可攜（v19.75）
 
 > user 核准「B+C+D 請繼續」(A 類大重構不動)。B=監控盲區、D=低 ROI 清理;C 類複查在 Fund 側記錄。
