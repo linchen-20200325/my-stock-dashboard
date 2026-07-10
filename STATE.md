@@ -1,5 +1,30 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🛠️ 2026-07-10 外部 code review P0/P1/P2 修正（v19.72）
+
+> 使用者提交外部深度 code review 報告（dashboard_code_review.md），指示「根據建議修改，不適合的列清單」。逐項核對現行代碼後修 7 項，其餘列不修清單（詳 PR 描述）。
+
+**P0-1 三大法人 BFI82U 欄位寫死**（`daily_data_fetchers.py`）:
+- `row[3]` 寫死 → 抽 `_parse_bfi82u_rows(fields, data)` 純函式,買賣超欄用 fields 欄名「買賣差額/買賣超」定位（對齊同檔 MI_MARGN 既有模式）。TWSE 改版欄序位移時回 None + log,不再靜默回錯欄（§1 Fail Loud;原行為 isdigit 過 → 反向籌碼結論最危險）。
+
+**P0-2 融資餘額 FinMind 區間猜單位**（`daily_data_fetchers.py`）:
+- 廢除「億/元/千元/萬元」四分支數值區間猜測 → `_finmind_margin_to_yi()` 固定仟元÷1e5=億（FinMind 鏡射 TWSE MI_MARGN,單位固定仟元;同檔方案A 註解同源印證）。
+- 新增 §3.2 sanity 區間 SSOT:`MARGIN_BALANCE_SANITY_MIN/MAX_YI`（500~10000 億,shared/signal_thresholds.py）,6 路 fallback 全走 `_margin_sanity_ok()`（原 inline `100<x<30_000` 過鬆,10× 誤判可穿過）。超區間 → log + 棄用改走下一 fallback。
+
+**P0-3 goodinfo 快取鍵不可雜湊**（`tw_stock_data_fetcher.py`）:`fetch_goodinfo_metrics(proxies: dict)` → `_proxies`（@st.cache_data 略過底線參數;原簽章傳非 None 即 UnhashableParamError）。
+
+**P1-1 連假強制重抓撞限流**（`app_stock_fetchers.py`）:價格快取容忍窗 5 → `PRICE_CACHE_HOLIDAY_TOLERANCE_CALENDAR_DAYS=14`（SSOT）。春節封關最長 13 日曆日（2025:1/21→2/3）,原 5 天窗連假期間每次冷啟動全檔強制重抓（拿到同樣舊資料,純燒 FinMind/yfinance 配額）。真新鮮度仍由 pkl 0.5h + cache_data 30min TTL 把關;gap>5 天沿用快取時 print 留跡（§5）。
+
+**P2-1 MOPS fallback 零值假財報**（`tw_stock_data_fetcher.py`）:MOPS 長格式塞進 Goodinfo 寬表計算 → 全零 dict 餵下游誤判「財務崩壞」。加核心科目全零偵測 → 回 `{"error":"mops_parse_failed"}` 走 insufficient_data（對齊同檔 OCF=0 防禦）;`fuzzy_get_from_df` 補 `str(c)`（MOPS read_html 整數欄名原直接 TypeError）。
+
+**P2-2 cache 無上界 OOM**:5 處以 stock_id 為鍵的 `@st.cache_data` 補 `max_entries=64`（data_loader `get_combined_data`/`get_monthly_revenue` + tw_stock_data_fetcher `_fetch`/`fetch_5_years_cash_flow`/`fetch_goodinfo_metrics`）。
+
+**UI bug CSS 字面大括號**（`tab_stock.py:1087/1099/1111`）:f-string 內 `"{TRAFFIC_GREEN}18"` 寫在引號內不插值 → 渲染字面文字,獲利 5 卡背景/邊框色壞掉 → 改 `{TRAFFIC_GREEN if ok else TRAFFIC_RED}18`（對齊同段 1124 行既有正確寫法）。另移除 `tech_indicators.calc_bollinger` 恆真 `'bw' in dir()` dead code。
+
+**驗證**:新增 `tests/test_review_fixes_v19_72.py` 18 測試（欄序位移/缺欄/單位錯 10×/邊界/全零偵測/源碼守衛）全綠;受影響套件（pr_n3/pr_n5/risk_radar/rs_leader/china 等 2,800+ 測試）無新增 regression（test_resample_audit 1 項 + test_china_macro_stock 2 項為 main 既有失敗,與本次無關,已列報告）。
+
+---
+
 ## 📦 2026-07-10 基本面存活池：每季第二趟延遲補抓 + 涵蓋率診斷（v19.71）
 
 > 使用者：「全台股每季重掃一次 OK，只是有些公司財報發布較慢，要怎樣確保都被抓到？」根因：cron 只在「截止+1週」抓一次，慢公布/展延申報者那趟抓不到，又不會回頭補 → 缺到下一季。

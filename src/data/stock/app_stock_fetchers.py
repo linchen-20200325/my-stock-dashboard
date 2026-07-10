@@ -45,6 +45,7 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.app_cache import _load_cache, _save_cache
+from shared.signal_thresholds import PRICE_CACHE_HOLIDAY_TOLERANCE_CALENDAR_DAYS
 from shared.ttls import TTL_30MIN, TTL_1HOUR
 from src.data.core import StockDataLoader, _LOADER_VERSION
 
@@ -104,8 +105,15 @@ def fetch_price_data(sid, days):
                     _latest = _latest.date()
                 elif isinstance(_latest, str):
                     _latest = datetime.datetime.strptime(str(_latest)[:10], '%Y-%m-%d').date()
-                # 5 個 calendar day 內視為新鮮(涵蓋週末 + 1 個連假);超過 → 強制重抓
-                if (_expected_latest_trading_date() - _latest).days <= 5:
+                # v19.72:容忍窗 5 → 14 日曆日(SSOT)。原 5 天在春節封關(最長 13 日曆日)
+                # 期間把「休市無新資料」誤判 stale → 每次冷啟動全檔強制重抓 → 撞
+                # FinMind/yfinance 限流(重抓也只拿到同樣的舊資料,純燒配額)。
+                # 真新鮮度仍由 pkl TTL(0.5h) + @st.cache_data TTL(30min) 把關。
+                _gap_days = (_expected_latest_trading_date() - _latest).days
+                if _gap_days <= PRICE_CACHE_HOLIDAY_TOLERANCE_CALENDAR_DAYS:
+                    if _gap_days > 5:  # §5 可觀測性:連假容忍範圍留跡,便於診斷
+                        print(f'[fetch_price_data] {sid} 序列最新日落後 {_gap_days} 天'
+                              f'(≤{PRICE_CACHE_HOLIDAY_TOLERANCE_CALENDAR_DAYS} 連假容忍),沿用快取')
                     return df_c, name_c, None
             except Exception:
                 return df_c, name_c, None

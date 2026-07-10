@@ -1084,8 +1084,8 @@ padding:14px 18px;margin-bottom:12px;">
                     _gm2_ok = _gm2.get('Status', '') == 'Good'
                     with _p5c[0]:
                         st.markdown(
-                            f'<div style="background:{"{TRAFFIC_GREEN}18" if _gm2_ok else "{TRAFFIC_RED}18"};'
-                            f'border:1px solid {"{TRAFFIC_GREEN}55" if _gm2_ok else "{TRAFFIC_RED}55"};'
+                            f'<div style="background:{TRAFFIC_GREEN if _gm2_ok else TRAFFIC_RED}18;'
+                            f'border:1px solid {TRAFFIC_GREEN if _gm2_ok else TRAFFIC_RED}55;'
                             f'border-radius:8px;padding:10px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">毛利率</div>'
                             f'<div style="font-size:17px;font-weight:900;color:{TRAFFIC_GREEN if _gm2_ok else TRAFFIC_RED};">{_gm2.get("Value","N/A")}</div>'
@@ -1096,8 +1096,8 @@ padding:14px 18px;margin-bottom:12px;">
                     _om2_ok = _om2.get('Core_Business_Profitable', 'No') == 'Yes'
                     with _p5c[1]:
                         st.markdown(
-                            f'<div style="background:{"{TRAFFIC_GREEN}18" if _om2_ok else "{TRAFFIC_RED}18"};'
-                            f'border:1px solid {"{TRAFFIC_GREEN}55" if _om2_ok else "{TRAFFIC_RED}55"};'
+                            f'<div style="background:{TRAFFIC_GREEN if _om2_ok else TRAFFIC_RED}18;'
+                            f'border:1px solid {TRAFFIC_GREEN if _om2_ok else TRAFFIC_RED}55;'
                             f'border-radius:8px;padding:10px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">營業利益率</div>'
                             f'<div style="font-size:17px;font-weight:900;color:{TRAFFIC_GREEN if _om2_ok else TRAFFIC_RED};">{_om2.get("Value","N/A")}</div>'
@@ -1108,8 +1108,8 @@ padding:14px 18px;margin-bottom:12px;">
                     _mos2_ok = _mos2.get('Status', '') == 'Strong'
                     with _p5c[2]:
                         st.markdown(
-                            f'<div style="background:{"{TRAFFIC_GREEN}18" if _mos2_ok else "{TRAFFIC_YELLOW}18"};'
-                            f'border:1px solid {"{TRAFFIC_GREEN}55" if _mos2_ok else "{TRAFFIC_YELLOW}55"};'
+                            f'<div style="background:{TRAFFIC_GREEN if _mos2_ok else TRAFFIC_YELLOW}18;'
+                            f'border:1px solid {TRAFFIC_GREEN if _mos2_ok else TRAFFIC_YELLOW}55;'
                             f'border-radius:8px;padding:10px;text-align:center;">'
                             f'<div style="font-size:10px;color:#8b949e;">安全邊際</div>'
                             f'<div style="font-size:17px;font-weight:900;color:{TRAFFIC_GREEN if _mos2_ok else TRAFFIC_YELLOW};">{_mos2.get("Value","N/A")}</div>'
