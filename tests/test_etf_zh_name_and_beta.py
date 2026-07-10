@@ -91,7 +91,11 @@ class TestFetchEtfZhNameFinMind:
         monkeypatch.setattr(_rq, 'get', _fake_get)
 
         # 若 FinMind 命中,MoneyDJ fetch_url 不該被呼叫
-        import src.data.proxy as _proxy
+        # v19.74:patch 真正持有者 proxy_helper 而非 package — PEP 562 lazy forward
+        # 對 package setattr,monkeypatch teardown 會把真函式寫成 package 實體屬性
+        # → 永久蓋住 __getattr__ 轉發,污染其後所有 patch proxy_helper 的測試
+        # (risk_radar CBOE 4 測 order-dependent 失敗根因;詳 test_etf_moneydj_nav_parse)
+        from src.data.proxy import proxy_helper as _proxy
         def _spy_fetch_url(*a, **k):
             _moneydj_called['hit'] = True
             return None
@@ -122,7 +126,7 @@ class TestFetchEtfZhNameFinMind:
         import requests as _rq
         monkeypatch.setattr(_rq, 'get',
                             lambda *a, **k: _FakeResp({'data': [{'stock_name': 'YUANTA ETF'}]}))
-        import src.data.proxy as _proxy
+        from src.data.proxy import proxy_helper as _proxy  # v19.74:patch 持有者,防 package 屬性釘死(同上)
         # MoneyDJ 也回不到 → 最終 None(驗證有走到 fallback 路徑)
         monkeypatch.setattr(_proxy, 'fetch_url', lambda *a, **k: None)
         ef.fetch_etf_zh_name.clear()

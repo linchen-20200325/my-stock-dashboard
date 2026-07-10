@@ -4,8 +4,27 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 from src.compute.risk import risk_radar as rr
+
+
+@pytest.fixture(autouse=True)
+def _unpin_proxy_package_attr():
+    """v19.74:清除 `src.data.proxy` package 上被釘死的 fetch_url 實體屬性。
+
+    根因:package 是 PEP 562 lazy forward(無實體 fetch_url),其他測試若對
+    package 做 `monkeypatch.setattr(pkg, 'fetch_url', fake)`,teardown「還原」
+    會把真函式物件寫成 package **實體屬性** → 永久蓋住 __getattr__ 轉發 →
+    本檔 `patch("src.data.proxy.proxy_helper.fetch_url")` 打不進 production 的
+    `from src.data.proxy import fetch_url`(CBOE 4 測全套件連跑 order-dependent
+    失敗根因)。已修 2 個已知釘死源(etf_moneydj_nav_parse / etf_zh_name_and_beta),
+    本 fixture 為類別級防禦:無論誰釘的,測前一律拆釘恢復轉發。
+    """
+    import src.data.proxy as _pp
+    if 'fetch_url' in vars(_pp):
+        del _pp.fetch_url
+    yield
 
 
 # ──────────────────────────────────────────────────────────────
