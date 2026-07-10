@@ -30,10 +30,12 @@ except ImportError:
         cache_resource = cache_data
         secrets: dict = {}
     st = _NoOpST()  # noqa
+import threading as _th_dl
 import requests as _req_dl
 import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
 from src.data.proxy import fetch_url as _fetch_url_dl
+from src.data.core.finmind_client import _UA as _FM_UA  # S8 v19.78:raw REST UA 對齊 SSOT client
 from shared.ttls import TTL_1DAY, TTL_1HOUR
 
 # v18.201 D2：FinMind dataset 後台 update 時間追蹤
@@ -71,14 +73,37 @@ def _stamp_finreport_attrs(df, src_key: str, src_val: str):
     return df
 
 
+# S7 v19.78:原 _bps_dl 每呼叫 new Session → TCP/TLS 連線池零複用(單股抓取
+# price/inst/margin/月營收/BS-CF 連打多請求,每個都重建連線)。改 thread-local
+# 單例:同執行緒共用連線池(urllib3 pool thread-safe;Retry adapter 隨
+# build_proxy_session 掛好,status_forcelist 含 429);批次 ThreadPoolExecutor
+# 各 worker 自持一份,不跨執行緒共享 Session 物件。
+_TLS_BPS = _th_dl.local()
+
+
 def _bps_dl():
-    try:
-        from src.data.stock import build_proxy_session as _b
-        s = _b()
-    except Exception:
-        s = _req_dl.Session()
-    s.verify = False
+    s = getattr(_TLS_BPS, 'session', None)
+    if s is None:
+        try:
+            from src.data.stock import build_proxy_session as _b
+            s = _b()
+        except Exception:
+            s = _req_dl.Session()
+        s.verify = False
+        _TLS_BPS.session = s
     return s
+
+
+def _fm_raw_headers(token: str) -> dict:
+    """FinMind raw REST 共用標頭(S8 v19.78)。
+
+    原 7 處手刻呼叫只帶 Authorization、無 User-Agent(requests 預設
+    `python-requests/x.x` 易被上游辨識限流);UA 對齊 finmind_client SSOT。
+    """
+    h = {'User-Agent': _FM_UA, 'Accept': 'application/json'}
+    if token:
+        h['Authorization'] = f'Bearer {token}'
+    return h
 
 def _yf_dl(symbol, **kwargs):
     """yfinance download，透過 os.environ 注入 proxy（相容新舊版 yfinance）。"""
@@ -93,6 +118,7 @@ def _yf_dl(symbol, **kwargs):
     if _px_url:
         for k in _ek:
             _os_yfd.environ[k] = _px_url
+    kwargs.setdefault('timeout', HTTP_TIMEOUT_YF_SEC)  # S6 v19.78:顯式逾時(SSOT)
     try:
         return yf.download(symbol, **kwargs)
     finally:
@@ -102,8 +128,15 @@ def _yf_dl(symbol, **kwargs):
             else:
                 _os_yfd.environ[k] = v
 
-_TWSE_DL = _bps_dl()
-from src.config import FINMIND_API_URL, FINMIND_TOKEN as _FINMIND_TOKEN_CFG, get_stock_name  # Batch 10 v18.412; _FINMIND_TOKEN_CFG reads st.secrets at import time
+# S7 v19.78:刪死碼 `_TWSE_DL = _bps_dl()`(全檔 0 使用,且會在 import 期建立
+# 從未被複用的 session)。
+from src.config import (  # Batch 10 v18.412; _FINMIND_TOKEN_CFG reads st.secrets at import time
+    FINMIND_API_URL,
+    FINMIND_TOKEN as _FINMIND_TOKEN_CFG,
+    HTTP_TIMEOUT_FINMIND_SDK_SEC,
+    HTTP_TIMEOUT_YF_SEC,
+    get_stock_name,
+)
 
 # S-H1 v18.244:`safe_fetch_strict` 為死碼(grep 全 repo 唯一引用為定義本身),
 # 已刪除以同時修復 §8.2「L1 不得用 st.session_state」違憲(原使用
@@ -366,7 +399,7 @@ def _fetch_finmind_margin_raw(stock_id: str, df: pd.DataFrame, start_str: str) -
         _r = _bps_dl().get(
             FINMIND_API_URL,
             params=_params,
-            headers={'Authorization': f'Bearer {_token}'} if _token else {},
+            headers=_fm_raw_headers(_token),   # S8 v19.78:補 UA
             timeout=20,
         )
         _j = _r.json()
@@ -412,7 +445,7 @@ def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> 
         _r = _bps_dl().get(
             FINMIND_API_URL,
             params=_params,
-            headers={'Authorization': f'Bearer {_token}'} if _token else {},
+            headers=_fm_raw_headers(_token),   # S8 v19.78:補 UA
             timeout=20)
         _j = _r.json()
         _capture_finmind_meta('inst', _j)   # v18.201 D2：紀錄 last_update + fetched_at
@@ -453,7 +486,7 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
         _r = _bps_dl().get(
             FINMIND_API_URL,
             params=_params,
-            headers={'Authorization': f'Bearer {_token}'} if _token else {},
+            headers=_fm_raw_headers(_token),   # S8 v19.78:補 UA
             timeout=20)
         _j = _r.json()
         _capture_finmind_meta('price', _j)   # v18.201 D2：紀錄 last_update + fetched_at
@@ -585,6 +618,7 @@ class StockDataLoader:
                         stock_id=stock_id,
                         start_date=start_str,
                         end_date=end_date.strftime('%Y-%m-%d'),
+                        timeout=HTTP_TIMEOUT_FINMIND_SDK_SEC,  # S6 v19.78:SDK 預設 None=無限等待
                     )
                     _fm_path = 'finmind_sdk'
                     _capture_finmind_meta('price', {})   # v18.201 D2：SDK 無 response → 只記 fetched_at
@@ -716,7 +750,8 @@ class StockDataLoader:
                 try:
                     df_inst = _self.dl.taiwan_stock_institutional_investors(
                         stock_id=stock_id,
-                        start_date=start_str
+                        start_date=start_str,
+                        timeout=HTTP_TIMEOUT_FINMIND_SDK_SEC,  # S6 v19.78
                     )
                     _sdk_ok = (df_inst is not None and
                                hasattr(df_inst, 'empty') and
@@ -761,7 +796,8 @@ class StockDataLoader:
                 try:
                     df_margin = _self.dl.taiwan_stock_margin_purchase_short_sale(
                         stock_id=stock_id,
-                        start_date=start_str
+                        start_date=start_str,
+                        timeout=HTTP_TIMEOUT_FINMIND_SDK_SEC,  # S6 v19.78
                     )
                     if not df_margin.empty:
                         df_margin['date'] = pd.to_datetime(df_margin['date']).dt.date
@@ -874,7 +910,7 @@ class StockDataLoader:
                     params={'dataset':'TaiwanStockMonthRevenue',
                             'data_id':stock_id, 'start_date':start_str,
                             'token':_tok},
-                    headers={'Authorization':f'Bearer {_tok}'}, timeout=20)
+                    headers=_fm_raw_headers(_tok), timeout=20)  # S8 v19.78:補 UA
                 _j0r = _r_fm0.json()
                 print(f'[FM-Rev0] {stock_id}: status={_j0r.get("status")} rows={len(_j0r.get("data",[]))}')
                 if _j0r.get('status')==200 and _j0r.get('data'):
@@ -891,28 +927,11 @@ class StockDataLoader:
                 print(f'[FM-Rev0] {stock_id}: ❌ {type(_e0r).__name__}: {_e0r}')
 
 
-        # ── 方案0: FinMind 月營收（優先，因MOPS 年份HTML全部404）────
-        if df_revenue is None and _tok:
-            try:
-                _rfm0 = _bps_dl().get(
-                    FINMIND_API_URL,
-                    params={'dataset':'TaiwanStockMonthRevenue',
-                            'data_id':stock_id,'start_date':start_str,'token':_tok},
-                    headers={'Authorization':f'Bearer {_tok}'}, timeout=20)
-                _jfm0 = _rfm0.json()
-                print(f'[FM-Rev] {stock_id}: status={_jfm0.get("status")} rows={len(_jfm0.get("data",[]))}')
-                if _jfm0.get('status')==200 and _jfm0.get('data'):
-                    _dffm0 = _pd_rv.DataFrame(_jfm0['data'])
-                    if 'revenue' in _dffm0.columns:
-                        if 'date' not in _dffm0.columns:
-                            _dffm0['date'] = (_dffm0['revenue_year'].astype(str)+'-'+
-                                              _dffm0['revenue_month'].astype(str).str.zfill(2)+'-01')
-                        _dffm0['date'] = _pd_rv.to_datetime(_dffm0['date'])
-                        df_revenue = _dffm0.sort_values('date').reset_index(drop=True)
-                        _rev_src = 'finmind'   # v18.202 E2
-                        print(f'[FM-Rev] {stock_id}: ✅ {len(df_revenue)}筆')
-            except Exception as _efm0:
-                print(f'[FM-Rev] {stock_id}: ❌ {type(_efm0).__name__}: {_efm0}')
+        # S11 v19.78(第二份 review):原此處有第二段「方案0」— dataset/data_id/
+        # start_date/token/headers/時間窗與上段逐字相同的複製貼上冗餘(gate
+        # `df_revenue is None` 使其只在上段失敗時跑,參數相同故必然同敗)。
+        # 已刪;暫態網路錯誤的重試改由 _bps_dl session 的 Retry adapter
+        # (含 429/503/504)原則性承接,非靠意外的重複程式碼。
 
         # ── 方案A: MOPS 月營收（官方來源，無需 Token）──────────
         try:
@@ -1087,7 +1106,8 @@ class StockDataLoader:
             if df_fin is None or df_fin.empty:
                 try:
                     df_fin = _self.dl.taiwan_stock_financial_statement(
-                        stock_id=stock_id, start_date=start_str)
+                        stock_id=stock_id, start_date=start_str,
+                        timeout=HTTP_TIMEOUT_FINMIND_SDK_SEC)  # S6 v19.78
                     if df_fin is not None and not df_fin.empty:
                         _qtr_src = 'finmind_sdk'   # v18.202 E2
                 except Exception as _e_fin_sdk:
@@ -1490,7 +1510,7 @@ class StockDataLoader:
             _qtr_extra_src = 'unknown'   # v18.202 E2：季財報-extra 資料源（finmind / finmind_mops / missing）
             _tok = _os_bscf.environ.get('FINMIND_TOKEN', '')
             _start = (_dt_bscf.date.today() - _dt_bscf.timedelta(days=365 * 3)).strftime('%Y-%m-%d')
-            _hdrs = {'Authorization': f'Bearer {_tok}'} if _tok else {}
+            _hdrs = _fm_raw_headers(_tok)   # S8 v19.78:補 UA
 
             def _fm_fetch(dataset):
                 _p = {'dataset': dataset, 'data_id': stock_id, 'start_date': _start}

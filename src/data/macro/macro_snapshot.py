@@ -41,11 +41,20 @@ from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.ttls import TTL_1HOUR
 
 
+# S7 v19.78:原每呼叫 new Session → 連線池零複用。改 thread-local 單例
+# (同 data_loader._bps_dl 模式;macro snapshot 各 block fetcher 高頻共用)。
+import threading as _th_ms
+_TLS_MS = _th_ms.local()
+
+
 def _make_proxy_session():
-    """NAS proxy Session — 直接套用 proxy_helper.get_proxies(),retry adapter 含 429/503/504。
+    """NAS proxy Session(thread-local 複用)— retry adapter 含 429/503/504。
 
     P3-D1 v18.389:從 tab_macro._job_macro._mk_s 抽出。
     """
+    _cached = getattr(_TLS_MS, 'session', None)
+    if _cached is not None:
+        return _cached
     import requests
     from requests.adapters import HTTPAdapter
     from urllib3.util.retry import Retry
@@ -63,6 +72,7 @@ def _make_proxy_session():
     if _px:
         _s.proxies.update(_px)
     _s.verify = False
+    _TLS_MS.session = _s
     return _s
 
 

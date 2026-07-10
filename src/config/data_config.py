@@ -15,6 +15,14 @@ PRIORITY = {
     "adl":             ["Cache", "YFinance"],
 }
 
+# HTTP 請求逾時（秒）— S6/S14 v19.78(第二份 review):
+# FinMind SDK dataset 方法簽名 `timeout: int = None`,None 會一路傳到
+# `session.get(timeout=None)` = 無限等待(還包在 SDK max_retry_times=10 迴圈),
+# proxy 慢/掛時單一請求即卡死整站 → 呼叫端必須顯式帶 timeout。
+# 語意為「單次 HTTP 等待上限」,與 shared/ttls.py 的「快取存活時長」不同源,不混放。
+HTTP_TIMEOUT_FINMIND_SDK_SEC: int = 30   # SDK 呼叫(daily/inst/margin/季報 fallback)
+HTTP_TIMEOUT_YF_SEC: int = 15            # yfinance download(其內部預設 10,顯式化+放寬跨國 RTT)
+
 # 快取存活時間（秒）— 短=當日關鍵數據，長=歷史數據
 TTL_CONFIG = {
     "institutional":   TTL_30MIN,   # 30 分鐘 — 法人買賣（收盤後更新，日頻）
