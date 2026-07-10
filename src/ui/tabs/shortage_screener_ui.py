@@ -155,6 +155,8 @@ def render_shortage_screener(gemini_fn=None) -> None:
             f"候選池來源：{_meta.get('pool_source', '?')}｜{_meta.get('candidates', '?')} 檔 → "
             f"深掃 {_meta.get('deep_scanned', '?')} 檔｜抓取時間 {_meta.get('fetched_at', '')[:19]} UTC"
         )
+        if _meta.get("coverage_note"):
+            st.caption(f"📦 存活池快照：{_meta['coverage_note']}")
 
     # ── AI 三型建議報告（積極 / 穩健 / 保守）─────────────────────
     st.markdown("---")

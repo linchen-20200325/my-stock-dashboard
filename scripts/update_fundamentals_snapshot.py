@@ -55,10 +55,26 @@ def _scan_cached_quarters(cache_dir: Path) -> set[tuple[int, int]]:
     return out
 
 
+def _count_quarter(cache_dir: Path, roc_year: int, season: int) -> tuple[dict, int]:
+    """數某季各市場檔數 → ({sii: n, otc: m}, total)。缺檔略過(不列入 dict)。"""
+    per: dict[str, int] = {}
+    for m in ALL_MARKETS:
+        path = cache_dir / f"{m}_{roc_year}Q{season}.parquet"
+        if not path.exists():
+            continue
+        try:
+            n = len(pd.read_parquet(path, columns=["stock_id"]))
+        except Exception:                             # columns 不符 → 整檔讀
+            n = len(pd.read_parquet(path))
+        per[m] = n
+    return per, sum(per.values())
+
+
 def _write_latest_json(cache_dir: Path) -> tuple[int, int] | None:
     """由『磁碟實況』重算 latest.json:latest = 現存最新季,prev = 該季去年同季(存在才填)。
 
     補抓舊季(如 114Q1)不會把 latest 指標往回移;補齊去年同季後 prev 自動補上。
+    v19.71:額外寫 coverage(涵蓋率診斷 §5):本季各市場檔數 + total + 去年同季 total(比較基準)。
     回傳 (roc_year, season) 供 log;無任何 parquet 回 None。
     """
     quarters = _scan_cached_quarters(cache_dir)
@@ -66,10 +82,16 @@ def _write_latest_json(cache_dir: Path) -> tuple[int, int] | None:
         return None
     roc_year, season = max(quarters)                 # tuple 比較 = 先比年再比季
     prev_available = (roc_year - 1, season) in quarters
+    _per, _total = _count_quarter(cache_dir, roc_year, season)
+    _prev_total = _count_quarter(cache_dir, roc_year - 1, season)[1] if prev_available else None
     (cache_dir / "latest.json").write_text(json.dumps({
         "roc_year": roc_year, "season": season,
         "prev_roc_year": (roc_year - 1) if prev_available else None,  # YoY 可用才填
         "updated_at": pd.Timestamp.now("UTC").isoformat(),
+        "coverage": {                                # §5 涵蓋率診斷(慢公布可見度)
+            "sii": _per.get("sii"), "otc": _per.get("otc"),
+            "total": _total, "prev_total": _prev_total,
+        },
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     return roc_year, season
 

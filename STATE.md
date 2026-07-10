@@ -1,5 +1,24 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📦 2026-07-10 基本面存活池：每季第二趟延遲補抓 + 涵蓋率診斷（v19.71）
+
+> 使用者：「全台股每季重掃一次 OK，只是有些公司財報發布較慢，要怎樣確保都被抓到？」根因：cron 只在「截止+1週」抓一次，慢公布/展延申報者那趟抓不到，又不會回頭補 → 缺到下一季。
+
+**A. 每季第二趟延遲補抓（真正解決）**
+- `.github/workflows/update_fundamentals.yml` 加 4 條 cron（截止+約5週）：Q4→5/5、Q1→6/19、Q2→9/18、Q3→12/19。
+- auto 模式 `latest_published_quarter` 判成同一季 → 重抓覆蓋同檔 parquet（腳本 §5 冪等已支援）；MOPS 彙總累加，晚交者這趟即補進。
+
+**B. 涵蓋率診斷（§5 可觀測性，讓缺口看得見）**
+- **script**：`_write_latest_json` 加 `_count_quarter`，把 `coverage{sii/otc/total/prev_total}` 寫進 `latest.json`（現有 115Q1 已回填：1,969＝上市1,078+上櫃891，去年同季1,934，保留原 updated_at）。
+- **L0**：`SNAPSHOT_COVERAGE_WARN_RATIO=0.90`（本季 total < 去年同季 × 0.9 → 標「可能尚缺慢公布」，以去年同季自我參照，不硬編期望總數魔數）。
+- **L3**：`describe_snapshot_coverage(meta)`（純函式，完整/偏低/舊版無 coverage 三態）+ `get_snapshot_coverage_note()`（快照缺 → 空字串不炸）。
+- **L5**：選股網初篩面板 + RS 抗跌掃描 + 缺貨掃描 caption 都顯示「📦 存活池快照：民國115Q1 涵蓋 1,969 檔…每季兩趟抓取確保慢公布納入」；偏低時初篩面板轉 st.warning。
+
+**§8**：script(L1 cron) + L0 常數 + L3 純 helper + L5 三處 caption，無跨層違規；covers 為 schema-additive（舊 caller 無感）。
+**驗證**：10 新測試（_count_quarter / _write_latest_json 寫 coverage / describe 三態 + 比例邊界 / get_note fail-safe）+ 127 相關既有測試（RS/缺貨/初篩/loader）無 regression 全綠。
+
+---
+
 ## 🛡️ 2026-07-10 抗跌 / 逆勢贏大盤選股（大盤下跌時仍贏過大盤的 RS 前 50）（v19.70）
 
 > 使用者要「大盤下跌時（例如 2020 疫情）仍贏過大盤(RS)的前 50 名個股」。§7/§8 對齊後選「兩者都要（先即時）」+「免費基本面存活池 ~324 檔」。**Phase 1 = 即時模式**（歷史視窗模式為 Phase 2，待接）。

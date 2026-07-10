@@ -203,6 +203,12 @@ def run_shortage_scan(
         _clear(_scan_cached)
 
     rows, meta = _scan_cached(max_scan)
+    # 存活池涵蓋率診斷（§5，快取外注入以反映最新快照）
+    try:
+        from src.services.fundamental_screener_service import get_snapshot_coverage_note
+        meta = {**meta, "coverage_note": get_snapshot_coverage_note()}
+    except Exception as _e:  # noqa: BLE001 — 涵蓋率不可用不炸掃描
+        print(f"[shortage-svc] 涵蓋率注入失敗:{type(_e).__name__}: {_e}")
     if name_map:
         rows = [dict(r) for r in rows]  # 淺拷貝避免污染 cache 內物件
         for r in rows:

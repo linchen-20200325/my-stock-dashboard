@@ -33,6 +33,7 @@ except ImportError:
 
 import pandas as pd
 
+from shared.fundamental_prescreen_thresholds import SNAPSHOT_COVERAGE_WARN_RATIO
 from shared.ttls import TTL_1DAY
 from src.compute.screener.fundamental_prescreen import (
     run_fundamental_prescreen,
@@ -78,6 +79,47 @@ def get_survivor_ids(*, refresh: bool = False) -> list[str]:
     if surv is None or surv.empty:
         return []
     return [str(s) for s in surv["stock_id"].tolist()]
+
+
+def describe_snapshot_coverage(meta: dict) -> dict:
+    """快照涵蓋率診斷(§5 可觀測性):latest.json 的 coverage → 人話 + 是否可能尚缺慢公布。
+
+    Returns: {text, possibly_incomplete, total, prev_total}
+      - possibly_incomplete: 本季 total < 去年同季 total × SNAPSHOT_COVERAGE_WARN_RATIO
+      - coverage 未記錄(舊版快照)→ text 標「未記錄」、possibly_incomplete=False(不誤報)
+    """
+    _cov = (meta or {}).get("coverage") or {}
+    _total = _cov.get("total")
+    if not _total:
+        return {"text": "涵蓋率未記錄（快照為舊版格式，下一趟補抓後即顯示）",
+                "possibly_incomplete": False, "total": None, "prev_total": None}
+    _q = f"民國{meta.get('roc_year')}Q{meta.get('season')}"
+    _asof = str(meta.get("updated_at", ""))[:10]
+    _sii, _otc, _prev = _cov.get("sii"), _cov.get("otc"), _cov.get("prev_total")
+    _incomplete = bool(_prev and _total < _prev * SNAPSHOT_COVERAGE_WARN_RATIO)
+    _parts = [f"{_q} 快照涵蓋 {_total:,} 檔"]
+    if _sii is not None and _otc is not None:
+        _parts.append(f"（上市 {_sii:,} + 上櫃 {_otc:,}）")
+    if _asof:
+        _parts.append(f"，抓取於 {_asof}")
+    _text = "".join(_parts)
+    if _incomplete:
+        _text += (f"；⚠️ 較去年同季 {_prev:,} 檔偏低，可能尚有慢公布公司未納入，"
+                  "每季第二趟 cron（截止+約5週）會自動補抓")
+    else:
+        _text += "；每季兩趟抓取（截止+1週 / +5週）確保慢公布公司納入"
+    return {"text": _text, "possibly_incomplete": _incomplete,
+            "total": _total, "prev_total": _prev}
+
+
+def get_snapshot_coverage_note(*, refresh: bool = False) -> str:
+    """給 RS / 缺貨掃描 caption 用的一行涵蓋率字串。快照缺 → 空字串(不炸掃描)。"""
+    try:
+        _, meta = get_fundamental_prescreen(refresh=refresh)
+        return describe_snapshot_coverage(meta)["text"]
+    except Exception as _e:  # noqa: BLE001 — 涵蓋率不可用不炸掃描
+        print(f"[fund_screener_service] 涵蓋率不可用:{type(_e).__name__}: {_e}")
+        return ""
 
 
 def gate_pool_by_fundamentals(
