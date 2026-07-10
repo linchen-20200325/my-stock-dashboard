@@ -660,7 +660,13 @@ class StockDataLoader:
 
                         # 成交量：股 -> 張
                         if 'volume' in df_yf_adj.columns:
-                            df_yf_adj['volume'] = (df_yf_adj['volume'] / 1000).round().astype(int)
+                            # v19.81 review A:Yahoo 停牌/無量日 volume 可為 NaN,
+                            # astype(int) 直接 IntCastingNaNError 炸整條 K 線。
+                            # §1 顯式填補 + log:NaN→0(§4.6 跌停 0 vol=有效報價語意)
+                            _vol_na = int(df_yf_adj['volume'].isna().sum())
+                            if _vol_na:
+                                print(f"[K線] {stock_id} Yahoo(adj) volume NaN {_vol_na} 筆 → 填 0(§4.6 無量日)")
+                            df_yf_adj['volume'] = (df_yf_adj['volume'].fillna(0) / 1000).round().astype(int)
                         else:
                             df_yf_adj['volume'] = 0
 
@@ -724,7 +730,11 @@ class StockDataLoader:
                         df_yf['low'] = df_yf['low'] * adj_ratio_values
                         df_yf['close'] = adj_close_values
 
-                    df_yf['volume'] = (df_yf['volume'] / 1000).round().astype(int)
+                    # v19.81 review A:同上,Yahoo 備援路徑 NaN volume 防炸(§1 顯式填補 + log)
+                    _vol_na = int(df_yf['volume'].isna().sum())
+                    if _vol_na:
+                        print(f"[K線] {stock_id} Yahoo(備援) volume NaN {_vol_na} 筆 → 填 0(§4.6 無量日)")
+                    df_yf['volume'] = (df_yf['volume'].fillna(0) / 1000).round().astype(int)
                     df = df_yf[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
                     _price_src = 'yahoo_fallback'
                 else:
@@ -737,7 +747,12 @@ class StockDataLoader:
                     })[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
 
                     df['date'] = pd.to_datetime(df['date']).dt.date
-                    df['volume'] = (df['volume'] / 1000).astype(int)
+                    # v19.81 review A:FinMind 路徑同樣 NaN volume 防炸(§1 顯式填補 + log)。
+                    # 保留原 astype(int) 截斷語意(不補 .round(),避免既有值位移)。
+                    _vol_na = int(df['volume'].isna().sum())
+                    if _vol_na:
+                        print(f"[K線] {stock_id} FinMind volume NaN {_vol_na} 筆 → 填 0(§4.6 無量日)")
+                    df['volume'] = (df['volume'].fillna(0) / 1000).astype(int)
 
                     # ========== 復權處理（從 Yahoo 獲取）==========
                     if use_adjusted:

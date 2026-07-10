@@ -460,12 +460,18 @@ def calc_financial_metrics(
     div = abs(_g(cf, "股利支付"))
 
     # Derived ratios
-    gross_margin = round(gross / rev * 100, 2) if rev else 0.0
-    op_margin = round(op_inc / rev * 100, 2) if rev else 0.0
-    net_margin = round(net_inc / rev * 100, 2) if rev else 0.0
-    debt_ratio = round(total_liab / total_assets * 100, 2) if total_assets else 0.0
-    current_ratio = round(cur_assets / cur_liab, 2) if cur_liab else 0.0
-    roe = round(net_inc / equity * 100, 2) if equity else 0.0
+    # v19.81 review C:fuzzy_get 可經 float("nan") 字串路徑回 NaN,而 NaN 為 truthy
+    # → `if rev` 擋不住,NaN/NaN 傳染下游(毛利率=NaN 汙染健康引擎)。
+    # 分母須 notna 且非 0 才算比率;無效分母維持既有 0.0 語意(缺分母≠可算)。
+    def _denom_ok(x: float) -> bool:
+        return bool(pd.notna(x) and x)
+
+    gross_margin = round(gross / rev * 100, 2) if _denom_ok(rev) else 0.0
+    op_margin = round(op_inc / rev * 100, 2) if _denom_ok(rev) else 0.0
+    net_margin = round(net_inc / rev * 100, 2) if _denom_ok(rev) else 0.0
+    debt_ratio = round(total_liab / total_assets * 100, 2) if _denom_ok(total_assets) else 0.0
+    current_ratio = round(cur_assets / cur_liab, 2) if _denom_ok(cur_liab) else 0.0
+    roe = round(net_inc / equity * 100, 2) if _denom_ok(equity) else 0.0
 
     return {
         # Revenue & Profit (千元)

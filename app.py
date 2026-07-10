@@ -363,16 +363,19 @@ with st.sidebar:
 
     st.markdown('---')
     st.markdown('### 🔌 連線狀態')
-    # [Fixed] 與 line 73-74 對齊：st.secrets 優先，os.environ fallback
-    _fm_tok  = str(st.secrets.get('FINMIND_TOKEN',  os.environ.get('FINMIND_TOKEN',  '')))
+    # v19.81:原裸呼 st.secrets.get ×5 — 無 secrets.toml 環境(CI slow lane /
+    # 本機裸跑)直接 StreamlitSecretNotFoundError 炸 module import(slow lane
+    # test_app_reexport 抓到,main 上已紅)。收斂走既有 SSOT helper _get_secret
+    # (st.secrets 優先 → env 降級 → raise 降級),語意同 line 88-89。
+    _fm_tok  = str(_get_secret('FINMIND_TOKEN'))
     # Gemini 改看整池 key（GEMINI_API_KEY + _2~_6），任一把有設就算通
     _gm_keys  = _gemini_keys()
     _gm_slots = [_n for _n in _GEMINI_KEY_NAMES
-                 if str(st.secrets.get(_n, '') or os.environ.get(_n, '') or '').strip()]
-    _px_host = str(st.secrets.get('PROXY_HOST',     os.environ.get('PROXY_HOST',     '')))
+                 if str(_get_secret(_n) or '').strip()]
+    _px_host = str(_get_secret('PROXY_HOST'))
     # PROXY_URL 與 PROXY_HOST 二擇一即可亮 ✅
     if not _px_host:
-        _px_host = str(st.secrets.get('PROXY_URL', os.environ.get('PROXY_URL', '')))
+        _px_host = str(_get_secret('PROXY_URL'))
     _sb_c1, _sb_c2, _sb_c3 = st.columns(3)
     with _sb_c1:
         if _fm_tok:
@@ -396,7 +399,7 @@ with st.sidebar:
         st.caption('🔑 未偵測到任何 Gemini 金鑰（請確認 Secrets 內 '
                    'GEMINI_API_KEY 或 GEMINI_API_KEY_2~_6 的名稱與值）')
     if _px_host:
-        _px_port = str(st.secrets.get('PROXY_PORT', os.environ.get('PROXY_PORT', '')))
+        _px_port = str(_get_secret('PROXY_PORT'))  # v19.81:同上,收斂 _get_secret
         st.caption(f'🔒 {_px_host}:{_px_port}' if _px_port else '🔒 PROXY_URL 已設定')
         st.caption('💡 詳細診斷請看「🔎 資料診斷」Tab 的 API Key 診斷面板')
     if st.button('🔍 測試連線', key='sb_conn_test', use_container_width=True):

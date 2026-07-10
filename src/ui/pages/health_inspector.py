@@ -325,8 +325,11 @@ def render_data_health_raw():
 
     # v18.225 T2：FRED 下次 release 取值（30 天 cache → rerun 不重打 API）
     import os as _os_hi
-    _fred_key_hi = (_os_hi.environ.get('FRED_API_KEY') or
-                    (st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None) or '')
+    try:  # v19.81:無 secrets.toml 時 st.secrets.get 會 raise(CI/裸跑)→ 降級 env-only
+        _sec_fred_hi = st.secrets.get('FRED_API_KEY') if hasattr(st, 'secrets') else None
+    except Exception:
+        _sec_fred_hi = None
+    _fred_key_hi = (_os_hi.environ.get('FRED_API_KEY') or _sec_fred_hi or '')
     try:
         from src.data.macro import fred_get_next_release_date as _fred_nrd
     except Exception:
