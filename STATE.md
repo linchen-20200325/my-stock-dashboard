@@ -1,5 +1,18 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🐛 2026-07-10 VIX/VIX3M 期限結構「對齊後不足 2 筆」修（v19.69）
+
+> 使用者截圖:短線風險雷達「VIX/3M」卡片顯示「⬜ 無資料 / VIX/VIX3M 對齊後不足 2 筆」,label 為 `Yahoo ^VIX / Yahoo ^VIX3M`（兩源皆非空卻對不上）。
+
+**真 bug**:`risk_radar._signal_vix_term_struct` 用 Yahoo **原始 timestamp**（含時分秒、非午夜）直接 `concat(axis=1).dropna()`。同市場日線本該以「日曆日」為對齊鍵,但 ^VIX 與 ^VIX3M 常各停在不同 intraday 時刻（或 VIX3M 走 CBOE 備援 = 00:00 date-only）→ 秒級不等 → `dropna()` **全清空** → 誤報「對齊後不足 2 筆」。
+
+- 修:兩支收盤 series 先 `pd.to_datetime(idx).normalize()` 到日曆日 + `~duplicated(keep='last')`（同日多筆取最後）再 join;`concat(..., sort=True)` 明確時序（消 Pandas4 warning）。
+- §5 可觀測性:對齊後**真的**無重疊時,note 改攤開「VIX 至 YYYY-MM-DD／VIX3M 至 YYYY-MM-DD，源疑停更」而非只丟「不足 2 筆」,供資料診斷判讀。
+- §8:單一 L2 純函式 bug fix,無跨層/介面變動。
+- 驗證:78 risk_radar 測試（+3 新:intraday 時間戳不同仍對齊 / Yahoo 盤中戳 × CBOE 00:00 對齊 / 真無重疊時攤開最後日期）全綠。
+
+---
+
 ## 🐛 2026-07-09 缺貨掃描「一檔都抓不到」修:免費版財報 dataset 無 s + 診斷（v19.68）
 
 > 使用者實測:掃描全跳「存活池深掃後無可評分」,一檔都不剩。
