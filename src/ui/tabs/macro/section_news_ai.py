@@ -175,7 +175,7 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 _nvda_v = locals().get('_ai_nvda') or 0
                 if _sox_v or _nvda_v:
                     _ctx.append(f'• 美股科技動能：費半 SOX={_sox_v:+.1f}% / NVDA={_nvda_v:+.1f}%（領先台股科技權值股 2-4 週）')
-                _v_macro_ctx = '\n'.join(_ctx) if _ctx else '（數據尚未載入，請先更新總經拼圖）'
+                _v_macro_ctx = '\n'.join(_ctx) if _ctx else '（數據尚未載入，請先按「🚀 一鍵更新全部數據」）'
                 _locker = MacroStateLocker()
                 _locker.lock_system_state_only(_system_state)
                 # 組裝 Markdown 提示語（不依賴 JSON 解析，與 Tab 2 AI 首席顧問同風格）
