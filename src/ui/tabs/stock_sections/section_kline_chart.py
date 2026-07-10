@@ -116,6 +116,18 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
     # ── 近5日評分走勢(儲存本次評分到歷史)───────────────────
     _score_hist_key = f'score_hist_{sid2}'
     _score_hist = st.session_state.get(_score_hist_key, [])
+    # B8 v19.77:底稿改讀 cron 快照(data_cache/health_history.parquet,跨 App 重啟
+    # 持久;watchlist 有該股才有史),session 即時點(盤中)覆蓋同日。快照缺/該股
+    # 無列 → 行為同舊(只靠 session 累積),§1 不造假。
+    try:
+        from src.services.health_history_service import (
+            load_health_history, merge_score_history)
+        _persisted_hh = load_health_history(sid2, days=14)
+        if _persisted_hh:
+            _score_hist = merge_score_history(_persisted_hh, _score_hist, keep=7)
+    except Exception as _e_hh:
+        print(f'[section_kline_chart] 健康度快照讀取失敗(fallback session): '
+              f'{type(_e_hh).__name__}: {_e_hh}')
     # 加入今日評分
     _today_str = datetime.date.today().strftime('%m/%d')
     _last_entry = _score_hist[-1] if _score_hist else {}

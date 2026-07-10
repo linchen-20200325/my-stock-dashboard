@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
@@ -43,7 +42,6 @@ from src.compute.strategy import (
 )
 from src.config import get_stock_name
 from src.data.stock.app_stock_fetchers import (
-    _get_loader,
     fetch_dividend_data,
     fetch_financials,
 )
@@ -53,27 +51,41 @@ from src.ui.tabs.tab_helpers import (
     classify_trend_4tier,
 )
 
+# A-2 v19.77(review 效能項,user 核准):thread-local loader — 每 worker 執行緒
+# 各持一個 StockDataLoader 實例。原以全域 Lock 串行保護「FinMind dl 非線程安全」,
+# 代價是 K 線抓取實質退化為序列;實例隔離後無共享可變狀態 → 免鎖真平行。
+# @st.cache_data 的 (stock_id, days) 快取鍵仍跨實例共享(_self 底線略過雜湊),
+# 快取效益不變;max_workers=3 維持(FinMind 限流禮貌上限)。
+_tls_batch = threading.local()
+
+
+def _get_worker_loader():
+    """本執行緒專屬 StockDataLoader(首次呼叫時建立;3 worker ≤ 3 次 login)。"""
+    if not hasattr(_tls_batch, 'loader'):
+        from src.data.core import StockDataLoader
+        _tls_batch.loader = StockDataLoader()
+    return _tls_batch.loader
+
 
 def run_batch_fetch(stock_list: list[str]) -> None:
     """批次抓取 + 計算 + 寫入 session_state(t3_data, t3_batch_codes)。
 
     並發抓 K 線 / 股利 / 財報 → 算指標 → 算健康度 → 算多因子 → 算狀態燈 → 風控警示。
     """
-    loader = _get_loader()
     results_t3 = []          # 汰弱留強(健康度)結果
     score_t3   = []          # 多因子評分結果
 
     prog_t3 = st.progress(0, text='批次分析中...')
-    _t3_loader_lock = threading.Lock()  # FinMind dl 非線程安全,需串行保護
 
     # ── 並發抓取(ThreadPoolExecutor,最多 3 個同時)────────
+    # A-2 v19.77:免鎖 — 每 worker 各持 loader 實例(見 _get_worker_loader),
+    # 原 Lock 讓抓取實質序列化(3 worker 名存實亡)
     def _fetch_single_t3(sid4):
         _cached = _load_cache('t3v2', sid4, ttl_hours=4)
         if _cached:
             return _cached
         try:
-            with _t3_loader_lock:
-                _df4_raw, _err4, _name4 = loader.get_combined_data(sid4, 360, True)
+            _df4_raw, _err4, _name4 = _get_worker_loader().get_combined_data(sid4, 360, True)
             df4   = _df4_raw.tail(300).reset_index(drop=True) if _df4_raw is not None and not _df4_raw.empty else None
             name4 = (_name4 if _name4 and _name4 != sid4 else None) or get_stock_name(sid4) or sid4
             avg_div4, _, _ = fetch_dividend_data(sid4)
@@ -214,7 +226,8 @@ def run_batch_fetch(stock_list: list[str]) -> None:
                 'VCP': '-', '合約負債': '-',
                 '_health': 0, '_val': '-', '_trend': '-',
             })
-        time.sleep(0.2)
+        # A-2 v19.77:原迴圈尾 0.2 秒 sleep 已移除 — 本迴圈為純本地計算(I/O 已在
+        # 上方 ThreadPool 完成),固定延遲純耗 0.2×N 秒且無任何限流意義(review 點名)
 
     prog_t3.empty()
 
