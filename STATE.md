@@ -1,6 +1,6 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🛠️ 2026-07-10 外部 code review P0/P1/P2 修正（v19.72）
+## 🛠️ 2026-07-10 外部 code review P0/P1/P2 修正（v19.74）
 
 > 使用者提交外部深度 code review 報告（dashboard_code_review.md），指示「根據建議修改，不適合的列清單」。逐項核對現行代碼後修 7 項，其餘列不修清單（詳 PR 描述）。
 
@@ -26,6 +26,31 @@
 **附帶:治綠 main 既有 3 紅測（merge 前 CI gate 收拾）**:
 - `test_china_macro_stock` 2 項:CHN_PMI → CHN_BCI 對齊 macro_core.py:241 v18.459 刻意改名（BSCICP03CNM665S = OECD Business Confidence 非 PMI）,測試原漏同步。
 - `test_resample_audit` 1 項:v18.461 週K `'W'`→`'W-SUN'` 後 inventory 未重盤;擴 regex 捕 anchored alias + expected 更新,並依該測試 docstring 要求同步 CLAUDE.md §4.5 一行（W→W-SUN 註記）。全部為「代碼是對的、測試/文件過期」方向,無行為變更。
+
+---
+
+## 🐛 2026-07-10 §十一 新聞：加獨立「📰 掃描新聞」按鈕（v19.73）
+
+> 使用者回報「新聞這邊沒有任何讀取按鈕跟 ai」。查因：新聞 RSS 原本**只在按「🔒 執行 AI 裁決」時順便抓**（section_news_ai.py:64），且該鈕需 Gemini 金鑰 → 沒金鑰的人等於沒有能單獨載新聞的鈕，「新聞整體狀態」永遠「未掃描」。
+
+- 加獨立 **「📰 掃描新聞」** 鈕（`btn_scan_news`）：只抓 RSS（`_fetch_macro_news`）、**免 Gemini 金鑰、不跑 AI**，寫入與 AI 裁決同一 stash key `_macro_news_items` → 上方「新聞整體狀態」燈號即更新。原「執行 AI 裁決」「清除報告」不動。
+- 描述文案改標清楚：「📰 掃描新聞」只抓新聞（免金鑰）；「🔒 執行 AI 裁決」需 `GEMINI_API_KEY`。
+- §8：純 L5 UI 加一鈕 + handler（mirror 既有 verdict handler 的 stash 機制）；無跨層/計算變動。
+- 驗證：4 新測試（按鈕存在 / handler 抓 RSS 且不呼叫 gemini / AI 鈕未誤刪 / 模組編譯）+ 13 render smoke(slow) 無 regression 全綠。
+- 註：AI 報告仍需**使用者自行**在 Streamlit Secrets 設 `GEMINI_API_KEY`（金鑰在 user 帳號，非程式可解）。
+
+---
+
+## 🐛 2026-07-10 §九 跨桶 AI：更新按鈕名對錯 + ①景氣位階 fail-loud（v19.72）
+
+> 使用者截圖：②③④⑤總經卡都跑出真資料了，只有①「目前總經位階」還顯示「請點擊更新總經拼圖」，且**找不到那顆按鈕**。
+
+**兩個真 bug**
+1. **按鈕名不符（找不到按鈕）**：實際按鈕是 `tab_macro.py:144`「🚀 一鍵更新全部數據」，但多處佔位文字卻寫「更新總經拼圖」/「🔄 更新全部總經數據」— 指向不存在的按鈕名。6 處全改對：`section_cross_ai`(卡①預設 + 卡⑤預設)、`section_news_ai:178`、`app.py:532`、`macro_alert.py:360`、`macro_ui_components.py:163`。
+2. **卡①誤導**：卡①需「外銷訂單 YoY 或 台灣 PMI/OECD CLI」才算得出景氣位階；此兩個 T3 來源（CIER/經濟部）本次抓取失敗，但卡①仍顯示「請點擊更新」（讓已更新的人困惑）。改 fail-loud（§1/§5）：偵測「其餘總經已載入（VIX/M1B/CPI 有值）卻缺這兩源」→ 顯示「景氣位階資料未就緒：缺外銷訂單+PMI，這兩來源本次抓取失敗（CIER/經濟部第三方網站暫不可用）」，講實情而非叫他再按更新。
+
+**§8**：純 UI 文案 + 一段 render 判斷，無跨層/計算變動；6 處按鈕名收斂為同一正確字串（消除 divergent label）。
+**驗證**：3 新測試（全 production 碼無殘留錯誤按鈕名的 guard / 卡①「已載入但缺源」顯示 fail-loud 診斷（復現截圖）/ 全空時指向正確按鈕）+ 14 macro render 相關測試無 regression 全綠。
 
 ---
 

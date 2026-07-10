@@ -160,7 +160,7 @@ def margin_card(margin):
         return ('<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;padding:14px;">'
                 '<div style="font-size:11px;color:#484f58;">融資餘額</div>'
                 f'<div style="font-size:12px;color:{TRAFFIC_YELLOW};margin-top:6px;">⏳ 抓取中（TWSE 15:30後更新）</div>'
-                '<div style="font-size:10px;color:#484f58;margin-top:4px;">收盤後點「更新全部總經數據」重試</div></div>')
+                '<div style="font-size:10px;color:#484f58;margin-top:4px;">收盤後點「🚀 一鍵更新全部數據」重試</div></div>')
     mc = (TRAFFIC_RED if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI
           else (TRAFFIC_YELLOW if margin > MARGIN_BALANCE_WARN_THRESHOLD_YI else TRAFFIC_GREEN))
     label = ('🔴超過3400億高危' if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI

@@ -357,7 +357,7 @@ def render_macro_alerts(alerts: list[dict]) -> None:
 
     # ── 資料不可用時的佔位符 ─────────────────────────────────────
     if not alerts:
-        st.info('⏳ 總經警示資料載入中，請點擊「🔄 更新全部總經數據」', icon='📡')
+        st.info('⏳ 總經警示資料載入中，請點擊「🚀 一鍵更新全部數據」', icon='📡')
         return
 
     sm = alert_summary(alerts)
