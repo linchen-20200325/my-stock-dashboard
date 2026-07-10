@@ -1,5 +1,26 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🛡️ 2026-07-10 抗跌 / 逆勢贏大盤選股（大盤下跌時仍贏過大盤的 RS 前 50）（v19.70）
+
+> 使用者要「大盤下跌時（例如 2020 疫情）仍贏過大盤(RS)的前 50 名個股」。§7/§8 對齊後選「兩者都要（先即時）」+「免費基本面存活池 ~324 檔」。**Phase 1 = 即時模式**（歷史視窗模式為 Phase 2，待接）。
+
+**計分口徑（σ 標準化超額報酬 = Mansfield 式）**
+- 個股區間報酬 − 大盤(^TWII)同期報酬 = 超額（>0＝贏過大盤）；再 ÷ 大盤日報酬σ → **RS(σ)**；依 RS 降冪取前 50。
+- ⚠️ 刻意**不用**官方 SSOT `calc_rs_score` 的比值法（`r_i/|r_m|` 在大盤負報酬時語意失真），改沿用 `v5_modules.calc_relative_strength`（逆勢強股語意）。
+- **分級**：🔴 逆勢強股(≥+1σ)｜🟡 偏強抗跌(≥+0.3σ)｜⚪ 同步(−0.3~0.3)｜🟢 落後(<−0.3σ)。
+
+**分層（沿用缺貨選股同一套，不重造）**
+- **L0** `shared/signal_thresholds.py` 補 `RS_SIGMA_LEAD_MIN/MILD_MIN/LAG_MAX`（1.0/0.3/−0.3，**收 v5_modules 3 處 inline 魔數** → §3.3）；`calc_relative_strength` 改 import + schema-additive 回 `avg_stock_ret/avg_market_ret`（顯示用）。新 `shared/rs_screen_thresholds.py`（top50 / lookback 預設 / 分級標籤 / 掃描上限）。
+- **L2** `src/compute/screener/rs_leader_screener.py`（純函式）：個股/大盤**日曆日對齊**（tz 統一：yfinance 個股 tz-aware vs fetch_yf_close 大盤 tz-naive，同 VIX/3M 教訓）→ reuse σ 公式 → 排序取前 50。
+- **L1 重用**：`fetch_stock_history_1y`（threaded，無 st.cache）+ `fetch_yf_close('^TWII')` + `get_survivor_ids`。
+- **L3** `src/services/rs_leader_service.py`：存活池 → 並行抓價 → L2 排名 + **市場漲/跌情境判定**（大盤在漲時明示「抗跌語意不成立」）+ §5 診斷；`build_rs_ai_prompt` 三型。
+- **L5** `src/ui/tabs/rs_leader_ui.py`（lookback 選擇 20/60/120 + 只留贏過大盤 + 排行表 + 情境橫幅 + 誠實揭露 + AI 三型按鈕）；app.py 選股網加 expander「🛡️ 抗跌 / 逆勢贏大盤選股（RS 前 50）」。
+
+**§1 fail-loud**：大盤抓不到 / 存活池空 / 全資料不足 → 回空 + 精準 note，不炸不造假。**誠實揭露**：只掃免費存活池（非全上市）、相對強弱非買點、已收盤日線、大盤漲時抗跌語意不成立。
+**驗證**：39 新測試（L2 15 + L3 9 + L5 AppTest 2，含 tz-aware 對齊 / 市場漲跌橫幅 / SSOT 邊界 / fail-loud）+ 缺貨/render smoke 無 regression 全綠。
+
+---
+
 ## 🐛 2026-07-10 VIX/VIX3M 期限結構「對齊後不足 2 筆」修（v19.69）
 
 > 使用者截圖:短線風險雷達「VIX/3M」卡片顯示「⬜ 無資料 / VIX/VIX3M 對齊後不足 2 筆」,label 為 `Yahoo ^VIX / Yahoo ^VIX3M`（兩源皆非空卻對不上）。

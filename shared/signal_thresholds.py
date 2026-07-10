@@ -273,6 +273,16 @@ RS_BAND_T3: float = 1.0
 RS_BAND_T4: float = 0.5
 """RS 相對強度 T4：≥0.5 → 55 分；≥0 → 40；<0 → 20（弱勢）。原 scoring_engine.py:291 inline"""
 
+# ── RS σ 標準化超額報酬分級（calc_relative_strength / 抗跌 RS 選股）───────
+# Mansfield 式：RS = (個股區間報酬 − 大盤區間報酬) / 大盤日報酬σ。單位 = σ（標準差倍數）。
+# 用於「大盤下跌時仍贏過大盤」語意（比值法 RS_BAND 在大盤負報酬時會失真，故另立此組）。
+RS_SIGMA_LEAD_MIN: float = 1.0
+"""RS σ 領漲門檻：avg_rs ≥ +1.0σ → 🔴 逆勢強股（顯著強於大盤）。原 v5_modules.py:124 inline"""
+RS_SIGMA_MILD_MIN: float = 0.3
+"""RS σ 溫和抗跌門檻：avg_rs ≥ +0.3σ → 🟡 偏強（略強於大盤）。原 v5_modules.py:127 inline"""
+RS_SIGMA_LAG_MAX: float = -0.3
+"""RS σ 落後門檻：avg_rs < −0.3σ → 🟢 弱勢（弱於大盤，空頭優先出清）；[−0.3,0.3) → ⚪ 同步。原 v5_modules.py:130 inline"""
+
 # ── 獲利品質 SQ（calc_quality_score）─────────────────────────
 SQ_GM_TREND_DELTA_PCT: float = 1.0
 """毛利率趨勢顯著門檻：近2季均 - 前2季均 > +1pp → ↑；< -1pp → ↓；其間 → 持穩。原 scoring_engine.py:470 inline"""
