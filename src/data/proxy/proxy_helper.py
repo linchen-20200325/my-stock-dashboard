@@ -80,10 +80,16 @@ def get_proxy_config() -> dict | None:
 
 
 def make_retry_session() -> requests.Session:
-    """urllib3 指數退避 Session：5xx 自動重試最多 3 次。"""
+    """urllib3 指數退避 Session：429/5xx 自動重試最多 3 次。
+
+    S7 v19.78(第二份 review):status_forcelist 補 429 — FinMind 匿名限速
+    3 req/min,原清單漏 429 導致 rate-limit 直接失敗無退避
+    (tw_stock_data_fetcher._RETRY_STATUS 本來就含 429,兩處對齊)。
+    Retry 預設 respect_retry_after_header=True,429 帶 Retry-After 時優先遵循。
+    """
     _retry = Retry(
         total=3, backoff_factor=0.3,
-        status_forcelist=[500, 502, 503, 504],
+        status_forcelist=[429, 500, 502, 503, 504],
         raise_on_status=False,
     )
     _s = requests.Session()

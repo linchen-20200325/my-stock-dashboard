@@ -256,6 +256,12 @@ MACRO_THRESHOLDS: dict = {
 # 不用 @st.cache_data 是因為 macro_core 規定不依賴 streamlit，須能在 CLI/pytest 直接 import。
 _FRED_CACHE: dict[tuple[str, str, int], tuple[float, pd.DataFrame]] = {}
 _FRED_TTL = 1800.0  # 30min，FRED 日頻足夠
+# S9 v19.78(第二份 review):fetch_china_macro(tw_macro)以 ThreadPoolExecutor(5)
+# 併發呼叫 fetch_fred → module dict 無鎖 check-then-set 為 TOCTOU race
+# (CPython dict 單操作原子不會壞結構,但重複抓取/覆寫)。補鎖保護讀寫臨界區。
+import threading as _th_mc
+_FRED_CACHE_LOCK = _th_mc.Lock()
+_YF_CLOSE_CACHE_LOCK = _th_mc.Lock()
 
 
 def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
@@ -287,7 +293,8 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     import time as _time
     key = (series_id, api_key, n)
     now = _time.time()
-    cached = _FRED_CACHE.get(key)
+    with _FRED_CACHE_LOCK:   # S9 v19.78
+        cached = _FRED_CACHE.get(key)
     if cached is not None and (now - cached[0]) < _FRED_TTL:
         return cached[1].copy()
 
@@ -331,7 +338,8 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         validate_fred(out)
     except ImportError:
         pass
-    _FRED_CACHE[key] = (now, out.copy())
+    with _FRED_CACHE_LOCK:   # S9 v19.78
+        _FRED_CACHE[key] = (now, out.copy())
     return out
 
 
@@ -357,7 +365,8 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
     import time as _time
     key = (ticker, interval)
     now = _time.time()
-    cached = _YF_CLOSE_CACHE.get(key)
+    with _YF_CLOSE_CACHE_LOCK:   # S9 v19.78
+        cached = _YF_CLOSE_CACHE.get(key)
     if cached is not None and (now - cached[0]) < _YF_CLOSE_TTL:
         return cached[1].copy()
 
@@ -381,7 +390,8 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
         # caller 不存取 attrs 時無感;需要追溯時 s.attrs["source"] / s.attrs["fetched_at"]。
         s.attrs["source"] = f"Yahoo:{ticker}"
         s.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
-        _YF_CLOSE_CACHE[key] = (now, s.copy())
+        with _YF_CLOSE_CACHE_LOCK:   # S9 v19.78
+            _YF_CLOSE_CACHE[key] = (now, s.copy())
         return s
     except Exception as e:
         print(f"[macro_core/yf] {ticker} 解析失敗: {e}")

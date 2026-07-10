@@ -60,16 +60,25 @@ def _get_finmind_token() -> str:
     return _tok or os.environ.get('FINMIND_TOKEN', '')
 
 
+# S7 v19.78:原 _make_proxy_session 每呼叫 new Session(fetch_dividend_data 一次
+# 呼叫內就 new 2 個)→ 連線池零複用。改 thread-local 單例,同 data_loader._bps_dl。
+import threading as _th_asf
+_TLS_ASF = _th_asf.local()
+
+
 def _make_proxy_session():
-    """NAS proxy session,fallback 純 requests.Session。
+    """NAS proxy session(thread-local 複用),fallback 純 requests.Session。
     對齊 app.py:_bps 行為。"""
     import requests
-    try:
-        from src.data.stock import build_proxy_session as _b
-        s = _b()
-    except Exception:
-        s = requests.Session()
-    s.verify = False
+    s = getattr(_TLS_ASF, 'session', None)
+    if s is None:
+        try:
+            from src.data.stock import build_proxy_session as _b
+            s = _b()
+        except Exception:
+            s = requests.Session()
+        s.verify = False
+        _TLS_ASF.session = s
     return s
 
 
@@ -153,11 +162,13 @@ def fetch_dividend_data(sid):
                 pass
         end = datetime.date.today()
         # First try REST API with proper auth
+        # S8 v19.78:補 UA(原僅 Authorization → python-requests 預設 UA 易被限流)
+        from src.data.core.data_loader import _fm_raw_headers as _fm_hdrs_div
         _div_resp = _make_proxy_session().get(
             FINMIND_API_URL,
             params={'dataset': 'TaiwanStockDividend', 'data_id': sid,
                     'start_date': (end - datetime.timedelta(days=365 * 6)).strftime('%Y-%m-%d')},
-            headers={'Authorization': f'Bearer {_get_finmind_token()}'}, timeout=20)
+            headers=_fm_hdrs_div(_get_finmind_token()), timeout=20)
         _div_jd = _div_resp.json()
         print(f'[股利REST] {sid} status={_div_jd.get("status")}')
         ddf = pd.DataFrame(_div_jd['data']) if _div_jd.get('status') == 200 and _div_jd.get('data') else None
@@ -180,8 +191,9 @@ def fetch_dividend_data(sid):
                 avg_div = float(yr['cash'].mean()) if len(yr) > 0 else 0
                 yearly = yr.to_dict('records')
                 source = 'FinMind'
-    except Exception:
-        pass
+    except Exception as _e_div_fm:
+        # §1:不靜默吞;FinMind 路徑失敗落 log 後走 yfinance/TWSE 備援
+        print(f'[股利] {sid} FinMind 路徑失敗: {type(_e_div_fm).__name__}: {_e_div_fm}')
     # ── 備援2: yfinance(v18.209 K5:改走 yf_proxy.cached_dividends,proxy+cache 統一)──
     if avg_div == 0:
         try:
@@ -198,8 +210,9 @@ def fetch_dividend_data(sid):
                     avg_div = float(yr['cash'].mean())
                     yearly = yr.to_dict('records')
                     source = 'yfinance'
-        except Exception:
-            pass
+        except Exception as _e_div_yf:
+            # §1:不靜默吞;yfinance 備援失敗落 log 後走 TWSE 備援
+            print(f'[股利] {sid} yfinance 備援失敗: {type(_e_div_yf).__name__}: {_e_div_yf}')
 
     # ── 備援3: TWSE 除權息資料(官方,免Token)──
     if avg_div == 0:

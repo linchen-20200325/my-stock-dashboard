@@ -57,7 +57,15 @@ def patch_registry(
             _proxy_rp = _dt_prp.date.today().strftime('%Y-%m-%d')
 
         # 移除所有舊的個股 / ETF 單一 / ETF組合 / ETF回測 / 比較 key
+        # S13 v19.78(第二份 review 查證時挖出):B5 v19.75 三條 [個股] 監控條目
+        # (籌碼集中度/股本/5年現金流量允當比率)由 data_registry_scanner **只在
+        # 「資料刷新」按鈕分支**寫入;本 patch 每次 render 都跑,原本無差別刪光
+        # `[個股]` 前綴 → B5 條目在下一次非刷新 render 即被清掉(監控形同虛設)。
+        # 刪除迴圈排除 B5 後綴(producer 為 scanner,非本 patch,故保留不重建)。
+        _b5_keep_suffixes = (' | 籌碼集中度', ' | 股本', ' | 5年現金流量允當比率')
         for _ok in list(_rp.keys()):
+            if _ok.startswith('[個股]') and _ok.endswith(_b5_keep_suffixes):
+                continue
             if (_ok.startswith('[個股]') or _ok.startswith('[比較]')
                     or (_ok.startswith('[ETF]') and '|' in _ok)
                     or '[ETF組合]' in _ok or '[ETF回測]' in _ok):

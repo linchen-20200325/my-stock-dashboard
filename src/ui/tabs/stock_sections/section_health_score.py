@@ -120,7 +120,11 @@ def render_health_score_section(
             st.markdown(kpi('KD', f'K={k2}/D={d2}' if k2 else '-', kd_txt, kd_c, kd_c),
                         unsafe_allow_html=True)
         with ind5:
-            if df2 is not None and 'MA20' in df2.columns and 'MA100' in df2.columns:
+            # S2 v19.78(第二份 review):歷史 <100 根時 rolling MA100 為 NaN,
+            # `p > m20 > NaN` 靜默 False → 一路 fallthrough 誤標「空箱整理」。
+            # NaN 顯式判別,與「真的空箱」區分(§4.6 新上市股票)。
+            if (df2 is not None and 'MA20' in df2.columns and 'MA100' in df2.columns
+                    and pd.notna(df2['MA20'].iloc[-1]) and pd.notna(df2['MA100'].iloc[-1])):
                 p = price2
                 m20 = float(df2['MA20'].iloc[-1])
                 m100 = float(df2['MA100'].iloc[-1])
@@ -139,7 +143,7 @@ def render_health_score_section(
                 st.markdown(kpi('趨勢', tr_txt, f'MA20={m20:.1f}', tr_c, tr_c),
                             unsafe_allow_html=True)
             else:
-                st.markdown(kpi('趨勢', '-', '無MA數據', '#484f58'), unsafe_allow_html=True)
+                st.markdown(kpi('趨勢', '-', '無MA數據(或均線未成形)', '#484f58'), unsafe_allow_html=True)
         with ind6:
             if bb2:
                 bw_c = TRAFFIC_GREEN if bb2['bw'] < bb2['bw_mean'] * BB_BW_SHRINK_WARN_RATIO else '#58a6ff'
@@ -152,7 +156,11 @@ def render_health_score_section(
     # ── 動態大師建議(基於實際評分)──────────────────────
     _grade_label, _grade_color, _, _grade_emoji = health_grade(health2)
     _price_pos = ''
-    if df2 is not None and 'MA20' in df2.columns and 'MA100' in df2.columns:
+    # S2 v19.78:同上 — MA 為 NaN 時不可判「空箱整理」,顯式標歷史不足
+    if (df2 is not None and 'MA20' in df2.columns and 'MA100' in df2.columns
+            and (pd.isna(df2['MA20'].iloc[-1]) or pd.isna(df2['MA100'].iloc[-1]))):
+        _price_pos = '均線未成形（歷史不足），趨勢不判定'
+    elif df2 is not None and 'MA20' in df2.columns and 'MA100' in df2.columns:
         _p2 = price2
         _m20 = float(df2['MA20'].iloc[-1])
         _m100 = float(df2['MA100'].iloc[-1])

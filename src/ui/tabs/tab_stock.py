@@ -574,6 +574,9 @@ padding:14px 18px;margin-bottom:12px;">
         st.markdown('#### 🎯 停利停損建議 + 近期支撐壓力')
         _sp_c1, _sp_c2, _sp_c3, _sp_c4 = st.columns(4)
         _cur_p  = float(df2['close'].iloc[-1]) if df2 is not None and not df2.empty else 0
+        # S5 v19.78(第二份 review):門檻 len>=5 但標籤固定寫「近20日」— 5≤len<20 時
+        # tail(20) 只涵蓋實際根數,壓力/支撐被高估卻標 20 日 → 標籤改動態視窗天數。
+        _win20_n = min(len(df2), 20) if df2 is not None else 0
         _hi20_p = float(df2['high'].tail(20).max()) if df2 is not None and len(df2) >= 5 else 0
         _lo20_p = float(df2['low'].tail(20).min())  if df2 is not None and len(df2) >= 5 else 0
         # v18.336 PR-H4:停利停損改走 compute_stop_levels SSOT(tab_helpers)
@@ -724,11 +727,17 @@ padding:14px 18px;margin-bottom:12px;">
             _red_k = df2[(df2['close'] > df2['open']) if 'open' in df2.columns
                          else df2['close'] > df2['close'].shift(1)].tail(20)
             if 'volume' in _red_k.columns and not _red_k.empty:
-                _big_red = _red_k.nlargest(1, 'volume').iloc[0]
-                _rk_high = float(_big_red.get('high', _big_red['close']))
-                _rk_low  = float(_big_red.get('low',  _big_red['close']) )
-                _entry_half = round((_rk_high + _rk_low) / 2, 2)  # 1/2 進場價
-                _abs_sl     = round(_rk_low * 0.995, 2)             # 紅K低點-0.5%
+                # S4 v19.78:volume 全 NaN 時 — 舊版 pandas nlargest 剔 NaN 回空 df
+                # → .iloc[0] IndexError;pandas 3.x 則回含 NaN 的任意列 → 靜默選錯
+                # 紅K(進場價/停損算在錯的 bar 上)。先濾 NaN 再取,兩版行為統一:
+                # 全 NaN → 空 → 維持 _entry_half=None 走「計算中」格,不造假。
+                _top_red = _red_k[_red_k['volume'].notna()].nlargest(1, 'volume')
+                if not _top_red.empty:
+                    _big_red = _top_red.iloc[0]
+                    _rk_high = float(_big_red.get('high', _big_red['close']))
+                    _rk_low  = float(_big_red.get('low',  _big_red['close']) )
+                    _entry_half = round((_rk_high + _rk_low) / 2, 2)  # 1/2 進場價
+                    _abs_sl     = round(_rk_low * 0.995, 2)             # 紅K低點-0.5%
 
         _sp_c5b, _sp_c6b, _sp_c7b = st.columns(3)
         with _sp_c5b:
@@ -751,9 +760,9 @@ padding:14px 18px;margin-bottom:12px;">
             st.markdown(kpi('實際盈虧比', f'{_rr2}x', '≥1.5 可操作', _rr_color, '#0d1117'), unsafe_allow_html=True)
 
         with _sp_c5:
-            st.markdown(kpi('近20日壓力', f'{_hi20_p:.2f}', f'距現價 +{_dist_hi}%', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
+            st.markdown(kpi(f'近{_win20_n}日壓力', f'{_hi20_p:.2f}', f'距現價 +{_dist_hi}%', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
         with _sp_c6:
-            st.markdown(kpi('近20日支撐', f'{_lo20_p:.2f}', f'距現價 -{_dist_lo}%', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
+            st.markdown(kpi(f'近{_win20_n}日支撐', f'{_lo20_p:.2f}', f'距現價 -{_dist_lo}%', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
 
         # ══ 進出場訊號（多位老師方法整合）═══════════════════════
         st.markdown('---')
@@ -1051,7 +1060,8 @@ padding:14px 18px;margin-bottom:12px;">
                     try:
                         _ccc_num = float(_ccc_str.split()[0].replace('天', '').strip())
                         _ccc_is_num = True
-                    except (ValueError, AttributeError):
+                    # S3 v19.78:空字串 ''.split() 回 [] → [0] 拋 IndexError,原 except 未涵蓋
+                    except (ValueError, AttributeError, IndexError):
                         _ccc_num, _ccc_is_num = 0.0, False
                     # OPM 護城河：引擎判定 Yes 且 CCC 為實質負數，兩者同時成立才顯示
                     _opm_yes = (_oper2.get('OPM_Strategy', 'No') == 'Yes') and _ccc_is_num and (_ccc_num < 0)

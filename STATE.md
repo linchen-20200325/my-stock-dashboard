@@ -1,5 +1,21 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔌 2026-07-10 第二份外部 review 查證後修復：連線層強化 + UI 邊界（v19.78）
+
+user 指派第二份建議書;14 條主張逐條查證:**6 修 / 1 已修過(S1 CSS=v19.74) / 3 誤判 / 4 部分屬實**;查證另挖出建議書沒發現的真 bug 一枚(S13-adjacent)。
+
+- **S6+S14 timeout SSOT**:實測 FinMind 1.9.12 源碼 — dataset 方法 `timeout=None` 直通 `session.get(timeout=None)` = **無限等待**(包在 SDK max_retry_times=10 迴圈)→ 新增 `data_config.HTTP_TIMEOUT_FINMIND_SDK_SEC=30 / HTTP_TIMEOUT_YF_SEC=15`(語意=單次 HTTP 等待上限,與 ttls.py 快取時長不同源不混放);4 個 SDK 呼叫點 + `_yf_dl` 顯式帶逾時。
+- **S7 session 複用**:`data_loader._bps_dl` / `app_stock_fetchers._make_proxy_session` / `macro_snapshot._make_proxy_session` 三處「每呼叫 new Session」→ thread-local 單例(同緒共連線池/異緒隔離);刪死碼 `_TWSE_DL`;`proxy_helper.make_retry_session` 補 **429**(對齊 tw_stock_data_fetcher._RETRY_STATUS)。
+- **S8 UA 補齊**:5 處手刻 FinMind raw REST 只帶 Authorization → 新 `_fm_raw_headers()`,UA 對齊 finmind_client SSOT;股利 REST 同修。**不硬收斂 finmind_get**(docstring 明載 proxy session 站點刻意排除,曾實測轉紅還原)。
+- **S9 cache 鎖**:`_FRED_CACHE`/`_YF_CLOSE_CACHE` 無鎖 check-then-set + `fetch_china_macro` ThreadPool(5) 真併發 → threading.Lock ×2(8 緒 hammer 測試)。**status 檢查子項改判誤判**:實讀 fetch_url — 只在 200 回 Response 其餘 None,`r is None` 本來就足夠。
+- **S11 月營收方案0 去重**:兩段逐字相同 FinMind 呼叫(第二段必然同敗)→ 刪;暫態重試由 Retry adapter 承接。
+- **S2 MA NaN 誤標**:section_health_score 兩處 `p > m20 > NaN` 靜默 False → <100 根被誤標「空箱整理」→ pd.notna +「均線未成形(歷史不足)」(§4.6);MA20 crash 子項誤判(safe_ma 恆回 float)。
+- **S3**:`split()[0]` except 補 IndexError。**S4**:實測 pandas 3.0.3 nlargest 全 NaN **回含 NaN 任意列**(靜默選錯紅K,非 review 說的 IndexError)→ 先 notna 過濾。**S5**:「近20日」標籤改 `近{_win20_n}日` 動態。
+- **S13-adjacent(真 bug)**:`macro_registry_patch` 每 render 刪光 `[個股]` key,B5 v19.75 三條監控條目(只在刷新分支寫入)下一次 render 即被清掉 → 刪除迴圈排除 B5 後綴。review 原主張(股利缺監控)反而誤判(patch:89-93 本有)。
+- **§1 順手修**:fetch_dividend_data 兩處 `except: pass` 補 log。
+- **回歸網**:`tests/test_review_fixes_v19_78.py` 25 test;全套件 **2,927 passed / 0 failed**。
+- **不修(證據)**:S1=v19.74 已修;S10 sidebar 重複=不成立(兩段內容不同無重疊);S12 季報快取=上層 fetch_quarterly/_extra 已 @st.cache_data 包覆,唯二 caller 皆走 cached wrapper。
+
 ## 📈 2026-07-10 B8 健康度歷史 repo 快照 + A-2 批次抓取真平行（v19.77）
 
 > user 拍板:B8 選「repo 快照 + cron」;A 類只做「批次抓取平行化」(K線快取試點/N+1 未選,不動)。
