@@ -116,14 +116,18 @@ def test_audit_inventory_documented():
     """v18.298 audit inventory:6 個生產 resample 呼叫應全部仍存在
     (用於 audit 文件對齊。新增/刪除 resample 時更新此 inventory + CLAUDE.md §4.5)。
 
-    審計結果(v18.298):
-    - etf_calc.py:`'W'`(週 K)x1
+    審計結果(v18.298 → v19.74 重新盤點):
+    - etf_calc.py:`'W-SUN'`(週 K,v18.461 自 'W' 改錨定週日;right-closed 不變)x1
     - etf_calc.py:`'QE'`(季報酬累積)x2
     - macro_core.py:`'ME'`(月度對齊)x2
     - app.py:`'YE'`(年總和)x1
+
+    v19.74:原 regex 只捕 `[A-Z]+` 純 alias,v18.461 'W'→'W-SUN' 後該筆
+    從盤點消失(帶 anchor 的 alias 不匹配)→ 擴 regex 捕 anchored 形式,
+    inventory 覆蓋率恢復 6/6。
     """
     counts: dict[str, int] = {}
-    pat = re.compile(r"\.resample\(\s*['\"]([A-Z]+)['\"]")
+    pat = re.compile(r"\.resample\(\s*['\"]([A-Z]+(?:-[A-Z]+)?)['\"]")
     for path in _iter_prod_py_files():
         try:
             text = path.read_text(encoding="utf-8")
@@ -133,7 +137,7 @@ def test_audit_inventory_documented():
             alias = m.group(1)
             counts[alias] = counts.get(alias, 0) + 1
     # 若 inventory 數量飄移,提醒重新 audit
-    expected = {"W": 1, "QE": 2, "ME": 2, "YE": 1}
+    expected = {"W-SUN": 1, "QE": 2, "ME": 2, "YE": 1}
     assert counts == expected, (
         f"resample alias 數量飄移,須重新 audit + 更新本 test inventory:\n"
         f"  expected = {expected}\n"

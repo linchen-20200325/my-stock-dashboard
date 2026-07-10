@@ -506,7 +506,9 @@ class StockDataLoader:
             print(f'[FinMind] ⚠️  登入失敗：{e}')
             self._token = _fm_token  # 保留 token 供 raw HTTP 備援使用
 
-    @st.cache_data(ttl=TTL_1HOUR)
+    # v19.74 review:max_entries=64 — 以 stock_id 為鍵逐檔堆積,LRU 回收控記憶體上界
+    # (Streamlit Cloud ~1GB,連續瀏覽數百檔無上界會膨脹到 OOM 重啟)。
+    @st.cache_data(ttl=TTL_1HOUR, max_entries=64)
     def get_combined_data(_self, stock_id, days, use_adjusted=True):
         """完整數據載入流程
 
@@ -851,7 +853,7 @@ class StockDataLoader:
             traceback.print_exc()
             return None, f"系統錯誤: {str(e)}", None
 
-    @st.cache_data(ttl=TTL_1HOUR)
+    @st.cache_data(ttl=TTL_1HOUR, max_entries=64)  # v19.74 review:LRU 上界防 OOM
     def get_monthly_revenue(_self, stock_id):
         """月營收優先順序：MOPS(官方) → FinMind"""
         import os as _os_rv, datetime as _dt_rv

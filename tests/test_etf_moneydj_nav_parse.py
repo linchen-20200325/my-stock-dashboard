@@ -74,8 +74,17 @@ class _FakeSecrets(dict):
 
 
 def _patch_moneydj_only(monkeypatch):
-    """讓 fetch_etf_nav_history 略過 FinMind/goodinfo/Basic0001,直接落到 Basic0003(4b)。"""
-    import src.data.proxy as proxy_pkg
+    """讓 fetch_etf_nav_history 略過 FinMind/goodinfo/Basic0001,直接落到 Basic0003(4b)。
+
+    v19.74:patch 目標從 package(`src.data.proxy`)改為真正持有者
+    `proxy_helper`。package 是 PEP 562 lazy forward(無實體 fetch_url 屬性),
+    monkeypatch 對 package setattr 後,teardown「還原」會把真函式物件寫成
+    package 的**實體屬性** → 永久蓋住 __getattr__ 轉發 → 其後任何測試 patch
+    `proxy_helper.fetch_url` 都打不進 production 的
+    `from src.data.proxy import fetch_url`(risk_radar CBOE 4 測全套件連跑
+    order-dependent 失敗的根因)。patch 持有者則 teardown 乾淨,轉發不受污染。
+    """
+    from src.data.proxy import proxy_helper as _ph
 
     monkeypatch.setattr(ef.st, 'secrets', _FakeSecrets(), raising=False)
 
@@ -83,7 +92,7 @@ def _patch_moneydj_only(monkeypatch):
         if 'Basic0003' in url:
             return _FakeResp()
         return None  # FinMind / goodinfo / Basic0001 皆回 None,強制落到 4b
-    monkeypatch.setattr(proxy_pkg, 'fetch_url', _fake_fetch_url)
+    monkeypatch.setattr(_ph, 'fetch_url', _fake_fetch_url)
     ef.fetch_etf_nav_history.clear()
 
 
@@ -145,7 +154,7 @@ def test_moneydj_malformed_row_skipped(monkeypatch):
         <td class="col09">109.3500</td><td class="col09">-0.31</td></tr>
     </table></body></html>
     '''
-    import src.data.proxy as proxy_pkg
+    from src.data.proxy import proxy_helper as _ph  # v19.74:同 _patch_moneydj_only,patch 持有者非 package
 
     class _FR:
         status_code = 200
@@ -155,7 +164,7 @@ def test_moneydj_malformed_row_skipped(monkeypatch):
 
     def _fake_fetch_url(url, *a, **k):
         return _FR() if 'Basic0003' in url else None
-    monkeypatch.setattr(proxy_pkg, 'fetch_url', _fake_fetch_url)
+    monkeypatch.setattr(_ph, 'fetch_url', _fake_fetch_url)
     ef.fetch_etf_nav_history.clear()
     df = ef.fetch_etf_nav_history('0050.TW', days=35)
     assert len(df) == 1, '雜訊列(非日期/非數字)應被跳過,只留 1 筆有效資料'

@@ -37,6 +37,10 @@ except ImportError:
 from shared.cache_layer import _CACHE_SENTINEL, _pkl_get, _pkl_put
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.macro_compute import _recent_date
+from shared.signal_thresholds import (  # v19.74 融資餘額 §3.2 合理區間 SSOT
+    MARGIN_BALANCE_SANITY_MAX_YI,
+    MARGIN_BALANCE_SANITY_MIN_YI,
+)
 from shared.ttls import TTL_30MIN, TTL_1HOUR
 from src.config import TTL_CONFIG as _TTL_CFG
 
@@ -213,6 +217,37 @@ def _fetch_otc_via_finmind(token: str = ""):
 # 三大法人 (TWSE BFI82U via Squid Proxy) — v18.346 PR-N3 抽出
 # 收盤後 15:30 才有當日資料
 # ═══════════════════════════════════════════════
+def _parse_bfi82u_rows(fields: list, data: list) -> dict | None:
+    """BFI82U 三大法人列 → {'外資及陸資': {'net': 億}, '投信': ..., '自營商': ...}。
+
+    v19.74 review 修正:買賣超欄位用 fields 欄名「買賣差額」定位,不再寫死 row[3]
+    （TWSE 改版欄序位移時,寫死索引會抓到「買進金額」等錯欄 → isdigit 仍通過 →
+    靜默回反向籌碼結論,§1 Fail Loud 違憲）。對齊同檔 MI_MARGN fields 定位既有模式。
+    fields 無「買賣差額/買賣超」欄 → 回 None,caller 應 log + 換日重試/放棄,不猜位置。
+    """
+    _net_idx = next((_i for _i, _f in enumerate(fields)
+                     if '買賣差額' in str(_f) or '買賣超' in str(_f)), None)
+    if _net_idx is None:
+        return None
+    _inst = {'外資及陸資': {'net': 0.0}, '投信': {'net': 0.0}, '自營商': {'net': 0.0}}
+    for _row in data:
+        if not _row or len(_row) <= _net_idx:
+            continue
+        _nm = str(_row[0])
+        # 買賣差額(元,帶千分位逗號);lstrip('-') 支援負值
+        _vs = str(_row[_net_idx]).replace(',', '').strip()
+        if not _vs.lstrip('-').isdigit():
+            continue
+        _net = round(int(_vs) / 1e8, 2)  # 元 → 億元
+        if '外資及陸資' in _nm:
+            _inst['外資及陸資']['net'] = _net
+        elif '投信' in _nm:
+            _inst['投信']['net'] = _net
+        elif '自營' in _nm:
+            _inst['自營商']['net'] += _net
+    return _inst
+
+
 @st.cache_data(ttl=TTL_30MIN, show_spinner=False)
 def fetch_institutional(date_str: str | None = None):
     if date_str is None:
@@ -242,26 +277,21 @@ def fetch_institutional(date_str: str | None = None):
             if not (isinstance(_resp_i, dict) and _resp_i.get('stat') == 'OK'):
                 print(f'[三大法人/BFI82U] ⚠️ date={_ds} stat={(_resp_i or {}).get("stat")}')
                 continue
-            # BFI82U 可能回傳 data 或 tables[0].data
+            # BFI82U 可能回傳 data 或 tables[0].data(fields 跟著同一容器走)
             _data_i = _resp_i.get('data', [])
+            _fields_i = _resp_i.get('fields', [])
             if not _data_i and 'tables' in _resp_i:
-                _data_i = (_resp_i['tables'][0] if _resp_i['tables'] else {}).get('data', [])
+                _tbl0_i = (_resp_i['tables'][0] if _resp_i['tables'] else {})
+                _data_i = _tbl0_i.get('data', [])
+                _fields_i = _tbl0_i.get('fields', []) or _fields_i
             if not _data_i:
                 continue
-            _inst = {'外資及陸資': {'net': 0.0}, '投信': {'net': 0.0}, '自營商': {'net': 0.0}}
-            for _row_i in _data_i:
-                _nm_i = str(_row_i[0])
-                # row[3] = 買賣超(元,帶千分位逗號);lstrip('-') 支援負值
-                _vs_i = str(_row_i[3]).replace(',', '').strip()
-                if not _vs_i.lstrip('-').isdigit():
-                    continue
-                _net_i = round(int(_vs_i) / 1e8, 2)  # 元 → 億元
-                if '外資及陸資' in _nm_i:
-                    _inst['外資及陸資']['net'] = _net_i
-                elif '投信' in _nm_i:
-                    _inst['投信']['net'] = _net_i
-                elif '自營' in _nm_i:
-                    _inst['自營商']['net'] += _net_i
+            # v19.74:欄名定位取代寫死 row[3](TWSE 改版防呆,詳 _parse_bfi82u_rows)
+            _inst = _parse_bfi82u_rows(_fields_i, _data_i)
+            if _inst is None:
+                print(f'[三大法人/BFI82U] ❌ date={_ds} fields 無「買賣差額」欄'
+                      f'(疑 TWSE 改版): {_fields_i}')
+                continue
             print(f'[三大法人/BFI82U] ✅ date={_ds} {_inst}')
             _prov_log('fetch_institutional', 'TWSE:BFI82U(via Squid Proxy)',
                       date_str or 'recent', f'tuple:date={_ds}')
@@ -450,10 +480,40 @@ def _adl_selftest():
 # 融資餘額 — v18.348 PR-N5 抽出 (MEDIUM-HIGH)
 # 6 路 fallback:FinMind → MI_MARGN → HiStock → Goodinfo → Yahoo → 鉅亨網
 # ═══════════════════════════════════════════════
+def _margin_sanity_ok(v_yi: float) -> bool:
+    """融資餘額合理區間檢查（單位:億,§3.2）。
+
+    超出 [MARGIN_BALANCE_SANITY_MIN_YI, MARGIN_BALANCE_SANITY_MAX_YI] →
+    疑似單位/欄位誤判,呼叫端應棄用該來源改走下一 fallback（§1 寧缺勿錯）。
+    """
+    return MARGIN_BALANCE_SANITY_MIN_YI < v_yi < MARGIN_BALANCE_SANITY_MAX_YI
+
+
+def _finmind_margin_to_yi(raw: float) -> float | None:
+    """FinMind TaiwanStockTotalMarginPurchaseShortSale 餘額 → 億。
+
+    v19.74 review 修正:該 dataset 鏡射 TWSE MI_MARGN,MarginPurchaseMoney 餘額
+    單位**固定「仟元」** → ÷1e5 = 億（同檔方案A 註解「仟元÷100,000=億」同源印證）。
+    原 v6 用數值區間反猜單位（億/元/千元/萬元 四分支）,來源改單位時會靜默錯
+    1 個數量級（§4.1 單位陷阱違憲）。換算後過 _margin_sanity_ok 才回值,否則回
+    None（log + 棄用,讓 fallback 鏈接手）。
+    """
+    if raw <= 0:
+        return None
+    _yi = raw / 1e5
+    if _margin_sanity_ok(_yi):
+        return round(_yi, 1)
+    print(f'[融資餘額/FinMind] ⚠️ {raw} 仟元 → {_yi:.1f}億 超出合理區間 '
+          f'({MARGIN_BALANCE_SANITY_MIN_YI:.0f}~{MARGIN_BALANCE_SANITY_MAX_YI:.0f}億),棄用')
+    return None
+
+
 @st.cache_data(ttl=TTL_30MIN, show_spinner=False)
 def fetch_margin_balance(date_str=None):
     """融資餘額 — FinMind → MI_MARGN → HiStock → Goodinfo → Yahoo → 鉅亨網,單位:億元
 
+    v7(v19.74):Plan 0 廢除數值區間猜單位,改固定仟元換算 + §3.2 sanity 區間
+        （見 _finmind_margin_to_yi;超區間 → 棄用改走下一 fallback）。
     v6:Plan 0 = FinMind TaiwanStockTotalMarginPurchaseShortSale
         (Streamlit Cloud 海外 IP 唯一可達來源)
     v5:Plan A = MI_MARGN (mi-margn.html 後端 JSON),扁平 data/fields 解析。
@@ -495,24 +555,18 @@ def fetch_margin_balance(date_str=None):
                             _raw0 = float(str(_r0.get(_bc0, 0)).replace(',', '') or 0)
                         except Exception:
                             continue
-                        # 自動偵測單位:億 / 元 / 千元 / 萬元
-                        if 100 <= _raw0 <= 30_000:        _cand0 = _raw0
-                        elif _raw0 > 1e9:                  _cand0 = _raw0 / 1e8
-                        elif _raw0 > 1e6:                  _cand0 = _raw0 / 1e5
-                        elif _raw0 > 1e4:                  _cand0 = _raw0 / 1e4
-                        else:                              continue
-                        if 100 < _cand0 < 30_000:
-                            _v_mb0 = round(_cand0, 1); break
+                        # v19.74:固定仟元→億換算 + sanity(取代原四分支區間猜單位)
+                        _cand0 = _finmind_margin_to_yi(_raw0)
+                        if _cand0 is not None:
+                            _v_mb0 = _cand0; break
                     if _v_mb0 is not None: break
             elif 'TotalMarginPurchaseTodayBalance' in _cols_mb0:
                 _raw0 = float(str(_grp0['TotalMarginPurchaseTodayBalance'].iloc[-1]).replace(',', '') or 0)
-                if _raw0 > 1e6: _v_mb0 = round(_raw0 / 1e5, 1)
-                elif 100 <= _raw0 <= 30_000: _v_mb0 = round(_raw0, 1)
+                _v_mb0 = _finmind_margin_to_yi(_raw0)
             elif 'MarginPurchaseTodayBalance' in _cols_mb0:
                 _raw0 = float(str(_grp0['MarginPurchaseTodayBalance'].iloc[-1]).replace(',', '') or 0)
-                if _raw0 > 1e6: _v_mb0 = round(_raw0 / 1e5, 1)
-                elif 100 <= _raw0 <= 30_000: _v_mb0 = round(_raw0, 1)
-            if _v_mb0 is not None and 100 < _v_mb0 < 30_000:
+                _v_mb0 = _finmind_margin_to_yi(_raw0)
+            if _v_mb0 is not None:
                 print(f'[融資餘額/FinMind] ✅ {_v_mb0}億 date={_last_d0}')
                 return _pkl_put('margin_balance', _v_mb0)
             print(f'[融資餘額/FinMind] ⚠️ date={_last_d0} 解析未命中(cols={_cols_mb0[:6]})')
@@ -556,7 +610,7 @@ def fetch_margin_balance(date_str=None):
                     continue
                 if _v_raw_mb > 10_000_000:  # 仟元 → 億
                     _v_mb = round(_v_raw_mb / 100_000, 1)
-                    if 100 < _v_mb < 30_000:
+                    if _margin_sanity_ok(_v_mb):
                         print(f'[融資餘額/MI_MARGN/{_sel_mb}] ✅ {_v_mb}億 date={_ds_mb}')
                         return _pkl_put('margin_balance', _v_mb)
             print(f'[融資餘額/MI_MARGN/{_sel_mb}] ⚠️ date={_ds_mb} 解析未命中(fa_col={_fa_col})')
@@ -577,7 +631,7 @@ def fetch_margin_balance(date_str=None):
             _m_h = re.search(r'融資餘額[^\d]{0,20}([\d,]+(?:\.\d+)?)\s*億', _txt_h)
             if _m_h:
                 _v_h = round(float(_m_h.group(1).replace(',', '')), 1)
-                if 100 < _v_h < 30_000:
+                if _margin_sanity_ok(_v_h):
                     print(f'[融資餘額/HiStock] ✅ {_v_h}億')
                     return _pkl_put('margin_balance', _v_h)
     except Exception as _e_hi:
@@ -613,7 +667,7 @@ def fetch_margin_balance(date_str=None):
                             _vc = float(_cand.replace(',', ''))
                             if _vc > 100_000:
                                 _vc = round(_vc / 100_000, 1)
-                            if 100 < _vc < 30_000:
+                            if _margin_sanity_ok(_vc):
                                 _gi_val = round(_vc, 1); break
                         if _gi_val is not None: break
                 if _gi_val is not None: break
@@ -622,7 +676,7 @@ def fetch_margin_balance(date_str=None):
                 _m_g = re.search(r'融資餘額[^\d]{0,30}([\d,]+(?:\.\d+)?)\s*億', _txt_g)
                 if _m_g:
                     _vg2 = round(float(_m_g.group(1).replace(',', '')), 1)
-                    if 100 < _vg2 < 30_000:
+                    if _margin_sanity_ok(_vg2):
                         _gi_val = _vg2
             if _gi_val is not None:
                 print(f'[融資餘額/Goodinfo] ✅ {_gi_val}億')
@@ -642,7 +696,7 @@ def fetch_margin_balance(date_str=None):
             _m_y = re.search(r'融資餘額[^\d]{0,30}([\d,]+(?:\.\d+)?)\s*(?:億|$)', _txt_y)
             if _m_y:
                 _vy = round(float(_m_y.group(1).replace(',', '')), 1)
-                if 100 < _vy < 30_000:
+                if _margin_sanity_ok(_vy):
                     print(f'[融資餘額/Yahoo] ✅ {_vy}億')
                     return _pkl_put('margin_balance', _vy)
             print('[融資餘額/Yahoo] ⚠️ 正則未命中')
@@ -660,7 +714,7 @@ def fetch_margin_balance(date_str=None):
             _m_c = re.search(r'融資餘額[^\d]{0,30}([\d,]+(?:\.\d+)?)\s*(?:億|$)', _txt_c)
             if _m_c:
                 _vc = round(float(_m_c.group(1).replace(',', '')), 1)
-                if 100 < _vc < 30_000:
+                if _margin_sanity_ok(_vc):
                     print(f'[融資餘額/cnyes] ✅ {_vc}億')
                     return _pkl_put('margin_balance', _vc)
             print('[融資餘額/cnyes] ⚠️ 正則未命中')
