@@ -1,5 +1,13 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚨 2026-07-10 雲端倒站 hotfix：pyarrow 25 cap + FinMind 殭屍依賴移除 + 融資單位修正（v19.79）
+
+**事故**:11:50 UTC Streamlit Cloud 平台重啟潮(強制 Python 3.14)+ **pyarrow 25.0.0 當日發布** → 兩儀表板 Segmentation fault(股票:啟動後首次 arrow 序列化崩;基金:舊 streamlit 啟動即 import 崩)。昨日部署(pyarrow 24.x+pandas 3)正常 = delta 鎖定 pyarrow 25。
+
+- **requirements**:顯式 `pyarrow>=14,<25`(cap 回久經驗證 24.x;解禁條件=25.x 在 cp314 穩定數週);**移除 `FinMind>=0.9,<2`** — 實測 wheel metadata:FinMind 1.x 全系列 pin `pandas<2.0/numpy<2.0/lxml<5.0`,與核心 pin 硬衝突,**雲端/CI 從未真正安裝成功**(殭屍依賴,app 長期走 DataLoader=None raw HTTP 路徑;移除消滅 resolver 回溯不確定性)。data_loader try-import 保留 + 警告改雙路錯誤都列出(原第一段錯誤被第二段覆蓋,誤導診斷)。
+- **融資餘額 P0(v19.74 regression)**:production log 實證 `TaiwanStockTotalMarginPurchaseShortSale` Money 列單位=**元**(619,648,244,000 元=6,196 億 ∈ sanity;當仟元=619 兆荒謬),v19.74 誤搬 MI_MARGN 的仟元規則(÷1e5)→ 全值被 sanity 棄用 → FinMind 路徑全滅+TWSE 未出檔時 all-routes-empty。修正:`_finmind_margin_to_yi` 改 ÷1e8;解析迴圈**只認 Money 列**(同組 MarginPurchaseVolume=張,非金額)+ 排除 YesBalance 欄;v19.74 反向測試改以線上真實值為 golden。
+- **回歸網**:`tests/test_hotfix_v19_79.py` 9 test + v19_74 margin 測試重寫;沙盒 pyarrow 對齊 24.0.0;全套件 2,934 passed / 0 failed。
+
 ## 🔌 2026-07-10 第二份外部 review 查證後修復：連線層強化 + UI 邊界（v19.78）
 
 user 指派第二份建議書;14 條主張逐條查證:**6 修 / 1 已修過(S1 CSS=v19.74) / 3 誤判 / 4 部分屬實**;查證另挖出建議書沒發現的真 bug 一枚(S13-adjacent)。

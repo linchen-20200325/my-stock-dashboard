@@ -7,15 +7,22 @@ import sys  # v18.241 D2: sys.stderr for imputation count logging
 import yfinance as yf
 import pandas as pd
 import datetime
+# v19.79:FinMind SDK 已自 requirements.txt 移除 — 其 1.x 全系列宣告
+# pandas<2.0 / numpy<2.0 / lxml<5.0,與本 repo 核心 pin(pandas>=2 / lxml>=5.3)
+# 硬衝突,雲端/CI 實際從未安裝成功(殭屍依賴)。try-import 保留:
+# DataLoader=None 分支即長期實際運行路徑(raw HTTP + finmind_get);
+# 若未來 FinMind 2.x 解除衝突可無痛復活。
 try:
     from FinMind.data import DataLoader        # finmind < 1.x
-except ImportError:
+except ImportError as _e_fm_cap:
+    _fm_err_cap = str(_e_fm_cap)   # v19.79:保留第一段錯誤(原被第二段覆蓋,誤導診斷)
     try:
         from finmind.data import DataLoader    # finmind >= 1.x (小寫)
     except ImportError as _e:
         DataLoader = None
         import warnings
-        warnings.warn(f"FinMind DataLoader 無法載入（raw HTTP API 仍可用）：{_e}")
+        warnings.warn(f"FinMind DataLoader 無法載入（raw HTTP API 仍可用）："
+                      f"FinMind={_fm_err_cap} / finmind={_e}")
 # §8.2.A EX-CACHE-1:條件 import streamlit + 無 UI 呼叫 fallback。
 # 本檔僅用 @st.cache_data / @st.cache_resource(S-H1 已刪 st.session_state 違憲)。
 try:
