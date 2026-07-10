@@ -152,13 +152,21 @@ def fetch_macro_news(n: int = 5) -> list:
 
 def rss_items_from_bytes(_content) -> list:
     """從 RSS bytes 抽 item:feedparser 主、ElementTree 備援(規避 feedparser 對
-    含 encoding 宣告 / 特殊命名空間 RSS 的怪癖)。回傳 dict list。"""
+    含 encoding 宣告 / 特殊命名空間 RSS 的怪癖)。回傳 dict list。
+
+    契約(v19.76 統一雙後端):無 title / 空 title 條目一律略過 — ET 備援本就如此,
+    feedparser 對缺 title 條目寬容原樣回傳,會讓空標題新聞流入下游渲染與關鍵字
+    統計(CI 環境有 feedparser 時 test_news_fetcher_coverage 抓到此分歧)。
+    malformed feed:feedparser 寬容解析(real-world RSS 常輕微 malformed,全丟
+    = 掉真新聞),ET 備援嚴格回 [] — 兩後端此處刻意不同,絕不 raise。
+    """
     if not _content:
         return []
     _cb = _content if isinstance(_content, bytes) else str(_content).encode('utf-8', 'ignore')
     try:
         import feedparser as _fp2
         _e = list(getattr(_fp2.parse(_cb), 'entries', []) or [])
+        _e = [_it for _it in _e if str(_it.get('title') or '').strip()]
         if _e:
             return _e
     except Exception:
