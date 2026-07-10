@@ -848,8 +848,9 @@ def build_leading_fast(days=7, token=""):
     # 跨 session pickle 快取（沿用 fetch_single 模式：回傳新物件、線程安全，避開
     # @st.cache_data 的 DataFrame mutation 陷阱）。先行指標日頻（收盤後更新）→ 30 分鐘 TTL。
     # 只在 FinMind 主來源真的有回資料時才寫快取（見函式尾 _fm_ok），避免暫時性故障被黏住。
-    _ck_li = '/tmp/stock_cache/' + _hs_li.md5(f'lead_fast_{days}_{token}'.encode()).hexdigest() + '.pkl'
-    _os_li.makedirs('/tmp/stock_cache', exist_ok=True)
+    from shared.cache_layer import _PKL_DIR as _pkl_dir_li  # D14b v19.75:可攜 cache dir SSOT
+    _ck_li = _os_li.path.join(_pkl_dir_li, _hs_li.md5(f'lead_fast_{days}_{token}'.encode()).hexdigest() + '.pkl')
+    _os_li.makedirs(_pkl_dir_li, exist_ok=True)
     if _os_li.path.exists(_ck_li) and (_tm_li.time() - _os_li.path.getmtime(_ck_li)) / 60 < 30:
         try:
             with open(_ck_li, 'rb') as _f_li:

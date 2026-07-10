@@ -55,6 +55,8 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
     """
     _tok = _get_token()
     if not _tok:
+        # D14c v19.75(review):原靜默回空 → 補 log(§5 可觀測性,診斷可分辨「無 token」vs「API 失敗」)
+        print(f"[mrev-fetcher] {stock_id} 無 FinMind token(FINMIND_TOKEN/FM_TOKEN 皆空)→ 回空")
         return pd.DataFrame()
     _end = _dt.date.today()
     _start = (_end - _dt.timedelta(days=months * 31 + 31)).strftime("%Y-%m-%d")
@@ -76,6 +78,10 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
                 _df["revenue_month"].astype(str).str.zfill(2) + "-01"
             )
         _df["date"] = pd.to_datetime(_df["date"], errors="coerce")
+        # D13 v19.75:revenue 強制 float64 — FinMind JSON 整數營收會推成 int64,
+        # 違反 MonthlyRevenueSchema float 契約 → blocking 模式整檔誤殺
+        # (同 Fund repo v19.172 FRED 全整數 series 教訓;非數值 coerce 成 NaN 由下行 dropna 接手)
+        _df["revenue"] = pd.to_numeric(_df["revenue"], errors="coerce").astype("float64")
         _df = _df.dropna(subset=["date", "revenue"]).sort_values("date").reset_index(drop=True)
         _result = _df[["date", "revenue", "revenue_year", "revenue_month"]] if all(
             c in _df.columns for c in ["revenue_year", "revenue_month"]
@@ -86,13 +92,14 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
             _result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
         except Exception:
             pass
-        # Phase 2 pandera Priority 1 v18.433:log-mode schema validation
+        # D13 v19.75(review,user 核准):log-mode → blocking。schema 違反 → 整檔
+        # 棄用回空(§1 錯值比缺值危險),下游走既有「無資料」路徑 + 診斷 Tab 亮紅。
         try:
-            from src.compute.risk.schemas import validate_in_log_mode, MonthlyRevenueSchema
-            validate_in_log_mode(_result, MonthlyRevenueSchema,
-                                  label=f'fetch_monthly_revenue:{stock_id}')
-        except Exception:
-            pass
+            from src.compute.risk.schemas import validate_or_reject, MonthlyRevenueSchema
+            _result = validate_or_reject(_result, MonthlyRevenueSchema,
+                                         label=f'fetch_monthly_revenue:{stock_id}')
+        except ImportError as _e_sch:
+            print(f'[mrev-fetcher] schema 模組不可用,跳過驗證: {_e_sch}')
         return _result
     except Exception as _e:
         print(f"[mrev-fetcher] fetch {stock_id} 失敗: {type(_e).__name__}: {_e}")
@@ -112,6 +119,8 @@ def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
     """
     _tok = _get_token()
     if not _tok:
+        # D14c v19.75(review):同單檔版,無 token 補 log 不再靜默
+        print("[mrev-fetcher] batch 無 FinMind token(FINMIND_TOKEN/FM_TOKEN 皆空)→ 回空")
         return pd.DataFrame()
     _end = _dt.date.today()
     _start = (_end - _dt.timedelta(days=months * 31 + 31)).strftime("%Y-%m-%d")
@@ -133,6 +142,8 @@ def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
                 _df["revenue_month"].astype(str).str.zfill(2) + "-01"
             )
         _df["date"] = pd.to_datetime(_df["date"], errors="coerce")
+        # D13 v19.75:同單檔版,revenue 強制 float64(schema float 契約;int64 會誤殺)
+        _df["revenue"] = pd.to_numeric(_df["revenue"], errors="coerce").astype("float64")
         _df = _df.dropna(subset=["date", "revenue", "stock_id"])
         _result_b = _df[["stock_id", "date", "revenue"]].sort_values(
             ["stock_id", "date"]
@@ -143,14 +154,18 @@ def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
             _result_b.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
         except Exception:
             pass
-        # Phase 2 pandera Priority 1 v18.433:log-mode schema validation(batch 含 stock_id 多檔)
+        # D13 v19.75(review,user 核准):log-mode → blocking(batch 含 stock_id 多檔)。
+        # 取首檔 36 列當代表驗(完整驗會誤判 date dup 跨股);樣本違反 = 系統性 shape
+        # 問題 → 整批棄用回空(§1),下游走既有「無資料」路徑。
         try:
-            from src.compute.risk.schemas import validate_in_log_mode, MonthlyRevenueSchema
-            # batch fetch 每股 sub-DataFrame 取首檔當代表驗(完整驗會誤判 date dup 跨股)
-            validate_in_log_mode(_result_b.head(36), MonthlyRevenueSchema,
-                                  label='fetch_batch_monthly_revenue:sample')
-        except Exception:
-            pass
+            from src.compute.risk.schemas import validate_or_reject, MonthlyRevenueSchema
+            _sample_v = validate_or_reject(_result_b.head(36), MonthlyRevenueSchema,
+                                           label='fetch_batch_monthly_revenue:sample')
+            if _sample_v.empty and not _result_b.empty:
+                print('[mrev-fetcher] batch 樣本 schema 違反 → 整批棄用(§1 錯值比缺值危險)')
+                return _result_b.iloc[0:0]
+        except ImportError as _e_sch:
+            print(f'[mrev-fetcher] schema 模組不可用,跳過驗證: {_e_sch}')
         return _result_b
     except Exception as _e:
         print(f"[mrev-fetcher] batch fetch 失敗: {type(_e).__name__}: {_e}")

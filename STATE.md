@@ -1,5 +1,30 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧰 2026-07-10 review B/D 類收斂：診斷盲區登錄 + pandera 阻擋 + cache 可攜（v19.75）
+
+> user 核准「B+C+D 請繼續」(A 類大重構不動)。B=監控盲區、D=低 ROI 清理;C 類複查在 Fund 側記錄。
+
+**B5 診斷盲區登錄 data_registry**(review:籌碼集中度/股本/現金流量比壞掉不亮紅):
+- producer 端 meta stash(只存元資料不存 df 本體):`chip_radar` 寫 `chip_conc_meta`、`tab_stock` 寫 `t2_xsec_meta`;5年現金流量比率讀財報健檢**既有** `_fin_raw_{sid}` stash,零新 producer。
+- `data_registry_scanner` 統一登錄 3 格:籌碼集中度(weekly,TDCC 週五更)/ 股本(quarterly,fetcher 失敗回 0.0 → missing 亮紅)/ 5年現金流量允當比率(yearly,status!=ok → missing)。只在 user 查過該股後登錄,避免固定清單膨脹。
+
+**D13 月營收 pandera log-mode → blocking**(user 核准的資料政策變更):
+- 新 `schemas.validate_or_reject()`:schema 違反 → **整檔棄用回空** + stderr log(§1 錯值比缺值危險;刻意不丟壞列 — 部分刪列會讓資料「看似完整」= 掩蓋)。pandera 未裝 → 放行(對齊 try_validate 語意),絕不 raise。
+- `monthly_revenue_fetcher` 單檔+batch 兩處接線(batch 取首檔 36 列樣本,樣本違反 = 系統性 shape 問題 → 整批棄用)。
+- **防誤殺**:revenue 先強轉 float64(FinMind JSON 整數營收會推成 int64,違反 schema float 契約 → blocking 整檔誤殺;Fund repo v19.172 FRED 同型教訓)。
+
+**D14b cache 路徑可攜化**(review:/tmp/stock_cache 寫死,Windows 本機炸):
+- 6 檔統一 `env STK_PKL_DIR 優先 + tempfile.gettempdir() 預設`(cache_layer/data_config/app_cache/leading_indicators/daily_data_fetchers/tab_macro)。Linux/Streamlit Cloud 結果不變(=/tmp/stock_cache),行為 0 變。
+- ADL 除錯 log 路徑抽 `shared/cache_layer.ADL_LOG_PATH` SSOT(原 daily_data_fetchers 寫 + tab_macro 讀各自寫死字面值 = 跨檔隱性契約)。
+
+**D14c 月營收無 token 靜默回空 → 補 log**(§5 可觀測性,診斷可分辨「無 token」vs「API 失敗」)。
+
+**D 類不動項(維持並說明)**:三層快取 TTL(30min pkl/30min cache_data 外層 + 1h loader 內層)為刻意兩層設計非 bug;`data_loader` 減 `.copy()` 屬高風險 perf 重構;兩處配息 fetcher 用途不同(yfinance 年度 vs 4-fallback 明細)不強併。**B8 健康度走勢後端持久化**:涉存儲選型(GSheet / repo 快照 / tmp),§8.1 先提案待 user 拍板,未實作。
+
+**驗證**:`tests/test_review_bcd_v19_75.py` 15 test(blocking 不誤殺 NaN 停業態/負營收整檔棄用/int64 強轉存活/no-token log/scanner 3 格登錄+missing/未查不登錄/可攜路徑源碼守衛+Linux 值不變)全綠;全套件無 regression。
+
+---
+
 ## 🛠️ 2026-07-10 外部 code review P0/P1/P2 修正（v19.74）
 
 > 使用者提交外部深度 code review 報告（dashboard_code_review.md），指示「根據建議修改，不適合的列清單」。逐項核對現行代碼後修 7 項，其餘列不修清單（詳 PR 描述）。

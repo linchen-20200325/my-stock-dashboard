@@ -352,10 +352,11 @@ def render_tab_macro():
             except Exception:
                 pass
             try:
-                with open('/tmp/_adl_log.txt','r',encoding='utf-8') as _af:
+                from shared.cache_layer import ADL_LOG_PATH as _adl_lp  # D14b v19.75:跨檔路徑 SSOT
+                with open(_adl_lp,'r',encoding='utf-8') as _af:
                     print('[ADL詳細]\n' + _af.read())
                 import os as _rmf
-                _rmf.remove('/tmp/_adl_log.txt')
+                _rmf.remove(_adl_lp)
             except Exception:
                 pass
 

@@ -117,6 +117,19 @@ def render_chip_radar(ticker: str = '') -> str:
     _df = _result.get('df', pd.DataFrame())
     _err = _result.get('err', '')
 
+    # B5 v19.75(review 監控盲區):登錄 meta 供 data_registry_scanner
+    # (只存元資料不存 df 本體;抓失敗也登 rows=0 → 診斷 Tab 亮紅可見)
+    try:
+        _cc_last = _df.iloc[-1]['日期'] if _df is not None and not _df.empty else None
+        st.session_state['chip_conc_meta'] = {
+            'sid': _tk,
+            'rows': 0 if _df is None else len(_df),
+            'last_date': (pd.Timestamp(_cc_last).strftime('%Y-%m-%d')
+                          if _cc_last is not None and pd.notna(_cc_last) else 'N/A'),
+        }
+    except Exception as _e_ccm:
+        print(f'[chip_radar] registry meta 寫入失敗: {type(_e_ccm).__name__}: {_e_ccm}')
+
     if _df is None or _df.empty:
         st.warning('⚠️ 無法解析籌碼資料，請確認目標網站結構或連線狀態')
         if _err:
