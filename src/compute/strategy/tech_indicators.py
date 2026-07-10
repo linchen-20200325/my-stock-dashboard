@@ -116,7 +116,7 @@ def calc_bollinger(df, window=20, mult=2):
             'lower': round(float(_l), 2),
             'ma':    round(float(_m), 2),
             'bw':    round(float(_bw), 2),
-            'bw_mean': round(float(bw.mean()), 2),  # v19.72:移除恆真 `'bw' in dir()` dead code
+            'bw_mean': round(float(bw.mean()), 2),  # v19.74:移除恆真 `'bw' in dir()` dead code
             'price': round(float(df['close'].iloc[-1]), 2),
             'near_upper': float(df['close'].iloc[-1]) >= float(_u) * BB_NEAR_UPPER_RATIO,
         }

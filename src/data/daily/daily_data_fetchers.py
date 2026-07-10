@@ -37,7 +37,7 @@ except ImportError:
 from shared.cache_layer import _CACHE_SENTINEL, _pkl_get, _pkl_put
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.macro_compute import _recent_date
-from shared.signal_thresholds import (  # v19.72 融資餘額 §3.2 合理區間 SSOT
+from shared.signal_thresholds import (  # v19.74 融資餘額 §3.2 合理區間 SSOT
     MARGIN_BALANCE_SANITY_MAX_YI,
     MARGIN_BALANCE_SANITY_MIN_YI,
 )
@@ -220,7 +220,7 @@ def _fetch_otc_via_finmind(token: str = ""):
 def _parse_bfi82u_rows(fields: list, data: list) -> dict | None:
     """BFI82U 三大法人列 → {'外資及陸資': {'net': 億}, '投信': ..., '自營商': ...}。
 
-    v19.72 review 修正:買賣超欄位用 fields 欄名「買賣差額」定位,不再寫死 row[3]
+    v19.74 review 修正:買賣超欄位用 fields 欄名「買賣差額」定位,不再寫死 row[3]
     （TWSE 改版欄序位移時,寫死索引會抓到「買進金額」等錯欄 → isdigit 仍通過 →
     靜默回反向籌碼結論,§1 Fail Loud 違憲）。對齊同檔 MI_MARGN fields 定位既有模式。
     fields 無「買賣差額/買賣超」欄 → 回 None,caller 應 log + 換日重試/放棄,不猜位置。
@@ -286,7 +286,7 @@ def fetch_institutional(date_str: str | None = None):
                 _fields_i = _tbl0_i.get('fields', []) or _fields_i
             if not _data_i:
                 continue
-            # v19.72:欄名定位取代寫死 row[3](TWSE 改版防呆,詳 _parse_bfi82u_rows)
+            # v19.74:欄名定位取代寫死 row[3](TWSE 改版防呆,詳 _parse_bfi82u_rows)
             _inst = _parse_bfi82u_rows(_fields_i, _data_i)
             if _inst is None:
                 print(f'[三大法人/BFI82U] ❌ date={_ds} fields 無「買賣差額」欄'
@@ -492,7 +492,7 @@ def _margin_sanity_ok(v_yi: float) -> bool:
 def _finmind_margin_to_yi(raw: float) -> float | None:
     """FinMind TaiwanStockTotalMarginPurchaseShortSale 餘額 → 億。
 
-    v19.72 review 修正:該 dataset 鏡射 TWSE MI_MARGN,MarginPurchaseMoney 餘額
+    v19.74 review 修正:該 dataset 鏡射 TWSE MI_MARGN,MarginPurchaseMoney 餘額
     單位**固定「仟元」** → ÷1e5 = 億（同檔方案A 註解「仟元÷100,000=億」同源印證）。
     原 v6 用數值區間反猜單位（億/元/千元/萬元 四分支）,來源改單位時會靜默錯
     1 個數量級（§4.1 單位陷阱違憲）。換算後過 _margin_sanity_ok 才回值,否則回
@@ -512,7 +512,7 @@ def _finmind_margin_to_yi(raw: float) -> float | None:
 def fetch_margin_balance(date_str=None):
     """融資餘額 — FinMind → MI_MARGN → HiStock → Goodinfo → Yahoo → 鉅亨網,單位:億元
 
-    v7(v19.72):Plan 0 廢除數值區間猜單位,改固定仟元換算 + §3.2 sanity 區間
+    v7(v19.74):Plan 0 廢除數值區間猜單位,改固定仟元換算 + §3.2 sanity 區間
         （見 _finmind_margin_to_yi;超區間 → 棄用改走下一 fallback）。
     v6:Plan 0 = FinMind TaiwanStockTotalMarginPurchaseShortSale
         (Streamlit Cloud 海外 IP 唯一可達來源)
@@ -555,7 +555,7 @@ def fetch_margin_balance(date_str=None):
                             _raw0 = float(str(_r0.get(_bc0, 0)).replace(',', '') or 0)
                         except Exception:
                             continue
-                        # v19.72:固定仟元→億換算 + sanity(取代原四分支區間猜單位)
+                        # v19.74:固定仟元→億換算 + sanity(取代原四分支區間猜單位)
                         _cand0 = _finmind_margin_to_yi(_raw0)
                         if _cand0 is not None:
                             _v_mb0 = _cand0; break

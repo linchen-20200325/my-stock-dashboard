@@ -105,7 +105,7 @@ def fetch_price_data(sid, days):
                     _latest = _latest.date()
                 elif isinstance(_latest, str):
                     _latest = datetime.datetime.strptime(str(_latest)[:10], '%Y-%m-%d').date()
-                # v19.72:容忍窗 5 → 14 日曆日(SSOT)。原 5 天在春節封關(最長 13 日曆日)
+                # v19.74:容忍窗 5 → 14 日曆日(SSOT)。原 5 天在春節封關(最長 13 日曆日)
                 # 期間把「休市無新資料」誤判 stale → 每次冷啟動全檔強制重抓 → 撞
                 # FinMind/yfinance 限流(重抓也只拿到同樣的舊資料,純燒配額)。
                 # 真新鮮度仍由 pkl TTL(0.5h) + @st.cache_data TTL(30min) 把關。

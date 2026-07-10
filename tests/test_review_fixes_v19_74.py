@@ -1,4 +1,4 @@
-"""v19.72 — 外部 code review 修正守衛測試。
+"""v19.74 — 外部 code review 修正守衛測試。
 
 對應 dashboard_code_review.md 建議（user 2026-07-10 指派）:
 1. P0 三大法人 BFI82U:買賣超欄改 fields 欄名定位,不寫死 row[3]

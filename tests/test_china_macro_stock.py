@@ -49,7 +49,7 @@ def test_china_fred_specs_uses_ssot():
 # ══════════════════════════════════════════════════════════════
 
 def test_macro_thresholds_china_keys_present():
-    # v19.72:CHN_PMI → CHN_BCI 對齊 macro_core.py:241 v18.459 刻意改名
+    # v19.74:CHN_PMI → CHN_BCI 對齊 macro_core.py:241 v18.459 刻意改名
     # (BSCICP03CNM665S = OECD Business Confidence,非 PMI;測試原漏同步)
     keys = {"CHN_CLI", "CHN_BCI", "CHN_CPI", "CHN_M2", "USDCNY"}
     assert keys.issubset(macro_core.MACRO_THRESHOLDS.keys())

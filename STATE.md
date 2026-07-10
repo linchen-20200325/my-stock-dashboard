@@ -21,11 +21,13 @@
 
 **UI bug CSS 字面大括號**（`tab_stock.py:1087/1099/1111`）:f-string 內 `"{TRAFFIC_GREEN}18"` 寫在引號內不插值 → 渲染字面文字,獲利 5 卡背景/邊框色壞掉 → 改 `{TRAFFIC_GREEN if ok else TRAFFIC_RED}18`（對齊同段 1124 行既有正確寫法）。另移除 `tech_indicators.calc_bollinger` 恆真 `'bw' in dir()` dead code。
 
-**驗證**:新增 `tests/test_review_fixes_v19_72.py` 18 測試（欄序位移/缺欄/單位錯 10×/邊界/全零偵測/源碼守衛）全綠;受影響套件（pr_n3/pr_n5/risk_radar/rs_leader/china 等 2,800+ 測試）無新增 regression。
+**驗證**:新增 `tests/test_review_fixes_v19_74.py` 18 測試（欄序位移/缺欄/單位錯 10×/邊界/全零偵測/源碼守衛）全綠;受影響套件（pr_n3/pr_n5/risk_radar/rs_leader/china 等 2,800+ 測試）無新增 regression。
 
-**附帶:治綠 main 既有 3 紅測（merge 前 CI gate 收拾）**:
+**附帶:治綠 main CI（pr-check fast lane 自 7/3 起全紅,merge 前收拾）**:
 - `test_china_macro_stock` 2 項:CHN_PMI → CHN_BCI 對齊 macro_core.py:241 v18.459 刻意改名（BSCICP03CNM665S = OECD Business Confidence 非 PMI）,測試原漏同步。
-- `test_resample_audit` 1 項:v18.461 週K `'W'`→`'W-SUN'` 後 inventory 未重盤;擴 regex 捕 anchored alias + expected 更新,並依該測試 docstring 要求同步 CLAUDE.md §4.5 一行（W→W-SUN 註記）。全部為「代碼是對的、測試/文件過期」方向,無行為變更。
+- `test_resample_audit` 1 項:v18.461 週K `'W'`→`'W-SUN'` 後 inventory 未重盤;擴 regex 捕 anchored alias + expected 更新,並依該測試 docstring 要求同步 CLAUDE.md §4.5 一行（W→W-SUN 註記）。
+- **collection 全滅根因**（CI run #422 起 `Interrupted: errors during collection` exit 2,一個測試都沒跑）:`test_data_coverage`/`test_macro_classroom` 在**收集(import)階段**把 `sys.modules['streamlit']` 換成 stub(非 package),字母序在後的 `test_rs_leader_ui`(v19.70)+`test_macro_cross_ai_button_and_state`(v19.72)模組層 `from streamlit.testing.v1 import AppTest` 直接 ModuleNotFoundError。修法對齊同套件 `test_pe_river_merge_dtype`/`test_render_smoke` 既有慣例:AppTest e2e 測試歸 `@pytest.mark.slow` + 測試內 lazy import + setup 偵測不可用即 skip;按鈕名 source-scan 測試不需 AppTest,留 fast lane。（曾試「踢 stub 重載真 streamlit」免疫段,實測會翻掉其後 49 個依賴 stub 生態的測試 → 棄用,回歸 pe_river 模式。）
+- 全部為「代碼是對的、測試過期/測試互相污染」方向,無 production 行為變更。既有「4 項 risk_radar 全套件連跑 order-dependent 失敗」(單獨執行全過,test-infra lazy-forward vs patch 目標歧異)為 main 既有議題,不在本 PR 範圍,已知悉待議。
 
 ---
 

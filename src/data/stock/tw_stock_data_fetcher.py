@@ -260,7 +260,7 @@ def fuzzy_get_from_df(df: pd.DataFrame, field: str, default: float = 0.0) -> flo
                 except (TypeError, ValueError):
                     continue
     # Contains match (substring)
-    # v19.72 review 修正:欄名可能非 str(MOPS read_html 常回整數欄)→ str(c)
+    # v19.74 review 修正:欄名可能非 str(MOPS read_html 常回整數欄)→ str(c)
     # 否則 `alias in c` 直接 TypeError 炸掉整個 calc_financial_metrics。
     for alias in aliases:
         matched = [c for c in df.columns if alias in str(c)]
@@ -507,7 +507,7 @@ def calc_financial_metrics(
 # §11 Cached Fetcher Factory
 # ─────────────────────────────────────────────
 def _make_cached_fetcher():
-    # v19.72 review:max_entries=64 — 以 stock_id 為鍵逐檔堆積,無上界時
+    # v19.74 review:max_entries=64 — 以 stock_id 為鍵逐檔堆積,無上界時
     # Streamlit Cloud(~1GB)連續瀏覽數百檔會膨脹;LRU 回收控記憶體上界。
     @st.cache_data(ttl=CACHE_TTL_SEC, show_spinner=False, max_entries=64)
     def _fetch(stock_id: str, is_finance: bool = False) -> dict[str, Any]:
@@ -538,7 +538,7 @@ def _make_cached_fetcher():
             return {"error": "all_sources_failed", "is_finance": is_finance}
 
         _metrics = calc_financial_metrics(bs, inc, cf, is_finance=is_finance)
-        # v19.72 review 修正:MOPS ajax_t164sb03 是未標準化長格式(會計項目/金額),
+        # v19.74 review 修正:MOPS ajax_t164sb03 是未標準化長格式(會計項目/金額),
         # 非 Goodinfo 季度寬表 schema,fuzzy 欄位比對多半全落空回 default=0.0 →
         # 「表面拿到財報 dict、實際全指標 = 0」,下游健康度被餵零值誤判財務崩壞
         # (§1 錯值比缺值更危險)。核心科目全零 → 顯式 fail 回 parse_failed,
@@ -801,7 +801,7 @@ def fetch_goodinfo_metrics(
         stock_code: 股票代號（如 "2330"）
         _proxies:   自訂代理，格式 {"http": "http://host:port", "https": "..."}
                     傳入 None 時自動讀取 Streamlit Secrets 設定。
-                    v19.72 review 修正:改名 `_proxies`(前置底線讓 @st.cache_data
+                    v19.74 review 修正:改名 `_proxies`(前置底線讓 @st.cache_data
                     略過雜湊)— dict 不可雜湊,原名 `proxies` 傳入非 None 值時
                     Streamlit 直接拋 UnhashableParamError。
                     ⚠️ 語意 trade-off:不同 proxies 共用同一 cache 條目(以

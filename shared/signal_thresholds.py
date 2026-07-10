@@ -423,13 +423,13 @@ v18.327：統一黃線（MK 籌碼面「提早預警」邏輯），SQL 邏輯卡
 MARGIN_BALANCE_SANITY_MIN_YI: float = 500.0
 """融資餘額多源解析**合理區間下限**（億 TWD，§3.2 範圍檢查）。
 換算後 < 500 億 → 疑似單位誤判（如仟元被當萬元,錯 10×）或抓錯欄位,棄用該來源改走下一 fallback。
-台股融資餘額 2008 金融海嘯低點 ≈1,100 億,現代史未低於此值。v19.72 review 修正新增,
+台股融資餘額 2008 金融海嘯低點 ≈1,100 億,現代史未低於此值。v19.74 review 修正新增,
 取代 daily_data_fetchers.fetch_margin_balance 原 inline `100 < x < 30_000` 過鬆區間。"""
 
 MARGIN_BALANCE_SANITY_MAX_YI: float = 10000.0
 """融資餘額多源解析**合理區間上限**（億 TWD = 1 兆，§3.2 範圍檢查）。
 換算後 > 1 兆 → 疑似單位誤判（如元被當仟元,錯 100×~1000×）,棄用該來源改走下一 fallback。
-近年高點 ≈3,300 億（2024/07）,上限留 3× 頭部空間避免多頭市場誤殺真值。v19.72 review 修正新增。"""
+近年高點 ≈3,300 億（2024/07）,上限留 3× 頭部空間避免多頭市場誤殺真值。v19.74 review 修正新增。"""
 
 PRICE_CACHE_HOLIDAY_TOLERANCE_CALENDAR_DAYS: int = 14
 """價格 pkl 快取「序列最新日 vs 預期交易日」容忍窗（單位:日曆日）。
@@ -437,7 +437,7 @@ PRICE_CACHE_HOLIDAY_TOLERANCE_CALENDAR_DAYS: int = 14
 台股春節封關最長 gap = 13 日曆日（2025:1/21 封關 → 2/3 開紅盤）,原 5 天窗在連假期間
 把「休市無新資料」誤判為 stale → 每次冷啟動全檔強制重抓 → 撞 FinMind/yfinance 限流。
 放寬至 14 涵蓋春節最壞情境;真正的資料新鮮度仍由 pkl TTL(0.5h)+ @st.cache_data TTL 把關,
-本窗僅防「快取剛寫入但序列過舊」極端態,放寬的完整性代價可忽略。v19.72 review 修正新增。"""
+本窗僅防「快取剛寫入但序列過舊」極端態,放寬的完整性代價可忽略。v19.74 review 修正新增。"""
 
 BREADTH_BULL_PCT: float = 60.0
 """市場廣度（jq_ratio / ADL 上漲佔比 %）多頭線：≥60% → 🟢 多頭積極 / bull regime。

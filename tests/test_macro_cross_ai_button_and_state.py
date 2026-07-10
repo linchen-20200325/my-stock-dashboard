@@ -9,7 +9,16 @@ from __future__ import annotations
 
 import pathlib
 
-from streamlit.testing.v1 import AppTest
+import pytest
+
+# v19.74:模組層 `from streamlit.testing.v1 import AppTest` 改 slow 測試內
+# lazy import(對齊 test_pe_river_merge_dtype / test_render_smoke 既有慣例)。
+# 原因:test_data_coverage / test_macro_classroom 在「收集(import)階段」把
+# sys.modules['streamlit'] 換成 stub(非 package),本檔字母序在 macro_classroom
+# 之後 → 模組層 import 直接 ModuleNotFoundError → 整個 fast lane
+# Interrupted exit 2(CI run #425/#426 全紅根因)。按鈕名 source-scan 測試
+# 不需 AppTest,留 fast lane;兩個 render 測試歸 slow(AppTest e2e 依 pytest.ini
+# 定義本就屬 slow lane),stub 生態下 setup 偵測不可用 → skip(同 pe_river)。
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -53,22 +62,34 @@ def _script_nothing_loaded():
     render_section_cross_ai(tech_s={}, tw_s={})
 
 
-def test_card1_honest_diagnostic_when_loaded_but_missing():
-    at = AppTest.from_function(_script_loaded_but_missing).run(timeout=30)
-    assert not at.exception
-    allmd = " ".join(m.value for m in at.markdown)
-    # 卡①不再誤說「請點擊更新」，改講實情：這兩個來源抓取失敗
-    assert "景氣位階資料未就緒" in allmd
-    assert "外銷訂單" in allmd and "PMI" in allmd
-    assert "請先按上方" not in allmd     # 已更新 → 不該再叫他去按更新
-    # 其餘卡仍正常填（不受影響）
-    assert "資金明顯外逃" in allmd or "M2" in allmd
+@pytest.mark.slow
+class TestCard1RenderAppTest:
+    """實機 render 驗證(需 streamlit.testing.v1.AppTest,對齊 pe_river 慣例)。"""
 
+    @classmethod
+    def setup_class(cls):
+        try:
+            from streamlit.testing.v1 import AppTest  # noqa: F401
+        except ImportError:
+            pytest.skip("streamlit.testing.v1.AppTest 不可用(collection stub 生態)")
 
-def test_card1_points_to_real_button_when_nothing_loaded():
-    at = AppTest.from_function(_script_nothing_loaded).run(timeout=30)
-    assert not at.exception
-    allmd = " ".join(m.value for m in at.markdown)
-    # 完全沒載入 → 指向【正確】按鈕名
-    assert "🚀 一鍵更新全部數據" in allmd
-    assert "更新總經拼圖" not in allmd
+    def test_card1_honest_diagnostic_when_loaded_but_missing(self):
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_function(_script_loaded_but_missing).run(timeout=30)
+        assert not at.exception
+        allmd = " ".join(m.value for m in at.markdown)
+        # 卡①不再誤說「請點擊更新」，改講實情：這兩個來源抓取失敗
+        assert "景氣位階資料未就緒" in allmd
+        assert "外銷訂單" in allmd and "PMI" in allmd
+        assert "請先按上方" not in allmd     # 已更新 → 不該再叫他去按更新
+        # 其餘卡仍正常填（不受影響）
+        assert "資金明顯外逃" in allmd or "M2" in allmd
+
+    def test_card1_points_to_real_button_when_nothing_loaded(self):
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_function(_script_nothing_loaded).run(timeout=30)
+        assert not at.exception
+        allmd = " ".join(m.value for m in at.markdown)
+        # 完全沒載入 → 指向【正確】按鈕名
+        assert "🚀 一鍵更新全部數據" in allmd
+        assert "更新總經拼圖" not in allmd
