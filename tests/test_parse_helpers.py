@@ -136,9 +136,20 @@ class TestBackCompat:
             assert a is b, 'app.parse_stocks 不是 shared.parse_helpers.parse_stocks'
             print('REEXPORT_OK')
         """)
+        # v19.81:import app 會在模組層級真打網路(ETF 批次/總經 snapshot 等)。
+        # CI 裸環境(無 cache/secrets)慢源可拖 >180s → TimeoutExpired 假紅。
+        # 指向必定 ECONNREFUSED 的 proxy,強制全部網路呼叫立即失敗(fetcher 皆有
+        # 失敗處理路徑)→ 測試回歸其本旨:驗 re-export 身分,hermetic 不吃網路。
+        _env = {**os.environ,
+                "HTTP_PROXY": "http://127.0.0.1:9",
+                "HTTPS_PROXY": "http://127.0.0.1:9",
+                "http_proxy": "http://127.0.0.1:9",
+                "https_proxy": "http://127.0.0.1:9",
+                "NO_PROXY": "", "no_proxy": ""}
         r = subprocess.run(
             [sys.executable, "-c", _code],
-            cwd=_repo_root, capture_output=True, text=True, timeout=180,
+            cwd=_repo_root, capture_output=True, text=True, timeout=300,
+            env=_env,
         )
         assert r.returncode == 0 and "REEXPORT_OK" in r.stdout, (
             "app re-export shim 驗證失敗:\n"
