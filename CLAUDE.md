@@ -367,7 +367,7 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 - `recalibrate_macro.yml:15` 每季首日 UTC 00:00（1/4/7/10 月）
 
 **resample 安全性**：
-- 已用 `"ME"`（月底）/ `"QE"`（季底）/ `"YE"`（年底）/ `"W"`（週）
+- 已用 `"ME"`（月底）/ `"QE"`（季底）/ `"YE"`（年底）/ `"W-SUN"`（週,錨定週日;v18.461 自 `"W"` 改,right-closed 不變）
 - 預設 `closed=right, label=right` — 月底資料 label 為 `"YYYY-MM-31"`,**不會**引入未來資料
 - audit 須驗證所有 resample 呼叫的 label/closed 是否一致
 

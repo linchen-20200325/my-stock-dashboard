@@ -49,12 +49,14 @@ def test_china_fred_specs_uses_ssot():
 # ══════════════════════════════════════════════════════════════
 
 def test_macro_thresholds_china_keys_present():
-    keys = {"CHN_CLI", "CHN_PMI", "CHN_CPI", "CHN_M2", "USDCNY"}
+    # v19.72:CHN_PMI → CHN_BCI 對齊 macro_core.py:241 v18.459 刻意改名
+    # (BSCICP03CNM665S = OECD Business Confidence,非 PMI;測試原漏同步)
+    keys = {"CHN_CLI", "CHN_BCI", "CHN_CPI", "CHN_M2", "USDCNY"}
     assert keys.issubset(macro_core.MACRO_THRESHOLDS.keys())
 
 
 def test_macro_thresholds_china_red_yellow_ordering():
-    for key in ("CHN_CLI", "CHN_PMI", "CHN_CPI", "CHN_M2", "USDCNY"):
+    for key in ("CHN_CLI", "CHN_BCI", "CHN_CPI", "CHN_M2", "USDCNY"):
         rule = macro_core.MACRO_THRESHOLDS[key]
         if "red_above" in rule and "yellow_above" in rule:
             assert rule["red_above"] >= rule["yellow_above"], f"{key} above 反序"

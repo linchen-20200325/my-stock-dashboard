@@ -21,7 +21,11 @@
 
 **UI bug CSS 字面大括號**（`tab_stock.py:1087/1099/1111`）:f-string 內 `"{TRAFFIC_GREEN}18"` 寫在引號內不插值 → 渲染字面文字,獲利 5 卡背景/邊框色壞掉 → 改 `{TRAFFIC_GREEN if ok else TRAFFIC_RED}18`（對齊同段 1124 行既有正確寫法）。另移除 `tech_indicators.calc_bollinger` 恆真 `'bw' in dir()` dead code。
 
-**驗證**:新增 `tests/test_review_fixes_v19_72.py` 18 測試（欄序位移/缺欄/單位錯 10×/邊界/全零偵測/源碼守衛）全綠;受影響套件（pr_n3/pr_n5/risk_radar/rs_leader/china 等 2,800+ 測試）無新增 regression（test_resample_audit 1 項 + test_china_macro_stock 2 項為 main 既有失敗,與本次無關,已列報告）。
+**驗證**:新增 `tests/test_review_fixes_v19_72.py` 18 測試（欄序位移/缺欄/單位錯 10×/邊界/全零偵測/源碼守衛）全綠;受影響套件（pr_n3/pr_n5/risk_radar/rs_leader/china 等 2,800+ 測試）無新增 regression。
+
+**附帶:治綠 main 既有 3 紅測（merge 前 CI gate 收拾）**:
+- `test_china_macro_stock` 2 項:CHN_PMI → CHN_BCI 對齊 macro_core.py:241 v18.459 刻意改名（BSCICP03CNM665S = OECD Business Confidence 非 PMI）,測試原漏同步。
+- `test_resample_audit` 1 項:v18.461 週K `'W'`→`'W-SUN'` 後 inventory 未重盤;擴 regex 捕 anchored alias + expected 更新,並依該測試 docstring 要求同步 CLAUDE.md §4.5 一行（W→W-SUN 註記）。全部為「代碼是對的、測試/文件過期」方向,無行為變更。
 
 ---
 
