@@ -218,7 +218,9 @@ def taifex_post(url, form, _timeout_get=2, _timeout_post=5, _max_retry=1):
             sess.get(url, timeout=_timeout_get)
             r = sess.post(url, data=form, timeout=_timeout_post)
             r.encoding = "utf-8"
-            if len(r.text) > 200:
+            # N4b v19.80(第三份 review):原只用 len(text)>200 判成功 — TAIFEX
+            # 維護頁/錯誤頁常 >200 字會誤判。補 HTTP status,非 200 視為失敗重試。
+            if r.status_code == 200 and len(r.text) > 200:
                 return r.text
         except Exception:
             if attempt == _max_retry - 1:
@@ -250,17 +252,25 @@ def finmind_fut_oi(start_ymd, end_ymd, token=""):
     result = {}
 
     # ── 主要: FinMind ──
+    # N4a v19.80(第三份 review):原主源段無 try/except — FinMind schema 改欄名時
+    # `df["institutional_investors"]` KeyError 直接冒泡,**繞過下方 TAIFEX 備援**。
+    # 包 try 讓 schema 變動降級為「主源失敗 → 走備援」(§1:log 不吞)。
     if token:
-        df_tx  = finmind_get("TaiwanFuturesInstitutionalInvestors","TX", start_ymd,end_ymd,token)
-        df_mtx = finmind_get("TaiwanFuturesInstitutionalInvestors","MTX",start_ymd,end_ymd,token)
-        for df, factor in [(df_tx, 1.0), (df_mtx, 0.25)]:
-            if df.empty: continue
-            df_fi = df[df["institutional_investors"].str.contains("外資", na=False)]
-            for _, row in df_fi.iterrows():
-                dk = str(row["date"]).replace("-","")
-                long_  = int(row.get("long_open_interest_balance_volume",  0) or 0)
-                short_ = int(row.get("short_open_interest_balance_volume", 0) or 0)
-                result[dk] = result.get(dk, 0) + (long_ - short_) * factor
+        try:
+            df_tx  = finmind_get("TaiwanFuturesInstitutionalInvestors","TX", start_ymd,end_ymd,token)
+            df_mtx = finmind_get("TaiwanFuturesInstitutionalInvestors","MTX",start_ymd,end_ymd,token)
+            for df, factor in [(df_tx, 1.0), (df_mtx, 0.25)]:
+                if df.empty: continue
+                df_fi = df[df["institutional_investors"].str.contains("外資", na=False)]
+                for _, row in df_fi.iterrows():
+                    dk = str(row["date"]).replace("-","")
+                    long_  = int(row.get("long_open_interest_balance_volume",  0) or 0)
+                    short_ = int(row.get("short_open_interest_balance_volume", 0) or 0)
+                    result[dk] = result.get(dk, 0) + (long_ - short_) * factor
+        except Exception as _e_fmoi:
+            print(f"[fut_oi] FinMind 主源失敗(走 TAIFEX 備援): "
+                  f"{type(_e_fmoi).__name__}: {_e_fmoi}")
+            result = {}
 
     # ── 備援: TAIFEX 官方三大法人留倉（免Token）──
     if not result:
@@ -287,7 +297,8 @@ def finmind_fut_oi(start_ymd, end_ymd, token=""):
                                 break
                 _curr += timedelta(days=1)
         except Exception as _eTA:
-            pass  # TAIFEX 備援靜默失敗
+            # §1 v19.80:備援失敗不可靜默(原 except: pass) — log 後回空由 caller 判斷
+            print(f"[fut_oi] TAIFEX 備援失敗: {type(_eTA).__name__}: {_eTA}")
 
     return {k: round(v) for k, v in result.items()}
 

@@ -1,5 +1,18 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧯 2026-07-10 第三份外部 review 查證後修復：快取正確性 + 執行緒安全（v19.80）
+
+user 指派第三份建議書;先過濾 8 條已修/已駁舊主張(CSS=v19.74、session/UA/_TWSE_DL/月營收重複=v19.78、季報快取・sidebar=前輪已駁、B5 已修),10 條新主張查證:**6 修 / 2 誤判 / 2 防禦不對稱已補齊**。
+
+- **N2a 失敗不進快取(本輪最高價值)**:`get_combined_data` except 分支原 `return None tuple` 會被 @st.cache_data 快取 **1 小時** — 一次 FinMind 限速/網路抖動 → 該股 1 小時黑洞。改「cached 內層 raise `_CombinedDataError` + public wrapper 還原 3-tuple」:st.cache_data 對 raise 不快取,caller 介面 0 改;「查無資料」類確定性負結果仍快取。`_LOADER_VERSION` bump v3。
+- **N2c T86 負快取**:暫時性失敗(網路 None/例外)原把 `{}` 永久釘進無 TTL 的 `_T86_DAY_CACHE` → 改 `_T86_FAIL_TS` 短 TTL(TTL_15MIN)負快取;「stat != OK」(假日等確定無資料)仍永久快取(語意正確)。
+- **N3 _yf_dl env 競態(v19.77 平行化後真風險)**:函式改寫**全域** os.environ 再還原 — 批次 ThreadPool(3) 下 worker A 的 finally 會中途拔掉 worker B 的 proxy、晚進者備份到同儕值導致外洩。yfinance 1.5.1 **無 proxy kwarg**、set_config 亦全域 → 改「引用計數+鎖」:首進備份/設定、末出還原,下載本身仍並行。3 執行緒交疊測試驗證 env 恆穩+精確還原+深度歸零。
+- **N4a 外資期貨留倉主源無 try**:FinMind schema 改欄名時 KeyError 冒泡**繞過 TAIFEX 備援** → 包 try+log 降級。**N4b** `taifex_post` 原只用 `len(text)>200` 判成功(維護頁誤判)→ 補 `status_code==200`。
+- **N1 分母防呆補齊**:毛利率(gp/成本兩路徑)+金融股稅後純益率分母無 0→NaN(營益率/淨利率有)— 一般股有「營收>0」過濾+圖表 ±100 clamp 擋著,金融股不走該過濾 → 三處對齊 L1448 既有 pattern。
+- **§1 補 log**:股利 TWSE 備援(四源鏈最後靜默段)+ `_is_financial_stock` 產業別查詢失敗(退 28/58 前綴啟發式留跡)+ fut_oi TAIFEX 備援。
+- **回歸網**:`tests/test_review_fixes_v19_80.py` 12 test(含 3 執行緒 env 競態重現/T86 負快取三段語意/wrapper 介面不變);全套件 **2,946 passed / 0 failed**。
+- **不修(附證據)**:N7 財報體檢 expander「收合省抓取成本」機制錯誤 — st.expander 收合仍執行 body,真省成本需按鈕 gate(UX 行為改變,列待核准);N8 flatten_snapshot 缺 key 風險 — production 0 caller 且唯一 consumer 用 .get() 安全;N9 scanner 無股利細項 — patch_registry 每 render 補年度股利,無實際缺口(writer 雙軌不一致列技術債);N2b cache key 無日期 — TTL 1hr 已界定跨日窗+隔夜無新 K,低嚴重度不動;N4c 慢版 vol[d] — d 取自 vol 自身鍵,無法 KeyError(防禦不對稱純外觀)。
+
 ## 🚨 2026-07-10 雲端倒站 hotfix：pyarrow 25 cap + FinMind 殭屍依賴移除 + 融資單位修正（v19.79）
 
 **事故**:11:50 UTC Streamlit Cloud 平台重啟潮(強制 Python 3.14)+ **pyarrow 25.0.0 當日發布** → 兩儀表板 Segmentation fault(股票:啟動後首次 arrow 序列化崩;基金:舊 streamlit 啟動即 import 崩)。昨日部署(pyarrow 24.x+pandas 3)正常 = delta 鎖定 pyarrow 25。
