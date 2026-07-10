@@ -54,7 +54,8 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
     _ai_twii_pct = float((tech_s.get('大盤 TWII') or tw_s.get('台股加權指數') or {}).get('pct') or 0)
 
     # ── ① 目前總經位階 ──────────────────────────────────────────
-    _ai1_lbl, _ai1_clr, _ai1_desc, _ai1_cyc = '資料載入中', '#484f58', '請點擊更新總經拼圖', None
+    _ai1_lbl, _ai1_clr, _ai1_desc, _ai1_cyc = (
+        '資料載入中', '#484f58', '請先按上方「🚀 一鍵更新全部數據」', None)
     _cycle_ref = _ai_cli if _ai_cli is not None else (_ai_pmi if _ai_pmi is not None else None)
     _cycle_exp = (_cycle_ref >= 100.0) if (_ai_cli is not None) else (_cycle_ref >= 50.0 if _cycle_ref is not None else None)
     if _ai_exp is not None:
@@ -85,6 +86,16 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
         _ai1_clr = TRAFFIC_GREEN if _cycle_exp else TRAFFIC_YELLOW
         _ai1_cyc = 'bull' if _cycle_exp else 'neutral'
         _ai1_desc = f'{_cli_str} — 外銷訂單數據載入中'
+
+    # v19.72 fail-loud（§1/§5）：其餘總經已載入（VIX/M1B/CPI 有值）卻算不出景氣位階 →
+    # 代表「外銷訂單 + PMI/CLI」這兩個來源本次抓取失敗，而**非使用者尚未更新**。
+    # 不再誤顯示「請點擊更新」（那會讓已更新的人找不到按鈕又困惑），改講實情。
+    _macro_loaded = any(v is not None for v in (_ai_vix, _ai_m1b, _ai_cpi))
+    if _ai1_cyc is None and _macro_loaded:
+        _ai1_lbl, _ai1_clr = '景氣位階資料未就緒', TRAFFIC_YELLOW
+        _ai1_desc = ('缺「外銷訂單 YoY ＋ 台灣 PMI／OECD CLI」——這兩個景氣來源本次抓取失敗'
+                     '（多為 CIER／經濟部第三方網站暫時不可用）；其餘總經已載入。'
+                     '可於收盤後再按「🚀 一鍵更新全部數據」重試。')
 
     # ── ② 建議配置 ──────────────────────────────────────────────
     _ai2_lbl, _ai2_clr, _ai2_desc = '計算中', '#484f58', '等待 VIX 及資金數據'
@@ -214,7 +225,7 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
         else:
             _ai5_clr, _ai5_icon = '#8b949e', '⏸️ 中性觀望，等待訊號'
     else:
-        _ai5_txt  = '請點擊「更新總經拼圖」載入資料後自動生成結論。'
+        _ai5_txt  = '請先按上方「🚀 一鍵更新全部數據」載入資料後自動生成結論。'
         _ai5_clr, _ai5_icon = '#484f58', '⏳ 等待資料'
 
     # ── 渲染五維度卡片 ────────────────────────────────────────────

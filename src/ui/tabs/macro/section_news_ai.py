@@ -39,25 +39,42 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
     render_macro_bucket_summary_bar('news')  # v18.314 桶輕量總結 bar(新聞系統性風險)
     
     with st.expander('🤖 AI 總裁決 — 實體狀態鎖架構（唯讀）', expanded=True):
-        _verdict_hdr_c1, _verdict_hdr_c2, _verdict_hdr_c3 = st.columns([4, 1, 1])
+        _verdict_hdr_c1, _verdict_hdr_c2, _verdict_hdr_c3, _verdict_hdr_c4 = \
+            st.columns([2.6, 1.2, 1.1, 1])
         with _verdict_hdr_c1:
             st.markdown(
                 '<div style="font-size:12px;color:#8b949e;padding:4px 0;">'
                 '整合即時國際財經新聞（RSS）與當前量化總經數據，'
                 '由 Gemini AI 生成 Markdown 戰情報告。'
                 '曝險上限由 Python 規則引擎計算，AI 負責解讀。'
-                '<br><span style="color:#484f58;">需設定 Streamlit Secrets：'
+                '<br><span style="color:#484f58;">「📰 掃描新聞」只抓新聞（免金鑰）；'
+                '「🔒 執行 AI 裁決」需 Streamlit Secrets：'
                 '<code>GEMINI_API_KEY = "AIza..."</code></span></div>',
                 unsafe_allow_html=True)
         with _verdict_hdr_c2:
+            # v19.73：獨立「掃描新聞」鈕——只抓 RSS、不需 Gemini 金鑰、不跑 AI。
+            # 修使用者回報「新聞沒有讀取按鈕」（原本新聞只能靠 AI 裁決鈕順便抓）。
+            _do_scan_news = st.button(
+                '📰 掃描新聞', key='btn_scan_news', use_container_width=True,
+                help='只抓即時財經新聞 RSS（不需 Gemini 金鑰、不跑 AI）；'
+                     '掃完上方「新聞整體狀態」燈號會更新。')
+        with _verdict_hdr_c3:
             _do_verdict = st.button('🔒 執行 AI 裁決', key='btn_run_verdict',
                                     use_container_width=True, type='primary')
-        with _verdict_hdr_c3:
+        with _verdict_hdr_c4:
             if st.button('🗑️ 清除報告', key='btn_clear_verdict', use_container_width=True):
                 st.session_state.pop('_macro_ai_report', None)
                 st.session_state.pop('_macro_ai_ts', None)
                 st.rerun()
-    
+
+        # ── 觸發：只掃新聞（免 AI 金鑰）→ 更新「新聞整體狀態」燈號 ──
+        if _do_scan_news:
+            with st.spinner('📡 抓取即時財經新聞 RSS…'):
+                _scanned = _fetch_macro_news(5)
+                st.session_state['_macro_news_items'] = _scanned
+            st.success(f'✅ 已掃描 {len(_scanned)} 則新聞（上方燈號已更新）')
+            st.rerun()
+
         # ── 觸發：呼叫 MacroStateLocker 寫入 macro_state.json ──
         if _do_verdict:
             with st.spinner('📡 正在抓取財經新聞 + 呼叫 Gemini AI（約 15~30 秒）…'):
@@ -175,7 +192,7 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 _nvda_v = locals().get('_ai_nvda') or 0
                 if _sox_v or _nvda_v:
                     _ctx.append(f'• 美股科技動能：費半 SOX={_sox_v:+.1f}% / NVDA={_nvda_v:+.1f}%（領先台股科技權值股 2-4 週）')
-                _v_macro_ctx = '\n'.join(_ctx) if _ctx else '（數據尚未載入，請先更新總經拼圖）'
+                _v_macro_ctx = '\n'.join(_ctx) if _ctx else '（數據尚未載入，請先按「🚀 一鍵更新全部數據」）'
                 _locker = MacroStateLocker()
                 _locker.lock_system_state_only(_system_state)
                 # 組裝 Markdown 提示語（不依賴 JSON 解析，與 Tab 2 AI 首席顧問同風格）

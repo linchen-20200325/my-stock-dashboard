@@ -529,7 +529,7 @@ def _build_llm_context(macro_info: dict) -> str:
         _lines.append(f'• 台灣 M1B={_mi["m1b_yoy"]:.1f}%  M2={_mi["m2_yoy"]:.1f}%  Gap={_gap:+.2f}%')
     if _bi.get('bias_240') is not None:
         _lines.append(f'• 台股大盤年線乖離率 BIAS240：{_bi["bias_240"]:+.1f}%')
-    return '\n'.join(_lines) if _lines else '（量化數據載入中，請先點擊更新總經拼圖）'
+    return '\n'.join(_lines) if _lines else '（量化數據載入中，請先按「🚀 一鍵更新全部數據」）'
 
 
 # ══════════════════════════════════════════════════════════════
