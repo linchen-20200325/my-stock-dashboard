@@ -2,5 +2,11 @@
   "roc_year": 115,
   "season": 1,
   "prev_roc_year": 114,
-  "updated_at": "2026-07-05T02:33:21.263671+00:00"
+  "updated_at": "2026-07-05T02:33:21.263671+00:00",
+  "coverage": {
+    "sii": 1078,
+    "otc": 891,
+    "total": 1969,
+    "prev_total": 1934
+  }
 }

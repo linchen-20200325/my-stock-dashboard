@@ -35,3 +35,7 @@ CHECK_LABELS: dict[str, str] = {
     "pass_net_current": "淨流動值>0",
     "pass_eps_positive": "EPS>0",
 }
+
+# 快照涵蓋率診斷(§5 可觀測性):本季總檔數 < 去年同季 × 此比例 → 標「可能尚有慢公布未納入」。
+# 台股每季應公布家數約略穩定,故以「去年同季」為自我參照基準(避免硬編期望總數魔數)。
+SNAPSHOT_COVERAGE_WARN_RATIO: float = 0.90

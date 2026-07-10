@@ -77,7 +77,10 @@ def render_prescreen_panel(*, refresh: bool = False) -> None:
     """
     import pandas as pd  # noqa: PLC0415 — 本檔 pandas 為局部 import
     try:
-        from src.services.fundamental_screener_service import get_fundamental_prescreen
+        from src.services.fundamental_screener_service import (
+            describe_snapshot_coverage,
+            get_fundamental_prescreen,
+        )
         _df, _meta = get_fundamental_prescreen(refresh=refresh)
     except Exception as _e:  # noqa: BLE001 — 面板不可用不炸選股網
         st.caption(f'（全台股基本面初篩結果暫不可用：{type(_e).__name__}）')
@@ -94,6 +97,9 @@ def render_prescreen_panel(*, refresh: bool = False) -> None:
             expanded=False):
         st.caption('四項：①負債比<50% ②三率三升 YoY（毛利/營益/淨利率 本季>去年同季）'
                    '③淨流動值>0（流動資產>總負債）④EPS>0。**四項全過**才入選股網候選池。')
+        # v19.71 涵蓋率診斷（§5）：讓「慢公布是否已納入」看得見
+        _cov = describe_snapshot_coverage(_meta)
+        (st.warning if _cov['possibly_incomplete'] else st.caption)(f'📦 {_cov["text"]}')
         _show_all = st.checkbox('顯示全市場（否則只看四項全過）', value=False,
                                 key='prescreen_show_all')
         _v = _df if _show_all else _surv
