@@ -10,10 +10,17 @@ altair>=4.0.0,<7.0.0
 pandas>=2.0.0,<4.0.0
 numpy>=1.24.0,<3.0.0
 plotly>=5.18.0,<7.0.0
+# v19.79 hotfix(2026-07-10):pyarrow 25.0.0 當日發布即造成 Streamlit Cloud
+# (Python 3.14 平台)啟動/序列化 Segmentation fault — 兩儀表板同時倒站。
+# 顯式 cap 回久經驗證的 24.x;pyarrow 為 streamlit 轉送 DataFrame 的核心 C 擴充,
+# 屬「不可浮動到當日新版」的高風險層。解禁條件:pyarrow 25.x 在 cp314 穩定數週後。
+pyarrow>=14,<25
 
 # ── 外部 API SDK(active development,寬 upper bound)────────
+# v19.79:移除 FinMind SDK — 其 1.x 全系列 pin pandas<2.0/numpy<2.0/lxml<5.0,
+# 與上方核心 pin 硬衝突,雲端/CI 從未真正裝上(app 一直走 DataLoader=None 的
+# raw HTTP 備援)。移除以消滅 resolver 回溯不確定性;REST 路徑(finmind_get)不受影響。
 yfinance>=0.2.36,<2.0
-FinMind>=0.9.0,<2.0
 google-generativeai>=0.5.0,<2.0
 curl-cffi>=0.6.0,<1.0
 

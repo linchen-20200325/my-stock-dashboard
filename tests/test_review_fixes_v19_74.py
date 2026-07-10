@@ -86,24 +86,31 @@ class TestParseBfi82uRows(unittest.TestCase):
 # 2. 融資餘額固定單位換算 + sanity 區間
 # ═══════════════════════════════════════════════════════════════
 class TestFinmindMarginToYi(unittest.TestCase):
-    """FinMind 融資餘額:仟元固定換算,超出合理區間 → None(棄用改走 fallback)。"""
+    """FinMind 融資餘額 Money 列:元固定換算(÷1e8),超出合理區間 → None。
 
-    def test_real_scale_accepted(self):
-        """真實量級:2.8e8 仟元 = 2800 億 → 接受。"""
-        from src.data.daily.daily_data_fetchers import _finmind_margin_to_yi
-        self.assertAlmostEqual(_finmind_margin_to_yi(2.8e8), 2800.0)
+    v19.79 語意修正:v19.74 誤把 TWSE MI_MARGN 的「仟元」搬到本 dataset(÷1e5),
+    2026-07-10 production log 實證 Money 列單位是「元」— 舊斷言反向,已改為
+    以線上真實值為 golden。
+    """
 
-    def test_unit_shift_to_yuan_rejected(self):
-        """來源改「元」(2.8e11)→ ÷1e5 = 2.8e6 億,超上限 → None(原猜測法會回 2800 過關,
-        但那是巧合;真正危險是反向)。"""
+    def test_production_golden_yuan_accepted(self):
+        """2026-07-10 線上真實值:619,648,244,000 元 = 6,196.5 億 → 接受。
+        (v19.74 舊換算 ÷1e5 會得 6,196,482 億而錯誤棄用 → FinMind 路徑全滅)"""
         from src.data.daily.daily_data_fetchers import _finmind_margin_to_yi
-        self.assertIsNone(_finmind_margin_to_yi(2.8e11))
+        self.assertAlmostEqual(_finmind_margin_to_yi(619_648_244_000), 6196.5)
 
-    def test_unit_shift_to_wan_rejected(self):
-        """來源改「萬元」(2.8e7)→ ÷1e5 = 280 億,低於下限 500 → None。
-        原猜測法:2.8e7 > 1e6 → ÷1e5 = 280…舊區間 100<x<30000 會**接受這個錯 10× 的值**。"""
+    def test_volume_row_scale_rejected(self):
+        """2026-07-10 線上另一列 9,614,955(MarginPurchaseVolume,單位=張):
+        若誤入換算 ÷1e8 = 0.096 億 → 低於下限 → None(雙保險;第一道防線是
+        caller 的 name==Money 過濾)。"""
         from src.data.daily.daily_data_fetchers import _finmind_margin_to_yi
-        self.assertIsNone(_finmind_margin_to_yi(2.8e7))
+        self.assertIsNone(_finmind_margin_to_yi(9_614_955))
+
+    def test_unit_shift_to_qianyuan_rejected(self):
+        """來源若改「仟元」(6.19e8 仟元=6,196億的仟元表示)→ ÷1e8 = 6.2 億,
+        低於下限 → None(單位漂移被 sanity 擋下,不會靜默錯 1000×)。"""
+        from src.data.daily.daily_data_fetchers import _finmind_margin_to_yi
+        self.assertIsNone(_finmind_margin_to_yi(6.19e8))
 
     def test_zero_and_negative_rejected(self):
         from src.data.daily.daily_data_fetchers import _finmind_margin_to_yi

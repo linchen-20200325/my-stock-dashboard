@@ -490,21 +490,25 @@ def _margin_sanity_ok(v_yi: float) -> bool:
     return MARGIN_BALANCE_SANITY_MIN_YI < v_yi < MARGIN_BALANCE_SANITY_MAX_YI
 
 
-def _finmind_margin_to_yi(raw: float) -> float | None:
-    """FinMind TaiwanStockTotalMarginPurchaseShortSale 餘額 → 億。
+def _finmind_margin_to_yi(raw_twd: float) -> float | None:
+    """FinMind TaiwanStockTotalMarginPurchaseShortSale「MarginPurchaseMoney」→ 億。
 
-    v19.74 review 修正:該 dataset 鏡射 TWSE MI_MARGN,MarginPurchaseMoney 餘額
-    單位**固定「仟元」** → ÷1e5 = 億（同檔方案A 註解「仟元÷100,000=億」同源印證）。
-    原 v6 用數值區間反猜單位（億/元/千元/萬元 四分支）,來源改單位時會靜默錯
-    1 個數量級（§4.1 單位陷阱違憲）。換算後過 _margin_sanity_ok 才回值,否則回
-    None（log + 棄用,讓 fallback 鏈接手）。
+    v19.79 修正(2026-07-10 production log 實證):該 dataset 的 Money 列單位是
+    **「元」** → ÷1e8 = 億。v19.74 誤把 TWSE MI_MARGN 的「仟元」搬過來(÷1e5),
+    導致線上 619,648,244,000 元被算成 6,196,482 億而棄用 → FinMind 路徑全滅。
+    單位考證(§4.1/§7):
+      - 619,648,244,000 當「元」= 6,196 億 ∈ sanity [500,10000]億 ✓(2026 融資餘額量級)
+      - 當「仟元」= 619 兆 ✗ 荒謬
+      - 同組另一列 9,614,955 為 MarginPurchaseVolume(單位=張,市場融資張數量級),
+        **不是金額** — caller 必須以 name 過濾 Money 列,勿混入換算
+    換算後過 _margin_sanity_ok 才回值,否則 None(log + 棄用,fallback 鏈接手)。
     """
-    if raw <= 0:
+    if raw_twd <= 0:
         return None
-    _yi = raw / 1e5
+    _yi = raw_twd / 1e8
     if _margin_sanity_ok(_yi):
         return round(_yi, 1)
-    print(f'[融資餘額/FinMind] ⚠️ {raw} 仟元 → {_yi:.1f}億 超出合理區間 '
+    print(f'[融資餘額/FinMind] ⚠️ {raw_twd} 元 → {_yi:.1f}億 超出合理區間 '
           f'({MARGIN_BALANCE_SANITY_MIN_YI:.0f}~{MARGIN_BALANCE_SANITY_MAX_YI:.0f}億),棄用')
     return None
 
@@ -546,17 +550,28 @@ def fetch_margin_balance(date_str=None):
             _grp0 = _df_mb0[_df_mb0['date'] == _last_d0]
             _v_mb0 = None
             if 'name' in _cols_mb0 and _bal_cols0:
-                # 長格式:每一列代表「融資/融券」單一指標
+                # 長格式:每一列代表單一指標。
+                # v19.79(production log 實證):同組含 MarginPurchaseVolume(張)與
+                # MarginPurchaseMoney(元)兩種 margin 列 — 只認 **Money** 列;
+                # YesBalance(昨日)欄排除,只取當日 TodayBalance/餘額欄。
+                _today_cols0 = [c for c in _bal_cols0
+                                if not c.lower().startswith('yes')]
                 for _, _r0 in _grp0.iterrows():
-                    _nm0 = str(_r0.get('name', '')).lower()
-                    if not ('融資' in _nm0 or 'margin' in _nm0 or 'purchase' in _nm0):
+                    _nm0 = str(_r0.get('name', ''))
+                    _nm0_l = _nm0.lower()
+                    _is_margin_money0 = (
+                        ('marginpurchase' in _nm0_l.replace('_', '')
+                         and 'money' in _nm0_l)
+                        or '融資金額' in _nm0
+                    )
+                    if not _is_margin_money0:
                         continue
-                    for _bc0 in _bal_cols0:
+                    for _bc0 in _today_cols0:
                         try:
                             _raw0 = float(str(_r0.get(_bc0, 0)).replace(',', '') or 0)
                         except Exception:
                             continue
-                        # v19.74:固定仟元→億換算 + sanity(取代原四分支區間猜單位)
+                        # v19.79:元→億換算 + sanity(v19.74 誤用仟元÷1e5 已修正)
                         _cand0 = _finmind_margin_to_yi(_raw0)
                         if _cand0 is not None:
                             _v_mb0 = _cand0; break
