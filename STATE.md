@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧾 2026-07-10 第四份外部 review 查證後修復：NaN 邊界防炸（v19.81）
+
+user 指派第四份建議書;先過濾 ≥4 條已修/過時舊主張(yf.download 無 timeout + session 未池化=v19.78、`_TWSE_DL` 模組級重用=v19.78 已刪死碼、台股無平行化=v19.77 批次 ThreadPool 已落地),本 repo 3 條新主張查證:**2 修 / 1 誤判**。
+
+- **4-A-1 volume `.astype(int)` NaN 崩潰**:Yahoo 停牌/無量日可回 NaN 成交量 → `.astype(int)` IntCastingNaNError 炸整條 K 線頁。三路徑(Yahoo adj / Yahoo 備援 / FinMind)全補顯式 `fillna(0)` + §1 log 受影響筆數(§4.6 跌停 0 vol=有效報價語意);FinMind 路徑保留原 astype 截斷語意不補 round,避免既有值位移。
+- **4-A-3 比率分母 NaN-truthy 傳染**:`fuzzy_get_from_df` 可經 `float("nan")` 字串路徑(MOPS read_html)回 NaN,而 NaN 為 truthy → `if rev` 擋不住 → 毛利率=NaN 靜默傳染下游健康引擎。`calc_financial_metrics` 6 個比率分母(rev×3 / 總資產 / 流動負債 / 權益)統一 `_denom_ok`(notna 且非 0),無效分母維持既有 0.0 語意。
+- **誤判(證據)**:4-A-2 股利 `.json()`/`['data']` 未 guard — 實碼為 `_div_jd.get('status')==200 and _div_jd.get('data')`,全 `.get()` 無 KeyError 面;`.json()` 失敗 v19.78 起已 log 非靜默 pass。1-A「健康分數未納入診斷」— `macro_registry_patch` 已有 `[個股] 健康分數` 條目(v19.75 B5,v19.78 修過被誤清 bug);「MA/KD/布林未納入診斷」— 衍生指標為 L2 純計算無獨立失敗模式,上游 K 線 freshness 已監控,health_inspector 明文排除為 by-design。
+- **回歸網**:`tests/test_review_fixes_v19_81.py` 7 test(NaN volume golden / 6 分母 NaN 傳染 / happy path 不變);全套件 **2,953 passed / 0 failed**。
+- **大項待核准(§-1 不擅動)**:IndicatorMeta 三軸 SSOT、異常分數引擎+關鍵訊號卡、卡片渲染收斂、逐標的平行化再擴張、fallback 分級 timeout、雙 pickle 快取合併(round-1 已判 by-design:兩層語意不同)— 詳 PR 描述。
+
 ## 🧯 2026-07-10 第三份外部 review 查證後修復：快取正確性 + 執行緒安全（v19.80）
 
 user 指派第三份建議書;先過濾 8 條已修/已駁舊主張(CSS=v19.74、session/UA/_TWSE_DL/月營收重複=v19.78、季報快取・sidebar=前輪已駁、B5 已修),10 條新主張查證:**6 修 / 2 誤判 / 2 防禦不對稱已補齊**。
