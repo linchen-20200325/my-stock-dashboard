@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🐛 2026-07-10 §十一 新聞：加獨立「📰 掃描新聞」按鈕（v19.73）
+
+> 使用者回報「新聞這邊沒有任何讀取按鈕跟 ai」。查因：新聞 RSS 原本**只在按「🔒 執行 AI 裁決」時順便抓**（section_news_ai.py:64），且該鈕需 Gemini 金鑰 → 沒金鑰的人等於沒有能單獨載新聞的鈕，「新聞整體狀態」永遠「未掃描」。
+
+- 加獨立 **「📰 掃描新聞」** 鈕（`btn_scan_news`）：只抓 RSS（`_fetch_macro_news`）、**免 Gemini 金鑰、不跑 AI**，寫入與 AI 裁決同一 stash key `_macro_news_items` → 上方「新聞整體狀態」燈號即更新。原「執行 AI 裁決」「清除報告」不動。
+- 描述文案改標清楚：「📰 掃描新聞」只抓新聞（免金鑰）；「🔒 執行 AI 裁決」需 `GEMINI_API_KEY`。
+- §8：純 L5 UI 加一鈕 + handler（mirror 既有 verdict handler 的 stash 機制）；無跨層/計算變動。
+- 驗證：4 新測試（按鈕存在 / handler 抓 RSS 且不呼叫 gemini / AI 鈕未誤刪 / 模組編譯）+ 13 render smoke(slow) 無 regression 全綠。
+- 註：AI 報告仍需**使用者自行**在 Streamlit Secrets 設 `GEMINI_API_KEY`（金鑰在 user 帳號，非程式可解）。
+
+---
+
 ## 🐛 2026-07-10 §九 跨桶 AI：更新按鈕名對錯 + ①景氣位階 fail-loud（v19.72）
 
 > 使用者截圖：②③④⑤總經卡都跑出真資料了，只有①「目前總經位階」還顯示「請點擊更新總經拼圖」，且**找不到那顆按鈕**。
