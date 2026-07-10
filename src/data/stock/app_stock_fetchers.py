@@ -250,8 +250,9 @@ def fetch_dividend_data(sid):
                     avg_div = float(yr['cash'].mean())
                     yearly = yr.to_dict('records')
                     source = 'TWSE'
-        except Exception:
-            pass
+        except Exception as _e_div_tw:
+            # §1 v19.80(N5):四源鏈最後一段原靜默吞 — 補 log,行為不變(回無股利)
+            print(f'[股利] {sid} TWSE 備援失敗: {type(_e_div_tw).__name__}: {_e_div_tw}')
 
     # v18.351 PR-Q1 S-PROV-1 phase 19:stderr 記 provenance(§2.2 audit trail)。
     # 介面 0 改:return 仍是 (avg_div, yearly, source) 3-tuple,caller 由 source 欄已可追溯;

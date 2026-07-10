@@ -43,7 +43,7 @@ import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
 from src.data.proxy import fetch_url as _fetch_url_dl
 from src.data.core.finmind_client import _UA as _FM_UA  # S8 v19.78:raw REST UA 對齊 SSOT client
-from shared.ttls import TTL_1DAY, TTL_1HOUR
+from shared.ttls import TTL_15MIN, TTL_1DAY, TTL_1HOUR
 
 # v18.201 D2：FinMind dataset 後台 update 時間追蹤
 # raw fetcher 從 response top-level 取 `last_update`，SDK 路徑無此欄位故留空
@@ -112,28 +112,48 @@ def _fm_raw_headers(token: str) -> dict:
         h['Authorization'] = f'Bearer {token}'
     return h
 
+# N3 v19.80(第三份 review):_yf_dl 改寫「全域」os.environ — v19.77 批次
+# ThreadPool(3) 並行進入後為真競態:worker A 的 finally 還原會在 worker B
+# 下載進行中拔掉/覆寫 proxy env,晚進的 worker 備份到「已被同儕設定的值」
+# 導致還原後 env 外洩。yfinance 1.5.1 無 proxy kwarg、set_config 亦為全域
+# → 改「引用計數 + 鎖」:第一個進入者備份+設定、最後一個離開者還原,
+# 期間 env 恆穩定(所有 worker 用同一 proxy 設定,下載本身仍並行)。
+_YF_ENV_LOCK = _th_dl.Lock()
+_YF_ENV_DEPTH = 0
+_YF_ENV_BAK: dict = {}
+
+
 def _yf_dl(symbol, **kwargs):
     """yfinance download，透過 os.environ 注入 proxy（相容新舊版 yfinance）。"""
     import os as _os_yfd
+    global _YF_ENV_DEPTH, _YF_ENV_BAK
     try:
         from src.data.stock import _load_proxy_config as _lpc_yfd
         _px_url = ((_lpc_yfd() or {}).get('https') or (_lpc_yfd() or {}).get('http') or None)
     except Exception:
         _px_url = None
     _ek = ('HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy')
-    _bak = {k: _os_yfd.environ.get(k) for k in _ek}
     if _px_url:
-        for k in _ek:
-            _os_yfd.environ[k] = _px_url
+        with _YF_ENV_LOCK:
+            _YF_ENV_DEPTH += 1
+            if _YF_ENV_DEPTH == 1:   # 第一個進入者才備份+設定
+                _YF_ENV_BAK = {k: _os_yfd.environ.get(k) for k in _ek}
+                for k in _ek:
+                    _os_yfd.environ[k] = _px_url
     kwargs.setdefault('timeout', HTTP_TIMEOUT_YF_SEC)  # S6 v19.78:顯式逾時(SSOT)
     try:
         return yf.download(symbol, **kwargs)
     finally:
-        for k, v in _bak.items():
-            if v is None:
-                _os_yfd.environ.pop(k, None)
-            else:
-                _os_yfd.environ[k] = v
+        if _px_url:
+            with _YF_ENV_LOCK:
+                _YF_ENV_DEPTH -= 1
+                if _YF_ENV_DEPTH == 0:   # 最後一個離開者才還原(N3 v19.80)
+                    for k, v in _YF_ENV_BAK.items():
+                        if v is None:
+                            _os_yfd.environ.pop(k, None)
+                        else:
+                            _os_yfd.environ[k] = v
+                    _YF_ENV_BAK = {}
 
 # S7 v19.78:刪死碼 `_TWSE_DL = _bps_dl()`(全檔 0 使用,且會在 import 期建立
 # 從未被複用的 session)。
@@ -152,6 +172,10 @@ from src.config import (  # Batch 10 v18.412; _FINMIND_TOKEN_CFG reads st.secret
 
 
 _T86_DAY_CACHE: dict = {}  # {日期字串: {股票代碼: {外資,投信,自營商}}} 進程級快取，多股共用
+# N2c v19.80(第三份 review):暫時性失敗(網路 None/例外)原本把 {} 永久釘進
+# _T86_DAY_CACHE(無 TTL,進程不重啟不重試)→ 改短 TTL 負快取,來源恢復後可重試。
+# 「stat != OK」(TWSE 明確回無資料,如假日)仍永久快取 — 該日資料永遠不會出現,語意正確。
+_T86_FAIL_TS: dict = {}   # {日期字串: 失敗時間 epoch};TTL_15MIN 內不重打
 
 
 def _get_t86_day(ds: str) -> dict:
@@ -159,13 +183,17 @@ def _get_t86_day(ds: str) -> dict:
     回傳 {股票代碼: {'外資':float, '投信':float, '自營商':float}}，單位：張"""
     if ds in _T86_DAY_CACHE:
         return _T86_DAY_CACHE[ds]
+    import time as _t_t86
+    _fts = _T86_FAIL_TS.get(ds)
+    if _fts is not None and (_t_t86.time() - _fts) < TTL_15MIN:
+        return {}   # 負快取生效中(短 TTL),不重打
     HDR = {'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}
     try:
         r = _fetch_url_dl('https://www.twse.com.tw/fund/T86',
                           params={'response': 'json', 'date': ds, 'selectType': 'ALL'},
                           headers=HDR, timeout=5)
         if r is None:
-            _T86_DAY_CACHE[ds] = {}
+            _T86_FAIL_TS[ds] = _t_t86.time()   # N2c:暫時性 → 負快取,不永久釘
             return {}
         j = r.json()
         if j.get('stat') != 'OK' or not j.get('data'):
@@ -194,7 +222,8 @@ def _get_t86_day(ds: str) -> dict:
         return day_data
     except Exception as e:
         print(f'[TWSE T86] {ds} 失敗: {e}')
-        _T86_DAY_CACHE[ds] = {}
+        import time as _t_t86e
+        _T86_FAIL_TS[ds] = _t_t86e.time()   # N2c:暫時性 → 負快取,不永久釘
         return {}
 
 
@@ -514,7 +543,19 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
 # 版本鍵：改動 StockDataLoader 邏輯時 bump 此字串，供 app._get_loader 作為
 # @st.cache_resource 的 cache key。避免線上 hot-reload 後仍用到舊實例的舊方法碼
 # （PR #44 修了 NoneType 但 cache_resource 舊實例殘留 → 仍崩，即此故）。
-_LOADER_VERSION = 'v2-raw-http-fallback'
+_LOADER_VERSION = 'v3-no-negative-cache'  # N2a v19.80:bump 讓 @st.cache_resource loader 換新
+
+
+class _CombinedDataError(Exception):
+    """get_combined_data 暫時性失敗訊號(N2a v19.80)。
+
+    st.cache_data 只快取「回傳值」、對 raise 不快取 — 原本 except 分支
+    `return None, err, None` 會被快取整整 TTL_1HOUR:一次 FinMind 限速/網路
+    抖動 → 該股接下來 1 小時持續回 None(即使來源已恢復)。改為 cached 內層
+    raise、public wrapper 攔截還原成 (None, err, None) 3-tuple — caller 介面
+    0 改變,但失敗結果不再進快取。「查無資料」類的確定性負結果仍走 return
+    (快取合理:重打也不會變出資料)。
+    """
 
 
 class StockDataLoader:
@@ -548,8 +589,20 @@ class StockDataLoader:
 
     # v19.74 review:max_entries=64 — 以 stock_id 為鍵逐檔堆積,LRU 回收控記憶體上界
     # (Streamlit Cloud ~1GB,連續瀏覽數百檔無上界會膨脹到 OOM 重啟)。
+    def get_combined_data(self, stock_id, days, use_adjusted=True):
+        """完整數據載入流程(public wrapper,N2a v19.80)。
+
+        暫時性失敗(內層 raise _CombinedDataError)在此還原為 (None, err, None),
+        **不進 st.cache_data** — 修「一次暫時性失敗被快取 1 小時」。
+        成功與確定性負結果(查無資料)仍由內層快取。
+        """
+        try:
+            return self._get_combined_data_cached(stock_id, days, use_adjusted)
+        except _CombinedDataError as _e_gcd:
+            return None, str(_e_gcd), None
+
     @st.cache_data(ttl=TTL_1HOUR, max_entries=64)
-    def get_combined_data(_self, stock_id, days, use_adjusted=True):
+    def _get_combined_data_cached(_self, stock_id, days, use_adjusted=True):
         """完整數據載入流程
 
         Args:
@@ -894,7 +947,8 @@ class StockDataLoader:
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return None, f"系統錯誤: {str(e)}", None
+            # N2a v19.80:raise(st.cache_data 不快取)取代 return None tuple(會被快取 1hr)
+            raise _CombinedDataError(f"系統錯誤: {str(e)}")
 
     @st.cache_data(ttl=TTL_1HOUR, max_entries=64)  # v19.74 review:LRU 上界防 OOM
     def get_monthly_revenue(_self, stock_id):
@@ -1172,8 +1226,11 @@ class StockDataLoader:
                                     s = str(row[k])
                                     if any(w in s for w in ['金融', '保險', '金控', '銀行', '證券']):
                                         return True
-                except Exception:
-                    pass
+                except Exception as _e_isfin:
+                    # §1 v19.80(N5):原靜默吞 — 補 log。退回前綴啟發式(28/58)為既有
+                    # 保底行為,非 28/58 開頭的金融股(如純網銀)會誤判為一般股,log 留跡可診斷
+                    print(f'[季財報] {_sid} 產業別查詢失敗(退前綴啟發式): '
+                          f'{type(_e_isfin).__name__}: {_e_isfin}')
                 # 保底：台股金融族群常見代碼前綴
                 return str(_sid).startswith(('28', '58'))
 
@@ -1309,7 +1366,9 @@ class StockDataLoader:
                         break
                 if net_col is not None:
                     net_income = pd.to_numeric(df_pivot[net_col], errors='coerce')
-                    df_quarterly['毛利率'] = (net_income / pd.to_numeric(df_quarterly['營收'], errors='coerce') * 100).round(2)
+                    # N1 v19.80:分母補 0→NaN 防呆(對齊營益率/淨利率 L1448 既有 pattern;
+                    # 金融股不走「營收>0」過濾,inf 會流進圖表)
+                    df_quarterly['毛利率'] = (net_income / pd.to_numeric(df_quarterly['營收'], errors='coerce').replace(0, float('nan')) * 100).round(2)
                     df_quarterly['毛利率名稱'] = '稅後純益率'
                 else:
                     df_quarterly['毛利率'] = float('nan')
@@ -1337,7 +1396,8 @@ class StockDataLoader:
 
                     if gp_col is not None:
                         gp = pd.to_numeric(df_pivot[gp_col], errors='coerce')
-                        df_quarterly['毛利率'] = (gp / df_quarterly['營收'] * 100).round(2)
+                        # N1 v19.80:分母補 0→NaN(對齊 L1448 pattern,防 inf)
+                        df_quarterly['毛利率'] = (gp / pd.to_numeric(df_quarterly['營收'], errors='coerce').replace(0, float('nan')) * 100).round(2)
                     else:
                         cost_col = None
                         for col in df_pivot.columns:
@@ -1348,7 +1408,9 @@ class StockDataLoader:
 
                         if cost_col is not None:
                             cost = pd.to_numeric(df_pivot[cost_col], errors='coerce')
-                            df_quarterly['毛利率'] = ((df_quarterly['營收'] - cost) / df_quarterly['營收'] * 100).round(2)
+                            # N1 v19.80:分母補 0→NaN(對齊 L1448 pattern,防 inf)
+                            _rev_gm = pd.to_numeric(df_quarterly['營收'], errors='coerce').replace(0, float('nan'))
+                            df_quarterly['毛利率'] = ((df_quarterly['營收'] - cost) / _rev_gm * 100).round(2)
                         else:
                             df_quarterly['毛利率'] = float('nan')
                             print(f"⚠️ 無法找到毛利/成本欄位，可用欄位: {[str(c) for c in df_pivot.columns[:15]]}")
