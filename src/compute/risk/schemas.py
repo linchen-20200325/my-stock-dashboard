@@ -271,3 +271,32 @@ def validate_in_log_mode(df: pd.DataFrame, schema, label: str = '',
         msg = f'[pandera-schema/{label}] WARN: {errors[0][:200]}'
         print(msg, file=sys.stderr)
     return df  # 絕對回原 df,non-blocking
+
+
+def validate_or_reject(df: pd.DataFrame, schema, label: str = '',
+                       *, normalize_case: bool = False) -> pd.DataFrame:
+    """blocking validation(D13 v19.75,user 核准 review D 類):
+    schema 違反 → **整檔棄用回空 DataFrame** + stderr log。
+
+    與 validate_in_log_mode 的分工:
+    - log-mode:POC 累積漂移信號,不擋 caller(壞 shape 仍流入計算)
+    - 本函式:給「錯值比缺值危險」的資料流(§1 Fail Loud)— 驗證失敗回空殼,
+      下游走既有「無資料」路徑(診斷 Tab 亮紅可見),絕不讓壞 shape 靜默進計算。
+      刻意**整檔棄用**而非丟壞列:部分刪列會讓資料「看似完整」= §1 掩蓋問題。
+
+    pandera 未安裝 → 視同 log-mode 放行(部署環境 requirements 已 pin,
+    僅極簡測試環境會走到;放行 + 不 log 對齊 try_validate 既有語意)。
+    絕不 raise。
+    """
+    import sys
+    if df is None or (hasattr(df, 'empty') and df.empty):
+        return df
+    _df_to_validate = df
+    if normalize_case and hasattr(df, 'columns'):
+        _df_to_validate = df.rename(columns={c: str(c).lower() for c in df.columns})
+    validated, errors = try_validate(_df_to_validate, schema)
+    if errors and 'pandera not installed' not in errors[0]:
+        print(f'[pandera-schema/{label}] REJECT(整檔棄用,§1 錯值比缺值危險): '
+              f'{errors[0][:200]}', file=sys.stderr)
+        return df.iloc[0:0]  # 同欄位空殼,caller 的 df.empty 防線直接接手
+    return df

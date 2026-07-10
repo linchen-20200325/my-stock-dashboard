@@ -328,6 +328,51 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
         else:
             _reg_missing(_reg_new, '[ETF回測] 回測績效', category=CAT_ETF, frequency='daily')
 
+        # ── B5 v19.75(review 監控盲區收斂):籌碼集中度 / 股本 / 5年現金流量比率 ──
+        # 原三源抓壞時診斷 Tab 不會亮紅(未登錄 registry)。producer 端只 stash 元資料
+        # (chip_radar / tab_stock),本段統一登錄;只在 user 查過該股後登錄(避免固定清單膨脹)。
+
+        # 籌碼集中度(TDCC 集保股權分散,週五更 → weekly 門檻 7/30 日)
+        _cc_meta = st.session_state.get('chip_conc_meta') or {}
+        if _cc_meta.get('sid'):
+            _cc_name = f"[個股] {_cc_meta['sid']} | 籌碼集中度"
+            if _cc_meta.get('rows'):
+                _reg_new[_cc_name] = {
+                    'last_updated': _cc_meta.get('last_date', 'N/A'),
+                    'rows': _cc_meta['rows'],
+                    'category': CAT_CHIPS, 'frequency': 'weekly',
+                }
+            else:
+                _reg_missing(_reg_new, _cc_name, category=CAT_CHIPS, frequency='weekly')
+
+        # 股本(FinMind BalanceSheet 最新季 → quarterly;fetcher 失敗回 0.0 → missing)
+        _xm_meta = st.session_state.get('t2_xsec_meta') or {}
+        if _xm_meta.get('sid'):
+            _cap_name = f"[個股] {_xm_meta['sid']} | 股本"
+            if (_xm_meta.get('capital') or 0) > 0:
+                _reg_new[_cap_name] = {
+                    'last_updated': 'N/A', 'rows': 1,
+                    'category': CAT_STOCK, 'frequency': 'quarterly',
+                }
+            else:
+                _reg_missing(_reg_new, _cap_name, category=CAT_STOCK, frequency='quarterly')
+
+        # 5年現金流量允當比率(FinMind 年報 → yearly;讀財報健檢既有 _fin_raw_{sid} stash,
+        # 無新 producer;僅健檢跑過該股才登錄)
+        _t2_sid_b5 = (st.session_state.get('t2_data') or {}).get('sid', '')
+        if _t2_sid_b5:
+            _fr_b5 = st.session_state.get(f'_fin_raw_{_t2_sid_b5}') or {}
+            _b5 = _fr_b5.get('b_item_5y') or {}
+            if _fr_b5:
+                _b5_name = f'[個股] {_t2_sid_b5} | 5年現金流量允當比率'
+                if _b5.get('status') == 'ok':
+                    _reg_new[_b5_name] = {
+                        'last_updated': 'N/A', 'rows': int(_b5.get('years') or 1),
+                        'category': CAT_STOCK, 'frequency': 'yearly',
+                    }
+                else:
+                    _reg_missing(_reg_new, _b5_name, category=CAT_STOCK, frequency='yearly')
+
         st.session_state['data_registry'] = _reg_new
         print(f'[DataRegistry] 已登錄 {len(_reg_new)} 個資料源，類別標籤已寫入')
     except Exception as _re:

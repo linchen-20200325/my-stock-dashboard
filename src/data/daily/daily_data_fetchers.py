@@ -323,7 +323,7 @@ def fetch_adl(days: int = 60, token=None):
     import time as _tm2
     import pandas as _pd_adl
     # ── 日誌 helper ────────────────────────────────────
-    _log_path = '/tmp/_adl_log.txt'
+    from shared.cache_layer import ADL_LOG_PATH as _log_path  # D14b v19.75:跨檔路徑 SSOT(tab_macro 讀同一常數)
 
     def _alog(msg):
         print(msg, flush=True)
@@ -338,8 +338,9 @@ def fetch_adl(days: int = 60, token=None):
         pass
 
     # ── Cache ────────────────────────────────────────
-    _ck = '/tmp/stock_cache/adl_data.pkl'
-    _os2.makedirs('/tmp/stock_cache', exist_ok=True)
+    from shared.cache_layer import _PKL_DIR as _pkl_dir_adl  # D14b v19.75:可攜 cache dir SSOT
+    _ck = _os2.path.join(_pkl_dir_adl, 'adl_data.pkl')
+    _os2.makedirs(_pkl_dir_adl, exist_ok=True)
     if _os2.path.exists(_ck):
         _age = _tm2.time() - _os2.path.getmtime(_ck)
         if _age < 1800:

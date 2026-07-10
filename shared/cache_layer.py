@@ -19,10 +19,17 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 
 # A2 v18.383:改 env 注入(STK_PKL_DIR),解原 `from src.config import PKL_DIR` L0↔L0 反向 import 設計味道。
-# src/config/data_config.py 同步用 env(預設 '/tmp/stock_cache'),caller 介面不變。
-_PKL_DIR = os.environ.get('STK_PKL_DIR', '/tmp/stock_cache')
+# src/config/data_config.py 同步用 env,caller 介面不變。
+# D14b v19.75(review):預設值 '/tmp/stock_cache' → tempfile.gettempdir() 可攜寫法
+# (Linux/Streamlit Cloud 結果不變 = /tmp/stock_cache;Windows 本機跑不再炸不存在路徑)。
+_PKL_DIR = os.environ.get('STK_PKL_DIR') or os.path.join(tempfile.gettempdir(), 'stock_cache')
+
+# D14b v19.75:ADL 除錯 log 路徑 SSOT(原 daily_data_fetchers 寫 + tab_macro 讀
+# 各自寫死 '/tmp/_adl_log.txt' 字面值 — 跨檔隱性契約,集中於此防漂移 + Windows 可攜)。
+ADL_LOG_PATH = os.path.join(tempfile.gettempdir(), '_adl_log.txt')
 
 _CACHE_SENTINEL = object()
 

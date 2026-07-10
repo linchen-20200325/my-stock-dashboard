@@ -27,4 +27,6 @@ TTL_CONFIG = {
 # pickle 快取根目錄(Streamlit Cloud /tmp 重啟後自動清除)
 # A2 v18.383:env 注入(`STK_PKL_DIR`)解 shared/cache_layer.py 反向 import L0(L0↔L0 hardcode 設計味道)
 import os as _os_cfg
-PKL_DIR = _os_cfg.environ.get('STK_PKL_DIR', '/tmp/stock_cache')
+import tempfile as _tf_cfg
+# D14b v19.75(review):預設改 tempfile.gettempdir() 可攜寫法(Linux 結果不變;Windows 不炸)
+PKL_DIR = _os_cfg.environ.get('STK_PKL_DIR') or _os_cfg.path.join(_tf_cfg.gettempdir(), 'stock_cache')

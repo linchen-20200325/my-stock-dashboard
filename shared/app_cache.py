@@ -24,8 +24,10 @@ import os
 import pickle
 import time
 
-# 對齊 app.py L247 原值
-_CACHE_DIR = '/tmp/stock_cache'
+# 對齊 app.py L247 原值;D14b v19.75(review):與 cache_layer._PKL_DIR 同語意
+# (env STK_PKL_DIR 優先 + tempfile 可攜預設;Linux 結果不變 = /tmp/stock_cache)
+import tempfile as _tf_ac
+_CACHE_DIR = os.environ.get('STK_PKL_DIR') or os.path.join(_tf_ac.gettempdir(), 'stock_cache')
 os.makedirs(_CACHE_DIR, exist_ok=True)
 
 

@@ -326,6 +326,13 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         # AI 摘要(L3200+)改讀 _xsec → 與顯示段執行順序解耦，Stage 2 物理重排才安全。
         _xsec = _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2)
 
+        # B5 v19.75(review 監控盲區):股本 meta 供 data_registry_scanner
+        # (fetch_share_capital 失敗回 0.0 → scanner 登 missing 亮紅可見)
+        try:
+            st.session_state['t2_xsec_meta'] = {'sid': sid2, 'capital': _xsec.get('capital')}
+        except Exception as _e_xm:
+            print(f'[tab_stock] xsec meta 寫入失敗: {type(_e_xm).__name__}: {_e_xm}')
+
         # v18.457 Task#18：寫入 t2_inst，供 section_kline_chart / section_health_score 讀取
         # df2 已含外資/投信欄（T86/TPEX merge，單位：張），取最後一日作為當前方向指標
         if df2 is not None and not df2.empty and '外資' in df2.columns and '投信' in df2.columns:
