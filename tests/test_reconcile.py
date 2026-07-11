@@ -117,21 +117,20 @@ def test_module_smoke():
 
 class TestComputeHealthArithmetic:
     def test_basic(self):
-        # jqavg=80, score_pct=80, fnet=positive → 80*0.4 + 80*0.4 + 20 = 84
+        # v19.102 校準 SSOT(0.6/0.4/+0):80*0.6 + 80*0.4 + 0 = 80
         v = compute_health_score_arithmetic(80, 80, 5000)
-        assert v == 84.0
+        assert v == 80.0
 
     def test_fnet_zero_or_negative(self):
-        # fnet=0 → bonus 不加
-        v = compute_health_score_arithmetic(80, 80, 0)
-        assert v == 64.0
-        v = compute_health_score_arithmetic(80, 80, -5000)
-        assert v == 64.0
+        # v19.102:fnet bonus 歸零 → 正負零皆同分(80*0.6+80*0.4=80)
+        assert compute_health_score_arithmetic(80, 80, 0) == 80.0
+        assert compute_health_score_arithmetic(80, 80, -5000) == 80.0
+        assert compute_health_score_arithmetic(80, 80, 5000) == 80.0
 
     def test_score_clipped(self):
-        # score_pct=150 → clip 至 100;80*0.4 + 100*0.4 + 20 = 32+40+20 = 92
+        # score_pct=150 → clip 至 100;80*0.6 + 100*0.4 + 0 = 48+40 = 88
         v = compute_health_score_arithmetic(80, 150, 5000)
-        assert v == 92.0
+        assert v == 88.0
 
     def test_missing_input_returns_none(self):
         assert compute_health_score_arithmetic(None, 80, 5000) is None
@@ -165,34 +164,34 @@ class TestComputeHealthMinOfFactors:
 
 class TestReconcileHealthScore:
     def test_agree_balanced(self):
-        # 平衡情境:v1≈v2,容差內 agree
-        # jqavg=80, score_pct=80, fnet=+:v1=84, v2=80 → delta=4 < abs_tol=15 → agree
+        # 平衡情境:v1≈v2,容差內 agree(v19.102 權重 0.6/0.4/+0)
+        # jqavg=80, score_pct=80, fnet=+:v1=80, v2=min(80,80)=80 → delta=0 → agree
         r = reconcile_health_score(80, 80, 5000)
         assert r['name'] == 'MACRO_HEALTH'
         assert r['agree'] is True
-        assert r['value_a'] == 84.0
+        assert r['value_a'] == 80.0
         assert r['value_b'] == 80.0
 
     def test_disagree_short_board_hidden(self):
-        # 短板隱藏情境:jqavg 90(高),score_pct 20(低) → v1=44, v2=20 → delta=24 > 15 → disagree
+        # 短板隱藏情境:jqavg 90(高),score_pct 20(低)→ disagree
         # 這正是 reconcile 想揭露的「arithmetic mean 掩蓋了某因子過弱」場景
         r = reconcile_health_score(90, 20, 5000)
         assert r['agree'] is False
         assert r['status'] == 'disagree'
-        # v1 = 90*0.4 + 20*0.4 + 20 = 64
+        # v1 = 90*0.6 + 20*0.4 + 0 = 62(v19.102)
         # v2 = min(90, 20) = 20
-        assert r['value_a'] == 64.0
+        assert r['value_a'] == 62.0
         assert r['value_b'] == 20.0
-        assert r['delta_abs'] == pytest.approx(44.0)
+        assert r['delta_abs'] == pytest.approx(42.0)
 
     def test_missing_input(self):
         r = reconcile_health_score(None, 80, 5000)
         assert r['status'] == 'both_missing'  # 兩 v 都 None
 
     def test_fnet_negative_penalizes_both(self):
-        # fnet 負 → v1 沒 bonus(64),v2 加入 40 cap → min(80, 80, 40) = 40
-        # delta = 64 - 40 = 24 > abs_tol 15 → disagree
+        # v19.102:v1 無 fnet bonus(恆 80);v2(min-of-factors)fnet 負仍加 40 cap
+        # → min(80, 80, 40) = 40;delta = 40 > abs_tol 15 → disagree
         r = reconcile_health_score(80, 80, -5000)
-        assert r['value_a'] == 64.0
+        assert r['value_a'] == 80.0
         assert r['value_b'] == 40.0
         assert r['agree'] is False

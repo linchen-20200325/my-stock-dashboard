@@ -100,13 +100,14 @@ class TestCalcTrafficLight:
 
     def test_health_38_no_longer_defense_v18_140(self):
         # v18.140 校準收斂：health 介於 35~40 不再觸發防禦
-        # jqavg=80 + score=0 + fnet=0 → health=80*0.4+0+0=32... 改用更貼近 38 的設定
-        # jqavg=70 + score=1 + fnet=0 → health=70*0.4+(1/5*100)*0.4+0=28+8=36 ≥ 35 → 不防禦
+        # v19.102 權重校準(0.6/0.4/0,score/max_score):
+        # jqavg=55 + score=1(max 預設 4)+ fnet=0
+        # → health = 55*0.6 + (1/4*100)*0.4 + 0 = 33 + 10 = 43 ≥ 35 → 不防禦
         mkt = {'score': 1, 'regime': 'neutral'}
-        jq  = {'avg': 70}
+        jq  = {'avg': 55}
         cl  = {'inst': {}}
         tl = calc_traffic_light(mkt, jq, cl, None)
-        assert tl['health'] == pytest.approx(36.0)
+        assert tl['health'] == pytest.approx(43.0)
         assert tl['icon'] == '🟡'  # neutral，不再強制 🔴
         assert tl['defense'] is False
 
@@ -148,13 +149,30 @@ class TestCalcTrafficLight:
         assert tl['leek'] == 50
 
     def test_health_formula(self):
-        # health = avg*0.4 + min(score/5*100,100)*0.4 + (20 if fnet>0 else 0)
-        # avg=50, score=5, fnet=100 → 20 + 40 + 20 = 80
-        mkt = {'score': 5, 'regime': 'bull'}
+        # v19.102 校準採納(方案 B):health = avg*0.6 + min(score/max*100,100)*0.4
+        # + (0 if fnet>0)。avg=50, score=5, max_score=5, fnet=100
+        # → 30 + min(100,100)*0.4 + 0 = 30 + 40 = 70(fnet bonus 歸零)
+        mkt = {'score': 5, 'max_score': 5, 'regime': 'bull'}
         jq  = {'avg': 50}
         cl  = {'inst': {'外資': {'net': 100}}}
         tl = calc_traffic_light(mkt, jq, cl, None)
-        assert tl['health'] == pytest.approx(80.0)
+        assert tl['health'] == pytest.approx(70.0)
+
+    def test_health_score_norm_uses_true_max_score(self):
+        # v19.102 修除5錯配:score=4/max=4 → score 分項滿分 100(舊 /5 只有 80)
+        mkt = {'score': 4, 'max_score': 4, 'regime': 'neutral'}
+        jq  = {'avg': 0}
+        cl  = {'inst': {}}
+        tl = calc_traffic_light(mkt, jq, cl, None)
+        assert tl['health'] == pytest.approx(40.0)   # 0*0.6 + 100*0.4
+
+    def test_health_fnet_no_longer_bonus(self):
+        # v19.102:fnet>0 不再 +20(校準:fnet 對 20 日回撤零預測力)
+        mkt = {'score': 0, 'regime': 'neutral'}
+        jq  = {'avg': 50}
+        base = calc_traffic_light(mkt, jq, {'inst': {}}, None)
+        with_fnet = calc_traffic_light(mkt, jq, {'inst': {'外資': {'net': 999}}}, None)
+        assert base['health'] == pytest.approx(with_fnet['health'])  # 同分
 
 
 class TestRpTs:
