@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 💰 2026-07-11 A~E backlog 批次3(b)：融資維持率 Option A（追繳線=強平線 130 + 撤銷線 166）（v19.91）
+
+user 於 AskUserQuestion 拍板 **Option A「追繳 130＋撤銷 166」**。ETF 質借模擬器維持率門檻校正為台股法規標準值:
+
+- **問題**:`etf_margin_simulator` 原用 `MARGIN_CALL_RATIO=140`(追繳)/ `LIQUIDATION_RATIO=130`(強平)兩級,**非台股法規標準**。台股實務:整戶維持率跌破 **130% 追繳線**發追繳令,須 2 日內補足至 **166% 撤銷線**,未補足即強平(第七/八份公式表點名)。「強平在哪個比率」原是模擬建模選擇(法規是追繳後未補足才強平,非固定比率),故憲法保留 user 拍板。
+- **修(Option A 單線模型)**:`MARGIN_CALL_RATIO=130.0`(追繳線)、`LIQUIDATION_RATIO=130.0`(=追繳線,同線)、新增 `MARGIN_RESTORE_RATIO=166.0`(撤銷線,教學顯示)。`SimulationParams` 加 `restore_ratio` 欄。維持率檢查改**單分支**:`borrowed>0 且 m_ratio < 130` → 視同「追繳令發出且本模擬未建模補足 → 強制平倉」,**同一事件同時計入 `margin_call_count` 與 `liquidation_count`**,`status="liquidated"`,event 文字點名追繳線 130 + 撤銷線 166(教學)。常數為本功能單一 domain-local SSOT(唯一 caller = 引擎 + UI),不外移 shared(§-1:單功能常數移共用層 = 多餘抽象)。
+- **UI 教學同步(撤銷線 166 教學顯示,Option A 要求)**:`tab_etf_margin_simulator` caption + 強平次數卡 help 改敘「跌破 130% 追繳線 → 發追繳令,補足至 166% 撤銷線,未補足即強平」,params 顯式傳 `restore_ratio`。
+- **回歸網**:`test_etf_margin_simulator_coverage.py`(常數 SSOT 改 130/130/166 + 改寫 `test_below_call_line_increments_both_counters` 驗兩計數器同增+event 文字)、`test_etf_margin_simulator.py`(`test_below_margin_call_threshold` 128% 對齊 130 線)。兩檔 69 passed;全套 **3043 passed / 10 skipped** 零破。ruff 四檔 clean(順手拔 coverage 檔既有未用 `import math`)。
+- **A~E 進度**:批次1 ✅ / 3(c) ✅ / 批次2 ✅ / 3(a) ✅ / 3(b) calc_rs_score ✅ + **融資維持率 ✅** / **3(b) 剩紅綠燈權重重設計**(user 選 Option B「先草擬方法論給你審」,不動 code,草案下一步交付)/ 批次4 架構待做。
+
 ## 🧮 2026-07-11 A~E backlog 批次3(b) 之一：calc_rs_score 近零大盤防爆炸（v19.90）
 
 user 核准「批次3(b)」。3(b) 三項風險分層,本次先落地**無語意歧義**的一項:
