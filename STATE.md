@@ -1,5 +1,19 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚦 2026-07-11 紅綠燈權重重設計 Phase 2：離線校準 CLI（scripts/calibrate_health_weights）（v19.93）
+
+user「請繼續」→ 續 Phase 1（v19.92）落地 Phase 2 wiring（仍在已核准 Path 1 範圍內）:
+
+- **新增 `scripts/calibrate_health_weights.py`（scripts 層 orchestrator）**:讀 `data_cache/{twii_ohlcv,finmind_inst,finmind_m1m2}.parquet`（update_macro_history 既有產出）→ 重建 3 特徵 → walk-forward 擬權重 → 寫 `MACRO_HEALTH_WEIGHT_PROPOSAL.md` 給人審。**不改任何 SSOT 常數**（Phase 3 人審後才動）。
+  - **score 重建 SSOT parity**:`reconstruct_score` 逐日呼**真** `market_regime`（L3）,`_ma_flags` 算 MA60/120 的連 3 日站上/跌破 + 斜率,外資/廣度/m1m2 對齊。`score_norm = score/max_score×100`（用真 max_score 4/6）**即修 health 原本除以 5 的錯配**（對齊 user ③）。
+  - **PIT-safe（§2.3）**:外資 backward merge T+1（tol 7D）、m1b_m2 月頻 backward 40D,無 lookahead。
+  - **§8 分層**:score 重建含 L3 呼叫 → 置於 scripts 層（L2 不得 import L3）；L2 純函式維持零 I/O。
+  - **§1 fail-loud**:缺 parquet → SystemExit（不用合成資料）；樣本不足/單一類別 → fit raise。
+- **§8.1 step6 反過度設計**:**砍掉原規劃的 `update_breadth_history.py` + `breadth_history.parquet`** — jqavg 由 twii_ohlcv O(n) 即時重算,獨立 parquet+cron = 用不到的抽象。Phase 2 收斂為單一 script。
+- **L2 小重構**:`health_calibration` 抽 `ad_ratio_from_twii`（日 ad_ratio,market_regime ④ 用）,`breadth_from_twii` 改呼它取 5 日均（輸出不變,Phase 1 19 test 全綠）。
+- **誠實限制**:真實擬合在**部署 cron**（沙箱無 parquet + egress 擋）;in-session 只單測純函式。**下一步（Phase 3）需 user 於部署跑 `python scripts/calibrate_health_weights.py`** 產出提案 → 人審 AUC/overfit_flag → 才改 3 權重常數。
+- **回歸網**:`tests/test_calibrate_health_weights.py` 8 test（_prep_close 去重／_ma_flags／**強勢上升→真 market_regime 滿分 6/6 非循環 parity**／MA120 前 NaN／外資 backward 無 lookahead／特徵表欄位／單一類別 raise／鋸齒混合類別擬合+提案渲染）。calibrate+Phase1 27 passed。全套零破。ruff clean。
+
 ## 🚦 2026-07-11 紅綠燈權重重設計 Phase 1：health_calibration L2 純函式（v19.92）
 
 user 於 AskUserQuestion 定案 Option B 後續 4 決策 + 核准 Path 1（建校準管線）。§8.1 架構先設計(禁寫 code)→ §7 數學式 user 確認照定義走 → 本次落地 **Phase 1（可 in-session 驗的「機器」）**:

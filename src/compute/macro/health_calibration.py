@@ -35,15 +35,37 @@ HEALTH_FIT_MIN_FOLDS = 3          # walk-forward fold 下限
 HEALTH_FIT_OVERFIT_DRIFT = 0.30   # 跨 fold 權重相對方差 > 此 → overfit flag
 
 
-def breadth_from_twii(twii_close: pd.Series) -> pd.Series:
-    """由 ^TWII 收盤序列重建 jqavg（大盤廣度 proxy）。
+def ad_ratio_from_twii(twii_close: pd.Series) -> pd.Series:
+    """由 ^TWII 收盤重建**日** ad_ratio proxy（鏡像 `fetch_adl` ①）。
 
-    鏡像 live 公式（SSOT parity，`fetch_adl` ① + `jingqi_calc.py:43`）：
         r%      = 日漲跌幅（pct_change × 100）
         up      = clip(900 + 150·r, ≥0)
         down    = clip(900 − 150·r, ≥0)
         ad_ratio = up / (up + down) × 100          （total=0 → NaN，不偽造）
-        jqavg   = ad_ratio 的 5 日移動平均
+
+    market_regime ④ 市場廣度用**日** ad_ratio；health 的 jqavg 是其 5 日均
+    （見 `breadth_from_twii`）。第 1 列因 pct_change=NaN → ad_ratio=NaN。
+    空輸入 → 空 Series。
+    """
+    if twii_close is None or len(twii_close) == 0:
+        return pd.Series(dtype=float)
+    close = pd.Series(twii_close, dtype=float)
+    r_pct = close.pct_change() * 100.0
+    up = (BREADTH_BASE_COUNT + BREADTH_PCT_TO_COUNT * r_pct).clip(lower=0.0)
+    down = (BREADTH_BASE_COUNT - BREADTH_PCT_TO_COUNT * r_pct).clip(lower=0.0)
+    total = up + down
+    # total=0（極端雙邊 clip）→ NaN；否則 up 佔比 ×100
+    return pd.Series(
+        np.where(total.to_numpy() > 0, up.to_numpy() / total.to_numpy() * 100.0, np.nan),
+        index=close.index,
+    )
+
+
+def breadth_from_twii(twii_close: pd.Series) -> pd.Series:
+    """由 ^TWII 收盤序列重建 jqavg（大盤廣度 proxy）。
+
+    jqavg = 日 ad_ratio 的 5 日移動平均（鏡像 `jingqi_calc.py:43` tail(5).mean，
+    SSOT parity）。此為 live jqavg 的 PROXY tier。
 
     Parameters
     ----------
@@ -56,19 +78,10 @@ def breadth_from_twii(twii_close: pd.Series) -> pd.Series:
         與輸入同 index 的 jqavg（前 ~5 日因均線不足 → NaN，**不 ffill**）。
         空輸入 → 空 Series。
     """
-    if twii_close is None or len(twii_close) == 0:
-        return pd.Series(dtype=float)
-    close = pd.Series(twii_close, dtype=float)
-    r_pct = close.pct_change() * 100.0
-    up = (BREADTH_BASE_COUNT + BREADTH_PCT_TO_COUNT * r_pct).clip(lower=0.0)
-    down = (BREADTH_BASE_COUNT - BREADTH_PCT_TO_COUNT * r_pct).clip(lower=0.0)
-    total = up + down
-    # total=0（極端雙邊 clip）→ NaN；否則 up 佔比 ×100
-    ad_ratio = pd.Series(
-        np.where(total.to_numpy() > 0, up.to_numpy() / total.to_numpy() * 100.0, np.nan),
-        index=close.index,
-    )
-    return ad_ratio.rolling(JQAVG_ROLLING_DAYS).mean()
+    ar = ad_ratio_from_twii(twii_close)
+    if ar.empty:
+        return ar
+    return ar.rolling(JQAVG_ROLLING_DAYS).mean()
 
 
 def risk_posture_label(

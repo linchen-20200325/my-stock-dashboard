@@ -75,28 +75,26 @@ min_w  Σ_folds [ Σ_t logloss(y_t, σ(w·x_t)) + λ‖w‖² ]     （walk-forw
 **單一職責**：離線校準管線，產出**提案權重**，**不直接改 SSOT**。
 
 ```
-twii_ohlcv.parquet (+選配 TWSE 漲跌家數)
-   │  scripts/update_breadth_history.py   (L1 cron，鏡像 fetch_adl proxy)
+data_cache/{twii_ohlcv, finmind_inst, finmind_m1m2}.parquet  (update_macro_history 既有產出)
+   │  scripts/calibrate_health_weights.py  (scripts 層 orchestrator)
+   │   ├─ L2 health_calibration: breadth_from_twii(jqavg) / ad_ratio_from_twii / risk_posture_label / fit_health_weights
+   │   └─ L3 market_regime: 逐日重建 score (SSOT parity;score_norm=score/max_score×100 修 /5 錯配)
    ▼
-data_cache/breadth_history.parquet  +  finmind_inst.parquet(fnet) + score 重建
-   │  src/compute/macro/health_calibration.py  (L2 純函式，無 I/O)
-   │     breadth_from_twii / risk_posture_label / fit_health_weights
+[X=jqavg/score_norm/fnet, y=20日回撤] → walk-forward fit → 寫 MACRO_HEALTH_WEIGHT_PROPOSAL.md
    ▼
-[X,y] → walk-forward fit → scripts/calibrate_health_weights.py 寫 MACRO_HEALTH_WEIGHT_PROPOSAL.md
-   ▼
-(人工審) → 一個小 commit 改 signal_thresholds 3 個權重常數
+(人工審) → 一個小 commit 改 signal_thresholds 3 個權重常數 (Phase 3)
 ```
-- **依賴方向**：L2 純函式無上行 import；scripts 讀 L1/L2；不碰 L3+。
-- **失敗降級（§1）**：labeled 樣本不足 / fold 太少 → **raise**，不輸出擬合值、不用合成資料。
-- **過度設計自評（§8.1 step6）**：最小版＝`twii_ohlcv` 重建 proxy breadth + 3 權重 logistic + walk-forward。**不**做精確漲跌家數回填、**不**加特徵、**不**加 sklearn → 全標「等最小版證明 ROI 再加」。
+- **依賴方向**：L2 純函式無上行 import；**score 重建含 L3 呼叫,故置於 scripts 層**（L2 不得 import L3）；不碰 L4+。
+- **失敗降級（§1）**：labeled 樣本不足 / fold 太少 / 單一類別 / 缺 parquet → **raise / SystemExit**，不輸出擬合值、不用合成資料。
+- **過度設計自評（§8.1 step6）**：v19.93 **砍掉原規劃的 `update_breadth_history.py` + `breadth_history.parquet`** — jqavg 由 `twii_ohlcv.parquet`（既有）O(n) 即時重算,獨立 parquet+cron = 用不到的抽象（反例）。最小版＝proxy breadth + 3 特徵 logistic + walk-forward;**不**做精確漲跌家數回填、**不**加特徵、**不**加 sklearn。
 
 ## 5. 落地階段
 
 | Phase | 內容 | 執行地 | 狀態 |
 |---|---|---|---|
-| **1** | `health_calibration.py` L2 純函式 + 單測（機器） | in-session（可驗） | ← v19.92 |
-| **2** | `scripts/update_breadth_history.py` + `scripts/calibrate_health_weights.py`（wiring） | 部署 cron | 待做 |
-| **3** | 人審 proposal → 小 commit 改 `signal_thresholds` 3 權重 | 人工 | 待 Phase 2 產出 |
+| **1** | `health_calibration.py` L2 純函式 + 單測（機器） | in-session（可驗） | ✅ v19.92 |
+| **2** | `scripts/calibrate_health_weights.py`（讀 parquet → 重建 3 特徵 → walk-forward 擬合 → 寫提案）+ L2 `ad_ratio_from_twii` | 純函式 in-session 單測；真實跑在部署 cron | ✅ v19.93 |
+| **3** | 部署跑 `python scripts/calibrate_health_weights.py` 產出 `MACRO_HEALTH_WEIGHT_PROPOSAL.md` → 人審（AUC/overfit_flag）→ 小 commit 改 `signal_thresholds` 3 權重 + 修 /5 錯配 | 部署 cron + 人工 | 待 user 於部署跑 |
 
 ## 6. 已知近似與誠實限制
 
