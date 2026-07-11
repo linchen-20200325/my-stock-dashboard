@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from src.services.fundamental_screener_service import (
     SCREEN_ANGLE_LABELS,
@@ -102,6 +103,9 @@ def _screener_flow_script():
                             source_label="基本面優選", skip_s3=True)
 
 
+@pytest.mark.slow  # v19.98 merge-fix:AppTest 須進 slow lane — fast lane 的 streamlit
+# 被鄰居測試 stub 成非 package(無 streamlit.testing)→ CI 恆紅;同檔家族
+# test_composite_rank 的 AppTest 皆已標 slow,本測漏標。
 def test_screener_candidate_to_picker_renders():
     """存活池 → build_candidate_frame → picker 候選 multiselect 真的畫得出來、無 exception。"""
     from streamlit.testing.v1 import AppTest

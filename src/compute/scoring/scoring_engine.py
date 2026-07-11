@@ -15,7 +15,7 @@ from shared.signal_thresholds import (
     MOM_SHARPE_GOOD,
     RISK_VOL_VERYLOW_RATIO, RISK_VOL_LOW_RATIO,
     RS_ABS_RET_T1_PCT, RS_ABS_RET_T2_PCT, RS_ABS_RET_T3_PCT, RS_ABS_RET_T4_PCT,
-    RS_BAND_T1, RS_BAND_T2, RS_BAND_T3, RS_BAND_T4,
+    RS_BAND_T1, RS_BAND_T2, RS_BAND_T3, RS_BAND_T4, RS_IDX_FLAT_EPS_PCT,
     SQ_GM_TREND_DELTA_PCT, SQ_REV_UP_RATIO, SQ_GM_LEVEL_HIGH_PCT, SQ_GM_LEVEL_LOW_PCT,
     SQ_GOOD_MIN, SQ_STABLE_MIN, SQ_FAIR_MIN,
     FGMS_W_CL, FGMS_W_INV, FGMS_W_THREE, FGMS_W_CAPEX,
@@ -47,13 +47,46 @@ except ImportError:
 
 
 def compute_rsi(close, period: int = 14):
-    """通用 RSI 計算(0-100;simple-mean smoothing,非 Wilder)。
-    P0-3 v18.370 深層拔毒:從 calc_buy_signal / calc_exit_signal 內 inline 重複 4 行抽出。
+    """通用 RSI 計算(0-100;**Wilder RMA smoothing**,對齊券商平台)。
+
+    v19.89 A~E 批次3(a)(user 授權位移訊號):原 `rolling(period).mean()`(SMA)改
+    Wilder 平滑 `ewm(alpha=1/period, adjust=False)` — 台股所有券商平台一律用
+    Wilder(α=1/period),故 70/30 超買超賣門檻改此後方可與券商數值對照。
+    數學:AvgGain_t = AvgGain_{t-1}×(period-1)/period + Gain_t/period(= ewm α=1/period)。
+    副作用:RSI 數值全體平滑位移(較 SMA 版遲緩、貼近主流平台);極端全漲/全跌仍
+    映射 ~100/~0(既有 test_tech_indicators 斷言不破)。單點 SSOT,全 RSI caller 同步。
+    P0-3 v18.370:從 calc_buy_signal / calc_exit_signal 內 inline 重複 4 行抽出。
     """
     delta = close.diff()
-    gain = delta.clip(lower=0).rolling(period).mean()
-    loss = (-delta.clip(upper=0)).rolling(period).mean()
+    gain = delta.clip(lower=0).ewm(alpha=1 / period, adjust=False).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1 / period, adjust=False).mean()
     return 100 - 100 / (1 + gain / (loss + 1e-10))
+
+
+def compute_atr(df, period: int = 14, *, wilder: bool = True):
+    """真實波幅 ATR(True Range + 平滑);v19.89 A~E 批次3(a) SSOT。
+
+    原各處只用當根 `high - low`,漏抓跨日跳空。改標準 True Range:
+        TR_t = max(High_t - Low_t, |High_t - Close_{t-1}|, |Low_t - Close_{t-1}|)
+    跳空(如除權息、隔夜大跌)才計入波動 → 停損距離更貼實。
+    平滑:wilder=True 用 Wilder RMA(ewm α=1/period,券商標準);False 用簡單
+    移動平均(rolling)。回傳 ATR series(caller 取 .iloc[-1])。
+
+    副作用(user 授權):以此計的停損距離較舊 high-low 版寬(跳空日尤然)。
+    缺 high/low 欄 → 退回 close(TR 退化為 |ΔClose|,不炸)。
+    """
+    import pandas as pd
+    high = df['high'] if 'high' in df.columns else df['close']
+    low = df['low'] if 'low' in df.columns else df['close']
+    close = df['close']
+    prev_close = close.shift(1)
+    tr = pd.concat(
+        [(high - low), (high - prev_close).abs(), (low - prev_close).abs()],
+        axis=1,
+    ).max(axis=1)  # 首根 prev_close=NaN → max skipna → TR=High-Low
+    if wilder:
+        return tr.ewm(alpha=1 / period, adjust=False).mean()
+    return tr.rolling(period).mean()
 
 
 # ── 1. 趨勢分數 ───────────────────────────────────────────────
@@ -125,9 +158,8 @@ def calc_momentum_score(df) -> float:
 
     # ③ ATR 動態停損空間（股票波動度 vs 風險）
     if len(df) >= 14:
-        _hi = df['high'] if 'high' in df.columns else close
-        _lo = df['low']  if 'low'  in df.columns else close
-        _tr = (_hi - _lo).rolling(14).mean().iloc[-1]
+        # v19.89 批次3(a):改 compute_atr(True Range + Wilder),跳空計入波動
+        _tr = float(compute_atr(df, 14).iloc[-1])
         _atr_pct = _tr / close.iloc[-1] if close.iloc[-1] > 0 else 0.02
         # v18.241 E10: ATR% 分級從 shared.signal_thresholds 引入（原 0.03/0.05 inline）
         atr_score = 2 if _atr_pct < ATR_PCT_LOW else (1 if _atr_pct < ATR_PCT_HIGH else 0)
@@ -305,7 +337,10 @@ def calc_rs_score(df, df_index=None, period=250):
             # 無大盤資料時用 0 為基準（只看絕對漲幅）
             idx_chg = 0
 
-        if idx_chg == 0:
+        if abs(idx_chg) < RS_IDX_FLAT_EPS_PCT:
+            # v19.90 批次3(b):原僅守 idx_chg==0,近零分母(如 0.01%)仍會讓
+            # rs=stock_chg/|idx_chg| 爆炸放大數千倍 → 誤判 100。改「近乎平盤
+            # (|idx_chg|<1%)」一律走絕對漲幅路徑(不動 RS_BAND 校準,僅堵退化情形)。
             # 無大盤基準：直接用絕對漲幅映射，不套入相對公式
             # 避免與有基準時的 rs 數值系統不同造成混淆
             if stock_chg >= RS_ABS_RET_T1_PCT:   return 100
@@ -1078,10 +1113,8 @@ def calc_atr_stop(df, entry_price: float, multiplier: float = ATR_STOP_MULTIPLIE
                 'atr': None, 'stop_pct': ATR_STOP_FIXED_PCT,
                 'method': 'fixed_8pct', 'error': None}
     try:
-        hi = df['high'] if 'high' in df.columns else df['close']
-        lo = df['low']  if 'low'  in df.columns else df['close']
-        tr = (hi - lo).rolling(14).mean()
-        atr = float(tr.iloc[-1])
+        # v19.89 批次3(a):改 compute_atr(True Range + Wilder) — 跳空計入,停損更貼實
+        atr = float(compute_atr(df, 14).iloc[-1])
         stop = entry_price - multiplier * atr
         stop_pct = (entry_price - stop) / entry_price * 100
         return {
@@ -1131,6 +1164,11 @@ def check_vcp_atr_filter(df) -> dict:
         result['label'] = '資料不足'
         return result
     try:
+        # v19.89 批次3(a) 註:此處**刻意保留當根 high-low range**(非 True Range) —
+        # VCP 收縮判定是 atr5/atr20 的**比值**,且 VCP_ATR_CONTRACTION_RATIO 門檻
+        # 對 high-low range 校準;換 True Range 會位移比值需重新校準(同 calc_rs_score
+        # 謹慎處理,列待 user 若要 VCP 亦 TR 化再一起回測)。停損/風險分級的 ATR
+        # 已於別處改 compute_atr(True Range)。
         hi = df['high'] if 'high' in df.columns else df['close']
         lo = df['low']  if 'low'  in df.columns else df['close']
         tr = (hi - lo)

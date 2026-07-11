@@ -15,7 +15,10 @@ from __future__ import annotations
 
 # v18.241 E11: 月線正乖離門檻從 shared SSOT 引入
 from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
-from shared.signal_thresholds import MA20_POSITIVE_DEVIATION_THRESHOLD_PCT
+from shared.signal_thresholds import (
+    KD_OVERBOUGHT_LEVEL,
+    MA20_POSITIVE_DEVIATION_THRESHOLD_PCT,
+)
 
 import json
 import re
@@ -94,8 +97,8 @@ def compute_tech_bearish(df, k=None, d=None) -> dict:
 
         if k is not None and d is not None:
             try:
-                if float(k) < float(d) and float(k) > 70:
-                    reasons.append(f'KD高檔死叉 K={float(k):.0f}')
+                if float(k) < float(d) and float(k) > KD_OVERBOUGHT_LEVEL:
+                    reasons.append(f'KD高檔死叉 K={float(k):.0f}')  # v19.94 70→SSOT 80
             except (TypeError, ValueError):
                 pass
 

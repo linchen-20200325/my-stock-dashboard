@@ -22,6 +22,7 @@ from src.compute.etf import (
     LEVERAGE_PRESETS,
     LIQUIDATION_RATIO,
     MARGIN_CALL_RATIO,
+    MARGIN_RESTORE_RATIO,
     PHASE_RECOMMENDATION,
     SimulationParams,
     result_to_dataframe,
@@ -148,9 +149,11 @@ def _render_summary_cards(result, symbol: str) -> None:
     col3.metric(
         "💥 強平次數",
         result.liquidation_count,
-        delta=f"⚠️ 追繳 {result.margin_call_count}",
+        delta=f"⚠️ 追繳令 {result.margin_call_count}",
         delta_color="off",
-        help=f"強平門檻 {LIQUIDATION_RATIO}% / 追繳門檻 {MARGIN_CALL_RATIO}%",
+        help=(f"台股實務：維持率跌破追繳線 {MARGIN_CALL_RATIO:.0f}% 發追繳令，"
+              f"須 2 日內補足至撤銷線 {MARGIN_RESTORE_RATIO:.0f}%，未補足即強平。"
+              "本模擬不建模「補足」動作 → 追繳令＝強平同次計。"),
     )
     col4.metric(
         "平均槓桿率",
@@ -217,8 +220,9 @@ def render_etf_margin_simulator() -> None:
     st.markdown("## 💰 ETF 質借倒金字塔加碼模擬器")
     st.caption(
         "📌 **策略邏輯**：價格從歷史高點回撤 X% → 依 preset 質借 Y% 本金加碼。"
-        f"擔保維持率 < {MARGIN_CALL_RATIO}% **追繳保證金**、< {LIQUIDATION_RATIO}% "
-        "**強制平倉**。模擬假設無利息成本、忽略交易手續費，僅作策略概念驗證。"
+        f"擔保維持率跌破 {MARGIN_CALL_RATIO:.0f}% **追繳線** → 券商發追繳令，"
+        f"須 2 日內補足至 {MARGIN_RESTORE_RATIO:.0f}% **撤銷線**，未補足即 **強制平倉**"
+        "（本模擬不建模補足動作）。模擬假設無利息成本、忽略交易手續費，僅作策略概念驗證。"
     )
 
     rec_key = _render_phase_recommendation()
@@ -241,6 +245,7 @@ def render_etf_margin_simulator() -> None:
         initial_capital=initial_capital,
         margin_call_ratio=MARGIN_CALL_RATIO,
         liquidation_ratio=LIQUIDATION_RATIO,
+        restore_ratio=MARGIN_RESTORE_RATIO,
     )
     result = simulate_margin_strategy(price_series, params)
 

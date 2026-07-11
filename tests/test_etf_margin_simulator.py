@@ -100,13 +100,14 @@ class TestMaintenanceRatioFormula:
         assert _compute_maintenance_ratio(1000, 200, 0, 100_000) == 200.0
 
     def test_below_margin_call_threshold(self):
-        # shares*price = 135_000；borrowed = 100_000 → 135% < 140%
-        r = _compute_maintenance_ratio(1000, 135, 0, 100_000)
-        assert r == 135.0
+        # v19.91 Option A:追繳線=強平線=130。shares*price = 128_000；
+        # borrowed = 100_000 → 128% < 130% 追繳線
+        r = _compute_maintenance_ratio(1000, 128, 0, 100_000)
+        assert r == 128.0
         assert r < MARGIN_CALL_RATIO
 
     def test_below_liquidation_threshold(self):
-        # 125_000 / 100_000 = 125% < 130%
+        # 125_000 / 100_000 = 125% < 130% 強平線（=追繳線,Option A 同線）
         r = _compute_maintenance_ratio(1000, 125, 0, 100_000)
         assert r == 125.0
         assert r < LIQUIDATION_RATIO

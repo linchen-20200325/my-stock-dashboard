@@ -25,8 +25,11 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.responses import Response as _RawResponse
 from pydantic import BaseModel
 from typing import Optional
+import ipaddress
+import socket
 import requests, datetime, os
 import urllib3
+from urllib.parse import urlparse
 
 
 # v18.355 PR-Q5a — S-PROV-1 phase 19 helper
@@ -48,6 +51,19 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 app = FastAPI(title="NAS 中繼站", version="1.0.0")
 
 _API_KEY = os.environ.get("NAS_API_KEY", "")
+# v19.86 安全（第八份 review D）:未設 NAS_API_KEY = `/proxy` `/api/fetch` 無認證
+# 開放,任何人可把本機當跳板(SSRF)。此處大聲警告;硬性「未設 key 拒絕啟動」屬
+# 部署行為變更,列 user 決定(見 PR 描述)。無論有無 key,下方 _assert_public_url
+# 都會封鎖內網/metadata 目標,先堵住 SSRF 最危險面。
+if not _API_KEY:
+    print("=" * 72, flush=True)
+    print("⚠️  [NAS 安全警告] NAS_API_KEY 未設定 — /proxy 與 /api/fetch 目前"
+          "「無認證開放」!", flush=True)
+    print("    任何知道本站網址者都可驅動本機發出 HTTP 請求。強烈建議:", flush=True)
+    print('    export NAS_API_KEY="<高強度隨機字串>" 後重啟。', flush=True)
+    print("    (SSRF 內網存取已由 _assert_public_url 封鎖,但認證仍應設定)", flush=True)
+    print("=" * 72, flush=True)
+
 _HDR = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -62,6 +78,43 @@ _HDR = {
 def _auth(x_api_key: str = Header(None)):
     if _API_KEY and x_api_key != _API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API Key")
+
+
+# ── SSRF 防護（第八份 review D，v19.86）────────────────────────────────────
+# `/proxy?url=` 原本對任意 url 直接 requests.get → 可被用來打內網主機、雲端
+# metadata endpoint(169.254.169.254)、localhost 服務等(SSRF)。此 guard 先解析
+# 目標主機的 IP,凡落在私有/loopback/link-local/保留範圍一律拒絕。
+#
+# 涵蓋範圍:公開站(TWSE/FinMind/FRED/Yahoo 等)解析為公網 IP → 放行,零誤傷;
+# 內網 IP / metadata / localhost → 擋。
+# 已知限制:不防 DNS rebinding(解析時公網、requests 抓取時翻內網)—屬進階攻擊,
+# 需 pin 已解析 IP,列後續強化(本 guard 已堵住直接以內網 URL 打進來的主要面)。
+def _assert_public_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400,
+                            detail=f"僅允許 http/https,拒絕 scheme={parsed.scheme!r}")
+    host = parsed.hostname
+    if not host:
+        raise HTTPException(status_code=400, detail="URL 缺 host")
+    try:
+        # 取得該主機所有解析結果(IPv4+IPv6),任一內網即拒
+        infos = socket.getaddrinfo(host, parsed.port or None,
+                                   proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        # 解析不了 → 讓 requests.get 自然失敗(不誤判為攻擊),但也抓不到內網
+        return
+    for info in infos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            raise HTTPException(
+                status_code=403,
+                detail=f"拒絕存取內網/保留位址 {ip_str}（SSRF 防護）")
 
 
 class FetchReq(BaseModel):
@@ -291,13 +344,23 @@ def proxy_relay(url: str, _=Depends(_auth)):
     用法：GET {NAS_BASE_URL}/proxy?url=https://www.twse.com.tw/...
     """
     try:
-        _r = requests.get(
-            url,
-            headers={**_HDR, 'Accept': '*/*'},
-            timeout=20,
-            verify=False,
-            allow_redirects=True,
-        )
+        # v19.86 SSRF 防護:每一跳(初始 + 每次轉址)都先過 _assert_public_url
+        # 再抓,防「公開 URL 302 → 內網」繞過。手動有界迴圈保留多層轉址支援。
+        _cur = url
+        _r = None
+        for _hop in range(6):  # 上限 6 跳,足夠合法 http→https→final;逾則截斷
+            _assert_public_url(_cur)
+            _r = requests.get(
+                _cur,
+                headers={**_HDR, 'Accept': '*/*'},
+                timeout=20,
+                verify=False,
+                allow_redirects=False,
+            )
+            if _r.is_redirect and _r.headers.get('Location'):
+                _cur = requests.compat.urljoin(_cur, _r.headers['Location'])
+                continue
+            break
         print(f'[NAS/proxy] ✅ {url[:80]} HTTP {_r.status_code}')
         return _RawResponse(
             content=_r.content,

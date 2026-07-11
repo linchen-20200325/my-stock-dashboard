@@ -1,5 +1,147 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+> ⚠️ **版號撞號註記(2026-07-11)**:本日兩條並行分支各自遞號,`v19.86~v19.90` 出現兩組 —
+> **A~E/校準線**(claude/review-modify-suggestions-7vygyp,下方第一批條目)與
+> **選股網線**(claude/dazzling-turing-QxI9m,下方第二批條目)。閱讀時以「主題+分支」區分;
+> 為不竄改已推送的 commit 訊息,兩組版號原樣保留,後續版號自 v19.98 起單線續號。
+
+## 🔧 2026-07-11 macro-history cron 白跑 bug 修 + 校準 Phase 3 一鍵化（v19.97）
+
+user 問「Phase 3 這要如何做?」→ 查證發現**前置真 bug**,一併修:
+
+- **Bug（實錘）**:`update_macro_history.yml` 每日 cron 的 Commit 步驟 `git add data_cache/` 被 `.gitignore:39`（v18.461 引入 `data_cache/*.parquet`）蓋掉 → **每日 no-op,origin/main 上 0 筆「🤖 每日總經歷史增量」commit**——cron 抓的 20 年歷史每天隨 runner 蒸發。這正是 MACRO_CALIBRATION 只有「TWII-only 合成資料」可用的根因（真實快取從未存在）。修:`git add -f data_cache/`（強制納管 parquet+metadata;CLAUDE.md §5 本來就定「歷史運算用凍結快照 data_cache/ parquet」,gitignore 該條與憲法牴觸）。fundamentals 季快照不受影響（`data_cache/*.parquet` pattern 不匹配子目錄,故它一直正常 commit）。
+- **新增 `calibrate_health_weights.yml`（workflow_dispatch 手動按鈕）**:跑 `scripts/calibrate_health_weights.py` → commit `MACRO_HEALTH_WEIGHT_PROPOSAL.md` 回 repo 供人審。缺 parquet 時 script SystemExit 明講缺什麼（§1）。deps 含 streamlit（`src/services/__init__` 急載 daily_checklist 無條件 import streamlit,CI 模擬驗證過;裝整包比繞 package `__init__` hack 乾淨,§8.1 step6）。
+- **Phase 3 操作路徑（全按鈕化,user 只要點）**:① merge PR ② GitHub Actions →「Update Macro History (Daily)」→ Run workflow → **bootstrap=true**（初次建 20 年）③ 跑完後 →「Calibrate Health Weights (Manual)」→ Run workflow ④ repo 多一筆 🤖 提案 commit → 交 AI/人審 AUC/overfit_flag → 過了才改 signal_thresholds 3 權重。**依賴警語**:步驟② 抓數據走 NAS proxy + FinMind secrets——若 NAS proxy 掛（A-1 待查）bootstrap 會部分失敗,run log 會誠實顯示。
+- **無 python 源碼變更**（純 yml + 文件）,測試面不受影響。
+
+## 🛰️ 2026-07-11 批次4 Item1+2：@monitored fetcher 自我登錄 + 孤兒 set-diff（v19.96）
+
+user AskUserQuestion 核准「Item1 最小版＋Item2;3/4/5 drop」。§8.1 設計先核准再落地:
+
+- **根因（兩次實案）**:診斷頁靠 3 份**手寫**清單（`DATA_REGISTRY` / `data_registry_scanner` 硬編掃描表 / `health_inspector` 18 個 `_g_add`）,新 fetcher 漏登即隱形 — B5 v19.75（籌碼集中度等 3 項未登錄,抓壞診斷不亮紅）+ S13 v19.78（patch 誤刪 B5 補登項）。
+- **Item1 最小版:新增 `shared/fetch_monitor.py`（純 stdlib,零 streamlit/零 I/O）**:
+  - `@monitored(name, category, frequency, registry_key)`:**import 時**自我登錄 metadata（從未被呼叫也顯示「未執行」,不再隱形）;每次**真實**呼叫記 status/rows/耗時。**放置在 `@st.cache_data`/`@_ttl_cache` 之「內」** → cache hit 不觸發,last_* 一律 = 最後一次真實外抓（誠實語意）。
+  - **§1**:fetcher raise → 記 failed 後**原樣 re-raise**（不吞）;registry 寫入失敗只 stderr log,絕不影響 fetch 主流程。
+  - `get_monitor_registry()` accessor（回 copy 防 UI 誤改）。
+  - **placement refinement**:§8.1 原設計寫 `src/data/core/`,因該包 `__init__` 急載重量級 data_loader,依 `shared/cache_layer.py` 先例改置 `shared/`（L0 式 utility ← L1 import,依賴方向更乾淨,無迴圈）。
+- **裝上 5 個高風險 fetcher**:`fetch_tw_pmi`（macro_core,9 源賽跑）/ `fetch_business_indicator_series` + `fetch_ndc_signal_history` + `fetch_ndc_leading_index`（tw_macro,FinMind NDC 鏈）/ `fetch_margin_balance`（daily,6 段 fallback）。monthly_revenue 為 cached **method**（`_self` + hash 複雜）,最小版不硬裝（§8.1 step6）。
+- **Item2 孤兒 set-diff**:`find_orphans(present_keys)` — 已監控且宣告 `registry_key`,但該 key 不在 `session_state['data_registry']` → 孤兒（= 有在抓但診斷清單沒它的列,B5/S13 類 bug 自動亮）。`registry_key=None` 者誠實跳過不猜。
+- **診斷頁接線**:`data_registry_panel.render_fetch_monitor_panel()`（L5 純讀 accessor）— 監控表（狀態燈/最後真實抓取/rows/耗時/錯誤）+ 孤兒警示,app.py 資料診斷 tab 掛在資料源清單後。
+- **3/4/5 依 user 決策 drop**（§8.1 step6 記錄）:Item3 跨 Tab 單例=臆測（StockDataLoader 已 `@st.cache_resource`,其餘 module-level 或刻意 rerun 重建零 I/O）;Item4 並行化=PMI 早已 9 源 ThreadPool 並行,margin/月營收備援雲端 geo-dead 並行零收益+有優先序破壞風險;Item5 DataManager=app.py 現 752 LOC thin orchestrator + **EX-PASSTHRU-1 憲法明文預先否決**此抽象。
+- **回歸網**:`tests/test_fetch_monitor.py` 14 test（import 登錄「未執行」/成功記 ok+rows+ms/失敗記 failed+re-raise/None→0·scalar→None 不偽造/wraps 穿透/accessor copy;孤兒 4 態;production wiring source-scan:5 fetcher 已裝+cache 內側順序+診斷頁接線+import 副作用實登錄）。margin/tw_macro/macro_core/registry 109 passed。ruff:新檔 clean,4 個被改 production 檔 baseline 比對零新增。
+- **A~E 全收**:批次1 ✅ 批次2 ✅ 批次3(a)(b)(c) ✅ **批次4 ✅**（Item1+2 最小版;3/4/5 user 決策 drop）。
+
+## 📊 2026-07-11 批次3(a) 布林突破量能確認（v19.95）
+
+user AskUserQuestion 核准「加量能 gate」。§7 數學式先確認再落地:
+
+- **問題**:`detect_bollinger_breakout`（v5_modules,Task 9）docstring 一直聲明吃 `volume` 欄但函式體**從未用** — 「🔴 布林突破爆發」不看量,無量假突破也給爆發買點。
+- **修（位移,已授權）**:加 `vol_ratio = 今量 / 20 日均量`（mirror 既有 `check_fake_breakout` pattern;gate 用**既有 SSOT `VOLUME_RATIO_SURGE=1.5`,不新增常數**）。`near_upper 且 bw>3` 分流:①量增 ≥1.5× → 🔴 突破爆發（msg 帶「量增 N×確認」）②量不足 → **🟡 布林突破待確認（慎防無量假突破）**（原 🔴 降級）③缺 volume 欄/均量無效 → `vol_ratio=None`（**誠實未知,不偽造 1.0**,§1）維持舊 🔴 行為 + msg 標「量能未知」。
+- **schema-additive**:dict 加 `vol_ratio` / `volume_confirmed` 兩鍵,既有 caller（section_health_score 顯示）無感。非突破路徑（收縮/靠近上軌/正常）零改動。
+- **回歸網**:`tests/test_review_fixes_v19_95.py` 6 test（有量🔴+ratio;量不足降🟡;缺欄維持🔴標未知;非突破路徑不受影響;schema 契約;全 0 量不除零不確認）。既有 `test_pr_j3_smed_high_risk` 併跑 23 passed。ruff v5_modules 零新增（既有 23 錯非本次,baseline 比對同數）。
+- **A~E 進度**:批次3(a) RSI/ATR ✅ + KD ✅ + **布林量能 ✅**(本次,3(a) 全收)/ 下一步 批次4 Item1 monitored 裝飾器（user 已核准最小版+Item2）。
+
+## 📈 2026-07-11 批次3(a) KD 鈍化背離（偵測 + 接進評分 + drift 修）（v19.94）
+
+user AskUserQuestion 核准「偵測＋接進評分」+「修 exit_signals 70→80 drift」。§7 數學式先確認再落地:
+
+- **新 L2 `analyze_kd_state(df)`（tech_indicators）**:偵測 KD 鈍化 + 背離,dict-or-None + stderr log（同儕 calc_kd/calc_bollinger 契約,不 raise）。
+  - **鈍化(passivation)**:K 連 `KD_PASSIVATION_DAYS(3)` 日 ≥ 80（高檔鈍化=強勢續漲,非賣訊）/ ≤ 20（低檔鈍化）。
+  - **背離(divergence,兩窗高低點法,避脆弱單點 pivot)**:最近 `KD_DIVERGENCE_LOOKBACK(40)` 日切兩半——頂背離(空)=後半價高點>前半但 K@高點<前半;底背離(多)對稱。
+- **接進健康評分（位移,已授權）**:`scoring_helpers.calc_health_score` KD tier（15 分）分流——高檔黃叉(K>D,K≥80)遇①**頂背離→降 5**（真警訊）②**高檔鈍化→維持 15**（強勢續漲不誤扣,原一律 8）③否則注意 8;低檔死叉遇**底背離→加 13**（反轉向上,原 10）。`analyze_kd_state` 回 None（資料不足）→ 退回原分級（向後相容）。純黃金交叉(K<80)不受影響。
+- **順帶 drift 修**:`exit_signals.py:96`「KD高檔死叉」寫死 `70` → 引 SSOT `KD_OVERBOUGHT_LEVEL(80)`,消 §3.3 漂移。
+- **新 SSOT 常數**:`KD_PASSIVATION_DAYS=3` / `KD_DIVERGENCE_LOOKBACK=40`（signal_thresholds）。
+- **§7 邊界**:lowercase OHLCV;資料不足 period+3 → None;NaN 對齊 dropna;兩窗需 aligned≥40 才算背離（不足不偽造）。§8.2 分層:tech_indicators/scoring_helpers 同 L2,無上行 import。
+- **回歸網**:`tests/test_review_fixes_v19_94.py` 13 test（鈍化高/低/不足/震盪;頂/底背離;wiring monkeypatch 6 態:高檔鈍化15/頂背離5/無訊號8/底背離13/低檔10/純黃叉15;drift 源掃描）。`test_exit_signals` 高檔死叉 fixture k=80→82 對齊新門檻。scoring/tech/exit/health 549 passed。ruff 對 4 檔零新增（tech_indicators 既有 1 個 E741 非本次）。
+- **A~E 進度**:批次3(a) RSI/ATR ✅(v19.89) + **KD 鈍化背離 ✅**(本次)/ 下一步 布林量能確認 → 批次4 Item1 monitored 裝飾器。
+
+## 🚦 2026-07-11 紅綠燈權重重設計 Phase 2：離線校準 CLI（scripts/calibrate_health_weights）（v19.93）
+
+user「請繼續」→ 續 Phase 1（v19.92）落地 Phase 2 wiring（仍在已核准 Path 1 範圍內）:
+
+- **新增 `scripts/calibrate_health_weights.py`（scripts 層 orchestrator）**:讀 `data_cache/{twii_ohlcv,finmind_inst,finmind_m1m2}.parquet`（update_macro_history 既有產出）→ 重建 3 特徵 → walk-forward 擬權重 → 寫 `MACRO_HEALTH_WEIGHT_PROPOSAL.md` 給人審。**不改任何 SSOT 常數**（Phase 3 人審後才動）。
+  - **score 重建 SSOT parity**:`reconstruct_score` 逐日呼**真** `market_regime`（L3）,`_ma_flags` 算 MA60/120 的連 3 日站上/跌破 + 斜率,外資/廣度/m1m2 對齊。`score_norm = score/max_score×100`（用真 max_score 4/6）**即修 health 原本除以 5 的錯配**（對齊 user ③）。
+  - **PIT-safe（§2.3）**:外資 backward merge T+1（tol 7D）、m1b_m2 月頻 backward 40D,無 lookahead。
+  - **§8 分層**:score 重建含 L3 呼叫 → 置於 scripts 層（L2 不得 import L3）；L2 純函式維持零 I/O。
+  - **§1 fail-loud**:缺 parquet → SystemExit（不用合成資料）；樣本不足/單一類別 → fit raise。
+- **§8.1 step6 反過度設計**:**砍掉原規劃的 `update_breadth_history.py` + `breadth_history.parquet`** — jqavg 由 twii_ohlcv O(n) 即時重算,獨立 parquet+cron = 用不到的抽象。Phase 2 收斂為單一 script。
+- **L2 小重構**:`health_calibration` 抽 `ad_ratio_from_twii`（日 ad_ratio,market_regime ④ 用）,`breadth_from_twii` 改呼它取 5 日均（輸出不變,Phase 1 19 test 全綠）。
+- **誠實限制**:真實擬合在**部署 cron**（沙箱無 parquet + egress 擋）;in-session 只單測純函式。**下一步（Phase 3）需 user 於部署跑 `python scripts/calibrate_health_weights.py`** 產出提案 → 人審 AUC/overfit_flag → 才改 3 權重常數。
+- **回歸網**:`tests/test_calibrate_health_weights.py` 8 test（_prep_close 去重／_ma_flags／**強勢上升→真 market_regime 滿分 6/6 非循環 parity**／MA120 前 NaN／外資 backward 無 lookahead／特徵表欄位／單一類別 raise／鋸齒混合類別擬合+提案渲染）。calibrate+Phase1 27 passed。全套零破。ruff clean。
+
+## 🚦 2026-07-11 紅綠燈權重重設計 Phase 1：health_calibration L2 純函式（v19.92）
+
+user 於 AskUserQuestion 定案 Option B 後續 4 決策 + 核准 Path 1（建校準管線）。§8.1 架構先設計(禁寫 code)→ §7 數學式 user 確認照定義走 → 本次落地 **Phase 1（可 in-session 驗的「機器」）**:
+
+- **user 定案 4 決策**:① 目標函數=**規避回撤·風險姿態**(燈學「該防禦嗎」非報酬預測器)、② 時界=**20 交易日**、③ 特徵集=**先維持現 3 輸入**(jqavg/score/fnet)+修除5錯配、④ 資料=**先建 jqavg 歷史重建管線**。§7 三數學式(jqavg 重建/20 日最大回撤真值/logistic 擬合)user 接受照定義。
+- **關鍵誠實前提**:MACRO_CALIBRATION −0.452/1.6% 證據**是 TWII-only 合成 demo**,非真實資料 → 第一步是**取得真實資料**,不是照 −0.452 反推權重(違 §1)。且 live `jqavg` 真相=`ad_ratio.tail(5).mean`(jingqi_calc:43),而 `ad_ratio` 本身重度是 ^TWII proxy(fetch_adl ①)→ 重建可**複用既有 twii_ohlcv.parquet + 鏡像 proxy**,成本低。
+- **新增 `src/compute/macro/health_calibration.py`（L2 純函式,numpy+pandas,無 I/O/streamlit/requests）**:
+  - `breadth_from_twii()` — 由 ^TWII 重建 jqavg(鏡像 fetch_adl ① proxy「±1%≈±150 家、900 基準」+ jingqi 5 日均,SSOT parity；此為 live jqavg 的 PROXY tier)。前 5 日 NaN 不偽造(§1)。
+  - `risk_posture_label()` — 未來 20 交易日最大回撤 ≥ θ_dd(預設 8%,待 OOS)→ y∈{0,1}。尾端不足窗 → NaN。
+  - `fit_health_weights()` — walk-forward L2-logistic(**純 numpy 手刻,不引 sklearn/scipy**=§8.1 反過度依賴)+ inner-CV 選 λ + robustness voting + overfit guard。**labeled 樣本<60 / fold<3 / 單一類別 → raise**(§1 fail loud,不回偽權重)。
+- **順帶抓到 1 個自寫 bug**:AUC 計算原用最後 λ 的 intercept 配 best_w(不同 λ)→ 改追 best_b 對應。
+- **存檔（user 核准）**:`MACRO_HEALTH_REWEIGHT_PROPOSAL.md` 完整方法論 + §7 數學式 + §8 架構 + 落地 3 Phase + 誠實限制。
+- **誠實限制（寫入 proposal）**:真實擬合在**部署 cron**(沙箱無 twii_ohlcv.parquet + egress 擋)；in-session 只交付「可單測演算法」。Phase 2(scripts/update_breadth_history + calibrate_health_weights,cron 執行)+ Phase 3(人審 proposal→改 3 權重常數,順解除5錯配)待做。文件漂移(CLAUDE.md 6-factor/sum=1.0、SPEC health<40)Phase 3 一併修。
+- **回歸網**:`tests/test_health_calibration.py` 19 test(jqavg 重建數值/NaN 頭/index；回撤真值觸發/θ 可調/尾端 NaN；logistic 擬權重符號/AUC/樣本不足 raise/單類別 raise/NaN drop 不填/輸出契約；L2 純度掃描)。全套 **3062 passed / 10 skipped** 零破。ruff 兩檔 clean。
+
+## 💰 2026-07-11 A~E backlog 批次3(b)：融資維持率 Option A（追繳線=強平線 130 + 撤銷線 166）（v19.91）
+
+user 於 AskUserQuestion 拍板 **Option A「追繳 130＋撤銷 166」**。ETF 質借模擬器維持率門檻校正為台股法規標準值:
+
+- **問題**:`etf_margin_simulator` 原用 `MARGIN_CALL_RATIO=140`(追繳)/ `LIQUIDATION_RATIO=130`(強平)兩級,**非台股法規標準**。台股實務:整戶維持率跌破 **130% 追繳線**發追繳令,須 2 日內補足至 **166% 撤銷線**,未補足即強平(第七/八份公式表點名)。「強平在哪個比率」原是模擬建模選擇(法規是追繳後未補足才強平,非固定比率),故憲法保留 user 拍板。
+- **修(Option A 單線模型)**:`MARGIN_CALL_RATIO=130.0`(追繳線)、`LIQUIDATION_RATIO=130.0`(=追繳線,同線)、新增 `MARGIN_RESTORE_RATIO=166.0`(撤銷線,教學顯示)。`SimulationParams` 加 `restore_ratio` 欄。維持率檢查改**單分支**:`borrowed>0 且 m_ratio < 130` → 視同「追繳令發出且本模擬未建模補足 → 強制平倉」,**同一事件同時計入 `margin_call_count` 與 `liquidation_count`**,`status="liquidated"`,event 文字點名追繳線 130 + 撤銷線 166(教學)。常數為本功能單一 domain-local SSOT(唯一 caller = 引擎 + UI),不外移 shared(§-1:單功能常數移共用層 = 多餘抽象)。
+- **UI 教學同步(撤銷線 166 教學顯示,Option A 要求)**:`tab_etf_margin_simulator` caption + 強平次數卡 help 改敘「跌破 130% 追繳線 → 發追繳令,補足至 166% 撤銷線,未補足即強平」,params 顯式傳 `restore_ratio`。
+- **回歸網**:`test_etf_margin_simulator_coverage.py`(常數 SSOT 改 130/130/166 + 改寫 `test_below_call_line_increments_both_counters` 驗兩計數器同增+event 文字)、`test_etf_margin_simulator.py`(`test_below_margin_call_threshold` 128% 對齊 130 線)。兩檔 69 passed;全套 **3043 passed / 10 skipped** 零破。ruff 四檔 clean(順手拔 coverage 檔既有未用 `import math`)。
+- **A~E 進度**:批次1 ✅ / 3(c) ✅ / 批次2 ✅ / 3(a) ✅ / 3(b) calc_rs_score ✅ + **融資維持率 ✅** / **3(b) 剩紅綠燈權重重設計**(user 選 Option B「先草擬方法論給你審」,不動 code,草案下一步交付)/ 批次4 架構待做。
+
+## 🧮 2026-07-11 A~E backlog 批次3(b) 之一：calc_rs_score 近零大盤防爆炸（v19.90）
+
+user 核准「批次3(b)」。3(b) 三項風險分層,本次先落地**無語意歧義**的一項:
+
+- **calc_rs_score 近零分母防爆炸（安全,不動校準）**:`rs = stock_chg / abs(idx_chg)` 原只守 `idx_chg == 0`,大盤近乎平盤(如 N 日僅 +0.01%)時分母近零 → rs 放大數千倍 → 個股小漲即誤判滿分 100。修:新增 SSOT `RS_IDX_FLAT_EPS_PCT=1.0`(signal_thresholds),`abs(idx_chg) < 1%` 一律走**既有絕對漲幅路徑**(不動 RS_BAND 相對強度校準,僅把退化情形導向現成分支)。近零大盤 + 個股 +5% 現正確得 60(絕對路徑)而非爆炸 100;正常大盤(+2.5%)仍走相對 rs 路徑不受影響。
+- **回歸網**:`test_review_fixes_v19_89.py` +3(近零走絕對 / 正常走相對 / 源掃描),共 12 test。
+- **3(b) 剩兩項需 user 決策(不擅動)**:① **融資維持率 130/166** — 現 etf_margin_simulator 用 140 追繳 / 130 強平,與台股法規(130 追繳 / 166 補足撤銷)不符;但「強平在哪個比率觸發」是模擬建模選擇(法規是追繳後未補足才強平,非固定比率),憲法保留 user 拍板 → 已提問。② **紅綠燈權重重設計**(MACRO_CALIBRATION −0.452 負相關)= 研究級模型重設計,需 user 定方法論(目標函數/權重方案),不盲改 → 已提問。
+- **A~E 進度**:批次1 ✅ / 3(c) ✅ / 批次2 ✅ / 3(a) ✅ / **3(b) calc_rs_score ✅**(融資+權重待 user 決策)/ 批次4 架構待做。
+
+## 📐 2026-07-11 A~E backlog 批次3(a)（標準公式）：RSI Wilder + ATR True Range（v19.89）
+
+user 明確授權「批次3(a) 標準公式」+「位移訊號換取和券商可對照」(§7 位移訊號 sign-off):
+
+- **RSI 改 Wilder RMA（SSOT 單點,全 RSI caller 同步位移）**:`compute_rsi` 原 `rolling(period).mean()`(SMA)→ `ewm(alpha=1/period, adjust=False).mean()`(Wilder)。台股所有券商平台一律 Wilder,故 70/30 超買超賣門檻改此後方可與券商數值對照。數學:`AvgGain_t = AvgGain_{t-1}×(p-1)/p + Gain_t/p`。副作用:RSI 全體平滑位移(較 SMA 遲緩、貼近平台);極端全漲/全跌仍 ~100/~0(既有斷言不破)。`tech_indicators.calc_rsi` 委派此 SSOT,一改全動。
+- **ATR 改 True Range（新 SSOT `compute_atr`,收斂 2 處直接幅值用途）**:原各處只用當根 `high-low`,漏抓跨日跳空。新 `compute_atr(df, period, wilder=True)`:`TR = max(H-L, |H-prevC|, |L-prevC|)` + Wilder 平滑。**風險分級 ATR%(scoring:130)+ 動態停損 calc_atr_stop(:1083)** 兩處改用之 → 跳空(除權息/隔夜大跌)計入波動,停損距離更貼實(user 授權「停損距離變寬」)。缺 high/low 欄退回 close 不炸。
+- **VCP 收縮比刻意不改(§謹慎)**:`calc_vcp` 的 atr5/atr20 保留 high-low range — 其 `VCP_ATR_CONTRACTION_RATIO` 門檻對 high-low 校準,換 True Range 位移比值需重新回測(同 calc_rs_score σ 處理);加註說明,列待若要 VCP 亦 TR 化再一起校準。
+- **回歸網**:`tests/test_review_fixes_v19_89.py` 9 test(RSI Wilder ewm 等值 + 異於 SMA + 極端值 + 源掃描;ATR True Range 捕捉跳空 + Wilder/simple + 缺欄降級 + 源掃描;calc_atr_stop functional)。既有 test_tech_indicators/test_risk_control/test_scoring_engine 333 passed 零破(極端值斷言對 Wilder/TR 仍成立)。
+- **A~E 進度**:批次1 ✅ / 3(c) ✅ / 批次2 ✅ / **3(a) 本次 ✅** / 下一步 批次3(b) 語意項(calc_rs_score σ / 融資 130-166 / 紅綠燈權重重設計 — 需 user 更多方向)。
+
+## 🚦 2026-07-11 A~E backlog 批次2 收尾（全域紅綠燈時效 gate）（v19.88）
+
+user 核准「批次2 收尾」。全域紅綠燈(app.py 頁面最頂,永遠可見)過期資料 gate 落地:
+
+- **全域紅綠燈時效 gate（行為變更,已授權）**:app.py:481 全域多空紅綠燈原直接吃 `mkt_info`/`jingqi_info` + `cl_ts`(上次一鍵更新時間),無時效檢查 → 使用者隔數日開著舊 session 會看到過期的「多頭市場（可積極操作）」當即時訊號(第八份 §3.1 點名,類比 v18.442 ETF 假折溢價事故)。修:過 `shared/staleness.gate_for_realtime(staleness_days(cl_ts), max_days=1)`,**過期時保留燈色(資料可顯示)但撤下「建議持股 X%」+ 旌旗均值 actionable 建議,改明確「⚠️ 資料已過期,燈號僅供參考 — 請先一鍵更新再操作」**。對齊原則:過期資料可顯示但須標記、不得以「可積極操作」語氣餵當下決策。
+- **基金端批次2 已由既有機制覆蓋(不另造)**:Fund 無單一「全域紅綠燈」,其 per-indicator `_freshness`(data_registry,本輪還修過 SLOOS 季頻閾值)+ tab1 AI prompt `[STALE]` 已是成熟時效系統;再造 staleness.py 屬 §8.1 step 6「用不到的抽象」反例,故基金不重複。
+- **回歸網**:`tests/test_staleness.py` +1 紅綠燈 gate source-scan(共 23 test);gate_for_realtime 邏輯已由既有單元測試覆蓋。
+- **批次2 完整收尾**:SSOT 基礎(v19.87)+ AI prompt [STALE](v19.87)+ 全域紅綠燈 gate(本次)。**A~E 進度**:批次1 ✅ / 3(c) ✅ / 批次2 ✅ / 下一步 批次3(a) 標準公式(user 已授權位移訊號:RSI Wilder / ATR True Range)→ 批次3(b) 語意項。
+
+## ⏱️ 2026-07-11 A~E backlog 批次2（時效閘 SSOT）：shared/staleness.py + AI prompt [STALE] 標記（v19.87）
+
+user 核准「1~4 陸續慢慢做」。批次2 時效閘依 §8.1 設計後落地;本次交付 **SSOT 基礎 + 安全的加法消費者**,行為變更的紅綠燈硬 gate 留作後續分開審查:
+
+- **新增 `shared/staleness.py`（L0 純函式 SSOT）**:`expected_latest_trading_day(today, holidays)`(扣週末 + 可選休市日,**不硬編全年台股日曆** — §8.1 過度設計自評,春節長假等由 caller 注入)、`staleness_days(data, ...)`(多型別:DataFrame/date/str/Timestamp → 距預期最新交易日天數,無法判定回 None)、`gate_for_realtime(days, max_days)`(→ 可否即時用 + 提示;None/超期 fail-safe 排除)、`stale_tag(days, threshold)`([STALE:Nd] AI 標籤)。
+- **DRY 收斂**:既有 `app_stock_fetchers._expected_latest_trading_date`(重複的週末退算)改委派 SSOT,介面 0 改。
+- **安全消費者(加法)**:`app.py:_build_llm_context` 月度指標(出口/PMI/CPI/NDC)距預期 >40 天者,行前綴 `[STALE:Nd]` — 防 AI 把過期資料當當期講(第八份 §3.1;對齊 Fund 端既有慣例)。順手把 AI prompt 殘留「外銷訂單」對齊 v19.85 正名「台灣出口」。
+- **未做(留後續,行為變更需分開審查)**:全域紅綠燈(app.py:481)硬 gate — 過期 mkt_info/jingqi_info 拒絕顯示多空 → 這動到決策顯示,擇期單獨做 + 單獨驗。
+- **回歸網**:`tests/test_staleness.py` 22 test(expected_latest 週末/假日鏈、staleness_days 多型別/邊界、gate fail-safe、stale_tag 閾值、shim 委派、AI prompt wiring source-scan)。
+- **A~E 進度**:批次1 ✅ / 3(c) ✅ / **批次2 基礎 ✅**(紅綠燈 gate 待續)/ 下一步 批次3(a) 標準公式(RSI Wilder/ATR TR,§7 已給數學式待你點頭位移訊號)。
+
+## 🔒 2026-07-11 A~E backlog 批次1（止血）：NAS proxy SSRF 防護 + fetch_pmi_history 死碼拔除 + CLAUDE.md dataset 正名（v19.86）
+
+user 核准「A~E 陸續修復」。本批取**最安全、自足、不位移訊號**三項落地（架構級 B/會位移訊號的公式 C 依 §7/§8 後續回合先出設計/數學式）：
+
+- **D 安全（NAS proxy SSRF 止血）**:`src/data/proxy/nas_server.py` 兩個洞——(1) `_auth` 的 `if _API_KEY and ...` 在**未設 NAS_API_KEY 時直接放行**(開放代理);(2) `/proxy?url=` 對任意 url 直接 `requests.get`,可打內網/雲端 metadata(169.254.169.254)/localhost = 完整 SSRF。修:新增 `_assert_public_url()` — 解析目標主機 IP,凡私有/loopback/link-local/reserved/multicast 一律 403;`/proxy` 每一跳(初始+每次轉址,`allow_redirects=False` 手動有界迴圈 6 跳)都過 guard,防「公開 URL 302→內網」繞過;未設 key 時啟動大聲警告。**向後相容**:公開站(TWSE/FinMind/FRED/Yahoo)解析為公網 IP → 放行,零誤傷。**已知限制**:不防 DNS rebinding(需 pin 已解析 IP,列後續)。**待 user 決定**:是否「未設 key 硬性拒絕啟動」(涉 NAS 部署行為變更,故本批只警告不強制)。
+- **E 死碼（fetch_pmi_history 整刪）**:`tw_macro.fetch_pmi_history` 打 dataset `TaiwanEconomicIndicator`(v19.85 證實不存在),恆回 None 且 **0 production caller**(原 caller merrill_clock 已 v18.359 整檔刪除 → 孤兒);當期 TW PMI 由 `fetch_tw_pmi`(9 源賽跑)供應。整刪 + schemas.py docstring 引用更新。**TW CPI/失業率 fetcher 不刪**——有專屬測試且是 v18.270 刻意加的半成品功能,「刪 vs 接真實源」屬 user 決定的岔路,不擅自摧毀。
+- **A-3 文件正名**:兩 repo CLAUDE.md §2.1 把已證實不存在的 `TaiwanEconomicIndicator`/`TaiwanMacroEconomics` 更正為 `TaiwanBusinessIndicator`(NDC)+ 註明 FinMind 無 PMI/出口替代集。憲法漂移收斂。
+- **回歸網**:`test_nas_server_coverage.py` +6 SSRF test(metadata/loopback/私有段/非 http scheme/缺 host 擋下 + 公開站放行;fastapi 缺套件時 graceful skip);`test_review_fixes_v19_85.py` +1 死碼刪除掃描 + 假 dataset 掃描擴至 tw_macro。ruff 對 nas_server/tw_macro 零新增(baseline 2 = 現況 2)。
+- **A~E 後續批次(已排 task,依序進行)**:批次2 時效閘 staleness.py(§8 先設計)、批次3 公式校正(RSI Wilder/ATR TR/KD 鈍化背離等,§7 先給數學式)、批次4 架構(monitored 診斷登錄/並行化/DataManager facade,§8 先核准範圍)。A-1(NAS 檢查)/A-2(Put/Call 死因)卡在 user 輸入。
 ## 🐞 2026-07-11 選股網綜合評分失真修：RS 全池覆蓋 + 缺料不灌 0（v19.90）
 
 > 使用者截圖：選股結果 RS分整欄 0，且排序與下方抗跌RS排行（2061 RS 188…）對不上。查為真資料錯誤。

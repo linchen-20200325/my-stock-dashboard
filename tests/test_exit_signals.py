@@ -80,7 +80,8 @@ def test_bull_df_not_bearish(bull_df):
 
 
 def test_kd_high_dead_cross_adds_reason(bull_df):
-    out = compute_tech_bearish(bull_df, k=80, d=85)
+    # v19.94:高檔死叉門檻 70→SSOT KD_OVERBOUGHT_LEVEL(80);K 須 >80 才算高檔
+    out = compute_tech_bearish(bull_df, k=82, d=85)
     assert any('KD高檔死叉' in r for r in out['reasons'])
 
 

@@ -493,13 +493,26 @@ if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
     )
     _gl_pos = _mkt_top.get('exposure_pct', '80%' if _reg=='bull' else ('20%' if _reg=='bear' else '50%'))
 
+    # v19.88 A~E 批次2 收尾:時效閘 — 紅綠燈基於過期資料時,保留燈色(資料可顯示)但
+    # 撤下「建議持股 X%」actionable 建議 + 旌旗均值,改明確過期警示。§1/第八份 §3.1:
+    # 過期資料可顯示但須標記,且不得以「可積極操作」語氣餵當下決策(cl_ts = 上次一鍵更新)。
+    from shared.staleness import gate_for_realtime, staleness_days
+    _rt_ok, _rt_msg = gate_for_realtime(
+        staleness_days(_ts_top) if _ts_top else None, max_days=1)
+    if _rt_ok:
+        _mid_html = (
+            f'<span style="font-size:12px;color:#c9d1d9;">建議持股 <b>{_gl_pos}</b></span>'
+            + (f'<span style="font-size:12px;color:#8b949e;">旌旗均值 {_jqpct:.0f}%</span>'
+               if _jqpct is not None else ''))
+    else:
+        _mid_html = ('<span style="font-size:12px;font-weight:700;color:#d29922;">'
+                     '⚠️ 資料已過期，燈號僅供參考 — 請先按「🚀 一鍵更新全部數據」再操作</span>')
+
     st.markdown(
         f'<div style="background:#0d1117;border:1px solid {_gl_color};border-radius:8px;'
         f'padding:8px 14px;margin-bottom:8px;display:flex;align-items:center;gap:16px;">'
         f'<span style="font-size:16px;font-weight:900;color:{_gl_color};">{_gl_label}</span>'
-        f'<span style="font-size:12px;color:#c9d1d9;">建議持股 <b>{_gl_pos}</b></span>'
-        + (f'<span style="font-size:12px;color:#8b949e;">旌旗均值 {_jqpct:.0f}%</span>'
-           if _jqpct is not None else '') +
+        f'{_mid_html}'
         f'<span style="font-size:11px;color:#484f58;margin-left:auto;">更新：{_ts_top}</span>'
         f'</div>', unsafe_allow_html=True)
 
@@ -510,7 +523,13 @@ if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
 
 
 def _build_llm_context(macro_info: dict) -> str:
-    """將 session_state 中的量化總經數據格式化為純文字供 LLM 使用"""
+    """將 session_state 中的量化總經數據格式化為純文字供 LLM 使用。
+
+    v19.87 A~E 批次2:月度指標(出口/PMI/CPI/NDC)距預期最新交易日 >40 天者,
+    在該行前綴 `[STALE:Nd]`(shared/staleness.stale_tag SSOT),防 AI 把過期資料
+    當當期講(第八份 review §3.1;對齊 Fund 端既有慣例)。
+    """
+    from shared.staleness import stale_tag, staleness_days
     _vix = macro_info.get('vix') or {}
     _exp = macro_info.get('tw_export') or {}
     _pmi = macro_info.get('ism_pmi') or {}
@@ -518,17 +537,23 @@ def _build_llm_context(macro_info: dict) -> str:
     _ndc = macro_info.get('ndc_signal') or {}
     _mi  = st.session_state.get('m1b_m2_info') or {}
     _bi  = st.session_state.get('bias_info') or {}
+
+    def _tag(_d: dict) -> str:
+        # 月度指標 stale 閾值 40 天;date 缺失 → staleness_days 回 None → 無標籤
+        return stale_tag(staleness_days(_d.get('date')), threshold=40)
+
     _lines = []
     if _vix.get('current'):
         _lines.append(f'• VIX 恐慌指數：{_vix["current"]} (MA20={_vix.get("ma20","N/A")})')
     if _exp.get('yoy') is not None:
-        _lines.append(f'• 台灣外銷訂單 YoY：{_exp["yoy"]:+.1f}%  ({_exp.get("date","")})')
+        # v19.85 正名:tw_export = 海關出口年增率(非經濟部外銷訂單)
+        _lines.append(f'• {_tag(_exp)}台灣出口 YoY：{_exp["yoy"]:+.1f}%  ({_exp.get("date","")})')
     if _pmi.get('value') is not None:
-        _lines.append(f'• 🇹🇼 台灣 PMI：{_pmi["value"]}  ({_pmi.get("date","")}，>50 擴張)')
+        _lines.append(f'• {_tag(_pmi)}🇹🇼 台灣 PMI：{_pmi["value"]}  ({_pmi.get("date","")}，>50 擴張)')
     if _cpi.get('yoy') is not None:
-        _lines.append(f'• 美國核心 CPI YoY：{_cpi["yoy"]:+.1f}%  ({_cpi.get("date","")})')
+        _lines.append(f'• {_tag(_cpi)}美國核心 CPI YoY：{_cpi["yoy"]:+.1f}%  ({_cpi.get("date","")})')
     if _ndc.get('score') is not None:
-        _lines.append(f'• NDC 景氣燈號分數：{_ndc["score"]:.0f}/45')
+        _lines.append(f'• {_tag(_ndc)}NDC 景氣燈號分數：{_ndc["score"]:.0f}/45')
     if _mi.get('m1b_yoy') is not None and _mi.get('m2_yoy') is not None:
         _gap = round(float(_mi['m1b_yoy']) - float(_mi['m2_yoy']), 2)
         _lines.append(f'• 台灣 M1B={_mi["m1b_yoy"]:.1f}%  M2={_mi["m2_yoy"]:.1f}%  Gap={_gap:+.2f}%')
@@ -731,10 +756,16 @@ with tab_tools:
     tab_diag, tab_edu = st.tabs(['🔎 資料診斷', '📚 教學'])
 
     with tab_diag:
-        from src.ui.pages import render_data_coverage, render_data_registry_panel, render_reconcile_panel
+        from src.ui.pages import (
+            render_data_coverage,
+            render_data_registry_panel,
+            render_fetch_monitor_panel,  # v19.96 批次4 Item1+2
+            render_reconcile_panel,
+        )
         render_data_coverage()
         st.markdown('---')
         render_data_registry_panel()
+        render_fetch_monitor_panel()   # v19.96:@monitored 監控 + 孤兒 set-diff
         st.markdown('---')
         render_reconcile_panel()
         st.markdown('---')

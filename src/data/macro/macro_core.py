@@ -54,6 +54,7 @@ from shared.signal_thresholds import (  # v18.242 W3b SSOT consume
     TNX_VALUATION_PRESSURE_PCT,  # v18.326 PR-D: macro_compass TNX 門檻
     TNX_NEUTRAL_PCT,
 )
+from shared.fetch_monitor import monitored  # v19.96 批次4 Item1:fetcher 自我登錄
 
 __version__ = "1.0.0"
 
@@ -857,6 +858,8 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 #   4. 鉅亨網（HTML，PMI 公告新聞）
 # ══════════════════════════════════════════════════════════════
 
+@monitored('fetch_tw_pmi', category='🇹🇼 台灣總經', frequency='monthly',
+           registry_key='🇹🇼 台灣 PMI 製造業指數')   # v19.96 批次4 Item1
 def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     """抓取台灣製造業 PMI（9 來源並行賽跑，依優先序取最高優先的有效值；月頻）。
 

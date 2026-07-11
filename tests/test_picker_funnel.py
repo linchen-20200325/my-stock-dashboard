@@ -36,15 +36,21 @@ def test_qualified_gate_uses_ssot_constants():
 
 
 def test_app_entry_no_longer_yield_ranked():
-    """app.py 選股網入口不得再用 nlargest 殖利率當排序閘門，改 nsmallest 本益比。"""
+    """app.py 選股網入口不得再用 nlargest 殖利率當排序閘門。
+
+    v19.98 merge-fix:原斷言釘 v18.466/v19.74 的實作細節
+    (`nsmallest(PICKER_DEEP_SCAN_N` / `gate_pool_by_fundamentals` / 估值優選),
+    但選股網 v19.88-90 重設計改走 `composite_rank_candidates`(綜合評分)+
+    `get_fundamental_survivors`(基本面存活池) — 舊斷言在 main 上恆紅(CI 失敗根因)。
+    改釘「當前設計」的入口契約;負面斷言(不得回退殖利率排序)原樣保留。
+    """
     with open('app.py', encoding='utf-8') as f:
         app_src = f.read()
     assert "nlargest(50, '殖利率(%)')" not in app_src, (
         '選股網入口仍用「殖利率前50」nlargest 當排序閘門')
-    assert "nsmallest(PICKER_DEEP_SCAN_N" in app_src, (
-        '選股網入口應改用 nsmallest(PICKER_DEEP_SCAN_N, 本益比) 估值排序')
     # source_label 不再自稱「高殖利率前50」
     assert "source_label='高殖利率前50'" not in app_src
-    # Phase 2:入口套「全台股基本面存活池」閘門，label 為條件式「基本面優選 / 估值優選」
-    assert "gate_pool_by_fundamentals" in app_src, '選股網入口應接上全台股基本面存活池閘門'
-    assert "基本面優選" in app_src and "估值優選" in app_src
+    # v19.88+ 現行設計:基本面存活池 → 綜合評分 → picker
+    assert "get_fundamental_survivors" in app_src, '選股網入口應接基本面存活池'
+    assert "composite_rank_candidates" in app_src, '選股網入口應走綜合評分排序'
+    assert "基本面優選" in app_src

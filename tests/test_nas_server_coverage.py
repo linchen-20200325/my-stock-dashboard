@@ -120,5 +120,48 @@ class TestModuleSurface:
         nas_server._prov_log("unit_test", "test:source", "summary")
 
 
+class TestSsrfGuard:
+    """v19.86 第八份 review D:_assert_public_url SSRF 防護。
+
+    只做 DNS 解析(不發 HTTP),擋內網/metadata/localhost,放行公開站。
+    """
+
+    def _raises_http(self, url):
+        from fastapi import HTTPException
+        try:
+            nas_server._assert_public_url(url)
+            return None
+        except HTTPException as e:
+            return e.status_code
+
+    def test_blocks_cloud_metadata_endpoint(self):
+        # 169.254.169.254 = 雲端 metadata(AWS/GCP);SSRF 最經典目標
+        assert self._raises_http("http://169.254.169.254/latest/meta-data/") == 403
+
+    def test_blocks_loopback(self):
+        assert self._raises_http("http://127.0.0.1:8765/") == 403
+        assert self._raises_http("http://localhost/admin") == 403
+        assert self._raises_http("http://[::1]/") == 403
+
+    def test_blocks_private_ranges(self):
+        assert self._raises_http("http://192.168.1.1/") == 403
+        assert self._raises_http("http://10.0.0.5/x") == 403
+        assert self._raises_http("http://0.0.0.0/") == 403
+
+    def test_blocks_non_http_scheme(self):
+        assert self._raises_http("ftp://evil.example/x") == 400
+        assert self._raises_http("file:///etc/passwd") == 400
+
+    def test_blocks_missing_host(self):
+        assert self._raises_http("http:///nohost") == 400
+
+    def test_allows_public_dashboard_hosts(self):
+        # 儀表板實際會抓的公開站不可被誤擋(解析為公網 IP)
+        for ok in ("https://www.twse.com.tw/x",
+                   "https://api.finmindtrade.com/x",
+                   "https://fred.stlouisfed.org/x"):
+            assert self._raises_http(ok) is None, f"誤擋公開站 {ok}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

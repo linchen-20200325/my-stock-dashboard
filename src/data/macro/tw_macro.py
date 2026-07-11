@@ -33,6 +33,7 @@ from typing import Optional
 
 import pandas as pd
 
+from shared.fetch_monitor import monitored  # v19.96 批次4 Item1(純 stdlib,無 streamlit)
 from shared.ttls import TTL_10MIN, TTL_15MIN, TTL_30MIN, TTL_1HOUR
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from src.data.proxy import fetch_url
@@ -637,6 +638,8 @@ def _finmind_token_from_env() -> str:
 
 
 @_ttl_cache(ttl_sec=TTL_15MIN, maxsize=4)
+@monitored('fetch_business_indicator_series', category='🇹🇼 台灣總經',
+           frequency='monthly', registry_key='景氣先行指標（NDC）')  # v19.96(cache 內=只記真實抓)
 def fetch_business_indicator_series(months_back: int = 18,
                                     token: str = "") -> Optional[pd.DataFrame]:
     """抓 FinMind `TaiwanBusinessIndicator`(國發會景氣指標官方鏡像,寬表)。
@@ -692,6 +695,8 @@ def fetch_business_indicator_series(months_back: int = 18,
 
 
 @_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
+@monitored('fetch_ndc_signal_history', category='🇹🇼 台灣總經',
+           frequency='monthly', registry_key='景氣先行指標（NDC）')  # v19.96
 def fetch_ndc_signal_history(months_back: int = 12,
                              token: str = "") -> dict:
     """抓景氣對策信號分數歷史（月頻），偵測連 2 月反轉拐點。
@@ -776,6 +781,8 @@ def fetch_ndc_signal_history(months_back: int = 12,
 
 
 @_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
+@monitored('fetch_ndc_leading_index', category='🇹🇼 台灣總經',
+           frequency='monthly', registry_key='景氣先行指標（NDC）')  # v19.96
 def fetch_ndc_leading_index(months_back: int = 18,
                             token: str = "") -> dict:
     """抓領先指標綜合指數歷史，計算 6M smoothed 變化率與翻揚拐點。
@@ -996,78 +1003,14 @@ def fetch_tw_market_snapshot(days_back: int = 7) -> dict:
 
 
 # ══════════════════════════════════════════════════════════════
-# TW PMI 月度歷史 — FinMind TaiwanEconomicIndicator(merrill_clock 共用)
-# ⚠️ v19.85 診斷:dataset `TaiwanEconomicIndicator` 不存在於 FinMind(SDK 2.0.4
-# 枚舉 + 官方文件皆無),本函式恆回 None;且現況 **0 production caller**(僅
-# schemas.py docstring 提及)。FinMind 無 PMI dataset 可替換 → 整刪列入待核准,
-# 本輪僅如實標註(§-1 範圍紀律)。
-# S-H4 v18.243:從 `merrill_clock.py`(L2 Compute)下沉至 L1 Data,
-# 修正 CLAUDE.md §8.2「L2 不得 import proxy_helper」違憲。caller(merrill_clock)
-# 改 `from tw_macro import fetch_pmi_history` 並從 `config.FINMIND_TOKEN` 取 token。
-# ══════════════════════════════════════════════════════════════
-@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
-def fetch_pmi_history(months: int = 18, token: str = "") -> Optional[pd.DataFrame]:
-    """從 FinMind 抓台灣 PMI 月度歷史(含當期),merrill 時鐘 YoY 算用。
-
-    Parameters
-    ----------
-    months : int
-        往回抓的月數(實際抓略多,容週末/假日 lag)。
-    token : str
-        FinMind API token。空 → 回 None(免費版有 dataset 限制)。
-
-    Returns
-    -------
-    pd.DataFrame  欄位:
-        - `date` (Timestamp):資料歸屬日(normalized 月底)
-        - `value` (float):PMI 數值(已過濾合理範圍)
-        - `source` (str):血緣標識,"FinMind:TaiwanEconomicIndicator:PMI"(S-PROV-1 v18.247)
-        - `fetched_at` (str):本次抓取 UTC ISO(S-PROV-1 v18.247)
-
-    失敗時回傳 None。
-    """
-    from shared.signal_thresholds import PMI_VALID_MAX, PMI_VALID_MIN
-    if not token:
-        return None
-    _start = (_dt.date.today() - _dt.timedelta(days=months * 31)).strftime('%Y-%m-%d')
-    _r = fetch_url(
-        FINMIND_BASE,
-        params={'dataset': 'TaiwanEconomicIndicator',
-                'start_date': _start, 'token': token},
-        timeout=15)
-    if _r is None:
-        print('[tw_macro/pmi-hist] fetch_url None(proxy 失敗)')
-        return None
-    if _r.status_code != 200:
-        print(f'[tw_macro/pmi-hist] HTTP {_r.status_code}')
-        return None
-    try:
-        _data = (_r.json() or {}).get('data') or []
-    except Exception as _e:
-        print(f'[tw_macro/pmi-hist] JSON 解析失敗:{type(_e).__name__}')
-        return None
-    _rows = [d for d in _data
-             if 'PMI' in str(d.get('name', '')) or '製造業' in str(d.get('name', ''))]
-    if not _rows:
-        print('[tw_macro/pmi-hist] FinMind 無 PMI series')
-        return None
-    _df = pd.DataFrame(_rows)
-    _df['date'] = pd.to_datetime(_df['date']).dt.normalize()
-    _df['value'] = pd.to_numeric(_df['value'], errors='coerce')
-    _df = _df.dropna(subset=['value']).sort_values('date').reset_index(drop=True)
-    _df = _df[(_df['value'] >= PMI_VALID_MIN) & (_df['value'] <= PMI_VALID_MAX)].reset_index(drop=True)
-    print(f'[tw_macro/pmi-hist] ✅ {len(_df)} months')
-    out = _df[['date', 'value']].copy()
-    # S-PROV-1 v18.247 phase 3:provenance schema(§2.2)
-    out['source'] = 'FinMind:TaiwanEconomicIndicator:PMI'
-    out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
-    # Phase 2 pandera Priority 2 v18.434:log-mode PMI schema(範圍 [30,70] + date ascending)
-    try:
-        from src.compute.risk.schemas import validate_in_log_mode, PMISchema
-        validate_in_log_mode(out, PMISchema, label=f'fetch_pmi_history:months={months}')
-    except Exception:
-        pass
-    return out
+# (v19.86 第八份 review E 死碼刪除)原 `fetch_pmi_history(months, token)`:
+# 打 dataset `TaiwanEconomicIndicator`(v19.85 證實不存在於 FinMind — SDK 2.0.4
+# 枚舉 + 官方文件皆無),恆回 None;且 **0 production caller**(僅 schemas.py
+# docstring 提及、無任何 import/呼叫)。原為 S-H4 v18.243 自 merrill_clock 下沉,
+# 但 merrill_clock 已於 v18.359 整檔刪除,此函式隨之成孤兒。
+# 當期 TW PMI 由 `fetch_tw_pmi`(macro_core,9 源賽跑)供應,不需本死路徑。
+# git history 可查回。§3.3 反捏造 + 死碼零殘留。
+# ════════════════════════════════════════════════════════════════
 
 
 # ════════════════════════════════════════════════════════════════════════════

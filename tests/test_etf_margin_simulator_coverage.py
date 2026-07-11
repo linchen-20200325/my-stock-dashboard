@@ -3,18 +3,17 @@
 對應 src/compute/etf/etf_margin_simulator.py(L2 純 compute 質借倒金字塔模擬器)。
 
 涵蓋:
-- 常數 SSOT(MARGIN_CALL_RATIO=140 / LIQUIDATION_RATIO=130)
+- 常數 SSOT(v19.91 Option A:MARGIN_CALL_RATIO=130 / LIQUIDATION_RATIO=130 / MARGIN_RESTORE_RATIO=166)
 - get_preset:deep copy 隔離 + 未知 key raise KeyError(§1 fail loud)
 - _compute_maintenance_ratio:borrowed=0 → 999 哨兵 + 正常公式 + 零除防護
 - simulate_margin_strategy:空/None/零初始價 邊界 + Day0 全押 + 倒金字塔觸發
-  + 追繳(margin_call)/強平(liquidated)門檻 + 單日只觸發一 level
+  + 跌破追繳線=強平線 130(同一事件同時計 margin_call_count+liquidation_count)
+  + 單日只觸發一 level
 - SimulationResult properties:final_equity / total_return_pct / max_drawdown_pct
   / avg_leverage_ratio(空集 + 無借款日不計入)
 - result_to_dataframe 欄位契約
 """
 from __future__ import annotations
-
-import math
 
 import pandas as pd
 import pytest
@@ -23,6 +22,7 @@ from src.compute.etf.etf_margin_simulator import (
     LEVERAGE_PRESETS,
     LIQUIDATION_RATIO,
     MARGIN_CALL_RATIO,
+    MARGIN_RESTORE_RATIO,
     PHASE_RECOMMENDATION,
     SimulationParams,
     SimulationResult,
@@ -41,18 +41,21 @@ def _series(prices, start="2026-01-01"):
 # ─────────────────────────── 常數 SSOT ───────────────────────────
 class TestThresholdConstants:
     def test_margin_call_and_liquidation_values(self):
-        # 台股保守實務值,本功能 SSOT
-        assert MARGIN_CALL_RATIO == 140.0
+        # v19.91 Option A:台股法規標準值(追繳線=強平線 130、撤銷線 166)
+        assert MARGIN_CALL_RATIO == 130.0
         assert LIQUIDATION_RATIO == 130.0
+        assert MARGIN_RESTORE_RATIO == 166.0
 
-    def test_call_above_liquidation(self):
-        # 追繳門檻必須高於強平門檻(否則邏輯顛倒)
-        assert MARGIN_CALL_RATIO > LIQUIDATION_RATIO
+    def test_call_equals_liquidation_restore_above(self):
+        # Option A:追繳線=強平線(同線 130);撤銷線 166 須高於追繳線
+        assert MARGIN_CALL_RATIO == LIQUIDATION_RATIO
+        assert MARGIN_RESTORE_RATIO > MARGIN_CALL_RATIO
 
     def test_default_params_inherit_constants(self):
         p = SimulationParams(preset_key="balanced")
         assert p.margin_call_ratio == MARGIN_CALL_RATIO
         assert p.liquidation_ratio == LIQUIDATION_RATIO
+        assert p.restore_ratio == MARGIN_RESTORE_RATIO
         assert p.initial_capital == 1_000_000.0
 
     def test_phase_recommendation_keys_map_to_real_presets(self):
@@ -146,7 +149,7 @@ class TestSimulateLogic:
         d = r.daily[-1]
         assert d.borrowed == pytest.approx(100_000.0)
         assert d.shares == pytest.approx(10000.0 + 100_000.0 / 94.0)
-        assert d.status == "normal"  # 維持率仍遠高於 140
+        assert d.status == "normal"  # 維持率 ~1040%,遠高於追繳線 130
 
     def test_only_one_level_per_day(self):
         # 即使一天跌破多個門檻,單日只觸發一個 level(然後下一根 K 補)
@@ -175,18 +178,28 @@ class TestSimulateLogic:
         assert last.maintenance_ratio == 999.0  # reset 哨兵
         assert "強制平倉" in last.event
 
-    def test_margin_call_status_recorded(self):
-        # 構造一個落在 [130, 140) 區間的維持率 → margin_call 但不強平。
-        # balanced: day2 100→94 觸發 L0(借 100,000);day3 跌到 19.75
-        # (~80% dd)再觸發 L1(借 200,000)→ borrowed=300,000,
-        # 維持率 ≈ 139.5% ∈ [130, 140) → margin_call(非 liquidated)。
-        prices = [100.0, 94.0, 19.75]
+    def test_below_call_line_increments_both_counters(self):
+        # v19.91 Option A:追繳線=強平線=130(同一事件)。跌破 130% 追繳線 → 發追繳令,
+        # 本模擬不建模「補足至撤銷線 166%」→ 同一事件同時計入 margin_call_count
+        # 與 liquidation_count,status="liquidated"。
+        # balanced:day1 100→94 觸發 L0(借 100,000);day2 跌到 15 觸發 L1(借 200,000)
+        # → borrowed=300,000,維持率 ≈ 122% < 130 → 跌破追繳線即強平。
+        prices = [100.0, 94.0, 15.0]
         r = simulate_margin_strategy(_series(prices), SimulationParams(preset_key="balanced"))
         last = r.daily[-1]
-        assert last.status == "margin_call"
+        assert last.status == "liquidated"
+        # Option A:追繳與強平為同一事件,兩計數器同增
         assert r.margin_call_count == 1
-        assert r.liquidation_count == 0
-        assert LIQUIDATION_RATIO <= last.maintenance_ratio < MARGIN_CALL_RATIO
+        assert r.liquidation_count == 1
+        # 強平後清倉 + reset 哨兵
+        assert last.shares == 0.0
+        assert last.borrowed == 0.0
+        assert last.maintenance_ratio == 999.0
+        # 事件文字須點名追繳線 130 + 撤銷線 166(教學顯示)
+        assert "追繳線" in last.event
+        assert f"{MARGIN_CALL_RATIO:.0f}" in last.event   # 130
+        assert f"{MARGIN_RESTORE_RATIO:.0f}" in last.event  # 166
+        assert "強制平倉" in last.event
 
 
 # ───────────────────── result properties ─────────────────────

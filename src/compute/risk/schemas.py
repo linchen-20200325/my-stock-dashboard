@@ -140,9 +140,10 @@ def _make_pmi_schema():
     對齊 §3.2 範圍表 + §4.2 不變量:
     - `date` datetime / ascending(月度,normalized 月底)
     - `value` float in [30, 70](PMI 合理範圍,shared/signal_thresholds.PMI_VALID_MIN/MAX)
-    - `source` str(§2.2 provenance,e.g. "FinMind:TaiwanEconomicIndicator:PMI")
+    - `source` str(§2.2 provenance)
 
-    fetcher:tw_macro.fetch_pmi_history
+    當期 TW PMI 由 `macro_core.fetch_tw_pmi`(9 源賽跑)供應;PMISchema 保留供
+    未來 PMI 歷史序列驗證用(原唯一 caller fetch_pmi_history 為死碼,v19.86 已刪)。
     """
     if not PANDERA_AVAILABLE:
         return None

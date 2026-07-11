@@ -5,9 +5,11 @@
 2. 倒金字塔加碼：價格從歷史高點（HWM）回撤 -X% 時依 preset 質借 Y% 現金加碼
 3. 每根 K 線檢查擔保維持率：
        擔保維持率 = (持股市值 + 現金) / 借款餘額 × 100%
-   < 140% → ⚠️ 追繳保證金；< 130% → 💥 強制平倉
+   跌破 130%（追繳線）→ 券商發追繳令，須 2 日內補足至 166%（撤銷線），
+   未補足即強制平倉。本模擬不建模「補足」動作 → 跌破追繳線視同強平。
 
-公式鏡像台股券商實務。純函式 + frozen dataclass，無 streamlit 相依。
+公式鏡像台股券商實務（v19.91 A~E 批次3(b) Option A：追繳線=強平線=130%、
+撤銷線 166%，校正舊版非標準的 140/130 兩級）。純函式 + frozen dataclass，無 streamlit 相依。
 """
 from __future__ import annotations
 
@@ -22,8 +24,12 @@ import pandas as pd
 # 唯一 caller = 本模組 + tab_etf_margin_simulator.py(同功能 UI)。已是具名 SSOT,
 # 屬正確的 domain-local 放置 — 不外移至 shared/(§-1:單功能常數移共用層 = 多餘抽象,
 # 反增跨模組依賴)。若未來其他風控模組需共用維持率,再升格 shared/。
-MARGIN_CALL_RATIO = 140.0  # %，低於此追繳保證金（本功能 SSOT）
-LIQUIDATION_RATIO = 130.0  # %，低於此強制平倉（本功能 SSOT）
+# v19.91 A~E 批次3(b) Option A（user 拍板）：校正為台股法規標準值。
+# 舊版 140 追繳 / 130 強平為非標準；台股實務：整戶維持率跌破 130% 發追繳令,
+# 須 2 日內補足至 166% 撤銷,未補足即強平。故追繳線=強平線=130、撤銷線=166。
+MARGIN_CALL_RATIO = 130.0   # %，跌破此發追繳令（法規追繳線；本功能 SSOT）
+LIQUIDATION_RATIO = 130.0   # %，跌破追繳線未補足即強平（=追繳線,Option A 同線）
+MARGIN_RESTORE_RATIO = 166.0  # %，追繳後須補足至此撤銷（法規撤銷線；教學顯示）
 
 # ── 4 風格 × 3 階梯觸發表（drawdown_pct → leverage_add_pct）───
 #  drawdown_pct: 從歷史最高點回撤幅度（正數，%）
@@ -82,8 +88,9 @@ class SimulationParams:
     """模擬參數（不可變，方便快取）。"""
     preset_key: str
     initial_capital: float = 1_000_000.0   # 初始自有資金（TWD）
-    margin_call_ratio: float = MARGIN_CALL_RATIO
-    liquidation_ratio: float = LIQUIDATION_RATIO
+    margin_call_ratio: float = MARGIN_CALL_RATIO      # 追繳線 130%
+    liquidation_ratio: float = LIQUIDATION_RATIO      # 強平線 130%（=追繳線,Option A）
+    restore_ratio: float = MARGIN_RESTORE_RATIO       # 撤銷線 166%（教學顯示）
 
 
 @dataclass
@@ -218,23 +225,23 @@ def simulate_margin_strategy(price_series: pd.Series,
                          f"質借 {loan:,.0f} 加碼 {add_shares:.0f} 股")
                 break  # 同一日只觸發一個 level
 
-        # 2) 維持率檢查
+        # 2) 維持率檢查（v19.91 批次3(b) Option A：追繳線=強平線=130，撤銷線 166）
+        # 台股法規：跌破 130% 追繳線 → 發追繳令，須 2 日內補足至 166% 撤銷線,
+        # 未補足即強平。本模擬不建模「補足」動作 → 跌破追繳線視同「追繳令發出且
+        # 未補足→強平」,同一事件同時計入 margin_call_count 與 liquidation_count。
         m_ratio = _compute_maintenance_ratio(shares, price, cash, borrowed)
-        if borrowed > 0 and m_ratio < params.liquidation_ratio:
-            # 💥 強平：賣光持股還借款，剩餘進現金
+        if borrowed > 0 and m_ratio < params.margin_call_ratio:
+            # 💥 追繳線跌破 → 強平：賣光持股還借款，剩餘進現金
             cash += shares * price - borrowed
             shares = 0.0
             borrowed = 0.0
             status = "liquidated"
             event = (event + " | " if event else "") + \
-                    f"💥 強制平倉（維持率 {m_ratio:.1f}% < {params.liquidation_ratio}%）"
+                    (f"💥 維持率 {m_ratio:.1f}% 跌破追繳線 {params.margin_call_ratio:.0f}%"
+                     f"（須補足至撤銷線 {params.restore_ratio:.0f}%，本模擬未補足→強制平倉）")
+            result.margin_call_count += 1
             result.liquidation_count += 1
             m_ratio = 999.0  # reset
-        elif borrowed > 0 and m_ratio < params.margin_call_ratio:
-            status = "margin_call"
-            event = (event + " | " if event else "") + \
-                    f"⚠️ 追繳保證金（維持率 {m_ratio:.1f}% < {params.margin_call_ratio}%）"
-            result.margin_call_count += 1
 
         equity = shares * price + cash - borrowed
         result.daily.append(SimulationDay(
