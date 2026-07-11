@@ -579,23 +579,9 @@ with tab_stocks:
         _render_tab_isolated(render_stock_grp, '個股組合')
 
     with tab_screener:
-        # v19.74 選股網重設計（3 步直線漏斗）：① 基本面優選池 → ② 依角度挑候選 → ③ 三階段深篩。
-        # 缺貨 / 抗跌RS 整併進「🔎 進階主題選股」（掃描結果回饋②的排序角度）。
-        st.markdown('### 🔭 選股網 — 基本面優選池 → 挑候選 → 三階段深篩')
-        # AI 選股建議置頂卡（三階段結果生成後自動填入）
-        _screener_ai_md = next(
-            (v for k, v in st.session_state.items() if '_ai_md_' in k and v), None)
-        with st.expander(
-            '🤖 AI 選股建議' + (' ✅ 已生成，點此展開' if _screener_ai_md else ' — 完成下方三階段後結果顯示於此'),
-            expanded=bool(_screener_ai_md),
-        ):
-            # 注意：這裡必須用 if/else 語句，不可寫成三元表達式——
-            # Streamlit 腳本裡「裸表達式」會觸發 magic 自動 st.write() → 炸 SyntaxError。
-            if _screener_ai_md:
-                st.markdown(_screener_ai_md)
-            else:
-                st.info('完成下方三階段、點「🤖 生成 AI 三型建議報告」後，結果同步顯示此處。')
-
+        # v19.89 選股網簡易版：勾條件 → 一鍵「開始選股」（缺貨/抗跌RS 自動掃，不用 USER 另外按）
+        # → 直接出最終名單（拿掉手動候選勾選 + 額外加碼）。籌碼技術×6 為選用深篩（自動對前 N 名跑）。
+        st.markdown('### 🔭 選股網 — 勾條件 → 一鍵選股')
         from src.ui.tabs import render_tab_stock_picker
         from src.ui.tabs.tab_stock_picker import render_prescreen_panel
         from src.ui.tabs.yield_screener import fetch_twse_yield_pe, render_yield_confirm
@@ -603,56 +589,88 @@ with tab_stocks:
             SCREEN_ANGLE_LABELS, composite_rank_candidates, get_fundamental_survivors,
         )
 
-        # ── ① 基本面優選池（四項全過）───────────────────────────
-        st.markdown('#### ① 基本面優選池（四項全過）')
+        # ── ① 基本面優選（四項全過，自動）────────────────────────
+        st.markdown('#### ① 基本面優選（四項全過，自動）')
         render_prescreen_panel()
 
-        # ── ② 從優選池挑候選（複選因子 → 綜合評分排序）──────────
-        st.markdown('#### ② 選股因子（可複選 → 綜合評分排序）')
-        try:
-            _surv_df, _ = get_fundamental_survivors()
-        except Exception as _e_surv:  # noqa: BLE001 — 快照缺不炸選股網
-            _surv_df = None
-            print(f'[screener] 存活池不可用: {type(_e_surv).__name__}: {_e_surv}')
-        _twse_scrn = fetch_twse_yield_pe()
-        _pe_map, _name_map = {}, {}
-        if _twse_scrn is not None and not _twse_scrn.empty and '代碼' in _twse_scrn.columns:
-            _codes_s = _twse_scrn['代碼'].astype(str)
-            if '本益比' in _twse_scrn.columns:
-                _pe_map = dict(zip(_codes_s, _twse_scrn['本益比']))
-            if '名稱' in _twse_scrn.columns:
-                _name_map = dict(zip(_codes_s, _twse_scrn['名稱'].astype(str)))
+        # ── ② 勾選條件（可複選）────────────────────────────────
+        st.markdown('#### ② 勾選條件（可複選）')
         _factor_labels = st.multiselect(
-            '勾選你要的因子（可複選；每個因子在優選池內排 0–100 分位，取平均為綜合分）',
+            '要用哪些條件？（估值/EPS 立即算；缺貨動能 / 抗跌RS 按「開始選股」時**自動掃描**，不用另外去按）',
             list(SCREEN_ANGLE_LABELS), default=[list(SCREEN_ANGLE_LABELS)[0]],
-            key='screener_factors',
-            help='估值/EPS 立即算；缺貨動能 / 抗跌RS 需先在下方「🔎 進階主題選股」掃描，掃完回來重勾即帶入。'
-                 '籌碼技術×6 因需逐檔深抓，放在下方③「三階段深篩」當最後一關。')
+            key='screener_factors')
         _factors = [SCREEN_ANGLE_LABELS[_l] for _l in _factor_labels]
-        _cands, _cnote = composite_rank_candidates(
-            _surv_df, factors=_factors, top_n=300,
-            pe_map=_pe_map, name_map=_name_map,
-            shortage_rows=st.session_state.get('_shortage_rows'),
-            rs_rows=st.session_state.get('_rs_rows'))
-        if _cnote:
-            st.info(_cnote)
-        _surv_n = len(_surv_df) if _surv_df is not None else 0
-        st.caption(f'📋 基本面優選 {_surv_n} 檔 → 依勾選因子綜合評分排序，取前 {len(_cands)} 檔供勾選（下方預設帶綜合分前 10）。')
-        if not _cands.empty and '綜合分' in _cands.columns:
-            with st.expander('📊 綜合評分排行（點開看各因子分數）', expanded=False):
+        _run_deep = st.checkbox(
+            '順便跑「籌碼技術×6」深篩（前 20 名的進出場時機；較慢，逐檔抓籌碼）',
+            value=False, key='screener_run_deep')
+
+        # ── ③ 一鍵開始選股（缺貨/RS 自動掃 → 綜合評分）─────────────
+        if st.button('🎯 開始選股', key='screener_go', type='primary', use_container_width=True):
+            with st.spinner('選股中：需要時自動掃缺貨/抗跌RS + 綜合評分…（首次較久）'):
+                if 'shortage' in _factors and not st.session_state.get('_shortage_rows'):
+                    try:
+                        from src.services.shortage_screener_service import run_shortage_scan
+                        _sr, _sm = run_shortage_scan()
+                        st.session_state['_shortage_rows'] = _sr
+                        st.session_state['_shortage_meta'] = _sm
+                    except Exception as _es:  # noqa: BLE001 — 掃描失敗不炸選股
+                        print(f'[screener] 缺貨自動掃失敗: {type(_es).__name__}: {_es}')
+                if 'rs_leader' in _factors and not st.session_state.get('_rs_rows'):
+                    try:
+                        from src.services.rs_leader_service import run_rs_leader_scan
+                        _rr, _rm = run_rs_leader_scan()
+                        st.session_state['_rs_rows'] = _rr
+                        st.session_state['_rs_meta'] = _rm
+                    except Exception as _er:  # noqa: BLE001
+                        print(f'[screener] 抗跌RS自動掃失敗: {type(_er).__name__}: {_er}')
+            st.session_state['_screener_ran'] = True
+
+        # ── 結果（點過「開始選股」才顯示）──────────────────────────
+        if not st.session_state.get('_screener_ran'):
+            st.info('👆 勾好條件後，點「🎯 開始選股」。缺貨/抗跌RS 會自動幫你掃，不用另外操作。')
+        else:
+            try:
+                _surv_df, _ = get_fundamental_survivors()
+            except Exception as _e_surv:  # noqa: BLE001 — 快照缺不炸選股網
+                _surv_df = None
+                print(f'[screener] 存活池不可用: {type(_e_surv).__name__}: {_e_surv}')
+            _twse_scrn = fetch_twse_yield_pe()
+            _pe_map, _name_map = {}, {}
+            if _twse_scrn is not None and not _twse_scrn.empty and '代碼' in _twse_scrn.columns:
+                _codes_s = _twse_scrn['代碼'].astype(str)
+                if '本益比' in _twse_scrn.columns:
+                    _pe_map = dict(zip(_codes_s, _twse_scrn['本益比']))
+                if '名稱' in _twse_scrn.columns:
+                    _name_map = dict(zip(_codes_s, _twse_scrn['名稱'].astype(str)))
+            _cands, _cnote = composite_rank_candidates(
+                _surv_df, factors=_factors, top_n=300,
+                pe_map=_pe_map, name_map=_name_map,
+                shortage_rows=st.session_state.get('_shortage_rows'),
+                rs_rows=st.session_state.get('_rs_rows'))
+            if _cnote:
+                st.info(_cnote)
+            st.markdown('#### ③ 選股結果（綜合評分排序）')
+            _surv_n = len(_surv_df) if _surv_df is not None else 0
+            if _cands.empty:
+                st.info('目前沒有符合的標的（請至少勾一個條件；缺貨/抗跌RS 需能連上資料源）。')
+            else:
+                st.caption(f'從基本面優選 {_surv_n} 檔 → 綜合評分取前 {min(len(_cands), 50)} 名。')
                 st.dataframe(_cands.head(50), hide_index=True, use_container_width=True)
+                _csv = _cands.head(50).to_csv(index=False).encode('utf-8-sig')
+                st.download_button('💾 下載選股結果 CSV', data=_csv,
+                                   file_name='screener_result.csv', mime='text/csv',
+                                   key='screener_csv')
+                if _run_deep:
+                    st.markdown('##### 🔬 籌碼技術×6 深篩（自動對前 20 名跑，不用手動勾）')
+                    render_tab_stock_picker(
+                        gemini_fn=gemini_call, candidates=_cands.head(20),
+                        source_label='基本面優選', auto_pick=True, skip_s3=True)
+                    _s1s2_pass = st.session_state.get('picker_s1s2_qualified_tickers', [])
+                    render_yield_confirm(_s1s2_pass, _twse_scrn)
 
-        # ── ③ 三階段深篩 + 殖利率確認 ──────────────────────────
-        st.markdown('#### ③ 三階段深篩（基本面 ×9 → 籌碼技術 ×6）')
-        render_tab_stock_picker(
-            gemini_fn=gemini_call, candidates=_cands,
-            source_label='基本面優選', skip_s3=True)
-        _s1s2_pass = st.session_state.get('picker_s1s2_qualified_tickers', [])
-        render_yield_confirm(_s1s2_pass, _twse_scrn)
-
-        # ── 🔎 進階主題選股（缺貨 / 抗跌RS 完整排行；掃描結果回饋②的排序角度）──
-        with st.expander('🔎 進階主題選股（缺貨 / 抗跌RS 完整排行 + AI 三型報告）', expanded=False):
-            st.caption('這兩個掃描的排行，也是上方②「排序角度」的來源：掃完後回上方選「缺貨動能 / 抗跌RS」即自動帶入候選。')
+        # ── 🔎 進階（選用）：缺貨 / 抗跌RS 完整排行 + AI 三型報告 ──
+        with st.expander('🔎 進階（選用）：缺貨 / 抗跌RS 完整排行 + AI 三型報告', expanded=False):
+            st.caption('主流程按「開始選股」已自動掃；這裡是要看完整排行 / AI 報告時才點開。')
             from src.ui.tabs.shortage_screener_ui import render_shortage_screener
             render_shortage_screener(gemini_fn=gemini_call)
             st.markdown('---')
