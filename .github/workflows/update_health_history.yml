@@ -53,7 +53,13 @@ jobs:
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add data_cache/health_history.parquet data_cache/health_history_meta.json
+          # v19.99 修雙 bug(同 macro-history 家族):
+          # 1) parquet 被 .gitignore:39 蓋掉 → 無 -f 的 add 從未真正納管;
+          # 2) watchlist 空時 script 依設計 exit 0 不寫檔 → 對不存在路徑 add
+          #    直接 fatal 128(2026-07-11 實錘)。改:逐檔「存在才 add -f」。
+          for f in data_cache/health_history.parquet data_cache/health_history_meta.json; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
           if git diff --staged --quiet; then
             echo "→ 健康度歷史無變更(清單空或全敗),跳過 commit"
           else

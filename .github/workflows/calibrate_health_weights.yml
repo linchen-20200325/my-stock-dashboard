@@ -27,9 +27,11 @@ jobs:
           python-version: '3.11'
 
       - name: Install deps
-        # streamlit 是必要的:src/services/__init__ 急載 daily_checklist(無條件 import
-        # streamlit);裝整包比繞過 package __init__ 的 hack 乾淨(§8.1 step6)。
-        run: pip install pandas numpy pyarrow streamlit
+        # v19.99 修:改裝整份 requirements(依賴 SSOT)。手挑清單漏 bs4 —
+        # import src.compute.macro 觸發 sibling eager import 連到 L1
+        # leading_indicators(BeautifulSoup)。對齊 update_health_history.yml
+        # 既有註解「完整 requirements…裝齊避免 ModuleNotFoundError」慣例。
+        run: pip install -r requirements.txt
 
       - name: Run calibration
         run: python scripts/calibrate_health_weights.py
