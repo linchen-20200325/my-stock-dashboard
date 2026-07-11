@@ -589,8 +589,12 @@ with tab_stocks:
             '🤖 AI 選股建議' + (' ✅ 已生成，點此展開' if _screener_ai_md else ' — 完成下方三階段後結果顯示於此'),
             expanded=bool(_screener_ai_md),
         ):
-            st.markdown(_screener_ai_md) if _screener_ai_md else st.info(
-                '完成下方三階段、點「🤖 生成 AI 三型建議報告」後，結果同步顯示此處。')
+            # 注意：這裡必須用 if/else 語句，不可寫成三元表達式——
+            # Streamlit 腳本裡「裸表達式」會觸發 magic 自動 st.write() → 炸 SyntaxError。
+            if _screener_ai_md:
+                st.markdown(_screener_ai_md)
+            else:
+                st.info('完成下方三階段、點「🤖 生成 AI 三型建議報告」後，結果同步顯示此處。')
 
         from src.ui.tabs import render_tab_stock_picker
         from src.ui.tabs.tab_stock_picker import render_prescreen_panel
