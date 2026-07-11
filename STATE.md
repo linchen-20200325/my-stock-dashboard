@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📐 2026-07-11 A~E backlog 批次3(a)（標準公式）：RSI Wilder + ATR True Range（v19.89）
+
+user 明確授權「批次3(a) 標準公式」+「位移訊號換取和券商可對照」(§7 位移訊號 sign-off):
+
+- **RSI 改 Wilder RMA（SSOT 單點,全 RSI caller 同步位移）**:`compute_rsi` 原 `rolling(period).mean()`(SMA)→ `ewm(alpha=1/period, adjust=False).mean()`(Wilder)。台股所有券商平台一律 Wilder,故 70/30 超買超賣門檻改此後方可與券商數值對照。數學:`AvgGain_t = AvgGain_{t-1}×(p-1)/p + Gain_t/p`。副作用:RSI 全體平滑位移(較 SMA 遲緩、貼近平台);極端全漲/全跌仍 ~100/~0(既有斷言不破)。`tech_indicators.calc_rsi` 委派此 SSOT,一改全動。
+- **ATR 改 True Range（新 SSOT `compute_atr`,收斂 2 處直接幅值用途）**:原各處只用當根 `high-low`,漏抓跨日跳空。新 `compute_atr(df, period, wilder=True)`:`TR = max(H-L, |H-prevC|, |L-prevC|)` + Wilder 平滑。**風險分級 ATR%(scoring:130)+ 動態停損 calc_atr_stop(:1083)** 兩處改用之 → 跳空(除權息/隔夜大跌)計入波動,停損距離更貼實(user 授權「停損距離變寬」)。缺 high/low 欄退回 close 不炸。
+- **VCP 收縮比刻意不改(§謹慎)**:`calc_vcp` 的 atr5/atr20 保留 high-low range — 其 `VCP_ATR_CONTRACTION_RATIO` 門檻對 high-low 校準,換 True Range 位移比值需重新回測(同 calc_rs_score σ 處理);加註說明,列待若要 VCP 亦 TR 化再一起校準。
+- **回歸網**:`tests/test_review_fixes_v19_89.py` 9 test(RSI Wilder ewm 等值 + 異於 SMA + 極端值 + 源掃描;ATR True Range 捕捉跳空 + Wilder/simple + 缺欄降級 + 源掃描;calc_atr_stop functional)。既有 test_tech_indicators/test_risk_control/test_scoring_engine 333 passed 零破(極端值斷言對 Wilder/TR 仍成立)。
+- **A~E 進度**:批次1 ✅ / 3(c) ✅ / 批次2 ✅ / **3(a) 本次 ✅** / 下一步 批次3(b) 語意項(calc_rs_score σ / 融資 130-166 / 紅綠燈權重重設計 — 需 user 更多方向)。
+
 ## 🚦 2026-07-11 A~E backlog 批次2 收尾（全域紅綠燈時效 gate）（v19.88）
 
 user 核准「批次2 收尾」。全域紅綠燈(app.py 頁面最頂,永遠可見)過期資料 gate 落地:
