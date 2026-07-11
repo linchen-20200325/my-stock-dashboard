@@ -577,7 +577,9 @@ class StockDataLoader:
                 self._token = _fm_token
             elif _fm_token:
                 self.dl.login_by_token(api_token=_fm_token)
-                print(f'[FinMind] ✅ Token 登入成功（{_fm_token[:12]}...）')
+                # v19.83(第六份 review P2-17):不再印 token 前綴片段 — 憑證材料
+                # 不入 log(Cloud console log 可見);只印長度供診斷「有沒有讀到」。
+                print(f'[FinMind] ✅ Token 登入成功（len={len(_fm_token)}）')
                 self._token = _fm_token
             elif _fm_user and _fm_password:
                 self.dl.login(user_id=_fm_user, password=_fm_password)
@@ -1344,21 +1346,42 @@ class StockDataLoader:
                 df_quarterly['營收'] = pd.to_numeric(df_pivot[rev_col], errors='coerce')
             else:
                 # 找不到一般營收欄位：很可能是金融股/金控
-                is_finance = True if finance_candidates else True
+                # v19.83(第六份 review Bug 1):原三元式兩分支皆 True(恆真)—
+                # 無金融代理欄位的一般股(如特殊報表格式)也被當金融股走月加總路徑。
+                is_finance = bool(finance_candidates)
                 # 先用財報中的代理欄位墊底（避免空值），後續會用「月營收加總」覆蓋季度營收
                 if finance_candidates:
                     rev_col = finance_candidates[0]
                     df_quarterly['營收'] = pd.to_numeric(df_pivot[rev_col], errors='coerce')
                 else:
-                    df_quarterly['營收'] = pd.NA
+                    # v19.83:pd.NA(object) 會讓下方 L1576 `(營收<0).any()` 拋
+                    # TypeError(NA 布林不明確);改 float nan,比較/運算行為皆安全
+                    df_quarterly['營收'] = float('nan')
 
             # 金融股：季度營收一律以「月營收 3 個月加總」為準（對齊看盤軟體的季營收）
             if is_finance:
                 df_month, _merr = _self.get_monthly_revenue(stock_id)
                 if df_month is not None and not df_month.empty:
-                    dfm = df_month[['年', '月', '營收']].copy()
-                    dfm['日期'] = pd.to_datetime(dfm['年'].astype(str) + '-' + dfm['月'].astype(int).astype(str).str.zfill(2) + '-01', errors='coerce')
-                    dfm = dfm[dfm['日期'].notna()].copy()
+                    # v19.83(第六份 review Bug 1):get_monthly_revenue 契約欄位是
+                    # date/revenue(v18.202 起),原 df_month[['年','月','營收']] 一執行
+                    # 就 KeyError → 被本函式外層 except 變成「載入錯誤」,整檔季報全滅。
+                    # 改用實際契約欄位(雙名容錯,對齊上方早退路徑 L1264 既有寫法)。
+                    _mr_date = '日期' if '日期' in df_month.columns else (
+                        'date' if 'date' in df_month.columns else None)
+                    _mr_rev = '營收' if '營收' in df_month.columns else (
+                        'revenue' if 'revenue' in df_month.columns else None)
+                    if _mr_date is None or _mr_rev is None:
+                        print(f'[季財報] {stock_id} 月營收欄位不符契約'
+                              f'(需 date/revenue),實際: {list(df_month.columns)[:8]}')
+                        dfm = None
+                    else:
+                        dfm = df_month[[_mr_date, _mr_rev]].copy()
+                        dfm.columns = ['日期', '營收']
+                        dfm['日期'] = pd.to_datetime(dfm['日期'], errors='coerce')
+                        dfm = dfm[dfm['日期'].notna()].copy()
+                        dfm['營收'] = pd.to_numeric(dfm['營收'], errors='coerce')
+                if (df_month is not None and not df_month.empty
+                        and dfm is not None and not dfm.empty):
                     dfm['年度'] = dfm['日期'].dt.year.astype(int)
                     dfm['季度'] = (((dfm['日期'].dt.month - 1) // 3) + 1).astype(int)
                     qsum = dfm.groupby(['年度', '季度'], as_index=False)['營收'].sum()

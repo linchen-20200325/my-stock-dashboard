@@ -183,34 +183,43 @@ def calc_kd_series(close: pd.Series, high: pd.Series, low: pd.Series,
 
 
 def calc_vcp(df, n_swings=3):
-    if df is None or len(df) < 30:
-        return None  # relaxed to 30 days
-    highs, lows = df['high'].values, df['low'].values
-    swings, w = [], 10
-    for i in range(w, len(df) - w):
-        if highs[i] == max(highs[max(0, i-w):i+w+1]):
-            swings.append(('H', i, highs[i]))
-        elif lows[i] == min(lows[max(0, i-w):i+w+1]):
-            swings.append(('L', i, lows[i]))
+    # v19.83(第六份 review 3-4 邊界):本函式契約「失敗回 None」,但原本無 try/except —
+    # 缺 high/low 欄(KeyError)或 swing 價為 0(ZeroDivisionError)會直接炸到 caller
+    # (tab_stock.py:266 裸呼叫,一炸整個個股 Tab 全掛)。補同儕 calc_kd/calc_bollinger
+    # 既有的 try/except + stderr log 模式,計算邏輯 0 改動。
+    try:
+        if df is None or len(df) < 30:
+            return None  # relaxed to 30 days
+        highs, lows = df['high'].values, df['low'].values
+        swings, w = [], 10
+        for i in range(w, len(df) - w):
+            if highs[i] == max(highs[max(0, i-w):i+w+1]):
+                swings.append(('H', i, highs[i]))
+            elif lows[i] == min(lows[max(0, i-w):i+w+1]):
+                swings.append(('L', i, lows[i]))
 
-    # P8修正: 只計算 H-L 或 L-H 交替的振幅（過濾連續同向swing）
-    alt_swings = []
-    for sw in swings:
-        if not alt_swings or alt_swings[-1][0] != sw[0]:
-            alt_swings.append(sw)
-        else:
-            # 同向取極值（HH取高，LL取低）
-            if sw[0] == 'H' and sw[2] > alt_swings[-1][2]:
-                alt_swings[-1] = sw
-            elif sw[0] == 'L' and sw[2] < alt_swings[-1][2]:
-                alt_swings[-1] = sw
-    swings = alt_swings
+        # P8修正: 只計算 H-L 或 L-H 交替的振幅（過濾連續同向swing）
+        alt_swings = []
+        for sw in swings:
+            if not alt_swings or alt_swings[-1][0] != sw[0]:
+                alt_swings.append(sw)
+            else:
+                # 同向取極值（HH取高，LL取低）
+                if sw[0] == 'H' and sw[2] > alt_swings[-1][2]:
+                    alt_swings[-1] = sw
+                elif sw[0] == 'L' and sw[2] < alt_swings[-1][2]:
+                    alt_swings[-1] = sw
+        swings = alt_swings
 
-    ranges = [abs(swings[k][2]-swings[k+1][2])/min(swings[k][2], swings[k+1][2])*100
-              for k in range(len(swings)-1) if swings[k][0] != swings[k+1][0]]
-    if len(ranges) < n_swings:
+        ranges = [abs(swings[k][2]-swings[k+1][2])/min(swings[k][2], swings[k+1][2])*100
+                  for k in range(len(swings)-1) if swings[k][0] != swings[k+1][0]]
+        if len(ranges) < n_swings:
+            return None
+        last_n = ranges[-n_swings:]
+        return {'swings': last_n,
+                'contracting': all(last_n[i] > last_n[i+1] for i in range(len(last_n)-1)),
+                'latest_range': last_n[-1]}
+    except Exception as e:
+        print(f'[tech_indicators/calc_vcp] n_swings={n_swings} fail: '
+              f'{type(e).__name__}: {e}', file=sys.stderr)
         return None
-    last_n = ranges[-n_swings:]
-    return {'swings': last_n,
-            'contracting': all(last_n[i] > last_n[i+1] for i in range(len(last_n)-1)),
-            'latest_range': last_n[-1]}

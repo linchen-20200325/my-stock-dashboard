@@ -57,17 +57,38 @@ def compute_yoy_mom(df_stock: pd.DataFrame) -> dict[str, Any]:
         return {"last_date": None, "last_revenue": None, "yoy_last3": [],
                 "mom_last": None, "months_available": 0}
 
-    # YoY: 末 3 月相對 12 個月前
+    # YoY: 末 3 月相對「去年同月」
+    # v19.83(第六份 review 3-9):原位置索引 _idx_curr-12 假設序列連續無缺月 —
+    # 缺月(新上市/暫停公布/來源缺洞,§4.6 月營收三態)時基期錯位(拿去年 M+1 月
+    # 當同月基期),YoY 靜默失真。改 (年-1, 同月) 日曆查表;date 欄缺/含 NaT 時
+    # 退回位置索引(舊行為,連續序列兩法結果相同)。
+    _has_dates = "date" in _df.columns and _df["date"].notna().all() and _n > 0
+    _ym = None
+    if _has_dates:
+        try:
+            _ym = pd.to_datetime(_df["date"])
+        except (ValueError, TypeError):
+            _has_dates = False
+    _rev_by_ym: dict[tuple[int, int], float] = {}
+    if _has_dates:
+        for _y_, _m_, _r_ in zip(_ym.dt.year, _ym.dt.month, _rev):
+            if _r_ is not None and not pd.isna(_r_):
+                _rev_by_ym[(int(_y_), int(_m_))] = float(_r_)
     _yoy_last3: list[float | None] = []
     for _off in (2, 1, 0):  # M-2, M-1, M(時序)
         _idx_curr = _n - 1 - _off
-        _idx_base = _idx_curr - 12
-        if _idx_curr < 0 or _idx_base < 0:
+        if _idx_curr < 0:
             _yoy_last3.append(None)
             continue
         _curr = _rev[_idx_curr]
-        _base = _rev[_idx_base]
-        if _curr is None or _base is None or _base == 0:
+        if _has_dates:
+            _ts_c = _ym.iloc[_idx_curr]
+            _base = _rev_by_ym.get((int(_ts_c.year) - 1, int(_ts_c.month)))
+        else:
+            _idx_base = _idx_curr - 12
+            _base = _rev[_idx_base] if _idx_base >= 0 else None
+        if (_curr is None or pd.isna(_curr) or _base is None
+                or pd.isna(_base) or _base == 0):
             _yoy_last3.append(None)
             continue
         _yoy_last3.append((_curr / _base - 1.0) * 100.0)

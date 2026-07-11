@@ -20,6 +20,25 @@ _PROXY_CFG_TTL   = 300
 # ── URL 回應快取（API Storm Shield：300s TTL，防重複衝擊 NAS/外部 API）──
 _URL_CACHE: dict = {}   # key=(url, params_frozen) → (timestamp, response_text, status_code)
 _URL_CACHE_TTL = 300
+# v19.83(第六份 review 2-7):原 dict 無上限、過期項只在命中時檢查不刪 —
+# Cloud 長跑 process 記憶體單調增長(HTML 回應每筆可達數百 KB)。寫入時統一走
+# _url_cache_put:先清過期,仍超額再逐出最舊,上限對齊全站 @st.cache_data
+# max_entries 慣例。
+_URL_CACHE_MAX = 256
+
+
+def _url_cache_put(key, content) -> None:
+    """寫入 URL 快取:先逐出過期項,仍超過 _URL_CACHE_MAX 再逐出最舊。"""
+    import time as _t_ucp
+    _now_ucp = _t_ucp.time()
+    _expired = [k for k, (ts, _, _) in _URL_CACHE.items()
+                if _now_ucp - ts >= _URL_CACHE_TTL]
+    for _k in _expired:
+        _URL_CACHE.pop(_k, None)
+    while len(_URL_CACHE) >= _URL_CACHE_MAX:
+        _oldest = min(_URL_CACHE, key=lambda k: _URL_CACHE[k][0])
+        _URL_CACHE.pop(_oldest, None)
+    _URL_CACHE[key] = (_now_ucp, content, 200)
 
 
 # get_proxies() 定義於本檔末尾,為 get_proxy_config 的向下相容別名(含 TTL 快取)。
@@ -159,7 +178,7 @@ def fetch_url(url: str, headers: dict = None,
             if _r.status_code == 200:
                 _path = url.split('?')[0].split('/')[-1] or url.split('/')[2]
                 print(f'[Proxy] 已透過 Synology NAS 成功抓取: {_path}')
-                _URL_CACHE[_cache_key] = (_t.time(), _r.content, 200)
+                _url_cache_put(_cache_key, _r.content)   # v19.83:統一入口(上限+過期清理)
                 return _r
         except requests.exceptions.ProxyError as _e:
             _perr += 1
@@ -181,7 +200,7 @@ def fetch_url(url: str, headers: dict = None,
             _r_dc = _sess.get(url, headers=_hdr, params=params,
                               timeout=timeout, proxies={}, verify=True)
             if _r_dc.status_code == 200:
-                _URL_CACHE[_cache_key] = (_t.time(), _r_dc.content, 200)
+                _url_cache_put(_cache_key, _r_dc.content)   # v19.83:統一入口
                 return _r_dc
         except Exception as _e_dc:
             print(f'[proxy] 直連失敗：{_e_dc}')
@@ -196,7 +215,7 @@ def fetch_url(url: str, headers: dict = None,
             _relay_url = requests.Request('GET', url, params=params).prepare().url
         _r_relay = nas_relay_fetch(_relay_url, timeout=timeout)
         if _r_relay is not None and getattr(_r_relay, 'status_code', 0) == 200:
-            _URL_CACHE[_cache_key] = (_t.time(), _r_relay.content, 200)
+            _url_cache_put(_cache_key, _r_relay.content)   # v19.83:統一入口
             return _r_relay
     except Exception as _e_relay:
         print(f'[proxy] NAS 中繼 fallback 失敗：{type(_e_relay).__name__}: {_e_relay}')
