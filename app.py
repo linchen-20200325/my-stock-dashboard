@@ -615,12 +615,15 @@ with tab_stocks:
                         st.session_state['_shortage_meta'] = _sm
                     except Exception as _es:  # noqa: BLE001 — 掃描失敗不炸選股
                         print(f'[screener] 缺貨自動掃失敗: {type(_es).__name__}: {_es}')
-                if 'rs_leader' in _factors and not st.session_state.get('_rs_rows'):
+                if 'rs_leader' in _factors and not st.session_state.get('_rs_rows_all'):
                     try:
+                        # v19.90:綜合評分需【全存活池】RS 分位 → beat_only=False + top_n 給大值
+                        # (不是只回 top-50 贏大盤股,否則 274 檔 RS 無資料 → 綜合分失真)。
+                        from shared.rs_screen_thresholds import RS_SCAN_MAX
                         from src.services.rs_leader_service import run_rs_leader_scan
-                        _rr, _rm = run_rs_leader_scan()
-                        st.session_state['_rs_rows'] = _rr
-                        st.session_state['_rs_meta'] = _rm
+                        _rr, _rm = run_rs_leader_scan(beat_only=False, top_n=RS_SCAN_MAX)
+                        st.session_state['_rs_rows_all'] = _rr
+                        st.session_state['_rs_meta_all'] = _rm
                     except Exception as _er:  # noqa: BLE001
                         print(f'[screener] 抗跌RS自動掃失敗: {type(_er).__name__}: {_er}')
             st.session_state['_screener_ran'] = True
@@ -646,7 +649,7 @@ with tab_stocks:
                 _surv_df, factors=_factors, top_n=300,
                 pe_map=_pe_map, name_map=_name_map,
                 shortage_rows=st.session_state.get('_shortage_rows'),
-                rs_rows=st.session_state.get('_rs_rows'))
+                rs_rows=st.session_state.get('_rs_rows_all'))  # v19.90 全存活池 RS（非 top-50）
             if _cnote:
                 st.info(_cnote)
             st.markdown('#### ③ 選股結果（綜合評分排序）')

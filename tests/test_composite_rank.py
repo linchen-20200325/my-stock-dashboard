@@ -29,11 +29,28 @@ def test_percentile_lower_better_pe():
     assert sc["A"] < sc["C"] < sc["B"]
 
 
-def test_percentile_missing_and_nan_zero():
+def test_percentile_missing_and_nan_omitted():
+    # v19.90：缺值/NaN 不再記 0，而是【不放 key】（代表無此因子資料）
     sc = _percentile_scores(["A", "B", "C"], {"A": 5, "B": None, "C": float("nan")},
                             higher_better=True)
-    assert sc["B"] == 0.0 and sc["C"] == 0.0
+    assert "B" not in sc and "C" not in sc
     assert sc["A"] == 100.0            # 唯一有值 → 100
+
+
+def test_missing_factor_not_zero_dragged():
+    """v19.90 核心修：缺料因子『不計入平均』（不再灌 0 拖垮綜合分）。"""
+    rows = [{"代碼": "B", "缺貨分數": 100}]   # 只有 B 有缺貨分
+    df, _ = composite_rank_candidates(_surv(["A", "B"], [9, 1]),
+                                      factors=["eps_high", "shortage"], shortage_rows=rows)
+    _score = {r["代碼"]: r["綜合分"] for _, r in df.iterrows()}
+    # A：EPS=100、缺貨無資料 → 只平均 EPS = 100（舊 0-fill 會變 (100+0)/2=50）
+    assert _score["A"] == 100.0
+    # B：EPS=50、缺貨=100 → 平均 = 75
+    assert _score["B"] == 75.0
+    assert list(df["代碼"]) == ["A", "B"]
+    # A 的缺貨分欄應為空白（NaN/None），不是 0
+    _a_short = df[df["代碼"] == "A"]["缺貨分"].iloc[0]
+    assert _a_short != _a_short or _a_short is None   # NaN or None
 
 
 # ── 綜合評分 ──────────────────────────────────────────────────
