@@ -113,10 +113,15 @@ def _market_context(df_market: pd.DataFrame, lookback: int) -> dict:
 
 
 @st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
-def _scan_cached(lookback: int, max_scan: int, beat_only: bool) -> tuple[list[dict], dict]:
-    """存活池 → 抓價 → L2 排名 → (前 N rows, meta)。快取集中點（無名稱）。"""
+def _scan_cached(lookback: int, max_scan: int, beat_only: bool,
+                 top_n: int = RS_LEADER_TOP_N) -> tuple[list[dict], dict]:
+    """存活池 → 抓價 → L2 排名 → (前 N rows, meta)。快取集中點（無名稱）。
+
+    top_n：排行取幾檔。選股網綜合評分需**全存活池** RS 分位（top_n 給大值 + beat_only=False），
+    避免只回 top-50 → 綜合分那邊 274 檔 RS 記 0 的失真。
+    """
     _fetched_at = pd.Timestamp.now("UTC").isoformat()
-    _base_meta = {"lookback": lookback, "top_n": RS_LEADER_TOP_N,
+    _base_meta = {"lookback": lookback, "top_n": top_n,
                   "source": "FundamentalsSnapshot(survivors)+yfinance:1y+Yahoo:^TWII",
                   "fetched_at": _fetched_at, "version": RS_LEADER_VERSION}
 
@@ -138,7 +143,7 @@ def _scan_cached(lookback: int, max_scan: int, beat_only: bool) -> tuple[list[di
     # ── ③ 逐檔抓價 + L2 排名 ──────────────────────────────────
     stocks = _fetch_pool_prices(survivors)
     ranked = rank_rs_leaders(stocks, dfm, lookback=lookback,
-                             top_n=RS_LEADER_TOP_N, beat_only=beat_only)
+                             top_n=top_n, beat_only=beat_only)
     rows = to_rows(ranked)
     market = _market_context(dfm, lookback)
 
@@ -160,6 +165,7 @@ def run_rs_leader_scan(
     beat_only: bool = False,
     refresh: bool = False,
     max_scan: int = RS_SCAN_MAX,
+    top_n: int = RS_LEADER_TOP_N,
     name_map: dict[str, str] | None = None,
 ) -> tuple[list[dict], dict]:
     """抗跌 RS 掃描 → (排行 rows, meta)。
@@ -176,7 +182,7 @@ def run_rs_leader_scan(
         _clear(fetch_stock_history_1y)
         _clear(_scan_cached)
 
-    rows, meta = _scan_cached(int(lookback), int(max_scan), bool(beat_only))
+    rows, meta = _scan_cached(int(lookback), int(max_scan), bool(beat_only), int(top_n))
     # 存活池涵蓋率診斷（§5，快取外注入以反映最新快照；淺拷貝避免污染 cache 內 dict）
     try:
         from src.services.fundamental_screener_service import get_snapshot_coverage_note

@@ -216,11 +216,17 @@ def build_candidate_frame(
     return out, note
 
 
-# ── 綜合評分（多因子複選；v19.88）────────────────────────────────
-# 每個勾選因子給 0-100 分位分數（各因子在存活池內排百分位），取平均為綜合分，降冪排序。
-# 缺料的因子該股記 0 分（不造假、不猜）。籌碼技術×6 因需逐檔深抓，屬 ③ 深篩關（不入綜合分）。
+# ── 綜合評分（多因子複選；v19.88 / v19.90 修 0-fill 失真）────────────
+# 每個勾選因子給 0-100 分位分數（在【有該因子資料的股票】之間排百分位）。
+# ⚠️ v19.90:綜合分 = 該股「**有資料的因子**」的平均（NOT 全因子平均）。原本對「缺資料因子」
+# 記 0 分再除以全因子數 → 缺貨/RS 只覆蓋 ~50 檔(掃描上限)時,274 檔被灌 0 → 綜合分嚴重失真
+# (user 實測:RS 分全 0、排序與 RS 排行對不上)。改「只平均有資料的因子」+ 缺料顯示空白(非 0)。
+# 籌碼技術×6 因需逐檔深抓,屬 ③ 深篩關(不入綜合分)。
 def _percentile_scores(ids: list[str], value_map: dict, *, higher_better: bool) -> dict:
-    """{id: 0-100 百分位分}。有值者排百分位（最佳=100），缺值/NaN/非數字 → 0。"""
+    """{id: 0-100 百分位分}——**只回有值的股票**（缺值/NaN/非數字 → 不放 key，代表「無此因子資料」）。
+
+    v19.90:不再對缺值填 0（那會在綜合分被當「最差」拉低，且與「真的很差=低分」混淆）。
+    """
     valid: dict[str, float] = {}
     for _i in ids:
         _v = value_map.get(_i)
@@ -231,15 +237,14 @@ def _percentile_scores(ids: list[str], value_map: dict, *, higher_better: bool) 
         if _f == _f:  # 非 NaN
             valid[_i] = _f
     if not valid:
-        return {i: 0.0 for i in ids}
+        return {}
     if len(valid) == 1:
-        return {i: (100.0 if i in valid else 0.0) for i in ids}
+        return {i: 100.0 for i in valid}
     _s = pd.Series(valid)
     # higher_better=True → 值越大分越高（ascending=True 使最大值 pct=1.0）；
     # pe_low（higher_better=False）→ 值越小分越高。
     _pct = _s.rank(pct=True, ascending=higher_better)
-    _sc = (_pct * 100).round(1).to_dict()
-    return {i: float(_sc.get(i, 0.0)) for i in ids}
+    return {i: float(v) for i, v in (_pct * 100).round(1).to_dict().items()}
 
 
 def composite_rank_candidates(
@@ -255,11 +260,12 @@ def composite_rank_candidates(
     """從存活池，依【複選因子】的綜合評分排序 → 候選 DataFrame（含 '代碼' 欄）。
 
     factors ⊆ {'pe_low','eps_high','shortage','rs_leader'}（籌碼技術×6 屬 ③ 深篩，不在此）。
-    綜合分 = 各勾選因子百分位分（0-100）的平均。缺料因子該股記 0（§1 不造假）。
+    綜合分 = 該股**有資料的因子**百分位分（0-100）的平均（v19.90：缺料因子不計入、不記 0）。
+    顯示欄：缺料因子該股為空白（None），不是 0，避免誤導。
 
     Returns: (df[代碼/名稱/綜合分/各因子分], note)。
       - factors 空 → 空 + 「請至少勾一個因子」
-      - 勾了缺貨/RS 但尚未掃描 → note 提示（該因子暫全記 0，不擋其他因子）
+      - 勾了缺貨/RS 但尚未掃描 → note 提示（該因子暫無資料、不計入，不擋其他因子）
     """
     pe_map = pe_map or {}
     name_map = name_map or {}
@@ -292,11 +298,12 @@ def composite_rank_candidates(
         _vmap, _hb, _col = _cfg.get(_f, ({}, True, _f))
         _col_scores[_f] = _percentile_scores(ids, _vmap, higher_better=_hb)
 
-    _composite = {
-        i: round(sum(_col_scores[f].get(i, 0.0) for f in factors) / len(factors), 1)
-        for i in ids
-    }
-    ranked = sorted(ids, key=lambda i: -_composite[i])[: int(top_n)]
+    # 綜合分 = 只平均「該股有資料的因子」；全無資料 → None（排最後）
+    _composite: dict[str, float | None] = {}
+    for i in ids:
+        _present = [_col_scores[f][i] for f in factors if i in _col_scores[f]]
+        _composite[i] = round(sum(_present) / len(_present), 1) if _present else None
+    ranked = sorted(ids, key=lambda i: (_composite[i] is None, -(_composite[i] or 0)))[: int(top_n)]
 
     out = pd.DataFrame({
         "代碼": ranked,
@@ -304,7 +311,8 @@ def composite_rank_candidates(
         "綜合分": [_composite[c] for c in ranked],
     })
     for _f in factors:
-        out[_cfg[_f][2]] = [_col_scores[_f].get(c, 0.0) for c in ranked]
+        # 缺料 → None（畫面顯示空白，非 0）
+        out[_cfg[_f][2]] = [_col_scores[_f].get(c) for c in ranked]
 
     note = ""
     if _missing:
