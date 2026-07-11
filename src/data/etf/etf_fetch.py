@@ -1954,7 +1954,9 @@ def _fetch_etf_zh_name_finmind(ticker: str) -> str | None:
         _p = {'dataset': 'TaiwanStockInfo', 'data_id': _bare}
         if _tok:
             _p['token'] = _tok
-        _r = _rq_fn.get(FINMIND_API_URL, params=_p, timeout=15)
+        # S8 v19.78 UA 補漏(v19.82):token 維持走 params,headers 僅補 UA
+        from src.data.core.data_loader import _fm_raw_headers as _fm_hdrs_fn
+        _r = _rq_fn.get(FINMIND_API_URL, params=_p, headers=_fm_hdrs_fn(''), timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         for _row in _data:
             _nm = str(_row.get('stock_name', '') or '').strip()

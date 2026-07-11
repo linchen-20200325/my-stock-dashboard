@@ -85,7 +85,7 @@ class TestFetchEtfZhNameFinMind:
         import requests as _rq
         _moneydj_called = {'hit': False}
 
-        def _fake_get(url, params=None, timeout=None):
+        def _fake_get(url, params=None, timeout=None, headers=None):  # v19.82:生產端補 UA headers,fake 簽名同步
             return _FakeResp({'data': [{'stock_id': '0050', 'stock_name': '元大台灣50',
                                         'industry_category': 'ETF', 'type': 'twse'}]})
         monkeypatch.setattr(_rq, 'get', _fake_get)
@@ -111,7 +111,7 @@ class TestFetchEtfZhNameFinMind:
         import requests as _rq
         _seen = {}
 
-        def _fake_get(url, params=None, timeout=None):
+        def _fake_get(url, params=None, timeout=None, headers=None):  # v19.82:生產端補 UA headers,fake 簽名同步
             _seen['data_id'] = (params or {}).get('data_id')
             return _FakeResp({'data': [{'stock_name': '主動群益台灣強棒'}]})
         monkeypatch.setattr(_rq, 'get', _fake_get)

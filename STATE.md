@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔩 2026-07-11 第五份外部 review 查證後修復：OTC 死參數 + UA 補漏（v19.82）
+
+user 指派第五份建議書(A/B 兩專案合併版);本 repo 5 條 Bug 主張查證:**1 修 + 3 項周邊硬化 / 4 已修過或誤判**。
+
+- **Bug D(真)`_fetch_otc_via_finmind` token 死參數**:函式讀 module-level 凍結快照 `FINMIND_TOKEN`,完全忽略傳入的 token 參數 — 若 import 當下 env/secrets 未就緒,凍結空值讓 caller 再傳新 token 也永遠 return None。改 `token or _get_finmind_token()` 動態重讀,順帶把該站僅 Authorization 無 UA 的 headers 換 `_fm_raw_headers` SSOT。
+- **UA 補漏 4 站(S8 v19.78 漏網)**:`data_loader` fetch_industry_category / fetch_bps、`share_capital_fetcher`、`etf_fetch` 中文名查詢 — 全補 `_fm_raw_headers('')`(UA-only,token 維持走 params)。同步放寬 `test_etf_zh_name_and_beta` 兩個 fake_get 簽名收 headers。
+- **裸 except 收窄 ×4(§3.3)**:`data_loader` `_pn`/`_pn_tp`/`_int_tp`/`_qe2date` 四個 cell-level parse helper 的 `except:` 改具名例外元組,保留 0.0/0/None fail-token 語意(對齊 S3 v19.78 收窄前例)。
+- **版號矛盾**:主標 badge「4.0 Pro」vs page_title/側欄/頁尾 v3.0 同畫面矛盾 → 統一 v3.0(多數決)。
+- **已修過/誤判(證據)**:Bug A 毛利率除零=N1 v19.80 已修(`replace(0,nan)` 兩路徑都在);Bug B 股利 `.json()`/`['data']`=v19.78 S8+v19.80 N5 已補 log,直索引有條件守衛屬誤讀;Bug C token 只讀 env=誤判(app.py:91-93 啟動即同步 secrets→env,函式內 runtime 讀全拿得到;唯一 module-level env-only 讀取 leading_indicators:53 為死變數 0 使用);Bug E volume NaN=v19.81 上輪剛修;sidebar 渲染兩次=誤判(兩個 with st.sidebar 區塊內容不重複,Streamlit 為 append 語意);f-string 色碼=第一輪已修(現存 3 處皆 f-前綴巢狀正確);get_quarterly 無快取=誤判(cache 在 fetch_quarterly/fetch_quarterly_extra wrapper 層 TTL_1HOUR);月營收方案0 重複=S11 v19.78 已刪;_score_help 死變數=已不存在。
+- **回歸網**:`tests/test_review_fixes_v19_82.py` 9 test(OTC 死參數功能測試×2+source-scan、UA 4 站、裸 except 歸零、版號);全套件 **2,962 passed / 0 failed**。
+- **大項待核准(§-1 不擅動)**:Session `@st.cache_resource` 複用(執行緒安全需評估)、個股頁 7 fetcher / inst 逐日迴圈 / margin 6 路平行化、picker_fetcher 快取、覆蓋率表盲區(配息/BPS/PE/產業別燈+全 10 Tab+registry 未觸發空白)、tab_stock st.tabs 子分頁+hero 概覽列+河流圖 selectbox 收斂+AI 體檢 expander 預設收合、企業 DNA 兩處二選一、停損卡重複、ARCHIVED 註解清理、app_cache pickle 路徑統一 — 詳 PR 描述。
+
 ## 🧾 2026-07-10 第四份外部 review 查證後修復：NaN 邊界防炸（v19.81）
 
 user 指派第四份建議書;先過濾 ≥4 條已修/過時舊主張(yf.download 無 timeout + session 未池化=v19.78、`_TWSE_DL` 模組級重用=v19.78 已刪死碼、台股無平行化=v19.77 批次 ThreadPool 已落地),本 repo 3 條新主張查證:**2 修 / 1 誤判**。
