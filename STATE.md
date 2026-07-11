@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📊 2026-07-11 批次3(a) 布林突破量能確認（v19.95）
+
+user AskUserQuestion 核准「加量能 gate」。§7 數學式先確認再落地:
+
+- **問題**:`detect_bollinger_breakout`（v5_modules,Task 9）docstring 一直聲明吃 `volume` 欄但函式體**從未用** — 「🔴 布林突破爆發」不看量,無量假突破也給爆發買點。
+- **修（位移,已授權）**:加 `vol_ratio = 今量 / 20 日均量`（mirror 既有 `check_fake_breakout` pattern;gate 用**既有 SSOT `VOLUME_RATIO_SURGE=1.5`,不新增常數**）。`near_upper 且 bw>3` 分流:①量增 ≥1.5× → 🔴 突破爆發（msg 帶「量增 N×確認」）②量不足 → **🟡 布林突破待確認（慎防無量假突破）**（原 🔴 降級）③缺 volume 欄/均量無效 → `vol_ratio=None`（**誠實未知,不偽造 1.0**,§1）維持舊 🔴 行為 + msg 標「量能未知」。
+- **schema-additive**:dict 加 `vol_ratio` / `volume_confirmed` 兩鍵,既有 caller（section_health_score 顯示）無感。非突破路徑（收縮/靠近上軌/正常）零改動。
+- **回歸網**:`tests/test_review_fixes_v19_95.py` 6 test（有量🔴+ratio;量不足降🟡;缺欄維持🔴標未知;非突破路徑不受影響;schema 契約;全 0 量不除零不確認）。既有 `test_pr_j3_smed_high_risk` 併跑 23 passed。ruff v5_modules 零新增（既有 23 錯非本次,baseline 比對同數）。
+- **A~E 進度**:批次3(a) RSI/ATR ✅ + KD ✅ + **布林量能 ✅**(本次,3(a) 全收)/ 下一步 批次4 Item1 monitored 裝飾器（user 已核准最小版+Item2）。
+
 ## 📈 2026-07-11 批次3(a) KD 鈍化背離（偵測 + 接進評分 + drift 修）（v19.94）
 
 user AskUserQuestion 核准「偵測＋接進評分」+「修 exit_signals 70→80 drift」。§7 數學式先確認再落地:

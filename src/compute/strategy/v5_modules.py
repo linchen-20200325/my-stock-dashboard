@@ -20,6 +20,7 @@ from shared.signal_thresholds import (
     RS_SIGMA_LEAD_MIN,   # v19.70:RS σ 分級 SSOT（原 1.0/0.3/-0.3 inline，抗跌 RS 選股共用）
     RS_SIGMA_MILD_MIN,
     RS_SIGMA_LAG_MAX,
+    VOLUME_RATIO_SURGE,  # v19.95 批次3(a):布林突破量能確認 gate（既有 SSOT 1.5×,不新增常數）
 )
 
 
@@ -255,6 +256,16 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
     bw_hist = ((ma + std_k*std) - (ma - std_k*std)) / ma * 100
     bw_pct  = round(float((bw_hist.tail(120) < bw).mean() * 100), 1)
 
+    # v19.95 批次3(a) 量能確認（§7 user 核准）:docstring 一直聲明吃 volume 但從未用 —
+    # 無量突破常為假突破。vol_ratio = 今量 / 20 日均量(mirror check_fake_breakout pattern);
+    # 缺 volume 欄 / 均量無效 → None(誠實未知,不偽造 1.0),此時不降級(維持舊行為)。
+    vol_ratio = None
+    if 'volume' in df.columns:
+        _avg_v = df['volume'].rolling(window).mean().iloc[-1]
+        if pd.notna(_avg_v) and _avg_v > 0:
+            vol_ratio = round(float(df['volume'].iloc[-1]) / float(_avg_v), 2)
+    volume_confirmed = vol_ratio is not None and vol_ratio >= VOLUME_RATIO_SURGE
+
     # 訊號判斷
     # v18.432 Batch 5d:0.995 → BB_NEAR_UPPER_STRICT_RATIO SSOT(STRICT tier,訊號層 action 用嚴格門檻)
     # 對應 LOOSE tier BB_NEAR_UPPER_RATIO=0.97(tech_indicators / tab_stock 篩選用,寬鬆 3% tolerance)
@@ -262,8 +273,18 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
     bw_squeeze = bw_pct < 20  # 帶寬在近120日最低20%
 
     if near_upper and bw > 3:
-        signal, color = "🔴 布林突破爆發", R
-        msg = f"BW={bw:.1f}% 且收盤 {close_now:.2f} 貼近上軌 {upper:.2f} — 短線爆發買點"
+        # v19.95:量能分流 — 有量=爆發🔴;量不足=待確認🟡(防無量假突破);量未知=舊行為🔴
+        if volume_confirmed:
+            signal, color = "🔴 布林突破爆發", R
+            msg = (f"BW={bw:.1f}% 且收盤 {close_now:.2f} 貼近上軌 {upper:.2f}"
+                   f"（量增 {vol_ratio:.1f}× 確認）— 短線爆發買點")
+        elif vol_ratio is not None:
+            signal, color = "🟡 布林突破待確認", Y
+            msg = (f"BW={bw:.1f}% 貼近上軌 {upper:.2f} 但量能不足"
+                   f"（{vol_ratio:.1f}× < {VOLUME_RATIO_SURGE}×）— 慎防無量假突破")
+        else:
+            signal, color = "🔴 布林突破爆發", R
+            msg = f"BW={bw:.1f}% 且收盤 {close_now:.2f} 貼近上軌 {upper:.2f} — 短線爆發買點（量能未知）"
     elif bw_squeeze:
         signal, color = "🟡 布林極度收縮", Y
         msg = f"BW={bw:.1f}%（近120日第{bw_pct:.0f}百分位）— 窒息量前兆，方向選擇即將到來"
@@ -277,6 +298,7 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
     return {"bw": bw, "bw_pct": bw_pct, "upper": round(upper, 2),
             "lower": round(lower, 2), "ma": round(ma_now, 2),
             "close": close_now, "near_upper": near_upper,
+            "vol_ratio": vol_ratio, "volume_confirmed": volume_confirmed,
             "signal": signal, "color": color, "msg": msg}
 
 
