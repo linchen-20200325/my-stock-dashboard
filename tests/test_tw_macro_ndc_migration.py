@@ -1,11 +1,16 @@
-"""v18.177 tw_macro NDC OpenAPI 遷移測試 — dgtw PRIMARY + FinMind FALLBACK chain。
+"""tw_macro NDC 鏈測試 — v19.85 起 TBI PRIMARY + dgtw FALLBACK。
 
-驗證 fetch_ndc_signal_history / fetch_ndc_leading_index：
-1. dgtw 命中時不打 FinMind（PRIMARY 路徑）
-2. dgtw 失敗時自動退 FinMind（FALLBACK 路徑）
-3. dgtw + FinMind 皆敗 graceful 回 error
+歷史:v18.177 遷移為「dgtw PRIMARY + FinMind(TaiwanMacroEconomics) FALLBACK」;
+v19.85 診斷發現 TaiwanMacroEconomics dataset 不存在(SDK 枚舉+官方文件皆無),
+FinMind 段改為 `TaiwanBusinessIndicator` 寬表並升 PRIMARY,dgtw 降 FALLBACK,
+舊 `_finmind_macro_series` 死鏈自 NDC 兩 fetcher 移除。
+
+驗證 fetch_ndc_signal_history / fetch_ndc_leading_index:
+1. TBI 命中時不打 dgtw(PRIMARY 路徑)
+2. TBI 失敗時自動退 dgtw;舊 _finmind_macro_series 永不被呼叫(死鏈拔除釘住)
+3. TBI + dgtw 皆敗 graceful 回 error
 4. source 欄位正確標示資料源
-5. dgtw helper（search / CSV parse / probe candidate）獨立驗證
+5. dgtw helper(search / CSV parse / probe candidate)獨立驗證
 """
 from __future__ import annotations
 
@@ -136,9 +141,48 @@ class TestDgtwNdcIndicatorSeries:
 # ════════════════════════════════════════════════════════════════
 # §2 fetch_ndc_signal_history chain
 # ════════════════════════════════════════════════════════════════
+def _tbi_df(values, colors=None, leading=None) -> pd.DataFrame:
+    """TaiwanBusinessIndicator 寬表 fixture(monitoring 必備,其餘可選)。"""
+    n = len(values)
+    data = {
+        'date': pd.date_range('2024-01-01', periods=n, freq='MS')
+                .strftime('%Y-%m-%d'),
+        'monitoring': values,
+    }
+    if colors is not None:
+        data['monitoring_color'] = colors
+    if leading is not None:
+        data['leading'] = leading
+    return pd.DataFrame(data)
+
+
+def _explode_dead_finmind(*a, **kw):
+    """v19.85 死鏈釘住:_finmind_macro_series 不該再被 NDC fetcher 呼叫。"""
+    raise AssertionError('_finmind_macro_series(死鏈)不該被呼叫')
+
+
 class TestNdcSignalHistoryChain:
-    def test_dgtw_primary_skips_finmind(self, monkeypatch):
-        """dgtw 命中 → source='data.gov.tw'，FinMind 不該被打。"""
+    def test_tbi_primary_skips_dgtw(self, monkeypatch):
+        """TBI 命中 → source='FinMind:TaiwanBusinessIndicator',dgtw 不該被打。"""
+        vals = [20, 19, 20, 21, 19, 20, 22, 21, 23, 22, 25, 28]
+        monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
+                             lambda *a, **kw: _tbi_df(vals, colors=['g'] * 12))
+
+        def _explode(*a, **kw):
+            raise AssertionError('TBI 命中時 dgtw 不該被呼叫')
+        monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series', _explode)
+        monkeypatch.setattr(tw_macro, '_finmind_macro_series',
+                             _explode_dead_finmind)
+        result = tw_macro.fetch_ndc_signal_history()
+        assert result['source'] == 'FinMind:TaiwanBusinessIndicator'
+        assert result['score_latest'] == 28
+        assert result['color_latest'] == 'g'
+        assert result['error'] is None
+
+    def test_tbi_empty_falls_back_to_dgtw(self, monkeypatch):
+        """TBI 失敗 → dgtw 被呼叫 → source='data.gov.tw'。"""
+        monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
+                             lambda *a, **kw: None)
         dgtw_df = pd.DataFrame({
             'date': pd.date_range('2024-01-01', periods=12, freq='MS')
                     .strftime('%Y-%m-%d'),
@@ -146,42 +190,28 @@ class TestNdcSignalHistoryChain:
         })
         monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series',
                              lambda *a, **kw: dgtw_df)
-        # finmind 路徑若被 call 會炸
-        def _explode(*a, **kw):
-            raise AssertionError('FinMind 不該被呼叫')
-        monkeypatch.setattr(tw_macro, '_finmind_macro_series', _explode)
+        monkeypatch.setattr(tw_macro, '_finmind_macro_series',
+                             _explode_dead_finmind)
         result = tw_macro.fetch_ndc_signal_history()
         assert result['source'] == 'data.gov.tw'
         assert result['score_latest'] == 28
-        assert result['error'] is None
-
-    def test_dgtw_empty_falls_back_to_finmind(self, monkeypatch):
-        """dgtw 失敗 → FinMind 被呼叫 → source='FinMind'。"""
-        monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series',
-                             lambda *a, **kw: None)
-        finmind_df = pd.DataFrame({
-            'date': pd.date_range('2024-01-01', periods=12, freq='MS')
-                    .strftime('%Y-%m-%d'),
-            'value': [20, 19, 20, 21, 19, 20, 22, 21, 23, 22, 25, 28],
-        })
-        monkeypatch.setattr(tw_macro, '_finmind_macro_series',
-                             lambda *a, **kw: finmind_df)
-        result = tw_macro.fetch_ndc_signal_history()
-        assert result['source'] == 'FinMind'
-        assert result['score_latest'] == 28
 
     def test_both_fail_graceful_error(self, monkeypatch):
+        monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
+                             lambda *a, **kw: None)
         monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series',
                              lambda *a, **kw: None)
         monkeypatch.setattr(tw_macro, '_finmind_macro_series',
-                             lambda *a, **kw: None)
+                             _explode_dead_finmind)
         result = tw_macro.fetch_ndc_signal_history()
         assert result['error'] is not None
-        assert 'dgtw + FinMind 皆無' in result['error']
+        assert 'FinMind-TBI + dgtw 皆無' in result['error']
         assert result['source'] is None
 
     def test_sanity_filters_out_of_range_score(self, monkeypatch):
-        """信號分數 ∉ [9, 45] 視為髒值濾掉。"""
+        """信號分數 ∉ [9, 45] 視為髒值濾掉(dgtw fallback 路徑)。"""
+        monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
+                             lambda *a, **kw: None)
         dirty_df = pd.DataFrame({
             'date': pd.date_range('2024-01-01', periods=12, freq='MS')
                     .strftime('%Y-%m-%d'),
@@ -189,8 +219,6 @@ class TestNdcSignalHistoryChain:
         })
         monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series',
                              lambda *a, **kw: dirty_df)
-        monkeypatch.setattr(tw_macro, '_finmind_macro_series',
-                             lambda *a, **kw: None)
         result = tw_macro.fetch_ndc_signal_history()
         # 髒值被砍後仍 ≥3 月，邏輯能跑
         assert result['error'] is None
@@ -201,7 +229,27 @@ class TestNdcSignalHistoryChain:
 # §3 fetch_ndc_leading_index chain
 # ════════════════════════════════════════════════════════════════
 class TestNdcLeadingIndexChain:
-    def test_dgtw_primary_skips_finmind(self, monkeypatch):
+    def test_tbi_primary_skips_dgtw(self, monkeypatch):
+        """TBI leading 欄命中 → source='FinMind:TaiwanBusinessIndicator'。"""
+        vals = [30] * 12
+        leading = [100 + i * 0.5 for i in range(1, 13)]
+        monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
+                             lambda *a, **kw: _tbi_df(vals, leading=leading))
+
+        def _explode(*a, **kw):
+            raise AssertionError('TBI 命中時 dgtw 不該被呼叫')
+        monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series', _explode)
+        monkeypatch.setattr(tw_macro, '_finmind_macro_series',
+                             _explode_dead_finmind)
+        result = tw_macro.fetch_ndc_leading_index()
+        assert result['source'] == 'FinMind:TaiwanBusinessIndicator'
+        assert result['error'] is None
+        # 連續遞增 → smooth6m > 0
+        assert result['smooth6m'] > 0
+
+    def test_tbi_empty_falls_back_to_dgtw(self, monkeypatch):
+        monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
+                             lambda *a, **kw: None)
         dgtw_df = pd.DataFrame({
             'date': pd.date_range('2024-01-01', periods=12, freq='MS')
                     .strftime('%Y-%m-%d'),
@@ -209,36 +257,35 @@ class TestNdcLeadingIndexChain:
         })
         monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series',
                              lambda *a, **kw: dgtw_df)
-        def _explode(*a, **kw):
-            raise AssertionError('FinMind 不該被呼叫')
-        monkeypatch.setattr(tw_macro, '_finmind_macro_series', _explode)
+        monkeypatch.setattr(tw_macro, '_finmind_macro_series',
+                             _explode_dead_finmind)
         result = tw_macro.fetch_ndc_leading_index()
         assert result['source'] == 'data.gov.tw'
-        assert result['error'] is None
-        # 連續遞增 → smooth6m > 0
-        assert result['smooth6m'] > 0
 
-    def test_dgtw_empty_falls_back_to_finmind(self, monkeypatch):
-        monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series',
-                             lambda *a, **kw: None)
-        finmind_df = pd.DataFrame({
+    def test_tbi_without_leading_column_falls_back(self, monkeypatch):
+        """TBI 回了 monitoring 但缺 leading 欄 → 領先指標仍走 dgtw。"""
+        monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
+                             lambda *a, **kw: _tbi_df([30] * 12))
+        dgtw_df = pd.DataFrame({
             'date': pd.date_range('2024-01-01', periods=12, freq='MS')
                     .strftime('%Y-%m-%d'),
             'value': [100 + i * 0.5 for i in range(1, 13)],
         })
-        monkeypatch.setattr(tw_macro, '_finmind_macro_series',
-                             lambda *a, **kw: finmind_df)
+        monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series',
+                             lambda *a, **kw: dgtw_df)
         result = tw_macro.fetch_ndc_leading_index()
-        assert result['source'] == 'FinMind'
+        assert result['source'] == 'data.gov.tw'
 
     def test_both_fail_graceful_error(self, monkeypatch):
+        monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
+                             lambda *a, **kw: None)
         monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series',
                              lambda *a, **kw: None)
         monkeypatch.setattr(tw_macro, '_finmind_macro_series',
-                             lambda *a, **kw: None)
+                             _explode_dead_finmind)
         result = tw_macro.fetch_ndc_leading_index()
         assert result['error'] is not None
-        assert 'dgtw + FinMind 皆無' in result['error']
+        assert 'FinMind-TBI + dgtw 皆無' in result['error']
 
 
 # ════════════════════════════════════════════════════════════════

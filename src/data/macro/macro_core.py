@@ -39,7 +39,7 @@ import pandas as pd
 
 from src.data.proxy import fetch_url
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
+# (v19.85)FINMIND_API_URL import 移除 — 唯一 caller _pmi_src_finmind 已拔(假 dataset)
 from shared.fred_series import (
     FRED_BSCICP02,
     FRED_ISPMANPMI,
@@ -858,10 +858,13 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 # ══════════════════════════════════════════════════════════════
 
 def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
-    """抓取台灣製造業 PMI（10 來源並行賽跑，依優先序取最高優先的有效值；月頻）。
+    """抓取台灣製造業 PMI（9 來源並行賽跑，依優先序取最高優先的有效值；月頻）。
 
     來源優先序：CIER-EN → data.gov.tw → NDC → MacroMicro → CIER(cid21) → StockFeel
-                → Cnyes → FinMind → CIER(cid8) → MoneyDJ
+                → Cnyes → CIER(cid8) → MoneyDJ
+    (v19.85 拔除 FinMind 段 — 原打 dataset `TaiwanEconomicIndicator` 不存在於
+    FinMind(SDK 2.0.4 枚舉 + 官方文件皆無此名),且 FinMind 無 PMI 資料集可替換,
+    段位從未命中,只浪費一次 API 呼叫。§3.3 反捏造。)
     各來源彼此獨立、無共享狀態 → ThreadPoolExecutor 並行；關鍵路徑由原序列
     最壞 ~100s+ 降為 ~單一最慢源，順帶修掉「序列鏈超過 macro pool 70s
     timeout → PMI 被切成片段」。
@@ -905,9 +908,9 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
             _hit = dict(_results[_nm])
             _hit['fetched_at'] = _fetched_at
             return _hit
-    err_msg = ' | '.join(errs) or 'all 10 stages failed'
-    print(f'[macro_core/TW-PMI] ❌ 10 段並行全失敗：{err_msg}')
-    # v18.225 T1：10 段全失敗 → 讀 stale cache（90 天 TTL），UI 端顯示 🟡 而非 🔴
+    err_msg = ' | '.join(errs) or 'all 9 stages failed'
+    print(f'[macro_core/TW-PMI] ❌ 9 段並行全失敗：{err_msg}')
+    # v18.225 T1：9 段全失敗 → 讀 stale cache（90 天 TTL），UI 端顯示 🟡 而非 🔴
     _stale = _macro_cache_load('tw_pmi')
     if _stale:
         _stale = dict(_stale)
@@ -1269,48 +1272,10 @@ def _pmi_src_cnyes(today, max_age_days, errs):
     return None
 
 
-def _pmi_src_finmind(today, max_age_days, errs):
-    """方案 5: FinMind TaiwanEconomicIndicator（過濾 PMI/製造業 series 取最新）。"""
-    try:
-        import os as _os_fm
-        _tok = _os_fm.environ.get('FINMIND_TOKEN')
-        if not _tok:
-            try:
-                import streamlit as _st_fm
-                _tok = (_st_fm.secrets or {}).get('FINMIND_TOKEN')
-            except Exception:
-                pass
-        if _tok:
-            _start = (today - _dt.timedelta(days=180)).strftime('%Y-%m-%d')
-            # 走 fetch_url（NAS Squid → 直連 → NAS 中繼站 fallback，PR #100）
-            _r_fm = fetch_url(
-                FINMIND_API_URL,
-                params={'dataset': 'TaiwanEconomicIndicator',
-                        'start_date': _start, 'token': _tok},
-                timeout=12, attempts=1)
-            if _r_fm is not None and _r_fm.status_code == 200:
-                _j = _r_fm.json()
-                _data = _j.get('data') or []
-                # 篩出 name 含 PMI / 製造業採購 的 series，按 date 取最新
-                _pmi_rows = [d for d in _data
-                             if 'PMI' in str(d.get('name', '')) or '製造業' in str(d.get('name', ''))]
-                if _pmi_rows:
-                    _pmi_rows.sort(key=lambda x: str(x.get('date', '')), reverse=True)
-                    _top = _pmi_rows[0]
-                    _v = float(_top.get('value') or 0)
-                    _d_str = str(_top.get('date', ''))
-                    if 30 <= _v <= 70 and _d_str:
-                        print(f"[macro_core/TW-PMI/FinMind] ✅ {_v} date={_d_str} ({_top.get('name')})")
-                        return {'value': _v, 'date': _d_str[:10],
-                                'label': f"FinMind TaiwanEconomicIndicator ({_top.get('name')})",
-                                'source': 'FinMind', 'is_proxy': True,
-                                'series_id': 'finmind-tw-pmi'}
-        else:
-            errs.append('FinMind:無 token')
-    except Exception as e:
-        errs.append(f'FinMind:{type(e).__name__}')
-        print(f'[macro_core/TW-PMI/FinMind] ❌ {e}')
-    return None
+# (v19.85 拔除)原 `_pmi_src_finmind`(方案 5)— 打的 dataset
+# `TaiwanEconomicIndicator` 不存在於 FinMind(SDK 2.0.4 Dataset 枚舉 + 官方
+# 文件皆無此名),自建立起從未命中;FinMind 亦無 PMI 資料集可替換 → 整段移除,
+# PMI_SOURCE_REGISTRY 同步 10 → 9 源。git history 可查回。§3.3 反捏造。
 
 
 def _pmi_src_cier8(today, max_age_days, errs):
@@ -1391,7 +1356,6 @@ PMI_SOURCE_REGISTRY: list[tuple[str, Callable]] = [
     ('CIER',        _pmi_src_cier21),
     ('StockFeel',   _pmi_src_stockfeel),
     ('Cnyes',       _pmi_src_cnyes),
-    ('FinMind',     _pmi_src_finmind),
     ('CIER-cid8',   _pmi_src_cier8),
     ('MoneyDJ',     _pmi_src_moneydj),
 ]

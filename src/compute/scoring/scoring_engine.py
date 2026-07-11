@@ -63,7 +63,10 @@ def calc_trend_score(df) -> float:
     修正：
     1. 資料不足 → 0分（不得中性假分）
     2. 預設值改為 0，避免「無MA=不站上」被誤判為站上
-    3. 加入 MA 斜率加分（短均 > 長均 且向上彎折）
+    3. 均線多頭排列加分（MA20>MA60、MA60>MA120）
+       ⚠️ v19.85 文實對齊:原文寫「MA 斜率加分(向上彎折)」但實作從未計算
+       斜率(無 shift/diff),只做排列比較 — docstring 還原真相;
+       真加入斜率 = 全下游趨勢分位移,列待核准。
     """
     if df is None or df.empty or 'close' not in df.columns:
         return 0.0   # 無資料 → 0分，不混入推薦名單

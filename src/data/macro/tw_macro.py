@@ -416,6 +416,11 @@ def fetch_cbc_m1b_m2() -> dict:
 # FinMind TaiwanMacroEconomics 指標名（中央銀行/國發會公開資料）
 # v18.177：FinMind v4 已把此 dataset 改 Sponsor 付費 tier，
 # tw_macro 改走 data.gov.tw NDC OpenData（dgtw）為 PRIMARY，FinMind 為 FALLBACK
+# ⚠️ v19.85 更正:「TaiwanMacroEconomics」在 FinMind **不存在**(SDK 2.0.4 Dataset
+#    枚舉 + 官方文件皆無此名;真名為 `TaiwanBusinessIndicator`,寬表含 monitoring
+#    分數/燈號/leading)。v18.177「改付費 tier」為誤診 — 付費牆 dataset 仍會列在
+#    文件,查無此名 = 名字打錯。NDC 兩 fetcher 已改走 fetch_business_indicator_series;
+#    _finmind_macro_series(長表過濾)僅存 CPI/失業率 caller,同病待另源(見 STATE v19.85)。
 _NDC_SIGNAL_KEYS  = ('景氣對策信號(分)', '景氣對策信號')
 _NDC_LI_KEYS      = ('領先指標綜合指數', '領先指標', '領先指標(綜合指數)')
 
@@ -620,6 +625,72 @@ def _finmind_macro_series(indicator_keys: tuple, months_back: int = 18,
     return sub
 
 
+def _finmind_token_from_env() -> str:
+    """FINMIND_TOKEN 環境變數 bootstrap。
+
+    production 由 app.py 啟動時把 st.secrets 同步進 os.environ(v18.x 既有機制);
+    本模組鐵則不 import streamlit(檔頭「依賴限制」),故僅讀 env。無 token 時
+    TaiwanBusinessIndicator 仍可匿名呼叫(免費 dataset,受較嚴 rate limit)。
+    """
+    import os as _os
+    return _os.environ.get('FINMIND_TOKEN', '') or ''
+
+
+@_ttl_cache(ttl_sec=TTL_15MIN, maxsize=4)
+def fetch_business_indicator_series(months_back: int = 18,
+                                    token: str = "") -> Optional[pd.DataFrame]:
+    """抓 FinMind `TaiwanBusinessIndicator`(國發會景氣指標官方鏡像,寬表)。
+
+    v19.85 新增:取代誤植的 `TaiwanMacroEconomics`(不存在,見 §上方更正註)。
+    欄位契約(FinMind SDK data_loader.taiwan_business_indicator 文件):
+      date / leading(領先指標綜合指數) / coincident / lagging /
+      monitoring(景氣對策信號綜合分數) / monitoring_color(景氣對策信號燈號)
+
+    Returns
+    -------
+    pd.DataFrame[date, monitoring(, monitoring_color, leading)] 由舊到新;
+    失敗回 None(§1 fail loud:print log + None,不捏造)。
+    """
+    today = _dt.date.today()
+    params: dict = {
+        'dataset':    'TaiwanBusinessIndicator',
+        'start_date': (today - _dt.timedelta(days=int(months_back * 31))
+                       ).strftime('%Y-%m-%d'),
+        'end_date':   today.strftime('%Y-%m-%d'),
+    }
+    _tok = token or _finmind_token_from_env()
+    if _tok:
+        params['token'] = _tok
+    r = fetch_url(FINMIND_BASE, params=params, timeout=15)
+    if r is None:
+        print('[tw_macro/TBI] ❌ FinMind TaiwanBusinessIndicator 無回應')
+        return None
+    try:
+        _j = r.json()
+    except Exception as e:
+        print(f'[tw_macro/TBI] ❌ JSON parse: {type(e).__name__}: {e}')
+        return None
+    rows = _j.get('data', [])
+    if not rows:
+        print(f"[tw_macro/TBI] ⚠️ 空 data(msg={str(_j.get('msg', ''))[:80]})")
+        return None
+    df = pd.DataFrame(rows)
+    if 'date' not in df.columns or 'monitoring' not in df.columns:
+        print(f'[tw_macro/TBI] ❌ 欄位不符: {list(df.columns)[:8]}')
+        return None
+    _keep = ['date'] + [c for c in ('monitoring', 'monitoring_color', 'leading')
+                        if c in df.columns]
+    out = df[_keep].copy()
+    out['monitoring'] = pd.to_numeric(out['monitoring'], errors='coerce')
+    if 'leading' in out.columns:
+        out['leading'] = pd.to_numeric(out['leading'], errors='coerce')
+    out = out.dropna(subset=['monitoring']).sort_values('date').reset_index(drop=True)
+    if out.empty:
+        print('[tw_macro/TBI] ⚠️ monitoring 全 NaN,回 None')
+        return None
+    return out
+
+
 @_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
 def fetch_ndc_signal_history(months_back: int = 12,
                              token: str = "") -> dict:
@@ -637,7 +708,8 @@ def fetch_ndc_signal_history(months_back: int = 12,
                                           '🟢 持續上升' / '🔴 持續下降' / '📊 持平' /
                                           '⬜ 資料不足'
           'date_latest':  str,
-          'source':       'FinMind' | None,
+          'source':       'FinMind:TaiwanBusinessIndicator' | 'data.gov.tw' | None,
+          'color_latest': str | None,   官方燈號字串(僅 TBI 源有,v19.85)
           'error':        str | None,
         }
     """
@@ -645,21 +717,33 @@ def fetch_ndc_signal_history(months_back: int = 12,
         'score_latest': None, 'score_prev': None, 'score_prev2': None,
         'trend': [], 'inflection': '⬜ 資料不足',
         'date_latest': '', 'source': None, 'error': None,
+        # v19.85 additive:官方燈號字串(TaiwanBusinessIndicator monitoring_color;
+        # 其他源無此欄 → None,caller 以分數自算燈號的既有邏輯不受影響)
+        'color_latest': None,
         # S-PROV-1 v18.249:provenance fetched_at(source 既有,無需改 schema)
         'fetched_at': pd.Timestamp.now('UTC').isoformat(),
     }
-    # v18.177 chain：dgtw PRIMARY（免費 NDC OpenData）→ FinMind FALLBACK（付費牆）
-    sub = _dgtw_ndc_indicator_series(
-        _DGTW_NDC_SIGNAL_KEYWORDS, _DGTW_NDC_SIGNAL_VALUE_KEYWORDS,
-        _DGTW_NDC_SIGNAL_CANDIDATE_IDS, label='ndc_signal')
-    _src = 'data.gov.tw' if sub is not None and not sub.empty else None
+    # v19.85 chain:FinMind TaiwanBusinessIndicator PRIMARY(官方鏡像,含分數+燈號)
+    # → dgtw 候選 ID 掃描 FALLBACK。原 _finmind_macro_series(TaiwanMacroEconomics)
+    # 段拔除 — dataset 名不存在,從未命中(§3.3 反捏造,見 §上方 v19.85 更正註)。
+    sub = None
+    _src = None
+    _tbi = fetch_business_indicator_series(months_back=max(months_back, 6),
+                                           token=token)
+    if _tbi is not None and not _tbi.empty:
+        sub = _tbi[['date', 'monitoring']].rename(columns={'monitoring': 'value'})
+        _src = 'FinMind:TaiwanBusinessIndicator'
+        if 'monitoring_color' in _tbi.columns:
+            _c = str(_tbi['monitoring_color'].iloc[-1] or '').strip()
+            result['color_latest'] = _c or None
     if sub is None or sub.empty:
-        sub = _finmind_macro_series(_NDC_SIGNAL_KEYS,
-                                    months_back=months_back, token=token)
+        sub = _dgtw_ndc_indicator_series(
+            _DGTW_NDC_SIGNAL_KEYWORDS, _DGTW_NDC_SIGNAL_VALUE_KEYWORDS,
+            _DGTW_NDC_SIGNAL_CANDIDATE_IDS, label='ndc_signal')
         if sub is not None and not sub.empty:
-            _src = 'FinMind'
+            _src = 'data.gov.tw'
     if sub is None or len(sub) < 3:
-        result['error'] = 'dgtw + FinMind 皆無景氣對策信號資料'
+        result['error'] = 'FinMind-TBI + dgtw 皆無景氣對策信號資料'
         return result
     # v18.177 sanity：信號分數 ∈ [9, 45]
     sub = sub[(sub['value'] >= 9) & (sub['value'] <= 45)].reset_index(drop=True)
@@ -721,18 +805,26 @@ def fetch_ndc_leading_index(months_back: int = 18,
         # S-PROV-1 v18.249:provenance fetched_at(source 既有)
         'fetched_at': pd.Timestamp.now('UTC').isoformat(),
     }
-    # v18.177 chain：dgtw PRIMARY → FinMind FALLBACK
-    sub = _dgtw_ndc_indicator_series(
-        _DGTW_NDC_LEADING_KEYWORDS, _DGTW_NDC_LEADING_VALUE_KEYWORDS,
-        _DGTW_NDC_LEADING_CANDIDATE_IDS, label='ndc_leading')
-    _src_li = 'data.gov.tw' if sub is not None and not sub.empty else None
+    # v19.85 chain:FinMind TaiwanBusinessIndicator PRIMARY(leading 欄)
+    # → dgtw FALLBACK。原 _finmind_macro_series(TaiwanMacroEconomics)段拔除 —
+    # dataset 名不存在,從未命中(§3.3 反捏造,見 §上方 v19.85 更正註)。
+    sub = None
+    _src_li = None
+    _tbi_li = fetch_business_indicator_series(months_back=months_back,
+                                              token=token)
+    if (_tbi_li is not None and 'leading' in _tbi_li.columns
+            and _tbi_li['leading'].notna().sum() >= 8):
+        sub = (_tbi_li.dropna(subset=['leading'])[['date', 'leading']]
+               .rename(columns={'leading': 'value'}).reset_index(drop=True))
+        _src_li = 'FinMind:TaiwanBusinessIndicator'
     if sub is None or sub.empty:
-        sub = _finmind_macro_series(_NDC_LI_KEYS,
-                                    months_back=months_back, token=token)
+        sub = _dgtw_ndc_indicator_series(
+            _DGTW_NDC_LEADING_KEYWORDS, _DGTW_NDC_LEADING_VALUE_KEYWORDS,
+            _DGTW_NDC_LEADING_CANDIDATE_IDS, label='ndc_leading')
         if sub is not None and not sub.empty:
-            _src_li = 'FinMind'
+            _src_li = 'data.gov.tw'
     if sub is None or len(sub) < 8:
-        result['error'] = 'dgtw + FinMind 皆無領先指標歷史'
+        result['error'] = 'FinMind-TBI + dgtw 皆無領先指標歷史'
         return result
     s = sub.set_index('date')['value'].astype(float)
     cur = float(s.iloc[-1])
@@ -905,6 +997,10 @@ def fetch_tw_market_snapshot(days_back: int = 7) -> dict:
 
 # ══════════════════════════════════════════════════════════════
 # TW PMI 月度歷史 — FinMind TaiwanEconomicIndicator(merrill_clock 共用)
+# ⚠️ v19.85 診斷:dataset `TaiwanEconomicIndicator` 不存在於 FinMind(SDK 2.0.4
+# 枚舉 + 官方文件皆無),本函式恆回 None;且現況 **0 production caller**(僅
+# schemas.py docstring 提及)。FinMind 無 PMI dataset 可替換 → 整刪列入待核准,
+# 本輪僅如實標註(§-1 範圍紀律)。
 # S-H4 v18.243:從 `merrill_clock.py`(L2 Compute)下沉至 L1 Data,
 # 修正 CLAUDE.md §8.2「L2 不得 import proxy_helper」違憲。caller(merrill_clock)
 # 改 `from tw_macro import fetch_pmi_history` 並從 `config.FINMIND_TOKEN` 取 token。

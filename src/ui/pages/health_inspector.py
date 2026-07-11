@@ -574,12 +574,13 @@ def render_data_health_raw():
             ('美國核心 CPI YoY',       'us_core_cpi', 'monthly', '_err_cpi',
              'FRED',                          'CPILFESL',                            True),
             ('🇹🇼 台灣製造業 PMI',     'ism_pmi',     'monthly', '_err_pmi',
-             'data.gov.tw+NDC+MacroMicro+CIER+StockFeel+鉅亨+FinMind+MoneyDJ 8段',
-             'data.gov.tw/dataset/6100 / index.ndc / charts/22 / cier / stockfeel / cnyes / FinMind / MoneyDJ', True),
+             'CIER-EN+data.gov.tw+NDC+MacroMicro+CIER+StockFeel+鉅亨+MoneyDJ 9段',
+             'cier.edu.tw / data.gov.tw/dataset/6100 / index.ndc / charts/22 / stockfeel / cnyes / MoneyDJ', True),
             ('NDC 景氣燈號分數',        'ndc_signal',  'monthly', '_err_ndc',
-             'StockFeel+MacroMicro 雙源',     'stockfeel/biz-light + charts/2',      True),
+             'FinMind-TBI+StockFeel+MacroMicro 三源',
+             'TaiwanBusinessIndicator / stockfeel/biz-light + charts/2',           True),
             ('台灣出口 YoY',           'tw_export',   'monthly', '_err_export',
-             'stat.gov.tw+FinMind+MOF+FRED+data.gov.tw+靜態 6段', 'XTEXVA01TWM657S',  True),
+             'stat.gov.tw+MOF+FRED+data.gov.tw 5段', 'XTEXVA01TWM664S',             True),
         ]:
             item = _ma.get(key) or {}
             date = (item.get('date') or item.get('period') or

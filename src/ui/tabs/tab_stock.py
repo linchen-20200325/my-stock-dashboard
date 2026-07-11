@@ -970,7 +970,16 @@ padding:14px 18px;margin-bottom:12px;">
                     if _radar:
                         import plotly.graph_objects as _go_fh
                         _cats = list(_radar.keys()) + [list(_radar.keys())[0]]
-                        _vals = [max(0, min(100, int(v))) for v in _radar.values()]
+                        # v19.85:AI 路徑的 radar_scores 來自 LLM JSON,可能出現
+                        # None/"80.5" 等非 int — int(None)/int("80.5") 直接炸掉
+                        # 整個財報體檢區塊。逐值防護,壞值以 0 呈現(no-AI 路徑
+                        # 恆為 int,不受影響)。
+                        _vals = []
+                        for _rv_fh in _radar.values():
+                            try:
+                                _vals.append(max(0, min(100, int(float(_rv_fh)))))
+                            except (TypeError, ValueError):
+                                _vals.append(0)
                         _vals += [_vals[0]]
                         _fig_fh = _go_fh.Figure(_go_fh.Scatterpolar(
                             r=_vals, theta=_cats, fill='toself',

@@ -37,7 +37,7 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.calc_helpers import calc_bias_pct
-from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
+# (v19.85)FINMIND_API_URL import 移除 — 唯一 caller 出口鏈方案 FM 已拔(假 dataset)
 from shared.ttls import TTL_1HOUR
 
 
@@ -597,14 +597,39 @@ def fetch_tw_pmi_block() -> dict:
 
 @st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_ndc_block() -> dict:
-    """NDC 景氣對策信號(StockFeel + MacroMicro 雙源,v10.57.0 復活)。
+    """NDC 景氣對策信號(FinMind-TBI + StockFeel + MacroMicro 三源)。
 
-    舊源全廢(FinMind/NDC JSON/CKAN/行動版 HTML 都失效),改抓第三方。
+    v10.57.0 復活時「舊源全廢(FinMind/NDC JSON/CKAN/行動版 HTML 都失效)」的
+    FinMind 判定為誤診 — 當年打的 dataset 名不存在,真名 `TaiwanBusinessIndicator`
+    (國發會官方鏡像)一直可用。v19.85 插為方案 0:官方分數+燈號+真實歸屬月份,
+    解掉 StockFeel 文章更新落後 1~2 月造成的 stale(2026-07 實測該文停在 4 月號)。
     P3-D1 v18.389 抽出。
     """
     import re as _re_ndc
     from src.data.proxy import fetch_url as _fu_ndc
     from bs4 import BeautifulSoup as _BS_ndc
+
+    # 方案 0(v19.85): FinMind TaiwanBusinessIndicator — 官方鏡像,月後數日更新
+    try:
+        from src.data.macro.tw_macro import (
+            fetch_business_indicator_series as _f_tbi,
+        )
+        _df_tbi = _f_tbi(months_back=8)
+        if _df_tbi is not None and not _df_tbi.empty:
+            _row_tbi = _df_tbi.iloc[-1]
+            _sc_tbi = int(round(float(_row_tbi['monitoring'])))
+            if 9 <= _sc_tbi <= 45:
+                _d_tbi = str(_row_tbi['date'])[:10]
+                _col_tbi = (str(_row_tbi.get('monitoring_color') or '').strip()
+                            or None)
+                print(f'[NDC/FinMind-TBI] ✅ score={_sc_tbi} date={_d_tbi} '
+                      f'color={_col_tbi}')
+                return {'ndc_signal': {'score': _sc_tbi, 'signal': _col_tbi,
+                                       'date': _d_tbi,
+                                       'source': 'FinMind:TaiwanBusinessIndicator'}}
+            print(f'[NDC/FinMind-TBI] ⚠️ 分數 {_sc_tbi} 超出 [9,45] sanity,跳過')
+    except Exception as _e_tbi:
+        print(f'[NDC/FinMind-TBI] ❌ {type(_e_tbi).__name__}: {_e_tbi}')
 
     # 方案 A: StockFeel 股感(每月更新文章,HTML 含「綜合分數 39」)
     try:
@@ -676,20 +701,27 @@ def fetch_ndc_block() -> dict:
     except Exception as _e_mm:
         print(f'[NDC/MacroMicro] ❌ {type(_e_mm).__name__}: {_e_mm}')
 
-    print('[NDC] ⚠️ 雙源皆失敗,回 _err_ndc 標記')
-    return {'_err_ndc': 'StockFeel + MacroMicro 雙源皆失敗'}
+    print('[NDC] ⚠️ 三源皆失敗,回 _err_ndc 標記')
+    return {'_err_ndc': 'FinMind-TBI + StockFeel + MacroMicro 三源皆失敗'}
 
 
 @st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
-    """台灣出口 YoY(5 路 fallback)。
+    """台灣出口 YoY(海關出口年增率,5 路 fallback)。
 
     Tier 0: stat.gov.tw(DGBAS 官方點資料頁,走 fetch_url NAS proxy)
-    Tier 1: FinMind TaiwanEconomicIndicator(需 finmind_token)
+    Tier 1: FRED API XTEXVA01TWM664S(OECD MEI;⚠️ OECD 已停止 MEI 供應,
+            FRED 端此系列 2024 起不再更新/可能下架 — 保留待證,失敗無害)
     Tier 2: MOF 財政部統計處 CSV(NAS proxy 台灣 IP 可直接存取)
     Tier 3: data.gov.tw dataset 6053(海關進出口貿易統計)
-    Tier 4: FRED XTEXVA01TWM664S(OECD MEI,延遲 2-3 月)
+    Tier 4: FRED fredgraph CSV(同上系列,同上警語)
     Tier 5: data.gov.tw CKAN(財政部進出口統計 fallback)
+
+    (v19.85 拔除)原「FinMind TaiwanEconomicIndicator」段 — 該 dataset 名
+    不存在於 FinMind(SDK 2.0.4 Dataset 枚舉 + 官方文件皆無),段位從未命中,
+    只浪費一次 API 呼叫;FinMind 亦無出口/貿易替代 dataset,故直接移除(§3.3)。
+    ⚠️ Tier 0/2/3/5 為台灣官方站,Streamlit Cloud 境外 IP 常被 WAF/geo 擋
+    → 實際存活依賴 NAS proxy;NAS 掛掉時本鏈可能全滅(見 STATE v19.85 診斷)。
 
     全敗回 {}(§1:**不捏造**任何數值),caller 顯示「待取得」placeholder。
     P3-D1 v18.389 抽出。logic verbatim from tab_macro._job_macro._fetch_export。
@@ -731,36 +763,8 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     except Exception as _e_stat:
         print(f'[Export/stat.gov.tw] ❌ {type(_e_stat).__name__}: {_e_stat}')
 
-    # 方案 FM: FinMind TaiwanEconomicIndicator
-    try:
-        if finmind_token:
-            _ex_start_fm = (_dt_ex.date.today() - _dt_ex.timedelta(days=365 * 2)).strftime('%Y-%m-%d')
-            _fm_ex_r = _s_ex.get(
-                FINMIND_API_URL,
-                params={'dataset': 'TaiwanEconomicIndicator',
-                        'start_date': _ex_start_fm, 'token': finmind_token},
-                timeout=10)
-            if _fm_ex_r.status_code == 200:
-                _fm_ex_data = _fm_ex_r.json().get('data', [])
-                for _kw_ex in ('出口', '外銷', 'export', 'Export'):
-                    _ex_rows = [r for r in _fm_ex_data
-                                if _kw_ex in str(r.get('indicator', ''))]
-                    if _ex_rows:
-                        _ex_rows.sort(key=lambda r: r.get('date', ''))
-                        _ind_name = _ex_rows[-1].get('indicator')
-                        _same = [r for r in _ex_rows if r.get('indicator') == _ind_name]
-                        if len(_same) >= 13:
-                            _cur_ex = float(_same[-1].get('value', 0) or 0)
-                            _prev_ex = float(_same[-13].get('value', 1) or 1)
-                            if _prev_ex != 0:
-                                _yoy_ex = round((_cur_ex - _prev_ex) / abs(_prev_ex) * 100, 2)
-                                _date_ex = str(_same[-1].get('date', ''))[:7]
-                                print(f'[Export/FinMind] ✅ YoY={_yoy_ex:.2f}% date={_date_ex} ind={_ind_name}')
-                                return {'tw_export': {'yoy': _yoy_ex, 'date': _date_ex,
-                                                      'source': f'FinMind/{_ind_name}'}}
-                        break
-    except Exception as _e_fm_ex:
-        print(f'[Export/FinMind] ❌ {type(_e_fm_ex).__name__}: {_e_fm_ex}')
+    # (v19.85 拔除)原「方案 FM: FinMind TaiwanEconomicIndicator」— dataset 名
+    # 不存在(見 docstring),從未命中。FinMind 無出口替代 dataset,不補段。
 
     # 方案 FRED-API: FRED series API(比 fredgraph.csv 更穩定, 需 fred_api_key)
     if fred_api_key:

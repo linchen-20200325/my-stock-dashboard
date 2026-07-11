@@ -1,5 +1,24 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🛰️ 2026-07-11 資料異常實診修復：NDC 接 FinMind 官方鏡像 + 假 dataset 拔除 + 出口正名（v19.85）
+
+user 實機截圖回報 4 筆資料異常(台灣出口 YoY 未取得 / 台灣製造業 PMI 未取得 / NDC 燈號+分數 101 天前 / 外銷訂單卡「待取得」但診斷清單沒出現)。逐鏈活體診斷(沙箱 egress 全 403 → 改以 FinMind SDK 2.0.4 枚舉 + WebSearch + 基金 repo 交叉證據)結論與修復:
+
+- **根因 1(修,NDC 101 天 stale)**:NDC 鏈 production 其實抓成功,是 **StockFeel 文章本身停在 2026 年 4 月號**(WebSearch 實證文章標題「2026年4月景氣燈號(最新)!」;國發會 5 月燈號 6/27 已公布)— 第三方文章天生落後 1~2 月。修:`tw_macro.fetch_business_indicator_series()` 新增 FinMind **`TaiwanBusinessIndicator`**(國發會官方鏡像;SDK 2.0.4 枚舉+官方文件雙重驗證存在,欄位 monitoring 分數/monitoring_color 燈號/leading 領先指標),插為 `fetch_ndc_block` 方案 0 + `fetch_ndc_signal_history`/`fetch_ndc_leading_index` PRIMARY(dgtw 降 fallback)。附帶:燈號字串官方化(`signal`/`color_latest` 欄,原恆 None),分數沿用既有 [9,45] sanity。token 走 env(app.py 啟動已同步 secrets→env;tw_macro 鐵則不 import streamlit)。
+- **根因 2(修,§3.3 反捏造)**:出口鏈「方案 FM」與 PMI 鏈「方案 5」打的 dataset **`TaiwanEconomicIndicator` 在 FinMind 不存在**(SDK 2.0.4 Dataset 枚舉 + 官方文件皆無此名)— 兩段自建立起從未命中,只浪費 API 呼叫;v18.177 註解「TaiwanMacroEconomics 改 Sponsor 付費」同屬誤診(該名亦不存在,付費牆 dataset 仍會列文件)。修:兩段拔除(PMI 10→9 源,出口 6→5 段),FinMind 無出口/PMI 替代 dataset 故不補段;`_finmind_macro_series` 舊 fallback 從兩個 NDC fetcher 移除。`fetch_pmi_history`(0 production caller)與 TW CPI/失業率 fetcher 同病 — 僅加註+registry 如實標註,整刪/新源列待核准(§-1)。
+- **根因 3(修,同鍵不同名)**:總經卡「外銷訂單 YoY」與診斷清單「台灣出口 YoY」是**同一個資料鍵 `tw_export`**(海關出口年增率,財政部) — 診斷清單其實有列(紅色第一筆),名稱對不上讓 user 以為漏列。修:section_mid 卡片/警示/策略敘事全數正名「台灣出口」(資料語意本來就是海關出口,非經濟部外銷訂單);health_inspector 端點筆誤 657S→664S、來源描述同步(PMI 9 段/NDC 三源/出口 5 段)。
+- **根因 4(據實回報,不擅動)**:出口/PMI 其餘段(stat.gov.tw/MOF/data.gov.tw/CIER/MacroMicro)全是 TW 官方站/防爬站,Streamlit Cloud 境外 IP 被 WAF/geo 擋 → 存活依賴 NAS proxy;現況全滅與 NAS proxy 狀態一致。**建議 user 開「API 診斷」頁檢查 NAS proxy** — 它是出口/PMI 兩卡的共同前置。FRED XTEXVA01TWM664S 段:OECD MEI 已停供、FRED 端 2024 起凍結/下架(WebSearch 佐證)— 保留待證(失敗無害),docstring 加警語。
+- **同輪併入:第八份建議書查證(595 行全面稽核;路線圖 8 版有 6 版與前七輪待核准重疊)**。屬實即修 5 項:
+  - **月營收 MOPS 段無閘門(屬實,比報告寫的更廣)**:方案A 缺 `df_revenue is None` 閘 — 連 FinMind 成功的快樂路徑都白打 4 支自承全 404 的 year-file URL(`t21sc03_{西元年}_0.html` 亦非 MOPS 實際檔名模式)。修:range 條件化閘門(零重排);整段移除/改真檔名列待核准。
+  - **calc_bollinger `bw=(upper-lower)/ma` 無 0 防護(屬實)**:ma=0 時 Series 除法回 inf(不 raise,穿過 except 與 isna 檢查)→ `ma.replace(0,nan)` 走既有 None 誠實路(§4.4;上游 close>0 過濾使實務觸發率極低,屬廉價硬化)。
+  - **五力雷達 `int(v)` 裸轉型(半屬實)**:no-AI 路徑恆 int 安全,但 AI 路徑 radar_scores 來自 LLM JSON — `int(None)`/`int("80.5")` 直接炸整個財報體檢區塊。逐值 `int(float(v))` 防護,壞值以 0 呈現。
+  - **趨勢分數 docstring 宣稱斜率、實作沒有(屬實)**:「MA 斜率加分(向上彎折)」從未實作(無 shift/diff)→ docstring 文實對齊;真加斜率=評分位移,列待核准。
+  - **ADL registry 標示不實(屬實)**:條目寫 TWSE MI_INDEX,實際主值為 ^TWII 漲跌幅反推估算(fetch_adl 自承+is_proxy 旗標)→ registry 正名揭露「估算」。
+- **第八份不適用清單(證據)**:季報無 cache=**第四次**同誤判(`fetch_quarterly`/`fetch_quarterly_extra` 皆 `@st.cache_data(TTL_1HOUR,max_entries=10)`);`fetch_batch_monthly_revenue` dead=誤判(月營收掃描 Tab+缺口掃描 service 兩個活 caller);`fetch_bps_from_finmind` 查無此函式=誤判(data_loader.py:2440 就在);ad_ratio 死因子=v18.449 已修(現 None 預設+動態權重);法人 fillna(0)=by-design(L373 明文「T86 缺列=無交易=真0」語意註);section_health_score MA NaN=v19.78 S2 已修 2 站(MA5/10 站 NaN 比較恆 False=正確不出訊號,良性);market_regime 假綠燈/ETF 假折溢價/holdings 未 import=報告引用本 repo 自家 STATE 已修事故(v18.442/v18.449/v19.287-288);plot_combined_chart 空 df 閘=不修(唯一 caller df 保證非空,加閘需改雙檔 ROI≈0)。
+- **第八份大項待核准(§-1 不擅動;與前七輪重疊項不重列)**:⭐MOPS 段整刪或改真檔名模式(ROC年+月)、⭐monitored 裝飾器強制診斷登錄+孤兒指標掃描器+registry 跨 Tab 單例(P4 家族)、⭐集保/股利/股本/現金流 4 指標補進診斷覆蓋、⭐融資維持率 130/166 正名(涉法規語意由 user 拍板)、⭐MACRO_CALIBRATION −0.452 負相關=紅綠燈權重重設計(模型層)、⭐趨勢分數真加斜率+量能、⭐布林突破加量能確認閂+與假突破交叉驗證、⭐金融股判定改產業別欄位(現為產業查詢主+前綴 fallback)、⭐個股融資補 TWSE MI_MARGN 備援、RSI Wilder/KD 鈍化背離/字串訊號改 Enum/毛利率跨產業/staleness 閘/data_manager/並行化/UX 重構(均前輪已列)。
+- **回歸網**:`tests/test_review_fixes_v19_85.py` 19 test(TBI parser ×4、NDC history 鏈 ×2、fetch_ndc_block ×2、假 dataset 掃描 ×3、正名 ×2、第八份:布林 0 價→None+正常路 ×2、MOPS 閘門+雷達防護+docstring 文實+ADL 正名 ×4);`test_tw_macro.py` 2 test 改餵 TBI 寬表、`test_tw_macro_ndc_migration.py` 全檔改釘新鏈序(TBI 主/dgtw 備/死鏈永不呼叫)+補 TBI 缺 leading 欄退 dgtw 邊界。
+- **診斷方法註記**:沙箱 egress proxy 對外站全 403,「直接打 endpoint」不可行;本輪證據鏈 = FinMind SDK wheel 枚舉(離線真相源)+ WebSearch(StockFeel 文章日期/CBOE 檔案狀態/dataset 6100 存在)+ 基金 repo production 交叉比對。
+
 ## 🚩 2026-07-11 第七份外部 review 查證後修復：旌旗捏造鍵拔除 + 新股 NaN 引導（v19.84）
 
 user 指派第七份建議書(C1-C7 跨專案診斷 + P0-P6 路線圖;品質最高的一份,承認既有 SSOT 治理,但快照仍在 v19.83 merge 前);本 repo 查證:**2 真修 + 1 死 import 清除 / 6+ 已修過或誤判 / 大項待核准**。
