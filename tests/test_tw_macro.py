@@ -228,16 +228,35 @@ def _mock_macro_rows(indicator_name: str, values: list, start: str = "2024-01-01
     ]
 
 
+def _mock_tbi_rows(values, leading=None):
+    """TaiwanBusinessIndicator 寬表 rows(v19.85 起 NDC 兩 fetcher 的 PRIMARY 源)。"""
+    import datetime as _d
+    base = _d.date(2025, 8, 1)
+    out = []
+    for i, v in enumerate(values):
+        row = {"date": (base + _d.timedelta(days=30 * i)).isoformat(),
+               "monitoring": v}
+        if leading is not None:
+            row["leading"] = leading[i]
+        out.append(row)
+    return out
+
+
 def test_ndc_signal_inflection_up(monkeypatch):
-    """景氣對策信號連 2 月翻多：prev2 ≥ prev 且 cur > prev → 拐點 emoji 應為 🚀。"""
+    """景氣對策信號連 2 月翻多：prev2 ≥ prev 且 cur > prev → 拐點 emoji 應為 🚀。
+
+    v19.85:改餵 TaiwanBusinessIndicator 寬表(原 TaiwanMacroEconomics 長表
+    dataset 不存在,該段已拔;拐點邏輯本身不變)。
+    """
     # 6 月歷史：26, 25, 24, 23, 22, 25（最後翻多）
-    rows = _mock_macro_rows('景氣對策信號(分)', [26, 25, 24, 23, 22, 25])
+    rows = _mock_tbi_rows([26, 25, 24, 23, 22, 25])
     monkeypatch.setattr(tw_macro, 'fetch_url',
                         lambda *a, **kw: _mock_resp({'data': rows}))
     r = tw_macro.fetch_ndc_signal_history(months_back=12)
     assert r['score_latest'] == 25
     assert r['score_prev'] == 22
     assert '🚀' in r['inflection'] or '翻多' in r['inflection']
+    assert r['source'] == 'FinMind:TaiwanBusinessIndicator'
 
 
 def test_ndc_signal_no_data(monkeypatch):
@@ -250,10 +269,13 @@ def test_ndc_signal_no_data(monkeypatch):
 
 
 def test_ndc_leading_index_smooth6m_reversal(monkeypatch):
-    """領先指標 6M smoothed change 由負轉正應觸發 🚀。"""
+    """領先指標 6M smoothed change 由負轉正應觸發 🚀。
+
+    v19.85:改餵 TaiwanBusinessIndicator 寬表 leading 欄(同上,邏輯不變)。
+    """
     # 用 12 月穩定下降 → 然後反轉，產生 6M MA 由負轉正
     vals = [100, 99, 98, 97, 96, 95, 95, 96, 98, 100, 103, 107]
-    rows = _mock_macro_rows('領先指標綜合指數', vals)
+    rows = _mock_tbi_rows([30] * len(vals), leading=vals)
     monkeypatch.setattr(tw_macro, 'fetch_url',
                         lambda *a, **kw: _mock_resp({'data': rows}))
     r = tw_macro.fetch_ndc_leading_index(months_back=18)

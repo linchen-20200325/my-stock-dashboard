@@ -1015,10 +1015,14 @@ class StockDataLoader:
         # (含 429/503/504)原則性承接,非靠意外的重複程式碼。
 
         # ── 方案A: MOPS 月營收（官方來源，無需 Token）──────────
+        # v19.85(第八份 review 屬實項):原本無 `df_revenue is None` 閘門 — 連
+        # 方案0(FinMind)成功的快樂路徑都會白打最多 4 支 year-file URL(自承全部
+        # 404,見方案0 註解;t21sc03_{西元年}_0.html 亦非 MOPS 實際檔名模式)。
+        # 補閘門止血(range 條件化,零重排);整段移除/改正確檔名列待核准,不擅動。
         try:
             import pandas as _pd_mops
             _today_rv = _dt_rv.date.today()
-            for _y_offset_rv in range(3):
+            for _y_offset_rv in range(0 if df_revenue is not None else 3):
                 _yr = _today_rv.year - _y_offset_rv
                 for _mops_url_rv in [
                     f'https://mops.twse.com.tw/nas/t21/sii/t21sc03_{_yr}_0.html',

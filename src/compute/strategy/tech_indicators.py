@@ -107,7 +107,9 @@ def calc_bollinger(df, window=20, mult=2):
         std = close.rolling(window).std()
         upper = ma + mult * std
         lower = ma - mult * std
-        bw = (upper - lower) / ma * 100
+        # v19.85(§4.4 大數除小數):ma==0 時 Series 除法回 inf(不 raise,會穿過
+        # except 與末值 isna 檢查外流)→ 顯式換 NaN,走下方 isna → return None。
+        bw = (upper - lower) / ma.replace(0, float('nan')) * 100
         _u, _l, _m, _bw = upper.iloc[-1], lower.iloc[-1], ma.iloc[-1], bw.iloc[-1]
         if any(pd.isna(v) for v in [_u, _l, _m, _bw]):
             return None

@@ -29,12 +29,12 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         st.markdown('''這一區把三種「大環境訊號」拼起來，判斷台股的外部是順風還是逆風：
     
     1. **景氣位階（現在冷熱）** — NDC 景氣燈號：藍燈=景氣冷（衰退）、綠燈=穩定、紅燈=過熱，分數越高景氣越熱。
-    2. **前瞻需求（未來動能）** — 外銷訂單 YoY、台灣 PMI，領先實際營收約 1~2 個月；PMI 以 **50 為榮枯線**（>50 擴張、<50 收縮）。
+    2. **前瞻需求（未來動能）** — 台灣出口 YoY、台灣 PMI，領先實際營收約 1~2 個月；PMI 以 **50 為榮枯線**（>50 擴張、<50 收縮）。
     3. **全球風險（外部壓力）** — 美國核心 CPI、VIX、美債殖利率、美元指數；通膨高或恐慌高 → 外資容易從台股提款。
     
     **怎麼合著看？**
     - 三塊都偏多（景氣穩+訂單成長+風險低）→ 基本面順風，可較積極。
-    - 互相打架（如景氣熱但 PMI 轉弱、外銷成長但 CPI 飆高）→ 留意背離，降低部位。
+    - 互相打架（如景氣熱但 PMI 轉弱、出口成長但 CPI 飆高）→ 留意背離，降低部位。
     - 多塊轉空 → 基本面逆風，優先保留現金。
     
     > 💡 這區看的是「中長期基本面」，和最上方的紅綠燈（偏即時多空）互相搭配，不是互相取代。''')
@@ -63,7 +63,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     _m8_fed   = _macro_info.get('fed_funds')  # v18.169: MK 黃金拐點配對指標
     _m8_vix   = _macro_info.get('vix')
     
-    # ── Row 1: NDC燈號 | 外銷訂單YoY | 🇹🇼 台灣 PMI ──────────
+    # ── Row 1: NDC燈號 | 台灣出口YoY | 🇹🇼 台灣 PMI ──────────
     _s8c1 = st.columns(3)
     
     with _s8c1[0]:
@@ -84,10 +84,12 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             _ey8 = _m8_exp.get('yoy', 0)
             _ec8 = TRAFFIC_GREEN if _ey8 > 0 else TRAFFIC_RED
             _el8 = ('✅ 出口動能正成長，基本面有撐' if _ey8 > 0 else
-                    ('🔴 外銷連兩月衰退，基本面警示！' if _ey8 < -5 else '⚠️ 外銷轉弱，留意基本面背離'))
-            st.markdown(kpi('外銷訂單 YoY', f'{_ey8:+.1f}%', _el8, _ec8, '#0d1117'), unsafe_allow_html=True)
+                    ('🔴 出口連兩月衰退，基本面警示！' if _ey8 < -5 else '⚠️ 出口轉弱，留意基本面背離'))
+            st.markdown(kpi('台灣出口 YoY', f'{_ey8:+.1f}%', _el8, _ec8, '#0d1117'), unsafe_allow_html=True)
         else:
-            st.markdown(kpi('外銷訂單 YoY', '待取得', '領先實際營收 1~2 月', '#484f58', '#0d1117'), unsafe_allow_html=True)
+            # v19.85 正名:本卡資料鍵 tw_export = 海關出口年增率(財政部),非經濟部外銷訂單。
+            # 原標題「外銷訂單 YoY」與資料診斷頁「台灣出口 YoY」同鍵不同名,已統一。
+            st.markdown(kpi('台灣出口 YoY', '待取得', '海關出口年增率（財政部）', '#484f58', '#0d1117'), unsafe_allow_html=True)
     
     with _s8c1[2]:
         if _m8_pmi:
@@ -186,7 +188,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         '_err_fed_funds': 'Fed Funds Rate',
         '_err_pmi': '🇹🇼 台灣 PMI',
         '_err_ndc': 'NDC 景氣燈號',
-        '_err_export': '外銷訂單 YoY',
+        '_err_export': '台灣出口 YoY',
     }
     _macro_errs = {k: v for k, v in _macro_info.items() if k.startswith('_err_')}
     # v18.349:6 個核心 macro_info key 走 SSOT,與「🔎 資料診斷」覆蓋率表
@@ -219,7 +221,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     if _m8_cpi and _m8_cpi.get('yoy', 0) > 4.0:
         _veto8.append(('⚠️', f'核心CPI={_m8_cpi["yoy"]:.1f}% > 4%：通膨嚴峻，外資提款風險升高，注意匯率變動', TRAFFIC_YELLOW))
     if _m8_exp and _m8_exp.get('yoy', 0) < -5:
-        _veto8.append(('⚠️', f'外銷訂單 YoY={_m8_exp["yoy"]:.1f}%：連續衰退，股價與基本面嚴重背離，謹慎追高', TRAFFIC_YELLOW))
+        _veto8.append(('⚠️', f'台灣出口 YoY={_m8_exp["yoy"]:.1f}%：連續衰退，股價與基本面嚴重背離，謹慎追高', TRAFFIC_YELLOW))
     _crisis_buy = _m8_ndc and _m8_ndc.get('score', 25) <= 16
     if _crisis_buy:
         _veto8.append(('💡', f'NDC燈號={_m8_ndc["score"]:.0f}分（藍燈）：實體景氣衰退但為左側交易黃金布局時機！低基期好股勇敢建倉', TRAFFIC_GREEN))
@@ -293,13 +295,13 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         else:
             st.info('M1B/M2 數據載入後自動顯示宏爺資金動能判斷')
     
-        # ── 策略1：BIAS240 × 外銷訂單 二維矩陣（v5.0）──────────────
+        # ── 策略1：BIAS240 × 台灣出口 二維矩陣（v5.0）──────────────
         if _bias_info8:
             _sql_b    = _b240_8
             _exp_yoy8 = float(_m8_exp.get('yoy', 0)) if _m8_exp else None
             _exp_dt8  = _m8_exp.get('date', '') if _m8_exp else ''
             if _exp_yoy8 is not None:
-                _exp_txt8 = f'外銷訂單 YoY={_exp_yoy8:+.1f}%（{_exp_dt8}）'
+                _exp_txt8 = f'台灣出口 YoY={_exp_yoy8:+.1f}%（{_exp_dt8}）'
                 if _sql_b >= 15 and _exp_yoy8 >= 10:
                     _sqc8  = TRAFFIC_RED
                     _sqi8  = f'年線乖離 +{_sql_b:.1f}% × {_exp_txt8} → 🚀 有基之彈'
@@ -351,11 +353,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 elif _sql_b >= 15:
                     _sqc8  = TRAFFIC_RED
                     _sqi8  = f'年線乖離 +{_sql_b:.1f}% × {_cli_txt8}（CLI備援·無基之彈）'
-                    _sqc8t = '⚠️ 史詩級過熱，外銷訂單無資料，謹慎追高，嚴防崩盤。'
+                    _sqc8t = '⚠️ 史詩級過熱，出口資料未取得，謹慎追高，嚴防崩盤。'
                 elif _sql_b >= 0:
                     _sqc8  = TRAFFIC_GREEN
                     _sqi8  = f'年線乖離 +{_sql_b:.1f}%（趨勢多頭） {_cli_txt8}'
-                    _sqc8t = '🟢 均線多頭，可持股操作，等待外銷訂單資料補充判斷。'
+                    _sqc8t = '🟢 均線多頭，可持股操作，等待出口資料補充判斷。'
                 elif _cli_8 is not None and _cli_8 > 100:
                     _sqc8  = '#58a6ff'
                     _sqi8  = f'年線乖離 {_sql_b:.1f}% × {_cli_txt8}（CLI備援·黃金坑）'
@@ -363,7 +365,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 else:
                     _sqc8  = '#8b949e'
                     _sqi8  = f'年線乖離 {_sql_b:.1f}%（整理·觀望） {_cli_txt8}'
-                    _sqc8t = '🟡 外銷訂單待取得，景氣尚未明確擴張，持股保守等待訊號。'
+                    _sqc8t = '🟡 台灣出口待取得，景氣尚未明確擴張，持股保守等待訊號。'
             st.markdown(teacher_conclusion('孫慶龍', _sqi8, _sqc8t, color=_sqc8), unsafe_allow_html=True)
     
         # ── ⚔️ 攻擊火力分級（三環公式 SSS/A/B）────────────────────
