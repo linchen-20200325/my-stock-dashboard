@@ -185,15 +185,21 @@ def fetch_flow_snapshot(period: str = "2y"):
 # ═══════════════════════════════════════════════
 @st.cache_data(ttl=TTL_30MIN, show_spinner=False)
 def _fetch_otc_via_finmind(token: str = ""):
-    if not FINMIND_TOKEN:
+    # v19.82(第五份 review Bug D):原本讀 module-level 凍結快照 FINMIND_TOKEN,
+    # 完全忽略傳入的 token 參數 — 若 import 當下 env/secrets 未就緒,凍結空值
+    # 永遠回 None,caller 再怎麼傳新 token 都救不回。改 token 優先 + 動態重讀。
+    _tok = token or _get_finmind_token()
+    if not _tok:
         _prov_log('_fetch_otc_via_finmind', 'FinMind:TaiwanStockDaily:OTC',
                   'OTC', 'None:no-token')
         return None
     try:
+        # S8 v19.78 UA 補漏(v19.82):原僅 Authorization、無 UA,改走 SSOT helper
+        from src.data.core.data_loader import _fm_raw_headers as _fm_hdrs_otc
         start = (datetime.date.today() - datetime.timedelta(days=90)).strftime('%Y-%m-%d')
         r = _bps().get(FINMIND_API_URL,
                        params={"dataset": "TaiwanStockDaily", "data_id": "OTC", "start_date": start},
-                       headers={"Authorization": f"Bearer {FINMIND_TOKEN}"}, timeout=20)
+                       headers=_fm_hdrs_otc(_tok), timeout=20)
         j = r.json()
         if j.get("status") == 200 and j.get("data"):
             df = pd.DataFrame(j["data"])

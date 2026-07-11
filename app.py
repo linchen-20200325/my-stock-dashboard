@@ -454,7 +454,9 @@ with st.sidebar:
 
 # 主標題
 st.markdown(
-    '<div style="display:flex;align-items:center;gap:10px;padding:4px 0 8px;">'    '<span style="font-size:22px;font-weight:900;color:#e6edf3;">&#128202; 台股 AI 戰情室</span>'    '<span style="font-size:10px;color:#484f58;background:#161b22;border-radius:10px;padding:2px 8px;">v4.0 Pro</span>'    '</div>',
+    # v19.82(第五份 review):badge 原掛「4.0 Pro」,與 page_title/側欄/頁尾 v3.0
+    # 同畫面矛盾 — 統一 v3.0(多數決;若要全面升版請 user 點名再一次換齊)
+    '<div style="display:flex;align-items:center;gap:10px;padding:4px 0 8px;">'    '<span style="font-size:22px;font-weight:900;color:#e6edf3;">&#128202; 台股 AI 戰情室</span>'    '<span style="font-size:10px;color:#484f58;background:#161b22;border-radius:10px;padding:2px 8px;">v3.0</span>'    '</div>',
     unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════

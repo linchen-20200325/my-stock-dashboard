@@ -210,7 +210,8 @@ def _get_t86_day(ds: str) -> dict:
         def _pn(row, idx):
             if idx is None or idx >= len(row): return 0.0
             try: return round(int(str(row[idx]).replace(',', '').replace('+', '') or 0) / 1000, 1)
-            except: return 0.0
+            # v19.82:裸 except 收窄(§3.3);髒儲存格 → 0.0 為既有 fail-token 語意
+            except (ValueError, TypeError): return 0.0
 
         day_data = {}
         for row in j['data']:
@@ -288,11 +289,13 @@ def _get_tpex_day(ds: str) -> dict:
         def _pn_tp(row, idx):
             if idx is None or idx >= len(row): return 0.0
             try: return round(int(str(row[idx]).replace(',', '').replace('+', '') or 0) / 1000, 1)
-            except: return 0.0
+            # v19.82:裸 except 收窄(§3.3);髒儲存格 → 0.0 為既有 fail-token 語意
+            except (ValueError, TypeError): return 0.0
 
         def _int_tp(row, idx):
             try: return int(str(row[idx]).replace(',', '').replace('+', '') or 0)
-            except: return 0
+            # v19.82:裸 except 收窄(§3.3);此 helper 無 idx 前置守衛,補 IndexError
+            except (ValueError, TypeError, IndexError): return 0
 
         # ── 動態偵測欄位索引（sColumns 或 buy-sell-net 驗證）──────────
         # TPEx 標準格式：[0]代號 [1]名稱
@@ -1725,7 +1728,8 @@ class StockDataLoader:
             _QME = {1: '03-31', 2: '06-30', 3: '09-30', 4: '12-31'}
             def _qe2date(lbl):
                 try: return f'{lbl[:4]}-{_QME[int(lbl[5])]}'
-                except: return None
+                # v19.82:裸 except 收窄(§3.3);非法季標籤 → None 為既有語意
+                except (ValueError, TypeError, IndexError, KeyError): return None
             df_extra['date'] = df_extra['季度標籤'].apply(_qe2date)
 
             # ── MOPS 備援：FinMind 抓不到合約負債時，補抓最後 1 季 ──────────
@@ -2381,8 +2385,9 @@ def fetch_industry_category(sid: str) -> str:
         _p = {'dataset': 'TaiwanStockInfo', 'data_id': sid}
         if _tok:
             _p['token'] = _tok
+        # S8 v19.78 UA 補漏(v19.82):token 維持走 params,headers 僅補 UA
         _r = _rq_ic.get(FINMIND_API_URL,
-                        params=_p, timeout=15)
+                        params=_p, headers=_fm_raw_headers(''), timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
             try:
@@ -2426,8 +2431,9 @@ def fetch_bps_from_finmind(sid: str) -> float:
         _p = {'dataset': 'TaiwanStockBalanceSheet', 'data_id': sid, 'start_date': _start}
         if _tok:
             _p['token'] = _tok
+        # S8 v19.78 UA 補漏(v19.82):token 維持走 params,headers 僅補 UA
         _r = _rq_bf.get(FINMIND_API_URL,
-                        params=_p, timeout=15)
+                        params=_p, headers=_fm_raw_headers(''), timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
             return 0.0
