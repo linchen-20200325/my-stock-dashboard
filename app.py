@@ -731,10 +731,16 @@ with tab_tools:
     tab_diag, tab_edu = st.tabs(['🔎 資料診斷', '📚 教學'])
 
     with tab_diag:
-        from src.ui.pages import render_data_coverage, render_data_registry_panel, render_reconcile_panel
+        from src.ui.pages import (
+            render_data_coverage,
+            render_data_registry_panel,
+            render_fetch_monitor_panel,  # v19.96 批次4 Item1+2
+            render_reconcile_panel,
+        )
         render_data_coverage()
         st.markdown('---')
         render_data_registry_panel()
+        render_fetch_monitor_panel()   # v19.96:@monitored 監控 + 孤兒 set-diff
         st.markdown('---')
         render_reconcile_panel()
         st.markdown('---')

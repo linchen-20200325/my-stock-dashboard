@@ -35,6 +35,7 @@ except ImportError:
 
 # v18.346 PR-N3:fetch_institutional 用 cache_layer + _bps + FINMIND_TOKEN
 from shared.cache_layer import _CACHE_SENTINEL, _pkl_get, _pkl_put
+from shared.fetch_monitor import monitored  # v19.96 批次4 Item1
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.macro_compute import _recent_date
 from shared.signal_thresholds import (  # v19.74 融資餘額 §3.2 合理區間 SSOT
@@ -520,6 +521,8 @@ def _finmind_margin_to_yi(raw_twd: float) -> float | None:
 
 
 @st.cache_data(ttl=TTL_30MIN, show_spinner=False)
+@monitored('fetch_margin_balance', category='💰 籌碼', frequency='daily',
+           registry_key='融資餘額（台股）')  # v19.96(cache 內=只記真實抓)
 def fetch_margin_balance(date_str=None):
     """融資餘額 — FinMind → MI_MARGN → HiStock → Goodinfo → Yahoo → 鉅亨網,單位:億元
 

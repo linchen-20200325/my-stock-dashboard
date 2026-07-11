@@ -1,5 +1,22 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🛰️ 2026-07-11 批次4 Item1+2：@monitored fetcher 自我登錄 + 孤兒 set-diff（v19.96）
+
+user AskUserQuestion 核准「Item1 最小版＋Item2;3/4/5 drop」。§8.1 設計先核准再落地:
+
+- **根因（兩次實案）**:診斷頁靠 3 份**手寫**清單（`DATA_REGISTRY` / `data_registry_scanner` 硬編掃描表 / `health_inspector` 18 個 `_g_add`）,新 fetcher 漏登即隱形 — B5 v19.75（籌碼集中度等 3 項未登錄,抓壞診斷不亮紅）+ S13 v19.78（patch 誤刪 B5 補登項）。
+- **Item1 最小版:新增 `shared/fetch_monitor.py`（純 stdlib,零 streamlit/零 I/O）**:
+  - `@monitored(name, category, frequency, registry_key)`:**import 時**自我登錄 metadata（從未被呼叫也顯示「未執行」,不再隱形）;每次**真實**呼叫記 status/rows/耗時。**放置在 `@st.cache_data`/`@_ttl_cache` 之「內」** → cache hit 不觸發,last_* 一律 = 最後一次真實外抓（誠實語意）。
+  - **§1**:fetcher raise → 記 failed 後**原樣 re-raise**（不吞）;registry 寫入失敗只 stderr log,絕不影響 fetch 主流程。
+  - `get_monitor_registry()` accessor（回 copy 防 UI 誤改）。
+  - **placement refinement**:§8.1 原設計寫 `src/data/core/`,因該包 `__init__` 急載重量級 data_loader,依 `shared/cache_layer.py` 先例改置 `shared/`（L0 式 utility ← L1 import,依賴方向更乾淨,無迴圈）。
+- **裝上 5 個高風險 fetcher**:`fetch_tw_pmi`（macro_core,9 源賽跑）/ `fetch_business_indicator_series` + `fetch_ndc_signal_history` + `fetch_ndc_leading_index`（tw_macro,FinMind NDC 鏈）/ `fetch_margin_balance`（daily,6 段 fallback）。monthly_revenue 為 cached **method**（`_self` + hash 複雜）,最小版不硬裝（§8.1 step6）。
+- **Item2 孤兒 set-diff**:`find_orphans(present_keys)` — 已監控且宣告 `registry_key`,但該 key 不在 `session_state['data_registry']` → 孤兒（= 有在抓但診斷清單沒它的列,B5/S13 類 bug 自動亮）。`registry_key=None` 者誠實跳過不猜。
+- **診斷頁接線**:`data_registry_panel.render_fetch_monitor_panel()`（L5 純讀 accessor）— 監控表（狀態燈/最後真實抓取/rows/耗時/錯誤）+ 孤兒警示,app.py 資料診斷 tab 掛在資料源清單後。
+- **3/4/5 依 user 決策 drop**（§8.1 step6 記錄）:Item3 跨 Tab 單例=臆測（StockDataLoader 已 `@st.cache_resource`,其餘 module-level 或刻意 rerun 重建零 I/O）;Item4 並行化=PMI 早已 9 源 ThreadPool 並行,margin/月營收備援雲端 geo-dead 並行零收益+有優先序破壞風險;Item5 DataManager=app.py 現 752 LOC thin orchestrator + **EX-PASSTHRU-1 憲法明文預先否決**此抽象。
+- **回歸網**:`tests/test_fetch_monitor.py` 14 test（import 登錄「未執行」/成功記 ok+rows+ms/失敗記 failed+re-raise/None→0·scalar→None 不偽造/wraps 穿透/accessor copy;孤兒 4 態;production wiring source-scan:5 fetcher 已裝+cache 內側順序+診斷頁接線+import 副作用實登錄）。margin/tw_macro/macro_core/registry 109 passed。ruff:新檔 clean,4 個被改 production 檔 baseline 比對零新增。
+- **A~E 全收**:批次1 ✅ 批次2 ✅ 批次3(a)(b)(c) ✅ **批次4 ✅**（Item1+2 最小版;3/4/5 user 決策 drop）。
+
 ## 📊 2026-07-11 批次3(a) 布林突破量能確認（v19.95）
 
 user AskUserQuestion 核准「加量能 gate」。§7 數學式先確認再落地:

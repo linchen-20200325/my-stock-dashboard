@@ -33,6 +33,7 @@ from typing import Optional
 
 import pandas as pd
 
+from shared.fetch_monitor import monitored  # v19.96 批次4 Item1(純 stdlib,無 streamlit)
 from shared.ttls import TTL_10MIN, TTL_15MIN, TTL_30MIN, TTL_1HOUR
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from src.data.proxy import fetch_url
@@ -637,6 +638,8 @@ def _finmind_token_from_env() -> str:
 
 
 @_ttl_cache(ttl_sec=TTL_15MIN, maxsize=4)
+@monitored('fetch_business_indicator_series', category='🇹🇼 台灣總經',
+           frequency='monthly', registry_key='景氣先行指標（NDC）')  # v19.96(cache 內=只記真實抓)
 def fetch_business_indicator_series(months_back: int = 18,
                                     token: str = "") -> Optional[pd.DataFrame]:
     """抓 FinMind `TaiwanBusinessIndicator`(國發會景氣指標官方鏡像,寬表)。
@@ -692,6 +695,8 @@ def fetch_business_indicator_series(months_back: int = 18,
 
 
 @_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
+@monitored('fetch_ndc_signal_history', category='🇹🇼 台灣總經',
+           frequency='monthly', registry_key='景氣先行指標（NDC）')  # v19.96
 def fetch_ndc_signal_history(months_back: int = 12,
                              token: str = "") -> dict:
     """抓景氣對策信號分數歷史（月頻），偵測連 2 月反轉拐點。
@@ -776,6 +781,8 @@ def fetch_ndc_signal_history(months_back: int = 12,
 
 
 @_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
+@monitored('fetch_ndc_leading_index', category='🇹🇼 台灣總經',
+           frequency='monthly', registry_key='景氣先行指標（NDC）')  # v19.96
 def fetch_ndc_leading_index(months_back: int = 18,
                             token: str = "") -> dict:
     """抓領先指標綜合指數歷史，計算 6M smoothed 變化率與翻揚拐點。

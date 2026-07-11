@@ -175,3 +175,53 @@ def render_data_registry_panel() -> None:
         f"全 {_total} 筆資料源,分 {len(groups)} 個 SSOT category。"
         "細項缺失 → 🌐 總經 Tab 按更新觸發,或檢查下方 API Key / Proxy 診斷。"
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# v19.96 批次4 Item1+2:@monitored fetcher 監控面板 + 孤兒 set-diff
+# ═══════════════════════════════════════════════════════════════
+def render_fetch_monitor_panel() -> None:
+    """渲染 @monitored fetcher 自我登錄清單(shared/fetch_monitor)。
+
+    - 每列:狀態燈 / fetcher 名 / 最後真實抓取時間 / rows / 耗時 / 錯誤。
+      「未執行」= import 過但本 session 尚無真實外抓(cache hit 不計)。
+    - Item2 孤兒檢查:已監控且宣告 registry_key 但 session_state['data_registry']
+      沒有該 key → 警示(= 有在抓但診斷清單沒它的列,B5/S13 那類 bug 自動亮)。
+    §8.2 L5:純讀 accessor(EX-PASSTHRU-1 精神),無副作用。
+    """
+    from shared.fetch_monitor import find_orphans, get_monitor_registry
+
+    reg = get_monitor_registry()
+    st.markdown("#### 🛰️ Fetcher 監控（@monitored 自我登錄）")
+    if not reg:
+        st.caption("尚無 fetcher 掛 @monitored（shared/fetch_monitor）。")
+        return
+
+    _icon = {'ok': '🟢', 'failed': '🔴', '未執行': '⬜'}
+    rows = []
+    for name, ent in sorted(reg.items()):
+        rows.append({
+            '狀態': _icon.get(ent.get('last_status'), '⬜'),
+            'fetcher': name,
+            '分類': ent.get('category') or '—',
+            '最後真實抓取': ent.get('last_called_at') or '—',
+            'rows': ent.get('last_rows') if ent.get('last_rows') is not None else '—',
+            '耗時(ms)': ent.get('last_ms') if ent.get('last_ms') is not None else '—',
+            '錯誤': ent.get('last_error') or '',
+        })
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.caption("「未執行」= 本 session 尚無真實外抓（cache 命中不計,狀態代表最後一次真實請求）。")
+
+    # Item2:孤兒 set-diff(對照 session_state['data_registry'])
+    _present = list((st.session_state.get('data_registry') or {}).keys())
+    orphans = find_orphans(_present)
+    if _present and orphans:
+        st.warning(
+            "🧩 孤兒 fetcher（有被監控、但診斷清單缺對應資料列 → 抓壞不會亮紅）:\n\n"
+            + "\n".join(f"- `{n}` → 預期 registry key `{reg[n]['registry_key']}` 不存在"
+                        for n in orphans)
+        )
+    elif _present:
+        st.caption("✅ 孤兒檢查:所有已監控 fetcher 的 registry_key 均存在於診斷清單。")
+    else:
+        st.caption("⬜ 孤兒檢查待資料:session_state['data_registry'] 尚未建立（先按 🚀 更新）。")
