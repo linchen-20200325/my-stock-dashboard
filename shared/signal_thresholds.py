@@ -264,6 +264,11 @@ RS_ABS_RET_T3_PCT: float = 15.0
 RS_ABS_RET_T4_PCT: float = 5.0
 """RS 絕對漲幅 T4：≥5% → 60 分。原 scoring_engine.py:281 inline"""
 # 有大盤基準時：RS = 個股漲幅 / |大盤漲幅| 分段
+RS_IDX_FLAT_EPS_PCT: float = 1.0
+"""RS 大盤近乎平盤門檻(v19.90 批次3b):|大盤 N 日漲幅| < 1.0% 視為平盤,走絕對
+漲幅路徑,避免 rs = stock_chg / |idx_chg| 在近零分母時爆炸(如 idx=0.01% → 放大
+數千倍 → 誤判 100 分)。原只守 idx_chg==0,近零仍炸。不動 RS_BAND 校準值,僅把
+分母近零的退化情形導向既有絕對漲幅路徑。"""
 RS_BAND_T1: float = 2.0
 """RS 相對強度 T1：≥2.0 → 100 分（強勢）。原 scoring_engine.py:288 inline"""
 RS_BAND_T2: float = 1.5

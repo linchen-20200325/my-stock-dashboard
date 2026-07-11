@@ -15,7 +15,7 @@ from shared.signal_thresholds import (
     MOM_SHARPE_GOOD,
     RISK_VOL_VERYLOW_RATIO, RISK_VOL_LOW_RATIO,
     RS_ABS_RET_T1_PCT, RS_ABS_RET_T2_PCT, RS_ABS_RET_T3_PCT, RS_ABS_RET_T4_PCT,
-    RS_BAND_T1, RS_BAND_T2, RS_BAND_T3, RS_BAND_T4,
+    RS_BAND_T1, RS_BAND_T2, RS_BAND_T3, RS_BAND_T4, RS_IDX_FLAT_EPS_PCT,
     SQ_GM_TREND_DELTA_PCT, SQ_REV_UP_RATIO, SQ_GM_LEVEL_HIGH_PCT, SQ_GM_LEVEL_LOW_PCT,
     SQ_GOOD_MIN, SQ_STABLE_MIN, SQ_FAIR_MIN,
     FGMS_W_CL, FGMS_W_INV, FGMS_W_THREE, FGMS_W_CAPEX,
@@ -337,7 +337,10 @@ def calc_rs_score(df, df_index=None, period=250):
             # 無大盤資料時用 0 為基準（只看絕對漲幅）
             idx_chg = 0
 
-        if idx_chg == 0:
+        if abs(idx_chg) < RS_IDX_FLAT_EPS_PCT:
+            # v19.90 批次3(b):原僅守 idx_chg==0,近零分母(如 0.01%)仍會讓
+            # rs=stock_chg/|idx_chg| 爆炸放大數千倍 → 誤判 100。改「近乎平盤
+            # (|idx_chg|<1%)」一律走絕對漲幅路徑(不動 RS_BAND 校準,僅堵退化情形)。
             # 無大盤基準：直接用絕對漲幅映射，不套入相對公式
             # 避免與有基準時的 rs 數值系統不同造成混淆
             if stock_chg >= RS_ABS_RET_T1_PCT:   return 100

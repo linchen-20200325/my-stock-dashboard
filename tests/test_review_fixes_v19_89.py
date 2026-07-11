@@ -91,3 +91,29 @@ class TestAtrStopFunctional:
         assert out["error"] is None
         assert out["atr"] is not None and out["atr"] > 0
         assert 0 < out["stop_pct"] < 50
+
+
+class TestRsScoreNearZeroGuard:
+    """v19.90 批次3(b):calc_rs_score 近零大盤分母防爆炸。"""
+
+    def test_near_zero_index_routes_to_absolute(self):
+        import pandas as pd
+        from src.compute.scoring.scoring_engine import calc_rs_score
+        stock = pd.DataFrame({"close": [100] * 250 + [105]})   # +5%
+        idx = pd.DataFrame({"close": [100] * 250 + [100.01]})  # +0.01% 近零
+        # 應走絕對漲幅路徑(+5% → 60),而非 rs=500 爆炸成 100
+        assert calc_rs_score(stock, idx, period=250) == 60
+
+    def test_normal_index_still_relative(self):
+        import pandas as pd
+        from src.compute.scoring.scoring_engine import calc_rs_score
+        idx = pd.DataFrame({"close": [100] * 250 + [102.5]})   # +2.5%
+        stock = pd.DataFrame({"close": [100] * 250 + [110]})   # +10% → rs=4 → 100
+        assert calc_rs_score(stock, idx, period=250) == 100
+
+    def test_source_uses_eps_not_eq_zero(self):
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent
+               / "src/compute/scoring/scoring_engine.py").read_text(encoding="utf-8")
+        assert "abs(idx_chg) < RS_IDX_FLAT_EPS_PCT" in src
+        assert "if idx_chg == 0:" not in src
