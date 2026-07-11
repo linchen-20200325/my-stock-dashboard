@@ -493,13 +493,26 @@ if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
     )
     _gl_pos = _mkt_top.get('exposure_pct', '80%' if _reg=='bull' else ('20%' if _reg=='bear' else '50%'))
 
+    # v19.88 A~E 批次2 收尾:時效閘 — 紅綠燈基於過期資料時,保留燈色(資料可顯示)但
+    # 撤下「建議持股 X%」actionable 建議 + 旌旗均值,改明確過期警示。§1/第八份 §3.1:
+    # 過期資料可顯示但須標記,且不得以「可積極操作」語氣餵當下決策(cl_ts = 上次一鍵更新)。
+    from shared.staleness import gate_for_realtime, staleness_days
+    _rt_ok, _rt_msg = gate_for_realtime(
+        staleness_days(_ts_top) if _ts_top else None, max_days=1)
+    if _rt_ok:
+        _mid_html = (
+            f'<span style="font-size:12px;color:#c9d1d9;">建議持股 <b>{_gl_pos}</b></span>'
+            + (f'<span style="font-size:12px;color:#8b949e;">旌旗均值 {_jqpct:.0f}%</span>'
+               if _jqpct is not None else ''))
+    else:
+        _mid_html = ('<span style="font-size:12px;font-weight:700;color:#d29922;">'
+                     '⚠️ 資料已過期，燈號僅供參考 — 請先按「🚀 一鍵更新全部數據」再操作</span>')
+
     st.markdown(
         f'<div style="background:#0d1117;border:1px solid {_gl_color};border-radius:8px;'
         f'padding:8px 14px;margin-bottom:8px;display:flex;align-items:center;gap:16px;">'
         f'<span style="font-size:16px;font-weight:900;color:{_gl_color};">{_gl_label}</span>'
-        f'<span style="font-size:12px;color:#c9d1d9;">建議持股 <b>{_gl_pos}</b></span>'
-        + (f'<span style="font-size:12px;color:#8b949e;">旌旗均值 {_jqpct:.0f}%</span>'
-           if _jqpct is not None else '') +
+        f'{_mid_html}'
         f'<span style="font-size:11px;color:#484f58;margin-left:auto;">更新：{_ts_top}</span>'
         f'</div>', unsafe_allow_html=True)
 

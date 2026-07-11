@@ -116,3 +116,13 @@ class TestLlmContextStaleWiring:
         assert "_tag(_exp)" in src and "_tag(_pmi)" in src, "月度指標應套 stale 標籤"
         # v19.85 正名一併帶入 AI prompt
         assert "台灣出口 YoY" in src and "台灣外銷訂單 YoY" not in src
+
+    def test_global_redlight_gated_by_staleness(self):
+        """v19.88 批次2 收尾:全域紅綠燈過期時撤 actionable 建議、標記過期。"""
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent / "app.py").read_text(encoding="utf-8")
+        assert "from shared.staleness import gate_for_realtime, staleness_days" in src
+        assert "_rt_ok, _rt_msg = gate_for_realtime(" in src
+        assert "資料已過期，燈號僅供參考" in src, "過期須明確標記"
+        # 過期分支不得再顯示 actionable「建議持股」
+        assert "if _rt_ok:" in src

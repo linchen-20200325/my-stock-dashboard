@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚦 2026-07-11 A~E backlog 批次2 收尾（全域紅綠燈時效 gate）（v19.88）
+
+user 核准「批次2 收尾」。全域紅綠燈(app.py 頁面最頂,永遠可見)過期資料 gate 落地:
+
+- **全域紅綠燈時效 gate（行為變更,已授權）**:app.py:481 全域多空紅綠燈原直接吃 `mkt_info`/`jingqi_info` + `cl_ts`(上次一鍵更新時間),無時效檢查 → 使用者隔數日開著舊 session 會看到過期的「多頭市場（可積極操作）」當即時訊號(第八份 §3.1 點名,類比 v18.442 ETF 假折溢價事故)。修:過 `shared/staleness.gate_for_realtime(staleness_days(cl_ts), max_days=1)`,**過期時保留燈色(資料可顯示)但撤下「建議持股 X%」+ 旌旗均值 actionable 建議,改明確「⚠️ 資料已過期,燈號僅供參考 — 請先一鍵更新再操作」**。對齊原則:過期資料可顯示但須標記、不得以「可積極操作」語氣餵當下決策。
+- **基金端批次2 已由既有機制覆蓋(不另造)**:Fund 無單一「全域紅綠燈」,其 per-indicator `_freshness`(data_registry,本輪還修過 SLOOS 季頻閾值)+ tab1 AI prompt `[STALE]` 已是成熟時效系統;再造 staleness.py 屬 §8.1 step 6「用不到的抽象」反例,故基金不重複。
+- **回歸網**:`tests/test_staleness.py` +1 紅綠燈 gate source-scan(共 23 test);gate_for_realtime 邏輯已由既有單元測試覆蓋。
+- **批次2 完整收尾**:SSOT 基礎(v19.87)+ AI prompt [STALE](v19.87)+ 全域紅綠燈 gate(本次)。**A~E 進度**:批次1 ✅ / 3(c) ✅ / 批次2 ✅ / 下一步 批次3(a) 標準公式(user 已授權位移訊號:RSI Wilder / ATR True Range)→ 批次3(b) 語意項。
+
 ## ⏱️ 2026-07-11 A~E backlog 批次2（時效閘 SSOT）：shared/staleness.py + AI prompt [STALE] 標記（v19.87）
 
 user 核准「1~4 陸續慢慢做」。批次2 時效閘依 §8.1 設計後落地;本次交付 **SSOT 基礎 + 安全的加法消費者**,行為變更的紅綠燈硬 gate 留作後續分開審查:
