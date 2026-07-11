@@ -1,5 +1,18 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧮 2026-07-11 第六份外部 review 查證後修復：季報金融股閘門 + 外本比分母（v19.83）
+
+user 指派第六份建議書(8 面向合併版,審查基準為舊 main — 多項為前五輪已修);本 repo ~22 條主張查證:**4 真 bug + 3 硬化 / 12+ 已修過或誤判 / 大項待核准**。
+
+- **Bug 1(真)季報金融股閘門雙重壞**:`get_quarterly_data` (a) 三元式兩分支皆 True(恆真)— 無營收欄的一般股一律誤判金融股;(b) 月加總 fallback 寫死 `年/月/營收` 欄名,但 `get_monthly_revenue` 契約自 v18.202 起是 `date/revenue` → 一執行就 KeyError → 被外層 except 變成「載入錯誤」,**該股整檔季報全滅**(受害者:報表無標準營收欄的個股,如產業別查詢失敗的非 28/58 金融股)。修:`bool(finance_candidates)` + 雙名容錯欄位偵測(對齊早退路徑既有寫法)+ 營收 fallback pd.NA→float nan(防 `(營收<0).any()` NA-布林 TypeError)。
+- **3-7(真,比報告說的更深)V4 外本比分母全 repo 無寫入**:報告懷疑「股 vs 張單位混用」— 查證後單位其實一致(都是張),真根因是 `t2_shares_{sid}` **只有讀取處沒有寫入處** → 分母永遠 fallback 1,000,000 張:台積電(2,593 萬張)外本比高估 26×、小型股低估數十倍,0.5%/0.3%/0.1% 門檻全失真。修:tab_stock 在 `_xsec['capital']`(股本元,fetch_share_capital 既有)可用時寫入 `int(股本/10000)` 張;抓取失敗不寫,維持既有 fallback(§1 不虛構)。
+- **3-9(真)月營收 YoY 位置索引錯基期**:`compute_yoy_mom` 用 `-12` 位置位移假設序列連續 — 缺月(新上市/暫停公布/來源缺洞,§4.6 月營收三態)時基期錯位靜默失真。修:改「(年-1, 同月)」日曆查表,date 欄缺/含 NaT 退回位置法(連續序列兩法結果相同,回歸測試釘住);NaN 值統一正規化為 None(classify_trend 的 `is None` 守衛原漏接 NaN → 缺值現在正確歸 insufficient 而非 neutral)。
+- **3-4 邊界(真)calc_vcp 破壞回 None 契約**:檔頭述明「失敗一律回 None(不丟例外)」,但缺 high/low 欄直接 KeyError 炸到 tab_stock:266 裸呼叫(舊測試自承為「與文件的局部偏差」)。修:補同儕 calc_kd/calc_bollinger 既有 try/except+stderr log 模式,計算邏輯 0 改;舊測試改釘契約本身。
+- **硬化 ×3**:etf_fetch NAV 狀態排除清單補 '429'(原漏列,FinMind 限流回應可能被誤收);FinMind token 前綴不再 print 入 log(改印長度);`_URL_CACHE` 補上限 256+過期逐出(原無上限、過期項只在命中時檢查 — Cloud 長跑記憶體單調增長,呼應 v19.79 段錯誤事故的記憶體壓力線索)。
+- **已修過/誤判(證據)**:Bug 2 L1315 除零=N1 v19.80 已修(`replace(0,nan)` 註解在場);`'bw' in dir()` 死碼=v19.74 已刪;Bug 3 finmind_get `.json()` 崩潰=誤判(全 body 在 try 內,429 已 log 判讀;改 fail-token 契約=改所有 caller,列待核准);Bug 4 build_leading_fast `.result()` 崩潰=誤判(finmind_get 內部全 catch 永不 raise,timeout 25s×2 有界);orchestrator `_ri.json()`=在 try/except 補救路徑內;季報無 cache=誤判(fetch_quarterly/fetch_quarterly_extra wrapper 層 TTL_1HOUR,與第五輪同一誤判);ttls docstring 7vs9=已修(現列 9 常數);法人列長守衛=第一輪已修;自營商 `+=` 不對稱=誤判(BFI82U 自營自行買賣+避險兩列本須累加,外資/投信單列);三率三升只查絕對值=誤判(真三率三升在 fundamental_screener 條件 B:三率 QoQ>0 且 YoY>0;calc_fundamental_score 名為四維評分、check label 誠實);picker 裸 except/float 未防護=現行 code 無此片段;get_monthly_revenue 只讀 env=誤判(app.py 啟動同步 secrets→env,第五輪已證);方案0 重複=S11 v19.78 已刪;foreign_flow `int(None)`=現行無此片段;fetch_yf_close range 截斷=映射表有 3y/5y/10y 鍵、現行唯一非標準 caller(tw_macro 'Nd')拿超集對窗型計算無害(潛在腳槍註記,無現行觸發)。
+- **回歸網**:`tests/test_review_fixes_v19_83.py` 17 test(季報閘門 scan×3 / t2_shares 寫入+換算+讀端不變 / calc_vcp 缺欄・0 價・happy×3 / 429 / YoY 連續=位置法・缺月 None・無 date 退位置・短序列 insufficient / token 遮罩 / _URL_CACHE 上限+過期+最舊逐出);`test_tech_indicators` 舊偏差測試改釘契約;全套件 **2,979 passed / 0 failed**。
+- **大項待核准(§-1 不擅動)**:RSI 改 Wilder+平盤=50(docstring 明示 simple-mean 設計,改=全下游訊號位移)、KD 種子 50/H=L 處理、ATR 補跳空真實波幅(改=停損距離全變)、假週線改 resample('W')+標準 MACD(12,26,9)(docstring 明示每 5 根近似設計)、融資維持率正名+法定 130% 切換、VIX veto 改滾動百分位、staleness gate `assert_fresh` 統一時效閘、**NAS `/proxy` 未設 key 全放行+SSRF(安全優先,建議:未設 NAS_API_KEY 拒絕啟動+url 白名單;涉 user NAS 部署行為變更故不擅動)**、finmind_client Session 池化+429 指數退避 fail-token(檔頭明示零行為漂移設計,改=另案 §8 對齊)、picker/dividend 4 路/margin 6 路平行化、yf_proxy cache key 含 proxy 狀態、ETF expense ratio fetcher 補 cache、二級 st.tabs 降密度、indicator taxonomy 三軸+render_smart_metric+異常置頂、專題 B 選股介面重構全案(獨立入口/勾選表/漏斗視覺化/一鍵智慧選股)、股票端 F821 pre-commit gate(本輪掃描 0 hit,純預防可選)— 詳 PR 描述。
+
 ## 🔩 2026-07-11 第五份外部 review 查證後修復：OTC 死參數 + UA 補漏（v19.82）
 
 user 指派第五份建議書(A/B 兩專案合併版);本 repo 5 條 Bug 主張查證:**1 修 + 3 項周邊硬化 / 4 已修過或誤判**。

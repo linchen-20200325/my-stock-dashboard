@@ -333,6 +333,18 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         except Exception as _e_xm:
             print(f'[tab_stock] xsec meta 寫入失敗: {type(_e_xm).__name__}: {_e_xm}')
 
+        # v19.83(第六份 review 3-7):V4 外本比分母 t2_shares_{sid} 原全 repo 無任何
+        # 寫入 — section_health_score 永遠 fallback 預設 1,000,000 張,台積電(2,593 萬張)
+        # 高估 26×、小型股低估數十倍,外本比門檻(0.5%/0.3%/0.1%)全失真。
+        # 發行張數 = 股本(元) / 10(面額) / 1000(股/張);股本抓取失敗(0.0)不寫,
+        # 維持既有 fallback(§1:不虛構)。
+        try:
+            _cap_v4 = float(_xsec.get('capital') or 0.0)
+            if _cap_v4 > 0:
+                st.session_state[f't2_shares_{sid2}'] = int(_cap_v4 / 10000)
+        except Exception as _e_shv4:
+            print(f'[tab_stock] t2_shares 寫入失敗: {type(_e_shv4).__name__}: {_e_shv4}')
+
         # v18.457 Task#18：寫入 t2_inst，供 section_kline_chart / section_health_score 讀取
         # df2 已含外資/投信欄（T86/TPEX merge，單位：張），取最後一日作為當前方向指標
         if df2 is not None and not df2.empty and '外資' in df2.columns and '投信' in df2.columns:

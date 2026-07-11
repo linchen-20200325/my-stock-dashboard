@@ -272,10 +272,10 @@ class TestCalcVcp:
         # 索取 100 個 swings → 不可能達成 → None
         assert calc_vcp(df, n_swings=100) is None
 
-    def test_missing_column_raises(self):
-        # 文件述明：失敗不丟例外。但實際上 calc_vcp 在 len<30 之外的
-        # column 缺失會拋 KeyError（這是預期行為的局部例外）。
-        # 因此 callsite 必須保證有 high/low 欄。
+    def test_missing_column_returns_none(self):
+        # 本測試原本釘的是「與文件契約的已知偏差」(檔頭述明失敗一律回 None,
+        # 但缺欄實際拋 KeyError,舊註解自承為局部例外且 callsite 須自保)。
+        # v19.83 補 try/except 後實作已對齊文件契約 → 改釘契約本身:
+        # 缺 high/low 欄回 None,不再要求 caller 防炸(tab_stock:266 為裸呼叫)。
         df = pd.DataFrame({'foo': list(range(50))})
-        with pytest.raises(KeyError):
-            calc_vcp(df)
+        assert calc_vcp(df) is None

@@ -1627,7 +1627,9 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 5) -> "pd.Data
             _jstatus = _j.get('status')
             _jdata   = _j.get('data')
             # 接受 status=200 / status=None（部分 proxy 環境）；排除已知錯誤碼
-            _status_ok = str(_jstatus) not in ('400', '401', '402', '403', '404', '500')
+            # v19.83(第六份 review Bug 3):排除清單補 '429'(FinMind 限流)— 原漏列,
+            # 429 回應若帶非空 data 會被誤收進快取
+            _status_ok = str(_jstatus) not in ('400', '401', '402', '403', '404', '429', '500')
             if _jdata and _status_ok:
                 _df = pd.DataFrame(_jdata)
                 # 自動偵測 NAV 欄位名稱（FinMind 兩個版本欄位名不同）
