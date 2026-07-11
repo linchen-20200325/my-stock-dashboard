@@ -79,22 +79,31 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
             st.error(f'❌ {t2d["err"]}')
     # ── K線動態趨勢建議(SSOT: tab_helpers.classify_trend_4tier,組合 Tab 共用)──
     if df2 is not None and 'MA20' in df2.columns and 'MA100' in df2.columns:
+        import pandas as _pd_kl
         _kp = price2
         _km20 = float(df2['MA20'].iloc[-1])
         _km100 = float(df2['MA100'].iloc[-1])
-        _trend_lbl, _tc = classify_trend_4tier(_kp, _km20, _km100)
-        if '多頭' in _trend_lbl:
-            _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＞ MA20 {_km20:.1f} ＞ MA100 {_km100:.1f}'
-                          ' — 宏爺：可持股，大盤多頭才做個股')
-        elif '空頭' in _trend_lbl:
-            _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＜ MA20 {_km20:.1f} ＜ MA100 {_km100:.1f}'
-                          ' — 宏爺：不做多，嚴格停損')
-        elif '多箱' in _trend_lbl:
-            _trend_msg = (f'{_trend_lbl}：股價在 MA100 之上'
-                          f' — 宏爺：等待站上 MA20({_km20:.1f})確認方向')
+        # v19.84(第七份 review 3-1):新股 MA rolling 未滿視窗為 NaN(loader 無
+        # min_periods 為既有語意,不動值)— 原直接進 f-string 顯示「MA20 nan」,
+        # 且 classify_trend_4tier 的 NaN 比較全 False 落錯層級。改白話引導(UI 降級)。
+        if _pd_kl.isna(_km20) or _pd_kl.isna(_km100):
+            _tc = TRAFFIC_YELLOW
+            _trend_msg = (f'🌱 上市初期：歷史僅 {len(df2)} 根 K 線，'
+                          'MA20/MA100 均線尚未成形 — 滿 100 根後自動顯示趨勢建議')
         else:
-            _trend_msg = (f'{_trend_lbl}：股價低於 MA100'
-                          ' — 宏爺：耐心等待多頭訊號，不摸底')
+            _trend_lbl, _tc = classify_trend_4tier(_kp, _km20, _km100)
+            if '多頭' in _trend_lbl:
+                _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＞ MA20 {_km20:.1f} ＞ MA100 {_km100:.1f}'
+                              ' — 宏爺：可持股，大盤多頭才做個股')
+            elif '空頭' in _trend_lbl:
+                _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＜ MA20 {_km20:.1f} ＜ MA100 {_km100:.1f}'
+                              ' — 宏爺：不做多，嚴格停損')
+            elif '多箱' in _trend_lbl:
+                _trend_msg = (f'{_trend_lbl}：股價在 MA100 之上'
+                              f' — 宏爺：等待站上 MA20({_km20:.1f})確認方向')
+            else:
+                _trend_msg = (f'{_trend_lbl}：股價低於 MA100'
+                              ' — 宏爺：耐心等待多頭訊號，不摸底')
         st.markdown(
             border_left_banner(_tc, _trend_msg, border_width=4,
                                font_size=13, padding_y=10, padding_x=14,

@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚩 2026-07-11 第七份外部 review 查證後修復：旌旗捏造鍵拔除 + 新股 NaN 引導（v19.84）
+
+user 指派第七份建議書(C1-C7 跨專案診斷 + P0-P6 路線圖;品質最高的一份,承認既有 SSOT 治理,但快照仍在 v19.83 merge 前);本 repo 查證:**2 真修 + 1 死 import 清除 / 6+ 已修過或誤判 / 大項待核准**。
+
+- **旌旗 pct 捏造鍵拔除(§1 寧缺勿假,本輪最高價值)**:`jingqi_calc` + `section_short` 兩處 inline 備援寫入器(v18.392 抽出殘留)共 3 站,全都寫入 `pct60/120/240 = ratio×0.9/0.8/0.7` — 站上季線/年線比例**無此換算關係**,純捏造;且全 repo **0 讀者**(唯一 consumer `macro_helpers` 只讀 `avg`)= 假數字 + 死資料雙重理由。三站同步刪 4 鍵;`大盤估算` 備援(40+漲日×5)保留 — 它帶 `source` 旗標屬「有標記的代理估算」(類比 M1B ^TWII proxy tier 前例),report 要求改 None 屬政策變更列待核准。順手補 section_short TWSE 即時區塊裸 `except: pass` 的 §3.3 log。
+- **新股 MA NaN 引導(3-1)**:`section_kline_chart` 趨勢建議段原 `float(df2['MA20'].iloc[-1])` 無 notna 守衛 — 上市 <100 天新股 MA100 整欄 NaN → 顯示「MA20 nan」且 `classify_trend_4tier` 的 NaN 比較全 False 落錯層級。補 isna 守衛 → 白話引導「🌱 上市初期:歷史僅 N 根 K 線,均線尚未成形」。loader 端 `rolling` 無 `min_periods` **不動**(加了會改早期均線值=語意變更,列待核准)。
+- **nest_* 事件迴圈補丁死 import 移除(C2)**:data_loader L1-4 import+apply,全 repo 0 非同步程式碼消費,原本就 try/except pass。回歸網加 src/ 守恆掃描(未來引入非同步碼會被提醒重評)。
+- **已修過/誤判(證據)**:`_TWSE_DL` 死碼=v19.78 S7 已刪(原地註解);季報無 cache=wrapper 層 TTL_1HOUR(第三次同誤判);share_capital/monthly_revenue token 只讀 env=誤判(app.py 啟動 sync secrets→env,第五輪已證);毛利率除零路徑不一致=v19.80 N1 已修;月營收 FinMind×2 重複=誤判(方案0 重複 v19.78 S11 已刪;現存兩段為 SDK vs raw 語意不同源,finmind_client D5 docstring 明載不可機械合併);`calc_rs_score` abs() 空頭失真=**屬實但為自洽評分公式**(RS_BAND_* 閾值以此校準,改=全評級位移;report 自列 P2「需回測驗證」)→ 待核准;monthly_revenue_calc 獲 report 評「全案最乾淨」(v19.83 又剛補日曆對齊 ✓)。
+- **回歸網**:`tests/test_review_fixes_v19_84.py` 8 test(jingqi ADL/備援/全敗三路功能測試+鍵集合斷言+源掃描 / kline NaN 守衛順序 / nest 移除+src 守恆);全套件 **2,987 passed / 0 failed**。
+- **大項待核准(§-1 不擅動;多數與五、六輪重疊,新增項標 ⭐)**:⭐`freshness_guard.assert_fresh` 下沉共用閘(P1,消費現成 FRESHNESS_THRESHOLDS_DAYS)、⭐DataManager 統一資料入口(P5,report 自評最高槓桿但屬 §8 架構案)、⭐MA `min_periods`(改早期均線值)、⭐`calc_rs_score` 收斂 σ 版 SSOT、⭐KD 高檔鈍化/背離模組/遲滯雙門檻/z-score regime(P3)、⭐registry 全覆蓋+主動巡檢(P4)、⭐布林帶寬×3/VCP×3/DNA×2 收斂+signal_thresholds 按領域拆包(P5)、⭐term_glossary/surface_anomalies(P6)、⭐旌旗備援改 None(政策)、Session 池化+429 退避、RSI Wilder/ATR True Range/假週線/融資正名(P2,前輪已列)、平行化(前輪已列)— 詳 PR 描述。
+
 ## 🧮 2026-07-11 第六份外部 review 查證後修復：季報金融股閘門 + 外本比分母（v19.83）
 
 user 指派第六份建議書(8 面向合併版,審查基準為舊 main — 多項為前五輪已修);本 repo ~22 條主張查證:**4 真 bug + 3 硬化 / 12+ 已修過或誤判 / 大項待核准**。

@@ -1,7 +1,7 @@
-try:
-    import nest_asyncio as _nest; _nest.apply()
-except Exception:
-    pass
+# v19.84(第七份 review C2):移除 nest_* 事件迴圈補丁死 import — 全 repo 無任何
+# 非同步程式碼消費此 patch(唯一效果是 import 期 monkey-patch event loop,0 使用者),
+# 且原本就包 try/except pass(套件缺席時本來就 no-op),移除零行為差。
+# (回歸網 test_review_fixes_v19_84 掃 src/ 守恆:未來引入非同步碼會被提醒重評)
 
 import sys  # v18.241 D2: sys.stderr for imputation count logging
 import yfinance as yf

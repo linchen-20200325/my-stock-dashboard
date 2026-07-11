@@ -188,12 +188,12 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
             _bs_label = '🟢 廣度健康' if _breadth_score>=BREADTH_BULL_PCT else ('🟡 中性' if _breadth_score>=BREADTH_NEUTRAL_PCT else '🔴 廣度不足')
             st.markdown(kpi('全市場健康度', f'{_breadth_score}分', _bs_label, _bs_color, '#0d1117'), unsafe_allow_html=True)
             # 同步更新旌旗指數（如果尚未由 ADL 計算）
+            # v19.84:刪 pct20/60/120/240 捏造鍵(同 jingqi_calc,§1 寧缺勿假 + 0 讀者)
             if not st.session_state.get('jingqi_info'):
                 st.session_state['jingqi_info'] = {
                     'avg': _adl_ratio, 'pos': ('80~100%' if _adl_ratio>=BREADTH_BULL_PCT else ('50~70%' if _adl_ratio>=BREADTH_NEUTRAL_PCT else '20~40%')),
                     'regime': ('bull' if _adl_ratio>=BREADTH_BULL_PCT else ('neutral' if _adl_ratio>=BREADTH_NEUTRAL_PCT else 'bear')),
                     'color': _bs_color, 'label': _bs_label, 'source': 'ADL廣度',
-                    'pct20':_adl_ratio,'pct60':_adl_ratio*0.9,'pct120':_adl_ratio*0.8,'pct240':_adl_ratio*0.7,
                 }
     
         # 信號提示
@@ -332,7 +332,7 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
                     st.markdown(kpi('全市場健康度', f'{_ratio_v:.1f}%',
                                     ('廣度健康' if _ratio_v >= 60 else ('中性' if _ratio_v >= 40 else '廣度不足')),
                                     _col_v, '#0d1117'), unsafe_allow_html=True)
-                # 同步旌旗指數（schema 完全保留）
+                # 同步旌旗指數（v19.84:刪 pct20/60/120/240 捏造鍵,同 jingqi_calc）
                 if not st.session_state.get('jingqi_info'):
                     st.session_state['jingqi_info'] = {
                         'avg': _ratio_v,
@@ -341,11 +341,11 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
                         'color': _col_v,
                         'label': ('🟢 多頭積極' if _ratio_v >= 60 else ('🟡 中性均衡' if _ratio_v >= 40 else '🔴 保守防禦')),
                         'source': 'TWSE即時',
-                        'pct20': _ratio_v, 'pct60': _ratio_v * 0.9,
-                        'pct120': _ratio_v * 0.8, 'pct240': _ratio_v * 0.7,
                     }
         except Exception as _adl_e:
-            pass
+            # v19.84 §3.3:原裸 pass 補 log(即時 TWSE 廣度為 best-effort 區塊,失敗留跡)
+            print(f'[section_short] TWSE 即時廣度區塊失敗: '
+                  f'{type(_adl_e).__name__}: {_adl_e}')
     
     st.markdown('<hr style="border-color:#21262d;margin:8px 0;">', unsafe_allow_html=True)
     st.markdown('<div style="font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:4px 0;">🌐 國際市場</div>', unsafe_allow_html=True)
