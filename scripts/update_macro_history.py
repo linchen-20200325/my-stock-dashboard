@@ -34,6 +34,13 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+# v19.101:`python scripts/update_macro_history.py` 直跑時 sys.path[0]=scripts/,
+# 不含 repo root → 函式內的 `src.*` lazy import 必 ImportError(m1m2 段死因之一)。
+# 同 calibrate_health_weights.py 既有模式。
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 CACHE_DIR = Path("data_cache")
 META_PATH = CACHE_DIR / "metadata.json"
 
@@ -87,7 +94,9 @@ def _fetch_url_via_proxy(url: str, params: dict | None = None,
                         timeout: int = 25) -> requests.Response | None:
     """走 proxy_helper.fetch_url；缺 helper 時 fallback 直連。"""
     try:
-        from proxy_helper import fetch_url
+        # v19.101:v18.359 檔案搬家後根目錄 shim 已刪,舊頂層路徑恆 ImportError
+        # → 之前一律走直連 fallback(twii 因此僥倖活著)。改正式路徑。
+        from src.data.proxy.proxy_helper import fetch_url
         return fetch_url(url, params=params, timeout=timeout, attempts=2)
     except ImportError:
         try:
@@ -238,10 +247,14 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     # token 參數忽略不用（CBC 不需要），但維持 signature 統一
     _ = token
     try:
-        from proxy_helper import fetch_url as _fu_cbc
-        from tw_macro import CBC_MS1_URLS, fetch_cbc_ms1_rows
-    except ImportError:
-        print("[finmind_m1m2] 缺 proxy_helper / tw_macro，無法抓 CBC")
+        # v19.101 真因修正:原 `from proxy_helper import ...` / `from tw_macro import ...`
+        # 是 v18.359 檔案搬家前的舊頂層路徑,根目錄 shim 已刪 → 本段自搬家起
+        # 恆 ImportError → CBC 整段靜默跳過(2026-07-11 Actions run 實錘)。
+        from src.data.proxy.proxy_helper import fetch_url as _fu_cbc  # noqa: F401
+        from src.data.macro.tw_macro import CBC_MS1_URLS, fetch_cbc_ms1_rows
+    except ImportError as e:
+        # §1:印出真正缺什麼,不再吞成固定字串誤導診斷
+        print(f"[finmind_m1m2] import 失敗,無法抓 CBC:{type(e).__name__}: {e}")
         return pd.DataFrame()
     # ── Tier 1: ms1.json（共用 tw_macro.CBC_MS1_URLS SSOT + fetch_cbc_ms1_rows kernel）──
     # v18.240：URL 清單從 tw_macro import，dead Attachment URL（v18.231 確認 404）已移除
