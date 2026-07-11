@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔧 2026-07-11 macro-history cron 白跑 bug 修 + 校準 Phase 3 一鍵化（v19.97）
+
+user 問「Phase 3 這要如何做?」→ 查證發現**前置真 bug**,一併修:
+
+- **Bug（實錘）**:`update_macro_history.yml` 每日 cron 的 Commit 步驟 `git add data_cache/` 被 `.gitignore:39`（v18.461 引入 `data_cache/*.parquet`）蓋掉 → **每日 no-op,origin/main 上 0 筆「🤖 每日總經歷史增量」commit**——cron 抓的 20 年歷史每天隨 runner 蒸發。這正是 MACRO_CALIBRATION 只有「TWII-only 合成資料」可用的根因（真實快取從未存在）。修:`git add -f data_cache/`（強制納管 parquet+metadata;CLAUDE.md §5 本來就定「歷史運算用凍結快照 data_cache/ parquet」,gitignore 該條與憲法牴觸）。fundamentals 季快照不受影響（`data_cache/*.parquet` pattern 不匹配子目錄,故它一直正常 commit）。
+- **新增 `calibrate_health_weights.yml`（workflow_dispatch 手動按鈕）**:跑 `scripts/calibrate_health_weights.py` → commit `MACRO_HEALTH_WEIGHT_PROPOSAL.md` 回 repo 供人審。缺 parquet 時 script SystemExit 明講缺什麼（§1）。deps 含 streamlit（`src/services/__init__` 急載 daily_checklist 無條件 import streamlit,CI 模擬驗證過;裝整包比繞 package `__init__` hack 乾淨,§8.1 step6）。
+- **Phase 3 操作路徑（全按鈕化,user 只要點）**:① merge PR ② GitHub Actions →「Update Macro History (Daily)」→ Run workflow → **bootstrap=true**（初次建 20 年）③ 跑完後 →「Calibrate Health Weights (Manual)」→ Run workflow ④ repo 多一筆 🤖 提案 commit → 交 AI/人審 AUC/overfit_flag → 過了才改 signal_thresholds 3 權重。**依賴警語**:步驟② 抓數據走 NAS proxy + FinMind secrets——若 NAS proxy 掛（A-1 待查）bootstrap 會部分失敗,run log 會誠實顯示。
+- **無 python 源碼變更**（純 yml + 文件）,測試面不受影響。
+
 ## 🛰️ 2026-07-11 批次4 Item1+2：@monitored fetcher 自我登錄 + 孤兒 set-diff（v19.96）
 
 user AskUserQuestion 核准「Item1 最小版＋Item2;3/4/5 drop」。§8.1 設計先核准再落地:

@@ -1,0 +1,48 @@
+name: Calibrate Health Weights (Manual)
+
+# v19.97 紅綠燈權重校準 Phase 3 一鍵化(方法論見 MACRO_HEALTH_REWEIGHT_PROPOSAL.md):
+# 前置:先跑過「Update Macro History (Daily)」bootstrap,repo 內須有
+#   data_cache/{twii_ohlcv,finmind_inst,finmind_m1m2}.parquet(v19.97 起 cron 會真的 commit)。
+# 本 workflow:跑 scripts/calibrate_health_weights.py(讀真實 parquet → walk-forward
+# 擬 3 權重)→ 把 MACRO_HEALTH_WEIGHT_PROPOSAL.md commit 回 repo 供人審。
+# 缺 parquet 時 script 會 SystemExit 並明講缺什麼(§1 fail loud,不用合成資料)。
+# 不改任何 SSOT 常數 — 提案經人審後才手動改 signal_thresholds(Phase 3 收尾)。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        # streamlit 是必要的:src/services/__init__ 急載 daily_checklist(無條件 import
+        # streamlit);裝整包比繞過 package __init__ 的 hack 乾淨(§8.1 step6)。
+        run: pip install pandas numpy pyarrow streamlit
+
+      - name: Run calibration
+        run: python scripts/calibrate_health_weights.py
+
+      - name: Commit proposal
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add MACRO_HEALTH_WEIGHT_PROPOSAL.md
+          if git diff --staged --quiet; then
+            echo "→ 提案無變化，跳過 commit"
+          else
+            DATE=$(date +%Y-%m-%d)
+            git commit -m "🤖 紅綠燈權重校準提案：$DATE（待人審,未改 SSOT）"
+            git push
+          fi
