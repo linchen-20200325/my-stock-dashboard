@@ -1,5 +1,20 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚦 2026-07-11 紅綠燈權重重設計 Phase 1：health_calibration L2 純函式（v19.92）
+
+user 於 AskUserQuestion 定案 Option B 後續 4 決策 + 核准 Path 1（建校準管線）。§8.1 架構先設計(禁寫 code)→ §7 數學式 user 確認照定義走 → 本次落地 **Phase 1（可 in-session 驗的「機器」）**:
+
+- **user 定案 4 決策**:① 目標函數=**規避回撤·風險姿態**(燈學「該防禦嗎」非報酬預測器)、② 時界=**20 交易日**、③ 特徵集=**先維持現 3 輸入**(jqavg/score/fnet)+修除5錯配、④ 資料=**先建 jqavg 歷史重建管線**。§7 三數學式(jqavg 重建/20 日最大回撤真值/logistic 擬合)user 接受照定義。
+- **關鍵誠實前提**:MACRO_CALIBRATION −0.452/1.6% 證據**是 TWII-only 合成 demo**,非真實資料 → 第一步是**取得真實資料**,不是照 −0.452 反推權重(違 §1)。且 live `jqavg` 真相=`ad_ratio.tail(5).mean`(jingqi_calc:43),而 `ad_ratio` 本身重度是 ^TWII proxy(fetch_adl ①)→ 重建可**複用既有 twii_ohlcv.parquet + 鏡像 proxy**,成本低。
+- **新增 `src/compute/macro/health_calibration.py`（L2 純函式,numpy+pandas,無 I/O/streamlit/requests）**:
+  - `breadth_from_twii()` — 由 ^TWII 重建 jqavg(鏡像 fetch_adl ① proxy「±1%≈±150 家、900 基準」+ jingqi 5 日均,SSOT parity；此為 live jqavg 的 PROXY tier)。前 5 日 NaN 不偽造(§1)。
+  - `risk_posture_label()` — 未來 20 交易日最大回撤 ≥ θ_dd(預設 8%,待 OOS)→ y∈{0,1}。尾端不足窗 → NaN。
+  - `fit_health_weights()` — walk-forward L2-logistic(**純 numpy 手刻,不引 sklearn/scipy**=§8.1 反過度依賴)+ inner-CV 選 λ + robustness voting + overfit guard。**labeled 樣本<60 / fold<3 / 單一類別 → raise**(§1 fail loud,不回偽權重)。
+- **順帶抓到 1 個自寫 bug**:AUC 計算原用最後 λ 的 intercept 配 best_w(不同 λ)→ 改追 best_b 對應。
+- **存檔（user 核准）**:`MACRO_HEALTH_REWEIGHT_PROPOSAL.md` 完整方法論 + §7 數學式 + §8 架構 + 落地 3 Phase + 誠實限制。
+- **誠實限制（寫入 proposal）**:真實擬合在**部署 cron**(沙箱無 twii_ohlcv.parquet + egress 擋)；in-session 只交付「可單測演算法」。Phase 2(scripts/update_breadth_history + calibrate_health_weights,cron 執行)+ Phase 3(人審 proposal→改 3 權重常數,順解除5錯配)待做。文件漂移(CLAUDE.md 6-factor/sum=1.0、SPEC health<40)Phase 3 一併修。
+- **回歸網**:`tests/test_health_calibration.py` 19 test(jqavg 重建數值/NaN 頭/index；回撤真值觸發/θ 可調/尾端 NaN；logistic 擬權重符號/AUC/樣本不足 raise/單類別 raise/NaN drop 不填/輸出契約；L2 純度掃描)。全套 **3062 passed / 10 skipped** 零破。ruff 兩檔 clean。
+
 ## 💰 2026-07-11 A~E backlog 批次3(b)：融資維持率 Option A（追繳線=強平線 130 + 撤銷線 166）（v19.91）
 
 user 於 AskUserQuestion 拍板 **Option A「追繳 130＋撤銷 166」**。ETF 質借模擬器維持率門檻校正為台股法規標準值:
