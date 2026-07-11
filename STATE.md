@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚑 2026-07-11 hotfix：選股網 AI 卡裸三元表達式炸整頁（v19.87）
+
+> 使用者截圖：選股網開啟即 `SyntaxError`（app.py:592 `st.markdown(x) if c else st.info(y)`）整頁掛。
+
+- **根因**：v19.86 我把 AI 置頂卡的 if/else 「簡化」成**裸三元表達式語句**。Streamlit 腳本的 magic 會把裸表達式自動 `st.write()` → 對三元結果呼叫 → 執行期炸（AST 合法故 compile-time 測不出，我的 render 測試也沒涵蓋這行）。
+- **修**：改回 `if _screener_ai_md: st.markdown(...) else: st.info(...)` 語句 + 加註解警示。
+- **防再犯**：新增 `tests/test_app_no_magic_bare_ternary.py`——AST 掃 app.py，禁止任何 `Expr(value=IfExp)`（裸三元表達式語句）。
+- 驗證：guard 測試 + 13 相關全綠；AST 掃描 app.py 裸三元 0 處。
+
+---
+
 ## 🔭 2026-07-11 個股選股網重設計：3 步直線漏斗（從優選池挑候選）（v19.86）
 
 > 使用者：「個股選股網不喜歡，要從基本面優選前 300 檔再給選股選項，整合這 tab、簡化。」§7/§8 對齊後選 **B（整合＋保留）**。（原記 v19.74，因並行 v19.75~85 合併順延版號至 v19.86。）
