@@ -36,9 +36,13 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-macro-history-${{ hashFiles('requirements.txt') }}
 
-      - name: Install minimal deps
-        # 只裝 scripts/update_macro_history.py 需要的：pandas / pyarrow / requests + proxy_helper deps
-        run: pip install pandas pyarrow requests urllib3
+      - name: Install deps
+        # v19.100 修:極簡清單害 finmind_m1m2 每次靜默跳過 —
+        # 「[finmind_m1m2] 缺 proxy_helper / tw_macro」實為 import tw_macro 觸發
+        # src.data.macro sibling eager import 連到 leading_indicators(bs4),極簡清單
+        # 沒裝 bs4 → ImportError → CBC 段整段 skip(2026-07-11 run 實錘)。
+        # 改裝整份 requirements(依賴 SSOT;同 calibrate v19.99 / health_history 慣例)。
+        run: pip install -r requirements.txt
 
       - name: Fetch historical data
         env:
