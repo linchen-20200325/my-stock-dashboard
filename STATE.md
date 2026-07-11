@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🩹 2026-07-11 校準資料鏈三連修：workflow deps ×2 + m1m2 舊路徑 import 真因（v19.99~v19.101）
+
+user 實跑 Phase 3 按鈕逐關回報,三輪對症修（v19.99/100 為 yml-only 未記 STATE,此處補記）:
+
+- **v19.99**:①calibrate workflow 缺 bs4（手挑依賴清單 → 改裝整份 requirements.txt=依賴 SSOT）②health-history workflow `git add` 對 gitignored/不存在路徑 fatal 128 → 逐檔「存在才 add -f」。
+- **v19.100**:macro-history workflow 同改整份 requirements（三個資料 cron 從此一致）。**當時誤診 m1m2 死因為 bs4** — 修完仍死,見 v19.101。
+- **v19.101（真因）**:`scripts/update_macro_history.py` 的 m1m2 段用**v18.359 檔案搬家前的舊頂層路徑** `from proxy_helper import` / `from tw_macro import`,根目錄 shim 已刪 → **自搬家起恆 ImportError,CBC 段靜默跳過數月**;且 `except ImportError` 吞掉 exception 內容只印固定字串（§1 反例）→ 誤導 v19.100 誤診。修:①script 頂部加 repo root 進 sys.path（scripts/ 直跑時 sys.path[0]=scripts/）②三處舊路徑改 `src.data.proxy.proxy_helper` / `src.data.macro.tw_macro`（line 90 的 `_fetch_url_via_proxy` 之前靠直連 fallback 僥倖活著,一併正名）③except 改印 `{type(e).__name__}: {e}`。本地驗證:fetch_finmind_m1m2 現在**過 import 打到 CBC 網路層**（sandbox 403 預期;Actions 有 PROXY_URL secret）。
+- **bootstrap 戰果（user 實跑）**:twii_ohlcv **4887 rows（2006→2026 二十年）**+ finmind_inst/margin 各 4912 rows 已 commit 進 main — 校準四塊資料到位三塊,只差 m1m2 等本修 merge 後重跑。tw_pmi 段 dgtw 404/500 為外部端點掛,校準不需要,§-1 不擴 scope。
+- **回歸網**:`tests/test_review_fixes_v19_101.py` 5 test（舊路徑禁用 source-scan/新路徑存在/sys.path guard/§1 錯誤訊息帶 exception/新路徑符號可解析）。
+
 > ⚠️ **版號撞號註記(2026-07-11)**:本日兩條並行分支各自遞號,`v19.86~v19.90` 出現兩組 —
 > **A~E/校準線**(claude/review-modify-suggestions-7vygyp,下方第一批條目)與
 > **選股網線**(claude/dazzling-turing-QxI9m,下方第二批條目)。閱讀時以「主題+分支」區分;
