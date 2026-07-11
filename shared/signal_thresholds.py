@@ -815,6 +815,14 @@ KD_OVERSOLD_LEVEL: float = 20.0
 """KD 低檔區邊界:K>20 且死亡交叉視為一般死叉(評分 5);K<=20 為超賣不另扣。
 原 src/compute/scoring/scoring_helpers.py:225 inline。與 KD_OVERBOUGHT_LEVEL 對稱。"""
 
+KD_PASSIVATION_DAYS: int = 3
+"""KD 鈍化(passivation)判定天數:K 連續 N 日 ≥ KD_OVERBOUGHT(高檔鈍化=強勢續漲,
+非賣訊)或 ≤ KD_OVERSOLD(低檔鈍化)。台股慣例 3 日。v19.94 analyze_kd_state。"""
+
+KD_DIVERGENCE_LOOKBACK: int = 40
+"""KD 背離(divergence)回看窗(交易日),切兩半(各 20)比高低點:價創高但 K 沒創高
+=頂背離(空);價創低但 K 沒創低=底背離(多)。v19.94 analyze_kd_state。"""
+
 # ── #9 IBS(內結構 Internal Bar Strength)反彈 / 賣壓邊界 ──
 IBS_OVERSOLD_THRESHOLD: float = 0.2
 """IBS 收低門檻(比例):IBS<=0.2(收當日區間低 20% 內)→ 隔日易反彈(評分 +10)。

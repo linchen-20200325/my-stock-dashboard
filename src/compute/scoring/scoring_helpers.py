@@ -219,21 +219,39 @@ def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
             score += 6
             details['IBS'] = (f'{ibs}（中性）', 6, 10)
 
-    # KD (15分) — v18.436 #7:20/80 inline → SSOT
+    # KD (15分) — v18.436 #7:20/80 inline → SSOT;v19.94 加鈍化/背離修正(§7 user 核准)
     if k_val is not None and d_val is not None:
         from shared.signal_thresholds import KD_OVERBOUGHT_LEVEL, KD_OVERSOLD_LEVEL
+        from src.compute.strategy.tech_indicators import analyze_kd_state
+        _kd = analyze_kd_state(df) or {}          # 同層 L2;None → {} 退回原分級
+        _hp = bool(_kd.get('high_passivation'))
+        _bear = bool(_kd.get('bearish_divergence'))
+        _bull = bool(_kd.get('bullish_divergence'))
         if k_val > d_val and k_val < KD_OVERBOUGHT_LEVEL:
             score += 15
             details['KD'] = (f'K={k_val} D={d_val}（黃金交叉）', 15, 15)
         elif k_val > d_val and k_val >= KD_OVERBOUGHT_LEVEL:
-            score += 8
-            details['KD'] = (f'K={k_val} D={d_val}（高檔黃叉注意）', 8, 15)
+            # v19.94 高檔黃叉分流:頂背離=真警訊(降5);高檔鈍化=強勢續漲不誤扣(15);否則注意(8)
+            if _bear:
+                score += 5
+                details['KD'] = (f'K={k_val} D={d_val}（高檔黃叉但頂背離⚠️）', 5, 15)
+            elif _hp:
+                score += 15
+                details['KD'] = (f'K={k_val} D={d_val}（高檔鈍化·強勢續漲）', 15, 15)
+            else:
+                score += 8
+                details['KD'] = (f'K={k_val} D={d_val}（高檔黃叉注意）', 8, 15)
         elif k_val < d_val and k_val > KD_OVERSOLD_LEVEL:
             score += 5
             details['KD'] = (f'K={k_val} D={d_val}（死亡交叉）', 5, 15)
         else:
-            score += 10
-            details['KD'] = (f'K={k_val} D={d_val}（低檔死叉可守）', 10, 15)
+            # v19.94 低檔死叉:底背離=反轉向上訊號(加分13);否則低檔可守(10)
+            if _bull:
+                score += 13
+                details['KD'] = (f'K={k_val} D={d_val}（低檔死叉但底背離↗）', 13, 15)
+            else:
+                score += 10
+                details['KD'] = (f'K={k_val} D={d_val}（低檔死叉可守）', 10, 15)
 
     # 布林 (10分)
     if bb is not None:

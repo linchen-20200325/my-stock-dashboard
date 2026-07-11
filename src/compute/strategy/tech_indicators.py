@@ -184,6 +184,78 @@ def calc_kd_series(close: pd.Series, high: pd.Series, low: pd.Series,
     return k, d
 
 
+def analyze_kd_state(df, period: int = 9):
+    """KD 鈍化(passivation) + 背離(divergence) 偵測（v19.94，§7 user 核准）。
+
+    純 L2:dict-or-None + stderr log（同儕 calc_kd/calc_bollinger 契約，不 raise）。
+
+    鈍化：K 連 `KD_PASSIVATION_DAYS` 日 ≥ `KD_OVERBOUGHT`（高檔鈍化＝強勢續漲，非賣訊）
+          / ≤ `KD_OVERSOLD`（低檔鈍化）。
+    背離（兩窗高低點法，避開脆弱單點 pivot）：最近 `KD_DIVERGENCE_LOOKBACK` 日切兩半——
+      頂背離(空)：後半價高點 > 前半價高點 但 後半 K@高點 < 前半 K@高點；
+      底背離(多)：後半價低點 < 前半價低點 但 後半 K@低點 > 前半 K@低點。
+
+    Returns:
+        dict{k,d,high_passivation,low_passivation,bearish_divergence,
+             bullish_divergence,label} 或 None（資料不足/欄缺）。
+    """
+    from shared.signal_thresholds import (
+        KD_DIVERGENCE_LOOKBACK,
+        KD_OVERBOUGHT_LEVEL,
+        KD_OVERSOLD_LEVEL,
+        KD_PASSIVATION_DAYS,
+    )
+    try:
+        if df is None or len(df) < period + KD_PASSIVATION_DAYS:
+            return None
+        k_s, d_s = calc_kd_series(df['close'], df['high'], df['low'], period)
+        k_valid, d_valid = k_s.dropna(), d_s.dropna()
+        if len(k_valid) < KD_PASSIVATION_DAYS:
+            return None
+        recent_k = k_valid.tail(KD_PASSIVATION_DAYS)
+        high_passivation = bool((recent_k >= KD_OVERBOUGHT_LEVEL).all())
+        low_passivation = bool((recent_k <= KD_OVERSOLD_LEVEL).all())
+
+        # 背離:兩窗高低點（對齊 close 與 K，去 K 的前 period-1 NaN）
+        bearish_div = bullish_div = False
+        aligned = pd.DataFrame({'close': df['close'], 'k': k_s}).dropna()
+        if len(aligned) >= KD_DIVERGENCE_LOOKBACK:
+            win = aligned.tail(KD_DIVERGENCE_LOOKBACK)
+            half = KD_DIVERGENCE_LOOKBACK // 2
+            old, new = win.iloc[:half], win.iloc[half:]
+            k_old_hi = float(old.loc[old['close'].idxmax(), 'k'])
+            k_new_hi = float(new.loc[new['close'].idxmax(), 'k'])
+            bearish_div = bool(new['close'].max() > old['close'].max()
+                               and k_new_hi < k_old_hi)          # 價創高 K 沒創高
+            k_old_lo = float(old.loc[old['close'].idxmin(), 'k'])
+            k_new_lo = float(new.loc[new['close'].idxmin(), 'k'])
+            bullish_div = bool(new['close'].min() < old['close'].min()
+                               and k_new_lo > k_old_lo)          # 價創低 K 沒創低
+
+        parts = []
+        if high_passivation:
+            parts.append('高檔鈍化')
+        if low_passivation:
+            parts.append('低檔鈍化')
+        if bearish_div:
+            parts.append('頂背離')
+        if bullish_div:
+            parts.append('底背離')
+        return {
+            'k': round(float(k_valid.iloc[-1]), 1),
+            'd': round(float(d_valid.iloc[-1]), 1) if len(d_valid) else None,
+            'high_passivation': high_passivation,
+            'low_passivation': low_passivation,
+            'bearish_divergence': bearish_div,
+            'bullish_divergence': bullish_div,
+            'label': '／'.join(parts) if parts else '無',
+        }
+    except Exception as e:
+        print(f'[tech_indicators/analyze_kd_state] fail: '
+              f'{type(e).__name__}: {e}', file=sys.stderr)
+        return None
+
+
 def calc_vcp(df, n_swings=3):
     # v19.83(第六份 review 3-4 邊界):本函式契約「失敗回 None」,但原本無 try/except —
     # 缺 high/low 欄(KeyError)或 swing 價為 0(ZeroDivisionError)會直接炸到 caller

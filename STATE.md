@@ -1,5 +1,19 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📈 2026-07-11 批次3(a) KD 鈍化背離（偵測 + 接進評分 + drift 修）（v19.94）
+
+user AskUserQuestion 核准「偵測＋接進評分」+「修 exit_signals 70→80 drift」。§7 數學式先確認再落地:
+
+- **新 L2 `analyze_kd_state(df)`（tech_indicators）**:偵測 KD 鈍化 + 背離,dict-or-None + stderr log（同儕 calc_kd/calc_bollinger 契約,不 raise）。
+  - **鈍化(passivation)**:K 連 `KD_PASSIVATION_DAYS(3)` 日 ≥ 80（高檔鈍化=強勢續漲,非賣訊）/ ≤ 20（低檔鈍化）。
+  - **背離(divergence,兩窗高低點法,避脆弱單點 pivot)**:最近 `KD_DIVERGENCE_LOOKBACK(40)` 日切兩半——頂背離(空)=後半價高點>前半但 K@高點<前半;底背離(多)對稱。
+- **接進健康評分（位移,已授權）**:`scoring_helpers.calc_health_score` KD tier（15 分）分流——高檔黃叉(K>D,K≥80)遇①**頂背離→降 5**（真警訊）②**高檔鈍化→維持 15**（強勢續漲不誤扣,原一律 8）③否則注意 8;低檔死叉遇**底背離→加 13**（反轉向上,原 10）。`analyze_kd_state` 回 None（資料不足）→ 退回原分級（向後相容）。純黃金交叉(K<80)不受影響。
+- **順帶 drift 修**:`exit_signals.py:96`「KD高檔死叉」寫死 `70` → 引 SSOT `KD_OVERBOUGHT_LEVEL(80)`,消 §3.3 漂移。
+- **新 SSOT 常數**:`KD_PASSIVATION_DAYS=3` / `KD_DIVERGENCE_LOOKBACK=40`（signal_thresholds）。
+- **§7 邊界**:lowercase OHLCV;資料不足 period+3 → None;NaN 對齊 dropna;兩窗需 aligned≥40 才算背離（不足不偽造）。§8.2 分層:tech_indicators/scoring_helpers 同 L2,無上行 import。
+- **回歸網**:`tests/test_review_fixes_v19_94.py` 13 test（鈍化高/低/不足/震盪;頂/底背離;wiring monkeypatch 6 態:高檔鈍化15/頂背離5/無訊號8/底背離13/低檔10/純黃叉15;drift 源掃描）。`test_exit_signals` 高檔死叉 fixture k=80→82 對齊新門檻。scoring/tech/exit/health 549 passed。ruff 對 4 檔零新增（tech_indicators 既有 1 個 E741 非本次）。
+- **A~E 進度**:批次3(a) RSI/ATR ✅(v19.89) + **KD 鈍化背離 ✅**(本次)/ 下一步 布林量能確認 → 批次4 Item1 monitored 裝飾器。
+
 ## 🚦 2026-07-11 紅綠燈權重重設計 Phase 2：離線校準 CLI（scripts/calibrate_health_weights）（v19.93）
 
 user「請繼續」→ 續 Phase 1（v19.92）落地 Phase 2 wiring（仍在已核准 Path 1 範圍內）:
