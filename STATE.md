@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔒 2026-07-11 A~E backlog 批次1（止血）：NAS proxy SSRF 防護 + fetch_pmi_history 死碼拔除 + CLAUDE.md dataset 正名（v19.86）
+
+user 核准「A~E 陸續修復」。本批取**最安全、自足、不位移訊號**三項落地（架構級 B/會位移訊號的公式 C 依 §7/§8 後續回合先出設計/數學式）：
+
+- **D 安全（NAS proxy SSRF 止血）**:`src/data/proxy/nas_server.py` 兩個洞——(1) `_auth` 的 `if _API_KEY and ...` 在**未設 NAS_API_KEY 時直接放行**(開放代理);(2) `/proxy?url=` 對任意 url 直接 `requests.get`,可打內網/雲端 metadata(169.254.169.254)/localhost = 完整 SSRF。修:新增 `_assert_public_url()` — 解析目標主機 IP,凡私有/loopback/link-local/reserved/multicast 一律 403;`/proxy` 每一跳(初始+每次轉址,`allow_redirects=False` 手動有界迴圈 6 跳)都過 guard,防「公開 URL 302→內網」繞過;未設 key 時啟動大聲警告。**向後相容**:公開站(TWSE/FinMind/FRED/Yahoo)解析為公網 IP → 放行,零誤傷。**已知限制**:不防 DNS rebinding(需 pin 已解析 IP,列後續)。**待 user 決定**:是否「未設 key 硬性拒絕啟動」(涉 NAS 部署行為變更,故本批只警告不強制)。
+- **E 死碼（fetch_pmi_history 整刪）**:`tw_macro.fetch_pmi_history` 打 dataset `TaiwanEconomicIndicator`(v19.85 證實不存在),恆回 None 且 **0 production caller**(原 caller merrill_clock 已 v18.359 整檔刪除 → 孤兒);當期 TW PMI 由 `fetch_tw_pmi`(9 源賽跑)供應。整刪 + schemas.py docstring 引用更新。**TW CPI/失業率 fetcher 不刪**——有專屬測試且是 v18.270 刻意加的半成品功能,「刪 vs 接真實源」屬 user 決定的岔路,不擅自摧毀。
+- **A-3 文件正名**:兩 repo CLAUDE.md §2.1 把已證實不存在的 `TaiwanEconomicIndicator`/`TaiwanMacroEconomics` 更正為 `TaiwanBusinessIndicator`(NDC)+ 註明 FinMind 無 PMI/出口替代集。憲法漂移收斂。
+- **回歸網**:`test_nas_server_coverage.py` +6 SSRF test(metadata/loopback/私有段/非 http scheme/缺 host 擋下 + 公開站放行;fastapi 缺套件時 graceful skip);`test_review_fixes_v19_85.py` +1 死碼刪除掃描 + 假 dataset 掃描擴至 tw_macro。ruff 對 nas_server/tw_macro 零新增(baseline 2 = 現況 2)。
+- **A~E 後續批次(已排 task,依序進行)**:批次2 時效閘 staleness.py(§8 先設計)、批次3 公式校正(RSI Wilder/ATR TR/KD 鈍化背離等,§7 先給數學式)、批次4 架構(monitored 診斷登錄/並行化/DataManager facade,§8 先核准範圍)。A-1(NAS 檢查)/A-2(Put/Call 死因)卡在 user 輸入。
+
 ## 🛰️ 2026-07-11 資料異常實診修復：NDC 接 FinMind 官方鏡像 + 假 dataset 拔除 + 出口正名（v19.85）
 
 user 實機截圖回報 4 筆資料異常(台灣出口 YoY 未取得 / 台灣製造業 PMI 未取得 / NDC 燈號+分數 101 天前 / 外銷訂單卡「待取得」但診斷清單沒出現)。逐鏈活體診斷(沙箱 egress 全 403 → 改以 FinMind SDK 2.0.4 枚舉 + WebSearch + 基金 repo 交叉證據)結論與修復:

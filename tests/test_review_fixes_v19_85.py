@@ -154,12 +154,18 @@ class TestNdcBlockPlanZero:
 
 class TestFakeDatasetRemoval:
     def test_no_fake_dataset_param_in_chain_files(self):
-        """出口鏈 + PMI 鏈不得再以 TaiwanEconomicIndicator 作為請求參數。
-        (tw_macro.fetch_pmi_history 為 0-caller 死碼,已加註待核准整刪,不在此限)"""
+        """出口鏈 + PMI 鏈 + tw_macro 不得再以 TaiwanEconomicIndicator 作為請求參數。
+        (v19.86:原 0-caller 死碼 fetch_pmi_history 已整刪,tw_macro 一併納入掃描)"""
         for rel in ("src/data/macro/macro_snapshot.py",
-                    "src/data/macro/macro_core.py"):
+                    "src/data/macro/macro_core.py",
+                    "src/data/macro/tw_macro.py"):
             src = (REPO / rel).read_text(encoding="utf-8")
             assert "'dataset': 'TaiwanEconomicIndicator'" not in src, rel
+
+    def test_fetch_pmi_history_deleted(self):
+        """v19.86:fetch_pmi_history 死碼已整刪(0 production caller)。"""
+        src = (REPO / "src/data/macro/tw_macro.py").read_text(encoding="utf-8")
+        assert "def fetch_pmi_history" not in src
 
     def test_pmi_registry_is_nine_sources_no_finmind(self):
         from src.data.macro.macro_core import PMI_SOURCE_REGISTRY
