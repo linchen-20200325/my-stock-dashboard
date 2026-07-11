@@ -600,15 +600,15 @@ with tab_stocks:
         from src.ui.tabs.tab_stock_picker import render_prescreen_panel
         from src.ui.tabs.yield_screener import fetch_twse_yield_pe, render_yield_confirm
         from src.services.fundamental_screener_service import (
-            SCREEN_ANGLE_LABELS, build_candidate_frame, get_fundamental_survivors,
+            SCREEN_ANGLE_LABELS, composite_rank_candidates, get_fundamental_survivors,
         )
 
         # ── ① 基本面優選池（四項全過）───────────────────────────
         st.markdown('#### ① 基本面優選池（四項全過）')
         render_prescreen_panel()
 
-        # ── ② 從優選池挑候選（依排序角度）──────────────────────
-        st.markdown('#### ② 從優選池挑候選')
+        # ── ② 從優選池挑候選（複選因子 → 綜合評分排序）──────────
+        st.markdown('#### ② 選股因子（可複選 → 綜合評分排序）')
         try:
             _surv_df, _ = get_fundamental_survivors()
         except Exception as _e_surv:  # noqa: BLE001 — 快照缺不炸選股網
@@ -622,19 +622,25 @@ with tab_stocks:
                 _pe_map = dict(zip(_codes_s, _twse_scrn['本益比']))
             if '名稱' in _twse_scrn.columns:
                 _name_map = dict(zip(_codes_s, _twse_scrn['名稱'].astype(str)))
-        _angle_label = st.selectbox(
-            '排序角度（決定候選清單怎麼從優選池排序）', list(SCREEN_ANGLE_LABELS),
-            key='screener_angle',
-            help='估值/EPS 立即排序；缺貨動能 / 抗跌RS 需先在下方「🔎 進階主題選股」掃描，掃完會自動帶上來。')
-        _cands, _cnote = build_candidate_frame(
-            _surv_df, angle=SCREEN_ANGLE_LABELS[_angle_label], top_n=300,
+        _factor_labels = st.multiselect(
+            '勾選你要的因子（可複選；每個因子在優選池內排 0–100 分位，取平均為綜合分）',
+            list(SCREEN_ANGLE_LABELS), default=[list(SCREEN_ANGLE_LABELS)[0]],
+            key='screener_factors',
+            help='估值/EPS 立即算；缺貨動能 / 抗跌RS 需先在下方「🔎 進階主題選股」掃描，掃完回來重勾即帶入。'
+                 '籌碼技術×6 因需逐檔深抓，放在下方③「三階段深篩」當最後一關。')
+        _factors = [SCREEN_ANGLE_LABELS[_l] for _l in _factor_labels]
+        _cands, _cnote = composite_rank_candidates(
+            _surv_df, factors=_factors, top_n=300,
             pe_map=_pe_map, name_map=_name_map,
             shortage_rows=st.session_state.get('_shortage_rows'),
             rs_rows=st.session_state.get('_rs_rows'))
         if _cnote:
             st.info(_cnote)
         _surv_n = len(_surv_df) if _surv_df is not None else 0
-        st.caption(f'📋 基本面優選 {_surv_n} 檔 → 依「{_angle_label}」排序，取前 {len(_cands)} 檔供勾選（下方預設帶前 10）。')
+        st.caption(f'📋 基本面優選 {_surv_n} 檔 → 依勾選因子綜合評分排序，取前 {len(_cands)} 檔供勾選（下方預設帶綜合分前 10）。')
+        if not _cands.empty and '綜合分' in _cands.columns:
+            with st.expander('📊 綜合評分排行（點開看各因子分數）', expanded=False):
+                st.dataframe(_cands.head(50), hide_index=True, use_container_width=True)
 
         # ── ③ 三階段深篩 + 殖利率確認 ──────────────────────────
         st.markdown('#### ③ 三階段深篩（基本面 ×9 → 籌碼技術 ×6）')

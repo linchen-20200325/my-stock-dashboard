@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🎛️ 2026-07-11 選股網 ②：複選因子 + 綜合評分排序（v19.88）
+
+> 使用者：「基本面選完後，讓 USER 點選 估值便宜/高EPS/缺貨動能/抗跌RS/籌碼技術×6，最終才選股。」確認採 **A（綜合評分）**。
+
+- **② 從「單選排序角度」升級為「複選因子 + 綜合評分」**：`st.multiselect` 勾選 估值便宜/高EPS/缺貨動能/抗跌RS（可複選）→ 每因子在存活池內排 0–100 百分位分 → **取平均為綜合分**降冪排序 → 餵 picker 候選。附「綜合評分排行」可展開表（看各因子分）。
+- **L3 純函式** `composite_rank_candidates`（+ `_percentile_scores`）：`pd.Series.rank(pct=True)` 算百分位（pe_low 低分高、其餘高分高）；缺料因子該股記 0（§1 不造假）；勾了缺貨/RS 但未掃描 → note 提示但不擋其他因子。
+- **籌碼技術×6**：因需逐檔深抓籌碼/技術資料（全 324 池即時算不切實際），維持在 **③「三階段深篩」當最後一關**（不入綜合分），UI 明示。
+- §8：純新增 L3 純函式 + app.py L6 multiselect 組裝，重用既有 picker/掃描元件，無新 fetcher、無跨層違規。避開 v19.87 magic 雷（全 if/else 語句，guard 測試在場）。
+- 驗證：10 綜合評分單元測試（百分位方向/缺料 0/複選平均/缺掃描 note/空因子/top_n）+ 1 實機 render（複選→綜合→picker multiselect 無 exception）+ 既有候選/magic-guard 無 regression 全綠。
+
+---
+
 ## 🚑 2026-07-11 hotfix：選股網 AI 卡裸三元表達式炸整頁（v19.87）
 
 > 使用者截圖：選股網開啟即 `SyntaxError`（app.py:592 `st.markdown(x) if c else st.info(y)`）整頁掛。
