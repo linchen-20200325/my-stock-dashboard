@@ -148,6 +148,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
                               source_label: str = '高息網',
                               key_prefix: str = 'picker',
                               *, auto_run: bool = False,
+                              auto_pick: bool = False,
                               fh_map: dict | None = None,
                               skip_s3: bool = False):
     """v19.58：source_label + key_prefix 抽參數，個股組合 tab 共用此函式（不複製 Stage 1/2/3 邏輯）。
@@ -192,7 +193,8 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         return
 
     # v19.59：個股組合輸入場景跳過 multiselect / extra_codes 二次勾選 — 直接拿上方 N 檔全跑出結果
-    _t3_mode = (source_label == '個股組合輸入')
+    # v19.89：auto_pick=True（選股網簡易版）同樣跳過手動勾選，直接對上游候選全跑（不要求 USER 勾）
+    _t3_mode = auto_pick or (source_label == '個股組合輸入')
     if _t3_mode:
         _preview = ', '.join(_codes[:10]) + ('...' if len(_codes) > 10 else '')
         st.markdown(f'#### 📋 候選清單（已自動帶入上方輸入的 {len(_codes)} 檔）')

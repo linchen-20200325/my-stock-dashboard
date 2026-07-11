@@ -123,3 +123,32 @@ class TestCompositeFlowRender:
         at = AppTest.from_function(_composite_flow_script).run(timeout=90)
         assert not at.exception, [f"{e.type}: {str(e.value)[:200]}" for e in at.exception]
         assert len(at.multiselect) >= 1   # picker 候選勾選框
+
+
+def _auto_pick_script():
+    import pandas as pd
+
+    from src.ui.tabs.tab_stock_picker import render_tab_stock_picker
+    _cands = pd.DataFrame({"代碼": ["2330", "2317", "2454"], "名稱": ["A", "B", "C"]})
+    render_tab_stock_picker(gemini_fn=None, candidates=_cands,
+                            source_label="基本面優選", auto_pick=True, skip_s3=True)
+
+
+@pytest.mark.slow
+class TestAutoPickNoMultiselect:
+    """v19.89：auto_pick=True → 不出手動候選 multiselect（簡易版核心），且不炸。"""
+
+    @classmethod
+    def setup_class(cls):
+        try:
+            from streamlit.testing.v1 import AppTest  # noqa: F401
+        except ImportError:
+            pytest.skip("streamlit.testing.v1.AppTest 不可用(collection stub 生態)")
+
+    def test_auto_pick_hides_multiselect(self):
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_function(_auto_pick_script).run(timeout=60)
+        assert not at.exception, [f"{e.type}: {str(e.value)[:200]}" for e in at.exception]
+        assert len(at.multiselect) == 0   # auto_pick → 無手動候選勾選框
+        # 候選已自動帶入
+        assert any("已自動帶入" in m.value for m in at.markdown)
