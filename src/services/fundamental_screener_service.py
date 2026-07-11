@@ -216,6 +216,103 @@ def build_candidate_frame(
     return out, note
 
 
+# ── 綜合評分（多因子複選；v19.88）────────────────────────────────
+# 每個勾選因子給 0-100 分位分數（各因子在存活池內排百分位），取平均為綜合分，降冪排序。
+# 缺料的因子該股記 0 分（不造假、不猜）。籌碼技術×6 因需逐檔深抓，屬 ③ 深篩關（不入綜合分）。
+def _percentile_scores(ids: list[str], value_map: dict, *, higher_better: bool) -> dict:
+    """{id: 0-100 百分位分}。有值者排百分位（最佳=100），缺值/NaN/非數字 → 0。"""
+    valid: dict[str, float] = {}
+    for _i in ids:
+        _v = value_map.get(_i)
+        try:
+            _f = float(_v)
+        except (TypeError, ValueError):
+            continue
+        if _f == _f:  # 非 NaN
+            valid[_i] = _f
+    if not valid:
+        return {i: 0.0 for i in ids}
+    if len(valid) == 1:
+        return {i: (100.0 if i in valid else 0.0) for i in ids}
+    _s = pd.Series(valid)
+    # higher_better=True → 值越大分越高（ascending=True 使最大值 pct=1.0）；
+    # pe_low（higher_better=False）→ 值越小分越高。
+    _pct = _s.rank(pct=True, ascending=higher_better)
+    _sc = (_pct * 100).round(1).to_dict()
+    return {i: float(_sc.get(i, 0.0)) for i in ids}
+
+
+def composite_rank_candidates(
+    survivors_df: pd.DataFrame,
+    *,
+    factors: list[str],
+    top_n: int = 300,
+    pe_map: dict | None = None,
+    name_map: dict | None = None,
+    shortage_rows: list[dict] | None = None,
+    rs_rows: list[dict] | None = None,
+) -> tuple[pd.DataFrame, str]:
+    """從存活池，依【複選因子】的綜合評分排序 → 候選 DataFrame（含 '代碼' 欄）。
+
+    factors ⊆ {'pe_low','eps_high','shortage','rs_leader'}（籌碼技術×6 屬 ③ 深篩，不在此）。
+    綜合分 = 各勾選因子百分位分（0-100）的平均。缺料因子該股記 0（§1 不造假）。
+
+    Returns: (df[代碼/名稱/綜合分/各因子分], note)。
+      - factors 空 → 空 + 「請至少勾一個因子」
+      - 勾了缺貨/RS 但尚未掃描 → note 提示（該因子暫全記 0，不擋其他因子）
+    """
+    pe_map = pe_map or {}
+    name_map = name_map or {}
+    if survivors_df is None or survivors_df.empty or "stock_id" not in survivors_df.columns:
+        return pd.DataFrame(columns=["代碼", "名稱"]), "基本面存活池為空（季快照未就緒）。"
+    if not factors:
+        return pd.DataFrame(columns=["代碼", "名稱"]), "請至少勾選一個選股因子。"
+
+    ids = [str(s) for s in survivors_df["stock_id"].tolist()]
+    eps_map = (dict(zip(ids, survivors_df["eps"].tolist()))
+               if "eps" in survivors_df.columns else {})
+    shortage_map = {str(r.get("代碼", "")): r.get("缺貨分數") for r in (shortage_rows or [])}
+    rs_map = {str(r.get("代碼", "")): r.get("RS(σ)") for r in (rs_rows or [])}
+
+    # (value_map, higher_better, 顯示欄名)
+    _cfg = {
+        "pe_low":    (pe_map,       False, "估值分"),
+        "eps_high":  (eps_map,      True,  "EPS分"),
+        "shortage":  (shortage_map, True,  "缺貨分"),
+        "rs_leader": (rs_map,       True,  "RS分"),
+    }
+    _missing = []
+    if "shortage" in factors and not shortage_rows:
+        _missing.append("缺貨動能")
+    if "rs_leader" in factors and not rs_rows:
+        _missing.append("抗跌 RS")
+
+    _col_scores: dict[str, dict] = {}
+    for _f in factors:
+        _vmap, _hb, _col = _cfg.get(_f, ({}, True, _f))
+        _col_scores[_f] = _percentile_scores(ids, _vmap, higher_better=_hb)
+
+    _composite = {
+        i: round(sum(_col_scores[f].get(i, 0.0) for f in factors) / len(factors), 1)
+        for i in ids
+    }
+    ranked = sorted(ids, key=lambda i: -_composite[i])[: int(top_n)]
+
+    out = pd.DataFrame({
+        "代碼": ranked,
+        "名稱": [str(name_map.get(c, "")) for c in ranked],
+        "綜合分": [_composite[c] for c in ranked],
+    })
+    for _f in factors:
+        out[_cfg[_f][2]] = [_col_scores[_f].get(c, 0.0) for c in ranked]
+
+    note = ""
+    if _missing:
+        note = (f"（{'、'.join(_missing)} 尚未掃描 → 該因子暫記 0 分；"
+                "請先在下方「🔎 進階主題選股」掃描，回來重按即帶入。）")
+    return out, note
+
+
 def gate_pool_by_fundamentals(
     pool_df: pd.DataFrame,
     code_col: str = "代碼",
