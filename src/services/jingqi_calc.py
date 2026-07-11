@@ -6,7 +6,9 @@
 - ADL ad_ratio 是主源(tail(5).mean)
 - 大盤漲跌備援(正日 +5%,4 漲日 = 60%, 5 跌日 = 40%)
 - 三段燈號(BULL/NEUTRAL/BEAR SSOT from shared.signal_thresholds)
-- 寫 session_state['jingqi_info'] 8 keys(供戰情概覽/作戰室/section_inputs 讀)
+- 寫 session_state['jingqi_info'] 7 keys(供戰情概覽/作戰室/section_inputs 讀;
+  v19.84 刪 pct20/60/120/240 — 該 4 鍵為 ratio×0.9/0.8/0.7 捏造值且全 repo 0 讀者,
+  §1「寧缺勿假」;真站上季線/年線比例待有真源再加)
 
 §8.2 L3 service:純 compute + 1 個 session_state write。
 """
@@ -62,10 +64,11 @@ def compute_and_store_jingqi(df_adl_raw: Any) -> None:
                    else (TRAFFIC_YELLOW if _jq_ratio >= BREADTH_NEUTRAL_PCT else TRAFFIC_RED))
         _jq_lbl = ('🟢 多頭積極' if _jq_ratio >= BREADTH_BULL_PCT
                    else ('🟡 中性均衡' if _jq_ratio >= BREADTH_NEUTRAL_PCT else '🔴 保守防禦'))
+        # v19.84(第七份 review 4-2):刪 pct20/60/120/240 — ×0.9/0.8/0.7 為捏造值
+        # (站上季線/年線比例無此換算關係),且全 repo 0 讀者(唯一 consumer
+        # macro_helpers 只讀 'avg')。§1 寧缺勿假:不再產出假數字。
         st.session_state['jingqi_info'] = {
             'avg': _jq_ratio, 'pos': _jq_pos, 'regime': _jq_reg,
             'color': _jq_col, 'label': _jq_lbl, 'total': 0,
             'source': _jq_ratio_src,
-            'pct20': _jq_ratio, 'pct60': _jq_ratio * 0.9,
-            'pct120': _jq_ratio * 0.8, 'pct240': _jq_ratio * 0.7,
         }
