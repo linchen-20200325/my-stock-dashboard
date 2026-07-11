@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## ⏱️ 2026-07-11 A~E backlog 批次2（時效閘 SSOT）：shared/staleness.py + AI prompt [STALE] 標記（v19.87）
+
+user 核准「1~4 陸續慢慢做」。批次2 時效閘依 §8.1 設計後落地;本次交付 **SSOT 基礎 + 安全的加法消費者**,行為變更的紅綠燈硬 gate 留作後續分開審查:
+
+- **新增 `shared/staleness.py`（L0 純函式 SSOT）**:`expected_latest_trading_day(today, holidays)`(扣週末 + 可選休市日,**不硬編全年台股日曆** — §8.1 過度設計自評,春節長假等由 caller 注入)、`staleness_days(data, ...)`(多型別:DataFrame/date/str/Timestamp → 距預期最新交易日天數,無法判定回 None)、`gate_for_realtime(days, max_days)`(→ 可否即時用 + 提示;None/超期 fail-safe 排除)、`stale_tag(days, threshold)`([STALE:Nd] AI 標籤)。
+- **DRY 收斂**:既有 `app_stock_fetchers._expected_latest_trading_date`(重複的週末退算)改委派 SSOT,介面 0 改。
+- **安全消費者(加法)**:`app.py:_build_llm_context` 月度指標(出口/PMI/CPI/NDC)距預期 >40 天者,行前綴 `[STALE:Nd]` — 防 AI 把過期資料當當期講(第八份 §3.1;對齊 Fund 端既有慣例)。順手把 AI prompt 殘留「外銷訂單」對齊 v19.85 正名「台灣出口」。
+- **未做(留後續,行為變更需分開審查)**:全域紅綠燈(app.py:481)硬 gate — 過期 mkt_info/jingqi_info 拒絕顯示多空 → 這動到決策顯示,擇期單獨做 + 單獨驗。
+- **回歸網**:`tests/test_staleness.py` 22 test(expected_latest 週末/假日鏈、staleness_days 多型別/邊界、gate fail-safe、stale_tag 閾值、shim 委派、AI prompt wiring source-scan)。
+- **A~E 進度**:批次1 ✅ / 3(c) ✅ / **批次2 基礎 ✅**(紅綠燈 gate 待續)/ 下一步 批次3(a) 標準公式(RSI Wilder/ATR TR,§7 已給數學式待你點頭位移訊號)。
+
 ## 🔒 2026-07-11 A~E backlog 批次1（止血）：NAS proxy SSRF 防護 + fetch_pmi_history 死碼拔除 + CLAUDE.md dataset 正名（v19.86）
 
 user 核准「A~E 陸續修復」。本批取**最安全、自足、不位移訊號**三項落地（架構級 B/會位移訊號的公式 C 依 §7/§8 後續回合先出設計/數學式）：

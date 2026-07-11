@@ -94,11 +94,13 @@ def _get_loader(_v: str = _LOADER_VERSION):
 
 
 def _expected_latest_trading_date():
-    """預期最新交易日(週末退到週五)。"""
-    d = datetime.date.today()
-    while d.weekday() >= 5:
-        d -= datetime.timedelta(days=1)
-    return d
+    """預期最新交易日(週末退到週五)。
+
+    v19.87 A~E 批次2:實作下沉 `shared/staleness.expected_latest_trading_day`(SSOT),
+    本處保留為向後相容 shim(既有 caller 介面 0 改)。委派唯一實作避免雙寫。
+    """
+    from shared.staleness import expected_latest_trading_day
+    return expected_latest_trading_day()
 
 
 @st.cache_data(ttl=TTL_30MIN, max_entries=10)

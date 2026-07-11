@@ -510,7 +510,13 @@ if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
 
 
 def _build_llm_context(macro_info: dict) -> str:
-    """將 session_state 中的量化總經數據格式化為純文字供 LLM 使用"""
+    """將 session_state 中的量化總經數據格式化為純文字供 LLM 使用。
+
+    v19.87 A~E 批次2:月度指標(出口/PMI/CPI/NDC)距預期最新交易日 >40 天者,
+    在該行前綴 `[STALE:Nd]`(shared/staleness.stale_tag SSOT),防 AI 把過期資料
+    當當期講(第八份 review §3.1;對齊 Fund 端既有慣例)。
+    """
+    from shared.staleness import stale_tag, staleness_days
     _vix = macro_info.get('vix') or {}
     _exp = macro_info.get('tw_export') or {}
     _pmi = macro_info.get('ism_pmi') or {}
@@ -518,17 +524,23 @@ def _build_llm_context(macro_info: dict) -> str:
     _ndc = macro_info.get('ndc_signal') or {}
     _mi  = st.session_state.get('m1b_m2_info') or {}
     _bi  = st.session_state.get('bias_info') or {}
+
+    def _tag(_d: dict) -> str:
+        # 月度指標 stale 閾值 40 天;date 缺失 → staleness_days 回 None → 無標籤
+        return stale_tag(staleness_days(_d.get('date')), threshold=40)
+
     _lines = []
     if _vix.get('current'):
         _lines.append(f'• VIX 恐慌指數：{_vix["current"]} (MA20={_vix.get("ma20","N/A")})')
     if _exp.get('yoy') is not None:
-        _lines.append(f'• 台灣外銷訂單 YoY：{_exp["yoy"]:+.1f}%  ({_exp.get("date","")})')
+        # v19.85 正名:tw_export = 海關出口年增率(非經濟部外銷訂單)
+        _lines.append(f'• {_tag(_exp)}台灣出口 YoY：{_exp["yoy"]:+.1f}%  ({_exp.get("date","")})')
     if _pmi.get('value') is not None:
-        _lines.append(f'• 🇹🇼 台灣 PMI：{_pmi["value"]}  ({_pmi.get("date","")}，>50 擴張)')
+        _lines.append(f'• {_tag(_pmi)}🇹🇼 台灣 PMI：{_pmi["value"]}  ({_pmi.get("date","")}，>50 擴張)')
     if _cpi.get('yoy') is not None:
-        _lines.append(f'• 美國核心 CPI YoY：{_cpi["yoy"]:+.1f}%  ({_cpi.get("date","")})')
+        _lines.append(f'• {_tag(_cpi)}美國核心 CPI YoY：{_cpi["yoy"]:+.1f}%  ({_cpi.get("date","")})')
     if _ndc.get('score') is not None:
-        _lines.append(f'• NDC 景氣燈號分數：{_ndc["score"]:.0f}/45')
+        _lines.append(f'• {_tag(_ndc)}NDC 景氣燈號分數：{_ndc["score"]:.0f}/45')
     if _mi.get('m1b_yoy') is not None and _mi.get('m2_yoy') is not None:
         _gap = round(float(_mi['m1b_yoy']) - float(_mi['m2_yoy']), 2)
         _lines.append(f'• 台灣 M1B={_mi["m1b_yoy"]:.1f}%  M2={_mi["m2_yoy"]:.1f}%  Gap={_gap:+.2f}%')
