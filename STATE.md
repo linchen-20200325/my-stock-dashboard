@@ -1,5 +1,10 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+> ⚠️ **版號撞號註記(2026-07-11)**:本日兩條並行分支各自遞號,`v19.86~v19.90` 出現兩組 —
+> **A~E/校準線**(claude/review-modify-suggestions-7vygyp,下方第一批條目)與
+> **選股網線**(claude/dazzling-turing-QxI9m,下方第二批條目)。閱讀時以「主題+分支」區分;
+> 為不竄改已推送的 commit 訊息,兩組版號原樣保留,後續版號自 v19.98 起單線續號。
+
 ## 🔧 2026-07-11 macro-history cron 白跑 bug 修 + 校準 Phase 3 一鍵化（v19.97）
 
 user 問「Phase 3 這要如何做?」→ 查證發現**前置真 bug**,一併修:
@@ -137,6 +142,75 @@ user 核准「A~E 陸續修復」。本批取**最安全、自足、不位移訊
 - **A-3 文件正名**:兩 repo CLAUDE.md §2.1 把已證實不存在的 `TaiwanEconomicIndicator`/`TaiwanMacroEconomics` 更正為 `TaiwanBusinessIndicator`(NDC)+ 註明 FinMind 無 PMI/出口替代集。憲法漂移收斂。
 - **回歸網**:`test_nas_server_coverage.py` +6 SSRF test(metadata/loopback/私有段/非 http scheme/缺 host 擋下 + 公開站放行;fastapi 缺套件時 graceful skip);`test_review_fixes_v19_85.py` +1 死碼刪除掃描 + 假 dataset 掃描擴至 tw_macro。ruff 對 nas_server/tw_macro 零新增(baseline 2 = 現況 2)。
 - **A~E 後續批次(已排 task,依序進行)**:批次2 時效閘 staleness.py(§8 先設計)、批次3 公式校正(RSI Wilder/ATR TR/KD 鈍化背離等,§7 先給數學式)、批次4 架構(monitored 診斷登錄/並行化/DataManager facade,§8 先核准範圍)。A-1(NAS 檢查)/A-2(Put/Call 死因)卡在 user 輸入。
+## 🐞 2026-07-11 選股網綜合評分失真修：RS 全池覆蓋 + 缺料不灌 0（v19.90）
+
+> 使用者截圖：選股結果 RS分整欄 0，且排序與下方抗跌RS排行（2061 RS 188…）對不上。查為真資料錯誤。
+
+**根因（兩個疊加）**：
+1. **RS 只回 top-50**：`run_rs_leader_scan` 內部 `rank_rs_leaders(top_n=RS_LEADER_TOP_N=50, beat_only=True)` → 只回「贏過大盤的前 50 檔動能股」；綜合評分拿它當 RS 來源 → 存活池 274 檔查無 RS → **RS分 全 0**（且那 50 檔多是動能股、與高EPS/缺貨的價值股不重疊 → 排序對不上）。
+2. **缺料灌 0 再除全因子數**：`composite_rank_candidates` 對「無資料因子」記 0 分、分母仍算全因子 → 缺貨/RS 只覆蓋 ~50 檔時，其餘 274 檔被灌 0 拉低綜合分 → 整體失真。
+
+**修**：
+- **RS 全池覆蓋**：`run_rs_leader_scan` / `_scan_cached` 加 `top_n` 參數；app.py 綜合評分自動掃改 `run_rs_leader_scan(beat_only=False, top_n=RS_SCAN_MAX)` → 回**全存活池** RS σ，存 `_rs_rows_all`（與進階 UI 的 `_rs_rows` top-50 分離）。
+- **綜合分改「只平均有資料的因子」**：`_percentile_scores` 缺值不再記 0（改**不放 key**）；綜合分 = 該股有資料因子的平均（缺貨只覆蓋 ~50 檔 → 沒掃到的股不被 0 拖垮）；缺料欄顯示**空白**（非 0）。
+- §8：純 L3 服務改 + app.py 組裝；全 if/else（magic-guard 在場）。
+- 驗證：33 相關測試（含新增「缺料因子不 0 拖垮」核心測試 + RS top_n 參數 + 既有 RS/缺貨/screener 無 regression）全綠。
+
+---
+
+## 🧹 2026-07-11 選股網簡易版：勾條件 → 一鍵選股（缺貨/RS 自動掃、拿掉手動候選）（v19.89）
+
+> 使用者：「缺貨動能/抗跌RS 由基本面這邊自動掃、不要 USER 額外壓；不要手動候選名單；重新設計成簡易的。」
+
+- **一條龍簡化**：① 基本面優選（自動）→ ② 勾條件（估值/EPS/缺貨/抗跌RS 可複選）→ **一鍵「🎯 開始選股」→ 直接出綜合評分名單**（可下載 CSV）。
+- **缺貨/抗跌RS 自動掃**：按「開始選股」時，若勾了缺貨/RS 且 session 尚無結果 → 自動呼叫 `run_shortage_scan` / `run_rs_leader_scan`（掃存活池），不再要求 USER 去「進階」按掃描。
+- **拿掉手動候選勾選**：picker 加 `auto_pick` 參數（`_t3_mode = auto_pick or 個股組合輸入`）→ 跳過 multiselect + 額外加碼。籌碼技術×6 改為**選用**深篩（勾了才對前 20 名自動跑，不用手動勾）。
+- **進階**：缺貨/RS 完整排行 + AI 三型報告收進「🔎 進階（選用）」摺疊，主流程不再依賴它。
+- §8 / 避雷：純 app.py L6 組裝 + picker 加 1 參數（向後相容，預設 False）；全 if/else 語句（magic-guard 在場，app.py 裸三元 0）。
+- 驗證：composite 10 單元 + auto_pick render（無 multiselect + 已自動帶入 + 無 exception）+ render smoke / 個股組合 picker 無 regression（24 pass / 2 skip）全綠。
+
+---
+
+## 🎛️ 2026-07-11 選股網 ②：複選因子 + 綜合評分排序（v19.88）
+
+> 使用者：「基本面選完後，讓 USER 點選 估值便宜/高EPS/缺貨動能/抗跌RS/籌碼技術×6，最終才選股。」確認採 **A（綜合評分）**。
+
+- **② 從「單選排序角度」升級為「複選因子 + 綜合評分」**：`st.multiselect` 勾選 估值便宜/高EPS/缺貨動能/抗跌RS（可複選）→ 每因子在存活池內排 0–100 百分位分 → **取平均為綜合分**降冪排序 → 餵 picker 候選。附「綜合評分排行」可展開表（看各因子分）。
+- **L3 純函式** `composite_rank_candidates`（+ `_percentile_scores`）：`pd.Series.rank(pct=True)` 算百分位（pe_low 低分高、其餘高分高）；缺料因子該股記 0（§1 不造假）；勾了缺貨/RS 但未掃描 → note 提示但不擋其他因子。
+- **籌碼技術×6**：因需逐檔深抓籌碼/技術資料（全 324 池即時算不切實際），維持在 **③「三階段深篩」當最後一關**（不入綜合分），UI 明示。
+- §8：純新增 L3 純函式 + app.py L6 multiselect 組裝，重用既有 picker/掃描元件，無新 fetcher、無跨層違規。避開 v19.87 magic 雷（全 if/else 語句，guard 測試在場）。
+- 驗證：10 綜合評分單元測試（百分位方向/缺料 0/複選平均/缺掃描 note/空因子/top_n）+ 1 實機 render（複選→綜合→picker multiselect 無 exception）+ 既有候選/magic-guard 無 regression 全綠。
+
+---
+
+## 🚑 2026-07-11 hotfix：選股網 AI 卡裸三元表達式炸整頁（v19.87）
+
+> 使用者截圖：選股網開啟即 `SyntaxError`（app.py:592 `st.markdown(x) if c else st.info(y)`）整頁掛。
+
+- **根因**：v19.86 我把 AI 置頂卡的 if/else 「簡化」成**裸三元表達式語句**。Streamlit 腳本的 magic 會把裸表達式自動 `st.write()` → 對三元結果呼叫 → 執行期炸（AST 合法故 compile-time 測不出，我的 render 測試也沒涵蓋這行）。
+- **修**：改回 `if _screener_ai_md: st.markdown(...) else: st.info(...)` 語句 + 加註解警示。
+- **防再犯**：新增 `tests/test_app_no_magic_bare_ternary.py`——AST 掃 app.py，禁止任何 `Expr(value=IfExp)`（裸三元表達式語句）。
+- 驗證：guard 測試 + 13 相關全綠；AST 掃描 app.py 裸三元 0 處。
+
+---
+
+## 🔭 2026-07-11 個股選股網重設計：3 步直線漏斗（從優選池挑候選）（v19.86）
+
+> 使用者：「個股選股網不喜歡，要從基本面優選前 300 檔再給選股選項，整合這 tab、簡化。」§7/§8 對齊後選 **B（整合＋保留）**。（原記 v19.74，因並行 v19.75~85 合併順延版號至 v19.86。）
+
+**現況病灶**：一個 tab 塞 6 塊；候選清單不是直接來自 324 檔優選池，而是繞「324 ∩ 估值池=146 → PE/殖利率=81 → 取 PE 最低 50」——與「基本面優選前 300」對不上；缺貨/抗跌RS 是兩個各自為政的全市場 expander。
+
+**重設計成 3 步直線漏斗（app.py tab_screener 重組）**：
+- **① 基本面優選池（四項全過 324）** — render_prescreen_panel（沿用）。
+- **② 從優選池挑候選** — 新增「排序角度」selectbox（估值便宜/高EPS/缺貨動能/抗跌RS）→ `build_candidate_frame` 從 324 存活池依角度排序 → 直接餵 picker 候選（拿掉中間估值池繞路）。
+- **③ 三階段深篩** — render_tab_stock_picker（候選來源改「基本面優選」）+ 殖利率確認。
+- **🔎 進階主題選股（摺疊）** — 缺貨 + 抗跌RS 完整排行；掃描結果（`_shortage_rows`/`_rs_rows` session）**回饋②的排序角度**（掃完回上方選「缺貨動能/抗跌RS」即帶入候選）。
+
+**分層（§8）**：L3 `fundamental_screener_service.build_candidate_frame`（**純函式**，所有資料 caller 傳入）+ `SCREEN_ANGLE_LABELS`（下拉 SSOT）；app.py 僅 L6 組裝，缺貨/RS/picker 全**重用**既有元件，無新 fetcher、無跨層違規。
+**§1 fail-loud**：存活池空 / 掃描未跑 / 掃描與存活池無交集 → 回空 + 精準 note，不炸不造假；pe_low 無 PE（OTC）以 +inf 墊底且不崩（None/NaN-safe 排序）。
+**驗證**：11 新測試（4 角度 + None/NaN PE 不崩 + 掃描需先跑 + 交集 + top_n + **實機 render：存活池→候選→picker multiselect 無 exception**）+ 28 服務相關無 regression 全綠。
+
+---
 
 ## 🛰️ 2026-07-11 資料異常實診修復：NDC 接 FinMind 官方鏡像 + 假 dataset 拔除 + 出口正名（v19.85）
 
@@ -324,7 +398,6 @@ user 指派第二份建議書;14 條主張逐條查證:**6 修 / 1 已修過(S1 
 - `test_resample_audit` 1 項:v18.461 週K `'W'`→`'W-SUN'` 後 inventory 未重盤;擴 regex 捕 anchored alias + expected 更新,並依該測試 docstring 要求同步 CLAUDE.md §4.5 一行（W→W-SUN 註記）。
 - **collection 全滅根因**（CI run #422 起 `Interrupted: errors during collection` exit 2,一個測試都沒跑）:`test_data_coverage`/`test_macro_classroom` 在**收集(import)階段**把 `sys.modules['streamlit']` 換成 stub(非 package),字母序在後的 `test_rs_leader_ui`(v19.70)+`test_macro_cross_ai_button_and_state`(v19.72)模組層 `from streamlit.testing.v1 import AppTest` 直接 ModuleNotFoundError。修法對齊同套件 `test_pe_river_merge_dtype`/`test_render_smoke` 既有慣例:AppTest e2e 測試歸 `@pytest.mark.slow` + 測試內 lazy import + setup 偵測不可用即 skip;按鈕名 source-scan 測試不需 AppTest,留 fast lane。（曾試「踢 stub 重載真 streamlit」免疫段,實測會翻掉其後 49 個依賴 stub 生態的測試 → 棄用,回歸 pe_river 模式。）
 - 全部為「代碼是對的、測試過期/測試互相污染」方向,無 production 行為變更。既有「4 項 risk_radar 全套件連跑 order-dependent 失敗」(單獨執行全過,test-infra lazy-forward vs patch 目標歧異)為 main 既有議題,不在本 PR 範圍,已知悉待議。
-
 ---
 
 ## 🐛 2026-07-10 §十一 新聞：加獨立「📰 掃描新聞」按鈕（v19.73）
