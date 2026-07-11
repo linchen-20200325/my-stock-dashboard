@@ -122,6 +122,100 @@ def get_snapshot_coverage_note(*, refresh: bool = False) -> str:
         return ""
 
 
+# ════════════════════════════════════════════════════════════════
+# 選股網「從優選池挑候選」— 依排序角度排出候選清單（v19.74 重設計）
+# ════════════════════════════════════════════════════════════════
+# UI 下拉 SSOT：label → angle key（與 build_candidate_frame 對應，禁止 UI 端寫死 key）。
+SCREEN_ANGLE_LABELS: dict[str, str] = {
+    "估值便宜（本益比低）": "pe_low",
+    "高 EPS（獲利高）": "eps_high",
+    "缺貨動能（需先於下方掃描）": "shortage",
+    "抗跌 RS 強（需先於下方掃描）": "rs_leader",
+}
+
+
+def build_candidate_frame(
+    survivors_df: pd.DataFrame,
+    *,
+    angle: str,
+    top_n: int = 300,
+    pe_map: dict | None = None,
+    name_map: dict | None = None,
+    shortage_rows: list[dict] | None = None,
+    rs_rows: list[dict] | None = None,
+) -> tuple[pd.DataFrame, str]:
+    """從基本面存活池，依「排序角度」排出候選 DataFrame（含 '代碼' 欄，供 picker 勾選）。
+
+    純函式（所有資料由 caller 傳入，無 I/O / session_state）：
+      - pe_low   : 依 pe_map 本益比由低到高（無 PE 排最後）
+      - eps_high : 依存活池 eps 由高到低
+      - shortage : 依 shortage_rows 缺貨分數（存活池 ∩ 掃描結果）；無掃描結果 → 空 + note
+      - rs_leader: 依 rs_rows RS(σ)（存活池 ∩ 掃描結果）；無掃描結果 → 空 + note
+
+    Returns: (df, note)。df 欄：代碼 / 名稱 / <角度指標>。df 空時 note 說明原因（§1/§5）。
+    """
+    pe_map = pe_map or {}
+    name_map = name_map or {}
+    if survivors_df is None or survivors_df.empty or "stock_id" not in survivors_df.columns:
+        return pd.DataFrame(columns=["代碼", "名稱"]), "基本面存活池為空（季快照未就緒，請先跑 Update Fundamentals）。"
+
+    ids = [str(s) for s in survivors_df["stock_id"].tolist()]
+    _id_set = set(ids)
+    eps_map = (dict(zip(ids, survivors_df["eps"].tolist()))
+               if "eps" in survivors_df.columns else {})
+
+    def _as_num(v, default: float) -> float:
+        """None / NaN / 非數字 → default（避免 sorted 比較 None 崩潰；缺值排最後）。"""
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return default
+        return default if f != f else f  # NaN
+
+    metric_label = ""
+    note = ""
+    if angle == "pe_low":
+        metric_label = "本益比"
+        # 本益比由低到高；無 PE（OTC 常見，不在 TWSE 估值表）→ +inf 排最後
+        ranked = sorted(ids, key=lambda c: _as_num(pe_map.get(c), float("inf")))
+        metric = {c: pe_map.get(c) for c in ranked}
+    elif angle == "eps_high":
+        metric_label = "EPS"
+        # EPS 由高到低；無 EPS → -inf → 排最後
+        ranked = sorted(ids, key=lambda c: -_as_num(eps_map.get(c), float("-inf")))
+        metric = {c: eps_map.get(c) for c in ranked}
+    elif angle == "shortage":
+        metric_label = "缺貨分數"
+        if not shortage_rows:
+            return (pd.DataFrame(columns=["代碼", "名稱"]),
+                    "『缺貨動能』排序需先在下方「🔎 進階主題選股」掃描缺貨股，掃完會自動帶上來。")
+        ranked = [str(r.get("代碼", "")) for r in shortage_rows
+                  if str(r.get("代碼", "")) in _id_set]
+        metric = {str(r.get("代碼", "")): r.get("缺貨分數") for r in shortage_rows}
+    elif angle == "rs_leader":
+        metric_label = "RS(σ)"
+        if not rs_rows:
+            return (pd.DataFrame(columns=["代碼", "名稱"]),
+                    "『抗跌 RS』排序需先在下方「🔎 進階主題選股」掃描抗跌股，掃完會自動帶上來。")
+        ranked = [str(r.get("代碼", "")) for r in rs_rows
+                  if str(r.get("代碼", "")) in _id_set]
+        metric = {str(r.get("代碼", "")): r.get("RS(σ)") for r in rs_rows}
+    else:
+        ranked, metric = ids, {}
+
+    ranked = ranked[: int(top_n)]
+    if not ranked:
+        return (pd.DataFrame(columns=["代碼", "名稱"]),
+                "此角度在存活池內無可排序標的（掃描結果與存活池無交集）。")
+    out = pd.DataFrame({
+        "代碼": ranked,
+        "名稱": [str(name_map.get(c, "")) for c in ranked],
+    })
+    if metric_label:
+        out[metric_label] = [metric.get(c) for c in ranked]
+    return out, note
+
+
 def gate_pool_by_fundamentals(
     pool_df: pd.DataFrame,
     code_col: str = "代碼",

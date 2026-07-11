@@ -1,5 +1,23 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔭 2026-07-11 個股選股網重設計：3 步直線漏斗（從優選池挑候選）（v19.86）
+
+> 使用者：「個股選股網不喜歡，要從基本面優選前 300 檔再給選股選項，整合這 tab、簡化。」§7/§8 對齊後選 **B（整合＋保留）**。（原記 v19.74，因並行 v19.75~85 合併順延版號至 v19.86。）
+
+**現況病灶**：一個 tab 塞 6 塊；候選清單不是直接來自 324 檔優選池，而是繞「324 ∩ 估值池=146 → PE/殖利率=81 → 取 PE 最低 50」——與「基本面優選前 300」對不上；缺貨/抗跌RS 是兩個各自為政的全市場 expander。
+
+**重設計成 3 步直線漏斗（app.py tab_screener 重組）**：
+- **① 基本面優選池（四項全過 324）** — render_prescreen_panel（沿用）。
+- **② 從優選池挑候選** — 新增「排序角度」selectbox（估值便宜/高EPS/缺貨動能/抗跌RS）→ `build_candidate_frame` 從 324 存活池依角度排序 → 直接餵 picker 候選（拿掉中間估值池繞路）。
+- **③ 三階段深篩** — render_tab_stock_picker（候選來源改「基本面優選」）+ 殖利率確認。
+- **🔎 進階主題選股（摺疊）** — 缺貨 + 抗跌RS 完整排行；掃描結果（`_shortage_rows`/`_rs_rows` session）**回饋②的排序角度**（掃完回上方選「缺貨動能/抗跌RS」即帶入候選）。
+
+**分層（§8）**：L3 `fundamental_screener_service.build_candidate_frame`（**純函式**，所有資料 caller 傳入）+ `SCREEN_ANGLE_LABELS`（下拉 SSOT）；app.py 僅 L6 組裝，缺貨/RS/picker 全**重用**既有元件，無新 fetcher、無跨層違規。
+**§1 fail-loud**：存活池空 / 掃描未跑 / 掃描與存活池無交集 → 回空 + 精準 note，不炸不造假；pe_low 無 PE（OTC）以 +inf 墊底且不崩（None/NaN-safe 排序）。
+**驗證**：11 新測試（4 角度 + None/NaN PE 不崩 + 掃描需先跑 + 交集 + top_n + **實機 render：存活池→候選→picker multiselect 無 exception**）+ 28 服務相關無 regression 全綠。
+
+---
+
 ## 🛰️ 2026-07-11 資料異常實診修復：NDC 接 FinMind 官方鏡像 + 假 dataset 拔除 + 出口正名（v19.85）
 
 user 實機截圖回報 4 筆資料異常(台灣出口 YoY 未取得 / 台灣製造業 PMI 未取得 / NDC 燈號+分數 101 天前 / 外銷訂單卡「待取得」但診斷清單沒出現)。逐鏈活體診斷(沙箱 egress 全 403 → 改以 FinMind SDK 2.0.4 枚舉 + WebSearch + 基金 repo 交叉證據)結論與修復:
@@ -186,7 +204,6 @@ user 指派第二份建議書;14 條主張逐條查證:**6 修 / 1 已修過(S1 
 - `test_resample_audit` 1 項:v18.461 週K `'W'`→`'W-SUN'` 後 inventory 未重盤;擴 regex 捕 anchored alias + expected 更新,並依該測試 docstring 要求同步 CLAUDE.md §4.5 一行（W→W-SUN 註記）。
 - **collection 全滅根因**（CI run #422 起 `Interrupted: errors during collection` exit 2,一個測試都沒跑）:`test_data_coverage`/`test_macro_classroom` 在**收集(import)階段**把 `sys.modules['streamlit']` 換成 stub(非 package),字母序在後的 `test_rs_leader_ui`(v19.70)+`test_macro_cross_ai_button_and_state`(v19.72)模組層 `from streamlit.testing.v1 import AppTest` 直接 ModuleNotFoundError。修法對齊同套件 `test_pe_river_merge_dtype`/`test_render_smoke` 既有慣例:AppTest e2e 測試歸 `@pytest.mark.slow` + 測試內 lazy import + setup 偵測不可用即 skip;按鈕名 source-scan 測試不需 AppTest,留 fast lane。（曾試「踢 stub 重載真 streamlit」免疫段,實測會翻掉其後 49 個依賴 stub 生態的測試 → 棄用,回歸 pe_river 模式。）
 - 全部為「代碼是對的、測試過期/測試互相污染」方向,無 production 行為變更。既有「4 項 risk_radar 全套件連跑 order-dependent 失敗」(單獨執行全過,test-infra lazy-forward vs patch 目標歧異)為 main 既有議題,不在本 PR 範圍,已知悉待議。
-
 ---
 
 ## 🐛 2026-07-10 §十一 新聞：加獨立「📰 掃描新聞」按鈕（v19.73）
