@@ -186,6 +186,19 @@ def render_tab_macro():
         st.info('👉 點擊上方按鈕載入總經資料')
         return
 
+    # ── ⚡ 今日關鍵橫幅(v19.108 第九份 4-C 精簡版)──────────────
+    # 門檻層吃 section_mid 載入時寫入的 session_state['macro_alerts']
+    # (MACRO_ALERT_RULES SSOT 命中);急變層吃 macro_info 的 vix 序列/
+    # fed_funds prev。零新 I/O(全讀 session);首次載入完成前 alerts 為
+    # None → 橫幅誠實顯示「無異常」層待資料,下輪 rerun 自動補齊。
+    from src.compute.macro.daily_key_alerts import collect_key_alerts as _cka
+    from src.ui.render.macro_ui_components import key_alerts_banner as _kab
+    st.markdown(
+        _kab(_cka(st.session_state.get('macro_alerts'),
+                  st.session_state.get('macro_info'))),
+        unsafe_allow_html=True,
+    )
+
     # ════════════════════════════════════════════════════════
     # 【模組一】紅綠燈決策儀表板(P3-D9 v18.391:抽至 section_traffic_light)
     # 回傳 (placeholder, show_market_data, tl_eff_reg);warroom_summary 內部寫。

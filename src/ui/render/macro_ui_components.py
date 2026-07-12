@@ -189,3 +189,34 @@ def section_header(num, title: str, icon: str = ""):
             f'border-left:3px solid #1f6feb;border-radius:0 6px 6px 0;'
             f'padding:8px 14px;margin:16px 0 10px 0;">'
             f'<span style="color:#1f6feb;font-weight:700;">{icon} {num}、{title}</span></div>')
+
+
+def key_alerts_banner(result: dict) -> str:
+    """⚡ 今日關鍵橫幅 HTML(v19.108;資料來自 L2 daily_key_alerts,純渲染)。
+
+    - 有異常:紅/黃左框橫條,item 以 chip 併排(hover title=白話 detail)。
+    - 無異常:細綠條「今日無異常」— 誠實顯示掃描過而非硬擠內容(§1)。
+    """
+    items = (result or {}).get('items') or []
+    if not items:
+        return ('<div style="background:#0d2318;border-left:3px solid '
+                f'{TRAFFIC_GREEN};border-radius:0 6px 6px 0;padding:6px 14px;'
+                'margin:4px 0 10px 0;">'
+                f'<span style="color:{TRAFFIC_GREEN};font-size:12px;">'
+                '✅ 今日關鍵：門檻＋急變雙層掃描無異常</span></div>')
+    _n_red = (result or {}).get('n_red', 0)
+    _bc = TRAFFIC_RED if _n_red else TRAFFIC_YELLOW
+    _bg = '#2d1b1b' if _n_red else '#2d2208'
+    _chips = ''.join(
+        f'<span title="{i.get("detail", "")}" '
+        f'style="display:inline-block;background:#161b22;border:1px solid #30363d;'
+        f'border-radius:6px;padding:2px 8px;margin:2px 6px 2px 0;font-size:12px;'
+        f'color:#e6edf3;cursor:help;">{i.get("emoji", "")} {i.get("text", "")}</span>'
+        for i in items)
+    return (f'<div style="background:{_bg};border-left:3px solid {_bc};'
+            'border-radius:0 6px 6px 0;padding:8px 14px;margin:4px 0 10px 0;">'
+            f'<span style="color:{_bc};font-weight:700;font-size:13px;">'
+            f'⚡ 今日關鍵（{len(items)} 項）</span><br>{_chips}'
+            '<div style="font-size:10px;color:#8b949e;margin-top:2px;">'
+            '滑鼠停在項目上看白話說明｜門檻層=總經警示規則命中｜急變層=單期變化超限'
+            '</div></div>')
