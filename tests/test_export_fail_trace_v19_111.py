@@ -57,7 +57,8 @@ class TestExportFailTrace:
         snap = _all_sources_down
         out = snap.fetch_export_block(fred_api_key='', finmind_token='')
         tok = out['_err_export']
-        for tier in ('stat.gov.tw', 'FRED-API', 'MOF-CSV',
+        # v19.112:MOF-CSV 段依探針實錘下架後拔除,tier 清單同步(6→5 段)
+        for tier in ('stat.gov.tw', 'FRED-API',
                      'data.gov.tw/6053', 'FRED-CSV', 'CKAN'):
             assert tier in tok, f'{tier} 段失敗須在 token 留痕，token={tok!r}'
         # 無 key 場景：FRED-API 段要標 skip 而非無聲消失

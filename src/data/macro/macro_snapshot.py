@@ -43,8 +43,67 @@ from shared.ttls import TTL_1HOUR
 
 # S7 v19.78:原每呼叫 new Session → 連線池零複用。改 thread-local 單例
 # (同 data_loader._bps_dl 模式;macro snapshot 各 block fetcher 高頻共用)。
+import functools as _ft_ms
 import threading as _th_ms
 _TLS_MS = _th_ms.local()
+
+
+# ── v19.112「失敗不進快取」(user 核准提案①) ────────────────────
+# 病灶:六個總經 block 掛 @st.cache_data(ttl=1h),**失敗 dict 也被快取** —
+# 一次上游打嗝(如 2026-07-12 dgtw 05:32 cron 死、14:13 探針活的間歇)被凍存
+# 一小時,期間按「🚀 一鍵更新」(吃暖快取)拿到的仍是凍住的失敗 → user 看到
+# 「待取得」誤判資料源全滅。修法:st.cache_data 對「拋例外」的呼叫不落快取
+# (Streamlit 官方語意),故以內部例外承載失敗 dict 穿透快取層,外層還原,
+# 對 caller 契約零改變(§1:失敗仍誠實回 _err_* dict,只是不再被凍存)。
+
+class _BlockFetchFailed(Exception):
+    """內部訊號:block 抓取失敗 → 讓 st.cache_data 不落快取。不外洩至 caller。"""
+
+    def __init__(self, payload: dict):
+        super().__init__('block fetch failed (not cached)')
+        self.payload = payload
+
+
+def _is_block_failure(out: dict) -> bool:
+    """失敗判準:空 dict、或全部鍵皆 `_` 前綴(僅診斷鍵、無資料鍵)。
+
+    對照六 block 的回傳形狀:成功必含資料鍵(vix / us_core_cpi / fed_funds /
+    ism_pmi / ndc_signal / tw_export),失敗僅含 `_err_*`(v19.111 起出口亦然)。
+    """
+    if not isinstance(out, dict) or not out:
+        return True
+    return all(str(k).startswith('_') for k in out)
+
+
+def _cache_success_only(ttl: int):
+    """@st.cache_data 變體:**只快取成功結果**,失敗穿透(下次呼叫真重試)。
+
+    用法與行為:
+    - 成功(含資料鍵)→ 照常入快取,TTL 內回快取值(效能/quota 不變)
+    - 失敗(_is_block_failure)→ 以 _BlockFetchFailed 拋出 → st.cache_data
+      不寫入 → 外層攔截還原原 dict 回傳 → caller 無感
+    - `.clear()` 透傳(「🆕 強制重抓」的全域清快取亦照常涵蓋)
+    """
+    def _deco(fn):
+        @st.cache_data(ttl=ttl, show_spinner=False)
+        @_ft_ms.wraps(fn)   # wraps 保 __qualname__ 各 block 快取鍵獨立
+        def _inner(*args, **kwargs):
+            out = fn(*args, **kwargs)
+            if _is_block_failure(out):
+                raise _BlockFetchFailed(out)
+            return out
+
+        @_ft_ms.wraps(fn)
+        def _outer(*args, **kwargs):
+            try:
+                return _inner(*args, **kwargs)
+            except _BlockFetchFailed as _bf:
+                return _bf.payload
+
+        # 無 streamlit 環境(_NoOpST)時裸函式無 .clear → no-op(EX-CACHE-1 同精神)
+        _outer.clear = getattr(_inner, 'clear', lambda: None)  # type: ignore[attr-defined]
+        return _outer
+    return _deco
 
 
 def _make_proxy_session():
@@ -76,7 +135,7 @@ def _make_proxy_session():
     return _s
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
 def fetch_vix_block() -> dict:
     """VIX（^VIX, 3mo, 日線）→ `{'vix': {current, ma20, dates, values, date}}`。
 
@@ -334,7 +393,7 @@ def fetch_twii_2y_for_ma240():
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
 def fetch_cpi_block(fred_api_key: str = '') -> dict:
     """美國核心 CPI YoY(CPILFESL,3 路 fallback)。
 
@@ -505,7 +564,7 @@ def fetch_us10y_block(fred_api_key: str = '') -> dict:
     return {'us10y': {'_err': '|'.join(_errs), 'current': None, 'value': None}}
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
 def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
     """Fed Funds Rate(FEDFUNDS,2 路 fallback)。
 
@@ -580,9 +639,9 @@ def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
     return {'_err_fed_funds': ' | '.join(_ff_errs) or 'all failed'}
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
 def fetch_tw_pmi_block() -> dict:
-    """台灣 PMI(CIER 中華經濟研究院,委派 macro_core.fetch_tw_pmi 4 段備援)。
+    """台灣 PMI(CIER 中華經濟研究院,委派 macro_core.fetch_tw_pmi 8 源並行賽跑)。
 
     session_state key 仍為 'ism_pmi' 維持向後相容(14 處讀取點不必動),
     內容是台灣 PMI;UI 顯示為「🇹🇼 台灣製造業 PMI」。
@@ -592,10 +651,10 @@ def fetch_tw_pmi_block() -> dict:
     _result = _ftp()
     if _result.get('value') is not None:
         return {'ism_pmi': _result}
-    return {'_err_pmi': _result.get('_err_pmi', '4 段備援全失敗')}
+    return {'_err_pmi': _result.get('_err_pmi', '8 源並行全失敗')}
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
 def fetch_ndc_block() -> dict:
     """NDC 景氣對策信號(FinMind-TBI + StockFeel + MacroMicro 三源)。
 
@@ -705,17 +764,17 @@ def fetch_ndc_block() -> dict:
     return {'_err_ndc': 'FinMind-TBI + StockFeel + MacroMicro 三源皆失敗'}
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
 def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     """台灣出口 YoY(海關出口年增率,5 路 fallback)。
 
     Tier 0: stat.gov.tw(DGBAS 官方點資料頁,走 fetch_url NAS proxy)
     Tier 1: FRED API XTEXVA01TWM664S(OECD MEI;⚠️ OECD 已停止 MEI 供應,
             FRED 端此系列 2024 起不再更新/可能下架 — 保留待證,失敗無害)
-    Tier 2: MOF 財政部統計處 CSV(NAS proxy 台灣 IP 可直接存取)
-    Tier 3: data.gov.tw dataset 6053(海關進出口貿易統計)
-    Tier 4: FRED fredgraph CSV(同上系列,同上警語)
-    Tier 5: data.gov.tw CKAN(財政部進出口統計 fallback)
+    Tier 2: data.gov.tw dataset 6053(海關進出口貿易統計)
+    Tier 3: FRED fredgraph CSV(同上系列,同上警語)
+    Tier 4: data.gov.tw CKAN(財政部進出口統計 fallback)
+    (v19.112 拔除原 MOF trade CSV 段 — 探針實錘舊端點族已下架,見下)
 
     (v19.85 拔除)原「FinMind TaiwanEconomicIndicator」段 — 該 dataset 名
     不存在於 FinMind(SDK 2.0.4 Dataset 枚舉 + 官方文件皆無),段位從未命中,
@@ -723,7 +782,7 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     ⚠️ Tier 0/2/3/5 為台灣官方站,Streamlit Cloud 境外 IP 常被 WAF/geo 擋
     → 實際存活依賴 NAS proxy;NAS 掛掉時本鏈可能全滅(見 STATE v19.85 診斷)。
 
-    全敗回 {}(§1:**不捏造**任何數值),caller 顯示「待取得」placeholder。
+    全敗回 {'_err_export': 'src:err | ...'}(v19.111 起;僅診斷鍵、**不捏造**任何數值鍵),caller 顯示「待取得」placeholder + 錯誤碼面板可見。
     P3-D1 v18.389 抽出。logic verbatim from tab_macro._job_macro._fetch_export。
     """
     import datetime as _dt_ex
@@ -794,41 +853,9 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     else:
         _ex_errs.append('FRED-API:skip(無 FRED key)')
 
-    # 方案 MOF: 財政部統計處 CSV — 透過 NAS proxy(台灣 IP)
-    try:
-        from src.data.proxy import fetch_url as _fu_ex
-        _now_ex = _dt_ex.date.today()
-        _mof_found = False
-        for _m_off in range(0, 2):
-            if _mof_found:
-                break
-            _chk = (_now_ex.replace(day=1) - _dt_ex.timedelta(days=_m_off * 30))
-            for _mof_url in [
-                f'https://service.mof.gov.tw/public/Data/statistic/trade/excel/{_chk.year}{_chk.month:02d}.csv',
-                f'https://service.mof.gov.tw/public/Data/statistic/trade/html/{_chk.year}{_chk.month:02d}.csv',
-            ]:
-                try:
-                    _r_mof = _fu_ex(_mof_url, timeout=10, attempts=1)
-                    if _r_mof is not None and len(_r_mof.content) > 500:
-                        _df_mof = _pd7.read_csv(
-                            _io_ex.StringIO(_r_mof.content.decode('utf-8-sig', errors='ignore')),
-                            header=None)
-                        _vals_mof = _pd7.to_numeric(_df_mof.iloc[:, 1], errors='coerce').dropna()
-                        if len(_vals_mof) >= 13:
-                            _yoy_mof = round((_vals_mof.iloc[-1] - _vals_mof.iloc[-13]) /
-                                             abs(_vals_mof.iloc[-13]) * 100, 2)
-                            print(f'[Export/MOF] ✅ YoY={_yoy_mof:.2f}% url={_mof_url[-25:]}')
-                            _mof_found = True
-                            return {'tw_export': {'yoy': _yoy_mof,
-                                                  'date': f'{_chk.year}-{_chk.month:02d}',
-                                                  'source': 'MOF-proxy'}}
-                except Exception:
-                    continue
-        if not _mof_found:
-            _ex_errs.append('MOF-CSV:近2月×2式 URL 皆無資料')
-    except Exception as _e_mof:
-        print(f'[Export/MOF] ❌ {type(_e_mof).__name__}: {_e_mof}')
-        _ex_errs.append(f'MOF-CSV:{type(_e_mof).__name__}')
+    # (v19.112 拔除)方案 MOF service.mof.gov.tw trade CSV — 探針
+    # run 29182317622 實錘該端點族 NAS+直連皆無回應(舊制式已下架),
+    # 留著只是每輪多打 4 個必死 URL。user 核准提案②移除。
 
     # 方案 DGTW: data.gov.tw dataset 6053
     try:

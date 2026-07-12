@@ -1008,7 +1008,7 @@ def fetch_tw_market_snapshot(days_back: int = 7) -> dict:
 # 枚舉 + 官方文件皆無),恆回 None;且 **0 production caller**(僅 schemas.py
 # docstring 提及、無任何 import/呼叫)。原為 S-H4 v18.243 自 merrill_clock 下沉,
 # 但 merrill_clock 已於 v18.359 整檔刪除,此函式隨之成孤兒。
-# 當期 TW PMI 由 `fetch_tw_pmi`(macro_core,9 源賽跑)供應,不需本死路徑。
+# 當期 TW PMI 由 `fetch_tw_pmi`(macro_core,8 源賽跑)供應,不需本死路徑。
 # git history 可查回。§3.3 反捏造 + 死碼零殘留。
 # ════════════════════════════════════════════════════════════════
 

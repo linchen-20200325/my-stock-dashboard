@@ -851,20 +851,19 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 #   Stock 端是台股視角，台灣景氣與本地 PMI 直接相關（CIER 是官方發布單位，
 #   每月第一個工作日上午 10:00 公布前一個月數據）。
 #
-# 備援順序（4 段）：
-#   1. MacroMicro 財經 M 平方（中文 HTML，圖表頁含最新值，較穩定）
-#   2. CIER 官網最新公告（HTML 列表頁解析）
-#   3. StockFeel 股感（搜尋頁）
-#   4. 鉅亨網（HTML，PMI 公告新聞）
+# 備援順序：見檔末 PMI_SOURCE_REGISTRY(v19.112 起 8 源;本註解原列 4 段為
+# v10 時代殘影,以 registry 為 SSOT 不再重複列舉)
 # ══════════════════════════════════════════════════════════════
 
 @monitored('fetch_tw_pmi', category='🇹🇼 台灣總經', frequency='monthly',
            registry_key='🇹🇼 台灣 PMI 製造業指數')   # v19.96 批次4 Item1
 def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
-    """抓取台灣製造業 PMI（9 來源並行賽跑，依優先序取最高優先的有效值；月頻）。
+    """抓取台灣製造業 PMI（8 來源並行賽跑，依優先序取最高優先的有效值；月頻）。
 
-    來源優先序：CIER-EN → data.gov.tw → NDC → MacroMicro → CIER(cid21) → StockFeel
+    來源優先序：CIER-EN → data.gov.tw → NDC → CIER(首頁) → StockFeel
                 → Cnyes → CIER(cid8) → MoneyDJ
+    (v19.112 拔除 MacroMicro 段 — 探針 run 29182317622 實錘 host 級無回應;
+    CIER 段的 cid=21 列表 URL 同輪實錘下架,改僅掃首頁。user 核准提案②。)
     (v19.85 拔除 FinMind 段 — 原打 dataset `TaiwanEconomicIndicator` 不存在於
     FinMind(SDK 2.0.4 枚舉 + 官方文件皆無此名),且 FinMind 無 PMI 資料集可替換,
     段位從未命中,只浪費一次 API 呼叫。§3.3 反捏造。)
@@ -904,16 +903,16 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     # 依來源優先序回傳第一個命中（與原序列 fallback 語義一致）
     for _nm, _ in _sources:
         if _nm in _results:
-            print(f'[macro_core/TW-PMI] ✅ 採用 {_nm}（9 源並行，依優先序）')
+            print(f'[macro_core/TW-PMI] ✅ 採用 {_nm}（8 源並行，依優先序）')
             # v18.225 T1：命中即 snapshot 持久化，作為後續全失敗時的 stale fallback
             _macro_cache_save('tw_pmi', _results[_nm])
             # S-PROV-1 v18.254:provenance fetched_at(orchestrator-level)
             _hit = dict(_results[_nm])
             _hit['fetched_at'] = _fetched_at
             return _hit
-    err_msg = ' | '.join(errs) or 'all 9 stages failed'
-    print(f'[macro_core/TW-PMI] ❌ 9 段並行全失敗：{err_msg}')
-    # v18.225 T1：9 段全失敗 → 讀 stale cache（90 天 TTL），UI 端顯示 🟡 而非 🔴
+    err_msg = ' | '.join(errs) or 'all 8 stages failed'
+    print(f'[macro_core/TW-PMI] ❌ 8 段並行全失敗：{err_msg}')
+    # v18.225 T1：8 段全失敗 → 讀 stale cache（90 天 TTL），UI 端顯示 🟡 而非 🔴
     _stale = _macro_cache_load('tw_pmi')
     if _stale:
         _stale = dict(_stale)
@@ -1138,44 +1137,18 @@ def _pmi_src_ndc(today, max_age_days, errs):
     return None
 
 
-def _pmi_src_macromicro(today, max_age_days, errs):
-    """方案 1: MacroMicro 財經 M 平方（chart 22 = 台灣 PMI）。"""
-    try:
-        from bs4 import BeautifulSoup
-        for url in ('https://www.macromicro.me/charts/22/taiwan-pmi',
-                    'https://www.macromicro.me/charts/16/tw-pmi'):
-            r = fetch_url(url, timeout=12, attempts=1)
-            if r is None:
-                errs.append(f'MacroMicro.{url[-20:]}:無回應')
-                continue
-            r.encoding = 'utf-8'
-            txt = BeautifulSoup(r.text, 'html.parser').get_text(' ', strip=True)
-            # 模式：「台灣 PMI ... 49.0」/「製造業 PMI 49.0 (2026/04)」
-            m = _re.search(
-                r'(?:台灣|TW|Taiwan)[^。]{0,40}?(?:PMI|採購經理[人]?指數)[^。]{0,200}?'
-                r'(\d{2}\.\d)[^。]{0,80}?(20\d{2})[\s/年-]+(\d{1,2})',
-                txt)
-            if m:
-                v = float(m.group(1)); yr = m.group(2); mo = int(m.group(3))
-                if 30 <= v <= 70 and 1 <= mo <= 12:
-                    date = f'{yr}-{mo:02d}-01'
-                    print(f'[macro_core/TW-PMI/MacroMicro] ✅ {v} date={date}')
-                    return {'value': v, 'date': date,
-                            'label': 'MacroMicro 台灣 PMI',
-                            'source': 'MacroMicro', 'is_proxy': False,
-                            'series_id': '22'}
-    except Exception as e:
-        errs.append(f'MacroMicro:{type(e).__name__}')
-        print(f'[macro_core/TW-PMI/MacroMicro] ❌ {e}')
-    return None
+# (v19.112 拔除)_pmi_src_macromicro — 探針 run 29182317622 實錘
+# macromicro.me host 級無回應(NAS+直連皆敗,charts/22 與 /16 同域同攔),
+# 留著只是每輪賽跑多等一個必死源。user 核准提案②移除(§-1 實錯觸發)。
 
 
 def _pmi_src_cier21(today, max_age_days, errs):
-    """方案 2: CIER 官網最新公告列表（cid=21 新聞稿/PMI 類別）。"""
+    """方案 2: CIER 官網首頁標題掃描(v19.112 起;原 cid=21 列表頁已下架)。"""
     try:
         from bs4 import BeautifulSoup
-        for cier_url in ('https://www.cier.edu.tw/news/list?cid=21',
-                         'https://www.cier.edu.tw/'):
+        # v19.112:原第一 URL news/list?cid=21 探針實錘無回應(站改版下架),
+        # 僅保留首頁掃描(未實測死亡,不越權拔;標題常含最新 PMI 發布)。
+        for cier_url in ('https://www.cier.edu.tw/',):
             r = fetch_url(cier_url, timeout=12, attempts=1)
             if r is None:
                 errs.append(f'CIER.{cier_url[-15:]}:無回應')
@@ -1355,7 +1328,6 @@ PMI_SOURCE_REGISTRY: list[tuple[str, Callable]] = [
     ('CIER-EN',     _pmi_src_cier_en_monthly),
     ('data.gov.tw', _pmi_src_dgtw),
     ('NDC',         _pmi_src_ndc),
-    ('MacroMicro',  _pmi_src_macromicro),
     ('CIER',        _pmi_src_cier21),
     ('StockFeel',   _pmi_src_stockfeel),
     ('Cnyes',       _pmi_src_cnyes),

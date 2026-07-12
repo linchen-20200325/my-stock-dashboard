@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧊 2026-07-12 失敗不進快取 + 死源清理（v19.112,user 核准提案①+②）
+
+v19.111 診斷收斂後 user 補測推翻「雲端連不到 NAS」假設(app 內 proxy 雙跑全綠、NAS 測試 978ms 成功)→ 真根因 = **凍結機制**:六個總經 block 掛 `@st.cache_data(ttl=1h)` 且失敗 dict 也被快取;「🚀 一鍵更新」吃暖快取(help 文字自證)、畫面讀 session_state — 一次上游打嗝(同日實錘 dgtw 05:32 cron 死 / 14:13 探針活的間歇)被凍住顯示。user 核准「1+2」:
+
+- **①失敗不進快取**:新 `_cache_success_only(ttl)` 裝飾器(macro_snapshot 模組內)— 失敗(空 dict 或全 `_` 前綴鍵,`_is_block_failure`)以內部例外 `_BlockFetchFailed` 穿透 st.cache_data(官方語意:拋例外不落快取),外層還原 err dict;成功照常入快取。`.clear()` 透傳(強制重抓按鈕 + 3 個既有測試依賴)。換裝 6 block:vix/cpi/fed_funds/tw_pmi/ndc/export。**不納入**:`fetch_m1b_m2_block`(失敗回 None)與 `fetch_us10y_block`(失敗形狀 `{'us10y':{'_err':...}}` 帶資料鍵)— 形狀不同判準不適用,等實錯再議(§-1)。
+- **②死源清理**(探針 run 29182317622 實錘,user 核准範圍):PMI 賽跑拔 MacroMicro 段(host 級無回應,9→8 源)+ CIER 段拔已下架的 `news/list?cid=21` URL(保留未實測死亡的首頁掃描);出口鏈拔 MOF `service.mof.gov.tw` trade CSV 段(端點族下架,6→5 tier)。**未越權拔**:CIER-cid8(未探測)、US PMI 的 MacroMicro 段與 NDC 的 MacroMicro 備援(非本次範圍)。
+- **文件同步**:CLAUDE.md §2.1(8 源+v19.112 註)/ SPEC §4 表整張重寫(原表停在 v19.85 前:仍列 FinMind、缺 CIER-EN — 陳年漂移一併矯正)/ health_inspector 兩張表 / tab_edu / data_registry / schemas / tw_macro 共 5 處殘留「9 源」字串對正(其中 2 處連 FinMind 都還列著)。
+- **回歸網**:`tests/test_cache_success_only_v19_112.py`(凍結 bug 棺材釘:全敗→上游復原→同參數再呼叫**必須真重抓**;成功→斷線→**必須回快取**;判準單元含混合鍵;6 block 裝飾掃描;.clear 透傳)— 對帳基準用財政部 6 月出口 +40.3%(2026-07-09 公布)。重釘 `test_review_fixes_v19_85`(9→8 源,加 MacroMicro 不得回歸)與 `test_export_fail_trace_v19_111`(tier 6→5)。macro 子集 802 passed。
+- **對 caller 零改變**:契約(成功資料鍵/失敗 `_err_*`)不動;效能不退(成功仍快取 1h);EX-CACHE-1 letter 不變(內部仍 st.cache_data,無 UI 呼叫,_NoOpST 環境 .clear 以 getattr 護)。
+
 ## 🔎 2026-07-12 出口 YoY 全敗 fail-trace 補接（v19.111,user 回報實錯觸發）
 
 user 驗收統一卡時回報「外需動能溫度計 台灣出口 YoY 無資料」+「台灣 PMI 也沒有資料」(§-1 實錯觸發)。診斷證據(GitHub Actions 每日 cron 2026-07-11 21:32 UTC run 29168967659,帶 PROXY_URL 走 NAS):

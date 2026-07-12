@@ -63,21 +63,21 @@ _likely_private = (
 
 ---
 
-## §4 TW PMI 8 段備援源 — 失敗追蹤格式
+## §4 TW PMI 8 源並行賽跑 — 失敗追蹤格式
 
-> 來源：`macro_core.fetch_tw_pmi`。失敗時回 `{'_err_pmi': str, 'value': None}`，`_err_pmi` 為各源失敗原因以 ` | ` 串接。
+> 來源：`macro_core.fetch_tw_pmi` + `PMI_SOURCE_REGISTRY`（SSOT）。失敗時回 `{'_err_pmi': str, 'value': None}`，`_err_pmi` 為各源失敗原因以 ` | ` 串接。
+> （v19.112 同步：本表原停在 v19.85 前的 9 段舊制 — 仍列已拔的 FinMind、缺 v19.85 新增的 CIER-EN。以下依現行 registry 重寫；MacroMicro 段與 CIER cid=21 URL 於 v19.112 依探針 run 29182317622 實錘拔除。）
 
-| 階段 | 來源 | 失敗 token 範例 |
+| 優先序 | 來源 | 失敗 token 範例 |
 |------|------|-----------------|
-| 0 | data.gov.tw dataset/6100 | `dgtw./rest/dataset/6100:無回應` / `dgtw.xxx:HTTP503` |
-| 0b | 國發會 NDC 景氣指標 | `NDC.a/indicator/PMI:無回應` / `NDC.xxx:HTTP404` |
-| 1 | MacroMicro chart 22 / 16 | `MacroMicro.charts/22/taiwan-pmi:無回應` |
-| 2 | CIER cid=21 / 首頁 | `CIER.ews/list?cid=21:無回應` |
-| 3 | StockFeel 搜尋頁 | `StockFeel:無回應` |
-| 4 | 鉅亨網 API | `Cnyes:無回應` |
-| 5 | FinMind TaiwanEconomicIndicator | `FinMind:無 token` / `FinMind:JSONDecodeError` |
-| 6 | CIER cid=8（PMI 專欄） | `CIER-cid8.news/list?cid=8:無回應` |
-| 7 | MoneyDJ 知識庫搜尋 | `MoneyDJ:無回應` |
+| 1 | CIER 英文月度頁 | `CIER-EN.taiwan-manufacturing-pmi-june-2026:HTTP404` |
+| 2 | data.gov.tw dataset/6100 | `dgtw./rest/dataset/6100:無回應` / `dgtw.xxx:HTTP503` |
+| 3 | 國發會 NDC 景氣指標 | `NDC.a/indicator/PMI:無回應` / `NDC.xxx:HTTP404` |
+| 4 | CIER 首頁標題掃描 | `CIER.ww.cier.edu.tw/:無回應` |
+| 5 | StockFeel 搜尋頁 | `StockFeel:無回應` |
+| 6 | 鉅亨網 API | `Cnyes:無回應` |
+| 7 | CIER cid=8（PMI 專欄） | `CIER-cid8.news/list?cid=8:無回應` |
+| 8 | MoneyDJ 知識庫搜尋 | `MoneyDJ:無回應` |
 
 **設計原則**：每段失敗都必須寫入 `errs`，避免使用者只看到部分失敗訊息誤判系統。
 
