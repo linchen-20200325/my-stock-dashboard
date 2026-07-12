@@ -51,7 +51,7 @@ DATA_REGISTRY: list[dict[str, Any]] = [
      'usage':'通膨判讀、Fed 升降息預測',
      'state_key':'macro_info.us_core_cpi.date', 'pingable':True,
      'ping_url':'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPILFESL'},
-    {'category':'🇹🇼 台灣總經', 'name':'台灣製造業 PMI (CIER)', 'source':'CIER-EN + data.gov.tw 6100 + 9 段並行',
+    {'category':'🇹🇼 台灣總經', 'name':'台灣製造業 PMI (CIER)', 'source':'CIER-EN + data.gov.tw 6100 + 8 段並行',
      'endpoint':'cier.edu.tw/en/eco (首選) / data.gov.tw/api/v2/rest/dataset/6100 / index.ndc / macromicro.me / stockfeel / cnyes / moneydj',
      'identifier':'cier-pmi',
      'frequency':'monthly', 'requires_key':None,

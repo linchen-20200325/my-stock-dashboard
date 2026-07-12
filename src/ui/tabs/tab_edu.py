@@ -79,7 +79,7 @@ def render_tab_edu():
              'Yahoo 1hr / EOD 翌日 04:00 TW',
              'Yahoo → CBOE CDN（VIX）'),
             ('🇹🇼 TW PMI', '🌐 總經',
-             '9 源賽跑：CIER → data.gov.tw → NDC → MacroMicro → StockFeel → Cnyes → FinMind → MoneyDJ',
+             '8 源賽跑：CIER-EN → data.gov.tw → NDC → CIER首頁 → StockFeel → Cnyes → CIER-cid8 → MoneyDJ（v19.113）',
              '月後第 1 營業日',
              'PMI_SOURCE_REGISTRY 順序賽跑,取第一命中（禁止平均）'),
             ('🏦 CBC M1B / M2', '🌐 總經',

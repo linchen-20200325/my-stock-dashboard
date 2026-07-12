@@ -1,0 +1,47 @@
+name: Probe TW Sources (Manual)
+
+# v19.112 診斷工具:出口 YoY / 台灣 PMI 候選源存活探針。
+# 唯讀 GET,不 commit 任何東西。
+# 視角 = 美國 IP + PROXY_URL 走 NAS,與 Streamlit Cloud 一致。
+# push 觸發限定「探針自身檔案變動」:分支上的 workflow 無法手動 dispatch
+# (App 整合無 actions:write,且非 default branch 的 workflow 不上 Actions 清單),
+# paths 過濾讓它不干擾一般開發 push。
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/probe_tw_sources.py'
+      - '.github/workflows/probe_tw_sources.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          # 同 update_macro_history 的 key → 直接吃它的暖快取
+          key: ${{ runner.os }}-pip-macro-history-${{ hashFiles('requirements.txt') }}
+
+      - name: Install deps
+        # 整份 requirements(依賴 SSOT;v19.100 教訓:極簡清單害 sibling import 靜默跳過)
+        run: pip install -r requirements.txt
+
+      - name: Probe sources
+        env:
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          NAS_BASE_URL: ${{ secrets.NAS_BASE_URL }}
+          NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
+        run: python scripts/probe_tw_sources.py
