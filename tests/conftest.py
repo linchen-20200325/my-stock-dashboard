@@ -18,21 +18,62 @@ import pytest
 import pandas as pd
 
 # v18.361 F-6.5 R5:在 conftest load 時(test_data_coverage 之前)捕捉真實 streamlit,
-#   存 backup;autouse fixture 每 test 結束後若 sys.modules['streamlit'] 是 stub
-#   且 caller 真需要 divider 等完整 API,還原回 pristine。
-#   tests/test_data_coverage.py:43 module-level _stub_st() 永久替換,沒 cleanup,
-#   F-6.5 後 collection 順序變,macro_classroom 在它之後跑時 stub 卡住 st.divider。
+#   存 backup。
+# v19.107 生命週期重整(CI slow lane 全滅根因):
+#   舊制靠「stub 掛 `_stub` 記號 + 每 test 前後還原」,但三代 stub 記號不一致
+#   (`_stub` / `_is_test_stub` / 無記號),classroom 的 `_is_test_stub` 永不被還原
+#   → collection 期模組級 stub 卡住整個 run phase → slow lane 24 個 AppTest
+#   全 skip(守衛偵測到 stub)+ test_screener_candidates 硬炸
+#   「'streamlit' is not a package」。CI run 對照:main 8b071cb 同紅,非 PR 引入。
+#   新制:
+#   ① stub 檔各自用 module-scoped autouse fixture 管生命週期(裝 stub → 測完
+#      還原 pristine + reload 被綁模組),不再模組級永久替換;
+#   ② conftest 只留 pytest_collection_finish **身分還原**(identity check,
+#      不認記號)作為未來漏網 stub 的 backstop — collection 一結束全域必乾淨;
+#   ③ tests/test_zz_streamlit_pollution_lock.py(字母序最後)鎖 run phase 尾端
+#      streamlit 仍為真 package — 未來任何測試內 stub 沒收尾,CI 直接紅。
 try:
     import streamlit as _STREAMLIT_PRISTINE  # noqa: F401
 except Exception:
     _STREAMLIT_PRISTINE = None
 
 
-def _restore_streamlit() -> None:
-    """若 sys.modules['streamlit'] 是 stub,還原為 pristine 版本(若有)。"""
+def reload_prefixed_modules(prefixes: tuple[str, ...]) -> None:
+    """就地 reload 指定前綴的已載入模組(rebind 它們的 module-level `st`)。
+
+    importlib.reload 是 in-place 重執行 → 既有引用(package `_SUBMODULES`
+    tuple、`from x import fn` 拿到的函式所屬 globals)全部看到新綁定,
+    不會產生「兩份模組」。供 stub fixture 在裝 stub 後/還原後各呼叫一次。
+    """
+    import importlib
+    for _name in sorted(k for k in list(sys.modules)
+                        if any(k == p or k.startswith(p + ".") for p in prefixes)):
+        _mod = sys.modules.get(_name)
+        if _mod is None or not hasattr(_mod, "__spec__") or _mod.__spec__ is None:
+            continue
+        try:
+            importlib.reload(_mod)
+        except Exception:
+            pass  # smoke-allow-pass — 個別模組 reload 失敗不炸整個 fixture
+
+
+def restore_pristine_streamlit() -> bool:
+    """把 sys.modules['streamlit'] 換回 conftest 載入時捕捉的真身(身分比對,
+    不認任何 stub 記號)。回傳是否有做置換。"""
     cur = sys.modules.get("streamlit")
-    if cur is not None and getattr(cur, "_stub", False) and _STREAMLIT_PRISTINE is not None:
+    if _STREAMLIT_PRISTINE is not None and cur is not _STREAMLIT_PRISTINE:
         sys.modules["streamlit"] = _STREAMLIT_PRISTINE
+        return True
+    return False
+
+
+def pytest_collection_finish(session):  # noqa: ARG001
+    """collection(=全部 test 模組 import)結束 → 全域 streamlit 必須是真身。
+
+    backstop:未來若有測試檔又在模組層裝 stub 忘了收,run phase 一開始就被
+    這裡矯正,而非讓字母序在後的整批測試陪葬(v19.74 CI run #422 病史)。
+    """
+    restore_pristine_streamlit()
 
 
 def _clear_module_caches() -> None:
@@ -65,11 +106,15 @@ def _clear_module_caches() -> None:
 
 @pytest.fixture(autouse=True)
 def _isolate_module_caches():
-    """每個測試前後清空 module-level 快取,杜絕跨測試污染。"""
-    _restore_streamlit()
+    """每個測試前後清空 module-level 快取,杜絕跨測試污染。
+
+    v19.107:移除舊的每-test streamlit 還原 — 它與 module-scoped stub fixture
+    衝突(function fixture 跑在 module fixture 之內,會把該模組自己的 stub
+    中途拔掉)。streamlit 生命週期改由 stub 檔自身 fixture + collection_finish
+    backstop + zz 鎖尾測試三層負責(見檔頭 v19.107 註)。
+    """
     _clear_module_caches()
     yield
-    _restore_streamlit()
     _clear_module_caches()
 
 

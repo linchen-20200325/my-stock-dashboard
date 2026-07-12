@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧯 2026-07-12 CI slow lane 全滅修復:streamlit stub 生命週期收斂（v19.107）
+
+未完成清單第 1 步(user 核准「從第 1 步開始」)。merge #519 時發現 slow lane job 紅,查證 **main 8b071cb 同紅**(非近期 PR 引入)。
+
+- **根因**:三代測試 stub 記號不一致(`_stub` / `_is_test_stub` / 無記號),conftest 舊還原機制只認 `_stub` → `test_macro_classroom` 的 stub 於 **collection 期**模組級永久替換後全程卡住 → 整個 run phase 吃到假 streamlit(非 package):slow lane **24 個 AppTest 全被守衛 skip**(v19.74 起 workaround 化,守門形同虛設)+ `test_screener_candidates` 無守衛硬炸 `'streamlit' is not a package`。整個生態靠「classroom 的 stub 恰好是 noop 超集」的巧合活著。
+- **修(三層防線)**:①stub 檔自身收尾 — `test_data_coverage` / `test_macro_classroom` 模組級永久替換改 **module-scoped autouse fixture**(裝 stub + reload 目標 → 測完還原進場真身 + reload rebind;`importlib.reload` in-place,既有引用同步) ②conftest `pytest_collection_finish` **身分還原 backstop**(identity check 不認記號;collection 一結束全域必乾淨) ③`test_zz_streamlit_pollution_lock.py`(字母序最後,fast+slow 各一鎖)— run phase 尾端 streamlit 必須真 package 且 `streamlit.testing.v1` 可 import,未來任何 stub 沒收尾 CI 直接紅在這。conftest 舊的每-test marker 還原移除(與 module fixture 相衝且記號不齊本就失效);`_clear_module_caches` 不變。
+- **效果**:slow lane 本地重現 CI — 修前「1 failed + 22 skipped」→ 修後 **23 passed + 4 skipped**(4 skip 皆正當條件:退役功能審計 / fastapi 非 CI 依賴 / 無 secrets.toml ×2)。被跳過月餘的 AppTest 全數真執行且全過。fast lane 全套 3180 passed 照常全綠。
+- 純測試基建,production 程式碼 0 行變更。
+
 ## ⚡ 2026-07-12 大工程清單 🟢 兩項:ETF 夏普 rf 動態化 + 連線 Session 複用（v19.106）
 
 user 核准大工程清單「先做你推薦的三項」(⑯基金/⑨①a股票),本包為股票側兩項:

@@ -4,6 +4,8 @@ from __future__ import annotations
 import sys
 import types
 
+import pytest
+
 
 def _stub_st():
     # v18.281 — 不覆蓋既有 test stub(避免污染其他 test 檔的完整 stub)
@@ -49,7 +51,40 @@ def _stub_st():
     sys.modules["streamlit"] = m
 
 
-_stub_st()
+def _reload_pages_modules() -> None:
+    """就地 reload 已載入的 src.ui.pages.* — rebind 它們的 module-level `st`。"""
+    import importlib
+    for _name in sorted(k for k in list(sys.modules)
+                        if k == "src.ui.pages" or k.startswith("src.ui.pages.")):
+        _mod = sys.modules.get(_name)
+        if _mod is None:
+            continue
+        try:
+            importlib.reload(_mod)
+        except Exception:
+            pass  # smoke-allow-pass — 個別 reload 失敗不炸 fixture
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _scoped_streamlit_stub():
+    """v19.107 stub 生命週期收斂(CI slow lane 全滅根因之一)。
+
+    原:模組級 `_stub_st()` 於 collection 期永久替換 sys.modules['streamlit'],
+    無 cleanup → 字母序在後的整個 run phase 吃到假 st(AppTest 全 skip /
+    test_screener_candidates 硬炸)。
+    改:本檔測試期間才裝 stub(隔離 st 副作用),測完還原進場前的真身,
+    並 reload 期間被綁到 stub 的 src.ui.pages.* 模組(importlib.reload 為
+    in-place,既有引用同步 rebind)。
+    """
+    _saved = sys.modules.get("streamlit")
+    _stub_st()
+    _reload_pages_modules()
+    yield
+    if _saved is not None:
+        sys.modules["streamlit"] = _saved
+    else:
+        sys.modules.pop("streamlit", None)
+    _reload_pages_modules()
 
 
 class TestComputeTabCoverage:
