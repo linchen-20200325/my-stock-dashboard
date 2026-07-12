@@ -73,6 +73,68 @@ def _snippet(body: str, keyword: str, width: int = 160) -> str:
     return flat[:width]
 
 
+# ── v19.114 深挖:錯誤碼面板實錘 stat.gov.tw:no-parse(連得上、解不動) ──
+# 對指定頁抓「關鍵字前後文視窗」+ 當場試跑 production 正則 → 用真實內文
+# 寫新解析器,不猜(§3.3)。每 pattern 印首個 match 的 groups。
+_DEEP_DUMPS: list[tuple[str, str, list[str], list[tuple[str, str]]]] = [
+    ('stat.gov.tw 出口年增率頁',
+     'https://www.stat.gov.tw/Point.aspx?sid=t.8&n=3587&sms=11480',
+     ['出口', '年增率', '出口年增率'],
+     [('production 現行', r'(20\d{2})\s*年\s*(\d{1,2})\s*月[^。]{0,80}?'
+                          r'出口[^。]{0,30}?年增率?[^\d\-]{0,15}(-?\d{1,3}\.\d)\s*%?'),
+      ('寬鬆試探A(值優先)', r'年增率[^\d\-]{0,40}(-?\d{1,3}\.\d)'),
+      ('寬鬆試探B(民國年月)', r'(1\d{2})年\s*(\d{1,2})月'),
+      ('寬鬆試探C(西元年月)', r'(20\d{2})[年/\-\s]+(\d{1,2})[月]?')]),
+    ('CIER-EN 2026-06 slug 頁',
+     'https://www.cier.edu.tw/en/eco/taiwan-manufacturing-pmi-june-2026/',
+     ['60.7', 'percentage', 'PMI was', 'fell'],
+     [('production 現行', r'(?:Manufacturing\s+PMI|PMI)[^.]{0,80}?'
+                          r'(?:at|registered|reached|of|stood\s+at|rose\s+to|fell\s+to|was)?'
+                          r'[^\d]{0,15}(\d{2}\.\d)\s*(?:%|percent)?'),
+      ('寬鬆試探(值域鎖)', r'(\d{2}\.\d)\s*(?:%|percent)')]),
+]
+
+
+def _dump_windows(flat: str, keyword: str, n: int = 4, width: int = 130) -> None:
+    start = 0
+    for i in range(n):
+        idx = flat.find(keyword, start)
+        if idx < 0:
+            if i == 0:
+                print(f'     (無「{keyword}」出現)')
+            return
+        print(f'     [{keyword}#{i + 1}] …{flat[max(0, idx - 50):idx + width - 50]}…')
+        start = idx + len(keyword)
+
+
+def _deep_dump(fetch_url) -> None:
+    print('\n══ 深挖:內文視窗 + production 正則試跑 ══')
+    for label, url, keywords, patterns in _DEEP_DUMPS:
+        r = fetch_url(url, timeout=20, attempts=2)
+        if r is None:
+            print(f'❌ {label} | 無回應,無法深挖')
+            continue
+        try:
+            r.encoding = r.encoding or 'utf-8'
+            from bs4 import BeautifulSoup
+            flat = re.sub(r'\s+', ' ',
+                          BeautifulSoup(r.text, 'html.parser')
+                          .get_text(' ', strip=True))
+        except Exception as e:
+            print(f'⚠️ {label} | 取文失敗 {type(e).__name__}: {e}')
+            continue
+        print(f'📄 {label} | HTTP {r.status_code} | 純文字 {len(flat)} chars')
+        for kw in keywords:
+            _dump_windows(flat, kw)
+        for pname, pat in patterns:
+            m = re.search(pat, flat)
+            if m:
+                print(f'   🎯 regex[{pname}] ✅ groups={m.groups()} '
+                      f'| 前後文=…{flat[max(0, m.start() - 30):m.end() + 30]}…')
+            else:
+                print(f'   🎯 regex[{pname}] ❌ 不匹配')
+
+
 def main() -> int:
     from src.data.proxy import fetch_url
 
@@ -101,6 +163,7 @@ def main() -> int:
               f'關鍵字「{keyword}」{"命中" if has_kw else "未命中"}')
         print(f'   ↳ {_snippet(body, keyword)}')
     print(f'\n📊 結果:{n_ok}/{len(TARGETS)} 端點回 200 且內容含關鍵字')
+    _deep_dump(fetch_url)   # v19.114:內文視窗 + 正則試跑
     return 0  # 探針本身永遠 exit 0,存活判讀看逐行輸出
 
 
