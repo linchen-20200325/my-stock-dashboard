@@ -220,3 +220,104 @@ def key_alerts_banner(result: dict) -> str:
             '<div style="font-size:10px;color:#8b949e;margin-top:2px;">'
             '滑鼠停在項目上看白話說明｜門檻層=總經警示規則命中｜急變層=單期變化超限'
             '</div></div>')
+
+
+# ════════════════════════════════════════════════════════════════
+# 統一指標卡(v19.109,第 5 步試點 — 燈號+俗名+原理+燈義 四要素固定格式)
+# band 表收 shared/signal_thresholds SSOT → 判定與燈義文字同源不漂移(§3.3)
+# ════════════════════════════════════════════════════════════════
+
+_BAND_HEX: dict = {
+    'red': TRAFFIC_RED, 'yellow': TRAFFIC_YELLOW, 'green': TRAFFIC_GREEN,
+    'blue': '#58a6ff', 'gray': '#484f58',
+}
+
+
+def resolve_band(value, bands) -> tuple:
+    """依 band 表(降冪 lo)取第一個 value >= lo 的 (色鍵, 燈標籤, 燈義)。
+
+    value 非數 → gray「資料異常」(§1 不腦補方向)。
+    """
+    try:
+        _v = float(value)
+    except (TypeError, ValueError):
+        return ('gray', '⬜ 資料異常', '值非數值,無法判定燈號')
+    for lo, color_key, label, meaning in bands:
+        if _v >= lo:
+            return (color_key, label, meaning)
+    return ('gray', '⬜ 資料異常', 'band 表無兜底項')   # bands 末項 -inf 時不會到
+
+
+def bands_caption(bands, unit: str = '') -> str:
+    """band 表 → 一行門檻帶說明,如「🔴≥38｜🟡≥32｜🟢≥23｜🔵≥17｜🔵<17」。
+
+    與 resolve_band 讀同一張表 → 顯示的門檻永遠 = 實際判定門檻。
+    """
+    parts = []
+    prev_lo = None
+    for lo, _c, label, _m in bands:
+        _emoji = label.split(' ')[0] if label else '⬜'
+        if lo == float('-inf'):
+            parts.append(f'{_emoji}<{prev_lo:g}{unit}' if prev_lo is not None
+                         else f'{_emoji}其他')
+        else:
+            parts.append(f'{_emoji}≥{lo:g}{unit}')
+            prev_lo = lo
+    return '｜'.join(parts)
+
+
+def unified_indicator_card(*, title: str, nickname: str, value_str: str,
+                           band: tuple, bands, principle: str,
+                           unit: str = '', date: str = '',
+                           extra: str = '') -> str:
+    """統一指標卡 HTML:燈號+俗名+原理+燈義 四要素固定版位。
+
+    Args:
+        title: 指標正式名(卡片主標)。
+        nickname: 俗名/白話名(小字前綴,新手第一眼)。
+        value_str: 已格式化的當前值字串。
+        band: resolve_band 回傳的 (色鍵, 燈標籤, 燈義)。
+        bands: band 表(產生門檻帶說明行,與判定同源)。
+        principle: 原理一句(這指標怎麼來/量什麼)。
+        unit: 門檻帶單位(顯示用)。
+        date: 資料日期(可空)。
+        extra: 額外一行(如上月趨勢),可空。
+    """
+    _ck, _label, _meaning = band
+    _c = _BAND_HEX.get(_ck, '#484f58')
+    _date_html = (f'<span style="color:#484f58;font-size:9px;"> ({date})</span>'
+                  if date else '')
+    _extra_html = (f'<div style="font-size:10px;color:#8b949e;margin-top:2px;">'
+                   f'{extra}</div>' if extra else '')
+    return (
+        f'<div style="background:#0d1117;border:1px solid #21262d;'
+        f'border-left:3px solid {_c};border-radius:8px;padding:10px 12px;margin:2px 0;">'
+        f'<div style="font-size:10px;color:#8b949e;">{nickname}</div>'
+        f'<div style="font-size:12px;font-weight:700;color:#c9d1d9;">{title}{_date_html}</div>'
+        f'<div style="font-size:20px;font-weight:900;color:{_c};margin:2px 0;">{value_str}'
+        f' <span style="font-size:11px;font-weight:700;">{_label}</span></div>'
+        f'<div style="font-size:11px;color:{_c};">燈義：{_meaning}</div>'
+        f'{_extra_html}'
+        f'<div style="font-size:10px;color:#8b949e;margin-top:4px;border-top:1px solid #21262d;'
+        f'padding-top:3px;">原理：{principle}</div>'
+        f'<div style="font-size:9px;color:#484f58;margin-top:2px;">'
+        f'門檻帶：{bands_caption(bands, unit)}</div>'
+        f'</div>')
+
+
+def unified_indicator_card_pending(*, title: str, nickname: str,
+                                   principle: str, source_note: str = '') -> str:
+    """統一指標卡「待取得」灰態(結構同正式卡,§1 誠實顯示未載入)。"""
+    _note = (f'<div style="font-size:10px;color:#484f58;margin-top:2px;">'
+             f'{source_note}</div>' if source_note else '')
+    return (
+        f'<div style="background:#0d1117;border:1px solid #21262d;'
+        f'border-left:3px solid #484f58;border-radius:8px;padding:10px 12px;'
+        f'margin:2px 0;opacity:0.75;">'
+        f'<div style="font-size:10px;color:#8b949e;">{nickname}</div>'
+        f'<div style="font-size:12px;font-weight:700;color:#c9d1d9;">{title}</div>'
+        f'<div style="font-size:20px;font-weight:900;color:#484f58;margin:2px 0;">待取得</div>'
+        f'{_note}'
+        f'<div style="font-size:10px;color:#8b949e;margin-top:4px;border-top:1px solid #21262d;'
+        f'padding-top:3px;">原理：{principle}</div>'
+        f'</div>')

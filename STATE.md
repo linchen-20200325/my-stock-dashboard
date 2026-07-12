@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🃏 2026-07-12 統一指標卡試點 — 總經拼圖模組八 5 卡（v19.109,第 5 步）
+
+未完成清單第 5 步(user「第五步繼續」)。試點區:總經 Tab 模組八「台灣在地總經」5 張 KPI 卡(NDC 燈號/出口 YoY/台灣 PMI/美核心 CPI/Fed Funds;VIX 為時序圖不動)。
+
+- **統一版位四要素**:俗名(白話名,新手第一眼)→ 正式名+日期 → 大字值+燈標籤 → **燈義**(這個燈現在=什麼)→ **原理**(指標怎麼來)→ **門檻帶**(🔴≥38｜🟡≥32…)。待取得灰態同構(§1 誠實)。
+- **核心設計:判定與文字同源** — 新 band 表 SSOT(`shared/signal_thresholds`:`NDC_SIGNAL_BANDS`/`TW_EXPORT_YOY_BANDS`/`TW_PMI_CARD_BANDS`/`US_CORE_CPI_YOY_BANDS`/`FED_FUNDS_RATE_BANDS`,每表 list[(下限,色鍵,燈標籤,燈義)] 末項 -inf 兜底)。L4 `resolve_band()` 判燈、`bands_caption()` 生成門檻帶說明、`unified_indicator_card()` 渲染 — **三者讀同一張表**,燈義/門檻帶文字永不與判定邏輯漂移(§3.3)。
+- **順手收斂 5 組 inline magic**:原 section_mid 的 38/32/23/17(NDC)、0/-5(出口)、50/47(PMI)、3.5/2.5(CPI)、5/3(Fed)全收 band SSOT,測試鎖定與 legacy 完全同值(零行為位移)。**邊界語意記錄**:CPI 3.5/2.5 由「>」改「≥」(恰等值燈更保守一級)、出口 0.0 由「>0」改「≥0」— 僅影響恰好等值月份,實務機率 ~0。
+- **保留不動**:CPI/Fed 上月趨勢行(入卡 extra)、兩條 💡 MK 黃金拐點 caption(跨指標配對提示,非卡片自身原理)、VIX 時序圖(已 SSOT 帶線)。
+- **回歸網**:`tests/test_unified_indicator_card_v19_109.py` 9 test(band 表鎖 legacy 值+四元組+兜底/NDC 五級含邊界/燈義同表/垃圾值 gray/無兜底表 gray/caption 逐項反映/卡片四要素/灰態/section_mid 掃描:5+5 卡全走統一卡+legacy inline 門檻零殘留)。slow lane 23 passed(AppTest 實渲染過)+ 相關子集 648 passed。ruff 四檔全淨。
+- **試點驗收**:user 看線上效果後決定是否推全站(其餘區塊/基金端)。
+
 ## ⚡ 2026-07-12 「今日關鍵」異常橫幅 v1（v19.108,設計 A）
 
 未完成清單第 2 步(user 核准設計 A,§8.1 先設計後動工)。打開總經 Tab 第一眼:置頂橫幅列出「今天最需要看的異常」;無異常誠實顯示細綠條(§1)。
