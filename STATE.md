@@ -15,6 +15,13 @@ user 驗收統一卡時回報「外需動能溫度計 台灣出口 YoY 無資料
 - **回歸網**:`tests/test_export_fail_trace_v19_111.py` 4 test(全源斷線回 token 不回值/6 tier 全留痕+無 key 標 skip/回傳僅 `_` 前綴鍵可進 orchestrator merge/UI 標籤存在);`test_macro_export_no_fabrication.py` 重釘(原鎖 `return {}` → 改鎖 `return {'_err_export':` + 全敗段禁 `'tw_export': {` 賦值,重釘理由入 docstring)。macro 子集 784 passed。
 - **不動的**(待 user 核准,§-1):新出口/PMI 資料源評估(FinMind 無出口與 PMI dataset — v19.85 已枚舉證實;MOF/stat.gov.tw 存活狀況待 user 截圖錯誤碼面板後再定)、PMI stale cache 落盤到 repo(需 §8 設計)。
 
+**探針補證(同日,run 29182317622)**:user 問「能否上網找資料來源」→ 加 `scripts/probe_tw_sources.py` + `probe_tw_sources.yml`(push paths 過濾自動觸發;App 整合無 actions:write 不能 dispatch,且分支 workflow 不上 Actions 清單 — Calibrate 前例)。15 端點經 NAS 實測(美國 IP + PROXY_URL,與 Streamlit Cloud 同視角):
+
+- **兩鏈頭部源全活**:CIER-EN 舊 slug `/en/eco/taiwan-manufacturing-pmi-june-2026/` **HTTP 200 含 6 月文**(網搜以為改制 404 — 誤;新分類頁 `/en/eco_cat/pmi-en/` 也 200)、stat.gov.tw 出口年增率頁 200(426KB)、dgtw 6100/6053 metadata 200(`success:true`)、Cnyes API 200。
+- **確認死源**:CIER `news/list?cid=21`(現役第5源)、MacroMicro(第4源)、MOF trade CSV 舊 URL 式(Tier2)、CIER 中文 focus-ch 無回應;NDC index API 200 但回 Angular SPA 殼非 JSON(名存實亡);MOF njswww 入口回 1 char;nstatdb qryout 回 HTML 殼(需再調參才有 CSV)。
+- **根因改判**:來源經 NAS 全通 + 正式站上「死的恰好全是 NAS 依賴指標、活的全是直連指標」→ **主嫌 = Streamlit Cloud → NAS 這一段**(app secrets 的 PROXY_URL 與 GitHub repo secret 是兩份獨立拷貝,疑漂移/失效;或 NAS 防火牆擋 Streamlit 出口 IP)。判別法:v19.111 部署後錯誤碼面板 — 若 CIER 段出 `HTTP403` = 直連打到官網被擋(NAS 路徑死);cron 今晨 dgtw `HTTP=None` 與探針 200 的矛盾 = cron 腳本 URL/解析待另查(不影響主嫌判定)。
+- **user 端 5 分鐘自查**:工具 Tab →「🔎 資料診斷」→「🚀 開始診斷外連狀態」(proxy vs 直連雙跑) + 檢查 Streamlit Cloud Secrets 的 `PROXY_URL` 是否與 NAS 現址一致。
+
 ## 📉 2026-07-12 週 MACD 升級標準 12/26/9（v19.110,插隊項 user 核准）
 
 user 核准「週 MACD 升級」(= 確認有在用週 MACD 出場訊號、要與券商對數字)。`exit_signals._weekly_macd_turn_negative` 自 v19.105 標註的 3/5/3 樣本受限代理升級為標準參數。
