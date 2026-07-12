@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔭 2026-07-12 選股網極簡版:只留單一「開始選股」按鈕（v19.111,user 要求）
+
+user 回報選股網「還是一樣」,澄清訴求:要**乾淨的篩選流程** — ① 基本面優選(自動)→ ② 勾條件(估值/EPS/缺貨/抗跌RS 四因子可複選)→ ③ 一鍵出名單,**不要下方那一整塊額外掃描按鈕**,只維持最上方一顆「開始選股」。
+
+- **移除**:app.py 選股網區塊底部的「🔎 進階(選用)」expander(內含 `render_shortage_screener` 缺貨完整排行 + `render_rs_leader_screener` 抗跌RS完整排行 + AI三型報告)+「順便跑籌碼技術×6」checkbox(`_run_deep`)及其 `render_tab_stock_picker` picker 深篩。連帶清掉 `render_tab_stock_picker` / `render_yield_confirm` 兩個已無用的 local import。
+- **保留不動的核心流程**:① `render_prescreen_panel`(基本面優選,自動)② `screener_factors` 多選(4 因子)③ 單一「🎯 開始選股」按鈕 → 按下時**自動掃**缺貨(`run_shortage_scan`)+ 抗跌RS(`run_rs_leader_scan(beat_only=False, top_n=RS_SCAN_MAX)` 全存活池)→ `composite_rank_candidates` 綜合評分 → ③ 選股結果 dataframe + CSV 下載。三點承諾全達成:缺貨/RS 自動掃(不用另按)、無手動候選名單、勾條件→一鍵→出名單。
+- **§8 分層**:純 L6 App UI 組裝的元素刪減,無新模組、無資料流變更、無跨層 import(反而移除了兩個 L5→L1/L4 的 lazy import);L2/L3 掃描與評分服務完全未動。§-1 只做 user 明確要求,無夾帶。
+- **回歸網**:`tests/test_app_no_magic_bare_ternary.py` 新增 `test_screener_keeps_only_single_button_flow` — AST/source 掃描鎖死 app.py 不得再出現 `render_shortage_screener` / `render_rs_leader_screener` / `screener_run_deep` / `render_tab_stock_picker`(改回去=紅)。既有 magic-guard(裸三元)續守。app.py 語法 OK;選股相關 32 passed + 本檔 3 passed。
+
 ## 📉 2026-07-12 週 MACD 升級標準 12/26/9（v19.110,插隊項 user 核准）
 
 user 核准「週 MACD 升級」(= 確認有在用週 MACD 出場訊號、要與券商對數字)。`exit_signals._weekly_macd_turn_negative` 自 v19.105 標註的 3/5/3 樣本受限代理升級為標準參數。
