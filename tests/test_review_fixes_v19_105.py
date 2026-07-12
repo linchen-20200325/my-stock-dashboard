@@ -170,11 +170,14 @@ class TestFormulaNaming:
                     if ln.strip().startswith('sharpe_20 = ret20'))
         assert '非年化' in line, 'sharpe_20 註解須明示為期間 Sharpe,非年化'
 
-    def test_weekly_macd_docstring_warns_nonstandard(self):
+    def test_weekly_macd_docstring_states_standard_params(self):
+        """v19.105 原鎖:3/5/3 代理必須警示「非標準」。v19.110 user 核准升級
+        標準 12/26/9 後重釘:警語退役(名實已相符),改鎖「已是標準參數、
+        代理不得回歸」— 完整行為鎖見 tests/test_weekly_macd_v19_110.py。"""
         from src.compute.scoring.exit_signals import _weekly_macd_turn_negative
         doc = _weekly_macd_turn_negative.__doc__ or ''
-        assert '12/26/9' in doc and '非標準' in doc, (
-            '3/5/3 週 MACD 為樣本受限代理,docstring 須警示不可與券商值對照')
+        assert '12/26/9' in doc, '週 MACD 應為標準參數(v19.110)'
+        assert '非標準' not in doc, '升級後「非標準」警語應退役(名實相符)'
 
 
 # ═════════════════════════════════════════════════════════════════

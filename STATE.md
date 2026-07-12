@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📉 2026-07-12 週 MACD 升級標準 12/26/9（v19.110,插隊項 user 核准）
+
+user 核准「週 MACD 升級」(= 確認有在用週 MACD 出場訊號、要與券商對數字)。`exit_signals._weekly_macd_turn_negative` 自 v19.105 標註的 3/5/3 樣本受限代理升級為標準參數。
+
+- **數學式(§7)**:w_t = 每 5 交易日一組的組內最後收盤(**自尾端對齊**);DIF = EMA12(w) − EMA26(w);DEA = EMA9(DIF);OSC = DIF − DEA;訊號 = OSC[-2] > 0 且 OSC[-1] ≤ 0(柱由正翻負,語意沿用舊版)。EMA adjust=False 遞迴定義同多數看盤軟體。
+- **樣本門檻**:≥ `WK_MACD_MIN_WEEKS`(35) 週 = 175 交易日;不足誠實回 False,**不**退回 3/5/3(§1 一名一義不混模型)。資料窗核實:批次掃描走 360 日、個股主流程 days+60,實務皆 ≥175,無需動 caller。
+- **順帶修掉既有缺陷**:舊版 `range(0, 30)` 取的是序列**頭端**(最舊 30 日,docstring 卻寫「近 30 日」)— 訊號一直在看最舊一個月的資料。本版自尾端合成,測試鎖死(頭端崩盤+尾端多頭 → 必須 False)。
+- **SSOT**:`WK_MACD_FAST/SLOW/SIGNAL_SPAN`(12/26/9)+ `WK_MACD_MIN_WEEKS`(35)+ `WK_MACD_DAYS_PER_WEEK`(5) 入 shared/signal_thresholds(§14 前綴分名);exit_signals 零 inline 參數。
+- **已知限制(docstring 註明)**:close 無日期索引,「每 5 根=一週」為近似;最新一組=最近 5 個交易日,可能跨日曆週界,當週值與券商按日曆週切的會有小差。
+- **回歸網**:`tests/test_weekly_macd_v19_110.py` 6 test — 含 **§4.3 雙算對帳**(測試內教科書式獨立重算 OSC,由對帳器搜出翻負場景再驗 production 同判,非手猜期望值)/純多頭不誤報/不足 175 日誠實 False/頭崩尾多鎖舊缺陷/NaN dropna 不炸/SSOT 掃描(3/5/3 殘留=紅)。相關子集 27 passed。
+
 ## 🃏 2026-07-12 統一指標卡試點 — 總經拼圖模組八 5 卡（v19.109,第 5 步）
 
 未完成清單第 5 步(user「第五步繼續」)。試點區:總經 Tab 模組八「台灣在地總經」5 張 KPI 卡(NDC 燈號/出口 YoY/台灣 PMI/美核心 CPI/Fed Funds;VIX 為時序圖不動)。
