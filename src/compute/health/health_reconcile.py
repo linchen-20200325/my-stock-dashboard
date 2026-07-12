@@ -7,14 +7,19 @@ CLAUDE.md §4.3:
 
 本檔提供第二個健康評分計算 path,用於對帳(reconciliation):
 - Method A(生產):macro_helpers.calc_traffic_light 內 `_health` 計算
-                  = jqavg*0.4 + min(score/5*100,100)*0.4 + (20 if fnet>0 else 0)
-- Method B(對照,本檔):等權平均三個正規化分數
-                  = (jqavg + min(score*20, 100) + fnet_score) / 3
-                  其中 fnet_score = 100 if fnet>0 else (0 if fnet<0 else 50)
+                  = jqavg*0.6 + min(score/max_score*100,100)*0.4 + (0 if fnet>0)
+                  (v19.102 校準採納方案 B;fnet bonus 歸零)
+- Method B(對照,本檔):**等權**平均兩個正規化分數
+                  = (jqavg + min(score/max_score*100, 100)) / 2
+                  v19.102:fnet 自平均中移除 — 校準(AUC 0.753,n=4748)顯示
+                  fnet 對 20 日回撤預測力 ≈ 0,Method A 已歸零;Method B 若仍
+                  1/3 等權 fnet,兩法常態性偏差 >tolerance = 恆噪音,失去對帳意義。
+                  參數保留(向後相容+未來重校準)但不計分。
 
-兩種 method 業務語意相同(評估 macro 健康度,值域 0-100),但加總方式不同
-→ 提供 cross-check。abs diff > 5 視為告警(可能 method A weight 飄移 / 邊界
-極端值意外行為)。
+兩種 method 業務語意相同(評估 macro 健康度,值域 0-100),但加權不同
+(A=0.6/0.4,B=0.5/0.5)→ 提供 cross-check;兩組件分歧大時 B 自然偏離 A
+→ drift_warning 提示「廣度與市場分數打架」,是有效訊號非誤報。
+abs diff > 5 視為告警(可能 method A weight 飄移 / 邊界極端值意外行為)。
 
 設計
 ----
@@ -31,17 +36,10 @@ from typing import Optional
 
 # 對照演算法獨立常數(刻意**不**讀 shared/signal_thresholds 的 HEALTH_WEIGHT_*)
 # 目的:第二 path 須獨立邏輯,若也讀 SSOT 則等同 method A copy,失去對帳意義
-_METHOD_B_SCORE_SCALE: float = 20.0
-"""Method B 內 score → 0-100 縮放(score 0-5 → 0-100)"""
-
-_METHOD_B_FNET_POS_SCORE: float = 100.0
-"""Method B 內 fnet>0 → 100 分(全分)"""
-
-_METHOD_B_FNET_NEG_SCORE: float = 0.0
-"""Method B 內 fnet<0 → 0 分(零分)"""
-
-_METHOD_B_FNET_NEUTRAL_SCORE: float = 50.0
-"""Method B 內 fnet==0 → 50 分(中性)"""
+_METHOD_B_DEFAULT_MAX_SCORE: float = 4.0
+"""Method B 內 score 正規化預設滿分(market_regime 基本滿分 4;
+ad_ratio/m1b_m2 有傳才 5/6 — caller 可經 max_score 參數傳真值)。
+v19.102:原 _METHOD_B_SCORE_SCALE=20(隱含 /5 錯配)退役,改 /max*100。"""
 
 # 對帳容差 — abs diff > 此值視為告警
 HEALTH_RECONCILE_TOLERANCE: float = 5.0
@@ -64,18 +62,23 @@ class HealthReconcileResult:
 def compute_method_b_health(
     jqavg: Optional[float],
     score: Optional[float],
-    fnet: Optional[float],
+    fnet: Optional[float] = None,
+    *,
+    max_score: Optional[float] = None,
 ) -> float:
-    """Method B(對照演算法):等權平均三個正規化分數。
+    """Method B(對照演算法):等權平均兩個正規化分數(v19.102)。
 
     Parameters
     ----------
     jqavg : float | None
         旌旗指數(0-100)。None → 視為 50(中性)。
     score : float | None
-        market_regime score(0-5,通常)。None → 視為 0(無資料保守)。
+        market_regime score(0~max_score)。None → 視為 0(無資料保守)。
     fnet : float | None
-        外資淨買賣超(任意數,只看正負號)。None → 視為 0(中性)。
+        v19.102 起**不計分**(校準顯示零預測力,Method A bonus 已歸零)。
+        參數保留供向後相容與未來重校準,傳入值被忽略。
+    max_score : float | None
+        score 的真實滿分(market_regime 回傳 4/5/6)。None → 4.0(基本滿分)。
 
     Returns
     -------
@@ -84,26 +87,21 @@ def compute_method_b_health(
 
     Examples
     --------
-    >>> compute_method_b_health(60, 3, 50)  # 三項都 OK
-    (60 + 60 + 100) / 3 = 73.3
-    >>> compute_method_b_health(0, 0, -100)  # 三項都壞
-    (0 + 0 + 0) / 3 = 0.0
+    >>> compute_method_b_health(60, 3, max_score=4)   # (60 + 75) / 2
+    67.5
+    >>> compute_method_b_health(0, 0)                 # 兩項都壞
+    0.0
     """
+    _ = fnet  # v19.102:保留參數,不參與計分(見 docstring)
     _jq = float(jqavg) if jqavg is not None else 50.0
     _sc = float(score) if score is not None else 0.0
-    _fn = float(fnet) if fnet is not None else 0.0
+    _max = float(max_score) if max_score else _METHOD_B_DEFAULT_MAX_SCORE
 
-    # 正規化三組件(0-100)
-    _jq_norm = max(0.0, min(100.0, _jq))               # jqavg 本身 0-100,clamp
-    _sc_norm = max(0.0, min(100.0, _sc * _METHOD_B_SCORE_SCALE))  # score*20 → 0-100
-    if _fn > 0:
-        _fn_norm = _METHOD_B_FNET_POS_SCORE
-    elif _fn < 0:
-        _fn_norm = _METHOD_B_FNET_NEG_SCORE
-    else:
-        _fn_norm = _METHOD_B_FNET_NEUTRAL_SCORE
+    # 正規化兩組件(0-100)
+    _jq_norm = max(0.0, min(100.0, _jq))                      # jqavg 本身 0-100,clamp
+    _sc_norm = max(0.0, min(100.0, _sc / _max * 100.0))       # score/max → 0-100
 
-    return round((_jq_norm + _sc_norm + _fn_norm) / 3.0, 1)
+    return round((_jq_norm + _sc_norm) / 2.0, 1)
 
 
 def reconcile_health_score(
@@ -111,7 +109,8 @@ def reconcile_health_score(
     *,
     jqavg: Optional[float],
     score: Optional[float],
-    fnet: Optional[float],
+    fnet: Optional[float] = None,
+    max_score: Optional[float] = None,
     tolerance: float = HEALTH_RECONCILE_TOLERANCE,
 ) -> HealthReconcileResult:
     """對帳生產 method A 與對照 method B,回報差異。
@@ -133,7 +132,7 @@ def reconcile_health_score(
     浮點比較用 math.isclose 容差(§4.3 禁用 ==)。
     diff 極端(> 30)額外標 'extreme_divergence' 提醒可能輸入錯。
     """
-    method_b = compute_method_b_health(jqavg, score, fnet)
+    method_b = compute_method_b_health(jqavg, score, fnet, max_score=max_score)
     diff = method_a_score - method_b
     abs_diff = abs(diff)
 

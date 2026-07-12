@@ -94,9 +94,14 @@ def calc_traffic_light(
     _defense = (_score < 2 and abs(_fut_net) > FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD
                 and _fut_net < 0)
     # v18.241 E1: 健康評分權重從 SSOT 引入（原 0.4/0.4/20 inline）
+    # v19.102 校準採納(方案 B,MACRO_HEALTH_WEIGHT_PROPOSAL.md AUC 0.753):
+    # ① 權重 0.6/0.4/0(SSOT 已改);② score 正規化除數自 CONFIDENCE_SOURCE_COUNT(5,
+    # 借用錯配)改用 market_regime 回傳的真 max_score(預設 4.0 = market_regime 基本
+    # 滿分,ad_ratio/m1b_m2 有傳才升 5/6)— 修「預設模式 score 永遠到不了 100」。
+    _max_score = float(_mkt.get('max_score') or 4.0)
     _health  = round(
         _jqavg * HEALTH_WEIGHT_JQ
-        + min(_score / CONFIDENCE_SOURCE_COUNT * 100, 100) * HEALTH_WEIGHT_SCORE
+        + min(_score / _max_score * 100, 100) * HEALTH_WEIGHT_SCORE
         + (HEALTH_FNET_BONUS if _fnet > 0 else 0), 1
     )
 
@@ -105,7 +110,8 @@ def calc_traffic_light(
     # drift_warning / extreme_divergence 走 stderr log,**不改 UI 行為**(觀測性升級)。
     try:
         from src.compute.health.health_reconcile import reconcile_health_score as _reconcile
-        _rec = _reconcile(_health, jqavg=_jqavg, score=_score, fnet=_fnet)
+        _rec = _reconcile(_health, jqavg=_jqavg, score=_score, fnet=_fnet,
+                          max_score=_max_score)
         if not _rec.within_tolerance:
             import sys as _sys_rec
             print(f'[health_reconcile] {_rec.reason} '

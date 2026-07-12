@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏁 2026-07-11 紅綠燈權重校準採納 — Phase 3 收官（v19.102）
+
+管線全通:user 於 Actions 跑 bootstrap(20 年真資料齊)→ Calibrate 產出提案 → AI 審核通過 → user 核准**方案 B** → 本次落地。**−0.452 議題正式結案**(合成資料假象;真實資料 AUC 0.753)。
+
+- **提案審核(全過)**:真實 2006~2026、n=4748(含 2008/2020/2022)、val **AUC 0.753**、overfit_flag **False**(fold 方差 0.144、無符號翻轉)、λ=0.01、方向正確(低廣度→該防禦)。本地用同 parquet 復算**一字不差**(§4.3/§5)。**關鍵發現**:①jqavg:score 相對重要性 ≈ 60:40 ②**fnet 對 20 日回撤零預測力**(+0.0006/億,方向微偏反)— 原 +20 bonus(佔滿分 1/5)無資料支撐。
+- **SSOT 常數(shared/signal_thresholds)**:`HEALTH_WEIGHT_JQ` 0.4→**0.6**、`HEALTH_WEIGHT_SCORE` **0.4**(不變)、`HEALTH_FNET_BONUS` 20→**0**(常數+公式形狀保留供未來重校準)。權重和=1.0(同步治癒 CLAUDE.md §4.2「權重和=1」漂移)。
+- **修除5錯配(macro_helpers)**:score 正規化除數自 `CONFIDENCE_SOURCE_COUNT`(5,借用錯配)改 `mkt_info['max_score']`(market_regime 真滿分 4/6,預設 4.0)— 預設模式 score 現在到得了 100。`CONFIDENCE_SOURCE_COUNT` 保留其真用途(信心度 :163)。
+- **對帳同步(health_reconcile Method B)**:改「兩組件等權平均」`(jqavg + score/max×100)/2`,fnet 退出計分(參數保留向後相容)、加 `max_score` 參數 — 否則 A 已歸零 fnet、B 仍 1/3 等權 → 常態偏差恆告警=噪音。`risk/reconcile` 第三份(診斷頁)吃 SSOT 自動跟(v18.397 對齊的紅利),僅 label 去寫死。
+- **門檻後續**:HEALTH_DEFENSE_THRESHOLD=35 / BULL_MIN_SCORE=4 是對舊分布校準的;既有**季度 recalibrate**(每季首日 cron)會對新分布重調,或 user 可手動觸發 Recalibrate workflow 提前完成。
+- **回歸網**:`test_review_fixes_v19_102.py` 6 test(常數採納/權重和=1/提案存在證據鏈/公式 source-scan/預設模式滿分可達 100/A-B 典型對齊);`test_macro_helpers`+2、`test_health_reconcile` 全面改版(fnet 忽略/max_score 參數/兩組件)、`test_reconcile` 期望值更新。四檔 143 passed。ruff 零新增(macro_helpers 既有 13 錯 baseline 同數)。
+
 ## 🩹 2026-07-11 校準資料鏈三連修：workflow deps ×2 + m1m2 舊路徑 import 真因（v19.99~v19.101）
 
 user 實跑 Phase 3 按鈕逐關回報,三輪對症修（v19.99/100 為 yml-only 未記 STATE,此處補記）:

@@ -94,7 +94,7 @@ data_cache/{twii_ohlcv, finmind_inst, finmind_m1m2}.parquet  (update_macro_histo
 |---|---|---|---|
 | **1** | `health_calibration.py` L2 純函式 + 單測（機器） | in-session（可驗） | ✅ v19.92 |
 | **2** | `scripts/calibrate_health_weights.py`（讀 parquet → 重建 3 特徵 → walk-forward 擬合 → 寫提案）+ L2 `ad_ratio_from_twii` | 純函式 in-session 單測；真實跑在部署 cron | ✅ v19.93 |
-| **3** | 部署跑 `python scripts/calibrate_health_weights.py` 產出 `MACRO_HEALTH_WEIGHT_PROPOSAL.md` → 人審（AUC/overfit_flag）→ 小 commit 改 `signal_thresholds` 3 權重 + 修 /5 錯配 | 部署 cron + 人工 | 待 user 於部署跑 |
+| **3** | 部署跑 `python scripts/calibrate_health_weights.py` 產出 `MACRO_HEALTH_WEIGHT_PROPOSAL.md` → 人審（AUC/overfit_flag）→ 小 commit 改 `signal_thresholds` 3 權重 + 修 /5 錯配 | 部署 cron + 人工 | ✅ v19.102 **已收官**：Actions 實跑（真實 20 年、n=4748）→ AUC **0.753**／overfit **False**／方向正確／本地復算一致 → user 核准**方案 B** → `HEALTH_WEIGHT_JQ=0.6`／`HEALTH_WEIGHT_SCORE=0.4`／`HEALTH_FNET_BONUS=0`＋health 正規化改 `/max_score`＋對帳 Method B 同步。**−0.452 正式結案**（合成資料假象）。後續：季度 recalibrate 會對新分布重調 35/4 門檻 |
 
 ## 6. 已知近似與誠實限制
 

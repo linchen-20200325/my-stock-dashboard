@@ -29,14 +29,23 @@ TRADING_DAYS_PER_YEAR: int = 252
 # Macro 健康評分（macro_helpers.py compute_macro_health）
 # ════════════════════════════════════════════════════════════════
 
-HEALTH_WEIGHT_JQ: float = 0.4
-"""景氣指標 (jq) 在健康評分的權重。原 macro_helpers.py:113 inline"""
+HEALTH_WEIGHT_JQ: float = 0.6
+"""景氣廣度 (jqavg) 在健康評分的權重。
+v19.102 校準採納(user 核准方案 B):MACRO_HEALTH_WEIGHT_PROPOSAL.md
+(真實 2006~2026 二十年、n=4748、val AUC 0.753、overfit_flag=False)
+顯示 jqavg:score 相對重要性 ≈ 0.0337:0.0228 ≈ 60:40 → 自 0.4 升 0.6。
+權重和 = 0.6+0.4 = 1.0(同步治癒 CLAUDE.md §4.2「權重和=1」漂移)。"""
 
 HEALTH_WEIGHT_SCORE: float = 0.4
-"""市場狀態評分 (/5*100) 在健康評分的權重。原 macro_helpers.py:113 inline"""
+"""市場狀態評分 (score/max_score×100) 在健康評分的權重。
+v19.102:正規化除數自 CONFIDENCE_SOURCE_COUNT(5,借用錯配 — market_regime
+真實滿分為 4/6)改用 mkt_info['max_score'],詳 macro_helpers 健康段。"""
 
-HEALTH_FNET_BONUS: int = 20
-"""外資淨買超為正時的健康評分加分。原 macro_helpers.py:113 inline"""
+HEALTH_FNET_BONUS: int = 0
+"""外資淨買超為正時的健康評分加分。
+v19.102 校準採納:二十年真實資料擬合顯示 fnet 對「未來 20 日回撤 ≥8%」
+預測力 ≈ 0(權重 +0.0006/億,方向甚至微偏反)→ 原 +20(佔滿分 1/5)歸零。
+常數與公式形狀保留,供未來重校準時調整。"""
 
 CONFIDENCE_SOURCE_COUNT: int = 5
 """信心度計算的來源總數（PMI/CPI/M2/Foreign/VIX 等 5 大來源）。原 macro_helpers.py:148 inline"""

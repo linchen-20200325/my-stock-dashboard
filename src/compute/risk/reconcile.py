@@ -253,7 +253,7 @@ def reconcile_health_score(
         name="MACRO_HEALTH",
         value_a=v1,
         value_b=v2,
-        source_a="weighted_avg(0.4/0.4/+20)",
+        source_a="weighted_avg(SSOT HEALTH_WEIGHT_*)",  # v19.102:值隨校準變,label 不寫死
         source_b="min_of_factors(Liebig)",
         abs_tol=abs_tol,
         rel_tol=0.30,  # 健康評分本身分散性大,30% rel 容差
