@@ -953,8 +953,10 @@ def _pmi_src_cier_en_monthly(today, max_age_days, errs):
             try:
                 r = fetch_url(_url, timeout=12, attempts=1)
                 if r is None or r.status_code != 200:
-                    if r is not None:
-                        errs.append(f'CIER-EN.{_slug}:HTTP{r.status_code}')
+                    # v19.114:無回應原為靜默(SPEC §4:每段失敗必寫 errs)
+                    errs.append(f'CIER-EN.{_slug}:HTTP{r.status_code}'
+                                if r is not None
+                                else f'CIER-EN.{_slug}:無回應')
                     continue
                 r.encoding = 'utf-8'
                 _txt = BeautifulSoup(r.text, 'html.parser').get_text(' ', strip=True)
@@ -976,6 +978,8 @@ def _pmi_src_cier_en_monthly(today, max_age_days, errs):
                                     'label': f'CIER Manufacturing PMI ({_month_names[_m - 1].title()} {_y})',
                                     'source': 'CIER-EN', 'is_proxy': False,
                                     'series_id': f'cier-en-{_y}{_m:02d}'}
+                # v19.114:200 但無 match/值越界/過時 — 原為靜默
+                errs.append(f'CIER-EN.{_slug}:no-parse/過時')
             except Exception as _e_slug:
                 errs.append(f'CIER-EN.{_slug}:{type(_e_slug).__name__}')
                 continue
@@ -1011,6 +1015,8 @@ def _pmi_src_dgtw(today, max_age_days, errs):
                 try:
                     _j_meta = _r_meta.json()
                 except Exception:
+                    # v19.114:200 但非 JSON(如攔截頁/SPA 殼)原為靜默
+                    errs.append(f'dgtw.{_meta_url[-18:]}:non-JSON')
                     continue
                 # 解析 resources：常見 shape `result.resources[]` / `resources[]`
                 _res = (_j_meta.get('result', {}).get('resources')
@@ -1091,6 +1097,8 @@ def _pmi_src_ndc(today, max_age_days, errs):
             try:
                 j = r.json()
             except Exception:
+                # v19.114:200 但非 JSON(Angular SPA 殼,探針實錘)原為靜默
+                errs.append(f'NDC.{ndc_url[-15:]}:non-JSON')
                 continue
             # 解析多種 JSON shape：list / {data:[...]} / {items:[...]} / 單筆 dict
             items = j if isinstance(j, list) else (j.get('data') or j.get('items') or [j])
@@ -1174,6 +1182,9 @@ def _pmi_src_cier21(today, max_age_days, errs):
                                 'series_id': 'cier-pmi'}
                     else:
                         errs.append(f'CIER:過時 {age} 天')
+            else:
+                # v19.114:200 但無 match — 原為靜默
+                errs.append(f'CIER.{cier_url[-15:]}:no-parse')
     except Exception as e:
         errs.append(f'CIER:{type(e).__name__}')
         print(f'[macro_core/TW-PMI/CIER] ❌ {e}')
@@ -1206,6 +1217,11 @@ def _pmi_src_stockfeel(today, max_age_days, errs):
                                 'label': 'StockFeel 股感（台灣 PMI 搜尋）',
                                 'source': 'StockFeel', 'is_proxy': False,
                                 'series_id': 'stockfeel-tw-pmi'}
+                    errs.append('StockFeel:過時')   # v19.114:原為靜默
+                else:
+                    errs.append('StockFeel:no-parse或值越界')   # v19.114
+            else:
+                errs.append('StockFeel:no-parse')   # v19.114:200 無 match
     except Exception as e:
         errs.append(f'StockFeel:{type(e).__name__}')
         print(f'[macro_core/TW-PMI/StockFeel] ❌ {e}')
@@ -1240,8 +1256,13 @@ def _pmi_src_cnyes(today, max_age_days, errs):
                                         'label': '鉅亨網新聞',
                                         'source': 'Cnyes', 'is_proxy': False,
                                         'series_id': 'cnyes-tw-pmi'}
-            except Exception:
-                pass  # 鉅亨可能改 API，靜默失敗
+                else:
+                    # v19.114:近 10 篇皆無台灣 PMI 命中 — 原為靜默
+                    errs.append('Cnyes:近10篇無PMI命中')
+            except Exception as _e_cj:
+                # v19.114:原 except:pass(§3.3 違憲)— API 改版須留痕
+                errs.append(f'Cnyes:parse {type(_e_cj).__name__}')
+                print(f'[macro_core/TW-PMI/Cnyes] ⚠️ 解析失敗: {_e_cj}')
     except Exception as e:
         errs.append(f'Cnyes:{type(e).__name__}')
         print(f'[macro_core/TW-PMI/Cnyes] ❌ {e}')
@@ -1281,6 +1302,8 @@ def _pmi_src_cier8(today, max_age_days, errs):
                                 'label': 'CIER 中華經濟研究院（PMI 專欄）',
                                 'source': 'CIER', 'is_proxy': False,
                                 'series_id': 'cier-pmi-cid8'}
+            else:
+                errs.append(f'CIER-cid8.{cier_url[-15:]}:no-parse')   # v19.114
     except Exception as e:
         errs.append(f'CIER-cid8:{type(e).__name__}')
         print(f'[macro_core/TW-PMI/CIER-cid8] ❌ {e}')
@@ -1314,6 +1337,8 @@ def _pmi_src_moneydj(today, max_age_days, errs):
                                 'label': 'MoneyDJ 財經知識庫',
                                 'source': 'MoneyDJ', 'is_proxy': False,
                                 'series_id': 'mdj-tw-pmi'}
+            else:
+                errs.append('MoneyDJ:no-parse')   # v19.114:200 無 match 原為靜默
     except Exception as e:
         errs.append(f'MoneyDJ:{type(e).__name__}')
         print(f'[macro_core/TW-PMI/MoneyDJ] ❌ {e}')
