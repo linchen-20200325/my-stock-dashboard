@@ -47,6 +47,19 @@ WEIGHT_TABLES = {
     },
 }
 
+# ── §4.2 權重和不變量（v19.105,import 時 fail loud）─────────────
+# 三態 6 因子權重各自和必須 = 1.0；日後手調任一權重忘了配平,app 啟動即炸並指名
+# 哪一態,而非讓 stock_score 加權總分悄悄整體縮放（§1 寧可炸掉,不可造假）。
+import math as _math  # noqa: E402
+
+for _wt_regime, _wt in WEIGHT_TABLES.items():
+    if not _math.isclose(sum(_wt.values()), 1.0, abs_tol=1e-9):
+        raise ValueError(
+            f"WEIGHT_TABLES['{_wt_regime}'] 6 因子權重和 = {sum(_wt.values()):.4f} ≠ 1.0"
+            "（§4.2 權重未歸一）— 請先配平再啟動"
+        )
+del _wt_regime, _wt
+
 # ── 選股篩選條件 ──────────────────────────────────────────────
 TOP_N_STOCKS    = 10
 RSI_OVERBOUGHT  = 70

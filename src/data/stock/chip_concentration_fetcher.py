@@ -46,6 +46,8 @@ except ImportError:
         cache_resource = cache_data
     st = _NoOpST()  # noqa
 
+from shared.data_categories import CAT_CHIPS
+from shared.fetch_monitor import monitored
 from shared.ttls import TTL_1DAY
 from src.data.core.provenance import prov_log
 
@@ -199,6 +201,8 @@ def _table_diag(tables: list[pd.DataFrame]) -> list[dict]:
 # 核心抓取(@st.cache_data — 回 dict,cache-safe)
 # ══════════════════════════════════════════════════════════════════════════════
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
+@monitored('fetch_chip_concentration', category=CAT_CHIPS, frequency='weekly',
+           registry_key=None)  # v19.105 cache 內=只記真實抓;registry key 動態 per 股(scanner B5 `[個股] {sid} | 籌碼集中度`),固定填必孤兒誤報 → 誠實 None
 def fetch_chip_concentration(ticker: str) -> dict:
     """抓集保股權分散表並自適應解析。失敗回空 df + 錯誤訊息(不拋例外)。"""
     import io as _io

@@ -143,7 +143,12 @@ def stat_card(name: str, stats, unit: str = "", has_data: bool = True):
                 f'padding:12px;text-align:center;opacity:0.5;">'
                 f'<div style="font-size:10px;color:#484f58;">{name}</div>'
                 f'<div style="font-size:13px;color:#484f58;">載入中...</div></div>')
-    pct = stats.get('pct', 0)
+    # v19.105(第九份 Bug4):API 回傳字串型數字時 pct>0 / abs(pct) 直接 TypeError
+    # 炸整張卡。coerce 失敗回 0(中性顯示,§1 不炸不腦補方向)。
+    try:
+        pct = float(stats.get('pct', 0))
+    except (TypeError, ValueError):
+        pct = 0.0
     pc = '#da3633' if pct > 0 else ('#2ea043' if pct < 0 else '#388bfd')
     arrow = '▲' if pct > 0 else ('▼' if pct < 0 else '─')
     return (f'<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;'
@@ -161,6 +166,12 @@ def margin_card(margin):
                 '<div style="font-size:11px;color:#484f58;">融資餘額</div>'
                 f'<div style="font-size:12px;color:{TRAFFIC_YELLOW};margin-top:6px;">⏳ 抓取中（TWSE 15:30後更新）</div>'
                 '<div style="font-size:10px;color:#484f58;margin-top:4px;">收盤後點「🚀 一鍵更新全部數據」重試</div></div>')
+    # v19.105(第九份 Bug4):字串型 margin 比較即 TypeError。coerce 失敗視同
+    # 未取得(走 None 卡片,誠實顯示抓取中而非炸卡)。
+    try:
+        margin = float(margin)
+    except (TypeError, ValueError):
+        return margin_card(None)
     mc = (TRAFFIC_RED if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI
           else (TRAFFIC_YELLOW if margin > MARGIN_BALANCE_WARN_THRESHOLD_YI else TRAFFIC_GREEN))
     label = ('🔴超過3400億高危' if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI

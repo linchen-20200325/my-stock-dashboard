@@ -239,7 +239,7 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
     # rolling(window).mean() 後 NaN tail 自然不影響最新一根判斷。
     close = df['close'].ffill().dropna()
     ma    = close.rolling(window).mean()
-    std   = close.rolling(window).std()
+    std   = close.rolling(window).std(ddof=0)  # v19.105:Bollinger 母體 σ
 
     ma_now  = float(ma.iloc[-1])
     std_now = float(std.iloc[-1])
