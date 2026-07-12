@@ -730,6 +730,9 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     import io as _io_ex
     import re as _re_ex
     import pandas as _pd7
+    # v19.111:per-tier fail token(對齊 fetch_ism_pmi/fetch_tw_pmi 的 errs 模式),
+    # 全敗時回 {'_err_export': ...} 供 v18.194 錯誤碼面板 + health_inspector 顯示。
+    _ex_errs: list[str] = []
     _s_ex = _make_proxy_session()
     _s_ex.verify = False
     _s_ex.headers.update({'User-Agent': 'Mozilla/5.0',
@@ -758,10 +761,13 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                     return {'tw_export': {'yoy': _yoy_s, 'date': _date_s,
                                           'source': 'stat.gov.tw'}}
             print('[Export/stat.gov.tw] ❌ HTML 未含可解析 YoY')
+            _ex_errs.append('stat.gov.tw:no-parse')
         else:
             print(f'[Export/stat.gov.tw] ❌ HTTP {getattr(_r_stat, "status_code", "None")}')
+            _ex_errs.append(f'stat.gov.tw:HTTP {getattr(_r_stat, "status_code", None)}')
     except Exception as _e_stat:
         print(f'[Export/stat.gov.tw] ❌ {type(_e_stat).__name__}: {_e_stat}')
+        _ex_errs.append(f'stat.gov.tw:{type(_e_stat).__name__}')
 
     # (v19.85 拔除)原「方案 FM: FinMind TaiwanEconomicIndicator」— dataset 名
     # 不存在(見 docstring),從未命中。FinMind 無出口替代 dataset,不補段。
@@ -781,8 +787,12 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                     print(f'[Export/FRED-API] ✅ YoY={_yoy_fa:.2f}% date={_date_fa}')
                     return {'tw_export': {'yoy': _yoy_fa, 'date': _date_fa,
                                           'source': 'FRED-API/XTEXVA01TWM664S'}}
+            _ex_errs.append('FRED-API:未取得有效序列(OECD MEI 停更)')
         except Exception as _e_fa:
             print(f'[Export/FRED-API] ❌ {_e_fa}')
+            _ex_errs.append(f'FRED-API:{type(_e_fa).__name__}')
+    else:
+        _ex_errs.append('FRED-API:skip(無 FRED key)')
 
     # 方案 MOF: 財政部統計處 CSV — 透過 NAS proxy(台灣 IP)
     try:
@@ -814,8 +824,11 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                                                   'source': 'MOF-proxy'}}
                 except Exception:
                     continue
+        if not _mof_found:
+            _ex_errs.append('MOF-CSV:近2月×2式 URL 皆無資料')
     except Exception as _e_mof:
         print(f'[Export/MOF] ❌ {type(_e_mof).__name__}: {_e_mof}')
+        _ex_errs.append(f'MOF-CSV:{type(_e_mof).__name__}')
 
     # 方案 DGTW: data.gov.tw dataset 6053
     try:
@@ -871,8 +884,10 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                                                   'source': 'data.gov.tw/6053'}}
             except Exception:
                 continue
+        _ex_errs.append('data.gov.tw/6053:metadata/CSV 無回應或欄位不符')
     except Exception as _e_dgtw:
         print(f'[Export/data.gov.tw-6053] ❌ {type(_e_dgtw).__name__}: {_e_dgtw}')
+        _ex_errs.append(f'data.gov.tw/6053:{type(_e_dgtw).__name__}')
 
     # 方案 FRED: FRED CSV(XTEXVA01TWM664S,OECD MEI,延遲 2-3 月)
     try:
@@ -901,8 +916,10 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                     print(f'[Export/FRED-XTEXVA01TWM664S] ✅ YoY={_yoy_f:.2f}% date={_date_f}')
                     return {'tw_export': {'yoy': _yoy_f, 'date': _date_f,
                                           'source': 'FRED/XTEXVA01TWM664S'}}
+        _ex_errs.append('FRED-CSV:未取得有效序列(OECD MEI 停更)')
     except Exception as _e_fred:
         print(f'[Export/FRED-XTEXVA01TWM664S] ❌ {type(_e_fred).__name__}: {_e_fred}')
+        _ex_errs.append(f'FRED-CSV:{type(_e_fred).__name__}')
 
     # 方案 GOV-MOF: data.gov.tw CKAN(財政部進出口統計)
     try:
@@ -938,9 +955,17 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                     print(f'[Export/gov-mof] ✅ YoY={_yoy:.2f}% date={_dv}')
                     return {'tw_export': {'yoy': _yoy, 'date': _dv, 'source': 'MOF-CSV'}}
         print(f'[Export/gov-mof] ❌ res_id={_res_id2}')
+        _ex_errs.append('CKAN:無 CSV 資源或欄位不符')
     except Exception as _e_gov2:
         print(f'[Export/gov-mof] ❌ {type(_e_gov2).__name__}: {_e_gov2}')
+        _ex_errs.append(f'CKAN:{type(_e_gov2).__name__}')
 
     # §1 Fail Loud:所有方案全失敗 → **不捏造**任何數值(原 v18.330 修正)。
-    print('[Export/fallback] ⚠️ 所有方案全失敗 → 回空(不捏造假值),UI 顯示「待取得」')
-    return {}
+    # v19.111:改回 {'_err_export': ...} fail-trace token — section_mid 錯誤碼面板
+    # (v18.194)與 health_inspector 的 `_err_export` 讀取端原為死鍵(從無 setter),
+    # 出口全敗時 user 看不到任何錯誤碼。token 僅含「來源:錯誤型別」診斷字串,
+    # 不含 'tw_export' key = 仍不貢獻任何數值,§1 不捏造精神不變。
+    _err_msg_ex = ' | '.join(_ex_errs) or 'all 6 tiers failed'
+    print(f'[Export/fallback] ⚠️ 所有方案全失敗 → 回 _err_export 診斷 token'
+          f'(不捏造假值),UI 顯示「待取得」:{_err_msg_ex}')
+    return {'_err_export': _err_msg_ex}

@@ -1,5 +1,20 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔎 2026-07-12 出口 YoY 全敗 fail-trace 補接（v19.111,user 回報實錯觸發）
+
+user 驗收統一卡時回報「外需動能溫度計 台灣出口 YoY 無資料」+「台灣 PMI 也沒有資料」(§-1 實錯觸發)。診斷證據(GitHub Actions 每日 cron 2026-07-11 21:32 UTC run 29168967659,帶 PROXY_URL 走 NAS):
+
+- **NAS Squid proxy 活著**:TWII/CBC PXWeb/dgtw 皆出現「已透過 Synology NAS 成功抓取」→ 排除「NAS 掛掉」單因說。
+- **data.gov.tw dataset API 連台灣 IP 都死**:`[tw_pmi] ❌ 所有 dgtw metadata URL 皆失敗`;且 `data_cache/metadata.json` 顯示 tw_pmi parquet **從建立起 0 rows / last_updated=null** → 「讀 repo 歷史快照當 PMI fallback」此路不存在。
+- **CBC ms1.json 端點退化回 HTML**(PXWeb 備援吃住,M1B/M2 無恙,順帶記錄)。
+- **PMI 卡**:`fetch_tw_pmi` 9 源賽跑全敗時已回 `_err_pmi`(+ 本地 stale cache,惟 Streamlit Cloud 重新部署即清空)→ UI「🔍 部分指標載入失敗」面板**已能**顯示逐源錯誤碼,等 user 截圖定位。
+- **出口卡真 bug**:`fetch_export_block` 全敗回 `{}`(v18.330 反捏造修正)但**從無 `_err_export` setter** — trio orchestrator `if _part:` 連 merge 都進不去,section_mid `_err_label_map['_err_export']` 與 health_inspector L582 err_key 兩個讀取端都是死鍵 = 7 個 macro fetcher 中唯一全敗時無 fail-trace 的(v18.194 設計盲區)。
+
+**本版修復**(單檔小修,不觸發 §8):`fetch_export_block` 6 tier 各補 per-tier fail token(`stat.gov.tw:HTTP None` / `FRED-API:skip(無 FRED key)` / `MOF-CSV:ConnectTimeout` …,鏡 `fetch_ism_pmi` errs 模式),全敗回 `{'_err_export': 'src:err | ...'}`。**不含** `tw_export` 數值 key,§1 不捏造精神不變;部署後 user 打開錯誤碼面板即可看到出口鏈死在哪一段。
+
+- **回歸網**:`tests/test_export_fail_trace_v19_111.py` 4 test(全源斷線回 token 不回值/6 tier 全留痕+無 key 標 skip/回傳僅 `_` 前綴鍵可進 orchestrator merge/UI 標籤存在);`test_macro_export_no_fabrication.py` 重釘(原鎖 `return {}` → 改鎖 `return {'_err_export':` + 全敗段禁 `'tw_export': {` 賦值,重釘理由入 docstring)。macro 子集 784 passed。
+- **不動的**(待 user 核准,§-1):新出口/PMI 資料源評估(FinMind 無出口與 PMI dataset — v19.85 已枚舉證實;MOF/stat.gov.tw 存活狀況待 user 截圖錯誤碼面板後再定)、PMI stale cache 落盤到 repo(需 §8 設計)。
+
 ## 📉 2026-07-12 週 MACD 升級標準 12/26/9（v19.110,插隊項 user 核准）
 
 user 核准「週 MACD 升級」(= 確認有在用週 MACD 出場訊號、要與券商對數字)。`exit_signals._weekly_macd_turn_negative` 自 v19.105 標註的 3/5/3 樣本受限代理升級為標準參數。
