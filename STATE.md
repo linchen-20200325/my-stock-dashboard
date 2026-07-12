@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧷 2026-07-11 scripts/ sys.path guard 通用鎖 + 季度校準報告真資料重生（v19.103）
+
+user 跑「Recalibrate Macro Thresholds (Quarterly)」按鈕 → `calibrate_macro_traffic.py` 炸 `ModuleNotFoundError: No module named 'src'` — **同 v19.101 病因第二個現場**(`python scripts/xxx.py` 直跑 sys.path[0]=scripts/,無 repo root)。
+
+- **修**:calibrate_macro_traffic 加 repo-root sys.path guard(scripts/ 全面盤點:15 檔中僅此檔「有 src import 無 guard」,其餘 5 檔早有)。
+- **通用不變量鎖(防第三個現場)**:`tests/test_review_fixes_v19_103.py` 參數化掃描**全部** scripts/*.py — 凡含 `src.*` import 必須有 guard,未來新 script 漏 guard 在 CI 直接紅,不必等生產炸。
+- **功能驗證(本地跑到底)+ 報告重生**:修後本地實跑季度校準完整完成,`MACRO_CALIBRATION.md` 從「TWII-only DEMO **合成資料**」重生為「**Cache enriched 真資料**(TWII+FinMind 籌碼/M1M2,337 有效日)」:score↔ret20 corr **+0.376**(舊合成 −0.452!)、🟢 precision 56.6%(舊 43.9)、🔴 recall 83.3%(該防禦時 5 次抓到 4 次)。**開啟整條校準線的 −0.452 誤導文件正式被真資料版取代** — v19.102 新權重與真實市場同向,弧線完整閉合。
+- 純 script guard + 測試 + 報告重生,無 SSOT 常數/公式變更(plain run 不寫 macro_thresholds.json;門檻優化屬 `--optimize` 路徑,user 之後可再按按鈕跑)。
+
 ## 🏁 2026-07-11 紅綠燈權重校準採納 — Phase 3 收官（v19.102）
 
 管線全通:user 於 Actions 跑 bootstrap(20 年真資料齊)→ Calibrate 產出提案 → AI 審核通過 → user 核准**方案 B** → 本次落地。**−0.452 議題正式結案**(合成資料假象;真實資料 AUC 0.753)。
