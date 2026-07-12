@@ -386,7 +386,7 @@ def render_data_health_raw():
            date_str=str((_ma_g.get('ism_pmi') or {}).get('date',''))[:10] or None)
     _g_add('NDC 景氣燈號',      'StockFeel+MacroMicro 雙源', 'monthly',
            date_str=str((_ma_g.get('ndc_signal') or {}).get('date',''))[:10] or None)
-    _g_add('台灣出口 YoY',      'stat.gov.tw+FinMind+MOF+FRED+data.gov.tw+靜態 6段備援', 'monthly',
+    _g_add('台灣出口 YoY',      'stat.gov.tw+FRED+data.gov.tw/6053(海關新臺幣)+CKAN 5段', 'monthly',
            date_str=str((_ma_g.get('tw_export') or {}).get('date',''))[:10] or None)
     _g_add('台灣 M1B / M2',    'CBC + FinMind 雙源',         'monthly',
            date_str=(_cl_ts_g if _mi_g.get('m1b_yoy') is not None else None))

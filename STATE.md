@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🎣 2026-07-12 兩張死卡救回:PMI + 出口 dgtw parser 重接（v19.114/115,user 核准「1+2」）
+
+user 問「其他找不到的資料能否用探針法救回」→ 探針 run 29186611230（美國 IP + NAS）第三輪深挖**實錘兩條活 CSV**,現行 parser 從未真解析過。user「1+2」= 救 PMI + 救出口。
+
+- **v19.114 PMI（`macro_core._pmi_src_dgtw` 重接）**:探針證明 dgtw 6100 resource = `ws.ndc.gov.tw/Download.ashx?u=...`,head=`Date,PMI,NMI 201207,47.1,-...202606,60.7,-`（升序、YYYYMM、含最新 60.7）。**死因**:原 parser 雙重 gate —「resource format in (CSV,JSON)」+「URL 含 'csv' 才解析」,但該 URL 無 'csv' 字樣、format 常空 → 活 CSV 從未進解析分支。**修**:收所有 resource url（CSV format 排前）逐一下載,交新純函式 `_parse_dgtw_pmi_csv`（取最新 PMI∈[30,70] 列 + age≤90 天）。對帳:6 月 60.7（CIER 官方發布值）。
+- **v19.115 出口（`macro_snapshot.fetch_export_block` 6053 tier 重接）**:探針證明 dgtw 6053 resource = `opendata.customs.gov.tw/data/6053/csv.csv`,head=`"年度","月份","出口總值(新臺幣千元)",...  "115","4",...`（**民國年、降序、新臺幣千元**）。**死因**:原 parser 三處對不上 —（a）年度/月份分兩欄只抓月份無年、（b）源降序卻用 `iloc[-1]`（取到最舊列）、（c）未同月對齊。**修**:新純函式 `_parse_customs_export_csv`（西元=民國+1911、同月對齊 `YoY=(出口總值[Y,M]/出口總值[Y-1,M]-1)×100`、sanity base>0 且 YoY∈[-80,200]）。
+- **幣別誠實（§4.1)**:海關 CSV 為**新臺幣**,與財政部頭條美元 +40.3% 有匯率落差 → return 帶 `ccy='TWD'`、source 標「海關新臺幣出口總值」。訊號方向（外需擴張/收縮）TWD/USD 幾乎一致,自動化卡片用 TWD 官方原始值正解。**option② USD 探勘**:probe_tw_sources 加 3 個美元 dataset 探針（CKAN 搜「進出口 美元」×2 + 關務署站台）,本次 push 觸發;若找到乾淨美元序列 → 評估 v19.116 加對帳，否則 TWD 為終解。
+- **回歸網**:`tests/test_dgtw_recovery_v19_114_115.py` 9 test（用探針真實 CSV 樣本當 fixture:PMI 取最新+越界skip+過舊None+空/僅表頭；出口 同月對齊非iloc+降序仍正確+去年同月缺None+列數不足）。ruff 新碼全淨（macro_core 既有 E701/E402 未觸）。
+- **health_inspector 出口來源字串**同步（原「stat.gov.tw+FinMind+MOF+FRED+data.gov.tw+靜態 6段」殘影 3 世代 → 更正為「stat.gov.tw+FRED+data.gov.tw/6053(海關新臺幣)+CKAN 5段」）。
+- **方法論沉澱**:「探針從雲端+NAS 抓到含值內容 → 重接 parser」對任何死卡通用;不能抓到含值內容者（CIER-EN 值在圖/JS、nstatdb 空殼）= 硬修 regex 也沒用,誠實換源或標不可得（§1）。
+
 ## 🧊 2026-07-12 失敗不進快取 + 死源清理（v19.113,user 核准提案①+②）
 
 v19.112 診斷收斂後 user 補測推翻「雲端連不到 NAS」假設(app 內 proxy 雙跑全綠、NAS 測試 978ms 成功)→ 真根因 = **凍結機制**:六個總經 block 掛 `@st.cache_data(ttl=1h)` 且失敗 dict 也被快取;「🚀 一鍵更新」吃暖快取(help 文字自證)、畫面讀 session_state — 一次上游打嗝(同日實錘 dgtw 05:32 cron 死 / 14:13 探針活的間歇)被凍住顯示。user 核准「1+2」:

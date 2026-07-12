@@ -764,6 +764,62 @@ def fetch_ndc_block() -> dict:
     return {'_err_ndc': 'FinMind-TBI + StockFeel + MacroMicro 三源皆失敗'}
 
 
+def _parse_customs_export_csv(text: str):
+    """解析海關 6053 出口 CSV（純函式,可單測）。
+
+    探針 run 29186611230（美國 IP + NAS）實測真實格式:
+        "年度","月份","出口總值(新臺幣千元)","出口(新臺幣千元)",...
+        "115","4","2153671224","1965063010",...   # 民國年、降序、新臺幣千元
+    §4.1 單位:**新臺幣計價**（與財政部美元頭條 +40.3% 有匯率落差,caller 標
+    ccy=TWD 誠實區分）。§7 數學式:
+        西元年 = 民國年 + 1911
+        YoY% = (出口總值[西元Y,M] / 出口總值[西元Y-1,M] − 1) × 100   ← 同月對齊,非 iloc
+    sanity:base>0、YoY∈[-80,200]、民國年≥50、月∈[1,12]。
+
+    Returns: {'yoy': float, 'date': 'YYYY-MM'} 或 None。
+    """
+    import csv as _csv3
+    import io as _io3
+    _rows = list(_csv3.DictReader(_io3.StringIO(text)))
+    if len(_rows) < 13:
+        return None
+    _cols = list(_rows[0].keys())
+    _yr_c = next((c for c in _cols if '年度' in str(c)), None)
+    _mo_c = next((c for c in _cols
+                  if '月份' in str(c) or str(c).strip() == '月'), None)
+    # 出口總值優先（含復出口,對齊頭條口徑）;無則純出口。排除 增/率/比/差/復/進
+    _val_c = next((c for c in _cols if '出口總值' in str(c)), None) \
+        or next((c for c in _cols if str(c).startswith('出口')
+                 and not any(_x in str(c)
+                             for _x in ('增', '率', '比', '差', '復'))), None)
+    if not (_yr_c and _mo_c and _val_c):
+        return None
+    _by_ym: dict = {}   # (西元年, 月) -> 出口總值(千元)
+    for _r in _rows:
+        try:
+            _roc = int(str(_r.get(_yr_c, '')).strip())
+            _mo = int(str(_r.get(_mo_c, '')).strip())
+            _v = float(str(_r.get(_val_c, '')).replace(',', '').strip())
+        except (ValueError, TypeError):
+            continue
+        if _roc < 50 or not (1 <= _mo <= 12):   # 民國年 sanity
+            continue
+        _by_ym[(_roc + 1911, _mo)] = _v
+    if len(_by_ym) < 13:
+        return None
+    _latest = max(_by_ym)              # (西元年, 月)
+    _base_k = (_latest[0] - 1, _latest[1])   # 去年同月
+    if _base_k not in _by_ym:
+        return None
+    _v_now, _v_base = _by_ym[_latest], _by_ym[_base_k]
+    if _v_base <= 0:
+        return None
+    _yoy = round((_v_now / _v_base - 1) * 100, 2)
+    if not (-80 <= _yoy <= 200):
+        return None
+    return {'yoy': _yoy, 'date': f'{_latest[0]}-{_latest[1]:02d}'}
+
+
 @_cache_success_only(ttl=TTL_1HOUR)   # v19.113:失敗不進快取
 def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     """台灣出口 YoY(海關出口年增率,5 路 fallback)。
@@ -887,28 +943,21 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                 _rc_ex = _fu_ex(_csv_url_ex, timeout=15, attempts=2)
                 if _rc_ex is None or _rc_ex.status_code != 200:
                     continue
-                _df_dgtw = _pd7.read_csv(_io_ex.StringIO(
-                    _rc_ex.content.decode('utf-8-sig', errors='ignore')))
-                _val_k = next((c for c in _df_dgtw.columns
-                               if '出口' in str(c) and not any(
-                                   _x in str(c) for _x in ('增', '率', '比', '差'))), None)
-                _dt_k = next((c for c in _df_dgtw.columns
-                              if any(_x in str(c) for _x in ('年月', '月份', '日期', 'DATE', 'date'))), None)
-                if _val_k and _dt_k and len(_df_dgtw) >= 13:
-                    _df_dgtw = _df_dgtw.dropna(subset=[_val_k]).copy()
-                    _df_dgtw[_val_k] = _pd7.to_numeric(
-                        _df_dgtw[_val_k].astype(str).str.replace(',', ''),
-                        errors='coerce')
-                    _df_dgtw = _df_dgtw.dropna(subset=[_val_k])
-                    if len(_df_dgtw) >= 13:
-                        _cur_d = float(_df_dgtw[_val_k].iloc[-1])
-                        _prv_d = float(_df_dgtw[_val_k].iloc[-13])
-                        if _prv_d != 0:
-                            _yoy_d = round((_cur_d - _prv_d) / abs(_prv_d) * 100, 2)
-                            _date_d = str(_df_dgtw[_dt_k].iloc[-1])[:7]
-                            print(f'[Export/data.gov.tw-6053] ✅ YoY={_yoy_d:.2f}% date={_date_d}')
-                            return {'tw_export': {'yoy': _yoy_d, 'date': _date_d,
-                                                  'source': 'data.gov.tw/6053'}}
+                # v19.115:探針 run 29186611230 實錘 6053 resource =
+                # opendata.customs.gov.tw/data/6053/csv.csv,格式為「民國年度/月份
+                # 分兩欄、降序、新臺幣千元」— 原 parser 三處對不上:(a) 年度/月份
+                # 未合併(只抓月份無年)、(b) iloc[-1] 取到最舊列(源降序未 sort)、
+                # (c) 未按同月對齊。改交 _parse_customs_export_csv 解析（純函式）。
+                _parsed_ex = _parse_customs_export_csv(
+                    _rc_ex.content.decode('utf-8-sig', errors='ignore'))
+                if _parsed_ex:
+                    print(f"[Export/data.gov.tw-6053] ✅ "
+                          f"YoY={_parsed_ex['yoy']:.2f}% date={_parsed_ex['date']}"
+                          f"（海關新臺幣出口總值）")
+                    return {'tw_export': {'yoy': _parsed_ex['yoy'],
+                                          'date': _parsed_ex['date'],
+                                          'ccy': 'TWD',
+                                          'source': 'data.gov.tw/6053(海關新臺幣出口總值)'}}
             except Exception:
                 continue
         _ex_errs.append('data.gov.tw/6053:metadata/CSV 無回應或欄位不符')

@@ -60,6 +60,17 @@ TARGETS: list[tuple[str, str, str]] = [
      'https://web02.mof.gov.tw/njswww/WebMain.aspx?sys=100', ''),
     ('EXP|關港貿單一窗口 GA35(新候選)',
      'https://portal.sw.nat.gov.tw/APGA/GA35', '出口'),
+    # ── v19.115 option②:美元計價出口序列探勘(對帳財政部頭條 +40.3% USD) ──
+    # 海關 6053 為新臺幣千元 → TWD YoY 與美元頭條有匯率落差。探是否有乾淨
+    # machine-readable 美元出口 dataset;無則誠實回報 TWD 為自動化卡片正解。
+    ('EXP-USD|CKAN 搜「進出口 美元」',
+     'https://data.gov.tw/api/3/action/package_search?q=%E9%80%B2%E5%87%BA%E5%8F%A3%20%E7%BE%8E%E5%85%83&rows=8',
+     'result'),
+    ('EXP-USD|CKAN 搜「出口 美元 統計」',
+     'https://data.gov.tw/api/3/action/package_search?q=%E5%87%BA%E5%8F%A3%20%E7%BE%8E%E5%85%83&rows=8',
+     'result'),
+    ('EXP-USD|關務署 opendata 站台首頁(找美元變體 dataset)',
+     'https://opendata.customs.gov.tw/', '美元'),
 ]
 
 
@@ -71,6 +82,173 @@ def _snippet(body: str, keyword: str, width: int = 160) -> str:
         if idx >= 0:
             return flat[max(0, idx - 40):idx + width - 40]
     return flat[:width]
+
+
+# ── v19.114 深挖:錯誤碼面板實錘 stat.gov.tw:no-parse(連得上、解不動) ──
+# 對指定頁抓「關鍵字前後文視窗」+ 當場試跑 production 正則 → 用真實內文
+# 寫新解析器,不猜(§3.3)。每 pattern 印首個 match 的 groups。
+_DEEP_DUMPS: list[tuple[str, str, list[str], list[tuple[str, str]]]] = [
+    ('stat.gov.tw 出口年增率頁',
+     'https://www.stat.gov.tw/Point.aspx?sid=t.8&n=3587&sms=11480',
+     ['出口', '年增率', '出口年增率'],
+     [('production 現行', r'(20\d{2})\s*年\s*(\d{1,2})\s*月[^。]{0,80}?'
+                          r'出口[^。]{0,30}?年增率?[^\d\-]{0,15}(-?\d{1,3}\.\d)\s*%?'),
+      ('寬鬆試探A(值優先)', r'年增率[^\d\-]{0,40}(-?\d{1,3}\.\d)'),
+      ('寬鬆試探B(民國年月)', r'(1\d{2})年\s*(\d{1,2})月'),
+      ('寬鬆試探C(西元年月)', r'(20\d{2})[年/\-\s]+(\d{1,2})[月]?')]),
+    ('CIER-EN 2026-06 slug 頁',
+     'https://www.cier.edu.tw/en/eco/taiwan-manufacturing-pmi-june-2026/',
+     ['60.7', 'percentage', 'PMI was', 'fell'],
+     [('production 現行', r'(?:Manufacturing\s+PMI|PMI)[^.]{0,80}?'
+                          r'(?:at|registered|reached|of|stood\s+at|rose\s+to|fell\s+to|was)?'
+                          r'[^\d]{0,15}(\d{2}\.\d)\s*(?:%|percent)?'),
+      ('寬鬆試探(值域鎖)', r'(\d{2}\.\d)\s*(?:%|percent)')]),
+]
+
+
+def _dump_windows(flat: str, keyword: str, n: int = 4, width: int = 130) -> None:
+    start = 0
+    for i in range(n):
+        idx = flat.find(keyword, start)
+        if idx < 0:
+            if i == 0:
+                print(f'     (無「{keyword}」出現)')
+            return
+        print(f'     [{keyword}#{i + 1}] …{flat[max(0, idx - 50):idx + width - 50]}…')
+        start = idx + len(keyword)
+
+
+def _deep_dump(fetch_url) -> None:
+    print('\n══ 深挖:內文視窗 + production 正則試跑 ══')
+    for label, url, keywords, patterns in _DEEP_DUMPS:
+        r = fetch_url(url, timeout=20, attempts=2)
+        if r is None:
+            print(f'❌ {label} | 無回應,無法深挖')
+            continue
+        try:
+            r.encoding = r.encoding or 'utf-8'
+            from bs4 import BeautifulSoup
+            flat = re.sub(r'\s+', ' ',
+                          BeautifulSoup(r.text, 'html.parser')
+                          .get_text(' ', strip=True))
+        except Exception as e:
+            print(f'⚠️ {label} | 取文失敗 {type(e).__name__}: {e}')
+            continue
+        print(f'📄 {label} | HTTP {r.status_code} | 純文字 {len(flat)} chars')
+        for kw in keywords:
+            _dump_windows(flat, kw)
+        for pname, pat in patterns:
+            m = re.search(pat, flat)
+            if m:
+                print(f'   🎯 regex[{pname}] ✅ groups={m.groups()} '
+                      f'| 前後文=…{flat[max(0, m.start() - 30):m.end() + 30]}…')
+            else:
+                print(f'   🎯 regex[{pname}] ❌ 不匹配')
+
+
+def _deep_dump_v2(fetch_url) -> None:
+    """v19.114 第三輪:資料端點探勘。
+
+    第二輪實錘:stat.gov.tw get_text 只剩 2177 字導覽殼(數值 JS 動態載入)、
+    CIER-EN 同 URL 時而 94KB 全頁時而 1.5K 殼(回應不穩)。本輪:
+    A. nstatdb qryout 47KB 是殼還是真資料表
+    B. stat.gov.tw RAW HTML 掃 AJAX/JSON 資料端點
+    C. dgtw 6100/6053 metadata resources 枚舉 + 首資源下載試讀
+    D. CIER-EN 同 URL 兩連抓驗不穩定性
+    """
+    from bs4 import BeautifulSoup
+    print('\n══ 深挖v2:資料端點探勘 ══')
+
+    # A. nstatdb qryout
+    _nstat = ('https://nstatdb.dgbas.gov.tw/dgbasall/webMain.aspx?sys=100'
+              '&funid=qryout&funid2=A081201010&cycle=41&outkind=4&outmode=8'
+              '&fldlst=11&codlst0=10&compmode=02.1')
+    r = fetch_url(_nstat, timeout=20, attempts=2)
+    if r is not None:
+        r.encoding = r.encoding or 'utf-8'
+        flat = re.sub(r'\s+', ' ',
+                      BeautifulSoup(r.text, 'html.parser').get_text(' ', strip=True))
+        print(f'📄 A.nstatdb qryout | HTTP {r.status_code} | raw {len(r.text)} '
+              f'| text {len(flat)}')
+        for kw in ('出口', '年增率', '115年', '114年'):
+            _dump_windows(flat, kw, n=3)
+        for pn, pat in (('民國年月', r'(1\d{2})年\s*(\d{1,2})月'),
+                        ('小數值樣本', r'-?\d{1,3}\.\d')):
+            ms = re.findall(pat, flat)[:8]
+            print(f'   🎯 {pn}: {ms if ms else "無"}')
+    else:
+        print('❌ A.nstatdb 無回應')
+
+    # B. stat.gov.tw RAW HTML 端點掃描
+    _stat = 'https://www.stat.gov.tw/Point.aspx?sid=t.8&n=3587&sms=11480'
+    r = fetch_url(_stat, timeout=20, attempts=2)
+    if r is not None:
+        r.encoding = 'utf-8'
+        raw = r.text
+        print(f'📄 B.stat.gov.tw RAW | {len(raw)} chars | API/JSON 端點候選:')
+        hits = re.findall(
+            r'["\']([^"\']{4,120}?(?:api|json|ashx|handler|GetData|Chart)'
+            r'[^"\']{0,80})["\']', raw, re.IGNORECASE)
+        seen: list[str] = []
+        for h in hits:
+            if h not in seen:
+                seen.append(h)
+        for h in seen[:15]:
+            print(f'   ↳ {h}')
+        if not seen:
+            print('   (無命中)')
+    else:
+        print('❌ B.stat.gov.tw 無回應')
+
+    # C. dgtw metadata resources + 首資源試讀
+    for _ds in ('6100', '6053'):
+        r = fetch_url(f'https://data.gov.tw/api/v2/rest/dataset/{_ds}',
+                      timeout=15, attempts=2,
+                      headers={'Accept': 'application/json'})
+        if r is None:
+            print(f'❌ C.dgtw {_ds} metadata 無回應')
+            continue
+        try:
+            j = r.json()
+        except Exception as e:
+            print(f'⚠️ C.dgtw {_ds} 非 JSON:{type(e).__name__} '
+                  f'| head={r.text[:120]!r}')
+            continue
+        res = (j.get('result', {}).get('resources') or j.get('resources')
+               or j.get('result', {}).get('distribution') or [])
+        print(f'📄 C.dgtw {_ds} resources × {len(res)}')
+        first_url = None
+        for it in res[:6]:
+            fmt = str(it.get('format', '?'))
+            u = (it.get('url') or it.get('resourceDownloadUrl')
+                 or it.get('downloadUrl') or '')
+            print(f'   ↳ [{fmt}] {u[:110]}')
+            if first_url is None and u:
+                first_url = u
+        if not res:
+            print(f'   (metadata keys={list(j.get("result", j))[:12]})')
+        if first_url:
+            rc = fetch_url(first_url, timeout=20, attempts=2)
+            if rc is None:
+                print('   ⬇️ 首資源下載:無回應')
+            else:
+                head = re.sub(r'\s+', ' ', rc.content[:400].decode(
+                    'utf-8-sig', errors='ignore'))[:220]
+                print(f'   ⬇️ 首資源 HTTP {rc.status_code} '
+                      f'| {len(rc.content)} bytes | head={head!r}')
+
+    # D. CIER-EN 不穩定性
+    _cier = 'https://www.cier.edu.tw/en/eco/taiwan-manufacturing-pmi-june-2026/'
+    for i in (1, 2):
+        r = fetch_url(_cier, timeout=20, attempts=1)
+        if r is None:
+            print(f'📄 D.CIER-EN 第{i}抓:無回應')
+        else:
+            flat = re.sub(r'\s+', ' ',
+                          BeautifulSoup(r.text, 'html.parser')
+                          .get_text(' ', strip=True))
+            print(f'📄 D.CIER-EN 第{i}抓 | HTTP {r.status_code} '
+                  f'| raw {len(r.text)} | text {len(flat)} | head={flat[:90]!r}')
 
 
 def main() -> int:
@@ -101,6 +279,8 @@ def main() -> int:
               f'關鍵字「{keyword}」{"命中" if has_kw else "未命中"}')
         print(f'   ↳ {_snippet(body, keyword)}')
     print(f'\n📊 結果:{n_ok}/{len(TARGETS)} 端點回 200 且內容含關鍵字')
+    _deep_dump(fetch_url)      # v19.114:內文視窗 + 正則試跑
+    _deep_dump_v2(fetch_url)   # v19.114:資料端點探勘
     return 0  # 探針本身永遠 exit 0,存活判讀看逐行輸出
 
 
