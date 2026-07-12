@@ -989,14 +989,66 @@ def _pmi_src_cier_en_monthly(today, max_age_days, errs):
     return None
 
 
+def _parse_dgtw_pmi_csv(text, *, today, max_age_days):
+    """解析 dgtw 6100 PMI CSV（純函式,可單測）。
+
+    探針 run 29186611230（美國 IP + NAS）實測真實格式:
+        Date,PMI,NMI
+        201207,47.1,-
+        ...
+        202606,60.7,-
+    Date=YYYYMM 升序、PMI 為值、NMI 常為 '-'。取「最新且 PMI∈[30,70]」的列。
+    §3.3 反捏造:值域 sanity;§2.4 age 超 max_age_days 回 None（不當新資料用）。
+
+    Returns: {'value': float, 'date': 'YYYY-MM-01'} 或 None。
+    """
+    import csv as _csv2
+    import datetime as _dt2
+    import io as _io2
+    _rows = list(_csv2.DictReader(_io2.StringIO(text)))
+    if not _rows:
+        return None
+    _cols = list(_rows[0].keys())
+    # PMI 欄:精確 'PMI' 優先,再模糊含 PMI（排除 NMI）
+    _pmi_c = next((c for c in _cols if str(c).strip().upper() == 'PMI'), None) \
+        or next((c for c in _cols if 'PMI' in str(c).upper()
+                 and 'NMI' not in str(c).upper()), None)
+    # Date 欄:名稱命中,或首列值像 YYYYMM
+    _date_c = next((c for c in _cols
+                    if str(c).strip().lower() in ('date', '日期', '年月')), None) \
+        or next((c for c in _cols
+                 if _re.match(r'^\s*20\d{4}\s*$', str(_rows[0].get(c, '')))), None)
+    if not _pmi_c or not _date_c:
+        return None
+    _best = None   # (yyyymm_int, value, 'YYYY-MM-01')
+    for _r in _rows:
+        _md = _re.match(r'^\s*(20\d{2})[-/]?(\d{2})\s*$', str(_r.get(_date_c, '')))
+        if not _md:
+            continue
+        try:
+            _v = float(str(_r.get(_pmi_c, '')).strip())
+        except (ValueError, TypeError):
+            continue
+        if not (30 <= _v <= 70):
+            continue
+        _ym = int(_md.group(1) + _md.group(2))
+        if _best is None or _ym > _best[0]:
+            _best = (_ym, round(_v, 1), f'{_md.group(1)}-{_md.group(2)}-01')
+    if _best is None:
+        return None
+    _last = _dt2.date(_best[0] // 100, _best[0] % 100, 1)
+    if (today - _last).days > max_age_days:
+        return None
+    return {'value': _best[1], 'date': _best[2]}
+
+
 def _pmi_src_dgtw(today, max_age_days, errs):
     """方案 0 (Primary): data.gov.tw dataset/6100 官方開放資料（國發會 NDC 提供）。
 
-    流程：① metadata API 取 resources URL → ② 下載 CSV/JSON 解析末筆。
+    流程：① metadata API 取 resources URL → ② 下載 CSV 交 _parse_dgtw_pmi_csv 解析。
+    v19.114:探針實錘現行 parser 從未真解析過活 CSV（見下 resource 段註解）→ 重接。
     """
     try:
-        import io as _io_dgw
-        import csv as _csv_dgw
         # metadata API 端點（多個變體：v1/v2 + .json + 直查 dataset id）
         for _meta_url in (
             'https://data.gov.tw/api/v2/rest/dataset/6100',
@@ -1025,50 +1077,36 @@ def _pmi_src_dgtw(today, max_age_days, errs):
                         or [])
                 if not _res:
                     continue
-                # 找 CSV / JSON resource
-                _csv_url = None
+                # v19.114:探針 run 29186611230 實錘 6100 resource =
+                # ws.ndc.gov.tw/Download.ashx?u=...（URL 無 'csv' 字樣、format 常空）
+                # → 原「format in (CSV,JSON)」+「'csv' in url 才解析」雙重 gate 使
+                # 這條**活 CSV 從未被解析**（head='Date,PMI,NMI 201207,47.1,-...'）。
+                # 改:收所有 resource url（CSV format 排前）、逐一下載 + 交
+                # _parse_dgtw_pmi_csv 解析（不靠 URL 副檔名/format 判斷內容）。
+                _urls = []
                 for _it in _res:
-                    _fmt = str(_it.get('format', '')).upper()
-                    _url2 = _it.get('url') or _it.get('resourceDownloadUrl')
-                    if _fmt in ('CSV', 'JSON') and _url2:
-                        _csv_url = _url2
-                        break
-                if not _csv_url:
-                    continue
-                # 下載 CSV / JSON
-                _r_csv = fetch_url(_csv_url, timeout=15, attempts=2)
-                if _r_csv is None or _r_csv.status_code != 200:
-                    continue
-                _txt_csv = _r_csv.content.decode('utf-8-sig', errors='ignore')
-                # CSV 路徑：解析最後一筆有效 row（含 PMI 欄位 + 年月）
-                if _csv_url.lower().endswith('.csv') or 'csv' in _csv_url.lower():
-                    _rdr = list(_csv_dgw.DictReader(_io_dgw.StringIO(_txt_csv)))
-                    if _rdr:
-                        # 找 PMI 欄位（常見 key：'PMI' / '製造業採購經理人指數' / '指數'）
-                        _row_last = _rdr[-1]
-                        _pmi_v = None; _pmi_d = None
-                        for _k, _v_cell in _row_last.items():
-                            _kl = str(_k)
-                            if any(_x in _kl for _x in ('PMI', '採購經理', '製造業')):
-                                try:
-                                    _val = float(str(_v_cell).strip())
-                                    if 30 <= _val <= 70:
-                                        _pmi_v = _val
-                                        break
-                                except (ValueError, TypeError):
-                                    pass
-                        # 找日期欄位
-                        for _k2, _v2 in _row_last.items():
-                            _m_d = _re.search(r'(20\d{2})[-/年]?(\d{1,2})', str(_v2))
-                            if _m_d:
-                                _pmi_d = f'{_m_d.group(1)}-{int(_m_d.group(2)):02d}-01'
-                                break
-                        if _pmi_v is not None and _pmi_d:
-                            print(f'[macro_core/TW-PMI/data.gov.tw] ✅ {_pmi_v} date={_pmi_d}')
-                            return {'value': _pmi_v, 'date': _pmi_d,
-                                    'label': '政府資料開放平臺 dataset/6100',
-                                    'source': 'data.gov.tw', 'is_proxy': True,
-                                    'series_id': 'dgtw-6100'}
+                    _u2 = (_it.get('url') or _it.get('resourceDownloadUrl')
+                           or _it.get('downloadUrl'))
+                    if not _u2:
+                        continue
+                    if str(_it.get('format', '')).upper() == 'CSV':
+                        _urls.insert(0, _u2)
+                    else:
+                        _urls.append(_u2)
+                for _u2 in _urls:
+                    _r_csv = fetch_url(_u2, timeout=15, attempts=2)
+                    if _r_csv is None or _r_csv.status_code != 200:
+                        continue
+                    _txt_csv = _r_csv.content.decode('utf-8-sig', errors='ignore')
+                    _parsed = _parse_dgtw_pmi_csv(
+                        _txt_csv, today=today, max_age_days=max_age_days)
+                    if _parsed:
+                        print(f"[macro_core/TW-PMI/data.gov.tw] ✅ "
+                              f"{_parsed['value']} date={_parsed['date']}")
+                        return {'value': _parsed['value'], 'date': _parsed['date'],
+                                'label': '政府資料開放平臺 dataset/6100（國發會 NDC）',
+                                'source': 'data.gov.tw/6100', 'is_proxy': True,
+                                'series_id': 'dgtw-6100'}
             except Exception as _e_dg:
                 errs.append(f'dgtw.{_meta_url[-15:]}:{type(_e_dg).__name__}')
     except Exception as _e_dg_outer:

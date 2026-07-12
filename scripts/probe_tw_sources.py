@@ -60,6 +60,17 @@ TARGETS: list[tuple[str, str, str]] = [
      'https://web02.mof.gov.tw/njswww/WebMain.aspx?sys=100', ''),
     ('EXP|關港貿單一窗口 GA35(新候選)',
      'https://portal.sw.nat.gov.tw/APGA/GA35', '出口'),
+    # ── v19.115 option②:美元計價出口序列探勘(對帳財政部頭條 +40.3% USD) ──
+    # 海關 6053 為新臺幣千元 → TWD YoY 與美元頭條有匯率落差。探是否有乾淨
+    # machine-readable 美元出口 dataset;無則誠實回報 TWD 為自動化卡片正解。
+    ('EXP-USD|CKAN 搜「進出口 美元」',
+     'https://data.gov.tw/api/3/action/package_search?q=%E9%80%B2%E5%87%BA%E5%8F%A3%20%E7%BE%8E%E5%85%83&rows=8',
+     'result'),
+    ('EXP-USD|CKAN 搜「出口 美元 統計」',
+     'https://data.gov.tw/api/3/action/package_search?q=%E5%87%BA%E5%8F%A3%20%E7%BE%8E%E5%85%83&rows=8',
+     'result'),
+    ('EXP-USD|關務署 opendata 站台首頁(找美元變體 dataset)',
+     'https://opendata.customs.gov.tw/', '美元'),
 ]
 
 
