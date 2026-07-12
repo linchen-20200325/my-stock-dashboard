@@ -18,6 +18,11 @@ from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
 from shared.signal_thresholds import (
     KD_OVERBOUGHT_LEVEL,
     MA20_POSITIVE_DEVIATION_THRESHOLD_PCT,
+    WK_MACD_DAYS_PER_WEEK,      # v19.110 週 MACD 標準參數組
+    WK_MACD_FAST_SPAN,
+    WK_MACD_MIN_WEEKS,
+    WK_MACD_SIGNAL_SPAN,
+    WK_MACD_SLOW_SPAN,
 )
 
 import json
@@ -43,24 +48,40 @@ def _ma(close: pd.Series, n: int):
 
 
 def _weekly_macd_turn_negative(close: pd.Series) -> bool:
-    """近 30 日 K 線每 5 根合成週 K，週 MACD(3/5/3) 由正翻負視為中線轉弱。
+    """每 5 根日K合成週K,標準週 MACD(12/26/9)柱由正翻負 → 中線轉弱。
 
-    ⚠️ 非標準參數的粗篩代理(v19.105 標註,第九份 review):標準 MACD 為
-    12/26/9;此處僅 ~6 根合成週 K,3/5/3 是樣本受限下的妥協,僅作「中線
-    轉弱」粗篩訊號,不可與券商週 MACD 數值對照。升級為真 12/26/9 需
-    ≥35 根週 K(~175 日),屬模型變更,列待核准。
+    v19.110(user 核准「週 MACD 升級」,原 3/5/3 為 v19.105 標註的樣本受限
+    代理):
+    - **數學式**:w_t = 每 5 交易日一組的組內最後收盤(自序列尾端對齊,
+      最新一組=最近 5 個交易日);DIF = EMA12(w) − EMA26(w);
+      DEA = EMA9(DIF);OSC = DIF − DEA。訊號 = OSC[-2] > 0 且 OSC[-1] ≤ 0
+      (柱由正翻負,語意沿用舊版)。EMA 用 adjust=False 遞迴定義,同多數
+      看盤軟體 → 可與券商週 MACD 對照。
+    - **樣本門檻**:≥ WK_MACD_MIN_WEEKS(35) 週 = 175 交易日;不足誠實回
+      False,**不**退回 3/5/3(§1 一名一義,不混兩套模型)。
+    - **順帶修掉既有缺陷**:舊版 `range(0, 30)` 取的是序列**頭端**(最舊
+      30 日,docstring 卻寫「近 30 日」)→ 本版自**尾端**合成。
+    - 已知限制:close 無日期索引,「每 5 根=一週」為近似;最新一組為最近
+      5 個交易日,可能跨日曆週界(與券商按日曆週切的值在當週會有小差)。
     """
     try:
-        if close is None or len(close) < 30:
+        if close is None:
             return False
-        vals = [float(close.iloc[min(i + 4, len(close) - 1)])
-                for i in range(0, min(30, len(close)), 5)]
-        if len(vals) < 6:
+        _c = pd.Series(close).astype(float).dropna()
+        _need_days = WK_MACD_MIN_WEEKS * WK_MACD_DAYS_PER_WEEK
+        if len(_c) < _need_days:
             return False
-        s = pd.Series(vals)
-        macd = s.ewm(span=3, adjust=False).mean() - s.ewm(span=5, adjust=False).mean()
-        hist = (macd - macd.ewm(span=3, adjust=False).mean()).tolist()
-        return len(hist) >= 2 and hist[-2] > 0 and hist[-1] <= 0
+        _n_weeks = len(_c) // WK_MACD_DAYS_PER_WEEK
+        _tail = _c.tail(_n_weeks * WK_MACD_DAYS_PER_WEEK).reset_index(drop=True)
+        # 各組末根 = 該週收盤(尾端對齊後 index 4,9,14,... 即組內最後一天)
+        _weekly = _tail.iloc[WK_MACD_DAYS_PER_WEEK - 1::WK_MACD_DAYS_PER_WEEK]
+        if len(_weekly) < WK_MACD_MIN_WEEKS:
+            return False
+        dif = (_weekly.ewm(span=WK_MACD_FAST_SPAN, adjust=False).mean()
+               - _weekly.ewm(span=WK_MACD_SLOW_SPAN, adjust=False).mean())
+        dea = dif.ewm(span=WK_MACD_SIGNAL_SPAN, adjust=False).mean()
+        osc = (dif - dea).tolist()
+        return len(osc) >= 2 and osc[-2] > 0 and osc[-1] <= 0
     except Exception as e:
         # S-MED v18.304: silent → narrow + stderr log
         import sys as _sys
