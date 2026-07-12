@@ -1,4 +1,4 @@
-name: Calibrate Health Weights (Manual)
+name: Calibrate Health Weights (Quarterly Proposal)
 
 # v19.97 紅綠燈權重校準 Phase 3 一鍵化(方法論見 MACRO_HEALTH_REWEIGHT_PROPOSAL.md):
 # 前置:先跑過「Update Macro History (Daily)」bootstrap,repo 內須有
@@ -6,10 +6,16 @@ name: Calibrate Health Weights (Manual)
 # 本 workflow:跑 scripts/calibrate_health_weights.py(讀真實 parquet → walk-forward
 # 擬 3 權重)→ 把 MACRO_HEALTH_WEIGHT_PROPOSAL.md commit 回 repo 供人審。
 # 缺 parquet 時 script 會 SystemExit 並明講缺什麼(§1 fail loud,不用合成資料)。
-# 不改任何 SSOT 常數 — 提案經人審後才手動改 signal_thresholds(Phase 3 收尾)。
+# ⚠️ 不改任何 SSOT 常數 — 本 workflow 產物只是「提案報告」;要改權重永遠須走
+# 人審 PR(如 #517)。故排程自動化零位移風險(user 2026-07-12 要求免記日程)。
 
 on:
   workflow_dispatch:
+  # v19.104:每季首日 UTC 10:00(TW 18:00)自動產提案 — 排在同日 09:00 UTC 的
+  # Update Macro History 之後,吃到當季最新 parquet;與 recalibrate_macro
+  # (門檻,UTC 00:00)同日錯時,兩份季檢互不干擾。
+  schedule:
+    - cron: '0 10 1 1,4,7,10 *'
 
 permissions:
   contents: write
