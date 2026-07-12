@@ -30,11 +30,21 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import pandas as pd
+
+# v19.103:`python scripts/calibrate_macro_traffic.py` 直跑時 sys.path[0]=scripts/,
+# 不含 repo root → 函式內 `src.*` lazy import 必 ImportError(2026-07-11 季度校準
+# Actions run 實錘;同 v19.101 update_macro_history 病因)。加 guard 對齊 scripts/
+# 其餘 5 檔既有模式;tests/test_review_fixes_v19_103.py 通用掃描鎖住本不變量。
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 
 # ════════════════════════════════════════════════════════════════
