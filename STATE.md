@@ -9,7 +9,7 @@ v19.112 診斷收斂後 user 補測推翻「雲端連不到 NAS」假設(app 內
 - **文件同步**:CLAUDE.md §2.1(8 源+v19.113 註)/ SPEC §4 表整張重寫(原表停在 v19.85 前:仍列 FinMind、缺 CIER-EN — 陳年漂移一併矯正)/ health_inspector 兩張表 / tab_edu / data_registry / schemas / tw_macro 共 5 處殘留「9 源」字串對正(其中 2 處連 FinMind 都還列著)。
 - **回歸網**:`tests/test_cache_success_only_v19_113.py`(凍結 bug 棺材釘:全敗→上游復原→同參數再呼叫**必須真重抓**;成功→斷線→**必須回快取**;判準單元含混合鍵;6 block 裝飾掃描;.clear 透傳)— 對帳基準用財政部 6 月出口 +40.3%(2026-07-09 公布)。重釘 `test_review_fixes_v19_85`(9→8 源,加 MacroMicro 不得回歸)與 `test_export_fail_trace_v19_112`(tier 6→5)。macro 子集 802 passed。
 - **對 caller 零改變**:契約(成功資料鍵/失敗 `_err_*`)不動;效能不退(成功仍快取 1h);EX-CACHE-1 letter 不變(內部仍 st.cache_data,無 UI 呼叫,_NoOpST 環境 .clear 以 getattr 護)。
-- **修中之修(CI 紅實錘,誠實記錄)**:v19.112/112 兩個新測試檔對 package `src.data.proxy` monkeypatch `fetch_url` — 重演 **v19.74 已記載地雷**(PEP 562 lazy forward 套件,teardown 還原把真函式寫成實體屬性永久遮蔽轉發)。時序鐵證:v19_112 檔名序在 etf 之後 → fd52364 CI 綠;v19_113 檔名序在 etf 之前 → d432ca2 CI 紅(`test_etf_moneydj_nav_parse` 3 測 fixture 失效,GH runner 打真 MoneyDJ 抓到 30 筆活資料)+ 本地全套 4 failed 同步重現。修正:兩檔全改 patch 真正持有者 `proxy_helper`;新增 `tests/test_zz_proxy_pollution_lock.py`(字母序最後跑,fast+slow 雙 lane)鎖「package 實體命名空間僅允許子模組」— 污染從 order-dependent 下游背鍋變具名炸出;鎖已自測(手動模擬遮蔽 → 正確 AssertionError)。
+- **修中之修(CI 紅實錘,誠實記錄)**:v19.112/113 兩個新測試檔對 package `src.data.proxy` monkeypatch `fetch_url` — 重演 **v19.74 已記載地雷**(PEP 562 lazy forward 套件,teardown 還原把真函式寫成實體屬性永久遮蔽轉發)。時序鐵證:v19_112 檔名序在 etf 之後 → fd52364 CI 綠;v19_113 檔名序在 etf 之前 → d432ca2 CI 紅(`test_etf_moneydj_nav_parse` 3 測 fixture 失效,GH runner 打真 MoneyDJ 抓到 30 筆活資料)+ 本地全套 4 failed 同步重現。修正:兩檔全改 patch 真正持有者 `proxy_helper`;新增 `tests/test_zz_proxy_pollution_lock.py`(字母序最後跑,fast+slow 雙 lane)鎖「package 實體命名空間僅允許子模組」— 污染從 order-dependent 下游背鍋變具名炸出;鎖已自測(手動模擬遮蔽 → 正確 AssertionError)。
 
 ## 🔎 2026-07-12 出口 YoY 全敗 fail-trace 補接（v19.112,user 回報實錯觸發）
 
@@ -32,6 +32,14 @@ user 驗收統一卡時回報「外需動能溫度計 台灣出口 YoY 無資料
 - **確認死源**:CIER `news/list?cid=21`(現役第5源)、MacroMicro(第4源)、MOF trade CSV 舊 URL 式(Tier2)、CIER 中文 focus-ch 無回應;NDC index API 200 但回 Angular SPA 殼非 JSON(名存實亡);MOF njswww 入口回 1 char;nstatdb qryout 回 HTML 殼(需再調參才有 CSV)。
 - **根因改判**:來源經 NAS 全通 + 正式站上「死的恰好全是 NAS 依賴指標、活的全是直連指標」→ **主嫌 = Streamlit Cloud → NAS 這一段**(app secrets 的 PROXY_URL 與 GitHub repo secret 是兩份獨立拷貝,疑漂移/失效;或 NAS 防火牆擋 Streamlit 出口 IP)。判別法:v19.112 部署後錯誤碼面板 — 若 CIER 段出 `HTTP403` = 直連打到官網被擋(NAS 路徑死);cron 今晨 dgtw `HTTP=None` 與探針 200 的矛盾 = cron 腳本 URL/解析待另查(不影響主嫌判定)。
 - **user 端 5 分鐘自查**:工具 Tab →「🔎 資料診斷」→「🚀 開始診斷外連狀態」(proxy vs 直連雙跑) + 檢查 Streamlit Cloud Secrets 的 `PROXY_URL` 是否與 NAS 現址一致。
+## 🔭 2026-07-12 選股網極簡版:只留單一「開始選股」按鈕（v19.111,user 要求）
+
+user 回報選股網「還是一樣」,澄清訴求:要**乾淨的篩選流程** — ① 基本面優選(自動)→ ② 勾條件(估值/EPS/缺貨/抗跌RS 四因子可複選)→ ③ 一鍵出名單,**不要下方那一整塊額外掃描按鈕**,只維持最上方一顆「開始選股」。
+
+- **移除**:app.py 選股網區塊底部的「🔎 進階(選用)」expander(內含 `render_shortage_screener` 缺貨完整排行 + `render_rs_leader_screener` 抗跌RS完整排行 + AI三型報告)+「順便跑籌碼技術×6」checkbox(`_run_deep`)及其 `render_tab_stock_picker` picker 深篩。連帶清掉 `render_tab_stock_picker` / `render_yield_confirm` 兩個已無用的 local import。
+- **保留不動的核心流程**:① `render_prescreen_panel`(基本面優選,自動)② `screener_factors` 多選(4 因子)③ 單一「🎯 開始選股」按鈕 → 按下時**自動掃**缺貨(`run_shortage_scan`)+ 抗跌RS(`run_rs_leader_scan(beat_only=False, top_n=RS_SCAN_MAX)` 全存活池)→ `composite_rank_candidates` 綜合評分 → ③ 選股結果 dataframe + CSV 下載。三點承諾全達成:缺貨/RS 自動掃(不用另按)、無手動候選名單、勾條件→一鍵→出名單。
+- **§8 分層**:純 L6 App UI 組裝的元素刪減,無新模組、無資料流變更、無跨層 import(反而移除了兩個 L5→L1/L4 的 lazy import);L2/L3 掃描與評分服務完全未動。§-1 只做 user 明確要求,無夾帶。
+- **回歸網**:`tests/test_app_no_magic_bare_ternary.py` 新增 `test_screener_keeps_only_single_button_flow` — AST/source 掃描鎖死 app.py 不得再出現 `render_shortage_screener` / `render_rs_leader_screener` / `screener_run_deep` / `render_tab_stock_picker`(改回去=紅)。既有 magic-guard(裸三元)續守。app.py 語法 OK;選股相關 32 passed + 本檔 3 passed。
 
 ## 📉 2026-07-12 週 MACD 升級標準 12/26/9（v19.110,插隊項 user 核准）
 

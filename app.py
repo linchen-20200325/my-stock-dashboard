@@ -604,12 +604,11 @@ with tab_stocks:
         _render_tab_isolated(render_stock_grp, '個股組合')
 
     with tab_screener:
-        # v19.89 選股網簡易版：勾條件 → 一鍵「開始選股」（缺貨/抗跌RS 自動掃，不用 USER 另外按）
-        # → 直接出最終名單（拿掉手動候選勾選 + 額外加碼）。籌碼技術×6 為選用深篩（自動對前 N 名跑）。
+        # v19.111 選股網極簡版：① 基本面優選（自動）→ ② 勾條件（4 因子可複選）→ ③ 一鍵出名單。
+        # 只留最上方「開始選股」一顆按鈕；移除下方進階掃描 expander + 籌碼×6 picker（user 要求極簡）。
         st.markdown('### 🔭 選股網 — 勾條件 → 一鍵選股')
-        from src.ui.tabs import render_tab_stock_picker
         from src.ui.tabs.tab_stock_picker import render_prescreen_panel
-        from src.ui.tabs.yield_screener import fetch_twse_yield_pe, render_yield_confirm
+        from src.ui.tabs.yield_screener import fetch_twse_yield_pe
         from src.services.fundamental_screener_service import (
             SCREEN_ANGLE_LABELS, composite_rank_candidates, get_fundamental_survivors,
         )
@@ -625,9 +624,6 @@ with tab_stocks:
             list(SCREEN_ANGLE_LABELS), default=[list(SCREEN_ANGLE_LABELS)[0]],
             key='screener_factors')
         _factors = [SCREEN_ANGLE_LABELS[_l] for _l in _factor_labels]
-        _run_deep = st.checkbox(
-            '順便跑「籌碼技術×6」深篩（前 20 名的進出場時機；較慢，逐檔抓籌碼）',
-            value=False, key='screener_run_deep')
 
         # ── ③ 一鍵開始選股（缺貨/RS 自動掃 → 綜合評分）─────────────
         if st.button('🎯 開始選股', key='screener_go', type='primary', use_container_width=True):
@@ -688,22 +684,6 @@ with tab_stocks:
                 st.download_button('💾 下載選股結果 CSV', data=_csv,
                                    file_name='screener_result.csv', mime='text/csv',
                                    key='screener_csv')
-                if _run_deep:
-                    st.markdown('##### 🔬 籌碼技術×6 深篩（自動對前 20 名跑，不用手動勾）')
-                    render_tab_stock_picker(
-                        gemini_fn=gemini_call, candidates=_cands.head(20),
-                        source_label='基本面優選', auto_pick=True, skip_s3=True)
-                    _s1s2_pass = st.session_state.get('picker_s1s2_qualified_tickers', [])
-                    render_yield_confirm(_s1s2_pass, _twse_scrn)
-
-        # ── 🔎 進階（選用）：缺貨 / 抗跌RS 完整排行 + AI 三型報告 ──
-        with st.expander('🔎 進階（選用）：缺貨 / 抗跌RS 完整排行 + AI 三型報告', expanded=False):
-            st.caption('主流程按「開始選股」已自動掃；這裡是要看完整排行 / AI 報告時才點開。')
-            from src.ui.tabs.shortage_screener_ui import render_shortage_screener
-            render_shortage_screener(gemini_fn=gemini_call)
-            st.markdown('---')
-            from src.ui.tabs.rs_leader_ui import render_rs_leader_screener
-            render_rs_leader_screener(gemini_fn=gemini_call)
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合）

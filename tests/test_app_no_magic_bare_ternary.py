@@ -27,3 +27,24 @@ def test_app_has_no_bare_ternary_expression_statement():
 
 def test_app_compiles():
     ast.parse(_APP.read_text(encoding="utf-8"))
+
+
+def test_screener_keeps_only_single_button_flow():
+    """v19.111 選股網極簡版：只留最上方「開始選股」一顆按鈕。
+
+    user 明確要求：優選(自動)→勾條件→一鍵出名單，**不要下方那些額外掃描按鈕**
+    （進階 expander 的 render_shortage_screener / render_rs_leader_screener + 籌碼×6 picker）。
+    這些若被改回去，選股網又會變回「上面選、下面還一堆按鈕」的複雜樣。本測試釘住不回退。
+    """
+    _src = _APP.read_text(encoding="utf-8")
+    _banned = [
+        "render_shortage_screener",   # 下方缺貨完整排行按鈕
+        "render_rs_leader_screener",  # 下方抗跌RS完整排行按鈕
+        "screener_run_deep",          # 籌碼×6 深篩 checkbox
+        "render_tab_stock_picker",    # 手動候選 picker（已於簡易版移除）
+    ]
+    _hit = [b for b in _banned if b in _src]
+    assert not _hit, (
+        f"app.py 選股網又出現下方額外按鈕/picker：{_hit}。"
+        "user 要極簡版——只留最上方單一『開始選股』，缺貨/抗跌RS 於按鈕內自動掃。"
+    )
