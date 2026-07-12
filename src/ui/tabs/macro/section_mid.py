@@ -64,89 +64,120 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     _m8_vix   = _macro_info.get('vix')
     
     # ── Row 1: NDC燈號 | 台灣出口YoY | 🇹🇼 台灣 PMI ──────────
+    # v19.109(第 5 步試點):5 卡改統一指標卡(燈號+俗名+原理+燈義 固定版位)。
+    # band 表收 shared/signal_thresholds SSOT(原 inline 38/32/23/17、0/-5、
+    # 50/47、3.5/2.5、5/3 全收斂)→ 判定與燈義/門檻帶文字同源不漂移(§3.3)。
+    from shared.signal_thresholds import (
+        FED_FUNDS_RATE_BANDS, NDC_SIGNAL_BANDS, TW_EXPORT_YOY_BANDS,
+        TW_PMI_CARD_BANDS, US_CORE_CPI_YOY_BANDS,
+    )
+    from src.ui.render.macro_ui_components import (
+        resolve_band, unified_indicator_card, unified_indicator_card_pending,
+    )
     _s8c1 = st.columns(3)
-    
+
     with _s8c1[0]:
         if _m8_ndc:
-            _sc8   = float(_m8_ndc.get('score', 0))
-            _nc8   = (TRAFFIC_RED if _sc8 >= 38 else TRAFFIC_YELLOW if _sc8 >= 32 else
-                      TRAFFIC_GREEN if _sc8 >= 23 else '#58a6ff')
-            _nl8   = ('🔴 紅燈 過熱' if _sc8 >= 38 else '🟡 黃紅燈 繁榮' if _sc8 >= 32 else
-                      '🟢 綠燈 穩定' if _sc8 >= 23 else '🔵 黃藍燈 趨緩' if _sc8 >= 17 else '🔵 藍燈 衰退')
-            _nd8   = f" ({_m8_ndc.get('date','')})" if _m8_ndc.get('date') else ''
-            _ndc_title8 = 'NDC 景氣燈號'
-            st.markdown(kpi(_ndc_title8, f'{_sc8:.0f} 分', f'{_nl8}{_nd8}', _nc8, '#0d1117'), unsafe_allow_html=True)
+            _sc8 = float(_m8_ndc.get('score', 0))
+            st.markdown(unified_indicator_card(
+                title='NDC 景氣燈號', nickname='台灣景氣紅綠燈',
+                value_str=f'{_sc8:.0f} 分',
+                band=resolve_band(_sc8, NDC_SIGNAL_BANDS), bands=NDC_SIGNAL_BANDS,
+                principle='國發會 9 項指標合成的景氣對策信號分數(9~45),分數越高景氣越熱',
+                unit='分', date=_m8_ndc.get('date', ''),
+            ), unsafe_allow_html=True)
         else:
-            st.markdown(kpi('NDC 景氣燈號', '待取得', '9分藍燈→45分紅燈（StockFeel+MacroMicro）', '#484f58', '#0d1117'), unsafe_allow_html=True)
-    
+            st.markdown(unified_indicator_card_pending(
+                title='NDC 景氣燈號', nickname='台灣景氣紅綠燈',
+                principle='國發會 9 項指標合成的景氣對策信號分數(9~45),分數越高景氣越熱',
+                source_note='9分藍燈→45分紅燈（StockFeel+MacroMicro）',
+            ), unsafe_allow_html=True)
+
     with _s8c1[1]:
+        # v19.85 正名:本卡資料鍵 tw_export = 海關出口年增率(財政部),非經濟部外銷訂單。
         if _m8_exp:
             _ey8 = _m8_exp.get('yoy', 0)
-            _ec8 = TRAFFIC_GREEN if _ey8 > 0 else TRAFFIC_RED
-            _el8 = ('✅ 出口動能正成長，基本面有撐' if _ey8 > 0 else
-                    ('🔴 出口連兩月衰退，基本面警示！' if _ey8 < -5 else '⚠️ 出口轉弱，留意基本面背離'))
-            st.markdown(kpi('台灣出口 YoY', f'{_ey8:+.1f}%', _el8, _ec8, '#0d1117'), unsafe_allow_html=True)
+            st.markdown(unified_indicator_card(
+                title='台灣出口 YoY', nickname='外需動能溫度計',
+                value_str=f'{_ey8:+.1f}%',
+                band=resolve_band(_ey8, TW_EXPORT_YOY_BANDS), bands=TW_EXPORT_YOY_BANDS,
+                principle='財政部海關出口金額年增率,領先上市公司營收約 1~2 個月',
+                unit='%',
+            ), unsafe_allow_html=True)
         else:
-            # v19.85 正名:本卡資料鍵 tw_export = 海關出口年增率(財政部),非經濟部外銷訂單。
-            # 原標題「外銷訂單 YoY」與資料診斷頁「台灣出口 YoY」同鍵不同名,已統一。
-            st.markdown(kpi('台灣出口 YoY', '待取得', '海關出口年增率（財政部）', '#484f58', '#0d1117'), unsafe_allow_html=True)
-    
+            st.markdown(unified_indicator_card_pending(
+                title='台灣出口 YoY', nickname='外需動能溫度計',
+                principle='財政部海關出口金額年增率,領先上市公司營收約 1~2 個月',
+                source_note='海關出口年增率（財政部）',
+            ), unsafe_allow_html=True)
+
     with _s8c1[2]:
         if _m8_pmi:
             _pv8 = _m8_pmi.get('value', 50)
-            _pmi_title = '🇹🇼 台灣 PMI'
-            _pmi_榮枯 = 50
-            _pc8 = TRAFFIC_GREEN if _pv8 >= _pmi_榮枯 else (TRAFFIC_YELLOW if _pv8 >= (_pmi_榮枯-3) else TRAFFIC_RED)
-            _pl8 = ('✅ 製造業擴張' if _pv8 >= _pmi_榮枯 else
-                    ('⚠️ 輕微收縮，留意內需與外銷動能' if _pv8 >= (_pmi_榮枯-3) else '🔴 嚴重收縮，台股出口/電子股承壓'))
-            _pd8 = f" ({_m8_pmi.get('date','')})" if _m8_pmi.get('date') else ''
-            st.markdown(kpi(_pmi_title, f'{_pv8:.1f}', f'{_pl8}{_pd8}', _pc8, '#0d1117'), unsafe_allow_html=True)
+            st.markdown(unified_indicator_card(
+                title='🇹🇼 台灣 PMI', nickname='製造業景氣問卷',
+                value_str=f'{_pv8:.1f}',
+                band=resolve_band(_pv8, TW_PMI_CARD_BANDS), bands=TW_PMI_CARD_BANDS,
+                principle='CIER 製造業採購經理人調查,50 為榮枯分水嶺(>50 擴張、<50 收縮)',
+                date=_m8_pmi.get('date', ''),
+            ), unsafe_allow_html=True)
         else:
-            st.markdown(kpi('🇹🇼 台灣 PMI', '待取得', '50為榮枯線（CIER 中華經濟研究院）', '#484f58', '#0d1117'), unsafe_allow_html=True)
-    
+            st.markdown(unified_indicator_card_pending(
+                title='🇹🇼 台灣 PMI', nickname='製造業景氣問卷',
+                principle='CIER 製造業採購經理人調查,50 為榮枯分水嶺(>50 擴張、<50 收縮)',
+                source_note='50為榮枯線（CIER 中華經濟研究院）',
+            ), unsafe_allow_html=True)
+
     # ── Row 2: 美國核心CPI | Fed Funds Rate | VIX 時間序列圖 ──────
     # v18.169：CPI + Fed Funds 並排呈現「MK 黃金拐點」配對指標
     _s8c2 = st.columns([1, 1, 2])
-    
+
     with _s8c2[0]:
         if _m8_cpi:
             _cy8 = _m8_cpi.get('yoy', 0)
             _cpv8 = _m8_cpi.get('prev_yoy')  # v18.169
-            _cc8 = TRAFFIC_RED if _cy8 > 3.5 else (TRAFFIC_YELLOW if _cy8 > 2.5 else TRAFFIC_GREEN)
-            _cl8 = ('🔴 通膨偏高，Fed升息壓力大' if _cy8 > 3.5 else
-                    ('⚠️ 通膨黏性，降息路徑放緩' if _cy8 > 2.5 else '✅ 通膨受控，降息可期'))
-            _cdate8 = f" ({_m8_cpi.get('date','')})" if _m8_cpi.get('date') else ''
             _ctrend = ''
             if _cpv8 is not None:
                 _cdelta = _cy8 - _cpv8
-                _ctrend = (f"｜上月 {_cpv8:+.2f}% ({'↓' if _cdelta<-0.05 else ('↑' if _cdelta>0.05 else '→')}"
+                _ctrend = (f"上月 {_cpv8:+.2f}% ({'↓' if _cdelta<-0.05 else ('↑' if _cdelta>0.05 else '→')}"
                            f"{abs(_cdelta):.2f})")
-            st.markdown(kpi('美國核心CPI YoY', f'{_cy8:+.2f}%',
-                            f'{_cl8}{_ctrend}{_cdate8}', _cc8, '#0d1117'), unsafe_allow_html=True)
+            st.markdown(unified_indicator_card(
+                title='美國核心CPI YoY', nickname='美國通膨體溫計',
+                value_str=f'{_cy8:+.2f}%',
+                band=resolve_band(_cy8, US_CORE_CPI_YOY_BANDS), bands=US_CORE_CPI_YOY_BANDS,
+                principle='剔除食品能源的美國核心通膨年增率,Fed 目標 2%',
+                unit='%', date=_m8_cpi.get('date', ''), extra=_ctrend,
+            ), unsafe_allow_html=True)
             st.caption('💡 Fed 目標值 = 2%。CPI > 3.5% 時升息預期升高，外資易從台股提款。')
         else:
-            st.markdown(kpi('美國核心CPI YoY', '待取得', 'Fed 目標值 = 2%', '#484f58', '#0d1117'), unsafe_allow_html=True)
-    
+            st.markdown(unified_indicator_card_pending(
+                title='美國核心CPI YoY', nickname='美國通膨體溫計',
+                principle='剔除食品能源的美國核心通膨年增率,Fed 目標 2%',
+                source_note='Fed 目標值 = 2%',
+            ), unsafe_allow_html=True)
+
     with _s8c2[1]:
         # v18.169：美國 Fed Funds Rate（CPI 配對 → MK 黃金拐點判讀）
         if _m8_fed:
             _fc = _m8_fed.get('current', 0)
             _fp = _m8_fed.get('prev', 0)
             _fdelta = _fc - _fp
-            _fc8 = (TRAFFIC_RED if _fc >= 5.0 else
-                    (TRAFFIC_YELLOW if _fc >= 3.0 else TRAFFIC_GREEN))
-            _fl8 = ('🔴 利率高位（>5%），緊縮壓力大' if _fc >= 5.0 else
-                    ('⚠️ 中性偏緊（3-5%）' if _fc >= 3.0 else '✅ 寬鬆環境（<3%）'))
-            _fdate8 = f" ({_m8_fed.get('date','')})" if _m8_fed.get('date') else ''
             _farrow = '↓' if _fdelta < -0.05 else ('↑' if _fdelta > 0.05 else '→')
-            _ftrend = f"｜上月 {_fp:.2f}% ({_farrow}{abs(_fdelta):.2f})"
-            st.markdown(kpi('美國 Fed Funds Rate', f'{_fc:.2f}%',
-                            f'{_fl8}{_ftrend}{_fdate8}', _fc8, '#0d1117'), unsafe_allow_html=True)
+            _ftrend = f"上月 {_fp:.2f}% ({_farrow}{abs(_fdelta):.2f})"
+            st.markdown(unified_indicator_card(
+                title='美國 Fed Funds Rate', nickname='美元資金成本錨',
+                value_str=f'{_fc:.2f}%',
+                band=resolve_band(_fc, FED_FUNDS_RATE_BANDS), bands=FED_FUNDS_RATE_BANDS,
+                principle='聯邦資金有效利率月均(FRED FEDFUNDS),全球美元資金成本的定價錨',
+                unit='%', date=_m8_fed.get('date', ''), extra=_ftrend,
+            ), unsafe_allow_html=True)
             st.caption('💡 與 CPI 配對：兩者同步月降 → ⭐ MK 黃金拐點（多頭最佳買點）')
         else:
-            st.markdown(kpi('美國 Fed Funds Rate', '待取得',
-                            '聯邦資金月均利率（FRED FEDFUNDS）',
-                            '#484f58', '#0d1117'), unsafe_allow_html=True)
+            st.markdown(unified_indicator_card_pending(
+                title='美國 Fed Funds Rate', nickname='美元資金成本錨',
+                principle='聯邦資金有效利率月均(FRED FEDFUNDS),全球美元資金成本的定價錨',
+                source_note='聯邦資金月均利率（FRED FEDFUNDS）',
+            ), unsafe_allow_html=True)
     
     with _s8c2[2]:
         if _m8_vix and _m8_vix.get('dates'):
