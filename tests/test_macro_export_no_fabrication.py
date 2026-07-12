@@ -30,13 +30,13 @@ class TestNoStaticExportFallback:
         assert "'date': '2026-03-01'" not in _src()
 
     def test_export_total_fail_returns_err_token_not_value(self):
-        """全敗 fallback 契約（v19.111 重釘）。
+        """全敗 fallback 契約（v19.112 重釘）。
 
-        原鎖 `return {}`；v19.111 起改回 `{'_err_export': ...}` 診斷 token —
+        原鎖 `return {}`；v19.112 起改回 `{'_err_export': ...}` 診斷 token —
         section_mid 錯誤碼面板(v18.194)與 health_inspector 的 `_err_export`
         讀取端原為死鍵（macro_snapshot 從無 setter），出口全敗時 user 看不到
         任何錯誤碼。§1 精神不變：token 僅為診斷字串，**不得**出現 'tw_export'
-        數值 key（行為鎖見 tests/test_export_fail_trace_v19_111.py）。"""
+        數值 key（行為鎖見 tests/test_export_fail_trace_v19_112.py）。"""
         src = _src()
         # 鎖定 fallback 段落：log 行 + 緊接的 return {'_err_export': ...}
         assert "所有方案全失敗" in src

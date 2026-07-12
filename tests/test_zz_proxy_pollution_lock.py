@@ -7,7 +7,7 @@
   寫成 package **實體屬性**,永久遮蔽 `__getattr__` 轉發 → 其後測試 patch
   `proxy_helper.fetch_url` 全部打不進 production 的
   `from src.data.proxy import fetch_url`。
-- v19.112:test_cache_success_only / test_export_fail_trace 兩新檔重犯同雷,
+- v19.113:test_cache_success_only / test_export_fail_trace 兩新檔重犯同雷,
   CI 紅(test_etf_moneydj_nav_parse 3 測 fixture 失效、GH runner 打真 MoneyDJ
   抓到 30 筆活資料)+ 本地全套 4 failed 同步實錘。
 
@@ -29,7 +29,7 @@ def _assert_forwarding_clean():
     leaked = concrete - _ALLOWED_CONCRETE
     assert not leaked, (
         f'src.data.proxy 的 PEP 562 轉發被實體屬性遮蔽:{sorted(leaked)} — '
-        f'某測試對 package monkeypatch 了這些名字(v19.74/v19.112 地雷)。'
+        f'某測試對 package monkeypatch 了這些名字(v19.74/v19.113 地雷)。'
         f'請改 patch 真正持有者 `src.data.proxy.proxy_helper`。')
 
 

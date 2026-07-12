@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""TW 資料源存活探針（v19.111 診斷工具,user 回報出口/PMI 無資料觸發）。
+"""TW 資料源存活探針（v19.112 診斷工具,user 回報出口/PMI 無資料觸發）。
 
 用途:從 GitHub Actions(美國 IP + PROXY_URL 走 NAS,與 Streamlit Cloud 同視角)
 逐一 GET 出口 YoY 與台灣 PMI 兩鏈的候選端點,印出 HTTP 狀態 + 內容摘要,

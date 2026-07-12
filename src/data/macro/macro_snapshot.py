@@ -48,7 +48,7 @@ import threading as _th_ms
 _TLS_MS = _th_ms.local()
 
 
-# ── v19.112「失敗不進快取」(user 核准提案①) ────────────────────
+# ── v19.113「失敗不進快取」(user 核准提案①) ────────────────────
 # 病灶:六個總經 block 掛 @st.cache_data(ttl=1h),**失敗 dict 也被快取** —
 # 一次上游打嗝(如 2026-07-12 dgtw 05:32 cron 死、14:13 探針活的間歇)被凍存
 # 一小時,期間按「🚀 一鍵更新」(吃暖快取)拿到的仍是凍住的失敗 → user 看到
@@ -68,7 +68,7 @@ def _is_block_failure(out: dict) -> bool:
     """失敗判準:空 dict、或全部鍵皆 `_` 前綴(僅診斷鍵、無資料鍵)。
 
     對照六 block 的回傳形狀:成功必含資料鍵(vix / us_core_cpi / fed_funds /
-    ism_pmi / ndc_signal / tw_export),失敗僅含 `_err_*`(v19.111 起出口亦然)。
+    ism_pmi / ndc_signal / tw_export),失敗僅含 `_err_*`(v19.112 起出口亦然)。
     """
     if not isinstance(out, dict) or not out:
         return True
@@ -135,7 +135,7 @@ def _make_proxy_session():
     return _s
 
 
-@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.113:失敗不進快取
 def fetch_vix_block() -> dict:
     """VIX（^VIX, 3mo, 日線）→ `{'vix': {current, ma20, dates, values, date}}`。
 
@@ -393,7 +393,7 @@ def fetch_twii_2y_for_ma240():
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.113:失敗不進快取
 def fetch_cpi_block(fred_api_key: str = '') -> dict:
     """美國核心 CPI YoY(CPILFESL,3 路 fallback)。
 
@@ -564,7 +564,7 @@ def fetch_us10y_block(fred_api_key: str = '') -> dict:
     return {'us10y': {'_err': '|'.join(_errs), 'current': None, 'value': None}}
 
 
-@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.113:失敗不進快取
 def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
     """Fed Funds Rate(FEDFUNDS,2 路 fallback)。
 
@@ -639,7 +639,7 @@ def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
     return {'_err_fed_funds': ' | '.join(_ff_errs) or 'all failed'}
 
 
-@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.113:失敗不進快取
 def fetch_tw_pmi_block() -> dict:
     """台灣 PMI(CIER 中華經濟研究院,委派 macro_core.fetch_tw_pmi 8 源並行賽跑)。
 
@@ -654,7 +654,7 @@ def fetch_tw_pmi_block() -> dict:
     return {'_err_pmi': _result.get('_err_pmi', '8 源並行全失敗')}
 
 
-@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.113:失敗不進快取
 def fetch_ndc_block() -> dict:
     """NDC 景氣對策信號(FinMind-TBI + StockFeel + MacroMicro 三源)。
 
@@ -764,7 +764,7 @@ def fetch_ndc_block() -> dict:
     return {'_err_ndc': 'FinMind-TBI + StockFeel + MacroMicro 三源皆失敗'}
 
 
-@_cache_success_only(ttl=TTL_1HOUR)   # v19.112:失敗不進快取
+@_cache_success_only(ttl=TTL_1HOUR)   # v19.113:失敗不進快取
 def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     """台灣出口 YoY(海關出口年增率,5 路 fallback)。
 
@@ -774,7 +774,7 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     Tier 2: data.gov.tw dataset 6053(海關進出口貿易統計)
     Tier 3: FRED fredgraph CSV(同上系列,同上警語)
     Tier 4: data.gov.tw CKAN(財政部進出口統計 fallback)
-    (v19.112 拔除原 MOF trade CSV 段 — 探針實錘舊端點族已下架,見下)
+    (v19.113 拔除原 MOF trade CSV 段 — 探針實錘舊端點族已下架,見下)
 
     (v19.85 拔除)原「FinMind TaiwanEconomicIndicator」段 — 該 dataset 名
     不存在於 FinMind(SDK 2.0.4 Dataset 枚舉 + 官方文件皆無),段位從未命中,
@@ -782,14 +782,14 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     ⚠️ Tier 0/2/3/5 為台灣官方站,Streamlit Cloud 境外 IP 常被 WAF/geo 擋
     → 實際存活依賴 NAS proxy;NAS 掛掉時本鏈可能全滅(見 STATE v19.85 診斷)。
 
-    全敗回 {'_err_export': 'src:err | ...'}(v19.111 起;僅診斷鍵、**不捏造**任何數值鍵),caller 顯示「待取得」placeholder + 錯誤碼面板可見。
+    全敗回 {'_err_export': 'src:err | ...'}(v19.112 起;僅診斷鍵、**不捏造**任何數值鍵),caller 顯示「待取得」placeholder + 錯誤碼面板可見。
     P3-D1 v18.389 抽出。logic verbatim from tab_macro._job_macro._fetch_export。
     """
     import datetime as _dt_ex
     import io as _io_ex
     import re as _re_ex
     import pandas as _pd7
-    # v19.111:per-tier fail token(對齊 fetch_ism_pmi/fetch_tw_pmi 的 errs 模式),
+    # v19.112:per-tier fail token(對齊 fetch_ism_pmi/fetch_tw_pmi 的 errs 模式),
     # 全敗時回 {'_err_export': ...} 供 v18.194 錯誤碼面板 + health_inspector 顯示。
     _ex_errs: list[str] = []
     _s_ex = _make_proxy_session()
@@ -853,7 +853,7 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     else:
         _ex_errs.append('FRED-API:skip(無 FRED key)')
 
-    # (v19.112 拔除)方案 MOF service.mof.gov.tw trade CSV — 探針
+    # (v19.113 拔除)方案 MOF service.mof.gov.tw trade CSV — 探針
     # run 29182317622 實錘該端點族 NAS+直連皆無回應(舊制式已下架),
     # 留著只是每輪多打 4 個必死 URL。user 核准提案②移除。
 
@@ -988,7 +988,7 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
         _ex_errs.append(f'CKAN:{type(_e_gov2).__name__}')
 
     # §1 Fail Loud:所有方案全失敗 → **不捏造**任何數值(原 v18.330 修正)。
-    # v19.111:改回 {'_err_export': ...} fail-trace token — section_mid 錯誤碼面板
+    # v19.112:改回 {'_err_export': ...} fail-trace token — section_mid 錯誤碼面板
     # (v18.194)與 health_inspector 的 `_err_export` 讀取端原為死鍵(從無 setter),
     # 出口全敗時 user 看不到任何錯誤碼。token 僅含「來源:錯誤型別」診斷字串,
     # 不含 'tw_export' key = 仍不貢獻任何數值,§1 不捏造精神不變。

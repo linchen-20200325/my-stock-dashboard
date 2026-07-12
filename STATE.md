@@ -1,17 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🧊 2026-07-12 失敗不進快取 + 死源清理（v19.112,user 核准提案①+②）
+## 🧊 2026-07-12 失敗不進快取 + 死源清理（v19.113,user 核准提案①+②）
 
-v19.111 診斷收斂後 user 補測推翻「雲端連不到 NAS」假設(app 內 proxy 雙跑全綠、NAS 測試 978ms 成功)→ 真根因 = **凍結機制**:六個總經 block 掛 `@st.cache_data(ttl=1h)` 且失敗 dict 也被快取;「🚀 一鍵更新」吃暖快取(help 文字自證)、畫面讀 session_state — 一次上游打嗝(同日實錘 dgtw 05:32 cron 死 / 14:13 探針活的間歇)被凍住顯示。user 核准「1+2」:
+v19.112 診斷收斂後 user 補測推翻「雲端連不到 NAS」假設(app 內 proxy 雙跑全綠、NAS 測試 978ms 成功)→ 真根因 = **凍結機制**:六個總經 block 掛 `@st.cache_data(ttl=1h)` 且失敗 dict 也被快取;「🚀 一鍵更新」吃暖快取(help 文字自證)、畫面讀 session_state — 一次上游打嗝(同日實錘 dgtw 05:32 cron 死 / 14:13 探針活的間歇)被凍住顯示。user 核准「1+2」:
 
 - **①失敗不進快取**:新 `_cache_success_only(ttl)` 裝飾器(macro_snapshot 模組內)— 失敗(空 dict 或全 `_` 前綴鍵,`_is_block_failure`)以內部例外 `_BlockFetchFailed` 穿透 st.cache_data(官方語意:拋例外不落快取),外層還原 err dict;成功照常入快取。`.clear()` 透傳(強制重抓按鈕 + 3 個既有測試依賴)。換裝 6 block:vix/cpi/fed_funds/tw_pmi/ndc/export。**不納入**:`fetch_m1b_m2_block`(失敗回 None)與 `fetch_us10y_block`(失敗形狀 `{'us10y':{'_err':...}}` 帶資料鍵)— 形狀不同判準不適用,等實錯再議(§-1)。
 - **②死源清理**(探針 run 29182317622 實錘,user 核准範圍):PMI 賽跑拔 MacroMicro 段(host 級無回應,9→8 源)+ CIER 段拔已下架的 `news/list?cid=21` URL(保留未實測死亡的首頁掃描);出口鏈拔 MOF `service.mof.gov.tw` trade CSV 段(端點族下架,6→5 tier)。**未越權拔**:CIER-cid8(未探測)、US PMI 的 MacroMicro 段與 NDC 的 MacroMicro 備援(非本次範圍)。
-- **文件同步**:CLAUDE.md §2.1(8 源+v19.112 註)/ SPEC §4 表整張重寫(原表停在 v19.85 前:仍列 FinMind、缺 CIER-EN — 陳年漂移一併矯正)/ health_inspector 兩張表 / tab_edu / data_registry / schemas / tw_macro 共 5 處殘留「9 源」字串對正(其中 2 處連 FinMind 都還列著)。
-- **回歸網**:`tests/test_cache_success_only_v19_112.py`(凍結 bug 棺材釘:全敗→上游復原→同參數再呼叫**必須真重抓**;成功→斷線→**必須回快取**;判準單元含混合鍵;6 block 裝飾掃描;.clear 透傳)— 對帳基準用財政部 6 月出口 +40.3%(2026-07-09 公布)。重釘 `test_review_fixes_v19_85`(9→8 源,加 MacroMicro 不得回歸)與 `test_export_fail_trace_v19_111`(tier 6→5)。macro 子集 802 passed。
+- **文件同步**:CLAUDE.md §2.1(8 源+v19.113 註)/ SPEC §4 表整張重寫(原表停在 v19.85 前:仍列 FinMind、缺 CIER-EN — 陳年漂移一併矯正)/ health_inspector 兩張表 / tab_edu / data_registry / schemas / tw_macro 共 5 處殘留「9 源」字串對正(其中 2 處連 FinMind 都還列著)。
+- **回歸網**:`tests/test_cache_success_only_v19_113.py`(凍結 bug 棺材釘:全敗→上游復原→同參數再呼叫**必須真重抓**;成功→斷線→**必須回快取**;判準單元含混合鍵;6 block 裝飾掃描;.clear 透傳)— 對帳基準用財政部 6 月出口 +40.3%(2026-07-09 公布)。重釘 `test_review_fixes_v19_85`(9→8 源,加 MacroMicro 不得回歸)與 `test_export_fail_trace_v19_112`(tier 6→5)。macro 子集 802 passed。
 - **對 caller 零改變**:契約(成功資料鍵/失敗 `_err_*`)不動;效能不退(成功仍快取 1h);EX-CACHE-1 letter 不變(內部仍 st.cache_data,無 UI 呼叫,_NoOpST 環境 .clear 以 getattr 護)。
-- **修中之修(CI 紅實錘,誠實記錄)**:v19.111/112 兩個新測試檔對 package `src.data.proxy` monkeypatch `fetch_url` — 重演 **v19.74 已記載地雷**(PEP 562 lazy forward 套件,teardown 還原把真函式寫成實體屬性永久遮蔽轉發)。時序鐵證:v19_111 檔名序在 etf 之後 → fd52364 CI 綠;v19_112 檔名序在 etf 之前 → d432ca2 CI 紅(`test_etf_moneydj_nav_parse` 3 測 fixture 失效,GH runner 打真 MoneyDJ 抓到 30 筆活資料)+ 本地全套 4 failed 同步重現。修正:兩檔全改 patch 真正持有者 `proxy_helper`;新增 `tests/test_zz_proxy_pollution_lock.py`(字母序最後跑,fast+slow 雙 lane)鎖「package 實體命名空間僅允許子模組」— 污染從 order-dependent 下游背鍋變具名炸出;鎖已自測(手動模擬遮蔽 → 正確 AssertionError)。
+- **修中之修(CI 紅實錘,誠實記錄)**:v19.112/112 兩個新測試檔對 package `src.data.proxy` monkeypatch `fetch_url` — 重演 **v19.74 已記載地雷**(PEP 562 lazy forward 套件,teardown 還原把真函式寫成實體屬性永久遮蔽轉發)。時序鐵證:v19_112 檔名序在 etf 之後 → fd52364 CI 綠;v19_113 檔名序在 etf 之前 → d432ca2 CI 紅(`test_etf_moneydj_nav_parse` 3 測 fixture 失效,GH runner 打真 MoneyDJ 抓到 30 筆活資料)+ 本地全套 4 failed 同步重現。修正:兩檔全改 patch 真正持有者 `proxy_helper`;新增 `tests/test_zz_proxy_pollution_lock.py`(字母序最後跑,fast+slow 雙 lane)鎖「package 實體命名空間僅允許子模組」— 污染從 order-dependent 下游背鍋變具名炸出;鎖已自測(手動模擬遮蔽 → 正確 AssertionError)。
 
-## 🔎 2026-07-12 出口 YoY 全敗 fail-trace 補接（v19.111,user 回報實錯觸發）
+## 🔎 2026-07-12 出口 YoY 全敗 fail-trace 補接（v19.112,user 回報實錯觸發）
 
 user 驗收統一卡時回報「外需動能溫度計 台灣出口 YoY 無資料」+「台灣 PMI 也沒有資料」(§-1 實錯觸發)。診斷證據(GitHub Actions 每日 cron 2026-07-11 21:32 UTC run 29168967659,帶 PROXY_URL 走 NAS):
 
@@ -23,14 +23,14 @@ user 驗收統一卡時回報「外需動能溫度計 台灣出口 YoY 無資料
 
 **本版修復**(單檔小修,不觸發 §8):`fetch_export_block` 6 tier 各補 per-tier fail token(`stat.gov.tw:HTTP None` / `FRED-API:skip(無 FRED key)` / `MOF-CSV:ConnectTimeout` …,鏡 `fetch_ism_pmi` errs 模式),全敗回 `{'_err_export': 'src:err | ...'}`。**不含** `tw_export` 數值 key,§1 不捏造精神不變;部署後 user 打開錯誤碼面板即可看到出口鏈死在哪一段。
 
-- **回歸網**:`tests/test_export_fail_trace_v19_111.py` 4 test(全源斷線回 token 不回值/6 tier 全留痕+無 key 標 skip/回傳僅 `_` 前綴鍵可進 orchestrator merge/UI 標籤存在);`test_macro_export_no_fabrication.py` 重釘(原鎖 `return {}` → 改鎖 `return {'_err_export':` + 全敗段禁 `'tw_export': {` 賦值,重釘理由入 docstring)。macro 子集 784 passed。
+- **回歸網**:`tests/test_export_fail_trace_v19_112.py` 4 test(全源斷線回 token 不回值/6 tier 全留痕+無 key 標 skip/回傳僅 `_` 前綴鍵可進 orchestrator merge/UI 標籤存在);`test_macro_export_no_fabrication.py` 重釘(原鎖 `return {}` → 改鎖 `return {'_err_export':` + 全敗段禁 `'tw_export': {` 賦值,重釘理由入 docstring)。macro 子集 784 passed。
 - **不動的**(待 user 核准,§-1):新出口/PMI 資料源評估(FinMind 無出口與 PMI dataset — v19.85 已枚舉證實;MOF/stat.gov.tw 存活狀況待 user 截圖錯誤碼面板後再定)、PMI stale cache 落盤到 repo(需 §8 設計)。
 
 **探針補證(同日,run 29182317622)**:user 問「能否上網找資料來源」→ 加 `scripts/probe_tw_sources.py` + `probe_tw_sources.yml`(push paths 過濾自動觸發;App 整合無 actions:write 不能 dispatch,且分支 workflow 不上 Actions 清單 — Calibrate 前例)。15 端點經 NAS 實測(美國 IP + PROXY_URL,與 Streamlit Cloud 同視角):
 
 - **兩鏈頭部源全活**:CIER-EN 舊 slug `/en/eco/taiwan-manufacturing-pmi-june-2026/` **HTTP 200 含 6 月文**(網搜以為改制 404 — 誤;新分類頁 `/en/eco_cat/pmi-en/` 也 200)、stat.gov.tw 出口年增率頁 200(426KB)、dgtw 6100/6053 metadata 200(`success:true`)、Cnyes API 200。
 - **確認死源**:CIER `news/list?cid=21`(現役第5源)、MacroMicro(第4源)、MOF trade CSV 舊 URL 式(Tier2)、CIER 中文 focus-ch 無回應;NDC index API 200 但回 Angular SPA 殼非 JSON(名存實亡);MOF njswww 入口回 1 char;nstatdb qryout 回 HTML 殼(需再調參才有 CSV)。
-- **根因改判**:來源經 NAS 全通 + 正式站上「死的恰好全是 NAS 依賴指標、活的全是直連指標」→ **主嫌 = Streamlit Cloud → NAS 這一段**(app secrets 的 PROXY_URL 與 GitHub repo secret 是兩份獨立拷貝,疑漂移/失效;或 NAS 防火牆擋 Streamlit 出口 IP)。判別法:v19.111 部署後錯誤碼面板 — 若 CIER 段出 `HTTP403` = 直連打到官網被擋(NAS 路徑死);cron 今晨 dgtw `HTTP=None` 與探針 200 的矛盾 = cron 腳本 URL/解析待另查(不影響主嫌判定)。
+- **根因改判**:來源經 NAS 全通 + 正式站上「死的恰好全是 NAS 依賴指標、活的全是直連指標」→ **主嫌 = Streamlit Cloud → NAS 這一段**(app secrets 的 PROXY_URL 與 GitHub repo secret 是兩份獨立拷貝,疑漂移/失效;或 NAS 防火牆擋 Streamlit 出口 IP)。判別法:v19.112 部署後錯誤碼面板 — 若 CIER 段出 `HTTP403` = 直連打到官網被擋(NAS 路徑死);cron 今晨 dgtw `HTTP=None` 與探針 200 的矛盾 = cron 腳本 URL/解析待另查(不影響主嫌判定)。
 - **user 端 5 分鐘自查**:工具 Tab →「🔎 資料診斷」→「🚀 開始診斷外連狀態」(proxy vs 直連雙跑) + 檢查 Streamlit Cloud Secrets 的 `PROXY_URL` 是否與 NAS 現址一致。
 
 ## 📉 2026-07-12 週 MACD 升級標準 12/26/9（v19.110,插隊項 user 核准）

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""v19.112 — 「失敗不進快取」(user 核准提案①) 行為鎖。
+"""v19.113 — 「失敗不進快取」(user 核准提案①) 行為鎖。
 
 病灶(user 2026-07-12 回報兩張總經卡「無資料」的機制面根因):六個總經 block
 掛 @st.cache_data(ttl=1h) 且**失敗 dict 也被快取** — 一次上游打嗝(當日實錘:
@@ -106,7 +106,7 @@ class TestFailurePredicate:
 def test_six_blocks_wrapped_source_scan():
     """六個總經 block 全掛 _cache_success_only;不得殘留裸 @st.cache_data。
     (m1b_m2 / us10y 失敗形狀不同(回 None / 資料鍵包 _err),本次不納入 —
-    見 STATE v19.112;此掃描僅鎖定六個同形狀 block。)"""
+    見 STATE v19.113;此掃描僅鎖定六個同形狀 block。)"""
     body = (REPO / 'src/data/macro/macro_snapshot.py').read_text(encoding='utf-8')
     for fn in ('fetch_vix_block', 'fetch_cpi_block', 'fetch_fed_funds_block',
                'fetch_tw_pmi_block', 'fetch_ndc_block', 'fetch_export_block'):

@@ -142,7 +142,7 @@ def _make_pmi_schema():
     - `value` float in [30, 70](PMI 合理範圍,shared/signal_thresholds.PMI_VALID_MIN/MAX)
     - `source` str(§2.2 provenance)
 
-    當期 TW PMI 由 `macro_core.fetch_tw_pmi`(8 源賽跑,v19.112)供應;PMISchema 保留供
+    當期 TW PMI 由 `macro_core.fetch_tw_pmi`(8 源賽跑,v19.113)供應;PMISchema 保留供
     未來 PMI 歷史序列驗證用(原唯一 caller fetch_pmi_history 為死碼,v19.86 已刪)。
     """
     if not PANDERA_AVAILABLE:

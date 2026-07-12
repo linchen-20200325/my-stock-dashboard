@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""v19.111 — 出口 YoY 全敗 fail-trace（`_err_export`）行為鎖。
+"""v19.112 — 出口 YoY 全敗 fail-trace（`_err_export`）行為鎖。
 
 背景（user 2026-07-12 回報「外需動能溫度計 台灣出口 YoY 無資料」）：
 fetch_export_block 全敗原本回 `{}` — trio orchestrator 的 `if _part:` 連 merge
 都進不去，導致 section_mid 錯誤碼面板(v18.194)與 health_inspector 的
 `_err_export` 讀取端是**死鍵**（7 個 macro fetcher 中唯一漏接診斷的）。
-v19.111 補 per-tier fail token，全敗回 `{'_err_export': 'src:err | ...'}`。
+v19.112 補 per-tier fail token，全敗回 `{'_err_export': 'src:err | ...'}`。
 
 三個最容易出錯的輸入(§6)：
 1. 全來源斷線（fetch_url 全回 None + session.get 全炸）→ 必回 _err_export，
@@ -37,7 +37,7 @@ def _all_sources_down(monkeypatch):
     `src.data.proxy`(PEP 562 lazy forward,無實體 fetch_url 屬性)— 對 package
     setattr 後 teardown「還原」會把真函式寫成 package 實體屬性,永久遮蔽轉發,
     害其後所有 patch proxy_helper 的測試(etf_moneydj_nav_parse 等)打真網路
-    (v19.74 已記載之地雷,v19.112 CI 紅實錘重演;回歸鎖見
+    (v19.74 已記載之地雷,v19.113 CI 紅實錘重演;回歸鎖見
     tests/test_zz_proxy_pollution_lock.py)。"""
     import src.data.macro.macro_snapshot as snap
     from src.data.proxy import proxy_helper as _ph
@@ -64,7 +64,7 @@ class TestExportFailTrace:
         snap = _all_sources_down
         out = snap.fetch_export_block(fred_api_key='', finmind_token='')
         tok = out['_err_export']
-        # v19.112:MOF-CSV 段依探針實錘下架後拔除,tier 清單同步(6→5 段)
+        # v19.113:MOF-CSV 段依探針實錘下架後拔除,tier 清單同步(6→5 段)
         for tier in ('stat.gov.tw', 'FRED-API',
                      'data.gov.tw/6053', 'FRED-CSV', 'CKAN'):
             assert tier in tok, f'{tier} 段失敗須在 token 留痕，token={tok!r}'

@@ -851,7 +851,7 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 #   Stock 端是台股視角，台灣景氣與本地 PMI 直接相關（CIER 是官方發布單位，
 #   每月第一個工作日上午 10:00 公布前一個月數據）。
 #
-# 備援順序：見檔末 PMI_SOURCE_REGISTRY(v19.112 起 8 源;本註解原列 4 段為
+# 備援順序：見檔末 PMI_SOURCE_REGISTRY(v19.113 起 8 源;本註解原列 4 段為
 # v10 時代殘影,以 registry 為 SSOT 不再重複列舉)
 # ══════════════════════════════════════════════════════════════
 
@@ -862,7 +862,7 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
 
     來源優先序：CIER-EN → data.gov.tw → NDC → CIER(首頁) → StockFeel
                 → Cnyes → CIER(cid8) → MoneyDJ
-    (v19.112 拔除 MacroMicro 段 — 探針 run 29182317622 實錘 host 級無回應;
+    (v19.113 拔除 MacroMicro 段 — 探針 run 29182317622 實錘 host 級無回應;
     CIER 段的 cid=21 列表 URL 同輪實錘下架,改僅掃首頁。user 核准提案②。)
     (v19.85 拔除 FinMind 段 — 原打 dataset `TaiwanEconomicIndicator` 不存在於
     FinMind(SDK 2.0.4 枚舉 + 官方文件皆無此名),且 FinMind 無 PMI 資料集可替換,
@@ -1137,16 +1137,16 @@ def _pmi_src_ndc(today, max_age_days, errs):
     return None
 
 
-# (v19.112 拔除)_pmi_src_macromicro — 探針 run 29182317622 實錘
+# (v19.113 拔除)_pmi_src_macromicro — 探針 run 29182317622 實錘
 # macromicro.me host 級無回應(NAS+直連皆敗,charts/22 與 /16 同域同攔),
 # 留著只是每輪賽跑多等一個必死源。user 核准提案②移除(§-1 實錯觸發)。
 
 
 def _pmi_src_cier21(today, max_age_days, errs):
-    """方案 2: CIER 官網首頁標題掃描(v19.112 起;原 cid=21 列表頁已下架)。"""
+    """方案 2: CIER 官網首頁標題掃描(v19.113 起;原 cid=21 列表頁已下架)。"""
     try:
         from bs4 import BeautifulSoup
-        # v19.112:原第一 URL news/list?cid=21 探針實錘無回應(站改版下架),
+        # v19.113:原第一 URL news/list?cid=21 探針實錘無回應(站改版下架),
         # 僅保留首頁掃描(未實測死亡,不越權拔;標題常含最新 PMI 發布)。
         for cier_url in ('https://www.cier.edu.tw/',):
             r = fetch_url(cier_url, timeout=12, attempts=1)

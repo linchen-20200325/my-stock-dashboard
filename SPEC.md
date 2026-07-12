@@ -66,7 +66,7 @@ _likely_private = (
 ## §4 TW PMI 8 源並行賽跑 — 失敗追蹤格式
 
 > 來源：`macro_core.fetch_tw_pmi` + `PMI_SOURCE_REGISTRY`（SSOT）。失敗時回 `{'_err_pmi': str, 'value': None}`，`_err_pmi` 為各源失敗原因以 ` | ` 串接。
-> （v19.112 同步：本表原停在 v19.85 前的 9 段舊制 — 仍列已拔的 FinMind、缺 v19.85 新增的 CIER-EN。以下依現行 registry 重寫；MacroMicro 段與 CIER cid=21 URL 於 v19.112 依探針 run 29182317622 實錘拔除。）
+> （v19.113 同步：本表原停在 v19.85 前的 9 段舊制 — 仍列已拔的 FinMind、缺 v19.85 新增的 CIER-EN。以下依現行 registry 重寫；MacroMicro 段與 CIER cid=21 URL 於 v19.113 依探針 run 29182317622 實錘拔除。）
 
 | 優先序 | 來源 | 失敗 token 範例 |
 |------|------|-----------------|
