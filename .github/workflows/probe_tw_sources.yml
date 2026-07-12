@@ -1,10 +1,17 @@
 name: Probe TW Sources (Manual)
 
 # v19.111 診斷工具:出口 YoY / 台灣 PMI 候選源存活探針。
-# 只在手動觸發時跑;唯讀 GET,不 commit 任何東西。
+# 唯讀 GET,不 commit 任何東西。
 # 視角 = 美國 IP + PROXY_URL 走 NAS,與 Streamlit Cloud 一致。
+# push 觸發限定「探針自身檔案變動」:分支上的 workflow 無法手動 dispatch
+# (App 整合無 actions:write,且非 default branch 的 workflow 不上 Actions 清單),
+# paths 過濾讓它不干擾一般開發 push。
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/probe_tw_sources.py'
+      - '.github/workflows/probe_tw_sources.yml'
 
 permissions:
   contents: read
