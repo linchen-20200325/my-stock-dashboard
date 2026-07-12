@@ -58,12 +58,8 @@ def _stub_streamlit():
     sys.modules["streamlit"] = _mod
 
 
-_stub_streamlit()
-
-
-# v18.362 F-Q1:強制 reload tab_edu / macro_classroom 重抓當下 stub st
-#   (避 test_data_coverage._stub_st() 已 import 過 → 它們的 `import streamlit as st`
-#    snapshot 到 data_coverage 的舊 stub,後續 macro_classroom 的 stub 換新版無用。)
+# v18.362 F-Q1:強制 reload tab_edu / macro_classroom 重抓「當下」的 st
+#   (它們模組頂 `import streamlit as st` 是 snapshot,換 stub/還原後都要 rebind)。
 def _force_reload_targets():
     import importlib
     for _name in ('src.ui.tabs.tab_edu', 'src.ui.tabs.macro_classroom'):
@@ -74,7 +70,24 @@ def _force_reload_targets():
                 pass
 
 
-_force_reload_targets()
+@pytest.fixture(autouse=True, scope="module")
+def _scoped_streamlit_stub():
+    """v19.107 stub 生命週期收斂(CI slow lane 全滅根因)。
+
+    原:模組級 `_stub_streamlit()` 於 collection 期永久替換且記號
+    (`_is_test_stub`)與 conftest 舊還原機制(`_stub`)不合 → 全 run phase
+    卡假 st。改:本檔測試期間才裝 stub,測完還原進場前的真身並 reload
+    目標模組 rebind(進出各一次,同 test_data_coverage 同模式)。
+    """
+    _saved = sys.modules.get("streamlit")
+    _stub_streamlit()
+    _force_reload_targets()
+    yield
+    if _saved is not None:
+        sys.modules["streamlit"] = _saved
+    else:
+        sys.modules.pop("streamlit", None)
+    _force_reload_targets()
 
 
 # ════════════════════════════════════════════════════════════════
