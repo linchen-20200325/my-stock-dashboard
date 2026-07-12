@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## ⚡ 2026-07-12 「今日關鍵」異常橫幅 v1（v19.108,設計 A）
+
+未完成清單第 2 步(user 核准設計 A,§8.1 先設計後動工)。打開總經 Tab 第一眼:置頂橫幅列出「今天最需要看的異常」;無異常誠實顯示細綠條(§1)。
+
+- **設計取捨(誠實聲明)**:報告 4-C 的 robust-z 需各指標歷史分布,現況 `data_cache/` 只有 TWII/法人/融資/M1M2 有序列,VIX/CPI 等只有本期+上期 — **z 分數地基不存在,硬做=腦補分布(§1)**。v1 兩層可驗證規則,robust-z 標升級觸發條件(等 macro_history parquet 覆蓋更多指標)。
+- **門檻層**:直接吃既有 `check_macro_alerts`(MACRO_ALERT_RULES SSOT)的 🔴🟡 命中 — 不另造第二套門檻;橫幅=挑出+按嚴重度排序+白話 detail 沿用 rule message(SSOT 敘事)。
+- **急變層(Δ)**:僅對 macro_info 內**有真 prev/序列**的指標:①VIX 單日急升 ≥`KEY_ALERT_VIX_DAY_SPIKE_PCT`(20%,3 個月日序列尾兩點;只看急升不看消退) ②Fed Funds 月均 |Δ| ≥`KEY_ALERT_FED_FUNDS_MOVE_PCTPT`(0.20 百分點 ≈ 一碼級政策動作,雙向亮)。兩常數進 shared/signal_thresholds SSOT(附依據)。us10y/dxy 等無 prev → 不做(§1 不腦補變化)。
+- **分層**:L2 `src/compute/macro/daily_key_alerts.py`(純函式,零 I/O 零 streamlit;單項 try 收窄,判定層錯誤絕不炸頁)→ L4 `macro_ui_components.key_alerts_banner()`(純 HTML,hover title=白話)→ L5 tab_macro 載入 gate 後、紅綠燈模組前掛載(讀 session_state 零新 I/O)。全程合 §8.2,零例外登記。
+- **回歸網**:`tests/test_daily_key_alerts.py` 13 test(空輸入不炸/green 過濾+紅先排序/VIX 急升觸發+未達門檻+急跌不亮/序列垃圾值跳過不影響門檻層/Fed 雙向+缺 prev 誠實跳過/L2 純度掃描/橫幅三態渲染/SSOT+掛載位置鎖)。ruff 既有檔 42=42 零新增,新檔 0 錯。
+
 ## 🧯 2026-07-12 CI slow lane 全滅修復:streamlit stub 生命週期收斂（v19.107）
 
 未完成清單第 1 步(user 核准「從第 1 步開始」)。merge #519 時發現 slow lane job 紅,查證 **main 8b071cb 同紅**(非近期 PR 引入)。
