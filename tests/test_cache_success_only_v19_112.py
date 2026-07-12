@@ -58,16 +58,18 @@ def _snap(monkeypatch):
 
 class TestFailureNotCached:
     def test_failure_then_heal_then_break_full_cycle(self, _snap, monkeypatch):
-        import src.data.proxy as proxy_pkg
+        # ⚠️ patch 真正持有者 proxy_helper,不可 patch package src.data.proxy
+        # (PEP 562 轉發,v19.74 地雷;詳見 test_zz_proxy_pollution_lock.py)
+        from src.data.proxy import proxy_helper as _ph
         snap = _snap
         # ── 階段 1:全源斷線 → 誠實回 _err_export(且不落快取) ──
-        monkeypatch.setattr(proxy_pkg, 'fetch_url', lambda *a, **k: None)
+        monkeypatch.setattr(_ph, 'fetch_url', lambda *a, **k: None)
         out1 = snap.fetch_export_block(fred_api_key='', finmind_token='')
         assert 'tw_export' not in out1 and '_err_export' in out1
 
         # ── 階段 2:stat.gov.tw 復原 → 同參數再呼叫必須「真重抓」──
         # 舊行為(失敗進快取)此處會回凍住的 out1 → 本斷言就是凍結 bug 的棺材釘
-        monkeypatch.setattr(proxy_pkg, 'fetch_url',
+        monkeypatch.setattr(_ph, 'fetch_url',
                             lambda *a, **k: _FakeResp(_HEAL_HTML))
         out2 = snap.fetch_export_block(fred_api_key='', finmind_token='')
         assert out2.get('tw_export', {}).get('source') == 'stat.gov.tw', (
@@ -76,7 +78,7 @@ class TestFailureNotCached:
         assert out2['tw_export']['date'] == '2026-06'
 
         # ── 階段 3:上游再斷線 → TTL 內必須回快取成功(效能契約不變) ──
-        monkeypatch.setattr(proxy_pkg, 'fetch_url', lambda *a, **k: None)
+        monkeypatch.setattr(_ph, 'fetch_url', lambda *a, **k: None)
         out3 = snap.fetch_export_block(fred_api_key='', finmind_token='')
         assert out3.get('tw_export', {}).get('yoy') == out2['tw_export']['yoy'], (
             '成功結果須照常入快取,TTL 內斷線也要回快取值')

@@ -9,6 +9,7 @@ v19.111 診斷收斂後 user 補測推翻「雲端連不到 NAS」假設(app 內
 - **文件同步**:CLAUDE.md §2.1(8 源+v19.112 註)/ SPEC §4 表整張重寫(原表停在 v19.85 前:仍列 FinMind、缺 CIER-EN — 陳年漂移一併矯正)/ health_inspector 兩張表 / tab_edu / data_registry / schemas / tw_macro 共 5 處殘留「9 源」字串對正(其中 2 處連 FinMind 都還列著)。
 - **回歸網**:`tests/test_cache_success_only_v19_112.py`(凍結 bug 棺材釘:全敗→上游復原→同參數再呼叫**必須真重抓**;成功→斷線→**必須回快取**;判準單元含混合鍵;6 block 裝飾掃描;.clear 透傳)— 對帳基準用財政部 6 月出口 +40.3%(2026-07-09 公布)。重釘 `test_review_fixes_v19_85`(9→8 源,加 MacroMicro 不得回歸)與 `test_export_fail_trace_v19_111`(tier 6→5)。macro 子集 802 passed。
 - **對 caller 零改變**:契約(成功資料鍵/失敗 `_err_*`)不動;效能不退(成功仍快取 1h);EX-CACHE-1 letter 不變(內部仍 st.cache_data,無 UI 呼叫,_NoOpST 環境 .clear 以 getattr 護)。
+- **修中之修(CI 紅實錘,誠實記錄)**:v19.111/112 兩個新測試檔對 package `src.data.proxy` monkeypatch `fetch_url` — 重演 **v19.74 已記載地雷**(PEP 562 lazy forward 套件,teardown 還原把真函式寫成實體屬性永久遮蔽轉發)。時序鐵證:v19_111 檔名序在 etf 之後 → fd52364 CI 綠;v19_112 檔名序在 etf 之前 → d432ca2 CI 紅(`test_etf_moneydj_nav_parse` 3 測 fixture 失效,GH runner 打真 MoneyDJ 抓到 30 筆活資料)+ 本地全套 4 failed 同步重現。修正:兩檔全改 patch 真正持有者 `proxy_helper`;新增 `tests/test_zz_proxy_pollution_lock.py`(字母序最後跑,fast+slow 雙 lane)鎖「package 實體命名空間僅允許子模組」— 污染從 order-dependent 下游背鍋變具名炸出;鎖已自測(手動模擬遮蔽 → 正確 AssertionError)。
 
 ## 🔎 2026-07-12 出口 YoY 全敗 fail-trace 補接（v19.111,user 回報實錯觸發）
 

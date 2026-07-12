@@ -31,11 +31,18 @@ class _BoomSession:
 
 @pytest.fixture()
 def _all_sources_down(monkeypatch):
-    """讓 6 tier 全部失敗：fetch_url→None、proxy session→炸、無 FRED key。"""
-    import src.data.macro.macro_snapshot as snap
-    import src.data.proxy as proxy_pkg
+    """讓全部 tier 失敗：fetch_url→None、proxy session→炸、無 FRED key。
 
-    monkeypatch.setattr(proxy_pkg, 'fetch_url', lambda *a, **k: None)
+    ⚠️ patch 目標必須是真正持有者 `proxy_helper`,**不可** patch package
+    `src.data.proxy`(PEP 562 lazy forward,無實體 fetch_url 屬性)— 對 package
+    setattr 後 teardown「還原」會把真函式寫成 package 實體屬性,永久遮蔽轉發,
+    害其後所有 patch proxy_helper 的測試(etf_moneydj_nav_parse 等)打真網路
+    (v19.74 已記載之地雷,v19.112 CI 紅實錘重演;回歸鎖見
+    tests/test_zz_proxy_pollution_lock.py)。"""
+    import src.data.macro.macro_snapshot as snap
+    from src.data.proxy import proxy_helper as _ph
+
+    monkeypatch.setattr(_ph, 'fetch_url', lambda *a, **k: None)
     monkeypatch.setattr(snap, '_make_proxy_session', lambda: _BoomSession())
     # st.cache_data 以參數為 key，先清避免吃到其他測試/先前呼叫的快取
     try:
