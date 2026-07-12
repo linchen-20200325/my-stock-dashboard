@@ -1,5 +1,13 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## ⚡ 2026-07-12 大工程清單 🟢 兩項:ETF 夏普 rf 動態化 + 連線 Session 複用（v19.106）
+
+user 核准大工程清單「先做你推薦的三項」(⑯基金/⑨①a股票),本包為股票側兩項:
+
+- **⑨ ETF 夏普 rf 動態化**:`etf_calc.calc_sharpe` 原寫死 `rf=5.33`(2024 年 FEDFUNDS 水準),利率變動後夏普失真。查證更正:基金 repo 已是動態(fund_service `_RF_ANNUAL` 由 app 注入 FEDFUNDS),股票僅 ETF 端殘留。落地(全程合 §8.2,零例外登記):①SSOT `ETF_SHARPE_RF_FALLBACK_PCT=5.33`(shared/signal_thresholds,注入失敗時零位移)②L2 `etf_calc` 加模組級 `_RF_PCT` + `set_risk_free_rate_pct()`(拒收非數/負/≥25% 越界,§1 不腦補)+ `calc_sharpe(df, rf=None)` 預設走模組值,顯式傳值行為不變 ③L3 `etf_grp_compare_service.ensure_etf_rf_injected()`:L3→L1 抓 `fetch_fed_funds_block`(既有 @st.cache_data 1h)+ L3→L2 setter 注入,失敗回 None 維持 fallback ④L5 grp_compare 批次評分前呼叫一次(ThreadPool 前,worker 共見)。
+- **①a 連線層 thread-local Session 複用**:`proxy_helper.fetch_url` 原每呼叫新建 Session(attempts=1 純版/否則 retry 版)— 批次抓(選股/ETF 多檔/PMI 多源)每請求重做 TCP+TLS 握手。比照 Fund repo infra/proxy v19.333 F6:`_TLS_HTTP = threading.local()` + `_get_thread_session(lean)` 懶建立 per-thread 兩口味(lean 無 urllib3 Retry / retry 指數退避),fetch_url 一行切換。Session 非跨執行緒安全 → per-thread 隔離,ThreadPool worker 各自持有無鎖競爭。`make_retry_session()` 保留(被 helper 消費)。
+- **回歸網**:`tests/test_review_fixes_v19_106.py` 10 test — rf 預設=SSOT/setter 生效且顯式傳值不受影響/垃圾值全拒收/service 注入成功與失敗兩態(monkeypatch fetch_fed_funds_block)/無殘留 inline 5.33/grp_compare 接線掃描/同執行緒複用 is 同物件/lean≠retry/跨執行緒隔離/fetch_url 本體無 `requests.Session()`。fixture 前後還原模組 rf(§3.3 測試隔離)。ruff:5 個 production 檔 baseline 3=3(零新增),新測試 0 錯。相關既有測試 79 passed。
+
 ## 🧾 2026-07-12 第九份外部 review 落地(股票側):查證屬實 14 項修復（v19.105）
 
 user 上傳第九份深度 review,指示「看是否需要修改讓資料更完整,不修的提供清單」。兩組並行 Explore agent 逐條對 origin/main 查證 33 項主張後分流:**查證屬實本次修 14 項**、誤判 2 項、本 session 稍早已完成 3 項(P0)、歷史版已修過多項、架構級大項全數列待核准(§8.1,三分類清單見對話/PR 描述)。

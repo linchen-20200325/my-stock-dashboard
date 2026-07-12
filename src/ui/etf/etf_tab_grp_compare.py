@@ -208,6 +208,10 @@ def render_etf_grp_compare() -> None:
     rows = st.session_state.get(_cache_key)
     if rows is None:
         rows = []
+        # v19.106 ⑨:夏普 rf 動態化 — 批次前經 L3 service 注入即時 FEDFUNDS
+        # (1h cache;失敗維持 SSOT fallback 5.33,夏普行為與動態化前相同)
+        from src.services.etf_grp_compare_service import ensure_etf_rf_injected
+        _rf_live = ensure_etf_rf_injected()
         prog = st.progress(0.0, text=f'批次評分中（{len(tickers)} 檔並行）...')
         with ThreadPoolExecutor(max_workers=5) as _ex:
             _futs = {_ex.submit(_fetch_one_etf, _t): _t for _t in tickers}
