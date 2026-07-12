@@ -47,10 +47,6 @@ def _get_revenue_range(revenue_series, pad_ratio=0.15):
         values = (revenue_series / 1000).round(0)
         vmin, vmax = float(values.min()), float(values.max())
 
-        print(f"\n_get_revenue_range 除錯:")
-        print(f"  原始最小值: {vmin:,.0f}")
-        print(f"  原始最大值: {vmax:,.0f}")
-
         # 如果有負數，確保下限低於0
         if vmin < 0:
             # 負數區間：給予足夠的顯示空間
@@ -62,7 +58,6 @@ def _get_revenue_range(revenue_series, pad_ratio=0.15):
             # 全是正數：從0開始
             rmin = 0
             rmax = vmax * (1 + pad_ratio)
-            print(f"  全正數，計算範圍: [0, {rmax:,.0f}]")
 
         return [rmin, rmax]
     except Exception as e:
@@ -268,7 +263,10 @@ def plot_combined_chart(df, stock_id, stock_name, show_ma_dict, k_line_type="一
 
     total_days = len(df)
     display_days = min(125, total_days)
-    initial_range = [df['date'].iloc[-display_days], df['date'].iloc[-1]]
+    # v19.105(第九份 Bug3):1 列 df 會產生零寬 initial_range 丟給 plotly;
+    # ≥2 列才給初始視窗,單列交給 plotly autorange(不炸不失真)。
+    initial_range = ([df['date'].iloc[-display_days], df['date'].iloc[-1]]
+                     if total_days >= 2 else None)
 
     fig.update_layout(
         **_DARK_LAYOUT_BASE,

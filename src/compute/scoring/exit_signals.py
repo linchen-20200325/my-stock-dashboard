@@ -43,7 +43,13 @@ def _ma(close: pd.Series, n: int):
 
 
 def _weekly_macd_turn_negative(close: pd.Series) -> bool:
-    """近 30 日 K 線每 5 根合成週 K，週 MACD(3/5/3) 由正翻負視為中線轉弱。"""
+    """近 30 日 K 線每 5 根合成週 K，週 MACD(3/5/3) 由正翻負視為中線轉弱。
+
+    ⚠️ 非標準參數的粗篩代理(v19.105 標註,第九份 review):標準 MACD 為
+    12/26/9;此處僅 ~6 根合成週 K,3/5/3 是樣本受限下的妥協,僅作「中線
+    轉弱」粗篩訊號,不可與券商週 MACD 數值對照。升級為真 12/26/9 需
+    ≥35 根週 K(~175 日),屬模型變更,列待核准。
+    """
     try:
         if close is None or len(close) < 30:
             return False

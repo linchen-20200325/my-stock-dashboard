@@ -153,7 +153,7 @@ def calc_momentum_score(df) -> float:
     # E-2 v18.387:抽 shared/calc_helpers.daily_return_rolling_std SSOT
     from shared.calc_helpers import daily_return_rolling_std as _drrs
     sigma20 = _drrs(close, 20).iloc[-1] if len(close) >= 20 else 0.01
-    sharpe_20 = ret20 / (sigma20 * (20 ** 0.5) + 1e-10)  # 年化 Sharpe 代理
+    sharpe_20 = ret20 / (sigma20 * (20 ** 0.5) + 1e-10)  # 20 日期間 Sharpe(σ√20 期間縮放,非年化;年化須 ×√(252/20)。v19.105 正名,MOM_SHARPE_GOOD 門檻本就對此值校準)
     sharpe_score = 2 if sharpe_20 > MOM_SHARPE_GOOD else (1 if sharpe_20 > 0 else 0)
 
     # ③ ATR 動態停損空間（股票波動度 vs 風險）
@@ -1240,7 +1240,7 @@ def check_bollinger_squeeze(df) -> dict:
     from src.compute.strategy.tech_indicators import calc_bollinger_width_series
     close = df['close']
     ma20  = close.rolling(20).mean()
-    std20 = close.rolling(20).std()
+    std20 = close.rolling(20).std(ddof=0)  # v19.105:Bollinger 原始定義用母體 σ(ddof=0);樣本 σ 使帶寬虛胖 ~2.6%
     upper = ma20 + 2 * std20
     # D1 v18.437:帶寬% =(upper-lower)/MA×100 = 4σ/MA×100 → 收 SSOT(helper 回比率,×100 轉%)
     bw = calc_bollinger_width_series(close, 20, 2.0) * 100

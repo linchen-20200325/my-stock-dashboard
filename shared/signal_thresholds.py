@@ -159,6 +159,15 @@ v18.442:0050 production bug — 即時來源(yfinance navPrice / goodinfo)回「
 連結型 ETF(如 00646)隔夜跳空的真實 1-3% 溢價顯示,避免誤殺。主動式(NAV T+1 易延遲)仍取
 較嚴的 2%。§1 寧缺勿假:超限一律回 stale(顯示「NAV 資料延遲」)而非假折溢價。"""
 
+ETF_SHARPE_RF_FALLBACK_PCT: float = 5.33
+"""ETF 夏普值無風險利率 fallback(單位:% 年化)。
+
+v19.106(第九份 review ⑨):原 etf_calc.calc_sharpe 預設寫死 rf=5.33(2024 年
+FEDFUNDS 水準),利率變動後夏普失真。現行設計:etf_grp_compare_service 於批次
+評分前抓 FRED FEDFUNDS(1h cache)注入 `etf_calc.set_risk_free_rate_pct`;本常數
+僅在注入失敗(FRED 全斷)時作 fallback — 對齊 Fund repo `fund_service._RF_ANNUAL`
+同 pattern(由 app 注入 FEDFUNDS)。值保留 5.33 = 原行為,注入失敗時零位移。"""
+
 
 # ════════════════════════════════════════════════════════════════
 # Macro 通用領域邊界（macro_core.py / merrill_clock.py）v18.242 W3b

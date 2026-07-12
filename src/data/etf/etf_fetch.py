@@ -1619,7 +1619,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 5) -> "pd.Data
             _p = {'dataset': _ds1, 'data_id': code, 'start_date': start}
             if token: _p['token'] = token
             _r = _fu_etfnav(FINMIND_API_URL, params=_p,
-                            timeout=15, attempts=1)
+                            timeout=15, attempts=2)  # v19.105: attempts=1 使 2×403 直連降級永不觸發(同 v18.455)
             if _r is None:
                 print(f'[ETF NAV] FinMind {_ds1} {code}: fetch_url 回 None（含 NAS 中繼皆失敗）')
                 continue
@@ -1741,7 +1741,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 5) -> "pd.Data
         try:
             _ep2 = f'https://openapi.twse.com.tw/v1/ETF/{_op_id2}'
             _r2 = _fu_etfnav(_ep2, headers={'Accept': 'application/json'},
-                             timeout=10, attempts=1)
+                             timeout=10, attempts=2)  # v19.105: 同上,允許 403 降級
             if _r2 is None:
                 print(f'[ETF NAV] TWSE {_op_id2}: fetch_url 回 None'); continue
             _j2 = _r2.json()

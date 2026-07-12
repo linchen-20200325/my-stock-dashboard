@@ -6,12 +6,17 @@ proxy_helper.py — NAS Squid 代理統一入口
   make_retry_session() → urllib3 指數退避 Session
   fetch_url()          → 通用抓取（NAS proxy → 自動降級直連）
 """
+import threading
+
 import requests
 import urllib3
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# v19.106 ①a:thread-local Session 複用(比照 Fund repo infra/proxy v19.333 F6)
+_TLS_HTTP = threading.local()
 
 _PROXY_CFG_CACHE = None
 _PROXY_CFG_TS    = 0.0
@@ -117,6 +122,24 @@ def make_retry_session() -> requests.Session:
     return _s
 
 
+def _get_thread_session(lean: bool = False) -> requests.Session:
+    """回傳本執行緒共用 Session(懶建立;lean=無 5xx Retry 版)。
+
+    v19.106(第九份 review ①a):原 fetch_url 每次呼叫新建 Session — 批次抓
+    (選股/ETF 多檔/PMI 多源)每個請求都重做 TCP+TLS 握手。比照 Fund repo
+    infra/proxy v19.333 F6 改 thread-local 複用連線池;requests.Session 非跨
+    執行緒安全,故 per-thread 各一份(ThreadPool worker 各自持有,無鎖競爭)。
+    兩種口味對應原本兩條路:lean(attempts=1 延遲敏感,無 urllib3 內層 Retry)/
+    retry(5xx/429 指數退避)。
+    """
+    _attr = 'session_lean' if lean else 'session_retry'
+    s = getattr(_TLS_HTTP, _attr, None)
+    if s is None:
+        s = requests.Session() if lean else make_retry_session()
+        setattr(_TLS_HTTP, _attr, s)
+    return s
+
+
 def fetch_url(url: str, headers: dict = None,
               params: dict = None, timeout: int = 20,
               attempts: int = 3) -> requests.Response | None:
@@ -154,11 +177,9 @@ def fetch_url(url: str, headers: dict = None,
     if headers:
         _hdr.update(headers)
 
-    # attempts=1 時改用「無 5xx 重試」的純 Session，避免 urllib3 內層 Retry 再吃 ~2s
-    if attempts <= 1:
-        _sess = requests.Session()
-    else:
-        _sess = make_retry_session()
+    # attempts=1 時用「無 5xx 重試」的 lean Session，避免 urllib3 內層 Retry 再吃 ~2s
+    # v19.106 ①a:兩種 Session 皆改 thread-local 複用(原每次新建,批次抓重複 TLS 握手)
+    _sess = _get_thread_session(lean=(attempts <= 1))
     _perr  = 0
     _block = 0
 

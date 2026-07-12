@@ -104,7 +104,7 @@ def calc_bollinger(df, window=20, mult=2):
             return None
         close = df['close']
         ma = close.rolling(window).mean()
-        std = close.rolling(window).std()
+        std = close.rolling(window).std(ddof=0)  # v19.105:Bollinger 母體 σ(原 ddof=1 帶寬虛胖 ~2.6%)
         upper = ma + mult * std
         lower = ma - mult * std
         # v19.85(§4.4 大數除小數):ma==0 時 Series 除法回 inf(不 raise,會穿過
@@ -161,7 +161,7 @@ def calc_bollinger_width_series(close: pd.Series, window: int = 20,
         pd.Series(width),與 close 等長(前 N-1 個 NaN);MA=0 時對應位置為 inf
     """
     ma = close.rolling(window).mean()
-    std = close.rolling(window).std()
+    std = close.rolling(window).std(ddof=0)  # v19.105:Bollinger 母體 σ(原 ddof=1 帶寬虛胖 ~2.6%)
     return (4 * k * std / 2 / ma)  # = 2k·std / ma;k=2 → 4·std/ma
 
 

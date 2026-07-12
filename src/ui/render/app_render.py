@@ -102,7 +102,9 @@ def render_health_score(score, details, sid: str = '', fund_scores=None,
     # ④ 因子條形圖
     breakdown = '<div style="margin-top:8px;">'
     for factor, (desc, got, total) in details.items():
-        pct = got / total * 100
+        # v19.105(第九份 Bug1):total=0(權重設定被改)原直接 ZeroDivisionError
+        # → 整張健康卡渲染失敗。防呆:0 分母顯示 0%(§1:壞設定顯示 0 而非炸卡)。
+        pct = got / total * 100 if total else 0.0
         bc = TRAFFIC_GREEN if pct >= 70 else (TRAFFIC_YELLOW if pct >= 40 else TRAFFIC_RED)
         breakdown += (
             f'<div style="display:flex;align-items:center;gap:6px;margin:2px 0;">'

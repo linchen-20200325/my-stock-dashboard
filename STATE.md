@@ -1,5 +1,25 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## ⚡ 2026-07-12 大工程清單 🟢 兩項:ETF 夏普 rf 動態化 + 連線 Session 複用（v19.106）
+
+user 核准大工程清單「先做你推薦的三項」(⑯基金/⑨①a股票),本包為股票側兩項:
+
+- **⑨ ETF 夏普 rf 動態化**:`etf_calc.calc_sharpe` 原寫死 `rf=5.33`(2024 年 FEDFUNDS 水準),利率變動後夏普失真。查證更正:基金 repo 已是動態(fund_service `_RF_ANNUAL` 由 app 注入 FEDFUNDS),股票僅 ETF 端殘留。落地(全程合 §8.2,零例外登記):①SSOT `ETF_SHARPE_RF_FALLBACK_PCT=5.33`(shared/signal_thresholds,注入失敗時零位移)②L2 `etf_calc` 加模組級 `_RF_PCT` + `set_risk_free_rate_pct()`(拒收非數/負/≥25% 越界,§1 不腦補)+ `calc_sharpe(df, rf=None)` 預設走模組值,顯式傳值行為不變 ③L3 `etf_grp_compare_service.ensure_etf_rf_injected()`:L3→L1 抓 `fetch_fed_funds_block`(既有 @st.cache_data 1h)+ L3→L2 setter 注入,失敗回 None 維持 fallback ④L5 grp_compare 批次評分前呼叫一次(ThreadPool 前,worker 共見)。
+- **①a 連線層 thread-local Session 複用**:`proxy_helper.fetch_url` 原每呼叫新建 Session(attempts=1 純版/否則 retry 版)— 批次抓(選股/ETF 多檔/PMI 多源)每請求重做 TCP+TLS 握手。比照 Fund repo infra/proxy v19.333 F6:`_TLS_HTTP = threading.local()` + `_get_thread_session(lean)` 懶建立 per-thread 兩口味(lean 無 urllib3 Retry / retry 指數退避),fetch_url 一行切換。Session 非跨執行緒安全 → per-thread 隔離,ThreadPool worker 各自持有無鎖競爭。`make_retry_session()` 保留(被 helper 消費)。
+- **回歸網**:`tests/test_review_fixes_v19_106.py` 10 test — rf 預設=SSOT/setter 生效且顯式傳值不受影響/垃圾值全拒收/service 注入成功與失敗兩態(monkeypatch fetch_fed_funds_block)/無殘留 inline 5.33/grp_compare 接線掃描/同執行緒複用 is 同物件/lean≠retry/跨執行緒隔離/fetch_url 本體無 `requests.Session()`。fixture 前後還原模組 rf(§3.3 測試隔離)。ruff:5 個 production 檔 baseline 3=3(零新增),新測試 0 錯。相關既有測試 79 passed。
+
+## 🧾 2026-07-12 第九份外部 review 落地(股票側):查證屬實 14 項修復（v19.105）
+
+user 上傳第九份深度 review,指示「看是否需要修改讓資料更完整,不修的提供清單」。兩組並行 Explore agent 逐條對 origin/main 查證 33 項主張後分流:**查證屬實本次修 14 項**、誤判 2 項、本 session 稍早已完成 3 項(P0)、歷史版已修過多項、架構級大項全數列待核准(§8.1,三分類清單見對話/PR 描述)。
+
+- **穩定性 4 修(UI 不炸卡)**:①`app_render.render_health_score` 因子條 `total=0` → ZeroDivisionError 炸整張健康卡 → `if total else 0.0`(Bug1) ②`chart_plotter.plot_combined_chart` 單列 df 產零寬 initial_range → `total_days>=2` 才給,否則 None 交 plotly autorange(Bug3) ③`macro_ui_components.stat_card` pct 字串型直接 TypeError → float coerce,失敗回中性 0 ④`margin_card` 同病 → coerce 失敗走 None 卡誠實顯示「抓取中」,不炸不腦補(Bug4)。
+- **連線層 2 修**:⑤`picker_fetcher.fetch_stock_history_1y` 裸 `yf.Ticker().history()`(無代理無快取,雲端易被 Yahoo 擋 IP、選股批次重複抓)→ 改走 `yf_proxy.cached_history`(NAS proxy + 1h cache),回傳契約 (df, resolved) 不變(1-A) ⑥`etf_fetch` 兩處 `attempts=1` 使 403 直連降級永不觸發(降級需連續 2 次 403)→ attempts=2,同 v18.455 前例(1-B)。
+- **快取/log 3 修**:⑦`data_loader.get_quarterly_data` 完全未快取(每次切個股重抓 FinMind 3 段季報)→ `@st.cache_data(ttl=TTL_3DAY, max_entries=64)`(2-A④) ⑧同檔法人 SDK `except Exception` 靜默吞 → 補 log 後走 raw fallback,行為不變(§3.3) ⑨`chart_plotter._get_revenue_range` 3 個無條件除錯 print 移除(僅留 except 分支 log)。
+- **公式/正名 3 修**:⑩Bollinger σ 統一母體標準差 `std(ddof=0)` 共 5 站(scoring_engine squeeze / tech_indicators×2 / v5_modules;原 pandas 預設樣本 σ 使帶寬虛胖 ~√(20/19)≈2.6%;bw_pct 為百分位排名,rank-invariant 不受影響)(3-B) ⑪`scoring_engine.sharpe_20` 註解正名「20 日期間 Sharpe,非年化」(MOM_SHARPE_GOOD 門檻本就對此值校準,零行為變更) ⑫`exit_signals._weekly_macd_turn_negative` docstring 標註 3/5/3 為樣本受限的非標準代理,不可與券商週 MACD 對照(升級真 12/26/9 需 ≥35 根週K ≈175 日,屬模型變更 → 待核准)。
+- **不變量/監控 2 增**:⑬`config.WEIGHT_TABLES` 三態 6 因子權重和=1 **import 時 fail-loud** 驗證(§4.2;手調忘配平 → 啟動即炸並指名哪一態,而非 stock_score 悄悄整體縮放) ⑭`@monitored` 擴編 5→7:`fetch_chip_concentration`(💰 籌碼/weekly)+ `fetch_share_capital`(🏢 個股財報/quarterly)進診斷監控面板;兩者 registry key 為動態 per 股(scanner B5 `[個股] {sid} | …`),固定填必孤兒誤報 → 依 fetch_monitor 規矩誠實留 None。category 走 `shared/data_categories` SSOT 常數。
+- **修中之修**:⑦裝飾時 `TTL_3DAY` import 未落地(前輪腳本中斷遺失)→ 新回歸測試當場抓到 NameError 補齊(data_loader:46) — 測試先行價值實證。
+- **回歸網**:`tests/test_review_fixes_v19_105.py` 21 test(runtime 行為 + source-scan 雙鎖:÷0 卡/75% 條寬/coerce 四態/yf_proxy 源掃/attempts=2/TTL_3DAY 裝飾/權重和/ddof=0 數值對照/監控登錄/正名註解/print 淨空)。ruff:13 個改動檔 229→228(淨 −1),新測試檔 0 錯。
+
 ## 🧷 2026-07-11 scripts/ sys.path guard 通用鎖 + 季度校準報告真資料重生（v19.103）
 
 user 跑「Recalibrate Macro Thresholds (Quarterly)」按鈕 → `calibrate_macro_traffic.py` 炸 `ModuleNotFoundError: No module named 'src'` — **同 v19.101 病因第二個現場**(`python scripts/xxx.py` 直跑 sys.path[0]=scripts/,無 repo root)。

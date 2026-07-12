@@ -20,15 +20,18 @@ def fetch_stock_history_1y(ticker: str):
     S-PROV-1 phase 19+:成功回 DataFrame 時注入 attrs(source/fetched_at);
     上游 yfinance 不提供 provenance,attrs 是唯一 schema-additive 落地點。
     """
-    import yfinance as yf
     import pandas as _pd
+    # v19.105(第九份 1-A):原裸 yf.Ticker().history() 無代理無快取 — 雲端易被
+    # Yahoo 擋 IP、選股批次重複抓。改走 yf_proxy.cached_history(NAS proxy +
+    # 1h cache,抓不到回空 df 不爆例外),回傳契約(df, resolved)不變。
+    from src.data.proxy.yf_proxy import cached_history as _yf_hist
     for _sfx in ('.TW', '.TWO'):
         try:
             _resolved = f'{ticker}{_sfx}'
-            df = yf.Ticker(_resolved).history(period='1y')
+            df = _yf_hist(_resolved, period='1y')
             if df is not None and not df.empty and len(df) >= 60:
                 try:
-                    df.attrs.setdefault('source', f'yfinance:Ticker({_resolved}).history(1y)')
+                    df.attrs.setdefault('source', f'yf_proxy.cached_history({_resolved},1y)')
                     df.attrs.setdefault('fetched_at', _pd.Timestamp.now('UTC').isoformat())
                 except Exception:
                     pass

@@ -26,12 +26,16 @@ except ImportError:
         secrets: dict = {}
     st = _NoOpST()  # noqa
 
+from shared.data_categories import CAT_STOCK
+from shared.fetch_monitor import monitored
 from shared.ttls import TTL_1DAY
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from src.data.core.provenance import prov_log
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
+@monitored('fetch_share_capital', category=CAT_STOCK, frequency='quarterly',
+           registry_key=None)  # v19.105 cache 內=只記真實抓;registry key 動態 per 股(scanner B5 `[個股] {sid} | 股本`),固定填必孤兒誤報 → 誠實 None
 def fetch_share_capital(sid: str) -> float:
     """FinMind 抓最新一季股本(普通股股本),回傳原始元值;失敗回 0。
 

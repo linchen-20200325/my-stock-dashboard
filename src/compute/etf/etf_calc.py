@@ -45,11 +45,40 @@ from shared.signal_thresholds import (
     ETF_AVG_VOL_20D_FAIR_LOTS,
     ETF_AVG_VOL_20D_LOW_LOTS,
     # v18.335 PR-H3:ETF_QUICK_SIGMA_* 5 個由 classify_etf_quick_sigma 內部消費,移除 etf_calc 直引
+    ETF_SHARPE_RF_FALLBACK_PCT,  # v19.106 ⑨:夏普 rf fallback(原 inline 5.33)
     ETF_UP_DOWN_DAYS_THRESHOLD,  # C-2 v18.382 抽自 inline 60
     ETF_MANAGER_TENURE_NEW_DAYS,  # v18.436 #5 抽自 inline 180
     ETF_VCP_MIN_DAYS,
     TRADING_DAYS_PER_YEAR,
 )
+
+# ── v19.106 ⑨:夏普無風險利率動態化(對齊 Fund repo fund_service._RF_ANNUAL pattern)──
+# L2 純函式層不做 I/O(§8.2):即時 FEDFUNDS 由 L3 etf_grp_compare_service 抓取後
+# 經 setter 注入;未注入(FRED 全斷/測試環境)時維持 SSOT fallback = 原行為零位移。
+_RF_PCT: float = ETF_SHARPE_RF_FALLBACK_PCT
+
+
+def set_risk_free_rate_pct(rf_pct: float) -> None:
+    """注入即時無風險利率(單位:% 年化,如 FEDFUNDS 4.33)。
+
+    由 L3 service 於抓到 FRED FEDFUNDS 後呼叫;非法值(負/NaN/非數)拒收並
+    log(§1 不腦補),維持現值。
+    """
+    global _RF_PCT
+    try:
+        _v = float(rf_pct)
+    except (TypeError, ValueError):
+        print(f'[etf_calc] set_risk_free_rate_pct 拒收非數值: {rf_pct!r}', file=sys.stderr)
+        return
+    if not (0.0 <= _v < 25.0):   # 年化 % 合理帶(§3.2 精神;25% 上限防單位誤傳 ratio×100)
+        print(f'[etf_calc] set_risk_free_rate_pct 拒收越界值: {_v}', file=sys.stderr)
+        return
+    _RF_PCT = _v
+
+
+def get_risk_free_rate_pct() -> float:
+    """目前生效的無風險利率(% 年化)— UI 顯示 / 測試用 accessor。"""
+    return _RF_PCT
 
 
 @st.cache_data(ttl=TTL_15MIN, max_entries=50, show_spinner=False)
@@ -647,8 +676,15 @@ def calc_cagr(df: pd.DataFrame, expected_years: float | None = None) -> float | 
         return 0.0
 
 
-def calc_sharpe(df: pd.DataFrame, rf: float = 5.33) -> float:
-    """夏普值（年化，rf預設5.33% FEDFUNDS）"""
+def calc_sharpe(df: pd.DataFrame, rf: float | None = None) -> float:
+    """夏普值(年化)。
+
+    rf: 無風險利率(% 年化)。None(預設)= 用模組級 `_RF_PCT`(L3 service 注入的
+    即時 FEDFUNDS;未注入時為 SSOT fallback 5.33)。顯式傳值者行為不變。
+    v19.106 ⑨:原寫死 rf=5.33 → 動態化。
+    """
+    if rf is None:
+        rf = _RF_PCT
     try:
         ret     = df['Close'].pct_change().dropna()
         if len(ret) < 20:

@@ -43,7 +43,7 @@ import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
 from src.data.proxy import fetch_url as _fetch_url_dl
 from src.data.core.finmind_client import _UA as _FM_UA  # S8 v19.78:raw REST UA 對齊 SSOT client
-from shared.ttls import TTL_15MIN, TTL_1DAY, TTL_1HOUR
+from shared.ttls import TTL_15MIN, TTL_1DAY, TTL_1HOUR, TTL_3DAY  # v19.105 補 TTL_3DAY(get_quarterly_data 快取)
 
 # v18.201 D2：FinMind dataset 後台 update 時間追蹤
 # raw fetcher 從 response top-level 取 `last_update`，SDK 路徑無此欄位故留空
@@ -849,7 +849,9 @@ class StockDataLoader:
                         _capture_finmind_meta('inst', {})   # v18.201 D2
                     else:
                         _sdk_used = False
-                except Exception:
+                except Exception as _e_sdk:
+                    # v19.105 §3.3:原靜默吞 → 補 log(仍走 raw fallback,行為不變)
+                    print(f'[法人] FinMind SDK 路徑失敗,改走 raw:{type(_e_sdk).__name__}: {_e_sdk}')
                     _sdk_used = False
             else:
                 _sdk_used = False
@@ -1149,6 +1151,9 @@ class StockDataLoader:
             return df_revenue, None
         return None, '月營收：所有來源均失敗（MOPS/FinMind）'
 
+    # v19.105(第九份 2-A④):原完全未快取,每次切個股重抓全部季報(FinMind 3 段)。
+    # 季報季更,TTL_3DAY(既有 SSOT)綽綽有餘;同 get_combined_data 的 _self 慣例。
+    @st.cache_data(ttl=TTL_3DAY, max_entries=64, show_spinner=False)
     def get_quarterly_data(_self, stock_id):
         """載入近3年季度財務數據（季營收、季毛利率）
 
