@@ -923,8 +923,11 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
         from src.data.proxy import fetch_url as _fu_ex
         # ① 直連海關 opendata(繞過 data.gov.tw catalog metadata 脆弱環)
         try:
+            # v19.119:收 timeout 進 orchestrator 70s budget(見下段註)。海關 opendata
+            # 探針兩 run 皆快速 200 → 15s×1 足夠;過長會撐爆 macro_trio inner 70s → 整個
+            # export block 被 cancel → tw_export 消失 → 卡片「待取得」(v19.116/117 反噬)。
             _rc_direct = _fu_ex('https://opendata.customs.gov.tw/data/6053/csv.csv',
-                                timeout=25, attempts=2)
+                                timeout=15, attempts=1)
             if _rc_direct is not None and _rc_direct.status_code == 200:
                 _parsed_direct = _parse_customs_export_csv(
                     _rc_direct.content.decode('utf-8-sig', errors='ignore'))
@@ -945,8 +948,10 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
             'https://data.gov.tw/api/v1/rest/dataset/6053',
         ):
             try:
-                # v19.116:data.gov.tw 慢速政府 API,放寬 timeout(同 PMI dgtw)
-                _rm_ex = _fu_ex(_meta_url_ex, timeout=25, attempts=2,
+                # v19.119:data.gov.tw catalog metadata 為**脆弱備援**(customs-direct 已先試),
+                # 收 10s×1 fast-fail 進 orchestrator 70s budget(v19.116 的 25s×2×2URL=100s
+                # 是撐爆 budget → export block 被砍 → 待取得 的主因之一)。
+                _rm_ex = _fu_ex(_meta_url_ex, timeout=10, attempts=1,
                                 headers={'Accept': 'application/json'})
                 if _rm_ex is None or _rm_ex.status_code != 200:
                     continue
@@ -965,7 +970,7 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                         break
                 if not _csv_url_ex:
                     continue
-                _rc_ex = _fu_ex(_csv_url_ex, timeout=25, attempts=2)  # v19.116 慢站放寬
+                _rc_ex = _fu_ex(_csv_url_ex, timeout=12, attempts=1)  # v19.119 收 70s budget
                 if _rc_ex is None or _rc_ex.status_code != 200:
                     continue
                 # v19.115:探針 run 29186611230 實錘 6053 resource =

@@ -67,16 +67,21 @@ class TestCnyesNoneSummary:
         assert out is not None and out['value'] == 60.7
 
 
-def test_dgtw_timeouts_widened():
-    """PMI + 出口 dgtw 的 metadata/CSV 抓取 timeout 已放寬到 25s(慢站)。"""
+def test_dgtw_timeouts_fit_orchestrator_budget():
+    """v19.116→v19.119 修訂:PMI dgtw 仍 25s(由外層 45s race deadline 兜底,見
+    test_pmi_bounded_race_v19_119);出口 dgtw **收窄** fit macro_trio 70s inner budget
+    (v19.116 的 25s×2 撐爆 budget → export block 被 cancel → 待取得,已由 v19.119 修)。"""
     mc = (REPO / 'src/data/macro/macro_core.py').read_text(encoding='utf-8')
     ms = (REPO / 'src/data/macro/macro_snapshot.py').read_text(encoding='utf-8')
-    # PMI:metadata + CSV 皆 25s/2
+    # PMI:metadata + CSV 仍 25s/2(慢站放寬;外層 race deadline 保證整體準時回)
     assert 'fetch_url(_meta_url, timeout=25, attempts=2' in mc
     assert 'fetch_url(_u2, timeout=25, attempts=2' in mc
-    # 出口:metadata + CSV 皆 25s/2
-    assert '_fu_ex(_meta_url_ex, timeout=25, attempts=2' in ms
-    assert '_fu_ex(_csv_url_ex, timeout=25, attempts=2' in ms
-    # 不得殘留舊的 10s/1 attempt(慢站被殺根因)
+    # 出口:v19.119 收窄 — customs-direct 15/1、metadata 10/1、CSV 12/1
+    assert 'timeout=15, attempts=1)' in ms                       # customs-direct
+    assert '_fu_ex(_meta_url_ex, timeout=10, attempts=1' in ms
+    assert '_fu_ex(_csv_url_ex, timeout=12, attempts=1' in ms
+    # 不得殘留 v19.116 的出口 25s×2(撐爆 orchestrator budget 根因)
+    assert '_fu_ex(_meta_url_ex, timeout=25, attempts=2' not in ms
+    assert '_fu_ex(_csv_url_ex, timeout=25, attempts=2' not in ms
+    # PMI 不得殘留舊 10s/1(v19.116 慢站被殺根因;PMI 這條未動)
     assert 'fetch_url(_meta_url, timeout=10, attempts=1' not in mc
-    assert '_fu_ex(_meta_url_ex, timeout=10, attempts=1' not in ms
