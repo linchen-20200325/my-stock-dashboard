@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🎯 2026-07-13 出口改直連海關 opendata（v19.117,v19.116 timeout 放寬證實不足）
+
+v19.116 timeout 放寬(25s)後再跑 production smoke(run **29223581269**,同 b4222f7),得**決定性反證**:timeout 不是(唯一)根因。
+
+- **鐵證:同一 run、同一條 NAS、同一個 URL、相反結果**。deep-dump 打 `data.gov.tw/api/v2/rest/dataset/6100` metadata **成功**(`resources × 1` → 下載 `Download.ashx` 200/2881B `Date,PMI,NMI`);production `_pmi_src_dgtw` **秒級後**打**同一 URL**(且更寬鬆 25s vs deep-dump 15s)卻 `dgtw./rest/dataset/6100:無回應`。→ **data.gov.tw catalog metadata hop 從雲端 IP 本質不穩**(疑 rate-limit/連線層),放寬 timeout 救不了。
+- **但資源 CSV 本身穩**:`opendata.customs.gov.tw/data/6053/csv.csv` 於兩 run(29186611230+29223581269)皆 200/14202B。**海關 opendata 才是實際 T1 源,data.gov.tw 僅 catalog 指標。**
+- **出口決定性修(本次)**:`fetch_export_block` 6053 段改**先直打海關 opendata 直連 URL**(繞過脆弱 catalog),失敗才回退 metadata resolution。直連段 except 記 `customs-direct/6053:` 診斷 token(§1 不裸 pass)。source 標 `opendata.customs.gov.tw/6053(...,直連)`。
+- **PMI 為何不比照**:6100 resource = `ws.ndc.gov.tw/Download.ashx?u=<base64>`,base64 內嵌**每月輪替的檔案 GUID**(NDC 重傳月報即變)→ 硬寫 URL 會月月失效(§3.3 不猜穩定性)。PMI 真解仍需 metadata hop,或**持久化快照**(下)。
+- **回歸網**:`tests/test_export_direct_v19_117.py` 4 test(直連 URL 存在且排 catalog 前 / 直連 except 記 token 非 pass / 直連成功 short-circuit 不再打 catalog / 直連壞掉落回退回 `_err_export`)。17 test 全綠(含 v19.114/115/116),ruff 淨。
+- **仍待議(§8,已向 user 提案待核准)**:持久化「上次已知值」快照 — data.gov.tw catalog 連日不穩時,唯快照能扛 PMI(出口已由直連解)。
+
 ## 🐢 2026-07-13 dgtw 慢站 timeout 放寬 + Cnyes crash 修（v19.116,user 部署後仍待取得）
 
 user 部署 v19.114/115 後回報 PMI/出口**仍待取得**,並用 app 診斷證明 **NAS 正常**(端對端 proxy+直連全綠、FinMind/TWSE/Yahoo 200)。推翻「NAS 間歇」假設。真根因用 production smoke(run 29220720874,雲端+NAS 跑合併後真 fetcher)實錘:
