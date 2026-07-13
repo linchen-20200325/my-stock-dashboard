@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """TW 資料源存活探針（v19.112 診斷工具,user 回報出口/PMI 無資料觸發）。
 
+（v19.116 re-run:驗 25s timeout 是否讓 dgtw 慢站在雲端+NAS 成功。）
+
 用途:從 GitHub Actions(美國 IP + PROXY_URL 走 NAS,與 Streamlit Cloud 同視角)
 逐一 GET 出口 YoY 與台灣 PMI 兩鏈的候選端點,印出 HTTP 狀態 + 內容摘要,
 產出「今天誰活誰死」的存活表 — 供換源提案用真實證據(§3.3 反捏造:
