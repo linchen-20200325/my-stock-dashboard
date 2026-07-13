@@ -913,15 +913,40 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
     # run 29182317622 實錘該端點族 NAS+直連皆無回應(舊制式已下架),
     # 留著只是每輪多打 4 個必死 URL。user 核准提案②移除。
 
-    # 方案 DGTW: data.gov.tw dataset 6053
+    # 方案 DGTW: 海關 6053 出口統計
+    # v19.117:探針 run 29223581269 實錘 — data.gov.tw catalog metadata hop 從雲端 IP
+    # 不穩(同 run deep-dump 打 metadata/6100 成功、production 秒級後打同 URL 卻「無回應」),
+    # 但**資源 CSV 直連 opendata.customs.gov.tw 穩定 200**(run 29186611230+29223581269
+    # 兩次一致)。海關 opendata 才是實際 T1 源,data.gov.tw 僅為 catalog 指標。
+    # → ① 先直打海關 opendata 直連 URL(繞過脆弱 catalog),失敗才 ② 回退 metadata resolution。
     try:
         from src.data.proxy import fetch_url as _fu_ex
+        # ① 直連海關 opendata(繞過 data.gov.tw catalog metadata 脆弱環)
+        try:
+            _rc_direct = _fu_ex('https://opendata.customs.gov.tw/data/6053/csv.csv',
+                                timeout=25, attempts=2)
+            if _rc_direct is not None and _rc_direct.status_code == 200:
+                _parsed_direct = _parse_customs_export_csv(
+                    _rc_direct.content.decode('utf-8-sig', errors='ignore'))
+                if _parsed_direct:
+                    print(f"[Export/customs-direct-6053] ✅ "
+                          f"YoY={_parsed_direct['yoy']:.2f}% date={_parsed_direct['date']}"
+                          f"（海關 opendata 直連,繞過 catalog）")
+                    return {'tw_export': {'yoy': _parsed_direct['yoy'],
+                                          'date': _parsed_direct['date'],
+                                          'ccy': 'TWD',
+                                          'source': 'opendata.customs.gov.tw/6053(海關新臺幣出口總值,直連)'}}
+        except Exception as _e_direct:
+            # §1 Fail Loud:不 pass,記診斷 token 後落 ② metadata 回退
+            _ex_errs.append(f'customs-direct/6053:{type(_e_direct).__name__}')
+        # ② 回退:data.gov.tw catalog metadata → 解析 resource URL(catalog 偶爾活)
         for _meta_url_ex in (
             'https://data.gov.tw/api/v2/rest/dataset/6053',
             'https://data.gov.tw/api/v1/rest/dataset/6053',
         ):
             try:
-                _rm_ex = _fu_ex(_meta_url_ex, timeout=10, attempts=1,
+                # v19.116:data.gov.tw 慢速政府 API,放寬 timeout(同 PMI dgtw)
+                _rm_ex = _fu_ex(_meta_url_ex, timeout=25, attempts=2,
                                 headers={'Accept': 'application/json'})
                 if _rm_ex is None or _rm_ex.status_code != 200:
                     continue
@@ -940,7 +965,7 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                         break
                 if not _csv_url_ex:
                     continue
-                _rc_ex = _fu_ex(_csv_url_ex, timeout=15, attempts=2)
+                _rc_ex = _fu_ex(_csv_url_ex, timeout=25, attempts=2)  # v19.116 慢站放寬
                 if _rc_ex is None or _rc_ex.status_code != 200:
                     continue
                 # v19.115:探針 run 29186611230 實錘 6053 resource =

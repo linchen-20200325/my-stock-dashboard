@@ -1,5 +1,60 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧊 2026-07-13 PMI durable 快照（v19.118,user 核准「建快照+seed」）— 卡片穩定有值的終解
+
+user 用 **5 張圖**證明:測試連線 FinMind/TWSE/Yahoo 全 200、外連診斷 proxy+直連全 200、
+`fetch_tw_pmi` 監控 🟢——**問題 100% 不在連線**,並要求「請找其他解決方法」。深挖後真根因浮現:
+
+- **假綠燈**:`fetch_tw_pmi` 8 源全敗仍回 dict(`value=None`)、**從不拋例外** → 舊 `@monitored`
+  只看「有無拋例外」(fetch_monitor.py:93)→ **恆綠**,誤導 user 以為有值。
+- **真根因 = 既有快照存錯地方**:v18.225 的 stale-cache 機制**本來就在**(命中存、全敗讀、帶
+  is_stale),但存 **`cache/`(Streamlit Cloud ephemeral 磁碟,container recycle 即抹)** →
+  一次上游打嗝後檔案沒了 → 全敗 `_macro_cache_load` 回 None → 卡片「待取得」。**不是連線、
+  不是 NAS、不是 timeout**——是快照撐不過雲端重啟。
+- **8 源本身也都「連得到、榨不出數字」**(NDC 非 JSON / CIER-EN 值在 JS / dgtw catalog 不穩 /
+  無新聞標題),即時抓本質不穩 → 唯持久化快照能讓卡片穩定有值(§5 凍結快照 + §2.4 is_stale)。
+
+**修(§8.1 user 核准「②建快照+seed」,設計比原提案更精簡——快照機制已存在,只補 durable 層):**
+- **durable 層** `data_cache/macro_last_good/`(**committed**,隨 deploy 帶上,撐過 recycle)。
+  `_macro_cache_load` 改**兩層 fallback**:先 ephemeral `cache/`(session 最新)→ miss/過期讀
+  durable(§4.6)。皆 90d TTL 過期回 None(§1 不把 3 月前值當現在)。
+- **cron 寫入**(`update_macro_history.py` 尾段):跑同一個 `fetch_tw_pmi()` 抓成功 →
+  `_macro_durable_save`;**只存 live hit,不回存 stale**(否則 cached_at 每日重刷 = 過期值假裝
+  永遠新鮮,§1)。workflow 既有 `git add -f data_cache/` 自動 commit。runtime(Cloud)只讀不寫。
+- **seed 當月值**:`data_cache/macro_last_good/tw_pmi.json` = **60.7**(2026-06,CIER 官方公布,
+  多源查證:連 9 月擴張、較 5 月 61.4 降 0.7),附完整 provenance。→ **部署後卡片馬上顯示 60.7
+  🟡「N 天前」**,不必等 cron。
+- **假綠燈治理**:`@monitored` 加選填 `success_check`;`fetch_tw_pmi` 回 `value=None` → 監控
+  亮 🔴(有值含 stale → 綠)。舊 caller 全不受影響(預設 None=舊行為)。
+- **回歸網**:`tests/test_durable_snapshot_v19_118.py` 7 test(ephemeral 空讀 durable / ephemeral
+  優先 / 過期回 None / durable_save / 全敗+durable 回 stale 值且監控綠 / 全敗+無 durable 回 None
+  且監控紅 / seed 誠實值域+provenance)。`test_fetch_monitor` 46 全綠(success_check 向後相容)。
+  ruff 新碼淨(11 個 pre-existing 舊債非本次,CI 無 ruff gate)。
+- **白話**:以前「即時抓不到 = 空白」;現在「即時抓不到 → 讀上次成功值 + 標🟡N天前」,永遠有數、
+  誠實標記、cron 每日自動刷新。data.gov.tw 連日全滅也扛得住。
+
+## 🎯 2026-07-13 出口改直連海關 opendata（v19.117,v19.116 timeout 放寬證實不足）
+
+v19.116 timeout 放寬(25s)後再跑 production smoke(run **29223581269**,同 b4222f7),得**決定性反證**:timeout 不是(唯一)根因。
+
+- **鐵證:同一 run、同一條 NAS、同一個 URL、相反結果**。deep-dump 打 `data.gov.tw/api/v2/rest/dataset/6100` metadata **成功**(`resources × 1` → 下載 `Download.ashx` 200/2881B `Date,PMI,NMI`);production `_pmi_src_dgtw` **秒級後**打**同一 URL**(且更寬鬆 25s vs deep-dump 15s)卻 `dgtw./rest/dataset/6100:無回應`。→ **data.gov.tw catalog metadata hop 從雲端 IP 本質不穩**(疑 rate-limit/連線層),放寬 timeout 救不了。
+- **但資源 CSV 本身穩**:`opendata.customs.gov.tw/data/6053/csv.csv` 於兩 run(29186611230+29223581269)皆 200/14202B。**海關 opendata 才是實際 T1 源,data.gov.tw 僅 catalog 指標。**
+- **出口決定性修(本次)**:`fetch_export_block` 6053 段改**先直打海關 opendata 直連 URL**(繞過脆弱 catalog),失敗才回退 metadata resolution。直連段 except 記 `customs-direct/6053:` 診斷 token(§1 不裸 pass)。source 標 `opendata.customs.gov.tw/6053(...,直連)`。
+- **PMI 為何不比照**:6100 resource = `ws.ndc.gov.tw/Download.ashx?u=<base64>`,base64 內嵌**每月輪替的檔案 GUID**(NDC 重傳月報即變)→ 硬寫 URL 會月月失效(§3.3 不猜穩定性)。PMI 真解仍需 metadata hop,或**持久化快照**(下)。
+- **回歸網**:`tests/test_export_direct_v19_117.py` 4 test(直連 URL 存在且排 catalog 前 / 直連 except 記 token 非 pass / 直連成功 short-circuit 不再打 catalog / 直連壞掉落回退回 `_err_export`)。17 test 全綠(含 v19.114/115/116),ruff 淨。
+- **仍待議(§8,已向 user 提案待核准)**:持久化「上次已知值」快照 — data.gov.tw catalog 連日不穩時,唯快照能扛 PMI(出口已由直連解)。
+
+## 🐢 2026-07-13 dgtw 慢站 timeout 放寬 + Cnyes crash 修（v19.116,user 部署後仍待取得）
+
+user 部署 v19.114/115 後回報 PMI/出口**仍待取得**,並用 app 診斷證明 **NAS 正常**(端對端 proxy+直連全綠、FinMind/TWSE/Yahoo 200)。推翻「NAS 間歇」假設。真根因用 production smoke(run 29220720874,雲端+NAS 跑合併後真 fetcher)實錘:
+
+- **主因:dgtw metadata timeout 太短**。`_pmi_src_dgtw` metadata 用 `timeout=10, attempts=1`,但 data.gov.tw 是慢速政府 API(實測回應常 12-18s)→「慢但活」時被 10s 殺掉回 `無回應`。**這正是探針(20s/2 attempts)成功、production(10s/1)失敗、同一條 NAS 的根因**。修:PMI+出口的 dgtw metadata 與 CSV 下載全放寬 `timeout=25, attempts=2`。
+- **附帶 bug:Cnyes 源 crash**。smoke 印 `Cnyes:parse TypeError: can only concatenate str (not "NoneType")`。`it.get('summary','')` 對「鍵存在但值=None」不套 default → None 進字串串接崩,整個 Cnyes 源在第一篇 null summary 就掛(即使後面有 PMI 命中也拿不到)。修:`(it.get('title') or '') + ' ' + (it.get('summary') or '')`。
+- **@monitored 綠燈是誤導(記錄但不修)**:`_record(name,'ok')` 只要函式不拋例外就記綠,`fetch_tw_pmi` 永遠回 dict(值或 `_err`)不拋 → 恆綠。user 看到 `fetch_tw_pmi` 綠燈 ≠ 有值。屬監控語意瑕疵,非本次核心,§-1 不順手擴。
+- **回歸網**:`tests/test_dgtw_resilience_v19_116.py`(Cnyes None-summary 不 crash+仍命中 title PMI+缺鍵亦可 / dgtw timeout 全 25s 且無 10s 殘留)13 test(含 v19.114/115 recovery)。ruff 新碼淨。
+- **仍待議(§8,未動)**:持久化「上次已知值」快照(cron 存 repo JSON,app 全敗時讀)— data.gov.tw 若連日全滅,timeout 放寬也救不了,唯快照能扛。待 user 點頭建。
+
+
 ## 🎣 2026-07-12 兩張死卡救回:PMI + 出口 dgtw parser 重接（v19.114/115,user 核准「1+2」）
 
 user 問「其他找不到的資料能否用探針法救回」→ 探針 run 29186611230（美國 IP + NAS）第三輪深挖**實錘兩條活 CSV**,現行 parser 從未真解析過。user「1+2」= 救 PMI + 救出口。
