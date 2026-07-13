@@ -67,6 +67,13 @@ YF_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
 # (覆蓋 CIER 月度公布 + 假日緩衝)；只當 in-memory race 失敗時讀，UI 標 🟡 stale
 _MACRO_CACHE_DIR = _os.path.join("cache", "macro_snapshot")
 _MACRO_CACHE_TTL_DAYS = 90
+# v19.118：durable（committed）快照層。`cache/` 為 Streamlit Cloud **ephemeral** 磁碟
+# （每次 container 重啟/重部署/休眠喚醒即抹），故 v18.225 的「命中即存 cache/、全敗讀
+# cache/」在雲端撐不過 recycle → 一次上游打嗝後 cache/ 被清空 → 全敗 → 卡片「待取得」。
+# 改在 `data_cache/`（**已 committed**，隨 deploy 帶上）另存一份「上次已知值」，即時全敗
+# 時讀它（帶 is_stale）。寫入僅由 cron（update_macro_history.yml, permissions: contents:write）
+# 呼叫 `_macro_durable_save` + workflow `git add -f data_cache/` 提交;runtime（Cloud）**只讀**。
+_MACRO_DURABLE_DIR = _os.path.join("data_cache", "macro_last_good")
 
 # v18.225 T2：FRED 下次 Release 30 天 TTL cache（鏡像 Fund repositories/macro_repository.py）
 _FRED_RELEASE_CACHE_DIR = _os.path.join("cache", "fred_release")
@@ -89,20 +96,42 @@ def _macro_cache_save(key: str, payload: dict) -> None:
         print(f"[macro_core/cache] save 失敗 {key}: {e}")
 
 
-def _macro_cache_load(key: str) -> Optional[dict]:
-    """讀取 TTL 內快照；過期或解析失敗回 None。"""
-    path = _macro_cache_path(key)
-    if not _os.path.exists(path):
-        return None
+def _macro_durable_save(key: str, payload: dict) -> None:
+    """v19.118：寫 durable（committed）快照 → 供 **cron** 呼叫，寫後由 workflow
+    `git add -f data_cache/` 提交。runtime（Streamlit Cloud）**不呼叫**此函式（無 repo
+    寫權限，且雲端磁碟 ephemeral）。shape 同 `_macro_cache_save`（附 cached_at）。"""
     try:
-        with open(path, "r", encoding="utf-8") as fh:
-            data = _json.load(fh)
-        ts = _dt.datetime.fromisoformat(data.get("cached_at", ""))
-        if (_dt.datetime.now() - ts).days >= _MACRO_CACHE_TTL_DAYS:
-            return None
-        return data
-    except Exception:
-        return None
+        _os.makedirs(_MACRO_DURABLE_DIR, exist_ok=True)
+        payload = dict(payload)
+        payload["cached_at"] = _dt.datetime.now().isoformat()
+        with open(_os.path.join(_MACRO_DURABLE_DIR, f"{key}.json"), "w",
+                  encoding="utf-8") as fh:
+            _json.dump(payload, fh, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[macro_core/durable] save 失敗 {key}: {e}")
+
+
+def _macro_cache_load(key: str) -> Optional[dict]:
+    """讀取 TTL 內快照；過期或解析失敗回 None。
+
+    v19.118 兩層 fallback：先讀 ephemeral `cache/`（session 內最新、命中即用），
+    miss/過期再讀 durable `data_cache/`（committed，撐得過 Streamlit Cloud 重啟）。
+    任一命中即回;皆 miss/過期回 None（§1 誠實，不硬湊）。
+    """
+    for _dir in (_MACRO_CACHE_DIR, _MACRO_DURABLE_DIR):
+        path = _os.path.join(_dir, f"{key}.json")
+        if not _os.path.exists(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = _json.load(fh)
+            ts = _dt.datetime.fromisoformat(data.get("cached_at", ""))
+            if (_dt.datetime.now() - ts).days >= _MACRO_CACHE_TTL_DAYS:
+                continue
+            return data
+        except Exception:
+            continue
+    return None
 
 
 def _fred_release_cache_path(series_id: str) -> str:
@@ -856,7 +885,10 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 # ══════════════════════════════════════════════════════════════
 
 @monitored('fetch_tw_pmi', category='🇹🇼 台灣總經', frequency='monthly',
-           registry_key='🇹🇼 台灣 PMI 製造業指數')   # v19.96 批次4 Item1
+           registry_key='🇹🇼 台灣 PMI 製造業指數',   # v19.96 批次4 Item1
+           # v19.118:治假綠燈——8 源全敗仍回 dict(value=None)不拋例外,舊版恆綠誤導。
+           # 有值(含 durable stale 值)=綠;value=None(連 durable 都沒有)=紅。
+           success_check=lambda r: isinstance(r, dict) and r.get('value') is not None)
 def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     """抓取台灣製造業 PMI（8 來源並行賽跑，依優先序取最高優先的有效值；月頻）。
 

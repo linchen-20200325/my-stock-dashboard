@@ -60,7 +60,7 @@ def _record(name: str, status: str, *, rows=None, error=None, ms=None) -> None:
 
 
 def monitored(name: str, *, category: str = '', frequency: str = 'daily',
-              registry_key: str | None = None):
+              registry_key: str | None = None, success_check=None):
     """裝飾 L1 fetcher:import 時登 metadata,真實呼叫時記錄狀態。
 
     Args:
@@ -68,6 +68,11 @@ def monitored(name: str, *, category: str = '', frequency: str = 'daily',
         category / frequency: 診斷分組顯示用。
         registry_key: 此 fetcher 資料最終落在 session_state['data_registry'] 的
             key（供 find_orphans set-diff）;不確定就留 None（誠實跳過,不猜）。
+        success_check: v19.118 選填 callable(result) -> bool。**預設 None = 舊行為**
+            （不拋例外即記 'ok'）。給了就用它判定成敗——治「fetcher 不拋例外、但回
+            `value=None` 診斷 dict」的**假綠燈**（如 `fetch_tw_pmi` 8 源全敗仍回 dict
+            → 舊版恆綠，誤導 user 以為有值）。回 False → 記 'failed'（診斷亮 🔴）。
+            check 本身拋例外 → 保守記 'ok'（不因判定器壞掉誤殺）。
     """
     def deco(fn):
         try:
@@ -90,8 +95,18 @@ def monitored(name: str, *, category: str = '', frequency: str = 'daily',
                 _record(name, 'failed', error=f'{type(e).__name__}: {e}',
                         ms=(_time.perf_counter() - t0) * 1000)
                 raise                                   # §1 不吞,原樣上拋
-            _record(name, 'ok', rows=_infer_rows(result),
-                    ms=(_time.perf_counter() - t0) * 1000)
+            # v19.118:success_check 治假綠燈——回 dict 不拋例外 ≠ 真的有值
+            _ok = True
+            _err = None
+            if success_check is not None:
+                try:
+                    _ok = bool(success_check(result))
+                except Exception:
+                    _ok = True   # 判定器自身壞掉不誤殺成 failed（保守）
+                if not _ok:
+                    _err = 'success_check=False（回應無有效值）'
+            _record(name, 'ok' if _ok else 'failed', rows=_infer_rows(result),
+                    error=_err, ms=(_time.perf_counter() - t0) * 1000)
             return result
         return wrapper
     return deco

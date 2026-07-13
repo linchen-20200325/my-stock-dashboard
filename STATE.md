@@ -1,5 +1,38 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧊 2026-07-13 PMI durable 快照（v19.118,user 核准「建快照+seed」）— 卡片穩定有值的終解
+
+user 用 **5 張圖**證明:測試連線 FinMind/TWSE/Yahoo 全 200、外連診斷 proxy+直連全 200、
+`fetch_tw_pmi` 監控 🟢——**問題 100% 不在連線**,並要求「請找其他解決方法」。深挖後真根因浮現:
+
+- **假綠燈**:`fetch_tw_pmi` 8 源全敗仍回 dict(`value=None`)、**從不拋例外** → 舊 `@monitored`
+  只看「有無拋例外」(fetch_monitor.py:93)→ **恆綠**,誤導 user 以為有值。
+- **真根因 = 既有快照存錯地方**:v18.225 的 stale-cache 機制**本來就在**(命中存、全敗讀、帶
+  is_stale),但存 **`cache/`(Streamlit Cloud ephemeral 磁碟,container recycle 即抹)** →
+  一次上游打嗝後檔案沒了 → 全敗 `_macro_cache_load` 回 None → 卡片「待取得」。**不是連線、
+  不是 NAS、不是 timeout**——是快照撐不過雲端重啟。
+- **8 源本身也都「連得到、榨不出數字」**(NDC 非 JSON / CIER-EN 值在 JS / dgtw catalog 不穩 /
+  無新聞標題),即時抓本質不穩 → 唯持久化快照能讓卡片穩定有值(§5 凍結快照 + §2.4 is_stale)。
+
+**修(§8.1 user 核准「②建快照+seed」,設計比原提案更精簡——快照機制已存在,只補 durable 層):**
+- **durable 層** `data_cache/macro_last_good/`(**committed**,隨 deploy 帶上,撐過 recycle)。
+  `_macro_cache_load` 改**兩層 fallback**:先 ephemeral `cache/`(session 最新)→ miss/過期讀
+  durable(§4.6)。皆 90d TTL 過期回 None(§1 不把 3 月前值當現在)。
+- **cron 寫入**(`update_macro_history.py` 尾段):跑同一個 `fetch_tw_pmi()` 抓成功 →
+  `_macro_durable_save`;**只存 live hit,不回存 stale**(否則 cached_at 每日重刷 = 過期值假裝
+  永遠新鮮,§1)。workflow 既有 `git add -f data_cache/` 自動 commit。runtime(Cloud)只讀不寫。
+- **seed 當月值**:`data_cache/macro_last_good/tw_pmi.json` = **60.7**(2026-06,CIER 官方公布,
+  多源查證:連 9 月擴張、較 5 月 61.4 降 0.7),附完整 provenance。→ **部署後卡片馬上顯示 60.7
+  🟡「N 天前」**,不必等 cron。
+- **假綠燈治理**:`@monitored` 加選填 `success_check`;`fetch_tw_pmi` 回 `value=None` → 監控
+  亮 🔴(有值含 stale → 綠)。舊 caller 全不受影響(預設 None=舊行為)。
+- **回歸網**:`tests/test_durable_snapshot_v19_118.py` 7 test(ephemeral 空讀 durable / ephemeral
+  優先 / 過期回 None / durable_save / 全敗+durable 回 stale 值且監控綠 / 全敗+無 durable 回 None
+  且監控紅 / seed 誠實值域+provenance)。`test_fetch_monitor` 46 全綠(success_check 向後相容)。
+  ruff 新碼淨(11 個 pre-existing 舊債非本次,CI 無 ruff gate)。
+- **白話**:以前「即時抓不到 = 空白」;現在「即時抓不到 → 讀上次成功值 + 標🟡N天前」,永遠有數、
+  誠實標記、cron 每日自動刷新。data.gov.tw 連日全滅也扛得住。
+
 ## 🎯 2026-07-13 出口改直連海關 opendata（v19.117,v19.116 timeout 放寬證實不足）
 
 v19.116 timeout 放寬(25s)後再跑 production smoke(run **29223581269**,同 b4222f7),得**決定性反證**:timeout 不是(唯一)根因。

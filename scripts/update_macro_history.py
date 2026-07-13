@@ -589,6 +589,25 @@ def main():
                          encoding="utf-8")
     print(f"\n✅ metadata 寫入 → {META_PATH}")
 
+    # v19.118：durable「上次已知值」快照 — 抓成功即存 data_cache/macro_last_good/，
+    # 供 Streamlit Cloud 即時全敗時讀（撐過雲端 container recycle;cache/ ephemeral 撐不過）。
+    # 只存 **live hit**，**不回存 stale fallback**（否則 cached_at 被每日重刷 → 過期值假裝
+    # 永遠新鮮，違 §1）。跑 runtime 同一個 fetch_tw_pmi()（8 源賽跑）確保 shape 一致。
+    try:
+        from src.data.macro.macro_core import (
+            fetch_tw_pmi as _rt_fetch_pmi, _macro_durable_save)
+        _pmi_now = _rt_fetch_pmi()
+        if _pmi_now.get("value") is not None and not _pmi_now.get("is_stale"):
+            _macro_durable_save("tw_pmi", _pmi_now)
+            print(f"✅ durable PMI 快照更新 → value={_pmi_now['value']} "
+                  f"date={_pmi_now.get('date')} source={_pmi_now.get('source')}")
+        else:
+            print(f"⚠️ PMI live 未取得（value={_pmi_now.get('value')}, "
+                  f"stale={_pmi_now.get('is_stale')}）→ 保留既有 durable 快照，不覆寫")
+    except Exception as _e_pmi_dur:
+        print(f"⚠️ durable PMI 快照步驟失敗（不影響其他 dataset）："
+              f"{type(_e_pmi_dur).__name__}: {_e_pmi_dur}")
+
     # 任何 fatal error 計入退碼，但仍維持 0 讓 workflow 不爆掉（部分失敗仍 commit 成功部分）
     err_count = sum(1 for m in metadata.values() if m.get("last_error"))
     if err_count:
