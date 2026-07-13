@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🐢 2026-07-13 dgtw 慢站 timeout 放寬 + Cnyes crash 修（v19.116,user 部署後仍待取得）
+
+user 部署 v19.114/115 後回報 PMI/出口**仍待取得**,並用 app 診斷證明 **NAS 正常**(端對端 proxy+直連全綠、FinMind/TWSE/Yahoo 200)。推翻「NAS 間歇」假設。真根因用 production smoke(run 29220720874,雲端+NAS 跑合併後真 fetcher)實錘:
+
+- **主因:dgtw metadata timeout 太短**。`_pmi_src_dgtw` metadata 用 `timeout=10, attempts=1`,但 data.gov.tw 是慢速政府 API(實測回應常 12-18s)→「慢但活」時被 10s 殺掉回 `無回應`。**這正是探針(20s/2 attempts)成功、production(10s/1)失敗、同一條 NAS 的根因**。修:PMI+出口的 dgtw metadata 與 CSV 下載全放寬 `timeout=25, attempts=2`。
+- **附帶 bug:Cnyes 源 crash**。smoke 印 `Cnyes:parse TypeError: can only concatenate str (not "NoneType")`。`it.get('summary','')` 對「鍵存在但值=None」不套 default → None 進字串串接崩,整個 Cnyes 源在第一篇 null summary 就掛(即使後面有 PMI 命中也拿不到)。修:`(it.get('title') or '') + ' ' + (it.get('summary') or '')`。
+- **@monitored 綠燈是誤導(記錄但不修)**:`_record(name,'ok')` 只要函式不拋例外就記綠,`fetch_tw_pmi` 永遠回 dict(值或 `_err`)不拋 → 恆綠。user 看到 `fetch_tw_pmi` 綠燈 ≠ 有值。屬監控語意瑕疵,非本次核心,§-1 不順手擴。
+- **回歸網**:`tests/test_dgtw_resilience_v19_116.py`(Cnyes None-summary 不 crash+仍命中 title PMI+缺鍵亦可 / dgtw timeout 全 25s 且無 10s 殘留)13 test(含 v19.114/115 recovery)。ruff 新碼淨。
+- **仍待議(§8,未動)**:持久化「上次已知值」快照(cron 存 repo JSON,app 全敗時讀)— data.gov.tw 若連日全滅,timeout 放寬也救不了,唯快照能扛。待 user 點頭建。
+
+
 ## 🎣 2026-07-12 兩張死卡救回:PMI + 出口 dgtw parser 重接（v19.114/115,user 核准「1+2」）
 
 user 問「其他找不到的資料能否用探針法救回」→ 探針 run 29186611230（美國 IP + NAS）第三輪深挖**實錘兩條活 CSV**,現行 parser 從未真解析過。user「1+2」= 救 PMI + 救出口。

@@ -1056,7 +1056,10 @@ def _pmi_src_dgtw(today, max_age_days, errs):
             'https://data.gov.tw/dataset/6100/resource',
         ):
             try:
-                _r_meta = fetch_url(_meta_url, timeout=10, attempts=1,
+                # v19.116:data.gov.tw 為慢速政府 API,實測回應常 12-18s。原
+                # timeout=10/attempts=1 在「慢但活」時被殺 → 探針(20s/2)成功
+                # 但 production 失敗的根因。放寬至 25s/2 attempts。
+                _r_meta = fetch_url(_meta_url, timeout=25, attempts=2,
                                     headers={'Accept': 'application/json'})
                 if _r_meta is None:
                     errs.append(f'dgtw.{_meta_url[-18:]}:無回應')
@@ -1094,7 +1097,7 @@ def _pmi_src_dgtw(today, max_age_days, errs):
                     else:
                         _urls.append(_u2)
                 for _u2 in _urls:
-                    _r_csv = fetch_url(_u2, timeout=15, attempts=2)
+                    _r_csv = fetch_url(_u2, timeout=25, attempts=2)  # v19.116 慢站放寬
                     if _r_csv is None or _r_csv.status_code != 200:
                         continue
                     _txt_csv = _r_csv.content.decode('utf-8-sig', errors='ignore')
@@ -1278,7 +1281,8 @@ def _pmi_src_cnyes(today, max_age_days, errs):
                 d = r.json()
                 items = (d.get('items', {}).get('data') or [])
                 for it in items[:10]:
-                    title = it.get('title', '') + ' ' + it.get('summary', '')
+                    # v19.116:.get(k,'') 對「鍵存在但值=None」不套 default → 需 or ''
+                    title = (it.get('title') or '') + ' ' + (it.get('summary') or '')
                     m = _re.search(
                         r'(20\d{2})\s*年\s*(\d{1,2})\s*月.{0,30}?'
                         r'(?:台灣|TW)\s*(?:製造業)?[^。]{0,40}?PMI[^。]{0,30}?(\d{2}\.\d)',

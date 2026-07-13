@@ -921,7 +921,8 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
             'https://data.gov.tw/api/v1/rest/dataset/6053',
         ):
             try:
-                _rm_ex = _fu_ex(_meta_url_ex, timeout=10, attempts=1,
+                # v19.116:data.gov.tw 慢速政府 API,放寬 timeout(同 PMI dgtw)
+                _rm_ex = _fu_ex(_meta_url_ex, timeout=25, attempts=2,
                                 headers={'Accept': 'application/json'})
                 if _rm_ex is None or _rm_ex.status_code != 200:
                     continue
@@ -940,7 +941,7 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
                         break
                 if not _csv_url_ex:
                     continue
-                _rc_ex = _fu_ex(_csv_url_ex, timeout=15, attempts=2)
+                _rc_ex = _fu_ex(_csv_url_ex, timeout=25, attempts=2)  # v19.116 慢站放寬
                 if _rc_ex is None or _rc_ex.status_code != 200:
                     continue
                 # v19.115:探針 run 29186611230 實錘 6053 resource =
