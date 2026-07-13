@@ -74,6 +74,13 @@ _MACRO_CACHE_TTL_DAYS = 90
 # 時讀它（帶 is_stale）。寫入僅由 cron（update_macro_history.yml, permissions: contents:write）
 # 呼叫 `_macro_durable_save` + workflow `git add -f data_cache/` 提交;runtime（Cloud）**只讀**。
 _MACRO_DURABLE_DIR = _os.path.join("data_cache", "macro_last_good")
+# v19.119：PMI 8 源並行賽跑的**硬上限**。必須 < macro_trio_orchestrator 的
+# inner_pool_timeout_s(70s),留餘裕給下方 durable/stale fallback。根因:v19.116 把
+# dgtw metadata timeout 放寬到 25s×2 attempts×3 URL = 最壞 ~150s,而原碼
+# `for _fut: _fut.result()` 無限等最慢源 → 雲端 data.gov.tw「連得上但 hang」時
+# fetch_tw_pmi 要 ~150s 才回,orchestrator 70s 就砍掉整個 block → durable seed
+# 根本讀不到 → 卡片「待取得」。設 45s 上限:慢源背景自生自滅,主流程準時回落 durable。
+_PMI_RACE_DEADLINE_S = 45
 
 # v18.225 T2：FRED 下次 Release 30 天 TTL cache（鏡像 Fund repositories/macro_repository.py）
 _FRED_RELEASE_CACHE_DIR = _os.path.join("cache", "fred_release")
@@ -911,6 +918,8 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
       失敗：{'_err_pmi': str, 'value': None}
     """
     from concurrent.futures import ThreadPoolExecutor as _TPE_pmi
+    from concurrent.futures import as_completed as _as_completed_pmi
+    from concurrent.futures import TimeoutError as _CFTimeout_pmi
     today = _dt.date.today()
     errs: list[str] = []
     # S-PROV-1 v18.254 phase 9:provenance fetched_at(orchestrator level)
@@ -920,18 +929,33 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     # 新增 source = 在 registry append 1 entry，driver 不動。
     _sources = PMI_SOURCE_REGISTRY
     _results: dict = {}
-    with _TPE_pmi(max_workers=len(_sources)) as _ex_pmi:
+    # v19.119：race 設 _PMI_RACE_DEADLINE_S(45s)硬上限,as_completed 收在 deadline 內
+    # 完成的源,逾時者 cancel + shutdown(wait=False)不等(否則 with __exit__ 會 block
+    # 到最慢源 ~150s)。準時回 → orchestrator 70s 內拿得到 → 下方 durable fallback 才生效。
+    _ex_pmi = _TPE_pmi(max_workers=len(_sources))
+    try:
         _fut2name = {_ex_pmi.submit(_fn, today, max_age_days, errs): _nm
                      for _nm, _fn in _sources}
-        for _fut in _fut2name:
-            _nm = _fut2name[_fut]
-            try:
-                _r = _fut.result()
-            except Exception as _e_fut:
-                errs.append(f'{_nm}:future {type(_e_fut).__name__}')
-                _r = None
-            if _r:
-                _results[_nm] = _r
+        try:
+            for _fut in _as_completed_pmi(_fut2name, timeout=_PMI_RACE_DEADLINE_S):
+                _nm = _fut2name[_fut]
+                try:
+                    _r = _fut.result()
+                except Exception as _e_fut:
+                    errs.append(f'{_nm}:future {type(_e_fut).__name__}')
+                    _r = None
+                if _r:
+                    _results[_nm] = _r
+        except _CFTimeout_pmi:
+            _pending = [_fut2name[_f] for _f in _fut2name if not _f.done()]
+            for _f in _fut2name:
+                if not _f.done():
+                    _f.cancel()
+            errs.append(f'race-deadline {_PMI_RACE_DEADLINE_S}s 未回={_pending}')
+            print(f'[macro_core/TW-PMI] ⏰ race {_PMI_RACE_DEADLINE_S}s 上限,'
+                  f'未完成={_pending} → 走 durable/stale fallback')
+    finally:
+        _ex_pmi.shutdown(wait=False)   # 不等慢 thread(否則 block ~150s)
     # 依來源優先序回傳第一個命中（與原序列 fallback 語義一致）
     for _nm, _ in _sources:
         if _nm in _results:

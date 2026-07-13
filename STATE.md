@@ -1,5 +1,30 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## ⏱️ 2026-07-13 race 硬上限修（v19.119）— v19.116 慢 timeout 反噬 v19.118 durable 的真兇
+
+user 部署 v19.117/118 後 PMI + 出口**仍**待取得(NDC 39分、CPI 2.96% 有值 → 證明 orchestrator 有跑)。深挖資料流實錘一條**我自己造的**回歸鏈:
+
+- **卡片資料流**:`section_mid` 讀 `st.session_state['macro_info']['ism_pmi'/'tw_export']`,由
+  `macro_trio_orchestrator` 呼叫 `fetch_tw_pmi_block`(→ `fetch_tw_pmi`)/ `fetch_export_block` 填。
+  orchestrator 給每個 block **70s inner budget**(macro_trio_orchestrator.py:28),逾時**cancel**。
+- **真兇**:v19.116 把 dgtw metadata timeout 放寬到 **25s×2 attempts×3 URL = 最壞 ~150s**,而
+  `fetch_tw_pmi` 原碼 `for _fut: _fut.result()` **無限等最慢源**。雲端 data.gov.tw「連得上但 hang」
+  時 → fetch_tw_pmi 要 ~150s 才回 → orchestrator 70s 就砍掉整個 block → **v19.118 的 durable
+  seed 在回落前就被砍,根本讀不到** → 卡片「待取得」。**即 v19.116(慢)反噬 v19.118(durable)**。
+  (本機 sandbox proxy 秒速 403,測不出此 hang,誤判 v19.118 已解 — 誠實記錄。)
+- **出口同理**:sequential 鏈 customs-direct(25×2)+metadata(25×2×2)+CSV(25×2) ≈ 225s ≫ 70s → 同樣被砍。
+
+**修**:
+- **PMI**:`fetch_tw_pmi` 改 `as_completed(timeout=_PMI_RACE_DEADLINE_S=45s)` + `shutdown(wait=False)`
+  — 慢源背景自生自滅、主流程 45s 內**必回** → durable fallback 生效。45s < 70s budget、> data.gov.tw
+  正常 12-18s(慢站活著時仍 live 命中)。
+- **出口**:收 timeout fit budget — customs-direct 15s×1(探針證實快)、metadata 10s×1、CSV 12s×1,
+  最壞 ~60s < 70s → customs-direct(可靠主源)準時回 live。
+- **回歸網**:`test_pmi_bounded_race_v19_119`(慢源 hang 60s → fetch_tw_pmi 2s deadline 內回 durable /
+  快源仍命中 / deadline < 70 / 結構鎖)+ `test_dgtw_resilience_v19_116` 改鎖出口收窄。全套 pytest 綠。
+- **白話**:以前抓資料太慢、被系統 70 秒鬧鐘砍掉,連「上次存的 60.7」都來不及讀 → 空白。現在 45 秒內
+  一定收工,抓不到就秒讀 durable seed 顯示 60.7 🟡。出口同樣卡進時限,直連海關準時回。
+
 ## 🧊 2026-07-13 PMI durable 快照（v19.118,user 核准「建快照+seed」）— 卡片穩定有值的終解
 
 user 用 **5 張圖**證明:測試連線 FinMind/TWSE/Yahoo 全 200、外連診斷 proxy+直連全 200、
