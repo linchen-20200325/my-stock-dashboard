@@ -281,7 +281,37 @@ def main() -> int:
     print(f'\n📊 結果:{n_ok}/{len(TARGETS)} 端點回 200 且內容含關鍵字')
     _deep_dump(fetch_url)      # v19.114:內文視窗 + 正則試跑
     _deep_dump_v2(fetch_url)   # v19.114:資料端點探勘
+    _prod_smoke()             # v19.116:production fetcher 端到端(驗 v19.114/115)
     return 0  # 探針本身永遠 exit 0,存活判讀看逐行輸出
+
+
+def _prod_smoke() -> None:
+    """v19.116 診斷:直接跑合併後的 production fetcher,雲端+NAS 端到端驗證。
+
+    user 部署後回報出口/PMI 仍待取得 → 三種可能:①app 跑舊 code ②新 parser
+    有 bug ③dgtw 源間歇性又死。本段在 GH Actions(與 Streamlit Cloud 同視角)
+    跑真 `fetch_tw_pmi()` / `fetch_export_block()`,印實際回傳 → 分辨是哪種。
+    """
+    print('\n══ v19.116 production fetcher 端到端 smoke（雲端+NAS）══')
+    try:
+        from src.data.macro.macro_core import fetch_tw_pmi
+        _r = fetch_tw_pmi()
+        print(f'🎯 fetch_tw_pmi() → value={_r.get("value")} date={_r.get("date")} '
+              f'source={_r.get("source")} is_stale={_r.get("is_stale")} '
+              f'_err_pmi={_r.get("_err_pmi")}')
+    except Exception as _e:
+        import traceback
+        print(f'❌ fetch_tw_pmi EXC {type(_e).__name__}: {_e}')
+        traceback.print_exc()
+    try:
+        from src.data.macro.macro_snapshot import fetch_export_block
+        _r = fetch_export_block(fred_api_key='', finmind_token='')
+        print(f'🎯 fetch_export_block() → tw_export={_r.get("tw_export")} '
+              f'_err_export={_r.get("_err_export")}')
+    except Exception as _e:
+        import traceback
+        print(f'❌ fetch_export_block EXC {type(_e).__name__}: {_e}')
+        traceback.print_exc()
 
 
 if __name__ == '__main__':
