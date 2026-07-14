@@ -484,6 +484,21 @@ my-stock-dashboard/
 - 所有 HTTP 呼叫有 retry + fallback（TWSE IP 封鎖 → FinMind 備援）
 - 回傳純 `pd.DataFrame` 或 `dict`，不含任何 UI 邏輯
 
+**macro 韌性機制（v19.118–119，`macro_core.py` / `macro_snapshot.py`）**：
+- **durable last-known-good 快照**：macro fetcher（`fetch_tw_pmi` / `fetch_export_block`）除
+  in-memory `@st.cache_data` 外，另在 `data_cache/macro_last_good/*.json`（**已 committed**，
+  隨 deploy 帶上）存「上次成功值」。即時全敗時 `_macro_cache_load` 讀它，回傳帶
+  `is_stale=True`，UI 顯示 🟡「N 天前」而非「待取得」（§1 不捏造）。寫入僅由 cron
+  （`scripts/update_macro_history.py`）+ workflow `git add -f data_cache/` 提交；runtime
+  只讀。此層**補強**原 `cache/macro_snapshot/`（Streamlit Cloud ephemeral 磁碟，container
+  recycle 即抹，撐不過重啟）。
+- **race budget（逾時前必回落）**：`fetch_tw_pmi` 8 源並行賽跑設 `_PMI_RACE_DEADLINE_S=45s`
+  硬上限（`as_completed(timeout=...)` + `shutdown(wait=False)`），**必須 < macro_trio
+  orchestrator inner budget（70s）**，確保單源慢 timeout（dgtw 25s×2）不會拖到整個 block
+  被 orchestrator cancel，durable 快照 fallback 才讀得到。出口鏈同精神收 timeout fit budget。
+- **假綠燈治理**：`@monitored` 加 `success_check`，fetcher 回 `value=None` 才算 failed（🔴），
+  不再「回 dict 不拋例外就恆綠」誤導診斷（v19.118）。
+
 ---
 
 #### L2 — 評分層（Scoring Layer）
