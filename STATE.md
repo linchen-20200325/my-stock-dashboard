@@ -1,5 +1,28 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧬 2026-07-14 AI 問答 agent Phase 1（v19.121，user 主動要求新功能）— Stock 骨幹落地
+
+user 交付外部規格(AI 分析師 panel + 問答),經雙 agent 查證 + 離線實跑核心(selftest 6/6 /
+golden 7/7)後,依 §8.1 分階段落地。**Phase 1 = Stock 骨幹**(service + 個股 panel + 聊天分頁);
+逐 tab「總結本頁」= Phase 2 不碰。
+
+- **新增 3 檔**:`src/services/ai_qa_service.py`(L3,允許 I/O)/ `src/ui/tabs/tab_ai_chat.py`(L5)/
+  `tests/test_ai_qa_service.py`(7 golden,離線免金鑰注入假工具+假 Gemini)。
+- **接線 2 處(純新增)**:`app.py` 頂層「🧬 AI 問答」分頁(`_render_tab_isolated` 錯誤隔離)+
+  `tab_stock.py` 個股頁「AI 分析師討論」按鈕(fail-soft try/except,壞了不影響本頁)。
+- **adapter 依實際簽名校正**(規格全標 TODO 沒驗,查證後改):import 走 `src.*` 實際包、
+  `calc_atr_stop` 在 `src.compute.scoring`、market_state as_of 用 `timestamp`、score 用小寫
+  `vcp_atr_pass`(無 `fundamental`)、financial 無 `ROE(%)`/`as_of` 改用實際欄位 + as_of=`period`。
+  **ROE 需 TTM 淨利**(§4.1 季 vs 年,naive 季ROE 會 4× 誤導)→ **留 Phase 1.5**(先對公式)。
+- **守則**:§1 Fail-Loud(工具失敗回結構化 error;bundle 全無資料不呼叫 LLM 不 fabricate);
+  EX-AI-1 精神(權威數字由 `tool_calls`/`bundle` 用 `st.table` 渲染,AI 敘述另段帶 🧬 旗標,
+  嚴禁從 LLM 字串萃取數字);§8.2 L5→L3→L1/L2 無上行 import;唯讀(不下單/不寫外部狀態);
+  無 `GEMINI_API_KEY` → 分頁「未啟用」,dashboard 其他功能不受影響。既有 AI 不動,並排新增。
+- **Gemini 走法**:Stock L3 允許 I/O → 內建 `_make_default_http`(直連 REST,panel 純文字 +
+  聊天 function-calling 通吃)。⚠️ 繞過 NAS proxy 直連 Google,部署時才確定通(Google API 幾乎不被擋)。
+- **未做(誠實記錄)**:Phase 2 其餘 5 tab「總結本頁」;Phase 3 鏡像 Fund(需寫 adapter +
+  `PANELS["fund"]` + `infra/llm` function-calling passthrough);ROE Phase 1.5。
+
 ## 🔌 2026-07-14 fetch_url lean-path 直連降級修（v19.120）— Fed Funds 卡「待取得」真兇
 
 user 回報「美元資金成本錨 缺資料」(Fed Funds Rate 卡待取得,底部「部分指標載入失敗 1 項」),

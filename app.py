@@ -469,8 +469,8 @@ render_macro_compass()
 # v18.182 ARCHIVED: 🧪 回測找參數 / v18.187 ARCHIVED: 📈 月營收進退 / v18.189 ARCHIVED: 📊 MJ 體檢變化
 # 各暫封存模組保留磁碟，啟用方式見各 ARCHIVED 原始注解。
 # v18.463: UI 重構 — 10 平鋪 Tab → 4 大群組 + Sub-tabs（sub-tab 變數名稱維持不變，測試仍通過）
-tab_market, tab_stocks, tab_etf_main, tab_tools = st.tabs([
-    '🌍 市場環境', '🔬 選股', '🏦 ETF', '🔧 工具箱',
+tab_market, tab_stocks, tab_etf_main, tab_tools, tab_ai = st.tabs([
+    '🌍 市場環境', '🔬 選股', '🏦 ETF', '🔧 工具箱', '🧬 AI 問答',
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -759,5 +759,10 @@ with tab_tools:
     with tab_edu:
         from src.ui.tabs import render_tab_edu
         _render_tab_isolated(render_tab_edu, '教學')
+
+# ── 🧬 AI 問答（v19.121 Phase 1，L5→L3 ai_qa_service）──────────────
+with tab_ai:
+    from src.ui.tabs import tab_ai_chat
+    _render_tab_isolated(tab_ai_chat.render, 'AI 問答')
 
 st.markdown('<div style="text-align:center;font-size:10px;color:#484f58;padding:8px 0;">⚠️ 台股AI戰情室 v3.0 · 僅供學術研究，非投資建議，盈虧自負</div>', unsafe_allow_html=True)
