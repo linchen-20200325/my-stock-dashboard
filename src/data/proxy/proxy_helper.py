@@ -214,8 +214,14 @@ def fetch_url(url: str, headers: dict = None,
             print(f'[proxy] Error: {_e}')
             break
 
-    # 降級直連
-    if _proxy and (_perr > 0 or _block >= 2):
+    # 降級直連：proxy 路徑已失敗(ProxyError 或 403)才觸發。
+    # v19.120 修:原門檻 `_block >= 2` 在 attempts=1(lean path)下永遠達不到——
+    # 單次 403 只讓 _block=1 且因 `attempts <= 1` 立即 break,直連整段被跳過。
+    # 這是 Fed Funds 卡「待取得」主因:其兩條 fallback 都 attempts=1 且都打
+    # stlouisfed.org(無非-FRED 逃生口,不像 CPI 有 BLS 直連),proxy 一 403 就死。
+    # 改 `_block >= 1`:任一次 proxy 403 都退直連(FRED 為公開 API,直連可通)。
+    # 對 attempts>1 多重試路徑無影響——該路徑本就會累到 _block>=2 或先 return 200。
+    if _proxy and (_perr > 0 or _block >= 1):
         print(f'[proxy] 降級直連：{url[:80]}')
         try:
             _r_dc = _sess.get(url, headers=_hdr, params=params,

@@ -1,5 +1,28 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔌 2026-07-14 fetch_url lean-path 直連降級修（v19.120）— Fed Funds 卡「待取得」真兇
+
+user 回報「美元資金成本錨 缺資料」(Fed Funds Rate 卡待取得,底部「部分指標載入失敗 1 項」),
+其餘 5 卡(NDC/出口/PMI/CPI/VIX)皆有值。user 直覺點破「直接連接不行嗎?FRED 應該不會擋 GitHub IP」
+——查證屬實,根因在 proxy 降級鏈,不在 FRED。
+
+- **根因 = `fetch_url` 直連 gate bug**:`proxy_helper.py` 直連門檻原寫 `_block >= 2`,但 Fed Funds
+  兩條 fallback(fredgraph + FRED-API)都用 `attempts=1`(lean path)。attempts=1 時單次 proxy 403 →
+  `_block=1` 且因 `attempts <= 1` **立即 break** → `_block` 永遠到不了 2 → **直連整段被跳過** →
+  掉 NAS 中繼(未設回 None)→ 卡片「待取得」。
+- **為何只有 Fed Funds 死**:六卡唯一 100% 靠 FRED 者。CPI 第三條 BLS(`macro_snapshot.py:475`)用
+  `_s.post` **自己直連、不走 fetch_url** → proxy 死也活;NDC=FinMind、出口=海關直連、PMI=durable、
+  VIX=Yahoo,皆不靠 FRED。故 FRED 從雲端 proxy 連不到時,只有 Fed Funds 這張沒逃生口。
+
+**修**:`_block >= 2` → `_block >= 1`(proxy_helper.py:224)。任一次 proxy 403 都退直連(FRED 公開
+API 直連可通)。對 `attempts>1` 多重試路徑零影響(該路徑本就累到 _block>=2 或先 return 200,不會走到)。
+**順帶救到所有 attempts=1 又吃 proxy 403 的 fetch**,不只這張卡。
+- **回歸網**:`test_proxy_lean_direct_fallback_v19_120`(4 測:403 退直連 / proxy 成功不多打 /
+  attempts>1 持續 403 仍直連 / proxy+直連皆敗誠實回 None)。revert gate 實測核心測試確會失敗 → 測有效。
+- **白話**:這張卡兩條路都設「快速模式(只試一次)」,舊碼規定「被擋兩次才改直連」,但只試一次永遠湊不到
+  兩次 → 直連從沒啟用 → 空白。FRED 其實直連就通(公開政府資料),改成「被擋一次就直連」即可。其他卡沒事
+  是因為它們要嘛不靠 FRED,要嘛(CPI)本來就自己直連。
+
 ## ⏱️ 2026-07-13 race 硬上限修（v19.119）— v19.116 慢 timeout 反噬 v19.118 durable 的真兇
 
 user 部署 v19.117/118 後 PMI + 出口**仍**待取得(NDC 39分、CPI 2.96% 有值 → 證明 orchestrator 有跑)。深挖資料流實錘一條**我自己造的**回歸鏈:
