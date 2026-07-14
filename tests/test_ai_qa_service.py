@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+test_ai_qa_service.py — AI 分析師 panel + 問答 golden test（v19.121 Phase 1）
+
+不需 GEMINI 金鑰、不需 repo 其他模組（工具與 Gemini 皆注入假物）。驗證:
+  聊天 tool-calling / 數字只從工具 / Fail-Loud / panel 輕量單次 / panel 完整管線(3分析師→辯論→風控→報告)
+  / 無資料 Fail-Loud / discuss_stock / summarize_tab / Gemini 失敗回報
+
+執行:  pytest tests/test_ai_qa_service.py -q
+"""
+try:
+    from src.services.ai_qa_service import run_agent, discuss, discuss_stock, summarize_tab, PANELS
+except Exception:  # pragma: no cover
+    from ai_qa_service import run_agent, discuss, discuss_stock, summarize_tab, PANELS
+
+
+class _Http:
+    def __init__(self, script):
+        self.script, self.calls = list(script), 0
+
+    def __call__(self, payload):
+        self.calls += 1
+        return self.script.pop(0) if self.script else _t("…")
+
+
+def _t(text):
+    return {"candidates": [{"content": {"parts": [{"text": text}]}}]}
+
+
+def _fc(name, args):
+    return {"candidates": [{"content": {"parts": [{"functionCall": {"name": name, "args": args}}]}}]}
+
+
+_TOOLS = {
+    "get_stock_score": lambda stock_id: {"ok": True, "data": {"total": 82, "grade": "A", "stock_id": stock_id},
+                                         "provenance": {"source": "FinMind", "as_of": "2026-07-11"}},
+    "get_financial_health": lambda stock_id: {"ok": True, "data": {"毛利率(%)": 55}, "provenance": {"source": "FinMind"}},
+    "get_risk_plan": lambda stock_id, capital_twd=1e6: {"ok": True, "data": {"stop_loss": 800},
+                                                        "provenance": {"source": "calc"}},
+}
+_BUNDLE = {"評分": {"ok": True, "data": {"total": 82}, "provenance": {"source": "FinMind", "as_of": "2026-07-11"}}}
+
+
+# ---- 聊天 -------------------------------------------------------------------
+def test_chat_numbers_from_tools():
+    g = _Http([_fc("get_stock_score", {"stock_id": "2330"}), _t("2330 評分 82。")])
+    r = run_agent("2330 評分?", api_key="x", gemini_http=g, tools=_TOOLS)
+    assert r.ok and r.tool_calls[0]["result"]["data"]["total"] == 82 and g.calls == 2
+
+
+def test_chat_fail_loud():
+    def boom(stock_id):
+        raise RuntimeError("FinMind quota")
+    r = run_agent("2330?", api_key="x", gemini_http=_Http([_fc("get_stock_score", {"stock_id": "2330"}), _t("")]),
+                  tools={"get_stock_score": boom})
+    assert r.tool_calls[0]["result"]["ok"] is False and "quota" in r.tool_calls[0]["result"]["error"]
+
+
+# ---- panel ------------------------------------------------------------------
+def test_panel_lite_single_call():
+    g = _Http([_t("小組討論結論")])
+    p = discuss("stock", _BUNDLE, mode="lite", gemini_http=g)
+    assert p.ok and p.text == "小組討論結論" and g.calls == 1
+    assert p.data_bundle["評分"]["data"]["total"] == 82         # 權威數字來自 bundle
+
+
+def test_panel_full_pipeline():
+    g = _Http([_t("基本面"), _t("技術"), _t("風險"), _t("多"), _t("空"), _t("hold"), _t("風控OK"), _t("報告")])
+    p = discuss("stock", _BUNDLE, mode="full", gemini_http=g)
+    assert p.ok and len(p.per_analyst) == 3 and g.calls == len(PANELS["stock"]) + 5   # 3 分析師+多+空+裁判+風控+報告
+    assert p.debate["verdict"] == "hold" and p.risk_review["text"] == "風控OK" and p.text == "報告"
+
+
+def test_panel_fail_loud_no_llm_call():
+    g = _Http([_t("不該被呼叫")])
+    p = discuss("stock", {"x": {"ok": False, "error": "來源全敗"}}, mode="lite", gemini_http=g)
+    assert p.ok is False and g.calls == 0                       # 無資料 → 不呼叫 LLM,不 fabricate
+
+
+def test_discuss_stock_and_summarize_tab():
+    g = _Http([_t("a"), _t("b"), _t("c"), _t("多"), _t("空"), _t("hold"), _t("風控"), _t("報告")])
+    p = discuss_stock("2330", gemini_http=g, tools=_TOOLS, mode="full")
+    assert p.ok and p.data_bundle["get_stock_score"]["data"]["total"] == 82 and p.text == "報告"
+    p2 = summarize_tab("任意頁", bundle={"重點": {"ok": True, "data": {"x": 1}, "provenance": {}}},
+                       gemini_http=_Http([_t("本頁總結")]))
+    assert p2.ok and p2.text == "本頁總結"
+
+
+def test_gemini_failure_reported():
+    def bad(payload):
+        raise ConnectionError("no net")
+    p = discuss("stock", _BUNDLE, mode="lite", gemini_http=bad)
+    assert p.ok is False and "Gemini" in (p.error or "")
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    for fn in fns:
+        fn()
+        print(f"  ok: {fn.__name__}")
+    print(f"\n{len(fns)} 項 golden test 全部通過 ✅")
