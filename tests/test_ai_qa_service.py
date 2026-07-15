@@ -12,11 +12,13 @@ test_ai_qa_service.py — AI 分析師 panel + 問答 golden test（v19.121 Phas
 try:
     from src.services.ai_qa_service import (
         run_agent, discuss, discuss_stock, summarize_tab, PANELS,
-        _calc_single_quarter_roe, _json_safe, _annotate_staleness)
+        _calc_single_quarter_roe, _json_safe, _annotate_staleness,
+        _scrub_secrets, _fmt_gemini_error)
 except Exception:  # pragma: no cover
     from ai_qa_service import (
         run_agent, discuss, discuss_stock, summarize_tab, PANELS,
-        _calc_single_quarter_roe, _json_safe, _annotate_staleness)
+        _calc_single_quarter_roe, _json_safe, _annotate_staleness,
+        _scrub_secrets, _fmt_gemini_error)
 
 
 class _Http:
@@ -203,6 +205,40 @@ def test_daily_cadence_unchanged_still_7d():
     r2 = _annotate_staleness({"ok": True, "data": {"x": 1},
                               "provenance": {"as_of": _as_of_days_ago(3)}})
     assert "_stale_days" not in r2
+
+
+# ---- 錯誤訊息金鑰洗白 + 429 友善化(v19.128 修 ?key=API_KEY 印到 UI)--------------
+def test_scrub_secrets_removes_api_key():
+    assert _scrub_secrets("…generateContent?key=AIzaSyABC_123-xyz reason") == \
+        "…generateContent?key=*** reason"                          # URL query key 值洗掉
+    assert "AIzaSyABC_123-xyz" not in _scrub_secrets("?key=AIzaSyABC_123-xyz")
+    assert _scrub_secrets("裸露 AIzaSyABC_123defGHIjklmnop 洩漏") == "裸露 AIza*** 洩漏"  # 裸 AIza 也洗
+    assert _scrub_secrets("token=abc123def456&x=1").startswith("token=***")
+    assert _scrub_secrets("無金鑰的普通訊息") == "無金鑰的普通訊息"  # 無誤傷
+
+
+def test_run_agent_429_scrubs_key_and_friendly():
+    """複現 bug:429 HTTPError 的 URL 含 ?key=<GEMINI_KEY>;修前整串(含金鑰)被塞進 UI 錯誤。
+    修後:金鑰不得出現 + 429 給友善提示。"""
+    KEY = "AIzaSyFAKE0123456789ABCDEFGHIJKLMNOPQRS"
+
+    class _Boom:
+        def __call__(self, payload):
+            raise RuntimeError("429 Client Error: Too Many Requests for url: "
+                               "https://generativelanguage.googleapis.com/v1beta/models/"
+                               f"gemini-2.5-flash:generateContent?key={KEY}")
+
+    r = run_agent("etf 哪個好?", api_key=KEY, gemini_http=_Boom(), tools={})
+    assert r.ok is False
+    assert KEY not in (r.error or ""), r.error                     # 金鑰絕不洩漏
+    assert "額度" in r.error and "429" in r.error                   # 友善 429 提示
+
+
+def test_fmt_gemini_error_non_429_scrubbed():
+    """非 429 的錯誤也要洗金鑰(仍保留原因供診斷)。"""
+    KEY = "AIzaSyFAKE0123456789ABCDEFGHIJKLMNOPQRS"
+    out = _fmt_gemini_error("Gemini 呼叫失敗", RuntimeError(f"boom ?key={KEY}"))
+    assert KEY not in out and "key=***" in out and "boom" in out
 
 
 if __name__ == "__main__":

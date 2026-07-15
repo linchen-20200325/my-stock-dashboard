@@ -26,6 +26,7 @@ Stock adapter(v19.121 Phase 1,已對實際簽名校正,evidence: 驗證 agent + 
 import json
 import math
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional
@@ -292,6 +293,27 @@ def _parts(resp: dict) -> list:
         return []
 
 
+# ── 錯誤訊息金鑰洗白 + Gemini 錯誤友善化(v19.128 修 429 錯誤把 ?key=API_KEY 印到 UI)──
+# requests 的 HTTPError str 含完整 URL(含 ?key=<GEMINI_KEY>);直接把 exception 塞進 UI 錯誤字串
+# = 金鑰洩漏。任何要渲染給使用者的錯誤都必須先過 _scrub_secrets。
+_SECRET_QS_RE = re.compile(r"\b(key|token|api[_-]?key|access[_-]?token)=[^&\s\"'<>]+", re.IGNORECASE)
+_GOOGLE_KEY_RE = re.compile(r"AIza[0-9A-Za-z_\-]{10,}")
+
+
+def _scrub_secrets(s) -> str:
+    """移除錯誤訊息可能夾帶的金鑰:URL query 的 key=/token=/api_key= 值 + 裸露的 AIza… 金鑰。"""
+    out = _SECRET_QS_RE.sub(lambda m: m.group(1) + "=***", str(s))
+    return _GOOGLE_KEY_RE.sub("AIza***", out)
+
+
+def _fmt_gemini_error(prefix: str, e) -> str:
+    """統一 Gemini 呼叫錯誤:先洗白金鑰;429 額度上限給友善提示(而非丟原始 HTTPError)。"""
+    msg = _scrub_secrets(f"{type(e).__name__}: {e}")
+    if "429" in msg or "Too Many Requests" in msg or "RESOURCE_EXHAUSTED" in msg:
+        return f"{prefix}:已達 Gemini 免費額度上限(429 Too Many Requests),請稍候約 30~60 秒再試。"
+    return f"{prefix}:{msg}"
+
+
 def _annotate_staleness(result: dict) -> dict:
     try:
         prov = result.get("provenance") or {}
@@ -317,7 +339,7 @@ def _run_tool(tools: dict, name: str, args: dict) -> dict:
         result = _annotate_staleness(out if isinstance(out, dict) else {"ok": True, "data": out})
         return _json_safe(result)   # v19.124:送 Gemini(json.dumps)前確保可序列化(numpy bool/int 等)
     except Exception as e:                                   # Fail Loud
-        return {"ok": False, "error": f"{name} 失敗:{type(e).__name__}: {e}"}
+        return {"ok": False, "error": _scrub_secrets(f"{name} 失敗:{type(e).__name__}: {e}")}
 
 
 def _make_default_http(api_key: str, model: str) -> Callable[[dict], dict]:
@@ -386,7 +408,7 @@ def discuss(context: str, bundle: dict, question: Optional[str] = None, *, mode:
         try:
             text = _gemini_text(http, sys, f"工具資料:\n{brief}{q}")
         except Exception as e:
-            return PanelResult(ok=False, error=f"Gemini 失敗:{type(e).__name__}: {e}", model=model, data_bundle=bundle)
+            return PanelResult(ok=False, error=_fmt_gemini_error("Gemini 失敗", e), model=model, data_bundle=bundle)
         return PanelResult(ok=True, text=text, model=model, data_bundle=bundle)
 
     # full:「(儀表板資料) → 3 分析師 → 多空辯論 → 風控 → 報告」,無 ingest 抓取
@@ -404,7 +426,7 @@ def discuss(context: str, bundle: dict, question: Optional[str] = None, *, mode:
         risk_text = _call(RISK_PERSONA, f"資料完整度:{n_ok}/{len(bundle)};辯論結論:{verdict}\n資料:\n{brief}")
         report = _call(REPORT_PERSONA, f"分析師:\n{vbrief}\n辯論:{verdict}\n風控:{risk_text}\n資料:\n{brief}{q}")
     except Exception as e:
-        return PanelResult(ok=False, error=f"Gemini 失敗:{type(e).__name__}: {e}", model=model,
+        return PanelResult(ok=False, error=_fmt_gemini_error("Gemini 失敗", e), model=model,
                            data_bundle=bundle, per_analyst=views)
     return PanelResult(ok=True, text=report, per_analyst=views,
                        debate={"bull": bull, "bear": bear, "verdict": verdict},
@@ -466,7 +488,7 @@ def run_agent(question: str, history: Optional[list] = None, *, api_key: Optiona
             resp = http({"system_instruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
                          "contents": contents, "tools": [{"function_declarations": TOOLS_SCHEMA}]})
         except Exception as e:
-            return QAResult(ok=False, error=f"Gemini 呼叫失敗:{type(e).__name__}: {e}", model=model, tool_calls=tool_calls)
+            return QAResult(ok=False, error=_fmt_gemini_error("Gemini 呼叫失敗", e), model=model, tool_calls=tool_calls)
         parts = _parts(resp)
         fcalls = [p["functionCall"] for p in parts if isinstance(p, dict) and "functionCall" in p]
         if fcalls:

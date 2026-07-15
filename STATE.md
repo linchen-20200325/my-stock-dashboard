@@ -1,5 +1,24 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔐 2026-07-15 AI 問答 v19.128 — 修錯誤訊息洩漏 Gemini API 金鑰 + 429 友善化
+
+user 部署後截圖回饋:問 ETF 時觸發 `429 Too Many Requests`,錯誤訊息把**完整 URL 含
+`?key=AIza…`(Gemini API 金鑰)印到畫面**。
+- 🔴 **真漏洞(安全)**:`run_agent` / `discuss` 的 except 直接 `f"Gemini…:{e}"`,而 requests
+  的 `HTTPError` str 內含完整請求 URL(含 `?key=<GEMINI_KEY>`)→ 金鑰渲染到 UI(截圖/公開
+  部署即外洩)。**修**:新增 `_scrub_secrets`(洗 URL query `key=/token=/api_key=` 值 + 裸露
+  `AIza…` 樣式)+ `_fmt_gemini_error`(先洗白再判 429),套用 4 處 UI-facing 錯誤字串
+  (run_agent / discuss lite / discuss full / _run_tool 工具錯誤 defense-in-depth)。
+- 🎯 **429 友善化**:偵測 `429 / Too Many Requests / RESOURCE_EXHAUSTED` → 「已達 Gemini
+  免費額度上限,請稍候約 30~60 秒再試」,不丟原始 HTTPError。
+- **test**:`test_scrub_secrets_removes_api_key` + `test_run_agent_429_scrubs_key_and_friendly`
+  (複現:429 HTTPError URL 含 key → 修前整串含金鑰洩漏;修後金鑰不出現 + 友善提示)+
+  `test_fmt_gemini_error_non_429_scrubbed`;17 passed、selftest、py_compile 過。純 bug fix
+  (§8 不觸發),隔離於 `ai_qa_service.py`(L3)。
+- ⚠️ **金鑰已曝光**:user 該截圖已把當前金鑰外洩 → 已請 user 至 Google AI Studio 重新產生。
+- 📌 **ETF 比較**(截圖另一問題):agent 目前無 ETF 工具,誠實回「無比較功能」(Fail-Loud 正確)。
+  加 ETF 工具屬**新功能**,§7/§8.1 需先對齊(範圍/比較指標)→ 待 user 點名再設計,本 PR 不含。
+
 ## 🧬 2026-07-15 AI 問答 v19.127 — 修季報「已過期100+天」誤報(頻率感知過期門檻)
 
 user 部署後回饋:個股問答財報「看起來尚未更新」(力積電 6770 顯示 as_of=2026-03-31、
