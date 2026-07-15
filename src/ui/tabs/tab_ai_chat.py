@@ -131,13 +131,24 @@ def render():
         return
     with st.chat_message("user"):
         st.markdown(q)
+    # run_agent 內部會自行把本次 question 當成新的 user turn 接在 history 之後
+    #(ai_qa_service.run_agent: contents = _history_to_contents(history) + [question])。
+    # 因此傳給 run_agent 的必須是「append 本次問題之前」的歷史快照,否則同一句會送兩次
+    #(Gemini 收到連續兩個相同 user turn → 例如輸入「6239」被串成「62396239」)。
+    _prior = list(st.session_state.ai_qa_history)          # 快照:不含本次 q
     st.session_state.ai_qa_history.append({"role": "user", "content": q})
 
     with st.chat_message("assistant"):
         with st.spinner("查詢中…"):
-            res = run_agent(q, st.session_state.ai_qa_history, api_key=key)
+            res = run_agent(q, _prior, api_key=key)        # 傳快照,q 只由 run_agent 接一次
         if res.tool_calls:
             _render_bundle({tc["name"]: tc["result"] for tc in res.tool_calls})
-        body = f"### 🧬 AI 解讀｜使用模型:{res.model}\n\n{res.text}" if res.ok else f"⚠️ {res.error}"
+        if res.ok:
+            _text = (res.text or "").strip()
+            # 空文字不可只留一個裸標題(否則畫面出現空的「🧬 AI 解讀」);顯式回報
+            body = (f"### 🧬 AI 解讀｜使用模型:{res.model}\n\n{_text}" if _text
+                    else "🧬 AI 已完成工具查詢,但未產生文字解讀;請見上方工具結果。")
+        else:
+            body = f"⚠️ {res.error}"
         st.markdown(body)
         st.session_state.ai_qa_history.append({"role": "assistant", "content": body})

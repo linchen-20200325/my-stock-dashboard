@@ -1,5 +1,20 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧬 2026-07-15 AI 問答 v19.126 — 修「6239→62396239」問題重複送 + 空標題
+
+user 部署後回饋兩個畫面 bug:
+- 🔴 **真 bug**:輸入股票代碼「6239」→ AI 收到「62396239」(整串重複)。根因在 UI 層
+  `tab_ai_chat.render()`:先把 `q` **append 進 `ai_qa_history`**,再把**同一個 list** 傳給
+  `run_agent(q, st.session_state.ai_qa_history)`;而 `run_agent` 內部本來就會再接一次
+  (`contents = _history_to_contents(history) + [question]`)→ Gemini 收到連續兩個相同 user turn,
+  串成「62396239」。**修**:append 前先 `_prior = list(...)` 快照,傳快照給 `run_agent`,q 只由
+  run_agent 接一次;可見歷史仍照常 append(下次 rerun 正常顯示)。
+- 🎯 **空的「🧬 AI 解讀」裸標題**:`res.text` 為空時 body 只剩標題。**修**:空文字改顯式回報
+  「AI 已完成工具查詢,但未產生文字解讀;請見上方工具結果」,不留裸標題。
+- **test**:新增 `test_run_agent_question_sent_once` 釘契約(給乾淨歷史時本次問題只送一次 +
+  歷史保留);golden **11 passed**、selftest 6/6、py_compile 過。變更隔離於 `tab_ai_chat.py`(L5)
+  單檔邏輯 + `test_ai_qa_service.py`(純 bug fix,§8 不觸發架構對齊)。
+
 ## 🧬 2026-07-15 AI 問答 v19.125 — prompt 強化:開頭逼出明確方向判斷（看得出好壞）
 
 user 部署 v19.124 後回饋:個股問答不炸了,但答案「看不出好還是不好」—— AI 把「先講重點」

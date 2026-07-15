@@ -61,6 +61,29 @@ def test_chat_fail_loud():
     assert r.tool_calls[0]["result"]["ok"] is False and "quota" in r.tool_calls[0]["result"]["error"]
 
 
+def test_run_agent_question_sent_once():
+    """契約(v19.126 回歸守門):run_agent 會自行把本次 question 當成新 user turn 接在
+    history 之後(contents = _history_to_contents(history) + [question])。呼叫端(tab_ai_chat)
+    因此必須傳『append 本次問題之前』的歷史快照;否則同一句被送兩次 → Gemini 收到連續兩個
+    相同 user turn(輸入「6239」被串成「62396239」)。此測試釘住:給乾淨歷史時 question 只出現一次,
+    且先前歷史不被吃掉。"""
+    seen = {}
+
+    class _CapHttp:
+        def __call__(self, payload):
+            seen["contents"] = payload["contents"]
+            return _t("結論")
+
+    hist = [{"role": "user", "content": "先前問題"},
+            {"role": "assistant", "content": "先前回答"}]
+    r = run_agent("6239 評分?", hist, api_key="x", gemini_http=_CapHttp(), tools=_TOOLS)
+    assert r.ok
+    user_texts = [p.get("text", "") for c in seen["contents"] if c.get("role") == "user"
+                  for p in c.get("parts", []) if isinstance(p, dict)]
+    assert sum(t == "6239 評分?" for t in user_texts) == 1, user_texts   # 本次問題只送一次
+    assert any("先前問題" in t for t in user_texts)                       # 歷史保留
+
+
 # ---- panel ------------------------------------------------------------------
 def test_panel_lite_single_call():
     g = _Http([_t("小組討論結論")])
