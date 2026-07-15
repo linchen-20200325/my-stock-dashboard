@@ -37,7 +37,8 @@ SYSTEM_INSTRUCTION = (
     "你是「台股 dashboard」的 AI 問答助理。嚴格遵守:\n"
     "1. 只能依『工具回傳的結構化結果』回答;需要數字時一律呼叫工具,**嚴禁自行計算/推估/杜撰數字**。\n"
     "2. 工具回傳 ok=false 或缺資料時,如實說明『哪個來源、為什麼』,不編造(Fail Loud, Never Fake)。\n"
-    "3. 回答個股/大盤時,可簡短帶入基本面、技術籌碼、風險等不同角度。\n"
+    "3. **開頭第一句先給最關鍵的結論或該採取的行動**(例:整體偏空宜保守 / 該檔評分高但財務轉弱),"
+    "再用 1-2 句補依據;寧精不冗,別只逐欄複述數字。\n"
     "4. 標註來源與時間;見 _stale_days 過期標記要提醒。你只做研究性說明,**不下單**。用繁體中文。"
 )
 
@@ -254,6 +255,30 @@ def _jsonable(v):
         return str(v)
 
 
+def _json_safe(obj):
+    """遞迴把 numpy/pandas scalar、set、Timestamp 等非標準 JSON 型別轉成可序列化物件。
+    工具結果 / bundle 送 Gemini(json.dumps)前**必過** —— 否則 numpy bool/int 會炸
+    `TypeError: Object of type bool is not JSON serializable`(v19.124 修:個股問答整段死掉)。
+    dict/list 遞迴;numpy scalar 走 `.item()` 轉 python 原生;其餘無法序列化者退成 str(不丟資料、不炸)。"""
+    if obj is None or type(obj) in (bool, int, float, str):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_json_safe(v) for v in obj]
+    _item = getattr(obj, "item", None)          # numpy/pandas scalar → python 原生
+    if callable(_item):
+        try:
+            return _json_safe(_item())
+        except Exception:
+            pass
+    try:
+        json.dumps(obj)
+        return obj
+    except Exception:
+        return str(obj)
+
+
 def _parts(resp: dict) -> list:
     try:
         return resp["candidates"][0]["content"]["parts"] or []
@@ -280,7 +305,8 @@ def _run_tool(tools: dict, name: str, args: dict) -> dict:
         return {"ok": False, "error": f"未知工具:{name}"}
     try:
         out = fn(**args) if args else fn()
-        return _annotate_staleness(out if isinstance(out, dict) else {"ok": True, "data": out})
+        result = _annotate_staleness(out if isinstance(out, dict) else {"ok": True, "data": out})
+        return _json_safe(result)   # v19.124:送 Gemini(json.dumps)前確保可序列化(numpy bool/int 等)
     except Exception as e:                                   # Fail Loud
         return {"ok": False, "error": f"{name} 失敗:{type(e).__name__}: {e}"}
 
@@ -305,11 +331,12 @@ def _normalize_bundle(bundle: dict) -> dict:
     """接受工具結構(含 ok/data/provenance)或 tab 直接丟的 {名稱:資料},統一成結構化。"""
     out = {}
     for k, v in (bundle or {}).items():
+        v = _json_safe(v)   # v19.124:tab 傳的 session_state 資料可能含 numpy/DataFrame → 先轉 JSON-safe
         if isinstance(v, dict) and ("ok" in v or "data" in v or "error" in v):
             out[k] = _annotate_staleness(v)
         else:
             out[k] = {"ok": v is not None,
-                      "data": v if isinstance(v, dict) else {"值": _jsonable(v)},
+                      "data": v if isinstance(v, dict) else {"值": v},
                       "provenance": {}}
     return out
 
@@ -319,7 +346,7 @@ def _bundle_brief(bundle: dict, cap: int = 700) -> str:
     for name, r in bundle.items():
         if r.get("ok"):
             prov = r.get("provenance", {})
-            data = json.dumps(r.get("data", {}), ensure_ascii=False)[:cap]
+            data = json.dumps(r.get("data", {}), ensure_ascii=False, default=str)[:cap]
             tag = f"　⚠️過期{r['_stale_days']}d" if r.get("_stale_days") else ""
             lines.append(f"[{name}] as_of={prov.get('as_of')} 來源={prov.get('source')}{tag}: {data}")
         else:

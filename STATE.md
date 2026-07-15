@@ -1,5 +1,20 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧬 2026-07-15 AI 問答 v19.124 — 修 JSON 序列化 bug（個股問答炸掉）+ prompt 補「先講重點」
+
+user 部署後實測回饋兩點:
+- 🔴 **真 bug**:個股問答「台積電呢?」→ `TypeError: Object of type bool is not JSON serializable`
+  **整段死掉**。根因:工具回傳含 **numpy 型別**(如 `score_single_stock` 的 `vcp_atr_pass` 來自
+  numpy/pandas 布林運算),放進 functionResponse 送 Gemini 時 `requests(json=payload)` 內部
+  `json.dumps` 不認 numpy bool/int → 炸。**修**:新增遞迴 `_json_safe`(numpy scalar 走 `.item()`
+  轉 python 原生、set/tuple→list、無法序列化退 str),在 `_run_tool`(聊天 functionResponse)+
+  `_normalize_bundle`(panel/tab bundle)兩個送 LLM 的邊界過濾;`_bundle_brief` json.dumps 補 `default=str`。
+- 🎯 **重點沒出來**:user 喜歡簡短但答案只複述欄位。`SYSTEM_INSTRUCTION` 第 3 點改「**開頭第一句
+  先給最關鍵結論/該採取的行動**,再 1-2 句補依據,別只逐欄複述」,維持簡短但重點前置。
+- **test**:`test_json_safe_numpy_serializable` + `test_run_agent_numpy_tool_result_no_crash`(複現:
+  工具回 numpy → functionResponse 需可 json.dumps 不炸);**revert `_json_safe` 實測 crash 測試確 FAIL**
+  → 測有效。golden **10 passed**、selftest 全過、py_compile 過。變更隔離於 `ai_qa_service.py`(L3)。
+
 ## 🧬 2026-07-15 AI 問答 ROE Phase 1.5（v19.123，user 核准 Option A）— 財務卡補單季 ROE
 
 Phase 1 財務工具刻意略過 ROE:fetcher(`fetch_financial_statements`)只給**單季**淨利,
