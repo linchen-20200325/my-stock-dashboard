@@ -13,12 +13,12 @@ try:
     from src.services.ai_qa_service import (
         run_agent, discuss, discuss_stock, summarize_tab, PANELS,
         _calc_single_quarter_roe, _json_safe, _annotate_staleness,
-        _scrub_secrets, _fmt_gemini_error)
+        _scrub_secrets, _fmt_gemini_error, _tool_get_etf_quality)
 except Exception:  # pragma: no cover
     from ai_qa_service import (
         run_agent, discuss, discuss_stock, summarize_tab, PANELS,
         _calc_single_quarter_roe, _json_safe, _annotate_staleness,
-        _scrub_secrets, _fmt_gemini_error)
+        _scrub_secrets, _fmt_gemini_error, _tool_get_etf_quality)
 
 
 class _Http:
@@ -239,6 +239,35 @@ def test_fmt_gemini_error_non_429_scrubbed():
     KEY = "AIzaSyFAKE0123456789ABCDEFGHIJKLMNOPQRS"
     out = _fmt_gemini_error("Gemini 呼叫失敗", RuntimeError(f"boom ?key={KEY}"))
     assert KEY not in out and "key=***" in out and "boom" in out
+
+
+# ---- ETF 品質工具(v19.129 加單檔 ETF 品質評分工具)------------------------------
+def test_etf_quality_tool_registered():
+    from src.services.ai_qa_service import REAL_TOOLS, TOOLS_SCHEMA
+    assert "get_etf_quality" in REAL_TOOLS
+    assert any(t["name"] == "get_etf_quality" for t in TOOLS_SCHEMA)
+
+
+def test_etf_quality_tool_ok_fail_invalid(monkeypatch):
+    """包 L2 compute_etf_quality:成功回 mapped 欄位;stars=None(抓失敗/因子全缺)→ Fail-Loud;
+    代碼無效 → 不評分即 ok:False。monkeypatch 避免真打 yfinance。"""
+    import src.compute.etf as E
+    monkeypatch.setattr(E, "normalize_etf_ticker", lambda s: (str(s) + ".TW") if s else "", raising=False)
+    # 成功
+    monkeypatch.setattr(E, "compute_etf_quality",
+                        lambda t: {"stars": 4, "score": 0.72, "weakest": "expense",
+                                   "coverage": 0.85, "factors": {"aum": {"val": 1e9, "score": 0.9}}},
+                        raising=False)
+    r = _tool_get_etf_quality("00878")
+    assert r["ok"] and r["data"]["etf_id"] == "00878.TW"
+    assert r["data"]["stars"] == 4 and r["data"]["coverage"] == 0.85
+    assert r["provenance"]["as_of"] is None                     # ETF 品質無單一 as_of → 不套過期
+    # 失敗:stars=None → Fail-Loud(§1 不假裝有分數)
+    monkeypatch.setattr(E, "compute_etf_quality", lambda t: {"stars": None, "_err": "4 因子全缺資料"}, raising=False)
+    _fail = _tool_get_etf_quality("00878")
+    assert _fail["ok"] is False and "全缺" in _fail["error"]
+    # 代碼無效 → 不呼叫評分即 Fail-Loud
+    assert _tool_get_etf_quality("")["ok"] is False
 
 
 if __name__ == "__main__":

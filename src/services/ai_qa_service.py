@@ -204,12 +204,34 @@ def _tool_get_risk_plan(stock_id: str, capital_twd: float = 1_000_000) -> dict:
                            "as_of": str(df["date"].iloc[-1]) if "date" in df.columns else None}}
 
 
+def _tool_get_etf_quality(etf_id: str) -> dict:
+    # 包 L2 compute_etf_quality(自抓 L1:AUM/費用率/配息/beta),同 _tool_get_stock_score lazy-import 模式。
+    # v19.129:讓 agent 能查/比較 ETF 品質(user 問「ETF 哪個好」時工具化,非 AI 腦補)。
+    try:
+        from src.compute.etf import compute_etf_quality, normalize_etf_ticker
+    except Exception as e:
+        return {"ok": False, "error": f"import 失敗:{e}"}
+    ticker = normalize_etf_ticker(etf_id)
+    if not ticker:
+        return {"ok": False, "error": f"ETF 代碼無效:{etf_id!r}(需 4-6 位數字,如 0050 / 00878)"}
+    q = compute_etf_quality(ticker)
+    # Fail-Loud:抓取失敗 / 4 因子全缺 → compute_etf_quality 回 stars=None(§1 不假裝有分數)
+    if not isinstance(q, dict) or q.get("stars") is None:
+        return {"ok": False, "error": f"ETF 品質評分失敗({ticker}):{(q or {}).get('_err', 'unknown')}"}
+    keys = ("stars", "score", "weakest", "coverage", "factors")
+    return {"ok": True,
+            "data": {"etf_id": ticker, **{k: q.get(k) for k in keys if k in q}},
+            # 慢變基本面屬性,無單一 as_of(不套過期標記);coverage<1 表部分因子缺,AI 應提醒
+            "provenance": {"source": "ETF 品質(AUM規模/費用率/配息穩定度/beta;yfinance+SITCA)", "as_of": None}}
+
+
 REAL_TOOLS: dict = {
     "get_market_state": _tool_get_market_state,
     "get_stock_score": _tool_get_stock_score,
     "get_financial_health": _tool_get_financial_health,
     "get_market_leading": _tool_get_market_leading,
     "get_risk_plan": _tool_get_risk_plan,
+    "get_etf_quality": _tool_get_etf_quality,
 }
 
 TOOLS_SCHEMA: list = [
@@ -224,6 +246,10 @@ TOOLS_SCHEMA: list = [
     {"name": "get_risk_plan", "description": "依最新價與 ATR 給停損與倉位。",
      "parameters": {"type": "object", "properties": {"stock_id": {"type": "string"}, "capital_twd": {"type": "number"}},
                     "required": ["stock_id"]}},
+    {"name": "get_etf_quality",
+     "description": "ETF 品質評分(1-5星/綜合分數[0,1]/最弱因子/涵蓋率;因子=規模AUM、費用率、配息穩定度、beta)。"
+                    "比較多檔 ETF 時每檔各呼叫一次。",
+     "parameters": {"type": "object", "properties": {"etf_id": {"type": "string"}}, "required": ["etf_id"]}},
 ]
 
 

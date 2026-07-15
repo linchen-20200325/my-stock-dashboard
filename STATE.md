@@ -1,5 +1,22 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧬 2026-07-15 AI 問答 v19.129 — 加單檔 ETF 品質工具(user 核准)
+
+user 部署後問「ETF 哪個比較好」,agent 無 ETF 工具 → 誠實回「無比較功能」(Fail-Loud 正確
+但不夠用)。user AskUserQuestion 選「加單檔 ETF 品質工具」。§7/§8.1 對齊後(Explore agent
+盤 `compute_etf_quality` 簽名 + 資料流)實作:
+- **§7**:包 L2 `src.compute.etf.compute_etf_quality(ticker)`(自抓 L1:AUM/費用率/配息CV/beta),
+  回 `stars`(1-5)/`score`([0,1])/`weakest`/`coverage`/`factors`。**不新增公式**,沿用既有評分。
+- **§8**:L3 單一新工具 `_tool_get_etf_quality`(同 `_tool_get_stock_score` lazy-import L2 模式),
+  註冊 REAL_TOOLS + TOOLS_SCHEMA。AI 比較多檔時每檔各呼叫一次。不新增模組/資料流。
+- **邊界**:代碼先 `normalize_etf_ticker`(0050→0050.TW);查不到/4因子全缺 → `stars=None` →
+  工具 **Fail-Loud** `ok:False`(§1 不假裝有分數);無單一 as_of → 不套過期標記;涵蓋率<1 surface
+  給 AI 提醒。
+- **test**:`test_etf_quality_tool_registered` + `test_etf_quality_tool_ok_fail_invalid`(monkeypatch
+  避免真打 yfinance:成功 mapped / stars=None Fail-Loud / 代碼無效);真 import 路徑冒煙驗證
+  (normalize 0050→0050.TW、invalid id Fail-Loud)。19 passed、selftest、py_compile 過。
+  隔離於 `ai_qa_service.py`(L3)單檔。
+
 ## 🔐 2026-07-15 AI 問答 v19.128 — 修錯誤訊息洩漏 Gemini API 金鑰 + 429 友善化
 
 user 部署後截圖回饋:問 ETF 時觸發 `429 Too Many Requests`,錯誤訊息把**完整 URL 含
