@@ -684,6 +684,16 @@ with tab_stocks:
                 st.download_button('💾 下載選股結果 CSV', data=_csv,
                                    file_name='screener_result.csv', mime='text/csv',
                                    key='screener_csv')
+                # ── 🧬 AI 總結本頁（v19.122 Phase 2，用選股已載結果組 bundle，不重抓；fail-soft）──
+                try:
+                    from src.ui.tabs.tab_ai_chat import render_tab_summary
+                    render_tab_summary('選股網', {
+                        '選股結果': _cands.head(15).to_dict('records'),
+                        '缺貨掃描': st.session_state.get('_shortage_rows'),
+                        '抗跌RS': st.session_state.get('_rs_rows_all'),
+                    }, context='general')
+                except Exception as _ai_sum_e:
+                    st.caption(f'🧬 AI 總結暫不可用：{type(_ai_sum_e).__name__}')
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合）

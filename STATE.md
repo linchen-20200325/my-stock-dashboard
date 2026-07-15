@@ -1,5 +1,25 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧬 2026-07-14 AI 問答 agent Phase 2（v19.122，user 續指派）— 逐 tab「AI 總結本頁」
+
+Phase 1(v19.121)骨幹落地後,user 指派 Phase 2:各 tab 加「🧬 AI 總結本頁」按鈕(用該頁**已載
+好的資料**組 bundle 給分析師 panel 討論,**不重抓、不重付 API**;規格 §5/§8)。
+
+- **survey agent 先掃**:規格 §8 表列 6 tab,查證後**兩處是死路**——
+  ①`tab_mj_health_diff` **v18.189 已 ARCHIVED**(app.py:469 註記、0 caller)→ 加按鈕永不渲染,**跳過**(§-1 不接死碼);
+  ②`tab_stock_picker` 非可見的「選股網」(選股網是 app.py inline `render_prescreen_panel`+screener);
+  ③`etf_dashboard` 是 re-export shim,真 render 在 `etf_tab_single`。
+- **實接 4 顆按鈕**(全 fail-soft try/except 包住,壞了顯示「暫不可用」不影響本頁;bundle 全取
+  自各 tab **已寫入的 session_state key**,scope-independent):
+  - **總經** `tab_macro.py`:bundle = `warroom_summary`(9 純量紅綠燈總覽)+ `intl_snap` + `macro_info`,context=macro
+  - **選股網** `app.py` screener 區塊:bundle = 本地 `_cands.head(15)` + `_shortage_rows` + `_rs_rows_all`,context=general
+  - **個股組合** `tab_stock_grp.py`:bundle = `t3_data` + `t3_batch_codes` + `_fh_t3_results`,context=general
+  - **ETF 單檔** `etf_tab_single.py`:bundle = `etf_single_data`(去掉 price_df DataFrame),context=general
+- **守則同 Phase 1**:數字由 bundle 用 `st.table` 渲染、AI 只討論帶 🧬 旗標、無資料不呼叫 LLM、
+  按鈕觸發 + session_state 快取控成本、無金鑰→「未啟用」。**core service/test 不動**(Phase 1 已測)。
+- **未做**:Phase 3 Fund(需 adapter + `PANELS["fund"]` + `infra/llm` passthrough);ROE Phase 1.5;
+  個股頁「AI 分析師討論」已在 Phase 1 落地(`render_stock_panel`)。
+
 ## 🧬 2026-07-14 AI 問答 agent Phase 1（v19.121，user 主動要求新功能）— Stock 骨幹落地
 
 user 交付外部規格(AI 分析師 panel + 問答),經雙 agent 查證 + 離線實跑核心(selftest 6/6 /
