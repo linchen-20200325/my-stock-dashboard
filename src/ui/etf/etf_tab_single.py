@@ -901,3 +901,13 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     _ai_saved = st.session_state.get(f'{_ai_sum_key}_result')
     if _ai_saved:
         st.markdown(_ai_saved)
+
+    # ── 🧬 AI 總結本頁（v19.122 Phase 2，用單檔已載資料組 bundle，不重抓；fail-soft）──
+    try:
+        from src.ui.tabs.tab_ai_chat import render_tab_summary
+        _esd = st.session_state.get('etf_single_data') or {}
+        render_tab_summary('ETF單檔', {
+            'ETF單檔診斷': {k: v for k, v in _esd.items() if k != 'price_df'},
+        }, context='general')
+    except Exception as _ai_sum_e:
+        st.caption(f'🧬 AI 總結暫不可用：{type(_ai_sum_e).__name__}')

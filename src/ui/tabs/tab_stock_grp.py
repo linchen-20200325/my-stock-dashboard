@@ -100,6 +100,17 @@ def render_stock_grp():
         build_prompt_fn=build_structured_summary_prompt,
     )
 
+    # ── 🧬 AI 總結本頁（v19.122 Phase 2，用批次已載資料組 bundle，不重抓；fail-soft）──
+    try:
+        from src.ui.tabs.tab_ai_chat import render_tab_summary
+        render_tab_summary('個股組合', {
+            '批次比較結果': st.session_state.get('t3_data'),
+            '批次代碼': st.session_state.get('t3_batch_codes'),
+            '財報體檢': st.session_state.get('_fh_t3_results'),
+        }, context='general')
+    except Exception as _ai_sum_e:
+        st.caption(f'🧬 AI 總結暫不可用：{type(_ai_sum_e).__name__}')
+
 
 def _render_stage_picker_section(stock_list: list[str], *,
                                   auto_run: bool = False,
