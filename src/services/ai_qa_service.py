@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
+from shared.staleness import stale_days_threshold  # 頻率感知過期門檻 SSOT(L0)
+
 DEFAULT_MODEL = "gemini-2.5-flash"
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -154,7 +156,10 @@ def _tool_get_financial_health(stock_id: str) -> dict:
     if _roe_q is not None:
         _data["ROE(單季%)"] = _roe_q
     return {"ok": True, "data": _data,
-            "provenance": {"source": "FinMind 季報 (季後~45d,公告日對齊)", "as_of": fd.get("period")}}
+            # cadence="quarterly":季報 as_of=季末,~45d 後才公告 → 過期門檻走季頻(150d)非日頻(7d),
+            # 否則當期最新一季會被誤標「已過期100+天」(SSOT: shared/staleness.stale_days_threshold)
+            "provenance": {"source": "FinMind 季報 (季後~45d,公告日對齊)",
+                           "as_of": fd.get("period"), "cadence": "quarterly"}}
 
 
 def _tool_get_market_leading(days: int = 7) -> dict:
@@ -289,11 +294,14 @@ def _parts(resp: dict) -> list:
 
 def _annotate_staleness(result: dict) -> dict:
     try:
-        as_of = (result.get("provenance") or {}).get("as_of")
+        prov = result.get("provenance") or {}
+        as_of = prov.get("as_of")
         if as_of:
             d = datetime.fromisoformat(str(as_of)[:10]).replace(tzinfo=timezone.utc)
             age = (datetime.now(timezone.utc) - d).days
-            if age > 7:
+            # 頻率感知門檻:季報 as_of=季末,季後~45d 才公告,不可用日頻 7d 誤標過期。
+            # cadence 由各 tool 於 provenance 宣告(未宣告 → daily 最嚴)。SSOT: shared/staleness.py
+            if age > stale_days_threshold(prov.get("cadence", "daily")):
                 result["_stale_days"] = age
     except Exception:
         pass

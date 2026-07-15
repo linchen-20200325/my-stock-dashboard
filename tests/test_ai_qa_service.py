@@ -12,11 +12,11 @@ test_ai_qa_service.py — AI 分析師 panel + 問答 golden test（v19.121 Phas
 try:
     from src.services.ai_qa_service import (
         run_agent, discuss, discuss_stock, summarize_tab, PANELS,
-        _calc_single_quarter_roe, _json_safe)
+        _calc_single_quarter_roe, _json_safe, _annotate_staleness)
 except Exception:  # pragma: no cover
     from ai_qa_service import (
         run_agent, discuss, discuss_stock, summarize_tab, PANELS,
-        _calc_single_quarter_roe, _json_safe)
+        _calc_single_quarter_roe, _json_safe, _annotate_staleness)
 
 
 class _Http:
@@ -170,6 +170,39 @@ def test_run_agent_numpy_tool_result_no_crash():
 
     r = run_agent("2330?", api_key="x", gemini_http=_NumpyHttp(), tools=tools)
     assert r.ok and r.tool_calls[0]["result"]["data"]["total"] == 82
+
+
+# ---- 頻率感知過期標記(v19.127 修季報「已過期100+天」誤報)------------------
+def _as_of_days_ago(n):
+    from datetime import datetime, timezone, timedelta
+    return (datetime.now(timezone.utc) - timedelta(days=n)).date().isoformat()
+
+
+def test_quarterly_financial_not_flagged_when_latest():
+    """複現 bug:季報 as_of=季末,季後~45d 才公告;力積電 Q1(as_of~106d 前)是當期最新一季,
+    修前套日頻 7d 門檻 → 誤標「已過期106天」。修後 quarterly 走 150d 門檻 → 不標。"""
+    r = _annotate_staleness({"ok": True, "data": {"EPS": 3.36},
+                             "provenance": {"source": "FinMind 季報", "as_of": _as_of_days_ago(106),
+                                            "cadence": "quarterly"}})
+    assert "_stale_days" not in r                       # 當期最新一季不該被標過期
+
+
+def test_quarterly_financial_flagged_when_truly_overdue():
+    """季報若真的停在舊季(>150d,下一季早該公告)→ 仍須標過期(§1 不放水)。"""
+    r = _annotate_staleness({"ok": True, "data": {"EPS": 1.0},
+                             "provenance": {"as_of": _as_of_days_ago(200), "cadence": "quarterly"}})
+    assert r.get("_stale_days") == 200
+
+
+def test_daily_cadence_unchanged_still_7d():
+    """日頻(未宣告 cadence → default daily)維持 7d 門檻:10 天前資料仍標過期(不回歸)。"""
+    r = _annotate_staleness({"ok": True, "data": {"x": 1},
+                             "provenance": {"as_of": _as_of_days_ago(10)}})   # 無 cadence → daily
+    assert r.get("_stale_days") == 10
+    # 3 天前(日頻新鮮)→ 不標
+    r2 = _annotate_staleness({"ok": True, "data": {"x": 1},
+                              "provenance": {"as_of": _as_of_days_ago(3)}})
+    assert "_stale_days" not in r2
 
 
 if __name__ == "__main__":

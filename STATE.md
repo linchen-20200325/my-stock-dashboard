@@ -1,5 +1,23 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧬 2026-07-15 AI 問答 v19.127 — 修季報「已過期100+天」誤報(頻率感知過期門檻)
+
+user 部署後回饋:個股問答財報「看起來尚未更新」(力積電 6770 顯示 as_of=2026-03-31、
+「已過期106天,請留意時效性」)。**查證 = 誤報,非真過期**:
+- `_annotate_staleness`(`ai_qa_service.py`)對**所有**工具結果套同一條 `age > 7d` **日頻**門檻;
+  但 `get_financial_health` 的 `as_of` 是**季末日**(3/31),台股季報**季末後~45d 才公告**,
+  下一季(Q2,as_of 6/30)要~8/14 才出 → 7/15 這天 Q1 就是「當期最新一季」,資料抓取正常。
+- 拿日頻新鮮度標準套季頻 → 當期最新一季被誤標過期,誤導 user 以為沒更新。
+- **修(頻率感知門檻)**:`shared/staleness.py`(SSOT)加 `STALE_DAYS_DAILY=7 / MONTHLY=45 /
+  QUARTERLY=150` + `stale_days_threshold(cadence)`;季頻門檻數學 = 一季(91d)+公告延遲(~45d)+
+  FinMind鏡像寬限(~14d)=150d(Q1 as_of age 在下季公告前最舊~136d)。`_annotate_staleness` 改讀
+  provenance `cadence` 取門檻;`_tool_get_financial_health` provenance 標 `cadence="quarterly"`。
+  日頻工具維持 7d(未宣告 cadence → default daily,§1 不放水)。
+- **邊界**:力積電 106d < 150d → 不標過期 ✓;若 9 月還停在 Q1(>150d,Q2 早該出)→ 正確標過期 ✓。
+- **test**:`test_staleness.py` +5(門檻表)、`test_ai_qa_service.py` +3(季報 106d 不標 / 200d 標 /
+  日頻 10d 仍標);**revert 實測 106d 在舊 age>7 邏輯會誤標 → 測有效**。42 passed、selftest、py_compile 過。
+  變更隔離於 `shared/staleness.py`(L0 加常數)+ `ai_qa_service.py`(L3),純 bug fix(§8 不觸發)。
+
 ## 🧬 2026-07-15 AI 問答 v19.126 — 修「6239→62396239」問題重複送 + 空標題
 
 user 部署後回饋兩個畫面 bug:
