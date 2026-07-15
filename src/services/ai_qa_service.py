@@ -24,6 +24,7 @@ Stock adapter(v19.121 Phase 1,已對實際簽名校正,evidence: 驗證 agent + 
 """
 
 import json
+import math
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -121,6 +122,20 @@ def _tool_get_stock_score(stock_id: str) -> dict:
             "provenance": {"source": "FinMind/TWSE/Yahoo (T+1)", "as_of": as_of}}
 
 
+def _calc_single_quarter_roe(net_inc_k, equity_k):
+    """單季 ROE(%) = 單季稅後淨利 ÷ 股東權益 × 100(§4.1:單季 ≠ 年化,標籤須註明「單季」;
+    兩者同為千元 → 約分後無量綱)。分母(股東權益)須為正的有限數,否則回 None
+    (§1/§4.4:不 silent ÷0、不腦補;淨利可負 → 合法負 ROE = 虧損)。"""
+    try:
+        ni = float(net_inc_k)
+        eq = float(equity_k)
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(ni) and math.isfinite(eq)) or eq <= 0:
+        return None
+    return round(ni / eq * 100, 2)
+
+
 def _tool_get_financial_health(stock_id: str) -> dict:
     try:
         from src.data.core import fetch_financial_statements
@@ -129,10 +144,14 @@ def _tool_get_financial_health(stock_id: str) -> dict:
     fd = fetch_financial_statements(stock_id, token=_finmind_token())
     if not isinstance(fd, dict) or fd.get("error"):
         return {"ok": False, "error": f"財報抓取失敗({stock_id}):{(fd or {}).get('error', 'unknown')}"}
-    # 實際欄位(evidence: data_loader.py:2352-2403)。ROE(%) 需 TTM 淨利,§4.1 季vs年 → Phase 1.5 再補。
+    # 實際欄位(evidence: data_loader.py:2352-2403)。
     want = ("負債比率(%)", "毛利率(%)", "現金佔總資產(%)", "應收帳款天數", "EPS", "is_finance")
-    return {"ok": True,
-            "data": {"stock_id": stock_id, **{k: fd.get(k) for k in want if k in fd}},
+    _data = {"stock_id": stock_id, **{k: fd.get(k) for k in want if k in fd}}
+    # v19.123 Phase 1.5:單季 ROE(誠實標籤;年化 TTM 需多季淨利來源,fetcher 只給單季,不硬湊 §1)
+    _roe_q = _calc_single_quarter_roe(fd.get("稅後淨利(千)"), fd.get("股東權益(千)"))
+    if _roe_q is not None:
+        _data["ROE(單季%)"] = _roe_q
+    return {"ok": True, "data": _data,
             "provenance": {"source": "FinMind 季報 (季後~45d,公告日對齊)", "as_of": fd.get("period")}}
 
 
@@ -190,7 +209,7 @@ TOOLS_SCHEMA: list = [
      "parameters": {"type": "object", "properties": {}}},
     {"name": "get_stock_score", "description": "個股量化評分(總分/等級/各因子)。",
      "parameters": {"type": "object", "properties": {"stock_id": {"type": "string"}}, "required": ["stock_id"]}},
-    {"name": "get_financial_health", "description": "個股財務體質(負債比/毛利率/現金佔比/EPS)。",
+    {"name": "get_financial_health", "description": "個股財務體質(負債比/毛利率/現金佔比/EPS/單季ROE)。",
      "parameters": {"type": "object", "properties": {"stock_id": {"type": "string"}}, "required": ["stock_id"]}},
     {"name": "get_market_leading", "description": "大盤先行/籌碼(法人買賣超、PCR、韭菜指數)。",
      "parameters": {"type": "object", "properties": {"days": {"type": "integer"}}}},

@@ -10,9 +10,11 @@ test_ai_qa_service.py — AI 分析師 panel + 問答 golden test（v19.121 Phas
 執行:  pytest tests/test_ai_qa_service.py -q
 """
 try:
-    from src.services.ai_qa_service import run_agent, discuss, discuss_stock, summarize_tab, PANELS
+    from src.services.ai_qa_service import (
+        run_agent, discuss, discuss_stock, summarize_tab, PANELS, _calc_single_quarter_roe)
 except Exception:  # pragma: no cover
-    from ai_qa_service import run_agent, discuss, discuss_stock, summarize_tab, PANELS
+    from ai_qa_service import (
+        run_agent, discuss, discuss_stock, summarize_tab, PANELS, _calc_single_quarter_roe)
 
 
 class _Http:
@@ -92,6 +94,20 @@ def test_gemini_failure_reported():
         raise ConnectionError("no net")
     p = discuss("stock", _BUNDLE, mode="lite", gemini_http=bad)
     assert p.ok is False and "Gemini" in (p.error or "")
+
+
+# ---- 單季 ROE(v19.123 Phase 1.5)------------------------------------------
+def test_single_quarter_roe_calc():
+    roe = _calc_single_quarter_roe
+    assert roe(1000, 10000) == 10.0            # 正常:單季淨利 1000 / 權益 10000 = 10%
+    assert roe(-500, 10000) == -5.0            # 虧損:淨利負 → 合法負 ROE(不擋分子)
+    assert roe(1000, 0) is None                # 分母 0 → None(§4.4 不 silent ÷0)
+    assert roe(1000, -5000) is None            # 分母負(資不抵債)→ None
+    assert roe(1000, float('nan')) is None     # NaN 分母 → None(§1 不腦補)
+    assert roe(float('nan'), 10000) is None    # NaN 分子 → None
+    assert roe(None, 10000) is None            # 缺分子 → None
+    assert roe(1000, None) is None             # 缺分母 → None
+    assert roe("x", 10000) is None             # 非數字 → None(不 fabricate)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,19 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧬 2026-07-15 AI 問答 ROE Phase 1.5（v19.123，user 核准 Option A）— 財務卡補單季 ROE
+
+Phase 1 財務工具刻意略過 ROE:fetcher(`fetch_financial_statements`)只給**單季**淨利,
+`單季淨利/股東權益` ≈ 年 ROE ÷ 4,直接標「ROE」會 **4× 誤導**(§4.1 季 vs 年)。§7 對公式後
+user 核准 **Option A**(誠實標「單季」,不硬湊年化):
+- `ai_qa_service._calc_single_quarter_roe(net_inc_k, equity_k)`:`單季淨利 ÷ 股東權益 × 100`
+  (兩者同為千元 → 約分後無量綱)。分母須為**正的有限數**,否則回 None(§4.4 不 silent ÷0、
+  §1 不腦補;淨利可負 = 合法負 ROE = 虧損)。`_tool_get_financial_health` 注入 `ROE(單季%)` 欄
+  (不可算則不加該 key,不 fabricate);tool description 補「單季ROE」。
+- **未做年化 TTM**(誠實記錄):需近 4 季淨利來源,fetcher 只給 1-2 季,`get_quarterly_data`
+  為營收/毛利率導向、金融股路徑無淨利欄 → 不硬接(§1)。要年化準度再議 Option B。
+- **test**:`test_single_quarter_roe_calc`(正常 / 虧損負值 / ÷0 / 負權益 / NaN 分子分母 /
+  None / 非數 共 9 斷言);golden **8 passed**、selftest 全過、py_compile 過。
+
 ## 🧬 2026-07-14 AI 問答 agent Phase 2（v19.122，user 續指派）— 逐 tab「AI 總結本頁」
 
 Phase 1(v19.121)骨幹落地後,user 指派 Phase 2:各 tab 加「🧬 AI 總結本頁」按鈕(用該頁**已載
