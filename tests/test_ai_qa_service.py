@@ -11,10 +11,12 @@ test_ai_qa_service.py — AI 分析師 panel + 問答 golden test（v19.121 Phas
 """
 try:
     from src.services.ai_qa_service import (
-        run_agent, discuss, discuss_stock, summarize_tab, PANELS, _calc_single_quarter_roe)
+        run_agent, discuss, discuss_stock, summarize_tab, PANELS,
+        _calc_single_quarter_roe, _json_safe)
 except Exception:  # pragma: no cover
     from ai_qa_service import (
-        run_agent, discuss, discuss_stock, summarize_tab, PANELS, _calc_single_quarter_roe)
+        run_agent, discuss, discuss_stock, summarize_tab, PANELS,
+        _calc_single_quarter_roe, _json_safe)
 
 
 class _Http:
@@ -108,6 +110,43 @@ def test_single_quarter_roe_calc():
     assert roe(None, 10000) is None            # 缺分子 → None
     assert roe(1000, None) is None             # 缺分母 → None
     assert roe("x", 10000) is None             # 非數字 → None(不 fabricate)
+
+
+# ---- JSON-safe(v19.124 修 numpy bool 送 Gemini 炸掉)------------------------
+def test_json_safe_numpy_serializable():
+    import json as _json
+    import numpy as _np
+    raw = {"ok": True, "data": {"pass": _np.bool_(True), "score": _np.int64(82),
+                                "ratio": _np.float64(1.5), "tags": {"x", "y"},
+                                "nested": [_np.int64(1), {"b": _np.bool_(False)}]}}
+    safe = _json_safe(raw)
+    _json.dumps(safe)                           # 不可拋 TypeError(修前 numpy bool/int 會炸)
+    assert safe["data"]["pass"] is True
+    assert safe["data"]["score"] == 82 and safe["data"]["ratio"] == 1.5
+    assert safe["data"]["nested"][1]["b"] is False
+
+
+def test_run_agent_numpy_tool_result_no_crash():
+    """複現 bug:工具回傳含 numpy → functionResponse 送 Gemini 前必須可 json.dumps(修前整段死)。"""
+    import json as _json
+    import numpy as _np
+    tools = {"get_stock_score": lambda stock_id: {
+        "ok": True, "data": {"vcp_atr_pass": _np.bool_(True), "total": _np.int64(82)},
+        "provenance": {"source": "x"}}}
+
+    class _NumpyHttp:
+        def __init__(self):
+            self.n = 0
+
+        def __call__(self, payload):
+            self.n += 1
+            _json.dumps(payload)                # 模擬 requests(json=payload):修前 numpy bool 在此炸
+            if self.n == 1:
+                return _fc("get_stock_score", {"stock_id": "2330"})
+            return _t("2330 評分 82。")
+
+    r = run_agent("2330?", api_key="x", gemini_http=_NumpyHttp(), tools=tools)
+    assert r.ok and r.tool_calls[0]["result"]["data"]["total"] == 82
 
 
 if __name__ == "__main__":
