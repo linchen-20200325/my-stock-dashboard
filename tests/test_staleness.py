@@ -7,8 +7,12 @@ import datetime as dt
 import pandas as pd
 
 from shared.staleness import (
+    STALE_DAYS_DAILY,
+    STALE_DAYS_MONTHLY,
+    STALE_DAYS_QUARTERLY,
     expected_latest_trading_day,
     gate_for_realtime,
+    stale_days_threshold,
     stale_tag,
     staleness_days,
 )
@@ -93,6 +97,28 @@ class TestStaleTag:
 
     def test_none_empty(self):
         assert stale_tag(None) == ""
+
+
+class TestStaleDaysThreshold:
+    """v19.127 頻率感知過期門檻:不同發布頻率取不同「合理最舊」天數。"""
+
+    def test_daily_default(self):
+        assert stale_days_threshold("daily") == STALE_DAYS_DAILY == 7
+
+    def test_quarterly(self):
+        # 台股季報 as_of=季末,季後~45d 公告 + 下一季~91d → ~136d,+鏡像寬限 = 150d
+        assert stale_days_threshold("quarterly") == STALE_DAYS_QUARTERLY == 150
+
+    def test_monthly(self):
+        assert stale_days_threshold("monthly") == STALE_DAYS_MONTHLY == 45
+
+    def test_unknown_falls_back_to_daily(self):
+        # 未知頻率 → 退最嚴日頻(§1 Fail-Loud,不放水)
+        assert stale_days_threshold("weekly") == STALE_DAYS_DAILY
+        assert stale_days_threshold() == STALE_DAYS_DAILY
+
+    def test_quarterly_gt_daily_invariant(self):
+        assert STALE_DAYS_QUARTERLY > STALE_DAYS_MONTHLY > STALE_DAYS_DAILY
 
 
 class TestShimDelegation:

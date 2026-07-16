@@ -26,9 +26,12 @@ Stock adapter(v19.121 Phase 1,已對實際簽名校正,evidence: 驗證 agent + 
 import json
 import math
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional
+
+from shared.staleness import stale_days_threshold  # 頻率感知過期門檻 SSOT(L0)
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -154,7 +157,10 @@ def _tool_get_financial_health(stock_id: str) -> dict:
     if _roe_q is not None:
         _data["ROE(單季%)"] = _roe_q
     return {"ok": True, "data": _data,
-            "provenance": {"source": "FinMind 季報 (季後~45d,公告日對齊)", "as_of": fd.get("period")}}
+            # cadence="quarterly":季報 as_of=季末,~45d 後才公告 → 過期門檻走季頻(150d)非日頻(7d),
+            # 否則當期最新一季會被誤標「已過期100+天」(SSOT: shared/staleness.stale_days_threshold)
+            "provenance": {"source": "FinMind 季報 (季後~45d,公告日對齊)",
+                           "as_of": fd.get("period"), "cadence": "quarterly"}}
 
 
 def _tool_get_market_leading(days: int = 7) -> dict:
@@ -198,12 +204,34 @@ def _tool_get_risk_plan(stock_id: str, capital_twd: float = 1_000_000) -> dict:
                            "as_of": str(df["date"].iloc[-1]) if "date" in df.columns else None}}
 
 
+def _tool_get_etf_quality(etf_id: str) -> dict:
+    # 包 L2 compute_etf_quality(自抓 L1:AUM/費用率/配息/beta),同 _tool_get_stock_score lazy-import 模式。
+    # v19.129:讓 agent 能查/比較 ETF 品質(user 問「ETF 哪個好」時工具化,非 AI 腦補)。
+    try:
+        from src.compute.etf import compute_etf_quality, normalize_etf_ticker
+    except Exception as e:
+        return {"ok": False, "error": f"import 失敗:{e}"}
+    ticker = normalize_etf_ticker(etf_id)
+    if not ticker:
+        return {"ok": False, "error": f"ETF 代碼無效:{etf_id!r}(需 4-6 位數字,如 0050 / 00878)"}
+    q = compute_etf_quality(ticker)
+    # Fail-Loud:抓取失敗 / 4 因子全缺 → compute_etf_quality 回 stars=None(§1 不假裝有分數)
+    if not isinstance(q, dict) or q.get("stars") is None:
+        return {"ok": False, "error": f"ETF 品質評分失敗({ticker}):{(q or {}).get('_err', 'unknown')}"}
+    keys = ("stars", "score", "weakest", "coverage", "factors")
+    return {"ok": True,
+            "data": {"etf_id": ticker, **{k: q.get(k) for k in keys if k in q}},
+            # 慢變基本面屬性,無單一 as_of(不套過期標記);coverage<1 表部分因子缺,AI 應提醒
+            "provenance": {"source": "ETF 品質(AUM規模/費用率/配息穩定度/beta;yfinance+SITCA)", "as_of": None}}
+
+
 REAL_TOOLS: dict = {
     "get_market_state": _tool_get_market_state,
     "get_stock_score": _tool_get_stock_score,
     "get_financial_health": _tool_get_financial_health,
     "get_market_leading": _tool_get_market_leading,
     "get_risk_plan": _tool_get_risk_plan,
+    "get_etf_quality": _tool_get_etf_quality,
 }
 
 TOOLS_SCHEMA: list = [
@@ -218,6 +246,10 @@ TOOLS_SCHEMA: list = [
     {"name": "get_risk_plan", "description": "依最新價與 ATR 給停損與倉位。",
      "parameters": {"type": "object", "properties": {"stock_id": {"type": "string"}, "capital_twd": {"type": "number"}},
                     "required": ["stock_id"]}},
+    {"name": "get_etf_quality",
+     "description": "ETF 品質評分(1-5星/綜合分數[0,1]/最弱因子/涵蓋率;因子=規模AUM、費用率、配息穩定度、beta)。"
+                    "比較多檔 ETF 時每檔各呼叫一次。",
+     "parameters": {"type": "object", "properties": {"etf_id": {"type": "string"}}, "required": ["etf_id"]}},
 ]
 
 
@@ -287,13 +319,37 @@ def _parts(resp: dict) -> list:
         return []
 
 
+# ── 錯誤訊息金鑰洗白 + Gemini 錯誤友善化(v19.128 修 429 錯誤把 ?key=API_KEY 印到 UI)──
+# requests 的 HTTPError str 含完整 URL(含 ?key=<GEMINI_KEY>);直接把 exception 塞進 UI 錯誤字串
+# = 金鑰洩漏。任何要渲染給使用者的錯誤都必須先過 _scrub_secrets。
+_SECRET_QS_RE = re.compile(r"\b(key|token|api[_-]?key|access[_-]?token)=[^&\s\"'<>]+", re.IGNORECASE)
+_GOOGLE_KEY_RE = re.compile(r"AIza[0-9A-Za-z_\-]{10,}")
+
+
+def _scrub_secrets(s) -> str:
+    """移除錯誤訊息可能夾帶的金鑰:URL query 的 key=/token=/api_key= 值 + 裸露的 AIza… 金鑰。"""
+    out = _SECRET_QS_RE.sub(lambda m: m.group(1) + "=***", str(s))
+    return _GOOGLE_KEY_RE.sub("AIza***", out)
+
+
+def _fmt_gemini_error(prefix: str, e) -> str:
+    """統一 Gemini 呼叫錯誤:先洗白金鑰;429 額度上限給友善提示(而非丟原始 HTTPError)。"""
+    msg = _scrub_secrets(f"{type(e).__name__}: {e}")
+    if "429" in msg or "Too Many Requests" in msg or "RESOURCE_EXHAUSTED" in msg:
+        return f"{prefix}:已達 Gemini 免費額度上限(429 Too Many Requests),請稍候約 30~60 秒再試。"
+    return f"{prefix}:{msg}"
+
+
 def _annotate_staleness(result: dict) -> dict:
     try:
-        as_of = (result.get("provenance") or {}).get("as_of")
+        prov = result.get("provenance") or {}
+        as_of = prov.get("as_of")
         if as_of:
             d = datetime.fromisoformat(str(as_of)[:10]).replace(tzinfo=timezone.utc)
             age = (datetime.now(timezone.utc) - d).days
-            if age > 7:
+            # 頻率感知門檻:季報 as_of=季末,季後~45d 才公告,不可用日頻 7d 誤標過期。
+            # cadence 由各 tool 於 provenance 宣告(未宣告 → daily 最嚴)。SSOT: shared/staleness.py
+            if age > stale_days_threshold(prov.get("cadence", "daily")):
                 result["_stale_days"] = age
     except Exception:
         pass
@@ -309,7 +365,7 @@ def _run_tool(tools: dict, name: str, args: dict) -> dict:
         result = _annotate_staleness(out if isinstance(out, dict) else {"ok": True, "data": out})
         return _json_safe(result)   # v19.124:送 Gemini(json.dumps)前確保可序列化(numpy bool/int 等)
     except Exception as e:                                   # Fail Loud
-        return {"ok": False, "error": f"{name} 失敗:{type(e).__name__}: {e}"}
+        return {"ok": False, "error": _scrub_secrets(f"{name} 失敗:{type(e).__name__}: {e}")}
 
 
 def _make_default_http(api_key: str, model: str) -> Callable[[dict], dict]:
@@ -378,7 +434,7 @@ def discuss(context: str, bundle: dict, question: Optional[str] = None, *, mode:
         try:
             text = _gemini_text(http, sys, f"工具資料:\n{brief}{q}")
         except Exception as e:
-            return PanelResult(ok=False, error=f"Gemini 失敗:{type(e).__name__}: {e}", model=model, data_bundle=bundle)
+            return PanelResult(ok=False, error=_fmt_gemini_error("Gemini 失敗", e), model=model, data_bundle=bundle)
         return PanelResult(ok=True, text=text, model=model, data_bundle=bundle)
 
     # full:「(儀表板資料) → 3 分析師 → 多空辯論 → 風控 → 報告」,無 ingest 抓取
@@ -396,7 +452,7 @@ def discuss(context: str, bundle: dict, question: Optional[str] = None, *, mode:
         risk_text = _call(RISK_PERSONA, f"資料完整度:{n_ok}/{len(bundle)};辯論結論:{verdict}\n資料:\n{brief}")
         report = _call(REPORT_PERSONA, f"分析師:\n{vbrief}\n辯論:{verdict}\n風控:{risk_text}\n資料:\n{brief}{q}")
     except Exception as e:
-        return PanelResult(ok=False, error=f"Gemini 失敗:{type(e).__name__}: {e}", model=model,
+        return PanelResult(ok=False, error=_fmt_gemini_error("Gemini 失敗", e), model=model,
                            data_bundle=bundle, per_analyst=views)
     return PanelResult(ok=True, text=report, per_analyst=views,
                        debate={"bull": bull, "bear": bear, "verdict": verdict},
@@ -458,7 +514,7 @@ def run_agent(question: str, history: Optional[list] = None, *, api_key: Optiona
             resp = http({"system_instruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
                          "contents": contents, "tools": [{"function_declarations": TOOLS_SCHEMA}]})
         except Exception as e:
-            return QAResult(ok=False, error=f"Gemini 呼叫失敗:{type(e).__name__}: {e}", model=model, tool_calls=tool_calls)
+            return QAResult(ok=False, error=_fmt_gemini_error("Gemini 呼叫失敗", e), model=model, tool_calls=tool_calls)
         parts = _parts(resp)
         fcalls = [p["functionCall"] for p in parts if isinstance(p, dict) and "functionCall" in p]
         if fcalls:

@@ -12,11 +12,13 @@ test_ai_qa_service.py — AI 分析師 panel + 問答 golden test（v19.121 Phas
 try:
     from src.services.ai_qa_service import (
         run_agent, discuss, discuss_stock, summarize_tab, PANELS,
-        _calc_single_quarter_roe, _json_safe)
+        _calc_single_quarter_roe, _json_safe, _annotate_staleness,
+        _scrub_secrets, _fmt_gemini_error, _tool_get_etf_quality)
 except Exception:  # pragma: no cover
     from ai_qa_service import (
         run_agent, discuss, discuss_stock, summarize_tab, PANELS,
-        _calc_single_quarter_roe, _json_safe)
+        _calc_single_quarter_roe, _json_safe, _annotate_staleness,
+        _scrub_secrets, _fmt_gemini_error, _tool_get_etf_quality)
 
 
 class _Http:
@@ -170,6 +172,102 @@ def test_run_agent_numpy_tool_result_no_crash():
 
     r = run_agent("2330?", api_key="x", gemini_http=_NumpyHttp(), tools=tools)
     assert r.ok and r.tool_calls[0]["result"]["data"]["total"] == 82
+
+
+# ---- 頻率感知過期標記(v19.127 修季報「已過期100+天」誤報)------------------
+def _as_of_days_ago(n):
+    from datetime import datetime, timezone, timedelta
+    return (datetime.now(timezone.utc) - timedelta(days=n)).date().isoformat()
+
+
+def test_quarterly_financial_not_flagged_when_latest():
+    """複現 bug:季報 as_of=季末,季後~45d 才公告;力積電 Q1(as_of~106d 前)是當期最新一季,
+    修前套日頻 7d 門檻 → 誤標「已過期106天」。修後 quarterly 走 150d 門檻 → 不標。"""
+    r = _annotate_staleness({"ok": True, "data": {"EPS": 3.36},
+                             "provenance": {"source": "FinMind 季報", "as_of": _as_of_days_ago(106),
+                                            "cadence": "quarterly"}})
+    assert "_stale_days" not in r                       # 當期最新一季不該被標過期
+
+
+def test_quarterly_financial_flagged_when_truly_overdue():
+    """季報若真的停在舊季(>150d,下一季早該公告)→ 仍須標過期(§1 不放水)。"""
+    r = _annotate_staleness({"ok": True, "data": {"EPS": 1.0},
+                             "provenance": {"as_of": _as_of_days_ago(200), "cadence": "quarterly"}})
+    assert r.get("_stale_days") == 200
+
+
+def test_daily_cadence_unchanged_still_7d():
+    """日頻(未宣告 cadence → default daily)維持 7d 門檻:10 天前資料仍標過期(不回歸)。"""
+    r = _annotate_staleness({"ok": True, "data": {"x": 1},
+                             "provenance": {"as_of": _as_of_days_ago(10)}})   # 無 cadence → daily
+    assert r.get("_stale_days") == 10
+    # 3 天前(日頻新鮮)→ 不標
+    r2 = _annotate_staleness({"ok": True, "data": {"x": 1},
+                              "provenance": {"as_of": _as_of_days_ago(3)}})
+    assert "_stale_days" not in r2
+
+
+# ---- 錯誤訊息金鑰洗白 + 429 友善化(v19.128 修 ?key=API_KEY 印到 UI)--------------
+def test_scrub_secrets_removes_api_key():
+    assert _scrub_secrets("…generateContent?key=AIzaSyABC_123-xyz reason") == \
+        "…generateContent?key=*** reason"                          # URL query key 值洗掉
+    assert "AIzaSyABC_123-xyz" not in _scrub_secrets("?key=AIzaSyABC_123-xyz")
+    assert _scrub_secrets("裸露 AIzaSyABC_123defGHIjklmnop 洩漏") == "裸露 AIza*** 洩漏"  # 裸 AIza 也洗
+    assert _scrub_secrets("token=abc123def456&x=1").startswith("token=***")
+    assert _scrub_secrets("無金鑰的普通訊息") == "無金鑰的普通訊息"  # 無誤傷
+
+
+def test_run_agent_429_scrubs_key_and_friendly():
+    """複現 bug:429 HTTPError 的 URL 含 ?key=<GEMINI_KEY>;修前整串(含金鑰)被塞進 UI 錯誤。
+    修後:金鑰不得出現 + 429 給友善提示。"""
+    KEY = "AIzaSyFAKE0123456789ABCDEFGHIJKLMNOPQRS"
+
+    class _Boom:
+        def __call__(self, payload):
+            raise RuntimeError("429 Client Error: Too Many Requests for url: "
+                               "https://generativelanguage.googleapis.com/v1beta/models/"
+                               f"gemini-2.5-flash:generateContent?key={KEY}")
+
+    r = run_agent("etf 哪個好?", api_key=KEY, gemini_http=_Boom(), tools={})
+    assert r.ok is False
+    assert KEY not in (r.error or ""), r.error                     # 金鑰絕不洩漏
+    assert "額度" in r.error and "429" in r.error                   # 友善 429 提示
+
+
+def test_fmt_gemini_error_non_429_scrubbed():
+    """非 429 的錯誤也要洗金鑰(仍保留原因供診斷)。"""
+    KEY = "AIzaSyFAKE0123456789ABCDEFGHIJKLMNOPQRS"
+    out = _fmt_gemini_error("Gemini 呼叫失敗", RuntimeError(f"boom ?key={KEY}"))
+    assert KEY not in out and "key=***" in out and "boom" in out
+
+
+# ---- ETF 品質工具(v19.129 加單檔 ETF 品質評分工具)------------------------------
+def test_etf_quality_tool_registered():
+    from src.services.ai_qa_service import REAL_TOOLS, TOOLS_SCHEMA
+    assert "get_etf_quality" in REAL_TOOLS
+    assert any(t["name"] == "get_etf_quality" for t in TOOLS_SCHEMA)
+
+
+def test_etf_quality_tool_ok_fail_invalid(monkeypatch):
+    """包 L2 compute_etf_quality:成功回 mapped 欄位;stars=None(抓失敗/因子全缺)→ Fail-Loud;
+    代碼無效 → 不評分即 ok:False。monkeypatch 避免真打 yfinance。"""
+    import src.compute.etf as E
+    monkeypatch.setattr(E, "normalize_etf_ticker", lambda s: (str(s) + ".TW") if s else "", raising=False)
+    # 成功
+    monkeypatch.setattr(E, "compute_etf_quality",
+                        lambda t: {"stars": 4, "score": 0.72, "weakest": "expense",
+                                   "coverage": 0.85, "factors": {"aum": {"val": 1e9, "score": 0.9}}},
+                        raising=False)
+    r = _tool_get_etf_quality("00878")
+    assert r["ok"] and r["data"]["etf_id"] == "00878.TW"
+    assert r["data"]["stars"] == 4 and r["data"]["coverage"] == 0.85
+    assert r["provenance"]["as_of"] is None                     # ETF 品質無單一 as_of → 不套過期
+    # 失敗:stars=None → Fail-Loud(§1 不假裝有分數)
+    monkeypatch.setattr(E, "compute_etf_quality", lambda t: {"stars": None, "_err": "4 因子全缺資料"}, raising=False)
+    _fail = _tool_get_etf_quality("00878")
+    assert _fail["ok"] is False and "全缺" in _fail["error"]
+    # 代碼無效 → 不呼叫評分即 Fail-Loud
+    assert _tool_get_etf_quality("")["ok"] is False
 
 
 if __name__ == "__main__":

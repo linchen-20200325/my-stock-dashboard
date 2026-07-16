@@ -109,6 +109,31 @@ def stale_tag(days: Optional[int], *, threshold: int = 40) -> str:
     return ""
 
 
+# ── 頻率感知「合理最舊」門檻(日曆天)──────────────────────────────────────
+# 不同發布頻率的資料,其「自然發布延遲」差異極大;拿日頻標準套季頻會把「當期最新一筆」
+# 誤標過期。門檻 = 該頻率下一筆資料「合理仍是最新」的最大 as_of 年齡,超過才算真過期。
+STALE_DAYS_DAILY = 7          # 日頻(報價/三大法人/大盤 regime):扣週末+短假仍應 ≤7d
+STALE_DAYS_MONTHLY = 45       # 月頻(月營收/CPI 級):月後~10-13d 公布 + 一個月週期 → ~45d
+STALE_DAYS_QUARTERLY = 150    # 季頻(台股季報):as_of=季末,季後~45d 才公告,下一季相隔~91d →
+                              #   最新一季在下季公告前 as_of 年齡可達~136d;+FinMind 鏡像寬限~14d
+                              #   = 91+45+14 = 150d。(例:力積電 Q1 as_of 3/31,7/15 為 106d < 150d
+                              #   → 仍是最新一季,不該標過期;若 9 月還停在 Q1 → >150d 正確標過期)
+
+_STALE_DAYS_BY_CADENCE = {
+    "daily": STALE_DAYS_DAILY,
+    "monthly": STALE_DAYS_MONTHLY,
+    "quarterly": STALE_DAYS_QUARTERLY,
+}
+
+
+def stale_days_threshold(cadence: str = "daily") -> int:
+    """依資料發布頻率回「合理最舊」門檻(日曆天)。
+
+    未知 / 未指定 cadence → 退 daily(最嚴門檻;§1 Fail-Loud 寧可保守標過期也不放水)。
+    """
+    return _STALE_DAYS_BY_CADENCE.get(cadence, STALE_DAYS_DAILY)
+
+
 # ── 內部:多型別日期萃取 ────────────────────────────────────────────────
 def _extract_latest_date(data, *, date_col: str) -> Optional[_dt.date]:
     if data is None:

@@ -1,5 +1,59 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧬 2026-07-15 AI 問答 v19.129 — 加單檔 ETF 品質工具(user 核准)
+
+user 部署後問「ETF 哪個比較好」,agent 無 ETF 工具 → 誠實回「無比較功能」(Fail-Loud 正確
+但不夠用)。user AskUserQuestion 選「加單檔 ETF 品質工具」。§7/§8.1 對齊後(Explore agent
+盤 `compute_etf_quality` 簽名 + 資料流)實作:
+- **§7**:包 L2 `src.compute.etf.compute_etf_quality(ticker)`(自抓 L1:AUM/費用率/配息CV/beta),
+  回 `stars`(1-5)/`score`([0,1])/`weakest`/`coverage`/`factors`。**不新增公式**,沿用既有評分。
+- **§8**:L3 單一新工具 `_tool_get_etf_quality`(同 `_tool_get_stock_score` lazy-import L2 模式),
+  註冊 REAL_TOOLS + TOOLS_SCHEMA。AI 比較多檔時每檔各呼叫一次。不新增模組/資料流。
+- **邊界**:代碼先 `normalize_etf_ticker`(0050→0050.TW);查不到/4因子全缺 → `stars=None` →
+  工具 **Fail-Loud** `ok:False`(§1 不假裝有分數);無單一 as_of → 不套過期標記;涵蓋率<1 surface
+  給 AI 提醒。
+- **test**:`test_etf_quality_tool_registered` + `test_etf_quality_tool_ok_fail_invalid`(monkeypatch
+  避免真打 yfinance:成功 mapped / stars=None Fail-Loud / 代碼無效);真 import 路徑冒煙驗證
+  (normalize 0050→0050.TW、invalid id Fail-Loud)。19 passed、selftest、py_compile 過。
+  隔離於 `ai_qa_service.py`(L3)單檔。
+
+## 🔐 2026-07-15 AI 問答 v19.128 — 修錯誤訊息洩漏 Gemini API 金鑰 + 429 友善化
+
+user 部署後截圖回饋:問 ETF 時觸發 `429 Too Many Requests`,錯誤訊息把**完整 URL 含
+`?key=AIza…`(Gemini API 金鑰)印到畫面**。
+- 🔴 **真漏洞(安全)**:`run_agent` / `discuss` 的 except 直接 `f"Gemini…:{e}"`,而 requests
+  的 `HTTPError` str 內含完整請求 URL(含 `?key=<GEMINI_KEY>`)→ 金鑰渲染到 UI(截圖/公開
+  部署即外洩)。**修**:新增 `_scrub_secrets`(洗 URL query `key=/token=/api_key=` 值 + 裸露
+  `AIza…` 樣式)+ `_fmt_gemini_error`(先洗白再判 429),套用 4 處 UI-facing 錯誤字串
+  (run_agent / discuss lite / discuss full / _run_tool 工具錯誤 defense-in-depth)。
+- 🎯 **429 友善化**:偵測 `429 / Too Many Requests / RESOURCE_EXHAUSTED` → 「已達 Gemini
+  免費額度上限,請稍候約 30~60 秒再試」,不丟原始 HTTPError。
+- **test**:`test_scrub_secrets_removes_api_key` + `test_run_agent_429_scrubs_key_and_friendly`
+  (複現:429 HTTPError URL 含 key → 修前整串含金鑰洩漏;修後金鑰不出現 + 友善提示)+
+  `test_fmt_gemini_error_non_429_scrubbed`;17 passed、selftest、py_compile 過。純 bug fix
+  (§8 不觸發),隔離於 `ai_qa_service.py`(L3)。
+- ⚠️ **金鑰已曝光**:user 該截圖已把當前金鑰外洩 → 已請 user 至 Google AI Studio 重新產生。
+- 📌 **ETF 比較**(截圖另一問題):agent 目前無 ETF 工具,誠實回「無比較功能」(Fail-Loud 正確)。
+  加 ETF 工具屬**新功能**,§7/§8.1 需先對齊(範圍/比較指標)→ 待 user 點名再設計,本 PR 不含。
+
+## 🧬 2026-07-15 AI 問答 v19.127 — 修季報「已過期100+天」誤報(頻率感知過期門檻)
+
+user 部署後回饋:個股問答財報「看起來尚未更新」(力積電 6770 顯示 as_of=2026-03-31、
+「已過期106天,請留意時效性」)。**查證 = 誤報,非真過期**:
+- `_annotate_staleness`(`ai_qa_service.py`)對**所有**工具結果套同一條 `age > 7d` **日頻**門檻;
+  但 `get_financial_health` 的 `as_of` 是**季末日**(3/31),台股季報**季末後~45d 才公告**,
+  下一季(Q2,as_of 6/30)要~8/14 才出 → 7/15 這天 Q1 就是「當期最新一季」,資料抓取正常。
+- 拿日頻新鮮度標準套季頻 → 當期最新一季被誤標過期,誤導 user 以為沒更新。
+- **修(頻率感知門檻)**:`shared/staleness.py`(SSOT)加 `STALE_DAYS_DAILY=7 / MONTHLY=45 /
+  QUARTERLY=150` + `stale_days_threshold(cadence)`;季頻門檻數學 = 一季(91d)+公告延遲(~45d)+
+  FinMind鏡像寬限(~14d)=150d(Q1 as_of age 在下季公告前最舊~136d)。`_annotate_staleness` 改讀
+  provenance `cadence` 取門檻;`_tool_get_financial_health` provenance 標 `cadence="quarterly"`。
+  日頻工具維持 7d(未宣告 cadence → default daily,§1 不放水)。
+- **邊界**:力積電 106d < 150d → 不標過期 ✓;若 9 月還停在 Q1(>150d,Q2 早該出)→ 正確標過期 ✓。
+- **test**:`test_staleness.py` +5(門檻表)、`test_ai_qa_service.py` +3(季報 106d 不標 / 200d 標 /
+  日頻 10d 仍標);**revert 實測 106d 在舊 age>7 邏輯會誤標 → 測有效**。42 passed、selftest、py_compile 過。
+  變更隔離於 `shared/staleness.py`(L0 加常數)+ `ai_qa_service.py`(L3),純 bug fix(§8 不觸發)。
+
 ## 🧬 2026-07-15 AI 問答 v19.126 — 修「6239→62396239」問題重複送 + 空標題
 
 user 部署後回饋兩個畫面 bug:
