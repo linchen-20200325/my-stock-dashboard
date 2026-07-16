@@ -12,7 +12,7 @@ NAS 中繼站 FastAPI Server v1.0
   uvicorn nas_server:app --host 0.0.0.0 --port 8765
 
 【Streamlit Cloud Secrets 設定】
-  NAS_BASE_URL = "http://chen10021.synology.me:8765"
+  NAS_BASE_URL = "http://yourname.synology.me:8765"
   NAS_API_KEY  = "your_strong_secret_key_2026"
 
 【支援 action】
