@@ -38,3 +38,6 @@ debug.log
 # Runtime data cache (regenerated at runtime; keep dir via .gitkeep)
 data_cache/*.parquet
 data_cache/metadata.json
+
+# Local push helper scripts (contain local paths / account names — never commit)
+*.vbs
