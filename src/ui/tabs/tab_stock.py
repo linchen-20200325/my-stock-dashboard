@@ -909,7 +909,16 @@ padding:14px 18px;margin-bottom:12px;">
 
         with st.expander('🔬 AI 財報體檢（策略2）', expanded=True):
             _fh_key2 = f'_fh_{sid2}'
-            if _fh_key2 not in st.session_state:
+            _fh_req_key = f'_fh_req_{sid2}'   # v19.134:是否已按「生成」按鈕
+            # v19.134 效能/省 API:改按鈕 opt-in — 原本一進個股就自動打 Gemini(每檔一次),
+            # 首屏慢 + 耗 API 額度。點按鈕才生成;已生成(session 有結果)直接顯示。
+            if _fh_key2 not in st.session_state and not st.session_state.get(_fh_req_key):
+                if st.button('🔬 生成 AI 財報體檢', key=f'_fh_btn_{sid2}',
+                             help='MJ 框架 + 市場情緒,會呼叫 AI,約數秒'):
+                    st.session_state[_fh_req_key] = True
+                    st.rerun()
+                st.info('點上方「🔬 生成 AI 財報體檢」按鈕生成（會呼叫 AI，約數秒；生成後同一檔走快取）。')
+            elif _fh_key2 not in st.session_state:
                 with st.spinner('📊 正在從 FinMind 抓取財報數據…'):
                     try:
                         _fin_raw = fetch_financial_statements(sid2, FINMIND_TOKEN)
@@ -936,8 +945,10 @@ padding:14px 18px;margin-bottom:12px;">
                     except Exception as _fh_exc:
                         st.session_state[_fh_key2] = {'error': True, 'ai_insight': f'財報體檢發生例外：{_fh_exc}'}
             _fh = st.session_state.get(_fh_key2)
-            if not _fh or _fh.get('error'):
-                st.error(_fh.get('ai_insight', '財報體檢失敗，請確認 FINMIND_TOKEN 已設定。') if _fh else '載入中...')
+            if _fh is None:
+                pass   # v19.134:尚未生成(按鈕 + info 已顯示於上),不渲染分析區
+            elif _fh.get('error'):
+                st.error(_fh.get('ai_insight', '財報體檢失敗，請確認 FINMIND_TOKEN 已設定。'))
             else:
                 # ── 第一關：三大生死燈號 ────────────────────
                 st.markdown('#### 🛡️ 第一關：生死與體質防禦')

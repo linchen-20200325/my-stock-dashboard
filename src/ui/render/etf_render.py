@@ -580,6 +580,21 @@ def render_sector_heatmap(gemini_fn=None):
         all_tickers.extend(meta.get('sub', []))
     all_tickers = tuple(set(all_tickers))
 
+    # v19.132 效能:此 tab body 每次 app run 都執行(Streamlit 全 tab body 都跑),
+    # 數十檔 batch 冷抓在首次載入就跑(即使 user 當下沒看熱力圖)。改 opt-in:
+    # 首次只顯示載入按鈕不冷抓;點過後 session 記住,之後 rerun 走 @st.cache_data
+    # 快取即時回。改市場/區間仍會依新 cache key 重抓;🔄 刷新視同載入。
+    _loaded_key = 'heatmap_loaded'
+    if refresh:
+        st.session_state[_loaded_key] = True
+    if not st.session_state.get(_loaded_key):
+        if st.button('🗺️ 載入產業熱力圖', key='heatmap_load', use_container_width=True):
+            st.session_state[_loaded_key] = True
+            st.rerun()
+        st.info('點上方按鈕載入：批次抓取數十檔類股代表的漲跌幅（首次較久，之後走快取；'
+                '改市場/區間會依新條件重抓）。')
+        return
+
     with st.spinner(f'抓取 {len(all_tickers)} 個標的資料（{period_label}）...'):
         # v18.396 P5-B1:cache.clear() 邏輯下沉至 L3 wrapper(refresh kwarg)。
         returns = get_sector_returns(all_tickers, period, refresh=refresh)

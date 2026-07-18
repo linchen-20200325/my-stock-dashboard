@@ -1,5 +1,82 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## ⚡ 2026-07-18 AI 財報體檢 v19.134 — 改按鈕 opt-in(省 API + 加速,user 核准)
+
+user 批次4。`src/ui/tabs/tab_stock.py`「🔬 AI 財報體檢（策略2）」原本一進到某檔股票、
+expander 首次 render 就**自動**呼叫 `analyze_financial_health`(Gemini)。有 session 快取
+(每檔一次)但無按鈕 gate → 首屏慢 + 每檔耗 API 額度。
+- **改按鈕 opt-in**:未按過本檔 → 顯示「🔬 生成 AI 財報體檢」按鈕 + info,不打 AI;點按鈕
+  設 `session_state[f'_fh_req_{sid}']` + rerun → 才跑 fetch + Gemini。已生成(session 有結果)
+  直接顯示。用 `_fh_req_` flag 避免重排既有 compute/render 大區塊縮排(安全 diff)。
+- **`_fh is None` 分支**:原「載入中...」st.error 改 `pass`(尚未生成不誤報錯)。
+- **section_strategy_conclusion `_cost` 不動(§-1 查證)**:`compute_one_stock_trend` 的 AI 是
+  **snapshot-gated**(`if yyyymm_curr not in yms:` 才打,once/股/月 + `save_snapshot` 持久化),
+  已攤銷,非每次 render 自動觸發,gate 反而破壞 MJ trend bootstrap → 不動。
+- **「刪 3 死 screener」撤回**:yield_screener / monthly_revenue_screener 皆有 caller,非死碼。
+- **test**:`test_ai_financial_health_gate`(按鈕在 AI 呼叫前)2 passed。§8.1 user 核准。
+
+## 🐞 2026-07-18 出口 YoY v19.133 — GOV-MOF CKAN 泛用 CSV 補 sort(數據正確)
+
+user 批次3 資料穩健。`src/data/macro/macro_snapshot.py:fetch_export_block` 的 **GOV-MOF CKAN**
+深層 fallback(方案在 customs-direct + catalog + FRED-API + FRED-CSV 全敗後才走)用泛用
+`read_csv` + 欄位比對取 `iloc[-1]/[-13]` 算 YoY,但**未 sort**。CKAN 列序不保證(常降序)→
+iloc[-1] 取到最舊列 → YoY 算反(§1 錯值比沒值更糟)。line 979 註解早點名此 pattern,customs
+路徑已改走 `_parse_customs_export_csv` 純函式處理,此泛用 fallback 漏網。
+- **修**:`_df_ex.dropna(subset=[_val_k]).sort_values(_dt_k)`(對照 line 896 FRED-API 路徑已 sort)。
+  MOF「年月」為 YYYYMM,數值/字典序=時序。加 `test_gov_mof_ckan_sorts_before_iloc` 迴歸鎖。
+- **同批次查證後略過(§-1,非真 bug)**:
+  - **CBC ms1.json YoY**(股 `tw_macro._try_cbc_ms1` + 基金 `tw_macro_repository` 同構)未 sort —
+    但 CBC ms1 列序**未證實降序**(若降序,M1B/M2 YoY 會嚴重算反,macro 看板天天看必被發現,
+    未報 = 大概率升序);且函式未取日期欄,加 sort 需先可靠識別日期欄,誤判反致 mis-sort。
+    CBC 亦 M1B/M2 同期發布,獨立 dropna 無實際錯位。**不投機修**。
+  - **基金 FX 負快取**(`fx_and_main.py`):已是 v18.275 **positive-only cache**(None 不入 cache
+    → 下次重試,避免 poisoning),本就正確設計,無需改。
+  - **VIX 重複抓**:多 consumer 走 `fetch_yf_close('^VIX',...)` 同 arg 共用 `@_ttl_cache`,已去重;
+    殘留跨 wrapper 差異僅 1 ticker 冷啟一次,dedup 需跨模組重構,ROI 低。
+
+## ⚡ 2026-07-18 產業熱力圖 v19.132 — opt-in 載入(下載速度)
+
+user 批次2 localized。`src/ui/render/etf_render.py:render_sector_heatmap` 位於
+`tab_market → 產業熱力圖` 巢狀 tab;Streamlit 全 tab body 每次 app run 都執行 → 數十檔類股
+batch(美股 GICS 11 大類 + 子成分 ~66 檔 / 台股類股)在**首屏就冷抓**,即使 user 當下在別的 tab。
+- **opt-in gate**:未點過 → 只顯示「🗺️ 載入產業熱力圖」按鈕 + early return(不冷抓);點過後
+  `session_state['heatmap_loaded']=True` 記住,之後走 `get_sector_returns` 的 `@st.cache_data`
+  快取即時回。改市場/區間仍依新 cache key 重抓;🔄 刷新視同載入。
+- **不破壞既有**:selectbox/refresh/treemap/AI 全不變;`get_sector_returns(refresh=)` 介面不變。
+  加 `test_etf_render_heatmap_gate`(gate 必在取數前)迴歸鎖。
+- **triage 略過(§-1 查證後非真 bug)**:強制刷新 `cache_data.clear()`(help 明寫「清除所有快取」=
+  刻意全刷,慢是預期)、`fetch_etf_price` period='max'(v18.228 跨 tab 去重設計,一次 API sliced
+  記憶體)、教學 3 檔 FRED sparkline(已 `@st.cache_data(1day)`,冷成本極小)。
+
+## ⚡ 2026-07-18 ETF 分散度分析 v19.131 — 按鈕 gate + 並行持股(下載速度)
+
+user「聽你的建議 都修吧」批次2 大贏面①。`src/ui/etf/etf_tab_smart.py:render_correlation_finder`
+是 ETF「單檔診斷 / 組合」頁最重的區塊:一設定標的就**自動**冷抓 ~30 檔 ETF 價格 batch +
+**31 檔持股序列迴圈**(首次 10-20 秒),且每次進頁 / 任一 widget 互動都重跑(cache 之外的冷啟動很痛)。
+- **按鈕 opt-in + 依標的記憶**:未按過本標的 → 只顯示按鈕不冷抓;按 `st.button('🔗 計算分散度')`
+  後 `session_state[f'_corr_ran{key_suffix}']=_ticker` 記住,之後 rerun 走 `@st.cache_data` 快取即時回。
+  換標的需重按(避免顯示舊標的結果)。對照同檔 `render_333_section` 既有 `_run_peer` gate 慣例。
+- **並行持股**:31 檔序列 `for` 迴圈 → `ThreadPoolExecutor(max_workers=8)` `.map`,每檔各自
+  try/except 容錯(單一 ETF 持股異常 → `set()` 略過不拖垮整區塊)。`_cached_holdings` 為
+  `@st.cache_data` 純資料函式(內部無 st.* UI 呼叫),worker thread 呼叫安全;spinner 留主緒。
+- **不破壞既有**:universe / `_cached_peer_prices` / `find_diversifiers_by_category` / `_normalize(ticker)`
+  全不變;函式簽名不變(wiring test 4 passed)。加 `test_correlation_finder_gated_and_parallel`
+  迴歸鎖(按鈕 gate + session 記憶 + ThreadPool + 容錯)。§8.1 user 核准「全做大贏面優先」,單檔 L5 UI。
+
+## 🐞 2026-07-18 ETF 分類 v19.130 — 修槓桿/反向 ETF 被誤判成主動式(判斷正確)
+
+user「聽你的建議 都修吧」批次1 第①項。稽核發現 `src/data/etf/etf_fetch.py:is_active_etf`
+被動後綴排除集**誤寫 `('B','K')`**:
+- **台股根本無 'K' 後綴** — 排除一個不存在的類別 = 空轉。
+- **漏掉 L(槓桿正2)/R(反向反1)/U,F(期貨)** — 這些代號末位為字母,直接掉進
+  `if _last.isalpha(): return True` 分支 → **00631L(元大台灣50正2)、00632R(元大台灣50反1)
+  等被誤判成「主動式 ETF」** → 觸發錯誤的主動式弱勢判定 + 無謂打 Yuanta 官網抓經理人。
+- **修正**:排除集改 `('B', 'L', 'R', 'U', 'F')`,docstring 優先序同步更正。純數字(0050/
+  00878)與白名單(A/D/T)行為不變。**純單檔 bug fix,不觸發 §8**(單一函式、無新模組/資料流)。
+- **golden test**:`tests/test_active_etf_fallback.py` 加 8 測(00631L/00675L/00632R/00676R→被動、
+  00679B/00687B 債券→被動、00642U/00635U 期貨→被動、00980A/00982T/00980D 白名單→主動、
+  00999A 非白名單 A 後綴 fallback→主動、純數字→被動、空/None→False)。16 passed。
+
 ## 🧬 2026-07-15 AI 問答 v19.129 — 加單檔 ETF 品質工具(user 核准)
 
 user 部署後問「ETF 哪個比較好」,agent 無 ETF 工具 → 誠實回「無比較功能」(Fail-Loud 正確

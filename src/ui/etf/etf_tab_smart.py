@@ -267,7 +267,19 @@ def render_correlation_finder(ticker: str | None = None, key_suffix: str = '') -
             return
         st.caption(f'📌 分析標的：**{_ticker}**')
 
-        # 自動計算(不需按鈕);此區塊會抓 ~30 檔 ETF,首次約 10-20 秒,之後走 cache
+        # v19.131 效能:此區塊會冷抓 ~30 檔 ETF 價格 + 31 檔持股(首次 10-20 秒)。
+        # 原本每次進頁/任一 widget 互動都自動重跑,cache 之外的冷啟動很痛。改「按鈕
+        # opt-in + 依標的記憶」:未按過本標的 → 只顯示按鈕不冷抓;按過後 session_state
+        # 記住,之後 rerun 走 @st.cache_data 快取即時回。換標的需重按(避免顯示舊標的結果)。
+        _ran_key = f'_corr_ran{key_suffix}'
+        if st.button('🔗 計算分散度（首次約 10-20 秒，之後走快取）',
+                     key=f'_corr_btn{key_suffix}'):
+            st.session_state[_ran_key] = _ticker
+        if st.session_state.get(_ran_key) != _ticker:
+            st.info('點上方按鈕開始計算：系統會抓約 30 檔 ETF 價格 + 持股，'
+                    '首次較久，算過後同一標的走快取即時顯示。')
+            return
+
         # ── 建立 universe（ETF_PEER_GROUPS 所有 + 輸入本身）──
         _universe: set[str] = {_ticker}
         for _lst in ETF_PEER_GROUPS.values():
@@ -289,21 +301,26 @@ def render_correlation_finder(ticker: str | None = None, key_suffix: str = '') -
             st.error(f'❌ {_ticker} 無歷史資料，請確認代號（台灣 ETF 需加 .TW）')
             return
 
-        # ── 取得持股（非同步，容錯）──
+        # ── 取得持股（v19.131:並行抓取,原 31 檔序列迴圈 → ThreadPool 併發）──
+        # 每檔各自 try/except 容錯:單一 ETF 持股格式異常 → set() 略過不拖垮整區塊。
+        # _cached_holdings 為 @st.cache_data 純資料函式(內部無 st.* UI 呼叫),worker
+        # thread 呼叫安全;st.spinner 留主執行緒。
         _peers_in_pivot = [c for c in _price_pivot.columns if c != _ticker]
         _tickers_to_fetch = [_ticker] + _peers_in_pivot[:30]  # 最多30檔避免太慢
         _holdings_map: dict[str, set] = {}
 
-        _prog = st.progress(0, '取得持股資料中...')
-        for _i, _t in enumerate(_tickers_to_fetch):
-            _prog.progress((_i + 1) / len(_tickers_to_fetch), f'取得 {_t} 持股...')
+        def _fetch_holdings_one(_t: str) -> "tuple[str, set]":
             try:
-                _raw_h = _cached_holdings(_t)
-                _holdings_map[_t] = build_holdings_set(_raw_h, top_n=15)
-            except Exception as _eh:   # 單一 ETF 持股格式異常 → 略過,不拖垮整區塊
+                return _t, build_holdings_set(_cached_holdings(_t), top_n=15)
+            except Exception as _eh:   # 單一 ETF 持股格式異常 → 略過
                 print(f'[etf_tab_smart] holdings {_t} 略過:{type(_eh).__name__}: {_eh}')
-                _holdings_map[_t] = set()
-        _prog.empty()
+                return _t, set()
+
+        with st.spinner(f'並行取得 {len(_tickers_to_fetch)} 檔持股資料…'):
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=8) as _ex:
+                for _t, _hs in _ex.map(_fetch_holdings_one, _tickers_to_fetch):
+                    _holdings_map[_t] = _hs
 
         # ── 計算分散度（按大類分組，每類前 10）──
         with st.spinner('計算三維分散度...'):
