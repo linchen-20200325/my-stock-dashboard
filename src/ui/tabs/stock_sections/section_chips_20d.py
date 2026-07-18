@@ -20,6 +20,7 @@ import streamlit as st
 
 from shared.colors import TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.stock_buckets import section_header_html
+from src.compute.risk.inst_sanity import flag_latest_inst_outlier_from_df
 from src.services import analyze_20d_chips_from_df
 
 
@@ -56,6 +57,18 @@ def render_chips_20d_section(df2, sec_lv_chips: dict) -> None:
         f'近 {_days20} 日 | 外+投累計 {_chip20["total_net_k"]:.1f}千張 | '
         f'成交量 {_chip20["total_vol_k"]:.1f}千張</span>'
         f'</div>', unsafe_allow_html=True)
+    # v19.135 三大法人單日爆量旗標(§3.2 outlier):最新一日主力合計 vs 30 日均量。
+    # 計算在 L2 inst_sanity(SSOT 門檻 5×);此處僅顯示。缺欄/資料不足 → 不顯示徽章。
+    _inst_flag = flag_latest_inst_outlier_from_df(df2)
+    if _inst_flag.is_outlier and _inst_flag.ratio is not None:
+        st.markdown(
+            f'<div style="background:#0d1117;border:1px solid {TRAFFIC_RED};'
+            f'border-radius:8px;padding:8px 14px;margin:6px 0;">'
+            f'<span style="font-size:13px;font-weight:800;color:{TRAFFIC_RED};">'
+            f'⚠️ 三大法人單日爆量 {_inst_flag.ratio:.1f}× 30日均量</span>'
+            f'<span style="font-size:11px;color:#8b949e;margin-left:10px;">'
+            f'單日淨買賣超遠超常量,留意隔日追買/出貨反轉風險</span>'
+            f'</div>', unsafe_allow_html=True)
     _g20c1, _g20c2 = st.columns(2)
     with _g20c1:
         st.metric(

@@ -1,5 +1,26 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚩 2026-07-18 三大法人單日爆量旗標 wiring v19.135 — 補上做一半的判斷訊號(user 核准)
+
+user「未完成項目」查證後點名開工(項1)。`src/compute/risk/inst_sanity.py` 的 helper
+`is_inst_net_outlier`(|三大法人單日淨買賣超| > 30D 均量 × 5 → 異常)早於 v18.299 落地
+(15 測 + SSOT `INST_NET_OUTLIER_VOLUME_RATIO=5.0`),但 **0 production caller** — CLAUDE.md §3.2
+記「wiring 待真實 consumer(現無 fetcher 同時持 inst_net+30D 均量)」。
+- **盤點推翻舊前提**:consumer 端 `df2`(data_loader `_get_combined_data_cached` 回傳)**本就同時**
+  握有 `主力合計`(外資+投信+自營,單日淨買賣超,**張**)+ `volume`(**張**),同日期軸。
+  兩者**同為張** → `ratio = |inst_net| / 30D均量` **無量綱、免換價**(§4.1)。
+- **§8.1 核准後動工(user 選:主力合計加總 + 嚴格滿 30 日)**:
+  - **L2 adapter** `flag_latest_inst_outlier_from_df(df)`(inst_sanity.py):取最新一日主力合計 +
+    算 30 日均量 → 呼既有 helper。計算落 L2,UI 不寫算式。
+  - **L5 wiring**:`src/ui/tabs/stock_sections/section_chips_20d.py` signal banner 後,
+    outlier 時顯示「⚠️ 三大法人單日爆量 N× 30日均量」徽章(重用檔內既有色值,無新 magic)。
+- **§4.6 / §1 降級**:不足 30 日(新上市)/ window 內 NaN 量 → `vol_unavailable` **不誤報**;
+  最新日主力合計 NaN → `inst_net_zero`(不用舊值冒充);缺欄/空 df → fail-soft 不炸 UI、不顯示徽章。
+- **測試**:新增 `test_inst_outlier_wiring_v19_135`(15:正常判定/賣超絕對值/golden/自訂門檻/降級×7/
+  單位無量綱 property/SSOT 門檻 + UI wiring source-scan)。既有 inst_sanity 15 測不動;全庫 3337 collect 無 error。
+- **範疇自評(§8.1 step6)**:只做「最新一日單點徽章」;`flag_inst_net_outliers_batch`(整條序列標記)
+  **先不接**,等真有歷史 outlier 圖標需求再用。不動 L1 data_loader 預算均量欄(避免改全 caller)。
+
 ## ⚡ 2026-07-18 AI 財報體檢 v19.134 — 改按鈕 opt-in(省 API + 加速,user 核准)
 
 user 批次4。`src/ui/tabs/tab_stock.py`「🔬 AI 財報體檢（策略2）」原本一進到某檔股票、
