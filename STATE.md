@@ -1,5 +1,20 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## ⚡ 2026-07-18 AI 財報體檢 v19.134 — 改按鈕 opt-in(省 API + 加速,user 核准)
+
+user 批次4。`src/ui/tabs/tab_stock.py`「🔬 AI 財報體檢（策略2）」原本一進到某檔股票、
+expander 首次 render 就**自動**呼叫 `analyze_financial_health`(Gemini)。有 session 快取
+(每檔一次)但無按鈕 gate → 首屏慢 + 每檔耗 API 額度。
+- **改按鈕 opt-in**:未按過本檔 → 顯示「🔬 生成 AI 財報體檢」按鈕 + info,不打 AI;點按鈕
+  設 `session_state[f'_fh_req_{sid}']` + rerun → 才跑 fetch + Gemini。已生成(session 有結果)
+  直接顯示。用 `_fh_req_` flag 避免重排既有 compute/render 大區塊縮排(安全 diff)。
+- **`_fh is None` 分支**:原「載入中...」st.error 改 `pass`(尚未生成不誤報錯)。
+- **section_strategy_conclusion `_cost` 不動(§-1 查證)**:`compute_one_stock_trend` 的 AI 是
+  **snapshot-gated**(`if yyyymm_curr not in yms:` 才打,once/股/月 + `save_snapshot` 持久化),
+  已攤銷,非每次 render 自動觸發,gate 反而破壞 MJ trend bootstrap → 不動。
+- **「刪 3 死 screener」撤回**:yield_screener / monthly_revenue_screener 皆有 caller,非死碼。
+- **test**:`test_ai_financial_health_gate`(按鈕在 AI 呼叫前)2 passed。§8.1 user 核准。
+
 ## 🐞 2026-07-18 出口 YoY v19.133 — GOV-MOF CKAN 泛用 CSV 補 sort(數據正確)
 
 user 批次3 資料穩健。`src/data/macro/macro_snapshot.py:fetch_export_block` 的 **GOV-MOF CKAN**
