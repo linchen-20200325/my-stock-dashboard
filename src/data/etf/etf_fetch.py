@@ -808,9 +808,9 @@ def is_active_etf(ticker: str) -> bool:
 
     判別優先序：
       1. 白名單命中 → True
-      2. 代號末位 = 'B' (債券型) 或 'K' (槓桿) → False（純被動）
-      3. 代號末位為字母（A/D/T 等非 B/K）→ True（多為主動）
-      4. 純數字代號 → False（多為被動追蹤指數，如 0050/00878/00940）
+      2. 代號末位 ∈ {B 債券 / L 槓桿(正2) / R 反向(反1) / U,F 期貨} → False（皆被動追蹤，非主動經理式）
+      3. 代號末位為其他字母（A 主動 / D / T 等）→ True（主動式）
+      4. 純數字代號 → False（被動追蹤指數，如 0050/00878/00940）
     """
     if not ticker:
         return False
@@ -821,9 +821,11 @@ def is_active_etf(ticker: str) -> bool:
     if not _code:
         return False
     _last = _code[-1]
-    if _last in ('B', 'K'):  # 債券型 / 槓桿型 = 被動追蹤
+    # 台股後綴：L=槓桿(正2,如 00631L) / R=反向(反1,如 00632R) / B=債券 / U,F=期貨 → 皆被動追蹤,非主動。
+    # (原本排除集寫 ('B','K') 有誤:台股無 'K' 後綴,且漏掉 L/R → 槓桿/反向 ETF 被誤判成主動式 → 跑錯弱勢判定)
+    if _last in ('B', 'L', 'R', 'U', 'F'):
         return False
-    if _last.isalpha():       # 其他字母結尾 (A/D/T) 多為主動式
+    if _last.isalpha():       # A(主動) / D / T 等 = 主動式
         return True
     return False              # 純數字 = 被動追蹤指數
 

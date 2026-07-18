@@ -155,3 +155,60 @@ def test_expense_ratio_skips_yuanta_for_passive_etf(monkeypatch):
     monkeypatch.setattr(etf_fetch, 'fetch_etf_info', lambda t: {})
     etf_fetch.get_etf_expense_ratio_safe('0050.TW')
     assert _yuanta_called == [], f'Yuanta 不該對被動 ETF 呼叫，但被呼叫了：{_yuanta_called}'
+
+
+# ════════════════════════════════════════════════════════════
+# is_active_etf 分類 golden test（v19.130 L/R 誤判修正）
+# ════════════════════════════════════════════════════════════
+# Regression 守門：台股後綴 L(槓桿正2)/R(反向反1)/B(債券)/U,F(期貨) 皆屬
+# 被動追蹤,絕不可判為主動式。原程式排除集誤寫 ('B','K')——台股無 'K' 後綴,
+# 且漏掉 L/R,導致 00631L(正2)/00632R(反1) 被 `_last.isalpha()` 分支誤判成
+# 主動式 → 觸發錯誤的「主動式 ETF 弱勢判定」+ 無謂的 Yuanta 官網抓取。
+
+def test_leveraged_etf_is_passive():
+    """00631L(元大台灣50正2,槓桿)= 被動追蹤,非主動經理式。(修正前誤判為 True)"""
+    assert etf_fetch.is_active_etf('00631L.TW') is False
+    assert etf_fetch.is_active_etf('00675L') is False   # 富邦臺灣加權正2
+
+
+def test_inverse_etf_is_passive():
+    """00632R(元大台灣50反1,反向)= 被動追蹤。(修正前誤判為 True)"""
+    assert etf_fetch.is_active_etf('00632R.TW') is False
+    assert etf_fetch.is_active_etf('00676R') is False   # 富邦臺灣加權反1
+
+
+def test_bond_etf_is_passive():
+    """00679B(元大美債20年,債券型)= 被動追蹤。"""
+    assert etf_fetch.is_active_etf('00679B.TW') is False
+    assert etf_fetch.is_active_etf('00687B') is False   # 國泰20年美債
+
+
+def test_futures_etf_is_passive():
+    """期貨型 ETF(U/F 後綴)= 被動追蹤。"""
+    assert etf_fetch.is_active_etf('00642U.TW') is False   # 期元大S&P石油
+    assert etf_fetch.is_active_etf('00635U') is False      # 期元大道瓊白銀
+
+
+def test_active_whitelist_etf_is_active():
+    """白名單主動式 ETF(A/D/T 後綴)→ True。"""
+    assert etf_fetch.is_active_etf('00980A.TW') is True   # 元大台灣價值高息(主動)
+    assert etf_fetch.is_active_etf('00982T') is True      # 白名單 T 後綴
+    assert etf_fetch.is_active_etf('00980D') is True      # 白名單 D 後綴
+
+
+def test_active_a_suffix_non_whitelist_is_active():
+    """未在白名單但 'A' 後綴(主動式命名慣例)→ True(fallback 分支)。"""
+    # 元大主動式系列尚未全列入白名單者,靠 isalpha 分支仍判主動
+    assert etf_fetch.is_active_etf('00999A') is True
+
+
+def test_passive_numeric_etf_is_passive():
+    """純數字代號 = 被動追蹤指數。"""
+    for _t in ('0050.TW', '00878', '00940.TW', '006208'):
+        assert etf_fetch.is_active_etf(_t) is False, f'{_t} 應為被動'
+
+
+def test_is_active_etf_empty_ticker():
+    """空 / None → False(不腦補)。"""
+    assert etf_fetch.is_active_etf('') is False
+    assert etf_fetch.is_active_etf(None) is False
