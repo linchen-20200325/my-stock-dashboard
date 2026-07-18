@@ -1,5 +1,20 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## ⚡ 2026-07-18 ETF 分散度分析 v19.131 — 按鈕 gate + 並行持股(下載速度)
+
+user「聽你的建議 都修吧」批次2 大贏面①。`src/ui/etf/etf_tab_smart.py:render_correlation_finder`
+是 ETF「單檔診斷 / 組合」頁最重的區塊:一設定標的就**自動**冷抓 ~30 檔 ETF 價格 batch +
+**31 檔持股序列迴圈**(首次 10-20 秒),且每次進頁 / 任一 widget 互動都重跑(cache 之外的冷啟動很痛)。
+- **按鈕 opt-in + 依標的記憶**:未按過本標的 → 只顯示按鈕不冷抓;按 `st.button('🔗 計算分散度')`
+  後 `session_state[f'_corr_ran{key_suffix}']=_ticker` 記住,之後 rerun 走 `@st.cache_data` 快取即時回。
+  換標的需重按(避免顯示舊標的結果)。對照同檔 `render_333_section` 既有 `_run_peer` gate 慣例。
+- **並行持股**:31 檔序列 `for` 迴圈 → `ThreadPoolExecutor(max_workers=8)` `.map`,每檔各自
+  try/except 容錯(單一 ETF 持股異常 → `set()` 略過不拖垮整區塊)。`_cached_holdings` 為
+  `@st.cache_data` 純資料函式(內部無 st.* UI 呼叫),worker thread 呼叫安全;spinner 留主緒。
+- **不破壞既有**:universe / `_cached_peer_prices` / `find_diversifiers_by_category` / `_normalize(ticker)`
+  全不變;函式簽名不變(wiring test 4 passed)。加 `test_correlation_finder_gated_and_parallel`
+  迴歸鎖(按鈕 gate + session 記憶 + ThreadPool + 容錯)。§8.1 user 核准「全做大贏面優先」,單檔 L5 UI。
+
 ## 🐞 2026-07-18 ETF 分類 v19.130 — 修槓桿/反向 ETF 被誤判成主動式(判斷正確)
 
 user「聽你的建議 都修吧」批次1 第①項。稽核發現 `src/data/etf/etf_fetch.py:is_active_etf`

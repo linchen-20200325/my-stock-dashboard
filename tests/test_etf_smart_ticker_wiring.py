@@ -38,6 +38,19 @@ def test_three_sections_no_own_ticker_input():
             f'{fn.__name__} 應以 _normalize(ticker) 取用傳入代號')
 
 
+def test_correlation_finder_gated_and_parallel():
+    """v19.131 效能:分散度分析改「按鈕 opt-in + 並行持股」— 防回退成自動冷抓/序列迴圈。"""
+    src = inspect.getsource(smart.render_correlation_finder)
+    # 按鈕 gate + 依標的記憶(未按過本標的 → 不冷抓 30 檔;換標的需重按)
+    assert "st.button(" in src, '分散度分析應 gate 在按鈕後(避免每次進頁冷抓 ~30 檔)'
+    assert "_corr_ran" in src and "session_state" in src, (
+        '應以 session_state 依標的記憶已計算狀態')
+    # 並行持股抓取(取代原 31 檔序列 for 迴圈)
+    assert "ThreadPoolExecutor" in src, '31 檔持股應並行抓取(原序列迴圈)'
+    # 單檔容錯仍在(一檔持股異常不拖垮整區塊)
+    assert "return _t, set()" in src, '單一 ETF 持股異常應 set() 略過(保留容錯)'
+
+
 def test_shared_ticker_input_exists():
     """組合頁專用的單一共用輸入框 helper 必須存在（3 框收斂成 1 框）。"""
     fn = getattr(smart, 'render_smart_ticker_input', None)
