@@ -75,6 +75,21 @@ def test_direct_url_short_circuits_catalog():
         f'直連成功後不應再打 catalog metadata;calls={calls}')
 
 
+def test_gov_mof_ckan_sorts_before_iloc():
+    """v19.133 資料穩健:GOV-MOF CKAN 泛用 CSV 路徑取 iloc[-1]/[-13] 前須 sort_values。
+
+    此路徑用泛用 read_csv + 欄位比對(非走 _parse_customs_export_csv),CKAN 列序不保證
+    (常降序)。未 sort → iloc[-1] 取到最舊列 → YoY 算反(§1 錯值比沒值更糟)。防回退。
+    """
+    ms = (REPO / 'src/data/macro/macro_snapshot.py').read_text(encoding='utf-8')
+    _idx_block = ms.find("'source': 'MOF-CSV'")
+    assert _idx_block != -1, 'GOV-MOF CKAN 區塊(source=MOF-CSV)應存在'
+    # 該 source 標記前方同段 _df_ex 處理須含 sort_values(_dt_k)
+    _seg = ms[max(0, _idx_block - 900):_idx_block]
+    assert 'sort_values(_dt_k)' in _seg, (
+        'GOV-MOF CKAN CSV 取 iloc 前須 sort_values(_dt_k)(源可能降序 → YoY 算反)')
+
+
 def test_direct_fail_falls_back_and_logs():
     """直連非200 → 落回退(catalog 也 None)→ 最終回 _err_export,且含 customs-direct token。"""
     from src.data.proxy import proxy_helper as _ph

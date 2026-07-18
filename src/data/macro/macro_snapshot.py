@@ -1052,7 +1052,10 @@ def fetch_export_block(fred_api_key: str = '', finmind_token: str = '') -> dict:
             _dt_k = next((c for c in _df_ex.columns
                           if '年月' in c or '月份' in c or 'DATE' in c.upper()), None)
             if _val_k and _dt_k and len(_df_ex) >= 13:
-                _df_ex = _df_ex.dropna(subset=[_val_k])
+                # v19.133 資料穩健:MOF CKAN CSV 列序不保證(常降序),先依年月排序再取
+                # iloc[-1]/[-13]。否則會拿到最舊列 → YoY 算反(對照 line 896 FRED-API 路徑
+                # 已 sort;line 979 註解早點名此 pattern)。MOF「年月」為 YYYYMM,數值/字典序=時序。
+                _df_ex = _df_ex.dropna(subset=[_val_k]).sort_values(_dt_k)
                 _cur = float(str(_df_ex[_val_k].iloc[-1]).replace(',', ''))
                 _prev = float(str(_df_ex[_val_k].iloc[-13]).replace(',', ''))
                 if _prev != 0:

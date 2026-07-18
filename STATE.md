@@ -1,5 +1,24 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🐞 2026-07-18 出口 YoY v19.133 — GOV-MOF CKAN 泛用 CSV 補 sort(數據正確)
+
+user 批次3 資料穩健。`src/data/macro/macro_snapshot.py:fetch_export_block` 的 **GOV-MOF CKAN**
+深層 fallback(方案在 customs-direct + catalog + FRED-API + FRED-CSV 全敗後才走)用泛用
+`read_csv` + 欄位比對取 `iloc[-1]/[-13]` 算 YoY,但**未 sort**。CKAN 列序不保證(常降序)→
+iloc[-1] 取到最舊列 → YoY 算反(§1 錯值比沒值更糟)。line 979 註解早點名此 pattern,customs
+路徑已改走 `_parse_customs_export_csv` 純函式處理,此泛用 fallback 漏網。
+- **修**:`_df_ex.dropna(subset=[_val_k]).sort_values(_dt_k)`(對照 line 896 FRED-API 路徑已 sort)。
+  MOF「年月」為 YYYYMM,數值/字典序=時序。加 `test_gov_mof_ckan_sorts_before_iloc` 迴歸鎖。
+- **同批次查證後略過(§-1,非真 bug)**:
+  - **CBC ms1.json YoY**(股 `tw_macro._try_cbc_ms1` + 基金 `tw_macro_repository` 同構)未 sort —
+    但 CBC ms1 列序**未證實降序**(若降序,M1B/M2 YoY 會嚴重算反,macro 看板天天看必被發現,
+    未報 = 大概率升序);且函式未取日期欄,加 sort 需先可靠識別日期欄,誤判反致 mis-sort。
+    CBC 亦 M1B/M2 同期發布,獨立 dropna 無實際錯位。**不投機修**。
+  - **基金 FX 負快取**(`fx_and_main.py`):已是 v18.275 **positive-only cache**(None 不入 cache
+    → 下次重試,避免 poisoning),本就正確設計,無需改。
+  - **VIX 重複抓**:多 consumer 走 `fetch_yf_close('^VIX',...)` 同 arg 共用 `@_ttl_cache`,已去重;
+    殘留跨 wrapper 差異僅 1 ticker 冷啟一次,dedup 需跨模組重構,ROI 低。
+
 ## ⚡ 2026-07-18 產業熱力圖 v19.132 — opt-in 載入(下載速度)
 
 user 批次2 localized。`src/ui/render/etf_render.py:render_sector_heatmap` 位於
