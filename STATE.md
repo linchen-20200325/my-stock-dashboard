@@ -1,5 +1,19 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## ⚡ 2026-07-18 產業熱力圖 v19.132 — opt-in 載入(下載速度)
+
+user 批次2 localized。`src/ui/render/etf_render.py:render_sector_heatmap` 位於
+`tab_market → 產業熱力圖` 巢狀 tab;Streamlit 全 tab body 每次 app run 都執行 → 數十檔類股
+batch(美股 GICS 11 大類 + 子成分 ~66 檔 / 台股類股)在**首屏就冷抓**,即使 user 當下在別的 tab。
+- **opt-in gate**:未點過 → 只顯示「🗺️ 載入產業熱力圖」按鈕 + early return(不冷抓);點過後
+  `session_state['heatmap_loaded']=True` 記住,之後走 `get_sector_returns` 的 `@st.cache_data`
+  快取即時回。改市場/區間仍依新 cache key 重抓;🔄 刷新視同載入。
+- **不破壞既有**:selectbox/refresh/treemap/AI 全不變;`get_sector_returns(refresh=)` 介面不變。
+  加 `test_etf_render_heatmap_gate`(gate 必在取數前)迴歸鎖。
+- **triage 略過(§-1 查證後非真 bug)**:強制刷新 `cache_data.clear()`(help 明寫「清除所有快取」=
+  刻意全刷,慢是預期)、`fetch_etf_price` period='max'(v18.228 跨 tab 去重設計,一次 API sliced
+  記憶體)、教學 3 檔 FRED sparkline(已 `@st.cache_data(1day)`,冷成本極小)。
+
 ## ⚡ 2026-07-18 ETF 分散度分析 v19.131 — 按鈕 gate + 並行持股(下載速度)
 
 user「聽你的建議 都修吧」批次2 大贏面①。`src/ui/etf/etf_tab_smart.py:render_correlation_finder`
