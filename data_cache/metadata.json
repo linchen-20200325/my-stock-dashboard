@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-18T10:23:33.909817+00:00",
+  "updated_at": "2026-07-19T10:39:11.200260+00:00",
   "datasets": {
     "twii_ohlcv": {
       "name": "twii_ohlcv",
@@ -17,7 +17,7 @@
       "name": "finmind_margin",
       "last_updated": "2026-07-17",
       "row_count": 4917,
-      "last_error": null
+      "last_error": "抓取結果為空"
     },
     "finmind_m1m2": {
       "name": "finmind_m1m2",
