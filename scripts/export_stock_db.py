@@ -1,0 +1,270 @@
+#!/usr/bin/env python3
+"""export_stock_db.py — 把 my-stock 的重點分析資料落地成 SQLite stock.db。
+
+供下游 2026_strategy_0719 多智能體系統讀取。「各源專案各自 export」架構(SSOT):
+抓取 / 評分 / 財報邏輯留在本專案,export 只**呼叫既有函式或讀既有 parquet,不重算**。
+
+資料分兩層(對照盤點):
+* 🟢 離線層（讀 `data_cache/` parquet/json,**免 API key、免網路**）
+    - `stock_fundamentals`  全市場季財報（load_fundamentals_snapshot）
+    - `market_index`        加權指數日K（twii_ohlcv.parquet）
+    - `institutional_flow`  外資買賣超（finmind_inst.parquet,單位 億元）
+    - `margin`              融資餘額（finmind_margin.parquet）
+    - `money_supply`        M1B/M2 月供給（finmind_m1m2.parquet,億元 level + gap 點差）
+    - `macro_tw_pmi`        台灣 PMI 最後良值（macro_last_good/tw_pmi.json）
+* 🔴 live 層（需 `FINMIND_TOKEN`；**缺 token → Fail-Loud 略過該表 + 警告,不造假**）
+    - `stock_technical`     個股 close/RSI/布林軌（下游 2026 個股分析的主要輸入;
+                            RSI/軌重用 compute_rsi / calc_bollinger,STOCK_IDS 指定個股清單）
+    - `monthly_revenue`     全市場月營收（fetch_batch_monthly_revenue,單位 元）
+    - `macro_tw_signal`     景氣對策信號燈號（fetch_ndc_signal_history）
+
+（`stock_health`（MJ 財報評級）為下一增量,需財報體檢管線,另接。）
+
+用法:
+    STOCK_DB=/volume1/data/stock.db python scripts/export_stock_db.py
+    （不設 STOCK_DB → 寫本專案根目錄 stock.db）
+
+單位鐵則(對照 CLAUDE.md §4.1):財報欄=千元、eps=元、外資/M1B2=億元、月營收=元、PMI=指數。
+Fail-Loud:離線層任一表讀不到 → raise;live 層缺 token / 抓不到 → 略過該表 + 警告(不寫假值)。
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sqlite3
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+# 專案根（scripts/ 的上一層）；讓 `python scripts/export_stock_db.py` 找得到 src、data_cache。
+_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_ROOT))
+_DATA_CACHE = _ROOT / "data_cache"
+
+
+def _log(msg: str) -> None:
+    print(msg, file=sys.stderr, flush=True)
+
+
+# ── 🟢 離線層（讀 parquet/json，免 key） ─────────────────────────────────────
+_FUND_COLS = [
+    "stock_id", "roc_year", "season", "revenue", "gross_profit", "op_income",
+    "net_income", "eps", "total_assets", "total_liab", "current_assets",
+    "total_equity", "market",
+]
+
+
+def write_fundamentals(conn: sqlite3.Connection) -> int:
+    """全市場最新季財報 → stock_fundamentals（呼叫既有 loader,不重算）。"""
+    from src.data.stock.fundamentals_snapshot_loader import load_fundamentals_snapshot
+
+    cur, _prev, _meta = load_fundamentals_snapshot()
+    if cur is None or cur.empty:
+        raise RuntimeError("財報快照為空（load_fundamentals_snapshot）→ 拒絕寫空表")
+    df = cur[[c for c in _FUND_COLS if c in cur.columns]].copy()
+    df.to_sql("stock_fundamentals", conn, if_exists="replace", index=False)
+    return len(df)
+
+
+def _read_cache_parquet(name: str, cols: list[str]) -> pd.DataFrame:
+    path = _DATA_CACHE / f"{name}.parquet"
+    if not path.exists():
+        raise RuntimeError(f"離線快取不存在:{path}（請先在 my-stock 跑 update_macro_history）")
+    df = pd.read_parquet(path)
+    keep = [c for c in cols if c in df.columns]
+    return df[keep].copy()
+
+
+def write_market_index(conn: sqlite3.Connection) -> int:
+    df = _read_cache_parquet("twii_ohlcv", ["date", "open", "high", "low", "close", "volume"])
+    df.to_sql("market_index", conn, if_exists="replace", index=False)
+    return len(df)
+
+
+def write_institutional_flow(conn: sqlite3.Connection) -> int:
+    # foreign_buy 單位 億元（net）；投信/自營未落地,故僅外資。
+    df = _read_cache_parquet("finmind_inst", ["date", "foreign_buy"])
+    df.to_sql("institutional_flow", conn, if_exists="replace", index=False)
+    return len(df)
+
+
+def write_margin(conn: sqlite3.Connection) -> int:
+    df = _read_cache_parquet("finmind_margin", ["date", "margin_balance"])
+    df.to_sql("margin", conn, if_exists="replace", index=False)
+    return len(df)
+
+
+def write_money_supply(conn: sqlite3.Connection) -> int:
+    df = _read_cache_parquet("finmind_m1m2", ["date", "m1b", "m2", "m1b_m2_gap"])
+    df.to_sql("money_supply", conn, if_exists="replace", index=False)
+    return len(df)
+
+
+def write_macro_tw_pmi(conn: sqlite3.Connection) -> int:
+    import json
+
+    path = _DATA_CACHE / "macro_last_good" / "tw_pmi.json"
+    if not path.exists():
+        raise RuntimeError(f"台灣 PMI 良值檔不存在:{path}")
+    d = json.loads(path.read_text(encoding="utf-8"))
+    df = pd.DataFrame([{
+        "date": d.get("date"), "pmi": d.get("value"),
+        "label": d.get("label"), "source": d.get("source"),
+    }])
+    df.to_sql("macro_tw_pmi", conn, if_exists="replace", index=False)
+    return len(df)
+
+
+# ── 🔴 live 層（需 FINMIND_TOKEN；pure transform 抽出以利單測） ────────────────
+def _revenue_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """全市場月營收 DataFrame → 落地欄位（純轉換,無 I/O,便於單測）。"""
+    cols = [c for c in ["stock_id", "date", "revenue"] if c in df.columns]
+    if not {"stock_id", "date", "revenue"}.issubset(df.columns):
+        raise RuntimeError(f"月營收欄位不齊:{list(df.columns)}")
+    out = df[cols].copy()
+    out = out[out["revenue"].notna()]     # 缺值顯式剔除,不填 0（§1 Fail-Loud）
+    return out
+
+
+def write_monthly_revenue(conn: sqlite3.Connection, token: str) -> int:
+    """全市場月營收 → monthly_revenue（缺 token → 略過 + 警告）。"""
+    if not token:
+        _log("⚠️ 略過 monthly_revenue：未設 FINMIND_TOKEN（不造假）")
+        return -1
+    from src.data.stock.monthly_revenue_fetcher import fetch_batch_monthly_revenue
+
+    df = fetch_batch_monthly_revenue()
+    if df is None or df.empty:
+        _log("⚠️ 略過 monthly_revenue：fetch 回空（不寫空表）")
+        return -1
+    rows = _revenue_rows(df)
+    rows.to_sql("monthly_revenue", conn, if_exists="replace", index=False)
+    return len(rows)
+
+
+_DEFAULT_STOCK_IDS = ["2330", "2317", "2454", "2308", "2412", "2882", "0050", "0056"]
+
+
+def _technical_row(df: pd.DataFrame, stock_id: str):
+    """個股日K df → (date, stock_id, close, rsi, upper_band, lower_band)；不足資料回 None。
+
+    對齊下游 2026 `stock_technical` schema。RSI / 布林軌**重用本專案 SSOT 指標函式**,不重算。
+    """
+    from src.compute.scoring.scoring_engine import compute_rsi
+    from src.compute.strategy.tech_indicators import calc_bollinger
+
+    if df is None or df.empty or "close" not in df.columns:
+        return None
+    bb = calc_bollinger(df, 20, 2)          # {'upper','lower',...};資料不足回 None
+    if bb is None:
+        return None
+    rsi = compute_rsi(df["close"], 14).iloc[-1]
+    if pd.isna(rsi):
+        return None
+    date = str(df["date"].iloc[-1])[:10] if "date" in df.columns else None
+    return (date, stock_id, float(df["close"].iloc[-1]), float(rsi), bb["upper"], bb["lower"])
+
+
+def write_stock_technical(conn: sqlite3.Connection, stock_ids: list[str], token: str) -> int:
+    """個股技術面 → stock_technical（下游個股分析的主要輸入；缺 token → 略過 + 警告）。"""
+    if not token:
+        _log("⚠️ 略過 stock_technical：未設 FINMIND_TOKEN（不造假）")
+        return -1
+    from src.data.core.data_loader import StockDataLoader
+
+    loader = StockDataLoader()
+    rows = []
+    for sid in stock_ids:
+        df, err, _name = loader.get_combined_data(sid, days=250)
+        if df is None:
+            _log(f"  stock_technical：{sid} 無資料（{err}）跳過")
+            continue
+        row = _technical_row(df, sid)
+        if row is not None:
+            rows.append(row)
+    if not rows:
+        _log("⚠️ 略過 stock_technical：所有個股皆無有效資料（不寫空表）")
+        return -1
+    pd.DataFrame(
+        rows, columns=["date", "stock_id", "close", "rsi", "upper_band", "lower_band"]
+    ).to_sql("stock_technical", conn, if_exists="replace", index=False)
+    return len(rows)
+
+
+def _signal_row(d: dict) -> pd.DataFrame:
+    """景氣燈號 dict → 一列落地（純轉換）。"""
+    if not d or d.get("error") or d.get("score_latest") is None:
+        raise RuntimeError(f"景氣燈號無效:{d}")
+    return pd.DataFrame([{
+        "date": d.get("date_latest"),
+        "score": d.get("score_latest"),          # 9~45 分
+        "color": d.get("color_latest"),          # 官方燈號
+        "trend": d.get("inflection"),
+        "source": d.get("source"),
+    }])
+
+
+def write_macro_tw_signal(conn: sqlite3.Connection, token: str) -> int:
+    """台灣景氣對策信號 → macro_tw_signal（缺 token → 略過 + 警告）。"""
+    if not token:
+        _log("⚠️ 略過 macro_tw_signal：未設 FINMIND_TOKEN（不造假）")
+        return -1
+    from src.data.macro.tw_macro import fetch_ndc_signal_history
+
+    d = fetch_ndc_signal_history(token=token)
+    if not d or d.get("error"):
+        _log(f"⚠️ 略過 macro_tw_signal：{d.get('error') if d else 'None'}")
+        return -1
+    _signal_row(d).to_sql("macro_tw_signal", conn, if_exists="replace", index=False)
+    return 1
+
+
+# ── 主流程 ───────────────────────────────────────────────────────────────────
+_DURABLE = [
+    ("stock_fundamentals", write_fundamentals),
+    ("market_index", write_market_index),
+    ("institutional_flow", write_institutional_flow),
+    ("margin", write_margin),
+    ("money_supply", write_money_supply),
+    ("macro_tw_pmi", write_macro_tw_pmi),
+]
+
+
+def export_all(db_path: Path, token: str, stock_ids: list[str] | None = None) -> dict[str, int]:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    result: dict[str, int] = {}
+    try:
+        for name, fn in _DURABLE:                 # 離線層：任一失敗即 raise（Fail-Loud）
+            result[name] = fn(conn)
+        result["stock_technical"] = write_stock_technical(
+            conn, stock_ids or _DEFAULT_STOCK_IDS, token
+        )
+        result["monthly_revenue"] = write_monthly_revenue(conn, token)
+        result["macro_tw_signal"] = write_macro_tw_signal(conn, token)
+        conn.commit()
+    finally:
+        conn.close()
+    return result
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="產生 stock.db 供多智能體系統讀取")
+    parser.add_argument("--output", help="stock.db 路徑（預設 env STOCK_DB 或 ./stock.db）")
+    args = parser.parse_args(argv)
+
+    out = Path(args.output or os.environ.get("STOCK_DB") or "stock.db")
+    token = os.environ.get("FINMIND_TOKEN", "")
+    ids = [s.strip() for s in os.environ.get("STOCK_IDS", "").split(",") if s.strip()]
+    result = export_all(out, token, ids or None)
+
+    print(f"✅ stock.db 已更新 → {out}")
+    for name, n in result.items():
+        print(f"   {name}: {'略過(缺 token/資料)' if n < 0 else f'{n} 列'}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
