@@ -245,7 +245,7 @@ class DataPoint:
 | RSI | [0, 100] | config.py:52-53 |
 | ATR | > 0 | strategy 層必要 |
 | 月營收（個股） | > 0 | (停業時應為 NaN 而非 0) |
-| 三大法人單日買賣超 | < 該股 30D 均量 × 5 | ✅ helper 已落地(`src/compute/risk/inst_sanity.py` `is_inst_net_outlier` + `flag_inst_net_outliers_batch`,SSOT `INST_NET_OUTLIER_VOLUME_RATIO=5.0`,15 測試)。wiring 待真實 consumer(§-1:現無 fetcher 同時持 inst_net+30D 均量,不強接) |
+| 三大法人單日買賣超 | < 該股 30D 均量 × 5 | ✅ helper + wiring 皆已落地(`src/compute/risk/inst_sanity.py`:`is_inst_net_outlier` + `flag_inst_net_outliers_batch` + `flag_latest_inst_outlier_from_df`,SSOT `INST_NET_OUTLIER_VOLUME_RATIO=5.0`,30 測試)。**v19.135 wire 進 `section_chips_20d`**(舊註「現無 fetcher 同時持 inst_net+30D 均量」已過時 — consumer 端 `df2` 本就同時持 `主力合計`+`volume`,同為張免換價),outlier 時顯示徽章 |
 
 **領域不變量**（calculation-side）：
 - OHLC: `low ≤ open/close ≤ high`, `volume ≥ 0`
