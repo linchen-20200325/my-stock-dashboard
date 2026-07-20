@@ -1,5 +1,12 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📝 2026-07-20 CLAUDE.md §3.2 校正 v19.136 — 三大法人 outlier wiring 過時註記(user 核准 SSOT)
+
+v19.135 已把 inst outlier helper wire 進 `section_chips_20d`,但 CLAUDE.md §3.2 該行仍寫
+「wiring 待真實 consumer(現無 fetcher 同時持 inst_net+30D 均量,不強接)」— 已過時且前提被推翻
+(consumer 端 df2 本就同時持 主力合計+volume)。校正為「helper + wiring 皆已落地(v19.135,
+`flag_latest_inst_outlier_from_df` + section_chips_20d 徽章),30 測試」。純憲法文件校正,無 code 改動。
+
 ## 🚩 2026-07-18 三大法人單日爆量旗標 wiring v19.135 — 補上做一半的判斷訊號(user 核准)
 
 user「未完成項目」查證後點名開工(項1)。`src/compute/risk/inst_sanity.py` 的 helper
