@@ -20,12 +20,14 @@ def test_durable_export_from_real_parquet(tmp_path):
     for t in ("stock_fundamentals", "market_index", "institutional_flow",
               "margin", "money_supply", "macro_tw_pmi"):
         assert res[t] > 0, f"{t} 應有列"
-    assert res["monthly_revenue"] == -1        # 缺 token → 略過（不造假）
+    assert res["stock_technical"] == -1        # 缺 token → 略過（不造假）
+    assert res["monthly_revenue"] == -1
     assert res["macro_tw_signal"] == -1
 
     conn = sqlite3.connect(str(db))
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "monthly_revenue" not in tables     # 略過 → 不建空表
+    assert "stock_technical" not in tables
     cols = [d[1] for d in conn.execute("PRAGMA table_info(stock_fundamentals)")]
     assert {"stock_id", "revenue", "eps", "total_equity"}.issubset(cols)
     conn.close()
@@ -54,9 +56,29 @@ def test_signal_row_and_invalid():
         E._signal_row({"score_latest": None})
 
 
+def test_technical_row_reuses_indicators_and_aligns_schema():
+    n = 40
+    dates = pd.date_range("2026-06-01", periods=n).strftime("%Y-%m-%d")
+    close = pd.Series([100 + i * 0.5 + (1.0 if i % 3 == 0 else -0.5) for i in range(n)])
+    df = pd.DataFrame({"date": dates, "close": close})
+    row = E._technical_row(df, "2330")
+    assert row is not None
+    date, sid, c, rsi, up, lo = row            # 對齊下游 stock_technical 6 欄
+    assert (sid, len(row)) == ("2330", 6)
+    assert isinstance(c, float)
+    assert 0.0 <= rsi <= 100.0                  # RSI 值域
+    assert up > lo                              # 上軌 > 下軌
+
+
+def test_technical_row_insufficient_data_returns_none():
+    df = pd.DataFrame({"date": ["2026-06-01"], "close": [100.0]})   # 只有 1 列 → 不足
+    assert E._technical_row(df, "2330") is None
+
+
 def test_live_gating_skips_without_token(tmp_path):
     conn = sqlite3.connect(str(tmp_path / "x.db"))
     try:
+        assert E.write_stock_technical(conn, ["2330"], token="") == -1
         assert E.write_monthly_revenue(conn, token="") == -1
         assert E.write_macro_tw_signal(conn, token="") == -1
     finally:

@@ -13,10 +13,12 @@
     - `money_supply`        M1B/M2 月供給（finmind_m1m2.parquet,億元 level + gap 點差）
     - `macro_tw_pmi`        台灣 PMI 最後良值（macro_last_good/tw_pmi.json）
 * 🔴 live 層（需 `FINMIND_TOKEN`；**缺 token → Fail-Loud 略過該表 + 警告,不造假**）
+    - `stock_technical`     個股 close/RSI/布林軌（下游 2026 個股分析的主要輸入;
+                            RSI/軌重用 compute_rsi / calc_bollinger,STOCK_IDS 指定個股清單）
     - `monthly_revenue`     全市場月營收（fetch_batch_monthly_revenue,單位 元）
     - `macro_tw_signal`     景氣對策信號燈號（fetch_ndc_signal_history）
 
-（`stock_technical` / `stock_health` 為下一個增量,需個股清單 + 財報體檢管線,另接。）
+（`stock_health`（MJ 財報評級）為下一增量,需財報體檢管線,另接。）
 
 用法:
     STOCK_DB=/volume1/data/stock.db python scripts/export_stock_db.py
@@ -142,6 +144,55 @@ def write_monthly_revenue(conn: sqlite3.Connection, token: str) -> int:
     return len(rows)
 
 
+_DEFAULT_STOCK_IDS = ["2330", "2317", "2454", "2308", "2412", "2882", "0050", "0056"]
+
+
+def _technical_row(df: pd.DataFrame, stock_id: str):
+    """個股日K df → (date, stock_id, close, rsi, upper_band, lower_band)；不足資料回 None。
+
+    對齊下游 2026 `stock_technical` schema。RSI / 布林軌**重用本專案 SSOT 指標函式**,不重算。
+    """
+    from src.compute.scoring.scoring_engine import compute_rsi
+    from src.compute.strategy.tech_indicators import calc_bollinger
+
+    if df is None or df.empty or "close" not in df.columns:
+        return None
+    bb = calc_bollinger(df, 20, 2)          # {'upper','lower',...};資料不足回 None
+    if bb is None:
+        return None
+    rsi = compute_rsi(df["close"], 14).iloc[-1]
+    if pd.isna(rsi):
+        return None
+    date = str(df["date"].iloc[-1])[:10] if "date" in df.columns else None
+    return (date, stock_id, float(df["close"].iloc[-1]), float(rsi), bb["upper"], bb["lower"])
+
+
+def write_stock_technical(conn: sqlite3.Connection, stock_ids: list[str], token: str) -> int:
+    """個股技術面 → stock_technical（下游個股分析的主要輸入；缺 token → 略過 + 警告）。"""
+    if not token:
+        _log("⚠️ 略過 stock_technical：未設 FINMIND_TOKEN（不造假）")
+        return -1
+    from src.data.core.data_loader import StockDataLoader
+
+    loader = StockDataLoader()
+    rows = []
+    for sid in stock_ids:
+        df, err, _name = loader.get_combined_data(sid, days=250)
+        if df is None:
+            _log(f"  stock_technical：{sid} 無資料（{err}）跳過")
+            continue
+        row = _technical_row(df, sid)
+        if row is not None:
+            rows.append(row)
+    if not rows:
+        _log("⚠️ 略過 stock_technical：所有個股皆無有效資料（不寫空表）")
+        return -1
+    pd.DataFrame(
+        rows, columns=["date", "stock_id", "close", "rsi", "upper_band", "lower_band"]
+    ).to_sql("stock_technical", conn, if_exists="replace", index=False)
+    return len(rows)
+
+
 def _signal_row(d: dict) -> pd.DataFrame:
     """景氣燈號 dict → 一列落地（純轉換）。"""
     if not d or d.get("error") or d.get("score_latest") is None:
@@ -181,13 +232,16 @@ _DURABLE = [
 ]
 
 
-def export_all(db_path: Path, token: str) -> dict[str, int]:
+def export_all(db_path: Path, token: str, stock_ids: list[str] | None = None) -> dict[str, int]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     result: dict[str, int] = {}
     try:
         for name, fn in _DURABLE:                 # 離線層：任一失敗即 raise（Fail-Loud）
             result[name] = fn(conn)
+        result["stock_technical"] = write_stock_technical(
+            conn, stock_ids or _DEFAULT_STOCK_IDS, token
+        )
         result["monthly_revenue"] = write_monthly_revenue(conn, token)
         result["macro_tw_signal"] = write_macro_tw_signal(conn, token)
         conn.commit()
@@ -203,7 +257,8 @@ def main(argv: list[str] | None = None) -> int:
 
     out = Path(args.output or os.environ.get("STOCK_DB") or "stock.db")
     token = os.environ.get("FINMIND_TOKEN", "")
-    result = export_all(out, token)
+    ids = [s.strip() for s in os.environ.get("STOCK_IDS", "").split(",") if s.strip()]
+    result = export_all(out, token, ids or None)
 
     print(f"✅ stock.db 已更新 → {out}")
     for name, n in result.items():
