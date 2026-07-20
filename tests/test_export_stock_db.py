@@ -56,18 +56,48 @@ def test_signal_row_and_invalid():
         E._signal_row({"score_latest": None})
 
 
-def test_technical_row_reuses_indicators_and_aligns_schema():
+def test_technical_row_core_only_df_aligns_schema():
+    """只有 date/close 的最小 df → 核心欄齊；加料欄(KD/籌碼/ma60)缺來源 → 誠實 None（不填 0）。"""
     n = 40
     dates = pd.date_range("2026-06-01", periods=n).strftime("%Y-%m-%d")
     close = pd.Series([100 + i * 0.5 + (1.0 if i % 3 == 0 else -0.5) for i in range(n)])
     df = pd.DataFrame({"date": dates, "close": close})
     row = E._technical_row(df, "2330")
     assert row is not None
-    date, sid, c, rsi, up, lo = row            # 對齊下游 stock_technical 6 欄
-    assert (sid, len(row)) == ("2330", 6)
-    assert isinstance(c, float)
-    assert 0.0 <= rsi <= 100.0                  # RSI 值域
-    assert up > lo                              # 上軌 > 下軌
+    assert set(row) == set(E._TECH_COLS)            # 欄位對齊下游 stock_technical
+    assert row["stock_id"] == "2330"
+    assert isinstance(row["close"], float)
+    assert 0.0 <= row["rsi"] <= 100.0               # RSI 值域
+    assert row["upper_band"] > row["lower_band"]    # 上軌 > 下軌
+    assert row["ma20"] is not None                  # 40 列 → MA20 可算
+    assert row["ma60"] is None                      # 僅 40 列 < 60 → 誠實 None
+    assert row["kd_k"] is None and row["kd_d"] is None            # 無 high/low → None
+    assert row["foreign_net_lots"] is None          # 無籌碼欄 → None（不填 0）
+    assert row["total_net_lots"] is None
+
+
+def test_technical_row_extracts_chip_kd_ma_from_combined_df():
+    """含 high/low/MA/籌碼欄的 combined df → KD/均線/籌碼(張)都撈出（重用 SSOT,不重算,保留負號）。"""
+    n = 70
+    dates = pd.date_range("2026-04-01", periods=n).strftime("%Y-%m-%d")
+    close = pd.Series([100 + i * 0.3 for i in range(n)])
+    df = pd.DataFrame({
+        "date": dates,
+        "high": close + 1.0,
+        "low": close - 1.0,
+        "close": close,
+        "MA20": close.rolling(20).mean(),
+        "MA60": close.rolling(60).mean(),
+        "外資": [None] * (n - 1) + [-115284.0],      # 張(net 賣超為負)
+        "投信": [None] * (n - 1) + [739.0],
+        "主力合計": [None] * (n - 1) + [-121700.0],  # 三大法人＝外資+投信+自營
+    })
+    row = E._technical_row(df, "6770")
+    assert row["ma20"] is not None and row["ma60"] is not None
+    assert row["kd_k"] is not None and 0.0 <= row["kd_k"] <= 100.0
+    assert row["foreign_net_lots"] == -115284.0     # 張,保留負號（賣超）
+    assert row["trust_net_lots"] == 739.0
+    assert row["total_net_lots"] == -121700.0
 
 
 def test_technical_row_insufficient_data_returns_none():
