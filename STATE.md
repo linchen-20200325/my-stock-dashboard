@@ -1,5 +1,21 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📲 2026-07-20 每日早報 LINE 推播 — pilot v1 骨架 v19.137(user 主動要求新功能)
+
+user 要「早上主動推播 + AI Agent 排程」。§8.1 設計核准後,依 §8.5 一次一塊,**先做股票 pilot 的推播骨架**:
+- **L1 outbound**:`src/data/notify/line_push.py` `push_line(text)` — 打 LINE 官方 Messaging API
+  `/push`(舊 LINE Notify 已停用)。token/user id 由 env(GitHub secrets)讀;retry×3 指數退避;
+  失敗 raise(§1);>5000 字切多則、單次 push >5 則分批。**不 import streamlit**(§8.2 L1)。
+- **CLI**:`scripts/push_morning_brief.py` — v1 只送「管線測試+時間戳」誠實狀態訊息(deps 僅
+  requests,不碰 src.services 重 import 鏈),證明 LINE 打得通。失敗非 0 退出。
+- **Workflow**:`.github/workflows/morning_push.yml` — cron `50 21 * * *`(TW 05:50)+ workflow_dispatch。
+  ⚠️ GH Actions cron 有 3~15 分 jitter,到達約 05:50~06:10。
+- **測試**:`test_line_push`(10:payload/缺token/空訊息/重試/切段/分批)+ `test_morning_push_pilot`(2)。
+  全庫 3358 collect 無 error。
+- **純新增,不動既有 code**。**待 user 端**:LINE secrets 已設 → workflow_dispatch 手動觸發驗證手機收到。
+- **下一步(未做)**:① `morning_brief` 接總經紅綠燈/出場訊號/AI 判讀(引重依賴)② 複製到基金 repo
+  ③ Part A 抓資料 cron 改「產生+2h」。
+
 ## 📝 2026-07-20 CLAUDE.md §3.2 校正 v19.136 — 三大法人 outlier wiring 過時註記(user 核准 SSOT)
 
 v19.135 已把 inst outlier helper wire 進 `section_chips_20d`,但 CLAUDE.md §3.2 該行仍寫

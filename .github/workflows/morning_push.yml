@@ -1,0 +1,35 @@
+name: "每日股票早報推播（LINE）"
+
+on:
+  schedule:
+    # 台灣 05:50（UTC 21:50）。
+    # ⚠️ GitHub Actions cron 有 3~15 分 jitter，實際到達約 05:50~06:10，非秒級精準。
+    - cron: "50 21 * * *"
+  workflow_dispatch:   # 手動觸發：設好 secrets 後在 Actions 頁面點 Run workflow 測試
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps (pilot v1：僅 requests)
+        run: pip install "requests>=2.31.0,<3.0.0"
+
+      - name: Build & push morning brief
+        env:
+          # 在 repo → Settings → Secrets and variables → Actions 新增：
+          #   LINE_CHANNEL_ACCESS_TOKEN（LINE Developers → Messaging API channel）
+          #   LINE_USER_ID（LINE Developers → Basic settings → Your user ID；並加 bot 好友）
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+        run: python scripts/push_morning_brief.py
