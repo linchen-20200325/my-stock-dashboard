@@ -15,6 +15,13 @@ from __future__ import annotations
 
 import datetime as _dt
 import sys
+from pathlib import Path
+
+# repo-root sys.path guard(v19.103 不變量):`python scripts/xxx.py` 直跑時
+# sys.path[0]=scripts/,不含 repo root → `from src.* import` 必 ImportError。
+# 模板見 scripts/calibrate_health_weights.py。
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_REPO_ROOT))
 
 _TW_TZ = _dt.timezone(_dt.timedelta(hours=8))   # Asia/Taipei UTC+8(§4.5)
 
