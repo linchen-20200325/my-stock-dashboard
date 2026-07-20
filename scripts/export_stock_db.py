@@ -13,8 +13,10 @@
     - `money_supply`        M1B/M2 月供給（finmind_m1m2.parquet,億元 level + gap 點差）
     - `macro_tw_pmi`        台灣 PMI 最後良值（macro_last_good/tw_pmi.json）
 * 🔴 live 層（需 `FINMIND_TOKEN`；**缺 token → Fail-Loud 略過該表 + 警告,不造假**）
-    - `stock_technical`     個股 close/RSI/布林軌（下游 2026 個股分析的主要輸入;
-                            RSI/軌重用 compute_rsi / calc_bollinger,STOCK_IDS 指定個股清單）
+    - `stock_technical`     個股 close/RSI/布林軌/均線(MA20,60)/KD/逐檔籌碼(外資,投信,三大法人 張)
+                            （下游 2026 個股盯盤卡的主要輸入;全部重用 SSOT 指標函式
+                            compute_rsi / calc_bollinger / calc_kd / calc_ma_series +
+                            get_combined_data 既有欄,不重算。STOCK_IDS 指定個股清單）
     - `monthly_revenue`     全市場月營收（fetch_batch_monthly_revenue,單位 元）
     - `macro_tw_signal`     景氣對策信號燈號（fetch_ndc_signal_history）
 
@@ -147,13 +149,26 @@ def write_monthly_revenue(conn: sqlite3.Connection, token: str) -> int:
 _DEFAULT_STOCK_IDS = ["2330", "2317", "2454", "2308", "2412", "2882", "0050", "0056"]
 
 
-def _technical_row(df: pd.DataFrame, stock_id: str):
-    """個股日K df → (date, stock_id, close, rsi, upper_band, lower_band)；不足資料回 None。
+# stock_technical 落地欄序（SSOT for 本表 schema；下游 2026 `_fetch_technical` 對齊此清單）。
+_TECH_COLS = [
+    "date", "stock_id", "close", "rsi", "upper_band", "lower_band",
+    "ma20", "ma60", "kd_k", "kd_d",
+    "foreign_net_lots", "trust_net_lots", "total_net_lots",
+]
 
-    對齊下游 2026 `stock_technical` schema。RSI / 布林軌**重用本專案 SSOT 指標函式**,不重算。
+
+def _technical_row(df: pd.DataFrame, stock_id: str):
+    """個股日K df → dict（欄位見 `_TECH_COLS`）；**核心**(close/rsi/布林)不足 → 回 None。
+
+    對齊下游 2026 `stock_technical` schema。**全部重用本專案 SSOT 指標函式,不重算**：
+    RSI=compute_rsi、布林軌=calc_bollinger、KD=calc_kd、均線優先取 get_combined_data 既算好的
+    MA20/MA60 欄（缺→calc_ma_series 補算）。籌碼(外資/投信/主力合計＝三大法人,單位 **張**)取自
+    get_combined_data 既有欄；缺欄 → None（§1 不捏造,不填 0）。
+
+    分層：核心欄缺 → 整檔回 None（該股略過）；加料欄(KD/均線/籌碼)個別缺 → 該欄 None。
     """
     from src.compute.scoring.scoring_engine import compute_rsi
-    from src.compute.strategy.tech_indicators import calc_bollinger
+    from src.compute.strategy.tech_indicators import calc_bollinger, calc_kd, calc_ma_series
 
     if df is None or df.empty or "close" not in df.columns:
         return None
@@ -164,7 +179,46 @@ def _technical_row(df: pd.DataFrame, stock_id: str):
     if pd.isna(rsi):
         return None
     date = str(df["date"].iloc[-1])[:10] if "date" in df.columns else None
-    return (date, stock_id, float(df["close"].iloc[-1]), float(rsi), bb["upper"], bb["lower"])
+
+    def _last(col: str):
+        """某欄最後一個值（缺欄或 NaN → None,不填 0）。"""
+        if col not in df.columns:
+            return None
+        v = df[col].iloc[-1]
+        return None if pd.isna(v) else float(v)
+
+    # 均線(元)：優先用 get_combined_data 既算好的 MA20/MA60（SSOT）,缺欄 → calc_ma_series 補
+    ma20 = _last("MA20")
+    if ma20 is None:
+        v = calc_ma_series(df["close"], 20).iloc[-1]
+        ma20 = None if pd.isna(v) else float(v)
+    ma60 = _last("MA60")
+    if ma60 is None:
+        v = calc_ma_series(df["close"], 60).iloc[-1]
+        ma60 = None if pd.isna(v) else float(v)
+
+    # KD(0~100 無單位)：需 high/low/close;缺欄 → None（不捏造）
+    kd_k = kd_d = None
+    if {"high", "low", "close"}.issubset(df.columns):
+        k, d = calc_kd(df)                   # calc_kd(df, period=9) → (k,d) 或 (None,None)
+        kd_k = None if k is None else float(k)
+        kd_d = None if d is None else float(d)
+
+    return {
+        "date": date,
+        "stock_id": stock_id,
+        "close": float(df["close"].iloc[-1]),
+        "rsi": float(rsi),
+        "upper_band": bb["upper"],
+        "lower_band": bb["lower"],
+        "ma20": ma20,
+        "ma60": ma60,
+        "kd_k": kd_k,
+        "kd_d": kd_d,
+        "foreign_net_lots": _last("外資"),    # 張(net;賣超為負)
+        "trust_net_lots": _last("投信"),      # 張
+        "total_net_lots": _last("主力合計"),  # 張(三大法人＝外資+投信+自營)
+    }
 
 
 def write_stock_technical(conn: sqlite3.Connection, stock_ids: list[str], token: str) -> int:
@@ -187,9 +241,10 @@ def write_stock_technical(conn: sqlite3.Connection, stock_ids: list[str], token:
     if not rows:
         _log("⚠️ 略過 stock_technical：所有個股皆無有效資料（不寫空表）")
         return -1
-    pd.DataFrame(
-        rows, columns=["date", "stock_id", "close", "rsi", "upper_band", "lower_band"]
-    ).to_sql("stock_technical", conn, if_exists="replace", index=False)
+    # columns=_TECH_COLS：固定欄序（dict → 表），下游 2026 對齊此清單。
+    pd.DataFrame(rows, columns=_TECH_COLS).to_sql(
+        "stock_technical", conn, if_exists="replace", index=False
+    )
     return len(rows)
 
 
