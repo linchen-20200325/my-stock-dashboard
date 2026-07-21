@@ -19,6 +19,8 @@
                             get_combined_data 既有欄,不重算。STOCK_IDS 指定個股清單）
     - `monthly_revenue`     全市場月營收（fetch_batch_monthly_revenue,單位 元）
     - `macro_tw_signal`     景氣對策信號燈號（fetch_ndc_signal_history）
+    - `futures_oi`          台指期外資留倉淨口數（finmind_fut_oi,單位 口;+多/-空）
+    - `futures_night`       台指期日盤+夜盤收盤 → 夜盤漲跌（finmind_fut_night;盤前隔日開盤領先）
 
 （`stock_health`（MJ 財報評級）為下一增量,需財報體檢管線,另接。）
 
@@ -128,6 +130,55 @@ def _revenue_rows(df: pd.DataFrame) -> pd.DataFrame:
     out = df[cols].copy()
     out = out[out["revenue"].notna()]     # 缺值顯式剔除,不填 0（§1 Fail-Loud）
     return out
+
+
+def _fut_oi_rows(oi: dict) -> pd.DataFrame:
+    """finmind_fut_oi dict {YYYYMMDD: 淨口} → DataFrame(date=YYYY-MM-DD, foreign_net_oi_lots)（純轉換）。"""
+    rows = [
+        {"date": f"{k[:4]}-{k[4:6]}-{k[6:8]}", "foreign_net_oi_lots": v}
+        for k, v in sorted(oi.items())
+        if v is not None and len(str(k)) == 8
+    ]
+    return pd.DataFrame(rows, columns=["date", "foreign_net_oi_lots"])
+
+
+def write_futures_oi(conn: sqlite3.Connection, token: str) -> int:
+    """台指期外資留倉 → futures_oi（缺 token → 略過 + 警告）。"""
+    if not token:
+        _log("⚠️ 略過 futures_oi：未設 FINMIND_TOKEN（不造假）")
+        return -1
+    from datetime import datetime, timedelta
+
+    from src.data.macro.leading_indicators import finmind_fut_oi
+
+    end = datetime.now()
+    start = end - timedelta(days=120)
+    oi = finmind_fut_oi(start.strftime("%Y%m%d"), end.strftime("%Y%m%d"), token)
+    if not oi:
+        _log("⚠️ 略過 futures_oi：fetch 回空（不寫空表）")
+        return -1
+    rows = _fut_oi_rows(oi)
+    rows.to_sql("futures_oi", conn, if_exists="replace", index=False)
+    return len(rows)
+
+
+def write_futures_night(conn: sqlite3.Connection, token: str) -> int:
+    """台指期夜盤漲跌 → futures_night（缺 token → 略過 + 警告）。"""
+    if not token:
+        _log("⚠️ 略過 futures_night：未設 FINMIND_TOKEN（不造假）")
+        return -1
+    from datetime import datetime, timedelta
+
+    from src.data.macro.leading_indicators import finmind_fut_night
+
+    end = datetime.now()
+    start = end - timedelta(days=120)
+    df = finmind_fut_night(start.strftime("%Y%m%d"), end.strftime("%Y%m%d"), token)
+    if df is None or df.empty:
+        _log("⚠️ 略過 futures_night：fetch 回空（不寫空表）")
+        return -1
+    df.to_sql("futures_night", conn, if_exists="replace", index=False)
+    return len(df)
 
 
 def write_monthly_revenue(conn: sqlite3.Connection, token: str) -> int:
@@ -299,6 +350,8 @@ def export_all(db_path: Path, token: str, stock_ids: list[str] | None = None) ->
         )
         result["monthly_revenue"] = write_monthly_revenue(conn, token)
         result["macro_tw_signal"] = write_macro_tw_signal(conn, token)
+        result["futures_oi"] = write_futures_oi(conn, token)
+        result["futures_night"] = write_futures_night(conn, token)
         conn.commit()
     finally:
         conn.close()

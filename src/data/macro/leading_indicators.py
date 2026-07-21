@@ -302,6 +302,61 @@ def finmind_fut_oi(start_ymd, end_ymd, token=""):
 
     return {k: round(v) for k, v in result.items()}
 
+
+_FUT_NIGHT_COLS = ["date", "night_close", "day_close", "chg_pts", "chg_pct"]
+
+
+def _fut_night_rows(df):
+    """TaiwanFuturesDaily(TX) → DataFrame(date, night_close, day_close, chg_pts, chg_pct)（純轉換,可單測）。
+
+    每日各時段取「成交量最大」的契約（近月主力）;日盤=position、夜盤=after_market。
+    夜盤漲跌 = 夜盤收 − 同日日盤收（日盤缺 → 漲跌 None,不臆造;§1 Fail-Loud）。
+    夜盤時段 15:00–05:00 為台灣時間（涵蓋歐美盤 → 對隔日開盤有領先性）。
+    """
+    need = {"date", "trading_session", "close", "volume"}
+    if df is None or getattr(df, "empty", True) or not need.issubset(df.columns):
+        return pd.DataFrame(columns=_FUT_NIGHT_COLS)
+    d = df.copy()
+    d["close"] = pd.to_numeric(d["close"], errors="coerce")
+    d["volume"] = pd.to_numeric(d["volume"], errors="coerce")
+    d = d[d["close"].notna() & d["volume"].notna()]
+    if d.empty:
+        return pd.DataFrame(columns=_FUT_NIGHT_COLS)
+    # 每 (date, session) 取成交量最大的契約 → 近月主力。
+    idx = d.groupby(["date", "trading_session"])["volume"].idxmax()
+    piv = d.loc[idx].pivot(index="date", columns="trading_session", values="close")
+    rows = []
+    for d_str, r in piv.iterrows():
+        night_c = r.get("after_market")
+        if pd.isna(night_c):                       # 無夜盤資料 → 跳過該日
+            continue
+        day_c = r.get("position")
+        row = {"date": str(d_str), "night_close": float(night_c),
+               "day_close": None, "chg_pts": None, "chg_pct": None}
+        if not pd.isna(day_c) and float(day_c) > 0:
+            row["day_close"] = float(day_c)
+            row["chg_pts"] = float(night_c) - float(day_c)
+            row["chg_pct"] = (float(night_c) / float(day_c) - 1.0) * 100.0
+        rows.append(row)
+    return pd.DataFrame(rows, columns=_FUT_NIGHT_COLS)
+
+
+@_safe_cache(ttl=TTL_30MIN, show_spinner=False)
+def finmind_fut_night(start_ymd, end_ymd, token=""):
+    """台指期(TX)日盤+夜盤收盤 → 夜盤漲跌（FinMind TaiwanFuturesDaily）。
+
+    盤前「隔日開盤方向」領先訊號。無 token / 抓取失敗 → 回空 DataFrame（Fail-Loud,不造假）。
+    """
+    if not token:
+        return pd.DataFrame(columns=_FUT_NIGHT_COLS)
+    try:
+        df = finmind_get("TaiwanFuturesDaily", "TX", start_ymd, end_ymd, token)
+    except Exception as _e:  # noqa: BLE001 — 抓取失敗降級為空,log 不吞（§1）
+        print(f"[fut_night] FinMind 失敗: {type(_e).__name__}: {_e}")
+        return pd.DataFrame(columns=_FUT_NIGHT_COLS)
+    return _fut_night_rows(df)
+
+
 @_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def taifex_calls_puts_day(date_ymd):
     """

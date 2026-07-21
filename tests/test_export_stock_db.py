@@ -13,6 +13,39 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import export_stock_db as E  # noqa: E402
 
 
+def test_fut_oi_rows_dict_to_df():
+    # {YYYYMMDD: 淨口} → DataFrame(date, foreign_net_oi_lots)，排序 + 過濾 None/壞 key
+    df = E._fut_oi_rows({"20260718": 12480, "20260717": 9800, "bad": 1, "20260716": None})
+    assert list(df["date"]) == ["2026-07-17", "2026-07-18"]
+    assert list(df["foreign_net_oi_lots"]) == [9800, 12480]
+
+
+def test_fut_night_rows_picks_active_contract_and_computes_chg():
+    from src.data.macro.leading_indicators import _fut_night_rows
+    df = pd.DataFrame([
+        {"date": "2026-07-18", "trading_session": "position", "close": 22000, "volume": 100000},
+        {"date": "2026-07-18", "trading_session": "position", "close": 21500, "volume": 10},   # 遠月→忽略
+        {"date": "2026-07-18", "trading_session": "after_market", "close": 22150, "volume": 80000},
+        {"date": "2026-07-18", "trading_session": "after_market", "close": 21400, "volume": 5},  # 遠月
+    ])
+    r = _fut_night_rows(df).iloc[0]
+    assert r["date"] == "2026-07-18"
+    assert r["night_close"] == 22150.0 and r["day_close"] == 22000.0   # 各時段取量大近月
+    assert r["chg_pts"] == 150.0
+    assert abs(r["chg_pct"] - (22150 / 22000 - 1) * 100) < 1e-9
+
+
+def test_fut_night_rows_no_night_or_bad_schema_empty():
+    from src.data.macro.leading_indicators import _fut_night_rows
+    # 只有日盤（無 after_market）→ 跳過該日
+    day_only = pd.DataFrame(
+        [{"date": "2026-07-18", "trading_session": "position", "close": 22000, "volume": 100}]
+    )
+    assert _fut_night_rows(day_only).empty
+    assert _fut_night_rows(pd.DataFrame()).empty              # 空
+    assert _fut_night_rows(pd.DataFrame([{"x": 1}])).empty    # 欄不齊
+
+
 def test_durable_export_from_real_parquet(tmp_path):
     """離線 6 表讀 data_cache 真 parquet；無 token → live 表 Fail-Loud 略過。"""
     db = tmp_path / "stock.db"

@@ -1,0 +1,56 @@
+name: "匯出 stock.db（台股總經 + 財報/技術）→ data 分支，供 2026 讀取"
+
+# 把 my-stock 的台股總經（PMI、外資、M1B/M2、加權指數）+ 財報 + 個股技術/籌碼
+# 用既有 scripts/export_stock_db.py 落地成 stock.db，force-push 到本 repo 的 `data` 分支。
+# 下游 2026 的國際盤 / 個股 workflow 會 checkout `data` 分支取用。
+#
+# 離線層（PMI/外資/M1B2/加權/財報）讀已 commit 的 data_cache → 真台股總經、免 key。
+# live 層（stock_technical 個股技術/籌碼、景氣燈號、月營收）→ 有 FINMIND_TOKEN 才產;
+# 抓不到 → Fail-Loud 略過該表(不造假)，離線層照常產出。
+
+on:
+  schedule:
+    # 每日 UTC 21:00（台灣 05:00）—— 排在下游 2026 國際盤推播（早上）之前。
+    - cron: "0 21 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install deps
+        # 與 update_macro_history.yml 一致：src 模組有 sibling eager import,需完整 requirements。
+        run: pip install -r requirements.txt
+
+      - name: Export stock.db
+        env:
+          # 有 token → 連 stock_technical（個股技術/籌碼）+ 景氣燈號 live 表一起產;
+          # 無 / 抓不到 → 離線層(真台股總經)照常，live 表 Fail-Loud 略過。
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+        run: python scripts/export_stock_db.py --output stock.db
+
+      - name: Publish stock.db → data 分支
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # 暫存 orphan 分支 → force-push 到 data：永遠 1 個 commit，不撐大 repo。
+          git checkout --orphan _pub
+          git reset -q .
+          git add -f stock.db
+          git commit -q -m "data: stock.db $(date -u '+%Y-%m-%dT%H:%M:%SZ') [skip ci]"
+          git push -f origin _pub:data
