@@ -1,5 +1,19 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🎚️ 2026-07-21 ETF 組合新增「風險貢獻分解」（v19.137,user 核准 §7/§8 對齊後動工）
+
+user 看了 PyPortfolioOpt 後問「有值得學的嗎」→ 我判定 library 本身不值得引入(重依賴 cvxpy/scipy/sklearn + 均值變異數「假精準」牴觸 §1),但其中一個概念 **Risk Contribution(風險貢獻分解)** 值得 —— 描述性、又輕又穩、貼合「描述現有持股」方向。user 核准「開工」,§7 計算式 + §8 架構皆先對齊。
+
+- **它回答什麼**:某檔市值只佔 40%,卻可能扛了 60% 組合波動 → 揭露「分散效果被高估、風險其實壓在哪幾檔」。
+- **數學(§7 對齊)**:σ_p = √(wᵀΣw);RC_i = w_i·(Σw)_i/σ_p;PRC_i = RC_i/σ_p。**只用 Σw、不需反矩陣** → 數值穩定,無 PyPortfolioOpt 均值變異數的病態問題。§4.3 對帳:Σ RC_i 必 = σ_p(不符則 raise,非 assert 以免 -O 剝除)。
+- **§1 誠實邊界**:缺價歷史的持股 → **剔除並記市值%(不灌 0)**;重疊觀測 <60 日 → low_confidence 旗標仍算但標低可信度;組合零波動 → 回 note 不硬除;權重未正規化 → 內部正規化(scale-free)。
+- **架構(§8.2 全合規)**:
+  - L0 `shared/risk_contribution_thresholds.py`(RC_MIN_OVERLAP_DAYS=60 / RC_CONCENTRATION_GAP_PCT=10;年化 252 重用 signal_thresholds.TRADING_DAYS_PER_YEAR,不重造)。
+  - L2 `src/compute/risk/risk_contribution.py` 純函式(零 I/O / 零 streamlit;`compute_risk_contribution(returns, weights)` → `RiskContributionResult`;註冊進 risk/__init__ lazy __getattr__)。
+  - L5 `etf_tab_portfolio.py` 接線:插在「相關係數矩陣」段後(同源 `ret_dict` 日報酬),渲染「市值% vs 風險%」表 + 風險集中紅框警示。L5→L2 下行依賴合規,無新增 L1 直呼。
+- **零新依賴**(純 numpy/pandas)。**範圍**:先做 ETF 組合(資料路徑現成);個股組合為後續。
+- **回歸網**:`tests/test_risk_contribution.py` 16 test —— Euler 加總100 / 等vol等權50-50 / 高vol風險放大+集中警示 / 單檔100% / 缺價剔除不灌0 / 樣本不足旗標 / 零波動note / scale-free / 相關資產Euler對帳不raise / property(任意權重vol恆加總100且非負)。全綠;ruff 淨;L2 純度掃描過。
+
 ## 📝 2026-07-20 CLAUDE.md §3.2 校正 v19.136 — 三大法人 outlier wiring 過時註記(user 核准 SSOT)
 
 v19.135 已把 inst outlier helper wire 進 `section_chips_20d`,但 CLAUDE.md §3.2 該行仍寫

@@ -1,7 +1,7 @@
 """src/compute/risk/ — 風控 / 短線雷達 / 法人 sanity / 對帳。PEP 562 lazy forward。"""
-from . import risk_control, risk_radar, inst_sanity, reconcile  # noqa: F401
+from . import risk_contribution, risk_control, risk_radar, inst_sanity, reconcile  # noqa: F401
 
-_SUBMODULES = (risk_control, risk_radar, inst_sanity, reconcile)
+_SUBMODULES = (risk_contribution, risk_control, risk_radar, inst_sanity, reconcile)
 
 
 def __getattr__(name):
