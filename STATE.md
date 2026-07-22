@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📈 2026-07-21 跨季趨勢 A-2 接線:選股網因子 + 全市場排行（v19.140,user 選「3」兩者都做）
+
+A-1 地基上線後,user 選「3」= **兩種呈現都做**:①選股網加因子 ②全台股獨立排行。
+
+- **L3 service**(`fundamental_screener_service`):新增 `get_cross_quarter_trends(refresh=)`(組合 L1 全季 loader + L2 compute,@st.cache_data 集中快取)+ `build_trend_map()` → `{stock_id: favorable_count}`(快照缺回空 dict 不炸)。
+- **① 選股網因子**:`SCREEN_ANGLE_LABELS` 加「跨季轉強(毛利/營益率升·負債降·營收增)」→ key `trend`;`composite_rank_candidates` 加 `trend_map` 參數 + `_cfg["trend"]=(trend_map,True,"跨季分")`;缺料的股不在 map → `_percentile_scores` 自然不計入(§1,非「尚未掃描」提示,因 trend 是算的非掃的)。app.py 按「開始選股」勾 trend 時 `build_trend_map()`(秒級,從快照算)存 session 傳入。
+- **② 全市場排行**:app.py 選股網底 button-gated expander「🌍 全台股跨季趨勢排行」→ `get_cross_quarter_trends()` 列**全市場 ~2000 檔(非只存活池)**依佳項數排前 100 + CSV 下載。放 expander 不擾亂極簡主流程。
+- **實測**:trend_map 1970 檔;選股網 trend 單因子可排存活池 324 檔;§8 分層合規(L6→L3 service,非 pass-through 例外,無需登錄)。
+- **零新依賴**;`tests/test_composite_rank.py` 補 3 test(trend 因子排序/缺 trend 不誤報掃描 note/缺料不灌 0)→ 全檔 + 跨季 + magic-guard **26 passed**;app.py compile OK、無新增 ruff 錯(4 個 E402/E401 皆 app.py 既有,非本次)。
+- **下一步**:B-0 全台股價格快照可行性探針 → B-1 建 cron。
+
 ## 📈 2026-07-21 全台股跨季趨勢 A-1:L1 全季 loader + L2 趨勢計算（v19.139,user 選「A+B」,A 先）
 
 user 要「全台股跨季大規模掃描」→ 拆 A(基本面跨季,便宜)+ B(價格快照,大工程),分批。A-1 為兩種呈現(選股網因子 / 獨立排行)共用的地基。
