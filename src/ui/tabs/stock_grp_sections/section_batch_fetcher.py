@@ -213,7 +213,11 @@ def run_batch_fetch(stock_list: list[str]) -> None:
             if df4 is not None and not df4.empty:
                 try:
                     _n4_use = name4 or get_stock_name(sid4)
-                    sf = score_single_stock(df4, sid4, _n4_use)
+                    # v19.148 ① 接線:個股組合 6 因子評分依總經 regime 切 WEIGHT_TABLES
+                    # (bull 重趨勢/動能、bear 重風控/基本面)。原本沒傳 regime → 恆 neutral;
+                    # macro_state 未評估(沒開總經頁)→ neutral(誠實不誤判多空)。
+                    _grp_regime = (st.session_state.get('macro_state', {}) or {}).get('regime') or 'neutral'
+                    sf = score_single_stock(df4, sid4, _n4_use, regime=_grp_regime)
                     score_t3.append(sf)
                 except Exception:
                     pass
