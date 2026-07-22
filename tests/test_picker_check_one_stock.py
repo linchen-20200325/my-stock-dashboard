@@ -101,20 +101,22 @@ def test_resolved_ticker_used_for_dividend_ticker_not_bare_code():
     查配息,而非用原始無後綴代碼(否則配息查詢會用錯代號)。
     B7 v19.154:配息改走 L1 cached_dividends → guard 對齊,patch L1 fetcher 驗傳入代號。"""
     import pandas as _pd
-    import src.data.proxy as _proxy
+    # patch 真正持有者 yf_proxy(非 package src.data.proxy),否則會遮蔽 PEP 562
+    # 轉發 → 觸 test_zz_proxy_pollution_lock(v19.74/v19.113 地雷)。
+    import src.data.proxy.yf_proxy as _yfp
     import src.ui.tabs.tab_stock_picker as _tsp
     _seen = {}
-    _orig = _proxy.cached_dividends
+    _orig = _yfp.cached_dividends
 
     def _recording(symbol):
         _seen['symbol'] = symbol
         return _pd.Series(dtype=float)
 
-    _proxy.cached_dividends = _recording
+    _yfp.cached_dividends = _recording
     try:
         _tsp._check_one_stock('2330', datetime.date.today())
     finally:
-        _proxy.cached_dividends = _orig
+        _yfp.cached_dividends = _orig
     assert _seen.get('symbol') == '2330.TW', _seen
 
 
