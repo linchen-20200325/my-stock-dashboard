@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🎚️ 2026-07-21 風險貢獻分解擴至個股組合 + render 抽 L4 共用（v19.138,user 選「第一點」）
+
+v19.137 ETF 組合上線後,user 要「個股組合也補」。查證個股組合頁(`tab_stock_grp`)是「比較×排行」工具、非持股權重組合 → 給 user 三選項,user 選**第一點**:那頁新增「輸入持股張數」再算風險貢獻。
+
+- **DRY 重構**:把 v19.137 ETF 頁 inline 的 render 抽成 L4 `src/ui/render/risk_contribution_render.py:render_risk_contribution_panel(result, *, warn_box, show_header)`,ETF/個股兩頁共用單一面板。ETF 頁改用它(以 `warn_box=_colored_box` 保留原紅框樣式,零視覺位移)。
+- **個股組合接線**:`tab_stock_grp._render_risk_contribution_section(stock_list)` — expander 內 `st.data_editor`(代碼唯讀 + 持有張數)→ 按「算風險貢獻」才抓價(button-gated,不拖慢頁面)→ 每檔 `fetch_stock_history_1y` 取 1y 收盤 → 市值 = 張數×1000×現價、日報酬 = pct_change → 同 L2 `compute_risk_contribution` → 同 L4 面板。
+- **§1**:抓不到價格的檔剔除並列出(不灌 0);權重 scale-free(×1000 對所有檔一致,正規化後不影響)。**§8.2**:L4 render 用 streamlit 合規;L5→L1 `fetch_stock_history_1y` 為 pass-through(L1 內已 @st.cache_data),**已登錄 EX-PASSTHRU-1**(CLAUDE.md + 檔內註解 + 本 PR 描述三處齊)。
+- **零新依賴**。**回歸網**:`tests/test_risk_contribution.py` 新增 slow AppTest `TestRiskContribPanelRender`(合成資料→真 L2 結果→渲染 L4 面板不炸、表格有出、集中警示走 st.error)。全檔 16 fast + 1 slow 全綠;ruff 淨;三 UI 模組 import OK。
+
 ## 🎚️ 2026-07-21 ETF 組合新增「風險貢獻分解」（v19.137,user 核准 §7/§8 對齊後動工）
 
 user 看了 PyPortfolioOpt 後問「有值得學的嗎」→ 我判定 library 本身不值得引入(重依賴 cvxpy/scipy/sklearn + 均值變異數「假精準」牴觸 §1),但其中一個概念 **Risk Contribution(風險貢獻分解)** 值得 —— 描述性、又輕又穩、貼合「描述現有持股」方向。user 核准「開工」,§7 計算式 + §8 架構皆先對齊。
