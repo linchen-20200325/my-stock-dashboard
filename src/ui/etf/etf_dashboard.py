@@ -42,7 +42,6 @@ from src.ui.render import (  # noqa: F401
     _plot_etf_chart, _plot_correlation, _plot_holdings_overlap, _render_bias,
     _render_weakness_table, render_etf_holdings,
     _ETF_SECTOR_MAP, _check_sector_exposure,
-    _render_monte_carlo, _etf_ai_backtest,
     _US_SECTORS, _TW_SECTORS, _PERIOD_MAP,
     _build_treemap_data, render_sector_heatmap,
 )

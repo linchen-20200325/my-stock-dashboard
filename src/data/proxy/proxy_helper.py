@@ -294,30 +294,3 @@ def nas_relay_fetch(url: str, timeout: int = 15) -> requests.Response | None:
 
 get_proxies = get_proxy_config  # 向下相容別名（get_proxies 指向有 TTL 快取的版本）
 
-
-def fetch_with_proxy(url: str, max_retries: int = 2, **kwargs) -> dict | list | None:
-    """
-    共用安全請求函式（spec proxy_client.py 相容介面）。
-    自動套用 PROXY_URL，失敗捕捉後回傳 None，嚴禁死迴圈。
-    """
-    _proxies = get_proxies()
-    _hdr = {
-        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                       'AppleWebKit/537.36 (KHTML, like Gecko) '
-                       'Chrome/124.0.0.0 Safari/537.36'),
-        'Accept': 'application/json, text/plain, */*',
-    }
-    for _i in range(max_retries):
-        try:
-            _r = requests.get(url, headers=_hdr, proxies=_proxies,
-                              timeout=10, verify=False, **kwargs)
-            if _r.status_code == 200:
-                try:
-                    return _r.json()
-                except Exception:
-                    return {'raw': _r.text, 'status': 200}
-            print(f'[fetch_with_proxy] HTTP {_r.status_code} {url[:60]}')
-        except Exception as _e:
-            if _i == max_retries - 1:
-                print(f'[fetch_with_proxy] ❌ {url[:60]}: {type(_e).__name__}')
-    return None

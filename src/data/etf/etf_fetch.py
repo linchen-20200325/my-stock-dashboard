@@ -61,11 +61,6 @@ def get_etf_manager_last_err() -> dict:
     return dict(_ETF_MANAGER_LAST_ERR)
 
 
-def get_etf_index_last_err() -> dict:
-    """Diagnostic 面板 accessor:回最近一次 ETF index fetch 失敗原因(by ticker)。"""
-    return dict(_ETF_INDEX_LAST_ERR)
-
-
 def _fetch_news_for(ticker: str, name: str = "", n: int = 4) -> str:
     """抓取個股/ETF 相關新聞，回傳格式化字串。失敗時回傳空字串。
     走 NAS 中繼站 → Squid proxy(帶 CONSENT cookie 繞 Google 同意頁) → 直連。"""

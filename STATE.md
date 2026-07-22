@@ -1,5 +1,19 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧹 2026-07-22 死碼稽核 + 清除(v19.150,user「檢查有沒有死碼造成程式碼膨脹」→ 選 Tier 1+2）
+
+vulture + ruff + 嚴格雙重驗證 agent(對 98 個候選逐個 grep prod/test/scripts/lazy)盤點。**刪 12 檔、875 行純死碼**,測試回 baseline(3 個 pre-existing 月營收 fail 為本地缺 FinMind,CI 過)。
+
+- **真刪(Tier 2,875 行)**:14 個嚴格驗證 0-caller 死函式 + 1 個整檔死模組:
+  - `shortage_screener_ui.py`(整檔 189 行,v19.111 選股網極簡版拿掉進階 expander 後孤兒)
+  - `yield_screener.render_yield_screener` + `render_yield_confirm`(殖利率反向 pipeline 重構遺留,277 行)
+  - `etf_render._render_monte_carlo` + `_etf_ai_backtest`(ETF 蒙地卡羅/AI回測沒接線,111 行)+ 清 `etf_dashboard` 對應 import
+  - `daily_checklist.analyze_20d_chips`(被 `_from_df` 版取代,109 行)
+  - `data_registry.get_state_value` + `ping_endpoint`、`data_loader.fetch_fund_nav`、`proxy_helper.fetch_with_proxy`、`grape_ladder.evaluate_income_ladder`、`rs_leader_screener.asdict_scores`、`ai_qa_service.make_llm_default_http`、`etf_fetch.get_etf_index_last_err`
+- **⚠️ Tier 1 未用 import(89 個)嘗試後回退**:ruff 清 tab_macro/tab_stock 的 89 個「未用 import」→ **踩到 `test_ssot_b_class_guard` 等 SSOT 守衛**(repo 慣例:把常數 import 存在當「已接線、無 inline 殘留」證據,即使 usage 已搬到 section 檔、import 變殘留)。移除觸發 14 個守衛 fail。**判斷:89 行 vs 守衛風險不值,回退 5 檔 import 變更**;真正膨脹大頭(875 行死函式/模組)保留。教訓:本 repo 的「未用 import」多為守衛釘的接線標記,不能無腦 ruff --fix。
+- **不刪(誤判/刻意保留)**:18 個 `__getattr__`(lazy 轉發)、~9 個 cron script 呼叫、FastAPI route、~50 個 prod-dead-test-live safety-net lib(政策保留)、3 個 app.py 標「ARCHIVED 保留供參考」的 render。
+
+
 ## 🏁 2026-07-22 策略「三條斷鏈」接線工程收尾 + 憲法/架構同步（v19.149,user「merge + SSOT + 程式碼原則 + 存檔」）
 
 策略體檢挖出「零件很齊、很多線沒接上」→ 三個最關鍵連動點全斷。逐條接完、全 merge：

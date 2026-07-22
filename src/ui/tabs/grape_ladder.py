@@ -172,59 +172,6 @@ def recommend_income_ladder(
     }
 
 
-def evaluate_income_ladder(
-    tickers: list[str],
-    shares_map: dict[str, int] | None = None,
-) -> dict:
-    """評估使用者輸入組合的月份覆蓋率 + 每月現金流。
-
-    Returns
-    -------
-    dict
-      tickers, covered_months, missing_months, month_etfs,
-      monthly_cashflow (1..12 完整 key), annual_cashflow, invalid_tickers
-    """
-    if not tickers:
-        return {'_err': '請至少輸入 1 檔 ETF', 'tickers': [], 'invalid_tickers': []}
-    # 去重保序
-    _seen: set[str] = set()
-    _clean: list[str] = []
-    for _t in tickers:
-        _t = (_t or '').strip().upper()
-        if _t and _t not in _seen:
-            _seen.add(_t)
-            _clean.append(_t)
-    # 台股代碼驗證
-    _valid: list[str] = []
-    _invalid: list[str] = []
-    for _t in _clean:
-        if _t.endswith('.TW') or _t.endswith('.TWO'):
-            _valid.append(_t)
-        else:
-            _invalid.append(_t)
-    _shares = shares_map or {}
-    _month_etfs: dict[int, list[str]] = {}
-    _monthly_cf: dict[int, float] = {m: 0.0 for m in range(1, 13)}
-    for _t in _valid:
-        _m_set = get_pay_months(_t)
-        for _m in _m_set:
-            _month_etfs.setdefault(_m, []).append(_t)
-        _cash = get_avg_monthly_cash(_t, shares=_shares.get(_t, 1000))
-        for _m, _v in _cash.items():
-            _monthly_cf[_m] = round(_monthly_cf.get(_m, 0.0) + _v, 2)
-    _covered = {m for m, lst in _month_etfs.items() if lst}
-    _missing = set(range(1, 13)) - _covered
-    return {
-        'tickers': _valid,
-        'covered_months': _covered,
-        'missing_months': _missing,
-        'month_etfs': _month_etfs,
-        'monthly_cashflow': _monthly_cf,
-        'annual_cashflow': round(sum(_monthly_cf.values()), 2),
-        'invalid_tickers': _invalid,
-    }
-
-
 # ══════════════════════════════════════════════════════════════
 # UI Helpers
 # ══════════════════════════════════════════════════════════════

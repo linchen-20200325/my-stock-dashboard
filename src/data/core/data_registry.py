@@ -541,28 +541,6 @@ DATA_REGISTRY: list[dict[str, Any]] = [
 # ══════════════════════════════════════════════════════════════════════════════
 # 工具函式
 # ══════════════════════════════════════════════════════════════════════════════
-def get_state_value(session_state, key_path: str | None) -> Any:
-    """從 session_state 用 dot 路徑取值。
-    e.g. 'macro_info.us_core_cpi.date' →
-         session_state['macro_info']['us_core_cpi']['date']
-    """
-    if not key_path:
-        return None
-    try:
-        parts = key_path.split('.')
-        cur = session_state.get(parts[0]) if hasattr(session_state, 'get') else None
-        for p in parts[1:]:
-            if cur is None:
-                return None
-            if isinstance(cur, dict):
-                cur = cur.get(p)
-            elif hasattr(cur, p):
-                cur = getattr(cur, p)
-            else:
-                return None
-        return cur
-    except Exception:
-        return None
 
 
 def get_categories() -> list[str]:
@@ -581,29 +559,6 @@ def get_by_category(category: str) -> list[dict]:
     return [e for e in DATA_REGISTRY if e.get('category') == category]
 
 
-
-def ping_endpoint(entry: dict, timeout: int = 8) -> dict:
-    """即時測試單一端點連線。
-    回傳 {'ok': bool, 'status': int|None, 'elapsed_ms': int, 'error': str|None}
-    走 proxy_helper.fetch_url() → 自動經 NAS Proxy
-    """
-    import time as _t
-    _start = _t.time()
-    try:
-        from src.data.proxy import fetch_url
-        _resp = fetch_url(entry['ping_url'], timeout=timeout)
-        _elapsed = int((_t.time() - _start) * 1000)
-        if _resp is None:
-            return {'ok': False, 'status': None, 'elapsed_ms': _elapsed,
-                    'error': 'fetch_url 回傳 None'}
-        _ok = _resp.status_code == 200
-        return {'ok': _ok, 'status': _resp.status_code,
-                'elapsed_ms': _elapsed,
-                'error': None if _ok else f'HTTP {_resp.status_code}'}
-    except Exception as _e:
-        _elapsed = int((_t.time() - _start) * 1000)
-        return {'ok': False, 'status': None, 'elapsed_ms': _elapsed,
-                'error': str(_e)[:80]}
 # 📖 EDU_GUIDE — 指標解讀手冊（依 identifier 對應）
 # ══════════════════════════════════════════════════════════════════════════════
 # 設計原則：新人看了就懂。每筆指標回答 6 個問題：
