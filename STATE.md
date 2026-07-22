@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧹 2026-07-22 全域重構 B1｜root 髒污清除（v19.152,深層技術債藍圖 B1/9,user「同意藍圖」→ 分批動刀）
+
+深層稽核藍圖核准後正式進實作。**準則**:一次一類別/單檔、隔離分支(`claude/dazzling-turing-QxI9m`)、每批 self-audit + commit + STATE。
+
+- **B1 目標**:repo root 10 個非程式垃圾(Windows 開發機殘留 + stray 空檔),全 git-tracked 卻無任何 code 引用。
+- **刪除清單**:
+  - stray 空檔(0 byte,誤 `git add` 進來):`2`、`capital`、`v19.293`
+  - Windows git log(mojibake,2026/7/3):`git_push_v18458_log.txt`、`git_stock_log.txt`、`push_v18459.log`
+  - Windows commit 助手 batch(`E:\01.Github\...` 路徑):`push_v18455.bat`~`push_v18458.bat`(4 檔)
+- **安全驗證**:`grep` 全 py/yml/toml/sh 對 10 個 basename → 0 code 引用(唯一 `v19.293` 命中是 `infra/oauth.py:67` 版本註解字串,非 stray 檔)。純刪除、零邏輯改動、零 import 連動。
+- **測試**:不需跑(無 code 變更);working tree 清空這 10 檔後 `git status` 乾淨。
+
 ## 🛡️ 2026-07-22 投組層級風控上限接線（v19.151,user「加在組合中風險貢獻」）
 
 斷鏈②後半。`RiskController` 早定義卻空轉的投組上限(單股 ≤10% / 最多 10 檔)接進**個股組合風險貢獻區塊**(user 指定位置)—— 那裡已有「持有張數 → 市值權重」現成狀態,零新增 state。
