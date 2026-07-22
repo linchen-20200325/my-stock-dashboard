@@ -146,5 +146,12 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
             'futures_net':   _tl_init['fut_net'],
             'confidence_pct': _tl_init['conf'],
         }
+        # v19.148 ① 接線:同步寫 canonical macro_state(單一契約)→ 個股頁加碼三問 +
+        # 個股組合 6 因子評分 + AI regime 全讀這裡,總經狀態終於真的影響選股決策。
+        try:
+            from src.services.macro_state_locker import get_macro_state
+            st.session_state['macro_state'] = get_macro_state(st.session_state['warroom_summary'])
+        except Exception as _e_ms:  # noqa: BLE001 — 寫 canonical 失敗不炸總經頁
+            print(f"[section_traffic_light] macro_state 寫入失敗:{type(_e_ms).__name__}: {_e_ms}")
 
     return _tl_placeholder, _show_market_data, _tl_eff_reg

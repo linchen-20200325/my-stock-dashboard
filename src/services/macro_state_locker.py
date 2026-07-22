@@ -217,6 +217,79 @@ def load_macro_state(state_file_path: str = "macro_state.json") -> dict:
         return _DEFAULT_STATE.copy()
 
 
+# ── ① 總經→選股 接線（v19.148）：canonical macro_state 契約 ──────────────
+# regime 中→英正規化 SSOT。macro_state.json 存中文 market_regime、warroom_summary 已英文;
+# 消費端(個股頁加碼三問 / 個股組合評分 / AI regime)一律用英文 {bull,neutral,caution,bear}。
+_REGIME_ZH_TO_EN: dict = {
+    "多頭": "bull", "多頭市場": "bull",
+    "震盪": "neutral", "震盪整理": "neutral", "盤整": "neutral",
+    "空頭": "bear", "空頭防禦": "bear",
+    "系統異常": "neutral",   # fail-safe → 中性(不誤判多空方向)
+}
+_REGIME_EN = ("bull", "neutral", "caution", "bear")
+
+
+def normalize_regime(value) -> str:
+    """任意 regime 字串(中/英/含 emoji/市場後綴)→ 英文 {bull,neutral,caution,bear}。
+
+    無法辨識 / 空 → "neutral"(§1:寧中性不誤判多空)。修 ai_qa_service `_regime()` 原本
+    回中文 → WEIGHT_TABLES(英文 key)永遠 fallback neutral 的 bug(v19.148 ①接線)。
+    """
+    if not value:
+        return "neutral"
+    s = str(value).strip()
+    if s.lower() in _REGIME_EN:
+        return s.lower()
+    for _zh, _en in _REGIME_ZH_TO_EN.items():
+        if _zh in s:          # 容 emoji/後綴,如 "🟢 多頭市場" 命中 "多頭市場"
+            return _en
+    return "neutral"
+
+
+def get_macro_state(warroom_summary: dict | None = None, *,
+                    state_file_path: str = "macro_state.json") -> dict:
+    """『總經 tab 已算好的狀態』→ 個股/選股決策共用的 canonical dict(① 接線單一契約)。
+
+    來源(§2.1 上層贏、不平均):
+      - regime / health / traffic_light ← warroom_summary(總經紅綠燈,英文 regime + health_score)
+      - exposure_limit_pct ← macro_state.json(calculate_system_state 曝險上限)
+    正規化:regime 一律英文;defense = regime∈{bear,caution} 或 health < HEALTH_DEFENSE_THRESHOLD。
+    is_loaded:總經是否已評估(warroom 有 health 或 macro_state.json 非 fail-safe)。
+      **False → 消費端誠實顯示「總經未評估」,不假裝通過(§1);不回填假多空**。
+
+    純函式:warroom_summary 由 caller 從 session 傳入(本層不碰 session_state);只讀檔。
+    """
+    _wr = warroom_summary or {}
+    try:
+        _file = load_macro_state(state_file_path) or {}
+    except Exception:  # noqa: BLE001 — 檔讀不到當未評估,不炸
+        _file = {}
+
+    _wr_ok = bool(_wr) and _wr.get("health_score") is not None
+    _file_ok = bool(_file) and _file.get("market_regime") not in (None, "系統異常")
+    _is_loaded = _wr_ok or _file_ok
+
+    _regime = normalize_regime(_wr.get("regime") if _wr_ok else _file.get("market_regime"))
+    _health = _wr.get("health_score") if _wr_ok else None
+    _exposure = _file.get("exposure_limit_pct") if _file_ok else None
+
+    try:
+        from src.compute.macro.macro_helpers import HEALTH_DEFENSE_THRESHOLD as _HD
+    except Exception:  # noqa: BLE001 — 門檻取不到用 SSOT 預設 35(macro_buckets)
+        _HD = 35.0
+    _defense = (_regime in ("bear", "caution")) or (
+        _health is not None and float(_health) < float(_HD))
+
+    return {
+        "regime": _regime,
+        "health": (float(_health) if _health is not None else None),
+        "defense": bool(_defense),
+        "exposure_limit_pct": (int(_exposure) if _exposure is not None else None),
+        "traffic_light": (_wr.get("traffic_light") if _wr_ok else None),
+        "is_loaded": bool(_is_loaded),
+    }
+
+
 # ── 理科引擎：Python 規則計算總經狀態 ─────────────────────
 def calculate_system_state(macro_numbers: dict) -> dict:
     """

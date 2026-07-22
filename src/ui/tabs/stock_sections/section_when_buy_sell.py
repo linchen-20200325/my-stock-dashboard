@@ -92,7 +92,11 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
             _sb = compute_std_bands(df2['close'], window=252)
             _sz = _sb.get('sigma_z') if _sb.get('has_data') else None
             _ms = st.session_state.get('macro_state', {}) or {}
-            _macro_def = bool(_ms.get('defense')) or (_ms.get('regime') in ('bear', 'caution'))
+            # v19.148 ① 接線:macro_state 現在真被寫入(總經 tab 紅綠燈 → canonical get_macro_state)
+            # → 總經防守終於生效。未評估(沒開過總經頁)→ 誠實不當防守(§1),下方 caption 提示,
+            # 不再假裝通過(舊行為:macro_state 恆空 → 這一問永遠自動 ✅)。
+            _macro_loaded = bool(_ms.get('is_loaded'))
+            _macro_def = bool(_ms.get('defense')) if _macro_loaded else False
             _gate = assess_add_gate(_sz, _bear_align, _macro_def)
             _glabel = '🟢 可考慮加碼' if _gate['can_add'] else '🔴 不建議加碼'
             _rows = ''.join(
@@ -107,6 +111,9 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
                 unsafe_allow_html=True)
             st.caption('💡 三個都 ✅ 才考慮加碼 —— **σ 夠低(不追高)＋ 趨勢沒壞(不攤平弱勢)'
                        '＋ 總經沒防守**。任一 ❌ 就先別加，等條件到齊再說。')
+            if not _macro_loaded:
+                st.caption('⚠️ 總經尚未評估（先開一次「🌡️ 總經」分頁）→「總經沒防守」暫以中性計，'
+                           '尚未納入真實紅綠燈判斷。')
         except Exception as _e_gate:
             print(f'[when_buy_sell] add_gate: {type(_e_gate).__name__}: {_e_gate}')
 

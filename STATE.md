@@ -1,5 +1,19 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔌 2026-07-22 斷鏈① 接線：總經→選股 真生效（v19.148,user「繼續接1」+ 選「完整版」）
+
+策略體檢三條斷鏈最後一條，也最微妙——不是接現成函式，是**整條契約分裂**：總經狀態散在三個各說各話的盒子(`warroom_summary` 英文 regime+health / `macro_state.json` 中文 regime+曝險 / `st.session_state['macro_state']` **從沒人寫卻被讀**)，加 AI `_regime()` 回中文但 `WEIGHT_TABLES` 是英文 key → regime 權重永遠 neutral。user 選「完整版」(連個股組合評分也依多空頭切權重)。
+
+- **canonical 單一契約(§8 SSOT)**：L3 `macro_state_locker` 加 `normalize_regime()`(中/英/emoji→英文 {bull,neutral,caution,bear})+ `get_macro_state(warroom_summary)` → 標準 dict `{regime,health,defense,exposure_limit_pct,traffic_light,is_loaded}`。regime 中文檔源自動轉英；`defense = regime∈{bear,caution} 或 health<HEALTH_DEFENSE_THRESHOLD(35 SSOT)`。純函式(warroom 由 caller 傳、只讀檔,不碰 session)。
+- **單一生產者**：總經 tab 紅綠燈(`section_traffic_light`)寫完 `warroom_summary` 後，**同步寫 canonical `st.session_state['macro_state']`**。
+- **消費者全接同一契約**：
+  - 個股頁「加碼三問」(`section_when_buy_sell`)：總經防守**終於生效**;**§1 誠實**——未評估(沒開總經頁)顯示「總經未評估」不再假裝通過(舊行為 macro_state 恆空 → 永遠自動 ✅)。
+  - AI 問答 `_regime()`：改 `normalize_regime` 轉英文 → WEIGHT_TABLES regime 權重生效(修中英文錯配 bug)。
+  - 個股組合評分(`section_batch_fetcher`)：`score_single_stock(..., regime=canonical)` → 6 因子依多空頭切權重(bull 重趨勢/動能、bear 重風控/基本面)。**評分數字自此隨總經浮動**(user 已同意)。
+- **測試**：`tests/test_macro_state_canonical.py` 9 測(normalize 中/英/emoji/未知 + get_macro_state 四來源 + defense 推導 + is_loaded 誠實)。相關 956 passed。
+- **三條斷鏈全接完**：②單股部位(#556)、③驗證自動化(#558)、①總經→選股(本輪)。投組層級上限仍另案。
+
+
 ## 🔌 2026-07-22 斷鏈③ 接線：選股→驗證自動累積（v19.147,user「先接線→繼續」）
 
 策略體檢三條斷鏈第二條。forward-test 卡在 **0 樣本**的根因:凍結只能**手動按** + 只存**私人 Google Sheet**(headless cron 無 OAuth 用不了)。本輪讓它**每月自動凍結 + 落地 git 可追蹤檔**,數據自己累積、可稽核。user 選「**完整選股網版**」(cron 凍的 = 畫面實際會挑的,含缺貨/RS)。

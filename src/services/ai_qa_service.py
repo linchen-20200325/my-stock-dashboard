@@ -80,9 +80,14 @@ def _finmind_token() -> Optional[str]:
 
 
 def _regime() -> str:
+    """回英文 regime {bull,neutral,caution,bear} 供 WEIGHT_TABLES 切權重。
+
+    v19.148 ① 接線:原直接回 load_macro_state 的中文 market_regime → WEIGHT_TABLES(英文 key)
+    永遠 fallback neutral(regime 自適應權重從未生效的 bug)。改用 normalize_regime 轉英文。
+    """
     try:
-        from src.services.macro_state_locker import load_macro_state
-        return (load_macro_state() or {}).get("market_regime", "neutral")
+        from src.services.macro_state_locker import load_macro_state, normalize_regime
+        return normalize_regime((load_macro_state() or {}).get("market_regime"))
     except Exception:
         return "neutral"
 
