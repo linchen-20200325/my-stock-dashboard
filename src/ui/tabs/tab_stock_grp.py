@@ -100,6 +100,9 @@ def render_stock_grp():
         build_prompt_fn=build_structured_summary_prompt,
     )
 
+    # ── 🎚️ 風險貢獻分解（v19.138：輸入持股張數 → 市值權重 → Euler 分解，與 ETF 組合共用 L2/L4）──
+    _render_risk_contribution_section(stock_list_t3)
+
     # ── 🧬 AI 總結本頁（v19.122 Phase 2，用批次已載資料組 bundle，不重抓；fail-soft）──
     try:
         from src.ui.tabs.tab_ai_chat import render_tab_summary
@@ -110,6 +113,68 @@ def render_stock_grp():
         }, context='general')
     except Exception as _ai_sum_e:
         st.caption(f'🧬 AI 總結暫不可用：{type(_ai_sum_e).__name__}')
+
+
+def _render_risk_contribution_section(stock_list: list[str]) -> None:
+    """個股組合風險貢獻分解（v19.138）— 輸入各檔持有張數 → 市值權重 → Euler 分解。
+
+    與 ETF 組合共用 L2 `compute_risk_contribution` + L4 `render_risk_contribution_panel`。
+    button-gated：避免每次 rerun 都抓 N 檔 1 年價格（僅按「算風險貢獻」時才抓）。
+    §1：抓不到價格的檔剔除並列出（不灌 0）；權重 scale-free（張數→市值→內部正規化）。
+    §8.2 EX-PASSTHRU-1：L5 直呼 L1 `fetch_stock_history_1y`（pass-through、無 L3 業務值，
+    L1 內已 @st.cache_data 集中緩存），沿用個股組合既有 lazy import 慣例。
+    """
+    import pandas as pd
+    import streamlit as _st  # noqa: F811
+
+    from src.compute.risk.risk_contribution import compute_risk_contribution
+    from src.data.stock.picker_fetcher import fetch_stock_history_1y  # EX-PASSTHRU-1
+    from src.ui.render.risk_contribution_render import render_risk_contribution_panel
+
+    if not stock_list:
+        return
+    _st.markdown('---')
+    with _st.expander('🎚️ 風險貢獻分解（輸入持股張數 → 看風險壓在哪幾檔）', expanded=False):
+        _st.caption('輸入各檔「持有張數」，換算市值權重後做 Euler 風險分解 —— '
+                    '揭露某檔「市值佔比 vs 風險佔比」的落差（風險是否壓在少數幾檔）。')
+        _seed = pd.DataFrame({'代碼': list(stock_list), '持有張數': [0.0] * len(stock_list)})
+        _edited = _st.data_editor(
+            _seed, hide_index=True, use_container_width=True, key='rc_t3_editor',
+            column_config={
+                '代碼': _st.column_config.TextColumn(disabled=True),
+                '持有張數': _st.column_config.NumberColumn(min_value=0.0, step=1.0, format='%.0f'),
+            })
+        if not _st.button('🎚️ 算風險貢獻', key='rc_t3_go'):
+            return
+        _lots: dict[str, float] = {}
+        for _, _r in _edited.iterrows():
+            try:
+                _n = float(_r['持有張數'] or 0)
+            except (TypeError, ValueError):
+                _n = 0.0
+            if _n > 0:
+                _lots[str(_r['代碼']).strip()] = _n
+        if not _lots:
+            _st.info('請至少替一檔輸入持有張數（> 0）。')
+            return
+        _ret_dict: dict[str, "pd.Series"] = {}
+        _weights: dict[str, float] = {}
+        _price_miss: list[str] = []
+        with _st.spinner(f'抓取 {len(_lots)} 檔近 1 年價格…'):
+            for _code, _n in _lots.items():
+                _df, _ = fetch_stock_history_1y(_code)
+                if _df is not None and not _df.empty and 'Close' in _df.columns:
+                    _close = _df['Close']
+                    _ret_dict[_code] = _close.pct_change()
+                    # 市值 = 張數 × 1000 股/張 × 現價（×1000 對所有檔一致，正規化後不影響佔比）
+                    _weights[_code] = _n * 1000.0 * float(_close.iloc[-1])
+                else:
+                    _price_miss.append(_code)
+        _returns = pd.DataFrame(_ret_dict).ffill() if _ret_dict else pd.DataFrame()
+        _rc = compute_risk_contribution(_returns, _weights)
+        render_risk_contribution_panel(_rc, show_header=False)
+        if _price_miss:
+            _st.caption(f'⚪ 這幾檔抓不到價格、已略過：{"、".join(_price_miss)}')
 
 
 def _render_stage_picker_section(stock_list: list[str], *,

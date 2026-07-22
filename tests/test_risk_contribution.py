@@ -138,3 +138,35 @@ def test_property_risk_sums_100_and_nonneg(wa, wb, sa, sb):
     assert res.ok
     assert abs(float(res.table["risk_pct"].sum()) - 100.0) < 0.2
     assert (res.table["risk_pct"] >= 0).all()   # 正交 → 風險貢獻非負
+
+
+# ── L4 render 面板實機渲染(ETF/個股共用),對齊 slow+skip 慣例 ──────────
+def _rc_panel_script():
+    import numpy as np
+    import pandas as pd
+
+    from src.compute.risk.risk_contribution import compute_risk_contribution
+    from src.ui.render.risk_contribution_render import render_risk_contribution_panel
+    a = np.tile([1.0, -1.0, 1.0, -1.0], 25) * 3.0     # 高 vol → 觸發集中警示
+    b = np.tile([1.0, 1.0, -1.0, -1.0], 25)
+    idx = pd.date_range("2024-01-01", periods=len(a), freq="D")
+    _ret = pd.DataFrame({"2330": a, "2317": b}, index=idx)
+    _res = compute_risk_contribution(_ret, {"2330": 1.0, "2317": 1.0})
+    render_risk_contribution_panel(_res)              # 預設 st.error 警示路徑
+
+
+@pytest.mark.slow
+class TestRiskContribPanelRender:
+    @classmethod
+    def setup_class(cls):
+        try:
+            from streamlit.testing.v1 import AppTest  # noqa: F401
+        except ImportError:
+            pytest.skip("streamlit.testing.v1.AppTest 不可用(collection stub 生態)")
+
+    def test_panel_renders_without_exception(self):
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_function(_rc_panel_script).run(timeout=60)
+        assert not at.exception, [f"{e.type}: {str(e.value)[:200]}" for e in at.exception]
+        assert len(at.dataframe) >= 1                 # 市值% vs 風險% 表有渲染
+        assert any("風險集中" in e.value for e in at.error)   # 集中警示走 st.error

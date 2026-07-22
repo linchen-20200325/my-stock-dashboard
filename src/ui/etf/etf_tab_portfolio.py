@@ -574,33 +574,13 @@ def render_etf_portfolio(gemini_fn=None):
 
     # ── 🎚️ 風險貢獻分解（市值% vs 風險%）── v19.137 Risk Contribution（PyPortfolioOpt 概念）
     # 與上方相關矩陣同源（ret_dict 日報酬）：相關看「同步度」，這裡看「風險壓在哪幾檔」。
-    st.markdown('#### 🎚️ 風險貢獻分解（市值佔比 vs 風險佔比）')
-    st.caption('💡 揭露「風險其實壓在哪幾檔」：某檔市值只佔 40%，卻可能扛了 60% 的組合波動 —— '
-               '分散效果被高估。用日報酬共變異數做 Euler 分解，風險佔比加總 = 100%。')
+    # v19.138：render 抽至 L4 risk_contribution_render，與個股組合共用（DRY）。
     from src.compute.risk.risk_contribution import compute_risk_contribution
+    from src.ui.render.risk_contribution_render import render_risk_contribution_panel
     _rc_weights = {r['ticker']: r['current_value'] for r in rows if r['current_value'] > 0}
     _rc_returns = pd.DataFrame(ret_dict).ffill() if ret_dict else pd.DataFrame()
     _rc = compute_risk_contribution(_rc_returns, _rc_weights)
-    if not _rc.ok:
-        st.info(f'⚪ 暫無法計算風險貢獻：{_rc.note or "資料不足（需至少 1 檔有價格歷史）"}')
-    else:
-        _rc_disp = _rc.table.rename(columns={
-            'ticker': '代碼', 'weight_pct': '市值%', 'risk_pct': '風險%', 'gap_pct': '風險−市值(差)',
-        })[['代碼', '市值%', '風險%', '風險−市值(差)']]
-        st.dataframe(_rc_disp, hide_index=True, use_container_width=True)
-        _conf = '（樣本偏少，僅供參考）' if _rc.low_confidence else ''
-        st.caption(f'組合年化波動 σ ≈ {_rc.portfolio_vol_annual_pct:.1f}%'
-                   f'｜採 {_rc.n_obs} 個交易日{_conf}')
-        _hot = _rc.table[_rc.table['concentrated']]
-        if not _hot.empty:
-            _msg = '、'.join(
-                f"{_r['ticker']}（市值 {_r['weight_pct']:.0f}% → 風險 {_r['risk_pct']:.0f}%）"
-                for _, _r in _hot.iterrows())
-            _colored_box(
-                f'⚠️ <b>風險集中</b>：{_msg} —— 風險佔比明顯高於市值佔比，'
-                f'分散效果被高估，這幾檔才是波動的主要來源', 'red')
-        if _rc.note:
-            st.caption(f'ℹ️ {_rc.note}')
+    render_risk_contribution_panel(_rc, warn_box=lambda _m: _colored_box(_m, 'red'))
 
     # ── 各檔 ETF 成分股明細（成分股顯示）──────────────────────
     st.markdown('#### 🧩 各檔 ETF 成分股明細')
