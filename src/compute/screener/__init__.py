@@ -1,5 +1,6 @@
 """src/compute/screener/ — 基本面 / 月營收 / 缺貨 / 抗跌RS 等篩選器計算。PEP 562 lazy forward。"""
 from . import (  # noqa: F401
+    cross_quarter_trends,
     fundamental_prescreen,
     fundamental_screener,
     rs_leader_screener,
@@ -7,7 +8,7 @@ from . import (  # noqa: F401
 )
 
 _SUBMODULES = (fundamental_screener, fundamental_prescreen, shortage_screener,
-               rs_leader_screener)
+               rs_leader_screener, cross_quarter_trends)
 
 
 def __getattr__(name):
