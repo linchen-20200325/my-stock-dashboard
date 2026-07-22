@@ -84,3 +84,32 @@ def load_fundamentals_snapshot() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     §1 fail-loud:快照缺 → raise FileNotFoundError。快取 TTL_1DAY(季度資料,日級足夠)。
     """
     return _load_impl(FUNDAMENTALS_CACHE_DIR)
+
+
+def _load_all_quarters_impl(cache_dir: Path) -> pd.DataFrame:
+    """讀 cache_dir 內**全部** `{market}_{roc}Q{season}.parquet` → long-form 合併。
+
+    每檔 parquet 自帶 roc_year/season/market 欄(寫入端注入),直接 concat 即 long-form。
+    無任何 parquet → raise FileNotFoundError(§1 不回假空表)。
+    """
+    frames: list[pd.DataFrame] = []
+    for m in _MARKETS:
+        for path in sorted(cache_dir.glob(f"{m}_*Q*.parquet")):
+            frames.append(pd.read_parquet(path))
+    if not frames:
+        raise FileNotFoundError(
+            f"[fundamentals_loader] {cache_dir} 內無季快照 parquet;請先跑 Update Fundamentals workflow"
+        )
+    return pd.concat(frames, ignore_index=True)
+
+
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
+def load_all_fundamentals_quarters() -> pd.DataFrame:
+    """讀**全部可得季別**全市場基本面快照 → 單一 long-form DataFrame(每檔每季一列)。
+
+    供跨季趨勢分析(L2 compute_cross_quarter_trends)用;含 roc_year/season 欄以定季序。
+    現況涵蓋 114Q1–115Q1 共 5 季(上市+上櫃)。
+
+    §1 fail-loud:無任何季快照 → raise FileNotFoundError。快取 TTL_1DAY(季度資料)。
+    """
+    return _load_all_quarters_impl(FUNDAMENTALS_CACHE_DIR)

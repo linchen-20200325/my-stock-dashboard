@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📈 2026-07-21 全台股跨季趨勢 A-1:L1 全季 loader + L2 趨勢計算（v19.139,user 選「A+B」,A 先）
+
+user 要「全台股跨季大規模掃描」→ 拆 A(基本面跨季,便宜)+ B(價格快照,大工程),分批。A-1 為兩種呈現(選股網因子 / 獨立排行)共用的地基。
+
+- **§1 誠實資料限制**:現有快照僅 5 季(114Q1–115Q1)、無 113 前 → **不做「連續成長季數」**(5 季 + QoQ 季節性會造假訊號),改用**比率型線性斜率**(對季節性穩健);營收 YoY 只算最新季 vs 去年同季一個點。
+- **L1**:`fundamentals_snapshot_loader.load_all_fundamentals_quarters()` — glob 讀全部季 parquet → long-form(每檔每季一列,含 roc_year/season);無快照 raise(§1)。@st.cache_data TTL_1DAY(EX-CACHE-1)。
+- **L2**:`src/compute/screener/cross_quarter_trends.compute_cross_quarter_trends()` 純函式 — 每檔算 4 因子:毛利率斜率(>0佳)/營益率斜率(>0佳)/負債比斜率(<0佳)/營收YoY(>0佳)+ favorable_count(0-4)+ favorable_of(有資料因子數)。斜率有效點 <`CROSS_QUARTER_MIN_POINTS`(3,SSOT)→ NaN 不硬配;除零/缺去年同季 → NaN 不 silent 0;季序 ordinal 間距感知(處理缺季)。
+- **實測(repo 內 5 季)**:9810 列 / 1970 檔全跑出;favorable_count 分布 0:188 / 1:523 / 2:424 / 3:502 / 4:333;YoY 1886/1970 有值。頂部標的呈「毛利升+營益升+負債降+營收增」改善型特徵,符合預期。
+- **零新依賴**;`tests/test_cross_quarter_trends.py` **9 passed**(方向正確/排序/季數不足NaN/缺YoY/除零/空+缺欄/同季去重/**真實 parquet smoke**);ruff 淨;L2 純度掃描過。
+- **下一步**:A-2 接線(選股網因子 + 獨立排行,版位待與 user 對齊)→ B-0 價格快照可行性探針 → B-1 建 cron。
+
 ## 🎚️ 2026-07-21 風險貢獻分解擴至個股組合 + render 抽 L4 共用（v19.138,user 選「第一點」）
 
 v19.137 ETF 組合上線後,user 要「個股組合也補」。查證個股組合頁(`tab_stock_grp`)是「比較×排行」工具、非持股權重組合 → 給 user 三選項,user 選**第一點**:那頁新增「輸入持股張數」再算風險貢獻。
