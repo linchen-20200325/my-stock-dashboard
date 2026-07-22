@@ -17,8 +17,10 @@ def _surv(ids, eps):
     return pd.DataFrame({"stock_id": ids, "eps": eps})
 
 
-def test_angle_labels_cover_four():
-    assert set(SCREEN_ANGLE_LABELS.values()) == {"pe_low", "eps_high", "shortage", "rs_leader"}
+def test_angle_labels_cover_five():
+    # A-2 v19.140:新增「跨季轉強」trend 因子（原 4 → 5）
+    assert set(SCREEN_ANGLE_LABELS.values()) == {
+        "pe_low", "eps_high", "shortage", "rs_leader", "trend"}
 
 
 def test_pe_low_missing_pe_goes_last_no_crash():
