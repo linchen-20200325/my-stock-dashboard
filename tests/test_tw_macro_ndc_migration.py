@@ -180,9 +180,11 @@ class TestNdcSignalHistoryChain:
         assert result['error'] is None
 
     def test_tbi_empty_falls_back_to_dgtw(self, monkeypatch):
-        """TBI 失敗 → dgtw 被呼叫 → source='data.gov.tw'。"""
+        """TBI 失敗 →(6099 ZIP 亦空)→ 泛用 dgtw scan → source='data.gov.tw'。"""
         monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
                              lambda *a, **kw: None)
+        monkeypatch.setattr(tw_macro, '_dgtw_ndc_signal_from_zip',
+                             lambda *a, **kw: None)   # 致命03:ZIP 真源亦空 → 落末路 scan
         dgtw_df = pd.DataFrame({
             'date': pd.date_range('2024-01-01', periods=12, freq='MS')
                     .strftime('%Y-%m-%d'),
@@ -199,6 +201,8 @@ class TestNdcSignalHistoryChain:
     def test_both_fail_graceful_error(self, monkeypatch):
         monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
                              lambda *a, **kw: None)
+        monkeypatch.setattr(tw_macro, '_dgtw_ndc_signal_from_zip',
+                             lambda *a, **kw: None)   # 致命03:ZIP 真源亦空
         monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series',
                              lambda *a, **kw: None)
         monkeypatch.setattr(tw_macro, '_finmind_macro_series',
@@ -212,6 +216,8 @@ class TestNdcSignalHistoryChain:
         """信號分數 ∉ [9, 45] 視為髒值濾掉(dgtw fallback 路徑)。"""
         monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
                              lambda *a, **kw: None)
+        monkeypatch.setattr(tw_macro, '_dgtw_ndc_signal_from_zip',
+                             lambda *a, **kw: None)   # 致命03:走泛用 scan 驗 sanity
         dirty_df = pd.DataFrame({
             'date': pd.date_range('2024-01-01', periods=12, freq='MS')
                     .strftime('%Y-%m-%d'),
@@ -303,6 +309,94 @@ class TestConstants:
     def test_value_keywords_present(self):
         assert '景氣對策' in tw_macro._DGTW_NDC_SIGNAL_VALUE_KEYWORDS
         assert '領先指標' in tw_macro._DGTW_NDC_LEADING_VALUE_KEYWORDS
+
+
+# ════════════════════════════════════════════════════════════════
+# §5 致命03:景氣對策信號 data.gov.tw 6099「景氣指標及燈號」ZIP 真源
+#   (2026-07-21 production log 實錘:6099 是 ZIP 打包 → 舊 CSV 判斷跳過 → 恆空)
+# ════════════════════════════════════════════════════════════════
+import io as _io          # noqa: E402
+import zipfile as _zip    # noqa: E402
+
+
+def _mk_6099_zip(rows, *, csv_name='景氣指標與燈號.csv', encoding='utf-8-sig',
+                 with_decoy=True) -> bytes:
+    """組 data.gov.tw 6099 風格 ZIP:Date(西元 YYYYMM)/綜合分數/燈號(+ 干擾 CSV)。"""
+    hdr = 'Date,景氣對策信號綜合分數,景氣對策信號\n'
+    body = ''.join(f'{ym},{score},{color}\n' for ym, score, color in rows)
+    buf = _io.BytesIO()
+    with _zip.ZipFile(buf, 'w') as z:
+        if with_decoy:
+            z.writestr('其他指標.csv', 'a,b\n1,2\n')   # 無分數欄 → 應被跳過
+        z.writestr(csv_name, (hdr + body).encode(encoding))
+    return buf.getvalue()
+
+
+class TestNdcSignal6099Zip:
+    # ---- 純函式 _parse_ndc_signal_zip(offline) ----
+    def test_parse_extracts_score_date_color(self):
+        zb = _mk_6099_zip([('202603', 28, '綠'), ('202604', 31, '綠'),
+                           ('202605', 22, '黃藍')])
+        df = tw_macro._parse_ndc_signal_zip(zb)
+        assert list(df.columns) == ['date', 'value', 'color']
+        assert df.iloc[-1].tolist() == ['2026-05-01', 22.0, '黃藍']
+        assert df.iloc[0]['date'] == '2026-03-01'      # 西元 YYYYMM → YYYY-MM-01
+
+    def test_parse_skips_decoy_csv_and_picks_by_column(self):
+        assert len(tw_macro._parse_ndc_signal_zip(
+            _mk_6099_zip([('202605', 22, '黃藍')]))) == 1
+
+    def test_parse_big5_encoding(self):
+        df = tw_macro._parse_ndc_signal_zip(
+            _mk_6099_zip([('202605', 22, '黃藍')], encoding='big5'))
+        assert df.iloc[-1]['value'] == 22.0 and df.iloc[-1]['color'] == '黃藍'
+
+    def test_parse_bad_bytes_returns_none(self):
+        assert tw_macro._parse_ndc_signal_zip(b'not-a-zip') is None
+
+    def test_parse_no_score_column_returns_none(self):
+        buf = _io.BytesIO()
+        with _zip.ZipFile(buf, 'w') as z:
+            z.writestr('x.csv', 'a,b\n1,2\n')          # 無分數欄 → None(§1 不臆造)
+        assert tw_macro._parse_ndc_signal_zip(buf.getvalue()) is None
+
+    # ---- I/O _dgtw_ndc_signal_from_zip(monkeypatch fetch_url) ----
+    def test_fetch_metadata_then_download_zip(self, monkeypatch):
+        zb = _mk_6099_zip([('202604', 31, '綠'), ('202605', 22, '黃藍')])
+        responses = iter([
+            _mk_resp(json_data={'result': {'resources': [
+                {'format': 'ZIP', 'url': 'https://data.gov.tw/x/6099.zip'}]}}),
+            _mk_resp(content=zb),
+        ])
+        monkeypatch.setattr(tw_macro, 'fetch_url', lambda *a, **kw: next(responses))
+        df = tw_macro._dgtw_ndc_signal_from_zip()
+        assert df is not None and df.iloc[-1]['value'] == 22.0
+
+    def test_fetch_no_zip_resource_returns_none(self, monkeypatch):
+        monkeypatch.setattr(tw_macro, 'fetch_url', lambda *a, **kw: _mk_resp(
+            json_data={'result': {'resources': [{'format': 'PDF', 'url': 'x.pdf'}]}}))
+        assert tw_macro._dgtw_ndc_signal_from_zip() is None
+
+    # ---- 鏈:TBI 失敗 → 6099 ZIP 命中(在泛用 scan 之前) ----
+    def test_chain_tbi_fails_then_zip_hits_with_official_color(self, monkeypatch):
+        monkeypatch.setattr(tw_macro, 'fetch_business_indicator_series',
+                             lambda *a, **kw: None)
+        zdf = pd.DataFrame({
+            'date': pd.date_range('2024-01-01', periods=12, freq='MS').strftime('%Y-%m-%d'),
+            'value': [20, 19, 20, 21, 19, 20, 22, 21, 23, 22, 25, 28],
+            'color': ['綠'] * 11 + ['黃藍'],
+        })
+        monkeypatch.setattr(tw_macro, '_dgtw_ndc_signal_from_zip', lambda *a, **kw: zdf)
+
+        def _explode(*a, **kw):
+            raise AssertionError('ZIP 命中時泛用 candidate-scan 不該被呼叫')
+        monkeypatch.setattr(tw_macro, '_dgtw_ndc_indicator_series', _explode)
+        monkeypatch.setattr(tw_macro, '_finmind_macro_series', _explode_dead_finmind)
+        result = tw_macro.fetch_ndc_signal_history()
+        assert result['source'] == 'data.gov.tw:6099(景氣指標及燈號)'
+        assert result['score_latest'] == 28
+        assert result['color_latest'] == '黃藍'        # 官方燈號字串抽出
+        assert result['error'] is None
 
 
 if __name__ == '__main__':
