@@ -537,11 +537,6 @@ def run_agent(question: str, history: Optional[list] = None, *, api_key: Optiona
     return QAResult(ok=True, text="(已達最大工具呼叫輪數;請看下方工具結果。)", model=model, tool_calls=tool_calls)
 
 
-def make_llm_default_http(api_key, model=DEFAULT_MODEL):
-    """對外:取得預設 Gemini http(Stock 用)。Fund 請改用 infra/llm。"""
-    return _make_default_http(api_key, model)
-
-
 # ============================================================================
 # 內建 selftest(離線,免金鑰)
 # ============================================================================

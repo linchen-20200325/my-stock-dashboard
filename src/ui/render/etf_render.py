@@ -5,7 +5,6 @@ ETF 渲染層（render layer）
 """
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 
 # v18.396 P5-B1:L4 → L3 → L1,收斂 cache.clear() anti-pattern。
@@ -347,116 +346,6 @@ def _check_sector_exposure(rows: list, total_value: float) -> None:
                 f'建議分散至其他類股或降低持倉', 'red')
     else:
         _colored_box('✅ 所有類股曝險均在 30% 以內，產業分散度良好', 'green')
-
-
-def _render_monte_carlo(port_val: pd.Series, initial: float, ann_vol: float,
-                        n_paths: int = 10_000, n_days: int = 252) -> None:
-    """
-    蒙地卡羅模擬 10,000 路徑，1 年期
-    使用歷史年化波動率計算日報酬標準差，幾何布朗運動隨機遊走
-    顯示 10th/50th/90th percentile 區間與最終分布直方圖
-    """
-    try:
-        daily_ret  = port_val.pct_change().dropna()
-        mu_daily   = float(daily_ret.mean())
-        sig_daily  = float(daily_ret.std())
-        if sig_daily == 0:
-            st.info('波動率為 0，無法執行蒙地卡羅模擬')
-            return
-
-        rng      = np.random.default_rng(42)
-        # shape: (n_paths, n_days)
-        shocks   = rng.normal(mu_daily, sig_daily, size=(n_paths, n_days))
-        paths    = np.cumprod(1 + shocks, axis=1) * float(port_val.iloc[-1])
-
-        p10  = np.percentile(paths[:, -1], 10)
-        p50  = np.percentile(paths[:, -1], 50)
-        p90  = np.percentile(paths[:, -1], 90)
-        prob_profit = float((paths[:, -1] > float(port_val.iloc[-1])).mean() * 100)
-
-        ca, cb, cc, cd = st.columns(4)
-        ca.metric('P10（悲觀）',  f'{(p10/float(port_val.iloc[-1])-1)*100:+.1f}%')
-        cb.metric('P50（中位）',  f'{(p50/float(port_val.iloc[-1])-1)*100:+.1f}%')
-        cc.metric('P90（樂觀）',  f'{(p90/float(port_val.iloc[-1])-1)*100:+.1f}%')
-        cd.metric('獲利機率',     f'{prob_profit:.1f}%')
-
-        # 繪製路徑分布（取前100條 + 百分位帶）
-        days_axis = list(range(n_days))
-        sample_paths = paths[:100]
-        fig = go.Figure()
-        for i, sp in enumerate(sample_paths):
-            fig.add_trace(go.Scatter(
-                x=days_axis, y=sp.tolist(),
-                mode='lines',
-                line=dict(color='rgba(88,166,255,0.05)', width=1),
-                showlegend=False,
-            ))
-        for label, pct, color in [
-            ('P10', 10, TRAFFIC_RED), ('P50', 50, '#e3b341'), ('P90', 90, TRAFFIC_GREEN),
-        ]:
-            band = np.percentile(paths, pct, axis=0)
-            fig.add_trace(go.Scatter(
-                x=days_axis, y=band.tolist(),
-                mode='lines', name=label,
-                line=dict(color=color, width=2),
-            ))
-        fig.add_hline(y=float(port_val.iloc[-1]),
-                      line_dash='dot', line_color='#ffffff',
-                      annotation_text='目前淨值')
-        fig.update_layout(
-            template='plotly_dark', height=320,
-            xaxis_title='交易日', yaxis_title='資產價值（元）',
-            margin=dict(l=0, r=0, t=20, b=0),
-            paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
-            legend=dict(orientation='h', yanchor='bottom', y=1.01),
-        )
-        st.plotly_chart(fig, width='stretch')
-        st.caption(f'模擬條件：{n_paths:,} 路徑，日均報酬 μ={mu_daily*100:.4f}%，σ={sig_daily*100:.3f}%（基於歷史資料）⚠️ 僅供參考')
-    except Exception as e:
-        st.warning(f'蒙地卡羅模擬失敗：{e}')
-
-
-def _etf_ai_backtest(gemini_fn, cagr, sharpe, mdd, vol, weights, regime):
-    with st.expander('🤖 AI 回測評斷（展開）', expanded=False):
-        w_txt  = ' | '.join(f'{t}: {w*100:.0f}%' for t, w in weights.items())
-        if st.button('🤖 生成回測AI評斷', key='etf_ai_bt_btn'):
-            # 為回測組合中每檔 ETF 抓取新聞（最多各 2 則）
-            _bt_news_lines = []
-            for _tk in list(weights.keys())[:4]:
-                _nn = get_news_for(_tk, _tk, 2)
-                if _nn and _nn != '（暫無相關新聞）':
-                    _bt_news_lines.append(f'[{_tk}]\n{_nn}')
-            _bt_news_str = '\n'.join(_bt_news_lines) if _bt_news_lines else '（暫無相關新聞）'
-            prompt = (
-                f"你是回測績效分析師，依據以下數字給出精準評斷，不超過300字，嚴禁捏造：\n"
-                f"組合：{w_txt}\n"
-                f"CAGR：{cagr:.2f}%\n"
-                f"夏普值：{sharpe:.2f}\n"
-                f"最大回撤：{mdd:.1f}%\n"
-                f"年化波動率：{vol:.2f}%\n"
-                f"當前市場狀態：{regime}\n\n"
-                f"【近期各ETF相關新聞】\n{_bt_news_str}\n\n"
-                f"輸出：\n"
-                f"1.【績效評級】優秀/良好/普通/劣（請說明標準）\n"
-                f"2.【風險評估】MDD和波動率是否在可接受範圍\n"
-                f"3.【改善建議】基於春哥/郭俊宏/孫慶龍觀點，如何優化配置\n"
-                f"4.【前瞻建議】在{regime}環境下，此組合的下一步行動\n"
-                f"⚠️ 僅供學術研究，非投資建議"
-            )
-            with st.spinner('AI 分析中...'):
-                result = gemini_fn(prompt, max_tokens=900)
-            if result and not result.startswith('⚠️'):
-                st.session_state['etf_ai_bt_result'] = result
-                st.rerun()
-            else:
-                st.session_state['etf_ai_bt_result'] = None
-                st.warning(result or 'AI 回傳為空')
-        _bt_saved = st.session_state.get('etf_ai_bt_result')
-        if _bt_saved:
-            st.markdown(_bt_saved)
-            if st.button('🔄 清除', key='etf_ai_bt_clear'):
-                st.session_state.pop('etf_ai_bt_result', None)
-                st.rerun()
 
 
 # ── 美股 11 大 GICS 類股 ETF ─────────────────────────────────

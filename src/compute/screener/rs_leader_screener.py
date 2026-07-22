@@ -15,7 +15,6 @@
 """
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass
 
 import pandas as pd
@@ -216,7 +215,3 @@ def count_insufficient(stocks: list[dict], df_market: pd.DataFrame, *, lookback:
         if score_rs_leader(s, df_market, lookback=lookback).tier == TIER_INSUFFICIENT
     )
 
-
-def asdict_scores(scores: list[RsLeaderScore]) -> list[dict]:
-    """JSON 友善（CLI / debug 用）。"""
-    return [dataclasses.asdict(s) for s in scores]

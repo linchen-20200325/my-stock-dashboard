@@ -9,7 +9,6 @@ import requests, os
 import urllib3
 
 _logger = _cl_log.getLogger(__name__)
-from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 # v18.325 PR-C: 融資餘額紅線改用既有 SSOT（原 inline 3400，§3.3 反捏造）
 # 融資紅/黃線門檻屬本服務的 SSOT 消費契約(consumed_ssot guard 釘),
 # 即使主邏輯已下沉 daily_data_fetchers,仍保留 import 作消費標記(F401 豁免)。
@@ -43,7 +42,6 @@ from shared.cache_layer import (
     _pkl_put,         # noqa: F401
     _pkl_clear_all,   # noqa: F401
 )
-
 
 
 # v18.344 PR-N1:`st.secrets.get(...)` 即使無 secrets.toml 也會觸發 StreamlitSecretNotFoundError
@@ -89,8 +87,6 @@ from src.data.daily import fetch_institutional  # noqa: F401
 from src.data.daily import fetch_margin_balance  # noqa: F401
 
 
-
-
 # v18.344 PR-N1:evaluate_market_status_v4_final 抽至 shared/macro_compute.py(L2 純函式)
 from shared.macro_compute import evaluate_market_status_v4_final  # noqa: F401
 
@@ -108,13 +104,10 @@ from src.data.daily import (  # noqa: F401
 from src.data.daily import _fetch_otc_via_finmind  # noqa: F401
 
 
-
 # ═════════════════════════════════════════════════════
 # 騰落指標（ADL）— v18.347 PR-N4 抽至 daily_data_fetchers.py
 # ═════════════════════════════════════════════════════
 from src.data.daily import fetch_adl, _adl_selftest  # noqa: F401
-
-
 
 
 # v18.344 PR-N1:UI 渲染元件抽至 macro_ui_components.py(L4 Render),re-export 維持相容。
@@ -130,108 +123,6 @@ from src.ui.render.macro_ui_components import (  # noqa: F401  # v18.361 F-6.5:�
     margin_card,
     section_header,
 )
-
-def analyze_20d_chips(stock_id: str) -> dict:
-    """
-    近 20 日個股籌碼集中度分析（外資 + 投信 vs 總成交量）
-
-    指標 A 集中度 = (外資+投信) 20日淨買總和 / 20日總成交量  × 100%
-    指標 B 延續性 = 20日中 (外資+投信) 淨買 > 0 的天數佔比 (%)
-
-    買賣超單位：張 (FinMind TaiwanStockTotalInstitutionalInvestors)
-    成交量單位：張 (FinMind TaiwanStockPrice Trading_Volume)
-    → 兩者單位相同，集中度為無因次百分比
-    """
-    import datetime as _dt20
-    try:
-        import pandas as _pd20
-        _start = (_dt20.date.today() - _dt20.timedelta(days=50)).strftime('%Y-%m-%d')
-        _base  = FINMIND_API_URL
-        _hdrs  = {'Authorization': f'Bearer {FINMIND_TOKEN}'} if FINMIND_TOKEN else {}
-        _common = {'token': FINMIND_TOKEN} if FINMIND_TOKEN else {}
-
-        # ── 1. 個股三大法人每日買賣超（單位：張）────────────────────
-        _p_inst = {**_common, 'dataset': 'TaiwanStockTotalInstitutionalInvestors',
-                   'stock_id': stock_id, 'start_date': _start}
-        _r_inst = _bps().get(_base, params=_p_inst, headers=_hdrs, timeout=20, verify=False)
-        _j_inst = _r_inst.json()
-        _inst_ok = (not (isinstance(_j_inst.get('status'), int)
-                         and _j_inst['status'] >= 400)) and bool(_j_inst.get('data'))
-        if not _inst_ok:
-            return {'error': f'法人資料失敗 status={_j_inst.get("status")}',
-                    'signal': '⚫ 資料不足'}
-
-        _df_i = _pd20.DataFrame(_j_inst['data'])
-        _df_i.columns = [str(c).lower() for c in _df_i.columns]
-        _df_i['buy']  = _pd20.to_numeric(_df_i.get('buy',  0), errors='coerce').fillna(0)
-        _df_i['sell'] = _pd20.to_numeric(_df_i.get('sell', 0), errors='coerce').fillna(0)
-        _df_i['net']  = _df_i['buy'] - _df_i['sell']
-        # 辨識外資 / 投信（相容 FinMind 英文或中文 name 欄位）
-        _is_fi = _df_i['name'].apply(
-            lambda n: str(n) == 'Foreign_Investor' or ('外資' in str(n) and '自營' not in str(n)))
-        _is_tr = _df_i['name'].apply(
-            lambda n: str(n) == 'Investment_Trust' or '投信' in str(n))
-        _df_fi = _df_i[_is_fi][['date','net']].rename(columns={'net':'foreign_net'})
-        _df_tr = _df_i[_is_tr][['date','net']].rename(columns={'net':'trust_net'})
-        _df_m  = _pd20.merge(_df_fi, _df_tr, on='date', how='outer').fillna(0)
-        _df_m['combined'] = _df_m['foreign_net'] + _df_m['trust_net']
-        _df_m  = _df_m.sort_values('date').tail(20)
-
-        # ── 2. 每日成交量（單位：張，來自 TaiwanStockPrice）─────────
-        _p_vol = {**_common, 'dataset': 'TaiwanStockPrice',
-                  'stock_id': stock_id, 'start_date': _start}
-        _r_vol = _bps().get(_base, params=_p_vol, headers=_hdrs, timeout=20, verify=False)
-        _j_vol = _r_vol.json()
-        _vol_ok = (not (isinstance(_j_vol.get('status'), int)
-                        and _j_vol['status'] >= 400)) and bool(_j_vol.get('data'))
-        if not _vol_ok:
-            return {'error': '價量資料失敗', 'signal': '⚫ 資料不足'}
-
-        _df_v  = _pd20.DataFrame(_j_vol['data'])
-        _df_v.columns = [str(c).lower() for c in _df_v.columns]
-        # 相容 trading_volume / volume 欄名
-        _vcol  = next((c for c in _df_v.columns if 'trading_volume' in c or c == 'volume'), None)
-        if _vcol is None:
-            return {'error': '找不到成交量欄位', 'signal': '⚫ 資料不足'}
-        _df_v[_vcol] = _pd20.to_numeric(_df_v[_vcol], errors='coerce').fillna(0)
-        _df_v  = _df_v[['date', _vcol]].rename(columns={_vcol: 'volume'})
-        _df_v  = _df_v.sort_values('date').tail(20)
-
-        # ── 3. 合併：只取法人與成交量均有資料的交易日 ──────────────
-        _df    = _pd20.merge(_df_m, _df_v, on='date', how='inner').tail(20)
-        if len(_df) < 5:
-            return {'error': f'有效天數不足（{len(_df)}天）', 'signal': '⚫ 資料不足'}
-
-        # ── 4. 計算兩大指標 ──────────────────────────────────────────
-        _tot_net = float(_df['combined'].sum())          # 外+投 累計淨買（張）
-        _tot_vol = float(_df['volume'].sum())            # 總成交量（張）
-        _concentration = (_tot_net / _tot_vol * 100) if _tot_vol > 0 else 0.0   # %
-        _pos_days  = int((_df['combined'] > 0).sum())
-        _continuity = _pos_days / len(_df) * 100                                  # %
-
-        # ── 5. 判定訊號 ──────────────────────────────────────────────
-        if _concentration > 5 and _continuity > 50:
-            _signal = '🔥 大戶吸籌'
-        elif _concentration < -5:
-            _signal = '🔴 大戶倒貨'
-        else:
-            _signal = '🟡 籌碼發散'
-
-        _logger.debug('[20d_chips/%s] 集中度=%.2f%% 延續性=%.0f%% days=%d signal=%s',
-                      stock_id, _concentration, _continuity, len(_df), _signal)
-        return {
-            'concentration': round(_concentration, 2),   # %（可正可負）
-            'continuity':    round(_continuity, 1),       # 0~100%
-            'signal':        _signal,
-            'days':          len(_df),
-            'pos_days':      _pos_days,
-            'total_net_k':   round(_tot_net / 1e3, 1),   # 千張
-            'total_vol_k':   round(_tot_vol / 1e3, 1),   # 千張
-            'error':         None,
-        }
-    except Exception as _e20:
-        _logger.warning('[20d_chips/%s] 計算失敗: %s: %s', stock_id, type(_e20).__name__, _e20)
-        return {'error': str(_e20), 'signal': '⚫ 計算失敗'}
 
 
 # v18.344 PR-N1:analyze_20d_chips_from_df 抽至 shared/macro_compute.py(L2 純函式)。
