@@ -22,6 +22,7 @@ import pandas as pd
 import requests
 
 from shared.roc_calendar import gregorian_to_roc_year  # B3 SSOT-H2:西元→民國
+from shared.finmind_subject_aliases import FIELD_ALIASES  # B4 SSOT-H1:財報科目別名
 # §8.2.A EX-CACHE-1 + EX-L0-1:條件 import streamlit + 無 UI 呼叫 fallback。
 # 本檔僅用 @st.cache_data + st.secrets(同 config.py 模式),無真 UI 呼叫。
 try:
@@ -68,43 +69,7 @@ _USER_AGENTS = [
 # ─────────────────────────────────────────────
 # §2 Field Aliases
 # ─────────────────────────────────────────────
-FIELD_ALIASES: dict[str, list[str]] = {
-    # Balance Sheet
-    "現金及約當現金": ["現金及約當現金", "Cash and Cash Equivalents", "現金", "現金及銀行存款"],
-    "應收帳款": [
-        "應收帳款淨額", "應收票據淨額", "應收帳款－關係人淨額",
-        "應收票據及應收帳款", "應收帳款", "AccountsReceivable",
-        "合約資產", "工程應收款", "應收帳款及合約資產",
-    ],
-    "存貨": ["存貨", "Inventory", "存貨淨額", "商品存貨"],
-    "流動資產": ["流動資產", "流動資產合計", "CurrentAssets", "總流動資產"],
-    "非流動資產": ["非流動資產", "非流動資產合計", "NonCurrentAssets"],
-    "總資產": ["總資產", "資產合計", "資產總計", "資產總額", "TotalAssets"],
-    "流動負債": ["流動負債", "流動負債合計", "CurrentLiabilities", "總流動負債"],
-    "非流動負債": ["非流動負債", "非流動負債合計", "NonCurrentLiabilities"],
-    "總負債": ["總負債", "負債合計", "負債總計", "負債總額", "TotalLiabilities"],
-    "股東權益": ["股東權益合計", "權益合計", "TotalEquity", "股東權益總額"],
-    "保留盈餘": ["保留盈餘", "RetainedEarnings", "累積盈虧", "未分配盈餘"],
-    "合約負債": ["合約負債", "ContractLiabilities", "預收款項", "合約負債-流動"],
-    # Income Statement
-    "營業收入": ["營業收入", "Revenue", "營業收入淨額", "收入合計"],
-    "營業成本": ["營業成本", "CostOfRevenue", "銷售成本", "製造成本"],
-    "毛利": ["毛利", "GrossProfit", "毛利額"],
-    "營業費用": ["營業費用", "OperatingExpenses", "銷管研費用"],
-    "營業利益": ["營業利益", "OperatingIncome", "營業利潤"],
-    "稅前淨利": ["稅前淨利", "IncomeBefore Tax", "稅前損益"],
-    "淨利": ["淨利", "NetIncome", "本期淨利", "稅後淨利"],
-    "EPS": ["EPS", "BasicEPS", "每股盈餘", "稀釋每股盈餘"],
-    # Cash Flow Statement
-    "營業現金流": ["營業活動現金流量", "OCF", "來自營業活動之現金流量", "OperatingCashFlow"],
-    "投資現金流": ["投資活動現金流量", "InvestingCashFlow", "用於投資活動之現金流量"],
-    "融資現金流": ["籌資活動現金流量", "FinancingCashFlow", "來自籌資活動之現金流量"],
-    "資本支出": [
-        "資本支出", "CapEx", "AcquisitionOfPropertyPlantAndEquipment",
-        "取得不動產、廠房及設備", "購置不動產、廠房及設備",
-    ],
-    "股利支付": ["支付現金股利", "DividendsPaid", "支付股利"],
-}
+# FIELD_ALIASES 已於 B4(SSOT-H1)搬至 shared/finmind_subject_aliases.py,見檔頂 import。
 
 # ─────────────────────────────────────────────
 # §3 Proxy Config

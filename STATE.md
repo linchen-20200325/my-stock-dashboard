@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏷️ 2026-07-22 全域重構 B4｜財報科目別名 SSOT（v19.152,深層技術債藍圖 B4/9,SSOT-H1,user 選「保守 SSOT」）
+
+財報科目別名散落多檔各自維護。**盤查發現不是純重複**:各檔別名清單是「同主題、不同來源」的變體(MOPS 混合 / FinMind SDK / yfinance),硬 union 再全域替換會改 priority-match「先命中哪欄」→ 財報數字走鐘。user 選**保守 SSOT**:集中「各來源分組」常數、各檔 import 對應那組,零行為改變、不強行合併。
+
+- **新 SSOT** `shared/finmind_subject_aliases.py`(L0 純常數):
+  - `FIELD_ALIASES`(MOPS/混合,priority-ordered BS/IS/CF 全表,25 科目)— 原 `tw_stock_data_fetcher.py:71-107` 搬入。
+  - `FINMIND_FS_{REVENUE,GROSS,COGS,INV}_KEYS`(FinMind SDK 專屬欄碼,含 GrossProfitLoss/NetRevenue/營業毛利（毛損）等)— 原 `quarterly_financials_fetcher.py:44-49` 搬入。
+- **wire 2 檔**:`tw_stock_data_fetcher` import `FIELD_ALIASES`;`quarterly_financials_fetcher` import 4 tuple 回原名(`as _REVENUE_KEYS` 等)。
+- **零行為改變證明**:搬移前先 python 實測 `orig == new`(FIELD_ALIASES 25 鍵 + 4 tuple 全 `True`);搬移後 `is` identity 全 `True`(名字現指向同一 shared 物件)。
+- **保守不動(誠實)**:3 個 source-specific inline 一次性小清單未搬 —— `tab_stock_picker` margin keys(FinMind)、`data_loader` yfinance keys + 自己的 `_INV_KEYS`、`app_stock_fetchers._CL_NAMES`(合約負債變體,與 FIELD_ALIASES 版不同)。它們是各自一次性用途、內容互異,強搬進 SSOT 反成「用不到的抽象」(§8.1-6);未來若要統一再議。
+- **測試**:3 檔 py_compile + import identity + 51 affected(含 `test_tw_stock_data_fetcher_coverage` FIELD_ALIASES 斷言 + quarterly/fundamentals)全綠。無新 ruff 錯(既存 E401 為無關舊碼)。
+
 ## 📅 2026-07-22 全域重構 B3｜ROC 民國曆換算 SSOT（v19.152,深層技術債藍圖 B3/9,SSOT-H2）
 
 magic number `1911`(ROC 紀元位移)原散落 8 處 code + 2 docstring。§3.3 反捏造要求 domain 常數走單一來源。
