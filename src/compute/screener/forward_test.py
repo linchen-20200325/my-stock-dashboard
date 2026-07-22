@@ -29,6 +29,52 @@ from shared.forward_test_thresholds import FORWARD_TEST_MIN_COHORT_PICKS
 # picks 必備欄(每列一「凍結持股」)。cohort = 凍結批次標籤(通常為凍結日字串)。
 REQUIRED_COLS = ("cohort", "stock_id", "entry_price")
 
+# 凍結紀錄(存 gsheet / 對帳)欄序。cohort=凍結批次(通常凍結日);factors=當時勾的因子組。
+PICK_SNAPSHOT_HEADERS = ("cohort", "stock_id", "name", "entry_price", "factors", "frozen_at")
+
+
+def build_pick_snapshot_rows(
+    codes,
+    entry_prices: dict,
+    *,
+    factors,
+    cohort: str,
+    names: dict | None = None,
+    frozen_at: str = "",
+) -> list[dict]:
+    """把「本次選股結果」凍結成 pick-snapshot 列(供存 Google Sheet + 日後對帳)。
+
+    Args:
+        codes: 選出的股號(依排序;list[str])。
+        entry_prices: {stock_id: 進場價(凍結當下現價)}。**缺有效價的檔直接跳過**(§1 不存假價)。
+        factors: 當時勾選的因子 key(list;記錄用,日後可分組比較不同策略)。
+        cohort: 批次標籤(通常凍結日 "YYYY-MM-DD")。
+        names: {stock_id: 中文名}(選填)。
+        frozen_at: 凍結完整時戳(選填;caller 帶入,本層不取系統時間以保純度)。
+
+    Returns:
+        list[dict](欄 = PICK_SNAPSHOT_HEADERS);無有效進場價的檔不出現(不灌假價)。
+    """
+    _fac = ",".join(str(f) for f in (factors or []))
+    _names = names or {}
+    _ep = {str(k).strip(): v for k, v in (entry_prices or {}).items()}
+    rows: list[dict] = []
+    for c in (codes or []):
+        c = str(c).strip()
+        _p = _ep.get(c)
+        try:
+            _pf = float(_p)
+        except (TypeError, ValueError):
+            continue
+        if not (_pf > 0):                     # 無效/缺價 → 不凍結該檔(§1)
+            continue
+        rows.append({
+            "cohort": str(cohort), "stock_id": c,
+            "name": str(_names.get(c, "")), "entry_price": round(_pf, 2),
+            "factors": _fac, "frozen_at": str(frozen_at),
+        })
+    return rows
+
 _OUT_COLS = [
     "cohort", "n_picks", "n_valid", "n_dropped",
     "avg_return_pct", "hit_rate_pct", "benchmark_return_pct",

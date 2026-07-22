@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧊 2026-07-21 策略補強 FT-2:選股凍結存 Google Sheet（v19.142,user 選 (a) gsheet + 帶因子組）
+
+FT-1 對帳地基上線後接凍結機制。user 選 **(a) Google Sheet 存 + 凍結時連因子組一起記**(日後可分策略比較)。
+
+- **L2**(補 `forward_test.build_pick_snapshot_rows`):選股結果 + 進場價 → 凍結列(cohort/stock_id/name/entry_price/factors/frozen_at)。**§1**:抓不到有效進場價的檔**不凍結**(不存假價);因子組逗號 join 一起記。純函式可測。
+- **L1**(補 `gsheet_portfolio`):`append_forward_test_picks` / `load_forward_test_picks` + `_ft_worksheet()` — 獨立 `forward_test_picks` worksheet(不污染 portfolios),沿用既有 OAuth client + append_rows 模式(EX-OAUTH-1)。
+- **L3**(新 `src/services/forward_test_service.py`):`freeze_current_picks`(抓進場價 → build → 存)+ `is_freeze_available` + `load_frozen_picks_df`。編排 L1 picker_fetcher + L1 gsheet + L2 純函式。
+- **L6 UI**:選股網結果下加「🧊 凍結前 20 名(存 Google Sheet)」按鈕 —— **L6→L3→L1 乾淨分層**(不直呼 L1,免 EX-PASSTHRU 登記);gsheet 未設定 → 提示去雲端儲存設定;凍結成功/失敗 fail-soft 顯示。cohort = TW 日期(用 app 既有 `_tw_now()`,非 pd)。
+- **⚠️ 測試限制(誠實)**:gsheet 寫入需 OAuth,**容器內測不了**;可測部分(L2 build_pick_snapshot_rows)已補 3 test。gsheet I/O + UI 為 thin wrapper 沿用既有穩定模式,fail-soft。
+- **零新依賴**;`tests/test_forward_test.py` **15 passed**(FT-1 對帳 9 + FT-2 建構 3 + 既有);app.py compile OK、magic-guard 過、無新增 ruff 錯(修掉誤用 pd→改 _tw_now)。
+- **下一步**:FT-3 UI 對帳面板(讀 gsheet 凍結 + 現價 → reconcile 顯示 vs 0050)。
+
 ## 🎯 2026-07-21 策略補強 FT-1:前進式驗證對帳 L2（v19.141,user「聽建議逐步執行」）
 
 策略體檢後 user 要逐步補強缺點。**第一步(最大的洞:策略沒驗證過 edge)= 前進式驗證(Forward-test)**。拆 FT-1(對帳地基)/ FT-2(凍結機制)/ FT-3(UI)。

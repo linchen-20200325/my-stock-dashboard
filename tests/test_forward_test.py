@@ -98,3 +98,33 @@ def test_multi_cohort_sorted():
     picks = _picks([("2025Q2", "A", 100), ("2025Q1", "B", 100)])
     df, _ = reconcile_forward_test(picks, {"A": 110, "B": 110})
     assert list(df["cohort"]) == ["2025Q1", "2025Q2"]    # 依 cohort 排序
+
+
+# ── FT-2 凍結列建構(build_pick_snapshot_rows)──────────────────
+def test_build_snapshot_rows_basic():
+    from src.compute.screener.forward_test import build_pick_snapshot_rows
+    rows = build_pick_snapshot_rows(
+        ["2330", "2317"], {"2330": 1000.0, "2317": 55.5},
+        factors=["估值便宜", "跨季轉強"], cohort="2026-07-21",
+        names={"2330": "台積電"}, frozen_at="2026-07-21T09:00:00+08:00")
+    assert len(rows) == 2
+    r0 = rows[0]
+    assert r0["cohort"] == "2026-07-21" and r0["stock_id"] == "2330"
+    assert r0["entry_price"] == 1000.0 and r0["name"] == "台積電"
+    assert r0["factors"] == "估值便宜,跨季轉強"       # 因子組一起記(逗號 join)
+    assert rows[1]["name"] == ""                      # 2317 無中文名 → 空
+
+
+def test_build_snapshot_skips_missing_or_bad_price():
+    from src.compute.screener.forward_test import build_pick_snapshot_rows
+    # A 缺價、B 價=0、C 價非數字 → 全略過(§1 不存假價);只有 D 有效
+    rows = build_pick_snapshot_rows(
+        ["A", "B", "C", "D"], {"B": 0, "C": "x", "D": 88.0},
+        factors=["eps_high"], cohort="2026-07-21")
+    assert [r["stock_id"] for r in rows] == ["D"]
+    assert rows[0]["entry_price"] == 88.0
+
+
+def test_build_snapshot_empty():
+    from src.compute.screener.forward_test import build_pick_snapshot_rows
+    assert build_pick_snapshot_rows([], {}, factors=[], cohort="X") == []
