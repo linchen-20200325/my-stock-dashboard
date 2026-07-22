@@ -457,13 +457,13 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 
 | 層 | 職責 | 代表檔案 |
 |---|---|---|
-| **L0 Infra** | 常數 / TTL / 門檻 / 全域 config | `src/config/{config,data_config,persona,stock_names}.py`(v18.359 F-6.1 搬入)、`shared/ttls.py`、`shared/thresholds.py`、`shared/health_thresholds.py`、`shared/fred_series.py` |
-| **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`、`data_registry.py`、`proxy_helper.py`、`scripts/update_macro_history.py`(cron CLI,v18.359 F-2 搬入)、`scripts/update_forward_test_freeze.py`(前進式驗證每月凍結 cron CLI,v19.147)、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`、`tw_stock_data_fetcher.py`、`src/data/portfolio/forward_test_store.py`(前進式驗證本地落地 parquet,v19.147) |
-| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`、`macro_signal_lookback_tw.py`、`compute/screener/{fundamental_prescreen,shortage_screener,rs_leader_screener,cross_quarter_trends,forward_test}.py`、`compute/risk/risk_contribution.py`(~~`merrill_clock.py`~~ v18.359 F-4 已刪) |
+| **L0 Infra** | 常數 / TTL / 門檻 / 全域 config | `src/config/{config,data_config,persona,stock_names}.py`(v18.359 F-6.1 搬入)、`shared/ttls.py`、`shared/thresholds.py`、`shared/health_thresholds.py`、`shared/fred_series.py`、`shared/roc_calendar.py`(民國↔西元 SSOT,B3 v19.152)、`shared/finmind_subject_aliases.py`(FinMind 科目別名 SSOT,B4 v19.152) |
+| **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`(B8 v19.155-156 拆分 2545→1734:抽出 `financial_statements_fetcher.py`(MJ 財報,B8-a)+ `data_loader_inst_fetchers.py`(TWSE/TPEX 三大法人 fallback,B8-b),皆同 `src/data/core/`,套件 __getattr__ / import-back 轉發介面不變)、`data_registry.py`、`proxy_helper.py`、`scripts/update_macro_history.py`(cron CLI,v18.359 F-2 搬入)、`scripts/update_forward_test_freeze.py`(前進式驗證每月凍結 cron CLI,v19.147)、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`(含 `fetch_etf_close_history`,B7-a 從 UI 下沉)、`tw_stock_data_fetcher.py`、`src/data/portfolio/forward_test_store.py`(前進式驗證本地落地 parquet,v19.147) |
+| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`(含 `compute_macd` + `weekly_macd_hist` MACD SSOT kernel,B6 v19.153)、`macro_signal_lookback_tw.py`、`compute/screener/{fundamental_prescreen,shortage_screener,rs_leader_screener,cross_quarter_trends,forward_test}.py`、`compute/risk/risk_contribution.py`(~~`merrill_clock.py`~~ v18.359 F-4 已刪) |
 | **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_structured_summary.py`、`daily_checklist.py`、`macro_state_locker.py`(① 接線 v19.148:`get_macro_state` canonical 總經契約 + `normalize_regime` 中→英)、`services/{fundamental_screener_service,rs_leader_service,shortage_screener_service,forward_test_service}.py`(選股網編排,v19.14x;`fundamental_screener_service.get_ranked_picks` = 畫面/cron 同源排名,v19.147)(~~`ai_engine.py`~~ P5-DEAD-δ 已刪、~~`unified_decision.py`~~ F-4 已刪) |
 | **L4 Render** | 圖表生成 / 通用 UI 元件（無 Streamlit container） | `chart_plotter.py`、`etf_render.py`、`ui_widgets.py`、`render/risk_contribution_render.py`(v19.138) |
 | **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`tab_mj_health_diff.py`、`etf_dashboard.py`、`etf_tab_*.py` |
-| **L6 App** | session_state 路由 + 全域編排 | `app.py`(7,300 LOC,僅 orchestrator) |
+| **L6 App** | session_state 路由 + 全域編排 | `app.py`(882 LOC,僅 orchestrator;原 7,300 經 R7/R8/B3-γ/B3-δ 等多輪重構收斂,B9 v19.157 同步) |
 
 **硬規則（violation = 違憲）**：
 - ❌ **L1 Data 不得 import streamlit** — 資料層脫離 UI 框架,可單獨測試
@@ -511,7 +511,7 @@ except ImportError:
 
 - ~~`macro_helpers.py`：分類 L2 但有輕度 I/O（讀 `macro_thresholds.json`）→ audit 看是否該抽 config-loader 到 L0~~ **S-GRAY-1 v18.244 已修**:loader 抽至 `shared/macro_calibration.py`(L0),`macro_helpers` 改 import,介面 0 改
 - **`daily_checklist.py`**：跨 L1+L2+L3(fetch + cache + 摘要 + pkl 持久化)→ audit 看是否該拆檔
-- **`app.py`**：7,300 LOC,部分計算邏輯可能該下沉到 L2 → audit 看抽取規模
+- ~~**`app.py`**：7,300 LOC,部分計算邏輯可能該下沉到 L2~~ **已收斂至 882 LOC**(R7/R8/B3-γ/B3-δ 拆 AI service / news fetcher / render / fetcher 至 L1-L4;B9 v19.157 同步),現純 orchestrator
 
 ### 8.4 做到一半的新增功能 — 先盤點再動
 

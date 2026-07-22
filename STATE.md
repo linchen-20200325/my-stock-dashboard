@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📚 2026-07-22 全域重構 B9｜文檔同步（v19.157,藍圖 B9/9,收尾）
+
+CLAUDE.md §8.2 7 層架構表同步 B1~B8 產生的模組/LOC 變動(doc-only,零風險):
+- **L6**:`app.py`(**7,300 → 882 LOC**,藍圖點名的最大 staleness,8× 偏差修正)+ §8.3 灰色地帶同步。
+- **L0**:補 `shared/roc_calendar.py`(B3)、`shared/finmind_subject_aliases.py`(B4)。
+- **L1**:`data_loader.py` 註記 B8 拆分 2545→1734 + 抽出 `financial_statements_fetcher.py`(B8-a)/`data_loader_inst_fetchers.py`(B8-b);`etf_fetch.py` 註 `fetch_etf_close_history`(B7-a 下沉)。
+- **L2**:`exit_signals.py` 註 `compute_macd`/`weekly_macd_hist` MACD SSOT kernel(B6)。
+- **範圍(誠實)**:同步「活的治理表」CLAUDE.md §8.2(受強制執行)。ARCHITECTURE.md 拓樸(dated 2026-06-30,app.py 642)為**時點快照記錄**,非活躍宣稱,全面 refresh 屬另案不在 B9 點名範圍。
+
 ## 🪓 2026-07-22 全域重構 B8｜大檔拆分（v19.155,藍圖 B8/9,user 選「拆 data_loader,2 子批」）
 
 **進行中**。純結構搬移、零行為改變、藍圖最高風險 → 動刀前 AST 精算依賴 + 逐子批全量測試。
