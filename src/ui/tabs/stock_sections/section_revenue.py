@@ -1,7 +1,7 @@
 """src/ui/tabs/stock_sections/section_revenue.py — D 月營收趨勢 section(v18.406 U4 Phase 2-D).
 
 從 tab_stock.py:2259-2302 抽出(L5 → L5,純 render 函式重構)。
-對齊 TAB_STOCK_AUDIT.md Phase 2 低風險 section batch。
+對齊 docs/TAB_STOCK_AUDIT.md Phase 2 低風險 section batch。
 
 §8.2 layer:L5 UI Tab section helper(類比 macro/section_*.py 模式)。
 

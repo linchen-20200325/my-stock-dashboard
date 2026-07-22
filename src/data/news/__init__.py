@@ -1,6 +1,6 @@
 """src/data/news/ — 新聞 RSS 抓取 L1 module(v18.398 P5-B3-β R8).
 
-對齊 APP_PY_AUDIT.md B3-β 拆檔藍圖:app.py:1052-1297 ~245 LOC 新聞 fetcher
+對齊 docs/APP_PY_AUDIT.md B3-β 拆檔藍圖:app.py:1052-1297 ~245 LOC 新聞 fetcher
 (`_SYSTEMIC_RISK_KEYWORDS` / `_fetch_macro_news` / `_rss_items_from_bytes` /
 `_fetch_stock_news`)→ 抽至 L1 data module。
 

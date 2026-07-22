@@ -1,6 +1,6 @@
 """src/ui/render/app_render.py — L4 app 級渲染元件(v18.404 U5 B3-γ).
 
-從 app.py:679-1007 抽出 3 個 render 函式,對齊 APP_PY_AUDIT.md B3-γ phase。
+從 app.py:679-1007 抽出 3 個 render 函式,對齊 docs/APP_PY_AUDIT.md B3-γ phase。
 
 §8.2 layer:L4 Render — Streamlit container-aware UI 元件,純展示無業務邏輯
 (I/O 透過 caller 預傳資料或 lazy import L1 fetcher,latter 為 EX-PASSTHRU-1 範疇)。

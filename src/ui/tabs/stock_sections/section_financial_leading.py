@@ -1,7 +1,7 @@
 """src/ui/tabs/stock_sections/section_financial_leading.py — C 財報領先指標 section(v18.406 U4 Phase 2-C).
 
 從 tab_stock.py:2182-2257 抽出。
-對齊 TAB_STOCK_AUDIT.md Phase 2 低風險 section batch。
+對齊 docs/TAB_STOCK_AUDIT.md Phase 2 低風險 section batch。
 
 §8.2 layer:L5 UI Tab section helper。
 

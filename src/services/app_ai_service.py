@@ -1,6 +1,6 @@
 """src/services/app_ai_service.py — Rule-based 個股文字建議(v18.398 P5-B3-β R7).
 
-對齊 APP_PY_AUDIT.md B3-β 拆檔藍圖:app.py:677-772 `generate_ai_comment`
+對齊 docs/APP_PY_AUDIT.md B3-β 拆檔藍圖:app.py:677-772 `generate_ai_comment`
 ~96 LOC 純函式決策樹,單一 caller(tab_stock.py:1725)→ 抽至 L3 service。
 
 §8.2 layer 對齊:

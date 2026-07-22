@@ -1,6 +1,6 @@
 """src/data/stock/app_stock_fetchers.py — app.py 個股 L1 fetcher 集中地(v18.405 U5 B3-δ).
 
-從 app.py:251-643 抽出 7 個 helper + fetcher,對齊 APP_PY_AUDIT.md B3-δ phase。
+從 app.py:251-643 抽出 7 個 helper + fetcher,對齊 docs/APP_PY_AUDIT.md B3-δ phase。
 
 §8.2 layer:L1 Data — yfinance / FinMind / TWSE HTTP fetch + cache。
 §8.2.A EX-CACHE-1 letter-compliant(try/except + `_NoOpST` fallback + secrets dict)。
