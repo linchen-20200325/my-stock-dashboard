@@ -34,6 +34,7 @@ from src.compute.scoring import (
     judge_news_sentiment_cached,
 )
 from src.compute.scoring import calc_rs_score, rs_slope
+from src.compute.scoring import calc_atr_stop, calculate_position_size
 from src.data.news import fetch_stock_news as _fetch_stock_news
 from src.services import analyze_20d_chips_from_df
 from src.ui.render.tab_sections import box_wrapper_open
@@ -162,6 +163,17 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
         except Exception as _ex_err:
             st.caption(f'⚪ 出場點綜合提示暫不可用：{_ex_err}')
 
+        # ── 💰 總資金輸入（算「建議買幾張」用；session 記住，跨股共用）──────
+        # 斷鏈② 接線 v19.146：把已寫好但零呼叫的 calculate_position_size 接進 UI。
+        # 資金因人而異 → UI 輸入 + session 記住，不寫死常數（§1 不造假假設）。
+        st.session_state.setdefault('_pos_capital', 0)
+        st.number_input(
+            '💰 你的總資金（元）— 填了才會算「建議買幾張 + 真 ATR 停損」',
+            min_value=0, step=100000, key='_pos_capital', format='%d',
+            help='用「單筆風險上限 1.5% ÷ ATR 停損距離」反推建議張數，不是全押。'
+                 'ATR 停損錨定進場價（現價），比下方浮動的 -7%/-8% 更貼實際波動。',
+        )
+
         _sig_cols = st.columns(3)
 
         with _sig_cols[0]:
@@ -252,6 +264,53 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
             if _bull_align and vcp2 and not _vcp_ok:
                 _add_pt = round(_hi20_i * 1.01, 2)
                 st.markdown(f'<div style="font-size:12px;color:#58a6ff;padding:2px 0;">➕ 加碼點（策略3 突破法）：>{_add_pt:.2f}</div>', unsafe_allow_html=True)
+
+            # ── 💡 建議部位（風險基準法：單筆風險1.5% ÷ ATR停損距離）───────
+            # 斷鏈② 接線：現價=進場價 → ATR14 停損 → 反推整張張數。§1 缺資料誠實提示不硬算。
+            _cap = float(st.session_state.get('_pos_capital', 0) or 0)
+            if _cap <= 0:
+                st.markdown('<div style="font-size:11px;color:#8b949e;padding:4px 0 0;">'
+                            '💡 上方填總資金 → 顯示「建議張數 + 真 ATR 停損」</div>',
+                            unsafe_allow_html=True)
+            else:
+                try:
+                    _atr_info = calc_atr_stop(df2, _p2)
+                    _atr_val = _atr_info.get('atr')
+                    if not _atr_val or _atr_val <= 0:
+                        st.markdown('<div style="font-size:11px;color:#8b949e;padding:4px 0 0;">'
+                                    '⚪ K線資料不足（<14根），無法算 ATR 建議部位</div>',
+                                    unsafe_allow_html=True)
+                    else:
+                        _pos = calculate_position_size(_cap, _p2, _atr_val)
+                        if _pos.get('error'):
+                            st.markdown(f'<div style="font-size:11px;color:{TRAFFIC_YELLOW};padding:4px 0 0;">'
+                                        f'⚠️ {_pos["error"]}</div>', unsafe_allow_html=True)
+                        elif _pos.get('position_lot', 0) < 1:
+                            st.markdown(f'<div style="font-size:11px;color:{TRAFFIC_YELLOW};padding:4px 0 0;">'
+                                        f'⚠️ 以此資金＋風險上限，買不到 1 整張'
+                                        f'（每張約 {_p2*1000:,.0f} 元）</div>', unsafe_allow_html=True)
+                        else:
+                            _atr_stop = _pos['stop_loss']
+                            _atr_dist = round((_p2 - _atr_stop) / _p2 * 100, 1) if _p2 else 0
+                            st.markdown(
+                                f'<div style="margin-top:6px;padding:7px 9px;border-radius:6px;'
+                                f'background:#0d1117;border:1px solid #30363d;">'
+                                f'<div style="font-size:12px;color:#c9d1d9;font-weight:700;padding-bottom:2px;">'
+                                f'💡 建議部位（風險 1.5% 法）</div>'
+                                f'<div style="font-size:12px;color:{TRAFFIC_GREEN};padding:1px 0;">'
+                                f'📦 建議 <b>{_pos["position_lot"]}</b> 張'
+                                f'（約 {_pos["cost"]:,.0f} 元）</div>'
+                                f'<div style="font-size:12px;color:{TRAFFIC_RED};padding:1px 0;">'
+                                f'🛑 ATR真停損：<b>{_atr_stop:.2f}</b>'
+                                f'<span style="color:#484f58;">（-{_atr_dist:.1f}%，錨進場價）</span></div>'
+                                f'<div style="font-size:11px;color:#8b949e;padding:1px 0;">'
+                                f'本筆最大風險 {_pos["max_risk"]:,.0f} 元 · 盈虧比 {_pos["rr_ratio"]:.1f}</div>'
+                                f'</div>', unsafe_allow_html=True)
+                except Exception as _pos_err:
+                    print(f'[when_buy_sell] position_size: {type(_pos_err).__name__}: {_pos_err}')
+                    st.markdown('<div style="font-size:11px;color:#8b949e;padding:4px 0 0;">'
+                                '⚪ 建議部位暫不可用</div>', unsafe_allow_html=True)
+
             st.markdown('</div>', unsafe_allow_html=True)
 
         # ══ 關鍵價位 K 線圖(停利/停損/支撐壓力直接畫在 K 線上)═════

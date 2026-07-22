@@ -1,5 +1,18 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔌 2026-07-22 斷鏈② 接線：訊號→部位（v19.146,user「先接線」）
+
+策略體檢挖出三條斷鏈,user 指派「先接線」。第一條接「訊號→部位」的前半 —— 把**已寫好卻零生產呼叫**的風險基準部位法 `calculate_position_size` 接進個股頁,補上一直缺的「該買幾張」。
+
+- **問題**:個股「🎯 目標+停損」欄只給訊號 + 固定 -7%/-8% 浮動假停損(錨現價,股價跌它跟著跌),**完全沒有部位大小**;正確的 `calculate_position_size`(風險1.5%÷停損距離)是 dead code。
+- **接法**(§8 對齊後 user「都同意」):L5 `section_when_buy_sell.py` 直呼 L2 `calc_atr_stop` + `calculate_position_size`(向下依賴,**免 service 層** —— 加 wrapper 只是 pure pass-through)。
+  - 新增 UI「💰 總資金」輸入(session 記住,**不寫死常數** —— 資金因人而異,§1 不造假假設)。
+  - 現價=進場價 → ATR14 停損(錨進場價,比浮動假停損貼實)→ 反推**整張**張數 + 成本 + 本筆風險額 + 盈虧比。
+- **§1 邊界誠實**:K線<14根(ATR=None)→「資料不足」不硬算;買不起1張→老實提示非灌1張;資金未填→提示。
+- **SSOT**:全走 `shared/signal_thresholds`(POS_MAX_RISK_PCT 1.5% / POS_ATR_MULTIPLIER 1.5 / POS_MAX_STOP_PCT 0.85 / RR 0.15),零 inline magic。
+- **測試**:`tests/test_position_sizing_wiring.py` 6 測(一般/整張/風險額對帳/資料不足/買不起1張/高波動15%截斷/元vs張單位一致)。全綠 357 passed。
+- **範圍切割**:投組層級上限(單股10%/10檔/回撤15%暫停)另案延後 → 需持倉狀態,應接**個股組合 tab**。斷鏈①(總經→選股)、③(驗證0樣本)待後續。
+
 ## 🏁 2026-07-21 策略補強收尾 + 憲法/架構同步（v19.145,user「收尾 + 憲法架構一併更新」）
 
 策略體檢 → 三步補強全收斂。步驟3 查證後 WONTFIX;CLAUDE.md/ARCHITECTURE.md 因本輪過時處一併更新。
