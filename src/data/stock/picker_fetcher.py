@@ -4,9 +4,34 @@ P1-1a v18.374 深層拔毒:從 src/ui/tabs/tab_stock_picker.py:283(L5 UI 違憲)
 抽出 yfinance.Ticker.history 直呼。
 
 職責:
-- fetch_stock_history_1y(ticker):個股 1y K 線(.TW + .TWO 雙後綴 fallback)
+- fetch_stock_history_1y(ticker):個股 1y K 線(Yahoo .TW/.TWO 雙後綴 → FinMind 備援)
 """
 from __future__ import annotations
+
+
+def _finmind_raw_to_close_df(raw):
+    """FinMind TaiwanStockPrice 原始 df(date/open/max/min/close/Trading_Volume)→
+    標準 K 線 df(DatetimeIndex + Close[/Open/High/Low/Volume])。純函式(可離線測)。
+
+    空 / 缺 close 欄 / date 全壞 → 回空 DataFrame(§1 不回假資料)。
+    建議#2 v19.144:Yahoo 全敗時的第二來源,單位對齊 yfinance(close→Close)。
+    """
+    import pandas as _pd
+
+    if raw is None or not hasattr(raw, "empty") or raw.empty or "close" not in raw.columns:
+        return _pd.DataFrame()
+    _d = raw.copy()
+    _d["date"] = _pd.to_datetime(_d.get("date"), errors="coerce")
+    _d = _d.dropna(subset=["date"]).sort_values("date").set_index("date")
+    if _d.empty:
+        return _pd.DataFrame()
+    _out = _pd.DataFrame(index=_d.index)
+    _out["Close"] = _pd.to_numeric(_d["close"], errors="coerce")
+    for _src, _dst in (("open", "Open"), ("max", "High"),
+                       ("min", "Low"), ("Trading_Volume", "Volume")):
+        if _src in _d.columns:
+            _out[_dst] = _pd.to_numeric(_d[_src], errors="coerce")
+    return _out.dropna(subset=["Close"])
 
 
 def fetch_stock_history_1y(ticker: str):
@@ -38,4 +63,24 @@ def fetch_stock_history_1y(ticker: str):
                 return df, _resolved
         except Exception:
             continue
+
+    # 建議#2 v19.144:Yahoo .TW/.TWO 全敗 → FinMind TaiwanStockPrice 第二來源備援。
+    # 補「價格全靠 Yahoo」單點風險:Yahoo 限流/擋 IP 時,RS/技術面降級不瞎(§1 誠實)。
+    try:
+        import datetime as _dt
+
+        from src.data.core.data_loader import _fetch_finmind_price_raw  # L1→L1 同層
+        _end = _dt.date.today()
+        _start = _end - _dt.timedelta(days=400)          # 多抓緩衝,確保 ≥ 1y 交易日
+        _raw = _fetch_finmind_price_raw(str(ticker), _start.isoformat(), _end.isoformat())
+        _fm = _finmind_raw_to_close_df(_raw)
+        if not _fm.empty and len(_fm) >= 60:
+            try:
+                _fm.attrs.setdefault("source", f"FinMind:TaiwanStockPrice:{ticker}(yahoo-fallback)")
+                _fm.attrs.setdefault("fetched_at", _pd.Timestamp.now("UTC").isoformat())
+            except Exception:
+                pass
+            return _fm, str(ticker)
+    except Exception as _e_fm:
+        print(f"[picker_fetcher] FinMind 備援失敗 {ticker}: {type(_e_fm).__name__}: {_e_fm}")
     return None, None

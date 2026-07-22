@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔌 2026-07-21 策略補強 步驟2:價格第二來源備援（v19.144,user「繼續」）
+
+補「價格 100% 靠 Yahoo」單點風險。`fetch_stock_history_1y` Yahoo `.TW/.TWO` 雙後綴全敗後 → **FinMind TaiwanStockPrice 第二來源備援**,Yahoo 限流/擋 IP 時 RS/技術面**降級不瞎**。
+
+- **沿用不重造**:直接呼叫既有 `data_loader._fetch_finmind_price_raw`(L1→L1 同層)拿 FinMind 原始日K,不寫新 API 呼叫。
+- **純函式 normalizer**(可離線測)`picker_fetcher._finmind_raw_to_close_df`:FinMind 原始(date/open/max/min/close/Trading_Volume)→ 標準 K 線(DatetimeIndex + Close[/Open/High/Low/Volume]);**單位對齊 yfinance**(close→Close);壞日期/NaN close 剔除、缺 close 欄回空(§1 不回假資料)。
+- **§8.2**:純 L1 Data(picker_fetcher 無 streamlit);fallback 附 provenance attrs(source 標 yahoo-fallback);FinMind 失敗 → print + 回 (None,None)(誠實)。
+- **⚠️ 測試限制**:Yahoo 全敗→FinMind 的 live 串接需連外,容器測不了;normalizer 純函式已 6 test 覆蓋。
+- **零新依賴**;`tests/test_price_fallback.py` **6 passed** + RS 回歸 9 passed;ruff 淨;L1 純度過。
+- 策略補強剩最後一步:建議#3 月營收早期預警層。
+
 ## 📊 2026-07-21 策略補強 FT-3:前進式驗證對帳 UI（v19.143,前進式驗證閉環到齊）
 
 FT-1 對帳核心 + FT-2 凍結後,補對帳 UI —— **前進式驗證三段(算/存/看)全通**。
