@@ -61,7 +61,9 @@ class TestQ5cMarkers(unittest.TestCase):
         self.assertIn("'FRED:{series_id}:units={units}:months={months}'", src)
 
     def test_tab_etf_margin_simulator(self):
-        src = self._read('src/ui/tabs/tab_etf_margin_simulator.py')
+        # B7 v19.154:fetcher 從 L5 tab 下沉至 L1 etf_fetch(修 §8.2 直呼 yfinance),
+        # provenance marker 隨函式移至新位置 → guard 對齊 L1。
+        src = self._read('src/data/etf/etf_fetch.py')
         self.assertIn("'yfinance:{symbol}:{years}y:auto_adjust'", src)
 
 

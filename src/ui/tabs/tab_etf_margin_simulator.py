@@ -10,14 +10,11 @@
 """
 from __future__ import annotations
 
-import datetime as _dt
-
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from shared.ttls import TTL_1HOUR
 from src.compute.etf import (
     LEVERAGE_PRESETS,
     LIQUIDATION_RATIO,
@@ -39,31 +36,9 @@ _DEFAULT_ETFS = {
 }
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
-def _fetch_etf_history(symbol: str, years: int) -> pd.Series | None:
-    """從 yfinance 抓 ETF 收盤價歷史；TTL 1 小時。"""
-    try:
-        import yfinance as yf
-        end = _dt.date.today()
-        start = end - _dt.timedelta(days=years * 365 + 30)
-        df = yf.download(symbol, start=start, end=end, progress=False,
-                          auto_adjust=True)
-        if df is None or df.empty:
-            return None
-        # yfinance 新版回 MultiIndex columns
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        close = df["Close"].dropna()
-        # v18.357 PR-Q5c S-PROV-1 phase 19:Series attrs
-        try:
-            close.attrs.setdefault('source', f'yfinance:{symbol}:{years}y:auto_adjust')
-            close.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
-        except Exception:
-            pass
-        return close
-    except Exception as e:
-        print(f"[_fetch_etf_history] {symbol} 失敗：{type(e).__name__}: {e}")
-        return None
+# B7 v19.154:ETF 價格歷史 fetcher 已下沉至 L1 `src/data/etf/etf_fetch.py`
+# (原 L5 直呼 yfinance 違 §8.2)。此處走 EX-PASSTHRU-1 直接引用 L1(cache 集中 L1)。
+from src.data.etf import fetch_etf_close_history  # noqa: E402
 
 
 def _render_phase_recommendation() -> str | None:
@@ -235,7 +210,7 @@ def render_etf_margin_simulator() -> None:
         return
 
     with st.spinner(f"抓 {symbol} 近 {years} 年歷史價..."):
-        price_series = _fetch_etf_history(symbol, years)
+        price_series = fetch_etf_close_history(symbol, years)
     if price_series is None or len(price_series) == 0:
         st.error("❌ 無法取得歷史價，請換 ETF 或減少年數重試")
         return

@@ -1,5 +1,11 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧱 2026-07-22 全域重構 B7｜分層違憲修復（v19.154,藍圖 B7/9,user 選「只收安全的」）
+
+**進行中**。risk_radar(L2 直呼 Yahoo/CBOE/FRED)屬大重構 → 延後單開;診斷頁 raw requests 合法 → 登記例外;此批只收 UI 直呼 yfinance。
+
+- **B7-a ✅ `tab_etf_margin_simulator` yfinance → L1**:原 L5 內 `_fetch_etf_history` 直呼 `yf.download` 違 §8.2。**原封下沉**至 L1 `src/data/etf/etf_fetch.py::fetch_etf_close_history`(行為零改變,同 yf/pd/st/TTL 皆在 etf_fetch 現成)。caller 走 EX-PASSTHRU-1;移除 tab 內 `_dt` / `TTL_1HOUR` 孤兒 import;provenance guard(`test_pr_q5c_singles`)隨函式對齊 L1。yfinance 已從該 L5 檔徹底消失。16 guard 測綠 + import smoke。
+
 ## 📉 2026-07-22 全域重構 B6｜MACD kernel SSOT（v19.153,藍圖 B6/9,user 選「抽 kernel + 統一 12/26/9」）
 
 - **Sharpe 部分 = 誤報,跳過(誠實)**:3 個「sharpe」是**不同指標**非重複 —— `etf_calc.calc_sharpe`(年化 + rf)、`multi_factor.evaluate_sharpe`(annual_return/annual_vol 無 rf)、`scoring_engine`「類 Sharpe」(Return20/Sigma20 未年化)。合併會錯,不動。
