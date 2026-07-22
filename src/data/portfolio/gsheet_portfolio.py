@@ -246,6 +246,54 @@ def save_portfolio(name: str, rows: list[dict[str, Any]]) -> int:
     return len(new_rows)
 
 
+# ── 前進式驗證:選股凍結紀錄(獨立 worksheet,不污染 portfolios)── FT-2 v19.142
+_FT_WORKSHEET_NAME = 'forward_test_picks'
+_FT_HEADERS = ['cohort', 'stock_id', 'name', 'entry_price', 'factors', 'frozen_at']
+
+
+def _ft_worksheet():
+    """取得 (或建立) `forward_test_picks` worksheet,並確保 header 列存在。"""
+    import gspread
+
+    sheet_id = _get_active_sheet_id()
+    if not sheet_id:
+        raise RuntimeError('尚未設定 Sheet ID(OAuth 模式請在雲端儲存區塊輸入)')
+    sh = _build_client().open_by_key(sheet_id)
+    try:
+        ws = sh.worksheet(_FT_WORKSHEET_NAME)
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet(title=_FT_WORKSHEET_NAME, rows=1000, cols=8)
+        ws.append_row(_FT_HEADERS)
+        return ws
+    if ws.row_values(1) != _FT_HEADERS:
+        ws.update('A1:F1', [_FT_HEADERS])
+    return ws
+
+
+def append_forward_test_picks(rows: list[dict[str, Any]]) -> int:
+    """把選股凍結列 append 到 forward_test_picks worksheet;回寫入列數。
+
+    rows 每筆須含 _FT_HEADERS 各欄(由 L2 build_pick_snapshot_rows 產出)。空 → 0。
+    """
+    if not rows:
+        return 0
+    ws = _ft_worksheet()
+    ws.append_rows([[r.get(h, '') for h in _FT_HEADERS] for r in rows])
+    return len(rows)
+
+
+def load_forward_test_picks() -> list[dict[str, Any]]:
+    """讀回全部凍結紀錄(dict list;含 cohort/stock_id/entry_price/factors…)。
+
+    worksheet 不存在 / 未設定 Sheet / 讀取失敗 → 回 [](不炸對帳面板;§1 由 caller 判空)。
+    """
+    try:
+        return _ft_worksheet().get_all_records()
+    except Exception as _e:  # noqa: BLE001 — gsheet 不可用不炸前進式驗證面板
+        print(f'[gsheet] forward_test_picks 讀取失敗: {type(_e).__name__}: {_e}')
+        return []
+
+
 def list_user_sheets(folder_id: str = '') -> list[dict]:
     """OAuth 模式列出使用者 Google Drive 內 Spreadsheets。
 

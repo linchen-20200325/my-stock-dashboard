@@ -692,6 +692,33 @@ with tab_stocks:
                 st.download_button('💾 下載選股結果 CSV', data=_csv,
                                    file_name='screener_result.csv', mime='text/csv',
                                    key='screener_csv')
+                # ── 🧊 前進式驗證：凍結本次選股（FT-2 v19.142）→ 存 Google Sheet，日後對帳 vs 0050 ──
+                st.markdown('##### 🧊 前進式驗證：凍結本次選股')
+                st.caption('把前 20 名凍結存進你的 Google Sheet（含當下進場價 + 勾選因子），'
+                           '日後對帳看這套選股實際贏不贏 0050 —— 零 lookahead、零存活者偏誤。')
+                from src.services.forward_test_service import (
+                    freeze_current_picks, is_freeze_available)
+                if not is_freeze_available():
+                    st.info('⚪ 需先在「⚖️ ETF 組合 → 💾 雲端儲存」設定 Google Sheet，才能凍結存檔。')
+                elif st.button('🧊 凍結前 20 名（存 Google Sheet）', key='ft_freeze_go'):
+                    _ft_top = _cands.head(20)
+                    _ft_codes = [str(c) for c in _ft_top['代碼'].tolist()]
+                    if '名稱' in _ft_top.columns:
+                        _ft_names = dict(zip(_ft_codes, _ft_top['名稱'].astype(str)))
+                    else:
+                        _ft_names = {}
+                    _ft_cohort = _tw_now().strftime('%Y-%m-%d')
+                    try:
+                        with st.spinner(f'抓進場價 + 存檔 {len(_ft_codes)} 檔…'):
+                            _ft_n, _ft_miss = freeze_current_picks(
+                                _ft_codes, factors=_factor_labels,
+                                cohort=_ft_cohort, names=_ft_names)
+                        _ft_msg = f'✅ 已凍結 {_ft_n} 檔（cohort {_ft_cohort}）到 Google Sheet「forward_test_picks」。'
+                        if _ft_miss:
+                            _ft_msg += f'（{_ft_miss} 檔抓不到進場價已略過）'
+                        st.success(_ft_msg)
+                    except Exception as _e_fz:  # noqa: BLE001 — 存檔失敗顯示不炸頁
+                        st.error(f'❌ 凍結失敗：{type(_e_fz).__name__}: {_e_fz}')
                 # ── 🧬 AI 總結本頁（v19.122 Phase 2，用選股已載結果組 bundle，不重抓；fail-soft）──
                 try:
                     from src.ui.tabs.tab_ai_chat import render_tab_summary
