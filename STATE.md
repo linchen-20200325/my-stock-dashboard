@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🪤 2026-07-22 治理文件｜Gotchas 踩雷筆記 + Fallback 預宣告慣例（v19.158,doc-only,user 核准）
+
+user 提 5 條方法論建議,對照 PROCESS.md 誠實盤點後只採 2 條真有增量的(其餘 3 條已在 §3/§5 或與「一次一檔」既定規則衝突):
+- **新增 `references/gotchas.md`**(漸進揭露機制):收錄本輪 B1~B8 真踩過並修過的 4 個坑,附 `file:symbol` 錨點——
+  - **G1** AST 依賴分析漏 `ast.AnnAssign`(帶型別註解 module-state,如 `_T86_DAY_CACHE: dict = {}`)→ 搬檔漏帶狀態,被負快取測試逮。
+  - **G2** PEP 562 `__getattr__` 轉發套件不能 monkeypatch 套件本身(會建實體屬性遮蔽轉發,`test_zz_proxy_pollution_lock` 鎖死)→ patch 真持有者模組。
+  - **G3** 大檔拆分:共享可變 module-state(`_FINMIND_META`)決定哪些函式可安全抽出 → 有共享狀態的整群搬或整群留。
+  - **G4** guard test 常把 provenance 字串/行號釘死成 source-text 斷言 → 搬檔必同步 grep 更新。
+- **PROCESS.md §3** 補兩條慣例:並行處理**明確限唯讀**(寫入仍序列化一次一檔,對齊既定 anti-timeout 規則);高風險步驟**預宣告 fallback**(範圍探針後才定案,誠實縮範圍 > 硬湊)。
+- **範圍(誠實)**:純文件,零 `.py` 邏輯。DAG 平行**寫入**建議未採(與 user 自訂「一次一檔」防 API timeout 規則直接衝突);Sub-Planners/Plan-Validate-Execute 已是 §3 三步法現況。
+
 ## 📚 2026-07-22 全域重構 B9｜文檔同步（v19.157,藍圖 B9/9,收尾）
 
 CLAUDE.md §8.2 7 層架構表同步 B1~B8 產生的模組/LOC 變動(doc-only,零風險):
