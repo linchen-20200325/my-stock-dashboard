@@ -13,6 +13,7 @@ import re as _re_etf_helpers
 # 本 re-export 維持 backward compat,既有 caller(本檔 auto_role / etf_calc / tab_stock_picker
 # / etf_tab_portfolio)無需改 import path。
 from shared.etf_codes import bare_etf_code  # noqa: F401
+from shared.signal_thresholds import TRADING_DAYS_PER_YEAR  # B5 SSOT-M1
 
 _TW_PURE_RE = _re_etf_helpers.compile(r'^\d{4,6}[A-Z]?$')
 
@@ -110,7 +111,7 @@ def yield_valuation_zone(cur_yield, avg_yield):
     return label
 
 
-def calc_sigma_metrics(df, window: int = 252) -> dict:
+def calc_sigma_metrics(df, window: int = TRADING_DAYS_PER_YEAR) -> dict:
     """v18.334 PR-H2:ETF σ 統計指標 SSOT(統一計算層,不統一分級邏輯)。
 
     R-3 audit 部分統一方案:計算層統一,分級邏輯保留兩套(短/長線分離)。

@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from shared.signal_thresholds import TRADING_DAYS_PER_YEAR  # B5 SSOT-M1
+
 if TYPE_CHECKING:
     pass
 
@@ -35,7 +37,7 @@ _BAND_LABELS = {
 
 def compute_std_bands(
     price_series: pd.Series,
-    window: int = 252,
+    window: int = TRADING_DAYS_PER_YEAR,
 ) -> dict:
     """計算收盤價的標準差買賣帶。
 

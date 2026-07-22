@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📈 2026-07-22 全域重構 B5｜252 交易日常數 SSOT（v19.152,深層技術債藍圖 B5/9,SSOT-M1）
+
+inline `252`(年化交易日)散落 L2 compute。SSOT `TRADING_DAYS_PER_YEAR=252`(`shared/signal_thresholds.py:23`)早存在,`etf_calc` 甚至已 import 卻仍有 4 處 inline `252`(自相矛盾)。
+
+- **收 9 站點(全 L2 compute,語意等價零行為改變 —— 252 == 常數值)**:
+  - **年化數學**:`etf_calc` 635(TE)/692(年報酬)/693(年波動)/976(TE),`multi_factor_optimization:208`(`periods_per_year = 252/fwd_days`)
+  - **1 年滾動窗口預設**:`flow_engine` 57/108(`window=252`)、`etf_smart_analysis:38`、`etf_helpers:113`(default param 於 def-time 求值 → 補 module-level import)
+- **刻意不動(誠實)**:
+  - 多期 tuple `(63, 126, 252)`(`etf_calc:736`、`etf_tab_single:725`)—— 252 與 3M/6M 併列,63/126 無 SSOT,單換 252 反而不一致
+  - UI dropdown `[120, 252, 500]`(`etf_tab_smart:122`)、L5 UI 顯式傳 `window=252`(`section_when_buy_sell`/`etf_tab_grp_compare`)、docstring
+- **驗證**:5 檔 py_compile + import smoke(新 module-level import 無循環)+ 335 targeted(etf_helpers/flow_engine/multi_factor + ETF SSOT 群)全綠。
+
 ## 🏷️ 2026-07-22 全域重構 B4｜財報科目別名 SSOT（v19.152,深層技術債藍圖 B4/9,SSOT-H1,user 選「保守 SSOT」）
 
 財報科目別名散落多檔各自維護。**盤查發現不是純重複**:各檔別名清單是「同主題、不同來源」的變體(MOPS 混合 / FinMind SDK / yfinance),硬 union 再全域替換會改 priority-match「先命中哪欄」→ 財報數字走鐘。user 選**保守 SSOT**:集中「各來源分組」常數、各檔 import 對應那組,零行為改變、不強行合併。
