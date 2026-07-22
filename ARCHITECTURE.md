@@ -1,6 +1,6 @@
 # 台股 AI 戰情室 — 技術規格書
 
-> **版本**:v9.2(2026-06-30 Phase 1 second-pass 唯讀全域 audit + Phase 2 收尾對齊)| v9.1:doc accuracy | v9.0:Batch 1~10 後 | 歷史 v7.1:2026-05-15
+> **版本**:v9.3(2026-07-21 選股/風控/驗證擴充:風險貢獻 + 跨季趨勢 + 前進式驗證 + 價格備援)| v9.2(2026-06-30 Phase 1 second-pass 唯讀全域 audit + Phase 2 收尾對齊)| v9.1:doc accuracy | v9.0:Batch 1~10 後 | 歷史 v7.1:2026-05-15
 >
 > 本文件為系統架構師視角的唯讀規格書,不含任何實作程式碼。
 >
@@ -13,6 +13,13 @@
 > **v18.412~420 Phase 2 動工批**(2026-06-30):Batch 1a/1b/2/3/4/6/10/10b + Batch 7-1~7-5 + Batch 8.1 + Batch 9 + Batch 9-2 全做,Batch 5/8 audit 翻案 WONTFIX;**所有 §0.6/§0.7/§0.8 列出殘餘全消(✅ 或 ⊘ WONTFIX 有證據)**。
 >
 > **v18.421 Phase 1 second-pass(2026-06-30 本批)**:4 路 fresh audit agent(SSOT/重複/§8.2/跨 tab 一致性)+ 直接 LOC 掃描;新發現 §0.11 補錄(2 處 EX-CACHE-1 letter compliance 違反 + 2 處 UI 層定義 L1 fetcher + 9 處 L1→L2 反向 import + 3 處 magic number 散落)。
+>
+> **v19.137~144 選股/風控/驗證擴充(2026-07-21)**:架構「原則」不變(7 層 + 硬規則全遵守),新增模組落各既有層:
+> - **風險貢獻分解**:L2 `compute/risk/risk_contribution.py`(Euler 分解,只用 Σw 免反矩陣)+ L4 `render/risk_contribution_render.py`;接 ETF 組合 + 個股組合(v19.137/138)。
+> - **全台股跨季趨勢**:L1 `fundamentals_snapshot_loader.load_all_fundamentals_quarters`(全季)+ L2 `compute/screener/cross_quarter_trends.py`(比率斜率,§1 5 季限制誠實用斜率非「連續成長」)→ 選股網因子 + 全市場排行(v19.139/140)。
+> - **前進式驗證(取代 v18.265 移除的舊回測)**:L2 `compute/screener/forward_test.py`(對帳 + 基準)+ L3 `services/forward_test_service.py`(凍結/對帳編排)+ L1 gsheet `forward_test_picks` worksheet;**零 lookahead + 零存活者偏誤**(v19.141~143)。
+> - **價格第二來源備援**:L1 `picker_fetcher.fetch_stock_history_1y` 加 FinMind fallback(Yahoo 全敗降級不瞎,v19.144)。
+> - 新 SSOT:`shared/{risk_contribution,cross_quarter,forward_test}_thresholds.py`(照既有 shared/*_thresholds 慣例)。
 
 ---
 
