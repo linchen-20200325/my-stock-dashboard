@@ -63,7 +63,25 @@ def test_durable_export_from_real_parquet(tmp_path):
     assert "stock_technical" not in tables
     cols = [d[1] for d in conn.execute("PRAGMA table_info(stock_fundamentals)")]
     assert {"stock_id", "revenue", "eps", "total_equity"}.issubset(cols)
+
+    # source_health：反映各維成敗（缺 token 的 live 表 → absent；離線表 → ok），不再默默消失
+    assert "source_health" in tables
+    health = {r[0]: (r[1], r[2]) for r in conn.execute(
+        "SELECT field, status, n_rows FROM source_health")}
+    assert health["monthly_revenue"][0] == "absent"
+    assert health["stock_technical"][0] == "absent"
+    assert health["market_index"] == ("ok", res["market_index"])
     conn.close()
+
+
+def test_health_rows_maps_status_and_schema():
+    df = E._health_rows({"market_index": 100, "monthly_revenue": -1, "empty_ok": 0}, "2026-07-22")
+    m = {r["field"]: (r["status"], int(r["n_rows"])) for _, r in df.iterrows()}
+    assert m["market_index"] == ("ok", 100)
+    assert m["monthly_revenue"] == ("absent", 0)     # 缺料 → absent、n_rows 記 0（不造假）
+    assert m["empty_ok"] == ("ok", 0)                # 0 列但有寫 → ok
+    assert set(df.columns) == set(E._HEALTH_COLS)
+    assert (df["as_of"] == "2026-07-22").all()
 
 
 def test_revenue_rows_drops_na_and_requires_cols():
