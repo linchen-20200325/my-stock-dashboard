@@ -610,7 +610,7 @@ with tab_stocks:
         from src.ui.tabs.tab_stock_picker import render_prescreen_panel
         from src.ui.tabs.yield_screener import fetch_twse_yield_pe
         from src.services.fundamental_screener_service import (
-            SCREEN_ANGLE_LABELS, composite_rank_candidates, get_fundamental_survivors,
+            SCREEN_ANGLE_LABELS, get_fundamental_survivors, get_ranked_picks,
         )
 
         # ── ① 基本面優選（四項全過，自動）────────────────────────
@@ -673,12 +673,15 @@ with tab_stocks:
                     _pe_map = dict(zip(_codes_s, _twse_scrn['本益比']))
                 if '名稱' in _twse_scrn.columns:
                     _name_map = dict(zip(_codes_s, _twse_scrn['名稱'].astype(str)))
-            _cands, _cnote = composite_rank_candidates(
-                _surv_df, factors=_factors, top_n=300,
+            # v19.147:改走 L3 get_ranked_picks（畫面/cron 同源，保證自動凍結清單=畫面清單）。
+            # auto_fetch=False = 只用 session 已快取的掃描結果（掃描仍由上方「開始選股」按鈕觸發），行為不變。
+            _cands, _cnote = get_ranked_picks(
+                _factors, top_n=300, survivors_df=_surv_df,
                 pe_map=_pe_map, name_map=_name_map,
                 shortage_rows=st.session_state.get('_shortage_rows'),
                 rs_rows=st.session_state.get('_rs_rows_all'),  # v19.90 全存活池 RS（非 top-50）
-                trend_map=st.session_state.get('_trend_map'))  # A-2 v19.140 跨季轉強
+                trend_map=st.session_state.get('_trend_map'),  # A-2 v19.140 跨季轉強
+                auto_fetch=False)
             if _cnote:
                 st.info(_cnote)
             st.markdown('#### ③ 選股結果（綜合評分排序）')

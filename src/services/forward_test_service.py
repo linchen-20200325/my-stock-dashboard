@@ -21,19 +21,13 @@ def is_freeze_available() -> bool:
         return False
 
 
-def freeze_current_picks(codes, *, factors, cohort: str, names: dict | None = None) -> tuple[int, int]:
-    """抓進場價 → 凍結本次選股存 Google Sheet。回 (存入檔數, 抓不到價而略過檔數)。
+def _build_freeze_rows(codes, *, factors, cohort: str, names: dict | None = None) -> tuple[list[dict], int]:
+    """抓進場價 → build pick-snapshot rows。回 (rows, 抓不到進場價而略過的檔數)。
 
-    Args:
-        codes: 要凍結的股號(list[str];通常選股結果前 N 名)。
-        factors: 當時勾選因子(記錄用,日後可分策略比較)。
-        cohort: 批次標籤(通常凍結日 "YYYY-MM-DD")。
-        names: {stock_id: 中文名}(選填,寫進 sheet 方便閱讀)。
-
-    §1:抓不到進場價的檔**不凍結**(不存假價);gsheet 未設定 / 寫入失敗 → raise(UI 顯示)。
+    共用給 gsheet / 本地 parquet 兩種 sink（DRY，避免兩處各抓一次價 / 各自組 rows）。
+    §1:抓不到進場價的檔 **不凍結**（build_pick_snapshot_rows 已濾，不存假價）。
     """
     from src.compute.screener.forward_test import build_pick_snapshot_rows
-    from src.data.portfolio.gsheet_portfolio import append_forward_test_picks
     from src.data.stock.picker_fetcher import fetch_stock_history_1y
 
     _codes = [str(c).strip() for c in (codes or []) if str(c).strip()]
@@ -46,21 +40,64 @@ def freeze_current_picks(codes, *, factors, cohort: str, names: dict | None = No
         _codes, _entry, factors=factors, cohort=cohort, names=names,
         frozen_at=pd.Timestamp.now(tz="Asia/Taipei").isoformat(),
     )
+    return _rows, len(_codes) - len(_rows)
+
+
+def freeze_current_picks(codes, *, factors, cohort: str, names: dict | None = None) -> tuple[int, int]:
+    """抓進場價 → 凍結本次選股存 Google Sheet。回 (存入檔數, 抓不到價而略過檔數)。
+
+    Args:
+        codes: 要凍結的股號(list[str];通常選股結果前 N 名)。
+        factors: 當時勾選因子(記錄用,日後可分策略比較)。
+        cohort: 批次標籤(通常凍結日 "YYYY-MM-DD")。
+        names: {stock_id: 中文名}(選填,寫進 sheet 方便閱讀)。
+
+    §1:抓不到進場價的檔**不凍結**(不存假價);gsheet 未設定 / 寫入失敗 → raise(UI 顯示)。
+    """
+    from src.data.portfolio.gsheet_portfolio import append_forward_test_picks
+    _rows, _miss = _build_freeze_rows(codes, factors=factors, cohort=cohort, names=names)
     _n = append_forward_test_picks(_rows)
-    return _n, len(_codes) - _n
+    return _n, _miss
+
+
+def freeze_current_picks_local(codes, *, factors, cohort: str, names: dict | None = None) -> tuple[int, int]:
+    """同 freeze_current_picks，但存 **本地 git 追蹤 parquet**（cron headless 用，無需 OAuth）。
+
+    回 (實際新增檔數, 抓不到進場價而略過檔數)。§5 冪等：同 (cohort, stock_id) 不重複新增。
+    v19.147:讓每月 cron 自動凍結 + 手動凍結都落地 repo，解「0 樣本 + 只在私人 sheet」卡關。
+    """
+    from src.data.portfolio.forward_test_store import append_picks_local
+    _rows, _miss = _build_freeze_rows(codes, factors=factors, cohort=cohort, names=names)
+    _n = append_picks_local(_rows)
+    return _n, _miss
+
+
+_FROZEN_COLS = ["cohort", "stock_id", "name", "entry_price", "factors", "frozen_at"]
 
 
 def load_frozen_picks_df() -> pd.DataFrame:
-    """讀回全部凍結紀錄為 DataFrame(欄:cohort/stock_id/name/entry_price/factors/frozen_at)。
+    """讀回全部凍結紀錄為 DataFrame（欄:cohort/stock_id/name/entry_price/factors/frozen_at）。
 
-    gsheet 無資料 / 未設定 → 空 DataFrame(對帳面板判空,不炸)。
+    v19.147:合併 **本地 git 追蹤 parquet（cron + 手動）∪ Google Sheet**，同 (cohort, stock_id)
+    去重（本地在前 → keep='first' 保留本地）。兩邊皆空 / gsheet 未設定 → 空 DataFrame（對帳判空不炸）。
     """
-    from src.data.portfolio.gsheet_portfolio import load_forward_test_picks
+    from src.data.portfolio.forward_test_store import load_picks_local
 
-    _recs = load_forward_test_picks()
+    _recs = list(load_picks_local())               # 本地(cron 自動 + 手動)優先
+    try:
+        from src.data.portfolio.gsheet_portfolio import load_forward_test_picks
+        _recs += list(load_forward_test_picks() or [])
+    except Exception as _e:  # noqa: BLE001 — gsheet 未設定 / 讀取失敗 → 只用本地,不炸
+        print(f"[forward_test_service] gsheet 凍結讀取略過:{type(_e).__name__}: {_e}")
+
     if not _recs:
-        return pd.DataFrame(columns=["cohort", "stock_id", "name", "entry_price", "factors", "frozen_at"])
-    return pd.DataFrame(_recs)
+        return pd.DataFrame(columns=_FROZEN_COLS)
+    _df = pd.DataFrame(_recs)
+    if "cohort" not in _df.columns or "stock_id" not in _df.columns:
+        return _df
+    _df["cohort"] = _df["cohort"].astype(str)
+    _df["stock_id"] = _df["stock_id"].astype(str).str.strip()
+    return _df.drop_duplicates(subset=["cohort", "stock_id"], keep="first").reset_index(drop=True)
 
 
 def reconcile_all() -> tuple[pd.DataFrame, dict]:

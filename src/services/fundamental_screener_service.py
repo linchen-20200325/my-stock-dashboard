@@ -365,6 +365,72 @@ def composite_rank_candidates(
     return out, note
 
 
+def get_ranked_picks(
+    factors: list[str],
+    *,
+    top_n: int = 300,
+    survivors_df: pd.DataFrame | None = None,
+    pe_map: dict | None = None,
+    name_map: dict | None = None,
+    shortage_rows: list[dict] | None = None,
+    rs_rows: list[dict] | None = None,
+    trend_map: dict | None = None,
+    auto_fetch: bool = True,
+    refresh: bool = False,
+) -> tuple[pd.DataFrame, str]:
+    """選股網「一鍵選股」同源編排：存活池 +（缺貨/RS/跨季）+ PE → 綜合排名。
+
+    v19.147：把原本散在 app.py 選股網（app.py:664-681）的組裝抽成單一函式，讓
+    **畫面**（app.py）與 **cron**（scripts/update_forward_test_freeze.py 前進式驗證自動凍結）
+    共用同一支 → 保證「自動凍結的清單 = 使用者畫面看到的清單」（§8 SSOT，防兩處組裝漂移）。
+
+    分層（§8.2 L3）:
+      - survivors / shortage / rs / trend 全走 L3 service（get_fundamental_survivors /
+        run_shortage_scan / run_rs_leader_scan / build_trend_map）——合法。
+      - `pe_map` / `name_map` 由 **orchestrator（app 或 cron）自 TWSE BWIBBU 抓後傳入**：
+        PE fetcher（fetch_twse_yield_pe）在 L5，L3 不反向 import，改由 caller 注入。
+
+    參數:
+      - survivors_df: 已備存活池則傳入（app 端已抓，避免重抓；不傳則本層自抓，cron 用）。
+      - auto_fetch: True（cron）→ 缺的 shortage/rs/trend 自動掃；False（app）→ 只用傳入的
+        session 快取值，不重掃（保留畫面既有「按鈕觸發掃描 + session 快取」行為）。
+
+    §1：任一掃描失敗 → 該因子缺料（composite 自動不計入、不記 0），不炸整體。
+    Returns: (cands_df[代碼/名稱/綜合分/各因子分], note)。
+    """
+    _factors = list(factors or [])
+    if survivors_df is None:
+        try:
+            survivors_df, _ = get_fundamental_survivors(refresh=refresh)
+        except Exception as _e:  # noqa: BLE001 — 快照缺不炸選股
+            print(f"[fund_screener_service] get_ranked_picks 存活池不可用：{type(_e).__name__}: {_e}")
+            survivors_df = None
+
+    if auto_fetch:
+        if "shortage" in _factors and shortage_rows is None:
+            try:
+                from src.services.shortage_screener_service import run_shortage_scan
+                shortage_rows = run_shortage_scan()[0]
+            except Exception as _es:  # noqa: BLE001 — 掃描失敗 → 該因子缺料，不炸
+                print(f"[fund_screener_service] get_ranked_picks 缺貨掃描失敗：{type(_es).__name__}: {_es}")
+        if "rs_leader" in _factors and rs_rows is None:
+            try:
+                # v19.90:綜合分需【全存活池】RS 分位 → beat_only=False + top_n 給大值（同 app.py:645）。
+                from shared.rs_screen_thresholds import RS_SCAN_MAX
+                from src.services.rs_leader_service import run_rs_leader_scan
+                rs_rows = run_rs_leader_scan(beat_only=False, top_n=RS_SCAN_MAX)[0]
+            except Exception as _er:  # noqa: BLE001
+                print(f"[fund_screener_service] get_ranked_picks RS 掃描失敗：{type(_er).__name__}: {_er}")
+        if "trend" in _factors and trend_map is None:
+            trend_map = build_trend_map(refresh=refresh)
+
+    return composite_rank_candidates(
+        survivors_df, factors=_factors, top_n=top_n,
+        pe_map=pe_map, name_map=name_map,
+        shortage_rows=shortage_rows, rs_rows=rs_rows, trend_map=trend_map,
+    )
+
+
 def gate_pool_by_fundamentals(
     pool_df: pd.DataFrame,
     code_col: str = "代碼",

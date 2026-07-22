@@ -43,6 +43,10 @@ def test_app_entry_no_longer_yield_ranked():
     但選股網 v19.88-90 重設計改走 `composite_rank_candidates`(綜合評分)+
     `get_fundamental_survivors`(基本面存活池) — 舊斷言在 main 上恆紅(CI 失敗根因)。
     改釘「當前設計」的入口契約;負面斷言(不得回退殖利率排序)原樣保留。
+
+    v19.147:選股網組裝抽成 L3 `get_ranked_picks`(畫面/cron 同源),app.py 改呼叫它;
+    `composite_rank_candidates` 下沉為 get_ranked_picks 內部呼叫,不再出現在 app.py。
+    斷言改釘 `get_ranked_picks`(仍是「走綜合評分排序」的同一契約,只是換入口名)。
     """
     with open('app.py', encoding='utf-8') as f:
         app_src = f.read()
@@ -50,7 +54,7 @@ def test_app_entry_no_longer_yield_ranked():
         '選股網入口仍用「殖利率前50」nlargest 當排序閘門')
     # source_label 不再自稱「高殖利率前50」
     assert "source_label='高殖利率前50'" not in app_src
-    # v19.88+ 現行設計:基本面存活池 → 綜合評分 → picker
+    # v19.88+ 現行設計:基本面存活池 → 綜合評分 → picker(v19.147 綜合評分入口 = get_ranked_picks)
     assert "get_fundamental_survivors" in app_src, '選股網入口應接基本面存活池'
-    assert "composite_rank_candidates" in app_src, '選股網入口應走綜合評分排序'
+    assert "get_ranked_picks" in app_src, '選股網入口應走綜合評分排序（get_ranked_picks 同源）'
     assert "基本面優選" in app_src
