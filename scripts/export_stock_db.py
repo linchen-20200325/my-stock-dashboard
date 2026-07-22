@@ -21,6 +21,8 @@
     - `macro_tw_signal`     景氣對策信號燈號（fetch_ndc_signal_history）
     - `futures_oi`          台指期外資留倉淨口數（finmind_fut_oi,單位 口;+多/-空）
     - `futures_night`       台指期日盤+夜盤收盤 → 夜盤漲跌（finmind_fut_night;盤前隔日開盤領先）
+* 🩺 健康表（每次 export 依上述各表成敗自動產生,不需外部抓取）
+    - `source_health`       各表 status（ok/absent）+ n_rows + as_of（下游 2026 顯示維度降級/缺料,不再默默消失）
 
 （`stock_health`（MJ 財報評級）為下一增量,需財報體檢管線,另接。）
 
@@ -38,6 +40,7 @@ import argparse
 import os
 import sqlite3
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -46,6 +49,13 @@ import pandas as pd
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 _DATA_CACHE = _ROOT / "data_cache"
+
+# TW 時區（UTC+8）—— source_health as_of 戳記用（對照 CLAUDE.md §4.5：TW 時間一律 std datetime）。
+_TW_TZ = timezone(timedelta(hours=8))
+
+
+def _now_tw_date() -> str:
+    return datetime.now(_TW_TZ).date().isoformat()
 
 
 def _log(msg: str) -> None:
@@ -327,6 +337,35 @@ def write_macro_tw_signal(conn: sqlite3.Connection, token: str) -> int:
     return 1
 
 
+# ── source_health：讓「維度降級 / 缺料」看得見（下游 2026 顯示，不再默默消失） ──
+_HEALTH_COLS = ["field", "status", "n_rows", "as_of"]
+_HEALTH_OK = "ok"
+_HEALTH_ABSENT = "absent"        # 缺 token / 抓不到 → 該表未寫
+
+
+def _health_rows(result: dict[str, int], as_of: str) -> pd.DataFrame:
+    """export result dict → source_health 落地（純轉換，無 I/O，便於單測）。
+
+    status：n < 0（略過 / 缺料）→ absent；否則 ok。n_rows：實際落地列數（absent 記 0）。
+    """
+    rows = [
+        {
+            "field": field,
+            "status": _HEALTH_ABSENT if n < 0 else _HEALTH_OK,
+            "n_rows": max(n, 0),
+            "as_of": as_of,
+        }
+        for field, n in result.items()
+    ]
+    return pd.DataFrame(rows, columns=_HEALTH_COLS)
+
+
+def write_source_health(conn: sqlite3.Connection, result: dict[str, int], as_of: str) -> int:
+    """各表成敗（ok / absent）落地成 source_health，供下游 2026 顯示『維度降級 / 缺料』。"""
+    _health_rows(result, as_of).to_sql("source_health", conn, if_exists="replace", index=False)
+    return len(result)
+
+
 # ── 主流程 ───────────────────────────────────────────────────────────────────
 _DURABLE = [
     ("stock_fundamentals", write_fundamentals),
@@ -352,6 +391,7 @@ def export_all(db_path: Path, token: str, stock_ids: list[str] | None = None) ->
         result["macro_tw_signal"] = write_macro_tw_signal(conn, token)
         result["futures_oi"] = write_futures_oi(conn, token)
         result["futures_night"] = write_futures_night(conn, token)
+        write_source_health(conn, result, _now_tw_date())
         conn.commit()
     finally:
         conn.close()
@@ -371,6 +411,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"✅ stock.db 已更新 → {out}")
     for name, n in result.items():
         print(f"   {name}: {'略過(缺 token/資料)' if n < 0 else f'{n} 列'}")
+    absent = [name for name, n in result.items() if n < 0]
+    if absent:
+        print(f"🩺 source_health：{len(absent)} 維缺料 → {', '.join(absent)}（下游 2026 會標降級）")
     return 0
 
 
