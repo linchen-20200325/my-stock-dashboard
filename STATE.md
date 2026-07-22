@@ -1,5 +1,27 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏁 2026-07-21 策略補強收尾 + 憲法/架構同步（v19.145,user「收尾 + 憲法架構一併更新」）
+
+策略體檢 → 三步補強全收斂。步驟3 查證後 WONTFIX;CLAUDE.md/ARCHITECTURE.md 因本輪過時處一併更新。
+
+- **步驟3 月營收早期預警 = WONTFIX(已覆蓋)**:查證發現月營收動能**系統早有一整套** —— `compute/health/monthly_revenue_calc.py`(YoY/MoM + 5 段趨勢分類)+ `monthly_revenue_screener` UI + 缺貨因子第④訊號(月營收 YoY 連續成長)+ `mj_trend_score`。再加選股網因子 = 重複 + 因子灌水(牴觸 user「選股網要簡單」)→ §-1 WONTFIX。
+- **CLAUDE.md 更新**(user 要求「憲法有變動一併更新」):
+  - **§2.3**:原「本專案**無策略回測**」已過時 → 改為「無傳統歷史回測(v18.265 移除,因短歷史+現存公司會 lookahead+存活者偏誤)**改採前進式驗證**(forward_test,零 lookahead/存活者偏誤)」。
+  - **§8.2 層表**:L2 補 `compute/screener/{...,cross_quarter_trends,forward_test}` + `compute/risk/risk_contribution`;L3 補 `services/{fundamental_screener,rs_leader,shortage_screener,forward_test}_service` 並修掉已刪的 ai_engine/unified_decision;L4 補 `render/risk_contribution_render`。
+- **ARCHITECTURE.md 更新**:v9.2→**v9.3**,加 v19.137~144 dated 演進註記(風險貢獻/跨季趨勢/前進式驗證/價格備援 各落既有層,7 層原則不變)。
+- **SSOT 原則**:本輪 3 個新 threshold 檔(risk_contribution/cross_quarter/forward_test)全照 `shared/*_thresholds.py` 慣例、零 inline magic。
+- **無 open PR 遺留**(551~554 全 merged);本 PR 純 doc(CLAUDE.md + ARCHITECTURE.md + STATE.md),0 production 變更。
+
+### 📌 本 session 策略補強總帳(v19.137→145)
+| 項目 | 結果 |
+|---|---|
+| 風險貢獻分解(ETF+個股組合) | ✅ v19.137/138 |
+| 全台股跨季趨勢(選股網因子+全市場排行) | ✅ v19.139/140 |
+| 全台股價格快照 B-1 | ⏹ WONTFIX(存活池 RS 已滿覆蓋) |
+| 前進式驗證(算/存/看 三段) | ✅ v19.141/142/143 |
+| 價格第二來源備援 | ✅ v19.144 |
+| 月營收早期預警 | ⏹ WONTFIX(已有整套) |
+
 ## 🔌 2026-07-21 策略補強 步驟2:價格第二來源備援（v19.144,user「繼續」）
 
 補「價格 100% 靠 Yahoo」單點風險。`fetch_stock_history_1y` Yahoo `.TW/.TWO` 雙後綴全敗後 → **FinMind TaiwanStockPrice 第二來源備援**,Yahoo 限流/擋 IP 時 RS/技術面**降級不瞎**。

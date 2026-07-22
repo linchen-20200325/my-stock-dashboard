@@ -147,7 +147,7 @@ class DataPoint:
 
 ### 2.3 Point-in-Time — 防 Lookahead
 
-本專案**無策略回測**(v18.265 移除 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py`)。Macro 拐點驗證(`tw_backtest.py` SPX/TWII 倒掛翻正)+ macro 校準歷史驗算(`scripts/calibrate_macro_traffic.py`,v18.359 F-2 搬入 `scripts/`)仍須遵守 PIT,**禁止 lookahead**。
+本專案**無傳統歷史回測**(v18.265 移除 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py` — 因只有現存公司快照 + 短歷史,回頭測必踩 lookahead + 存活者偏誤)。**改採前進式驗證(Forward-test,v19.141~143)**:凍結當下選股 → 事後真實現價對帳 vs 0050(`src/compute/screener/forward_test.py` L2 + `services/forward_test_service.py` L3 + Google Sheet 凍結),**零 lookahead、零存活者偏誤**(都是當下真實決定 + 事後真實現價)。Macro 拐點驗證(`tw_backtest.py` SPX/TWII 倒掛翻正)+ macro 校準歷史驗算(`scripts/calibrate_macro_traffic.py`,v18.359 F-2 搬入 `scripts/`)仍須遵守 PIT,**禁止 lookahead**。
 
 **各來源發布延遲 + 修正風險**:
 
@@ -459,9 +459,9 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 |---|---|---|
 | **L0 Infra** | 常數 / TTL / 門檻 / 全域 config | `src/config/{config,data_config,persona,stock_names}.py`(v18.359 F-6.1 搬入)、`shared/ttls.py`、`shared/thresholds.py`、`shared/health_thresholds.py`、`shared/fred_series.py` |
 | **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`、`data_registry.py`、`proxy_helper.py`、`scripts/update_macro_history.py`(cron CLI,v18.359 F-2 搬入)、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`、`tw_stock_data_fetcher.py` |
-| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、~~`merrill_clock.py`~~(v18.359 F-4 已刪,fetch_pmi_history 已下沉 tw_macro)、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`、`macro_signal_lookback_tw.py` |
-| **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_engine.py`、`ai_structured_summary.py`、`unified_decision.py`、`daily_checklist.py` |
-| **L4 Render** | 圖表生成 / 通用 UI 元件（無 Streamlit container） | `chart_plotter.py`、`etf_render.py`、`ui_widgets.py` |
+| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`、`macro_signal_lookback_tw.py`、`compute/screener/{fundamental_prescreen,shortage_screener,rs_leader_screener,cross_quarter_trends,forward_test}.py`、`compute/risk/risk_contribution.py`(~~`merrill_clock.py`~~ v18.359 F-4 已刪) |
+| **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_structured_summary.py`、`daily_checklist.py`、`services/{fundamental_screener_service,rs_leader_service,shortage_screener_service,forward_test_service}.py`(選股網編排,v19.14x)(~~`ai_engine.py`~~ P5-DEAD-δ 已刪、~~`unified_decision.py`~~ F-4 已刪) |
+| **L4 Render** | 圖表生成 / 通用 UI 元件（無 Streamlit container） | `chart_plotter.py`、`etf_render.py`、`ui_widgets.py`、`render/risk_contribution_render.py`(v19.138) |
 | **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`tab_mj_health_diff.py`、`etf_dashboard.py`、`etf_tab_*.py` |
 | **L6 App** | session_state 路由 + 全域編排 | `app.py`(7,300 LOC,僅 orchestrator) |
 
