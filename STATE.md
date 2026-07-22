@@ -1,5 +1,20 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚑 2026-07-22 HOTFIX｜Gemini 503 退避重試（user 回報「AI 總結本頁」硬失敗）
+
+user 截圖:`Gemini 失敗:HTTPError: 503 Server Error: Service Unavailable`。根因 = AI 呼叫路徑對**暫時性**上游錯誤(503 = Google 過載/短暫不可用)無退避重試,單次即拋。
+
+- **三條 Gemini 路徑盤查**:
+  - `ai_qa_service._make_default_http`(「AI 總結本頁」/ panel discuss 走這條)—— one-shot `raise_for_status`,**零重試** = 病灶。
+  - `ai_fetcher.post_gemini`(健康評分 / macro_state)—— 429 有重試,但 503/5xx 當永久錯 `break`(同類漏洞)。
+  - `app.py:gemini_call`(主 AI)—— 已跨 key×model fail-soft 回友善訊息,OK,不動。
+- **修**(兩條 fail-soft 路徑補退避重試,仍失敗才拋 = fail-loud §1 不變):
+  - `_make_default_http`:429/500/502/503/504 → 指數退避(1.5→3→6s,封頂 8s)重試 `max_attempts=3`;4xx(設定/prompt 錯)不重試立即拋。
+  - `post_gemini`:5xx 改與 429 同,退避重試同 model(原直接跳下個 model)。
+  - `_fmt_gemini_error`:503 給友善提示(「服務暫時過載,已重試多次,請稍候 1~2 分再試」),不丟原始 HTTPError。
+- **測試**:`tests/test_ai_qa_service.py` 補 5 測(503→200 重試成功 / 503×3 用盡拋 / 400 不重試 / 503 友善訊息不洩金鑰);23 passed。
+- **本質**:transient 5xx 本該退避重試,§1 fail-loud 仍成立(重試用盡才顯示錯誤,不造假)。
+
 ## 📈 2026-07-22 全域重構 B5｜252 交易日常數 SSOT（v19.152,深層技術債藍圖 B5/9,SSOT-M1）
 
 inline `252`(年化交易日)散落 L2 compute。SSOT `TRADING_DAYS_PER_YEAR=252`(`shared/signal_thresholds.py:23`)早存在,`etf_calc` 甚至已 import 卻仍有 4 處 inline `252`(自相矛盾)。

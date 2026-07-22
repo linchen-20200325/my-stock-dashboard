@@ -342,6 +342,9 @@ def _fmt_gemini_error(prefix: str, e) -> str:
     msg = _scrub_secrets(f"{type(e).__name__}: {e}")
     if "429" in msg or "Too Many Requests" in msg or "RESOURCE_EXHAUSTED" in msg:
         return f"{prefix}:已達 Gemini 免費額度上限(429 Too Many Requests),請稍候約 30~60 秒再試。"
+    if ("Service Unavailable" in msg or "UNAVAILABLE" in msg
+            or "503 Server Error" in msg or "overloaded" in msg):
+        return f"{prefix}:Gemini 服務暫時過載/無法使用(503),已自動退避重試多次仍失敗,請稍候 1~2 分鐘再試。"
     return f"{prefix}:{msg}"
 
 
@@ -373,13 +376,30 @@ def _run_tool(tools: dict, name: str, args: dict) -> dict:
         return {"ok": False, "error": _scrub_secrets(f"{name} 失敗:{type(e).__name__}: {e}")}
 
 
-def _make_default_http(api_key: str, model: str) -> Callable[[dict], dict]:
-    """預設 Gemini REST(Stock L3 允許 I/O)。★Fund(L2 禁 requests):請改注入走 infra/llm 的 gemini_http。"""
+# 暫時性上游錯誤(限流 429 + 過載/中斷 5xx,如 503 Service Unavailable)→ 退避重試;
+# 非此清單(4xx 設定/prompt 錯、200)不重試。Google 過載時常回 503,單次即拋對 UX 太脆。
+_GEMINI_RETRIABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+def _make_default_http(api_key: str, model: str, *, max_attempts: int = 3) -> Callable[[dict], dict]:
+    """預設 Gemini REST(Stock L3 允許 I/O)。★Fund(L2 禁 requests):請改注入走 infra/llm 的 gemini_http。
+
+    暫時性上游錯誤(429/5xx,如 503 Service Unavailable)自動退避重試 max_attempts 次;
+    仍失敗才拋(fail-loud,§1)。永久性錯誤(4xx 設定/prompt)不重試,直接拋。
+    """
     def _http(payload: dict) -> dict:
+        import time
         import requests  # lazy
-        r = requests.post(_GEMINI_URL.format(model=model), params={"key": api_key}, json=payload, timeout=30)
-        r.raise_for_status()
-        return r.json()
+        for _attempt in range(max_attempts):
+            r = requests.post(_GEMINI_URL.format(model=model), params={"key": api_key},
+                              json=payload, timeout=30)
+            # 暫時性且還有重試額度 → 指數退避後再試(1.5 → 3 → 6s,封頂 8s)
+            if r.status_code in _GEMINI_RETRIABLE_STATUS and _attempt < max_attempts - 1:
+                time.sleep(min(8.0, 1.5 * (2 ** _attempt)))
+                continue
+            r.raise_for_status()   # 200 放行;重試用盡或永久性錯誤 → 拋(fail-loud §1)
+            return r.json()
+        raise RuntimeError("Gemini retry 迴圈異常終止(max_attempts < 1?)")  # 防禦,理論不可達
     return _http
 
 
