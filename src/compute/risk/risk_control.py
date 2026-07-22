@@ -32,6 +32,70 @@ def portfolio_exposure(regime: str) -> float:
     }.get(regime, EXPOSURE_NEUTRAL)
 
 
+# ── 投組層級集中度守門 (§6.3;v19.151 接線) ─────────────────────
+def check_portfolio_limits(weights: dict,
+                           *,
+                           single_max_pct: float = MAX_POSITION_PER_STOCK,
+                           max_positions: int = MAX_POSITIONS) -> dict:
+    """投組層級集中度上限檢查(單股權重上限 + 持股檔數上限)。純函式,零 I/O。
+
+    把 RiskController 早已定義卻空轉的兩條上限(單股 ≤10% / 最多 10 檔)接成
+    「輸入權重 → 回違反清單」,供個股組合風險貢獻區塊顯示(v19.151 接線)。
+
+    Args:
+        weights: {code: 市值權重}(scale-free;本函式內部正規化為 % of total)。
+                 ≤0 / None 的檔視為未持有,不計入。
+        single_max_pct: 單股權重上限(小數,預設 MAX_POSITION_PER_STOCK=0.10)。
+        max_positions: 持股檔數上限(預設 MAX_POSITIONS=10)。
+
+    Returns:
+        dict {
+          'n_positions':        int    有效持股檔數,
+          'weights_pct':        dict   {code: 權重%},依權重降冪,
+          'over_concentration': list   [(code, pct)] 單股 > single_max_pct×100(降冪),
+          'too_many_positions': bool   n_positions > max_positions,
+          'max_weight_pct':     float|None  最大單股權重%(空投組 None),
+          'single_max_pct':     float  回傳門檻(供 UI 顯示),
+          'max_positions':      int,
+          'ok':                 bool   無任何違反,
+        }
+        空 / 全 ≤0 → n_positions=0, ok=True(無持股不算違反)。
+    """
+    _w = {str(k): float(v) for k, v in (weights or {}).items()
+          if v is not None and _is_pos(v)}
+    _total = sum(_w.values())
+    _thresh_pct = float(single_max_pct) * 100.0
+    if not _w or _total <= 0:
+        return {'n_positions': 0, 'weights_pct': {}, 'over_concentration': [],
+                'too_many_positions': False, 'max_weight_pct': None,
+                'single_max_pct': single_max_pct, 'max_positions': max_positions,
+                'ok': True}
+    _pct = {c: v / _total * 100.0 for c, v in _w.items()}
+    _pct_sorted = dict(sorted(_pct.items(), key=lambda kv: -kv[1]))
+    _over = [(c, round(p, 1)) for c, p in _pct_sorted.items() if p > _thresh_pct]
+    _n = len(_w)
+    _too_many = _n > int(max_positions)
+    return {
+        'n_positions': _n,
+        'weights_pct': {c: round(p, 1) for c, p in _pct_sorted.items()},
+        'over_concentration': _over,
+        'too_many_positions': _too_many,
+        'max_weight_pct': round(next(iter(_pct_sorted.values())), 1),
+        'single_max_pct': single_max_pct,
+        'max_positions': int(max_positions),
+        'ok': (not _over) and (not _too_many),
+    }
+
+
+def _is_pos(v) -> bool:
+    """v 為有限正數(擋 NaN / inf / 負 / 非數字);集中度只計有效持股。"""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return False
+    return f == f and f not in (float('inf'), float('-inf')) and f > 0
+
+
 # ── ATR 動態停損工具函數 (§6.2) ──────────────────────────────
 def atr_stop_price(buy_price: float, atr: float | None,
                    multiplier: float = ATR_MULTIPLIER,

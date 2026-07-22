@@ -128,6 +128,7 @@ def _render_risk_contribution_section(stock_list: list[str]) -> None:
     import streamlit as _st  # noqa: F811
 
     from src.compute.risk.risk_contribution import compute_risk_contribution
+    from src.compute.risk.risk_control import check_portfolio_limits  # v19.151 投組上限接線
     from src.data.stock.picker_fetcher import fetch_stock_history_1y  # EX-PASSTHRU-1
     from src.ui.render.risk_contribution_render import render_risk_contribution_panel
 
@@ -173,6 +174,34 @@ def _render_risk_contribution_section(stock_list: list[str]) -> None:
         _returns = pd.DataFrame(_ret_dict).ffill() if _ret_dict else pd.DataFrame()
         _rc = compute_risk_contribution(_returns, _weights)
         render_risk_contribution_panel(_rc, show_header=False)
+
+        # v19.151 投組層級風控接線:用同一份市值權重,把 RiskController 早定義卻空轉的
+        # 「單股 ≤10% / 持股 ≤10 檔」上限真的顯示出來(§6.3 SSOT 門檻)。回撤暫停/現金
+        # 下限需成本基礎與現金輸入 → 另案。抓不到價的檔不在 _weights,不計入集中度。
+        _lim = check_portfolio_limits(_weights)
+        _sm = _lim['single_max_pct'] * 100
+        _rows = []
+        if _lim['too_many_positions']:
+            _rows.append(f'🔴 持股 <b>{_lim["n_positions"]}</b> 檔 — 超過建議上限 '
+                         f'{_lim["max_positions"]} 檔(分散過度、難管理)')
+        else:
+            _rows.append(f'🟢 持股 {_lim["n_positions"]} 檔(上限 {_lim["max_positions"]})')
+        if _lim['over_concentration']:
+            _ov = '、'.join(f'{c} {p:.0f}%' for c, p in _lim['over_concentration'])
+            _rows.append(f'🔴 單股超過 {_sm:.0f}%:<b>{_ov}</b> — 過度集中,考慮分散')
+        elif _lim['max_weight_pct'] is not None:
+            _rows.append(f'🟢 最大單股 {_lim["max_weight_pct"]:.0f}%(上限 {_sm:.0f}%),集中度 OK')
+        _verdict = '🟢 集中度 OK' if _lim['ok'] else '🔴 集中度超標'
+        _st.markdown(
+            '<div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;'
+            'padding:10px 14px;margin-top:8px;">'
+            f'<b>🛡️ 投組集中度守門</b>:<b>{_verdict}</b>'
+            + ''.join(f'<div style="font-size:12px;color:#c9d1d9;margin-top:3px;">{_r}</div>'
+                      for _r in _rows)
+            + '</div>', unsafe_allow_html=True)
+        _st.caption('單股 ≤10% / 持股 ≤10 檔為 SSOT 風控門檻;權重＝市值佔比。'
+                    '回撤 15% 暫停 / 現金下限需成本基礎與現金輸入 → 另案。')
+
         if _price_miss:
             _st.caption(f'⚪ 這幾檔抓不到價格、已略過：{"、".join(_price_miss)}')
 

@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🛡️ 2026-07-22 投組層級風控上限接線（v19.151,user「加在組合中風險貢獻」）
+
+斷鏈②後半。`RiskController` 早定義卻空轉的投組上限(單股 ≤10% / 最多 10 檔)接進**個股組合風險貢獻區塊**(user 指定位置)—— 那裡已有「持有張數 → 市值權重」現成狀態,零新增 state。
+
+- **L2 純函式** `check_portfolio_limits(weights)`(`risk_control.py`,放 `portfolio_exposure` 旁):市值權重正規化為 % → 回 `{n_positions, weights_pct, over_concentration, too_many_positions, max_weight_pct, ok}`。門檻走 config SSOT `MAX_POSITION_PER_STOCK=0.10` / `MAX_POSITIONS=10`。§1:0/負/NaN/None 濾除(不計未持有);空投組 ok=True。
+- **L5 接線**:`tab_stock_grp._render_risk_contribution_section` 在 Euler 分解 panel 後加「🛡️ 投組集中度守門」—— 單股 >10% 紅字列出、持股 >10 檔紅字、否則綠燈。共用同一份 `_weights`。
+- **測試**:`tests/test_portfolio_limits.py` 8 測(10檔剛好10%邊界 / 超標降冪 / 檔數超標 / 單股100% / 空 / 濾無效 / scale-free 市值 / 自訂門檻)。全綠 3427 passed。
+- **另案延後(誠實)**:**回撤 15% 暫停**(需成本基礎 + 峰值歷史)、**現金下限 10%**(需現金輸入)—— 現有狀態只有「市值快照」算不出,屬「持久投組帳本」等級,硬做會造假 → 不做。
+
+
 ## 🧹 2026-07-22 死碼稽核 + 清除(v19.150,user「檢查有沒有死碼造成程式碼膨脹」→ 選 Tier 1+2）
 
 vulture + ruff + 嚴格雙重驗證 agent(對 98 個候選逐個 grep prod/test/scripts/lazy)盤點。**刪 12 檔、875 行純死碼**,測試回 baseline(3 個 pre-existing 月營收 fail 為本地缺 FinMind,CI 過)。
