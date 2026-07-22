@@ -10,3 +10,6 @@ FORWARD_TEST_BENCHMARK: str = "0050"
 
 FORWARD_TEST_MIN_COHORT_PICKS: int = 3
 """單一 cohort(凍結批次)至少要有幾檔有效持股才納入績效統計;不足 → 標記略過(§1 樣本太小不硬算)。"""
+
+FORWARD_TEST_FREEZE_TOP_N: int = 20
+"""每月 cron 自動凍結「綜合評分前 N 名」當該期 cohort(v19.147;對齊 UI 手動凍結的前 20 名)。"""

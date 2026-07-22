@@ -1,0 +1,68 @@
+name: Forward-test 每月自動凍結 (Monthly)
+
+# 前進式驗證(forward-test)自動凍結:每月跑一次「完整選股網」→ 取綜合評分前 N 名 →
+# 抓當下進場價 → 存 data_cache/forward_test/picks.parquet(git 追蹤)→ commit。
+# 解 forward-test 卡在 0 樣本(原本只能手動按 + 只存私人 Google Sheet)的根因。
+# 選股與 app.py 畫面同源(L3 get_ranked_picks),凍結的清單 = 使用者按「開始選股」會看到的。
+
+on:
+  workflow_dispatch:
+    inputs:
+      cohort:
+        description: '批次標籤 YYYY-MM-DD（留空=今天 TW）'
+        required: false
+        default: ''
+      top_n:
+        description: '凍結前 N 名（留空=SSOT 預設 20）'
+        required: false
+        default: ''
+  schedule:
+    # 每月 2 號 06:00 UTC = 14:00 TW(盤中；進場價取最近收盤，月初休假日順延由當日最近收盤承接)。
+    - cron: '0 6 2 * *'
+
+permissions:
+  contents: write
+
+jobs:
+  freeze-forward-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40   # 完整選股網含缺貨/RS 掃全存活池，給足網路預算
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Freeze forward-test picks
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          NAS_BASE_URL: ${{ secrets.NAS_BASE_URL }}
+          NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.cohort }}" ]; then
+            ARGS="$ARGS --cohort ${{ github.event.inputs.cohort }}"
+          fi
+          if [ -n "${{ github.event.inputs.top_n }}" ]; then
+            ARGS="$ARGS --top-n ${{ github.event.inputs.top_n }}"
+          fi
+          python scripts/update_forward_test_freeze.py $ARGS
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add data_cache/forward_test/
+          if git diff --staged --quiet; then
+            echo "→ data_cache/forward_test/ 無變更（本月可能已凍結或選股為空），跳過 commit"
+          else
+            git commit -m "🤖 前進式驗證每月凍結：$(date +%Y-%m-%d)"
+            git push
+          fi

@@ -1,5 +1,19 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔌 2026-07-22 斷鏈③ 接線：選股→驗證自動累積（v19.147,user「先接線→繼續」）
+
+策略體檢三條斷鏈第二條。forward-test 卡在 **0 樣本**的根因:凍結只能**手動按** + 只存**私人 Google Sheet**(headless cron 無 OAuth 用不了)。本輪讓它**每月自動凍結 + 落地 git 可追蹤檔**,數據自己累積、可稽核。user 選「**完整選股網版**」(cron 凍的 = 畫面實際會挑的,含缺貨/RS)。
+
+- **§8 同源設計(SSOT)**:抽 L3 `get_ranked_picks()` —— 把原散在 `app.py:664-681` 的選股網組裝(存活池+缺貨+RS+跨季+PE→綜合排名)變成**畫面 + cron 共用同一支**。app.py 改呼叫它(`auto_fetch=False` 保留 session 快取行為,AppTest 綠);cron 用 `auto_fetch=True` 自動掃。PE map 由 orchestrator(app/cron)注入,L3 不反向 import L5。
+- **L1 落地**:新 `src/data/portfolio/forward_test_store.py` → `data_cache/forward_test/picks.parquet`(子目錄躲 gitignore,git 追蹤,同 fundamentals 手法)。§5 冪等:同 (cohort, stock_id) 不重複。
+- **L3 對帳讀取**:`load_frozen_picks_df()` 改「**本地 ∪ gsheet** 去重」(本地優先)→ cron 自動凍的 + 手動 gsheet 都進對帳。`freeze_current_picks_local()` 新增(cron 用,無需 OAuth);抽 `_build_freeze_rows` 共用抓價+組 rows。
+- **cron**:`scripts/update_forward_test_freeze.py`(orchestrator,全 5 因子)+ `.github/workflows/update_forward_test.yml`(每月 2 號 14:00 TW,40 分 timeout,commit `data_cache/forward_test/`)。
+- **部署現實**:Streamlit Cloud 寫本地 parquet 是 ephemeral → **手動按鈕維持存 gsheet**(對使用者持久);本地檔的持久來自 cron(它 git commit),app 部署時帶入 repo 的已 commit 檔 → reconcile 讀得到。
+- **SSOT**:`FORWARD_TEST_FREEZE_TOP_N=20` 抽 `shared/forward_test_thresholds`,零 inline magic。
+- **測試**:`tests/test_forward_test_freeze.py` 10 測(store 往返/冪等/邊界 + get_ranked_picks 同源直通 + union 去重),monkeypatch tmp 不污染 repo。全綠。
+- **範圍**:斷鏈①(總經→選股 key 錯配)待後續。斷鏈②(投組層級上限)另案。
+
+
 ## 🔌 2026-07-22 斷鏈② 接線：訊號→部位（v19.146,user「先接線」）
 
 策略體檢挖出三條斷鏈,user 指派「先接線」。第一條接「訊號→部位」的前半 —— 把**已寫好卻零生產呼叫**的風險基準部位法 `calculate_position_size` 接進個股頁,補上一直缺的「該買幾張」。
