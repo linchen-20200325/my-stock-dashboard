@@ -1,5 +1,15 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🎯 2026-07-21 策略補強 FT-1:前進式驗證對帳 L2（v19.141,user「聽建議逐步執行」）
+
+策略體檢後 user 要逐步補強缺點。**第一步(最大的洞:策略沒驗證過 edge)= 前進式驗證(Forward-test)**。拆 FT-1(對帳地基)/ FT-2(凍結機制)/ FT-3(UI)。
+
+- **為何是前進式而非回測**:舊回測引擎 v18.265 已移除;且只有 5 季快照 + 現存公司 → 回頭測會踩 **lookahead + 存活者偏誤**。前進式(凍結當下選股 → 事後真實現價對帳)**兩個偏誤都零**,取代舊回測。
+- **FT-1(本次)L2 純函式** `src/compute/screener/forward_test.reconcile_forward_test(picks, current_prices, benchmark_returns)`:每檔 `fwd=現價/進場價−1` → cohort 等權平均 / 勝率 / vs 0050 超額 / 贏基準率。**§1**:凍結後抓不到現價(下市/停牌)→ 剔除計數不灌 0;進場價≤0/NaN→剔除;基準缺→excess=NaN;cohort 有效檔<`FORWARD_TEST_MIN_COHORT_PICKS`(3)→ enough_sample=False;overall 平均超額**只採樣本足夠+有基準**的 cohort(不被小樣本汙染)。
+- **SSOT**:`shared/forward_test_thresholds.py`(`FORWARD_TEST_BENCHMARK="0050"` 可買被動基準 + `FORWARD_TEST_MIN_COHORT_PICKS=3`)。
+- **零新依賴**;`tests/test_forward_test.py` **9 passed**(報酬/超額手算精確值 / 缺價剔除不灌0 / 進場價無效 / 無基準excess=NaN / 樣本不足旗標 / 全剔不炸 / 空+缺欄 / 多cohort排序);ruff 淨;L2 純度過。
+- **下一步**:FT-2 凍結機制(建議用現成 Google Sheet 存,避免脆弱 CI cron)→ FT-3 UI 對帳面板。
+
 ## 🅱️ 2026-07-21 B-0 全台股價格快照可行性探針 → B-1 WONTFIX（user 決定「先不做」）
 
 「全台股跨季大規模掃描」A+B 的 B 段評估完成,user 決定 **B-1 先不做**(有依據,非放棄)。
