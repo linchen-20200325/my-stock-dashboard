@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📉 2026-07-22 全域重構 B6｜MACD kernel SSOT（v19.153,藍圖 B6/9,user 選「抽 kernel + 統一 12/26/9」）
+
+- **Sharpe 部分 = 誤報,跳過(誠實)**:3 個「sharpe」是**不同指標**非重複 —— `etf_calc.calc_sharpe`(年化 + rf)、`multi_factor.evaluate_sharpe`(annual_return/annual_vol 無 rf)、`scoring_engine`「類 Sharpe」(Return20/Sigma20 未年化)。合併會錯,不動。
+- **MACD 抽 kernel**(3 變體去重):新 `exit_signals.compute_macd(series, *, fast=12, slow=26, signal=9, adjust=False)` 純函式(DIF/DEA/HIST)+ `weekly_macd_hist(close)`(週K合成 + ≥35 週 gate + 12/26/9,exit 與 section 共用一份)。
+  - `_weekly_macd_turn_negative` 改用 helper —— **零行為改變**(數學逐點等價,22 舊測全綠)。
+  - `tab_stock_picker._check_macd_bullish` 改用 `compute_macd(adjust=True)` —— **零行為改變**(釘死 golden test)。
+  - **`section_when_buy_sell`(個股買賣時機)週MACD:3/5/3 → 12/26/9**(user 核准的行為改變,修 v19.110 漏網 + 那句假註解)。原本 30 日只取 6 根算失真 3/5/3 → 改走 `weekly_macd_hist` 全歷史 + ≥35 週 gate;**不足 35 週的個股此警示不再顯示**(誠實,不再秀失真訊號)。
+- **測試**:新 `test_macd_kernel_b6.py` 5 測(daily adjust=True 逐點等價 / 預設=顯式 12/26/9 / adjust 語意差 / 週 gate <35 週回 None / ≥35 週回 list);+ 22 舊 MACD 測;section pd 未用 import 移除;`_check_macd_bullish` end-to-end smoke 過。
+
 ## 🚑 2026-07-22 HOTFIX｜Gemini 503 退避重試（user 回報「AI 總結本頁」硬失敗）
 
 user 截圖:`Gemini 失敗:HTTPError: 503 Server Error: Service Unavailable`。根因 = AI 呼叫路徑對**暫時性**上游錯誤(503 = Google 過載/短暫不可用)無退避重試,單次即拋。

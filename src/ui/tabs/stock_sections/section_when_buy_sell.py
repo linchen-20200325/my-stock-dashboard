@@ -14,7 +14,6 @@
 """
 from __future__ import annotations
 
-import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -30,6 +29,7 @@ from shared.signal_thresholds import (
 )
 from src.compute.scoring import (
     compute_tech_bearish,
+    weekly_macd_hist,
     evaluate_exit_signals,
     judge_news_sentiment_cached,
 )
@@ -228,24 +228,15 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
                 _exit.append(f'⚠️ 年線乖離 {_bias_i:+.0f}% → 策略1：分批出場')
             if _p2 < _ma5:
                 _exit.append(f'⚠️ 跌破5MA({_ma5:.1f}) → 林穎：短線停利')
-            # 週MACD 警示:12/26/9 EMA on weekly bars
+            # 週MACD 警示:標準週 MACD 12/26/9(B6 v19.153 統一,原 3/5/3 樣本受限已汰換)。
+            # 走 exit_signals.weekly_macd_hist 共用 helper(全歷史合成週K + ≥35 週才算;
+            # 不足誠實不顯示,不再用 30 日 6 根算失真的 3/5/3)。
             try:
-                if df2 is not None and len(df2) >= 30:
-                    _wdf = df2.copy()
-                    _wdf.index = range(len(_wdf))
-                    # 近30日K線轉換為週K(每5根合一)
-                    _wclose = [float(_wdf['close'].iloc[min(i+4, len(_wdf)-1)])
-                               for i in range(0, min(30, len(_wdf)), 5)]
-                    if len(_wclose) >= 6:
-                        _we12 = pd.Series(_wclose).ewm(span=3,adjust=False).mean()
-                        _we26 = pd.Series(_wclose).ewm(span=5,adjust=False).mean()
-                        _wmacd= _we12 - _we26
-                        _whist= (_wmacd - _wmacd.ewm(span=3,adjust=False).mean()).tolist()
-                        # 週MACD紅柱縮短(連續2根縮小)
-                        if len(_whist)>=3 and _whist[-1]>0 and _whist[-1]<_whist[-2]<_whist[-3]:
-                            _exit.append('⚠️ 週MACD紅柱連縮 → 上漲動能衰減，準備減碼')
-                        elif len(_whist)>=2 and _whist[-2]>0 and _whist[-1]<=0:
-                            _exit.append('🔴 週MACD翻負 → 中線趨勢轉弱，出清訊號')
+                _whist = weekly_macd_hist(df2['close']) if df2 is not None else None
+                if _whist and len(_whist) >= 3 and _whist[-1] > 0 and _whist[-1] < _whist[-2] < _whist[-3]:
+                    _exit.append('⚠️ 週MACD紅柱連縮 → 上漲動能衰減，準備減碼')
+                elif _whist and len(_whist) >= 2 and _whist[-2] > 0 and _whist[-1] <= 0:
+                    _exit.append('🔴 週MACD翻負 → 中線趨勢轉弱，出清訊號')
             except Exception:
                 pass
             if not _exit:

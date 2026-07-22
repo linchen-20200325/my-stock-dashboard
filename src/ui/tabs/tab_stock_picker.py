@@ -860,12 +860,9 @@ def _check_ma20_uptrend(df) -> str:
 def _check_macd_bullish(df) -> str:
     """MACD 綠轉紅（DIF-DEA 由負轉正）or 柱狀體由收斂轉發散。"""
     try:
-        _close = df['Close']
-        _ema12 = _close.ewm(span=12).mean()
-        _ema26 = _close.ewm(span=26).mean()
-        _dif   = _ema12 - _ema26
-        _dea   = _dif.ewm(span=9).mean()
-        _macd  = _dif - _dea
+        from src.compute.scoring.exit_signals import compute_macd
+        # 日 MACD 標準 12/26/9(B6 kernel);沿用舊 adjust=True(pandas ewm 預設)維持既有數值
+        _dif, _dea, _macd = compute_macd(df['Close'], adjust=True)
         if len(_macd.dropna()) < 3:
             return '❓ 不足 30 日'
         _now = float(_macd.iloc[-1])
