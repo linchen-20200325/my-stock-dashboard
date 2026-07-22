@@ -61,3 +61,38 @@ def load_frozen_picks_df() -> pd.DataFrame:
     if not _recs:
         return pd.DataFrame(columns=["cohort", "stock_id", "name", "entry_price", "factors", "frozen_at"])
     return pd.DataFrame(_recs)
+
+
+def reconcile_all() -> tuple[pd.DataFrame, dict]:
+    """讀凍結紀錄 + 抓現價 + 0050 基準 → 對帳。回 (per_cohort_df, overall)。
+
+    §8.2 L3 編排:L1 gsheet 讀凍結 + L1 picker 抓現價/0050 + L2 reconcile/benchmark 純函式。
+    無凍結紀錄 → 空 + note(對帳面板顯示「收集中」);抓不到某檔現價 → L2 自動剔除計數。
+    """
+    from src.compute.screener.forward_test import (
+        benchmark_returns_from_close,
+        reconcile_forward_test,
+    )
+    from src.data.stock.picker_fetcher import fetch_stock_history_1y
+    from shared.forward_test_thresholds import FORWARD_TEST_BENCHMARK
+
+    picks = load_frozen_picks_df()
+    if picks.empty:
+        return pd.DataFrame(), {"n_cohorts": 0, "n_picks_total": 0,
+                                "note": "尚無凍結選股紀錄(先在上方按「🧊 凍結」)。"}
+
+    # 各持股現價(每個不重複股號抓最後收盤)
+    _codes = sorted({str(c).strip() for c in picks["stock_id"] if str(c).strip()})
+    _cur: dict[str, float] = {}
+    for _c in _codes:
+        _df, _ = fetch_stock_history_1y(_c)
+        if _df is not None and not _df.empty and "Close" in _df.columns:
+            _cur[_c] = float(_df["Close"].iloc[-1])
+
+    # 0050 基準:各 cohort(凍結日)當日 close → 現在的報酬
+    _bench = {}
+    _bdf, _ = fetch_stock_history_1y(FORWARD_TEST_BENCHMARK)
+    if _bdf is not None and not _bdf.empty and "Close" in _bdf.columns:
+        _bench = benchmark_returns_from_close(_bdf["Close"], list(picks["cohort"].unique()))
+
+    return reconcile_forward_test(picks, _cur, benchmark_returns=_bench)

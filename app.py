@@ -719,6 +719,38 @@ with tab_stocks:
                         st.success(_ft_msg)
                     except Exception as _e_fz:  # noqa: BLE001 — 存檔失敗顯示不炸頁
                         st.error(f'❌ 凍結失敗：{type(_e_fz).__name__}: {_e_fz}')
+                # ── 📊 前進式驗證對帳（FT-3 v19.143）：讀凍結 + 現價 → vs 0050 ──
+                with st.expander('📊 前進式驗證對帳：這套選股實際贏 0050 嗎？', expanded=False):
+                    st.caption('讀你 Google Sheet 的凍結紀錄、抓現價算「各期報酬 vs 0050」。'
+                               '前進式驗證要時間累積 —— 剛開始樣本少、數字僅供參考。')
+                    if st.button('📊 對帳（讀凍結 + 抓現價）', key='ft_reconcile_go'):
+                        from src.services.forward_test_service import reconcile_all
+                        with st.spinner('讀凍結紀錄 + 抓現價對帳…'):
+                            st.session_state['_ft_recon'] = reconcile_all()
+                    _ft_r = st.session_state.get('_ft_recon')
+                    if _ft_r is None:
+                        st.info('👆 點「📊 對帳」讀取凍結紀錄並計算績效。')
+                    elif _ft_r[0] is None or _ft_r[0].empty:
+                        st.info(f'⚪ {_ft_r[1].get("note", "尚無資料")}')
+                    else:
+                        _ft_df, _ft_ov = _ft_r
+                        _ae = _ft_ov.get('avg_excess_pct')
+                        _hr = _ft_ov.get('overall_hit_rate_pct')
+                        _ae_s = '—' if _ae != _ae else f'{_ae:+.1f}%'
+                        _hr_s = '—' if _hr != _hr else f'{_hr:.0f}%'
+                        st.markdown(
+                            f"**累積 {_ft_ov.get('n_cohorts', 0)} 批 / "
+                            f"{_ft_ov.get('n_valid_total', 0)} 檔**"
+                            f"｜平均超額 vs 0050：{_ae_s}｜整體勝率：{_hr_s}")
+                        if _ft_ov.get('note'):
+                            st.caption(f'ℹ️ {_ft_ov["note"]}')
+                        _ft_disp = _ft_df.rename(columns={
+                            'cohort': '凍結批次', 'n_valid': '檔數', 'avg_return_pct': '平均報酬%',
+                            'benchmark_return_pct': '0050報酬%', 'excess_pct': '超額%',
+                            'hit_rate_pct': '勝率%', 'beat_bench_rate_pct': '贏0050率%'})
+                        _ft_cols = ['凍結批次', '檔數', '平均報酬%', '0050報酬%',
+                                    '超額%', '勝率%', '贏0050率%']
+                        st.dataframe(_ft_disp[_ft_cols], hide_index=True, use_container_width=True)
                 # ── 🧬 AI 總結本頁（v19.122 Phase 2，用選股已載結果組 bundle，不重抓；fail-soft）──
                 try:
                     from src.ui.tabs.tab_ai_chat import render_tab_summary

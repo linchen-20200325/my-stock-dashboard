@@ -1,5 +1,16 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📊 2026-07-21 策略補強 FT-3:前進式驗證對帳 UI（v19.143,前進式驗證閉環到齊）
+
+FT-1 對帳核心 + FT-2 凍結後,補對帳 UI —— **前進式驗證三段(算/存/看)全通**。
+
+- **L2**(補 `forward_test.benchmark_returns_from_close`):由 0050 日收盤序列 + cohort 凍結日 → 各 cohort 到最新的基準報酬(取 ≤ 凍結日的最後一筆 close 當進場;cohort 早於序列起點 → 不放 key,§1 無基準不猜)。純函式,含 tz strip + 排序。
+- **L3**(補 `forward_test_service.reconcile_all`):讀 gsheet 凍結 → 抓各持股現價 + 0050 → benchmark_returns_from_close → reconcile_forward_test → (per_cohort_df, overall)。編排 L1 gsheet/picker + L2 純函式。
+- **L6 UI**:選股網加「📊 前進式驗證對帳」button-gated expander → overall 摘要(累積批數/檔數/平均超額 vs 0050/勝率)+ 各 cohort 表(平均報酬/0050報酬/超額/勝率/贏0050率)。無凍結 → 顯示「收集中」。
+- **§1 誠實**:樣本累積前 overall 帶「僅供參考」note;缺現價的檔 L2 自動剔除;NaN 顯示「—」不假數。
+- **零新依賴**;`tests/test_forward_test.py` **20 passed**(FT-1 對帳 9 + FT-2 建構 3 + FT-3 基準 5 + 端到端 + 既有);app.py compile/magic-guard 過、無新 ruff 錯。
+- **前進式驗證完成**:①算=reconcile_forward_test ②存=freeze→gsheet ③看=reconcile_all→UI。**取代已移除的舊回測,零 lookahead + 零存活者偏誤**。剩策略補強步驟2(價格備援)/ 步驟3(月營收預警)。
+
 ## 🧊 2026-07-21 策略補強 FT-2:選股凍結存 Google Sheet（v19.142,user 選 (a) gsheet + 帶因子組）
 
 FT-1 對帳地基上線後接凍結機制。user 選 **(a) Google Sheet 存 + 凍結時連因子組一起記**(日後可分策略比較)。
