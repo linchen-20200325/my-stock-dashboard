@@ -86,6 +86,31 @@ def test_shortage_scores_used_when_scanned():
     assert list(df["代碼"]) == ["B", "A"] and note == ""
 
 
+def test_trend_factor_ranks_by_favorable_count():
+    # A-2：跨季轉強因子 = trend_map {stock_id: favorable_count 0-4}
+    tm = {"A": 4, "B": 1}
+    df, note = composite_rank_candidates(_surv(["A", "B"], [1, 1]),
+                                         factors=["trend"], trend_map=tm)
+    assert list(df["代碼"]) == ["A", "B"] and note == ""
+    assert "跨季分" in df.columns
+
+
+def test_trend_missing_no_scan_note():
+    # trend 未提供（空 map）→ 不觸發「尚未掃描」提示（trend 是算的、非掃描）
+    df, note = composite_rank_candidates(_surv(["A", "B"], [3, 1]),
+                                         factors=["eps_high", "trend"], trend_map=None)
+    assert "尚未掃描" not in note
+    assert list(df["代碼"]) == ["A", "B"]   # 用 EPS 排（trend 無資料不計入）
+
+
+def test_trend_missing_stock_omitted_not_zero():
+    # A 有 trend、B 無 → B 的跨季分空白（不灌 0，§1）
+    df, _ = composite_rank_candidates(_surv(["A", "B"], [1, 1]),
+                                      factors=["eps_high", "trend"], trend_map={"A": 4})
+    _b_trend = df[df["代碼"] == "B"]["跨季分"].iloc[0]
+    assert _b_trend != _b_trend or _b_trend is None   # NaN or None
+
+
 def test_empty_factors():
     df, note = composite_rank_candidates(_surv(["A"], [1]), factors=[])
     assert df.empty and "至少勾選" in note

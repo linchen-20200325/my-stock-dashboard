@@ -35,11 +35,15 @@ import pandas as pd
 
 from shared.fundamental_prescreen_thresholds import SNAPSHOT_COVERAGE_WARN_RATIO
 from shared.ttls import TTL_1DAY
+from src.compute.screener.cross_quarter_trends import compute_cross_quarter_trends
 from src.compute.screener.fundamental_prescreen import (
     run_fundamental_prescreen,
     survivors_only,
 )
-from src.data.stock.fundamentals_snapshot_loader import load_fundamentals_snapshot
+from src.data.stock.fundamentals_snapshot_loader import (
+    load_all_fundamentals_quarters,
+    load_fundamentals_snapshot,
+)
 
 
 def _clear(fn) -> None:
@@ -79,6 +83,40 @@ def get_survivor_ids(*, refresh: bool = False) -> list[str]:
     if surv is None or surv.empty:
         return []
     return [str(s) for s in surv["stock_id"].tolist()]
+
+
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
+def _cross_quarter_trends_cached() -> pd.DataFrame:
+    """讀全季快照 → 跑跨季趨勢(全市場,每檔一列)。快取集中點(A-2 v19.140)。"""
+    return compute_cross_quarter_trends(load_all_fundamentals_quarters())
+
+
+def get_cross_quarter_trends(*, refresh: bool = False) -> pd.DataFrame:
+    """全台股跨季趨勢 DataFrame(每檔一列;欄見 cross_quarter_trends._OUT_COLS)。
+
+    §8.2 L3:合法組合 L1 load_all_fundamentals_quarters + L2 compute_cross_quarter_trends。
+    refresh=True → 清 L1 全季 cache + 本層 cache。快照缺 → raise(caller 自行 fail-soft)。
+    """
+    if refresh:
+        _clear(load_all_fundamentals_quarters)
+        _clear(_cross_quarter_trends_cached)
+    return _cross_quarter_trends_cached()
+
+
+def build_trend_map(*, refresh: bool = False) -> dict[str, int]:
+    """{stock_id: favorable_count} 供選股網 composite「跨季轉強」因子用。
+
+    favorable_count ∈ [0,4] = 毛利/營益率升·負債降·營收增 中「方向為佳」的個數。
+    快照缺 / 計算失敗 → 回空 dict(不炸選股;§1 缺料下游不計入該因子)。
+    """
+    try:
+        _df = get_cross_quarter_trends(refresh=refresh)
+    except Exception as _e:  # noqa: BLE001 — 快照缺不炸選股
+        print(f"[fund_screener_service] 跨季趨勢不可用:{type(_e).__name__}: {_e}")
+        return {}
+    if _df is None or _df.empty:
+        return {}
+    return {str(s): int(c) for s, c in zip(_df["stock_id"], _df["favorable_count"])}
 
 
 def describe_snapshot_coverage(meta: dict) -> dict:
@@ -131,6 +169,7 @@ SCREEN_ANGLE_LABELS: dict[str, str] = {
     "高 EPS（獲利高）": "eps_high",
     "缺貨動能（需先於下方掃描）": "shortage",
     "抗跌 RS 強（需先於下方掃描）": "rs_leader",
+    "跨季轉強（毛利/營益率升·負債降·營收增）": "trend",
 }
 
 
@@ -256,10 +295,12 @@ def composite_rank_candidates(
     name_map: dict | None = None,
     shortage_rows: list[dict] | None = None,
     rs_rows: list[dict] | None = None,
+    trend_map: dict | None = None,
 ) -> tuple[pd.DataFrame, str]:
     """從存活池，依【複選因子】的綜合評分排序 → 候選 DataFrame（含 '代碼' 欄）。
 
-    factors ⊆ {'pe_low','eps_high','shortage','rs_leader'}（籌碼技術×6 屬 ③ 深篩，不在此）。
+    factors ⊆ {'pe_low','eps_high','shortage','rs_leader','trend'}（籌碼技術×6 屬 ③ 深篩，不在此）。
+    trend_map: {stock_id: favorable_count 0-4}（A-2 跨季轉強因子；缺料的股不在 map → 該因子不計入）。
     綜合分 = 該股**有資料的因子**百分位分（0-100）的平均（v19.90：缺料因子不計入、不記 0）。
     顯示欄：缺料因子該股為空白（None），不是 0，避免誤導。
 
@@ -279,6 +320,7 @@ def composite_rank_candidates(
                if "eps" in survivors_df.columns else {})
     shortage_map = {str(r.get("代碼", "")): r.get("缺貨分數") for r in (shortage_rows or [])}
     rs_map = {str(r.get("代碼", "")): r.get("RS(σ)") for r in (rs_rows or [])}
+    trend_map = {str(k): v for k, v in (trend_map or {}).items()}
 
     # (value_map, higher_better, 顯示欄名)
     _cfg = {
@@ -286,12 +328,14 @@ def composite_rank_candidates(
         "eps_high":  (eps_map,      True,  "EPS分"),
         "shortage":  (shortage_map, True,  "缺貨分"),
         "rs_leader": (rs_map,       True,  "RS分"),
+        "trend":     (trend_map,    True,  "跨季分"),
     }
     _missing = []
     if "shortage" in factors and not shortage_rows:
         _missing.append("缺貨動能")
     if "rs_leader" in factors and not rs_rows:
         _missing.append("抗跌 RS")
+    # trend 由快照計算(非掃描),缺料時 _percentile_scores 自然不計入,不走「尚未掃描」提示。
 
     _col_scores: dict[str, dict] = {}
     for _f in factors:

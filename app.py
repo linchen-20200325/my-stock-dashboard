@@ -647,6 +647,13 @@ with tab_stocks:
                         st.session_state['_rs_meta_all'] = _rm
                     except Exception as _er:  # noqa: BLE001
                         print(f'[screener] 抗跌RS自動掃失敗: {type(_er).__name__}: {_er}')
+                if 'trend' in _factors and not st.session_state.get('_trend_map'):
+                    try:
+                        # A-2 v19.140:跨季轉強因子 = 全市場基本面趨勢(從快照算,非掃描,秒級)。
+                        from src.services.fundamental_screener_service import build_trend_map
+                        st.session_state['_trend_map'] = build_trend_map()
+                    except Exception as _et:  # noqa: BLE001
+                        print(f'[screener] 跨季趨勢計算失敗: {type(_et).__name__}: {_et}')
             st.session_state['_screener_ran'] = True
 
         # ── 結果（點過「開始選股」才顯示）──────────────────────────
@@ -670,7 +677,8 @@ with tab_stocks:
                 _surv_df, factors=_factors, top_n=300,
                 pe_map=_pe_map, name_map=_name_map,
                 shortage_rows=st.session_state.get('_shortage_rows'),
-                rs_rows=st.session_state.get('_rs_rows_all'))  # v19.90 全存活池 RS（非 top-50）
+                rs_rows=st.session_state.get('_rs_rows_all'),  # v19.90 全存活池 RS（非 top-50）
+                trend_map=st.session_state.get('_trend_map'))  # A-2 v19.140 跨季轉強
             if _cnote:
                 st.info(_cnote)
             st.markdown('#### ③ 選股結果（綜合評分排序）')
@@ -694,6 +702,40 @@ with tab_stocks:
                     }, context='general')
                 except Exception as _ai_sum_e:
                     st.caption(f'🧬 AI 總結暫不可用：{type(_ai_sum_e).__name__}')
+
+        # ── 🌍 全台股跨季趨勢排行（A-2 v19.140：全市場 ~2000 檔，非只存活池；button-gated）──
+        with st.expander('🌍 全台股跨季趨勢排行（全市場，不限存活池）', expanded=False):
+            st.caption('用近 5 季基本面算「毛利率/營益率是否逐季升、負債比是否逐季降、營收年增」，'
+                       '列出全市場改善最明顯的股票。⚠️ 僅 5 季資料 → 用比率趨勢斜率（非「連續成長季數」）。')
+            if st.button('🌍 掃全台股跨季趨勢', key='trend_rank_go'):
+                try:
+                    from src.services.fundamental_screener_service import get_cross_quarter_trends
+                    _tr = get_cross_quarter_trends()
+                    st.session_state['_trend_rank'] = _tr
+                except Exception as _e_tr:  # noqa: BLE001 — 快照缺不炸
+                    st.session_state['_trend_rank'] = None
+                    print(f'[screener] 跨季趨勢排行失敗: {type(_e_tr).__name__}: {_e_tr}')
+            _tr = st.session_state.get('_trend_rank')
+            if _tr is None:
+                st.info('👆 點「🌍 掃全台股跨季趨勢」列出全市場改善最明顯的股票（首次約數秒）。')
+            elif _tr.empty:
+                st.info('目前無跨季趨勢資料（季快照未就緒）。')
+            else:
+                _disp = _tr.rename(columns={
+                    'stock_id': '代碼', 'gross_margin_slope': '毛利率趨勢',
+                    'op_margin_slope': '營益率趨勢', 'debt_ratio_slope': '負債比趨勢',
+                    'revenue_yoy': '營收YoY', 'favorable_count': '佳項數',
+                    'favorable_of': '有資料項', 'n_quarters': '季數',
+                }).round({'毛利率趨勢': 4, '營益率趨勢': 4, '負債比趨勢': 4, '營收YoY': 4})
+                _cols = ['代碼', '佳項數', '有資料項', '毛利率趨勢', '營益率趨勢',
+                         '負債比趨勢', '營收YoY', '季數']
+                st.caption(f'全市場 {len(_tr):,} 檔 → 依「佳項數」由高到低取前 100。'
+                           f'（🔺 毛利/營益率趨勢>0、🔻 負債比趨勢<0、營收YoY>0 為佳）')
+                st.dataframe(_disp[_cols].head(100), hide_index=True, use_container_width=True)
+                _csv_tr = _disp[_cols].to_csv(index=False).encode('utf-8-sig')
+                st.download_button('💾 下載全台股跨季趨勢 CSV', data=_csv_tr,
+                                   file_name='cross_quarter_trend_rank.csv',
+                                   mime='text/csv', key='trend_rank_csv')
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合）
