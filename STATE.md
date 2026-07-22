@@ -1,5 +1,22 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🗂️ 2026-07-22 全域重構 B2｜錯位檔案歸位（v19.152,深層技術債藍圖 B2/9）
+
+兩個 coherent commit:
+
+**B2a（純 housekeeping,零執行期影響,commit 6a01ac8）**
+- `docs/` 新建 → 收 5 個稽核工作產物:`APP_PY_AUDIT` / `DEAD_CODE_AUDIT` / `PHASE4_AUDIT` / `S_MED_AUDIT` / `TAB_STOCK_AUDIT`.md
+- `cleanup_stale_branches.sh` → `scripts/`(維運腳本歸位)
+- provenance 引用同步:7 個 .py docstring(`docs/APP_PY_AUDIT.md` ×4、`docs/TAB_STOCK_AUDIT.md` ×3)+ ARCHITECTURE.md 拓樸樹重構 + 2 處 prose
+- 保留 root:`ARCHIVED_FEATURES.md`(復活錨) + 2 `MACRO_HEALTH_*_PROPOSAL.md`(方法論定案) —— 非「audit」臨時產物,是被引用的定義來源
+- 驗證:py_compile 7 檔全過、grep 0 殘留 bare ref、0 `docs/docs` 雙前綴
+
+**B2b（真 bug 修 —— F-6.2 reorg regression,個股 ETF 換手偵測）**
+- **病灶**:`etf_managers.json` / `etf_manager_watchlist.json` 卡在 root,但 reader `src/data/etf/etf_fetch.py:1167` 以 `dirname(__file__)` = `src/data/etf/` 讀取 → F-6.2 把 etf_fetch.py 移入 src/ 卻遺留 JSON 在 root → **reader 讀不到持久檔 → 只剩 /tmp → 容器重啟後「經理人異動」紅框失效**(正是此檔當初要解的 bug 被 reorg 反噬)
+- **修**:`git mv` 兩 JSON → `src/data/etf/`(reader 期望位置,免改 reader);writer `scripts/update_etf_managers.py` 路徑改 `__file__`-relative 指向同處;workflow `update_etf_managers.yml` `git add` 路徑同步
+- **驗證**:python 實算 reader==writer 路徑一致 + 檔案 exists at path == True;writer py_compile 過;JSON 仍 git-tracked(未進 gitignore data_cache)
+- **偏離藍圖說明(誠實)**:原 B2 藍圖寫「runtime JSON → data_cache/」,但 grep 實證這 2 檔是 Actions 維護、commit 進 repo 的持久資料(非 transient cache),移進 gitignore 的 data_cache/ 會斷 commit 流 → 改採「歸位到 reader 期望處」才對。`macro_thresholds.json` 維持 root(合法 config SSOT,未動)
+
 ## 🧹 2026-07-22 全域重構 B1｜root 髒污清除（v19.152,深層技術債藍圖 B1/9,user「同意藍圖」→ 分批動刀）
 
 深層稽核藍圖核准後正式進實作。**準則**:一次一類別/單檔、隔離分支(`claude/dazzling-turing-QxI9m`)、每批 self-audit + commit + STATE。

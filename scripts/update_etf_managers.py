@@ -26,8 +26,12 @@ from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
-WATCHLIST_PATH = Path("etf_manager_watchlist.json")
-MANAGERS_PATH = Path("etf_managers.json")
+# 與 reader(src/data/etf/etf_fetch.py)同目錄 —— reader 以 __file__ 相對路徑讀取,
+# 故持久檔須與其 co-locate(F-6.2 src/ 搬移曾把 etf_fetch.py 移入 src/data/etf/ 卻
+# 遺留 JSON 在 root,導致 reader 讀不到 → 換手紅框跨重啟失效;B2 v19.152 歸位修復)。
+_ETF_DATA_DIR = Path(__file__).resolve().parents[1] / "src" / "data" / "etf"
+WATCHLIST_PATH = _ETF_DATA_DIR / "etf_manager_watchlist.json"
+MANAGERS_PATH = _ETF_DATA_DIR / "etf_managers.json"
 REQUEST_GAP_SEC = 0.6
 
 # MoneyDJ 經理人相關頁（簡介頁 Basic0004 通常就有「經理人」欄，擺第一）
