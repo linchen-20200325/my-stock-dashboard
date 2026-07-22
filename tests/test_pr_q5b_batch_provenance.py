@@ -21,7 +21,7 @@ class TestQ5bMarkersInSource(unittest.TestCase):
     def test_tab_stock_picker_2(self):
         src = self._read('src/ui/tabs/tab_stock_picker.py')
         self.assertIn('[_fetch_fs_safe]', src)
-        self.assertIn('src.data.core.data_loader.fetch_financial_statements', src)
+        self.assertIn('src.data.core.financial_statements_fetcher.fetch_financial_statements', src)
         self.assertIn('[_fetch_quarterly_is]', src)
         self.assertIn('FinMind:TaiwanStockFinancialStatements', src)
 

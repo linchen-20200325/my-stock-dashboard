@@ -513,7 +513,7 @@ def _fetch_fs_safe(stock_id: str) -> dict:
         _r = fetch_financial_statements(stock_id)
         _result = _r if isinstance(_r, dict) and 'error' not in _r else {}
         # v18.356 PR-Q5b S-PROV-1 phase 19 — prov_log emits [_fetch_fs_safe] marker
-        prov_log('_fetch_fs_safe', 'src.data.core.data_loader.fetch_financial_statements',
+        prov_log('_fetch_fs_safe', 'src.data.core.financial_statements_fetcher.fetch_financial_statements',
                  f'dict:{len(_result)}keys', ticker=stock_id)
         return _result
     except Exception as e:

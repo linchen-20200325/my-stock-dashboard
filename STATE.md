@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🪓 2026-07-22 全域重構 B8｜大檔拆分（v19.155,藍圖 B8/9,user 選「拆 data_loader,2 子批」）
+
+**進行中**。純結構搬移、零行為改變、藍圖最高風險 → 動刀前 AST 精算依賴 + 逐子批全量測試。
+
+- **B8-a ✅ `fetch_financial_statements`(584 行)data_loader → 新 L1 `financial_statements_fetcher.py`**:
+  - **AST free-var 精算**:外部依賴僅 `pd` / `TTL_1HOUR` / `FINMIND_API_URL` / `st`(decorator);所有 I/O(requests/yfinance/pandas/TPE)皆函式內 late import → **完全自足**,零耦合 data_loader 其他 helper。
+  - **零 cycle 設計**:新模組落 `src/data/core/`(非 stock,避 `src.data.stock.__init__` eager import),加進 `core/__init__` `_SUBMODULES` → `from src.data.core import fetch_financial_statements` 經 PEP 562 __getattr__ 自動轉發,**data_loader 直接刪函式不 re-export**(零 cycle 風險)。
+  - **data_loader 2545 → 1962 行**(−583)。介面完全不變(4 caller 全走套件轉發,簽章 `(stock_id, token='')→dict` 不動)。
+  - provenance:`tab_stock_picker` prov_log 字串 + guard `test_pr_q5b` 同步指向新位置(誠實血緣)。
+  - 驗證:compile + import smoke(轉發解析到新模組 + data_loader 無 cycle)+ 417 targeted(prov guard/財報體檢/data_loader/4 caller)全綠。
+- **B8-b(下一步)**:TWSE/TPEX/FinMind 法人+融資+價格 raw fetchers(~330 行)→ 新 L1 module。
+
 ## 🧱 2026-07-22 全域重構 B7｜分層違憲修復（v19.154,藍圖 B7/9,user 選「只收安全的」）
 
 **進行中**。risk_radar(L2 直呼 Yahoo/CBOE/FRED)屬大重構 → 延後單開;診斷頁 raw requests 合法 → 登記例外;此批只收 UI 直呼 yfinance。
