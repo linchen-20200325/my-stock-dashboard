@@ -341,20 +341,111 @@ def _fut_night_rows(df):
     return pd.DataFrame(rows, columns=_FUT_NIGHT_COLS)
 
 
+# ── 致命03:夜盤去 FinMind 單點 — TAIFEX futDataDown 官方備援(免token, Big5 CSV) ──
+# TAIFEX 每日期貨行情下載,含「交易時段」欄(一般=日盤 / 盤後=夜盤),轉成 FinMind
+# TaiwanFuturesDaily 同 schema(date/trading_session/close/volume)→ 復用 _fut_night_rows
+# (挑近月主力 + 算夜盤漲跌,不重寫)。§4.1:收盤價為指數點數(無單位換算);交易日期西元
+# YYYY/MM/DD。taifex_post 硬寫 utf-8 不適用(此為 Big5),故自寫 POST + big5 解碼。
+_TAIFEX_FUT_DOWN_URL = "https://www.taifex.com.tw/cht/3/futDataDown"
+_TAIFEX_SESSION_MAP = {"一般": "position", "盤後": "after_market"}
+
+
+def _taifex_fut_daily_csv(start_ymd: str, end_ymd: str) -> str:
+    """POST TAIFEX futDataDown → Big5 CSV 文字(TX 日盤+盤後)。失敗回 ''(§1)。"""
+    _form = {
+        "down_type": "1",
+        "queryStartDate": f"{start_ymd[:4]}/{start_ymd[4:6]}/{start_ymd[6:8]}",
+        "queryEndDate": f"{end_ymd[:4]}/{end_ymd[4:6]}/{end_ymd[6:8]}",
+        "commodity_id": "TX",
+    }
+    try:
+        _sess = requests.Session()
+        _hdrs = dict(TAIFEX_HDR)
+        _hdrs["Referer"] = "https://www.taifex.com.tw/cht/3/futDailyMarketReport"
+        _sess.headers.update(_hdrs)
+        _sess.get(_TAIFEX_FUT_DOWN_URL, timeout=3)
+        _r = _sess.post(_TAIFEX_FUT_DOWN_URL, data=_form, timeout=12)
+        if _r.status_code == 200 and len(_r.content) > 200:
+            return _r.content.decode("big5", errors="ignore")
+        print(f"[fut_night] TAIFEX futDataDown 非200/空: status={_r.status_code}")
+    except Exception as _e:
+        print(f"[fut_night] TAIFEX futDataDown 失敗: {type(_e).__name__}: {_e}")
+    return ""
+
+
+def _parse_taifex_fut_night_csv(csv_text: str) -> pd.DataFrame:
+    """[純函式] TAIFEX futDataDown CSV → DataFrame(date, trading_session, close, volume)。
+
+    FinMind TaiwanFuturesDaily 相容 shape → 直接餵 _fut_night_rows。§4.1 西元 YYYY/MM/DD
+    → YYYY-MM-DD;交易時段 一般→position / 盤後→after_market;僅收契約 TX。offline 可單測。
+    §1 Fail-Loud:欄不齊 / 壞列 / 收盤≤0 → 略過,無有效列回空(不臆造)。
+    """
+    import csv as _csv
+    import io as _io
+    _cols = ["date", "trading_session", "close", "volume"]
+    if not csv_text or not csv_text.strip():
+        return pd.DataFrame(columns=_cols)
+    _reader = _csv.reader(_io.StringIO(csv_text))
+    try:
+        _hdr = [str(h).strip() for h in next(_reader)]
+    except StopIteration:
+        return pd.DataFrame(columns=_cols)
+
+    def _idx(*subs):
+        for _i, _h in enumerate(_hdr):
+            if any(_s in _h for _s in subs):
+                return _i
+        return None
+    _i_date, _i_con = _idx("交易日期"), _idx("契約")
+    _i_ses, _i_cls, _i_vol = _idx("交易時段"), _idx("收盤價"), _idx("成交量")
+    if None in (_i_date, _i_con, _i_ses, _i_cls, _i_vol):
+        return pd.DataFrame(columns=_cols)          # 欄不齊 → 空(§1)
+    _rows = []
+    _maxi = max(_i_date, _i_con, _i_ses, _i_cls, _i_vol)
+    for _rec in _reader:
+        if len(_rec) <= _maxi:
+            continue
+        if _rec[_i_con].strip() != "TX":            # 僅大台(排除 MTX/電子/金融等)
+            continue
+        _session = _TAIFEX_SESSION_MAP.get(_rec[_i_ses].strip())
+        if _session is None:
+            continue
+        _m = re.match(r"(\d{4})/(\d{1,2})/(\d{1,2})", _rec[_i_date].strip())
+        if not _m:
+            continue
+        _date = f"{_m.group(1)}-{int(_m.group(2)):02d}-{int(_m.group(3)):02d}"
+        try:
+            _close = float(_rec[_i_cls].replace(",", "").strip())
+            _volume = float(_rec[_i_vol].replace(",", "").strip())
+        except (ValueError, TypeError):
+            continue
+        if _close <= 0:
+            continue
+        _rows.append({"date": _date, "trading_session": _session,
+                      "close": _close, "volume": _volume})
+    return pd.DataFrame(_rows, columns=_cols)
+
+
 @_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def finmind_fut_night(start_ymd, end_ymd, token=""):
-    """台指期(TX)日盤+夜盤收盤 → 夜盤漲跌（FinMind TaiwanFuturesDaily）。
+    """台指期(TX)日盤+夜盤收盤 → 夜盤漲跌。FinMind 主 → TAIFEX 官方 futDataDown 備援。
 
-    盤前「隔日開盤方向」領先訊號。無 token / 抓取失敗 → 回空 DataFrame（Fail-Loud,不造假）。
+    致命03 去 FinMind 單點:FinMind(需 token)全敗/回空 → 免 token TAIFEX 官方備援。
+    盤前「隔日開盤方向」領先訊號。全源無資料 → 回空 DataFrame(§1 Fail-Loud,不造假)。
     """
-    if not token:
-        return pd.DataFrame(columns=_FUT_NIGHT_COLS)
-    try:
-        df = finmind_get("TaiwanFuturesDaily", "TX", start_ymd, end_ymd, token)
-    except Exception as _e:  # noqa: BLE001 — 抓取失敗降級為空,log 不吞（§1）
-        print(f"[fut_night] FinMind 失敗: {type(_e).__name__}: {_e}")
-        return pd.DataFrame(columns=_FUT_NIGHT_COLS)
-    return _fut_night_rows(df)
+    # 主源 FinMind TaiwanFuturesDaily(需 token)
+    if token:
+        try:
+            df = finmind_get("TaiwanFuturesDaily", "TX", start_ymd, end_ymd, token)
+            _fm = _fut_night_rows(df)
+            if _fm is not None and not _fm.empty:
+                return _fm
+        except Exception as _e:  # noqa: BLE001 — log 不吞(§1),降級 TAIFEX
+            print(f"[fut_night] FinMind 失敗(走 TAIFEX 備援): {type(_e).__name__}: {_e}")
+    # 備援 TAIFEX 官方 futDataDown(免 token)— 復用同一 _fut_night_rows 純轉換
+    print("[fut_night] 走 TAIFEX futDataDown 備援(免 token 官方日盤+夜盤)")
+    return _fut_night_rows(
+        _parse_taifex_fut_night_csv(_taifex_fut_daily_csv(start_ymd, end_ymd)))
 
 
 @_safe_cache(ttl=TTL_30MIN, show_spinner=False)
