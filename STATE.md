@@ -1,5 +1,19 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏁 2026-07-22 策略「三條斷鏈」接線工程收尾 + 憲法/架構同步（v19.149,user「merge + SSOT + 程式碼原則 + 存檔」）
+
+策略體檢挖出「零件很齊、很多線沒接上」→ 三個最關鍵連動點全斷。逐條接完、全 merge：
+- **②訊號→部位**(PR #556 v19.146)：個股頁補「建議張數 + 真 ATR 停損」(接已寫好卻 dead 的 `calculate_position_size`)。投組層級上限仍另案。
+- **③選股→驗證**(PR #558 v19.147)：forward-test 每月自動凍結(cron + 本地 git parquet + 畫面/cron 同源 `get_ranked_picks`)→ 解 0 樣本。
+- **①總經→選股**(PR #559 v19.148)：canonical `get_macro_state` 單一契約 → 加碼三問生效 + AI regime 中英文 bug 修 + 個股組合評分依多空頭切權重。
+
+**本輪收尾(doc-only)**：
+- **SSOT 稽核通過**：三 PR 新增碼零 inline magic(`FORWARD_TEST_FREEZE_TOP_N` / regime map / 部位常數全 SSOT;唯一 `35.0` 是 `HEALTH_DEFENSE_THRESHOLD` import 失敗防禦 fallback,已註明)。
+- **CLAUDE.md**：§2.3 前進式驗證段補「自動化 cron + 本地落地」；§8.2 L1 補 `forward_test_store` + freeze cron、L3 補 `macro_state_locker.get_macro_state` canonical + `get_ranked_picks` 同源。
+- **ARCHITECTURE.md**：v9.3→**v9.4**(三條斷鏈接線 dated 記錄)。
+- **⚠️ 行為改變(user 已同意)**：個股組合 6 因子評分數字自此隨總經多空頭浮動,與舊值不同。
+
+
 ## 🔌 2026-07-22 斷鏈① 接線：總經→選股 真生效（v19.148,user「繼續接1」+ 選「完整版」）
 
 策略體檢三條斷鏈最後一條，也最微妙——不是接現成函式，是**整條契約分裂**：總經狀態散在三個各說各話的盒子(`warroom_summary` 英文 regime+health / `macro_state.json` 中文 regime+曝險 / `st.session_state['macro_state']` **從沒人寫卻被讀**)，加 AI `_regime()` 回中文但 `WEIGHT_TABLES` 是英文 key → regime 權重永遠 neutral。user 選「完整版」(連個股組合評分也依多空頭切權重)。

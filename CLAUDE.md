@@ -147,7 +147,7 @@ class DataPoint:
 
 ### 2.3 Point-in-Time — 防 Lookahead
 
-本專案**無傳統歷史回測**(v18.265 移除 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py` — 因只有現存公司快照 + 短歷史,回頭測必踩 lookahead + 存活者偏誤)。**改採前進式驗證(Forward-test,v19.141~143)**:凍結當下選股 → 事後真實現價對帳 vs 0050(`src/compute/screener/forward_test.py` L2 + `services/forward_test_service.py` L3 + Google Sheet 凍結),**零 lookahead、零存活者偏誤**(都是當下真實決定 + 事後真實現價)。Macro 拐點驗證(`tw_backtest.py` SPX/TWII 倒掛翻正)+ macro 校準歷史驗算(`scripts/calibrate_macro_traffic.py`,v18.359 F-2 搬入 `scripts/`)仍須遵守 PIT,**禁止 lookahead**。
+本專案**無傳統歷史回測**(v18.265 移除 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py` — 因只有現存公司快照 + 短歷史,回頭測必踩 lookahead + 存活者偏誤)。**改採前進式驗證(Forward-test,v19.141~148)**:凍結當下選股 → 事後真實現價對帳 vs 0050(`src/compute/screener/forward_test.py` L2 + `services/forward_test_service.py` L3),**零 lookahead、零存活者偏誤**(都是當下真實決定 + 事後真實現價)。**v19.147 自動化**:`scripts/update_forward_test_freeze.py` + `.github/workflows/update_forward_test.yml` 每月自動凍結(走與選股網畫面同源的 L3 `get_ranked_picks`)→ 落地 git 追蹤 `data_cache/forward_test/picks.parquet`(L1 `forward_test_store.py`);對帳讀「本地 ∪ Google Sheet」去重。解原本「手動 + 只存私人 sheet → 0 樣本」卡關。Macro 拐點驗證(`tw_backtest.py` SPX/TWII 倒掛翻正)+ macro 校準歷史驗算(`scripts/calibrate_macro_traffic.py`,v18.359 F-2 搬入 `scripts/`)仍須遵守 PIT,**禁止 lookahead**。
 
 **各來源發布延遲 + 修正風險**:
 
@@ -458,9 +458,9 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 | 層 | 職責 | 代表檔案 |
 |---|---|---|
 | **L0 Infra** | 常數 / TTL / 門檻 / 全域 config | `src/config/{config,data_config,persona,stock_names}.py`(v18.359 F-6.1 搬入)、`shared/ttls.py`、`shared/thresholds.py`、`shared/health_thresholds.py`、`shared/fred_series.py` |
-| **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`、`data_registry.py`、`proxy_helper.py`、`scripts/update_macro_history.py`(cron CLI,v18.359 F-2 搬入)、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`、`tw_stock_data_fetcher.py` |
+| **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`、`data_registry.py`、`proxy_helper.py`、`scripts/update_macro_history.py`(cron CLI,v18.359 F-2 搬入)、`scripts/update_forward_test_freeze.py`(前進式驗證每月凍結 cron CLI,v19.147)、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`、`tw_stock_data_fetcher.py`、`src/data/portfolio/forward_test_store.py`(前進式驗證本地落地 parquet,v19.147) |
 | **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`、`macro_signal_lookback_tw.py`、`compute/screener/{fundamental_prescreen,shortage_screener,rs_leader_screener,cross_quarter_trends,forward_test}.py`、`compute/risk/risk_contribution.py`(~~`merrill_clock.py`~~ v18.359 F-4 已刪) |
-| **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_structured_summary.py`、`daily_checklist.py`、`services/{fundamental_screener_service,rs_leader_service,shortage_screener_service,forward_test_service}.py`(選股網編排,v19.14x)(~~`ai_engine.py`~~ P5-DEAD-δ 已刪、~~`unified_decision.py`~~ F-4 已刪) |
+| **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_structured_summary.py`、`daily_checklist.py`、`macro_state_locker.py`(① 接線 v19.148:`get_macro_state` canonical 總經契約 + `normalize_regime` 中→英)、`services/{fundamental_screener_service,rs_leader_service,shortage_screener_service,forward_test_service}.py`(選股網編排,v19.14x;`fundamental_screener_service.get_ranked_picks` = 畫面/cron 同源排名,v19.147)(~~`ai_engine.py`~~ P5-DEAD-δ 已刪、~~`unified_decision.py`~~ F-4 已刪) |
 | **L4 Render** | 圖表生成 / 通用 UI 元件（無 Streamlit container） | `chart_plotter.py`、`etf_render.py`、`ui_widgets.py`、`render/risk_contribution_render.py`(v19.138) |
 | **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`tab_mj_health_diff.py`、`etf_dashboard.py`、`etf_tab_*.py` |
 | **L6 App** | session_state 路由 + 全域編排 | `app.py`(7,300 LOC,僅 orchestrator) |
