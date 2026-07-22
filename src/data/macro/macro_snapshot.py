@@ -39,6 +39,7 @@ except ImportError:
 from shared.calc_helpers import calc_bias_pct
 # (v19.85)FINMIND_API_URL import 移除 — 唯一 caller 出口鏈方案 FM 已拔(假 dataset)
 from shared.ttls import TTL_1HOUR
+from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 
 
 # S7 v19.78:原每呼叫 new Session → 連線池零複用。改 thread-local 單例
@@ -804,7 +805,7 @@ def _parse_customs_export_csv(text: str):
             continue
         if _roc < 50 or not (1 <= _mo <= 12):   # 民國年 sanity
             continue
-        _by_ym[(_roc + 1911, _mo)] = _v
+        _by_ym[(roc_to_gregorian_year(_roc), _mo)] = _v
     if len(_by_ym) < 13:
         return None
     _latest = max(_by_ym)              # (西元年, 月)

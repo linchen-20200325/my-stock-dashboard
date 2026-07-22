@@ -20,6 +20,8 @@ from typing import Any
 
 import pandas as pd
 import requests
+
+from shared.roc_calendar import gregorian_to_roc_year  # B3 SSOT-H2:西元→民國
 # §8.2.A EX-CACHE-1 + EX-L0-1:條件 import streamlit + 無 UI 呼叫 fallback。
 # 本檔僅用 @st.cache_data + st.secrets(同 config.py 模式),無真 UI 呼叫。
 try:
@@ -400,7 +402,7 @@ def fetch_mops_financials(
         "TYPEK": "all",
         "isnew": "false",
         "co_id": stock_id,
-        "year": str(year - 1911),   # 民國年
+        "year": str(gregorian_to_roc_year(year)),   # 民國年
         "season": f"{season:02d}",
     }
     resp = proxy_post(session, _MOPS_URL, data=payload)

@@ -34,6 +34,8 @@ import pandas as pd
 # 允許從 repo root 直接跑
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from shared.roc_calendar import gregorian_to_roc_year  # noqa: E402  B3 SSOT-H2:西元→民國
+
 from src.data.stock.mops_bulk_fetcher import (  # noqa: E402
     fetch_mops_balance_bulk,
     fetch_mops_income_bulk,
@@ -112,7 +114,7 @@ def latest_published_quarter(today: _dt.date) -> tuple[int, int]:
         cal_year, season = y - 1, 4      # 去年年報
     else:
         cal_year, season = y - 1, 3      # 年報尚未出 → 去年 Q3
-    return cal_year - 1911, season
+    return gregorian_to_roc_year(cal_year), season
 
 
 def _parse_seasons(raw: str | None) -> list[int]:

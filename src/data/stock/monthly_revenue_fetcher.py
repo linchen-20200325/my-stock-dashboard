@@ -38,6 +38,7 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.ttls import TTL_6HOUR
+from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 from src.data.core.finmind_client import finmind_get  # D5 step2 v18.437 SSOT client
 
 
@@ -206,7 +207,7 @@ def _roc_ym_to_date(ym: str) -> str | None:
     roc_year, month = int(s[:-2]), int(s[-2:])
     if roc_year < 1 or not (1 <= month <= 12):
         return None
-    return f"{roc_year + 1911:04d}-{month:02d}-01"
+    return f"{roc_to_gregorian_year(roc_year):04d}-{month:02d}-01"
 
 
 def _clean_revenue_amount(raw) -> float | None:

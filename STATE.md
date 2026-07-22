@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 📅 2026-07-22 全域重構 B3｜ROC 民國曆換算 SSOT（v19.152,深層技術債藍圖 B3/9,SSOT-H2）
+
+magic number `1911`(ROC 紀元位移)原散落 8 處 code + 2 docstring。§3.3 反捏造要求 domain 常數走單一來源。
+
+- **新 SSOT** `shared/roc_calendar.py`(L0,純函式無 I/O):`ROC_EPOCH_OFFSET = 1911` + `roc_to_gregorian_year()` + `gregorian_to_roc_year()`。僅收攏 ± 1911 算術,**不含**各源格式解析(字串格式 '11505'/'1150401' 不同,仍由各 fetcher 自解)。
+- **收攏 8 code 站點**(全 L1/scripts,import L0 合法):
+  - 民國→西元(6):`leading_indicators`(roc_to_ymd ×2 + extract_date ×1)、`macro_snapshot`(出口 YoY parser)、`app_stock_fetchers`(除息年)、`monthly_revenue_fetcher`(_roc_ym_to_date)
+  - 西元→民國(2 code + 1 script):`data_loader`(TPEX 三大法人 roc_date)、`tw_stock_data_fetcher`(MOPS year 參數)、`scripts/update_fundamentals_snapshot`(季別推算)
+- **保留 docstring 的 1911**(`macro_snapshot:776` §7 數學式、`monthly_revenue_fetcher:200` 說明)—— 解釋概念用,非執行碼。
+- **語意等價**:所有站點 X 早已是 int(`int(s[:3])`/`dt.year` 等),helper 內 `int(X)` 為 no-op → 零行為改變。
+- **測試**:新 `tests/test_roc_calendar.py`(11 測:位移釘死 1911、雙向 parametrize、往返一致、str 容錯)。8 檔 py_compile + 7 模組 import smoke + 117 targeted 全綠。
+
 ## 🗂️ 2026-07-22 全域重構 B2｜錯位檔案歸位（v19.152,深層技術債藍圖 B2/9）
 
 兩個 coherent commit:

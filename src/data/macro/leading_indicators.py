@@ -36,6 +36,7 @@ import urllib3
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from src.config import FINMIND_API_URL, TWSE_BFI82U_URL  # Batch 10b v18.412 + Batch 8.1 v18.420 SSOT
 from shared.ttls import TTL_30MIN
+from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def _bps():
@@ -113,10 +114,10 @@ def roc_to_ymd(s):
         return s
     # 7位民國 YYYMMDD（openapi.twse.com.tw 回傳格式，如 '1150401' = 2026-04-01）
     if re.match(r"^\d{7}$", s):
-        return f"{int(s[:3])+1911}{s[3:5]}{s[5:7]}"
+        return f"{roc_to_gregorian_year(int(s[:3]))}{s[3:5]}{s[5:7]}"
     # ROC 格式: YYY/MM/DD 或 YY/MM/DD
     m = re.match(r"(\d{2,3})[/年](\d{1,2})[/月](\d{1,2})", s)
-    return f"{int(m.group(1))+1911}{m.group(2).zfill(2)}{m.group(3).zfill(2)}" if m else ""
+    return f"{roc_to_gregorian_year(int(m.group(1)))}{m.group(2).zfill(2)}{m.group(3).zfill(2)}" if m else ""
 
 def ymd_to_slash(s): return f"{s[:4]}/{s[4:6]}/{s[6:]}"
 def ymd_to_dash(s):  return f"{s[:4]}-{s[4:6]}-{s[6:]}"
@@ -157,7 +158,7 @@ def extract_date(s):
     m = re.search(r"(20\d{2})[/\-](\d{1,2})[/\-](\d{1,2})", str(s))
     if m: return f"{m.group(1)}{m.group(2).zfill(2)}{m.group(3).zfill(2)}"
     m = re.search(r"(\d{3})[/\-](\d{1,2})[/\-](\d{1,2})", str(s))
-    if m: return f"{int(m.group(1))+1911}{m.group(2).zfill(2)}{m.group(3).zfill(2)}"
+    if m: return f"{roc_to_gregorian_year(int(m.group(1)))}{m.group(2).zfill(2)}{m.group(3).zfill(2)}"
     return None
 
 # ────────────────────────────────────────────────────────

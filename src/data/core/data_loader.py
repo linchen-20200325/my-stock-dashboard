@@ -42,6 +42,7 @@ import requests as _req_dl
 import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
 from src.data.proxy import fetch_url as _fetch_url_dl
+from shared.roc_calendar import gregorian_to_roc_year  # B3 SSOT-H2:西元→民國
 from src.data.core.finmind_client import _UA as _FM_UA  # S8 v19.78:raw REST UA 對齊 SSOT client
 from shared.ttls import TTL_15MIN, TTL_1DAY, TTL_1HOUR, TTL_3DAY  # v19.105 補 TTL_3DAY(get_quarterly_data 快取)
 
@@ -271,7 +272,7 @@ def _get_tpex_day(ds: str) -> dict:
            'Referer': 'https://www.tpex.org.tw/'}
     try:
         dt = datetime.date(int(ds[:4]), int(ds[4:6]), int(ds[6:8]))
-        roc_year = dt.year - 1911
+        roc_year = gregorian_to_roc_year(dt.year)
         roc_date = f'{roc_year}/{dt.month:02d}/{dt.day:02d}'
         r = _fetch_url_dl(
             'https://www.tpex.org.tw/web/stock/3insti/daily_report/3itrade_hedge_result.php',
