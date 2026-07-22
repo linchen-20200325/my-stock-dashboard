@@ -47,9 +47,10 @@ class TestQ5bMarkersInSource(unittest.TestCase):
         self.assertIn("'FinMind:TaiwanStockMonthRevenue:batch(all-market)'", src)
 
     def test_data_loader_2(self):
-        src = self._read('src/data/core/data_loader.py')
-        self.assertIn('src.data.core.data_loader._fetch_twse_inst_fallback:TWSE T86', src)
-        self.assertIn('src.data.core.data_loader._fetch_tpex_inst_fallback:TPEx 三大法人', src)
+        # B8-b v19.156:TWSE/TPEX 三大法人 fallback fetcher 拆至 data_loader_inst_fetchers
+        src = self._read('src/data/core/data_loader_inst_fetchers.py')
+        self.assertIn('src.data.core.data_loader_inst_fetchers._fetch_twse_inst_fallback:TWSE T86', src)
+        self.assertIn('src.data.core.data_loader_inst_fetchers._fetch_tpex_inst_fallback:TPEx 三大法人', src)
 
     def test_tab_stock_2(self):
         # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 section_357_valuation

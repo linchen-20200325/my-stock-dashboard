@@ -58,27 +58,29 @@ class TestNoNegativeCache:
 # ══════════════════════════════════════════════════════════════
 class TestT86NegativeCache:
     def test_transient_fail_uses_fail_ts_not_day_cache(self, monkeypatch):
-        import src.data.core.data_loader as dl
+        # B8-b v19.156:_get_t86_day + 其 _T86_DAY_CACHE/_T86_FAIL_TS 快取搬至
+        # data_loader_inst_fetchers → patch/存取真正持有者模組。
+        import src.data.core.data_loader_inst_fetchers as ifx
         calls = {"n": 0}
 
         def _none_fetch(*a, **k):
             calls["n"] += 1
             return None
 
-        monkeypatch.setattr(dl, "_fetch_url_dl", _none_fetch)
-        dl._T86_DAY_CACHE.pop("20990101", None)
-        dl._T86_FAIL_TS.pop("20990101", None)
-        assert dl._get_t86_day("20990101") == {}
-        assert "20990101" not in dl._T86_DAY_CACHE      # 不永久釘
-        assert "20990101" in dl._T86_FAIL_TS            # 負快取記錄
+        monkeypatch.setattr(ifx, "_fetch_url_dl", _none_fetch)
+        ifx._T86_DAY_CACHE.pop("20990101", None)
+        ifx._T86_FAIL_TS.pop("20990101", None)
+        assert ifx._get_t86_day("20990101") == {}
+        assert "20990101" not in ifx._T86_DAY_CACHE      # 不永久釘
+        assert "20990101" in ifx._T86_FAIL_TS            # 負快取記錄
         # 負快取窗內第二次呼叫不重打
-        assert dl._get_t86_day("20990101") == {}
+        assert ifx._get_t86_day("20990101") == {}
         assert calls["n"] == 1
         # 模擬過期 → 允許重試
-        dl._T86_FAIL_TS["20990101"] = time.time() - 10_000
-        dl._get_t86_day("20990101")
+        ifx._T86_FAIL_TS["20990101"] = time.time() - 10_000
+        ifx._get_t86_day("20990101")
         assert calls["n"] == 2
-        dl._T86_FAIL_TS.pop("20990101", None)
+        ifx._T86_FAIL_TS.pop("20990101", None)
 
 
 # ══════════════════════════════════════════════════════════════

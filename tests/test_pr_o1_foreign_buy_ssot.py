@@ -86,8 +86,8 @@ class TestUnitAnnotationAdded(unittest.TestCase):
         # 明示「張」單位
         self.assertIn('單位 = **張**', src,
                       'fill_cols 鄰近應有「單位 = 張」明文註解')
-        # 提及 _normalize_inst_pivot L286 SSOT 源
-        self.assertIn('_normalize_inst_pivot L286', src,
+        # 提及 _normalize_inst_pivot SSOT 源(B8-b v19.156 拆至 data_loader_inst_fetchers)
+        self.assertIn('data_loader_inst_fetchers._normalize_inst_pivot', src,
                       '應指回 SSOT 來源 _normalize_inst_pivot 的 /1000 轉換')
 
 

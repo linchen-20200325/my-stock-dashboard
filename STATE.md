@@ -10,7 +10,13 @@
   - **data_loader 2545 → 1962 行**(−583)。介面完全不變(4 caller 全走套件轉發,簽章 `(stock_id, token='')→dict` 不動)。
   - provenance:`tab_stock_picker` prov_log 字串 + guard `test_pr_q5b` 同步指向新位置(誠實血緣)。
   - 驗證:compile + import smoke(轉發解析到新模組 + data_loader 無 cycle)+ 417 targeted(prov guard/財報體檢/data_loader/4 caller)全綠。
-- **B8-b(下一步)**:TWSE/TPEX/FinMind 法人+融資+價格 raw fetchers(~330 行)→ 新 L1 module。
+- **B8-b ✅ TWSE/TPEX 三大法人 fallback fetchers(235 行)→ 新 L1 `data_loader_inst_fetchers.py`**:
+  - **範圍收斂(誠實)**:原計畫抽 8 個 raw fetcher,AST 實測 3 個 FinMind fetcher(`_fetch_finmind_*`)與 `_capture_finmind_meta`/`_FINMIND_META` **共享可變狀態**耦合(writer 搬走、reader 在 StockDataLoader L962)→ 分裂狀態=bug,**刻意留在 data_loader**。只抽零共享狀態的 5 個 TWSE/TPEX fetcher(`_get_t86_day`/`_get_tpex_day`/`_fetch_twse_inst_fallback`/`_fetch_tpex_inst_fallback`/`_normalize_inst_pivot`)。
+  - **零 cycle**:新模組只依 config/proxy/shared,不 import data_loader;data_loader import 回 5 個供 StockDataLoader + 外部 caller(`dl._get_t86_day` / picker)使用。線性依賴。
+  - **抓到並修一個真陷阱**:AST free-var 漏了 **annotated assignment**(`_T86_DAY_CACHE: dict = {}`)→ 首版把 `_get_t86_day` 的進程級快取留在 data_loader(函式搬走卻沒帶狀態)。`test_review_fixes_v19_80` 負快取測試當場逮到 → 補搬 `_T86_DAY_CACHE`/`_T86_FAIL_TS` 入新模組 + 測試改 patch 新持有者。**(big-file split 的典型 module-state 陷阱,測試守住了)**
+  - **data_loader 1962 → 1734 行**(−228;B8 合計 2545 → 1734,−811 / −32%)。provenance 字串(TWSE/TPEx source attr)+ `_normalize_inst_pivot` SSOT 註 + 2 guard 同步指向新位置。
+  - 驗證:compile + import smoke(import-back + 無 cycle)+ 617 targeted 全綠。
+- **B8 收尾**:FinMind raw fetchers(共享 `_FINMIND_META` 狀態)刻意留 data_loader —— 硬抽需先把共享狀態獨立成第 3 模組,ROI 不划算,不做。
 
 ## 🧱 2026-07-22 全域重構 B7｜分層違憲修復（v19.154,藍圖 B7/9,user 選「只收安全的」）
 
