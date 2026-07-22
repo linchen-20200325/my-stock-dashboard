@@ -128,3 +128,50 @@ def test_build_snapshot_skips_missing_or_bad_price():
 def test_build_snapshot_empty():
     from src.compute.screener.forward_test import build_pick_snapshot_rows
     assert build_pick_snapshot_rows([], {}, factors=[], cohort="X") == []
+
+
+# ── FT-3 基準報酬(benchmark_returns_from_close)──────────────────
+def _bench_series():
+    # 0050 收盤:1/1=100, 2/1=110, 3/1=120(現值)
+    idx = pd.to_datetime(["2025-01-01", "2025-02-01", "2025-03-01"])
+    return pd.Series([100.0, 110.0, 120.0], index=idx)
+
+
+def test_benchmark_returns_from_close_basic():
+    from src.compute.screener.forward_test import benchmark_returns_from_close
+    out = benchmark_returns_from_close(_bench_series(), ["2025-01-01", "2025-02-01"])
+    assert out["2025-01-01"] == pytest.approx(0.20)   # 120/100−1
+    assert out["2025-02-01"] == pytest.approx(120 / 110 - 1)
+
+
+def test_benchmark_uses_prior_close_when_cohort_between_dates():
+    from src.compute.screener.forward_test import benchmark_returns_from_close
+    # cohort 2025-01-15 介於 1/1、2/1 之間 → 取 <= 的最後一筆(1/1=100)
+    out = benchmark_returns_from_close(_bench_series(), ["2025-01-15"])
+    assert out["2025-01-15"] == pytest.approx(0.20)   # 120/100−1
+
+
+def test_benchmark_cohort_before_series_omitted():
+    from src.compute.screener.forward_test import benchmark_returns_from_close
+    out = benchmark_returns_from_close(_bench_series(), ["2024-01-01"])  # 早於序列起點
+    assert "2024-01-01" not in out                    # §1:無基準不猜
+
+
+def test_benchmark_empty_series():
+    from src.compute.screener.forward_test import benchmark_returns_from_close
+    assert benchmark_returns_from_close(pd.Series([], dtype=float), ["2025-01-01"]) == {}
+
+
+def test_benchmark_end_to_end_reconcile():
+    # 串起來:凍結 1/1 進場、0050 同期 +20% → 超額 = 個股平均 − 20%
+    from src.compute.screener.forward_test import (
+        benchmark_returns_from_close, reconcile_forward_test)
+    picks = _picks([("2025-01-01", "A", 100), ("2025-01-01", "B", 100),
+                    ("2025-01-01", "C", 100)])
+    _bench = benchmark_returns_from_close(_bench_series(), ["2025-01-01"])
+    df, _ = reconcile_forward_test(picks, {"A": 150, "B": 150, "C": 150},
+                                   benchmark_returns=_bench)
+    r = df.iloc[0]
+    assert r["avg_return_pct"] == pytest.approx(50.0)
+    assert r["benchmark_return_pct"] == pytest.approx(20.0)
+    assert r["excess_pct"] == pytest.approx(30.0)     # 50% − 20%

@@ -82,6 +82,46 @@ _OUT_COLS = [
 ]
 
 
+def benchmark_returns_from_close(close, cohorts) -> dict:
+    """由基準(0050)日收盤序列,算各 cohort(凍結日)到最新的報酬。
+
+    Args:
+        close: pd.Series;index=日期(DatetimeIndex 或可轉),values=收盤。
+        cohorts: cohort 標籤(通常 "YYYY-MM-DD")。
+
+    Returns:
+        {cohort: 報酬(最新 close / 凍結日當日或之前最後一筆 close − 1)}。
+        序列空 / cohort 早於序列起點 → 該 cohort 不放 key(§1 無基準不猜)。
+    """
+    if close is None or len(close) == 0:
+        return {}
+    s = pd.Series(close).dropna()
+    if s.empty:
+        return {}
+    idx = pd.to_datetime(s.index, errors="coerce")
+    if getattr(idx, "tz", None) is not None:
+        idx = idx.tz_localize(None)
+    s = pd.Series(s.to_numpy(), index=idx).dropna().sort_index()
+    if s.empty:
+        return {}
+    _cur = float(s.iloc[-1])
+    if not (_cur > 0):
+        return {}
+    out: dict[str, float] = {}
+    for c in cohorts:
+        try:
+            _d = pd.Timestamp(str(c))
+        except (ValueError, TypeError):
+            continue
+        _prior = s[s.index <= _d]
+        if _prior.empty:
+            continue
+        _entry = float(_prior.iloc[-1])
+        if _entry > 0:
+            out[str(c)] = _cur / _entry - 1.0
+    return out
+
+
 def reconcile_forward_test(
     picks: pd.DataFrame,
     current_prices: dict,
