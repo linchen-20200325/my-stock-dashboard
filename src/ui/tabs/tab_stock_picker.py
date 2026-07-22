@@ -164,7 +164,6 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
     # ─ Late imports（避免循環 import + 啟動時間）─
     import datetime as _dt_sp
     import pandas as pd
-    import yfinance as yf
 
     st.caption(f'從上方「{source_label}」候選清單勾選標的，系統自動跑三階段篩選並提供配置建議。'
                f'全 15 項條件：3️⃣ 基本面 ×9 → 4️⃣ 籌碼技術 ×6 → 5️⃣ AI 綜合建議。')
@@ -266,7 +265,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         with st.spinner(f'三階段篩選中（{len(_tickers)} 檔，並行）...'):
             with ThreadPoolExecutor(max_workers=5) as _pick_exec:
                 _pick_futs = {
-                    _pick_exec.submit(_check_one_stock, _tk, _today, yf,
+                    _pick_exec.submit(_check_one_stock, _tk, _today, None,
                                       (fh_map or {}).get(_tk)): _i
                     for _i, _tk in enumerate(_tickers)
                 }
@@ -459,12 +458,10 @@ def _check_one_stock(ticker: str, today, yf=None, fh_result: dict | None = None)
         _r['kd_label'] = '❌ 抓不到 K 線'
         _r['boll_label'] = '❌ 抓不到 K 線'
         return _r
-    # v18.452 hotfix:5Y 配息檢查需要 yfinance.Ticker 物件(讀 .dividends),
-    # 原碼引用未定義的 `_t_yf` → 每檔必炸 NameError,ThreadPoolExecutor 捕獲後
-    # 整檔回退成全 ❓N/A(production bug:Stage 1/2 兩張表無論輸入什麼股票全部
-    # 顯示 N/A、0/9、0/6)。改用 fetch_stock_history_1y 已解析出的正確後綴建構。
-    import yfinance as _yf_mod
-    _t_yf = _yf_mod.Ticker(_resolved_ticker)
+    # B7 v19.154:5Y 配息檢查改走 L1 cached_dividends(NAS proxy + 1h cache),
+    # 取代原 L5 直呼 yfinance.Ticker(違 §8.2);回傳同一份 .dividends Series。
+    from src.data.proxy import cached_dividends
+    _divs5 = cached_dividends(_resolved_ticker)
 
     # ── 一次抓財報（多個 Stage 1 helpers 共用）──────────────
     _fs = _fetch_fs_safe(ticker)
@@ -473,7 +470,7 @@ def _check_one_stock(ticker: str, today, yf=None, fh_result: dict | None = None)
     # ── Stage 1 條件 ──────────────────────────────────────────
     _r['debt_ratio_label']  = _check_debt_ratio(_fs, fh_result)
     _r['three_rate_label']  = _check_three_rate_growth(_qis)
-    _r['div_5y_label']      = _check_dividend_5y(_df, _t_yf)
+    _r['div_5y_label']      = _check_dividend_5y(_df, _divs5)
     _r['pe_zone_label']     = _check_pe_zone(_qis, _df)
     _r['ar_turnover_label'] = _check_ar_turnover(_fs)
     _r['inv_turnover_label']= _check_inventory_turnover(_fs)
@@ -634,10 +631,10 @@ def _check_three_rate_growth(qis: dict) -> str:
 
 
 
-def _check_dividend_5y(df, yf_ticker) -> str:
-    """連續 5 年配息 + 平均殖利率 > 7%。"""
+def _check_dividend_5y(df, divs) -> str:
+    """連續 5 年配息 + 平均殖利率 > 7%。divs = L1 cached_dividends 回的 .dividends Series。"""
     try:
-        _divs = yf_ticker.dividends
+        _divs = divs
         if _divs is None or _divs.empty or len(_divs) < 5:
             return '❌ 配息 <5 次'
         # 年度化 — 最近 5 年除息總額

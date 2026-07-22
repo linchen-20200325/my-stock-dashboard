@@ -5,6 +5,9 @@
 **進行中**。risk_radar(L2 直呼 Yahoo/CBOE/FRED)屬大重構 → 延後單開;診斷頁 raw requests 合法 → 登記例外;此批只收 UI 直呼 yfinance。
 
 - **B7-a ✅ `tab_etf_margin_simulator` yfinance → L1**:原 L5 內 `_fetch_etf_history` 直呼 `yf.download` 違 §8.2。**原封下沉**至 L1 `src/data/etf/etf_fetch.py::fetch_etf_close_history`(行為零改變,同 yf/pd/st/TTL 皆在 etf_fetch 現成)。caller 走 EX-PASSTHRU-1;移除 tab 內 `_dt` / `TTL_1HOUR` 孤兒 import;provenance guard(`test_pr_q5c_singles`)隨函式對齊 L1。yfinance 已從該 L5 檔徹底消失。16 guard 測綠 + import smoke。
+- **B7-b ✅ `tab_stock_picker` yfinance → L1**:原 L5 內 5Y 配息檢查直呼 `yfinance.Ticker(...).dividends` 違 §8.2。改走既有 L1 `src/data/proxy/yf_proxy.cached_dividends`(**同一份 .dividends Series + NAS proxy + 1h cache**,順帶提升可靠性)。`_check_dividend_5y(df, divs)` 改收 Series(原收 Ticker 物件);`_check_one_stock` 死 `yf` 參數傳 `None`(原註「內部已不用」);移除 L5 兩處 yfinance import。resolved-ticker guard(`test_picker_check_one_stock`)改 patch L1 fetcher 對齊。yfinance 從該 L5 檔徹底消失(僅剩 docstring/死參數名)。14 guard 測綠 + `_check_dividend_5y(Series)` 實算 smoke。
+- **診斷頁 raw requests(api_diagnostic/health_inspector/sidebar_health):合法保留**——探測端點是其本質,L1 import 早登 EX-PASSTHRU-1;raw HTTP 為診斷工具內生,不改。
+- **risk_radar(L2 直呼 Yahoo/CBOE/FRED):延後**——大重構(多源 fetcher + fallback 內嵌),屬 B8 級,單開處理。
 
 ## 📉 2026-07-22 全域重構 B6｜MACD kernel SSOT（v19.153,藍圖 B6/9,user 選「抽 kernel + 統一 12/26/9」）
 
