@@ -393,7 +393,9 @@ def _make_default_http(api_key: str, model: str, *, max_attempts: int = 3) -> Ca
         for _attempt in range(max_attempts):
             r = requests.post(_GEMINI_URL.format(model=model), params={"key": api_key},
                               json=payload, timeout=30)
-            # 暫時性且還有重試額度 → 指數退避後再試(1.5 → 3 → 6s,封頂 8s)
+            # 暫時性且還有重試額度 → 指數退避後再試。退避 min(8, 1.5·2^attempt),封頂 8s。
+            # 註:max_attempts=3 時實際只 sleep 兩次(attempt 0→1.5s、attempt 1→3s);
+            # 最後一次(attempt 2)不 sleep,直接落到 raise_for_status 拋(fail-loud §1)。
             if r.status_code in _GEMINI_RETRIABLE_STATUS and _attempt < max_attempts - 1:
                 time.sleep(min(8.0, 1.5 * (2 ** _attempt)))
                 continue

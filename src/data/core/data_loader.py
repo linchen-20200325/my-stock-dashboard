@@ -42,9 +42,8 @@ import requests as _req_dl
 import urllib3 as _urllib3_dl
 _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
 from src.data.proxy import fetch_url as _fetch_url_dl
-from shared.roc_calendar import gregorian_to_roc_year  # B3 SSOT-H2:西元→民國
 from src.data.core.finmind_client import _UA as _FM_UA  # S8 v19.78:raw REST UA 對齊 SSOT client
-from shared.ttls import TTL_15MIN, TTL_1DAY, TTL_1HOUR, TTL_3DAY  # v19.105 補 TTL_3DAY(get_quarterly_data 快取)
+from shared.ttls import TTL_1DAY, TTL_1HOUR, TTL_3DAY  # v19.105 補 TTL_3DAY(get_quarterly_data 快取)
 
 # v18.201 D2：FinMind dataset 後台 update 時間追蹤
 # raw fetcher 從 response top-level 取 `last_update`，SDK 路徑無此欄位故留空
