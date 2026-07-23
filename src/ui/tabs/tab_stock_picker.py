@@ -265,7 +265,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         with st.spinner(f'三階段篩選中（{len(_tickers)} 檔，並行）...'):
             with ThreadPoolExecutor(max_workers=5) as _pick_exec:
                 _pick_futs = {
-                    _pick_exec.submit(_check_one_stock, _tk, _today, None,
+                    _pick_exec.submit(_check_one_stock, _tk, _today,
                                       (fh_map or {}).get(_tk)): _i
                     for _i, _tk in enumerate(_tickers)
                 }
@@ -437,12 +437,12 @@ def _blank_pick_result(ticker: str, note: str = '') -> dict:
     }
 
 
-def _check_one_stock(ticker: str, today, yf=None, fh_result: dict | None = None) -> dict:
+def _check_one_stock(ticker: str, today, fh_result: dict | None = None) -> dict:
     """對單檔個股跑完 Stage 1 + Stage 2 — 失敗條件統一回灰色 ❓ 不阻斷流程。
     全程獨立 requests + yfinance、零 st.* 呼叫 → 線程安全，可丟進 ThreadPoolExecutor。
 
     P1-1a v18.374:yfinance K 線直呼抽至 L1 fetcher(`src.data.stock.picker_fetcher`)。
-    yf param 保留 backward compat 但內部已不用。
+    (v19.159:原 backward-compat `yf` 幽靈參數已移除 — 內部早不用。)
 
     fh_result:v18.453 — 個股組合場景已由「批次財報體檢」算好的
     analyze_financial_health() 結果(dict,鍵含 financial_structure_module 等 6 子模組)。

@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧹 2026-07-23 團隊交叉稽核排毒波（v19.159,6 批 A~F,user 核准「建議全動工」）
+
+四角色並行唯讀稽核(PM / 架構師 / 工程師 / QA)→ 統整報告 → user 核准 → 6 批分別 commit + 測試 gate。
+
+- **Batch A(P4 瑣碎)**:data_loader 刪 2 個 B8-b 搬檔遺留死 import(gregorian_to_roc_year + TTL_15MIN,caller=0)+ etf_tab_single:552 手寫乖離收 `calc_bias_pct` SSOT(C1 漏網)+ Gemini retry 註解修正。
+- **Batch B(P1 資料正確性)**:`_get_tpex_day` TPEX 暫時性失敗改短 TTL 負快取(`_TPEX_FAIL_TS`,對稱補齊 T86 早有、TPEX 一直漏的護欄;來源恢復後可重試,不再靜默釘空 dict → 上櫃股法人 NaN)+ 對稱回歸測試。pre-existing 缺口(v19.80 N2c 只修 T86)。
+- **Batch C(P2a 高 ROI)**:pandera schema 併回 `shared/schemas.py`(L0 單一家)+ 刪 `compute/risk/schemas.py`(L2)+ repoint 8 處 L1 production import + 2 test → **一次解「schema SSOT 分裂 + L1→L2 上行 10 處」兩型違憲**;graceful 改善(L0 無 pandera 也能乾淨 import)。
+- **Batch D(P2b)**:`render_macro_alerts` + `_LEVEL_STYLE` 從 `macro_alert.py`(L1)搬 `macro_ui_components.py`(L4);macro_alert docstring 修錯標(L3→L1)+ 清死 TRAFFIC import;3 caller repoint。
+- **Batch E(P3 真刪 + 存檔)**:比照 backtest/macro_validation 前例,真刪 4 個「後端活、UI 下架」孤兒 Tab + 專屬死後端(共 9 檔 + 2 函式):ETF 質借模擬整棧(UI + L2 engine + fetch_etf_close_history + 2 test)、MJ 體檢變化 UI(後端 LIVE 保留)、月營收篩選 UI + screen_from_batch/filter_by_mode、RS wrapper UI(service LIVE 保留);新增 `docs/ARCHIVED_FEATURES.md`。全套 3347 passed(僅 pandera-gated 既有 3 基準)。
+- **Batch F(LOW + 治理同步)**:COLORS_7 色票 SSOT 歸位 `shared/colors.py`(L0,修 daily_checklist L3→L4 上行)+ gsheet_portfolio session_state 納入 EX-OAUTH-1(登錄 + 檔內註解)+ 刪 `_check_one_stock` yf 幽靈參數 + CLAUDE.md 治理同步(EX-PASSTHRU-1 移除已刪模組 stale 條目 + section_mid render 註記 + L5 表 + EX-OAUTH-1 擴充)+ SPEC.md:5 backtest stale 修 + STATE 存檔。
+- **誠實排除(非漏)**:risk_radar L2 I/O(STATE B7 已登錄延後)、fillna(0)(D1 已登錄)、reconcile×2 / sharpe×3(刻意不同語意)、docs/DEAD_CODE_AUDIT.md(時點快照非活躍治理表,mj 後端仍 LIVE 未動)。3 個 pandera-gated test 為本地無 pandera 既有基準(CI 有則通過,stash 對照確認非本波引入)。
+
 ## 🪤 2026-07-22 治理文件｜Gotchas 踩雷筆記 + Fallback 預宣告慣例（v19.158,doc-only,user 核准）
 
 user 提 5 條方法論建議,對照 PROCESS.md 誠實盤點後只採 2 條真有增量的(其餘 3 條已在 §3/§5 或與「一次一檔」既定規則衝突):

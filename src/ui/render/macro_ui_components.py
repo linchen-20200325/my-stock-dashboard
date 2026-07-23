@@ -19,10 +19,7 @@ from shared.signal_thresholds import (
 )
 
 
-COLORS_7 = [
-    "#58a6ff", TRAFFIC_GREEN, "#ffd700", TRAFFIC_RED,
-    "#bc8cff", "#79c0ff", "#ff9f43",
-]
+from shared.colors import COLORS_7  # noqa: E402,F401  v19.159:SSOT 移 L0,此處 re-export 供 L5 consumer
 
 
 def _hex2rgba(color, alpha=0.12):

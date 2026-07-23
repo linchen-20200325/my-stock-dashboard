@@ -1,5 +1,9 @@
 """Google Sheet 持股組合雲端儲存 (PR #5 + OAuth 擴充)
 
+⚠️ §8.2.A EX-OAUTH-1(v19.159 團隊稽核擴充):本檔 L1 讀 `st.session_state`
+(gsheet_tokens / portfolio_sheet_id,見下方 ready 檢查)屬 OAuth session lifecycle
+(token 取用),非業務 UI。例外正式登錄於 CLAUDE.md §8.2.A EX-OAUTH-1。
+
 Schema (單一 worksheet `portfolios`)：
     name | ticker | lots | avg_price | updated_at
 
