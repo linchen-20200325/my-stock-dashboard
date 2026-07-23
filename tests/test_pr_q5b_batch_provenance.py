@@ -74,8 +74,6 @@ class TestImports(unittest.TestCase):
     def test_yield_screener(self):
         from src.ui.tabs import yield_screener  # noqa
 
-    def test_monthly_revenue_screener(self):
-        from src.ui.tabs import monthly_revenue_screener  # noqa
 
     def test_data_loader(self):
         from src.data.core import data_loader  # noqa

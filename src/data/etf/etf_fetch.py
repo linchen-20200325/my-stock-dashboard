@@ -2196,33 +2196,3 @@ def fetch_etf_peer_history(tickers: tuple, period: str = '2y') -> pd.DataFrame:
                   f'{_all[0]}+{len(_all)-1}peers',
                   f'None:exc:{type(_e).__name__}')
         return pd.DataFrame()
-
-
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
-def fetch_etf_close_history(symbol: str, years: int) -> "pd.Series | None":
-    """ETF 收盤價歷史 Series(auto_adjust 還原;近 years 年 + 30 日 buffer)。TTL 1h。
-
-    B7 v19.154:原為 tab_etf_margin_simulator(L5)內 `_fetch_etf_history`,直呼
-    yfinance 違 §8.2「L5 不得直呼外部資料源」→ 原封下沉至 L1(行為零改變)。
-    caller 走 EX-PASSTHRU-1(L5→L1 pass-through,cache 集中此層)。
-    """
-    try:
-        import datetime as _dt
-        end = _dt.date.today()
-        start = end - _dt.timedelta(days=years * 365 + 30)
-        df = yf.download(symbol, start=start, end=end, progress=False, auto_adjust=True)
-        if df is None or df.empty:
-            return None
-        # yfinance 新版回 MultiIndex columns
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        close = df["Close"].dropna()
-        try:
-            close.attrs.setdefault('source', f'yfinance:{symbol}:{years}y:auto_adjust')
-            close.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
-        except Exception:
-            pass
-        return close
-    except Exception as e:
-        print(f"[fetch_etf_close_history] {symbol} 失敗：{type(e).__name__}: {e}")
-        return None
