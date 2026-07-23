@@ -632,7 +632,7 @@ def calc_tracking_error(df: pd.DataFrame, bench_df: pd.DataFrame) -> float:
         if len(common) < 20:
             return None
         diff = etf_r.loc[common] - bench_r.loc[common]
-        return round(float(diff.std() * (252 ** 0.5) * 100), 2)
+        return round(float(diff.std() * (TRADING_DAYS_PER_YEAR ** 0.5) * 100), 2)
     except Exception as _e:
         print(f'[calc_tracking_error] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
         return None
@@ -689,8 +689,8 @@ def calc_sharpe(df: pd.DataFrame, rf: float | None = None) -> float:
         ret     = df['Close'].pct_change().dropna()
         if len(ret) < 20:
             return 0.0
-        ann_ret = float(ret.mean() * 252 * 100)
-        ann_vol = float(ret.std() * (252 ** 0.5) * 100)
+        ann_ret = float(ret.mean() * TRADING_DAYS_PER_YEAR * 100)
+        ann_vol = float(ret.std() * (TRADING_DAYS_PER_YEAR ** 0.5) * 100)
         return round((ann_ret - rf) / ann_vol, 2) if ann_vol > 0 else 0.0
     except Exception as _e:
         print(f'[calc_sharpe] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
@@ -973,7 +973,7 @@ def calc_weakness_metrics(etf_returns, bench_returns):
             break
 
     _diff = _df['etf'] - _df['bench']
-    _te = float(_diff.std() * _np_w.sqrt(252) * 100) if _diff.std() > 0 else 0.0
+    _te = float(_diff.std() * _np_w.sqrt(TRADING_DAYS_PER_YEAR) * 100) if _diff.std() > 0 else 0.0
 
     return {
         'down_days': _down_n,

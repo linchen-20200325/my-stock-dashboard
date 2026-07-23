@@ -1196,7 +1196,7 @@ def fetch_tw_cpi_yoy(months_back: int = 24, token: str = "") -> Optional[pd.Data
     print(f'[tw_macro/cpi_yoy] ✅ {len(out)} months, latest={out.iloc[-1]["value"]:+.2f}%')
     # Phase 2 pandera P3 v18.436 #24:macro 時序 schema(date+value+source)log-mode
     try:
-        from src.compute.risk.schemas import validate_in_log_mode, MacroDFSchema
+        from shared.schemas import validate_in_log_mode, MacroDFSchema
         validate_in_log_mode(out, MacroDFSchema, label='fetch_tw_cpi_yoy')
     except Exception:
         pass
@@ -1230,7 +1230,7 @@ def fetch_tw_unemployment(months_back: int = 24, token: str = "") -> Optional[pd
     print(f'[tw_macro/unemp] ✅ {len(out)} months, latest={out.iloc[-1]["value"]:.2f}%')
     # Phase 2 pandera P3 v18.436 #24
     try:
-        from src.compute.risk.schemas import validate_in_log_mode, MacroDFSchema
+        from shared.schemas import validate_in_log_mode, MacroDFSchema
         validate_in_log_mode(out, MacroDFSchema, label='fetch_tw_unemployment')
     except Exception:
         pass
@@ -1271,7 +1271,7 @@ def fetch_cbc_discount_rate(months_back: int = 24, fred_api_key: str = "") -> Op
     print(f'[tw_macro/cbc_rate] ✅ {len(out)} months, latest={out.iloc[-1]["value"]:.3f}%')
     # Phase 2 pandera P3 v18.436 #24
     try:
-        from src.compute.risk.schemas import validate_in_log_mode, MacroDFSchema
+        from shared.schemas import validate_in_log_mode, MacroDFSchema
         validate_in_log_mode(out, MacroDFSchema, label='fetch_cbc_discount_rate')
     except Exception:
         pass
@@ -1317,7 +1317,7 @@ def fetch_usdtwd_close(days_back: int = 180) -> Optional[pd.DataFrame]:
     print(f'[tw_macro/usdtwd] ✅ {len(out)} days, latest={out.iloc[-1]["value"]:.3f}')
     # Phase 2 pandera P3 v18.436 #24
     try:
-        from src.compute.risk.schemas import validate_in_log_mode, MacroDFSchema
+        from shared.schemas import validate_in_log_mode, MacroDFSchema
         validate_in_log_mode(out, MacroDFSchema, label='fetch_usdtwd_close')
     except Exception:
         pass

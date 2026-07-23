@@ -12,6 +12,14 @@ import unittest
 
 import pandas as pd
 
+try:
+    import pandera  # noqa: F401
+    _HAS_PANDERA = True
+except ImportError:  # pandera 缺(本地極簡環境)→ blocking 驗證測試 skip;CI 有 pandera 則跑
+    _HAS_PANDERA = False
+
+_SKIP_NO_PANDERA = unittest.skipUnless(_HAS_PANDERA, "pandera 未安裝(CI 有則跑,本地缺則 skip)")
+
 
 # ═══════════════════════════════════════════════════════════════
 # D13 validate_or_reject(blocking 驗證)
@@ -26,28 +34,30 @@ class TestValidateOrReject(unittest.TestCase):
         })
 
     def test_good_df_passes_through(self):
-        from src.compute.risk.schemas import MonthlyRevenueSchema, validate_or_reject
+        from shared.schemas import MonthlyRevenueSchema, validate_or_reject
         df = self._good_df()
         out = validate_or_reject(df, MonthlyRevenueSchema, label='t')
         self.assertEqual(len(out), 6, '合法 df(含 NaN 停業態)不得誤殺')
 
+    @_SKIP_NO_PANDERA
     def test_negative_revenue_rejected_whole(self):
         """負營收(schema 違反)→ 整檔棄用回空,不是丟壞列(§1 部分刪列 = 掩蓋)。"""
-        from src.compute.risk.schemas import MonthlyRevenueSchema, validate_or_reject
+        from shared.schemas import MonthlyRevenueSchema, validate_or_reject
         df = self._good_df()
         df.loc[2, 'revenue'] = -5.0
         out = validate_or_reject(df, MonthlyRevenueSchema, label='t')
         self.assertTrue(out.empty)
         self.assertListEqual(list(out.columns), list(df.columns), '空殼須保留欄位')
 
+    @_SKIP_NO_PANDERA
     def test_unsorted_date_rejected(self):
-        from src.compute.risk.schemas import MonthlyRevenueSchema, validate_or_reject
+        from shared.schemas import MonthlyRevenueSchema, validate_or_reject
         df = self._good_df().iloc[::-1].reset_index(drop=True)  # 降序
         out = validate_or_reject(df, MonthlyRevenueSchema, label='t')
         self.assertTrue(out.empty)
 
     def test_empty_df_passthrough(self):
-        from src.compute.risk.schemas import MonthlyRevenueSchema, validate_or_reject
+        from shared.schemas import MonthlyRevenueSchema, validate_or_reject
         out = validate_or_reject(pd.DataFrame(), MonthlyRevenueSchema, label='t')
         self.assertTrue(out.empty)
 
@@ -75,6 +85,7 @@ class TestMonthlyRevenueFetcherBlocking(unittest.TestCase):
         finally:
             m.finmind_get, m._get_token = _orig_get, _orig_tok
 
+    @_SKIP_NO_PANDERA
     def test_bad_shape_rejected_to_empty(self):
         """負營收 → blocking 整檔棄用,caller 拿到空 df(走既有無資料路徑)。"""
         import src.data.stock.monthly_revenue_fetcher as m

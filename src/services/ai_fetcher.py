@@ -140,7 +140,12 @@ def post_gemini(
                     time.sleep(wait_s)
                     continue  # retry 同 model
 
-                # 404/400/500 等 → 跳下個 model
+                # 暫時性 5xx(500/502/503/504,如 Gemini 過載 503)→ 退避重試同 model(同 429)
+                if response.status_code in (500, 502, 503, 504):
+                    last_error = f"{model_name} HTTP {response.status_code} (attempt {attempt+1}/{retries_per_model})"
+                    time.sleep(min(15, 3 * (2 ** attempt)))
+                    continue
+                # 4xx(400/403/404 等)永久性設定/prompt 錯 → 跳下個 model(重試無用)
                 last_error = f"{model_name} HTTP {response.status_code}: {response.text[:300]}"
                 break
 

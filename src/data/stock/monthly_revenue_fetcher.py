@@ -38,6 +38,7 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.ttls import TTL_6HOUR
+from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 from src.data.core.finmind_client import finmind_get  # D5 step2 v18.437 SSOT client
 
 
@@ -103,7 +104,7 @@ def _single_finmind(stock_id: str, months: int = 18) -> pd.DataFrame:
         # D13 v19.75(review,user 核准):log-mode → blocking。schema 違反 → 整檔
         # 棄用回空(§1 錯值比缺值危險),下游走既有「無資料」路徑 + 診斷 Tab 亮紅。
         try:
-            from src.compute.risk.schemas import validate_or_reject, MonthlyRevenueSchema
+            from shared.schemas import validate_or_reject, MonthlyRevenueSchema
             _result = validate_or_reject(_result, MonthlyRevenueSchema,
                                          label=f'fetch_monthly_revenue:{stock_id}')
         except ImportError as _e_sch:
@@ -168,7 +169,7 @@ def _batch_finmind(months: int = 18) -> pd.DataFrame:
         # 取首檔 36 列當代表驗(完整驗會誤判 date dup 跨股);樣本違反 = 系統性 shape
         # 問題 → 整批棄用回空(§1),下游走既有「無資料」路徑。
         try:
-            from src.compute.risk.schemas import validate_or_reject, MonthlyRevenueSchema
+            from shared.schemas import validate_or_reject, MonthlyRevenueSchema
             _sample_v = validate_or_reject(_result_b.head(36), MonthlyRevenueSchema,
                                            label='fetch_batch_monthly_revenue:sample')
             if _sample_v.empty and not _result_b.empty:
@@ -206,7 +207,7 @@ def _roc_ym_to_date(ym: str) -> str | None:
     roc_year, month = int(s[:-2]), int(s[-2:])
     if roc_year < 1 or not (1 <= month <= 12):
         return None
-    return f"{roc_year + 1911:04d}-{month:02d}-01"
+    return f"{roc_to_gregorian_year(roc_year):04d}-{month:02d}-01"
 
 
 def _clean_revenue_amount(raw) -> float | None:

@@ -276,3 +276,89 @@ if __name__ == "__main__":
         fn()
         print(f"  ok: {fn.__name__}")
     print(f"\n{len(fns)} 項 golden test 全部通過 ✅")
+
+
+# ── B-hotfix 2026-07-22:Gemini 503 退避重試(user 回報「AI 總結本頁」503 硬失敗)──
+def test_make_default_http_retries_503_then_succeeds(monkeypatch):
+    """503(暫時性上游過載)→ 退避重試 → 次次 200 成功。無此 retry 則單次即拋 HTTPError。"""
+    import requests
+    from src.services.ai_qa_service import _make_default_http
+
+    class _Resp:
+        def __init__(self, code, body=None):
+            self.status_code, self._body, self.text = code, body or {}, str(body)
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.HTTPError(f"{self.status_code} Server Error: Service Unavailable for url: x")
+        def json(self):
+            return self._body
+
+    seq = [_Resp(503), _Resp(200, {"ok": True})]
+    calls = {"n": 0}
+    def _fake_post(*a, **k):
+        calls["n"] += 1
+        return seq.pop(0)
+    monkeypatch.setattr(requests, "post", _fake_post)
+    monkeypatch.setattr("time.sleep", lambda *_: None)   # 不真的睡,測試秒過
+
+    http = _make_default_http("KEY", "gemini-2.5-flash", max_attempts=3)
+    out = http({"contents": []})
+    assert calls["n"] == 2 and out == {"ok": True}       # 重試 1 次後成功
+
+
+def test_make_default_http_503_exhausted_raises(monkeypatch):
+    """503 連 max_attempts 次 → 用盡才拋(fail-loud §1)。"""
+    import pytest as _pt
+    import requests
+    from src.services.ai_qa_service import _make_default_http
+
+    class _Resp:
+        status_code, text = 503, "503"
+        def raise_for_status(self):
+            raise requests.HTTPError("503 Server Error: Service Unavailable for url: x")
+        def json(self):
+            return {}
+    calls = {"n": 0}
+    def _fake_post(*a, **k):
+        calls["n"] += 1
+        return _Resp()
+    monkeypatch.setattr(requests, "post", _fake_post)
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+
+    http = _make_default_http("KEY", "m", max_attempts=3)
+    with _pt.raises(requests.HTTPError):
+        http({})
+    assert calls["n"] == 3                                # 試滿 3 次
+
+
+def test_make_default_http_400_no_retry(monkeypatch):
+    """400(永久性 prompt/設定錯)→ 不重試,立即拋。"""
+    import pytest as _pt
+    import requests
+    from src.services.ai_qa_service import _make_default_http
+
+    class _Resp:
+        status_code, text = 400, "bad"
+        def raise_for_status(self):
+            raise requests.HTTPError("400 Bad Request")
+        def json(self):
+            return {}
+    calls = {"n": 0}
+    def _fake_post(*a, **k):
+        calls["n"] += 1
+        return _Resp()
+    monkeypatch.setattr(requests, "post", _fake_post)
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+
+    http = _make_default_http("KEY", "m", max_attempts=3)
+    with _pt.raises(requests.HTTPError):
+        http({})
+    assert calls["n"] == 1                                # 永久性錯不重試
+
+
+def test_fmt_gemini_error_503_friendly():
+    """503 → 友善提示(不丟原始 HTTPError,且不洩金鑰)。"""
+    import requests
+    e = requests.HTTPError("503 Server Error: Service Unavailable for url: https://x?key=SECRET")
+    msg = _fmt_gemini_error("Gemini 失敗", e)
+    assert "503" in msg and "重試" in msg and "SECRET" not in msg

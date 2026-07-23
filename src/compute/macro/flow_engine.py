@@ -19,6 +19,7 @@ from shared.etf_universe import (  # noqa: F401
     CROSS_ASSET_ETFS,
     all_symbols,
 )
+from shared.signal_thresholds import TRADING_DAYS_PER_YEAR  # B5 SSOT-M1
 
 
 def to_close_list(df) -> list:
@@ -54,7 +55,7 @@ def pct_return(closes, days):
     return round((closes[-1] / prev - 1) * 100, 2)
 
 
-def zscore_latest(closes, window=252, clip=3.0):
+def zscore_latest(closes, window=TRADING_DAYS_PER_YEAR, clip=3.0):
     """最新值相對過去 window 日分布的 Z-score，clip 到 [-clip, clip]。
     資料不足（<30 點）回 None；標準差為 0 回 0.0。"""
     if not closes or len(closes) < 30:
@@ -105,7 +106,7 @@ def _risk_label(score):
     return "🔴 強烈 Risk-off（資金撤退）"
 
 
-def compute_risk_score(close_map, window=252):
+def compute_risk_score(close_map, window=TRADING_DAYS_PER_YEAR):
     """用跨資產序列合成 risk-on/off 分數。
     close_map 需含 CROSS_ASSET_ETFS 的 key（缺的自動略過）。
     各代理指標「上升」代表 risk-on(+1) 或 risk-off(-1)，取 Z-score×方向 平均後映射 -100..100。

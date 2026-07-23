@@ -98,20 +98,25 @@ def test_stage2_technical_checks_populate_from_real_df():
 
 def test_resolved_ticker_used_for_dividend_ticker_not_bare_code():
     """fetch_stock_history_1y 回傳的 resolved_ticker(含 .TW/.TWO 後綴)須真正被拿去
-    建構 yfinance.Ticker,而非用原始無後綴代碼(否則配息查詢會用錯代號)。"""
+    查配息,而非用原始無後綴代碼(否則配息查詢會用錯代號)。
+    B7 v19.154:配息改走 L1 cached_dividends → guard 對齊,patch L1 fetcher 驗傳入代號。"""
+    import pandas as _pd
+    # patch 真正持有者 yf_proxy(非 package src.data.proxy),否則會遮蔽 PEP 562
+    # 轉發 → 觸 test_zz_proxy_pollution_lock(v19.74/v19.113 地雷)。
+    import src.data.proxy.yf_proxy as _yfp
     import src.ui.tabs.tab_stock_picker as _tsp
     _seen = {}
-    class _RecordingTicker(_FakeTicker):
-        def __init__(self, symbol):
-            super().__init__(symbol)
-            _seen['symbol'] = symbol
-    import yfinance as _yf
-    _orig = _yf.Ticker
-    _yf.Ticker = _RecordingTicker
+    _orig = _yfp.cached_dividends
+
+    def _recording(symbol):
+        _seen['symbol'] = symbol
+        return _pd.Series(dtype=float)
+
+    _yfp.cached_dividends = _recording
     try:
         _tsp._check_one_stock('2330', datetime.date.today())
     finally:
-        _yf.Ticker = _orig
+        _yfp.cached_dividends = _orig
     assert _seen.get('symbol') == '2330.TW', _seen
 
 

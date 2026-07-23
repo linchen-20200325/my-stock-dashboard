@@ -21,7 +21,7 @@ class TestQ5bMarkersInSource(unittest.TestCase):
     def test_tab_stock_picker_2(self):
         src = self._read('src/ui/tabs/tab_stock_picker.py')
         self.assertIn('[_fetch_fs_safe]', src)
-        self.assertIn('src.data.core.data_loader.fetch_financial_statements', src)
+        self.assertIn('src.data.core.financial_statements_fetcher.fetch_financial_statements', src)
         self.assertIn('[_fetch_quarterly_is]', src)
         self.assertIn('FinMind:TaiwanStockFinancialStatements', src)
 
@@ -47,9 +47,10 @@ class TestQ5bMarkersInSource(unittest.TestCase):
         self.assertIn("'FinMind:TaiwanStockMonthRevenue:batch(all-market)'", src)
 
     def test_data_loader_2(self):
-        src = self._read('src/data/core/data_loader.py')
-        self.assertIn('src.data.core.data_loader._fetch_twse_inst_fallback:TWSE T86', src)
-        self.assertIn('src.data.core.data_loader._fetch_tpex_inst_fallback:TPEx 三大法人', src)
+        # B8-b v19.156:TWSE/TPEX 三大法人 fallback fetcher 拆至 data_loader_inst_fetchers
+        src = self._read('src/data/core/data_loader_inst_fetchers.py')
+        self.assertIn('src.data.core.data_loader_inst_fetchers._fetch_twse_inst_fallback:TWSE T86', src)
+        self.assertIn('src.data.core.data_loader_inst_fetchers._fetch_tpex_inst_fallback:TPEx 三大法人', src)
 
     def test_tab_stock_2(self):
         # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 section_357_valuation
@@ -73,8 +74,6 @@ class TestImports(unittest.TestCase):
     def test_yield_screener(self):
         from src.ui.tabs import yield_screener  # noqa
 
-    def test_monthly_revenue_screener(self):
-        from src.ui.tabs import monthly_revenue_screener  # noqa
 
     def test_data_loader(self):
         from src.data.core import data_loader  # noqa

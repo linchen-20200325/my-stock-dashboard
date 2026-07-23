@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from shared.stats_helpers import zscore as _zscore  # D2 v18.437:z-score SSOT
+from shared.signal_thresholds import TRADING_DAYS_PER_YEAR  # B5 SSOT-M1
 from src.compute.macro import TwiiCrisisEvent
 
 Direction = Literal["above", "below"]
@@ -205,7 +206,7 @@ def evaluate_sharpe(
     mu = trade_rets.mean()
     sd = trade_rets.std()
     n = len(trade_rets)
-    periods_per_year = 252 / fwd_days
+    periods_per_year = TRADING_DAYS_PER_YEAR / fwd_days
     annual_return = mu * periods_per_year
     annual_vol = sd * np.sqrt(periods_per_year) if sd > 0 else 0.0
     sharpe = annual_return / annual_vol if annual_vol > 0 else 0.0

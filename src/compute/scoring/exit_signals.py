@@ -47,6 +47,43 @@ def _ma(close: pd.Series, n: int):
     return float(close.tail(n).mean())
 
 
+def compute_macd(series, *, fast: int = 12, slow: int = 26, signal: int = 9,
+                 adjust: bool = False):
+    """MACD 三線純函式(B6 SSOT kernel)。回 (dif, dea, hist) 三個 pd.Series。
+
+    DIF = EMA_fast(series) − EMA_slow(series);DEA = EMA_signal(DIF);HIST = DIF − DEA。
+    - 預設 12/26/9 = 教科書標準 MACD(單一定義,免各處重寫 magic number)。
+    - adjust:對齊 pandas ewm 定義。看盤軟體慣用 adjust=False(週線 exit/section);
+      個股初篩 daily 沿用舊行為 adjust=True(呼叫端顯式帶)。
+    """
+    _s = pd.Series(series).astype(float)
+    dif = _s.ewm(span=fast, adjust=adjust).mean() - _s.ewm(span=slow, adjust=adjust).mean()
+    dea = dif.ewm(span=signal, adjust=adjust).mean()
+    return dif, dea, dif - dea
+
+
+def weekly_macd_hist(close) -> list | None:
+    """日K收盤 → 每 WK_MACD_DAYS_PER_WEEK 根合成週K(尾端對齊,取組末根=週收)→
+    標準週 MACD(WK_MACD_* = 12/26/9,adjust=False)柱狀 HIST list(B6 共用 helper)。
+
+    樣本 < WK_MACD_MIN_WEEKS(35 週 = 175 交易日)→ 回 None(不足以算 26 週 EMA,§1 不臆造)。
+    exit_signals 與個股「買賣時機」section 共用此一份,避免兩套週 MACD 走鐘。
+    """
+    if close is None:
+        return None
+    _c = pd.Series(close).astype(float).dropna()
+    if len(_c) < WK_MACD_MIN_WEEKS * WK_MACD_DAYS_PER_WEEK:
+        return None
+    _n_weeks = len(_c) // WK_MACD_DAYS_PER_WEEK
+    _tail = _c.tail(_n_weeks * WK_MACD_DAYS_PER_WEEK).reset_index(drop=True)
+    _weekly = _tail.iloc[WK_MACD_DAYS_PER_WEEK - 1::WK_MACD_DAYS_PER_WEEK]
+    if len(_weekly) < WK_MACD_MIN_WEEKS:
+        return None
+    _, _, _hist = compute_macd(_weekly, fast=WK_MACD_FAST_SPAN, slow=WK_MACD_SLOW_SPAN,
+                               signal=WK_MACD_SIGNAL_SPAN, adjust=False)
+    return _hist.tolist()
+
+
 def _weekly_macd_turn_negative(close: pd.Series) -> bool:
     """每 5 根日K合成週K,標準週 MACD(12/26/9)柱由正翻負 → 中線轉弱。
 
@@ -65,23 +102,8 @@ def _weekly_macd_turn_negative(close: pd.Series) -> bool:
       5 個交易日,可能跨日曆週界(與券商按日曆週切的值在當週會有小差)。
     """
     try:
-        if close is None:
-            return False
-        _c = pd.Series(close).astype(float).dropna()
-        _need_days = WK_MACD_MIN_WEEKS * WK_MACD_DAYS_PER_WEEK
-        if len(_c) < _need_days:
-            return False
-        _n_weeks = len(_c) // WK_MACD_DAYS_PER_WEEK
-        _tail = _c.tail(_n_weeks * WK_MACD_DAYS_PER_WEEK).reset_index(drop=True)
-        # 各組末根 = 該週收盤(尾端對齊後 index 4,9,14,... 即組內最後一天)
-        _weekly = _tail.iloc[WK_MACD_DAYS_PER_WEEK - 1::WK_MACD_DAYS_PER_WEEK]
-        if len(_weekly) < WK_MACD_MIN_WEEKS:
-            return False
-        dif = (_weekly.ewm(span=WK_MACD_FAST_SPAN, adjust=False).mean()
-               - _weekly.ewm(span=WK_MACD_SLOW_SPAN, adjust=False).mean())
-        dea = dif.ewm(span=WK_MACD_SIGNAL_SPAN, adjust=False).mean()
-        osc = (dif - dea).tolist()
-        return len(osc) >= 2 and osc[-2] > 0 and osc[-1] <= 0
+        osc = weekly_macd_hist(close)   # B6:週K合成 + 12/26/9 + ≥35 週 gate 共用一份
+        return bool(osc) and len(osc) >= 2 and osc[-2] > 0 and osc[-1] <= 0
     except Exception as e:
         # S-MED v18.304: silent → narrow + stderr log
         import sys as _sys

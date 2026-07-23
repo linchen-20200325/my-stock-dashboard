@@ -8,9 +8,9 @@
 - hot_money.fetch_foreign_flow_series (DataFrame attrs)
 - risk_radar._fetch_cboe_csv (Series attrs)
 - tab_edu._fetch_fred_series_edu (Series attrs)
-- tab_etf_margin_simulator._fetch_etf_history (Series attrs)
+- ~~tab_etf_margin_simulator._fetch_etf_history~~(整功能棧 v19.159 團隊稽核真刪,見 docs/ARCHIVED_FEATURES.md)
 
-phase 19 累計 50+8 = 58 fetcher 全套清完。
+phase 19 累計 50+8 = 58 fetcher 全套清完(其中 etf_margin 段已隨孤兒功能退役)。
 """
 from __future__ import annotations
 
@@ -60,9 +60,8 @@ class TestQ5cMarkers(unittest.TestCase):
         src = self._read('src/ui/tabs/tab_edu.py')
         self.assertIn("'FRED:{series_id}:units={units}:months={months}'", src)
 
-    def test_tab_etf_margin_simulator(self):
-        src = self._read('src/ui/tabs/tab_etf_margin_simulator.py')
-        self.assertIn("'yfinance:{symbol}:{years}y:auto_adjust'", src)
+    # test_tab_etf_margin_simulator(source marker)已移除:整功能棧 v19.159 團隊稽核真刪
+    # (fetch_etf_close_history 隨孤兒 UI 一併刪,見 docs/ARCHIVED_FEATURES.md)
 
 
 class TestImports(unittest.TestCase):
@@ -88,8 +87,7 @@ class TestImports(unittest.TestCase):
     def test_tab_edu(self):
         from src.ui.tabs import tab_edu  # noqa
 
-    def test_tab_etf_margin_simulator(self):
-        from src.ui.tabs import tab_etf_margin_simulator  # noqa
+    # test_tab_etf_margin_simulator(import)已移除:孤兒 UI v19.159 真刪
 
 
 if __name__ == "__main__":

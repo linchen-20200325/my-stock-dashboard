@@ -41,3 +41,12 @@ def emoji_to_hex(emoji: str) -> str:
     _m = {"🟢": TRAFFIC_GREEN, "🟡": TRAFFIC_YELLOW,
           "🔴": TRAFFIC_RED, "⬜": TRAFFIC_NEUTRAL}
     return _m.get(emoji, TRAFFIC_NEUTRAL)
+
+
+# 7 色多序列調色盤(macro 多指標圖 / daily_checklist)。v19.159 團隊稽核:
+# 原位於 macro_ui_components.py(L4),被 daily_checklist(L3)上行 import → 色票 SSOT
+# 歸位 L0。L4/L5 consumer 續由 macro_ui_components re-export 取得(下行 import,合規)。
+COLORS_7: list[str] = [
+    "#58a6ff", TRAFFIC_GREEN, "#ffd700", TRAFFIC_RED,
+    "#bc8cff", "#79c0ff", "#ff9f43",
+]

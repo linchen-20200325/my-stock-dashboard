@@ -549,7 +549,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     _kv_ai = _dv_ai = None
     if len(_close_ai) >= 240:
         _ma240_ai   = float(_close_ai.rolling(240).mean().iloc[-1])
-        _bias240_ai = round((float(_close_ai.iloc[-1]) - _ma240_ai) / _ma240_ai * 100, 2)
+        _bias240_ai = calc_bias_pct(float(_close_ai.iloc[-1]), _ma240_ai, decimals=2)  # R-CALC-3 SSOT(C1 漏網收斂)
     if 'High' in df.columns and 'Low' in df.columns and len(df) >= 9:
         _h9  = df['High'].rolling(9).max()
         _l9  = df['Low'].rolling(9).min()

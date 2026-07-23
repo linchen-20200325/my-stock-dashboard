@@ -57,9 +57,11 @@ my-stock-dashboard/
 ├── app.py                     # L6 唯一入口(642 LOC,已從 1,722 經 R7+R8+B3-γ+B3-δ 四輪重構收斂)
 ├── README.md / CLAUDE.md / PROCESS.md / STATE.md / SPEC.md /
 ├── ARCHITECTURE.md / DATASTATION.md / STRATEGY_MANUAL.md /
-├── ARCHIVED_FEATURES.md / DEAD_CODE_AUDIT.md / TAB_STOCK_AUDIT.md /
-├── APP_PY_AUDIT.md
+├── ARCHIVED_FEATURES.md
 ├── pytest.ini / requirements.txt / .gitignore
+│
+├── docs/                     # 稽核工作產物(B2 v19.152 從 root 歸位)
+│   └── APP_PY_AUDIT.md / DEAD_CODE_AUDIT.md / PHASE4_AUDIT.md / S_MED_AUDIT.md / TAB_STOCK_AUDIT.md
 │
 ├── src/                       # 164 .py(F-6.1~F-6.5 全做完,0 root 殘留)
 │   ├── config/                # 5 檔(L0)— FINMIND_TOKEN / persona / stock_names / data_config
@@ -1493,7 +1495,7 @@ with tab_edu:
     render_tab_edu()
 ```
 
-**前置審計**：`PHASE4_AUDIT.md`（141 行）— AST-based cross-TAB leak scan，0 真實洩漏，動工綠燈。
+**前置審計**：`docs/PHASE4_AUDIT.md`（141 行）— AST-based cross-TAB leak scan，0 真實洩漏，動工綠燈。
 
 **已清除死碼總計**：
 - P4: `cx4` (tab_stock_grp) + redundant `from scoring_engine import calc_rs_score, rs_slope` (tab_stock)
@@ -1530,7 +1532,7 @@ with tab_edu:
     render_tab_edu()
 ```
 
-**前置審計**：`PHASE4_AUDIT.md`（141 行）— AST-based cross-TAB leak scan，補抓 4 種 Store 場景（except/import/def args/class），嚴格規則 0 真實洩漏，動工綠燈。
+**前置審計**：`docs/PHASE4_AUDIT.md`（141 行）— AST-based cross-TAB leak scan，補抓 4 種 Store 場景（except/import/def args/class），嚴格規則 0 真實洩漏，動工綠燈。
 
 **已暴露死碼清除**：
 - `cx4 = _d4.get('cx')` (tab_stock_grp 內，PR #66)

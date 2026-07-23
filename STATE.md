@@ -1,5 +1,153 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧹 2026-07-23 團隊交叉稽核排毒波（v19.159,6 批 A~F,user 核准「建議全動工」）
+
+四角色並行唯讀稽核(PM / 架構師 / 工程師 / QA)→ 統整報告 → user 核准 → 6 批分別 commit + 測試 gate。
+
+- **Batch A(P4 瑣碎)**:data_loader 刪 2 個 B8-b 搬檔遺留死 import(gregorian_to_roc_year + TTL_15MIN,caller=0)+ etf_tab_single:552 手寫乖離收 `calc_bias_pct` SSOT(C1 漏網)+ Gemini retry 註解修正。
+- **Batch B(P1 資料正確性)**:`_get_tpex_day` TPEX 暫時性失敗改短 TTL 負快取(`_TPEX_FAIL_TS`,對稱補齊 T86 早有、TPEX 一直漏的護欄;來源恢復後可重試,不再靜默釘空 dict → 上櫃股法人 NaN)+ 對稱回歸測試。pre-existing 缺口(v19.80 N2c 只修 T86)。
+- **Batch C(P2a 高 ROI)**:pandera schema 併回 `shared/schemas.py`(L0 單一家)+ 刪 `compute/risk/schemas.py`(L2)+ repoint 8 處 L1 production import + 2 test → **一次解「schema SSOT 分裂 + L1→L2 上行 10 處」兩型違憲**;graceful 改善(L0 無 pandera 也能乾淨 import)。
+- **Batch D(P2b)**:`render_macro_alerts` + `_LEVEL_STYLE` 從 `macro_alert.py`(L1)搬 `macro_ui_components.py`(L4);macro_alert docstring 修錯標(L3→L1)+ 清死 TRAFFIC import;3 caller repoint。
+- **Batch E(P3 真刪 + 存檔)**:比照 backtest/macro_validation 前例,真刪 4 個「後端活、UI 下架」孤兒 Tab + 專屬死後端(共 9 檔 + 2 函式):ETF 質借模擬整棧(UI + L2 engine + fetch_etf_close_history + 2 test)、MJ 體檢變化 UI(後端 LIVE 保留)、月營收篩選 UI + screen_from_batch/filter_by_mode、RS wrapper UI(service LIVE 保留);新增 `docs/ARCHIVED_FEATURES.md`。全套 3347 passed(僅 pandera-gated 既有 3 基準)。
+- **Batch F(LOW + 治理同步)**:COLORS_7 色票 SSOT 歸位 `shared/colors.py`(L0,修 daily_checklist L3→L4 上行)+ gsheet_portfolio session_state 納入 EX-OAUTH-1(登錄 + 檔內註解)+ 刪 `_check_one_stock` yf 幽靈參數 + CLAUDE.md 治理同步(EX-PASSTHRU-1 移除已刪模組 stale 條目 + section_mid render 註記 + L5 表 + EX-OAUTH-1 擴充)+ SPEC.md:5 backtest stale 修 + STATE 存檔。
+- **誠實排除(非漏)**:risk_radar L2 I/O(STATE B7 已登錄延後)、fillna(0)(D1 已登錄)、reconcile×2 / sharpe×3(刻意不同語意)、docs/DEAD_CODE_AUDIT.md(時點快照非活躍治理表,mj 後端仍 LIVE 未動)。3 個 pandera-gated test 為本地無 pandera 既有基準(CI 有則通過,stash 對照確認非本波引入)。
+
+## 🪤 2026-07-22 治理文件｜Gotchas 踩雷筆記 + Fallback 預宣告慣例（v19.158,doc-only,user 核准）
+
+user 提 5 條方法論建議,對照 PROCESS.md 誠實盤點後只採 2 條真有增量的(其餘 3 條已在 §3/§5 或與「一次一檔」既定規則衝突):
+- **新增 `references/gotchas.md`**(漸進揭露機制):收錄本輪 B1~B8 真踩過並修過的 4 個坑,附 `file:symbol` 錨點——
+  - **G1** AST 依賴分析漏 `ast.AnnAssign`(帶型別註解 module-state,如 `_T86_DAY_CACHE: dict = {}`)→ 搬檔漏帶狀態,被負快取測試逮。
+  - **G2** PEP 562 `__getattr__` 轉發套件不能 monkeypatch 套件本身(會建實體屬性遮蔽轉發,`test_zz_proxy_pollution_lock` 鎖死)→ patch 真持有者模組。
+  - **G3** 大檔拆分:共享可變 module-state(`_FINMIND_META`)決定哪些函式可安全抽出 → 有共享狀態的整群搬或整群留。
+  - **G4** guard test 常把 provenance 字串/行號釘死成 source-text 斷言 → 搬檔必同步 grep 更新。
+- **PROCESS.md §3** 補兩條慣例:並行處理**明確限唯讀**(寫入仍序列化一次一檔,對齊既定 anti-timeout 規則);高風險步驟**預宣告 fallback**(範圍探針後才定案,誠實縮範圍 > 硬湊)。
+- **範圍(誠實)**:純文件,零 `.py` 邏輯。DAG 平行**寫入**建議未採(與 user 自訂「一次一檔」防 API timeout 規則直接衝突);Sub-Planners/Plan-Validate-Execute 已是 §3 三步法現況。
+
+## 📚 2026-07-22 全域重構 B9｜文檔同步（v19.157,藍圖 B9/9,收尾）
+
+CLAUDE.md §8.2 7 層架構表同步 B1~B8 產生的模組/LOC 變動(doc-only,零風險):
+- **L6**:`app.py`(**7,300 → 882 LOC**,藍圖點名的最大 staleness,8× 偏差修正)+ §8.3 灰色地帶同步。
+- **L0**:補 `shared/roc_calendar.py`(B3)、`shared/finmind_subject_aliases.py`(B4)。
+- **L1**:`data_loader.py` 註記 B8 拆分 2545→1734 + 抽出 `financial_statements_fetcher.py`(B8-a)/`data_loader_inst_fetchers.py`(B8-b);`etf_fetch.py` 註 `fetch_etf_close_history`(B7-a 下沉)。
+- **L2**:`exit_signals.py` 註 `compute_macd`/`weekly_macd_hist` MACD SSOT kernel(B6)。
+- **範圍(誠實)**:同步「活的治理表」CLAUDE.md §8.2(受強制執行)。ARCHITECTURE.md 拓樸(dated 2026-06-30,app.py 642)為**時點快照記錄**,非活躍宣稱,全面 refresh 屬另案不在 B9 點名範圍。
+
+## 🪓 2026-07-22 全域重構 B8｜大檔拆分（v19.155,藍圖 B8/9,user 選「拆 data_loader,2 子批」）
+
+**進行中**。純結構搬移、零行為改變、藍圖最高風險 → 動刀前 AST 精算依賴 + 逐子批全量測試。
+
+- **B8-a ✅ `fetch_financial_statements`(584 行)data_loader → 新 L1 `financial_statements_fetcher.py`**:
+  - **AST free-var 精算**:外部依賴僅 `pd` / `TTL_1HOUR` / `FINMIND_API_URL` / `st`(decorator);所有 I/O(requests/yfinance/pandas/TPE)皆函式內 late import → **完全自足**,零耦合 data_loader 其他 helper。
+  - **零 cycle 設計**:新模組落 `src/data/core/`(非 stock,避 `src.data.stock.__init__` eager import),加進 `core/__init__` `_SUBMODULES` → `from src.data.core import fetch_financial_statements` 經 PEP 562 __getattr__ 自動轉發,**data_loader 直接刪函式不 re-export**(零 cycle 風險)。
+  - **data_loader 2545 → 1962 行**(−583)。介面完全不變(4 caller 全走套件轉發,簽章 `(stock_id, token='')→dict` 不動)。
+  - provenance:`tab_stock_picker` prov_log 字串 + guard `test_pr_q5b` 同步指向新位置(誠實血緣)。
+  - 驗證:compile + import smoke(轉發解析到新模組 + data_loader 無 cycle)+ 417 targeted(prov guard/財報體檢/data_loader/4 caller)全綠。
+- **B8-b ✅ TWSE/TPEX 三大法人 fallback fetchers(235 行)→ 新 L1 `data_loader_inst_fetchers.py`**:
+  - **範圍收斂(誠實)**:原計畫抽 8 個 raw fetcher,AST 實測 3 個 FinMind fetcher(`_fetch_finmind_*`)與 `_capture_finmind_meta`/`_FINMIND_META` **共享可變狀態**耦合(writer 搬走、reader 在 StockDataLoader L962)→ 分裂狀態=bug,**刻意留在 data_loader**。只抽零共享狀態的 5 個 TWSE/TPEX fetcher(`_get_t86_day`/`_get_tpex_day`/`_fetch_twse_inst_fallback`/`_fetch_tpex_inst_fallback`/`_normalize_inst_pivot`)。
+  - **零 cycle**:新模組只依 config/proxy/shared,不 import data_loader;data_loader import 回 5 個供 StockDataLoader + 外部 caller(`dl._get_t86_day` / picker)使用。線性依賴。
+  - **抓到並修一個真陷阱**:AST free-var 漏了 **annotated assignment**(`_T86_DAY_CACHE: dict = {}`)→ 首版把 `_get_t86_day` 的進程級快取留在 data_loader(函式搬走卻沒帶狀態)。`test_review_fixes_v19_80` 負快取測試當場逮到 → 補搬 `_T86_DAY_CACHE`/`_T86_FAIL_TS` 入新模組 + 測試改 patch 新持有者。**(big-file split 的典型 module-state 陷阱,測試守住了)**
+  - **data_loader 1962 → 1734 行**(−228;B8 合計 2545 → 1734,−811 / −32%)。provenance 字串(TWSE/TPEx source attr)+ `_normalize_inst_pivot` SSOT 註 + 2 guard 同步指向新位置。
+  - 驗證:compile + import smoke(import-back + 無 cycle)+ 617 targeted 全綠。
+- **B8 收尾**:FinMind raw fetchers(共享 `_FINMIND_META` 狀態)刻意留 data_loader —— 硬抽需先把共享狀態獨立成第 3 模組,ROI 不划算,不做。
+
+## 🧱 2026-07-22 全域重構 B7｜分層違憲修復（v19.154,藍圖 B7/9,user 選「只收安全的」）
+
+**進行中**。risk_radar(L2 直呼 Yahoo/CBOE/FRED)屬大重構 → 延後單開;診斷頁 raw requests 合法 → 登記例外;此批只收 UI 直呼 yfinance。
+
+- **B7-a ✅ `tab_etf_margin_simulator` yfinance → L1**:原 L5 內 `_fetch_etf_history` 直呼 `yf.download` 違 §8.2。**原封下沉**至 L1 `src/data/etf/etf_fetch.py::fetch_etf_close_history`(行為零改變,同 yf/pd/st/TTL 皆在 etf_fetch 現成)。caller 走 EX-PASSTHRU-1;移除 tab 內 `_dt` / `TTL_1HOUR` 孤兒 import;provenance guard(`test_pr_q5c_singles`)隨函式對齊 L1。yfinance 已從該 L5 檔徹底消失。16 guard 測綠 + import smoke。
+- **B7-b ✅ `tab_stock_picker` yfinance → L1**:原 L5 內 5Y 配息檢查直呼 `yfinance.Ticker(...).dividends` 違 §8.2。改走既有 L1 `src/data/proxy/yf_proxy.cached_dividends`(**同一份 .dividends Series + NAS proxy + 1h cache**,順帶提升可靠性)。`_check_dividend_5y(df, divs)` 改收 Series(原收 Ticker 物件);`_check_one_stock` 死 `yf` 參數傳 `None`(原註「內部已不用」);移除 L5 兩處 yfinance import。resolved-ticker guard(`test_picker_check_one_stock`)改 patch L1 fetcher 對齊。yfinance 從該 L5 檔徹底消失(僅剩 docstring/死參數名)。14 guard 測綠 + `_check_dividend_5y(Series)` 實算 smoke。
+- **診斷頁 raw requests(api_diagnostic/health_inspector/sidebar_health):合法保留**——探測端點是其本質,L1 import 早登 EX-PASSTHRU-1;raw HTTP 為診斷工具內生,不改。
+- **risk_radar(L2 直呼 Yahoo/CBOE/FRED):延後**——大重構(多源 fetcher + fallback 內嵌),屬 B8 級,單開處理。
+
+## 📉 2026-07-22 全域重構 B6｜MACD kernel SSOT（v19.153,藍圖 B6/9,user 選「抽 kernel + 統一 12/26/9」）
+
+- **Sharpe 部分 = 誤報,跳過(誠實)**:3 個「sharpe」是**不同指標**非重複 —— `etf_calc.calc_sharpe`(年化 + rf)、`multi_factor.evaluate_sharpe`(annual_return/annual_vol 無 rf)、`scoring_engine`「類 Sharpe」(Return20/Sigma20 未年化)。合併會錯,不動。
+- **MACD 抽 kernel**(3 變體去重):新 `exit_signals.compute_macd(series, *, fast=12, slow=26, signal=9, adjust=False)` 純函式(DIF/DEA/HIST)+ `weekly_macd_hist(close)`(週K合成 + ≥35 週 gate + 12/26/9,exit 與 section 共用一份)。
+  - `_weekly_macd_turn_negative` 改用 helper —— **零行為改變**(數學逐點等價,22 舊測全綠)。
+  - `tab_stock_picker._check_macd_bullish` 改用 `compute_macd(adjust=True)` —— **零行為改變**(釘死 golden test)。
+  - **`section_when_buy_sell`(個股買賣時機)週MACD:3/5/3 → 12/26/9**(user 核准的行為改變,修 v19.110 漏網 + 那句假註解)。原本 30 日只取 6 根算失真 3/5/3 → 改走 `weekly_macd_hist` 全歷史 + ≥35 週 gate;**不足 35 週的個股此警示不再顯示**(誠實,不再秀失真訊號)。
+- **測試**:新 `test_macd_kernel_b6.py` 5 測(daily adjust=True 逐點等價 / 預設=顯式 12/26/9 / adjust 語意差 / 週 gate <35 週回 None / ≥35 週回 list);+ 22 舊 MACD 測;section pd 未用 import 移除;`_check_macd_bullish` end-to-end smoke 過。
+
+## 🚑 2026-07-22 HOTFIX｜Gemini 503 退避重試（user 回報「AI 總結本頁」硬失敗）
+
+user 截圖:`Gemini 失敗:HTTPError: 503 Server Error: Service Unavailable`。根因 = AI 呼叫路徑對**暫時性**上游錯誤(503 = Google 過載/短暫不可用)無退避重試,單次即拋。
+
+- **三條 Gemini 路徑盤查**:
+  - `ai_qa_service._make_default_http`(「AI 總結本頁」/ panel discuss 走這條)—— one-shot `raise_for_status`,**零重試** = 病灶。
+  - `ai_fetcher.post_gemini`(健康評分 / macro_state)—— 429 有重試,但 503/5xx 當永久錯 `break`(同類漏洞)。
+  - `app.py:gemini_call`(主 AI)—— 已跨 key×model fail-soft 回友善訊息,OK,不動。
+- **修**(兩條 fail-soft 路徑補退避重試,仍失敗才拋 = fail-loud §1 不變):
+  - `_make_default_http`:429/500/502/503/504 → 指數退避(1.5→3→6s,封頂 8s)重試 `max_attempts=3`;4xx(設定/prompt 錯)不重試立即拋。
+  - `post_gemini`:5xx 改與 429 同,退避重試同 model(原直接跳下個 model)。
+  - `_fmt_gemini_error`:503 給友善提示(「服務暫時過載,已重試多次,請稍候 1~2 分再試」),不丟原始 HTTPError。
+- **測試**:`tests/test_ai_qa_service.py` 補 5 測(503→200 重試成功 / 503×3 用盡拋 / 400 不重試 / 503 友善訊息不洩金鑰);23 passed。
+- **本質**:transient 5xx 本該退避重試,§1 fail-loud 仍成立(重試用盡才顯示錯誤,不造假)。
+
+## 📈 2026-07-22 全域重構 B5｜252 交易日常數 SSOT（v19.152,深層技術債藍圖 B5/9,SSOT-M1）
+
+inline `252`(年化交易日)散落 L2 compute。SSOT `TRADING_DAYS_PER_YEAR=252`(`shared/signal_thresholds.py:23`)早存在,`etf_calc` 甚至已 import 卻仍有 4 處 inline `252`(自相矛盾)。
+
+- **收 9 站點(全 L2 compute,語意等價零行為改變 —— 252 == 常數值)**:
+  - **年化數學**:`etf_calc` 635(TE)/692(年報酬)/693(年波動)/976(TE),`multi_factor_optimization:208`(`periods_per_year = 252/fwd_days`)
+  - **1 年滾動窗口預設**:`flow_engine` 57/108(`window=252`)、`etf_smart_analysis:38`、`etf_helpers:113`(default param 於 def-time 求值 → 補 module-level import)
+- **刻意不動(誠實)**:
+  - 多期 tuple `(63, 126, 252)`(`etf_calc:736`、`etf_tab_single:725`)—— 252 與 3M/6M 併列,63/126 無 SSOT,單換 252 反而不一致
+  - UI dropdown `[120, 252, 500]`(`etf_tab_smart:122`)、L5 UI 顯式傳 `window=252`(`section_when_buy_sell`/`etf_tab_grp_compare`)、docstring
+- **驗證**:5 檔 py_compile + import smoke(新 module-level import 無循環)+ 335 targeted(etf_helpers/flow_engine/multi_factor + ETF SSOT 群)全綠。
+
+## 🏷️ 2026-07-22 全域重構 B4｜財報科目別名 SSOT（v19.152,深層技術債藍圖 B4/9,SSOT-H1,user 選「保守 SSOT」）
+
+財報科目別名散落多檔各自維護。**盤查發現不是純重複**:各檔別名清單是「同主題、不同來源」的變體(MOPS 混合 / FinMind SDK / yfinance),硬 union 再全域替換會改 priority-match「先命中哪欄」→ 財報數字走鐘。user 選**保守 SSOT**:集中「各來源分組」常數、各檔 import 對應那組,零行為改變、不強行合併。
+
+- **新 SSOT** `shared/finmind_subject_aliases.py`(L0 純常數):
+  - `FIELD_ALIASES`(MOPS/混合,priority-ordered BS/IS/CF 全表,25 科目)— 原 `tw_stock_data_fetcher.py:71-107` 搬入。
+  - `FINMIND_FS_{REVENUE,GROSS,COGS,INV}_KEYS`(FinMind SDK 專屬欄碼,含 GrossProfitLoss/NetRevenue/營業毛利（毛損）等)— 原 `quarterly_financials_fetcher.py:44-49` 搬入。
+- **wire 2 檔**:`tw_stock_data_fetcher` import `FIELD_ALIASES`;`quarterly_financials_fetcher` import 4 tuple 回原名(`as _REVENUE_KEYS` 等)。
+- **零行為改變證明**:搬移前先 python 實測 `orig == new`(FIELD_ALIASES 25 鍵 + 4 tuple 全 `True`);搬移後 `is` identity 全 `True`(名字現指向同一 shared 物件)。
+- **保守不動(誠實)**:3 個 source-specific inline 一次性小清單未搬 —— `tab_stock_picker` margin keys(FinMind)、`data_loader` yfinance keys + 自己的 `_INV_KEYS`、`app_stock_fetchers._CL_NAMES`(合約負債變體,與 FIELD_ALIASES 版不同)。它們是各自一次性用途、內容互異,強搬進 SSOT 反成「用不到的抽象」(§8.1-6);未來若要統一再議。
+- **測試**:3 檔 py_compile + import identity + 51 affected(含 `test_tw_stock_data_fetcher_coverage` FIELD_ALIASES 斷言 + quarterly/fundamentals)全綠。無新 ruff 錯(既存 E401 為無關舊碼)。
+
+## 📅 2026-07-22 全域重構 B3｜ROC 民國曆換算 SSOT（v19.152,深層技術債藍圖 B3/9,SSOT-H2）
+
+magic number `1911`(ROC 紀元位移)原散落 8 處 code + 2 docstring。§3.3 反捏造要求 domain 常數走單一來源。
+
+- **新 SSOT** `shared/roc_calendar.py`(L0,純函式無 I/O):`ROC_EPOCH_OFFSET = 1911` + `roc_to_gregorian_year()` + `gregorian_to_roc_year()`。僅收攏 ± 1911 算術,**不含**各源格式解析(字串格式 '11505'/'1150401' 不同,仍由各 fetcher 自解)。
+- **收攏 8 code 站點**(全 L1/scripts,import L0 合法):
+  - 民國→西元(6):`leading_indicators`(roc_to_ymd ×2 + extract_date ×1)、`macro_snapshot`(出口 YoY parser)、`app_stock_fetchers`(除息年)、`monthly_revenue_fetcher`(_roc_ym_to_date)
+  - 西元→民國(2 code + 1 script):`data_loader`(TPEX 三大法人 roc_date)、`tw_stock_data_fetcher`(MOPS year 參數)、`scripts/update_fundamentals_snapshot`(季別推算)
+- **保留 docstring 的 1911**(`macro_snapshot:776` §7 數學式、`monthly_revenue_fetcher:200` 說明)—— 解釋概念用,非執行碼。
+- **語意等價**:所有站點 X 早已是 int(`int(s[:3])`/`dt.year` 等),helper 內 `int(X)` 為 no-op → 零行為改變。
+- **測試**:新 `tests/test_roc_calendar.py`(11 測:位移釘死 1911、雙向 parametrize、往返一致、str 容錯)。8 檔 py_compile + 7 模組 import smoke + 117 targeted 全綠。
+
+## 🗂️ 2026-07-22 全域重構 B2｜錯位檔案歸位（v19.152,深層技術債藍圖 B2/9）
+
+兩個 coherent commit:
+
+**B2a（純 housekeeping,零執行期影響,commit 6a01ac8）**
+- `docs/` 新建 → 收 5 個稽核工作產物:`APP_PY_AUDIT` / `DEAD_CODE_AUDIT` / `PHASE4_AUDIT` / `S_MED_AUDIT` / `TAB_STOCK_AUDIT`.md
+- `cleanup_stale_branches.sh` → `scripts/`(維運腳本歸位)
+- provenance 引用同步:7 個 .py docstring(`docs/APP_PY_AUDIT.md` ×4、`docs/TAB_STOCK_AUDIT.md` ×3)+ ARCHITECTURE.md 拓樸樹重構 + 2 處 prose
+- 保留 root:`ARCHIVED_FEATURES.md`(復活錨) + 2 `MACRO_HEALTH_*_PROPOSAL.md`(方法論定案) —— 非「audit」臨時產物,是被引用的定義來源
+- 驗證:py_compile 7 檔全過、grep 0 殘留 bare ref、0 `docs/docs` 雙前綴
+
+**B2b（真 bug 修 —— F-6.2 reorg regression,個股 ETF 換手偵測）**
+- **病灶**:`etf_managers.json` / `etf_manager_watchlist.json` 卡在 root,但 reader `src/data/etf/etf_fetch.py:1167` 以 `dirname(__file__)` = `src/data/etf/` 讀取 → F-6.2 把 etf_fetch.py 移入 src/ 卻遺留 JSON 在 root → **reader 讀不到持久檔 → 只剩 /tmp → 容器重啟後「經理人異動」紅框失效**(正是此檔當初要解的 bug 被 reorg 反噬)
+- **修**:`git mv` 兩 JSON → `src/data/etf/`(reader 期望位置,免改 reader);writer `scripts/update_etf_managers.py` 路徑改 `__file__`-relative 指向同處;workflow `update_etf_managers.yml` `git add` 路徑同步
+- **驗證**:python 實算 reader==writer 路徑一致 + 檔案 exists at path == True;writer py_compile 過;JSON 仍 git-tracked(未進 gitignore data_cache)
+- **偏離藍圖說明(誠實)**:原 B2 藍圖寫「runtime JSON → data_cache/」,但 grep 實證這 2 檔是 Actions 維護、commit 進 repo 的持久資料(非 transient cache),移進 gitignore 的 data_cache/ 會斷 commit 流 → 改採「歸位到 reader 期望處」才對。`macro_thresholds.json` 維持 root(合法 config SSOT,未動)
+
+## 🧹 2026-07-22 全域重構 B1｜root 髒污清除（v19.152,深層技術債藍圖 B1/9,user「同意藍圖」→ 分批動刀）
+
+深層稽核藍圖核准後正式進實作。**準則**:一次一類別/單檔、隔離分支(`claude/dazzling-turing-QxI9m`)、每批 self-audit + commit + STATE。
+
+- **B1 目標**:repo root 10 個非程式垃圾(Windows 開發機殘留 + stray 空檔),全 git-tracked 卻無任何 code 引用。
+- **刪除清單**:
+  - stray 空檔(0 byte,誤 `git add` 進來):`2`、`capital`、`v19.293`
+  - Windows git log(mojibake,2026/7/3):`git_push_v18458_log.txt`、`git_stock_log.txt`、`push_v18459.log`
+  - Windows commit 助手 batch(`E:\01.Github\...` 路徑):`push_v18455.bat`~`push_v18458.bat`(4 檔)
+- **安全驗證**:`grep` 全 py/yml/toml/sh 對 10 個 basename → 0 code 引用(唯一 `v19.293` 命中是 `infra/oauth.py:67` 版本註解字串,非 stray 檔)。純刪除、零邏輯改動、零 import 連動。
+- **測試**:不需跑(無 code 變更);working tree 清空這 10 檔後 `git status` 乾淨。
+
 ## 🛡️ 2026-07-22 投組層級風控上限接線（v19.151,user「加在組合中風險貢獻」）
 
 斷鏈②後半。`RiskController` 早定義卻空轉的投組上限(單股 ≤10% / 最多 10 檔)接進**個股組合風險貢獻區塊**(user 指定位置)—— 那裡已有「持有張數 → 市值權重」現成狀態,零新增 state。

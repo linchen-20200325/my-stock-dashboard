@@ -1,7 +1,7 @@
 """src/ui/tabs/stock_sections/section_op_recommendation.py — 即時操作建議規則引擎 section(v18.406 U4 Phase 2-OpRec).
 
 從 tab_stock.py:1698-1753 抽出。
-對齊 TAB_STOCK_AUDIT.md Phase 2 低風險 section batch。
+對齊 docs/TAB_STOCK_AUDIT.md Phase 2 低風險 section batch。
 
 §8.2 layer:L5 UI Tab section helper。
 

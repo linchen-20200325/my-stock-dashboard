@@ -1,6 +1,6 @@
 """src/data/stock/app_stock_fetchers.py — app.py 個股 L1 fetcher 集中地(v18.405 U5 B3-δ).
 
-從 app.py:251-643 抽出 7 個 helper + fetcher,對齊 APP_PY_AUDIT.md B3-δ phase。
+從 app.py:251-643 抽出 7 個 helper + fetcher,對齊 docs/APP_PY_AUDIT.md B3-δ phase。
 
 §8.2 layer:L1 Data — yfinance / FinMind / TWSE HTTP fetch + cache。
 §8.2.A EX-CACHE-1 letter-compliant(try/except + `_NoOpST` fallback + secrets dict)。
@@ -46,6 +46,7 @@ except ImportError:
 
 from shared.app_cache import _load_cache, _save_cache
 from shared.signal_thresholds import PRICE_CACHE_HOLIDAY_TOLERANCE_CALENDAR_DAYS
+from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 from shared.ttls import TTL_30MIN, TTL_1HOUR
 from src.data.core import StockDataLoader, _LOADER_VERSION
 
@@ -240,7 +241,7 @@ def fetch_dividend_data(sid):
                     try:
                         _yr_div = int(str(_dr[0]).split('/')[0])
                         if _yr_div < 1000:
-                            _yr_div += 1911
+                            _yr_div = roc_to_gregorian_year(_yr_div)
                         _cash_d = float(str(_dr[5]).replace(',', '')) if len(_dr) > 5 else 0
                         if _cash_d > 0:
                             _tw_div_rows.append({'year': _yr_div, 'cash': _cash_d})

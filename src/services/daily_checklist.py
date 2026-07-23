@@ -58,8 +58,8 @@ HDR = {
     "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
     "X-Requested-With": "XMLHttpRequest",
 }
-# v18.344 PR-N1:COLORS_7 抽至 macro_ui_components.py(L4 Render),re-export 維持相容
-from src.ui.render.macro_ui_components import COLORS_7  # noqa: F401  # v18.361 F-6.5:直打 submod 避 __init__ 順序 circular
+# v19.159 團隊稽核:COLORS_7 色票 SSOT 歸位 shared/colors.py(L0),修 L3→L4 上行違憲
+from shared.colors import COLORS_7  # noqa: F401
 INTL_MAP = {"道瓊工業 DJI":"^DJI","納斯達克 IXIC":"^IXIC","費城半導體 SOX":"^SOX","10Y公債殖利率":"^TNX","美元指數 DXY":"DX-Y.NYB"}
 INTL_UNIT = {k:("%" if "殖利率" in k else "指數") for k in INTL_MAP}
 TW_MAP   = {"台股加權指數":"^TWII","新台幣匯率":"TWD=X"}

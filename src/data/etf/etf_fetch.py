@@ -227,7 +227,7 @@ def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
         result.attrs = dict(df.attrs)
     # Phase 2 pandera Priority 1 v18.433:log-mode schema validation
     try:
-        from src.compute.risk.schemas import validate_in_log_mode, OHLCVSchema
+        from shared.schemas import validate_in_log_mode, OHLCVSchema
         result = validate_in_log_mode(result, OHLCVSchema,
                                        label=f'fetch_etf_price:{ticker}:{period}',
                                        normalize_case=True)

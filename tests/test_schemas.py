@@ -11,7 +11,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.compute.risk.schemas import (
+from shared.schemas import (
     PANDERA_AVAILABLE,
     OHLCVSchema, MonthlyRevenueSchema, MacroDFSchema,
     PMISchema, ForeignFlowSchema,
@@ -22,7 +22,7 @@ from src.compute.risk.schemas import (
 def test_module_smoke():
     """import 路徑 + 5 schema instance 存在(installed 才非 None)。
     v18.434 P2 補:PMISchema + ForeignFlowSchema。"""
-    from src.compute.risk import schemas
+    from shared import schemas
     assert hasattr(schemas, 'PANDERA_AVAILABLE')
     assert hasattr(schemas, 'OHLCVSchema')
     assert hasattr(schemas, 'MonthlyRevenueSchema')

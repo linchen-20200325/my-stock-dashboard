@@ -1,7 +1,7 @@
 """src/data/core/ — 核心資料 fetcher。PEP 562 lazy forward,見 macro/__init__.py 註釋。"""
-from . import data_loader, data_registry  # noqa: F401
+from . import data_loader, data_registry, financial_statements_fetcher  # noqa: F401
 
-_SUBMODULES = (data_loader, data_registry)
+_SUBMODULES = (data_loader, data_registry, financial_statements_fetcher)
 
 
 def __getattr__(name):

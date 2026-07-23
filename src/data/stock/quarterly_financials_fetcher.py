@@ -41,12 +41,13 @@ from shared.ttls import TTL_1DAY
 from src.data.core.finmind_client import finmind_get
 
 # ── 會計科目別名（英文 IFRS code + 中文 origin_name 混合，比照 data_loader 既有慣例）──
-_REVENUE_KEYS = ("Revenue", "營業收入合計", "營業收入", "NetRevenue",
-                 "OperatingRevenue", "營業總收入", "銷貨收入淨額", "收入合計")
-_GROSS_KEYS = ("GrossProfit", "GrossProfitLoss", "營業毛利（毛損）",
-               "營業毛利", "營業毛利（毛損）淨額", "營業毛利(毛損)")
-_COGS_KEYS = ("CostOfGoodsSold", "營業成本", "銷售成本", "OperatingCosts", "營業總成本")
-_INV_KEYS = ("Inventories", "InventoriesNet", "存貨", "存貨淨額", "商品存貨")
+# B4(SSOT-H1):FinMind FS 欄碼別名搬至 shared/finmind_subject_aliases.py,import 回原名。
+from shared.finmind_subject_aliases import (
+    FINMIND_FS_REVENUE_KEYS as _REVENUE_KEYS,
+    FINMIND_FS_GROSS_KEYS as _GROSS_KEYS,
+    FINMIND_FS_COGS_KEYS as _COGS_KEYS,
+    FINMIND_FS_INV_KEYS as _INV_KEYS,
+)
 _CL_SUBSTR = "合約負債"   # str.contains 主路徑（涵蓋 流動/非流動 各種 dash 變體）
 _CL_ENG_KEYS = ("ContractLiabilities", "CurrentContractLiabilities",
                 "NonCurrentContractLiabilities", "ContractLiabilitiesCurrent",

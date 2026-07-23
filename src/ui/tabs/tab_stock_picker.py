@@ -164,7 +164,6 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
     # ─ Late imports（避免循環 import + 啟動時間）─
     import datetime as _dt_sp
     import pandas as pd
-    import yfinance as yf
 
     st.caption(f'從上方「{source_label}」候選清單勾選標的，系統自動跑三階段篩選並提供配置建議。'
                f'全 15 項條件：3️⃣ 基本面 ×9 → 4️⃣ 籌碼技術 ×6 → 5️⃣ AI 綜合建議。')
@@ -266,7 +265,7 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         with st.spinner(f'三階段篩選中（{len(_tickers)} 檔，並行）...'):
             with ThreadPoolExecutor(max_workers=5) as _pick_exec:
                 _pick_futs = {
-                    _pick_exec.submit(_check_one_stock, _tk, _today, yf,
+                    _pick_exec.submit(_check_one_stock, _tk, _today,
                                       (fh_map or {}).get(_tk)): _i
                     for _i, _tk in enumerate(_tickers)
                 }
@@ -438,12 +437,12 @@ def _blank_pick_result(ticker: str, note: str = '') -> dict:
     }
 
 
-def _check_one_stock(ticker: str, today, yf=None, fh_result: dict | None = None) -> dict:
+def _check_one_stock(ticker: str, today, fh_result: dict | None = None) -> dict:
     """對單檔個股跑完 Stage 1 + Stage 2 — 失敗條件統一回灰色 ❓ 不阻斷流程。
     全程獨立 requests + yfinance、零 st.* 呼叫 → 線程安全，可丟進 ThreadPoolExecutor。
 
     P1-1a v18.374:yfinance K 線直呼抽至 L1 fetcher(`src.data.stock.picker_fetcher`)。
-    yf param 保留 backward compat 但內部已不用。
+    (v19.159:原 backward-compat `yf` 幽靈參數已移除 — 內部早不用。)
 
     fh_result:v18.453 — 個股組合場景已由「批次財報體檢」算好的
     analyze_financial_health() 結果(dict,鍵含 financial_structure_module 等 6 子模組)。
@@ -459,12 +458,10 @@ def _check_one_stock(ticker: str, today, yf=None, fh_result: dict | None = None)
         _r['kd_label'] = '❌ 抓不到 K 線'
         _r['boll_label'] = '❌ 抓不到 K 線'
         return _r
-    # v18.452 hotfix:5Y 配息檢查需要 yfinance.Ticker 物件(讀 .dividends),
-    # 原碼引用未定義的 `_t_yf` → 每檔必炸 NameError,ThreadPoolExecutor 捕獲後
-    # 整檔回退成全 ❓N/A(production bug:Stage 1/2 兩張表無論輸入什麼股票全部
-    # 顯示 N/A、0/9、0/6)。改用 fetch_stock_history_1y 已解析出的正確後綴建構。
-    import yfinance as _yf_mod
-    _t_yf = _yf_mod.Ticker(_resolved_ticker)
+    # B7 v19.154:5Y 配息檢查改走 L1 cached_dividends(NAS proxy + 1h cache),
+    # 取代原 L5 直呼 yfinance.Ticker(違 §8.2);回傳同一份 .dividends Series。
+    from src.data.proxy import cached_dividends
+    _divs5 = cached_dividends(_resolved_ticker)
 
     # ── 一次抓財報（多個 Stage 1 helpers 共用）──────────────
     _fs = _fetch_fs_safe(ticker)
@@ -473,7 +470,7 @@ def _check_one_stock(ticker: str, today, yf=None, fh_result: dict | None = None)
     # ── Stage 1 條件 ──────────────────────────────────────────
     _r['debt_ratio_label']  = _check_debt_ratio(_fs, fh_result)
     _r['three_rate_label']  = _check_three_rate_growth(_qis)
-    _r['div_5y_label']      = _check_dividend_5y(_df, _t_yf)
+    _r['div_5y_label']      = _check_dividend_5y(_df, _divs5)
     _r['pe_zone_label']     = _check_pe_zone(_qis, _df)
     _r['ar_turnover_label'] = _check_ar_turnover(_fs)
     _r['inv_turnover_label']= _check_inventory_turnover(_fs)
@@ -516,7 +513,7 @@ def _fetch_fs_safe(stock_id: str) -> dict:
         _r = fetch_financial_statements(stock_id)
         _result = _r if isinstance(_r, dict) and 'error' not in _r else {}
         # v18.356 PR-Q5b S-PROV-1 phase 19 — prov_log emits [_fetch_fs_safe] marker
-        prov_log('_fetch_fs_safe', 'src.data.core.data_loader.fetch_financial_statements',
+        prov_log('_fetch_fs_safe', 'src.data.core.financial_statements_fetcher.fetch_financial_statements',
                  f'dict:{len(_result)}keys', ticker=stock_id)
         return _result
     except Exception as e:
@@ -634,10 +631,10 @@ def _check_three_rate_growth(qis: dict) -> str:
 
 
 
-def _check_dividend_5y(df, yf_ticker) -> str:
-    """連續 5 年配息 + 平均殖利率 > 7%。"""
+def _check_dividend_5y(df, divs) -> str:
+    """連續 5 年配息 + 平均殖利率 > 7%。divs = L1 cached_dividends 回的 .dividends Series。"""
     try:
-        _divs = yf_ticker.dividends
+        _divs = divs
         if _divs is None or _divs.empty or len(_divs) < 5:
             return '❌ 配息 <5 次'
         # 年度化 — 最近 5 年除息總額
@@ -860,12 +857,9 @@ def _check_ma20_uptrend(df) -> str:
 def _check_macd_bullish(df) -> str:
     """MACD 綠轉紅（DIF-DEA 由負轉正）or 柱狀體由收斂轉發散。"""
     try:
-        _close = df['Close']
-        _ema12 = _close.ewm(span=12).mean()
-        _ema26 = _close.ewm(span=26).mean()
-        _dif   = _ema12 - _ema26
-        _dea   = _dif.ewm(span=9).mean()
-        _macd  = _dif - _dea
+        from src.compute.scoring.exit_signals import compute_macd
+        # 日 MACD 標準 12/26/9(B6 kernel);沿用舊 adjust=True(pandas ewm 預設)維持既有數值
+        _dif, _dea, _macd = compute_macd(df['Close'], adjust=True)
         if len(_macd.dropna()) < 3:
             return '❓ 不足 30 日'
         _now = float(_macd.iloc[-1])
