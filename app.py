@@ -593,7 +593,7 @@ with tab_market:
 # GROUP 2: 選股（個股 + 個股組合 + 選股網）
 # ══════════════════════════════════════════════════════════════
 with tab_stocks:
-    tab_stock, tab_stock_grp, tab_screener = st.tabs(['🔬 個股', '🏆 個股組合', '🔭 選股網'])
+    tab_stock, tab_stock_grp, tab_screener, tab_mj = st.tabs(['🔬 個股', '🏆 個股組合', '🔭 選股網', '🩺 體檢轉機'])
 
     with tab_stock:
         from src.ui.tabs import render_tab_stock
@@ -798,6 +798,12 @@ with tab_stocks:
                 st.download_button('💾 下載全台股跨季趨勢 CSV', data=_csv_tr,
                                    file_name='cross_quarter_trend_rank.csv',
                                    mime='text/csv', key='trend_rank_csv')
+
+    with tab_mj:
+        # v19.160 user 要求復活:MJ 體檢轉機掃描(找體質差→變好的公司)。
+        # 修當初 v18.463「10 Tab→4 群組」改版漏掛的根因;守衛測試釘住掛載避免再變孤兒。
+        from src.ui.tabs import render_mj_health_diff_tab
+        _render_tab_isolated(render_mj_health_diff_tab, '體檢轉機')
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合）
