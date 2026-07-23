@@ -84,6 +84,35 @@ class TestT86NegativeCache:
 
 
 # ══════════════════════════════════════════════════════════════
+# P1 v19.159(團隊稽核 QA-Med)— TPEX 暫時性失敗改短 TTL 負快取
+# (對稱補上 T86 早有、TPEX 一直漏的護欄;暫時性失敗不再永久釘空 dict)
+# ══════════════════════════════════════════════════════════════
+class TestTPEXNegativeCache:
+    def test_transient_fail_uses_fail_ts_not_day_cache(self, monkeypatch):
+        import src.data.core.data_loader_inst_fetchers as ifx
+        calls = {"n": 0}
+
+        def _none_fetch(*a, **k):
+            calls["n"] += 1
+            return None
+
+        monkeypatch.setattr(ifx, "_fetch_url_dl", _none_fetch)
+        ifx._TPEX_DAY_CACHE.pop("20990102", None)
+        ifx._TPEX_FAIL_TS.pop("20990102", None)
+        assert ifx._get_tpex_day("20990102") == {}
+        assert "20990102" not in ifx._TPEX_DAY_CACHE     # 不永久釘(舊 bug:永久空快取)
+        assert "20990102" in ifx._TPEX_FAIL_TS           # 負快取記錄
+        # 負快取窗內第二次呼叫不重打
+        assert ifx._get_tpex_day("20990102") == {}
+        assert calls["n"] == 1
+        # 模擬過期 → 允許重試(來源恢復後可重抓)
+        ifx._TPEX_FAIL_TS["20990102"] = time.time() - 10_000
+        ifx._get_tpex_day("20990102")
+        assert calls["n"] == 2
+        ifx._TPEX_FAIL_TS.pop("20990102", None)
+
+
+# ══════════════════════════════════════════════════════════════
 # N3 — _yf_dl os.environ 引用計數護欄(並行不互踩)
 # ══════════════════════════════════════════════════════════════
 class TestYfEnvRefcount:

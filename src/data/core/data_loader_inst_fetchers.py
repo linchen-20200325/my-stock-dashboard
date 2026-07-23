@@ -108,6 +108,11 @@ def _fetch_twse_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
 
 
 _TPEX_DAY_CACHE: dict = {}  # {日期字串: {股票代碼: {外資,投信,自營商}}} TPEx 進程級快取
+# P1 v19.159(團隊稽核 QA-Med):TPEX 暫時性失敗(網路 None/例外)原本把 {} 永久釘進
+# _TPEX_DAY_CACHE(無 TTL)→ 來源恢復後同 process 不再重試,上櫃股法人欄位靜默 NaN。
+# 對稱補上與 T86 相同的短 TTL 負快取(N2c v19.80 當時只補 T86,漏了 TPEX)。
+# 「aaData 為空」(TPEX 明確回無資料,如假日)仍永久快取 — 該日資料永不出現,語意正確。
+_TPEX_FAIL_TS: dict = {}   # {日期字串: 失敗時間 epoch};TTL_15MIN 內不重打
 
 
 def _get_tpex_day(ds: str) -> dict:
@@ -115,6 +120,10 @@ def _get_tpex_day(ds: str) -> dict:
     回傳 {股票代碼: {'外資':float, '投信':float, '自營商':float}}，單位：張"""
     if ds in _TPEX_DAY_CACHE:
         return _TPEX_DAY_CACHE[ds]
+    import time as _t_tp
+    _fts = _TPEX_FAIL_TS.get(ds)
+    if _fts is not None and (_t_tp.time() - _fts) < TTL_15MIN:
+        return {}   # 負快取生效中(短 TTL),不重打
     HDR = {'User-Agent': 'Mozilla/5.0', 'Accept': '*/*',
            'Referer': 'https://www.tpex.org.tw/'}
     try:
@@ -126,7 +135,7 @@ def _get_tpex_day(ds: str) -> dict:
             params={'l': 'zh-tw', 'se': 'EW', 't': 'D', 'd': roc_date, 'o': 'json'},
             headers=HDR, timeout=5)
         if r is None:
-            _TPEX_DAY_CACHE[ds] = {}
+            _TPEX_FAIL_TS[ds] = _t_tp.time()   # P1:暫時性 → 短 TTL 負快取,不永久釘
             return {}
         j = r.json()
         rows_data = j.get('aaData', [])
@@ -177,7 +186,7 @@ def _get_tpex_day(ds: str) -> dict:
         return day_data
     except Exception as e:
         print(f'[TPEx] {ds} 失敗: {e}')
-        _TPEX_DAY_CACHE[ds] = {}
+        _TPEX_FAIL_TS[ds] = _t_tp.time()   # P1:暫時性 → 短 TTL 負快取,不永久釘
         return {}
 
 
