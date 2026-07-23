@@ -197,7 +197,7 @@ class DataPoint:
 
 ### 3.1 邊界契約（Schema）
 
-**現況**：requirements.txt **無 pandera**,現有資料 schema 散落於各 fetcher 的 dict / df parse 邏輯（如 `data_loader.py`、`scripts/update_macro_history.py`,後者 v18.359 F-2 搬入 `scripts/`）。
+**現況**（v19.159 團隊稽核同步）：`pandera>=0.20,<2.0` **已 pin 於 requirements.txt:44**。DataFrame schema SSOT 統一於 `shared/schemas.py`（L0,v19.159 Batch C 併回原 `compute/risk/schemas.py`）：MacroFred / OHLCV / MonthlyRevenue / MacroDF / PMI / ForeignFlow + `validate_in_log_mode`(log-only) / `validate_or_reject`(blocking)。**opt-in**：fetcher 在出口主動呼叫,pandera 缺席時 graceful degrade（不阻斷）。其餘散落 dict / df parse 斷言仍逐步收斂中。
 
 **規範**：新增資料流入 / 流出系統的點,**必須**附等效斷言（即使尚未引入 pandera）：
 
@@ -226,7 +226,7 @@ class DataPoint:
 {"date": ..., "foreign_twd": float, "trust_twd": float, "dealer_twd": float}
 ```
 
-⚠️ **待議**:是否將 pandera 加入 requirements 並逐 fetcher 落地 schema?評估 import 開銷後決定（pandera 啟動 ~200ms）。
+✅ **已定案**（v19.159）：pandera 已 pin + 6 個 schema 落地 `shared/schemas.py`(L0),8 處 L1 fetcher 出口採 opt-in log-mode / blocking 驗證。逐 fetcher 全面強制驗證仍屬漸進（避免一次性破壞既有契約）。
 
 ### 3.2 範圍 / 合理性檢查
 
