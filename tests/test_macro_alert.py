@@ -449,7 +449,7 @@ class TestFetchMacroSnapshotEdgeCases:
 import sys
 from unittest.mock import MagicMock, patch
 
-from src.data.macro import render_macro_alerts
+from src.ui.render.macro_ui_components import render_macro_alerts  # v19.159:render 歸位 L4
 
 
 def _make_st_mock():

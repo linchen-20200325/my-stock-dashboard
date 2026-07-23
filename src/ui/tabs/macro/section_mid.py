@@ -14,7 +14,8 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F4
 from src.ui.render.macro_ui_components import section_header
 from src.ui.render.ui_widgets import kpi, cond_badge, teacher_conclusion
 from src.ui.tabs.macro.helpers import add_danger_hlines  # noqa: F401
-from src.data.macro import check_macro_alerts, fetch_macro_snapshot, render_macro_alerts
+from src.data.macro import check_macro_alerts, fetch_macro_snapshot
+from src.ui.render.macro_ui_components import render_macro_alerts  # v19.159:render 歸位 L4
 
 
 def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict) -> None:

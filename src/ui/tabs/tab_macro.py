@@ -14,7 +14,7 @@
       / fetch_margin_balance / fetch_single / multi_chart / section_header
       / sparkline / stat_card / COLORS_7 / INTL_MAP / INTL_UNIT
       / TECH_MAP / TW_MAP / TW_UNIT
-    - macro_alert (3): check_macro_alerts / fetch_macro_snapshot / render_macro_alerts
+    - macro_alert (2): check_macro_alerts / fetch_macro_snapshot（render_macro_alerts 已搬 L4 macro_ui_components）
     - market_strategy: get_market_assessment
     - leading_indicators: build_leading_fast / render_leading_table
     - ui_widgets: beginner_kpi / kpi / teacher_conclusion
@@ -117,8 +117,9 @@ def render_tab_macro():
         COLORS_7, INTL_MAP, INTL_UNIT, TECH_MAP, TW_MAP, TW_UNIT,
     )
     from src.data.macro import (
-        check_macro_alerts, fetch_macro_snapshot, render_macro_alerts,
+        check_macro_alerts, fetch_macro_snapshot,
     )
+    from src.ui.render.macro_ui_components import render_macro_alerts  # v19.159:render 歸位 L4
     from src.services import get_market_assessment
     from src.data.macro import render_leading_table
     from src.ui.render import beginner_kpi, cond_badge, kpi, teacher_conclusion
