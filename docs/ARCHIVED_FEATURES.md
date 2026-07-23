@@ -25,7 +25,11 @@ macro_validation 前例處理。刪除前逐一 grep 驗證 0 production caller 
 - **保留**:無共用後端。
 - **還原**:`git show <v19.159 前 commit>:src/compute/etf/etf_margin_simulator.py` 等。
 
-### 2. MJ 體檢變化 Tab(UI only,後端共用保留)
+### 2. MJ 體檢變化 Tab(UI only,後端共用保留)— ⚠️ **已於 v19.160 復活**
+
+> user 需求「找體質差→變好的公司」→ 從 git 撈回 UI + **修當初 v18.463 漏掛根因**(掛回
+> 🔬 選股群組「🩺 體檢轉機」)+ 加「🔗 帶入我的持股」入口 + 守衛測試釘住掛載。以下為原退役紀錄(保留供追溯):
+
 - **刪除**:`src/ui/tabs/tab_mj_health_diff.py`(L5 UI,`render_mj_health_diff_tab` 0 caller)
   + `src/ui/tabs/__init__.py` 移除註冊。
 - **保留(仍 LIVE)**:`diff_mj_health` / `HealthDiffVerdict` / `analyze_financial_health`

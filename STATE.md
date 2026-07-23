@@ -1,5 +1,18 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🩺 2026-07-23 復活 MJ 體檢轉機 Tab（v19.160,user 要求「找體質差→變好的公司」）
+
+團隊稽核排毒波(v19.159)P3 曾真刪 4 孤兒 Tab;user 於反悔點指出 **MJ 體檢變化仍需要**(找轉機股)。撈回 + 修根因 + 掛回 + 加值:
+- **根因**:此功能 v18.463「10 Tab→4 群組」改版時**被漏掛**(render fn 全域 0 caller)→ 淪孤兒 → 稽核判死。非功能不好,是從沒被接上。
+- **復活**:git 撈回 `tab_mj_health_diff.py`(後端 diff_mj_health / analyze_financial_health 一直是活的,零改)→ 重新註冊 `src/ui/tabs/__init__` → **真的掛進 app.py** 🔬 選股群組第 4 子 Tab「🩺 體檢轉機」(修漏掛根因)。
+- **能力**:貼一串代碼(≤10)→ 每檔跑 MJ「4力1棒子」財報體檢跨兩季 diff → 標 🌟 本業虧轉盈轉機股 / ⚠️ 盈轉虧雷股。**零 LLM 純規則引擎**。
+- **加值(user 選「貼清單+帶入持股」)**:新增「🔗 帶入我的持股」按鈕 — callback 讀 Google Sheet 持股組合代碼自動填入(EX-PASSTHRU-1 lazy import gsheet_portfolio,graceful 未登入不炸)。
+- **防再孤兒**:新增守衛測試 `test_mj_health_diff_mounted.py`(3 test:app.py 有掛載 + UI 可 forward import + 帶入持股 callback 在)→ 釘死掛載,下輪稽核不會再誤判孤兒。
+- **治理回滾**:CLAUDE.md L5 表 + EX-PASSTHRU-1(補 2 處 L5→L1)、ARCHIVED_FEATURES.md MJ 段標「已復活」。
+- **驗證**:compile + import forward + 98 passed(含守衛)+ **AppTest render smoke 零未捕捉例外**。
+- **分支**:因 v19.159 PR #565 已 merged,依規則從最新 main 重開同名分支做,另開新 PR。
+
+
 ## 🧹 2026-07-23 團隊交叉稽核排毒波（v19.159,6 批 A~F,user 核准「建議全動工」）
 
 四角色並行唯讀稽核(PM / 架構師 / 工程師 / QA)→ 統整報告 → user 核准 → 6 批分別 commit + 測試 gate。
