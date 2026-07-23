@@ -26,14 +26,14 @@ class TestValidateOrReject(unittest.TestCase):
         })
 
     def test_good_df_passes_through(self):
-        from src.compute.risk.schemas import MonthlyRevenueSchema, validate_or_reject
+        from shared.schemas import MonthlyRevenueSchema, validate_or_reject
         df = self._good_df()
         out = validate_or_reject(df, MonthlyRevenueSchema, label='t')
         self.assertEqual(len(out), 6, '合法 df(含 NaN 停業態)不得誤殺')
 
     def test_negative_revenue_rejected_whole(self):
         """負營收(schema 違反)→ 整檔棄用回空,不是丟壞列(§1 部分刪列 = 掩蓋)。"""
-        from src.compute.risk.schemas import MonthlyRevenueSchema, validate_or_reject
+        from shared.schemas import MonthlyRevenueSchema, validate_or_reject
         df = self._good_df()
         df.loc[2, 'revenue'] = -5.0
         out = validate_or_reject(df, MonthlyRevenueSchema, label='t')
@@ -41,13 +41,13 @@ class TestValidateOrReject(unittest.TestCase):
         self.assertListEqual(list(out.columns), list(df.columns), '空殼須保留欄位')
 
     def test_unsorted_date_rejected(self):
-        from src.compute.risk.schemas import MonthlyRevenueSchema, validate_or_reject
+        from shared.schemas import MonthlyRevenueSchema, validate_or_reject
         df = self._good_df().iloc[::-1].reset_index(drop=True)  # 降序
         out = validate_or_reject(df, MonthlyRevenueSchema, label='t')
         self.assertTrue(out.empty)
 
     def test_empty_df_passthrough(self):
-        from src.compute.risk.schemas import MonthlyRevenueSchema, validate_or_reject
+        from shared.schemas import MonthlyRevenueSchema, validate_or_reject
         out = validate_or_reject(pd.DataFrame(), MonthlyRevenueSchema, label='t')
         self.assertTrue(out.empty)
 

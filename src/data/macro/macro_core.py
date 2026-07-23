@@ -524,7 +524,7 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
         # Phase 2 pandera Priority 1 v18.433 — log-mode schema validation
         # (yfinance OHLCV 大寫 column,normalize_case=True);失敗只 stderr log,不擋 caller
         try:
-            from src.compute.risk.schemas import validate_in_log_mode, OHLCVSchema
+            from shared.schemas import validate_in_log_mode, OHLCVSchema
             df = validate_in_log_mode(df, OHLCVSchema,
                                        label=f'fetch_yf_ohlcv:{ticker}:{range_}',
                                        normalize_case=True)
