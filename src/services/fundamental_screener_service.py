@@ -167,8 +167,8 @@ def get_snapshot_coverage_note(*, refresh: bool = False) -> str:
 SCREEN_ANGLE_LABELS: dict[str, str] = {
     "估值便宜（本益比低）": "pe_low",
     "高 EPS（獲利高）": "eps_high",
-    "缺貨動能（需先於下方掃描）": "shortage",
-    "抗跌 RS 強（需先於下方掃描）": "rs_leader",
+    "缺貨動能（供不應求 4 訊號）": "shortage",
+    "抗跌 RS 強（弱勢仍贏大盤）": "rs_leader",
     "跨季轉強（毛利/營益率升·負債降·營收增）": "trend",
 }
 
@@ -360,8 +360,10 @@ def composite_rank_candidates(
 
     note = ""
     if _missing:
-        note = (f"（{'、'.join(_missing)} 尚未掃描 → 該因子暫記 0 分；"
-                "請先在下方「🔎 進階主題選股」掃描，回來重按即帶入。）")
+        # v19.167 文案修:實際行為是「缺料因子不計分、不影響其他因子排序」(見上方
+        # out[...] = get(c) 回 None 空白,非 0);且「開始選股」已自動掃描,無「下方掃描」區塊。
+        note = (f"（{'、'.join(_missing)} 這次沒掃到 → 該因子不計分、不影響其他因子排序;"
+                "重按「🎯 開始選股」會自動掃描帶入。）")
     return out, note
 
 

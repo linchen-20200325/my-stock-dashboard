@@ -689,7 +689,23 @@ with tab_stocks:
             if _cands.empty:
                 st.info('目前沒有符合的標的（請至少勾一個條件；缺貨/抗跌RS 需能連上資料源）。')
             else:
-                st.caption(f'從基本面優選 {_surv_n} 檔 → 綜合評分取前 {min(len(_cands), 50)} 名。')
+                # 🔭 選股結果總覽卡(v19.167:一眼看命中,對稱個股 🧭 / ETF 🚦 頁頂卡)。
+                # 命中數只在該因子有掃到結果(session 值存在)時顯示,§1 掃失敗不假報 0。
+                _hit_bits = []
+                if 'shortage' in _factors and st.session_state.get('_shortage_rows') is not None:
+                    _hit_bits.append(f'缺貨命中 {len(st.session_state["_shortage_rows"])}')
+                if 'rs_leader' in _factors and st.session_state.get('_rs_rows_all') is not None:
+                    _hit_bits.append(f'抗跌RS {len(st.session_state["_rs_rows_all"])}')
+                if 'trend' in _factors and st.session_state.get('_trend_map') is not None:
+                    _hit_bits.append(f'跨季轉強 {len(st.session_state["_trend_map"])}')
+                _hit_txt = ' · '.join(_hit_bits) if _hit_bits else '僅基本面四項全過'
+                st.markdown(
+                    f'<div style="background:#0d1117;border:2px solid #3fb950;border-radius:10px;'
+                    f'padding:12px 16px;margin:4px 0 10px;">'
+                    f'<span style="font-size:18px;font-weight:900;color:#3fb950;">'
+                    f'🔭 存活池 {_surv_n} 檔 → 綜合入選前 {min(len(_cands), 50)} 名</span>'
+                    f'<span style="font-size:12px;color:#8b949e;margin-left:10px;">'
+                    f'本次因子:{_hit_txt}</span></div>', unsafe_allow_html=True)
                 st.dataframe(_cands.head(50), hide_index=True, use_container_width=True)
                 _csv = _cands.head(50).to_csv(index=False).encode('utf-8-sig')
                 st.download_button('💾 下載選股結果 CSV', data=_csv,
