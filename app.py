@@ -878,19 +878,25 @@ with tab_tools:
             render_fetch_monitor_panel,  # v19.96 批次4 Item1+2
             render_reconcile_panel,
         )
+        # v19.168 IMPL-E:使用者版 —— 資料覆蓋率/新鮮度總覽常駐(一般使用者只需看這張燈號表)。
         render_data_coverage()
-        st.markdown('---')
-        render_data_registry_panel()
-        render_fetch_monitor_panel()   # v19.96:@monitored 監控 + 孤兒 set-diff
-        st.markdown('---')
-        render_reconcile_panel()
-        st.markdown('---')
-        render_api_diagnostic()
-        st.markdown('---')
-        render_data_health_raw()
-        st.markdown('---')
-        from src.ui.pages import render_calibration_panel
-        render_calibration_panel()
+        # v19.168 IMPL-E:工程師版 —— 資料源清單 / Fetcher 監控 / §4.3 雙演算法對帳 / API 根因 /
+        # 原始資料表 / 門檻校準,全對照 CLAUDE.md §編號、談 SSOT/proxy/@monitored,一般使用者用不到,
+        # 收進折疊、預設隱藏(不刪 —— 診斷仍在,只是不干擾主畫面)。
+        with st.expander(
+                '🔧 進階診斷（工程師版：資料源清單 · Fetcher 監控 · §4.3 對帳 · API 根因 · 原始表 · 門檻校準）',
+                expanded=False):
+            render_data_registry_panel()
+            render_fetch_monitor_panel()   # v19.96:@monitored 監控 + 孤兒 set-diff
+            st.markdown('---')
+            render_reconcile_panel()
+            st.markdown('---')
+            render_api_diagnostic()
+            st.markdown('---')
+            render_data_health_raw()
+            st.markdown('---')
+            from src.ui.pages import render_calibration_panel
+            render_calibration_panel()
 
     with tab_edu:
         from src.ui.tabs import render_tab_edu
