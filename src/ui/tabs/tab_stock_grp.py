@@ -384,6 +384,23 @@ _TREND_SORT_ORDER = {
     'up': 3, 'strong_up': 4, 'error': 5,
 }
 
+# v19.164 稽核補回:MJ「純季財報體質」verdict(與月+季混合的趨勢分數不同)。
+# 一檔可能月營收強 → 混合趨勢分顯示「📈 進步」,但季財報 verdict 其實是「🔴 退步」——
+# 兩者必須並列,否則「找體質差」的能力會被月營收動能蓋掉(對抗式稽核 90f5ca9 抓到的損失)。
+_MJ_VERDICT_LABEL = {
+    'improving': '🟢 進步', 'deteriorating': '🔴 退步', 'mixed': '🟡 分歧',
+    'stable': '⚪ 不變', 'first_snapshot': '⏳ 首季', 'fetch_failed': '❌ 失敗',
+}
+
+
+def _mj_verdict_code(r: dict) -> str:
+    """取一列的『純 MJ 季財報 verdict』代碼(非月+季混合趨勢分;來自 diff_mj_health)。"""
+    v = r.get('diff_verdict')
+    if v is not None:
+        return getattr(v, 'verdict', 'first_snapshot') or 'first_snapshot'
+    # 無 diff_verdict:抓取失敗 → fetch_failed;否則季快照不足 2 季 → first_snapshot
+    return 'fetch_failed' if r.get('label_code') == 'error' else 'first_snapshot'
+
 
 def _fmt_quarter(yyyymm: str) -> str:
     """202503 → 2025Q1（季底月份對應季）；格式不符回原字串。"""
@@ -407,6 +424,21 @@ def _render_mj_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '') 
     cols[2].metric('➖ 中性', cnt.get('neutral', 0))
     cols[3].metric('📈 進步', cnt.get('up', 0))
     cols[4].metric('🚀 強進步', cnt.get('strong_up', 0))
+    st_mod.caption('↑ 上列＝月營收動能 × 季財報「**混合**」趨勢分(月 65% / 季 35%)。　'
+                   '↓ 下列＝**純 MJ 季財報體質** verdict(只看季度,不混月營收)——'
+                   '兩者可能相反(月強但季退),分開看才不會漏掉「財報體質在惡化」。')
+
+    # v19.164 稽核補回:純 MJ 季財報 verdict 計數(組合層「幾檔財報體質在惡化」一眼看)
+    _mjv = {k: 0 for k in _MJ_VERDICT_LABEL}
+    for r in rows:
+        _mjv[_mj_verdict_code(r)] = _mjv.get(_mj_verdict_code(r), 0) + 1
+    mcols = st_mod.columns(6)
+    mcols[0].metric('🔴 財報退步', _mjv['deteriorating'])
+    mcols[1].metric('🟡 分歧', _mjv['mixed'])
+    mcols[2].metric('🟢 財報進步', _mjv['improving'])
+    mcols[3].metric('⚪ 不變', _mjv['stable'])
+    mcols[4].metric('⏳ 首季', _mjv['first_snapshot'])
+    mcols[5].metric('❌ 失敗', _mjv['fetch_failed'])
 
     # v18.199 ── 📊 快照新鮮度條（MJ 季財報分來自哪季 — 防補抓失敗靜默沿用舊季）──
     _fresh = sum(1 for r in rows if r.get('snap_stale') is False)
@@ -449,7 +481,8 @@ def _render_mj_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '') 
 
     df = pd.DataFrame([{
         '代碼': r['sid'],
-        '判定': r['label'],
+        '判定(月+季)': r['label'],
+        'MJ季財報': _MJ_VERDICT_LABEL.get(_mj_verdict_code(r), '—'),  # 純季度 verdict(補回)
         '轉機': r.get('turn_icon') or '—',
         '綜合分數': round(r['score'], 2),
         '月營收分': round(r['mon_sub'], 2),
@@ -467,9 +500,12 @@ def _render_mj_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '') 
             for r in _diffable:
                 v = r['diff_verdict']
                 _ic = f'　{r["turn_icon"]}' if r.get('turn_icon') else ''
+                _net = int(getattr(v, 'net_delta', 0) or 0)
+                _vlabel = _MJ_VERDICT_LABEL.get(_mj_verdict_code(r), '')
                 st_mod.markdown(
-                    f"**{r['sid']}**：改善 {getattr(v, 'improve_count', 0)} / "
-                    f"惡化 {getattr(v, 'deteriorate_count', 0)}{_ic}")
+                    f"**{r['sid']}**　{_vlabel}　改善 {getattr(v, 'improve_count', 0)} / "
+                    f"惡化 {getattr(v, 'deteriorate_count', 0)} / "
+                    f"淨變化 {_net:+d}{_ic}")   # 淨變化(補回)
                 for _title, _items in (('🟢 變好', getattr(v, 'improvements', None) or []),
                                        ('🔴 變差', getattr(v, 'deteriorations', None) or [])):
                     if _items:
@@ -478,6 +514,14 @@ def _render_mj_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '') 
                             '模組': m.module.replace('_Module', ''), '指標': m.metric,
                             '上期': m.prev_status, '本期': m.curr_status,
                         } for m in _items]), use_container_width=True, hide_index=True)
+                # ⚪ 不變逐項(補回;決策相關性低,收在巢狀展開)
+                _unch = getattr(v, 'unchanged', None) or []
+                if _unch:
+                    with st_mod.expander(f'⚪ 不變（{len(_unch)} 項）', expanded=False):
+                        st_mod.dataframe(pd.DataFrame([{
+                            '模組': m.module.replace('_Module', ''), '指標': m.metric,
+                            'Status': m.curr_status,
+                        } for m in _unch]), use_container_width=True, hide_index=True)
 
     with st_mod.expander('🛠️ 逐檔細節（分子分數推導）', expanded=False):
         for r in rows_sorted:

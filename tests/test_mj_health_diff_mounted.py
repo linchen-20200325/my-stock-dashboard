@@ -41,6 +41,15 @@ def test_standalone_mj_diff_tab_retired():
     assert "with tab_mj:" not in app, "app.py 殘留獨立 MJ 體檢轉機分頁"
 
 
+def test_mj_quarterly_verdict_preserved():
+    """v19.164 對抗式稽核補回:純 MJ 季財報 verdict(非月+季混合趨勢分)在組合層可見,
+    避免『月營收動能蓋掉財報體質退步』——一檔季財報退步不該因月營收強而顯示進步。"""
+    grp = (_REPO / "src/ui/tabs/tab_stock_grp.py").read_text(encoding="utf-8")
+    assert "_MJ_VERDICT_LABEL" in grp, "MJ 純季財報 verdict 標籤缺失(稽核漏失回歸)"
+    assert "MJ季財報" in grp, "MJ 表未加『MJ季財報』純季度 verdict 欄"
+    assert "財報退步" in grp, "缺 MJ 季財報退步計數(組合層一眼看幾檔財報惡化)"
+
+
 def test_stock_grp_single_ticker_source():
     """v19.164 單一來源:組合不再有蔡森 selectbox / MJ 第二批次輸入,改帶入持股填唯一輸入。"""
     grp = (_REPO / "src/ui/tabs/tab_stock_grp.py").read_text(encoding="utf-8")

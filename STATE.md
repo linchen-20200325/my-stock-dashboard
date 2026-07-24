@@ -21,6 +21,11 @@
   (RSI/KD/量比/357/VCP/合約負債…去掉與總表重複的 EPS/毛利/殖利/健康/評級)全下沉 expander。
 - **驗證**:全套 pytest **3382 passed / 28 skipped / 0 fail**;新增 4 個 summarize_caisen 測試 + 4 個守衛
   (轉機合併點 / 蔡森批次接線 / 單一來源 / 獨立檔退役);undefined-names AppTest smoke 7 passed。
+- **對抗式稽核補洞(user 問「面板資料會少嗎」)**:派稽核 AI 拿 OLD vs NEW 逐欄比對 —— ③④⑤/多因子/蔡森
+  是乾淨去重(⑤ 從前 5 檔→全部、維度表 head(5)→全部,反更完整);但抓到 MJ 併檔**真損失**:組合層
+  「純 MJ 季財報 verdict + 計數」被「月 65%+季 35% 混合趨勢分」蓋掉(一檔季財報退步卻可能因月營收強顯示進步)。
+  **已修**:MJ 表加「MJ季財報」純季度 verdict 欄 + 6-count 計數(退步/分歧/進步/不變/首季/失敗)+ 補回
+  淨變化/⚪不變逐項(全來自既有 `diff_verdict`,零計算改動);加 `test_mj_quarterly_verdict_preserved` 守衛。
 - **其他 Tab(個股/選股網/ETF)**已平行稽核完(去重提案在手),接著做可視預覽給 user 確認再實作。
 - **分支**:PR #568 已 merged → 從最新 main 重開,另開新 PR。
 
