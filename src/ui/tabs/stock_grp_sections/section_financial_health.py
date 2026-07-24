@@ -90,7 +90,7 @@ def render_financial_health_section(
 def _render_summary_table(fh_cached: dict) -> None:
     """📊 體檢摘要比較表(現金水位 / OCF / 負債比 / DNA / 雷達均分 / 紅旗)。"""
     st.markdown('##### 📊 體檢摘要比較表')
-    st.caption('🔰 欄位白話(MJ 策略2):現金水位＝現金佔總資產(>25%佳);OCF＝營業現金流(須為正,否則「黑字破產」);'
+    st.caption('🔰 欄位白話(老師 策略2):現金水位＝現金佔總資產(>25%佳);OCF＝營業現金流(須為正,否則「黑字破產」);'
                '負債比＝欠錢比例(<60%穩);企業DNA＝商業模式類型;雷達均分＝五力體質平均(越高越好)。')
     _fh_rows = []
     for _sid_f, _fd_f in fh_cached.items():
@@ -121,7 +121,7 @@ def _render_summary_table(fh_cached: dict) -> None:
 
 
 def _render_operating_compare(fh_cached: dict) -> None:
-    """⚙️ 經營能力多檔比較表(MJ DSO/DIO/DPO)。"""
+    """⚙️ 經營能力多檔比較表(老師 DSO/DIO/DPO)。"""
     _op_rows = []
     for _sid_o, _fd_o in fh_cached.items():
         _oper_o = _fd_o.get('operating_module', {}) or {}
@@ -137,7 +137,7 @@ def _render_operating_compare(fh_cached: dict) -> None:
             '現金缺口': _oper_o.get('Cash_Gap_Days', 'N/A'),
         })
     if _op_rows:
-        st.markdown('##### ⚙️ 經營能力多檔比較(MJ DSO/DIO/DPO)')
+        st.markdown('##### ⚙️ 經營能力多檔比較(老師 DSO/DIO/DPO)')
         _df_op = pd.DataFrame(_op_rows)
         st.dataframe(
             _df_op, use_container_width=True, hide_index=True,
@@ -154,7 +154,7 @@ def _render_operating_compare(fh_cached: dict) -> None:
 
 
 def _render_profitability_compare(fh_cached: dict) -> None:
-    """💰 獲利能力多檔比較表(MJ 5大指標)。"""
+    """💰 獲利能力多檔比較表(老師 5大指標)。"""
     _pf_rows = []
     for _sid_p, _fd_p in fh_cached.items():
         _prof_p = _fd_p.get('profitability_module', {}) or {}
@@ -169,7 +169,7 @@ def _render_profitability_compare(fh_cached: dict) -> None:
             'ROE':        _prof_p.get('ROE', {}).get('Value', 'N/A'),
         })
     if _pf_rows:
-        st.markdown('##### 💰 獲利能力多檔比較(MJ 5大指標)')
+        st.markdown('##### 💰 獲利能力多檔比較(老師 5大指標)')
         _df_pf = pd.DataFrame(_pf_rows)
         st.dataframe(
             _df_pf, use_container_width=True, hide_index=True,
@@ -267,11 +267,11 @@ def _render_dna_opm(fd: dict, dna: str, dna_color: str) -> None:
 
 
 def _render_survival_module(fd: dict) -> None:
-    """存活能力精細模組(MJ 3 大生死指標)。"""
+    """存活能力精細模組(老師 3 大生死指標)。"""
     _surv_f = fd.get('survival_module', {})
     if not _surv_f or fd.get('error'):
         return
-    st.markdown('**🏥 存活能力精細診斷(MJ 3大生死指標)**')
+    st.markdown('**🏥 存活能力精細診斷(老師 3大生死指標)**')
     _s_cols = st.columns(3)
     _status_color = {'Pass': TRAFFIC_GREEN, 'Acceptable': TRAFFIC_YELLOW, 'Fail': TRAFFIC_RED}
     for _col, (_key, _label) in zip(_s_cols, [
@@ -317,7 +317,7 @@ def _render_operating_module(fd: dict) -> None:
     _oper_f = fd.get('operating_module', {})
     if not _oper_f or fd.get('error'):
         return
-    st.markdown('**⚙️ 經營能力診斷(MJ DSO/DIO/DPO)**')
+    st.markdown('**⚙️ 經營能力診斷(老師 DSO/DIO/DPO)**')
     _o4c = st.columns(4)
     with _o4c[0]:
         st.metric('DSO 應收天數', _oper_f.get('DSO', 'N/A'))
@@ -349,11 +349,11 @@ def _render_operating_module(fd: dict) -> None:
 
 
 def _render_profitability_module(fd: dict) -> None:
-    """獲利能力模組(MJ 5 大指標)。"""
+    """獲利能力模組(老師 5 大指標)。"""
     _prof_f = fd.get('profitability_module', {})
     if not _prof_f or fd.get('error'):
         return
-    st.markdown('**💰 獲利能力診斷(MJ 5大指標)**')
+    st.markdown('**💰 獲利能力診斷(老師 5大指標)**')
     _p5f = st.columns(5)
     _gm_f = _prof_f.get('Gross_Margin', {})
     _gm_f_ok = _gm_f.get('Status', '') == 'Good'
@@ -455,11 +455,11 @@ def _render_financial_structure_module(fd: dict) -> None:
 
 
 def _render_solvency_module(fd: dict) -> None:
-    """償債能力模組(MJ 300/150 嚴格 + 保命符例外)。"""
+    """償債能力模組(老師 300/150 嚴格 + 保命符例外)。"""
     _solv_f = fd.get('solvency_module', {})
     if not _solv_f or fd.get('error'):
         return
-    st.markdown('**🛡️ 短期償債能力(MJ 300/150 嚴格標準)**')
+    st.markdown('**🛡️ 短期償債能力(老師 300/150 嚴格標準)**')
     _sv_f_v = _solv_f.get('Final_Solvency_Verdict', '')
     _sv_f_pass = 'Pass' in _sv_f_v
     _sv_f_exc  = 'Exception' in _sv_f_v

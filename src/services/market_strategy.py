@@ -2,7 +2,7 @@
 市場狀態判斷引擎 v4.1 (§5.1)
 目的：先判斷是否適合積極進場
 輸出：bull / neutral / bear + 建議持股比例
-v4.0 新增：宏爺 M1B-M2 資金活水評分維度
+v4.0 新增：老師 M1B-M2 資金活水評分維度
 v4.1 [step 3c]：來源切換 — TWSE BFI82U 直連 → tw_macro.fetch_finmind_foreign_investor
               ；yfinance.Ticker 直連 → macro_core.fetch_yf_ohlcv，全部走 NAS proxy
 """
@@ -53,7 +53,7 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
                   ma120_rising=False, ma120_falling=False):
     """
     市場狀態判斷引擎 v4.1
-    新增：MA60 連三日遲滯區間（Hysteresis）+ MA斜率過濾 + 宏爺 M1B-M2
+    新增：MA60 連三日遲滯區間（Hysteresis）+ MA斜率過濾 + 老師 M1B-M2
 
     ma60_above_3d / ma60_below_3d: 最近3日收盤均站上/均跌破 MA60（防盤整雙巴）
     ad_ratio:    float | None — 市場廣度(0-100% 上漲家數佔比,`fetch_adl` 的
@@ -120,7 +120,7 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
         else:
             signals.append(f'❌ 市場廣度偏弱 ({ad_ratio:.1f}%)')
 
-    # ⑤ 宏爺 M1B-M2 資金活水（選填，不傳則略過，向後相容）
+    # ⑤ 老師 M1B-M2 資金活水（選填，不傳則略過，向後相容）
     if m1b_m2_gap is not None:
         _trending_up = (m1b_m2_prev is not None) and (m1b_m2_gap > m1b_m2_prev)
         if m1b_m2_gap > 0 and _trending_up:

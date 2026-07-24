@@ -115,12 +115,12 @@ def render_portfolio_summary_section(
 | **多因子**(0~100) | 趨勢＋動能＋籌碼＋量價＋RS 五項合成,偏「**現在強不強**」 |
 | **健康度** | 均線／RSI／KD／量比／布林,偏「**體質好不好**」 |
 | **出場** | 技術＋籌碼(＋AI 利空)三維出場訊號 X/3 |
-| **蔡森型態／風報比** | K 線型態學等幅滿足的目標與風報比(完整見「🎯 蔡森型態目標價」) |
+| **老師型態／風報比** | K 線型態學等幅滿足的目標與風報比(完整見「🎯 老師型態目標價」) |
 | **EPS／毛利／殖利／P/B** | 基本面對照(各只出現這一次) |
 
 - **多因子子維度**(趨勢／動能／籌碼／量價／RS 個別分數)在下方「📈 多因子維度拆解」展開。
 - **逐檔技術明細**(RSI／KD／量比／357／VCP／合約負債…)在「🩹 逐檔技術明細」展開。
-- **MJ 財報體質(趨勢×轉機、找體質差→變好)**在更下方「📊 MJ 趨勢×轉機」區塊。
+- **老師 財報體質(趨勢×轉機、找體質差→變好)**在更下方「📊 老師 趨勢×轉機」區塊。
 
 > 💡 多因子＋健康度都排前面、且 RS 向上＝「強上加強」優先觀察;體質好但動能弱的可留意打底。''')
 
@@ -130,7 +130,7 @@ def render_portfolio_summary_section(
     # ── 🏆 組合排行總表(v19.164 合併 ③④⑤,一檔一列,每個 headline 欄只出現一次)──
     _render_master_table(results_t3, score_t3, _fund_map)
 
-    # ── 🎯 蔡森型態目標價(全組合,共用批次來源;逐檔看圖下鑽,非第二輸入)──
+    # ── 🎯 老師型態目標價(全組合,共用批次來源;逐檔看圖下鑽,非第二輸入)──
     _render_caisen_batch(results_t3, score_t3)
 
     # ── 明細 drill-down(需要才展開,不佔首屏)──────────────────────
@@ -248,7 +248,7 @@ def _render_master_table(
     """🏆 組合排行總表(v19.164 合併 ③④⑤)— 一檔一列,依綜合建議 → 多因子排序。
 
     每個 headline 欄只出現一次(去重 EPS/毛利/殖利/健康度/評級/多因子);技術明細、
-    多因子子維度、蔡森完整欄改由下方 expander 展開。§1:蔡森風報比缺 → 「—」不腦補。
+    多因子子維度、老師完整欄改由下方 expander 展開。§1:老師風報比缺 → 「—」不腦補。
     """
     if not results_t3:
         return
@@ -271,7 +271,7 @@ def _render_master_table(
             '評級': r.get('評級', '-'),
             '健康度': int(r.get('健康度', 0) or 0),
             '出場': f'{ev["icon"]} {ev["score"]}/3',
-            '蔡森型態': cs.get('pattern') or '—',
+            '老師型態': cs.get('pattern') or '—',
             '風報比': f'{rr:.2f}' if isinstance(rr, (int, float)) else '—',
             'EPS(4Q)': fd.get('近4季EPS', '-'),
             '毛利%': fd.get('毛利率%', '-'),
@@ -284,13 +284,13 @@ def _render_master_table(
           .drop(columns=['_p']).reset_index(drop=True))
     st.markdown('#### 🏆 組合排行總表')
     st.caption('一檔一列,3 秒看出「哪幾檔積極、哪幾檔該汰」:綜合建議 → 多因子 → 健康度 → 出場 → '
-               '蔡森型態/風報比 → 基本面。每個欄位只出現一次(明細見下方展開區)。')
+               '老師型態/風報比 → 基本面。每個欄位只出現一次(明細見下方展開區)。')
     st.dataframe(df, use_container_width=True, hide_index=True, column_config={
         '多因子': st.column_config.ProgressColumn('多因子', min_value=0, max_value=100, format='%.0f'),
         '健康度': st.column_config.NumberColumn('健康度', format='%d 🏥'),
         '出場': st.column_config.TextColumn('出場', help='技術+籌碼二維;利空新聞第三維在下方「逐檔技術明細」按「AI 掃利空」'),
-        '蔡森型態': st.column_config.TextColumn('蔡森型態'),
-        '風報比': st.column_config.TextColumn('風報比', help='蔡森等幅滿足;型態未明→「—」不給假高值'),
+        '老師型態': st.column_config.TextColumn('老師型態'),
+        '風報比': st.column_config.TextColumn('風報比', help='老師等幅滿足;型態未明→「—」不給假高值'),
         'P/B': st.column_config.TextColumn('P/B 估值'),
     })
 
@@ -324,14 +324,14 @@ def _render_caisen_batch(
     results_t3: list[dict],
     score_t3: list[dict],
 ) -> None:
-    """🎯 蔡森型態目標價(全組合)— v19.164 批次化,共用上方批次的 K 線來源。
+    """🎯 老師型態目標價(全組合)— v19.164 批次化,共用上方批次的 K 線來源。
 
     每檔在 run_batch_fetch 內已用 df4 就地算好(存 `_caisen`),此處只渲染。
     §1 誠實:擺動點不足 / 型態未明 → 標「—」不腦補;下鑽線圖共用批次 df(同源同數)。
     """
     if not results_t3:
         return
-    st.markdown('#### 🎯 蔡森型態目標價（全組合）')
+    st.markdown('#### 🎯 老師型態目標價（全組合）')
     st.caption('共用上方批次的 10 檔 K 線自動算,**無需再選標的**。§1:擺動點不足 / 型態未明 → '
                '「—」不給假目標;距甜蜜價% 負=待突破、正=已突破。')
     rows = []

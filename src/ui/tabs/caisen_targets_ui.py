@@ -1,8 +1,8 @@
-"""src/ui/tabs/caisen_targets_ui.py — 蔡森型態目標價計算機 UI(L5,v19.162→v19.163)。
+"""src/ui/tabs/caisen_targets_ui.py — 老師型態目標價計算機 UI(L5,v19.162→v19.163)。
 
 user 需求:「由技術線型計算甜蜜價與目標價」+「接在個股/組合裡,套用當前標的」。
 核心 `render_caisen_for_ticker(code, *, key_prefix)` 可重用元件:輸入代碼 → 抓 1y K 線 →
-ZigZag 自動偵測擺動點 → 機械對映蔡森關鍵位 → 可手動微調 → compute_caisen_targets →
+ZigZag 自動偵測擺動點 → 機械對映老師關鍵位 → 可手動微調 → compute_caisen_targets →
 報告 + 線圖標點。兩處共用(🔬 個股 Tab / 🏆 個股組合 Tab,各以 key_prefix 隔離 session),
 不另設獨立分頁(v19.163 user 要求)。
 
@@ -106,7 +106,7 @@ def _render_report(r: dict, current_price: float) -> None:
     rr = r.get("rr")
     pattern = r.get("pattern", "型態未明")
 
-    st.markdown(f"#### 📋 蔡森分析報告　`型態:{pattern}`　`現價:{current_price:.2f}`")
+    st.markdown(f"#### 📋 老師分析報告　`型態:{pattern}`　`現價:{current_price:.2f}`")
     a, b, c = st.columns(3)
     a.metric("🎯 甜蜜價(進場)", _fnum(sweet),
              help=f"區間 {_fnum(r.get('sweet_low'))} ~ {_fnum(r.get('sweet_high'))}(量縮拉回踩頸線不破更甜)")
@@ -130,7 +130,7 @@ def _render_report(r: dict, current_price: float) -> None:
         tip = "N 字須**帶量突破第一波高**才確認;拉回踩頸線要**量縮**才是好洗盤,量放大下殺別接。跌破整理低型態失效。"
     else:
         tip = "型態未明:擺動點不足或非典型,請自行看圖確認關鍵點後再參考數字。"
-    st.info(f"💡 **專家叮嚀**：{tip}　量價配合是蔡森核心 —— **突破必帶量、拉回宜量縮**。")
+    st.info(f"💡 **專家叮嚀**：{tip}　量價配合是老師核心 —— **突破必帶量、拉回宜量縮**。")
     if isinstance(rr, (int, float)) and rr < 2:
         st.caption("⚠️ 風報比 < 2:賺賠不划算。可等更甜的進場(貼近整理低)或放棄這筆。")
 
@@ -172,11 +172,11 @@ def _render_chart(data: dict, r: dict, chart_key: str) -> None:
 
 def render_caisen_for_ticker(code: str, *, key_prefix: str = "cs", default_pct: int = 8,
                              preloaded_df=None) -> None:
-    """可重用核心:對單一代碼跑蔡森型態目標價分析(自動偵測 + 可手動覆寫)。
+    """可重用核心:對單一代碼跑老師型態目標價分析(自動偵測 + 可手動覆寫)。
 
     key_prefix 隔離 session(獨立分頁 / 個股 / 組合 三處共用不衝突)。
     preloaded_df(v19.164 組合下鑽):傳入批次已抓的 df → 不重抓、換檔自動算,
-    確保「批次蔡森表 vs 下鑽線圖」同源同數(§1);None → 個股 Tab 走自抓。
+    確保「批次老師表 vs 下鑽線圖」同源同數(§1);None → 個股 Tab 走自抓。
     """
     st.caption("⚠️ **演算法推導,非型態判定**：系統只機械抓「擺動轉折點」，型態是否成立請自行看圖確認，"
                "並可下方**手動微調每個關鍵點**。僅供研究，風險自負。")

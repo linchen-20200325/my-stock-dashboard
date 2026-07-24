@@ -187,10 +187,10 @@ class TestMonthlyRevenueSubscore:
 
 
 # ════════════════════════════════════════════════════════════════
-# MJ 季財報 trend 子分數
+# 老師 季財報 trend 子分數
 # ════════════════════════════════════════════════════════════════
 def _make_snapshot(survival_status: str = "Pass") -> dict:
-    """簡化 MJ 體檢 snapshot fixture，僅含 Survival_Module/Cash_Ratio 一項。
+    """簡化 老師 體檢 snapshot fixture，僅含 Survival_Module/Cash_Ratio 一項。
 
     Key 須用大寫 Survival_Module 對齊 mj_health_diff._walk_statuses 掃描清單。
     """
@@ -315,7 +315,7 @@ class TestComputeTrendScore:
         assert out["mj_subscore"] == 0.0
 
     def test_mj_alone_cant_reach_strong(self):
-        # MJ 滿分但月營收缺 → mj=2.0*0.35=0.7 → up（達不到 strong_up）
+        # 老師 滿分但月營收缺 → mj=2.0*0.35=0.7 → up（達不到 strong_up）
         mj_snaps = [
             _make_snapshot("Fail"),
             _make_snapshot("Pass"),

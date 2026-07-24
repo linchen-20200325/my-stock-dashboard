@@ -1,7 +1,7 @@
-"""financial_statements_fetcher.py — MJ 財報體檢原始數據 fetcher(L1)。
+"""financial_statements_fetcher.py — 老師 財報體檢原始數據 fetcher(L1)。
 
 `fetch_financial_statements`:從 FinMind 抓最新季 資產負債表 / 現金流量表 / 損益表,
-算 MJ 體系所需指標。B8-a v19.155 從 data_loader.py(2545 行)原封拆出以降體積 + 職責
+算 老師 體系所需指標。B8-a v19.155 從 data_loader.py(2545 行)原封拆出以降體積 + 職責
 單一化;呼叫端經 `src.data.core` 套件 PEP 562 __getattr__ 轉發,介面完全不變。
 
 自足:所有 I/O(requests / yfinance / pandas / ThreadPoolExecutor)皆函式內 late import。
@@ -32,7 +32,7 @@ from src.config import FINMIND_API_URL
 def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
     """
     從 FinMind 抓取最新一季資產負債表、現金流量表、損益表，
-    計算 MJ 體系所需指標。
+    計算 老師 體系所需指標。
     回傳 dict；失敗時回傳 {"error": "..."}。
     """
     import os as _os_ffs, requests as _rq_ffs, datetime as _dt_ffs
@@ -206,7 +206,7 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
                              "PropertyPlantAndEquipment", "不動產廠房及設備淨額",
                              "不動產、廠房及設備"])
     lt_inv = _v(_bs, _lat, ["LongTermInvestments", "長期投資", "採權益法之投資"])
-    # ── v10.57.0 新增：MJ 體檢補充原料（速動比率 / 現金再投資比率 / EPS）──
+    # ── v10.57.0 新增：老師 體檢補充原料（速動比率 / 現金再投資比率 / EPS）──
     prepaid = _v(_bs, _lat, ["Prepayments", "預付款項", "預付費用", "預付貨款",
                               "預付投資款", "其他預付款項"])
     other_nca = _v(_bs, _lat, ["OtherNoncurrentAssets", "其他非流動資產",
@@ -469,7 +469,7 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
     print(f"[fetch_fin] {stock_id} {_lat}: cash={cash_ratio}% debt={debt_ratio}% "
           f"OCF={round(ocf/1e6,1)}百萬 AR_days={ar_days} AP_days={ap_days}")
 
-    # ── prev_period_data：供 MJ trend 季際比較 bootstrap（v18.456）─────────────────
+    # ── prev_period_data：供 老師 trend 季際比較 bootstrap（v18.456）─────────────────
     # 用已抓到的 730 天 FinMind 資料再計算上一季指標，避免 Streamlit Cloud 重啟後
     # 快照清空導致 mj_trend 恆為 0。不做模糊比對/yfinance 兜底（零值時 analyze 給 N/A 即可）。
     _prev_period_data: dict = {}
@@ -595,7 +595,7 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
         "現金股利(千)":      round(div_paid),
         "固定資產(千)":      round(ppe),
         "長期投資(千)":      round(lt_inv),
-        # ── v10.57.0 新增：MJ 體檢原料（5 個）──
+        # ── v10.57.0 新增：老師 體檢原料（5 個）──
         "現金及約當現金(千)": round(cash),
         "應收帳款(千)":      round(ar),
         "EPS":               round(eps_v, 2) if eps_v else 0,

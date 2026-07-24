@@ -24,7 +24,7 @@
 * 🩺 健康表（每次 export 依上述各表成敗自動產生,不需外部抓取）
     - `source_health`       各表 status（ok/absent）+ n_rows + as_of（下游 2026 顯示維度降級/缺料,不再默默消失）
 
-（`stock_health`（MJ 財報評級）為下一增量,需財報體檢管線,另接。）
+（`stock_health`（老師 財報評級）為下一增量,需財報體檢管線,另接。）
 
 用法:
     STOCK_DB=/volume1/data/stock.db python scripts/export_stock_db.py

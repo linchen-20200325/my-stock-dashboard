@@ -1,4 +1,4 @@
-"""v18.323 財報體檢 MJ 門檻 SSOT + 3 漂移修正 golden test。
+"""v18.323 財報體檢 老師 門檻 SSOT + 3 漂移修正 golden test。
 
 涵蓋:
 1. shared/financial_health_thresholds 常數值

@@ -64,7 +64,7 @@ def compute_and_apply_market_assessment(
         print(f'[市場評估] 大盤DF shape={getattr(_twii_df_loaded,"shape",None)}, '
               f'columns={list(getattr(_twii_df_loaded,"columns",[]))}, '
               f'外資淨={_foreign_net_loaded/1e8:.1f}億')
-        # 取得 M1B-M2 資金活水資料(宏爺評分維度)
+        # 取得 M1B-M2 資金活水資料(老師評分維度)
         _m1b2 = st.session_state.get('m1b_m2_info') or {}
         _m1b2_gap = (round(float(_m1b2['m1b_yoy']) - float(_m1b2['m2_yoy']), 2)
                      if _m1b2.get('m1b_yoy') is not None and _m1b2.get('m2_yoy') is not None

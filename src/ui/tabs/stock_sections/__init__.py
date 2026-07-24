@@ -9,7 +9,7 @@ Phase 2(低風險 section):
 Phase 3(中風險 section,v18.407):
 - section_health_score: A 健康度評分 + v4/v5 卡片(SVG 量表 + 6 技術指標 + 6 進階卡)
 - section_357_valuation: B 357 殖利率評價 + 殖利率/PE/PB 3 河流圖
-- section_strategy_conclusion: 策略 1 結論(月營收/毛利率/SQ/FGMS) + MJ 趨勢分數合議
+- section_strategy_conclusion: 策略 1 結論(月營收/毛利率/SQ/FGMS) + 老師 趨勢分數合議
 - section_d2_leading: D2 基本面先行 6 大指標 + 動態投資建議
 - section_vcp_bollinger: E VCP 波幅收縮 + 布林通道(v18.409 U4 Phase 3-E)
 - section_kline_chart: F K線技術圖 + 健康度走勢(v18.409 U4 Phase 3-F)

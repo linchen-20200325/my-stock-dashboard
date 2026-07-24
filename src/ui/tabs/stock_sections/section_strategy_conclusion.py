@@ -1,8 +1,8 @@
-"""src/ui/tabs/stock_sections/section_strategy_conclusion.py — 策略 1 結論 + MJ 趨勢分數 section(v18.408 U4 Phase 3-S1).
+"""src/ui/tabs/stock_sections/section_strategy_conclusion.py — 策略 1 結論 + 老師 趨勢分數 section(v18.408 U4 Phase 3-S1).
 
 從 tab_stock.py:1342-1509 抽出。
 - 策略 1 結論 expander:月營收 / 毛利率 / SQ 獲利品質 / FGMS 前瞻動能 4 指標
-- MJ 趨勢分數合議(月 + 季雙頻率 65/35)
+- 老師 趨勢分數合議(月 + 季雙頻率 65/35)
 
 §8.2 layer:L5 UI Tab section helper(中風險:依賴 5 locals + 7 helpers,
 無下游 state 寫回)。
@@ -41,14 +41,14 @@ def render_strategy_conclusion_section(
     fetch_financial_statements,
     analyze_financial_health,
 ) -> None:
-    """策略 1 結論 + MJ 趨勢分數合議。
+    """策略 1 結論 + 老師 趨勢分數合議。
 
     Args:
         sid2: 股票代碼
         rev2: 月營收 DataFrame
         qtr2: 季財報 DataFrame
         qtr_extra2: 季 BS/CF DataFrame
-        finmind_token: FinMind API token(供 MJ trend 補抓本季快照)
+        finmind_token: FinMind API token(供 老師 trend 補抓本季快照)
         fetch_financial_statements: callback(token, sid)→ dict
         analyze_financial_health: callback(token, sid, fin, news_context)→ dict
     """
@@ -166,7 +166,7 @@ def render_strategy_conclusion_section(
                 print(f'[FGMS_UI] 顯示錯誤: {_efgms2}')
                 _tb2.print_exc()
 
-    # ── 📊 MJ 趨勢分數合議(月+季雙頻率,單檔模式)──
+    # ── 📊 老師 趨勢分數合議(月+季雙頻率,單檔模式)──
     # SSOT:呼叫 mj_trend_score.compute_one_stock_trend(),與組合 Tab 同一函式
     try:
         from src.compute.health import (
@@ -204,7 +204,7 @@ def render_strategy_conclusion_section(
         st.markdown(
             f'<div style="background:#0d1117;border-left:3px solid {_mj_color};'
             f'padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
-            f'<span style="font-size:11px;color:#8b949e;">📊 MJ 趨勢分數合議（月+季 65/35）</span>　'
+            f'<span style="font-size:11px;color:#8b949e;">📊 老師 趨勢分數合議（月+季 65/35）</span>　'
             f'<span style="font-size:13px;font-weight:700;color:{_mj_color};">{_mj_label}（合分 {_mj_score:+.2f}）</span>'
             f'<span style="font-size:11px;color:#8b949e;margin-left:8px;">月分 {_mon_sub:+.2f} · 季分 {_mj_sub:+.2f} · 快照 {_snap_ym} {_fresh_tag}</span>'
             f'{_note_line}'

@@ -1,4 +1,4 @@
-"""tests/test_caisen_targets.py — 蔡森形態學目標價引擎單元測試(純邏輯,無 I/O)。
+"""tests/test_caisen_targets.py — 老師形態學目標價引擎單元測試(純邏輯,無 I/O)。
 
 涵蓋:
   1. compute_caisen_targets 例題數字驗算(破底翻 + N字兩種 stop)。

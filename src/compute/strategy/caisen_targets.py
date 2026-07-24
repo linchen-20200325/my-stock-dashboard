@@ -1,12 +1,12 @@
-"""src/compute/strategy/caisen_targets.py — 蔡森形態學目標價引擎(L2 純函式)。
+"""src/compute/strategy/caisen_targets.py — 老師形態學目標價引擎(L2 純函式)。
 
-把「蔡森(阿森)線型形態學」的**目標價 / 甜蜜價 / 止損 / 風報比**做成
+把「老師(阿森)線型形態學」的**目標價 / 甜蜜價 / 止損 / 風報比**做成
 **確定性演算法**:輸入 high/low 序列 + 現價 → ZigZag 擺動點 → 機械對映關鍵點 →
 等幅滿足量測目標。**演算法推導,非主觀型態判定**。
 
 三段式 pipeline(全純函式,零 I/O — 不 import requests/yfinance/streamlit/proxy):
   1. detect_swings(highs, lows)        — ZigZag 擺動點偵測(確定性反轉≥pct)
-  2. derive_caisen_levels(swings, px)  — 從擺動點機械對映蔡森關鍵位
+  2. derive_caisen_levels(swings, px)  — 從擺動點機械對映老師關鍵位
   3. compute_caisen_targets(**levels)  — 等幅滿足量測 → 目標/止損/風報比
 
 §1 Fail Loud / Never Fake:輸入缺值 / 算不出 → 回 None(不腦補假值);
@@ -126,9 +126,9 @@ def detect_swings(highs, lows, *, pct: float = 0.08) -> list[dict]:
     return pivots
 
 
-# ── 函式 2:機械對映蔡森關鍵位 ──────────────────────────────────────
+# ── 函式 2:機械對映老師關鍵位 ──────────────────────────────────────
 def derive_caisen_levels(swings, current_price) -> dict | None:
-    """從擺動點 + 現價,機械對映蔡森關鍵點(演算法推導,非型態判定)。
+    """從擺動點 + 現價,機械對映老師關鍵點(演算法推導,非型態判定)。
 
     以「最近一個顯著擺動高」為錨(壓力 / 頸線 / 第一波高),往前找起漲低、
     往後找整理低,並以整體最低低作為破底參考。
@@ -364,7 +364,7 @@ def compute_caisen_targets(
 
 # ── 函式 4:批次摘要(組合 Tab 用,一次跑三段 + 誠實 gate)────────────────
 def summarize_caisen(highs, lows, current_price, *, pct: float = 0.08) -> dict:
-    """單檔蔡森批次摘要 — 給「個股組合」批次表用的精選欄位 + §1 誠實 gate。
+    """單檔老師批次摘要 — 給「個股組合」批次表用的精選欄位 + §1 誠實 gate。
 
     一次跑完 detect_swings → derive_caisen_levels → compute_caisen_targets,只回
     對操盤最可操作的幾個數字,並套兩條誠實規則(§1 Fail Loud / Never Fake):

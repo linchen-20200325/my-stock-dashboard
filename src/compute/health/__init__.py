@@ -1,4 +1,4 @@
-"""src/compute/health/ — 健康度 / MJ 體檢計算。PEP 562 lazy forward。"""
+"""src/compute/health/ — 健康度 / 老師 體檢計算。PEP 562 lazy forward。"""
 from . import health_reconcile, mj_health_diff, mj_snapshot_io, mj_trend_score  # noqa: F401
 
 _SUBMODULES = (health_reconcile, mj_health_diff, mj_snapshot_io, mj_trend_score)

@@ -719,7 +719,7 @@ def fetch_5_years_cash_flow(stock_code: str, token: str = "") -> dict:
 
 
 # ─────────────────────────────────────────────
-# §12.6  Goodinfo MJ 財報指標直抓（資產/負債/應收/DSO）
+# §12.6  Goodinfo 老師 財報指標直抓（資產/負債/應收/DSO）
 # ─────────────────────────────────────────────
 _GI_BS_URL = "https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=BS_M_QUAR&STOCK_ID={sid}"
 _GI_IS_URL = "https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=IS_M_QUAR&STOCK_ID={sid}"
@@ -768,7 +768,7 @@ def fetch_goodinfo_metrics(
     _proxies: dict | None = None,
 ) -> dict:
     """
-    從 Goodinfo BS_M_QUAR / IS_M_QUAR 直抓最新一季財報數值並計算 MJ 指標。
+    從 Goodinfo BS_M_QUAR / IS_M_QUAR 直抓最新一季財報數值並計算 老師 指標。
 
     Args:
         stock_code: 股票代號（如 "2330"）
@@ -817,7 +817,7 @@ def fetch_goodinfo_metrics(
         else:
             print(f"[fetch_goodinfo_metrics] {stock_code} IS: HTTP {getattr(resp_is,'status_code','None')}")
 
-        # ── MJ 指標計算（units cancel in ratios）──────────────
+        # ── 老師 指標計算（units cancel in ratios）──────────────
         _a, _l, _ar, _rev = result["assets"], result["liab"], result["ar"], result["revenue"]
 
         if _l is not None and _a and _a > 0:

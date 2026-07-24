@@ -66,7 +66,7 @@ def generate_ai_comment(data: dict) -> str:
     if fb > 5 and tb > 0:
         lines.append(f'💰 【籌碼共振】外資+{fb:.1f}億 & 投信+{tb:.1f}億，主力共同買進，訊號強烈。')
     elif fb > 5:
-        lines.append(f'💰 【外資買進】外資+{fb:.1f}億，跟著大戶走（宏爺策略）。')
+        lines.append(f'💰 【外資買進】外資+{fb:.1f}億，跟著大戶走（老師策略）。')
     elif fb < -10:
         lines.append(f'⚠️ 【外資賣超】外資-{abs(fb):.1f}億，籌碼面轉弱，建議等待。')
 

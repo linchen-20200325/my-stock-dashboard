@@ -168,8 +168,8 @@ def render_data_health_raw():
             st.info('尚無資料（請先觸發對應的抓取動作）')
             return
         _df_t = _pd_r.DataFrame(rows)
-        # 固定欄位順序：先 MJ 分組 → 名稱/MJ指標 → 來源/端點/Proxy → 時序 → 狀態
-        _order = ['MJ 模組', '資料名稱', '適用 MJ 指標', '來源', '端點', 'Proxy',
+        # 固定欄位順序：先 老師 分組 → 名稱/老師指標 → 來源/端點/Proxy → 時序 → 狀態
+        _order = ['老師 模組', '資料名稱', '適用 老師 指標', '來源', '端點', 'Proxy',
                   '頻率', '日期', '最後更新', '狀態']
         _cols  = [c for c in _order if c in _df_t.columns] + \
                  [c for c in _df_t.columns if c not in _order]
@@ -772,15 +772,15 @@ def render_data_health_raw():
             rows.append(_row('股利歷史', _yr_date, 'yearly',
                              source='FinMind', endpoint='TaiwanStockDividend',
                              proxy=False))
-            # MJ 體檢財報
+            # 老師 體檢財報
             _fh2 = st.session_state.get(f'_fh_{sid2}')
             _fh2_date = (str(_dt_r.date.today())
                          if _fh2 and not _fh2.get('error') else None)
-            rows.append(_row('MJ體檢財報原始 BS+CF+IS', _fh2_date, 'quarterly',
+            rows.append(_row('老師體檢財報原始 BS+CF+IS', _fh2_date, 'quarterly',
                              source='FinMind 3 datasets',
                              endpoint='BalanceSheet+CashFlows+IncomeStatement',
                              proxy=False))
-            # ── MJ 體檢科目連動診斷（與「🏥 體檢表」N/A 項目 1:1 對應）──
+            # ── 老師 體檢科目連動診斷（與「🏥 體檢表」N/A 項目 1:1 對應）──
             #   此處只回答「該科目本季原料是否抓到」，不顯示計算值或現況數字。
             _fin_raw2 = st.session_state.get(f'_fin_raw_{sid2}') or {}
             if _fh2_date and _fin_raw2:
@@ -799,9 +799,9 @@ def render_data_health_raw():
                     slot: '_bs_slot_latest' / '_cf_slot_latest' / '_is_slot_latest'
                     """
                     _meta = {
-                        'MJ 模組': module,
+                        '老師 模組': module,
                         '資料名稱': f'{name}',
-                        '適用 MJ 指標': mj_indicator,
+                        '適用 老師 指標': mj_indicator,
                         '頻率': '季頻',
                         '來源': source,
                         '端點': endpoint or '—',
@@ -942,9 +942,9 @@ def render_data_health_raw():
                 # ━━━ 5 年加總（允當比率 B 項）━━━━━━━━━━━━━━━━━━━━━━
                 _b5_ok = _b5_2.get('status') == 'ok'
                 rows.append({
-                    'MJ 模組':   _M1,
+                    '老師 模組':   _M1,
                     '資料名稱':  '5 年現金流加總（OCF + Capex + 存貨增加 + 現金股利）',
-                    '適用 MJ 指標': '現金流量允當比率（5 年版）',
+                    '適用 老師 指標': '現金流量允當比率（5 年版）',
                     '頻率':     '年頻',
                     '來源':     'FinMind',
                     '端點':     'TaiwanStockCashFlowsStatement (5y)',
@@ -958,7 +958,7 @@ def render_data_health_raw():
             st.caption(
                 '🩺 **本表僅回答「該欄位本季是否抓到」**，不顯示數值或現況；'
                 '若體檢表出現 N/A，請對照本表紅燈科目。\n\n'
-                '📚 **MJ 五大模組對照**：一、現金流量（氣長）｜二、獲利能力（好生意）｜'
+                '📚 **老師 五大模組對照**：一、現金流量（氣長）｜二、獲利能力（好生意）｜'
                 '三、經營能力（翻桌率）｜四、償債能力（還債）｜五、財務結構（那根棒子）。')
 
         # ────────── 個股組合：逐檔批次分析診斷 ─────────────────
@@ -1011,7 +1011,7 @@ def render_data_health_raw():
             _all_section_rows.extend(_grp_diag_rows)
             _tbl(_grp_diag_rows)
             st.caption(
-                '💡 批次分析涵蓋 K線+合約負債+資本支出+股利 4 大維度（不含 MJ 五大模組 N/A 對照）。'
+                '💡 批次分析涵蓋 K線+合約負債+資本支出+股利 4 大維度（不含 老師 五大模組 N/A 對照）。'
                 '若需單檔深度診斷請至「🔬 個股」Tab 載入完整分析。')
 
     # ════ 5. ETF Raw ═════════════════════════════════════════════

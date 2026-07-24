@@ -1,56 +1,56 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
-## 🏆 2026-07-24 個股組合 Tab 版面優化：單一來源 × 去重 × 蔡森批次化 × MJ 合一（v19.164,user「標的只有一個來源、整合上方總表、資訊重複繁雜要重分類」）
+## 🏆 2026-07-24 個股組合 Tab 版面優化：單一來源 × 去重 × 老師批次化 × 老師 合一（v19.164,user「標的只有一個來源、整合上方總表、資訊重複繁雜要重分類」）
 
 多 AI 顧問(資訊架構 + 台股操盤手)討論 + 可視預覽(user 核准「超出預期」)後實作。核心:3 個標的輸入來源 → 1 個、~12 張表 → 6、毛利率重複 5 次 → 1。
 
-- **單一來源**:砍掉蔡森獨立 `選擇標的` selectbox(`_csgrp_pick`)+ MJ 體檢轉機獨立批次輸入框
+- **單一來源**:砍掉老師獨立 `選擇標的` selectbox(`_csgrp_pick`)+ 老師 體檢轉機獨立批次輸入框
   (`_mj_batch_input`);「帶入我的持股」鈕(`_grp_load_holdings_callback`)移到上方唯一輸入 `multi_input` 旁,
-  蔡森 / MJ / 三階段濾網全部吃這一組。
-- **蔡森批次化(零額外抓取)**:L2 新增 `summarize_caisen(highs, lows, px)` — 一次跑三段 pipeline +
+  老師 / MJ / 三階段濾網全部吃這一組。
+- **老師批次化(零額外抓取)**:L2 新增 `summarize_caisen(highs, lows, px)` — 一次跑三段 pipeline +
   **§1 誠實 gate**:①擺動點不足→全 None;②**型態未明→封鎖 rr/目標**(否則引擎止損退化成頸線×0.99,
   分母極小把風報比灌成假高,誤導進場);另加 `距甜蜜價%`(負=待突破/正=已突破)。`run_batch_fetch` 在
-  `df4`(已抓)就地算,塞 `results_t3['_caisen']`。組合出「🎯 蔡森型態目標價(全組合)」批次表;
+  `df4`(已抓)就地算,塞 `results_t3['_caisen']`。組合出「🎯 老師型態目標價(全組合)」批次表;
   逐檔線圖下鑽用 selectbox(選項=同一批次 10 檔、預設最強檔)+ **preloaded 批次 df**(不重抓,表↔圖同源同數)。
-- **MJ 趨勢 × 轉機合一**:`compute_one_stock_trend` additive 用已載入的近 2 季快照 `mj_snaps[-2:]` 附帶跑
-  `diff_mj_health` → 回 `diff_verdict` / `turn_icon`(零額外抓取)。組合 MJ 區塊加「轉機」欄 + 🌟本業虧轉盈/
+- **老師 趨勢 × 轉機合一**:`compute_one_stock_trend` additive 用已載入的近 2 季快照 `mj_snaps[-2:]` 附帶跑
+  `diff_mj_health` → 回 `diff_verdict` / `turn_icon`(零額外抓取)。組合 老師 區塊加「轉機」欄 + 🌟本業虧轉盈/
   ⚠️盈轉虧摘要 + 逐檔🟢變好/🔴變差明細 → user 要的「找體質差→變好」完整保留。獨立
   **`tab_mj_health_diff.py` 退役真刪**(自帶第二輸入 + 重複第二張表,能力已合併)。
 - **主表合併去重**:`section_portfolio_summary` 把 ⑤最終建議卡 + ③多因子排行 + ④汰弱留強 合成一張
   **「🏆 組合排行總表」**(一檔一列,依綜合建議→多因子排序,headline 各出現一次);多因子子維度、逐檔技術明細
   (RSI/KD/量比/357/VCP/合約負債…去掉與總表重複的 EPS/毛利/殖利/健康/評級)全下沉 expander。
 - **驗證**:全套 pytest **3382 passed / 28 skipped / 0 fail**;新增 4 個 summarize_caisen 測試 + 4 個守衛
-  (轉機合併點 / 蔡森批次接線 / 單一來源 / 獨立檔退役);undefined-names AppTest smoke 7 passed。
-- **對抗式稽核補洞(user 問「面板資料會少嗎」)**:派稽核 AI 拿 OLD vs NEW 逐欄比對 —— ③④⑤/多因子/蔡森
-  是乾淨去重(⑤ 從前 5 檔→全部、維度表 head(5)→全部,反更完整);但抓到 MJ 併檔**真損失**:組合層
-  「純 MJ 季財報 verdict + 計數」被「月 65%+季 35% 混合趨勢分」蓋掉(一檔季財報退步卻可能因月營收強顯示進步)。
-  **已修**:MJ 表加「MJ季財報」純季度 verdict 欄 + 6-count 計數(退步/分歧/進步/不變/首季/失敗)+ 補回
+  (轉機合併點 / 老師批次接線 / 單一來源 / 獨立檔退役);undefined-names AppTest smoke 7 passed。
+- **對抗式稽核補洞(user 問「面板資料會少嗎」)**:派稽核 AI 拿 OLD vs NEW 逐欄比對 —— ③④⑤/多因子/老師
+  是乾淨去重(⑤ 從前 5 檔→全部、維度表 head(5)→全部,反更完整);但抓到 老師 併檔**真損失**:組合層
+  「純 老師 季財報 verdict + 計數」被「月 65%+季 35% 混合趨勢分」蓋掉(一檔季財報退步卻可能因月營收強顯示進步)。
+  **已修**:老師 表加「老師季財報」純季度 verdict 欄 + 6-count 計數(退步/分歧/進步/不變/首季/失敗)+ 補回
   淨變化/⚪不變逐項(全來自既有 `diff_verdict`,零計算改動);加 `test_mj_quarterly_verdict_preserved` 守衛。
 - **其他 Tab(個股/選股網/ETF)**已平行稽核完(去重提案在手),接著做可視預覽給 user 確認再實作。
 - **分支**:PR #568 已 merged → 從最新 main 重開,另開新 PR。
 
-## 🩺 2026-07-23 MJ 體檢轉機併進個股組合（v19.163,user「都合併在個股與組合,不開新 tab」）
+## 🩺 2026-07-23 老師 體檢轉機併進個股組合（v19.163,user「都合併在個股與組合,不開新 tab」）
 
-- MJ 體檢轉機是**批次**工具(掃一票找轉機股)→ 併進 🏆 個股組合 Tab(批次天生適合),
-  拿掉獨立「🩺 體檢轉機」分頁;個股 Tab 維持既有單檔 MJ 財報體檢(健康度那段),不重複塞。
+- 老師 體檢轉機是**批次**工具(掃一票找轉機股)→ 併進 🏆 個股組合 Tab(批次天生適合),
+  拿掉獨立「🩺 體檢轉機」分頁;個股 Tab 維持既有單檔 老師 財報體檢(健康度那段),不重複塞。
 - `render_mj_health_diff_tab` 加 `seed_codes` 參數 → 組合內嵌時**預設吃組合現有持股清單**
   (仍保留貼清單 / 帶入持股)。app.py 選股群組回 3 子 Tab(個股/組合/選股網)。
-- 守衛測試改「組合掛載 + app.py 無 with tab_mj」;9 passed + MJ render smoke 零例外。
-- 同 PR #568(蔡森 + MJ 皆併入個股/組合、無獨立分頁)。
+- 守衛測試改「組合掛載 + app.py 無 with tab_mj」;9 passed + 老師 render smoke 零例外。
+- 同 PR #568(老師 + 老師 皆併入個股/組合、無獨立分頁)。
 
-## 🔗 2026-07-23 蔡森目標價接進 個股 + 組合（v19.163,user 要求「套用當前標的」）
+## 🔗 2026-07-23 老師目標價接進 個股 + 組合（v19.163,user 要求「套用當前標的」）
 
 把 v19.162 的 `render_caisen_targets_tab` 核心重構為**可重用元件** `render_caisen_for_ticker(code, *, key_prefix)`
 (session key 以 key_prefix 隔離,三處共用不衝突),再接進:
-- **個股 Tab**(tab_stock):expander「🎯 蔡森型態目標價（本檔）」→ 套用當前 `t2_sid` 標的(不用重輸)。
+- **個股 Tab**(tab_stock):expander「🎯 老師型態目標價（本檔）」→ 套用當前 `t2_sid` 標的(不用重輸)。
 - **個股組合 Tab**(tab_stock_grp):expander + selectbox 選一檔持股 → 套用該標的。
-- **不設獨立分頁**(user 追加要求「蔡森目標價這個就不用多 tab 了」):刪除 `render_caisen_targets_tab`
-  + app.py 選股群組移除「🎯 蔡森目標價」子 Tab + __init__ 反註冊,只保留 個股/組合 內嵌。
+- **不設獨立分頁**(user 追加要求「老師目標價這個就不用多 tab 了」):刪除 `render_caisen_targets_tab`
+  + app.py 選股群組移除「🎯 老師目標價」子 Tab + __init__ 反註冊,只保留 個股/組合 內嵌。
 - 守衛測試「可重用元件 + 個股/組合接線 + 無獨立分頁」;26 passed + AppTest smoke 零例外。同 PR #568。
 
-## 🎯 2026-07-23 新功能:蔡森型態目標價計算機（v19.162,user 要求「由技術線型算甜蜜價/目標價」）
+## 🎯 2026-07-23 新功能:老師型態目標價計算機（v19.162,user 要求「由技術線型算甜蜜價/目標價」）
 
-多角色團隊(線型分析專家 + 總管)協作:由技術線型**自動**算蔡森 甜蜜價/止損/目標/風報比。
+多角色團隊(線型分析專家 + 總管)協作:由技術線型**自動**算老師 甜蜜價/止損/目標/風報比。
 
 - **L2 引擎(線型專家建)** `src/compute/strategy/caisen_targets.py`(純函式,只 import math,零 I/O):
   - `detect_swings(highs, lows, pct)` — ZigZag 擺動點偵測(確定性,反轉 ≥pct 才確認)。
@@ -60,21 +60,21 @@
   - §1 誠實:缺值回 None 不腦補;`_EPS` 容差;除零 guard。21 tests(含 golden:例題 target_n=145)。
 - **L5 UI(總管建)** `src/ui/tabs/caisen_targets_ui.py`:輸入代碼→抓 1y K 線(fetch_stock_history_1y,EX-PASSTHRU-1)
   →自動偵測→**手動可覆寫每個關鍵點**→報告(甜蜜/止損/目標第一二波/風報比/專家叮嚀)+ 線圖標擺動點與水平線。
-  掛 🔬 選股群組第 5 子 Tab「🎯 蔡森目標價」。
+  掛 🔬 選股群組第 5 子 Tab「🎯 老師目標價」。
 - **§1 誠實界線**:UI 明示「演算法推導,非型態判定」+ 抓不到 K 線 fail loud(不編假)+ 型態關鍵點可人工覆寫。
 - **防孤兒**:`tests/test_caisen_ui_mounted.py`(掛載 + forward + UI 走 L2 SSOT + L2 純度)。
 - **驗證**:25 passed + AppTest render smoke 零例外 + 引擎 forward import 例題精確。
 - **分支**:v19.161 PR #567 已 merged → 從最新 main 重開,另開新 PR。
 
-## 🩺 2026-07-23 復活 MJ 體檢轉機 Tab（v19.160,user 要求「找體質差→變好的公司」）
+## 🩺 2026-07-23 復活 老師 體檢轉機 Tab（v19.160,user 要求「找體質差→變好的公司」）
 
-團隊稽核排毒波(v19.159)P3 曾真刪 4 孤兒 Tab;user 於反悔點指出 **MJ 體檢變化仍需要**(找轉機股)。撈回 + 修根因 + 掛回 + 加值:
+團隊稽核排毒波(v19.159)P3 曾真刪 4 孤兒 Tab;user 於反悔點指出 **老師 體檢變化仍需要**(找轉機股)。撈回 + 修根因 + 掛回 + 加值:
 - **根因**:此功能 v18.463「10 Tab→4 群組」改版時**被漏掛**(render fn 全域 0 caller)→ 淪孤兒 → 稽核判死。非功能不好,是從沒被接上。
 - **復活**:git 撈回 `tab_mj_health_diff.py`(後端 diff_mj_health / analyze_financial_health 一直是活的,零改)→ 重新註冊 `src/ui/tabs/__init__` → **真的掛進 app.py** 🔬 選股群組第 4 子 Tab「🩺 體檢轉機」(修漏掛根因)。
 - **能力**:貼一串代碼(≤10)→ 每檔跑 MJ「4力1棒子」財報體檢跨兩季 diff → 標 🌟 本業虧轉盈轉機股 / ⚠️ 盈轉虧雷股。**零 LLM 純規則引擎**。
 - **加值(user 選「貼清單+帶入持股」)**:新增「🔗 帶入我的持股」按鈕 — callback 讀 Google Sheet 持股組合代碼自動填入(EX-PASSTHRU-1 lazy import gsheet_portfolio,graceful 未登入不炸)。
 - **防再孤兒**:新增守衛測試 `test_mj_health_diff_mounted.py`(3 test:app.py 有掛載 + UI 可 forward import + 帶入持股 callback 在)→ 釘死掛載,下輪稽核不會再誤判孤兒。
-- **治理回滾**:CLAUDE.md L5 表 + EX-PASSTHRU-1(補 2 處 L5→L1)、ARCHIVED_FEATURES.md MJ 段標「已復活」。
+- **治理回滾**:CLAUDE.md L5 表 + EX-PASSTHRU-1(補 2 處 L5→L1)、ARCHIVED_FEATURES.md 老師 段標「已復活」。
 - **驗證**:compile + import forward + 98 passed(含守衛)+ **AppTest render smoke 零未捕捉例外**。
 - **分支**:因 v19.159 PR #565 已 merged,依規則從最新 main 重開同名分支做,另開新 PR。
 
@@ -87,7 +87,7 @@
 - **Batch B(P1 資料正確性)**:`_get_tpex_day` TPEX 暫時性失敗改短 TTL 負快取(`_TPEX_FAIL_TS`,對稱補齊 T86 早有、TPEX 一直漏的護欄;來源恢復後可重試,不再靜默釘空 dict → 上櫃股法人 NaN)+ 對稱回歸測試。pre-existing 缺口(v19.80 N2c 只修 T86)。
 - **Batch C(P2a 高 ROI)**:pandera schema 併回 `shared/schemas.py`(L0 單一家)+ 刪 `compute/risk/schemas.py`(L2)+ repoint 8 處 L1 production import + 2 test → **一次解「schema SSOT 分裂 + L1→L2 上行 10 處」兩型違憲**;graceful 改善(L0 無 pandera 也能乾淨 import)。
 - **Batch D(P2b)**:`render_macro_alerts` + `_LEVEL_STYLE` 從 `macro_alert.py`(L1)搬 `macro_ui_components.py`(L4);macro_alert docstring 修錯標(L3→L1)+ 清死 TRAFFIC import;3 caller repoint。
-- **Batch E(P3 真刪 + 存檔)**:比照 backtest/macro_validation 前例,真刪 4 個「後端活、UI 下架」孤兒 Tab + 專屬死後端(共 9 檔 + 2 函式):ETF 質借模擬整棧(UI + L2 engine + fetch_etf_close_history + 2 test)、MJ 體檢變化 UI(後端 LIVE 保留)、月營收篩選 UI + screen_from_batch/filter_by_mode、RS wrapper UI(service LIVE 保留);新增 `docs/ARCHIVED_FEATURES.md`。全套 3347 passed(僅 pandera-gated 既有 3 基準)。
+- **Batch E(P3 真刪 + 存檔)**:比照 backtest/macro_validation 前例,真刪 4 個「後端活、UI 下架」孤兒 Tab + 專屬死後端(共 9 檔 + 2 函式):ETF 質借模擬整棧(UI + L2 engine + fetch_etf_close_history + 2 test)、老師 體檢變化 UI(後端 LIVE 保留)、月營收篩選 UI + screen_from_batch/filter_by_mode、RS wrapper UI(service LIVE 保留);新增 `docs/ARCHIVED_FEATURES.md`。全套 3347 passed(僅 pandera-gated 既有 3 基準)。
 - **Batch F(LOW + 治理同步)**:COLORS_7 色票 SSOT 歸位 `shared/colors.py`(L0,修 daily_checklist L3→L4 上行)+ gsheet_portfolio session_state 納入 EX-OAUTH-1(登錄 + 檔內註解)+ 刪 `_check_one_stock` yf 幽靈參數 + CLAUDE.md 治理同步(EX-PASSTHRU-1 移除已刪模組 stale 條目 + section_mid render 註記 + L5 表 + EX-OAUTH-1 擴充)+ SPEC.md:5 backtest stale 修 + STATE 存檔。
 - **誠實排除(非漏)**:risk_radar L2 I/O(STATE B7 已登錄延後)、fillna(0)(D1 已登錄)、reconcile×2 / sharpe×3(刻意不同語意)、docs/DEAD_CODE_AUDIT.md(時點快照非活躍治理表,mj 後端仍 LIVE 未動)。3 個 pandera-gated test 為本地無 pandera 既有基準(CI 有則通過,stash 對照確認非本波引入)。
 
@@ -466,7 +466,7 @@ expander 首次 render 就**自動**呼叫 `analyze_financial_health`(Gemini)。
 - **`_fh is None` 分支**:原「載入中...」st.error 改 `pass`(尚未生成不誤報錯)。
 - **section_strategy_conclusion `_cost` 不動(§-1 查證)**:`compute_one_stock_trend` 的 AI 是
   **snapshot-gated**(`if yyyymm_curr not in yms:` 才打,once/股/月 + `save_snapshot` 持久化),
-  已攤銷,非每次 render 自動觸發,gate 反而破壞 MJ trend bootstrap → 不動。
+  已攤銷,非每次 render 自動觸發,gate 反而破壞 老師 trend bootstrap → 不動。
 - **「刪 3 死 screener」撤回**:yield_screener / monthly_revenue_screener 皆有 caller,非死碼。
 - **test**:`test_ai_financial_health_gate`(按鈕在 AI 呼叫前)2 passed。§8.1 user 核准。
 
@@ -1669,18 +1669,18 @@ compute_std_bands 回傳鍵實測正確。
 - **`section_financial_leading` 仍顯示 PP&E 存量標榜「資本支出」**:Task#20 修復了龍頭預警(dragon_alert)的比較邏輯，但同一個 `_capex2`(CF 季資本支出)未傳給財報領先指標 section，UI 仍用 PP&E 存量(cx2)且標籤顯示「資本支出」造成誤導。
 - **修法**:`render_financial_leading_section` 新增 `capex=None` kw-only 參數；若 capex > 0 則優先以「季資本支出」顯示，cx2 PP&E 作 fallback(標籤改為「固定資產/資本支出」)。tab_stock.py 呼叫端加 `capex=_capex2`(與 dragon_alert 一致)。`section_financial_leading.py` + `tab_stock.py`
 
-## 🚀 前一狀態(v18.457 — t2_inst 修 + Reuters RSS 移除 + 龍頭預警 capex 修 + MJ bootstrap)
+## 🚀 前一狀態(v18.457 — t2_inst 修 + Reuters RSS 移除 + 龍頭預警 capex 修 + 老師 bootstrap)
 
 ✅ **v18.457(2026-07-03)**:Stock dashboard 4 項修復:
 - **Task#18 `t2_inst` session key 從未寫入**:`section_kline_chart`(K線敘事「外資買超/賣超」)與 `section_health_score`(v4 籌碼 foreign_net/trust_net)讀 `st.session_state['t2_inst']` 但整個 tab_stock.py 從未寫這個 key → K線敘事恆用 `_fnet_f=0`(顯示「外資中性」)，v4 籌碼欄位恆為 0。修法：在 `_xsec` 計算後、各 section 渲染前，從 df2(已含 T86/TPEX 外資/投信欄，單位張)取最後一日寫入 `t2_inst`。`src/ui/tabs/tab_stock.py`
 - **Task#19 Reuters RSS dead**:`news_fetcher.py` 移除 `feeds.reuters.com/reuters/businessNews`(dead since 2020-06),每次新聞抓取白費 timeout。`src/data/news/news_fetcher.py`
 - **Task#20 龍頭預警「大擴廠」用 PP&E 存量(cx2)而非 capex(季流量)**:製造業 PP&E 存量動輒數倍股本，幾乎永遠觸發龍頭預警(假正例)。fetch_financials 本就同時抓 BS PP&E 和 CF 資本支出，但 `_capex2`(CF 資本支出)被丟棄未存入 t2_data。修法：t2_data 加 `capex` 欄，傳給 `render_dragon_alert_section`；龍頭預警優先用 CF capex 比較，PP&E 作 fallback(當 CF 資料取不到時)。`tab_stock.py` + `section_dragon_alert.py`
-- (含 v18.455/v18.456)ETF 中文名 + MJ 季財報 bootstrap 同批推送
+- (含 v18.455/v18.456)ETF 中文名 + 老師 季財報 bootstrap 同批推送
 
-## 🚀 前一狀態(v18.456 — ETF 中文名 attempts=1 bug 修 + MJ 季財報 bootstrap 修)
+## 🚀 前一狀態(v18.456 — ETF 中文名 attempts=1 bug 修 + 老師 季財報 bootstrap 修)
 
-✅ **v18.456(2026-07-03)**:MJ 季財報分 bootstrap 修:
-- **MJ 季財報分恆為 0 根因**:`data_cache/mj_snapshots/` 在 Streamlit Cloud 為 ephemeral 存儲,重啟即清空,永遠湊不齊 2 季 snapshot → `compute_mj_trend_subscore` 回 `(0.0, {"reason": "insufficient_snapshots"})`。
+✅ **v18.456(2026-07-03)**:老師 季財報分 bootstrap 修:
+- **老師 季財報分恆為 0 根因**:`data_cache/mj_snapshots/` 在 Streamlit Cloud 為 ephemeral 存儲,重啟即清空,永遠湊不齊 2 季 snapshot → `compute_mj_trend_subscore` 回 `(0.0, {"reason": "insufficient_snapshots"})`。
 - **解法**:在 `fetch_financial_statements` return dict 加 `prev_period_data` 欄位(用同一個 730 天 FinMind call 裡 `_dates[-2]` 的資料計算上季關鍵指標,約 50 行,無額外 API call)。`compute_one_stock_trend` 保存本季快照後,若 `len(yms) < 2` 則立即用 `prev_period_data` 呼叫 `analyze_financial_health("", sid, prev_period_data, "")` 補存上季快照。每次重啟後第一次抓財報就能湊足 2 季 → `mj_trend` 正常計算。`src/data/core/data_loader.py` + `src/compute/health/mj_trend_score.py`。
 
 ✅ **v18.455 補強（PR #455,2026-07-03，另一 session）**:上條 attempts=2 已修 MoneyDJ 路徑;本 PR **另加**兩項:
@@ -1695,7 +1695,7 @@ compute_std_bands 回傳鍵實測正確。
 - **總經頁「M1B-M2 資金動能」頂部燈號恆顯示「—」**(但下方「策略3」區塊正確顯示 -12.63%):`tw_macro.fetch_cbc_m1b_m2()` 本就算好 `gap`,但 `macro_snapshot.fetch_m1b_m2_block()` 重新打包 dict 時,CBC/FRED/IMF 三個 return 路徑全部漏帶 `'gap'` 鍵 → `session_state['m1b_m2_info']` 從未有此鍵 → `macro_helpers.py` 算頂部燈號/KPI 卡(依 `.get('gap')`)恆得 None → 顯示「—」;「策略3」區塊是自己內聯重算 `m1b_yoy-m2_yoy`(不依賴此鍵)才不受影響。補回三路徑 `gap` 欄(schema-additive)。守衛 `test_m1b_m2_gap_wiring.py`(+4)。
 - **「個股」分頁整頁 MergeError 崩潰**(`incompatible merge keys dtype('<M8[s]') and dtype('<M8[us]')`,v18.440 per-tab 隔離器攔到不拖垮其他分頁):`section_357_valuation.py:333` PE 本益比河流圖 `merge_asof` 兩側日期精度不同 —— 股價側(data_loader `.dt.date` 物件經 `pd.to_datetime` → `datetime64[s]`)vs 季報側(FinMind 字串日期 `pd.to_datetime` → `datetime64[us]`),兩側從未顯式對齊精度。pandas merge_asof 要求兩側 key dtype 完全一致(含精度),不同即炸。兩側補 `.astype('datetime64[ns]')`。守衛 `test_pe_river_merge_dtype.py`(+4 純邏輯 + 1 slow AppTest)。
 - **ETF 多檔比較表「1Y累積%」對年輕 ETF 顯示假 212%**(user 截圖 00981A 上市僅 13 個月):與 v18.452 `calc_cagr` 同源根因 —— `calc_total_return_1y` 只看「有沒有資料」不看「是否真橫跨 1 年」,年輕 ETF 的 `p_start` 實為上市首日低價而非真 365 天前價格。新增可選 `require_full_period`,資料跨度不足 365 天 90% 回 None(§1 寧缺勿假);兩 ETF UI 呼叫端(single/grp_compare)補齊 None 顯示 N/A。守衛併入 `test_etf_grp_compare_young_etf_fix.py`(+5)。
-- **MJ 季財報分恆為 0**(待定):需連續 2 季 snapshot 才能算 delta,但 snapshot 存本機 `data_cache/mj_snapshots/`(.gitignore,Streamlit Cloud 重啟即清空),永遠湊不齊 2 季 → 架構決策(改存 GitHub / Google Sheets 等持久層),待 user 定奪。
+- **老師 季財報分恆為 0**(待定):需連續 2 季 snapshot 才能算 delta,但 snapshot 存本機 `data_cache/mj_snapshots/`(.gitignore,Streamlit Cloud 重啟即清空),永遠湊不齊 2 季 → 架構決策(改存 GitHub / Google Sheets 等持久層),待 user 定奪。
 - 測試 2520 pass(fast lane)。SSOT/§8.2:無新增 SSOT 常數 / 無新增例外 / 無跨層反向 import;M1B-M2 修復為「正確透傳 tw_macro 早已算好的 gap」而非消費端重算。
 
 ---
@@ -1705,7 +1705,7 @@ compute_std_bands 回傳鍵實測正確。
 ✅ **v18.452→453(PR #451,2026-07-01)**:user 回報「個股」「總經」「個股組合」三分頁陸續出錯 + 附完整 production log,逐一 root cause 確認全部同一根因(大檔案抽出成獨立模組時漏搬 import/變數):
 - **ETF 多檔比較假資料**:名稱欄只用 yfinance shortName(常回發行商英文名,非商品名)→ 改用既有 SSOT `fetch_etf_zh_name()`(MoneyDJ 中文名,原本只有 etf_tab_single.py 在用)。`calc_cagr`/`calc_avg_yield` 新增可選 `expected_years`/`require_full_years` 嚴格模式:年輕 ETF(如上市僅 13 個月)資料跨度不足宣稱年期時回 `None`(§1 寧缺勿假),不再外推出「00981A 假 191% 3Y CAGR」這類不可能數字。兩參數皆預設維持舊行為。
 - **6 處 undefined-name 崩潰**(用 pyflakes 全域靜態掃描一次找出,而非等 production log 逐一現形):`section_short.py`(總經 §5 短線急殺桶)缺 `TRAFFIC_GREEN/RED/YELLOW`/`os`/`plotly.graph_objects`/`BREADTH_BULL_PCT`/`BREADTH_NEUTRAL_PCT`/`add_danger_hlines` 共 8 處 import,ADL 資料一載入就 100% 全頁炸;`section_357_valuation.py`(個股 357 評價)結尾殘留一段完全重複且用未定義 `cheap2/fair2/dear2` 寫死的舊邏輯,直接刪除;`tab_stock_picker.py` 的 `_check_dividend_5y` 傳入未定義 `_t_yf`,導致「智慧選股」Stage 1/2 兩張表對任何股票都 100% NameError、整檔回退成全 ❓N/A(v18.374 抽 L1 fetcher 時漏改)—— 改用 `fetch_stock_history_1y` 已解析出的正確後綴建構真正的 `yfinance.Ticker`。另 2 處(`section_news_ai.py` 缺 `json`/`datetime`、`section_state.py` 缺 `pd`)尚未在 production 現形但屬同一顆未爆彈,一併清除。新增 `tests/test_no_undefined_names.py`(pyflakes 全域靜態守衛,CI 補裝),較功能測試更早、更全面攔截此類回歸;每個修復皆用 `git stash` 驗證「還原前程式碼 → 測試精準重現原始錯誤」。
-- **個股組合負債比判定不一致**:盤點 3 張健檢表格(批次財報體檢/MJ趨勢分數/智慧選股)後確認唯一真衝突是負債比 ——「批次財報體檢」用 40/60% 三級門檻,「智慧選股」Stage 1 獨立重算卻只用 <50% 二分,同一檔股票兩處顯示不同顏色。三率三升等其餘欄位盤點後確認是水準 vs 趨勢的不同面向,非同一事實重複,故不強行合併;Stage 2 六項籌碼技術指標與 MJ 月營收分皆為獨有資訊,維持現狀(user 核准此範圍,§8 對齊後才動工)。修法:`_check_debt_ratio` 新增可選 `fh_result` 參數,個股組合場景直接沿用 `analyze_financial_health()` 已算好的判定(該版本另有負債比為 0 時的重算 fallback,品質更完整);無 `fh_result` 的呼叫端(高息網等)行為不變。
+- **個股組合負債比判定不一致**:盤點 3 張健檢表格(批次財報體檢/老師趨勢分數/智慧選股)後確認唯一真衝突是負債比 ——「批次財報體檢」用 40/60% 三級門檻,「智慧選股」Stage 1 獨立重算卻只用 <50% 二分,同一檔股票兩處顯示不同顏色。三率三升等其餘欄位盤點後確認是水準 vs 趨勢的不同面向,非同一事實重複,故不強行合併;Stage 2 六項籌碼技術指標與 老師 月營收分皆為獨有資訊,維持現狀(user 核准此範圍,§8 對齊後才動工)。修法:`_check_debt_ratio` 新增可選 `fh_result` 參數,個股組合場景直接沿用 `analyze_financial_health()` 已算好的判定(該版本另有負債比為 0 時的重算 fallback,品質更完整);無 `fh_result` 的呼叫端(高息網等)行為不變。
 - 測試 2508 pass(fast lane)+ 新增 34 個測試(ETF 10 + undefined-name 守衛 7 + picker 17)。SSOT/§8.2 影響:無新增 SSOT 常數(沿用既有 `shared.colors`/`shared.signal_thresholds`/`analyze_financial_health`),無新增例外,無跨層反向 import。
 
 ---

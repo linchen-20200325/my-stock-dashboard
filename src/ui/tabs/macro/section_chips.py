@@ -126,7 +126,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         st.markdown(f'<div style="color:#8b949e;font-size:11px;padding:1px 8px 6px 8px;">→ 建議行動：{_sql_mact}</div>', unsafe_allow_html=True)
     st.markdown('<hr style="border-color:#21262d;margin:10px 0;">', unsafe_allow_html=True)
 
-    # ── 宏爺外資期貨（先行指標快速結論）─────────────────────────────────
+    # ── 老師外資期貨（先行指標快速結論）─────────────────────────────────
     _li4 = st.session_state.get('li_latest')
     if _li4 is not None and not _li4.empty:
         _fut4 = (float(_li4.iloc[-1].get('外資大小', 0)) if '外資大小' in _li4.columns else None)
@@ -134,7 +134,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         if _fut4 is not None:
             _pcr_txt = f' | PCR {_pcr4:.1f}' if _pcr4 else ''
             _l4_ind = f'外資期貨 {_fut4:,.0f}口{_pcr_txt}'
-            # 宏爺絕對口數門檻（容錯率最高）
+            # 老師絕對口數門檻（容錯率最高）
             if _fut4 <= -30000:
                 _l4c = f'外資期貨空單 {abs(_fut4):,.0f}口 > 3萬口，啟動強制防禦，強制減倉至20%以下，等待空單回補'
                 _l4a = '強制減倉至 20% 以下，嚴禁追高攤平，保護本金'
@@ -497,9 +497,9 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         st.markdown(_li_es(attempted=_attempted_li, token_present=_fm_present_li),
                     unsafe_allow_html=True)
 
-    # 宏爺判斷方式 → 已移至 Tab 5 策略手冊
+    # 老師判斷方式 → 已移至 Tab 5 策略手冊
 
-    # ── 宏爺智能綜合結論 ─────────────────────────────────────────────────────
+    # ── 老師智能綜合結論 ─────────────────────────────────────────────────────
     _df_li_c = st.session_state.get('li_latest')
     if _df_li_c is not None and not _df_li_c.empty:
         _last_li = _df_li_c.iloc[-1]

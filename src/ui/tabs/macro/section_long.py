@@ -115,7 +115,7 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     _dxy1 = intl_s.get('美元指數 DXY')
     _tyx1 = intl_s.get('10Y公債殖利率')
     
-    # ── 宏爺：SOX × DXY 動態結論 ─────────────────────────────
+    # ── 老師：SOX × DXY 動態結論 ─────────────────────────────
     _sox_pct = _sox1.get('pct', None) if _sox1 else None
     _dxy_val = _dxy1.get('last', None) if _dxy1 else None
     _tyx_val = _tyx1.get('last', None) if _tyx1 else None
