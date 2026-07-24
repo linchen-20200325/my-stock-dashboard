@@ -220,6 +220,60 @@ def compute_stock_section_levels(
     return out
 
 
+# ── 個股頁頂「一眼判讀」綜合結論（v19.167，對稱 ETF 🚦 卡 / 組合排行 headline）──
+_STOCK_VERDICT_KEYS = ("entry", "tech", "chips", "fundamental")
+
+
+def summarize_stock_verdict(
+    sec_lv: dict[str, dict],
+    trend_label: str | None = None,
+) -> dict:
+    """個股頁頂『一眼判讀』單一綜合結論（純函式，吃 compute_stock_section_levels 輸出）。
+
+    只聚合 4 個「頁頂即時可評定」的桶（entry RS / tech 健康 / chips 籌碼 /
+    fundamental 先行指標）；financials / ai 為 on-demand gray → **不納入**
+    （§1 不偽造：沒展開就沒有的東西不當綠也不當紅）。**零重算**：理由直接取
+    各桶既有 headline，不另起演算法（§4.3 不製造第二套數字）。
+
+    綜合規則（平衡讀，非 macro aggregate_level 的 worst-light 安全聚合）：
+      - 有紅且紅 ≥ 綠 → red「訊號偏弱 · 保守」
+      - 無紅且綠 > 黃  → green「多項轉強 · 偏多」
+      - 其餘          → yellow「訊號分歧 · 觀望」
+    可評定桶為 0（資料全未載）→ gray「資料待算」。
+
+    Parameters
+    ----------
+    sec_lv : compute_stock_section_levels 的回傳 dict。
+    trend_label : 頁頂 3-MA 趨勢燈（如「🟢 強勢多頭」）；僅作情境行透傳，
+        **不併入 level**（趨勢是價格面、桶是結構面，分開較誠實）。
+
+    Returns
+    -------
+    dict：{level, verdict, reasons(list[str]), counts(tuple g,y,r), n, trend_label}
+    """
+    evaluable = [
+        sec_lv[k] for k in _STOCK_VERDICT_KEYS
+        if isinstance(sec_lv.get(k), dict)
+        and sec_lv[k].get("level") in ("green", "yellow", "red")
+    ]
+    g = sum(1 for b in evaluable if b["level"] == "green")
+    y = sum(1 for b in evaluable if b["level"] == "yellow")
+    r = sum(1 for b in evaluable if b["level"] == "red")
+    n = len(evaluable)
+    reasons = [b.get("headline", "") for b in evaluable if b.get("headline")]
+    if n == 0:
+        return {"level": "gray", "verdict": "資料待算", "reasons": [],
+                "counts": (0, 0, 0), "n": 0, "trend_label": trend_label}
+    if r > 0 and r >= g:
+        level, verdict = "red", "訊號偏弱 · 保守"
+    elif r == 0 and g > y:
+        level, verdict = "green", "多項轉強 · 偏多"
+    else:
+        level, verdict = "yellow", "訊號分歧 · 觀望"
+    return {"level": level, "verdict": verdict, "reasons": reasons,
+            "counts": (g, y, r), "n": n, "trend_label": trend_label}
+
+
 # ════════════════════════════════════════════════════════════════
 # P/B 估值帶狀 SSOT(v18.326)— 個股 Tab + 組合 Tab 共用
 # ════════════════════════════════════════════════════════════════
