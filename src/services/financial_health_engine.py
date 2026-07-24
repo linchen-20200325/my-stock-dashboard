@@ -1,5 +1,5 @@
 """
-financial_health_engine.py — MJ 林明樟財報體檢 AI 引擎
+financial_health_engine.py — 老師財報體檢 AI 引擎
 --------------------------------------------------------
 analyze_financial_health(api_key, stock_id, fin_data) -> dict
   fin_data: fetch_financial_statements() 的輸出
@@ -14,7 +14,7 @@ import re
 from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
-# v18.323: MJ 財報體檢門檻從 shared SSOT 引入（§3.3 反捏造）。
+# v18.323: 老師 財報體檢門檻從 shared SSOT 引入（§3.3 反捏造）。
 # prompt 文字仍保留人類可讀數字，由 tests/test_financial_health_ssot.py golden test 釘住一致。
 from shared.financial_health_thresholds import (
     MJ_CASH_RATIO_SAFE_PCT, MJ_CASH_RATIO_WATCH_PCT,
@@ -32,7 +32,7 @@ from shared.financial_health_thresholds import (
 # ── Survival Module Prompt（存活能力：3大生死指標）──────────
 _SURVIVAL_PROMPT = """\
 # Role & Task
-你是一個執行「超級數字力（MJ老師）」財務邏輯的嚴格量化 AI。你的任務是審查企業的【存活能力 (Survival)】。這攸關公司是否會面臨黑字破產或資金斷鏈，判定標準極度嚴格。
+你是一個執行「超級數字力（老師）」財務邏輯的嚴格量化 AI。你的任務是審查企業的【存活能力 (Survival)】。這攸關公司是否會面臨黑字破產或資金斷鏈，判定標準極度嚴格。
 
 # Constraint: Exception Handling
 - 若遇財報欄位缺失，輸出 "N/A"，絕對禁止自行推算或腦補。
@@ -195,10 +195,10 @@ _PROFITABILITY_PROMPT = """\
   }}
 }}"""
 
-# ── MJ 財報體檢 Prompt ──────────────────────────────────────
+# ── 老師 財報體檢 Prompt ──────────────────────────────────────
 _PROMPT_TEMPLATE = """\
 # Role
-你是「MJ 林明樟財報分析師 AI」。依據「4力1棒子＋現金流矩陣」邏輯，\
+你是「老師財報分析師 AI」。依據「4力1棒子＋現金流矩陣」邏輯，\
 對下方台灣上市公司財務數據進行標準化健診，輸出精準的 JSON 報告。
 
 # Absolute Constraint
@@ -206,7 +206,7 @@ _PROMPT_TEMPLATE = """\
 2. 禁止在輸出中推薦任何買賣操作或 ETF 標的。
 3. 輸出僅限 JSON，禁止任何 Markdown 包裝、前言或結語。
 
-# Financial Health Framework (MJ 體系)
+# Financial Health Framework (老師 體系)
 
 ## 第一關：生死關
 - 現金佔總資產比率：>25% 安全（🟢）| 10~25% 注意（🟡）| <10% 危險（🔴）
@@ -363,7 +363,7 @@ def _derive_basic_from_fin_data(fin_data: dict) -> dict:
         return 20
 
     radar = {
-        # MJ 生死關門檻走 SSOT；其餘為 radar 估分曲線斷點（單用途，保 inline）
+        # 老師 生死關門檻走 SSOT；其餘為 radar 估分曲線斷點（單用途，保 inline）
         "存活能力": _score(cash_pct, [(MJ_CASH_RATIO_SAFE_PCT, 80), (MJ_CASH_RATIO_WATCH_PCT, 60)]),
         "經營能力": _score(ap_days - ar_days if ar_days > 0 else -999, [(10, 80), (0, 60), (-30, 40)]),
         "獲利能力": _score(gm, [(MJ_GROSS_MARGIN_GOOD_PCT, 80), (20, 60), (10, 40)]),
@@ -493,7 +493,7 @@ def _no_ai_profitability(fd: dict) -> dict:
     om = round(oi / rev * 100, 1) if rev > 0 and not _bad_om else 0
     nm = round(ni / rev * 100, 1) if rev > 0 and not _bad_nm else 0
     roe = round((ni * 4) / eq * 100, 1) if eq > 0 else 0  # 年化：單季 NI × 4
-    # ── MJ 安全邊際正解：營業利益 / 毛利（line 153 docs）──────────────
+    # ── 老師 安全邊際正解：營業利益 / 毛利（line 153 docs）──────────────
     mos = round(oi / gp * 100, 1) if gp > 0 and not _bad_om else 0
     om_val = "N/A (rev 單位異常)" if _bad_om else f"{om:.1f}%"
     nm_val = "N/A (rev 單位異常)" if _bad_nm else f"{nm:.1f}%"
@@ -501,7 +501,7 @@ def _no_ai_profitability(fd: dict) -> dict:
     return {"Profitability_Module": {
         "Gross_Margin": {"Value": f"{gm:.1f}%", "Status": "Good" if gm >= MJ_GROSS_MARGIN_GOOD_PCT else "Average"},
         "Operating_Margin": {"Value": om_val, "Core_Business_Profitable": "N/A" if _bad_om else ("Yes" if om > 0 else "No")},
-        # v18.323 漂移修正：安全邊際 Strong 線 20→60（對齊 MJ 經典標準，保三階）
+        # v18.323 漂移修正：安全邊際 Strong 線 20→60（對齊 老師 經典標準，保三階）
         "Margin_Of_Safety": {"Value": mos_val, "Status": "N/A" if _bad_om else ("Strong" if mos >= MJ_MOS_STRONG_PCT else ("Acceptable" if mos >= 0 else "Weak"))},
         "Net_Margin": {"Value": nm_val, "Status": "N/A" if _bad_nm else ("Pass" if nm >= MJ_NET_MARGIN_PASS_PCT else ("Thin Profit" if nm >= 0 else "Loss"))},
         "ROE": {"Value": f"{roe:.1f}%", "Leverage_Warning": "槓桿膨脹警報" if roe > MJ_ROE_LEVERAGE_CHECK_PCT and debt > MJ_DUPONT_LEVERAGE_DEBT_PCT else "None"},
@@ -661,7 +661,7 @@ _FAIL_SAFE: dict = {
 
 def no_ai_overall_verdict(fin_data: dict, fh_result: dict) -> dict:
     """
-    彙整六大模組，生成 MJ 林明樟老師風格的動態總結論（純計算，無 AI）。
+    彙整六大模組，生成 老師風格的動態總結論（純計算，無 AI）。
     """
     surv = fh_result.get("survival_module", {})
     prof = fh_result.get("profitability_module", {})
@@ -795,7 +795,7 @@ _SOLVENCY_PROMPT = """\
 # Role: 超級數字力短期償債分析官
 
 # Core Rules
-1. 採用 MJ 老師極度嚴格標準 (300/150)。
+1. 採用 老師極度嚴格標準 (300/150)。
 2. 備有「收現行業」豁免條款，確保不誤殺優質流通業。
 
 # Edge Case Handling
@@ -901,7 +901,7 @@ _ADVANCED_DIAGNOSTIC_PROMPT = """\
 def analyze_financial_health(api_key: str, stock_id: str, fin_data: dict,
                              news_context: str = "") -> dict:
     """
-    從 fin_data 直接計算所有 MJ 財報體檢指標（純數學）。
+    從 fin_data 直接計算所有 老師 財報體檢指標（純數學）。
     若提供 api_key 與 news_context，則額外呼叫 Gemini 生成結合新聞的 ai_insight。
     """
     if not fin_data or fin_data.get("error"):
@@ -936,7 +936,7 @@ def analyze_financial_health(api_key: str, stock_id: str, fin_data: dict,
                 result["red_flags"] = _parsed_mj["red_flags"]
             print(f"[FinHealth] ✅ {stock_id} MJ+新聞 AI insight 生成完成")
         except Exception as _e_mj:
-            print(f"[FinHealth] {stock_id} MJ AI insight生成失敗: {_e_mj}")
+            print(f"[FinHealth] {stock_id} 老師 AI insight生成失敗: {_e_mj}")
 
     print(f"[FinHealth] ✅ {stock_id} 純計算完成 DNA={result.get('business_model_dna','?')}")
     return result

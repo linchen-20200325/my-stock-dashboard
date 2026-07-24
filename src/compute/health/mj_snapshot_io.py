@@ -1,4 +1,4 @@
-"""src/compute/health/mj_snapshot_io.py — v18.186 MJ 體檢快照持久化層
+"""src/compute/health/mj_snapshot_io.py — v18.186 老師 體檢快照持久化層
 
 把 `financial_health_engine.analyze_financial_health` 的 JSON 結果落地
 到 `data_cache/mj_snapshots/{sid}_{yyyymm}.json`，供 v18.185
@@ -48,7 +48,7 @@ def save_snapshot(
     mj_result: Any,
     base_dir: Path | None = None,
 ) -> Path | None:
-    """落地單股單期 MJ 體檢 JSON。
+    """落地單股單期 老師 體檢 JSON。
 
     Returns:
         Path of written file on success, None on validation failure.

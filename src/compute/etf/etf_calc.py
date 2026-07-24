@@ -1087,3 +1087,47 @@ def compute_etf_weakness_row(ticker: str, name: str = '',
             _row['動作建議'] = '續抱觀察'
 
     return _row
+
+
+def align_portfolio_returns(var_rets, weights):
+    """§1 誠實對齊組合日報酬(供 VaR / 波動用)—— 純函式,零 I/O。
+
+    組合單日報酬 Σ wᵢ·rᵢ(t) 只有在「當天所有持股都有交易」時才是完整真實的組合報酬。
+    故只取**共同交易日**(`dropna(how='any')`),**絕不** ffill / fillna(0) —— 否則新上市
+    ETF 上市前會被當成 0% 報酬,稀釋波動 → 低估 σ 與尾部 VaR(違反 §1)。權重只取「有報酬
+    資料」的持股並重新正規化到 sum=1(某檔缺資料時分母 <1 也會低估)。對齊 codebase 既有
+    誠實範式:`compute_risk_contribution` 用 `dropna(how='any')`、`calc_tracking_error` 用日期交集。
+
+    Args:
+        var_rets: {ticker: pd.Series(日報酬, DatetimeIndex)}。
+        weights:  {ticker: 權重數值(如 actual_pct;比例或百分比皆可,內部正規化)}。
+
+    Returns:
+        dict:port_ret(共同交易日組合日報酬 Series;算不出為空 Series,不腦補) /
+        n_union / n_common / dropped / limiter(壓縮視窗的最晚上市 ticker) /
+        limiter_start(該檔最早資料日) / tickers_used。
+    """
+    _empty = pd.Series(dtype='float64')
+    clean = {t: s.dropna() for t, s in (var_rets or {}).items()
+             if s is not None and not s.dropna().empty}
+    if not clean:
+        return {'port_ret': _empty, 'n_union': 0, 'n_common': 0, 'dropped': 0,
+                'limiter': None, 'limiter_start': None, 'tickers_used': []}
+    mat = pd.DataFrame(clean)
+    n_union = len(mat)
+    mat = mat.dropna(how='any')          # 只留全員皆有報酬的共同交易日(絕不補值)
+    n_common = len(mat)
+    starts = {t: s.index.min() for t, s in clean.items()}
+    limiter = max(starts, key=starts.get)
+    w = pd.Series({t: float(weights.get(t, 0.0) or 0.0) for t in mat.columns},
+                  dtype='float64')
+    w = w[w > 0]
+    if w.empty or float(w.sum()) <= 0 or mat.empty:
+        port_ret, tickers_used = _empty, []
+    else:
+        w = w / w.sum()               # 只用有資料的持股,權重重新正規化到 sum=1
+        port_ret = mat[w.index].mul(w, axis=1).sum(axis=1)
+        tickers_used = list(w.index)
+    return {'port_ret': port_ret, 'n_union': n_union, 'n_common': n_common,
+            'dropped': n_union - n_common, 'limiter': limiter,
+            'limiter_start': starts.get(limiter), 'tickers_used': tickers_used}

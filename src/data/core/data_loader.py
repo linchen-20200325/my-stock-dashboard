@@ -1584,7 +1584,7 @@ class StockDataLoader:
             return None, f"BS+CF 載入錯誤: {_e_bscf}"
 
 
-# ── fetch_financial_statements(MJ 財報體檢原始數據)已於 B8-a v19.155 拆至
+# ── fetch_financial_statements(老師 財報體檢原始數據)已於 B8-a v19.155 拆至
 #    src/data/core/financial_statements_fetcher.py(降 data_loader 體積);
 #    caller 走 src.data.core 套件 __getattr__ 轉發,介面不變。
 

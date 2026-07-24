@@ -35,35 +35,32 @@ def render_stock_grp():
     from src.ui.tabs.stock_grp_sections import render_market_status_section
     render_market_status_section()
 
-    # ══ ② 輸入多檔代碼 ══════════════════════════════════════════
+    # ══ ② 輸入多檔代碼(v19.164 唯一來源:老師 / MJ / 三階段濾網全部吃這裡)═══
+    # session_state-backed(供「帶入持股」回填;不用 value= 避免 widget 衝突警告)
+    if 'multi_input' not in st.session_state:
+        st.session_state['multi_input'] = '2330 2454 2317 2382 3017 2308 2303 2376 6669 3661'
     with st.container(border=True):
         t3c1, t3c2 = st.columns([4, 1])
         with t3c1:
             multi_input = st.text_area(
-                '輸入多檔代碼（逗號/空格/換行，最多10檔）',
-                value='2330 2454 2317 2382 3017 2308 2303 2376 6669 3661',
+                '輸入多檔代碼（逗號/空格/換行，最多10檔）— 老師 / 老師 體質 / 三階段濾網全部吃這一組',
                 height=68, key='multi_input',
                 placeholder='例：2330 2454 2317 2382 3017')
         with t3c2:
             st.markdown('<br>', unsafe_allow_html=True)
             t3_run_btn = st.button('🚀 批次分析', type='primary',
                                    use_container_width=True, key='t3_run_btn')
+        # v19.164:除貼清單外,一鍵帶入自己的 Google Sheet 持股(填入上方唯一輸入框)
+        st.button('🔗 帶入我的持股（Google Sheet 組合）', key='_grp_load_holdings',
+                  on_click=_grp_load_holdings_callback)
+        _hmsg = st.session_state.pop('_grp_holdings_msg', None)
+        if _hmsg:
+            (st.success if _hmsg[0] == 'ok' else st.warning)(_hmsg[1])
 
     stock_list_t3 = parse_stocks(multi_input)[:10]
-    with st.expander('🎯 蔡森型態目標價（選一檔持股，K 線自動算）', expanded=False):
-        # v19.163 user 要求:蔡森目標價接進組合,套用選中的持股標的。
-        if stock_list_t3:
-            _cs_pick = st.selectbox('選擇標的', stock_list_t3, key='_csgrp_pick')
-            from src.ui.tabs.caisen_targets_ui import render_caisen_for_ticker
-            render_caisen_for_ticker(_cs_pick, key_prefix='cs_grp')
-        else:
-            st.caption('請先在上方輸入持股代碼後，這裡就能選一檔算蔡森目標價。')
-    with st.expander('🩺 MJ 體檢轉機（組合持股批次：找體質差→變好）', expanded=False):
-        # v19.163 user 要求:MJ 體檢轉機併進組合(批次天生適合),拿掉獨立分頁,預設吃組合持股。
-        from src.ui.tabs.tab_mj_health_diff import render_mj_health_diff_tab
-        render_mj_health_diff_tab(seed_codes=(' '.join(stock_list_t3) if stock_list_t3 else None))
     if stock_list_t3:
-        st.caption(f'待分析：{", ".join(stock_list_t3)}（共{len(stock_list_t3)}檔）')
+        st.caption(f'待分析：{", ".join(stock_list_t3)}（共{len(stock_list_t3)}檔）'
+                   '　·　按「🚀 批次分析」一鍵串跑：排行總表 + 老師目標價 + 老師 趨勢×轉機 + 三階段濾網')
     elif t3_run_btn:
         st.warning('⚠️ 請先在上方輸入至少一個有效股票代碼，再按「🚀 批次分析」')
 
@@ -87,7 +84,7 @@ def render_stock_grp():
         results_t3=results_t3,
         finmind_token=FINMIND_TOKEN,
     )
-    # ══ 📊 MJ 趨勢分數（v18.189）+ 🎯 三階段濾網（v19.58）═══════════
+    # ══ 📊 老師 趨勢分數（v18.189）+ 🎯 三階段濾網（v19.58）═══════════
     # v18.223 一鍵化：吃 batch 跑完時鎖定的 codes（t3_batch_codes），自動跑 MJ + picker + AI。
     # 不再依賴 stock_list_t3（避免 textarea 改動觸發重跑），改 textarea 後須按「批次分析」才更新。
     _batch_codes = st.session_state.get('t3_batch_codes')
@@ -97,7 +94,7 @@ def render_stock_grp():
         # v18.453:轉傳批次財報體檢結果,讓 Stage 1 負債比檢查與其判定一致
         _render_stage_picker_section(_bc_list, auto_run=True, fh_map=_fh_t3_cached)
     elif stock_list_t3:
-        st.info('💡 上方按「🚀 批次分析」會自動串跑 MJ 趨勢分數 + 三階段濾網 + AI 三型建議。')
+        st.info('💡 上方按「🚀 批次分析」會自動串跑 老師 趨勢分數 + 三階段濾網 + AI 三型建議。')
 
     # ── 🤖 AI 投資組合綜合判讀(Batch 7-5 v18.417:抽至 stock_grp_sections.section_ai_portfolio)──
     from src.ui.tabs.stock_grp_sections import render_ai_portfolio_section
@@ -125,6 +122,38 @@ def render_stock_grp():
         }, context='general')
     except Exception as _ai_sum_e:
         st.caption(f'🧬 AI 總結暫不可用：{type(_ai_sum_e).__name__}')
+
+
+def _grp_load_holdings_callback() -> None:
+    """帶入 Google Sheet 持股組合代碼 → 填入上方唯一輸入框 multi_input(on_click callback)。
+
+    v19.164 單一來源化:原「老師 體檢轉機」獨立輸入框的帶入持股鈕搬來這裡,改填組合唯一輸入。
+    §8.2.A EX-PASSTHRU-1:L5 lazy import L1 gsheet_portfolio(pass-through、無 L3 業務值)。
+    graceful:未登入 Google / 未設組合 → 只回 warn,不炸。
+    """
+    try:
+        from src.data.portfolio import gsheet_portfolio as _gsp  # EX-PASSTHRU-1
+        names = _gsp.list_portfolios()
+        if not names:
+            st.session_state['_grp_holdings_msg'] = (
+                'warn', '找不到雲端持股組合 — 請先到「🏦 ETF → 組合」設定 Google Sheet 持股。')
+            return
+        tickers: list[str] = []
+        for _nm in names:
+            for _r in (_gsp.load_portfolio(_nm) or []):
+                _t = str(_r.get('ticker', '')).strip()
+                if _t and _t not in tickers:
+                    tickers.append(_t)
+        if not tickers:
+            st.session_state['_grp_holdings_msg'] = ('warn', '雲端持股組合是空的。')
+            return
+        capped = tickers[:10]  # 批次上限 10(parse_stocks 對齊)
+        st.session_state['multi_input'] = ' '.join(capped)
+        _tail = f'(共 {len(tickers)} 檔,取前 10)' if len(tickers) > 10 else f'(共 {len(tickers)} 檔)'
+        st.session_state['_grp_holdings_msg'] = ('ok', f'已帶入持股 {_tail}:{" ".join(capped)}')
+    except Exception as _e:  # noqa: BLE001 — 帶入失敗不炸 UI
+        st.session_state['_grp_holdings_msg'] = (
+            'warn', f'帶入持股失敗:{type(_e).__name__}(可能未登入 Google / 未設定組合)')
 
 
 def _render_risk_contribution_section(stock_list: list[str]) -> None:
@@ -224,9 +253,9 @@ def _render_stage_picker_section(stock_list: list[str], *,
     """v19.58 個股組合內三階段濾網 — 直接拿 stock_list_t3 為 candidates，共用 picker 子函式。
 
     v18.223：auto_run=True 串接「批次分析」一鍵流程（picker 跳過按鈕直接跑、AI 也自動）。
-    與 _render_mj_trend_section 互補：MJ 趨勢分數看「最近 3 月/3 季的進步退步」，
+    與 _render_mj_trend_section 互補：老師 趨勢分數看「最近 3 月/3 季的進步退步」，
     三階段濾網看「當下是否進場（基本面 9 項 ＋ 籌碼技術 6 項 ＋ AI 三型建議）」。
-    共用 data_loader.fetch_financial_statements + financial_health_engine（與 MJ 同源）。
+    共用 data_loader.fetch_financial_statements + financial_health_engine（與 老師 同源）。
 
     fh_map:v18.453 — 上方「批次財報體檢」已算好的 dict[代碼, analyze_financial_health()
     結果],轉傳給 render_tab_stock_picker 讓 Stage 1 負債比檢查直接沿用同一判定,
@@ -264,10 +293,10 @@ def _render_stage_picker_section(stock_list: list[str], *,
 
 def _render_mj_trend_section(stock_list: list[str], *,
                               auto_run: bool = False) -> None:
-    """v18.189 個股組合內「MJ 趨勢分數」區塊。
+    """v18.189 個股組合內「老師 趨勢分數」區塊。
 
     v18.223：auto_run=True 串接「批次分析」一鍵流程（移除手動按鈕，自動跑全程 + cache）。
-    對 stock_list 每檔合議「近 3 月月營收動能」+「近 3 季 MJ 體檢 status delta」
+    對 stock_list 每檔合議「近 3 月月營收動能」+「近 3 季 老師 體檢 status delta」
     產出 5 段判定（🚀 強進步 / 📈 進步 / ➖ 中性 / 📉 退步 / 🔻 強退步）。
     月權重 65%（先行）/ 季權重 35%（落後但見品質）。
     """
@@ -293,16 +322,17 @@ def _render_mj_trend_section(stock_list: list[str], *,
         'background:linear-gradient(90deg,#22c55e22,#0d1117);'
         'border-left:4px solid #22c55e;border-radius:0 6px 6px 0;">'
         '<span style="font-size:15px;font-weight:900;color:#22c55e;">'
-        '📊 MJ 趨勢分數（v18.189）</span>'
+        '📊 老師 趨勢 × 轉機（找體質差→變好）</span>'
         '<span style="font-size:11px;color:#8b949e;margin-left:8px;">'
-        '月營收動能 × 季財報體檢 · 65/35 雙頻率合議</span></div>',
+        '月營收動能 × 季財報體檢 · 65/35 合議 · 併入本業虧轉盈 🌟 / 盈轉虧 ⚠️ 轉機偵測</span></div>',
         unsafe_allow_html=True,
     )
     _st.caption(
         '🔰 **判定規則**：≥+1.5 🚀 強進步 / +0.5~+1.5 📈 進步 / -0.5~+0.5 ➖ 中性 / '
         '-1.5~-0.5 📉 退步 / ≤-1.5 🔻 強退步。'
         '**月權重高**因月營收 10 日公布（先行指標），季財報 45 天遞延（落後但見獲利品質）。'
-        '近 3 季 MJ 不足時自動補抓本季快照。'
+        '近 3 季 老師 不足時自動補抓本季快照。'
+        '**「轉機」欄** = 用同一份季財報快照判本業虧轉盈(🌟)/盈轉虧(⚠️),零額外抓取。'
     )
 
     # v18.223：auto_run 模式移除手動按鈕；slider 保留以利使用者觀察/調整權重
@@ -314,7 +344,7 @@ def _render_mj_trend_section(stock_list: list[str], *,
     )
 
     if not auto_run:
-        _st.caption('💡 上方按「🚀 批次分析」自動跑 MJ 趨勢分數（首次 ~30-60s）')
+        _st.caption('💡 上方按「🚀 批次分析」自動跑 老師 趨勢分數（首次 ~30-60s）')
         return
 
     if not _TOK:
@@ -330,7 +360,7 @@ def _render_mj_trend_section(stock_list: list[str], *,
     rows = _st.session_state.get(_mj_cache_key)
     if rows is None:
         rows = []
-        prog = _st.progress(0.0, text=f'MJ 趨勢分數中 {len(stock_list)} 檔...')
+        prog = _st.progress(0.0, text=f'老師 趨勢分數中 {len(stock_list)} 檔...')
         for i, sid in enumerate(stock_list, 1):
             prog.progress(i / len(stock_list),
                           text=f'[{i}/{len(stock_list)}] {sid} 趨勢計算中...')
@@ -353,6 +383,23 @@ _TREND_SORT_ORDER = {
     'strong_down': 0, 'down': 1, 'neutral': 2,
     'up': 3, 'strong_up': 4, 'error': 5,
 }
+
+# v19.164 稽核補回:MJ「純季財報體質」verdict(與月+季混合的趨勢分數不同)。
+# 一檔可能月營收強 → 混合趨勢分顯示「📈 進步」,但季財報 verdict 其實是「🔴 退步」——
+# 兩者必須並列,否則「找體質差」的能力會被月營收動能蓋掉(對抗式稽核 90f5ca9 抓到的損失)。
+_MJ_VERDICT_LABEL = {
+    'improving': '🟢 進步', 'deteriorating': '🔴 退步', 'mixed': '🟡 分歧',
+    'stable': '⚪ 不變', 'first_snapshot': '⏳ 首季', 'fetch_failed': '❌ 失敗',
+}
+
+
+def _mj_verdict_code(r: dict) -> str:
+    """取一列的『純 老師 季財報 verdict』代碼(非月+季混合趨勢分;來自 diff_mj_health)。"""
+    v = r.get('diff_verdict')
+    if v is not None:
+        return getattr(v, 'verdict', 'first_snapshot') or 'first_snapshot'
+    # 無 diff_verdict:抓取失敗 → fetch_failed;否則季快照不足 2 季 → first_snapshot
+    return 'fetch_failed' if r.get('label_code') == 'error' else 'first_snapshot'
 
 
 def _fmt_quarter(yyyymm: str) -> str:
@@ -377,8 +424,23 @@ def _render_mj_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '') 
     cols[2].metric('➖ 中性', cnt.get('neutral', 0))
     cols[3].metric('📈 進步', cnt.get('up', 0))
     cols[4].metric('🚀 強進步', cnt.get('strong_up', 0))
+    st_mod.caption('↑ 上列＝月營收動能 × 季財報「**混合**」趨勢分(月 65% / 季 35%)。　'
+                   '↓ 下列＝**純 老師 季財報體質** verdict(只看季度,不混月營收)——'
+                   '兩者可能相反(月強但季退),分開看才不會漏掉「財報體質在惡化」。')
 
-    # v18.199 ── 📊 快照新鮮度條（MJ 季財報分來自哪季 — 防補抓失敗靜默沿用舊季）──
+    # v19.164 稽核補回:純 老師 季財報 verdict 計數(組合層「幾檔財報體質在惡化」一眼看)
+    _mjv = {k: 0 for k in _MJ_VERDICT_LABEL}
+    for r in rows:
+        _mjv[_mj_verdict_code(r)] = _mjv.get(_mj_verdict_code(r), 0) + 1
+    mcols = st_mod.columns(6)
+    mcols[0].metric('🔴 財報退步', _mjv['deteriorating'])
+    mcols[1].metric('🟡 分歧', _mjv['mixed'])
+    mcols[2].metric('🟢 財報進步', _mjv['improving'])
+    mcols[3].metric('⚪ 不變', _mjv['stable'])
+    mcols[4].metric('⏳ 首季', _mjv['first_snapshot'])
+    mcols[5].metric('❌ 失敗', _mjv['fetch_failed'])
+
+    # v18.199 ── 📊 快照新鮮度條（老師 季財報分來自哪季 — 防補抓失敗靜默沿用舊季）──
     _fresh = sum(1 for r in rows if r.get('snap_stale') is False)
     _stale = sum(1 for r in rows if r.get('snap_stale') is True)
     _missing = sum(1 for r in rows if r.get('snap_stale') is None)
@@ -391,7 +453,7 @@ def _render_mj_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '') 
     st_mod.markdown(
         f'<div style="margin:8px 0;padding:8px 14px;border-left:4px solid {_fc};'
         f'background:{_fc}14;border-radius:0 6px 6px 0;font-size:13px;">'
-        f'<b style="color:{_fc};">📊 MJ 快照新鮮度</b>　'
+        f'<b style="color:{_fc};">📊 老師 快照新鮮度</b>　'
         f'📅 應有最新季 <b>{_fmt_quarter(yyyymm_curr)}</b>　'
         f'<span style="color:{_fc};">{_ft}</span>　'
         f'<span style="color:#8b949e;">🟢 最新 {_fresh} ／ 🟡 落後 {_stale} ／ ⬜ 無快照 '
@@ -407,16 +469,59 @@ def _render_mj_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '') 
         return f'🟡 {_q}（舊）' if r.get('snap_stale') else f'🟢 {_q}'
 
     rows_sorted = sorted(rows, key=lambda r: _TREND_SORT_ORDER.get(r['label_code'], 99))
+
+    # 🌟/⚠️ 轉機摘要(v19.164 合併「老師 體檢轉機」)——user 要的「找體質差→變好」在這裡,
+    # 判定由 compute_one_stock_trend 用同一份季快照附帶算出(turn_icon / diff_verdict),零額外抓取。
+    _turn = [r['sid'] for r in rows_sorted if str(r.get('turn_icon', '')).startswith('🌟')]
+    _break = [r['sid'] for r in rows_sorted if str(r.get('turn_icon', '')).startswith('⚠️')]
+    if _turn:
+        st_mod.success(f'🌟 **本業虧轉盈轉機股**：{", ".join(_turn)} —— 「體質差→變好」看這裡')
+    if _break:
+        st_mod.error(f'⚠️ **本業盈轉虧雷股**：{", ".join(_break)}')
+
     df = pd.DataFrame([{
         '代碼': r['sid'],
-        '判定': r['label'],
+        '判定(月+季)': r['label'],
+        '老師季財報': _MJ_VERDICT_LABEL.get(_mj_verdict_code(r), '—'),  # 純季度 verdict(補回)
+        '轉機': r.get('turn_icon') or '—',
         '綜合分數': round(r['score'], 2),
         '月營收分': round(r['mon_sub'], 2),
-        'MJ 季財報分': round(r['mj_sub'], 2),
+        '老師 季財報分': round(r['mj_sub'], 2),
         '季別': _quarter_cell(r),
         '備註': r['note'].strip().rstrip(';') if r['note'] else '',
     } for r in rows_sorted])
     st_mod.dataframe(df, use_container_width=True, hide_index=True)
+
+    # 逐檔體質變化明細(🟢變好 / 🔴變差 逐項)——合併原「老師 體檢轉機」下鑽,吃同一份 diff_verdict
+    _diffable = [r for r in rows_sorted if r.get('diff_verdict') is not None]
+    if _diffable:
+        with st_mod.expander('🔍 逐檔體質變化明細（🟢變好 / 🔴變差 逐項；找體質差→變好）',
+                             expanded=False):
+            for r in _diffable:
+                v = r['diff_verdict']
+                _ic = f'　{r["turn_icon"]}' if r.get('turn_icon') else ''
+                _net = int(getattr(v, 'net_delta', 0) or 0)
+                _vlabel = _MJ_VERDICT_LABEL.get(_mj_verdict_code(r), '')
+                st_mod.markdown(
+                    f"**{r['sid']}**　{_vlabel}　改善 {getattr(v, 'improve_count', 0)} / "
+                    f"惡化 {getattr(v, 'deteriorate_count', 0)} / "
+                    f"淨變化 {_net:+d}{_ic}")   # 淨變化(補回)
+                for _title, _items in (('🟢 變好', getattr(v, 'improvements', None) or []),
+                                       ('🔴 變差', getattr(v, 'deteriorations', None) or [])):
+                    if _items:
+                        st_mod.markdown(f'{_title}（{len(_items)} 項）')
+                        st_mod.dataframe(pd.DataFrame([{
+                            '模組': m.module.replace('_Module', ''), '指標': m.metric,
+                            '上期': m.prev_status, '本期': m.curr_status,
+                        } for m in _items]), use_container_width=True, hide_index=True)
+                # ⚪ 不變逐項(補回;決策相關性低,收在巢狀展開)
+                _unch = getattr(v, 'unchanged', None) or []
+                if _unch:
+                    with st_mod.expander(f'⚪ 不變（{len(_unch)} 項）', expanded=False):
+                        st_mod.dataframe(pd.DataFrame([{
+                            '模組': m.module.replace('_Module', ''), '指標': m.metric,
+                            'Status': m.curr_status,
+                        } for m in _unch]), use_container_width=True, hide_index=True)
 
     with st_mod.expander('🛠️ 逐檔細節（分子分數推導）', expanded=False):
         for r in rows_sorted:

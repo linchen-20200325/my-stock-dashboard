@@ -138,6 +138,6 @@ class TestMJTrendSSOT:
         assert 'compute_one_stock_trend' in src  # 是 import 來的
 
     def test_individual_tab_uses_ssot(self):
-        """個股 Tab 已引入 compute_one_stock_trend(MJ 趨勢分數)。"""
+        """個股 Tab 已引入 compute_one_stock_trend(老師 趨勢分數)。"""
         src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert 'compute_one_stock_trend' in src

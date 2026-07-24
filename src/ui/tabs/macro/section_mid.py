@@ -271,7 +271,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     elif any([_m8_vix, _m8_pmi, _m8_cpi, _m8_ndc]):
         st.success('✅ v4.0 總經否決權：無觸發 — 當前宏觀環境無系統性風險訊號')
     
-    # ── Section 八 v4.0 動態結論（宏爺VIX否決權 × 孫慶龍估值/CLI矩陣）────
+    # ── Section 八 v4.0 動態結論（老師VIX否決權 × 孫慶龍估值/CLI矩陣）────
     _bias_info8 = st.session_state.get('bias_info') or {}
     _b240_8     = float(_bias_info8.get('bias_240', 0))
     _vix_now8   = float(_m8_vix.get('current', 0)) if _m8_vix else None
@@ -284,7 +284,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     if _vix_now8 is not None and _vix_now8 > 100:
         st.error(f'❌ VIX 數值異常（{_vix_now8:.0f}），疑似 API 變數映射錯誤，結論暫不顯示。請重新整理。')
     else:
-        # ── 宏爺：VIX 總經否決權 ──────────────────────────────
+        # ── 老師：VIX 總經否決權 ──────────────────────────────
         if _vix_now8 is not None:
             if _vix_now8 >= 30:
                 _hyc8 = TRAFFIC_RED
@@ -300,9 +300,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 _hyc8t = '🟢 全球風險情緒穩定，未觸發否決權。回歸個股籌碼面與基本面操作。'
             st.markdown(teacher_conclusion('弘爺', _hyi8, _hyc8t, color=_hyc8), unsafe_allow_html=True)
         else:
-            st.info('VIX 數據載入中，宏爺否決權暫無法判斷')
+            st.info('VIX 數據載入中，老師否決權暫無法判斷')
     
-        # ── 宏爺：M1B-M2 資金動能（三段公式）────────────────────
+        # ── 老師：M1B-M2 資金動能（三段公式）────────────────────
         _m1b8_info = st.session_state.get('m1b_m2_info', {})
         if _m1b8_info and _m1b8_info.get('m1b_yoy') is not None and _m1b8_info.get('m2_yoy') is not None:
             _m1b8 = float(_m1b8_info.get('m1b_yoy', 0))
@@ -325,7 +325,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                           '資金轉向定存或匯出，減碼等待訊號確認。')
             st.markdown(teacher_conclusion('宏爺', _m1bi8, _m1bt8, color=_m1bc8), unsafe_allow_html=True)
         else:
-            st.info('M1B/M2 數據載入後自動顯示宏爺資金動能判斷')
+            st.info('M1B/M2 數據載入後自動顯示老師資金動能判斷')
     
         # ── 策略1：BIAS240 × 台灣出口 二維矩陣（v5.0）──────────────
         if _bias_info8:

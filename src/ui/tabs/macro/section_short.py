@@ -78,9 +78,9 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
         if 'is_proxy' in _adl_chk.columns and _adl_chk['is_proxy'].any():
             st.caption('⚠️ 目前顯示 yfinance 代理數據（TWSE 上漲/下跌家數暫時無法取得），上漲佔比為估算值')
     
-    # ── 宏爺策略 + 上漲佔比動態結論（移至 Section 標題下方）──────────
+    # ── 老師策略 + 上漲佔比動態結論（移至 Section 標題下方）──────────
     if df_adl is not None and not df_adl.empty:
-        st.caption('💡 宏爺策略：ADL 趨勢比今日漲跌更重要，要看「方向」是否與指數一致。')
+        st.caption('💡 老師策略：ADL 趨勢比今日漲跌更重要，要看「方向」是否與指數一致。')
         _ar2 = df_adl.iloc[-1]
         _ad2 = _ar2.get('ad', 0)
         _ratio2 = _ar2.get('ad_ratio', 50)

@@ -39,6 +39,7 @@ from src.compute.strategy import (
     calc_rsi,
     calc_vcp,
     calc_volume_ratio,
+    summarize_caisen,  # v19.164:老師批次化(df4 已在手,零額外抓取)
 )
 from src.config import get_stock_name
 from src.data.stock.app_stock_fetchers import (
@@ -153,6 +154,18 @@ def run_batch_fetch(stock_list: list[str]) -> None:
 
             vcp_ok4 = vcp4 and vcp4['contracting']
 
+            # ── 老師型態目標價(批次,v19.164)──────────────────────────
+            # df4 已在手(上方 ThreadPool 抓),老師 L2 為純函式 → 零額外抓取、純 CPU。
+            # summarize_caisen 內含 §1 誠實 gate:型態未明封鎖假高 rr、擺動點不足回 None。
+            _caisen4 = None
+            try:
+                if (df4 is not None and not df4.empty
+                        and 'high' in df4.columns and 'low' in df4.columns and price4 > 0):
+                    _caisen4 = summarize_caisen(df4['high'], df4['low'], price4)
+            except Exception as _e_cs4:
+                print(f'[section_batch_fetcher 老師] {sid4} '
+                      f'{type(_e_cs4).__name__}: {_e_cs4}')
+
             # 出場訊號:技術 + 籌碼兩維(利空新聞第三維由「AI 掃利空」鈕後補)
             _ex_tech4 = compute_tech_bearish(df4, k=k4, d=d4)
             _ex_chip4 = analyze_20d_chips_from_df(df4)
@@ -188,6 +201,7 @@ def run_batch_fetch(stock_list: list[str]) -> None:
                 '_cx_ok':      bool(cx4 and cx4 > 0),
                 '_has_div':    bool(avg_div4 and avg_div4 > 0),
                 '_fetch_err':  _d4.get('error'),
+                '_caisen':     _caisen4,   # v19.164:老師批次摘要(供總表老師欄 + 下鑽 seed)
             })
 
             # ── 操作狀態燈 🔵🟠🟡(v18.336 PR-H4:抽至 classify_stock_status_lamp SSOT)

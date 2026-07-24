@@ -1,6 +1,6 @@
-"""src/compute/health/mj_health_diff.py — v18.185 MJ 體檢表跨期變化偵測
+"""src/compute/health/mj_health_diff.py — v18.185 老師 體檢表跨期變化偵測
 
-對 MJ 林明樟財報體檢（`financial_health_engine.analyze_financial_health`）兩期
+對 老師財報體檢（`financial_health_engine.analyze_financial_health`）兩期
 結果做 status 等級比對，逐項偵測「變好 / 變差 / 不變」，回傳 verdict
 與漏斗篩選器，純函式 zero-IO。
 
@@ -42,7 +42,7 @@ STATUS_SCORES: dict[str, int] = {
     "Excellent": 2, "Moderate": 1,
     # Net margin
     "Thin Profit": 1,
-    # Emoji 燈號（MJ top-level）
+    # Emoji 燈號（老師 top-level）
     "🟢": 2, "🟡": 1, "🔴": 0,
     # OPM / Core_Business_Profitable / Leverage
     "Yes": 2, "No": 0,
@@ -87,7 +87,7 @@ class MetricDiff:
 
 @dataclass
 class HealthDiffVerdict:
-    """單股 MJ 體檢跨期 verdict。"""
+    """單股 老師 體檢跨期 verdict。"""
 
     stock_id: str
     improvements: list[MetricDiff] = field(default_factory=list)
@@ -131,7 +131,7 @@ class HealthDiffVerdict:
 
 
 # ════════════════════════════════════════════════════════════════
-# Module 掃描清單（MJ schema）
+# Module 掃描清單（老師 schema）
 # ════════════════════════════════════════════════════════════════
 _MJ_MODULES = (
     "Survival_Module",
@@ -141,14 +141,14 @@ _MJ_MODULES = (
     "Solvency_Module",
     "Advanced_Diagnostic_Module",
 )
-# Top-level 燈號（v18.x MJ overview）
+# Top-level 燈號（v18.x 老師 overview）
 _TOP_LEVEL_LIGHTS = (
     "cash_ratio_status", "ocf_status", "debt_ratio_status",
 )
 
 
 def _walk_statuses(mj_result: Any) -> dict[tuple[str, str], str]:
-    """掃 MJ 結果，回 {(module, metric): status_string} 字典。
+    """掃 老師 結果，回 {(module, metric): status_string} 字典。
 
     - 6 個 *_Module 內遞迴找帶 "Status" 欄位的子物件（如 Cash_Ratio.Status）
     - Operating_Margin.Core_Business_Profitable 視為 status
@@ -200,11 +200,11 @@ def diff_mj_health(
     stock_id: str = "",
     min_net_delta: int = 1,
 ) -> HealthDiffVerdict:
-    """逐項比對 MJ 體檢 prev 與 curr 的 status delta。
+    """逐項比對 老師 體檢 prev 與 curr 的 status delta。
 
     Args:
-        prev: 上一期 MJ analyze_financial_health 結果 dict
-        curr: 本期 MJ 結果 dict
+        prev: 上一期 老師 analyze_financial_health 結果 dict
+        curr: 本期 老師 結果 dict
         stock_id: 標識用，不影響邏輯
         min_net_delta: verdict 緩衝門檻（improve - deteriorate ≥ 此值 → improving）
 
@@ -271,7 +271,7 @@ def screen_health_changes(
     mode: str = "both",
     min_net_delta: int = 1,
 ) -> list[HealthDiffVerdict]:
-    """漏斗篩選：跨多檔 MJ 跨期快照，依 mode 過濾。
+    """漏斗篩選：跨多檔 老師 跨期快照，依 mode 過濾。
 
     Args:
         snapshots: list of {"id": sid, "prev": prev_mj_dict, "curr": curr_mj_dict}

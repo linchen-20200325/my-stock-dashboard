@@ -1,4 +1,4 @@
-"""src/services/ — L3 業務邏輯編排 / AI 整合 / 摘要 / 狀態鎖 / section input / MJ 體檢。
+"""src/services/ — L3 業務邏輯編排 / AI 整合 / 摘要 / 狀態鎖 / section input / 老師 體檢。
 
 PEP 562 lazy `__getattr__`(F-6.2 R4 教訓):每次 attr lookup 從 submod 即時取,
 支援 caller 的 `from src.services import X` 對 monkeypatch.setattr(submod, X) 生效。

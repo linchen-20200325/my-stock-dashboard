@@ -2,9 +2,9 @@
 
 整合兩個頻率：
 - **月營收動能（月頻、權重 65%）**：近 3 月 YoY 平均 + 末月 MoM
-- **MJ 季財報 trend（季頻、權重 35%）**：近 3 季快照逐期 diff 兩次 net_delta
+- **老師 季財報 trend（季頻、權重 35%）**：近 3 季快照逐期 diff 兩次 net_delta
 
-設計理念：月營收 10 日公布更新快（先行指標）；MJ 季財報慢但見獲利品質（落後指標）。
+設計理念：月營收 10 日公布更新快（先行指標）；老師 季財報慢但見獲利品質（落後指標）。
 月權重大搶時效、季權重小保品質 — 互補不對立。
 
 公式：
@@ -110,7 +110,7 @@ def _squash(net: int) -> float:
 
 
 def compute_mj_trend_subscore(mj_snapshots_3q: list[dict]) -> tuple[float, dict]:
-    """MJ 季財報 trend 子分數，範圍 [-2, +2]。
+    """老師 季財報 trend 子分數，範圍 [-2, +2]。
 
     對近 3 季快照逐期 diff 兩次（Q-2→Q-1、Q-1→Q），兩次 net_delta 同向 → 自然累加；
     分歧 → 衰減 0.5×（避免假訊號）。
@@ -180,7 +180,7 @@ def compute_trend_score(
 
     Args:
         monthly_revenue_3m: 近 3 月月營收
-        mj_snapshots_3q: 近 3 季 MJ 體檢快照
+        mj_snapshots_3q: 近 3 季 老師 體檢快照
         w_monthly: 月營收權重（預設 0.65，季財報自動 = 1 - w_monthly）
 
     Returns:
@@ -227,9 +227,9 @@ def compute_one_stock_trend(
     load_snapshot,
     save_snapshot,
 ) -> dict:
-    """單檔 MJ 趨勢分數編排（SSOT,個股 Tab + 組合 Tab 共用）。
+    """單檔 老師 趨勢分數編排（SSOT,個股 Tab + 組合 Tab 共用）。
 
-    流程：抓月營收 → 補抓 MJ 季財報 → 跑 compute_trend_score。
+    流程：抓月營收 → 補抓 老師 季財報 → 跑 compute_trend_score。
     例外永遠 graceful — 單檔失敗不阻斷批次。
 
     依賴注入維持本模組純編排特性（不 hard import L1 fetcher）。
@@ -265,7 +265,7 @@ def compute_one_stock_trend(
     except Exception as e:  # pragma: no cover - defensive
         row["note"] += f"月營收抓取失敗 ({type(e).__name__}); "
 
-    # ── 2. MJ 季財報快照（不足 3 季自動補抓本季）───────────────
+    # ── 2. 老師 季財報快照（不足 3 季自動補抓本季）───────────────
     try:
         yms = list_snapshots(sid)
         if yyyymm_curr not in yms:
@@ -294,7 +294,7 @@ def compute_one_stock_trend(
                                     except Exception as _e_pp:
                                         row["note"] += f"上季 bootstrap 失敗 ({type(_e_pp).__name__}); "
             except Exception as e_in:  # pragma: no cover - defensive
-                row["note"] += f"本季 MJ 補抓失敗 ({type(e_in).__name__}); "
+                row["note"] += f"本季 老師 補抓失敗 ({type(e_in).__name__}); "
 
         if yms:
             row["snap_ym"] = yms[0]
@@ -306,7 +306,25 @@ def compute_one_stock_trend(
                 mj_snaps.append(snap)
         mj_snaps.reverse()  # oldest..latest
     except Exception as e:  # pragma: no cover - defensive
-        row["note"] += f"MJ 快照載入失敗 ({type(e).__name__}); "
+        row["note"] += f"老師 快照載入失敗 ({type(e).__name__}); "
+
+    # ── 2.5 轉機判定(v19.164:合併「老師 體檢轉機」獨立 Tab)────────────
+    # 零額外抓取 —— 直接用上面已載入的近 2 季快照(mj_snaps oldest..latest)跑
+    # diff_mj_health,產出「本業虧轉盈 🌟 / 盈轉虧 ⚠️」+ 逐項改善/惡化。這就是
+    # user 要的「找體質差→變好」,不再需要第二個輸入框 + 第二張表(去重)。
+    row["diff_verdict"] = None
+    row["turn_icon"] = ""
+    try:
+        if len(mj_snaps) >= 2:
+            from src.compute.health import diff_mj_health
+            v = diff_mj_health(mj_snaps[-2], mj_snaps[-1], stock_id=sid, min_net_delta=1)
+            row["diff_verdict"] = v
+            if getattr(v, "is_turnaround", False):
+                row["turn_icon"] = "🌟 轉機"
+            elif getattr(v, "is_breakdown", False):
+                row["turn_icon"] = "⚠️ 雷股"
+    except Exception as e:  # pragma: no cover - defensive
+        row["note"] += f"轉機判定失敗 ({type(e).__name__}); "
 
     # ── 3. 合議 ─────────────────────────────────────────────────
     try:

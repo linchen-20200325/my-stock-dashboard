@@ -55,7 +55,7 @@ class TestScore:
         assert _score("  Pass  ") == 2
 
     def test_prefix_match(self):
-        # MJ engine 偶爾吐 "Exception_Pass (條件A：現金充足)"
+        # 老師 engine 偶爾吐 "Exception_Pass (條件A：現金充足)"
         assert _score("Exception_Pass (條件A)") is None  # 不在表內、不命中前綴
 
     def test_high_debt_special(self):
@@ -82,7 +82,7 @@ class TestScore:
 # ════════════════════════════════════════════════════════════════
 def _mj_mini(cash="Pass", dso="Acceptable", gm="Good", om="Moderate",
              cbp="Yes", roe_lev="None"):
-    """簡化版 MJ 體檢回傳結構供測試。"""
+    """簡化版 老師 體檢回傳結構供測試。"""
     return {
         "cash_ratio_status": "🟢",
         "ocf_status": "🟢",

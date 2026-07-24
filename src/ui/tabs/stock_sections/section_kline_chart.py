@@ -94,16 +94,16 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
             _trend_lbl, _tc = classify_trend_4tier(_kp, _km20, _km100)
             if '多頭' in _trend_lbl:
                 _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＞ MA20 {_km20:.1f} ＞ MA100 {_km100:.1f}'
-                              ' — 宏爺：可持股，大盤多頭才做個股')
+                              ' — 老師：可持股，大盤多頭才做個股')
             elif '空頭' in _trend_lbl:
                 _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＜ MA20 {_km20:.1f} ＜ MA100 {_km100:.1f}'
-                              ' — 宏爺：不做多，嚴格停損')
+                              ' — 老師：不做多，嚴格停損')
             elif '多箱' in _trend_lbl:
                 _trend_msg = (f'{_trend_lbl}：股價在 MA100 之上'
-                              f' — 宏爺：等待站上 MA20({_km20:.1f})確認方向')
+                              f' — 老師：等待站上 MA20({_km20:.1f})確認方向')
             else:
                 _trend_msg = (f'{_trend_lbl}：股價低於 MA100'
-                              ' — 宏爺：耐心等待多頭訊號，不摸底')
+                              ' — 老師：耐心等待多頭訊號，不摸底')
         st.markdown(
             border_left_banner(_tc, _trend_msg, border_width=4,
                                font_size=13, padding_y=10, padding_x=14,
@@ -117,7 +117,7 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
     _kl_c = TRAFFIC_GREEN if '多頭' in _trend_msg_safe or '✅' in _trend_msg_safe else (TRAFFIC_RED if '空頭' in _trend_msg_safe else TRAFFIC_YELLOW)
     st.markdown(border_left_banner(
         _kl_c,
-        f'<span style="font-size:11px;color:#8b949e;">🎓 宏爺 · 均線排列</span>　'
+        f'<span style="font-size:11px;color:#8b949e;">🎓 老師 · 均線排列</span>　'
         f'<span style="font-weight:700;">{_trend_msg_safe}</span>',
         padding_y=7, font_size=13,
     ), unsafe_allow_html=True)

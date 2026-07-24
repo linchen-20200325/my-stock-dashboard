@@ -466,7 +466,7 @@ st.markdown(
 from src.ui.render.app_render import render_macro_compass  # noqa: E402
 render_macro_compass()
 
-# v18.182 ARCHIVED: 🧪 回測找參數 / v18.187 ARCHIVED: 📈 月營收進退 / v18.189 ARCHIVED: 📊 MJ 體檢變化
+# v18.182 ARCHIVED: 🧪 回測找參數 / v18.187 ARCHIVED: 📈 月營收進退 / v18.189 ARCHIVED: 📊 老師 體檢變化
 # 各暫封存模組保留磁碟，啟用方式見各 ARCHIVED 原始注解。
 # v18.463: UI 重構 — 10 平鋪 Tab → 4 大群組 + Sub-tabs（sub-tab 變數名稱維持不變，測試仍通過）
 tab_market, tab_stocks, tab_etf_main, tab_tools, tab_ai = st.tabs([
@@ -799,7 +799,7 @@ with tab_stocks:
                                    file_name='cross_quarter_trend_rank.csv',
                                    mime='text/csv', key='trend_rank_csv')
 
-# v19.163 MJ 體檢轉機併進 🏆 個股組合 Tab(批次)、蔡森目標價內嵌 🔬 個股 + 🏆 組合;
+# v19.163 老師 體檢轉機併進 🏆 個股組合 Tab(批次)、老師目標價內嵌 🔬 個股 + 🏆 組合;
 # 皆不設獨立分頁(user 要求「都合併在個股與組合中,不需要開立新的 tab」)。
 # ══════════════════════════════════════════════════════════════
 # GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合）

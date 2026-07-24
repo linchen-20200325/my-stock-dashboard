@@ -130,7 +130,7 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
         # VCP 訊號
         _vcp_ok = bool(vcp2 and isinstance(vcp2, dict) and vcp2.get('contracting'))
 
-        # 目標價(蔡森一比一對稱法)
+        # 目標價(老師一比一對稱法)
         _hi20_i = float(df2['high'].tail(20).max())
         _lo20_i = float(df2['low'].tail(20).min())
         _range20 = _hi20_i - _lo20_i
