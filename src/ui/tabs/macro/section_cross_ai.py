@@ -1,6 +1,9 @@
-"""src/ui/tabs/macro/section_cross_ai.py — Section 九 跨桶 AI 投資決策(B-S8-B 抽出,P2 v18.389 rename)。
+"""src/ui/tabs/macro/section_cross_ai.py — Section 九 跨桶規則決策(B-S8-B 抽出;v19.168 去 AI 標籤)。
 
-🧠 跨桶｜總經 AI 投資決策分析(五維度卡:景氣位階 / 配置 / 貨幣 / 美股 / 結論)
+🧭 跨桶｜總經規則決策(離線可用,五維度卡:景氣位階 / 配置 / 貨幣 / 美股 / 結論)
+
+⚠️ 本檔為**純 if/else 規則引擎(零 LLM / 免金鑰 / 離線可用)**,非 AI。v19.168 從「AI 綜合」
+桶群移出、獨立為「🧭 規則決策」群,讓使用者知道這是最該信任的確定性決策而非黑箱。
 
 closure params(explicit pass):
 - tech_s: dict  美股 calc_stats 結果(SOX / NVDA / 大盤 TWII)
@@ -11,8 +14,8 @@ session_state 讀(0 寫):
 - m1b_m2_info    M1B/M2 YoY + Gap
 - bias_info      年線乖離(bias_240)
 
-備註:本檔的 'ai' 桶群組 banner 同時 group §九 + §十一,故 banner setup 留在本檔
-頭部(原 tab_macro:2233-2235),§十一 render_section_news_ai() 在外層接續呼叫,不重複 emit。
+備註:v19.168 起 §九 emit 自己的 'rules' 桶群 banner;§十一(新聞 AI 裁決,真 Gemini)
+改由 section_news_ai 自行 emit 'ai' 桶群 banner(不再共用 §九 的)。
 """
 from __future__ import annotations
 
@@ -23,11 +26,13 @@ from src.ui.render.macro_ui_components import section_header
 
 
 def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
-    """渲染§九 跨桶 AI 投資決策分析(原 tab_macro line 2233-2452)。"""
-    # v18.310 桶群組 banner：AI 綜合(跨桶 AI §九 + 新聞 AI 裁決 §十一)
+    """渲染§九 跨桶規則決策(離線可用,原 tab_macro line 2233-2452)。純規則引擎,非 AI。"""
+    # v19.168 桶群組 banner:§九 從「AI 綜合」移出,獨立為「🧭 規則決策」群組。
+    # 本 section 是純 if/else 規則引擎(零 LLM),離線可用、免金鑰;掛「AI」標籤會誤導
+    # 使用者以為是黑箱,其實是最該信任的確定性決策。§十一 新聞 AI 裁決才 emit 'ai' banner。
     from shared.macro_buckets import bucket_group_banner_html as _bgb
-    st.markdown(_bgb('ai', 6), unsafe_allow_html=True)
-    st.markdown(section_header('九', '🧠 跨桶｜總經 AI 投資決策分析', '🧠'), unsafe_allow_html=True)
+    st.markdown(_bgb('rules', 0), unsafe_allow_html=True)
+    st.markdown(section_header('九', '🧭 跨桶｜總經規則決策(離線可用,免 AI)', '🧭'), unsafe_allow_html=True)
 
     # ── 安全取數 ────────────────────────────────────────────────
     # v18.388:B-4 (1ee60c3) 把 _m8_* 隨 §八 section 抽至 section_mid local,§九 此處

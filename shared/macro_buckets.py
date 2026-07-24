@@ -266,10 +266,17 @@ BUCKET_GROUP_COLOR = {
     "chips":    "#a371f7",   # 🧩 籌碼 — 紫
     "news":     "#d2a8ff",   # 📰 新聞 — 淺紫
     "ai":       "#76e3ea",   # 🧠 AI 綜合 — 青
+    "rules":    "#79c0ff",   # 🧭 規則決策 — 天藍(v19.168:§九 從 AI 桶移出,純規則引擎、離線可用)
 }
 
-# AI 群組(跨桶 AI + 新聞 AI 裁決)非 5 桶之一,meta 另列
-_AI_GROUP_META = {"emoji": "🧠", "title": "AI 綜合決策", "sub": "跨桶 AI 投資決策 × 新聞 AI 總裁決"}
+# AI 群組非 5 桶之一,meta 另列。v19.168:§九「跨桶規則決策」已從本群移出(純規則引擎、非 AI),
+# 獨立為 _RULES_GROUP_META;本群現僅涵蓋 §十一 新聞 AI 總裁決(真 Gemini)。
+_AI_GROUP_META = {"emoji": "🧠", "title": "AI 綜合決策", "sub": "新聞 AI 總裁決(Gemini 生成戰情報告)"}
+
+# v19.168:§九 跨桶規則決策群組 — 純 if/else 規則引擎,離線可用、免金鑰、確定性。與 AI 群組
+# 刻意分開,讓使用者知道這是「最該信任的規則決策」而非黑箱 AI(原標題誤掛「AI」造成困惑)。
+_RULES_GROUP_META = {"emoji": "🧭", "title": "規則決策",
+                     "sub": "離線可用 · 純規則引擎(免 AI／金鑰,確定性判讀)"}
 
 # v18.317 全球風險群組(10 燈短線雷達改桶):亦非 5 桶 DangerSpec 之一,meta 另列。
 # 資料源為 risk_radar.detect_risk_radar(自帶 color/label/value/trend),非 BUCKET_DANGER_SPECS,
@@ -301,9 +308,10 @@ def bucket_group_banner_html(bucket_key: str, idx: int, total: int = 5) -> str:
     _special_meta = {
         "ai": _AI_GROUP_META, "global": _GLOBAL_GROUP_META,
         "pivot": _PIVOT_GROUP_META, "cashflow": _CASHFLOW_GROUP_META,
+        "rules": _RULES_GROUP_META,
     }
     _special_badge = {"ai": "綜合", "global": "雷達",
-                      "pivot": "拐點", "cashflow": "金流"}
+                      "pivot": "拐點", "cashflow": "金流", "rules": "規則"}
     meta = _special_meta.get(bucket_key) or BUCKET_META[bucket_key]
     color = BUCKET_GROUP_COLOR[bucket_key]  # KeyError on bad key = Fail Loud
     _badge = _special_badge.get(bucket_key) or f"桶 {idx}/{total}"
