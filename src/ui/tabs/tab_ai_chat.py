@@ -5,7 +5,6 @@ tab_ai_chat.py — AI 分析師 panel + 問答(L5 UI)
 
 提供三個可直接嵌入的元件:
   render_tab_summary(tab_key, bundle)  — 每個 Tab 放一顆「🧬 AI 總結本頁」按鈕(輕量;Phase 2 逐 tab 接)
-  render_stock_panel(stock_id)         — 個股「🧬 AI 分析師討論」(3分析師→辯論→風控→報告)
   render()                             — 自由問答聊天分頁
 
 守則:權威數字由 bundle/工具結果用 st 元件渲染;AI 敘述帶 🧬 旗標(對齊 EX-AI-1 精神)。
@@ -17,9 +16,9 @@ import os
 import streamlit as st
 
 try:
-    from src.services.ai_qa_service import run_agent, summarize_tab, discuss_stock
+    from src.services.ai_qa_service import run_agent, summarize_tab
 except Exception:  # pragma: no cover
-    from ai_qa_service import run_agent, summarize_tab, discuss_stock
+    from ai_qa_service import run_agent, summarize_tab
 
 
 # ---- secrets 橋接(L3 service 不 import streamlit,靠 env 讀 token)---------
@@ -97,18 +96,9 @@ def render_tab_summary(tab_key: str, bundle: dict, *, context: str = "general",
 
 
 # ---- ② 個股:一鍵分析師討論(完整管線)------------------------------------
-def render_stock_panel(stock_id: str, *, mode: str = "full", title: str = "🧬 AI 分析師討論"):
-    _bridge_secrets_to_env()
-    key = _secret("GEMINI_API_KEY")
-    if not key or not stock_id:
-        st.caption("🧬 AI 未啟用或未選股票")
-        return
-    slot = f"_ai_stk_{stock_id}"
-    if st.button(f"{title}（{stock_id}）", key=f"btn_stk_{stock_id}"):
-        with st.spinner("3 分析師 → 多空辯論 → 風控 → 報告…"):
-            st.session_state[slot] = discuss_stock(stock_id, api_key=key, mode=mode)
-    if st.session_state.get(slot):
-        _render_panel(st.session_state[slot])
+# v19.168 IMPL-C:render_stock_panel(個股「🧬 AI 分析師討論」)已移除。個股頁保留更完整的
+# 「🤖 AI 首席顧問總結」(五維:技術+基本+財報+新聞)即可,不需並存兩顆個股 AI 按鈕。
+# L3 discuss_stock service 仍保留於 ai_qa_service(有測試、可重用)。
 
 
 # ---- ③ 自由問答聊天 --------------------------------------------------------
