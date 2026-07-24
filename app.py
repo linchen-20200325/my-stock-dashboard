@@ -593,7 +593,7 @@ with tab_market:
 # GROUP 2: 選股（個股 + 個股組合 + 選股網）
 # ══════════════════════════════════════════════════════════════
 with tab_stocks:
-    tab_stock, tab_stock_grp, tab_screener, tab_mj = st.tabs(['🔬 個股', '🏆 個股組合', '🔭 選股網', '🩺 體檢轉機'])
+    tab_stock, tab_stock_grp, tab_screener, tab_mj, tab_caisen = st.tabs(['🔬 個股', '🏆 個股組合', '🔭 選股網', '🩺 體檢轉機', '🎯 蔡森目標價'])
 
     with tab_stock:
         from src.ui.tabs import render_tab_stock
@@ -804,6 +804,12 @@ with tab_stocks:
         # 修當初 v18.463「10 Tab→4 群組」改版漏掛的根因;守衛測試釘住掛載避免再變孤兒。
         from src.ui.tabs import render_mj_health_diff_tab
         _render_tab_isolated(render_mj_health_diff_tab, '體檢轉機')
+
+    with tab_caisen:
+        # v19.162 user 要求:由技術線型(ZigZag)自動算蔡森 甜蜜價/目標價/止損。
+        # 演算法推導擺動點 + 可手動覆寫;計算走 L2 SSOT caisen_targets。
+        from src.ui.tabs import render_caisen_targets_tab
+        _render_tab_isolated(render_caisen_targets_tab, '蔡森目標價')
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合）

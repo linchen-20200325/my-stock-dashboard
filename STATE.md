@@ -1,5 +1,23 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🎯 2026-07-23 新功能:蔡森型態目標價計算機（v19.162,user 要求「由技術線型算甜蜜價/目標價」）
+
+多角色團隊(線型分析專家 + 總管)協作:由技術線型**自動**算蔡森 甜蜜價/止損/目標/風報比。
+
+- **L2 引擎(線型專家建)** `src/compute/strategy/caisen_targets.py`(純函式,只 import math,零 I/O):
+  - `detect_swings(highs, lows, pct)` — ZigZag 擺動點偵測(確定性,反轉 ≥pct 才確認)。
+  - `derive_caisen_levels(swings, px)` — 機械對映 破底低/起漲/波高/整理低/頸線 + 判型(破底翻/N字/未明)。
+  - `compute_caisen_targets(...)` — 等幅滿足:N字 `整理低+(波高-起漲)`、底型 `頸線+(波高-型低)`、第二波 `頸線+2×幅`;
+    止損分流(破底翻→破底低下方寬停 / N字→整理低·頸線下方緊停);風報比 = (目標-甜蜜)/(甜蜜-止損)。
+  - §1 誠實:缺值回 None 不腦補;`_EPS` 容差;除零 guard。21 tests(含 golden:例題 target_n=145)。
+- **L5 UI(總管建)** `src/ui/tabs/caisen_targets_ui.py`:輸入代碼→抓 1y K 線(fetch_stock_history_1y,EX-PASSTHRU-1)
+  →自動偵測→**手動可覆寫每個關鍵點**→報告(甜蜜/止損/目標第一二波/風報比/專家叮嚀)+ 線圖標擺動點與水平線。
+  掛 🔬 選股群組第 5 子 Tab「🎯 蔡森目標價」。
+- **§1 誠實界線**:UI 明示「演算法推導,非型態判定」+ 抓不到 K 線 fail loud(不編假)+ 型態關鍵點可人工覆寫。
+- **防孤兒**:`tests/test_caisen_ui_mounted.py`(掛載 + forward + UI 走 L2 SSOT + L2 純度)。
+- **驗證**:25 passed + AppTest render smoke 零例外 + 引擎 forward import 例題精確。
+- **分支**:v19.161 PR #567 已 merged → 從最新 main 重開,另開新 PR。
+
 ## 🩺 2026-07-23 復活 MJ 體檢轉機 Tab（v19.160,user 要求「找體質差→變好的公司」）
 
 團隊稽核排毒波(v19.159)P3 曾真刪 4 孤兒 Tab;user 於反悔點指出 **MJ 體檢變化仍需要**(找轉機股)。撈回 + 修根因 + 掛回 + 加值:

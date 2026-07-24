@@ -2,11 +2,13 @@
 from . import (  # noqa: F401
     v4_strategy_engine, v5_modules,
     tw_backtest, portfolio_manager, tech_indicators,
+    caisen_targets,
 )
 
 _SUBMODULES = (
     v4_strategy_engine, v5_modules,
     tw_backtest, portfolio_manager, tech_indicators,
+    caisen_targets,
 )
 
 

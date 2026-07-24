@@ -6,7 +6,7 @@ section render 函式(類比 `macro/` 子目錄模式)。
 from . import (  # noqa: F401
     tab_edu, tab_helpers, tab_macro,
     tab_mj_health_diff, tab_stock, tab_stock_grp,
-    tab_stock_picker,
+    tab_stock_picker, caisen_targets_ui,
     # F-8 補搬:L5 渲染元件(非單一 tab,但同層性質)
     chip_radar, grape_ladder, hot_money, macro_classroom, macro_stock_link,
     portfolio_linkage, yield_screener,
@@ -19,7 +19,7 @@ from . import (  # noqa: F401
 _SUBMODULES = (
     tab_edu, tab_helpers, tab_macro,
     tab_mj_health_diff, tab_stock, tab_stock_grp,
-    tab_stock_picker,
+    tab_stock_picker, caisen_targets_ui,
     chip_radar, grape_ladder, hot_money, macro_classroom, macro_stock_link,
     portfolio_linkage, yield_screener,
     stock_sections,
