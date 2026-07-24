@@ -19,6 +19,7 @@ from src.compute.strategy.caisen_targets import (
     compute_caisen_targets,
     derive_caisen_levels,
     detect_swings,
+    summarize_caisen,
 )
 
 
@@ -322,3 +323,56 @@ def test_result_dict_has_all_keys():
     for k in ("sweet", "sweet_low", "sweet_high", "stop", "target_n",
               "target_box", "target2", "target1", "rr", "pattern", "notes"):
         assert k in r
+
+
+# ── 5. summarize_caisen(批次摘要 + 誠實 gate)──────────────────────
+_SUMMARY_KEYS = ("pattern", "sweet", "dist_pct", "stop", "target1", "rr",
+                 "levels", "ok", "reason")
+
+
+def test_summarize_contract_keys():
+    """回傳 dict 契約:批次摘要 key 齊備。"""
+    s = summarize_caisen([100.0, 130.0, 115.0, 145.0],
+                         [100.0, 130.0, 115.0, 145.0], 145.0, pct=0.08)
+    for k in _SUMMARY_KEYS:
+        assert k in s
+
+
+def test_summarize_n_pattern_actionable():
+    """N字型態 → 有可操作數字:pattern/sweet/rr/dist_pct 皆備、ok=True、reason=None。"""
+    seq = [100.0, 130.0, 115.0, 145.0]
+    s = summarize_caisen(seq, seq, 145.0, pct=0.08)
+    assert s["pattern"] == "N字整理"
+    assert math.isclose(s["sweet"], 130.0, rel_tol=1e-9)   # 甜蜜價=頸線=wave1_high
+    assert s["rr"] is not None and s["rr"] > 0
+    assert s["ok"] is True
+    assert s["reason"] is None
+    # 距甜蜜價% = (145-130)/130*100 ≈ +11.54(已突破)
+    assert math.isclose(s["dist_pct"], (145 - 130) / 130 * 100, rel_tol=1e-9)
+    assert s["levels"] is not None
+
+
+def test_summarize_gate_blocks_undetermined_pattern():
+    """型態未明:引擎止損退化會灌假高 rr → 封鎖所有可操作數字,只留 pattern + reason。"""
+    # [100,150,120]:上衝後回落確認高、其後無擺動低 → consolidation_low=None → 型態未明
+    seq = [100.0, 150.0, 120.0]
+    s = summarize_caisen(seq, seq, 120.0, pct=0.08)
+    assert s["pattern"] == "型態未明"
+    assert s["sweet"] is None
+    assert s["stop"] is None
+    assert s["target1"] is None
+    assert s["rr"] is None          # ← 關鍵:不給假高風報比
+    assert s["dist_pct"] is None
+    assert s["ok"] is False
+    assert s["reason"] == "型態未明·需看圖"
+    assert s["levels"] is not None  # levels 仍回傳供下鑽看圖
+
+
+def test_summarize_insufficient_swings():
+    """擺動點不足 → 全 None、pattern=None、reason 標明,不腦補。"""
+    s = summarize_caisen([100.0, 105.0], [100.0, 105.0], 105.0, pct=0.08)
+    assert s["pattern"] is None
+    assert s["levels"] is None
+    assert s["ok"] is False
+    assert s["reason"] == "擺動點不足"
+    assert all(s[k] is None for k in ("sweet", "dist_pct", "stop", "target1", "rr"))

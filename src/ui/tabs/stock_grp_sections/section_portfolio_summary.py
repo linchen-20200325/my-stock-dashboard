@@ -104,102 +104,45 @@ def render_portfolio_summary_section(
                   delta_color='inverse',
                   help='系統觸發的風控警示數量(下方有詳情)')
 
-    # ── 🔰 故事化白話:兩套評分一次搞懂(純疊加,零動計算)──
-    with st.expander('🔰 這頁怎麼看?兩套排行 + 多因子一次搞懂'):
-        st.markdown('''這頁同時用**兩套評分**幫你比較多檔股票,角度不同、互相參照:
+    # ── 🔰 故事化白話:一張總表怎麼看(v19.164 合併版)──
+    with st.expander('🔰 這頁怎麼看?一張「組合排行總表」搞懂'):
+        st.markdown('''下方**「🏆 組合排行總表」一檔一列**,把原本散落的最終建議、多因子排行、汰弱留強
+合成一張,依「綜合建議 → 多因子」排序,**開頁 3 秒**看出哪幾檔積極、哪幾檔該汰:
 
-| 排行 | 看什麼 | 白話 |
-|---|---|---|
-| **③ 多因子評分** | 趨勢＋動能＋籌碼＋量價＋RS 五項合成 | 偏「**現在強不強**」(短中期動能選股) |
-| **④ 汰弱留強** | 健康度(均線／RSI／KD／量比／布林) | 偏「**體質好不好**」(淘汰技術面偏弱的) |
+| 欄位 | 看什麼 |
+|---|---|
+| **綜合建議** | 健康＋多因子＋357 三重確認 → 積極／觀察／等待 |
+| **多因子**(0~100) | 趨勢＋動能＋籌碼＋量價＋RS 五項合成,偏「**現在強不強**」 |
+| **健康度** | 均線／RSI／KD／量比／布林,偏「**體質好不好**」 |
+| **出場** | 技術＋籌碼(＋AI 利空)三維出場訊號 X/3 |
+| **蔡森型態／風報比** | K 線型態學等幅滿足的目標與風報比(完整見「🎯 蔡森型態目標價」) |
+| **EPS／毛利／殖利／P/B** | 基本面對照(各只出現這一次) |
 
-**多因子的 5 個分數(0~100,越高越好):**
-- **趨勢**:均線排列是否偏多(站上均線、多頭排列)
-- **動能**:近期上漲的力道(漲勢／RSI)
-- **籌碼**:法人／主力是否買超
-- **量價**:成交量與股價是否同步放大(量價配合)
-- **RS 相對強度**:這檔相對大盤是強還是弱,**RS 越高＝跑贏大盤越多**
+- **多因子子維度**(趨勢／動能／籌碼／量價／RS 個別分數)在下方「📈 多因子維度拆解」展開。
+- **逐檔技術明細**(RSI／KD／量比／357／VCP／合約負債…)在「🩹 逐檔技術明細」展開。
+- **MJ 財報體質(趨勢×轉機、找體質差→變好)**在更下方「📊 MJ 趨勢×轉機」區塊。
 
-> 💡 兩套都排前面、且 RS 向上的＝「強上加強」優先觀察;體質好但動能弱的可留意打底。最終仍以最下方「⑤ 最終綜合建議」＋風控警示為準。''')
+> 💡 多因子＋健康度都排前面、且 RS 向上＝「強上加強」優先觀察;體質好但動能弱的可留意打底。''')
 
     # ── 預先計算基本面(③④⑤ 共用)─────────────────────────
     _fund_map = _precompute_fund_map(results_t3)
 
-    # ── ⑤ 最終綜合建議卡 ──────────────────────────────────
-    if results_t3:
-        score_map = {s['stock_id']: s for s in score_t3}
+    # ── 🏆 組合排行總表(v19.164 合併 ③④⑤,一檔一列,每個 headline 欄只出現一次)──
+    _render_master_table(results_t3, score_t3, _fund_map)
 
-        st.markdown('#### ⑤ 最終綜合建議')
-        _rec_counts = {'積極': 0, '觀察': 0, '等待': 0}
-        for _rr in results_t3:
-            _rl, _ = final_recommendation(_rr, score_map)
-            _rec_counts[_rl.split()[-1]] = _rec_counts.get(_rl.split()[-1], 0) + 1
-        _active_n = _rec_counts.get('積極', 0)
-        _wait_n = _rec_counts.get('等待', 0)
-        if _active_n >= 2:
-            _r5c = f'本批 {_active_n} 支達積極布局條件'
-            _r5a = '可同步建倉,停損設健康度跌破50'
-        elif _active_n == 1:
-            _r5c = '僅 1 支達積極條件,其餘觀察或等待'
-            _r5a = '單一標的建倉,其餘等訊號確認'
-        else:
-            _r5c = f'本批無積極訊號({_wait_n} 支等待),市場擇股難度高'
-            _r5a = '空手等待,勿強求進場'
-        st.markdown(teacher_conclusion('宏爺', f'健康+多因子+357三重確認,共 {len(results_t3)} 支', _r5c, _r5a), unsafe_allow_html=True)
-        rec_cols = st.columns(min(len(results_t3), 5))
-        for ci, row in enumerate(results_t3[:5]):
-            rec_label, rec_color = final_recommendation(row, score_map)
-            mf2 = score_map.get(row['stock_id'], {}).get('total', 0)
-            _fd2 = _fund_map.get(row['stock_id'], {})
-            with rec_cols[ci]:
-                st.markdown(f"""<div style="background:#0d1117;border:2px solid {rec_color};
-border-radius:10px;padding:12px;text-align:center;margin:2px 0;">
-<div style="font-size:20px;font-weight:900;color:{rec_color};">{row['代碼']}</div>
-<div style="font-size:11px;color:#8b949e;">{row['名稱']}</div>
-<div style="font-size:13px;font-weight:700;color:{rec_color};margin:6px 0;">{rec_label}</div>
-<div style="font-size:11px;color:#8b949e;">健康:{row.get('健康度',0):.0f} | 多因子:{mf2:.0f}</div>
-<div style="font-size:11px;color:#8b949e;">EPS:{_fd2.get('近4季EPS','-')} | 毛利:{_fd2.get('毛利率%','-')}%</div>
-</div>""", unsafe_allow_html=True)
+    # ── 🎯 蔡森型態目標價(全組合,共用批次來源;逐檔看圖下鑽,非第二輸入)──
+    _render_caisen_batch(results_t3, score_t3)
 
-    # ── RS 走勢對比 ─────────────────────────────────────────
+    # ── 明細 drill-down(需要才展開,不佔首屏)──────────────────────
     if score_t3 and len(score_t3) >= 2:
-        st.markdown('---')
-        _sdf = pd.DataFrame([{
-            '代碼': r['stock_id'], '總分': r.get('total',0),
-            '趨勢': r.get('trend',0), '動能': r.get('momentum',0),
-            '籌碼': r.get('chip',0), '量價': r.get('volume',0),
-            'RS': r.get('rs_score',50),
-        } for r in score_t3]).sort_values('總分', ascending=False)
-        st.markdown('##### 📈 多因子維度對比')
-        _rs_top = _sdf.iloc[0] if not _sdf.empty else None
-        _rs_up_pre = [r['stock_id'] for r in score_t3 if r.get('rs_up')]
-        if _rs_top is not None and _rs_up_pre:
-            _rs27c = f'RS 最強 {_rs_top["代碼"]}({_rs_top["RS"]:.0f}分),{len(_rs_up_pre)} 支 RS 向上'
-            _rs27a = '優先佈局 RS 向上標的,動能最強'
-        elif _rs_top is not None:
-            _rs27c = f'RS 最強 {_rs_top["代碼"]}({_rs_top["RS"]:.0f}分),無 RS 向上訊號'
-            _rs27a = '等待突破,趨勢+動能>70再行動'
-        else:
-            _rs27c = 'RS 資料計算中'
-            _rs27a = '等待資料載入後判斷'
-        st.markdown(teacher_conclusion('朱家泓', 'RS相對強度對比', _rs27c, _rs27a), unsafe_allow_html=True)
-        _score_pivot = _sdf.head(5).set_index('代碼')[['趨勢','動能','籌碼','量價','RS']]
-        st.dataframe(_score_pivot, use_container_width=True,
-            column_config={c: st.column_config.ProgressColumn(c, min_value=0, max_value=100, format='%.0f')
-                           for c in ['趨勢','動能','籌碼','量價','RS']})
-        _rs_up_list = [r['stock_id'] for r in score_t3 if r.get('rs_up')]
-        if _rs_up_list:
-            st.success(f"📊 RS曲線向上(強勢動能):{' / '.join(_rs_up_list)}")
-
-    st.markdown('---')
-
-    # ── ③+④ 雙欄:多因子排行(含EPS/毛利率)vs 汰弱留強 ──
-    col_left, col_right = st.columns([1, 1])
-
-    with col_left:
+        with st.expander('📈 多因子維度拆解（趨勢／動能／籌碼／量價／RS）— 上表「多因子」欄的拆解',
+                         expanded=False):
+            _render_multifactor_dims(score_t3)
+    with st.expander('📋 多因子評分排行 + 基本面明細（EPS／毛利／SQ品質／FGMS前瞻／殖利／P/B）',
+                     expanded=False):
         _render_multifactor_ranking(score_t3, _fund_map)
-
-    with col_right:
+    with st.expander('🩹 逐檔技術明細（RSI／KD／量比／IBS／VCP／357／合約負債／操作狀態）＋ 🤖 AI 掃利空',
+                     expanded=False):
         _render_elimination_detail(
             results_t3, _fund_map, gemini_call_fn=gemini_call_fn)
 
@@ -295,6 +238,143 @@ def _precompute_fund_map(results_t3: list[dict]) -> dict[str, dict]:
             'P/B評價':  _pb_eval3,
         }
     return _fund_map
+
+
+def _render_master_table(
+    results_t3: list[dict],
+    score_t3: list[dict],
+    fund_map: dict[str, dict],
+) -> None:
+    """🏆 組合排行總表(v19.164 合併 ③④⑤)— 一檔一列,依綜合建議 → 多因子排序。
+
+    每個 headline 欄只出現一次(去重 EPS/毛利/殖利/健康度/評級/多因子);技術明細、
+    多因子子維度、蔡森完整欄改由下方 expander 展開。§1:蔡森風報比缺 → 「—」不腦補。
+    """
+    if not results_t3:
+        return
+    score_map = {s['stock_id']: s for s in score_t3}
+    _prio = {'積極': 0, '觀察': 1, '等待': 2}
+    rows = []
+    for r in results_t3:
+        sid = r.get('stock_id', r.get('代碼', ''))
+        rec_label, _ = final_recommendation(r, score_map)
+        rec_word = rec_label.split()[-1] if rec_label else ''
+        mf = float(score_map.get(sid, {}).get('total', 0) or 0)
+        cs = r.get('_caisen') or {}
+        rr = cs.get('rr')
+        ev = evaluate_exit_signals(r.get('_ex_tech'), r.get('_ex_chip_sig', ''), None)
+        fd = fund_map.get(sid, {})
+        rows.append({
+            '代碼': sid, '名稱': r.get('名稱', sid) or sid, '現價': r.get('現價', '-'),
+            '綜合建議': rec_label,
+            '多因子': round(mf, 0),
+            '評級': r.get('評級', '-'),
+            '健康度': int(r.get('健康度', 0) or 0),
+            '出場': f'{ev["icon"]} {ev["score"]}/3',
+            '蔡森型態': cs.get('pattern') or '—',
+            '風報比': f'{rr:.2f}' if isinstance(rr, (int, float)) else '—',
+            'EPS(4Q)': fd.get('近4季EPS', '-'),
+            '毛利%': fd.get('毛利率%', '-'),
+            '殖利%': fd.get('殖利率%', '-'),
+            'P/B': fd.get('P/B評價', '-'),
+            '_p': _prio.get(rec_word, 3),
+        })
+    df = (pd.DataFrame(rows)
+          .sort_values(['_p', '多因子'], ascending=[True, False])
+          .drop(columns=['_p']).reset_index(drop=True))
+    st.markdown('#### 🏆 組合排行總表')
+    st.caption('一檔一列,3 秒看出「哪幾檔積極、哪幾檔該汰」:綜合建議 → 多因子 → 健康度 → 出場 → '
+               '蔡森型態/風報比 → 基本面。每個欄位只出現一次(明細見下方展開區)。')
+    st.dataframe(df, use_container_width=True, hide_index=True, column_config={
+        '多因子': st.column_config.ProgressColumn('多因子', min_value=0, max_value=100, format='%.0f'),
+        '健康度': st.column_config.NumberColumn('健康度', format='%d 🏥'),
+        '出場': st.column_config.TextColumn('出場', help='技術+籌碼二維;利空新聞第三維在下方「逐檔技術明細」按「AI 掃利空」'),
+        '蔡森型態': st.column_config.TextColumn('蔡森型態'),
+        '風報比': st.column_config.TextColumn('風報比', help='蔡森等幅滿足;型態未明→「—」不給假高值'),
+        'P/B': st.column_config.TextColumn('P/B 估值'),
+    })
+
+
+def _render_multifactor_dims(score_t3: list[dict]) -> None:
+    """📈 多因子維度拆解(趨勢/動能/籌碼/量價/RS)— 主表「多因子」欄的子分數(唯一棲身)。"""
+    if not score_t3:
+        st.info('多因子維度資料載入中')
+        return
+    _sdf = pd.DataFrame([{
+        '代碼': r['stock_id'], '總分': r.get('total', 0),
+        '趨勢': r.get('trend', 0), '動能': r.get('momentum', 0),
+        '籌碼': r.get('chip', 0), '量價': r.get('volume', 0),
+        'RS': r.get('rs_score', 50),
+    } for r in score_t3]).sort_values('總分', ascending=False)
+    _pivot = _sdf.set_index('代碼')[['趨勢', '動能', '籌碼', '量價', 'RS']]
+    st.dataframe(_pivot, use_container_width=True, column_config={
+        c: st.column_config.ProgressColumn(c, min_value=0, max_value=100, format='%.0f')
+        for c in ['趨勢', '動能', '籌碼', '量價', 'RS']})
+    _rs_up = [r['stock_id'] for r in score_t3 if r.get('rs_up')]
+    if _rs_up:
+        st.success(f"📊 RS 曲線向上(強勢動能):{' / '.join(_rs_up)}")
+
+
+def _fmt_caisen(x, fmt: str = '%.2f') -> str:
+    """數值 → 字串;None/非數 → 「—」(§1 不腦補)。"""
+    return (fmt % x) if isinstance(x, (int, float)) else '—'
+
+
+def _render_caisen_batch(
+    results_t3: list[dict],
+    score_t3: list[dict],
+) -> None:
+    """🎯 蔡森型態目標價(全組合)— v19.164 批次化,共用上方批次的 K 線來源。
+
+    每檔在 run_batch_fetch 內已用 df4 就地算好(存 `_caisen`),此處只渲染。
+    §1 誠實:擺動點不足 / 型態未明 → 標「—」不腦補;下鑽線圖共用批次 df(同源同數)。
+    """
+    if not results_t3:
+        return
+    st.markdown('#### 🎯 蔡森型態目標價（全組合）')
+    st.caption('共用上方批次的 10 檔 K 線自動算,**無需再選標的**。§1:擺動點不足 / 型態未明 → '
+               '「—」不給假目標;距甜蜜價% 負=待突破、正=已突破。')
+    rows = []
+    for r in results_t3:
+        sid = r.get('stock_id', r.get('代碼', ''))
+        cs = r.get('_caisen') or {}
+        _dist = cs.get('dist_pct')
+        if _dist is None:
+            _dist_s = '—'
+        else:
+            _dist_s = f'{_dist:+.1f}% ' + ('已突破' if _dist >= 0 else '待突破')
+        rows.append({
+            '代碼': sid, '名稱': r.get('名稱', sid) or sid,
+            '型態': cs.get('pattern') or '—',
+            '甜蜜價': _fmt_caisen(cs.get('sweet')),
+            '距甜蜜價%': _dist_s,
+            '止損': _fmt_caisen(cs.get('stop')),
+            '目標①': _fmt_caisen(cs.get('target1')),
+            '風報比': _fmt_caisen(cs.get('rr'), '%.2f'),
+        })
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # ── 逐檔看圖下鑽(選一檔看 K 線 + 手動微調;非第二輸入,標的仍是上方 10 檔)──
+    _ordered = [s['stock_id'] for s in sorted(
+        score_t3, key=lambda x: x.get('total', 0) or 0, reverse=True)]
+    _codes = _ordered + [r.get('stock_id', r.get('代碼', ''))
+                         for r in results_t3
+                         if r.get('stock_id', r.get('代碼', '')) not in _ordered]
+    _codes = [c for c in _codes if c]
+    if not _codes:
+        return
+    with st.expander('🔎 看某一檔的型態線圖 + 手動微調關鍵點（從上方 10 檔挑一檔看圖）',
+                     expanded=False):
+        _sel = st.selectbox('看哪一檔的型態線圖', _codes, key='_csgrp_drill')
+        _pre_df = None
+        try:
+            from shared.app_cache import _load_cache
+            _cache = _load_cache('t3v2', _sel, ttl_hours=4)
+            _pre_df = (_cache or {}).get('df')
+        except Exception:
+            _pre_df = None
+        from src.ui.tabs.caisen_targets_ui import render_caisen_for_ticker
+        render_caisen_for_ticker(_sel, key_prefix='cs_grp', preloaded_df=_pre_df)
 
 
 def _render_multifactor_ranking(
@@ -415,22 +495,18 @@ def _render_elimination_detail(
         _row['出場'] = f'{_ev3["icon"]} {_ev3["score"]}/3'
         _elim_rows.append(_row)
     # v18.322 Option A:舊評分退役 → ④ 汰弱留強改以「純健康度」排序(對齊頁面說明)
+    # v19.164:身分/健康/出場/EPS/毛利/殖利 已在上方「組合排行總表」,此明細只留技術欄(去重)
     df_cmp = pd.DataFrame(_elim_rows).sort_values('健康度', ascending=False).reset_index(drop=True)
     if '名稱' not in df_cmp.columns and '代碼' in df_cmp.columns:
         df_cmp.insert(0, '名稱', df_cmp['代碼'])
-    _col_order = [c for c in ['名稱','代碼','現價','出場','操作狀態','健康度','評級',
-                               'RSI','KD','量比','IBS','趨勢','357評價','VCP',
-                               '合約負債','近4季EPS','毛利率%','殖利率%']
+    _col_order = [c for c in ['名稱','代碼','出場','操作狀態',
+                               'RSI','KD','量比','IBS','趨勢','357評價','VCP','合約負債']
                   if c in df_cmp.columns]
+    st.caption('身分/健康度/評級/EPS/毛利/殖利 已在上方組合排行總表,此處只列技術與籌碼明細(去重)。')
     st.dataframe(df_cmp[_col_order], use_container_width=True,
                  hide_index=True,
                  column_config={
                      '名稱':     st.column_config.TextColumn('名稱', width='small'),
                      '代碼':     st.column_config.TextColumn('代碼', width='small'),
-                     '現價':     st.column_config.TextColumn('現價'),
                      '出場':     st.column_config.TextColumn('出場', width='small', help='三維出場訊號:🔴3=強烈出場 / 🟠2=建議減碼 / 🟡1=留意 / 🟢0=清淡(利空新聞需按「AI 掃利空」)'),
-                     '健康度':   st.column_config.NumberColumn('健康度',  format='%d 🏥'),
-                     '近4季EPS': st.column_config.TextColumn('近4Q EPS'),
-                     '毛利率%':  st.column_config.TextColumn('毛利率%'),
-                     '殖利率%':  st.column_config.TextColumn('殖利率%'),
                  })

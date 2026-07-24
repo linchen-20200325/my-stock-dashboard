@@ -25,22 +25,60 @@ _LEVEL_FIELDS = (
 _PATTERNS = ("破底翻", "N字整理", "型態未明")
 
 
-def _run_detect(code: str, pct: float, prefix: str) -> None:
-    """抓 K 線 + ZigZag 偵測 + 對映關鍵位 → 存 session[prefix](button handler)。"""
+def _normalize_ohlc(df):
+    """把批次 df(小寫 high/low/close + date 欄)正規化成 High/Low/Close + DatetimeIndex。
+
+    v19.164:組合下鑽共用批次已抓的 df4(小寫欄名 + reset_index 的 date 欄),
+    避免下鑽重抓造成「表格 vs 線圖」數字不一致(§1 同源同數)。已是 Title-case
+    (fetch_stock_history_1y)則原樣回。缺必要欄 → None(不腦補)。
+    """
+    if df is None or getattr(df, "empty", True):
+        return None
+    import pandas as pd
+    d = df.copy()
+    ren = {lo: hi for lo, hi in (("high", "High"), ("low", "Low"),
+                                 ("close", "Close"), ("open", "Open"))
+           if hi not in d.columns and lo in d.columns}
+    if ren:
+        d = d.rename(columns=ren)
+    if not {"High", "Low", "Close"}.issubset(d.columns):
+        return None
+    if not isinstance(d.index, pd.DatetimeIndex) and "date" in d.columns:
+        try:
+            d = d.set_index(pd.to_datetime(d["date"]))
+        except Exception:
+            pass
+    return d
+
+
+def _run_detect(code: str, pct: float, prefix: str, preloaded_df=None) -> None:
+    """抓 K 線(或用 preloaded 批次 df)+ ZigZag 偵測 + 對映關鍵位 → 存 session[prefix]。
+
+    preloaded_df 非 None(組合下鑽):用批次已抓的 df,**不重抓**(§1 表↔圖同源同數);
+    None(個股 Tab / 獨立):走 fetch_stock_history_1y(EX-PASSTHRU-1)。
+    """
     dkey = f"_{prefix}_data"
     if not code:
         st.session_state[dkey] = {"error": "請先提供股票代碼。"}
         return
-    try:
-        from src.data.stock.picker_fetcher import fetch_stock_history_1y  # EX-PASSTHRU-1
-        df, resolved = fetch_stock_history_1y(code)
-    except Exception as e:  # noqa: BLE001 — 抓取失敗不炸 UI
-        st.session_state[dkey] = {"error": f"抓取失敗:{type(e).__name__}"}
-        return
-    if df is None or getattr(df, "empty", True) or "Close" not in getattr(df, "columns", []):
-        st.session_state[dkey] = {
-            "error": f"抓不到「{code}」的 K 線(Yahoo/FinMind 皆無回應)。§1:不編造假資料,請確認代碼或稍後再試。"}
-        return
+    if preloaded_df is not None:
+        df = _normalize_ohlc(preloaded_df)
+        resolved = code
+        if df is None:
+            st.session_state[dkey] = {
+                "error": f"批次 K 線欄位不完整,無法畫「{code}」型態圖(§1:不補假資料)。"}
+            return
+    else:
+        try:
+            from src.data.stock.picker_fetcher import fetch_stock_history_1y  # EX-PASSTHRU-1
+            df, resolved = fetch_stock_history_1y(code)
+        except Exception as e:  # noqa: BLE001 — 抓取失敗不炸 UI
+            st.session_state[dkey] = {"error": f"抓取失敗:{type(e).__name__}"}
+            return
+        if df is None or getattr(df, "empty", True) or "Close" not in getattr(df, "columns", []):
+            st.session_state[dkey] = {
+                "error": f"抓不到「{code}」的 K 線(Yahoo/FinMind 皆無回應)。§1:不編造假資料,請確認代碼或稍後再試。"}
+            return
 
     from src.compute.strategy import detect_swings, derive_caisen_levels
     current_price = float(df["Close"].iloc[-1])
@@ -132,10 +170,13 @@ def _render_chart(data: dict, r: dict, chart_key: str) -> None:
     st.plotly_chart(fig, use_container_width=True, key=f"_cs_chart_{chart_key}")
 
 
-def render_caisen_for_ticker(code: str, *, key_prefix: str = "cs", default_pct: int = 8) -> None:
+def render_caisen_for_ticker(code: str, *, key_prefix: str = "cs", default_pct: int = 8,
+                             preloaded_df=None) -> None:
     """可重用核心:對單一代碼跑蔡森型態目標價分析(自動偵測 + 可手動覆寫)。
 
     key_prefix 隔離 session(獨立分頁 / 個股 / 組合 三處共用不衝突)。
+    preloaded_df(v19.164 組合下鑽):傳入批次已抓的 df → 不重抓、換檔自動算,
+    確保「批次蔡森表 vs 下鑽線圖」同源同數(§1);None → 個股 Tab 走自抓。
     """
     st.caption("⚠️ **演算法推導,非型態判定**：系統只機械抓「擺動轉折點」，型態是否成立請自行看圖確認，"
                "並可下方**手動微調每個關鍵點**。僅供研究，風險自負。")
@@ -146,11 +187,18 @@ def render_caisen_for_ticker(code: str, *, key_prefix: str = "cs", default_pct: 
     pct = cc1.slider("ZigZag 靈敏度（反轉 %）", 3, 15, default_pct, key=f"_{prefix}_pct",
                      help="越小抓越多小轉折;越大只抓大波段。") / 100.0
     cc2.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-    if cc2.button(f"🔍 抓 K 線並計算（{code or '—'}）", type="primary",
+    _btn_label = (f"🔄 重新計算（{code or '—'}）" if preloaded_df is not None
+                  else f"🔍 抓 K 線並計算（{code or '—'}）")
+    if cc2.button(_btn_label, type="primary",
                   use_container_width=True, key=f"_{prefix}_go", disabled=not code):
-        _run_detect(code, pct, prefix)
+        _run_detect(code, pct, prefix, preloaded_df=preloaded_df)
 
     data = st.session_state.get(f"_{prefix}_data")
+    # 組合下鑽:換檔(或首次)自動用批次 df 算,免按鈕、免重抓(§1 表↔圖同源)
+    if preloaded_df is not None and code and (not data or data.get("code") != code):
+        _run_detect(code, pct, prefix, preloaded_df=preloaded_df)
+        data = st.session_state.get(f"_{prefix}_data")
+
     if not data:
         st.info(f"👆 按「抓 K 線並計算」，系統會抓 **{code or '該標的'}** 近一年 K 線並偵測型態關鍵點。")
         return

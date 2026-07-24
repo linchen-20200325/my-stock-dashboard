@@ -308,6 +308,24 @@ def compute_one_stock_trend(
     except Exception as e:  # pragma: no cover - defensive
         row["note"] += f"MJ 快照載入失敗 ({type(e).__name__}); "
 
+    # ── 2.5 轉機判定(v19.164:合併「MJ 體檢轉機」獨立 Tab)────────────
+    # 零額外抓取 —— 直接用上面已載入的近 2 季快照(mj_snaps oldest..latest)跑
+    # diff_mj_health,產出「本業虧轉盈 🌟 / 盈轉虧 ⚠️」+ 逐項改善/惡化。這就是
+    # user 要的「找體質差→變好」,不再需要第二個輸入框 + 第二張表(去重)。
+    row["diff_verdict"] = None
+    row["turn_icon"] = ""
+    try:
+        if len(mj_snaps) >= 2:
+            from src.compute.health import diff_mj_health
+            v = diff_mj_health(mj_snaps[-2], mj_snaps[-1], stock_id=sid, min_net_delta=1)
+            row["diff_verdict"] = v
+            if getattr(v, "is_turnaround", False):
+                row["turn_icon"] = "🌟 轉機"
+            elif getattr(v, "is_breakdown", False):
+                row["turn_icon"] = "⚠️ 雷股"
+    except Exception as e:  # pragma: no cover - defensive
+        row["note"] += f"轉機判定失敗 ({type(e).__name__}); "
+
     # ── 3. 合議 ─────────────────────────────────────────────────
     try:
         out = compute_trend_score(monthly_3m, mj_snaps, w_monthly=w_monthly)

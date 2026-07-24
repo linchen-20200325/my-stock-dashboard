@@ -360,3 +360,72 @@ def compute_caisen_targets(
         "pattern": pattern,
         "notes": notes,
     }
+
+
+# ── 函式 4:批次摘要(組合 Tab 用,一次跑三段 + 誠實 gate)────────────────
+def summarize_caisen(highs, lows, current_price, *, pct: float = 0.08) -> dict:
+    """單檔蔡森批次摘要 — 給「個股組合」批次表用的精選欄位 + §1 誠實 gate。
+
+    一次跑完 detect_swings → derive_caisen_levels → compute_caisen_targets,只回
+    對操盤最可操作的幾個數字,並套兩條誠實規則(§1 Fail Loud / Never Fake):
+
+    1. **擺動點不足**(levels is None):`pattern=None`、全數 None、`reason="擺動點不足"`。
+    2. **型態未明 gate**:此型態下 `consolidation_low is None`,引擎止損退化成
+       `neckline×(1-buffer)`(貼最近擺動高下緣),分母 `sweet-stop` 極小 → `rr` 會被
+       灌成「假高風報比」誤導進場。故**封鎖** sweet/dist/stop/target1/rr(全 None),
+       只保留 `pattern="型態未明"` + `reason`,交由使用者看圖(下鑽)判斷。破底翻 / N字
+       的止損有真實整理低 / 破底低支撐,數字健全,照常回傳。
+
+    另加 `dist_pct`(距甜蜜價%)= (現價 − 甜蜜價)/甜蜜價 × 100 —— 負=待突破、
+    正=甜蜜價已過期(現價已站上頸線)。比絕對甜蜜價更可操作。
+
+    Args:
+        highs / lows: 高 / 低價序列(與 detect_swings 同,list 或 pd.Series)。
+        current_price: 現價(float)。
+        pct: ZigZag 反轉門檻(小數,預設 0.08)。
+
+    Returns:
+        dict:pattern / sweet / dist_pct / stop / target1 / rr / levels / ok / reason。
+        `levels` = derive_caisen_levels 原始輸出(供下鑽 seed 每個關鍵點);
+        `ok` = bool(型態明確且 rr 算得出,可直接列入可操作候選);
+        `reason` = None(正常)或原因字串(擺動點不足 / 型態未明·需看圖)。
+    """
+    out: dict = {
+        "pattern": None, "sweet": None, "dist_pct": None, "stop": None,
+        "target1": None, "rr": None, "levels": None, "ok": False, "reason": None,
+    }
+    px = _f(current_price)
+    swings = detect_swings(highs, lows, pct=pct)
+    levels = derive_caisen_levels(swings, px)
+    if not levels:
+        out["reason"] = "擺動點不足"
+        return out
+
+    out["levels"] = levels
+    pattern = levels.get("pattern")
+    out["pattern"] = pattern
+
+    # 型態未明:引擎止損退化 → rr 假高,封鎖可操作數字(§1 不誤導)
+    if pattern == "型態未明":
+        out["reason"] = "型態未明·需看圖"
+        return out
+
+    r = compute_caisen_targets(
+        pattern=pattern,
+        support=levels.get("support"),
+        breakdown_low=levels.get("breakdown_low"),
+        wave1_start=levels.get("wave1_start"),
+        wave1_high=levels.get("wave1_high"),
+        consolidation_low=levels.get("consolidation_low"),
+        neckline=levels.get("neckline"),
+        current_price=px,
+    )
+    sweet = r.get("sweet")
+    out["sweet"] = sweet
+    out["stop"] = r.get("stop")
+    out["target1"] = r.get("target1")
+    out["rr"] = r.get("rr")
+    if sweet is not None and px is not None and abs(sweet) > _EPS:
+        out["dist_pct"] = (px - sweet) / sweet * 100.0
+    out["ok"] = out["rr"] is not None
+    return out
