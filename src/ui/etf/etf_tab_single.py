@@ -141,6 +141,34 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
 
     st.markdown(f'### 🏦 {etf_name} ({ticker})')
 
+    # ── 🚦 綜合研判卡(v19.166 版面重排:單一 留/觀察/換 + 理由,取代散落多張老師卡的「總結」)──
+    # 沿用 build_etf_score_row(單檔/多檔共用 row SSOT)+ recommend_etf_action;§8.1 餵 render 已抓的
+    # df/divs/info 不重抓。§1:composite 缺 → recommend_etf_action 回「觀察/資料不足」,不腦補。
+    try:
+        from src.compute.etf import (
+            build_etf_score_row, compute_etf_composite_score,
+            recommend_etf_action, compute_etf_quality)
+        _vrow = build_etf_score_row(ticker, df, divs, info,
+                                    quality=compute_etf_quality(ticker), zh_name=_zh_name)
+        _vrow['composite'], _ = compute_etf_composite_score(_vrow)
+        _verdict = recommend_etf_action(_vrow)
+        _vlabel = str(_verdict.get('verdict', ''))
+        _vcolor = ('#3fb950' if '留' in _vlabel else '#f85149' if '換' in _vlabel
+                   else '#d29922' if '觀察' in _vlabel else '#8b949e')
+        _rhtml = ''.join(
+            f'<div style="font-size:12px;color:#c9d1d9;margin-top:3px;">• {_rr}</div>'
+            for _rr in (_verdict.get('reasons') or [])[:3])
+        st.markdown(
+            f'<div style="background:#0d1117;border:2px solid {_vcolor};border-radius:10px;'
+            f'padding:12px 16px;margin:4px 0 8px;">'
+            f'<span style="font-size:19px;font-weight:900;color:{_vcolor};">'
+            f'{_verdict.get("icon", "🚦")} {_vlabel}</span>'
+            f'<span style="font-size:11px;color:#8b949e;margin-left:10px;">綜合研判 · 留/觀察/換</span>'
+            f'{_rhtml}</div>', unsafe_allow_html=True)
+        st.caption('⚠️ 依既有評分綜合研判、非投資建議;完整細節見下方各面板。')
+    except Exception as _e_vc:  # noqa: BLE001 — 研判卡失敗不炸整頁
+        st.caption(f'🚦 綜合研判暫不可用:{type(_e_vc).__name__}')
+
     c1, c2, c3, c4 = st.columns(4)
     c1.metric('最新收盤', f'{df["Close"].iloc[-1]:.2f}')
     c2.metric('內扣費用率', f'{expense*100:.2f}%' if expense else 'N/A',
