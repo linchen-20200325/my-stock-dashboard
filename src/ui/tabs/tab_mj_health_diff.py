@@ -244,8 +244,12 @@ def _mj_load_holdings_callback() -> None:
             "warn", f"帶入持股失敗:{type(_e).__name__}(可能未登入 Google / 未設定組合)")
 
 
-def render_mj_health_diff_tab() -> None:
-    """v18.188 批次 MJ 體檢主畫面。"""
+def render_mj_health_diff_tab(*, seed_codes: str | None = None) -> None:
+    """v18.188 批次 MJ 體檢主畫面。
+
+    seed_codes:批次輸入框預設代碼(v19.163 組合內嵌時帶入組合持股);
+    None → 用內建範例。首次 render 才 seed,之後尊重 user 手改。
+    """
     st.markdown("## 📊 MJ 體檢變化（v18.188 批次版）")
     st.caption(
         "**批次跑 MJ 林明樟「4 力 1 棒子」財報體檢**，每按一次重新計算（零 LLM 燒錢，純規則引擎）。"
@@ -268,7 +272,7 @@ def render_mj_health_diff_tab() -> None:
 
     # 批次輸入框預設 session_state-backed(供「帶入持股」按鈕回填;不用 value= 避免衝突警告)
     if "_mj_batch_input" not in st.session_state:
-        st.session_state["_mj_batch_input"] = "2330 2454 2317 2382 3017 2308 2303 2376 6669 3661"
+        st.session_state["_mj_batch_input"] = seed_codes or "2330 2454 2317 2382 3017 2308 2303 2376 6669 3661"
 
     with st.container(border=True):
         c1, c2 = st.columns([4, 1])

@@ -50,6 +50,18 @@ def render_stock_grp():
                                    use_container_width=True, key='t3_run_btn')
 
     stock_list_t3 = parse_stocks(multi_input)[:10]
+    with st.expander('🎯 蔡森型態目標價（選一檔持股，K 線自動算）', expanded=False):
+        # v19.163 user 要求:蔡森目標價接進組合,套用選中的持股標的。
+        if stock_list_t3:
+            _cs_pick = st.selectbox('選擇標的', stock_list_t3, key='_csgrp_pick')
+            from src.ui.tabs.caisen_targets_ui import render_caisen_for_ticker
+            render_caisen_for_ticker(_cs_pick, key_prefix='cs_grp')
+        else:
+            st.caption('請先在上方輸入持股代碼後，這裡就能選一檔算蔡森目標價。')
+    with st.expander('🩺 MJ 體檢轉機（組合持股批次：找體質差→變好）', expanded=False):
+        # v19.163 user 要求:MJ 體檢轉機併進組合(批次天生適合),拿掉獨立分頁,預設吃組合持股。
+        from src.ui.tabs.tab_mj_health_diff import render_mj_health_diff_tab
+        render_mj_health_diff_tab(seed_codes=(' '.join(stock_list_t3) if stock_list_t3 else None))
     if stock_list_t3:
         st.caption(f'待分析：{", ".join(stock_list_t3)}（共{len(stock_list_t3)}檔）')
     elif t3_run_btn:

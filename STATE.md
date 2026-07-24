@@ -1,5 +1,42 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🩺 2026-07-23 MJ 體檢轉機併進個股組合（v19.163,user「都合併在個股與組合,不開新 tab」）
+
+- MJ 體檢轉機是**批次**工具(掃一票找轉機股)→ 併進 🏆 個股組合 Tab(批次天生適合),
+  拿掉獨立「🩺 體檢轉機」分頁;個股 Tab 維持既有單檔 MJ 財報體檢(健康度那段),不重複塞。
+- `render_mj_health_diff_tab` 加 `seed_codes` 參數 → 組合內嵌時**預設吃組合現有持股清單**
+  (仍保留貼清單 / 帶入持股)。app.py 選股群組回 3 子 Tab(個股/組合/選股網)。
+- 守衛測試改「組合掛載 + app.py 無 with tab_mj」;9 passed + MJ render smoke 零例外。
+- 同 PR #568(蔡森 + MJ 皆併入個股/組合、無獨立分頁)。
+
+## 🔗 2026-07-23 蔡森目標價接進 個股 + 組合（v19.163,user 要求「套用當前標的」）
+
+把 v19.162 的 `render_caisen_targets_tab` 核心重構為**可重用元件** `render_caisen_for_ticker(code, *, key_prefix)`
+(session key 以 key_prefix 隔離,三處共用不衝突),再接進:
+- **個股 Tab**(tab_stock):expander「🎯 蔡森型態目標價（本檔）」→ 套用當前 `t2_sid` 標的(不用重輸)。
+- **個股組合 Tab**(tab_stock_grp):expander + selectbox 選一檔持股 → 套用該標的。
+- **不設獨立分頁**(user 追加要求「蔡森目標價這個就不用多 tab 了」):刪除 `render_caisen_targets_tab`
+  + app.py 選股群組移除「🎯 蔡森目標價」子 Tab + __init__ 反註冊,只保留 個股/組合 內嵌。
+- 守衛測試「可重用元件 + 個股/組合接線 + 無獨立分頁」;26 passed + AppTest smoke 零例外。同 PR #568。
+
+## 🎯 2026-07-23 新功能:蔡森型態目標價計算機（v19.162,user 要求「由技術線型算甜蜜價/目標價」）
+
+多角色團隊(線型分析專家 + 總管)協作:由技術線型**自動**算蔡森 甜蜜價/止損/目標/風報比。
+
+- **L2 引擎(線型專家建)** `src/compute/strategy/caisen_targets.py`(純函式,只 import math,零 I/O):
+  - `detect_swings(highs, lows, pct)` — ZigZag 擺動點偵測(確定性,反轉 ≥pct 才確認)。
+  - `derive_caisen_levels(swings, px)` — 機械對映 破底低/起漲/波高/整理低/頸線 + 判型(破底翻/N字/未明)。
+  - `compute_caisen_targets(...)` — 等幅滿足:N字 `整理低+(波高-起漲)`、底型 `頸線+(波高-型低)`、第二波 `頸線+2×幅`;
+    止損分流(破底翻→破底低下方寬停 / N字→整理低·頸線下方緊停);風報比 = (目標-甜蜜)/(甜蜜-止損)。
+  - §1 誠實:缺值回 None 不腦補;`_EPS` 容差;除零 guard。21 tests(含 golden:例題 target_n=145)。
+- **L5 UI(總管建)** `src/ui/tabs/caisen_targets_ui.py`:輸入代碼→抓 1y K 線(fetch_stock_history_1y,EX-PASSTHRU-1)
+  →自動偵測→**手動可覆寫每個關鍵點**→報告(甜蜜/止損/目標第一二波/風報比/專家叮嚀)+ 線圖標擺動點與水平線。
+  掛 🔬 選股群組第 5 子 Tab「🎯 蔡森目標價」。
+- **§1 誠實界線**:UI 明示「演算法推導,非型態判定」+ 抓不到 K 線 fail loud(不編假)+ 型態關鍵點可人工覆寫。
+- **防孤兒**:`tests/test_caisen_ui_mounted.py`(掛載 + forward + UI 走 L2 SSOT + L2 純度)。
+- **驗證**:25 passed + AppTest render smoke 零例外 + 引擎 forward import 例題精確。
+- **分支**:v19.161 PR #567 已 merged → 從最新 main 重開,另開新 PR。
+
 ## 🩺 2026-07-23 復活 MJ 體檢轉機 Tab（v19.160,user 要求「找體質差→變好的公司」）
 
 團隊稽核排毒波(v19.159)P3 曾真刪 4 孤兒 Tab;user 於反悔點指出 **MJ 體檢變化仍需要**(找轉機股)。撈回 + 修根因 + 掛回 + 加值:
