@@ -362,7 +362,7 @@ def composite_rank_candidates(
     if _missing:
         # v19.167 文案修:實際行為是「缺料因子不計分、不影響其他因子排序」(見上方
         # out[...] = get(c) 回 None 空白,非 0);且「開始選股」已自動掃描,無「下方掃描」區塊。
-        note = (f"（{'、'.join(_missing)} 這次沒掃到 → 該因子不計分、不影響其他因子排序;"
+        note = (f"（{'、'.join(_missing)} 尚未掃描 → 該因子不計分、不影響其他因子排序;"
                 "重按「🎯 開始選股」會自動掃描帶入。）")
     return out, note
 
