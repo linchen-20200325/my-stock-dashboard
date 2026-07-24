@@ -491,7 +491,11 @@ if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
         _reg == 'bear' or (_jqpct is not None and _jqpct < 20),
         '多頭市場（可積極操作）', '空頭市場（先觀望保守）', '🟡 震盪整理（謹慎操作）'
     )
-    _gl_pos = _mkt_top.get('exposure_pct', '80%' if _reg=='bull' else ('20%' if _reg=='bear' else '50%'))
+    # v19.168 IMPL-F:持股% 統一讀姿態油門 SSOT(warroom_summary.throttle,與總經 gauge /
+    # 作戰室 / 組合①卡 同一個數);無 throttle 時 fallback 原 regime 粗略 exposure_pct。
+    _wr_thr = (st.session_state.get('warroom_summary') or {}).get('throttle')
+    _gl_pos = (f"{_wr_thr['lo_pct']}–{_wr_thr['hi_pct']}%" if _wr_thr
+               else _mkt_top.get('exposure_pct', '80%' if _reg=='bull' else ('20%' if _reg=='bear' else '50%')))
 
     # v19.88 A~E 批次2 收尾:時效閘 — 紅綠燈基於過期資料時,保留燈色(資料可顯示)但
     # 撤下「建議持股 X%」actionable 建議 + 旌旗均值,改明確過期警示。§1/第八份 §3.1:

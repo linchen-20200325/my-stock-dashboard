@@ -42,8 +42,12 @@ def render_position_throttle(tl) -> None:
     if not isinstance(tl, dict) or tl.get('health') is None:
         return
     _health = float(tl.get('health'))
-    _thr = compute_position_throttle(
-        _health, regime=tl.get('regime'), defense=bool(tl.get('defense')))
+    # v19.168 IMPL-F:優先讀 warroom_summary 的 SSOT throttle(render_traffic_light_top 算一次),
+    # 確保 gauge 與頁頂全域 bar / 作戰室 / 組合①卡 顯示同一個持股%區間;無則即算(fallback)。
+    _thr = (st.session_state.get('warroom_summary') or {}).get('throttle')
+    if not _thr:
+        _thr = compute_position_throttle(
+            _health, regime=tl.get('regime'), defense=bool(tl.get('defense')))
     _c = _THROTTLE_COLORS.get(_thr['icon'], '#8b949e')
     _lo, _hi, _mid = _thr['lo_pct'], _thr['hi_pct'], _thr['mid_pct']
     _veto = ('&nbsp;<span style="color:#da3633;">（⚠️ 總經否決：無視技術面多頭，'
@@ -135,6 +139,13 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
 
     # ── 同步寫入 session_state(其他頁面需要的值)────────────
     if _tl_init:
+        # v19.168 IMPL-F 持股% 單一引擎 SSOT:在此(唯一同時握有 health + 有效 regime 之處)
+        # 算一次「姿態油門」區間,存進 warroom_summary['throttle'],讓總經 gauge + 頁頂全域
+        # 紅綠燈 bar + 今日作戰室 + 個股組合①卡 全讀同一份 → 根治「同一問題四處四個持股%」
+        # (原 bar/作戰室/組合①用 regime 粗略 exposure_pct 80/50/20、gauge 用 health 細分區間)。
+        _wr_throttle = compute_position_throttle(
+            float(_tl_init['health']), regime=_tl_eff_reg,
+            defense=bool(_tl_init.get('defense')))
         st.session_state['warroom_summary'] = {
             'traffic_light': _tl_init['label'],
             'health_score':  _tl_init['health'],
@@ -145,6 +156,7 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
             'foreign_net_bn': _tl_init['fnet'],
             'futures_net':   _tl_init['fut_net'],
             'confidence_pct': _tl_init['conf'],
+            'throttle':      _wr_throttle,   # v19.168 IMPL-F:持股% SSOT(lo/hi/mid/posture/icon)
         }
         # v19.148 ① 接線:同步寫 canonical macro_state(單一契約)→ 個股頁加碼三問 +
         # 個股組合 6 因子評分 + AI regime 全讀這裡,總經狀態終於真的影響選股決策。
