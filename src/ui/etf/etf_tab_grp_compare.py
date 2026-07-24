@@ -224,9 +224,7 @@ def render_etf_grp_compare() -> None:
     df = df.sort_values(
         by='綜合分', ascending=False, na_position='last', kind='stable',
     )
-    st.dataframe(
-        df, hide_index=True, use_container_width=True,
-        column_config={
+    _full_col_config = {
             '🚦 建議':  st.column_config.TextColumn(
                 '🚦 建議',
                 help='由既有分數彙整(不重算):綜合分≥0.65(4★)且無紅旗=✅留下;'
@@ -272,8 +270,26 @@ def render_etf_grp_compare() -> None:
             '建議理由': st.column_config.TextColumn(
                 '建議理由', width='large',
                 help='彙整綜合分 / 紅旗 / 加碼時機 / 同類重疊的一句話說明'),
-        },
+    }
+
+    # ── 版面重排(v19.166):主表只留 11 個決策核心欄,完整 24 欄收進下方 expander ──
+    # §「整理不減料」:所有欄位仍在(expander 內完整呈現),只是主視圖不再一次攤 24 欄。
+    _CORE_COLS = ['代號', '名稱', '🚦 建議', '綜合分', '市價', '費用率%',
+                  '殖利率%', '夏普值', 'MDD%', '流動性', '建議理由']
+    _core_cols_present = [c for c in _CORE_COLS if c in df.columns]
+    st.dataframe(
+        df[_core_cols_present], hide_index=True, use_container_width=True,
+        column_config={k: v for k, v in _full_col_config.items()
+                       if k in _core_cols_present},
     )
+    st.caption('👆 主表為 11 個決策核心欄;折溢價 / 1Y·3Y 報酬 / AUM / 5Y均殖 / '
+               '7%估值 / 配息健康 / 追蹤誤差 / σ 買賣帶等完整指標見下方 ⬇️')
+    with st.expander(f'📊 完整指標({len(df.columns)} 欄:星等 / 折溢價 / 1Y·3Y 報酬 / '
+                     'AUM / 5Y均殖 / 7%估值 / 配息健康 / 追蹤誤差 / σ 買賣帶 / 備註)'):
+        st.dataframe(
+            df, hide_index=True, use_container_width=True,
+            column_config=_full_col_config,
+        )
     st.caption(
         '💡 **7 維權重**：1Y 累積 25% / 3Y CAGR 20% / 夏普 15% / MDD 15% / '
         '費用率 12% / AUM 8% / 殖利率穩定度 5%。'
