@@ -52,6 +52,29 @@ def render_position_throttle(tl) -> None:
     _lo, _hi, _mid = _thr['lo_pct'], _thr['hi_pct'], _thr['mid_pct']
     _veto = ('&nbsp;<span style="color:#da3633;">（⚠️ 總經否決：無視技術面多頭，'
              '強制壓低上界）</span>' if _thr['regime_capped'] else '')
+    # v19.168 第1項(user:「兩個都留 上限 vs 建議區間」):把 §十一 曝險鎖的「風險上限」
+    # (exposure_limit_pct,薩姆/PMI/外資期貨硬否決天花板)與此「建議區間」並排呈現,清楚區分
+    # 兩者互補(區間=依健康分的姿態、上限=硬否決天花板),非兩個打架的持股%。上限更低時註明
+    # 「實際取較低者」;未跑 §十一 AI 裁決(無 exposure_limit_pct)→ 只顯示區間(§1 fail-safe)。
+    _ceiling = (st.session_state.get('macro_state') or {}).get('exposure_limit_pct')
+    try:
+        _ceiling = int(_ceiling) if _ceiling is not None else None
+    except (TypeError, ValueError):
+        _ceiling = None
+    _ceil_line = ''
+    _ceil_marker = ''
+    if _ceiling is not None:
+        _ceil_line = (
+            '<div style="font-size:11px;color:#d29922;margin-top:4px;">'
+            f'🔒 系統風險上限 <b>{_ceiling}%</b>（薩姆規則／PMI／外資期貨 硬否決天花板）'
+            + (f'&nbsp;→ 與建議區間取較低者：<b>實際上限 {min(_hi, _ceiling)}%</b>'
+               if _ceiling < _hi else '（未壓低建議區間）')
+            + '</div>'
+        )
+        _ceil_marker = (
+            f'<div style="position:absolute;left:calc({_ceiling}% - 1px);top:-3px;width:2px;'
+            'height:20px;background:#d29922;"></div>'
+        )
     st.markdown(
         f'<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;'
         f'padding:10px 14px;margin:6px 0 2px;">'
@@ -62,13 +85,14 @@ def render_position_throttle(tl) -> None:
         f'<div style="position:absolute;left:{_lo}%;width:{max(_hi - _lo, 1)}%;height:100%;'
         f'background:{_c};border-radius:7px;"></div>'
         f'<div style="position:absolute;left:calc({_mid}% - 1px);top:-3px;width:2px;'
-        f'height:20px;background:#f0f6fc;"></div></div>'
+        f'height:20px;background:#f0f6fc;"></div>{_ceil_marker}</div>'
         f'<span style="font-size:11px;color:#8b949e;">0%（全現金） ← 總經健康分 '
-        f'{_health:.0f} → 100%（滿倉）</span></div>',
+        f'{_health:.0f} → 100%（滿倉）</span>{_ceil_line}</div>',
         unsafe_allow_html=True,
     )
-    st.caption('💡 這是「**姿態油門**」：總經只決定你**該持股幾成**（積極↔防守），'
-               '不是「全進全出」開關。總經惡化時上界會被壓低，但個別強勢股仍可各自判斷。')
+    st.caption('💡 這是「**姿態油門**」：**建議區間**＝依總經健康分的姿態（積極↔防守）；'
+               '**🔒 風險上限**＝薩姆／PMI／外資期貨硬否決的天花板（跑「🤖 AI 總裁決」後出現）。'
+               '兩者互補，**實際持股取兩者較低**；個別強勢股仍可各自判斷。')
 
 
 def render_traffic_light_top() -> tuple[Any, bool, str | None]:
