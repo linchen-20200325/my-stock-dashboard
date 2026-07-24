@@ -29,3 +29,10 @@ def test_load_holdings_callback_exists():
     """v19.160『帶入我的持股』callback 存在(貼清單 + 帶入持股 兩入口)。"""
     import src.ui.tabs.tab_mj_health_diff as m
     assert hasattr(m, "_mj_load_holdings_callback"), "帶入持股 callback 缺失"
+
+
+def test_result_table_shows_stock_name():
+    """v19.161:結果表代碼旁顯示中文名(走 get_stock_name L0 SSOT,不腦補)。"""
+    src = (_REPO / "src/ui/tabs/tab_mj_health_diff.py").read_text(encoding="utf-8")
+    assert "from src.config.stock_names import get_stock_name" in src, "未用股票名 SSOT"
+    assert '"名稱"' in src, "結果表未加『名稱』欄"

@@ -23,6 +23,7 @@ import pandas as pd
 import streamlit as st
 
 from src.services import analyze_financial_health
+from src.config.stock_names import get_stock_name  # v19.161:結果表代碼旁顯示中文名(L0 SSOT)
 from src.compute.health import HealthDiffVerdict, diff_mj_health
 from src.compute.health import (
     current_finmind_yyyymm,
@@ -86,6 +87,7 @@ def _run_single_stock_diff(
 
     row: dict[str, Any] = {
         "代碼": sid,
+        "名稱": get_stock_name(sid),
         "本季": yyyymm,
         "verdict": "fetch_failed",
         "改善": 0,
@@ -150,6 +152,7 @@ def _render_result_table(rows: list[dict[str, Any]]) -> None:
     rows_sorted = sorted(rows, key=lambda r: _VERDICT_SORT_ORDER.get(r["verdict"], 99))
     df = pd.DataFrame([{
         "代碼": r["代碼"],
+        "名稱": r.get("名稱", ""),
         "判定": _verdict_label(r["verdict"]),
         "上季 → 本季": f"{r['上季']} → {r['本季']}",
         "改善": r["改善"],
@@ -170,7 +173,7 @@ def _render_per_stock_detail(rows: list[dict[str, Any]]) -> None:
         v: HealthDiffVerdict = r["_verdict_obj"]
         label = _verdict_label(r["verdict"])
         with st.expander(
-            f"{label}｜{r['代碼']}｜{r['上季']} → {r['本季']}｜"
+            f"{label}｜{r['代碼']} {r.get('名稱', '')}｜{r['上季']} → {r['本季']}｜"
             f"改善 {v.improve_count} / 惡化 {v.deteriorate_count}"
             + (f"｜{r['icon']}" if r["icon"] else ""),
             expanded=False,
