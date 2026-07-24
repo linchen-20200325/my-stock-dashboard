@@ -129,14 +129,19 @@ class _FakeQuality(dict):
 
 
 def _patch_fetch_one_etf_deps(monkeypatch, *, df, divs, info, zh_name):
+    # v19.166:每檔 row 計算下沉 build_etf_score_row(lazy import etf_calc)。
+    # I/O fetcher 仍在 grp(在 grp mock);折溢價/流動性移入 build_etf_score_row 的 lazy
+    # etf_calc import → 在 etf_calc 層 mock 才生效(避免真 NAV I/O)。名稱 fallback 與
+    # require_full_period/years 用真 calc(這正是本測試要驗的行為)。
+    from src.compute.etf import etf_calc
     monkeypatch.setattr(grp, 'fetch_etf_price', lambda ticker, period='5y': df)
     monkeypatch.setattr(grp, 'fetch_etf_dividends', lambda ticker: divs)
     monkeypatch.setattr(grp, 'fetch_etf_info', lambda ticker: info)
     monkeypatch.setattr(grp, '_fetch_zh_n', lambda ticker: zh_name)
     monkeypatch.setattr(grp, 'compute_etf_quality', lambda ticker: {'stars': None, '_err': 'skip-network'})
-    monkeypatch.setattr(grp, 'calc_premium_discount', lambda info, df, ticker: {})
-    monkeypatch.setattr(grp, 'calc_liquidity_score', lambda df, aum: {})
     monkeypatch.setattr(grp, 'auto_detect_benchmark', lambda ticker: None)
+    monkeypatch.setattr(etf_calc, 'calc_premium_discount', lambda info, df, ticker: {})
+    monkeypatch.setattr(etf_calc, 'calc_liquidity_score', lambda df, aum: {})
 
 
 class TestFetchOneEtfNameFix:

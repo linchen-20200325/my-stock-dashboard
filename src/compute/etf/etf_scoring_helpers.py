@@ -52,6 +52,83 @@ def _norm(value, hi, lo):
     return max(0.0, min(1.0, (v - lo) / (hi - lo)))
 
 
+def build_etf_score_row(ticker, df, divs, info, *, quality=None,
+                        tracking_error=None, zh_name=None) -> dict:
+    """從已抓的 df(5y)/divs/info 組出 ETF 評分 row(單檔 + 多檔共用 row SSOT,v19.166)。
+
+    §8.1 免重複抓取:純計算、自身零 I/O — 需 I/O 的依賴(`compute_etf_quality` /
+    追蹤誤差 benchmark)由 caller 注入(quality / tracking_error),讓單檔頁能直接餵
+    render 時已抓好的 df/divs/info,不必為了 🚦研判卡再抓一次。
+    §1 誠實:各指標算不出一律 None / 三態標籤,不腦補;require_full_period / require_full_years
+    沿用(年輕 ETF 不把「上市至今」誤標成 1Y/3Y/5Y)。回傳欄位與多檔 `_fetch_one_etf`
+    完全對齊 → 多檔比較表 + `compute_etf_composite_score` + `recommend_etf_action` 直接吃。
+    """
+    info = info or {}
+    _r = {
+        'ticker': ticker, 'name': '', 'error': None,
+        'price': None, 'total_ret_1y': None, 'cagr_3y': None,
+        'sharpe': None, 'mdd': None,
+        'expense_ratio': None, 'aum': None,
+        'div_yield': None, 'beta': None, 'quality': quality,
+        'premium_pct': None, 'stale_nav': False,
+        'avg_yield_5y': None, 'valuation_zone': '—',
+        'dividend_health': '⬜ 資料不足',
+        'liquidity_level': '⚪', 'liquidity_avg_vol_20d': None, 'liquidity_reasons': [],
+        'tracking_error': tracking_error,
+        'sigma_buy': None, 'sigma_sell': None, 'sigma_z': None,
+    }
+    if df is None or getattr(df, 'empty', True) or 'Close' not in getattr(df, 'columns', []):
+        _r['error'] = '無 K 線資料'
+        return _r
+
+    from src.compute.etf.etf_calc import (
+        calc_avg_yield, calc_cagr, calc_current_yield, calc_liquidity_score,
+        calc_mdd, calc_premium_discount, calc_sharpe, calc_total_return_1y,
+    )
+    from src.compute.etf.etf_helpers import dividend_health_label, yield_valuation_zone
+
+    _r['name'] = (zh_name or info.get('shortName') or info.get('longName') or ticker)[:30]
+    _r['price'] = round(float(df['Close'].iloc[-1]), 2)
+    try:
+        from src.compute.etf.etf_smart_analysis import compute_std_bands
+        _sb = compute_std_bands(df['Close'], window=252)
+        if _sb.get('has_data'):
+            _r['sigma_buy'] = round(float(_sb['lower_2s']), 2)   # -2σ 強買
+            _r['sigma_sell'] = round(float(_sb['upper_2s']), 2)  # +2σ 減碼
+            _r['sigma_z'] = round(float(_sb['sigma_z']), 2)
+    except Exception as _e_sb:
+        print(f'[build_etf_score_row] {ticker} σ 帶計算失敗:{type(_e_sb).__name__}: {_e_sb}')
+    _r['total_ret_1y'] = calc_total_return_1y(df, divs, require_full_period=True)
+    _r['div_yield'] = calc_current_yield(df, divs)
+    _r['cagr_3y'] = calc_cagr(df, expected_years=3)
+    _r['sharpe'] = calc_sharpe(df)
+    _r['mdd'] = calc_mdd(df)
+    _r['expense_ratio'] = info.get('annualReportExpenseRatio')
+    _r['aum'] = info.get('totalAssets')
+    _r['beta'] = info.get('beta') or info.get('beta3Year')
+    try:
+        _pd_res = calc_premium_discount(info, df, ticker)
+        _r['premium_pct'] = _pd_res.get('premium_pct')
+        _r['stale_nav'] = bool(_pd_res.get('stale_nav'))
+    except Exception as _e_pd:
+        print(f'[build_etf_score_row] {ticker} 折溢價失敗:{type(_e_pd).__name__}: {_e_pd}')
+    try:
+        _r['avg_yield_5y'] = calc_avg_yield(df, divs, years=5, require_full_years=True)
+    except Exception as _e_ay:
+        print(f'[build_etf_score_row] {ticker} 5y 均殖失敗:{type(_e_ay).__name__}: {_e_ay}')
+    _r['valuation_zone'] = yield_valuation_zone(_r['div_yield'], _r['avg_yield_5y'])
+    _r['dividend_health'] = dividend_health_label(
+        _r['div_yield'], _r['total_ret_1y'], _r['cagr_3y'])
+    try:
+        _liq = calc_liquidity_score(df, _r['aum'])
+        _r['liquidity_level'] = _liq.get('level', '⚪')
+        _r['liquidity_avg_vol_20d'] = _liq.get('avg_vol_20d')
+        _r['liquidity_reasons'] = _liq.get('reasons', [])
+    except Exception as _e_liq:
+        print(f'[build_etf_score_row] {ticker} 流動性失敗:{type(_e_liq).__name__}: {_e_liq}')
+    return _r
+
+
 def compute_etf_composite_score(row: dict) -> tuple[float | None, int | None]:
     """7 維度標準化 + 加權合成。回傳 (綜合分 0~1, 星等 1~5)。缺項 rescale 有效權重。"""
     _scores: dict[str, float | None] = {

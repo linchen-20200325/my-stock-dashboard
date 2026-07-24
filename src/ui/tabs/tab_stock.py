@@ -28,6 +28,7 @@ from shared.stock_buckets import (
     pb_bands_label as _pb_bands_label_ssot,
     render_stock_toc_html,
     section_header_html,
+    summarize_stock_verdict,
 )
 from shared.thresholds import YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC
 from shared.ttls import TTL_1DAY
@@ -588,6 +589,32 @@ padding:14px 18px;margin-bottom:12px;">
   </div>
   <div style="font-size:18px;font-weight:700;">{_trend_label}</div>
 </div></div>''', unsafe_allow_html=True)
+
+            # ── 🧭 一眼判讀卡（v19.167 版面重排:單一綜合結論 + 理由,對稱 ETF 🚦 卡 / 組合排行）──
+            # 純聚合上方已 compute-once 的 _sec_lv 4 桶(進場RS/健康/籌碼/先行)+ 3-MA 趨勢;
+            # §4.3 零重算(理由=桶 headline)、§1 on-demand 桶為 gray 不納入不偽造。
+            try:
+                _verdict = summarize_stock_verdict(_sec_lv, trend_label=_trend_label)
+                _vlv = _verdict['level']
+                _vcolor = {'green': TRAFFIC_GREEN, 'yellow': TRAFFIC_YELLOW,
+                           'red': TRAFFIC_RED}.get(_vlv, '#8b949e')
+                _vemoji = {'green': '🟢', 'yellow': '🟡', 'red': '🔴'}.get(_vlv, '⬜')
+                _g, _y, _r = _verdict['counts']
+                _rhtml = ''.join(
+                    f'<div style="font-size:12.5px;color:#c9d1d9;margin-top:3px;">• {_rz}</div>'
+                    for _rz in _verdict['reasons'][:4])
+                st.markdown(
+                    f'<div style="background:#0d1117;border:2px solid {_vcolor};border-radius:10px;'
+                    f'padding:12px 16px;margin:0 0 12px;">'
+                    f'<span style="font-size:19px;font-weight:900;color:{_vcolor};">'
+                    f'{_vemoji} 一眼判讀:{_verdict["verdict"]}</span>'
+                    f'<span style="font-size:12px;color:#8b949e;margin-left:10px;">'
+                    f'頁頂 4 訊號綜合 🟢{_g} 🟡{_y} 🔴{_r} · 趨勢 {_trend_label}</span>'
+                    f'{_rhtml}</div>', unsafe_allow_html=True)
+                st.caption('⚠️ 綜合進場RS / 健康 / 籌碼 / 先行指標 4 桶「非投資建議」;'
+                           '財報·AI 桶展開下方後才評定,完整細節見各 section。')
+            except Exception as _e_vd:  # noqa: BLE001 — 判讀卡失敗不炸整頁
+                st.caption(f'🧭 一眼判讀暫不可用:{type(_e_vd).__name__}')
 
         # v18.307 Bug2 PR-C：頂部目錄（一眼看全貌 + 錨點跳轉）
         st.markdown(render_stock_toc_html(), unsafe_allow_html=True)

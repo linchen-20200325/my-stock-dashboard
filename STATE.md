@@ -1,5 +1,28 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏆 2026-07-24 ETF 三 Tab 版面重排：單檔 🚦研判卡 × 多檔主表 24→11 欄 × row 計算 SSOT（v19.166,user「其他 Tab 也幫我優化」延續）
+
+多 AI 顧問 + 可視預覽核准後,ETF 版面重排(接續 v19.164 個股組合、v19.166 地基 #570 標籤 SSOT)。核心:每檔 row 計算下沉共用 SSOT、單檔頁補單一「留/觀察/換」研判卡、多檔比較表從一次攤 24 欄改「11 核心欄 + 完整指標 expander」。
+
+- **Phase A｜row 計算下沉 SSOT**:L2 新增 `etf_scoring_helpers.build_etf_score_row(ticker, df, divs, info, *, quality, tracking_error, zh_name)` — §8.1 純計算、自身零 I/O(品質/追蹤誤差由 caller 注入),回傳欄位與原多檔 `_fetch_one_etf` schema 對齊。多檔 `_fetch_one_etf` 改「薄抓取 → build_etf_score_row」,折溢價/流動性/CAGR/殖利率等計算收進單一 helper,單檔/多檔共用同一份 row 邏輯(消計算重複)。
+- **Phase B｜單檔 🚦 綜合研判卡**:單檔頁標題後、核心指標前置頂單一「✅留下 / ⚠️觀察 / 🔻換」+ 3 條理由,沿用 `build_etf_score_row` + `recommend_etf_action`(與多檔同引擎);§8.1 餵 render 已抓的 df/divs/info **不重抓**;§1:composite 缺 → `recommend_etf_action` 回「觀察/資料不足」不腦補,卡片本身 try/except 失敗不炸整頁。
+- **Phase C｜多檔比較表 24→11 欄(整理不減料)**:主表只留 11 個決策核心欄(代號/名稱/🚦建議/綜合分/市價/費用率/殖利率/夏普/MDD/流動性/建議理由);完整 24 欄(星等/折溢價/1Y·3Y報酬/AUM/5Y均殖/7%估值/配息健康/追蹤誤差/σ 買賣帶/備註)**全數收進下方 expander 完整呈現,零減料**;column_config 抽為 `_full_col_config` 由主表(子集)+完整表共用,無重複維護。
+- **§-1 對齊**:單檔「σ 雙演算法合併」經評估**不做** — 長線 σ(MA240 z-score)vs 短線 σ(MA20±nσ)是**不同時間尺度的既有刻意設計**(v18.334 已加文案標註),合併會損失訊號,非違憲、非 bug。避免機械式改動。
+- **驗證**:全套 pytest 綠(新增 `test_etf_score_row` / `test_etf_single_verdict_card` / `test_etf_grp_compare_declutter` 3 檔守衛 + 既有 `test_pr_h1_etf_grp_ssot` / `test_etf_grp_compare_young_etf_fix` 重指向 `etf_scoring_helpers`)。
+- **範圍決策**:組合 Tab(etf_tab_portfolio)結構性不同(核衛角色/再平衡/VaR,已有 核心/衛星/其他 分組表),本輪**不強塞組合研判卡**(較不成比例);若 user 要,可另開一輪。
+- **分支**:PR #569/#570 已 merged → 從最新 main 重開,另開新 PR(#571,CI 全綠)。
+
+## 🏆 2026-07-24 個股 Tab 版面優化:🧭 一眼判讀卡（v19.167,接續 ETF #571 同 PR）
+
+user「點頭」續做個股 Tab。先派稽核 AI 攤出「操作價位/買賣點/停利停損」全部計算點(32 處),釐清「操作價位 6→1」的真相:**不是把 6 個不同演算法硬併成 1**(σ帶252 vs 布林20、老師 ZigZag 等幅 vs 直加震幅、大量紅K、PE/PB/殖利率三種河流皆不同演算法,合併會損失資訊),而是「殺掉真正的重複(支撐壓力 hi20/lo20 重算、357 inline×2、MA20 inline)+ 加一張頁頂綜合卡」。
+
+- **🧭 一眼判讀卡(已做)**:L0 純函式 `shared/stock_buckets.summarize_stock_verdict` — 聚合 `compute_stock_section_levels` 已算好的 4 個可評定桶(進場RS/健康/籌碼/先行指標)→ 單一 green/yellow/red 綜合 + verdict + 理由(理由=桶 headline,§4.3 零重算)。規則平衡讀(非 macro worst-light):有紅且紅≥綠→保守、無紅且綠>黃→偏多、其餘→觀望;§1:on-demand 財報/AI 桶恆 gray 不納入不偽造,全 gray→「資料待算」不偽綠。卡片插即時趨勢總覽後、目錄前,對稱 ETF 🚦 卡 / 組合排行 headline,失敗只 fail-loud caption。6 golden/edge 測試。
+- **選股網 Tab(v19.167,同 PR #571)**:稽核 AI 攤出真實結構 —— 選股網主體在 `app.py:606-800`(不在 tab_stock_picker),真正的表只有 4 張,且**表 B 綜合評分主表早已是合併好的多欄表**(估值/EPS/缺貨/RS/跨季全是欄不是獨立表),表 C(前進式對帳)/表 D(全市場跨季)是**不同 universe/資料型態不可併**。故「3 表合 1」大半已完成,真正高價值的是**兩個誤導文案 bug**:
+  - **F1**:因子 multiselect label「(需先於下方掃描)」與現行 auto-scan 流程 + 旁邊 help 自相矛盾 → 改描述因子本身(`fundamental_screener_service.py:170-171`)。
+  - **F2**:live note「該因子暫記 **0 分**」與實際「缺料不計分、回 None 空白」(v19.90)**相反**且引用已移除區塊 → 改正確語意(`:363-364`)。
+  - 加 **🔭 選股結果總覽卡**(存活池 N → 綜合入選前 K + 因子命中 缺貨/RS/跨季 各 N,§1 掃失敗不假報 0)。dead `build_candidate_frame` 內同類舊字串(被 test 釘 substring)依 §-1 不 churn。3 守衛測試。
+- **操作價位去重 → WONTFIX(§-1)**:稽核 + **對抗式驗證 AI 雙查**結論一致 —— 357 合理價 inline×2、MA20 inline 兩組**逐值 byte 相等可零變動收斂**(但畫面零可見效益);近20日支撐壓力**非零變動**(caller 有 `len>=5→0` guard、section:134 無 → 1~4 根新股會改「初步目標/加碼點」顯示數字,需 guard + 有意識決策)。三組都是**看不見的內部 DRY**,對「版面優化/一眼看懂」零效益,候選1還有動數字風險 → 依 §-1「沒 bug 沒需求不要動」掛 **WONTFIX**,真有維護觸發(要動這幾個 section 時)再順手收。優先做看得見的「選股網 3 表合 1」。
+
 ## 🏆 2026-07-24 個股組合 Tab 版面優化：單一來源 × 去重 × 老師批次化 × 老師 合一（v19.164,user「標的只有一個來源、整合上方總表、資訊重複繁雜要重分類」）
 
 多 AI 顧問(資訊架構 + 台股操盤手)討論 + 可視預覽(user 核准「超出預期」)後實作。核心:3 個標的輸入來源 → 1 個、~12 張表 → 6、毛利率重複 5 次 → 1。
