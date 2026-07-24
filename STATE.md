@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🩺 2026-07-23 MJ 體檢轉機併進個股組合（v19.163,user「都合併在個股與組合,不開新 tab」）
+
+- MJ 體檢轉機是**批次**工具(掃一票找轉機股)→ 併進 🏆 個股組合 Tab(批次天生適合),
+  拿掉獨立「🩺 體檢轉機」分頁;個股 Tab 維持既有單檔 MJ 財報體檢(健康度那段),不重複塞。
+- `render_mj_health_diff_tab` 加 `seed_codes` 參數 → 組合內嵌時**預設吃組合現有持股清單**
+  (仍保留貼清單 / 帶入持股)。app.py 選股群組回 3 子 Tab(個股/組合/選股網)。
+- 守衛測試改「組合掛載 + app.py 無 with tab_mj」;9 passed + MJ render smoke 零例外。
+- 同 PR #568(蔡森 + MJ 皆併入個股/組合、無獨立分頁)。
+
 ## 🔗 2026-07-23 蔡森目標價接進 個股 + 組合（v19.163,user 要求「套用當前標的」）
 
 把 v19.162 的 `render_caisen_targets_tab` 核心重構為**可重用元件** `render_caisen_for_ticker(code, *, key_prefix)`

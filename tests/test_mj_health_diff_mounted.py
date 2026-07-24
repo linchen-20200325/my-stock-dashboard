@@ -18,11 +18,12 @@ def test_render_mj_health_diff_importable_via_package():
     assert callable(render_mj_health_diff_tab)
 
 
-def test_app_py_mounts_mj_health_diff_tab():
-    """app.py 選股群組實際掛載 render + 子 Tab 標籤(孤兒回歸防線)。"""
-    src = (_REPO / "app.py").read_text(encoding="utf-8")
-    assert "render_mj_health_diff_tab" in src, "app.py 未掛載 MJ 體檢轉機 render(孤兒回歸風險)"
-    assert "🩺 體檢轉機" in src, "app.py 選股群組未見『體檢轉機』子 Tab 標籤"
+def test_stock_grp_mounts_mj_health_diff_tab():
+    """v19.163:MJ 體檢轉機併進 🏆 個股組合 Tab(批次),不再獨立分頁(孤兒回歸防線)。"""
+    grp = (_REPO / "src/ui/tabs/tab_stock_grp.py").read_text(encoding="utf-8")
+    assert "render_mj_health_diff_tab" in grp, "個股組合 Tab 未掛載 MJ 體檢轉機(孤兒回歸風險)"
+    app = (_REPO / "app.py").read_text(encoding="utf-8")
+    assert "with tab_mj:" not in app, "app.py 殘留獨立 MJ 體檢轉機分頁"
 
 
 def test_load_holdings_callback_exists():
