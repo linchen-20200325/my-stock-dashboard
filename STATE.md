@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏆 2026-07-24 ETF 三 Tab 版面重排：單檔 🚦研判卡 × 多檔主表 24→11 欄 × row 計算 SSOT（v19.166,user「其他 Tab 也幫我優化」延續）
+
+多 AI 顧問 + 可視預覽核准後,ETF 版面重排(接續 v19.164 個股組合、v19.166 地基 #570 標籤 SSOT)。核心:每檔 row 計算下沉共用 SSOT、單檔頁補單一「留/觀察/換」研判卡、多檔比較表從一次攤 24 欄改「11 核心欄 + 完整指標 expander」。
+
+- **Phase A｜row 計算下沉 SSOT**:L2 新增 `etf_scoring_helpers.build_etf_score_row(ticker, df, divs, info, *, quality, tracking_error, zh_name)` — §8.1 純計算、自身零 I/O(品質/追蹤誤差由 caller 注入),回傳欄位與原多檔 `_fetch_one_etf` schema 對齊。多檔 `_fetch_one_etf` 改「薄抓取 → build_etf_score_row」,折溢價/流動性/CAGR/殖利率等計算收進單一 helper,單檔/多檔共用同一份 row 邏輯(消計算重複)。
+- **Phase B｜單檔 🚦 綜合研判卡**:單檔頁標題後、核心指標前置頂單一「✅留下 / ⚠️觀察 / 🔻換」+ 3 條理由,沿用 `build_etf_score_row` + `recommend_etf_action`(與多檔同引擎);§8.1 餵 render 已抓的 df/divs/info **不重抓**;§1:composite 缺 → `recommend_etf_action` 回「觀察/資料不足」不腦補,卡片本身 try/except 失敗不炸整頁。
+- **Phase C｜多檔比較表 24→11 欄(整理不減料)**:主表只留 11 個決策核心欄(代號/名稱/🚦建議/綜合分/市價/費用率/殖利率/夏普/MDD/流動性/建議理由);完整 24 欄(星等/折溢價/1Y·3Y報酬/AUM/5Y均殖/7%估值/配息健康/追蹤誤差/σ 買賣帶/備註)**全數收進下方 expander 完整呈現,零減料**;column_config 抽為 `_full_col_config` 由主表(子集)+完整表共用,無重複維護。
+- **§-1 對齊**:單檔「σ 雙演算法合併」經評估**不做** — 長線 σ(MA240 z-score)vs 短線 σ(MA20±nσ)是**不同時間尺度的既有刻意設計**(v18.334 已加文案標註),合併會損失訊號,非違憲、非 bug。避免機械式改動。
+- **驗證**:全套 pytest 綠(新增 `test_etf_score_row` / `test_etf_single_verdict_card` / `test_etf_grp_compare_declutter` 3 檔守衛 + 既有 `test_pr_h1_etf_grp_ssot` / `test_etf_grp_compare_young_etf_fix` 重指向 `etf_scoring_helpers`)。
+- **範圍決策**:組合 Tab(etf_tab_portfolio)結構性不同(核衛角色/再平衡/VaR,已有 核心/衛星/其他 分組表),本輪**不強塞組合研判卡**(較不成比例);若 user 要,可另開一輪。
+- **分支**:PR #569/#570 已 merged → 從最新 main 重開,另開新 PR。
+
 ## 🏆 2026-07-24 個股組合 Tab 版面優化：單一來源 × 去重 × 老師批次化 × 老師 合一（v19.164,user「標的只有一個來源、整合上方總表、資訊重複繁雜要重分類」）
 
 多 AI 顧問(資訊架構 + 台股操盤手)討論 + 可視預覽(user 核准「超出預期」)後實作。核心:3 個標的輸入來源 → 1 個、~12 張表 → 6、毛利率重複 5 次 → 1。
