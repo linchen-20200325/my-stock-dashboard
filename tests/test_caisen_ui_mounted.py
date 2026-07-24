@@ -28,6 +28,16 @@ def test_ui_uses_l2_ssot_not_selfcompute():
     assert "compute_caisen_targets" in src, "UI 未用 L2 SSOT 計算(疑似自算)"
 
 
+def test_reusable_component_wired_into_stock_and_group():
+    """v19.163:蔡森核心可重用元件 render_caisen_for_ticker 接進 個股 + 組合 Tab。"""
+    from src.ui.tabs.caisen_targets_ui import render_caisen_for_ticker
+    assert callable(render_caisen_for_ticker)
+    stock = (_REPO / "src/ui/tabs/tab_stock.py").read_text(encoding="utf-8")
+    grp = (_REPO / "src/ui/tabs/tab_stock_grp.py").read_text(encoding="utf-8")
+    assert "render_caisen_for_ticker" in stock and "cs_stk" in stock, "個股 Tab 未接蔡森目標價"
+    assert "render_caisen_for_ticker" in grp and "cs_grp" in grp, "個股組合 Tab 未接蔡森目標價"
+
+
 def test_l2_engine_pure_no_io():
     """L2 引擎只准 import math / __future__(§8.2 L2 無 I/O)。"""
     src = (_REPO / "src/compute/strategy/caisen_targets.py").read_text(encoding="utf-8")

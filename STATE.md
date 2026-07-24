@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔗 2026-07-23 蔡森目標價接進 個股 + 組合（v19.163,user 要求「套用當前標的」）
+
+把 v19.162 的 `render_caisen_targets_tab` 核心重構為**可重用元件** `render_caisen_for_ticker(code, *, key_prefix)`
+(session key 以 key_prefix 隔離,三處共用不衝突),再接進:
+- **個股 Tab**(tab_stock):expander「🎯 蔡森型態目標價（本檔）」→ 套用當前 `t2_sid` 標的(不用重輸)。
+- **個股組合 Tab**(tab_stock_grp):expander + selectbox 選一檔持股 → 套用該標的。
+- 獨立分頁 `render_caisen_targets_tab` 改為薄 wrapper(代碼 input → 呼叫核心)。
+- 守衛測試補「可重用元件 + 個股/組合接線」;26 passed + AppTest smoke 零例外。同 PR #568。
+
 ## 🎯 2026-07-23 新功能:蔡森型態目標價計算機（v19.162,user 要求「由技術線型算甜蜜價/目標價」）
 
 多角色團隊(線型分析專家 + 總管)協作:由技術線型**自動**算蔡森 甜蜜價/止損/目標/風報比。

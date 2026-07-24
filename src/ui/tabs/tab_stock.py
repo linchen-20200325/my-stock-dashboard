@@ -230,6 +230,11 @@ border-radius:8px;padding:10px 14px;font-size:12px;color:#8b949e;">
 K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 · 月/季營收毛利率 · 合約負債/資本支出 · 健康評分(RSI+量比+IBS+KD+布林)
 </div>""", unsafe_allow_html=True)
 
+    with st.expander('🎯 蔡森型態目標價（本檔 K 線自動算：甜蜜價·止損·目標）', expanded=False):
+        # v19.163 user 要求:蔡森目標價接進個股,套用當前 t2_sid 標的。
+        from src.ui.tabs.caisen_targets_ui import render_caisen_for_ticker
+        render_caisen_for_ticker(t2_sid or '2330', key_prefix='cs_stk')
+
     if t2_run:
         sid2 = t2_sid or '2330'
         st.info(f'🌐 抓取 {sid2} 全方位數據...')
