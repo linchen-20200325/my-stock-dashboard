@@ -11,15 +11,16 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 
 
-def test_render_caisen_importable_via_package():
-    from src.ui.tabs import render_caisen_targets_tab
-    assert callable(render_caisen_targets_tab)
+def test_render_caisen_for_ticker_importable():
+    """v19.163:蔡森核心可重用元件可直接 import(不再有獨立分頁,見 test_reusable_*)。"""
+    from src.ui.tabs.caisen_targets_ui import render_caisen_for_ticker
+    assert callable(render_caisen_for_ticker)
 
 
-def test_app_py_mounts_caisen_tab():
+def test_no_standalone_caisen_tab():
+    """v19.163 user 要求:蔡森不設獨立分頁(只內嵌個股/組合)。"""
     src = (_REPO / "app.py").read_text(encoding="utf-8")
-    assert "render_caisen_targets_tab" in src, "app.py 未掛載 蔡森目標價 render(孤兒風險)"
-    assert "🎯 蔡森目標價" in src, "app.py 選股群組未見 蔡森目標價 子 Tab 標籤"
+    assert "render_caisen_targets_tab" not in src, "殘留獨立蔡森分頁掛載"
 
 
 def test_ui_uses_l2_ssot_not_selfcompute():

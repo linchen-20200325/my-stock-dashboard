@@ -6,8 +6,9 @@
 (session key 以 key_prefix 隔離,三處共用不衝突),再接進:
 - **個股 Tab**(tab_stock):expander「🎯 蔡森型態目標價（本檔）」→ 套用當前 `t2_sid` 標的(不用重輸)。
 - **個股組合 Tab**(tab_stock_grp):expander + selectbox 選一檔持股 → 套用該標的。
-- 獨立分頁 `render_caisen_targets_tab` 改為薄 wrapper(代碼 input → 呼叫核心)。
-- 守衛測試補「可重用元件 + 個股/組合接線」;26 passed + AppTest smoke 零例外。同 PR #568。
+- **不設獨立分頁**(user 追加要求「蔡森目標價這個就不用多 tab 了」):刪除 `render_caisen_targets_tab`
+  + app.py 選股群組移除「🎯 蔡森目標價」子 Tab + __init__ 反註冊,只保留 個股/組合 內嵌。
+- 守衛測試「可重用元件 + 個股/組合接線 + 無獨立分頁」;26 passed + AppTest smoke 零例外。同 PR #568。
 
 ## 🎯 2026-07-23 新功能:蔡森型態目標價計算機（v19.162,user 要求「由技術線型算甜蜜價/目標價」）
 

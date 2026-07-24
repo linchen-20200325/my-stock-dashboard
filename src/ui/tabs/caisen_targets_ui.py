@@ -3,8 +3,8 @@
 user 需求:「由技術線型計算甜蜜價與目標價」+「接在個股/組合裡,套用當前標的」。
 核心 `render_caisen_for_ticker(code, *, key_prefix)` 可重用元件:輸入代碼 → 抓 1y K 線 →
 ZigZag 自動偵測擺動點 → 機械對映蔡森關鍵位 → 可手動微調 → compute_caisen_targets →
-報告 + 線圖標點。三處共用(獨立分頁 / 個股 Tab / 個股組合 Tab),session key 以 key_prefix
-隔離互不干擾。
+報告 + 線圖標點。兩處共用(🔬 個股 Tab / 🏆 個股組合 Tab,各以 key_prefix 隔離 session),
+不另設獨立分頁(v19.163 user 要求)。
 
 §1 誠實:抓不到 K 線 → fail loud(不編假);演算法只抓「機械擺動點」,型態是否成立由 user
 看圖確認,每個關鍵點都可手動覆寫。§8.2.A EX-PASSTHRU-1:lazy import L1 fetch_stock_history_1y。
@@ -190,11 +190,3 @@ def render_caisen_for_ticker(code: str, *, key_prefix: str = "cs", default_pct: 
     with st.expander("🔬 計算軌跡（notes：用了哪條公式、缺哪些值）", expanded=False):
         for n in r.get("notes", []):
             st.caption(f"• {n}")
-
-
-def render_caisen_targets_tab() -> None:
-    """獨立分頁:自行輸入代碼 → 蔡森型態目標價分析。"""
-    st.markdown("## 🎯 蔡森型態目標價計算機")
-    st.caption("由技術線型(ZigZag 擺動點)**自動偵測**破底低/起漲/波高/整理低/頸線 → 算 甜蜜價·止損·目標·風報比。")
-    code = st.text_input("股票代碼", value="2330", key="_cstab_code")
-    render_caisen_for_ticker((code or "").strip(), key_prefix="cstab")
