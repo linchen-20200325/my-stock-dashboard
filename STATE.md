@@ -10,7 +10,14 @@
 - **§-1 對齊**:單檔「σ 雙演算法合併」經評估**不做** — 長線 σ(MA240 z-score)vs 短線 σ(MA20±nσ)是**不同時間尺度的既有刻意設計**(v18.334 已加文案標註),合併會損失訊號,非違憲、非 bug。避免機械式改動。
 - **驗證**:全套 pytest 綠(新增 `test_etf_score_row` / `test_etf_single_verdict_card` / `test_etf_grp_compare_declutter` 3 檔守衛 + 既有 `test_pr_h1_etf_grp_ssot` / `test_etf_grp_compare_young_etf_fix` 重指向 `etf_scoring_helpers`)。
 - **範圍決策**:組合 Tab(etf_tab_portfolio)結構性不同(核衛角色/再平衡/VaR,已有 核心/衛星/其他 分組表),本輪**不強塞組合研判卡**(較不成比例);若 user 要,可另開一輪。
-- **分支**:PR #569/#570 已 merged → 從最新 main 重開,另開新 PR。
+- **分支**:PR #569/#570 已 merged → 從最新 main 重開,另開新 PR(#571,CI 全綠)。
+
+## 🏆 2026-07-24 個股 Tab 版面優化:🧭 一眼判讀卡（v19.167,接續 ETF #571 同 PR）
+
+user「點頭」續做個股 Tab。先派稽核 AI 攤出「操作價位/買賣點/停利停損」全部計算點(32 處),釐清「操作價位 6→1」的真相:**不是把 6 個不同演算法硬併成 1**(σ帶252 vs 布林20、老師 ZigZag 等幅 vs 直加震幅、大量紅K、PE/PB/殖利率三種河流皆不同演算法,合併會損失資訊),而是「殺掉真正的重複(支撐壓力 hi20/lo20 重算、357 inline×2、MA20 inline)+ 加一張頁頂綜合卡」。
+
+- **🧭 一眼判讀卡(已做)**:L0 純函式 `shared/stock_buckets.summarize_stock_verdict` — 聚合 `compute_stock_section_levels` 已算好的 4 個可評定桶(進場RS/健康/籌碼/先行指標)→ 單一 green/yellow/red 綜合 + verdict + 理由(理由=桶 headline,§4.3 零重算)。規則平衡讀(非 macro worst-light):有紅且紅≥綠→保守、無紅且綠>黃→偏多、其餘→觀望;§1:on-demand 財報/AI 桶恆 gray 不納入不偽造,全 gray→「資料待算」不偽綠。卡片插即時趨勢總覽後、目錄前,對稱 ETF 🚦 卡 / 組合排行 headline,失敗只 fail-loud caption。6 golden/edge 測試。
+- **操作價位去重(待 user 定奪)**:稽核出 3 組可安全收斂但屬 §1/§4 顯示數字敏感區(支撐壓力有 len<5→0 guard 差異、357/MA20 需逐點對帳),依 §7「改計算/顯示前先對齊」暫不自作主張,列給 user 決定是否本輪做。
 
 ## 🏆 2026-07-24 個股組合 Tab 版面優化：單一來源 × 去重 × 老師批次化 × 老師 合一（v19.164,user「標的只有一個來源、整合上方總表、資訊重複繁雜要重分類」）
 
