@@ -16,7 +16,7 @@
 | §三 籌碼桶(法人/融資/先行指標) | section_chips.py       | render_section_chips      | 592 |
 | §五 短線急殺桶          | section_short.py       | render_section_short      | 342 |
 | §八 總經拼圖 v4.0       | section_mid.py         | render_section_mid        | 458 |
-| §九 跨桶 AI 投資決策    | section_cross_ai.py    | render_section_cross_ai   | 246 |
+| §九 跨桶規則決策(離線)  | section_cross_ai.py    | render_section_cross_ai   | 246 |
 | §十一 News AI 總裁決    | section_news_ai.py     | render_section_news_ai    | 323 |
 | 共用 inner def(refresh handler) | handlers.py            | _macro_session_reset / _on_refresh_click / _on_force_clear_click / _render_traffic_light | 153 |
 | 純函式 helper(8 個 KPI / 雷達 / banner) | helpers.py             | _radar_threshold_lines / _render_macro_indicator_card / _render_global_risk_bucket / render_five_bucket_bar / 等 | 462 |
@@ -32,7 +32,7 @@
   → render_section_short  (§五 短線急殺)
   → 🌍 全球風險桶(_render_global_risk_bucket,在 helpers.py)
   → render_section_chips  (§三 籌碼)
-  → render_section_cross_ai (§九 跨桶 AI)
+  → render_section_cross_ai (§九 跨桶規則決策)
   → 歷史驗證(§十 archived)
   → render_section_news_ai  (§十一 News AI)
 

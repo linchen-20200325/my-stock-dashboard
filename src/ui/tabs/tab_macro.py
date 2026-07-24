@@ -503,13 +503,5 @@ def render_tab_macro():
     st.caption("📖 想看總經原理教室(景氣循環 / PMI / 殖利率倒掛 / 美林時鐘 等 10 章)?"
                "→ 已移至「📖 系統說明書」Tab,含資料來源完整地圖 + 4 大師策略。")
 
-    # ── 🧬 AI 總結本頁（v19.122 Phase 2，用本頁已載資料組 bundle，不重抓；fail-soft）──
-    try:
-        from src.ui.tabs.tab_ai_chat import render_tab_summary
-        render_tab_summary('總經', {
-            '紅綠燈總覽': st.session_state.get('warroom_summary'),
-            '國際指標快照': st.session_state.get('intl_snap'),
-            '總經訊號': _macro_info,
-        }, context='macro')
-    except Exception as _ai_sum_e:
-        st.caption(f'🧬 AI 總結暫不可用：{type(_ai_sum_e).__name__}')
+    # v19.168 IMPL-B:移除冗餘的「🧬 AI 總結本頁」lite 卡 —— 本頁已有 §十一「🤖 AI 總裁決」
+    # 深報告(Gemini 生成完整戰情),泛用 lite 摘要重複。自由問答走獨立「🧬 AI 問答」tab。

@@ -25,7 +25,7 @@ from src.ui.tabs.macro.helpers import add_danger_hlines, render_macro_bucket_sum
 def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
     """渲染短線急殺桶(原 tab_macro line 3421-3741)。"""
     # ══════════════════════════════════════════════════════════════
-    # SECTION 九: 總經 AI 投資決策分析（五維度綜合研判）
+    # SECTION 五: 短線急殺桶（即時 risk-off）— v19.168 修正原誤植「SECTION 九 AI 投資決策」註解
     # ══════════════════════════════════════════════════════════════
     from shared.macro_buckets import bucket_group_banner_html as _bgb  # v18.310 桶群組 banner
     st.markdown(_bgb('short', 3), unsafe_allow_html=True)

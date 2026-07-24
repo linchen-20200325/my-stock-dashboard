@@ -67,8 +67,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _wr_bias.get('ma240', 0) or 0,
         _wr_fut_net,
     )
-    # 持股建議統一用紅綠燈/market_regime 的 exposure_pct(與 ①②一致,不再用 v4 區間)
-    _wr_exp = _wr_mkt.get('exposure_pct', '--') if _wr_mkt else '--'
+    # v19.168 IMPL-F:持股% 統一讀姿態油門 SSOT(warroom_summary.throttle,與頁頂全域 bar /
+    # 總經 gauge / 組合①卡 同一個數);無 throttle 時 fallback 原 regime 粗略 exposure_pct。
+    _wr_thr = (st.session_state.get('warroom_summary') or {}).get('throttle')
+    _wr_exp = (f"{_wr_thr['lo_pct']}–{_wr_thr['hi_pct']}%" if _wr_thr
+               else (_wr_mkt.get('exposure_pct', '--') if _wr_mkt else '--'))
 
     if _show_market_data and (_wr_mkt or _wr_cd):
         # ── 今日唯一結論(大字顯示)──────────────────────────

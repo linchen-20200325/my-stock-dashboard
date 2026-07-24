@@ -35,6 +35,10 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
     # SECTION 十一: 🤖 AI 總裁決（實體狀態鎖架構）
     # 前端唯讀 macro_state.json；LLM 運算由觸發按鈕在背景執行並寫檔
     # ══════════════════════════════════════════════════════════════
+    # v19.168:§九 從「AI 綜合」桶群移出後(它是純規則引擎),本 section(真 Gemini AI 裁決)
+    # 改為自行 emit 'ai' 桶群 banner(原由 §九 共用 emit)。
+    from shared.macro_buckets import bucket_group_banner_html as _bgb
+    st.markdown(_bgb('ai', 6), unsafe_allow_html=True)
     st.markdown(section_header('十一', '📰 新聞 ｜🤖 AI 總裁決', '🤖'), unsafe_allow_html=True)
     render_macro_bucket_summary_bar('news')  # v18.314 桶輕量總結 bar(新聞系統性風險)
     

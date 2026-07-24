@@ -491,7 +491,11 @@ if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
         _reg == 'bear' or (_jqpct is not None and _jqpct < 20),
         '多頭市場（可積極操作）', '空頭市場（先觀望保守）', '🟡 震盪整理（謹慎操作）'
     )
-    _gl_pos = _mkt_top.get('exposure_pct', '80%' if _reg=='bull' else ('20%' if _reg=='bear' else '50%'))
+    # v19.168 IMPL-F:持股% 統一讀姿態油門 SSOT(warroom_summary.throttle,與總經 gauge /
+    # 作戰室 / 組合①卡 同一個數);無 throttle 時 fallback 原 regime 粗略 exposure_pct。
+    _wr_thr = (st.session_state.get('warroom_summary') or {}).get('throttle')
+    _gl_pos = (f"{_wr_thr['lo_pct']}–{_wr_thr['hi_pct']}%" if _wr_thr
+               else _mkt_top.get('exposure_pct', '80%' if _reg=='bull' else ('20%' if _reg=='bear' else '50%')))
 
     # v19.88 A~E 批次2 收尾:時效閘 — 紅綠燈基於過期資料時,保留燈色(資料可顯示)但
     # 撤下「建議持股 X%」actionable 建議 + 旌旗均值,改明確過期警示。§1/第八份 §3.1:
@@ -874,19 +878,25 @@ with tab_tools:
             render_fetch_monitor_panel,  # v19.96 批次4 Item1+2
             render_reconcile_panel,
         )
+        # v19.168 IMPL-E:使用者版 —— 資料覆蓋率/新鮮度總覽常駐(一般使用者只需看這張燈號表)。
         render_data_coverage()
-        st.markdown('---')
-        render_data_registry_panel()
-        render_fetch_monitor_panel()   # v19.96:@monitored 監控 + 孤兒 set-diff
-        st.markdown('---')
-        render_reconcile_panel()
-        st.markdown('---')
-        render_api_diagnostic()
-        st.markdown('---')
-        render_data_health_raw()
-        st.markdown('---')
-        from src.ui.pages import render_calibration_panel
-        render_calibration_panel()
+        # v19.168 IMPL-E:工程師版 —— 資料源清單 / Fetcher 監控 / §4.3 雙演算法對帳 / API 根因 /
+        # 原始資料表 / 門檻校準,全對照 CLAUDE.md §編號、談 SSOT/proxy/@monitored,一般使用者用不到,
+        # 收進折疊、預設隱藏(不刪 —— 診斷仍在,只是不干擾主畫面)。
+        with st.expander(
+                '🔧 進階診斷（工程師版：資料源清單 · Fetcher 監控 · §4.3 對帳 · API 根因 · 原始表 · 門檻校準）',
+                expanded=False):
+            render_data_registry_panel()
+            render_fetch_monitor_panel()   # v19.96:@monitored 監控 + 孤兒 set-diff
+            st.markdown('---')
+            render_reconcile_panel()
+            st.markdown('---')
+            render_api_diagnostic()
+            st.markdown('---')
+            render_data_health_raw()
+            st.markdown('---')
+            from src.ui.pages import render_calibration_panel
+            render_calibration_panel()
 
     with tab_edu:
         from src.ui.tabs import render_tab_edu

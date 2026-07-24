@@ -1,5 +1,18 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏆 2026-07-24 全 App 面板重組 v20：AI 觸點去重 + 持股% 單一引擎 SSOT（v19.168,user「重新分類整合所有 tab、資訊重複繁雜」）
+
+3 組審計 AI 逐頁盤點 11 葉節點 tab + 2 組對抗驗證 AI 挑戰後,核心發現:真正的痛不是箱子多,而是**同一資訊在整個 App 重複 4~18 次**(AI 觸點 ~18、市場 regime 4~5、資料新鮮度 5+、持股% 四處不同數)。經 user 確認方向 B(Tier1 安全去重 + 持股% 根因),落地 5 刀(PR #572,全綠 3417 passed):
+
+- **A｜§九 去 AI 標籤正名**:`section_cross_ai` 是純規則引擎(零 LLM/免金鑰/離線),卻掛「總經 AI 投資決策」+ 歸「AI 綜合」桶群 = 全 App 最誤導標籤。正名「🧭 規則決策(離線可用)」、`shared/macro_buckets` 獨立 `rules` 桶群;§十一(真 Gemini)接手 emit `ai` banner。`_AI_GROUP_META` title/badge 契約不變。
+- **B｜刪冗餘「🧬 本頁總結」lite 卡**:總經/ETF單檔/個股組合已有更深 AI 報告 → 刪泛用 lite 卡(選股網保留其唯一 AI)。純 L5 UI 去重,不動 L3 `ai_qa_service`。
+- **C｜個股 AI 收斂 3→1**:保留已五維合成(技術+基本+財報+新聞)的「🤖 首席顧問總結」,砍較淺的「🧬 分析師討論」panel + 死函式 `render_stock_panel` + unused import;L3 `discuss_stock` 保留。
+- **F｜持股% 單一引擎 SSOT(根因修 ⭐)**:頁頂全域 bar / 作戰室 / 組合①卡(regime 粗略 exposure_pct 80/50/20)與總經 gauge(health 細分 throttle)原給不同數。改在 `render_traffic_light_top` 算一次 `compute_position_throttle` 存 `warroom_summary['throttle']`,四處全讀同一份 → 一致。gauge 亦改優先讀該 SSOT。§十一 曝險鎖(含薩姆/PMI/外資期貨硬否決)刻意保留為獨立「風險上限」,非本輪統一範圍。
+- **E｜資料診斷 tab 使用者/工程師分層**:覆蓋率/新鮮度總覽常駐;資料源清單/Fetcher監控/§4.3對帳/API根因/原始表/門檻校準 收「🔧 進階診斷」expander 折疊(不刪)。
+- **對抗驗證擋下(§-1 / 行為變更偽裝)**:估值三演算法統一(個股頁本就刻意多鏡頭 357/PE/PB + 說明,非矛盾)、三階段濾網搬家(逆轉 v19.111 user 簡化決定)、AI L3 管線合併(規則/LLM/agent 三抽象)、頂層改名/§編號重排(純 churn + 34 守衛測試)、ETF σ 三尺度統一(刻意短/長/中線)—— 全 WONTFIX。誠實修正:AI 是 5→2 非 5→1。
+- **驗證**:全套 pytest **3417 passed / 28 skipped / 0 fail**;新增 `test_macro_section9_rules_rename` + `test_position_throttle_ssot` 守衛。分支從最新 main 重開(PR #571 已 merged)。
+- **尚未納入(Tier1 剩餘)**:D(財報體檢逐檔卡抽 L4 共用元件 ~900 行,個股 inline vs 組合 section 同引擎兩套手寫,曾漂移;最高風險需 golden test + 參數化 vital signs st.metric vs columns HTML + 雷達 clamp 差異)—— 另開專注一輪處理,不於本輪尾段倉促做以免回歸核心功能。
+
 ## 🏆 2026-07-24 ETF 三 Tab 版面重排：單檔 🚦研判卡 × 多檔主表 24→11 欄 × row 計算 SSOT（v19.166,user「其他 Tab 也幫我優化」延續）
 
 多 AI 顧問 + 可視預覽核准後,ETF 版面重排(接續 v19.164 個股組合、v19.166 地基 #570 標籤 SSOT)。核心:每檔 row 計算下沉共用 SSOT、單檔頁補單一「留/觀察/換」研判卡、多檔比較表從一次攤 24 欄改「11 核心欄 + 完整指標 expander」。

@@ -112,16 +112,8 @@ def render_stock_grp():
     # ── 🎚️ 風險貢獻分解（v19.138：輸入持股張數 → 市值權重 → Euler 分解，與 ETF 組合共用 L2/L4）──
     _render_risk_contribution_section(stock_list_t3)
 
-    # ── 🧬 AI 總結本頁（v19.122 Phase 2，用批次已載資料組 bundle，不重抓；fail-soft）──
-    try:
-        from src.ui.tabs.tab_ai_chat import render_tab_summary
-        render_tab_summary('個股組合', {
-            '批次比較結果': st.session_state.get('t3_data'),
-            '批次代碼': st.session_state.get('t3_batch_codes'),
-            '財報體檢': st.session_state.get('_fh_t3_results'),
-        }, context='general')
-    except Exception as _ai_sum_e:
-        st.caption(f'🧬 AI 總結暫不可用：{type(_ai_sum_e).__name__}')
+    # v19.168 IMPL-B:移除冗餘的「🧬 AI 總結本頁」lite 卡 —— 本頁已有 🤖 AI 投資組合綜合判讀
+    # 深報告(經理人強弱排序),泛用 lite 摘要重複。自由問答走獨立「🧬 AI 問答」tab。
 
 
 def _grp_load_holdings_callback() -> None:

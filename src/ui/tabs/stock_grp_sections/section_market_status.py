@@ -67,8 +67,11 @@ def render_market_status_section() -> None:
             f'<div style="font-size:16px;font-weight:900;color:{_twii_c};">{_twii_val}</div>'
             f'</div>', unsafe_allow_html=True)
     with _t3c3:
-        # 修正:warroom_summary 從未寫入 hold_pct;改讀 mkt_info.exposure_pct ('80%' 字串)
-        _t3_hold = _t3_mkt.get('exposure_pct') if _t3_mkt else None
+        # v19.168 IMPL-F:持股% 統一讀姿態油門 SSOT(warroom_summary.throttle,與頁頂全域 bar /
+        # 總經 gauge / 作戰室 同一個數);無 throttle 時 fallback 原 mkt_info.exposure_pct。
+        _t3_thr = (st.session_state.get('warroom_summary') or {}).get('throttle')
+        _t3_hold = (f"{_t3_thr['lo_pct']}–{_t3_thr['hi_pct']}%" if _t3_thr
+                    else (_t3_mkt.get('exposure_pct') if _t3_mkt else None))
         _hold_val = str(_t3_hold) if _t3_hold not in (None, '', '--') else '未載入'
         _hold_c = '#58a6ff' if _t3_hold not in (None, '', '--') else '#484f58'
         st.markdown(
