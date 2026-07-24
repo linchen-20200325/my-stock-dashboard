@@ -558,7 +558,8 @@ def render_etf_portfolio(gemini_fn=None):
             if not df_t.empty:
                 ret_dict[t] = df_t['Close'].pct_change()
     if len(ret_dict) >= 2:
-        ret_df = pd.DataFrame(ret_dict).ffill().dropna()
+        # §1(v19.165):共同交易日交集,不 ffill(停牌/缺口日不捏造報酬,否則相關被拉假)
+        ret_df = pd.DataFrame(ret_dict).dropna(how='any')
         corr   = ret_df.corr()
         _plot_correlation(corr)
         for i in range(len(corr)):
@@ -578,7 +579,8 @@ def render_etf_portfolio(gemini_fn=None):
     from src.compute.risk.risk_contribution import compute_risk_contribution
     from src.ui.render.risk_contribution_render import render_risk_contribution_panel
     _rc_weights = {r['ticker']: r['current_value'] for r in rows if r['current_value'] > 0}
-    _rc_returns = pd.DataFrame(ret_dict).ffill() if ret_dict else pd.DataFrame()
+    # §1(v19.165):compute_risk_contribution 內部已 dropna(how='any');外層勿 ffill(捏造缺口值)
+    _rc_returns = pd.DataFrame(ret_dict) if ret_dict else pd.DataFrame()
     _rc = compute_risk_contribution(_rc_returns, _rc_weights)
     render_risk_contribution_panel(_rc, warn_box=lambda _m: _colored_box(_m, 'red'))
 
@@ -727,16 +729,28 @@ def render_etf_portfolio(gemini_fn=None):
             if not _df_v.empty:
                 _var_rets[r['ticker']] = _df_v['Close'].pct_change().dropna()
     if len(_var_rets) >= 1:
-        # 組合日報酬（加權合并）
-        _all_idx = sorted(set().union(*[s.index for s in _var_rets.values()]))
-        _port_ret = pd.Series(0.0, index=_all_idx)
-        for r in rows:
-            if r['ticker'] in _var_rets:
-                _w = r['actual_pct'] / 100
-                _port_ret = _port_ret.add(
-                    _var_rets[r['ticker']].reindex(_all_idx).ffill().fillna(0) * _w)
-        _port_ret = _port_ret.dropna()
+        # §1 誠實對齊(v19.165):只取「全員皆有交易」的共同日(dropna),不 ffill / 不 fillna(0)。
+        # 舊寫法把新上市 ETF 上市前當成 0% 報酬 → 稀釋波動、低估尾部 VaR(風險看起來比實際小)。
+        # 計算下沉 L2 etf_calc.align_portfolio_returns(可單元測試)。
+        from src.compute.etf.etf_calc import align_portfolio_returns
+        _va = align_portfolio_returns(_var_rets, {r['ticker']: r['actual_pct'] for r in rows})
+        _port_ret = _va['port_ret']
+        _n_common = _va['n_common']
+        _limiter = _va['limiter']
+        _limiter_start = _va['limiter_start']
+        if _va['dropped'] > 0 and _limiter is not None and _limiter_start is not None:
+            print(f"[etf_var] 共同交易日對齊:union {_va['n_union']}→交集 {_n_common}"
+                  f"(剔 {_va['dropped']} 非共同日);視窗受最短檔 {_limiter}"
+                  f"(起 {_limiter_start.date()})限制;未做任何填補(§1)")
         if len(_port_ret) >= 20:
+            st.caption(f'📏 VaR 樣本＝{_n_common} 個「全員皆有交易」的共同日'
+                       f'（{_port_ret.index.min():%Y-%m-%d} ~ {_port_ret.index.max():%Y-%m-%d}）;'
+                       '缺失日一律剔除、未填 0 或 ffill（§1 誠實)。')
+            if _limiter is not None and _limiter_start is not None \
+                    and _limiter_start > _port_ret.index.min():
+                st.warning(f'⚠️ VaR 視窗被最短一檔 **{_limiter}**'
+                           f'（{_limiter_start:%Y-%m-%d} 才有資料）壓縮到 {_n_common} 日;'
+                           '新上市 ETF 樣本短、尾部估計偏樂觀,請理解此限制。')
             # 歷史模擬法
             _h95 = float(_port_ret.quantile(PORTFOLIO_VAR_95_PERCENTILE)) * total_value
             _h99 = float(_port_ret.quantile(PORTFOLIO_VAR_99_PERCENTILE)) * total_value
@@ -782,7 +796,9 @@ def render_etf_portfolio(gemini_fn=None):
                                     '月度尾部風險在可接受範圍，組合穩健',
                                     '維持現有風險配置，按計畫再平衡')
         else:
-            st.warning('歷史資料不足（<20筆），無法計算 VaR')
+            st.warning(f'歷史共同交易日不足（{_n_common}<20'
+                       + (f'，受最短檔 {_limiter} 限制' if _limiter else '')
+                       + '），無法計算 VaR')
     else:
         st.warning('無法取得價格資料，跳過 VaR 計算')
 
