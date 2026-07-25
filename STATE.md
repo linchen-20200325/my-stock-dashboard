@@ -1,5 +1,17 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏆 2026-07-25 MCP Server 首波：把資料層做成「無頭第二前端」(v20-MCP,user 看 CasualMarket 後「好,啟動」)
+
+user 看 GitHub `topics/stock`(多為中國 A 股 + 回測/量化,方向與本專案相反,WONTFIX)+ `sacahan/CasualMarket`(台股 MCP server)後,唯一真正值得學的 = **「把資料層包成 MCP server」交付模式**——且我們資料層更硬(多源 fallback + provenance + PIT + fail-loud,CasualMarket 只單源 TWSE)。經 §8.1 可行性草圖 → user 核准 → §8.5 一次一模組落地首波:
+
+- **定位(§8.2)**:新增 `mcp_server/`(root 級 orchestrator,同 `app.py` L6 / `scripts/` cron 的 sibling)。**現有 L1/L2/L3/UI 一行不動**,純新增 adapter → 零回歸。依賴方向 `MCP → L3 → L1` 合憲(不直呼 L1、不反向 import)。
+- **首波工具(唯讀 1 個)**:`screen_stocks(factors, top_n)` — 全台股基本面選股綜合排名。**鏡像 cron `update_forward_test_freeze._build_pe_name_maps` + 走同一支 L3 `get_ranked_picks`** → 保證「MCP 選股 = 畫面『🎯 開始選股』= 每月凍結」三處同源(§8 SSOT)。
+- **§1 fail-loud**:季快照未就緒 / 存活池空 / 上游全敗 → 回 `ok:false` + 具體 reason,**不編造清單**;工具例外轉結構化錯誤(帶 source),不崩 server 不吞。JSON 序列化 NaN→None(缺料因子留空**不填 0**)。provenance:回傳帶 `as_of`(UTC 抓取時間)。
+- **無頭安全確認**:`fundamental_screener_service` 只用 `@st.cache_data`(EX-CACHE-1),無 `session_state`/無真 UI → 可脫離 Streamlit 執行(cron 已實證)。
+- **交付範式誠實界定**:這是「多開一扇對話門」(在 Claude Desktop / Cursor 用),**非**網頁多一顆按鈕。`fastmcp` 放獨立 `requirements-mcp.txt`,**不進** Streamlit Cloud 部署(雲端不多裝一包)。
+- **過度設計自評(§8.1 step6,先不做)**:模擬下單/紙上交易、Docker+SSE remote、auth/rate-limit、一次包 24 個 service — 全列「等有需求再加」。**第二波候選**(未做):個股體質(`financial_health_engine`)、總經紅綠燈(`macro_state_locker`,需補無頭編排)、前進式驗證對帳(`forward_test_service`)。
+- **驗證**:`tests/test_mcp_server_smoke.py` 5 綠(工具註冊 + JSON 序列化 NaN→None + fail-loud 契約 + 非法 factor fallback);fastmcp in-memory Client 實測 MCP 協定往返(list_tools + schema)通。新增檔:`mcp_server/{__init__,server}.py` + `mcp_server/README.md`(Claude Desktop 掛載說明)+ `requirements-mcp.txt`。
+
 ## 🏆 2026-07-24 全 App 面板重組 v20：AI 觸點去重 + 持股% 單一引擎 SSOT（v19.168,user「重新分類整合所有 tab、資訊重複繁雜」）
 
 3 組審計 AI 逐頁盤點 11 葉節點 tab + 2 組對抗驗證 AI 挑戰後,核心發現:真正的痛不是箱子多,而是**同一資訊在整個 App 重複 4~18 次**(AI 觸點 ~18、市場 regime 4~5、資料新鮮度 5+、持股% 四處不同數)。經 user 確認方向 B(Tier1 安全去重 + 持股% 根因),落地 5 刀(PR #572,全綠 3417 passed):

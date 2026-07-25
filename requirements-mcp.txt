@@ -1,0 +1,12 @@
+# requirements-mcp.txt — MCP server(無頭第二前端)專用依賴。
+#
+# 刻意「不」放進 requirements.txt:MCP server 在你本機 / 自架環境跑,
+# 與 Streamlit Cloud 部署無關;分開才不會讓雲端部署多裝一包 fastmcp + 其依賴。
+#
+# 安裝:pip install -r requirements-mcp.txt
+# 啟動:python -m mcp_server.server   (stdio,供 Claude Desktop / Cursor 掛載)
+#
+# 註:MCP server 執行時仍需專案本身的資料依賴(pandas / requests 等),
+#     故實務上請在已 `pip install -r requirements.txt` 的同一環境再裝本檔。
+
+fastmcp>=3.0,<4.0
