@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import os
 import sys
 from pathlib import Path
 
@@ -55,12 +56,83 @@ def _build_pe_name_maps() -> tuple[dict, dict]:
     return _pe, _nm
 
 
+def _fetch_chip_for(code: str, loader) -> dict:
+    """單檔籌碼:法人 20 日流向 + 大戶持股比例%。全程 fail-soft(抓不到 → None,不炸)。
+
+    回 {"flow": analyze_20d_chips_from_df 輸出 | None,
+        "holder": {"pct": float, "delta": float | None} | None}。
+    §1:任一路失敗只記 stderr + 回 None → 訊息端該徽章自動略,不影響其他股、不腦補。
+    """
+    out = {"flow": None, "holder": None}
+    # (1) 法人 20 日流向:get_combined_data(價+法人+融資)→ analyze_20d_chips_from_df
+    #     (上市走 TWSE T86、上櫃走 TPEX fallback;全 0 → analyze 自回 error → 略)
+    try:
+        from shared.macro_compute import analyze_20d_chips_from_df
+        _df, _err, _ = loader.get_combined_data(code, 90)
+        if _df is not None and not getattr(_df, "empty", True):
+            out["flow"] = analyze_20d_chips_from_df(_df)
+    except Exception as _e:  # noqa: BLE001 — 法人籌碼抓不到 → 無流向徽章,不炸
+        print(f"[push_signals] {code} 法人籌碼失敗:{type(_e).__name__}: {_e}", file=sys.stderr)
+    # (2) 大戶持股比例%:集保股權分散表(週更新;取最新 + 對前一筆的週變化)
+    try:
+        from src.data.stock.chip_concentration_fetcher import fetch_chip_concentration
+        _res = fetch_chip_concentration(code)
+        _cdf = _res.get("df") if isinstance(_res, dict) else None
+        if (_cdf is not None and not getattr(_cdf, "empty", True)
+                and "大戶比例" in _cdf.columns):
+            _s = _cdf.sort_values("日期") if "日期" in _cdf.columns else _cdf
+            _vals = _s["大戶比例"].dropna()
+            if len(_vals) >= 1:
+                _pct = float(_vals.iloc[-1])
+                _delta = float(_vals.iloc[-1] - _vals.iloc[-2]) if len(_vals) >= 2 else None
+                out["holder"] = {"pct": _pct, "delta": _delta}
+    except Exception as _e:  # noqa: BLE001 — 大戶比例抓不到 → 無水位徽章,不炸
+        print(f"[push_signals] {code} 大戶比例失敗:{type(_e).__name__}: {_e}", file=sys.stderr)
+    return out
+
+
+def _maybe_ai_judgment(picks, tech_by, *, as_of, trend_by, short_by, chip_by) -> str:
+    """有 GEMINI_API_KEY → 回「\\n\\n──\\n{AI 研判段}」;缺 key / AI 失敗 → 回 ''。
+
+    §1:AI 是加值、非主體 —— 缺 key 或全 model 失敗只記 log,清單照送。
+    §2.1 Tier-5:prompt(見 ai_judgment.py)已硬性要求只依 Data、禁腦補數字、非投資建議。
+    """
+    _key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not _key:
+        print("[push_signals] 未設 GEMINI_API_KEY → 略過 AI 研判(只送清單)")
+        return ""
+    try:
+        from src.compute.notify.ai_judgment import (
+            AI_JUDGMENT_MODELS,
+            build_ai_judgment_prompt,
+        )
+        from src.services.ai_fetcher import post_gemini
+        _prompt = build_ai_judgment_prompt(
+            picks, tech_by, as_of=as_of,
+            trend_by_code=trend_by, shortage_by_code=short_by, chip_by_code=chip_by)
+        _text, _model = post_gemini(
+            _key, _prompt, models=AI_JUDGMENT_MODELS,
+            temperature=0.2, max_tokens=1200, timeout=120,
+            retries_per_model=1, retry_after_parse=False, inter_model_sleep=0)
+    except Exception as _e:  # noqa: BLE001 — AI 整段失敗 → 只送清單,不炸
+        print(f"[push_signals] AI 研判失敗(略過只送清單):{type(_e).__name__}: {_e}",
+              file=sys.stderr)
+        return ""
+    if not _text:
+        print(f"[push_signals] AI 研判無輸出(略過):{_model}", file=sys.stderr)
+        return ""
+    print(f"[push_signals] ✅ AI 研判已附加(model={_model})")
+    return "\n\n" + "─" * 12 + "\n" + _text.strip()
+
+
 def main(argv=None) -> int:
     from src.compute.notify.signal_message import (
         format_empty_message,
         format_signal_message,
     )
     from src.compute.notify.technical_snapshot import build_technical_snapshot
+    from src.config import get_stock_name
+    from src.data.core import StockDataLoader
     from src.data.notify.dispatch import send_notification
     from src.data.stock.picker_fetcher import fetch_stock_history_1y
     from src.services.fundamental_screener_service import (
@@ -107,7 +179,21 @@ def main(argv=None) -> int:
         _msg = format_empty_message(as_of=_as_of, reason=(_note or "綜合排名為空"))
     else:
         _picks = _cands.head(int(args.top_n)).to_dict("records")
+        # 中文名 fallback:選股用的 name_map 只有上市(TWSE),上櫃股空名 → 補 get_stock_name
+        # (涵蓋上市+上櫃;回傳=代碼代表查無 → 留空,不印「6223 6223」)。
+        for _p in _picks:
+            _c = str(_p.get("代碼", "") or "").strip()
+            if _c and not str(_p.get("名稱", "") or "").strip():
+                try:
+                    _n = get_stock_name(_c)
+                    if _n and _n != _c:
+                        _p["名稱"] = _n
+                except Exception as _e:  # noqa: BLE001 — 名稱補不到 → 只顯代碼,不炸
+                    print(f"[push_signals] {_c} 名稱 fallback 失敗:{type(_e).__name__}: {_e}",
+                          file=sys.stderr)
+        _loader = StockDataLoader()
         _tech: dict = {}
+        _chip_by: dict = {}
         for _p in _picks:
             _code = str(_p.get("代碼", "")).strip()
             if not _code:
@@ -119,6 +205,7 @@ def main(argv=None) -> int:
                 print(f"[push_signals] {_code} 抓價/技術失敗:{type(_e).__name__}: {_e}",
                       file=sys.stderr)
                 _tech[_code] = {"ok": False, "note": "抓價失敗"}
+            _chip_by[_code] = _fetch_chip_for(_code, _loader)   # 法人流向 + 大戶比例(fail-soft)
         # 財報趨勢 / 缺貨 tier 查表(§1:缺料的股不在表 → 徽章自動略)
         _trend_by: dict = {}
         if _trend_df is not None and not _trend_df.empty:
@@ -126,7 +213,11 @@ def main(argv=None) -> int:
                 _trend_by[str(_r.get("stock_id"))] = _r
         _short_by = {str(_r.get("代碼")): _r.get("_tier") for _r in (_shortage_rows or [])}
         _msg = format_signal_message(_picks, _tech, as_of=_as_of,
-                                     trend_by_code=_trend_by, shortage_by_code=_short_by)
+                                     trend_by_code=_trend_by, shortage_by_code=_short_by,
+                                     chip_by_code=_chip_by)
+        # AI 研判(偏多/偏空/需觀察):有 GEMINI_API_KEY 才接;缺 key / AI 失敗 → 略過只送清單
+        _msg += _maybe_ai_judgment(_picks, _tech, as_of=_as_of,
+                                   trend_by=_trend_by, short_by=_short_by, chip_by=_chip_by)
 
     if args.dry_run:
         print("----- DRY RUN(未送)-----")

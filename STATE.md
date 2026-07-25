@@ -1,5 +1,18 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏆 2026-07-25 推播加「中文名 + 籌碼 + AI 研判」(v20-PUSH.3,user「幫加股票名稱、籌碼,也想要 AI 回應哪些偏多/偏空/需觀察」)
+
+user 實機看到上櫃股只顯代碼、想再加籌碼 + AI 分類。§7/§8 三路並行探查(名稱來源 / 籌碼 fetcher / AI 呼叫路徑)對齊後,經 AskUserQuestion 定「籌碼兩個都放 + 要 AI(會加 GEMINI_API_KEY)」,§8.5 一次一模組落地(**採 Path B:既有技術面路徑 `fetch_stock_history_1y`→`build_technical_snapshot` 一行不動 = 零回歸**):
+
+- **中文名 fallback(誠實根因)**:缺名純因推播 name_map 走 `_build_pe_name_maps`→`fetch_twse_yield_pe`(**TWSE 上市 only**);上櫃股(6223/4807/8091…)不在表 → 空名。修:orchestrator 空名時補**既有 SSOT** `get_stock_name(code)`(涵蓋上市+上櫃,走 TWSE+TPEx OpenAPI、24h 快取);回傳=代碼(查無)→ 留空,不印「6223 6223」。**不動 L3 選股 service**(webpage 同缺但非本次範圍,§-1 不擴)。
+- **籌碼兩個(§1 fail-soft,抓不到略徽章不腦補)**:
+  - **法人 20 日流向** 🔥吸籌/🔴倒貨/🟡發散 —— `StockDataLoader.get_combined_data`(價+法人+融資,上市 TWSE T86 / 上櫃 TPEX)→ 複用 `analyze_20d_chips_from_df`(shared,外資+投信淨買÷總量,單位張;全 0 自回 error → 略)。
+  - **大戶持股比例%↑↓** —— `fetch_chip_concentration`(集保 >400 張大股東持股比例,週更新);取最新 + 對前一筆週變化(|Δ|≤0.05 不加箭頭)。
+  - **版面加第 3 行** `籌碼 {流向} · 大戶XX.X%↑↓`;兩者皆缺 → 不印此行(不佔版面)。
+- **AI 研判(偏多/偏空/需觀察,Tier-5 synthesis only)**:新 L2 `ai_judgment.py` 組 prompt —— 把**推播同一份客觀事實**(綜合分/均線/RSI/KD/財報趨勢/缺貨/籌碼,複用同源 L2 formatter,§3.3 不另立第二套)包進 `<Data>`,對齊 `macro_state_locker` 絕對約束(**只依 Data、禁腦補任何數字/價位/新聞、不下買賣點、附非投資建議聲明**);model 清單對齊 SSOT。orchestrator 呼叫 `post_gemini`(headless、`os.environ["GEMINI_API_KEY"]`)。**§1:AI 是加值非主體 —— 缺 key / 全 model 失敗只記 log,清單照送**(`_maybe_ai_judgment` 回 ''),cron 不因 AI 紅燈。
+- **分層(§8.2,全加值)**:L2 純函式 `signal_message.format_chip_line` + 新檔 `ai_judgment.py`(無 I/O、無 streamlit);籌碼雙抓 + 名稱 fallback + AI 呼叫皆在 orchestrator `push_daily_signals.py`(可跨層);cron yml 加 `GEMINI_API_KEY` env(選填)。
+- **驗證**:`test_daily_signal_push.py` **20 綠**(+籌碼徽章各情境含 nan 略/箭頭門檻、第 3 行組字 + 向後相容、AI 事實行同源、prompt 含反捏造+免責+Data、orchestrator 缺 key 略過 / 有 key 附段);pyflakes 乾淨;離線渲染確認 3 行版面 + 缺料略徽章;dry-run 端到端跑通。**user 端要開 AI 需在 GitHub Secrets 加 `GEMINI_API_KEY`(選填,不設只送清單不紅燈,見 docs)**。
+
 ## 🏆 2026-07-25 推播加「趨勢」徽章:財報變好/變差 + 缺貨動能(v20-PUSH.2,user「想加變好變差、可觀察,像 MJ 健檢 + 缺貨變多變少」)
 
 user 要每檔加趨勢/轉機。誠實界定資料後(§7 對齊)落地,版面經 AskUserQuestion 選「併入兩行」:

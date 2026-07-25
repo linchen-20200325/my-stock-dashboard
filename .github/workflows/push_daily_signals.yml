@@ -51,6 +51,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          # AI 研判（偏多/偏空/需觀察）— 選填；未設則自動略過只送清單
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: >
           python scripts/push_daily_signals.py
           --top-n "${{ github.event.inputs.top_n || '10' }}"
