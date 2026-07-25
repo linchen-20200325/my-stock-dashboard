@@ -11,7 +11,8 @@
 - **E｜資料診斷 tab 使用者/工程師分層**:覆蓋率/新鮮度總覽常駐;資料源清單/Fetcher監控/§4.3對帳/API根因/原始表/門檻校準 收「🔧 進階診斷」expander 折疊(不刪)。
 - **對抗驗證擋下(§-1 / 行為變更偽裝)**:估值三演算法統一(個股頁本就刻意多鏡頭 357/PE/PB + 說明,非矛盾)、三階段濾網搬家(逆轉 v19.111 user 簡化決定)、AI L3 管線合併(規則/LLM/agent 三抽象)、頂層改名/§編號重排(純 churn + 34 守衛測試)、ETF σ 三尺度統一(刻意短/長/中線)—— 全 WONTFIX。誠實修正:AI 是 5→2 非 5→1。
 - **驗證**:全套 pytest **3417 passed / 28 skipped / 0 fail**;新增 `test_macro_section9_rules_rename` + `test_position_throttle_ssot` 守衛。分支從最新 main 重開(PR #571 已 merged)。
-- **尚未納入(Tier1 剩餘)**:D(財報體檢逐檔卡抽 L4 共用元件 ~900 行,個股 inline vs 組合 section 同引擎兩套手寫,曾漂移;最高風險需 golden test + 參數化 vital signs st.metric vs columns HTML + 雷達 clamp 差異)—— 另開專注一輪處理,不於本輪尾段倉促做以免回歸核心功能。
+- **D(財報體檢逐檔卡抽 L4 共用元件)→ 專注一輪實讀後 WONTFIX(user 拍板)**:逐模組比對 `tab_stock.py:982-1405`(個股 inline)vs `section_financial_health.py:210-572`(組合)後證實 **兩者非純重複,是兩個刻意不同細緻度的畫面**——個股 = 單檔完整深度(生死燈號帶 delta 文字+豐富 label、雷達含 v19.85 clamp 防護、**綜合診斷有杜邦分析卡**、結尾 **老師總結評級卡 A/B/C grade**),組合 = 多檔精簡(省空間、DNA inline badge、結尾 AI insight+紅旗)。僅存活/獲利/結構/償債 4 模組邏輯相同(字級 20/17/26/24px vs 18/15/20/18px 微異)。**共用同一引擎 `analyze_financial_health`**(數字/門檻一致,當年 v18.453 漂移的是**門檻**、早在引擎層修好,非渲染層)。硬抽共用元件 → 要嘛個股頁失去杜邦卡+總結評級卡+豐富標籤(明顯退化),要嘛做成塞 label 集/字級/是否顯示杜邦 參數的怪物(§8.1 反面「用不到的抽象」),真正省行數不多。**同 σ 三尺度 / 估值三鏡頭同類:看似重複、實為刻意不同視角 → §-1 WONTFIX。** 真有維護觸發(門檻要改時)在引擎層改即可,渲染層各自保留。
+- **持股% 收尾(F 之後第1項,user「兩個都留 上限 vs 建議區間」)**:§十一 曝險鎖 `exposure_limit_pct`(薩姆/PMI/外資期貨硬否決天花板)原是孤立的第三個持股%數字。改在總經「建議持股油門」gauge(`render_position_throttle`)與「建議持股區間」**並排呈現、清楚標成互補**(區間=依健康分的姿態、上限=硬否決天花板,實際持股取兩者較低),bar 上加金色上限標記;未跑 §十一 AI 裁決(無 exposure_limit_pct)→ 只顯示區間(§1 fail-safe,不偽造上限)。新增 `test_position_ceiling`(source-scan + 2 slow AppTest 實機驗)。與 F 一致原則:同一問題(該持股幾成)不再散落多個對不上的數字。
 
 ## 🏆 2026-07-24 ETF 三 Tab 版面重排：單檔 🚦研判卡 × 多檔主表 24→11 欄 × row 計算 SSOT（v19.166,user「其他 Tab 也幫我優化」延續）
 
