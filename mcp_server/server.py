@@ -63,22 +63,22 @@ def _build_pe_name_maps() -> tuple[dict, dict]:
     return _pe, _nm
 
 
+def _json_safe(obj):
+    """遞迴轉 JSON-safe:dict/list 遞迴、NaN→None(§1 缺料留空**不填 0**)、numpy 純量→py 原生。"""
+    if isinstance(obj, dict):
+        return {_k: _json_safe(_v) for _k, _v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(_v) for _v in obj]
+    if isinstance(obj, float) and math.isnan(obj):
+        return None
+    if hasattr(obj, "item"):        # numpy int/float/bool 純量 → py 原生
+        return obj.item()
+    return obj
+
+
 def _df_to_records(df) -> list[dict]:
-    """DataFrame → JSON-safe list[dict]:NaN→None(§1 缺料留空不填 0)、numpy 純量→py 原生。"""
-    _out: list[dict] = []
-    for _r in df.to_dict(orient="records"):
-        _clean: dict = {}
-        for _k, _v in _r.items():
-            if _v is None:
-                _clean[_k] = None
-            elif isinstance(_v, float) and math.isnan(_v):
-                _clean[_k] = None          # 缺料因子顯示 null,非 0(避免誤導)
-            elif hasattr(_v, "item"):       # numpy int/float/bool 純量
-                _clean[_k] = _v.item()
-            else:
-                _clean[_k] = _v
-        _out.append(_clean)
-    return _out
+    """DataFrame → JSON-safe list[dict](NaN→None、numpy→py;走 _json_safe)。"""
+    return [_json_safe(_r) for _r in df.to_dict(orient="records")]
 
 
 def _screen_stocks_impl(factors, top_n: int) -> dict:
@@ -136,6 +136,96 @@ def screen_stocks(factors: list[str] | None = None, top_n: int = 30) -> dict:
         **不編造清單**(§1 fail-loud)。
     """
     return _screen_stocks_impl(factors, top_n)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 第二波工具(v20-MCP W2):前進式驗證對帳 + 個股體質(免 AI)
+# ════════════════════════════════════════════════════════════════════
+
+def _forward_test_reconcile_impl() -> dict:
+    """forward_test_reconcile 實作本體(與 MCP 註冊分離,便於單元測試)。"""
+    from src.services.forward_test_service import reconcile_all
+    _as_of = _now_utc_iso()
+    try:
+        _per_cohort, _overall = reconcile_all()
+    except Exception as _e:  # noqa: BLE001 — fail-loud:轉結構化錯誤,不崩 server
+        return {"ok": False, "as_of": _as_of,
+                "error": f"{type(_e).__name__}: {_e}",
+                "source": "forward_test_service.reconcile_all"}
+    _cohorts = (_df_to_records(_per_cohort)
+                if _per_cohort is not None and not _per_cohort.empty else [])
+    return {"ok": True, "as_of": _as_of,
+            "overall": _json_safe(dict(_overall or {})), "cohorts": _cohorts}
+
+
+@mcp.tool
+def forward_test_reconcile() -> dict:
+    """前進式驗證對帳:凍結過的選股清單,事後用真實現價對帳 vs 0050(零 lookahead)。
+
+    讀「本地 git 追蹤 parquet ∪ Google Sheet」的歷史凍結選股 → 抓現價 + 0050 基準 →
+    逐 cohort(凍結批次)計算實際報酬 vs 0050。這是「這套選股實際贏不贏大盤」的誠實計分。
+
+    Returns:
+        {ok, as_of, overall(整體統計/含 note), cohorts:[每個凍結批次的對帳列]}。
+        尚無凍結紀錄 → ok=True、cohorts 空、overall.note 說明「收集中」(§1 不偽造績效)。
+    """
+    return _forward_test_reconcile_impl()
+
+
+def _stock_health_impl(stock_id) -> dict:
+    """stock_health 實作本體(與 MCP 註冊分離,便於單元測試)。"""
+    from src.data.core.financial_statements_fetcher import fetch_financial_statements
+    from src.services.financial_health_engine import (
+        analyze_financial_health,
+        no_ai_overall_verdict,
+    )
+    _sid = str(stock_id or "").strip()
+    _as_of = _now_utc_iso()
+    if not _sid:
+        return {"ok": False, "as_of": _as_of, "error": "stock_id 為空"}
+    try:
+        _fin = fetch_financial_statements(_sid)
+    except Exception as _e:  # noqa: BLE001 — fail-loud
+        return {"ok": False, "as_of": _as_of, "stock_id": _sid,
+                "error": f"{type(_e).__name__}: {_e}",
+                "source": "fetch_financial_statements"}
+    # §1 關鍵:財報缺料 → **不呼叫引擎、不編造評級**(否則缺料被當 N/A 會誤產高分,
+    # 見 headless smoke:error fin_data 竟回 B+)。直接回 fail-loud 說明。
+    if not _fin or _fin.get("error"):
+        return {"ok": False, "as_of": _as_of, "stock_id": _sid,
+                "error": (_fin or {}).get("error", "財報資料為空"),
+                "source": "fetch_financial_statements"}
+    # 空 api_key → analyze_financial_health 純規則計算,不呼叫 Gemini(免金鑰)
+    _fh = analyze_financial_health("", _sid, _fin)
+    _v = no_ai_overall_verdict(_fin, _fh)
+    return {
+        "ok": True, "as_of": _as_of, "stock_id": _sid,
+        "grade": _v.get("grade"),
+        "score_pct": _v.get("score_pct"),
+        "headline": _v.get("headline"),
+        "comment": _v.get("comment"),
+        "pass_items": _v.get("pass_items"),
+        "fail_items": _v.get("fail_items"),
+        "business_model_dna": _fh.get("business_model_dna"),
+    }
+
+
+@mcp.tool
+def stock_health(stock_id: str) -> dict:
+    """個股「老師財報體檢」總評(純規則、免 AI 金鑰)。
+
+    抓最新一季財報 → 6 大模組(存活/營運/獲利/財務結構/償債/進階診斷)純數學計算 →
+    綜合評級 A+/A/B+/C/F + 生死指標通過/警示清單。與網頁「個股 → 財報體檢」同一引擎。
+
+    Args:
+        stock_id: 台股代碼(如 "2330")。
+
+    Returns:
+        {ok, as_of, stock_id, grade, score_pct, headline, comment, pass_items,
+         fail_items, business_model_dna}。
+        財報抓不到 / 為空 → ok=False + error,**不編造體質評級**(§1 fail-loud)。
+    """
+    return _stock_health_impl(stock_id)
 
 
 if __name__ == "__main__":

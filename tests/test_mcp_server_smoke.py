@@ -23,16 +23,19 @@ import pytest
 pytest.importorskip("fastmcp")
 
 
-# ── 1. 結構:模組 + 工具註冊 ─────────────────────────────────────
-def test_server_module_and_tool_registered():
+# ── 1. 結構:模組 + 3 工具註冊 ───────────────────────────────────
+def test_server_module_and_tools_registered():
     from fastmcp import FastMCP
 
     from mcp_server import server
     assert isinstance(server.mcp, FastMCP)
+    for _name in ("screen_stocks", "forward_test_reconcile", "stock_health"):
+        # fastmcp 3.x:get_tool(name) 為 coroutine,回 FunctionTool
+        _tool = asyncio.run(server.mcp.get_tool(_name))
+        assert getattr(_tool, "name", None) == _name
     assert callable(server._screen_stocks_impl)
-    # fastmcp 3.x:get_tool(name) 為 coroutine,回 FunctionTool
-    tool = asyncio.run(server.mcp.get_tool("screen_stocks"))
-    assert getattr(tool, "name", None) == "screen_stocks"
+    assert callable(server._forward_test_reconcile_impl)
+    assert callable(server._stock_health_impl)
 
 
 # ── 2. JSON 序列化:NaN→None、numpy→py ──────────────────────────
@@ -102,6 +105,77 @@ def test_screen_stocks_invalid_factor_falls_back(monkeypatch):
     monkeypatch.setattr(fss, "get_ranked_picks", _fake)
     server._screen_stocks_impl(["bogus_factor"], 5)   # 全非法 → 應 fallback 全 5 因子
     assert _seen["factors"] == list(fss.SCREEN_ANGLE_LABELS.values())
+
+
+# ── 5. forward_test_reconcile:有對帳資料 → numpy 經 _json_safe ──
+def test_forward_test_reconcile_shape(monkeypatch):
+    import src.services.forward_test_service as fts
+    from mcp_server import server
+
+    _df = pd.DataFrame({"cohort": ["2026-06-01"],
+                        "pick_return_pct": [np.float64(4.2)],
+                        "bench_return_pct": [1.8]})
+    monkeypatch.setattr(fts, "reconcile_all",
+                        lambda: (_df, {"n_cohorts": 1, "alpha_pct": np.float64(2.4)}))
+    out = server._forward_test_reconcile_impl()
+    assert out["ok"] is True
+    assert out["cohorts"][0]["cohort"] == "2026-06-01"
+    assert out["cohorts"][0]["pick_return_pct"] == 4.2      # numpy→py
+    assert out["overall"]["alpha_pct"] == 2.4               # numpy→py(遞迴 _json_safe)
+
+
+# ── 5b. forward_test_reconcile:無凍結 → ok=True + note,不偽造績效 ──
+def test_forward_test_reconcile_empty(monkeypatch):
+    import src.services.forward_test_service as fts
+    from mcp_server import server
+
+    monkeypatch.setattr(fts, "reconcile_all",
+                        lambda: (pd.DataFrame(), {"n_cohorts": 0, "note": "尚無凍結選股紀錄"}))
+    out = server._forward_test_reconcile_impl()
+    assert out["ok"] is True
+    assert out["cohorts"] == []                            # 空,不偽造 cohort
+    assert "尚無" in out["overall"]["note"]
+
+
+# ── 6. stock_health:空 id → ok=False ────────────────────────────
+def test_stock_health_empty_id():
+    from mcp_server import server
+    out = server._stock_health_impl("")
+    assert out["ok"] is False
+
+
+# ── 6b. stock_health:財報 error → ok=False,不編造評級(§1)──────
+def test_stock_health_fail_loud_on_error_findata(monkeypatch):
+    import src.data.core.financial_statements_fetcher as ffs
+    from mcp_server import server
+
+    monkeypatch.setattr(ffs, "fetch_financial_statements",
+                        lambda sid, token="": {"error": "FinMind quota 用罄"})
+    out = server._stock_health_impl("2330")
+    assert out["ok"] is False
+    assert "quota" in out["error"]
+    assert "grade" not in out          # §1:缺料不得產生體質評級(headless smoke 曾誤回 B+)
+
+
+# ── 6c. stock_health:正常 → ok=True + grade ─────────────────────
+def test_stock_health_happy(monkeypatch):
+    import src.data.core.financial_statements_fetcher as ffs
+    import src.services.financial_health_engine as fhe
+    from mcp_server import server
+
+    monkeypatch.setattr(ffs, "fetch_financial_statements",
+                        lambda sid, token="": {"revenue": 100})   # 非 error
+    monkeypatch.setattr(fhe, "analyze_financial_health",
+                        lambda k, sid, fd, **kw: {"business_model_dna": "A+ 印鈔機"})
+    monkeypatch.setattr(fhe, "no_ai_overall_verdict",
+                        lambda fd, fh: {"grade": "A+", "score_pct": 90,
+                                        "headline": "🟢 印鈔機", "comment": "體質堅實",
+                                        "pass_items": ["氣長"], "fail_items": []})
+    out = server._stock_health_impl("2330")
+    assert out["ok"] is True
+    assert out["stock_id"] == "2330"
+    assert out["grade"] == "A+" and out["score_pct"] == 90
+    assert out["business_model_dna"] == "A+ 印鈔機"
 
 
 if __name__ == "__main__":
