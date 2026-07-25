@@ -47,9 +47,24 @@ def test_format_signal_message():
             "2317": {"ok": False}}       # 缺技術
     msg = format_signal_message(picks, tech, as_of="2026-07-25 14:40")
     assert "2330 台積電" in msg and "綜合分 88" in msg
-    assert "RSI 61" in msg and "距MA20 +2.3%" in msg
+    assert "RSI 61" in msg and "距月線 +2.3%" in msg and "592元" in msg
     assert "技術資料不足" in msg          # 2317 缺技術 → 明示不臆造
     assert "🟢" in msg and "⚪" in msg     # 趨勢燈號(客觀 MA 排列)
+    assert "基本面" not in msg            # 精簡:不列基本面內部分數(綜合分已代表)
+    assert "MACD" not in msg              # 精簡:MACD 原始值(隨股價亂跳)不列
+
+
+def test_no_nan_leak():
+    """v20-PUSH.1 回歸釘:缺料因子在 pandas 裡是 NaN(非 None)→ 不得印出「nan」。"""
+    from src.compute.notify.signal_message import format_signal_message
+    picks = [{"代碼": "6223", "名稱": "", "綜合分": 85.8, "估值分": float("nan")}]
+    tech = {"6223": {"ok": True, "price": 5705, "ma_bull": False,
+                     "bias20_pct": float("nan"), "rsi": 43.0, "kd_gold": True}}
+    msg = format_signal_message(picks, tech, as_of="x")
+    assert "nan" not in msg.lower()       # NaN 一律不外流
+    assert "距月線" not in msg             # bias=NaN → 該欄略過(不腦補)
+    assert "RSI 43" in msg                 # 有值的照顯示
+    assert "6223" in msg and "綜合分 85.8" in msg
 
 
 def test_format_empty_message():

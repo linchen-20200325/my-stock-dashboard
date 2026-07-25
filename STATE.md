@@ -1,5 +1,12 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔧 2026-07-25 推播訊息精簡 + nan bug 修(v20-PUSH.1,user 實機收到後「數字太多、有 nan」)
+
+推播上線後 user 實機回饋兩點,#574 已 merged → 從 main 重開分支當新變更修:
+- **nan bug(真 bug)**:`signal_message._num` 用 `x is not None` 判斷,但 pandas 把缺料因子存成 **NaN(非 None)**,`float(nan)` 騙過判斷 → 印出「估值 nan」。修:`_num` 加 `math.isnan` → NaN 一律回 None(§1 缺料不顯示、不印 nan)。新增 `test_no_nan_leak` 回歸釘。
+- **精簡(user「數字太多」)**:每檔從 3 行 ~10 數字 → **2 行**:①趨勢燈+代碼名稱+綜合分 ②現價元/距月線%/RSI/KD 方向。拿掉基本面 5 項內部分數(綜合分已代表)+ MACD 柱狀原始值(隨股價尺度亂跳、不可跨股比較);`距MA20`→`距月線`、`現價 592`→`592元`;無中文名不留尾空格。
+- 純 L2 `signal_message.py` 改 + 測試;`test_daily_signal_push.py` 11 綠(斷言 `基本面`/`MACD` 不出現、nan 不外流)。**技術快照 kernel 不動**(MACD 仍算、只是不顯示,要加回極快)。
+
 ## 🏆 2026-07-25 每日選股訊號推播(LINE / Telegram,v20-PUSH,user「收盤後自動把今天訊號推到手機、要含技術分析」→「改 line 推播」)
 
 kevin801221/stock-strategies-only(每日收盤後推 Telegram)啟發。user 明確要「推的是**選股清單選出的股票 + 技術分析資料**」,後又指定「改 **LINE** 推播」。誠實釐清 ①選股清單因子(估值/EPS/缺貨/RS/跨季)**非純技術面**,故技術面另算一層;②**LINE Notify 已於 2025-03-31 停用** → LINE 走 **Messaging API**(需官方帳號 channel token + userId)。§7/§8 對齊後落地(管道由 `NOTIFY_CHANNEL` 選,預設 line,Telegram 保留為備援):
