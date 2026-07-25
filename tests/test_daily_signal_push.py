@@ -47,15 +47,69 @@ def test_format_signal_message():
             "2317": {"ok": False}}       # 缺技術
     msg = format_signal_message(picks, tech, as_of="2026-07-25 14:40")
     assert "2330 台積電" in msg and "綜合分 88" in msg
-    assert "RSI 61" in msg and "距MA20 +2.3%" in msg
+    assert "RSI 61" in msg and "距月線 +2.3%" in msg and "592元" in msg
     assert "技術資料不足" in msg          # 2317 缺技術 → 明示不臆造
     assert "🟢" in msg and "⚪" in msg     # 趨勢燈號(客觀 MA 排列)
+    assert "基本面" not in msg            # 精簡:不列基本面內部分數(綜合分已代表)
+    assert "MACD" not in msg              # 精簡:MACD 原始值(隨股價亂跳)不列
+
+
+def test_no_nan_leak():
+    """v20-PUSH.1 回歸釘:缺料因子在 pandas 裡是 NaN(非 None)→ 不得印出「nan」。"""
+    from src.compute.notify.signal_message import format_signal_message
+    picks = [{"代碼": "6223", "名稱": "", "綜合分": 85.8, "估值分": float("nan")}]
+    tech = {"6223": {"ok": True, "price": 5705, "ma_bull": False,
+                     "bias20_pct": float("nan"), "rsi": 43.0, "kd_gold": True}}
+    msg = format_signal_message(picks, tech, as_of="x")
+    assert "nan" not in msg.lower()       # NaN 一律不外流
+    assert "距月線" not in msg             # bias=NaN → 該欄略過(不腦補)
+    assert "RSI 43" in msg                 # 有值的照顯示
+    assert "6223" in msg and "綜合分 85.8" in msg
 
 
 def test_format_empty_message():
     from src.compute.notify.signal_message import format_empty_message
     msg = format_empty_message(as_of="2026-07-25 14:40", reason="季快照未就緒")
     assert "今日無訊號" in msg and "季快照未就緒" in msg
+
+
+# ── 趨勢徽章:財報變好/變差 + 缺貨動能 ───────────────────────────
+def test_fundamental_trend_badge():
+    from src.compute.notify.signal_message import format_fundamental_trend
+    assert format_fundamental_trend({"favorable_count": 4, "favorable_of": 4}) == "📈財報變好"
+    assert format_fundamental_trend({"favorable_count": 0, "favorable_of": 4}) == "📉財報轉弱"
+    assert format_fundamental_trend({"favorable_count": 2, "favorable_of": 4}) == "➡️財報持平"
+    assert format_fundamental_trend({"favorable_count": 0, "favorable_of": 0}) == ""   # 無資料不臆造
+    assert format_fundamental_trend(None) == ""
+
+
+def test_shortage_badge():
+    from shared.shortage_screen_thresholds import (
+        TIER_INSUFFICIENT, TIER_MID, TIER_STRONG, TIER_WEAK,
+    )
+
+    from src.compute.notify.signal_message import format_shortage_badge
+    assert format_shortage_badge(TIER_STRONG) == "缺貨強"
+    assert format_shortage_badge(TIER_MID) == "缺貨中"
+    assert format_shortage_badge(TIER_WEAK) == "缺貨弱"
+    assert format_shortage_badge(TIER_INSUFFICIENT) == ""   # 資料不足 → 略(不臆造)
+    assert format_shortage_badge(None) == ""
+
+
+def test_format_message_with_trend_and_shortage():
+    from shared.shortage_screen_thresholds import TIER_STRONG
+
+    from src.compute.notify.signal_message import format_signal_message
+    picks = [{"代碼": "6944", "名稱": "兆聯實業", "綜合分": 80.4}]
+    tech = {"6944": {"ok": True, "price": 786, "ma_bull": True, "bias20_pct": 4.2,
+                     "rsi": 55, "kd_gold": True}}
+    msg = format_signal_message(
+        picks, tech, as_of="2026-07-25 14:40",
+        trend_by_code={"6944": {"favorable_count": 4, "favorable_of": 4}},
+        shortage_by_code={"6944": TIER_STRONG})
+    assert "📈財報變好" in msg          # 財報趨勢徽章(標題行)
+    assert "缺貨強" in msg               # 缺貨徽章(技術行尾)
+    assert "786元" in msg and "6944 兆聯實業" in msg
 
 
 # ── 分塊(Telegram / LINE 共用)──────────────────────────────────

@@ -1,5 +1,21 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏆 2026-07-25 推播加「趨勢」徽章:財報變好/變差 + 缺貨動能(v20-PUSH.2,user「想加變好變差、可觀察,像 MJ 健檢 + 缺貨變多變少」)
+
+user 要每檔加趨勢/轉機。誠實界定資料後(§7 對齊)落地,版面經 AskUserQuestion 選「併入兩行」:
+- **財報趨勢(變好/持平/轉弱)**:走現成 `cross_quarter_trends`(近 5 季 毛利率↑/營益率↑/負債比↓/營收YoY↑ 的 `favorable_count`)—— **從季快照算、零逐檔網路**。⚠️ 誠實:這是「毛利/營收/負債逐季方向」,**非** MJ 健檢 A→B 等級 diff(那要逐檔 2 季完整健檢,重很多);但抓的正是體質核心。門檻 `favorable_count/of ≥0.75→📈變好、≤0.25→📉轉弱`(命名常數,§3.3)。
+- **缺貨動能(強/中/弱)**:走缺貨 tier(合約負債增溫/存貨去化/毛利改善/營收成長)。⚠️ 誠實:這是「**當期缺貨動能強度**」非「vs 上次 delta」(無歷史存檔);tier 對映走 `shared.shortage_screen_thresholds` SSOT。
+- **版面(每檔 2 行)**:行1 加 `📈財報變好` 於綜合分後、行2 尾加 `缺貨強`。§1:任一資料缺 → 徽章自動略(不臆造);無缺貨資料的股正確不顯示缺貨徽章。
+- **分層(§8.2)**:純 L2 `signal_message.py` 加 `format_fundamental_trend`/`format_shortage_badge`;orchestrator 明確抓 `run_shortage_scan`+`get_cross_quarter_trends`(缺貨並傳入選股避免重掃),建查表傳入組字。零回歸。
+- **驗證**:`test_daily_signal_push.py` 14 綠(財報趨勢門檻 + 缺貨 tier 對映 + 含徽章組字);用 user 實機 10 檔渲染確認 2 行、缺料略徽章。
+
+## 🔧 2026-07-25 推播訊息精簡 + nan bug 修(v20-PUSH.1,user 實機收到後「數字太多、有 nan」)
+
+推播上線後 user 實機回饋兩點,#574 已 merged → 從 main 重開分支當新變更修:
+- **nan bug(真 bug)**:`signal_message._num` 用 `x is not None` 判斷,但 pandas 把缺料因子存成 **NaN(非 None)**,`float(nan)` 騙過判斷 → 印出「估值 nan」。修:`_num` 加 `math.isnan` → NaN 一律回 None(§1 缺料不顯示、不印 nan)。新增 `test_no_nan_leak` 回歸釘。
+- **精簡(user「數字太多」)**:每檔從 3 行 ~10 數字 → **2 行**:①趨勢燈+代碼名稱+綜合分 ②現價元/距月線%/RSI/KD 方向。拿掉基本面 5 項內部分數(綜合分已代表)+ MACD 柱狀原始值(隨股價尺度亂跳、不可跨股比較);`距MA20`→`距月線`、`現價 592`→`592元`;無中文名不留尾空格。
+- 純 L2 `signal_message.py` 改 + 測試;`test_daily_signal_push.py` 11 綠(斷言 `基本面`/`MACD` 不出現、nan 不外流)。**技術快照 kernel 不動**(MACD 仍算、只是不顯示,要加回極快)。
+
 ## 🏆 2026-07-25 每日選股訊號推播(LINE / Telegram,v20-PUSH,user「收盤後自動把今天訊號推到手機、要含技術分析」→「改 line 推播」)
 
 kevin801221/stock-strategies-only(每日收盤後推 Telegram)啟發。user 明確要「推的是**選股清單選出的股票 + 技術分析資料**」,後又指定「改 **LINE** 推播」。誠實釐清 ①選股清單因子(估值/EPS/缺貨/RS/跨季)**非純技術面**,故技術面另算一層;②**LINE Notify 已於 2025-03-31 停用** → LINE 走 **Messaging API**(需官方帳號 channel token + userId)。§7/§8 對齊後落地(管道由 `NOTIFY_CHANNEL` 選,預設 line,Telegram 保留為備援):

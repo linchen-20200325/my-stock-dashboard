@@ -65,6 +65,7 @@ def main(argv=None) -> int:
     from src.data.stock.picker_fetcher import fetch_stock_history_1y
     from src.services.fundamental_screener_service import (
         SCREEN_ANGLE_LABELS,
+        get_cross_quarter_trends,
         get_ranked_picks,
     )
 
@@ -81,9 +82,23 @@ def main(argv=None) -> int:
     print(f"[push_signals] as_of={_as_of} top_n={args.top_n} factors={_factors}")
 
     _pe, _nm = _build_pe_name_maps()
+    # 缺貨掃描 + 跨季財報趨勢:明確抓一次(供訊息徽章;缺貨並傳入選股避免重掃)
+    _shortage_rows = None
+    if "shortage" in _factors:
+        try:
+            from src.services.shortage_screener_service import run_shortage_scan
+            _shortage_rows = run_shortage_scan()[0]
+        except Exception as _es:  # noqa: BLE001 — 缺貨掃描失敗 → 無徽章,不炸
+            print(f"[push_signals] 缺貨掃描失敗:{type(_es).__name__}: {_es}", file=sys.stderr)
+    try:
+        _trend_df = get_cross_quarter_trends()
+    except Exception as _et:  # noqa: BLE001 — 跨季快照缺 → 無財報趨勢徽章,不炸
+        print(f"[push_signals] 跨季趨勢不可用:{type(_et).__name__}: {_et}", file=sys.stderr)
+        _trend_df = None
     try:
         _cands, _note = get_ranked_picks(_factors, top_n=max(int(args.top_n), 300),
-                                         pe_map=_pe, name_map=_nm, auto_fetch=True)
+                                         pe_map=_pe, name_map=_nm,
+                                         shortage_rows=_shortage_rows, auto_fetch=True)
     except Exception as _e:  # noqa: BLE001 — 選股整體失敗 → 硬錯
         print(f"[push_signals] ❌ 選股失敗:{type(_e).__name__}: {_e}", file=sys.stderr)
         return 1
@@ -104,7 +119,14 @@ def main(argv=None) -> int:
                 print(f"[push_signals] {_code} 抓價/技術失敗:{type(_e).__name__}: {_e}",
                       file=sys.stderr)
                 _tech[_code] = {"ok": False, "note": "抓價失敗"}
-        _msg = format_signal_message(_picks, _tech, as_of=_as_of)
+        # 財報趨勢 / 缺貨 tier 查表(§1:缺料的股不在表 → 徽章自動略)
+        _trend_by: dict = {}
+        if _trend_df is not None and not _trend_df.empty:
+            for _r in _trend_df.to_dict("records"):
+                _trend_by[str(_r.get("stock_id"))] = _r
+        _short_by = {str(_r.get("代碼")): _r.get("_tier") for _r in (_shortage_rows or [])}
+        _msg = format_signal_message(_picks, _tech, as_of=_as_of,
+                                     trend_by_code=_trend_by, shortage_by_code=_short_by)
 
     if args.dry_run:
         print("----- DRY RUN(未送)-----")
