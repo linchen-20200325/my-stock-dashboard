@@ -1,5 +1,14 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏆 2026-07-25 推播加「趨勢」徽章:財報變好/變差 + 缺貨動能(v20-PUSH.2,user「想加變好變差、可觀察,像 MJ 健檢 + 缺貨變多變少」)
+
+user 要每檔加趨勢/轉機。誠實界定資料後(§7 對齊)落地,版面經 AskUserQuestion 選「併入兩行」:
+- **財報趨勢(變好/持平/轉弱)**:走現成 `cross_quarter_trends`(近 5 季 毛利率↑/營益率↑/負債比↓/營收YoY↑ 的 `favorable_count`)—— **從季快照算、零逐檔網路**。⚠️ 誠實:這是「毛利/營收/負債逐季方向」,**非** MJ 健檢 A→B 等級 diff(那要逐檔 2 季完整健檢,重很多);但抓的正是體質核心。門檻 `favorable_count/of ≥0.75→📈變好、≤0.25→📉轉弱`(命名常數,§3.3)。
+- **缺貨動能(強/中/弱)**:走缺貨 tier(合約負債增溫/存貨去化/毛利改善/營收成長)。⚠️ 誠實:這是「**當期缺貨動能強度**」非「vs 上次 delta」(無歷史存檔);tier 對映走 `shared.shortage_screen_thresholds` SSOT。
+- **版面(每檔 2 行)**:行1 加 `📈財報變好` 於綜合分後、行2 尾加 `缺貨強`。§1:任一資料缺 → 徽章自動略(不臆造);無缺貨資料的股正確不顯示缺貨徽章。
+- **分層(§8.2)**:純 L2 `signal_message.py` 加 `format_fundamental_trend`/`format_shortage_badge`;orchestrator 明確抓 `run_shortage_scan`+`get_cross_quarter_trends`(缺貨並傳入選股避免重掃),建查表傳入組字。零回歸。
+- **驗證**:`test_daily_signal_push.py` 14 綠(財報趨勢門檻 + 缺貨 tier 對映 + 含徽章組字);用 user 實機 10 檔渲染確認 2 行、缺料略徽章。
+
 ## 🔧 2026-07-25 推播訊息精簡 + nan bug 修(v20-PUSH.1,user 實機收到後「數字太多、有 nan」)
 
 推播上線後 user 實機回饋兩點,#574 已 merged → 從 main 重開分支當新變更修:

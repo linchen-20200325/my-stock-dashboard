@@ -73,6 +73,45 @@ def test_format_empty_message():
     assert "今日無訊號" in msg and "季快照未就緒" in msg
 
 
+# ── 趨勢徽章:財報變好/變差 + 缺貨動能 ───────────────────────────
+def test_fundamental_trend_badge():
+    from src.compute.notify.signal_message import format_fundamental_trend
+    assert format_fundamental_trend({"favorable_count": 4, "favorable_of": 4}) == "📈財報變好"
+    assert format_fundamental_trend({"favorable_count": 0, "favorable_of": 4}) == "📉財報轉弱"
+    assert format_fundamental_trend({"favorable_count": 2, "favorable_of": 4}) == "➡️財報持平"
+    assert format_fundamental_trend({"favorable_count": 0, "favorable_of": 0}) == ""   # 無資料不臆造
+    assert format_fundamental_trend(None) == ""
+
+
+def test_shortage_badge():
+    from shared.shortage_screen_thresholds import (
+        TIER_INSUFFICIENT, TIER_MID, TIER_STRONG, TIER_WEAK,
+    )
+
+    from src.compute.notify.signal_message import format_shortage_badge
+    assert format_shortage_badge(TIER_STRONG) == "缺貨強"
+    assert format_shortage_badge(TIER_MID) == "缺貨中"
+    assert format_shortage_badge(TIER_WEAK) == "缺貨弱"
+    assert format_shortage_badge(TIER_INSUFFICIENT) == ""   # 資料不足 → 略(不臆造)
+    assert format_shortage_badge(None) == ""
+
+
+def test_format_message_with_trend_and_shortage():
+    from shared.shortage_screen_thresholds import TIER_STRONG
+
+    from src.compute.notify.signal_message import format_signal_message
+    picks = [{"代碼": "6944", "名稱": "兆聯實業", "綜合分": 80.4}]
+    tech = {"6944": {"ok": True, "price": 786, "ma_bull": True, "bias20_pct": 4.2,
+                     "rsi": 55, "kd_gold": True}}
+    msg = format_signal_message(
+        picks, tech, as_of="2026-07-25 14:40",
+        trend_by_code={"6944": {"favorable_count": 4, "favorable_of": 4}},
+        shortage_by_code={"6944": TIER_STRONG})
+    assert "📈財報變好" in msg          # 財報趨勢徽章(標題行)
+    assert "缺貨強" in msg               # 缺貨徽章(技術行尾)
+    assert "786元" in msg and "6944 兆聯實業" in msg
+
+
 # ── 分塊(Telegram / LINE 共用)──────────────────────────────────
 def test_split_chunks():
     from src.data.notify.chunk import split_chunks
