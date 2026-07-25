@@ -1,5 +1,33 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏆 2026-07-25 每日選股訊號推播(LINE / Telegram,v20-PUSH,user「收盤後自動把今天訊號推到手機、要含技術分析」→「改 line 推播」)
+
+kevin801221/stock-strategies-only(每日收盤後推 Telegram)啟發。user 明確要「推的是**選股清單選出的股票 + 技術分析資料**」,後又指定「改 **LINE** 推播」。誠實釐清 ①選股清單因子(估值/EPS/缺貨/RS/跨季)**非純技術面**,故技術面另算一層;②**LINE Notify 已於 2025-03-31 停用** → LINE 走 **Messaging API**(需官方帳號 channel token + userId)。§7/§8 對齊後落地(管道由 `NOTIFY_CHANNEL` 選,預設 line,Telegram 保留為備援):
+
+- **選股同源(§8 SSOT)**:cron 走**同一支** `get_ranked_picks`(鏡像 forward_test cron 的 `_build_pe_name_maps`)→ 推播選股 = 網頁「🎯開始選股」= 每月凍結 = MCP `screen_stocks`,四處同源不漂移。
+- **技術面(誠實修正)**:原想複用「一眼判讀卡」`compute_stock_section_levels` —— 那吃財報+籌碼+先行指標,headless 每檔太重。**改純價格衍生技術面** `build_technical_snapshot`(L2):MA5/20/60 多頭排列 / 距 MA20 乖離% / RSI / KD / MACD 柱,**全複用既有 kernel**(`calc_rsi`/`calc_kd`/`calc_ma_series`/`compute_macd`,§3.3 不新增演算法),每檔只抓一次價(`fetch_stock_history_1y`,forward_test 已用)。
+- **分層(§8.2,全新增零回歸)**:L2 純函式 `src/compute/notify/{technical_snapshot,signal_message}.py`(技術快照 + 組字,無 I/O)→ L1 `src/data/notify/`:`chunk.py`(分塊,LINE/TG 共用)+ `line_notify.py`(LINE Messaging API push,5000 字/5 則批次)+ `telegram_notify.py`(備援)+ `dispatch.py`(依 `NOTIFY_CHANNEL` 路由)→ orchestrator `scripts/push_daily_signals.py`(同 app.py/cron 可跨層)→ cron `.github/workflows/push_daily_signals.yml`(UTC 09:00 = TW 17:00 收盤後)。
+- **§1 fail-loud**:季快照未就緒/存活池空 → 推「今日無訊號+原因」不偽造清單(exit 0);某股抓不到價 → 技術面標「資料不足」不腦補、不影響其他股;推播 secret 缺(LINE/TG token)→ send raise → cron 紅燈不靜默。趨勢燈號僅反映**客觀 MA 排列事實**,文案明標「非個人化買賣建議」。
+- **⚠️ 反面教材(不學)**:kevin 專案「綜合分 = 基本面30%+技術面30%+**回測勝率40%**」—— 回測 40% 權重 = 存活者偏誤 + 過度配適,正是本專案 v18.265 拔掉、改前進式驗證的那類。**不退回**。
+- **⚠️ 已知限制**:cron 排 Mon-Fri 未濾 TW 國定假日(無第三方 trading calendar,§4.5);假日推的清單資料日期未更新(訊息帶 as_of 可辨識)。
+- **user 端設定(GitHub Secrets)**:LINE(主)`LINE_CHANNEL_ACCESS_TOKEN` + `LINE_USER_ID`;Telegram(備援,選)`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`(見 `docs/push_daily_signals.md`)。未設 → cron fail-loud 提醒,設了即每日推。
+- **驗證**:`tests/test_daily_signal_push.py` 10 綠(技術快照趨勢/缺料不臆造 + 組字缺技術顯示「資料不足」+ 空清單 + 分塊 + LINE/Telegram send 缺 secret/非 200 raise + dispatch 依 NOTIFY_CHANNEL 路由);orchestrator main() 全 mock 端到端跑通兩路徑(LINE 送出 `api.line.me/v2/bot/message/push` 正確 + 缺 secret fail-loud、exit 0);pyflakes 乾淨;全套 pytest 綠。**MCP(#574)按 user 要求暫擱**,本推播功能同分支續建。
+
+## 🏆 2026-07-25 MCP Server 首波+二波：把資料層做成「無頭第二前端」(v20-MCP,user 看 CasualMarket 後「好,啟動」→「接著做第二波」)
+
+user 看 GitHub `topics/stock`(多為中國 A 股 + 回測/量化,方向與本專案相反,WONTFIX)+ `sacahan/CasualMarket`(台股 MCP server)後,唯一真正值得學的 = **「把資料層包成 MCP server」交付模式**——且我們資料層更硬(多源 fallback + provenance + PIT + fail-loud,CasualMarket 只單源 TWSE)。經 §8.1 可行性草圖 → user 核准 → §8.5 一次一模組落地首波:
+
+- **定位(§8.2)**:新增 `mcp_server/`(root 級 orchestrator,同 `app.py` L6 / `scripts/` cron 的 sibling)。**現有 L1/L2/L3/UI 一行不動**,純新增 adapter → 零回歸。依賴方向 `MCP → L3 → L1` 合憲(不直呼 L1、不反向 import)。
+- **工具(唯讀 3 個)**:
+  - **首波** `screen_stocks(factors, top_n)` — 全台股基本面選股綜合排名。**鏡像 cron `update_forward_test_freeze._build_pe_name_maps` + 走同一支 L3 `get_ranked_picks`** → 保證「MCP 選股 = 畫面『🎯 開始選股』= 每月凍結」三處同源(§8 SSOT)。
+  - **二波** `forward_test_reconcile()` — 凍結過的選股 vs 0050 事後對帳(`reconcile_all`,cron 已實證無頭:本地 parquet ∪ gsheet graceful skip)。
+  - **二波** `stock_health(stock_id)` — 個股「老師財報體檢」總評(`fetch_financial_statements` → `analyze_financial_health(api_key="")` 純規則 → `no_ai_overall_verdict`,免金鑰)。**§1 關鍵防呆**:headless smoke 揭露 error fin_data 會誤回「B+」評級 → 工具**先擋 `fin_data.error` 才呼叫引擎**,缺料回 `ok:false` 不編造評級。
+- **§1 fail-loud**:季快照未就緒 / 存活池空 / 上游全敗 → 回 `ok:false` + 具體 reason,**不編造清單**;工具例外轉結構化錯誤(帶 source),不崩 server 不吞。JSON 序列化 NaN→None(缺料因子留空**不填 0**)。provenance:回傳帶 `as_of`(UTC 抓取時間)。
+- **無頭安全確認**:`fundamental_screener_service` 只用 `@st.cache_data`(EX-CACHE-1),無 `session_state`/無真 UI → 可脫離 Streamlit 執行(cron 已實證)。
+- **交付範式誠實界定**:這是「多開一扇對話門」(在 Claude Desktop / Cursor 用),**非**網頁多一顆按鈕。`fastmcp` 放獨立 `requirements-mcp.txt`,**不進** Streamlit Cloud 部署(雲端不多裝一包)。
+- **過度設計自評(§8.1 step6,先不做)**:模擬下單/紙上交易、Docker+SSE remote、auth/rate-limit、一次包 24 個 service — 全列「等有需求再加」。**第三波候選**(未做):總經紅綠燈(`macro_state_locker`,需先補無頭編排 —— headless 跑 macro 抓取 + `calc_traffic_light` 產 `warroom_summary`,不靠 session_state)。
+- **驗證**:`tests/test_mcp_server_smoke.py` **10 綠**(3 工具註冊 + `_json_safe` NaN→None/numpy→py + 三工具各自 fail-loud 契約:選股空/對帳無凍結不偽造/財報 error 不編造評級 + 非法 factor fallback);fastmcp in-memory Client 實測 3 工具 MCP 協定往返通。新增檔:`mcp_server/{__init__,server}.py` + `mcp_server/README.md`(Claude Desktop 掛載說明)+ `requirements-mcp.txt`。全套 pytest **3428 passed / 0 fail**。
+
 ## 🏆 2026-07-24 全 App 面板重組 v20：AI 觸點去重 + 持股% 單一引擎 SSOT（v19.168,user「重新分類整合所有 tab、資訊重複繁雜」）
 
 3 組審計 AI 逐頁盤點 11 葉節點 tab + 2 組對抗驗證 AI 挑戰後,核心發現:真正的痛不是箱子多,而是**同一資訊在整個 App 重複 4~18 次**(AI 觸點 ~18、市場 regime 4~5、資料新鮮度 5+、持股% 四處不同數)。經 user 確認方向 B(Tier1 安全去重 + 持股% 根因),落地 5 刀(PR #572,全綠 3417 passed):
