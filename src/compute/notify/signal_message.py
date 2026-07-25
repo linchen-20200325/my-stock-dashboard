@@ -4,11 +4,12 @@
 (`build_technical_snapshot`)+ 跨季財報趨勢(`cross_quarter_trends`)+ 缺貨 tier
 → 組成手機推播純文字訊息(每檔 2 行)。
 
-版面(v20-PUSH.2,user 選「趨勢併入兩行」):
+版面(v20-PUSH.3,加中文名 fallback + 籌碼第 3 行):
   行1  {趨勢燈} {代碼} {名稱}  {綜合分} {📈財報變好/➡️持平/📉轉弱}
   行2  {現價}元 · 距月線% · RSI · KD方向 · {缺貨強/中/弱}
+  行3  籌碼 {🔥大戶吸籌/🔴大戶倒貨/🟡籌碼發散} · {大戶XX.X%↑↓}   ← 兩者皆缺則不印此行
 
-§1 fail-loud:缺料(技術/趨勢/缺貨任一)→ 略過該徽章 / 顯示「技術資料不足」(**不腦補、
+§1 fail-loud:缺料(技術/趨勢/缺貨/籌碼任一)→ 略過該徽章 / 顯示「技術資料不足」(**不腦補、
 不印 nan**);清單為空 → `format_empty_message` 明講原因,不偽造清單。
 §8.2 L2:無 I/O、無 streamlit。趨勢燈與徽章僅反映**客觀計算事實**,非買賣建議。
 """
@@ -68,6 +69,34 @@ def format_shortage_badge(tier) -> str:
     return _SHORTAGE_LABEL.get(str(tier).strip(), "") if tier else ""
 
 
+def format_chip_line(chip: dict | None) -> str:
+    """籌碼徽章一行:法人 20 日流向 + 大戶持股比例%(附週變化箭頭)。
+
+    chip = {"flow": analyze_20d_chips_from_df 輸出 dict | None,
+            "holder": {"pct": float, "delta": float | None} | None}。
+    §1:兩者皆缺 / 資料不足 → 回 ''(**不硬印「籌碼資料不足」佔行**、不腦補數字)。
+    """
+    if not chip:
+        return ""
+    parts: list[str] = []
+    # 法人 20 日流向(signal 已含 emoji;error / 資料不足 / 計算失敗 → 略)
+    flow = chip.get("flow") or {}
+    if isinstance(flow, dict):
+        _sig = str(flow.get("signal") or "").strip()
+        if _sig and not flow.get("error") and "資料不足" not in _sig and "計算失敗" not in _sig:
+            parts.append(_sig)
+    # 大戶持股比例%(集保 >400 張大股東;附週變化 ↑↓,平盤不加箭頭)
+    holder = chip.get("holder") or {}
+    _pct = _num(holder.get("pct"))
+    if _pct is not None:
+        _delta = _num(holder.get("delta"))
+        _arrow = ""
+        if _delta is not None:
+            _arrow = "↑" if _delta > 0.05 else ("↓" if _delta < -0.05 else "")
+        parts.append(f"大戶{_pct:.1f}%{_arrow}")
+    return "籌碼 " + " · ".join(parts) if parts else ""
+
+
 def format_technical_line(snap: dict) -> str:
     """一檔技術快照 → 一行技術面文字(缺料的欄自動略過;全缺 → 「技術資料不足」)。"""
     if not snap or not snap.get("ok"):
@@ -90,19 +119,23 @@ def format_technical_line(snap: dict) -> str:
 def format_signal_message(picks: list[dict], tech_by_code: dict, *,
                           as_of: str, regime: str | None = None,
                           trend_by_code: dict | None = None,
-                          shortage_by_code: dict | None = None) -> str:
-    """選股清單 + 技術快照 + 財報趨勢 + 缺貨 tier → 手機推播純文字(每檔 2 行)。
+                          shortage_by_code: dict | None = None,
+                          chip_by_code: dict | None = None) -> str:
+    """選股清單 + 技術快照 + 財報趨勢 + 缺貨 tier + 籌碼 → 手機推播純文字(每檔 2~3 行)。
 
     Args:
         picks: `get_ranked_picks` 的 df.to_dict('records')(每筆含 代碼/名稱/綜合分)。
         tech_by_code: {股號: build_technical_snapshot 輸出}。
         trend_by_code: {股號: cross_quarter_trends 一列 dict}(選填;無 → 不顯示財報趨勢)。
         shortage_by_code: {股號: 缺貨 tier 字串}(選填;無 → 不顯示缺貨)。
+        chip_by_code: {股號: {"flow": analyze dict, "holder": {"pct","delta"}}}(選填;
+                      無 → 不印籌碼行)。
         as_of: 資料時間(字串,orchestrator 傳入 TW 時間)。
         regime: 總經 regime(選填,顯示於抬頭)。
     """
     trend_by_code = trend_by_code or {}
     shortage_by_code = shortage_by_code or {}
+    chip_by_code = chip_by_code or {}
     head = f"📊 台股選股訊號 · {as_of} · 前 {len(picks)} 名"
     if regime:
         head += f" · 總經 {regime}"
@@ -121,6 +154,10 @@ def format_signal_message(picks: list[dict], tech_by_code: dict, *,
         _tech = format_technical_line(snap)
         _short = format_shortage_badge(shortage_by_code.get(code))
         lines.append("  " + (f"{_tech} · {_short}" if _short else _tech))
+        # 行3:籌碼(法人流向 + 大戶比例);兩者皆缺 → 不印(§1 不佔行)
+        _chip = format_chip_line(chip_by_code.get(code))
+        if _chip:
+            lines.append("  " + _chip)
     lines.append("")
     lines.append("⚠️ 清單訊號,非買賣建議;🟢多頭排列 🟡未站上均線 ⚪資料不足。")
     return "\n".join(lines)

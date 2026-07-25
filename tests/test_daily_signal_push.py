@@ -112,6 +112,97 @@ def test_format_message_with_trend_and_shortage():
     assert "786元" in msg and "6944 兆聯實業" in msg
 
 
+# ── 籌碼徽章:法人流向 + 大戶持股比例%(v20-PUSH.3)──────────────
+def test_format_chip_line():
+    from src.compute.notify.signal_message import format_chip_line
+    # 法人流向(吸籌) + 大戶比例上升
+    c = {"flow": {"signal": "🔥 大戶吸籌", "error": None}, "holder": {"pct": 45.23, "delta": 0.8}}
+    assert format_chip_line(c) == "籌碼 🔥 大戶吸籌 · 大戶45.2%↑"
+    # 只有大戶比例(下降)
+    assert format_chip_line({"flow": None, "holder": {"pct": 30.0, "delta": -1.2}}) == "籌碼 大戶30.0%↓"
+    # 只有法人流向(倒貨)
+    assert format_chip_line({"flow": {"signal": "🔴 大戶倒貨", "error": None},
+                             "holder": None}) == "籌碼 🔴 大戶倒貨"
+    # 大戶比例平盤(|Δ|≤0.05 不加箭頭)、delta 缺
+    assert format_chip_line({"flow": None, "holder": {"pct": 40.0, "delta": None}}) == "籌碼 大戶40.0%"
+    assert format_chip_line({"flow": None, "holder": {"pct": 40.0, "delta": 0.02}}) == "籌碼 大戶40.0%"
+    # 資料不足 / error 的 flow → 略(不臆造)
+    assert format_chip_line({"flow": {"signal": "⚫ 資料不足", "error": "df法人欄全為0"},
+                             "holder": None}) == ""
+    # 全缺 / None → ''
+    assert format_chip_line({"flow": None, "holder": None}) == ""
+    assert format_chip_line(None) == ""
+    # nan pct → 略(§1 不印 nan)
+    assert format_chip_line({"flow": None, "holder": {"pct": float("nan"), "delta": None}}) == ""
+
+
+def test_format_message_with_chips():
+    from src.compute.notify.signal_message import format_signal_message
+    picks = [{"代碼": "6223", "名稱": "旺矽", "綜合分": 84.2}]
+    tech = {"6223": {"ok": True, "price": 5705, "ma_bull": False, "bias20_pct": -10.5,
+                     "rsi": 43, "kd_gold": True}}
+    chip = {"6223": {"flow": {"signal": "🔥 大戶吸籌", "error": None},
+                     "holder": {"pct": 45.2, "delta": 0.8}}}
+    msg = format_signal_message(picks, tech, as_of="x", chip_by_code=chip)
+    assert "籌碼 🔥 大戶吸籌 · 大戶45.2%↑" in msg     # 第 3 行
+    # 未傳 chip → 不印第 3 行(向後相容,舊 caller 無感)
+    assert "籌碼" not in format_signal_message(picks, tech, as_of="x")
+
+
+# ── AI 研判 prompt:餵事實、禁腦補、附免責(v20-PUSH.3)──────────
+def test_ai_judgment_fact_lines():
+    from src.compute.notify.ai_judgment import build_fact_lines
+    picks = [{"代碼": "2330", "名稱": "台積電", "綜合分": 88.0}]
+    tech = {"2330": {"ok": True, "price": 592.0, "ma_bull": True, "bias20_pct": 2.3,
+                     "rsi": 61.0, "kd_gold": True}}
+    lines = build_fact_lines(
+        picks, tech,
+        trend_by_code={"2330": {"favorable_count": 4, "favorable_of": 4}},
+        chip_by_code={"2330": {"flow": {"signal": "🔥 大戶吸籌", "error": None},
+                               "holder": {"pct": 45.2, "delta": 0.8}}})
+    assert len(lines) == 1
+    _l = lines[0]
+    assert "2330 台積電" in _l and "均線多頭排列" in _l and "綜合分88" in _l
+    assert "📈財報變好" in _l and "大戶45.2%" in _l and "🔥 大戶吸籌" in _l
+
+
+def test_ai_judgment_prompt():
+    from src.compute.notify.ai_judgment import build_ai_judgment_prompt
+    picks = [{"代碼": "2330", "名稱": "台積電", "綜合分": 88.0}]
+    tech = {"2330": {"ok": True, "price": 592.0, "ma_bull": True, "rsi": 61.0, "kd_gold": True}}
+    prompt = build_ai_judgment_prompt(picks, tech, as_of="2026-07-25 17:00")
+    assert "偏多" in prompt and "偏空" in prompt and "需觀察" in prompt
+    assert "禁止" in prompt                 # 反捏造約束
+    assert "非投資建議" in prompt            # 免責
+    assert "<Data>" in prompt and "2330 台積電" in prompt
+    # 空清單 → 明講,不硬掰
+    assert "今日無入選股" in build_ai_judgment_prompt([], {}, as_of="x")
+
+
+# ── orchestrator AI glue:缺 key 略過 / 有 key 附段(薄 glue,只守關鍵契約)──
+def test_maybe_ai_judgment_no_key(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    import scripts.push_daily_signals as ps
+    out = ps._maybe_ai_judgment(
+        [{"代碼": "2330", "名稱": "台積電", "綜合分": 88}], {},
+        as_of="x", trend_by={}, short_by={}, chip_by={})
+    assert out == ""            # §1:缺 key → 只送清單,不炸、不附段
+
+
+def test_maybe_ai_judgment_with_key(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
+    import src.services.ai_fetcher as af
+    monkeypatch.setattr(af, "post_gemini",
+                        lambda *a, **k: ("🤖 AI 研判\n**偏多**\n- 2330 台積電:均線多頭",
+                                         "gemini-2.5-flash"))
+    import scripts.push_daily_signals as ps
+    out = ps._maybe_ai_judgment(
+        [{"代碼": "2330", "名稱": "台積電", "綜合分": 88}],
+        {"2330": {"ok": True, "price": 592, "ma_bull": True, "rsi": 61, "kd_gold": True}},
+        as_of="x", trend_by={}, short_by={}, chip_by={})
+    assert out.startswith("\n\n") and "AI 研判" in out and "2330 台積電" in out
+
+
 # ── 分塊(Telegram / LINE 共用)──────────────────────────────────
 def test_split_chunks():
     from src.data.notify.chunk import split_chunks
