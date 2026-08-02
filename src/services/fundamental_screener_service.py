@@ -342,11 +342,25 @@ def composite_rank_candidates(
         _vmap, _hb, _col = _cfg.get(_f, ({}, True, _f))
         _col_scores[_f] = _percentile_scores(ids, _vmap, higher_better=_hb)
 
-    # 綜合分 = 只平均「該股有資料的因子」；全無資料 → None（排最後）
+    # 綜合分 = 只平均「該股有資料的因子」；但需「勾選因子過半有資料」才進榜(涵蓋門檻),
+    # 否則 None（排最後）—— 防「只有單一因子有資料、又剛好高分」的股(如只有 RS=100
+    # 的上櫃股)以 100 衝頂(v19.90「只平均有資料因子」的反向副作用)。
+    # SSOT: SCREENER_MIN_FACTOR_COVERAGE_RATIO(嚴格 >:3 勾需≥2、2 勾需2、1 勾需1)。
+    # 分母用「全域實際有資料的勾選因子」_effective_n:某因子完全沒掃到(如缺貨未掃 →
+    # 全空)時不算進門檻,否則「勾了但沒掃的因子」會把全榜清空(對齊既有『缺掃不擋』行為)。
+    from shared.signal_thresholds import SCREENER_MIN_FACTOR_COVERAGE_RATIO
+    _effective_n = sum(1 for _f in factors if _col_scores[_f])  # 至少 1 檔有值的勾選因子數
+    _min_present = SCREENER_MIN_FACTOR_COVERAGE_RATIO * _effective_n
     _composite: dict[str, float | None] = {}
+    _n_below_coverage = 0  # 有資料但不足過半 → 被涵蓋門檻擋下(可觀測性 §5)
     for i in ids:
         _present = [_col_scores[f][i] for f in factors if i in _col_scores[f]]
-        _composite[i] = round(sum(_present) / len(_present), 1) if _present else None
+        if _present and len(_present) > _min_present:
+            _composite[i] = round(sum(_present) / len(_present), 1)
+        else:
+            _composite[i] = None
+            if _present:  # 「有部分資料但不足過半」才計入(全無資料本就 None,非新擋下)
+                _n_below_coverage += 1
     ranked = sorted(ids, key=lambda i: (_composite[i] is None, -(_composite[i] or 0)))[: int(top_n)]
 
     out = pd.DataFrame({
@@ -364,6 +378,12 @@ def composite_rank_candidates(
         # out[...] = get(c) 回 None 空白,非 0);且「開始選股」已自動掃描,無「下方掃描」區塊。
         note = (f"（{'、'.join(_missing)} 尚未掃描 → 該因子不計分、不影響其他因子排序;"
                 "重按「🎯 開始選股」會自動掃描帶入。）")
+    if _n_below_coverage:
+        # 涵蓋門檻擋下數(§5 可觀測性):讓 user 知道有幾檔因「勾選因子涵蓋不足過半」被排最後。
+        _pct = int(SCREENER_MIN_FACTOR_COVERAGE_RATIO * 100)
+        _cov_txt = (f"（{_n_below_coverage} 檔因「勾選因子涵蓋未過半」未列入綜合排序;"
+                    f"需 >{_pct}% 勾選因子有資料,避免單一因子高分股衝頂。）")
+        note = f"{note} {_cov_txt}".strip() if note else _cov_txt
     return out, note
 
 

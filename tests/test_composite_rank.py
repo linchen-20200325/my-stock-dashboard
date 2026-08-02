@@ -38,17 +38,25 @@ def test_percentile_missing_and_nan_omitted():
 
 
 def test_missing_factor_not_zero_dragged():
-    """v19.90 核心修：缺料因子『不計入平均』（不再灌 0 拖垮綜合分）。"""
-    rows = [{"代碼": "B", "缺貨分數": 100}]   # 只有 B 有缺貨分
-    df, _ = composite_rank_candidates(_surv(["A", "B"], [9, 1]),
-                                      factors=["eps_high", "shortage"], shortage_rows=rows)
+    """v19.90『不灌 0』保留 + 涵蓋門檻(A 修):1-of-2 因子未過半 → 不進榜(綜合分 None),非 100。
+
+    舊 v19.90 行為:A 只有 EPS → 綜合分 = 100(缺貨不計入)。該行為讓「單因子高分股」衝頂
+    (user 2026-08 實測 2061 只有 RS=100 卻綜合 100 排第一)。新增涵蓋門檻後,A(1/2 因子)
+    未過半 → 綜合分 None 排最後;B(2/2)仍 75(不灌 0)。
+    """
+    rows = [{"代碼": "B", "缺貨分數": 100}]   # 只有 B 有缺貨分(缺貨因子全域有資料 → 計入門檻)
+    df, note = composite_rank_candidates(_surv(["A", "B"], [9, 1]),
+                                         factors=["eps_high", "shortage"], shortage_rows=rows)
     _score = {r["代碼"]: r["綜合分"] for _, r in df.iterrows()}
-    # A：EPS=100、缺貨無資料 → 只平均 EPS = 100（舊 0-fill 會變 (100+0)/2=50）
-    assert _score["A"] == 100.0
-    # B：EPS=50、缺貨=100 → 平均 = 75
+    # A：只有 EPS(1/2 因子,未過半)→ 綜合分 None（不再是 100）
+    assert pd.isna(_score["A"])
+    # B：EPS=50、缺貨=100 → (50+100)/2 = 75（2/2 過半;仍不灌 0）
     assert _score["B"] == 75.0
-    assert list(df["代碼"]) == ["A", "B"]
-    # A 的缺貨分欄應為空白（NaN/None），不是 0
+    # B 有效 → 排在被門檻擋下(None)的 A 前面
+    assert list(df["代碼"]) == ["B", "A"]
+    # 涵蓋門檻提示
+    assert "涵蓋" in note
+    # A 的缺貨分欄仍為空白（NaN/None），不是 0
     _a_short = df[df["代碼"] == "A"]["缺貨分"].iloc[0]
     assert _a_short != _a_short or _a_short is None   # NaN or None
 
