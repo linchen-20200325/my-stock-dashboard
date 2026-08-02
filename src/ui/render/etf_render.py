@@ -117,6 +117,50 @@ def _plot_etf_chart(df: pd.DataFrame, ticker: str,
     st.plotly_chart(fig, width='stretch')
 
 
+def _plot_portfolio_vs_benchmark(result: dict, benchmark_label: str = '0050') -> bool:
+    """組合(加權)＋ 個別持股 vs 基準(0050)累積報酬疊圖(Y:累積報酬%)。
+
+    result: etf_calc.compute_portfolio_vs_benchmark() 的回傳 dict(曲線皆小數,此處 ×100 顯示 %)。
+    組合粗實線 + 0050 粗虛線(綠,視覺區隔)+ 個別持股細線(半透明墊底)。
+    §1:benchmark_ok=False / 空曲線 → 不畫、回傳 False,交 caller 顯示 fail-loud 訊息(不畫假曲線)。
+    """
+    port  = result.get('portfolio_cum')
+    bench = result.get('benchmark_cum')
+    if not result.get('benchmark_ok') or port is None or getattr(port, 'empty', True) \
+            or bench is None or getattr(bench, 'empty', True):
+        return False
+    fig = go.Figure()
+    _hover = '%{x|%Y-%m-%d}  %{y:.2f}%<extra>%{fullData.name}</extra>'
+    # 個別持股(細線,先畫墊底)
+    for t, s in (result.get('per_asset_cum') or {}).items():
+        if s is None or s.empty:
+            continue
+        fig.add_trace(go.Scatter(
+            x=s.index, y=(s * 100).round(2), name=str(t), mode='lines',
+            line=dict(width=1), opacity=0.55, hovertemplate=_hover))
+    # 基準 0050(粗虛線,綠)
+    fig.add_trace(go.Scatter(
+        x=bench.index, y=(bench * 100).round(2), name=f'{benchmark_label}（基準）',
+        mode='lines', line=dict(color=TRAFFIC_GREEN, width=3, dash='dash'),
+        hovertemplate=_hover))
+    # 組合(粗實線,亮藍)
+    fig.add_trace(go.Scatter(
+        x=port.index, y=(port * 100).round(2), name='組合（加權）',
+        mode='lines', line=dict(color='#58a6ff', width=3),
+        hovertemplate=_hover))
+    fig.update_layout(
+        template='plotly_dark', height=420,
+        margin=dict(l=0, r=0, t=20, b=0),
+        paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
+        legend=dict(orientation='h', yanchor='bottom', y=1.01),
+        yaxis=dict(title='累積報酬 (%)', ticksuffix='%', zeroline=True,
+                   zerolinecolor='#444', zerolinewidth=1),
+        hovermode='x unified',
+    )
+    st.plotly_chart(fig, width='stretch')
+    return True
+
+
 def _plot_correlation(corr: pd.DataFrame) -> None:
     """相關係數熱力圖"""
     labels = list(corr.columns)

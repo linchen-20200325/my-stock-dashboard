@@ -818,6 +818,13 @@ PORTFOLIO_VAR_MONTHLY_WARN_PCT: float = 10.0
 """ETF 投組月度 99% VaR 警示門檻(%):月度尾部虧損 > 10%
 → ⚠️ 尾部風險偏高,建議增加防禦部位。原 etf_tab_portfolio.py:689/693/699 inline。"""
 
+# ── 組合累積報酬 vs 基準(v19.166)──
+PORTFOLIO_BENCHMARK_TICKER: str = "0050.TW"
+"""ETF 投組「與 0050 累積報酬比較」的被動基準代號(§3.3 反捏造:禁止 inline '0050.TW')。
+概念同 shared/forward_test_thresholds.py:FORWARD_TEST_BENCHMARK('0050'),同指元大台灣50;
+但兩者服務不同 fetcher:forward_test 走 fetch_stock_history_1y(無 .TW 後綴),ETF 投組走
+fetch_etf_price(yfinance,需 .TW 後綴)。故格式不同、各自 SSOT,不硬併。"""
+
 
 # ════════════════════════════════════════════════════════════════
 # v18.436「全做」audit 翻案 — 8 處 inline magic 收 SSOT(#3-10)

@@ -1131,3 +1131,119 @@ def align_portfolio_returns(var_rets, weights):
     return {'port_ret': port_ret, 'n_union': n_union, 'n_common': n_common,
             'dropped': n_union - n_common, 'limiter': limiter,
             'limiter_start': starts.get(limiter), 'tickers_used': tickers_used}
+
+
+def compute_portfolio_vs_benchmark(per_asset_returns, weights, bench_returns):
+    """§1 誠實對齊:組合 + 個別持股 vs 基準(0050)的「累積報酬曲線」—— 純函式,零 I/O。
+
+    累積報酬定義(§7 對齊):給定日報酬 Series r(pct_change 得的小數),
+        cum = (1 + r).cumprod() - 1        # 小數;顯示時 ×100 為 %(不年化)
+    三種曲線(組合 / 基準 / 個別持股)一律在**同一組共同交易日**上計算,才能公平疊圖:
+      1. 先用 `align_portfolio_returns` 取「全員皆有交易」的組合日報酬(共同日交集,§1 不補值)。
+      2. 再與基準日報酬取交集(仍 §1:非共同日一律剔除,**不 ffill / 不 fillna(0)**)。
+      3. 組合 / 基準 / 每檔持股都 slice 到這條最終共同日 index,再各自 cumprod
+         (同 index 起算 → 三線可直接視覺比較)。
+    基準抓不到(空)/ 無共同日 → 回傳 `benchmark_ok=False` + 空 Series,交由 UI fail loud
+    (顯示錯誤,**不畫假曲線**,§1)。
+
+    幣別注意(§4.1):pct_change 是「原幣別」報酬;美元計價持股(如 BND)未含 TWD 匯率。
+    本函式**不做**匯率換算(不靜默混算),由 UI 端加註 caption 揭露(對齊 VaR 段誠實風格)。
+
+    Args:
+        per_asset_returns: {ticker: pd.Series(日報酬, DatetimeIndex)}(pct_change().dropna())。
+        weights:           {ticker: 權重(actual_pct;比例或百分比皆可,align 內部正規化)}。
+        bench_returns:     pd.Series(基準 0050 日報酬, DatetimeIndex)。
+
+    Returns:
+        dict:
+          dates(最終共同日 DatetimeIndex)/ portfolio_cum(Series)/ benchmark_cum(Series)/
+          per_asset_cum({ticker: Series})/ n_common(最終共同日數)/ tickers_used /
+          final({portfolio, benchmark, per_asset:{ticker: 末點累積報酬(小數)}})/ benchmark_ok /
+          + 診斷:n_union / n_common_assets / dropped_assets / dropped_vs_benchmark /
+                  limiter / limiter_start。
+        資料不足 / 基準空 → 空 Series,絕不腦補(§1)。
+    """
+    _empty = pd.Series(dtype='float64')
+
+    def _norm(s):
+        """去 tz + 去 NaN + 排序,讓組合 / 基準 / 個別的 DatetimeIndex 可一致交集。"""
+        if s is None:
+            return _empty
+        s = pd.Series(s).dropna()
+        if s.empty:
+            return _empty
+        idx = pd.to_datetime(s.index, errors='coerce')
+        if getattr(idx, 'tz', None) is not None:
+            idx = idx.tz_localize(None)
+        out = pd.Series(s.to_numpy(), index=idx)
+        out = out[~out.index.isna()]
+        return out.sort_index()
+
+    # 1) 個別報酬統一正規化 → 餵給既有 align(組合曲線沿用誠實對齊,不重造輪子)
+    norm_assets = {t: _norm(s) for t, s in (per_asset_returns or {}).items()}
+    norm_assets = {t: s for t, s in norm_assets.items() if not s.empty}
+    align = align_portfolio_returns(norm_assets, weights or {})
+    port_ret = align['port_ret']              # 全員共同交易日的組合日報酬
+    tickers_used = align['tickers_used']
+
+    def _fail(dropped_vs_bench):
+        return {
+            'dates': pd.DatetimeIndex([]),
+            'portfolio_cum': _empty, 'benchmark_cum': _empty, 'per_asset_cum': {},
+            'n_common': 0, 'tickers_used': tickers_used,
+            'final': {'portfolio': None, 'benchmark': None, 'per_asset': {}},
+            'benchmark_ok': False,
+            'n_union': align['n_union'], 'n_common_assets': align['n_common'],
+            'dropped_assets': align['dropped'], 'dropped_vs_benchmark': dropped_vs_bench,
+            'limiter': align['limiter'], 'limiter_start': align['limiter_start'],
+        }
+
+    # 2) 基準與「組合共同日」再取交集(§1 非共同日剔除,不補值)
+    bench = _norm(bench_returns)
+    if port_ret.empty or bench.empty:
+        return _fail(0)
+    common_idx = port_ret.index.intersection(bench.index).sort_values()
+    if len(common_idx) == 0:
+        # 有組合、有基準,但零共同交易日 → 無法比較,交 UI fail loud
+        return _fail(align['n_common'])
+
+    def _cum(r):
+        return (1.0 + r).cumprod() - 1.0
+
+    port_cum  = _cum(port_ret.reindex(common_idx))
+    bench_cum = _cum(bench.reindex(common_idx))
+    per_asset_cum = {}
+    for t in tickers_used:
+        s = norm_assets.get(t)
+        if s is None or s.empty:
+            continue
+        r = s.reindex(common_idx)
+        if r.isna().any():
+            # tickers_used 已通過 align 的 dropna(how='any'),common_idx ⊆ 資產共同日,
+            # 正常不會缺;此為防禦性剔除,絕不補值畫殘缺線(§1)。
+            continue
+        per_asset_cum[t] = _cum(r)
+
+    def _last(s):
+        return float(s.iloc[-1]) if s is not None and not s.empty else None
+
+    return {
+        'dates': common_idx,
+        'portfolio_cum': port_cum,
+        'benchmark_cum': bench_cum,
+        'per_asset_cum': per_asset_cum,
+        'n_common': len(common_idx),
+        'tickers_used': tickers_used,
+        'final': {
+            'portfolio': _last(port_cum),
+            'benchmark': _last(bench_cum),
+            'per_asset': {t: _last(s) for t, s in per_asset_cum.items()},
+        },
+        'benchmark_ok': True,
+        'n_union': align['n_union'],
+        'n_common_assets': align['n_common'],
+        'dropped_assets': align['dropped'],
+        'dropped_vs_benchmark': align['n_common'] - len(common_idx),
+        'limiter': align['limiter'],
+        'limiter_start': align['limiter_start'],
+    }
