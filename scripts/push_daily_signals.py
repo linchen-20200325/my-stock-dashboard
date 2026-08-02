@@ -37,23 +37,17 @@ def _tw_now() -> str:
 
 
 def _build_pe_name_maps() -> tuple[dict, dict]:
-    """自 TWSE BWIBBU 抓 PE / 名稱 → (pe_map, name_map)。抓不到 → 空 dict。
+    """全市場(上市 TWSE + 上櫃 TPEX)PE / 名稱 → (pe_map, name_map)。抓不到 → 空 dict。
 
-    鏡像 scripts/update_forward_test_freeze.py + mcp_server —— 三處 orchestrator 走同一支
-    L5 `fetch_twse_yield_pe`,確保推播選股 = 畫面 / 凍結 / MCP 選股(§8 SSOT)。
+    走 SSOT `fetch_pe_name_maps` —— 畫面 / 凍結 / MCP / 推播 四 orchestrator 同源,確保
+    推播選股 = 畫面選股,且上櫃股同樣有估值分 + 中文名(原僅 TWSE → 上櫃股空白)(§8 SSOT)。
     """
     try:
-        from src.ui.tabs.yield_screener import fetch_twse_yield_pe
-        _df = fetch_twse_yield_pe()
+        from src.ui.tabs.yield_screener import fetch_pe_name_maps
+        return fetch_pe_name_maps()
     except Exception as _e:  # noqa: BLE001 — PE 抓不到 → pe_low 缺料,不炸
-        print(f"[push_signals] TWSE PE 抓取失敗:{type(_e).__name__}: {_e}", file=sys.stderr)
+        print(f"[push_signals] PE 抓取失敗:{type(_e).__name__}: {_e}", file=sys.stderr)
         return {}, {}
-    if _df is None or _df.empty or "代碼" not in _df.columns:
-        return {}, {}
-    _codes = _df["代碼"].astype(str)
-    _pe = dict(zip(_codes, _df["本益比"])) if "本益比" in _df.columns else {}
-    _nm = dict(zip(_codes, _df["名稱"].astype(str))) if "名稱" in _df.columns else {}
-    return _pe, _nm
 
 
 def _fetch_chip_for(code: str, loader) -> dict:

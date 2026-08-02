@@ -43,24 +43,18 @@ def _now_utc_iso() -> str:
 
 
 def _build_pe_name_maps() -> tuple[dict, dict]:
-    """自 TWSE BWIBBU 抓全市場本益比 / 名稱 → (pe_map, name_map)。抓不到 → 兩個空 dict。
+    """全市場(上市 TWSE + 上櫃 TPEX)本益比 / 名稱 → (pe_map, name_map)。抓不到 → 兩個空 dict。
 
-    **鏡像** scripts/update_forward_test_freeze.py:_build_pe_name_maps —— 兩者皆
-    orchestrator、走同一支 L5 `fetch_twse_yield_pe`,確保「MCP 選股 = 畫面 / cron 選股」
-    (§8 SSOT)。pe_low 因子缺 pe_map 時 composite 自動不計入、不記 0(§1),不炸整體。
+    走 SSOT `fetch_pe_name_maps`（畫面 / 推播 / 凍結 / MCP 四 orchestrator 同源），
+    確保「MCP 選股 = 畫面 / cron 選股」且上櫃股同樣有估值 + 名稱(§8 SSOT)。pe_low 因子
+    缺 pe_map 時 composite 自動不計入、不記 0(§1),不炸整體。
     """
     try:
-        from src.ui.tabs.yield_screener import fetch_twse_yield_pe
-        _df = fetch_twse_yield_pe()
+        from src.ui.tabs.yield_screener import fetch_pe_name_maps
+        return fetch_pe_name_maps()
     except Exception as _e:  # noqa: BLE001 — PE 抓不到 → pe_low 缺料,不炸
-        print(f"[mcp_server] TWSE 本益比抓取失敗:{type(_e).__name__}: {_e}", file=sys.stderr)
+        print(f"[mcp_server] 本益比抓取失敗:{type(_e).__name__}: {_e}", file=sys.stderr)
         return {}, {}
-    if _df is None or _df.empty or "代碼" not in _df.columns:
-        return {}, {}
-    _codes = _df["代碼"].astype(str)
-    _pe = dict(zip(_codes, _df["本益比"])) if "本益比" in _df.columns else {}
-    _nm = dict(zip(_codes, _df["名稱"].astype(str))) if "名稱" in _df.columns else {}
-    return _pe, _nm
 
 
 def _json_safe(obj):
