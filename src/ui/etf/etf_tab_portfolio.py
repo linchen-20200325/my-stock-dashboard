@@ -860,6 +860,47 @@ def render_etf_portfolio(gemini_fn=None):
     else:
         st.info('無持股報酬資料，略過累積報酬比較。')
 
+    # ── 📐 效率前緣（風險-報酬地圖）─────────────────────────────
+    # ⚠️ **描述性視覺化,非規範性最佳化**:STATE.md:512 曾拒均值-變異數最佳化為「假精準」
+    # (牴觸 §1)。這裡只把「你的組合」定位在歷史風險-報酬空間,疊隨機配置雲 + 前緣**參考**線,
+    # **不**輸出「最適權重建議」。§7 對齊:年化 μ=mean(日報酬)×252、Σ=cov×252、
+    # 組合 vol=sqrt(wᵀΣw)、Sharpe=ret/vol(rf=0)。計算下沉 L2 etf_calc.compute_efficient_frontier
+    # (可單元測試、固定 seed 可重現),繪圖走 L4 etf_render。重用 VaR 段已抓好的 _var_rets + 權重。
+    st.markdown('#### 📐 效率前緣（風險-報酬地圖）')
+    st.caption('把「你的組合」畫在近1年歷史的「年化波動度 × 年化報酬」平面上,'
+               '疊一片隨機配置的蒙地卡羅雲 + 前緣參考線,單純幫你**理解**組合在風險-報酬'
+               '空間的相對位置(偏攻擊 / 偏防禦)。')
+    if _var_rets:
+        from src.compute.etf.etf_calc import compute_efficient_frontier
+        from src.ui.render.etf_render import _plot_efficient_frontier
+        from src.compute.etf.etf_dividend_schedule import dividend_currency
+        from shared.signal_thresholds import (
+            EFFICIENT_FRONTIER_N_SIM, EFFICIENT_FRONTIER_SEED,
+        )
+        with st.spinner('計算效率前緣（蒙地卡羅隨機配置）...'):
+            _ef = compute_efficient_frontier(
+                _var_rets, {r['ticker']: r['actual_pct'] for r in rows},
+                n_sim=EFFICIENT_FRONTIER_N_SIM, seed=EFFICIENT_FRONTIER_SEED)
+        if _ef['ok']:
+            _plot_efficient_frontier(_ef)
+            # §1 強制警語:描述性、對取樣窗極敏感、非投資建議
+            st.caption('⚠️ 歷史估計,對取樣時間窗極度敏感;均值-變異數最適解實務上極不穩定,'
+                       '僅供理解你的組合在風險-報酬空間的相對位置,非投資建議（§1）。'
+                       '圖中「最小變異 / 最大夏普」為**歷史估計參考點,非建議**。')
+            st.caption(f'📏 樣本＝{_ef["n_common"]} 個「全員皆有交易」的共同日;'
+                       f'Sharpe 以無風險利率 **rf=0** 計算(僅供相對比較,非絕對夏普值)。'
+                       '缺失日一律剔除、未填 0 或 ffill（§1 誠實）。')
+            # §4.1 幣別誠實:美元計價持股(如 BND)為「原幣別」報酬,未含 USD/TWD 匯率
+            _ef_usd = [t for t in _ef['tickers_used'] if dividend_currency(t) == 'USD']
+            if _ef_usd:
+                st.caption(f'💱 註:{"、".join(_ef_usd)} 為美元計價,此處報酬為「原幣別」,'
+                           '未計入 USD/TWD 匯率變動（與 VaR / vs-0050 段同一誠實原則,不靜默混算）。')
+        else:
+            st.info(f'ℹ️ 無法繪製效率前緣：{_ef["note"]}。'
+                    '（需 ≥2 檔有足夠共同歷史的持股,§1 不畫假圖。）')
+    else:
+        st.info('無持股報酬資料，略過效率前緣。')
+
     # ── 配息日曆 × 年度現金流預估 ──────────────────────────────
     st.markdown('#### 💰 配息日曆 × 年度現金流預估')
     st.caption('依過去12個月配息紀錄 × 持有股數（市值/現價）推估未來現金流入')
