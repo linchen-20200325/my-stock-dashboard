@@ -612,7 +612,7 @@ with tab_stocks:
         # 只留最上方「開始選股」一顆按鈕；移除下方進階掃描 expander + 籌碼×6 picker（user 要求極簡）。
         st.markdown('### 🔭 選股網 — 勾條件 → 一鍵選股')
         from src.ui.tabs.tab_stock_picker import render_prescreen_panel
-        from src.ui.tabs.yield_screener import fetch_twse_yield_pe
+        from src.ui.tabs.yield_screener import fetch_pe_name_maps
         from src.services.fundamental_screener_service import (
             SCREEN_ANGLE_LABELS, get_fundamental_survivors, get_ranked_picks,
         )
@@ -669,14 +669,9 @@ with tab_stocks:
             except Exception as _e_surv:  # noqa: BLE001 — 快照缺不炸選股網
                 _surv_df = None
                 print(f'[screener] 存活池不可用: {type(_e_surv).__name__}: {_e_surv}')
-            _twse_scrn = fetch_twse_yield_pe()
-            _pe_map, _name_map = {}, {}
-            if _twse_scrn is not None and not _twse_scrn.empty and '代碼' in _twse_scrn.columns:
-                _codes_s = _twse_scrn['代碼'].astype(str)
-                if '本益比' in _twse_scrn.columns:
-                    _pe_map = dict(zip(_codes_s, _twse_scrn['本益比']))
-                if '名稱' in _twse_scrn.columns:
-                    _name_map = dict(zip(_codes_s, _twse_scrn['名稱'].astype(str)))
+            # 上市(TWSE BWIBBU) + 上櫃(TPEX peratio) 合併 → 上櫃股也有估值分 + 名稱
+            # (原僅 TWSE:上櫃股 pe_low None、名稱空白)。SSOT 見 fetch_pe_name_maps。
+            _pe_map, _name_map = fetch_pe_name_maps()
             # v19.147:改走 L3 get_ranked_picks（畫面/cron 同源，保證自動凍結清單=畫面清單）。
             # auto_fetch=False = 只用 session 已快取的掃描結果（掃描仍由上方「開始選股」按鈕觸發），行為不變。
             _cands, _cnote = get_ranked_picks(
