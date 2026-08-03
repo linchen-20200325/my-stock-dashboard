@@ -59,6 +59,9 @@ _HEADERS = ['name', 'ticker', 'lots', 'avg_price', 'updated_at']
 _STOCK_WATCHLIST_WORKSHEET = 'stock_watchlist'
 _STOCK_WATCHLIST_HEADERS = ['name', 'ticker', 'updated_at']
 
+# §3.3 SSOT:個股 新建 Sheet 的專屬 Drive 資料夾名稱(與 ETF 建的 Sheet 物理分隔)。
+_STOCK_DRIVE_FOLDER_NAME = '台股 Dashboard（個股組合）'
+
 # ── §3.3 session-key SSOT:個股 / ETF 雲端儲存分家(Phase 1)──────────────
 # 兩條 session channel,各自獨立指向不同 Google Sheet,互不污染:
 #   PORTFOLIO_SHEET_KEY       — ETF 組合 + legacy(含 SA secrets fallback);
@@ -545,11 +548,70 @@ def list_user_folders() -> list[dict]:
     return folders
 
 
-def create_new_sheet(title: str = '台股 Dashboard - 投資組合') -> tuple[str, str]:
+def _get_or_create_app_folder(folder_name: str) -> str:
+    """回傳(或建立)名為 `folder_name` 的 app 專屬 Drive 資料夾 id。
+
+    在 `drive.file` scope 下,Drive v3 `files.list` **只**會列出本 app 建立的檔案 /
+    資料夾 —— 故先 SEARCH 同名資料夾:命中即 reuse(避免每次新建重複資料夾),
+    未命中才 CREATE 一個。整個流程只需 `drive.file`,不需 `drive.metadata.readonly`。
+
+    §1 fail-loud:任一 Drive API 呼叫失敗 → raise RuntimeError(不回假 id、不靜默)。
+    """
+    if not _has_oauth_tokens():
+        raise RuntimeError('建立/查詢資料夾需先「🔐 用 Google 登入」')
+    client = _build_client()
+    url = 'https://www.googleapis.com/drive/v3/files'
+    # q 字串內單引號需以 \' 轉義,避免注入 / 破壞查詢語法
+    _escaped = folder_name.replace("'", "\\'")
+    # ── SEARCH:同名 app-created 資料夾(mirror list_user_folders 的 params)──
+    search_params = {
+        'q': ("mimeType='application/vnd.google-apps.folder' and "
+              f"name='{_escaped}' and trashed=false"),
+        'pageSize': 10,
+        'supportsAllDrives': True,
+        'includeItemsFromAllDrives': True,
+        'fields': 'files(id,name)',
+    }
+    try:
+        resp = client.http_client.request('get', url, params=search_params)
+        data = resp.json() if hasattr(resp, 'json') else resp
+        for f in (data.get('files') or []):
+            _fid = f.get('id')
+            if _fid:
+                return _fid            # ← reuse 既有資料夾
+        # ── CREATE:未命中才建立 ──
+        resp2 = client.http_client.request(
+            'post', url,
+            json={'name': folder_name,
+                  'mimeType': 'application/vnd.google-apps.folder'},
+            params={'fields': 'id', 'supportsAllDrives': True})
+        data2 = resp2.json() if hasattr(resp2, 'json') else resp2
+        new_id = (data2 or {}).get('id')
+        if not new_id:
+            raise RuntimeError('建立資料夾後未取得 id（Drive 回傳異常）')
+        return new_id
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(
+            f'資料夾建立/查詢失敗：[{type(e).__name__}] {e}') from e
+
+
+def create_new_sheet(title: str = '台股 Dashboard - 投資組合', *,
+                     folder_name: str | None = None) -> tuple[str, str]:
     """建立新 Google Sheet 並回傳 (sheet_id, sheet_url)。
 
     OAuth 模式下 `drive.file` scope 已允許 app 建立並擁有此檔，
     不需要 `drive.metadata.readonly` — 可避開「token 缺中繼權限」的卡關。
+
+    folder_name
+    -----------
+    - None(預設)→ 行為與舊版 byte-for-byte 相同:Sheet 建於 Drive 根目錄
+      (ETF caller 走此路,不受影響)。
+    - 非空字串 → 建立後把 Sheet **搬入** 該名稱的 app 專屬資料夾
+      (`_get_or_create_app_folder`),使個股 Sheet 與 ETF Sheet 在 Drive 物理分隔。
+      §1 best-effort:搬移屬「錦上添花」,失敗**只記 log 不炸**,仍回傳已建立的
+      (sheet_id, sheet_url) —— **Sheet 永不遺失 / 永不 orphan**。
     """
     if not _has_oauth_tokens():
         raise RuntimeError('建立新 Sheet 需先「🔐 用 Google 登入」')
@@ -564,6 +626,30 @@ def create_new_sheet(title: str = '台股 Dashboard - 投資組合') -> tuple[st
         f'https://docs.google.com/spreadsheets/d/{sheet_id}/edit' if sheet_id else '')
     if not sheet_id:
         raise RuntimeError('建立 Sheet 後未取得 ID（gspread 回傳異常）')
+
+    # ── best-effort:放入專屬資料夾(失敗不影響已建立的 Sheet)──
+    if isinstance(folder_name, str) and folder_name.strip():
+        try:
+            fid = _get_or_create_app_folder(folder_name)
+            files_url = 'https://www.googleapis.com/drive/v3/files'
+            # 先取現有 parents,搬移時一併 remove,避免雙 parent(dual-parented)
+            resp = client.http_client.request(
+                'get', f'{files_url}/{sheet_id}',
+                params={'fields': 'parents', 'supportsAllDrives': True})
+            gdata = resp.json() if hasattr(resp, 'json') else resp
+            cur_parents = (gdata or {}).get('parents') or []
+            update_params = {
+                'addParents': fid,
+                'fields': 'id,parents',
+                'supportsAllDrives': True,
+            }
+            if cur_parents:
+                update_params['removeParents'] = ','.join(cur_parents)
+            client.http_client.request(
+                'patch', f'{files_url}/{sheet_id}', params=update_params)
+        except Exception as e:  # noqa: BLE001 — §1 disclosed best-effort log
+            print(f'[create_new_sheet] 資料夾放置失敗，Sheet 仍建於根目錄：{e}')
+
     return sheet_id, sheet_url
 
 
