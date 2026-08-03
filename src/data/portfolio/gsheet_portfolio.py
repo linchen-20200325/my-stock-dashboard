@@ -46,6 +46,14 @@ except ImportError:
 _WORKSHEET_NAME = 'portfolios'
 _HEADERS = ['name', 'ticker', 'lots', 'avg_price', 'updated_at']
 
+# ── §3.3 session-key SSOT:個股 / ETF 雲端儲存分家(Phase 1)──────────────
+# 兩條 session channel,各自獨立指向不同 Google Sheet,互不污染:
+#   PORTFOLIO_SHEET_KEY       — ETF 組合 + legacy(含 SA secrets fallback);
+#                               forward-test 亦沿用此 legacy 通道(_get_active_sheet_id)。
+#   STOCK_PORTFOLIO_SHEET_KEY — 個股組合專用(session-only,無 secrets fallback)。
+PORTFOLIO_SHEET_KEY = 'portfolio_sheet_id'
+STOCK_PORTFOLIO_SHEET_KEY = 'stock_portfolio_sheet_id'
+
 
 def _oauth_active() -> bool:
     """OAuth 模式:已設 OAuth Client + 已登入 + 有 sheet id。"""
@@ -69,7 +77,7 @@ def _sa_configured() -> bool:
     if st is None:
         return False
     try:
-        _ = st.secrets['portfolio_sheet_id']
+        _ = st.secrets[PORTFOLIO_SHEET_KEY]
         _ = st.secrets['gcp_service_account']
         return True
     except (KeyError, FileNotFoundError, AttributeError):
@@ -82,16 +90,32 @@ def is_configured() -> bool:
 
 
 def _get_active_sheet_id() -> str:
-    """OAuth 模式下取使用者輸入的 sheet id；SA 模式回 secrets 的值。"""
+    """OAuth 模式下取使用者輸入的 sheet id；SA 模式回 secrets 的值。
+
+    ⚠️ 這是 **ETF / legacy** 通道(PORTFOLIO_SHEET_KEY + secrets fallback);
+    forward-test(_ft_worksheet)亦沿用。個股組合請改用 `_get_active_stock_sheet_id()`。
+    """
     if st is None:
         return ''
-    sid = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
+    sid = str(st.session_state.get(PORTFOLIO_SHEET_KEY, '') or '').strip()
     if sid:
         return sid
     try:
-        return str(st.secrets.get('portfolio_sheet_id', '') or '').strip()
+        return str(st.secrets.get(PORTFOLIO_SHEET_KEY, '') or '').strip()
     except (KeyError, FileNotFoundError, AttributeError):
         return ''
+
+
+def _get_active_stock_sheet_id() -> str:
+    """個股組合專用 sheet id — 只讀 session channel `STOCK_PORTFOLIO_SHEET_KEY`。
+
+    與 ETF/legacy 分家(Phase 1):**不** fallback 到 secrets(SA/secrets 仍屬
+    ETF-legacy 專用),也**不**讀 `PORTFOLIO_SHEET_KEY`。未設定 → 回空字串
+    (由 caller 依 §1 fail-loud 處理,不靜默借用 ETF sheet)。
+    """
+    if st is None:
+        return ''
+    return str(st.session_state.get(STOCK_PORTFOLIO_SHEET_KEY, '') or '').strip()
 
 
 def _has_oauth_tokens() -> bool:
@@ -143,15 +167,19 @@ def _build_client():
     return gspread.authorize(creds)
 
 
-def _get_worksheet():
-    """取得 (或建立) `portfolios` worksheet，並確保 header 列存在。"""
+def _get_worksheet(*, sheet_id: str | None = None):
+    """取得 (或建立) `portfolios` worksheet，並確保 header 列存在。
+
+    sheet_id=None(或空)→ 走 legacy `_get_active_sheet_id()`(ETF / SA / forward-test
+    行為 byte-for-byte 不變);非空 sheet_id → 開 **那本** sheet(個股組合分家用)。
+    """
     import gspread
 
-    sheet_id = _get_active_sheet_id()
-    if not sheet_id:
+    _sid = sheet_id or _get_active_sheet_id()
+    if not _sid:
         raise RuntimeError('尚未設定 Sheet ID（OAuth 模式請在雲端儲存區塊輸入）')
     client = _build_client()
-    sh = client.open_by_key(sheet_id)
+    sh = client.open_by_key(_sid)
 
     try:
         ws = sh.worksheet(_WORKSHEET_NAME)
@@ -166,33 +194,42 @@ def _get_worksheet():
     return ws
 
 
-def _ws():
-    """取得 worksheet handle。每次重新建立（OAuth token 可能 refresh）。"""
-    return _get_worksheet()
+def _ws(*, sheet_id: str | None = None):
+    """取得 worksheet handle。每次重新建立（OAuth token 可能 refresh）。
+
+    sheet_id 透傳給 `_get_worksheet`(None → legacy;非空 → 指定 sheet)。
+    """
+    return _get_worksheet(sheet_id=sheet_id)
 
 
-def _all_records() -> list[dict[str, Any]]:
+def _all_records(*, sheet_id: str | None = None) -> list[dict[str, Any]]:
     """回傳全表（含 header 後的所有列）為 dict list。"""
-    return _ws().get_all_records()
+    return _ws(sheet_id=sheet_id).get_all_records()
 
 
-def list_portfolios() -> list[str]:
-    """列出所有不重複的組合名稱（按字母排序）。"""
+def list_portfolios(*, sheet_id: str | None = None) -> list[str]:
+    """列出所有不重複的組合名稱（按字母排序）。
+
+    sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
+    """
     names: set[str] = set()
-    for rec in _all_records():
+    for rec in _all_records(sheet_id=sheet_id):
         n = str(rec.get('name', '')).strip()
         if n:
             names.add(n)
     return sorted(names)
 
 
-def load_portfolio(name: str) -> list[dict[str, Any]]:
-    """讀取指定名稱的組合，回傳 `[{ticker, lots, avg_price}, ...]`。"""
+def load_portfolio(name: str, *, sheet_id: str | None = None) -> list[dict[str, Any]]:
+    """讀取指定名稱的組合，回傳 `[{ticker, lots, avg_price}, ...]`。
+
+    sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
+    """
     name = (name or '').strip()
     if not name:
         return []
     out: list[dict[str, Any]] = []
-    for rec in _all_records():
+    for rec in _all_records(sheet_id=sheet_id):
         if str(rec.get('name', '')).strip() != name:
             continue
         tk = str(rec.get('ticker', '')).strip()
@@ -209,10 +246,12 @@ def load_portfolio(name: str) -> list[dict[str, Any]]:
     return out
 
 
-def save_portfolio(name: str, rows: list[dict[str, Any]]) -> int:
+def save_portfolio(name: str, rows: list[dict[str, Any]], *,
+                   sheet_id: str | None = None) -> int:
     """儲存（覆蓋）指定名稱的組合，回傳寫入的列數。
 
     rows 預期格式：每筆含 `ticker` / `lots` / `avg_price`。其它欄位忽略。
+    sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
     """
     name = (name or '').strip()
     if not name:
@@ -220,7 +259,7 @@ def save_portfolio(name: str, rows: list[dict[str, Any]]) -> int:
     if not rows:
         raise ValueError('組合內容不可為空')
 
-    ws = _ws()
+    ws = _ws(sheet_id=sheet_id)
     existing = ws.get_all_values()
     keep_rows = [r for r in existing[1:] if (r and r[0].strip() != name)]
 
@@ -440,12 +479,15 @@ def get_sheet_title(sheet_id: str = '') -> str:
         return ''
 
 
-def delete_portfolio(name: str) -> int:
-    """刪除指定名稱的組合（所有持股列），回傳刪除的列數。"""
+def delete_portfolio(name: str, *, sheet_id: str | None = None) -> int:
+    """刪除指定名稱的組合（所有持股列），回傳刪除的列數。
+
+    sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
+    """
     name = (name or '').strip()
     if not name:
         return 0
-    ws = _ws()
+    ws = _ws(sheet_id=sheet_id)
     existing = ws.get_all_values()
     if len(existing) <= 1:
         return 0

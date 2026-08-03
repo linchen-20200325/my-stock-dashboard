@@ -202,3 +202,119 @@ def test_delete_portfolio_empty_name(populated_ws):
 
 def test_delete_portfolio_empty_sheet(fake_ws):
     assert gsp.delete_portfolio('x') == 0
+
+
+# ══ Phase 1: 個股 / ETF 雲端 sheet 分家（sheet_id 參數化 + 個股專屬通道）══════
+def _fake_client_capturing():
+    """回 (client, opened)：client.open_by_key 記錄每次的 sheet_id 到 opened，
+    並回一個 `.worksheet()` 給乾淨 _FakeWorksheet 的 spreadsheet stub。"""
+    opened: list[str] = []
+
+    def _open_by_key(sid):
+        opened.append(sid)
+        _sh = MagicMock()
+        _sh.worksheet.return_value = _FakeWorksheet()
+        return _sh
+
+    client = MagicMock()
+    client.open_by_key.side_effect = _open_by_key
+    return client, opened
+
+
+def test_no_sheet_id_routes_to_legacy_active():
+    """(a) 不帶 sheet_id → 走 legacy _get_active_sheet_id（ETF 向後相容 byte-for-byte）。"""
+    client, opened = _fake_client_capturing()
+    with patch.object(gsp, '_build_client', return_value=client), \
+         patch.object(gsp, '_get_active_sheet_id',
+                      return_value='LEGACY_SID') as _mock_legacy:
+        gsp.list_portfolios()
+        gsp.load_portfolio('x')
+        gsp.save_portfolio('g', [{'ticker': '2330', 'lots': 1, 'avg_price': 100}])
+        gsp.delete_portfolio('g')
+    assert opened == ['LEGACY_SID'] * 4
+    assert _mock_legacy.call_count >= 4
+
+
+def test_explicit_sheet_id_routes_to_that_sheet():
+    """(b) 明確 sheet_id → open_by_key 用那把 key,且**不**呼叫 legacy accessor（短路）。"""
+    client, opened = _fake_client_capturing()
+    with patch.object(gsp, '_build_client', return_value=client), \
+         patch.object(gsp, '_get_active_sheet_id',
+                      return_value='LEGACY_SID') as _mock_legacy:
+        gsp.list_portfolios(sheet_id='STOCK_SID')
+        gsp.load_portfolio('x', sheet_id='STOCK_SID')
+        gsp.save_portfolio('g', [{'ticker': '2330', 'lots': 1, 'avg_price': 100}],
+                           sheet_id='STOCK_SID')
+        gsp.delete_portfolio('g', sheet_id='STOCK_SID')
+    assert set(opened) == {'STOCK_SID'}           # legacy sheet 完全沒被打開
+    assert opened == ['STOCK_SID'] * 4
+    _mock_legacy.assert_not_called()              # 明確 sheet_id 短路 legacy accessor
+
+
+def test_explicit_sheet_id_differs_from_legacy():
+    """(b) 同一批操作:legacy 與明確 sheet_id 打開的是**不同** key（真正分家）。"""
+    client, opened = _fake_client_capturing()
+    with patch.object(gsp, '_build_client', return_value=client), \
+         patch.object(gsp, '_get_active_sheet_id', return_value='ETF_LEGACY_SID'):
+        gsp.list_portfolios()                     # ETF（legacy）
+        gsp.list_portfolios(sheet_id='STOCK_SID')  # 個股
+    assert opened == ['ETF_LEGACY_SID', 'STOCK_SID']
+
+
+def test_empty_string_sheet_id_falls_back_to_legacy():
+    """sheet_id='' (falsy) → 視同 None 走 legacy（防禦性:callback 已先擋空）。"""
+    client, opened = _fake_client_capturing()
+    with patch.object(gsp, '_build_client', return_value=client), \
+         patch.object(gsp, '_get_active_sheet_id', return_value='LEGACY_SID'):
+        gsp.list_portfolios(sheet_id='')
+    assert opened == ['LEGACY_SID']
+
+
+# ── (c) _get_active_stock_sheet_id：只讀個股通道，不借 ETF 通道 / 無 secrets fallback ──
+def test_get_active_stock_sheet_id_reads_stock_key():
+    """(c) 只讀 STOCK_PORTFOLIO_SHEET_KEY,不讀 portfolio_sheet_id。"""
+    fake_st = MagicMock()
+    fake_st.session_state = {
+        gsp.STOCK_PORTFOLIO_SHEET_KEY: 'STOCK_123',
+        gsp.PORTFOLIO_SHEET_KEY: 'ETF_999',
+    }
+    with patch.object(gsp, 'st', fake_st):
+        assert gsp._get_active_stock_sheet_id() == 'STOCK_123'
+
+
+def test_get_active_stock_sheet_id_ignores_etf_session_key():
+    """(c) 只設 ETF 的 portfolio_sheet_id → 個股通道仍回空（不靜默借用）。"""
+    fake_st = MagicMock()
+    fake_st.session_state = {gsp.PORTFOLIO_SHEET_KEY: 'ETF_999'}
+    with patch.object(gsp, 'st', fake_st):
+        assert gsp._get_active_stock_sheet_id() == ''
+
+
+def test_get_active_stock_sheet_id_no_secrets_fallback():
+    """(c) 個股通道**無** secrets fallback（SA/secrets 仍屬 ETF-legacy 專用）。"""
+    fake_st = MagicMock()
+    fake_st.session_state = {}
+    fake_st.secrets = {gsp.PORTFOLIO_SHEET_KEY: 'ETF_FROM_SECRETS'}
+    with patch.object(gsp, 'st', fake_st):
+        assert gsp._get_active_stock_sheet_id() == ''
+
+
+def test_get_active_stock_sheet_id_no_streamlit():
+    with patch.object(gsp, 'st', None):
+        assert gsp._get_active_stock_sheet_id() == ''
+
+
+def test_legacy_active_sheet_id_still_reads_etf_key():
+    """對照組:legacy _get_active_sheet_id 仍讀 portfolio_sheet_id（ETF 行為不變）。"""
+    fake_st = MagicMock()
+    fake_st.session_state = {gsp.PORTFOLIO_SHEET_KEY: 'ETF_999'}
+    fake_st.secrets = {}
+    with patch.object(gsp, 'st', fake_st):
+        assert gsp._get_active_sheet_id() == 'ETF_999'
+
+
+def test_sheet_key_constants_distinct():
+    """§3.3 兩條 session-key 常數必須不同（分家的根本）。"""
+    assert gsp.PORTFOLIO_SHEET_KEY == 'portfolio_sheet_id'
+    assert gsp.STOCK_PORTFOLIO_SHEET_KEY == 'stock_portfolio_sheet_id'
+    assert gsp.PORTFOLIO_SHEET_KEY != gsp.STOCK_PORTFOLIO_SHEET_KEY

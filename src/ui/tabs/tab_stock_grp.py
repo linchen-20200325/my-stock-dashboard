@@ -64,6 +64,9 @@ def render_stock_grp():
     elif t3_run_btn:
         st.warning('⚠️ 請先在上方輸入至少一個有效股票代碼，再按「🚀 批次分析」')
 
+    # ══ ②b 個股組合雲端儲存(Phase 1 個股/ETF 分家:專屬 stock_portfolio_sheet_id)══
+    _render_stock_cloud_storage(stock_list_t3)
+
     # ══ 批次分析邏輯(Batch 7-2 v18.414:抽至 stock_grp_sections.section_batch_fetcher)══
     if t3_run_btn and stock_list_t3:
         from src.ui.tabs.stock_grp_sections import run_batch_fetch
@@ -117,27 +120,35 @@ def render_stock_grp():
 
 
 def _grp_load_holdings_callback() -> None:
-    """帶入 Google Sheet 持股組合代碼 → 填入上方唯一輸入框 multi_input(on_click callback)。
+    """帶入**個股專屬** Google Sheet 持股組合代碼 → 填入上方唯一輸入框 multi_input(on_click)。
 
     v19.164 單一來源化:原「老師 體檢轉機」獨立輸入框的帶入持股鈕搬來這裡,改填組合唯一輸入。
+    Phase 1 個股/ETF 分家:改讀 **個股專屬** sheet(`stock_portfolio_sheet_id`),不再借用
+    ETF 的 `portfolio_sheet_id`(修 user 回報「帶入我的持股卻拉到 ETF 組合資料」)。
     §8.2.A EX-PASSTHRU-1:L5 lazy import L1 gsheet_portfolio(pass-through、無 L3 業務值)。
-    graceful:未登入 Google / 未設組合 → 只回 warn,不炸。
+    §1 fail-loud:未設個股 sheet → 只回 warn 指引去下方面板設定,**不**靜默 fallback ETF sheet。
+    graceful:未登入 Google / 讀取失敗 → 只回 warn,不炸。
     """
     try:
         from src.data.portfolio import gsheet_portfolio as _gsp  # EX-PASSTHRU-1
-        names = _gsp.list_portfolios()
+        stock_sid = _gsp._get_active_stock_sheet_id()
+        if not stock_sid:  # §1:不靜默借用 ETF sheet
+            st.session_state['_grp_holdings_msg'] = (
+                'warn', '個股組合尚未設定雲端 Sheet — 請在下方「☁️ 個股組合雲端儲存」挑選或新建')
+            return
+        names = _gsp.list_portfolios(sheet_id=stock_sid)
         if not names:
             st.session_state['_grp_holdings_msg'] = (
-                'warn', '找不到雲端持股組合 — 請先到「🏦 ETF → 組合」設定 Google Sheet 持股。')
+                'warn', '個股 Sheet 內還沒有組合 — 請先到下方「☁️ 個股組合雲端儲存」存一組。')
             return
         tickers: list[str] = []
         for _nm in names:
-            for _r in (_gsp.load_portfolio(_nm) or []):
+            for _r in (_gsp.load_portfolio(_nm, sheet_id=stock_sid) or []):
                 _t = str(_r.get('ticker', '')).strip()
                 if _t and _t not in tickers:
                     tickers.append(_t)
         if not tickers:
-            st.session_state['_grp_holdings_msg'] = ('warn', '雲端持股組合是空的。')
+            st.session_state['_grp_holdings_msg'] = ('warn', '個股組合是空的。')
             return
         capped = tickers[:10]  # 批次上限 10(parse_stocks 對齊)
         st.session_state['multi_input'] = ' '.join(capped)
@@ -146,6 +157,169 @@ def _grp_load_holdings_callback() -> None:
     except Exception as _e:  # noqa: BLE001 — 帶入失敗不炸 UI
         st.session_state['_grp_holdings_msg'] = (
             'warn', f'帶入持股失敗:{type(_e).__name__}(可能未登入 Google / 未設定組合)')
+
+
+def _render_stock_cloud_storage(stock_list: list[str]) -> None:
+    """☁️ 個股組合雲端儲存(獨立於 ETF 組合)— 存/讀 個股清單到**專屬** Google Sheet。
+
+    Phase 1 個股/ETF 分家:本面板**只**操作 `stock_portfolio_sheet_id` session channel,
+    絕不碰 ETF 的 `portfolio_sheet_id`,避免「帶入我的持股」誤拉 ETF 組合。
+
+    §8.2.A EX-PASSTHRU-1:L5 lazy import L1 gsheet_portfolio + OAuth 原語(pass-through、
+    無 L3 業務值;L1 內已 @st.cache/OAuth 集中緩存)。**不** reuse ETF 的 `_render_oauth_panel`
+    ——那支寫死 `portfolio_sheet_id`,借用會污染 ETF sheet;改用同一批 OAuth 原語自建精簡版
+    (§8.1 step 6:避免為重用而引入會破壞 ETF 的耦合)。
+    §1:未設個股 sheet → 提示挑選/新建,不靜默借 ETF sheet。
+    """
+    import re
+
+    import pandas as pd
+
+    from src.data.portfolio import gsheet_portfolio as _gsp  # EX-PASSTHRU-1
+
+    with st.expander('☁️ 個股組合雲端儲存（獨立於 ETF 組合）', expanded=False):
+        st.caption('把上方輸入的個股清單存成命名組合到**你自己的** Google Sheet;'
+                   '之後按「🔗 帶入我的持股」即可一鍵回填。'
+                   '此 Sheet **獨立於 ETF 組合**,兩邊互不污染。')
+
+        # ── OAuth 登入狀態(reuse 原語,不重造 OAuth 邏輯)──────────────
+        _logged_in = bool(st.session_state.get('gsheet_tokens'))
+        _oauth_cfg = None
+        _build_url = None
+        _login_state = None
+        try:
+            from src.data.portfolio.oauth_state import get_login_state, get_oauth_cfg
+            from infra.oauth import build_authorize_url
+            _oauth_cfg = get_oauth_cfg()
+            _build_url = build_authorize_url
+            _login_state = get_login_state
+        except Exception as _ie:  # noqa: BLE001 — OAuth 模組缺席仍可走 URL/ID 手貼
+            st.caption(f'（OAuth 模組未就緒:{type(_ie).__name__} — 仍可手貼 Sheet URL/ID）')
+
+        if _logged_in:
+            _email = st.session_state.get('gsheet_email', '')
+            st.success(f'🟢 已用 Google 登入{("：" + _email) if _email else ""}')
+        elif _oauth_cfg and _build_url and _login_state:
+            _url = _build_url(_oauth_cfg['client_id'], _oauth_cfg['redirect_uri'],
+                              state=_login_state())
+            st.info('ℹ️ 尚未登入 Google — 登入後可一鍵新建個股專屬 Sheet(或直接手貼下方 URL/ID)。')
+            st.link_button('🔐 用 Google 登入', _url, use_container_width=True)
+        # (SA 模式:無 OAuth cfg 也無登入 → 直接用下方 URL/ID 輸入即可)
+
+        # ── 設定個股 sheet(URL/ID 手貼,OAuth+SA 皆可;regex 同 ETF sidebar)──
+        _stock_sid = _gsp._get_active_stock_sheet_id()
+        _raw = st.text_input(
+            '個股 Google Sheet ID 或完整 URL(系統自動解析 ID)',
+            value=_stock_sid, key='stock_grp_sheet_id_input',
+            placeholder='貼上 https://docs.google.com/spreadsheets/d/...')
+        _m = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', _raw)
+        _new_sid = _m.group(1) if _m else _raw.strip()
+        if _new_sid and _new_sid != _stock_sid:
+            st.session_state[_gsp.STOCK_PORTFOLIO_SHEET_KEY] = _new_sid
+            _stock_sid = _new_sid
+
+        # ── 一鍵新建個股專屬 Sheet(OAuth 限定;reuse L1 create_new_sheet)──
+        if _logged_in:
+            _nc1, _nc2 = st.columns([3, 2])
+            _new_title = _nc1.text_input(
+                '新 Sheet 名稱', value='台股 Dashboard - 個股組合',
+                key='stock_grp_new_sheet_title', label_visibility='collapsed',
+                placeholder='台股 Dashboard - 個股組合')
+            if _nc2.button('🆕 建立個股專屬 Sheet', key='stock_grp_create_sheet',
+                           use_container_width=True):
+                try:
+                    _nid, _nurl = _gsp.create_new_sheet(_new_title)
+                except Exception as _ce:  # noqa: BLE001 — 建立失敗顯示不炸
+                    st.error(f'❌ 建立失敗:{_ce}')
+                else:
+                    st.session_state[_gsp.STOCK_PORTFOLIO_SHEET_KEY] = _nid
+                    st.success(f'✅ 已建立並選用「{_new_title}」 — [打開 Sheet]({_nurl})')
+                    st.rerun()
+
+        if not _stock_sid:  # §1:未設定 → 不繼續(不借 ETF sheet)
+            st.info('💡 尚未設定個股專屬 Sheet — 貼上 URL/ID,或(登入後)按「🆕 建立個股專屬 Sheet」。')
+            return
+        st.caption(f'✅ 個股 Sheet ID:`{_stock_sid}`')
+        st.markdown('---')
+
+        # ── 儲存目前個股清單 ──────────────
+        st.markdown('**💾 儲存目前個股清單為命名組合**')
+        st.caption('個股組合以「**代碼**」為主;張數/均價**非必填**,留白或 0 存檔時以哨兵 1 通過'
+                   '雲端驗證 —— 「帶入我的持股」時**只讀代碼**。有實際持股可自行改填真實值。')
+        _seed = pd.DataFrame({
+            '代碼': list(stock_list),
+            '持有張數': [0.0] * len(stock_list),
+            '平均買入價': [0.0] * len(stock_list),
+        })
+        _edited = st.data_editor(
+            _seed, hide_index=True, use_container_width=True,
+            key='stock_grp_save_editor',
+            column_config={
+                '持有張數': st.column_config.NumberColumn(min_value=0.0, step=1.0),
+                '平均買入價': st.column_config.NumberColumn(min_value=0.0, step=0.01),
+            })
+        _sc1, _sc2 = st.columns([3, 1])
+        _name = _sc1.text_input('組合名稱', value='',
+                                placeholder='例如:主力觀察 / 高股息 / 波段',
+                                key='stock_grp_save_name')
+        if _sc2.button('💾 儲存', key='stock_grp_save_btn',
+                       use_container_width=True, disabled=(not _name.strip())):
+            _rows: list[dict] = []
+            for _r in _edited.to_dict('records'):
+                _tk = str(_r.get('代碼', '')).strip()
+                if not _tk:
+                    continue
+                try:
+                    _lots = float(_r.get('持有張數') or 0)
+                    _avg = float(_r.get('平均買入價') or 0)
+                except (TypeError, ValueError):
+                    _lots, _avg = 0.0, 0.0
+                # 純觀察清單(未填持股)→ 用哨兵 1/1 通過 save_portfolio 驗證;
+                # §3.3 載入(帶入持股)僅取代碼,哨兵不會被當價格讀回。
+                _rows.append({'ticker': _tk,
+                              'lots': _lots if _lots > 0 else 1.0,
+                              'avg_price': _avg if _avg > 0 else 1.0})
+            if not _rows:
+                st.warning('⚠️ 沒有可儲存的代碼')
+            else:
+                try:
+                    _n = _gsp.save_portfolio(_name, _rows, sheet_id=_stock_sid)
+                except Exception as _e:  # noqa: BLE001 — 儲存失敗顯示不炸
+                    st.error(f'❌ 儲存失敗:{_e}')
+                else:
+                    st.success(f'✅ 已儲存「{_name}」共 {_n} 檔到個股 Sheet')
+
+        st.markdown('---')
+
+        # ── 載入/列出既有個股組合(帶入上方唯一輸入框)──────────────
+        st.markdown('**📂 載入既有個股組合**（帶入上方唯一輸入框）')
+        try:
+            _names = _gsp.list_portfolios(sheet_id=_stock_sid)
+        except Exception as _e:  # noqa: BLE001 — 連線失敗顯示不炸
+            st.error(f'❌ 無法連線個股 Sheet:{_e}')
+            return
+        if not _names:
+            st.caption('💡 此個股 Sheet 尚無組合 —— 先在上方存一組。')
+            return
+        _lc1, _lc2 = st.columns([3, 1])
+        _sel = _lc1.selectbox('選擇組合', options=['—'] + _names,
+                              key='stock_grp_load_sel')
+        if _lc2.button('📂 載入', key='stock_grp_load_btn',
+                       use_container_width=True, disabled=(_sel == '—')):
+            try:
+                _loaded = _gsp.load_portfolio(_sel, sheet_id=_stock_sid)
+            except Exception as _e:  # noqa: BLE001 — 載入失敗顯示不炸
+                st.error(f'❌ 載入失敗:{_e}')
+            else:
+                _tks = [str(r.get('ticker', '')).strip() for r in (_loaded or [])
+                        if str(r.get('ticker', '')).strip()]
+                if not _tks:
+                    st.warning(f'⚠️ 組合「{_sel}」是空的')
+                else:
+                    _capped = _tks[:10]
+                    st.session_state['multi_input'] = ' '.join(_capped)
+                    st.success(f'✅ 已載入「{_sel}」{len(_tks)} 檔,帶入上方輸入框:{" ".join(_capped)}')
+                    st.rerun()
 
 
 def _render_risk_contribution_section(stock_list: list[str]) -> None:
