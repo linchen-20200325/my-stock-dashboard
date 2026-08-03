@@ -330,12 +330,14 @@ def _render_stock_cloud_storage(stock_list: list[str]) -> None:
             if _nc2.button('🆕 建立個股專屬 Sheet', key='stock_grp_create_sheet',
                            use_container_width=True):
                 try:
-                    _nid, _nurl = _gsp.create_new_sheet(_new_title)
+                    _nid, _nurl = _gsp.create_new_sheet(
+                        _new_title, folder_name=_gsp._STOCK_DRIVE_FOLDER_NAME)
                 except Exception as _ce:  # noqa: BLE001 — 建立失敗顯示不炸
                     st.error(f'❌ 建立失敗:{_ce}')
                 else:
                     st.session_state[_gsp.STOCK_PORTFOLIO_SHEET_KEY] = _nid
-                    st.success(f'✅ 已建立並選用「{_new_title}」 — [打開 Sheet]({_nurl})')
+                    st.success(f'✅ 已建立並選用「{_new_title}」（已放入專屬資料夾）'
+                               f' — [打開 Sheet]({_nurl})')
                     st.rerun()
 
         if not _stock_sid:  # §1:未設定 → 不繼續(不借 ETF sheet)

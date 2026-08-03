@@ -494,3 +494,215 @@ def test_col_letter_helper():
     assert gsp._col_letter(26) == 'Z'
     with pytest.raises(ValueError):
         gsp._col_letter(27)
+
+
+# ══ Phase 2: 個股 新建 Sheet 放進專屬 Drive 資料夾（drive.file scope only）══════
+class _FakeResp:
+    """模擬 requests.Response：只需 .json() 回預設 payload。"""
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _FakeHTTPClient:
+    """記錄每次 request(method, endpoint, params=, json=)；依序列回應。
+
+    routes: 依 method 給 payload —— 'get_search'（q 查資料夾）/ 'post'（建資料夾）
+    / 'get_parents'（?fields=parents）/ 'patch'（搬移）。
+    """
+    def __init__(self, *, search_files=None, new_folder_id=None,
+                 cur_parents=None, fail_on=None):
+        self.calls: list[dict] = []
+        self._search_files = search_files if search_files is not None else []
+        self._new_folder_id = new_folder_id
+        self._cur_parents = cur_parents if cur_parents is not None else []
+        self._fail_on = fail_on   # e.g. 'patch' / 'post' / 'get_search'
+
+    def request(self, method, endpoint, params=None, json=None,
+                data=None, files=None, headers=None):
+        # 分類這次呼叫
+        is_files_root = endpoint.endswith('/drive/v3/files')
+        q = (params or {}).get('q', '')
+        if method == 'get' and is_files_root and 'folder' in q:
+            kind = 'get_search'
+        elif method == 'post' and is_files_root:
+            kind = 'post'
+        elif method == 'get' and not is_files_root:
+            kind = 'get_parents'
+        elif method == 'patch':
+            kind = 'patch'
+        else:
+            kind = 'other'
+        self.calls.append({'kind': kind, 'method': method, 'endpoint': endpoint,
+                           'params': params, 'json': json})
+        if self._fail_on and kind == self._fail_on:
+            # 模擬真實 Drive API 失敗（網路 / requests 例外，非 RuntimeError）
+            raise ConnectionError(f'boom on {kind}')
+        if kind == 'get_search':
+            return _FakeResp({'files': list(self._search_files)})
+        if kind == 'post':
+            return _FakeResp({'id': self._new_folder_id})
+        if kind == 'get_parents':
+            return _FakeResp({'parents': list(self._cur_parents)})
+        if kind == 'patch':
+            return _FakeResp({'id': 'SHEET_X', 'parents': ['FID']})
+        return _FakeResp({})
+
+
+def _fake_client_with_http(http):
+    client = MagicMock()
+    client.http_client = http
+    return client
+
+
+# ── _get_or_create_app_folder ───────────────────────────────
+def test_get_or_create_folder_found_returns_existing_no_create():
+    """命中同名資料夾 → 回既有 id，且**不**發 POST（不重複建立）。"""
+    http = _FakeHTTPClient(search_files=[{'id': 'FID_EXISTING', 'name': 'X'}])
+    with patch.object(gsp, '_has_oauth_tokens', return_value=True), \
+         patch.object(gsp, '_build_client',
+                      return_value=_fake_client_with_http(http)):
+        fid = gsp._get_or_create_app_folder('台股 Dashboard（個股組合）')
+    assert fid == 'FID_EXISTING'
+    kinds = [c['kind'] for c in http.calls]
+    assert kinds == ['get_search']          # 只有查詢，無 POST
+    assert 'post' not in kinds
+
+
+def test_get_or_create_folder_not_found_creates_and_returns_new_id():
+    """查無同名 → 發 POST 建立，回新 id。"""
+    http = _FakeHTTPClient(search_files=[], new_folder_id='FID_NEW')
+    with patch.object(gsp, '_has_oauth_tokens', return_value=True), \
+         patch.object(gsp, '_build_client',
+                      return_value=_fake_client_with_http(http)):
+        fid = gsp._get_or_create_app_folder('台股 Dashboard（個股組合）')
+    assert fid == 'FID_NEW'
+    kinds = [c['kind'] for c in http.calls]
+    assert kinds == ['get_search', 'post']
+    # POST body 帶正確 name + folder mimeType
+    post_call = http.calls[1]
+    assert post_call['json']['name'] == '台股 Dashboard（個股組合）'
+    assert post_call['json']['mimeType'] == 'application/vnd.google-apps.folder'
+
+
+def test_get_or_create_folder_escapes_single_quote_in_q():
+    """名稱含單引號 → q 字串內以 \\' 轉義（防查詢語法破壞）。"""
+    http = _FakeHTTPClient(search_files=[{'id': 'FID', 'name': "a'b"}])
+    with patch.object(gsp, '_has_oauth_tokens', return_value=True), \
+         patch.object(gsp, '_build_client',
+                      return_value=_fake_client_with_http(http)):
+        gsp._get_or_create_app_folder("a'b")
+    q = http.calls[0]['params']['q']
+    assert "name='a\\'b'" in q
+
+
+def test_get_or_create_folder_requires_oauth():
+    with patch.object(gsp, '_has_oauth_tokens', return_value=False):
+        with pytest.raises(RuntimeError, match='登入'):
+            gsp._get_or_create_app_folder('X')
+
+
+def test_get_or_create_folder_api_failure_raises():
+    """§1 fail-loud：Drive API 失敗 → RuntimeError（不回假 id）。"""
+    http = _FakeHTTPClient(search_files=[], fail_on='get_search')
+    with patch.object(gsp, '_has_oauth_tokens', return_value=True), \
+         patch.object(gsp, '_build_client',
+                      return_value=_fake_client_with_http(http)):
+        with pytest.raises(RuntimeError, match='資料夾建立/查詢失敗'):
+            gsp._get_or_create_app_folder('X')
+
+
+def test_get_or_create_folder_post_no_id_raises():
+    """POST 回應無 id → §1 fail-loud RuntimeError（不回假 id）。"""
+    http = _FakeHTTPClient(search_files=[], new_folder_id=None)
+    with patch.object(gsp, '_has_oauth_tokens', return_value=True), \
+         patch.object(gsp, '_build_client',
+                      return_value=_fake_client_with_http(http)):
+        with pytest.raises(RuntimeError, match='未取得 id'):
+            gsp._get_or_create_app_folder('X')
+
+
+# ── create_new_sheet(folder_name=...) ───────────────────────
+def _sheet_stub(sheet_id='SHEET_X'):
+    sh = MagicMock()
+    sh.id = sheet_id
+    sh.url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/edit'
+    return sh
+
+
+def test_create_new_sheet_default_no_folder_calls():
+    """folder_name=None（預設）→ 行為與舊版相同：只 create，無任何 Drive 資料夾呼叫。"""
+    http = _FakeHTTPClient()
+    client = _fake_client_with_http(http)
+    client.create.return_value = _sheet_stub()
+    with patch.object(gsp, '_has_oauth_tokens', return_value=True), \
+         patch.object(gsp, '_build_client', return_value=client):
+        sid, url = gsp.create_new_sheet('台股 Dashboard - 投資組合')
+    assert sid == 'SHEET_X'
+    assert url.endswith('/SHEET_X/edit')
+    assert http.calls == []                 # 完全沒碰 Drive 資料夾 API
+
+
+def test_create_new_sheet_with_folder_moves_sheet_into_folder():
+    """folder_name 非空 → 先 create Sheet，再 addParents 搬入資料夾。"""
+    http = _FakeHTTPClient(search_files=[{'id': 'FID', 'name': 'X'}],
+                           cur_parents=['ROOT_ID'])
+    client = _fake_client_with_http(http)
+    client.create.return_value = _sheet_stub('SHEET_X')
+    with patch.object(gsp, '_has_oauth_tokens', return_value=True), \
+         patch.object(gsp, '_build_client', return_value=client):
+        sid, url = gsp.create_new_sheet('個股組合',
+                                        folder_name='台股 Dashboard（個股組合）')
+    assert sid == 'SHEET_X'
+    kinds = [c['kind'] for c in http.calls]
+    # 搜資料夾 → 取現有 parents → PATCH 搬移
+    assert kinds == ['get_search', 'get_parents', 'patch']
+    patch_call = http.calls[-1]
+    assert patch_call['endpoint'].endswith('/SHEET_X')
+    assert patch_call['params']['addParents'] == 'FID'
+    assert patch_call['params']['removeParents'] == 'ROOT_ID'
+
+
+def test_create_new_sheet_folder_step_best_effort_still_returns_sheet():
+    """§1 best-effort：搬移（PATCH）失敗 → 仍回傳已建立的 Sheet（永不遺失）。"""
+    http = _FakeHTTPClient(search_files=[{'id': 'FID', 'name': 'X'}],
+                           cur_parents=['ROOT_ID'], fail_on='patch')
+    client = _fake_client_with_http(http)
+    client.create.return_value = _sheet_stub('SHEET_X')
+    with patch.object(gsp, '_has_oauth_tokens', return_value=True), \
+         patch.object(gsp, '_build_client', return_value=client):
+        sid, url = gsp.create_new_sheet('個股組合',
+                                        folder_name='台股 Dashboard（個股組合）')
+    # 搬移失敗被吞（best-effort log），Sheet id/url 完好回傳
+    assert sid == 'SHEET_X'
+    assert url.endswith('/SHEET_X/edit')
+
+
+def test_create_new_sheet_folder_lookup_failure_best_effort():
+    """§1 best-effort：連資料夾查詢都失敗 → 仍回傳 Sheet（不炸、不 orphan）。"""
+    http = _FakeHTTPClient(fail_on='get_search')
+    client = _fake_client_with_http(http)
+    client.create.return_value = _sheet_stub('SHEET_X')
+    with patch.object(gsp, '_has_oauth_tokens', return_value=True), \
+         patch.object(gsp, '_build_client', return_value=client):
+        sid, url = gsp.create_new_sheet('個股組合',
+                                        folder_name='台股 Dashboard（個股組合）')
+    assert sid == 'SHEET_X'
+
+
+def test_create_new_sheet_empty_folder_name_treated_as_root():
+    """folder_name='' / 空白 → 視同 None，走根目錄（不觸發資料夾流程）。"""
+    http = _FakeHTTPClient()
+    client = _fake_client_with_http(http)
+    client.create.return_value = _sheet_stub()
+    with patch.object(gsp, '_has_oauth_tokens', return_value=True), \
+         patch.object(gsp, '_build_client', return_value=client):
+        gsp.create_new_sheet('t', folder_name='   ')
+    assert http.calls == []
+
+
+def test_stock_drive_folder_name_constant():
+    """§3.3 專屬資料夾名為具名常數。"""
+    assert gsp._STOCK_DRIVE_FOLDER_NAME == '台股 Dashboard（個股組合）'
