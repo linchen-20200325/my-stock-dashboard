@@ -318,3 +318,179 @@ def test_sheet_key_constants_distinct():
     assert gsp.PORTFOLIO_SHEET_KEY == 'portfolio_sheet_id'
     assert gsp.STOCK_PORTFOLIO_SHEET_KEY == 'stock_portfolio_sheet_id'
     assert gsp.PORTFOLIO_SHEET_KEY != gsp.STOCK_PORTFOLIO_SHEET_KEY
+
+
+# ══ Option B: 個股純代碼觀察清單（stock_watchlist 分頁,§1 無價格/哨兵）══════════
+class _CapturingWorksheet:
+    """只記錄 update(range, values) 呼叫,用來驗證 header 更新範圍是否動態。"""
+    def __init__(self, first_row):
+        self._first_row = list(first_row)
+        self.update_calls: list[tuple] = []
+
+    def row_values(self, n):
+        return list(self._first_row) if n == 1 else []
+
+    def update(self, range_name, values):
+        self.update_calls.append((range_name, [list(v) for v in values]))
+
+
+def _mount_capturing_ws(first_row):
+    """建一個 _build_client stub,open_by_key → spreadsheet → 回傳 capturing ws。"""
+    ws = _CapturingWorksheet(first_row)
+    sh = MagicMock()
+    sh.worksheet.return_value = ws
+    client = MagicMock()
+    client.open_by_key.return_value = sh
+    return ws, client
+
+
+@pytest.fixture
+def fake_watchlist_ws():
+    """乾淨的 stock_watchlist worksheet（只含 3 欄 header）。"""
+    ws = _FakeWorksheet([gsp._STOCK_WATCHLIST_HEADERS])
+    with patch.object(gsp, '_ws', return_value=ws):
+        yield ws
+
+
+# ── 常數 / schema 物理隔離 ─────────────────────────────────────
+def test_watchlist_constants():
+    """§3.3 worksheet 名稱 + headers 具名常數;3 欄純代碼,與 portfolios 物理隔離。"""
+    assert gsp._STOCK_WATCHLIST_WORKSHEET == 'stock_watchlist'
+    assert gsp._STOCK_WATCHLIST_HEADERS == ['name', 'ticker', 'updated_at']
+    # 不同分頁 + 無價格欄(lots/avg_price 不在 watchlist headers)
+    assert gsp._STOCK_WATCHLIST_WORKSHEET != gsp._WORKSHEET_NAME
+    assert 'lots' not in gsp._STOCK_WATCHLIST_HEADERS
+    assert 'avg_price' not in gsp._STOCK_WATCHLIST_HEADERS
+
+
+# ── save→load round-trip：僅代碼、無價格、無哨兵 ──────────────
+def test_save_stock_watchlist_roundtrip_no_price(fake_watchlist_ws):
+    n = gsp.save_stock_watchlist('觀察', ['2330', '2454', '0050.tw'])
+    assert n == 3
+    # header 完好(3 欄)
+    assert fake_watchlist_ws.rows[0] == gsp._STOCK_WATCHLIST_HEADERS
+    # 每列恰 3 欄:name / ticker / updated_at —— **無任何價格欄 / 哨兵值**
+    for r in fake_watchlist_ws.rows[1:]:
+        assert len(r) == 3, f'watchlist 列應為 3 欄(無價格),實得 {r}'
+        assert r[0] == '觀察'
+        assert 1.0 not in r and 1 not in r       # 無哨兵 1.0
+        # 除 name/ticker/updated_at 外沒有任何 float(價格)
+        assert not any(isinstance(v, float) for v in r)
+    # ticker 大寫正規化
+    assert [r[1] for r in fake_watchlist_ws.rows[1:]] == ['2330', '2454', '0050.TW']
+    # load 回原代碼(順序一致、無 price 欄)
+    assert gsp.load_stock_watchlist('觀察') == ['2330', '2454', '0050.TW']
+
+
+def test_save_stock_watchlist_dedupes_preserves_order(fake_watchlist_ws):
+    n = gsp.save_stock_watchlist('觀察', ['2330', '2330', '2454', ' 2330 '])
+    assert n == 2
+    assert gsp.load_stock_watchlist('觀察') == ['2330', '2454']
+
+
+def test_save_stock_watchlist_overwrites_same_name():
+    ws = _FakeWorksheet([
+        gsp._STOCK_WATCHLIST_HEADERS,
+        ['A', '2330', 'ts'],
+        ['B', '2454', 'ts'],
+    ])
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_stock_watchlist('A', ['1101', '1102'])
+        assert gsp.load_stock_watchlist('A') == ['1101', '1102']
+        assert gsp.load_stock_watchlist('B') == ['2454']   # 其它 name 不受影響
+
+
+# ── list distinct names ─────────────────────────────────────
+def test_list_stock_watchlists_distinct_sorted():
+    ws = _FakeWorksheet([
+        gsp._STOCK_WATCHLIST_HEADERS,
+        ['波段', '2330', 'ts'],
+        ['波段', '2454', 'ts'],
+        ['存股', '0056', 'ts'],
+        ['', '9999', 'ts'],         # 空 name 略過
+    ])
+    with patch.object(gsp, '_ws', return_value=ws):
+        assert gsp.list_stock_watchlists() == ['存股', '波段']
+
+
+def test_list_stock_watchlists_empty(fake_watchlist_ws):
+    assert gsp.list_stock_watchlists() == []
+
+
+def test_load_stock_watchlist_missing_and_empty_name(fake_watchlist_ws):
+    assert gsp.load_stock_watchlist('不存在') == []
+    assert gsp.load_stock_watchlist('') == []
+    assert gsp.load_stock_watchlist('   ') == []
+
+
+def test_load_stock_watchlist_dedupes_skips_blank():
+    ws = _FakeWorksheet([
+        gsp._STOCK_WATCHLIST_HEADERS,
+        ['觀察', '2330', 'ts'],
+        ['觀察', '2454', 'ts'],
+        ['觀察', '2330', 'ts'],      # 重複去除
+        ['觀察', '', 'ts'],          # 空代碼略過
+    ])
+    with patch.object(gsp, '_ws', return_value=ws):
+        assert gsp.load_stock_watchlist('觀察') == ['2330', '2454']
+
+
+# ── 空 name / 空 tickers raise ──────────────────────────────
+def test_save_stock_watchlist_empty_name(fake_watchlist_ws):
+    with pytest.raises(ValueError, match='名稱'):
+        gsp.save_stock_watchlist('', ['2330'])
+
+
+def test_save_stock_watchlist_empty_tickers(fake_watchlist_ws):
+    with pytest.raises(ValueError, match='代碼'):
+        gsp.save_stock_watchlist('x', [])
+
+
+def test_save_stock_watchlist_all_blank_tickers(fake_watchlist_ws):
+    with pytest.raises(ValueError, match='代碼'):
+        gsp.save_stock_watchlist('x', ['', '   '])
+
+
+# ── 明確 sheet_id 路由到該 sheet(短路 legacy accessor)──────
+def test_stock_watchlist_explicit_sheet_id_routes():
+    client, opened = _fake_client_capturing()
+    with patch.object(gsp, '_build_client', return_value=client), \
+         patch.object(gsp, '_get_active_sheet_id',
+                      return_value='LEGACY_SID') as _mock_legacy:
+        gsp.save_stock_watchlist('g', ['2330'], sheet_id='STOCK_SID')
+        gsp.list_stock_watchlists(sheet_id='STOCK_SID')
+        gsp.load_stock_watchlist('g', sheet_id='STOCK_SID')
+    assert set(opened) == {'STOCK_SID'}            # legacy sheet 完全沒被打開
+    _mock_legacy.assert_not_called()               # 明確 sheet_id 短路 legacy accessor
+
+
+# ── 動態 header-range 修正（3 欄 → A1:C1,不是死寫的 A1:E1）──
+def test_dynamic_header_range_3col_watchlist():
+    """§ bug fix:3 欄 watchlist 分頁的 header 更新範圍應為 A1:C1(非死寫 A1:E1)。"""
+    ws, client = _mount_capturing_ws(first_row=[])   # header mismatch → 觸發 update
+    with patch.object(gsp, '_build_client', return_value=client):
+        gsp._get_worksheet(sheet_id='SID',
+                           worksheet_name=gsp._STOCK_WATCHLIST_WORKSHEET,
+                           headers=gsp._STOCK_WATCHLIST_HEADERS)
+    assert ws.update_calls, 'header 不符應觸發 update'
+    _rng, _vals = ws.update_calls[0]
+    assert _rng == 'A1:C1'                            # 3 欄 → C,不是 E
+    assert _vals == [gsp._STOCK_WATCHLIST_HEADERS]
+
+
+def test_dynamic_header_range_5col_portfolios():
+    """對照組:預設 portfolios(5 欄)仍為 A1:E1(既有行為不變)。"""
+    ws, client = _mount_capturing_ws(first_row=[])
+    with patch.object(gsp, '_build_client', return_value=client):
+        gsp._get_worksheet(sheet_id='SID')           # 預設 portfolios + 5 headers
+    _rng, _ = ws.update_calls[0]
+    assert _rng == 'A1:E1'
+
+
+def test_col_letter_helper():
+    assert gsp._col_letter(3) == 'C'
+    assert gsp._col_letter(5) == 'E'
+    assert gsp._col_letter(1) == 'A'
+    assert gsp._col_letter(26) == 'Z'
+    with pytest.raises(ValueError):
+        gsp._col_letter(27)
