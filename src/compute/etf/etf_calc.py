@@ -19,6 +19,8 @@ except ImportError:
             return lambda f: f
         cache_resource = cache_data
     st = _NoOpST()  # noqa
+import math  # v19.167 效率前緣:sqrt / isfinite(§4.3 浮點容差比較用 math.isclose)
+import numpy as np  # v19.167 效率前緣:Dirichlet 取樣 + 向量化 wᵀΣw(§8.2:numpy 非 I/O,L2 允許)
 import pandas as pd
 # v18.358 PR-R1 §8.2 A7 修:原 `import yfinance as yf` 為 L2 違規(L2 不得 HTTP I/O)。
 # yfinance 唯一用途(compute_etf_peer_ranking L587)已抽至 etf_fetch.fetch_etf_peer_history(L1)。
@@ -40,6 +42,10 @@ from src.config import STOP_LOSS_PCT
 # v18.442:ACTIVE_ETF_PREMIUM_MAX_PCT 直引移除 — 折溢價上限改由 etf_helpers.etf_premium_sanity_max
 #         (主/被動分流)內部引 SSOT,見 calc_premium_discount。
 from shared.signal_thresholds import (
+    EFFICIENT_FRONTIER_MIN_COMMON_DAYS,  # v19.167 效率前緣:共同日下限 SSOT
+    EFFICIENT_FRONTIER_N_BINS,           # v19.167 效率前緣:前緣分箱數 SSOT
+    EFFICIENT_FRONTIER_N_SIM,            # v19.167 效率前緣:蒙地卡羅樣本數 SSOT
+    EFFICIENT_FRONTIER_SEED,             # v19.167 效率前緣:RNG 種子 SSOT(§5 可重現)
     ETF_AUM_FAIR_YI,
     ETF_AUM_LOW_YI,
     ETF_AVG_VOL_20D_FAIR_LOTS,
@@ -1131,3 +1137,319 @@ def align_portfolio_returns(var_rets, weights):
     return {'port_ret': port_ret, 'n_union': n_union, 'n_common': n_common,
             'dropped': n_union - n_common, 'limiter': limiter,
             'limiter_start': starts.get(limiter), 'tickers_used': tickers_used}
+
+
+def compute_portfolio_vs_benchmark(per_asset_returns, weights, bench_returns):
+    """§1 誠實對齊:組合 + 個別持股 vs 基準(0050)的「累積報酬曲線」—— 純函式,零 I/O。
+
+    累積報酬定義(§7 對齊):給定日報酬 Series r(pct_change 得的小數),
+        cum = (1 + r).cumprod() - 1        # 小數;顯示時 ×100 為 %(不年化)
+    三種曲線(組合 / 基準 / 個別持股)一律在**同一組共同交易日**上計算,才能公平疊圖:
+      1. 先用 `align_portfolio_returns` 取「全員皆有交易」的組合日報酬(共同日交集,§1 不補值)。
+      2. 再與基準日報酬取交集(仍 §1:非共同日一律剔除,**不 ffill / 不 fillna(0)**)。
+      3. 組合 / 基準 / 每檔持股都 slice 到這條最終共同日 index,再各自 cumprod
+         (同 index 起算 → 三線可直接視覺比較)。
+    基準抓不到(空)/ 無共同日 → 回傳 `benchmark_ok=False` + 空 Series,交由 UI fail loud
+    (顯示錯誤,**不畫假曲線**,§1)。
+
+    幣別注意(§4.1):pct_change 是「原幣別」報酬;美元計價持股(如 BND)未含 TWD 匯率。
+    本函式**不做**匯率換算(不靜默混算),由 UI 端加註 caption 揭露(對齊 VaR 段誠實風格)。
+
+    Args:
+        per_asset_returns: {ticker: pd.Series(日報酬, DatetimeIndex)}(pct_change().dropna())。
+        weights:           {ticker: 權重(actual_pct;比例或百分比皆可,align 內部正規化)}。
+        bench_returns:     pd.Series(基準 0050 日報酬, DatetimeIndex)。
+
+    Returns:
+        dict:
+          dates(最終共同日 DatetimeIndex)/ portfolio_cum(Series)/ benchmark_cum(Series)/
+          per_asset_cum({ticker: Series})/ n_common(最終共同日數)/ tickers_used /
+          final({portfolio, benchmark, per_asset:{ticker: 末點累積報酬(小數)}})/ benchmark_ok /
+          + 診斷:n_union / n_common_assets / dropped_assets / dropped_vs_benchmark /
+                  limiter / limiter_start。
+        資料不足 / 基準空 → 空 Series,絕不腦補(§1)。
+    """
+    _empty = pd.Series(dtype='float64')
+
+    def _norm(s):
+        """去 tz + 去 NaN + 排序,讓組合 / 基準 / 個別的 DatetimeIndex 可一致交集。"""
+        if s is None:
+            return _empty
+        s = pd.Series(s).dropna()
+        if s.empty:
+            return _empty
+        idx = pd.to_datetime(s.index, errors='coerce')
+        if getattr(idx, 'tz', None) is not None:
+            idx = idx.tz_localize(None)
+        out = pd.Series(s.to_numpy(), index=idx)
+        out = out[~out.index.isna()]
+        return out.sort_index()
+
+    # 1) 個別報酬統一正規化 → 餵給既有 align(組合曲線沿用誠實對齊,不重造輪子)
+    norm_assets = {t: _norm(s) for t, s in (per_asset_returns or {}).items()}
+    norm_assets = {t: s for t, s in norm_assets.items() if not s.empty}
+    align = align_portfolio_returns(norm_assets, weights or {})
+    port_ret = align['port_ret']              # 全員共同交易日的組合日報酬
+    tickers_used = align['tickers_used']
+
+    def _fail(dropped_vs_bench):
+        return {
+            'dates': pd.DatetimeIndex([]),
+            'portfolio_cum': _empty, 'benchmark_cum': _empty, 'per_asset_cum': {},
+            'n_common': 0, 'tickers_used': tickers_used,
+            'final': {'portfolio': None, 'benchmark': None, 'per_asset': {}},
+            'benchmark_ok': False,
+            'n_union': align['n_union'], 'n_common_assets': align['n_common'],
+            'dropped_assets': align['dropped'], 'dropped_vs_benchmark': dropped_vs_bench,
+            'limiter': align['limiter'], 'limiter_start': align['limiter_start'],
+        }
+
+    # 2) 基準與「組合共同日」再取交集(§1 非共同日剔除,不補值)
+    bench = _norm(bench_returns)
+    if port_ret.empty or bench.empty:
+        return _fail(0)
+    common_idx = port_ret.index.intersection(bench.index).sort_values()
+    if len(common_idx) == 0:
+        # 有組合、有基準,但零共同交易日 → 無法比較,交 UI fail loud
+        return _fail(align['n_common'])
+
+    def _cum(r):
+        return (1.0 + r).cumprod() - 1.0
+
+    port_cum  = _cum(port_ret.reindex(common_idx))
+    bench_cum = _cum(bench.reindex(common_idx))
+    per_asset_cum = {}
+    for t in tickers_used:
+        s = norm_assets.get(t)
+        if s is None or s.empty:
+            continue
+        r = s.reindex(common_idx)
+        if r.isna().any():
+            # tickers_used 已通過 align 的 dropna(how='any'),common_idx ⊆ 資產共同日,
+            # 正常不會缺;此為防禦性剔除,絕不補值畫殘缺線(§1)。
+            continue
+        per_asset_cum[t] = _cum(r)
+
+    def _last(s):
+        return float(s.iloc[-1]) if s is not None and not s.empty else None
+
+    return {
+        'dates': common_idx,
+        'portfolio_cum': port_cum,
+        'benchmark_cum': bench_cum,
+        'per_asset_cum': per_asset_cum,
+        'n_common': len(common_idx),
+        'tickers_used': tickers_used,
+        'final': {
+            'portfolio': _last(port_cum),
+            'benchmark': _last(bench_cum),
+            'per_asset': {t: _last(s) for t, s in per_asset_cum.items()},
+        },
+        'benchmark_ok': True,
+        'n_union': align['n_union'],
+        'n_common_assets': align['n_common'],
+        'dropped_assets': align['dropped'],
+        'dropped_vs_benchmark': align['n_common'] - len(common_idx),
+        'limiter': align['limiter'],
+        'limiter_start': align['limiter_start'],
+    }
+
+
+def _ef_norm_series(s):
+    """去 tz + 去 NaN + 排序,讓各資產日報酬的 DatetimeIndex 可一致交集。
+
+    與 compute_portfolio_vs_benchmark._norm 同範式(共同日對齊須先統一 index)。
+    """
+    _empty = pd.Series(dtype='float64')
+    if s is None:
+        return _empty
+    s = pd.Series(s).dropna()
+    if s.empty:
+        return _empty
+    idx = pd.to_datetime(s.index, errors='coerce')
+    if getattr(idx, 'tz', None) is not None:
+        idx = idx.tz_localize(None)
+    out = pd.Series(s.to_numpy(), index=idx)
+    out = out[~out.index.isna()]
+    return out.sort_index()
+
+
+def compute_efficient_frontier(
+    per_asset_returns,
+    weights,
+    *,
+    n_sim: int = EFFICIENT_FRONTIER_N_SIM,
+    seed: int = EFFICIENT_FRONTIER_SEED,
+    min_common_days: int = EFFICIENT_FRONTIER_MIN_COMMON_DAYS,
+    n_bins: int = EFFICIENT_FRONTIER_N_BINS,
+) -> dict:
+    """§7 描述性「風險-報酬地圖」(效率前緣參考圖)—— 純函式,零 I/O。
+
+    ⚠️ **描述性、非規範性**:STATE.md:512 曾拒均值-變異數最佳化為「假精準」(牴觸
+    §1)。本函式**不**輸出「最適權重建議」,只把使用者「目前的組合」定位在歷史風險-
+    報酬空間,並疊一片隨機配置的蒙地卡羅雲 + 前緣**參考**包絡線。min-var / max-Sharpe
+    僅為「歷史估計參考點」,對取樣時間窗極度敏感,實務極不穩,**非投資建議**。
+
+    數學(§7,與既有 compute_risk_contribution 的 wᵀΣw 同範式;rf=0):
+        先取「全員皆有交易」的共同日矩陣 R(§1 dropna(how='any'),絕不 ffill/fillna(0))。
+        μ_daily = R.mean();  Σ_daily = R.cov()(ddof=1,同 compute_risk_contribution)
+        年化(§4.1 交易日非日曆日,SSOT TRADING_DAYS_PER_YEAR):
+            μ_annual = μ_daily × TRADING_DAYS_PER_YEAR         # 小數(0.15 = 15%)
+            Σ_annual = Σ_daily × TRADING_DAYS_PER_YEAR
+        任一權重 w(Σw=1):
+            port_ret = wᵀ μ_annual ;  port_vol = sqrt(wᵀ Σ_annual w) ;  sharpe = port_ret / port_vol
+        蒙地卡羅:w ~ Dirichlet(1ₖ)(單體上均勻),np.random.default_rng(seed) → §5 可重現。
+        前緣:雲依 vol 切 n_bins 等寬箱、每箱取 max 報酬,再取累積最大 → 非遞減上緣參考線。
+
+    §1 fail-loud:共同歷史 <2 檔、或共同日 <min_common_days → ok=False + 空結果,
+    **絕不**捏造前緣。§4.1 幣別:報酬為「原幣別」(美元計價持股未含 USD/TWD 匯率),
+    由 UI 加註 caption(本層不靜默混算)。
+
+    Args:
+        per_asset_returns: {ticker: pd.Series(日報酬, DatetimeIndex)}(pct_change().dropna())。
+        weights:           {ticker: 權重(actual_pct;比例或百分比皆可,內部正規化到 Σ=1)}。
+        n_sim:             蒙地卡羅樣本數(SSOT EFFICIENT_FRONTIER_N_SIM)。
+        seed:              RNG 種子(SSOT EFFICIENT_FRONTIER_SEED;固定 → 可重現)。
+        min_common_days:   共同日下限(SSOT EFFICIENT_FRONTIER_MIN_COMMON_DAYS)。
+        n_bins:            前緣分箱數(SSOT EFFICIENT_FRONTIER_N_BINS)。
+
+    Returns:
+        dict:
+          ok(bool)/ note(白話診斷)/ tickers_used(有共同歷史的資產順序)/ n_common(共同日數)/
+          cloud({'vol':[], 'ret':[], 'sharpe':[]}, 皆年化小數)/
+          frontier({'vol':[], 'ret':[]}, 年化小數, 上緣參考線)/
+          current_point({'vol','ret','sharpe'} 或 None — 使用者實際權重)/
+          per_asset_points({ticker: {'vol','ret'}} — 每檔單獨一點)/
+          min_var_point / max_sharpe_point({'vol','ret','sharpe'} 或 None — 歷史估計參考點,非建議)。
+        資料不足 → ok=False + 空,交 UI fail loud(§1)。
+    """
+    def _fail(note: str) -> dict:
+        return {
+            'ok': False, 'note': note,
+            'tickers_used': [], 'n_common': 0,
+            'cloud': {'vol': [], 'ret': [], 'sharpe': []},
+            'frontier': {'vol': [], 'ret': []},
+            'current_point': None, 'per_asset_points': {},
+            'min_var_point': None, 'max_sharpe_point': None,
+        }
+
+    # 1) 統一正規化各資產報酬 → 建共同日矩陣(§1 dropna(how='any'),絕不補值)
+    clean = {}
+    for t, s in (per_asset_returns or {}).items():
+        ns = _ef_norm_series(s)
+        if not ns.empty:
+            clean[str(t)] = ns
+    if len(clean) < 2:
+        return _fail('需 ≥2 檔有價格歷史的持股才能畫風險-報酬地圖(單檔無「配置」可言)')
+
+    mat = pd.DataFrame(clean).dropna(how='any')   # 全員皆有交易的共同日
+    n_common = int(len(mat))
+    tickers = list(mat.columns)
+    if len(tickers) < 2:
+        return _fail('可對齊的持股不足 2 檔,無法估共變異數')
+    if n_common < int(min_common_days):
+        return _fail(f'共同交易日僅 {n_common} 日(<{min_common_days}),'
+                     '樣本過短、共變異數估計過噪,不畫前緣(§1 不捏造)')
+
+    # 2) 年化 μ / Σ(§4.1 交易日年化,SSOT TRADING_DAYS_PER_YEAR)
+    k = len(tickers)
+    ann = float(TRADING_DAYS_PER_YEAR)
+    mu_vec = mat.mean().to_numpy(dtype='float64') * ann                     # μ_annual (k,)
+    cov_mat = mat.cov().reindex(index=tickers, columns=tickers).to_numpy(   # Σ_annual (k,k)
+        dtype='float64') * ann
+
+    def _stats(w):
+        """w(k,)已 Σ=1 → (vol, ret, sharpe);rf=0(sharpe=ret/vol),§4.1 波動非負開根。"""
+        ret = float(w @ mu_vec)
+        var = float(w @ cov_mat @ w)
+        vol = math.sqrt(var) if var > 0 else 0.0
+        sharpe = (ret / vol) if vol > 0 else float('nan')
+        return vol, ret, sharpe
+
+    def _pt(vol, ret, sharpe):
+        return {'vol': float(vol), 'ret': float(ret),
+                'sharpe': (None if not math.isfinite(sharpe) else float(sharpe))}
+
+    # 3) 每檔單獨一點(eᵢ:全押單一資產 → vol=σᵢ, ret=μᵢ)
+    per_asset_points = {}
+    for i, t in enumerate(tickers):
+        w = np.zeros(k, dtype='float64')
+        w[i] = 1.0
+        vol, ret, _ = _stats(w)
+        per_asset_points[t] = {'vol': float(vol), 'ret': float(ret)}
+
+    # 4) 使用者「目前」組合點(實際權重,只用有共同歷史的持股並重新正規化 Σ=1)
+    w_cur_raw = np.array(
+        [float(weights.get(t, 0.0) or 0.0) if weights else 0.0 for t in tickers],
+        dtype='float64')
+    w_cur_raw = np.where(w_cur_raw > 0, w_cur_raw, 0.0)
+    current_point = None
+    if float(w_cur_raw.sum()) > 0:
+        w_cur = w_cur_raw / w_cur_raw.sum()
+        current_point = _pt(*_stats(w_cur))
+
+    # 5) 蒙地卡羅雲(w ~ Dirichlet(1ₖ),default_rng(seed) → §5 可重現)+ 向量化 wᵀΣw
+    rng = np.random.default_rng(int(seed))
+    n_sim = max(int(n_sim), 1)
+    W = rng.dirichlet(np.ones(k, dtype='float64'), size=n_sim)   # (n_sim, k),每列 Σ=1
+    rets = W @ mu_vec                                            # (n_sim,)
+    var_rows = np.einsum('ij,ij->i', W, W @ cov_mat)            # 每列 wᵀΣw
+    var_rows = np.clip(var_rows, 0.0, None)                      # 防浮點微負(§4.4)
+    vols = np.sqrt(var_rows)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        sharpes = np.where(vols > 0, rets / vols, np.nan)       # rf=0
+
+    # 6) min-var / max-Sharpe 參考點(取自雲;歷史估計參考點,非建議)
+    min_var_point = None
+    if vols.size:
+        j = int(np.argmin(vols))
+        min_var_point = _pt(vols[j], rets[j], sharpes[j])
+    max_sharpe_point = None
+    if np.isfinite(sharpes).any():
+        j = int(np.nanargmax(sharpes))
+        max_sharpe_point = _pt(vols[j], rets[j], sharpes[j])
+
+    # 7) 前緣包絡線:依 vol 分箱、每箱取 max 報酬、再取累積最大 → 非遞減上緣參考線
+    fx, fy = _ef_frontier_envelope(vols, rets, int(n_bins))
+
+    return {
+        'ok': True, 'note': '',
+        'tickers_used': tickers, 'n_common': n_common,
+        'cloud': {'vol': vols.tolist(), 'ret': rets.tolist(),
+                  'sharpe': [None if not math.isfinite(x) else float(x) for x in sharpes]},
+        'frontier': {'vol': fx, 'ret': fy},
+        'current_point': current_point,
+        'per_asset_points': per_asset_points,
+        'min_var_point': min_var_point,
+        'max_sharpe_point': max_sharpe_point,
+    }
+
+
+def _ef_frontier_envelope(vols, rets, n_bins: int):
+    """雲 → 前緣上緣參考線:依 vol 切 n_bins 等寬箱,每箱取 max 報酬,再取累積最大值。
+
+    累積最大(cummax over 遞增 vol)保證:(1) 非遞減、(2) 上緣 —— 每箱參考值 ≥ 該箱
+    所有雲點報酬,故整條線罩住雲。回 (vol_list, ret_list)(年化小數,vol 遞增)。
+    """
+    vols = np.asarray(vols, dtype='float64')
+    rets = np.asarray(rets, dtype='float64')
+    if vols.size == 0:
+        return [], []
+    vmin, vmax = float(vols.min()), float(vols.max())
+    if not (vmax > vmin):
+        # 全部同波動(退化)→ 單點:該波動下的最高報酬
+        return [vmin], [float(rets.max())]
+    edges = np.linspace(vmin, vmax, int(n_bins) + 1)
+    centers = (edges[:-1] + edges[1:]) / 2.0
+    # digitize 用內部邊界,夾到 [0, n_bins-1](含左右端點)
+    bin_idx = np.clip(np.digitize(vols, edges[1:-1], right=False), 0, int(n_bins) - 1)
+    fx, fy = [], []
+    running = -np.inf
+    for b in range(int(n_bins)):
+        mask = bin_idx == b
+        if not mask.any():
+            continue
+        running = max(running, float(rets[mask].max()))
+        fx.append(float(centers[b]))
+        fy.append(running)
+    return fx, fy

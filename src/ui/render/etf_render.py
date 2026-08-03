@@ -117,6 +117,138 @@ def _plot_etf_chart(df: pd.DataFrame, ticker: str,
     st.plotly_chart(fig, width='stretch')
 
 
+def _plot_portfolio_vs_benchmark(result: dict, benchmark_label: str = '0050') -> bool:
+    """組合(加權)＋ 個別持股 vs 基準(0050)累積報酬疊圖(Y:累積報酬%)。
+
+    result: etf_calc.compute_portfolio_vs_benchmark() 的回傳 dict(曲線皆小數,此處 ×100 顯示 %)。
+    組合粗實線 + 0050 粗虛線(綠,視覺區隔)+ 個別持股細線(半透明墊底)。
+    §1:benchmark_ok=False / 空曲線 → 不畫、回傳 False,交 caller 顯示 fail-loud 訊息(不畫假曲線)。
+    """
+    port  = result.get('portfolio_cum')
+    bench = result.get('benchmark_cum')
+    if not result.get('benchmark_ok') or port is None or getattr(port, 'empty', True) \
+            or bench is None or getattr(bench, 'empty', True):
+        return False
+    fig = go.Figure()
+    _hover = '%{x|%Y-%m-%d}  %{y:.2f}%<extra>%{fullData.name}</extra>'
+    # 個別持股(細線,先畫墊底)
+    for t, s in (result.get('per_asset_cum') or {}).items():
+        if s is None or s.empty:
+            continue
+        fig.add_trace(go.Scatter(
+            x=s.index, y=(s * 100).round(2), name=str(t), mode='lines',
+            line=dict(width=1), opacity=0.55, hovertemplate=_hover))
+    # 基準 0050(粗虛線,綠)
+    fig.add_trace(go.Scatter(
+        x=bench.index, y=(bench * 100).round(2), name=f'{benchmark_label}（基準）',
+        mode='lines', line=dict(color=TRAFFIC_GREEN, width=3, dash='dash'),
+        hovertemplate=_hover))
+    # 組合(粗實線,亮藍)
+    fig.add_trace(go.Scatter(
+        x=port.index, y=(port * 100).round(2), name='組合（加權）',
+        mode='lines', line=dict(color='#58a6ff', width=3),
+        hovertemplate=_hover))
+    fig.update_layout(
+        template='plotly_dark', height=420,
+        margin=dict(l=0, r=0, t=20, b=0),
+        paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
+        legend=dict(orientation='h', yanchor='bottom', y=1.01),
+        yaxis=dict(title='累積報酬 (%)', ticksuffix='%', zeroline=True,
+                   zerolinecolor='#444', zerolinewidth=1),
+        hovermode='x unified',
+    )
+    st.plotly_chart(fig, width='stretch')
+    return True
+
+
+def _plot_efficient_frontier(result: dict) -> bool:
+    """效率前緣（風險-報酬地圖）散點圖 —— **描述性**視覺化(§7),非規範性最佳化。
+
+    result: etf_calc.compute_efficient_frontier() 回傳 dict(vol/ret 皆年化小數,此處 ×100 → %)。
+    圖層(由底到頂):蒙地卡羅隨機配置雲(依 Sharpe 上色)→ 前緣參考線 → 每檔持股點 →
+    min-var / max-Sharpe 歷史估計參考點(非建議)→ 使用者「目前組合」星號(最顯眼)。
+    軸:X=年化波動度(%),Y=年化報酬(%)。主題 plotly_dark,與其他圖一致。
+    §1:ok=False / 空雲 → 不畫、回 False,交 caller 顯示 fail-loud 訊息(不畫假圖)。
+    """
+    if not result or not result.get('ok'):
+        return False
+    cloud = result.get('cloud') or {}
+    vols = cloud.get('vol') or []
+    rets = cloud.get('ret') or []
+    if not vols or not rets:
+        return False
+
+    def _pct(xs):
+        return [x * 100 for x in xs]
+
+    fig = go.Figure()
+    # 1) 蒙地卡羅隨機配置雲(依 Sharpe 上色;None→nan 不著色,實務幾乎不觸發 vol=0)
+    _sh = [(s if s is not None else float('nan')) for s in (cloud.get('sharpe') or [])]
+    fig.add_trace(go.Scattergl(
+        x=_pct(vols), y=_pct(rets), mode='markers', showlegend=False,
+        name='隨機配置雲',
+        marker=dict(size=4, opacity=0.45, color=_sh, colorscale='Viridis',
+                    showscale=True, colorbar=dict(title='Sharpe', thickness=10)),
+        hovertemplate='波動 %{x:.2f}%　報酬 %{y:.2f}%<extra></extra>'))
+    # 2) 前緣參考線(歷史估計上緣,非建議)
+    fr = result.get('frontier') or {}
+    if fr.get('vol') and fr.get('ret'):
+        fig.add_trace(go.Scatter(
+            x=_pct(fr['vol']), y=_pct(fr['ret']), mode='lines',
+            name='效率前緣（歷史估計參考線）',
+            line=dict(color='#f0f6fc', width=2, dash='dash'),
+            hovertemplate='波動 %{x:.2f}%　報酬 %{y:.2f}%<extra>前緣參考</extra>'))
+    # 3) 每檔持股點(diamond + 代號標籤)
+    pap = result.get('per_asset_points') or {}
+    if pap:
+        _tk = list(pap.keys())
+        fig.add_trace(go.Scatter(
+            x=[pap[t]['vol'] * 100 for t in _tk], y=[pap[t]['ret'] * 100 for t in _tk],
+            mode='markers+text', name='個別持股', text=_tk, textposition='top center',
+            textfont=dict(size=10, color='#c9d1d9'),
+            marker=dict(symbol='diamond', size=10, color='#ffa657',
+                        line=dict(color='#0d1117', width=1)),
+            hovertemplate='%{text}<br>波動 %{x:.2f}%　報酬 %{y:.2f}%<extra></extra>'))
+    # 4) min-var / max-Sharpe 歷史估計參考點(非建議)
+    mv = result.get('min_var_point')
+    if mv:
+        fig.add_trace(go.Scatter(
+            x=[mv['vol'] * 100], y=[mv['ret'] * 100], mode='markers',
+            name='最小變異（歷史估計參考點,非建議）',
+            marker=dict(symbol='triangle-up', size=13, color=TRAFFIC_GREEN,
+                        line=dict(color='#0d1117', width=1)),
+            hovertemplate='最小變異參考點<br>波動 %{x:.2f}%　報酬 %{y:.2f}%<extra></extra>'))
+    ms = result.get('max_sharpe_point')
+    if ms:
+        fig.add_trace(go.Scatter(
+            x=[ms['vol'] * 100], y=[ms['ret'] * 100], mode='markers',
+            name='最大夏普（歷史估計參考點,非建議）',
+            marker=dict(symbol='star-diamond', size=14, color=TRAFFIC_YELLOW,
+                        line=dict(color='#0d1117', width=1)),
+            hovertemplate='最大夏普參考點<br>波動 %{x:.2f}%　報酬 %{y:.2f}%<extra></extra>'))
+    # 5) 使用者「目前組合」星號(最顯眼,最後畫置頂)
+    cp = result.get('current_point')
+    if cp:
+        fig.add_trace(go.Scatter(
+            x=[cp['vol'] * 100], y=[cp['ret'] * 100], mode='markers+text',
+            name='你的組合（目前）', text=['你的組合'], textposition='bottom center',
+            textfont=dict(size=12, color='#ff7b72'),
+            marker=dict(symbol='star', size=20, color='#ff7b72',
+                        line=dict(color='#0d1117', width=1)),
+            hovertemplate='你的組合（目前）<br>波動 %{x:.2f}%　報酬 %{y:.2f}%<extra></extra>'))
+    fig.update_layout(
+        template='plotly_dark', height=460,
+        margin=dict(l=0, r=0, t=20, b=0),
+        paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
+        legend=dict(orientation='h', yanchor='bottom', y=1.01, font=dict(size=10)),
+        xaxis=dict(title='年化波動度 (%)', ticksuffix='%'),
+        yaxis=dict(title='年化報酬 (%)', ticksuffix='%', zeroline=True,
+                   zerolinecolor='#444', zerolinewidth=1),
+    )
+    st.plotly_chart(fig, width='stretch')
+    return True
+
+
 def _plot_correlation(corr: pd.DataFrame) -> None:
     """相關係數熱力圖"""
     labels = list(corr.columns)

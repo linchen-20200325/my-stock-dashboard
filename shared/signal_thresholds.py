@@ -26,6 +26,34 @@ TRADING_DAYS_PER_YEAR: int = 252
 
 
 # ════════════════════════════════════════════════════════════════
+# 效率前緣（風險-報酬地圖）— 蒙地卡羅參數 SSOT（v19.167）
+# ════════════════════════════════════════════════════════════════
+# 依據:此為**描述性**風險-報酬視覺化(非規範性最佳化器)。STATE.md:512 曾拒
+# 均值-變異數最佳化為「假精準」(牴觸 §1);本功能只把「你的組合」畫在歷史風險-
+# 報酬空間、疊一片隨機配置雲 + 前緣參考線,**不**輸出「最適權重建議」。
+# N_SIM / SEED 為命名 SSOT(§3.3 反捏造),SEED 固定確保可重現(§5:同輸入+同種子
+# → 同一片雲),絕不 hardcode 於 compute 函式內。
+
+EFFICIENT_FRONTIER_N_SIM: int = 3000
+"""蒙地卡羅隨機配置雲的樣本數。3000 點:視覺上足以勾勒前緣輪廓、plotly 渲染
+仍流暢(Scattergl);再多對「理解相對位置」的邊際效益低。純視覺取樣數,非統計推論。"""
+
+EFFICIENT_FRONTIER_SEED: int = 42
+"""蒙地卡羅 RNG 種子(np.random.default_rng(SEED))。固定值 → §5 可重現:
+同一組持股報酬 + 同種子必產生**完全相同**的隨機配置雲(golden test 釘死)。"""
+
+EFFICIENT_FRONTIER_MIN_COMMON_DAYS: int = 20
+"""估年化 μ/Σ 所需的最少「共同交易日」。<20 日 → 共變異數估計過噪、前緣無意義,
+compute_efficient_frontier 回 ok=False(§1 不捏造前緣),UI 顯示需更多共同歷史。
+對齊 VaR 段「<20 共同日不計 VaR」的既有門檻(etf_tab_portfolio VaR section)。"""
+
+EFFICIENT_FRONTIER_N_BINS: int = 25
+"""前緣包絡線的波動度分箱數。把隨機雲依年化波動度切 25 等寬箱、每箱取最高報酬,
+再取累積最大值 → 非遞減的「上緣」參考線(歷史估計,非建議)。25 箱:線夠平滑
+又不過度貼合取樣噪音。"""
+
+
+# ════════════════════════════════════════════════════════════════
 # Macro 健康評分（macro_helpers.py compute_macro_health）
 # ════════════════════════════════════════════════════════════════
 
@@ -817,6 +845,13 @@ PORTFOLIO_VAR_99_PERCENTILE: float = 0.01
 PORTFOLIO_VAR_MONTHLY_WARN_PCT: float = 10.0
 """ETF 投組月度 99% VaR 警示門檻(%):月度尾部虧損 > 10%
 → ⚠️ 尾部風險偏高,建議增加防禦部位。原 etf_tab_portfolio.py:689/693/699 inline。"""
+
+# ── 組合累積報酬 vs 基準(v19.166)──
+PORTFOLIO_BENCHMARK_TICKER: str = "0050.TW"
+"""ETF 投組「與 0050 累積報酬比較」的被動基準代號(§3.3 反捏造:禁止 inline '0050.TW')。
+概念同 shared/forward_test_thresholds.py:FORWARD_TEST_BENCHMARK('0050'),同指元大台灣50;
+但兩者服務不同 fetcher:forward_test 走 fetch_stock_history_1y(無 .TW 後綴),ETF 投組走
+fetch_etf_price(yfinance,需 .TW 後綴)。故格式不同、各自 SSOT,不硬併。"""
 
 
 # ════════════════════════════════════════════════════════════════

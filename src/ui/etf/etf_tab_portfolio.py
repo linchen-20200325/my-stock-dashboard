@@ -802,6 +802,105 @@ def render_etf_portfolio(gemini_fn=None):
     else:
         st.warning('無法取得價格資料，跳過 VaR 計算')
 
+    # ── 📈 與 0050 累積報酬比較（個別 + 組合）─────────────────────
+    # §7 對齊:累積報酬 = (1+日報酬).cumprod()-1(小數,顯示 %,不年化)。三曲線(組合/個別/0050)
+    # 一律在「共同交易日」上算(§1 dropna,不 ffill / 不 fillna(0));計算下沉 L2
+    # etf_calc.compute_portfolio_vs_benchmark(可單元測試),繪圖走 L4 etf_render。
+    # 重用 VaR 段已抓好的 _var_rets(每檔 1y 日報酬)+ 權重,只多抓一次 0050 基準。
+    st.markdown('#### 📈 與 0050 累積報酬比較（個別 + 組合）')
+    st.caption('把「組合(加權)」「每檔持股」與可直接買的 0050 疊在同一組共同交易日上比累積報酬%，'
+               '看你的配置到底贏不贏得過大盤。')
+    if _var_rets:
+        from src.compute.etf.etf_calc import compute_portfolio_vs_benchmark
+        from src.ui.render.etf_render import _plot_portfolio_vs_benchmark
+        from src.compute.etf.etf_dividend_schedule import dividend_currency
+        from shared.signal_thresholds import PORTFOLIO_BENCHMARK_TICKER
+        _bench_ret = pd.Series(dtype='float64')
+        with st.spinner(f'抓取 {PORTFOLIO_BENCHMARK_TICKER} 基準...'):
+            try:
+                _bdf = fetch_etf_price(PORTFOLIO_BENCHMARK_TICKER, period='1y')
+                if _bdf is not None and not _bdf.empty and 'Close' in _bdf.columns:
+                    _bench_ret = _bdf['Close'].pct_change().dropna()
+            except Exception as _e_b:  # §1 fail loud:log + 下面走 warning,不吞成假曲線
+                print(f'[etf_portfolio/bench] {type(_e_b).__name__}: {_e_b}')
+        if _bench_ret.empty:
+            st.warning(f'⚠️ 無法取得 {PORTFOLIO_BENCHMARK_TICKER} 基準價格，'
+                       '略過累積報酬比較（不畫假曲線,§1）。')
+        else:
+            _cmp = compute_portfolio_vs_benchmark(
+                _var_rets, {r['ticker']: r['actual_pct'] for r in rows}, _bench_ret)
+            if _cmp['benchmark_ok'] and _cmp['n_common'] >= 2:
+                _plot_portfolio_vs_benchmark(_cmp, benchmark_label=PORTFOLIO_BENCHMARK_TICKER)
+                _p0, _p1 = _cmp['dates'].min(), _cmp['dates'].max()
+                st.caption(
+                    f'📏 共同交易日＝{_cmp["n_common"]} 日'
+                    f'（{_p0:%Y-%m-%d} ~ {_p1:%Y-%m-%d}）;缺失日一律剔除、未填 0 或 ffill（§1 誠實)。'
+                    + (f' 另因基準日與持股共同日不一致剔除 {_cmp["dropped_vs_benchmark"]} 日。'
+                       if _cmp['dropped_vs_benchmark'] > 0 else ''))
+                if _cmp['limiter'] is not None and _cmp['limiter_start'] is not None \
+                        and _cmp['limiter_start'] > _p0:
+                    st.caption(f'⚠️ 視窗受最短一檔 **{_cmp["limiter"]}**'
+                               f'（{_cmp["limiter_start"]:%Y-%m-%d} 才有資料）壓縮,樣本偏短。')
+                # §4.1 幣別誠實:美元計價持股(如 BND)為「原幣別」報酬,未含 USD/TWD 匯率
+                _usd_used = [t for t in _cmp['tickers_used'] if dividend_currency(t) == 'USD']
+                if _usd_used:
+                    st.caption(f'💱 註:{"、".join(_usd_used)} 為美元計價,此處為「原幣別」累積報酬,'
+                               '未計入 USD/TWD 匯率變動（與 VaR 段同一誠實原則,不靜默混算)。')
+                _fp, _fb = _cmp['final']['portfolio'], _cmp['final']['benchmark']
+                if _fp is not None and _fb is not None:
+                    _ex = (_fp - _fb) * 100
+                    _colored_box(
+                        f'期末累積報酬：組合 <b>{_fp*100:+.2f}%</b> vs '
+                        f'{PORTFOLIO_BENCHMARK_TICKER} <b>{_fb*100:+.2f}%</b>'
+                        f'&nbsp; 超額 <b>{_ex:+.2f}%</b>'
+                        + ('&nbsp; ✅ 期間贏過大盤' if _ex >= 0 else '&nbsp; ⚠️ 期間落後大盤'),
+                        'green' if _ex >= 0 else 'red')
+            else:
+                st.warning(f'共同交易日不足（{_cmp["n_common"]}<2），無法比較累積報酬。')
+    else:
+        st.info('無持股報酬資料，略過累積報酬比較。')
+
+    # ── 📐 效率前緣（風險-報酬地圖）─────────────────────────────
+    # ⚠️ **描述性視覺化,非規範性最佳化**:STATE.md:512 曾拒均值-變異數最佳化為「假精準」
+    # (牴觸 §1)。這裡只把「你的組合」定位在歷史風險-報酬空間,疊隨機配置雲 + 前緣**參考**線,
+    # **不**輸出「最適權重建議」。§7 對齊:年化 μ=mean(日報酬)×252、Σ=cov×252、
+    # 組合 vol=sqrt(wᵀΣw)、Sharpe=ret/vol(rf=0)。計算下沉 L2 etf_calc.compute_efficient_frontier
+    # (可單元測試、固定 seed 可重現),繪圖走 L4 etf_render。重用 VaR 段已抓好的 _var_rets + 權重。
+    st.markdown('#### 📐 效率前緣（風險-報酬地圖）')
+    st.caption('把「你的組合」畫在近1年歷史的「年化波動度 × 年化報酬」平面上,'
+               '疊一片隨機配置的蒙地卡羅雲 + 前緣參考線,單純幫你**理解**組合在風險-報酬'
+               '空間的相對位置(偏攻擊 / 偏防禦)。')
+    if _var_rets:
+        from src.compute.etf.etf_calc import compute_efficient_frontier
+        from src.ui.render.etf_render import _plot_efficient_frontier
+        from src.compute.etf.etf_dividend_schedule import dividend_currency
+        from shared.signal_thresholds import (
+            EFFICIENT_FRONTIER_N_SIM, EFFICIENT_FRONTIER_SEED,
+        )
+        with st.spinner('計算效率前緣（蒙地卡羅隨機配置）...'):
+            _ef = compute_efficient_frontier(
+                _var_rets, {r['ticker']: r['actual_pct'] for r in rows},
+                n_sim=EFFICIENT_FRONTIER_N_SIM, seed=EFFICIENT_FRONTIER_SEED)
+        if _ef['ok']:
+            _plot_efficient_frontier(_ef)
+            # §1 強制警語:描述性、對取樣窗極敏感、非投資建議
+            st.caption('⚠️ 歷史估計,對取樣時間窗極度敏感;均值-變異數最適解實務上極不穩定,'
+                       '僅供理解你的組合在風險-報酬空間的相對位置,非投資建議（§1）。'
+                       '圖中「最小變異 / 最大夏普」為**歷史估計參考點,非建議**。')
+            st.caption(f'📏 樣本＝{_ef["n_common"]} 個「全員皆有交易」的共同日;'
+                       f'Sharpe 以無風險利率 **rf=0** 計算(僅供相對比較,非絕對夏普值)。'
+                       '缺失日一律剔除、未填 0 或 ffill（§1 誠實）。')
+            # §4.1 幣別誠實:美元計價持股(如 BND)為「原幣別」報酬,未含 USD/TWD 匯率
+            _ef_usd = [t for t in _ef['tickers_used'] if dividend_currency(t) == 'USD']
+            if _ef_usd:
+                st.caption(f'💱 註:{"、".join(_ef_usd)} 為美元計價,此處報酬為「原幣別」,'
+                           '未計入 USD/TWD 匯率變動（與 VaR / vs-0050 段同一誠實原則,不靜默混算）。')
+        else:
+            st.info(f'ℹ️ 無法繪製效率前緣：{_ef["note"]}。'
+                    '（需 ≥2 檔有足夠共同歷史的持股,§1 不畫假圖。）')
+    else:
+        st.info('無持股報酬資料，略過效率前緣。')
+
     # ── 配息日曆 × 年度現金流預估 ──────────────────────────────
     st.markdown('#### 💰 配息日曆 × 年度現金流預估')
     st.caption('依過去12個月配息紀錄 × 持有股數（市值/現價）推估未來現金流入')
