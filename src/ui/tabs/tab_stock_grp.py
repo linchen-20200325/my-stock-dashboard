@@ -120,11 +120,13 @@ def render_stock_grp():
 
 
 def _grp_load_holdings_callback() -> None:
-    """帶入**個股專屬** Google Sheet 持股組合代碼 → 填入上方唯一輸入框 multi_input(on_click)。
+    """帶入**個股專屬** Google Sheet 純代碼觀察清單 → 填入上方唯一輸入框 multi_input(on_click)。
 
     v19.164 單一來源化:原「老師 體檢轉機」獨立輸入框的帶入持股鈕搬來這裡,改填組合唯一輸入。
-    Phase 1 個股/ETF 分家:改讀 **個股專屬** sheet(`stock_portfolio_sheet_id`),不再借用
-    ETF 的 `portfolio_sheet_id`(修 user 回報「帶入我的持股卻拉到 ETF 組合資料」)。
+    Option B:改讀個股專屬 sheet 的 `stock_watchlist` **純代碼清單**(name/ticker/updated_at,
+    無張數/均價/哨兵),取代原本借 `portfolios` schema + 哨兵假價的路徑(§1 反捏造)。
+    Phase 1 個股/ETF 分家:只讀個股專屬 sheet(`stock_portfolio_sheet_id`),不借 ETF 的
+    `portfolio_sheet_id`(修 user 回報「帶入我的持股卻拉到 ETF 組合資料」)。
     §8.2.A EX-PASSTHRU-1:L5 lazy import L1 gsheet_portfolio(pass-through、無 L3 業務值)。
     §1 fail-loud:未設個股 sheet → 只回 warn 指引去下方面板設定,**不**靜默 fallback ETF sheet。
     graceful:未登入 Google / 讀取失敗 → 只回 warn,不炸。
@@ -136,19 +138,19 @@ def _grp_load_holdings_callback() -> None:
             st.session_state['_grp_holdings_msg'] = (
                 'warn', '個股組合尚未設定雲端 Sheet — 請在下方「☁️ 個股組合雲端儲存」挑選或新建')
             return
-        names = _gsp.list_portfolios(sheet_id=stock_sid)
+        names = _gsp.list_stock_watchlists(sheet_id=stock_sid)
         if not names:
             st.session_state['_grp_holdings_msg'] = (
-                'warn', '個股 Sheet 內還沒有組合 — 請先到下方「☁️ 個股組合雲端儲存」存一組。')
+                'warn', '個股 Sheet 內還沒有代碼清單 — 請先到下方「☁️ 個股組合雲端儲存」存一組。')
             return
         tickers: list[str] = []
         for _nm in names:
-            for _r in (_gsp.load_portfolio(_nm, sheet_id=stock_sid) or []):
-                _t = str(_r.get('ticker', '')).strip()
+            for _t in (_gsp.load_stock_watchlist(_nm, sheet_id=stock_sid) or []):
+                _t = str(_t).strip()
                 if _t and _t not in tickers:
                     tickers.append(_t)
         if not tickers:
-            st.session_state['_grp_holdings_msg'] = ('warn', '個股組合是空的。')
+            st.session_state['_grp_holdings_msg'] = ('warn', '個股清單是空的。')
             return
         capped = tickers[:10]  # 批次上限 10(parse_stocks 對齊)
         st.session_state['multi_input'] = ' '.join(capped)
@@ -160,8 +162,10 @@ def _grp_load_holdings_callback() -> None:
 
 
 def _render_stock_cloud_storage(stock_list: list[str]) -> None:
-    """☁️ 個股組合雲端儲存(獨立於 ETF 組合)— 存/讀 個股清單到**專屬** Google Sheet。
+    """☁️ 個股組合雲端儲存(獨立於 ETF 組合)— 存/讀**純代碼清單**到**專屬** Google Sheet。
 
+    Option B(§1 反捏造):存的是 `stock_watchlist` 分頁的純代碼清單(name/ticker/updated_at),
+    **不寫**任何張數/均價/哨兵假價;與 ETF 的 `portfolios`(5 欄含價格)物理隔離。
     Phase 1 個股/ETF 分家:本面板**只**操作 `stock_portfolio_sheet_id` session channel,
     絕不碰 ETF 的 `portfolio_sheet_id`,避免「帶入我的持股」誤拉 ETF 組合。
 
@@ -172,8 +176,6 @@ def _render_stock_cloud_storage(stock_list: list[str]) -> None:
     §1:未設個股 sheet → 提示挑選/新建,不靜默借 ETF sheet。
     """
     import re
-
-    import pandas as pd
 
     from src.data.portfolio import gsheet_portfolio as _gsp  # EX-PASSTHRU-1
 
@@ -242,64 +244,41 @@ def _render_stock_cloud_storage(stock_list: list[str]) -> None:
         st.caption(f'✅ 個股 Sheet ID:`{_stock_sid}`')
         st.markdown('---')
 
-        # ── 儲存目前個股清單 ──────────────
-        st.markdown('**💾 儲存目前個股清單為命名組合**')
-        st.caption('個股組合以「**代碼**」為主;張數/均價**非必填**,留白或 0 存檔時以哨兵 1 通過'
-                   '雲端驗證 —— 「帶入我的持股」時**只讀代碼**。有實際持股可自行改填真實值。')
-        _seed = pd.DataFrame({
-            '代碼': list(stock_list),
-            '持有張數': [0.0] * len(stock_list),
-            '平均買入價': [0.0] * len(stock_list),
-        })
-        _edited = st.data_editor(
-            _seed, hide_index=True, use_container_width=True,
-            key='stock_grp_save_editor',
-            column_config={
-                '持有張數': st.column_config.NumberColumn(min_value=0.0, step=1.0),
-                '平均買入價': st.column_config.NumberColumn(min_value=0.0, step=0.01),
-            })
+        # ── 儲存目前個股清單(純代碼清單,§1 無張數/均價/哨兵)──────────────
+        st.markdown('**💾 儲存上方個股清單為命名代碼組合**')
+        st.caption('個股組合是純「**代碼清單**」—— 只存代碼,不存張數/均價/任何價格。'
+                   '按「💾 儲存」把上方唯一輸入框目前的代碼存成命名組合;'
+                   '之後「🔗 帶入我的持股」時原樣讀回這組代碼。')
+        if stock_list:
+            st.caption(f'待存代碼（{len(stock_list)} 檔）:{" ".join(stock_list)}')
         _sc1, _sc2 = st.columns([3, 1])
         _name = _sc1.text_input('組合名稱', value='',
                                 placeholder='例如:主力觀察 / 高股息 / 波段',
                                 key='stock_grp_save_name')
         if _sc2.button('💾 儲存', key='stock_grp_save_btn',
-                       use_container_width=True, disabled=(not _name.strip())):
-            _rows: list[dict] = []
-            for _r in _edited.to_dict('records'):
-                _tk = str(_r.get('代碼', '')).strip()
-                if not _tk:
-                    continue
-                try:
-                    _lots = float(_r.get('持有張數') or 0)
-                    _avg = float(_r.get('平均買入價') or 0)
-                except (TypeError, ValueError):
-                    _lots, _avg = 0.0, 0.0
-                # 純觀察清單(未填持股)→ 用哨兵 1/1 通過 save_portfolio 驗證;
-                # §3.3 載入(帶入持股)僅取代碼,哨兵不會被當價格讀回。
-                _rows.append({'ticker': _tk,
-                              'lots': _lots if _lots > 0 else 1.0,
-                              'avg_price': _avg if _avg > 0 else 1.0})
-            if not _rows:
-                st.warning('⚠️ 沒有可儲存的代碼')
+                       use_container_width=True,
+                       disabled=(not _name.strip() or not stock_list)):
+            try:
+                _n = _gsp.save_stock_watchlist(_name, list(stock_list),
+                                               sheet_id=_stock_sid)
+            except Exception as _e:  # noqa: BLE001 — 儲存失敗顯示不炸
+                st.error(f'❌ 儲存失敗:{_e}')
             else:
-                try:
-                    _n = _gsp.save_portfolio(_name, _rows, sheet_id=_stock_sid)
-                except Exception as _e:  # noqa: BLE001 — 儲存失敗顯示不炸
-                    st.error(f'❌ 儲存失敗:{_e}')
-                else:
-                    st.success(f'✅ 已儲存「{_name}」共 {_n} 檔到個股 Sheet')
+                st.success(f'✅ 已儲存「{_name}」共 {_n} 檔代碼到個股 Sheet')
+        if not stock_list:
+            st.caption('💡 上方唯一輸入框尚無有效代碼 —— 先輸入至少一檔再存。')
 
         st.markdown('---')
 
-        # ── 載入/列出既有個股組合(帶入上方唯一輸入框)──────────────
-        st.markdown('**📂 載入既有個股組合**（帶入上方唯一輸入框）')
+        # ── 載入/列出既有個股代碼清單(帶入上方唯一輸入框)──────────────
+        st.markdown('**📂 載入既有個股代碼組合**（帶入上方唯一輸入框）')
         try:
-            _names = _gsp.list_portfolios(sheet_id=_stock_sid)
+            _names = _gsp.list_stock_watchlists(sheet_id=_stock_sid)
         except Exception as _e:  # noqa: BLE001 — 連線失敗顯示不炸
             st.error(f'❌ 無法連線個股 Sheet:{_e}')
             return
         if not _names:
-            st.caption('💡 此個股 Sheet 尚無組合 —— 先在上方存一組。')
+            st.caption('💡 此個股 Sheet 尚無代碼組合 —— 先在上方存一組。')
             return
         _lc1, _lc2 = st.columns([3, 1])
         _sel = _lc1.selectbox('選擇組合', options=['—'] + _names,
@@ -307,12 +286,10 @@ def _render_stock_cloud_storage(stock_list: list[str]) -> None:
         if _lc2.button('📂 載入', key='stock_grp_load_btn',
                        use_container_width=True, disabled=(_sel == '—')):
             try:
-                _loaded = _gsp.load_portfolio(_sel, sheet_id=_stock_sid)
+                _tks = _gsp.load_stock_watchlist(_sel, sheet_id=_stock_sid)
             except Exception as _e:  # noqa: BLE001 — 載入失敗顯示不炸
                 st.error(f'❌ 載入失敗:{_e}')
             else:
-                _tks = [str(r.get('ticker', '')).strip() for r in (_loaded or [])
-                        if str(r.get('ticker', '')).strip()]
                 if not _tks:
                     st.warning(f'⚠️ 組合「{_sel}」是空的')
                 else:

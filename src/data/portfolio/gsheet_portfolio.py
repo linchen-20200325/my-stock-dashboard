@@ -4,10 +4,17 @@
 (gsheet_tokens / portfolio_sheet_id,見下方 ready 檢查)屬 OAuth session lifecycle
 (token 取用),非業務 UI。例外正式登錄於 CLAUDE.md §8.2.A EX-OAUTH-1。
 
-Schema (單一 worksheet `portfolios`)：
+Schema
+======
+- worksheet `portfolios`(ETF / legacy 持股組合)：
     name | ticker | lots | avg_price | updated_at
+- worksheet `forward_test_picks`(前進式驗證選股凍結,見 _FT_HEADERS)
+- worksheet `stock_watchlist`(個股**純代碼**觀察清單,Option B)：
+    name | ticker | updated_at
+  ⚠️ §1 反捏造:純代碼清單**不**寫張數/均價/任何價格,與 `portfolios` schema
+  物理隔離(獨立分頁),避免哨兵假價污染。
 
-多組命名 = 多列共用同一 worksheet；同一個 name 多列 = 該組合的所有持股。
+多組命名 = 多列共用同一 worksheet；同一個 name 多列 = 該組合的所有持股 / 代碼。
 
 雙模式認證
 ==========
@@ -45,6 +52,12 @@ except ImportError:
 
 _WORKSHEET_NAME = 'portfolios'
 _HEADERS = ['name', 'ticker', 'lots', 'avg_price', 'updated_at']
+
+# ── Option B:個股**純代碼**觀察清單(§3.3 worksheet 名稱 + headers 具名常數)──────
+# §1 反捏造:此分頁**只**存 name/ticker/updated_at 三欄,無張數/均價/哨兵/任何價格;
+# 與 `portfolios`(5 欄含價格)物理隔離(獨立 worksheet),互不污染。
+_STOCK_WATCHLIST_WORKSHEET = 'stock_watchlist'
+_STOCK_WATCHLIST_HEADERS = ['name', 'ticker', 'updated_at']
 
 # ── §3.3 session-key SSOT:個股 / ETF 雲端儲存分家(Phase 1)──────────────
 # 兩條 session channel,各自獨立指向不同 Google Sheet,互不污染:
@@ -167,11 +180,27 @@ def _build_client():
     return gspread.authorize(creds)
 
 
-def _get_worksheet(*, sheet_id: str | None = None):
-    """取得 (或建立) `portfolios` worksheet，並確保 header 列存在。
+def _col_letter(n_cols: int) -> str:
+    """1-based 欄數 → A1 欄字母(headers ≤ 26 欄,單字母 A..Z)。
+
+    e.g. 3 欄 → 'C'、5 欄 → 'E'。用於動態算 header 更新範圍,取代死寫 'A1:E1'。
+    """
+    if not 1 <= n_cols <= 26:
+        raise ValueError(f'_col_letter 僅支援 1..26 欄,收到 {n_cols}')
+    return chr(ord('A') + n_cols - 1)
+
+
+def _get_worksheet(*, sheet_id: str | None = None,
+                   worksheet_name: str = _WORKSHEET_NAME,
+                   headers: list[str] = _HEADERS):
+    """取得 (或建立) `worksheet_name` 這個 worksheet，並確保 header 列存在。
 
     sheet_id=None(或空)→ 走 legacy `_get_active_sheet_id()`(ETF / SA / forward-test
     行為 byte-for-byte 不變);非空 sheet_id → 開 **那本** sheet(個股組合分家用)。
+
+    worksheet_name / headers 預設為 `portfolios` 分頁(既有 caller 無感);個股純代碼
+    清單傳 `stock_watchlist` + 3 欄 header。header 更新範圍依 `len(headers)` **動態**
+    計算(3 欄 → A1:C1、5 欄 → A1:E1),修原本死寫 'A1:E1' 在 3 欄分頁會誤蓋 D/E 欄的 bug。
     """
     import gspread
 
@@ -182,29 +211,36 @@ def _get_worksheet(*, sheet_id: str | None = None):
     sh = client.open_by_key(_sid)
 
     try:
-        ws = sh.worksheet(_WORKSHEET_NAME)
+        ws = sh.worksheet(worksheet_name)
     except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title=_WORKSHEET_NAME, rows=200, cols=10)
-        ws.append_row(_HEADERS)
+        ws = sh.add_worksheet(title=worksheet_name, rows=200, cols=10)
+        ws.append_row(headers)
         return ws
 
     first_row = ws.row_values(1)
-    if first_row != _HEADERS:
-        ws.update('A1:E1', [_HEADERS])
+    if first_row != headers:
+        ws.update(f'A1:{_col_letter(len(headers))}1', [headers])
     return ws
 
 
-def _ws(*, sheet_id: str | None = None):
+def _ws(*, sheet_id: str | None = None,
+        worksheet_name: str = _WORKSHEET_NAME,
+        headers: list[str] = _HEADERS):
     """取得 worksheet handle。每次重新建立（OAuth token 可能 refresh）。
 
-    sheet_id 透傳給 `_get_worksheet`(None → legacy;非空 → 指定 sheet)。
+    sheet_id / worksheet_name / headers 透傳給 `_get_worksheet`
+    (預設 portfolios 分頁 → 既有 caller 無感)。
     """
-    return _get_worksheet(sheet_id=sheet_id)
+    return _get_worksheet(sheet_id=sheet_id, worksheet_name=worksheet_name,
+                          headers=headers)
 
 
-def _all_records(*, sheet_id: str | None = None) -> list[dict[str, Any]]:
-    """回傳全表（含 header 後的所有列）為 dict list。"""
-    return _ws(sheet_id=sheet_id).get_all_records()
+def _all_records(*, sheet_id: str | None = None,
+                 worksheet_name: str = _WORKSHEET_NAME,
+                 headers: list[str] = _HEADERS) -> list[dict[str, Any]]:
+    """回傳全表（含 header 後的所有列）為 dict list（預設 portfolios 分頁）。"""
+    return _ws(sheet_id=sheet_id, worksheet_name=worksheet_name,
+               headers=headers).get_all_records()
 
 
 def list_portfolios(*, sheet_id: str | None = None) -> list[str]:
@@ -287,6 +323,87 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
         ws.append_rows(keep_rows)
     ws.append_rows(new_rows)
     return len(new_rows)
+
+
+# ── Option B:個股**純代碼**觀察清單 API(獨立 `stock_watchlist` 分頁,無價格)──────
+# §1 反捏造:save 只寫 [name, ticker.upper(), updated_at],**絕無**張數/均價/哨兵。
+# 與 portfolios(5 欄含價格)物理隔離,pure watchlist 讀寫時不接觸任何價格欄位。
+def save_stock_watchlist(name: str, tickers: list[str], *,
+                         sheet_id: str | None = None) -> int:
+    """儲存(覆蓋)指定名稱的**純代碼**觀察清單到 `stock_watchlist` 分頁,回寫入列數。
+
+    §1:每列僅 `[name, ticker.upper(), updated_at]` 三欄 —— **無**張數/均價/哨兵/任何
+    捏造價格。tickers 去空 + 去重(保序,大寫正規化)。同名覆蓋(保留其它 name,
+    與 `save_portfolio` 的 keep_rows 同 pattern)。name/代碼皆空 → raise ValueError。
+    sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合分家用)。
+    """
+    name = (name or '').strip()
+    if not name:
+        raise ValueError('組合名稱不可為空')
+    if not tickers:
+        raise ValueError('代碼清單不可為空')
+
+    clean: list[str] = []
+    seen: set[str] = set()
+    for _t in tickers:
+        tk = str(_t or '').strip().upper()
+        if tk and tk not in seen:
+            seen.add(tk)
+            clean.append(tk)
+    if not clean:
+        raise ValueError('無有效代碼可儲存')
+
+    ws = _ws(sheet_id=sheet_id, worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
+             headers=_STOCK_WATCHLIST_HEADERS)
+    existing = ws.get_all_values()
+    keep_rows = [r for r in existing[1:] if (r and r[0].strip() != name)]
+
+    ts = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    new_rows = [[name, tk, ts] for tk in clean]  # ← 無價格欄,§1 反捏造
+
+    ws.clear()
+    ws.append_row(_STOCK_WATCHLIST_HEADERS)
+    if keep_rows:
+        ws.append_rows(keep_rows)
+    ws.append_rows(new_rows)
+    return len(new_rows)
+
+
+def list_stock_watchlists(*, sheet_id: str | None = None) -> list[str]:
+    """列出 `stock_watchlist` 分頁內所有不重複的清單名稱(字母排序)。
+
+    sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合)。
+    """
+    names: set[str] = set()
+    for rec in _all_records(sheet_id=sheet_id,
+                            worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
+                            headers=_STOCK_WATCHLIST_HEADERS):
+        n = str(rec.get('name', '')).strip()
+        if n:
+            names.add(n)
+    return sorted(names)
+
+
+def load_stock_watchlist(name: str, *, sheet_id: str | None = None) -> list[str]:
+    """讀取指定名稱的**純代碼**清單(保序、去重),回傳 `list[str]`,**無**價格欄位。
+
+    sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合)。
+    """
+    name = (name or '').strip()
+    if not name:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for rec in _all_records(sheet_id=sheet_id,
+                            worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
+                            headers=_STOCK_WATCHLIST_HEADERS):
+        if str(rec.get('name', '')).strip() != name:
+            continue
+        tk = str(rec.get('ticker', '')).strip()
+        if tk and tk not in seen:
+            seen.add(tk)
+            out.append(tk)
+    return out
 
 
 # ── 前進式驗證:選股凍結紀錄(獨立 worksheet,不污染 portfolios)── FT-2 v19.142
