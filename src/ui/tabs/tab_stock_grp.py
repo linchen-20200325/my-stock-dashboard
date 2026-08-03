@@ -216,9 +216,109 @@ def _render_stock_cloud_storage(stock_list: list[str]) -> None:
             placeholder='貼上 https://docs.google.com/spreadsheets/d/...')
         _m = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', _raw)
         _new_sid = _m.group(1) if _m else _raw.strip()
-        if _new_sid and _new_sid != _stock_sid:
-            st.session_state[_gsp.STOCK_PORTFOLIO_SHEET_KEY] = _new_sid
-            _stock_sid = _new_sid
+        # 只在「輸入框本次真的被改動」時才套用 → 避免下方 Drive 挑檔選定後,rerun 時
+        # 殘留的舊輸入框值把剛選的 sheet 蓋回去(同面板兩處設 sheet 的競態,§1 不誤改)。
+        if _raw != st.session_state.get('_stock_grp_prev_raw'):
+            st.session_state['_stock_grp_prev_raw'] = _raw
+            if _new_sid and _new_sid != _stock_sid:
+                st.session_state[_gsp.STOCK_PORTFOLIO_SHEET_KEY] = _new_sid
+                _stock_sid = _new_sid
+
+        # ── 從 Drive 挑既有 Sheet(OAuth 限定;mirror ETF etf_tab_portfolio 挑選器)──
+        # §8.2.A EX-PASSTHRU-1:L5 lazy 直呼 L1 list_user_folders/list_user_sheets
+        # (pass-through、OAuth-gated、L1 內已集中緩存)。§1:列檔失敗 → 誠實報錯
+        # (沿用 ETF 面板同款 403/中繼權限不足 引導文案),不捏造/回假 Sheet 清單。
+        # 選定後寫入**個股** channel STOCK_PORTFOLIO_SHEET_KEY(絕不碰 ETF 的
+        # portfolio_sheet_id)。widget key 一律 stock_grp_ 前綴、stash key 一律
+        # _stock_grp_ 前綴,與 ETF 面板 etf_p_* keys 物理隔離,永不碰撞。
+        if _logged_in:
+            st.caption('📂 **或者** — 從你 Google Drive 既有的 Sheets 挑一個'
+                       '（可選擇限定資料夾）:')
+
+            # 資料夾下拉:先列出所有資料夾讓使用者挑(取代手貼 URL)
+            _fbc1, _fbc2 = st.columns([2, 3])
+            if _fbc1.button('🔄 載入資料夾清單',
+                            key='stock_grp_load_folders',
+                            use_container_width=True,
+                            help='點一次抓 Drive 內所有資料夾;之後下方下拉就能選'):
+                try:
+                    _folders_ls = _gsp.list_user_folders()
+                    st.session_state['_stock_grp_my_folders'] = _folders_ls
+                    if not _folders_ls:
+                        st.info('ℹ️ Drive 內沒有資料夾,或 token 缺 '
+                                '`drive.metadata.readonly` 權限')
+                except Exception as _fle:  # noqa: BLE001 — 列資料夾失敗顯示不炸
+                    _err = str(_fle)
+                    if 'insufficient' in _err.lower() or '403' in _err:
+                        st.error('❌ 列資料夾失敗:OAuth token 缺中繼權限。'
+                                 '左 sidebar「🚪 登出」→ 重新登入即可。')
+                    else:
+                        st.error(f'❌ 列資料夾失敗:{_fle}')
+
+            _my_folders = st.session_state.get('_stock_grp_my_folders') or []
+            _folder_options = [('', '🌐 整個帳號（不限資料夾）')] + [
+                (f['id'], f"📁 {f['name']}  (`{f['id'][:10]}…`)") for f in _my_folders]
+            _cur_folder_id = str(st.session_state.get('_stock_grp_drive_folder', '') or '')
+            try:
+                _cur_idx = next(i for i, (fid, _) in enumerate(_folder_options)
+                                if fid == _cur_folder_id)
+            except StopIteration:
+                _cur_idx = 0
+            _sel_folder_idx = st.selectbox(
+                '📁 限定資料夾（可選）',
+                range(len(_folder_options)),
+                index=_cur_idx,
+                format_func=lambda i: _folder_options[i][1],
+                key='stock_grp_drive_folder_sel',
+                help='留空 = 列整個帳號;或先點「🔄 載入資料夾清單」抓 Drive 資料夾後挑一個')
+            _folder_id = _folder_options[_sel_folder_idx][0]
+            st.session_state['_stock_grp_drive_folder'] = _folder_id
+
+            if st.button('📂 從 Drive 列出 Sheets',
+                         key='stock_grp_list_drive', use_container_width=True,
+                         help='需要 OAuth `drive.metadata.readonly` 權限;若顯示權限不足請登出再登入'):
+                try:
+                    _files_ls = _gsp.list_user_sheets(folder_id=_folder_id)
+                    st.session_state['_stock_grp_my_sheets'] = _files_ls
+                    st.session_state['_stock_grp_list_tried'] = True
+                    _scope_name = _folder_options[_sel_folder_idx][1].lstrip(
+                        '📁🌐 ').split('  (')[0]
+                    st.session_state['_stock_grp_list_scope'] = _scope_name
+                except Exception as _lse:  # noqa: BLE001 — 列檔失敗顯示不炸
+                    _err = str(_lse)
+                    if 'insufficient' in _err.lower() or '403' in _err:
+                        st.error('❌ 列檔失敗:OAuth token 缺少 `drive.metadata.readonly` 權限。\n\n'
+                                 '**解法**:左 sidebar 先「🚪 登出」→ 重新「🔐 用 Google 登入」'
+                                 '(這次同意畫面會多一條 Drive 中繼權限)→ 再回來點列檔。')
+                    else:
+                        st.error(f'❌ 列檔失敗:{_lse}')
+
+            _my_sheets = st.session_state.get('_stock_grp_my_sheets') or []
+            _list_scope = st.session_state.get('_stock_grp_list_scope', '')
+            if _my_sheets:
+                _opt_labels = [f"📄 {f['name']}  (`{f['id'][:14]}…`)" for f in _my_sheets]
+                _scope_hint = f'（來源:{_list_scope}）' if _list_scope else ''
+                _sel_idx = st.selectbox(
+                    f'清單共 {len(_my_sheets)} 個 Sheets — 選一個 {_scope_hint}',
+                    range(len(_opt_labels)),
+                    format_func=lambda i: _opt_labels[i],
+                    key='stock_grp_sel_my_sheets',
+                )
+                if st.button('✅ 使用此 Sheet 作為個股資料庫',
+                             key='stock_grp_pick_my_sheet',
+                             type='primary', use_container_width=True):
+                    _picked = _my_sheets[_sel_idx]
+                    st.session_state[_gsp.STOCK_PORTFOLIO_SHEET_KEY] = _picked['id']
+                    st.success(f"✅ 已選用 `{_picked['name']}`")
+                    st.rerun()
+            elif st.session_state.get('_stock_grp_list_tried'):
+                st.warning(
+                    '⚠️ Drive 列檔回空 — 通常代表 OAuth token 是舊版發的'
+                    '(只授了 `drive.file` scope,只能看本 app 建立的檔)。\n\n'
+                    '**兩個解法擇一**:\n'
+                    '1. 左 sidebar「🚪 登出」→ 重新「🔐 用 Google 登入」拿完整中繼權限\n'
+                    '2. 直接用下方「🆕 建立個股專屬 Sheet」一鍵建一本'
+                    '(用 `drive.file` 就可以,免重登)')
 
         # ── 一鍵新建個股專屬 Sheet(OAuth 限定;reuse L1 create_new_sheet)──
         if _logged_in:
