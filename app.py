@@ -851,8 +851,27 @@ with tab_etf_main:
             render_std_band_section, render_correlation_finder, render_333_section,
             render_smart_ticker_input,
         )
-        # 組合頁無單一主代號 → 用一個共用輸入框驅動下方三項分析（取代原本各自 3 個輸入框）
-        _etf_grp_tk = render_smart_ticker_input(key_suffix='_grp')
+        # 組合頁三項分析標的：優先取自使用者組合（etf_portfolio_rows，按「計算組合」後寫入）
+        # → selectbox 供選；未載入組合時 fallback 共用手動輸入框（render_smart_ticker_input）。
+        _grp_rows = st.session_state.get('etf_portfolio_rows', []) or []
+        _seen_gt: set = set()
+        _grp_tickers = []  # 去重保序：同一檔重複輸入不會在下拉出現兩筆
+        for _r in _grp_rows:
+            if isinstance(_r, dict) and _r.get('ticker') and _r['ticker'] not in _seen_gt:
+                _seen_gt.add(_r['ticker'])
+                _grp_tickers.append(_r['ticker'])
+        if _grp_tickers:
+            _etf_grp_tk = st.selectbox(
+                '分析標的（取自你的組合）',
+                options=_grp_tickers,
+                index=0,
+                key='etf_grp_analysis_ticker_sel',
+                help='下方 標準差帶 / 分散度 / 3-3-3 三項分析共用此標的（取自上方組合持股）。',
+            )
+        else:
+            st.caption('（尚未載入組合 —— 於上方填入持股並按「計算組合」後，'
+                       '這裡會自動帶入你的持股清單供選擇；目前用手動輸入。）')
+            _etf_grp_tk = render_smart_ticker_input(key_suffix='_grp')
         render_333_section(_etf_grp_tk, key_suffix='_grp')
         render_std_band_section(_etf_grp_tk, key_suffix='_grp')
         render_correlation_finder(_etf_grp_tk, key_suffix='_grp')
