@@ -28,6 +28,10 @@ TARGET_MONTHS_FULL = 12
 # 月配 ETF 清單（slider 排除選項用）
 _MONTHLY_ETFS = {'00929.TW', '00940.TW', '00939.TW'}
 
+# 12 月份中文名 SSOT（grid + 明細表共用）
+_MONTH_NAMES = ['一月', '二月', '三月', '四月', '五月', '六月',
+                '七月', '八月', '九月', '十月', '十一月', '十二月']
+
 
 # ══════════════════════════════════════════════════════════════
 # Pure Logic（無 Streamlit 副作用，可單測）
@@ -172,14 +176,104 @@ def recommend_income_ladder(
     }
 
 
+def evaluate_income_ladder(holdings: list[str]) -> dict:
+    """評估「使用者持股」的月月領息覆蓋率（純函式，資料源＝get_pay_months）。
+
+    與 recommend_income_ladder 不同：**不做組合搜尋**，直接就 user 實際持有的
+    tickers 逐檔取配息月份，回傳覆蓋 / 缺口 / 每月配息名單。§1 誠實原則：
+    無配息歷史的 ETF（get_pay_months 回空 set）→ 不貢獻任何月份、不捏造。
+
+    Parameters
+    ----------
+    holdings : list[str]
+        使用者持股 ticker（已含 .TW/.TWO 後綴，來自 st.session_state['etf_portfolio_rows']）。
+        重複 ticker 會去重（保序）。
+
+    Returns
+    -------
+    dict
+      covered_months  : list[int]              有息覆蓋的月份（1-12，排序）
+      gap_months      : list[int]              1-12 中未被任何持股覆蓋的月份（排序）
+      month_map       : dict[int, list[str]]   {月份: [該月配息的持股 tickers]}（排序）
+      per_ticker      : dict[str, list[int]]   {ticker: 該檔配息月份（排序）}
+      no_data_tickers : list[str]              無配息歷史（貢獻 0 月，誠實列出）
+      coverage_pct    : float                  len(covered)/12 * 100
+      holdings_count  : int                    去重後持股數
+    """
+    # 去重保序 + 去空白
+    _seen: set[str] = set()
+    _holdings: list[str] = []
+    for _raw in (holdings or []):
+        _t = str(_raw).strip()
+        if _t and _t not in _seen:
+            _seen.add(_t)
+            _holdings.append(_t)
+
+    _month_map: dict[int, list[str]] = {}
+    _per_ticker: dict[str, list[int]] = {}
+    _no_data: list[str] = []
+    for _t in _holdings:
+        _months = get_pay_months(_t)
+        if not _months:                       # §1：無配息歷史 → 不貢獻月份，不捏造
+            _no_data.append(_t)
+            _per_ticker[_t] = []
+            continue
+        _per_ticker[_t] = sorted(_months)
+        for _m in _months:
+            _month_map.setdefault(_m, []).append(_t)
+
+    _covered = sorted(_month_map.keys())
+    _gap = [_m for _m in range(1, 13) if _m not in _month_map]
+    return {
+        'covered_months': _covered,
+        'gap_months': _gap,
+        'month_map': {_m: sorted(_ts) for _m, _ts in _month_map.items()},
+        'per_ticker': _per_ticker,
+        'no_data_tickers': _no_data,
+        'coverage_pct': round(len(_covered) / TARGET_MONTHS_FULL * 100, 1),
+        'holdings_count': len(_holdings),
+    }
+
+
+def suggest_fill_for_gaps(
+    gap_months: list[int], exclude: list[str] | None = None,
+) -> dict[int, str | None]:
+    """為每個缺月，從 ETF_PEER_GROUPS['高股息'] 挑一檔「配息月份含該缺月」的 ETF。
+
+    純函式，資料源＝get_pay_months（既有 cache 路徑）；找不到合適者回 None，不捏造。
+
+    Parameters
+    ----------
+    gap_months : list[int]   欲補的缺月（1-12）。
+    exclude    : list[str]   排除的 tickers（通常＝使用者現有持股，避免推薦已持有）。
+
+    Returns
+    -------
+    dict[int, str | None]  {缺月: 建議補一檔 ticker 或 None}。
+    """
+    _exclude = {str(_t).strip() for _t in (exclude or [])}
+    _cand_months: dict[str, set[int]] = {}
+    for _cand in ETF_PEER_GROUPS.get('高股息', []):
+        if _cand in _exclude:
+            continue
+        _cand_months[_cand] = get_pay_months(_cand)
+    _suggest: dict[int, str | None] = {}
+    for _gm in gap_months:
+        _pick: str | None = None
+        for _cand, _months in _cand_months.items():
+            if _gm in _months:
+                _pick = _cand
+                break
+        _suggest[_gm] = _pick
+    return _suggest
+
+
 # ══════════════════════════════════════════════════════════════
 # UI Helpers
 # ══════════════════════════════════════════════════════════════
 
 def _render_month_grid(month_etfs: dict[int, list[str]], missing: set[int]) -> None:
     """12 月份 3×4 grid；該月有配 → 綠底 + ETF chips；缺月 → 紅底 ❌。"""
-    _MONTH_NAMES = ['一月', '二月', '三月', '四月', '五月', '六月',
-                    '七月', '八月', '九月', '十月', '十一月', '十二月']
     for _row in range(3):
         _cols = st.columns(4)
         for _i in range(4):
@@ -205,8 +299,67 @@ def _render_month_grid(month_etfs: dict[int, list[str]], missing: set[int]) -> N
                     f"</div>", unsafe_allow_html=True)
 
 
+def _render_holdings_coverage(holdings: list[str]) -> None:
+    """主視圖：你的持股月月領覆蓋（由 st.session_state['etf_portfolio_rows'] 驅動）。"""
+    st.markdown('##### 🍇 你的持股月月領覆蓋')
+    st.caption('就你目前持有的 ETF 逐檔計算配息月份，看一年 12 個月哪些月領得到息、哪些月缺。')
+    _res = evaluate_income_ladder(holdings)
+    _covered = _res['covered_months']
+    _gaps = _res['gap_months']
+
+    _m1, _m2, _m3 = st.columns(3)
+    _m1.metric('覆蓋月數', f'{len(_covered)}/12')
+    _m2.metric('缺口月數', len(_gaps))
+    _m3.metric('覆蓋率', f'{_res["coverage_pct"]}%')
+
+    if _gaps:
+        st.warning('⚠️ 缺月份：' + '、'.join(_MONTH_NAMES[_m - 1] for _m in _gaps))
+    else:
+        st.success('✅ 你的持股已覆蓋全部 12 個月，月月有息可領！')
+
+    st.markdown('##### 📅 12 月份覆蓋圖（你的持股）')
+    _render_month_grid(_res['month_map'], set(_gaps))
+
+    st.markdown('##### 📋 每月配息明細')
+    _tbl = [{
+        '月份': _MONTH_NAMES[_m - 1],
+        '檔數': len(_res['month_map'].get(_m, [])),
+        '配息 ETF': '、'.join(_res['month_map'].get(_m, [])) or '—',
+    } for _m in range(1, 13)]
+    st.dataframe(pd.DataFrame(_tbl), use_container_width=True, hide_index=True)
+
+    if _res['no_data_tickers']:
+        st.caption('⚪ 無配息歷史（誠實不計入覆蓋）：'
+                   + '、'.join(_res['no_data_tickers']))
+
+    # ── 補缺建議（次要）：非你持股，僅供參考 ──
+    if _gaps:
+        st.markdown('##### 💡 建議補（非你持股）')
+        _sugg = suggest_fill_for_gaps(_gaps, exclude=holdings)
+        _srows = [{
+            '缺月': _MONTH_NAMES[_gm - 1],
+            '建議補一檔': _sugg.get(_gm) or '（高股息 10 檔中查無配該月）',
+        } for _gm in _gaps]
+        st.dataframe(pd.DataFrame(_srows), use_container_width=True, hide_index=True)
+        st.caption('上表為「若想補齊該缺月，可從高股息 10 檔中考慮加入的標的」，'
+                   '**非你目前持股**；加入前仍請看品質星等與含息總報酬（領息 ≠ 賺錢）。')
+
+
 def _render_propose_subtab() -> None:
-    """💡 系統提議 sub-tab"""
+    """葡萄串主入口：優先以「使用者持股」評估月月領覆蓋；未載入組合則 fallback 高股息 10 檔提議。"""
+    _rows = st.session_state.get('etf_portfolio_rows', []) or []
+    _holdings = [r['ticker'] for r in _rows
+                 if isinstance(r, dict) and r.get('ticker')]
+    if _holdings:
+        _render_holdings_coverage(_holdings)
+        return
+    st.caption('（尚未載入你的組合 —— 於上方「⚖️ ETF 組合」填入持股並按「計算組合」後，'
+               '本區會改以你的**實際持股**評估月月領覆蓋。以下先示範高股息 10 檔的參考組合。）')
+    _render_curated_recommendation()
+
+
+def _render_curated_recommendation() -> None:
+    """💡 系統提議（fallback）：從高股息 10 檔自動挑選最佳組合。"""
     st.markdown('##### 💡 從高股息 10 檔自動挑選最佳組合')
     _c1, _c2, _c3 = st.columns([1, 1, 1])
     with _c1:
@@ -256,14 +409,16 @@ def _render_propose_subtab() -> None:
 
 
 def render_grape_ladder(gemini_fn=None) -> None:
-    """Streamlit UI 對外入口 — 主視圖：💡 系統提議（從高股息 10 檔自動挑選最佳組合）。
+    """Streamlit UI 對外入口 — 主視圖：🍇 你的持股月月領覆蓋（由組合持股驅動）。
 
-    註：評估你現有持股的月配息分布功能已下放到 etf_tab_portfolio 的「💰 配息日曆 × 年度現金流預估」（PR #6 去重）。
+    優先讀 st.session_state['etf_portfolio_rows']（上方「⚖️ ETF 組合」按「計算組合」後寫入），
+    評估你**實際持股**的月月領覆蓋 + 缺月補位建議；未載入組合時 fallback 到
+    「高股息 10 檔自動挑選最佳組合」提議。
     """
     st.markdown('### 📅 葡萄串領息法')
     st.caption('「不同月配 ETF」組合形成「葡萄串」：讓每個月都有息可領。'
-               '本區從高股息 10 檔自動挑選最佳組合；'
-               '若想看你既有持股的月配息分布，請見上方「💰 配息日曆 × 年度現金流預估」。')
+               '本區優先就**你的持股**評估月月領覆蓋（於上方「⚖️ ETF 組合」按「計算組合」後帶入）；'
+               '未載入組合時，改示範高股息 10 檔的參考組合。')
     with st.expander('💡 葡萄串領息法是什麼？怎麼用？', expanded=False):
         st.markdown(
             '**核心概念**：台灣高股息 ETF 各有固定**配息月份**（如 0056 配 1/4/7/10 月、00878 配 2/5/8/11 月…）。'

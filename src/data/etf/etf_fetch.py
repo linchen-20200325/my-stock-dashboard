@@ -32,6 +32,11 @@ import yfinance as yf
 
 from shared.ttls import TTL_15MIN, TTL_30MIN, TTL_1HOUR, TTL_2HOUR, TTL_1DAY, TTL_7DAY
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
+# 價格歷史抓取走 NAS proxy(同本檔 metadata fetcher):yfinance 在 Streamlit Cloud
+# 常被 Yahoo 海外 IP 封鎖/rate-limit(見 fetch_etf_meta_moneydj 註)。複用 yf_proxy 的
+# _proxy_env SSOT(env backup/restore context manager),不重寫。yf_proxy 僅 lazy import
+# src.data.stock._load_proxy_config,不 import 本檔 → 無 import cycle。
+from src.data.proxy.yf_proxy import _proxy_env
 
 
 # v18.352 PR-Q2 — S-PROV-1 phase 19 helper
@@ -191,7 +196,10 @@ def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
     S-PROV-1 v18.251 phase 7:成功時 df.attrs 含 source/fetched_at(§2.2)。
     """
     try:
-        df = yf.Ticker(ticker).history(period='max', auto_adjust=True)
+        # 走 NAS proxy(_proxy_env:臨時設 HTTPS/HTTP_PROXY,finally 還原)避開
+        # Yahoo 海外 IP 封鎖 → 原本直呼致 0050.TW 空 df「找不到歷史/價格資料」。
+        with _proxy_env():
+            df = yf.Ticker(ticker).history(period='max', auto_adjust=True)
         if df.empty:
             return pd.DataFrame()
         df.index = pd.to_datetime(df.index).tz_localize(None)
@@ -243,7 +251,10 @@ def fetch_etf_dividends(ticker: str) -> pd.Series:
     S-PROV-1 v18.251:成功時 s.attrs 含 source/fetched_at(§2.2)。
     """
     try:
-        divs = yf.Ticker(ticker).dividends
+        # 同 _fetch_etf_price_max:走 NAS proxy(_proxy_env)避開 Yahoo 海外 IP 封鎖。
+        # 否則配息回空 → 葡萄串「月月領」覆蓋全變缺口、每檔 no_data。無 proxy 時 no-op。
+        with _proxy_env():
+            divs = yf.Ticker(ticker).dividends
         if divs.empty:
             return pd.Series(dtype=float)
         divs.index = pd.to_datetime(divs.index).tz_localize(None)
@@ -251,7 +262,9 @@ def fetch_etf_dividends(ticker: str) -> pd.Series:
         divs.attrs["source"] = f"Yahoo:{ticker}:dividends"
         divs.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
         return divs
-    except Exception:
+    except Exception as e:
+        # §1:不靜默吞 —— L1 不可 st.error,改 print log,caller 依 empty Series 判斷
+        print(f'[etf_fetch] ❌ 無法取得 {ticker} 配息:{type(e).__name__}: {e}')
         return pd.Series(dtype=float)
 
 

@@ -1,0 +1,154 @@
+"""
+test_etf_price_proxy.py — 迴歸鎖:ETF 價格歷史抓取必須走 NAS proxy。
+
+BUG(修前):`_fetch_etf_price_max` 直呼 `yf.Ticker(ticker).history(period='max')`
+無 proxy → Streamlit Cloud 海外 IP 被 Yahoo 封鎖/rate-limit → 回空 df →
+每檔 ETF(0050.TW 為預設首檔)顯示「找不到 0050.TW 的歷史/價格資料」,並連帶
+拖垮 VaR 與 vs-0050 比較。
+
+FIX:把 history 呼叫包進 yf_proxy._proxy_env()(臨時設 HTTPS/HTTP_PROXY,finally
+還原)。本測試驗證:
+1. history 呼叫確實在 _proxy_env context 內執行(enter → history → exit 順序)。
+2. 空 history 仍回空 DataFrame(§1 fail loud,不造假)。
+3. etf_fetch 複用 yf_proxy._proxy_env SSOT(未自行重寫 env backup/restore)。
+4. import etf_fetch + yf_proxy 無 import cycle。
+
+CLAUDE.md §8:etf_fetch(L1 Data)import L1 proxy helper 合法,EX-CACHE-1 適用。
+"""
+from __future__ import annotations
+
+import contextlib
+
+import pandas as pd
+import pytest
+
+from src.data.etf import etf_fetch
+from src.data.proxy import yf_proxy
+
+
+def _install_recording_env(monkeypatch, calls: list):
+    """把 etf_fetch._proxy_env 換成會記錄進出的 context manager。"""
+    @contextlib.contextmanager
+    def _recording_env():
+        calls.append('proxy_enter')
+        try:
+            yield
+        finally:
+            calls.append('proxy_exit')
+    monkeypatch.setattr(etf_fetch, '_proxy_env', _recording_env)
+
+
+def _install_fake_yf(monkeypatch, calls: list, hist_df: pd.DataFrame):
+    """把 etf_fetch.yf 換成回傳指定 history df 的假 yfinance。"""
+    class _FakeTicker:
+        def __init__(self, ticker):
+            calls.append(('ticker', ticker))
+
+        def history(self, *args, **kwargs):
+            calls.append('history')
+            return hist_df.copy()
+
+    class _FakeYF:
+        Ticker = _FakeTicker
+
+    monkeypatch.setattr(etf_fetch, 'yf', _FakeYF)
+
+
+def test_price_max_runs_history_inside_proxy_env(monkeypatch):
+    """history 呼叫必須在 _proxy_env 內:順序 enter → history → exit。"""
+    calls: list = []
+    _install_recording_env(monkeypatch, calls)
+    idx = pd.to_datetime(['2020-01-02', '2020-01-03'])
+    _df = pd.DataFrame(
+        {'Open': [1.0, 2.0], 'High': [2.0, 3.0], 'Low': [0.5, 1.5],
+         'Close': [1.5, 2.5], 'Volume': [100, 200]},
+        index=idx,
+    )
+    _install_fake_yf(monkeypatch, calls, _df)
+
+    etf_fetch._fetch_etf_price_max.clear()  # 清 st.cache_data,強制跑函式體
+    out = etf_fetch._fetch_etf_price_max('0050.TW')
+
+    assert 'proxy_enter' in calls, '_proxy_env 未被進入 — history 沒走 proxy'
+    assert 'history' in calls, 'history 未被呼叫'
+    # 順序鐵則:proxy 進入 → history → proxy 離開
+    assert calls.index('proxy_enter') < calls.index('history') < calls.index('proxy_exit'), \
+        f'history 未包在 _proxy_env context 內:{calls}'
+    assert not out.empty
+    assert list(out['Close']) == [1.5, 2.5]
+
+
+def test_price_max_empty_history_returns_empty_df(monkeypatch):
+    """空 history → 回空 DataFrame(§1:不造假、不 raise、caller 依 empty 判斷)。"""
+    calls: list = []
+    _install_recording_env(monkeypatch, calls)
+    _install_fake_yf(monkeypatch, calls, pd.DataFrame())
+
+    etf_fetch._fetch_etf_price_max.clear()
+    out = etf_fetch._fetch_etf_price_max('0050.TW')
+
+    assert isinstance(out, pd.DataFrame)
+    assert out.empty
+    # 即使結果為空,history 仍應在 proxy context 內嘗試過
+    assert 'proxy_enter' in calls
+    assert calls.index('proxy_enter') < calls.index('history')
+
+
+def test_price_max_swallows_exception_returns_empty_df(monkeypatch):
+    """history 拋錯 → print log + 回空 df(L1 不得 st.error;不吞成假資料)。"""
+    calls: list = []
+    _install_recording_env(monkeypatch, calls)
+
+    class _BoomTicker:
+        def __init__(self, ticker):
+            pass
+
+        def history(self, *args, **kwargs):
+            raise RuntimeError('yahoo 429 rate limit')
+
+    class _BoomYF:
+        Ticker = _BoomTicker
+
+    monkeypatch.setattr(etf_fetch, 'yf', _BoomYF)
+
+    etf_fetch._fetch_etf_price_max.clear()
+    out = etf_fetch._fetch_etf_price_max('0050.TW')
+
+    assert isinstance(out, pd.DataFrame)
+    assert out.empty
+    # 例外發生在 proxy context 內,context manager 的 finally 仍應還原(exit)
+    assert calls == ['proxy_enter', 'proxy_exit'], \
+        f'例外路徑下 _proxy_env 進出不完整:{calls}'
+
+
+def test_reuses_yf_proxy_proxy_env_ssot():
+    """etf_fetch._proxy_env 必須是 yf_proxy._proxy_env 本尊(複用 SSOT,未重寫)。"""
+    assert etf_fetch._proxy_env is yf_proxy._proxy_env
+
+
+def test_no_import_cycle():
+    """import etf_fetch + yf_proxy 皆成功 → 無 import cycle。"""
+    import importlib
+    m1 = importlib.import_module('src.data.etf.etf_fetch')
+    m2 = importlib.import_module('src.data.proxy.yf_proxy')
+    assert hasattr(m1, '_fetch_etf_price_max')
+    assert hasattr(m2, '_proxy_env')
+    # yf_proxy 不得反向 import etf_fetch(cycle 來源)
+    import inspect
+    src = inspect.getsource(m2)
+    assert 'etf_fetch' not in src, 'yf_proxy 不應 import etf_fetch(否則成環)'
+
+
+def test_source_wraps_history_in_proxy_env():
+    """靜態鎖:原始碼中 history('max') 呼叫必須被 _proxy_env 包住(防回歸裸抓)。"""
+    import inspect
+    src = inspect.getsource(etf_fetch._fetch_etf_price_max)
+    assert 'with _proxy_env():' in src, '_fetch_etf_price_max 未用 _proxy_env 包 history'
+    # _proxy_env 的 with 必須出現在 history 呼叫之前
+    assert src.index('with _proxy_env():') < src.index(".history(period='max'"), \
+        'history 呼叫未被 _proxy_env 包住'
+
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(pytest.main([__file__, '-q']))
