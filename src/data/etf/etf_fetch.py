@@ -1627,8 +1627,12 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 5) -> "pd.Data
     for _ds1 in ['TaiwanETFNetAssetValue', 'TaiwanStockETFNAV']:
         try:
             _p = {'dataset': _ds1, 'data_id': code, 'start_date': start}
-            if token: _p['token'] = token
+            # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+            # fetch_url 支援 headers=(proxy_helper.fetch_url 簽名第 2 參數,會 merge 進預設 UA)。
+            # 副作用備註:fetch_url 的 Storm Shield 快取 key 為 (url, params),token 移出
+            # params 後「帶 token」與「匿名」兩種請求會共用同一 cache entry。
             _r = _fu_etfnav(FINMIND_API_URL, params=_p,
+                            headers=({'Authorization': f'Bearer {token}'} if token else None),
                             timeout=15, attempts=2)  # v19.105: attempts=1 使 2×403 直連降級永不觸發(同 v18.455)
             if _r is None:
                 print(f'[ETF NAV] FinMind {_ds1} {code}: fetch_url 回 None（含 NAS 中繼皆失敗）')
@@ -1964,11 +1968,11 @@ def _fetch_etf_zh_name_finmind(ticker: str) -> str | None:
             _tok = ''
     try:
         _p = {'dataset': 'TaiwanStockInfo', 'data_id': _bare}
-        if _tok:
-            _p['token'] = _tok
-        # S8 v19.78 UA 補漏(v19.82):token 維持走 params,headers 僅補 UA
+        # S8 v19.78 UA 補漏(v19.82):headers 走 _fm_raw_headers SSOT(帶 UA)。
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # 推翻 v19.82 的「token 維持走 params」— 改傳 _tok 讓 helper 組 Bearer。
         from src.data.core.data_loader import _fm_raw_headers as _fm_hdrs_fn
-        _r = _rq_fn.get(FINMIND_API_URL, params=_p, headers=_fm_hdrs_fn(''), timeout=15)
+        _r = _rq_fn.get(FINMIND_API_URL, params=_p, headers=_fm_hdrs_fn(_tok), timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         for _row in _data:
             _nm = str(_row.get('stock_name', '') or '').strip()

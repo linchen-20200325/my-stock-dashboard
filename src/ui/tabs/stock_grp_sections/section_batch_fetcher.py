@@ -253,7 +253,8 @@ def run_batch_fetch(stock_list: list[str]) -> None:
     _t3_mkt = st.session_state.get('mkt_info', {}) or {}
     risk_alerts_t3 = []
     if _t3_mkt.get('regime') == 'bear':
-        risk_alerts_t3.append('大盤偏空,建議降低持股至20%以下')
+        # v19.170 P0-1:移除硬編碼持股%,持股水位一律由建議持股 SSOT 決定
+        risk_alerts_t3.append('大盤偏空,建議降低持股比重 → 實際持股見 🎚️ 建議持股油門')
     if _t3_mkt.get('foreign_net', 0) < -5e9:
         risk_alerts_t3.append('外資大量賣超,注意籌碼面壓力')
 

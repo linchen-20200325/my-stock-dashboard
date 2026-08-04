@@ -103,7 +103,14 @@ def post_gemini(
     """
     import requests  # lazy import(測試 mock-friendly)
 
-    headers = headers or {"Content-Type": "application/json"}
+    headers = dict(headers or {"Content-Type": "application/json"})
+    # v19.170:憑證只走 header,不進 query string / URL(避免落入 access log)
+    # 原本是 `requests.post(f"{url}?key={api_key}", ...)` —— key 直接拼進 URL,
+    # 是最容易被 proxy / CDN / 例外訊息完整記錄下來的形式。
+    # `src/ui/pages/api_diagnostic.py` 已證實 Gemini 支援 x-goog-api-key header。
+    # 用 dict() 複製,避免污染 caller 傳進來的 dict。
+    if api_key:
+        headers["x-goog-api-key"] = api_key
     payload = _build_payload(prompt, persona, temperature, max_tokens,
                               extra_generation_config=extra_generation_config,
                               safety_settings=safety_settings)
@@ -121,7 +128,7 @@ def post_gemini(
                     time.sleep(min(15, 3 * (2 ** attempt)))
 
                 response = requests.post(
-                    f"{url}?key={api_key}", headers=headers, json=payload, timeout=timeout,
+                    url, headers=headers, json=payload, timeout=timeout,
                 )
 
                 if response.status_code == 200:

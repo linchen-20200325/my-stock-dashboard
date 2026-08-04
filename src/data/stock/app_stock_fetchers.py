@@ -295,8 +295,7 @@ def fetch_financials(sid, industry: str = ""):
     # ── Step 1: BalanceSheet → 合約負債 + 固定資產 ──────────────
     try:
         _params = {"dataset": "TaiwanStockBalanceSheet", "data_id": sid, "start_date": _start}
-        if _tok:
-            _params["token"] = _tok
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
         _hdrs = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
         if _tok:
             _hdrs["Authorization"] = f"Bearer {_tok}"
@@ -367,8 +366,8 @@ def fetch_financials(sid, industry: str = ""):
     # ── Step 2: CashFlowsStatement → 資本支出 ────────────────────
     try:
         _params2 = {"dataset": "TaiwanStockCashFlowsStatement", "data_id": sid, "start_date": _start}
-        if _tok:
-            _params2["token"] = _tok
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # 下方 _hdrs2 已帶 Authorization: Bearer,憑證通道唯一。
         _hdrs2 = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
         if _tok:
             _hdrs2["Authorization"] = f"Bearer {_tok}"

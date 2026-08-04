@@ -274,7 +274,17 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     # ── Section 八 v4.0 動態結論（老師VIX否決權 × 孫慶龍估值/CLI矩陣）────
     _bias_info8 = st.session_state.get('bias_info') or {}
     _b240_8     = float(_bias_info8.get('bias_240', 0))
-    _vix_now8   = float(_m8_vix.get('current', 0)) if _m8_vix else None
+    # v19.170 一致性:缺值一律回 None,不得回 0.0。
+    # 原式 `float(_m8_vix.get('current', 0)) if _m8_vix else None` 在
+    # `macro_info['vix']` 存在但缺 'current' 時回 **0.0**,下游
+    # `_cA = _vix_now8 is not None and _vix_now8 < 20` 會**偽造通過**三環第一環,
+    # badge 印出假的「A VIX=0.0<20 ✅」。
+    # 對齊 `src/services/allocation_service._read_vix()`(缺值/型別錯誤→None)。
+    _vix_raw8 = _m8_vix.get('current') if isinstance(_m8_vix, dict) else None
+    try:
+        _vix_now8 = float(_vix_raw8) if _vix_raw8 is not None else None
+    except (TypeError, ValueError):
+        _vix_now8 = None
     # CLI：OECD CLI 榮枯線 = 100，取自 _m8_pmi（is_oecd_cli=True 時）
     _cli_8 = None
     if _m8_pmi and _m8_pmi.get('is_oecd_cli'):
@@ -285,15 +295,23 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         st.error(f'❌ VIX 數值異常（{_vix_now8:.0f}），疑似 API 變數映射錯誤，結論暫不顯示。請重新整理。')
     else:
         # ── 老師：VIX 總經否決權 ──────────────────────────────
+        # v19.170 P0-1:三段燈號與敘述保留,但**持股百分比全部撤除** —— 本卡原本自己喊
+        # 「建議持股 0~10%」/「持股上限壓縮在 30% 以下」,與 🎚️ 建議持股油門 打架。
+        # 改為 apply_vix_veto() 把 VIX 登記成「天花板」,由建議持股 SSOT 統一仲裁,
+        # 本卡只負責講「為什麼危險」。門檻沿用既有 20／30 不動。
+        from src.services.allocation_service import apply_vix_veto
+        apply_vix_veto(_vix_now8)
         if _vix_now8 is not None:
             if _vix_now8 >= 30:
                 _hyc8 = TRAFFIC_RED
                 _hyi8 = f'VIX {_vix_now8:.1f} ≥ 30'
-                _hyc8t = '🔴 系統性風險爆發，觸發否決權！無視所有技術面多頭訊號，強制清倉，建議持股 0~10%，現金為王。'
+                _hyc8t = ('🔴 系統性風險爆發，觸發否決權！無視所有技術面多頭訊號，現金為王。'
+                          '→ 已納入總持股上限（見上方 🎚️ 建議持股油門）')
             elif _vix_now8 >= 20:
                 _hyc8 = TRAFFIC_YELLOW
                 _hyi8 = f'VIX {_vix_now8:.1f}（20~30 警戒）'
-                _hyc8t = '🟡 波動率飆升，市場情緒轉恐慌。停止加槓桿，汰弱留強，持股上限壓縮在 30% 以下。'
+                _hyc8t = ('🟡 波動率飆升，市場情緒轉恐慌。停止加槓桿，汰弱留強。'
+                          '→ 已納入總持股上限（見上方 🎚️ 建議持股油門）')
             else:
                 _hyc8 = TRAFFIC_GREEN
                 _hyi8 = f'VIX {_vix_now8:.1f} < 20（平靜期）'
@@ -443,50 +461,72 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             _ring2_cnt  = int(_cC) + int(_cD)
             _ring3_cnt  = int(_cE) + int(_cF) + int(_cG)
     
-            _r1_html = (cond_badge(_cA, f'A VIX={_vix_now8:.1f}<20' if _vix_now8 else 'A VIX未知') + ' ' +
+            # v19.170:真值判斷改 `is not None` —— VIX 若真為 0 會被 `if _vix_now8`
+            # 當成「未知」而印錯 badge(其餘 _vix_now8 用法本來就已是 is not None)。
+            _r1_html = (cond_badge(_cA, f'A VIX={_vix_now8:.1f}<20' if _vix_now8 is not None else 'A VIX未知') + ' ' +
                         cond_badge(_cB, f'B 期貨={_fut8:,.0f}口' if _fut8 is not None else 'B 期貨未知'))
             _r2_html = (cond_badge(_cC, f'C 出口={_exp_c:+.1f}%' if _exp_c is not None else 'C 出口未知') + ' ' +
                         cond_badge(_cD, f'D M1B-M2={_gap8c:+.2f}%' if _gap8c is not None else 'D M1B-M2未知'))
+            # v19.170 P0-1 順手修 bug:原三元運算兩邊字串相同(True/False 都印「F 股匯雙漲」),
+            # 條件未成立時等於謊報。改成未成立顯示「F 股匯未雙漲」。
             _r3_html = (cond_badge(_cE, f'E 外資={_fnet8:+.0f}億' if _fnet8 is not None else 'E 外資未知') + ' ' +
-                        cond_badge(_cF, 'F 股匯雙漲' if _cF else 'F 股匯雙漲') + ' ' +
+                        cond_badge(_cF, 'F 股匯雙漲' if _cF else 'F 股匯未雙漲') + ' ' +
                         cond_badge(_cG, 'G SOX/NVDA點火'))
-    
+
+            # v19.170 P0-1:第一環(解除保險)未過 → 登記成「天花板」交給建議持股 SSOT 仲裁,
+            # 本卡不再自行輸出 `_atk_pct`(原「持股 0~20%」…),只保留火力分級文字,
+            # 根治「同畫面三環說 0~20%、油門說 30~50%」的矛盾。
+            from src.services.allocation_service import (
+                apply_ring_gate, get_allocation, register_conflict,
+            )
+            _ring_detail = (
+                (f'A VIX={_vix_now8:.1f}' if _vix_now8 is not None else 'A VIX 未知')
+                + '／'
+                + (f'B 外資期貨={_fut8:,.0f}口' if _fut8 is not None else 'B 外資期貨未知')
+                + ' — 大環境有鬼，技術面突破視為誘多'
+            )
+            apply_ring_gate(_ring1_pass, detail=_ring_detail)
+
             if not _ring1_pass:
                 _atk_color = TRAFFIC_RED
                 _atk_grade = '🚫 禁止攻擊'
-                _atk_pct = '持股 0~20%'
                 _atk_txt = ('第一環未通過（VIX過高 或 外資重兵空單）：'
                             '大環境有鬼，任何技術面突破均為誘多，嚴格停損保留現金。')
             elif _ring2_cnt >= 2 and _ring3_cnt >= 2:
                 _atk_color = '#f0e040'
                 _atk_grade = '🚀 SSS 級全面總攻'
-                _atk_pct = '持股 80~100%'
                 _atk_txt = ('三環齊備、資金面與基本面完美共振：天時地利人和。'
                             '勇敢追擊強勢突破股，重壓半導體主流。')
             elif _ring2_cnt >= 1 and _ring3_cnt >= 1:
                 _atk_color = TRAFFIC_RED
                 _atk_grade = '🔥 A 級強勢進攻'
-                _atk_pct = '持股 60~80%'
                 _atk_txt = ('標準順風局：第二環（燃料）、第三環（點火）各至少一條通過。'
                             '順勢佈局，汰弱留強，跌破 10MA 停損。')
             elif _ring3_cnt >= 1:
                 _atk_color = TRAFFIC_YELLOW
                 _atk_grade = '🛡️ B 級試探性建倉'
-                _atk_pct = '持股 30~50%'
                 _atk_txt = ('大環境無足夠燃料，但短線有點火訊號。'
                             '屬於「跌深反彈」或「區間震盪」，打帶跑策略，見好就收。')
             else:
                 _atk_color = '#8b949e'
                 _atk_grade = '⏸️ 暫不進攻'
-                _atk_pct = '持股 30% 以下'
                 _atk_txt = '三環條件均不足，等待更明確訊號，保守觀望。'
-    
+
+            # 火力分級偏多、但實際持股已被總經／VIX 硬否決壓到防禦帶 → 誠實登記為
+            # 「被壓制的反向訊號」,顯示在 🎚️ 建議持股油門 的「為何是這個持股數字」。
+            if _ring2_cnt >= 1 and _ring3_cnt >= 1:
+                _atk_alloc = get_allocation()
+                if _atk_alloc.final_hi is not None and _atk_alloc.final_hi <= 20:
+                    register_conflict('三環火力分級偏多，但已被總經／VIX 硬否決壓制')
+
             st.markdown(
                 f'<div style="background:#0d1117;border:2px solid {_atk_color};border-radius:12px;padding:16px;margin:8px 0;">'
                 f'<div style="font-size:18px;font-weight:900;color:{_atk_color};">{_atk_grade}</div>'
-                f'<div style="font-size:14px;color:#c9d1d9;margin:4px 0;">{_atk_pct} — {_atk_txt}</div>'
+                f'<div style="font-size:14px;color:#c9d1d9;margin:4px 0;">{_atk_txt}</div>'
                 f'<div style="margin-top:10px;font-size:12px;color:#8b949e;">第一環（解除保險）：{_r1_html}<br>'
                 f'第二環（確認燃料）：{_r2_html}<br>'
                 f'第三環（點火訊號）：{_r3_html}</div>'
+                f'<div style="margin-top:10px;font-size:11px;color:#d29922;">'
+                f'📌 本判定僅提供「火力分級」；實際持股請看 🎚️ 建議持股油門（已納入本環天花板）</div>'
                 f'</div>', unsafe_allow_html=True)
     

@@ -400,7 +400,14 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
     except Exception as _e_exp:
         print(f"[macro_classroom/explainer] {type(_e_exp).__name__}: {_e_exp}")
     if _tl_final:
-        st.session_state['warroom_summary'] = {
+        # v19.170 P0-1 修 SSOT 破口:原本 `st.session_state['warroom_summary'] = {...}`
+        # 整包覆寫,把 section_traffic_light 先寫入的 'throttle' key 抹掉 —— 下游
+        # (頁頂常駐條 / 今日作戰室)讀不到 throttle 就 fallback 回粗略 80/50/20,
+        # 正是稽核「同畫面 6 套持股建議」的成因之一。改為就地 update 保留既有 key。
+        _wr_sum = st.session_state.get('warroom_summary')
+        if not isinstance(_wr_sum, dict):
+            _wr_sum = {}
+        _wr_sum.update({
             'traffic_light': _tl_final['label'],
             'health_score':  _tl_final['health'],
             'regime': _tl2_mkt.get('regime', 'neutral'),
@@ -410,5 +417,6 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
             'foreign_net_bn':_tl_final['fnet'],
             'futures_net':   _tl_final['fut_net'],
             'confidence_pct':_tl_final['conf'],
-        }
+        })
+        st.session_state['warroom_summary'] = _wr_sum
     

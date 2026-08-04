@@ -6,8 +6,10 @@
 
 讀總經 Tab 已算好的 session_state（個股 Tab 未載入總經 → 容錯提示）：
   - mkt_info：market_strategy.get_market_assessment 結果
-    {regime:'bull'/'neutral'/'bear', label, score, exposure_pct,
+    {regime:'bull'/'neutral'/'bear', label, score,
      index_below_ma5, foreign_net, ...}
+    ⚠️ v19.170 P0-1：**持股% 不從這裡取**，一律走
+    `allocation_service.get_allocation()`（全站唯一持股 SSOT）。
   - jingqi_info：市場廣度 regime {regime, label, color, ...}（optional）
 零新 IO（純 reuse 總經 Tab 結果），屬「跨 Tab 訊號聯動」系列。
 """
@@ -25,7 +27,12 @@ def render_macro_stock_backdrop(session_state) -> None:
 
     _regime = str(_mkt.get("regime", "neutral"))
     _label = str(_mkt.get("label", "") or _regime)
-    _exp = str(_mkt.get("exposure_pct", "") or "")
+    # v19.170 P0-1:建議持股改讀全站唯一 SSOT(get_allocation),不再讀
+    # mkt_info['exposure_pct'](market_strategy 自算的 80/50/20,與
+    # 🎚️ 建議持股油門 打架)。§1 Fail Loud:未評估時 range_text='--' → 不顯示。
+    from src.services.allocation_service import get_allocation
+    _alloc = get_allocation()
+    _exp = _alloc.range_text if _alloc.is_loaded else ""
     _below5 = _mkt.get("index_below_ma5")
     # v18.210 K4：走 shared/colors SSOT（traffic-light hex 散落 15 檔 110 處統一收納）
     from shared.colors import TRAFFIC_GREEN, TRAFFIC_YELLOW, TRAFFIC_RED

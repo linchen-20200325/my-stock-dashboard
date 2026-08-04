@@ -266,7 +266,10 @@ def render_tab_macro():
             '4. 按 Save → App 自動重啟後即生效'
         )
     else:
-        st.success(f'✅ FinMind Token 已設定（{_fm_tok_now[:12]}...）', icon='🔑')
+        # v19.170(P0-3 資安):原本渲染 token 前 12 碼到公開頁面 — 憑證材料不得
+        # 入 UI/log(截圖、螢幕分享、瀏覽器快取都會外洩)。改為只顯示長度,
+        # 對齊 data_loader.py:349-351 已修好的同類問題。
+        st.success(f'✅ FinMind Token 已設定（len={len(_fm_tok_now)}）', icon='🔑')
 
     # v18.315：原埋在中間的「一鍵更新」按鈕已移除 — 改由 render_tab_macro 最外層頂部
     # 的唯一按鈕觸發(解決 user 反饋「內層多一顆按鈕」+「應在最外層就開始跑」)。

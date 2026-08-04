@@ -90,7 +90,11 @@ def prepare_long_term_radar() -> tuple[Any, str, Any]:
                 'score':  float(_lt.get('score') or 0.0) * 5.0,
                 'color':  _lt.get('color') or '#888',
                 'icon':   _icon,
-                'action': f"{_lt.get('detail','')}；建議持股 {_lt.get('suggest_pct','--')}",
+                # v19.170:移除 `suggest_pct`(classify_long_term_regime 自算的持股%),
+                # 它非 SSOT 來源,會經 synthesize_dual_verdict → 「🤝 雙速合議」卡印出,
+                # 與 🎚️ 建議持股油門(allocation_service.get_allocation())打架。
+                # 此處只留敘事 detail,持股數字一律導回單一來源。
+                'action': f"{_lt.get('detail','')} → 實際持股見 🎚️ 建議持股油門",
             }
     except Exception as _e_rr:
         print(f'[tab_macro/risk_radar] {type(_e_rr).__name__}: {_e_rr}')

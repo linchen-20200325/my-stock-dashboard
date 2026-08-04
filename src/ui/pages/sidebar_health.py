@@ -195,7 +195,8 @@ def _call_gemini_brief(prompt: str) -> str:
             try:
                 _r = _rq.post(
                     f"https://generativelanguage.googleapis.com/v1beta/models/{_m}:generateContent",
-                    params={"key": _key},
+                    # v19.170:憑證只走 header,不進 query string / URL(避免落入 access log)
+                    headers=({"x-goog-api-key": _key} if _key else None),
                     json={"contents": [{"parts": [{"text": prompt}]}],
                           "generationConfig": {"temperature": 0.3, "maxOutputTokens": 500}},
                     timeout=30,

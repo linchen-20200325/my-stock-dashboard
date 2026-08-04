@@ -67,11 +67,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _wr_bias.get('ma240', 0) or 0,
         _wr_fut_net,
     )
-    # v19.168 IMPL-F:持股% 統一讀姿態油門 SSOT(warroom_summary.throttle,與頁頂全域 bar /
-    # 總經 gauge / 組合①卡 同一個數);無 throttle 時 fallback 原 regime 粗略 exposure_pct。
-    _wr_thr = (st.session_state.get('warroom_summary') or {}).get('throttle')
-    _wr_exp = (f"{_wr_thr['lo_pct']}–{_wr_thr['hi_pct']}%" if _wr_thr
-               else (_wr_mkt.get('exposure_pct', '--') if _wr_mkt else '--'))
+    # v19.170 P0-1:持股% 改讀建議持股 SSOT(get_allocation)——原本讀
+    # warroom_summary['throttle'](會被 section_state 整包覆寫抹掉)再 fallback 回
+    # mkt_info['exposure_pct'](粗略 80/50/20),導致本卡與 🎚️ 建議持股油門 打架。
+    # get_allocation() 每次由來源重算,且已把硬否決天花板一併納入(取兩者較低)。
+    from src.services.allocation_service import get_allocation
+    _alloc = get_allocation()
+    _wr_exp = _alloc.range_text
 
     if _show_market_data and (_wr_mkt or _wr_cd):
         # ── 今日唯一結論(大字顯示)──────────────────────────
@@ -125,6 +127,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             f'border-radius:0 10px 10px 0;padding:14px 18px;margin:8px 0;">'
             f'<div style="font-size:11px;color:#484f58;margin-bottom:4px;">📌 今日唯一行動建議</div>'
             f'<div style="font-size:17px;font-weight:900;color:{_wr_action_color};">{_wr_action}</div>'
+            # v19.170 P0-1:持股% 被硬否決壓低時,同卡顯示是哪條天花板生效,
+            # 讓「趨勢偏多但只建議 0–20%」不再看起來像 bug。
+            + (f'<div style="font-size:11px;color:#d29922;margin-top:4px;">{_alloc.cap_text}'
+               f'　→ 明細見 🎚️ 建議持股油門</div>' if _alloc.capped else '')
             + (f'<div style="font-size:11px;color:#8b949e;margin-top:4px;">📐 年線位階參考：{_wr_v4_hint}</div>' if _wr_v4_hint else '')
             + (f'<div style="font-size:11px;color:#484f58;margin-top:4px;">更新時間：{_wr_ts}</div>' if _wr_ts else '') +
             '</div>', unsafe_allow_html=True)
@@ -142,7 +148,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
              '>2500億警戒，>3400億極危'),
             ('年線位置', f'乖離{_wr_bias.get("bias_240",0):+.1f}%' if _wr_bias else '未知',
              not _wr_bias or abs(_wr_bias.get("bias_240", 0)) < 20, '超過±20%要警惕'),
-            ('持股比例', f'建議{_wr_exp}', _wr_reg != 'bear', '按建議比例，不要滿倉'),
+            # v19.170 P0-1:第 5 格同讀 SSOT;未評估誠實顯示,被硬否決壓低時給 ⚠️ 而非 ✅
+            ('持股比例', f'建議{_wr_exp}' if _alloc.is_loaded else '⬜ 總經未評估',
+             _alloc.is_loaded and not _alloc.capped, '按建議比例，不要滿倉'),
         ]
         _cl_cols = st.columns(len(_cl_items))
         for _ccol, (_name, _val, _ok, _tip) in zip(_cl_cols, _cl_items):

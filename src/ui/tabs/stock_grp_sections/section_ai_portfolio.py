@@ -8,7 +8,9 @@
 - score_t3(多因子評分:總分 / 五維 / RS)
 - _fund_map(基本面:EPS / 毛利 / 殖利率 / SQ / FGMS / P/B)
 - _fh_t3_cached(財報體檢:DNA / 現金水位 / OCF / 負債比 / 雷達)
-- session_state(mkt_info.regime + macro_state.exposure_limit_pct + risk_alerts)
+- session_state(mkt_info.regime + risk_alerts)
+- allocation_service.get_allocation()(v19.170:建議持股 SSOT,取代原本直讀
+  macro_state.exposure_limit_pct — 該值為 None 時會讓 prompt 出現「None%」)
 
 → build_structured_summary_prompt → Gemini → 顯示 / 快取至
 st.session_state[_t3ai_key] 防 rerun 重打。
@@ -123,7 +125,18 @@ def _build_portfolio_prompt(
         )
     _reg_p = st.session_state.get('mkt_info', {}).get('regime', 'neutral')
     _reg_txt_p = '多頭市場(積極操作)' if _reg_p == 'bull' else ('空頭市場(縮減部位)' if _reg_p == 'bear' else '震盪整理(謹慎觀望)')
-    _exp_p = st.session_state.get('macro_state', {}).get('exposure_limit_pct', 'N/A')
+    # v19.170 SSOT 修正:建議持股上限改讀 allocation_service(全站唯一來源)。
+    # 原寫法 `macro_state.get('exposure_limit_pct', 'N/A')` 有 bug:該 key 存在但值為
+    # None,`dict.get` 的 default 只在 key 缺席時才生效 → prompt 實際送出
+    # 「系統建議的持股上限:None%」,LLM 會自行編一個數字寫進投組報告。
+    # 函式內延遲 import:避免 module-level L5(ui)→L3(services) 循環匯入。
+    from src.services.allocation_service import get_allocation as _get_alloc_p
+    _alloc_p = _get_alloc_p()
+    _alloc_line_p = (
+        '系統建議的持股上限:未評估（禁止在報告中推估任何持股百分比）'
+        if _alloc_p.range_text == '--'
+        else f'系統建議的持股上限:{_alloc_p.range_text}'
+    )
     # ── 依綜合評分排出強弱順序(重用上方已算好的資料)──────────
     _ranked_t3 = sorted(
         results_t3,
@@ -147,7 +160,7 @@ def _build_portfolio_prompt(
     # ── 風險診斷字串(大盤格局 + 建議上限 + 系統風控警示)──────
     _risk_str = (
         f"目前大盤格局:{_reg_txt_p}\n"
-        f"系統建議的持股上限:{_exp_p}%\n"
+        f"{_alloc_line_p}\n"
         "系統風控警示:\n"
         + ('\n'.join(f'⚠️ {_a}' for _a in risk_alerts) if risk_alerts else '(目前沒有觸發任何風控警示)')
     )

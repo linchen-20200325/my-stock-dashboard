@@ -1612,9 +1612,22 @@ padding:14px 18px;margin-bottom:12px;">
                 except (TypeError, ValueError):
                     pass
             _macro_extra2 = "\n  • " + "\n  • ".join(_macro_lines2) if _macro_lines2 else "（暫無，請先到「宏觀拼圖」分頁更新）"
+            # v19.170 SSOT 修正:建議持股改讀 allocation_service(全站唯一來源)。
+            # 原寫法 `_mkt_info2.get('exposure_limit_pct', macro_state.get(...,'N/A'))`
+            # 有雙重 bug:(a) mkt_info 根本沒有 exposure_limit_pct 這個 key;
+            # (b) macro_state 有 key 但值是 None,`dict.get` 的 default 只在 key 缺席時
+            # 才生效 → prompt 實際送出「建議持股=None%」,LLM 會自行編一個數字寫進報告。
+            # 函式內延遲 import:避免 module-level L5(ui)→L3(services) 循環匯入。
+            from src.services.allocation_service import get_allocation as _get_alloc_s
+            _alloc_s = _get_alloc_s()
+            _alloc_line2 = (
+                '建議持股=未評估（禁止在報告中推估任何持股百分比）'
+                if _alloc_s.range_text == '--'
+                else f'建議持股={_alloc_s.range_text}'
+            )
             _mkt_ctx2 = (
                 f"大盤格局={_regime_txt2} | 健康評分={_mkt_info2.get('market_score','N/A')} | "
-                f"建議持股={_mkt_info2.get('exposure_limit_pct', st.session_state.get('macro_state',{}).get('exposure_limit_pct','N/A'))}%\n"
+                f"{_alloc_line2}\n"
                 f"宏觀跨資產背景：{_macro_extra2}"
             )
             # ── 抓取個股新聞（近期，RSS 偏近期）──────────────────

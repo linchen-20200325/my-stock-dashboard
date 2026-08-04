@@ -175,7 +175,8 @@ else:
         s_n = _mk_s()
         start_n = (datetime.date.today()-datetime.timedelta(days=365*3)).strftime('%Y-%m-%d')
         p_n = {'dataset':'TaiwanMacroEconomics','start_date':start_n}
-        if _tok: p_n['token'] = _tok
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # 下方 headers= 已帶 Authorization: Bearer,故此處直接移除 params 的 token。
         j_n = s_n.get('https://api.finmindtrade.com/api/v4/data', params=p_n,
                        headers={'Authorization':f'Bearer {_tok}'} if _tok else {},
                        timeout=15).json()

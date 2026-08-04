@@ -280,16 +280,48 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 st.session_state['_macro_ai_ts'] = datetime.datetime.now(_tz8).strftime('%Y-%m-%d %H:%M:%S')
             st.rerun()
     
-        # ── 唯讀渲染：從 macro_state.json 讀取曝險數據 ────────────
+        # ── 唯讀渲染：市場體制/系統風險仍讀 macro_state.json ────────────
         _ms = load_macro_state()
         _srl = _ms.get('systemic_risk_level', '危險')
         _regime = _ms.get('market_regime', '系統異常')
-        _exp_pct = int(_ms.get('exposure_limit_pct', 0))
-        _cash_pct = 100 - _exp_pct
         _ms_ts = _ms.get('timestamp', '')
+        # v19.170 SSOT 修正:建議持股改讀 allocation_service,不再自行由
+        # `_ms['exposure_limit_pct']` 算。原因:repo 中 macro_state.json 常不存在,
+        # load_macro_state() 會回 _DEFAULT_STATE(exposure_limit_pct=0),
+        # 而本 expander 預設 expanded=True → 會用 48px 巨字印「曝險 0%／現金 100%」,
+        # 與 🎚️ 建議持股油門(如 20%)當場打架。
+        # 函式內延遲 import:避免 module-level L5(ui)→L3(services) 循環匯入。
+        from src.services.allocation_service import (
+            get_allocation as _get_alloc,
+            get_allocation_sleeves as _get_sleeves,
+        )
+        _alloc = _get_alloc()
+        _sleeves = _get_sleeves()
     
         _srl_clr = {'安全': TRAFFIC_GREEN, '警告': TRAFFIC_YELLOW, '危險': TRAFFIC_RED}.get(_srl, '#8b949e')
         _reg_clr = {'多頭': TRAFFIC_GREEN, '震盪': TRAFFIC_YELLOW, '空頭': TRAFFIC_RED}.get(_regime, '#8b949e')
+
+        # v19.170 §1 Fail Loud:總經未評估 → 本區塊「不得印出任何持股/現金數字」,
+        # 只顯示未評估提示;禁止回填 0% / 100% 之類的預設值。
+        if _alloc.is_loaded:
+            _cash_disp = f"{_sleeves['貨幣/現金']}%" if _sleeves else '--'
+            _alloc_block_html = (
+                f'<div style="font-size:10px;color:#484f58;">'
+                f'建議持股（同步自 🎚️ 建議持股油門）</div>'
+                f'<div style="font-size:48px;font-weight:900;color:{_srl_clr};">'
+                f'{_alloc.final_mid}<span style="font-size:18px;">%</span></div>'
+                f'<div style="font-size:11px;color:#8b949e;">'
+                f'區間 {_alloc.range_text}｜貨幣/現金 {_cash_disp}</div>'
+            )
+        else:
+            _alloc_block_html = (
+                '<div style="font-size:10px;color:#484f58;">'
+                '建議持股（同步自 🎚️ 建議持股油門）</div>'
+                '<div style="font-size:22px;font-weight:900;color:#8b949e;">'
+                '⬜ 總經未評估</div>'
+                '<div style="font-size:11px;color:#8b949e;">'
+                '請先按「🚀 一鍵更新全部數據」</div>'
+            )
     
         st.markdown(
             f'<div style="background:#0d1117;border:2px solid {_srl_clr};'
@@ -309,10 +341,7 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
             f'</div>'
             f'</div>'
             f'<div style="text-align:center;padding:8px 0;">'
-            f'<div style="font-size:10px;color:#484f58;">建議股票型基金曝險</div>'
-            f'<div style="font-size:48px;font-weight:900;color:{_srl_clr};">'
-            f'{_exp_pct}<span style="font-size:18px;">%</span></div>'
-            f'<div style="font-size:11px;color:#8b949e;">現金/防禦型資產 {_cash_pct}%</div>'
+            f'{_alloc_block_html}'
             f'</div>'
             f'</div>',
             unsafe_allow_html=True)

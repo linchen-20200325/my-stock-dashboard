@@ -1,12 +1,17 @@
 """v18.172 短線風險雷達 — risk_radar.py 單元測試（50+ case，鏡像 fund v19.20）"""
 from __future__ import annotations
 
+import re
 from unittest.mock import patch
 
 import pandas as pd
 import pytest
 
 from src.compute.risk import risk_radar as rr
+
+# v19.170：L2 的行動建議不得再輸出任何持股百分比（持股數字唯一來源 =
+# `allocation_service.get_allocation()`）。共用於 TestSynthesizeDualVerdict。
+_PCT_RE = re.compile(r'\d{1,3}\s*%')
 
 
 @pytest.fixture(autouse=True)
@@ -660,7 +665,22 @@ class TestSummarizeRadar:
 # v18.173 雙速合議 — synthesize_dual_verdict（提前 port，Step 4 會用）
 # ════════════════════════════════════════════════════════════════════
 class TestSynthesizeDualVerdict:
-    """雙速合議規則 — 慢總經 verdict × 短線雷達 level → 單一行動建議。"""
+    """雙速合議規則 — 慢總經 verdict × 短線雷達 level → 單一行動建議。
+
+    v19.170 持股百分比下架
+    ----------------------
+    本函式原本在 downgrade_2 / override_defense 各分支硬編碼「倉位降至 50-60% /
+    現金 25-30% / 現金 35%+」，這些字串會直接印在「🤝 雙速合議」卡上，與
+    🎚️ 建議持股油門（`allocation_service.get_allocation()`，全站唯一持股 SSOT）
+    當場打架 —— 使用者同一畫面看到兩個不同的持股建議，不知道該信哪一個。
+
+    故舊斷言（`"50-60%" in action` 等）釘住的是**已被推翻的決定**，本輪改為
+    斷言新的敘事強度詞。三種強度必須仍可區分，不可弱化成「都只斷言『現金』」：
+      警報 × 慢多頭 → 明顯降低倉位      （最輕：先降槓桿）
+      警報 × 慢中性 → 提高現金部位      （中）
+      警報 × 慢悲觀 → 大幅提高現金部位  （最重：全面防守）
+    另每條加一則反向斷言 `_PCT_RE`，釘住「L2 不得再輸出持股百分比」這條新規則。
+    """
 
     SLOW_BULL = ("極度樂觀", 10.5, "#00c853", "🟢", "多頭市場強勁：可滿倉持有")
     SLOW_OK = ("樂觀", 6.0, "#69f0ae", "🟢", "景氣穩定擴張：核心持有不動")
@@ -702,7 +722,12 @@ class TestSynthesizeDualVerdict:
         assert s["mode"] == "downgrade_2"
         assert "雙速分歧" in s["level"]
         assert "降槓桿" in s["level"]
-        assert "50-60%" in s["action"]
+        # v19.170：原「倉位降至 50-60%」→ 敘事詞（最輕的一級：只降槓桿）
+        assert "明顯降低倉位" in s["action"]
+        assert "暫緩定額" in s["action"]
+        assert "提高現金部位" not in s["action"], "強度混淆：此級不該升級成加現金"
+        assert not _PCT_RE.search(s["action"]), \
+            "L2 不得再輸出持股百分比（唯一來源 = get_allocation()）"
         assert s["icon"] == "🟠"
         assert s["color"] == "#ef6c00"
 
@@ -710,13 +735,21 @@ class TestSynthesizeDualVerdict:
         s = rr.synthesize_dual_verdict(*self.SLOW_NEU, "警報")
         assert s["mode"] == "downgrade_2"
         assert "偏空" in s["level"]
-        assert "25-30%" in s["action"]
+        # v19.170：原「現金 25-30%」→ 敘事詞（中間強度）
+        assert "提高現金部位" in s["action"]
+        assert "停止加碼" in s["action"]
+        assert "大幅提高現金" not in s["action"], "強度混淆：此級不該用全面防守語氣"
+        assert not _PCT_RE.search(s["action"]), \
+            "L2 不得再輸出持股百分比（唯一來源 = get_allocation()）"
 
     def test_radar_alert_with_bear_slow_full_defense(self):
         s = rr.synthesize_dual_verdict(*self.SLOW_BEAR, "警報")
         assert s["mode"] == "downgrade_2"
         assert s["level"] == "全面防守"
-        assert "35%+" in s["action"]
+        # v19.170：原「現金 35%+」→ 敘事詞（最強防守語氣）
+        assert "大幅提高現金部位" in s["action"]
+        assert not _PCT_RE.search(s["action"]), \
+            "L2 不得再輸出持股百分比（唯一來源 = get_allocation()）"
         assert s["color"] == "#b71c1c"
 
     def test_radar_extreme_overrides_any_slow(self):

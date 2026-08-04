@@ -103,31 +103,31 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
                      '可於收盤後再按「🚀 一鍵更新全部數據」重試。')
 
     # ── ② 建議配置 ──────────────────────────────────────────────
-    _ai2_lbl, _ai2_clr, _ai2_desc = '計算中', '#484f58', '等待 VIX 及資金數據'
-    if _ai_vix is not None:
-        _r1_ok  = _ai_vix < 20
-        _r2_exp = _ai_exp is not None and _ai_exp >= 10
-        _r2_gap = _ai_gap is not None and _ai_gap >= 1.0
-        _r2_cnt = int(_r2_exp) + int(_r2_gap)
-        _r3_sox = _ai_sox >= 1.5 or _ai_nvda >= 2.0
-        _r3_tw  = _ai_twii_pct > 0
-        _r3_cnt = int(_r3_sox) + int(_r3_tw)
-        _fuel_str = ((' 出口+' if _r2_exp else '') + (' M1B-M2+' if _r2_gap else '')).strip(' +') or '—'
-        if not _r1_ok:
-            _ai2_lbl, _ai2_clr = '⛔ 防禦模式 持股0~20%', TRAFFIC_RED
-            _ai2_desc = f'VIX={_ai_vix:.1f}≥20，大環境風險偏高，現金為王，等待 VIX<20 才考慮進場'
-        elif _r2_cnt >= 2 and _r3_cnt >= 1:
-            _ai2_lbl, _ai2_clr = '🚀 積極進攻 持股80~100%', '#f0e040'
-            _ai2_desc = f'VIX={_ai_vix:.1f}安全 × 燃料充足（{_fuel_str}）× 點火訊號啟動 — 三環齊備，重壓主流'
-        elif _r2_cnt >= 1 and _r3_cnt >= 1:
-            _ai2_lbl, _ai2_clr = '🔥 標準多頭 持股60~80%', TRAFFIC_RED
-            _ai2_desc = f'VIX={_ai_vix:.1f}安全，燃料（{_fuel_str}）有效，順勢佈局強勢個股，跌破10MA停損'
-        elif _r3_cnt >= 1:
-            _ai2_lbl, _ai2_clr = '🛡️ 試探建倉 持股30~50%', TRAFFIC_YELLOW
-            _ai2_desc = '短線點火訊號存在但燃料不足，打帶跑策略，見好就收，嚴設停損'
+    # v19.170 P0-1:原本這裡自行再判一次三環(_r1_ok/_r2_cnt/_r3_cnt),條件與 section_mid
+    # 的三環還不一致,又各自輸出「持股0~20%」等字串 —— 正是稽核「6 套矛盾持股建議」之一。
+    # 現改為直接顯示建議持股 SSOT 的結論(get_allocation),本卡不再自算任何持股%。
+    from src.services.allocation_service import get_allocation
+    _ai2_alloc = get_allocation()
+    if not _ai2_alloc.is_loaded:
+        # §1 Fail Loud:未評估就說未評估,不回填任何預設配置
+        _ai2_lbl, _ai2_clr = '⬜ 總經未評估', '#8b949e'
+        _ai2_desc = '請先按「🚀 一鍵更新全部數據」；資料未就緒前不提供持股建議。'
+    else:
+        _ai2_lbl = _ai2_alloc.headline()
+        _ai2_hi = _ai2_alloc.final_hi
+        # 顏色沿用既有色票,依最終持股上界分段(與油門/主結論卡同一個數,不再各判各的)
+        if _ai2_hi <= 20:
+            _ai2_clr = TRAFFIC_RED
+        elif _ai2_hi <= 50:
+            _ai2_clr = TRAFFIC_YELLOW
+        elif _ai2_hi <= 80:
+            _ai2_clr = TRAFFIC_GREEN
         else:
-            _ai2_lbl, _ai2_clr = '⏸️ 保守觀望 持股30%以下', '#8b949e'
-            _ai2_desc = '三環條件均不足，保留現金等待更明確訊號，避免追高'
+            _ai2_clr = '#f0e040'
+        # desc = 最後一條推導(min(姿態, 天花板) 的算式) + 生效天花板
+        _ai2_desc = (_ai2_alloc.drivers[-1] if _ai2_alloc.drivers else '')
+        if _ai2_alloc.cap_text:
+            _ai2_desc = f'{_ai2_desc}　{_ai2_alloc.cap_text}'
 
     # ── ③ 目前貨幣流向 ──────────────────────────────────────────
     _ai3_lbl, _ai3_clr, _ai3_desc = '待取得 M1B/M2', '#484f58', '央行貨幣數據載入中'

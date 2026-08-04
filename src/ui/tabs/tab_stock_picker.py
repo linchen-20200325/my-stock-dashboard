@@ -574,10 +574,11 @@ def _fetch_quarterly_is(stock_id: str) -> dict:
         _start = (_dt_q.date.today() - _dt_q.timedelta(days=900)).strftime('%Y-%m-%d')
         _p = {'dataset': 'TaiwanStockFinancialStatements',
               'data_id': stock_id, 'start_date': _start}
-        if _tok:
-            _p['token'] = _tok
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # 原本無 headers,先補 data_loader._fm_raw_headers SSOT(帶 Bearer + UA)再移除 params token。
+        from src.data.core.data_loader import _fm_raw_headers as _fm_hdrs_q
         _r = _rq_q.get(FINMIND_API_URL,
-                       params=_p, timeout=15)
+                       params=_p, headers=_fm_hdrs_q(_tok), timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
             return {}
@@ -785,10 +786,11 @@ def _check_contract_liab_yoy(stock_id: str) -> str:
         _start = (_dt_cl.date.today() - _dt_cl.timedelta(days=900)).strftime('%Y-%m-%d')
         _p = {'dataset': 'TaiwanStockBalanceSheet',
               'data_id': stock_id, 'start_date': _start}
-        if _tok:
-            _p['token'] = _tok
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # 原本無 headers,先補 data_loader._fm_raw_headers SSOT(帶 Bearer + UA)再移除 params token。
+        from src.data.core.data_loader import _fm_raw_headers as _fm_hdrs_cl
         _r = _rq_cl.get(FINMIND_API_URL,
-                         params=_p, timeout=15)
+                         params=_p, headers=_fm_hdrs_cl(_tok), timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
             return '❓ FinMind 無 BS'
@@ -948,10 +950,11 @@ def _check_institutional_buying(stock_id: str) -> str:
         _start = (_dt_in.date.today() - _dt_in.timedelta(days=20)).strftime('%Y-%m-%d')
         _p = {'dataset': 'TaiwanStockInstitutionalInvestorsBuySell',
               'data_id': stock_id, 'start_date': _start}
-        if _tok:
-            _p['token'] = _tok
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # 原本無 headers,先補 data_loader._fm_raw_headers SSOT(帶 Bearer + UA)再移除 params token。
+        from src.data.core.data_loader import _fm_raw_headers as _fm_hdrs_in
         _r = _rq_in.get(FINMIND_API_URL,
-                         params=_p, timeout=15)
+                         params=_p, headers=_fm_hdrs_in(_tok), timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
             return '❓ FinMind 無法人'
@@ -997,10 +1000,11 @@ def _check_major_holders(stock_id: str) -> str:
         _start = (_dt_mh.date.today() - _dt_mh.timedelta(days=60)).strftime('%Y-%m-%d')
         _p = {'dataset': 'TaiwanStockHoldingSharesPer',
               'data_id': stock_id, 'start_date': _start}
-        if _tok:
-            _p['token'] = _tok
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # 原本無 headers,先補 data_loader._fm_raw_headers SSOT(帶 Bearer + UA)再移除 params token。
+        from src.data.core.data_loader import _fm_raw_headers as _fm_hdrs_mh
         _r = _rq_mh.get(FINMIND_API_URL,
-                         params=_p, timeout=15)
+                         params=_p, headers=_fm_hdrs_mh(_tok), timeout=15)
         _j = _r.json() if _r.status_code == 200 else {}
         _data = _j.get('data', [])
         if not _data:

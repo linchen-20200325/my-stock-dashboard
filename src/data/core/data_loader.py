@@ -202,8 +202,9 @@ def _fetch_finmind_margin_raw(stock_id: str, df: pd.DataFrame, start_str: str) -
             'start_date': start_str,
             'end_date': _end_str,
         }
-        if _token:
-            _params['token'] = _token
+        # v19.170:憑證只走 header,不進 query string(避免落入 access log)
+        # — 原本 token 同時放 params 與 Authorization header,params 版本會被
+        # proxy / API gateway / server access log 明文記錄。header 版本保留即可。
         _r = _bps_dl().get(
             FINMIND_API_URL,
             params=_params,
@@ -248,8 +249,7 @@ def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> 
     try:
         _params = {'dataset': 'TaiwanStockInstitutionalInvestorsBuySell',
                    'data_id': stock_id, 'start_date': start_str, 'end_date': _end_str}
-        if _token:
-            _params['token'] = _token
+        # v19.170:憑證只走 header,不進 query string(避免落入 access log)
         _r = _bps_dl().get(
             FINMIND_API_URL,
             params=_params,
@@ -289,8 +289,7 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
     try:
         _params = {'dataset': 'TaiwanStockPrice', 'data_id': stock_id,
                    'start_date': start_str, 'end_date': end_str}
-        if _token:
-            _params['token'] = _token
+        # v19.170:憑證只走 header,不進 query string(避免落入 access log)
         _r = _bps_dl().get(
             FINMIND_API_URL,
             params=_params,
@@ -757,11 +756,11 @@ class StockDataLoader:
         # ── 方案0: FinMind TaiwanStockMonthRevenue（優先，MOPS year-file全部404）
         if _tok and df_revenue is None:
             try:
+                # v19.170:憑證只走 header,不進 query string(避免落入 access log)
                 _r_fm0 = _bps_dl().get(
                     FINMIND_API_URL,
                     params={'dataset':'TaiwanStockMonthRevenue',
-                            'data_id':stock_id, 'start_date':start_str,
-                            'token':_tok},
+                            'data_id':stock_id, 'start_date':start_str},
                     headers=_fm_raw_headers(_tok), timeout=20)  # S8 v19.78:補 UA
                 _j0r = _r_fm0.json()
                 print(f'[FM-Rev0] {stock_id}: status={_j0r.get("status")} rows={len(_j0r.get("data",[]))}')
@@ -1402,7 +1401,8 @@ class StockDataLoader:
 
             def _fm_fetch(dataset):
                 _p = {'dataset': dataset, 'data_id': stock_id, 'start_date': _start}
-                if _tok: _p['token'] = _tok
+                # v19.170:憑證只走 header,不進 query string(避免落入 access log)
+                # — _hdrs 已由 _fm_raw_headers(_tok) 帶 Authorization: Bearer。
                 _r = _bps_dl().get(FINMIND_API_URL,
                                     params=_p, headers=_hdrs, timeout=20)
                 _j = _r.json()
@@ -1601,11 +1601,11 @@ def fetch_industry_category(sid: str) -> str:
     try:
         _tok = _os_ic.environ.get('FINMIND_TOKEN', '')
         _p = {'dataset': 'TaiwanStockInfo', 'data_id': sid}
-        if _tok:
-            _p['token'] = _tok
-        # S8 v19.78 UA 補漏(v19.82):token 維持走 params,headers 僅補 UA
+        # v19.170:憑證只走 header,不進 query string(避免落入 access log)
+        # — 原 v19.82 註記「token 維持走 params」為此次資安稽核推翻:query string
+        # 會被 proxy / gateway 明文記錄。改由 _fm_raw_headers(_tok) 帶 Bearer。
         _r = _rq_ic.get(FINMIND_API_URL,
-                        params=_p, headers=_fm_raw_headers(''), timeout=15)
+                        params=_p, headers=_fm_raw_headers(_tok), timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
             try:
@@ -1647,11 +1647,10 @@ def fetch_bps_from_finmind(sid: str) -> float:
         _tok = _os_bf.environ.get('FINMIND_TOKEN', '')
         _start = (_dt_bf.date.today() - _dt_bf.timedelta(days=540)).strftime('%Y-%m-%d')
         _p = {'dataset': 'TaiwanStockBalanceSheet', 'data_id': sid, 'start_date': _start}
-        if _tok:
-            _p['token'] = _tok
-        # S8 v19.78 UA 補漏(v19.82):token 維持走 params,headers 僅補 UA
+        # v19.170:憑證只走 header,不進 query string(避免落入 access log)
+        # — 同 fetch_industry_category:改由 _fm_raw_headers(_tok) 帶 Bearer。
         _r = _rq_bf.get(FINMIND_API_URL,
-                        params=_p, headers=_fm_raw_headers(''), timeout=15)
+                        params=_p, headers=_fm_raw_headers(_tok), timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
             return 0.0

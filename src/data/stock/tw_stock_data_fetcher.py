@@ -575,14 +575,16 @@ def fetch_5_years_cash_flow(stock_code: str, token: str = "") -> dict:
             "start_date": start,
             "end_date":   end,
         }
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        _hdrs = {"User-Agent": random.choice(_USER_AGENTS)}
         if _tok:
-            params["token"] = _tok
+            _hdrs["Authorization"] = f"Bearer {_tok}"
 
         session = build_proxy_session()
         r = session.get(
             FINMIND_API_URL,
             params=params,
-            headers={"User-Agent": random.choice(_USER_AGENTS)},
+            headers=_hdrs,
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )
         j = r.json()

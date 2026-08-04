@@ -38,6 +38,7 @@ class TestFinmindGet:
         def _fake_get(url, params=None, headers=None, timeout=None):
             captured['url'] = url
             captured['params'] = params
+            captured['headers'] = headers          # v19.170:header-only 契約需驗證 headers
             captured['timeout'] = timeout
             return _FakeResp({"status": 200, "data": [{"a": 1}, {"a": 2}]})
 
@@ -45,10 +46,14 @@ class TestFinmindGet:
         out = fc.finmind_get("TaiwanStockMonthRevenue", data_id="2330",
                              start_date="2024-01-01", token="tok", timeout=20)
         assert isinstance(out, pd.DataFrame) and len(out) == 2
-        # data_id / start_date / token 有送;end_date 未給 → 不送
+        # data_id / start_date 有送;end_date 未給 → 不送
         assert captured['params']['data_id'] == "2330"
         assert captured['params']['start_date'] == "2024-01-01"
-        assert captured['params']['token'] == "tok"
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # 原斷言 params['token'] == "tok" 已改為下列兩條:token 不得出現在 params,
+        # 且必須以 Bearer 形式出現在 Authorization header(保留「token 有被正確傳遞」的原意圖)。
+        assert 'token' not in captured['params']
+        assert captured['headers']['Authorization'] == 'Bearer tok'
         assert 'end_date' not in captured['params']
         assert captured['timeout'] == 20
 

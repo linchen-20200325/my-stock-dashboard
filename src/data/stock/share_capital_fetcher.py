@@ -55,14 +55,14 @@ def fetch_share_capital(sid: str) -> float:
         _tok = _os_sc.environ.get('FINMIND_TOKEN', '')
         _start = (_dt_sc.date.today() - _dt_sc.timedelta(days=540)).strftime('%Y-%m-%d')
         _p = {'dataset': 'TaiwanStockBalanceSheet', 'data_id': sid, 'start_date': _start}
-        if _tok:
-            _p['token'] = _tok
         # S8 v19.78 UA 補漏(v19.82):原 plain requests 無 UA 易被限流,走
-        # data_loader._fm_raw_headers SSOT(同 app_stock_fetchers 前例);
-        # token 維持走 params,headers 僅補 UA
+        # data_loader._fm_raw_headers SSOT(同 app_stock_fetchers 前例)。
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # 推翻 v19.82 的「token 維持走 params」— 改把 _tok 交給 _fm_raw_headers,
+        # 由它組 Authorization: Bearer;params 不再含 token。
         from src.data.core.data_loader import _fm_raw_headers as _fm_hdrs_sc
         _r = _rq_sc.get(FINMIND_API_URL,
-                        params=_p, headers=_fm_hdrs_sc(''), timeout=15)
+                        params=_p, headers=_fm_hdrs_sc(_tok), timeout=15)
         _data = _r.json().get('data', []) if _r.status_code == 200 else []
         if not _data:
             return 0.0

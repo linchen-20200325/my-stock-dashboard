@@ -98,7 +98,8 @@ _qtr_ok = False
 try:
     _start_q = (datetime.date.today() - datetime.timedelta(days=365 * 2)).strftime('%Y-%m-%d')
     _p = {'dataset': 'TaiwanStockFinancialStatement', 'stock_id': '2330', 'start_date': _start_q}
-    if _tok: _p['token'] = _tok
+    # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+    # _FM_HDR(第 32 行)已帶 Authorization: Bearer,故此處直接移除 params 的 token。
     _r = s.get(_FM_URL, params=_p, headers=_FM_HDR, timeout=15)
     _j = _r.json()
     print(f'  HTTP = {_r.status_code}  API status = {_j.get("status")}  rows = {len(_j.get("data", []))}')
@@ -128,7 +129,8 @@ _cl_ok = False
 try:
     _start_bs = (datetime.date.today() - datetime.timedelta(days=365 * 2)).strftime('%Y-%m-%d')
     _p = {'dataset': 'TaiwanStockBalanceSheet', 'stock_id': '2330', 'start_date': _start_bs}
-    if _tok: _p['token'] = _tok
+    # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+    # _FM_HDR(第 32 行)已帶 Authorization: Bearer,故此處直接移除 params 的 token。
     _r = s.get(_FM_URL, params=_p, headers=_FM_HDR, timeout=15)
     _j = _r.json()
     print(f'  HTTP = {_r.status_code}  API status = {_j.get("status")}  rows = {len(_j.get("data", []))}')
