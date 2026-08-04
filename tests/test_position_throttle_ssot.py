@@ -31,18 +31,41 @@ def test_traffic_light_computes_and_stores_throttle():
     assert "'throttle'" in src, "warroom_summary 未寫入 throttle SSOT"
 
 
-# ── 讀取端:四個持股%顯示點都讀 warroom_summary.throttle ──────────────────
-def test_all_four_consumers_read_throttle_ssot():
+# ── 讀取端:四個持股%顯示點都接 get_allocation() SSOT ─────────────────────
+# v19.170:唯一取數入口的 import 原文。section_market_status 用
+# `... import get_allocation as _get_alloc_ms`,故比對用 startswith 容許 as 別名。
+_ALLOC_IMPORT = "from src.services.allocation_service import get_allocation"
+
+
+def _imports_allocation_ssot(rel: str) -> bool:
+    """該檔是否有一行**真正的** import 敘述接上 get_allocation。
+
+    v19.170:刻意逐行 strip 後比對並跳過 `#` 註解行 —— 原斷言
+    `"warroom_summary" in src and "throttle" in src` 是 false green,
+    光靠一句「原本讀 warroom_summary['throttle']…」的註解就能矇混過關
+    (section_market_status.py:72 正是如此)。
+    """
+    for _ln in _read(rel).splitlines():
+        _s = _ln.strip()
+        if _s.startswith("#"):
+            continue
+        if _s.startswith(_ALLOC_IMPORT):
+            return True
+    return False
+
+
+def test_all_four_consumers_read_allocation_ssot():
+    """四個持股%顯示點一律走 get_allocation(),不得自行再算或讀中繼 key。"""
     consumers = {
-        "app.py": "頁頂全域紅綠燈 bar",
+        "app.py": "頁頂/置底全域紅綠燈 bar",
         "src/ui/tabs/macro/section_traffic_light.py": "總經建議持股油門 gauge",
         "src/ui/tabs/macro/section_warroom.py": "今日作戰室",
         "src/ui/tabs/stock_grp_sections/section_market_status.py": "個股組合①卡",
     }
     for rel, label in consumers.items():
-        src = _read(rel)
-        assert "warroom_summary" in src and "throttle" in src, (
-            f"{label}({rel})未讀 warroom_summary.throttle SSOT → 持股%會再度不一致")
+        assert _imports_allocation_ssot(rel), (
+            f"{label}({rel})未接 get_allocation() SSOT → 持股%會再度不一致。"
+            f"需有一行 `{_ALLOC_IMPORT}`(可 as 別名)")
 
 
 # ── throttle dict 契約:顯示端用 lo_pct/hi_pct 區間 ───────────────────────

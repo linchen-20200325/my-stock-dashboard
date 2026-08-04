@@ -4,7 +4,7 @@
 從 tab_stock_grp.py:85-141 抽出。
 - 🚦 大盤燈號(warroom_summary['traffic_light'])
 - 📈 台股大盤(cl_data.tw.台股加權指數 → daily 漲跌幅)
-- 💼 建議持股(mkt_info.exposure_pct)
+- 💼 建議持股(allocation_service.get_allocation() — 全站唯一持股 SSOT)
 
 §8.2 layer:L5 UI Tab section helper(🟢 低風險:57 LOC,純展示 + 3 KPI 卡)。
 
@@ -24,7 +24,8 @@ def render_market_status_section() -> None:
     改為總是渲染 3 張卡,無資料時顯示「未載入」中性 placeholder
     (不再強制要求先跑總經 Tab)。
     """
-    _t3_mkt = st.session_state.get('mkt_info', {}) or {}
+    # v19.170 P0-1:原本這裡還讀 mkt_info 供「建議持股」卡使用,
+    # 已改走 get_allocation() SSOT,故不再需要 mkt_info。
     _t3_tl  = st.session_state.get('warroom_summary', {}) or {}
 
     _t3c1, _t3c2, _t3c3 = st.columns(3)
@@ -67,11 +68,15 @@ def render_market_status_section() -> None:
             f'<div style="font-size:16px;font-weight:900;color:{_twii_c};">{_twii_val}</div>'
             f'</div>', unsafe_allow_html=True)
     with _t3c3:
-        # v19.168 IMPL-F:持股% 統一讀姿態油門 SSOT(warroom_summary.throttle,與頁頂全域 bar /
-        # 總經 gauge / 作戰室 同一個數);無 throttle 時 fallback 原 mkt_info.exposure_pct。
-        _t3_thr = (st.session_state.get('warroom_summary') or {}).get('throttle')
-        _t3_hold = (f"{_t3_thr['lo_pct']}–{_t3_thr['hi_pct']}%" if _t3_thr
-                    else (_t3_mkt.get('exposure_pct') if _t3_mkt else None))
+        # v19.170 P0-1:持股% 改讀建議持股 SSOT(get_allocation)。
+        # 原本讀 warroom_summary['throttle'] 只有**姿態帶**、不含硬否決天花板
+        # (VIX 否決權 / 三環第一環 / 系統風險上限),且該 key 會被 section_state
+        # 整包覆寫抹掉 → fallback 回粗略的 mkt_info['exposure_pct'],與
+        # 🎚️ 建議持股油門系統性不一致。get_allocation() 每次由來源重算且已取
+        # min(姿態, 天花板)。§1 Fail Loud:未評估時 range_text 為 '--' → 走既有
+        # falsy 分支顯示「未載入」,不回填任何預設百分比。
+        from src.services.allocation_service import get_allocation as _get_alloc_ms
+        _t3_hold = _get_alloc_ms().range_text
         _hold_val = str(_t3_hold) if _t3_hold not in (None, '', '--') else '未載入'
         _hold_c = '#58a6ff' if _t3_hold not in (None, '', '--') else '#484f58'
         st.markdown(

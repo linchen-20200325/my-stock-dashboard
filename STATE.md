@@ -1,5 +1,31 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🔧 2026-08-04 外部稽核 P0 修補:持股建議 SSOT 收斂 + token 洩漏 + 防白屏(v19.170,**誠實界定「已接線」vs「工具已備、尚未接線」**)
+
+外部稽核指出同一次載入下畫面並存 **6 套互相矛盾的持股建議**、FinMind token 進 query string、`app.py` module-level 無保護等問題。本輪逐項落地。**本則刻意把「已接線生效」與「工具已備但零 caller」分開寫 —— 避免改動報告被誤讀成 P1-1/P1-2 已修**:
+
+- **✅ 已修(已接線、實際生效)**:
+  - **持股建議 SSOT 收斂(P0-1)**:新增 L0 `shared/allocation_decision.py`(唯一仲裁點,規則 `final_hi = min(姿態帶上界, 各 Cap)`)+ L3 `src/services/allocation_service.py`(唯一取數入口 `get_allocation()`)。消費點 `app.py` / `section_traffic_light` / `section_warroom` / `section_market_status` / `section_cross_ai` / `etf_render` / `macro_stock_link` 全改讀同一份,不再各算各的。UI 上早就寫著「兩者取較低」,這次程式**真的執行**了這條規則。
+  - **timeout 收斂**、**匯率語意修正**、**死區修正**、**風險情緒相關性加權** —— 同批落地(細節見各該 commit,此處不重述以免與程式碼漂移)。
+  - **API 憑證洩漏(P0-3:**FinMind 憑證歸零** + Gemini 本輪一併改 header)**:憑證一律改走 header,**query string / URL 不再帶任何 token 或 key**(query string 會被 proxy / gateway / access log 明文記錄)。
+    - **FinMind(`Authorization: Bearer` header)—— 出現在 query string 的次數歸零**:涵蓋 `data_loader.py`(7 處)、`finmind_client.py`(全 repo SSOT client、流量最大)、`tw_macro.py`(3 處)、`tw_stock_data_fetcher.py`、`app_stock_fetchers.py`、`api_diagnostic.py`,以及 `scripts/update_macro_history.py`(**GitHub Actions cron,token 會進 runner log,風險最高**)。收尾再補 `macro_fetch_orchestrator.py:251` 的**空 token 防護**:原本未判空,無 token 時會送出 `Authorization: Bearer `(空憑證),部分 gateway 直接回 400 → 改成 `if fm_token else None`,對齊其餘 8 個改動點。
+    - **Gemini(`x-goog-api-key` header)—— 本輪一併改**:`api_diagnostic.py:167` 先行證實 Gemini 支援 header 認證後,收尾補齊剩下 4 處:`ai_fetcher.py:124`(**原本 `f"{url}?key={api_key}"` 把 key 直接拼進 URL,是最容易被 proxy / CDN / 例外訊息完整記錄的形式**)、`app.py:209`、`sidebar_health.py:198`、`ai_qa_service.py:394`(後三者原為 `params={'key': …}`)。
+    - ⚠️ **FRED 例外(刻意不改,非疏漏)**:St. Louis Fed 的 FRED API **只接受** `api_key` query 參數,官方文件與實測皆無任何 header 認證方式,改 header 會直接 400。這是 API 端限制。
+  - **守門測試(防止再長出第 5、第 6 個硬編碼持股數字)**:新增 `tests/test_no_hardcoded_position_pct.py` —— 靜態掃描 `src/ui/**` + `src/compute/**` + `app.py`,正則 `(持股|曝險|倉位|部位|現金|股票型ETF|債券型ETF)` 後 12 字內出現 `\d{1,3}%` 即紅。排除註解行、docstring(走 `ast` 的 `Expr(Constant[str])` 行區間,**刻意不用三引號字元掃描** —— 那會誤放 `st.markdown('''…''')` 這種真的會印到畫面的多行字串)。理由:本輪的 4 處殘留(`risk_radar` action 字串、`section_news_ai` 巨字曝險、2 支 LLM prompt)全靠人工重掃才揪到,不可重複、不可規模化。
+  - **module-level 防白屏(🟡-1)**:`app.py` 頁頂紅綠燈的 `get_allocation()` 位於 `with tab_market:` **之前**、不受 `_render_tab_isolated` 保護,任何 raise = 全站白屏。改加 try/except 降級為「⬜ 總經未評估」,並把錯誤型別/訊息/traceback 全數 print(§1:要留跡,**不吞掉錯誤訊息**)。
+- **⚠️ 工具已備、尚未接線(P1-1 / P1-2 **本輪未修**,請勿誤讀為已修)**:
+  - `shared/relative_thresholds.py`(融資餘額 / BIAS240 / 外資期貨淨口的**相對化**門檻)—— **目前零 production caller,是死碼**。現行**絕對**門檻仍在 `section_long.py:178`(BIAS240 ±20%)與 `section_warroom.py:104-111`(融資餘額億元絕對值 + BIAS240 ±20%)**原地生效**。理由:改成相對化會直接改變歷史燈號分布與觸發頻率,**門檻變更須先回測**才可接線,故本輪只備工具、不動現行判定。
+  - `shared/data_freshness.detect_frozen_columns`(值凍結偵測:欄位有值,但一階差分連續 N 期為 0)—— 同樣**零 production caller**,尚未掛進任何抓取 / 健檢路徑。
+  - **終驗稽核補登(v19.170 初版條目漏記的零 caller 項目)** —— 一併列出,避免下一輪重複「發現」,也避免有人誤以為它們已在生效:
+    - `shared/data_freshness.staleness_badge_html` / `frozen_summary` / `_emoji_worse` —— 新鮮度徽章 HTML 與凍結摘要,**零 production caller**,無任何 UI 掛載點(與上一則 `detect_frozen_columns` 同一批工具)。
+    - `shared/stats_helpers.winsorize`(極值截尾)—— **零 production caller**。
+    - `shared/stats_helpers.robust_z` 與 `rolling_pct_rank` —— **傳遞性死碼**:唯一 caller 是 `shared/relative_thresholds`,而後者本身零 caller(見本段第一則)→ 實際上也從未被執行到。
+    - `src/ui/render/etf_render.MACRO_ALLOC` —— 標 DEPRECATED 的舊總經配置常數;現行股/債/現金三桶百分比一律由 `get_allocation_sleeves()`(SSOT 最終建議持股中值推導)供給。**該檔已列入守門測試白名單**(理由:DEPRECATED 常數 + ETF 產業曝險文案,非個人持股建議)。
+  - **⚠️ 守門測試的「已知技術債」(`_KNOWN_DEBT`,應逐版縮小,非永久豁免)**:
+    - `src/compute/strategy/v4_strategy_engine.py:93`「建議持股 ≤20%」—— 目前由 `section_chips.py` 在 UI 邊界用 regex 剝除數字、只留敘事,畫面不會出現競爭數字;但字串本體仍是硬編碼,**若出現第二個直接印 msg 的 caller 就會破功**。
+    - `src/compute/strategy/v5_modules.py:395`「建議股票部位降至 20%」(`get_defensive_allocation()`)—— **零 production caller 的死碼**,但一旦有人接線就會多出第 7 套持股建議。建議下一版直接刪除或改吃 SSOT。
+- **⚠️ 已知限制(不宣稱「同一輪必然一致」)**:`app.py` 置底常駐條是 module level,執行早於 `tab_macro` 內寫入 `warroom_summary` 的 `render_traffic_light_top()`。因此在「health 剛好變動」的**那一輪** rerun,置底條會用**上一輪**的 health,下一次 rerun 才收斂。根治需把 `warroom_summary` 的計算搬到 tab 之前,屬另案。
+
 ## 🏆 2026-07-25 推播加「中文名 + 籌碼 + AI 研判」(v20-PUSH.3,user「幫加股票名稱、籌碼,也想要 AI 回應哪些偏多/偏空/需觀察」)
 
 user 實機看到上櫃股只顯代碼、想再加籌碼 + AI 分類。§7/§8 三路並行探查(名稱來源 / 籌碼 fetcher / AI 呼叫路徑)對齊後,經 AskUserQuestion 定「籌碼兩個都放 + 要 AI(會加 GEMINI_API_KEY)」,§8.5 一次一模組落地(**採 Path B:既有技術面路徑 `fetch_stock_history_1y`→`build_technical_snapshot` 一行不動 = 零回歸**):

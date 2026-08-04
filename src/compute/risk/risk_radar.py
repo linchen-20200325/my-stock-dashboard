@@ -549,6 +549,20 @@ def synthesize_dual_verdict(
 
     第三維度**只 append 到 action 與 third_axis_notes**，不改 mode/icon/color/level
     （保 backward compat，已寫好的下游 UI 可零變動繼續用）。
+
+    v19.170 持股數字下架（SSOT 合規）
+    ----------------------------------
+    本函式原本在各分支硬編碼「現金 30%+ / 倉位降至 50-60% / 現金 25-30% /
+    現金 35%+ / 倉位 60-70%」，經 `helpers.synthesize_dual_verdict` → 「🤝 雙速合議」
+    卡直接印給使用者，與 🎚️ 建議持股油門（`allocation_service.get_allocation()`，
+    全站唯一持股 SSOT）互相打架。
+
+    修法：**全部改為敘事強度詞**（明顯提高現金部位／明顯降低倉位／…），語氣強度
+    與原本一一對應，但不再輸出任何競爭性百分比。
+
+    ⚠️ 本檔為 L2 Compute（CLAUDE.md §8.2）：不得 import streamlit、不得 import L3。
+    因此**刻意不在此接 allocation_service**——持股數字由 UI 層自行向 SSOT 取得，
+    本層只負責「該多防守」這個純訊號判斷。
     """
     if radar_level in (None, "平靜"):
         suffix = "（短線雷達平靜確認）" if radar_level == "平靜" else ""
@@ -565,7 +579,8 @@ def synthesize_dual_verdict(
             "level": "立即減倉防守",
             "color": "#d32f2f",
             "action": (
-                f"短線急殺進行中（雷達 4+ 紅燈）→ 現金 30%+、核心轉投資等級債／防守型；"
+                # v19.170:硬編碼現金百分比 → 敘事詞（原文見上方 docstring）
+                f"短線急殺進行中（雷達 4+ 紅燈）→ 明顯提高現金部位、核心轉投資等級債／防守型；"
                 f"慢總經 {slow_level}({slow_score:+.1f}) 暫不採信，待雷達回到警戒以下再恢復攻擊"
             ),
             "mode": "override_defense",
@@ -578,7 +593,8 @@ def synthesize_dual_verdict(
                 "color": "#ef6c00",
                 "action": (
                     f"慢總經 {slow_level}({slow_score:+.1f}) 仍多頭，但短線雷達警報 → "
-                    f"倉位降至 50-60%、暫緩定額、停利收緊；觀察 24-48h 雷達是否轉警戒"
+                    # v19.170:硬編碼倉位百分比 → 敘事詞（原文見上方 docstring）
+                    f"明顯降低倉位、暫緩定額、停利收緊；觀察 24-48h 雷達是否轉警戒"
                 ),
                 "mode": "downgrade_2",
             }
@@ -589,7 +605,8 @@ def synthesize_dual_verdict(
                 "color": "#d84315",
                 "action": (
                     f"慢總經 {slow_level}({slow_score:+.1f}) 本已疲弱，疊加短線警報 → "
-                    f"現金 25-30%、停止加碼、衛星部位獲利了結"
+                    # v19.170:硬編碼現金百分比 → 敘事詞（原文見上方 docstring）
+                    f"提高現金部位、停止加碼、衛星部位獲利了結"
                 ),
                 "mode": "downgrade_2",
             }
@@ -600,7 +617,8 @@ def synthesize_dual_verdict(
                 "color": "#b71c1c",
                 "action": (
                     f"慢總經 {slow_level}({slow_score:+.1f}) 已悲觀，疊加短線警報 → "
-                    f"現金 35%+、核心轉投資等級債／全球均衡"
+                    # v19.170:硬編碼現金百分比 → 敘事詞（最強防守語氣保留）
+                    f"大幅提高現金部位、核心轉投資等級債／全球均衡"
                 ),
                 "mode": "downgrade_2",
             }
@@ -623,7 +641,8 @@ def synthesize_dual_verdict(
                 "color": "#f9a825",
                 "action": (
                     f"慢總經 {slow_level}({slow_score:+.1f}) 疊加雷達警戒 → "
-                    f"分批進場、倉位 60-70%、定期定額減半"
+                    # v19.170:硬編碼倉位百分比 → 敘事詞（原文見上方 docstring）
+                    f"分批進場、可維持既有倉位、定期定額減半"
                 ),
                 "mode": "downgrade_1",
             }

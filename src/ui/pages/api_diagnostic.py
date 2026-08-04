@@ -56,13 +56,21 @@ def _resolve_key(key: str) -> dict:
 
 
 def _probe(label: str, url: str, params: dict | None = None,
-           proxies: dict | None = None, timeout: int = 8) -> tuple[bool, str]:
-    """輕量探測，回傳 (ok, msg)。不丟例外。"""
+           proxies: dict | None = None, timeout: int = 8,
+           headers: dict | None = None) -> tuple[bool, str]:
+    """輕量探測，回傳 (ok, msg)。不丟例外。
+
+    v19.170:新增 headers 參數——診斷需要真的打 API，但憑證只走 header，
+    不進 query string(避免落入 proxy / access log)。
+    """
     import requests
+    _hdr = {'User-Agent': 'Mozilla/5.0'}
+    if headers:
+        _hdr.update(headers)
     try:
         r = requests.get(url, params=params, proxies=proxies,
                          timeout=timeout, verify=False,
-                         headers={'User-Agent': 'Mozilla/5.0'})
+                         headers=_hdr)
         snippet = (r.text or '')[:80].replace('\n', ' ')
         return (r.status_code < 400, f'HTTP {r.status_code} {snippet}')
     except Exception as e:
@@ -141,35 +149,47 @@ def render_api_diagnostic():
 
     if st.button('🚀 開始診斷外連狀態', key='api_diag_run', use_container_width=True, type='primary'):
         keys = {r['name']: r['val'] for r in rows}
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # tests 改為 4-tuple (label, url, params, headers);FinMind token 由
+        # Authorization: Bearer 帶,query string 不再出現 token。
+        _fm_tok = keys.get('FINMIND_TOKEN', '')
+        _gm_key = keys.get('GEMINI_API_KEY', '')
         tests = [
             ('FinMind (需 token)',
              FINMIND_API_URL,
-             {'dataset': 'TaiwanStockInfo', 'stock_id': '2330',
-              'token': keys.get('FINMIND_TOKEN', '')}),
+             {'dataset': 'TaiwanStockInfo', 'stock_id': '2330'},
+             {'Authorization': f'Bearer {_fm_tok}'} if _fm_tok else None),
+            # v19.170:憑證只走 header,不進 query string —— Gemini 官方支援
+            # `x-goog-api-key` header,改走 header 後 URL 不再帶 key。
             ('Gemini API (需 key)',
              'https://generativelanguage.googleapis.com/v1beta/models',
-             {'key': keys.get('GEMINI_API_KEY', '')}),
+             None,
+             {'x-goog-api-key': _gm_key} if _gm_key else None),
+            # ⚠️ FRED 例外(刻意不改):St. Louis Fed 的 FRED API **只接受**
+            # `api_key` query 參數,沒有任何 header 認證方式(官方文件與實測皆然),
+            # 改 header 會直接 400。這是 API 端的限制,非本專案疏漏。
             ('FRED API (需 key)',
              'https://api.stlouisfed.org/fred/series',
              {'series_id': 'GDP', 'api_key': keys.get('FRED_API_KEY', ''),
-              'file_type': 'json'}),
+              'file_type': 'json'}, None),
             ('Yahoo Finance (免 key)',
              'https://query1.finance.yahoo.com/v8/finance/chart/2330.TW',
-             {'range': '1d', 'interval': '1d'}),
+             {'range': '1d', 'interval': '1d'}, None),
             ('TWSE OpenAPI (免 key)',
              'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL',
-             None),
+             None, None),
         ]
-        for label, url, params in tests:
+        for label, url, params, hdrs in tests:
             with st.spinner(f'測試 {label}…'):
                 t0 = time.time()
                 ok_p, msg_p = (False, '(skip)')
                 if proxy_cfg:
-                    ok_p, msg_p = _probe(label, url, params, proxies=proxy_cfg)
+                    ok_p, msg_p = _probe(label, url, params,
+                                         proxies=proxy_cfg, headers=hdrs)
                 t_p = time.time() - t0
 
                 t0 = time.time()
-                ok_d, msg_d = _probe(label, url, params, proxies=None)
+                ok_d, msg_d = _probe(label, url, params, proxies=None, headers=hdrs)
                 t_d = time.time() - t0
 
             col1, col2 = st.columns(2)

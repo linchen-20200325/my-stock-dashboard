@@ -101,7 +101,12 @@ def _render_traffic_light(placeholder, tl, mkt_info=None):
     _mi_score  = _mi.get('score')
     _mi_mx     = _mi.get('max_score', 4)
     _mi_idx    = _mi.get('index_price', 0)
-    _mi_exp    = _mi.get('exposure_pct', '--')
+    # v19.170 P0-1:建議持股一律取自 SSOT(get_allocation),**不再**讀
+    # market_strategy 的 `exposure_pct`(neutral→固定 50%)。本卡就印在
+    # 🎚️ 建議持股油門正上方,兩者曾系統性打架(50% vs 30–50%)。
+    # §1 Fail Loud:總經未評估時 range_text 自回 '--',不回填任何預設值。
+    from src.services.allocation_service import get_allocation as _get_alloc_tl
+    _mi_exp    = _get_alloc_tl().range_text
     _mi_sigs   = _mi.get('signals', [])
     _mi_upd    = st.session_state.get('cl_ts', '')
 

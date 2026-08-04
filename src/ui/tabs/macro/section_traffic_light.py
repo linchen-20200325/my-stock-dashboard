@@ -25,6 +25,8 @@ from typing import Any
 
 import streamlit as st
 
+# v19.170:此 import 僅剩下方 warroom_summary['throttle'] 寫入端使用,
+# 而該 key 已無讀取端(死碼);保留原因見 render_traffic_light_top 內註解。
 from shared.position_throttle import compute_position_throttle
 from src.compute.macro import calc_traffic_light
 from src.ui.tabs.macro.handlers import _render_traffic_light
@@ -34,65 +36,75 @@ _THROTTLE_COLORS = {'🟢': '#26a641', '🟡': '#d29922', '🟠': '#db6d28', '�
 
 
 def render_position_throttle(tl) -> None:
-    """總經『建議持股油門』儀表(v19.62)——姿態油門,非進出開關。
+    """總經『建議持股油門』儀表(v19.62;v19.170 改吃建議持股 SSOT)。
 
-    tl: calc_traffic_light / compute_macro_health 輸出(含 health/regime/defense)。
-    無 health → 靜默略過(不炸)。
+    tl: calc_traffic_light / compute_macro_health 輸出。v19.170 起僅為 caller
+        簽章相容保留 —— 所有數值一律取自 `get_allocation()`(全站唯一持股真相);
+        本函式不再自行 compute_position_throttle,也不再自行讀
+        macro_state['exposure_limit_pct'](天花板改由 SSOT 內部仲裁)。
     """
-    if not isinstance(tl, dict) or tl.get('health') is None:
+    # v19.170 P0-1:唯一取數入口。姿態帶(該多積極)× 硬否決(最多能到哪)→ 最終建議持股。
+    from src.services.allocation_service import get_allocation
+    _alloc = get_allocation()
+    if not _alloc.is_loaded:
+        # §1 Fail Loud:總經未評估 → 誠實顯示,不畫任何假的持股區間
+        st.info('⬜ 建議持股油門：總經未評估 — 請先按「🚀 一鍵更新全部數據」')
         return
-    _health = float(tl.get('health'))
-    # v19.168 IMPL-F:優先讀 warroom_summary 的 SSOT throttle(render_traffic_light_top 算一次),
-    # 確保 gauge 與頁頂全域 bar / 作戰室 / 組合①卡 顯示同一個持股%區間;無則即算(fallback)。
-    _thr = (st.session_state.get('warroom_summary') or {}).get('throttle')
-    if not _thr:
-        _thr = compute_position_throttle(
-            _health, regime=tl.get('regime'), defense=bool(tl.get('defense')))
-    _c = _THROTTLE_COLORS.get(_thr['icon'], '#8b949e')
-    _lo, _hi, _mid = _thr['lo_pct'], _thr['hi_pct'], _thr['mid_pct']
-    _veto = ('&nbsp;<span style="color:#da3633;">（⚠️ 總經否決：無視技術面多頭，'
-             '強制壓低上界）</span>' if _thr['regime_capped'] else '')
-    # v19.168 第1項(user:「兩個都留 上限 vs 建議區間」):把 §十一 曝險鎖的「風險上限」
-    # (exposure_limit_pct,薩姆/PMI/外資期貨硬否決天花板)與此「建議區間」並排呈現,清楚區分
-    # 兩者互補(區間=依健康分的姿態、上限=硬否決天花板),非兩個打架的持股%。上限更低時註明
-    # 「實際取較低者」;未跑 §十一 AI 裁決(無 exposure_limit_pct)→ 只顯示區間(§1 fail-safe)。
-    _ceiling = (st.session_state.get('macro_state') or {}).get('exposure_limit_pct')
-    try:
-        _ceiling = int(_ceiling) if _ceiling is not None else None
-    except (TypeError, ValueError):
-        _ceiling = None
-    _ceil_line = ''
-    _ceil_marker = ''
-    if _ceiling is not None:
-        _ceil_line = (
-            '<div style="font-size:11px;color:#d29922;margin-top:4px;">'
-            f'🔒 系統風險上限 <b>{_ceiling}%</b>（薩姆規則／PMI／外資期貨 硬否決天花板）'
-            + (f'&nbsp;→ 與建議區間取較低者：<b>實際上限 {min(_hi, _ceiling)}%</b>'
-               if _ceiling < _hi else '（未壓低建議區間）')
-            + '</div>'
-        )
-        _ceil_marker = (
-            f'<div style="position:absolute;left:calc({_ceiling}% - 1px);top:-3px;width:2px;'
-            'height:20px;background:#d29922;"></div>'
-        )
+
+    _c = _THROTTLE_COLORS.get(_alloc.icon, '#8b949e')
+    _p_lo, _p_hi = _alloc.posture_lo, _alloc.posture_hi
+    _lo, _hi, _mid = _alloc.final_lo, _alloc.final_hi, _alloc.final_mid
+    # 風險上限:無天花板時誠實寫「無硬否決」,不留白(留白會被誤讀成漏算)
+    _cap_line = (f'🔒 風險上限 <b>{_alloc.cap_pct}%</b>（{_alloc.cap_name}）'
+                 if _alloc.cap_pct is not None else '🔒 風險上限：無硬否決')
+    _cap_marker = (
+        f'<div style="position:absolute;left:calc({_alloc.cap_pct}% - 1px);top:-3px;'
+        'width:2px;height:20px;background:#d29922;"></div>'
+        if _alloc.cap_pct is not None else ''
+    )
+    # v19.170 格式一致:改吃 `_alloc.range_text`(顯示格式的 SSOT)。
+    # 原本直接用 raw {_lo}–{_hi}% 繞過 range_text,lo==hi 時會印出「40–40%」——
+    # 正是 range_text 註解宣稱要消滅的怪字串,且與全站其他 8 個取數點格式不一致。
+    _range_txt = _alloc.range_text
+    # 中值只在區間真的有寬度時才顯示;lo==hi 時中值恆等於區間本身,重複且無資訊。
+    _mid_txt = (
+        f'<span style="font-size:12px;font-weight:400;color:#8b949e;">'
+        f'（中值 {_mid}%）</span>'
+        if (_lo is not None and _hi is not None and _lo != _hi) else ''
+    )
     st.markdown(
         f'<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;'
         f'padding:10px 14px;margin:6px 0 2px;">'
-        f'<b>🎚️ 建議持股油門</b>&nbsp; {_thr["icon"]} <b>{_thr["posture"]}</b>'
-        f'&nbsp;→ 建議持股 <b>{_lo}–{_hi}%</b>（中值 {_mid}%）{_veto}'
+        f'<b>🎚️ 建議持股油門</b>&nbsp; {_alloc.icon} <b>{_alloc.posture}</b>'
+        f'&nbsp;→ 姿態帶 <b>{_p_lo}–{_p_hi}%</b>'
+        f'<div style="font-size:11px;color:#d29922;margin-top:4px;">{_cap_line}</div>'
+        # 全站唯一該被記住的數字 → 字級最大、顏色最醒目
+        f'<div style="font-size:22px;font-weight:900;color:{_c};margin:6px 0 2px;'
+        f'letter-spacing:0.5px;">✅ 最終建議持股 {_range_txt}'
+        f'{_mid_txt}</div>'
         f'<div style="position:relative;height:14px;background:#21262d;border-radius:7px;'
         f'margin:8px 0 4px;">'
         f'<div style="position:absolute;left:{_lo}%;width:{max(_hi - _lo, 1)}%;height:100%;'
         f'background:{_c};border-radius:7px;"></div>'
         f'<div style="position:absolute;left:calc({_mid}% - 1px);top:-3px;width:2px;'
-        f'height:20px;background:#f0f6fc;"></div>{_ceil_marker}</div>'
+        f'height:20px;background:#f0f6fc;"></div>{_cap_marker}</div>'
         f'<span style="font-size:11px;color:#8b949e;">0%（全現金） ← 總經健康分 '
-        f'{_health:.0f} → 100%（滿倉）</span>{_ceil_line}</div>',
+        f'{_alloc.health:.0f} → 100%（滿倉）</span></div>',
         unsafe_allow_html=True,
     )
-    st.caption('💡 這是「**姿態油門**」：**建議區間**＝依總經健康分的姿態（積極↔防守）；'
-               '**🔒 風險上限**＝薩姆／PMI／外資期貨硬否決的天花板（跑「🤖 AI 總裁決」後出現）。'
-               '兩者互補，**實際持股取兩者較低**；個別強勢股仍可各自判斷。')
+    st.caption('💡 **姿態帶**＝依總經健康分該多積極（積極↔防守）；**🔒 風險上限**＝薩姆／PMI／'
+               '外資期貨／VIX 否決權／三環第一環 的硬否決天花板；'
+               '**✅ 最終建議持股＝兩者取較低**，全站只認這一個數字（個別強勢股仍可各自判斷）。')
+
+    # v19.170 P0-1:把推導攤開 —— 使用者看到「趨勢偏多卻只建議 0–20%」時
+    # 能自己查到是哪一條天花板生效,而不是懷疑系統算錯。
+    with st.expander('📖 為何是這個持股數字？', expanded=False):
+        for _drv in _alloc.drivers:
+            st.markdown(f'- {_drv}')
+        if _alloc.conflicts:
+            st.markdown('**⚠️ 被壓制的反向訊號**')
+            for _cfl in _alloc.conflicts:
+                st.markdown(f'- {_cfl}')
 
 
 def render_traffic_light_top() -> tuple[Any, bool, str | None]:
@@ -167,6 +179,14 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
         # 算一次「姿態油門」區間,存進 warroom_summary['throttle'],讓總經 gauge + 頁頂全域
         # 紅綠燈 bar + 今日作戰室 + 個股組合①卡 全讀同一份 → 根治「同一問題四處四個持股%」
         # (原 bar/作戰室/組合①用 regime 粗略 exposure_pct 80/50/20、gauge 用 health 細分區間)。
+        #
+        # ⚠️ v19.170 現況:持股% 已改由 `allocation_service.get_allocation()` **內生推導**
+        # (每次由 macro_state.health 現算),不再依賴這個會被 section_state 整包覆寫的中繼 key。
+        # 全 repo 已無任何**程式碼**讀取端(僅剩註解提及) → 本段實質為死碼。
+        # 之所以保留而非刪除:`tests/test_position_throttle_ssot.py:28-31` 仍以
+        # 原始碼字串掃描斷言本檔含 `compute_position_throttle` 與 `'throttle'`,
+        # 直接移除會讓 CI 變紅;若只留註解讓字串掃描通過,則會製造該測試檔自己
+        # (line 44-46)指出的 false green。廢止本 key 應與該測試一起改,屬另案。
         _wr_throttle = compute_position_throttle(
             float(_tl_init['health']), regime=_tl_eff_reg,
             defense=bool(_tl_init.get('defense')))
@@ -180,6 +200,8 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
             'foreign_net_bn': _tl_init['fnet'],
             'futures_net':   _tl_init['fut_net'],
             'confidence_pct': _tl_init['conf'],
+            # v19.170 DEPRECATED:持股% 已改由 allocation_service 內生推導,
+            # 此中繼 key 現無任何程式碼讀取端(保留原因見上方註解)。
             'throttle':      _wr_throttle,   # v19.168 IMPL-F:持股% SSOT(lo/hi/mid/posture/icon)
         }
         # v19.148 ① 接線:同步寫 canonical macro_state(單一契約)→ 個股頁加碼三問 +

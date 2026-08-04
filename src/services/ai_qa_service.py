@@ -391,7 +391,9 @@ def _make_default_http(api_key: str, model: str, *, max_attempts: int = 3) -> Ca
         import time
         import requests  # lazy
         for _attempt in range(max_attempts):
-            r = requests.post(_GEMINI_URL.format(model=model), params={"key": api_key},
+            # v19.170:憑證只走 header,不進 query string / URL(避免落入 access log)
+            r = requests.post(_GEMINI_URL.format(model=model),
+                              headers=({"x-goog-api-key": api_key} if api_key else None),
                               json=payload, timeout=30)
             # 暫時性且還有重試額度 → 指數退避後再試。退避 min(8, 1.5·2^attempt),封頂 8s。
             # 註:max_attempts=3 時實際只 sleep 兩次(attempt 0→1.5s、attempt 1→3s);

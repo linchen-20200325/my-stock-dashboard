@@ -97,8 +97,8 @@ def finmind_get(dataset: str, *, data_id=None, start_date=None, end_date=None,
         params["end_date"] = _ed
     if data_id:
         params["data_id"] = data_id
-    if token:
-        params["token"] = token
+    # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+    # 原本同時塞進 params 的 token 已移除;下方 hdrs 的 Bearer 為唯一憑證通道。
 
     hdrs = {"User-Agent": _UA, "Accept": "application/json"}
     if token:

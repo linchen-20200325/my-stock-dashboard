@@ -25,6 +25,8 @@ from typing import Optional
 # ── 既有 L0 SSOT 常數（直接 import，不重複宣告）──
 from shared.signal_thresholds import (
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,       # 3400 億：融資過熱紅線
+    MARGIN_BALANCE_WARN_THRESHOLD_YI,           # 2500 億：融資警戒黃線（v19.170 消除 inline 硬寫）
+    MARKET_BREADTH_NEUTRAL_PCT,                 # 50.0%：市場廣度中性分界（v19.170 同上）
     FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS,  # -10000 口：外資期貨黃線
     FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS,    # -20000 口：外資期貨紅線
 )
@@ -144,19 +146,32 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     DangerSpec("dxy", "美元指數 DXY", "mid", "", "high_bad",
                yellow=_DXY_YELLOW, red=_DXY_RED, decimals=1,
                note="≥105 警戒 / ≥110 強勢美元壓力", source="SSOT:MACRO_THRESHOLDS.DXY"),
+    # v19.170：yellow 原 inline 50.0 → 改 import signal_thresholds.MARKET_BREADTH_NEUTRAL_PCT
+    #          （同值，僅消除 SSOT 漂移風險；紅線 35.0 無對應常數，維持 DESIGN inline）
     DangerSpec("adl", "ADL 漲跌家數比", "short", "%", "low_bad",
-               yellow=50.0, red=35.0, decimals=1,
-               note="<50 廣度轉弱 / <35 廣度崩（大型股獨撐）", source="DESIGN:市場廣度慣例"),
+               yellow=float(MARKET_BREADTH_NEUTRAL_PCT), red=35.0, decimals=1,
+               note="<50 廣度轉弱 / <35 廣度崩（大型股獨撐）"
+                    "（v19.170:此為佔比類指標,不受市值成長侵蝕,但仍建議看歷史分位,"
+                    "相對化見 shared/relative_thresholds）",
+               source="SSOT:MARKET_BREADTH_NEUTRAL_PCT(50)+DESIGN(35)"),
     DangerSpec("fut_net", "外資期貨淨口", "short", "口", "low_bad",
                yellow=float(FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS),
                red=float(FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS), decimals=0,
                note="<-10000 避險 / <-20000 大戶閃人", source="SSOT:FOREIGN_FUTURES_*_LOTS"),
 
     # ── 🧩 籌碼：大戶定位 ──
+    # v19.170：yellow 原 inline 硬寫 2500.0 → 改 import
+    #          signal_thresholds.MARGIN_BALANCE_WARN_THRESHOLD_YI（同值 2500.0），
+    #          消除與 macro_ui_components.margin_card 兩處各自寫死的 SSOT 漂移風險。
+    #          **數值未變**（改門檻屬行為變更，需獨立回測）。
     DangerSpec("margin", "融資餘額", "chips", "億", "high_bad",
-               yellow=2500.0, red=float(MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI), decimals=0,
-               note="2500-3400 警戒 / >3400 散戶槓桿極危",
-               source="SSOT:MARGIN_BALANCE_OVERHEAT(3400)+DESIGN(2500)"),
+               yellow=float(MARGIN_BALANCE_WARN_THRESHOLD_YI),
+               red=float(MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI), decimals=0,
+               note="2500-3400 警戒 / >3400 散戶槓桿極危"
+                    "（v19.170:絕對門檻已被市值成長淹沒—實測 5,148 億早已穿透兩線,"
+                    "燈號恆紅、鑑別力歸零;相對化見 shared/relative_thresholds"
+                    ".margin_leverage_ratio + classify_by_pct_rank）",
+               source="SSOT:MARGIN_BALANCE_OVERHEAT(3400)+MARGIN_BALANCE_WARN(2500)"),
     DangerSpec("jingqi", "旌旗指數（站上 20MA %）", "chips", "%", "low_bad",
                yellow=60.0, red=40.0, decimals=0,
                note=">60 積極 / 40-60 中性 / <40 弱勢", source="DESIGN:站上均線比例慣例"),

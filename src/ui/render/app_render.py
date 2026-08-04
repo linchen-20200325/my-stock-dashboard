@@ -156,18 +156,24 @@ def render_macro_compass() -> None:
     預設不抓資料(避免顯示過時值誤判),按「📡 抓取最新」按鈕才打 yfinance。
     """
     def _do_fetch():
+        # v19.170(P0-2 / §1 Fail Loud):原本 except 只把 _data 設成空 dict,UI 靜默
+        # 退回「尚未抓取」提示 — 使用者按了按鈕、畫面卻毫無變化,無從得知是網路失敗
+        # 還是還沒按。改為把錯誤型別+訊息一併寫進 session,由 UI 端顯示。
+        _err = None
         try:
             from src.data.macro import fetch_macro_compass as _fmc
             _data = _fmc()
         except Exception as e:
-            print(f'[render_macro_compass] fetch failed: {e}')
+            _err = f'{type(e).__name__}: {e}'
+            print(f'[render_macro_compass] fetch failed: {_err}')
             _data = {}
         st.session_state['_macro_compass_cache'] = {
-            '_ts': datetime.datetime.now(), 'data': _data,
+            '_ts': datetime.datetime.now(), 'data': _data, '_err': _err,
         }
 
     _cache = st.session_state.get('_macro_compass_cache')
     _has_data = bool(_cache and _cache.get('data'))
+    _fetch_err = (_cache or {}).get('_err')
     _ts_str = (_cache.get('_ts').strftime('%H:%M:%S')
                if _has_data and _cache.get('_ts') else '尚未抓取')
 
@@ -183,8 +189,14 @@ def render_macro_compass() -> None:
                       key='_compass_fetch_btn', on_click=_do_fetch,
                       use_container_width=True)
 
+    # v19.170:抓取失敗要說出來(§1 Fail Loud) — 有 _err 就顯示原因,
+    # 部分成功(有 data 也有 _err)同樣提示,避免誤以為畫面上的是完整資料。
+    if _fetch_err:
+        st.warning(f'⚠️ 抓取失敗：{_fetch_err}，請稍後重試')
+
     if not _has_data:
-        st.info('💡 點擊右上「📡 抓取最新」按鈕載入即時 VIX / 10Y / S&P 500')
+        if not _fetch_err:
+            st.info('💡 點擊右上「📡 抓取最新」按鈕載入即時 VIX / 10Y / S&P 500')
         return
 
     data = _cache.get('data') or {}

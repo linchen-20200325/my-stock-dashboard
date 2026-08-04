@@ -954,14 +954,33 @@ def build_leading_indicators(start, end, token="", progress_cb=None):
 # 禁靜默」。週末/假日 FinMind 自然無新資料,build_leading_fast 返回 None 會讓 UI
 # 整段空白;改:當次抓空 → 改返回最近一次成功的 pickle + is_stale=True attrs。
 # ════════════════════════════════════════════════════════════════
-def _load_stale_pickle(cache_path):
-    """嘗試載入指定 pickle 路徑(忽略 TTL),回傳 (df, age_minutes) 或 (None, None)。"""
+# v19.170 P0-4:stale pickle 年齡上限。原本 _load_stale_pickle 完全忽略 TTL —
+# 只要 FinMind 連續失敗(免費版無「前五大留倉」等資料即為常態失敗),就會天天回同
+# 一份舊 pickle,稽核實測「前五大留倉/前十大留倉/未平倉口數」自 7/21 到 7/31 連續
+# 9 個交易日數值完全不變。3 個交易日(3*24*60 分鐘)為上限,超過依 §1 Fail Loud
+# 回 None 讓上游顯示「抓不到」,不再用一份無限老的資料假裝系統健康。
+_STALE_MAX_AGE_MIN = 3 * 24 * 60   # 4320 分鐘 = 3 日
+
+
+def _load_stale_pickle(cache_path, max_age_min: float | None = None):
+    """嘗試載入指定 pickle 路徑(忽略 TTL),回傳 (df, age_minutes) 或 (None, None)。
+
+    max_age_min : float | None
+        年齡上限(分鐘)。None → 不設限(維持舊行為,供既有測試/呼叫端相容);
+        超過上限 → 直接回 (None, None) 並 print 一行 log(§1 Fail Loud:
+        寧可讓上游顯示缺資料,也不沿用已無參考價值的舊快照)。
+    """
     import os as _os_sp, pickle as _pk_sp, time as _tm_sp, sys as _sys_sp
     if not _os_sp.path.exists(cache_path):
         return (None, None)
     try:
         _age_sec = _tm_sp.time() - _os_sp.path.getmtime(cache_path)
         _age_min = round(_age_sec / 60, 1)
+        # v19.170:先驗年齡再讀檔 — 超齡就不必付 unpickle 的 I/O 成本
+        if max_age_min is not None and _age_min > max_age_min:
+            print(f'[LI-v8] ⛔ stale pickle age={_age_min}min > 上限 {max_age_min}min '
+                  f'→ 放棄沿用(回 None,讓上游顯示抓不到)')
+            return (None, None)
         with open(cache_path, 'rb') as _f:
             _df = _pk_sp.load(_f)
         print(f'[LI-v8] 預載過期 pickle age={_age_min}min,當次失敗時用')
@@ -973,7 +992,17 @@ def _load_stale_pickle(cache_path):
 
 
 def _mark_stale(df, age_min):
-    """在 df.attrs 標記 is_stale=True + stale_age_min(下游 UI chip 用)。"""
+    """在 df.attrs 標記 is_stale=True + stale_age_min(下游 UI chip 用)。
+
+    v19.170 P0-4:**另外寫入 `_is_stale`(bool)/ `_stale_age_min`(float)兩欄**。
+    原因:`df.attrs` 在 pandas 多數運算(copy / merge / concat / 切欄 / groupby)
+    與 st.session_state 往返後會遺失,稽核判定這正是「籌碼面資料 9 天不變卻沒有
+    任何警示」的直接原因 —— 旗標明明標了,卻在傳到 UI 前就被 pandas 蒸發。
+    欄位隨 DataFrame 走,不會被上述運算吃掉,下游(如 data_coverage 覆蓋率表)
+    可直接用 `df['_is_stale']` 判定。
+    attrs 仍保留寫入以相容既有讀 attrs 的呼叫端(section_chips.py)。
+    註:欄名以底線開頭,render_leading_table 用固定 COLS 白名單渲染,不會外露。
+    """
     if df is None:
         return df
     try:
@@ -982,6 +1011,12 @@ def _mark_stale(df, age_min):
             df.attrs['stale_age_min'] = age_min
     except Exception:
         pass
+    try:
+        df['_is_stale'] = True
+        df['_stale_age_min'] = float(age_min) if age_min is not None else float('nan')
+    except Exception as _e_col:
+        # 不因加欄失敗而讓整條 fallback 路徑掛掉,但要出聲(§1 禁 except: pass)
+        print(f'[LI-v8] ⚠️ _mark_stale 寫欄失敗: {type(_e_col).__name__}: {_e_col}')
     return df
 
 
@@ -1017,13 +1052,25 @@ def build_leading_fast(days=7, token=""):
                 if hasattr(_df_fresh, 'attrs'):
                     _df_fresh.attrs.pop('is_stale', None)
                     _df_fresh.attrs.pop('stale_age_min', None)
+                # v19.170:同步清掉欄位版旗標。正常路徑不會把 stale 標記寫進
+                # pickle(_mark_stale 後即 return,不落快取),此處為防禦性清理 —
+                # 萬一未來有人在標記後才 dump,舊 cache 會永遠自稱過期。
+                if hasattr(_df_fresh, 'columns'):
+                    _df_fresh = _df_fresh.drop(
+                        columns=[c for c in ('_is_stale', '_stale_age_min')
+                                 if c in _df_fresh.columns], errors='ignore')
                 return _df_fresh
         except Exception as _e_cf:
             print(f'[LI-v8] fresh cache load fail: {type(_e_cf).__name__}: {_e_cf}',
                   file=__import__('sys').stderr)
 
     # v18.342 PR-L2:預載過期 pickle 供 stale fallback(若當次抓不到再用)。
-    _stale_fallback_df, _stale_age_min = _load_stale_pickle(_ck_li)
+    # v19.170 P0-4:加年齡上限 _STALE_MAX_AGE_MIN(3 個交易日)。此處是**唯一**的
+    # 載入點,下方兩個 fallback 觸發點(「無資料」與「FinMind 全空 + filled=0」)
+    # 都靠 `_stale_fallback_df is not None` 閘門,故上限在這裡一次套用即同時生效:
+    # 超齡 → 回 (None, None) → 兩個觸發點都會落到 `return None`(§1 Fail Loud)。
+    _stale_fallback_df, _stale_age_min = _load_stale_pickle(
+        _ck_li, max_age_min=_STALE_MAX_AGE_MIN)
     import datetime as _dt
     today  = _dt.date.today()
     s_date = today - _dt.timedelta(days=days + 14)
@@ -1349,6 +1396,8 @@ def build_leading_fast(days=7, token=""):
         print("[LI-v8] ⚠️ 無資料")
         # v18.342 PR-L2:無新資料 → 改用過期 pickle(若有),不返回 None。
         # user「假日抓前一次的」+ §2.4「過期 cache 須帶 is_stale,禁靜默」。
+        # v19.170:fallback 觸發點 ①。pickle 超過 _STALE_MAX_AGE_MIN(3 日)時
+        # _stale_fallback_df 已為 None → 直接落到下方 return None(Fail Loud)。
         if _stale_fallback_df is not None and not getattr(_stale_fallback_df, 'empty', True):
             print(f'[LI-v8] 📦 fallback to stale pickle (age={_stale_age_min}min)')
             return _mark_stale(_stale_fallback_df, _stale_age_min)
@@ -1359,6 +1408,8 @@ def build_leading_fast(days=7, token=""):
     print(f"[LI-v8] ✅ {len(df)} 筆 ({filled} 筆有數據)")
     # v18.342 PR-L2:當次 FinMind 全空 + 有過期 pickle → 用 pickle + is_stale 旗標
     # (rows 雖非空但全 None placeholder = 跟 user 視角的「沒抓到」等價,假日場景)
+    # v19.170:fallback 觸發點 ②。同上 —— 超齡 pickle 已在載入時被擋掉,
+    # 這裡自然走到下方「照常回傳當次(雖然稀疏的)df」,不再無限沿用舊值。
     if not _fm_ok and filled == 0 and _stale_fallback_df is not None \
             and not getattr(_stale_fallback_df, 'empty', True):
         print(f'[LI-v8] 📦 FinMind 全空 + filled=0 → fallback to stale pickle '

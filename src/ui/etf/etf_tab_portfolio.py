@@ -242,13 +242,14 @@ def render_etf_portfolio(gemini_fn=None):
         )
         _sb = assess_stock_bond(
             [{'ticker': r['ticker'], 'value': r['current_value']} for r in rows])
-        _ms = st.session_state.get('macro_state', {}) or {}
-        _posture = ''
-        if _ms.get('health') is not None:
-            from shared.position_throttle import compute_position_throttle
-            _posture = compute_position_throttle(
-                _ms.get('health'), regime=_ms.get('regime'),
-                defense=bool(_ms.get('defense')))['posture']
+        # v19.170 P0-1:姿態改讀建議持股 SSOT(get_allocation)。
+        # 原本直呼 compute_position_throttle 繞過 SSOT —— 該路徑只算姿態帶、
+        # 不含硬否決天花板,且讀的是可能過期的 session['macro_state'],
+        # 會與 🎚️ 建議持股油門 給出不同姿態。
+        # §1 Fail Loud:未評估時維持空字串(coherence_note 既有的未知分支)。
+        from src.services.allocation_service import get_allocation
+        _alloc_pf = get_allocation()
+        _posture = _alloc_pf.posture if _alloc_pf.is_loaded else ''
         _segs = ''
         if _sb['stock_pct'] > 0:
             _segs += (f'<div style="width:{_sb["stock_pct"]}%;background:#3498db;'

@@ -20,6 +20,150 @@ from src.services.daily_checklist import (
     COLORS_7, INTL_UNIT, TECH_MAP, TW_UNIT,
     _fetch_otc_via_finmind, fetch_flow_snapshot,
 )
+# v19.170 P1-4 死區判定（L0 純函式，無 I/O）
+from shared.stats_helpers import ewma_vol, signal_with_deadband
+
+# ════════════════════════════════════════════════════════════════
+# v19.170 — P1-4（缺死區）／ P1-5（匯率方向語意反轉）修正用常數 + helper
+#
+# P1-4 稽核實測：台股 −0.06%（約 0.05σ）被判「股匯雙殺，外資無情提款撤出」。
+#      只看漲跌符號、不看幅度是否超過雜訊 → 盤整日被寫成崩盤敘事。
+# P1-5 稽核實測：卡片顯示「新台幣匯率 32.39 TWD/USD ▲0.30%」標綠色「多頭排列↑」，
+#      但 TWD/USD **上升 = 台幣貶值 = 外資匯出壓力 = 對台股偏空**，語意完全反轉。
+# ════════════════════════════════════════════════════════════════
+
+# 死區寬度倍數：|日報酬| <= 0.5σ 視為雜訊，不宣稱方向。
+_DEADBAND_K: float = 0.5
+# σ 拿不到時的**降級**固定中性帶（%）。標明是降級值，非統計估計。
+#
+# v19.170 修正：原本台股與匯率共用單一常數 0.3%，但兩者真實日 σ 差約 5 倍
+#   ・台股加權指數 ≈ 1.0–1.3%／日
+#   ・新台幣 TWD/USD ≈ 0.15–0.25%／日
+# 用 0.3% 同時服務兩者 → 死區 = 0.5 × 0.3% = 0.15%，方向剛好相反：
+#   ・對台股**過窄**：±0.2% 的純雜訊日仍會被判 decisive，
+#     誤觸「股匯雙殺，外資無情提款撤出」這種強度敘事（P1-4 想修的正是這個）。
+#   ・對台幣**偏寬**：真實 σ 常低於 0.25%，確實更容易判 neutral。
+# 舊註解只寫了台幣那一面（「偏保守、更容易判 neutral」），對台股是反的 → 誤導。
+# 故拆成兩個尺度各用各的：
+#   ・_FALLBACK_SIGMA_EQUITY_PCT = 1.0：取觀測區間**下緣**（比 1.3 敏感一點，
+#     但死區 0.5% 已比舊值寬 6.7 倍，足以濾掉盤整日的雜訊）。
+#   ・_FALLBACK_SIGMA_FX_PCT = 0.25：取觀測區間**上緣**（死區 0.125%，
+#     方向偏保守／更容易判 neutral）。
+# 兩者都是「寧可少講一句敘事，也不要把盤整說成雙殺」。
+_FALLBACK_SIGMA_EQUITY_PCT: float = 1.0
+_FALLBACK_SIGMA_FX_PCT: float = 0.25
+
+
+def _daily_sigma_pct(df, fallback_pct: float) -> tuple[float, str]:
+    """從 OHLC DataFrame 估「當期日報酬 σ（%）」（v19.170）。
+
+    作法：close → pct_change（向量化）→ `ewma_vol(λ=0.94)` 取最新值。
+    RiskMetrics EWMA 讓 σ 跟著市況呼吸，不會被歷史崩盤長期撐大。
+
+    Args
+    ----
+    df : OHLC DataFrame（需含 close/Close 欄）
+    fallback_pct : 降級用固定 σ（%）。**刻意不給預設值** —— 台股與匯率的日 σ
+        差約 5 倍，共用一個常數必定有一邊被誤判（見上方常數註解），
+        故強制呼叫端明寫要用哪個尺度（`_FALLBACK_SIGMA_EQUITY_PCT` /
+        `_FALLBACK_SIGMA_FX_PCT`）。
+
+    Returns
+    -------
+    (sigma_pct, source) :
+        成功 → (σ%, 'EWMA λ=0.94')
+        序列拿不到 / 太短 / σ 非正 → (fallback_pct, f'降級:固定 {fallback_pct}% 中性帶')
+        **降級來源字串會一路顯示到 UI**，讓使用者知道這條敘事的信賴基礎（§1 不靜默）。
+    """
+    fallback = (fallback_pct, f'降級:固定 {fallback_pct:g}% 中性帶')
+    if df is None or getattr(df, 'empty', True):
+        return fallback
+    col = next((c for c in ('close', 'Close') if c in getattr(df, 'columns', [])), None)
+    if col is None:
+        return fallback
+    s = df[col].dropna()
+    if len(s) < 21:  # 少於約 1 個月，EWMA 尚未收斂
+        return fallback
+    r = s.pct_change().dropna() * 100.0
+    if r.empty:
+        return fallback
+    v = ewma_vol(r)
+    if v.empty:
+        return fallback
+    last = float(v.iloc[-1])
+    if not (last > 0) or last != last:  # <=0 / NaN
+        return fallback
+    return (last, 'EWMA λ=0.94')
+
+
+def _fx_move_word(pct) -> str:
+    """TWD/USD 漲跌 % → 台幣方向中文（v19.170 P1-5）。
+
+    TWD/USD 是「1 美元換多少台幣」：**數值上升 = 台幣貶值**。
+    這與股票「數值上升 = 好」相反，是 P1-5 語意反轉的根因。
+    """
+    if pct is None:
+        return '持平'
+    try:
+        p = float(pct)
+    except (TypeError, ValueError):
+        return '持平'
+    if p != p:  # NaN
+        return '持平'
+    if p > 0:
+        return '貶值'
+    if p < 0:
+        return '升值'
+    return '持平'
+
+
+def _fx_card(name: str, stats, unit: str) -> str:
+    """新台幣匯率**專用**卡片 HTML（v19.170 P1-5 修語意反轉）。
+
+    為何不沿用 `macro_ui_components.stat_card`
+    -----------------------------------------
+    stat_card 是給**股票**用的：pct>0 → 紅色 ▲（台股紅漲慣例）+ 直接印
+    `calc_stats()` 的 status（'多頭排列↑'）。套到 TWD/USD 上會變成
+    「台幣貶值 0.30% ＝ 多頭排列↑（綠 / 好事）」—— 方向與顏色雙重錯誤。
+
+    本卡片的語意軸改成「**對台股的意涵**」而非「數字漲跌」：
+        台幣貶值（TWD/USD ▲）→ 外資匯出 / 匯損壓力 → 對台股**偏空** → TRAFFIC_RED
+        台幣升值（TWD/USD ▼）→ 外資匯入            → 對台股**偏多** → TRAFFIC_GREEN
+    並顯式寫出「貶值 / 升值」與「偏空 / 偏多」字樣，不讓讀者自己推箭頭方向。
+    """
+    if not stats:
+        return ('<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;'
+                'padding:12px;text-align:center;opacity:0.5;">'
+                f'<div style="font-size:10px;color:#484f58;">{name}</div>'
+                '<div style="font-size:13px;color:#484f58;">載入中...</div></div>')
+    try:
+        pct = float(stats.get('pct'))
+    except (TypeError, ValueError):
+        pct = None
+    if pct is not None and pct != pct:  # NaN
+        pct = None
+
+    if pct is None:
+        # §1：拿不到 pct 就不猜方向（絕不預設 0 → 綠燈）
+        arrow, color, move, implies = '─', '#8b949e', '方向未知', '資料不足,不判讀'
+        pct_txt = '—'
+    else:
+        move = _fx_move_word(pct)
+        if pct > 0:
+            arrow, color, implies = '▲', TRAFFIC_RED, '外資匯出壓力,對台股偏空'
+        elif pct < 0:
+            arrow, color, implies = '▼', TRAFFIC_GREEN, '外資匯入,對台股偏多'
+        else:
+            arrow, color, implies = '─', '#388bfd', '匯率持平,無方向'
+        pct_txt = f'{abs(pct):.2f}%'
+    return (f'<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;'
+            f'padding:12px;text-align:center;">'
+            f'<div style="font-size:10px;color:#484f58;">{name}</div>'
+            f'<div style="font-size:18px;font-weight:900;color:#e6edf3;">{stats.get("last", "?")} '
+            f'<span style="font-size:10px;color:#8b949e;">{unit}</span></div>'
+            f'<div style="font-size:12px;font-weight:700;color:{color};">'
+            f'{arrow} 台幣{move} {pct_txt}</div>'
+            f'<div style="font-size:10px;color:#484f58;">{implies}</div></div>')
 
 
 def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
@@ -240,7 +384,9 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         if _ewt5 is not None:
             _tw_bits.append(f'台股 ETF（EWT）近 5 日 **{_ewt5:+.1f}%**')
         if _twd_pct is not None:
-            _tw_bits.append(f'新台幣 **{float(_twd_pct):+.2f}%**')
+            # v19.170 P1-5：原本只印「新台幣 +0.30%」，讀者無從判斷是升值還是貶值
+            # （TWD/USD 上升＝台幣貶值）。改為顯式寫出方向詞。
+            _tw_bits.append(f'新台幣**{_fx_move_word(_twd_pct)} {abs(float(_twd_pct)):.2f}%**')
         if _tw_bits:
             st.markdown('**🇹🇼 新台幣／外資視角**：' + '　｜　'.join(_tw_bits))
             st.caption('EWT（美國掛牌台股 ETF）相對強弱反映海外資金對台股偏好，與外資買賣超、台幣走勢合看。')
@@ -276,23 +422,50 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         _tp = float(_tp) if _tp is not None else None
         _fp = float(_fp) if _fp is not None else None
         if _tp is not None and _fp is not None:
+            # ── v19.170 P1-4：死區（dead-band）前置判定 ──────────────────
+            # 稽核實測 −0.06%（≈0.05σ）被判「股匯雙殺，外資無情提款撤出」。
+            # 四象限敘事只看**符號**，符號在 0 附近會亂跳 → 必須先確認幅度
+            # 真的超過當期雜訊。σ 用 EWMA(λ=0.94) 估；拿不到序列時退回固定
+            # 中性帶（降級，來源字串會顯示出來）。
+            # v19.170：台股與匯率的降級 σ **各用各的尺度**（日 σ 差約 5 倍，
+            # 共用 0.3% 會讓台股死區過窄、誤觸「股匯雙殺」敘事）。
+            _tw_sigma, _tw_src = _daily_sigma_pct(
+                tw.get('台股加權指數'), _FALLBACK_SIGMA_EQUITY_PCT)
+            _fx_sigma, _fx_src = _daily_sigma_pct(
+                tw.get('新台幣匯率'), _FALLBACK_SIGMA_FX_PCT)
+            _tw_sig = signal_with_deadband(_tp, _tw_sigma, k=_DEADBAND_K)
+            _fx_sig = signal_with_deadband(_fp, _fx_sigma, k=_DEADBAND_K)
+            # 兩邊都要「明確有方向」才配得上「股匯雙殺 / 雙漲」這種強度的敘事。
+            # 'unknown'（σ 不可得）同樣不放行 —— 不猜（CLAUDE.md §1）。
+            _decisive = (_tw_sig in ('bullish', 'bearish')
+                         and _fx_sig in ('bullish', 'bearish'))
             # 四象限資金流向判斷（fx>0=台幣貶值，fx<0=台幣升值）
-            if _tp > 0 and _fp < 0:
+            if not _decisive:
+                # v19.170：死區內一律「盤整，無明確方向」。
+                # 禁止出現「無情提款」「現金為王」「嚴格減碼防守」等強度文字，
+                # 也不輸出任何持股百分比（持股 SSOT 另有其檔）。
+                _t2c = (f'台股 {_tp:+.1f}% ／ 台幣{_fx_move_word(_fp)} {abs(_fp):.2f}% → '
+                        f'盤整,無明確方向'
+                        f'（日變動未超過 {_DEADBAND_K:g}σ 雜訊帶：'
+                        f'台股σ {_tw_sigma:.2f}%／{_tw_src}、'
+                        f'台幣σ {_fx_sigma:.2f}%／{_fx_src}）')
+                _t2a = '維持現有部位,靜待表態'
+            elif _tp > 0 and _fp < 0:
                 # 股匯雙漲：外資真實匯入
                 _t2c = f'台股 {_tp:+.1f}% ／ 台幣升值 {_fp:+.2f}% → 股匯雙漲，外資真金白銀匯入，權值股領軍'
-                _t2a = '順勢大膽作多，持股建議 80~100%'
+                _t2a = '順勢大膽作多，優先權值龍頭　→ 實際持股見 🎚️ 建議持股油門'
             elif _tp > 0 and _fp > 0:
                 # 股漲匯貶：疑似拉高出貨
                 _t2c = f'台股 {_tp:+.1f}% ／ 台幣貶值 {_fp:+.2f}% → 股漲匯貶，指數虛漲，疑似外資拉高出貨'
-                _t2a = '不追高，謹慎觀察，持股建議 50%'
+                _t2a = '不追高，謹慎觀察，等外資匯入確認　→ 實際持股見 🎚️ 建議持股油門'
             elif _tp < 0 and _fp > 0:
                 # 股匯雙殺：外資大舉提款
                 _t2c = f'台股 {_tp:+.1f}% ／ 台幣貶值 {_fp:+.2f}% → 股匯雙殺，外資無情提款撤出'
-                _t2a = '嚴格減碼防守，持股建議 0~30%（現金為王）'
+                _t2a = '嚴格減碼防守，現金為王　→ 實際持股見 🎚️ 建議持股油門'
             elif _tp < 0 and _fp < 0:
                 # 股跌匯升：技術性洗盤
                 _t2c = f'台股 {_tp:+.1f}% ／ 台幣升值 {_fp:+.2f}% → 股跌匯升，外資資金停泊未撤，技術性洗盤'
-                _t2a = '尋找錯殺優質股逢低布局，持股建議 50~70%'
+                _t2a = '尋找錯殺優質股逢低布局　→ 實際持股見 🎚️ 建議持股油門'
             else:
                 _t2c = f'台股 {_tp:+.1f}% ／ 台幣 {_fp:+.2f}%，無明顯方向性波動'
                 _t2a = '維持現有部位，靜待表態'
@@ -316,7 +489,14 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         tc = st.columns(len(TW_UNIT))
         for col,(name,unit) in zip(tc,TW_UNIT.items()):
             with col:
-                st.markdown(stat_card(name,tw_s.get(name),unit,name in tw_s),unsafe_allow_html=True)
+                # v19.170 P1-5：匯率卡片不得再走股票用的 stat_card（紅漲綠跌 +
+                # calc_stats 的「多頭排列↑」）。TWD/USD ▲ = 台幣貶值 = 對台股偏空，
+                # 用 stat_card 會把偏空訊號畫成多頭。改走專用 _fx_card。
+                if name == '新台幣匯率':
+                    st.markdown(_fx_card(name, tw_s.get(name) if name in tw_s else None, unit),
+                                unsafe_allow_html=True)
+                else:
+                    st.markdown(stat_card(name,tw_s.get(name),unit,name in tw_s),unsafe_allow_html=True)
     tw1,tw2 = st.columns(2)
     with tw1:
         if '台股加權指數' in tw:

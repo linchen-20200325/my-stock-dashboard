@@ -16,6 +16,11 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
 # ── 總經連動配置建議表 ────────────────────────────────────────
+# ⚠️ v19.170 DEPRECATED(P0-1):這張靜態表與主決策脫鉤(bull 一律股票 70%),是稽核
+# 「同畫面 6 套矛盾持股建議」的其中一套。配置數字一律改由
+# `allocation_service.get_allocation_sleeves()`(依最終建議持股中值推導)提供;
+# 本表僅保留給尚未遷移的 caller(etf_tab_ai._generate_report 的 prompt 文案)作 fallback,
+# **新程式碼請勿再引用**。
 MACRO_ALLOC = {
     'bull':    {'股票型ETF': 70, '債券型ETF': 15, '貨幣/現金': 15},
     'neutral': {'股票型ETF': 50, '債券型ETF': 30, '貨幣/現金': 20},
@@ -29,13 +34,37 @@ MACRO_DESC = {
 
 
 def macro_allocation_banner(regime: str) -> None:
-    """總經連動配置建議橫幅"""
-    alloc = MACRO_ALLOC.get(regime, MACRO_ALLOC['neutral'])
-    desc  = MACRO_DESC.get(regime, MACRO_DESC['neutral'])
+    """總經連動配置橫幅(v19.170 P0-1:改吃建議持股 SSOT)。
+
+    Args:
+        regime: 舊介面保留 —— 僅在 SSOT 未給 regime 時作樣式 fallback,
+            **不再決定配置數字**(數字一律來自 get_allocation_sleeves())。
+
+    Note:
+        §1 Fail Loud:總經未評估 → 誠實顯示「未評估」並指路,
+        **不**退回 `MACRO_ALLOC['neutral']` 假裝有一份配置建議。
+    """
+    # v19.170:股/債/現金三桶由最終建議持股中值推導,與 🎚️ 建議持股油門 永不矛盾。
+    from src.services.allocation_service import get_allocation, get_allocation_sleeves
+    _alloc = get_allocation()
+    alloc = get_allocation_sleeves()
+    _sub = '📡 總經連動配置（同步自 🎚️ 建議持股油門）'
+    if alloc is None:
+        st.markdown(
+            f'''<div style="background:#1a1f2e;border:1px solid #484f58;border-radius:10px;
+padding:10px 16px;margin-bottom:14px;">
+<div style="font-size:12px;font-weight:700;color:#8b949e;margin-bottom:2px;">{_sub}</div>
+<div style="font-size:13px;color:#c9d1d9;">
+⬜ 總經未評估，請先到「🌍 市場環境」按一鍵更新</div>
+</div>''', unsafe_allow_html=True)
+        return
+    _rg = _alloc.regime or regime
+    _cap_suffix = f'　{_alloc.cap_text}' if _alloc.capped else ''
+    desc = MACRO_DESC.get(_rg, _alloc.headline())
     bg_map  = {'bull': '#0d2618', 'neutral': '#1e1a00', 'bear': '#2a0d0d'}
     brd_map = {'bull': '#2ea043',  'neutral': TRAFFIC_YELLOW,  'bear': TRAFFIC_RED}
-    bg  = bg_map.get(regime, '#1a1f2e')
-    brd = brd_map.get(regime, '#1f6feb')
+    bg  = bg_map.get(_rg, '#1a1f2e')
+    brd = brd_map.get(_rg, '#1f6feb')
     alloc_html = ' &nbsp;|&nbsp; '.join(
         f'<b>{k}</b>&nbsp;<span style="color:#58a6ff;">{v}%</span>'
         for k, v in alloc.items()
@@ -44,7 +73,7 @@ def macro_allocation_banner(regime: str) -> None:
         f'''<div style="background:{bg};border:1px solid {brd};border-radius:10px;
 padding:10px 16px;margin-bottom:14px;">
 <div style="font-size:12px;font-weight:700;color:#8b949e;margin-bottom:2px;">
-📡 總經連動配置建議（來源：Tab① 市場評估）</div>
+{_sub}　建議持股 {_alloc.range_text}{_cap_suffix}</div>
 <div style="font-size:13px;color:#c9d1d9;">{desc}</div>
 <div style="font-size:13px;margin-top:6px;">{alloc_html}</div>
 </div>''', unsafe_allow_html=True)

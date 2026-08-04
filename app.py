@@ -206,7 +206,8 @@ def gemini_call(prompt, max_tokens=2048):
             try:
                 _r = requests.post(
                     f'https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent',
-                    params={'key': _key},
+                    # v19.170:憑證只走 header,不進 query string / URL(避免落入 access log)
+                    headers=({'x-goog-api-key': _key} if _key else None),
                     json={'systemInstruction': {'parts': [{'text': _PERSONA}]},
                           'contents': [{'parts': [{'text': prompt}]}],
                           'generationConfig': _gen_cfg},
@@ -482,20 +483,45 @@ _mkt_top  = st.session_state.get('mkt_info', {})
 _jq_top   = st.session_state.get('jingqi_info', {})
 _ts_top   = st.session_state.get('cl_ts', '')
 if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
-    _reg   = _mkt_top.get('regime', 'neutral')
     _jqpct = _jq_top.get('avg', 50) if _jq_top else None
-    # 綜合信號
-    _gl_color, _gl_label = traffic_light(
-        None,
-        _reg == 'bull' and (_jqpct is None or _jqpct >= 40),
-        _reg == 'bear' or (_jqpct is not None and _jqpct < 20),
-        '多頭市場（可積極操作）', '空頭市場（先觀望保守）', '🟡 震盪整理（謹慎操作）'
-    )
-    # v19.168 IMPL-F:持股% 統一讀姿態油門 SSOT(warroom_summary.throttle,與總經 gauge /
-    # 作戰室 / 組合①卡 同一個數);無 throttle 時 fallback 原 regime 粗略 exposure_pct。
-    _wr_thr = (st.session_state.get('warroom_summary') or {}).get('throttle')
-    _gl_pos = (f"{_wr_thr['lo_pct']}–{_wr_thr['hi_pct']}%" if _wr_thr
-               else _mkt_top.get('exposure_pct', '80%' if _reg=='bull' else ('20%' if _reg=='bear' else '50%')))
+    # v19.170 P0-1:燈號 label 與持股% 全部改讀建議持股 SSOT(get_allocation)——
+    # 原本 label 自行看 mkt_info.regime + jingqi_info.avg;持股% 則是
+    # warroom_summary['throttle'](v19.168 SSOT,會被 section_state 整包覆寫抹掉)
+    # → mkt_info['exposure_pct'] → 硬編碼 80/50/20 三層 fallback,與 🎚️ 建議持股油門 /
+    # 三環 / VIX 否決權 打架(稽核 P0-1 六套結論之一)。現在全站只剩 get_allocation()
+    # 一個出處,且已內含「姿態 vs 硬否決取較低」規則。
+    # v19.170 🟡-1 防白屏:本段是 module level、在 `with tab_market:` 之前,
+    # **不受 _render_tab_isolated 保護** —— get_allocation() 任何 raise
+    # (macro_state.json 壞、session 型別異常、下游 import 失敗…)都會直接白屏全站。
+    # 改為 try/except 兜住並降級為「⬜ 總經未評估」;錯誤原文 + traceback 一律
+    # print 出來(§1:要留跡,不吞掉錯誤訊息)。
+    try:
+        from src.services.allocation_service import get_allocation
+        _alloc = get_allocation()
+    except Exception as _alloc_err:  # noqa: BLE001 — module level,不得讓它炸掉全站
+        import traceback as _tb_alloc
+        print('[app/頁頂紅綠燈] get_allocation() 失敗，降級為「總經未評估」：'
+              f'{type(_alloc_err).__name__}: {_alloc_err}')
+        _tb_alloc.print_exc()
+        _alloc = None
+
+    _gl_pos = _alloc.range_text if _alloc is not None else '--'
+    if _alloc is None or not _alloc.is_loaded:
+        # §1 Fail Loud:總經未評估(或取數失敗)→ 誠實顯示未評估,
+        # 不回填任何多空結論或預設持股%
+        _gl_color, _gl_label = '#8b949e', '⬜ 總經未評估'
+    else:
+        # 綜合信號(多空判斷與持股% 同源,不再各算各的)
+        _gl_color, _gl_label = traffic_light(
+            None,
+            _alloc.regime == 'bull',
+            _alloc.regime == 'bear',
+            f'多頭市場（{_alloc.posture}）', f'空頭市場（{_alloc.posture}）',
+            f'🟡 {_alloc.regime_text}（{_alloc.posture}）',
+        )
+        # 被硬否決壓低時,label 後面直接掛上生效的天花板,避免「多頭」與低持股% 看似矛盾
+        if _alloc.capped:
+            _gl_label = f'{_gl_label}&nbsp;<span style="font-size:12px;">{_alloc.cap_text}</span>'
 
     # v19.88 A~E 批次2 收尾:時效閘 — 紅綠燈基於過期資料時,保留燈色(資料可顯示)但
     # 撤下「建議持股 X%」actionable 建議 + 旌旗均值,改明確過期警示。§1/第八份 §3.1:

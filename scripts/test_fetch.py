@@ -74,7 +74,8 @@ try:
     s = requests.Session(); s.verify = False
     start_n = (datetime.date.today()-datetime.timedelta(days=365*2)).strftime('%Y-%m-%d')
     p = {'dataset':'TaiwanMacroEconomics','start_date':start_n}
-    if _tok: p['token'] = _tok
+    # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+    # 下一行 hdrs 已帶 Authorization: Bearer,故此處直接移除 params 的 token。
     hdrs = {'Authorization':f'Bearer {_tok}'} if _tok else {}
     r = s.get('https://api.finmindtrade.com/api/v4/data', params=p, headers=hdrs, timeout=15)
     j = r.json()

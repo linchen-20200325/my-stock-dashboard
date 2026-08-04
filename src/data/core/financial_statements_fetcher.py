@@ -43,8 +43,8 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
 
     def _fm(dataset):
         _p = {"dataset": dataset, "data_id": stock_id, "start_date": _start}
-        if _tok:
-            _p["token"] = _tok
+        # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+        # 上方 _hdrs 已為 {"Authorization": f"Bearer {_tok}"},憑證通道唯一。
         try:
             _r = _rq_ffs.get(
                 FINMIND_API_URL,

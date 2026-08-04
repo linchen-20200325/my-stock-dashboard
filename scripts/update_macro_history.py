@@ -120,12 +120,15 @@ def _finmind_get(dataset: str, data_id: str, start: str, end: str,
     params = {"dataset": dataset, "start_date": start, "end_date": end}
     if data_id:
         params["data_id"] = data_id
+    # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+    # 本檔為 GitHub Actions cron,query string 會被 runner log 明文記錄,風險最高。
+    _hdrs = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
     if token:
-        params["token"] = token
+        _hdrs["Authorization"] = f"Bearer {token}"
     try:
         r = requests.get(
             FINMIND_URL, params=params, timeout=30,
-            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+            headers=_hdrs,
         )
         if r.status_code != 200:
             print(f"[FinMind/{dataset}] HTTP={r.status_code} body={r.text[:200]}")

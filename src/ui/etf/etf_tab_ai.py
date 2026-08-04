@@ -4,7 +4,10 @@
 ========
 - Top-level: streamlit
 - 函式內 late import：
-  * etf_dashboard.py 內部 helper: MACRO_ALLOC, _fetch_news_for, macro_allocation_banner
+  * etf_dashboard.py 內部 helper: _fetch_news_for, macro_allocation_banner
+  * v19.170 P0-1：配置數字改吃建議持股 SSOT
+    `src.services.allocation_service.get_allocation / get_allocation_sleeves`，
+    **不再引用 DEPRECATED 的 `etf_render.MACRO_ALLOC`**。
 
 呼叫端
 ======
@@ -16,7 +19,9 @@ import streamlit as st
 
 
 def render_etf_ai(gemini_fn=None):
-    from src.ui.etf import MACRO_ALLOC, _fetch_news_for, macro_allocation_banner
+    # v19.170 P0-1:移除 MACRO_ALLOC 引用 —— 該靜態表與 🎚️ 建議持股油門 脫鉤
+    # (bull 一律股票 70%),餵給 AI 會產出與畫面矛盾的配置文字給使用者看。
+    from src.ui.etf import _fetch_news_for, macro_allocation_banner
 
     mkt_info = st.session_state.get('mkt_info', {})
     regime   = mkt_info.get('regime', 'neutral')
@@ -56,7 +61,7 @@ def render_etf_ai(gemini_fn=None):
         if not gemini_fn:
             st.warning('⚠️ 請設定 GEMINI_API_KEY 才能使用 AI 功能')
         else:
-            _generate_report(gemini_fn, port_d, backtest_d, regime, MACRO_ALLOC,
+            _generate_report(gemini_fn, port_d, backtest_d, regime,
                              _fetch_news_for, mkt_info)
 
     # ── 顯示已生成報告 ────────────────────────────────────────
@@ -78,9 +83,14 @@ def render_etf_ai(gemini_fn=None):
     _render_free_qa(gemini_fn)
 
 
-def _generate_report(gemini_fn, port_d, backtest_d, regime, MACRO_ALLOC,
+def _generate_report(gemini_fn, port_d, backtest_d, regime,
                      fetch_news_fn, mkt_info):
-    """組裝 Markdown prompt 並呼叫 Gemini 生成結構化戰情報告。"""
+    """組裝 Markdown prompt 並呼叫 Gemini 生成結構化戰情報告。
+
+    v19.170 P0-1：簽章移除 `MACRO_ALLOC` 參數。prompt 內的配置百分比一律
+    來自 `get_allocation_sleeves()`；總經未評估(回 None)時 prompt **完全不出現
+    任何配置百分比**，並明令 AI 不得自行給數字(§1 Fail Loud)。
+    """
     rows     = port_d.get('rows', [])
     war_rows = port_d.get('war_rows', [])
     rebal    = port_d.get('rebal_actions', [])
@@ -128,13 +138,27 @@ def _generate_report(gemini_fn, port_d, backtest_d, regime, MACRO_ALLOC,
         )
 
     # ── 總經數據快照 ─────────────────────────────────────────
+    # v19.170 P0-1:原本餵 DEPRECATED 的 MACRO_ALLOC(bull 固定股票 70%),
+    # 與 🎚️ 建議持股油門 脫鉤 → AI 會寫出跟畫面互相矛盾的配置給使用者看。
+    # 改為唯一取數入口:區間文字取 get_allocation().range_text,
+    # 三桶百分比取 get_allocation_sleeves()(由最終建議持股中值推導)。
+    from src.services.allocation_service import (
+        get_allocation,
+        get_allocation_sleeves,
+    )
+
+    _alloc_dec = get_allocation()
+    _sleeves = get_allocation_sleeves()
     _macro_lines = [f'• 大盤狀態：{regime}']
-    _alloc = MACRO_ALLOC.get(regime, {})
-    if _alloc:
+    if _sleeves is not None:
+        _macro_lines.append(f'• 系統最終建議持股（唯一真相）：{_alloc_dec.range_text}')
         _macro_lines.append(
-            f'• regime 建議配置：股票型 {_alloc.get("股票型ETF",0)}% / '
-            f'債券型 {_alloc.get("債券型ETF",0)}% / 現金 {_alloc.get("貨幣/現金",0)}%'
+            f'• 對應三桶配置：股票型 {_sleeves.get("股票型ETF", 0)}% / '
+            f'債券型 {_sleeves.get("債券型ETF", 0)}% / 現金 {_sleeves.get("貨幣/現金", 0)}%'
         )
+    else:
+        # §1 Fail Loud:總經未評估 → prompt 內**不得出現任何配置百分比**
+        _macro_lines.append('• 建議配置：總經尚未評估，系統沒有任何配置數字可提供')
     for _k, _v in mkt_info.items():
         if _k in ('regime', 'exposure_pct'):
             continue
@@ -188,10 +212,27 @@ def _generate_report(gemini_fn, port_d, backtest_d, regime, MACRO_ALLOC,
         '年化波動率（價格平常上下震盪有多劇烈，越大代表越會心驚膽跳）。'
     )
 
+    # v19.170 P0-1:配置護欄 —— 明令 AI 只能沿用 SSOT 的數字,
+    # 避免它自行生出第 N 套與 🎚️ 建議持股油門 矛盾的股債比。
+    if _sleeves is not None:
+        _macro_guard = (
+            f'⚠️ 配置護欄（必須遵守）：系統最終建議持股為 {_alloc_dec.range_text}，'
+            '上面的股/債/現金三桶百分比就是由這個區間推導出來的（與畫面上的'
+            '「🎚️ 建議持股油門」是同一個數字來源）。你的配置建議必須與此一致，'
+            '不得自行給出不同的百分比，也不得引用任何其他來源的股債比。'
+            '可以做的是：拿這組百分比去對照使用者目前實際配置，指出哪邊超標、哪邊不足。'
+        )
+    else:
+        _macro_guard = (
+            '⚠️ 配置護欄（必須遵守）：總經尚未評估，請勿在報告中給出具體持股或配置百分比。'
+            '這一節只能說明「總經還沒評估，要先按『🚀 一鍵更新全部數據』才會有建議配置」，'
+            '不准自行推估、不准引用一般常見的股債比數字。'
+        )
+
     _macro_data = (
         '這段看的是現在整體大環境順不順，以及系統建議的股債現金比例。\n'
         f'{_macro_str}\n'
-        '（建議配置是規則引擎依大盤狀態給的參考股/債/現金比例，可拿來跟你目前實際配置對照看哪邊超標、哪邊不足。）'
+        f'{_macro_guard}'
     )
 
     sections = [

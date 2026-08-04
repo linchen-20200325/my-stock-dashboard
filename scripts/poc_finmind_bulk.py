@@ -72,8 +72,9 @@ def _call(token: str, dataset: str, *, start_date=None, end_date=None, data_id=N
         params["end_date"] = end_date
     if data_id:
         params["data_id"] = data_id
-    if token:
-        params["token"] = token
+    # v19.170:憑證只走 header,不進 query string
+    # (原本 params["token"] 與 Authorization header 兩邊都帶,query string 那份
+    #  會落入 proxy / CDN / access log;此處刪除,只保留下方 Bearer header)。
     hdrs = {"User-Agent": _UA, "Accept": "application/json"}
     if token:
         hdrs["Authorization"] = f"Bearer {token}"

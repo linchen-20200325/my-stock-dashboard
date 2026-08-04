@@ -64,17 +64,17 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             _hye_c = TRAFFIC_GREEN
             _hye_ind = f'外資大買超 {_fn3:.1f}億'
             _hye_concl = '大戶點火，跟著大戶走 → 積極加碼'
-            _hye_act = '趁拉回布局，持股 80~100%'
+            _hye_act = '趁拉回布局，優先強勢主流股　→ 實際持股見 🎚️ 建議持股油門'
         elif _fn3 <= -100:
             _hye_c = TRAFFIC_RED
             _hye_ind = f'外資大賣超 {abs(_fn3):.1f}億'
             _hye_concl = '大戶倒貨，嚴格減碼 → 離場為上'
-            _hye_act = '持股降至 0~30%，停損優先'
+            _hye_act = '停損優先，嚴禁攤平　→ 實際持股見 🎚️ 建議持股油門'
         else:
             _hye_c = '#8b949e'
             _hye_ind = f'外資 {_fn3:+.1f}億（觀望區間）'
             _hye_concl = '資金觀望，區間操作'
-            _hye_act = '持股 50%，高出低進等方向'
+            _hye_act = '高出低進，等方向表態　→ 實際持股見 🎚️ 建議持股油門'
         st.markdown(teacher_conclusion('宏爺', _hye_ind, _hye_concl, color=_hye_c), unsafe_allow_html=True)
         st.markdown(f'<div style="color:#8b949e;font-size:11px;padding:1px 8px 6px 8px;">→ 建議行動：{_hye_act}</div>', unsafe_allow_html=True)
         if _tn3 > 5:
@@ -106,24 +106,31 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                             config={'displayModeBar': False})
         except Exception as _bc_err:
             st.caption(f'外資 {_bc_vals[0]:+.1f}億 ｜ 投信 {_bc_vals[1]:+.1f}億 ｜ 自營商 {_bc_vals[2]:+.1f}億')
-    if margin:
+    # v19.170 P0-1 順手修 bug:原 `if margin:` 會把 margin == 0(真的收到 0 億)當成沒資料
+    # 整段靜默跳過 → 改 `is not None`,0 也照常判讀(§1:有資料就要顯示)。
+    if margin is not None:
         if margin >= MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
             _sql_mc = TRAFFIC_RED
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '極度危險，嚴防多殺多 → 行情尾端'
-            _sql_mact = '全面減碼，勿追高，準備逃命'
+            _sql_mact = '全面減碼、去槓桿，勿追高'
         elif margin >= MARGIN_BALANCE_WARN_THRESHOLD_YI:
             _sql_mc = TRAFFIC_YELLOW
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '水位偏高，籌碼凌亂 → 警戒操作'
-            _sql_mact = '持股降至 50% 以下，避免重倉'
+            _sql_mact = '降低槓桿部位，避免重倉單一標的'
         else:
             _sql_mc = TRAFFIC_GREEN
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '籌碼乾淨，安全水位 → 可積極布局'
-            _sql_mact = '健康多頭格局，持股 70~100%'
+            _sql_mact = '籌碼面無壓，可維持既定姿態'
         st.markdown(teacher_conclusion('孫慶龍', _sql_mind, _sql_mconcl, color=_sql_mc), unsafe_allow_html=True)
-        st.markdown(f'<div style="color:#8b949e;font-size:11px;padding:1px 8px 6px 8px;">→ 建議行動：{_sql_mact}</div>', unsafe_allow_html=True)
+        # v19.170 P0-1:本段只講「籌碼面該怎麼做」,持股百分比一律交給建議持股 SSOT,
+        # 不再自行喊任何持股百分比,以免與 🎚️ 建議持股油門 打架。
+        st.markdown(
+            f'<div style="color:#8b949e;font-size:11px;padding:1px 8px 6px 8px;">'
+            f'→ 建議行動：{_sql_mact}　→ 實際持股見 🎚️ 建議持股油門</div>',
+            unsafe_allow_html=True)
     st.markdown('<hr style="border-color:#21262d;margin:10px 0;">', unsafe_allow_html=True)
 
     # ── 老師外資期貨（先行指標快速結論）─────────────────────────────────
@@ -136,17 +143,17 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             _l4_ind = f'外資期貨 {_fut4:,.0f}口{_pcr_txt}'
             # 老師絕對口數門檻（容錯率最高）
             if _fut4 <= -30000:
-                _l4c = f'外資期貨空單 {abs(_fut4):,.0f}口 > 3萬口，啟動強制防禦，強制減倉至20%以下，等待空單回補'
-                _l4a = '強制減倉至 20% 以下，嚴禁追高攤平，保護本金'
+                _l4c = f'外資期貨空單 {abs(_fut4):,.0f}口 > 3萬口，啟動強制防禦，等待空單回補'
+                _l4a = '啟動強制防禦，嚴禁追高攤平，保護本金　→ 實際持股見 🎚️ 建議持股油門'
             elif _fut4 <= -15000:
                 _l4c = f'外資期貨空單 {abs(_fut4):,.0f}口，空單累積中，大戶動向保守，逢高調節'
-                _l4a = '收回資金，持股降至 50%，等待明確表態'
+                _l4a = '收回資金，逢高調節，等待明確表態　→ 實際持股見 🎚️ 建議持股油門'
             elif _fut4 > 0:
                 _l4c = f'外資期貨多單 {_fut4:,.0f}口，外資期貨翻多，燃料充足，積極作多'
-                _l4a = '順勢重壓強勢股，持股 80~100%'
+                _l4a = '順勢重壓強勢股　→ 實際持股見 🎚️ 建議持股油門'
             else:
                 _l4c = f'外資期貨微空 {abs(_fut4):,.0f}口，水位正常，依個股技術面操作'
-                _l4a = '持股 70%，現金 30% 備用'
+                _l4a = '依個股技術面操作，保留備用現金　→ 實際持股見 🎚️ 建議持股油門'
         else:
             _l4c = '先行指標欄位異常，請確認 FinMind Token'
             _l4a = ''
@@ -333,58 +340,129 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
 
 
         # ── ⑤ v4.0 總經一票否決 (Task 2) ─────────────────────────────
+        # v19.170 P0-1:本卡原本直接印 V4StrategyEngine 的 `max_position`
+        # (L2 上游自算的 20/50/100),與 🎚️ 建議持股油門 完全脫鉤 → 同一畫面
+        # 兩個持股數字打架。改為:**v4 的否決狀態/理由(敘事)保留**,
+        # 持股數字一律取自建議持股 SSOT(get_allocation)。
         try:
+            import re as _re_v4
+
+            from src.services.allocation_service import (
+                get_allocation as _get_alloc_veto,
+            )
             _v4_pcr = float(_last_row.get('選PCR') or 100)
             _v4_fut = float(_last_row.get('外資大小') or 0)
-            _v4_mac = V4StrategyEngine.__new__(V4StrategyEngine)
-            _v4_mac.macro = {'vix': 15, 'foreign_futures': _v4_fut, 'pcr': _v4_pcr}
-            _v4_veto = _v4_mac.check_macro_veto()
+
+            # ── v19.170 P0-2:修「常數偽裝成資料」──────────────────────
+            # 原本硬編碼 `_v4_mac.macro = {'vix': 15, ...}`,v4 否決權因此
+            # **永遠拿不到真實 VIX** —— VIX>25 紅燈 / VIX>20 黃燈 兩條規則等同
+            # 永久失效,紅/黃燈只能靠外資期貨口數觸發,是實質功能缺陷(不是樣式問題)。
+            # 改為讀 `macro_info['vix']['current']` 真值(與 section_mid /
+            # allocation_service._read_vix 同一來源,避免又生一套 VIX)。
+            #
+            # §1 Fail Loud:取不到 VIX 時**不得**回填 15 或任何預設值。
+            # 注意 V4StrategyEngine.check_macro_veto 內部是
+            # `float(self.macro.get('vix') or 15)` —— 傳 None 進去會被它悄悄
+            # 換回 15(等於原 bug 換個地方發生),所以在 UI 邊界直接短路:
+            # 不呼叫引擎,誠實顯示「VIX 未取得,v4 否決權無法判定」。
+            _v4_mi = st.session_state.get('macro_info') or {}
+            _v4_vix_node = _v4_mi.get('vix')
+            _v4_vix_raw = (_v4_vix_node.get('current')
+                           if isinstance(_v4_vix_node, dict) else None)
+            try:
+                _v4_vix = float(_v4_vix_raw)
+                if _v4_vix != _v4_vix:      # NaN → 視為未取得
+                    _v4_vix = None
+            except (TypeError, ValueError):
+                _v4_vix = None
+
+            if _v4_vix is None:
+                _v4_veto = {
+                    'status': '⬜ 無法判定',
+                    'color':  TRAFFIC_NEUTRAL,
+                    'msg':    'VIX 未取得，v4 否決權無法判定 — '
+                              '請先按「🚀 一鍵更新全部數據」補齊 VIX 後再看本卡。',
+                }
+            else:
+                _v4_mac = V4StrategyEngine.__new__(V4StrategyEngine)
+                _v4_mac.macro = {'vix': _v4_vix, 'foreign_futures': _v4_fut,
+                                 'pcr': _v4_pcr}
+                _v4_veto = _v4_mac.check_macro_veto()
             _v4_c = _v4_veto['color']
+            _alloc_veto = _get_alloc_veto()
+            _v4_pos = (f'建議持股 {_alloc_veto.range_text}' if _alloc_veto.is_loaded
+                       else '⬜ 總經未評估')
+            _v4_cap_html = (
+                f'<span style="font-size:11px;color:{TRAFFIC_YELLOW};">'
+                f'{_alloc_veto.cap_text}</span><br>'
+                if _alloc_veto.capped and _alloc_veto.cap_text else '')
+            # L2 的 msg 字串內嵌硬編碼百分比(v4_strategy_engine:93 的紅燈文案)。
+            # L2 屬白名單不改,改在 UI 邊界剝除數字、只留敘事 → 畫面零競爭數字。
+            _v4_msg = _re_v4.sub(
+                r'建議持股\s*[≤≥<>~\-–—]*\s*\d+\s*[%％]',
+                '（實際持股見 🎚️ 建議持股油門）',
+                str(_v4_veto.get('msg', '')))
             st.markdown(
                 f'<div style="border-left:5px solid {_v4_c};background:#0d1117;'
                 f'padding:9px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
                 f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">🏛️ v4.0 總經否決權</span><br>'
                 f'<span style="font-size:14px;font-weight:900;color:{_v4_c};">'
-                f'{_v4_veto["status"]} — 最大建議持股 {_v4_veto["max_position"]}%</span><br>'
-                f'<span style="font-size:12px;color:#c9d1d9;">{_v4_veto["msg"]}</span>'
+                f'{_v4_veto["status"]} — {_v4_pos}</span><br>'
+                f'{_v4_cap_html}'
+                f'<span style="font-size:12px;color:#c9d1d9;">{_v4_msg}</span>'
                 f'</div>',
                 unsafe_allow_html=True
             )
         except Exception as _v4e:
-            pass
+            # v19.170 §1 Fail Loud:原本 `pass` → 整張卡無聲消失、零 log,
+            # 使用者只看到畫面少一塊,無從分辨是「沒觸發」還是「算爆了」。
+            print(f'[section_chips/v4] {type(_v4e).__name__}: {_v4e}')
+            st.warning('⚠️ v4.0 總經否決權卡計算失敗，請看 log')
 
 
-        # ── v5.0 動態資產配置建議（純現金策略，無 ETF）────────────────
+        # ── v5.0 動態資產配置建議 ─────────────────────────────────────
+        # v19.170 P0-1:原本依外資期貨口數自算 20/80、50/50、90/10、70/30,
+        # 與 🎚️ 建議持股油門 完全脫鉤。改為:**期貨敘事(該怎麼操作)保留**,
+        # 配置數字一律取自 get_allocation_sleeves()(由 SSOT 最終持股中值推導)。
         try:
+            from src.services.allocation_service import get_allocation_sleeves
             _v5_fut = float(_last_row.get('外資大小') or 0)
             if _v5_fut <= -30000:
-                _v5_stock, _v5_cash = 20, 80
                 _v5_strategy = '嚴禁追高攤平，保護本金優先；可留意低基期高殖利率個股'
                 _v5_color = TRAFFIC_RED
             elif _v5_fut <= -15000:
-                _v5_stock, _v5_cash = 50, 50
                 _v5_strategy = '收回資金，逢高減碼漲多個股，等待期空回補訊號'
                 _v5_color = TRAFFIC_YELLOW
             elif _v5_fut > 0:
-                _v5_stock, _v5_cash = 90, 10
                 _v5_strategy = '期貨翻多，順勢重壓強勢股，外投同買個股優先布局'
                 _v5_color = TRAFFIC_GREEN
             else:
-                _v5_stock, _v5_cash = 70, 30
                 _v5_strategy = '水位中性，依個股技術面操作，保留現金彈藥'
                 _v5_color = '#58a6ff'
+            _v5_slv = get_allocation_sleeves()
+            if _v5_slv is None:
+                # §1 Fail Loud:總經未評估 → 誠實顯示,不回填任何預設配置
+                _v5_head = '⬜ 總經未評估 — 請先按「🚀 一鍵更新全部數據」'
+                _v5_color = TRAFFIC_NEUTRAL
+            else:
+                _v5_head = (f'股票 {_v5_slv["股票型ETF"]}%'
+                            f' ／債券 {_v5_slv["債券型ETF"]}%'
+                            f' ／現金 {_v5_slv["貨幣/現金"]}%')
             st.markdown(
                 f'<div style="border-left:5px solid {_v5_color};background:#0d1117;'
                 f'padding:9px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
-                f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">💰 v5 動態配置</span><br>'
+                f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">'
+                f'💰 v5 動態配置（數字來源：🎚️ 建議持股油門）</span><br>'
                 f'<span style="font-size:14px;font-weight:900;color:{_v5_color};">'
-                f'建議股票 {_v5_stock}% ／現金 {_v5_cash}%</span><br>'
+                f'{_v5_head}</span><br>'
                 f'<span style="font-size:12px;color:#c9d1d9;">📌 {_v5_strategy}</span>'
                 f'</div>',
                 unsafe_allow_html=True
             )
-        except Exception:
-            pass
+        except Exception as _v5e:
+            # v19.170 §1 Fail Loud:同 v4 —— 不再靜默吞掉配置卡的例外。
+            print(f'[section_chips/v5] {type(_v5e).__name__}: {_v5e}')
+            st.warning('⚠️ v5.0 動態配置卡計算失敗，請看 log')
 
 # ── ④ 資料來源診斷（收合，供進階使用者確認）─────────────────────
         with st.expander('🔍 資料來源診斷（點此確認各欄數據正確性）', expanded=False):

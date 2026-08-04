@@ -714,9 +714,9 @@ def _finmind_macro_series(indicator_keys: tuple, months_back: int = 18,
         'start_date': start_dt,
         'end_date':   end_dt,
     }
-    if token:
-        params['token'] = token
-    r = fetch_url(FINMIND_BASE, params=params, timeout=15)
+    # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+    _hdrs = {'Authorization': f'Bearer {token}'} if token else None
+    r = fetch_url(FINMIND_BASE, params=params, headers=_hdrs, timeout=15)
     if r is None:
         return None
     try:
@@ -784,9 +784,9 @@ def fetch_business_indicator_series(months_back: int = 18,
         'end_date':   today.strftime('%Y-%m-%d'),
     }
     _tok = token or _finmind_token_from_env()
-    if _tok:
-        params['token'] = _tok
-    r = fetch_url(FINMIND_BASE, params=params, timeout=15)
+    # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+    _hdrs = {'Authorization': f'Bearer {_tok}'} if _tok else None
+    r = fetch_url(FINMIND_BASE, params=params, headers=_hdrs, timeout=15)
     if r is None:
         print('[tw_macro/TBI] ❌ FinMind TaiwanBusinessIndicator 無回應')
         return None
@@ -1040,9 +1040,9 @@ def fetch_foreign_consecutive_days(days_back: int = 30,
         'start_date': start_dt,
         'end_date':   end_dt,
     }
-    if token:
-        params['token'] = token
-    r = fetch_url(FINMIND_BASE, params=params, timeout=15)
+    # v19.170:憑證只走 header,不進 query string(避免落入 proxy / access log)
+    _hdrs = {'Authorization': f'Bearer {token}'} if token else None
+    r = fetch_url(FINMIND_BASE, params=params, headers=_hdrs, timeout=15)
     if r is None:
         result['error'] = 'FinMind 抓取失敗'
         return result

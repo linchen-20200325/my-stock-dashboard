@@ -24,6 +24,12 @@ from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 import datetime as _dt
 import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as _FutTimeoutError
+
+# v19.170:Python < 3.11 的 concurrent.futures.TimeoutError 並非 builtins.TimeoutError
+# 的別名(3.11 起才合併)。原本只 `except TimeoutError` 在舊版會漏接 → as_completed
+# 超時直接炸穿 fetch_macro_bundle,整包資料全失。用 tuple 同時涵蓋兩者。
+_TIMEOUT_EXC = (_FutTimeoutError, TimeoutError)
 
 
 def fetch_macro_bundle(
@@ -67,21 +73,58 @@ def fetch_macro_bundle(
     # v18.193 perf:3 個 job 內部從 ticker 序列改為內層 ThreadPoolExecutor 並行
     # (原 N×fetch_single 序列 → max(t);fetch_single /tmp pickle 30 分鐘 cache 不變、
     # DX-Y.NYB→DX=F→UUP 備援邏輯不變)
-    def _parallel_fetch(_mp, **_kw):
-        _max_w = max(1, len(_mp))
-        with ThreadPoolExecutor(max_workers=_max_w) as _e_in:
-            _f_in = {_e_in.submit(fetch_single, _s, **_kw): _n for _n, _s in _mp.items()}
-            return {_f_in[_ft]: _ft.result() for _ft in _f_in}
+    # v19.170(P0-2 穩定性):原內層為 `{_f_in[_ft]: _ft.result() for _ft in _f_in}`
+    # — 完全沒帶 timeout 也不是 as_completed。任一 ticker 卡死(yfinance socket
+    # hang / proxy 無回應)就會一路阻塞到外層 30s job timeout,外層再把「整個 job」
+    # 收成 None → 同組其他已抓成功的 ticker 全被丟棄。
+    # 改為 as_completed(全域上限)+ 每檔 result(單檔上限):
+    #   1. 單檔失敗/超時 → 該 key 設 None + print 一行 log,其餘照常回傳(部分成功保留)
+    #   2. 內層全域上限 = 該 job 既有 timeout - 3s,讓內層先超時,外層才來得及收部分結果
+    _INNER_ITEM_TIMEOUT_S = 8     # 單檔上限(秒)
+    _INNER_GLOBAL_MARGIN_S = 3    # 內層全域上限相對外層 job timeout 的提前量(秒)
 
+    def _parallel_fetch(_mp, *, _job_timeout=30, **_kw):
+        _max_w = max(1, len(_mp))
+        _g_limit = max(1, _job_timeout - _INNER_GLOBAL_MARGIN_S)
+        _out = {}
+        _e_in = ThreadPoolExecutor(max_workers=_max_w)
+        _f_in = {_e_in.submit(fetch_single, _s, **_kw): _n for _n, _s in _mp.items()}
+        try:
+            try:
+                for _ft in as_completed(_f_in, timeout=_g_limit):
+                    _n_in = _f_in[_ft]
+                    try:
+                        _out[_n_in] = _ft.result(timeout=_INNER_ITEM_TIMEOUT_S)
+                    except Exception as _e_it:
+                        # §1 Fail Loud:單檔失敗顯式設 None + 出聲,不靜默補值
+                        _out[_n_in] = None
+                        print(f'[並發-內層] ❌ {_n_in}: {type(_e_it).__name__}: {_e_it}')
+            except _TIMEOUT_EXC:
+                print(f'[並發-內層] ⚠️ 全域 {_g_limit}s 超時,'
+                      f'保留已完成 {len(_out)}/{len(_f_in)} 檔')
+        finally:
+            # 立即取消未開始任務,不等執行中的 thread(對齊外層 shutdown 寫法)
+            try:
+                _e_in.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                _e_in.shutdown(wait=False)  # Python < 3.9
+        # 補齊未收到結果者 → 顯式 None(缺就是缺,呼叫端自行判空)
+        for _ft, _n_in in _f_in.items():
+            if _n_in not in _out:
+                _out[_n_in] = None
+                print(f'[並發-內層] ⏰ {_n_in} 未完成 → None')
+        return _out
+
+    # _job_timeouts 於下方定義;此處為 closure,實際執行(submit)時才解析 → 安全。
     def _job_intl():
-        return _parallel_fetch(intl_map)
+        return _parallel_fetch(intl_map, _job_timeout=_job_timeouts['intl'])
 
     def _job_tw():
         # 9mo ≈ 195 交易日,確保 ^TWII 有足夠 bars 計算 MA120(需 120 筆)
-        return _parallel_fetch(tw_map, period='9mo')
+        return _parallel_fetch(tw_map, _job_timeout=_job_timeouts['tw'], period='9mo')
 
     def _job_tech():
-        return _parallel_fetch(tech_map)
+        return _parallel_fetch(tech_map, _job_timeout=_job_timeouts['tech'])
 
     def _job_inst():
         return fetch_institutional()
@@ -160,7 +203,7 @@ def fetch_macro_bundle(
                 except Exception as _fe:
                     _results[name] = None
                     print(f'[並發] ❌ {name}: {type(_fe).__name__}: {_fe}')
-        except TimeoutError:
+        except _TIMEOUT_EXC:   # v19.170:相容 Python < 3.11(見檔頭 _TIMEOUT_EXC 註解)
             print(f'[並發] ⚠️ as_completed {_AS_COMPLETED_TIMEOUT}s 超時,補救已完成結果')
             for _fut, _name in _futs.items():
                 if _name not in _results:
@@ -202,9 +245,13 @@ def fetch_macro_bundle(
                 _start_i = (_dt.date.today() - _dt.timedelta(days=5)).strftime('%Y-%m-%d')
                 _ri = bps_session.get(
                     FINMIND_API_URL,
+                    # v19.170:憑證只走 header,不進 query string(避免落入 access log)
                     params={'dataset': 'TaiwanStockTotalInstitutionalInvestors',
-                            'start_date': _start_i, 'token': fm_token},
-                    headers={'Authorization': f'Bearer {fm_token}'},
+                            'start_date': _start_i},
+                    # v19.170:空 token 不送 Bearer —— 未判空時會送出
+                    # `Authorization: Bearer `(空憑證),部分 gateway 直接回 400。
+                    # 對齊本輪其餘 8 個改動點的寫法。
+                    headers=({'Authorization': f'Bearer {fm_token}'} if fm_token else None),
                     timeout=15)
                 _ji = _ri.json()
                 print(f'[FinMind-Inst] status={_ji.get("status")} rows={len(_ji.get("data",[]))}')

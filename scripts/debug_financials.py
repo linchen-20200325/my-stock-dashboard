@@ -9,11 +9,14 @@ TOKEN = os.environ.get("FINMIND_TOKEN", "")
 BASE = "https://api.finmindtrade.com/api/v4/data"
 
 def fm_get(dataset: str, stock_id: str = STOCK_ID, extra: dict | None = None) -> list[dict]:
-    params = {"dataset": dataset, "stock_id": stock_id, "token": TOKEN}
+    # v19.170:憑證只走 header,不進 query string
+    # (query string 會落入 proxy / CDN / access log 與瀏覽器歷史,等同明文外洩)。
+    params = {"dataset": dataset, "stock_id": stock_id}
     if extra:
         params.update(extra)
+    headers = {"Authorization": f"Bearer {TOKEN}"} if TOKEN else {}
     try:
-        r = requests.get(BASE, params=params, timeout=30)
+        r = requests.get(BASE, params=params, headers=headers, timeout=30)
         r.raise_for_status()
         data = r.json()
         if data.get("status") == 200:
