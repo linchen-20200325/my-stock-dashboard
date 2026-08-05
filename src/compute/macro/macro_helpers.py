@@ -69,9 +69,11 @@ def calc_traffic_light(
     _cd     = cl_data    or {}
     _score  = _mkt.get('score', 0)
     _jqavg  = _jq.get('avg', 50)
-    _inst   = _cd.get('inst', {})
+    _inst   = _cd.get('inst') or {}   # key 存在但 value=None 時 default {} 不生效,須 `or {}`
     _fk     = next((k for k in _inst if '外資' in k), None)
-    _fnet   = _inst.get(_fk, {}).get('net', 0) if _fk else 0
+    _fnet   = (_inst.get(_fk) or {}).get('net', 0) if _fk else 0   # _inst[_fk] 可能為 None
+    if _fnet is None:      # {'net': None}:key 存在但值 None → default 0 不生效,顯式歸零
+        _fnet = 0          # (防 line 105 `_fnet > 0` 對 None 比較炸;present-data 不觸發)
 
     # 先行指標：期貨外資大小、韭菜指數
     _fut_net = 0

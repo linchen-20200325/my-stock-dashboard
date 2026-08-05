@@ -83,5 +83,62 @@ def test_ad_ratio_nan_last_row_treated_as_none(monkeypatch):
     assert captured.get('ad_ratio') is None
 
 
+def test_inst_none_does_not_crash_reaches_gma(monkeypatch):
+    """inst=None(上游 None)→ `.items()` 不可炸 AttributeError。
+
+    整個 body 包在 try/except 內,若 `inst.items()` 炸,執行跳到 except、
+    get_market_assessment **永不被呼叫**。故用「gma 有被呼叫 + foreign_net=0」
+    證明 None-guard 讓執行流穿過去(graceful,外資淨默認 0 = 待更新)。
+    """
+    captured = {}
+
+    def _fake_gma(**kw):
+        captured.update(kw)
+        captured['_called'] = True
+        return {'signals': [], 'label': 'x', 'score': 1}
+    monkeypatch.setattr('src.services.get_market_assessment', _fake_gma)
+
+    maa.compute_and_apply_market_assessment(
+        inst=None, tw_raw=_fake_tw_raw(), margin=None, df_adl=None)
+
+    assert captured.get('_called') is True, 'inst=None 不該 bail 進 except,gma 應被呼叫'
+    assert captured.get('foreign_net') == 0, 'inst=None → 外資淨默認 0(待更新)'
+
+
+def test_inst_value_none_does_not_crash(monkeypatch):
+    """inst={'外資': None}(value 為 None)→ `_v.get('net')` 不可炸。
+
+    graceful → 該筆 net 視為缺,foreign_net 保持 0。
+    """
+    captured = {}
+
+    def _fake_gma(**kw):
+        captured.update(kw)
+        captured['_called'] = True
+        return {'signals': [], 'label': 'x', 'score': 1}
+    monkeypatch.setattr('src.services.get_market_assessment', _fake_gma)
+
+    maa.compute_and_apply_market_assessment(
+        inst={'外資': None}, tw_raw=_fake_tw_raw(), margin=None, df_adl=None)
+
+    assert captured.get('_called') is True
+    assert captured.get('foreign_net') == 0
+
+
+def test_inst_present_data_unchanged(monkeypatch):
+    """回歸:inst 有真值時 foreign_net 計算不受 None-guard 影響(byte-for-byte)。"""
+    captured = {}
+
+    def _fake_gma(**kw):
+        captured.update(kw)
+        return {'signals': [], 'label': 'x', 'score': 1}
+    monkeypatch.setattr('src.services.get_market_assessment', _fake_gma)
+
+    maa.compute_and_apply_market_assessment(
+        inst={'外資': {'net': 10.0}}, tw_raw=_fake_tw_raw(), margin=None, df_adl=None)
+
+    assert captured.get('foreign_net') == pytest.approx(10.0 * 1e8)
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
