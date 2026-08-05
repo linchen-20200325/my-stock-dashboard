@@ -4,6 +4,16 @@
 
 # ── Streamlit / UI 核心 ────────────────────────────────────────
 streamlit>=1.36.0,<1.60.0
+# v19.172 hotfix(2026-08-05):starlette 1.4.0(當日 09:36 UTC 發布)重構 gzip
+# middleware,GZipResponder.__init__ 新增「必填」keyword-only 參數 thread_minimum_size。
+# streamlit 1.59.2 的 _MediaAwareGZipResponder 子類沿用舊簽章呼叫
+# super().__init__(app, minimum_size, compresslevel=...) 而未傳 thread_minimum_size,
+# 1.4.0 下即 TypeError → server 健康檢查 500 → 部署倒站(rebuild 於 09:36 後首次觸發即中)。
+# streamlit 僅宣告 starlette>=0.40.0(無 upper bound),resolver 直接抓到當日新版。
+# 顯式 cap 回久經驗證的 1.3.x(resolver 取 1.3.1);starlette 為 streamlit 轉送 ASGI 的
+# 框架層,屬「不可浮動到當日新版」的高風險層(同 pyarrow 當日新版倒站前例)。
+# 解禁條件:streamlit 釋出相容 starlette 1.4.0 新簽章的版本後(屆時若 >=1.60 需同步放寬上方 cap)。
+starlette>=0.40.0,<1.4.0
 altair>=4.0.0,<7.0.0
 
 # ── 資料處理(major version stability 高優先)────────────────
