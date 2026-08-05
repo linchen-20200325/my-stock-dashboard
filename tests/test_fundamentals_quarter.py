@@ -53,7 +53,7 @@ def test_scan_cached_quarters(tmp_path):
     _touch_parquet(tmp_path, "sii", 115, 1)
     _touch_parquet(tmp_path, "otc", 115, 1)
     _touch_parquet(tmp_path, "sii", 114, 1)
-    (tmp_path / "latest.json").write_text("{}")     # 非 parquet 應被忽略
+    (tmp_path / "latest.json").write_text("{}", encoding="utf-8")  # 非 parquet 應被忽略
     assert _scan_cached_quarters(tmp_path) == {(115, 1), (114, 1)}
 
 
@@ -63,7 +63,7 @@ def test_latest_json_points_to_newest_with_prev(tmp_path):
     _touch_parquet(tmp_path, "otc", 115, 1)
     _touch_parquet(tmp_path, "sii", 114, 1)
     assert _write_latest_json(tmp_path) == (115, 1)
-    meta = json.loads((tmp_path / "latest.json").read_text())
+    meta = json.loads((tmp_path / "latest.json").read_text(encoding="utf-8"))
     assert (meta["roc_year"], meta["season"]) == (115, 1)
     assert meta["prev_roc_year"] == 114          # 去年同季存在 → YoY 可用
 
@@ -72,7 +72,7 @@ def test_latest_json_prev_null_when_missing(tmp_path):
     # 只有 115Q1、無 114Q1 → prev_roc_year 應為 None(YoY 不可用)
     _touch_parquet(tmp_path, "sii", 115, 1)
     assert _write_latest_json(tmp_path) == (115, 1)
-    meta = json.loads((tmp_path / "latest.json").read_text())
+    meta = json.loads((tmp_path / "latest.json").read_text(encoding="utf-8"))
     assert meta["prev_roc_year"] is None
 
 
@@ -82,7 +82,7 @@ def test_backfill_old_quarter_does_not_move_pointer_back(tmp_path):
     assert _write_latest_json(tmp_path) == (115, 1)
     _touch_parquet(tmp_path, "sii", 114, 1)      # 補舊季
     assert _write_latest_json(tmp_path) == (115, 1)
-    meta = json.loads((tmp_path / "latest.json").read_text())
+    meta = json.loads((tmp_path / "latest.json").read_text(encoding="utf-8"))
     assert (meta["roc_year"], meta["season"]) == (115, 1)
     assert meta["prev_roc_year"] == 114
 
@@ -151,7 +151,7 @@ def test_manual_mode_multi_season(monkeypatch, tmp_path):
     rc = _ufs.main(["--roc-year", "114", "--season", "2,3,4", "--markets", "sii"])
     assert rc == 0
     assert set(calls) == {(114, 2, "sii"), (114, 3, "sii"), (114, 4, "sii")}
-    meta = json.loads((tmp_path / "latest.json").read_text())
+    meta = json.loads((tmp_path / "latest.json").read_text(encoding="utf-8"))
     assert (meta["roc_year"], meta["season"]) == (115, 1)   # 補舊季不動最新指標
 
 

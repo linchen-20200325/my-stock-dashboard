@@ -148,7 +148,14 @@ def render_tab_macro():
         on_click=_on_refresh_click,
         use_container_width=True,
         type='primary',
-        help='抓取總經 / 籌碼 / 先行指標（吃 30 分內暖快取，通常數秒；冷啟動約 30~50 秒）。'
+        # v19.176 P0-A(§1):舊文案在這裡宣稱 50 秒上界、同頁 spinner 宣稱 60 秒 ——
+        # 同一顆按鈕兩個數字,且**兩個都被 code 自己的逾時上限否定**
+        # (fetch_macro_bundle 100s + run_macro_trio_and_persist 200s = 300s)。
+        # (舊字串本身不在此重述,否則會反過來讓 test_stale_lying_copy_removed 失效)
+        # 使用者在第 61 秒會合理判定「當掉了」。三處文案統一改實測 + 真上限,
+        # 並由 tests/test_p0a_key_alerts_and_spinner.py 機器化釘住。
+        help='抓取總經 / 籌碼 / 先行指標（吃 30 分內暖快取，通常數秒；'
+             '冷啟動實測 40~75 秒；逾時上限最長 300 秒 ≈ 5 分鐘）。'
              'v18.329：不再清掉個股 / ETF / 健診等其他頁快取。',
     )
     # v18.329：強制重抓另立按鈕（對齊 Fund「🆕 強制重抓最新（清快取）」）。
@@ -158,8 +165,11 @@ def render_tab_macro():
         key='cl_force_refresh',
         on_click=_on_force_clear_click,
         use_container_width=True,
+        # v19.176 P0-A(§1):原文案只寫「較慢」沒給任何量級 —— 2026-08-05 實測
+        # 冷載 72.4 秒。給實測值而非模糊形容,使用者才知道 70 秒還在跑是正常的。
         help='完全清除快取（pkl + st.cache_data + proxy）後重抓，確保零殘留；'
-             '較慢，且會一併清掉個股 / ETF 等其他頁快取。',
+             '實測冷載約 75 秒（逾時上限同上，最長 300 秒 ≈ 5 分鐘），'
+             '且會一併清掉個股 / ETF 等其他頁快取。',
     )
     do_refresh = bool(do_refresh or do_force)
     if do_refresh:
@@ -191,15 +201,53 @@ def render_tab_macro():
     # ── ⚡ 今日關鍵橫幅(v19.108 第九份 4-C 精簡版)──────────────
     # 門檻層吃 section_mid 載入時寫入的 session_state['macro_alerts']
     # (MACRO_ALERT_RULES SSOT 命中);急變層吃 macro_info 的 vix 序列/
-    # fed_funds prev。零新 I/O(全讀 session);首次載入完成前 alerts 為
-    # None → 橫幅誠實顯示「無異常」層待資料,下輪 rerun 自動補齊。
-    from src.compute.macro.daily_key_alerts import collect_key_alerts as _cka
-    from src.ui.render.macro_ui_components import key_alerts_banner as _kab
-    st.markdown(
-        _kab(_cka(st.session_state.get('macro_alerts'),
-                  st.session_state.get('macro_info'))),
-        unsafe_allow_html=True,
-    )
+    # fed_funds prev。零新 I/O(全讀 session)。
+    #
+    # 🔴 v19.176 P0-A(§1 Fail Loud, Never Fake)—— 修「首輪假綠燈」:
+    # 【現象】2026-08-05 22:26 線上首輪載入,橫幅印「✅ 今日關鍵：門檻＋急變
+    #   雙層掃描無異常」,但同一頁下方「🔍 總經警示詳情」同時列著 🟡×2
+    #   (CPI YoY 2.81% / 美債 10Y 4.63%),下一輪 rerun 才變「⚡ 今日關鍵(2 項)」。
+    # 【根因】兩件事疊加:
+    #   (a) 時序 —— `macro_alerts` 是頁面**下方**的 section_mid.py:61-62 才寫入,
+    #       同一輪 render 較晚執行;此處(頁首)先跑 → 永遠讀到「上一輪」的值。
+    #   (b) 語意 —— 舊 code 把 `None`(還沒評估)直接餵進 banner,而 banner 把
+    #       「items 為空」一律當「無異常」→ **未評估被冒充成綠色斷言**。原註解
+    #       自稱「誠實顯示無異常」,但「無異常」是結論不是狀態,正是 §1 禁止的
+    #       「讓流程看起來成功」。
+    # 【修法】照 app.py:502 `_gl_slot` 的 v19.171 同款手法(placeholder 延後填充):
+    #   1. 此處只 `st.empty()` 佔位 —— 版面位置完全不變(仍在【模組一】紅綠燈之前)。
+    #   2. 真正內容延到 section_mid 那一段跑完、`macro_alerts` 是本輪最新值
+    #      之後才填(見下方 _fill_key_alerts 的兩個呼叫點)。
+    #      ⚠️ 本註解**刻意迴避**該 render 函式名後面直接接左括號的字面組合 ——
+    #      tests/test_macro_section_render_wiring.py:54 與 test_render_smoke.py
+    #      用 str.index 取「函式名+左括號」的**第一個**出現位置來驗證 long→mid
+    #      呼叫順序;註解裡若出現同樣字面,會被當成呼叫點而假性紅燈(該字面在註解
+    #      區的 offset 遠小於真正呼叫點)。真正的呼叫順序見本檔下方 render 區。
+    #   3. `None` / `[]` / 非空 list 三態顯示三種不同結果,None 與 [] **絕不**
+    #      走綠色分支(判定與文案見 `key_alerts_banner` docstring)。
+    # 【v19.171 踩過的坑已確認不會重演】`_macro_session_reset()`
+    #   (macro/handlers.py:21-24)pop 的 10 個 key **不含** 'macro_alerts' /
+    #   'macro_info';且填充時機在同一輪 render 內、section_mid 之後,不經過
+    #   任何 on_click callback → 不會被清掉。
+    _key_alerts_slot = st.empty()
+
+    def _fill_key_alerts() -> None:
+        """把 ⚡ 今日關鍵橫幅填回頂部佔位(§1:未評估 ≠ 無異常)。
+
+        `bool(_ma_raw)` 一次涵蓋兩種「沒有結論」的狀態:
+          - `None` = section_mid 這輪還沒跑到(未評估)
+          - `[]`   = 跑了但 check_macro_alerts 一個指標都沒取到(無資料可評)
+        兩者都傳 `threshold_scanned=False` → L4 走中性灰「尚未完成」;
+        只有「非空 list」(真的評估過)才允許出現 ✅ 綠色「無異常」。
+        """
+        from src.compute.macro.daily_key_alerts import collect_key_alerts as _cka
+        from src.ui.render.macro_ui_components import key_alerts_banner as _kab
+        _ma_raw = st.session_state.get('macro_alerts')
+        _key_alerts_slot.markdown(
+            _kab(_cka(_ma_raw, st.session_state.get('macro_info')),
+                 threshold_scanned=bool(_ma_raw)),
+            unsafe_allow_html=True,
+        )
 
     # ════════════════════════════════════════════════════════
     # 【模組一】紅綠燈決策儀表板(P3-D9 v18.391:抽至 section_traffic_light)
@@ -229,13 +277,19 @@ def render_tab_macro():
     # 同批把「評分 x/4」改為 x/N：分母吃 market_regime 的 max_score（基本 4，
     # ad_ratio / m1b_m2_gap 有傳才升 5-6，見 market_strategy.py:151-155），
     # 卡片實際渲染即為動態分母（handlers.py:102,123）。
+    # v19.177 P1-B 反捏造（§1）：本表原寫「旌旗指數（站上 20MA 家數比）」——
+    # 全站無任何一行在算「站上均線的家數比」，真值是**上漲佔比的 5 日均**
+    # （src/services/jingqi_calc.py:43；名詞 SSOT: ui_widgets.BREADTH_JINGQI）。
+    # 同批把「信心 %」那列補上「會列出缺哪幾份資料」—— 對應 handlers.py 的修正：
+    # 原本缺 1/5 項時 conf=80%，既進不了 conf<70 的列缺項分支、也過不了 conf<80
+    # 的警告條件 ⇒ 降級完全看不見。
     with st.expander('🔰 看不懂上面那張燈號卡片的數字？點我 30 秒讀懂'):
         st.markdown('''卡片上的每個數字，用一句話看懂：
 
 | 卡片欄位 | 白話意思 |
 |---|---|
-| **綜合健康度 /100** | 只有兩個輸入：旌旗指數（站上 20MA 家數比＝廣度）60% ＋ 大盤評分 40%；**不含籌碼、景氣**，那些請看下方五桶燈號 |
-| **信心 %** | 系統對「資料夠不夠新、夠不夠齊」的把握度；**低於 70% 會直接擋住燈號**，避免拿過期資料誤判 |
+| **綜合健康度 /100** | 只有兩個輸入：旌旗指數（＝上漲佔比的 5 日均，屬「廣度」）60% ＋ 大盤評分 40%；**不含籌碼、景氣**，那些請看下方五桶燈號 |
+| **信心 %** | 系統對「資料夠不夠新、夠不夠齊」的把握度；**低於 70% 會直接擋住燈號**；只要少任何一項，卡片下方就會列出「缺了哪幾份資料」 |
 | **評分 x/N** | 大盤多空打分，越高越偏多頭；分母 N 隨資料齊全度變動（基本 4；ADL／M1B-M2 有值才升 5-6） |
 | **建議持股 %** | 對應目前環境，建議把多少比例的資金放在股票上（其餘留現金） |
 | **灰色小標籤** | 當下觸發的關鍵訊號（如外資買超、融資增減、期貨淨部位等） |
@@ -310,6 +364,12 @@ def render_tab_macro():
 
     # 用戶要求：未按按鈕前完全空白，只剩按鈕（隱藏所有 section）
     if not _load_heavy:
+        # v19.176 P0-A:本路徑不會跑到 render_section_mid → 門檻層這輪沒評估。
+        # 佔位若就這樣留空白等於「靜默」,一樣不誠實(§1)→ 顯式填中性灰
+        # 「尚未完成」。注意此時 session 內可能還殘留上一輪的 macro_alerts,
+        # bool() 判定會讓它顯示上一輪掃描結果 —— 這是**真的掃過**的值,
+        # 非腦補;新鮮度由頁面「上次更新」時間戳承載。
+        _fill_key_alerts()
         return
 
     if do_refresh:
@@ -317,7 +377,23 @@ def render_tab_macro():
         # v18.333：改用 st.spinner 動畫載入指示（對齊 Fund tab1 行為）。原本只有
         # 靜態 st.info 文字 + 按鈕殘留 → 阻塞抓取時畫面看似凍結、分不清是否載完。
         # spinner 在整個抓取期間動畫旋轉，結束自動消失，使用者一眼看出「進行中」。
-        with st.spinner('🚀 並行抓取 總經 + 籌碼 + 先行指標中…（約 30~60 秒，請稍候）'):
+        # v19.176 P0-A(§1 Fail Loud, Never Fake — 文案不得與 code 行為矛盾):
+        # 舊文案宣稱的 60 秒是**假的上界** —— 這個 with 區塊裡序列跑
+        #   fetch_macro_bundle       逾時上限 _AS_COMPLETED_TIMEOUT
+        #                            = max(_job_timeouts)=80 + 20 = 100s
+        #                            (macro_fetch_orchestrator.py:170-192)
+        #   run_macro_trio_and_persist 逾時上限 global_timeout_s = 200s
+        #                            (macro_trio_orchestrator.py:27)
+        # → 100 + 200 = **300 秒**才是 code 允許的最長等待。宣告 60 秒等於
+        # 叫使用者在第 61 秒誤判當機並中斷(實測冷載 72.4 秒,正好落在誤判區)。
+        # 數字改動時 tests/test_p0a_key_alerts_and_spinner.py 會擋下不同步。
+        # 「最長 300 秒」的字面格式被該守衛測試 regex 解析,改寫請一併改測試。
+        # ⚠️ 下一行**必須維持單行**:tests/test_macro_loading_spinner.py 有兩條斷言,
+        # 一條比對 spinner 開頭那段中文的連續字面,另一條的 regex 要求整個 with 陳述
+        # 落在同一行([^\n]*)。拆成多行字串串接會讓兩條同時假性紅燈(v19.176 踩過)。
+        # 本註解亦刻意不重述那兩段字面 —— 否則 test_p0a 的上界守衛會從註解取到
+        # 「文案」,把說明文字誤當成 spinner 內容(v19.176 也踩過這個)。
+        with st.spinner('🚀 並行抓取 總經 + 籌碼 + 先行指標中…（暖快取數秒；冷啟動實測 40~75 秒；逾時上限最長 300 秒 ≈ 5 分鐘，未到此時間都還在跑，請勿判定當機）'):
             # P3-D4 v18.389:7-job orchestrator 下沉 src/services/macro_fetch_orchestrator
             from src.services.macro_fetch_orchestrator import fetch_macro_bundle
             _bundle = fetch_macro_bundle(
@@ -475,6 +551,12 @@ def render_tab_macro():
     # F-7.1 B-4:Section 4 (§八) 中期/總經拼圖抽至 src/ui/tabs/macro/section_mid.py
     # (B-5 awk 誤刪此 call,R3 補回 — render_section_mid 應接續 render_section_long)
     render_section_mid(_load_heavy, intl_s, tech_s, tw_s)
+    # ── ⚡ 今日關鍵橫幅:延後填充點(v19.176 P0-A)────────────────
+    # 這是 `st.session_state['macro_alerts']` 剛被 section_mid.py:62 寫成
+    # **本輪最新值**的第一個時點 → 立刻填回頁首佔位,不再落後一個 rerun。
+    # 刻意「越早越好」而非放在函式最末:即使下方任一 section 拋例外被
+    # `_render_tab_isolated` 接住,頁首橫幅已經是正確內容(不會留白 / 不會假綠)。
+    _fill_key_alerts()
     # ══════════════════════════════════════════════════════════════
     # v18.276 中國拖累唯讀面板 — Section 八 之後、Section 九 之前
     # 4 數字唯讀展示:不改變上方主分卡與今日市場總覽,僅示意 China 副盤折扣強度

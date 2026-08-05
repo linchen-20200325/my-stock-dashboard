@@ -1,7 +1,8 @@
 """TAB 教學：策略邏輯說明書（靜態 Markdown）— 從 app.py 抽出（PR P2-B Phase 5-A）
 
-依賴極簡：僅 streamlit；內部所需 data_registry / shared.macro_card / pandas
-皆在函式內 late import，避免循環 import 與啟動成本。
+依賴極簡：streamlit + L0 shared 常數 + L4 `ui_widgets`（策略代號 / 標題 SSOT）；
+內部所需 data_registry / shared.macro_card / pandas 皆在函式內 late import，
+避免循環 import 與啟動成本。
 
 呼叫端
 ======
@@ -12,12 +13,84 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import MATERIAL_GREEN, MATERIAL_ORANGE, MATERIAL_RED
+from shared.financial_health_thresholds import (  # 策略2 章節門檻 SSOT（§3.3）
+    FH_ASSET_TURNOVER_MIN,
+    FH_CASH_RATIO_SAFE_PCT,
+    FH_CASH_RATIO_WATCH_PCT,
+    FH_CASH_REINVEST_MIN_PCT,
+    FH_CASHFLOW_ADEQUACY_MIN_PCT,
+    FH_CASHFLOW_RATIO_MIN_PCT,
+    FH_CURRENT_RATIO_MIN_PCT,
+    FH_DEBT_RATIO_EXCELLENT_PCT,
+    FH_DEBT_RATIO_PASS_PCT,
+    FH_DEBT_RATIO_WARN_PCT,
+    FH_DSO_FAST_DAYS,
+    FH_DSO_SLOW_DAYS,
+    FH_DUPONT_LEVERAGE_DEBT_PCT,
+    FH_EARNINGS_QUALITY_MIN_PCT,
+    FH_GROSS_MARGIN_GOOD_PCT,
+    FH_LONG_TERM_FUNDING_MIN_PCT,
+    FH_MOS_STRONG_PCT,
+    FH_NET_MARGIN_PASS_PCT,
+    FH_OPERATING_MARGIN_EXCELLENT_PCT,
+    FH_QUICK_RATIO_MIN_PCT,
+    FH_ROE_LEVERAGE_CHECK_PCT,
+    FH_ROE_TOP_PCT,
+)
 from shared.fred_series import FRED_NAPM
 from shared.ttls import TTL_1DAY
+from src.ui.render.ui_widgets import (  # v19.175：章節標題改吃策略代號 SSOT
+    STRATEGY_FINANCIAL,
+    STRATEGY_TECHNICAL,
+    STRATEGY_VALUATION,
+    strategy_label,
+)
 
 
 # #U7：單值總經指標若 identifier 為 FRED series id → 可抓歷史序列畫 sparkline
 _FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'XTEXVA01TWM664S': 'pc1', FRED_NAPM: 'lin'}
+
+
+# ════════════════════════════════════════════════════════════════
+# v19.175 — 說明書策略章節標題（import 期組好，錯了立刻 ValueError）
+#
+# 背景：v19.174 去識別化後，說明書 4 個策略章節的標題是**手打字串**
+# 「📐 策略3（技術 / 動能）— …」。實機 DOM 掃描抓到兩件事：
+#   (1) 「策略2」+「🏥」全站 0 次；
+#   (2) 三章都掛「策略3」，但其中兩章括號寫「（技術 / 動能）」、
+#       一章寫「（資金面）」—— 同一代號兩種括號說明。
+#
+# 判定（查 v19.174 刪掉的 `_STRATEGY_MAP` 原始分組後的結論，不是猜）：
+#   - 型態學 / VCP / 資金動能 三章原本就同屬「策略3：技術 / 動能 / 資金面」
+#     那一組，**三章都叫策略3 是對的**，不是遷移時把策略2 錯標成策略3。
+#   - 真正的兩個缺陷是：
+#       a. 說明書從來沒有 **策略2（財報體檢）** 這一章
+#          → `STRATEGY_FINANCIAL` 全站 0 個 caller，🏥 永遠不出現。
+#          本次補章，門檻一律 import `shared/financial_health_thresholds`，
+#          與 🔬 個股 / 🏆 個股組合 的財報體檢同一份 SSOT。
+#       b. 括號是各 caller 手打 → 同代號兩種說明。
+#          本次改由 `ui_widgets.strategy_label()` 統一產出（該函式已移除
+#          scope 覆寫參數，一個代號只有一種括號），章節之間的差異一律寫在
+#          破折號後面的**主題**。
+# ════════════════════════════════════════════════════════════════
+_EDU_STRATEGY_TITLES: dict[str, str] = {
+    # key → 章節 emoji + 「策略N（範疇）」(SSOT) + 「— 主題」(本章專屬)
+    'valuation_leading': (
+        f'📊 {strategy_label(STRATEGY_VALUATION)}'
+        f' — 財報領先指標與盈餘成長選股'),
+    'financial_health': (
+        f'🏥 {strategy_label(STRATEGY_FINANCIAL)}'
+        f' — 四關體檢：存活 × 財務結構 × 償債 × 獲利'),
+    'pattern': (
+        f'📐 {strategy_label(STRATEGY_TECHNICAL)}'
+        f' — 型態學：破底翻 × 頭肩底 × 頸線突破'),
+    'vcp': (
+        f'🌀 {strategy_label(STRATEGY_TECHNICAL)}'
+        f' — VCP 波幅收縮與爆量突破'),
+    'liquidity': (
+        f'💰 {strategy_label(STRATEGY_TECHNICAL)}'
+        f' — 資金動能 M1B-M2 × 均線多頭家數 × 外資期貨防守'),
+}
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
@@ -323,8 +396,22 @@ def render_tab_edu():
         except ImportError as _ie:
             st.error(f'❌ 無法載入 data_registry：{_ie}')
 
-    # ── 策略1（估值 / 存股）v19.174 去識別化 ──────────────────────
-    with st.expander('📊 策略1（估值 / 存股）— 財報領先指標與盈餘成長選股', expanded=True):
+    # ── 策略章節導讀（v19.175：解「三章都叫策略3」的閱讀困惑）────────
+    st.markdown('---')
+    st.markdown('### 🧭 三大策略分類導讀')
+    # 括號範疇一律取 `strategy_label()`（SSOT），此處**不重寫**；破折號後的
+    # 「例：…」是舉例用的指標名稱，不是範疇定義，改動不會造成代號↔括號不一致。
+    st.caption(
+        '本說明書把選股邏輯收斂為三類（括號內範疇是全站唯一說法）：'
+        f'**{strategy_label(STRATEGY_VALUATION)}** 例：殖利率、357 區間、年線位階；'
+        f'**{strategy_label(STRATEGY_FINANCIAL)}** 例：現金、負債、毛利、盈餘品質；'
+        f'**{strategy_label(STRATEGY_TECHNICAL)}** 例：型態、VCP、均線、M1B-M2、法人籌碼。'
+        f'　⚠️ {STRATEGY_TECHNICAL} 涵蓋面最廣，底下有「型態學 / VCP / 資金動能」**三章**，'
+        '三章的代號與括號完全相同，差異寫在破折號後的主題 —— '
+        '這是分類本來就寬，不是章節編號重複。')
+
+    # ── 策略1（估值 / 存股）v19.174 去識別化；v19.175 標題改吃 SSOT ────
+    with st.expander(_EDU_STRATEGY_TITLES['valuation_leading'], expanded=True):
         st.markdown("""
 ### 核心邏輯：在「業績加速成長」前提早佈局
 
@@ -375,8 +462,89 @@ def render_tab_edu():
 ```
 """)
 
-    # ── 策略3（型態學）v19.174 去識別化 ──────────────────────────
-    with st.expander('📐 策略3（技術 / 動能）— 型態學：破底翻 × 頭肩底 × 頸線突破', expanded=True):
+    # ── 策略2（財報體檢）v19.175 補章 ─────────────────────────────
+    # 門檻**全部** import 自 shared/financial_health_thresholds.py（§3.3 反捏造），
+    # 與 🔬 個股「AI 財報體檢」/ 🏆 個股組合「批次財報體檢」同一份 SSOT。
+    with st.expander(_EDU_STRATEGY_TITLES['financial_health'], expanded=True):
+        st.markdown(f"""
+### 核心邏輯：先確認「這門生意活得下去」，再談會不會漲
+
+{STRATEGY_VALUATION} 看便宜、{STRATEGY_TECHNICAL} 看時機，本策略只問一件事：
+**這家公司的財報體質撐不撐得住？** 順序是「存活 → 財務結構 → 償債 → 獲利」，
+前一關沒過，後面數字再漂亮都不看。
+
+> 📍 **在系統哪裡看**：🔬 個股 →「AI 財報體檢」區塊（單檔完整版）；
+> 🏆 個股組合 →「批次財報體檢」區塊（多檔並排）。
+> 以下門檻與那兩處**同一份常數**（`shared/financial_health_thresholds.py`），
+> 不會出現說明書寫一套、畫面算另一套。
+
+---
+
+#### 🔑 第一關：存活關（氣長 + 收現 + 現金流自給）
+
+| 指標 | 白話 | 門檻 |
+|------|------|------|
+| 氣長（現金 ÷ 總資產） | 手上還有多少現金可以撐 | ≥ **{FH_CASH_RATIO_SAFE_PCT:.0f}%** 🟢／{FH_CASH_RATIO_WATCH_PCT:.0f}–{FH_CASH_RATIO_SAFE_PCT:.0f}% 🟡／< {FH_CASH_RATIO_WATCH_PCT:.0f}% 🔴 |
+| 收現天數 DSO | 賣出去多久才收到錢 | < **{FH_DSO_FAST_DAYS:.0f} 天** 🟢（天天收現金）／{FH_DSO_FAST_DAYS:.0f}–{FH_DSO_SLOW_DAYS:.0f} 天 🟡／> {FH_DSO_SLOW_DAYS:.0f} 天 🔴 |
+| 現金流量比率（OCF ÷ 流動負債） | 本業現金夠不夠還短債 | > **{FH_CASHFLOW_RATIO_MIN_PCT:.0f}%** |
+| 現金流量允當比率（5 年 OCF ÷ 5 年 資本支出+存貨增+現金股利） | 擴張與配息是不是自己賺來的 | ≥ **{FH_CASHFLOW_ADEQUACY_MIN_PCT:.0f}%** |
+| 現金再投資比率 | 賺的錢有沒有再投回長期資產 | > **{FH_CASH_REINVEST_MIN_PCT:.0f}%** |
+
+**口訣**：現金流量比率 {FH_CASHFLOW_RATIO_MIN_PCT:.0f}％ ×
+允當比率 {FH_CASHFLOW_ADEQUACY_MIN_PCT:.0f}％ ×
+再投資比率 {FH_CASH_REINVEST_MIN_PCT:.0f}％ → 三個都過＝現金流自給自足。
+
+---
+
+#### 🔑 第二關：財務結構關（借多少 + 借得對不對）
+
+| 指標 | 門檻 | 意義 |
+|------|------|------|
+| 負債佔資產比率 | < **{FH_DEBT_RATIO_EXCELLENT_PCT:.0f}%** 🟢優秀／< {FH_DEBT_RATIO_PASS_PCT:.0f}% 🟡正常／{FH_DEBT_RATIO_PASS_PCT:.0f}–{FH_DEBT_RATIO_WARN_PCT:.0f}% ⚠️警戒／> {FH_DEBT_RATIO_WARN_PCT:.0f}% 🔴 | 突發性倒閉風險的第一道防線 |
+| 以長支長（(股東權益+非流動負債) ÷ 固定資產） | > **{FH_LONG_TERM_FUNDING_MIN_PCT:.0f}%** | < {FH_LONG_TERM_FUNDING_MIN_PCT:.0f}% ＝ 短債長投，景氣一轉就周轉不靈 |
+
+⚠️ **例外**：金融 / 租賃業負債天生高，須以產業旗標豁免，不可直接套用上表。
+
+---
+
+#### 🔑 第三關：償債關（極嚴標準）
+
+| 指標 | 門檻 |
+|------|------|
+| 流動比率（流動資產 ÷ 流動負債） | > **{FH_CURRENT_RATIO_MIN_PCT:.0f}%** |
+| 速動比率（(流動資產−存貨) ÷ 流動負債） | > **{FH_QUICK_RATIO_MIN_PCT:.0f}%** |
+
+沒過不是直接判死，而是進入**交叉驗證**（例如 DSO < {FH_DSO_FAST_DAYS:.0f} 天的收現型行業可豁免）。
+
+---
+
+#### 🔑 第四關：獲利關（三率三升 + 槓桿防呆）
+
+| 指標 | 門檻 | 意義 |
+|------|------|------|
+| 營業毛利率 | ≥ **{FH_GROSS_MARGIN_GOOD_PCT:.0f}%** | 高毛利才有護城河 |
+| 營業利益率 | > **{FH_OPERATING_MARGIN_EXCELLENT_PCT:.0f}%** | < 0% ＝ 本業虧損，直接淘汰 |
+| 經營安全邊際（營益 ÷ 毛利） | ≥ **{FH_MOS_STRONG_PCT:.0f}%** | 毛利衰退 {100 - FH_MOS_STRONG_PCT:.0f}% 本業仍不虧 |
+| 稅後淨利率 | > **{FH_NET_MARGIN_PASS_PCT:.0f}%** | 最後真正落袋的比例 |
+| ROE | > **{FH_ROE_TOP_PCT:.0f}%** 頂標 | 但要看是「本業賺」還是「借來的」 |
+| 杜邦槓桿防呆 | ROE > {FH_ROE_LEVERAGE_CHECK_PCT:.0f}% 且 負債比 > **{FH_DUPONT_LEVERAGE_DEBT_PCT:.0f}%** → 🚨 | 高 ROE 若來自高槓桿＝假優等生 |
+
+---
+
+#### 🔑 綜合診斷：經營能力與盈餘品質
+
+| 指標 | 門檻 | 白話 |
+|------|------|------|
+| 總資產翻桌率（營收 ÷ 總資產） | > **{FH_ASSET_TURNOVER_MIN:.1f} 趟** | 同一份資產一年做幾趟生意 |
+| 盈餘品質（OCF ÷ 稅後淨利） | ≥ **{FH_EARNINGS_QUALITY_MIN_PCT:.0f}%** | < {FH_EARNINGS_QUALITY_MIN_PCT:.0f}% ＝ 帳上有賺、現金沒進來（紙上富貴） |
+
+> **{STRATEGY_FINANCIAL} 心法**：「先看會不會倒，再看賺不賺錢。
+> 帳上獲利是意見，現金流才是事實。」
+""")
+
+    # ── 策略3 章節 1/3：型態學 — v19.174 去識別化；v19.175 標題改吃 SSOT ──
+    # （章節主題寫在破折號後；括號範疇一律由 strategy_label() 產出，勿在此重寫）
+    with st.expander(_EDU_STRATEGY_TITLES['pattern'], expanded=True):
         st.markdown(r"""
 ### 核心邏輯：用「型態」讀懂主力換手完畢的訊號
 
@@ -426,9 +594,9 @@ def render_tab_edu():
 4. **停損**：跌破右肩低點即出場
 """)
 
-    # ── 策略3（VCP 波幅收縮）v19.174 去識別化 ────────────────────
-    with st.expander('🌀 策略3（技術 / 動能）— VCP 波幅收縮與爆量突破', expanded=True):
-        st.markdown(r"""
+    # ── 策略3 章節 2/3：VCP 波幅收縮 — v19.174 去識別化；v19.175 標題吃 SSOT ──
+    with st.expander(_EDU_STRATEGY_TITLES['vcp'], expanded=True):
+        st.markdown(rf"""
 ### 核心邏輯：波幅每次比上次小 → 籌碼鎖定完成 → 等爆量突破
 
 VCP（Volatility Contraction Pattern）找的是「橫盤整理中能量不斷蓄積」的股票，
@@ -471,11 +639,11 @@ VCP（Volatility Contraction Pattern）找的是「橫盤整理中能量不斷�
 | **停損** | 跌破進場 K 棒低點（通常約 7–8% 以內） |
 | **停利** | 距停損 3 倍獲利（盈虧比 ≥ 3:1）先設目標；強勢股跟蹤 MA10 |
 
-> **策略3 心法**：「量縮到極點就是爆發前夕。等的不是上漲，等的是籌碼。」
+> **{STRATEGY_TECHNICAL} 心法**：「量縮到極點就是爆發前夕。等的不是上漲，等的是籌碼。」
 """)
 
-    # ── 策略3（資金動能）v19.174 去識別化 ────────────────────────
-    with st.expander('💰 策略3（資金面）— 資金動能 M1B-M2 × 均線多頭家數 × 外資期貨防守', expanded=True):
+    # ── 策略3 章節 3/3：資金動能 — v19.174 去識別化；v19.175 標題改吃 SSOT ──
+    with st.expander(_EDU_STRATEGY_TITLES['liquidity'], expanded=True):
         st.markdown("""
 ### 核心邏輯：用「總體資金」判斷大盤體質，而非個股
 
@@ -499,19 +667,27 @@ VCP（Volatility Contraction Pattern）找的是「橫盤整理中能量不斷�
 
 ---
 
-#### 🔑 指標二：均線多頭排列家數
+#### 🔑 指標二：市場廣度（本系統用「旌旗指數」）
 
-> **白話**：台股 1800 支股票中，有幾支站在 240 日均線（年線）之上？
+> ⚠️ **本系統沒有「站上年線家數比」這個數據**（§1 反捏造）。
+> 原教材這一段寫的是「台股 1800 支股票中有幾支站在年線之上」，
+> 但全站**沒有任何一行程式在算它**，畫面上也找不到這個數字 ——
+> 照著找只會白費力氣，故改為說明系統**實際**提供的廣度指標。
 
-| 家數比例 | 市場意義 |
+> **本系統實際算的**：**旌旗指數 ＝ 上漲佔比的 5 日移動平均**
+> （上漲佔比 ＝ 上漲家數 ÷（上漲家數＋下跌家數）× 100；再取 5 日均）。
+> 它衡量的是「最近一週有多少比例的股票在漲」，同樣屬於**市場廣度**家族，
+> 但**不是**均線類指標。位置：🌍 總經 → 🧩 籌碼桶「旌旗指數」。
+
+| 旌旗指數 | 市場意義 |
 |---------|---------|
-| ≥ **60%** 站上年線 | 🟢 多頭格局強健，可積極持股 |
-| **40–60%** 站上年線 | 🟡 多空拉鋸，選股不選市 |
-| ≤ **40%** 站上年線 | 🔴 熊市格局，嚴控倉位 |
+| ≥ **60%** | 🟢 多頭格局強健，可積極持股 |
+| **40–60%** | 🟡 多空拉鋸，選股不選市 |
+| ≤ **40%** | 🔴 熊市格局，嚴控倉位 |
 
 搭配「大盤 vs 個股」強弱：
-- 指數創高但多頭家數不創高 → 警訊（領頭羊撐盤，底層崩潰）
-- 多頭家數先反彈 → 領先大盤底部的信號
+- 指數創高但廣度不創高 → 警訊（領頭羊撐盤，底層崩潰）
+- 廣度先反彈 → 領先大盤底部的信號
 
 ---
 
@@ -530,14 +706,14 @@ VCP（Volatility Contraction Pattern）找的是「橫盤整理中能量不斷�
 
 *（教學示意，實際持股以 🎚️ 建議持股油門為準）*
 
-| M1B-M2 | 多頭家數 | 外資期貨 | 建議倉位 |
+| M1B-M2 | 旌旗指數（廣度） | 外資期貨 | 建議倉位 |
 |--------|---------|---------|---------|
 | ✅ 寬鬆 | ✅ ≥60% | ✅ 多單 | **滿倉 80–100%** |
 | ✅ 寬鬆 | ✅ ≥60% | ❌ 空單 | **七成 70%** |
 | ✅ 寬鬆 | ❌ <40% | 任何 | **五成 50%，選股不選市** |
 | ❌ 緊縮 | 任何 | 任何 | **防守 0–30%，保留現金** |
 
-> **記憶口訣**：「M1B-M2 翻正是起跑槍，年線家數過半是加速器，外資空單是急剎車。」
+> **記憶口訣**：「M1B-M2 翻正是起跑槍，廣度過半是加速器，外資空單是急剎車。」
 
 ---
 

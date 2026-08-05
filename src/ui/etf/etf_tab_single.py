@@ -41,6 +41,8 @@ from shared.signal_thresholds import (
     # v18.335 PR-H3:ETF_SIGMA_* 4 個由 classify_etf_deep_sigma 內部消費,移除直引
     ETF_TRACKING_ERROR_MAX_PCT,
     ETF_VCP_MIN_DAYS,
+    KD_OVERBOUGHT_LEVEL,   # v19.178:AI prompt 的 KD 過熱/過冷說明引 SSOT
+    KD_OVERSOLD_LEVEL,
 )
 
 
@@ -882,7 +884,10 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                     f'近1年含息總報酬（連配息一起算，過去一年賺或賠幾 %）={_fmt(total_ret, "%")}；'
                     f'年線乖離（現在價格比過去一年平均價高/低幾 %，正數=偏高偏貴、負數=偏低）='
                     f'{_fmt(_bias240_ai, "%", _sign=True) if _bias240_ai is not None else "N/A（上市未滿約一年）"}；'
-                    f'KD（短線過熱或過冷的溫度計，80 以上偏熱、20 以下偏冷）='
+                    # v19.178 §3.3:80 / 20 原為 prompt 內寫死,改插值
+                    # shared/signal_thresholds.KD_OVERBOUGHT_LEVEL / KD_OVERSOLD_LEVEL
+                    f'KD（短線過熱或過冷的溫度計，{KD_OVERBOUGHT_LEVEL:.0f} 以上偏熱、'
+                    f'{KD_OVERSOLD_LEVEL:.0f} 以下偏冷）='
                     f'{(f"K={_fmt(_kv_ai, _nd=1)} D={_fmt(_dv_ai, _nd=1)}") if _kv_ai is not None else "N/A"}。'
                 ),
             },

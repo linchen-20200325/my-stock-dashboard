@@ -11,6 +11,67 @@ ai_structured_summary.py — 共用「白話結構化 AI 摘要」元件
   - 純組字串，不抓資料、不呼叫 AI（由呼叫端傳入的 gemini_fn 執行），
     不被 fetch / calc 反向依賴。
 """
+from shared.macro_buckets import SPECS_BY_KEY as _DANGER_SPECS
+from src.config import MACRO_ALERT_RULES as _MACRO_ALERT_RULES
+
+
+# ══════════════════════════════════════════════════════════════════════
+# v19.178 AI-SSOT — 「餵給 LLM 的判讀門檻」文案產生器（§3.3 反捏造）
+#
+# 【修的是什麼】2026-08-06 稽核發現**兩處**組給 Gemini 的總經 context
+# （`section_news_ai._ctx` 與 `tab_stock._macro_lines2`）都各自手寫了一套門檻，
+# 而且**彼此不同、也都與畫面燈號用的 shared/macro_buckets SSOT 不同**：
+#
+#     指標      section_news_ai   tab_stock       SSOT(畫面燈號)
+#     VIX       >28 / >35         >20 / >30       黃 22 / 紅 30
+#     CPI       >3%               >3%             黃 3.5 / 紅 4.0
+#     台灣 PMI  <48               <45             黃 50 / 紅 46
+#     US10Y     —                 >4% / >5%       黃 4.5 / 紅 5.0
+#     BIAS240   >15 / <-10        —               黃 10 / 紅 20
+#     ADL       >70 / <30         —               黃 50 / 紅 35
+#     外資期貨  <-35000           —               黃 -10000 / 紅 -20000
+#
+# 後果：系統畫面已亮 🔴、AI 卻依較寬的門檻說「還在安全區」；而且個股頁 AI 與
+# 總經頁 AI 對同一個 VIX 值可能講出不同結論。使用者理所當然以為三者同源。
+# 這是 §1「錯誤的數字比沒有數字更危險」的變形：**錯誤的門檻比沒有門檻更危險**。
+#
+# 【為何放這裡】本模組是「各 Tab 共用的 prompt 組裝元件」(L3)，是唯一同時被
+# 總經 / 個股 / ETF / 選股各 prompt 建構點 import 的地方。放這裡才有一份真相；
+# 放回 shared/macro_buckets(L0) 會讓純常數模組長出文案職責。
+# ══════════════════════════════════════════════════════════════════════
+def danger_rule_text(key: str) -> str:
+    """由 `shared/macro_buckets` 的 DangerSpec 產生「畫面燈號門檻」判讀句。
+
+    值 / 單位 / 小數位 / 方向全部取自 SSOT，**不在 prompt 內寫死任何數字**；
+    改門檻只需改 SSOT 一處，所有 prompt 自動跟上。
+
+    刻意寫明「與畫面燈號同一套門檻」，讓 LLM 的敘事與使用者看到的燈號對齊。
+    未登錄的 key → KeyError（§1 Fail Loud，不靜默回空字串把門檻吞掉）。
+    """
+    _s = _DANGER_SPECS[key]
+    _u, _d = _s.unit, _s.decimals
+    if _s.direction == 'high_bad':
+        _body = f'≥{_s.yellow:.{_d}f}{_u} 🟡 警戒、≥{_s.red:.{_d}f}{_u} 🔴 危險'
+    elif _s.direction == 'low_bad':
+        _body = f'≤{_s.yellow:.{_d}f}{_u} 🟡 警戒、≤{_s.red:.{_d}f}{_u} 🔴 危險'
+    else:  # band — 高低兩側皆有危險帶
+        _body = (f'≥{_s.yellow:.{_d}f}{_u} 或 ≤{_s.yellow_lo:.{_d}f}{_u} 🟡 警戒；'
+                 f'≥{_s.red:.{_d}f}{_u} 或 ≤{_s.red_lo:.{_d}f}{_u} 🔴 危險')
+    return f'畫面燈號同一套門檻：{_body}'
+
+
+def pcr_rule_text() -> str:
+    """由 `src/config.MACRO_ALERT_RULES['pcr']` 產生 PCR 判讀句。
+
+    PCR 不在五桶 DangerSpec 內（它是雙向指標），其 SSOT 是總經警示規則表。
+    ⚠️ 這裡的門檻是**標準 PCR 比值刻度**（0.5~2.0）；若 caller 手上的值來自
+    `li_latest['選PCR']`（已 ×100 的百分比刻度），**必須先換算**再配上本判讀句，
+    否則就是 100× 量綱錯（§4.1）—— 見 `shared.signal_thresholds.PCR_PERCENT_SCALE_MIN`。
+    """
+    _r = next(_x for _x in _MACRO_ALERT_RULES if _x.get('key') == 'pcr')
+    return (f"高於 {_r['yellow_above']:.1f} 🟡 偏空情緒、高於 {_r['red_above']:.1f} 🔴 極度恐慌；"
+            f"低於 {_r['yellow_below']:.1f} 🟡 樂觀偏高、低於 {_r['red_below']:.1f} 🔴 過度樂觀(頂部訊號)")
+
 
 # ── 白話硬規格（所有 Tab 共用，確保口吻一致）──────────────────
 PLAIN_RULES = """【講話規則 — 一定要遵守】

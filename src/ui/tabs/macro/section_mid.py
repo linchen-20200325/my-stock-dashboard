@@ -21,6 +21,8 @@ from src.ui.render.ui_widgets import (
     strategy_conclusion,
 )
 from src.ui.tabs.macro.helpers import add_danger_hlines  # noqa: F401
+# v19.175 P0:`cl_data['inst']` 型別收斂 SSOT(L5 → L2,合法下行依賴)
+from src.compute.macro import coerce_inst_dict
 from src.data.macro import check_macro_alerts, fetch_macro_snapshot
 from src.ui.render.macro_ui_components import render_macro_alerts  # v19.159:render 歸位 L4
 
@@ -260,7 +262,28 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 st.markdown(f'- **{_err_label_map.get(_ek, _ek)}**：`{_ev}`')
             st.caption('💡 截圖此面板回報 → 可定位是 API timeout / proxy / FRED key / data source down')
     
-    # ── v4.0 總經否決權 ─────────────────────────────────────
+    # ── 總經基本面否決檢查（v19.176 P0-D 正名，原名「v4.0 總經否決權」）──
+    #
+    # 【為什麼改名】2026-08-05 實機同一次渲染，同一個名字在同一頁給出相反結論：
+    #   本區 → 「✅ v4.0 總經否決權：無觸發」
+    #   §三 籌碼 → 「🏛️ v4.0 總經否決權 🔴 紅燈 — 總經環境高風險」
+    # 【根因】兩者**根本不是同一個判定**，只是撞名：
+    #   - 本區是下面這組 inline 規則（VIX／台灣 PMI／美國核心 CPI／台灣出口／NDC），
+    #     **完全不看外資期貨**，也從來沒有呼叫過 `V4StrategyEngine`。
+    #   - §三 那張才是真的 `V4StrategyEngine.check_macro_veto()`（L2 Task 2），
+    #     只看 VIX + 外資期貨口數。
+    #   當日 VIX < 30（本區不觸發）但外資期貨空單過門檻（§三 紅燈）→ 各自都算對了，
+    #   錯的是它們頂著同一個名字。
+    # 【處置】不合併（輸入集與用途不同，合併＝行為變更；判定邏輯與門檻**零變更**），
+    #   改為：① 正名（名稱走 L0 SSOT `config.VETO_*`）；② 標明判定範圍；
+    #   ③ 與 §三 結論不一致時**主動揭露**（§1：不一致本身必須可見，
+    #      不可隨便挑一個顯示、也不可假裝沒發生）。
+    from src.config import (
+        VETO_FUNDAMENTAL_INPUTS,
+        VETO_FUNDAMENTAL_NAME,
+        VETO_FUNDAMENTAL_SCOPE_NOTE,
+        VETO_V4_ENGINE_NAME,
+    )
     _veto8 = []
     if _m8_vix and _m8_vix.get('current', 0) >= 30:
         _veto8.append(('🚨', f'VIX={_m8_vix["current"]} ≥ 30：全球流動性危機，無視所有技術面買訊，強制空手！', TRAFFIC_RED))
@@ -274,19 +297,61 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     if _crisis_buy:
         _veto8.append(('💡', f'NDC燈號={_m8_ndc["score"]:.0f}分（藍燈）：實體景氣衰退但為左側交易黃金布局時機！低基期好股勇敢建倉', TRAFFIC_GREEN))
     
+    # `💡` 是「危機入市」機會訊號，不算否決 → 只有非 💡 才算真的觸發。
+    _has_veto = any(e[0] != '💡' for e in _veto8)
+    # 四個來源任一有資料才算「本檢查可評估」；全空時不下任何結論（§1）。
+    _fund_evaluable = any([_m8_vix, _m8_pmi, _m8_cpi, _m8_ndc])
     if _veto8:
-        _has_veto = any(e[0] != '💡' for e in _veto8)
-        _exp_title = ('🚨 v4.0 總經否決權已觸發（展開看詳情）' if _has_veto else
-                      '💡 v4.0 危機入市訊號（展開看詳情）')
+        _exp_title = (f'🚨 {VETO_FUNDAMENTAL_NAME}已觸發（展開看詳情）' if _has_veto else
+                      '💡 危機入市訊號（展開看詳情）')
         with st.expander(_exp_title, expanded=_has_veto):
             for _icon8, _msg8, _col8 in _veto8:
                 st.markdown(
                     f'<div style="border-left:3px solid {_col8};padding:6px 12px;'
                     f'margin:4px 0;color:{_col8};font-size:13px;">{_icon8} {_msg8}</div>',
                     unsafe_allow_html=True)
-    elif any([_m8_vix, _m8_pmi, _m8_cpi, _m8_ndc]):
-        st.success('✅ v4.0 總經否決權：無觸發 — 當前宏觀環境無系統性風險訊號')
-    
+    elif _fund_evaluable:
+        st.success(f'✅ {VETO_FUNDAMENTAL_NAME}：無觸發 — 景氣／通膨／外需面無系統性風險訊號')
+    if _veto8 or _fund_evaluable:
+        st.caption(f'📌 {VETO_FUNDAMENTAL_SCOPE_NOTE}')
+
+    # ── 跨區一致性揭露（§1 Fail Loud：不一致本身必須看得見）──────────
+    # 取數走 §三 的同一個入口 `read_v4_macro_veto()`，確保兩區吃**同一份輸入**
+    # （同一個 VIX、同一份 ffill 後的外資期貨口數）——
+    # 否則「揭露分歧」自己就會變成新的分歧來源。
+    # lazy import：與本檔其他 import 一致（避免 module load 時跑完整 dependency
+    # chain），同層 L5 互相取用純函式，不涉跨層上行（§8.2）。
+    try:
+        from src.ui.tabs.macro.section_chips import read_v4_macro_veto
+        _v4_light = read_v4_macro_veto()
+    except Exception as _e_v4x:
+        print(f'[section_mid/veto-cross] {type(_e_v4x).__name__}: {_e_v4x}')
+        _v4_light = None
+
+    if _fund_evaluable and _v4_light is not None:
+        # 綠燈以外（🔴/🟡）都算「籌碼側有風險訊號」。
+        _v4_risk = not str(_v4_light.get('status', '')).startswith('🟢')
+        if _v4_risk != _has_veto:
+            st.warning(
+                f'⚖️ **同一頁的兩套判定結論不一致 —— 這不是系統算錯，'
+                f'是它們看的資料本來就不同**\n\n'
+                f'- **{VETO_FUNDAMENTAL_NAME}**（本區）：'
+                f'{"🚨 已觸發" if _has_veto else "✅ 無觸發"}　'
+                f'看的是 {VETO_FUNDAMENTAL_INPUTS}\n'
+                f'- **{VETO_V4_ENGINE_NAME}**（§三 籌碼）：'
+                f'{_v4_light.get("status", "?")}　'
+                f'看的是 VIX={_v4_light["_vix"]:.1f}、'
+                f'外資期貨={_v4_light["_futures"]:,.0f} 口\n\n'
+                f'👉 兩者不是同一個指標，不必也不該互相覆蓋；'
+                f'實際持股水位一律以 🎚️ 建議持股油門 為準。'
+            )
+    elif _fund_evaluable and _v4_light is None:
+        st.caption(
+            f'（§三 籌碼的「{VETO_V4_ENGINE_NAME}」因 VIX 未取得而無法判定，'
+            '本區與該燈暫時無法比對 —— 兩區都缺 VIX 時請先按'
+            '「🚀 一鍵更新全部數據」）')
+
+
     # ── Section 八 v4.0 動態結論（VIX 否決權 × 估值/CLI 矩陣）────
     _bias_info8 = st.session_state.get('bias_info') or {}
     _b240_8     = float(_bias_info8.get('bias_240', 0))
@@ -310,7 +375,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     if _vix_now8 is not None and _vix_now8 > 100:
         st.error(f'❌ VIX 數值異常（{_vix_now8:.0f}），疑似 API 變數映射錯誤，結論暫不顯示。請重新整理。')
     else:
-        # ── 策略3：VIX 總經否決權 ──────────────────────────────
+        # ── 策略3：VIX 否決權（持股天花板）──────────────────────
+        # v19.176 P0-D:本卡講的是 `allocation_service` 登記的那條天花板,
+        # 名稱對齊該 cap 的正式 key **'VIX 否決權'**(shared/allocation_decision
+        # `vix_veto_cap`)—— 與本區上方的「總經基本面否決檢查」、§三 籌碼的
+        # 「v4 引擎風險燈」是**三件不同的事**,文案一律帶前綴避免又被讀成同一個。
         # v19.170 P0-1:三段燈號與敘述保留,但**持股百分比全部撤除** —— 本卡原本自己喊
         # 「建議持股 0~10%」/「持股上限壓縮在 30% 以下」,與 🎚️ 建議持股油門 打架。
         # 改為 apply_vix_veto() 把 VIX 登記成「天花板」,由建議持股 SSOT 統一仲裁,
@@ -321,7 +390,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             if _vix_now8 >= 30:
                 _hyc8 = TRAFFIC_RED
                 _hyi8 = f'VIX {_vix_now8:.1f} ≥ 30'
-                _hyc8t = ('🔴 系統性風險爆發，觸發否決權！無視所有技術面多頭訊號，現金為王。'
+                _hyc8t = ('🔴 系統性風險爆發，觸發 VIX 否決權！無視所有技術面多頭訊號，現金為王。'
                           '→ 已納入總持股上限（見上方 🎚️ 建議持股油門）')
             elif _vix_now8 >= 20:
                 _hyc8 = TRAFFIC_YELLOW
@@ -331,10 +400,10 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             else:
                 _hyc8 = TRAFFIC_GREEN
                 _hyi8 = f'VIX {_vix_now8:.1f} < 20（平靜期）'
-                _hyc8t = '🟢 全球風險情緒穩定，未觸發否決權。回歸個股籌碼面與基本面操作。'
+                _hyc8t = '🟢 全球風險情緒穩定，未觸發 VIX 否決權。回歸個股籌碼面與基本面操作。'
             st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _hyi8, _hyc8t, color=_hyc8), unsafe_allow_html=True)
         else:
-            st.info('VIX 數據載入中，否決權暫無法判斷')
+            st.info('VIX 數據載入中，VIX 否決權暫無法判斷')
 
         # ── 策略3：M1B-M2 資金動能（三段公式）────────────────────
         _m1b8_info = st.session_state.get('m1b_m2_info', {})
@@ -445,8 +514,12 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 except Exception:
                     pass
             _cl8d     = st.session_state.get('cl_data', {})
-            _inst8    = _cl8d.get('inst', {})
-            _fk8      = next((k for k in _inst8 if '外資' in k), None)
+            # v19.175 P0:`.get('inst', {})` 的預設值只在 key 不存在時生效;
+            # key 在、值為 None(上游三大法人全敗)時會讓下一行 genexpr 拋
+            # `TypeError: 'NoneType' object is not iterable` 炸掉總經分頁。
+            # 收斂 + log 走 L2 SSOT(§1:缺失照樣顯示成「E 外資未知」)。
+            _inst8    = coerce_inst_dict(_cl8d, where='section_mid')
+            _fk8      = next((k for k in _inst8 if '外資' in str(k)), None)
             _fnet8    = _inst8.get(_fk8, {}).get('net', None) if _fk8 else None
             _twii8    = tw_s.get('台股加權指數', {})
             _twd8     = tw_s.get('新台幣匯率', {})

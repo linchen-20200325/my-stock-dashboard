@@ -313,7 +313,7 @@ class TestLoadMacroState:
 
     def test_corrupt_file_returns_default(self, tmp_path):
         path = str(tmp_path / "bad.json")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("{ broken json ::::")
         data = load_macro_state(path)
         assert data["exposure_limit_pct"] == 0

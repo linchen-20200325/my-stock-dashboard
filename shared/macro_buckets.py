@@ -55,6 +55,39 @@ _DXY_YELLOW   = 105.0  # 對齊 MACRO_THRESHOLDS['DXY']['yellow_above']
 _DXY_RED      = 110.0  # 對齊 MACRO_THRESHOLDS['DXY']['red_above']
 
 # ════════════════════════════════════════════════════════════════
+# v19.175 — 合理範圍（CLAUDE.md §3.2 範圍/合理性檢查）
+#
+# 【為何需要】us10y / dxy 於 v19.175 才第一次真的接進五桶取值(見
+# macro_helpers.compute_five_bucket_summary),而這兩條的上游有**換標的**風險:
+#   - DXY: `daily_data_fetchers.fetch_single` 對 'DX-Y.NYB' 有備援鏈
+#     DX-Y.NYB → DX=F → **UUP**(ETF,價格 ~27 美元)。若前兩者被擋而落到 UUP,
+#     欄位名仍叫「美元指數 DXY」但**尺度完全不同** → 27 < 105 會被判「🟢 綠」,
+#     這是**假綠**,比灰燈危險(§1 錯的數字比沒有數字更危險)。
+#   - US10Y: Yahoo `^TNX` 在不同平台有「殖利率」與「殖利率×10」兩種報價慣例
+#     (本專案 `compute/risk/reconcile.py:106` 文件寫的是 ×10 慣例;實機國際指標卡
+#     顯示 4.63 則是直接 % 慣例)。若哪天上游改回 ×10,46.3 會被判「🔴 紅」= 假紅。
+#
+# 【處理原則】§1 Fail Loud：超出合理範圍 → **回 gray + log**,
+#   **不**自作聰明除以 10 / 乘以 10 去「猜」正確尺度(猜錯就是造假)。
+#   範圍值取自 CLAUDE.md §3.2 表(US10Y [0,20]% / DXY [70,130]),
+#   非本檔腦補;PMI 另有 shared.signal_thresholds.PMI_VALID_MIN/MAX 同性質常數。
+#
+# ⚠️ 刻意**只**掛在 us10y / dxy 兩條 spec 上(valid_min/max 預設 None = 不檢查)。
+#   其餘 14 條的判級行為與本版前完全一致,零回歸。
+# ════════════════════════════════════════════════════════════════
+_US10Y_VALID_MIN = 0.0     # CLAUDE.md §3.2「US10Y (%) [0, 20]」
+_US10Y_VALID_MAX = 20.0
+_DXY_VALID_MIN   = 70.0    # CLAUDE.md §3.2「DXY（美元指數）[70, 130]」
+_DXY_VALID_MAX   = 130.0
+
+# ── cl_data['intl'] 的中文 key 鏡像(SSOT: services/daily_checklist.INTL_MAP)──
+# L0 不可 import L3(§8.2 跨層上行),故在此鏡像 2 個 key 名,
+# 由 tests/test_p0b_spec_wiring.py::test_intl_key_mirror_matches_daily_checklist
+# 擋漂移(同 _VIX_YELLOW 等鏡像常數的既有作法)。
+CL_INTL_KEY_US10Y = "10Y公債殖利率"   # INTL_MAP → '^TNX'
+CL_INTL_KEY_DXY   = "美元指數 DXY"    # INTL_MAP → 'DX-Y.NYB'
+
+# ════════════════════════════════════════════════════════════════
 # 桶 meta：順序鎖定 + emoji + 副標（對齊下方詳細區由上而下閱讀序）
 # ════════════════════════════════════════════════════════════════
 BUCKET_ORDER = ["long", "mid", "short", "chips", "news"]
@@ -121,7 +154,9 @@ _HEALTH_YELLOW = 50.0   # DESIGN：低於半分轉弱警示
 # 「總經健康評分」在**建構上只有 2 個輸入**（macro_helpers.compute_macro_health）:
 #     health = jqavg × HEALTH_WEIGHT_JQ(0.6) + min(score/max_score×100,100) × HEALTH_WEIGHT_SCORE(0.4)
 #              + HEALTH_FNET_BONUS(0，v19.102 校準後歸零 → dead term)
-# 其中 jqavg = 旌旗指數（站上 20MA 家數比）＝**廣度**，不是槓桿、不是資金面。
+# 其中 jqavg = 旌旗指數（＝上漲佔比的 5 日均）＝**廣度**，不是槓桿、不是資金面。
+# （v19.177 更正：原註解沿用「站上 20MA 家數比」這個捏造描述；真值見
+#  src/services/jingqi_calc.py:43，名詞 SSOT 見 ui_widgets.BREADTH_JINGQI。）
 # 本註冊表 16 個 DangerSpec 中，health 自己是**輸出**，真正餵進這條公式的只有
 # jingqi 一項（score 來自 mkt_info，不在本註冊表內）；其餘 14 項 ——
 # ndc_signal / m1b_m2_gap / ism_pmi / us_core_cpi / tw_export / bias_240 /
@@ -147,6 +182,11 @@ class DangerSpec:
     note: str = ""         # 業務語意（= SPEC 卡片註解）
     source: str = ""       # 門檻來源（SSOT:... 或 DESIGN）
     emoji: str = ""        # 指標小圖（v18.338 Fund 式卡片網格用；空 → 卡片 fallback 📊）
+    # v19.175 §3.2 合理範圍：None = 不檢查（維持既有行為）。
+    # 兩者皆非 None 且值落在區間外 → within_valid_range() 回 False，
+    # 取值端應改回 gray + log（§1 不猜尺度、不偽綠/偽紅）。
+    valid_min: Optional[float] = None
+    valid_max: Optional[float] = None
 
 
 # ════════════════════════════════════════════════════════════════
@@ -157,7 +197,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     DangerSpec("health", "總經健康評分", "long", "", "low_bad",
                yellow=_HEALTH_YELLOW, red=_HEALTH_RED, decimals=0,
                note="<35 防禦 / <50 轉弱"
-                    "（v19.173:此分只有 2 個輸入 — 旌旗指數(站上 20MA 家數比) 60% ＋ "
+                    "（v19.173:此分只有 2 個輸入 — 旌旗指數(上漲佔比 5 日均) 60% ＋ "
                     "大盤評分 40%,實質是「趨勢廣度分數」;不含融資／外資期貨／"
                     "年線乖離／NDC／M1B-M2／VIX／PMI／CPI／出口／ADL／新聞,"
                     "那些各自有燈號。故五桶多盞紅而本分數不低非矛盾,是評估範疇不同）",
@@ -192,12 +232,21 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                yellow=_VIX_YELLOW, red=_VIX_RED, decimals=1,
                note="≥22 警戒 / ≥30 流動性危機強制空手", source="SSOT:MACRO_THRESHOLDS.VIX"),
     # v18.286:10Y / DXY 加入註冊表(供 tab_macro 國際指標 sparkline 用)
+    # v19.175:此二條原本**只有 spec 沒有取值**(macro_helpers values dict 無此 key)
+    #   → classify_danger(None) → 永久 ⬜ gray。本版已接線(見 macro_helpers),
+    #   並補 valid_min/max 防上游換標的造成的假綠/假紅(理由見上方 §3.2 區塊)。
+    #   單位:us10y = **百分點**(4.63 表示 4.63%,非 0.0463 也非 46.3);
+    #        dxy   = **指數點**(99.75),與 yellow/red 門檻同刻度。
     DangerSpec("us10y", "10Y 公債殖利率", "mid", "%", "high_bad",
                yellow=_US10Y_YELLOW, red=_US10Y_RED, decimals=2,
-               note="≥4.5 警戒 / ≥5.0 緊縮", source="SSOT:MACRO_THRESHOLDS.US10Y"),
+               note="≥4.5 警戒 / ≥5.0 緊縮", source="SSOT:MACRO_THRESHOLDS.US10Y",
+               emoji="🏦",
+               valid_min=_US10Y_VALID_MIN, valid_max=_US10Y_VALID_MAX),
     DangerSpec("dxy", "美元指數 DXY", "mid", "", "high_bad",
                yellow=_DXY_YELLOW, red=_DXY_RED, decimals=1,
-               note="≥105 警戒 / ≥110 強勢美元壓力", source="SSOT:MACRO_THRESHOLDS.DXY"),
+               note="≥105 警戒 / ≥110 強勢美元壓力", source="SSOT:MACRO_THRESHOLDS.DXY",
+               emoji="💵",
+               valid_min=_DXY_VALID_MIN, valid_max=_DXY_VALID_MAX),
     # v19.170：yellow 原 inline 50.0 → 改 import signal_thresholds.MARKET_BREADTH_NEUTRAL_PCT
     #          （同值，僅消除 SSOT 漂移風險；紅線 35.0 無對應常數，維持 DESIGN inline）
     DangerSpec("adl", "ADL 漲跌家數比", "short", "%", "low_bad",
@@ -224,9 +273,20 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                     "燈號恆紅、鑑別力歸零;相對化見 shared/relative_thresholds"
                     ".margin_leverage_ratio + classify_by_pct_rank）",
                source="SSOT:MARGIN_BALANCE_OVERHEAT(3400)+MARGIN_BALANCE_WARN(2500)"),
-    DangerSpec("jingqi", "旌旗指數（站上 20MA %）", "chips", "%", "low_bad",
+    # ── v19.177 P1-B 反捏造(§1):label / source 兩處都在說謊 ──────────────────
+    # 舊 label「旌旗指數（站上 20MA %）」+ 舊 source「DESIGN:站上均線比例慣例」。
+    # **全站沒有任何一行 code 在算「站上 20MA 的股票家數比」**。真值 =
+    # 上漲佔比(ad_ratio)的 5 日移動平均(`src/services/jingqi_calc.py:43`)。
+    # ⚠️ 這是**畫面文字變更** —— 本 label 會印在五桶「🧩 籌碼」的指標明細卡上。
+    # 門檻 60/40 與 low_bad 方向**完全不動**(改門檻屬行為變更,需另案校準);
+    # 只有名字改成真的。門檻本身是「廣度佔比」的經驗切點,與均線無關,故 source
+    # 一併更正為 DESIGN:廣度佔比經驗切點。
+    DangerSpec("jingqi", "旌旗指數（上漲佔比 5 日均 %）", "chips", "%", "low_bad",
                yellow=60.0, red=40.0, decimals=0,
-               note=">60 積極 / 40-60 中性 / <40 弱勢", source="DESIGN:站上均線比例慣例"),
+               note=">60 積極 / 40-60 中性 / <40 弱勢"
+                    "（v19.177:此值為**上漲佔比的 5 日均**,不是「站上均線的家數比」——"
+                    "本專案並未計算後者）",
+               source="DESIGN:廣度佔比經驗切點(60/40)"),
     DangerSpec("foreign_net", "外資現貨淨買賣", "chips", "億", "low_bad",
                yellow=0.0, red=-200.0, decimals=0,
                note=">0 買超 / <0 賣超 / <-200 大賣（軟線）", source="DESIGN:外資現貨流向"),
@@ -262,6 +322,36 @@ MACRO_INFO_KEYS: tuple[str, ...] = (
 def specs_for_bucket(bucket: str) -> list[DangerSpec]:
     """取某桶的所有 DangerSpec（依註冊順序）。"""
     return [s for s in BUCKET_DANGER_SPECS if s.bucket == bucket]
+
+
+def within_valid_range(value: Optional[float], spec: DangerSpec) -> bool:
+    """值是否落在 spec 的 §3.2 合理範圍內（v19.175）。
+
+    語意（三態，caller 須分辨）::
+
+        value=None          → False（沒有值本來就不算「在範圍內」）
+        spec 無 valid_*     → True （未設範圍 = 不檢查，維持既有行為）
+        有範圍且值越界      → False（caller 應退回 gray + log，**不得**猜尺度換算）
+
+    §1 Fail Loud / §4.1 量綱：本函式**只判斷不修正**。上游若把「美元指數」
+    換成 UUP(ETF ~27)或把殖利率換成 ×10 慣例(46.3)，正確處置是誠實顯示
+    「未載入」並留 log，而不是除以 10 假裝算對 —— 猜錯即造假。
+
+    NaN 一律 False（NaN 的任何比較皆 False，此處顯式處理避免誤讀）。
+    """
+    if value is None:
+        return False
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return False
+    if v != v:   # NaN
+        return False
+    if spec.valid_min is not None and v < spec.valid_min:
+        return False
+    if spec.valid_max is not None and v > spec.valid_max:
+        return False
+    return True
 
 
 def classify_danger(value: Optional[float], spec: DangerSpec) -> str:

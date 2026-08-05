@@ -28,6 +28,8 @@ from shared.signal_thresholds import (
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
     MARGIN_BALANCE_WARN_THRESHOLD_YI,
 )
+# v19.175 P0:`cl_data['inst']` 型別收斂 SSOT(L5 → L2,合法下行依賴)
+from src.compute.macro import coerce_inst_dict
 
 
 def render_section_warroom(_tl_eff_reg, _show_market_data: bool, do_refresh: bool) -> None:
@@ -50,10 +52,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     _wr_cd = _wr_inp.cl_data or {}
     _wr_bias = _wr_inp.bias_info or {}
     _wr_m1b = _wr_inp.m1b_m2_info or {}
-    _wr_inst = _wr_cd.get('inst', {})
-    _wr_fk = next((k for k in _wr_inst if '外資' in k), None)
-    if _wr_fk is None:
-        _wr_fk = next((k for k in _wr_inst if '外資' in k), None)
+    # v19.175 P0:`_wr_cd.get('inst', {})` 的預設值**只在 key 不存在時生效** ——
+    # key 在、值為 None(上游三大法人全敗)時原樣回 None,下一行 genexpr 立刻拋
+    # `TypeError: 'NoneType' object is not iterable` 炸掉整個「🌍 總經」分頁。
+    # 收斂 + log 走 L2 SSOT(§1:缺失照樣顯示成「未知」,只是不再炸頁)。
+    _wr_inst = coerce_inst_dict(_wr_cd, where='section_warroom')
+    _wr_fk = next((k for k in _wr_inst if '外資' in str(k)), None)
     _wr_fnet = _wr_inst.get(_wr_fk, {}).get('net', None) if _wr_fk else None
     _wr_margin = _wr_cd.get('margin')
     _wr_adl = _wr_cd.get('adl')

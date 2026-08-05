@@ -69,7 +69,13 @@ def render_traffic_light_explainer(tl: Optional[dict]) -> None:
     _score = tl.get('score', 0)
     _regime = tl.get('regime', 'neutral')
     _defense = tl.get('defense', False)
-    _fut_net = tl.get('fut_net', 0)
+    # ⚠️ v19.177 P1-B:`fut_net` 現在可能是 **None**(先行指標未載入)。
+    # 舊碼 `tl.get('fut_net', 0)` 的預設**只在 key 不存在時生效** —— key 在、
+    # 值為 None 時原樣拿到 None,下方 `{_fut_net:+,.0f}` 立刻拋 TypeError,
+    # 而 caller(`section_state.py:501`)包了 try/except → 整個「📖 為何這個顏色」
+    # expander **靜默消失**。§1:降級要看得見,不可靜默,更不可回頭捏 0(那等於
+    # 宣告「外資期貨淨部位是 0」)。
+    _fut_net = tl.get('fut_net')
     _conf = tl.get('conf', 0)
 
     with st.expander("📖 為何紅綠燈是現在這個顏色?(展開看判讀規則 + 推導)", expanded=False):
@@ -83,7 +89,11 @@ def render_traffic_light_explainer(tl: Optional[dict]) -> None:
             f"  *(切點:多頭需 ≥ {BULL_MIN_SCORE})*"
         )
         st.markdown(f"- 市場 regime:**{_regime}**")
-        st.markdown(f"- 外資期貨淨部位:**{_fut_net:+,.0f}** 口")
+        st.markdown(
+            f"- 外資期貨淨部位:**{_fut_net:+,.0f}** 口" if _fut_net is not None
+            else "- 外資期貨淨部位:**— 未取得**（先行指標未載入；"
+                 "此時防禦判定的期貨條件視為「無法判斷」，不會觸發也不會抑制）"
+        )
         st.markdown(f"- 資料信心度:**{_conf}%**")
 
         st.markdown("")
@@ -131,9 +141,22 @@ def render_traffic_light_explainer(tl: Optional[dict]) -> None:
         # (market_strategy.py:151-155)；② regime 只會回 bull/neutral/bear
         # 三態，且由 MA120 連三日 + 斜率單獨決定（ADL/漲跌家數是進 score，不進
         # regime）—— 'caution' 是 calc_traffic_light:144 的死分支，永不觸發。
+        # ── P0-C 定名 + 反捏造（2026-08-05）──────────────────────────
+        # 原文「旌旗指數(站上 20MA 家數比＝市場廣度)」兩個錯：
+        #   ① **捏造**（§1）：全站沒有任何一行在算「站上 20MA 的家數比」。
+        #      grep `站上|above_ma|pct_above`：tab_stock.py:563-565 的 _above_ma20
+        #      是單檔個股比自己的均線；daily_data_fetchers.py:445 的 adl_ma20 是
+        #      「ADL 累積線的 MA20」。兩者都不是「站上均線的股票家數比例」。
+        #      真值：jingqi_calc.py:43 = ad_ratio.tail(5).mean()，即
+        #      **上漲佔比的 5 日均**。
+        #   ② **撞名**：「市場廣度」是家族統稱（上漲佔比 / 旌旗 / AD 值 / ADL），
+        #      同時名詞表又寫「騰落指標＝市場廣度」→ 跨 tab 對照必然打結。
+        # 文案不在本檔手寫，取 ui_widgets.BREADTH_JINGQI（名詞定義單一出處）。
+        from src.ui.render.ui_widgets import BREADTH_FAMILY_NAME, BREADTH_JINGQI
         st.markdown(
             "TW 股市紅綠燈用**三大支柱**綜合判讀:\n"
-            "- **健康評分**(0-100):旌旗指數(站上 20MA 家數比＝**市場廣度**,"
+            f"- **健康評分**(0-100):{BREADTH_JINGQI.canonical}"
+            f"({BREADTH_JINGQI.formula}；屬**{BREADTH_FAMILY_NAME}**類,"
             f"不是景氣指標){_JQ_PCT}% + 大盤評分 {_SC_PCT}%"
             f",外資資金加分項 **+{_FNET_BONUS} 分**(校準後歸零,見下一段),"
             f"低於 {HEALTH_DEFENSE_THRESHOLD} = 系統性風險浮現,優先保護資金\n"

@@ -38,6 +38,7 @@ from shared.signal_thresholds import (
     BB_DROP_OUT_RATIO,
     BB_NEAR_UPPER_RATIO,
     CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT,
+    CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT,
     FGMS_LABEL_T2,
     FGMS_LABEL_T3,
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
@@ -1578,29 +1579,46 @@ padding:14px 18px;margin-bottom:12px;">
             _macro_info2 = st.session_state.get('macro_info', {}) or {}
             _ma_snap2    = st.session_state.get('ma_snap', {}) or {}
             _intl_snap2  = st.session_state.get('intl_snap', {}) or {}
+            # ── v19.178 AI-SSOT：宏觀門檻改引 SSOT，不在 prompt 內寫死 ──────
+            # 【修的是什麼】本區塊是**個股 AI prompt** 的宏觀背景段，原本自行手寫了
+            # 一套門檻（VIX >20/>30、CPI >3%、台灣 PMI <45、US10Y >4%/>5%），
+            # 而總經 Tab 的 AI prompt 又寫了**另一套**（VIX >28/>35、PMI <48），
+            # 兩者也都與畫面燈號用的 shared/macro_buckets SSOT（VIX 22/30、
+            # CPI 3.5/4.0、PMI 50/46、US10Y 4.5/5.0）不同。
+            # ⇒ 同一個 VIX 值，個股頁 AI、總經頁 AI、畫面燈號可以講出三種結論。
+            # 現統一走 L3 共用元件 `danger_rule_text()`（與總經 Tab 同一份真相）。
+            from src.services.ai_structured_summary import danger_rule_text as _drt2
             _macro_lines2 = []
             _vix_v2 = (_macro_info2.get('vix') or {}).get('current') or _ma_snap2.get('vix')
             if _vix_v2 is not None:
                 try:
-                    _macro_lines2.append(f"VIX 恐慌指數={float(_vix_v2):.2f}（>20 警戒、>30 恐慌）")
+                    _macro_lines2.append(
+                        f"VIX 恐慌指數={float(_vix_v2):.2f}（{_drt2('vix')}）")
                 except (TypeError, ValueError):
                     pass
             _cpi_v2 = (_macro_info2.get('us_core_cpi') or {}).get('yoy') or _ma_snap2.get('cpi')
             if _cpi_v2 is not None:
                 try:
-                    _macro_lines2.append(f"美核心 CPI YoY={float(_cpi_v2):+.2f}%（Fed 目標 2%；>3% 升息壓力）")
+                    _macro_lines2.append(
+                        f"美核心 CPI YoY={float(_cpi_v2):+.2f}%"
+                        f"（{_drt2('us_core_cpi')}；通膨高→升息壓力→壓抑高本益比成長股估值）")
                 except (TypeError, ValueError):
                     pass
             _pmi_v2 = (_macro_info2.get('ism_pmi') or {}).get('value')
             if _pmi_v2 is not None:
                 try:
-                    _macro_lines2.append(f"🇹🇼 台灣 PMI={float(_pmi_v2):.1f}（CIER；50=榮枯線；<45=製造業衰退強訊；台灣製造業景氣領先指標）")
+                    _macro_lines2.append(
+                        f"🇹🇼 台灣 PMI={float(_pmi_v2):.1f}"
+                        f"（CIER；{_drt2('ism_pmi')}；黃線即榮枯分界，"
+                        f"低於代表製造業收縮；台灣製造業景氣領先指標）")
                 except (TypeError, ValueError):
                     pass
             _tnx_v2 = (_intl_snap2.get('tnx') or {}).get('last') or _ma_snap2.get('us10y')
             if _tnx_v2 is not None:
                 try:
-                    _macro_lines2.append(f"美 10Y 殖利率={float(_tnx_v2):.2f}%（>4% 估值壓抑、>5% 殺戮區）")
+                    _macro_lines2.append(
+                        f"美 10Y 殖利率={float(_tnx_v2):.2f}%"
+                        f"（{_drt2('us10y')}；殖利率高→估值壓抑）")
                 except (TypeError, ValueError):
                     pass
             _sox_obj2 = _intl_snap2.get('sox') or {}
@@ -1647,8 +1665,12 @@ padding:14px 18px;margin-bottom:12px;">
                     f'現價={_cur_p:.2f}',
                     f'近20日壓力={_hi20_p:.2f}(距現價+{_dist_hi}%)',
                     f'近20日支撐={_lo20_p:.2f}(距現價-{_dist_lo}%)',
-                    f'停利目標1(+5%)={_tp1_p} / 目標2(+10%)={_tp2_p}',
-                    f'建議停損(-8%)={_sl_p} | 盈虧比={_rr_p}x',
+                    # v19.178 §3.3:+5% / +10% / -8% 原為 prompt 內寫死,而 _tp1_p /
+                    # _tp2_p / _sl_p 的**算法**走 SSOT(:633-634)。改門檻時價位會動、
+                    # 送給 AI 的說明不會動 → AI 會照舊百分比敘事。改為插值。
+                    f'停利目標1(+{STOP_PROFIT_T1_PCT:g}%)={_tp1_p} / '
+                    f'目標2(+{STOP_PROFIT_T2_PCT:g}%)={_tp2_p}',
+                    f'建議停損(-{STOP_LOSS_DEFAULT_PCT:g}%)={_sl_p} | 盈虧比={_rr_p}x',
                 ]
                 if _entry_half:
                     _sr_parts2.append(f'大量紅K 1/2 低風險買點={_entry_half}')  # v19.174 去識別化
@@ -1671,16 +1693,27 @@ padding:14px 18px;margin-bottom:12px;">
             except Exception:
                 _li_str2 = '（基本面先行指標未計算）'
             _rs_v = _xsec.get('rs_val')
-            _rs_str2 = (f'{_rs_v:.0f} 分（≥75 強勢領漲、50-75 中性、<50 落後大盤；相對加權指數）'
+            # v19.178 §3.3:75 / 50 原為 prompt 內寫死,改插值 STOCK_RS_* SSOT
+            _rs_str2 = (f'{_rs_v:.0f} 分（≥{STOCK_RS_STRONG_MIN:g} 強勢領漲、'
+                        f'{STOCK_RS_NEUTRAL_MIN:g}-{STOCK_RS_STRONG_MIN:g} 中性、'
+                        f'<{STOCK_RS_NEUTRAL_MIN:g} 落後大盤；相對加權指數）'
                         if isinstance(_rs_v, (int, float)) else '（未計算）')
             try:
                 _cap_v = _xsec.get('capital')
                 if _cap_v and _cap_v > 0:
                     _cl_r = (locals().get('cl2') or 0) / _cap_v * 100
                     _cx_r = (locals().get('cx2') or 0) / _cap_v * 100
-                    _is_lead = '✅ 符合龍頭高成長特徵' if (_cl_r >= 50 or _cx_r >= CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT) else '未達龍頭門檻'
+                    # v19.178 §3.3:判定端的 `>= 50` 與文案端的「股本50%」是兩份複本,
+                    # 文案端的「股本80%」又與判定端已 SSOT 化的 CAPEX_* 各寫一份。
+                    # 兩者一律插值(50 新抽 CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT)。
+                    _is_lead = ('✅ 符合龍頭高成長特徵'
+                                if (_cl_r >= CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT
+                                    or _cx_r >= CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT)
+                                else '未達龍頭門檻')
                     _lead_str2 = (f'合約負債/股本={_cl_r:.0f}%、資本支出/股本={_cx_r:.0f}% → {_is_lead}'
-                                  '（龍多策略：合約負債≥股本50%=客戶預付旺、資本支出≥股本80%=積極擴產）')  # v19.174 去識別化
+                                  f'（龍多策略：合約負債≥股本'
+                                  f'{CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT:g}%=客戶預付旺、'
+                                  f'資本支出≥股本{CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT:g}%=積極擴產）')  # v19.174 去識別化
                 else:
                     _lead_str2 = '（股本資料未取得，無法判定龍頭擴產特徵）'
             except Exception:

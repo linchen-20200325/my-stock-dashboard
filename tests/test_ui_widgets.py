@@ -207,7 +207,13 @@ class TestShowTermHelp:
     def test_chinese_term(self):
         html = show_term_help('旌旗指數')
         assert '旌旗指數' in html
-        assert '全市場健康度' in html
+        # v19.176 P0-C:原本斷言 '全市場健康度' —— 該名稱已**退役**並登記於
+        # ui_widgets.BREADTH_DEPRECATED_TITLES。退役理由:它同時被貼在三個不同
+        # 的量上(旌旗 5 日均 / 當日上漲佔比 / 綜合健康度),且「旌旗＝站上 20MA
+        # 家數比」這個舊描述是捏造的 —— 全 repo 沒有任何 code 在算站上均線家數
+        # 比,真實公式是「上漲佔比的 5 日均」(src/services/jingqi_calc.py:43)。
+        # 這條測試原本正好釘住那個錯名,故一併改釘新的 nickname。
+        assert '廣度 5 日均' in html
 
     def test_uses_explain_box_format(self):
         # 應該複用 explain_box 包裝

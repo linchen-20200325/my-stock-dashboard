@@ -1066,13 +1066,13 @@ def _generate_ai_report(gemini_fn, qualified: list[dict], all_results: list[dict
         _title = f'{r["ticker"]} {_name}'.strip()
         _pick_lines.append(
             f'- {_title}：'
-            f'基本面體質過了 {r["s1_pass_cnt"]}/9 關'
+            f'基本面體質過了 {r["s1_pass_cnt"]}/{len(PICKER_S1_CONDITIONS)} 關'
             f'（負債{r.get("debt_ratio_label", "?")}、賺錢能力三率{r.get("three_rate_label", "?")}、'
             f'近5年配息{r.get("div_5y_label", "?")}、股價貴不貴{r.get("pe_zone_label", "?")}、'
             f'收帳速度{r.get("ar_turnover_label", "?")}、賣貨速度{r.get("inv_turnover_label", "?")}、'
             f'敢花錢擴廠{r.get("capex_label", "?")}、家底淨值{r.get("book_value_label", "?")}、'
             f'未來訂單合約負債{r.get("contract_liab_label", "?")}）；'
-            f'買盤時機過了 {r["s2_pass_cnt"]}/6 關'
+            f'買盤時機過了 {r["s2_pass_cnt"]}/{len(PICKER_S2_CONDITIONS)} 關'
             f'（站上月線{r.get("ma20_label", "?")}、MACD多空{r.get("macd_label", "?")}、'
             f'KD轉強{r.get("kd_label", "?")}、布林開口{r.get("boll_label", "?")}、'
             f'投信買超{r.get("inst_label", "?")}、千張大戶加碼{r.get("major_label", "?")}）'
@@ -1082,13 +1082,17 @@ def _generate_ai_report(gemini_fn, qualified: list[dict], all_results: list[dict
     # ── 第 2 節：整批名單體質統計（通過率）────────────────────
     _total = len(all_results)
     _qual_n = len(qualified)
-    _s1_strong = sum(1 for r in all_results if r.get('s1_pass_cnt', 0) >= 5)
-    _s2_strong = sum(1 for r in all_results if r.get('s2_pass_cnt', 0) >= 3)
+    # v19.178 §3.3:原 inline `>= 5` / `>= 3` + 文案「過 5 關」「過 3 關」。
+    # `PICKER_S1_MIN_PASS` 已於 v18.466 由 5 拉高到 6，同檔 :318/:361/:363 都跟著改了，
+    # **只有這份餵給 AI 的統計沒改** → 送進 LLM 的報告對使用者陳述的篩選標準是錯的
+    # (畫面說 6/9、AI 報告說 5 關以上)。改為插值 SSOT，永不再漂移。
+    _s1_strong = sum(1 for r in all_results if r.get('s1_pass_cnt', 0) >= PICKER_S1_MIN_PASS)
+    _s2_strong = sum(1 for r in all_results if r.get('s2_pass_cnt', 0) >= PICKER_S2_MIN_PASS)
     _rate = (f'{_qual_n / _total * 100:.0f}%' if _total else '0%')
     _stat_lines = [
         f'- 這次總共掃了 {_total} 檔股票。',
-        f'- 基本面體質健康（過 5 關以上）的有 {_s1_strong} 檔。',
-        f'- 買盤時機到位（過 3 關以上）的有 {_s2_strong} 檔。',
+        f'- 基本面體質健康（過 {PICKER_S1_MIN_PASS} 關以上）的有 {_s1_strong} 檔。',
+        f'- 買盤時機到位（過 {PICKER_S2_MIN_PASS} 關以上）的有 {_s2_strong} 檔。',
         f'- 兩邊同時都過、最後入選的有 {_qual_n} 檔，等於每 100 檔大約只挑出 {_rate}。',
         '- 入選比例越低，代表標準守得越嚴、地雷股被擋掉越多。',
     ]

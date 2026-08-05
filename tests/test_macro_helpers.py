@@ -148,11 +148,18 @@ class TestCalcTrafficLight:
         assert tl['conf'] == pytest.approx(40)
 
     def test_li_latest_safe_parsing(self):
-        # 欄位缺失：不報錯，fut_net=0、leek=50
+        # 欄位缺失：不報錯，fut_net / leek 一律 None
+        # ── v19.177 P1-B 行為變更（§1 Fail Loud）───────────────────────────
+        # 舊斷言是 `fut_net == 0` / `leek == 50`，那是**捏造的預設值**：
+        #   - leek 欄實際是「小台法人空多比」，值域 ±100%、中位 0 → 50 是極端偏空，
+        #     拿它當 neutral default 同時違反 §1 與 §4.1（量綱/值域錯配）。
+        #   - fut_net = 0 會讓 `_defense` 判定恆為假 ＝ 把缺資料當成安全訊號。
+        # 現在兩者缺值一律 None；缺失由 conf 下降 + missing_sources 顯示（見
+        # tests/test_p1b_fabricated_defaults.py）。
         li = pd.DataFrame({'其他欄': [1]})
         tl = calc_traffic_light({'score': 3, 'regime': 'neutral'}, {'avg': 60}, {}, li)
-        assert tl['fut_net'] == 0
-        assert tl['leek'] == 50
+        assert tl['fut_net'] is None
+        assert tl['leek'] is None
 
     def test_health_formula(self):
         # v19.102 校準採納(方案 B):health = avg*0.6 + min(score/max*100,100)*0.4

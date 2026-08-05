@@ -94,13 +94,21 @@ def _get_health_params() -> tuple[float | None, float | None, float | None]:
         except Exception:
             _score_pct = None
 
+    # ── v19.177 P1-B:`_fnet` 缺值改 None,不再捏 0(§1)──────────────────────
+    # 舊碼三處都寫死 0。看似無害(v1 的 HEALTH_FNET_BONUS 已校準歸零),但
+    # **v2 有實質影響**:`compute_health_score_min_of_factors` 在 `fnet <= 0`
+    # 時會把 40 分壓制項加進 min 候選(reconcile.py:229-230)⇒ 「三大法人沒載入」
+    # 被當成「外資淨賣」,v2 被硬壓到 ≤40 → 與 v1 拉開差距 → 該列**假紅**。
+    # 改回 None 後,reconcile_health_score 內兩個 compute_* 都會回 None,
+    # 面板誠實顯示 ⬜(both_missing)而不是紅燈。
     _inst = _cl.get('inst') or {}
     _fk = next((k for k in _inst if '外資' in str(k)), None)
-    _fnet = _inst.get(_fk, {}).get('net', 0) if _fk else 0
+    _fnet_raw = _inst.get(_fk, {}).get('net') if _fk else None
     try:
-        _fnet = float(_fnet)
-    except Exception:
-        _fnet = 0.0
+        _fnet = float(_fnet_raw) if _fnet_raw is not None else None
+    except (TypeError, ValueError):
+        print(f"[reconcile_panel] ⚠️ 外資 net 無法轉 float: {_fnet_raw!r} → 視為未取得(§1)")
+        _fnet = None
 
     return _jqavg, _score_pct, _fnet
 
@@ -126,7 +134,11 @@ def compute_reconcile_rows() -> list[dict[str, Any]]:
         'source_a': _r['source_a'],
         'source_b': _r['source_b'],
         'delta':    _r['delta_abs'],
-        'note':     '雙源差 > 5bp → disagree',
+        # v19.177 P1-B ③:^TNX 刻度改由 reconcile.normalize_tnx_quote 偵測
+        # (4.63 直接% / 46.3 ×10 慣例 / 越界回 ⬜ 不猜)。偵測結果印在 source 欄,
+        # 故 note 提醒讀者「v1/v2 都已是百分點」,避免又被誤讀成沒換算。
+        'note':     '雙源差 > 5bp → disagree；^TNX 刻度自動偵測（見 source 欄），'
+                    '兩欄皆為百分點',
     })
 
     # ── 月營收 YoY:目前無 production 收集(待 user 觸發個股查詢時動)──

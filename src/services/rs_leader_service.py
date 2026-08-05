@@ -38,6 +38,11 @@ from shared.rs_screen_thresholds import (
     RS_MAX_WORKERS,
     RS_SCAN_MAX,
 )
+from shared.signal_thresholds import (  # v19.178:AI prompt 引 RS σ 分級 SSOT
+    RS_SIGMA_LAG_MAX,
+    RS_SIGMA_LEAD_MIN,
+    RS_SIGMA_MILD_MIN,
+)
 from shared.ttls import TTL_1HOUR
 from src.compute.screener.rs_leader_screener import (
     count_insufficient,
@@ -239,7 +244,14 @@ def build_rs_ai_prompt(
         f"- 觀察區間：近 {_lookback} 個交易日。",
         f"- {_mkt.get('banner', '（市場情境未知）')}",
         f"- 這次掃出共 {len(_rows)} 檔進榜，其中 {_cnt_beat()} 檔區間報酬贏過大盤。",
-        "- RS 為「σ 標準化超額報酬」：+1σ 以上＝顯著逆勢強、0 附近＝與大盤連動、負值＝弱於大盤。",
+        # v19.178 §3.3:原寫死「+1σ 以上 / 0 附近 / 負值」，與實際分級 SSOT
+        # (shared/signal_thresholds RS_SIGMA_*) 的三段門檻不同 —— 表格裡的「訊號」欄
+        # 用 1.0 / 0.3 / -0.3 分級，餵給 AI 的說明卻把 0.3 / -0.3 壓縮成「0 附近」，
+        # LLM 讀不出 🟡 偏強與 ⚪ 同步的界線。改為插值 SSOT。
+        (f"- RS 為「σ 標準化超額報酬」（單位＝大盤日報酬標準差的倍數）："
+         f"≥{RS_SIGMA_LEAD_MIN:+.1f}σ＝🔴 顯著逆勢強、"
+         f"≥{RS_SIGMA_MILD_MIN:+.1f}σ＝🟡 偏強、"
+         f"<{RS_SIGMA_LAG_MAX:+.1f}σ＝🟢 弱於大盤，其間＝⚪ 與大盤同步。"),
     ])
 
     # ── 第 3 節：模型限制與正確用法（誠實揭露）──────────────

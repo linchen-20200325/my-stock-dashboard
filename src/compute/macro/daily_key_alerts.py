@@ -104,6 +104,21 @@ def collect_key_alerts(threshold_alerts: list | None,
     Returns:
         {'items': [{'emoji','severity'(0紅/1黃),'text','detail','layer'}...]
          依 severity 升冪(紅先), 'n_red': int, 'n_yellow': int}
+
+    ⚠️ v19.176 P0-A(§1 Fail Loud, Never Fake)—— **`items == []` 不等於
+    「今天沒事」**。本函式刻意**不**在回傳值裡編碼「有沒有評估過」:
+
+      - `threshold_alerts is None` → section_mid 這輪還沒跑(未評估)
+      - `threshold_alerts == []`   → 跑了但 `check_macro_alerts` 一個指標
+        都沒取到(snapshot 全 None,見 macro_alert.py:143 `if raw is None:
+        continue`)= 無資料可評
+      - 非空 list 且全 green       → 真的評估過且無異常
+
+    三者在本函式都會得到 `items == []`。**要顯示綠燈的責任在 render 端**:
+    caller 必須把「門檻層是否真的評估過」(`bool(macro_alerts)`,None 與 []
+    都 falsy)傳給 `macro_ui_components.key_alerts_banner(...,
+    threshold_scanned=...)`,由它決定走綠色還是中性灰。本函式維持既有
+    回傳契約(不加欄位)以免既有 caller/回歸測試被靜默改語意。
     """
     items = _threshold_items(threshold_alerts) + _delta_items(macro_info)
     items.sort(key=lambda i: i['severity'])

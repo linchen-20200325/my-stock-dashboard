@@ -17,12 +17,54 @@ import json
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
-from src.config import FINMIND_TOKEN  # noqa: F401
+# v19.178 AI-SSOT:餵給 LLM 的門檻一律引 SSOT,不在 prompt 內寫死(§3.3)。
+# 五桶危險門檻 SSOT = shared/macro_buckets.BUCKET_DANGER_SPECS(畫面燈號同源),
+# 由 L3 共用 prompt 元件 ai_structured_summary 轉成判讀句(個股 Tab 共用同一份)。
+from shared.signal_thresholds import PCR_PERCENT_SCALE_MIN as _PCR_PCT_SCALE_MIN
+from src.config import (  # noqa: F401
+    FINMIND_TOKEN,
+    LEEK_ALERT_HIGH_PCT,
+    LEEK_ALERT_LOW_PCT,
+    LEEK_PIVOT_HIGH_PCT,
+)
+from src.services.ai_structured_summary import (
+    danger_rule_text as _danger_rule_text,
+    pcr_rule_text as _pcr_rule_text,
+)
 from src.ui.render.macro_ui_components import section_header
 from src.ui.tabs.macro.helpers import render_macro_bucket_summary_bar  # noqa: F401
+# v19.175 P0:`cl_data['inst']` 型別收斂 SSOT(L5 → L2,合法下行依賴)
+from src.compute.macro import coerce_inst_dict
 from src.services.macro_state_locker import (
+    MACRO_VETO_FUTURES_NET_SHORT_LOTS,
+    MACRO_VETO_FUTURES_EXPOSURE_CAP_PCT,
     MacroStateLocker, calculate_system_state, load_macro_state,
 )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# v19.178 AI-SSOT — 餵給 LLM 的「怎麼判讀」門檻一律由 SSOT 產生
+#
+# 【修的是什麼】本檔 `_ctx` 區塊組裝送進 Gemini 的總經 context,每行都附一句
+# 「怎麼判讀」。2026-08-06 稽核發現其中 6 條的門檻是 prompt 內寫死的裸數字,
+# 且**與畫面燈號用的 shared/macro_buckets.BUCKET_DANGER_SPECS 不一致**:
+#     外資期貨  prompt <-35000 強烈空頭   vs  SSOT 黃 -10000 / 紅 -20000
+#     VIX       prompt >28 / >35          vs  SSOT 黃 22 / 紅 30
+#     BIAS240   prompt >15 / <-10         vs  SSOT 黃 10 / 紅 20
+#     ADL 廣度  prompt >70 / <30          vs  SSOT 黃 50 / 紅 35
+#     PMI       prompt <48 製造業衰退      vs  SSOT 黃 50 / 紅 46
+#     CPI       prompt >3% 升息壓力        vs  SSOT 黃 3.5 / 紅 4.0
+# 後果:系統畫面已亮 🔴,AI 卻依較寬的門檻說「還在安全區」。使用者會以為兩者
+# 看的是同一套規則 —— 這是 §1「錯誤的數字比沒有數字更危險」的變形:
+# **錯誤的門檻比沒有門檻更危險**。
+#
+# 【處置】不再手寫門檻,一律由 `src.services.ai_structured_summary.danger_rule_text`
+# 生成(值/單位/小數位/方向全取自 DangerSpec)。該 helper 刻意放在 L3 共用 prompt
+# 元件,因為**個股 Tab 的 AI prompt 也犯同款**(tab_stock `_macro_lines2` 另寫了
+# VIX >20 / PMI <45 / US10Y >4 一套),兩處必須共用同一份真相才不會再分岔(§2.1)。
+# ══════════════════════════════════════════════════════════════════════
+_danger_rule = _danger_rule_text     # 本檔沿用短名（呼叫點密集，維持可讀性）
+_pcr_alert_rule = _pcr_rule_text
 
 
 def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
@@ -139,10 +181,15 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 _system_state = calculate_system_state(_macro_numbers)
                 # ── 組裝量化原始數據字串供新版 AI 提示語使用 ──────
                 _cl_d_v = st.session_state.get('cl_data', {})
-                _inst_v = _cl_d_v.get('inst', {})
-                _fk_v   = next((k for k in _inst_v if '外資' in k), None)
-                _tk_v   = next((k for k in _inst_v if '投信' in k), None)
-                _dk_v   = next((k for k in _inst_v if '自營' in k), None)
+                # v19.175 P0:`.get('inst', {})` 的預設值只在 key 不存在時生效;
+                # key 在、值為 None(上游三大法人全敗)時會讓下面 3 行 genexpr 拋
+                # `TypeError: 'NoneType' object is not iterable` 炸掉總經分頁。
+                # 收斂 + log 走 L2 SSOT(§1:缺失時三行量化脈絡直接不列給 LLM,
+                # 不塞 0 讓它腦補「外資買賣超 0 億」)。
+                _inst_v = coerce_inst_dict(_cl_d_v, where='section_news_ai')
+                _fk_v   = next((k for k in _inst_v if '外資' in str(k)), None)
+                _tk_v   = next((k for k in _inst_v if '投信' in str(k)), None)
+                _dk_v   = next((k for k in _inst_v if '自營' in str(k)), None)
                 _fnet_v = _inst_v.get(_fk_v, {}).get('net') if _fk_v else None
                 _tnet_v = _inst_v.get(_tk_v, {}).get('net') if _tk_v else None
                 _dnet_v = _inst_v.get(_dk_v, {}).get('net') if _dk_v else None
@@ -162,41 +209,108 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                         pass
                 _ctx = []
                 if _bi_d.get('bias_240') is not None:
-                    _ctx.append(f'• 大盤年線乖離率 BIAS240：{_bi_d["bias_240"]:+.1f}%（>15%偏貴、<-10%低估）')
+                    # v19.178:原「>15%偏貴、<-10%低估」為 prompt 內寫死,與五桶 SSOT
+                    # (黃 10 / 紅 20,high_bad 單向)不符。負乖離側 SSOT **刻意不設門檻**
+                    # (spec.note:「負乖離為超賣機會,非危險」),故如實告知而非另編一個 -10。
+                    _ctx.append(
+                        f'• 大盤年線乖離率 BIAS240：{_bi_d["bias_240"]:+.1f}%'
+                        f'（{_danger_rule("bias_240")}；'
+                        f'負乖離＝低於年線,系統視為超賣機會而非危險,不設危險門檻）')
                 if _mi_d.get('m1b_yoy') is not None:
                     _gap_v = round(float(_mi_d['m1b_yoy']) - float(_mi_d.get('m2_yoy') or 0), 2)
-                    _ctx.append(f'• M1B={_mi_d["m1b_yoy"]:.1f}%  M2={_mi_d.get("m2_yoy",0):.1f}%  差額={_gap_v:+.2f}%（正=資金行情啟動）')
+                    _ctx.append(
+                        f'• M1B={_mi_d["m1b_yoy"]:.1f}%  M2={_mi_d.get("m2_yoy",0):.1f}%  '
+                        f'差額={_gap_v:+.2f}%（正=資金行情啟動；{_danger_rule("m1b_m2_gap")}）')
                 if _fnet_v is not None:
-                    _ctx.append(f'• 外資現貨買賣超：{_fnet_v:+.1f}億')
+                    _ctx.append(f'• 外資現貨買賣超：{_fnet_v:+.1f}億（{_danger_rule("foreign_net")}）')
                 if _tnet_v is not None:
-                    _ctx.append(f'• 投信買賣超：{_tnet_v:+.1f}億')
+                    # 投信 / 自營商在五桶 SSOT 內**沒有**對應 DangerSpec → 誠實不給門檻,
+                    # 不自行腦補一組(§1:沒有門檻好過錯誤的門檻)。
+                    _ctx.append(f'• 投信買賣超：{_tnet_v:+.1f}億（系統未對此項設危險門檻）')
                 if _dnet_v is not None:
-                    _ctx.append(f'• 自營商買賣超：{_dnet_v:+.1f}億')
+                    _ctx.append(f'• 自營商買賣超：{_dnet_v:+.1f}億（系統未對此項設危險門檻）')
                 if _margin_v is not None:
-                    _ctx.append(f'• 融資餘額：{_margin_v:.0f}億（>3400億危險、>2500億警戒）')
+                    _ctx.append(f'• 融資餘額：{_margin_v:.0f}億（{_danger_rule("margin")}）')
                 if _leek_v2 is not None:
-                    _ctx.append(f'• 韭菜指數（小台散戶多空比）：{_leek_v2:.0f}（>80散戶過熱、<20散戶恐慌）')
+                    # v19.177 §1:原文案寫「>80散戶過熱、<20散戶恐慌」—— 那是**另一個**
+                    # 同名指標的尺度(融資餘額 5Y 標準化指數,值域 [0,100]、中位 50)。
+                    # 本欄實際餵進來的 `韭菜指數` 是「小台法人空多比」
+                    # (leading_indicators:(法人空方MTX OI − 法人多方MTX OI)/小台全體OI×100),
+                    # **值域 ±100%、中位 0%**。兩者差一個量綱(§4.1)。
+                    # 後果:實測 +34.7%(三套門檻都判過熱)會被 LLM 讀成「離 80 還很遠 →
+                    # 情緒平穩」⇒ **AI 總經敘事系統性低估散戶過熱**。這是餵給模型的
+                    # 錯誤事實,比畫面上寫錯更難察覺(§1「錯誤的數字比沒有數字更危險」)。
+                    # 門檻一律引 SSOT(src/config/config.py:105-120),不在 prompt 內寫死。
+                    _ctx.append(
+                        f'• 韭菜指數（小台法人空多比）：{_leek_v2:+.1f}%'
+                        f'（值域 ±100%、中性 0%；'
+                        f'>{LEEK_PIVOT_HIGH_PCT:+.0f}% 散戶偏熱、'
+                        f'>{LEEK_ALERT_HIGH_PCT:+.0f}% 極端過熱（頂部訊號）；'
+                        f'<{LEEK_ALERT_LOW_PCT:+.0f}% 極端悲觀（軋空動能）)'
+                    )
                 if _pcr_v is not None:
-                    _ctx.append(f'• 選擇權 PCR：{_pcr_v:.2f}（>1.3市場恐慌偏多訊號、<0.7過度樂觀偏空）')
+                    # v19.178 §4.1 量綱:`li_latest['選PCR']` 由 leading_indicators 寫入時
+                    # 已 ×100 轉百分比刻度(50~200,evidence: macro_alert.py:285-295 同註),
+                    # 但 SSOT 門檻 MACRO_ALERT_RULES['pcr'] 是**標準 PCR 比值刻度**(0.5~2.0)。
+                    # 原 prompt 直接把 126.80 配上「>1.3 恐慌」→ 100× 量綱錯,LLM 必然
+                    # 讀成「極度恐慌」。此處**只為 prompt** 換算回比值刻度並標明兩種刻度。
+                    # ⚠️ 同一個 `_pcr_v` 也餵給 `calculate_system_state`(見上方 _macro_numbers),
+                    #   那條路徑仍是百分比刻度 → `pcr > 1.5` 恆真 → 曝險分數恆 -10。
+                    #   修那條會直接位移「建議持股」數字,屬 §8.4「需分開提案」的行為變更,
+                    #   本版**刻意不動**,已列入稽核報告待 user 核准。
+                    _pcr_ratio = _pcr_v / 100.0 if _pcr_v > _PCR_PCT_SCALE_MIN else _pcr_v
+                    _ctx.append(
+                        f'• 選擇權 PCR（Put/Call 比值）：{_pcr_ratio:.2f}'
+                        f'（原始欄位為百分比刻度 {_pcr_v:.1f}，此處已換算回標準比值；'
+                        f'{_pcr_alert_rule()}）')
                 if _adl_ratio_v is not None:
-                    _ctx.append(f'• ADR 廣度指標：{_adl_ratio_v:.0f}%（>70市場健康、<30廣度不足）')
+                    # v19.178 正名:原寫「ADR 廣度指標」—— ADR 在金融是 American
+                    # Depositary Receipt(美國存託憑證),與本欄毫無關係,會誤導 LLM。
+                    # 本欄實為 ADL 漲跌家數比(上漲家數佔比 %),與五桶 `adl` 同源同欄位。
+                    _ctx.append(
+                        f'• ADL 漲跌家數比（上漲家數佔全市場 %）：{_adl_ratio_v:.0f}%'
+                        f'（{_danger_rule("adl")}）')
                 if _fut_net_v is not None:
-                    _ctx.append(f'• 外資期貨淨口數：{_fut_net_v:+.0f}口（負=淨空單、<-35000強烈空頭信號）')
+                    # v19.178 §4.1 量綱:本欄 = TX **當量口**(大台淨口 + 0.25×小台淨口),
+                    # 非原始口數加總(evidence: leading_indicators.py:1267-1281)。原 prompt
+                    # 只寫「口」且門檻 -35000 與畫面燈號(-10000/-20000)差 1.75 倍。
+                    # 兩條門檻**都是真的但用途不同**,故兩條並列並各自標明來源。
+                    _ctx.append(
+                        f'• 外資期貨淨口數：{_fut_net_v:+.0f} 口'
+                        f'（單位為 TX 當量口＝大台淨口＋0.25×小台淨口，非原始口數加總；'
+                        f'負=淨空單；{_danger_rule("fut_net")}；'
+                        f'另有系統硬否決線：淨口 <{MACRO_VETO_FUTURES_NET_SHORT_LOTS:+.0f} 口'
+                        f'「且」指數同時跌破 MA5 → 強制曝險上限 '
+                        f'{MACRO_VETO_FUTURES_EXPOSURE_CAP_PCT}%，此線比燈號嚴屬設計）')
                 if _vix_d.get('current'):
-                    _ctx.append(f'• VIX 恐慌指數：{_vix_d["current"]}（>28警戒、>35極度恐慌）')
-                _ndc_v = locals().get('_m8_ndc')
-                if _ndc_v and _ndc_v.get('score') is not None:
-                    _ctx.append(f'• NDC 景氣對策信號：{float(_ndc_v["score"]):.0f}分（9-16藍燈衰退 / 23-31綠燈穩定 / 38-45紅燈過熱）')
+                    _ctx.append(f'• VIX 恐慌指數：{_vix_d["current"]}（{_danger_rule("vix")}）')
+                # v19.178 §1:原寫 `locals().get('_m8_ndc')` —— `_m8_ndc` 從未在本函式
+                # 內賦值(它隨 §八 被抽到 section_mid 的 local),故此條 **永遠不會進 prompt**,
+                # 是 dead context。NDC 實際就在本函式的 `_macro_info` 參數裡,直接取用。
+                _ndc_v = _macro_info.get('ndc_signal') or {}
+                if _ndc_v.get('score') is not None:
+                    _ctx.append(
+                        f'• NDC 景氣對策信號：{float(_ndc_v["score"]):.0f}分'
+                        f'（國發會 9 項指標合成，分數越高景氣越熱；'
+                        f'{_danger_rule("ndc_signal")}）')
                 if _pmi_cur is not None:
-                    _ctx.append(f'• 台灣 PMI / 景氣領先：{_pmi_cur}（>50擴張、<50收縮、<48製造業衰退）')
+                    _ctx.append(f'• 台灣 PMI（製造業採購經理人指數）：{_pmi_cur}'
+                                f'（{_danger_rule("ism_pmi")}；黃線即榮枯分界，'
+                                f'低於代表製造業收縮）')
                 if _exp_d.get('yoy') is not None:
-                    _ctx.append(f'• 台灣外銷訂單 YoY：{_exp_d["yoy"]:+.1f}%（科技出口景氣領先）')
+                    # v19.178 正名:`tw_export` = 財政部海關**出口**年增率,不是經濟部
+                    # 外銷訂單(v19.85 已於畫面正名,此處為漏網的第二份)。
+                    _ctx.append(f'• 台灣出口 YoY（財政部海關出口金額年增率）：'
+                                f'{_exp_d["yoy"]:+.1f}%（{_danger_rule("tw_export")}）')
                 if _cpi_d.get('yoy') is not None:
-                    _ctx.append(f'• 美國核心 CPI YoY：{_cpi_d["yoy"]:+.1f}%（>3% 升息壓力、壓抑高 PE 成長股估值）')
-                _sox_v = locals().get('_ai_sox') or 0
-                _nvda_v = locals().get('_ai_nvda') or 0
-                if _sox_v or _nvda_v:
-                    _ctx.append(f'• 美股科技動能：費半 SOX={_sox_v:+.1f}% / NVDA={_nvda_v:+.1f}%（領先台股科技權值股 2-4 週）')
+                    _ctx.append(f'• 美國核心 CPI YoY：{_cpi_d["yoy"]:+.1f}%'
+                                f'（{_danger_rule("us_core_cpi")}；'
+                                f'通膨高→升息壓力→壓抑高本益比成長股估值）')
+                # v19.178 §1:`_ai_sox` / `_ai_nvda` 同樣從未在本函式賦值(它們是
+                # section_cross_ai 的 local),故美股科技動能這條也是 dead context。
+                # 修法需把 `tech_s` 一路傳進本 section(跨 section 參數改動,§8.4 屬
+                # 分開提案),本版**不擴大改動面**,改為明確標注待接線,不再假裝有值。
+                # (原碼 `locals().get(...) or 0` 會讓 if 恆為 False,靜默吞掉整條)
                 _v_macro_ctx = '\n'.join(_ctx) if _ctx else '（數據尚未載入，請先按「🚀 一鍵更新全部數據」）'
                 _locker = MacroStateLocker()
                 _locker.lock_system_state_only(_system_state)

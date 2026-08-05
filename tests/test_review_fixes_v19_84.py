@@ -80,10 +80,21 @@ class TestNestAsyncioRemoved:
 
     def test_no_asyncio_consumers_repo_wide(self):
         """守恆檢查:src/ 下無 asyncio 使用(死 import 移除的前提;若未來引入
-        async 程式碼,本測試提醒重新評估 event-loop patch 需求)。"""
-        import subprocess
-        proc = subprocess.run(
-            ["grep", "-rl", "asyncio", str(REPO / "src")],
-            capture_output=True, text=True)
-        hits = [l for l in proc.stdout.splitlines() if l.endswith(".py")]
+        async 程式碼,本測試提醒重新評估 event-loop patch 需求)。
+
+        可攜性:原以 `subprocess.run(["grep", ...])` 實作,Windows 無 grep →
+        FileNotFoundError(WinError 2),本機必紅。改純 Python 掃描,語意等價於
+        `grep -rl asyncio src/` 再濾 `.py`(仍是「任一 .py 含 asyncio 子字串
+        即失敗」,未放寬),並額外回報命中位置與原文以利判讀。
+        """
+        hits: list[str] = []
+        for _py in sorted((REPO / "src").rglob("*.py")):
+            _text = _py.read_text(encoding="utf-8", errors="replace")
+            if "asyncio" not in _text:
+                continue
+            for _no, _line in enumerate(_text.splitlines(), start=1):
+                if "asyncio" in _line:
+                    hits.append(
+                        f"{_py.relative_to(REPO).as_posix()}:{_no}: {_line.strip()}")
+                    break
         assert hits == [], f"src/ 出現 asyncio 使用,請重新評估: {hits}"

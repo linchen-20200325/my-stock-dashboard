@@ -1,5 +1,270 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧪 2026-08-06 測試可攜性 + AI prompt 門檻 SSOT + 捏造預設清除(v19.177~178)
+
+> 驗證:`python -m pytest -q` → **4093 passed / 0 failed**(本專案史上第一次全綠)。
+> 起點是 3821 passed / 4 failed,本批新增約 270 條測試並清掉 4 個長年既有失敗。
+
+### ① 四個「既有失敗」全數修掉(不是忽略,是修)
+
+前幾輪一直標它們「既有問題、不算這批的錯」—— 那句話只說明**責任歸屬**,不等於不該修。
+依 §-1「跑測試時遇到實際錯誤」本來就是允許動工的觸發條件,而它們每一輪都在浪費判讀時間。
+
+| 失敗 | 真因 | 修法 |
+|---|---|---|
+| `test_market_strategy` cp950 | `open()` 沒指定 `encoding`,Windows 用 cp950 解繁中原始碼 | 補 `encoding='utf-8'`;**全域掃出另外 8 處同款**(`test_calibrate_walkforward`×2、`test_macro_state_locker`、`test_fundamentals_quarter`×5)一併修;另修 `test_parse_helpers` 的 `subprocess(text=True)` 子行程中文 traceback 同款陷阱(釘 `PYTHONIOENCODING=utf-8`) |
+| `test_review_fixes_v19_84` WinError 2 | `subprocess.run(["grep", ...])`,Windows 沒有 grep | 改純 `pathlib.rglob`,語意等價(仍是 substring,`nest_asyncio` 照樣算)。**不是改成「Windows 就 skip」** —— 那是藏問題 |
+| `test_health_history_b8` `1 != 2` | **`id()` 誤用**:`_Marker` 的唯一強參照是 thread-local 槽,t1 結束時 `PyThreadState_Clear` 丟掉 per-thread dict → refcount 歸零 → **立即 dealloc**(不是等 GC)→ 位址回到 pymalloc free list(LIFO)→ t2 極可能拿到同一位址。而 `Thread.start()` **不保證兩者生命週期重疊** | 存物件本身(強參照)+ `assertIs`/`assertIsNot`,`id()` 完全移除。**不放寬反而加嚴**:原測試蒐集了 `_made` 卻**從未斷言**,那正是「能分辨 production 共享退化 vs 位址重用」的訊號被丟掉的地方,現補上 `len(_made)==2`。已排除 production 退化(thread-local 實作正確;若真共享會**每次必紅**而非 flaky) |
+| `test_zz_proxy_pollution_lock` | **汙染源不是 monkeypatch**,是 `test_nas_server_coverage.py:25` 一行普通的 `from src.data.proxy import nas_server` —— Python import machinery 會 `setattr(parent_package, 'nas_server', module)` 把子模組**永久釘成 package 實體屬性**,違反 `src/data/proxy/__init__.py:4` 白紙黑字的「故意不 re-export」契約。且發生在 **collection 階段**,deselect 也擋不掉 | import 後就地 `vars(_proxy_pkg).pop(...)`;另 3 顆 `fetch_url` 地雷改 patch 真正持有者 `proxy_helper` |
+
+**⚠️ 本項最重要的發現**:那 3 顆 `fetch_url` 地雷沒爆,是因為 `test_risk_radar.py:17-32` 有個
+autouse fixture 會 `del _pp.fetch_url` **順手掃地** —— 純屬字母序巧合。
+> **那個「防禦性 fixture」把三顆真地雷藏了好幾個月**,直到出現一個它清單外的名字才爆。
+
+因此**刻意不加** conftest 自動還原守衛:自動修復 = 自動掩蓋,正是 §1「這是解決問題還是掩蓋
+問題?」。哨兵測試(`test_zz_*`)已正確做完這件事且訊息具名,再加一層是純重複。
+
+### ② v19.177 — 餵給 LLM 的韭菜指數量綱錯(§1 + §4.1)
+
+`section_news_ai` 原文案「>80散戶過熱、<20散戶恐慌」是**另一個同名指標**的尺度(融資餘額 5Y
+標準化指數,值域 [0,100]、中位 50)。實際餵進去的是「小台法人空多比」,**值域 ±100%、中位 0%**。
+⇒ 實測 +34.7%(三套門檻都判過熱)會被 LLM 讀成「離 80 還很遠 → 情緒平穩」,
+**AI 總經敘事系統性低估散戶過熱**。這比畫面寫錯更難察覺。
+
+### ③ v19.178 — AI prompt 門檻與 SSOT 全面對帳
+
+**同一個 bug 有兩份,而且兩份互相矛盾**:總經 Tab 與個股 Tab 各自寫了一套門檻:
+
+| 指標 | 總經 prompt | 個股 prompt | SSOT(畫面燈號) |
+|---|---|---|---|
+| VIX | >28 / >35 | >20 / >30 | 黃 22 / 紅 30 |
+| 台灣 PMI | <48 衰退 | <45 衰退 | 黃 50 / 紅 46 |
+| BIAS240 | >15 / <-10 | — | 黃 10 / 紅 20 |
+| ADL | >70 / <30 | — | 黃 50 / 紅 35 |
+| 外資期貨 | <-35000 | — | 黃 -10000 / 紅 -20000 |
+
+⇒ 同一個 PMI=46.5,總經頁 AI 說「已衰退」、個股頁 AI 說「只是收縮」、畫面燈號說 🟡。
+處置:抽 L3 共用元件 `ai_structured_summary.danger_rule_text()` / `pcr_rule_text()`,
+兩處共用同一份真相,**結構上不可能再分岔**。全庫 12 個 prompt 建構點一併對帳。
+
+**順帶抓到的兩個真 bug**:
+- 🔴 **選股網 AI 報告寫「過 5 關以上」但畫面與 code 都是 6**(`PICKER_S1_MIN_PASS=6`,v18.466 已改)⇒ **送給 LLM 的篩選標準是假的**
+- 🔴 **PCR 100× 量綱錯**:`li_latest['選PCR']` 已 ×100(50–200),但門檻是標準比值刻度(0.5–2.0)⇒ 126.80 配「>1.5 極度恐慌」= 假紅
+
+**行為變更試算**(線上實測值代入):BIAS240 +33.0% 改前「偏貴」→ 改後 **🔴 危險**(這正是
+「五桶紅、AI 說還好」的主因);ADL 55.2% 改前落在 30–70 模糊帶 → 改後 **🟢**(消除系統性偏空)。
+
+⚠️ **殘留未修(下批優先)**:`calculate_system_state` 仍吃未換算的 PCR ⇒ `pcr > 1.5` 恆真
+⇒ 曝險分數系統性 -10 ⇒ **「建議持股」永遠低 10 個百分點**。修法是一行,但會位移全站頭條
+數字,屬 §8.4 需獨立提案 + 驗證。
+
+### ④ v19.178 — 捏造預設值清除(§1)
+
+`calc_traffic_light` 的三個捏造預設:
+- `_leek = 50` —— ±% 尺度上 **50 是極端值不是中性**(中性是 0),§4.1 + §1 雙違
+- `_jqavg = _jq.get('avg', 50)` —— 以 **60% 權重**進健康評分。且 `dict.get` 預設**只在 key
+  不存在時生效**,而 `section_inputs.py:97` 缺值時會合成 `{'avg': None}` ⇒ key 在 ⇒ 拿到
+  `None` ⇒ 下一行 `None * 0.6` **直接 TypeError 炸總經頁**(與 v19.175 `inst=None` 同款,只是還沒被觸發到)
+- `_fut_net = 0` —— `_defense` 永遠為假,把「不知道」當成「沒有大空單」
+
+處置:health 改**權重重新歸一化**(`Σ(vᵢwᵢ)/Σwᵢ`)而非塞中性值 —— 兩項都在時 `Σw = 1.0`
+(IEEE754 精確)⇒ **與舊式逐位相同,零回歸**;缺項靠 conf 下降 + `missing_sources` 列名 +
+新增 `health_partial` 旗標三重可見。
+
+**另查到兩個原稽核沒點名的破口**:`_conf_sources` 用 `bool(jingqi_info)` 判定 ⇒ `{'avg': None}`
+是非空 dict ⇒ True ⇒ **缺失完全不扣信心**;`handlers.py:166` 用 `conf < 80` 而列缺項要 `conf < 70`
+⇒ 缺 1/5 項時 conf 正好 80 ⇒ **兩個分支都進不去,降級零提示**。兩者一併修。
+
+**⚠️ 會翻燈的窗口(已知情)**:jqavg 缺 且 `score_pct ∈ [12.5, 35)` 時,舊 🟡 → 新 🔴。
+方向保守、語意誠實(「唯一量得到的大盤評分只有 25/100」)。
+
+### ⑤ v19.178 — 「站上 20MA」謊言複本清零 + `^TNX` 刻度偵測
+
+6 處複本全改(含**謊言源頭** `jingqi_calc.py:1` 的 SSOT 模組自身 docstring)。
+`^TNX`:實機是直接 %(4.63),但 repo 內 ×10 慣例仍活著(`test_reconcile.py:59` 等)⇒
+**不能單純把 ÷10 拿掉**。改成 `normalize_tnx_quote()` 依值域**偵測刻度**([0,20] 直接 % /
+(20,200] ÷10 / 其餘回 None + log),範圍取自 CLAUDE.md §3.2 且與 `SPECS_BY_KEY['us10y'].valid_*`
+釘一致。**刻意不拿 FRED 來挑刻度** —— 那等於為了讓兩邊一致而選答案,對帳就失去意義(§4.3)。
+效果:對帳面板 US10Y 那列從**永久假紅**變成 🟢 agree。
+
+---
+
+### 🧨 流程教訓續集:掃原始碼字面的守衛,第 4 次假紅燈
+
+v19.176 已記錄前三次。本批第四次,但**性質不同**:
+
+前三次是「註解/docstring 裡出現同樣字面」。這次是 `st.spinner('…約 8-12 秒…')` —— **真的字串
+常數**,AST 抓得到,不是註解問題。真因是**掃描範圍以「函式」為單位**:登記 `_generate_report`
+之後,函式裡的 spinner、進度文案、錯誤訊息全部一起被掃,而它們本來就不是 prompt。
+
+修法:數量詞豁免清單補「秒」。**刻意不加「分」與「時」** —— 「分」在本專案是**分數單位**
+(「健康度 ≥70 分」),加了會製造假陰性。並加一條**反向驗證測試** `test_score_unit_still_caught`
+釘住這個邊界:誰為了消紅燈把「分」也加進去,那條當場紅。
+
+**累計四次的共同結論(建議,未做)**:① 所有掃原始碼的守衛,比對前先剝 `#` 之後內容(部分已
+這樣做,不一致本身就是問題);② 失敗訊息印出命中位置的**該行原文** —— 本批新增的三個守衛
+(`test_zz_test_portability` / `test_ai_prompt_thresholds` / `test_p1b_fabricated_defaults`)
+都已落實 ②,且全部走 AST + 自我驗證誘餌測試,可作為後續守衛的範本。
+
+---
+
+## 🩹 2026-08-05 實機稽核 P0 批次：誠實性缺陷六連修(v19.176)
+
+> 本批全部由**連線實機**發現 —— 靜態審查看不出來(要嘛需要真實資料才觸發,要嘛是接線
+> 漏洞)。方法論結論:**每次上線後實際看一眼,投報率高於再跑一輪 code review。**
+
+### ① 總經分頁 `TypeError: 'NoneType' object is not iterable`(硬阻斷)
+
+**根因不在渲染層,在資料契約。** `macro_fetch_orchestrator.py:238` 的
+`_results.get('inst') or (None, None)` —— TWSE BFI82U 逾時後 `inst=None`,而下方
+FinMind 救援**只 catch raise 出來的例外**,quota 用罄回的是 `status != 200`(不 raise)
+→ `None` 直接寫進 session。4 個消費端全部寫成 `cl_data.get('inst', {})`,而 dict 的
+default **只在 key 不存在時生效**,值是 None 照樣回 None。
+
+`calc_traffic_light` 第一個中彈,位置在 `warroom_summary` 寫入**之前** ⇒
+`get_allocation()` 直接 `is_loaded=False` ⇒ 全站 8 處「總經未評估 / 建議持股 --」。
+毒掉的 `cl_data` 留在 session,每次 rerun 重炸(實機 2/2 重現)。
+
+⚠️ **不是 v19.172/173/174 造成的** —— 那三批沒動這條路徑。v19.170~171 驗收時 inst
+剛好抓成功。這是**潛伏的 §1 違憲**(回傳型別與 docstring 宣告不符卻無人擋),環境一變
+就發作。修法:orchestrator 守住 `dict` 契約 + 新增 L2 SSOT `coerce_inst_dict()`
+(**區分**「key 不存在＝冷啟動,不 log」與「key 在但值 None＝上游失敗,要 log」),
+4 消費端全改走它。缺 inst 時降級在三處畫面可見,不偽裝成 0。
+
+### ② 策略代號 SSOT(`STRATEGY_SCOPE` / `STRATEGY_LABELS`)
+
+實機掃描:`👤` 退化訊號 0 次(遷移零錯誤),但**「策略2」與 🏥 全站 0 次**,說明書 3 個
+章節撞號。考證(比對姊妹倉庫 `my-Stock-dashboard` 保有的 v19.174 前 `_STRATEGY_MAP` 原文)
+確認**不是錯標** —— 那三章原本就同屬「策略3」。真缺陷有二:財報體檢內容**手打字串
+「策略2」**沒走 `strategy_conclusion()`;括號由各 caller 自己 f-string 拼 ⇒ 同代號兩種括號。
+
+修法:`STRATEGY_LABELS` 為顯示字串唯一來源;**`strategy_label()` 移除 `scope` 覆寫參數**
+(⚠️ 破壞性介面變更,經 grep 確認爆炸半徑 = 0)。`section_long.py` 另修代號重複渲染與
+**substring 嗅探分類**(`'M1B' in _mc2` 從顯示文案回推代號,改文案就靜默誤分類)。
+
+### ③ ⚡「今日關鍵」假綠燈(§1 違憲)
+
+頁首讀 `macro_alerts`,而該 key 是頁面**下方** `section_mid.py:62` 才寫入 ⇒ 永遠讀上一輪。
+實機首輪顯示 `✅ 無異常` 但同頁下方有 `🟡×2`。原註解自稱「誠實顯示無異常」—— 但「無異常」
+是**綠色斷言**不是狀態。修法照 v19.171 置底條同款(`st.empty()` 佔位 + 延後填充)。
+額外發現 `macro_alert.py:143` 表示 `[]` 代表「一個指標都沒取到」⇒ 誠實語意需**三態**:
+`None`/`[]` 一律灰,只有「非空且全 green」才可綠。文案同步誠實化(實測冷載 72.4 秒,
+原寫「約 30~60 秒」;強制上限實為 300 秒),並加守衛測試釘住「宣稱上界 ≥ 兩個
+orchestrator timeout 之和」。
+
+### ④ `us10y` / `dxy` 五桶永久灰 + `20–20%` 怪字串
+
+兩條 DangerSpec 自 v18.286 註冊,但 `macro_helpers` 的 `values` dict **從來沒有這兩個 key**
+⇒ 恆 gray,與當日資料無關;同頁國際卡卻印著 4.63% / 99.75。接線時發現兩個**換尺度陷阱**,
+新增 `DangerSpec.valid_min/max`(**只掛這兩條**,其餘 14 條 None,零回歸):
+- **DXY→UUP 假綠**:備援鏈落到 UUP(ETF ~27 美元),欄位名不變,27 < 105 判 🟢 —— 比灰燈危險
+- **`^TNX` ×10 假紅**:`reconcile.py:106` 寫 ×10 但實機是直接 %,翻轉時 46.3 判 🔴
+
+越界跳過該源 + log,**絕不自行乘除 10 去猜**(§1)。行為變更:10Y 4.63%→🟡、DXY 99.75→🟢,
+**中期桶整體仍 🔴**(由 BIAS240 觸發),僅明細 4 列→6 列。
+
+`20–20%`:`allocation_decision.py:141` 的 `range_text` 有處理 `lo==hi` 並註明「避免怪字串」,
+但**同檔** `:263` raw f-string 繞過它。抽出 `_fmt_range()` 為全檔唯一 formatter。
+
+### ⑤ 「旌旗指數＝站上 20MA 家數比」是**捏造的資料描述**(§1 反捏造)
+
+追到 compute 層確認:**全站沒有任何一行 code 在算「站上均線家數比」**。真實定義是
+**上漲佔比(單日)的 5 日均**(`jingqi_calc.py:43`)。謊言源頭就在正確實作旁邊 ——
+`jingqi_calc.py:1` docstring 自己寫著「站在均線上股票%」。且上游 `up`/`down` 本身是
+**yfinance ^TWII 反推的估算值**(`is_proxy=True`)。「健康度」另撞名三次。
+
+處置:建立 `ui_widgets.BREADTH_TERMS` 名詞 SSOT;「全市場健康度」**退役**並登記
+`BREADTH_DEPRECATED_TITLES`;「市場廣度」降為家族統稱,禁止配單一數值當 KPI 標題。
+`section_short.py:191` 的回寫**不是覆寫**而是「建立了一個口徑不符的值」(canonical 是
+5 日均,回寫的是當日值):ADL 路徑改呼叫 L3 SSOT;TWSE 即時路徑無法算 5 日均,判定為
+**真 fallback**,依 §1 加代理旗標並在畫面標示。
+
+### ⑥ v4.0 總經否決權同頁相反結論 —— **命名衝突,不是計算錯誤**
+
+| | §八 總經拼圖 | §三 籌碼 |
+|---|---|---|
+| 實作 | **inline 規則集**(全檔 0 個 `V4StrategyEngine` 引用) | **真的呼叫** `check_macro_veto()` |
+| 看什麼 | VIX≥30 / PMI<48 / CPI>4% / 出口<-5% / NDC≤16 | VIX × 外資期貨淨口數 |
+| 門檻 | 全 inline magic | SSOT `signal_thresholds` |
+
+**兩邊都沒算錯**,錯的是名字。處置:正名為「總經基本面否決檢查」與「v4 引擎風險燈」,
+各印「看什麼/不看什麼」互相指路;結論相反時**主動揭露**(黃框攤開雙方輸入與數值)。
+抽出唯一取數入口 `read_v4_macro_veto()`。
+
+**韭菜指數:只做 SSOT 化,行為完全凍結**(`LEEK_ALERT_*`/`LEEK_SCORE_*`/`LEEK_PIVOT_*`,
+數值一個沒動)。⚠️ **原提案「統一到 `LEEK_HIGH=35`」經試算後推翻** —— **量綱錯誤**:
+35/10 服務的是「融資餘額 5Y 標準化指數」(值域 [0,100]、中位 50),畫面跑的是「小台法人
+空多比」(值域 [-100,+100]、中位 0)。`low=10` 套過去 ⇒ **0%(多空平衡)被誤標成底部買訊**;
+上限 35 讓實測 +34.7% 以 0.3pp 之差全體靜音。且教學頁校準表與自身公式互相矛盾,
+**「35 有校準依據」在本 repo 內無法驗證**。
+
+---
+
+### 🧨 本批最大的流程教訓:掃原始碼字面的守衛測試
+
+**連續三個回合被假性紅燈擋下,沒有一次是行為真的壞掉**:
+1. AST 守衛不認得 `for a, b in xs:` 的 tuple target ⇒ 把 `section_long.py` 判違規
+2. 註解裡出現 `render_section_mid(` 字面 ⇒ `src.index()` 命中註解而非呼叫點
+3. 修 (2) 時**在解釋用的註解裡又寫了同一個字面** ⇒ 再紅一次
+
+**核心問題**:這類守衛讓「在相關程式碼旁邊寫註解」變成有風險的動作 —— 而 CLAUDE.md
+要求每個修改點都要註明理由與憲法條款。**照規矩寫註解越勤,越容易觸發假紅燈。**
+
+**次要但更危險**:失敗訊息**主動誤導**。「render_section_long 應先於 render_section_mid
+呼叫」讓人第一直覺以為渲染順序壞了(AI 總管當時如此誤判並寫進報告),實際順序完全正確。
+
+**建議(未做,待核准)**:① 所有掃原始碼的守衛,比對前先剝 `#` 之後內容(部分已這樣做,
+例如 `TestNoBareInstGetDefault`,不一致本身就是問題);② 失敗訊息印出命中位置的**該行原文**。
+
+### 驗證
+
+`python -m pytest -q` → **4007 passed / 4 failed**,4 個均為既有問題。本批新增約 186 條測試。
+⚠️ **全程 shell 沙箱不可用**,4 組 agent 皆無法自跑 pytest,由 user 代跑三輪才收斂。
+
+### BACKLOG(本批發現、未動)
+
+- 🔴 **`section_news_ai.py:185` 餵 LLM 的韭菜尺度錯**:值是 ±%,說明寫「>80 過熱 / <20 恐慌」
+  (0~100 尺度)⇒ +34.7(三套門檻都判過熱)會被 AI 讀成「離 80 很遠 → 情緒平穩」,
+  **AI 總經敘事系統性低估散戶過熱**。下一批優先。
+- 🟡 `macro_helpers.py:147,156` `_leek = 50` / `_jqavg = 50` 捏造預設
+- 🟡 `reconcile.py:106` `^TNX ×10` 假設與實機不符 ⇒ 對帳面板該列疑似永久紅
+- 🟡 「站上 20MA」謊言尚有 6 處複本(`jingqi_calc.py:1`、`section_long.py:210`、
+  `macro_helpers.py:226`、`tab_macro.py:279`、`macro_buckets.py:227`、`tab_edu.py:676`)
+- 🟡 §8.2.A 例外清單:14 筆行號對不上、4 筆指向不存在的 code、20+ 處未登記(含
+  `stock_sections/` `stock_grp_sections/` 整批)。`tests/test_layering.py` 設計已完成
+  (allowlist 只記檔案+規則 ID 不記行號、fail-closed、ratchet),待核准實作。
+  ⚠️ 已知盲區:L3 裸 re-export laundering(`daily_checklist.py:81` 已在發生)
+- 🟡 冷啟動 72.4 秒 / 上限 300 秒;7 個 job 只有 3 個 timeout 真正生效
+  (`as_completed` 只吐已完成的 future ⇒ `_fut.result(timeout=)` 永不觸發)
+- ⚪ 12 組 v19.174 過渡期 alias 已全部零 production caller,可刪
+
+---
+
+## 🚨 2026-08-05 HOTFIX：starlette 1.4.0 打爆 streamlit 1.59.2,全站 500(v19.175)
+
+**症狀**:merge 後 Streamlit Cloud 重建,健康檢查 500,每個 request 吐同一條 traceback:
+`GZipResponder.__init__() missing 1 required keyword-only argument: 'thread_minimum_size'`
+(`streamlit/web/server/starlette/starlette_gzip_middleware.py:125`)。**與我們的改動無關** ——
+code 一行都沒執行到,炸點在 ASGI 中介層。
+
+**根因**:starlette 1.4.0 把 gzip 改成超過門檻丟 worker thread,並在 `GZipResponder.__init__`
+新增**必填 keyword-only 參數** `thread_minimum_size`。streamlit 1.59.2 的
+`_MediaAwareGZipResponder` 是對著 1.3.x 簽章寫的子類別,不會傳。
+
+**為什麼被打到**:streamlit 1.5x 起從 tornado 改走 ASGI,starlette 成為**傳遞依賴**,
+而 requirements 從沒直接列它 ⇒ resolver 每次 build 自由取最新 ⇒ 上游釋出當天倒站。
+**與 v19.79 的 pyarrow 25.0.0 同一種事故**(未 pin 的傳遞 C/框架層依賴)。
+
+**修法**:`requirements.txt` pin `starlette>=1.3.1,<1.4.0`(1.3.1 = 2026-06-12,上一版
+known-good)。解禁條件:streamlit 釋出會傳 `thread_minimum_size` 的版本後一併放寬。
+
+⚠️ **本則曾在 v19.176 批次中從工作區消失**(疑似 `git checkout main` 時掉),已補回。
+**根治建議(未做)**:改用 lockfile(`uv pip compile`)鎖全量傳遞依賴,而非每次被打到才補
+一條 pin —— 目前 requirements.txt 只鎖直接依賴,starlette / uvicorn / anyio / protobuf /
+narwhals 等全部裸奔。代價:lockfile 要定期 refresh。**§-1:未經 user 核准不動。**
+
+---
+
 ## 🕶️ 2026-08-05 去識別化：移除全站人名與相關尊稱(v19.174,user 要求「名稱都不要加上去,請移除」)
 
 user 核准**全部改(含檔名/模組名)**、**保留「策略1/2/3」顯示形式**。多 AI 分工並行,本則記錄

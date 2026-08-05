@@ -78,6 +78,41 @@ _BOND_SHARE_OF_NON_EQUITY: dict[str, float] = {
 }
 
 
+# ════════════════════════════════════════════════════════════════
+# v19.175 P0-B：區間字串格式化 —— **本檔唯一實作**
+#
+# 【修的是什麼】`AllocationDecision.range_text` 早就有「lo == hi 就只印一個數字」
+# 的邏輯，註解甚至寫著「避免出現 '20–20%' 這種怪字串」；但**同一個檔案**的
+# `build_allocation_decision()` 在組 `_drivers` 最後一行時，是用 raw f-string
+# 直接把兩個數字拼起來（`→ {_f_lo}–{_f_hi}%`），**繞過**了 range_text。
+# 結果線上兩處照樣印出「最終 = min(姿態 70%, 天花板 20%) → 20–20%」：
+#   - `section_traffic_light.py:102`  🎚️ 建議持股油門明細（印全部 drivers）
+#   - `section_cross_ai.py:128`       九、規則決策（印 drivers[-1]，正是這一行）
+# v19.170 修掉了 UI 端 `section_traffic_light.py:68` 的同款問題，卻漏了 SSOT
+# 模組自己 —— 典型的「SSOT 模組內部沒有自我一致」。
+#
+# 【修法】把「怎麼把 lo/hi 變成字串」抽成唯一私有 formatter，range_text 與
+# _drivers 共用；並由 tests/test_p0b_spec_wiring.py 以 AST 掃描擋回歸
+# （本檔任何 f-string 都不得再自行用「–」拼區間）。
+# ════════════════════════════════════════════════════════════════
+def _fmt_range(lo: int | None, hi: int | None) -> str:
+    """把持股區間 lo/hi 轉成顯示字串。**全檔只有這一份實作**。
+
+    Args:
+        lo: 區間下界 %（None 視為未評估）
+        hi: 區間上界 %（None 視為未評估）
+
+    Returns:
+        `'30-50%'` 形式；`lo == hi` 時只印一個數字（`'20%'`）；
+        任一為 None 時回 `'--'`（§1：未評估不捏造數字）。
+    """
+    if lo is None or hi is None:
+        return '--'
+    if lo == hi:
+        return f'{lo}%'
+    return f'{lo}–{hi}%'   # U+2013 en dash（顯示用）
+
+
 @dataclass(frozen=True)
 class Cap:
     """一條硬否決天花板。
@@ -135,12 +170,14 @@ class AllocationDecision:
     # ── 顯示用 helper(集中在此，避免各頁各自 f-string 出不同格式)──────
     @property
     def range_text(self) -> str:
-        """'30–50%'；上下界相同時回 '20%'；未評估回 '--'。"""
-        if not self.is_loaded or self.final_lo is None or self.final_hi is None:
+        """'30-50%'；上下界相同時回 '20%'；未評估回 '--'。
+
+        v19.175:格式化邏輯下沉至 `_fmt_range()`（本檔唯一實作），
+        與 `build_allocation_decision()` 的 drivers 共用，避免兩處各自拼字串。
+        """
+        if not self.is_loaded:
             return '--'
-        if self.final_lo == self.final_hi:
-            return f'{self.final_lo}%'   # v19.170:避免出現 '20–20%' 這種怪字串
-        return f'{self.final_lo}–{self.final_hi}%'
+        return _fmt_range(self.final_lo, self.final_hi)
 
     @property
     def mid_text(self) -> str:
@@ -251,8 +288,12 @@ def build_allocation_decision(
     _capped = _cap_pct is not None and _cap_pct < _p_hi
 
     # ── 推導依據(給「為何是這個數字」)──────────────────────────────
+    # v19.175:姿態帶字串同樣改走唯一 formatter（原為 raw f-string 拼接，
+    #   與最後一行「最終 = ...」犯的是同一個錯，只是尚未在線上撞見 lo == hi）。
+    #   lo != hi 時輸出與本版前**逐字相同**，非行為變更。
     _drivers: list[str] = [
-        f'總經健康分 {float(_health):.0f} → 姿態「{_posture}」，油門帶 {_p_lo}–{_p_hi}%',
+        f'總經健康分 {float(_health):.0f} → 姿態「{_posture}」，'
+        f'油門帶 {_fmt_range(_p_lo, _p_hi)}',
     ]
     if throttle.get('regime_capped'):
         _drivers.append(f'regime={_regime}／defense={_defense} → 油門已先被壓至防禦帶')
@@ -260,8 +301,11 @@ def build_allocation_decision(
         _mark = '✅ 生效' if int(_c.pct) == _cap_pct else '　　'
         _drivers.append(f'{_mark} 天花板「{_c.name}」≤{_c.pct}%'
                         + (f'：{_c.reason}' if _c.reason else ''))
+    # v19.175 P0-B：原本這裡是 raw f-string `→ {_f_lo}–{_f_hi}%`，繞過 range_text
+    #   的 lo==hi 收斂 → 線上印出「→ 20–20%」怪字串。改走唯一 formatter。
     _drivers.append(f'最終 = min(姿態 {_p_hi}%, 天花板 '
-                    f'{_cap_pct if _cap_pct is not None else "—"}%) → {_f_lo}–{_f_hi}%')
+                    f'{_cap_pct if _cap_pct is not None else "—"}%) '
+                    f'→ {_fmt_range(_f_lo, _f_hi)}')
 
     return AllocationDecision(
         is_loaded=True, regime=_regime, health=float(_health),

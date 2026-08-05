@@ -209,9 +209,9 @@ _PROMPT_TEMPLATE = """\
 # Financial Health Framework (財報體檢體系)
 
 ## 第一關：生死關
-- 現金佔總資產比率：>25% 安全（🟢）| 10~25% 注意（🟡）| <10% 危險（🔴）
+- 現金佔總資產比率：>{cash_safe_pct}% 安全（🟢）| {cash_watch_pct}~{cash_safe_pct}% 注意（🟡）| <{cash_watch_pct}% 危險（🔴）
 - 營業活動現金流（OCF）：>0 真實獲利（🟢）| ≤0 黑字破產警戒（🔴）
-- 負債比率（總負債/總資產）：<40% 優秀（🟢）| 40~60% 正常（🟡）| >60% 危險（🔴）
+- 負債比率（總負債/總資產）：<{debt_excellent_pct}% 優秀（🟢）| {debt_excellent_pct}~{debt_pass_pct}% 正常（🟡）| >{debt_pass_pct}% 危險（🔴）
   注意：金融/租賃業負債高屬正常，請考量行業特性
 
 ## 第二關：五力分析（各 0~100 分）
@@ -924,9 +924,18 @@ def analyze_financial_health(api_key: str, stock_id: str, fin_data: dict,
     # 若有 api_key 與 news_context，呼叫 Gemini 生成含新聞情緒的 ai_insight
     if api_key and news_context:
         try:
+            # v19.178 §3.3:第一關三條門檻原為 prompt 內寫死(25/10、40/60),
+            # 與 `_no_ai_survival` / `_no_ai_financial_structure` 用的
+            # shared/financial_health_thresholds SSOT 是兩份複本 —— 改門檻時
+            # code 端會動、送給 Gemini 的判讀規則不會動 → 同一檔股票在
+            # 「純計算燈號」與「AI insight 敘事」會給出相反結論。改為插值。
             _news_prompt = _PROMPT_TEMPLATE.format(
                 financial_data_json=json.dumps(fin_data, ensure_ascii=False, indent=2),
                 news_context=news_context,
+                cash_safe_pct=f"{FH_CASH_RATIO_SAFE_PCT:g}",
+                cash_watch_pct=f"{FH_CASH_RATIO_WATCH_PCT:g}",
+                debt_excellent_pct=f"{FH_DEBT_RATIO_EXCELLENT_PCT:g}",
+                debt_pass_pct=f"{FH_DEBT_RATIO_PASS_PCT:g}",
             )
             # v19.174 去識別化：區域變數 _raw_mj/_parsed_mj/_e_mj → _raw_fh/_parsed_fh/_e_fh
             _raw_fh = _gemini_call(_news_prompt, api_key)

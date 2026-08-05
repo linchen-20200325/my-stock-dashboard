@@ -22,7 +22,27 @@ import pytest
 pytest.importorskip("fastapi", reason="fastapi 僅裝於 NAS host,非 dashboard/CI 依賴")
 pytest.importorskip("pydantic", reason="pydantic 僅裝於 NAS host")
 
+import src.data.proxy as _proxy_pkg  # noqa: E402
 from src.data.proxy import nas_server  # noqa: E402
+
+# ⚠️ 汙染修(tests/test_zz_proxy_pollution_lock.py 具名炸出的來源):
+# 上面這行 `from src.data.proxy import nas_server` **不是** monkeypatch,而是
+# Python import machinery 的固有副作用 —— 載入子模組時 importlib 會執行
+# `setattr(parent_package, 'nas_server', <module>)`,把子模組釘成 package 的
+# **實體屬性**,且沒有任何 teardown 會還原它(沒人 patch,自然沒人還原)。
+# 這違反 `src/data/proxy/__init__.py` 明寫的契約:
+#   「nas_server.py 故意不 re-export:它是 FastAPI server entry,不該被當 lib import」
+# 該 package 是 PEP 562 lazy forward(`__getattr__` 只轉發 proxy_helper / yf_proxy
+# 內的名字),實體屬性一旦長出來就會永久遮蔽轉發 —— v19.74 / v19.113 兩次 CI
+# order-dependent 紅燈的同一類地雷。
+#
+# 對策:import 完立刻把 parent package 上的綁定拆掉。
+# - 本檔區域名稱 `nas_server` 仍指向 module 物件 → 底下所有測試照跑
+# - `sys.modules['src.data.proxy.nas_server']` 仍在 → 他人再 import 也拿得到
+# - `src.data.proxy` 的命名空間回到乾淨狀態 → 全量跑順序無關
+# 放在 module 層(而非 fixture finalizer)是刻意的:collection 階段就會 import
+# 本檔,即使 `-m slow` 把本檔測試全部 deselect,這行仍會執行,清乾淨。
+vars(_proxy_pkg).pop("nas_server", None)
 
 
 class TestNum:

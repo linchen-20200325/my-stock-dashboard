@@ -3,7 +3,7 @@
 §4.3 重算對帳:關鍵指標應有第二種演算法/源頭做交叉驗證,降低單源偏差風險。
 
 範疇(per CLAUDE.md §4.3):
-- 殖利率:FRED DGS10 vs Yahoo ^TNX(TNX = 10Y treasury × 10)
+- 殖利率:FRED DGS10 vs Yahoo ^TNX(**刻度自動偵測**,v19.177;原寫死 ÷10)
 - 健康評分:目前單一 path,缺對照演算法
 - 月營收 YoY:`(本月 / 12 月前) - 1` vs FinMind 預算 YoY
 
@@ -11,6 +11,7 @@
 回 reconcile 結果 dict。
 
 對外 API:
+- normalize_tnx_quote(yahoo_tnx_value) -> (pct | None, source_label)
 - reconcile_us10y_yield(fred_value, yahoo_tnx_value) -> dict
 - reconcile_pair(name, value_a, value_b, *, source_a, source_b, abs_tol=1e-4,
                   rel_tol=1e-3) -> dict
@@ -92,6 +93,83 @@ def reconcile_pair(
     }
 
 
+# ══════════════════════════════════════════════════════════════════
+# v19.177 P1-B ③ — `^TNX` 報價刻度偵測(§1 + §4.1 量綱)
+#
+# 【原本錯在哪】本檔舊版寫死 `yahoo_tnx / 10.0`,docstring 也宣告
+# 「^TNX = 殖利率 × 10」。但**實機不是**:國際指標卡印的
+# `cl_data['intl']['10Y公債殖利率']`(= Yahoo ^TNX 收盤)是 4.63,
+# 且 `macro_core._sig_tnx` 直接拿它去比 4.5 / 3.5 的門檻
+# (macro_core.py:571-573,605-611)—— 全站現行慣例是**直接 %**。
+# ⇒ 舊碼把 4.63 除成 0.463,與 FRED 的 4.63 對帳必然 disagree,
+#   「🔎 對帳面板」的 US10Y 那列**永久紅**(假紅,§1 錯的數字比沒有數字更危險)。
+#
+# 【為何不是直接把 ÷10 拿掉】Yahoo 對 `^TNX` 在不同時期 / 不同端點確實出現過
+# 「殖利率 × 10」(42.5 表 4.25%)的慣例 —— 本 repo 既有測試就是照那個寫的
+# (tests/test_reconcile.py:59 / tests/test_risk_radar.py:225)。硬 pin 任一邊
+# 都會在另一邊產生假紅。
+#
+# 【處理原則】**偵測刻度,不猜換算**,與 `shared/macro_buckets.py` 的
+# `valid_min/max` 守衛同款思路:
+#   - 值 ∈ [0, 20]    → 直接 % 慣例(對齊 CLAUDE.md §3.2「US10Y (%) [0, 20]」)
+#   - 值 ∈ (20, 200]  → ×10 慣例(= [0,20] 的十倍),除以 10 後仍在合理範圍
+#   - 其餘(負值 / >200 / NaN)→ **回 None + log**,絕不硬湊
+# 兩個區間**不重疊**,故判定是確定性的,不依賴 FRED 的值 —— 這點很重要:
+# 若拿 FRED 去挑「比較接近的那個刻度」,等於為了讓兩邊一致而選答案,
+# 對帳就失去意義了(§4.3 比的是獨立來源,不是比誰湊得比較準)。
+#
+# 【殘留模糊區的誠實揭露】若哪天 10Y 殖利率跌回 2% 以下且上游同時改用 ×10
+# 慣例(raw ∈ [0,20] 但實為 0.x~2%),本函式會判成「直接 %」而讀錯。
+# 那種情況下對帳結果會是 **disagree(大聲)**,不是靜默算錯 —— 這正是對帳面板
+# 存在的目的。要根治需上游提供 provenance 欄位標明刻度,屬另案。
+# ══════════════════════════════════════════════════════════════════
+#: 直接 % 慣例的合理上限 —— 對齊 CLAUDE.md §3.2「US10Y (%) [0, 20]」
+TNX_DIRECT_PCT_MIN: float = 0.0
+TNX_DIRECT_PCT_MAX: float = 20.0
+#: ×10 慣例的合理上限 = 直接 % 上限 × 10
+TNX_X10_MAX: float = TNX_DIRECT_PCT_MAX * 10.0
+
+
+def normalize_tnx_quote(yahoo_tnx: Optional[float]) -> tuple[Optional[float], str]:
+    """把 Yahoo `^TNX` 原始報價收斂成「百分點」,並回報偵測到的刻度慣例。
+
+    Parameters
+    ----------
+    yahoo_tnx : float | None
+        Yahoo `^TNX` 收盤原始值(可能是 4.63 直接 %,也可能是 46.3 的 ×10 慣例)。
+
+    Returns
+    -------
+    (value_pct, source_label)
+        value_pct    : float | None —— 百分點;無法判定刻度時為 None(§1 不猜)。
+        source_label : str          —— 帶偵測結果的來源字串,直接餵給
+                                        `reconcile_pair(source_b=...)`,
+                                        讓對帳面板看得到「這次讀成哪一種刻度」。
+    """
+    if yahoo_tnx is None:
+        return None, "Yahoo:^TNX(未取得)"
+    try:
+        v = float(yahoo_tnx)
+    except (TypeError, ValueError):
+        print(f"[reconcile/us10y] ⚠️ ^TNX 值無法轉 float: {yahoo_tnx!r} → 視為未取得(§1)")
+        return None, "Yahoo:^TNX(型別錯誤)"
+    if v != v:  # NaN guard(NaN 的任何比較皆 False,顯式處理避免誤讀)
+        print("[reconcile/us10y] ⚠️ ^TNX 值為 NaN → 視為未取得(§1)")
+        return None, "Yahoo:^TNX(NaN)"
+
+    if TNX_DIRECT_PCT_MIN <= v <= TNX_DIRECT_PCT_MAX:
+        return v, "Yahoo:^TNX(直接%)"
+    if TNX_DIRECT_PCT_MAX < v <= TNX_X10_MAX:
+        return v / 10.0, "Yahoo:^TNX(×10慣例→/10)"
+
+    # 負殖利率 / >200 → 兩種慣例都解釋不通(§3.2 US10Y 合理範圍 [0,20]%)。
+    # 常見主因:上游 fallback 換成不同標的、或報價欄位被改成 price 而非 yield。
+    print(f"[reconcile/us10y] ⚠️ ^TNX 值 {v} 落在兩種慣例的合理範圍外 "
+          f"(直接% [{TNX_DIRECT_PCT_MIN}, {TNX_DIRECT_PCT_MAX}] / "
+          f"×10 ({TNX_DIRECT_PCT_MAX}, {TNX_X10_MAX}]) → 回 None,**不猜換算**(§1)。")
+    return None, f"Yahoo:^TNX(越界 {v:g},刻度不明)"
+
+
 def reconcile_us10y_yield(
     fred_dgs10: Optional[float],
     yahoo_tnx: Optional[float],
@@ -103,25 +181,29 @@ def reconcile_us10y_yield(
     fred_dgs10 : float | None
         FRED DGS10 直接報率(% 單位,例如 4.25)。
     yahoo_tnx : float | None
-        Yahoo ^TNX 報價(=殖利率 × 10,需除 10 才是 %)。
+        Yahoo `^TNX` **原始**報價。刻度由 `normalize_tnx_quote()` 偵測 ——
+        4.63 讀成 4.63%、46.3 讀成 4.63%、越界則回 None(不猜)。
+        v19.177 前本參數的 docstring 寫死「= 殖利率 × 10」,與實機不符,
+        導致對帳面板 US10Y 那列永久紅,詳見本檔上方 P1-B ③ 區塊。
 
     對照:
-        FRED DGS10 = TNX / 10 → 兩源頭應約相等。
+        FRED DGS10(T1 官方)vs Yahoo ^TNX 正規化後(T2)→ 兩源頭應約相等。
 
     Returns
     -------
     dict
         reconcile_pair 標準回傳(name="US10Y_YIELD")。
+        `source_b` 會帶偵測到的刻度(直接% / ×10慣例 / 越界),供 UI 顯示。
         容差預設 abs_tol=0.05(0.05 個百分點 = 5bp 內視為一致)。
     """
-    converted_yahoo = (yahoo_tnx / 10.0) if yahoo_tnx is not None else None
+    converted_yahoo, _src_b = normalize_tnx_quote(yahoo_tnx)
     # bond yield 容差:5bp = 0.05%
     return reconcile_pair(
         name="US10Y_YIELD",
         value_a=fred_dgs10,
         value_b=converted_yahoo,
         source_a="FRED:DGS10",
-        source_b="Yahoo:^TNX/10",
+        source_b=_src_b,
         abs_tol=0.05,
         rel_tol=0.02,
     )

@@ -1,6 +1,10 @@
 """src/ui/tabs/macro/section_short.py — Section 6 短線急殺桶(F-7.1 B-2 抽出)。
 
-⚡ 全市場健康度 × 騰落指標(ADL)+ 國際市場列。
+⚡ 市場廣度(上漲佔比 × 騰落指標 ADL)+ 國際市場列。
+
+P0-C 定名(2026-08-05):原寫「全市場健康度」—— 該名一名三義(本檔=當日上漲佔比 /
+section_overview=旌旗指數 / 紅綠燈卡=綜合健康度分數),已整個退役。
+廣度名詞定義單一出處:`src/ui/render/ui_widgets.py` 的 `BREADTH_TERMS`。
 
 closure params(explicit pass,因原 render_tab_macro 內 local var):
 - load_heavy: bool   渲染權重控制(降階模式時跳過部分繪圖)
@@ -19,7 +23,17 @@ from shared.signal_thresholds import BREADTH_BULL_PCT, BREADTH_NEUTRAL_PCT
 from src.config import FINMIND_TOKEN  # noqa: F401
 from src.ui.render.macro_ui_components import section_header
 # v19.174 去識別化：改用策略代號常數 + 新函式名 strategy_conclusion（原 teacher_conclusion）
-from src.ui.render.ui_widgets import STRATEGY_TECHNICAL, kpi, strategy_conclusion
+from src.ui.render.ui_widgets import (
+    # P0-C：廣度名詞定義 SSOT（正式名 / 單位 / 白話 / 公式皆取自此，不在本檔手寫）
+    BREADTH_ADL,
+    BREADTH_FAMILY_NAME,
+    BREADTH_JINGQI,
+    BREADTH_UP_RATIO,
+    STRATEGY_TECHNICAL,
+    breadth_kpi_title,
+    kpi,
+    strategy_conclusion,
+)
 from src.ui.tabs.macro.helpers import add_danger_hlines, render_macro_bucket_summary_bar
 
 
@@ -30,7 +44,14 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
     # ══════════════════════════════════════════════════════════════
     from shared.macro_buckets import bucket_group_banner_html as _bgb  # v18.310 桶群組 banner
     st.markdown(_bgb('short', 3), unsafe_allow_html=True)
-    st.markdown(section_header('五','⚡ 短線急殺｜📊 全市場健康度 × 騰落指標（ADL）','📉'),unsafe_allow_html=True)
+    # P0-C 定名：標題原為「全市場健康度 × 騰落指標（ADL）」——「全市場健康度」
+    # 在本 section 貼的是「當日上漲佔比」，在 section_overview 貼的是「旌旗指數」，
+    # 在紅綠燈卡貼的是「綜合健康度/100」→ 一名三義，整個退役。
+    # 本 section 實際呈現的是整個廣度家族（上漲佔比 / AD 值 / ADL），故用家族統稱。
+    st.markdown(section_header(
+        '五', f'⚡ 短線急殺｜📊 {BREADTH_FAMILY_NAME}'
+              f'（{BREADTH_UP_RATIO.canonical} × {BREADTH_ADL.canonical}）', '📉'),
+        unsafe_allow_html=True)
     render_macro_bucket_summary_bar('short')  # v18.314 桶輕量總結 bar
     _adl5 = st.session_state.get('cl_data', {}).get('adl')
     _mkt5 = st.session_state.get('mkt_info', {})
@@ -72,7 +93,10 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
         _a5a = ''
         _a5_ind = 'ADL騰落線'
     st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _a5_ind, _a5c, _a5a), unsafe_allow_html=True)
-    st.caption('💡 衡量「多少股票真的在漲」—— 分數越高 = 廣度越健康；ADL 趨勢 vs 指數是否背離是最重要的觀察點')
+    # P0-C §4.1：原寫「分數越高」，但本區塊的值是**百分比**不是分數（與紅綠燈卡的
+    # 「綜合健康度 N 分」是完全不同的量）→ 改用正確單位描述。
+    st.caption(f'💡 衡量「多少股票真的在漲」—— {BREADTH_UP_RATIO.canonical}越高 = 廣度越健康；'
+               f'{BREADTH_ADL.canonical} 趨勢 vs 指數是否背離是最重要的觀察點')
     # 如果是代理資料，顯示提示
     _adl_chk = st.session_state.get('cl_data',{}).get('adl')
     if _adl_chk is not None and not _adl_chk.empty:
@@ -183,19 +207,41 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
         with _adl_cols[2]:
             st.markdown(kpi('AD值（今日）', f'{_adl_ad:+,}', '漲家－跌家', _adl_color, '#0d1117'), unsafe_allow_html=True)
         with _adl_cols[3]:
-            # 廣度健康評分：0-100（對應全市場健康度）
-            _breadth_score = round(_adl_ratio)  # 直接用上漲佔比%當分數
-            _bs_color = TRAFFIC_GREEN if _breadth_score>=BREADTH_BULL_PCT else (TRAFFIC_YELLOW if _breadth_score>=BREADTH_NEUTRAL_PCT else TRAFFIC_RED)
-            _bs_label = '🟢 廣度健康' if _breadth_score>=BREADTH_BULL_PCT else ('🟡 中性' if _breadth_score>=BREADTH_NEUTRAL_PCT else '🔴 廣度不足')
-            st.markdown(kpi('全市場健康度', f'{_breadth_score}分', _bs_label, _bs_color, '#0d1117'), unsafe_allow_html=True)
-            # 同步更新旌旗指數（如果尚未由 ADL 計算）
-            # v19.84:刪 pct20/60/120/240 捏造鍵(同 jingqi_calc,§1 寧缺勿假 + 0 讀者)
+            # ── P0-C 定名 + 單位修正（2026-08-05）────────────────────────
+            # 原本：標題「全市場健康度」、值 `round(_adl_ratio)` 顯示成「N 分」。
+            # 兩個錯：
+            #   ① 標題一名三義（見檔頭 section_header 註解）→ 退役。
+            #   ② **量綱錯**（§4.1）：_adl_ratio 是**百分比**（上漲家數佔比 %），
+            #      顯示成「分」會讓人以為是 0-100 的評分，與紅綠燈卡的
+            #      「綜合健康度 N 分」（= 0.6×旌旗 + 0.4×大盤評分，完全不同的量）
+            #      在同一頁互相冒充。改回它真正的單位 %。
+            # 名詞定義單一出處：ui_widgets.BREADTH_UP_RATIO。
+            _bs_color = TRAFFIC_GREEN if _adl_ratio>=BREADTH_BULL_PCT else (TRAFFIC_YELLOW if _adl_ratio>=BREADTH_NEUTRAL_PCT else TRAFFIC_RED)
+            _bs_label = '🟢 廣度健康' if _adl_ratio>=BREADTH_BULL_PCT else ('🟡 中性' if _adl_ratio>=BREADTH_NEUTRAL_PCT else '🔴 廣度不足')
+            st.markdown(kpi(breadth_kpi_title(BREADTH_UP_RATIO, '今日'),
+                            f'{_adl_ratio:.1f}{BREADTH_UP_RATIO.unit}',
+                            _bs_label, _bs_color, '#0d1117'), unsafe_allow_html=True)
+
+            # ── P0-C 修正二：旌旗 session key 回寫汙染（2026-08-05）────────
+            # 原碼在此 inline 組一份 `jingqi_info` 寫進 session，註解自稱
+            # 「同步更新旌旗指數」。實際是**頂替**，而且口徑不同：
+            #   canonical 旌旗 = ad_ratio 的 **5 日均**（jingqi_calc.py:43）
+            #   此處寫入的   = `_adl_ratio` = **當日** ad_ratio（單日，未平滑）
+            # 同一個 key 兩種口徑，而下游（section_overview KPI、個股組合
+            # 「① 市場狀態快覽」、置底常駐條、macro_helpers.compute_macro_health
+            # 的 jqavg 0.6 權重）全都當成 5 日均在用 → §4.1 量綱/口徑不一致。
+            #
+            # 判定：**不是刻意 fallback 的設計，是重複實作漂移**。證據 —— 此處
+            # 手上就有 `df_adl`，正是 `compute_and_store_jingqi()` 的入參型別，
+            # 沒有任何理由改用單日值。（另註：原 guard 是
+            # `if not st.session_state.get('jingqi_info')`，所以它**不會**覆蓋
+            # 既有值，只在缺值時建立 —— 汙染來自「建立了一個口徑不符的值」，
+            # 而非「蓋掉正確值」。）
+            # 修法：刪掉 inline 副本，直接呼叫 L3 SSOT，公式全站唯一。
+            # §8.2 附帶收益：L5 UI → L3 Service 是正確方向（原 inline 等於 L5 自算）。
             if not st.session_state.get('jingqi_info'):
-                st.session_state['jingqi_info'] = {
-                    'avg': _adl_ratio, 'pos': ('80~100%' if _adl_ratio>=BREADTH_BULL_PCT else ('50~70%' if _adl_ratio>=BREADTH_NEUTRAL_PCT else '20~40%')),
-                    'regime': ('bull' if _adl_ratio>=BREADTH_BULL_PCT else ('neutral' if _adl_ratio>=BREADTH_NEUTRAL_PCT else 'bear')),
-                    'color': _bs_color, 'label': _bs_label, 'source': 'ADL廣度',
-                }
+                from src.services.jingqi_calc import compute_and_store_jingqi
+                compute_and_store_jingqi(df_adl)
     
         # 信號提示
         _sig_color = TRAFFIC_GREEN if _adl_ad > 200 else (TRAFFIC_YELLOW if _adl_ad >= -100 else TRAFFIC_RED)
@@ -323,26 +369,51 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
             _bd = fetch_twse_breadth()
             _up_v, _dn_v = _bd.get('adv'), _bd.get('dec')
             if _up_v is not None and _dn_v is not None and (_up_v + _dn_v) > 50:
+                # P0-C §3.3：原 inline magic 60 / 40 全數改讀 SSOT
+                # （BREADTH_BULL_PCT / BREADTH_NEUTRAL_PCT，同本檔其他分支）
                 _ratio_v = round(_up_v / (_up_v + _dn_v) * 100, 1)
-                _col_v = TRAFFIC_GREEN if _ratio_v >= 60 else (TRAFFIC_YELLOW if _ratio_v >= 40 else TRAFFIC_RED)
+                _col_v = (TRAFFIC_GREEN if _ratio_v >= BREADTH_BULL_PCT
+                          else (TRAFFIC_YELLOW if _ratio_v >= BREADTH_NEUTRAL_PCT
+                                else TRAFFIC_RED))
                 with _adl_today_cols[0]:
                     st.markdown(kpi('今日上漲家數', f'{_up_v:,}', '即時TWSE', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
                 with _adl_today_cols[1]:
                     st.markdown(kpi('今日下跌家數', f'{_dn_v:,}', '即時TWSE', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
                 with _adl_today_cols[2]:
-                    st.markdown(kpi('全市場健康度', f'{_ratio_v:.1f}%',
-                                    ('廣度健康' if _ratio_v >= 60 else ('中性' if _ratio_v >= 40 else '廣度不足')),
+                    # P0-C 定名：「全市場健康度」退役 → 用正式名 + 標明口徑
+                    st.markdown(kpi(breadth_kpi_title(BREADTH_UP_RATIO, '今日·TWSE即時'),
+                                    f'{_ratio_v:.1f}{BREADTH_UP_RATIO.unit}',
+                                    ('廣度健康' if _ratio_v >= BREADTH_BULL_PCT
+                                     else ('中性' if _ratio_v >= BREADTH_NEUTRAL_PCT else '廣度不足')),
                                     _col_v, '#0d1117'), unsafe_allow_html=True)
-                # 同步旌旗指數（v19.84:刪 pct20/60/120/240 捏造鍵,同 jingqi_calc）
+                # ── P0-C 修正二（b）：這一站是**真 fallback**，但必須帶旗標 ──────
+                # 與上方 ADL 分支不同，此處只有「今日」adv/dec 兩個數，**拿不到
+                # ad_ratio 歷史序列**，因此無法用 canonical 口徑（5 日均，
+                # jingqi_calc.py:43）計算 → 只能以單日值頂替。
+                # 依 §1「不可靜默頂替」：口徑差異寫進 `source`，由下游顯示
+                # （section_overview KPI tip、macro_stock_link banner 已改為
+                #  `source != 'ADL'` 時標「⚠️ 代理值」）。
+                # 刻意**不新增** is_proxy 鍵：jingqi_info 的 7 鍵契約由
+                # tests/test_review_fixes_v19_84.py:19 釘住，provenance 用既有
+                # `source` 字串承載即可，不必為單一寫入站擴充契約（§8.1 step 6）。
                 if not st.session_state.get('jingqi_info'):
                     st.session_state['jingqi_info'] = {
                         'avg': _ratio_v,
-                        'pos': ('80~100%' if _ratio_v >= 60 else ('50~70%' if _ratio_v >= 40 else '20~40%')),
-                        'regime': ('bull' if _ratio_v >= 60 else ('neutral' if _ratio_v >= 40 else 'bear')),
+                        'pos': ('80~100%' if _ratio_v >= BREADTH_BULL_PCT
+                                else ('50~70%' if _ratio_v >= BREADTH_NEUTRAL_PCT else '20~40%')),
+                        'regime': ('bull' if _ratio_v >= BREADTH_BULL_PCT
+                                   else ('neutral' if _ratio_v >= BREADTH_NEUTRAL_PCT else 'bear')),
                         'color': _col_v,
-                        'label': ('🟢 多頭積極' if _ratio_v >= 60 else ('🟡 中性均衡' if _ratio_v >= 40 else '🔴 保守防禦')),
-                        'source': 'TWSE即時',
+                        'label': ('🟢 多頭積極' if _ratio_v >= BREADTH_BULL_PCT
+                                  else ('🟡 中性均衡' if _ratio_v >= BREADTH_NEUTRAL_PCT else '🔴 保守防禦')),
+                        # ⚠️ 口徑寫死在 source 裡，讓「這不是 5 日均」看得見
+                        'source': 'TWSE即時(單日上漲佔比,非5日均)',
+                        'total': 0,
                     }
+                    st.caption(
+                        f'⚠️ {BREADTH_JINGQI.canonical}目前以「今日{BREADTH_UP_RATIO.canonical}」'
+                        f'代理（TWSE 即時單日值，非 {BREADTH_JINGQI.formula}）—— '
+                        f'按「🚀 一鍵更新全部數據」可取得正式口徑。')
         except Exception as _adl_e:
             # v19.84 §3.3:原裸 pass 補 log(即時 TWSE 廣度為 best-effort 區塊,失敗留跡)
             print(f'[section_short] TWSE 即時廣度區塊失敗: '

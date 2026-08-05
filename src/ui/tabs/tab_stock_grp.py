@@ -589,7 +589,17 @@ def _render_fin_trend_section(stock_list: list[str], *,
     )
 
     if not auto_run:
-        _st.caption('💡 上方按「🚀 批次分析」自動跑 財報趨勢分數（首次 ~30-60s）')
+        # v19.176 P0-A(§1 Fail Loud, Never Fake — 文案不得與 code 行為矛盾):
+        # 舊文案給了一個憑空的固定秒數區間(上界 60 秒),但下方 L609-620 是**逐檔序列**
+        # 迴圈(for sid in stock_list → compute_one_stock_trend,每檔都打 FinMind),
+        # 耗時隨檔數線性成長且**無全域逾時上限** —— 30 檔的組合不可能 60 秒跑完。
+        # 給結構性描述 + 指向真正的進度來源(進度條),比給一個必然說謊的數字誠實。
+        _st.caption(
+            '💡 上方按「🚀 批次分析」自動跑 財報趨勢分數。'
+            '首次為**逐檔序列**抓 FinMind（無全域逾時上限），耗時隨檔數線性成長；'
+            '開始後上方會出現「[N/總數] 趨勢計算中」進度條 —— 以進度條是否前進'
+            '判斷是否仍在執行，不要用秒數猜。'
+        )
         return
 
     if not _TOK:

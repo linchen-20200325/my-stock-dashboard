@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import plotly.graph_objects as go
 
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.signal_thresholds import (
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
     MARGIN_BALANCE_WARN_THRESHOLD_YI,
@@ -188,14 +188,46 @@ def section_header(num, title: str, icon: str = ""):
             f'<span style="color:#1f6feb;font-weight:700;">{icon} {num}、{title}</span></div>')
 
 
-def key_alerts_banner(result: dict) -> str:
+def key_alerts_banner(result: dict, *, threshold_scanned: bool = True) -> str:
     """⚡ 今日關鍵橫幅 HTML(v19.108;資料來自 L2 daily_key_alerts,純渲染)。
 
-    - 有異常:紅/黃左框橫條,item 以 chip 併排(hover title=白話 detail)。
-    - 無異常:細綠條「今日無異常」— 誠實顯示掃描過而非硬擠內容(§1)。
+    Args:
+        result: `collect_key_alerts()` 的輸出。
+        threshold_scanned: 門檻層這一輪**是否真的評估過**。caller(L5)傳
+            `bool(session_state['macro_alerts'])`。
+
+    v19.176 P0-A(§1 Fail Loud, Never Fake)新增 `threshold_scanned` —— 原本
+    「items 為空」被無條件當成「✅ 雙層掃描無異常」,但空 items 其實混了三種
+    完全不同的狀態:
+
+      1. `macro_alerts is None`  → section_mid 這輪還沒跑到 = **尚未評估**
+      2. `macro_alerts == []`    → 跑了,但 `check_macro_alerts` 一個指標都沒
+                                   取到(snapshot 全 None,見 macro_alert.py:143)
+                                   = **無資料可評**
+      3. `macro_alerts` 非空且全 green → 真的評估過且沒事 = **無異常**
+
+    只有第 3 種可以顯示綠燈。1/2 是「沒有結論」,拿它冒充「沒有問題」就是
+    §1 明令禁止的「讓流程看起來成功」。caller 用 `bool()` 一次涵蓋 1+2
+    (None 與 [] 都 falsy)→ 本函式走中性灰分支。
+
+    預設 `True` 是為了不改既有 caller/測試語意(有 items 時本旗標完全不影響
+    紅/黃橫條的判定,只在空 items 時分岔)。
+
+    - 有異常:紅/黃左框橫條,item 以 chip 併排(hover title=白話 detail);
+      若門檻層未評估,額外附一行揭露「本列僅含急變層」。
+    - 無異常 + 已評估:細綠條「今日無異常」— 誠實顯示掃描過而非硬擠內容(§1)。
+    - 無異常 + 未評估:中性灰條「尚未完成」— **絕不**進綠色分支(§1 假綠燈)。
     """
     items = (result or {}).get('items') or []
     if not items:
+        if not threshold_scanned:
+            # §1:未評估 ≠ 無異常。中性灰 + 明說原因,不給任何「沒事」暗示。
+            return ('<div style="background:#161b22;border-left:3px solid '
+                    f'{TRAFFIC_NEUTRAL};border-radius:0 6px 6px 0;padding:6px 14px;'
+                    'margin:4px 0 10px 0;">'
+                    f'<span style="color:{TRAFFIC_NEUTRAL};font-size:12px;">'
+                    '⬜ 今日關鍵：門檻掃描尚未完成（總經指標尚未載入）—— '
+                    '<b>未評估 ≠ 無異常</b>，請按「🚀 一鍵更新全部數據」</span></div>')
         return ('<div style="background:#0d2318;border-left:3px solid '
                 f'{TRAFFIC_GREEN};border-radius:0 6px 6px 0;padding:6px 14px;'
                 'margin:4px 0 10px 0;">'
@@ -210,10 +242,16 @@ def key_alerts_banner(result: dict) -> str:
         f'border-radius:6px;padding:2px 8px;margin:2px 6px 2px 0;font-size:12px;'
         f'color:#e6edf3;cursor:help;">{i.get("emoji", "")} {i.get("text", "")}</span>'
         for i in items)
+    # §1:急變層有料但門檻層還沒評估時,不可讓使用者以為這 N 項就是「今天的全部」。
+    _pending_note = ('' if threshold_scanned else
+                     f'<div style="font-size:10px;color:{TRAFFIC_NEUTRAL};margin-top:2px;">'
+                     '⬜ 門檻層尚未評估（總經指標未載入），本列僅含急變層 —— 未評估 ≠ 無異常'
+                     '</div>')
     return (f'<div style="background:{_bg};border-left:3px solid {_bc};'
             'border-radius:0 6px 6px 0;padding:8px 14px;margin:4px 0 10px 0;">'
             f'<span style="color:{_bc};font-weight:700;font-size:13px;">'
             f'⚡ 今日關鍵（{len(items)} 項）</span><br>{_chips}'
+            f'{_pending_note}'
             '<div style="font-size:10px;color:#8b949e;margin-top:2px;">'
             '滑鼠停在項目上看白話說明｜門檻層=總經警示規則命中｜急變層=單期變化超限'
             '</div></div>')

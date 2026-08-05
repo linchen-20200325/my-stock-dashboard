@@ -33,6 +33,8 @@ import pandas as pd
 
 from shared.shortage_screen_thresholds import (
     SHORTAGE_DEEP_SCAN_MAX,
+    SHORTAGE_TIER_MID_MIN,
+    SHORTAGE_TIER_STRONG_MIN,
     SHORTAGE_VERSION,
     TIER_INSUFFICIENT,
     TIER_MID,
@@ -262,9 +264,12 @@ def build_shortage_ai_prompt(
         return sum(1 for r in _rows if r.get("_tier") == tier)
     _stat_data = "\n".join([
         f"- 這次掃出共 {len(_rows)} 檔可評分。",
-        f"- 🟥 強缺貨訊號（分數≥65）：{_cnt(TIER_STRONG)} 檔。",
-        f"- 🟧 中度缺貨訊號（40–64）：{_cnt(TIER_MID)} 檔。",
-        f"- ⬜ 不明顯（<40）：{_cnt(TIER_WEAK)} 檔。",
+        # v19.178 §3.3:原文案 65 / 40–64 / 40 為 prompt 內寫死,tier 判定卻走 SSOT
+        # (shared/shortage_screen_thresholds)。改門檻時 tier 會動、送給 AI 的說明不會動
+        # → LLM 會依舊門檻敘事。改為插值,單一真相。
+        f"- 🟥 強缺貨訊號（分數≥{SHORTAGE_TIER_STRONG_MIN:.0f}）：{_cnt(TIER_STRONG)} 檔。",
+        f"- 🟧 中度缺貨訊號（{SHORTAGE_TIER_MID_MIN:.0f} ~ 未達強訊號）：{_cnt(TIER_MID)} 檔。",
+        f"- ⬜ 不明顯（<{SHORTAGE_TIER_MID_MIN:.0f}）：{_cnt(TIER_WEAK)} 檔。",
         "- 分數越高代表「合約負債大增＋毛利率走揚＋存貨天數下降＋月營收連續成長」越同步。",
     ])
 

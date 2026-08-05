@@ -138,7 +138,9 @@ class TestNdcBlockPlanZero:
         """分數超出 [9,45] → 方案0 跳過,落到後續源(此處全 mock 失敗 → _err_ndc 三源)。"""
         from src.data.macro import tw_macro as T
         from src.data.macro import macro_snapshot as M
-        import src.data.proxy as P
+        # v19.74/v19.113 地雷:patch 真正持有者 proxy_helper,不可 patch package
+        # `src.data.proxy`(PEP 562 轉發;monkeypatch 還原會釘成實體屬性)。
+        import src.data.proxy.proxy_helper as P
         self._clear_block_cache()
         monkeypatch.setattr(
             T, "fetch_business_indicator_series",

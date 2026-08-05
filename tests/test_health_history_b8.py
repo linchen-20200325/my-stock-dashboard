@@ -278,6 +278,15 @@ class TestBatchFetcherParallelA2(unittest.TestCase):
         self.assertIn("max_workers=3", src, "FinMind 禮貌上限須維持")
 
     def test_module_importable_and_worker_loader_isolated(self):
+        """thread-local 隔離:兩執行緒各得**自己的** loader,同執行緒內則共用同一個。
+
+        ⚠️ 身分判定**不可用 `id()`**:CPython 的 `id()` 是記憶體位址,物件一旦被
+        回收位址就會被重用。`_get_worker_loader()` 建立的實例唯一強參照在該執行緒的
+        thread-local 槽,執行緒結束即被清掉 → 若 t1 在 t2 建實例前就跑完,兩個
+        `_Marker` 可能拿到同一個位址,`set(id)` 只剩 1 個 → 假紅(flaky,全量跑
+        機器較忙時更容易發生)。改為:實例存進 list 保強參照 + `assertIsNot` 直接比
+        物件身分,並用 `len(_made)` 釘住「到底建了幾個實例」。
+        """
         import threading
 
         import src.ui.tabs.stock_grp_sections.section_batch_fetcher as bf
@@ -285,23 +294,36 @@ class TestBatchFetcherParallelA2(unittest.TestCase):
         # thread-local 隔離:兩執行緒各得不同實例(免鎖的前提)
         import src.data.core.data_loader as dl_mod
         _orig = dl_mod.StockDataLoader
-        _made = []
+        _made = []          # 存**物件本身**:全程保強參照,位址不會被回收重用
 
         class _Marker:
             def __init__(self):
-                _made.append(id(self))
+                _made.append(self)      # list.append 在 GIL 下為原子操作
         try:
             dl_mod.StockDataLoader = _Marker
             if hasattr(bf._tls_batch, 'loader'):
                 del bf._tls_batch.loader
-            got = []
+            got = []        # 每執行緒 append 一個 (第一次呼叫, 第二次呼叫) tuple
+            errs = []
 
             def _grab():
-                got.append(id(bf._get_worker_loader()))
+                try:
+                    _a = bf._get_worker_loader()
+                    _b = bf._get_worker_loader()   # 同執行緒二度呼叫應命中快取
+                except Exception as _e:            # 執行緒內例外不會讓測試變紅,須自行回報
+                    errs.append(_e)
+                    return
+                got.append((_a, _b))
             t1 = threading.Thread(target=_grab)
             t2 = threading.Thread(target=_grab)
             t1.start(); t2.start(); t1.join(); t2.join()
-            self.assertEqual(len(set(got)), 2, "各執行緒應持有各自 loader 實例")
+            self.assertEqual(errs, [], f"worker loader 取得時炸掉:{errs}")
+            self.assertEqual(len(got), 2, "兩條執行緒都應成功取得 loader")
+            self.assertEqual(len(_made), 2,
+                             "thread-local:每執行緒恰建 1 個實例(4 次呼叫仍只 2 次 login)")
+            for _a, _b in got:
+                self.assertIs(_a, _b, "同一執行緒重複呼叫應回同一實例(thread-local 快取)")
+            self.assertIsNot(got[0][0], got[1][0], "各執行緒應持有各自 loader 實例")
         finally:
             dl_mod.StockDataLoader = _orig
             if hasattr(bf._tls_batch, 'loader'):

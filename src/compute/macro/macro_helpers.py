@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import sys
 from typing import Any, Optional
 
 import pandas as pd
@@ -30,6 +31,77 @@ _QE_MAP = {'1': '03-31', '2': '06-30', '3': '09-30', '4': '12-31'}
 from shared.macro_calibration import load_calibrated_thresholds as _load_calibrated_thresholds
 
 HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE = _load_calibrated_thresholds()
+
+# ── v19.177 P1-B ②:信心來源標籤 —— 「站上均線比例」是捏造描述,已除役 ──────────
+# 舊值:'旌旗指數 (站上均線比例)'。**全站沒有任何一行 code 在算「站上均線的
+# 股票家數比」**(grep `站上|above_ma|pct_above` 的命中都是別的量:
+# `tab_stock.py` 的 `_above_ma20` 是單檔個股比自己的均線;
+# `daily_data_fetchers.py:445` 的 `adl_ma20` 是「ADL 累積線的 MA20」)。
+# 真值:旌旗 = 上漲佔比(ad_ratio)的 5 日移動平均,見
+#       `src/services/jingqi_calc.compute_and_store_jingqi` 的 ADL 主源那一行
+#       `float(df_adl_raw['ad_ratio'].tail(5).mean())`(不寫行號 —— 行號會漂移)。
+#
+# 名詞 SSOT 是 `src/ui/render/ui_widgets.BREADTH_JINGQI`,但那是 L4 Render,
+# L2 Compute 不得上行 import(§8.2 跨層上行 import 違憲)→ 這裡放字面值,
+# 由 `tests/test_p1b_fabricated_defaults.py::test_conf_label_matches_breadth_ssot`
+# 斷言與 SSOT 的 canonical / formula 一致,擋兩邊漂移。
+_CONF_LABEL_JINGQI = '旌旗指數 (上漲佔比的 5 日均)'
+
+
+# ── v19.175 P0:`cl_data['inst']` 型別收斂 SSOT ────────────────────────────────
+# 全站有 4 個消費點對 `cl_data['inst']` 做 `next((k for k in inst if '外資' in k))`,
+# 而它們清一色寫成 `cl_data.get('inst', {})` —— **dict.get 的預設值只在 key 不存在
+# 時生效**;key 存在、值為 None 時原樣回 None,下一行 genexpr 立刻拋
+# `TypeError: 'NoneType' object is not iterable`,把整個「🌍 總經」分頁炸掉。
+#
+# 4 個消費點(修前全部裸奔):
+#   1. `macro_helpers.calc_traffic_light`            (L2,本檔)
+#   2. `src/ui/tabs/macro/section_warroom.py:53`     (L5,今日作戰室)
+#   3. `src/ui/tabs/macro/section_mid.py:448`        (L5,三環 E 條件)
+#   4. `src/ui/tabs/macro/section_news_ai.py:142`    (L5,AI 量化脈絡)
+# 只修其中一個,下一個 rerun 就換下一個炸 —— 故抽成本 helper 一次收齊。
+def coerce_inst_dict(cl_data: Optional[dict], *, where: str) -> dict:
+    """把 `cl_data['inst']` 收斂成 dict;契約違約時**大聲 log**,不靜默補值。
+
+    §1 Fail Loud 的界線在哪
+    -----------------------
+    這**不是** `if x is None: x = []` 那種粉飾:`{}` 與 `None` 在下游語意完全相同
+    —— 都代表「三大法人這份資料沒拿到」。所有消費點原本就以 falsy / `_fk is None`
+    判缺並**照樣把缺失顯示出來**:
+
+    - `calc_traffic_light`:`_conf_sources` 的「外資買賣超 (三大法人)」判 False
+      → 信心分數下降 → `handlers._render_traffic_light` 在 conf<70 時直接擋掉燈號
+      並逐項列出缺哪一份資料。
+    - `section_warroom`:外資方向顯示「未知」。
+    - `section_mid`:三環 E 條件顯示「E 外資未知」。
+    - `section_news_ai`:AI 脈絡直接不列該行(不塞 0 給 LLM 腦補)。
+
+    本函式唯一改變的是「不再把整頁炸掉」,並且把契約違約寫進 stderr 留跡。
+    真正的修法在上游 —— `macro_fetch_orchestrator.fetch_macro_bundle` 已於同一版
+    收斂回傳契約(inst 一律 dict);本函式是消費端的第二道防線(舊 session 裡可能
+    還躺著上一版寫入的 None)。
+
+    Args:
+        cl_data: `st.session_state['cl_data']`(可為 None)。
+        where:   呼叫點識別字串,寫進 log 方便定位(如 'calc_traffic_light')。
+
+    Returns:
+        dict —— 保證可安全迭代;拿不到資料時為空 dict。
+    """
+    _cd = cl_data or {}
+    _raw = _cd.get('inst')
+    if isinstance(_raw, dict):
+        return _raw
+    if _raw is not None:
+        print(f"[{where}] ⚠️ cl_data['inst'] 型別違約:{type(_raw).__name__}"
+              f"(契約要求 dict)→ 視為三大法人未載入,缺失會照常顯示",
+              file=sys.stderr)
+    elif 'inst' in _cd:
+        # key 在但值為 None = 上游明確失敗(TWSE BFI82U 逾時 + FinMind rescue 未補到)。
+        # key 根本不存在 = 冷啟動尚未抓,屬正常狀態,不需 log(避免洗版)。
+        print(f"[{where}] ⚠️ cl_data['inst'] is None(上游三大法人 TWSE+FinMind 全敗)"
+              f"→ 視為未載入;信心分數會下降並列入缺失來源", file=sys.stderr)
+    return {}
 
 
 def calc_traffic_light(
@@ -59,8 +131,12 @@ def calc_traffic_light(
         li_latest:   先行指標 DataFrame，含 '外資大小' / '韭菜指數' 欄
 
     Returns:
-        dict (color, icon, label, action, sub, health, defense,
-              score, jqavg, leek, fnet, fk, fut_net, conf, regime) 或 None
+        dict (color, icon, label, action, sub, health, health_partial, defense,
+              score, jqavg, leek, fnet, fk, fut_net, conf, missing_sources,
+              regime) 或 None
+
+        ⚠️ v19.177 起 `jqavg` / `leek` / `fut_net` **可能為 None**(= 該來源沒拿到),
+        消費端格式化前必須先判 None。詳見下方 P1-B 註解。
     """
     if not mkt_info and not jingqi_info and not cl_data:
         return None
@@ -68,30 +144,78 @@ def calc_traffic_light(
     _jq     = jingqi_info or {}
     _cd     = cl_data    or {}
     _score  = _mkt.get('score', 0)
-    _jqavg  = _jq.get('avg', 50)
-    _inst   = _cd.get('inst', {})
-    _fk     = next((k for k in _inst if '外資' in k), None)
+    # ── v19.177 P1-B ①:`_jq.get('avg', 50)` 捏造中性值 → 改 None(§1 Fail Loud)──
+    # 舊碼:`_jqavg = _jq.get('avg', 50)`。
+    # 50 在旌旗 0~100% 的尺度上**確實**是中點,但它以 HEALTH_WEIGHT_JQ(0.6)的權重
+    # 進健康評分 —— 拿不到廣度資料時捏一個 50,等於憑空製造「市場廣度剛好中性」
+    # 這個結論,再讓它佔健康分 60% 的份量(§1「自行估一個合理值當常數」= 違憲)。
+    #
+    # 另有一個舊碼自己就踩到的坑:`dict.get` 的預設值**只在 key 不存在時生效**。
+    # `section_inputs.load_section_inputs` 在 warroom 沒有 jingqi_avg 時會合成
+    # `{'avg': None}`(section_inputs.py:97)—— key 在、值為 None ⇒ 舊碼拿到的是
+    # None 而不是 50,下方乘法直接 TypeError。改成顯式 None + 權重重新歸一化後,
+    # 「沒有 jingqi_info」與「有 dict 但 avg 是 None」兩種缺法行為一致。
+    _jqavg = _safe_float(_jq.get('avg'))
+    # ── v19.175 P0(實機 2/2 重現):`cl_data['inst']` 可能是 **None** ──────────
+    # 型別收斂 + log 已抽至同檔 `coerce_inst_dict`(4 個消費點共用,詳見該 docstring)。
+    #
+    # None 從哪來:`macro_fetch_orchestrator.fetch_macro_bundle` 在 inst job
+    # 逾時 / 例外時 `_results['inst'] = None` → `None or (None, None)` 解包成
+    # `inst = None`,若 FinMind rescue 也沒補到就原樣回傳,再由
+    # `tab_macro.py:355-358` 寫進 `session_state['cl_data']['inst']`。
+    # 之後**每一次 rerun** 走 `section_traffic_light.render_traffic_light_top()`
+    # → 本函式 → 炸;而 `warroom_summary` 是在本函式回傳**之後**才寫入
+    # (`section_traffic_light.py:193`),於是全站 4 個消費點(置底常駐條 /
+    # 建議持股油門 / ETF 與個股組合的總經連動配置)全部退化成
+    # 「⬜ 總經未評估 / 建議持股 --」。
+    _inst = coerce_inst_dict(_cd, where='calc_traffic_light')
+    _fk     = next((k for k in _inst if '外資' in str(k)), None)
     _fnet   = _inst.get(_fk, {}).get('net', 0) if _fk else 0
 
     # 先行指標：期貨外資大小、韭菜指數
-    _fut_net = 0
-    _leek = 50
+    # ── v19.177 P1-B ①:兩者缺值一律 None,不再捏 0 / 50(§1 + §4.1)────────────
+    # 舊碼:`_fut_net = 0` / `_leek = 50`,且 `.get(col, 50)` 又埋了第二層預設。
+    #
+    # `_leek = 50` 是本批**最嚴重**的一個:畫面「韭菜指數」欄實際餵進來的是
+    # **小台法人空多比**,值域約 [-100, +100]、中位 **0**(定義見
+    # `src/config/config.py`「韭菜指數門檻 SSOT」的 (B) 段;另一個值域 [0,100]
+    # 中位 50 的「融資 5Y 標準化指數」是**同名不同義**的另一個量)。
+    # 50 放在 ±100% 的尺度上是**極端偏空**,不是中性 —— 用它當 neutral default
+    # 同時違反 §1(自行估一個合理值)與 §4.1(量綱/值域錯配)。
+    #
+    # `_fut_net = 0` 則讓下方 `_defense` 判定恆為假:把「不知道外資期貨部位」
+    # 當成「外資期貨沒有大空單」,是把**缺資料當成安全訊號**。
+    #
+    # 缺失不會被吞:`_conf_sources` 的「先行指標」項會判 False → 信心分數下降 →
+    # `handlers._render_traffic_light` 把缺項列在燈號卡上(v19.177 一併修好
+    # 「只在 conf<70 才列」導致缺 1 項時 conf=80% 看不到的破口)。
+    #
+    # NaN 也算缺:`leading_indicators` 對沒抓到的日子會塞 None/NaN,舊碼
+    # `float(None)` 拋 TypeError 被 except 吞掉 → 悄悄退回捏造值;`_safe_float`
+    # 統一把 None / NaN / 非數字都收斂成 None。
+    _fut_net = None
+    _leek = None
     if li_latest is not None and not li_latest.empty:
-        if '外資大小' in li_latest.columns:
-            try:
-                _fut_net = float(li_latest.iloc[-1].get('外資大小', 0))
-            except Exception:
-                pass
-        if '韭菜指數' in li_latest.columns:
-            try:
-                _leek = float(li_latest.iloc[-1].get('韭菜指數', 50))
-            except Exception:
-                pass
+        try:
+            _li_row = li_latest.iloc[-1]
+        except Exception as _e_li:  # noqa: BLE001 — 取末列失敗 = 兩值皆缺,照常降級
+            print(f"[calc_traffic_light] li_latest 末列讀取失敗:"
+                  f"{type(_e_li).__name__}: {_e_li} → 期貨/韭菜視為未取得",
+                  file=sys.stderr)
+            _li_row = None
+        if _li_row is not None:
+            if '外資大小' in li_latest.columns:
+                _fut_net = _safe_float(_li_row.get('外資大小'))
+            if '韭菜指數' in li_latest.columns:
+                _leek = _safe_float(_li_row.get('韭菜指數'))
 
     _regime  = _mkt.get('regime', 'neutral')
     # v18.436 #3:外資期貨防禦門檻 SSOT 化
     from shared.signal_thresholds import FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD
-    _defense = (_score < 2 and abs(_fut_net) > FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD
+    # v19.177:`_fut_net is None`(未取得)**既不觸發也不抑制**防禦 —— 缺資料不是
+    # 「沒有大空單」。與舊碼(0)在燈號上同為 False,但語意與 log/信心揭露不同。
+    _defense = (_fut_net is not None and _score < 2
+                and abs(_fut_net) > FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD
                 and _fut_net < 0)
     # v18.241 E1: 健康評分權重從 SSOT 引入（原 0.4/0.4/20 inline）
     # v19.102 校準採納(方案 B,MACRO_HEALTH_WEIGHT_PROPOSAL.md AUC 0.753):
@@ -99,33 +223,61 @@ def calc_traffic_light(
     # 借用錯配)改用 market_regime 回傳的真 max_score(預設 4.0 = market_regime 基本
     # 滿分,ad_ratio/m1b_m2 有傳才升 5/6)— 修「預設模式 score 永遠到不了 100」。
     _max_score = float(_mkt.get('max_score') or 4.0)
-    _health  = round(
-        _jqavg * HEALTH_WEIGHT_JQ
-        + min(_score / _max_score * 100, 100) * HEALTH_WEIGHT_SCORE
+    _score_pct = min(_score / _max_score * 100, 100)
+    # ── v19.177 P1-B:缺項改「權重重新歸一化」,不再用捏造的中性值頂替 ──────────
+    # 舊式:health = jqavg×0.6 + score_pct×0.4 + fnet_bonus,jqavg 缺時塞 50。
+    # 新式:只對**真的拿得到**的分項加權後歸一化 ——
+    #     health = Σ(value_i × w_i) / Σ(w_i)        (i ∈ 有值的分項)
+    # 語意是「用手上有的資料評分」,而不是「假裝缺的那項剛好中性」。
+    # 降級不靜默:conf 同步下降(見下方 `_conf_sources`)、缺項列進 missing_sources、
+    # 並回傳 `health_partial=True` 供畫面標示(§1「填補必須顯式呼叫 + 帶旗標」)。
+    #
+    # 零回歸保證:兩項都在時 Σw = HEALTH_WEIGHT_JQ + HEALTH_WEIGHT_SCORE = 1.0
+    # (0.6 + 0.4 在 IEEE754 下正好 1.0),除以 1.0 為精確運算 → 與舊式逐位相同。
+    _health_parts: list[tuple[float, float]] = []
+    if _jqavg is not None:
+        _health_parts.append((_jqavg, HEALTH_WEIGHT_JQ))
+    # score 恆有值(`_mkt.get('score', 0)`);mkt_info 整包缺時 `bool(mkt_info)`
+    # 已在 `_conf_sources` 扣信心,且三來源全空在函式開頭就 return None。
+    _health_parts.append((_score_pct, HEALTH_WEIGHT_SCORE))
+    _w_sum = sum(_w for _, _w in _health_parts)
+    _health = round(
+        sum(_v * _w for _v, _w in _health_parts) / _w_sum
         + (HEALTH_FNET_BONUS if _fnet > 0 else 0), 1
     )
+    _health_partial = _jqavg is None
 
     # R-CALC-4 v18.412:Method A ↔ Method B 雙演算法對帳(§4.3)
     # 嵌入 production render 路徑(原只在 reconcile_panel diagnostic page);
     # drift_warning / extreme_divergence 走 stderr log,**不改 UI 行為**(觀測性升級)。
-    try:
-        from src.compute.health.health_reconcile import reconcile_health_score as _reconcile
-        _rec = _reconcile(_health, jqavg=_jqavg, score=_score, fnet=_fnet,
-                          max_score=_max_score)
-        if not _rec.within_tolerance:
-            import sys as _sys_rec
-            print(f'[health_reconcile] {_rec.reason} '
-                  f'method_a={_rec.method_a} method_b={_rec.method_b:.1f} '
-                  f'diff={_rec.diff:+.1f} abs_diff={_rec.abs_diff:.1f}',
-                  file=_sys_rec.stderr)
-    except Exception as _e_rec:
-        # 對帳失敗不影響主路徑(§1 fail loud 範圍外:這是觀測性,主邏輯仍走 Method A)
+    #
+    # v19.177 gate:jqavg 缺時 Method A 已改權重歸一化,而 Method B
+    # (`health_reconcile.compute_method_b_health:96`)仍用它自己的 `jqavg or 50.0`
+    # 預設 —— 兩者對「缺值」的定義不同,硬對帳只會產出恆定噪音告警。
+    # 對帳屬觀測性而非主邏輯,故僅在**輸入齊全**時才跑(§4.3 精神:比的是演算法差異,
+    # 不是比誰的缺值預設比較好)。Method B 的 50.0 預設本身屬另案(該檔不在本批範圍)。
+    if _jqavg is not None:
         try:
-            import sys as _sys_rec_err
-            print(f'[health_reconcile] swallow: {type(_e_rec).__name__}: {_e_rec}',
-                  file=_sys_rec_err.stderr)
-        except Exception:
-            pass
+            from src.compute.health.health_reconcile import reconcile_health_score as _reconcile
+            _rec = _reconcile(_health, jqavg=_jqavg, score=_score, fnet=_fnet,
+                              max_score=_max_score)
+            if not _rec.within_tolerance:
+                import sys as _sys_rec
+                print(f'[health_reconcile] {_rec.reason} '
+                      f'method_a={_rec.method_a} method_b={_rec.method_b:.1f} '
+                      f'diff={_rec.diff:+.1f} abs_diff={_rec.abs_diff:.1f}',
+                      file=_sys_rec.stderr)
+        except Exception as _e_rec:
+            # 對帳失敗不影響主路徑(§1 fail loud 範圍外:這是觀測性,主邏輯仍走 Method A)
+            try:
+                import sys as _sys_rec_err
+                print(f'[health_reconcile] swallow: {type(_e_rec).__name__}: {_e_rec}',
+                      file=_sys_rec_err.stderr)
+            except Exception:
+                pass
+    else:
+        print('[health_reconcile] skip:jqavg 未取得,Method A 已權重歸一化而 '
+              'Method B 仍用 50 預設,兩者不可比 → 本輪不對帳(§4.3)', file=sys.stderr)
 
     # 校準腳本可注入測試門檻；正式呼叫不傳 → 用模組常數
     _h_thr = health_defense_threshold if health_defense_threshold is not None else HEALTH_DEFENSE_THRESHOLD
@@ -154,7 +306,19 @@ def calc_traffic_light(
 
     _conf_sources = [
         ('大盤趨勢評分 (market_regime)', bool(mkt_info)),
-        ('旌旗指數 (站上均線比例)',       bool(jingqi_info)),
+        # ── v19.177 P1-B ② 兩處同時修 ────────────────────────────────────
+        # (a) 標籤反捏造:原文「旌旗指數 (站上均線比例)」—— **全站沒有任何一行
+        #     在算「站上均線的家數比」**。真值 = 上漲佔比(ad_ratio)的 5 日移動
+        #     平均(`jingqi_calc.compute_and_store_jingqi` 的 ADL 主源那一行:
+        #     `df_adl_raw['ad_ratio'].tail(5).mean()`)。SSOT 定義在
+        #     `src/ui/render/ui_widgets.BREADTH_JINGQI`,但那是 L4 Render,
+        #     L2 不得上行 import(§8.2)→ 此處寫字面值,由
+        #     `tests/test_p1b_fabricated_defaults.py` 釘住兩邊一致,擋漂移。
+        # (b) 判定改吃「真的有沒有數值」:原 `bool(jingqi_info)` 在
+        #     `section_inputs` 合成 `{'avg': None}`(section_inputs.py:97)時
+        #     為 True(dict 非空)⇒ 明明沒有旌旗值,信心分數卻不降、缺項也不列
+        #     = 缺失被吃掉。改判 `_jqavg is not None`。
+        (_CONF_LABEL_JINGQI,              _jqavg is not None),
         ('外資買賣超 (三大法人)',         bool(_fk)),
         ('先行指標 (期貨/PCR/韭菜)',      bool(li_latest is not None and not li_latest.empty)),
         ('ADL 騰落指標',                  bool(_cd.get('adl') is not None)),
@@ -165,6 +329,9 @@ def calc_traffic_light(
     return {
         'color': _color, 'icon': _icon, 'label': _label,
         'action': _action, 'sub': _sub, 'health': _health,
+        # v19.177:True = 健康評分少了旌旗(廣度)那條腿,僅由大盤評分推算。
+        # 畫面須據此標示(handlers._render_traffic_light),不可靜默(§1)。
+        'health_partial': _health_partial,
         'defense': _defense, 'score': _score, 'jqavg': _jqavg,
         'leek': _leek, 'fnet': _fnet, 'fk': _fk, 'fut_net': _fut_net,
         'conf': _conf, 'missing_sources': _missing, 'regime': _regime,
@@ -1265,13 +1432,21 @@ def compute_five_bucket_summary(
 
     §1 Fail Loud：缺值 → 該指標 gray（未載入），桶全 gray → ⬜，**不**偽綠。
     §4.1：foreign_net 因 inst net 單位待確認，v1 暫不接（保持 gray 不誤判）。
+
+    v19.175 P0-B（**行為變更**）：`us10y` / `dxy` 兩條 spec 自 v18.286 註冊起
+    就沒有對應取值（values dict 無此 key）→ 永久 ⬜ gray。本版接上
+    macro_info['us10y'] / cl_data['intl'] 兩條真實來源，並依 §3.2 加合理範圍
+    守衛。副作用：**「中期」桶從 4 盞燈變 6 盞**，桶燈號取 worst-of 可能改變
+    （詳見 tests/test_p0b_spec_wiring.py 與 PR 說明的線上實測值代入結果）。
     """
     # v19.172：BUCKET_LEVEL_LABEL 改由 bucket_level_label() 取用(紅燈依觸發方向
     #   分流過熱 / 惡化)；danger_exceedance 用來在同桶多盞同色燈時挑主因。
+    # v19.175：us10y / dxy 接線 → 需 CL_INTL_KEY_* 鏡像 key 與 within_valid_range。
     from shared.macro_buckets import (
         BUCKET_ORDER, LEVEL_COLOR, LEVEL_EMOJI, SPECS_BY_KEY,
+        CL_INTL_KEY_DXY, CL_INTL_KEY_US10Y,
         specs_for_bucket, classify_danger, aggregate_level, fmt_value,
-        bucket_level_label, danger_exceedance,
+        bucket_level_label, danger_exceedance, within_valid_range,
     )
 
     macro_info = macro_info or {}
@@ -1302,6 +1477,57 @@ def compute_five_bucket_summary(
             return None
         return None
 
+    # ── v19.175 P0-B：us10y / dxy 取值 helper ────────────────────────
+    # 【修的是什麼】這兩條在 macro_buckets 早於 v18.286 就註冊了 DangerSpec，
+    #   但 values dict **從來沒有這兩個 key** → `values.get(s.key)` 恆為 None
+    #   → classify_danger(None) → **永久 ⬜ gray**，與當日資料無關。
+    #   實機證據:五桶明細印「⬜ 10Y 公債殖利率：—」，同一頁國際指標卡卻印
+    #   「10Y公債殖利率 4.63 %」、總經警示印「🟢 DXY 美元指數 99.75」。
+    #
+    # 【資料來源與量綱】(§2.1 5-Tier + §4.1 量綱陷阱)
+    #   us10y: ① T1 FRED DGS10 —— macro_info['us10y']['current']
+    #             (macro_snapshot.fetch_us10y_block，單位=百分點，如 4.63)
+    #          ② T2 Yahoo ^TNX —— cl_data['intl']['10Y公債殖利率'] 收盤價
+    #             (daily_data_fetchers.fetch_single，欄位已 lower-case 為 'close')
+    #          **T1 優先、取第一個命中，不平均**(同 §2.1 PMI 多源賽跑規則)。
+    #   dxy:   僅 T2 Yahoo DX-Y.NYB —— cl_data['intl']['美元指數 DXY'] 收盤價。
+    #          (macro_info 無 dxy 區塊；macro_alert 的 ma_snap['dxy'] 不在本函式
+    #           入參內，硬要接需改兩個 L5 caller 的簽章 → 不在本次範圍。)
+    #
+    # 【為何一定要配 §3.2 範圍檢查】fetch_single 對 'DX-Y.NYB' 有備援鏈
+    #   DX-Y.NYB → DX=F → **UUP**(ETF ~27 美元)。落到 UUP 時欄位名不變但尺度差
+    #   4 倍，27 < 105 會判成「🟢 綠」= **假綠**(§1:錯的數字比沒有數字更危險)。
+    #   同理 ^TNX 若改回「殖利率×10」慣例(46.3)會判成「🔴 紅」= 假紅。
+    #   → 越界一律回 None(gray) + log，**絕不**自行乘除 10 去猜尺度。
+    def _intl_close(name):
+        """cl_data['intl'][name] 末列收盤價。欄名對齊 calc_stats 的 close/Close 解析。"""
+        _df_intl = _g(cl_data, "intl", name)
+        for _col in ("close", "Close"):
+            _v_intl = _df_last(_df_intl, _col)
+            if _v_intl is not None:
+                return _v_intl
+        return None
+
+    def _first_sane(key, *sources):
+        """多源賽跑取第一個「有值且通過 §3.2 合理範圍」者；全不過 → None(gray)。
+
+        sources: (來源標籤, 原始值) tuple 序列，依權威分級由高到低排列。
+        """
+        _spec_fs = SPECS_BY_KEY.get(key)
+        for _src_label, _raw in sources:
+            _v_fs = _num(_raw)
+            if _v_fs is None:
+                continue
+            if _spec_fs is not None and not within_valid_range(_v_fs, _spec_fs):
+                # §1:出聲不吞。這行 log 就是「上游換標的 / 換慣例」的偵測點。
+                print(f"[五桶/{key}] ⚠️ 來源 {_src_label} 值 {_v_fs} 超出合理範圍 "
+                      f"[{_spec_fs.valid_min}, {_spec_fs.valid_max}] → 跳過此源(§3.2)。"
+                      f"常見主因:上游 fallback 換成不同尺度標的(如 DXY→UUP)"
+                      f"或報價慣例改變(如 ^TNX 殖利率×10)。**不猜換算**。")
+                continue
+            return _v_fs
+        return None
+
     _news_sys = None
     if news_items is not None:
         try:
@@ -1318,6 +1544,18 @@ def compute_five_bucket_summary(
         "us_core_cpi":   _num(_g(macro_info, "us_core_cpi", "yoy")),
         "tw_export":     _num(_g(macro_info, "tw_export", "yoy")),
         "bias_240":      _num(_g(bias_info, "bias_240")),
+        # v19.175 P0-B:接線(原本 values 完全沒有這兩個 key → 永久 gray)。
+        # 單位皆與 spec 門檻同刻度:us10y=百分點(4.5/5.0)、dxy=指數點(105/110)。
+        "us10y":         _first_sane(
+            "us10y",
+            ("FRED:DGS10(macro_info)", _g(macro_info, "us10y", "current")),
+            ("FRED:DGS10(macro_info.value)", _g(macro_info, "us10y", "value")),
+            ("Yahoo:^TNX(cl_data.intl)", _intl_close(CL_INTL_KEY_US10Y)),
+        ),
+        "dxy":           _first_sane(
+            "dxy",
+            ("Yahoo:DX-Y.NYB(cl_data.intl)", _intl_close(CL_INTL_KEY_DXY)),
+        ),
         "vix":           _num(_g(macro_info, "vix", "current")),
         "adl":           _df_last(_g(cl_data, "adl"), "ad_ratio"),
         "fut_net":       _df_last(li_latest, "外資大小"),

@@ -75,7 +75,13 @@ class TestTier1FredGap:
                            for i in range(20)]
             return _r
 
-        monkeypatch.setattr('src.data.proxy.fetch_url', _fake_fetch_url)
+        # v19.74/v19.113 地雷:**不可** patch package `src.data.proxy` —— 它是
+        # PEP 562 lazy forward(無實體 fetch_url),monkeypatch teardown 的「還原」
+        # 會把真函式 setattr 回 package 變成實體屬性,永久遮蔽 __getattr__ 轉發。
+        # 改 patch 真正持有者 proxy_helper;production 端是 function-local
+        # `from src.data.proxy import fetch_url`(呼叫時才解析)→ 照樣打得進去。
+        import src.data.proxy.proxy_helper as _ph
+        monkeypatch.setattr(_ph, 'fetch_url', _fake_fetch_url)
         r = _unwrap(ms.fetch_m1b_m2_block, '')
         assert r is not None
         assert r['source'] == 'FRED'
@@ -112,7 +118,9 @@ class TestTier2ImfGap:
                 return None
             return _fake_fetch_url(url, **kwargs)
 
-        monkeypatch.setattr('src.data.proxy.fetch_url', _dispatch)
+        # 同上:patch 真正持有者 proxy_helper,不可 patch package(見 TestTier1FredGap 註)
+        import src.data.proxy.proxy_helper as _ph
+        monkeypatch.setattr(_ph, 'fetch_url', _dispatch)
         r = _unwrap(ms.fetch_m1b_m2_block, '')
         assert r is not None
         assert r['source'].startswith('IMF')

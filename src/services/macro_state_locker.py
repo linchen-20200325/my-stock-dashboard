@@ -32,6 +32,39 @@ _DEFAULT_STATE: dict = {
     "timestamp": "",
 }
 
+# ── 硬否決紅線常數 SSOT（v19.178 AI-SSOT）──────────────────────────
+# 原為 calculate_system_state() 內 inline 裸數字（-35000 / 30）。抽出理由：
+# `section_news_ai` 的 AI context 需要**如實告訴 LLM 這條硬否決線**，若在 prompt
+# 內另抄一份數字 → 兩處各自漂移（§3.3 反捏造）。數值完全未變，僅具名。
+# ⚠️ 與 `shared/macro_buckets.fut_net`（黃 -10000 / 紅 -20000，籌碼桶燈號）
+#    **刻意不同源**：那組是「短線急殺桶」的分級燈；本常數是「曝險上限硬否決」
+#    的單一觸發線，且必須**與指數跌破 MA5 同時成立**才生效，門檻更嚴屬設計。
+MACRO_VETO_FUTURES_NET_SHORT_LOTS: float = -35000.0
+"""外資期貨淨口硬否決線（單位：TX 當量口＝大台淨口＋0.25×小台淨口）。
+淨口 < 本值 **且** 指數跌破 MA5 → 強制曝險上限 MACRO_VETO_FUTURES_EXPOSURE_CAP_PCT。
+原 calculate_system_state inline `-35000`。"""
+
+MACRO_VETO_FUTURES_EXPOSURE_CAP_PCT: int = 30
+"""外資期貨硬否決觸發後的曝險上限（%）。原 calculate_system_state inline `30`。"""
+
+MACRO_VETO_SAHM_EXPOSURE_CAP_PCT: int = 20
+"""薩姆規則（美國衰退警報）觸發後的曝險上限（%）。原 inline `20`。"""
+
+MACRO_VETO_PMI_CONTRACTION_LEVEL: float = 48.0
+"""PMI 連兩月硬否決的收縮水位。連續兩月 < 本值 → 曝險上限降至
+MACRO_VETO_PMI_EXPOSURE_CAP_PCT。原 inline `48`。
+⚠️ 與 `shared/macro_buckets.ism_pmi`（黃 50 / 紅 46）刻意不同源：那是桶燈號分級，
+本值是「連兩月」複合條件的硬否決線，取兩者之間的 48 屬設計。"""
+
+MACRO_VETO_PMI_EXPOSURE_CAP_PCT: int = 40
+"""PMI 連兩月收縮觸發後的曝險上限（%）。原 inline `40`。"""
+
+MACRO_EXPOSURE_BULLISH_MIN_PCT: int = 70
+"""曝險 ≥ 本值 → 風險等級「安全」/ 市場體制「多頭」。原 inline `70`。"""
+
+MACRO_EXPOSURE_NEUTRAL_MIN_PCT: int = 40
+"""曝險 ≥ 本值（且 < BULLISH）→「警告」/「震盪」；< 本值 →「危險」/「空頭」。原 inline `40`。"""
+
 # ── AI 核心 Prompt 模板（台股AI戰情室 v3.0）──────────────────
 _PROMPT_TEMPLATE = """\
 # 台股 AI 戰情室：總體經濟與大盤判讀提示語
@@ -42,7 +75,7 @@ _PROMPT_TEMPLATE = """\
 
 ## Absolute Constraints（絕對約束）
 1. 資訊隔離：【絕對禁止】腦補或使用預訓練知識中的具體數字。解讀必須 100% 基於下方 Data 標籤內的內容。
-2. 絕對服從：你必須絕對服從系統計算出的「曝險上限 (exposure_limit_pct)」。曝險 ≤30% → 解讀必須偏向防禦；曝險 ≥70% → 可偏向樂觀。
+2. 絕對服從：你必須絕對服從系統計算出的「曝險上限 (exposure_limit_pct)」。曝險 <{exposure_neutral_min_pct}% → 系統已判「危險／空頭」，解讀必須偏向防禦；曝險 ≥{exposure_bullish_min_pct}% → 系統已判「安全／多頭」，可偏向樂觀。（此為系統分級門檻，與畫面同源）
 3. 標的禁令：【絕對禁止】在報告中建議任何個股、ETF 或特定標的。
 4. 百分比禁令：analysis_summary 中不得出現任何持股百分比數字（如「60%」「持股七成」）。
 
@@ -180,10 +213,15 @@ class MacroStateLocker:
 
     # ── 內部方法 ────────────────────────────────────────────
     def _build_prompt(self, state_json_str: str, news_str: str, macro_context: str = "") -> str:
+        # v19.178 AI-SSOT：曝險分級門檻改插值,不在 prompt 內寫死(§3.3)。
+        # 原文寫「≤30% 防禦」與 calculate_system_state 實際的「<40% = 危險/空頭」
+        # 不一致 —— 曝險 30~40% 時系統已判空頭,AI 卻可能仍讀成「不到防禦線」。
         return _PROMPT_TEMPLATE.format(
             system_state_json=state_json_str,
             macro_data_str=macro_context or "（量化數據未提供）",
             news_string=news_str,
+            exposure_neutral_min_pct=MACRO_EXPOSURE_NEUTRAL_MIN_PCT,
+            exposure_bullish_min_pct=MACRO_EXPOSURE_BULLISH_MIN_PCT,
         )
 
     def _extract_json(self, raw_text: str) -> dict:
@@ -370,25 +408,28 @@ def calculate_system_state(macro_numbers: dict) -> dict:
     # ── 三大硬否決紅線 (Hard Veto Physical Lock) ────────────
     veto_labels: list[str] = []
 
-    # 紅線一：薩姆規則（美國衰退警報）→ 強制上限 20%
+    # v19.178 AI-SSOT：以下 6 個門檻原為 inline 裸數字，本版抽為模組常數（§3.3）。
+    # **數值完全未變**，行為零位移；抽出目的是讓 AI prompt 能引用同一份真相。
+
+    # 紅線一：薩姆規則（美國衰退警報）→ 強制上限
     if sahm:
-        exposure = min(exposure, 20)
+        exposure = min(exposure, MACRO_VETO_SAHM_EXPOSURE_CAP_PCT)
         veto_labels.append("🚨薩姆規則觸發")
 
-    # 紅線二：ISM PMI 連兩月 <48 → 強制上限 40%
-    if pmi < 48 and pmi_prev < 48:
-        exposure = min(exposure, 40)
+    # 紅線二：ISM PMI 連兩月低於收縮水位 → 強制上限
+    if pmi < MACRO_VETO_PMI_CONTRACTION_LEVEL and pmi_prev < MACRO_VETO_PMI_CONTRACTION_LEVEL:
+        exposure = min(exposure, MACRO_VETO_PMI_EXPOSURE_CAP_PCT)
         veto_labels.append(f"⚠️PMI連兩月收縮({pmi_prev:.1f}→{pmi:.1f})")
 
-    # 紅線三：外資期貨淨空 >35000 口 + 指數跌破 MA5 → 強制上限 30%
-    if futures_net < -35000 and below_ma5:
-        exposure = min(exposure, 30)
+    # 紅線三：外資期貨大額淨空 + 指數跌破 MA5 → 強制上限
+    if futures_net < MACRO_VETO_FUTURES_NET_SHORT_LOTS and below_ma5:
+        exposure = min(exposure, MACRO_VETO_FUTURES_EXPOSURE_CAP_PCT)
         veto_labels.append(f"🚨期貨淨空{abs(futures_net):.0f}口+破MA5")
 
     # ── 依硬否決後的曝險重新評定等級 ────────────────────────
-    if exposure >= 70:   risk_level, regime = "安全", "多頭"
-    elif exposure >= 40: risk_level, regime = "警告", "震盪"
-    else:                risk_level, regime = "危險", "空頭"
+    if exposure >= MACRO_EXPOSURE_BULLISH_MIN_PCT:   risk_level, regime = "安全", "多頭"
+    elif exposure >= MACRO_EXPOSURE_NEUTRAL_MIN_PCT: risk_level, regime = "警告", "震盪"
+    else:                                            risk_level, regime = "危險", "空頭"
 
     labels = veto_labels.copy()
     if pmi < 50 and not any("PMI" in l for l in labels):

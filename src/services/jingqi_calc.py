@@ -1,8 +1,19 @@
-"""src/services/jingqi_calc.py — 旌旗指數(全市場廣度)計算 + session_state write(P3-D11 v18.392)。
+"""src/services/jingqi_calc.py — 旌旗指數(市場廣度家族之一)計算 + session_state write(P3-D11 v18.392)。
 
 從 tab_macro inline 抽出(原 line 347-378,~32 LOC)。
 
-「旌旗」= 站在均線上股票%,代表市場廣度健康度:
+「旌旗」= **上漲佔比(ad_ratio)的 5 日移動平均**,單位 %,代表市場廣度健康度。
+
+⚠️ v19.177 反捏造更正(§1):本 docstring 原本寫「旌旗＝站在均線上股票%」——
+   **本專案從未計算「站上均線的股票家數比」這個量**。這裡是那句謊言的源頭
+   (SSOT 模組自己的檔頭),v19.176 已修的 5 處畫面文案都是從這裡抄出去的。
+   真值就是下方 `compute_and_store_jingqi` 的 ADL 主源那一行:
+   `float(df_adl_raw['ad_ratio'].tail(5).mean())`(刻意不寫行號 —— 行號會漂移,
+   本次修這段 docstring 就把它從 43 推到 52 了;守衛測試改釘**字串片段**)。
+   名詞 SSOT:`src/ui/render/ui_widgets.BREADTH_JINGQI`(canonical/formula/evidence)。
+   易混淆的鄰居:`daily_data_fetchers.py:445` 的 `adl_ma20` 是「ADL **累積線**的
+   MA20」,`tab_stock.py` 的 `_above_ma20` 是**單檔個股**比自己的均線 —— 都不是廣度。
+
 - ADL ad_ratio 是主源(tail(5).mean)
 - 大盤漲跌備援(正日 +5%,4 漲日 = 60%, 5 跌日 = 40%)
 - 三段燈號(BULL/NEUTRAL/BEAR SSOT from shared.signal_thresholds)
@@ -33,7 +44,11 @@ def compute_and_store_jingqi(df_adl_raw: Any) -> None:
                 None / 空 / 缺欄 → fallback 用 cl_data.tw['台股加權指數'] 估算。
 
     成功時寫 `st.session_state['jingqi_info']` = {avg/pos/regime/color/label/
-    total/source/pct20/pct60/pct120/pct240}。
+    total/source} 共 7 鍵。
+    ⚠️ v19.177 更正:此處原本還列著 `pct20/pct60/pct120/pct240` —— 那 4 鍵早在
+    v19.84 就因「ratio×0.9/0.8/0.7 是捏造值 + 全 repo 0 讀者」被刪(見檔頭),
+    docstring 卻沒跟著改,與實際寫入的鍵集合矛盾(鍵契約由
+    tests/test_p0c_breadth_naming.py::_JQ_CONTRACT_KEYS 釘住 7 鍵)。
     全敗(無 ADL + 無大盤資料)→ 不寫(誠實顯示未載入,§1)。
     """
     _jq_ratio_src = None

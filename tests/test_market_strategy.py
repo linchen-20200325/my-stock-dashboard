@@ -123,9 +123,14 @@ def test_get_market_assessment_fallback_returns_none_on_empty(monkeypatch):
 # ══════════════════════════════════════════════════════════════
 
 def test_no_direct_requests_or_yfinance_import():
-    """讀原始碼確認沒有直接 import requests 或 yfinance(註解/docstring 不算)。"""
+    """讀原始碼確認沒有直接 import requests 或 yfinance(註解/docstring 不算)。
+
+    可攜性:`open()` 未指定 encoding 時走 locale 預設(Windows 為 cp950),
+    讀本專案的繁中原始碼會 UnicodeDecodeError → 一律顯式 encoding='utf-8'。
+    """
     import re
-    src = open(market_strategy.__file__).read()
+    with open(market_strategy.__file__, encoding='utf-8') as f:
+        src = f.read()
     pattern = re.compile(r'^\s*(?:import|from)\s+(requests|yfinance)\b', re.MULTILINE)
     matches = pattern.findall(src)
     assert not matches, f'market_strategy 不應 import {matches}'

@@ -19,6 +19,15 @@ from shared.signal_thresholds import (
     MARGIN_BALANCE_WARN_THRESHOLD_YI,
 )
 from src.compute.strategy import V4StrategyEngine
+# v19.176 P0-D:韭菜門檻 + 兩個「否決」判定的正式名稱一律走 L0 SSOT(§3.3)
+from src.config import (
+    LEEK_ALERT_HIGH_PCT,
+    LEEK_ALERT_LOW_PCT,
+    LEEK_SCORE_HIGH_PCT,
+    LEEK_SCORE_LOW_PCT,
+    VETO_V4_ENGINE_NAME,
+    VETO_V4_ENGINE_SCOPE_NOTE,
+)
 from src.data.macro import render_leading_table
 from src.ui.render.macro_ui_components import section_header
 # v19.174 去識別化：改用策略代號常數 + 新函式名 strategy_conclusion（原 teacher_conclusion）
@@ -28,6 +37,68 @@ from src.ui.render.ui_widgets import (
     strategy_conclusion,
 )
 from src.ui.tabs.tab_helpers import safe_get
+
+
+# ══════════════════════════════════════════════════════════════════
+# v4 引擎風險燈 — 全站唯一取數 + 判定入口（§2.1 SSOT，v19.176 P0-D）
+# ══════════════════════════════════════════════════════════════════
+def read_v4_macro_veto() -> dict | None:
+    """讀 session 現況 → 回 `V4StrategyEngine.check_macro_veto()` 的判定結果。
+
+    為什麼要抽成模組級函式
+    ----------------------
+    2026-08-05 實機同一次渲染，同一個名字「v4.0 總經否決權」在同一頁給出
+    相反結論（§八 說「無觸發」、§三 說「🔴 紅燈 高風險」）。根因是 §八
+    (`section_mid`) 那塊**根本不是 v4 引擎**，而是另一組 inline 規則，兩者
+    只是撞名 —— 完整根因記在 `src/config/config.py` 的 `VETO_*` 常數上方。
+
+    正名之後 §八 仍需要知道「籌碼側那盞燈現在是什麼顏色」才有辦法揭露分歧，
+    於是把**取數 + 判定**收斂成這一個入口：兩個 section 保證吃同一份輸入，
+    不會再各讀各的而長出第二種不一致。
+
+    §1 Fail Loud：VIX 取不到一律回 `None`，**不得**回填 15。
+    `check_macro_veto()` 內部是 `float(self.macro.get('vix') or 15)` ——
+    傳 None 進去會被它悄悄換成 15，等於用捏造的資料點亮綠燈（v19.170 P0-2
+    修過一次的同一個坑），故在此邊界直接短路。
+
+    Returns:
+        dict: engine 原始回傳（status/level/color/max_position/msg）
+              外加三個輸入 `_vix` / `_futures` / `_pcr`（供 UI 揭露依據）；
+        None: VIX 未取得 → 無法判定。
+    """
+    _mi = st.session_state.get('macro_info') or {}
+    _vix_node = _mi.get('vix')
+    _vix_raw = _vix_node.get('current') if isinstance(_vix_node, dict) else None
+    try:
+        _vix = float(_vix_raw)
+    except (TypeError, ValueError):
+        return None
+    if _vix != _vix:          # NaN → 視為未取得
+        return None
+
+    # 先行指標取「與畫面主表格同一份 ffill 後」的末筆：若 §三 吃 ffill 值、
+    # §八 吃原始 NaN，兩邊輸入不同 → 又會生出一次「同名不同結論」。
+    _fut = 0.0
+    _pcr = 100.0
+    _li = st.session_state.get('li_latest')
+    if _li is not None and not getattr(_li, 'empty', True):
+        try:
+            _num_cols = [c for c in _li.columns if c != '日期']
+            _row = _li[_num_cols].ffill().iloc[-1]
+            _fut = float(_row.get('外資大小') or 0)
+            _pcr = float(_row.get('選PCR') or 100)
+        except Exception as _e_li:
+            # §1：不靜默 —— 讀不到先行指標會讓這盞燈退化成「只看 VIX」。
+            print(f'[section_chips/read_v4_macro_veto] 先行指標讀取失敗，'
+                  f'外資期貨以 0 口計：{type(_e_li).__name__}: {_e_li}')
+
+    _eng = V4StrategyEngine.__new__(V4StrategyEngine)
+    _eng.macro = {'vix': _vix, 'foreign_futures': _fut, 'pcr': _pcr}
+    _veto = dict(_eng.check_macro_veto())
+    _veto['_vix'] = _vix
+    _veto['_futures'] = _fut
+    _veto['_pcr'] = _pcr
+    return _veto
 
 
 def render_section_chips(inst: dict, margin, cd: dict) -> None:
@@ -266,16 +337,23 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             pass
 
         # 訊號 2：韭菜指數極端值
+        # v19.176 P0-D §3.3：門檻 ±30 原為 inline magic number，抽至 L0 SSOT
+        # `config.LEEK_ALERT_*`。**刻意不與** section_chips 綜合評分（±10/-5）、
+        # section_state 拐點（±20）合併 —— 三者用途/敏感度不同，合併=行為變更。
+        # ⚠️ 本欄位是「小台法人空多比 ±%」，與 config.LEEK_HIGH_THRESHOLD(35)
+        # 那組「融資餘額 0~100 指數」**不同量綱**，不可互換（§4.1）。
         try:
             if _leek is not None:
                 _leek_f = float(_leek)
-                if _leek_f > 30:
+                if _leek_f > LEEK_ALERT_HIGH_PCT:
                     _warnings.append(('🔴', '散戶過度樂觀（韭菜極端多）',
-                        f'法人空多比 +{_leek_f:.1f}%（超過+30%警戒線）',
+                        f'法人空多比 {_leek_f:+.1f}%'
+                        f'（超過 {LEEK_ALERT_HIGH_PCT:+.0f}% 警戒線）',
                         '散戶一面倒看多，短線見頂訊號，主力容易在此出貨'))
-                elif _leek_f < -30:
+                elif _leek_f < LEEK_ALERT_LOW_PCT:
                     _warnings.append(('🟢', '軋空動能極強（韭菜極端空）',
-                        f'法人空多比 {_leek_f:.1f}%（超過-30%機會線）',
+                        f'法人空多比 {_leek_f:+.1f}%'
+                        f'（超過 {LEEK_ALERT_LOW_PCT:+.0f}% 機會線）',
                         '散戶爭相放空，軋空動能強，千萬不要在此放空，逆勢做多機會'))
         except Exception:
             pass
@@ -349,55 +427,34 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                 )
 
 
-        # ── ⑤ v4.0 總經一票否決 (Task 2) ─────────────────────────────
+        # ── ⑤ v4 引擎風險燈（V4StrategyEngine Task 2）─────────────────
         # v19.170 P0-1:本卡原本直接印 V4StrategyEngine 的 `max_position`
         # (L2 上游自算的 20/50/100),與 🎚️ 建議持股油門 完全脫鉤 → 同一畫面
         # 兩個持股數字打架。改為:**v4 的否決狀態/理由(敘事)保留**,
         # 持股數字一律取自建議持股 SSOT(get_allocation)。
+        #
+        # v19.176 P0-D 正名:本卡原標題「🏛️ v4.0 總經否決權」與 §八 總經拼圖
+        # 裡另一組**完全不同**的判定同名,同一頁給出相反結論(實機 2026-08-05)。
+        # 兩者不合併(輸入集/用途不同,合併=行為變更),改為正名 + 各自標明
+        # 「看了什麼、沒看什麼」。名稱與範圍說明走 L0 SSOT(config.VETO_*),
+        # 取數+判定走同檔 `read_v4_macro_veto()`(§八 揭露分歧時吃同一份輸入)。
         try:
             import re as _re_v4
 
             from src.services.allocation_service import (
                 get_allocation as _get_alloc_veto,
             )
-            _v4_pcr = float(_last_row.get('選PCR') or 100)
-            _v4_fut = float(_last_row.get('外資大小') or 0)
-
-            # ── v19.170 P0-2:修「常數偽裝成資料」──────────────────────
-            # 原本硬編碼 `_v4_mac.macro = {'vix': 15, ...}`,v4 否決權因此
-            # **永遠拿不到真實 VIX** —— VIX>25 紅燈 / VIX>20 黃燈 兩條規則等同
-            # 永久失效,紅/黃燈只能靠外資期貨口數觸發,是實質功能缺陷(不是樣式問題)。
-            # 改為讀 `macro_info['vix']['current']` 真值(與 section_mid /
-            # allocation_service._read_vix 同一來源,避免又生一套 VIX)。
-            #
-            # §1 Fail Loud:取不到 VIX 時**不得**回填 15 或任何預設值。
-            # 注意 V4StrategyEngine.check_macro_veto 內部是
-            # `float(self.macro.get('vix') or 15)` —— 傳 None 進去會被它悄悄
-            # 換回 15(等於原 bug 換個地方發生),所以在 UI 邊界直接短路:
-            # 不呼叫引擎,誠實顯示「VIX 未取得,v4 否決權無法判定」。
-            _v4_mi = st.session_state.get('macro_info') or {}
-            _v4_vix_node = _v4_mi.get('vix')
-            _v4_vix_raw = (_v4_vix_node.get('current')
-                           if isinstance(_v4_vix_node, dict) else None)
-            try:
-                _v4_vix = float(_v4_vix_raw)
-                if _v4_vix != _v4_vix:      # NaN → 視為未取得
-                    _v4_vix = None
-            except (TypeError, ValueError):
-                _v4_vix = None
-
-            if _v4_vix is None:
+            # v19.170 P0-2 的「常數偽裝成資料」修正(原硬編碼 vix=15,讓
+            # VIX>25 紅燈 / VIX>20 黃燈 兩條規則永久失效)已下沉至
+            # `read_v4_macro_veto()`,含 §1「VIX 取不到不得回填 15」的短路。
+            _v4_veto = read_v4_macro_veto()
+            if _v4_veto is None:
                 _v4_veto = {
                     'status': '⬜ 無法判定',
                     'color':  TRAFFIC_NEUTRAL,
-                    'msg':    'VIX 未取得，v4 否決權無法判定 — '
+                    'msg':    f'VIX 未取得，{VETO_V4_ENGINE_NAME}無法判定 — '
                               '請先按「🚀 一鍵更新全部數據」補齊 VIX 後再看本卡。',
                 }
-            else:
-                _v4_mac = V4StrategyEngine.__new__(V4StrategyEngine)
-                _v4_mac.macro = {'vix': _v4_vix, 'foreign_futures': _v4_fut,
-                                 'pcr': _v4_pcr}
-                _v4_veto = _v4_mac.check_macro_veto()
             _v4_c = _v4_veto['color']
             _alloc_veto = _get_alloc_veto()
             _v4_pos = (f'建議持股 {_alloc_veto.range_text}' if _alloc_veto.is_loaded
@@ -415,11 +472,17 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             st.markdown(
                 f'<div style="border-left:5px solid {_v4_c};background:#0d1117;'
                 f'padding:9px 14px;border-radius:0 8px 8px 0;margin:6px 0;">'
-                f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">🏛️ v4.0 總經否決權</span><br>'
+                f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">'
+                f'🏛️ {VETO_V4_ENGINE_NAME}</span><br>'
                 f'<span style="font-size:14px;font-weight:900;color:{_v4_c};">'
                 f'{_v4_veto["status"]} — {_v4_pos}</span><br>'
                 f'{_v4_cap_html}'
-                f'<span style="font-size:12px;color:#c9d1d9;">{_v4_msg}</span>'
+                f'<span style="font-size:12px;color:#c9d1d9;">{_v4_msg}</span><br>'
+                # v19.176 P0-D §1:標明本燈的判定範圍。使用者看到「🔴 高風險」
+                # 而 §八 說「無觸發」時,必須看得出那是**兩個不同判定**,
+                # 而不是系統自打嘴巴。
+                f'<span style="font-size:11px;color:{TRAFFIC_NEUTRAL};">'
+                f'📌 {VETO_V4_ENGINE_SCOPE_NOTE}</span>'
                 f'</div>',
                 unsafe_allow_html=True
             )
@@ -427,7 +490,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             # v19.170 §1 Fail Loud:原本 `pass` → 整張卡無聲消失、零 log,
             # 使用者只看到畫面少一塊,無從分辨是「沒觸發」還是「算爆了」。
             print(f'[section_chips/v4] {type(_v4e).__name__}: {_v4e}')
-            st.warning('⚠️ v4.0 總經否決權卡計算失敗，請看 log')
+            st.warning(f'⚠️ {VETO_V4_ENGINE_NAME}卡計算失敗，請看 log')
 
 
         # ── v5.0 動態資產配置建議 ─────────────────────────────────────
@@ -669,10 +732,16 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                 _score += 1
                 _sigs.append(f'✅ 前五大淨多 {_top5:+,.0f}口')
         if _leek is not None:
-            if   _leek > 10:
+            # v19.176 P0-D §3.3：門檻 +10 / -5 原為 inline magic number，抽至 L0
+            # SSOT `config.LEEK_SCORE_*`。**刻意與上方進階警示（±30）分名** ——
+            # 這裡是「加減 1 分」的計分器，要對中度傾斜就有反應，故門檻最敏感；
+            # 正負不對稱（+10 vs -5）也是刻意的，理由記在 config 該常數註解。
+            # 敏感度差異的實務後果：leek=15 時本行亮 🔴，而進階警示（>30）與
+            # 拐點（>20）都不會吭聲 —— 那是**設計如此**，不是 bug。
+            if   _leek > LEEK_SCORE_HIGH_PCT:
                 _score -= 1
                 _sigs.append(f'🔴 韭菜指數{_leek:.1f}%（散戶過熱）')
-            elif _leek < -5:
+            elif _leek < LEEK_SCORE_LOW_PCT:
                 _score += 1
                 _sigs.append(f'✅ 韭菜指數{_leek:.1f}%（散戶悲觀）')
             else:

@@ -180,9 +180,14 @@ def _generate_report(gemini_fn, port_d, backtest_d, regime,
     # ── 改用共用「白話結構化摘要」元件組 prompt ──────────────
     from src.services import build_structured_summary_prompt
 
+    # v19.178 §3.3:「美股大跌 20%」原為 prompt 內寫死,而 `loss_pct` 的計算情境
+    # 走 SSOT PORTFOLIO_STRESS_TEST_DROP_PCT(-20.0)。改情境時數字會動、送給 AI 的
+    # 說明不會動 → AI 會用錯誤的情境描述解讀正確的虧損值。改為插值。
+    from shared.signal_thresholds import PORTFOLIO_STRESS_TEST_DROP_PCT
     _hold_data = (
         f'這個組合一共 {len(rows)} 檔｜目前總現值 {port_d.get("total_value",0):,.0f} 元'
-        f'｜壓力測試（假設美股大跌 20% 時，整個組合大概會跌多少）約 {port_d.get("loss_pct",0):.1f}%\n'
+        f'｜壓力測試（假設美股大跌 {abs(PORTFOLIO_STRESS_TEST_DROP_PCT):g}% 時，'
+        f'整個組合大概會跌多少）約 {port_d.get("loss_pct",0):.1f}%\n'
         f'下面是每一檔的持有狀況（希望比例＝你原本想配多少%、實際＝現在實際占多少%、'
         f'偏離＝差了幾個百分點 pp）：\n{_hold_str}\n\n'
         f'持股重疊（兩檔 ETF 裝的成分股很像，等於同一筆錢押兩次、風險更集中）：\n{_overlap_str}'

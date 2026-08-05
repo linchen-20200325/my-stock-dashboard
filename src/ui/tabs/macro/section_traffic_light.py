@@ -146,6 +146,11 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
 
     _tl_init = None
     _tm_mkt_init: dict = {}
+    # 是否走了「快取新鮮」分支 —— 決定文末要不要回填燈號卡。
+    # ⚠️ 不能用 `_tl_init is not None` 當旗標:`calc_traffic_light` 三來源全空時
+    # 回 None,而 `_render_traffic_light` 收到 tl=None 時**有它自己的畫面**
+    # (⏳ 系統正在深度解析…)。用旗標才不會把那個狀態變成空白。
+    _tl_computed = False
     if _cache_fresh and not _is_refreshing:
         # 快取新鮮 → 立即計算燈號(含資料新鮮度標記)
         # C1-D v18.290:走 section_inputs SSOT(對齊 5 桶 + 戰情概覽 + 今日作戰室)
@@ -156,7 +161,19 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
         _tm_cd_init = _tl_inp.cl_data or {}
         _tm_li_init = _tl_inp.li_latest
         _tl_init = calc_traffic_light(_tm_mkt_init, _tm_jq_init, _tm_cd_init, _tm_li_init)
-        _render_traffic_light(_tl_placeholder, _tl_init, _tm_mkt_init)
+        # ⚠️ v19.175:燈號卡**不在這裡**畫 —— `_render_traffic_light` 內部會呼叫
+        # `allocation_service.get_allocation()`,而它唯一的來源 `warroom_summary`
+        # 要到本函式下方才寫入 → 這裡渲染等於「先讀後寫」,用的是**上一輪**的
+        # warroom(而「🚀 一鍵更新全部數據」的 on_click `_macro_session_reset`
+        # 剛好會 pop 掉它)→ 卡片印出「建議持股 --」。
+        #
+        # 誠實註記:實機看到的那次 `--` 主因是 `calc_traffic_light` 拋 TypeError
+        # 導致 warroom 整個沒寫成(見 macro_helpers.coerce_inst_dict);且正常路徑下
+        # 本卡片稍後會被 `section_state.py:479` 用同一個 placeholder 重畫一次,
+        # 所以這個順序缺陷平時**不可見**。這裡順手把它修掉,是為了讓本函式自身
+        # 「先寫後讀」的不變量成立(section_state 沒跑到 / 提早炸掉時就會露出來)。
+        # 卡片位置由頁頂的 `_tl_placeholder` 佔住,延後回填不影響版面順序。
+        _tl_computed = True
     else:
         # 無快取 or 快取過期 → 顯示等待狀態,不顯示誤導性燈號
         age_note = (f'（上次更新 {_age_min:.0f} 分鐘前，已過期）'
@@ -211,5 +228,13 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
             st.session_state['macro_state'] = get_macro_state(st.session_state['warroom_summary'])
         except Exception as _e_ms:  # noqa: BLE001 — 寫 canonical 失敗不炸總經頁
             print(f"[section_traffic_light] macro_state 寫入失敗:{type(_e_ms).__name__}: {_e_ms}")
+
+    # ── ③ 最後才回填燈號卡(必須在 warroom_summary / macro_state 寫入之後)───
+    # v19.175:`_render_traffic_light` → `get_allocation()` → `get_macro_state(warroom)`。
+    # 放在寫入之前 = 讀到「上一輪」(或被 on_click pop 掉)的 warroom → `is_loaded=False`
+    # → 卡片印出「建議持股 --」,而同一頁下方各區塊卻是正常數字,使用者只會看到矛盾。
+    # 延後回填讓卡片與全站 8 個持股消費點**同輪同源**(v19.171 置底條同一修法)。
+    if _tl_computed:
+        _render_traffic_light(_tl_placeholder, _tl_init, _tm_mkt_init)
 
     return _tl_placeholder, _show_market_data, _tl_eff_reg

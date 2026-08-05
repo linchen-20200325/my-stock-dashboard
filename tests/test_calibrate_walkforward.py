@@ -73,7 +73,7 @@ def test_emit_thresholds_json_no_change_returns_false():
         # 值變了應回 True
         changed = emit_thresholds_json(37, 4, method='test3', path=path)
         assert changed is True
-        with open(path) as fp:
+        with open(path, encoding='utf-8') as fp:
             payload = json.load(fp)
         assert payload['HEALTH_DEFENSE_THRESHOLD'] == 37
 
@@ -87,7 +87,7 @@ def test_macro_helpers_reads_json_override():
         # 用 tempdir 直接模擬該檔不存在的情境
         path = os.path.join(tmpdir, 'macro_thresholds.json')
         emit_thresholds_json(33, 5, method='test', path=path)
-        with open(path) as fp:
+        with open(path, encoding='utf-8') as fp:
             payload = json.load(fp)
         assert payload['HEALTH_DEFENSE_THRESHOLD'] == 33
         assert payload['BULL_MIN_SCORE'] == 5

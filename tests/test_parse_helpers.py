@@ -140,7 +140,12 @@ class TestBackCompat:
         # CI 裸環境(無 cache/secrets)慢源可拖 >180s → TimeoutExpired 假紅。
         # 指向必定 ECONNREFUSED 的 proxy,強制全部網路呼叫立即失敗(fetcher 皆有
         # 失敗處理路徑)→ 測試回歸其本旨:驗 re-export 身分,hermetic 不吃網路。
+        # 可攜性:子行程輸出含繁中,Windows 下 text=True 會用 locale(cp950)解碼
+        # → UnicodeDecodeError。兩端釘死 UTF-8 + errors='replace',不讓解碼把
+        # 「re-export 驗證」變成假紅。(注意:這裡跑的是 sys.executable 本身,
+        #  非外部 shell 工具,故不違反 tests 可攜性守衛。)
         _env = {**os.environ,
+                "PYTHONIOENCODING": "utf-8",
                 "HTTP_PROXY": "http://127.0.0.1:9",
                 "HTTPS_PROXY": "http://127.0.0.1:9",
                 "http_proxy": "http://127.0.0.1:9",
@@ -148,7 +153,8 @@ class TestBackCompat:
                 "NO_PROXY": "", "no_proxy": ""}
         r = subprocess.run(
             [sys.executable, "-c", _code],
-            cwd=_repo_root, capture_output=True, text=True, timeout=300,
+            cwd=_repo_root, capture_output=True, timeout=300,
+            encoding="utf-8", errors="replace",
             env=_env,
         )
         assert r.returncode == 0 and "REEXPORT_OK" in r.stdout, (

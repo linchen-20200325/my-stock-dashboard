@@ -181,6 +181,15 @@ CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT: float = 80.0
 """資本支出 / 股本比率入選龍多股的門檻（單位：%）。
 > 80% → 大舉擴產訊號。原 v5_modules.py:58 inline"""
 
+CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT: float = 50.0
+"""合約負債 / 股本比率「客戶預付旺」門檻（單位：%）。v19.178 抽出。
+
+≥ 50% → 客戶大量預付、訂單能見度高，與 CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT（80%）
+任一成立即判「符合龍頭高成長特徵」。原 `src/ui/tabs/tab_stock.py:1681` inline `>= 50`，
+且同一行的判定文案（餵給個股 AI prompt 的「龍頭擴產檢測」）另抄一份 `50%`
+→ §3.3 兩份複本。注意與 `CONTRACT_LIABILITY_YOY_GROWTH_THRESHOLD_PCT`（20%）**語意不同**：
+後者是合約負債的**年增率**，本常數是合約負債**對股本的比率**，不可互換。"""
+
 
 # ════════════════════════════════════════════════════════════════
 # 市場狀態判斷 — market_strategy.market_regime()
@@ -574,6 +583,23 @@ US10Y 桶 regime 用 5.0），屬不同用途。原 macro_core.py:499 inline。"
 
 TNX_NEUTRAL_PCT: float = 3.5
 """macro_compass TNX 中性**黃線**：3.5~4.5% → 🟡 中性區；< 3.5% → 🟢 寬鬆有利。原 macro_core.py:500 inline。"""
+
+PCR_PERCENT_SCALE_MIN: float = 10.0
+"""選擇權 PCR「百分比刻度 vs 比值刻度」判別線（§4.1 量綱陷阱 SSOT，v19.178）。
+
+本專案同一個 PCR 有**兩種刻度**共存：
+  - `li_latest['選PCR']`：`leading_indicators` 寫入時已 ×100 → **百分比刻度**（50~200，
+    UI 卡片直接顯示用；section_chips 的 80 / 130 / 150 判斷即用此刻度）
+  - `config.MACRO_ALERT_RULES['pcr']` / `macro_state_locker.calculate_system_state`：
+    **標準 PCR 比值刻度**（0.5~2.0）
+
+跨刻度直接比較 = 100× 誤差（實測 126.80 配「>1.5 極度恐慌」→ 恆真）。判別規則：
+`value > PCR_PERCENT_SCALE_MIN` 視為百分比刻度，除以 100 換回比值。
+10.0 這個切點很寬鬆但安全：真實 PCR 比值歷史上從未逼近 10（極端恐慌約 2.0），
+百分比刻度也從未低到 10（那等於比值 0.1）—— 兩個刻度的值域完全不重疊，無誤判區。
+
+原為 `src/data/macro/macro_alert.py:295` inline `> 10`，v19.178 抽出供
+`section_news_ai` 的 AI context 共用（避免兩處各寫一個判別線 → §3.3 漂移）。"""
 
 
 # ════════════════════════════════════════════════════════════════

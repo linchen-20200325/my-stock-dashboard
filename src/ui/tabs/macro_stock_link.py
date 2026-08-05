@@ -10,7 +10,11 @@
      index_below_ma5, foreign_net, ...}
     ⚠️ v19.170 P0-1：**持股% 不從這裡取**，一律走
     `allocation_service.get_allocation()`（全站唯一持股 SSOT）。
-  - jingqi_info：市場廣度 regime {regime, label, color, ...}（optional）
+  - jingqi_info：**旌旗指數** regime {regime, label, color, source, ...}（optional）
+    ⚠️ P0-C 定名：舊註解寫「市場廣度 regime」——「市場廣度」是家族統稱
+    （含 上漲佔比 / 旌旗指數 / AD 值 / 騰落指標 ADL 四個量），不是這一個
+    數字的名字。旌旗指數 = 上漲佔比的 5 日均，定義見
+    `src/ui/render/ui_widgets.py` BREADTH_TERMS。
 零新 IO（純 reuse 總經 Tab 結果），屬「跨 Tab 訊號聯動」系列。
 """
 from __future__ import annotations
@@ -47,10 +51,22 @@ def render_macro_stock_backdrop(session_state) -> None:
     elif _below5 is False:
         _head += "　·　指數 &gt; MA5"
 
+    # ── P0-C 定名（2026-08-05）─────────────────────────────────────
+    # 原本印「市場廣度：{label}」，但 label 來自 `jingqi_info` —— 也就是拿
+    # **家族統稱**當標籤去印**單一成員**的值。同一時間名詞表說「市場廣度＝
+    # 騰落指標 ADL」，讀者跨 tab 對照必然打結。
+    # 定名後：「市場廣度」只當家族/章節統稱，單一數值一律用正式名（旌旗指數）。
+    # 名詞定義單一出處：ui_widgets.BREADTH_JINGQI。
+    from src.ui.render.ui_widgets import BREADTH_JINGQI
+
     _jq = session_state.get("jingqi_info") or {}
     _jq_line = ""
     if isinstance(_jq, dict) and _jq.get("label"):
-        _jq_line = f"<br/><span style='color:#888'>市場廣度：{_jq.get('label')}</span>"
+        # §1：備援 / 代理來源要看得見（'ADL' 為主源；'大盤估算' / 'TWSE即時' 為代理）
+        _jq_src = str(_jq.get("source") or "")
+        _jq_note = f"（{_jq_src} 代理）" if _jq_src and _jq_src != "ADL" else ""
+        _jq_line = (f"<br/><span style='color:#888'>"
+                    f"{BREADTH_JINGQI.canonical}：{_jq.get('label')}{_jq_note}</span>")
 
     st.markdown(
         f"<div style='background:#0d1117;border-left:4px solid {_border};"

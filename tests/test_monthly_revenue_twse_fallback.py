@@ -21,7 +21,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import src.data.proxy as _proxy_pkg  # noqa: E402
+# v19.74/v19.113 地雷:patch 真正持有者 proxy_helper,**不可** patch package
+# `src.data.proxy`(PEP 562 lazy forward,無實體 fetch_url)—— monkeypatch
+# teardown 的「還原」會把真函式 setattr 回 package 變成實體屬性,永久遮蔽
+# __getattr__ 轉發(tests/test_zz_proxy_pollution_lock.py 就是在鎖這件事)。
+import src.data.proxy.proxy_helper as _proxy_helper  # noqa: E402
 from src.data.stock import monthly_revenue_fetcher as MR  # noqa: E402
 from src.data.stock.monthly_revenue_fetcher import (  # noqa: E402
     _batch_twse_openapi,
@@ -56,14 +60,19 @@ def _clear_mr_cache():
 
 
 def _install_fake_fetch(monkeypatch, twse_payload, tpex_payload):
-    """把 src.data.proxy.fetch_url 換成回固定 JSON 的替身(offline,不打網路)。"""
+    """把 proxy_helper.fetch_url 換成回固定 JSON 的替身(offline,不打網路)。
+
+    production 端 `monthly_revenue_fetcher.py:267` 是 function-local
+    `from src.data.proxy import fetch_url`(呼叫時才經 PEP 562 轉發解析),
+    所以 patch 持有者 proxy_helper 一樣打得進去,且不會污染 package 命名空間。
+    """
     def _fake(url, headers=None, params=None, timeout=20, attempts=3):
         if "openapi.twse.com.tw" in url:
             return _FakeResp(twse_payload)
         if "tpex.org.tw" in url:
             return _FakeResp(tpex_payload)
         return _FakeResp([], status=404)
-    monkeypatch.setattr(_proxy_pkg, "fetch_url", _fake, raising=False)
+    monkeypatch.setattr(_proxy_helper, "fetch_url", _fake)
 
 
 # ─────────────────────────────────────────────── 民國年月 → 西元
@@ -211,7 +220,7 @@ def test_orchestrator_prefers_finmind_when_present(monkeypatch):
 
     def _boom(*a, **k):
         raise AssertionError("FinMind 有資料時不該呼叫 OpenAPI fallback")
-    monkeypatch.setattr(_proxy_pkg, "fetch_url", _boom, raising=False)
+    monkeypatch.setattr(_proxy_helper, "fetch_url", _boom)
 
     df = fetch_batch_monthly_revenue()
     assert df.iloc[0]["stock_id"] == "9999"

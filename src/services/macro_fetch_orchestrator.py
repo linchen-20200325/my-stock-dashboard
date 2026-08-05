@@ -283,6 +283,23 @@ def fetch_macro_bundle(
                     print(f'[FinMind-Inst] ✅ {inst}')
             except Exception as _ei:
                 print(f'[FinMind-Inst] ❌ {_ei}')
+        # ── v19.175 P0:回傳契約收斂 —— inst 一律是 dict ────────────────────
+        # 本函式 docstring 宣告 `'inst': dict`,但上面
+        # `inst_res = _results.get('inst') or (None, None)` 在 inst job 逾時
+        # (25s)或例外時會讓 `inst = None`;FinMind rescue 若也沒補到(quota 用罄 /
+        # status != 200 → 不拋例外、只印 log),None 就會被 tab_macro 原樣寫進
+        # `session_state['cl_data']['inst']`,再由
+        # `macro_helpers.calc_traffic_light` 做 `for k in _inst` →
+        # `TypeError: 'NoneType' object is not iterable`,炸掉整個「🌍 總經」分頁。
+        #
+        # §1:{} 與 None 同樣表示「這份資料沒拿到」,下游(calc_traffic_light 的
+        # `_conf_sources` / section_chips 的 `if inst:`)本來就以 falsy 判缺;
+        # 這裡只是讓**型別符合宣告的契約**,失敗本身照樣大聲 log,不靜默補值。
+        if not isinstance(inst, dict):
+            print(f'[並發] ❌ inst 全敗(TWSE BFI82U 逾時/例外 + FinMind rescue 未補到),'
+                  f'原值={inst!r} → 統一回空 dict;下游會把「外資買賣超(三大法人)」'
+                  f'列為缺失來源並壓低信心分數')
+            inst = {}
         margin = _results.get('margin')
         df_adl_raw = _results.get('adl')
         if df_adl_raw is None:

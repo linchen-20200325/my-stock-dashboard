@@ -17,6 +17,9 @@ import streamlit as st
 from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
 from src.config import FINMIND_TOKEN  # noqa: F401
+# v19.176 P0-D:韭菜指數拐點門檻走 L0 SSOT(§3.3);與另外兩組同名不同義的
+# 門檻分別命名,詳見 src/config/config.py「韭菜指數門檻 SSOT」區塊。
+from src.config import LEEK_PIVOT_HIGH_PCT, LEEK_PIVOT_LOW_PCT
 from src.compute.macro import calc_traffic_light  # noqa: F401
 from src.ui.tabs.macro.handlers import _render_traffic_light  # noqa: F401
 
@@ -142,14 +145,22 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
                 elif _fut_net_v > 10000:
                     pivot_signals.append(('外資期貨多方','✅',TRAFFIC_GREEN,
                         f'外資期貨淨多 {_fut_net_v:,.0f}口 → 多頭強勢確認'))
+            # v19.176 P0-D §3.3：門檻 ±20 原為 inline magic number，抽至 L0 SSOT
+            # `config.LEEK_PIVOT_*`。拐點用途 → 敏感度取中、且左右對稱
+            # （偵測轉折不預設方向偏好）。**刻意不與** section_chips 的
+            # 進階警示（±30）／綜合評分（+10/-5）合併：三者用途不同，
+            # 合併是行為變更。⚠️ 亦與 config.LEEK_HIGH_THRESHOLD(35) 那組
+            # 「融資餘額 0~100 指數」不同量綱，不可互換（§4.1）。
             if _leek is not None:
                 _leek_v = float(_leek)
-                if _leek_v > 20:
+                if _leek_v > LEEK_PIVOT_HIGH_PCT:
                     pivot_signals.append(('散戶極度看多（危險）','⚠️',TRAFFIC_RED,
-                        f'韭菜指數 +{_leek_v:.1f}% > 20% → 散戶過熱，頂部拐點警示（反向指標）'))
-                elif _leek_v < -20:
+                        f'韭菜指數 {_leek_v:+.1f}% > {LEEK_PIVOT_HIGH_PCT:+.0f}%'
+                        ' → 散戶過熱，頂部拐點警示（反向指標）'))
+                elif _leek_v < LEEK_PIVOT_LOW_PCT:
                     pivot_signals.append(('散戶極度悲觀（機會）','💡',TRAFFIC_GREEN,
-                        f'韭菜指數 {_leek_v:.1f}% < -20% → 散戶極度看空，底部拐點機會（反向指標）'))
+                        f'韭菜指數 {_leek_v:+.1f}% < {LEEK_PIVOT_LOW_PCT:+.0f}%'
+                        ' → 散戶極度看空，底部拐點機會（反向指標）'))
     
         # ── 6. 台灣領先指標拐點（景氣對策 / 領先指標 / 外資連續日數）─────
         try:

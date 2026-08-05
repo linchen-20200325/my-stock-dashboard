@@ -207,7 +207,10 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     # 使用者實機回報「五桶 4 紅，綜合健康度還有 44 分」＝ 不是算錯，是範疇不同。
     # 採常駐 st.caption（非 tooltip）：卡片是 raw HTML、無 help= 可掛，
     # 且此為「這個數字代表什麼」的認知前提，藏在 hover 裡等於沒揭露。
-    st.caption('🩺 **總經健康評分怎麼算的**：旌旗指數（站上 20MA 家數比）60% ＋ '
+    # v19.177 P1-B 反捏造（§1）：原文寫「旌旗指數（站上 20MA 家數比）」——
+    # 全站沒有任何一行在算「站上均線的家數比」。真值 = 上漲佔比的 5 日均
+    # （src/services/jingqi_calc.py:43）。名詞 SSOT: ui_widgets.BREADTH_JINGQI。
+    st.caption('🩺 **總經健康評分怎麼算的**：旌旗指數（上漲佔比的 5 日均）60% ＋ '
                '大盤評分 40%，就這兩項 — 實質是「趨勢廣度分數」。'
                '**不含**融資／外資期貨／年線乖離／NDC／M1B-M2／VIX／PMI／CPI／'
                '出口／ADL／新聞，那些請直接看五桶燈號。'
@@ -218,33 +221,39 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     _bias_info = st.session_state.get('bias_info')
     
     # ── 策略3 × 策略1 結論（標題下方直接顯示）──────────────────
+    # v19.176 修兩個缺陷（v19.174 去識別化的殘留）:
+    #   (1) **代號重複渲染**:原本把「策略N：」寫死在文案裡,又把「→」右半段整段丟給
+    #       strategy_conclusion() 二次渲染 ⇒ 畫面實際顯示「🎯 策略3：M1B-M2=… → 策略3：…」。
+    #   (2) **substring 嗅探分類**:原用 `'M1B' in _mc2` 從**顯示文案**回推策略代號 ——
+    #       任何人改寫文案拿掉「M1B」字樣,卡片就會靜默翻成策略1(§1:降級要看得見,不靜默)。
+    # 改法:代號當**資料**帶著走 (code, 指標, 結論, 色),文案內不再出現代號字面值。
     _macro_concl = []
     if _m1b_info:
         _diff2 = _m1b_info.get('m1b_yoy', 0) - _m1b_info.get('m2_yoy', 0)
+        _ind_m1b = f'M1B-M2={_diff2:+.2f}%'
         if _diff2 > 0:
-            _macro_concl.append(f'✅ M1B-M2={_diff2:+.2f}% 正值 → 策略3：資金行情啟動，大膽做多！（領先大盤3~6月）')
+            _macro_concl.append((STRATEGY_TECHNICAL, f'{_ind_m1b} 正值',
+                                 '資金行情啟動，大膽做多！（領先大盤3~6月）', TRAFFIC_GREEN))
         elif _diff2 > -2:
-            _macro_concl.append(f'⚠️ M1B-M2={_diff2:+.2f}% 接近0 → 策略3：資金動能趨緩，減碼等待訊號確認')
+            _macro_concl.append((STRATEGY_TECHNICAL, f'{_ind_m1b} 接近0',
+                                 '資金動能趨緩，減碼等待訊號確認', TRAFFIC_RED))
         else:
-            _macro_concl.append(f'🔴 M1B-M2={_diff2:+.2f}% 負值 → 策略3：資金撤離，空手觀望！')
+            _macro_concl.append((STRATEGY_TECHNICAL, f'{_ind_m1b} 負值',
+                                 '資金撤離，空手觀望！', TRAFFIC_RED))
     if _bias_info:
         _bv2 = _bias_info.get('bias_240', 0)
+        _ind_bias = f'年線乖離 {_bv2:+.1f}%'
         if _bv2 > 20:
-            _macro_concl.append(f'⚠️ 年線乖離 {_bv2:+.1f}% 過大 → 策略1：開始分批減碼（乖離>20%啟動停利）')
+            _macro_concl.append((STRATEGY_VALUATION, f'{_ind_bias} 過大',
+                                 '開始分批減碼（乖離>20%啟動停利）', TRAFFIC_RED))
         elif _bv2 < -20:
-            _macro_concl.append(f'✅ 年線乖離 {_bv2:+.1f}% 嚴重低估 → 策略1：左側交易最佳布局區，大膽加碼！')
+            _macro_concl.append((STRATEGY_VALUATION, f'{_ind_bias} 嚴重低估',
+                                 '左側交易最佳布局區，大膽加碼！', TRAFFIC_GREEN))
         else:
-            _macro_concl.append(f'✅ 年線乖離 {_bv2:+.1f}% 正常 → 策略1：可持股，按計畫操作')
-    for _mc2 in _macro_concl:
-        _mc3 = _mc2.replace('✅','').replace('⚠️','').replace('🔴','').strip()
-        if '→' in _mc3:
-            _ind7, _res7 = _mc3.split('→', 1)
-            _col7 = TRAFFIC_RED if any(k in _mc2 for k in ['🔴','⚠️']) else TRAFFIC_GREEN
-            # v19.174 去識別化：原為人名字串（M1B→技術/資金面、其餘→估值），改策略代號
-            _strat7 = STRATEGY_TECHNICAL if 'M1B' in _mc2 else STRATEGY_VALUATION
-            st.markdown(strategy_conclusion(_strat7, _ind7.strip(), _res7.strip(), color=_col7), unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div style="color:#c9d1d9;font-size:12px;padding:2px 6px;">• {_mc2}</div>', unsafe_allow_html=True)
+            _macro_concl.append((STRATEGY_VALUATION, f'{_ind_bias} 正常',
+                                 '可持股，按計畫操作', TRAFFIC_GREEN))
+    for _code7, _ind7, _res7, _col7 in _macro_concl:
+        st.markdown(strategy_conclusion(_code7, _ind7, _res7, color=_col7), unsafe_allow_html=True)
     
     # v18.169：3 卡 → 2 卡精簡（月線乖離併入年線副標；詳細訊號歸頂部拐點面板）
     _m_cols = st.columns(2)
