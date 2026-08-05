@@ -172,11 +172,39 @@ class TestDeidentifiedAliases:
             assert banned not in src, f"financial_health_thresholds 殘留「{banned}」"
 
     def test_l0_l2_no_ui_or_network_import(self):
-        """§8.2 硬規則：L0 shared / L2 compute 不得 import streamlit / requests。"""
+        """§8.2 硬規則：L0 shared / L2 compute 不得 import streamlit / requests。
+
+        ⚠️ v19.174 修：原實作用 `"import streamlit" not in body` 做**字串比對**，
+        會被 docstring／註解裡的同一句話誤判。實測紅在
+        `shared/financial_health_thresholds.py:15` ——
+        那行寫的是「純常數模組，零 import 依賴（L0，**不得 import streamlit /
+        requests**）」，是**在宣告遵守規則**，卻被守衛當成違規抓出來。
+
+        改用 AST 走訪真正的 `Import` / `ImportFrom` 節點，只認**可執行的
+        import 陳述式**，註解與 docstring 一律不算。順便涵蓋
+        `import streamlit as st` / `from streamlit import x` 這些原本
+        字串比對抓不到的變體（原實作只抓得到 `import streamlit` 這一種寫法）。
+        """
+        import ast
+
         import src.compute.health.fin_health_diff as _d
         import src.compute.health.fin_snapshot_io as _io
         import src.compute.health.fin_trend_score as _t
+
+        _BANNED_ROOTS = {"streamlit", "requests"}
         for mod in (FH, _d, _io, _t):
             body = open(mod.__file__, encoding="utf-8").read()
-            assert "import streamlit" not in body, f"{mod.__name__} 違憲 import streamlit"
-            assert "import requests" not in body, f"{mod.__name__} 違憲 import requests"
+            tree = ast.parse(body, filename=mod.__file__)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    roots = {a.name.split(".")[0] for a in node.names}
+                elif isinstance(node, ast.ImportFrom):
+                    # `from . import x` 的 node.module 為 None → 相對匯入，跳過
+                    roots = {(node.module or "").split(".")[0]}
+                else:
+                    continue
+                hit = roots & _BANNED_ROOTS
+                assert not hit, (
+                    f"{mod.__name__}:{node.lineno} 違憲 import {sorted(hit)} "
+                    f"(§8.2 L0/L2 不得依賴 UI/網路層)"
+                )

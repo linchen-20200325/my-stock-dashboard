@@ -41,3 +41,4 @@ data_cache/metadata.json
 
 # Local push helper scripts (contain local paths / account names — never commit)
 *.vbs
+data_cache/*_snapshots/

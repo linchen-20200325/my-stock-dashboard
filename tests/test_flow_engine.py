@@ -347,7 +347,16 @@ class TestDisclosureKeys(unittest.TestCase):
         self.assertGreaterEqual(res["amplification"], 1.3)
 
     def test_amplification_bounds_across_cases(self):
-        """不變式：1 <= amplification <= √n（σ_p ∈ [1/√n, 1] 的直接推論）。"""
+        """不變式：1 <= amplification <= √n（σ_p ∈ [1/√n, 1] 的直接推論）。
+
+        ⚠️ 容差來源（v19.174 修）：`flow_engine` 回的是
+        `round(1.0 / sigma_p, 3)`，**捨入到小數第 3 位**。當 σ_p 剛好咬在地板
+        `1/√n` 時，`1/σ_p` 精確等於 √n，捨入後可能**略大於** √n ——
+        n=7 時 √7 = 2.645751…，round(…, 3) = **2.646 > √7**。
+        原本用 `+1e-9` 當容差沒把這層捨入算進去，是測試自己的 bug（實測紅）。
+        正確容差 = 半個最後有效位 = 5e-4，再留一點浮點餘裕。
+        """
+        _ROUND_TOL = 5e-4 + 1e-9   # amplification 捨入到 3 位 → 半個 ulp
         a, b = _antiphase_pair()
         cases = [
             self._full_close_map(),
@@ -358,7 +367,7 @@ class TestDisclosureKeys(unittest.TestCase):
             res = fe.compute_risk_score(cm)
             n = len(res["components"])
             self.assertGreaterEqual(res["amplification"], 1.0)
-            self.assertLessEqual(res["amplification"], (n ** 0.5) + 1e-9)
+            self.assertLessEqual(res["amplification"], (n ** 0.5) + _ROUND_TOL)
             self.assertAlmostEqual(res["amplification"],
                                    1.0 / res["sigma_p"], delta=0.002)
 
