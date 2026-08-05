@@ -207,11 +207,25 @@ def load_macro_state(state_file_path: str = "macro_state.json") -> dict:
     """
     Streamlit 前端唯讀讀取實體狀態鎖。
     讀取失敗時回傳 default_state，確保 UI 不崩潰。
+
+    `exposure_limit_pct` 契約（v19.171）：檔內有值 → int；**缺 key → None**，
+    語意是「本次沒有硬否決天花板」，而**不是**「天花板 = 0%」。
     """
     try:
         with open(state_file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        data["exposure_limit_pct"] = int(data.get("exposure_limit_pct", 0))
+        # v19.171 §1 Fail Loud:**缺 key → None,不得靜默填 0**(等價 fillna(0))。
+        # 原本 `int(data.get(..., 0))` 的災難路徑:macro_state.json 有合法
+        # market_regime 但缺這個欄位(手改 / 部分寫入 / 舊版格式)時 →
+        # get_macro_state 會回 exposure_limit_pct=0 →
+        # `Cap('系統風險上限', 0, 'macro_state 規則引擎（薩姆／PMI／外資期貨硬否決）')`
+        # → 全站顯示「最終建議持股 0%」,而且理由文案**謊稱**是規則引擎的硬否決。
+        # 真實的 0% 只能來自 `calculate_system_state` 實際算出 0(它一定寫這個 key),
+        # 不能來自「欄位缺失」。None → 下游 `get_macro_state` 視為「無 cap」。
+        # 注意:值存在但無法轉 int(如 "N/A")仍走 except → _DEFAULT_STATE(行為不變)。
+        _exposure_raw = data.get("exposure_limit_pct")
+        data["exposure_limit_pct"] = (
+            int(_exposure_raw) if _exposure_raw is not None else None)
         return data
     except Exception:
         return _DEFAULT_STATE.copy()

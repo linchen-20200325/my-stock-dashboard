@@ -26,24 +26,83 @@ MACRO_ALLOC = {
     'neutral': {'股票型ETF': 50, '債券型ETF': 30, '貨幣/現金': 20},
     'bear':    {'股票型ETF': 20, '債券型ETF': 50, '貨幣/現金': 30},
 }
+# ⚠️ v19.171 DEPRECATED（🟡-2）:`macro_allocation_banner` 已改用
+# `_alloc_banner_desc()`（依最終持股中值生成），**本表在本 repo 內已無任何實質
+# caller** —— 唯一剩下的引用是 `src/ui/etf/etf_dashboard.py:40` 的
+# `# noqa: F401` re-export shim（向後相容用，不讀值）。與 `MACRO_ALLOC` 同理保留，
+# 待確認無外部 caller 後可一併刪除。**新程式碼請勿引用。**
 MACRO_DESC = {
     'bull':    '🟢 多頭市場：加大股票型ETF比重，可佈局成長型/科技型ETF',
     'neutral': '🟡 中性市場：股債平衡，降低單一類型集中度',
     'bear':    '🔴 空頭市場：大幅降低股票曝險，增加投資級債券ETF + 現金',
 }
 
+# ── 配置文案分段（v19.171 🟡-2：文案 / 顏色 / 數字三者同源）─────────────
+# (最終持股中值上界, 燈號, 文案, 底色, 框色)
+# 為什麼要分段而不是查 regime：實機 2026-08-05 ETF 分頁同一張卡上出現
+#   「建議持股 20%　🔒 上限 20%（三環第一環）」＋「🟢 多頭市場：加大股票型ETF比重」
+# —— 數字已吃 SSOT，文案卻還在查 `MACRO_DESC[regime]`，於是總經多頭時
+# 永遠喊「加大比重」，跟被硬否決壓到 20% 的數字當場打臉。
+# 分段門檻對齊 §3.2 語意帶（防禦 ≤20 = DEFENSE_HI_PCT / 保守 ≤50 / 平衡 ≤80 / 積極 >80）。
+_ALLOC_DESC_BANDS: tuple[tuple[int, str, str, str, str], ...] = (
+    (20,  '🔴', '防禦配置：優先保本 —— 股票型ETF 壓到最低，其餘停泊投資級債與現金',
+     '#2a0d0d', TRAFFIC_RED),
+    (50,  '🟡', '保守配置：控制股票曝險 —— 只留核心市值型ETF，主題／槓桿型暫不加碼',
+     '#1e1a00', TRAFFIC_YELLOW),
+    (80,  '🔵', '平衡配置：股債並重 —— 核心市值型ETF 為主，衛星部位小額試單',
+     '#0a1628', '#1f6feb'),
+    (100, '🟢', '積極配置：可加大股票型ETF 比重，並佈局成長型／科技型ETF',
+     '#0d2618', '#2ea043'),
+)
+
+
+def _alloc_banner_desc(alloc) -> tuple[str, str, str]:
+    """由 `AllocationDecision` 生成配置文案 + 視覺色（與畫面數字同源）。
+
+    v19.171 🟡-2 取代 `MACRO_DESC.get(regime, ...)`。
+
+    規則:
+      1. **方向由最終持股中值 `final_mid` 決定**（與 `get_allocation_sleeves()`
+         吃同一個輸入）→ 文案與三桶數字不可能再打架。
+      2. 帶上姿態 `posture`（油門在講「該多積極」）。
+      3. `capped=True` 時明講「總經 X 但被 <天花板> 壓制」，使用者才看得懂
+         「為何總經多頭卻只給 20%」。
+      4. `regime` 只作**輔助語氣**（括號內的總經背景），不得單獨決定方向。
+
+    Args:
+        alloc: `allocation_service.get_allocation()` 的回傳（`is_loaded=True`）。
+
+    Returns:
+        (desc, bg, brd)
+    """
+    _mid = alloc.final_mid
+    if _mid is None:   # is_loaded=True 理論上必有值；防禦性降級為 SSOT 一句話結論
+        return alloc.headline(), '#1a1f2e', '#1f6feb'
+    _icon, _text, _bg, _brd = _ALLOC_DESC_BANDS[-1][1:]
+    for _hi, _i, _t, _b, _r in _ALLOC_DESC_BANDS:
+        if _mid <= _hi:
+            _icon, _text, _bg, _brd = _i, _t, _b, _r
+            break
+    _tail = f'總經{alloc.regime_text}、姿態「{alloc.posture}」'
+    if alloc.capped:
+        _tail += f'，但被「{alloc.cap_name}」壓制 → 先控制股票曝險'
+    return f'{_icon} {_text}｜{_tail}', _bg, _brd
+
 
 def macro_allocation_banner(regime: str) -> None:
     """總經連動配置橫幅(v19.170 P0-1:改吃建議持股 SSOT)。
 
     Args:
-        regime: 舊介面保留 —— 僅在 SSOT 未給 regime 時作樣式 fallback,
-            **不再決定配置數字**(數字一律來自 get_allocation_sleeves())。
+        regime: **僅為舊介面相容而保留,函式內已完全不使用**(v19.171 🟡-2)。
+            數字來自 `get_allocation_sleeves()`;文案 / 顏色來自
+            `_alloc_banner_desc()`(吃 `get_allocation().final_mid`)。
+            保留參數是為了不打破現有 caller 簽章,移除屬另案。
 
     Note:
         §1 Fail Loud:總經未評估 → 誠實顯示「未評估」並指路,
         **不**退回 `MACRO_ALLOC['neutral']` 假裝有一份配置建議。
     """
+    del regime  # 明示「刻意不使用」,避免日後誤以為它還在影響畫面(v19.171)
     # v19.170:股/債/現金三桶由最終建議持股中值推導,與 🎚️ 建議持股油門 永不矛盾。
     from src.services.allocation_service import get_allocation, get_allocation_sleeves
     _alloc = get_allocation()
@@ -58,13 +117,11 @@ padding:10px 16px;margin-bottom:14px;">
 ⬜ 總經未評估，請先到「🌍 市場環境」按一鍵更新</div>
 </div>''', unsafe_allow_html=True)
         return
-    _rg = _alloc.regime or regime
     _cap_suffix = f'　{_alloc.cap_text}' if _alloc.capped else ''
-    desc = MACRO_DESC.get(_rg, _alloc.headline())
-    bg_map  = {'bull': '#0d2618', 'neutral': '#1e1a00', 'bear': '#2a0d0d'}
-    brd_map = {'bull': '#2ea043',  'neutral': TRAFFIC_YELLOW,  'bear': TRAFFIC_RED}
-    bg  = bg_map.get(_rg, '#1a1f2e')
-    brd = brd_map.get(_rg, '#1f6feb')
+    # v19.171 🟡-2:文案 + 底色 + 框色全部改由**最終持股中值**推導,與上方
+    # 「建議持股 X%」及下方三桶數字同源。`regime` 參數(以及 _alloc.regime)
+    # 只在 `_alloc_banner_desc` 內作輔助語氣,不再單獨決定文案方向 / 顏色。
+    desc, bg, brd = _alloc_banner_desc(_alloc)
     alloc_html = ' &nbsp;|&nbsp; '.join(
         f'<b>{k}</b>&nbsp;<span style="color:#58a6ff;">{v}%</span>'
         for k, v in alloc.items()

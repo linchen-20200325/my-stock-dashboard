@@ -233,12 +233,15 @@ def get_allocation() -> AllocationDecision:
     v19.170：核心天花板(VIX 否決權 / 三環第一環)改為**內生推導**，
     不再依賴 UI render 順序 —— 這消滅了「caps 慢一個 rerun」那類 bug。
 
-    ⚠️ 仍有一個已知限制：`health` / `regime` 來自 `warroom_summary`，
-    而它是在 `tab_macro` 內的 `render_traffic_light_top()` 才寫入的；
-    `app.py` 置底常駐條是 module level、執行早於 tab 內容。
-    因此在「本輪 health 剛好變動」的那一次 rerun，置底條會用上一輪的 health。
-    下一次 rerun 即收斂。**不要在文件上宣稱「同一輪必然一致」** —— 真正的
-    根治要把 `warroom_summary` 的計算搬到 tab 之前，屬另案。
+    v19.171 補記(實機驗收後修正)：`health` / `regime` 來自 `warroom_summary`，
+    而它是在 `tab_macro` 內的 `render_traffic_light_top()` 才寫入的。
+    `app.py` 置底常駐條原本是 module level、執行早於 tab 內容，加上
+    「🚀 一鍵更新全部數據」的 on_click callback(`handlers._macro_session_reset`)
+    會先 pop 掉 `warroom_summary`，導致置底條**實機上永遠顯示「⬜ 總經未評估」**
+    (不是偶發、是常態 —— 2026-08-05 線上實測複現)。
+    **已於 v19.171 根治**：置底條改用 `st.empty()` 佔位、在所有 tab render 完成
+    之後才填充，因此與油門 / 主結論卡 / ETF 橫幅同輪同源。
+    其他消費點本來就在 tab 內，不受此限制影響。
 
     Returns:
         AllocationDecision。總經未評估時 `is_loaded=False`，

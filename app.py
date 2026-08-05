@@ -478,73 +478,25 @@ tab_market, tab_stocks, tab_etf_main, tab_tools, tab_ai = st.tabs([
 # 全域多空紅綠燈（Tab 外，永遠可見）
 # ══════════════════════════════════════════════════════════════
 
-# ── 全域多空紅綠燈（頁面最頂端）─────────────────────────────
-_mkt_top  = st.session_state.get('mkt_info', {})
-_jq_top   = st.session_state.get('jingqi_info', {})
-_ts_top   = st.session_state.get('cl_ts', '')
-if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
-    _jqpct = _jq_top.get('avg', 50) if _jq_top else None
-    # v19.170 P0-1:燈號 label 與持股% 全部改讀建議持股 SSOT(get_allocation)——
-    # 原本 label 自行看 mkt_info.regime + jingqi_info.avg;持股% 則是
-    # warroom_summary['throttle'](v19.168 SSOT,會被 section_state 整包覆寫抹掉)
-    # → mkt_info['exposure_pct'] → 硬編碼 80/50/20 三層 fallback,與 🎚️ 建議持股油門 /
-    # 三環 / VIX 否決權 打架(稽核 P0-1 六套結論之一)。現在全站只剩 get_allocation()
-    # 一個出處,且已內含「姿態 vs 硬否決取較低」規則。
-    # v19.170 🟡-1 防白屏:本段是 module level、在 `with tab_market:` 之前,
-    # **不受 _render_tab_isolated 保護** —— get_allocation() 任何 raise
-    # (macro_state.json 壞、session 型別異常、下游 import 失敗…)都會直接白屏全站。
-    # 改為 try/except 兜住並降級為「⬜ 總經未評估」;錯誤原文 + traceback 一律
-    # print 出來(§1:要留跡,不吞掉錯誤訊息)。
-    try:
-        from src.services.allocation_service import get_allocation
-        _alloc = get_allocation()
-    except Exception as _alloc_err:  # noqa: BLE001 — module level,不得讓它炸掉全站
-        import traceback as _tb_alloc
-        print('[app/頁頂紅綠燈] get_allocation() 失敗，降級為「總經未評估」：'
-              f'{type(_alloc_err).__name__}: {_alloc_err}')
-        _tb_alloc.print_exc()
-        _alloc = None
-
-    _gl_pos = _alloc.range_text if _alloc is not None else '--'
-    if _alloc is None or not _alloc.is_loaded:
-        # §1 Fail Loud:總經未評估(或取數失敗)→ 誠實顯示未評估,
-        # 不回填任何多空結論或預設持股%
-        _gl_color, _gl_label = '#8b949e', '⬜ 總經未評估'
-    else:
-        # 綜合信號(多空判斷與持股% 同源,不再各算各的)
-        _gl_color, _gl_label = traffic_light(
-            None,
-            _alloc.regime == 'bull',
-            _alloc.regime == 'bear',
-            f'多頭市場（{_alloc.posture}）', f'空頭市場（{_alloc.posture}）',
-            f'🟡 {_alloc.regime_text}（{_alloc.posture}）',
-        )
-        # 被硬否決壓低時,label 後面直接掛上生效的天花板,避免「多頭」與低持股% 看似矛盾
-        if _alloc.capped:
-            _gl_label = f'{_gl_label}&nbsp;<span style="font-size:12px;">{_alloc.cap_text}</span>'
-
-    # v19.88 A~E 批次2 收尾:時效閘 — 紅綠燈基於過期資料時,保留燈色(資料可顯示)但
-    # 撤下「建議持股 X%」actionable 建議 + 旌旗均值,改明確過期警示。§1/第八份 §3.1:
-    # 過期資料可顯示但須標記,且不得以「可積極操作」語氣餵當下決策(cl_ts = 上次一鍵更新)。
-    from shared.staleness import gate_for_realtime, staleness_days
-    _rt_ok, _rt_msg = gate_for_realtime(
-        staleness_days(_ts_top) if _ts_top else None, max_days=1)
-    if _rt_ok:
-        _mid_html = (
-            f'<span style="font-size:12px;color:#c9d1d9;">建議持股 <b>{_gl_pos}</b></span>'
-            + (f'<span style="font-size:12px;color:#8b949e;">旌旗均值 {_jqpct:.0f}%</span>'
-               if _jqpct is not None else ''))
-    else:
-        _mid_html = ('<span style="font-size:12px;font-weight:700;color:#d29922;">'
-                     '⚠️ 資料已過期，燈號僅供參考 — 請先按「🚀 一鍵更新全部數據」再操作</span>')
-
-    st.markdown(
-        f'<div style="background:#0d1117;border:1px solid {_gl_color};border-radius:8px;'
-        f'padding:8px 14px;margin-bottom:8px;display:flex;align-items:center;gap:16px;">'
-        f'<span style="font-size:16px;font-weight:900;color:{_gl_color};">{_gl_label}</span>'
-        f'{_mid_html}'
-        f'<span style="font-size:11px;color:#484f58;margin-left:auto;">更新：{_ts_top}</span>'
-        f'</div>', unsafe_allow_html=True)
+# ── 全域置底常駐條：此處只「佔位」，內容延後到所有 tab render 完才填 ──────
+# v19.171 🔴-1（線上實機驗收 2026-08-05 抓到，非偶發）：
+#   本段原本在此就把整條 bar 算完並印出，但它是 **module level**，執行順序早於
+#   `with tab_market:` 內的 `render_traffic_light_top()` —— 而 `warroom_summary`
+#   （`get_allocation()` 取 health / regime 的來源）正是在那裡才寫入。
+#   再加上「🚀 一鍵更新全部數據」的 on_click callback
+#   (`src/ui/tabs/macro/handlers.py::_macro_session_reset`) 會 **pop 掉**
+#   `warroom_summary`，於是更新後的那一次 rerun，這裡必然讀到空 →
+#   `get_macro_state` 的 `_wr_ok=False` → `is_loaded=False` → 顯示
+#   「⬜ 總經未評估 / 建議持股 --」，而同一畫面下方的 tab 內容卻已是
+#   「最終建議持股 20%」。使用者不再操作就沒有下一次 rerun →
+#   **置底條實質永遠停在「未評估」**（市場環境頁與 ETF 頁同時複現）。
+#
+# 修法（Streamlit placeholder 模式）：
+#   `st.empty()` 在**建立當下**就佔住版面位置（仍在 tabs 區塊之後、頁尾免責聲明
+#   之前），實際內容改由檔案最後的填充區塊寫入 —— 此時所有 tab 都已 render 完，
+#   `warroom_summary` 已是本輪最新值。計算邏輯（get_allocation / 時效閘 /
+#   traffic_light / 旌旗均值）一字未改，**只是執行時機延後**，視覺位置不變。
+_gl_slot = st.empty()
 
 # ══════════════════════════════════════════════════════════════
 # AI 總經戰情 — 新聞抓取已抽至 src/data/news/(v18.398 P5-B3-β R8)
@@ -946,5 +898,85 @@ with tab_tools:
 with tab_ai:
     from src.ui.tabs import tab_ai_chat
     _render_tab_isolated(tab_ai_chat.render, 'AI 問答')
+
+# ══════════════════════════════════════════════════════════════
+# 全域置底常駐條 — 延後填充（v19.171 🔴-1）
+# ══════════════════════════════════════════════════════════════
+# 執行時機：所有 `with tab_*:` 都已 render 完 → `warroom_summary` /
+#   `mkt_info` / `jingqi_info` / `cl_ts` 都是**本輪最新值**，不再是被
+#   `_macro_session_reset()` on_click callback pop 掉的空值。
+# 渲染位置：填進上方的 `_gl_slot`（建立於 tabs 區塊之後、頁尾之前）→
+#   使用者看到的位置與 v19.170 完全相同（tab 內容下方、免責聲明上方）。
+# ⚠️ gate 用的 `_mkt_top` / `_jq_top` / `_ts_top` 必須**在這裡重新讀**：
+#   module-level 讀到的是 tab render 之前的舊值（refresh 那一輪甚至是空 dict），
+#   沿用舊值就等於沒修。
+_mkt_top  = st.session_state.get('mkt_info', {})
+_jq_top   = st.session_state.get('jingqi_info', {})
+_ts_top   = st.session_state.get('cl_ts', '')
+if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
+    _jqpct = _jq_top.get('avg', 50) if _jq_top else None
+    # v19.170 P0-1:燈號 label 與持股% 全部改讀建議持股 SSOT(get_allocation)——
+    # 原本 label 自行看 mkt_info.regime + jingqi_info.avg;持股% 則是
+    # warroom_summary['throttle'](v19.168 SSOT,會被 section_state 整包覆寫抹掉)
+    # → mkt_info['exposure_pct'] → 硬編碼 80/50/20 三層 fallback,與 🎚️ 建議持股油門 /
+    # 三環 / VIX 否決權 打架(稽核 P0-1 六套結論之一)。現在全站只剩 get_allocation()
+    # 一個出處,且已內含「姿態 vs 硬否決取較低」規則。
+    # v19.170 🟡-1 防白屏:本段仍是 module level(v19.171 只是移到 tab 之後),
+    # **不受 _render_tab_isolated 保護** —— get_allocation() 任何 raise
+    # (macro_state.json 壞、session 型別異常、下游 import 失敗…)都會直接白屏全站。
+    # 改為 try/except 兜住並降級為「⬜ 總經未評估」;錯誤原文 + traceback 一律
+    # print 出來(§1:要留跡,不吞掉錯誤訊息)。
+    try:
+        from src.services.allocation_service import get_allocation
+        _alloc = get_allocation()
+    except Exception as _alloc_err:  # noqa: BLE001 — module level,不得讓它炸掉全站
+        import traceback as _tb_alloc
+        print('[app/置底紅綠燈] get_allocation() 失敗，降級為「總經未評估」：'
+              f'{type(_alloc_err).__name__}: {_alloc_err}')
+        _tb_alloc.print_exc()
+        _alloc = None
+
+    _gl_pos = _alloc.range_text if _alloc is not None else '--'
+    if _alloc is None or not _alloc.is_loaded:
+        # §1 Fail Loud:總經未評估(或取數失敗)→ 誠實顯示未評估,
+        # 不回填任何多空結論或預設持股%
+        _gl_color, _gl_label = '#8b949e', '⬜ 總經未評估'
+    else:
+        # 綜合信號(多空判斷與持股% 同源,不再各算各的)
+        _gl_color, _gl_label = traffic_light(
+            None,
+            _alloc.regime == 'bull',
+            _alloc.regime == 'bear',
+            f'多頭市場（{_alloc.posture}）', f'空頭市場（{_alloc.posture}）',
+            f'🟡 {_alloc.regime_text}（{_alloc.posture}）',
+        )
+        # 被硬否決壓低時,label 後面直接掛上生效的天花板,避免「多頭」與低持股% 看似矛盾
+        if _alloc.capped:
+            _gl_label = f'{_gl_label}&nbsp;<span style="font-size:12px;">{_alloc.cap_text}</span>'
+
+    # v19.88 A~E 批次2 收尾:時效閘 — 紅綠燈基於過期資料時,保留燈色(資料可顯示)但
+    # 撤下「建議持股 X%」actionable 建議 + 旌旗均值,改明確過期警示。§1/第八份 §3.1:
+    # 過期資料可顯示但須標記,且不得以「可積極操作」語氣餵當下決策(cl_ts = 上次一鍵更新)。
+    from shared.staleness import gate_for_realtime, staleness_days
+    _rt_ok, _rt_msg = gate_for_realtime(
+        staleness_days(_ts_top) if _ts_top else None, max_days=1)
+    if _rt_ok:
+        _mid_html = (
+            f'<span style="font-size:12px;color:#c9d1d9;">建議持股 <b>{_gl_pos}</b></span>'
+            + (f'<span style="font-size:12px;color:#8b949e;">旌旗均值 {_jqpct:.0f}%</span>'
+               if _jqpct is not None else ''))
+    else:
+        _mid_html = ('<span style="font-size:12px;font-weight:700;color:#d29922;">'
+                     '⚠️ 資料已過期，燈號僅供參考 — 請先按「🚀 一鍵更新全部數據」再操作</span>')
+
+    # v19.171:唯一差異 —— 由 `st.markdown(...)` 改為 `_gl_slot.markdown(...)`,
+    # 內容寫回上方預留的位置(視覺位置不變)。
+    _gl_slot.markdown(
+        f'<div style="background:#0d1117;border:1px solid {_gl_color};border-radius:8px;'
+        f'padding:8px 14px;margin-bottom:8px;display:flex;align-items:center;gap:16px;">'
+        f'<span style="font-size:16px;font-weight:900;color:{_gl_color};">{_gl_label}</span>'
+        f'{_mid_html}'
+        f'<span style="font-size:11px;color:#484f58;margin-left:auto;">更新：{_ts_top}</span>'
+        f'</div>', unsafe_allow_html=True)
 
 st.markdown('<div style="text-align:center;font-size:10px;color:#484f58;padding:8px 0;">⚠️ 台股AI戰情室 v3.0 · 僅供學術研究，非投資建議，盈虧自負</div>', unsafe_allow_html=True)

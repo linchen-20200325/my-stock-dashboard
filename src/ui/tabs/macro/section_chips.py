@@ -245,9 +245,14 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         try:
             if _fut_net is not None and float(_fut_net) < -20000:
                 if _opt_net is not None and float(_opt_net) < 0:
+                    # v19.171:移除硬編碼「建議降倉至30%以下」—— 實機驗收抓到它與
+                    # 同畫面「最終建議持股 20%」(建議持股 SSOT)當場矛盾。
+                    # 警示卡只負責敘事(發生什麼事、為何危險),持股水位一律指回
+                    # get_allocation();守門測試 v19.171 已補動詞型「降倉」樣式。
                     _warnings.append(('🔴', '期權同向崩盤警戒',
                         f'期貨空{abs(float(_fut_net)):,.0f}口 + 選擇權外資淨空{float(_opt_net):,.0f}千元',
-                        '外資「不惜成本」雙向避險，高機率隨即殺盤，建議降倉至30%以下'))
+                        '外資「不惜成本」雙向避險，高機率隨即殺盤，務必嚴控風險　'
+                        '→ 實際持股見 🎚️ 建議持股油門'))
                 elif _fut_net is not None and float(_fut_net) < -30000:
                     _warnings.append(('🟡', '期貨大空警戒',
                         f'外資期貨空單 {abs(float(_fut_net)):,.0f} 口（>3萬口門檻）',

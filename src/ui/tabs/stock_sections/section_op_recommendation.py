@@ -43,7 +43,11 @@ def render_op_recommendation_section(sid2: str, health2,
               and price2 <= round(avg_div2 / YIELD_MID_DEC, 1)) else 0,
     ])
     if _reg_op == 'bear':
-        _op_a = f'大盤空頭格局，{sid2} 無論評分多高，先降倉至20%以下'
+        # v19.171:移除硬編碼「先降倉至20%以下」—— 個股卡片沒有資格宣告全站持股
+        # 水位(那是 get_allocation() 的職責),否則同畫面會出現第二個競爭數字。
+        # 這裡只保留「方向性判斷」,實際百分比指回建議持股 SSOT。
+        _op_a = (f'大盤空頭格局，{sid2} 無論評分多高，先控制風險、不重壓　'
+                 '→ 實際持股見 🎚️ 建議持股油門')
         _op_b = '市場趨勢優先，個股強不等於能賺錢'
     elif _sig_count >= 3:
         _op_a = f'{_sig_count}個訊號共振（健康度+大盤+VCP+估值），可積極進場'
