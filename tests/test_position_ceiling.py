@@ -37,19 +37,23 @@ def test_gauge_reads_exposure_ceiling_and_labels_complement():
 
 
 # ── 實機 render(AppTest,對齊 pe_river/cross_ai slow 慣例)──────
-# health 62 → 姿態帶 50–70%(中性偏多);天花板 40% < 70% → 最終必須被壓到 40%。
-_WARROOM = {"health_score": 62, "regime": "neutral", "traffic_light": "🟡 震盪整理"}
-
-
 def _script_render():
     """v19.170:fixture 改設 `warroom_summary`。
 
     舊 fixture 設的是 `st.session_state['macro_state']`,但 `get_allocation()`
     的來源鏈是 `warroom_summary` + `macro_state.json`,那個 key 根本沒人讀 →
     `is_loaded=False` → UI 走 `st.info` 早退 → 底下所有 markdown 斷言全落空。
+
+    v19.172(CI slow lane 修紅):`_WARROOM` 原為 module-level global,但
+    `AppTest.from_function` 只抽出**本函式原始碼**寫成獨立 temp script 執行,
+    module global 不在該 temp script 命名空間 → `NameError: name '_WARROOM'
+    is not defined`。改內聯為函式 local 即落在被抽出的範圍內。(此紅為 main
+    既有失敗,非 starlette pin 所致;pin 只動 requirements.txt。)
     """
     import streamlit as st
-    st.session_state["warroom_summary"] = dict(_WARROOM)
+    # health 62 → 姿態帶 50–70%(中性偏多);天花板 40% < 70% → 最終必被壓到 40%。
+    _warroom = {"health_score": 62, "regime": "neutral", "traffic_light": "🟡 震盪整理"}
+    st.session_state["warroom_summary"] = dict(_warroom)
     from src.ui.tabs.macro.section_traffic_light import render_position_throttle
     render_position_throttle({"health": 62, "regime": "neutral", "defense": False})
 
