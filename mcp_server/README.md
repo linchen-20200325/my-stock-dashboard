@@ -14,7 +14,7 @@ provenance + fail-loud 的 fetcher，不是 AI 腦內舊記憶。
 |---|---|---|
 | `screen_stocks(factors, top_n)` | 全台股基本面選股綜合排名 | 選股網「🎯 開始選股」**同源**（`get_ranked_picks`） |
 | `forward_test_reconcile()` | 凍結過的選股 vs 0050 事後對帳（零 lookahead） | 前進式驗證對帳面板（`reconcile_all`） |
-| `stock_health(stock_id)` | 個股「老師財報體檢」總評（純規則、免金鑰） | 個股 →「財報體檢」（`analyze_financial_health`） |
+| `stock_health(stock_id)` | 個股「財報體檢」總評（純規則、免金鑰） | 個股 →「財報體檢」（`analyze_financial_health`） |
 
 - `screen_stocks` 的 `factors` 任選：`pe_low`(低估值)、`eps_high`(高EPS)、`shortage`(缺貨動能)、`rs_leader`(抗跌RS)、`trend`(跨季轉強)；留空＝全 5 因子。回傳含 `as_of`(UTC 抓取時間)、`picks`(代碼/名稱/綜合分/各因子分)。
 - `stock_health` 回 `grade`(A+/A/B+/C/F) + `score_pct` + 生死指標 `pass_items`/`fail_items`。

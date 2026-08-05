@@ -19,7 +19,7 @@ from shared.signal_thresholds import (  # Phase 2 Batch 5b v18.429:布林帶寬�
     BB_BW_SHRINK_ACTION_RATIO,
     BB_BW_SHRINK_WARN_RATIO,
 )
-from src.ui.render import kpi, signal_box, teacher_conclusion
+from src.ui.render import STRATEGY_TECHNICAL, kpi, signal_box, strategy_conclusion  # v19.174 去識別化
 from src.ui.render.tab_sections import border_left_banner
 
 
@@ -47,7 +47,7 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
     else:
         _ea = '數據不足，VCP無法計算（需至少30日價格資料）'
         _eb = ''
-    st.markdown(teacher_conclusion('朱家泓', f'{sid2} VCP型態', _ea, _eb),
+    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, f'{sid2} VCP型態', _ea, _eb),
                 unsafe_allow_html=True)
     ec1, ec2 = st.columns(2)
     with ec1:

@@ -370,3 +370,214 @@ def test_leading_table_empty_always_valid_div():
             h = mb.leading_table_empty_state_html(attempted=_att, token_present=_tok)
             assert h.startswith("<div") and h.rstrip().endswith("</div>")
             assert "先行指標明細表未顯示" in h
+
+
+# ──────────────────────────────────────────────────────────
+# 7. v19.172 — 紅燈標籤依觸發方向分流(過熱 vs 惡化)
+#    實機 bug：中期桶因 BIAS240 +32.7%(high_bad 過熱)轉紅，五桶摘要卻印
+#    「🔴 循環惡化」，同頁四象限同時寫「主升段狂熱…順勢作多」→ 自相矛盾。
+#    矛盾來源是**標籤**，不是燈號/門檻/處置(四象限本身自洽)。
+# ──────────────────────────────────────────────────────────
+def test_red_flavor_by_direction():
+    """high_bad → 過熱；low_bad → 惡化；band 依觸發側。"""
+    assert mb.red_flavor(mb.SPECS_BY_KEY["bias_240"], 32.7) == mb.RED_FLAVOR_OVERHEAT
+    assert mb.red_flavor(mb.SPECS_BY_KEY["us_core_cpi"], 4.5) == mb.RED_FLAVOR_OVERHEAT
+    assert mb.red_flavor(mb.SPECS_BY_KEY["ism_pmi"], 44) == mb.RED_FLAVOR_DETERIORATION
+    assert mb.red_flavor(mb.SPECS_BY_KEY["tw_export"], -8) == mb.RED_FLAVOR_DETERIORATION
+    _ndc = mb.SPECS_BY_KEY["ndc_signal"]          # band: red_lo=16 / red=38
+    assert mb.red_flavor(_ndc, 40) == mb.RED_FLAVOR_OVERHEAT        # ≥38 紅過熱側
+    assert mb.red_flavor(_ndc, 12) == mb.RED_FLAVOR_DETERIORATION   # ≤16 藍衰退側
+    # 值不可解析 → 保守維持原標籤語意(不擅自改口徑)
+    assert mb.red_flavor(_ndc, None) == mb.RED_FLAVOR_DETERIORATION
+    assert mb.red_flavor(_ndc, "n/a") == mb.RED_FLAVOR_DETERIORATION
+
+
+def test_bucket_level_label_backward_compatible():
+    """不傳 spec → 與原 BUCKET_LEVEL_LABEL 逐格一致(caller 介面 0 改變)。"""
+    for _b in mb.BUCKET_ORDER:
+        for _lv in ("green", "yellow", "red", "gray"):
+            assert mb.bucket_level_label(_b, _lv) == mb.BUCKET_LEVEL_LABEL[_b][_lv]
+
+
+def test_bucket_level_label_red_overheat_vs_deterioration():
+    """紅燈才分流；long / mid 有過熱版，其餘桶語意中性維持原字串。"""
+    assert mb.bucket_level_label(
+        "mid", "red", spec=mb.SPECS_BY_KEY["bias_240"], value=32.7) == "循環過熱"
+    assert mb.bucket_level_label(
+        "mid", "red", spec=mb.SPECS_BY_KEY["ism_pmi"], value=44) == "循環惡化"
+    assert mb.bucket_level_label(
+        "long", "red", spec=mb.SPECS_BY_KEY["ndc_signal"], value=40) == "結構過熱"
+    assert mb.bucket_level_label(
+        "long", "red", spec=mb.SPECS_BY_KEY["ndc_signal"], value=12) == "結構防禦"
+    # 方向中性的桶不分流
+    assert mb.bucket_level_label(
+        "short", "red", spec=mb.SPECS_BY_KEY["vix"], value=35) == "急殺風險"
+    assert mb.bucket_level_label(
+        "chips", "red", spec=mb.SPECS_BY_KEY["margin"], value=5000) == "籌碼危險"
+
+
+def test_bucket_level_label_non_red_not_flavored():
+    """v19.172 範圍限定紅燈；黃 / 綠 / 灰維持原字串(不擴大行為變更面)。"""
+    for _lv in ("green", "yellow", "gray"):
+        _got = mb.bucket_level_label(
+            "mid", _lv, spec=mb.SPECS_BY_KEY["bias_240"], value=15)
+        assert _got == mb.BUCKET_LEVEL_LABEL["mid"][_lv], _lv
+
+
+def test_bucket_level_label_unknown_key_fails_loud():
+    """§1：未知 bucket / level 不得靜默回空字串。"""
+    with pytest.raises(KeyError):
+        mb.bucket_level_label("nonexist", "red")
+    with pytest.raises(KeyError):
+        mb.bucket_level_label("mid", "purple")
+
+
+def test_danger_exceedance_zero_and_negative_thresholds():
+    """§4.1：門檻含 0 / 負值 → 不可用倍數；帶寬正規化須成立且不除零。"""
+    _exp = mb.SPECS_BY_KEY["tw_export"]     # low_bad yellow=0 red=-5
+    assert math.isclose(mb.danger_exceedance(-8, _exp, "red"), 0.6, abs_tol=1e-9)
+    _gap = mb.SPECS_BY_KEY["m1b_m2_gap"]    # low_bad yellow=1 red=0
+    assert math.isclose(mb.danger_exceedance(-0.5, _gap, "red"), 0.5, abs_tol=1e-9)
+    _fut = mb.SPECS_BY_KEY["fut_net"]       # low_bad yellow=-10000 red=-20000
+    assert math.isclose(mb.danger_exceedance(-30000, _fut, "red"), 1.0, abs_tol=1e-9)
+    _bias = mb.SPECS_BY_KEY["bias_240"]     # high_bad yellow=10 red=20
+    assert math.isclose(mb.danger_exceedance(32.7, _bias, "red"), 1.27, abs_tol=1e-9)
+    # 黃燈以黃線為基準
+    assert math.isclose(mb.danger_exceedance(15, _bias, "yellow"), 0.5, abs_tol=1e-9)
+
+
+def test_danger_exceedance_degrades_to_zero_not_crash():
+    """不可解析 / 非 red|yellow → 0.0(排序退回註冊順序,不爆)。"""
+    _bias = mb.SPECS_BY_KEY["bias_240"]
+    assert mb.danger_exceedance(None, _bias, "red") == 0.0
+    assert mb.danger_exceedance("n/a", _bias, "red") == 0.0
+    assert mb.danger_exceedance(float("nan"), _bias, "red") == 0.0
+    assert mb.danger_exceedance(32.7, _bias, "green") == 0.0
+    assert mb.danger_exceedance(32.7, _bias, "gray") == 0.0
+
+
+def test_danger_exceedance_band_both_sides():
+    _ndc = mb.SPECS_BY_KEY["ndc_signal"]   # yellow_lo=23 yellow=32 red_lo=16 red=38
+    assert math.isclose(mb.danger_exceedance(44, _ndc, "red"), 1.0, abs_tol=1e-9)   # (44-38)/6
+    assert math.isclose(mb.danger_exceedance(9, _ndc, "red"), 1.0, abs_tol=1e-9)    # (16-9)/7
+    assert mb.danger_exceedance(28, _ndc, "red") == 0.0    # 綠區,兩側皆未觸發
+
+
+def test_five_bucket_mid_red_label_overheat_on_bias():
+    """實機重現：中期桶只有 BIAS240 過熱轉紅 → 標籤須是「循環過熱」不是「循環惡化」。"""
+    from src.compute.macro import compute_five_bucket_summary
+    out = compute_five_bucket_summary(
+        macro_info={"ism_pmi": {"value": 55}, "us_core_cpi": {"yoy": 2.0},
+                    "tw_export": {"yoy": 54.6}},
+        bias_info={"bias_240": 32.7},
+    )
+    assert out["mid"]["level"] == "red"
+    assert out["mid"]["label"] == "循環過熱"
+    assert "年線乖離" in out["mid"]["headline"]
+
+
+def test_five_bucket_mid_red_label_deterioration_on_pmi():
+    """反向：由 PMI(low_bad)觸發 → 仍是「循環惡化」(原語意保留)。"""
+    from src.compute.macro import compute_five_bucket_summary
+    out = compute_five_bucket_summary(
+        macro_info={"ism_pmi": {"value": 40}, "us_core_cpi": {"yoy": 2.0},
+                    "tw_export": {"yoy": 5}},
+        bias_info={"bias_240": 5},
+    )
+    assert out["mid"]["level"] == "red"
+    assert out["mid"]["label"] == "循環惡化"
+    assert "PMI" in out["mid"]["headline"]
+
+
+def test_five_bucket_long_red_label_overheat_on_ndc():
+    """長期桶 band 指標 NDC 熱到紅(≥38)→「結構過熱」；藍燈(≤16)→「結構防禦」。"""
+    from src.compute.macro import compute_five_bucket_summary
+    _hot = compute_five_bucket_summary(
+        macro_info={"ndc_signal": {"score": 41}},
+        warroom_summary={"health_score": 70}, m1b_m2_info={"gap": 2.0},
+    )
+    assert _hot["long"]["level"] == "red" and _hot["long"]["label"] == "結構過熱"
+    _cold = compute_five_bucket_summary(
+        macro_info={"ndc_signal": {"score": 12}},
+        warroom_summary={"health_score": 70}, m1b_m2_info={"gap": 2.0},
+    )
+    assert _cold["long"]["level"] == "red" and _cold["long"]["label"] == "結構防禦"
+
+
+def test_five_bucket_headline_picks_most_severe_not_first_registered():
+    """v19.172：同桶多盞紅 → headline 取超標幅度最大者,非註冊順序第一個。
+
+    中期桶註冊順序 ism_pmi → us_core_cpi → tw_export → bias_240。
+    本例 PMI 45.5(僅超紅線 0.5/4 帶寬)vs BIAS 60(超 4.0 帶寬)→ 主因應是 BIAS。
+    """
+    from src.compute.macro import compute_five_bucket_summary
+    out = compute_five_bucket_summary(
+        macro_info={"ism_pmi": {"value": 45.5}, "us_core_cpi": {"yoy": 2.0},
+                    "tw_export": {"yoy": 5}},
+        bias_info={"bias_240": 60.0},
+    )
+    assert out["mid"]["level"] == "red"
+    assert "年線乖離" in out["mid"]["headline"], out["mid"]["headline"]
+    assert out["mid"]["label"] == "循環過熱"
+
+
+# ──────────────────────────────────────────────────────────
+# 8. v19.173 — 「總經健康評分」名不副實 → note 須誠實揭露因子組成
+#
+#    實機回報：五桶 4 盞紅，綜合健康度仍有 44 分。查證結論是**不是算錯** ——
+#    compute_macro_health 在建構上只吃 2 個輸入：
+#        health = jqavg × 0.6 + min(score/max_score×100,100) × 0.4 + 0
+#    jqavg = 旌旗指數（站上 20MA 家數比）＝廣度；外資加分項 v19.102 校準後歸零。
+#    本註冊表 16 個 DangerSpec 中，health 自己是輸出、真正餵進公式的只有 jingqi
+#    （score 來自 mkt_info，不在註冊表內）；其餘 14 項（融資 / 外資期貨 / 年線乖離 /
+#    NDC / M1B-M2 / VIX / PMI / CPI / 出口 / ADL / 新聞 …）**一個都沒有**。
+#    使用者從「總經健康評分」這個名字完全看不出來 → 名不副實。
+#
+#    本版決策：**不全站改名**（會動到大量 UI 字串與 source-scan 測試，風險與收益
+#    不對稱），改為在顯示處誠實揭露。這兩條測試就是防止未來有人「順手清掉太長的
+#    note」把揭露刪掉 —— 揭露一旦消失，名不副實就悄悄復發。
+# ──────────────────────────────────────────────────────────
+def test_health_note_discloses_factor_composition():
+    """health 的 note 必須講清楚「由誰組成、不含誰」。"""
+    _note = mb.SPECS_BY_KEY["health"].note
+    # 原有門檻語意不得被揭露文字擠掉
+    assert "35" in _note and "50" in _note, "原門檻語意（<35 防禦 / <50 轉弱）不見了"
+    # 兩個真實輸入 + 權重（對齊 shared/signal_thresholds.HEALTH_WEIGHT_*）
+    assert "旌旗" in _note and "60%" in _note, "未揭露 jqavg（旌旗指數）權重"
+    assert "大盤評分" in _note and "40%" in _note, "未揭露 score（大盤評分）權重"
+    # 明講「不含什麼」—— 否則使用者仍會以為它綜合了五桶
+    assert "不含" in _note, "未明講排除項"
+    for _kw in ("融資", "外資期貨", "VIX", "PMI"):
+        assert _kw in _note, f"note 未點名排除項: {_kw}"
+
+
+def test_health_note_survives_card_render():
+    """揭露文字必須真的印進卡片（不能只躺在 dataclass 裡沒人看得到）。"""
+    _spec = mb.SPECS_BY_KEY["health"]
+    h = mb.bucket_indicator_cards_html({"details": [
+        {"key": "health", "label": _spec.label, "value_str": "44",
+         "danger": "yellow", "note": _spec.note},
+    ]})
+    assert "旌旗" in h and "不含" in h, "卡片沒印出因子組成揭露"
+    assert "44" in h and "🩺" in h
+
+
+def test_health_weights_still_sum_to_one_and_fnet_is_dead_term():
+    """v19.173 只改註解 / 揭露文字 —— 三個權重常數必須原封不動。
+
+    §4.2 權重和 = 1；HEALTH_FNET_BONUS = 0 是 v19.102 校準後的**明示歸零**
+    （有 AUC 佐證，非漏寫），本版不得順手「修好」它 —— 改值＝改行為，
+    需重跑校準，屬另案。
+    """
+    from shared.signal_thresholds import (
+        HEALTH_FNET_BONUS, HEALTH_WEIGHT_JQ, HEALTH_WEIGHT_SCORE,
+    )
+    assert math.isclose(HEALTH_WEIGHT_JQ + HEALTH_WEIGHT_SCORE, 1.0, abs_tol=1e-9)
+    assert HEALTH_FNET_BONUS == 0
+
+
+def test_health_danger_lines_unchanged_by_v19_173():
+    """揭露不得順手動門檻：red=35（DEFENSE 預設）/ yellow=50（DESIGN）。"""
+    _spec = mb.SPECS_BY_KEY["health"]
+    assert _spec.red == 35.0 and _spec.yellow == 50.0
+    assert _spec.direction == "low_bad" and _spec.bucket == "long"

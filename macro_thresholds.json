@@ -3,5 +3,6 @@
   "BULL_MIN_SCORE": 4,
   "last_calibrated": null,
   "method": "default (uncalibrated)",
-  "_comment": "By recalibrate_macro Actions workflow. Override calc_traffic_light thresholds. PR-reviewed before applied."
+  "_comment": "By recalibrate_macro Actions workflow. Override calc_traffic_light thresholds. PR-reviewed before applied.",
+  "_comment_v19_173": "校準狀態誠實化（只是說明，未動任何數值）：健康評分的『權重』HEALTH_WEIGHT_JQ=0.6 / HEALTH_WEIGHT_SCORE=0.4（見 shared/signal_thresholds.py）已於 v19.102 用真實 2006-2026 樣本校準（n=4748、val AUC 0.753、overfit_flag=False）；但本檔這兩個吃該分數的『決策門檻』HEALTH_DEFENSE_THRESHOLD=35 與 BULL_MIN_SCORE=4 仍是手訂未校準 —— 上面的 last_calibrated=null 與 method='default (uncalibrated)' 就是證據。權重端用 AUC 最佳化、切點端憑直覺，等於把 ROC 曲線畫出來了卻隨手挑一個 operating point，兩端證據等級不對等。待辦：以同一份樣本跑 ROC、用 Youden J（或指定 FPR 上限）選點，經 PR 審閱後由 recalibrate_macro workflow 寫回本檔。另註：HEALTH_FNET_BONUS=0 是 v19.102 校準後的明示歸零（有 AUC 佐證，非漏寫），但它已是 dead term、可讀性差。"
 }

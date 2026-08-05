@@ -153,7 +153,7 @@ def render_tab_stock():
     from src.compute.scoring import calc_rs_score, rs_slope
     # C1 v18.401:乖離率公式 SSOT(取代 4 處 inline (price-MA)/MA*100)
     from shared.calc_helpers import calc_bias_pct
-    from src.ui.render import kpi, signal_box, teacher_conclusion
+    from src.ui.render import kpi, signal_box, strategy_conclusion  # v19.174 去識別化
     from src.ui.render import plot_combined_chart, plot_quarterly_chart, plot_revenue_chart
     # U2 v18.401:統一容器框樣式 SSOT(取代 4 處 inline <div style="background..."> 重複)
     # U2-b v18.403:再補 border_left_banner 收 3 處 banner pattern
@@ -231,10 +231,10 @@ border-radius:8px;padding:10px 14px;font-size:12px;color:#8b949e;">
 K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 · 月/季營收毛利率 · 合約負債/資本支出 · 健康評分(RSI+量比+IBS+KD+布林)
 </div>""", unsafe_allow_html=True)
 
-    with st.expander('🎯 老師型態目標價（本檔 K 線自動算：甜蜜價·止損·目標）', expanded=False):
-        # v19.163 user 要求:老師目標價接進個股,套用當前 t2_sid 標的。
-        from src.ui.tabs.caisen_targets_ui import render_caisen_for_ticker
-        render_caisen_for_ticker(t2_sid or '2330', key_prefix='cs_stk')
+    with st.expander('🎯 型態目標價（本檔 K 線自動算：甜蜜價·止損·目標）', expanded=False):
+        # v19.163 user 要求:型態目標價接進個股,套用當前 t2_sid 標的。(v19.174 去識別化)
+        from src.ui.tabs.pattern_targets_ui import render_pattern_targets_for_ticker
+        render_pattern_targets_for_ticker(t2_sid or '2330', key_prefix='cs_stk')
 
     if t2_run:
         sid2 = t2_sid or '2330'
@@ -791,7 +791,7 @@ padding:14px 18px;margin-bottom:12px;">
         with _sp_c5b:
             if _entry_half:
                 st.markdown(kpi('大量紅K 1/2 進場', f'{_entry_half:.2f}',
-                                '朱家泓低風險買點', '#58a6ff', '#1a2744'), unsafe_allow_html=True)
+                                '技術面低風險買點', '#58a6ff', '#1a2744'), unsafe_allow_html=True)  # v19.174 去識別化
             else:
                 st.markdown(kpi('大量紅K 1/2', '計算中', '', '#484f58', '#0d1117'), unsafe_allow_html=True)
         with _sp_c6b:
@@ -812,7 +812,7 @@ padding:14px 18px;margin-bottom:12px;">
         with _sp_c6:
             st.markdown(kpi(f'近{_win20_n}日支撐', f'{_lo20_p:.2f}', f'距現價 -{_dist_lo}%', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
 
-        # ══ 進出場訊號（多位老師方法整合）═══════════════════════
+        # ══ 進出場訊號（多策略方法整合）═══════════════════════
         st.markdown('---')
 
         # ══ 心理檢查 + 勝利方程式 + 禁止操作(U4 Phase 2-Psy v18.406:抽至 stock_sections.section_psy_checklist)══
@@ -889,7 +889,7 @@ padding:14px 18px;margin-bottom:12px;">
         render_revenue_trend_section(sid2, name2, rev2, qtr2,
                                       _rev2_cached=_rev2_cached,
                                       _qtr2_cached=_qtr2_cached)
-        # ══ 策略 1 結論 + 老師 趨勢分數(U4 Phase 3-S1 v18.408:抽至 stock_sections.section_strategy_conclusion)══
+        # ══ 策略 1 結論 + 財報趨勢分數(U4 Phase 3-S1 v18.408:抽至 stock_sections.section_strategy_conclusion)══
         from src.ui.tabs.stock_sections import render_strategy_conclusion_section
         render_strategy_conclusion_section(
             sid2, rev2, qtr2, qtr_extra2, FINMIND_TOKEN,
@@ -922,7 +922,7 @@ padding:14px 18px;margin-bottom:12px;">
 
         # ── 🔰 故事化白話：財報名詞快查（純疊加；放在體檢 expander 外，避免巢狀）──
         with st.expander('🔰 看懂下面這些財報名詞（新手必看，30 秒）'):
-            st.markdown('''下面「AI 財報體檢」用的是老師財報分析框架，名詞白話對照：
+            st.markdown('''下面「AI 財報體檢」用的是財報體檢框架，名詞白話對照：
 
 | 名詞 | 白話意思 |
 |---|---|
@@ -931,7 +931,7 @@ padding:14px 18px;margin-bottom:12px;">
 | **那根棒子**（負債比 < 60%） | 公司欠錢的比例；越低越穩，>60% 代表槓桿偏高 |
 | **周轉效率** | 賣貨、收帳的速度；越快＝資金越活、不卡庫存與呆帳 |
 | **以長支長** | 用「長期的錢」（股本＋長期借款）買「長期資產」（廠房設備）；比率夠才不會短債養長投、周轉爆掉 |
-| **老師 300 / 150** | 老師 的嚴格標準：流動比率 >300%、速動比率 >150%＝短期還債餘裕大（收現行業或現金充足者會放寬門檻＝「保命符」） |
+| **300 / 150 法則** | 嚴格標準：流動比率 >300%、速動比率 >150%＝短期還債餘裕大（收現行業或現金充足者會放寬門檻＝「保命符」） |
 | **跨表勾稽 + 地雷** | 把損益表／資產負債表／現金流量表三張表交叉對驗，揪出兜不攏的造假或地雷訊號 |
 
 > 💡 燈號：🟢 安全、🟡 注意、🔴 危險。任一生死指標亮紅燈，務必深究原因再決定要不要碰。''')
@@ -943,7 +943,7 @@ padding:14px 18px;margin-bottom:12px;">
             # 首屏慢 + 耗 API 額度。點按鈕才生成;已生成(session 有結果)直接顯示。
             if _fh_key2 not in st.session_state and not st.session_state.get(_fh_req_key):
                 if st.button('🔬 生成 AI 財報體檢', key=f'_fh_btn_{sid2}',
-                             help='老師 框架 + 市場情緒,會呼叫 AI,約數秒'):
+                             help='財報體檢框架 + 市場情緒,會呼叫 AI,約數秒'):
                     st.session_state[_fh_req_key] = True
                     st.rerun()
                 st.info('點上方「🔬 生成 AI 財報體檢」按鈕生成（會呼叫 AI，約數秒；生成後同一檔走快取）。')
@@ -960,14 +960,14 @@ padding:14px 18px;margin-bottom:12px;">
                                 _fin_raw['b_item_5y'] = fetch_5_years_cash_flow(sid2, FINMIND_TOKEN)
                             except Exception:
                                 pass  # fallback 到 1Q 估算
-                            # 近期新聞：供 老師 體檢 AI insight 結合市場情緒
-                            _mj_news = _fetch_stock_news(sid2, name2, 3)
-                            _mj_news_str = '\n'.join(
+                            # 近期新聞：供 財報體檢 AI insight 結合市場情緒
+                            _fin_news = _fetch_stock_news(sid2, name2, 3)
+                            _fin_news_str = '\n'.join(
                                 f'- {_n["title"]}（{_n.get("source","RSS")} · {_n.get("published","")}）'
-                                for _n in _mj_news
-                            ) if _mj_news else '（暫無近期個股新聞）'
+                                for _n in _fin_news
+                            ) if _fin_news else '（暫無近期個股新聞）'
                             _fh_out = analyze_financial_health(api_key, sid2, _fin_raw,
-                                                               news_context=_mj_news_str)
+                                                               news_context=_fin_news_str)
                             st.session_state[_fh_key2] = _fh_out
                             # 保存原始財報數據供診斷面板使用（ar_days/liab/b_item_5y 等）
                             st.session_state[f'_fin_raw_{sid2}'] = _fin_raw
@@ -1080,7 +1080,7 @@ padding:14px 18px;margin-bottom:12px;">
                 # ── 存活能力精細模組（Survival Module）──────────
                 _surv2 = _fh.get('survival_module', {})
                 if _surv2:
-                    st.markdown('#### 🏥 存活能力精細診斷（老師 3大生死指標）')
+                    st.markdown('#### 🏥 存活能力精細診斷（3大生死指標）')
                     _sc_map = {'Pass': TRAFFIC_GREEN, 'Acceptable': TRAFFIC_YELLOW, 'Fail': TRAFFIC_RED}
                     _s2c = st.columns(3)
                     for _col2, (_key2, _lbl2) in zip(_s2c, [
@@ -1162,7 +1162,7 @@ padding:14px 18px;margin-bottom:12px;">
                 # ── 獲利能力模組（Profitability Module）─────────
                 _prof2 = _fh.get('profitability_module', {})
                 if _prof2:
-                    st.markdown('#### 💰 獲利能力診斷（老師 5大指標）')
+                    st.markdown('#### 💰 獲利能力診斷（5大指標）')
                     _p5c = st.columns(5)
                     # 1 毛利率
                     _gm2 = _prof2.get('Gross_Margin', {})
@@ -1271,7 +1271,7 @@ padding:14px 18px;margin-bottom:12px;">
                 # ── 償債能力模組（Solvency Module）─────────────
                 _solv2 = _fh.get('solvency_module', {})
                 if _solv2:
-                    st.markdown('#### 🛡️ 短期償債能力診斷（老師 300/150 嚴格標準）')
+                    st.markdown('#### 🛡️ 短期償債能力診斷（300/150 嚴格標準）')
                     # 最終裁決 banner
                     _sv2_v = _solv2.get('Final_Solvency_Verdict', '')
                     _sv2_pass = 'Pass' in _sv2_v
@@ -1290,11 +1290,11 @@ padding:14px 18px;margin-bottom:12px;">
                     # 流動比率門檻：條件B→150%；條件A→100%；無例外→300%
                     _cr_thresh = 150 if _is_dso_exception else (100 if _is_cash_exception else 300)
                     _cr_label  = (f'流動比率（保命符放寬 >{_cr_thresh}%）'
-                                  if _is_any_exception else '流動比率（老師嚴格 >300%）')
+                                  if _is_any_exception else '流動比率（嚴格 >300%）')
                     _sv2c = st.columns(2)
                     for _col, (_key, _label, _thresh) in zip(_sv2c, [
                         ('Current_Ratio', _cr_label, _cr_thresh),
-                        ('Quick_Ratio', '速動比率（老師嚴格 >150%）', 150),
+                        ('Quick_Ratio', '速動比率（嚴格 >150%）', 150),
                     ]):
                         _si = _solv2.get(_key, {})
                         _si_s = _si.get('Status', '')
@@ -1379,7 +1379,7 @@ padding:14px 18px;margin-bottom:12px;">
                     if _adv2.get('Final_Verdict'):
                         st.caption(f'🔬 {_adv2["Final_Verdict"]}')
 
-                # ── 老師動態總結論 ─────────────────────────────────
+                # ── 動態總結論 ─────────────────────────────────────
                 _ov = no_ai_overall_verdict(
                     fin_data=st.session_state.get('t2_fin_data', {}),
                     fh_result=_fh,
@@ -1524,7 +1524,7 @@ padding:14px 18px;margin-bottom:12px;">
                     )
             except Exception:
                 pass
-            # v18.327 PR-B:AI prompt 補 老師 趨勢分數合議(月+季 65/35)
+            # v18.327 PR-B:AI prompt 補 財報趨勢分數合議(月+季 65/35)
             try:
                 from datetime import date as _date_ai
                 from src.compute.health import (
@@ -1535,16 +1535,17 @@ padding:14px 18px;margin-bottom:12px;">
                 )
                 from src.compute.health import compute_one_stock_trend as _cost_ai
                 _ymm_ai = _cfymm_ai(_date_ai.today())
-                _mj_row_ai = _cost_ai(
+                _fin_row_ai = _cost_ai(
                     sid=sid2, yyyymm_curr=_ymm_ai, token=FINMIND_TOKEN, w_monthly=0.65,
                     fetch_financial_statements=fetch_financial_statements,
                     analyze_financial_health=analyze_financial_health,
                     list_snapshots=_ls_ai, load_snapshot=_ld_ai, save_snapshot=_sv_ai,
                 )
                 _fund_str2.append(
-                    f"老師 趨勢分數(月+季 65/35)={_mj_row_ai.get('label', '—')} "
-                    f"(合分 {_mj_row_ai.get('score', 0):+.2f},月分 {_mj_row_ai.get('mon_sub', 0):+.2f}/"
-                    f"季分 {_mj_row_ai.get('mj_sub', 0):+.2f})"
+                    f"財報趨勢分數(月+季 65/35)={_fin_row_ai.get('label', '—')} "
+                    f"(合分 {_fin_row_ai.get('score', 0):+.2f},月分 {_fin_row_ai.get('mon_sub', 0):+.2f}/"
+                    # v19.174:改吃中性 key fin_sub(AI-A 已與舊 mj_sub 同值並存)
+                    f"季分 {_fin_row_ai.get('fin_sub', 0):+.2f})"
                 )
             except Exception:
                 pass
@@ -1650,7 +1651,7 @@ padding:14px 18px;margin-bottom:12px;">
                     f'建議停損(-8%)={_sl_p} | 盈虧比={_rr_p}x',
                 ]
                 if _entry_half:
-                    _sr_parts2.append(f'朱家泓大量紅K 1/2 低風險買點={_entry_half}')
+                    _sr_parts2.append(f'大量紅K 1/2 低風險買點={_entry_half}')  # v19.174 去識別化
                 if _abs_sl:
                     _sr_parts2.append(f'紅K低點絕對停損={_abs_sl}')
                 _sr_str2 = ' | '.join(_sr_parts2)
@@ -1679,7 +1680,7 @@ padding:14px 18px;margin-bottom:12px;">
                     _cx_r = (locals().get('cx2') or 0) / _cap_v * 100
                     _is_lead = '✅ 符合龍頭高成長特徵' if (_cl_r >= 50 or _cx_r >= CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT) else '未達龍頭門檻'
                     _lead_str2 = (f'合約負債/股本={_cl_r:.0f}%、資本支出/股本={_cx_r:.0f}% → {_is_lead}'
-                                  '（孫慶龍龍多：合約負債≥股本50%=客戶預付旺、資本支出≥股本80%=積極擴產）')
+                                  '（龍多策略：合約負債≥股本50%=客戶預付旺、資本支出≥股本80%=積極擴產）')  # v19.174 去識別化
                 else:
                     _lead_str2 = '（股本資料未取得，無法判定龍頭擴產特徵）'
             except Exception:
@@ -1735,6 +1736,6 @@ padding:14px 18px;margin-bottom:12px;">
 
     st.markdown(f"""<div style="background:#2a0d0d;border:1px solid {TRAFFIC_RED};border-radius:8px;
 padding:10px 14px;font-size:11px;color:{TRAFFIC_RED};margin-top:12px;">
-⚠️ 本手冊整理自各大師公開課程內容，僅供學術研究與教育用途。
+⚠️ 本手冊整理自公開教學資源，僅供學術研究與教育用途。
 投資涉及風險，任何操作均應自行判斷，盈虧自負。本系統非投資顧問，不構成買賣建議。
 </div>""", unsafe_allow_html=True)

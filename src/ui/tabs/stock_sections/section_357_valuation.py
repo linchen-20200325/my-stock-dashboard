@@ -33,7 +33,7 @@ from src.ui.render.tab_sections import border_left_banner  # R-UI-1 v18.412
 from shared.ttls import TTL_1DAY
 from src.data.core import fetch_bps, fetch_industry_category
 from src.data.core.provenance import prov_log
-from src.ui.render import kpi, teacher_conclusion
+from src.ui.render import STRATEGY_VALUATION, kpi, strategy_conclusion  # v19.174 去識別化
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
@@ -108,7 +108,7 @@ def render_357_valuation_section(sid2: str, name2: str, df2, price2,
             '以技術面健康度為主要判斷'),
     }
     _ba, _bb = _TEACHER_LABELS[_code357](price2, _targets)
-    st.markdown(teacher_conclusion('孫慶龍', f'{sid2} 現價{price2:.1f} vs 357區間', _ba, _bb),
+    st.markdown(strategy_conclusion(STRATEGY_VALUATION, f'{sid2} 現價{price2:.1f} vs 357區間', _ba, _bb),
                 unsafe_allow_html=True)
     if _code357 != 'na':
         # 結論卡 sig/顏色

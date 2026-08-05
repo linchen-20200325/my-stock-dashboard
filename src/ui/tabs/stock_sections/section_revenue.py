@@ -14,10 +14,11 @@ import pandas as pd
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN
-from src.ui.render import (
+from src.ui.render import (  # v19.174 去識別化：改吃策略代號常數 + 新函式名
+    STRATEGY_VALUATION,
     plot_quarterly_chart,
     plot_revenue_chart,
-    teacher_conclusion,
+    strategy_conclusion,
 )
 
 
@@ -58,7 +59,7 @@ def render_revenue_trend_section(sid2: str, name2: str, rev2, qtr2,
                 else:
                     _da = f'近3月YoY平均 {_avg_y:+.1f}%，業績衰退'
                     _db = '不管K線多好看，先觀望'
-    st.markdown(teacher_conclusion('孫慶龍', _d_ind, _da, _db), unsafe_allow_html=True)
+    st.markdown(strategy_conclusion(STRATEGY_VALUATION, _d_ind, _da, _db), unsafe_allow_html=True)
     st.markdown(
         f'<div style="background:#0a1628;border-left:3px solid {TRAFFIC_GREEN};padding:8px 12px;'
         'border-radius:0 6px 6px 0;margin-bottom:8px;font-size:12px;color:#c9d1d9;">'

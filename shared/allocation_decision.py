@@ -295,7 +295,9 @@ def allocation_sleeves(decision: AllocationDecision) -> dict[str, int] | None:
 
 
 def vix_veto_cap(vix: float | None) -> Cap | None:
-    """VIX 總經否決權 → Cap(原 section_mid「弘爺」硬編碼文案的 SSOT 化)。
+    """VIX 總經否決權 → Cap(原 section_mid 硬編碼文案的 SSOT 化)。
+
+    v19.174 去識別化:原註解在此帶人名稱謂,已改為來源模組名。
 
     門檻對齊 `signal_thresholds.VIX_MEDIUM_RISK_THRESHOLD(20)` /
     `VIX_HIGH_RISK_THRESHOLD(25)` 與 macro_buckets 紅線 30。

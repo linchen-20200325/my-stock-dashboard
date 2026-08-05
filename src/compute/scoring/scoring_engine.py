@@ -937,14 +937,23 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
                 _prev = float(_cl.iloc[-2]); _now = float(_cl.iloc[-1])
                 if _prev > 0:
                     _qoq = (_now - _prev) / _prev * 100
+                    # ── v19.173 敘述符號約定（與 section_long.py v19.172 對齊）──
+                    # **有方向詞的句子一律配絕對值；raw 值的符號只用來「選分支」。**
+                    # 原本 `合約負債減少 {_qoq:+.1f}%` 在 else 分支（_qoq ≤ -5）會印出
+                    # 「合約負債減少 -8.3%」= 雙重否定，讀起來像「減少幅度是負的」→
+                    # 使用者無從判斷到底是增是減（同「台幣升值 -0.21%」那個 bug class）。
+                    # 反之「持平（{:+.1f}%）」沒有方向詞，正負都可能且**必須**看得到
+                    # 符號才知道是微增還是微減 → 保留帶號原值。
+                    # `_val` 是 raw 讀數（非敘述句），同理保留帶號。
                     if _qoq > LEAD_CL_QOQ_SURGE_PCT:
-                        _sig = '🟢'; _detail = f'合約負債單季爆增 {_qoq:+.1f}%，預收訂單大幅增加'
+                        _sig = '🟢'; _detail = f'合約負債單季爆增 {abs(_qoq):.1f}%，預收訂單大幅增加'
                     elif _qoq > LEAD_CL_QOQ_UP_PCT:
-                        _sig = '🟢'; _detail = f'合約負債穩健增加 {_qoq:+.1f}%，訂單能見度提升'
+                        _sig = '🟢'; _detail = f'合約負債穩健增加 {abs(_qoq):.1f}%，訂單能見度提升'
                     elif _qoq > LEAD_CL_QOQ_DOWN_PCT:
+                        # 無方向詞（「持平」不指方向）→ 帶號原值，區分微增/微減
                         _sig = '🟡'; _detail = f'合約負債持平（{_qoq:+.1f}%），訂單穩定'
                     else:
-                        _sig = '🔴'; _detail = f'合約負債減少 {_qoq:+.1f}%，訂單能見度下降'
+                        _sig = '🔴'; _detail = f'合約負債減少 {abs(_qoq):.1f}%，訂單能見度下降'
                     _val = f'最新: {_now/1e8:.1f}億 QoQ {_qoq:+.1f}%'
                 elif _prev == 0 and _now > 0:
                     _sig = '🟢'; _val = f'最新: {_now/1e8:.1f}億（新增合約負債）'; _detail = '合約負債由零轉正，訂單模式出現'
@@ -1011,10 +1020,14 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
                         _sig = '🟡'; _detail = f'資本支出/營收比率小幅提升{_ratio_chg:.0f}%，維持投入'
                         _val = f'CapEx率: {_ratio_now*100:.1f}% (YoY {_ratio_chg:+.0f}%)'
                     elif _ratio_chg > LEAD_CAPEX_RATIO_CHG_DOWN_PCT:
-                        _sig = '🟡'; _detail = f'資本支出/營收比率小幅收縮{_ratio_chg:.0f}%，尚可'
+                        # v19.173 同 I3 約定:本分支 _ratio_chg ∈ (-20, 0](非正),
+                        # 「收縮{負數}%」= 雙重否定 → 方向詞配絕對值(0 亦無需帶號)。
+                        # `_val` 是 raw 讀數(標了 YoY、無方向詞)→ 仍保留帶號。
+                        _sig = '🟡'; _detail = f'資本支出/營收比率小幅收縮{abs(_ratio_chg):.0f}%，尚可'
                         _val = f'CapEx率: {_ratio_now*100:.1f}% (YoY {_ratio_chg:+.0f}%)'
                     else:
-                        _sig = '🔴'; _detail = f'資本支出/營收比率大幅下滑{_ratio_chg:.0f}%，縮減投資'
+                        # v19.173:本分支 _ratio_chg ≤ -20 必為負 → 方向詞配絕對值
+                        _sig = '🔴'; _detail = f'資本支出/營收比率大幅下滑{abs(_ratio_chg):.0f}%，縮減投資'
                         _val = f'CapEx率: {_ratio_now*100:.1f}% (YoY {_ratio_chg:+.0f}%)'
                 else:
                     _sig = '⚪'; _val = 'N/A'; _detail = '營收資料不足'
@@ -1067,13 +1080,18 @@ def calc_leading_indicators_detail(rev_df=None, qtr_df=None, bs_cf_df=None) -> l
                     if _i5_event_driven and _pct_chg < LEAD_INV_QOQ_DROP_PCT:
                         # 存貨急降但同期有重大資產處分 → 可能是廠房移轉帶走存貨
                         _sig = '🟡'
-                        _detail = f'⚠️ 事件驅動：存貨大降{_pct_chg:.0f}%，但同期偵測重大資產處分，去化原因需確認'
+                        # v19.173 同 I3 約定:「大降/下降」等方向詞配絕對值。
+                        # 本分支 _pct_chg < -10（DROP_PCT）必為負,原寫法會印出
+                        #「存貨大降-18%」= 雙重否定。`_val`（標 QoQ、無方向詞）保留帶號。
+                        _detail = f'⚠️ 事件驅動：存貨大降{abs(_pct_chg):.0f}%，但同期偵測重大資產處分，去化原因需確認'
                     elif _all_down and len(_ratios) >= 3:
                         _sig = '🟢'; _detail = f'存貨/銷售比連續{len(_ratios)}季下降，去化速度加快'
                     elif _pct_chg < LEAD_INV_QOQ_DROP_PCT:
-                        _sig = '🟢'; _detail = f'存貨/銷售比單季大降{_pct_chg:.0f}%，庫存快速去化'
+                        # v19.173:本分支 _pct_chg < -10 必為負 → 方向詞配絕對值
+                        _sig = '🟢'; _detail = f'存貨/銷售比單季大降{abs(_pct_chg):.0f}%，庫存快速去化'
                     elif _pct_chg < 0:
-                        _sig = '🟡'; _detail = f'存貨/銷售比下降{_pct_chg:.0f}%，庫存略有改善'
+                        # v19.173:本分支 _pct_chg ∈ [-10, 0) 必為負 → 方向詞配絕對值
+                        _sig = '🟡'; _detail = f'存貨/銷售比下降{abs(_pct_chg):.0f}%，庫存略有改善'
                     elif _pct_chg < LEAD_INV_QOQ_RISE_PCT:
                         _sig = '🟡'; _detail = f'存貨/銷售比小幅上升{_pct_chg:.0f}%，尚在合理範圍'
                     else:
@@ -1207,12 +1225,12 @@ def calc_short_squeeze_bonus(short_ratio: float = 0.0,
             'inst_consecutive_buy': inst_consecutive_buy}
 
 # ════════════════════════════════════════════════════════════
-# 模組二：大師級量化選股因子（v3.2 新增）
+# 模組二：進階量化選股因子（v3.2 新增）
 # ════════════════════════════════════════════════════════════
 
 def check_contract_liability_surge(cl_current, cl_prev_year, paid_in_capital) -> dict:
     """
-    合約負債大增檢測（孫慶龍隱形冠軍因子）
+    合約負債大增檢測（隱形冠軍因子）
     條件：YoY增長>30% 且 合約負債/資本額>10%
     """
     result = {'is_surge': False, 'yoy_pct': None, 'cl_ratio': None, 'label': ''}

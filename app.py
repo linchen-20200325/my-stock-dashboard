@@ -141,7 +141,9 @@ st.markdown(f"""<style>
 .stTabs [data-baseweb="tab-list"]{{gap:2px;}}
 .stTabs [data-baseweb="tab"]{{background:#161b22;color:#8b949e;border-radius:6px 6px 0 0;padding:8px 16px;font-size:13px;}}
 .stTabs [aria-selected="true"]{{background:linear-gradient(135deg,#1f6feb,#0d4faa);color:#fff;font-weight:700;}}
-.teacher-card{{background:#0d1117;border-left:3px solid #ffd700;border-radius:0 8px 8px 0;padding:10px 14px;margin:6px 0;}}
+/* v19.174 去識別化：新名 .strategy-card；.teacher-card 為過渡期舊名(ui_widgets.strategy_box
+   目前仍輸出舊 class,待該檔 caller 收乾淨後可刪。兩者樣式必須一致,否則畫面會漏樣式) */
+.strategy-card,.teacher-card{{background:#0d1117;border-left:3px solid #ffd700;border-radius:0 8px 8px 0;padding:10px 14px;margin:6px 0;}}
 .health-A{{background:linear-gradient(90deg,#0d2818,#0d1117);border:2px solid {TRAFFIC_GREEN};border-radius:12px;padding:16px;text-align:center;}}
 .health-B{{background:linear-gradient(90deg,#2a1f00,#0d1117);border:2px solid {TRAFFIC_YELLOW};border-radius:12px;padding:16px;text-align:center;}}
 .health-C{{background:linear-gradient(90deg,#2a0d0d,#0d1117);border:2px solid {TRAFFIC_RED};border-radius:12px;padding:16px;text-align:center;}}
@@ -286,7 +288,8 @@ _TERM_HELP_LI = show_term_help('PCR') + show_term_help('ADL') + show_term_help('
 # generate_ai_comment 已抽至 src/services/app_ai_service.py(v18.398 P5-B3-β R7)
 # caller 改走 `from src.services.app_ai_service import generate_ai_comment`
 
-# ── kpi / teacher_conclusion / signal_box 已抽至 ui_widgets.py ──
+# ── kpi / strategy_conclusion / signal_box 已抽至 ui_widgets.py ──
+#    (v19.174 去識別化：strategy_conclusion 舊名 teacher_conclusion)
 
 # render_health_score 已抽至 src/ui/render/app_render.py(v18.404 U5 B3-γ)
 # caller 改走 `from src.ui.render.app_render import render_health_score`
@@ -467,7 +470,7 @@ st.markdown(
 from src.ui.render.app_render import render_macro_compass  # noqa: E402
 render_macro_compass()
 
-# v18.182 ARCHIVED: 🧪 回測找參數 / v18.187 ARCHIVED: 📈 月營收進退 / v18.189 ARCHIVED: 📊 老師 體檢變化
+# v18.182 ARCHIVED: 🧪 回測找參數 / v18.187 ARCHIVED: 📈 月營收進退 / v18.189 ARCHIVED: 📊 財報體檢變化
 # 各暫封存模組保留磁碟，啟用方式見各 ARCHIVED 原始注解。
 # v18.463: UI 重構 — 10 平鋪 Tab → 4 大群組 + Sub-tabs（sub-tab 變數名稱維持不變，測試仍通過）
 tab_market, tab_stocks, tab_etf_main, tab_tools, tab_ai = st.tabs([
@@ -792,12 +795,12 @@ with tab_stocks:
                                    file_name='cross_quarter_trend_rank.csv',
                                    mime='text/csv', key='trend_rank_csv')
 
-# v19.163 老師 體檢轉機併進 🏆 個股組合 Tab(批次)、老師目標價內嵌 🔬 個股 + 🏆 組合;
+# v19.163 財報體檢轉機併進 🏆 個股組合 Tab(批次)、目標價區間內嵌 🔬 個股 + 🏆 組合;
 # 皆不設獨立分頁(user 要求「都合併在個股與組合中,不需要開立新的 tab」)。
 # ══════════════════════════════════════════════════════════════
 # GROUP 3: ETF（單檔診斷 + 多檔比較 + ETF 組合）
 # v18.464: 移除質借模擬 Tab；新增標準差買賣帶 + 分散度分析到單檔 & 組合
-# v18.465: 新增 MK 3-3-3 原則評估（成立>3年 / 3年年化>7% / 同儕前1/3）
+# v18.465: 新增 3-3-3 原則評估（成立>3年 / 3年年化>7% / 同儕前1/3）
 # ══════════════════════════════════════════════════════════════
 with tab_etf_main:
     tab_etf, tab_etf_compare, tab_etf_grp = st.tabs([

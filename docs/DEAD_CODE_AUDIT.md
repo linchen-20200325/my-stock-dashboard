@@ -41,8 +41,8 @@ PR #406 audit 邏輯漏的(init re-export 邊界):
 | `src/compute/macro/macro_helpers.py:612` | `calc_real_rate` | 5 | (c) lib safety net |
 | `src/compute/macro/macro_helpers.py:641` | `classify_rate_cycle` | 6 | (c) |
 | `src/compute/macro/macro_helpers.py:702` | `calc_twd_trend` | 5 | (c) |
-| `src/compute/health/mj_snapshot_io.py:149` | `list_all_stocks_with_snapshots` | 2 | (b)? 若 mj 退役 |
-| `src/compute/health/mj_health_diff.py:269` | `screen_health_changes` | 11 | (c) 高 test ref |
+| `src/compute/health/fin_snapshot_io.py:149`（v19.174 去識別化改名） | `list_all_stocks_with_snapshots` | 2 | (b)? 若財報體檢快照退役 |
+| `src/compute/health/fin_health_diff.py:269`（v19.174 去識別化改名） | `screen_health_changes` | 11 | (c) 高 test ref |
 | `src/compute/scoring/scoring_engine.py:1175` | `check_contract_liability_surge` | 5 | (a/b) |
 | `src/compute/scoring/scoring_engine.py:1194` | `check_bollinger_squeeze` | 5 | (a/b) |
 | `src/compute/scoring/scoring_engine.py:1226` | `check_fake_breakout` | 3 | (a/b) |

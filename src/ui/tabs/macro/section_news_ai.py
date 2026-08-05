@@ -91,7 +91,8 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 _exp_d  = _macro_info.get('tw_export') or {}
                 _pmi_d  = _macro_info.get('ism_pmi') or {}
                 _cpi_d  = _macro_info.get('us_core_cpi') or {}
-                _fed_d  = _macro_info.get('fed_funds') or {}  # v18.169 MK 拐點
+                # v19.173 正名:原註「MK 拐點」→ CPI×Fed 雙頂回落(MK ≠ Mann-Kendall)
+                _fed_d  = _macro_info.get('fed_funds') or {}  # CPI×Fed 雙頂回落配對
                 _mi_d   = st.session_state.get('m1b_m2_info') or {}
                 _bi_d   = st.session_state.get('bias_info') or {}
                 _li_d   = st.session_state.get('li_latest')

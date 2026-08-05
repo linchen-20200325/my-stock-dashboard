@@ -188,7 +188,7 @@ render_tab_edu()
         at = AppTest.from_string(drv, default_timeout=90)
         at.run()
         _assert_no_uncaught(at, "render_tab_edu")
-        # 應該有相當量 markdown(教室 10 章 + 4 大師策略 + 資料地圖)
+        # 應該有相當量 markdown(教室 10 章 + 4 組策略 + 資料地圖)
         assert len(at.markdown) > 30, "系統說明書 render 元素太少"
 
     def test_render_data_coverage(self):

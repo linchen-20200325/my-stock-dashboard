@@ -1,5 +1,210 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🕶️ 2026-08-05 去識別化：移除全站人名與相關尊稱(v19.174,user 要求「名稱都不要加上去,請移除」)
+
+user 核准**全部改(含檔名/模組名)**、**保留「策略1/2/3」顯示形式**。多 AI 分工並行,本則記錄
+**總經／ETF／AI prompt／設定檔／文件**這一組(AI-C)的落地內容;個股組(`stock_sections/*`、
+`caisen_*`)與財報體檢組(`MJ_*`→`FH_*`、`mj_*.py`→`fin_*.py`)另記。
+
+### 做法(共用契約)
+- `src/ui/render/ui_widgets.py` 的 `_STRATEGY_MAP`(10 個真實人名 key)**整份刪除**,改為
+  三個策略代號常數 `STRATEGY_VALUATION='策略1'` / `STRATEGY_FINANCIAL='策略2'` /
+  `STRATEGY_TECHNICAL='策略3'`。**caller 一律直接傳代號,不再傳人名字串。**
+- 原對映(僅供追溯,code 內已無此表):估值/存股 → 策略1;財報體檢 → 策略2;
+  技術/動能/資金面 → 策略3。
+- `_to_strategy()` 對未登記字串**退化**成 `('策略','👤')` 而非 raise —— 這條退化路徑同時是
+  「還有 caller 沒改乾淨」的**可見訊號**(畫面會出現 👤 策略)。§1:降級要看得見,不靜默。
+
+### 本輪實改(AI-C 範圍)
+- **`teacher_conclusion` caller 遷移 25 處**(全部改成代號常數,零人名字面值殘留):
+  - 總經:`section_chips`(3)、`section_long`(5,含 1 處**變數型** `_tchr7` → `_strat7`)、
+    `section_mid`(3)、`section_short`(1)、`tab_macro`(import 改名)
+  - ETF:`etf_tab_single`(15)、`etf_tab_portfolio`(9)、`etf_dashboard` / `etf_render`(改名 + alias)
+- **AI prompt 去識別化**:`etf_tab_ai.py` 問答 prompt 原列 3 位人名 → 改純方法論
+  (「VCP 波幅收縮 / 以息養股 / 7% 殖利率估值」);`app_ai_service` 括號內原為尊稱 →「(籌碼面策略)」。
+  ⚠️ `macro_state_locker._PROMPT_TEMPLATE` **零人名 → 未動**,四條絕對約束(禁腦補數字 /
+  絕對服從曝險上限 / 禁建議個股 / 禁出現持股百分比)**原封不動**。
+  `src/config/persona.py` 亦零人名(「股海老船長」是角色比喻,非真實人物)→ 未動。
+- **「MK」代號清除**:該代號在 repo 內指某 ETF 存股框架作者。`MK 框架`→`存股框架`、
+  `MK 規格`→`存股規格`、`MK 提醒`→`框架提醒`、`MK 3-3-3`→`3-3-3`、`MK 條件 C`→`存股框架條件 C`。
+  ⚠️ **總經側的「MK」不動** —— 那是 Mann-Kendall 的統計縮寫(v19.173 正名脈絡),語意無關。
+- **CSS class**:`app.py` 新增 `.strategy-card`,與舊 `.teacher-card` **併列同一條規則**
+  (`ui_widgets.strategy_box` 目前仍輸出舊 class,兩者樣式必須一致,否則畫面漏樣式)。
+- **文件**:SPEC §1 對應表整節改寫、§13 `MJ_*`→`FH_*`;ARCHITECTURE 函式表/測試表/目錄樹;
+  CLAUDE.md §3.3 + L1/L5 表;`docs/ARCHIVED_FEATURES.md`、`docs/DEAD_CODE_AUDIT.md`、
+  `docs/TAB_STOCK_AUDIT.md`、`mcp_server/README.md`;STATE 歷史條目**只改稱謂、不改事實**
+  (檔名/函式名等「當時真的長那樣」的識別碼保留)。
+
+### ⚠️ 過渡期 alias(caller 收乾淨後才可刪)
+| 位置 | 舊名 → 新名 |
+|---|---|
+| `src/ui/render/ui_widgets.py` 檔尾 | `teacher_box = strategy_box` / `teacher_conclusion = strategy_conclusion` |
+| `src/ui/render/etf_render.py` | `_teacher_conclusion = _strategy_conclusion` |
+| `shared/financial_health_thresholds.py` 檔尾 | `MJ_* = FH_*`(19 個同值 alias) |
+| `app.py` CSS | `.teacher-card`(與 `.strategy-card` 併列) |
+
+### ⚠️ 待手動刪除的舊檔(AI-A 已縮為 deprecation 轉發,仍可 import)
+- `src/compute/health/mj_health_diff.py` → `fin_health_diff.py`
+- `src/compute/health/mj_snapshot_io.py` → `fin_snapshot_io.py`
+- `src/compute/health/mj_trend_score.py` → `fin_trend_score.py`
+
+### ~~⚠️ 尚未遷移完的 caller~~ → **已由個股組(AI-B)全數收尾,v19.174 AI-D 重掃確認 0 殘留**
+原清單(留供追溯):`tab_stock.py:156`(import)、`section_portfolio_summary.py:401,454`、
+`stock_sections/{section_health_score, section_357_valuation, section_financial_leading,
+section_kline_chart, section_op_recommendation, section_revenue, section_vcp_bollinger}.py`
+—— 皆已改傳 `STRATEGY_*` 代號常數,畫面不會退化成「👤 策略」。
+
+其他殘留文字(`src/services/market_strategy.py`、`market_assessment_apply.py`、
+`STRATEGY_MANUAL.md`、`DATASTATION.md`)亦**全部已清**(AI-D 全 repo regex 實掃 0 hit)。
+
+### ⚠️ 已知會紅的測試(測試檔不在 AI-C 授權範圍)
+- ~~`tests/test_ui_widgets.py:6` `from ... import _STRATEGY_MAP` → ImportError~~
+  **已由個股組修好**(改吃 `STRATEGY_VALUATION/FINANCIAL/TECHNICAL` + `_STRATEGY_ICON`,
+  函式名改 `strategy_box`/`strategy_conclusion`,並新增 `TestNoPersonNameInSource` 守衛)。
+- 守門測試 `tests/test_no_hardcoded_position_pct.py` 已對本輪所有改動檔實跑 regex 掃描:**0 新增違規**。
+  過程中攔下一顆自己種的雷 —— ETF AI prompt 若寫成「…以息養股**現金**流、7% 殖利率…」會命中
+  「現金 + 12 字內 %」而讓 CI 變紅(`、` 不在該 regex 的斷句排除集內),已改掉並加註解說明。
+
+---
+
+## 🧹 v19.174 收尾(AI-D):散落殘留清零
+
+前三組(財報體檢 / 個股策略 / 總經ETF文件)交付後,全 repo 重掃兩組 regex
+(人名+尊稱 / 舊識別碼),把**沒人認領的散落殘留**清完。全部是**文字與路徑同步,零邏輯改動**。
+
+### 本輪清掉的殘留
+
+> ⚠️ 下表「原內容」欄**刻意保留被移除的字樣**(稽核用 before/after 對照) ——
+> 全 repo 掃人名時,STATE 變更紀錄表屬預期內,請跳過。**原始碼側已 0 殘留。**
+
+| 檔 | 原內容 | 改法 |
+|---|---|---|
+| `src/ui/render/ui_widgets.py:104` | 註解引用 user 原話含尊稱 | 改「去識別化決議」中性敘述 |
+| `src/services/app_ai_service.py:73` | v19.174 註解自身仍寫尊稱 | 改「原括號內為人名稱謂」 |
+| `src/compute/etf/etf_calc.py:271,303` | 兩處 docstring 帶人名(殖利率公式 / VCP) | 改方法論描述 |
+| `src/compute/etf/etf_helpers.py:4,21,91,317` | 人名 + `MK 框架` ×3 | 「存股框架」+ 「殖利率估值法」 |
+| `src/compute/etf/etf_smart_analysis.py:392,403` | `MK 3-3-3` + 人名 | 「3-3-3 原則」+「存股框架」 |
+| `src/data/etf/etf_fetch.py:116,155` | `MK 規格` ×2 | 「存股規格」 |
+| `shared/thresholds.py:3,70` | 兩位提出者姓名 | 「7%/5%/3% 殖利率估值法則」 |
+| `shared/signal_thresholds.py:479` | 「大師級量化因子」 | 「進階量化因子」 |
+| `shared/allocation_decision.py:298` | `vix_veto_cap` docstring 帶人名稱謂 | 「原 section_mid 硬編碼文案的 SSOT 化」 |
+| `mcp_server/server.py:209` | MCP tool docstring 帶稱謂(**會被下游 LLM 讀到**) | 「個股『財報體檢』總評」 |
+| `scripts/export_stock_db.py:27` | 「財報評級」前綴帶稱謂 | 去稱謂 |
+| `tests/test_etf_single_verdict_card.py:3` | 「老師卡」 | 「策略卡」 |
+| `tests/test_etf_smart_ticker_wiring.py:3` | `MK 3-3-3` | `3-3-3` |
+| **區域變數 / session_state key**(AI-C 表未列) | `_mj_*` 30 處 | → `_fin_*`:`tab_stock.py`(9)、`tab_stock_grp.py`(5,含 widget key `_mj_trend_w_mon` + cache key `_mj_trend_rows_*`)、`section_strategy_conclusion.py`(16,另 `_date_mj`→`_date_fin`、`_emj`→`_e_fin`)、`tab_stock_grp._mjv`→`_finv` |
+| `src/ui/tabs/stock_grp_sections/section_portfolio_summary.py:267,323,344` | 註解直接複述舊羅馬拼音欄名 | 改「原帶人名羅馬拼音」 |
+| `src/data/stock/monthly_revenue_fetcher.py:4`<br>`src/compute/health/monthly_revenue_calc.py:4` | **指向已改名檔的死路徑** `mj_trend_score.py:250` | → `fin_trend_score.py:250` |
+
+⚠️ **`chip_radar.py` 的 `_mj` / `_mj_v` 不改** —— 該處 `mj` = **major(大戶)**,與 `_rt_v`(retail 散戶)成對,
+與人名縮寫撞名而已,語意無關(同「總經側 MK = Mann-Kendall」的判定原則)。
+
+### 文件同步(路徑對不上 = 例外登記失效)
+- **`CLAUDE.md` EX-PASSTHRU-1 例外表**:`src/ui/tabs/caisen_targets_ui.py` → **`pattern_targets_ui.py`** ✅
+  (檔案已改名,例外表沒同步等於這條 §8.2 豁免指向不存在的檔)。
+- `CLAUDE.md` §8.2 L5 UI Tabs 表:同步 `pattern_targets_ui.py` / `render_pattern_targets_for_ticker`。
+- `ARCHITECTURE.md`:目錄樹補 `pattern_targets_ui.py`;`ui_widgets` 函式表、etf_render helper 表、
+  `test_ui_widgets` 測試表(`TestToStrategy`/`TestStrategyBox`/`TestStrategyConclusion` + 新守衛列)全部對齊實況。
+- `SPEC.md`:§1 對應表、§5 分層判定、§6.5 測試覆蓋(原寫「會 ImportError,待更新」已過時 → 改記已收斂)、§13 前綴說明。
+- `docs/DEAD_CODE_AUDIT.md`、`docs/ARCHIVED_FEATURES.md`:去掉舊名複述,`diff_mj_health` → `diff_fin_health`。
+
+### ⚠️ 待手動刪除的舊檔(共 7 個,全部已縮為 deprecation 轉發 / 清空,**刪除即可,無需再改**)
+```
+src/compute/health/mj_health_diff.py      → fin_health_diff.py
+src/compute/health/mj_snapshot_io.py      → fin_snapshot_io.py
+src/compute/health/mj_trend_score.py      → fin_trend_score.py
+src/compute/strategy/caisen_targets.py    → pattern_targets.py
+src/ui/tabs/caisen_targets_ui.py          → pattern_targets_ui.py
+tests/test_caisen_targets.py              → test_pattern_targets.py   (已清空為 no-op)
+tests/test_caisen_ui_mounted.py           → test_pattern_targets_ui_mounted.py (已清空為 no-op)
+```
+> 前 5 個仍是 `import *` 轉發,**刪掉才是真的去識別化**;後 2 個已是空殼(測試檔不可 `import *`,
+> 否則 pytest 重複收集)。三個 `__init__.py` 都**沒有**把舊檔登記進 `_SUBMODULES`,刪除不會斷。
+
+### ⚠️ 過渡期 alias 全清單(caller 收乾淨後才可刪)
+| 位置 | alias | 移除條件 |
+|---|---|---|
+| `src/ui/render/ui_widgets.py` 檔尾 | `teacher_box` / `teacher_conclusion` | 全 repo 無 caller 用舊名(現已 0,可隨時刪;`tests/test_ui_widgets.py` 兩條 alias 測試一併刪) |
+| `src/ui/render/etf_render.py:172` | `_teacher_conclusion` | 同上 |
+| `app.py` CSS | `.teacher-card`(與 `.strategy-card` 併列) | `ui_widgets.strategy_box` 改輸出新 class 後 |
+| `shared/financial_health_thresholds.py` 檔尾 | `MJ_*` 19 個同值 alias | 由 `tests/test_financial_health_ssot.py::test_all_19_plus_aliases_match` 釘住;caller 全走 `FH_*` 後刪 |
+| `src/compute/health/fin_health_diff.py:270` | `diff_mj_health` | caller 全走 `diff_fin_health` 後 |
+| `src/compute/health/fin_trend_score.py:173,228-229,258,353,356` | `compute_mj_trend_subscore` + dict key `mj_subscore`/`mj_detail`/`mj_sub` | **dict key 最危險** —— 下游若還在讀舊 key,刪 alias 會靜默拿到預設值;刪前先 grep 全 repo |
+| `src/compute/strategy/pattern_targets.py:440-442` | `derive_caisen_levels` / `compute_caisen_targets` / `summarize_caisen` | caller 全走新名後(`tests/test_pattern_targets.py:395-397` 三條 alias 斷言一併刪) |
+| `src/ui/tabs/pattern_targets_ui.py:252` | `render_caisen_for_ticker` | 同上 |
+| `src/compute/health/fin_snapshot_io.py:31` | `_LEGACY_DIR = data_cache/mj_snapshots` | **不是 alias 是資料遷移路徑** —— 使用者本機舊快照都在該目錄,刪掉 = 歷史快照讀不到,**需先寫遷移腳本** |
+
+### ⚠️ 刻意保留(不是殘留,掃描時請跳過)
+- **去識別化守衛黑名單** ×3:`tests/test_ui_widgets.py:_BANNED`、
+  `tests/test_pattern_targets_ui_mounted.py:_BANNED`、
+  `tests/test_financial_health_ssot.py:test_no_person_name_in_ssot_module`。
+  這三處**必須**含人名字串才驗得出「人名有沒有被加回去」。已逐處補註解標明。
+- **`docs/ARCHIVED_FEATURES.md`:33,38** 的 `git show <...>:src/ui/tabs/tab_mj_health_diff.py` ——
+  那是**真實 git 路徑**,改寫會讓還原指令失效(該檔第 35 行早已註明「歷史事實不改寫」)。
+- **STATE.md 歷史條目**(v19.164 / v19.162 等)的舊識別碼:當時真的長那樣,改寫會讓
+  「commit ↔ 看板」對不上。沿用 AI-C 既定原則:**只改稱謂、不改識別碼**。
+- **總經側「MK」**= Mann-Kendall 統計縮寫(v19.173 正名脈絡),與人名無關。
+
+### 🔎 本輪未做(留給總管決定)
+- `tests/test_mj_health_diff.py` / `test_mj_snapshot_io.py` / `test_mj_trend_score.py` /
+  `test_mj_health_diff_mounted.py` **四個測試檔名仍帶人名縮寫**(內容已指向 `fin_*` 新模組)。
+  AI-A 選擇只改 docstring 不改檔名,與 `test_caisen_*` → `test_pattern_*` 的處理不一致。
+  改名需「新增 + 刪除」兩步(否則 pytest 重複收集),不在本輪授權的 7 檔待刪清單內。
+
+## 🩺 2026-08-05 方法論技術債清償 + 說謊文件修正(v19.173,user「點頭」核准 3 項 BACKLOG + 「先全部改好」)
+
+v19.172 的量化複核組列了 4 條方法論技術債,user 核准處理其中 3 條;隨後又核准把「文件說謊」一併清乾淨。**本則同樣把「已接線生效」與「工具已備但零 caller」分開寫。**
+
+- **① MK 拐點正名 + 補上真的 Mann-Kendall**
+  - **原始問題**:全 repo `grep -i mann` = **0 hit**。`detect_mk_golden_inflection` 實作只是「CPI 差分 < −0.05 **且** Fed 差分 < −0.05」的兩點比大小 —— 沒有 S 統計量、Var(S)、Z、p-value、tie 修正。**命名讓讀者以為有無母數趨勢檢定背書。**
+  - **修法**:正名 `detect_cpi_fed_double_top`(**保留舊名 alias**,唯一 production caller `section_long_term.py:43` 走 PEP 562 lazy 解析得到);UI 標籤 `MK 黃金拐點 ⭐` → `CPI×Fed 雙頂回落 ⭐`;`_PIVOT_GROUP_META.sub`、`section_mid` caption 等 live 字串全部正名。
+  - **新建 `shared/mk_test.py`(L0)**:真 Mann-Kendall —— `S = Σ_{i<j} sgn(x_j−x_i)`、含 tie 修正的 `Var(S) = [n(n−1)(2n+5) − Σ_p t_p(t_p−1)(2t_p+5)]/18`、連續性校正 `Z`、`p = 2(1−Φ(|Z|))`、Sen's slope `β̂ = median{(x_j−x_i)/(j−i)}`。全向量化(`np.triu_indices`,**零 for 迴圈**,有測試釘住);`Φ` 用 `math.erf` 自組 → **不需 scipy**。
+  - **⚠️ 零 production caller(工具已備、尚未接線)**:`macro_snapshot.fetch_cpi_block()` / `fetch_fed_funds_block()` **只回本月 + 上月兩個純量**,全 repo 無任何地方存 CPI/Fed 歷史序列。n=2 時 `mann_kendall()` 本來就回 `None` —— 寧可不顯示,也不拿兩個點硬算一個沒檢定力的 Z。要接線須先加「回整條月頻序列」的 fetcher,屬新資料流,§7 要求先對齊 endpoint / 單位 / 發布延遲 / PIT 鍵(**FRED CPI 必須用 `release_date` 而非 `observation_date`**)。
+  - **誠實揭露**(寫進 docstring):未做 Hamed–Rao 序列相關修正 → 總經月頻自相關會讓 Var(S) 低估、p 偏小;無 tie 時 n=4 的 Z 上限只有 1.698(p≈0.089)⇒ **n<5 在 α=0.05 下不可能顯著**,n≥8~10 才有實用檢定力。
+- **② 拐點「4 個空頭訊號」→ 六群分群 + 分母揭露**
+  - **原始問題**:(a) **共線性** —— 「年線乖離過大 / 外資期貨大空單 / 散戶極度看多」本質是同一個「多頭末端擁擠度」因子,「景氣對策 / 領先指標」同屬**國發會同一資料集**。等相關近似 `n_eff = n/(1+(n−1)ρ̄)`,ρ̄=0.7 時 4 個訊號僅值 **1.29 個獨立訊號** → 確信度誇大約 3 倍。(b) **對資訊集非單調** —— `_bear_pts >= 2` 是絕對計數無分母,fetch 失敗會讓同一個市場從「🔴 4 個空頭」變「⚪ 訊號分歧」。這正是 `allocation_service._derive_intrinsic_caps` 已修好的那類 bug,**沒推廣到拐點面板**。
+  - **修法**:`macro_helpers` 新增 `PIVOT_FAMILIES`(趨勢 / 位階 / 資金 / 籌碼 / 景氣 / 通膨利率六群)+ `aggregate_pivot_families()`,**群內取最壞不累加**;顯示改「6 群中 3 群偏空(**可評估 K/6**)」;拿不到資料的群**從分母剔除**,既不算偏多也不算偏空。門檻常數值不動(仍是 2),只把單位從「個訊號」換成「個群」—— 兩訊號分屬不同群時新舊**完全等價**,擠在同一群時新規則才擋下(那正是共線性誤判)。
+  - **線上實測那組(4 紅 0 綠)**:燈號**仍是 🔴**,只有文案從「4 個空頭訊號」變「6 群中 3 群偏空(可評估 6/6 群)」。窮舉驗證:只有「綠訊號散佈的群數 ≥ 紅訊號群數」才會變色。
+  - **`ρ̄=0.7` 是量級假設非實測** → 只寫進註解,**不印到畫面**(§3.3 反捏造)。
+- **③ 「綜合健康度」名不副實 → 揭露而非改名**
+  - **原始問題**:`health = 0.6·旌旗指數 + 0.4·大盤評分`(權重和 = 1 ✅)。16 個 `DangerSpec` 中**只有 `jingqi`(旌旗＝站上 20MA 家數比,是市場「廣度」不是槓桿)進得去**;融資 / 外資期貨 / BIAS240 / NDC / M1B-M2 / VIX / PMI / CPI / 出口 / ADL / 新聞**全部不含**。所以「五桶 4 紅但健康度還有 44 分」**不是算錯**,是這個分數本來就只是「趨勢廣度分數」。
+  - **為何不全站改名**:「綜合健康度」字樣散佈多處 + 大量 source-scan 測試依賴,改名的風險與收益不對稱。改為**在顯示處誠實揭露**:`macro_buckets` health spec 的 `note`、`section_long` 長期桶 caption、`tab_macro` 名詞表、`macro_classroom` 原理教室。
+  - **順帶修掉兩處主動說謊的教學文字**(這比沒解釋更糟 —— 用文件背書錯誤認知):`tab_macro.py` 名詞表宣稱「把均線、**籌碼**、**景氣**等訊號綜合」(三者一個都沒進公式);`macro_classroom.py` 寫「景氣(40%) + 市場結構(40%) + 外資資金(20%)」是 **v19.102 校準前的舊權重**(現行 60/40/0)。後者改為**從 SSOT derive**(`_JQ_PCT = round(HEALTH_WEIGHT_JQ*100)`)—— 這才是根治漂移,而非再寫死一次。並新增「為什麼外資那項被校準成 0 分」教學段(AUC 0.753 / n=4748:**聽起來重要 ≠ 真能預測**)。
+  - 同時揪出 `macro_classroom` 另外兩處過期敘述:「市場分數由 6 個 daily checklist 指標投票」(來源錯 + 滿分浮動 4~6 非固定 6)、「regime 結合大盤走勢 + ADL + 漲跌家數 → bull/neutral/caution/bear」(regime 由 **MA120 連三日 + 斜率單獨決定**,ADL 進的是 `score` 不進 `regime`;且只回三態、**沒有 `caution`**)。
+  - **校準狀態誠實化**:`signal_thresholds` 加註「**權重**已校準(v19.102, AUC 0.753)、但 `HEALTH_DEFENSE_THRESHOLD=35` / `BULL_MIN_SCORE=4` 這兩個**決策門檻**仍手訂未校準(`macro_thresholds.json` 的 `last_calibrated: null`)—— 權重用 AUC 最佳化、切點卻隨手挑,是內部不一致,待 ROC/Youden J 選點」。`HEALTH_FNET_BONUS = 0` 是**校準後的明示歸零**(有 AUC 佐證),不是漏掉的 bug,但確實是 dead term。
+- **④ 同 bug class 收尾**(終驗稽核列的建議項,一併清乾淨):
+  - **韭菜指數 fallback 的 substring 比對**(`leading_indicators`):`any(k in str(...) for k in ["外資","投信","自營"])` 與 v19.172 修掉的 `str.contains("外資")` 是**同一類**問題 —— 上游同天回「外資」+「外資及陸資」會雙重計入,而韭菜指數分子是差、分母是和,**放大倍率不同 → 比值失真且無法事後校正**(測試實測最壞情境正負號會翻:正解 +29.7 → 舊行為 −47.3)。改用 `_INST_ALIASES` + `_inst_mask()`,**別名清單共用同一份 SSOT**(`_INST_ALIASES["外資"] is _FGN_ALIASES`,測試用 `assertIs` 釘住防抄第二份)。別名依**同檔既有證據**(`:691` 的 `("自營商","投信","外資","外資及陸資")`、`:629`/`:1220` 明確排除「外資自營商」)決定,無證據的變體不腦補。**主路徑(TAIFEX 精確值)數值不變,只影響 fallback。**
+  - **雙重否定全檔清掃**(`scoring_engine`):原點名 1 處(「合約負債減少 −8.3%」),但用**不帶 `+` 的 `:.0f` 格式**再掃一次**又找到 5 處**(「小幅收縮 −8%」「大幅下滑 −25%」「存貨大降 −18%」等)—— 指定的 `:\+` regex 完全掃不到它們。共修 8 處,並逐分支驗證值域,`:954`「持平({:+.1f}%)」等**無方向詞的分支一律保留帶號**(符號本身是資訊)。
+  - **CSV schema 靜默變寬**(`section_chips`):v19.172 新增的 3 個 marker 欄會跑進使用者下載的檔案。加白名單排除 `_` 開頭欄;`OI_TX當量` **保留匯出**(它是唯一與「外資大小」同當量的分母,拿掉反而讓使用者算不出正確比值);`_date` 改名 `日期YYYYMMDD` 移到第一欄(畫面「日期」欄無年份,直接丟掉會讓跨年 CSV 無法判讀)。順手把該處 `except: pass` 改成 log(§1;靜默吞掉會讓下載鈕整個消失)。
+  - `未平倉口數` 的「值與舊版完全一致」註解**過頭**:唯一差異在 `_oi_mtx` falsy 且 `_oi_tx == 0` 時,舊 `or` 回 `0`、新回 `None`。OI 為 0 物理上等同缺值 → 新行為更正確,但敘述已改精確。
+
+**⚠️ 仍未動(BACKLOG,§-1 待有需求)**:`health_reconcile` 的 §4.3「雙演算法對帳」是**假保證** —— Method B `(旌旗+評分)/2` 與 Method A 輸入 100% 相同、只差權重 ⇒ `|A−B| = 0.1·|旌旗−評分|`,實際狀態下恆 ≤4 < tolerance 5 ⇒ **恆判 aligned**,不論輸入是否為垃圾。這比沒有對帳更危險(§1 精神)。
+
+## 🔬 2026-08-05 線上實機 + 量化複核修補(v19.172,**四項全部是「靜態稽核看不到、要連上線 or 手算才會現形」的問題**)
+
+v19.171 上線後,總管連上線逐頁擷取 DOM,並派一組 AI 專做量化方法論複核(拿線上真實數值回頭驗算 code)。四項發現如下。**本則沿用 v19.170 的分寫慣例:「已接線生效」與「工具已備但零 caller」分開,不得混寫。**
+
+- **① P0-a 外資期貨欄位契約別/當量混用(嚴重度最高)**
+  - **為何最嚴重**:線上顯示的「最終建議持股 20%」,其**唯一決定者**就是這一欄 —— VIX 16.5 < 20 未觸發否決權,20% 完全來自 `allocation_service._read_foreign_futures_lots()` 讀 `li_latest['外資大小']` → `_fut <= -15000` → `Cap('三環第一環', 20%)`。同一欄還餵另外 3 個決策點(拐點 <-30000、短線桶紅燈、`macro_helpers` defense 旗標)。依 §1「錯誤的數字比沒有數字更危險」,優先度高於其他所有項目總和。
+  - **根因**:`外資大小`(`:249` 大台 + 小台×0.25 = **TX 當量**)與 `未平倉口數`(`:1390` `taifex_mtx_oi.get(d) or _lt.get("未平倉")` = **MTX 原始口 或 TX 口,逐列可能不同源**)被放在同一張表對讀。線上 |−87,626| vs 39,503,若後者是 MTX 原始口其 TX 當量僅 9,876 → **分子分母差 8.9 倍,是量綱錯誤不是誤差**。
+  - **附帶根因**:`str.contains("外資")` 若同天回「外資」+「外資及陸資」會**重複計數**。同檔 `:1129` 在選擇權段已明確排除「外資自營商」,期貨段卻沒排 —— 不對稱,是真 bug 非設計。
+  - **修法**:`_FGN_ALIASES` 白名單 + `_fgn_mask()`(多重別名時 log + **只取第一個,絕不相加**)、`_MTX_TO_TX_FACTOR=0.25` SSOT(取代 2 處 inline)、新增 `_oi_src`/`OI_TX當量`/`_oi_inconsistent` 三個 marker 欄、表頭標契約別。
+  - **⚠️ 刻意不變的部分(避免誤讀)**:`未平倉口數` **欄名與顯示值一律不動**(下游 `data_registry_scanner` / `render_leading_table` COLS 白名單 / 測試皆依賴);門檻 −15000/−20000/−30000 **一個都沒改**(屬另案,需回測)。因此**線上那個 −87,626 與 20% 上限都不會變** —— 本輪改的是「下次執行會明確告訴我們 87,626 到底是不是真的」+「畫面不再讓人以為 87,626 和 39,503 是同一種口」。
+- **② P0-b 桶紅燈把「過熱」寫成「惡化」**:線上同頁並存「📈 中期: 🔴 **循環惡化**」與四象限「BIAS240 +32.7% × 出口 +54.6% → 🚀 有基之彈…**順勢作多**」。查證後**四象限本身內部自洽**(紅燈 + 順勢但嚴停損 = 合理的「過熱但趨勢未破」處置),矛盾 **100% 來自標籤**:中期桶的紅可由方向相反的 spec 觸發(`low_bad` 的 PMI/出口 = 真惡化 ／ `high_bad` 的 BIAS240/CPI = 過熱),但 `BUCKET_LEVEL_LABEL` 是單一寫死字串、`compute_five_bucket_summary` 又取**註冊順序第一個紅**、不看方向。修法:新增 `red_flavor()` / `bucket_level_label()` 依 `DangerSpec.direction` 分流(high_bad→「循環過熱/結構過熱」),`next()` → `max(key=danger_exceedance)` 取**最嚴重**而非第一個。`danger_exceedance` 刻意**不用倍數 v/red**(本專案門檻含 0 與負值:`m1b_m2_gap red=0.0`、`tw_export red=-5.0`、`fut_net red=-20000`,倍數會除零或符號翻轉),改用「黃→紅帶寬」正規化。**門檻/顏色/emoji/details 全部未動,只改顯示文字。**
+- **③ 匯率符號雙重否定(實機才看得到)**:同一畫面、同一個匯率,卡片顯示「台幣升值 0.21%」、四象限敘事卻是「台幣**升值 -0.21%**」。`_fp` 是 USD/TWD 日變動(>0 貶值),舊寫法把 raw `_fp` 直接內插到方向詞後面 → `_fp<0` 的兩個分支變成雙重否定。修法:`section_long.py` 四象限 4 個分支一律「**方向詞 + `abs(_fp)`**」,`_fp` 的符號只用於選分支。約定已寫進註解。(死區分支本來就是對的,這次是對齊它。)
+- **④ P1 `vol_normalized_bias` 量綱錯誤**:原式 `bias_pct / ann_vol_pct` 把「對 240 日均線的偏離」除以「**年化**波動」,兩者尺度不同。正確為 `SD(BIAS_N) = σ_a·√((N−1)(2N−1)/(6NT))`,N=240/T=252 時 = **0.5617σ_a** → 原式**系統性低估 1.39~1.78 倍**。以線上 BIAS240 = +32.7% 為例:σ_a=25% 時實際 **2.33σ**(真的極端),原式只給 1.31σ。**若照舊式接線會讓紅燈變綠、反而製造誤判。** 修法:`_bias_sd_factor()` / `_bias_drift_factor()` 由 N、T 推導(**不硬寫 0.5616**),新增 `ma_len`/`trading_days`/`drift_ann_pct` 參數讓 BIAS20/60 通用;v19.170 那句「+29.6% 在高波動的結構多頭裡並不極端」由錯誤公式導出,**正式撤回**。
+- **⑤ 風險情緒分數的放大倍率未揭露(誠實度)**:v19.171 docstring 宣稱「水位相關恆逼近 1 → 實測 var_p≈1、σ_p≈1、放大有限」。總管由線上實測反推:貢獻 +2.6/+2.4/−0.6/+0.5/−1.4/+0.5(n=6,Σ=4.0)→ 等權平均 0.6667 → σ_p=1 時 score 應為 **22**,線上實際顯示 **47** ⇒ σ_p=0.473、n_eff=4.46、**ρ̄_level ≈ 0.069,不是 ≈1**。成因:ρ 是**方向調整後**的 ρ(d_i z_i, d_j z_j)=d_i·d_j·ρ(z_i,z_j),7 個成分有 3 個 d=−1(VIX/UUP/GLD),正負配對在雙重和裡互相抵銷 —— v19.171 只看 ρ(z_i,z_j)→1、**漏了符號**。結果:分數被放大 **2.11 倍且無人知曉**,而距離誤報「🟢 強烈 Risk-on」(±50)只差 3 分,那 3 分可能純粹來自 σ_p 每日抖動。修法(**計算邏輯 0 改動**):撤回錯誤 docstring、return 新增 `sigma_p`/`amplification`/`missing`、UI 在 `amplification ≥ 1.3` 時顯示「本日放大倍率 X.XX×(n_eff Y.Y/7)— 分數尺度每日重估,不可跨日直接比較」、`missing` 非空時顯示未納入成分(線上 7 個成分只回 6 個,**USDJPY 缺席但原本沒人知道**)。`_risk_label` 的 ±15/±50 抽成具名常數(**值不變**)並加註「這組邊界是在 σ_p≡1 尺度下訂的,尺度已變,建議改為 s/σ_p 的滾動 3 年分位,待回測後調整」。
+
+**⚠️ 工具已備、尚未接線(本輪未修,請勿誤讀為已修)**:
+- `shared/relative_thresholds.py` —— 本輪**只修了 `vol_normalized_bias` 的公式錯誤**,全模組**仍是零 production caller 的死碼**。現行 **BIAS240 ±20% / 融資 3400 億 / 外資期貨 −20000 口 三個絕對門檻原地未動**。複核 AI 用資訊論量化過:燈號恆紅時 `H(L)=0` ⇒ `I(L;Y)=0 bits`,後驗=先驗,**燈號不改變任何決策**;融資要轉綠需指數 −60~70%、外資期貨即使重複計數假說成立(真值 ≈ −44,000)仍 2.2× 超標。三者中**只有 BIAS240 仍有資訊量**(2022–23 曾綠)。接線需先跑燈號分布回測(驗收 `P(red) ∈ [5%,20%]` 且年轉換 ≥4 次)+ AUC/DeLong 檢定 + PIT 合規斷言,屬另案。
+- 傳遞性死碼 `shared/stats_helpers.robust_z` / `rolling_pct_rank` / `winsorize` —— 唯一 caller 是上述死碼模組。
+
+**⚠️ 複核 AI 指出的方法論問題** —— ⚠️ **前三條已於 v19.173 修掉**(見本檔最上方 v19.173 條目),此處保留原始診斷供追溯,**不要再當成待辦**:
+- ~~**「MK 黃金拐點」不是 Mann-Kendall**~~ → **v19.173 已修**(正名 `detect_cpi_fed_double_top` + 保留 alias;真 Mann-Kendall 另建 `shared/mk_test.py`,**但零 production caller**)。原始診斷:`macro_helpers.detect_mk_golden_inflection` 實作是**兩點 MoM 差分**,全 repo `grep -i mann` = 0 hit,沒有 S 統計量 / Var(S) / Z / p-value / tie 修正。命名會讓人誤以為有無母數趨勢檢定背書。
+- ~~**「4 個空頭訊號」誇大確信度約 2.5~3 倍**~~ → **v19.173 已修**(`aggregate_pivot_families` 六群分群 + 分母揭露)。原始診斷::訊號高度共線(「年線乖離過大 / 外資期貨空單 / 散戶極度看多」本質是同一個「多頭末端擁擠度」;「景氣對策 / 領先指標」同屬國發會同一資料集)。等相關近似 `n_eff = n/(1+(n−1)ρ̄)`,ρ̄=0.7 時 4 個訊號僅值 **1.29 個獨立訊號**。且 `_bear_pts >= 2` 是**絕對計數無分母** → fetch 失敗會讓結論反轉(`allocation_service` 已修好的那類「資訊非單調」bug,未推廣到拐點面板)。
+- ~~**「綜合健康度」名不副實**~~ → **v19.173 已修**(不改名,改在顯示處揭露因子組成:`macro_buckets` health note + `section_long` caption + `tab_macro` 名詞表 + `macro_classroom` 權重改 derive 自 SSOT)。原始診斷:`health = 0.6·旌旗 + 0.4·大盤評分`(權重和=1 ✅,v19.102 有 AUC 0.753 校準),但**建構上不含**融資 / 外資期貨 / BIAS240 / NDC / M1B-M2 / VIX / PMI / CPI / 出口 / ADL / 新聞 —— 五桶 13 個 DangerSpec 只有「旌旗」進得去。所以「5 桶 4 紅還有 44 分」不是算錯,是這個分數本來就只是「趨勢廣度分數」。**零風險改法是正名**,擴因子需重跑校準。另:權重有校準、但決策門檻(`HEALTH_DEFENSE_THRESHOLD=35` / `BULL_MIN_SCORE=4`)`last_calibrated: null` 仍未校準,是內部不一致狀態。
+- **`health_reconcile` 的 §4.3「雙演算法對帳」是假保證**:Method B `(旌旗+評分)/2` 與 Method A 輸入 100% 相同、只差權重 → `|A−B| = 0.1·|旌旗−評分|`,實際狀態下恆 ≤4 < tolerance 5 ⇒ **恆判 aligned**,不論輸入是否為垃圾。
+
 ## 🔧 2026-08-04 外部稽核 P0 修補:持股建議 SSOT 收斂 + token 洩漏 + 防白屏(v19.170,**誠實界定「已接線」vs「工具已備、尚未接線」**)
 
 外部稽核指出同一次載入下畫面並存 **6 套互相矛盾的持股建議**、FinMind token 進 query string、`app.py` module-level 無保護等問題。本輪逐項落地。**本則刻意把「已接線生效」與「工具已備但零 caller」分開寫 —— 避免改動報告被誤讀成 P1-1/P1-2 已修**:
@@ -60,10 +265,10 @@ user 實機看到上櫃股只顯代碼、想再加籌碼 + AI 分類。§7/§8 �
 - **分層(§8.2,全加值)**:L2 純函式 `signal_message.format_chip_line` + 新檔 `ai_judgment.py`(無 I/O、無 streamlit);籌碼雙抓 + 名稱 fallback + AI 呼叫皆在 orchestrator `push_daily_signals.py`(可跨層);cron yml 加 `GEMINI_API_KEY` env(選填)。
 - **驗證**:`test_daily_signal_push.py` **20 綠**(+籌碼徽章各情境含 nan 略/箭頭門檻、第 3 行組字 + 向後相容、AI 事實行同源、prompt 含反捏造+免責+Data、orchestrator 缺 key 略過 / 有 key 附段);pyflakes 乾淨;離線渲染確認 3 行版面 + 缺料略徽章;dry-run 端到端跑通。**user 端要開 AI 需在 GitHub Secrets 加 `GEMINI_API_KEY`(選填,不設只送清單不紅燈,見 docs)**。
 
-## 🏆 2026-07-25 推播加「趨勢」徽章:財報變好/變差 + 缺貨動能(v20-PUSH.2,user「想加變好變差、可觀察,像 MJ 健檢 + 缺貨變多變少」)
+## 🏆 2026-07-25 推播加「趨勢」徽章:財報變好/變差 + 缺貨動能(v20-PUSH.2,user「想加變好變差、可觀察,像財報健檢 + 缺貨變多變少」)
 
 user 要每檔加趨勢/轉機。誠實界定資料後(§7 對齊)落地,版面經 AskUserQuestion 選「併入兩行」:
-- **財報趨勢(變好/持平/轉弱)**:走現成 `cross_quarter_trends`(近 5 季 毛利率↑/營益率↑/負債比↓/營收YoY↑ 的 `favorable_count`)—— **從季快照算、零逐檔網路**。⚠️ 誠實:這是「毛利/營收/負債逐季方向」,**非** MJ 健檢 A→B 等級 diff(那要逐檔 2 季完整健檢,重很多);但抓的正是體質核心。門檻 `favorable_count/of ≥0.75→📈變好、≤0.25→📉轉弱`(命名常數,§3.3)。
+- **財報趨勢(變好/持平/轉弱)**:走現成 `cross_quarter_trends`(近 5 季 毛利率↑/營益率↑/負債比↓/營收YoY↑ 的 `favorable_count`)—— **從季快照算、零逐檔網路**。⚠️ 誠實:這是「毛利/營收/負債逐季方向」,**非**財報健檢 A→B 等級 diff(那要逐檔 2 季完整健檢,重很多);但抓的正是體質核心。門檻 `favorable_count/of ≥0.75→📈變好、≤0.25→📉轉弱`(命名常數,§3.3)。
 - **缺貨動能(強/中/弱)**:走缺貨 tier(合約負債增溫/存貨去化/毛利改善/營收成長)。⚠️ 誠實:這是「**當期缺貨動能強度**」非「vs 上次 delta」(無歷史存檔);tier 對映走 `shared.shortage_screen_thresholds` SSOT。
 - **版面(每檔 2 行)**:行1 加 `📈財報變好` 於綜合分後、行2 尾加 `缺貨強`。§1:任一資料缺 → 徽章自動略(不臆造);無缺貨資料的股正確不顯示缺貨徽章。
 - **分層(§8.2)**:純 L2 `signal_message.py` 加 `format_fundamental_trend`/`format_shortage_badge`;orchestrator 明確抓 `run_shortage_scan`+`get_cross_quarter_trends`(缺貨並傳入選股避免重掃),建查表傳入組字。零回歸。
@@ -97,7 +302,7 @@ user 看 GitHub `topics/stock`(多為中國 A 股 + 回測/量化,方向與本�
 - **工具(唯讀 3 個)**:
   - **首波** `screen_stocks(factors, top_n)` — 全台股基本面選股綜合排名。**鏡像 cron `update_forward_test_freeze._build_pe_name_maps` + 走同一支 L3 `get_ranked_picks`** → 保證「MCP 選股 = 畫面『🎯 開始選股』= 每月凍結」三處同源(§8 SSOT)。
   - **二波** `forward_test_reconcile()` — 凍結過的選股 vs 0050 事後對帳(`reconcile_all`,cron 已實證無頭:本地 parquet ∪ gsheet graceful skip)。
-  - **二波** `stock_health(stock_id)` — 個股「老師財報體檢」總評(`fetch_financial_statements` → `analyze_financial_health(api_key="")` 純規則 → `no_ai_overall_verdict`,免金鑰)。**§1 關鍵防呆**:headless smoke 揭露 error fin_data 會誤回「B+」評級 → 工具**先擋 `fin_data.error` 才呼叫引擎**,缺料回 `ok:false` 不編造評級。
+  - **二波** `stock_health(stock_id)` — 個股「財報體檢」總評(`fetch_financial_statements` → `analyze_financial_health(api_key="")` 純規則 → `no_ai_overall_verdict`,免金鑰)。**§1 關鍵防呆**:headless smoke 揭露 error fin_data 會誤回「B+」評級 → 工具**先擋 `fin_data.error` 才呼叫引擎**,缺料回 `ok:false` 不編造評級。
 - **§1 fail-loud**:季快照未就緒 / 存活池空 / 上游全敗 → 回 `ok:false` + 具體 reason,**不編造清單**;工具例外轉結構化錯誤(帶 source),不崩 server 不吞。JSON 序列化 NaN→None(缺料因子留空**不填 0**)。provenance:回傳帶 `as_of`(UTC 抓取時間)。
 - **無頭安全確認**:`fundamental_screener_service` 只用 `@st.cache_data`(EX-CACHE-1),無 `session_state`/無真 UI → 可脫離 Streamlit 執行(cron 已實證)。
 - **交付範式誠實界定**:這是「多開一扇對話門」(在 Claude Desktop / Cursor 用),**非**網頁多一顆按鈕。`fastmcp` 放獨立 `requirements-mcp.txt`,**不進** Streamlit Cloud 部署(雲端不多裝一包)。
@@ -115,7 +320,7 @@ user 看 GitHub `topics/stock`(多為中國 A 股 + 回測/量化,方向與本�
 - **E｜資料診斷 tab 使用者/工程師分層**:覆蓋率/新鮮度總覽常駐;資料源清單/Fetcher監控/§4.3對帳/API根因/原始表/門檻校準 收「🔧 進階診斷」expander 折疊(不刪)。
 - **對抗驗證擋下(§-1 / 行為變更偽裝)**:估值三演算法統一(個股頁本就刻意多鏡頭 357/PE/PB + 說明,非矛盾)、三階段濾網搬家(逆轉 v19.111 user 簡化決定)、AI L3 管線合併(規則/LLM/agent 三抽象)、頂層改名/§編號重排(純 churn + 34 守衛測試)、ETF σ 三尺度統一(刻意短/長/中線)—— 全 WONTFIX。誠實修正:AI 是 5→2 非 5→1。
 - **驗證**:全套 pytest **3417 passed / 28 skipped / 0 fail**;新增 `test_macro_section9_rules_rename` + `test_position_throttle_ssot` 守衛。分支從最新 main 重開(PR #571 已 merged)。
-- **D(財報體檢逐檔卡抽 L4 共用元件)→ 專注一輪實讀後 WONTFIX(user 拍板)**:逐模組比對 `tab_stock.py:982-1405`(個股 inline)vs `section_financial_health.py:210-572`(組合)後證實 **兩者非純重複,是兩個刻意不同細緻度的畫面**——個股 = 單檔完整深度(生死燈號帶 delta 文字+豐富 label、雷達含 v19.85 clamp 防護、**綜合診斷有杜邦分析卡**、結尾 **老師總結評級卡 A/B/C grade**),組合 = 多檔精簡(省空間、DNA inline badge、結尾 AI insight+紅旗)。僅存活/獲利/結構/償債 4 模組邏輯相同(字級 20/17/26/24px vs 18/15/20/18px 微異)。**共用同一引擎 `analyze_financial_health`**(數字/門檻一致,當年 v18.453 漂移的是**門檻**、早在引擎層修好,非渲染層)。硬抽共用元件 → 要嘛個股頁失去杜邦卡+總結評級卡+豐富標籤(明顯退化),要嘛做成塞 label 集/字級/是否顯示杜邦 參數的怪物(§8.1 反面「用不到的抽象」),真正省行數不多。**同 σ 三尺度 / 估值三鏡頭同類:看似重複、實為刻意不同視角 → §-1 WONTFIX。** 真有維護觸發(門檻要改時)在引擎層改即可,渲染層各自保留。
+- **D(財報體檢逐檔卡抽 L4 共用元件)→ 專注一輪實讀後 WONTFIX(user 拍板)**:逐模組比對 `tab_stock.py:982-1405`(個股 inline)vs `section_financial_health.py:210-572`(組合)後證實 **兩者非純重複,是兩個刻意不同細緻度的畫面**——個股 = 單檔完整深度(生死燈號帶 delta 文字+豐富 label、雷達含 v19.85 clamp 防護、**綜合診斷有杜邦分析卡**、結尾 **總結評級卡 A/B/C grade**),組合 = 多檔精簡(省空間、DNA inline badge、結尾 AI insight+紅旗)。僅存活/獲利/結構/償債 4 模組邏輯相同(字級 20/17/26/24px vs 18/15/20/18px 微異)。**共用同一引擎 `analyze_financial_health`**(數字/門檻一致,當年 v18.453 漂移的是**門檻**、早在引擎層修好,非渲染層)。硬抽共用元件 → 要嘛個股頁失去杜邦卡+總結評級卡+豐富標籤(明顯退化),要嘛做成塞 label 集/字級/是否顯示杜邦 參數的怪物(§8.1 反面「用不到的抽象」),真正省行數不多。**同 σ 三尺度 / 估值三鏡頭同類:看似重複、實為刻意不同視角 → §-1 WONTFIX。** 真有維護觸發(門檻要改時)在引擎層改即可,渲染層各自保留。
 - **持股% 收尾(F 之後第1項,user「兩個都留 上限 vs 建議區間」)**:§十一 曝險鎖 `exposure_limit_pct`(薩姆/PMI/外資期貨硬否決天花板)原是孤立的第三個持股%數字。改在總經「建議持股油門」gauge(`render_position_throttle`)與「建議持股區間」**並排呈現、清楚標成互補**(區間=依健康分的姿態、上限=硬否決天花板,實際持股取兩者較低),bar 上加金色上限標記;未跑 §十一 AI 裁決(無 exposure_limit_pct)→ 只顯示區間(§1 fail-safe,不偽造上限)。新增 `test_position_ceiling`(source-scan + 2 slow AppTest 實機驗)。與 F 一致原則:同一問題(該持股幾成)不再散落多個對不上的數字。
 
 ## 🏆 2026-07-24 ETF 三 Tab 版面重排：單檔 🚦研判卡 × 多檔主表 24→11 欄 × row 計算 SSOT（v19.166,user「其他 Tab 也幫我優化」延續）
@@ -132,7 +337,7 @@ user 看 GitHub `topics/stock`(多為中國 A 股 + 回測/量化,方向與本�
 
 ## 🏆 2026-07-24 個股 Tab 版面優化:🧭 一眼判讀卡（v19.167,接續 ETF #571 同 PR）
 
-user「點頭」續做個股 Tab。先派稽核 AI 攤出「操作價位/買賣點/停利停損」全部計算點(32 處),釐清「操作價位 6→1」的真相:**不是把 6 個不同演算法硬併成 1**(σ帶252 vs 布林20、老師 ZigZag 等幅 vs 直加震幅、大量紅K、PE/PB/殖利率三種河流皆不同演算法,合併會損失資訊),而是「殺掉真正的重複(支撐壓力 hi20/lo20 重算、357 inline×2、MA20 inline)+ 加一張頁頂綜合卡」。
+user「點頭」續做個股 Tab。先派稽核 AI 攤出「操作價位/買賣點/停利停損」全部計算點(32 處),釐清「操作價位 6→1」的真相:**不是把 6 個不同演算法硬併成 1**(σ帶252 vs 布林20、ZigZag 等幅 vs 直加震幅、大量紅K、PE/PB/殖利率三種河流皆不同演算法,合併會損失資訊),而是「殺掉真正的重複(支撐壓力 hi20/lo20 重算、357 inline×2、MA20 inline)+ 加一張頁頂綜合卡」。
 
 - **🧭 一眼判讀卡(已做)**:L0 純函式 `shared/stock_buckets.summarize_stock_verdict` — 聚合 `compute_stock_section_levels` 已算好的 4 個可評定桶(進場RS/健康/籌碼/先行指標)→ 單一 green/yellow/red 綜合 + verdict + 理由(理由=桶 headline,§4.3 零重算)。規則平衡讀(非 macro worst-light):有紅且紅≥綠→保守、無紅且綠>黃→偏多、其餘→觀望;§1:on-demand 財報/AI 桶恆 gray 不納入不偽造,全 gray→「資料待算」不偽綠。卡片插即時趨勢總覽後、目錄前,對稱 ETF 🚦 卡 / 組合排行 headline,失敗只 fail-loud caption。6 golden/edge 測試。
 - **選股網 Tab(v19.167,同 PR #571)**:稽核 AI 攤出真實結構 —— 選股網主體在 `app.py:606-800`(不在 tab_stock_picker),真正的表只有 4 張,且**表 B 綜合評分主表早已是合併好的多欄表**(估值/EPS/缺貨/RS/跨季全是欄不是獨立表),表 C(前進式對帳)/表 D(全市場跨季)是**不同 universe/資料型態不可併**。故「3 表合 1」大半已完成,真正高價值的是**兩個誤導文案 bug**:
@@ -141,57 +346,57 @@ user「點頭」續做個股 Tab。先派稽核 AI 攤出「操作價位/買賣�
   - 加 **🔭 選股結果總覽卡**(存活池 N → 綜合入選前 K + 因子命中 缺貨/RS/跨季 各 N,§1 掃失敗不假報 0)。dead `build_candidate_frame` 內同類舊字串(被 test 釘 substring)依 §-1 不 churn。3 守衛測試。
 - **操作價位去重 → WONTFIX(§-1)**:稽核 + **對抗式驗證 AI 雙查**結論一致 —— 357 合理價 inline×2、MA20 inline 兩組**逐值 byte 相等可零變動收斂**(但畫面零可見效益);近20日支撐壓力**非零變動**(caller 有 `len>=5→0` guard、section:134 無 → 1~4 根新股會改「初步目標/加碼點」顯示數字,需 guard + 有意識決策)。三組都是**看不見的內部 DRY**,對「版面優化/一眼看懂」零效益,候選1還有動數字風險 → 依 §-1「沒 bug 沒需求不要動」掛 **WONTFIX**,真有維護觸發(要動這幾個 section 時)再順手收。優先做看得見的「選股網 3 表合 1」。
 
-## 🏆 2026-07-24 個股組合 Tab 版面優化：單一來源 × 去重 × 老師批次化 × 老師 合一（v19.164,user「標的只有一個來源、整合上方總表、資訊重複繁雜要重分類」）
+## 🏆 2026-07-24 個股組合 Tab 版面優化：單一來源 × 去重 × 型態目標價批次化 × 財報趨勢合一（v19.164,user「標的只有一個來源、整合上方總表、資訊重複繁雜要重分類」）
 
 多 AI 顧問(資訊架構 + 台股操盤手)討論 + 可視預覽(user 核准「超出預期」)後實作。核心:3 個標的輸入來源 → 1 個、~12 張表 → 6、毛利率重複 5 次 → 1。
 
-- **單一來源**:砍掉老師獨立 `選擇標的` selectbox(`_csgrp_pick`)+ 老師 體檢轉機獨立批次輸入框
+- **單一來源**:砍掉型態目標價獨立 `選擇標的` selectbox(`_csgrp_pick`)+ 財報體檢轉機獨立批次輸入框
   (`_mj_batch_input`);「帶入我的持股」鈕(`_grp_load_holdings_callback`)移到上方唯一輸入 `multi_input` 旁,
-  老師 / MJ / 三階段濾網全部吃這一組。
-- **老師批次化(零額外抓取)**:L2 新增 `summarize_caisen(highs, lows, px)` — 一次跑三段 pipeline +
+  型態目標價 / 財報體檢 / 三階段濾網全部吃這一組。
+- **型態目標價批次化(零額外抓取)**:L2 新增 `summarize_caisen(highs, lows, px)` — 一次跑三段 pipeline +
   **§1 誠實 gate**:①擺動點不足→全 None;②**型態未明→封鎖 rr/目標**(否則引擎止損退化成頸線×0.99,
   分母極小把風報比灌成假高,誤導進場);另加 `距甜蜜價%`(負=待突破/正=已突破)。`run_batch_fetch` 在
-  `df4`(已抓)就地算,塞 `results_t3['_caisen']`。組合出「🎯 老師型態目標價(全組合)」批次表;
+  `df4`(已抓)就地算,塞 `results_t3['_caisen']`。組合出「🎯 型態目標價(全組合)」批次表;
   逐檔線圖下鑽用 selectbox(選項=同一批次 10 檔、預設最強檔)+ **preloaded 批次 df**(不重抓,表↔圖同源同數)。
-- **老師 趨勢 × 轉機合一**:`compute_one_stock_trend` additive 用已載入的近 2 季快照 `mj_snaps[-2:]` 附帶跑
-  `diff_mj_health` → 回 `diff_verdict` / `turn_icon`(零額外抓取)。組合 老師 區塊加「轉機」欄 + 🌟本業虧轉盈/
+- **財報趨勢 × 轉機合一**:`compute_one_stock_trend` additive 用已載入的近 2 季快照 `mj_snaps[-2:]` 附帶跑
+  `diff_mj_health` → 回 `diff_verdict` / `turn_icon`(零額外抓取)。組合財報體檢區塊加「轉機」欄 + 🌟本業虧轉盈/
   ⚠️盈轉虧摘要 + 逐檔🟢變好/🔴變差明細 → user 要的「找體質差→變好」完整保留。獨立
   **`tab_mj_health_diff.py` 退役真刪**(自帶第二輸入 + 重複第二張表,能力已合併)。
 - **主表合併去重**:`section_portfolio_summary` 把 ⑤最終建議卡 + ③多因子排行 + ④汰弱留強 合成一張
   **「🏆 組合排行總表」**(一檔一列,依綜合建議→多因子排序,headline 各出現一次);多因子子維度、逐檔技術明細
   (RSI/KD/量比/357/VCP/合約負債…去掉與總表重複的 EPS/毛利/殖利/健康/評級)全下沉 expander。
 - **驗證**:全套 pytest **3382 passed / 28 skipped / 0 fail**;新增 4 個 summarize_caisen 測試 + 4 個守衛
-  (轉機合併點 / 老師批次接線 / 單一來源 / 獨立檔退役);undefined-names AppTest smoke 7 passed。
-- **對抗式稽核補洞(user 問「面板資料會少嗎」)**:派稽核 AI 拿 OLD vs NEW 逐欄比對 —— ③④⑤/多因子/老師
-  是乾淨去重(⑤ 從前 5 檔→全部、維度表 head(5)→全部,反更完整);但抓到 老師 併檔**真損失**:組合層
-  「純 老師 季財報 verdict + 計數」被「月 65%+季 35% 混合趨勢分」蓋掉(一檔季財報退步卻可能因月營收強顯示進步)。
-  **已修**:老師 表加「老師季財報」純季度 verdict 欄 + 6-count 計數(退步/分歧/進步/不變/首季/失敗)+ 補回
+  (轉機合併點 / 型態目標價批次接線 / 單一來源 / 獨立檔退役);undefined-names AppTest smoke 7 passed。
+- **對抗式稽核補洞(user 問「面板資料會少嗎」)**:派稽核 AI 拿 OLD vs NEW 逐欄比對 —— ③④⑤/多因子/財報體檢
+  是乾淨去重(⑤ 從前 5 檔→全部、維度表 head(5)→全部,反更完整);但抓到財報體檢併檔**真損失**:組合層
+  「純季財報 verdict + 計數」被「月 65%+季 35% 混合趨勢分」蓋掉(一檔季財報退步卻可能因月營收強顯示進步)。
+  **已修**:財報體檢表加「純季財報」verdict 欄 + 6-count 計數(退步/分歧/進步/不變/首季/失敗)+ 補回
   淨變化/⚪不變逐項(全來自既有 `diff_verdict`,零計算改動);加 `test_mj_quarterly_verdict_preserved` 守衛。
 - **其他 Tab(個股/選股網/ETF)**已平行稽核完(去重提案在手),接著做可視預覽給 user 確認再實作。
 - **分支**:PR #568 已 merged → 從最新 main 重開,另開新 PR。
 
-## 🩺 2026-07-23 老師 體檢轉機併進個股組合（v19.163,user「都合併在個股與組合,不開新 tab」）
+## 🩺 2026-07-23 財報體檢轉機併進個股組合（v19.163,user「都合併在個股與組合,不開新 tab」）
 
-- 老師 體檢轉機是**批次**工具(掃一票找轉機股)→ 併進 🏆 個股組合 Tab(批次天生適合),
-  拿掉獨立「🩺 體檢轉機」分頁;個股 Tab 維持既有單檔 老師 財報體檢(健康度那段),不重複塞。
+- 財報體檢轉機是**批次**工具(掃一票找轉機股)→ 併進 🏆 個股組合 Tab(批次天生適合),
+  拿掉獨立「🩺 體檢轉機」分頁;個股 Tab 維持既有單檔財報體檢(健康度那段),不重複塞。
 - `render_mj_health_diff_tab` 加 `seed_codes` 參數 → 組合內嵌時**預設吃組合現有持股清單**
   (仍保留貼清單 / 帶入持股)。app.py 選股群組回 3 子 Tab(個股/組合/選股網)。
-- 守衛測試改「組合掛載 + app.py 無 with tab_mj」;9 passed + 老師 render smoke 零例外。
-- 同 PR #568(老師 + 老師 皆併入個股/組合、無獨立分頁)。
+- 守衛測試改「組合掛載 + app.py 無 with tab_mj」;9 passed + 財報體檢 render smoke 零例外。
+- 同 PR #568(型態目標價 + 財報體檢 皆併入個股/組合、無獨立分頁)。
 
-## 🔗 2026-07-23 老師目標價接進 個股 + 組合（v19.163,user 要求「套用當前標的」）
+## 🔗 2026-07-23 型態目標價接進 個股 + 組合（v19.163,user 要求「套用當前標的」）
 
 把 v19.162 的 `render_caisen_targets_tab` 核心重構為**可重用元件** `render_caisen_for_ticker(code, *, key_prefix)`
 (session key 以 key_prefix 隔離,三處共用不衝突),再接進:
-- **個股 Tab**(tab_stock):expander「🎯 老師型態目標價（本檔）」→ 套用當前 `t2_sid` 標的(不用重輸)。
+- **個股 Tab**(tab_stock):expander「🎯 型態目標價（本檔）」→ 套用當前 `t2_sid` 標的(不用重輸)。
 - **個股組合 Tab**(tab_stock_grp):expander + selectbox 選一檔持股 → 套用該標的。
-- **不設獨立分頁**(user 追加要求「老師目標價這個就不用多 tab 了」):刪除 `render_caisen_targets_tab`
-  + app.py 選股群組移除「🎯 老師目標價」子 Tab + __init__ 反註冊,只保留 個股/組合 內嵌。
+- **不設獨立分頁**(user 追加要求「型態目標價這個就不用多 tab 了」):刪除 `render_caisen_targets_tab`
+  + app.py 選股群組移除「🎯 型態目標價」子 Tab + __init__ 反註冊,只保留 個股/組合 內嵌。
 - 守衛測試「可重用元件 + 個股/組合接線 + 無獨立分頁」;26 passed + AppTest smoke 零例外。同 PR #568。
 
-## 🎯 2026-07-23 新功能:老師型態目標價計算機（v19.162,user 要求「由技術線型算甜蜜價/目標價」）
+## 🎯 2026-07-23 新功能:型態目標價計算機（v19.162,user 要求「由技術線型算甜蜜價/目標價」）
 
-多角色團隊(線型分析專家 + 總管)協作:由技術線型**自動**算老師 甜蜜價/止損/目標/風報比。
+多角色團隊(線型分析專家 + 總管)協作:由技術線型**自動**算甜蜜價/止損/目標/風報比。
 
 - **L2 引擎(線型專家建)** `src/compute/strategy/caisen_targets.py`(純函式,只 import math,零 I/O):
   - `detect_swings(highs, lows, pct)` — ZigZag 擺動點偵測(確定性,反轉 ≥pct 才確認)。
@@ -201,21 +406,21 @@ user「點頭」續做個股 Tab。先派稽核 AI 攤出「操作價位/買賣�
   - §1 誠實:缺值回 None 不腦補;`_EPS` 容差;除零 guard。21 tests(含 golden:例題 target_n=145)。
 - **L5 UI(總管建)** `src/ui/tabs/caisen_targets_ui.py`:輸入代碼→抓 1y K 線(fetch_stock_history_1y,EX-PASSTHRU-1)
   →自動偵測→**手動可覆寫每個關鍵點**→報告(甜蜜/止損/目標第一二波/風報比/專家叮嚀)+ 線圖標擺動點與水平線。
-  掛 🔬 選股群組第 5 子 Tab「🎯 老師目標價」。
+  掛 🔬 選股群組第 5 子 Tab「🎯 型態目標價」。
 - **§1 誠實界線**:UI 明示「演算法推導,非型態判定」+ 抓不到 K 線 fail loud(不編假)+ 型態關鍵點可人工覆寫。
 - **防孤兒**:`tests/test_caisen_ui_mounted.py`(掛載 + forward + UI 走 L2 SSOT + L2 純度)。
 - **驗證**:25 passed + AppTest render smoke 零例外 + 引擎 forward import 例題精確。
 - **分支**:v19.161 PR #567 已 merged → 從最新 main 重開,另開新 PR。
 
-## 🩺 2026-07-23 復活 老師 體檢轉機 Tab（v19.160,user 要求「找體質差→變好的公司」）
+## 🩺 2026-07-23 復活財報體檢轉機 Tab（v19.160,user 要求「找體質差→變好的公司」）
 
-團隊稽核排毒波(v19.159)P3 曾真刪 4 孤兒 Tab;user 於反悔點指出 **老師 體檢變化仍需要**(找轉機股)。撈回 + 修根因 + 掛回 + 加值:
+團隊稽核排毒波(v19.159)P3 曾真刪 4 孤兒 Tab;user 於反悔點指出 **財報體檢變化仍需要**(找轉機股)。撈回 + 修根因 + 掛回 + 加值:
 - **根因**:此功能 v18.463「10 Tab→4 群組」改版時**被漏掛**(render fn 全域 0 caller)→ 淪孤兒 → 稽核判死。非功能不好,是從沒被接上。
 - **復活**:git 撈回 `tab_mj_health_diff.py`(後端 diff_mj_health / analyze_financial_health 一直是活的,零改)→ 重新註冊 `src/ui/tabs/__init__` → **真的掛進 app.py** 🔬 選股群組第 4 子 Tab「🩺 體檢轉機」(修漏掛根因)。
-- **能力**:貼一串代碼(≤10)→ 每檔跑 MJ「4力1棒子」財報體檢跨兩季 diff → 標 🌟 本業虧轉盈轉機股 / ⚠️ 盈轉虧雷股。**零 LLM 純規則引擎**。
+- **能力**:貼一串代碼(≤10)→ 每檔跑「4力1棒子」財報體檢跨兩季 diff → 標 🌟 本業虧轉盈轉機股 / ⚠️ 盈轉虧雷股。**零 LLM 純規則引擎**。
 - **加值(user 選「貼清單+帶入持股」)**:新增「🔗 帶入我的持股」按鈕 — callback 讀 Google Sheet 持股組合代碼自動填入(EX-PASSTHRU-1 lazy import gsheet_portfolio,graceful 未登入不炸)。
 - **防再孤兒**:新增守衛測試 `test_mj_health_diff_mounted.py`(3 test:app.py 有掛載 + UI 可 forward import + 帶入持股 callback 在)→ 釘死掛載,下輪稽核不會再誤判孤兒。
-- **治理回滾**:CLAUDE.md L5 表 + EX-PASSTHRU-1(補 2 處 L5→L1)、ARCHIVED_FEATURES.md 老師 段標「已復活」。
+- **治理回滾**:CLAUDE.md L5 表 + EX-PASSTHRU-1(補 2 處 L5→L1)、ARCHIVED_FEATURES.md 財報體檢段標「已復活」。
 - **驗證**:compile + import forward + 98 passed(含守衛)+ **AppTest render smoke 零未捕捉例外**。
 - **分支**:因 v19.159 PR #565 已 merged,依規則從最新 main 重開同名分支做,另開新 PR。
 
@@ -228,7 +433,7 @@ user「點頭」續做個股 Tab。先派稽核 AI 攤出「操作價位/買賣�
 - **Batch B(P1 資料正確性)**:`_get_tpex_day` TPEX 暫時性失敗改短 TTL 負快取(`_TPEX_FAIL_TS`,對稱補齊 T86 早有、TPEX 一直漏的護欄;來源恢復後可重試,不再靜默釘空 dict → 上櫃股法人 NaN)+ 對稱回歸測試。pre-existing 缺口(v19.80 N2c 只修 T86)。
 - **Batch C(P2a 高 ROI)**:pandera schema 併回 `shared/schemas.py`(L0 單一家)+ 刪 `compute/risk/schemas.py`(L2)+ repoint 8 處 L1 production import + 2 test → **一次解「schema SSOT 分裂 + L1→L2 上行 10 處」兩型違憲**;graceful 改善(L0 無 pandera 也能乾淨 import)。
 - **Batch D(P2b)**:`render_macro_alerts` + `_LEVEL_STYLE` 從 `macro_alert.py`(L1)搬 `macro_ui_components.py`(L4);macro_alert docstring 修錯標(L3→L1)+ 清死 TRAFFIC import;3 caller repoint。
-- **Batch E(P3 真刪 + 存檔)**:比照 backtest/macro_validation 前例,真刪 4 個「後端活、UI 下架」孤兒 Tab + 專屬死後端(共 9 檔 + 2 函式):ETF 質借模擬整棧(UI + L2 engine + fetch_etf_close_history + 2 test)、老師 體檢變化 UI(後端 LIVE 保留)、月營收篩選 UI + screen_from_batch/filter_by_mode、RS wrapper UI(service LIVE 保留);新增 `docs/ARCHIVED_FEATURES.md`。全套 3347 passed(僅 pandera-gated 既有 3 基準)。
+- **Batch E(P3 真刪 + 存檔)**:比照 backtest/macro_validation 前例,真刪 4 個「後端活、UI 下架」孤兒 Tab + 專屬死後端(共 9 檔 + 2 函式):ETF 質借模擬整棧(UI + L2 engine + fetch_etf_close_history + 2 test)、財報體檢變化 UI(後端 LIVE 保留)、月營收篩選 UI + screen_from_batch/filter_by_mode、RS wrapper UI(service LIVE 保留);新增 `docs/ARCHIVED_FEATURES.md`。全套 3347 passed(僅 pandera-gated 既有 3 基準)。
 - **Batch F(LOW + 治理同步)**:COLORS_7 色票 SSOT 歸位 `shared/colors.py`(L0,修 daily_checklist L3→L4 上行)+ gsheet_portfolio session_state 納入 EX-OAUTH-1(登錄 + 檔內註解)+ 刪 `_check_one_stock` yf 幽靈參數 + CLAUDE.md 治理同步(EX-PASSTHRU-1 移除已刪模組 stale 條目 + section_mid render 註記 + L5 表 + EX-OAUTH-1 擴充)+ SPEC.md:5 backtest stale 修 + STATE 存檔。
 - **誠實排除(非漏)**:risk_radar L2 I/O(STATE B7 已登錄延後)、fillna(0)(D1 已登錄)、reconcile×2 / sharpe×3(刻意不同語意)、docs/DEAD_CODE_AUDIT.md(時點快照非活躍治理表,mj 後端仍 LIVE 未動)。3 個 pandera-gated test 為本地無 pandera 既有基準(CI 有則通過,stash 對照確認非本波引入)。
 
@@ -607,7 +812,7 @@ expander 首次 render 就**自動**呼叫 `analyze_financial_health`(Gemini)。
 - **`_fh is None` 分支**:原「載入中...」st.error 改 `pass`(尚未生成不誤報錯)。
 - **section_strategy_conclusion `_cost` 不動(§-1 查證)**:`compute_one_stock_trend` 的 AI 是
   **snapshot-gated**(`if yyyymm_curr not in yms:` 才打,once/股/月 + `save_snapshot` 持久化),
-  已攤銷,非每次 render 自動觸發,gate 反而破壞 老師 trend bootstrap → 不動。
+  已攤銷,非每次 render 自動觸發,gate 反而破壞財報 trend bootstrap → 不動。
 - **「刪 3 死 screener」撤回**:yield_screener / monthly_revenue_screener 皆有 caller,非死碼。
 - **test**:`test_ai_financial_health_gate`(按鈕在 AI 呼叫前)2 passed。§8.1 user 核准。
 
@@ -1654,7 +1859,7 @@ user 指派第二份建議書;14 條主張逐條查證:**6 修 / 1 已修過(S1 
 
 ## 🎨 2026-07-04 ETF UI 五連改（v18.467/468/469/470 + hotfix,使用者截圖回報）
 
-- **v18.467**：ETF 三個智慧區塊(σ 買賣帶/分散度/MK 3-3-3)**去按鈕改自動計算**(輸入代號即算)、
+- **v18.467**：ETF 三個智慧區塊(σ 買賣帶/分散度/3-3-3)**去按鈕改自動計算**(輸入代號即算)、
   expander `expanded=True` 直接顯示;**AI 白話總結移到最下方**(單檔:`render_etf_single` 加
   `before_ai_hook` 於 AI 前呼叫;組合:`render_etf_ai` 移到 smart 之後)。
 - **hotfix(PR #467)**：自動計算暴露 `build_holdings_set` KeyError 當機(對 DataFrame/dict 非
@@ -1810,18 +2015,18 @@ compute_std_bands 回傳鍵實測正確。
 - **`section_financial_leading` 仍顯示 PP&E 存量標榜「資本支出」**:Task#20 修復了龍頭預警(dragon_alert)的比較邏輯，但同一個 `_capex2`(CF 季資本支出)未傳給財報領先指標 section，UI 仍用 PP&E 存量(cx2)且標籤顯示「資本支出」造成誤導。
 - **修法**:`render_financial_leading_section` 新增 `capex=None` kw-only 參數；若 capex > 0 則優先以「季資本支出」顯示，cx2 PP&E 作 fallback(標籤改為「固定資產/資本支出」)。tab_stock.py 呼叫端加 `capex=_capex2`(與 dragon_alert 一致)。`section_financial_leading.py` + `tab_stock.py`
 
-## 🚀 前一狀態(v18.457 — t2_inst 修 + Reuters RSS 移除 + 龍頭預警 capex 修 + 老師 bootstrap)
+## 🚀 前一狀態(v18.457 — t2_inst 修 + Reuters RSS 移除 + 龍頭預警 capex 修 + 財報體檢 bootstrap)
 
 ✅ **v18.457(2026-07-03)**:Stock dashboard 4 項修復:
 - **Task#18 `t2_inst` session key 從未寫入**:`section_kline_chart`(K線敘事「外資買超/賣超」)與 `section_health_score`(v4 籌碼 foreign_net/trust_net)讀 `st.session_state['t2_inst']` 但整個 tab_stock.py 從未寫這個 key → K線敘事恆用 `_fnet_f=0`(顯示「外資中性」)，v4 籌碼欄位恆為 0。修法：在 `_xsec` 計算後、各 section 渲染前，從 df2(已含 T86/TPEX 外資/投信欄，單位張)取最後一日寫入 `t2_inst`。`src/ui/tabs/tab_stock.py`
 - **Task#19 Reuters RSS dead**:`news_fetcher.py` 移除 `feeds.reuters.com/reuters/businessNews`(dead since 2020-06),每次新聞抓取白費 timeout。`src/data/news/news_fetcher.py`
 - **Task#20 龍頭預警「大擴廠」用 PP&E 存量(cx2)而非 capex(季流量)**:製造業 PP&E 存量動輒數倍股本，幾乎永遠觸發龍頭預警(假正例)。fetch_financials 本就同時抓 BS PP&E 和 CF 資本支出，但 `_capex2`(CF 資本支出)被丟棄未存入 t2_data。修法：t2_data 加 `capex` 欄，傳給 `render_dragon_alert_section`；龍頭預警優先用 CF capex 比較，PP&E 作 fallback(當 CF 資料取不到時)。`tab_stock.py` + `section_dragon_alert.py`
-- (含 v18.455/v18.456)ETF 中文名 + 老師 季財報 bootstrap 同批推送
+- (含 v18.455/v18.456)ETF 中文名 + 財報體檢季財報 bootstrap 同批推送
 
-## 🚀 前一狀態(v18.456 — ETF 中文名 attempts=1 bug 修 + 老師 季財報 bootstrap 修)
+## 🚀 前一狀態(v18.456 — ETF 中文名 attempts=1 bug 修 + 財報體檢季財報 bootstrap 修)
 
-✅ **v18.456(2026-07-03)**:老師 季財報分 bootstrap 修:
-- **老師 季財報分恆為 0 根因**:`data_cache/mj_snapshots/` 在 Streamlit Cloud 為 ephemeral 存儲,重啟即清空,永遠湊不齊 2 季 snapshot → `compute_mj_trend_subscore` 回 `(0.0, {"reason": "insufficient_snapshots"})`。
+✅ **v18.456(2026-07-03)**:財報體檢季財報分 bootstrap 修:
+- **季財報分恆為 0 根因**:`data_cache/mj_snapshots/` 在 Streamlit Cloud 為 ephemeral 存儲,重啟即清空,永遠湊不齊 2 季 snapshot → `compute_mj_trend_subscore` 回 `(0.0, {"reason": "insufficient_snapshots"})`。
 - **解法**:在 `fetch_financial_statements` return dict 加 `prev_period_data` 欄位(用同一個 730 天 FinMind call 裡 `_dates[-2]` 的資料計算上季關鍵指標,約 50 行,無額外 API call)。`compute_one_stock_trend` 保存本季快照後,若 `len(yms) < 2` 則立即用 `prev_period_data` 呼叫 `analyze_financial_health("", sid, prev_period_data, "")` 補存上季快照。每次重啟後第一次抓財報就能湊足 2 季 → `mj_trend` 正常計算。`src/data/core/data_loader.py` + `src/compute/health/mj_trend_score.py`。
 
 ✅ **v18.455 補強（PR #455,2026-07-03，另一 session）**:上條 attempts=2 已修 MoneyDJ 路徑;本 PR **另加**兩項:
@@ -1836,7 +2041,7 @@ compute_std_bands 回傳鍵實測正確。
 - **總經頁「M1B-M2 資金動能」頂部燈號恆顯示「—」**(但下方「策略3」區塊正確顯示 -12.63%):`tw_macro.fetch_cbc_m1b_m2()` 本就算好 `gap`,但 `macro_snapshot.fetch_m1b_m2_block()` 重新打包 dict 時,CBC/FRED/IMF 三個 return 路徑全部漏帶 `'gap'` 鍵 → `session_state['m1b_m2_info']` 從未有此鍵 → `macro_helpers.py` 算頂部燈號/KPI 卡(依 `.get('gap')`)恆得 None → 顯示「—」;「策略3」區塊是自己內聯重算 `m1b_yoy-m2_yoy`(不依賴此鍵)才不受影響。補回三路徑 `gap` 欄(schema-additive)。守衛 `test_m1b_m2_gap_wiring.py`(+4)。
 - **「個股」分頁整頁 MergeError 崩潰**(`incompatible merge keys dtype('<M8[s]') and dtype('<M8[us]')`,v18.440 per-tab 隔離器攔到不拖垮其他分頁):`section_357_valuation.py:333` PE 本益比河流圖 `merge_asof` 兩側日期精度不同 —— 股價側(data_loader `.dt.date` 物件經 `pd.to_datetime` → `datetime64[s]`)vs 季報側(FinMind 字串日期 `pd.to_datetime` → `datetime64[us]`),兩側從未顯式對齊精度。pandas merge_asof 要求兩側 key dtype 完全一致(含精度),不同即炸。兩側補 `.astype('datetime64[ns]')`。守衛 `test_pe_river_merge_dtype.py`(+4 純邏輯 + 1 slow AppTest)。
 - **ETF 多檔比較表「1Y累積%」對年輕 ETF 顯示假 212%**(user 截圖 00981A 上市僅 13 個月):與 v18.452 `calc_cagr` 同源根因 —— `calc_total_return_1y` 只看「有沒有資料」不看「是否真橫跨 1 年」,年輕 ETF 的 `p_start` 實為上市首日低價而非真 365 天前價格。新增可選 `require_full_period`,資料跨度不足 365 天 90% 回 None(§1 寧缺勿假);兩 ETF UI 呼叫端(single/grp_compare)補齊 None 顯示 N/A。守衛併入 `test_etf_grp_compare_young_etf_fix.py`(+5)。
-- **老師 季財報分恆為 0**(待定):需連續 2 季 snapshot 才能算 delta,但 snapshot 存本機 `data_cache/mj_snapshots/`(.gitignore,Streamlit Cloud 重啟即清空),永遠湊不齊 2 季 → 架構決策(改存 GitHub / Google Sheets 等持久層),待 user 定奪。
+- **財報體檢季財報分恆為 0**(待定):需連續 2 季 snapshot 才能算 delta,但 snapshot 存本機 `data_cache/mj_snapshots/`(.gitignore,Streamlit Cloud 重啟即清空),永遠湊不齊 2 季 → 架構決策(改存 GitHub / Google Sheets 等持久層),待 user 定奪。
 - 測試 2520 pass(fast lane)。SSOT/§8.2:無新增 SSOT 常數 / 無新增例外 / 無跨層反向 import;M1B-M2 修復為「正確透傳 tw_macro 早已算好的 gap」而非消費端重算。
 
 ---
@@ -1846,7 +2051,7 @@ compute_std_bands 回傳鍵實測正確。
 ✅ **v18.452→453(PR #451,2026-07-01)**:user 回報「個股」「總經」「個股組合」三分頁陸續出錯 + 附完整 production log,逐一 root cause 確認全部同一根因(大檔案抽出成獨立模組時漏搬 import/變數):
 - **ETF 多檔比較假資料**:名稱欄只用 yfinance shortName(常回發行商英文名,非商品名)→ 改用既有 SSOT `fetch_etf_zh_name()`(MoneyDJ 中文名,原本只有 etf_tab_single.py 在用)。`calc_cagr`/`calc_avg_yield` 新增可選 `expected_years`/`require_full_years` 嚴格模式:年輕 ETF(如上市僅 13 個月)資料跨度不足宣稱年期時回 `None`(§1 寧缺勿假),不再外推出「00981A 假 191% 3Y CAGR」這類不可能數字。兩參數皆預設維持舊行為。
 - **6 處 undefined-name 崩潰**(用 pyflakes 全域靜態掃描一次找出,而非等 production log 逐一現形):`section_short.py`(總經 §5 短線急殺桶)缺 `TRAFFIC_GREEN/RED/YELLOW`/`os`/`plotly.graph_objects`/`BREADTH_BULL_PCT`/`BREADTH_NEUTRAL_PCT`/`add_danger_hlines` 共 8 處 import,ADL 資料一載入就 100% 全頁炸;`section_357_valuation.py`(個股 357 評價)結尾殘留一段完全重複且用未定義 `cheap2/fair2/dear2` 寫死的舊邏輯,直接刪除;`tab_stock_picker.py` 的 `_check_dividend_5y` 傳入未定義 `_t_yf`,導致「智慧選股」Stage 1/2 兩張表對任何股票都 100% NameError、整檔回退成全 ❓N/A(v18.374 抽 L1 fetcher 時漏改)—— 改用 `fetch_stock_history_1y` 已解析出的正確後綴建構真正的 `yfinance.Ticker`。另 2 處(`section_news_ai.py` 缺 `json`/`datetime`、`section_state.py` 缺 `pd`)尚未在 production 現形但屬同一顆未爆彈,一併清除。新增 `tests/test_no_undefined_names.py`(pyflakes 全域靜態守衛,CI 補裝),較功能測試更早、更全面攔截此類回歸;每個修復皆用 `git stash` 驗證「還原前程式碼 → 測試精準重現原始錯誤」。
-- **個股組合負債比判定不一致**:盤點 3 張健檢表格(批次財報體檢/老師趨勢分數/智慧選股)後確認唯一真衝突是負債比 ——「批次財報體檢」用 40/60% 三級門檻,「智慧選股」Stage 1 獨立重算卻只用 <50% 二分,同一檔股票兩處顯示不同顏色。三率三升等其餘欄位盤點後確認是水準 vs 趨勢的不同面向,非同一事實重複,故不強行合併;Stage 2 六項籌碼技術指標與 老師 月營收分皆為獨有資訊,維持現狀(user 核准此範圍,§8 對齊後才動工)。修法:`_check_debt_ratio` 新增可選 `fh_result` 參數,個股組合場景直接沿用 `analyze_financial_health()` 已算好的判定(該版本另有負債比為 0 時的重算 fallback,品質更完整);無 `fh_result` 的呼叫端(高息網等)行為不變。
+- **個股組合負債比判定不一致**:盤點 3 張健檢表格(批次財報體檢/財報趨勢分數/智慧選股)後確認唯一真衝突是負債比 ——「批次財報體檢」用 40/60% 三級門檻,「智慧選股」Stage 1 獨立重算卻只用 <50% 二分,同一檔股票兩處顯示不同顏色。三率三升等其餘欄位盤點後確認是水準 vs 趨勢的不同面向,非同一事實重複,故不強行合併;Stage 2 六項籌碼技術指標與財報體檢月營收分皆為獨有資訊,維持現狀(user 核准此範圍,§8 對齊後才動工)。修法:`_check_debt_ratio` 新增可選 `fh_result` 參數,個股組合場景直接沿用 `analyze_financial_health()` 已算好的判定(該版本另有負債比為 0 時的重算 fallback,品質更完整);無 `fh_result` 的呼叫端(高息網等)行為不變。
 - 測試 2508 pass(fast lane)+ 新增 34 個測試(ETF 10 + undefined-name 守衛 7 + picker 17)。SSOT/§8.2 影響:無新增 SSOT 常數(沿用既有 `shared.colors`/`shared.signal_thresholds`/`analyze_financial_health`),無新增例外,無跨層反向 import。
 
 ---

@@ -243,13 +243,13 @@ def render_etf_grp_compare() -> None:
             '殖利率%':  st.column_config.NumberColumn('殖利率%', format='%.2f'),
             '5Y均殖%':  st.column_config.NumberColumn(
                 '5Y均殖%', format='%.2f',
-                help='近 5 年平均殖利率（孫慶龍 7% 存股聖經估值基準）'),
+                help='近 5 年平均殖利率（7% 存股估值基準）'),
             '7%估值':   st.column_config.TextColumn(
                 '7%估值',
-                help='孫慶龍策略：殖利率≥7%🟢強烈買進 / 5%~7%⚪中性 / 3%~5%🟡減碼 / ≤3%🔴獲利了結'),
+                help='7% 估值策略：殖利率≥7%🟢強烈買進 / 5%~7%⚪中性 / 3%~5%🟡減碼 / ≤3%🔴獲利了結'),
             '配息健康': st.column_config.TextColumn(
                 '配息健康',
-                help='MK 框架 #1+#2：含息報酬 ≥ 殖利率 = ✅雙贏；< 殖利率 = 🔴吃本金'),
+                help='存股框架 #1+#2：含息報酬 ≥ 殖利率 = ✅雙贏；< 殖利率 = 🔴吃本金'),
             # v18.333 PR-H1:流動性 + 追蹤誤差(R-2 audit P1)
             '流動性':   st.column_config.TextColumn(
                 '流動性',
@@ -295,8 +295,8 @@ def render_etf_grp_compare() -> None:
         '費用率 12% / AUM 8% / 殖利率穩定度 5%。'
         '**星等映射**（綜合分）：≥0.80 5★、≥0.65 4★、≥0.50 3★、≥0.35 2★、<0.35 1★。'
         '缺資料因子自動 rescale 有效權重。'
-        '**6 SSOT 補欄**：折溢價（calc_premium_discount）/ 7%估值（calc_avg_yield + 孫慶龍策略）'
-        '/ 配息健康（MK 框架 #1+#2 ✅雙贏/🔴吃本金）/ 品質星等（已含於綜合分）'
+        '**6 SSOT 補欄**：折溢價（calc_premium_discount）/ 7%估值（calc_avg_yield + 7% 估值策略）'
+        '/ 配息健康（存股框架 #1+#2 ✅雙贏/🔴吃本金）/ 品質星等（已含於綜合分）'
         '/ 流動性（calc_liquidity_score 20D 均量+AUM）'
         '/ 追蹤誤差（calc_tracking_error vs 自動偵測 benchmark）。'
         ' **σ 建議買賣價位**（compute_std_bands 252 日）：σ強買≤（μ−2σ 相對低點）'

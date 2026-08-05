@@ -10,8 +10,10 @@
 - beginner_kpi(title, value, plain_meaning, ...)      — 初學者版 KPI 卡
 - show_term_help(term)                                — 顯示術語對照表內容
 - kpi(title, value, sub='', color, border)            — 一般 KPI 卡
-- teacher_box(icon, teacher, logic)                   — 老師建議框（舊版）
-- teacher_conclusion(teacher, indicator_val, ...)     — 老師結論（自動配色）
+- strategy_box(icon, strategy, logic)                 — 策略邏輯框（舊版）
+- strategy_conclusion(strategy, indicator_val, ...)   — 策略結論（自動配色）
+  ⚠️ v19.174 去識別化：舊名 teacher_box / teacher_conclusion，第一參數舊為人名。
+     過渡期保留同名 alias，caller 全部遷移完成後可移除（見檔尾）。
 - signal_box(label, color, desc='')                   — 訊號方塊
 
 常數
@@ -92,44 +94,62 @@ def kpi(title, value, sub='', color='#e6edf3', border='#21262d'):
             f'<div style="font-size:10px;color:#8b949e;margin-top:3px;">{sub}</div></div>')
 
 
-# 老師 → 策略代號（UI 顯示用；變數/邏輯不受影響）
-_STRATEGY_MAP = {
-    # 策略 1：估值 / 存股
-    '孫慶龍': ('策略1', '💡'),
-    '郭俊宏': ('策略1', '💰'),
-    # 策略 2：財報體檢
-    'MJ':     ('策略2', '🏥'),
-    '林明樟': ('策略2', '🏥'),
-    # 策略 3：技術 / 動能 / 資金面
-    '蔡森':   ('策略3', '📐'),
-    '春哥':   ('策略3', '🌱'),
-    '弘爺':   ('策略3', '🎯'),
-    '妮可':   ('策略3', '📈'),
-    '朱家泓': ('策略3', '📊'),
-    '宏爺':   ('策略3', '🎯'),
+# ════════════════════════════════════════════════════════════════
+# v19.174 去識別化：策略代號 → icon（**不再保存任何人名**）
+#
+# 原本這裡是 `_STRATEGY_MAP`，key 是 10 個真實人名（估值派 2 位、財報派 2 位、
+# 技術派 6 位），由 `_to_strategy()` 在渲染時翻成「策略1/2/3」。也就是說：
+# 畫面上看不到人名，**但原始碼裡有**，而且每個 caller 都在傳人名字串。
+#
+# 2026-08-05 去識別化決議：人名一律移除，顯示形式維持「策略1/2/3」。因此：
+#   1. 人名字典整份刪除，改成「策略代號 → icon」的極簡表；
+#   2. caller 一律直接傳 `策略1` / `策略2` / `策略3`（見 `STRATEGY_*` 常數）；
+#   3. 保留 `_to_strategy()` 的寬鬆行為 —— 傳到未知字串時退化為通用標籤而非
+#      KeyError，避免漏改的 caller 讓整頁炸掉（§1：降級要看得見，不是靜默）。
+# ════════════════════════════════════════════════════════════════
+
+# 策略代號常數（caller 用這三個，不要再寫字面字串）
+STRATEGY_VALUATION = '策略1'   # 估值 / 存股
+STRATEGY_FINANCIAL = '策略2'   # 財報體檢
+STRATEGY_TECHNICAL = '策略3'   # 技術 / 動能 / 資金面
+
+_STRATEGY_ICON = {
+    STRATEGY_VALUATION: '💡',
+    STRATEGY_FINANCIAL: '🏥',
+    STRATEGY_TECHNICAL: '🎯',
 }
 
 
-def _to_strategy(teacher: str) -> tuple[str, str]:
-    """老師名稱 → (策略代號, icon)；找不到時退化為通用標籤。"""
-    return _STRATEGY_MAP.get(teacher, ('策略', '👤'))
+def _to_strategy(strategy: str) -> tuple[str, str]:
+    """策略代號 → (顯示標籤, icon)。
+
+    未登記的字串**不 raise**，退化為通用標籤 `('策略', '👤')` ——
+    這條退化路徑同時是「還有 caller 沒改乾淨」的可見訊號（畫面會出現 👤 策略）。
+    """
+    if strategy in _STRATEGY_ICON:
+        return (strategy, _STRATEGY_ICON[strategy])
+    return ('策略', '👤')
 
 
-def teacher_box(icon, teacher, logic):
-    # 保留向下相容，但建議用 teacher_conclusion()
-    _label, _ic = _to_strategy(teacher)
+def strategy_box(icon, strategy, logic):
+    """策略邏輯方塊（舊名 `teacher_box`，v19.174 去識別化改名）。"""
+    _label, _ic = _to_strategy(strategy)
     return (f'<div class="teacher-card">'
             f'<span style="font-size:12px;color:#ffd700;font-weight:700;">{_ic} {_label}</span>'
             f'<div style="font-size:12px;color:#8b949e;margin-top:4px;line-height:1.6;">{logic}</div>'
             f'</div>')
 
 
-def teacher_conclusion(teacher, indicator_val, conclusion, action='', color=None):
+def strategy_conclusion(strategy, indicator_val, conclusion, action='', color=None):
     """
     統一策略結論格式：
     策略X：指標數值 → 結論，行動建議
 
-    teacher:       策略原始識別字串（內部對應到 策略1/2/3 顯示）
+    v19.174 去識別化：舊名 `teacher_conclusion`，第一參數舊名 `teacher`
+    且傳的是人名字串；現改為直接傳策略代號（`STRATEGY_VALUATION` /
+    `STRATEGY_FINANCIAL` / `STRATEGY_TECHNICAL`）。
+
+    strategy:      策略代號（'策略1'/'策略2'/'策略3'）
     indicator_val: 指標與數值（如 '費半 7837(+0.5%)'）
     conclusion:    目前結論（如 '半導體強勢'）
     action:        建議行動（如 '台股多方加分'）
@@ -149,7 +169,7 @@ def teacher_conclusion(teacher, indicator_val, conclusion, action='', color=None
             color = '#da3633'   # 漲=紅
         else:
             color = TRAFFIC_YELLOW
-    _label, _icon = _to_strategy(teacher)
+    _label, _icon = _to_strategy(strategy)
     _action_str = f'，{action}' if action else ''
     return (
         f'<div style="border-left:3px solid {color};padding:6px 10px;margin:4px 0;'
@@ -161,6 +181,15 @@ def teacher_conclusion(teacher, indicator_val, conclusion, action='', color=None
         f'<span style="color:#8b949e;font-size:11px;">{_action_str}</span>'
         f'</div>'
     )
+
+
+# ── v19.174 過渡期 alias（caller 全部遷移完成後移除）──────────────────
+# 去識別化是跨 40+ 檔的改動，分批進行。這兩個 alias 讓「已改的 caller」與
+# 「還沒改的 caller」可以並存，避免中途 ImportError 讓整站白屏。
+# ⚠️ 舊 caller 傳的是人名字串 → `_to_strategy()` 查不到 → 退化為 👤 策略，
+#    畫面看得出來還沒改完（刻意不靜默）。
+teacher_box = strategy_box
+teacher_conclusion = strategy_conclusion
 
 
 def signal_box(label, color, desc=''):

@@ -1,9 +1,20 @@
-"""src/ui/render/ui_widgets.py 純函式 unit test — Phase 7F（cond_badge）+ Phase 7G（其餘 9 函式 + 常數補測）。"""
+"""src/ui/render/ui_widgets.py 純函式 unit test — Phase 7F（cond_badge）+ Phase 7G（其餘 9 函式 + 常數補測）。
+
+v19.174 去識別化：`_STRATEGY_MAP`（10 個人名 key）已刪除，本檔改測新契約
+`STRATEGY_VALUATION/FINANCIAL/TECHNICAL` + `_STRATEGY_ICON`，函式名亦改為
+`strategy_box` / `strategy_conclusion`。另新增 `TestNoPersonNameInSource`
+守衛，防止人名被加回原始碼。
+"""
 from __future__ import annotations
 
+from pathlib import Path
+
 from src.ui.render import (
+    STRATEGY_FINANCIAL,
+    STRATEGY_TECHNICAL,
+    STRATEGY_VALUATION,
     TERM_EXPLAIN,
-    _STRATEGY_MAP,
+    _STRATEGY_ICON,
     _to_strategy,
     beginner_kpi,
     cond_badge,
@@ -11,9 +22,10 @@ from src.ui.render import (
     kpi,
     show_term_help,
     signal_box,
-    teacher_box,
-    teacher_conclusion,
+    strategy_box,
+    strategy_conclusion,
     traffic_light,
+    ui_widgets,
 )
 
 
@@ -233,113 +245,140 @@ class TestKpi:
 
 
 class TestToStrategy:
-    def test_strategy1_teachers(self):
-        # 估值 / 存股
-        assert _to_strategy('孫慶龍')[0] == '策略1'
-        assert _to_strategy('郭俊宏')[0] == '策略1'
+    def test_strategy1_valuation(self):
+        # 策略1 = 估值 / 存股
+        assert _to_strategy(STRATEGY_VALUATION) == ('策略1', '💡')
 
-    def test_strategy2_teachers(self):
-        # 財報體檢
-        assert _to_strategy('MJ')[0] == '策略2'
-        assert _to_strategy('林明樟')[0] == '策略2'
+    def test_strategy2_financial(self):
+        # 策略2 = 財報體檢
+        assert _to_strategy(STRATEGY_FINANCIAL) == ('策略2', '🏥')
 
-    def test_strategy3_teachers(self):
-        # 技術 / 動能 / 資金面
-        for t in ('蔡森', '春哥', '弘爺', '妮可', '朱家泓', '宏爺'):
-            assert _to_strategy(t)[0] == '策略3', f'{t} 未對應到策略3'
+    def test_strategy3_technical(self):
+        # 策略3 = 技術 / 動能 / 資金面
+        assert _to_strategy(STRATEGY_TECHNICAL) == ('策略3', '🎯')
+
+    def test_constants_are_the_display_codes(self):
+        # caller 一律傳這三個常數；常數值本身就是畫面標籤
+        assert STRATEGY_VALUATION == '策略1'
+        assert STRATEGY_FINANCIAL == '策略2'
+        assert STRATEGY_TECHNICAL == '策略3'
 
     def test_unknown_fallback(self):
-        label, icon = _to_strategy('未知老師')
+        # v19.174：漏改的 caller 不該 KeyError，而是退化成通用標籤 ——
+        # 畫面上的 👤 就是「還沒改乾淨」的可見訊號（§1 降級要看得見）。
+        label, icon = _to_strategy('尚未遷移的字串')
         assert label == '策略'
         assert icon == '👤'
 
+    def test_empty_string_does_not_raise(self):
+        assert _to_strategy('') == ('策略', '👤')
+
     def test_returns_2tuple(self):
-        out = _to_strategy('孫慶龍')
+        out = _to_strategy(STRATEGY_VALUATION)
         assert isinstance(out, tuple)
         assert len(out) == 2
         assert all(isinstance(x, str) for x in out)
 
-    def test_strategy_map_structure(self):
-        # 防呆：常數結構一致
-        for teacher, val in _STRATEGY_MAP.items():
-            assert isinstance(val, tuple) and len(val) == 2
-            assert val[0] in ('策略1', '策略2', '策略3')
+    def test_strategy_icon_structure(self):
+        # 防呆：常數結構一致（key = 策略代號、value = 非空 icon 字串）
+        assert set(_STRATEGY_ICON) == {
+            STRATEGY_VALUATION, STRATEGY_FINANCIAL, STRATEGY_TECHNICAL,
+        }
+        for code, icon in _STRATEGY_ICON.items():
+            assert code in ('策略1', '策略2', '策略3')
+            assert isinstance(icon, str) and icon
 
 
-class TestTeacherBox:
+class TestStrategyBox:
     def test_returns_string(self):
-        assert isinstance(teacher_box('💰', '孫慶龍', '估值偏低'), str)
+        assert isinstance(strategy_box('💰', STRATEGY_VALUATION, '估值偏低'), str)
 
     def test_logic_embedded(self):
-        html = teacher_box('💰', '孫慶龍', '估值合理可買')
+        html = strategy_box('💰', STRATEGY_VALUATION, '估值合理可買')
         assert '估值合理可買' in html
 
-    def test_known_teacher_uses_strategy_label(self):
-        html = teacher_box('💰', '孫慶龍', '邏輯')
+    def test_known_strategy_uses_strategy_label(self):
+        html = strategy_box('💰', STRATEGY_VALUATION, '邏輯')
         assert '策略1' in html
+        # icon 一律取自 _STRATEGY_ICON，第一參數目前不參與渲染
+        assert '💡' in html
 
-    def test_unknown_teacher_fallback(self):
-        html = teacher_box('💰', '不存在老師', '邏輯')
+    def test_unknown_strategy_fallback(self):
+        html = strategy_box('💰', '未登記代號', '邏輯')
         assert '策略' in html  # fallback label
         assert '👤' in html    # fallback icon
 
     def test_html_structure(self):
-        html = teacher_box('💰', '孫慶龍', '邏輯')
-        assert html.startswith('<div ')
-        assert 'teacher-card' in html
+        html = strategy_box('💰', STRATEGY_VALUATION, '邏輯')
+        assert html.startswith('<div class=')
+        assert html.endswith('</div>')
+
+    def test_legacy_alias_still_points_to_new_fn(self):
+        # v19.174 過渡期 alias；待 ui_widgets 檔尾 alias 移除時連同本測試刪除
+        assert ui_widgets.teacher_box is ui_widgets.strategy_box
 
 
-class TestTeacherConclusion:
+class TestStrategyConclusion:
     def test_returns_string(self):
-        out = teacher_conclusion('蔡森', '費半 7837', '半導體強勢')
+        out = strategy_conclusion(STRATEGY_TECHNICAL, '費半 7837', '半導體強勢')
         assert isinstance(out, str)
 
     def test_positive_keyword_red(self):
         # 「強勢」是正面關鍵字 → 台股慣例紅色 #da3633
-        html = teacher_conclusion('蔡森', '費半 7837', '半導體強勢')
+        html = strategy_conclusion(STRATEGY_TECHNICAL, '費半 7837', '半導體強勢')
         assert '#da3633' in html
 
     def test_negative_keyword_green(self):
         # 「警戒」是負面關鍵字 → 台股慣例綠色 #2ea043
-        html = teacher_conclusion('蔡森', 'PMI 45', '景氣警戒')
+        html = strategy_conclusion(STRATEGY_TECHNICAL, 'PMI 45', '景氣警戒')
         assert '#2ea043' in html
 
     def test_neutral_default_yellow(self):
-        # 既非正面也非負面 → 黃色 #d29922
-        html = teacher_conclusion('蔡森', '中性指標', '持平觀察')
+        # 既非正面也非負面 → 黃色 TRAFFIC_YELLOW #eab308
+        html = strategy_conclusion(STRATEGY_TECHNICAL, '中性指標', '持平觀察')
         assert '#eab308' in html
 
     def test_manual_color_overrides(self):
-        html = teacher_conclusion('蔡森', 'X', '強勢', color='#000fff')
+        html = strategy_conclusion(STRATEGY_TECHNICAL, 'X', '強勢', color='#000fff')
         assert '#000fff' in html
         # 不應再自動套紅
         assert '#da3633' not in html
 
     def test_action_appended_when_provided(self):
-        html = teacher_conclusion('蔡森', 'X', '持平', action='留意風險')
+        html = strategy_conclusion(STRATEGY_TECHNICAL, 'X', '持平', action='留意風險')
         assert '留意風險' in html
         assert '，留意風險' in html
 
     def test_action_omitted_when_empty(self):
-        html = teacher_conclusion('蔡森', 'X', '持平', action='')
+        html = strategy_conclusion(STRATEGY_TECHNICAL, 'X', '持平', action='')
         # 不應有開頭的「，」
         assert '，' not in html.split('</span>')[-2]
 
     def test_action_keyword_triggers_color(self):
         # 結論中性，但 action 帶正面詞 → 仍紅
-        html = teacher_conclusion('蔡森', 'X', '持平', action='可加碼')
+        html = strategy_conclusion(STRATEGY_TECHNICAL, 'X', '持平', action='可加碼')
         assert '#da3633' in html
 
-    def test_unknown_teacher_fallback(self):
-        html = teacher_conclusion('不存在', 'X', 'Y')
+    def test_strategy_label_and_icon_embedded(self):
+        html = strategy_conclusion(STRATEGY_FINANCIAL, 'X', 'Y')
+        assert '策略2' in html
+        assert '🏥' in html
+
+    def test_unknown_strategy_fallback(self):
+        html = strategy_conclusion('未登記代號', 'X', 'Y')
         assert '策略' in html
         assert '👤' in html
 
     def test_indicator_and_conclusion_embedded(self):
-        html = teacher_conclusion('蔡森', '費半 7837(+0.5%)', '半導體強勢', action='台股多方加分')
+        html = strategy_conclusion(
+            STRATEGY_TECHNICAL, '費半 7837(+0.5%)', '半導體強勢', action='台股多方加分')
         assert '費半 7837(+0.5%)' in html
         assert '半導體強勢' in html
         assert '台股多方加分' in html
+
+    def test_legacy_alias_still_points_to_new_fn(self):
+        # v19.174 過渡期 alias；待 ui_widgets 檔尾 alias 移除時連同本測試刪除
+        assert ui_widgets.teacher_conclusion is ui_widgets.strategy_conclusion
 
 
 class TestSignalBox:
@@ -384,3 +423,31 @@ class TestSignalBox:
         html = signal_box('L', 'green', desc='')
         assert html.startswith('<div ')
         assert html.endswith('</div>')
+
+
+class TestNoPersonNameInSource:
+    """v19.174 去識別化守衛 —— `ui_widgets.py` 原始碼不得再出現任何人名。
+
+    背景：改版前畫面上其實看不到人名（`_to_strategy()` 會把人名翻成
+    策略1/2/3），**但原始碼裡有** —— `_STRATEGY_MAP` 的 10 個 key 就是
+    真實人名，且每個 caller 都在傳人名字串。user 2026-08-05 要求整份移除，
+    本測試負責防止未來有人再加回去（review 容易漏看、但這條會紅）。
+    """
+
+    # ⚠️ 這是**守衛黑名單**，刻意保留的檢查清單，不是去識別化殘留 ——
+    #    全 repo 掃人名時請跳過本區塊（v19.174 AI-D 收尾註記）。
+    _BANNED = ('孫慶龍', '郭俊宏', '林明樟', '蔡森', '春哥',
+               '弘爺', '妮可', '朱家泓', '宏爺')
+
+    def test_ui_widgets_source_has_no_person_name(self):
+        src = Path(ui_widgets.__file__).read_text(encoding='utf-8')
+        hit = [n for n in self._BANNED if n in src]
+        assert not hit, f'ui_widgets.py 殘留人名：{hit}'
+
+    def test_rendered_html_has_no_person_name(self):
+        # 實際輸出也掃一次，防止人名被塞進 icon / label 而非常數表
+        for code in (STRATEGY_VALUATION, STRATEGY_FINANCIAL, STRATEGY_TECHNICAL):
+            html = (strategy_conclusion(code, '指標 1', '結論', action='行動')
+                    + strategy_box('x', code, '邏輯'))
+            hit = [n for n in self._BANNED if n in html]
+            assert not hit, f'{code} 輸出殘留人名：{hit}'

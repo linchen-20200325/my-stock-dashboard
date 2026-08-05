@@ -1,7 +1,8 @@
 """src/compute/health/monthly_revenue_calc.py — 月營收趨勢計算 L2 純函式(v18.400 U1).
 
 從 `src/ui/tabs/monthly_revenue_screener.py` 抽出 compute 層(原 L2 邏輯誤放 L5),
-配合 U1 修反向違憲(原 `src/compute/health/mj_trend_score.py:250` 反向 import L5)。
+配合 U1 修反向違憲(原 `src/compute/health/fin_trend_score.py:250` 反向 import L5;
+v19.174 該檔已去識別化改名,原檔名帶人名縮寫)。
 
 §8.2 layer:L2 Compute — 純函式,無 I/O,無 Streamlit。
 

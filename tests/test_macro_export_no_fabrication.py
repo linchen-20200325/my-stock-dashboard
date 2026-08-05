@@ -1,7 +1,9 @@
 """v18.330 PR-2B 守衛：總經出口 YoY 全來源失敗時不得捏造靜態值（§1 Fail Loud）。
 
 原 `_fetch_export` 全敗回傳寫死 `{'yoy': 18.9, 'date': '2026-03-01',
-'source': '靜態備援'}`，把假出口數據灌進儀表板 / MK 拐點 / AI 摘要。
+'source': '靜態備援'}`，把假出口數據灌進儀表板 / CPI×Fed 雙頂回落 / AI 摘要。
+（v19.173 正名：原寫「MK 拐點」，MK 會被誤讀為 Mann-Kendall；實作是兩點差分，
+真正的 Mann-Kendall 無母數趨勢檢定另置於 `shared/mk_test.py`。）
 PR-2B 改回空 dict（不貢獻 tw_export key），下游退「待取得」placeholder。
 """
 from __future__ import annotations

@@ -6,21 +6,27 @@
 
 ---
 
-## §1 老師 → 策略 對應表（UI 顯示用）
+## §1 策略代號對應表（UI 顯示用）
 
-> 來源：`ui_widgets._STRATEGY_MAP` + `_to_strategy(teacher)`。所有 `teacher_box` / `teacher_conclusion` / `etf_dashboard._teacher_conclusion` 內部自動套用，呼叫端**保留原老師字串**（變數 / 函數參數 / log / AI prompt 內部不動）。
+> 來源：`ui_widgets.STRATEGY_VALUATION / STRATEGY_FINANCIAL / STRATEGY_TECHNICAL` + `_to_strategy()`。
+> `strategy_box` / `strategy_conclusion` / `etf_render._strategy_conclusion` 三個 render 入口共用。
+>
+> ⚠️ **v19.174 去識別化**：本節原為「人名 → 策略」對應表，該人名字典（10 個 key）
+> 已整份刪除。caller **一律直接傳策略代號常數**，不再傳人名字串；
+> 變數名 / dict key / log / AI prompt 內部同步清乾淨。
 
-| 策略 | 方法論 | 涵蓋老師 | 預設 icon |
-|------|--------|---------|-----------|
-| 策略 1 | 估值 / 存股 | 孫慶龍、郭俊宏 | 💡 / 💰 |
-| 策略 2 | 財報體檢 | MJ、林明樟（MJ 林明樟） | 🏥 |
-| 策略 3 | 技術 / 動能 | 蔡森、春哥（Mark Minervini）、弘爺、宏爺、妮可、朱家泓 | 📐 / 🌱 / 🎯 / 📈 / 📊 |
+| 常數 | 值 | 方法論 | icon |
+|------|-----|--------|------|
+| `STRATEGY_VALUATION` | `策略1` | 估值 / 存股（殖利率、357 區間、年線位階） | 💡 |
+| `STRATEGY_FINANCIAL` | `策略2` | 財報體檢（現金、負債、毛利、盈餘品質） | 🏥 |
+| `STRATEGY_TECHNICAL` | `策略3` | 技術 / 動能 / 資金面（VCP、均線、M1B-M2、VIX、法人） | 🎯 |
 
-**未列表的老師字串** → `('策略', '👤')` fallback。
+**未登記的字串** → `('策略', '👤')` fallback。這條退化路徑同時是「還有 caller 沒改乾淨」的
+可見訊號（畫面會出現 👤 策略），刻意不 raise、也刻意不靜默。
 
-**範圍邊界**：
-- ✅ **改**：`st.markdown` / `st.expander` / `st.caption` / `help=` 等 UI 顯示字串
-- ❌ **不改**：Python 變數名、dict key、函式簽名、函式 docstring、檔案 docstring、AI prompt 內部結構、log 訊息
+**範圍邊界（v19.174 後）**：
+- ✅ **改**：UI 顯示字串、變數名、函式名／參數名、docstring、註解、AI prompt
+- ❌ **不改**：策略 1/2/3 的顯示形式（user 明確要求保留）、任何門檻數值
 
 ---
 
@@ -104,7 +110,7 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 - `_compute_etf_warroom_row` 混 fetch + calc → 放 **L2** (calc 可依賴 fetch，反向不可)
 - `_safe_float` / NAV 常數 → 放 **L1** (與 NAV 解析配套，calc 層也可用)
 - `_fetch_sector_returns` 含 `st.warning` → 仍放 **L1** (本質是 I/O，warning 為 cache miss 提示)
-- `_teacher_conclusion` 用到 `ui_widgets._to_strategy` → 放 **L3**，採 late import 解循環風險
+- `_strategy_conclusion`（v19.174 去識別化改名，舊名 alias 保留）用到 `ui_widgets._to_strategy` → 放 **L3**，採 late import 解循環風險
 
 **新增 helper 流程**：
 1. 看依賴：純抓資料 → L1；只算數字 → L2；產出 Streamlit element → L3
@@ -191,7 +197,7 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 | `norm_lower_better(v, best=5, mid=20, worst=35)` | float × 4 | float (0-100) | `_norm_lower_better` (etf_tab_backtest:192) |
 | `auto_role(tk)` | str / None | '核心' / '衛星' | `_auto_role` + `_CORE_TICKERS` (etf_tab_portfolio:45-51) |
 
-**`_CORE_TICKERS` 白名單**（MK 框架 #9，frozenset 防呆）：
+**`_CORE_TICKERS` 白名單**（存股框架 #9，frozenset 防呆）：
 
 | 類別 | ticker（去後綴） |
 |---|---|
@@ -220,7 +226,10 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 
 **設計**：HTML 字串模板（無 Streamlit 依賴），呼叫端負責用 `st.markdown(..., unsafe_allow_html=True)` 渲染。
 
-**測試覆蓋（Phase 7G 補完）**：`tests/test_ui_widgets.py` 涵蓋 `ui_widgets.py` 全 10 函式 + `TERM_EXPLAIN` / `_STRATEGY_MAP` 兩個常數，共 71 cases — `cond_badge` 8 + `TERM_EXPLAIN` 3 + `explain_box` 5 + `traffic_light` 7 + `beginner_kpi` 7 + `show_term_help` 5 + `kpi` 6 + `_to_strategy` 6 + `teacher_box` 5 + `teacher_conclusion` 10 + `signal_box` 9。
+**測試覆蓋（Phase 7G 補完 → v19.174 更新）**：`tests/test_ui_widgets.py` 涵蓋 `ui_widgets.py` 全 10 函式 + `TERM_EXPLAIN` / `_STRATEGY_ICON` 兩個常數 — `cond_badge` 8 + `TERM_EXPLAIN` 3 + `explain_box` 5 + `traffic_light` 7 + `beginner_kpi` 7 + `show_term_help` 5 + `kpi` 6 + `_to_strategy` 6 + `strategy_box` 5 + `strategy_conclusion` 10+ + `signal_box` 9 + 去識別化守衛 2。
+> ✅ **v19.174 已收斂**：原人名字典已刪、`strategy_box` / `strategy_conclusion` 為正名
+> （舊名保留過渡 alias，並有測試釘住 alias 指向新函式）。新增 `TestNoPersonNameInSource`
+> 守衛：`ui_widgets.py` 原始碼與渲染輸出皆不得再出現人名。
 
 ### §6.6 同期修補：`_no_ai_survival` 1Q fallback（commit `e678d22`）
 
@@ -322,7 +331,7 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 
 ### §9.4 故事化白話層原則（PR #37/#40/#41/#43/#46/#47）
 - 純疊加 `st.expander` / `st.caption` 白話導讀，**零更動計算邏輯**。
-- **不重複既有白話**（總經 `beginner_kpi`/`teacher_conclusion`、個股白話問句標題等已白話處不再加）。
+- **不重複既有白話**（總經 `beginner_kpi`/`strategy_conclusion`、個股白話問句標題等已白話處不再加）。
 - Streamlit **不可巢狀 expander** → 白話 expander 須置於既有 expander 之外（個股財報名詞快查即放在「策略2」expander 外）。
 - v5.0 Task 3（每 tab AI 解盤）盤點後確認**各重點 tab 早已有 AI**（總經/個股/組合/智慧選股/ETF），不另加通用模組（PR #38 誤加個股第二個 AI 已 #39 撤回）。
 
@@ -349,10 +358,10 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 
 ### §9.6 個股 AI 總結補餵已算章節（PR #55）
 原 prompt 僅含技術/籌碼/基本面/財報體檢/新聞/總經；四、戰術建議價位由 AI 臆測。改為補餵 `tab_stock` 上方**已實算**三章節（全程 try/except 防呆，未算到顯示「未計算」不崩）：
-- 【關鍵價位｜支撐壓力與停利停損】：近20日壓力/支撐(`_hi20_p`/`_lo20_p`)、停利1/2(`_tp1_p`/`_tp2_p`)、停損(`_sl_p`)、盈虧比(`_rr_p`)、朱家泓買點/絕對停損(`_entry_half`/`_abs_sl`)。
+- 【關鍵價位｜支撐壓力與停利停損】：近20日壓力/支撐(`_hi20_p`/`_lo20_p`)、停利1/2(`_tp1_p`/`_tp2_p`)、停損(`_sl_p`)、盈虧比(`_rr_p`)、型態買點/絕對停損(`_entry_half`/`_abs_sl`)。
 - 【近20日籌碼集中度】：`_con20`/`_cty20`/`_sig20`（注入籌碼動向段）。
 - 【基本面先行指標 D2】：`_li_green/_li_yellow/_li_red` + 明細。
-- **（PR #68 再補兩章節，`locals().get()` 防呆）**：**RS 相對強度**（`_rs_val`，注入技術指標段）、**龍頭擴產檢測**（合約負債/股本比、資本支出/股本比 + 孫慶龍龍多門檻判定，注入財務基本面段）。
+- **（PR #68 再補兩章節，`locals().get()` 防呆）**：**RS 相對強度**（`_rs_val`，注入技術指標段）、**龍頭擴產檢測**（合約負債/股本比、資本支出/股本比 + 龍頭多方門檻判定，注入財務基本面段）。
 - 指令強化：四、戰術建議**強制引用系統實算價位、嚴禁自行虛構**；步驟一納入籌碼集中度 + RS、步驟二納入 D2 先行指標 + 龍頭擴產檢測。
 
 ### §9.7 個股新聞改走 NAS FastAPI 中繼站（PR #56/#57）
@@ -480,49 +489,55 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 
 ### §12.3 單一個股 vs 個股組合「評分不同」— 維持（user 確認）
 
-- 兩頁本就不同引擎：**單一**以健康度(6技術)+四維基本面深挖一檔；**組合**以多因子0-100(動態權重)排序 + 批次財報體檢 + MJ趨勢 + **綜合評論**。
+- 兩頁本就不同引擎：**單一**以健康度(6技術)+四維基本面深挖一檔；**組合**以多因子0-100(動態權重)排序 + 批次財報體檢 + 財報趨勢 + **綜合評論**。
 - user 2026-06-27 明示：「組合一定會跟單一不同，因為要綜合評論+評分，這可以維持」→ **不統一跨頁總分**，此差異為設計，非違憲。
 
 ### §12.4 版面（維持）
 
-- 上方 = 整體結論（⑤ 最終綜合建議 teacher_conclusion）；下方 = Raw 明細（③④ 排行表 / 🏥 批次財報體檢）+ 🤖 AI 綜合判讀，**已符合**「上結論／下 Raw+AI」，本次不重排。
+- 上方 = 整體結論（⑤ 最終綜合建議 `strategy_conclusion`）；下方 = Raw 明細（③④ 排行表 / 🏥 批次財報體檢）+ 🤖 AI 綜合判讀，**已符合**「上結論／下 Raw+AI」，本次不重排。
 
-## §13 MJ 財報體檢門檻 SSOT + 3 漂移修正（`financial_health_engine.py`，v18.323）
+## §13 財報體檢門檻 SSOT + 3 漂移修正（`financial_health_engine.py`，v18.323）
 
-> user 2026-06-27 深層 SSOT 第 1 階段（PR-A）。`financial_health_engine.py` 的 MJ
+> user 2026-06-27 深層 SSOT 第 1 階段（PR-A）。`financial_health_engine.py` 的
 > 「4 力 1 棒子 + 現金流矩陣」門檻原同時硬寫在 **AI prompt 文字** 與 **6 個 `_no_ai_*`
 > fallback 計算**兩處。本節為審計結論與決策紀錄。SSOT 落於 `shared/financial_health_thresholds.py`。
+>
+> ⚠️ **v19.174 去識別化**：常數前綴改為 `FH_*`（Financial Health），**數值一個都沒改**；
+> 舊前綴（人名縮寫）保留為過渡期 alias（同檔尾段），caller 收乾淨後可刪 —— 見
+> `tests/test_financial_health_ssot.py::test_all_19_plus_aliases_match` 釘住同值。
 
 ### §13.1 SSOT 化策略（prompt 與 code 雙表徵）
 
 - **code 端**（6 個 `_no_ai_*` + `_derive_basic_from_fin_data`）：inline 數字 → `import` 常數，消滅計算端 magic number。
-- **prompt 端**：MJ 門檻數字寫在自然語言 prompt 內（如「Pass (綠燈)：>= 25%」），**不** f-string 模板化（避免破壞既有 `{{ }}` JSON 轉義、降低 AI 解析風險）；改由 `tests/test_financial_health_ssot.py` **golden test** 釘住「prompt 文字內數值 == SSOT 常數」，任一邊漂移測試即紅。
-- radar 估分曲線（`_derive` 的 `_score`）僅 MJ 生死關門檻（現金 25/10、毛利 Good 40）走 SSOT，其餘 radar 專屬曲線斷點屬單用途，保 inline。
+- **prompt 端**：門檻數字寫在自然語言 prompt 內（如「Pass (綠燈)：>= 25%」），**不** f-string 模板化（避免破壞既有 `{{ }}` JSON 轉義、降低 AI 解析風險）；改由 `tests/test_financial_health_ssot.py` **golden test** 釘住「prompt 文字內數值 == SSOT 常數」，任一邊漂移測試即紅。
+- radar 估分曲線（`_derive` 的 `_score`）僅生死關門檻（現金 25/10、毛利 Good 40）走 SSOT，其餘 radar 專屬曲線斷點屬單用途，保 inline。
 
-### §13.2 MJ 門檻常數表（`shared/financial_health_thresholds.py`）
+### §13.2 財報體檢門檻常數表（`shared/financial_health_thresholds.py`）
+
+> v19.174 起前綴為 `FH_*`；下表括號註記舊 alias 名。
 
 | 常數 | 值 | 用途 |
 |---|---|---|
-| `MJ_CASH_RATIO_SAFE_PCT` / `_WATCH_PCT` | 25 / 10 | 氣長（現金/總資產）安全/注意線 |
-| `MJ_DSO_FAST_DAYS` / `_SLOW_DAYS` | 15 / 90 | 收現速度（DSO）快/慢線；亦為償債交叉驗證條件 B |
-| `MJ_CASHFLOW_RATIO_MIN_PCT` / `_ADEQUACY_MIN_PCT` / `MJ_CASH_REINVEST_MIN_PCT` | 100 / 100 / 10 | 現金流自給「100-100-10 法則」A/B/C |
-| `MJ_DEBT_RATIO_EXCELLENT_PCT` / `_PASS_PCT` / `_WARN_PCT` | 40 / 60 / 70 | 負債結構：優秀/安全/警戒線 |
-| `MJ_LONG_TERM_FUNDING_MIN_PCT` | 100 | 以長支長比率 |
-| `MJ_CURRENT_RATIO_MIN_PCT` / `MJ_QUICK_RATIO_MIN_PCT` | 300 / 150 | 流動/速動比率（MJ 極嚴標準） |
-| `MJ_GROSS_MARGIN_GOOD_PCT` | 40 | 毛利率 Good 線（**漂移2修正**） |
-| `MJ_MOS_STRONG_PCT` | 60 | 經營安全邊際 Strong 線（**漂移3修正**） |
-| `MJ_NET_MARGIN_PASS_PCT` | 10 | 稅後淨利率 Pass 線 |
-| `MJ_ROE_LEVERAGE_CHECK_PCT` | 15 | ROE 槓桿防呆觸發線 |
-| `MJ_DUPONT_LEVERAGE_DEBT_PCT` | 65 | 杜邦槓桿膨脹警報負債門檻（**漂移1修正**，與結構線 60 刻意分離） |
-| `MJ_EARNINGS_QUALITY_MIN_PCT` | 100 | 盈餘品質（OCF/淨利） |
+| `FH_CASH_RATIO_SAFE_PCT` / `_WATCH_PCT` | 25 / 10 | 氣長（現金/總資產）安全/注意線 |
+| `FH_DSO_FAST_DAYS` / `_SLOW_DAYS` | 15 / 90 | 收現速度（DSO）快/慢線；亦為償債交叉驗證條件 B |
+| `FH_CASHFLOW_RATIO_MIN_PCT` / `_ADEQUACY_MIN_PCT` / `FH_CASH_REINVEST_MIN_PCT` | 100 / 100 / 10 | 現金流自給「100-100-10 法則」A/B/C |
+| `FH_DEBT_RATIO_EXCELLENT_PCT` / `_PASS_PCT` / `_WARN_PCT` | 40 / 60 / 70 | 負債結構：優秀/安全/警戒線 |
+| `FH_LONG_TERM_FUNDING_MIN_PCT` | 100 | 以長支長比率 |
+| `FH_CURRENT_RATIO_MIN_PCT` / `FH_QUICK_RATIO_MIN_PCT` | 300 / 150 | 流動/速動比率（極嚴標準） |
+| `FH_GROSS_MARGIN_GOOD_PCT` | 40 | 毛利率 Good 線（**漂移2修正**） |
+| `FH_MOS_STRONG_PCT` | 60 | 經營安全邊際 Strong 線（**漂移3修正**） |
+| `FH_NET_MARGIN_PASS_PCT` | 10 | 稅後淨利率 Pass 線 |
+| `FH_ROE_LEVERAGE_CHECK_PCT` | 15 | ROE 槓桿防呆觸發線 |
+| `FH_DUPONT_LEVERAGE_DEBT_PCT` | 65 | 杜邦槓桿膨脹警報負債門檻（**漂移1修正**，與結構線 60 刻意分離） |
+| `FH_EARNINGS_QUALITY_MIN_PCT` | 100 | 盈餘品質（OCF/淨利） |
 
 ### §13.3 3 處漂移收斂決策（git blame 證實同 commit `4ebe5bc` 手誤、非後期調參）
 
 | 漂移 | prompt vs code | 決策 | no-AI 輸出影響 |
 |---|---|---|---|
-| **1. 負債槓桿警報** | prof prompt 60 vs prof code 65（advanced 兩端皆 65） | **名稱分離**：一般負債結構安全線 `MJ_DEBT_RATIO_PASS_PCT=60`（不同用途）與杜邦槓桿警報 `MJ_DUPONT_LEVERAGE_DEBT_PCT=65` 各自具名；修 prof prompt 60→65 對齊其 code + advanced | 無（僅 AI prompt 文字對齊） |
-| **2. 毛利率 Good** | prompt >20% vs code >=40% | **對齊 40%**（保 code 現值，修 prompt 20→40），合 MJ「高毛利才是護城河」 | 無（AI 變嚴格） |
-| **3. 安全邊際 Strong** | prompt >60% vs code >=20% | **對齊 60%**（MJ 經典：安全邊際>60% 表毛利衰退 40% 本業仍不虧；修 code bug 20→60，保三階 Strong/Acceptable/Weak） | 20–60% MOS 由 Strong→Acceptable |
+| **1. 負債槓桿警報** | prof prompt 60 vs prof code 65（advanced 兩端皆 65） | **名稱分離**：一般負債結構安全線 `FH_DEBT_RATIO_PASS_PCT=60`（不同用途）與杜邦槓桿警報 `FH_DUPONT_LEVERAGE_DEBT_PCT=65` 各自具名；修 prof prompt 60→65 對齊其 code + advanced | 無（僅 AI prompt 文字對齊） |
+| **2. 毛利率 Good** | prompt >20% vs code >=40% | **對齊 40%**（保 code 現值，修 prompt 20→40），合「高毛利才是護城河」原則 | 無（AI 變嚴格） |
+| **3. 安全邊際 Strong** | prompt >60% vs code >=20% | **對齊 60%**（安全邊際>60% 表毛利衰退 40% 本業仍不虧；修 code bug 20→60，保三階 Strong/Acceptable/Weak） | 20–60% MOS 由 Strong→Acceptable |
 
 - golden test `tests/test_financial_health_ssot.py` 守 3 漂移修正 + prompt/code 一致；`tests/test_financial_health_engine.py` 既有負債 45→Pass / 65→Warning / 75→Fail 邊界不受影響（仍釘 60/70）。
 
@@ -539,7 +554,7 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 - **評分函式**：動能 Sharpe(`MOM_*`)、風險波動率(`RISK_*`)、RS 相對強度(`RS_*`)、
   獲利品質 SQ(`SQ_*`)、前瞻動能 FGMS 含維度權重 + 曲線(`FGMS_*`)
 - **先行指標 narrative**：I3 合約負債 / I4 CapEx / I5 存貨 的 🟢🟡🔴 斷點(`LEAD_*`)
-- **大師級因子 check_***：合約負債大增(`CL_*`)、布林壓縮(`BOLL_*`)、假突破(`FAKEOUT_*`)、
+- **進階因子 check_***：合約負債大增(`CL_*`)、布林壓縮(`BOLL_*`)、假突破(`FAKEOUT_*`)、
   相對強度天數(`RS_STRONG_DAYS_MIN`)
 - **風控 / 部位**：盈虧比(`RR_*`)、ATR 停損(`ATR_STOP_*`)、時間停損(`TIME_STOP_*`)、
   VCP 收縮(`VCP_*`)、軋空加分(`SQUEEZE_*`)、動態部位(`POS_*`)
@@ -587,13 +602,13 @@ financial_health 因 prompt/code 雙表徵 + 真漂移 → SSOT 有「修 bug」
 **唯一行為變動（user 核准）**：`macro_compass._sig_vix` 黃線 **25→22**，複用
 `MACRO_THRESHOLDS['VIX']`，對齊 C2（v19.157-160）全站統一黃線 22。macro_compass 原為 C2 漏網。
 
-### §15.3 ✅ 分歧統一收斂（PR-E v18.327，user MK 邏輯拍板「全面對齊標準值」）
+### §15.3 ✅ 分歧統一收斂（PR-E v18.327，user 拍板「全面對齊標準值」）
 
 PR-D 過程發現 3 組同概念門檻在不同卡片用不同值（會讓使用者看到自打架結論，如 health2=55
-標籤顯示弱勢、評語卻說可分批布局）。user 2026-06-27 依 MK（郭俊宏）風險邏輯**全面對齊標準值**，
+標籤顯示弱勢、評語卻說可分批布局）。user 2026-06-27 依存股風險邏輯**全面對齊標準值**，
 移除分歧變體常數，行為變動如下：
 
-| 概念 | 統一值 | 原分歧值 → | 位置 | MK 依據 |
+| 概念 | 統一值 | 原分歧值 → | 位置 | 依據 |
 |---|---|---|---|---|
 | 健康度中間級 | **50**（`HEALTH_GRADE_B_MIN`） | 60 下修 | tab_stock 標籤(1137) | 50 = 經典榮枯線（PMI 擴張/衰退界），標籤與評語一致 |
 | 融資黃線 | **2500**（`MARGIN_BALANCE_WARN_THRESHOLD_YI`） | 2800 下修 | tab_macro SQL 卡片(4289) | 籌碼面提早預警，更早捕捉散戶過度樂觀 |

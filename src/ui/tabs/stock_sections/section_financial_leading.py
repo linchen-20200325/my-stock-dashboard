@@ -13,7 +13,7 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_YELLOW
-from src.ui.render import kpi, teacher_conclusion
+from src.ui.render import STRATEGY_VALUATION, kpi, strategy_conclusion  # v19.174 去識別化
 
 
 def render_financial_leading_section(sid2: str, cl2, cx2,
@@ -51,7 +51,7 @@ def render_financial_leading_section(sid2: str, cl2, cx2,
     else:
         _ca = '合約負債+資本支出均無資料（可能為金融股或資料源限制）'
         _cb = '請至 MOPS 或年報查閱'
-    st.markdown(teacher_conclusion('孫慶龍', f'{sid2} 財報領先指標', _ca, _cb),
+    st.markdown(strategy_conclusion(STRATEGY_VALUATION, f'{sid2} 財報領先指標', _ca, _cb),
                 unsafe_allow_html=True)
     st.markdown(
         '<div style="background:#0a1628;border-left:3px solid #bc8cff;padding:8px 12px;'

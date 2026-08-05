@@ -369,5 +369,307 @@ class TestStaleCacheHelpers(unittest.TestCase):
         self.assertNotIn('stale_age_min', _out.attrs)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# v19.172 P0a-①:外資身分別白名單 _fgn_mask
+# 事故:原本 `str.contains("外資", na=False)` 會同時撈到「外資」「外資及陸資」
+# 「外資自營商」三種身分別 → 同一天多列被 **相加** = 重複計數,淨口數被灌成
+# 歷史極端值(稽核實測 −87,626 口)。§1:異常要吼出來,且不可相加。
+# ─────────────────────────────────────────────────────────────────────────────
+def _fut_df(rows):
+    """[(身分別, long, short)] → FinMind TaiwanFuturesInstitutionalInvestors 樣式 df。"""
+    return pd.DataFrame([
+        {"date": "2026-08-04", "institutional_investors": _n,
+         "long_open_interest_balance_volume": _l,
+         "short_open_interest_balance_volume": _s}
+        for _n, _l, _s in rows
+    ])
+
+
+def _mask_list(m):
+    """pandas/numpy bool Series → 純 Python list[bool](避免 numpy 標量比較歧義)。"""
+    return [bool(x) for x in m]
+
+
+class TestForeignAliasMask(unittest.TestCase):
+    def test_plain_foreign_selected(self):
+        from src.data.macro import _fgn_mask
+        df = _fut_df([("自營商", 10, 5), ("投信", 1, 1), ("外資", 100, 200)])
+        self.assertEqual(_mask_list(_fgn_mask(df)), [False, False, True])
+
+    def test_legacy_alias_selected(self):
+        """舊年份寫「外資及陸資」→ 白名單須認得(否則整段外資資料漏掉)。"""
+        from src.data.macro import _fgn_mask
+        df = _fut_df([("自營商", 10, 5), ("外資及陸資", 100, 200)])
+        self.assertEqual(_mask_list(_fgn_mask(df)), [False, True])
+
+    def test_foreign_dealer_excluded(self):
+        """「外資自營商」語意不同(同檔選擇權段本就排除),白名單不得收。"""
+        from src.data.macro import _fgn_mask
+        df = _fut_df([("外資自營商", 999, 0)])
+        self.assertEqual(_mask_list(_fgn_mask(df)), [False])
+
+    def test_both_aliases_only_first_taken(self):
+        """核心防重:兩個別名同天並存 → 只採第一個,絕不相加。"""
+        from src.data.macro import _fgn_mask
+        df = _fut_df([("外資", 100, 200), ("外資及陸資", 100, 200)])
+        m = _mask_list(_fgn_mask(df))
+        self.assertEqual(sum(m), 1, "同天兩別名不可同時計入(會重複計數)")
+        self.assertEqual(m, [True, False], "須採第一個出現的別名")
+
+    def test_net_lots_not_doubled(self):
+        """回歸:重複計數會讓淨口數翻倍(−100 → −200)。"""
+        from src.data.macro import _fgn_mask
+        df = _fut_df([("外資", 100, 200), ("外資及陸資", 100, 200)])
+        sub = df[_fgn_mask(df)]
+        net = int((sub["long_open_interest_balance_volume"]
+                   - sub["short_open_interest_balance_volume"]).sum())
+        self.assertEqual(net, -100, "重複計數 → 會變 -200")
+
+    def test_missing_column_returns_none(self):
+        from src.data.macro import _fgn_mask
+        self.assertIsNone(_fgn_mask(pd.DataFrame([{"date": "2026-08-04"}])))
+
+    def test_empty_df_returns_none(self):
+        from src.data.macro import _fgn_mask
+        self.assertIsNone(_fgn_mask(pd.DataFrame()))
+        self.assertIsNone(_fgn_mask(None))
+
+    def test_unknown_identity_returns_all_false(self):
+        """上游又改名 → 0 命中,回全 False(該來源不計入),不臆造、不 fallback contains。"""
+        from src.data.macro import _fgn_mask
+        df = _fut_df([("Foreign_Investor", 100, 200)])
+        m = _fgn_mask(df)
+        self.assertIsNotNone(m)
+        self.assertEqual(sum(_mask_list(m)), 0)
+
+    def test_nan_identity_not_selected(self):
+        """身分別為 None/NaN → 不得被選入(原 contains 用 na=False 擋,白名單同效)。"""
+        from src.data.macro import _fgn_mask
+        df = _fut_df([("外資", 100, 200), (None, 1, 1)])
+        self.assertEqual(_mask_list(_fgn_mask(df)), [True, False])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v19.173:三大法人身分別白名單 _inst_mask(韭菜指數 fallback)
+# v19.172 只收了「外資」兩處(_fgn_mask);build_leading_fast §7 的韭菜指數
+# fallback 仍用 `any(k in ii for k in ["外資","投信","自營"])` —— 同一個 bug class:
+#   ① 「外資」+「外資及陸資」同天並存 → 兩列都收 = 重複計數;
+#   ② 「外資自營商」同時含 "外資" 與 "自營" → 被當第 4 個法人多收一列。
+# 韭菜指數 =(Σshort − Σlong)/(Σshort + Σlong):分子是差、分母是和,重複計入
+# 對兩者的放大倍率不同 → 比值失真(下方 test_leek_ratio_* 直接把差異釘住)。
+# ─────────────────────────────────────────────────────────────────────────────
+def _leek_pct(df):
+    """依 build_leading_fast §7 的公式算法人淨空比(韭菜指數 fallback)。"""
+    _l = int(df["long_open_interest_balance_volume"].sum())
+    _s = int(df["short_open_interest_balance_volume"].sum())
+    if _l + _s <= 0:
+        return None
+    return round((_s - _l) / (_l + _s) * 100, 1)
+
+
+# 同一天上游同時吐「外資」「外資及陸資」「外資自營商」的最壞情境。
+# 正解只該取 外資(100,200) + 投信(10,10) + 自營商(20,30)。
+_DIRTY_ROWS = [
+    ("外資",       100, 200),
+    ("外資及陸資", 100, 200),   # 同一身分別的舊寫法 → 不可與上一列相加
+    ("投信",        10,  10),
+    ("自營商",      20,  30),
+    ("外資自營商", 999,   0),   # 語意不同(外資/自營商的子集)→ 不可另計一列
+]
+
+
+class TestInstAliasMask(unittest.TestCase):
+    def test_three_categories_selected(self):
+        from src.data.macro import _inst_mask
+        df = _fut_df([("外資", 1, 1), ("投信", 1, 1), ("自營商", 1, 1)])
+        self.assertEqual(_mask_list(_inst_mask(df)), [True, True, True])
+
+    def test_legacy_foreign_alias_selected(self):
+        """單獨出現「外資及陸資」(舊年份寫法)時必須認得,否則外資整段漏掉。"""
+        from src.data.macro import _inst_mask
+        df = _fut_df([("外資及陸資", 1, 1), ("投信", 1, 1)])
+        self.assertEqual(_mask_list(_inst_mask(df)), [True, True])
+
+    def test_foreign_dealer_excluded(self):
+        """「外資自營商」是子集身分別,原 substring 會多收一列 → 白名單不得收。"""
+        from src.data.macro import _inst_mask
+        df = _fut_df([("外資自營商", 999, 0)])
+        self.assertEqual(_mask_list(_inst_mask(df)), [False])
+
+    def test_both_foreign_aliases_only_first_taken(self):
+        """核心防重:同一類別兩個別名同天並存 → 只採第一個,絕不相加。"""
+        from src.data.macro import _inst_mask
+        df = _fut_df([("外資", 100, 200), ("外資及陸資", 100, 200), ("投信", 1, 1)])
+        m = _mask_list(_inst_mask(df))
+        self.assertEqual(m, [True, False, True], "外資兩別名不可同時計入")
+
+    def test_dirty_day_selects_exactly_three_rows(self):
+        from src.data.macro import _inst_mask
+        df = _fut_df(_DIRTY_ROWS)
+        self.assertEqual(_mask_list(_inst_mask(df)),
+                         [True, False, True, True, False])
+
+    def test_leek_ratio_not_distorted_by_duplicates(self):
+        """回歸:重複計入會讓韭菜指數**連正負號都翻掉**(29.7 → −47.3)。"""
+        from src.data.macro import _inst_mask
+        df = _fut_df(_DIRTY_ROWS)
+        # 正解:外資(100,200)+投信(10,10)+自營商(20,30) → Σl=130 Σs=240
+        self.assertAlmostEqual(_leek_pct(df[_inst_mask(df)]), 29.7, places=1)
+        # 舊 substring 行為(全 5 列都收)→ Σl=1229 Σs=440,比值失真且反向
+        self.assertAlmostEqual(_leek_pct(df), -47.3, places=1)
+
+    def test_missing_column_returns_none(self):
+        from src.data.macro import _inst_mask
+        self.assertIsNone(_inst_mask(pd.DataFrame([{"date": "2026-08-04"}])))
+
+    def test_empty_df_returns_none(self):
+        from src.data.macro import _inst_mask
+        self.assertIsNone(_inst_mask(pd.DataFrame()))
+        self.assertIsNone(_inst_mask(None))
+
+    def test_unknown_identity_returns_all_false(self):
+        """上游全改名 → 0 命中回全 False(該日不算韭菜),不臆造、不退回 substring。"""
+        from src.data.macro import _inst_mask
+        df = _fut_df([("Foreign_Investor", 1, 1), ("Dealer_self", 1, 1)])
+        m = _inst_mask(df)
+        self.assertIsNotNone(m)
+        self.assertEqual(sum(_mask_list(m)), 0)
+
+    def test_nan_identity_not_selected(self):
+        from src.data.macro import _inst_mask
+        df = _fut_df([("投信", 1, 1), (None, 9, 9)])
+        self.assertEqual(_mask_list(_inst_mask(df)), [True, False])
+
+    def test_aliases_share_single_ssot(self):
+        """§3.3:外資別名清單只能有一份 —— _INST_ALIASES 必須直接引用 _FGN_ALIASES。"""
+        from src.data.macro import _FGN_ALIASES, _INST_ALIASES
+        self.assertIs(_INST_ALIASES["外資"], _FGN_ALIASES,
+                      "別名清單被抄了第二份,改一邊會漂移")
+        self.assertEqual(set(_INST_ALIASES), {"外資", "投信", "自營商"})
+        # 沒證據的變體不得被腦補進來(§3.3 反捏造)
+        _flat = [a for _al in _INST_ALIASES.values() for a in _al]
+        for _bad in ("外資自營商", "投資信託", "自營商(避險)", "自營商(自行買賣)"):
+            self.assertNotIn(_bad, _flat)
+
+
+class TestNoSubstringInstListRegression(unittest.TestCase):
+    """原始碼守衛:三大法人 substring 清單 `for k in ["外資","投信","自營"]` 不得復活。
+
+    v19.172 的守衛只擋 `str.contains("外資")`,所以韭菜指數 fallback 的
+    `any(k in ii for k in [...])` 整個逃逸、CI 全綠 —— 這條就是補那個洞。
+    刻意比對 `for k in [...]` 這個**成員判定慣用法**而非單純三個字串,
+    才不會誤殺 `taifex_mtx_data` 裡 `find_data_table(html1, ["小型臺指期貨",
+    "外資","投信","自營"])` 的表頭關鍵字清單(那是找 table 用的,不是身分別過濾)。
+    """
+
+    def test_source_has_no_substring_inst_list(self):
+        import inspect
+        import re as _re
+        from src.data.macro import leading_indicators as _li
+        src = inspect.getsource(_li)
+        offenders = []
+        for ln in src.splitlines():
+            _s = ln.strip()
+            if _s.startswith("#"):      # 說明「原本錯在哪」的註解不該被罰
+                continue
+            _norm = _re.sub(r"\s+", "", _s)
+            if ('forkin["外資","投信","自營"]' in _norm
+                    or "forkin['外資','投信','自營']" in _norm):
+                offenders.append(_s)
+        self.assertEqual(offenders, [],
+                         f"發現殘留三大法人 substring 清單: {offenders}")
+
+
+class TestNoContainsForeignRegression(unittest.TestCase):
+    """原始碼守衛:`str.contains("外資")` 不得復活(重複計數的根源)。"""
+
+    def test_source_has_no_contains_foreign(self):
+        import inspect
+        from src.data.macro import leading_indicators as _li
+        src = inspect.getsource(_li)
+        # 只掃程式碼行,略過中文說明用的註解行(§ 說明文內會引用這個字串當反例)
+        offenders = [
+            ln.strip() for ln in src.splitlines()
+            if not ln.strip().startswith("#")
+            and ('str.contains("外資"' in ln or "str.contains('外資'" in ln)
+        ]
+        self.assertEqual(offenders, [], f"發現殘留 contains 外資: {offenders}")
+
+    def test_whitelist_constant_exists(self):
+        from src.data.macro import _FGN_ALIASES
+        self.assertIn("外資", _FGN_ALIASES)
+        self.assertIn("外資及陸資", _FGN_ALIASES)
+        self.assertNotIn("外資自營商", _FGN_ALIASES)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v19.172 P0a-②:未平倉口數的契約別標記 + 同當量分母
+# 事故:`未平倉口數` 同一欄可能是 MTX 原始口數(taifex_mtx_oi)或 TX 口數
+# (largeTraderFutQry),誰先命中算誰;而「外資大小」是 TX 當量(TX + 0.25×MTX),
+# 兩者相除 = 量綱錯誤。表頭須把契約別講清楚,不再讓 user 以為同一種口。
+# ─────────────────────────────────────────────────────────────────────────────
+def _oi_df(oi_val, oi_src, inconsistent=False, fut=None):
+    return pd.DataFrame([{
+        "_date": "20260804", "日期": "8月4日", "成交量": "-",
+        "外資": None, "投信": None, "自營": None,
+        "外資大小": fut, "前五大留倉": None, "前十大留倉": None,
+        "選PCR": None, "外(選)": None,
+        "未平倉口數": oi_val, "_oi_src": oi_src,
+        "OI_TX當量": None, "_oi_inconsistent": inconsistent,
+        "韭菜指數": None,
+    }])
+
+
+class TestOiContractLabel(unittest.TestCase):
+    def test_mtx_source_labeled(self):
+        html = render_leading_table(_oi_df(39503, "MTX_raw"))
+        self.assertIn("小台 MTX 原始口", html)
+
+    def test_tx_source_labeled(self):
+        html = render_leading_table(_oi_df(80000, "TX"))
+        self.assertIn("大台 TX 口", html)
+
+    def test_mixed_source_flagged(self):
+        df = pd.concat([_oi_df(39503, "MTX_raw"), _oi_df(80000, "TX")],
+                       ignore_index=True)
+        html = render_leading_table(df)
+        self.assertIn("契約別混合", html)
+
+    def test_inconsistent_flag_surfaces(self):
+        html = render_leading_table(_oi_df(39503, "MTX_raw", inconsistent=True))
+        self.assertIn("不同源", html)
+
+    def test_no_marker_columns_backward_compatible(self):
+        """舊 pickle / 舊 schema 無 _oi_src 欄 → 退回中性「口」,不得爆。"""
+        html = render_leading_table(_pcr_df(100.0))
+        self.assertIn("未平倉口數", html)
+        self.assertNotIn("契約別混合", html)
+
+    def test_marker_columns_not_rendered_as_cells(self):
+        """`_oi_src` / `OI_TX當量` / `_oi_inconsistent` 不得混進表格欄位。"""
+        html = render_leading_table(_oi_df(39503, "MTX_raw"))
+        for _c in ("_oi_src", "OI_TX當量", "_oi_inconsistent", "MTX_raw"):
+            self.assertNotIn(_c, html, f"{_c} 不該外露到 HTML")
+
+    def test_foreign_futures_header_states_equivalence(self):
+        """「外資大小」表頭須標明 TX 當量(否則 user 會以為是原始口數)。"""
+        html = render_leading_table(_oi_df(39503, "MTX_raw"))
+        self.assertIn("TX當量", html)
+
+
+class TestMtxToTxFactor(unittest.TestCase):
+    """§3.3:當量因子必須是 SSOT 常數,且等於契約乘數比 50/200。"""
+
+    def test_factor_value(self):
+        from src.data.macro import _MTX_TO_TX_FACTOR
+        self.assertAlmostEqual(_MTX_TO_TX_FACTOR, 50.0 / 200.0)
+
+    def test_equivalent_oi_formula(self):
+        """OI_TX當量 = OI_TX + 0.25 × OI_MTX（回歸:分子分母須同當量）。"""
+        from src.data.macro import _MTX_TO_TX_FACTOR
+        oi_tx, oi_mtx = 80000, 39503
+        self.assertEqual(round(oi_tx + _MTX_TO_TX_FACTOR * oi_mtx), 89876)
+
+
 if __name__ == "__main__":
     unittest.main()

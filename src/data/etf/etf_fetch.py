@@ -113,7 +113,8 @@ def _fetch_news_for(ticker: str, name: str = "", n: int = 4) -> str:
     return '\n'.join(_out[:n]) if _out else '（暫無相關新聞）'
 
 
-# ── MK 規格 條件 B：台灣 ETF 發行價對照表（用於破發檢測）──────
+# ── 存股規格 條件 B：台灣 ETF 發行價對照表（用於破發檢測）──────
+# v19.174 去識別化：原規格代號為作者姓名縮寫，改為中性描述
 # 台灣常見 ETF 發行價（多為 10/15/20/30/40 元）；債券 ETF 多為 40 元
 _TW_ETF_LAUNCH_PRICE = {
     '0050': 36.98, '0051': 25.57, '0052': 36.99, '0053': 22.20,
@@ -152,7 +153,7 @@ _TW_ETF_LAUNCH_PRICE = {
 
 
 def _get_etf_launch_price(ticker: str, df: "pd.DataFrame|None" = None):
-    """取得 ETF 發行價（用於 MK 規格條件 B 破發檢測）。
+    """取得 ETF 發行價（用於存股規格條件 B 破發檢測；v19.174 去識別化，原代號為作者姓名縮寫）。
 
     優先序：
     1. 內建台灣 ETF 對照表（最精準）

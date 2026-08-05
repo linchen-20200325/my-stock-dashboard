@@ -9,7 +9,7 @@
           / etf_fetch._fetch_news_for（按鈕觸發時）
   * etf_dashboard.py 內部 helper (21):
     - 渲染類: _colored_box / _plot_etf_chart / _render_bias
-      / _teacher_conclusion / macro_allocation_banner
+      / _strategy_conclusion / macro_allocation_banner
     - 計算類: auto_detect_benchmark / calc_avg_yield / calc_cagr / calc_current_yield
       / calc_premium_discount / calc_total_return_1y / calc_tracking_error
       / check_vcp_signal / compute_etf_peer_ranking
@@ -28,7 +28,7 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.thresholds import classify_yield_zone
 # Batch 9-2 v18.419:策略二「7% 存股估值」改 call classify_yield_zone SSOT。
 # 原 YIELD_HIGH/MID/LOW 直接 import 已不需要(SSOT 函式內部消費)。
-# 4 段對齊 strong_buy/neutral/reduce/sell,UI 措辭(_colored_box + _teacher_conclusion)
+# 4 段對齊 strong_buy/neutral/reduce/sell,UI 措辭(_colored_box + _strategy_conclusion)
 # 仍各自 dispatch 保留 ETF 教學脈絡。
 from shared.signal_thresholds import (
     ETF_CAGR_TARGET_PCT,
@@ -57,7 +57,11 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     # 改 import 真正 SSOT 來源(§8.2 L5→L4/L2/L1 downward;L1 fetcher 屬 EX-PASSTHRU-1)。
     from src.ui.render.etf_render import (   # 渲染類
         _colored_box, _plot_etf_chart, _render_bias, render_etf_holdings,
-        _teacher_conclusion, macro_allocation_banner,
+        _strategy_conclusion, macro_allocation_banner,   # v19.174 去識別化改名
+    )
+    # v19.174 去識別化：策略代號常數（原本各 caller 傳人名字串）
+    from src.ui.render.ui_widgets import (
+        STRATEGY_TECHNICAL, STRATEGY_VALUATION,
     )
     from src.compute.etf.etf_calc import (   # 計算類
         auto_detect_benchmark, calc_avg_yield, calc_beta, calc_cagr,
@@ -141,7 +145,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
 
     st.markdown(f'### 🏦 {etf_name} ({ticker})')
 
-    # ── 🚦 綜合研判卡(v19.166 版面重排:單一 留/觀察/換 + 理由,取代散落多張老師卡的「總結」)──
+    # ── 🚦 綜合研判卡(v19.166 版面重排:單一 留/觀察/換 + 理由,取代散落多張策略卡的「總結」)──
     # 沿用 build_etf_score_row(單檔/多檔共用 row SSOT)+ recommend_etf_action;§8.1 餵 render 已抓的
     # df/divs/info 不重抓。§1:composite 缺 → recommend_etf_action 回「觀察/資料不足」,不腦補。
     try:
@@ -247,31 +251,31 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     cb.metric('現金殖利率（近12M）', f'{cur_yield:.2f}%')
     if total_ret is None:
         st.info('ℹ️ 上市未滿 1 年，資料不足以計算真實「近1年」總報酬（避免用上市至今報酬誤導）')
-        _teacher_conclusion('郭俊宏',
-                            '上市未滿 1 年，資料不足',
-                            '無法套用近1年報酬策略',
-                            '待滿 1 年歷史後再評估')
+        _strategy_conclusion(STRATEGY_VALUATION,
+                             '上市未滿 1 年，資料不足',
+                             '無法套用近1年報酬策略',
+                             '待滿 1 年歷史後再評估')
     elif cur_yield > 0 and total_ret < cur_yield:
         _colored_box('⚠️ <b>紅燈警示</b>：賺了股息賠了價差，侵蝕本金中，<b>不宜作為核心資產</b>', 'red')
-        _teacher_conclusion('郭俊宏',
-                            f'含息總報酬 {total_ret:.1f}% < 殖利率 {cur_yield:.1f}%',
-                            '本金侵蝕中，高息陷阱',
-                            '換標的，找總報酬為正的 ETF')
+        _strategy_conclusion(STRATEGY_VALUATION,
+                             f'含息總報酬 {total_ret:.1f}% < 殖利率 {cur_yield:.1f}%',
+                             '本金侵蝕中，高息陷阱',
+                             '換標的，找總報酬為正的 ETF')
     elif cur_yield > 0:
         _colored_box(f'✅ 含息總報酬({total_ret:.1f}%) > 殖利率({cur_yield:.1f}%)，核心資產條件通過', 'green')
-        _teacher_conclusion('郭俊宏',
-                            f'含息總報酬 {total_ret:.1f}%，殖利率 {cur_yield:.1f}%',
-                            '價差 + 配息雙贏，核心資產條件通過',
-                            '可列入長期核心持倉')
+        _strategy_conclusion(STRATEGY_VALUATION,
+                             f'含息總報酬 {total_ret:.1f}%，殖利率 {cur_yield:.1f}%',
+                             '價差 + 配息雙贏，核心資產條件通過',
+                             '可列入長期核心持倉')
     else:
         st.info('ℹ️ 無配息紀錄（成長型ETF），以價差報酬評估')
-        _teacher_conclusion('郭俊宏',
-                            f'近1年總報酬 {total_ret:.1f}%，無配息',
-                            '成長型ETF，以價差報酬衡量',
-                            '衡量 CAGR 是否超過大盤')
+        _strategy_conclusion(STRATEGY_VALUATION,
+                             f'近1年總報酬 {total_ret:.1f}%，無配息',
+                             '成長型ETF，以價差報酬衡量',
+                             '衡量 CAGR 是否超過大盤')
 
-    # ── MK 框架 #1+#2+#7：配息健康度 + 3Y 年化報酬（汰弱五項中前兩項 + 留強 3-3-3 第二項）──
-    st.markdown('#### 💧 配息健康度 + 年化報酬（MK 框架燈號）')
+    # ── 存股框架 #1+#2+#7：配息健康度 + 3Y 年化報酬（汰弱五項中前兩項 + 留強 3-3-3 第二項）──
+    st.markdown('#### 💧 配息健康度 + 年化報酬（存股框架燈號）')
     _now2 = df.index[-1]
     _divs_idx = divs.index.tz_localize(None) if (not divs.empty and divs.index.tz is not None) else divs.index
     _12m_div = float(divs[(_divs_idx >= _now2 - timedelta(days=365))].sum()) if not divs.empty else 0.0
@@ -284,7 +288,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     # 資料」——年輕 ETF(如上市 13 個月)切窗後仍可能 >=30 列,但 calc_cagr 內部
     # expected_years 檢查會再擋一次跨度不足(§1 寧缺勿假,production bug 同源修正)。
     _cagr3 = calc_cagr(_df_3y, expected_years=3) if len(_df_3y) >= 30 else None
-    # MK 框架 #6：成立年數（yfinance firstTradeDateEpochUtc primary，df span fallback）
+    # 存股框架 #6：成立年數（yfinance firstTradeDateEpochUtc primary，df span fallback）
     _incept_yrs = None
     try:
         _ep = info.get('firstTradeDateEpochUtc') if isinstance(info, dict) else None
@@ -350,7 +354,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     cd.metric('現今殖利率', f'{cur_yield:.2f}%')
     # Batch 9-2 v18.419:走 shared.thresholds.classify_yield_zone SSOT。
     # 原 inline if-elif(4 段對齊 strong_buy/sell/reduce/neutral)收 SSOT;
-    # UI 各自 dispatch(_colored_box + _teacher_conclusion)文字保留 ETF 教學脈絡。
+    # UI 各自 dispatch(_colored_box + _strategy_conclusion)文字保留 ETF 教學脈絡。
     # v18.452:avg_yield=None 需先攔為 'na' —— classify_yield_zone() 對「個股場景省略
     # avg_yield(引數預設值 None)」與「ETF 場景 avg_yield 資料不足」語意不同,只有
     # avg_yield<=0 才視為無估值脈絡,None 會被當成「個股模式」直接用 cur_yield 誤判。
@@ -382,19 +386,19 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     }
     if _zone_code == 'na':
         st.info('ℹ️ 無充足配息歷史,套用回測頁評估價差績效')
-        _teacher_conclusion('孫慶龍',
-                            '配息歷史不足',
-                            '無法套用 7% 存股聖經,改看回測 CAGR',
-                            '前往「ETF回測」確認年化報酬是否 ≥ 8%')
+        _strategy_conclusion(STRATEGY_VALUATION,
+                             '配息歷史不足',
+                             '無法套用 7% 存股估值框架,改看回測 CAGR',
+                             '前往「ETF回測」確認年化報酬是否 ≥ 8%')
     else:
         _ux = _ZONE_UX[_zone_code]
         if _ux['box'] is not None:
             _colored_box(_ux['box'][0], _ux['box'][1])
         else:
             st.info(f'殖利率 {cur_yield:.1f}% 位於 5%~7% 合理區間,中性持有')
-        _teacher_conclusion('孫慶龍',
-                            f'現金殖利率 {cur_yield:.1f}%（5年均 {avg_yield:.1f}%）',
-                            _ux['tc'][0], _ux['tc'][1])
+        _strategy_conclusion(STRATEGY_VALUATION,
+                             f'現金殖利率 {cur_yield:.1f}%（5年均 {avg_yield:.1f}%）',
+                             _ux['tc'][0], _ux['tc'][1])
 
     # ── 策略三：VCP 突破 ──────────────────────────────────────
     st.markdown('#### 🧠 策略三：VCP 波幅收縮突破')
@@ -407,10 +411,10 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         st.caption('近5週波幅：' + ' → '.join(f'{r}%' for r in vcp['weekly_ranges']))
     if vcp['signal']:
         _colored_box(f'🚀 <b>VCP 突破買訊！</b> 嚴守 8% 停損線：{vcp["stop_loss"]}', 'green')
-        _teacher_conclusion('春哥',
-                            '50MA ✅ | 200MA ✅ | 量能 ✅',
-                            'VCP 三條件全過，突破買進',
-                            f'停損設 {vcp["stop_loss"]}（-8%），突破後嚴守紀律')
+        _strategy_conclusion(STRATEGY_TECHNICAL,
+                             '50MA ✅ | 200MA ✅ | 量能 ✅',
+                             'VCP 三條件全過，突破買進',
+                             f'停損設 {vcp["stop_loss"]}（-8%），突破後嚴守紀律')
     else:
         missing = []
         if not vcp['above_ma50']:
@@ -423,10 +427,10 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
             missing.append(f'資料不足{ETF_VCP_MIN_DAYS}天')
         _miss_str = ' | '.join(missing) if missing else '波幅尚未收縮'
         st.info('⏳ VCP 條件未滿足：' + _miss_str)
-        _teacher_conclusion('春哥',
-                            f'VCP 缺：{_miss_str}',
-                            '條件未齊，耐心等候突破訊號',
-                            '加入觀察清單，條件滿足再進場')
+        _strategy_conclusion(STRATEGY_TECHNICAL,
+                             f'VCP 缺：{_miss_str}',
+                             '條件未齊，耐心等候突破訊號',
+                             '加入觀察清單，條件滿足再進場')
 
     # ── ETF 防呆：折溢價 + 追蹤誤差 + 建議買賣時機 ──────────
     st.markdown('#### 🛡️ ETF 折溢價 — 建議買賣時機')
@@ -512,7 +516,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         _prem_act2  = ('分批買進' if _pct <= ETF_PREMIUM_FAIR_DISCOUNT_PCT
                        else '持有觀望' if _pct <= ETF_PREMIUM_FAIR_PREMIUM_PCT
                        else '暫緩或換標的')
-        _teacher_conclusion('宏爺', f'{ticker} 折溢價 {_pct:+.2f}%', _prem_concl, _prem_act2)
+        _strategy_conclusion(STRATEGY_TECHNICAL, f'{ticker} 折溢價 {_pct:+.2f}%', _prem_concl, _prem_act2)
 
     ch, ci = st.columns(2)
     ch.metric('折溢價率', f'{_pct:+.2f}%' if _pct is not None else 'N/A',
@@ -587,11 +591,11 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         _kv_ai = round(float(_k_s.iloc[-1]), 1)
         _dv_ai = round(float(_d_s.iloc[-1]), 1)
 
-    # ── MK 框架 #11:📅 長線 σ 量化買點(年線 ± σ z-score 4 段)──────
+    # ── 存股框架 #11:📅 長線 σ 量化買點(年線 ± σ z-score 4 段)──────
     # v18.334 PR-H2:σ 計算層改用 etf_helpers.calc_sigma_metrics SSOT(消重複)。
     # 與「⚡ 短線 σ」(etf_calc.py MA20±nσ 戰情燈號)為**不同時間尺度**,
     # 給不同建議天經地義(類比 MA20 vs MA60);標題前綴「📅 長線」明示避免 user 困惑。
-    st.markdown('#### 🎯 📅 長線 σ 量化買點(MK 框架:年線基準,跌了就買)')
+    st.markdown('#### 🎯 📅 長線 σ 量化買點(存股框架:年線基準,跌了就買)')
     st.caption('💡 與戰情室「⚡ 短線 σ」(月線基準)為不同時間尺度,訊號差異屬正常。')
     from src.compute.etf import calc_sigma_metrics, classify_etf_deep_sigma
     _sig_metrics = calc_sigma_metrics(df, window=252)
@@ -613,17 +617,17 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                 f'<b>建議</b>：{_action}',
                 _color,
             )
-            _teacher_conclusion('郭俊宏',
-                                f'位階 z={_z:+.2f}σ',
-                                _label.split('（')[0],
-                                _action)
+            _strategy_conclusion(STRATEGY_VALUATION,
+                                 f'位階 z={_z:+.2f}σ',
+                                 _label.split('（')[0],
+                                 _action)
         else:
             st.info('ℹ️ MA240 或 σ 不足，無法分級')
     else:
         st.info(f'ℹ️ 資料不足 252 日（目前 {len(df)} 日），無法計算 σ 位階')
 
-    # ── MK 框架 #5：季線 × 趨勢 聯合警示燈號（跌破 + 下彎 = 趨勢轉弱）──
-    st.markdown('#### 📉 季線 × 趨勢 聯合警示（MK 框架：技術面防禦）')
+    # ── 存股框架 #5：季線 × 趨勢 聯合警示燈號（跌破 + 下彎 = 趨勢轉弱）──
+    st.markdown('#### 📉 季線 × 趨勢 聯合警示（存股框架：技術面防禦）')
     if len(df) >= 80:
         _close_now = float(df['Close'].iloc[-1])
         _ma60_series = df['Close'].rolling(60).mean()
@@ -648,16 +652,16 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
             f'<b>建議</b>：{_t5_action}',
             _t5_color,
         )
-        _teacher_conclusion('郭俊宏',
-                            f'季線 {("站上" if _above_ma60 else "跌破")}+'
-                            f'{("上彎" if _ma60_up else "下彎")}',
-                            _t5_label.split('（')[0],
-                            _t5_action)
+        _strategy_conclusion(STRATEGY_VALUATION,
+                             f'季線 {("站上" if _above_ma60 else "跌破")}+'
+                             f'{("上彎" if _ma60_up else "下彎")}',
+                             _t5_label.split('（')[0],
+                             _t5_action)
     else:
         st.info(f'ℹ️ 資料不足 80 日（目前 {len(df)} 日），無法計算季線 × 斜率')
 
-    # ── MK 規格三大訊號：破發 ｜ 跌破均線買點 ｜ 死亡交叉 ────────
-    st.markdown('#### 🚨 MK 規格三大訊號（破發檢測 ｜ 跌了就買 ｜ 趨勢警示）')
+    # ── 存股規格三大訊號：破發 ｜ 跌破均線買點 ｜ 死亡交叉 ────────
+    st.markdown('#### 🚨 存股規格三大訊號（破發檢測 ｜ 跌了就買 ｜ 趨勢警示）')
     _cur_price = float(df['Close'].iloc[-1]) if len(df) > 0 else None
 
     # ① 條件 B：破發檢測（市價 < 發行價 → 法規限制配資本利得 → 配息必縮水）
@@ -672,13 +676,13 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                 f'🔴 <b>條件 B 警訊：破發狀態</b><br>'
                 f'最新市價 {_cur_price:.2f} &lt; 發行價 {_launch_price:.2f}'
                 f'（{_vs_launch_pct:+.2f}%）<br>'
-                f'<b>MK 提醒</b>：法規規定 ETF 淨值低於發行價時不能配發資本利得，'
+                f'<b>框架提醒</b>：法規規定 ETF 淨值低於發行價時不能配發資本利得，'
                 f'配息率「一定會縮水」；若同時觸發條件 A（吃本金）→ 標準汰弱訊號',
                 'red')
-            _teacher_conclusion('郭俊宏',
-                                f'市價 {_cur_price:.2f} < 發行價 {_launch_price:.2f}',
-                                '破發 → 配資本利得受限，配息將縮水',
-                                '若搭配條件 A → 換股汰弱')
+            _strategy_conclusion(STRATEGY_VALUATION,
+                                 f'市價 {_cur_price:.2f} < 發行價 {_launch_price:.2f}',
+                                 '破發 → 配資本利得受限，配息將縮水',
+                                 '若搭配條件 A → 換股汰弱')
         else:
             _colored_box(
                 f'✅ <b>條件 B 通過：未破發</b><br>'
@@ -701,23 +705,23 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                 f'🟢🟢 <b>跌破季線：波段大買點（超跌）</b><br>'
                 f'市價 {_cur_price:.2f} &lt; MA60 {_ma60_v:.2f}'
                 f'（{calc_bias_pct(_cur_price, _ma60_v) or 0:+.2f}%）<br>'
-                f'<b>MK 提醒</b>：跌破季線視為波段超跌，分批加碼黃金區',
+                f'<b>框架提醒</b>：跌破季線視為波段超跌，分批加碼黃金區',
                 'green')
-            _teacher_conclusion('郭俊宏',
-                                f'市價 {_cur_price:.2f} < MA60 {_ma60_v:.2f}',
-                                '波段超跌進場區',
-                                '剩餘資金分批加碼')
+            _strategy_conclusion(STRATEGY_VALUATION,
+                                 f'市價 {_cur_price:.2f} < MA60 {_ma60_v:.2f}',
+                                 '波段超跌進場區',
+                                 '剩餘資金分批加碼')
         elif _below_ma20:
             _colored_box(
                 f'🟢 <b>跌破月線：短線小買點</b><br>'
                 f'市價 {_cur_price:.2f} &lt; MA20 {_ma20:.2f}'
                 f'（{calc_bias_pct(_cur_price, _ma20) or 0:+.2f}%）<br>'
-                f'<b>MK 提醒</b>：跌破月線可小量加碼',
+                f'<b>框架提醒</b>：跌破月線可小量加碼',
                 'green')
-            _teacher_conclusion('郭俊宏',
-                                f'市價 {_cur_price:.2f} < MA20 {_ma20:.2f}',
-                                '短線小買點',
-                                '投入 20–30% 資金小量加碼')
+            _strategy_conclusion(STRATEGY_VALUATION,
+                                 f'市價 {_cur_price:.2f} < MA20 {_ma20:.2f}',
+                                 '短線小買點',
+                                 '投入 20–30% 資金小量加碼')
         else:
             _colored_box(
                 f'⚪ <b>站上月線/季線</b>：市價 {_cur_price:.2f} ≥ '
@@ -731,12 +735,12 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                 f'🟡 <b>趨勢偏空：MA20 &lt; MA60（死亡交叉）</b><br>'
                 f'MA20 {_ma20:.2f} &lt; MA60 {_ma60_v:.2f}'
                 f'（差 {(_ma20-_ma60_v)/_ma60_v*100:+.2f}%）<br>'
-                f'<b>MK 提醒</b>：均線死叉 → 注意風險，衛星部位降槓桿',
+                f'<b>框架提醒</b>：均線死叉 → 注意風險，衛星部位降槓桿',
                 'yellow')
-            _teacher_conclusion('郭俊宏',
-                                f'MA20 {_ma20:.2f} < MA60 {_ma60_v:.2f}',
-                                '均線死叉 → 趨勢偏空',
-                                '衛星部位停利或減碼，核心紀律扣款')
+            _strategy_conclusion(STRATEGY_VALUATION,
+                                 f'MA20 {_ma20:.2f} < MA60 {_ma60_v:.2f}',
+                                 '均線死叉 → 趨勢偏空',
+                                 '衛星部位停利或減碼，核心紀律扣款')
         else:
             st.caption(f'✅ 黃金交叉狀態：MA20 {_ma20:.2f} ≥ MA60 {_ma60_v:.2f}（趨勢偏多）')
     else:
@@ -816,7 +820,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         'expense': expense, 'beta': beta, 'aum': aum,
         'k_val': _kv_ai, 'd_val': _dv_ai,
         'bias240': _bias240_ai,
-        # MK 規格三大訊號
+        # 存股規格三大訊號
         'launch_price':   _launch_price,
         'vs_launch_pct':  _vs_launch_pct,
         'broken_issue':   _broken_issue,

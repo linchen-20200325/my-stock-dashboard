@@ -130,7 +130,7 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
         # VCP 訊號
         _vcp_ok = bool(vcp2 and isinstance(vcp2, dict) and vcp2.get('contracting'))
 
-        # 目標價(老師一比一對稱法)
+        # 目標價(一比一對稱法)
         _hi20_i = float(df2['high'].tail(20).max())
         _lo20_i = float(df2['low'].tail(20).min())
         _range20 = _hi20_i - _lo20_i
@@ -188,7 +188,7 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
             st.markdown('**📈 進場訊號**')
             _entry = []
             if _bull_align:
-                _entry.append('✅ 多頭排列（股>月>季）→ 朱家泓：可進場方向')
+                _entry.append('✅ 多頭排列（股>月>季）→ 策略3：可進場方向')
             if _vcp_ok:
                 _entry.append('✅ VCP波幅收縮 → 策略3：即將突破，建底倉30-50%')
             if k2 and k2 < 30:
@@ -217,7 +217,7 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
             st.markdown('**📉 減碼/出場訊號**')
             _exit = []
             if _bear_align:
-                _exit.append('🔴 空頭排列 → 朱家泓：禁止做多，考慮出清')
+                _exit.append('🔴 空頭排列 → 策略3：禁止做多，考慮出清')
             if _kd_dead:
                 _exit.append(f'⚠️ KD高檔死叉 K={k2:.0f} → 策略3：開始減碼')
             if _bb_drop_out:

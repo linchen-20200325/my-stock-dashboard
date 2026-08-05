@@ -38,7 +38,8 @@ from src.compute.etf import (  # noqa: F401
 # ── render 層 ────────────────────────────────────────────────
 from src.ui.render import (  # noqa: F401
     MACRO_ALLOC, MACRO_DESC,
-    macro_allocation_banner, _colored_box, _teacher_conclusion,
+    # v19.174 去識別化：_teacher_conclusion → _strategy_conclusion
+    macro_allocation_banner, _colored_box, _strategy_conclusion,
     _plot_etf_chart, _plot_correlation, _plot_holdings_overlap, _render_bias,
     _render_weakness_table, render_etf_holdings,
     _ETF_SECTOR_MAP, _check_sector_exposure,

@@ -1,7 +1,7 @@
 """src/ui/tabs/stock_sections/section_dragon_alert.py — 龍頭預警區 section(v18.411 U4 Phase 3-Dragon).
 
 從 tab_stock.py:802-829 抽出。
-- 孫慶龍龍多策略最高等級「龍頭預警區」
+- 龍多策略最高等級「龍頭預警區」
 - 合約負債 / 股本 ≥ 50% → 未來 3-6 月訂單保障
 - 資本支出(CF,季實際支出) / 股本 ≥ 80% → 大擴廠,看好未來需求
 
@@ -16,7 +16,7 @@ import streamlit as st
 
 
 def render_dragon_alert_section(cl2, cx2, capital: float, *, capex=None) -> None:
-    """龍頭預警區 — 孫慶龍龍多策略最高等級。
+    """龍頭預警區 — 龍多策略最高等級。
 
     cl2 / cx2 為 FinMind 原始元值;對「股本」算真實比例(取代舊版 >0 假判斷)。
 

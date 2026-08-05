@@ -256,5 +256,132 @@ class TestSigmaPUsesLevelCorr(unittest.TestCase):
             self.assertGreaterEqual(res["score"], -100)
 
 
+# ══════════════════════════════════════════════════════════════════
+# v19.172 契約測試：放大倍率 / σ_p / 缺席成分 三個「揭露」key
+#
+# 背景（誠實度 bug，非計算 bug）：score = (Σ w·d·z / σ_p)/3×100，σ_p 每日重估。
+# 線上反推 σ_p = 0.473 → 分數被放大 2.11× 而使用者完全不知道，
+# 且 47 距離「強烈 Risk-on」的 ±50 只差 3 分。本組測試釘住揭露欄位的存在與自洽。
+# ══════════════════════════════════════════════════════════════════
+class TestDisclosureKeys(unittest.TestCase):
+
+    def _full_close_map(self, n=300):
+        """涵蓋全部 7 個成分所需的 9 個 close_map key（斜率各異，避免常數序列）。"""
+        def ramp(start, step):
+            return [start + step * i for i in range(n)]
+        return {
+            "股票 SPY": ramp(100, 0.50),
+            "長天期美債 TLT": ramp(150, -0.20),
+            "高收益債 HYG": ramp(80, 0.11),
+            "投資級債 LQD": ramp(110, -0.07),
+            "美債波動 MOVE": ramp(90, 0.13),
+            "VIX 波動率": ramp(30, -0.05),
+            "美元 UUP": ramp(28, 0.03),
+            "黃金 GLD": ramp(180, 0.17),
+            "美元日圓 USDJPY": ramp(140, 0.09),
+        }
+
+    def test_expected_components_is_ssot_of_seven(self):
+        """`EXPECTED_RISK_COMPONENTS` 必須剛好 7 個且不重複（missing 的分母）。"""
+        exp = fe.EXPECTED_RISK_COMPONENTS
+        self.assertEqual(len(exp), 7)
+        self.assertEqual(len(set(exp)), 7)
+        self.assertIn("美元日圓 USDJPY", exp)
+
+    def test_missing_empty_when_all_present(self):
+        """9 個 key 全給 → 7 個成分全到 → missing 為空，且順序等於 SSOT 名單。"""
+        res = fe.compute_risk_score(self._full_close_map())
+        self.assertEqual(len(res["components"]), 7)
+        self.assertEqual(res["missing"], [])
+        self.assertEqual([c[0] for c in res["components"]],
+                         list(fe.EXPECTED_RISK_COMPONENTS))
+
+    def test_missing_lists_absent_components(self):
+        """線上實況重現：USDJPY 缺席時必須被點名（原本沒人知道少了它）。"""
+        cm = self._full_close_map()
+        cm.pop("美元日圓 USDJPY")
+        res = fe.compute_risk_score(cm)
+        self.assertEqual(len(res["components"]), 6)
+        self.assertEqual(res["missing"], ["美元日圓 USDJPY"])
+
+    def test_missing_covers_all_when_no_component(self):
+        """完全沒資料 → 7 個全列 missing；σ_p / amplification 回 None（不捏造 1.0）。"""
+        res = fe.compute_risk_score({"股票 SPY": [1, 2, 3]})
+        self.assertIsNone(res["score"])
+        self.assertEqual(res["missing"], list(fe.EXPECTED_RISK_COMPONENTS))
+        self.assertIsNone(res["sigma_p"])
+        self.assertIsNone(res["amplification"])
+
+    def test_degraded_path_amplification_is_one(self):
+        """降級（相關矩陣算不出）→ σ_p = 1、放大倍率 = 1（不因降級而放大）。"""
+        cm = {"股票 SPY": [100 + 0.5 * i for i in range(300)],
+              "長天期美債 TLT": [150 - 0.2 * i for i in range(300)]}
+        res = fe.compute_risk_score(cm)
+        self.assertEqual(res["weighting"], "equal")
+        self.assertEqual(res["sigma_p"], 1.0)
+        self.assertEqual(res["amplification"], 1.0)
+
+    def test_amplification_equals_inverse_sigma_p(self):
+        """手算：VIX(−1) 與 UUP(−1)，ρ_level ≈ +0.3583、等權
+        → var_p = ¼(2 + 2×0.3583) = 0.67915 → σ_p = 0.8241
+        → amplification = 1/0.8241 = **1.213**、n_eff = 1/0.67915 = **1.47**
+        （amplification² 必須等於 n_effective，兩者同源不可漂移）。
+        """
+        a, b = _antiphase_pair()
+        res = fe.compute_risk_score({"VIX 波動率": a, "美元 UUP": b})
+        self.assertEqual(res["weighting"], "inv_corr")
+        self.assertAlmostEqual(res["sigma_p"], 0.8241, delta=0.002)
+        self.assertAlmostEqual(res["amplification"], 1.213, delta=0.003)
+        self.assertAlmostEqual(res["amplification"] ** 2, res["n_effective"],
+                               delta=0.01)
+
+    def test_amplification_hits_sqrt_n_ceiling(self):
+        """手算：VIX(−1) 與 USDJPY(+1) → ρ_level = −0.3583 → σ_p 被地板 1/√2 咬住
+        → σ_p = 0.70711、amplification = √2 = **1.414**（= 理論上限 √n）。
+        本例 >= UI 的 1.3 揭露門檻，正是「該跳警告」的情境。
+        """
+        a, b = _antiphase_pair()
+        res = fe.compute_risk_score({"VIX 波動率": a, "美元日圓 USDJPY": b})
+        self.assertEqual(res["sigma_p"], 0.7071)
+        self.assertAlmostEqual(res["amplification"], 1.4142, delta=0.001)
+        self.assertGreaterEqual(res["amplification"], 1.3)
+
+    def test_amplification_bounds_across_cases(self):
+        """不變式：1 <= amplification <= √n（σ_p ∈ [1/√n, 1] 的直接推論）。"""
+        a, b = _antiphase_pair()
+        cases = [
+            self._full_close_map(),
+            {"VIX 波動率": a, "美元 UUP": b},
+            {"VIX 波動率": a, "美元日圓 USDJPY": b},
+        ]
+        for cm in cases:
+            res = fe.compute_risk_score(cm)
+            n = len(res["components"])
+            self.assertGreaterEqual(res["amplification"], 1.0)
+            self.assertLessEqual(res["amplification"], (n ** 0.5) + 1e-9)
+            self.assertAlmostEqual(res["amplification"],
+                                   1.0 / res["sigma_p"], delta=0.002)
+
+
+class TestRiskLabelBoundariesUnchanged(unittest.TestCase):
+    """v19.172 只把 ±15 / ±50 抽成具名常數 + 加註解，**數值與判級行為不得變**
+    （改門檻須先回測，見 flow_engine `_risk_label` 上方註解）。"""
+
+    def test_design_values(self):
+        self.assertEqual(fe._RISK_LABEL_STRONG, 50)
+        self.assertEqual(fe._RISK_LABEL_MILD, 15)
+
+    def test_boundary_behaviour(self):
+        self.assertIn("強烈 Risk-on", fe._risk_label(50))
+        self.assertIn("偏 Risk-on", fe._risk_label(49))
+        self.assertIn("偏 Risk-on", fe._risk_label(15))
+        self.assertIn("中性", fe._risk_label(14))
+        self.assertIn("中性", fe._risk_label(0))
+        self.assertIn("中性", fe._risk_label(-14))
+        self.assertIn("偏 Risk-off", fe._risk_label(-15))
+        self.assertIn("偏 Risk-off", fe._risk_label(-49))
+        self.assertIn("強烈 Risk-off", fe._risk_label(-50))
+
+
 if __name__ == "__main__":
     unittest.main()

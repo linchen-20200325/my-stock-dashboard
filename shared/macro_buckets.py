@@ -75,6 +75,41 @@ BUCKET_LEVEL_LABEL = {
     "news":  {"green": "無系統風險", "yellow": "風險新聞", "red": "系統性警報", "gray": "未掃描"},
 }
 
+# ════════════════════════════════════════════════════════════════
+# v19.172 — 紅燈標籤「方向風味」(修:同一桶的紅燈可由方向相反的指標觸發)
+#
+# 實機案例(2026-08,使用者回報同一畫面自相矛盾):
+#     五桶摘要   → 「📈 中期: 🔴 循環惡化」
+#     同頁四象限 → 「年線乖離 +32.7% × 出口 YoY +54.6% → 🚀 有基之彈(主升段狂熱)
+#                    …順勢作多,但需以月線作為嚴格停損」
+# 使用者看到「循環惡化」配「順勢作多」,直覺是系統算錯。實際上四象限**內部自洽**
+# (過熱但趨勢未破 → 順勢 + 嚴停損 是合理處置),矛盾**完全來自標籤**:
+# 中期桶的紅可由兩種方向相反的 DangerSpec 觸發 —
+#     low_bad  (ism_pmi < 46 / tw_export ≤ -5%)      → 真的是「惡化」
+#     high_bad (bias_240 ≥ 20 / us_core_cpi ≥ 4)     → 其實是「過熱」
+# 當期是 BIAS240 = +32.7%(high_bad)觸發,卻沿用寫死的「循環惡化」。
+#
+# 設計取捨(為何不把 BUCKET_LEVEL_LABEL 直接改成巢狀 dict):
+#   BUCKET_LEVEL_LABEL 的形狀是 {bucket: {level: str}},巢狀化會打破既有讀法。
+#   故**保留原 dict 當預設**(向下相容,不傳 spec 的 caller 行為 0 改變),
+#   另加本表 + `bucket_level_label()` 在紅燈時覆寫。
+#
+# 只有 long / mid 需要過熱版:
+#   short(vix 高 / adl 低 / fut_net 低)→「急殺風險」語意本就方向中性;
+#   chips →「籌碼危險」中性;news →「系統性警報」中性。
+#
+# ⚠️ 本節**只改顯示文字**,不動任何門檻數值、不動燈號顏色/分級邏輯。
+# ════════════════════════════════════════════════════════════════
+RED_FLAVOR_OVERHEAT = "overheat"            # high_bad(或 band 高側)觸發 → 過熱
+RED_FLAVOR_DETERIORATION = "deterioration"  # low_bad(或 band 低側)觸發 → 惡化 / 衰退
+
+BUCKET_RED_LABEL_BY_FLAVOR: dict[str, dict[str, str]] = {
+    "long": {RED_FLAVOR_OVERHEAT: "結構過熱",
+             RED_FLAVOR_DETERIORATION: BUCKET_LEVEL_LABEL["long"]["red"]},
+    "mid":  {RED_FLAVOR_OVERHEAT: "循環過熱",
+             RED_FLAVOR_DETERIORATION: BUCKET_LEVEL_LABEL["mid"]["red"]},
+}
+
 # 新聞桶：系統性風險命中「則數」→ 燈號（DESIGN：UI 判讀規則，非金融閾值）
 NEWS_SYSTEMIC_YELLOW_COUNT = 1   # ≥1 則系統性新聞 → 🟡
 NEWS_SYSTEMIC_RED_COUNT    = 2   # ≥2 則系統性新聞 → 🔴
@@ -82,6 +117,18 @@ NEWS_SYSTEMIC_RED_COUNT    = 2   # ≥2 則系統性新聞 → 🔴
 # macro 健康評分（0-100）危險線：red=DEFENSE 預設樓地板，yellow=過半警示
 _HEALTH_RED    = 35.0   # SSOT:macro_helpers.HEALTH_DEFENSE_THRESHOLD 預設值（calibrated 可調 [20,60]）
 _HEALTH_YELLOW = 50.0   # DESIGN：低於半分轉弱警示
+# ── v19.173 名不副實揭露（AI-H）────────────────────────────────────
+# 「總經健康評分」在**建構上只有 2 個輸入**（macro_helpers.compute_macro_health）:
+#     health = jqavg × HEALTH_WEIGHT_JQ(0.6) + min(score/max_score×100,100) × HEALTH_WEIGHT_SCORE(0.4)
+#              + HEALTH_FNET_BONUS(0，v19.102 校準後歸零 → dead term)
+# 其中 jqavg = 旌旗指數（站上 20MA 家數比）＝**廣度**，不是槓桿、不是資金面。
+# 本註冊表 16 個 DangerSpec 中，health 自己是**輸出**，真正餵進這條公式的只有
+# jingqi 一項（score 來自 mkt_info，不在本註冊表內）；其餘 14 項 ——
+# ndc_signal / m1b_m2_gap / ism_pmi / us_core_cpi / tw_export / bias_240 /
+# us10y / dxy / vix / adl / fut_net / margin / foreign_net / news_systemic
+# —— 全部**不含**。
+# ⇒ 「五桶多盞紅、但本分數仍不低」不是算錯，是兩者評估範疇不同。
+# 本版只在 note 誠實揭露因子組成（不改門檻、不改公式；改公式需重跑 AUC 校準，屬另案）。
 
 
 @dataclass(frozen=True)
@@ -109,7 +156,12 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     # ── 🌳 長期：結構 / 景氣位階 ──
     DangerSpec("health", "總經健康評分", "long", "", "low_bad",
                yellow=_HEALTH_YELLOW, red=_HEALTH_RED, decimals=0,
-               note="<35 防禦 / <50 轉弱", source="SSOT:HEALTH_DEFENSE_THRESHOLD(35)+DESIGN(50)",
+               note="<35 防禦 / <50 轉弱"
+                    "（v19.173:此分只有 2 個輸入 — 旌旗指數(站上 20MA 家數比) 60% ＋ "
+                    "大盤評分 40%,實質是「趨勢廣度分數」;不含融資／外資期貨／"
+                    "年線乖離／NDC／M1B-M2／VIX／PMI／CPI／出口／ADL／新聞,"
+                    "那些各自有燈號。故五桶多盞紅而本分數不低非矛盾,是評估範疇不同）",
+               source="SSOT:HEALTH_DEFENSE_THRESHOLD(35)+DESIGN(50)",
                emoji="🩺"),
     DangerSpec("ndc_signal", "NDC 景氣對策燈號", "long", "分", "band",
                yellow=32.0, red=38.0, yellow_lo=23.0, red_lo=16.0, decimals=0,
@@ -246,6 +298,112 @@ def classify_danger(value: Optional[float], spec: DangerSpec) -> str:
     return "green"
 
 
+def red_flavor(spec: DangerSpec, value: Optional[float] = None) -> str:
+    """判定「這盞紅燈是由哪個方向觸發」(v19.172)。
+
+    回 RED_FLAVOR_OVERHEAT(過熱) 或 RED_FLAVOR_DETERIORATION(惡化/衰退)。
+
+        high_bad → 過熱(值太高)
+        low_bad  → 惡化(值太低)
+        band     → 依觸發側:v >= red 走過熱、v <= red_lo 走衰退
+
+    值不可解析 / NaN / band 兩側皆未觸發 → 保守回 DETERIORATION,
+    亦即維持原本寫死的標籤(§1:不確定時不擅自改口徑,不偽造新語意)。
+    """
+    if spec.direction == "high_bad":
+        return RED_FLAVOR_OVERHEAT
+    if spec.direction == "low_bad":
+        return RED_FLAVOR_DETERIORATION
+    # band：高低兩側皆危險 → 看值實際落在哪一側
+    # None / 非數字 → float() 拋 TypeError / ValueError，一律走保守分支
+    try:
+        v = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return RED_FLAVOR_DETERIORATION
+    if v != v:   # NaN
+        return RED_FLAVOR_DETERIORATION
+    if v >= spec.red:
+        return RED_FLAVOR_OVERHEAT
+    return RED_FLAVOR_DETERIORATION
+
+
+def bucket_level_label(bucket: str, level: str, *,
+                       spec: Optional[DangerSpec] = None,
+                       value: Optional[float] = None) -> str:
+    """桶燈號 → 狀態短語；紅燈依觸發方向分流過熱 / 惡化(v19.172)。
+
+    Args
+    ----
+    bucket: BUCKET_ORDER 之一
+    level : green / yellow / red / gray
+    spec  : 觸發該桶當前燈號的 DangerSpec(僅 red 時有作用)
+    value : 該 spec 當期值(band 判觸發側用)
+
+    **向下相容**：不傳 spec → 回傳值完全等同 `BUCKET_LEVEL_LABEL[bucket][level]`。
+    黃燈刻意不分流(v19.172 範圍僅收斂紅燈,避免擴大行為變更面)。
+    未知 bucket / level → KeyError(§1 Fail Loud,不靜默回空字串)。
+    """
+    base = BUCKET_LEVEL_LABEL[bucket][level]
+    if level != "red" or spec is None:
+        return base
+    return BUCKET_RED_LABEL_BY_FLAVOR.get(bucket, {}).get(red_flavor(spec, value), base)
+
+
+def danger_exceedance(value: Optional[float], spec: DangerSpec, level: str) -> float:
+    """超標幅度 = 超過該級門檻「幾個黃→紅帶寬」(v19.172)。
+
+    用途：同一桶同時有多盞同色燈時，挑出**最嚴重**那盞當 headline / 標籤依據
+    （原本是取「註冊順序第一個」，順序純屬歷史,常不是主因）。
+
+        high_bad: (v - ref) / |red - yellow|
+        low_bad : (ref - v) / |yellow - red|
+        band    : 依觸發側取對應門檻對
+
+    其中 ref = 該 level 的門檻線(red / yellow；band 低側用 red_lo / yellow_lo)。
+
+    為何**不**用「倍數 v / red」(§4.1 量綱陷阱)
+    -------------------------------------------
+    本專案門檻含 0 與負值 — tw_export red=-5.0、m1b_m2_gap red=0.0、
+    fut_net red=-20000 — 倍數會除零或符號翻轉(如 -8/-5 反而 <1),排序整個亂掉。
+    帶寬正規化對 0 / 負門檻皆成立,且無單位、跨指標可比。
+
+    回 0.0 的情形：level 非 red/yellow、值不可解析 / NaN、帶寬為 0(門檻重合)、
+    band 兩側皆未觸發。caller 以 `max(..., key=)` 選主因時 0.0 會平手,
+    而 `max` 保留先出現者 → **退回原註冊順序**,行為不退步。
+    """
+    if level not in ("red", "yellow"):
+        return 0.0
+    try:
+        v = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+    if v != v:   # NaN
+        return 0.0
+
+    if spec.direction == "high_bad":
+        ref = spec.red if level == "red" else spec.yellow
+        scale = abs(spec.red - spec.yellow)
+        return (v - ref) / scale if scale > 0 else 0.0
+
+    if spec.direction == "low_bad":
+        ref = spec.red if level == "red" else spec.yellow
+        scale = abs(spec.yellow - spec.red)
+        return (ref - v) / scale if scale > 0 else 0.0
+
+    # band：先判觸發側，再用該側的紅黃線算帶寬
+    hi_ref = spec.red if level == "red" else spec.yellow
+    lo_ref = spec.red_lo if level == "red" else spec.yellow_lo
+    if v >= hi_ref:
+        scale = abs(spec.red - spec.yellow)
+        return (v - hi_ref) / scale if scale > 0 else 0.0
+    if lo_ref is not None and v <= lo_ref:
+        if spec.red_lo is None or spec.yellow_lo is None:
+            return 0.0
+        scale = abs(spec.yellow_lo - spec.red_lo)
+        return (lo_ref - v) / scale if scale > 0 else 0.0
+    return 0.0
+
+
 def aggregate_level(levels: list[str]) -> str:
     """桶燈號 = 旗下指標取最危險者（紅>黃>綠）。全部 gray（未載入）→ gray。"""
     loaded = [lv for lv in levels if lv in LEVEL_RANK]
@@ -301,8 +459,13 @@ _GLOBAL_GROUP_META = {"emoji": "🌍", "title": "全球風險",
 
 # v18.321 拐點 / 現金流向群組:深度分析區塊(非 5 桶 DangerSpec),meta 另列。
 # 與 "ai"/"global" 同走特例(badge 顯示自訂短語而非「桶 N/5」)。
+# v19.173 正名:原寫「MK 黃金拐點」會讓人以為背後有 Mann-Kendall 無母數趨勢檢定,
+# 但 `macro_helpers.detect_cpi_fed_double_top` 實際是「CPI 與 Fed 利率同步月降」的
+# 兩點差分規則(無 S / Var(S) / Z / p-value)。真正的 Mann-Kendall 另置於
+# `shared/mk_test.py`(v19.173 新增,尚未接線 —— CPI/Fed 目前只存本月+上月兩個純量,
+# 無歷史序列可檢定)。此處改用誠實名稱。
 _PIVOT_GROUP_META = {"emoji": "🔮", "title": "拐點",
-                     "sub": "六大面向 × MK 黃金拐點（景氣反轉偵測）"}
+                     "sub": "六大面向 × CPI×Fed 雙頂回落（景氣反轉偵測）"}
 _CASHFLOW_GROUP_META = {"emoji": "💵", "title": "現金流向",
                         "sub": "熱錢三角交叉（外資 × 匯率 × 背離）"}
 

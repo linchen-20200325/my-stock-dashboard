@@ -152,14 +152,37 @@ def _ratio_series(close_map, a, b, min_len=30):
     return [x / y for x, y in zip(ca, cb) if y]
 
 
+# ══════════════════════════════════════════════════════════════════
+# v19.172 ⚠️ ±15 / ±50 邊界的**尺度前提已經變了**（本版只揭露，不動數值）
+# ------------------------------------------------------------------
+# 這組邊界是 v19.169 以前訂的，當時 score = 「n 個 z 的等權平均」/3×100，
+# 分母固定 = 1（等同 σ_p ≡ 1）。v19.170/171 引入 σ_p 標準化之後，
+# score = (Σ w_i d_i z_i / σ_p)/3×100 —— **分母每天重估**。
+# 線上實測 σ_p = 0.473（放大 2.11×，反推見 compute_risk_score docstring），
+# 也就是同一組 z 在新尺度下的分數是舊尺度的 2.11 倍：
+#     等權平均 0.667 → 舊尺度 score = 22（🟡 中性）
+#                    → 新尺度 score = 47（🟢 偏 Risk-on，距 ±50 只差 3 分）
+# 這 3 分可能純粹來自 σ_p 的日間抖動，不是風險情緒真的變了。
+#
+# 建議（**需回測，不在本版做**）：把門檻改成對 `s/σ_p` 的**滾動 3 年分位**
+# （例如 >P85 = 強烈 Risk-on），讓邊界跟著自身分布走，而非釘死在 ±15/±50。
+# 在回測完成前**不得**改下面 2 個常數（＝ ±15 / ±50 共 4 條判級邊界）——
+# 改了會直接改變歷史燈號分布與觸發頻率。v19.172 只做「抽具名常數 + 加註解」，
+# 數值與 `_risk_label()` 的判級行為 100% 不變（tests 已釘住邊界值）。
+# 過渡期的誠實作法：由 UI 揭露當日放大倍率（section_long.py，v19.172 已接）。
+# ══════════════════════════════════════════════════════════════════
+_RISK_LABEL_STRONG: int = 50   # |score| >= 50 → 「強烈」（DESIGN 值，見上方註解）
+_RISK_LABEL_MILD: int = 15     # |score| >= 15 → 「偏」  （DESIGN 值，見上方註解）
+
+
 def _risk_label(score):
-    if score >= 50:
+    if score >= _RISK_LABEL_STRONG:
         return "🟢 強烈 Risk-on（資金追逐風險）"
-    if score >= 15:
+    if score >= _RISK_LABEL_MILD:
         return "🟢 偏 Risk-on"
-    if score > -15:
+    if score > -_RISK_LABEL_MILD:
         return "🟡 中性"
-    if score > -50:
+    if score > -_RISK_LABEL_STRONG:
         return "🔴 偏 Risk-off（避險防禦）"
     return "🔴 強烈 Risk-off（資金撤退）"
 
@@ -246,6 +269,34 @@ def _direction_adjusted_corr(series_dirs, window, min_obs=30, use_diff=True):
     return corr
 
 
+# ══════════════════════════════════════════════════════════════════
+# v19.172：風險情緒「應到成分」清單 —— SSOT
+#
+# 為何抽出來：新增的回傳 key `missing`（誰因資料不足而缺席）必須跟
+# `compute_risk_score` 實際建構 signals 的名單**同一份**。若兩邊各寫一份，
+# 只要有人加成分就會漂移，`missing` 會變成一個「看起來很誠實但其實在說謊」
+# 的欄位 —— 比不揭露更糟。故建構迴圈直接吃這兩個 spec，順序 / 方向皆不變。
+# ══════════════════════════════════════════════════════════════════
+# (顯示名, 分子 key, 分母 key, 方向 d)
+_RATIO_COMPONENT_SPECS = (
+    ("股債比 SPY/TLT", "股票 SPY", "長天期美債 TLT", +1),
+    ("信用利差 HYG/LQD", "高收益債 HYG", "投資級債 LQD", +1),
+    ("MOVE/VIX 債市壓力", "美債波動 MOVE", "VIX 波動率", -1),
+)
+# (顯示名 = close_map key, 方向 d)
+_DIRECT_COMPONENT_SPECS = (
+    ("VIX 波動率", -1),
+    ("美元 UUP", -1),
+    ("黃金 GLD", -1),
+    ("美元日圓 USDJPY", +1),  # USD/JPY 升 = 日圓貶 = carry-on = risk-on
+)
+# 完整 7 個成分的顯示名（順序 = 建構順序 = components 的順序）
+EXPECTED_RISK_COMPONENTS = tuple(
+    [spec[0] for spec in _RATIO_COMPONENT_SPECS]
+    + [spec[0] for spec in _DIRECT_COMPONENT_SPECS]
+)
+
+
 def compute_risk_score(close_map, window=TRADING_DAYS_PER_YEAR, min_window=60):
     """用跨資產序列合成 risk-on/off 分數（v19.170 修 P1-3 等權共線）。
 
@@ -278,16 +329,46 @@ def compute_risk_score(close_map, window=TRADING_DAYS_PER_YEAR, min_window=60):
     效果（**理論上**）：全相關（ρ≈1）時 σ_p≈1，退化成原本的平均；
     成分互相獨立時 σ_p≈1/√n，分數被放大 √n 倍（n 個獨立證據本來就更強）。
 
-    ⚠️ v19.171 誠實補述：上面這句「放大 √n 倍」**實務上幾乎不會發生**。
-    v19.171 把 σ_p 的 ρ 改吃**水位**（ρ_level，見下方修正三）之後，趨勢價格
-    序列的水位相關恆逼近 1（成因即本檔 `_direction_adjusted_corr` 引用的
-    Yule 1926 spurious correlation）→ wᵀρ_level·w ≈ (Σw)² = 1，
-    實測 var_p≈1、σ_p≈1、n_effective≈1：分數基本上就是原本的加權平均，
-    放大效果有限，`_risk_label` 的 ±50「強烈」門檻依舊不容易觸發。
-    這是**刻意付出的代價**，不是 bug：水位 ρ 保證分母與分子（水位 z）同源、
-    `Var(s)=wᵀρw` 的恆等式才成立。改用差分 ρ 確實能換到 √n 放大，但那個放大
-    是**假的**（分子分母不同源，量化影響見修正三：一律虛增 1.44×、燈號整級
-    上調）。寧可不放大，也不要放大一個算錯的數。
+    🔴 v19.172 撤回 v19.171 的「放大有限」宣稱（**被線上實測打臉**）
+    ---------------------------------------------------------------
+    v19.171 這段原文寫：「趨勢價格序列的水位相關恆逼近 1 → wᵀρ_level·w ≈ 1，
+    **實測 var_p≈1、σ_p≈1、n_effective≈1**：放大效果有限」。
+    那三個「實測」值**沒有任何線上量測支撐**，是從「水位 ρ→1」的直覺推的。
+    真的從線上畫面反推，結論相反：
+
+        線上貢獻明細（已乘方向）：+2.6, +2.4, −0.6, +0.5, −1.4, +0.5   (n=6)
+        Σ = 4.0，等權平均 = 4.0/6 = 0.6667
+        若 σ_p = 1（降級路徑）→ score = round(0.6667/3×100) = 22
+        線上實際顯示                                        = 47
+        ⇒ σ_p = 0.6667×100/(47×3) = 0.473，var_p = 0.473² = 0.224
+        ⇒ n_effective = 1/0.224 = 4.46（不是 1！）
+        ⇒ 由 var_p = 1/n + (1/n²)·ΣΣ_{i≠j} ρ_ij 反推（n=6）：
+             0.224 = 0.1667 + 0.8333·ρ̄  →  **ρ̄_level ≈ 0.069**
+
+    （反推假設等權；實際權重是 inv_corr 配的，故 ρ̄ 是量級估計而非精確值。）
+
+    **實測 ρ̄_level ≈ 0.07，不是 ≈1。** 為什麼？因為 ρ 是**方向調整後**的
+    ρ(d_i z_i, d_j z_j) = d_i·d_j·ρ(z_i, z_j)。7 個成分裡有 3 個 d = −1
+    （VIX 波動率、美元 UUP、黃金 GLD）。即使原始水位 ρ 普遍為正（Yule 假相關
+    確實存在），乘上方向後 d_i·d_j = −1 的配對就翻成負值，
+    在 ΣΣ_{i≠j} 這個雙重和裡與正配對**互相抵銷** → ρ̄ 被拉到 0 附近。
+    v19.171 只看到「ρ(z_i,z_j)→1」，漏了 d_i·d_j 的符號 —— 這正是同一份
+    docstring 下方「為何兩者都要先乘方向 d」在講的事，前後自相矛盾。
+
+    ⚠️ 實務後果（本版揭露、不改計算）
+    --------------------------------
+    - 放大倍率 `1/σ_p` 實測 **2.11×**，遠不止「有限」；理論上限是 √n
+      （n=6 → 2.45×，由 σ_p 的地板 1/√n 保證）。
+    - 分數 47 距離「🟢 強烈 Risk-on」的 ±50 只差 **3 分**，而 σ_p 是**每日重估**
+      的分母 → 那 3 分可能純粹來自 σ_p 抖動，不是風險情緒真的變了。
+    - 因此 **score 不可跨日直接比較**（尺度每天不同），也不該把 ±50 當成
+      穩定的事件門檻（見 `_risk_label` 上方 v19.172 註解）。
+    - v19.172 起回傳 `amplification` / `sigma_p` / `missing` 三個 key，
+      由 UI（`section_long.py`）在放大倍率 >= 1.3 時顯式提示，
+      不再讓「分數被放大 2 倍且沒人知道」這件事繼續發生。
+
+    這不影響 v19.171 修正三本身的正確性：水位 ρ 仍是唯一能讓
+    `Var(s)=wᵀρw` 成立的選擇。錯的只是「所以放大會很小」這個推論。
 
     v19.171 修正三【🔴 數學錯誤】：σ_p 的分子分母必須同源
     ----------------------------------------------------
@@ -339,24 +420,30 @@ def compute_risk_score(close_map, window=TRADING_DAYS_PER_YEAR, min_window=60):
                                           （全相關→1；n 個獨立→n）
                                           v19.171 起由 σ_p 的地板/天花板保證
                                           落在 [1, n]，不會再出現 >n 的假性放大。
+        v19.172 新增 key（**揭露用，不影響任何既有數值**）：
+          'sigma_p'       : float | None  當日組合理論標準差 σ_p。
+                                          降級路徑 = 1.0；無成分 → None。
+          'amplification' : float | None  放大倍率 1/σ_p（= sqrt(n_effective)）。
+                                          1.0 = 未放大；實測可達 2.11。
+                                          無成分 → None（**不填 1.0** —— 沒有
+                                          組合就沒有 σ_p，填 1.0 是捏造，§1）。
+          'missing'       : list[str]     `EXPECTED_RISK_COMPONENTS` 中因
+                                          「close_map 沒這個 key」或「樣本不足
+                                          算不出 z」而未納入的成分顯示名。
+                                          線上 7 個成分只回 6 個、USDJPY 缺席
+                                          卻沒人知道 —— 本 key 就是為此而加。
+                                          注意：**不區分**「沒抓到」與「z 算不出」，
+                                          兩者對分數的效果相同（都是沒進分母 n）。
     """
     signals = []  # (顯示名, closes, 方向)
 
-    spy_tlt = _ratio_series(close_map, "股票 SPY", "長天期美債 TLT")
-    if spy_tlt:
-        signals.append(("股債比 SPY/TLT", spy_tlt, +1))
-    hyg_lqd = _ratio_series(close_map, "高收益債 HYG", "投資級債 LQD")
-    if hyg_lqd:
-        signals.append(("信用利差 HYG/LQD", hyg_lqd, +1))
-    move_vix = _ratio_series(close_map, "美債波動 MOVE", "VIX 波動率")
-    if move_vix:
-        signals.append(("MOVE/VIX 債市壓力", move_vix, -1))
-    for name, direction in (
-        ("VIX 波動率", -1),
-        ("美元 UUP", -1),
-        ("黃金 GLD", -1),
-        ("美元日圓 USDJPY", +1),  # USD/JPY 升 = 日圓貶 = carry-on = risk-on
-    ):
+    # v19.172：改吃 module-level spec（行為與 v19.171 逐字等價 —— 同順序、同方向、
+    # 同 truthy 判定），目的是讓 `missing` 與建構名單共用同一份 SSOT。
+    for label, num_key, den_key, direction in _RATIO_COMPONENT_SPECS:
+        ratio = _ratio_series(close_map, num_key, den_key)
+        if ratio:
+            signals.append((label, ratio, direction))
+    for name, direction in _DIRECT_COMPONENT_SPECS:
         if close_map.get(name):
             signals.append((name, close_map[name], direction))
 
@@ -369,10 +456,16 @@ def compute_risk_score(close_map, window=TRADING_DAYS_PER_YEAR, min_window=60):
         components.append((label, z, direction))
         used.append((label, closes, direction))
 
+    # v19.172：誰缺席（§1 不靜默 —— 少一個成分就少一份證據，使用者有權知道）
+    _present = {c[0] for c in components}
+    missing = [nm for nm in EXPECTED_RISK_COMPONENTS if nm not in _present]
+
     if not components:
         # 既有回傳契約：score=None / components=[]（tests/test_flow_engine.py 斷言）
         return {"score": None, "label": "資料不足", "components": [],
-                "weighting": "equal", "weights": [], "n_effective": 0.0}
+                "weighting": "equal", "weights": [], "n_effective": 0.0,
+                # 沒有任何成分 → σ_p / 放大倍率**無定義**，回 None 而非 1.0
+                "sigma_p": None, "amplification": None, "missing": missing}
 
     names = [c[0] for c in components]
     contrib = np.asarray([c[1] * c[2] for c in components], dtype=float)  # d_i · z_i
@@ -424,4 +517,10 @@ def compute_risk_score(close_map, window=TRADING_DAYS_PER_YEAR, min_window=60):
         "weighting": weighting,
         "weights": [(nm, round(float(w), 4)) for nm, w in zip(names, weights)],
         "n_effective": n_effective,
+        # ── v19.172 揭露欄位（純附加，不參與上面任何計算）──────────────
+        # sigma_p 恆在 [1/√n, 1]（地板/天花板見 docstring 修正三），
+        # 故 amplification = 1/σ_p 恆在 [1, √n]，且 = sqrt(n_effective)。
+        "sigma_p": round(float(sigma_p), 4),
+        "amplification": round(1.0 / float(sigma_p), 3),
+        "missing": missing,
     }

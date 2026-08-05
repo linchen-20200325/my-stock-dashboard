@@ -243,6 +243,147 @@ def finmind_get(dataset, data_id, start_ymd, end_ymd, token=""):
     return _fm_client(dataset, data_id=data_id, start_date=start_ymd,
                       end_date=end_ymd, token=token, timeout=25, retries=2)
 
+# ════════════════════════════════════════════════════════
+# v19.172 P0a-①:外資身分別「白名單」— 取代 str.contains("外資")
+# ════════════════════════════════════════════════════════
+# 為何不用 contains:期交所 / FinMind 的 `institutional_investors` 欄,在不同年份
+# 用過「外資」與「外資及陸資」兩種寫法(同檔 taifex_mtx_data 的 identity 白名單
+# 已列此二變體),另有「外資自營商」這種**語意不同**的身分別(同檔選擇權段用
+# `("外資" in ii) and ("自營" not in ii)` 就是在排除它)。
+# `str.contains("外資")` 會把上述三者全部收進來 → 同一天若回多列即**重複計數**,
+# 淨口數被灌成歷史極端值(稽核實測 −87,626 口),而畫面上完全看不出異常。
+# 依 §1 Fail Loud:白名單比對 + 多重命中時明確 log,且**只採第一個、絕不相加**。
+_FGN_ALIASES = ("外資", "外資及陸資")
+
+# ════════════════════════════════════════════════════════
+# v19.172 P0a-②:小台 → 大台「當量」換算因子(§3.3 反捏造 / §4.1 量綱 SSOT)
+# ════════════════════════════════════════════════════════
+# 小型臺指期貨(MTX)契約乘數 50 元/點,臺股期貨(TX)為 200 元/點 → 50/200 = 0.25。
+# 「外資大小」= TX 淨口 + 0.25 × MTX 淨口,單位是 **TX 當量口數**;
+# 任何要跟它相除的分母(全市場未平倉)**必須換成同一當量**,否則量綱錯誤。
+# 原本 0.25 在 finmind_fut_oi / build_leading_fast 兩處 inline,抽此常數統一。
+_MTX_TO_TX_FACTOR = 0.25
+
+
+def _fgn_mask(df, tag=""):
+    """回傳「外資」列的 boolean mask(白名單 isin + 多重身分別偵測)。
+
+    Parameters
+    ----------
+    df : pd.DataFrame  須含 `institutional_investors` 欄
+    tag : str          log 前綴用(標明呼叫點,便於診斷)
+
+    Returns
+    -------
+    pd.Series[bool] | None
+        欄位缺失 / df 空 → None(呼叫端應 skip 該來源,不臆造)。
+
+    Notes
+    -----
+    「外資」與「外資及陸資」是期交所同一個身分別在不同年份的改名,
+    **同一份資料不應同時出現**;若同時出現 → 上游 schema 異常,
+    log 後只採第一個(§1:不靜默、也不用相加把錯誤放大)。
+    """
+    if df is None or getattr(df, "empty", True):
+        return None
+    if "institutional_investors" not in getattr(df, "columns", []):
+        print(f"[LI{tag}] ⚠️ 缺 institutional_investors 欄 → 該來源本次不計入外資淨口")
+        return None
+    _col = df["institutional_investors"].astype(str)
+    _hit = _col.isin(_FGN_ALIASES)
+    _uniq = list(_col[_hit].unique())
+    if not _uniq:
+        # 白名單全落空 → 上游可能又改名。把實際值印出來供診斷,不猜、不 fallback contains。
+        print(f"[LI{tag}] ⚠️ 外資身分別白名單 {list(_FGN_ALIASES)} 0 命中,"
+              f"實際值={list(_col.unique())[:8]} → 該來源本次不計入外資淨口")
+        return _hit
+    if len(_uniq) > 1:
+        print(f"[LI{tag}] ⚠️ 外資身分別同時出現 {_uniq} — 可能重複計數,"
+              f"僅採第一個: {_uniq[0]}")
+        _hit = _col == _uniq[0]
+    return _hit
+
+
+# ════════════════════════════════════════════════════════
+# v19.173:三大法人身分別白名單 — 收 v19.172 P0a-① 的同 bug class 殘留
+# ════════════════════════════════════════════════════════
+# v19.172 只把「外資」兩處(finmind_fut_oi / build_leading_fast §2)換成 _fgn_mask;
+# **韭菜指數 fallback**(build_leading_fast §7)仍是 substring 比對:
+#     any(k in str(_mr["institutional_investors"]) for k in ["外資","投信","自營"])
+# 同一個根因,兩種漏法:
+#   ① 「外資」與「外資及陸資」(期交所同一身分別的跨年份改名)同天並存
+#      → 兩列都收 = 重複計數;
+#   ② 「外資自營商」同時含 "外資" 與 "自營" 兩個子字串 → 被當成第 4 個法人多收
+#      一列,但它本就是外資/自營商的子集(同檔 `taifex_calls_puts_day` 選擇權段
+#      `if "外資" not in identity or "自營商" in identity: continue` 就是在排除它)。
+# 為何比值不會「等比例放大」而必須修:
+#     韭菜指數 = (Σshort − Σlong) / (Σshort + Σlong) × 100
+#   分子是**差**、分母是**和**。多收一列 (l, s) 會讓分子 +(s−l)、分母 +(l+s),
+#   兩者增量比例不同 → 比值失真且**無法事後校正**(不像純加總可除回去)。
+# 別名清單的證據來源(§3.3 反捏造:不腦補沒證據的變體):
+#   - 「外資」「外資及陸資」 → _FGN_ALIASES(v19.172 SSOT)+ 同檔 `taifex_mtx_data`
+#     的 identity 白名單 `("自營商","投信","外資","外資及陸資")`(同一支 TAIFEX
+#     futContractsDate,且**同樣是 MTX 小台** → 與本 fallback 的資料形狀一致)
+#   - 「投信」「自營商」     → 同上白名單 + 該段 find_data_table 表頭關鍵字
+#   刻意**不**收「投資信託」/「自營商(避險)」/「自營商(自行買賣)」——
+#   本 repo 唯一出現「自行買賣 / 避險」拆列的是 TWSE 現貨 BFI82U
+#   (`twse_institutional_day`),那是**另一個來源、另一組欄位語彙**(欄名叫
+#   `name` 不叫 `institutional_investors`);期交所 futContractsDate 的 identity
+#   欄從未觀測到該寫法。上游若真的改名,下方 0 命中會 log 實際值(§1 fail loud),
+#   再依實證補,不預先臆造。
+# 「外資」段直接引用 _FGN_ALIASES → 別名清單維持單一 SSOT,不抄第二份。
+_INST_ALIASES = {
+    "外資":   _FGN_ALIASES,      # ("外資", "外資及陸資") ← v19.172 SSOT,共用
+    "投信":   ("投信",),
+    "自營商": ("自營商",),
+}
+
+
+def _inst_mask(df, tag=""):
+    """回傳「三大法人(外資/投信/自營商)」列的聯集 boolean mask。
+
+    與 `_fgn_mask` 同一套規則,只是從單一類別擴到三類:每一類**各自**做白名單
+    isin;同一類若同時命中多個別名(如「外資」+「外資及陸資」)→ log 後只採
+    第一個,**絕不相加**(§1:不靜默、也不用相加把錯誤放大)。
+
+    Parameters
+    ----------
+    df : pd.DataFrame  須含 `institutional_investors` 欄(呼叫端已篩到單一交易日)
+    tag : str          log 前綴用(標明呼叫點與日期,便於診斷)
+
+    Returns
+    -------
+    pd.Series[bool] | None
+        欄位缺失 / df 空 → None(呼叫端 skip 該日,不臆造)。
+        白名單 0 命中 → 全 False Series + log(該日不算韭菜指數,
+        而不是拿殘缺分母硬算出一個看起來合理的數字)。
+    """
+    if df is None or getattr(df, "empty", True):
+        return None
+    if "institutional_investors" not in getattr(df, "columns", []):
+        print(f"[LI{tag}] ⚠️ 缺 institutional_investors 欄 → 該日韭菜指數 fallback 不計算")
+        return None
+    _col = df["institutional_investors"].astype(str)
+    _mask = pd.Series(False, index=df.index)
+    _picked = []
+    for _cat, _aliases in _INST_ALIASES.items():
+        _hit = _col.isin(_aliases)
+        _uniq = list(_col[_hit].unique())
+        if not _uniq:
+            continue
+        if len(_uniq) > 1:
+            print(f"[LI{tag}] ⚠️ {_cat} 身分別同時出現 {_uniq} — 可能重複計數,"
+                  f"僅採第一個: {_uniq[0]}")
+            _hit = _col == _uniq[0]
+        _picked.append(_uniq[0])
+        _mask = _mask | _hit
+    if not _picked:
+        # 全落空 → 上游可能又改名。印實際值供診斷,不猜、不 fallback substring。
+        print(f"[LI{tag}] ⚠️ 三大法人身分別白名單 {list(_INST_ALIASES)} 0 命中,"
+              f"實際值={list(_col.unique())[:8]} → 該日韭菜指數 fallback 不計算")
+    return _mask
+
+
 @_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def finmind_fut_oi(start_ymd, end_ymd, token=""):
     """
@@ -260,9 +401,14 @@ def finmind_fut_oi(start_ymd, end_ymd, token=""):
         try:
             df_tx  = finmind_get("TaiwanFuturesInstitutionalInvestors","TX", start_ymd,end_ymd,token)
             df_mtx = finmind_get("TaiwanFuturesInstitutionalInvestors","MTX",start_ymd,end_ymd,token)
-            for df, factor in [(df_tx, 1.0), (df_mtx, 0.25)]:
+            for df, factor, _cid in [(df_tx, 1.0, "TX"),
+                                     (df_mtx, _MTX_TO_TX_FACTOR, "MTX")]:
                 if df.empty: continue
-                df_fi = df[df["institutional_investors"].str.contains("外資", na=False)]
+                # v19.172 P0a-①:白名單取代 contains(防「外資/外資及陸資/外資自營商」重複計數)
+                _m_fi = _fgn_mask(df, tag=f":fut_oi:{_cid}")
+                if _m_fi is None:
+                    continue
+                df_fi = df[_m_fi]
                 for _, row in df_fi.iterrows():
                     dk = str(row["date"]).replace("-","")
                     long_  = int(row.get("long_open_interest_balance_volume",  0) or 0)
@@ -931,10 +1077,28 @@ def build_leading_indicators(start, end, token="", progress_cb=None):
     rows = []
     for d in all_dates:
         inst = inst_data.get(d, {}); lt = lt_data.get(d, {})
+        # v19.172 P0a-②:與 build_leading_fast 同 schema —— 未平倉口數必須帶契約別。
+        # 本路徑的 `lt["未平倉"]` 恆為 largeTraderFutQry(contractId=TX)的「全市場
+        # 未沖銷部位數」→ 契約別固定 'TX'。MTX 全體 OI 只能從 taifex_mtx_data 的
+        # (韭菜值, MTX OI) tuple 取;兩邊都有才算得出 TX 當量分母(§1 缺一不湊)。
+        _oi_tx_s = lt.get("未平倉")
+        _mtx_res_s = mtx_data.get(d)
+        _oi_mtx_s = (_mtx_res_s[1] if isinstance(_mtx_res_s, tuple)
+                     and len(_mtx_res_s) == 2 else None)
+        _oi_eq_s = (round(float(_oi_tx_s) + _MTX_TO_TX_FACTOR * float(_oi_mtx_s))
+                    if (_oi_tx_s is not None and _oi_mtx_s is not None) else None)
+        _fut_s = fut_dict.get(d)
+        _oi_bad_s = bool(_oi_eq_s and _fut_s is not None and abs(_fut_s) > _oi_eq_s)
+        if _oi_bad_s:
+            print(f"[LI-full] ⚠️ {d} 一致性違反:|外資大小|={abs(_fut_s):,} > "
+                  f"OI_TX當量={_oi_eq_s:,} — 已標 _oi_inconsistent=True")
         rows.append({
             "_date":d, "日期":ymd_display(d), "成交量":f"{vol[d]:.1f}億",
             "外資":inst.get("外資"), "投信":inst.get("投信"), "自營":inst.get("自營"),
             "外資大小":fut_dict.get(d),
+            "_oi_src": ("TX" if _oi_tx_s else None),
+            "OI_TX當量": _oi_eq_s,
+            "_oi_inconsistent": _oi_bad_s,
             "前五大留倉":lt.get("前五大"), "前十大留倉":lt.get("前十大"),
             "選PCR":pcr_dict.get(d), "外(選)":opt_data.get(d),
             "未平倉口數":lt.get("未平倉"), "韭菜指數":mtx_data.get(d),
@@ -1100,10 +1264,17 @@ def build_leading_fast(days=7, token=""):
         print("[LI-v8] ❌ 所有 FinMind API 均返回空 → 可能速率限制或網路問題")
 
     # ═══ 2. 外資期貨留倉 ════════════════════════════════════════
+    # §4.1 量綱:factor 0.25 = 小台契約乘數 50 / 大台 200 → fut_net 單位為
+    # **TX(大台)當量口數**,只能跟同為 TX 當量的分母相除(見 §7 OI_TX當量)。
     fut_net = {}
-    for df, factor in [(df_tx, 1.0), (df_mtx, 0.25)]:
+    for df, factor, _cid in [(df_tx, 1.0, "TX"),
+                             (df_mtx, _MTX_TO_TX_FACTOR, "MTX")]:
         if df.empty: continue
-        for _, row in df[df["institutional_investors"].str.contains("外資", na=False)].iterrows():
+        # v19.172 P0a-①:白名單取代 contains(防「外資/外資及陸資/外資自營商」重複計數)
+        _m_fgn = _fgn_mask(df, tag=f":fast:{_cid}")
+        if _m_fgn is None:
+            continue
+        for _, row in df[_m_fgn].iterrows():
             dk = str(row["date"]).replace("-", "")
             lo = int(pd.to_numeric(row.get("long_open_interest_balance_volume",  0), errors="coerce") or 0)
             sh = int(pd.to_numeric(row.get("short_open_interest_balance_volume", 0), errors="coerce") or 0)
@@ -1354,6 +1525,8 @@ def build_leading_fast(days=7, token=""):
 
     # ═══ 7. 組合 DataFrame ══════════════════════════════════════
     rows = []
+    _oi_partial_days = []   # v19.172:只拿到單邊 OI(TX 或 MTX)→ 同當量分母算不出
+    _oi_bad_days = []       # v19.172:|外資大小| > OI_TX當量(物理上不可能)
     for d in target:
         inst = inst_dict.get(d, {})
         _lt  = taifex_lt.get(d, {})
@@ -1365,9 +1538,17 @@ def build_leading_fast(days=7, token=""):
         if df_mtx is not None and not df_mtx.empty:
             _mtx_d = df_mtx[df_mtx["date"].astype(str).str.replace("-","") == d]
             if not _mtx_d.empty:
+                # v19.173:白名單取代 substring(同 v19.172 P0a-① 的 bug class,
+                #   當時只收了「外資」兩處,這個 fallback 漏網 — 守衛測試只擋
+                #   `str.contains`,故 CI 不會紅,但根因相同)。
+                #   原 `any(k in ii for k in ["外資","投信","自營"])` 會多收
+                #   「外資及陸資」與「外資自營商」→ _inst_l/_inst_s 重複計入;
+                #   韭菜比值分子是差、分母是和,放大倍率不同 → 比值失真。
+                #   詳見 _INST_ALIASES / _inst_mask 的說明。
+                _m_inst = _inst_mask(_mtx_d, tag=f":leek:{d}")
                 _inst_l = _inst_s = 0
-                for _, _mr in _mtx_d.iterrows():
-                    if any(k in str(_mr.get("institutional_investors","")) for k in ["外資","投信","自營"]):
+                if _m_inst is not None:
+                    for _, _mr in _mtx_d[_m_inst].iterrows():
                         _inst_l += int(pd.to_numeric(_mr.get("long_open_interest_balance_volume",0), errors="coerce") or 0)
                         _inst_s += int(pd.to_numeric(_mr.get("short_open_interest_balance_volume",0), errors="coerce") or 0)
                 _inst_total = _inst_l + _inst_s
@@ -1375,6 +1556,41 @@ def build_leading_fast(days=7, token=""):
                     # 法人淨空比（方向指標，非精確韭菜指數）
                     _leek = round((_inst_s - _inst_l) / _inst_total * 100, 1)
                     _leek = max(-99, min(99, _leek))
+
+        # ══ v19.172 P0a-②/③:未平倉口數的契約別正名 + 同當量分母 + 一致性檢查 ══
+        # 【問題】原本 `"未平倉口數": taifex_mtx_oi.get(d) or _lt.get("未平倉")`
+        #   把**兩種不同契約別**塞進同一欄,誰先命中算誰:
+        #     - taifex_mtx_oi = futDailyMarketReport(commodity_id=MTX)各月未沖銷加總
+        #       → **MTX 原始口數,未乘 0.25**
+        #     - _lt["未平倉"]  = largeTraderFutQry(contractId=TX)「全市場未沖銷部位數」
+        #       → **TX 口數**
+        #   而「外資大小」是 TX **當量**口數(TX + 0.25×MTX)。拿 TX 當量分子去除
+        #   MTX 原始分母 = 量綱錯誤,誤差 4 倍起跳(§4.1)。
+        # 【處置】欄名不動(下游 data_registry_scanner / render COLS / 測試皆硬依賴),
+        #   改為:① 加 `_oi_src` 標明本列這個數字到底是哪種契約別;
+        #        ② 另開 `OI_TX當量` 才是唯一可與「外資大小」相除的分母;
+        #        ③ 缺任一邊就回 None,**不用另一種硬湊**(§1 寧缺勿假)。
+        _oi_mtx = taifex_mtx_oi.get(d)      # MTX 原始口數(未 ×0.25)
+        _oi_tx = _lt.get("未平倉")           # TX 全市場未沖銷部位數
+        if _oi_mtx:
+            _oi_disp, _oi_src = _oi_mtx, "MTX_raw"
+        elif _oi_tx:
+            _oi_disp, _oi_src = _oi_tx, "TX"
+        else:
+            _oi_disp, _oi_src = None, None
+        # 同當量:OI_TX當量 = OI_TX + 0.25 × OI_MTX(兩邊都要有,缺一即 None)
+        if _oi_tx is not None and _oi_mtx is not None:
+            _oi_tx_eq = round(float(_oi_tx) + _MTX_TO_TX_FACTOR * float(_oi_mtx))
+        else:
+            _oi_tx_eq = None
+            if _oi_tx is not None or _oi_mtx is not None:
+                _oi_partial_days.append(f"{d}(TX={_oi_tx},MTX={_oi_mtx})")
+        # 一致性:|外資淨口| 不可能大於全市場未平倉(同當量比)。違反 → fail loud 但不 fail closed
+        _fut_d = fut_net.get(d)
+        _oi_bad = bool(_oi_tx_eq and _fut_d is not None and abs(_fut_d) > _oi_tx_eq)
+        if _oi_bad:
+            _oi_bad_days.append(f"{d}(|外資大小|={abs(_fut_d):,.0f} > 當量OI={_oi_tx_eq:,})")
+
         rows.append({
             "_date":     d,
             "日期":       ymd_display(d),
@@ -1387,11 +1603,33 @@ def build_leading_fast(days=7, token=""):
             "前十大留倉": _lt.get("前十大"),
             "選PCR":      pcr_dict.get(d),
             "外(選)":     opt_dict.get(d),
-            "未平倉口數": taifex_mtx_oi.get(d) or _lt.get("未平倉"),
+            # v19.172:選值**順序**與舊版相同(MTX 優先、falsy 才退 TX),但契約別不再是謎
+            # v19.173 更正上句原文「值與舊版完全一致」— 精確講**不是**完全一致:
+            #   舊: `taifex_mtx_oi.get(d) or _lt.get("未平倉")`
+            #   新: if _oi_mtx / elif _oi_tx / else None
+            #   唯一差異在「`_oi_mtx` falsy **且** `_oi_tx == 0`」:舊 `or` 回 `0`,新回 `None`。
+            #   全市場未平倉為 0 在物理上不可能,實質等同缺值 → 回 None 才符合
+            #   §1 寧缺勿假(回 0 會讓下游把「沒資料」誤當成「真的沒部位」,
+            #   且 OI_TX當量 拿它當分母會除以 0)。除此一格外行為相同。
+            "未平倉口數": _oi_disp,
+            "_oi_src":    _oi_src,          # 'MTX_raw' | 'TX' | None ← 上面那個數字的契約別
+            "OI_TX當量":  _oi_tx_eq,        # 唯一可與「外資大小」相除的分母(TX 當量)
+            "_oi_inconsistent": _oi_bad,    # |外資大小| > OI_TX當量 → 資料源打架
             "韭菜指數":   taifex_leek.get(d) if taifex_leek.get(d) is not None else _leek,
             "融資餘額":   margin_dict.get(d, {}).get('融資餘額'),
             "融券餘額":   margin_dict.get(d, {}).get('融券餘額'),
         })
+    # ── v19.172 P0a-③:OI 同當量 / 一致性 匯總 log(§1 不靜默,但不刷屏)──────
+    if _oi_partial_days:
+        print(f"[LI-v8] ⚠️ OI_TX當量 {len(_oi_partial_days)} 天算不出(只拿到單邊 OI,"
+              f"缺一邊即不湊 → None):{_oi_partial_days[:5]}"
+              f"{' ...' if len(_oi_partial_days) > 5 else ''}")
+    if _oi_bad_days:
+        print(f"[LI-v8] 🚨 一致性違反 {len(_oi_bad_days)} 天:{_oi_bad_days}\n"
+              f"        外資淨口(TX 當量)絕對值不可能大於全市場未平倉(TX 當量)。"
+              f"可能原因:①「外資/外資及陸資/外資自營商」重複計數 "
+              f"②「未平倉口數」與「外資大小」不同契約別/未換算。"
+              f"資料照回傳(不 fail closed),各列已標 _oi_inconsistent=True 供下游判斷。")
     if not rows:
         print("[LI-v8] ⚠️ 無資料")
         # v18.342 PR-L2:無新資料 → 改用過期 pickle(若有),不返回 None。
@@ -1505,6 +1743,19 @@ def render_leading_table(df):
     _margin_hdr = ('<th colspan="2" class="li-mg">💸 信用交易</th>\n' if _has_margin else '')
     _margin_th  = ('<th class="li-hb">融資餘額<br><small>億元</small></th>\n'
                    '  <th class="li-hb">融券餘額<br><small>億元</small></th>\n' if _has_margin else '')
+    # v19.172 P0a-②:「未平倉口數」欄名無契約別限定詞 = 誤導根源(MTX 原始口 vs TX 口
+    # 相差 4 倍當量)。欄名為相容下游不改,改在表頭 small 註明本次資料實際的契約別,
+    # 並在 _oi_inconsistent 為真時掛 ⚠️(§1:資料照顯示,但異常必須看得見)。
+    _OI_SRC_LABEL = {"MTX_raw": "小台 MTX 原始口", "TX": "大台 TX 口"}
+    _oi_note = "口"
+    if "_oi_src" in df.columns:
+        _srcs = [s for s in df["_oi_src"].dropna().unique() if s in _OI_SRC_LABEL]
+        if len(_srcs) == 1:
+            _oi_note = _OI_SRC_LABEL[_srcs[0]]
+        elif len(_srcs) > 1:
+            _oi_note = "口(契約別混合⚠️)"
+    if "_oi_inconsistent" in df.columns and bool(df["_oi_inconsistent"].fillna(False).any()):
+        _oi_note += " ⚠️與外資大小不同源"
     h = (
         "<style>\n"
         ".li-tbl{width:100%;border-collapse:collapse;font-size:14px;font-family:Arial,sans-serif;}\n"
@@ -1529,13 +1780,14 @@ def render_leading_table(df):
         "  <th class=\"li-hb\">外資<br><small>億元</small></th>\n"
         "  <th class=\"li-hb\">投信<br><small>億元</small></th>\n"
         "  <th class=\"li-hb\">自營<br><small>億元</small></th>\n"
-        "  <th class=\"li-hb\">外資大小<br><small>口</small></th>\n"
+        # v19.172:標明當量 — 此欄 = TX 淨口 + 0.25×MTX 淨口(大台當量),非原始口數加總
+        "  <th class=\"li-hb\">外資大小<br><small>口(TX當量)</small></th>\n"
         f"  {_margin_th}"
         "  <th class=\"li-hb\">前五大留倉<br><small>口</small></th>\n"
         "  <th class=\"li-hb\">前十大留倉<br><small>口</small></th>\n"
         "  <th class=\"li-hb\">選PCR</th>\n"
         "  <th class=\"li-hb\">外(選)<br><small>千元</small></th>\n"
-        "  <th class=\"li-hb\">未平倉口數<br><small>口</small></th>\n"
+        f"  <th class=\"li-hb\">未平倉口數<br><small>{_oi_note}</small></th>\n"
         "  <th class=\"li-hb\">韭菜指數<br><small>%</small></th>\n"
         "</tr>\n"
         "</thead><tbody>"

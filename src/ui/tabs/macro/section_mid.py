@@ -12,7 +12,14 @@ import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
 from src.ui.render.macro_ui_components import section_header
-from src.ui.render.ui_widgets import kpi, cond_badge, teacher_conclusion
+# v19.174 去識別化：改用策略代號常數 + 新函式名 strategy_conclusion（原 teacher_conclusion）
+from src.ui.render.ui_widgets import (
+    STRATEGY_TECHNICAL,
+    STRATEGY_VALUATION,
+    cond_badge,
+    kpi,
+    strategy_conclusion,
+)
 from src.ui.tabs.macro.helpers import add_danger_hlines  # noqa: F401
 from src.data.macro import check_macro_alerts, fetch_macro_snapshot
 from src.ui.render.macro_ui_components import render_macro_alerts  # v19.159:render 歸位 L4
@@ -61,7 +68,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     _m8_exp   = _macro_info.get('tw_export')
     _m8_pmi   = _macro_info.get('ism_pmi')
     _m8_cpi   = _macro_info.get('us_core_cpi')
-    _m8_fed   = _macro_info.get('fed_funds')  # v18.169: MK 黃金拐點配對指標
+    # v18.169: 「CPI×Fed 雙頂回落」配對指標
+    # (v19.173 正名:原稱「MK 黃金拐點」,易被誤讀為 Mann-Kendall 檢定)
+    _m8_fed   = _macro_info.get('fed_funds')
     _m8_vix   = _macro_info.get('vix')
     
     # ── Row 1: NDC燈號 | 台灣出口YoY | 🇹🇼 台灣 PMI ──────────
@@ -130,7 +139,10 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             ), unsafe_allow_html=True)
 
     # ── Row 2: 美國核心CPI | Fed Funds Rate | VIX 時間序列圖 ──────
-    # v18.169：CPI + Fed Funds 並排呈現「MK 黃金拐點」配對指標
+    # v18.169：CPI + Fed Funds 並排呈現「CPI×Fed 雙頂回落」配對指標
+    # v19.173 正名:原稱「MK 黃金拐點」,但本規則只是「CPI 與 Fed 同步月降」的
+    # 兩點差分(macro_helpers.detect_cpi_fed_double_top),與 Mann-Kendall 無關。
+    # 真 Mann-Kendall 見 `shared/mk_test.py`。
     _s8c2 = st.columns([1, 1, 2])
 
     with _s8c2[0]:
@@ -158,7 +170,8 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             ), unsafe_allow_html=True)
 
     with _s8c2[1]:
-        # v18.169：美國 Fed Funds Rate（CPI 配對 → MK 黃金拐點判讀）
+        # v18.169：美國 Fed Funds Rate（CPI 配對 → 「CPI×Fed 雙頂回落」判讀）
+        # v19.173 正名:原稱「MK 黃金拐點」(非 Mann-Kendall,見上方 Row 2 註解)。
         if _m8_fed:
             _fc = _m8_fed.get('current', 0)
             _fp = _m8_fed.get('prev', 0)
@@ -172,7 +185,10 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 principle='聯邦資金有效利率月均(FRED FEDFUNDS),全球美元資金成本的定價錨',
                 unit='%', date=_m8_fed.get('date', ''), extra=_ftrend,
             ), unsafe_allow_html=True)
-            st.caption('💡 與 CPI 配對：兩者同步月降 → ⭐ MK 黃金拐點（多頭最佳買點）')
+            # v19.173 正名：原稱「MK 黃金拐點」易被誤讀為 Mann-Kendall 檢定，
+            # 實際只是「CPI 與 Fed 同步月降」的兩點差分規則（見 macro_helpers
+            # .detect_cpi_fed_double_top）。真 Mann-Kendall 在 shared/mk_test.py。
+            st.caption('💡 與 CPI 配對：兩者同步月降 → ⭐ CPI×Fed 雙頂回落（多頭最佳買點）')
         else:
             st.markdown(unified_indicator_card_pending(
                 title='美國 Fed Funds Rate', nickname='美元資金成本錨',
@@ -271,7 +287,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     elif any([_m8_vix, _m8_pmi, _m8_cpi, _m8_ndc]):
         st.success('✅ v4.0 總經否決權：無觸發 — 當前宏觀環境無系統性風險訊號')
     
-    # ── Section 八 v4.0 動態結論（老師VIX否決權 × 孫慶龍估值/CLI矩陣）────
+    # ── Section 八 v4.0 動態結論（VIX 否決權 × 估值/CLI 矩陣）────
     _bias_info8 = st.session_state.get('bias_info') or {}
     _b240_8     = float(_bias_info8.get('bias_240', 0))
     # v19.170 一致性:缺值一律回 None,不得回 0.0。
@@ -294,7 +310,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     if _vix_now8 is not None and _vix_now8 > 100:
         st.error(f'❌ VIX 數值異常（{_vix_now8:.0f}），疑似 API 變數映射錯誤，結論暫不顯示。請重新整理。')
     else:
-        # ── 老師：VIX 總經否決權 ──────────────────────────────
+        # ── 策略3：VIX 總經否決權 ──────────────────────────────
         # v19.170 P0-1:三段燈號與敘述保留,但**持股百分比全部撤除** —— 本卡原本自己喊
         # 「建議持股 0~10%」/「持股上限壓縮在 30% 以下」,與 🎚️ 建議持股油門 打架。
         # 改為 apply_vix_veto() 把 VIX 登記成「天花板」,由建議持股 SSOT 統一仲裁,
@@ -316,11 +332,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 _hyc8 = TRAFFIC_GREEN
                 _hyi8 = f'VIX {_vix_now8:.1f} < 20（平靜期）'
                 _hyc8t = '🟢 全球風險情緒穩定，未觸發否決權。回歸個股籌碼面與基本面操作。'
-            st.markdown(teacher_conclusion('弘爺', _hyi8, _hyc8t, color=_hyc8), unsafe_allow_html=True)
+            st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _hyi8, _hyc8t, color=_hyc8), unsafe_allow_html=True)
         else:
-            st.info('VIX 數據載入中，老師否決權暫無法判斷')
-    
-        # ── 老師：M1B-M2 資金動能（三段公式）────────────────────
+            st.info('VIX 數據載入中，否決權暫無法判斷')
+
+        # ── 策略3：M1B-M2 資金動能（三段公式）────────────────────
         _m1b8_info = st.session_state.get('m1b_m2_info', {})
         if _m1b8_info and _m1b8_info.get('m1b_yoy') is not None and _m1b8_info.get('m2_yoy') is not None:
             _m1b8 = float(_m1b8_info.get('m1b_yoy', 0))
@@ -341,9 +357,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 _m1bi8 = f'M1B-M2 Gap = {_gap8:.2f}%（死亡交叉·資金退潮）'
                 _m1bt8 = (f'📉 資金動能趨緩（M1B={_m1b8:.1f}% < M2={_m2b8:.1f}%），'
                           '資金轉向定存或匯出，減碼等待訊號確認。')
-            st.markdown(teacher_conclusion('宏爺', _m1bi8, _m1bt8, color=_m1bc8), unsafe_allow_html=True)
+            st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _m1bi8, _m1bt8, color=_m1bc8), unsafe_allow_html=True)
         else:
-            st.info('M1B/M2 數據載入後自動顯示老師資金動能判斷')
+            st.info('M1B/M2 數據載入後自動顯示資金動能判斷')
     
         # ── 策略1：BIAS240 × 台灣出口 二維矩陣（v5.0）──────────────
         if _bias_info8:
@@ -416,7 +432,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                     _sqc8  = '#8b949e'
                     _sqi8  = f'年線乖離 {_sql_b:.1f}%（整理·觀望） {_cli_txt8}'
                     _sqc8t = '🟡 台灣出口待取得，景氣尚未明確擴張，持股保守等待訊號。'
-            st.markdown(teacher_conclusion('孫慶龍', _sqi8, _sqc8t, color=_sqc8), unsafe_allow_html=True)
+            st.markdown(strategy_conclusion(STRATEGY_VALUATION, _sqi8, _sqc8t, color=_sqc8), unsafe_allow_html=True)
     
         # ── ⚔️ 攻擊火力分級（三環公式 SSS/A/B）────────────────────
         with st.expander('⚔️ 攻擊發動判定 — 三環公式 + 火力分級', expanded=True):
