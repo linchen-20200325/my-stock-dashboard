@@ -24,7 +24,28 @@
   - **⚠️ 守門測試的「已知技術債」(`_KNOWN_DEBT`,應逐版縮小,非永久豁免)**:
     - `src/compute/strategy/v4_strategy_engine.py:93`「建議持股 ≤20%」—— 目前由 `section_chips.py` 在 UI 邊界用 regex 剝除數字、只留敘事,畫面不會出現競爭數字;但字串本體仍是硬編碼,**若出現第二個直接印 msg 的 caller 就會破功**。
     - `src/compute/strategy/v5_modules.py:395`「建議股票部位降至 20%」(`get_defensive_allocation()`)—— **零 production caller 的死碼**,但一旦有人接線就會多出第 7 套持股建議。建議下一版直接刪除或改吃 SSOT。
-- **⚠️ 已知限制(不宣稱「同一輪必然一致」)**:`app.py` 置底常駐條是 module level,執行早於 `tab_macro` 內寫入 `warroom_summary` 的 `render_traffic_light_top()`。因此在「health 剛好變動」的**那一輪** rerun,置底條會用**上一輪**的 health,下一次 rerun 才收斂。根治需把 `warroom_summary` 的計算搬到 tab 之前,屬另案。
+- **⚠️ 已知限制** — ~~`app.py` 置底常駐條慢一個 rerun~~ **v19.171 已根治**,見下一則。
+
+## 🔬 2026-08-05 線上實機驗收後修補(v19.171,**實機才抓到的 4 處，靜態稽核全數漏掉**)
+
+v19.170 merge 進 main 並部署後,連上線上儀錶板逐頁驗收。**已驗證通過**:七處持股數字全部一致顯示 `20%`、FinMind token 顯示為 `len=177`(不再露前綴)、匯率改「台幣升值 0.01%」(不再標「多頭排列↑」)、死區生效顯示「盤整,無明確方向」並附 `台股σ 2.99%／台幣σ 0.19%／EWMA λ=0.94`、工具箱新增「新鮮度」欄。
+
+但實機也抓到 **4 處靜態稽核（含兩輪獨立 AI 稽核 + 守門測試）全數漏掉**的問題:
+
+- **① 置底常駐條實機永遠顯示「⬜ 總經未評估／建議持股 --」**(市場環境頁與 ETF 頁同時複現)。根因:置底條是 module level,執行早於 tab 寫入 `warroom_summary`,而「一鍵更新」的 on_click callback 會**先 pop 掉** `warroom_summary` + 設 `_is_refreshing=True`(只在 `tab_macro.py` render 期間解鎖)→ gate 必然讀到空值。v19.170 把它登記為「慢一個 rerun 的已知限制」是**誤判嚴重性** —— 它是常態不是偶發。**修法**:改 `st.empty()` 佔位 + 所有 tab render 完成後才 `_gl_slot.markdown(...)` 填充,gate 三值(`mkt_info`/`jingqi_info`/`cl_ts`)於填充處重讀。視覺位置不變。
+- **② ETF 橫幅「文案 vs 數字」自相矛盾**:數字已改吃 `get_allocation_sleeves()`(股 20/債 40/現 40),但 `desc` 與底色仍讀 DEPRECATED 的 `MACRO_DESC[regime]` → regime='bull' 印「🟢 多頭市場:加大股票型ETF比重」配 20% 數字。**修法**:新增 `_ALLOC_DESC_BANDS` + `_alloc_banner_desc()`,文案/底色/框色全部由 `final_mid` 決定,與數字同源;`regime` 僅作句尾背景語氣。
+- **③ 「降倉至 NN%」躲過守門測試**:`section_chips.py` 期權同向崩盤警戒印「建議降倉至30%以下」、`section_op_recommendation.py` bear 分支印「先降倉至20%以下」。根因:守門 regex 的關鍵詞全是**名詞型**(持股/曝險/倉位/部位/現金),「降**倉**至30%」只有單字「倉」不在 alternation 內 → 整類**動詞型**寫法逃逸,CI 一直是假綠燈。
+- **④ 「3 成」單位躲過守門測試**:`section_long.py` 印「降倉至 3 成以下」(=30%),守門 regex 只認 `%`。
+
+**守門測試同步補強**(`tests/test_no_hardcoded_position_pct.py`):`_PATTERN` 擴充動詞型關鍵詞(`降倉|減倉|加倉|清倉|滿倉|空手|水位|比重`)+ 「成」單位 `\d{1,2}\s*成` + 16 字負向前瞻(排除 成長/成交/成本/成立/成分…);正向樣本補 13 條(含兩句實機原文),新增 `test_cheng_unit_does_not_match_compound_words` 防誤殺。
+
+**另外兩項**:
+- **CI slow lane 唯一紅燈修復**(`tests/test_position_ceiling.py`):`assert "40–40%" not in _all` 收斂為 `assert "最終建議持股 40–40%" not in _all`。原斷言把 headline 的格式規則誤套到「📖 為何是這個持股數字?」expander 內的**稽核推導軌跡**上(`最終 = min(姿態 70%, 天花板 40%) → 40–40%`),而 AppTest 的 `at.markdown` 會遞迴收集 expander 內容 → 必中。那條軌跡本來就該印原始 `min()` 算式(要看得出 lo 與 hi 各被壓到哪),屬測試斷言過度收緊,非 production bug。
+- **§1 Fail Loud 違規修復**(`macro_state_locker.load_macro_state`):`int(data.get("exposure_limit_pct", 0))` 缺 key 時**靜默填 0**(等價 `fillna(0)`)。一旦 `macro_state.json` 有合法 `market_regime` 但缺此欄(手改/部分寫入),會產生 `Cap('系統風險上限', 0, '…規則引擎硬否決')` → 全站顯示「最終建議持股 0%」且**理由文案謊稱**是規則引擎硬否決。改為缺 key 回 `None`(視同無 cap);真實的 0% 只能來自 `calculate_system_state` 實際算出 0。
+
+**⚠️ 仍登記在案的技術債**(§-1:無實際 bug 不主動動,待下次有需求時一併處理):
+- `src/compute/strategy/v5_modules.get_defensive_allocation()` —— **零 production caller 的死碼**,內含 3 條硬編碼配置(`:395/401/407`),其中只有 `:395` 進了守門測試的 `_KNOWN_DEBT`,另兩條因 `部位`/`現金` 後緊接全形逗號被邊界字元集擋掉而抓不到。建議下一版整個函式刪除並同步移除 `_KNOWN_DEBT` 該筆。
+- `src/ui/tabs/macro/section_chips.py` 訊號區塊的既有 `except Exception: pass`(§1 違憲,非本輪新增)。
 
 ## 🏆 2026-07-25 推播加「中文名 + 籌碼 + AI 研判」(v20-PUSH.3,user「幫加股票名稱、籌碼,也想要 AI 回應哪些偏多/偏空/需觀察」)
 

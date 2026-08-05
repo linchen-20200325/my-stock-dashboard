@@ -98,7 +98,16 @@ class TestCeilingRender:
         # v19.170:UI 改吃 `AllocationDecision.range_text`(顯示格式 SSOT),
         # lo==hi 時回 '40%' 而非 '40–40%' → 斷言同步改成新格式。
         assert "最終建議持股 40%" in _all               # ✅ min() 真的生效
-        assert "40–40%" not in _all                     # 不得回退成怪字串
+        # v19.171 CI slow lane 修紅：原斷言 `"40–40%" not in _all` 過度收緊。
+        # `at.markdown` 會**遞迴收集 expander 內的 markdown**，而「📖 為何是這個
+        # 持股數字？」expander 印的是 `AllocationDecision.drivers` 推導軌跡，其
+        # 最後一行本來就是 `最終 = min(姿態 70%, 天花板 40%) → 40–40%`
+        # （`allocation_decision.py:263-264`，格式為 `{final_lo}–{final_hi}%`）。
+        # 那是**稽核用的下界–上界**寫法，刻意保留 —— 使用者點開才看得到「哪一條
+        # 天花板生效、把區間壓到哪」，這正是 v19.170 P0-1 攤開推導的目的。
+        # 使用者實際看到的 headline 走 `range_text`，lo==hi 時已正確收斂成「40%」。
+        # 故斷言收斂到 headline 本身，不再連坐折疊區內的推導軌跡。
+        assert "最終建議持股 40–40%" not in _all        # headline 不得回退成怪字串
         assert "最終建議持股 50–70%" not in _all        # 沒有退回未壓制的姿態帶
 
     def test_no_ceiling_keeps_full_posture_band(self, tmp_path, monkeypatch):

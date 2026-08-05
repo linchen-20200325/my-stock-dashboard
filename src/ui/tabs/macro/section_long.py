@@ -270,7 +270,11 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
             _i1a = '台積電/矽力/聯發科可積極持有'
         elif _sox_pct <= -1.5 and _dxy_val >= 103:
             _i1c = f'SOX {_sox_pct:+.1f}% / DXY {_dxy_val:.1f} → 外資提款，電子股嚴格減碼'
-            _i1a = '降倉至 3 成以下，等待 DXY 回落'
+            # v19.171 🟡-3:原文為「降倉至 3 成以下」—— 「3 成」= 30%,是**硬編碼
+            # 持股水位**,與 🎚️ 建議持股油門(get_allocation() SSOT)競爭;只因守門
+            # regex 當時只抓 `%` 而躲過 CI(該 regex 已於本版補上「成」單位)。
+            # 改為純敘事 + 指路,沿用 repo 既有句式(section_chips / section_long L456-468)。
+            _i1a = '嚴格控管電子曝險、停損優先，等待 DXY 回落　→ 實際持股見 🎚️ 建議持股油門'
         elif _sox_pct >= 1.0 and _dxy_val >= 100:
             _i1c = f'SOX {_sox_pct:+.1f}% / DXY {_dxy_val:.1f} → 內資控盤，精選中小型題材股'
             _i1a = '避開外資重倉大型權值，找內資題材'
