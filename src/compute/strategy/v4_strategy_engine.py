@@ -289,12 +289,12 @@ class V4StrategyEngine:
         }
 
     # ─────────────────────────────────────────────────────────────
-    # [Task 5] 春哥 VCP 三階段波動收縮偵測（含等幅測距目標價）
-    # 春哥原理：波幅遞減 + 窒息量 + 帶量突破 = 籌碼沉澱完畢
+    # [Task 5] VCP 三階段波動收縮偵測（含等幅測距目標價）
+    # VCP 原理：波幅遞減 + 窒息量 + 帶量突破 = 籌碼沉澱完畢
     # ─────────────────────────────────────────────────────────────
     def detect_vcp_breakout(self, lookback_days: int = 60) -> dict:
         """
-        春哥 VCP 三階段波動收縮 + 帶量突破偵測。
+        VCP 三階段波動收縮 + 帶量突破偵測。
 
         偵測邏輯：
           1. 將 lookback 區間切為 3 段，計算每段波幅（High-Low/High）
@@ -307,7 +307,7 @@ class V4StrategyEngine:
           vcp_stages:   [float, float, float]  各段波幅（%）
           volume_dry:   bool
           breakout:     bool
-          target_price: float  老師等幅測距目標價
+          target_price: float  等幅測距目標價
           stop_loss:    float  近 lookback 最低點 × 0.98
           message:      str
         """
@@ -339,7 +339,7 @@ class V4StrategyEngine:
         breakout      = current_close >= resistance * 0.99
         volume_surge  = current_vol > vol_50ma * 1.5
 
-        # 老師等幅測距目標價
+        # 等幅測距目標價
         bottom        = recent['close'].min() if 'low' not in recent.columns else recent['low'].min()
         target_price  = round(resistance + (resistance - bottom), 2)
         stop_loss_vcp = round(bottom * 0.98, 2)
@@ -369,12 +369,12 @@ class V4StrategyEngine:
         }
 
     # ─────────────────────────────────────────────────────────────
-    # [Task 6] 老師假突破 + 高檔爆量逃命訊號
+    # [Task 6] 假突破 + 高檔爆量逃命訊號
     # 公式：創 20 日新高 + 爆量 + 黑K/長上影線 = 主力出貨警訊
     # ─────────────────────────────────────────────────────────────
     def detect_false_breakout_v4(self) -> dict:
         """
-        老師假突破偵測：創近期新高後，爆出天量且收黑K或長上影線。
+        假突破偵測：創近期新高後，爆出天量且收黑K或長上影線。
 
         條件：
           1. 今日最高價 ≥ 近 20 日最高（創新高）

@@ -19,7 +19,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from src.ui.render import plot_combined_chart, teacher_conclusion
+from src.ui.render import STRATEGY_TECHNICAL, plot_combined_chart, strategy_conclusion  # v19.174 去識別化
 from src.ui.render.tab_sections import border_left_banner
 from src.ui.tabs.tab_helpers import classify_trend_4tier
 
@@ -67,7 +67,7 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
         _fa = f'{sid2} 現價{_p_now_f:.1f}（{"站月線" if _above_f else "跌月線"}）| 外資{"買超" if _fnet_f > 0 else "賣超" if _fnet_f < 0 else "中性"}'
     else:
         _fb_txt = '技術資料載入中，請先點擊「🔍 載入完整分析」'
-    st.markdown(teacher_conclusion('朱家泓', _fa, _fb_txt, _fc_txt), unsafe_allow_html=True)
+    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _fa, _fb_txt, _fc_txt), unsafe_allow_html=True)
     if df2 is not None and not df2.empty:
         fig_k = plot_combined_chart(df2, sid2, name2, show_ma_dict,
                                      k_line_type='還原K線' if t2_adjusted else '一般K線')
@@ -94,16 +94,16 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
             _trend_lbl, _tc = classify_trend_4tier(_kp, _km20, _km100)
             if '多頭' in _trend_lbl:
                 _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＞ MA20 {_km20:.1f} ＞ MA100 {_km100:.1f}'
-                              ' — 老師：可持股，大盤多頭才做個股')
+                              ' — 策略3：可持股，大盤多頭才做個股')
             elif '空頭' in _trend_lbl:
                 _trend_msg = (f'{_trend_lbl}：股價 {_kp:.1f} ＜ MA20 {_km20:.1f} ＜ MA100 {_km100:.1f}'
-                              ' — 老師：不做多，嚴格停損')
+                              ' — 策略3：不做多，嚴格停損')
             elif '多箱' in _trend_lbl:
                 _trend_msg = (f'{_trend_lbl}：股價在 MA100 之上'
-                              f' — 老師：等待站上 MA20({_km20:.1f})確認方向')
+                              f' — 策略3：等待站上 MA20({_km20:.1f})確認方向')
             else:
                 _trend_msg = (f'{_trend_lbl}：股價低於 MA100'
-                              ' — 老師：耐心等待多頭訊號，不摸底')
+                              ' — 策略3：耐心等待多頭訊號，不摸底')
         st.markdown(
             border_left_banner(_tc, _trend_msg, border_width=4,
                                font_size=13, padding_y=10, padding_x=14,
@@ -117,7 +117,7 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
     _kl_c = TRAFFIC_GREEN if '多頭' in _trend_msg_safe or '✅' in _trend_msg_safe else (TRAFFIC_RED if '空頭' in _trend_msg_safe else TRAFFIC_YELLOW)
     st.markdown(border_left_banner(
         _kl_c,
-        f'<span style="font-size:11px;color:#8b949e;">🎓 老師 · 均線排列</span>　'
+        f'<span style="font-size:11px;color:#8b949e;">🎓 策略3 · 均線排列</span>　'
         f'<span style="font-weight:700;">{_trend_msg_safe}</span>',
         padding_y=7, font_size=13,
     ), unsafe_allow_html=True)

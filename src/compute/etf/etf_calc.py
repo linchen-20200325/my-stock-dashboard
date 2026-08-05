@@ -268,7 +268,9 @@ def calc_total_return_1y(df: pd.DataFrame, divs: pd.Series,
 
 def calc_avg_yield(df: pd.DataFrame, divs: pd.Series, years: int = 5,
                     require_full_years: bool = False) -> float | None:
-    """近N年平均殖利率（孫慶龍7%公式）。
+    """近N年平均殖利率（7% 殖利率估值法的分母來源）。
+
+    v19.174 去識別化：原標題帶人名，改為方法論描述。
 
     require_full_years=True 時,若實際有效年度桶數 < years(如年輕 ETF 只上市 1 年,
     5 個年度桶只有 1 桶有資料),回傳 None(§1 寧缺勿假),避免把「1 年均殖」誤標為
@@ -300,7 +302,7 @@ def calc_avg_yield(df: pd.DataFrame, divs: pd.Series, years: int = 5,
 
 
 def check_vcp_signal(df: pd.DataFrame) -> dict:
-    """春哥 VCP 波幅收縮偵測"""
+    """VCP 波幅收縮偵測（v19.174 去識別化：原標題帶人名，改為方法論描述）"""
     r = {'signal': False, 'above_ma50': False, 'above_ma200': False,
          'vol_confirm': False, 'weekly_ranges': [], 'stop_loss': None}
     if df is None or len(df) < ETF_VCP_MIN_DAYS:

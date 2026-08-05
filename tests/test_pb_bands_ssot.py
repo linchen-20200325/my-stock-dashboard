@@ -124,12 +124,16 @@ class TestTabStockGrpHasPB:
         assert "'P/B評價'" in src
 
 
-class TestMJTrendSSOT:
-    def test_compute_one_stock_trend_in_mj_module(self):
-        """compute_one_stock_trend 已抽到 mj_trend_score(SSOT,兩 Tab 共用)。"""
-        from src.compute.health import mj_trend_score
-        assert hasattr(mj_trend_score, 'compute_one_stock_trend'), \
-            'mj_trend_score 缺 compute_one_stock_trend()'
+class TestFinTrendSSOT:
+    def test_compute_one_stock_trend_in_fin_module(self):
+        """compute_one_stock_trend 已抽到 fin_trend_score(SSOT,兩 Tab 共用)。
+
+        v19.174 去識別化:模組 `mj_trend_score` 已改名 `fin_trend_score`
+        （舊檔僅剩待刪的 deprecation 轉發，故這裡直接吃新名）。
+        """
+        from src.compute.health import fin_trend_score
+        assert hasattr(fin_trend_score, 'compute_one_stock_trend'), \
+            'fin_trend_score 缺 compute_one_stock_trend()'
 
     def test_grp_uses_ssot(self):
         """組合 Tab 走 SSOT,不再有 file-local _compute_one_stock_trend。"""
@@ -138,6 +142,6 @@ class TestMJTrendSSOT:
         assert 'compute_one_stock_trend' in src  # 是 import 來的
 
     def test_individual_tab_uses_ssot(self):
-        """個股 Tab 已引入 compute_one_stock_trend(老師 趨勢分數)。"""
+        """個股 Tab 已引入 compute_one_stock_trend(財報趨勢分數)。"""
         src = open('src/ui/tabs/tab_stock.py', encoding='utf-8').read()
         assert 'compute_one_stock_trend' in src

@@ -1,5 +1,5 @@
 """
-v5_modules.py — 台股 AI 戰情室 v5.0 大師滿配版
+v5_modules.py — 台股 AI 戰情室 v5.0 策略滿配版
 Tasks: 5=財報領先 6=RS相對強度 7=估值河流圖 8=型態辨識
        9=布林爆發 10=7%存股 11=強制防守 12=動態配置
 Author: AI戰情室 v5.0 | 防禦性開發
@@ -62,7 +62,7 @@ def analyze_fundamental_leading(cl_now: Optional[float], cl_prev: Optional[float
     if capex_now and equity and equity > 0:
         capex_ratio = capex_now / equity * 100
 
-    # 訊號邏輯（孫慶龍「龍多股」標準）
+    # 訊號邏輯（「龍多股」標準）
     cl_ok     = cl_now and cl_now > 0
     # v18.241 E12: 龍多股篩選門檻從 SSOT 引入
     cl_growth = cl_yoy and cl_yoy > CONTRACT_LIABILITY_YOY_GROWTH_THRESHOLD_PCT
@@ -303,7 +303,7 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# [Task 10] 7% 存股殖利率評估（孫慶龍 357 聖經）
+# [Task 10] 7% 存股殖利率評估（357 殖利率法則）
 # 公式: Y_est = EPS_4Q × PayoutRatio_3Y / Price × 100%
 # ══════════════════════════════════════════════════════════════════════════════
 def calc_dividend_yield_357(price: float, eps_ttm: float,

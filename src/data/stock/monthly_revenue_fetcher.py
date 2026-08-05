@@ -1,7 +1,8 @@
 """src/data/stock/monthly_revenue_fetcher.py — 月營收 L1 fetcher(v18.400 U1).
 
 從 `src/ui/tabs/monthly_revenue_screener.py` 抽出 fetch 層(原 L1 邏輯誤放 L5),
-配合 U1 修反向違憲(原 `src/compute/health/mj_trend_score.py:250` 反向 import L5)。
+配合 U1 修反向違憲(原 `src/compute/health/fin_trend_score.py:250` 反向 import L5;
+v19.174 該檔已去識別化改名,原檔名帶人名縮寫)。
 
 §8.2 layer:L1 Data — 月營收多源:FinMind 主 → TWSE/TPEx OpenAPI keyless fallback。
 §8.2.A EX-CACHE-1 letter-compliant(try/except + `_NoOpST` fallback + secrets dict)。

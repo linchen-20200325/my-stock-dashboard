@@ -1,13 +1,17 @@
-"""src/compute/strategy/caisen_targets.py — 老師形態學目標價引擎(L2 純函式)。
+"""src/compute/strategy/pattern_targets.py — 線型形態學目標價引擎(L2 純函式)。
 
-把「老師(阿森)線型形態學」的**目標價 / 甜蜜價 / 止損 / 風報比**做成
+v19.174 去識別化改名:原檔名 `caisen_targets.py`(檔名 + 函式名皆帶人名羅馬拼音),
+依 user 要求「人名一律移除」全數改為中性的 `pattern_*`。
+**演算法 0 改**,只換名字;舊檔保留 deprecation re-export、舊函式名保留 alias。
+
+把「線型形態學」的**目標價 / 甜蜜價 / 止損 / 風報比**做成
 **確定性演算法**:輸入 high/low 序列 + 現價 → ZigZag 擺動點 → 機械對映關鍵點 →
 等幅滿足量測目標。**演算法推導,非主觀型態判定**。
 
 三段式 pipeline(全純函式,零 I/O — 不 import requests/yfinance/streamlit/proxy):
-  1. detect_swings(highs, lows)        — ZigZag 擺動點偵測(確定性反轉≥pct)
-  2. derive_caisen_levels(swings, px)  — 從擺動點機械對映老師關鍵位
-  3. compute_caisen_targets(**levels)  — 等幅滿足量測 → 目標/止損/風報比
+  1. detect_swings(highs, lows)         — ZigZag 擺動點偵測(確定性反轉≥pct)
+  2. derive_pattern_levels(swings, px)  — 從擺動點機械對映型態關鍵位
+  3. compute_pattern_targets(**levels)  — 等幅滿足量測 → 目標/止損/風報比
 
 §1 Fail Loud / Never Fake:輸入缺值 / 算不出 → 回 None(不腦補假值);
 浮點比較用容差(_EPS);除零一律 guard。
@@ -126,9 +130,9 @@ def detect_swings(highs, lows, *, pct: float = 0.08) -> list[dict]:
     return pivots
 
 
-# ── 函式 2:機械對映老師關鍵位 ──────────────────────────────────────
-def derive_caisen_levels(swings, current_price) -> dict | None:
-    """從擺動點 + 現價,機械對映老師關鍵點(演算法推導,非型態判定)。
+# ── 函式 2:機械對映型態關鍵位 ──────────────────────────────────────
+def derive_pattern_levels(swings, current_price) -> dict | None:
+    """從擺動點 + 現價,機械對映型態關鍵點(演算法推導,非型態判定)。
 
     以「最近一個顯著擺動高」為錨(壓力 / 頸線 / 第一波高),往前找起漲低、
     往後找整理低,並以整體最低低作為破底參考。
@@ -217,7 +221,7 @@ def derive_caisen_levels(swings, current_price) -> dict | None:
 
 
 # ── 函式 3:等幅滿足量測 → 目標 / 止損 / 風報比 ──────────────────────
-def compute_caisen_targets(
+def compute_pattern_targets(
     *,
     pattern,
     support,
@@ -363,10 +367,10 @@ def compute_caisen_targets(
 
 
 # ── 函式 4:批次摘要(組合 Tab 用,一次跑三段 + 誠實 gate)────────────────
-def summarize_caisen(highs, lows, current_price, *, pct: float = 0.08) -> dict:
-    """單檔老師批次摘要 — 給「個股組合」批次表用的精選欄位 + §1 誠實 gate。
+def summarize_pattern(highs, lows, current_price, *, pct: float = 0.08) -> dict:
+    """單檔型態批次摘要 — 給「個股組合」批次表用的精選欄位 + §1 誠實 gate。
 
-    一次跑完 detect_swings → derive_caisen_levels → compute_caisen_targets,只回
+    一次跑完 detect_swings → derive_pattern_levels → compute_pattern_targets,只回
     對操盤最可操作的幾個數字,並套兩條誠實規則(§1 Fail Loud / Never Fake):
 
     1. **擺動點不足**(levels is None):`pattern=None`、全數 None、`reason="擺動點不足"`。
@@ -386,7 +390,7 @@ def summarize_caisen(highs, lows, current_price, *, pct: float = 0.08) -> dict:
 
     Returns:
         dict:pattern / sweet / dist_pct / stop / target1 / rr / levels / ok / reason。
-        `levels` = derive_caisen_levels 原始輸出(供下鑽 seed 每個關鍵點);
+        `levels` = derive_pattern_levels 原始輸出(供下鑽 seed 每個關鍵點);
         `ok` = bool(型態明確且 rr 算得出,可直接列入可操作候選);
         `reason` = None(正常)或原因字串(擺動點不足 / 型態未明·需看圖)。
     """
@@ -396,7 +400,7 @@ def summarize_caisen(highs, lows, current_price, *, pct: float = 0.08) -> dict:
     }
     px = _f(current_price)
     swings = detect_swings(highs, lows, pct=pct)
-    levels = derive_caisen_levels(swings, px)
+    levels = derive_pattern_levels(swings, px)
     if not levels:
         out["reason"] = "擺動點不足"
         return out
@@ -410,7 +414,7 @@ def summarize_caisen(highs, lows, current_price, *, pct: float = 0.08) -> dict:
         out["reason"] = "型態未明·需看圖"
         return out
 
-    r = compute_caisen_targets(
+    r = compute_pattern_targets(
         pattern=pattern,
         support=levels.get("support"),
         breakdown_low=levels.get("breakdown_low"),
@@ -429,3 +433,10 @@ def summarize_caisen(highs, lows, current_price, *, pct: float = 0.08) -> dict:
         out["dist_pct"] = (px - sweet) / sweet * 100.0
     out["ok"] = out["rr"] is not None
     return out
+
+
+# ── v19.174 過渡期 alias(舊人名函式名;caller 全部遷移後移除)────────────
+# 同物件 alias,不是 wrapper —— 行為完全一致,且 `is` 比較會成立。
+derive_caisen_levels = derive_pattern_levels
+compute_caisen_targets = compute_pattern_targets
+summarize_caisen = summarize_pattern

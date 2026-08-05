@@ -1,7 +1,7 @@
 """src/ui/tabs/stock_sections/section_health_score.py — A 健康度評分 + v4/v5 卡片(v18.407 U4 Phase 3-A).
 
 從 tab_stock.py:1101-1368 抽出。含 A 健康度評分(SVG 量表 + 四維 + 6 技術指標
-KPI + 大師建議)、v4 防守線+VPOC+籌碼 3 卡、v5 布林+殖利率+財報領先 3 卡。
+KPI + 綜合建議)、v4 防守線+VPOC+籌碼 3 卡、v5 布林+殖利率+財報領先 3 卡。
 
 §8.2 layer:L5 UI Tab section helper(中風險:依賴 15+ locals / 8 helpers /
 5 session_state keys,但無下游 state 寫回問題)。
@@ -30,7 +30,7 @@ from src.compute.strategy import (
     detect_bollinger_breakout,
 )
 from src.compute.strategy.v4_strategy_engine import V4StrategyEngine
-from src.ui.render import kpi, teacher_conclusion
+from src.ui.render import STRATEGY_TECHNICAL, kpi, strategy_conclusion  # v19.174 去識別化
 from src.ui.render.app_render import render_health_score
 
 
@@ -66,7 +66,7 @@ def render_health_score_section(
     else:
         _ha = f'健康度 {health2:.0f}分，技術面偏弱，跳過'
         _hb = '不要強求，另找更好標的'
-    st.markdown(teacher_conclusion('宏爺', f'{sid2} 健康度 {health2:.0f}分', _ha, _hb),
+    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, f'{sid2} 健康度 {health2:.0f}分', _ha, _hb),
                 unsafe_allow_html=True)
 
     ha, hb = st.columns([1, 2])
@@ -153,7 +153,7 @@ def render_health_score_section(
             else:
                 st.markdown(kpi('布林帶寬', '-', '數據不足', '#484f58'), unsafe_allow_html=True)
 
-    # ── 動態大師建議(基於實際評分)──────────────────────
+    # ── 動態綜合建議(基於實際評分)──────────────────────
     _grade_label, _grade_color, _, _grade_emoji = health_grade(health2)
     _price_pos = ''
     # S2 v19.78:同上 — MA 為 NaN 時不可判「空箱整理」,顯式標歷史不足
@@ -178,7 +178,7 @@ def render_health_score_section(
                       else '降低倉位或觀望；趨勢偏弱，以保本為優先。'))
     st.markdown(f"""<div style="background:#161b22;border:1px solid {_verdict_color};
 border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margin:8px 0;">
-<span style="font-size:13px;font-weight:800;color:{_verdict_color};">{_grade_emoji} 大師綜合建議：{_verdict}</span>
+<span style="font-size:13px;font-weight:800;color:{_verdict_color};">{_grade_emoji} 綜合建議：{_verdict}</span>
 <div style="font-size:11px;color:#8b949e;margin-top:4px;">技術位置：{_price_pos} | RSI={rsi2} | 量比={vr2} | KD=K{k2}/D{d2}</div>
 </div>""", unsafe_allow_html=True)
 

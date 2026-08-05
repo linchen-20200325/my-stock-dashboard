@@ -1,7 +1,8 @@
 """v18.235 業務閾值 SSOT — 殖利率三段分級（357 策略）。
 
-孫慶龍 / 郭俊宏「7%/5%/3% 殖利率估值法則」散落 8 檔 28 處 inline magic number，
+「7%/5%/3% 殖利率估值法則」散落 8 檔 28 處 inline magic number，
 集中為 3 個百分比常數 + 對應小數版本（便於分母除法 `est_div / YIELD_HIGH_DEC`）。
+（v19.174 去識別化：原文列出兩位提出者姓名，改為純方法論描述。）
 
 設計：純常數模組，零 import 依賴；caller 用
 `from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW`。
@@ -67,7 +68,8 @@ def classify_stock_357_price(price: float | None,
                               avg_div: float | None) -> tuple[str, dict]:
     """v18.418 Batch 9:個股 357 殖利率估值 SSOT 函式。
 
-    給定當前股價 + 5 年均股利,反推殖利率 → 4 段分級(對齊孫慶龍 357 估值法則)。
+    給定當前股價 + 5 年均股利,反推殖利率 → 4 段分級(對齊 357 殖利率估值法則;
+    v19.174 去識別化,原括號內帶提出者姓名)。
     回 (code, targets) — code 為語意化的 zone 識別,targets 為三檔目標價字典。
 
     Args:

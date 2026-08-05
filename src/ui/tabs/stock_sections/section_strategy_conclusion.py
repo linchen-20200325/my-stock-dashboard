@@ -1,8 +1,8 @@
-"""src/ui/tabs/stock_sections/section_strategy_conclusion.py — 策略 1 結論 + 老師 趨勢分數 section(v18.408 U4 Phase 3-S1).
+"""src/ui/tabs/stock_sections/section_strategy_conclusion.py — 策略 1 結論 + 財報趨勢分數 section(v18.408 U4 Phase 3-S1).
 
 從 tab_stock.py:1342-1509 抽出。
 - 策略 1 結論 expander:月營收 / 毛利率 / SQ 獲利品質 / FGMS 前瞻動能 4 指標
-- 老師 趨勢分數合議(月 + 季雙頻率 65/35)
+- 財報趨勢分數合議(月 + 季雙頻率 65/35)  # v19.174 去識別化
 
 §8.2 layer:L5 UI Tab section helper(中風險:依賴 5 locals + 7 helpers,
 無下游 state 寫回)。
@@ -14,7 +14,7 @@
 """
 from __future__ import annotations
 
-from datetime import date as _date_mj
+from datetime import date as _date_fin
 
 import pandas as pd
 import streamlit as st
@@ -41,14 +41,14 @@ def render_strategy_conclusion_section(
     fetch_financial_statements,
     analyze_financial_health,
 ) -> None:
-    """策略 1 結論 + 老師 趨勢分數合議。
+    """策略 1 結論 + 財報趨勢分數合議。
 
     Args:
         sid2: 股票代碼
         rev2: 月營收 DataFrame
         qtr2: 季財報 DataFrame
         qtr_extra2: 季 BS/CF DataFrame
-        finmind_token: FinMind API token(供 老師 trend 補抓本季快照)
+        finmind_token: FinMind API token(供財報 trend 補抓本季快照)
         fetch_financial_statements: callback(token, sid)→ dict
         analyze_financial_health: callback(token, sid, fin, news_context)→ dict
     """
@@ -166,8 +166,8 @@ def render_strategy_conclusion_section(
                 print(f'[FGMS_UI] 顯示錯誤: {_efgms2}')
                 _tb2.print_exc()
 
-    # ── 📊 老師 趨勢分數合議(月+季雙頻率,單檔模式)──
-    # SSOT:呼叫 mj_trend_score.compute_one_stock_trend(),與組合 Tab 同一函式
+    # ── 📊 財報趨勢分數合議(月+季雙頻率,單檔模式)── v19.174 去識別化
+    # SSOT:呼叫 fin_trend_score.compute_one_stock_trend(),與組合 Tab 同一函式
     try:
         from src.compute.health import (
             current_finmind_yyyymm as _cfymm,
@@ -176,39 +176,39 @@ def render_strategy_conclusion_section(
             save_snapshot as _sv_snap,
         )
         from src.compute.health import compute_one_stock_trend as _cost
-        _ymm_curr = _cfymm(_date_mj.today())
-        _mj_row = _cost(
+        _ymm_curr = _cfymm(_date_fin.today())
+        _fin_row = _cost(
             sid=sid2, yyyymm_curr=_ymm_curr, token=finmind_token, w_monthly=0.65,
             fetch_financial_statements=fetch_financial_statements,
             analyze_financial_health=analyze_financial_health,
             list_snapshots=_ls_snap, load_snapshot=_ld_snap, save_snapshot=_sv_snap,
         )
-        _mj_score = float(_mj_row.get('score', 0.0))
-        _mj_label = _mj_row.get('label', '—')
-        _mj_code = _mj_row.get('label_code', 'error')
-        _mj_color = {
+        _fin_score = float(_fin_row.get('score', 0.0))
+        _fin_label = _fin_row.get('label', '—')
+        _fin_code = _fin_row.get('label_code', 'error')
+        _fin_color = {
             'strong_up': TRAFFIC_GREEN, 'up': TRAFFIC_GREEN,
             'neutral': TRAFFIC_NEUTRAL,
             'down': TRAFFIC_YELLOW, 'strong_down': TRAFFIC_RED,
             'error': TRAFFIC_NEUTRAL,
-        }.get(_mj_code, TRAFFIC_NEUTRAL)
-        _mon_sub = float(_mj_row.get('mon_sub', 0.0))
-        _mj_sub = float(_mj_row.get('mj_sub', 0.0))
-        _snap_ym = _mj_row.get('snap_ym') or '—'
-        _snap_stale = _mj_row.get('snap_stale')
+        }.get(_fin_code, TRAFFIC_NEUTRAL)
+        _mon_sub = float(_fin_row.get('mon_sub', 0.0))
+        _fin_sub = float(_fin_row.get('fin_sub', 0.0))   # v19.174:改吃中性 key
+        _snap_ym = _fin_row.get('snap_ym') or '—'
+        _snap_stale = _fin_row.get('snap_stale')
         _fresh_tag = ('🟢 最新' if _snap_stale is False
                       else ('🟡 落後' if _snap_stale is True else '⬜ 無快照'))
-        _mj_note = (_mj_row.get('note') or '').strip().rstrip(';')
-        _note_line = (f'<div style="font-size:11px;color:#8b949e;margin-top:3px;">⚠️ {_mj_note}</div>'
-                      if _mj_note else '')
+        _fin_note = (_fin_row.get('note') or '').strip().rstrip(';')
+        _note_line = (f'<div style="font-size:11px;color:#8b949e;margin-top:3px;">⚠️ {_fin_note}</div>'
+                      if _fin_note else '')
         st.markdown(
-            f'<div style="background:#0d1117;border-left:3px solid {_mj_color};'
+            f'<div style="background:#0d1117;border-left:3px solid {_fin_color};'
             f'padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
-            f'<span style="font-size:11px;color:#8b949e;">📊 老師 趨勢分數合議（月+季 65/35）</span>　'
-            f'<span style="font-size:13px;font-weight:700;color:{_mj_color};">{_mj_label}（合分 {_mj_score:+.2f}）</span>'
-            f'<span style="font-size:11px;color:#8b949e;margin-left:8px;">月分 {_mon_sub:+.2f} · 季分 {_mj_sub:+.2f} · 快照 {_snap_ym} {_fresh_tag}</span>'
+            f'<span style="font-size:11px;color:#8b949e;">📊 財報趨勢分數合議（月+季 65/35）</span>　'
+            f'<span style="font-size:13px;font-weight:700;color:{_fin_color};">{_fin_label}（合分 {_fin_score:+.2f}）</span>'
+            f'<span style="font-size:11px;color:#8b949e;margin-left:8px;">月分 {_mon_sub:+.2f} · 季分 {_fin_sub:+.2f} · 快照 {_snap_ym} {_fresh_tag}</span>'
             f'{_note_line}'
             f'</div>', unsafe_allow_html=True
         )
-    except Exception as _emj:
-        print(f'[MJ_TREND_UI] 顯示錯誤: {_emj}')
+    except Exception as _e_fin:
+        print(f'[FIN_TREND_UI] 顯示錯誤: {_e_fin}')   # v19.174 去識別化

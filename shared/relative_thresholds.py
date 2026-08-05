@@ -1,4 +1,10 @@
-"""shared/relative_thresholds.py — 相對化門檻判定（L0 純函式，v19.170）
+"""shared/relative_thresholds.py — 相對化門檻判定（L0 純函式，v19.170；v19.172 修正）
+
+⚠️ v19.172 重要更正：`vol_normalized_bias()` 原本除以「年化波動」是**量綱錯誤**
+（BIAS_N 的 σ 只有年化波動的 0.5617 倍，N=240/T=252），舊式**系統性低估
+1.4~1.8 倍**。v19.170 據此導出的「實測 +29.6% 並不極端」結論**已撤回**——
+正確值是 1.76σ~2.64σ，**確實極端**。完整推導、影響表與撤回聲明見該函式 docstring。
+
 
 【解決什麼】P1-1：絕對值門檻沒有隨市值 / 指數水位縮放，久了必然失效。
 稽核實測：
@@ -27,18 +33,27 @@
 """
 from __future__ import annotations
 
+import math  # v19.172：BIAS 的 σ 換算係數由 (N, T) 推導，需 sqrt
 from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 
+from shared.signal_thresholds import TRADING_DAYS_PER_YEAR  # v19.172 SSOT，禁 inline 252
 from shared.stats_helpers import robust_z, rolling_pct_rank
 
 # 分位數判級的預設視窗：756 ≈ 3 年交易日（252 × 3），涵蓋一輪中期景氣循環。
 DEFAULT_PCT_RANK_WINDOW: int = 756
 # 穩健 z 的視窗：252 ≈ 1 年，回報「現值偏離近一年中位數幾個 σ」。
 DEFAULT_ROBUST_Z_WINDOW: int = 252
+
+# v19.172：BIAS 均線長度預設 240（年線）。
+# 與 `src/config/config.py:14 MA_ANNUAL = 240` 同值，但**刻意不 import src.config** ——
+# 該檔為讀 `st.secrets` 而條件 import streamlit（CLAUDE.md §8.2.A EX-L0-1），
+# shared/ 這層純函式不該把 UI 框架拖進 import chain。
+# 接線時建議由呼叫端顯式傳 `ma_len=config.MA_ANNUAL`，讓 SSOT 留在 config。
+DEFAULT_BIAS_MA_LEN: int = 240
 
 
 @dataclass(frozen=True)
@@ -241,40 +256,185 @@ def foreign_futures_share(net_lots: Optional[float],
     return round(net / oi * 100.0, 2)
 
 
+def _bias_sd_factor(ma_len: int, trading_days: int) -> float:
+    """BIAS_N 的標準差 ÷ 年化波動＝ sqrt((N−1)(2N−1) / (6·N·T))，v19.172。
+
+    由 `vol_normalized_bias` docstring 的隨機漫步推導而來，**不硬寫常數**：
+    只要換 N（BIAS20 / BIAS60 / BIAS240）或換 T，係數自動跟著變。
+
+    N=240, T=252 → sqrt(239×479 / (6×240×252)) = sqrt(114481/362880)
+                 = sqrt(0.315479) = **0.56168**（稽核報告寫 0.5616 是截斷，同一個數）
+    N=60,  T=252 → sqrt(59×119 / (6×60×252)) = sqrt(7021/90720) = 0.27819
+    N=20,  T=252 → sqrt(19×39 / (6×20×252))  = sqrt(741/30240)  = 0.15654
+
+    大 N 近似式 sqrt(N/(3T))：N=240 → sqrt(240/756) = 0.56344，
+    與精確值差 +0.31%。此處**採精確式**（成本一樣是一次 sqrt，沒有理由用近似）。
+    """
+    return math.sqrt((ma_len - 1) * (2 * ma_len - 1) / (6.0 * ma_len * trading_days))
+
+
+def _bias_drift_factor(ma_len: int, trading_days: int) -> float:
+    """BIAS_N 的期望值 ÷ 年化漂移＝(N−1) / (2T)，v19.172。
+
+    N=240, T=252 → 239/504 = **0.474206**。
+    即：年漂移 10%/年 的多頭，BIAS240 的**期望值**本來就有 +4.74%，
+    那 4.74% 不是「過熱」，是趨勢本身，扣掉才是真正的超漲。
+    """
+    return (ma_len - 1) / (2.0 * trading_days)
+
+
 def vol_normalized_bias(bias_pct: Optional[float],
-                        ann_vol_pct: Optional[float]) -> Optional[float]:
-    """波動度標準化乖離＝BIAS / 年化波動度（無單位「σ 數」），v19.170。
+                        ann_vol_pct: Optional[float],
+                        *,
+                        ma_len: int = DEFAULT_BIAS_MA_LEN,
+                        trading_days: int = TRADING_DAYS_PER_YEAR,
+                        drift_ann_pct: Optional[float] = None) -> Optional[float]:
+    """波動度標準化乖離＝BIAS 對「BIAS 自己的 σ」的倍數（v19.172 修 🔴 量綱錯誤）。
 
-    公式
-    ----
-        bias_sigma = bias_pct / ann_vol_pct
+    ⚠️ v19.170 舊版是**錯的**（本版撤回）
+    ------------------------------------
+    舊式 `bias_sigma = bias_pct / ann_vol_pct` 把「價格對 240 日均線的偏離」
+    直接除以「**年化**波動」。兩者不是同一個尺度：年化波動描述的是「一整年
+    (T=252 個交易日) 累積報酬的 σ」，而 BIAS240 是「當前價 vs 過去 240 日均價」，
+    後者是一組**加權報酬和**，其 σ 只有年化波動的 0.56 倍。除錯分母 = 量綱錯誤。
 
-    為何需要（解 P1-2）
-    -------------------
-    BIAS240 固定 ±20% 沒有考慮「這 20% 相對市場自身波動算大還算小」。
-    台股年化波動約 18%~25%：
-        年化波動 18% → +20% 乖離 ≈ 1.11σ（確實偏高）
-        年化波動 30% → +20% 乖離 ≈ 0.67σ（其實還在常態範圍）
-    實測 +29.6% 在高波動的結構多頭裡並不極端，固定門檻卻直接判「過熱」→ 誤判。
-    改用「幾個 σ」後門檻自動隨波動 regime 伸縮。
-    建議再把本函式輸出丟進 `classify_by_pct_rank` 取歷史分位，雙保險。
+    正確推導（log 價格帶漂移隨機漫步；N = 均線長度、T = 年交易日）
+    ------------------------------------------------------------
+    設 L_t = log P_t、日報酬 r_t = L_t − L_{t−1}，r 為 i.i.d.（μ_d, σ_d²）。
+
+        X_t = L_t − (1/N)·Σ_{k=0}^{N−1} L_{t−k}
+            = (1/N)·Σ_{k=0}^{N−1} (L_t − L_{t−k})
+            = (1/N)·Σ_{j=0}^{N−2} (N−1−j)·r_{t−j}          ← r_{t−j} 出現 (N−1−j) 次
+
+        Var(X) = (σ_d²/N²)·Σ_{m=1}^{N−1} m²                 ← m = N−1−j
+               = (σ_d²/N²)·(N−1)N(2N−1)/6
+               = σ_d²·(N−1)(2N−1)/(6N)                      [N=240 → 79.5007·σ_d²]
+               ≈ σ_d²·N/3                                   [大 N 近似，N=240 → 80]
+
+        SD(X) = σ_d·sqrt((N−1)(2N−1)/(6N))
+              = σ_a·sqrt((N−1)(2N−1)/(6·N·T))               [σ_a = σ_d·√T]
+              = σ_a·**0.56168**                             [N=240, T=252]
+
+        E[X]  = (μ_d/N)·Σ_{m=1}^{N−1} m = μ_d·(N−1)/2
+              = μ_a·(N−1)/(2T) = μ_a·**0.474206**           [N=240, T=252]
+
+    ⇒ **BIAS240 的標準差約為年化波動的 0.5617 倍，不是 1 倍。**
+
+    本版判定式
+    ----------
+        sd_bias   = ann_vol_pct   · sqrt((N−1)(2N−1) / (6·N·T))
+        mu_bias   = drift_ann_pct · (N−1) / (2T)            （未給 drift → 0）
+        bias_sigma = (bias_pct − mu_bias) / sd_bias
+
+    實際影響（以線上實測 BIAS240 = +32.7%、μ=0 為例）
+    -------------------------------------------------
+    ==========  ===============  ==============  ==============
+    年化波動 σ_a  SD = 0.5617·σ_a   正確 σ 數        舊式（錯）給的
+    ==========  ===============  ==============  ==============
+    20%          11.23%           **+2.91σ**      +1.64σ
+    25%          14.04%           **+2.33σ**      +1.31σ
+    30%          16.85%           **+1.94σ**      +1.09σ
+    ==========  ===============  ==============  ==============
+
+    舊式在 μ=0 時**恆定低估 1/0.5617 = 1.780 倍**（不是「有時候」）；
+    若再加上漂移修正（年漂移 10%~15% 的結構多頭），低估倍率落在 1.4~1.5 倍。
+    綜合區間 **1.4~1.8 倍**。
+    若照舊式接線，+32.7%（實際 1.9~2.9σ，**是真的極端**）會被算成 1.1~1.6σ →
+    落在黃甚至綠 → 相對化不但沒解決 P1-2，**反而製造新的誤判**。
+
+    🔴 v19.172 撤回 v19.170 的錯誤結論
+    ---------------------------------
+    v19.170 原文寫：「實測 +29.6% 在高波動的結構多頭裡**並不極端**」——
+    那句話是由上面那條錯誤公式導出的（29.6 / 30 = 0.99σ），**現正式撤回**。
+    用正確係數重算 +29.6%（μ=0）：
+
+        σ_a = 20% → 29.6 / 11.23 = **2.64σ**
+        σ_a = 25% → 29.6 / 14.04 = **2.11σ**
+        σ_a = 30% → 29.6 / 16.85 = **1.76σ**
+
+    即使假設台股年化波動高達 30%，+29.6% 仍是 **1.76σ**（常態雙尾約 8%）；
+    在 20% 波動下更是 2.63σ（雙尾約 0.8%）。**它確實極端**。
+    （尾端機率僅供量級參考 —— 真實報酬厚尾，實際尾端機率會更高。）
+    同理原文「18% 波動下 +20% 乖離 ≈ 1.11σ、30% 下 ≈ 0.67σ」兩個數字亦錯，
+    正確為 **1.98σ** 與 **1.19σ**。
+
+    已知二階近似（誠實揭露，不宣稱本式精確）
+    --------------------------------------
+    1. 推導在 **log 空間**，但 `bias_pct` 慣例是算術乖離 (P/MA − 1)×100。
+       log(1+0.327) = 0.2830 → 若改用 log 乖離，+32.7% 的 σ 數會是 2.91 × 0.865
+       = **2.52σ**（本式偏高 ~15%，方向偏保守/偏「更極端」）。
+       |bias| ≤ 10% 時兩者差 < 5%，可忽略；尾端才明顯。
+    2. 分母的均線是**價格算術平均**，推導用的是 **log 價格平均**。
+       由 Jensen，mean(log P) ≤ log(mean P)，故 X 略大於 log(P/MA)，同樣偏保守。
+    3. r_t 假設 i.i.d.：真實報酬有波動叢聚與弱負自相關，Var(X) 會偏離；
+       故本函式輸出**建議再丟進 `classify_by_pct_rank` 取歷史分位**做雙保險，
+       不要單獨拿 ±2σ 當硬門檻。
 
     Args
     ----
-    bias_pct : float | None      年線乖離率（%，正=正乖離）
-    ann_vol_pct : float | None   年化波動度（%，需與 bias 同為「%」單位）
+    bias_pct : float | None
+        乖離率（%，正=正乖離）。定義須為 (P / MA_N − 1) × 100。
+    ann_vol_pct : float | None
+        **年化**波動度（%，需與 bias 同為「%」單位，例如 25.0 代表 25%）。
+    ma_len : int
+        均線長度 N（交易日）。預設 240（年線）；BIAS20 傳 20、BIAS60 傳 60。
+    trading_days : int
+        年交易日 T，預設 `TRADING_DAYS_PER_YEAR`（252）。
+        **必須與 `ann_vol_pct` 年化時所用的 T 一致**，否則又是一個量綱錯誤。
+    drift_ann_pct : float | None
+        年化漂移 μ_a（%/年）。**可選**：
+          - 給定 → 扣掉 `μ_a·(N−1)/(2T)`（N=240,T=252 時 = 0.4742·μ_a）。
+          - **不給（預設 None）→ 視為 0**，即假設無漂移。這在多頭期會讓
+            σ 數**略偏高**（趨勢本身帶來的正乖離被算進「超漲」）。
+            方向是**保守**的（傾向多喊過熱、少漏警訊），但呼叫端要知道：
+            年漂移 12% 時 BIAS240 的期望值就有 +5.7%，在 σ_a=25%
+            （SD=14.04%）下相當於白送 0.41σ。
+          - 給了但不是有限數（NaN / inf）→ **回 None**，不當作 0
+            （§1：資料壞掉 ≠ 沒有資料，不可靜默降級）。
 
     Returns
     -------
     float | None
-        σ 倍數（小數 3 位）。任一不可用或 `ann_vol_pct <= 0` → 回 None
-        （§1：不捏造 σ=20% 這類預設值）。
+        σ 倍數（小數 3 位）。下列情形一律 **回 None**，不除零、不填 0
+        （§1：算不出就說算不出；填 0 會被下游誤讀成「完全沒有乖離」）：
+          - `bias_pct` 為 None / 非數值 / NaN / inf
+          - `ann_vol_pct` 為 None / 非數值 / NaN / inf / **<= 0**
+          - `drift_ann_pct` 有給但為 NaN / inf
+
+    Raises
+    ------
+    ValueError
+        `ma_len < 2` 或 `trading_days < 1`（這是**參數**錯誤而非資料缺漏，
+        §1 Fail Loud，與 `classify_by_pct_rank` 對 window 的處理一致）。
+
+    效能
+    ----
+    O(1)，兩次乘除 + 一次 sqrt，無迴圈、無配置。
     """
+    if ma_len < 2:
+        raise ValueError(f"vol_normalized_bias: ma_len 需 >= 2,收到 {ma_len}")
+    if trading_days < 1:
+        raise ValueError(
+            f"vol_normalized_bias: trading_days 需 >= 1,收到 {trading_days}")
+
     b = _to_finite_float(bias_pct)
     v = _to_finite_float(ann_vol_pct)
     if b is None or v is None or v <= 0:
         return None
-    return round(b / v, 3)
+
+    # 漂移修正：None = 呼叫端明說「不修正」→ 0；有給但壞掉 → 不猜，回 None。
+    if drift_ann_pct is None:
+        mu_bias = 0.0
+    else:
+        mu_a = _to_finite_float(drift_ann_pct)
+        if mu_a is None:
+            return None
+        mu_bias = mu_a * _bias_drift_factor(ma_len, trading_days)
+
+    sd_bias = v * _bias_sd_factor(ma_len, trading_days)
+    if not np.isfinite(sd_bias) or sd_bias <= 0:
+        return None
+    return round((b - mu_bias) / sd_bias, 3)
 
 
 def _to_finite_float(x) -> Optional[float]:

@@ -1,7 +1,7 @@
 """tests/test_etf_single_verdict_card.py — v19.166 守衛:ETF 單檔 🚦 綜合研判卡。
 
-單檔頁原本 verdict 散在多張老師卡、無單一「留/觀察/換」結論。此卡置頂,沿用「單檔/多檔
-共用 row SSOT」build_etf_score_row + recommend_etf_action(與多檔同引擎),§8.1 餵 render
+單檔頁原本 verdict 散在多張策略卡(v19.174 去識別化:原文用尊稱)、無單一「留/觀察/換」結論。
+此卡置頂,沿用「單檔/多檔共用 row SSOT」build_etf_score_row + recommend_etf_action(與多檔同引擎),§8.1 餵 render
 已抓的 df/divs/info 不重抓。本測試釘住「有掛 + 走共用 SSOT + 缺料不腦補」。
 """
 from __future__ import annotations

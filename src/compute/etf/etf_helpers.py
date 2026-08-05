@@ -1,7 +1,7 @@
 """ETF 共用純函式 — Phase 7B 抽 closure 為 module-level。
 
 零 Streamlit / Plotly 依賴；任何 module 皆可直接 import。
-- auto_role：MK 框架 #9 核心/衛星分類（etf_tab_portfolio）
+- auto_role：存股框架 #9 核心/衛星分類（etf_tab_portfolio；v19.174 去識別化，原代號為作者縮寫）
 - normalize_etf_ticker：ETF 代號規範化 SSOT（純 4-6 碼補 .TW；v18.224）
 - bare_etf_code：ETF 裸碼 SSOT（strip .TW/.TWO；v18.234）— normalize 反向
 """
@@ -18,7 +18,8 @@ from shared.signal_thresholds import TRADING_DAYS_PER_YEAR  # B5 SSOT-M1
 _TW_PURE_RE = _re_etf_helpers.compile(r'^\d{4,6}[A-Z]?$')
 
 
-# MK 框架 #9：核心持股白名單（高股息大型 / 全市場 / 債券）
+# v19.174 去識別化：原框架代號為作者姓名縮寫，改為中性描述
+# 存股框架 #9：核心持股白名單（高股息大型 / 全市場 / 債券）
 _CORE_TICKERS: frozenset[str] = frozenset({
     '0050', '0051', '0056', '006208', '00713', '00878', '00919', '00929',
     '00940', '00946', '00713B', '00679B', '00937B',
@@ -88,7 +89,9 @@ def normalize_etf_ticker(raw: str | None) -> str:
 # 原 etf_tab_grp_compare.py file-local 函式,單檔/多檔/組合 Tab 統一 import。
 
 def yield_valuation_zone(cur_yield, avg_yield):
-    """7% 存股估值買賣點分級(孫慶龍策略)。
+    """7% 存股估值買賣點分級(殖利率估值法)。
+
+    v19.174 去識別化：原括號內為人名,改為方法論描述。
 
     ETF 場景必須有 5y 平均殖利率作為估值脈絡,否則回 '—'。
 
@@ -312,7 +315,7 @@ def compute_etf_annual_cashflow(div_series, shares: int,
 
 
 def dividend_health_label(cur_yield, total_ret_1y, cagr_3y):
-    """配息健康度分級(MK 框架 #1+#2)。
+    """配息健康度分級(存股框架 #1+#2;v19.174 去識別化,原代號為作者縮寫)。
 
     含息報酬 ≥ 殖利率 = 雙贏 ✅;含息 < 殖利率 = 本金侵蝕 🔴;
     無配息直接看 3Y CAGR ≥ ETF_CAGR_TARGET_PCT 達標 ✅ 否則 🟡。

@@ -47,7 +47,11 @@ from src.services.stock_grp_service import (
     get_bps as fetch_bps,
     get_industry_category as fetch_industry_category,
 )
-from src.ui.render import teacher_conclusion
+from src.ui.render import (  # v19.174 去識別化：改吃策略代號常數 + 新函式名
+    STRATEGY_TECHNICAL,
+    STRATEGY_VALUATION,
+    strategy_conclusion,
+)
 from src.ui.tabs.tab_helpers import final_recommendation
 
 
@@ -115,12 +119,12 @@ def render_portfolio_summary_section(
 | **多因子**(0~100) | 趨勢＋動能＋籌碼＋量價＋RS 五項合成,偏「**現在強不強**」 |
 | **健康度** | 均線／RSI／KD／量比／布林,偏「**體質好不好**」 |
 | **出場** | 技術＋籌碼(＋AI 利空)三維出場訊號 X/3 |
-| **老師型態／風報比** | K 線型態學等幅滿足的目標與風報比(完整見「🎯 老師型態目標價」) |
+| **型態／風報比** | K 線型態學等幅滿足的目標與風報比(完整見「🎯 型態目標價」) |
 | **EPS／毛利／殖利／P/B** | 基本面對照(各只出現這一次) |
 
 - **多因子子維度**(趨勢／動能／籌碼／量價／RS 個別分數)在下方「📈 多因子維度拆解」展開。
 - **逐檔技術明細**(RSI／KD／量比／357／VCP／合約負債…)在「🩹 逐檔技術明細」展開。
-- **老師 財報體質(趨勢×轉機、找體質差→變好)**在更下方「📊 老師 趨勢×轉機」區塊。
+- **財報體質(趨勢×轉機、找體質差→變好)**在更下方「📊 財報趨勢×轉機」區塊。
 
 > 💡 多因子＋健康度都排前面、且 RS 向上＝「強上加強」優先觀察;體質好但動能弱的可留意打底。''')
 
@@ -130,8 +134,8 @@ def render_portfolio_summary_section(
     # ── 🏆 組合排行總表(v19.164 合併 ③④⑤,一檔一列,每個 headline 欄只出現一次)──
     _render_master_table(results_t3, score_t3, _fund_map)
 
-    # ── 🎯 老師型態目標價(全組合,共用批次來源;逐檔看圖下鑽,非第二輸入)──
-    _render_caisen_batch(results_t3, score_t3)
+    # ── 🎯 型態目標價(全組合,共用批次來源;逐檔看圖下鑽,非第二輸入)──
+    _render_pattern_batch(results_t3, score_t3)
 
     # ── 明細 drill-down(需要才展開,不佔首屏)──────────────────────
     if score_t3 and len(score_t3) >= 2:
@@ -248,7 +252,7 @@ def _render_master_table(
     """🏆 組合排行總表(v19.164 合併 ③④⑤)— 一檔一列,依綜合建議 → 多因子排序。
 
     每個 headline 欄只出現一次(去重 EPS/毛利/殖利/健康度/評級/多因子);技術明細、
-    多因子子維度、老師完整欄改由下方 expander 展開。§1:老師風報比缺 → 「—」不腦補。
+    多因子子維度、型態完整欄改由下方 expander 展開。§1:型態風報比缺 → 「—」不腦補。
     """
     if not results_t3:
         return
@@ -260,7 +264,7 @@ def _render_master_table(
         rec_label, _ = final_recommendation(r, score_map)
         rec_word = rec_label.split()[-1] if rec_label else ''
         mf = float(score_map.get(sid, {}).get('total', 0) or 0)
-        cs = r.get('_caisen') or {}
+        cs = r.get('_pattern') or {}   # v19.174 去識別化:欄名原帶人名羅馬拼音
         rr = cs.get('rr')
         ev = evaluate_exit_signals(r.get('_ex_tech'), r.get('_ex_chip_sig', ''), None)
         fd = fund_map.get(sid, {})
@@ -271,7 +275,7 @@ def _render_master_table(
             '評級': r.get('評級', '-'),
             '健康度': int(r.get('健康度', 0) or 0),
             '出場': f'{ev["icon"]} {ev["score"]}/3',
-            '老師型態': cs.get('pattern') or '—',
+            '型態': cs.get('pattern') or '—',
             '風報比': f'{rr:.2f}' if isinstance(rr, (int, float)) else '—',
             'EPS(4Q)': fd.get('近4季EPS', '-'),
             '毛利%': fd.get('毛利率%', '-'),
@@ -284,13 +288,13 @@ def _render_master_table(
           .drop(columns=['_p']).reset_index(drop=True))
     st.markdown('#### 🏆 組合排行總表')
     st.caption('一檔一列,3 秒看出「哪幾檔積極、哪幾檔該汰」:綜合建議 → 多因子 → 健康度 → 出場 → '
-               '老師型態/風報比 → 基本面。每個欄位只出現一次(明細見下方展開區)。')
+               '型態/風報比 → 基本面。每個欄位只出現一次(明細見下方展開區)。')
     st.dataframe(df, use_container_width=True, hide_index=True, column_config={
         '多因子': st.column_config.ProgressColumn('多因子', min_value=0, max_value=100, format='%.0f'),
         '健康度': st.column_config.NumberColumn('健康度', format='%d 🏥'),
         '出場': st.column_config.TextColumn('出場', help='技術+籌碼二維;利空新聞第三維在下方「逐檔技術明細」按「AI 掃利空」'),
-        '老師型態': st.column_config.TextColumn('老師型態'),
-        '風報比': st.column_config.TextColumn('風報比', help='老師等幅滿足;型態未明→「—」不給假高值'),
+        '型態': st.column_config.TextColumn('型態'),
+        '風報比': st.column_config.TextColumn('風報比', help='等幅滿足;型態未明→「—」不給假高值'),
         'P/B': st.column_config.TextColumn('P/B 估值'),
     })
 
@@ -315,29 +319,29 @@ def _render_multifactor_dims(score_t3: list[dict]) -> None:
         st.success(f"📊 RS 曲線向上(強勢動能):{' / '.join(_rs_up)}")
 
 
-def _fmt_caisen(x, fmt: str = '%.2f') -> str:
-    """數值 → 字串;None/非數 → 「—」(§1 不腦補)。"""
+def _fmt_pattern(x, fmt: str = '%.2f') -> str:
+    """數值 → 字串;None/非數 → 「—」(§1 不腦補)。v19.174 去識別化:原函式名帶人名羅馬拼音。"""
     return (fmt % x) if isinstance(x, (int, float)) else '—'
 
 
-def _render_caisen_batch(
+def _render_pattern_batch(
     results_t3: list[dict],
     score_t3: list[dict],
 ) -> None:
-    """🎯 老師型態目標價(全組合)— v19.164 批次化,共用上方批次的 K 線來源。
+    """🎯 型態目標價(全組合)— v19.164 批次化,共用上方批次的 K 線來源。
 
-    每檔在 run_batch_fetch 內已用 df4 就地算好(存 `_caisen`),此處只渲染。
+    每檔在 run_batch_fetch 內已用 df4 就地算好(存 `_pattern`),此處只渲染。
     §1 誠實:擺動點不足 / 型態未明 → 標「—」不腦補;下鑽線圖共用批次 df(同源同數)。
     """
     if not results_t3:
         return
-    st.markdown('#### 🎯 老師型態目標價（全組合）')
+    st.markdown('#### 🎯 型態目標價（全組合）')
     st.caption('共用上方批次的 10 檔 K 線自動算,**無需再選標的**。§1:擺動點不足 / 型態未明 → '
                '「—」不給假目標;距甜蜜價% 負=待突破、正=已突破。')
     rows = []
     for r in results_t3:
         sid = r.get('stock_id', r.get('代碼', ''))
-        cs = r.get('_caisen') or {}
+        cs = r.get('_pattern') or {}   # v19.174 去識別化:欄名原帶人名羅馬拼音
         _dist = cs.get('dist_pct')
         if _dist is None:
             _dist_s = '—'
@@ -346,11 +350,11 @@ def _render_caisen_batch(
         rows.append({
             '代碼': sid, '名稱': r.get('名稱', sid) or sid,
             '型態': cs.get('pattern') or '—',
-            '甜蜜價': _fmt_caisen(cs.get('sweet')),
+            '甜蜜價': _fmt_pattern(cs.get('sweet')),
             '距甜蜜價%': _dist_s,
-            '止損': _fmt_caisen(cs.get('stop')),
-            '目標①': _fmt_caisen(cs.get('target1')),
-            '風報比': _fmt_caisen(cs.get('rr'), '%.2f'),
+            '止損': _fmt_pattern(cs.get('stop')),
+            '目標①': _fmt_pattern(cs.get('target1')),
+            '風報比': _fmt_pattern(cs.get('rr'), '%.2f'),
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
@@ -373,8 +377,8 @@ def _render_caisen_batch(
             _pre_df = (_cache or {}).get('df')
         except Exception:
             _pre_df = None
-        from src.ui.tabs.caisen_targets_ui import render_caisen_for_ticker
-        render_caisen_for_ticker(_sel, key_prefix='cs_grp', preloaded_df=_pre_df)
+        from src.ui.tabs.pattern_targets_ui import render_pattern_targets_for_ticker
+        render_pattern_targets_for_ticker(_sel, key_prefix='cs_grp', preloaded_df=_pre_df)
 
 
 def _render_multifactor_ranking(
@@ -398,7 +402,7 @@ def _render_multifactor_ranking(
     else:
         _mf3c = '多因子資料計算中'
         _mf3a = '等待評分載入'
-    st.markdown(teacher_conclusion('孫慶龍', '多因子總分排行', _mf3c, _mf3a), unsafe_allow_html=True)
+    st.markdown(strategy_conclusion(STRATEGY_VALUATION, '多因子總分排行', _mf3c, _mf3a), unsafe_allow_html=True)
     if score_t3:
         from src.compute.scoring import rank_stocks as _rk3
         _ranked3 = _rk3(score_t3)
@@ -451,7 +455,7 @@ def _render_elimination_detail(
     else:
         _e4c = f'本批 {len(results_t3)} 支全數通過汰弱篩選'
         _e4a = '品質整齊,可從多因子排行取前2~3支'
-    st.markdown(teacher_conclusion('弘爺', f'汰弱留強(共 {len(results_t3)} 支)', _e4c, _e4a), unsafe_allow_html=True)
+    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, f'汰弱留強(共 {len(results_t3)} 支)', _e4c, _e4a), unsafe_allow_html=True)
     # ── 出場警示掃描鈕(利空新聞 LLM 第三維,按需觸發以省額度)──
     if not results_t3:
         return

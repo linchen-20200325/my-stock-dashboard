@@ -8,7 +8,7 @@
   * etf_dashboard.py 內部 helper：
     _check_sector_exposure / _colored_box / _compute_etf_warroom_row
     / _plot_correlation / _plot_holdings_overlap / _render_weakness_table
-    / _teacher_conclusion / build_holdings_overlap_matrix
+    / _strategy_conclusion / build_holdings_overlap_matrix
     / compute_etf_weakness_row / fetch_etf_dividends / fetch_etf_holdings
     / fetch_etf_info / fetch_etf_price / macro_allocation_banner
 
@@ -50,7 +50,11 @@ def render_etf_portfolio(gemini_fn=None):
     from src.ui.render.etf_render import (   # 渲染類
         _check_sector_exposure, _colored_box, _plot_correlation,
         _plot_holdings_overlap, _render_weakness_table, render_etf_holdings,
-        _teacher_conclusion, macro_allocation_banner,
+        _strategy_conclusion, macro_allocation_banner,   # v19.174 去識別化改名
+    )
+    # v19.174 去識別化：策略代號常數（原本各 caller 傳人名字串）
+    from src.ui.render.ui_widgets import (
+        STRATEGY_TECHNICAL, STRATEGY_VALUATION,
     )
     from src.compute.etf.etf_calc import (   # 計算類
         _compute_etf_warroom_row, build_holdings_overlap_matrix,
@@ -388,7 +392,7 @@ def render_etf_portfolio(gemini_fn=None):
         '名稱':         st.column_config.TextColumn('名稱', width='medium'),
         '市價':         st.column_config.NumberColumn('市價', format='%.2f'),
         '折溢價%':      st.column_config.NumberColumn('折溢價%', format='%+.2f%%',
-                          help='> +1% 追高；< 0% 折價撿便宜（MK 條件 C）'),
+                          help='> +1% 追高；< 0% 折價撿便宜（存股框架條件 C）'),
         '年化配息率%':  st.column_config.NumberColumn('年化配息率%', format='%.2f%%'),
         '1年含息報酬%': st.column_config.NumberColumn('1年含息報酬%', format='%+.2f%%',
                           help='含息總報酬，與年化配息率比較'),
@@ -460,7 +464,7 @@ def render_etf_portfolio(gemini_fn=None):
         st.dataframe(_oth_df, column_config=_other_cols,
                      use_container_width=True, hide_index=True)
 
-    # ── MK 框架 #9：核心 / 衛星比例 vs regime 目標 ────────────
+    # ── 存股框架 #9：核心 / 衛星比例 vs regime 目標 ────────────
     _core_value = sum(r['current_value'] for r in rows if r.get('role') == '核心')
     _sat_value  = sum(r['current_value'] for r in rows if r.get('role') == '衛星')
     _core_pct = _core_value / total_value * 100 if total_value > 0 else 0.0
@@ -471,7 +475,7 @@ def render_etf_portfolio(gemini_fn=None):
         _target_core_pct = _mgr.core_ratio * 100
         _target_sat_pct  = _mgr.satellite_ratio * 100
         _rebal_info = _mgr.check_rebalance(satellite_current_value=_sat_value)
-        st.markdown('#### 🎯 核心 / 衛星 配置 vs MK regime 目標')
+        st.markdown('#### 🎯 核心 / 衛星 配置 vs regime 目標')
         _cs1, _cs2 = st.columns(2)
         _core_dev = _core_pct - _target_core_pct
         _sat_dev  = _sat_pct  - _target_sat_pct
@@ -487,18 +491,18 @@ def render_etf_portfolio(gemini_fn=None):
                 f'⚠️ <b>衛星超標</b> {_excess:.1f}pp（regime={regime} 目標衛星 {_target_sat_pct:.0f}%）<br>'
                 f'<b>建議</b>：{_rebal_info.get("action", "考慮停利衛星部位轉入核心")}',
                 'red')
-            _teacher_conclusion('郭俊宏',
-                                f'衛星 {_sat_pct:.1f}% > 目標 {_target_sat_pct:.0f}%',
-                                '衛星部位超標，違背核衛宿命',
-                                '停利衛星轉入核心（葡萄串閉環）')
+            _strategy_conclusion(STRATEGY_VALUATION,
+                                 f'衛星 {_sat_pct:.1f}% > 目標 {_target_sat_pct:.0f}%',
+                                 '衛星部位超標，違背核衛宿命',
+                                 '停利衛星轉入核心（葡萄串閉環）')
         else:
             _colored_box(
                 f'✅ 核衛比例符合 regime={regime} 目標範圍（±10pp 容忍）',
                 'green')
-            _teacher_conclusion('郭俊宏',
-                                f'核 {_core_pct:.0f}% / 衛 {_sat_pct:.0f}%',
-                                f'符合 regime={regime} 目標 {_target_core_pct:.0f}/{_target_sat_pct:.0f}',
-                                '維持當前配置')
+            _strategy_conclusion(STRATEGY_VALUATION,
+                                 f'核 {_core_pct:.0f}% / 衛 {_sat_pct:.0f}%',
+                                 f'符合 regime={regime} 目標 {_target_core_pct:.0f}/{_target_sat_pct:.0f}',
+                                 '維持當前配置')
         st.caption('💡 **regime 目標**：多頭 60/40 / 中性 70/30 / 保守 80/20 / 空頭 85/15（核/衛）')
     except Exception as _csm_e:
         st.info(f'ℹ️ 核衛分離計算暫時不可用：{type(_csm_e).__name__}')
@@ -710,15 +714,15 @@ def render_etf_portfolio(gemini_fn=None):
            if _stress_warn else '&nbsp; ✅ 風險可控'),
         color)
     if _stress_warn:
-        _teacher_conclusion('孫慶龍',
-                            f'S&P500↓20% 壓力測試損失 {loss_pct:.1f}%',
-                            '尾部風險超標，組合過於進攻型',
-                            '增加債券 ETF 或現金部位，降低整體 Beta')
+        _strategy_conclusion(STRATEGY_VALUATION,
+                             f'S&P500↓20% 壓力測試損失 {loss_pct:.1f}%',
+                             '尾部風險超標，組合過於進攻型',
+                             '增加債券 ETF 或現金部位，降低整體 Beta')
     else:
-        _teacher_conclusion('孫慶龍',
-                            f'S&P500↓20% 壓力測試損失 {loss_pct:.1f}%',
-                            '壓力測試風險可控，組合防禦性足夠',
-                            '維持現有配置，定期再平衡')
+        _strategy_conclusion(STRATEGY_VALUATION,
+                             f'S&P500↓20% 壓力測試損失 {loss_pct:.1f}%',
+                             '壓力測試風險可控，組合防禦性足夠',
+                             '維持現有配置，定期再平衡')
 
     # ── VaR 風險值（歷史模擬法 + 參數法）────────────────────────
     st.markdown('#### 📉 VaR 風險值（Value at Risk）')
@@ -787,15 +791,15 @@ def render_etf_portfolio(gemini_fn=None):
                    if _var_warn else '&nbsp; ✅ 月度尾部風險在可接受範圍內'),
                 'red' if _var_warn else 'green')
             if _var_warn:
-                _teacher_conclusion('弘爺',
-                                    f'月度 99% VaR {abs(_m99)/total_value*100:.2f}%',
-                                    f'月度尾部風險 > {PORTFOLIO_VAR_MONTHLY_WARN_PCT:.0f}%，組合波動過大',
-                                    '增加低相關資產（如 BND/AGGG），降低整體波動')
+                _strategy_conclusion(STRATEGY_TECHNICAL,
+                                     f'月度 99% VaR {abs(_m99)/total_value*100:.2f}%',
+                                     f'月度尾部風險 > {PORTFOLIO_VAR_MONTHLY_WARN_PCT:.0f}%，組合波動過大',
+                                     '增加低相關資產（如 BND/AGGG），降低整體波動')
             else:
-                _teacher_conclusion('弘爺',
-                                    f'月度 99% VaR {abs(_m99)/total_value*100:.2f}%',
-                                    '月度尾部風險在可接受範圍，組合穩健',
-                                    '維持現有風險配置，按計畫再平衡')
+                _strategy_conclusion(STRATEGY_TECHNICAL,
+                                     f'月度 99% VaR {abs(_m99)/total_value*100:.2f}%',
+                                     '月度尾部風險在可接受範圍，組合穩健',
+                                     '維持現有風險配置，按計畫再平衡')
         else:
             st.warning(f'歷史共同交易日不足（{_n_common}<20'
                        + (f'，受最短檔 {_limiter} 限制' if _limiter else '')
@@ -964,20 +968,20 @@ def render_etf_portfolio(gemini_fn=None):
                if _yoc >= YIELD_LOW else '&nbsp; 🟡 殖利率偏低，可考慮增加高息ETF比例'),
             'green' if _yoc >= YIELD_LOW else 'yellow')
         if _yoc >= YIELD_MID:
-            _teacher_conclusion('郭俊宏',
-                                f'組合殖利率 {_yoc:.2f}%，年現金流 {_total_annual_raw:,.0f} 元',
-                                '殖利率優異，現金流充沛，以息養股目標達成',
-                                '持續持有，配息再投入複利滾動')
+            _strategy_conclusion(STRATEGY_VALUATION,
+                                 f'組合殖利率 {_yoc:.2f}%，年現金流 {_total_annual_raw:,.0f} 元',
+                                 '殖利率優異，現金流充沛，以息養股目標達成',
+                                 '持續持有，配息再投入複利滾動')
         elif _yoc >= YIELD_LOW:
-            _teacher_conclusion('郭俊宏',
-                                f'組合殖利率 {_yoc:.2f}%，年現金流 {_total_annual_raw:,.0f} 元',
-                                '殖利率合格，現金流穩定',
-                                '可維持，視需要提高高息 ETF 比例')
+            _strategy_conclusion(STRATEGY_VALUATION,
+                                 f'組合殖利率 {_yoc:.2f}%，年現金流 {_total_annual_raw:,.0f} 元',
+                                 '殖利率合格，現金流穩定',
+                                 '可維持，視需要提高高息 ETF 比例')
         else:
-            _teacher_conclusion('郭俊宏',
-                                f'組合殖利率 {_yoc:.2f}%，年現金流 {_total_annual_raw:,.0f} 元',
-                                '殖利率偏低，現金流不足以息養股',
-                                '增加 00878/00713 等高息 ETF 比例')
+            _strategy_conclusion(STRATEGY_VALUATION,
+                                 f'組合殖利率 {_yoc:.2f}%，年現金流 {_total_annual_raw:,.0f} 元',
+                                 '殖利率偏低，現金流不足以息養股',
+                                 '增加 00878/00713 等高息 ETF 比例')
 
         # §4.1:含美元 ETF 但抓不到匯率 → fail loud 提示,不靜默把 USD 當 TWD 加。
         if _sched['any_needs_fx']:

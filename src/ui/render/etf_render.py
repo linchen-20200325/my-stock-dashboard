@@ -151,18 +151,25 @@ def _colored_box(text: str, color: str = 'green') -> None:
         unsafe_allow_html=True)
 
 
-def _teacher_conclusion(teacher: str, indicator_val: str, conclusion: str,
-                        action: str = '', color: str | None = None) -> None:
-    """ETF dashboard 策略結論卡 — sink shim,委派 ui_widgets.teacher_conclusion SSOT。
+def _strategy_conclusion(strategy: str, indicator_val: str, conclusion: str,
+                         action: str = '', color: str | None = None) -> None:
+    """ETF dashboard 策略結論卡 — sink shim,委派 ui_widgets.strategy_conclusion SSOT。
 
     v18.427 Phase 2 Batch 4(D10):原私有副本含 _neg_kw/_pos_kw + HTML 字串建構,
-    與 ui_widgets.teacher_conclusion 1:1 重複(差別僅 4 個 ETF 脈絡關鍵字 +
+    與 ui_widgets 版本 1:1 重複(差別僅 4 個 ETF 脈絡關鍵字 +
     sink:st.markdown vs string return)。
     SSOT 收斂:ui_widgets 補上 4 個關鍵字後本檔改 thin shim,簽名不變 24 個 caller 無感。
+
+    v19.174 去識別化:舊名 `_teacher_conclusion`,第一參數舊為人名字串;
+    現改為策略代號(`STRATEGY_VALUATION` / `STRATEGY_FINANCIAL` / `STRATEGY_TECHNICAL`)。
     """
-    from src.ui.render.ui_widgets import teacher_conclusion as _ui_tc
-    st.markdown(_ui_tc(teacher, indicator_val, conclusion, action, color),
+    from src.ui.render.ui_widgets import strategy_conclusion as _ui_sc
+    st.markdown(_ui_sc(strategy, indicator_val, conclusion, action, color),
                 unsafe_allow_html=True)
+
+
+# v19.174 過渡期 alias（caller 全部遷移完成後移除）
+_teacher_conclusion = _strategy_conclusion
 
 
 def _plot_etf_chart(df: pd.DataFrame, ticker: str,

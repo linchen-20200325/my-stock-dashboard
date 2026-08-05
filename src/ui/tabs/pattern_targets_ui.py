@@ -1,14 +1,19 @@
-"""src/ui/tabs/caisen_targets_ui.py — 老師型態目標價計算機 UI(L5,v19.162→v19.163)。
+"""src/ui/tabs/pattern_targets_ui.py — 型態目標價計算機 UI(L5,v19.162→v19.163)。
+
+v19.174 去識別化改名:原檔名 `caisen_targets_ui.py`、原核心函式
+`render_caisen_for_ticker`(皆帶人名羅馬拼音)。依 user 要求「人名一律移除」
+全數改為中性的 `pattern_*`。**行為 0 改**,只換名字;
+舊檔保留 deprecation re-export、舊函式名保留 alias。
 
 user 需求:「由技術線型計算甜蜜價與目標價」+「接在個股/組合裡,套用當前標的」。
-核心 `render_caisen_for_ticker(code, *, key_prefix)` 可重用元件:輸入代碼 → 抓 1y K 線 →
-ZigZag 自動偵測擺動點 → 機械對映老師關鍵位 → 可手動微調 → compute_caisen_targets →
-報告 + 線圖標點。兩處共用(🔬 個股 Tab / 🏆 個股組合 Tab,各以 key_prefix 隔離 session),
-不另設獨立分頁(v19.163 user 要求)。
+核心 `render_pattern_targets_for_ticker(code, *, key_prefix)` 可重用元件:
+輸入代碼 → 抓 1y K 線 → ZigZag 自動偵測擺動點 → 機械對映型態關鍵位 → 可手動微調
+→ compute_pattern_targets → 報告 + 線圖標點。兩處共用(🔬 個股 Tab / 🏆 個股組合
+Tab,各以 key_prefix 隔離 session),不另設獨立分頁(v19.163 user 要求)。
 
 §1 誠實:抓不到 K 線 → fail loud(不編假);演算法只抓「機械擺動點」,型態是否成立由 user
 看圖確認,每個關鍵點都可手動覆寫。§8.2.A EX-PASSTHRU-1:lazy import L1 fetch_stock_history_1y。
-計算走 L2 SSOT `src.compute.strategy.caisen_targets`,UI 不自算。
+計算走 L2 SSOT `src.compute.strategy.pattern_targets`,UI 不自算。
 """
 from __future__ import annotations
 
@@ -80,10 +85,10 @@ def _run_detect(code: str, pct: float, prefix: str, preloaded_df=None) -> None:
                 "error": f"抓不到「{code}」的 K 線(Yahoo/FinMind 皆無回應)。§1:不編造假資料,請確認代碼或稍後再試。"}
             return
 
-    from src.compute.strategy import detect_swings, derive_caisen_levels
+    from src.compute.strategy import detect_swings, derive_pattern_levels
     current_price = float(df["Close"].iloc[-1])
     swings = detect_swings(df["High"], df["Low"], pct=pct)
-    levels = derive_caisen_levels(swings, current_price)
+    levels = derive_pattern_levels(swings, current_price)
 
     st.session_state[dkey] = {
         "df": df, "swings": swings, "levels": levels,
@@ -106,7 +111,7 @@ def _render_report(r: dict, current_price: float) -> None:
     rr = r.get("rr")
     pattern = r.get("pattern", "型態未明")
 
-    st.markdown(f"#### 📋 老師分析報告　`型態:{pattern}`　`現價:{current_price:.2f}`")
+    st.markdown(f"#### 📋 型態分析報告　`型態:{pattern}`　`現價:{current_price:.2f}`")
     a, b, c = st.columns(3)
     a.metric("🎯 甜蜜價(進場)", _fnum(sweet),
              help=f"區間 {_fnum(r.get('sweet_low'))} ~ {_fnum(r.get('sweet_high'))}(量縮拉回踩頸線不破更甜)")
@@ -130,7 +135,8 @@ def _render_report(r: dict, current_price: float) -> None:
         tip = "N 字須**帶量突破第一波高**才確認;拉回踩頸線要**量縮**才是好洗盤,量放大下殺別接。跌破整理低型態失效。"
     else:
         tip = "型態未明:擺動點不足或非典型,請自行看圖確認關鍵點後再參考數字。"
-    st.info(f"💡 **專家叮嚀**：{tip}　量價配合是老師核心 —— **突破必帶量、拉回宜量縮**。")
+    # v19.174 去識別化：原文的稱謂已改為中性表述
+    st.info(f"💡 **操作叮嚀**：{tip}　量價配合是型態學核心 —— **突破必帶量、拉回宜量縮**。")
     if isinstance(rr, (int, float)) and rr < 2:
         st.caption("⚠️ 風報比 < 2:賺賠不划算。可等更甜的進場(貼近整理低)或放棄這筆。")
 
@@ -170,13 +176,15 @@ def _render_chart(data: dict, r: dict, chart_key: str) -> None:
     st.plotly_chart(fig, use_container_width=True, key=f"_cs_chart_{chart_key}")
 
 
-def render_caisen_for_ticker(code: str, *, key_prefix: str = "cs", default_pct: int = 8,
-                             preloaded_df=None) -> None:
-    """可重用核心:對單一代碼跑老師型態目標價分析(自動偵測 + 可手動覆寫)。
+def render_pattern_targets_for_ticker(code: str, *, key_prefix: str = "cs", default_pct: int = 8,
+                                      preloaded_df=None) -> None:
+    """可重用核心:對單一代碼跑型態目標價分析(自動偵測 + 可手動覆寫)。
+
+    v19.174 去識別化：舊名 `render_caisen_for_ticker`（檔尾保留 alias）。
 
     key_prefix 隔離 session(獨立分頁 / 個股 / 組合 三處共用不衝突)。
     preloaded_df(v19.164 組合下鑽):傳入批次已抓的 df → 不重抓、換檔自動算,
-    確保「批次老師表 vs 下鑽線圖」同源同數(§1);None → 個股 Tab 走自抓。
+    確保「批次型態表 vs 下鑽線圖」同源同數(§1);None → 個股 Tab 走自抓。
     """
     st.caption("⚠️ **演算法推導,非型態判定**：系統只機械抓「擺動轉折點」，型態是否成立請自行看圖確認，"
                "並可下方**手動微調每個關鍵點**。僅供研究，風險自負。")
@@ -222,8 +230,8 @@ def render_caisen_for_ticker(code: str, *, key_prefix: str = "cs", default_pct: 
         st.selectbox("型態（影響止損邏輯）", _PATTERNS, key=f"_{prefix}_ov_pattern",
                      help="破底翻→止損貼破底低(較寬);N字→止損貼整理低/頸線(較緊)")
 
-    from src.compute.strategy import compute_caisen_targets
-    r = compute_caisen_targets(
+    from src.compute.strategy import compute_pattern_targets
+    r = compute_pattern_targets(
         pattern=st.session_state.get(f"_{prefix}_ov_pattern", "型態未明"),
         support=st.session_state.get(f"_{prefix}_ov_support"),
         breakdown_low=st.session_state.get(f"_{prefix}_ov_breakdown_low"),
@@ -238,3 +246,7 @@ def render_caisen_for_ticker(code: str, *, key_prefix: str = "cs", default_pct: 
     with st.expander("🔬 計算軌跡（notes：用了哪條公式、缺哪些值）", expanded=False):
         for n in r.get("notes", []):
             st.caption(f"• {n}")
+
+
+# ── v19.174 過渡期 alias(舊人名函式名;caller 全部遷移後移除)────────────
+render_caisen_for_ticker = render_pattern_targets_for_ticker

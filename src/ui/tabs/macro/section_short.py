@@ -18,7 +18,8 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.signal_thresholds import BREADTH_BULL_PCT, BREADTH_NEUTRAL_PCT
 from src.config import FINMIND_TOKEN  # noqa: F401
 from src.ui.render.macro_ui_components import section_header
-from src.ui.render.ui_widgets import kpi, teacher_conclusion
+# v19.174 去識別化：改用策略代號常數 + 新函式名 strategy_conclusion（原 teacher_conclusion）
+from src.ui.render.ui_widgets import STRATEGY_TECHNICAL, kpi, strategy_conclusion
 from src.ui.tabs.macro.helpers import add_danger_hlines, render_macro_bucket_summary_bar
 
 
@@ -70,7 +71,7 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
         _a5c = 'ADL數據尚未載入，請點擊「🚀 一鍵更新全部數據」'
         _a5a = ''
         _a5_ind = 'ADL騰落線'
-    st.markdown(teacher_conclusion('宏爺', _a5_ind, _a5c, _a5a), unsafe_allow_html=True)
+    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _a5_ind, _a5c, _a5a), unsafe_allow_html=True)
     st.caption('💡 衡量「多少股票真的在漲」—— 分數越高 = 廣度越健康；ADL 趨勢 vs 指數是否背離是最重要的觀察點')
     # 如果是代理資料，顯示提示
     _adl_chk = st.session_state.get('cl_data',{}).get('adl')
@@ -78,9 +79,9 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
         if 'is_proxy' in _adl_chk.columns and _adl_chk['is_proxy'].any():
             st.caption('⚠️ 目前顯示 yfinance 代理數據（TWSE 上漲/下跌家數暫時無法取得），上漲佔比為估算值')
     
-    # ── 老師策略 + 上漲佔比動態結論（移至 Section 標題下方）──────────
+    # ── 廣度策略 + 上漲佔比動態結論（移至 Section 標題下方）──────────
     if df_adl is not None and not df_adl.empty:
-        st.caption('💡 老師策略：ADL 趨勢比今日漲跌更重要，要看「方向」是否與指數一致。')
+        st.caption('💡 廣度策略：ADL 趨勢比今日漲跌更重要，要看「方向」是否與指數一致。')
         _ar2 = df_adl.iloc[-1]
         _ad2 = _ar2.get('ad', 0)
         _ratio2 = _ar2.get('ad_ratio', 50)

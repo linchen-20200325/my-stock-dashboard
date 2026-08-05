@@ -1,7 +1,8 @@
 """src/ui/tabs/macro/section_state.py — Section 2 拐點偵測 + 市場狀態卡(F-7.1 B-S2 抽出)。
 
-📊 整合六大面向 + MK 黃金拐點(v18.169);結論寫入 st.session_state['regime_data']
-供其他 tab 共用。
+📊 整合六大面向 + CPI×Fed 雙頂回落(v18.169;v19.173 正名,原「MK 黃金拐點」——
+「MK」= Mann-Kendall 的通用縮寫,但那條規則只是兩點差分,見 macro_helpers 註解);
+結論寫入 st.session_state['regime_data'] 供其他 tab 共用。
 
 closure params(4 explicit pass):
 - _mkt_info: dict | None  market_regime() 結果(從 S1 算出)
@@ -23,7 +24,7 @@ from src.ui.tabs.macro.handlers import _render_traffic_light  # noqa: F401
 def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> None:
     """渲染 §二 拐點偵測 + 市場狀態(原 tab_macro line 2186-2565)。"""
     # ══════════════════════════════════════════════════════════════
-    # 拐點偵測系統（整合六大面向 + MK 黃金拐點，v18.169）
+    # 拐點偵測系統（整合六大面向 + CPI×Fed 雙頂回落，v18.169；v19.173 正名）
     # ══════════════════════════════════════════════════════════════
     if _mkt_info:
         _mi2    = _mkt_info
@@ -42,9 +43,17 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
     
         # ── 計算各項拐點訊號 ─────────────────────────────────────
         pivot_signals = []  # (label, icon, color, detail)
+        # v19.173：訊號「群」的可評估名單（§資訊單調性，比照
+        #   allocation_service._derive_intrinsic_caps 的「未知 ≠ 不利」原則）。
+        #   每個 fetch/資料 gate 成功就登記對應 family key；沒登記的群 →
+        #   下方 aggregate_pivot_families() 會標「未評估」並**從分母剔除**，
+        #   既不當成偏空、也不當成不偏空。這樣「多抓到一個來源」只會改變
+        #   分母與該群的方向，不會像舊的絕對計數那樣讓結論整個反轉。
+        _fam_ok: set = set()
     
         # 1. 技術面：均線方向（MA60/MA120 彎折）
         if _ma60 and _ma120 and _idx2:
+            _fam_ok.add('trend')   # v19.173：均線資料到位 → 趨勢群可評估
             _turn_up   = any('向上彎折' in s for s in _sigs2)
             _turn_down = any('向下' in s and 'MA' in s for s in _sigs2)
             _above60   = _idx2 > _ma60
@@ -69,6 +78,7 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
     
         # 2. 乖離率（與台股體質 ±7~10% 門檻）
         if _bias2:
+            _fam_ok.add('level')   # v19.173：乖離率資料到位 → 位階群可評估
             _b240 = _bias2.get('bias_240', 0)
             _b60  = _bias2.get('bias_60', _bias2.get('bias_20', 0))
             _b20  = _bias2.get('bias_20', 0)
@@ -87,6 +97,7 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
     
         # 3. M1B-M2（資金面黃金/死亡交叉）
         if _m1b2 and not _m1b2.get('is_proxy'):
+            _fam_ok.add('liquidity')   # v19.173：M1B/M2 到位 → 資金群可評估
             _m1b_y = _m1b2.get('m1b_yoy', 0)
             _m2_y  = _m1b2.get('m2_yoy', 0)
             _diff  = _m1b_y - _m2_y
@@ -101,6 +112,7 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
         if _twd_df is not None and not _twd_df.empty:
             _twd_col = 'close' if 'close' in _twd_df.columns else 'Close'
             if _twd_col in _twd_df.columns and len(_twd_df) >= 10:
+                _fam_ok.add('liquidity')   # v19.173：台幣序列到位 → 資金群可評估
                 _twd_now   = float(_twd_df[_twd_col].iloc[-1])
                 _twd_prev5 = float(_twd_df[_twd_col].iloc[-5])
                 _twd_chg   = (_twd_now - _twd_prev5) / _twd_prev5 * 100
@@ -114,6 +126,7 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
     
         # 5. 外資期貨 + 散戶比（先行指標）
         if _li2 is not None and not _li2.empty:
+            _fam_ok.add('chips')   # v19.173：先行指標到位 → 籌碼群可評估
             _last_li = _li2.iloc[-1]
             _fut_net = _last_li.get('外資大小')
             _leek    = _last_li.get('韭菜指數')
@@ -160,6 +173,15 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
                 _fi_st = _f_fi_streak(days_back=30, token=_FMD_TK or '')
                 st.session_state['_fi_streak_cache'] = _fi_st
     
+            # v19.173：登記可評估群。景氣對策(6-A) 與 領先指標(6-B) 同屬國發會
+            #   **同一份資料集**（領先指標本身就是景氣對策信號的構成項），
+            #   故合併為一個 'cycle' 群 —— 兩者同號幾乎必然，不該當成兩份證據。
+            #   6-C 外資連續日數屬籌碼面，併入 'chips'（與外資期貨同一齣戲）。
+            if _ndc_h or _ndc_li:
+                _fam_ok.add('cycle')
+            if _fi_st:
+                _fam_ok.add('chips')
+
             # 6-A 景氣對策信號拐點
             _inf = (_ndc_h or {}).get('inflection', '')
             _sc, _spv = (_ndc_h or {}).get('score_latest'), (_ndc_h or {}).get('score_prev')
@@ -212,16 +234,40 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
         except Exception as _e_tp6:
             print(f'[tab_macro/拐點面板6] {type(_e_tp6).__name__}: {_e_tp6}')
     
-        # ── 7. MK 黃金拐點（CPI YoY × Fed Funds Rate 雙頂回落）─────────────
+        # ── 7. CPI×Fed 雙頂回落（CPI YoY × Fed Funds Rate 同步回落）───────
         # v18.169：鏡像 fund services/macro_service.py::_detect_inflection
         # 規則：CPI 月降 + Fed Funds 月降/持平 → ⭐ 強訊號（多頭最佳買點）
-        # 邏輯純函式集中於 macro_helpers.detect_mk_golden_inflection（可單測）
+        # 邏輯純函式集中於 macro_helpers.detect_cpi_fed_double_top（可單測）
+        #
+        # v19.173 正名：原名「MK 黃金拐點」/ detect_mk_golden_inflection。
+        #   「MK」是 Mann-Kendall 的通用縮寫，但這條規則只是「本月 vs 上月」
+        #   兩點差分 + 固定 ppt 門檻 —— 沒有 S 統計量 / Var(S) / Z / p-value /
+        #   tie 修正（全 repo `grep -i mann` = 0 hit）。掛 MK 之名等於借了一個
+        #   它沒有的統計背書。真正的 Mann-Kendall 見 `shared/mk_test.py`。
+        #   ⚠️ 判定邏輯**零變更**，只換名字與 label。
+        #
+        # v19.173 未做（並列 MK 佐證）：原規劃在此同時顯示 CPI / Fed 的真
+        #   Mann-Kendall 統計量（Z / p / Sen's β / n）。**做不了**，因為手上
+        #   根本沒有序列 —— `macro_snapshot.fetch_cpi_block()` 只回
+        #   {yoy, prev_yoy, date, source}，`fetch_fed_funds_block()` 只回
+        #   {current, prev, date, source}，兩者都是**純量**，session_state
+        #   的 macro_info 也只存這些。要並列就得新增「回整條月頻序列」的
+        #   fetcher，而那屬新資料流（CLAUDE.md §7 需先對齊 endpoint / 單位 /
+        #   發布延遲 / PIT 對齊鍵），不在本輪授權範圍。
+        #   §1：寧可不顯示，也不拿兩個點硬算一個沒有檢定力的 Z（n=2 時
+        #   `mann_kendall()` 直接回 None，這是刻意的）。
         try:
-            from src.compute.macro import detect_mk_golden_inflection as _det_mk
+            from src.compute.macro import detect_cpi_fed_double_top as _det_cf
             _mi_mk = st.session_state.get('macro_info') or {}
             _cpi_mk = _mi_mk.get('us_core_cpi') or {}
             _fed_mk = _mi_mk.get('fed_funds') or {}
-            _mk_sig = _det_mk(
+            # v19.173：四個輸入齊全才算「通膨利率群可評估」；
+            #   缺任一個 → 該群不進分母（不是「不偏空」，是「沒判斷」）。
+            if all(_v is not None for _v in (
+                    _cpi_mk.get('yoy'), _cpi_mk.get('prev_yoy'),
+                    _fed_mk.get('current'), _fed_mk.get('prev'))):
+                _fam_ok.add('inflation')
+            _mk_sig = _det_cf(
                 cpi_yoy=_cpi_mk.get('yoy'),
                 cpi_prev_yoy=_cpi_mk.get('prev_yoy'),
                 fed_rate=_fed_mk.get('current'),
@@ -233,25 +279,48 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
                     _mk_sig['color'], _mk_sig['detail'],
                 ))
         except Exception as _e_tp7:
-            print(f'[tab_macro/拐點面板7-MK] {type(_e_tp7).__name__}: {_e_tp7}')
+            print(f'[tab_macro/拐點面板7-CPIxFed] {type(_e_tp7).__name__}: {_e_tp7}')
     
         # v1.2 暫存供 AI 首席總經分析師讀（章節：拐點訊號摘要）
         st.session_state['_pivot_signals'] = list(pivot_signals)
     
         # ── 綜合評分 & 顯示 ──────────────────────────────────────
-        _bull_pts = sum(1 for _,_,c,_ in pivot_signals if c == TRAFFIC_GREEN)
-        _bear_pts = sum(1 for _,_,c,_ in pivot_signals if c == TRAFFIC_RED)
-        _warn_pts = sum(1 for _,_,c,_ in pivot_signals if c in (TRAFFIC_YELLOW,''))
+        # v19.173：從「數紅燈個數」改成「數偏空的**群**數 + 顯示分母」。
+        #
+        # 【為什麼不能直接數訊號個數 —— 共線性】
+        # 舊寫法 `sum(1 for ... if c == TRAFFIC_RED)` 隱含假設每盞紅燈都是一份
+        # **獨立**證據。實際上這些訊號彼此高度相關：
+        #   - 「年線乖離過大 / 外資期貨大量空單 / 散戶極度看多」是同一個
+        #     「多頭末端擁擠度」因子的三種量測；
+        #   - 「景氣對策連 2 月翻空 / 領先指標 6M 由正轉負」出自國發會同一份
+        #     資料集（領先指標是景氣對策信號的構成項），幾乎必然同號。
+        # 等相關（equicorrelated）近似下的有效獨立訊號數為
+        #
+        #       n_eff = n / ( 1 + (n − 1) · ρ̄ )
+        #
+        # 代 n = 4、ρ̄ = 0.7 → n_eff = 4 / (1 + 3×0.7) = 4/3.1 ≈ 1.29，
+        # 也就是「4 個空頭訊號」實際只值約 1.3 個獨立訊號 —— 確信度誇大約 3 倍。
+        # （ρ̄ = 0.7 是量級假設而非本專案實測，故**不印到畫面**，只用來解釋
+        #   為何要分群；§3.3 反捏造。）
+        #
+        # 【為什麼要有分母 —— 資訊單調性】
+        # 舊門檻 `_bear_pts >= 2` 是絕對計數，面向 6 需 FinMind token、面向 7 需
+        # CPI+Fed，任一 fetch 失敗就少幾盞燈 → 同一個市場可能從「🔴 4 個空頭」
+        # 掉成「⚪ 訊號分歧」。這與 allocation_service.py:178-212（v19.170 已修的
+        # 三環第一環）是同一類 bug：多知道 / 少知道一個事實，結論反而反轉。
+        # 現在改成：拿不到資料的群 → 標「未評估」、**排除於分母外**，
+        # 既不當「不偏空」也不當「偏空」，且分母一定寫給使用者看。
+        #
+        # 分群 / 門檻 / 判定式的 SSOT 在 macro_helpers（L2 純函式，可單測）。
+        from src.compute.macro import aggregate_pivot_families as _agg_pv
+        _pv_agg = _agg_pv(pivot_signals, evaluable=_fam_ok)
     
-        if _bull_pts > _bear_pts and _bull_pts >= 2:
-            _pivot_overall = f'🟢 綜合拐點：{_bull_pts} 個多頭訊號 → 偏向底部起漲'
-            _pivot_color   = TRAFFIC_GREEN
-        elif _bear_pts > _bull_pts and _bear_pts >= 2:
-            _pivot_overall = f'🔴 綜合拐點：{_bear_pts} 個空頭訊號 → 偏向頂部起跌'
-            _pivot_color   = TRAFFIC_RED
-        else:
-            _pivot_overall = f'⚪ 訊號分歧：多頭{_bull_pts} vs 空頭{_bear_pts}，方向待確認'
-            _pivot_color   = TRAFFIC_YELLOW
+        # 新舊門檻等價性（詳見 macro_helpers.PIVOT_MIN_SIDE_FAMILIES 註解）：
+        #   舊 `>= 2` 的單位是「訊號」，新 `>= 2` 的單位是「群」，常數值不動。
+        #   兩訊號分屬不同群 → 新舊完全等價；兩訊號擠在同一群 → 舊成立、新不成立，
+        #   而那正是共線性誤判（同一因子的兩種量測不是兩份獨立證據）。
+        _pivot_overall = _pv_agg['headline']
+        _pivot_color   = _pv_agg['color']
     
         # v18.321：🔮 拐點群組 banner（與其他桶一致的分隔條，分組化收尾）
         from shared.macro_buckets import bucket_group_banner_html as _bgb_pv
@@ -261,10 +330,31 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
                     f'border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;'
                     f'font-size:13px;font-weight:600;color:{_pivot_color};">'
                     f'{_pivot_overall}</div>', unsafe_allow_html=True)
+        # v19.173：分群明細 + 未評估揭露（§1 誠實揭露資料完整度）。
+        #   把「哪幾群偏空、哪幾群根本沒資料」攤開，使用者才知道那句結論
+        #   是建立在幾份**互相獨立**的證據上，而不是同一件事被數了好幾次。
+        _pv_side_txt = {'bull': '偏多', 'bear': '偏空',
+                        'neutral': '中性', 'unevaluated': '未評估'}
+        st.caption('　'.join(
+            f"{_f['name']}：{_pv_side_txt.get(_f['side'], _f['side'])}"
+            for _f in _pv_agg['families'].values()))
+        st.caption(
+            '💡 同一群內的訊號（例：外資期貨大空單＋散戶極度看多）源自同一個潛在'
+            '因子，**群內取最壞、不累加** —— 避免把同一件事數成多份獨立證據而'
+            '誇大確信度。'
+        )
+        if _pv_agg['note']:
+            st.caption(_pv_agg['note'])
+        if _pv_agg['unknown_labels']:
+            # 不靜默吞：label 與 macro_helpers.PIVOT_FAMILY_OF 對不上時要看得見，
+            # 否則新增訊號時會悄悄從分子分母同時消失（§1 Fail Loud）。
+            print('[tab_macro/拐點分群] 未歸群的訊號 label='
+                  f"{_pv_agg['unknown_labels']}")
     
         # v18.319：六大面向 → verdict 小卡格（比照桶卡片，常駐可見），
         #          完整訊號敘述 + 判斷參考收進 Raw expander（要看才打開）。
-        st.markdown('##### 📊 拐點詳細分析 — 六大面向 + MK 黃金拐點')
+        # v19.173 正名：原「六大面向 + MK 黃金拐點」（MK ≠ Mann-Kendall）
+        st.markdown('##### 📊 拐點詳細分析 — 六大面向 + CPI×Fed 雙頂回落')
         if pivot_signals:
             _pv_cols = st.columns(3)
             for _pi, (_label, _icon, _color, _detail) in enumerate(pivot_signals):

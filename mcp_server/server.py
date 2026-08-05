@@ -206,7 +206,9 @@ def _stock_health_impl(stock_id) -> dict:
 
 @mcp.tool
 def stock_health(stock_id: str) -> dict:
-    """個股「老師財報體檢」總評(純規則、免 AI 金鑰)。
+    """個股「財報體檢」總評(純規則、免 AI 金鑰)。
+
+    v19.174 去識別化:原標題帶稱謂,改為純功能描述(MCP tool docstring 會被下游 LLM 讀到)。
 
     抓最新一季財報 → 6 大模組(存活/營運/獲利/財務結構/償債/進階診斷)純數學計算 →
     綜合評級 A+/A/B+/C/F + 生死指標通過/警示清單。與網頁「個股 → 財報體檢」同一引擎。

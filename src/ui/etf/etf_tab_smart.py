@@ -405,7 +405,7 @@ def _render_cat_diversifier_chart(cat_name: str, cdf, input_ticker: str) -> None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Section 3：MK 3-3-3 原則評估
+# Section 3：3-3-3 原則評估
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _render_333_result(ticker: str, r: dict) -> None:
@@ -421,7 +421,7 @@ def _render_333_result(ticker: str, r: dict) -> None:
     overall = r.get('overall_pass')
     if overall is True:
         bcolor  = '#16a085'
-        header  = '🏆 三項全過！符合 MK 3-3-3 優質標的標準'
+        header  = '🏆 三項全過！符合 3-3-3 優質標的標準'
     elif overall is False:
         bcolor  = '#c0392b'
         header  = '⚠️ 未達 3-3-3 標準 — 至少一項條件未通過'
@@ -462,7 +462,7 @@ def _render_333_result(ticker: str, r: dict) -> None:
 
 
 def render_333_section(ticker: str | None = None, key_suffix: str = '') -> None:
-    """在目前頁面渲染 MK 3-3-3 原則評估（expandable）。
+    """在目前頁面渲染 3-3-3 原則評估（expandable）。
 
     ticker: 由呼叫端傳入的分析標的（同 render_std_band_section）。
 
@@ -473,9 +473,10 @@ def render_333_section(ticker: str | None = None, key_suffix: str = '') -> None:
     from src.compute.etf.etf_smart_analysis import check_333_criteria
 
     _key = f'etf_smart_333{key_suffix}'
-    with st.expander('🎯 MK 3-3-3 優質標的篩選', expanded=True):
+    # v19.174 去識別化：原標題／說明含人名與代號，改為純方法論描述
+    with st.expander('🎯 3-3-3 優質標的篩選', expanded=True):
         st.caption(
-            '郭俊宏（MK）老師核心篩選原則：'
+            '3-3-3 核心篩選原則：'
             '**① 成立 >3 年**（歷經牛熊考驗）｜'
             '**② 3 年年化報酬 >7%**（真正的定存替代品）｜'
             '**③ 同儕前 1/3**（績效中前段，有上升潛力）'
@@ -534,7 +535,7 @@ def render_333_section(ticker: str | None = None, key_suffix: str = '') -> None:
             st.markdown(
                 '**① 成立 > 3 年** — 足以歷經一個完整牛熊循環，才有足夠資本利得作為配息後盾，'
                 '並能在歷史中驗證其抗跌能力。\n\n'
-                '**② 3 年年化報酬 > 7%** — MK 的目標是找到 7% 以上的定存替代品。'
+                '**② 3 年年化報酬 > 7%** — 目標是找到 7% 以上的定存替代品。'
                 '長期穩定 7%+ 代表能透過資本利得+股息完全覆蓋配息，實現「穩健領息不吃本金」。\n\n'
                 '**③ 同儕排名前 1/3** — 晨星 3 顆星以上，即同類前 40 名。'
                 '中前段班比頂尖更有持續上升空間，費率、風控和績效已達標，不是資優生但有韌性。'

@@ -1,11 +1,18 @@
-"""tests/test_caisen_targets.py — 老師形態學目標價引擎單元測試(純邏輯,無 I/O)。
+"""tests/test_pattern_targets.py — 線型形態學目標價引擎單元測試(純邏輯,無 I/O)。
+
+v19.174 去識別化改名:原檔名 `test_caisen_targets.py`,受測模組
+`src/compute/strategy/caisen_targets.py` 已改名為 `pattern_targets.py`,
+函式 `compute_caisen_targets` / `derive_caisen_levels` / `summarize_caisen`
+分別改名為 `compute_pattern_targets` / `derive_pattern_levels` / `summarize_pattern`。
+**測項與期望數字 0 改**,只換名字。
 
 涵蓋:
-  1. compute_caisen_targets 例題數字驗算(破底翻 + N字兩種 stop)。
+  1. compute_pattern_targets 例題數字驗算(破底翻 + N字兩種 stop)。
   2. detect_swings 合成 ZigZag 交替 pivots + NaN 跳過。
-  3. derive_caisen_levels 關鍵位對映(wave1_high / wave1_start / consolidation_low)。
+  3. derive_pattern_levels 關鍵位對映(wave1_high / wave1_start / consolidation_low)。
   4. 邊界:空 / 太短 / 缺 consolidation_low / 除零 → rr=None。
   5. property-based:pivots 永遠 kind 交替 + idx 遞增。
+  6. 過渡期 alias:舊人名函式名仍指向同一物件。
 """
 import math
 import os
@@ -15,18 +22,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 
-from src.compute.strategy.caisen_targets import (
-    compute_caisen_targets,
-    derive_caisen_levels,
+from src.compute.strategy.pattern_targets import (
+    compute_pattern_targets,
+    derive_pattern_levels,
     detect_swings,
-    summarize_caisen,
+    summarize_pattern,
 )
 
 
 # ── 1. 例題數字驗算 ────────────────────────────────────────────────
 def test_golden_breakdown_reversal_numbers():
     """破底翻例題:target_n=145、sweet=120、stop≈95*0.99、rr 為正且合理。"""
-    r = compute_caisen_targets(
+    r = compute_pattern_targets(
         pattern="破底翻",
         support=100,
         breakdown_low=95,
@@ -61,7 +68,7 @@ def test_golden_n_pattern_stop_uses_min_consol_neckline():
     專業判斷驗證:N字回踩不破整理低才是有效買點,故止損應貼整理低(115),
     而非甩轎破底低(95)——後者是破底翻專用的更寬停損。
     """
-    r = compute_caisen_targets(
+    r = compute_pattern_targets(
         pattern="N字整理",
         support=100,
         breakdown_low=95,
@@ -86,8 +93,8 @@ def test_two_stop_regimes_differ():
     """同數字下,破底翻止損(95 基)必寬於 N字止損(115 基)→ 破底翻 rr 較低。"""
     kw = dict(support=100, breakdown_low=95, wave1_start=100, wave1_high=130,
               consolidation_low=115, neckline=120, current_price=120)
-    br = compute_caisen_targets(pattern="破底翻", **kw)
-    nz = compute_caisen_targets(pattern="N字整理", **kw)
+    br = compute_pattern_targets(pattern="破底翻", **kw)
+    nz = compute_pattern_targets(pattern="N字整理", **kw)
     assert br["stop"] < nz["stop"]      # 破底翻停損更低(更寬)
     assert br["rr"] < nz["rr"]          # 更寬停損 → 風報比較低
 
@@ -167,7 +174,7 @@ def test_detect_swings_accepts_pandas_series():
     assert piv_ser == piv_list
 
 
-# ── 3. derive_caisen_levels 對映 ──────────────────────────────────
+# ── 3. derive_pattern_levels 對映 ─────────────────────────────────
 def test_derive_levels_maps_wave_points():
     """low100 → high130 → low115,現價120 → 正確對映三關鍵位。"""
     swings = [
@@ -175,7 +182,7 @@ def test_derive_levels_maps_wave_points():
         {"idx": 1, "price": 130.0, "kind": "high"},
         {"idx": 2, "price": 115.0, "kind": "low"},
     ]
-    lv = derive_caisen_levels(swings, current_price=120.0)
+    lv = derive_pattern_levels(swings, current_price=120.0)
     assert lv is not None
     assert lv["wave1_high"] == 130.0
     assert lv["neckline"] == 130.0            # neckline == wave1_high
@@ -192,7 +199,7 @@ def test_derive_levels_pattern_n_shape():
         {"idx": 1, "price": 130.0, "kind": "high"},
         {"idx": 2, "price": 115.0, "kind": "low"},
     ]
-    lv = derive_caisen_levels(swings, current_price=120.0)
+    lv = derive_pattern_levels(swings, current_price=120.0)
     assert lv["pattern"] == "N字整理"
 
 
@@ -203,7 +210,7 @@ def test_derive_levels_pattern_breakdown_reversal():
         {"idx": 1, "price": 140.0, "kind": "high"},  # 第一波高
         {"idx": 2, "price": 95.0, "kind": "low"},    # 破底(<110)
     ]
-    lv = derive_caisen_levels(swings, current_price=120.0)  # 站回 110 之上
+    lv = derive_pattern_levels(swings, current_price=120.0)  # 站回 110 之上
     assert lv["pattern"] == "破底翻"
     assert lv["breakdown_low"] == 95.0
 
@@ -214,16 +221,16 @@ def test_derive_levels_no_consolidation_low_is_none():
         {"idx": 0, "price": 100.0, "kind": "low"},
         {"idx": 1, "price": 130.0, "kind": "high"},
     ]
-    lv = derive_caisen_levels(swings, current_price=128.0)
+    lv = derive_pattern_levels(swings, current_price=128.0)
     assert lv["consolidation_low"] is None
     assert lv["pattern"] == "型態未明"
 
 
 def test_derive_end_to_end_from_detect_swings():
-    """detect_swings → derive_caisen_levels 串接一致。"""
+    """detect_swings → derive_pattern_levels 串接一致。"""
     seq = [100.0, 130.0, 115.0, 145.0]
     piv = detect_swings(seq, seq, pct=0.08)
-    lv = derive_caisen_levels(piv, current_price=145.0)
+    lv = derive_pattern_levels(piv, current_price=145.0)
     assert lv["wave1_high"] == 130.0
     assert lv["wave1_start"] == 100.0
     assert lv["consolidation_low"] == 115.0
@@ -231,11 +238,11 @@ def test_derive_end_to_end_from_detect_swings():
 
 # ── 4. 邊界 ────────────────────────────────────────────────────────
 def test_derive_levels_insufficient_swings_returns_none():
-    assert derive_caisen_levels([], current_price=100.0) is None
-    assert derive_caisen_levels([{"idx": 0, "price": 100.0, "kind": "low"}],
-                                current_price=100.0) is None
+    assert derive_pattern_levels([], current_price=100.0) is None
+    assert derive_pattern_levels([{"idx": 0, "price": 100.0, "kind": "low"}],
+                                 current_price=100.0) is None
     # 只有低點、無高點 → None
-    assert derive_caisen_levels(
+    assert derive_pattern_levels(
         [{"idx": 0, "price": 100.0, "kind": "low"},
          {"idx": 1, "price": 90.0, "kind": "low"}],
         current_price=95.0) is None
@@ -243,7 +250,7 @@ def test_derive_levels_insufficient_swings_returns_none():
 
 def test_missing_consolidation_low_target_n_none_box_ok():
     """缺 consolidation_low → target_n=None,但 target_box 仍算得出。"""
-    r = compute_caisen_targets(
+    r = compute_pattern_targets(
         pattern="型態未明",
         support=100,
         breakdown_low=95,
@@ -263,7 +270,7 @@ def test_missing_consolidation_low_target_n_none_box_ok():
 
 def test_target_box_falls_back_to_support_when_no_breakdown():
     """無 breakdown_low → box_low 退回 support。"""
-    r = compute_caisen_targets(
+    r = compute_pattern_targets(
         pattern="型態未明",
         support=90,
         breakdown_low=None,
@@ -279,7 +286,7 @@ def test_target_box_falls_back_to_support_when_no_breakdown():
 
 def test_rr_none_on_zero_denominator():
     """sweet - stop ≤ 0 → rr=None(除零 guard,不炸不腦補)。"""
-    r = compute_caisen_targets(
+    r = compute_pattern_targets(
         pattern="破底翻",
         support=120,
         breakdown_low=125,     # stop = 125*0.99 = 123.75 > sweet(120) → 分母負
@@ -295,7 +302,7 @@ def test_rr_none_on_zero_denominator():
 
 def test_all_none_inputs_no_crash():
     """全 None 輸入不炸,關鍵值回 None。"""
-    r = compute_caisen_targets(
+    r = compute_pattern_targets(
         pattern="型態未明",
         support=None,
         breakdown_low=None,
@@ -316,7 +323,7 @@ def test_all_none_inputs_no_crash():
 
 def test_result_dict_has_all_keys():
     """回傳 dict 契約:所有 key 齊備。"""
-    r = compute_caisen_targets(
+    r = compute_pattern_targets(
         pattern="N字整理", support=100, breakdown_low=95, wave1_start=100,
         wave1_high=130, consolidation_low=115, neckline=120, current_price=120,
     )
@@ -325,15 +332,15 @@ def test_result_dict_has_all_keys():
         assert k in r
 
 
-# ── 5. summarize_caisen(批次摘要 + 誠實 gate)──────────────────────
+# ── 5. summarize_pattern(批次摘要 + 誠實 gate)─────────────────────
 _SUMMARY_KEYS = ("pattern", "sweet", "dist_pct", "stop", "target1", "rr",
                  "levels", "ok", "reason")
 
 
 def test_summarize_contract_keys():
     """回傳 dict 契約:批次摘要 key 齊備。"""
-    s = summarize_caisen([100.0, 130.0, 115.0, 145.0],
-                         [100.0, 130.0, 115.0, 145.0], 145.0, pct=0.08)
+    s = summarize_pattern([100.0, 130.0, 115.0, 145.0],
+                          [100.0, 130.0, 115.0, 145.0], 145.0, pct=0.08)
     for k in _SUMMARY_KEYS:
         assert k in s
 
@@ -341,7 +348,7 @@ def test_summarize_contract_keys():
 def test_summarize_n_pattern_actionable():
     """N字型態 → 有可操作數字:pattern/sweet/rr/dist_pct 皆備、ok=True、reason=None。"""
     seq = [100.0, 130.0, 115.0, 145.0]
-    s = summarize_caisen(seq, seq, 145.0, pct=0.08)
+    s = summarize_pattern(seq, seq, 145.0, pct=0.08)
     assert s["pattern"] == "N字整理"
     assert math.isclose(s["sweet"], 130.0, rel_tol=1e-9)   # 甜蜜價=頸線=wave1_high
     assert s["rr"] is not None and s["rr"] > 0
@@ -356,7 +363,7 @@ def test_summarize_gate_blocks_undetermined_pattern():
     """型態未明:引擎止損退化會灌假高 rr → 封鎖所有可操作數字,只留 pattern + reason。"""
     # [100,150,120]:上衝後回落確認高、其後無擺動低 → consolidation_low=None → 型態未明
     seq = [100.0, 150.0, 120.0]
-    s = summarize_caisen(seq, seq, 120.0, pct=0.08)
+    s = summarize_pattern(seq, seq, 120.0, pct=0.08)
     assert s["pattern"] == "型態未明"
     assert s["sweet"] is None
     assert s["stop"] is None
@@ -370,9 +377,21 @@ def test_summarize_gate_blocks_undetermined_pattern():
 
 def test_summarize_insufficient_swings():
     """擺動點不足 → 全 None、pattern=None、reason 標明,不腦補。"""
-    s = summarize_caisen([100.0, 105.0], [100.0, 105.0], 105.0, pct=0.08)
+    s = summarize_pattern([100.0, 105.0], [100.0, 105.0], 105.0, pct=0.08)
     assert s["pattern"] is None
     assert s["levels"] is None
     assert s["ok"] is False
     assert s["reason"] == "擺動點不足"
     assert all(s[k] is None for k in ("sweet", "dist_pct", "stop", "target1", "rr"))
+
+
+# ── 6. v19.174 過渡期 alias(舊人名函式名)─────────────────────────
+def test_legacy_aliases_point_to_same_objects():
+    """舊人名函式名為同物件 alias —— 未遷移的 caller 不會斷,且行為完全一致。
+
+    待舊名全數退場時,連同本測試一起刪除。
+    """
+    from src.compute.strategy import pattern_targets as pt
+    assert pt.derive_caisen_levels is pt.derive_pattern_levels
+    assert pt.compute_caisen_targets is pt.compute_pattern_targets
+    assert pt.summarize_caisen is pt.summarize_pattern

@@ -238,14 +238,41 @@ def rp_scalar(val: Any, cat: str, freq: str, proxy_date: str) -> dict:
     return {'last_updated': 'N/A', 'rows': 0, 'category': cat, 'frequency': freq, 'missing': True}
 
 
-# v18.169: MK 黃金拐點（CPI × Fed Funds 雙頂回落）— 純函式 helper
-def detect_mk_golden_inflection(
+# v18.169: CPI × Fed Funds 雙頂回落 — 純函式 helper
+# ── v19.173 正名(命名不實技術債)──────────────────────────────────────────
+# 原名 `detect_mk_golden_inflection`,UI 顯示「MK 黃金拐點」。
+# 「MK」在統計文獻是 Mann-Kendall 的通用縮寫,而本函式**不是** Mann-Kendall:
+#   它只做「本月 vs 上月」兩點差分 + 固定門檻,沒有 S 統計量、沒有 Var(S)、
+#   沒有 Z、沒有 p-value、也沒有 tie 修正(全 repo `grep -i mann` = 0 hit)。
+# 舊名會讓讀者以為這條規則有無母數趨勢檢定背書 → 誇大確信度,故正名。
+# (v19.174 去識別化前,本 repo 別處的「MK」曾指某 ETF 存股框架的作者代號,兩者撞名更添誤讀;
+#  該處已一併改為「存股框架」中性描述。)
+# 真正的 Mann-Kendall 實作見 `shared/mk_test.py::mann_kendall`,
+# 用於 UI 上的**並列佐證**;本函式的判定邏輯 v19.173 一律不動(零行為變更)。
+def detect_cpi_fed_double_top(
     cpi_yoy: Optional[float],
     cpi_prev_yoy: Optional[float],
     fed_rate: Optional[float],
     fed_prev_rate: Optional[float],
 ) -> Optional[dict]:
-    """MK 黃金拐點偵測 — CPI YoY × Fed Funds Rate 雙頂回落判讀（鏡像 fund _detect_inflection）。
+    """CPI YoY × Fed Funds Rate「雙頂回落」偵測（鏡像 fund _detect_inflection）。
+
+    ⚠️ 這是什麼 / 不是什麼（v19.173 誠實揭露）
+    ------------------------------------------
+    **是**：對「最新月」與「上一月」兩個純量做差分，再比對固定 ppt 門檻的
+            經驗規則。輸入只有 4 個數字，沒有時間序列。
+    **不是**：Mann-Kendall 無母數趨勢檢定。本函式沒有 S 統計量、沒有 Var(S)、
+            沒有 Z、沒有 p-value、沒有 tie 修正，也沒有做任何顯著性宣稱。
+            若需要真正的趨勢檢定，請用 `shared.mk_test.mann_kendall()`
+            （它吃整條序列，回 Z / p / Sen's slope）。
+    ⚠️ v19.173 現況：兩者**尚未**在 UI 並列 —— `mann_kendall()` 目前
+    **零 production caller**。原因是 `macro_snapshot.fetch_cpi_block()` /
+    `fetch_fed_funds_block()` 只回「本月 + 上月」兩個純量，全 repo 沒有
+    CPI/Fed 的歷史序列可餵給檢定（n=2 時 `mann_kendall()` 本來就回 None）。
+    **規劃**是等序列 fetcher 到位後並列呈現：本規則負責「拐點事件」判讀、
+    Mann-Kendall 負責「這段期間有沒有統計上的趨勢」佐證，**互不覆寫**。
+    接序列屬新資料流，§7 需先對齊 endpoint／單位／發布延遲／PIT 鍵
+    （FRED CPI 必須用 release_date 而非 observation_date）。
 
     參數
     ----
@@ -256,14 +283,14 @@ def detect_mk_golden_inflection(
 
     回傳
     ----
-    None  — 資料不足（任一參數為 None）或無 MK 訊號
+    None  — 資料不足（任一參數為 None）或無訊號
     dict  — {'label', 'icon', 'color', 'detail', 'strength'}
             strength: 'strong'（雙明確回落）/ 'weak'（CPI 弱降+Fed 持平）
 
     判讀規則（防雜訊：±0.05ppt 視為持平）
     --------
-    - CPI 月降 ≥ 0.2ppt AND Fed 持平或月降      → ⭐ 強訊號（MK 黃金拐點 ＝ 多頭最佳買點）
-    - CPI 月降 ∈ [0.05, 0.2)ppt AND Fed 持平或月降 → ✅ 弱訊號（MK 拐點觀察中）
+    - CPI 月降 ≥ 0.2ppt AND Fed 持平或月降      → ⭐ 強訊號（CPI×Fed 雙頂回落）
+    - CPI 月降 ∈ [0.05, 0.2)ppt AND Fed 持平或月降 → ✅ 弱訊號（回落觀察中）
     - 任一上升 (> 0.05ppt) 或 CPI 未降          → None（無訊號）
     """
     if cpi_yoy is None or cpi_prev_yoy is None:
@@ -277,7 +304,7 @@ def detect_mk_golden_inflection(
     except (TypeError, ValueError):
         return None
 
-    # 任一指標明確上升 → 無 MK 訊號
+    # 任一指標明確上升 → 無訊號
     if cpi_delta > 0.05 or fed_delta > 0.05:
         return None
     # CPI 須至少出現降溫（>= 0.05ppt 月降）
@@ -288,7 +315,8 @@ def detect_mk_golden_inflection(
 
     if cpi_delta <= -0.2:
         return {
-            'label': 'MK 黃金拐點 ⭐',
+            # v19.173 正名:原 'MK 黃金拐點 ⭐'(見上方函式註解:MK ≠ Mann-Kendall)
+            'label': 'CPI×Fed 雙頂回落 ⭐',
             'icon': '⭐',
             'color': TRAFFIC_GREEN,
             'detail': (
@@ -300,7 +328,8 @@ def detect_mk_golden_inflection(
             'strength': 'strong',
         }
     return {
-        'label': 'MK 拐點觀察中',
+        # v19.173 正名:原 'MK 拐點觀察中'
+        'label': 'CPI×Fed 回落觀察中',
         'icon': '✅',
         'color': TRAFFIC_YELLOW,
         'detail': (
@@ -310,6 +339,18 @@ def detect_mk_golden_inflection(
         ),
         'strength': 'weak',
     }
+
+
+# ── v19.173 向後相容 alias（DEPRECATED，勿用於新程式碼）────────────────────
+# 舊名 `detect_mk_golden_inflection` 命名不實（「MK」= Mann-Kendall 的通用縮寫，
+# 但本規則只是兩點差分）。正名後保留 alias 是為了**不破壞既有 caller**。
+# v19.173 當下仍以舊名呼叫的地方（全 repo 掃描結果）：
+#   - src/ui/tabs/macro/section_long_term.py:43  （長期 regime 的 mk_signal 輸入）
+#     ← 該檔本輪不在授權改動範圍內，故 alias 不刪。
+#   - tests/test_macro_helpers.py                 （刻意保留，兼測 alias 未斷）
+# 已遷移到新名的：src/ui/tabs/macro/section_state.py（拐點面板第 7 項）。
+# 新程式碼一律改用 `detect_cpi_fed_double_top`；待全部 caller 遷移完成後移除本行。
+detect_mk_golden_inflection = detect_cpi_fed_double_top
 
 
 # v18.170: 長期總經位階分類（12M 視角，景氣大循環）— 純函式 helper
@@ -343,7 +384,10 @@ def classify_long_term_regime(
     fed_prev_rate  : 上月 Fed Funds Rate（%）
     ndc_score      : 台灣景氣對策信號分數（9-45）
     pmi            : 台灣製造業 PMI 指數（CIER）
-    mk_signal      : detect_mk_golden_inflection() 回傳值（None 或 dict）
+    mk_signal      : detect_cpi_fed_double_top() 回傳值（None 或 dict）
+                     ⚠️ v19.173：參數名維持 `mk_signal` 是為了不破壞既有
+                     keyword caller（section_long_term.py:66）；語意上它是
+                     「CPI×Fed 雙頂回落」訊號，**與 Mann-Kendall 無關**。
 
     回傳
     ----
@@ -356,7 +400,7 @@ def classify_long_term_regime(
     - Fed 方向 (20%)：月降+2 / 持平+1 / 月升-2
     - NDC (20%)：紅(≥38)+2 / 黃紅(32-37)+1 / 綠(23-31) 0 / 黃藍(17-22)-1 / 藍(<17)-2
     - PMI (20%)：≥55+2 / 52-55+1 / 50-52 0 / 48-50-1 / <48-2
-    - MK 拐點 (15%)：⭐強+2 / ✅弱+1 / None 0
+    - CPI×Fed 雙頂 (15%)：⭐強+2 / ✅弱+1 / None 0（v19.173 正名，原「MK 拐點」）
     """
     cpi_v = _safe_float(cpi_yoy)
     fed_v = _safe_float(fed_rate)
@@ -429,14 +473,17 @@ def classify_long_term_regime(
         weighted_sum += pmi_pts * 20
         weight_total += 20
 
-    # 5. MK 黃金拐點訊號（15%）— 僅當至少一個主指標存在時才計入
+    # 5. CPI×Fed 雙頂回落訊號（15%）— 僅當至少一個主指標存在時才計入
+    # v19.173 正名：原「MK 黃金拐點」。components 目前無 production render
+    # （v18.190 已移除雙視角 UI 區塊，僅 _lt['score'] / ['regime'] 被下游取用），
+    # 故改名不影響任何畫面；改的是未來讀 code 的人不會再被「MK」誤導。
     if weight_total > 0:
         if mk_signal is not None and isinstance(mk_signal, dict):
             _s = mk_signal.get('strength')
             mk_pts = 2 if _s == 'strong' else (1 if _s == 'weak' else 0)
         else:
             mk_pts = 0
-        components.append(('MK 拐點', mk_pts, 15))
+        components.append(('CPI×Fed 雙頂', mk_pts, 15))
         weighted_sum += mk_pts * 15
         weight_total += 15
 
@@ -1219,9 +1266,12 @@ def compute_five_bucket_summary(
     §1 Fail Loud：缺值 → 該指標 gray（未載入），桶全 gray → ⬜，**不**偽綠。
     §4.1：foreign_net 因 inst net 單位待確認，v1 暫不接（保持 gray 不誤判）。
     """
+    # v19.172：BUCKET_LEVEL_LABEL 改由 bucket_level_label() 取用(紅燈依觸發方向
+    #   分流過熱 / 惡化)；danger_exceedance 用來在同桶多盞同色燈時挑主因。
     from shared.macro_buckets import (
-        BUCKET_ORDER, BUCKET_LEVEL_LABEL, LEVEL_COLOR, LEVEL_EMOJI,
+        BUCKET_ORDER, LEVEL_COLOR, LEVEL_EMOJI, SPECS_BY_KEY,
         specs_for_bucket, classify_danger, aggregate_level, fmt_value,
+        bucket_level_label, danger_exceedance,
     )
 
     macro_info = macro_info or {}
@@ -1293,20 +1343,293 @@ def compute_five_bucket_summary(
                 "danger": classify_danger(v, s), "note": s.note,
             })
         blevel = aggregate_level([d["danger"] for d in details])
+        d0 = None
         if blevel == "gray":
             headline = "尚未載入（按更新 / 執行 AI 裁決）"
         elif blevel == "green":
             _n_ok = sum(1 for d in details if d["danger"] == "green")
             headline = f"{_n_ok} 項指標全綠"
         else:
-            d0 = next(d for d in details if d["danger"] == blevel)
+            # v19.172：原本 `next(...)` 取「註冊順序第一個同色燈」當主因，
+            #   註冊順序純屬歷史，同桶多盞紅時顯示的常不是最嚴重那盞，
+            #   而它同時決定下方標籤的方向 → 一起收斂。
+            #   改取「超標幅度」最大者（以黃→紅帶寬為單位，見 danger_exceedance
+            #   docstring 說明為何不用倍數）。幅度平手時 max() 保留先出現者，
+            #   完全退回原註冊順序，行為不退步。
+            _hits = [d for d in details if d["danger"] == blevel]
+            d0 = max(_hits, key=lambda d: danger_exceedance(
+                values.get(d["key"]), SPECS_BY_KEY[d["key"]], blevel))
             headline = f"{d0['label']} {d0['value_str']}｜{d0['note']}"
         out[bucket] = {
             "level": blevel,
-            "label": BUCKET_LEVEL_LABEL[bucket][blevel],
+            # v19.172：紅燈標籤依「觸發該桶紅燈的 spec 方向」分流
+            #   （high_bad → 結構/循環過熱；low_bad → 結構防禦/循環惡化），
+            #   修實機「🔴 循環惡化」配同頁「主升段狂熱…順勢作多」的自相矛盾。
+            "label": bucket_level_label(
+                bucket, blevel,
+                spec=SPECS_BY_KEY[d0["key"]] if d0 is not None else None,
+                value=values.get(d0["key"]) if d0 is not None else None,
+            ),
             "headline": headline,
             "color": LEVEL_COLOR[blevel],
             "emoji": LEVEL_EMOJI[blevel],
             "details": details,
         }
     return out
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# v19.173 — 拐點訊號「分群 + 分母」聚合（修「4 個空頭訊號」誇大確信度）
+#
+# 【問題一：共線性 —— 把同一個因子數成好幾個獨立證據】
+# 舊寫法是 `sum(1 for ... if color == TRAFFIC_RED)`，等於假設每盞紅燈都是
+# **一份獨立證據**。實際上拐點面板的訊號高度相關：
+#   - 「年線乖離過大 / 外資期貨大量空單 / 散戶極度看多」本質是同一個
+#     「多頭末端擁擠度」因子的三種量測；
+#   - 「景氣對策連 2 月翻空 / 領先指標 6M 由正轉負」同屬國發會**同一份資料集**
+#     （領先指標本身就是景氣對策信號的構成項之一），幾乎必然同號。
+#
+# 等相關（equicorrelated）近似下的有效獨立訊號數：
+#
+#       n_eff = n / ( 1 + (n − 1) · ρ̄ )
+#
+#   （推導：n 個單位變異數、兩兩相關 ρ̄ 的訊號，其和的變異數為
+#     Var(Σ) = n + n(n−1)ρ̄；若改用 n_eff 個**獨立**訊號要有同樣的
+#     「平均訊號」精度，需 n_eff = n²/Var(Σ) = n / (1 + (n−1)ρ̄)。）
+#
+#   代 n = 4、ρ̄ = 0.7 →  n_eff = 4 / (1 + 3×0.7) = 4 / 3.1 ≈ 1.29
+#   也就是「4 個空頭訊號」實際只值 ~1.3 個獨立訊號，確信度被誇大約 3 倍。
+#
+#   ⚠️ 誠實揭露：ρ̄ = 0.7 是**量級假設**，不是本專案實測值（要實測需要各訊號
+#   的歷史觸發序列，目前沒有落地）。因此本模組**不把 n_eff 當數字印到畫面**
+#   （§3.3 反捏造），只用它說明「為什麼要分群」。真正落地的是下面的分群規則。
+#
+# 【問題二：對資訊集非單調 —— 少抓到一個來源，結論反而反轉】
+# 舊門檻 `_bear_pts >= 2` 是**絕對計數、沒有分母**。面向 6 需 FinMind token、
+# 面向 7 需 CPI + Fed，任一 fetch 失敗 → 可評估訊號數下降 →
+# 同一個市場可能從「🔴 4 個空頭」變成「⚪ 訊號分歧」。使用者只會看到
+# 「昨天紅燈、今天變白燈」而找不到原因。
+# 這與 `src/services/allocation_service.py:178-212`（v19.170 修好的三環第一環）
+# 是同一類 bug，本次把該處的處理原則推廣過來：
+#   **未知 ≠ 不利，也 ≠ 有利** —— 資料拿不到的群從分母剔除並標「未評估」，
+#   不計入偏多也不計入偏空，且**分母一定顯示給使用者看**。
+#
+# 【落地規則】
+#   1. 每個訊號歸入一個 family（同一個潛在因子 → 同一群）。
+#   2. 群內**取最壞、不累加**：只要有一盞空 → 該群 = 偏空（一群最多算一次）。
+#   3. 顯示改為「N 群中 M 群偏空（可評估 K/N 群）」，比例 + 分母同時揭露。
+# ════════════════════════════════════════════════════════════════════════════
+
+#: 拐點訊號分群（key, 顯示名）。分群原則：**同一個潛在因子放同一群**。
+#: 順序即 UI 顯示順序，與 section_state.py 面板 1~7 的敘事順序對齊。
+PIVOT_FAMILIES: tuple[tuple[str, str], ...] = (
+    ('trend',     '趨勢（均線結構）'),
+    ('level',     '位階（乖離率）'),
+    ('liquidity', '資金（M1B-M2 / 台幣）'),
+    ('chips',     '籌碼（外資期貨 / 韭菜 / 外資連續）'),
+    ('cycle',     '景氣（NDC 對策 / 領先指標）'),
+    ('inflation', '通膨利率（CPI × Fed）'),
+)
+
+#: family key → 顯示名
+PIVOT_FAMILY_NAME: dict = dict(PIVOT_FAMILIES)
+
+#: 訊號 label → family key（SSOT）。
+#: label 必須與 `section_state.py` 的 `pivot_signals.append((label, ...))` 逐字一致；
+#: 對不上的 label 會被歸入回傳值的 `unknown_labels`（**不靜默吞掉**，§1）。
+PIVOT_FAMILY_OF: dict = {
+    # 1. 均線方向（同一條指數的多條均線，彼此相關極高）
+    '均線多頭確認': 'trend',
+    '均線初步翻多': 'trend',
+    '均線空頭確認': 'trend',
+    '整理區間':     'trend',
+    # 2. 乖離率（年線 / 月線同為「離均線多遠」的量測）
+    '年線乖離過大': 'level',
+    '年線深度低估': 'level',
+    '月線過熱':     'level',
+    '月線超賣':     'level',
+    # 3. 資金面（M1B-M2 與台幣同屬「錢往哪流」）
+    'M1B>M2 黃金交叉': 'liquidity',
+    'M1B<M2 死亡交叉': 'liquidity',
+    '台幣升值':        'liquidity',
+    '台幣貶值':        'liquidity',
+    # 4. 籌碼（外資期貨 / 韭菜 / 外資現貨連續 —— 都是「外資 vs 散戶」同一齣戲）
+    '外資期貨大量空單':   'chips',
+    '外資空單縮減':       'chips',
+    '外資期貨多方':       'chips',
+    '散戶極度看多（危險）': 'chips',
+    '散戶極度悲觀（機會）': 'chips',
+    '外資由連賣轉買':     'chips',
+    '外資由連買轉賣':     'chips',
+    '外資連續買超':       'chips',
+    '外資連續賣超':       'chips',
+    # 5. 景氣（NDC 景氣對策信號與領先指標同屬國發會**同一資料集**，必然同號）
+    '景氣對策連2月翻多':   'cycle',
+    '景氣對策連2月翻空':   'cycle',
+    '景氣對策連3月上升':   'cycle',
+    '景氣對策連3月下降':   'cycle',
+    '領先指標 6M 由負轉正': 'cycle',
+    '領先指標 6M 由正轉負': 'cycle',
+    '領先指標持續擴張':     'cycle',
+    '領先指標持續收縮':     'cycle',
+    # 6. 通膨利率（CPI×Fed 雙頂回落，v19.173 正名前為「MK 黃金拐點」）
+    'CPI×Fed 雙頂回落 ⭐': 'inflation',
+    'CPI×Fed 回落觀察中':  'inflation',
+}
+
+#: 判定方向所需的最少「群」數。
+#: 新舊等價性推導（為何仍是 2）：
+#:   舊規則 `_bear_pts >= 2` 的單位是「**訊號**」，新規則的單位是「**群**」。
+#:   - 兩訊號**分屬不同群** → 新舊同時成立，**行為完全等價**。
+#:   - 兩訊號**擠在同一群**（如「外資期貨大量空單」+「散戶極度看多」都在籌碼群）
+#:     → 舊規則成立、新規則不成立。這正是共線性修正要擋掉的誤判：
+#:       同一個因子的兩種量測不構成兩份獨立證據。
+#:   故常數值不動（2），只改單位；沒有引入新的魔術數字。
+PIVOT_MIN_SIDE_FAMILIES: int = 2
+
+#: 可評估群數低於此值 → 不宣稱方向（分母太小，比例沒有意義）。
+PIVOT_MIN_EVALUABLE_FAMILIES: int = 2
+
+
+def aggregate_pivot_families(
+    pivot_signals: Optional[list] = None,
+    evaluable: Any = None,
+) -> dict:
+    """把拐點訊號依 family 收斂，回「群比例 + 分母」而非「訊號絕對計數」。
+
+    參數
+    ----
+    pivot_signals : list[tuple[label, icon, color, detail]] | None
+        `section_state.py` 累積的訊號清單。形狀不符的元素會被略過。
+    evaluable : Iterable[str] | None
+        **有資料、有能力判定**的 family key 集合（即使該群這次沒觸發任何訊號）。
+        沒被列入且也沒有任何訊號的 family → 標記 'unevaluated'，
+        **從分母剔除**、不計入偏多也不計入偏空（§1 誠實揭露 + 資訊單調性）。
+
+    回傳
+    ----
+    dict::
+
+        {
+          'families':    {key: {'name', 'side', 'labels'}},   # side ∈ bull/bear/neutral/unevaluated
+          'n_bull' / 'n_bear' / 'n_neutral': int,             # 單位 = 群
+          'n_evaluable': int,   # 分母（= bull + bear + neutral）
+          'n_total':     int,   # 群總數
+          'unevaluated': list[str],      # 未評估群的顯示名
+          'unknown_labels': list[str],   # 對不上 PIVOT_FAMILY_OF 的 label
+          'verdict':  'bull' | 'bear' | 'mixed' | 'insufficient',
+          'headline': str,   # 直接可印的結論句（含分母）
+          'color':    str,   # traffic hex
+          'note':     str,   # 未評估群的說明（無則空字串）
+        }
+
+    判定
+    ----
+    - 群內取最壞：一群裡只要有一盞 `TRAFFIC_RED` → 該群 = 'bear'（**不累加**）；
+      否則有 `TRAFFIC_GREEN` → 'bull'；其餘（黃/灰/無訊號）→ 'neutral'。
+    - verdict='bear'  ⟺ n_bear > n_bull 且 n_bear >= PIVOT_MIN_SIDE_FAMILIES
+    - verdict='bull'  ⟺ 對稱條件
+    - n_evaluable < PIVOT_MIN_EVALUABLE_FAMILIES → 'insufficient'（不宣稱方向）
+    - 其餘 → 'mixed'
+
+    ⚠️ 已知落差（v19.173 誠實揭露，本輪**刻意不改**）
+    ------------------------------------------------
+    `section_state.py` 的「月線過熱 / 月線超賣」用的是 `#da3633` / `#2ea043`，
+    **不是** `TRAFFIC_RED` / `TRAFFIC_GREEN`。舊的計數邏輯同樣漏算它們，
+    本函式維持一致（嚴格比對 traffic 常數），避免在「正名 + 去共線」這次改動裡
+    夾帶一個沒被核准、也無法在此驗證的行為變更。若日後要修，請單獨提案：
+    把那兩處色碼改成 traffic SSOT 常數（那是 `section_state.py` 端的修正）。
+
+    效能
+    ----
+    O(len(pivot_signals))，單次線性掃描，無巢狀迴圈。
+    """
+    _eval_keys = set()
+    if evaluable:
+        try:
+            _eval_keys = {str(k) for k in evaluable}
+        except TypeError:
+            _eval_keys = set()
+
+    _fam_side: dict = {}
+    _fam_labels: dict = {k: [] for k, _ in PIVOT_FAMILIES}
+    unknown_labels: list = []
+
+    for _sig in (pivot_signals or []):
+        try:
+            _label, _icon, _color, _detail = _sig
+        except (TypeError, ValueError):
+            # 形狀不符（非 4-tuple）→ 略過但不吞：計入 unknown_labels 供診斷
+            unknown_labels.append(repr(_sig)[:40])
+            continue
+        _fam = PIVOT_FAMILY_OF.get(str(_label))
+        if _fam is None:
+            unknown_labels.append(str(_label))
+            continue
+        _fam_labels[_fam].append(str(_label))
+        if _color == TRAFFIC_RED:
+            _fam_side[_fam] = 'bear'          # 取最壞：空一旦成立就不被多蓋掉
+        elif _color == TRAFFIC_GREEN:
+            if _fam_side.get(_fam) != 'bear':
+                _fam_side[_fam] = 'bull'
+        else:
+            _fam_side.setdefault(_fam, 'neutral')
+
+    families: dict = {}
+    n_bull = n_bear = n_neutral = 0
+    unevaluated: list = []
+    for _key, _name in PIVOT_FAMILIES:
+        _has_signal = bool(_fam_labels[_key])
+        # 有訊號 ⇒ 必定可評估（防呼叫端漏登記）；否則看 evaluable 名單
+        if not (_has_signal or _key in _eval_keys):
+            _side = 'unevaluated'
+            unevaluated.append(_name)
+        else:
+            _side = _fam_side.get(_key, 'neutral')
+            if _side == 'bull':
+                n_bull += 1
+            elif _side == 'bear':
+                n_bear += 1
+            else:
+                n_neutral += 1
+        families[_key] = {'name': _name, 'side': _side, 'labels': _fam_labels[_key]}
+
+    n_total = len(PIVOT_FAMILIES)
+    n_evaluable = n_bull + n_bear + n_neutral
+
+    if n_evaluable < PIVOT_MIN_EVALUABLE_FAMILIES:
+        verdict, color = 'insufficient', TRAFFIC_YELLOW
+        headline = (f'⚪ 拐點資料不足：{n_total} 群僅 {n_evaluable} 群可評估 '
+                    f'→ 不宣稱方向')
+    elif n_bull > n_bear and n_bull >= PIVOT_MIN_SIDE_FAMILIES:
+        verdict, color = 'bull', TRAFFIC_GREEN
+        headline = (f'🟢 綜合拐點：{n_total} 群中 {n_bull} 群偏多'
+                    f'（可評估 {n_evaluable}/{n_total} 群）→ 偏向底部起漲')
+    elif n_bear > n_bull and n_bear >= PIVOT_MIN_SIDE_FAMILIES:
+        verdict, color = 'bear', TRAFFIC_RED
+        headline = (f'🔴 綜合拐點：{n_total} 群中 {n_bear} 群偏空'
+                    f'（可評估 {n_evaluable}/{n_total} 群）→ 偏向頂部起跌')
+    else:
+        verdict, color = 'mixed', TRAFFIC_YELLOW
+        headline = (f'⚪ 訊號分歧：偏多 {n_bull} 群 vs 偏空 {n_bear} 群'
+                    f'（可評估 {n_evaluable}/{n_total} 群），方向待確認')
+
+    note = ''
+    if unevaluated:
+        note = ('⚠️ 未評估：' + '、'.join(unevaluated)
+                + '（資料未取得 → 已排除於分母外，既不計入偏多也不計入偏空）')
+
+    return {
+        'families': families,
+        'n_bull': n_bull,
+        'n_bear': n_bear,
+        'n_neutral': n_neutral,
+        'n_evaluable': n_evaluable,
+        'n_total': n_total,
+        'unevaluated': unevaluated,
+        'unknown_labels': unknown_labels,
+        'verdict': verdict,
+        'headline': headline,
+        'color': color,
+        'note': note,
+    }

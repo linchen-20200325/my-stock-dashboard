@@ -1,4 +1,10 @@
-"""tests/test_mj_trend_score.py — v18.189 雙頻率融合分數測試"""
+"""tests/test_mj_trend_score.py — v18.189 雙頻率融合分數測試
+
+v19.174 去識別化：模組自 `mj_trend_score` 改名為 `fin_trend_score`，
+`compute_mj_trend_subscore` → `compute_fin_trend_subscore`，
+輸出 key `mj_subscore` / `mj_detail` → `fin_subscore` / `fin_detail`
+（舊 key 仍以同值 alias 並存，另有一條 test 釘住過渡期相容）。
+"""
 from __future__ import annotations
 
 import pytest
@@ -8,7 +14,7 @@ from src.compute.health import (
     _safe_num,
     _squash,
     _yoy_step_score,
-    compute_mj_trend_subscore,
+    compute_fin_trend_subscore,
     compute_monthly_revenue_subscore,
     compute_trend_score,
 )
@@ -187,12 +193,12 @@ class TestMonthlyRevenueSubscore:
 
 
 # ════════════════════════════════════════════════════════════════
-# 老師 季財報 trend 子分數
+# 季財報體檢 trend 子分數
 # ════════════════════════════════════════════════════════════════
 def _make_snapshot(survival_status: str = "Pass") -> dict:
-    """簡化 老師 體檢 snapshot fixture，僅含 Survival_Module/Cash_Ratio 一項。
+    """簡化財報體檢 snapshot fixture，僅含 Survival_Module/Cash_Ratio 一項。
 
-    Key 須用大寫 Survival_Module 對齊 mj_health_diff._walk_statuses 掃描清單。
+    Key 須用大寫 Survival_Module 對齊 fin_health_diff._walk_statuses 掃描清單。
     """
     return {
         "Survival_Module": {
@@ -201,22 +207,22 @@ def _make_snapshot(survival_status: str = "Pass") -> dict:
     }
 
 
-class TestMjTrendSubscore:
+class TestFinTrendSubscore:
     def test_bad_input(self):
-        s, det = compute_mj_trend_subscore("not_a_list")  # type: ignore[arg-type]
+        s, det = compute_fin_trend_subscore("not_a_list")  # type: ignore[arg-type]
         assert s == 0.0 and det["reason"] == "bad_input"
 
     def test_empty(self):
-        s, det = compute_mj_trend_subscore([])
+        s, det = compute_fin_trend_subscore([])
         assert s == 0.0 and det["reason"] == "insufficient_snapshots"
 
     def test_only_one_snapshot(self):
-        s, det = compute_mj_trend_subscore([_make_snapshot("Pass")])
+        s, det = compute_fin_trend_subscore([_make_snapshot("Pass")])
         assert s == 0.0 and det["n_snapshots"] == 1
 
     def test_two_snapshots_improvement(self):
         snaps = [_make_snapshot("Fail"), _make_snapshot("Pass")]
-        s, det = compute_mj_trend_subscore(snaps)
+        s, det = compute_fin_trend_subscore(snaps)
         # net_delta = +1 (Fail→Pass) → squash(1)*2 = ~0.667
         assert s > 0
         assert det["delta_1"] == 1
@@ -224,7 +230,7 @@ class TestMjTrendSubscore:
 
     def test_two_snapshots_deterioration(self):
         snaps = [_make_snapshot("Pass"), _make_snapshot("Fail")]
-        s, _ = compute_mj_trend_subscore(snaps)
+        s, _ = compute_fin_trend_subscore(snaps)
         assert s < 0
 
     def test_three_snapshots_same_dir_up(self):
@@ -234,7 +240,7 @@ class TestMjTrendSubscore:
             _make_snapshot("Acceptable"),
             _make_snapshot("Pass"),
         ]
-        s, det = compute_mj_trend_subscore(snaps)
+        s, det = compute_fin_trend_subscore(snaps)
         # delta_1 = +1, delta_2 = +1, same_direction → s1+s2 ≈ 0.667
         assert s > 0
         assert det["same_direction"] is True
@@ -246,7 +252,7 @@ class TestMjTrendSubscore:
             _make_snapshot("Pass"),
             _make_snapshot("Fail"),
         ]
-        s, det = compute_mj_trend_subscore(snaps)
+        s, det = compute_fin_trend_subscore(snaps)
         # delta_1 = +1, delta_2 = -1, divergent → (0.333 + -0.333)*0.5 = 0
         assert det["same_direction"] is False
         assert abs(s) < 0.1
@@ -258,7 +264,7 @@ class TestMjTrendSubscore:
             _make_snapshot("Acceptable"),
             _make_snapshot("Pass"),
         ]
-        s, det = compute_mj_trend_subscore(snaps)
+        s, det = compute_fin_trend_subscore(snaps)
         assert det["n_snapshots"] == 3
         # 應吃最新 3 季 Fail→Acceptable→Pass 同向改善
         assert s > 0
@@ -279,13 +285,13 @@ class TestComputeTrendScore:
             {"yoy_pct": 12.0, "mom_pct": 3.0},
             {"yoy_pct": 20.0, "mom_pct": 8.0},
         ]
-        mj_snaps = [
+        fin_snaps = [
             _make_snapshot("Fail"),
             _make_snapshot("Acceptable"),
             _make_snapshot("Pass"),
         ]
-        out = compute_trend_score(monthly, mj_snaps)
-        # mon = 2.5, mj ≈ 0.667 → 2.5*0.65 + 0.667*0.35 ≈ 1.625+0.233 ≈ 1.86 → strong_up
+        out = compute_trend_score(monthly, fin_snaps)
+        # mon = 2.5, 季 ≈ 0.667 → 2.5*0.65 + 0.667*0.35 ≈ 1.625+0.233 ≈ 1.86 → strong_up
         assert out["label_code"] == "strong_up"
         assert out["monthly_subscore"] == 2.5
 
@@ -295,40 +301,40 @@ class TestComputeTrendScore:
             {"yoy_pct": -15.0, "mom_pct": -8.0},
             {"yoy_pct": -25.0, "mom_pct": -12.0},
         ]
-        mj_snaps = [
+        fin_snaps = [
             _make_snapshot("Pass"),
             _make_snapshot("Acceptable"),
             _make_snapshot("Fail"),
         ]
-        out = compute_trend_score(monthly, mj_snaps)
+        out = compute_trend_score(monthly, fin_snaps)
         assert out["label_code"] == "strong_down"
 
-    def test_monthly_drives_when_mj_missing(self):
+    def test_monthly_drives_when_fin_missing(self):
         monthly = [
             {"yoy_pct": 15.0, "mom_pct": 5.0},
             {"yoy_pct": 12.0, "mom_pct": 3.0},
             {"yoy_pct": 18.0, "mom_pct": 8.0},
         ]
         out = compute_trend_score(monthly, None)
-        # mon = 2.5, mj = 0 → 2.5*0.65 = 1.625 → strong_up
+        # mon = 2.5, 季 = 0 → 2.5*0.65 = 1.625 → strong_up
         assert out["label_code"] == "strong_up"
-        assert out["mj_subscore"] == 0.0
+        assert out["fin_subscore"] == 0.0
 
-    def test_mj_alone_cant_reach_strong(self):
-        # 老師 滿分但月營收缺 → mj=2.0*0.35=0.7 → up（達不到 strong_up）
-        mj_snaps = [
+    def test_fin_alone_cant_reach_strong(self):
+        # 季財報滿分但月營收缺 → 季=2.0*0.35=0.7 → up（達不到 strong_up）
+        fin_snaps = [
             _make_snapshot("Fail"),
             _make_snapshot("Pass"),
         ]
-        out = compute_trend_score(None, mj_snaps)
-        # mj ≈ 0.667 → 0.667*0.35 ≈ 0.23 → neutral
+        out = compute_trend_score(None, fin_snaps)
+        # 季 ≈ 0.667 → 0.667*0.35 ≈ 0.23 → neutral
         # 邊界：用較強樣本
         assert out["label_code"] in ("neutral", "up")
 
     def test_custom_weight(self):
         monthly = [{"yoy_pct": 15.0, "mom_pct": 5.0}]
-        mj_snaps = [_make_snapshot("Pass"), _make_snapshot("Fail")]
-        out = compute_trend_score(monthly, mj_snaps, w_monthly=0.5)
+        fin_snaps = [_make_snapshot("Pass"), _make_snapshot("Fail")]
+        out = compute_trend_score(monthly, fin_snaps, w_monthly=0.5)
         assert out["w_monthly"] == 0.5
         assert out["w_quarterly"] == 0.5
 
@@ -343,21 +349,32 @@ class TestComputeTrendScore:
         out = compute_trend_score(None, None)
         for key in (
             "score", "label", "label_code",
-            "monthly_subscore", "mj_subscore",
+            "monthly_subscore", "fin_subscore",
             "w_monthly", "w_quarterly",
-            "monthly_detail", "mj_detail",
+            "monthly_detail", "fin_detail",
         ):
             assert key in out
 
+    def test_legacy_alias_keys_still_present(self):
+        """v19.174 過渡期：舊 key mj_subscore / mj_detail 仍同值並存，
+        未遷移的 caller（tab_stock_grp / tab_stock / section_strategy_conclusion）不會 KeyError。
+        caller 全遷移後本 test 連同 alias 一起移除。"""
+        out = compute_trend_score(
+            [{"yoy_pct": 15.0, "mom_pct": 5.0}],
+            [_make_snapshot("Fail"), _make_snapshot("Pass")],
+        )
+        assert out["mj_subscore"] == out["fin_subscore"]
+        assert out["mj_detail"] is out["fin_detail"]
+
     def test_monthly_dominates_at_65_weight(self):
-        # 月營收 +2.5 vs MJ -2.0 → 0.65*2.5 + 0.35*-2.0 = 1.625 - 0.7 = 0.925 → up
+        # 月營收 +2.5 vs 季 -2.0 → 0.65*2.5 + 0.35*-2.0 = 1.625 - 0.7 = 0.925 → up
         monthly = [{"yoy_pct": 15.0, "mom_pct": 5.0}, {"yoy_pct": 12.0}, {"yoy_pct": 18.0}]
-        mj_snaps = [
+        fin_snaps = [
             _make_snapshot("Pass"),
             _make_snapshot("Acceptable"),
             _make_snapshot("Fail"),
         ]
-        out = compute_trend_score(monthly, mj_snaps)
+        out = compute_trend_score(monthly, fin_snaps)
         # mon = 2.5+0.5 = 3 → cap 不需要，但 mon = yoy(+2)+mom(+0.5)=2.5
         assert out["monthly_subscore"] >= 2.0
         # 整體因月權重主導 → 仍偏正

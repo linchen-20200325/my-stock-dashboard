@@ -55,6 +55,31 @@ EFFICIENT_FRONTIER_N_BINS: int = 25
 
 # ════════════════════════════════════════════════════════════════
 # Macro 健康評分（macro_helpers.py compute_macro_health）
+#
+# ⚠️ v19.173 校準狀態誠實化（AI-H）— 只是註解，**不動任何數值**
+# ────────────────────────────────────────────────────────────────
+# 公式（macro_helpers.compute_macro_health）：
+#     health = jqavg × HEALTH_WEIGHT_JQ
+#              + min(score / max_score × 100, 100) × HEALTH_WEIGHT_SCORE
+#              + (HEALTH_FNET_BONUS if fnet > 0 else 0)
+#
+# ① 名不副實：這條式子**建構上只有 2 個輸入**（jqavg = 旌旗指數＝站上 20MA
+#    家數比，是「廣度」；score = 大盤評分）。融資／外資期貨／年線乖離／NDC／
+#    M1B-M2／VIX／PMI／CPI／出口／ADL／新聞**一個都沒進來** —— 那些走
+#    shared/macro_buckets 五桶燈號各自判讀。UI 上「五桶多盞紅、健康度仍不低」
+#    因此不是 bug。顯示端揭露見 macro_buckets 的 health DangerSpec.note
+#    + section_long.py 的 st.caption（v19.173）。
+#
+# ② 內部不一致（**權重已校準、決策門檻沒有**）：
+#    下方兩個**權重**是 v19.102 用真實 2006–2026 資料擬合出來的
+#    （n=4748、val AUC 0.753、overfit_flag=False，見 MACRO_HEALTH_WEIGHT_PROPOSAL.md）；
+#    但吃這個分數做決策的兩個**切點** —— `HEALTH_DEFENSE_THRESHOLD`(35) 與
+#    `BULL_MIN_SCORE`(4)，見專案根目錄 `macro_thresholds.json` —— 至今仍是手訂，
+#    該檔 `"last_calibrated": null` / `"method": "default (uncalibrated)"` 就是證據。
+#    等於「ROC 曲線畫出來了，operating point 卻隨手挑一個」：
+#    權重端用 AUC 最佳化、切點端憑直覺，兩端的證據等級不對等。
+#    待辦（本版**不做**，改門檻＝行為變更，需獨立驗證）：以同一份 2006–2026
+#    樣本跑 ROC，用 Youden J（或指定 FPR 上限）選點，再經 PR 審閱寫回 JSON。
 # ════════════════════════════════════════════════════════════════
 
 HEALTH_WEIGHT_JQ: float = 0.6
@@ -73,7 +98,14 @@ HEALTH_FNET_BONUS: int = 0
 """外資淨買超為正時的健康評分加分。
 v19.102 校準採納:二十年真實資料擬合顯示 fnet 對「未來 20 日回撤 ≥8%」
 預測力 ≈ 0(權重 +0.0006/億,方向甚至微偏反)→ 原 +20(佔滿分 1/5)歸零。
-常數與公式形狀保留,供未來重校準時調整。"""
+常數與公式形狀保留,供未來重校準時調整。
+
+v19.173 補述:**0 是「校準後的明示歸零」,不是漏寫的 bug** —— 有 AUC 佐證
+(同 §HEALTH_WEIGHT_* 那份 n=4748 / val AUC 0.753 擬合)。但也要誠實說:
+它現在是 dead term(`+ 0` 恆等於沒加),可讀性差 —— 讀 compute_macro_health
+的人會以為外資有進到分數裡,實際上沒有。刻意**不刪**:刪掉會讓「曾經評估過
+外資、結論是無預測力」這件事從程式碼裡消失,下一個人很可能又把它加回去。
+若未來重校準判定 fnet 仍無效,再考慮連同公式一起收斂(屬另案,需重跑 AUC)。"""
 
 CONFIDENCE_SOURCE_COUNT: int = 5
 """信心度計算的來源總數（PMI/CPI/M2/Foreign/VIX 等 5 大來源）。原 macro_helpers.py:148 inline"""
@@ -444,7 +476,8 @@ LEAD_INV_QOQ_DROP_PCT: float = -10.0
 LEAD_INV_QOQ_RISE_PCT: float = 15.0
 """I5 存貨/銷售比 QoQ 上升容忍：<15% → 🟡；≥15% → 🔴 積壓風險。原 scoring_engine.py:953 inline"""
 
-# ── 大師級量化因子 check_*（v3.2）─────────────────────────────
+# ── 進階量化因子 check_*（v3.2）───────────────────────────────
+# v19.174 去識別化：原標題帶尊稱，改為中性描述
 CL_SURGE_YOY_PCT: float = 30.0
 """合約負債大增（隱形冠軍因子）YoY 門檻：>30% 且 ratio>10% → 隱形冠軍潛力。原 scoring_engine.py:1096 inline"""
 CL_SURGE_RATIO_PCT: float = 10.0

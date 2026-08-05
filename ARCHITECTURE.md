@@ -77,7 +77,9 @@ my-stock-dashboard/
 │   ├── compute/               # 39 檔(L2)
 │   │   ├── scoring/   (6)     # scoring_engine / scoring_helpers / tech_indicators
 │   │   ├── strategy/  (6)     # V4StrategyEngine / V5 modules / tech_indicators series
-│   │   ├── health/    (6)     # financial_health_engine / mj_trend_score / monthly_revenue_calc
+│   │   ├── health/    (6)     # financial_health_engine / fin_trend_score / fin_health_diff
+│   │   │                      #   / fin_snapshot_io / monthly_revenue_calc / health_reconcile
+│   │   │                      #   (v19.174 改名;舊 mj_*.py 已縮為 deprecation 轉發,待刪)
 │   │   ├── risk/      (6)     # risk_control / exit_signals / reconcile
 │   │   ├── etf/       (7)     # etf_calc / etf_quality / etf_helpers / σ 統一層
 │   │   ├── macro/     (5)     # macro_helpers / macro_signal_lookback_tw
@@ -96,13 +98,15 @@ my-stock-dashboard/
 │           ├── stock_sections/ (14) # 個股 Tab 已抽 13 section + __init__
 │           ├── macro/          (15) # 總經 Tab 已抽 10+ section + handlers + helpers
 │           ├── tab_stock.py / tab_stock_grp.py / tab_stock_picker.py
-│           ├── tab_mj_health_diff.py / tab_edu.py / tab_macro.py
+│           ├── tab_edu.py / tab_macro.py / pattern_targets_ui.py
+│           │                      #   (體檢轉機獨立分頁 v19.164 已退役真刪;
+│           │                      #    pattern_targets_ui v19.174 去識別化改名)
 │           ├── monthly_revenue_screener.py / yield_screener.py
 │           └── chip_radar.py / hot_money.py
 │
 ├── shared/                    # L0 跨層常數 / 工具(20 檔)
 │   ├── signal_thresholds.py   # 76+ 語意常數(scoring 50+ / 個股組合 7 / financial 19)
-│   ├── financial_health_thresholds.py  # MJ 19 門檻
+│   ├── financial_health_thresholds.py  # FH_* 財報體檢 19 門檻(v19.174 前綴 MJ_→FH_)
 │   ├── calc_helpers.py        # calc_bias_pct SSOT(收 8 處 inline 乖離率)
 │   ├── stock_buckets.py / macro_buckets.py / data_categories.py
 │   ├── thresholds.py / ttls.py / colors.py / health_thresholds.py
@@ -180,8 +184,8 @@ LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 
 | 範圍 | 集中位置 | 收斂效果 |
 |---|---|---|
-| 信號閾值 | `shared/signal_thresholds.py` | 76+ 常數(scoring 50 + 個股組合 7 + MJ 19)|
-| MJ 財健門檻 | `shared/financial_health_thresholds.py` | 19 個 |
+| 信號閾值 | `shared/signal_thresholds.py` | 76+ 常數(scoring 50 + 個股組合 7 + 財報體檢 19)|
+| 財報體檢門檻 | `shared/financial_health_thresholds.py` | 19 個(`FH_*`；v19.174 前綴自 `MJ_*` 改名，舊名保留 alias) |
 | 乖離率公式 | `shared/calc_helpers.py:calc_bias_pct` | 8 處 inline 已收(剩 5 處新增/漏網)|
 | 趨勢分類 | `src/ui/tabs/tab_helpers.py:classify_trend_4tier` | SSOT(剩 8 處 inline 待收)|
 | MA series | `src/compute/strategy/tech_indicators.py:calc_ma_series` | series 版 SSOT(scalar 版散落)|
@@ -241,7 +245,7 @@ LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 
 | 位置 | 重複內容 |
 |---|---|
-| `src/ui/render/etf_render.py:69-93` 私有 `_teacher_conclusion` + `_to_strategy` 色彩判斷 | 與 `src/ui/render/ui_widgets.py:127 teacher_conclusion` + `_to_strategy` 邏輯 1:1 重複 |
+| `src/ui/render/etf_render.py:69-93` 私有 `_strategy_conclusion`（v19.174 去識別化改名，舊名 alias 保留）+ `_to_strategy` 色彩判斷 | 與 `src/ui/render/ui_widgets.py:127 strategy_conclusion` + `_to_strategy` 邏輯 1:1 重複 |
 
 → 修法:etf_render 刪除私有版,import + 委派 ui_widgets SSOT。
 
@@ -1153,9 +1157,9 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 | `beginner_kpi(title, value, plain_meaning, ...)` | 初學者 KPI 卡 | 5 |
 | `show_term_help(term)` | 術語對照表查詢 | 2 |
 | `kpi(title, value, sub='', color, border)` | 一般 KPI 卡 | **53** |
-| `teacher_box(icon, teacher, logic)` | 舊版老師建議框（保留向下相容；內含 `_to_strategy()` 自動翻譯） | 0 |
-| `teacher_conclusion(teacher, indicator_val, conclusion, ...)` | 老師結論（自動配色；老師→策略翻譯統一在此） | **25** |
-| `_STRATEGY_MAP: dict` + `_to_strategy(teacher)` | **集中翻譯**：老師 → 策略 1/2/3（按方法論分 3 類：估值/存股、財報體檢、技術/動能） | 內部 + `etf_dashboard._teacher_conclusion` |
+| `strategy_box(icon, strategy, logic)` | 策略邏輯框（v19.174 去識別化改名；舊名 alias 保留，見 STATE 過渡 alias 表） | 0 |
+| `strategy_conclusion(strategy, indicator_val, conclusion, ...)` | 策略結論（自動配色）。v19.174 去識別化改名，舊名 alias 保留 | **25** |
+| `STRATEGY_VALUATION` / `STRATEGY_FINANCIAL` / `STRATEGY_TECHNICAL` + `_to_strategy(strategy)` | 策略代號常數（`策略1`/`策略2`/`策略3`）→ icon。**v19.174 起 caller 直接傳代號**，原本的人名字典（10 個 key）已整份刪除 | 內部 + `etf_render._strategy_conclusion` |
 | `signal_box(label, color, desc='')` | 訊號方塊 | 4 |
 | `TERM_EXPLAIN: dict` | 13 個常見術語白話對照 | 內部 |
 
@@ -1182,7 +1186,7 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 | Helper | etf_tab_single | etf_tab_portfolio | etf_tab_backtest | etf_tab_ai |
 |---|---|---|---|---|
 | `_colored_box` | ✅ | ✅ | ✅ | — |
-| `_teacher_conclusion` | ✅ | ✅ | ✅ | — |
+| `_strategy_conclusion`（v19.174 去識別化改名，舊名 alias 保留） | ✅ | ✅ | ✅ | — |
 | `macro_allocation_banner` | ✅ | ✅ | — | ✅ |
 | `fetch_etf_price` | ✅ | ✅ | ✅ | — |
 | `fetch_etf_dividends` | ✅ | ✅ | ✅ | — |
@@ -1206,7 +1210,7 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 |---|---|---|---|
 | `etf_fetch.py` | 572 | 純 I/O：價格 / 配息 / 基本資訊 / 費用率 (SITCA→MoneyDJ→yfinance 3 源備援) / NAV (FinMind→goodinfo→TWSE→MoneyDJ→yfinance 5 源備援+stale fallback) / 類股漲跌 / 新聞 | streamlit + pandas + yfinance（**零內部依賴**） |
 | `etf_calc.py` | 465 | 純算：殖利率 / 總報酬 / 折溢價 G1-G3 守門員 / 風險指標 (TE/MDD/CAGR/Sharpe) / VCP / 同儕排名 / `_compute_etf_warroom_row` | `etf_fetch` |
-| `etf_render.py` | 505 | Streamlit UI：MACRO_ALLOC 配置橫幅 / 走勢圖 / BIAS / 蒙地卡羅 / 類股熱力圖 / `_teacher_conclusion` / `_check_sector_exposure` | `etf_fetch`（只取 `_fetch_news_for` / `_fetch_sector_returns`） |
+| `etf_render.py` | 505 | Streamlit UI：MACRO_ALLOC 配置橫幅 / 走勢圖 / BIAS / 蒙地卡羅 / 類股熱力圖 / `_strategy_conclusion` / `_check_sector_exposure` | `etf_fetch`（只取 `_fetch_news_for` / `_fetch_sector_returns`） |
 | `etf_dashboard.py` | 49 | Public API shim — re-export 40 個 symbol + 4 個 tab 入口 | 上述 3 檔 + 4 個 etf_tab_*.py |
 
 **Phase 7C 依賴方向**：
@@ -1227,7 +1231,7 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 - `_compute_etf_warroom_row` 雖混 fetch + calc，仍歸 `etf_calc`（calc 可依賴 fetch，反向不可）
 - `_safe_float` / `_NAV_MIN` / `_NAV_MAX` 留 `etf_fetch`（NAV 解析配套）
 - `_fetch_sector_returns` 留 `etf_fetch`（雖含 st.warning，但本質仍是 I/O）
-- `_teacher_conclusion` 內部對 `ui_widgets._to_strategy` 採 late import，避免 render 直接依賴
+- `_strategy_conclusion` 內部對 `ui_widgets._to_strategy` 採 late import，避免 render 直接依賴
 
 **驗證結果**：
 - ✅ py_compile 4 檔全綠
@@ -1327,7 +1331,7 @@ tab_stock.py / tab_stock_grp.py / tab_macro.py  (module-level import)
 
 **動機**：Phase 7A/7A-Ext 已抽完 tab_macro / tab_stock(_grp) 的 closure，但 `etf_tab_backtest.py` 與 `etf_tab_portfolio.py` 仍各有純邏輯 closure 嵌在 render 內無法獨立測試：
 - `etf_tab_backtest._norm_return` / `_norm_lower_better`（雷達圖 5 維 0-100 正規化，12 行；組合 + 基準共 10 個 callsites）
-- `etf_tab_portfolio._auto_role` + `_CORE_TICKERS`（MK 框架 #9 核心/衛星分類，6 行）
+- `etf_tab_portfolio._auto_role` + `_CORE_TICKERS`（存股框架 #9 核心/衛星分類，6 行）
 
 | 抽出 | 從 | 至 | Lines saved |
 |---|---|---|---|
@@ -1410,16 +1414,17 @@ tab_stock.py / tab_stock_grp.py / tab_macro.py  (module-level import)
 | `TestBeginnerKpi` | `beginner_kpi` | 7 | tip 有/無 → `💡` 條件渲染 / 自訂 color |
 | `TestShowTermHelp` | `show_term_help` | 5 | 已知 / 未知 / 空字串 / 中文 term / 復用 explain_box |
 | `TestKpi` | `kpi` | 6 | sub / 自訂 color & border |
-| `TestToStrategy` | `_to_strategy` + `_STRATEGY_MAP` | 6 | 策略 1/2/3 全 10 老師 + 未知 fallback `('策略', '👤')` |
-| `TestTeacherBox` | `teacher_box` | 5 | logic 嵌入 / 已知 vs 未知 teacher |
-| `TestTeacherConclusion` | `teacher_conclusion` | 10 | 台股紅綠慣例（正面 → `#da3633` 紅、負面 → `#2ea043` 綠）+ 手動 color 覆寫 + action 關鍵字觸發 |
+| `TestToStrategy` | `_to_strategy` + `_STRATEGY_ICON` | 6 | 策略 1/2/3 + 未知 fallback `('策略', '👤')`。v19.174 起改吃 `STRATEGY_*` 常數（原人名字典已刪） |
+| `TestStrategyBox` | `strategy_box` | 5 | logic 嵌入 / 已知 vs 未知 strategy（v19.174 改名，舊名 alias 仍在並有測試釘住） |
+| `TestStrategyConclusion` | `strategy_conclusion` | 10+ | 台股紅綠慣例（正面 → `#da3633` 紅、負面 → `#2ea043` 綠）+ 手動 color 覆寫 + action 關鍵字觸發（v19.174 改名，舊名 alias 有測試釘住） |
 | `TestSignalBox` | `signal_box` | 9 | green/red/yellow/blue 4 keys + 未知 color fallback |
+| `TestNoPersonNameInSource` | 去識別化守衛 | 2 | v19.174：`ui_widgets.py` 原始碼 + 渲染輸出皆不得出現人名 |
 
 **驗證**：
 - ✅ ruff (`All checks passed!`) — 純測試碼，無 py_compile 變動
 - ✅ pytest 全套 **637/637 全綠**（原 574 + 新增 63）
 - ✅ 7F 8 cases + 7G 63 cases = 71 cases 全綠（ui_widgets.py 模組 100% 函式 coverage）
-- 涵蓋：所有預設參數路徑 / 條件渲染分支（detail/tip/desc 有無）/ 配色 fallback / 未知 key fallback / 11 個關鍵字觸發 teacher_conclusion 自動配色
+- 涵蓋：所有預設參數路徑 / 條件渲染分支（detail/tip/desc 有無）/ 配色 fallback / 未知 key fallback / 11 個關鍵字觸發 `strategy_conclusion` 自動配色
 
 #### `tech_indicators.py` + `scoring_helpers.py` 9 純函式補完單測（P2-B Phase 7H）
 

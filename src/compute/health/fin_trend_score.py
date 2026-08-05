@@ -1,14 +1,20 @@
-"""src/compute/health/mj_trend_score.py — v18.189 月+季雙頻率融合進退分數（純函式 zero-IO）
+"""src/compute/health/fin_trend_score.py — v18.189 月+季雙頻率融合進退分數（純函式 zero-IO）
+
+（v19.174 去識別化：本檔自 `mj_trend_score.py` 改名而來，文字敘述移除人名／稱謂。
+`compute_mj_trend_subscore` → `compute_fin_trend_subscore`（舊名保留 alias）；
+輸出 dict 新增中性 key `fin_subscore` / `fin_detail` / `fin_sub`，
+舊 key `mj_subscore` / `mj_detail` / `mj_sub` **同值並存**為過渡期 alias，
+待 caller 全遷移後移除。計算邏輯與數值 0 改。）
 
 整合兩個頻率：
 - **月營收動能（月頻、權重 65%）**：近 3 月 YoY 平均 + 末月 MoM
-- **老師 季財報 trend（季頻、權重 35%）**：近 3 季快照逐期 diff 兩次 net_delta
+- **季財報 trend（季頻、權重 35%）**：近 3 季體檢快照逐期 diff 兩次 net_delta
 
-設計理念：月營收 10 日公布更新快（先行指標）；老師 季財報慢但見獲利品質（落後指標）。
+設計理念：月營收 10 日公布更新快（先行指標）；季財報慢但見獲利品質（落後指標）。
 月權重大搶時效、季權重小保品質 — 互補不對立。
 
 公式：
-  final = 0.65 × monthly_subscore + 0.35 × mj_subscore
+  final = 0.65 × monthly_subscore + 0.35 × fin_subscore
 
 合分 5 段判定：
   ≥+1.5 🚀 強進步 / +0.5~+1.5 📈 進步 / -0.5~+0.5 ➖ 中性
@@ -19,7 +25,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from src.compute.health.mj_health_diff import diff_mj_health  # v18.362 F-8:直打 submod 避 sibling self circular
+from src.compute.health.fin_health_diff import diff_fin_health  # v18.362 F-8:直打 submod 避 sibling self circular
 
 # label 由高到低排序，命中第一個 threshold 即回
 _LABEL_THRESHOLDS = [
@@ -109,28 +115,28 @@ def _squash(net: int) -> float:
     return max(-1.0, min(1.0, net / 3.0))
 
 
-def compute_mj_trend_subscore(mj_snapshots_3q: list[dict]) -> tuple[float, dict]:
-    """老師 季財報 trend 子分數，範圍 [-2, +2]。
+def compute_fin_trend_subscore(fin_snapshots_3q: list[dict]) -> tuple[float, dict]:
+    """季財報體檢 trend 子分數，範圍 [-2, +2]。
 
     對近 3 季快照逐期 diff 兩次（Q-2→Q-1、Q-1→Q），兩次 net_delta 同向 → 自然累加；
     分歧 → 衰減 0.5×（避免假訊號）。
 
     Args:
-        mj_snapshots_3q: 近 3 季快照 list[oldest..latest]，每元素為 analyze_financial_health 回傳 dict
+        fin_snapshots_3q: 近 3 季快照 list[oldest..latest]，每元素為 analyze_financial_health 回傳 dict
 
     Returns:
         (subscore, detail_dict)
     """
-    if not isinstance(mj_snapshots_3q, list):
+    if not isinstance(fin_snapshots_3q, list):
         return 0.0, {"reason": "bad_input", "n_snapshots": 0}
 
-    valid = [s for s in mj_snapshots_3q if isinstance(s, dict)]
+    valid = [s for s in fin_snapshots_3q if isinstance(s, dict)]
     n = len(valid)
     if n < 2:
         return 0.0, {"reason": "insufficient_snapshots", "n_snapshots": n}
 
     if n == 2:
-        v = diff_mj_health(valid[0], valid[1], stock_id="", min_net_delta=1)
+        v = diff_fin_health(valid[0], valid[1], stock_id="", min_net_delta=1)
         subscore = _squash(v.net_delta) * 2.0  # 線性放大到 [-2, +2]
         return max(-2.0, min(2.0, subscore)), {
             "n_snapshots": 2,
@@ -142,8 +148,8 @@ def compute_mj_trend_subscore(mj_snapshots_3q: list[dict]) -> tuple[float, dict]
 
     # n >= 3：取最新 3 季
     last3 = valid[-3:]
-    v1 = diff_mj_health(last3[0], last3[1], stock_id="", min_net_delta=1)
-    v2 = diff_mj_health(last3[1], last3[2], stock_id="", min_net_delta=1)
+    v1 = diff_fin_health(last3[0], last3[1], stock_id="", min_net_delta=1)
+    v2 = diff_fin_health(last3[1], last3[2], stock_id="", min_net_delta=1)
     s1 = _squash(v1.net_delta)
     s2 = _squash(v2.net_delta)
 
@@ -163,6 +169,10 @@ def compute_mj_trend_subscore(mj_snapshots_3q: list[dict]) -> tuple[float, dict]
     }
 
 
+# v19.174 過渡期 alias（舊名帶人名縮寫，caller 全遷移後移除）
+compute_mj_trend_subscore = compute_fin_trend_subscore
+
+
 def _label_from_score(score: float) -> tuple[str, str]:
     """把 score 對應到 5 段標籤。"""
     for thr, lbl, code in _LABEL_THRESHOLDS:
@@ -173,23 +183,24 @@ def _label_from_score(score: float) -> tuple[str, str]:
 
 def compute_trend_score(
     monthly_revenue_3m: list[dict] | None,
-    mj_snapshots_3q: list[dict] | None,
+    fin_snapshots_3q: list[dict] | None,
     w_monthly: float = 0.65,
 ) -> dict:
     """月+季雙頻率融合進退分數。
 
     Args:
         monthly_revenue_3m: 近 3 月月營收
-        mj_snapshots_3q: 近 3 季 老師 體檢快照
+        fin_snapshots_3q: 近 3 季財報體檢快照
         w_monthly: 月營收權重（預設 0.65，季財報自動 = 1 - w_monthly）
 
     Returns:
         dict {
             score, label, label_code,
-            monthly_subscore, mj_subscore,
+            monthly_subscore, fin_subscore,
             w_monthly, w_quarterly,
-            monthly_detail, mj_detail,
+            monthly_detail, fin_detail,
         }
+        另含 v19.174 過渡期 alias key：mj_subscore / mj_detail（與新 key 同值）。
     """
     if not isinstance(w_monthly, (int, float)) or not (0.0 <= float(w_monthly) <= 1.0):
         w_monthly = 0.65
@@ -197,21 +208,25 @@ def compute_trend_score(
     w_quarterly = 1.0 - w_monthly
 
     mon_score, mon_detail = compute_monthly_revenue_subscore(monthly_revenue_3m or [])
-    mj_score, mj_detail = compute_mj_trend_subscore(mj_snapshots_3q or [])
+    fin_score, fin_detail = compute_fin_trend_subscore(fin_snapshots_3q or [])
 
-    final = mon_score * w_monthly + mj_score * w_quarterly
+    final = mon_score * w_monthly + fin_score * w_quarterly
     label, code = _label_from_score(final)
 
+    _fin_subscore = round(fin_score, 3)
     return {
         "score": round(final, 3),
         "label": label,
         "label_code": code,
         "monthly_subscore": round(mon_score, 3),
-        "mj_subscore": round(mj_score, 3),
+        "fin_subscore": _fin_subscore,
         "w_monthly": w_monthly,
         "w_quarterly": w_quarterly,
         "monthly_detail": mon_detail,
-        "mj_detail": mj_detail,
+        "fin_detail": fin_detail,
+        # v19.174 過渡期 alias（同值，caller 全遷移後移除）
+        "mj_subscore": _fin_subscore,
+        "mj_detail": fin_detail,
     }
 
 
@@ -227,23 +242,24 @@ def compute_one_stock_trend(
     load_snapshot,
     save_snapshot,
 ) -> dict:
-    """單檔 老師 趨勢分數編排（SSOT,個股 Tab + 組合 Tab 共用）。
+    """單檔財報趨勢分數編排（SSOT,個股 Tab + 組合 Tab 共用）。
 
-    流程：抓月營收 → 補抓 老師 季財報 → 跑 compute_trend_score。
+    流程：抓月營收 → 補抓季財報 → 跑 compute_trend_score。
     例外永遠 graceful — 單檔失敗不阻斷批次。
 
     依賴注入維持本模組純編排特性（不 hard import L1 fetcher）。
 
-    Returns: dict {sid, label, label_code, score, mon_sub, mj_sub,
-                   mon_detail, mj_detail, snap_ym, snap_stale, note}
+    Returns: dict {sid, label, label_code, score, mon_sub, fin_sub,
+                   mon_detail, fin_detail, snap_ym, snap_stale, note}
+             另含 v19.174 過渡期 alias key：mj_sub / mj_detail（與新 key 同值）。
     """
     row: dict = {
         "sid": sid, "label": "—", "label_code": "error", "score": 0.0,
-        "mon_sub": 0.0, "mj_sub": 0.0, "note": "",
+        "mon_sub": 0.0, "fin_sub": 0.0, "mj_sub": 0.0, "note": "",
         "snap_ym": "", "snap_stale": None,
     }
     monthly_3m: list[dict] = []
-    mj_snaps: list[dict] = []
+    fin_snaps: list[dict] = []
 
     # ── 1. 月營收 3 期 ──────────────────────────────────────────
     # v18.400 U1:原 `from src.ui.tabs import ...` 為 L2→L5 反向違憲,改 import L1+L2 正確層
@@ -265,18 +281,18 @@ def compute_one_stock_trend(
     except Exception as e:  # pragma: no cover - defensive
         row["note"] += f"月營收抓取失敗 ({type(e).__name__}); "
 
-    # ── 2. 老師 季財報快照（不足 3 季自動補抓本季）───────────────
+    # ── 2. 季財報體檢快照（不足 3 季自動補抓本季）───────────────
     try:
         yms = list_snapshots(sid)
         if yyyymm_curr not in yms:
             try:
                 fin = fetch_financial_statements(sid, token)
                 if fin and not fin.get("error"):
-                    mj = analyze_financial_health(token, sid, fin, news_context="")
-                    if isinstance(mj, dict):
-                        save_snapshot(sid, yyyymm_curr, mj)
+                    fh = analyze_financial_health(token, sid, fin, news_context="")
+                    if isinstance(fh, dict):
+                        save_snapshot(sid, yyyymm_curr, fh)
                         yms = list_snapshots(sid)
-                        # v18.456: bootstrap 上季快照，防 Streamlit Cloud 重啟後 mj_trend 恆為 0
+                        # v18.456: bootstrap 上季快照，防 Streamlit Cloud 重啟後季分恆為 0
                         # fetch_financial_statements 本已抓 730 天，_dates 一定含上季資料
                         if len(yms) < 2:
                             _ppd = fin.get("prev_period_data") or {}
@@ -285,16 +301,16 @@ def compute_one_stock_trend(
                                 _pp_ym = f"{_pp_period[:4]}{_pp_period[5:7]}"
                                 if _pp_ym and _pp_ym < yyyymm_curr and _pp_ym not in yms:
                                     try:
-                                        _mj_prev = analyze_financial_health(
+                                        _fh_prev = analyze_financial_health(
                                             "", sid, _ppd, news_context=""
                                         )
-                                        if isinstance(_mj_prev, dict):
-                                            save_snapshot(sid, _pp_ym, _mj_prev)
+                                        if isinstance(_fh_prev, dict):
+                                            save_snapshot(sid, _pp_ym, _fh_prev)
                                             yms = list_snapshots(sid)
                                     except Exception as _e_pp:
                                         row["note"] += f"上季 bootstrap 失敗 ({type(_e_pp).__name__}); "
             except Exception as e_in:  # pragma: no cover - defensive
-                row["note"] += f"本季 老師 補抓失敗 ({type(e_in).__name__}); "
+                row["note"] += f"本季財報補抓失敗 ({type(e_in).__name__}); "
 
         if yms:
             row["snap_ym"] = yms[0]
@@ -303,21 +319,21 @@ def compute_one_stock_trend(
         for ym in yms[:3]:
             snap = load_snapshot(sid, ym)
             if isinstance(snap, dict):
-                mj_snaps.append(snap)
-        mj_snaps.reverse()  # oldest..latest
+                fin_snaps.append(snap)
+        fin_snaps.reverse()  # oldest..latest
     except Exception as e:  # pragma: no cover - defensive
-        row["note"] += f"老師 快照載入失敗 ({type(e).__name__}); "
+        row["note"] += f"財報快照載入失敗 ({type(e).__name__}); "
 
-    # ── 2.5 轉機判定(v19.164:合併「老師 體檢轉機」獨立 Tab)────────────
-    # 零額外抓取 —— 直接用上面已載入的近 2 季快照(mj_snaps oldest..latest)跑
-    # diff_mj_health,產出「本業虧轉盈 🌟 / 盈轉虧 ⚠️」+ 逐項改善/惡化。這就是
+    # ── 2.5 轉機判定(v19.164:合併「財報體檢轉機」獨立 Tab)────────────
+    # 零額外抓取 —— 直接用上面已載入的近 2 季快照(fin_snaps oldest..latest)跑
+    # diff_fin_health,產出「本業虧轉盈 🌟 / 盈轉虧 ⚠️」+ 逐項改善/惡化。這就是
     # user 要的「找體質差→變好」,不再需要第二個輸入框 + 第二張表(去重)。
     row["diff_verdict"] = None
     row["turn_icon"] = ""
     try:
-        if len(mj_snaps) >= 2:
-            from src.compute.health import diff_mj_health
-            v = diff_mj_health(mj_snaps[-2], mj_snaps[-1], stock_id=sid, min_net_delta=1)
+        if len(fin_snaps) >= 2:
+            from src.compute.health import diff_fin_health as _diff
+            v = _diff(fin_snaps[-2], fin_snaps[-1], stock_id=sid, min_net_delta=1)
             row["diff_verdict"] = v
             if getattr(v, "is_turnaround", False):
                 row["turn_icon"] = "🌟 轉機"
@@ -328,15 +344,17 @@ def compute_one_stock_trend(
 
     # ── 3. 合議 ─────────────────────────────────────────────────
     try:
-        out = compute_trend_score(monthly_3m, mj_snaps, w_monthly=w_monthly)
+        out = compute_trend_score(monthly_3m, fin_snaps, w_monthly=w_monthly)
         row["label"] = out["label"]
         row["label_code"] = out["label_code"]
         row["score"] = out["score"]
         row["mon_sub"] = out["monthly_subscore"]
-        row["mj_sub"] = out["mj_subscore"]
+        row["fin_sub"] = out["fin_subscore"]
+        row["mj_sub"] = out["fin_subscore"]  # v19.174 過渡期 alias
         row["mon_detail"] = out["monthly_detail"]
-        row["mj_detail"] = out["mj_detail"]
-        if not monthly_3m and not mj_snaps:
+        row["fin_detail"] = out["fin_detail"]
+        row["mj_detail"] = out["fin_detail"]  # v19.174 過渡期 alias
+        if not monthly_3m and not fin_snaps:
             row["note"] += "月+季資料皆缺; "
     except Exception as e:  # pragma: no cover - defensive
         row["note"] += f"合議失敗 ({type(e).__name__}); "

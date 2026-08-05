@@ -13,7 +13,13 @@ import streamlit as st
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
 from src.config import FINMIND_TOKEN  # noqa: F401
 from src.ui.render.macro_ui_components import section_header
-from src.ui.render.ui_widgets import kpi, teacher_conclusion
+# v19.174 去識別化：改用策略代號常數 + 新函式名 strategy_conclusion（原 teacher_conclusion）
+from src.ui.render.ui_widgets import (
+    STRATEGY_TECHNICAL,
+    STRATEGY_VALUATION,
+    kpi,
+    strategy_conclusion,
+)
 from src.ui.tabs.macro.helpers import add_danger_hlines, render_macro_bucket_summary_bar  # noqa: F401
 from src.services.daily_checklist import (
     multi_chart, sparkline, stat_card,
@@ -52,6 +58,20 @@ _DEADBAND_K: float = 0.5
 # 兩者都是「寧可少講一句敘事，也不要把盤整說成雙殺」。
 _FALLBACK_SIGMA_EQUITY_PCT: float = 1.0
 _FALLBACK_SIGMA_FX_PCT: float = 0.25
+
+# ── v19.172：風險情緒分數「放大倍率」揭露門檻 ──────────────────────────
+# flow_engine.compute_risk_score 的 score = (Σ w_i·d_i·z_i / σ_p)/3×100，
+# 其中 σ_p（組合理論標準差）**每日重估** → 分數的尺度每天不一樣。
+# 線上實測 σ_p = 0.473 ⇒ 放大倍率 1/σ_p = 2.11×，而顯示分數 47 距離
+# 「🟢 強烈 Risk-on」的 ±50 只差 3 分 —— 那 3 分可能純粹來自 σ_p 的日間抖動。
+# 不揭露的話，使用者會以為自己在看一個固定尺度的分數（誠實度問題）。
+#
+# 為何取 1.3：1/σ_p = 1.3 ⇔ n_effective = 1/σ_p² = 1.69，
+# 亦即「有效獨立證據數已達 1.7 個以上」才算真的有在放大；
+# 低於此的放大幅度（<30%）在 ±15 / ±50 的燈號邊界上通常不足以改判級，
+# 每天都跳一行警告反而變成雜訊。**這是揭露門檻，不是判級門檻**，
+# 調整它不會改變任何分數或燈號。
+_AMP_DISCLOSE_MIN: float = 1.3
 
 
 def _daily_sigma_pct(df, fallback_pct: float) -> tuple[float, str]:
@@ -180,12 +200,24 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     # v18.338：🌳 長期桶 = Fund 式分組卡片模板（小圖 + 值 + 燈號 + SPEC）。滿意後再套其餘 4 桶。
     # v18.313/314 桶輕量總結 bar(整體燈號 + 指標 chip + SPEC §11)；詳細 raw 維持下方收合。
     render_macro_bucket_summary_bar('long', with_cards=True)  # v18.338 Fund 式分組卡片模板
-    
+    # ── v19.173：🩺「總經健康評分」名不副實 → 在顯示處誠實揭露因子組成 ──────────
+    # 本桶卡片會印出 🩺 總經健康評分，但該分數在**建構上只有 2 個輸入**
+    # （macro_helpers.compute_macro_health：旌旗指數 60% + 大盤評分 40%，
+    #  外資加分項 v19.102 校準後已歸零），名字卻讓人以為它綜合了五桶。
+    # 使用者實機回報「五桶 4 紅，綜合健康度還有 44 分」＝ 不是算錯，是範疇不同。
+    # 採常駐 st.caption（非 tooltip）：卡片是 raw HTML、無 help= 可掛，
+    # 且此為「這個數字代表什麼」的認知前提，藏在 hover 裡等於沒揭露。
+    st.caption('🩺 **總經健康評分怎麼算的**：旌旗指數（站上 20MA 家數比）60% ＋ '
+               '大盤評分 40%，就這兩項 — 實質是「趨勢廣度分數」。'
+               '**不含**融資／外資期貨／年線乖離／NDC／M1B-M2／VIX／PMI／CPI／'
+               '出口／ADL／新聞，那些請直接看五桶燈號。'
+               '所以「五桶多盞紅、但這個分數不低」不是矛盾，是兩者評估範疇不同。')
+
     # ── M1B-M2 年增率（FinMind）──────────────────────────────
     _m1b_info = st.session_state.get('m1b_m2_info')
     _bias_info = st.session_state.get('bias_info')
     
-    # ── 弘爺 × 孫慶龍 結論（標題下方直接顯示）──────────────────
+    # ── 策略3 × 策略1 結論（標題下方直接顯示）──────────────────
     _macro_concl = []
     if _m1b_info:
         _diff2 = _m1b_info.get('m1b_yoy', 0) - _m1b_info.get('m2_yoy', 0)
@@ -208,8 +240,9 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         if '→' in _mc3:
             _ind7, _res7 = _mc3.split('→', 1)
             _col7 = TRAFFIC_RED if any(k in _mc2 for k in ['🔴','⚠️']) else TRAFFIC_GREEN
-            _tchr7 = '弘爺' if 'M1B' in _mc2 else '孫慶龍'
-            st.markdown(teacher_conclusion(_tchr7, _ind7.strip(), _res7.strip(), color=_col7), unsafe_allow_html=True)
+            # v19.174 去識別化：原為人名字串（M1B→技術/資金面、其餘→估值），改策略代號
+            _strat7 = STRATEGY_TECHNICAL if 'M1B' in _mc2 else STRATEGY_VALUATION
+            st.markdown(strategy_conclusion(_strat7, _ind7.strip(), _res7.strip(), color=_col7), unsafe_allow_html=True)
         else:
             st.markdown(f'<div style="color:#c9d1d9;font-size:12px;padding:2px 6px;">• {_mc2}</div>', unsafe_allow_html=True)
     
@@ -259,7 +292,7 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     _dxy1 = intl_s.get('美元指數 DXY')
     _tyx1 = intl_s.get('10Y公債殖利率')
     
-    # ── 老師：SOX × DXY 動態結論 ─────────────────────────────
+    # ── 策略3：SOX × DXY 動態結論 ─────────────────────────────
     _sox_pct = _sox1.get('pct', None) if _sox1 else None
     _dxy_val = _dxy1.get('last', None) if _dxy1 else None
     _tyx_val = _tyx1.get('last', None) if _tyx1 else None
@@ -295,7 +328,7 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         _i1c = '數據尚未載入，請點擊「🚀 一鍵更新全部數據」'
         _i1a = ''
         _i1_ind = '費半+美元'
-    st.markdown(teacher_conclusion('宏爺', _i1_ind, _i1c, _i1a), unsafe_allow_html=True)
+    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _i1_ind, _i1c, _i1a), unsafe_allow_html=True)
     
     # ── 策略1：10Y Yield 動態結論 ─────────────────────────────
     if _tyx_val is not None:
@@ -308,7 +341,7 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         else:
             _sql_c = f'10Y殖利率 {_tyx_val:.2f}% → 總經安全，利率溫和股市友善'
             _sql_a = '精選低基期價值股，可適度持有'
-        st.markdown(teacher_conclusion('孫慶龍', f'10Y {_tyx_val:.2f}%', _sql_c, _sql_a), unsafe_allow_html=True)
+        st.markdown(strategy_conclusion(STRATEGY_VALUATION, f'10Y {_tyx_val:.2f}%', _sql_c, _sql_a), unsafe_allow_html=True)
     if _load_heavy:
         ci = st.columns(len(INTL_UNIT))
         for col,(name,unit) in zip(ci,INTL_UNIT.items()):
@@ -407,6 +440,24 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
                 st.markdown(f"目前研判：**{_risk['label']}**　"
                             "<span style='color:#8b949e;font-size:12px;'>"
                             "（＋100 極度追逐風險　↔　−100 極度避險）</span>", unsafe_allow_html=True)
+            # ── v19.172 誠實揭露：這個分數被放大了幾倍、少算了誰 ──────────
+            # 見上方 _AMP_DISCLOSE_MIN 註解。amplification / n_effective /
+            # missing 三個 key 由 flow_engine v19.172 提供（純附加，不改計算）。
+            _amp = _risk.get('amplification')
+            _neff = _risk.get('n_effective')
+            _ncomp = len(_risk.get('components') or [])
+            _miss = _risk.get('missing') or []
+            _disc = []
+            if isinstance(_amp, (int, float)) and _amp >= _AMP_DISCLOSE_MIN:
+                _neff_txt = (f'（n_eff {_neff:.1f} / {_ncomp}）'
+                             if isinstance(_neff, (int, float)) else '')
+                _disc.append(f'⚠️ 本日放大倍率 {_amp:.2f}×{_neff_txt}'
+                             f'— 分數尺度每日重估，不可跨日直接比較')
+            if _miss:
+                _miss_txt = '、'.join(str(_m) for _m in _miss)
+                _disc.append(f'（未納入：{_miss_txt}）')
+            if _disc:
+                st.caption('　'.join(_disc))
             if _risk.get('components'):
                 _det = '　｜　'.join(
                     f"{_lbl} {'＋' if _z * _d >= 0 else ''}{round(_z * _d, 1)}"
@@ -454,23 +505,36 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
                         f'台股σ {_tw_sigma:.2f}%／{_tw_src}、'
                         f'台幣σ {_fx_sigma:.2f}%／{_fx_src}）')
                 _t2a = '維持現有部位,靜待表態'
+            # v19.172 符號約定(實機抓到的雙重否定 bug)：
+            #   `_fp` 是 USD/TWD 的日變動 %，>0 = 台幣貶值、<0 = 台幣升值。
+            #   舊寫法把 raw `_fp` 直接內插到方向詞後面，於 `_fp<0` 的兩個分支
+            #   印出「台幣升值 -0.21%」—— 方向詞已表達方向，再帶負號變成雙重否定。
+            #   線上實測（2026-08-05）同一畫面：卡片「台幣升值 0.21%」vs 敘事
+            #   「台幣升值 -0.21%」，同一個數字兩種寫法。
+            #   約定：**方向詞 + 絕對值**；`_fp` 的符號只用於選分支，不進字面。
+            #   死區分支(:483)本來就是這樣寫的，這裡對齊它。
             elif _tp > 0 and _fp < 0:
                 # 股匯雙漲：外資真實匯入
-                _t2c = f'台股 {_tp:+.1f}% ／ 台幣升值 {_fp:+.2f}% → 股匯雙漲，外資真金白銀匯入，權值股領軍'
+                _t2c = (f'台股 {_tp:+.1f}% ／ 台幣升值 {abs(_fp):.2f}% → '
+                        f'股匯雙漲，外資真金白銀匯入，權值股領軍')
                 _t2a = '順勢大膽作多，優先權值龍頭　→ 實際持股見 🎚️ 建議持股油門'
             elif _tp > 0 and _fp > 0:
                 # 股漲匯貶：疑似拉高出貨
-                _t2c = f'台股 {_tp:+.1f}% ／ 台幣貶值 {_fp:+.2f}% → 股漲匯貶，指數虛漲，疑似外資拉高出貨'
+                _t2c = (f'台股 {_tp:+.1f}% ／ 台幣貶值 {abs(_fp):.2f}% → '
+                        f'股漲匯貶，指數虛漲，疑似外資拉高出貨')
                 _t2a = '不追高，謹慎觀察，等外資匯入確認　→ 實際持股見 🎚️ 建議持股油門'
             elif _tp < 0 and _fp > 0:
                 # 股匯雙殺：外資大舉提款
-                _t2c = f'台股 {_tp:+.1f}% ／ 台幣貶值 {_fp:+.2f}% → 股匯雙殺，外資無情提款撤出'
+                _t2c = (f'台股 {_tp:+.1f}% ／ 台幣貶值 {abs(_fp):.2f}% → '
+                        f'股匯雙殺，外資無情提款撤出')
                 _t2a = '嚴格減碼防守，現金為王　→ 實際持股見 🎚️ 建議持股油門'
             elif _tp < 0 and _fp < 0:
                 # 股跌匯升：技術性洗盤
-                _t2c = f'台股 {_tp:+.1f}% ／ 台幣升值 {_fp:+.2f}% → 股跌匯升，外資資金停泊未撤，技術性洗盤'
+                _t2c = (f'台股 {_tp:+.1f}% ／ 台幣升值 {abs(_fp):.2f}% → '
+                        f'股跌匯升，外資資金停泊未撤，技術性洗盤')
                 _t2a = '尋找錯殺優質股逢低布局　→ 實際持股見 🎚️ 建議持股油門'
             else:
+                # 此分支只在 _tp 或 _fp 恰為 0 時進入；無方向詞，保留帶號原值
                 _t2c = f'台股 {_tp:+.1f}% ／ 台幣 {_fp:+.2f}%，無明顯方向性波動'
                 _t2a = '維持現有部位，靜待表態'
         else:
@@ -488,7 +552,7 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         _t2c = '數據尚未載入，請點擊「🚀 一鍵更新全部數據」'
         _t2a = ''
         _t2_ind = '台股加權 + 台幣'
-    st.markdown(teacher_conclusion('宏爺', _t2_ind, _t2c, _t2a), unsafe_allow_html=True)
+    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _t2_ind, _t2c, _t2a), unsafe_allow_html=True)
     if _load_heavy:
         tc = st.columns(len(TW_UNIT))
         for col,(name,unit) in zip(tc,TW_UNIT.items()):
@@ -567,7 +631,7 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         _t6c = '技術股數據尚未載入，請點擊「🚀 一鍵更新全部數據」'
         _t6a = ''
         _t6_ind = '費半+美股科技'
-    st.markdown(teacher_conclusion('蔡森', _t6_ind, _t6c, _t6a), unsafe_allow_html=True)
+    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _t6_ind, _t6c, _t6a), unsafe_allow_html=True)
     if _load_heavy:
         tc_list = list(TECH_MAP.keys())
         tr1=st.columns(4)

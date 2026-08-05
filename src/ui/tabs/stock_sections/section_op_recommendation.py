@@ -15,7 +15,7 @@ import streamlit as st
 from shared.health_thresholds import HEALTH_GRADE_A_MIN
 from shared.thresholds import YIELD_MID_DEC
 from src.services.app_ai_service import generate_ai_comment
-from src.ui.render import teacher_conclusion
+from src.ui.render import STRATEGY_TECHNICAL, strategy_conclusion  # v19.174 去識別化
 
 
 def render_op_recommendation_section(sid2: str, health2,
@@ -58,7 +58,7 @@ def render_op_recommendation_section(sid2: str, health2,
     else:
         _op_a = f'只有{_sig_count}個訊號，條件不足，今日不操作 {sid2}'
         _op_b = '耐心等待，寧可錯過勿強求'
-    st.markdown(teacher_conclusion('宏爺', f'{sid2} 共振訊號 {_sig_count}/4', _op_a, _op_b),
+    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, f'{sid2} 共振訊號 {_sig_count}/4', _op_a, _op_b),
                 unsafe_allow_html=True)
     try:
         _mkt_top_g = st.session_state.get('mkt_info', {})

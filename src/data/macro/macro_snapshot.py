@@ -425,7 +425,11 @@ def fetch_cpi_block(fred_api_key: str = '') -> dict:
                                             errors='coerce').dropna()
                 if len(_vals0) >= 13:
                     _yoy = round((_vals0.iloc[-1] / _vals0.iloc[-13] - 1) * 100, 2)
-                    # v18.169:補 prev_yoy 供 MK 黃金拐點偵測(CPI 月度變化)
+                    # v18.169:補 prev_yoy 供 CPI×Fed 雙頂回落偵測(CPI 月度變化)
+                    # v19.173 正名:原寫「MK 黃金拐點」。MK 會被讀成 Mann-Kendall,
+                    # 但 `macro_helpers.detect_cpi_fed_double_top` 只是兩點差分規則。
+                    # 真正的 Mann-Kendall 在 `shared/mk_test.py`(尚未接線 —— 這裡
+                    # 只存本月 + 上月兩個純量,沒有序列可做無母數趨勢檢定)。
                     _prev_yoy = (round((_vals0.iloc[-2] / _vals0.iloc[-14] - 1) * 100, 2)
                                  if len(_vals0) >= 14 else None)
                     _date = str(_df0.iloc[-1, 0])[:10]
@@ -571,7 +575,8 @@ def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
 
     Tier 0: FRED 公開 fredgraph.csv  Tier 1: FRED API(帶 key 加速)
 
-    v18.169 起 MK 黃金拐點偵測需 CPI YoY × Fed Rate 同步月度比較。
+    v18.169 起 CPI×Fed 雙頂回落偵測需 CPI YoY × Fed Rate 同步月度比較。
+    (v19.173 正名:原稱「MK 黃金拐點」,MK ≠ Mann-Kendall;真檢定見 shared/mk_test.py)
     P3-D1 v18.389 抽出。logic verbatim from tab_macro._job_macro._fetch_fed_funds。
     """
     import datetime as _dt_ff

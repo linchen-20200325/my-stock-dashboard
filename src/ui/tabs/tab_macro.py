@@ -17,7 +17,7 @@
     - macro_alert (2): check_macro_alerts / fetch_macro_snapshot（render_macro_alerts 已搬 L4 macro_ui_components）
     - market_strategy: get_market_assessment
     - leading_indicators: build_leading_fast / render_leading_table
-    - ui_widgets: beginner_kpi / kpi / teacher_conclusion
+    - ui_widgets: beginner_kpi / kpi / strategy_conclusion（v19.174 去識別化改名）
   * app.py 內部 (4): _bps / _get_fm_token / _tw_now_str / gemini_call
   * src/data/news (1): fetch_macro_news(P5-B3-β R8 抽出,原 app._fetch_macro_news)
 
@@ -122,7 +122,8 @@ def render_tab_macro():
     from src.ui.render.macro_ui_components import render_macro_alerts  # v19.159:render 歸位 L4
     from src.services import get_market_assessment
     from src.data.macro import render_leading_table
-    from src.ui.render import beginner_kpi, cond_badge, kpi, teacher_conclusion
+    # v19.174 去識別化：teacher_conclusion → strategy_conclusion
+    from src.ui.render import beginner_kpi, cond_badge, kpi, strategy_conclusion
     # app.py 內部 helper（v18.192：還原 section 十一 → 需要 gemini_call）
     from app import (
         _bps, _get_fm_token, _tw_now_str, gemini_call,
@@ -220,14 +221,22 @@ def render_tab_macro():
     # 頂部已有「📊 總經總結儀表板 + 五桶 bar」(L679),此天氣解說與其重複 → 刪除,讓總結 bar 當頂。
     # 多空白話解讀保留為「點開才看」expander(收合,不佔版面)。
     # ── 🔰 故事化白話解讀（純疊加；解碼上方燈號卡片的數字，不重複多空說明）──
+    # v19.173 誠實化：本名詞表原寫「綜合健康度 = 均線＋籌碼＋景氣」，但
+    # `macro_helpers.compute_macro_health` 建構上只有 2 個輸入（jqavg 旌旗指數 ×
+    # HEALTH_WEIGHT_JQ 0.6 + score/max_score×100 × HEALTH_WEIGHT_SCORE 0.4；
+    # HEALTH_FNET_BONUS 已於 v19.102 校準後歸零）—— 籌碼／景氣**一項都沒進公式**。
+    # 舊敘述等於用文件背書錯誤認知（讓人以為看這一個數字＝看完五桶），故改寫。
+    # 同批把「評分 x/4」改為 x/N：分母吃 market_regime 的 max_score（基本 4，
+    # ad_ratio / m1b_m2_gap 有傳才升 5-6，見 market_strategy.py:151-155），
+    # 卡片實際渲染即為動態分母（handlers.py:102,123）。
     with st.expander('🔰 看不懂上面那張燈號卡片的數字？點我 30 秒讀懂'):
         st.markdown('''卡片上的每個數字，用一句話看懂：
 
 | 卡片欄位 | 白話意思 |
 |---|---|
-| **綜合健康度 /100** | 把均線、籌碼、景氣等訊號綜合成一個「市場體檢分數」，越高越健康 |
+| **綜合健康度 /100** | 只有兩個輸入：旌旗指數（站上 20MA 家數比＝廣度）60% ＋ 大盤評分 40%；**不含籌碼、景氣**，那些請看下方五桶燈號 |
 | **信心 %** | 系統對「資料夠不夠新、夠不夠齊」的把握度；**低於 70% 會直接擋住燈號**，避免拿過期資料誤判 |
-| **評分 x/4** | 大盤多空打分，分數越高越偏多頭 |
+| **評分 x/N** | 大盤多空打分，越高越偏多頭；分母 N 隨資料齊全度變動（基本 4；ADL／M1B-M2 有值才升 5-6） |
 | **建議持股 %** | 對應目前環境，建議把多少比例的資金放在股票上（其餘留現金） |
 | **灰色小標籤** | 當下觸發的關鍵訊號（如外資買超、融資增減、期貨淨部位等） |
 
@@ -504,7 +513,7 @@ def render_tab_macro():
     _macro_info = st.session_state.get('macro_info') or {}
     render_section_news_ai(_macro_info, _tl_eff_reg)
     st.caption("📖 想看總經原理教室(景氣循環 / PMI / 殖利率倒掛 / 美林時鐘 等 10 章)?"
-               "→ 已移至「📖 系統說明書」Tab,含資料來源完整地圖 + 4 大師策略。")
+               "→ 已移至「📖 系統說明書」Tab,含資料來源完整地圖 + 4 大策略主題。")
 
     # v19.168 IMPL-B:移除冗餘的「🧬 AI 總結本頁」lite 卡 —— 本頁已有 §十一「🤖 AI 總裁決」
     # 深報告(Gemini 生成完整戰情),泛用 lite 摘要重複。自由問答走獨立「🧬 AI 問答」tab。

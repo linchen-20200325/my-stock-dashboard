@@ -1,4 +1,8 @@
-"""v18.186 mj_snapshot_io 純函式單元測試（tmp_path 隔離不污染本地 cache）。"""
+"""v18.186 fin_snapshot_io 純函式單元測試（tmp_path 隔離不污染本地 cache）。
+
+v19.174 去識別化：模組自 `mj_snapshot_io` 改名為 `fin_snapshot_io`；
+所有 case 都顯式傳 `base_dir=tmp_path`，故不會踩到預設路徑的舊目錄唯讀相容分支。
+"""
 from __future__ import annotations
 
 import json
@@ -53,7 +57,7 @@ class TestSanitize:
 # ════════════════════════════════════════════════════════════════
 # save_snapshot
 # ════════════════════════════════════════════════════════════════
-def _fake_mj(cash="Pass"):
+def _fake_fh(cash="Pass"):
     return {
         "Survival_Module": {"Cash_Ratio": {"Status": cash}},
         "cash_ratio_status": "🟢",
@@ -62,7 +66,7 @@ def _fake_mj(cash="Pass"):
 
 class TestSaveSnapshot:
     def test_basic_roundtrip(self, tmp_path: Path):
-        fp = save_snapshot("2330", "202503", _fake_mj(), base_dir=tmp_path)
+        fp = save_snapshot("2330", "202503", _fake_fh(), base_dir=tmp_path)
         assert fp is not None
         assert fp.exists()
         assert fp.name == "2330_202503.json"
@@ -71,18 +75,18 @@ class TestSaveSnapshot:
         assert loaded["cash_ratio_status"] == "🟢"
 
     def test_atomic_write_no_leftover_tmp(self, tmp_path: Path):
-        save_snapshot("2330", "202503", _fake_mj(), base_dir=tmp_path)
+        save_snapshot("2330", "202503", _fake_fh(), base_dir=tmp_path)
         # 不應留 .tmp
         tmps = list(tmp_path.glob("*.tmp"))
         assert tmps == []
 
     def test_invalid_sid_returns_none(self, tmp_path: Path):
-        assert save_snapshot("", "202503", _fake_mj(), base_dir=tmp_path) is None
-        assert save_snapshot(None, "202503", _fake_mj(), base_dir=tmp_path) is None
+        assert save_snapshot("", "202503", _fake_fh(), base_dir=tmp_path) is None
+        assert save_snapshot(None, "202503", _fake_fh(), base_dir=tmp_path) is None
 
     def test_invalid_yyyymm_returns_none(self, tmp_path: Path):
-        assert save_snapshot("2330", "25Q1", _fake_mj(), base_dir=tmp_path) is None
-        assert save_snapshot("2330", "", _fake_mj(), base_dir=tmp_path) is None
+        assert save_snapshot("2330", "25Q1", _fake_fh(), base_dir=tmp_path) is None
+        assert save_snapshot("2330", "", _fake_fh(), base_dir=tmp_path) is None
 
     def test_non_dict_payload_returns_none(self, tmp_path: Path):
         assert save_snapshot("2330", "202503", "not dict", base_dir=tmp_path) is None
@@ -90,8 +94,8 @@ class TestSaveSnapshot:
         assert save_snapshot("2330", "202503", [1, 2, 3], base_dir=tmp_path) is None
 
     def test_overwrites_existing(self, tmp_path: Path):
-        save_snapshot("2330", "202503", _fake_mj(cash="Pass"), base_dir=tmp_path)
-        save_snapshot("2330", "202503", _fake_mj(cash="Fail"), base_dir=tmp_path)
+        save_snapshot("2330", "202503", _fake_fh(cash="Pass"), base_dir=tmp_path)
+        save_snapshot("2330", "202503", _fake_fh(cash="Fail"), base_dir=tmp_path)
         loaded = load_snapshot("2330", "202503", base_dir=tmp_path)
         assert loaded["Survival_Module"]["Cash_Ratio"]["Status"] == "Fail"
 
@@ -129,19 +133,19 @@ class TestListSnapshots:
 
     def test_descending_sort(self, tmp_path: Path):
         for ym in ("202403", "202506", "202509", "202412", "202503"):
-            save_snapshot("2330", ym, _fake_mj(), base_dir=tmp_path)
+            save_snapshot("2330", ym, _fake_fh(), base_dir=tmp_path)
         out = list_snapshots("2330", base_dir=tmp_path)
         assert out == ["202509", "202506", "202503", "202412", "202403"]
 
     def test_filter_by_sid(self, tmp_path: Path):
-        save_snapshot("2330", "202503", _fake_mj(), base_dir=tmp_path)
-        save_snapshot("0050", "202503", _fake_mj(), base_dir=tmp_path)
-        save_snapshot("2330", "202506", _fake_mj(), base_dir=tmp_path)
+        save_snapshot("2330", "202503", _fake_fh(), base_dir=tmp_path)
+        save_snapshot("0050", "202503", _fake_fh(), base_dir=tmp_path)
+        save_snapshot("2330", "202506", _fake_fh(), base_dir=tmp_path)
         assert list_snapshots("2330", base_dir=tmp_path) == ["202506", "202503"]
         assert list_snapshots("0050", base_dir=tmp_path) == ["202503"]
 
     def test_ignores_unrelated_files(self, tmp_path: Path):
-        save_snapshot("2330", "202503", _fake_mj(), base_dir=tmp_path)
+        save_snapshot("2330", "202503", _fake_fh(), base_dir=tmp_path)
         (tmp_path / "README.md").write_text("hi", encoding="utf-8")
         (tmp_path / "2330_bad.json").write_text("{}", encoding="utf-8")
         out = list_snapshots("2330", base_dir=tmp_path)
@@ -157,7 +161,7 @@ class TestLoadLatestTwo:
         assert (prev, curr, p_ym, c_ym) == (None, None, None, None)
 
     def test_one_snapshot_only(self, tmp_path: Path):
-        save_snapshot("2330", "202506", _fake_mj(), base_dir=tmp_path)
+        save_snapshot("2330", "202506", _fake_fh(), base_dir=tmp_path)
         prev, curr, p_ym, c_ym = load_latest_two("2330", base_dir=tmp_path)
         assert prev is None
         assert curr is not None
@@ -165,8 +169,8 @@ class TestLoadLatestTwo:
         assert c_ym == "202506"
 
     def test_two_snapshots_descending(self, tmp_path: Path):
-        save_snapshot("2330", "202503", _fake_mj(cash="Acceptable"), base_dir=tmp_path)
-        save_snapshot("2330", "202506", _fake_mj(cash="Pass"), base_dir=tmp_path)
+        save_snapshot("2330", "202503", _fake_fh(cash="Acceptable"), base_dir=tmp_path)
+        save_snapshot("2330", "202506", _fake_fh(cash="Pass"), base_dir=tmp_path)
         prev, curr, p_ym, c_ym = load_latest_two("2330", base_dir=tmp_path)
         assert p_ym == "202503"
         assert c_ym == "202506"
@@ -175,7 +179,7 @@ class TestLoadLatestTwo:
 
     def test_three_snapshots_takes_top_two(self, tmp_path: Path):
         for ym in ("202412", "202503", "202506"):
-            save_snapshot("2330", ym, _fake_mj(), base_dir=tmp_path)
+            save_snapshot("2330", ym, _fake_fh(), base_dir=tmp_path)
         _, _, p_ym, c_ym = load_latest_two("2330", base_dir=tmp_path)
         assert (p_ym, c_ym) == ("202503", "202506")
 
@@ -185,10 +189,10 @@ class TestLoadLatestTwo:
 # ════════════════════════════════════════════════════════════════
 class TestListAllStocks:
     def test_dedupe_and_sort(self, tmp_path: Path):
-        save_snapshot("2330", "202503", _fake_mj(), base_dir=tmp_path)
-        save_snapshot("2330", "202506", _fake_mj(), base_dir=tmp_path)
-        save_snapshot("0050", "202506", _fake_mj(), base_dir=tmp_path)
-        save_snapshot("6770", "202506", _fake_mj(), base_dir=tmp_path)
+        save_snapshot("2330", "202503", _fake_fh(), base_dir=tmp_path)
+        save_snapshot("2330", "202506", _fake_fh(), base_dir=tmp_path)
+        save_snapshot("0050", "202506", _fake_fh(), base_dir=tmp_path)
+        save_snapshot("6770", "202506", _fake_fh(), base_dir=tmp_path)
         out = list_all_stocks_with_snapshots(base_dir=tmp_path)
         assert out == ["0050", "2330", "6770"]
 

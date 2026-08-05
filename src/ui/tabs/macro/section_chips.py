@@ -21,7 +21,12 @@ from shared.signal_thresholds import (
 from src.compute.strategy import V4StrategyEngine
 from src.data.macro import render_leading_table
 from src.ui.render.macro_ui_components import section_header
-from src.ui.render.ui_widgets import teacher_conclusion
+# v19.174 去識別化：改用策略代號常數 + 新函式名 strategy_conclusion（原 teacher_conclusion）
+from src.ui.render.ui_widgets import (
+    STRATEGY_TECHNICAL,
+    STRATEGY_VALUATION,
+    strategy_conclusion,
+)
 from src.ui.tabs.tab_helpers import safe_get
 
 
@@ -75,7 +80,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             _hye_ind = f'外資 {_fn3:+.1f}億（觀望區間）'
             _hye_concl = '資金觀望，區間操作'
             _hye_act = '高出低進，等方向表態　→ 實際持股見 🎚️ 建議持股油門'
-        st.markdown(teacher_conclusion('宏爺', _hye_ind, _hye_concl, color=_hye_c), unsafe_allow_html=True)
+        st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _hye_ind, _hye_concl, color=_hye_c), unsafe_allow_html=True)
         st.markdown(f'<div style="color:#8b949e;font-size:11px;padding:1px 8px 6px 8px;">→ 建議行動：{_hye_act}</div>', unsafe_allow_html=True)
         if _tn3 > 5:
             st.markdown(f'<div style="color:#58a6ff;font-size:12px;padding:2px 6px;">• 投信買超 {_tn3:.1f}億 → 連續買超是加碼訊號</div>', unsafe_allow_html=True)
@@ -124,7 +129,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             _sql_mind = f'融資餘額 {margin:.0f}億'
             _sql_mconcl = '籌碼乾淨，安全水位 → 可積極布局'
             _sql_mact = '籌碼面無壓，可維持既定姿態'
-        st.markdown(teacher_conclusion('孫慶龍', _sql_mind, _sql_mconcl, color=_sql_mc), unsafe_allow_html=True)
+        st.markdown(strategy_conclusion(STRATEGY_VALUATION, _sql_mind, _sql_mconcl, color=_sql_mc), unsafe_allow_html=True)
         # v19.170 P0-1:本段只講「籌碼面該怎麼做」,持股百分比一律交給建議持股 SSOT,
         # 不再自行喊任何持股百分比,以免與 🎚️ 建議持股油門 打架。
         st.markdown(
@@ -133,7 +138,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             unsafe_allow_html=True)
     st.markdown('<hr style="border-color:#21262d;margin:10px 0;">', unsafe_allow_html=True)
 
-    # ── 老師外資期貨（先行指標快速結論）─────────────────────────────────
+    # ── 外資期貨（先行指標快速結論）─────────────────────────────────
     _li4 = st.session_state.get('li_latest')
     if _li4 is not None and not _li4.empty:
         _fut4 = (float(_li4.iloc[-1].get('外資大小', 0)) if '外資大小' in _li4.columns else None)
@@ -141,7 +146,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         if _fut4 is not None:
             _pcr_txt = f' | PCR {_pcr4:.1f}' if _pcr4 else ''
             _l4_ind = f'外資期貨 {_fut4:,.0f}口{_pcr_txt}'
-            # 老師絕對口數門檻（容錯率最高）
+            # 絕對口數門檻（容錯率最高）
             if _fut4 <= -30000:
                 _l4c = f'外資期貨空單 {abs(_fut4):,.0f}口 > 3萬口，啟動強制防禦，等待空單回補'
                 _l4a = '啟動強制防禦，嚴禁追高攤平，保護本金　→ 實際持股見 🎚️ 建議持股油門'
@@ -164,7 +169,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         _l4_ind = '外資期貨留倉'
     # v18.336：三源全空時上方已有 fail-loud 診斷卡,此處不重複「尚未載入」(避免點過更新仍喊更新)
     if not _chips_all_empty3:
-        st.markdown(teacher_conclusion('宏爺', _l4_ind, _l4c, _l4a), unsafe_allow_html=True)
+        st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _l4_ind, _l4c, _l4a), unsafe_allow_html=True)
 
     # ── 副標籤：欄位確認列（v12 風格）─────────────────────────────────
     st.markdown("""<div style="font-size:11px;color:#484f58;margin:-6px 0 10px 0;">
@@ -551,7 +556,30 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         # ── ⑤ 下載按鈕（Base64 data URL，不依賴 WebSocket）──────
         try:
             import base64 as _b64_li
-            _csv_li = df_li_show.to_csv(index=False, encoding='utf-8-sig')
+            # ── v19.173:匯出欄位白名單(原本 to_csv 直接倒全欄 → schema 靜默變寬)──
+            # df_li_show 帶著一批**內部 marker 欄**,是給下游程式判旗標用的,不是
+            # 給人看的資料:`_date`(YYYYMMDD 排序鍵)、`_oi_src`(契約別)、
+            # `_oi_inconsistent`(資料源打架)、`_is_stale` / `_stale_age_min`
+            # (v19.170 過期快取旗標)。v19.172 一口氣新增 3 欄後,它們就跟著跑進
+            # 使用者下載的「先行指標.csv」,畫面上卻完全看不到 → 規則:
+            #   ① 底線開頭 = 內部 marker → 一律排除。
+            #   ② `OI_TX當量` **保留**:它不以底線開頭,也不是 marker,而是唯一
+            #      與「外資大小」同當量(TX)的分母(TX + 0.25×MTX,§4.1 量綱)。
+            #      分析價值高於欄名沿用歷史包袱、契約別會跳動的「未平倉口數」,
+            #      拿掉反而讓 CSV 使用者算不出正確的比值。
+            #   ③ `_date` 例外處理 —— **改名保留而非丟棄**:畫面「日期」欄是
+            #      「8月4日」(無年份),跨年下載會無法判讀;正名為 `日期YYYYMMDD`
+            #      後它就是使用者可讀欄位,不算 marker 外洩,且零資訊損失。
+            #   ④ `source` / `fetched_at` 保留(§2.2 血緣:CSV 落地後仍可追來源)。
+            _drop_li = [c for c in df_li_show.columns
+                        if str(c).startswith('_') and c != '_date']
+            _csv_df_li = df_li_show.drop(columns=_drop_li, errors='ignore')
+            if '_date' in _csv_df_li.columns:
+                _csv_df_li = _csv_df_li.rename(columns={'_date': '日期YYYYMMDD'})
+                _csv_df_li = _csv_df_li[
+                    ['日期YYYYMMDD']
+                    + [c for c in _csv_df_li.columns if c != '日期YYYYMMDD']]
+            _csv_li = _csv_df_li.to_csv(index=False, encoding='utf-8-sig')
             _b64_li_data = _b64_li.b64encode(_csv_li.encode('utf-8-sig')).decode()
             st.markdown(
                 f'<a href="data:text/csv;charset=utf-8-sig;base64,{_b64_li_data}" '
@@ -561,8 +589,18 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                 f'font-size:13px;text-decoration:none;">⬇️ 下載先行指標 CSV</a>',
                 unsafe_allow_html=True
             )
-        except Exception:
-            pass
+            # v19.173:欄位範圍公告 —— 排除 marker 後欄數會變少,不講清楚使用者
+            # 會以為「資料變少了」。同時點名多出來的 OI_TX當量 是什麼。
+            st.caption(
+                'CSV 欄位＝畫面表格全欄 ＋ `日期YYYYMMDD`（完整日期）'
+                ' ＋ `OI_TX當量`（TX 當量分母＝OI_TX＋0.25×OI_MTX，唯一可與「外資大小」相除）'
+                ' ＋ `source` / `fetched_at`（來源與抓取時間）；'
+                '已排除底線開頭的內部旗標欄（契約別、資料源打架、過期快取標記）。'
+            )
+        except Exception as _e_csv_li:
+            # §1:匯出失敗會讓下載按鈕整個消失,靜默 pass 使用者只會以為功能壞了
+            print(f'[section_chips] 先行指標 CSV 匯出失敗: '
+                  f'{type(_e_csv_li).__name__}: {_e_csv_li}')
 
     else:
         # v18.340 §1 Fail Loud：對齊 PR #362 chips_empty_state 三狀態分流(table 專屬 helper)。
@@ -580,9 +618,9 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         st.markdown(_li_es(attempted=_attempted_li, token_present=_fm_present_li),
                     unsafe_allow_html=True)
 
-    # 老師判斷方式 → 已移至 Tab 5 策略手冊
+    # 判斷方式 → 已移至 Tab 5 策略手冊
 
-    # ── 老師智能綜合結論 ─────────────────────────────────────────────────────
+    # ── 智能綜合結論 ─────────────────────────────────────────────────────
     _df_li_c = st.session_state.get('li_latest')
     if _df_li_c is not None and not _df_li_c.empty:
         _last_li = _df_li_c.iloc[-1]

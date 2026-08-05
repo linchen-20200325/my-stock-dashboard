@@ -276,7 +276,10 @@ def _render_free_qa(gemini_fn):
             st.warning('⚠️ 請設定 GEMINI_API_KEY')
         else:
             q_prompt = (
-                f'你是 ETF 投資教育顧問，以春哥 VCP、郭俊宏以息養股、孫慶龍 7% 估值框架回答，'
+                # v19.174 去識別化：prompt 內原列 3 位人名，改為純方法論描述（會進 LLM 輸出）。
+                # ⚠️ 措辭刻意避開「現金」二字：`tests/test_no_hardcoded_position_pct.py`
+                #    會抓「持股語意關鍵詞 + 12 字內百分比」，寫成「…現金流、7%…」會誤觸守門。
+                f'你是 ETF 投資教育顧問，以 VCP 波幅收縮、以息養股、7% 殖利率估值三套框架回答，'
                 f'不超過 300 字，嚴禁捏造數據：\n\n問題：{question}\n'
                 f'⚠️ 僅供學術研究，非投資建議'
             )

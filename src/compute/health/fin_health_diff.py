@@ -1,13 +1,16 @@
-"""src/compute/health/mj_health_diff.py — v18.185 老師 體檢表跨期變化偵測
+"""src/compute/health/fin_health_diff.py — v18.185 財報體檢表跨期變化偵測
 
-對 老師財報體檢（`financial_health_engine.analyze_financial_health`）兩期
+（v19.174 去識別化：本檔自 `mj_health_diff.py` 改名而來，文字敘述移除人名／稱謂。
+主函式 `diff_mj_health` → `diff_fin_health`，舊名保留為過渡期 alias。邏輯 0 改。）
+
+對財報體檢（`financial_health_engine.analyze_financial_health`）兩期
 結果做 status 等級比對，逐項偵測「變好 / 變差 / 不變」，回傳 verdict
 與漏斗篩選器，純函式 zero-IO。
 
 使用情境：
-  prev_mj_result = analyze_financial_health(api_key, sid, fin_data_q_prev)
-  curr_mj_result = analyze_financial_health(api_key, sid, fin_data_q_curr)
-  verdict = diff_mj_health(prev_mj_result, curr_mj_result, stock_id=sid)
+  prev_fh_result = analyze_financial_health(api_key, sid, fin_data_q_prev)
+  curr_fh_result = analyze_financial_health(api_key, sid, fin_data_q_curr)
+  verdict = diff_fin_health(prev_fh_result, curr_fh_result, stock_id=sid)
   → 取得 verdict.improvements / verdict.deteriorations / verdict.verdict
 
 設計重點：
@@ -42,7 +45,7 @@ STATUS_SCORES: dict[str, int] = {
     "Excellent": 2, "Moderate": 1,
     # Net margin
     "Thin Profit": 1,
-    # Emoji 燈號（老師 top-level）
+    # Emoji 燈號（體檢表 top-level）
     "🟢": 2, "🟡": 1, "🔴": 0,
     # OPM / Core_Business_Profitable / Leverage
     "Yes": 2, "No": 0,
@@ -87,7 +90,7 @@ class MetricDiff:
 
 @dataclass
 class HealthDiffVerdict:
-    """單股 老師 體檢跨期 verdict。"""
+    """單股財報體檢跨期 verdict。"""
 
     stock_id: str
     improvements: list[MetricDiff] = field(default_factory=list)
@@ -131,9 +134,9 @@ class HealthDiffVerdict:
 
 
 # ════════════════════════════════════════════════════════════════
-# Module 掃描清單（老師 schema）
+# Module 掃描清單（財報體檢 schema）
 # ════════════════════════════════════════════════════════════════
-_MJ_MODULES = (
+_FH_MODULES = (
     "Survival_Module",
     "Operating_Module",
     "Profitability_Module",
@@ -141,14 +144,14 @@ _MJ_MODULES = (
     "Solvency_Module",
     "Advanced_Diagnostic_Module",
 )
-# Top-level 燈號（v18.x 老師 overview）
+# Top-level 燈號（v18.x 體檢 overview）
 _TOP_LEVEL_LIGHTS = (
     "cash_ratio_status", "ocf_status", "debt_ratio_status",
 )
 
 
-def _walk_statuses(mj_result: Any) -> dict[tuple[str, str], str]:
-    """掃 老師 結果，回 {(module, metric): status_string} 字典。
+def _walk_statuses(fh_result: Any) -> dict[tuple[str, str], str]:
+    """掃財報體檢結果，回 {(module, metric): status_string} 字典。
 
     - 6 個 *_Module 內遞迴找帶 "Status" 欄位的子物件（如 Cash_Ratio.Status）
     - Operating_Margin.Core_Business_Profitable 視為 status
@@ -156,18 +159,18 @@ def _walk_statuses(mj_result: Any) -> dict[tuple[str, str], str]:
     - top-level cash_ratio_status / ocf_status / debt_ratio_status
     """
     out: dict[tuple[str, str], str] = {}
-    if not isinstance(mj_result, dict):
+    if not isinstance(fh_result, dict):
         return out
 
     # Top-level 燈號
     for k in _TOP_LEVEL_LIGHTS:
-        v = mj_result.get(k)
+        v = fh_result.get(k)
         if isinstance(v, str) and v.strip():
             out[("TopLevel", k)] = v
 
     # 6 模組
-    for mod_name in _MJ_MODULES:
-        mod = mj_result.get(mod_name)
+    for mod_name in _FH_MODULES:
+        mod = fh_result.get(mod_name)
         if not isinstance(mod, dict):
             continue
         for metric_name, payload in mod.items():
@@ -194,17 +197,17 @@ def _walk_statuses(mj_result: Any) -> dict[tuple[str, str], str]:
 # ════════════════════════════════════════════════════════════════
 # 核心 diff
 # ════════════════════════════════════════════════════════════════
-def diff_mj_health(
+def diff_fin_health(
     prev: Any,
     curr: Any,
     stock_id: str = "",
     min_net_delta: int = 1,
 ) -> HealthDiffVerdict:
-    """逐項比對 老師 體檢 prev 與 curr 的 status delta。
+    """逐項比對財報體檢 prev 與 curr 的 status delta。
 
     Args:
-        prev: 上一期 老師 analyze_financial_health 結果 dict
-        curr: 本期 老師 結果 dict
+        prev: 上一期 analyze_financial_health 結果 dict
+        curr: 本期結果 dict
         stock_id: 標識用，不影響邏輯
         min_net_delta: verdict 緩衝門檻（improve - deteriorate ≥ 此值 → improving）
 
@@ -263,6 +266,10 @@ def diff_mj_health(
     return verdict
 
 
+# v19.174 過渡期 alias（舊名帶人名縮寫，caller 全遷移後移除）
+diff_mj_health = diff_fin_health
+
+
 # ════════════════════════════════════════════════════════════════
 # 漏斗篩選器
 # ════════════════════════════════════════════════════════════════
@@ -271,13 +278,13 @@ def screen_health_changes(
     mode: str = "both",
     min_net_delta: int = 1,
 ) -> list[HealthDiffVerdict]:
-    """漏斗篩選：跨多檔 老師 跨期快照，依 mode 過濾。
+    """漏斗篩選：跨多檔財報體檢跨期快照，依 mode 過濾。
 
     Args:
-        snapshots: list of {"id": sid, "prev": prev_mj_dict, "curr": curr_mj_dict}
+        snapshots: list of {"id": sid, "prev": prev_fh_dict, "curr": curr_fh_dict}
         mode: "improving"（只回變好）/ "deteriorating"（只回變差）/
               "both"（變好 + 變差皆回，過濾掉 stable）/ "all"（全回）
-        min_net_delta: 雜訊緩衝門檻（傳給 diff_mj_health）
+        min_net_delta: 雜訊緩衝門檻（傳給 diff_fin_health）
 
     Returns:
         list[HealthDiffVerdict] — 過濾後 verdict 清單
@@ -295,12 +302,12 @@ def screen_health_changes(
         if not sid:
             continue
         try:
-            v = diff_mj_health(
+            v = diff_fin_health(
                 snap.get("prev"), snap.get("curr"),
                 stock_id=sid, min_net_delta=min_net_delta,
             )
         except Exception as e:  # pragma: no cover - defensive
-            print(f"[mj_health_diff] {sid} diff 失敗: {type(e).__name__}: {e}")
+            print(f"[fin_health_diff] {sid} diff 失敗: {type(e).__name__}: {e}")
             continue
 
         if mode == "improving" and v.verdict != "improving":
