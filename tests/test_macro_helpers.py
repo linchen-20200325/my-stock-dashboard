@@ -133,6 +133,41 @@ class TestCalcTrafficLight:
         assert tl['fk'] == '外資 (自營+投信)'
         assert tl['fnet'] == 12345
 
+    def test_inst_value_none_no_crash(self):
+        # 上游 None：{'inst': None}(key 存在但值 None,default {} 不生效)
+        # 不可炸 TypeError('NoneType' not iterable);graceful → fnet=0, fk=None
+        mkt = {'score': 3, 'regime': 'neutral'}
+        tl = calc_traffic_light(mkt, {'avg': 60}, {'inst': None}, None)
+        assert isinstance(tl, dict)
+        assert tl['fk'] is None
+        assert tl['fnet'] == 0
+
+    def test_inst_key_maps_to_none_no_crash(self):
+        # 外資 key 存在但值為 None:{'inst': {'外資淨': None}} → fnet 安全歸 0
+        mkt = {'score': 3, 'regime': 'neutral'}
+        tl = calc_traffic_light(mkt, {'avg': 60}, {'inst': {'外資淨': None}}, None)
+        assert isinstance(tl, dict)
+        assert tl['fk'] == '外資淨'
+        assert tl['fnet'] == 0
+
+    def test_inst_net_value_none_no_crash(self):
+        # net 值為 None:{'inst': {'外資': {'net': None}}} — key 存在故 .get('net',0)=None
+        # 須顯式歸零,否則 line 105 `None > 0` 炸;graceful → fnet=0
+        mkt = {'score': 3, 'regime': 'neutral'}
+        tl = calc_traffic_light(mkt, {'avg': 60}, {'inst': {'外資': {'net': None}}}, None)
+        assert isinstance(tl, dict)
+        assert tl['fk'] == '外資'
+        assert tl['fnet'] == 0
+
+    def test_present_data_unchanged_vs_none_guard(self):
+        # 回歸:present-data 路徑不受 None-guard 影響(net=負值/0 皆 byte-for-byte 不變)
+        cl_neg = {'inst': {'外資': {'net': -777}}}
+        tl_neg = calc_traffic_light({'score': 3, 'regime': 'neutral'}, {'avg': 60}, cl_neg, None)
+        assert tl_neg['fnet'] == -777
+        cl_zero = {'inst': {'外資': {'net': 0.0}}}
+        tl_zero = calc_traffic_light({'score': 3, 'regime': 'neutral'}, {'avg': 60}, cl_zero, None)
+        assert tl_zero['fnet'] == 0.0  # 0.0 保留 float,不被 is-None guard 動到
+
     def test_confidence_score(self):
         # 5 來源齊全 → conf=100
         mkt = {'score': 3, 'regime': 'neutral'}

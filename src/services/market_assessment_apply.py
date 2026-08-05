@@ -54,9 +54,9 @@ def compute_and_apply_market_assessment(
 
     try:
         _foreign_net_loaded = 0  # 0 = 尚無資料(market_regime 會顯示「待更新」)
-        for _k, _v in inst.items():
+        for _k, _v in (inst or {}).items():   # inst 可能為 None(上游 None)→ 待更新
             if '外資' in _k:
-                _net_v = _v.get('net')
+                _net_v = (_v or {}).get('net')   # value 可能為 None
                 if _net_v is not None:
                     _foreign_net_loaded = float(_net_v) * 1e8
                 break
