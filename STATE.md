@@ -1,5 +1,52 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚨 2026-08-05 HOTFIX：starlette 1.4.0 打爆 streamlit 1.59.2,全站 500(v19.175)
+
+**症狀**:v19.172~174 merge 進 main 後 Streamlit Cloud 重建,`[10:16:33] ❗️ The Streamlit
+server is responding 500 to health checks`,之後每一個 HTTP request 都吐同一條 traceback。
+**與本輪三批修改完全無關** —— 我們的 code 一行都還沒執行到,炸點在 ASGI 中介層。
+
+```
+streamlit/web/server/starlette/starlette_gzip_middleware.py:125
+    responder = _MediaAwareGZipResponder(...)
+TypeError: GZipResponder.__init__() missing 1 required
+           keyword-only argument: 'thread_minimum_size'
+```
+
+### 根因(上游簽章破壞性變更)
+starlette 1.4.0 為了「大 chunk 壓縮不要阻塞 event loop」,把 gzip 改成超過門檻就丟去
+worker thread(`anyio.to_thread.run_sync`),並在 `GZipResponder.__init__` 新增
+**必填的 keyword-only 參數** `thread_minimum_size`:
+
+```python
+# starlette 1.4.0
+class GZipResponder(IdentityResponder):
+    def __init__(self, app, minimum_size, compresslevel=9, *, thread_minimum_size) -> None:
+#                                                          ^^^ 必填、無預設值
+```
+
+streamlit 1.59.2 的 `_MediaAwareGZipResponder` 是對著 **1.3.x 簽章**寫的子類別,不會傳這個
+參數。中介層在**每個 request 的建構期**就 TypeError → 健康檢查 500 → 全站白畫面。
+
+### 為什麼會被打到:未 pin 的傳遞依賴
+streamlit 1.5x 起從 tornado 改走 ASGI(starlette + uvicorn),starlette 因此變成
+**傳遞依賴**;我們的 `requirements.txt` 從沒直接列它 → resolver 每次 build 自由取最新 →
+1.4.0 一釋出當天就倒站。**與 v19.79 的 pyarrow 25.0.0 是同一種事故**:
+「未 pin 的傳遞 C/框架層依賴,在上游釋出當日隨機爆炸」。
+
+### 修法
+`requirements.txt` 顯式 pin `starlette>=1.3.1,<1.4.0`(1.3.1 = 2026-06-12,上一版
+known-good;floor 取它而非更低,是為了重現「最後一次成功部署實際裝到的版本」)。
+**解禁條件**:streamlit 釋出會傳 `thread_minimum_size` 的版本後,連同 streamlit 上限一起放寬。
+
+### 教訓(建議但尚未做,等 user 決定)
+本次 + v19.79 同型事故兩次。根治手段是 **lockfile**(`uv pip compile` 產 `requirements.lock`,
+部署鎖全量傳遞依賴),而不是每次被打到才補一條 pin —— 目前 `requirements.txt` 只鎖了
+**直接依賴**,傳遞依賴(starlette / uvicorn / anyio / protobuf / narwhals …)全部裸奔。
+⚠️ 代價:lockfile 要定期 refresh,否則安全性更新也一起凍住。**§-1:未經 user 核准不動。**
+
+---
+
 ## 🕶️ 2026-08-05 去識別化：移除全站人名與相關尊稱(v19.174,user 要求「名稱都不要加上去,請移除」)
 
 user 核准**全部改(含檔名/模組名)**、**保留「策略1/2/3」顯示形式**。多 AI 分工並行,本則記錄
