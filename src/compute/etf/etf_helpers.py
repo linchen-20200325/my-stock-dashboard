@@ -27,6 +27,15 @@ _CORE_TICKERS: frozenset[str] = frozenset({
 })
 
 
+# B5-a v19.180:公開別名。`portfolio_gates.classify_portfolio_role` 需要這份白名單
+# 裡的**海外寬基**條目(VT / VTI / VOO / SPY / VEA / VWO —— 台股 ETF 分類表
+# `ETF_PEER_GROUPS` 查不到它們),但不吃台股條目(台股一律以分類表為準,
+# 因為本白名單把高股息 / 債券也算「核心」,對核衛閘門而言語意錯)。
+# 只加公開名,不動內容 → auto_role 既有行為 0 改。
+CORE_TICKER_WHITELIST: frozenset[str] = _CORE_TICKERS
+"""`auto_role` 的核心白名單(裸碼、大寫)。唯讀,勿就地修改。"""
+
+
 def auto_role(tk: str | None) -> str:
     """ETF 核心 / 衛星判讀：白名單命中回「核心」，其餘「衛星」。
 

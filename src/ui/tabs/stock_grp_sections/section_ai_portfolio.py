@@ -96,26 +96,33 @@ def _build_portfolio_prompt(
         _sid_p = _rp.get('stock_id', _rp.get('代碼',''))
         _nm_p  = _rp.get('stock_name', _rp.get('名稱', _sid_p))
         _ht_p  = _rp.get('_health', 0)
-        _sc_p  = _rp.get('total', _rp.get('健康度', 0))
         _fd_p  = fund_map.get(_sid_p, {})
         _fhp   = fh_cached.get(_sid_p, {})
         _dna_p = _fhp.get('business_model_dna', 'N/A') if _fhp else 'N/A'
         _fb_p  = _rp.get('foreign_buy', 0) or 0
-        _rsi_p = _rp.get('rsi', 'N/A')
-        _ma_p  = '多頭排列' if (_rp.get('ma_above', 0) or 0) >= 2 else '空頭排列'
-        _vcp_p = 'VCP突破' if _rp.get('vcp_signal') else '未突破'
+        # B5-b(2026-08)§1:以下 4 個欄位原本讀的是 results_t3 **不存在**的 key
+        # ('total'/'rsi'/'ma_above'/'vcp_signal'),於是 `.get(key, default)` 的 default
+        # 每一檔都生效 → 送進 LLM 的是「評分=健康度、RSI=N/A、全部空頭排列、全部未突破」
+        # 的假資料。改讀 `section_batch_fetcher` 真正寫入的 key。
+        _rsi_p = _rp.get('RSI', 'N/A')
+        _ma_p  = _rp.get('趨勢', 'N/A')
+        _vcp_p = 'VCP收縮' if str(_rp.get('VCP', '')).startswith('✅') else '未收縮'
         _scf   = _sc_map3.get(_sid_p, {})
+        _scored_p = bool(_scf) and 'error' not in _scf and _scf.get('total') is not None
+        _sc_p = f"{float(_scf['total']):.0f}" if _scored_p else '無法評分'
         try:
+            # 五維同 UI「多因子維度拆解」：score_single_stock 實際回傳的 key
+            # (原第 5 欄寫 rs_score，該 key 從未被回傳 → 恆為捏造的 50)
             _dim_p = (f" 五維(趨{_scf.get('trend',0):.0f}/動{_scf.get('momentum',0):.0f}/籌{_scf.get('chip',0):.0f}"
-                      f"/量{_scf.get('volume',0):.0f}/RS{_scf.get('rs_score',50):.0f})") if _scf else ''
+                      f"/量{_scf.get('volume',0):.0f}/風險{_scf.get('risk',0):.0f})") if _scored_p else ''
         except (TypeError, ValueError):
             _dim_p = ''
         _rad_p = _fhp.get('radar_scores', {}) if _fhp else {}
         _rad_avg_p = f"{sum(_rad_p.values())/len(_rad_p):.1f}" if _rad_p else '-'
         # v18.349 PR-O1:單位「張」(SSOT data_loader.py:286 /1000 後),原 /1e8「億」是錯誤假設元的舊 bug
         _port_lines.append(
-            f"[{_sid_p} {_nm_p}] 健康度={_ht_p:.0f} 評分={_sc_p:.0f}{_dim_p} | "
-            f"技術: 均線={_ma_p} RSI={_rsi_p} {_vcp_p} | "
+            f"[{_sid_p} {_nm_p}] 健康度={_ht_p:.0f} 多因子={_sc_p}{_dim_p} | "
+            f"技術: 趨勢={_ma_p} RSI={_rsi_p} VCP={_vcp_p} | "
             f"籌碼: 外資近20日{'買超' if _fb_p>0 else '賣超'}{abs(_fb_p):,.0f}張 | "
             f"基本面: EPS={_fd_p.get('近4季EPS','-')} 毛利={_fd_p.get('毛利率%','-')}% "
             f"殖利率={_fd_p.get('殖利率%','-')} SQ品質={_fd_p.get('SQ評分','-')} "

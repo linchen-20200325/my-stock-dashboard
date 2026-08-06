@@ -340,6 +340,22 @@ MULTIFACTOR_ENTRY_MIN: float = 70.0
 """多因子總分「入選候選」門檻（0-100）。≥70 → 列為可進場候選（③ 多因子排行）。
 原 tab_stock_grp.py:521 inline"""
 
+TREND_MIN_REVENUE_MONTHS: int = 1
+"""財報趨勢分數「月營收子分數可評分」最少月份數（B5-b 2026-08）。
+
+`compute_monthly_revenue_subscore` 在 `yoy_vals` 為空時回 `(0.0, {"n_months": 0})`
+——那個 0.0 **不是「持平」而是「沒有資料」**。消費端（🏆 個股組合「📊 財報趨勢×轉機」）
+必須用本常數判定該檔是否可評分，缺料一律標「⚪ 無法評分」，
+不得讓 0.0 混進 5 段判定（0.0 正好落在「➖ 中性」帶正中央）。"""
+
+TREND_MIN_FIN_SNAPSHOTS: int = 2
+"""財報趨勢分數「季財報子分數可評分」最少快照季數（B5-b 2026-08）。
+
+鏡射 `src/compute/health/fin_trend_score.compute_fin_trend_subscore`：
+`n < 2 → (0.0, {"reason": "insufficient_snapshots"})`。同理那個 0.0 是「無法比較」
+不是「沒有變化」。兩處一致性由 `tests/test_b5b_stock_grp.py` 的**行為斷言**釘住
+（真的呼叫 compute_fin_trend_subscore 驗邊界），不是字串掃描。"""
+
 SCREENER_MIN_FACTOR_COVERAGE_RATIO: float = 0.5
 """選股網（fundamental_screener_service）綜合分「最低因子涵蓋」門檻（比例，0-1）。
 
@@ -902,6 +918,26 @@ STOCK_BIAS_MILD_DEVIATION_PCT: float = 15.0
 PORTFOLIO_REBAL_TOLERANCE_DEFAULT_PCT: float = 5.0
 """ETF 投組再平衡容忍偏離預設值 %:|實際-目標| > 5% → 觸發再平衡建議。
 Slider 範圍 1-15,預設 5。原 etf_tab_portfolio.py:86 inline。"""
+
+PORTFOLIO_TARGET_SUM_TOLERANCE_PP: float = 1.0
+"""ETF 投組「目標權重」總和容差(百分點):|Σ target_pct - 100| > 1pp → 目標本身不成立,
+再平衡檢查回**無法判定**(§1:不拿一組加不到 100% 的目標去算偏離,那個偏離沒有意義)。
+留 1pp 是給使用者四捨五入(如 33.3/33.3/33.3 = 99.9)的空間。B5-a v19.180 新增。"""
+
+# ── 核心/衛星 配置(B5-a v19.180)──
+PORTFOLIO_CORE_SAT_TOLERANCE_PP: float = 10.0
+"""核心/衛星比 vs regime 目標的**雙邊**容忍帶(百分點):|實際核心% - 目標核心%| > 10pp
+→ 🔴 偏離目標。
+
+SSOT 理由(§3.3):此數字原本一式三份且語意漂移 ——
+  1. `etf_tab_portfolio.py:599/602` inline `10`(只控 metric delta 顏色)
+  2. `etf_tab_portfolio.py:615` 文案寫「±10pp 容忍」(**雙邊**)
+  3. `src/compute/strategy/portfolio_manager.py:22 _REBALANCE_THRESHOLD = 0.10`
+     實際判定式 `excess_ratio >= 0.10` 是**單邊**(只抓衛星超標),
+     衛星不足 30pp 也永遠不觸發 → 畫面說 ±10pp 是假的。
+B5-a 起判定改走 `portfolio_gates.evaluate_core_satellite_gate` 的雙邊比對,
+文案與判定式對齊到本常數。`_REBALANCE_THRESHOLD` 仍服務 portfolio_manager
+既有 caller(個股衛星超標警報),語意不同故不合併。"""
 
 # ── 分散度(G1 P1+P2)──
 ETF_CORR_HIGH_THRESHOLD: float = 0.85

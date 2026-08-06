@@ -5,11 +5,12 @@ from . import (  # noqa: F401
     fundamental_prescreen,
     fundamental_screener,
     rs_leader_screener,
+    scorability,
     shortage_screener,
 )
 
 _SUBMODULES = (fundamental_screener, fundamental_prescreen, shortage_screener,
-               rs_leader_screener, cross_quarter_trends, forward_test)
+               rs_leader_screener, cross_quarter_trends, forward_test, scorability)
 
 
 def __getattr__(name):

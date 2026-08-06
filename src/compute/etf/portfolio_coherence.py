@@ -64,7 +64,15 @@ _CORE_CATEGORIES: frozenset[str] = frozenset({'市值型'})
 
 
 def classify_core_satellite(ticker) -> str:
-    """'債券' / '核心' / '衛星'。債券→債券;市值型 ETF→核心;其餘股票→衛星。"""
+    """'債券' / '核心' / '衛星'。債券→債券;市值型 ETF→核心;其餘股票→衛星。
+
+    ⚠️ **B5-a v19.180 起,ETF 投組頁不再使用本函式** —— 請改用
+    `src/compute/etf/portfolio_gates.classify_portfolio_role`(四態,多一個
+    `'未知'`)。差異:本函式把台股分類表查無的代號(例如海外寬基 `VT` / `VOO`)
+    一律歸「衛星」,而 `auto_role` 又把它們歸「核心」→ 同一頁兩套數字。
+    新函式改成「查不到就回未知」,讓閘門判無法判定而不是硬塞一個桶(§1)。
+    本函式保留供既有測試/其他潛在 caller,新程式碼請勿再用。
+    """
     if classify_asset_class(ticker) == 'bond':
         return '債券'
     from src.compute.etf.etf_categories import get_category_name  # noqa: PLC0415

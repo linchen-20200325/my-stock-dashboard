@@ -28,8 +28,11 @@ from src.compute.etf import auto_role
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.signal_thresholds import (
     ETF_CORR_HIGH_THRESHOLD,
-    PORTFOLIO_OVERLAP_JACCARD_THRESHOLD_PCT,
-    PORTFOLIO_OVERLAP_WEIGHT_THRESHOLD_PCT,
+    # B5-a v19.180:持股 Overlap 的兩個門檻(`PORTFOLIO_OVERLAP_WEIGHT_THRESHOLD_PCT`
+    # / `PORTFOLIO_OVERLAP_JACCARD_THRESHOLD_PCT`)改由 L2
+    # `portfolio_gates.evaluate_overlap_gate` 依 method 自行取 SSOT —— 判定式與門檻
+    # 住在同一處,UI 不再各拿一份自己比一次(比一次就多一個會漂移的地方)。
+    # 本檔仍透過 `_ov_gate['threshold_pct']` 顯示實際採用的門檻。
     PORTFOLIO_REBAL_TOLERANCE_DEFAULT_PCT,
     PORTFOLIO_STRESS_TEST_DROP_PCT,
     PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT,
@@ -38,6 +41,9 @@ from shared.signal_thresholds import (
     PORTFOLIO_VAR_MONTHLY_WARN_PCT,
 )
 from shared.thresholds import YIELD_MID, YIELD_LOW
+
+# B5-a v19.180:目標權重輸入欄名 SSOT(data_editor column_config / 解析 / 說明文案共用)。
+TARGET_PCT_COL: str = '目標比例%'
 
 
 def _fetch_usdtwd_spot():
@@ -117,14 +123,16 @@ def render_etf_portfolio(gemini_fn=None):
     macro_allocation_banner(regime)
 
     st.markdown('#### 📋 輸入持股組合')
-    st.caption('💡 表格欄位：**股票代號 / 持有張數 / 平均買入價格**。'
+    st.caption('💡 表格欄位：**股票代號 / 持有張數 / 平均買入價格 / 目標比例%（選填）**。'
                '系統自動：① 1 張 = 1000 股換算 ② 核心/衛星判讀 ③ 即時收盤價算現值、資本利得、已領配息。'
                '可用「+」新增列、勾選後 Del 刪除列。')
     with st.expander('💡 核心/衛星 · 再平衡 · 持股重疊（Overlap）是什麼？', expanded=False):
         st.markdown(
-            '- **核心 / 衛星配置**：**核心**（如 0050/VT 大盤型，佔多數、長期持有求穩）＋ **衛星**（高息/主題型，少量、求現金流或增強）。系統依代號自動判讀，幫你檢視比重是否頭重腳輕。\n'
-            '- **再平衡容忍偏離度**：當某檔實際權重偏離目標超過此 %，才建議調整 —— 避免頻繁交易產生成本。設 5% = 偏離超過 5 個百分點才動手。\n'
-            '- **持股重疊（Overlap）**：兩檔 ETF 可能都重壓台積電 → 你以為分散、其實重複押注。Overlap 矩陣量化「成分股重疊度」，**>30% 代表分散效果打折**，宜換成低重疊的搭配。'
+            '- **核心 / 衛星配置**：**核心**（追大盤市值型，佔多數、長期持有求穩）＋ **衛星**（高息/主題型，少量、求現金流或增強）。系統依代號自動判讀；**判不出來的代號會誠實標「未分類」並改判「無法判定」，不會硬塞進核心。**\n'
+            '- **再平衡容忍偏離度**：當某檔實際權重偏離**你設定的目標比例**超過此 %，才建議調整 —— 避免頻繁交易產生成本。設 5% = 偏離超過 5 個百分點才動手。\n'
+            '  - ⚠️ **沒填「目標比例%」就沒有偏離可算** —— 此時本檢查顯示「⚪ 無法判定」而非綠燈（拿現況當目標會讓偏離恆等於 0，那是「沒算」不是「已平衡」）。\n'
+            '- **持股重疊（Overlap）**：兩檔 ETF 可能都重壓台積電 → 你以為分散、其實重複押注。Overlap 矩陣量化「成分股重疊度」，**>30% 代表分散效果打折**，宜換成低重疊的搭配。\n'
+            '  - ⚠️ **台股 ETF 的成分股是中文股名、海外 ETF 是英文公司名**，兩者對不上 → 跨市場（如 0050 × VT）的重疊率**量不到**，會標「無法判定」而不是回報 0%。'
         )
 
     # ── 結構化表單輸入（取代 text_area）─────────────────────
@@ -135,6 +143,14 @@ def render_etf_portfolio(gemini_fn=None):
             '平均買入價格':   [135.50, 82.30, 72.50, 20.10],
         }
     )
+    # B5-a v19.180:再平衡的「目標」必須由使用者給。原碼拿現況當目標 → 偏離恆 0 →
+    # 永遠印「✅ 無需再平衡」(§1 假綠燈)。選填欄:留白 = 明說「沒設定」而非 0。
+    # 雲端載入(etf_p_loaded_df)只帶 3 欄,故一律在此補齊,避免 KeyError。
+    if TARGET_PCT_COL not in _default_df.columns:
+        # NaN（非 0！）= 空白格。NumberColumn 對 float64 的 NaN 顯示空白,
+        # 解析端把 NaN 判成「沒填」→ 不會被誤當「目標 0%」。
+        _default_df[TARGET_PCT_COL] = pd.Series(
+            [float('nan')] * len(_default_df), dtype='float64')
     edited_df = st.data_editor(
         _default_df, num_rows='dynamic', hide_index=True,
         use_container_width=True, key='etf_p_table',
@@ -148,6 +164,13 @@ def render_etf_portfolio(gemini_fn=None):
             '平均買入價格': st.column_config.NumberColumn(
                 '平均買入價格', required=True, min_value=0.0, format='%.2f', width='small',
                 help='你過去買入此檔的成本均價'),
+            TARGET_PCT_COL: st.column_config.NumberColumn(
+                TARGET_PCT_COL, required=False, min_value=0.0, max_value=100.0,
+                format='%.1f', width='small',
+                help='選填。你希望這一檔佔組合的比例（各檔加總 100%）。'
+                     '「⚖️ 再平衡交易指令」只有在**全部填滿且總和 100%** 時才會下判斷；'
+                     '留白 → 顯示「無法判定」（不會用現況假裝已平衡）。'
+                     '⚠️ 此欄目前**不會**存進 Google Sheet 雲端組合。'),
         })
 
     # ── 雲端儲存（Google Sheet）─────────────────────────────
@@ -181,13 +204,22 @@ def render_etf_portfolio(gemini_fn=None):
             st.warning(f'⚠️ {_tk_raw} 張數或均價為 0，已略過')
             continue
         _shares = _lots * 1000  # 1 張 = 1000 股
+        # B5-a:選填目標比例。留白 / 非數字 / NaN → None(= 明確「沒設定」),**不補 0**。
+        _tgt_raw = _row.get(TARGET_PCT_COL)
+        try:
+            _tgt_user = None if _tgt_raw is None else float(_tgt_raw)
+        except (TypeError, ValueError):
+            _tgt_user = None
+        if _tgt_user is not None and (_tgt_user != _tgt_user or _tgt_user < 0):
+            _tgt_user = None                       # NaN / 負數 → 視為未填
         rows.append({
             'ticker':     _tk_raw,
             'lots':       _lots,
             'shares':     _shares,
             'avg_price':  _avg_price,
             'cost':       _shares * _avg_price,
-            'target_pct': None,         # 不再有「希望比例」輸入 → 以實際現值權重為目標
+            'target_pct_user': _tgt_user,   # None = 使用者沒填(§1:不拿現況冒充目標)
+            'target_pct': None,             # 下方依 gate 結果決定要不要填
             'role':       auto_role(_tk_raw),
         })
     if not rows:
@@ -308,15 +340,36 @@ def render_etf_portfolio(gemini_fn=None):
     total_gain  = sum(r['capital_gain'] for r in rows)
     total_div   = sum(r['dividend_received'] for r in rows)
 
-    # target_pct 全為 None（新表格輸入無希望比例欄）→ 直接用實際現值權重作目標
-    # 偏離度 = 0，下游再平衡邏輯仍可運作（按實際權重平衡 = 不需動作）
-    for r in rows:
-        if r['target_pct'] is None:
-            r['target_pct'] = round(r['current_value'] / total_value * 100, 2) if total_value > 0 else 0
-
+    # ══════════════════════════════════════════════════════════════════
+    # §1 B5-a v19.180:**沒有目標就沒有偏離**
+    # ------------------------------------------------------------------
+    # 原碼:`target_pct = actual_pct` → `deviation` 恆 0 → 再平衡永遠印
+    # 「✅ 所有標的偏離度均在 ±5% 內」。那個綠燈代表「沒算」不是「已平衡」。
+    # 現改:目標一律由使用者的「目標比例%」欄提供,並交給 L2 gate 三態判定。
+    # ══════════════════════════════════════════════════════════════════
+    from src.compute.etf.portfolio_gates import (
+        STATUS_PASS, STATUS_UNKNOWN,
+        evaluate_core_satellite_gate, evaluate_overlap_gate, evaluate_rebalance_gate,
+    )
     for r in rows:
         r['actual_pct'] = round(r['current_value'] / total_value * 100, 2) if total_value > 0 else 0
-        r['deviation']  = round(r['actual_pct'] - r['target_pct'], 2)
+    _rebal_gate = evaluate_rebalance_gate(
+        [{'ticker': r['ticker'], 'actual_pct': r['actual_pct'],
+          'target_pct': r['target_pct_user']} for r in rows],
+        tolerance_pp=tolerance)
+    _target_is_user_set = _rebal_gate['status'] != STATUS_UNKNOWN
+    for r in rows:
+        r['target_source'] = 'user' if _target_is_user_set else 'unset'
+        if _target_is_user_set:
+            r['target_pct'] = float(r['target_pct_user'])
+            r['deviation']  = round(r['actual_pct'] - r['target_pct'], 2)
+        else:
+            # 下游(etf_tab_ai prompt / portfolio_linkage)吃 float 契約 → 保持數值型別,
+            # 但畫面上這兩欄一律顯示「—」,且 target_source='unset' 已標記其不可信。
+            # ⚠️ 已知殘留:`src/ui/etf/etf_tab_ai.py:107-108` 仍會把這組值寫進 AI prompt
+            #    成「希望比例 X% / 實際 X%（偏離 +0.0pp）」—— 該檔不在本次改動範圍。
+            r['target_pct'] = r['actual_pct']
+            r['deviation']  = 0.0
 
     # ── 共享給下游模組（葡萄串領息法 / AI 評斷）──
     st.session_state['etf_portfolio_rows'] = rows
@@ -352,13 +405,25 @@ def render_etf_portfolio(gemini_fn=None):
         {'warn': st.warning, 'info': st.info, 'ok': st.success}.get(_lvl, st.caption)(_cmsg)
 
         # ── 🧱 核心/衛星 拆解(v19.63 #4):核心=市值型定期定額不理循環,衛星才戰術 ──
-        from src.compute.etf.portfolio_coherence import assess_core_satellite
-        _cs = assess_core_satellite(
+        # §2.1 B5-a v19.180:改吃 `portfolio_gates.assess_role_split`。
+        # 原本這條 bar 走 `portfolio_coherence.assess_core_satellite`(VT 因不在台股
+        # 分類表 → 判「衛星」),而下方「🎯 核心/衛星 vs regime 目標」走 `auto_role`
+        # (VT/00878 都判「核心」)—— **同一頁、同一個名詞、兩套數字**。
+        # 現在兩處共用同一個分類 SSOT,並多一段「未分類」讓不確定性看得見。
+        from src.compute.etf.portfolio_gates import assess_role_split
+        _cs = assess_role_split(
             [{'ticker': r['ticker'], 'value': r['current_value']} for r in rows])
+        _cs_total = _cs['total_value']
+
+        def _bar_pct(_v):
+            """bar 用「佔總市值」比例(含債券),與下方核衛閘門的「股票腿內」比例不同口徑。"""
+            return round(_v / _cs_total * 100, 1) if _cs_total > 0 else 0.0
+
         _cs_segs = ''
-        for _k, _pct, _col in (('核心', _cs['core_pct'], '#8957e5'),
-                               ('衛星', _cs['satellite_pct'], '#e67e22'),
-                               ('債券', _cs['bond_pct'], '#16a085')):
+        for _k, _pct, _col in (('核心', _bar_pct(_cs['core_value']), '#8957e5'),
+                               ('衛星', _bar_pct(_cs['satellite_value']), '#e67e22'),
+                               ('債券', _bar_pct(_cs['bond_value']), '#16a085'),
+                               ('未分類', _bar_pct(_cs['unknown_value']), '#586069')):
             if _pct > 0:
                 _cs_segs += (f'<div style="width:{_pct}%;background:{_col};'
                              f'text-align:center;">{_k} {_pct:.0f}%</div>')
@@ -368,7 +433,9 @@ def render_etf_portfolio(gemini_fn=None):
             f'margin:6px 0;font-size:11px;color:#fff;">{_cs_segs}</div>',
             unsafe_allow_html=True)
         st.caption('💡 建議把「相關係數/景氣調整」用在**衛星**那塊,**核心**維持被動不動,'
-                   '避免用分散之名行追漲殺跌之實。')
+                   '避免用分散之名行追漲殺跌之實。'
+                   '（本條 bar 是**佔總市值**；下方「🎯 vs regime 目標」是**股票部位內**'
+                   '比例，債券已排除 —— 兩者口徑不同，數字不會相等。）')
     except Exception as _e_sb:
         print(f'[portfolio_coherence] {type(_e_sb).__name__}: {_e_sb}')
 
@@ -465,11 +532,17 @@ def render_etf_portfolio(gemini_fn=None):
         '資本利得':   f'{"+" if r["capital_gain"]>=0 else ""}{r["capital_gain"]:,.0f}',
         '利得%':      f'{"+" if r["capital_gain_pct"]>=0 else ""}{r["capital_gain_pct"]:.2f}%',
         '已領配息':   f'+{r["dividend_received"]:,.0f}' if r['dividend_received'] > 0 else '-',
-        '目標比例%':  f'{r["target_pct"]:.1f}',
+        # §1:沒設定目標 → 顯示「—」。原碼印目標=實際、偏離=+0.0,
+        # 讀起來像「完美貼合目標」,實際上是把現況抄成目標的自我循環。
+        '目標比例%':  (f'{r["target_pct"]:.1f}' if r.get('target_source') == 'user' else '—'),
         '實際比例%':  f'{r["actual_pct"]:.1f}',
-        '偏離度%':    f'{"+" if r["deviation"]>=0 else ""}{r["deviation"]:.1f}',
+        '偏離度%':    (f'{"+" if r["deviation"]>=0 else ""}{r["deviation"]:.1f}'
+                       if r.get('target_source') == 'user' else '—'),
     } for r in rows])
     st.dataframe(overview_df, use_container_width=True, hide_index=True)
+    if not _target_is_user_set:
+        st.caption('ℹ️ 「目標比例% / 偏離度%」顯示「—」：你尚未在上方表格填「目標比例%」。'
+                   '系統**不會**拿現況當目標（那樣偏離永遠是 0，等於沒檢查）。')
     if _fx_rate_used:
         st.caption(f'💱 「均價/現價」為**原幣別**單價；「成本/現值/資本利得/已領配息」'
                    f'已用 1 USD = {_fx_rate_used:.4f} TWD 換算為台幣。')
@@ -580,73 +653,110 @@ def render_etf_portfolio(gemini_fn=None):
                      use_container_width=True, hide_index=True)
 
     # ── 存股框架 #9：核心 / 衛星比例 vs regime 目標 ────────────
-    _core_value = sum(r['current_value'] for r in rows if r.get('role') == '核心')
-    _sat_value  = sum(r['current_value'] for r in rows if r.get('role') == '衛星')
-    _core_pct = _core_value / total_value * 100 if total_value > 0 else 0.0
-    _sat_pct  = _sat_value / total_value * 100 if total_value > 0 else 0.0
+    # ══════════════════════════════════════════════════════════════════
+    # §1 B5-a v19.180:兩個假綠燈同時修
+    # ------------------------------------------------------------------
+    # (1) 判定式單邊 → `portfolio_manager.check_rebalance` 的
+    #     `excess_ratio >= 0.10` 只抓「衛星**超標**」。衛星不足 30pp 落到 else
+    #     分支印「✅ 核衛比例符合…（±10pp 容忍）」—— 畫面寫雙邊、判定是單邊。
+    # (2) 分類把所有 ETF 歸核心 → `auto_role` 白名單同時收了高股息(00878)與
+    #     債券(BND),一組 0050+00878+VT 會算出「核心 100% / 衛星 0%」。
+    # 改走 L2 `portfolio_gates`:雙邊比對 + 分類走「債券 → 台股分類表 → 海外寬基
+    # 白名單 → 未知」四段,查不到的代號誠實回「未知」並改判無法判定。
+    # ══════════════════════════════════════════════════════════════════
+    st.markdown('#### 🎯 核心 / 衛星 配置 vs regime 目標')
+    _target_core_pct = None
     try:
         from src.compute.strategy import CoreSatelliteManager as _CSM
-        _mgr = _CSM(total_value, regime=regime)
-        _target_core_pct = _mgr.core_ratio * 100
-        _target_sat_pct  = _mgr.satellite_ratio * 100
-        _rebal_info = _mgr.check_rebalance(satellite_current_value=_sat_value)
-        st.markdown('#### 🎯 核心 / 衛星 配置 vs regime 目標')
-        _cs1, _cs2 = st.columns(2)
-        _core_dev = _core_pct - _target_core_pct
-        _sat_dev  = _sat_pct  - _target_sat_pct
-        _cs1.metric(f'核心比 (目標 {_target_core_pct:.0f}%)', f'{_core_pct:.1f}%',
-                    delta=f'{_core_dev:+.1f}pp',
-                    delta_color='normal' if abs(_core_dev) <= 10 else 'inverse')
-        _cs2.metric(f'衛星比 (目標 {_target_sat_pct:.0f}%)', f'{_sat_pct:.1f}%',
-                    delta=f'{_sat_dev:+.1f}pp',
-                    delta_color='normal' if abs(_sat_dev) <= 10 else 'inverse')
-        if isinstance(_rebal_info, dict) and _rebal_info.get('rebalance_needed'):
-            _excess = _rebal_info.get('excess_pct', 0) * 100 if _rebal_info.get('excess_pct', 0) < 1 else _rebal_info.get('excess_pct', 0)
-            _colored_box(
-                f'⚠️ <b>衛星超標</b> {_excess:.1f}pp（regime={regime} 目標衛星 {_target_sat_pct:.0f}%）<br>'
-                f'<b>建議</b>：{_rebal_info.get("action", "考慮停利衛星部位轉入核心")}',
-                'red')
-            _strategy_conclusion(STRATEGY_VALUATION,
-                                 f'衛星 {_sat_pct:.1f}% > 目標 {_target_sat_pct:.0f}%',
-                                 '衛星部位超標，違背核衛宿命',
-                                 '停利衛星轉入核心（葡萄串閉環）')
-        else:
-            _colored_box(
-                f'✅ 核衛比例符合 regime={regime} 目標範圍（±10pp 容忍）',
-                'green')
-            _strategy_conclusion(STRATEGY_VALUATION,
-                                 f'核 {_core_pct:.0f}% / 衛 {_sat_pct:.0f}%',
-                                 f'符合 regime={regime} 目標 {_target_core_pct:.0f}/{_target_sat_pct:.0f}',
-                                 '維持當前配置')
-        st.caption('💡 **regime 目標**：多頭 60/40 / 中性 70/30 / 保守 80/20 / 空頭 85/15（核/衛）')
+        _mgr = _CSM(total_value, regime=regime) if total_value > 0 else None
+        _target_core_pct = _mgr.core_ratio * 100 if _mgr is not None else None
     except Exception as _csm_e:
-        st.info(f'ℹ️ 核衛分離計算暫時不可用：{type(_csm_e).__name__}')
+        print(f'[etf_tab_portfolio/core_sat] CoreSatelliteManager 取目標失敗:'
+              f'{type(_csm_e).__name__}: {_csm_e}')
+    _cs_gate = evaluate_core_satellite_gate(
+        [{'ticker': r['ticker'], 'value': r['current_value']} for r in rows],
+        target_core_pct=_target_core_pct, regime=regime)
+    _cs_split = _cs_gate['split']
+    _cs_tol   = _cs_gate['tolerance_pp']
+    _cs1, _cs2 = st.columns(2)
+    _core_lbl = (f'核心比 (目標 {_target_core_pct:.0f}%)' if _target_core_pct is not None
+                 else '核心比 (目標未知)')
+    _sat_lbl  = (f'衛星比 (目標 {100 - _target_core_pct:.0f}%)'
+                 if _target_core_pct is not None else '衛星比 (目標未知)')
+    _core_dev = (_cs_split['core_pct'] - _target_core_pct
+                 if _target_core_pct is not None else None)
+    _sat_dev  = (_cs_split['satellite_pct'] - (100 - _target_core_pct)
+                 if _target_core_pct is not None else None)
+    _cs1.metric(_core_lbl, f'{_cs_split["core_pct"]:.1f}%',
+                delta=(f'{_core_dev:+.1f}pp' if _core_dev is not None else None),
+                delta_color=('normal' if _core_dev is not None and abs(_core_dev) <= _cs_tol
+                             else 'inverse'))
+    _cs2.metric(_sat_lbl, f'{_cs_split["satellite_pct"]:.1f}%',
+                delta=(f'{_sat_dev:+.1f}pp' if _sat_dev is not None else None),
+                delta_color=('normal' if _sat_dev is not None and abs(_sat_dev) <= _cs_tol
+                             else 'inverse'))
+    _cs_color = {STATUS_PASS: 'green', STATUS_UNKNOWN: 'yellow'}.get(
+        _cs_gate['status'], 'red')
+    _colored_box(f'<b>{_cs_gate["headline"]}</b><br>{_cs_gate["detail"]}', _cs_color)
+    if _cs_gate['status'] == STATUS_PASS:
+        _strategy_conclusion(
+            STRATEGY_VALUATION,
+            f'核 {_cs_split["core_pct"]:.0f}% / 衛 {_cs_split["satellite_pct"]:.0f}%',
+            f'符合 regime={regime} 目標 {_target_core_pct:.0f}'
+            f'/{100 - _target_core_pct:.0f}（±{_cs_tol:.0f}pp）',
+            '維持當前配置')
+    elif _cs_gate['status'] != STATUS_UNKNOWN:
+        _strategy_conclusion(
+            STRATEGY_VALUATION,
+            f'核 {_cs_split["core_pct"]:.0f}% / 衛 {_cs_split["satellite_pct"]:.0f}%',
+            f'偏離 regime={regime} 建議帶 '
+            f'{_cs_gate["band_lo"]:.0f}~{_cs_gate["band_hi"]:.0f}%',
+            '把超額的一側調回建議帶（核心=市值型被動；衛星才做戰術）')
+    if _cs_split['unclassified']:
+        st.caption(f'⚪ **未分類**（佔股票部位 {_cs_split["unknown_pct"]:.1f}%）：'
+                   f'{"、".join(_cs_split["unclassified"])} —— 不在 ETF 分類表也不在'
+                   '海外寬基白名單，**不硬歸核心也不硬歸衛星**；'
+                   '要讓它可判定請補 `src/compute/etf/etf_categories.py`。')
+    if _cs_split['bond_value'] > 0:
+        st.caption(f'ℹ️ 債券部位（佔總市值 {_cs_split["bond_pct_of_total"]:.1f}%）'
+                   '**不計入**核心/衛星分母 —— 核衛是「股票部位怎麼拆」，'
+                   '債券請看上方「🧭 股債比」。')
+    st.caption(f'💡 **regime 目標**：多頭 60/40 / 中性 70/30 / 保守 80/20 / 空頭 85/15'
+               f'（核/衛），雙邊容忍 ±{_cs_tol:.0f}pp。'
+               '分類規則：債券 → 台股 ETF 分類表（市值型=核心，其餘類別=衛星）→ '
+               '海外寬基白名單（VT/VTI/VOO/SPY…）→ 未分類。')
 
     # ── 再平衡交易指令（含具體股數）────────────────────────────
     st.markdown('#### ⚖️ 再平衡交易指令')
     # §4.1 B1-a:金額(adj)是 TWD → 換算股數的「現價」也必須是 TWD 口徑。
     # 原碼用 `_cur_prices`(原幣別)當分母,美元 ETF 會算出約 32 倍的股數。
     # 改讀已換匯的 r['current_price'];原幣單價另存 r['current_price_native'] 供顯示。
+    # B5-a:交易指令一律由 L2 gate 的 `breaches` 驅動（單一判定式，避免 UI 端
+    # 再寫一次 `abs(dev) > tol` 而與燈號因四捨五入不同步）。
+    _rows_by_tk = {r['ticker']: r for r in rows}
     rebal_actions = []
-    for r in rows:
-        if abs(r['deviation']) > tolerance:
-            target_val = total_value * r['target_pct'] / 100
-            adj        = target_val - r['current_value']
-            action     = '買進' if adj > 0 else '賣出'
-            cur_price  = r.get('current_price', 0) or 0     # TWD 口徑
-            shares     = int(abs(adj) / cur_price) if cur_price > 0 else 0
-            rebal_actions.append({
-                # ⚠️ key 名維持 '金額(元)' / '現價' 不變 —— `etf_tab_ai.py:127`
-                # 直接讀這兩個 key 建 AI prompt(該檔不在本次改動範圍)。
-                # 值的**口徑**已改為 TWD(原為原幣別),語意因此才正確。
-                'ETF': r['ticker'], '動作': action,
-                '金額(元)': abs(adj), '偏離度%': r['deviation'],
-                '現價': cur_price, '建議股數': shares,
-                '幣別': r.get('currency', 'TWD'),
-                '現價(原幣)': r.get('current_price_native', cur_price),
-            })
+    for _b in _rebal_gate['breaches']:
+        r = _rows_by_tk.get(_b['ticker'])
+        if r is None:
+            continue
+        target_val = total_value * _b['target_pct'] / 100
+        adj        = target_val - r['current_value']
+        action     = _b['action']
+        cur_price  = r.get('current_price', 0) or 0     # TWD 口徑
+        shares     = int(abs(adj) / cur_price) if cur_price > 0 else 0
+        rebal_actions.append({
+            # ⚠️ key 名維持 '金額(元)' / '現價' 不變 —— `etf_tab_ai.py:127`
+            # 直接讀這兩個 key 建 AI prompt(該檔不在本次改動範圍)。
+            # 值的**口徑**已改為 TWD(原為原幣別),語意因此才正確。
+            'ETF': r['ticker'], '動作': action,
+            '金額(元)': abs(adj), '偏離度%': _b['deviation_pp'],
+            '現價': cur_price, '建議股數': shares,
+            '幣別': r.get('currency', 'TWD'),
+            '現價(原幣)': r.get('current_price_native', cur_price),
+        })
 
     if rebal_actions:
+        _colored_box(f'<b>{_rebal_gate["headline"]}</b>', 'red')
         ra_df = pd.DataFrame([{
             'ETF':    a['ETF'],
             '動作':   a['動作'],
@@ -671,7 +781,12 @@ def render_etf_portfolio(gemini_fn=None):
                 f'（偏離 {act["偏離度%"]:+.1f}%）',
                 color)
     else:
-        _colored_box(f'✅ 所有標的偏離度均在 ±{tolerance}% 內，無需再平衡', 'green')
+        # §1 B5-a:三態 —— 只有「已比對過使用者設定的目標且全部在容忍帶內」才給綠燈。
+        # 沒設定目標 / 只設定一部分 / 總和 ≠ 100% → ⚪ 無法判定 + 明說缺什麼。
+        _rb_color = {STATUS_PASS: 'green', STATUS_UNKNOWN: 'yellow'}.get(
+            _rebal_gate['status'], 'red')
+        _colored_box(f'<b>{_rebal_gate["headline"]}</b><br>{_rebal_gate["detail"]}',
+                     _rb_color)
 
     # ── 產業曝險上限檢查（單一類股 ≤ 30%）─────────────────────
     st.markdown('#### 🏗️ 產業曝險上限檢查（單一 GICS 類股 ≤ 30%）')
@@ -751,6 +866,20 @@ def render_etf_portfolio(gemini_fn=None):
         st.warning(f'⚪ 以下 ETF 拿不到成份股，對應行列顯示 N/A：{", ".join(_h_miss)}'
                    f'（MoneyDJ 暫無資料或為新 ETF）')
     _valid_count = len(_h_dict)
+    # ══════════════════════════════════════════════════════════════════
+    # §1 B5-a v19.180:重疊度三態判定（原碼只有「有警示 / 綠燈」兩態）
+    # ------------------------------------------------------------------
+    # 原綠燈「✅ 任兩檔重疊 < 30%」在以下三種「其實沒量到」的情況一律會亮:
+    #   (a) 某檔抓不到成分股 → 該對是 NaN，迴圈 `pd.notna` 直接跳過 → 沒警示 = 綠燈
+    #   (b) 跨市場（0050 中文股名 × VT 英文公司名）→ 交集恆為空 → 恆 0%
+    #   (c) yfinance 只給前 10 大（VT 權重覆蓋率 ~15%）→ 重疊率**上限**就低於
+    #       30% 門檻 → 這對不可能失敗，「沒超標」不代表分散
+    # 現改由 L2 `evaluate_overlap_gate` 逐對標 ok / breach / no_data /
+    # incomparable_namespace / inconclusive_ceiling，只有全部 ok 才給綠燈。
+    # ══════════════════════════════════════════════════════════════════
+    _ov_gate = evaluate_overlap_gate(
+        {t: _h_dict.get(t) for t in tickers}, tickers, method=_method_key)
+    _threshold = _ov_gate['threshold_pct']
     if _valid_count >= 2:
         _ov_mat = build_holdings_overlap_matrix(_h_dict, method=_method_key)
         # 補齊缺資料 ETF（讓矩陣 ticker 順序與上方價格矩陣一致）
@@ -759,36 +888,42 @@ def render_etf_portfolio(gemini_fn=None):
                 _ov_mat.loc[_t_miss] = np.nan
                 _ov_mat[_t_miss]     = np.nan
         _ov_mat = _ov_mat.reindex(index=tickers, columns=tickers)
+        # §1:量不到的那幾對從熱圖抹成 NaN(灰) —— 不讓一個「沒比到」的 0.0%
+        # 在圖上長得跟「真的不重疊」一樣。
+        for _p in _ov_gate['unmeasured']:
+            if _p['a'] in _ov_mat.index and _p['b'] in _ov_mat.columns:
+                _ov_mat.loc[_p['a'], _p['b']] = np.nan
+                _ov_mat.loc[_p['b'], _p['a']] = np.nan
         _plot_holdings_overlap(
             _ov_mat,
-            title=f'{"權重 Overlap%" if _method_key == "weight" else "Jaccard%"}（成份股 N={_valid_count}/{len(tickers)}）'
+            title=f'{"權重 Overlap%" if _method_key == "weight" else "Jaccard%"}'
+                  f'（可比對 {_ov_gate["measured_pairs"]}/{_ov_gate["total_pairs"]} 對）'
         )
-        # 同質性警示（門檻 SSOT:shared.signal_thresholds 投組 Overlap 門檻）
-        _threshold = (PORTFOLIO_OVERLAP_WEIGHT_THRESHOLD_PCT
-                      if _method_key == 'weight'
-                      else PORTFOLIO_OVERLAP_JACCARD_THRESHOLD_PCT)
-        _warn_lines = []
-        for i in range(len(_ov_mat)):
-            for j in range(i + 1, len(_ov_mat)):
-                val = _ov_mat.iloc[i, j]
-                if pd.notna(val) and val > _threshold:
-                    _warn_lines.append(
-                        f'⚠️ <b>{_ov_mat.index[i]} × {_ov_mat.columns[j]}</b> '
-                        f'{val:.1f}% > {_threshold:.0f}%，建議擇一保留'
-                    )
-        if _warn_lines:
-            _colored_box('<br>'.join(_warn_lines), 'red')
-        else:
-            st.success(f'✅ 任兩檔 ETF 持股 {"權重重疊" if _method_key == "weight" else "Jaccard 重疊"} '
-                       f'皆 < {_threshold:.0f}%，組合分散度健康。')
-        import re as _re_ov
-        _ov_clean = [_re_ov.sub('<[^>]+>', '', _w).replace('⚠️', '').strip() for _w in _warn_lines]
-        st.session_state['etf_overlap_summary'] = ('；'.join(_ov_clean) if _ov_clean
-                                                   else f'任兩檔持股重疊皆 <{_threshold:.0f}%，分散度健康')
-    elif _valid_count == 1:
-        st.info('⚪ 僅 1 檔 ETF 抓到成份股，無法兩兩比對。')
-    else:
-        st.warning('⚪ 所有 ETF 都抓不到成份股清單，無法計算持股重疊（MoneyDJ 端點可能變動）。')
+    _ov_color = {STATUS_PASS: 'green', STATUS_UNKNOWN: 'yellow'}.get(
+        _ov_gate['status'], 'red')
+    _colored_box(f'<b>{_ov_gate["headline"]}</b><br>{_ov_gate["detail"]}', _ov_color)
+    # 逐對可稽核明細（重疊率 / 可測上限 / 各自權重覆蓋率 / 共同持股數）
+    if _ov_gate['pairs']:
+        _pair_df = pd.DataFrame([{
+            'ETF A': _p['a'], 'ETF B': _p['b'],
+            '重疊%': ('—' if _p['value_pct'] is None else f'{_p["value_pct"]:.1f}'),
+            '可測上限%': ('—' if _p['ceiling_pct'] is None else f'{_p["ceiling_pct"]:.1f}'),
+            'A 權重覆蓋%': f'{_p["coverage_a_pct"]:.0f}',
+            'B 權重覆蓋%': f'{_p["coverage_b_pct"]:.0f}',
+            '共同持股': _p['common_holdings'],
+            '判定': {'ok': '✅ 已比對，未超標', 'breach': '🔴 超標',
+                     'no_data': '⚪ 無成分股資料',
+                     'incomparable_namespace': '⚪ 中/英文名對不上，沒比到',
+                     'inconclusive_ceiling': '⚪ 上限低於門檻，不可能失敗'}[_p['status']],
+            '說明': _p['reason'],
+        } for _p in _ov_gate['pairs']])
+        st.dataframe(_pair_df, use_container_width=True, hide_index=True)
+        st.caption('💡 **可測上限%** = 在現有成分股資料下，這一對「最高可能」的重疊率。'
+                   f'上限 ≤ 門檻 {_threshold:.0f}% 時，這對再怎麼雷同也不會觸發警示 → '
+                   '判「無法判定」而非通過（§1：綠燈必須代表「算過且通過」）。')
+    # §1:下游 AI prompt 讀這個字串 —— unknown 也要如實傳達「沒量到」。
+    st.session_state['etf_overlap_summary'] = (
+        f'{_ov_gate["headline"]}｜{_ov_gate["detail"]}')
 
     # ── 主動 ETF 弱勢度檢測（PR — claude/etf-weakness-manager）──
     # Gemini 邏輯：大跌時跌得比大盤深 + 反彈時漲得比大盤慢 + 連兩季輸盤 = 該換

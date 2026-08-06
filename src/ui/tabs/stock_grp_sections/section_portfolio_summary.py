@@ -32,6 +32,7 @@ from shared.signal_thresholds import (
     MULTIFACTOR_ENTRY_MIN,
 )
 from shared.stock_buckets import classify_pb_level, get_pb_bands
+from src.compute.screener.scorability import CandidateStats, summarize_candidates
 from src.compute.scoring import (
     evaluate_exit_signals,
     judge_news_sentiment_cached,
@@ -78,31 +79,53 @@ def render_portfolio_summary_section(
     risk_alerts = t3_data.get('risk_alerts', [])
 
     # ── 📊 投資組合綜合總結 banner(v18.327 PR-B 頂部 KPI 摘要)──
-    _total_n = len(results_t3)
-    _health_vals = [_r.get('健康度', 0) or 0 for _r in results_t3]
-    _avg_health = sum(_health_vals) / _total_n if _total_n else 0
-    _entry_pass_n = sum(1 for _s in score_t3
-                        if (_s.get('total', 0) or 0) >= MULTIFACTOR_ENTRY_MIN)
-    _top_pick = max(score_t3, key=lambda _s: _s.get('total', 0) or 0) if score_t3 else None
+    # B5-b(2026-08):候選數改吃**單一來源** summarize_candidates(§2.1 SSOT)。
+    # 舊版分子取自 score_t3、分母取自 results_t3 —— 兩個 list 長度不保證相等
+    # (section_batch_fetcher 只在 K 線非空時才 append score_t3),於是同頁「≥70」
+    # 出現兩個不同分母,再加上汰弱那處的第三種定義,三個數字互相否定。
+    _stats = summarize_candidates(results_t3, score_t3)
+    _total_n = _stats.n_total
+    # 健康度平均只算「真的有健康度讀數」的檔(§1:缺讀數不以 0 充數拉低平均)
+    _health_vals = [_h for _h in
+                    ((_r.get('健康度') if isinstance(_r, dict) else None) for _r in results_t3)
+                    if isinstance(_h, (int, float)) and not isinstance(_h, bool)]
+    _avg_health = sum(_health_vals) / len(_health_vals) if _health_vals else None
+    _score_map_kpi = {s.get('stock_id'): s for s in score_t3 if isinstance(s, dict)}
+    _top_pick = max((_score_map_kpi[i] for i in _stats.scored_ids if i in _score_map_kpi),
+                    key=lambda _s: _s.get('total', 0) or 0, default=None)
     _top_pick_str = (f"{_top_pick.get('stock_id', '—')} "
                      f"({_top_pick.get('total', 0):.0f}分)"
                      if _top_pick else '—')
     _risk_n = len(risk_alerts)
     _bk_c1, _bk_c2, _bk_c3, _bk_c4, _bk_c5 = st.columns(5)
     _bk_c1.metric('組合檔數', f'{_total_n} 檔',
-                  help='本次批次分析涵蓋的股票數量')
-    _avg_health_color = ('🟢' if _avg_health >= HEALTH_GRADE_A_MIN
-                         else '🟡' if _avg_health >= HEALTH_GRADE_B_MIN
-                         else '🔴')
-    _bk_c2.metric('平均健康度', f'{_avg_health:.0f}',
-                  delta=_avg_health_color,
-                  help=f'組合平均健康度(0-100);A 級≥{HEALTH_GRADE_A_MIN} / '
-                       f'B 級≥{HEALTH_GRADE_B_MIN}')
+                  delta=(f'⚪ {_stats.n_unscored} 檔無法評分'
+                         if _stats.n_unscored else None),
+                  delta_color='off',
+                  help='本次批次分析涵蓋的股票數量;「無法評分」= 抓不到 K 線 / 評分失敗,'
+                       '下方各表以「⚪ 無法評分」標示,不給假分數參與排序(§1)')
+    if _avg_health is None:
+        _bk_c2.metric('平均健康度', '—', delta='⚪ 無讀數', delta_color='off',
+                      help='本批沒有任何一檔取得健康度讀數(§1:不以 0 充數)')
+    else:
+        _avg_health_color = ('🟢' if _avg_health >= HEALTH_GRADE_A_MIN
+                             else '🟡' if _avg_health >= HEALTH_GRADE_B_MIN
+                             else '🔴')
+        _bk_c2.metric('平均健康度', f'{_avg_health:.0f}',
+                      delta=_avg_health_color,
+                      help=f'組合平均健康度(0-100);A 級≥{HEALTH_GRADE_A_MIN} / '
+                           f'B 級≥{HEALTH_GRADE_B_MIN}。'
+                           f'只平均「有讀數」的 {len(_health_vals)} 檔')
     _bk_c3.metric(f'多因子 ≥{MULTIFACTOR_ENTRY_MIN:.0f} 候選',
-                  f'{_entry_pass_n}/{_total_n}',
-                  help=f'多因子總分達 {MULTIFACTOR_ENTRY_MIN:.0f} 分以上的檔數(積極布局候選)')
+                  f'{_stats.n_entry_pass}/{_stats.n_scored}',
+                  delta=(f'⚪ {_stats.n_unscored} 檔未列入'
+                         if _stats.n_unscored else None),
+                  delta_color='off',
+                  help=f'多因子總分達 {MULTIFACTOR_ENTRY_MIN:.0f} 分以上的檔數(積極布局候選)。'
+                       f'**分母 = 可評分檔數**(與下方「③ 多因子評分排行」表列數同一母體);'
+                       f'抓不到 K 線的檔不列入分子也不列入分母')
     _bk_c4.metric('最強檔', _top_pick_str,
-                  help='多因子總分最高的代碼')
+                  help='多因子總分最高的代碼(只在可評分檔中取)')
     _bk_c5.metric('風控警示', f'{_risk_n} 項',
                   delta=('🔴 注意' if _risk_n > 0 else '🟢 清淡'),
                   delta_color='inverse',
@@ -116,39 +139,39 @@ def render_portfolio_summary_section(
 | 欄位 | 看什麼 |
 |---|---|
 | **綜合建議** | 健康＋多因子＋357 三重確認 → 積極／觀察／等待 |
-| **多因子**(0~100) | 趨勢＋動能＋籌碼＋量價＋RS 五項合成,偏「**現在強不強**」 |
+| **多因子**(0~100) | 趨勢＋動能＋籌碼＋量價＋風險＋基本面 六因子加權(權重 SSOT `config.WEIGHT_TABLES`),偏「**現在強不強**」;抓不到 K 線 → 「⚪ 無法評分」不給假分 |
 | **健康度** | 均線／RSI／KD／量比／布林,偏「**體質好不好**」 |
 | **出場** | 技術＋籌碼(＋AI 利空)三維出場訊號 X/3 |
 | **型態／風報比** | K 線型態學等幅滿足的目標與風報比(完整見「🎯 型態目標價」) |
 | **EPS／毛利／殖利／P/B** | 基本面對照(各只出現這一次) |
 
-- **多因子子維度**(趨勢／動能／籌碼／量價／RS 個別分數)在下方「📈 多因子維度拆解」展開。
+- **多因子子維度**(趨勢／動能／籌碼／量價／風險 個別分數)在下方「📈 多因子維度拆解」展開。
 - **逐檔技術明細**(RSI／KD／量比／357／VCP／合約負債…)在「🩹 逐檔技術明細」展開。
 - **財報體質(趨勢×轉機、找體質差→變好)**在更下方「📊 財報趨勢×轉機」區塊。
 
-> 💡 多因子＋健康度都排前面、且 RS 向上＝「強上加強」優先觀察;體質好但動能弱的可留意打底。''')
+> 💡 多因子＋健康度都排前面＝「強上加強」優先觀察;體質好但動能弱的可留意打底。''')
 
     # ── 預先計算基本面(③④⑤ 共用)─────────────────────────
     _fund_map = _precompute_fund_map(results_t3)
 
     # ── 🏆 組合排行總表(v19.164 合併 ③④⑤,一檔一列,每個 headline 欄只出現一次)──
-    _render_master_table(results_t3, score_t3, _fund_map)
+    _render_master_table(results_t3, score_t3, _fund_map, _stats)
 
     # ── 🎯 型態目標價(全組合,共用批次來源;逐檔看圖下鑽,非第二輸入)──
     _render_pattern_batch(results_t3, score_t3)
 
     # ── 明細 drill-down(需要才展開,不佔首屏)──────────────────────
     if score_t3 and len(score_t3) >= 2:
-        with st.expander('📈 多因子維度拆解（趨勢／動能／籌碼／量價／RS）— 上表「多因子」欄的拆解',
+        with st.expander('📈 多因子維度拆解（趨勢／動能／籌碼／量價／風險）— 上表「多因子」欄的拆解',
                          expanded=False):
             _render_multifactor_dims(score_t3)
     with st.expander('📋 多因子評分排行 + 基本面明細（EPS／毛利／SQ品質／FGMS前瞻／殖利／P/B）',
                      expanded=False):
-        _render_multifactor_ranking(score_t3, _fund_map)
+        _render_multifactor_ranking(score_t3, _fund_map, _stats)
     with st.expander('🩹 逐檔技術明細（RSI／KD／量比／IBS／VCP／357／合約負債／操作狀態）＋ 🤖 AI 掃利空',
                      expanded=False):
         _render_elimination_detail(
-            results_t3, _fund_map, gemini_call_fn=gemini_call_fn)
+            results_t3, _fund_map, _stats, gemini_call_fn=gemini_call_fn)
 
     st.markdown('---')
 
@@ -248,32 +271,47 @@ def _render_master_table(
     results_t3: list[dict],
     score_t3: list[dict],
     fund_map: dict[str, dict],
+    stats: CandidateStats,
 ) -> None:
     """🏆 組合排行總表(v19.164 合併 ③④⑤)— 一檔一列,依綜合建議 → 多因子排序。
 
     每個 headline 欄只出現一次(去重 EPS/毛利/殖利/健康度/評級/多因子);技術明細、
     多因子子維度、型態完整欄改由下方 expander 展開。§1:型態風報比缺 → 「—」不腦補。
+
+    B5-b(2026-08)§1:抓不到 K 線 → 多因子欄留白、綜合建議標「⚪ 無法評分」。
+    舊版走 `score_map.get(sid, {}).get('total', 0)` → 缺分當 0 分,再餵給
+    `final_recommendation` 算出「🔴 等待」—— 那是「評過了,很差」,不是「沒得評」。
     """
     if not results_t3:
         return
-    score_map = {s['stock_id']: s for s in score_t3}
+    score_map = {s['stock_id']: s for s in score_t3 if isinstance(s, dict) and 'stock_id' in s}
     _prio = {'積極': 0, '觀察': 1, '等待': 2}
     rows = []
     for r in results_t3:
         sid = r.get('stock_id', r.get('代碼', ''))
-        rec_label, _ = final_recommendation(r, score_map)
-        rec_word = rec_label.split()[-1] if rec_label else ''
-        mf = float(score_map.get(sid, {}).get('total', 0) or 0)
+        _scored = stats.is_scored(str(sid))
+        if _scored:
+            rec_label, _ = final_recommendation(r, score_map)
+            rec_word = rec_label.split()[-1] if rec_label else ''
+            mf = float(score_map.get(sid, {}).get('total', 0) or 0)
+            _mf_cell = round(mf, 0)
+            _prio_v = _prio.get(rec_word, 3)
+        else:
+            # NaN(非 None):讓「多因子」欄維持 float dtype → sort_values 不會拿
+            # None 跟 float 比較而 TypeError;ProgressColumn 對 NaN 一律留白。
+            rec_label, _mf_cell, _prio_v = '⚪ 無法評分', float('nan'), 9
         cs = r.get('_pattern') or {}   # v19.174 去識別化:欄名原帶人名羅馬拼音
         rr = cs.get('rr')
         ev = evaluate_exit_signals(r.get('_ex_tech'), r.get('_ex_chip_sig', ''), None)
         fd = fund_map.get(sid, {})
+        _health_raw = r.get('健康度')
+        _health_ok = isinstance(_health_raw, (int, float)) and not isinstance(_health_raw, bool)
         rows.append({
             '代碼': sid, '名稱': r.get('名稱', sid) or sid, '現價': r.get('現價', '-'),
             '綜合建議': rec_label,
-            '多因子': round(mf, 0),
+            '多因子': _mf_cell,
             '評級': r.get('評級', '-'),
-            '健康度': int(r.get('健康度', 0) or 0),
+            '健康度': float(_health_raw) if _health_ok else float('nan'),
             '出場': f'{ev["icon"]} {ev["score"]}/3',
             '型態': cs.get('pattern') or '—',
             '風報比': f'{rr:.2f}' if isinstance(rr, (int, float)) else '—',
@@ -281,14 +319,20 @@ def _render_master_table(
             '毛利%': fd.get('毛利率%', '-'),
             '殖利%': fd.get('殖利率%', '-'),
             'P/B': fd.get('P/B評價', '-'),
-            '_p': _prio.get(rec_word, 3),
+            '_p': _prio_v,
         })
     df = (pd.DataFrame(rows)
-          .sort_values(['_p', '多因子'], ascending=[True, False])
+          .sort_values(['_p', '多因子'], ascending=[True, False], na_position='last')
           .drop(columns=['_p']).reset_index(drop=True))
     st.markdown('#### 🏆 組合排行總表')
     st.caption('一檔一列,3 秒看出「哪幾檔積極、哪幾檔該汰」:綜合建議 → 多因子 → 健康度 → 出場 → '
-               '型態/風報比 → 基本面。每個欄位只出現一次(明細見下方展開區)。')
+               '型態/風報比 → 基本面。每個欄位只出現一次(明細見下方展開區)。'
+               '「⚪ 無法評分」= 抓不到 K 線 / 評分失敗,多因子欄留白排最後,'
+               '**不以 0 分冒充「很弱」**(§1)。')
+    if stats.n_unscored:
+        st.caption(f'⚪ 本批 {stats.n_unscored} 檔無法評分:'
+                   f'{"、".join(c for c in stats.unscored_ids if c)}'
+                   f'(這些檔不列入上方「多因子 ≥{stats.entry_min:.0f} 候選」的分子與分母)')
     st.dataframe(df, use_container_width=True, hide_index=True, column_config={
         '多因子': st.column_config.ProgressColumn('多因子', min_value=0, max_value=100, format='%.0f'),
         '健康度': st.column_config.NumberColumn('健康度', format='%d 🏥'),
@@ -299,24 +343,38 @@ def _render_master_table(
     })
 
 
+_MF_DIMS = (('趨勢', 'trend'), ('動能', 'momentum'), ('籌碼', 'chip'),
+            ('量價', 'volume'), ('風險', 'risk'))
+"""多因子子維度顯示欄 → `score_single_stock()` 實際回傳的 key(§2.1 SSOT,禁止亂猜 key)。
+
+B5-b(2026-08)刪掉的舊欄:`'RS': r.get('rs_score', 50)` —— `score_single_stock`
+**從來沒有**回傳 `rs_score`/`rs_up`,所以那一欄恆為捏造的 50(還畫成進度條),
+而「📊 RS 曲線向上」提示是永不觸發的死碼。多因子總分本來就不含 RS
+(見 `scoring_engine.stock_score`:趨勢/動能/籌碼/量價/風險/基本面 六因子)。
+基本面因子(月營收 YoY)目前未被 `score_single_stock` 回傳個別分數 → 不列(不捏造)。
+"""
+
+
 def _render_multifactor_dims(score_t3: list[dict]) -> None:
-    """📈 多因子維度拆解(趨勢/動能/籌碼/量價/RS)— 主表「多因子」欄的子分數(唯一棲身)。"""
-    if not score_t3:
+    """📈 多因子維度拆解 — 主表「多因子」欄的子分數(唯一棲身)。"""
+    _rows = [r for r in (score_t3 or [])
+             if isinstance(r, dict) and 'error' not in r and r.get('stock_id')]
+    if not _rows:
         st.info('多因子維度資料載入中')
         return
-    _sdf = pd.DataFrame([{
-        '代碼': r['stock_id'], '總分': r.get('total', 0),
-        '趨勢': r.get('trend', 0), '動能': r.get('momentum', 0),
-        '籌碼': r.get('chip', 0), '量價': r.get('volume', 0),
-        'RS': r.get('rs_score', 50),
-    } for r in score_t3]).sort_values('總分', ascending=False)
-    _pivot = _sdf.set_index('代碼')[['趨勢', '動能', '籌碼', '量價', 'RS']]
+    _sdf = pd.DataFrame([
+        {'代碼': r['stock_id'], '總分': r.get('total', 0),
+         **{_label: r.get(_key) for _label, _key in _MF_DIMS}}
+        for r in _rows
+    ]).sort_values('總分', ascending=False)
+    _cols = [_label for _label, _ in _MF_DIMS]
+    _pivot = _sdf.set_index('代碼')[_cols]
     st.dataframe(_pivot, use_container_width=True, column_config={
         c: st.column_config.ProgressColumn(c, min_value=0, max_value=100, format='%.0f')
-        for c in ['趨勢', '動能', '籌碼', '量價', 'RS']})
-    _rs_up = [r['stock_id'] for r in score_t3 if r.get('rs_up')]
-    if _rs_up:
-        st.success(f"📊 RS 曲線向上(強勢動能):{' / '.join(_rs_up)}")
+        for c in _cols})
+    st.caption('五欄為 `score_single_stock()` 實際回傳的子分數;'
+               '多因子總分另含「基本面(月營收 YoY)」因子,該因子未回傳個別分數故不列'
+               '(§1:不補一個看起來合理的數字)。加權權重見下方「③ 多因子評分排行」。')
 
 
 def _fmt_pattern(x, fmt: str = '%.2f') -> str:
@@ -384,8 +442,13 @@ def _render_pattern_batch(
 def _render_multifactor_ranking(
     score_t3: list[dict],
     fund_map: dict[str, dict],
+    stats: CandidateStats,
 ) -> None:
-    """③ 多因子評分排行(左欄)。"""
+    """③ 多因子評分排行(左欄)。
+
+    B5-b(2026-08):結論句的「N/M 支≥70分」改吃 `stats`(與頂部 KPI 同一份),
+    舊版自己重算一次且分母用 `len(score_t3)`,與 KPI 的 `len(results_t3)` 打架。
+    """
     st.markdown('##### ③ 多因子評分排行')
     _w = WEIGHT_TABLES['neutral']
     st.caption(
@@ -394,18 +457,21 @@ def _render_multifactor_ranking(
         f"(neutral 權重,SSOT 來自 config.WEIGHT_TABLES)"
     )
     st.caption('🔰 另三欄基本面白話:SQ品質分＝獲利品質(賺得乾不乾淨)、FGMS前瞻＝前瞻成長動能(未來成長力道),皆 0~100 越高越好;EPS／毛利率／殖利率為對照。')
-    _top_score_r = max(score_t3, key=lambda r: r.get('total', 0)) if score_t3 else None
-    _pass70 = [r for r in score_t3 if r.get('total', 0) >= MULTIFACTOR_ENTRY_MIN]
+    from src.compute.scoring import rank_stocks as _rk3
+    _ranked3 = _rk3(score_t3 or [])       # 與 stats.n_scored 同一條篩選規則(丟掉 error 列)
+    _top_score_r = _ranked3[0] if _ranked3 else None
+    _entry_txt = f'{stats.entry_min:.0f}'
     if _top_score_r:
-        _mf3c = f'最高分 {_top_score_r["stock_id"]} {_top_score_r.get("total",0):.0f}分,{len(_pass70)}/{len(score_t3)} 支≥70分'
-        _mf3a = '≥70分方可列入候選,其餘繼續觀察'
+        _mf3c = (f'最高分 {_top_score_r["stock_id"]} {_top_score_r.get("total", 0):.0f}分,'
+                 f'{stats.n_entry_pass}/{stats.n_scored} 支≥{_entry_txt}分')
+        if stats.n_unscored:
+            _mf3c += f'(另 {stats.n_unscored} 檔無法評分,未列入)'
+        _mf3a = f'≥{_entry_txt}分方可列入候選,其餘繼續觀察'
     else:
         _mf3c = '多因子資料計算中'
         _mf3a = '等待評分載入'
     st.markdown(strategy_conclusion(STRATEGY_VALUATION, '多因子總分排行', _mf3c, _mf3a), unsafe_allow_html=True)
-    if score_t3:
-        from src.compute.scoring import rank_stocks as _rk3
-        _ranked3 = _rk3(score_t3)
+    if _ranked3:
         _rank_rows = []
         for _ri, _r in enumerate(_ranked3):
             _sid_r = _r.get('stock_id','')
@@ -440,22 +506,35 @@ def _render_multifactor_ranking(
 def _render_elimination_detail(
     results_t3: list[dict],
     fund_map: dict[str, dict],
+    stats: CandidateStats,
     *,
     gemini_call_fn: Callable[..., str],
 ) -> None:
-    """④ 汰弱留強明細(右欄)+ AI 掃利空。"""
+    """④ 汰弱留強明細(右欄)+ AI 掃利空。
+
+    B5-b(2026-08)§1:淘汰/保留改吃 `stats`(單一來源)。舊版:
+      `_elim_n = sum(1 for r in results_t3 if r.get('健康度', 100) < HEALTH_GRADE_B_MIN ...)`
+    —— 健康度缺讀數時預設**滿分 100** → 直接判「保留」,而同檔 KPI/總表對同一欄
+    卻預設 0。一個欄位、同一頁、兩個方向相反的預設值,是「假綠燈」的引信。
+    現在缺讀數 = 既不 kept 也不 eliminated,明講「N 檔健康度無讀數,未判定」。
+    """
     st.markdown('##### ④ 汰弱留強明細')
     st.caption('健康度 · 357評價 · VCP · KD · RSI')
-    _elim_n = sum(1 for r in results_t3
-                  if r.get('健康度', 100) < HEALTH_GRADE_B_MIN or '超貴' in str(r.get('357評價', '')))
-    _keep_n = len(results_t3) - _elim_n
+    _elim_n, _keep_n = stats.n_eliminated, stats.n_kept
+    _unknown_n = stats.n_health_unknown
+    _thr_txt = f'{stats.health_min:.0f}'
     if _elim_n > 0:
-        _e4c = f'{_elim_n} 支被淘汰(健康<50 或 357超貴),剩 {_keep_n} 支候選'
-        _e4a = '只看留下的 {_keep_n} 支,被淘汰直接跳過'.format(_keep_n=_keep_n)
-    else:
-        _e4c = f'本批 {len(results_t3)} 支全數通過汰弱篩選'
+        _e4c = f'{_elim_n} 支被淘汰(健康<{_thr_txt} 或 357超貴),剩 {_keep_n} 支候選'
+        _e4a = f'只看留下的 {_keep_n} 支,被淘汰直接跳過'
+    elif _keep_n > 0:
+        _e4c = f'有讀數的 {_keep_n} 支全數通過汰弱篩選'
         _e4a = '品質整齊,可從多因子排行取前2~3支'
-    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, f'汰弱留強(共 {len(results_t3)} 支)', _e4c, _e4a), unsafe_allow_html=True)
+    else:
+        _e4c = '本批沒有任何一支取得健康度讀數 → 無法判定汰弱'
+        _e4a = '先確認 K 線/財報來源是否可用,不要當成「全數通過」'
+    if _unknown_n:
+        _e4c += f';另 {_unknown_n} 支健康度無讀數,未判定'
+    st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, f'汰弱留強(共 {stats.n_total} 支)', _e4c, _e4a), unsafe_allow_html=True)
     # ── 出場警示掃描鈕(利空新聞 LLM 第三維,按需觸發以省額度)──
     if not results_t3:
         return

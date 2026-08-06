@@ -1,5 +1,137 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🚨 2026-08-06 B5「綠燈不代表算過」批次(v19.183)
+
+> 共同主題:**綠燈的語意被偷換成「沒算」**。B4 修的是顯示層的量錯對象,
+> 這批修的是**判定式根本沒執行,或執行了但比對的不是它畫面上宣稱的東西**。
+
+### ETF 組合三個閘門(`src/compute/etf/portfolio_gates.py` 新 L2 SSOT)
+
+| 閘門 | 根因 | 改後(以 0050 40%/00878 30%/VT 30% 實測) |
+|---|---|---|
+| **E-1 核衛配置** | ①`portfolio_manager.py:96` `rebalance_ok = excess_ratio >= _REBALANCE_THRESHOLD` **單邊**判定,但畫面寫「±10pp」雙邊 ⇒ **衛星不足永遠不觸發**;②`etf_helpers.py:23-27` `_CORE_TICKERS` 白名單把市值型+高股息+債券**全收成核心** ⇒ 恆 100/0;③**同頁兩套數字** —— 上方 bar 走 `portfolio_coherence.classify_core_satellite`(VT 不在 `ETF_PEER_GROUPS` → 判衛星 → **40/60**),下方閘門走白名單(**100/0**),§2.1 破裂 | 核心 **70.0%** / 衛星 **30.0%**,delta 0.0pp。同頁 bar 改吃同一個 `assess_role_split`,不再兩套 |
+| **E-2 再平衡** | `etf_tab_portfolio.py:190,311-319` **拿現況當目標** ⇒ `deviation ≡ 0` ⇒ `abs(0) > tol` 永遠 False ⇒ 整個「⚖️ 再平衡交易指令」是**死區**。原碼註解自己寫了「按實際權重平衡 = 不需動作」 | 復活選填「目標比例%」欄(NaN 不補 0);全空 → ⚪「尚未設定目標權重」+ 明說「拿現況當目標,偏離必然 0,那不是已平衡而是沒算」 |
+| **E-3 重疊度** | ①**命名空間對不上** —— 台股 holdings key 是中文股名「台積電 (2330)」,美股走 yfinance 是英文公司名 `Taiwan Semiconductor Manufacturing Co Ltd`,`_canonical_holding_key`(etf_calc.py:808)只去括號+小寫,**中英文永遠不等** ⇒ 交集恆空 ⇒ 回 0.0%;②抓不到 → NaN → 警示迴圈 `pd.notna` 跳過 → 落 else 印綠燈;③**天花板低於門檻** —— yfinance 只回前 10 大,VT 前十大約佔淨值 15-20% ⇒ 權重重疊數學上限 ≈17% **< 30% 門檻** ⇒ 該對永遠不可能失敗 | 逐對標 5 態(`ok/breach/no_data/incomparable_namespace/inconclusive_ceiling`);任一對非 ok → 整體 ⚪;熱圖缺格抹灰;新增逐對可稽核明細(重疊%/可測上限%/各自覆蓋率/共同持股數/理由) |
+
+**SSOT**:新增 `PORTFOLIO_CORE_SAT_TOLERANCE_PP=10.0` / `PORTFOLIO_TARGET_SUM_TOLERANCE_PP=1.0`,UI 移除 3 處 inline `10`(原本一式三份、語意還不同)。
+
+### 個股組合(`src/compute/screener/scorability.py` 新 L2 SSOT)
+
+**S-1 三個互斥候選數 —— 原始描述(摘要 3 / 明細表 0 / 綠燈)無法重現**。逐條追過該頁每組
+「摘要↔明細表」配對:③ 表 0 列 ⇔ `score_t3` 空 ⇔ KPI 分子必為 0。**真實缺陷是**:
+`score_t3` 與 `results_t3` **長度不保證相等**(`section_batch_fetcher.py:227-237` 只在
+`df4` 非空且不丟例外時 append;抓不到 K 線的檔仍無條件進 `results_t3`),導致 KPI 分子取
+`score_t3`、分母取 `results_t3`。`score_t3` 全空時 ③ 表 0 列,但 KPI 仍印「0/10」、
+④ 仍宣告「本批 10 支全數通過汰弱篩選」—— **兩個看起來正常的摘要疊在一張空表上**。
+⇒ `summarize_candidates` 統一為「可評分」與「健康度已知」兩條獨立軸,
+`build_score_map` 與 `rank_stocks` 共用同一條篩選規則,保證 KPI 分母 == 明細表列數。
+
+**S-2 真正決定生死的預設值在 UI 層,且是同頁相反的一對**:
+```python
+section_portfolio_summary.py:450   r.get('健康度', 100)   # 缺 → 滿分 → 保留
+section_portfolio_summary.py:82    r.get('健康度', 0)     # 缺 → 0
+```
+健康度欄整個缺(換 producer / schema 漂移)時,`:450` 會讓**全批通過汰弱**並印綠燈。
+⚠️ 原假設「`入選70` 與財報體檢 default 相接」**不成立** —— 那是兩個不同閘門。
+且 `_no_ai_*` 給的不是預設分數而是**預設 status = Pass**(`financial_health_engine.py:436`
+100-100-10 三項全缺也判 Pass)。全空財報實測 grade **C 🟡**,非滿分入選。
+⇒ 採「不給預設值」:缺資料標「無法評分」並**排除於分子分母與排序之外**。
+改 default 數值只是把偏誤換方向(0 誤殺新上市 / 100 捏造利多),兩者都在回答沒有答案的問題。
+
+**捏造值兩處(§3.3)**:
+- `'RS': r.get('rs_score', 50)` —— `score_single_stock`(scoring_engine.py:436-452)
+  **從未回傳 `rs_score`** ⇒ 「多因子維度拆解」RS 欄**恆為 50** 且畫成進度條;
+  旁邊「📊 RS 曲線向上」是永不觸發的死碼。兩者已刪
+- `section_ai_portfolio.py:99,104-106` 讀 4 個幽靈 key:`'total'`(→ fallback 健康度但標籤叫「評分」)、
+  `'rsi'`(真 key `'RSI'`)、`'vcp_signal'`(真 key `'VCP'`)、**`'ma_above'` 根本不存在
+  ⇒ 每一檔都以「空頭排列」送進 LLM**
+- `fin_trend_score.py:76,136` 缺料回 `0.0`,而 `_LABEL_THRESHOLDS` 中性帶是 ±0.5
+  ⇒ **0.0 落在「➖ 中性」正中央**,「沒資料」與「真的持平」畫面完全一樣還一起參與計數排序
+  (顯示層已擋,回傳語意未改 —— 其他 caller 如 🔬 個股 Tab 未受保護,見 BACKLOG)
+
+**同頁兩種多因子定義**:`:142` 寫「趨勢+動能+籌碼+量價+**RS** 五項」,`:392-394` 寫
+「趨勢/動能/籌碼/量價/**風險/基本面** 六因子」。依 `stock_score()` 真相是後者,文案已修。
+
+**S-3 PIT 查核通過,無 lookahead**:季別由 `latest_published_quarter()` 用**公告截止日**
+(Q1 5/15 / Q2 8/14 / Q3 11/14 / Q4 次年 3/31)決定,非季末日;freeze 用當下 snapshot +
+當下現價,對帳用事後現價。⚠️ **但有 operator 可觸發的洞**:`update_fundamentals_snapshot.py:171-175`
+手動回補 `--roc-year/--season` **不經過** `latest_published_quarter` 檢查,若回補尚未公告的季
+(MOPS 會給部分早報公司)→ `latest.json` 指過去 → 存活池只剩早報公司,等同「用未來季報選股」。
+建議在 `_write_latest_json` 加 clamp(見 BACKLOG)。
+
+### BACKLOG(新增,皆超出本輪可改範圍)
+
+- 🔴 `update_fundamentals_snapshot.py:75-98,171-175` 手動回補缺 `latest_published_quarter` clamp
+- 🟡 `financial_health_engine.py:436/546-547/569-576/694` 四處「缺資料 → Pass / 憑空 50」
+- 🟡 `fin_trend_score.py:76,136` 缺料回 0.0 的回傳語意(顯示層已擋,其他 caller 未保護)
+- 🟡 `tab_helpers.py:96-99` `final_recommendation` 的 `75`/`55` inline magic
+  (`MULTIFACTOR_GRADE_A/B_MIN` 已有 SSOT、值相同但沒引用)
+- 🟡 `etf_tab_ai.py:107-108,128` 仍把 `target_pct/deviation` 寫進 AI prompt 成「偏離 +0.0pp」
+- ⚪ `test_pr_g_etf_portfolio_audit.py:67-68` 掃常數名字面,迫使實作在 import 位置留註解湊字串
+  → 應轉行為斷言(本 session 第 7 例同類)
+
+---
+
+## 🚨 2026-08-06 B4「量錯對象」批次(v19.182)
+
+### 資料診斷(`src/ui/pages/data_coverage.py` 重寫)
+
+> 這是使用者用來判斷「能不能信這些數字」的頁面,而它自己在說謊。
+> 8/4 稽核:先行指標**連續 9 個交易日三欄完全不變**,該頁照樣 `🟢 3/3 完整 / 🟢 當日`。
+
+| # | 根因 | 修法 |
+|---|---|---|
+| **D-1** | 覆蓋率只判 `is not None`,但 `macro_fetch_orchestrator.py:298-302` 在三大法人**全滅時回 `inst = {}`**(v19.175 契約收斂)—— **空 dict `is not None` 是 True**,那盞燈存在的唯一目的就是抓這情境。總經側同型:`fetch_us10y_block` 全敗回 `{'_err':…,'current':None}` 亦非空 | `_has_value()` + `_macro_block_has_value()`;數值 `0` 仍算有值 |
+| **D-1b** | 唯一的凍結偵測器 `detect_frozen_columns`(data_freshness.py:52)**全 repo 零 caller**,且其 docstring 要求 caller 先排序而沒人做 | 接進籌碼列,7 個日頻欄一階差分 `stale_periods=3`;刻意排除 `成交量`(字串)與融資融券餘額(整數億可合法重複)避免假紅 |
+| **D-1c** | **9 天凍結的真正漏點不在 `_STALE_MAX_AGE_MIN`**:`tab_macro.py:450` 在 `build_leading_fast` 回 None 時**靜默沿用 session_state 舊 `li_latest`** —— 該 DataFrame 從正常路徑進來、**身上沒有 stale 旗標**,年齡也與 pickle 無關。把 3 天上限調寬到 30 天,這條路徑仍是靜默的 | cap 維持 3 天(理由記於 `leading_indicators.py:1121-1147`);改記 `li_retain_meta{rounds,since,last_try,reason}`,診斷頁顯示 ♻️ + 降級 |
+| **D-2** | 「🟢 當日」量的是 `_loaded_at` = `macro_trio_orchestrator.py:110` 的 `datetime.now()` ⇒ **抓回一筆 60 天前的 CPI 照樣顯示「當日」** | 改量各指標自己的 `block['date']`(as-of),配**頻率感知**門檻;`_loaded_at` 降級為明標「本輪抓取於…(≠ 資料日期)」的細節文字 |
+| **D-3** | 籌碼覆蓋率算 `cl_data`,新鮮度卻取自另一物件 `li_latest._date`;而 `cl_data['inst_date']`(tab_macro.py:433 寫入)**從未被讀** | 三個子源各自 as-of,整列取**最差**並指名是哪一源 |
+| **D-4** | 個股/ETF 的 ⬜ 是**接錯 key**:`:166` 讀 `_t2.get("date")` 但只有 `'fetched_at'`;`:220` 讀 `nav_date` 但它**巢狀在 `premium` 內** | 全部接對;⬜ 細分 `未載入` / `無資料日期`(接錯的簽名) / `日期無法解析`,各帶 log 列出搜過的路徑與實際 key。ETF 的 DatetimeIndex fallback 加 guard 拒 RangeIndex(否則 `pd.to_datetime(4)` 靜默給 1970 = 假紅) |
+| **D-5** | `tab_stock.py:278-286` **無條件**寫 `t2_data`(含 `'err'`),失敗時 dict 仍非空 ⇒ 🟢 +「個股資料已載入（28 欄）」 | `err` truthy → 🔴「抓取失敗」帶錯誤文字 |
+
+**用詞**:「完整」→「有值」(該欄只回答「這格不是空的」)。
+**門檻收斂**:紅燈一律 `shared.staleness.stale_days_threshold(cadence)`(daily 7 / monthly 45 /
+quarterly 150);黃燈保留**具名**的診斷頁專用 `_DIAG_DAILY_WARN_DAYS = 3`
+—— 舊 `warn=1/bad=3` 讓**每個週一假黃燈、週二假紅燈**(週五資料週一讀 = lag 3 日曆天,正常)。
+`freshness_level` 不再對 lag>0 回「當日」;「最新」只保留給 lag≤0,其餘一律「落後N日」。
+色票改吃 `shared.colors`(原本是 pre-v19.68 的舊 GitHub 調色盤,全 app 只剩這頁沒遷)。
+**未收斂(刻意,屬他頁尺規)**:`data_categories.FRESHNESS_THRESHOLDS_DAYS(7,30)`、
+`health_inspector._light`(5 天無黃燈)。
+
+### 產業熱力圖(`shared/sector_heatmap.py` 新 L0 SSOT)
+
+| # | 根因 | 修法 |
+|---|---|---|
+| **H-1** | `_PERIOD_MAP` 把「1日」對到 `5d` 且 `pct = series.iloc[-1]/series.iloc[0]` **拿整個下載窗第一根當基期** ⇒ 全部標籤少算 4~6 倍。`index=0` 讓**預設就是錯最兇的那個**,數字還原封不動流進 AI prompt 與「今天最受青睞」敘事 | 下載窗與計算區間**拆兩張表**(選 (b) 而非收窄下載窗 —— `period='1d'` 遇連假可能只回 0~1 根,等於用修 A 換 B 壞)。口徑定為**交易日**:1/5/**21**/**63**(非 30/90 日曆日),對齊 `ANNUAL_MA=240`、`signal_thresholds` 252。傳舊窗字串現在 `raise ValueError` 且不先發請求 |
+| **H-2** | `_TW_SECTORS` 的 key **全是個股** ⇒ 使用者讀到「半導體 +2.3%」而數字**純粹是台積電**,全頁無揭露 | 查證後走揭露(yfinance 無 TWSE 類股 ticker;TWSE MI_INDEX 一次只回一天且本 repo 已標永久停用;FinMind 無類股指數 dataset;類股 ETF 只涵蓋 3~4 個產業)。標籤改「半導體（代表股 2330）」,黃框揭露 **並同步進 AI prompt**(否則 AI 照樣敘事成類股平均)。開關 `_TW_SECTOR_SINGLE_STOCK_PROXY` 待日後接真指數 |
+| **H-2b** | 順帶抓到 4 個資料錯誤:`2475` 華映 **2019 已下市**(永遠抓不到)、`9910` 豐泰是製鞋廠卻當「觀光」、`2409` 友達是面板廠卻掛「電信」、`3008` 重複計數 | 全修;新增「全表任一 ticker 不得出現兩次」不變量測試 |
+| **H-3** | 缺值填 0 ⇒ **從未抓到的標的 hover 顯示「+0.00%」**,與真實資料同格式;缺值面積給 1.0(**比真實 ±0.5% 的類股還大**) | 缺值傳 `None` 留白,hover 走 customdata 吐「無資料」,面積 0.25/0.15 嚴格小於任何有資料節點 |
+| **H-3b** | `close.ffill()` 讓**停牌股報酬恆為 0.00%**(§4.6 明文禁止 ffill 停牌) | 移除;測試以尾端兩根 NaN 釘住舊 0.00% vs 新 +10.00% |
+| **H-4** | 同列自相矛盾:`%` 欄正確顯示 `N/A`,方向欄因 `ret and ret>0` falsy 落 else ⇒ 斷言「➡️ 持平」;排序把 N/A 當 0.00% 插進真實報酬中間 | `direction_label(None)` → 「❓ 無資料」;排序 key 對 None 回 `-inf` |
+| **H-9** | `max(abs(c) for c in colors if c != 0)` 在全 0 時 `ValueError`,而 `app.py:574-575` 是**全 app 唯一沒包 `_render_tab_isolated`** 的 tab ⇒ 白掉整頁 | 兩者皆補 |
+
+**數字會大幅變動(修好非變壞)**:1日 NVDA **+13.3% → 約 +3.2%**、科技 XLK **+6.7% → 約 +1.6%**。
+**H-5 只改文案不顯示日期**:caption「即時抓取」是假話(實為日線收盤 + `TTL_30MIN`),已改;
+但精確 as-of 做不到 —— 要帶出來得改 L1 回傳型別,而 L3 `etf_sector_service.py` 不在該輪範圍,
+替代方案(module-level dict)在 cache hit 時會顯示與畫面數字不符的日期 = **製造新的謊**,故不做。
+
+### 測試守衛的教訓(本 session 第 6 例)
+
+`test_hotfix_v19_79.py::TestMarginMoneyRowParsing` 三條掃 `daily_data_fetchers.py` 字面
+(`_is_margin_money0` / `'money' in _nm0_l` / `raw_twd / 1e8`),B3 把實作抽到 L0 SSOT 後全紅。
+**行為沒變,實作搬家了。** 未把字串改指新檔(那只是把脆弱性搬位置),改**行為斷言** + 一條
+**委派斷言**(逐值比對 `_ddf._finmind_margin_to_yi(v) == _ms.margin_money_to_yi(v)`)。
+
+改完立刻抓到一個真缺口:`is_today_balance_col("MarginPurchaseYesterdayBalance")` **回 True**
+—— 只檢查 `startswith('yes')`,而該欄名以 `marginpurchase` 開頭。目前不出事(寬格式走
+`MARGIN_WIDE_TODAY_BALANCE_COLS` 白名單),但**函式名承諾的是「當日餘額欄」,契約大於現有 caller**。
+補強函式(加 `MARGIN_YESTERDAY_COL_TOKEN` substring 判定)而非放寬斷言。
+⇒ **原本三條掃字面的守衛從來沒發現這件事,因為它們照抄的就是那段不完整的實作。**
+
+另:`test_b4a` 有一條 `freshness_level_for_cadence(STALE_DAYS_DAILY,"daily") == "🟡"`,
+與同檔月頻那條(同預設、斷言 🟢)**自相矛盾** —— 預設 `warn_days=None` 是刻意的兩態設計,
+黃燈帶是診斷頁傳 `warn_days=3` 才有。已改為只釘「紅燈起點 = SSOT+1」+ 另立一條測三態。
+
 ## 🩸 2026-08-06 B3 融資餘額混口徑：止血 + 修 cron schema(v19.181)
 
 ### 根因:抓錯 schema —— 而正確作法就寫在本 repo 裡

@@ -578,6 +578,8 @@ def _render_fin_trend_section(stock_list: list[str], *,
         '**月權重高**因月營收 10 日公布（先行指標），季財報 45 天遞延（落後但見獲利品質）。'
         '近 3 季財報快照不足時自動補抓本季快照。'
         '**「轉機」欄** = 用同一份季財報快照判本業虧轉盈(🌟)/盈轉虧(⚠️),零額外抓取。'
+        '**月營收與季快照皆缺 → 標「⚪ 無法評分」**(分數 0.0 只是預設值,不是「持平」),'
+        '不進 5 段計數也不參與排序(§1)。'
     )
 
     # v18.223：auto_run 模式移除手動按鈕；slider 保留以利使用者觀察/調整權重
@@ -645,7 +647,12 @@ _TREND_SORT_ORDER = {
 _FIN_VERDICT_LABEL = {   # v19.174 去識別化：原 _MJ_VERDICT_LABEL
     'improving': '🟢 進步', 'deteriorating': '🔴 退步', 'mixed': '🟡 分歧',
     'stable': '⚪ 不變', 'first_snapshot': '⏳ 首季', 'fetch_failed': '❌ 失敗',
+    # B5-b:0 季快照 ≠「首季」。首季 = 有 1 季但無法 diff;無快照 = 根本沒抓到。
+    'no_snapshot': '⬜ 無季快照',
 }
+
+# 無法評分列在表格數值欄的顯示字元(§1:不用 0.00 冒充「持平」)
+_UNSCORABLE_CELL = '—'
 
 
 def _fin_verdict_code(r: dict) -> str:
@@ -653,8 +660,11 @@ def _fin_verdict_code(r: dict) -> str:
     v = r.get('diff_verdict')
     if v is not None:
         return getattr(v, 'verdict', 'first_snapshot') or 'first_snapshot'
-    # 無 diff_verdict:抓取失敗 → fetch_failed;否則季快照不足 2 季 → first_snapshot
-    return 'fetch_failed' if r.get('label_code') == 'error' else 'first_snapshot'
+    if r.get('label_code') == 'error':
+        return 'fetch_failed'
+    # 無 diff_verdict:有 ≥1 季快照 → 首季(還不能 diff);0 季 → 無快照(§1 兩者不同義)
+    from src.compute.screener.scorability import trend_row_evidence
+    return 'first_snapshot' if trend_row_evidence(r)[1] >= 1 else 'no_snapshot'
 
 
 def _fmt_quarter(yyyymm: str) -> str:
@@ -667,33 +677,52 @@ def _fmt_quarter(yyyymm: str) -> str:
 
 
 def _render_fin_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '') -> None:
-    """渲染結果表（退步在前）+ 統計 KPI。"""
+    """渲染結果表（退步在前）+ 統計 KPI。
+
+    B5-b(2026-08)§1:「月營收缺 + 季快照不足」時 `compute_trend_score` 回 score=0.0,
+    而 0.0 正好落在「➖ 中性」帶(±0.5)正中央 —— 沒資料被講成「持平」,還進 KPI 計數
+    與排序。改用 `scorability.split_trend_rows` 把這種列切出來標「⚪ 無法評分」,
+    數值欄一律 `—`,不進 5 段判定計數、排在表尾。
+    """
     if not rows:
         return
+    from src.compute.screener.scorability import split_trend_rows
+    _scorable, _unscorable = split_trend_rows(rows)
+
     cnt = {k: 0 for k in _TREND_SORT_ORDER}
-    for r in rows:
-        cnt[r['label_code']] = cnt.get(r['label_code'], 0) + 1
-    cols = st_mod.columns(5)
+    for r in _scorable:
+        _lc = r.get('label_code')
+        cnt[_lc] = cnt.get(_lc, 0) + 1
+    cols = st_mod.columns(6)
     cols[0].metric('🔻 強退步', cnt.get('strong_down', 0))
     cols[1].metric('📉 退步', cnt.get('down', 0))
     cols[2].metric('➖ 中性', cnt.get('neutral', 0))
     cols[3].metric('📈 進步', cnt.get('up', 0))
     cols[4].metric('🚀 強進步', cnt.get('strong_up', 0))
-    st_mod.caption('↑ 上列＝月營收動能 × 季財報「**混合**」趨勢分(月 65% / 季 35%)。　'
+    cols[5].metric('⚪ 無法評分', len(_unscorable),
+                   help='月營收與季財報快照皆缺 → 分數 0.0 只是預設值,'
+                        '不代表「持平」;已排除於左側 5 段計數與排序之外(§1)')
+    st_mod.caption(f'↑ 上列＝月營收動能 × 季財報「**混合**」趨勢分(月 65% / 季 35%),'
+                   f'分母為**可評分的 {len(_scorable)} 檔**(共 {len(rows)} 檔)。　'
                    '↓ 下列＝**純季財報體質** verdict(只看季度,不混月營收)——'
                    '兩者可能相反(月強但季退),分開看才不會漏掉「財報體質在惡化」。')
+    if _unscorable:
+        st_mod.warning(
+            f'⚪ {len(_unscorable)} 檔無法評分(月營收與季快照皆缺,非「中性」):'
+            + '、'.join(str(r.get('sid', '?')) for r in _unscorable))
 
     # v19.164 稽核補回:純季財報 verdict 計數(組合層「幾檔財報體質在惡化」一眼看)
     _finv = {k: 0 for k in _FIN_VERDICT_LABEL}
     for r in rows:
         _finv[_fin_verdict_code(r)] = _finv.get(_fin_verdict_code(r), 0) + 1
-    mcols = st_mod.columns(6)
+    mcols = st_mod.columns(7)
     mcols[0].metric('🔴 財報退步', _finv['deteriorating'])
     mcols[1].metric('🟡 分歧', _finv['mixed'])
     mcols[2].metric('🟢 財報進步', _finv['improving'])
     mcols[3].metric('⚪ 不變', _finv['stable'])
     mcols[4].metric('⏳ 首季', _finv['first_snapshot'])
-    mcols[5].metric('❌ 失敗', _finv['fetch_failed'])
+    mcols[5].metric('⬜ 無季快照', _finv['no_snapshot'])
+    mcols[6].metric('❌ 失敗', _finv['fetch_failed'])
 
     # v18.199 ── 📊 快照新鮮度條（季財報分來自哪季 — 防補抓失敗靜默沿用舊季）──
     _fresh = sum(1 for r in rows if r.get('snap_stale') is False)
@@ -723,7 +752,12 @@ def _render_fin_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '')
         _q = _fmt_quarter(_ym)
         return f'🟡 {_q}（舊）' if r.get('snap_stale') else f'🟢 {_q}'
 
-    rows_sorted = sorted(rows, key=lambda r: _TREND_SORT_ORDER.get(r['label_code'], 99))
+    # 排序:可評分列依 5 段(退步在前);無法評分列一律排到最後(§1 不與真分數混排)
+    _unscorable_ids = {id(r) for r in _unscorable}
+    rows_sorted = sorted(
+        rows,
+        key=lambda r: (1 if id(r) in _unscorable_ids else 0,
+                       _TREND_SORT_ORDER.get(r.get('label_code'), 99)))
 
     # 🌟/⚠️ 轉機摘要(v19.164 合併「財報體檢轉機」)——user 要的「找體質差→變好」在這裡,
     # 判定由 compute_one_stock_trend 用同一份季快照附帶算出(turn_icon / diff_verdict),零額外抓取。
@@ -734,17 +768,22 @@ def _render_fin_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '')
     if _break:
         st_mod.error(f'⚠️ **本業盈轉虧雷股**：{", ".join(_break)}')
 
-    df = pd.DataFrame([{
-        '代碼': r['sid'],
-        '判定(月+季)': r['label'],
-        '季財報體質': _FIN_VERDICT_LABEL.get(_fin_verdict_code(r), '—'),  # 純季度 verdict(補回)
-        '轉機': r.get('turn_icon') or '—',
-        '綜合分數': round(r['score'], 2),
-        '月營收分': round(r['mon_sub'], 2),
-        '季財報分': round(r['fin_sub'], 2),   # v19.174:改吃中性 key
-        '季別': _quarter_cell(r),
-        '備註': r['note'].strip().rstrip(';') if r['note'] else '',
-    } for r in rows_sorted])
+    def _trend_row(r: dict) -> dict:
+        """一列的表格 cell。§1:無法評分 → 判定/分數欄一律 `—`,不印 0.00。"""
+        _bad = id(r) in _unscorable_ids
+        return {
+            '代碼': r['sid'],
+            '判定(月+季)': '⚪ 無法評分' if _bad else r['label'],
+            '季財報體質': _FIN_VERDICT_LABEL.get(_fin_verdict_code(r), '—'),  # 純季度 verdict(補回)
+            '轉機': r.get('turn_icon') or '—',
+            '綜合分數': _UNSCORABLE_CELL if _bad else f"{r['score']:.2f}",
+            '月營收分': _UNSCORABLE_CELL if _bad else f"{r['mon_sub']:.2f}",
+            '季財報分': _UNSCORABLE_CELL if _bad else f"{r['fin_sub']:.2f}",  # v19.174:改吃中性 key
+            '季別': _quarter_cell(r),
+            '備註': r['note'].strip().rstrip(';') if r['note'] else '',
+        }
+
+    df = pd.DataFrame([_trend_row(r) for r in rows_sorted])
     st_mod.dataframe(df, use_container_width=True, hide_index=True)
 
     # 逐檔體質變化明細(🟢變好 / 🔴變差 逐項)——合併原「財報體檢轉機」下鑽,吃同一份 diff_verdict

@@ -96,7 +96,13 @@ def _render_summary_table(fh_cached: dict) -> None:
     _fh_rows = []
     for _sid_f, _fd_f in fh_cached.items():
         _scores_f = _fd_f.get('radar_scores', {})
-        _avg_f = round(sum(_scores_f.values()) / len(_scores_f), 1) if _scores_f else 0
+        # B5-b(2026-08)§1:抓不到財報時 `_FAIL_SAFE` 會回 radar 全 0 + red_flags='None',
+        # 舊寫法照這兩個值算出「雷達均分 0」+「紅旗 ✅」—— 等於宣告「已體檢、無紅旗」。
+        # 沒資料就標沒資料,不得拿 fail-safe 佔位值當結論。
+        _err_f = bool(_fd_f.get('error'))
+        # NaN(非 None):下方 sort_values('雷達均分') 才不會拿 None 跟 float 比而炸
+        _avg_f = (float('nan') if _err_f or not _scores_f
+                  else round(sum(_scores_f.values()) / len(_scores_f), 1))
         _fh_rows.append({
             '代碼':     _sid_f,
             '現金水位':  _fd_f.get('cash_ratio_status', '?') + ' ' + _fd_f.get('cash_ratio_value', ''),
@@ -104,7 +110,9 @@ def _render_summary_table(fh_cached: dict) -> None:
             '負債比':   _fd_f.get('debt_ratio_status', '?') + ' ' + _fd_f.get('debt_ratio_value', ''),
             '企業DNA':  _fd_f.get('business_model_dna', 'N/A'),
             '雷達均分': _avg_f,
-            '紅旗':     '⚠️' if (_fd_f.get('red_flags', 'None') not in ('None', '', None)) else '✅',
+            '紅旗':     ('⬜ 未體檢' if _err_f else
+                         '⚠️' if (_fd_f.get('red_flags', 'None') not in ('None', '', None))
+                         else '✅'),
         })
     _df_fh = pd.DataFrame(_fh_rows).sort_values('雷達均分', ascending=False).reset_index(drop=True)
     st.dataframe(
@@ -565,7 +573,10 @@ def _render_ai_insight_and_flags(fd: dict) -> None:
             f'🤖 {_insight_f}</div>',
             unsafe_allow_html=True
         )
-    # 紅旗
+    # 紅旗(B5-b §1:抓不到財報 → `_FAIL_SAFE` 的 red_flags='None' 不代表「沒紅旗」)
+    if fd.get('error'):
+        st.warning('⬜ 未取得財報資料,本檔未做紅旗檢查(不等於「無紅旗」)')
+        return
     _flags_f = fd.get('red_flags', 'None')
     if _flags_f and _flags_f not in ('None', ''):
         st.error(f'🚩 紅旗警示:{_flags_f}')
