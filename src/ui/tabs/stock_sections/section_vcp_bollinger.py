@@ -51,8 +51,8 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
                 unsafe_allow_html=True)
     ec1, ec2 = st.columns(2)
     with ec1:
-        # v19.180 B2-a：v19.174 去識別化漏網（同區塊右邊「布林通道 [策略3]」已改，
-        # 只有這行留著人名）。改吃策略代號常數（§2.1 SSOT）。
+        # v19.180 B2-a：v19.174 去識別化漏網 —— 當時同區塊右邊已是「布林通道 [策略3]」，
+        # 只有這行留著人名。本批一併改吃策略代號常數（§2.1 SSOT）。
         st.markdown(f'**VCP [{STRATEGY_TECHNICAL}]**')
         if vcp2:
             sw = ' → '.join([f'{s:.1f}%' for s in vcp2['swings']])
