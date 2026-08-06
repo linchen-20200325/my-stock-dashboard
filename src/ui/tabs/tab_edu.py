@@ -88,8 +88,13 @@ _EDU_STRATEGY_TITLES: dict[str, str] = {
         f'🌀 {strategy_label(STRATEGY_TECHNICAL)}'
         f' — VCP 波幅收縮與爆量突破'),
     'liquidity': (
+        # v19.179 §1:標題原寫「均線多頭家數」—— 但本章內文（:672-690）v19.178 已改成
+        # 誠實版,明講「本系統**沒有**站上年線家數比這個數據,全站沒有任何一行程式在算
+        # 它」。標題卻還在宣傳該指標 ⇒ 同一章自我打臉,且標題比內文先被看到,誤導性更強。
+        # 改用本系統真正在算的量:旌旗指數 ＝ 上漲佔比（單日）的 5 日移動平均
+        # （evidence: src/services/jingqi_calc.py 的 ad_ratio 5 日均）。
         f'💰 {strategy_label(STRATEGY_TECHNICAL)}'
-        f' — 資金動能 M1B-M2 × 均線多頭家數 × 外資期貨防守'),
+        f' — 資金動能 M1B-M2 × 旌旗指數（市場廣度）× 外資期貨防守'),
 }
 
 

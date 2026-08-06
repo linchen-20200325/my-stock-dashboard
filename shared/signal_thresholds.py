@@ -601,6 +601,22 @@ PCR_PERCENT_SCALE_MIN: float = 10.0
 原為 `src/data/macro/macro_alert.py:295` inline `> 10`，v19.178 抽出供
 `section_news_ai` 的 AI context 共用（避免兩處各寫一個判別線 → §3.3 漂移）。"""
 
+PCR_PERCENT_VALID_MAX: float = 500.0
+"""選擇權 PCR **百分比刻度**的合理上界（§3.2 範圍檢查，v19.180 B2-b）。
+
+與 `PCR_PERCENT_SCALE_MIN` 合成一組完整的刻度判別區間
+（實作 SSOT：`shared/pcr_scale.normalize_pcr_to_ratio`）::
+
+    ≤0            → 兩種刻度都不成立（PCR = putV/callV 恆為正）→ None + log
+    (0, 10]       → 標準比值刻度，原值即比值
+    (10, 500]     → 百分比刻度，÷100 換回比值（→ 0.1~5.0）
+    >500          → 兩種刻度都解釋不通 → None + log（§1 不猜換算）
+
+500 這個上界**不是腦補**，取自寫入端自己的收值窗：
+`src/data/macro/leading_indicators.py:970` 的 `taifex_pcr` 只接受
+`20 < val < 500` 的百分比值、超出即丟棄。下游沿用同一上界，
+避免出現「寫入端已經拒收、消費端卻照單全收」的不一致。"""
+
 
 # ════════════════════════════════════════════════════════════════
 # 進場操作層:停利停損 / 量比 / 趨勢分級(v18.328 PR-C 稽核三項違憲)
@@ -619,6 +635,25 @@ STOP_LOSS_DEFAULT_PCT: float = 8.0
 """預設停損:跌破認賠(-8%)。原 tab_stock.py:577 inline `_cur_p * 0.92`。
 注意:與 ATR_STOP_FIXED_PCT(8% / scoring_engine 風控)同值但語意分離 —
 本常數是「個股 Tab 顯示用建議值」,後者是「ATR 失敗 fallback」。"""
+
+# ── 固定停利停損方案的「先天盈虧比」(v19.179 B1-b)────────────────
+# tab_stock.py:640 原寫 `(_tp1_p - _cur_p) / (_cur_p - _sl_p)`,而 _tp1_p / _sl_p
+# 都是「現價 × 固定百分比」⇒ 現價被完整約掉,結果 **恆等於 T1% / 停損%**,
+# 對任何股票、任何價格都是同一個數(實機 2330 顯示 0.63x)。舊碼旁邊卻標
+# 「≥1.5 較理想」= 這個方案在數學上永遠達不到的目標 → §1 假結論。
+#
+# 這兩個常數把「它是方案的結構性常數,不是個股資訊」寫進型別本身:
+#   - 由 SSOT 百分比推導,改門檻時自動同步(§3.3 不得 inline 0.625)
+#   - 不從 round() 後的價位反推 → 沒有 ±0.01 的假抖動冒充「因股而異」
+FIXED_PLAN_RR_T1: float = STOP_PROFIT_T1_PCT / STOP_LOSS_DEFAULT_PCT
+"""固定方案盈虧比(停利目標1 對 預設停損)= 5% / 8% = 0.625。
+
+**與個股無關的常數**。<1 代表「用 T1 出場時,承擔的風險大於目標獲利」。
+UI 顯示這個值時,文案必須說明它是方案先天值,不可標任何「≥N 較理想」的門檻
+(那會變成一個永遠不達標的假目標)。"""
+
+FIXED_PLAN_RR_T2: float = STOP_PROFIT_T2_PCT / STOP_LOSS_DEFAULT_PCT
+"""固定方案盈虧比(停利目標2 對 預設停損)= 10% / 8% = 1.25。同上為常數。"""
 
 # ── 量比軸線(個股三段 + 組合兩段,設計差保留但 SSOT 化 / PR-C P3)──
 VOLUME_RATIO_SURGE: float = 1.5
@@ -911,6 +946,17 @@ PORTFOLIO_BENCHMARK_TICKER: str = "0050.TW"
 概念同 shared/forward_test_thresholds.py:FORWARD_TEST_BENCHMARK('0050'),同指元大台灣50;
 但兩者服務不同 fetcher:forward_test 走 fetch_stock_history_1y(無 .TW 後綴),ETF 投組走
 fetch_etf_price(yfinance,需 .TW 後綴)。故格式不同、各自 SSOT,不硬併。"""
+
+# ── §3.2 USD/TWD 即期匯率合理範圍 sanity(B1-a v19.179)──
+USDTWD_SANITY_MIN: float = 25.0
+"""USD/TWD 即期匯率 sanity 下界(TWD per 1 USD)。低於此視為抓錯欄位/單位反了
+(例如抓成 TWD→USD 的 0.031),**不可**拿來換匯 —— §1 寧可 fail loud 也不用髒匯率。
+歷史區間約 [28, 35],留 3 元緩衝。原 src/data/macro/tw_macro.py:1307 inline `25`
+(該檔不在 B1-a 檔案範圍,待後續 PR 改 import 本常數以真正單一化)。"""
+
+USDTWD_SANITY_MAX: float = 40.0
+"""USD/TWD 即期匯率 sanity 上界(TWD per 1 USD)。同 USDTWD_SANITY_MIN。
+原 src/data/macro/tw_macro.py:1307 inline `40`。"""
 
 
 # ════════════════════════════════════════════════════════════════

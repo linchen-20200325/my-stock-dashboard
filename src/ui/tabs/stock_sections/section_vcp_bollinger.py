@@ -1,7 +1,7 @@
 """src/ui/tabs/stock_sections/section_vcp_bollinger.py — E. VCP+布林 section(v18.409 U4 Phase 3-E).
 
 從 tab_stock.py:1067-1149 抽出。
-- VCP 型態結論 + 卡片(Mark Minervini 波幅收縮)
+- VCP 型態結論 + 卡片(波幅收縮型態;v19.174 去識別化,v19.180 B2-a 補漏網人名)
 - 布林通道卡片(策略 3,4 KPI:現價/上軌/帶寬/下軌 + 條件 signal_box)
 - VCP+布林 動態建議 banner + 安全結論
 
@@ -51,7 +51,9 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
                 unsafe_allow_html=True)
     ec1, ec2 = st.columns(2)
     with ec1:
-        st.markdown('**VCP [Mark Minervini]**')
+        # v19.180 B2-a：v19.174 去識別化漏網（同區塊右邊「布林通道 [策略3]」已改，
+        # 只有這行留著人名）。改吃策略代號常數（§2.1 SSOT）。
+        st.markdown(f'**VCP [{STRATEGY_TECHNICAL}]**')
         if vcp2:
             sw = ' → '.join([f'{s:.1f}%' for s in vcp2['swings']])
             vc = TRAFFIC_GREEN if vcp2['contracting'] else TRAFFIC_YELLOW
@@ -63,7 +65,8 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
         else:
             st.info('數據不足（需≥40日）')
     with ec2:
-        st.markdown('**布林通道 [策略3]**')
+        # v19.180 B2-a：同上，手打字面 → 常數（避免半套 SSOT）。
+        st.markdown(f'**布林通道 [{STRATEGY_TECHNICAL}]**')
         if bb2:
             b1, b2 = st.columns(2)
             with b1:
@@ -87,15 +90,16 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
     # ── VCP+布林動態建議 ──
     _vcp_verdict = ''
     _bb_verdict = ''
+    # v19.180 B2-a：本檔所有 `[策略3]` 一律改吃常數，避免「一半常數一半手打」
     if vcp2:
-        _vcp_verdict = ('✅ VCP確認收縮：等待帶量突破頸線，是高確信進場點 [策略3]'
+        _vcp_verdict = (f'✅ VCP確認收縮：等待帶量突破頸線，是高確信進場點 [{STRATEGY_TECHNICAL}]'
                         if vcp2['contracting']
                         else '⚪ 波幅尚未收縮：等待整理完成後再觀察')
     if bb2:
         if bb2['bw'] < bb2['bw_mean'] * BB_BW_SHRINK_ACTION_RATIO:
-            _bb_verdict = '🔵 布林帶寬極度收縮：即將爆發，注意量能確認方向 [策略3]'
+            _bb_verdict = f'🔵 布林帶寬極度收縮：即將爆發，注意量能確認方向 [{STRATEGY_TECHNICAL}]'
         elif bb2['near_upper']:
-            _bb_verdict = '🟢 股價黏近上軌＋強勢：搭配大量是突破確認訊號 [策略3]'
+            _bb_verdict = f'🟢 股價黏近上軌＋強勢：搭配大量是突破確認訊號 [{STRATEGY_TECHNICAL}]'
         else:
             _bb_verdict = f'⚪ 布林帶寬{bb2["bw"]:.1f}%（均值{bb2["bw_mean"]:.1f}%）：尚未到關鍵位置'
     if _vcp_verdict or _bb_verdict:
@@ -109,7 +113,7 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
     _vcp_c = TRAFFIC_GREEN if '✅' in _msg or '🟢' in _msg else (TRAFFIC_YELLOW if '⚠️' in _msg else '#484f58')
     st.markdown(border_left_banner(
         _vcp_c,
-        f'<span style="font-size:11px;color:#8b949e;">🎓 策略3 · VCP</span>　'
+        f'<span style="font-size:11px;color:#8b949e;">🎓 {STRATEGY_TECHNICAL} · VCP</span>　'
         f'<span style="font-weight:700;">{_msg}</span>',
         padding_y=7, font_size=13,
     ), unsafe_allow_html=True)
@@ -118,7 +122,7 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
         _bb_c = TRAFFIC_GREEN if '✅' in _bb_verdict_safe or '🟢' in _bb_verdict_safe else ('#3aa2f5' if '🔵' in _bb_verdict_safe else TRAFFIC_YELLOW)
         st.markdown(border_left_banner(
             _bb_c,
-            f'<span style="font-size:11px;color:#8b949e;">🎓 策略3 · 布林</span>　'
+            f'<span style="font-size:11px;color:#8b949e;">🎓 {STRATEGY_TECHNICAL} · 布林</span>　'
             f'<span style="font-weight:700;">{_bb_verdict_safe}</span>',
             padding_y=7, font_size=13,
         ), unsafe_allow_html=True)

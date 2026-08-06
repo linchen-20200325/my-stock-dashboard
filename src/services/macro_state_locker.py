@@ -348,6 +348,35 @@ def calculate_system_state(macro_numbers: dict) -> dict:
     Rule-based quantitative engine (理科 brain).
     包含三大硬否決紅線（Physical Lock），覆蓋分數計算結果。
     新增輸入：Sahm_Rule_Triggered / PMI_Prev_Month / Futures_Net_Short / Index_Below_MA5
+
+    輸入單位契約（§4.1 量綱；caller 有責任先換算，本函式**不做刻度偵測**）
+    ────────────────────────────────────────────────────────────────
+    ==============================  ==========================================
+    key                             刻度 / 單位
+    ==============================  ==========================================
+    ``VIX_Index``                   指數點（17.1）
+    ``ISM_PMI_or_OECD_CLI``         PMI 水位（0~100，非 YoY）
+    ``PMI_Prev_Month``              同上，前一月
+    ``M1B_YoY_pct`` / ``M2_YoY_pct``  **百分點**（3.2 表示 3.2%，非 0.032）
+    ``BIAS240_pct``                 **百分點**（+33.0 表示 +33%）
+    ``PCR``                         **標準比值刻度**（0.5~2.0）⚠️ 見下
+    ``Futures_Net_Short``           TX **當量口**（大台淨口 ＋ 0.25×小台淨口），負 = 淨空
+    ``Sahm_Rule_Triggered``         bool
+    ``Index_Below_MA5``             bool
+    ==============================  ==========================================
+
+    ⚠️ **``PCR`` 只收標準比值刻度**（0.5~2.0，與
+    `src/config/config.py` `MACRO_ALERT_RULES['pcr']` 同刻度）。
+    **不得**直接餵 `li_latest['選PCR']` —— 那是 `leading_indicators` 寫入時
+    已 ×100 的**百分比刻度**（50~200）。歷史 bug（v19.180 B2-b 修）：實測
+    126.80 直接進來 → `pcr > 1.5` 恆真 → 曝險分數系統性 −10 → 曝險上限恆低
+    10 個百分點。取值端請一律經 `shared.pcr_scale.normalize_pcr_to_ratio()`
+    換算；刻度不明時該 helper 回 `None`，本函式收到 None 會退回中性預設 1.0
+    （`_f` 的 default），不加不扣。
+
+    本函式**刻意不在內部塞刻度判斷**：規則引擎的職責是「照契約算分」，
+    一旦引擎自己猜刻度，錯誤就會被吸收在引擎裡、caller 永遠不會發現送錯值
+    （§1：掩蓋問題 ≠ 解決問題）。守衛屬於取值端。
     """
     def _b(key):
         v = macro_numbers.get(key)

@@ -10,7 +10,9 @@ from typing import Optional, Tuple
 from shared.colors import TRAFFIC_YELLOW
 from shared.thresholds import (
     YIELD_HIGH, YIELD_MID, YIELD_LOW,
-    YIELD_HIGH_DEC, YIELD_MID_DEC, YIELD_LOW_DEC,
+    # v19.179 B1-b:三檔目標價的反推(÷ YIELD_*_DEC)已下沉 classify_stock_357_price,
+    # 本檔不再自行除,故不再 import YIELD_*_DEC(§2.1 一個算式只有一份實作)。
+    classify_stock_357_price,
 )
 # v18.241 E12: 龍多股篩選門檻從 shared SSOT 引入
 from shared.signal_thresholds import (
@@ -303,69 +305,136 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# [Task 10] 7% 存股殖利率評估（357 殖利率法則）
-# 公式: Y_est = EPS_4Q × PayoutRatio_3Y / Price × 100%
+# [Task 10] 存股殖利率評估（357 殖利率法則）
+# 公式: Y = AvgCashDividend_TWD / Price × 100%
+#
+# v19.179 B1-b 量綱修正（CLAUDE.md §4.1 / §2.1 SSOT / §1 Fail Loud）
+# ------------------------------------------------------------------------------
+# 舊契約是 `est_div = eps_ttm × avg_payout`，其中 `avg_payout` 標明是「配發率
+# (0~1)」。但唯一的 production caller（section_health_score.py:304）傳的是
+# `avg_div / price` —— 那是**殖利率**，不是配發率。於是：
+#
+#     est_yield = (eps × (avg_div / price)) / price × 100     ← price 出現兩次
+#
+# 實機 2330 對帳：avg_div=13.70、price=2320 ⇒ 誤傳 payout=0.0059
+#   ⇒ est_div ≈ EPS_ttm × 0.0059 ≈ 0.35 元 ⇒ est_yield ≈ 0.01%（畫面值）
+#   真值 13.70 / 2320 × 100 = 0.59%      ⇒ 低估約 40 倍（＝ price/eps_ttm 倍）
+# 0.01% 會落進「🔴 超貴（<3%）」，是個由量綱錯誤生出來的**假結論**。
+#
+# 修法選擇：改函式契約收「年均現金股利（元）」，而不是在 caller 端補傳
+# `avg_div / eps_ttm`。理由：
+#   1. §2.1 SSOT — 配息的權威值是 `fetch_dividend_data` 實際抓到的現金股利
+#      金額；`eps × payout` 只是它的二次推估。既然真值在手，不繞 EPS。
+#   2. 同頁 B 區 357（`section_357_valuation` → `classify_stock_357_price`）
+#      用的就是 avg_div，改成同一個輸入後，兩處**由建構保證一致**，
+#      而不是「代數上剛好等價」（payout>1 被 clamp、EPS≤0 時就會分岔）。
+#   3. 少一個外部輸入 = 少一個可以再次接錯的介面。
+# 分級不再自己寫 if-elif，直接委派 `classify_stock_357_price`（同一 SSOT），
+# 本函式只負責把 zone code 映射成 v5 卡片的 UX 措辭。
 # ══════════════════════════════════════════════════════════════════════════════
-def calc_dividend_yield_357(price: float, eps_ttm: float,
-                             avg_payout: float, div_years: int,
-                             hist_div: Optional[list] = None) -> dict:
-    """
-    預估存股殖利率 + 357 位階判定。
+def calc_dividend_yield_357(price: float, *,
+                            avg_div_twd: Optional[float],
+                            div_years: Optional[int] = None) -> dict:
+    """存股殖利率 + 357 位階判定（與 B 區 357 同一 SSOT）。
 
     Args:
-        price:       現價
-        eps_ttm:     近四季 EPS 合計
-        avg_payout:  近三年平均配發率（0~1）
-        div_years:   連續配息年數
-        hist_div:    歷史配息記錄（元/年，list 近到遠）
+        price:       現價（元）
+        avg_div_twd: 近 N 年**平均年現金股利（元／股）** — 注意是金額，不是
+                     配發率、也不是殖利率。參數名帶 `_twd` 即為 §4.1 單位標記。
+        div_years:   近 5 年實際有配息的年數；`None` = 未知（不臆測穩定性）。
 
-    Edge E-A(EPS<0):  無法估算，回傳警示
-    Edge E-A(Price=0): ZeroDivisionError 防禦
+    Note:
+        keyword-only 是刻意的 —— 舊版簽章是
+        `(price, eps_ttm, avg_payout, div_years)`，若有殘留的位置呼叫，
+        會當場 `TypeError` 而不是靜默算出錯 40 倍的數字（§1 Fail Loud）。
 
-    Returns: {est_yield, zone_357, signal, color, p_cheap, p_fair, p_expensive, msg}
+    Edge:
+        - price ≤ 0 或 avg_div_twd ≤ 0 / None → **未評估**（est_yield=None）。
+          §1：不可回 0 —— 0% 會被判成「超貴」，那是拿缺資料當看空結論。
+
+    Returns:
+        {est_yield, est_div, p_cheap, p_fair, p_expensive, zone_code,
+         div_years, signal, color, msg}
+        est_yield 為 None 時代表未評估，caller 必須顯示「未評估」而非數字。
     """
     R = '#da3633'; G = '#2ea043'; Y = TRAFFIC_YELLOW; N = '#484f58'
 
-    if not price or price <= 0:
-        return {"est_yield": None, "signal": "⚪ 無股價", "color": N, "msg": "無法取得股價"}
+    # 分級與三檔目標價全部委派 SSOT；'na' 已涵蓋 price/avg_div 缺值或 ≤0
+    zone_code, targets = classify_stock_357_price(price, avg_div_twd)
+    if zone_code == 'na':
+        _why = "無股價" if (not price or price <= 0) else "無配息記錄"
+        return {
+            "est_yield": None, "est_div": None,
+            "p_cheap": None, "p_fair": None, "p_expensive": None,
+            "zone_code": "na", "div_years": div_years,
+            "signal": "⚪ 未評估", "color": N,
+            "msg": f"{_why}，357 殖利率法則不適用（不以 0% 代替，避免誤判為超貴）",
+        }
 
-    if not eps_ttm or eps_ttm <= 0:
-        return {"est_yield": None, "signal": "⚪ EPS≤0", "color": N,
-                "msg": "近四季 EPS 為負或零，不適用殖利率法則"}
-
-    # 估算股利
-    est_div = eps_ttm * max(min(avg_payout, 1.0), 0.0)
+    est_div = float(avg_div_twd)
     est_yield = round(est_div / price * 100, 2)
+    p_cheap, p_fair, p_expensive = targets['cheap'], targets['fair'], targets['dear']
 
-    # 357 價位計算（以估算股利反推）
-    p_cheap    = round(est_div / YIELD_HIGH_DEC, 1)  # 7% → 便宜
-    p_fair     = round(est_div / YIELD_MID_DEC, 1)   # 5% → 合理
-    p_expensive= round(est_div / YIELD_LOW_DEC, 1)   # 3% → 昂貴
+    # 近 5 年年年有配 → 視為穩定；div_years 未知時不下穩定性結論（§1）
+    stable = (div_years is not None and div_years >= 5)
+    _yr_txt = "配息年數未知" if div_years is None else f"近5年配息 {div_years} 年"
 
-    # 連續配息加分
-    stable = div_years >= 5
-
-    if est_yield >= YIELD_HIGH and stable:
-        signal, color = "🟢 甜甜價（7%+連續5年）", G
-        msg = f"預估殖利率 {est_yield:.2f}% ≥ 7% 且連續配息 {div_years} 年 — 策略1 存股首選"
-    elif est_yield >= YIELD_HIGH:
-        signal, color = "🟢 高殖利率（配息不穩定）", G
-        msg = f"殖利率 {est_yield:.2f}% 高，但連續配息僅 {div_years} 年（<5年），需確認配息穩定性"
-    elif est_yield >= YIELD_MID:
-        signal, color = "🟡 合理（5~7%）", Y
-        msg = f"預估殖利率 {est_yield:.2f}%，位於合理區間，可分批布局"
-    elif est_yield >= YIELD_LOW:
-        signal, color = "🔴 昂貴（3~5%）", R
-        msg = f"預估殖利率 {est_yield:.2f}%，位於昂貴區，持有但不追高"
-    else:
-        signal, color = "🔴 超貴（<3%）", R
-        msg = f"預估殖利率僅 {est_yield:.2f}%，估值過高，建議逢高減碼"
+    if zone_code == 'cheap' and stable:
+        signal, color = "🟢 甜甜價（7%+近5年年年配）", G
+        msg = (f"殖利率 {est_yield:.2f}% ≥ {YIELD_HIGH:g}%（便宜價 {p_cheap}）"
+               f"且{_yr_txt} — 策略1 存股首選")
+    elif zone_code == 'cheap':
+        signal, color = "🟢 高殖利率（穩定性待確認）", G
+        msg = (f"殖利率 {est_yield:.2f}% ≥ {YIELD_HIGH:g}%（便宜價 {p_cheap}），"
+               f"但{_yr_txt}，需確認配息穩定性")
+    elif zone_code == 'fair':
+        signal, color = f"🟡 合理（{YIELD_MID:g}~{YIELD_HIGH:g}%）", Y
+        msg = f"殖利率 {est_yield:.2f}%，位於合理區間（{p_cheap}~{p_fair}），可分批布局"
+    elif zone_code == 'dear':
+        signal, color = f"🔴 昂貴（{YIELD_LOW:g}~{YIELD_MID:g}%）", R
+        msg = f"殖利率 {est_yield:.2f}%，位於昂貴區（{p_fair}~{p_expensive}），持有但不追高"
+    else:  # 'overpriced'
+        signal, color = f"🔴 超貴（<{YIELD_LOW:g}%）", R
+        msg = (f"殖利率僅 {est_yield:.2f}%（現價已高於昂貴價 {p_expensive}），"
+               f"估值過高，建議逢高減碼")
 
     return {
         "est_yield": est_yield, "est_div": round(est_div, 2),
         "p_cheap": p_cheap, "p_fair": p_fair, "p_expensive": p_expensive,
-        "div_years": div_years, "signal": signal, "color": color, "msg": msg,
+        "zone_code": zone_code, "div_years": div_years,
+        "signal": signal, "color": color, "msg": msg,
     }
+
+
+def count_dividend_paying_years(yearly: Optional[list]) -> Optional[int]:
+    """從 `fetch_dividend_data` 的 `yearly`（近 5 年 list[{'year','cash'}]）
+    數出「實際有配息的年數」。
+
+    v19.179 B1-b：原 caller 讀 `st.session_state['t2_div_hist']`，但**全站
+    沒有任何一行寫入這個 key**（grep 僅 1 個讀取點）⇒ `div_years` 恆為 0
+    ⇒ 卡片永遠宣稱「連續配息 0 年」。那是把「沒去查」講成「查到沒有」，
+    §1 反捏造。真值就在同一個 caller 已持有的 `yearly2` 裡。
+
+    Returns:
+        有配息年數（0~5）；`yearly` 為 None / 形狀不符 → `None`（未知，
+        由下游顯示「配息年數未知」，不填 0）。
+    """
+    if not yearly:
+        return None
+    try:
+        n = 0
+        for row in yearly:
+            cash = row['cash'] if isinstance(row, dict) else None
+            if cash is None:
+                return None
+            if float(cash) > 0:
+                n += 1
+        return n
+    except (TypeError, ValueError, KeyError) as e:
+        # §1：形狀不符不猜 0，回 None 讓 UI 誠實說「未知」
+        print(f'[count_dividend_paying_years] yearly 形狀不符，回 None: '
+              f'{type(e).__name__}: {e}')
+        return None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -466,15 +535,18 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"  ❌ {e}"); traceback.print_exc()
 
-    # ── Task 10: 存股殖利率
-    print("\n[Task 10] 7% 存股殖利率")
+    # ── Task 10: 存股殖利率(v19.179 B1-b:改收「年均現金股利(元)」)
+    print("\n[Task 10] 存股殖利率 357")
     try:
-        r = calc_dividend_yield_357(100, 8, 0.75, 7)
-        print(f"  {r['signal']}: Y={r['est_yield']}%  ✅")
-        r2 = calc_dividend_yield_357(0, 8, 0.75, 5)
-        print(f"  Price=0防禦: {r2['signal']}  ✅")
-        r3 = calc_dividend_yield_357(100, -1, 0.75, 3)
-        print(f"  EPS<0防禦: {r3['signal']}  ✅")
+        r = calc_dividend_yield_357(100, avg_div_twd=8.0, div_years=5)
+        print(f"  {r['signal']}: Y={r['est_yield']}%  ✅")   # 8/100 = 8% → 甜甜價
+        r2 = calc_dividend_yield_357(0, avg_div_twd=8.0, div_years=5)
+        print(f"  Price=0防禦: {r2['signal']} est_yield={r2['est_yield']}  ✅")
+        r3 = calc_dividend_yield_357(100, avg_div_twd=0, div_years=None)
+        print(f"  無配息防禦: {r3['signal']} est_yield={r3['est_yield']}  ✅")
+        r4 = calc_dividend_yield_357(2320, avg_div_twd=13.70, div_years=5)
+        print(f"  2330 對帳: Y={r4['est_yield']}%(應 0.59) {r4['signal']}  ✅")
+        print(f"  配息年數: {count_dividend_paying_years([{'year': 2024, 'cash': 3.0}])}  ✅")
     except Exception as e:
         print(f"  ❌ {e}"); traceback.print_exc()
 

@@ -236,11 +236,24 @@ class V4StrategyEngine:
     def calculate_stop_loss(self) -> dict:
         """
         防守線 = min(MA20, 近10日爆量紅K低點)
-        
+
         Edge Case E-C: 資料 < 20 日 → 降級用 MA5 或最近低點
-        
+
+        ⚠️ **`stop_loss` 可能高於 `current_price`**（v19.180 B2-a）：
+        MA20 與「近 10 日爆量紅K低點」**兩者都可能在現價之上**（股價跌破月線
+        且跌破前次帶量紅K的低點時）。此時 `risk_pct` 會是**負數**，語意是
+        **「已跌破防守價，依本引擎規則應無條件停損」**，而不是「風險很小」。
+        下游**禁止**直接把 `risk_pct` 當成「下檔緩衝%」渲染（CLAUDE.md §1
+        「錯誤的數字比沒有數字更危險」）——請先看 `is_breached`。
+
         Returns:
-            dict: {stop_loss, ma20, breakout_low, current_price, msg}
+            dict: {stop_loss, ma20, breakout_low, current_price,
+                   risk_pct, is_breached, msg}
+
+            - risk_pct:    float | None — 帶號的「現價距防守價%」。
+                           >0 = 尚有下檔緩衝；<0 = **已跌破**；None = 無法計算。
+            - is_breached: bool | None  — True=現價已低於防守價（該停損）；
+                           False=尚未跌破（含正好等於）；None=算不出（§1 不猜）。
         """
         if len(self.df) < 5:
             return {
@@ -248,10 +261,26 @@ class V4StrategyEngine:
                 "ma20":          None,
                 "breakout_low":  None,
                 "current_price": None,
+                "risk_pct":      None,      # §1：算不出就是 None，不填 0 假裝正常
+                "is_breached":   None,      # §1：不知道有沒有跌破 ≠ 沒跌破
                 "msg":           "⚪ 新股觀望 — 資料不足，無法計算防守線",
             }
 
         current_price = float(self.df['close'].iloc[-1])
+
+        # §1 Fail Loud（不 Fake）：現價 0 / 負 / NaN / inf（例：close 欄全空被
+        # __init__ 的 fillna(0) 補成 0）→ 任何百分比都沒有意義。原本寫
+        # `... if current_price > 0 else 0`，那是「填一個看起來正常的 0」＝造假。
+        if not np.isfinite(current_price) or current_price <= 0:
+            return {
+                "stop_loss":     None,
+                "ma20":          None,
+                "breakout_low":  None,
+                "current_price": None,
+                "risk_pct":      None,
+                "is_breached":   None,
+                "msg":           f"⚠️ 現價無效（{current_price}）— 無法計算防守線，請檢查資料來源",
+            }
 
         # MA20（或 MA5 降級）
         if len(self.df) >= 20:
@@ -277,7 +306,22 @@ class V4StrategyEngine:
             breakout_low = float(recent_10['low'].min()) * 0.98
 
         stop_loss = round(min(ma20, breakout_low), 2)
-        sl_pct    = (current_price - stop_loss) / current_price * 100 if current_price > 0 else 0
+        sl_pct    = (current_price - stop_loss) / current_price * 100   # current_price>0 已於上方保證
+
+        # v19.180 B2-a：已跌破 = 現價**嚴格低於**防守價（等於視為「正好觸及」，尚未跌破）。
+        # 這個判斷放在 L2 引擎、以旗標往下游送，而不是讓每個 UI 各自 `stop > price` 比大小
+        # （§2.1 SSOT：同一個語意只能有一處定義）。
+        # §4.3 浮點比較用容差，禁止裸 `==`
+        at_stop     = bool(np.isclose(stop_loss, current_price, rtol=1e-9, atol=1e-9))
+        is_breached = bool(stop_loss > current_price) and not at_stop
+
+        if is_breached:
+            msg = (f"🚨 已跌破防守價 {stop_loss:.2f} 元"
+                   f"（現價 {current_price:.2f}，低於防守價 {abs(sl_pct):.1f}%）— 依規則無條件停損")
+        elif at_stop:
+            msg = f"⚠️ 現價正好觸及防守價 {stop_loss:.2f} 元 — 收盤跌破即無條件停損"
+        else:
+            msg = f"🛡️ 嚴格防守價：{stop_loss:.2f} 元（距現價 {sl_pct:.1f}%）— 收盤跌破請無條件停損"
 
         return {
             "stop_loss":     stop_loss,
@@ -285,7 +329,8 @@ class V4StrategyEngine:
             "breakout_low":  round(breakout_low, 2),
             "current_price": round(current_price, 2),
             "risk_pct":      round(sl_pct, 1),
-            "msg":           f"🛡️ 嚴格防守價：{stop_loss:.2f} 元（距現價 {sl_pct:.1f}%）— 收盤跌破請無條件停損",
+            "is_breached":   is_breached,
+            "msg":           msg,
         }
 
     # ─────────────────────────────────────────────────────────────

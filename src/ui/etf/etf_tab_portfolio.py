@@ -40,6 +40,51 @@ from shared.signal_thresholds import (
 from shared.thresholds import YIELD_MID, YIELD_LOW
 
 
+def _fetch_usdtwd_spot():
+    """抓 USD/TWD 即期匯率 → `(rate, as_of, source)`;全失敗回 `(None, None, None)`。
+
+    B1-a v19.179。**不新開抓取路徑**,只串既有的兩條 SSOT(§2.1):
+
+    1. **主**:`src.data.macro.fetch_usdtwd_close`（`data_registry.py:389` 登錄的
+       「USDTWD 匯率 / Yahoo / TWD=X」正式來源）—— 走 macro 的 NAS proxy 化
+       Chart API,已含 §3.2 sanity [25,40] 過濾與 `source` / `fetched_at` provenance。
+    2. **備**:`fetch_etf_price('TWD=X', period='5d')` —— 本檔 v19.64 原本就在用的
+       yfinance 直抓路徑(保留為 fallback,不是新增)。
+
+    §1:兩條都拿不到 → 回 None,由 caller 把美元持股排除並顯示 ⚠️,
+    **絕不**回 1.0 或任何「估一個合理值」。
+
+    §8.2:L5 直呼 L1 fetcher — 屬 §8.2.A `EX-PASSTHRU-1`(pass-through、L1 內
+    已有 `@st.cache_data`)。**升級觸發條件**:若第二個 consumer 需要同一組匯率,
+    本函式應上升為 L3 `src/services/fx_service.py`(現在只有投組頁用,先不做)。
+    """
+    import pandas as _pd_fx
+    # ① macro SSOT(proxy + sanity + provenance)
+    try:
+        from src.data.macro import fetch_usdtwd_close
+        _df = fetch_usdtwd_close(days_back=60)
+        if _df is not None and not _df.empty:
+            _last = _df.iloc[-1]
+            _as_of = _pd_fx.to_datetime(_last['date']).strftime('%Y-%m-%d')
+            return (float(_last['value']), _as_of,
+                    str(_last.get('source') or 'Yahoo:TWD=X'))
+    except Exception as _e_fx1:
+        print(f'[etf_tab_portfolio/fx] macro fetch_usdtwd_close 失敗:'
+              f'{type(_e_fx1).__name__}: {_e_fx1}')
+    # ② 本檔既有 fallback(yfinance TWD=X)
+    try:
+        from src.data.etf.etf_fetch import fetch_etf_price as _fep
+        _fx_df = _fep('TWD=X', period='5d')
+        if _fx_df is not None and not _fx_df.empty and 'Close' in _fx_df.columns:
+            _as_of = _pd_fx.to_datetime(_fx_df.index[-1]).strftime('%Y-%m-%d')
+            return (float(_fx_df['Close'].iloc[-1]), _as_of, 'Yahoo:TWD=X:Close')
+    except Exception as _e_fx2:
+        print(f'[etf_tab_portfolio/fx] yfinance TWD=X fallback 失敗:'
+              f'{type(_e_fx2).__name__}: {_e_fx2}')
+    print('[etf_tab_portfolio/fx] ❌ USD/TWD 兩條來源皆失敗 → 美元持股將被排除(§1)')
+    return (None, None, None)
+
+
 def render_etf_portfolio(gemini_fn=None):
     # ─ Late imports（避免循環 import）─
     import numpy as np
@@ -210,7 +255,7 @@ def render_etf_portfolio(gemini_fn=None):
                     _pf_price_end = _pe
     _pf_fetched_at = pd.Timestamp.now()  # v18.198 抓取完成時戳
 
-    # ── 算現值/資本利得/已領配息 ──
+    # ── 算現值/資本利得/已領配息（此段全為「該檔原幣別」）──
     for r in rows:
         _cp = _cur_prices.get(r['ticker'], 0.0)
         r['current_price']   = _cp
@@ -220,6 +265,43 @@ def render_etf_portfolio(gemini_fn=None):
         r['dividend_received'] = _div_received.get(r['ticker'], 0.0)
         # 總損益 = 資本利得 + 已領配息（粗略不含稅費）
         r['total_pnl']       = r['capital_gain'] + r['dividend_received']
+
+    # ══════════════════════════════════════════════════════════════════
+    # §4.1 **單一換匯點**（B1-a v19.179）
+    # ------------------------------------------------------------------
+    # 原碼把美元 ETF(BND/VOO…)的原幣金額直接加進 TWD 總額 = 預設 1 USD = 1 TWD,
+    # 造成整頁每個數字都錯(總現值 / 權重 / 股債比 / 核衛 / 產業曝險 / 風險貢獻 /
+    # VaR 元金額 / 壓測 / 效率前緣權重 / 組合殖利率)。
+    # 這裡是**整頁唯一**的換匯處:換完之後,下游 9 個消費點一律吃同一套 TWD 欄位。
+    # §1:匯率拿不到 → 該檔排除出總計並顯示 ⚠️,**不**預設 1.0。
+    # ══════════════════════════════════════════════════════════════════
+    from src.compute.etf.portfolio_fx import (
+        CURRENCY_USD, convert_rows_to_twd, fx_disclosure_caption, holding_currency,
+    )
+    _fx_rate = _fx_asof = _fx_source = None
+    if any(holding_currency(r['ticker']) == CURRENCY_USD for r in rows):
+        with st.spinner('抓取 USD/TWD 匯率（組合含美元計價 ETF）...'):
+            _fx_rate, _fx_asof, _fx_source = _fetch_usdtwd_spot()
+    _fx = convert_rows_to_twd(rows, usdtwd_rate=_fx_rate)
+    rows          = _fx['rows']        # ← 之後全頁只用這份（已統一 TWD）
+    _fx_excluded  = _fx['excluded']
+    _fx_rate_used = _fx['rate_used']
+
+    if _fx_excluded:
+        # §1 Fail Loud:講清楚哪幾檔、為什麼、影響是什麼 —— 不靜默 1:1 混算
+        _ex_names = '、'.join(str(_e.get('ticker')) for _e in _fx_excluded)
+        print(f'[etf_tab_portfolio/fx] ⚠️ USD/TWD 取不到 → 排除 {_ex_names} '
+              f'(共 {len(_fx_excluded)} 檔) 不計入 TWD 總計')
+        st.error(
+            f'⚠️ **{_ex_names} 為美元計價,但 USD/TWD 匯率取不到 —— '
+            f'未納入組合統計。**\n\n'
+            '下方所有金額 / 權重 / 股債比 / 風險數字都**只涵蓋台幣計價持股**。'
+            '（不會用 1 USD = 1 TWD 硬加 —— 那正是這個頁面過去算錯的原因。）'
+            '請點下方「🔄 強制重抓」再試一次。')
+    if not rows:
+        st.error('❌ 所有持股皆為外幣計價且 USD/TWD 匯率取不到 —— '
+                 '無法產生任何台幣口徑的組合統計（§1 寧可不給,也不給錯的數字）。')
+        return
 
     total_value = sum(r['current_value'] for r in rows)
     total_cost  = sum(r['cost'] for r in rows)
@@ -299,7 +381,7 @@ def render_etf_portfolio(gemini_fn=None):
     except Exception as _e_msl:
         print(f'[macro_stock_link/etf_pf] {type(_e_msl).__name__}: {_e_msl}')
 
-    # ── 資產總覽卡（總成本 / 總現值 / 資本利得 / 已領配息 / 總損益）──
+    # ── 資產總覽卡（總成本 / 總現值 / 資本利得 / 已領配息 / 總損益；全 TWD）──
     _gain_color = TRAFFIC_GREEN if total_gain >= 0 else TRAFFIC_RED
     _gain_sign  = '+' if total_gain >= 0 else ''
     _total_pnl  = total_gain + total_div
@@ -308,9 +390,9 @@ def render_etf_portfolio(gemini_fn=None):
     st.markdown(
         f'<div style="background:#0d1117;border:1px solid #30363d;border-radius:10px;'
         f'padding:16px 20px;margin:8px 0 16px;display:flex;gap:24px;flex-wrap:wrap;">'
-        f'<div><div style="font-size:11px;color:#8b949e;">總投入成本</div>'
+        f'<div><div style="font-size:11px;color:#8b949e;">總投入成本（TWD）</div>'
         f'<div style="font-size:18px;font-weight:700;color:#c9d1d9;">{total_cost:,.0f}</div></div>'
-        f'<div><div style="font-size:11px;color:#8b949e;">總現值</div>'
+        f'<div><div style="font-size:11px;color:#8b949e;">總現值（TWD）</div>'
         f'<div style="font-size:18px;font-weight:700;color:#c9d1d9;">{total_value:,.0f}</div></div>'
         f'<div><div style="font-size:11px;color:#8b949e;">資本利得</div>'
         f'<div style="font-size:18px;font-weight:700;color:{_gain_color};">'
@@ -321,6 +403,13 @@ def render_etf_portfolio(gemini_fn=None):
         f'<div style="font-size:18px;font-weight:900;color:{_pnl_color};">'
         f'{_pnl_sign}{_total_pnl:,.0f} ({_pnl_sign}{(_total_pnl/total_cost*100 if total_cost else 0):.2f}%)</div></div>'
         f'</div>', unsafe_allow_html=True)
+
+    # §2.2 provenance:換匯用了什麼匯率、哪一天、哪個來源 —— 全部講出來。
+    if _fx_rate_used:
+        st.caption(fx_disclosure_caption(_fx_rate_used, _fx_asof, _fx_source))
+        st.caption('ℹ️ 成本與現值**用同一個今日即期匯率**換算,故「資本利得」是'
+                   '**純價格報酬**、**不含匯兌損益** —— 你真實的匯兌損益取決於'
+                   '當初買進時的換匯匯率,本頁沒有那筆資料,所以不估（§1 不捏造）。')
 
     # v18.198 ══ 📊 投組資料新鮮度條 ══（價格截止日 + 抓取時間 + age traffic-light + 強制重抓）
     _pf_age_min = (pd.Timestamp.now() - _pf_fetched_at).total_seconds() / 60
@@ -359,16 +448,20 @@ def render_etf_portfolio(gemini_fn=None):
     except Exception as _e_nm:
         print(f'[etf_tab_portfolio] _etf_name helper 初始化失敗:{type(_e_nm).__name__}')
         def _etf_name(tk): return tk
+    # §4.1:單價欄一律顯示「原幣別」原值(美元 ETF 印台幣單價會誤導),
+    # 金額欄一律 TWD(已換匯)。幣別欄讓兩者不會被混讀。
     overview_df = pd.DataFrame([{
         'ETF':       r['ticker'],
         '名稱':       _etf_name(r['ticker']),
         '類型':       r.get('role', '—'),
+        '幣別':       r.get('currency', 'TWD'),
         '張數':       f'{r.get("lots", r["shares"]/1000):.2f}',
         '股數':       f'{int(r["shares"]):,}',
-        '均價':       f'{r["avg_price"]:.2f}',
-        '現價':       f'{r["current_price"]:.2f}' if r['current_price'] > 0 else '-',
-        '成本(元)':   f'{r["cost"]:,.0f}',
-        '現值(元)':   f'{r["current_value"]:,.0f}',
+        '均價(原幣)': f'{r.get("avg_price_native", r["avg_price"]):.2f}',
+        '現價(原幣)': (f'{r.get("current_price_native", r["current_price"]):.2f}'
+                       if r.get('current_price_native', r['current_price']) > 0 else '-'),
+        '成本(TWD)':  f'{r["cost"]:,.0f}',
+        '現值(TWD)':  f'{r["current_value"]:,.0f}',
         '資本利得':   f'{"+" if r["capital_gain"]>=0 else ""}{r["capital_gain"]:,.0f}',
         '利得%':      f'{"+" if r["capital_gain_pct"]>=0 else ""}{r["capital_gain_pct"]:.2f}%',
         '已領配息':   f'+{r["dividend_received"]:,.0f}' if r['dividend_received'] > 0 else '-',
@@ -377,10 +470,32 @@ def render_etf_portfolio(gemini_fn=None):
         '偏離度%':    f'{"+" if r["deviation"]>=0 else ""}{r["deviation"]:.1f}',
     } for r in rows])
     st.dataframe(overview_df, use_container_width=True, hide_index=True)
+    if _fx_rate_used:
+        st.caption(f'💱 「均價/現價」為**原幣別**單價；「成本/現值/資本利得/已領配息」'
+                   f'已用 1 USD = {_fx_rate_used:.4f} TWD 換算為台幣。')
+
+    # §1:換不了匯而被排除的持股 —— 仍然要讓使用者看見(只是不進總計)。
+    if _fx_excluded:
+        st.markdown('##### ⚠️ 未納入組合統計（匯率取不到，不做 1:1 硬加）')
+        st.dataframe(pd.DataFrame([{
+            'ETF':          _e['ticker'],
+            '名稱':          _etf_name(_e['ticker']),
+            '幣別':          _e.get('currency', 'USD'),
+            '股數':          f'{int(_e["shares"]):,}',
+            '均價(原幣)':    f'{_e.get("avg_price_native", _e["avg_price"]):.2f}',
+            '現價(原幣)':    f'{_e.get("current_price_native", _e["current_price"]):.2f}',
+            '現值(原幣)':    f'{_e.get("current_value_native", _e["current_value"]):,.2f}',
+            '狀態':          '⚠️ USD/TWD 匯率取不到，未換匯、不計入總計',
+        } for _e in _fx_excluded]), use_container_width=True, hide_index=True)
 
     # ── 🛰️ ETF 追蹤戰情室（核心/衛星分流燈號 + Sparkline）─────
     st.markdown('#### 🛰️ ETF 追蹤戰情室（核衛分流健檢）')
     st.caption('💡 **核心**看「總報酬 vs 殖利率 + MA60 趨勢」；**衛星**看「MA20 ± σ 五階分級買賣點」')
+    _usd_in_rows = [r['ticker'] for r in rows if r.get('currency') == CURRENCY_USD]
+    if _usd_in_rows:
+        # §4.1 誠實:本表逐檔獨立(不加總),市價/報酬皆為**原幣別**,未換匯亦不需換匯。
+        st.caption(f'💱 {"、".join(_usd_in_rows)} 為美元計價 —— 本表「市價」與'
+                   '各項報酬率皆為**原幣別**（逐檔獨立比較，不涉及跨幣別相加）。')
     with st.spinner('批次計算 ETF 健檢指標...'):
         _war_rows = [_compute_etf_warroom_row(r['ticker'], _etf_name(r['ticker']),
                                               r.get('role', '—'))
@@ -509,40 +624,51 @@ def render_etf_portfolio(gemini_fn=None):
 
     # ── 再平衡交易指令（含具體股數）────────────────────────────
     st.markdown('#### ⚖️ 再平衡交易指令')
-    # 現價 dict 已於上方資產追蹤段批次抓取，此處直接複用
-
+    # §4.1 B1-a:金額(adj)是 TWD → 換算股數的「現價」也必須是 TWD 口徑。
+    # 原碼用 `_cur_prices`(原幣別)當分母,美元 ETF 會算出約 32 倍的股數。
+    # 改讀已換匯的 r['current_price'];原幣單價另存 r['current_price_native'] 供顯示。
     rebal_actions = []
     for r in rows:
         if abs(r['deviation']) > tolerance:
             target_val = total_value * r['target_pct'] / 100
             adj        = target_val - r['current_value']
             action     = '買進' if adj > 0 else '賣出'
-            cur_price  = _cur_prices.get(r['ticker'], 0)
+            cur_price  = r.get('current_price', 0) or 0     # TWD 口徑
             shares     = int(abs(adj) / cur_price) if cur_price > 0 else 0
             rebal_actions.append({
+                # ⚠️ key 名維持 '金額(元)' / '現價' 不變 —— `etf_tab_ai.py:127`
+                # 直接讀這兩個 key 建 AI prompt(該檔不在本次改動範圍)。
+                # 值的**口徑**已改為 TWD(原為原幣別),語意因此才正確。
                 'ETF': r['ticker'], '動作': action,
                 '金額(元)': abs(adj), '偏離度%': r['deviation'],
                 '現價': cur_price, '建議股數': shares,
+                '幣別': r.get('currency', 'TWD'),
+                '現價(原幣)': r.get('current_price_native', cur_price),
             })
 
     if rebal_actions:
         ra_df = pd.DataFrame([{
             'ETF':    a['ETF'],
             '動作':   a['動作'],
-            '現價':   f'{a["現價"]:.2f}' if a['現價'] > 0 else '-',
+            '幣別':   a['幣別'],
+            '現價(原幣)': f'{a["現價(原幣)"]:.2f}' if a['現價(原幣)'] > 0 else '-',
+            '現價(TWD)':  f'{a["現價"]:.2f}' if a['現價'] > 0 else '-',
             '建議股數': f'{a["建議股數"]:,}' if a['建議股數'] > 0 else '-',
-            '金額(元)': f'{a["金額(元)"]:,.0f}',
+            '金額(TWD)': f'{a["金額(元)"]:,.0f}',
             '偏離度%': a['偏離度%'],
         } for a in rebal_actions])
         st.dataframe(ra_df, use_container_width=True, hide_index=True)
         for act in rebal_actions:
             color = 'green' if act['動作'] == '買進' else 'red'
             icon  = '📈' if act['動作'] == '買進' else '📉'
-            _share_txt = (f'約 <b>{act["建議股數"]:,} 股</b>（現價 {act["現價"]:.2f} 元）'
+            _px_txt = (f'{act["現價(原幣)"]:.2f} {act["幣別"]}'
+                       if act['幣別'] != 'TWD' else f'{act["現價"]:.2f} 元')
+            _share_txt = (f'約 <b>{act["建議股數"]:,} 股</b>（現價 {_px_txt}）'
                           if act['建議股數'] > 0 else '（無法取得現價）')
             _colored_box(
                 f'{icon} <b>{act["動作"]} {act["ETF"]}</b> {_share_txt}，'
-                f'預估金額 <b>{act["金額(元)"]:,.0f} 元</b>（偏離 {act["偏離度%"]:+.1f}%）',
+                f'預估金額 <b>{act["金額(元)"]:,.0f} 元 TWD</b>'
+                f'（偏離 {act["偏離度%"]:+.1f}%）',
                 color)
     else:
         _colored_box(f'✅ 所有標的偏離度均在 ±{tolerance}% 內，無需再平衡', 'green')
@@ -818,7 +944,6 @@ def render_etf_portfolio(gemini_fn=None):
     if _var_rets:
         from src.compute.etf.etf_calc import compute_portfolio_vs_benchmark
         from src.ui.render.etf_render import _plot_portfolio_vs_benchmark
-        from src.compute.etf.etf_dividend_schedule import dividend_currency
         from shared.signal_thresholds import PORTFOLIO_BENCHMARK_TICKER
         _bench_ret = pd.Series(dtype='float64')
         with st.spinner(f'抓取 {PORTFOLIO_BENCHMARK_TICKER} 基準...'):
@@ -847,10 +972,12 @@ def render_etf_portfolio(gemini_fn=None):
                     st.caption(f'⚠️ 視窗受最短一檔 **{_cmp["limiter"]}**'
                                f'（{_cmp["limiter_start"]:%Y-%m-%d} 才有資料）壓縮,樣本偏短。')
                 # §4.1 幣別誠實:美元計價持股(如 BND)為「原幣別」報酬,未含 USD/TWD 匯率
-                _usd_used = [t for t in _cmp['tickers_used'] if dividend_currency(t) == 'USD']
+                _usd_used = [t for t in _cmp['tickers_used']
+                             if holding_currency(t) == CURRENCY_USD]
                 if _usd_used:
                     st.caption(f'💱 註:{"、".join(_usd_used)} 為美元計價,此處為「原幣別」累積報酬,'
-                               '未計入 USD/TWD 匯率變動（與 VaR 段同一誠實原則,不靜默混算)。')
+                               '未計入 USD/TWD 匯率變動（**權重**已用今日即期匯率換算成 TWD 口徑,'
+                               '但**報酬序列**仍是原幣別 —— 與 VaR 段同一誠實原則,不靜默混算)。')
                 _fp, _fb = _cmp['final']['portfolio'], _cmp['final']['benchmark']
                 if _fp is not None and _fb is not None:
                     _ex = (_fp - _fb) * 100
@@ -878,7 +1005,6 @@ def render_etf_portfolio(gemini_fn=None):
     if _var_rets:
         from src.compute.etf.etf_calc import compute_efficient_frontier
         from src.ui.render.etf_render import _plot_efficient_frontier
-        from src.compute.etf.etf_dividend_schedule import dividend_currency
         from shared.signal_thresholds import (
             EFFICIENT_FRONTIER_N_SIM, EFFICIENT_FRONTIER_SEED,
         )
@@ -896,10 +1022,12 @@ def render_etf_portfolio(gemini_fn=None):
                        f'Sharpe 以無風險利率 **rf=0** 計算(僅供相對比較,非絕對夏普值)。'
                        '缺失日一律剔除、未填 0 或 ffill（§1 誠實）。')
             # §4.1 幣別誠實:美元計價持股(如 BND)為「原幣別」報酬,未含 USD/TWD 匯率
-            _ef_usd = [t for t in _ef['tickers_used'] if dividend_currency(t) == 'USD']
+            _ef_usd = [t for t in _ef['tickers_used']
+                       if holding_currency(t) == CURRENCY_USD]
             if _ef_usd:
                 st.caption(f'💱 註:{"、".join(_ef_usd)} 為美元計價,此處報酬為「原幣別」,'
-                           '未計入 USD/TWD 匯率變動（與 VaR / vs-0050 段同一誠實原則,不靜默混算）。')
+                           '未計入 USD/TWD 匯率變動（**權重**已換算為 TWD 口徑;'
+                           '與 VaR / vs-0050 段同一誠實原則,不靜默混算）。')
         else:
             st.info(f'ℹ️ 無法繪製效率前緣：{_ef["note"]}。'
                     '（需 ≥2 檔有足夠共同歷史的持股,§1 不畫假圖。）')
@@ -908,62 +1036,68 @@ def render_etf_portfolio(gemini_fn=None):
 
     # ── 配息日曆 × 年度現金流預估 ──────────────────────────────
     st.markdown('#### 💰 配息日曆 × 年度現金流預估')
-    st.caption('依過去12個月配息紀錄 × 持有股數（市值/現價）推估未來現金流入')
+    st.caption('依過去12個月配息紀錄 × 持有股數推估未來現金流入。'
+               '每股配息為**原幣別**；年收入與組合殖利率一律換算為 **TWD**，'
+               '與上方「總現值」同幣別（§4.1 分子分母不得混幣）。')
     # v18.335 PR-H3:彙整邏輯抽至 etf_helpers.compute_etf_annual_cashflow SSOT
     # v19.64:同時收 per-ETF 月度明細 → etf_dividend_schedule 畫「ETF × 12 月」矩陣。
     from src.compute.etf.etf_dividend_schedule import (
-        build_monthly_dividend_rows, dividend_currency, pay_months_str,
+        build_monthly_dividend_rows, pay_months_str,
     )
-    _div_data = []
-    _sched_holdings = []  # per-ETF monthly_distribution(原幣別)供每月明細矩陣
+    _per_share_native = {}   # ticker → 近1年每股配息(原幣別;每股單價本就該用原幣)
+    _sched_holdings = []     # per-ETF monthly_distribution(原幣別)供每月明細矩陣
     with st.spinner('抓取配息資料...'):
         for r in rows:
             _div_s  = fetch_etf_dividends(r['ticker'])
-            _price  = _cur_prices.get(r['ticker'], 0)
-            _shares = int(r['current_value'] / _price) if _price > 0 else 0
+            # §4.1 B1-a:原碼 `int(current_value / _price)` 在單一換匯點之後會爆掉
+            # (分子已換 TWD、分母仍是原幣 USD → 股數放大約 32 倍)。
+            # 而 current_value / current_price 本來就恆等於 shares,直接用 shares 即可
+            # (順帶修掉原本 int() 截斷可能把 200 股算成 199 的浮點誤差)。
+            _shares = int(round(r['shares']))
             _cf = compute_etf_annual_cashflow(_div_s, _shares, lookback_days=365)
             if _cf is None:
                 continue
-            _div_data.append({
-                'ETF': r['ticker'],
-                '持有股數': _shares,
-                '近1年每股配息': round(_cf['annual_per_share'], 4),
-                '預估年收入(元)': round(_cf['estimated_income']),
-                '配息次數/年': _cf['n_payments'],
-            })
+            _per_share_native[r['ticker']] = _cf['annual_per_share']
             _sched_holdings.append({
                 'ticker': r['ticker'],
                 'name': _etf_name(r['ticker']),
                 'monthly_distribution': _cf['monthly_distribution'],
                 'n_payments': _cf['n_payments'],
+                'shares': _shares,
             })
 
     # ── §4.1 幣別換算:美元計價 ETF(BND/AGG…)配息是 USD,不可直接加進 TWD。
-    # 若組合含美元 ETF,抓一次 USD/TWD 即期匯率(yfinance TWD=X);抓不到 → fail loud,
-    # 該檔不計入 TWD 總額並標 ⚠️(不腦補匯率)。全台股組合則跳過(rate=None 也不影響)。
-    _has_usd = any(dividend_currency(h['ticker']) == 'USD' for h in _sched_holdings)
-    _usdtwd = None
-    if _has_usd:
-        try:
-            _fx_df = fetch_etf_price('TWD=X', period='5d')
-            if _fx_df is not None and not _fx_df.empty and 'Close' in _fx_df.columns:
-                _usdtwd = float(_fx_df['Close'].iloc[-1])
-        except Exception as _e_fx:
-            print(f'[etf_tab_portfolio] USD/TWD 匯率抓取失敗:{type(_e_fx).__name__}: {_e_fx}')
-    _sched = build_monthly_dividend_rows(_sched_holdings, usdtwd_rate=_usdtwd)
+    # B1-a v19.179:匯率**不再在這裡重抓** —— 直接用上方「單一換匯點」已取得的
+    # `_fx_rate`(整頁同一個匯率、同一個 as-of)。原本這裡自己抓一次,會出現
+    # 「配息用 A 匯率、現值用(沒有)匯率」的分子分母不同口徑,正是 12.20% 假殖利率的成因。
+    # 另:換不了匯的美元持股已在單一換匯點被排除出 `rows`,故此處 any_needs_fx 恆為 False,
+    # 保留該分支只作為第二道防線。
+    _sched = build_monthly_dividend_rows(_sched_holdings, usdtwd_rate=_fx_rate_used)
     _monthly_twd = _sched['monthly_totals']
+
+    # 「近1年配息預估」表改由 _sched['rows'] 建 —— 年收入一律取**已換匯 TWD**
+    # (原碼 `_cf['estimated_income']` 是原幣別卻標「(元)」,BND 的 584 USD 被當 584 元)。
+    _div_data = [{
+        'ETF': _sr['ticker'],
+        '幣別': _sr['currency'],
+        '持有股數': int(_sr.get('shares') or 0),
+        '近1年每股配息(原幣)': round(_per_share_native.get(_sr['ticker'], 0.0), 4),
+        '預估年收入(TWD)': round(_sr['annual_twd']),
+        '配息次數/年': _sr.get('n_payments', 0),
+    } for _sr in _sched['rows']]
 
     if _div_data:
         _div_df = pd.DataFrame(_div_data)
-        _div_df['預估年收入(元)'] = _div_df['預估年收入(元)'].apply(lambda x: f'{x:,}')
+        _div_df['預估年收入(TWD)'] = _div_df['預估年收入(TWD)'].apply(lambda x: f'{x:,}')
         st.dataframe(_div_df, use_container_width=True, hide_index=True)
-        # v19.64:年現金流 + 組合殖利率改用「換匯後 TWD」總額(§4.1 不混幣)。
-        # 全台股組合時與原 native 加總完全相同;含美元 ETF 時才有差(且更正確)。
+        # §4.1 B1-a:分子(年現金流)與分母(總現值)**必須同幣別**。
+        # 兩者現在都來自同一個換匯點的 TWD 口徑 —— 原碼分子已換匯、分母沒換,
+        # 實機組合殖利率因此顯示 12.20%(真值約 3.9%),還被拿去下「殖利率優異」強結論。
         _total_annual_raw = _sched['annual_total_twd']
         _yoc = _total_annual_raw / total_value * 100 if total_value > 0 else 0
         _colored_box(
-            f'💰 組合預估年度現金流入：<b>{_total_annual_raw:,.0f} 元</b>'
-            f'（組合殖利率 {_yoc:.2f}%）'
+            f'💰 組合預估年度現金流入：<b>{_total_annual_raw:,.0f} 元 TWD</b>'
+            f'（組合殖利率 {_yoc:.2f}% ＝ 年現金流 ÷ 總現值，同為 TWD 口徑）'
             + ('&nbsp; ✅ 每年現金流穩定，適合存股策略'
                if _yoc >= YIELD_LOW else '&nbsp; 🟡 殖利率偏低，可考慮增加高息ETF比例'),
             'green' if _yoc >= YIELD_LOW else 'yellow')
@@ -984,13 +1118,15 @@ def render_etf_portfolio(gemini_fn=None):
                                  '增加 00878/00713 等高息 ETF 比例')
 
         # §4.1:含美元 ETF 但抓不到匯率 → fail loud 提示,不靜默把 USD 當 TWD 加。
+        # (第二道防線:換不了匯的檔已在單一換匯點被排除,正常不會進這個分支。)
         if _sched['any_needs_fx']:
             st.warning(
                 '⚠️ 組合含**美元計價 ETF**,但 USD/TWD 匯率抓取失敗 —— '
                 '這幾檔的配息**未換匯、不計入下方 TWD 總額**（避免把美元金額當台幣加）。'
                 '點上方「🔄 強制重抓」可再試。')
         elif _sched.get('rate_used'):
-            st.caption(f'💱 美元計價 ETF 配息已用 USD/TWD＝{_sched["rate_used"]:.3f} 換算為台幣。')
+            st.caption(fx_disclosure_caption(_sched['rate_used'], _fx_asof, _fx_source)
+                       + '　—— 與上方總現值使用**同一個**匯率與同一個日期。')
 
         # 月度現金流長條圖(已換匯 TWD;全台股組合與原值相同)
         import plotly.graph_objects as _go_div
@@ -1056,6 +1192,15 @@ def render_etf_portfolio(gemini_fn=None):
         'rows': rows, 'war_rows': _war_rows, 'rebal_actions': rebal_actions,
         'total_value': total_value, 'regime': regime,
         'loss_pct': loss_pct,
+        # §2.2 provenance:下游(AI prompt / 診斷頁)要能知道這頁的 TWD 口徑
+        # 是用哪個匯率、哪一天換的,以及有沒有持股被排除。
+        'currency': 'TWD',
+        'fx': {
+            'usdtwd': _fx_rate_used,
+            'as_of': _fx_asof,
+            'source': _fx_source,
+            'excluded_tickers': [str(_e.get('ticker')) for _e in _fx_excluded],
+        },
     }
 
 

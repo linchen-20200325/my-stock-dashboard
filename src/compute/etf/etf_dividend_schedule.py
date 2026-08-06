@@ -15,6 +15,10 @@ shared/dividend_frequency SSOT。
 """
 from __future__ import annotations
 
+from src.compute.etf.portfolio_fx import (  # L2→L2:幣別 + 匯率 sanity 單一 SSOT
+    holding_currency,
+    normalize_usdtwd_rate,
+)
 from shared.dividend_frequency import (
     PAY_FREQ_ANNUAL_MIN,
     PAY_FREQ_BIMONTHLY_MIN,
@@ -54,13 +58,11 @@ def classify_pay_frequency(n_payments) -> str:
 def dividend_currency(ticker) -> str:
     """ETF 配息幣別:台股 .TW/.TWO → 'TWD';其餘(美股 ETF)→ 'USD'。
 
-    註:本專案 ETF 只涵蓋台股 + 美股兩市場(見 etf_categories);
-    如未來擴充其他市場需再細分。
+    B1-a v19.179:改**委派** `portfolio_fx.holding_currency`(單一實作)。
+    原本本檔與投組換匯各有一份後綴判斷 = 兩份 SSOT,改版時會漂移(§2.1)。
+    公開簽章與回傳值完全不變,既有 caller / 測試 0 改動。
     """
-    _t = str(ticker or '').upper().strip()
-    if _t.endswith('.TW') or _t.endswith('.TWO'):
-        return 'TWD'
-    return 'USD'
+    return holding_currency(ticker)
 
 
 def build_monthly_dividend_rows(holdings, usdtwd_rate=None) -> dict:
@@ -70,14 +72,17 @@ def build_monthly_dividend_rows(holdings, usdtwd_rate=None) -> dict:
         holdings: list of dict,每檔需含:
             ticker(str)、name(str,可省)、
             monthly_distribution({1..12: 該月配息「原幣別」金額}) 或空、
-            n_payments(int)。
+            n_payments(int)、shares(int,可省,原樣帶回供 caller 建表)。
             金額為「該檔幣別」(TWD ETF 即 TWD,USD ETF 即 USD)。
-        usdtwd_rate: USD/TWD 即期匯率(float>0)。None / 無效 → USD 檔無法換匯。
+        usdtwd_rate: USD/TWD 即期匯率。None / 非數字 / 超出 §3.2 sanity 範圍
+            [USDTWD_SANITY_MIN, USDTWD_SANITY_MAX] → 一律視為拿不到匯率
+            (§1 不夾邊界、不退回 1.0),USD 檔無法換匯。
 
     Returns:
         dict {
-          'rows': [ {ticker, name, freq, currency, pay_months(list[int]),
-                     monthly_twd({1..12}), annual_twd, needs_fx(bool)} ],
+          'rows': [ {ticker, name, freq, n_payments, shares, currency,
+                     pay_months(list[int]), monthly_twd({1..12}),
+                     annual_twd, needs_fx(bool)} ],
           'monthly_totals': {1..12: TWD 加總(只計已換算成 TWD 者)},
           'annual_total_twd': float,
           'any_needs_fx': bool,        # 有 USD 檔換不了匯 → UI 顯示 ⚠️
@@ -87,12 +92,9 @@ def build_monthly_dividend_rows(holdings, usdtwd_rate=None) -> dict:
     §4.1:USD 金額**只有**在 rate 有效時才 × rate 計入 TWD 總額;否則該檔
     needs_fx=True 且其月額**不**進 monthly_totals / annual_total_twd(不靜默混幣)。
     """
-    try:
-        _rate = float(usdtwd_rate) if usdtwd_rate is not None else None
-    except (TypeError, ValueError):
-        _rate = None
-    if _rate is not None and _rate <= 0:
-        _rate = None
+    # B1-a v19.179:匯率正規化 + §3.2 sanity 走 portfolio_fx SSOT
+    # (原本只擋 <=0;現在連「25~40 以外的髒值」也一併 fail loud 不使用)。
+    _rate = normalize_usdtwd_rate(usdtwd_rate)
 
     rows: list[dict] = []
     monthly_totals = {m: 0.0 for m in range(1, 13)}
@@ -141,6 +143,11 @@ def build_monthly_dividend_rows(holdings, usdtwd_rate=None) -> dict:
             'ticker': _tk,
             'name': (h or {}).get('name') or _tk,
             'freq': classify_pay_frequency(_n_pay),
+            # B1-a v19.179 additive:caller 要用「已換匯 TWD 年收入」重建
+            # 「近1年配息預估」表時,需要一併帶回 n_payments / shares,
+            # 否則得另建第二份 dict = 兩份真相。
+            'n_payments': _n_pay,
+            'shares': (h or {}).get('shares'),
             'currency': _cur,
             'pay_months': _pay_months,
             'monthly_twd': _monthly_twd,

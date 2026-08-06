@@ -21,6 +21,9 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F4
 # 五桶危險門檻 SSOT = shared/macro_buckets.BUCKET_DANGER_SPECS(畫面燈號同源),
 # 由 L3 共用 prompt 元件 ai_structured_summary 轉成判讀句(個股 Tab 共用同一份)。
 from shared.signal_thresholds import PCR_PERCENT_SCALE_MIN as _PCR_PCT_SCALE_MIN
+# v19.180 B2-b §4.1:PCR 百分比↔比值刻度換算的唯一實作(L0)。取值端換算一次,
+# 規則引擎(calculate_system_state)與 AI prompt 共用同一個比值刻度變數。
+from shared.pcr_scale import normalize_pcr_to_ratio as _normalize_pcr
 from src.config import (  # noqa: F401
     FINMIND_TOKEN,
     LEEK_ALERT_HIGH_PCT,
@@ -138,6 +141,9 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 _mi_d   = st.session_state.get('m1b_m2_info') or {}
                 _bi_d   = st.session_state.get('bias_info') or {}
                 _li_d   = st.session_state.get('li_latest')
+                # `選PCR` 欄位是 leading_indicators 寫入時已 ×100 的**百分比刻度**
+                # （50~200）。`_pcr_v` 保留原始值僅供顯示 / 對帳，**不可**直接送任何
+                # 吃「標準比值刻度」的消費端（規則引擎 / MACRO_ALERT_RULES）。
                 _pcr_v  = None
                 if _li_d is not None and not _li_d.empty and '選PCR' in _li_d.columns:
                     _pcr_raw = str(_li_d.iloc[-1].get('選PCR', ''))
@@ -146,6 +152,12 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                             _pcr_v = float(_pcr_raw)
                         except ValueError:
                             pass
+                # v19.180 B2-b §4.1：換算**上移到取值端做一次**，規則引擎與 AI prompt
+                # 共用同一個比值刻度變數。修的 bug：v19.178 只在 prompt 那行 inline
+                # 換算，`_macro_numbers['PCR']` 仍送百分比刻度 → `pcr > 1.5` 對 126.80
+                # 恆真 → 曝險分數系統性 −10 → 曝險上限恆低 10 個百分點。
+                # 刻度不明（≤0 / >500 / NaN）→ None，§1 不猜、不回填中性預設。
+                _pcr_ratio, _pcr_scale_src = _normalize_pcr(_pcr_v)
                 # 外資期貨淨口數（負值=淨空單）
                 _fut_net_v = None
                 if _li_d is not None and not _li_d.empty and '外資大小' in _li_d.columns:
@@ -173,7 +185,10 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                     'US_FedFunds_Rate_pct': _fed_d.get('current'),             # v18.169
                     'US_FedFunds_PrevMonth_pct': _fed_d.get('prev'),           # v18.169
                     'BIAS240_pct':         _bi_d.get('bias_240'),
-                    'PCR':                 _pcr_v,
+                    # v19.180 B2-b：送**標準比值刻度**（引擎契約，見
+                    # `calculate_system_state` docstring）。原本送 `_pcr_v`
+                    # （百分比刻度）是 100× 量綱錯。
+                    'PCR':                 _pcr_ratio,
                     'Futures_Net_Short':   _fut_net_v,
                     'Index_Below_MA5':     _below_ma5,
                     'Sahm_Rule_Triggered': False,  # 尚無薩姆規則資料來源，預設 False
@@ -248,21 +263,17 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                         f'>{LEEK_ALERT_HIGH_PCT:+.0f}% 極端過熱（頂部訊號）；'
                         f'<{LEEK_ALERT_LOW_PCT:+.0f}% 極端悲觀（軋空動能）)'
                     )
-                if _pcr_v is not None:
-                    # v19.178 §4.1 量綱:`li_latest['選PCR']` 由 leading_indicators 寫入時
-                    # 已 ×100 轉百分比刻度(50~200,evidence: macro_alert.py:285-295 同註),
-                    # 但 SSOT 門檻 MACRO_ALERT_RULES['pcr'] 是**標準 PCR 比值刻度**(0.5~2.0)。
-                    # 原 prompt 直接把 126.80 配上「>1.3 恐慌」→ 100× 量綱錯,LLM 必然
-                    # 讀成「極度恐慌」。此處**只為 prompt** 換算回比值刻度並標明兩種刻度。
-                    # ⚠️ 同一個 `_pcr_v` 也餵給 `calculate_system_state`(見上方 _macro_numbers),
-                    #   那條路徑仍是百分比刻度 → `pcr > 1.5` 恆真 → 曝險分數恆 -10。
-                    #   修那條會直接位移「建議持股」數字,屬 §8.4「需分開提案」的行為變更,
-                    #   本版**刻意不動**,已列入稽核報告待 user 核准。
-                    _pcr_ratio = _pcr_v / 100.0 if _pcr_v > _PCR_PCT_SCALE_MIN else _pcr_v
+                if _pcr_ratio is not None:
+                    # v19.180 B2-b:換算已上移至取值端(`_pcr_ratio`,SSOT
+                    # `shared.pcr_scale.normalize_pcr_to_ratio`),此處只負責敘述,
+                    # 不再自行 inline 換算 —— 那正是 v19.178 只修一半的根因:
+                    # prompt 換算了、`_macro_numbers['PCR']` 沒換,同一份值兩種刻度。
+                    # 判別線仍如實告訴 LLM,讓它知道畫面顯示的百分比與此處比值同源。
                     _ctx.append(
                         f'• 選擇權 PCR（Put/Call 比值）：{_pcr_ratio:.2f}'
-                        f'（原始欄位為百分比刻度 {_pcr_v:.1f}，此處已換算回標準比值；'
-                        f'{_pcr_alert_rule()}）')
+                        f'（原始欄位值 {_pcr_v:.1f}；系統以 >{_PCR_PCT_SCALE_MIN:.0f} '
+                        f'判定為百分比刻度並 ÷100 換回標準比值，'
+                        f'本次判定：{_pcr_scale_src}；{_pcr_alert_rule()}）')
                 if _adl_ratio_v is not None:
                     # v19.178 正名:原寫「ADR 廣度指標」—— ADR 在金融是 American
                     # Depositary Receipt(美國存託憑證),與本欄毫無關係,會誤導 LLM。

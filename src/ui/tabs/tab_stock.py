@@ -41,6 +41,8 @@ from shared.signal_thresholds import (
     CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT,
     FGMS_LABEL_T2,
     FGMS_LABEL_T3,
+    FIXED_PLAN_RR_T1,   # v19.179 B1-b:固定停利停損方案的先天盈虧比(常數,非個股資訊)
+    FIXED_PLAN_RR_T2,
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
     MARGIN_BALANCE_WARN_THRESHOLD_YI,
     SQ_GOOD_MIN,
@@ -637,7 +639,17 @@ padding:14px 18px;margin-bottom:12px;">
         _tp1_p = round(_stop['stop_profit_t1'], 2)
         _tp2_p = round(_stop['stop_profit_t2'], 2)
         _sl_p  = round(_stop['stop_loss_default'], 2)
-        _rr_p  = round((_tp1_p - _cur_p) / max(_cur_p - _sl_p, 0.01), 2) if _cur_p > 0 else 0
+        # ── v19.179 B1-b:「盈虧比」誠實化（CLAUDE.md §1 / §3.3）────────────
+        # 舊碼 `round((_tp1_p - _cur_p) / max(_cur_p - _sl_p, 0.01), 2)`：
+        # _tp1_p = 現價×(1+5%)、_sl_p = 現價×(1-8%) ⇒ 現價完全約掉
+        # ⇒ 結果 ≡ 5/8 = 0.625，**對任何股票、任何價格都一樣**（實機 2330 = 0.63x），
+        # 旁邊卻標「≥1.5 較理想」＝ 這個方案在數學上永遠達不到的目標（假結論）。
+        # 改法：(c) 保留但正名為「固定方案盈虧比」，拿掉誤導門檻，並同時列出 T2，
+        # 讓「這套預設方案 T1 連 1 都不到、T2 也到不了 1.5」這個**真實資訊**被看見。
+        # 取 SSOT 推導常數而不是從 round() 後價位反推 —— 後者會有 ±0.01 假抖動，
+        # 看起來像「因股而異」，其實只是四捨五入雜訊。
+        # 註：同頁另有「實際盈虧比（紅K低點停損）」＝ 不同義，兩者已各自具名，
+        #     不再出現兩張卡都叫「盈虧比」卻算不同東西的情形。
         with _sp_c1:
             st.markdown(kpi(f'停利目標1 (+{_stop["t1_pct"]:.0f}%)', f'{_tp1_p}', '短線先入袋', TRAFFIC_GREEN, '#0d2818'), unsafe_allow_html=True)
         with _sp_c2:
@@ -645,7 +657,18 @@ padding:14px 18px;margin-bottom:12px;">
         with _sp_c3:
             st.markdown(kpi(f'建議停損 (-{_stop["loss_pct"]:.0f}%)', f'{_sl_p}', '跌破認賠', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
         with _sp_c4:
-            st.markdown(kpi('盈虧比', f'{_rr_p}x', '≥1.5 較理想', '#ffd700', '#1a1000'), unsafe_allow_html=True)
+            st.markdown(kpi(
+                '固定方案盈虧比',
+                f'T1 {FIXED_PLAN_RR_T1:.2f}x／T2 {FIXED_PLAN_RR_T2:.2f}x',
+                f'+{_stop["t1_pct"]:.0f}%／+{_stop["t2_pct"]:.0f}% 對 −{_stop["loss_pct"]:.0f}% '
+                f'的先天值，與個股無關',
+                '#8b949e', '#161b22'), unsafe_allow_html=True)
+        st.caption(
+            f'ℹ️「固定方案盈虧比」是**方案本身**的結構常數（停利% ÷ 停損%），'
+            f'不是這檔股票的評分 —— 換任何一檔股票都是同兩個數字。'
+            f'T1 未達 1 表示：用 +{_stop["t1_pct"]:.0f}% 出場時，冒的風險大於目標獲利，'
+            f'想拉高盈虧比要嘛改用 +{_stop["t2_pct"]:.0f}% 目標、要嘛把停損收更近。'
+            f'要看**隨個股變動**的盈虧比，請看下方「實際盈虧比（紅K低點停損）」。')
 
         # ── v18.336 PR-H4:📊 操作雷達(4 卡 — 對稱組合 Tab,個股 Tab P1 補齊)
         # 整合「狀態燈 + 月線乖離 + 年線乖離 + 量比」四個即時操作維度。
@@ -802,11 +825,30 @@ padding:14px 18px;margin-bottom:12px;">
                 st.markdown(kpi('絕對停損線', f'{_abs_sl:.2f}',
                                 f'紅K低點（距{_bias_sl:.1f}%）', _sl_color, '#2a0d0d'), unsafe_allow_html=True)
             else:
-                st.markdown(kpi('絕對停損線', _sl_p.__str__(), '跌破即出場', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
+                # v19.179 B1-b:無大量紅K 時退回固定 -8%,標題卻叫「絕對停損線」
+                # → 與有紅K 時同名不同義。副標明說是退回值,不假裝是紅K 錨點。
+                st.markdown(kpi('絕對停損線', f'{_sl_p}',
+                                f'近{_win20_n}日無大量紅K → 退回固定 −{_stop["loss_pct"]:.0f}%',
+                                TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
         with _sp_c7b:
-            _rr2 = round((_tp1_p - _cur_p) / max(_cur_p - (_abs_sl or _sl_p), 0.01), 2) if _cur_p else 0
-            _rr_color = TRAFFIC_GREEN if _rr2 >= 1.5 else (TRAFFIC_YELLOW if _rr2 >= 1 else TRAFFIC_RED)
-            st.markdown(kpi('實際盈虧比', f'{_rr2}x', '≥1.5 可操作', _rr_color, '#0d1117'), unsafe_allow_html=True)
+            # v19.179 B1-b（§1 Fail Loud）:舊碼 `(_abs_sl or _sl_p)` 在沒有紅K 低點時
+            # 偷偷換成固定 -8% 停損,算出來的其實就是上方那個固定方案常數 0.63x,
+            # 卻仍掛「實際盈虧比 / ≥1.5 可操作」 → 拿方案常數冒充個股實測值。
+            # 另補一個邊界:紅K 低點已高於現價(股價跌破該錨點)時,分母為負,
+            # 舊碼被 max(...,0.01) 夾成 0.01 → 盈虧比噴到數千倍的假數字。
+            _rr2 = None
+            if _abs_sl and _cur_p > 0 and _cur_p > _abs_sl:
+                _rr2 = round((_tp1_p - _cur_p) / (_cur_p - _abs_sl), 2)
+            if _rr2 is None:
+                _rr_why = ('近20日無大量紅K → 無停損錨點' if not _abs_sl
+                           else '現價已跌破紅K低點 → 停損距離為負')
+                st.markdown(kpi('實際盈虧比（紅K低點停損）', '未評估', _rr_why,
+                                '#484f58', '#0d1117'), unsafe_allow_html=True)
+            else:
+                _rr_color = TRAFFIC_GREEN if _rr2 >= 1.5 else (TRAFFIC_YELLOW if _rr2 >= 1 else TRAFFIC_RED)
+                st.markdown(kpi('實際盈虧比（紅K低點停損）', f'{_rr2}x',
+                                f'停利 +{_stop["t1_pct"]:.0f}% 對 紅K低點；≥1.5 可操作',
+                                _rr_color, '#0d1117'), unsafe_allow_html=True)
 
         with _sp_c5:
             st.markdown(kpi(f'近{_win20_n}日壓力', f'{_hi20_p:.2f}', f'距現價 +{_dist_hi}%', TRAFFIC_RED, '#2a0d0d'), unsafe_allow_html=True)
@@ -1670,12 +1712,20 @@ padding:14px 18px;margin-bottom:12px;">
                     # 送給 AI 的說明不會動 → AI 會照舊百分比敘事。改為插值。
                     f'停利目標1(+{STOP_PROFIT_T1_PCT:g}%)={_tp1_p} / '
                     f'目標2(+{STOP_PROFIT_T2_PCT:g}%)={_tp2_p}',
-                    f'建議停損(-{STOP_LOSS_DEFAULT_PCT:g}%)={_sl_p} | 盈虧比={_rr_p}x',
+                    f'建議停損(-{STOP_LOSS_DEFAULT_PCT:g}%)={_sl_p}',
+                    # v19.179 B1-b:原本餵 `盈虧比={_rr_p}x`,而那個值恆等於
+                    # T1%/停損% = 0.63,與個股無關 → AI 會對每一檔都寫出
+                    # 「盈虧比不佳」的同一句假結論。改為明講它是方案常數。
+                    f'固定方案盈虧比(方案先天常數,與個股無關)：'
+                    f'T1={FIXED_PLAN_RR_T1:.2f}x / T2={FIXED_PLAN_RR_T2:.2f}x',
                 ]
                 if _entry_half:
                     _sr_parts2.append(f'大量紅K 1/2 低風險買點={_entry_half}')  # v19.174 去識別化
                 if _abs_sl:
                     _sr_parts2.append(f'紅K低點絕對停損={_abs_sl}')
+                _sr_parts2.append(
+                    f'實際盈虧比(停利+{STOP_PROFIT_T1_PCT:g}% 對 紅K低點停損)='
+                    + (f'{_rr2}x' if _rr2 is not None else '未評估(無紅K低點錨點)'))
                 _sr_str2 = ' | '.join(_sr_parts2)
             except Exception:
                 _sr_str2 = '（支撐壓力/停利停損未計算）'

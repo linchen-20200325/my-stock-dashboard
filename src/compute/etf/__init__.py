@@ -2,13 +2,15 @@
 from . import (  # noqa: F401
     etf_calc, etf_quality, etf_helpers,
     etf_categories, etf_scoring_helpers,
-    etf_smart_analysis, etf_recommendation, etf_dividend_schedule,
+    etf_smart_analysis, etf_recommendation,
+    portfolio_fx, etf_dividend_schedule,   # portfolio_fx 先於 dividend_schedule(後者 import 前者)
 )
 
 _SUBMODULES = (
     etf_calc, etf_quality, etf_helpers,
     etf_categories, etf_scoring_helpers,
-    etf_smart_analysis, etf_recommendation, etf_dividend_schedule,
+    etf_smart_analysis, etf_recommendation,
+    portfolio_fx, etf_dividend_schedule,   # portfolio_fx 先於 dividend_schedule(後者 import 前者)
 )
 
 

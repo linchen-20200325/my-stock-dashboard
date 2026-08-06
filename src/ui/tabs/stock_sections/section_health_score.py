@@ -14,7 +14,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
 from shared.signal_thresholds import (
     BB_BW_SHRINK_WARN_RATIO,  # Phase 2 Batch 5b v18.429:布林帶寬收縮 warn SSOT
@@ -30,6 +30,8 @@ from src.compute.strategy import (
     detect_bollinger_breakout,
 )
 from src.compute.strategy.v4_strategy_engine import V4StrategyEngine
+# v19.179 B1-b:配息年數改由實際 yearly 資料數出(原讀一個從沒被寫過的 session key)
+from src.compute.strategy.v5_modules import count_dividend_paying_years
 from src.ui.render import STRATEGY_TECHNICAL, kpi, strategy_conclusion  # v19.174 去識別化
 from src.ui.render.app_render import render_health_score
 
@@ -231,18 +233,45 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             _v4c1, _v4c2, _v4c3 = st.columns(3)
 
             # Task 4: Stop Loss
+            # v19.180 B2-a（§1 Fail Loud, Never Fake）：防守價可能**高於現價**
+            # （MA20 與爆量紅K低點同時在現價之上）。原本無條件印
+            # 「風險 {risk_pct}%」，跌破時就變成「風險 -1.1%」，使用者讀成
+            # 「風險很小」，實際語意卻是「你已經該出場了」。改為讀 L2 引擎給的
+            # `is_breached` 旗標分三態渲染，UI 不自己比大小（§2.1 SSOT）。
             with _v4c1:
                 _sl = _v4rep['stop_loss']
-                _sl_color = '#da3633' if _sl['stop_loss'] else '#484f58'
+                _sl_val = _sl.get('stop_loss')
+                _sl_breach = _sl.get('is_breached')
+                _sl_risk = _sl.get('risk_pct')
+                if _sl_val is None or _sl_breach is None:
+                    # 資料不足 / 現價無效 → 灰底 N/A，**不填 0 也不猜**（§1）
+                    _sl_color, _sl_bg = TRAFFIC_NEUTRAL, '#0d1117'
+                    _sl_main = 'N/A'
+                    _sl_sub = _sl.get('msg', '無法計算防守線')
+                    _sl_foot = ''
+                elif _sl_breach:
+                    _sl_color, _sl_bg = TRAFFIC_RED, '#2a0d0d'
+                    _sl_main = f'🚨 已跌破 {_sl_val} 元'
+                    _sl_sub = (f'MA20={_sl["ma20"]} | 現價低於防守價 '
+                               f'{abs(_sl_risk):.1f}%' if _sl_risk is not None
+                               else f'MA20={_sl["ma20"]}')
+                    _sl_foot = '依規則無條件停損'
+                else:
+                    _sl_color, _sl_bg = '#da3633', '#0d1117'
+                    _sl_main = f'{_sl_val} 元'
+                    _sl_sub = (f'MA20={_sl["ma20"]} | 下檔緩衝 {_sl_risk:.1f}%'
+                               if _sl_risk is not None else f'MA20={_sl["ma20"]}')
+                    _sl_foot = '跌破無條件停損'
+                _sl_foot_html = (f'<div style="font-size:10px;color:{_sl_color};">'
+                                 f'{_sl_foot}</div>' if _sl_foot else '')
                 st.markdown(
-                    f'<div style="background:#0d1117;border:1px solid {_sl_color};'
+                    f'<div style="background:{_sl_bg};border:1px solid {_sl_color};'
                     f'border-radius:8px;padding:12px;text-align:center;">'
                     f'<div style="font-size:10px;color:#484f58;">🛡️ v4 防守價</div>'
                     f'<div style="font-size:20px;font-weight:900;color:{_sl_color};">'
-                    f'{_sl["stop_loss"] or "N/A"} 元</div>'
-                    f'<div style="font-size:11px;color:#8b949e;">MA20={_sl["ma20"]} | '
-                    f'風險 {_sl["risk_pct"]}%</div>'
-                    f'<div style="font-size:10px;color:#da3633;">跌破無條件停損</div>'
+                    f'{_sl_main}</div>'
+                    f'<div style="font-size:11px;color:#8b949e;">{_sl_sub}</div>'
+                    f'{_sl_foot_html}'
                     f'</div>', unsafe_allow_html=True)
 
             # Task 3: VPOC Resistance
@@ -294,24 +323,31 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                     f'</div>', unsafe_allow_html=True)
 
             # Task 10: 357 存股殖利率
+            # v19.179 B1-b（CLAUDE.md §4.1 量綱 / §2.1 SSOT / §1 Fail Loud）:
+            #   舊碼第 3 個位置參數傳 `avg_div2 / max(price2, 1)` —— 那是**殖利率**，
+            #   但函式契約要的是**配發率**，函式內再 `eps × payout / price` ⇒ 除以
+            #   股價兩次 ⇒ 2330 實機顯示 0.01%（真值 0.59%），並被判成「🔴 超貴」。
+            #   舊碼第 4 個參數讀 `st.session_state['t2_div_hist']`，該 key 全站沒有
+            #   任何寫入點 ⇒ 配息年數恆為 0（把「沒查」講成「查到 0 年」）。
+            #   現在：直接餵已在手的 avg_div2（元）+ yearly2（近 5 年配息），
+            #   分級與 B 區 357 共用 `classify_stock_357_price`，兩張卡不可能再打架。
             with _v5_r2:
                 _dy5 = calc_dividend_yield_357(
                     price2 or 0,
-                    pd.to_numeric(
-                        (qtr2['EPS'] if qtr2 is not None and not qtr2.empty and 'EPS' in qtr2.columns
-                         else pd.Series(dtype=float)).head(4),
-                        errors='coerce').fillna(0).sum(),
-                    avg_div2 / max(price2, 1) if avg_div2 and price2 else 0,
-                    len([d for d in (st.session_state.get('t2_div_hist', []) or []) if d > 0])
+                    avg_div_twd=avg_div2,
+                    div_years=count_dividend_paying_years(yearly2),
                 )
                 _dy5c = _dy5['color']
+                # §1：est_yield 為 None＝未評估，顯示「未評估」而不是 0%／N/A%
+                _dy5_val = ('未評估' if _dy5['est_yield'] is None
+                            else f'{_dy5["est_yield"]:.2f}%')
                 st.markdown(
                     f'<div style="background:#0d1117;border:1px solid {_dy5c};'
                     f'border-radius:8px;padding:12px;text-align:center;">'
                     f'<div style="font-size:10px;color:#484f58;">💰 v5 存股殖利率</div>'
                     f'<div style="font-size:14px;font-weight:900;color:{_dy5c};">'
-                    f'{_dy5["est_yield"] or "N/A"}%</div>'
-                    f'<div style="font-size:10px;color:#8b949e;">{_dy5["signal"][:8]}</div>'
+                    f'{_dy5_val}</div>'
+                    f'<div style="font-size:10px;color:#8b949e;">{_dy5["signal"][:12]}</div>'
                     f'</div>', unsafe_allow_html=True)
 
             # Task 5: 財報領先

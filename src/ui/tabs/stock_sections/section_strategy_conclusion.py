@@ -25,6 +25,7 @@ from shared.colors import (
     TRAFFIC_RED,
     TRAFFIC_YELLOW,
 )
+from src.ui.render import STRATEGY_VALUATION  # v19.174 去識別化：策略代號 SSOT
 from src.ui.render.tab_sections import border_left_banner  # R-UI-1 v18.412
 from shared.signal_thresholds import (
     FGMS_LABEL_T1,
@@ -64,7 +65,9 @@ def render_strategy_conclusion_section(
                 _rv_c = TRAFFIC_GREEN if '✅' in _rv_sig else (TRAFFIC_RED if '🔴' in _rv_sig else TRAFFIC_YELLOW)
                 st.markdown(border_left_banner(
                     _rv_c,
-                    f'<span style="font-size:11px;color:#8b949e;">🎓 策略1 · 月營收</span>　'
+                    # v19.180 B2-a：同檔毛利率那行改吃常數後，這行一併改，避免
+                    # 「一處常數、一處手打」的半套 SSOT（下次改代號又會漏一半）。
+                    f'<span style="font-size:11px;color:#8b949e;">🎓 {STRATEGY_VALUATION} · 月營收</span>　'
                     f'<span style="font-weight:700;">{_rv_sig}（YoY:{_rv_latest:+.1f}%）</span>',
                     padding_y=7, font_size=13,
                 ), unsafe_allow_html=True)
@@ -86,7 +89,9 @@ def render_strategy_conclusion_section(
                                else f'🔴 {_gp_now:.1f}%（低毛利<20%）')
                     st.markdown(border_left_banner(
                         _gp_c,
-                        f'<span style="font-size:11px;color:#8b949e;">🎓 陳重銘 · 毛利率</span>　'
+                        # v19.180 B2-a：v19.174 去識別化漏網（左右鄰居都已改，只有這行沒改）。
+                        # 改吃 ui_widgets 的策略代號常數，而非再手打一次字面（§2.1 SSOT / §3.3）。
+                        f'<span style="font-size:11px;color:#8b949e;">🎓 {STRATEGY_VALUATION} · 毛利率</span>　'
                         f'<span style="font-weight:700;">{_gp_msg}</span>',
                         padding_y=7, font_size=13,
                     ), unsafe_allow_html=True)

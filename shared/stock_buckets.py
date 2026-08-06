@@ -214,7 +214,12 @@ def compute_stock_section_levels(
         }
 
     # ── financials / ai：on-demand，於 section 內才抓 → gray 不偽造（§1）──
-    out["financials"] = {"level": "gray", "headline": "展開下方體檢表後評定 MJ 等級"}
+    # v19.180 B2-a：「MJ 等級」是 v19.174 去識別化的漏網（`MJ_*` 門檻已改名 `FH_*`，
+    # 見 shared/financial_health_thresholds.py）。此處指的是體檢表底部
+    # `no_ai_overall_verdict()` 給的 A+/A/B… 綜合評等 → 正名「財報體檢等級」。
+    # 本模組是 L0（§8.2 不得依賴 L1+），故不 import L4 的 STRATEGY_FINANCIAL 常數，
+    # 用中性業務名詞即可（此處本來就不顯示策略代號）。
+    out["financials"] = {"level": "gray", "headline": "展開下方體檢表後評定財報體檢等級"}
     out["ai"] = {"level": "gray", "headline": "點下方按鈕生成 AI 五維評估"}
 
     return out
