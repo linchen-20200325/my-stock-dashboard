@@ -38,6 +38,14 @@ from shared.cache_layer import _CACHE_SENTINEL, _pkl_get, _pkl_put
 from shared.fetch_monitor import monitored  # v19.96 批次4 Item1
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.macro_compute import _recent_date
+from shared.margin_schema import (  # B3 v19.179 融資口徑判定 SSOT(L0,cron 共用)
+    MARGIN_WIDE_TODAY_BALANCE_COLS,
+    TWD_PER_YI,
+    is_margin_money_row,
+    margin_money_to_yi,
+    margin_sanity_ok,
+    pick_today_balance_cols,
+)
 from shared.signal_thresholds import (  # v19.74 融資餘額 §3.2 合理區間 SSOT
     MARGIN_BALANCE_SANITY_MAX_YI,
     MARGIN_BALANCE_SANITY_MIN_YI,
@@ -493,8 +501,13 @@ def _margin_sanity_ok(v_yi: float) -> bool:
 
     超出 [MARGIN_BALANCE_SANITY_MIN_YI, MARGIN_BALANCE_SANITY_MAX_YI] →
     疑似單位/欄位誤判,呼叫端應棄用該來源改走下一 fallback（§1 寧缺勿錯）。
+
+    B3 v19.179:實作下沉 `shared/margin_schema.margin_sanity_ok`(L0 SSOT),
+    本名保留為 backward-compat 別名(既有 6 路 fallback + 既有測試皆引用)。
+    cron `scripts/update_macro_history.py` / `scripts/export_stock_db.py`
+    吃的是**同一個** L0 函式,不再各寫一份。
     """
-    return MARGIN_BALANCE_SANITY_MIN_YI < v_yi < MARGIN_BALANCE_SANITY_MAX_YI
+    return margin_sanity_ok(v_yi)
 
 
 def _finmind_margin_to_yi(raw_twd: float) -> float | None:
@@ -509,12 +522,16 @@ def _finmind_margin_to_yi(raw_twd: float) -> float | None:
       - 同組另一列 9,614,955 為 MarginPurchaseVolume(單位=張,市場融資張數量級),
         **不是金額** — caller 必須以 name 過濾 Money 列,勿混入換算
     換算後過 _margin_sanity_ok 才回值,否則 None(log + 棄用,fallback 鏈接手)。
+
+    B3 v19.179:換算 + sanity 下沉 `shared/margin_schema.margin_money_to_yi`
+    (L0 SSOT,cron 共用);本函式僅保留「棄用時印 log」這層 side effect。
     """
     if raw_twd <= 0:
         return None
-    _yi = raw_twd / 1e8
-    if _margin_sanity_ok(_yi):
-        return round(_yi, 1)
+    _v = margin_money_to_yi(raw_twd)
+    if _v is not None:
+        return _v
+    _yi = raw_twd / TWD_PER_YI
     print(f'[融資餘額/FinMind] ⚠️ {raw_twd} 元 → {_yi:.1f}億 超出合理區間 '
           f'({MARGIN_BALANCE_SANITY_MIN_YI:.0f}~{MARGIN_BALANCE_SANITY_MAX_YI:.0f}億),棄用')
     return None
@@ -552,8 +569,8 @@ def fetch_margin_balance(date_str=None):
         _df_mb0 = _fm_mb('TaiwanStockTotalMarginPurchaseShortSale', '', _start_mb, _ds_mb, _tok_mb)
         if _df_mb0 is not None and not _df_mb0.empty:
             _cols_mb0 = list(_df_mb0.columns)
-            _bal_cols0 = [c for c in _cols_mb0 if any(k in c for k in
-                          ['alance', '餘額', 'amount', 'Amount'])]
+            # B3 v19.179:餘額欄 / 當日欄判定改走 shared.margin_schema(L0 SSOT)
+            _bal_cols0 = pick_today_balance_cols(_cols_mb0)
             _df_mb0 = _df_mb0.sort_values('date')
             _last_d0 = str(_df_mb0['date'].iloc[-1])
             _grp0 = _df_mb0[_df_mb0['date'] == _last_d0]
@@ -563,17 +580,11 @@ def fetch_margin_balance(date_str=None):
                 # v19.79(production log 實證):同組含 MarginPurchaseVolume(張)與
                 # MarginPurchaseMoney(元)兩種 margin 列 — 只認 **Money** 列;
                 # YesBalance(昨日)欄排除,只取當日 TodayBalance/餘額欄。
-                _today_cols0 = [c for c in _bal_cols0
-                                if not c.lower().startswith('yes')]
+                # B3 v19.179:name / 欄位判定全走 shared.margin_schema(L0 SSOT),
+                # 與 cron scripts/update_macro_history.py 吃同一份規則。
+                _today_cols0 = _bal_cols0   # pick_today_balance_cols 已排除 Yes*
                 for _, _r0 in _grp0.iterrows():
-                    _nm0 = str(_r0.get('name', ''))
-                    _nm0_l = _nm0.lower()
-                    _is_margin_money0 = (
-                        ('marginpurchase' in _nm0_l.replace('_', '')
-                         and 'money' in _nm0_l)
-                        or '融資金額' in _nm0
-                    )
-                    if not _is_margin_money0:
+                    if not is_margin_money_row(_r0.get('name', '')):
                         continue
                     for _bc0 in _today_cols0:
                         try:
@@ -585,12 +596,14 @@ def fetch_margin_balance(date_str=None):
                         if _cand0 is not None:
                             _v_mb0 = _cand0; break
                     if _v_mb0 is not None: break
-            elif 'TotalMarginPurchaseTodayBalance' in _cols_mb0:
-                _raw0 = float(str(_grp0['TotalMarginPurchaseTodayBalance'].iloc[-1]).replace(',', '') or 0)
-                _v_mb0 = _finmind_margin_to_yi(_raw0)
-            elif 'MarginPurchaseTodayBalance' in _cols_mb0:
-                _raw0 = float(str(_grp0['MarginPurchaseTodayBalance'].iloc[-1]).replace(',', '') or 0)
-                _v_mb0 = _finmind_margin_to_yi(_raw0)
+            else:
+                # 寬格式(個股版 / 舊彙總版):欄名偏好順序走 L0 SSOT
+                # MARGIN_WIDE_TODAY_BALANCE_COLS(B3 v19.179;原兩條 elif 硬寫同字串)。
+                _wide0 = next((_c for _c in MARGIN_WIDE_TODAY_BALANCE_COLS
+                               if _c in _cols_mb0), None)
+                if _wide0:
+                    _raw0 = float(str(_grp0[_wide0].iloc[-1]).replace(',', '') or 0)
+                    _v_mb0 = _finmind_margin_to_yi(_raw0)
             if _v_mb0 is not None:
                 print(f'[融資餘額/FinMind] ✅ {_v_mb0}億 date={_last_d0}')
                 return _pkl_put('margin_balance', _v_mb0)

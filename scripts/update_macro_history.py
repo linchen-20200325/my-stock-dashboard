@@ -217,28 +217,81 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
 
 
 def fetch_finmind_margin(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
-    """融資餘額（FinMind TaiwanStockTotalMarginPurchaseShortSale）→ 取 MarginPurchaseTodayBalance。"""
-    raw = _finmind_get("TaiwanStockTotalMarginPurchaseShortSale",
-                       "", start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), token)
+    """融資餘額（FinMind TaiwanStockTotalMarginPurchaseShortSale）。
+
+    輸出欄位：date / margin_balance（**單位:元**）/ source（列級）/ fetched_at。
+
+    B3 v19.179 治本（原實作是本次雙峰混口徑事故的根因）
+    ====================================================
+    原欄位偵測是照**個股版寬格式**寫的（`MarginPurchaseTodayBalance`），但本
+    dataset 是**彙總版長格式** —— 同一天回多列、靠 `name` 分口徑
+    （`MarginPurchaseMoney`=元 / `MarginPurchaseVolume`=**張**）。原碼
+    `raw[["date", bal_col]]` 把所有 name 列一起拿，再被 `_merge_dedupe` 的
+    `drop_duplicates(keep="last")` 壓成一列 → 留哪一列由 API 回傳順序決定
+    → 序列變「元 / 張」雙峰混口徑（2006~2026 共 4,929 列約 40% 元、36% 張）。
+
+    修正三件：
+    1. 列/欄判定改走 `shared.margin_schema`（L0 SSOT），與即時路徑
+       `src/data/daily/daily_data_fetchers.fetch_margin_balance` **同一份規則**。
+       只認 Money 列 + 只取當日餘額欄（排除 `Yes*` —— 用昨日欄會讓整條序列
+       **日期錯位一天**，違 §2.3 PIT）。
+    2. 寫入前逐列 sanity（元 → 億，§3.2 [500, 10000] 億）；**任一列不合格 → raise**
+       （由 `update_one` 接住 → 記 `last_error` → **不寫 parquet**，既有資料原封不動）。
+       單位/schema 漂移屬系統性問題，不可只丟壞列繼續（§1 Fail-Loud, Never Fake）。
+    3. `source` 記到**列級**（`...:MarginPurchaseMoney:TodayBalance`），
+       原本只記到 dataset 就停 → 事後分不出 Money vs Volume，此為根因之二。
+    """
+    from shared.margin_schema import (
+        MARGIN_BALANCE_SANITY_MAX_YI,
+        MARGIN_BALANCE_SANITY_MIN_YI,
+        MARGIN_DATASET,
+        TWD_PER_YI,
+        extract_margin_money_series,
+        margin_twd_sanity_mask,
+    )
+
+    raw = _finmind_get(MARGIN_DATASET, "",
+                       start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), token)
     if raw.empty:
         return raw
-    bal_col = next((c for c in raw.columns
-                    if "MarginPurchase" in c and ("Balance" in c or "Today" in c)), None)
-    if bal_col is None:
-        bal_col = next((c for c in raw.columns if "Balance" in c), None)
-    if bal_col is None:
-        print(f"[finmind_margin] 找不到融資餘額欄位；欄位={list(raw.columns)}")
+
+    out, meta = extract_margin_money_series(raw)
+    print(f"[finmind_margin] shape={meta['format']} raw={meta['n_raw']} "
+          f"money列={meta['n_money_rows']} 採用欄={meta['balance_col']} "
+          f"name值={meta['name_values']}")
+    if meta["n_dropped_nonpositive"]:
+        # §3.3:任何顯式剔除都要 log 筆數
+        print(f"[finmind_margin] ⚠️ 顯式剔除 {meta['n_dropped_nonpositive']} 列"
+              f"（餘額 NaN / <=0）")
+    if meta["n_dup_dates"]:
+        print(f"[finmind_margin] ⚠️ 過濾後仍有 {meta['n_dup_dates']} 列同日重複"
+              f"（上游 shape 可能又變了）→ 保留第一列")
+    if out.empty:
+        print(f"[finmind_margin] ❌ 取不到融資金額序列：{meta['reason']}")
         return pd.DataFrame()
-    out = raw[["date", bal_col]].copy()
-    out.columns = ["date", "margin_balance"]
+
+    # ── §3.2 sanity：元 → 億 ∈ (500, 10000)；任一列不合格 = 上游口徑漂移 → 全批不寫
+    ok = margin_twd_sanity_mask(out["margin_balance"])
+    if not bool(ok.all()):
+        bad = out[~ok.to_numpy()]
+        _yi = bad["margin_balance"] / TWD_PER_YI
+        raise RuntimeError(
+            f"融資餘額 sanity 失敗：{len(bad)}/{len(out)} 列換算後超出 "
+            f"[{MARGIN_BALANCE_SANITY_MIN_YI:.0f}, {MARGIN_BALANCE_SANITY_MAX_YI:.0f}] 億"
+            f"（採用欄={meta['balance_col']}, "
+            f"樣本日期={list(bad['date'].astype(str).head(5))}, "
+            f"樣本值(億)={[round(float(v), 4) for v in _yi.head(5)]}）"
+            "→ 疑似上游改口徑/換欄；不寫入 parquet（§1 寧缺勿錯）"
+        )
+
+    out = out.copy()
     out["date"] = pd.to_datetime(out["date"]).dt.date
-    out["margin_balance"] = pd.to_numeric(out["margin_balance"], errors="coerce")
-    out = out.dropna(subset=["margin_balance"]).reset_index(drop=True)
-    # S-PROV-1 phase 13 v18.259 — provenance(schema-additive)
-    if not out.empty:
-        out["source"] = "FinMind:TaiwanStockTotalMarginPurchaseShortSale"
-        out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
-    return out
+    # S-PROV-1 phase 13 v18.259 — provenance；B3 v19.179 起 source 已是列級字串
+    out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+    print(f"[finmind_margin] ✅ {len(out)} rows 通過 sanity "
+          f"({out['margin_balance'].min() / TWD_PER_YI:.0f}~"
+          f"{out['margin_balance'].max() / TWD_PER_YI:.0f} 億)")
+    return out[["date", "margin_balance", "source", "fetched_at"]]
 
 
 def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:

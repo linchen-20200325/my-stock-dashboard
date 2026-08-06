@@ -47,11 +47,16 @@ def test_fut_night_rows_no_night_or_bad_schema_empty():
 
 
 def test_durable_export_from_real_parquet(tmp_path):
-    """離線 6 表讀 data_cache 真 parquet；無 token → live 表 Fail-Loud 略過。"""
+    """離線表讀 data_cache 真 parquet；無 token → live 表 Fail-Loud 略過。
+
+    B3 v19.179：`margin` 另受 §3.2 sanity gate 管轄（現況 parquet 為「元 / 張」
+    混口徑），故**不**斷言它一定 >0，改斷言「寫了就全列合格 / 沒寫就整表缺席」
+    這條與資料狀態無關的不變量（bootstrap 重抓乾淨後自動轉為前者）。
+    """
     db = tmp_path / "stock.db"
     res = E.export_all(db, token="")
     for t in ("stock_fundamentals", "market_index", "institutional_flow",
-              "margin", "money_supply", "macro_tw_pmi"):
+              "money_supply", "macro_tw_pmi"):
         assert res[t] > 0, f"{t} 應有列"
     assert res["stock_technical"] == -1        # 缺 token → 略過（不造假）
     assert res["monthly_revenue"] == -1
@@ -61,6 +66,16 @@ def test_durable_export_from_real_parquet(tmp_path):
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "monthly_revenue" not in tables     # 略過 → 不建空表
     assert "stock_technical" not in tables
+
+    # margin：不變量（不論 parquet 目前乾不乾淨都該成立）
+    from shared.margin_schema import margin_twd_sanity_mask
+    if res["margin"] < 0:
+        assert "margin" not in tables, "sanity 未過 → 整表不得落地（少一張表 ≠ 錯的表）"
+    else:
+        assert res["margin"] > 0 and "margin" in tables
+        vals = pd.read_sql("SELECT margin_balance FROM margin", conn)["margin_balance"]
+        assert bool(margin_twd_sanity_mask(vals).all()), \
+            "落地的 margin 必須全列通過 §3.2 區間（單位=元）"
     cols = [d[1] for d in conn.execute("PRAGMA table_info(stock_fundamentals)")]
     assert {"stock_id", "revenue", "eps", "total_equity"}.issubset(cols)
 
@@ -71,6 +86,8 @@ def test_durable_export_from_real_parquet(tmp_path):
     assert health["monthly_revenue"][0] == "absent"
     assert health["stock_technical"][0] == "absent"
     assert health["market_index"] == ("ok", res["market_index"])
+    # B3：margin 被 sanity gate 擋下時，下游要從 source_health 看得見「這維缺料」
+    assert health["margin"][0] == ("absent" if res["margin"] < 0 else "ok")
     conn.close()
 
 

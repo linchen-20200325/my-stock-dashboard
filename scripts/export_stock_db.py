@@ -9,7 +9,9 @@
     - `stock_fundamentals`  全市場季財報（load_fundamentals_snapshot）
     - `market_index`        加權指數日K（twii_ohlcv.parquet）
     - `institutional_flow`  外資買賣超（finmind_inst.parquet,單位 億元）
-    - `margin`              融資餘額（finmind_margin.parquet）
+    - `margin`              融資餘額（finmind_margin.parquet,**單位 元**；
+                            B3 v19.179 加 §3.2 sanity gate：全列須 ∈[500,10000]億,
+                            否則整表略過 + 警告,不把混口徑序列外送下游）
     - `money_supply`        M1B/M2 月供給（finmind_m1m2.parquet,億元 level + gap 點差）
     - `macro_tw_pmi`        台灣 PMI 最後良值（macro_last_good/tw_pmi.json）
 * 🔴 live 層（需 `FINMIND_TOKEN`；**缺 token → Fail-Loud 略過該表 + 警告,不造假**）
@@ -30,8 +32,11 @@
     STOCK_DB=/volume1/data/stock.db python scripts/export_stock_db.py
     （不設 STOCK_DB → 寫本專案根目錄 stock.db）
 
-單位鐵則(對照 CLAUDE.md §4.1):財報欄=千元、eps=元、外資/M1B2=億元、月營收=元、PMI=指數。
+單位鐵則(對照 CLAUDE.md §4.1):財報欄=千元、eps=元、外資/M1B2=億元、月營收=元、
+**融資餘額=元**(B3 v19.179 補標;原本是本清單裡唯一沒標單位的一項)、PMI=指數。
 Fail-Loud:離線層任一表讀不到 → raise;live 層缺 token / 抓不到 → 略過該表 + 警告(不寫假值)。
+離線層 `margin` 另有 §3.2 sanity gate:讀得到但值不可信 → **略過該表**(非 raise),
+讓下游「少一張表」而不是「拿到錯的表」;其餘離線表照舊 raise。
 """
 
 from __future__ import annotations
@@ -104,8 +109,63 @@ def write_institutional_flow(conn: sqlite3.Connection) -> int:
     return len(df)
 
 
+def _margin_sanity_gate(df: pd.DataFrame) -> tuple[bool, str]:
+    """`margin` 表放行判定（純函式,無 I/O,便於單測）→ (可否寫入, 診斷訊息)。
+
+    B3 v19.179。`data_cache/finmind_margin.parquet` 的 `margin_balance` 契約
+    單位是 **元**；但 cron fetcher 舊版把 FinMind 長格式的 `MarginPurchaseVolume`
+    (**張**,量級 ~1e7) 與 `MarginPurchaseMoney`(元,~1e11) 混在同一欄
+    (2026-08 實測 4,929 列中約 40% 元 / 36% 張 / 25% 不明)。這條序列會被本檔
+    force-push 到 `data` 分支給下游 2026_strategy_0719 讀 → 下游拿到「有時差
+    4 個數量級」的融資餘額,比沒有更危險(§1)。
+
+    門檻**重用既有 SSOT**(`shared/margin_schema` → `shared/signal_thresholds`
+    的 MARGIN_BALANCE_SANITY_MIN/MAX_YI = 500~10,000 億),不另造一套。
+    採「全列皆須通過」:混口徑是系統性污染,不是零星離群值,只丟壞列 = 靜默造假。
+    """
+    from shared.margin_schema import (
+        MARGIN_BALANCE_SANITY_MAX_YI,
+        MARGIN_BALANCE_SANITY_MIN_YI,
+        TWD_PER_YI,
+        margin_twd_sanity_mask,
+    )
+
+    if df is None or df.empty:
+        return False, "序列為空"
+    if "margin_balance" not in df.columns:
+        return False, f"缺 margin_balance 欄（欄位={list(df.columns)}）"
+    ok = margin_twd_sanity_mask(df["margin_balance"])
+    n_bad = int((~ok).sum())
+    if n_bad == 0:
+        return True, f"{len(df)} 列全數通過 §3.2 區間"
+    bad = df.loc[~ok.to_numpy()]
+    _yi = pd.to_numeric(bad["margin_balance"], errors="coerce") / TWD_PER_YI
+    # 用 .head() 不用 [:5]：整數 index 上的 slice 語意在 pandas 版本間不穩定
+    _dates = list(bad["date"].astype(str).head(5)) if "date" in bad.columns else []
+    return False, (
+        f"{n_bad}/{len(df)} 列換算後超出 §3.2 合理區間 "
+        f"[{MARGIN_BALANCE_SANITY_MIN_YI:.0f}, {MARGIN_BALANCE_SANITY_MAX_YI:.0f}] 億"
+        f"（樣本日期={_dates}, 樣本值(億)={[round(float(v), 4) for v in _yi.head(5)]}）"
+        "→ 疑似「元 / 張」混口徑,不外送下游"
+    )
+
+
 def write_margin(conn: sqlite3.Connection) -> int:
+    """融資餘額 → margin（單位:**元**）。
+
+    §3.2 sanity 不過 → **略過整表**（+ DROP 舊表）並回 -1,
+    由 `source_health` 記 absent 讓下游看得見「這一維缺料」。
+    照本檔既有慣例:略過該表 + 明確警告,不靜默寫入、不寫 NaN、不自行換算補救。
+    """
     df = _read_cache_parquet("finmind_margin", ["date", "margin_balance"])
+    ok, msg = _margin_sanity_gate(df)
+    if not ok:
+        _log(f"⚠️ 略過 margin：{msg}")
+        # 舊表若還在（本機 / NAS 長存 db）一併移除,避免下游讀到上次的殘留值
+        # 而 source_health 卻標 absent（GitHub Actions 每次 checkout 全新,無此情境）。
+        conn.execute("DROP TABLE IF EXISTS margin")
+        return -1
+    _log(f"   margin sanity：{msg}")
     df.to_sql("margin", conn, if_exists="replace", index=False)
     return len(df)
 

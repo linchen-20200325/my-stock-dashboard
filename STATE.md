@@ -1,5 +1,81 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🩸 2026-08-06 B3 融資餘額混口徑：止血 + 修 cron schema(v19.181)
+
+### 根因:抓錯 schema —— 而正確作法就寫在本 repo 裡
+
+`scripts/update_macro_history.py:225-236` 的欄位偵測是照**個股版**(寬格式
+`MarginPurchaseTodayBalance`)寫的,但 cron 用的 dataset
+`TaiwanStockTotalMarginPurchaseShortSale` 是**彙總版長格式**(每天多列、靠 `name` 分口徑):
+
+```python
+bal_col = next((c for c in raw.columns
+                if "MarginPurchase" in c and ("Balance" in c or "Today" in c)), None)
+if bal_col is None:
+    bal_col = next((c for c in raw.columns if "Balance" in c), None)   # ← 必落到這條
+out = raw[["date", bal_col]].copy()                                    # ← 全部 name 列一起拿
+```
+第一條 `next()` 必落空 → 第二條抓「第一個含 Balance 的欄」→ 套用到當天每一列 →
+`_merge_dedupe` 的 `drop_duplicates(keep="last")` 留哪一列由 FinMind 回傳順序決定。
+
+⇒ **低峰 = `MarginPurchaseVolume`(張,~1e7),高峰 = `MarginPurchaseMoney`(元,~1e11~6e11)。**
+診斷實測全序列約 **40% 元 / 36% 張 / 25% 不明**,且 **2006 年第一天起就混著**
+(118 列中 元 35 / 張 56 / 不明 27)—— 那些日期本來就同時存在兩種列,是 `keep="last"` 在擲骰子。
+
+⚠️ **正確用法就寫在本 repo**:`src/data/daily/daily_data_fetchers.py:500-520` docstring 明講
+「同組另一列 9,614,955 是 Volume(張)不是金額,caller 必須以 name 過濾 Money 列」,
+並由 `tests/test_review_fixes_v19_74.py:99-107` 釘死。**cron 這支從來沒同步過** ——
+典型的「同一件事兩個實作,只有一個是對的」。
+
+### 生產影響追蹤
+
+| 消費端 | 判定 |
+|---|---|
+| `macro_thresholds.json`(季度校準) | ✅ **沒被污染** —— `calibrate_macro_traffic.py` 的 `_Features` dataclass 根本沒有 margin 欄位,margin 是掛在 DataFrame 上但從未被讀的死欄位。且該檔現值 `"last_calibrated": null` ⇒ `recalibrate_macro.yml` **至今從未成功寫過**(另立 BACKLOG) |
+| 線上融資燈號 | ✅ 走 `macro_ui_components.py:172-175` + 即時 `fetch_margin_balance()`(含 500~10,000 億 sanity),**不讀 parquet** |
+| `macro_signal_lookback_tw` → `multi_factor_optimization` | ✅ **零 production caller**(UI 消費端 `tab_macro_validation.py` v18.399 已整檔刪除)。⚠️ 本輪兩組 agent 對此說法矛盾,已自行 grep 驗證:全 repo 只剩兩支新診斷腳本的 docstring、`calc_helpers.py:19` / `margin_schema.py:40` 註解引用、`test_pr_q5a:75` 一個 `# noqa` test import |
+| 🔴 `scripts/export_stock_db.py:107` `write_margin()` | **唯一活體外流點** —— 原封不動寫進 `stock.db` 的 `margin` 表,`export_db.yml`(cron 台灣每日 05:00)force-push 到 `data` 分支,**供下游 `2026_strategy_0719` 多智能體系統讀取**。且該檔 `:12` 的「單位鐵則」清單裡 **margin 是唯一沒標單位的一項** |
+
+### 處置
+
+**① 止血**:`write_margin()` 加 sanity gate,不合格 → log + `DROP TABLE IF EXISTS margin`
++ `source_health` 記 `absent`;`:12` 補單位標註。
+
+**採「全列皆須通過才寫」而非「只寫通過的列」** —— 這是系統性口徑污染(60% 壞)不是零星離群值,
+只丟壞列會產生「看起來連續、實際上 60% 日期憑空消失」的序列,下游算 YoY / 過熱門檻卻不知道,
+**那才是靜默造假**。加 `unit` / `is_suspect` 欄同理否決:下游若不讀那欄就等於沒防護。
+⚠️ **代價**:下游 `margin` 表會消失直到重抓完成(走既有 `source_health=absent` 機制,同
+`monthly_revenue` 缺 token 時)。
+
+**② 治本**:新增 L0 `shared/margin_schema.py`,cron fetcher 與已驗證正確的
+`daily_data_fetchers.py:561-587` **共用函式本體**(不只共用常數),測試以**函式物件同一性**
+釘死。放 L0 的理由:consumer 之一是 L1,§8.2 禁 L1→L2,L0 是唯一兩邊都合法的層
+(先例 `shared/schemas.py`)。移除必然命中的寬鬆 fallback;明確只取 `TodayBalance`
+(排除 `Yes*` ⇒ 解掉**整條序列日期錯位一天**的 §2.3 PIT 隱患);寫入前逐列 sanity,
+任一列不合格 **raise** ⇒ `update_one` 接住記 `last_error` ⇒ **不寫 parquet,既有檔原封不動**;
+`source` 落到**列級**(`...:MarginPurchaseMoney:TodayBalance`)—— 原本只記到 dataset 就停了,
+事後根本分辨不出 Money vs Volume,這是根因之二。
+
+### 重抓評估(**未執行**,待 user 決定)
+
+可以重抓:診斷確認 2006-2010 每年都同時有 Money 列,**重抓後早年不會缺、會是完整乾淨的
+20 年序列**。風險:
+1. **bootstrap 是破壞性的** —— `--bootstrap` 下直接覆蓋整檔,動手前務必先備份 parquet
+2. FinMind 單次 20 年 ≈ 2 萬列,**可能被靜默截斷** ⇒ 落地後要對帳 rows(應 ≈ 4,900)與起訖日
+3. 新 sanity 會讓一顆壞列擋掉整次 bootstrap(刻意,§1)
+4. `--years 20` 會漏 2006-07-17～08-05,要用 `--years 21`
+5. 增量模式**不會**自動修掉舊髒列(`_merge_dedupe` 只覆蓋同日期)⇒ 不 bootstrap 就永遠是髒的,
+   ①的 gate 會一直擋著
+
+### BACKLOG(新增)
+
+- 🟡 `recalibrate_macro.yml` **至今從未成功寫過** `macro_thresholds.json`
+  (`last_calibrated: null` / `method: "default (uncalibrated)"`)—— 季度校準等於沒在跑
+- ⚪ `macro_signal_lookback_tw` + `multi_factor_optimization` 確認為死碼,可刪(與
+  `DEAD_CODE_AUDIT.md` 既有記載一致)
+
+---
+
 ## 🚨 2026-08-06 B2「說謊的顯示」批次 + 閘門有效性量測(v19.180)
 
 > 驗證:`python -m pytest -q` → **全綠**。
