@@ -31,6 +31,13 @@ import pandas as pd
 import yfinance as yf
 
 from shared.ttls import TTL_15MIN, TTL_30MIN, TTL_1HOUR, TTL_2HOUR, TTL_1DAY, TTL_7DAY
+# B4-b H-1:產業熱力圖「區間口徑」SSOT(L1 → L0,合法下行 import)。
+# 下載窗 ≠ 計算區間;計算區間一律以交易日(bar)計 —— 見該檔 module docstring §4.1。
+from shared.sector_heatmap import (
+    lookback_trading_days as _sector_lookback_trading_days,
+    pct_change_over_bars as _sector_pct_change_over_bars,
+    yf_download_window as _sector_yf_download_window,
+)
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 # 價格歷史抓取走 NAS proxy(同本檔 metadata fetcher):yfinance 在 Streamlit Cloud
 # 常被 Yahoo 海外 IP 封鎖/rate-limit(見 fetch_etf_meta_moneydj 註)。複用 yf_proxy 的
@@ -1919,30 +1926,104 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 5) -> "pd.Data
 
 @st.cache_data(ttl=TTL_30MIN, max_entries=10)
 def _fetch_sector_returns(tickers: tuple, period: str) -> dict:
-    """批次抓取類股漲跌幅，回傳 {ticker: pct_change}"""
-    result = {}
+    """批次抓類股區間報酬,回傳 `{ticker: rate_pct}`;**取不到的 ticker 不入 dict**。
+
+    ⚠️ **B4-b 契約變更**:`period` 由「yfinance 原始 window 字串」改為
+    **UI 區間標籤**(`shared.sector_heatmap.SECTOR_PERIOD_LABELS`,即
+    `'1日' / '5日' / '1月' / '3月'`)。
+
+    ## 修了什麼(B4-b H-1,§4.1 量綱違反)
+    原實作 `pct = series.iloc[-1] / series.iloc[0] - 1` 拿**整個下載窗的第一根**
+    當基期,而下載窗跟標籤根本不同義(`'1日' → period='5d'`)。結果:
+
+    | 使用者選 | 原下載窗 | 原實際計算 | 原標籤 |
+    |---|---|---|---|
+    | 1日 | 5d  | ≈4 交易日 | 1日漲跌% |
+    | 5日 | 1mo | ≈21 交易日 | 5日漲跌% |
+    | 1月 | 3mo | ≈63 交易日 | 1月漲跌% |
+    | 3月 | 6mo | ≈126 交易日 | 3月漲跌% |
+
+    全部少算 4~6 倍,畫面因此出現「1日 NVDA +13.3%」這種單日不可能的數字,
+    且該數字原封不動流進 AI prompt 的「今天最受青睞」敘事。
+
+    ## 現行口徑(§4.1:交易日,非日曆日)
+    - **下載窗**走 `yf_download_window(period)` —— 刻意放大以吸收農曆年 / 感恩節連假。
+    - **計算區間**走 `lookback_trading_days(period)` —— `1日=1` / `5日=5` /
+      `1月=21` / `3月=63` 根 **bar**,基期固定 `iloc[-1-n]`,與標籤 1:1 對應。
+    - 兩者刻意分離:多抓 bar 幾乎不增加成本(同一次 batch request),
+      但可保證連假後仍算得出「1日」。
+
+    ## §1 Fail Loud
+    - `period` 不在 SSOT → `raise ValueError`(不猜預設值)。
+    - 某 ticker bar 數不足 `n+1` → **不寫入 dict**,由 UI 顯示「無資料」;
+      **絕不回 0**(原本回 0 會被熱力圖畫成「持平」的綠/紅中性格)。
+    - **移除原 `close.ffill()`**:停牌 / 尚未上市造成的洞被 ffill 後,
+      `iloc[-1-n]` 取到的是**複製值**,報酬恆為 `0.00%` —— 把「沒有交易」
+      偽裝成「持平」,§4.6「停牌股票不可 ffill」明文禁止。
+      跨 ticker 的日期對齊改由「各 ticker 自己 `dropna()` 後取自己的 bar」處理。
+
+    Args:
+        tickers: ticker tuple(需 hashable 供 `@st.cache_data` 當 cache key)。
+        period: UI 區間標籤,見 `shared.sector_heatmap.SECTOR_PERIOD_LABELS`。
+
+    Returns:
+        `{ticker: rate_pct}`,`rate_pct` 為百分比數(+1.23 表 +1.23%)。
+
+    Raises:
+        ValueError: `period` 不是合法區間標籤。
+    """
+    # ── §1:未知區間標籤直接炸,不落 try(不可用預設值蒙混)────────────
+    _n_bars = _sector_lookback_trading_days(period)
+    _window = _sector_yf_download_window(period)
+
+    result: dict = {}
+    _missing: list = []
     try:
-        raw = yf.download(list(tickers), period=period,
+        raw = yf.download(list(tickers), period=_window,
                           auto_adjust=True, progress=False, threads=True)
-        if raw.empty:
+        if raw is None or raw.empty:
+            print(f'[etf_fetch/sector] ⚠️ yfinance 回空:{len(tickers)} 檔 / '
+                  f'window={_window}(區間標籤={period})')
+            _prov_log('_fetch_sector_returns',
+                      f'yfinance:batch:window={_window}:bars={_n_bars}:label={period}',
+                      f'{len(tickers)}tickers', 'dict:0items:empty-download')
             return result
         # yf.download 多 ticker 時 Close 為 MultiIndex
         if isinstance(raw.columns, pd.MultiIndex):
-            close = raw['Close'] if 'Close' in raw.columns.get_level_values(0) else raw.xs('Close', axis=1, level=0)
+            close = (raw['Close'] if 'Close' in raw.columns.get_level_values(0)
+                     else raw.xs('Close', axis=1, level=0))
         else:
             close = raw[['Close']] if 'Close' in raw.columns else raw
-        close = close.ffill().dropna(how='all')
+            # 單一 ticker 時 yfinance 回單層欄名 'Close',與 ticker 名對不上
+            # → 下方 `t in close.columns` 永遠 False(原實作潛在死角)。
+            if len(tickers) == 1 and list(close.columns) == ['Close']:
+                close = close.rename(columns={'Close': tickers[0]})
+        # ⚠️ 刻意不做 close.ffill():見 docstring §1 / §4.6。
         for t in tickers:
-            if t in close.columns:
-                series = close[t].dropna()
-                if len(series) >= 2:
-                    pct = round((float(series.iloc[-1]) / float(series.iloc[0]) - 1) * 100, 2)
-                    result[t] = pct
+            if t not in close.columns:
+                _missing.append(t)
+                continue
+            _col = close[t]
+            if isinstance(_col, pd.DataFrame):   # 極端狀況:重複欄名 → 取第一欄
+                _col = _col.iloc[:, 0]
+            _series = _col.dropna()
+            _pct = _sector_pct_change_over_bars(_series.tolist(), _n_bars)
+            if _pct is None:
+                _missing.append(t)
+                continue
+            result[t] = _pct
     except Exception as e:
         # S-H3 v18.244:L1 不可 st.warning → 改 print log
         print(f'[etf_fetch/sector] ⚠️ 類股資料抓取部分失敗:{type(e).__name__}: {e}')
+    if _missing:
+        # §1:缺值要留下痕跡,不可靜默(UI 端會顯示「無資料」而非 0.00%)
+        _head = _missing[:10]
+        print(f'[etf_fetch/sector] ⚠️ {len(_missing)}/{len(tickers)} 檔無資料'
+              f'(yfinance 未回傳 或 有效 bar 數 < {_n_bars + 1} 根,區間={period}),'
+              f'留缺不填 0:{_head}{"..." if len(_missing) > 10 else ""}')
     # S-PROV-1 P0 v18.434:批次 yf.download 結果 prov_log(§2.2)
-    _prov_log('_fetch_sector_returns', f'yfinance:batch:period={period}',
+    _prov_log('_fetch_sector_returns',
+              f'yfinance:batch:window={_window}:bars={_n_bars}:label={period}',
               f'{len(tickers)}tickers', f'dict:{len(result)}items')
     return result
 

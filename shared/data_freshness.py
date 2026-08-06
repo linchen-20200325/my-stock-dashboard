@@ -30,7 +30,7 @@ import,確保純算力/純字串組裝,可單測、可被任一層 import)。
 """
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
 # 呈現層預設色票(對齊 shared/colors 的紅綠燈 SSOT)
 from shared.colors import (
@@ -39,6 +39,9 @@ from shared.colors import (
     TRAFFIC_RED as _C_RED,
     TRAFFIC_YELLOW as _C_YELLOW,
 )
+# 「合理最舊」天數門檻的 SSOT 在 staleness(頻率感知);本檔只負責翻成燈號,
+# **不自己定義天數**(B4-a:診斷頁原本 inline 寫死 1/3 天,與此 SSOT 打架)。
+from shared.staleness import stale_days_threshold
 
 # 預設燈號 → 色票對照(呼叫端可用 color_map 覆寫)
 _DEFAULT_COLOR_MAP = {
@@ -47,6 +50,10 @@ _DEFAULT_COLOR_MAP = {
     "🔴": _C_RED,
     "⬜": _C_IDLE,
 }
+
+# 燈號「壞度」排序:綠 < 未知 < 黃 < 紅。
+# ⬜ 排在綠之後 —— 「不知道新不新鮮」比「確定很新」差,但比「確定過期」好。
+_FRESH_RANK = {"🟢": 0, "⬜": 1, "🟡": 2, "🔴": 3}
 
 
 def detect_frozen_columns(
@@ -166,17 +173,23 @@ def freshness_level(
         資料落後天數(可直接吃 `shared.staleness.staleness_days()` 回傳值)。
         None = 無法判定(缺日期欄 / 空資料)。
     warn : int
-        ≤ warn 視為當日(綠燈),預設 1(容忍收盤前一日的自然延遲)。
+        ≤ warn 仍算綠燈(可接受的自然延遲),預設 1。
+        ⚠️ 綠燈**不等於**落後 0 日 —— label 仍會照實寫「落後N日」,見下方誠實條款。
     bad : int
         ≤ bad 視為警告(黃燈),超過即紅燈,預設 3(≈ 一個週末 + 一天)。
+        呼叫端若要頻率感知的 SSOT 門檻,請改用 `freshness_level_for_cadence`。
 
     Returns
     -------
     tuple[str, str]
-        `('⬜','未知')` / `('🟢','當日')` / `('🟡','落後N日')` / `('🔴','落後N日')`
+        `('⬜','未知')` / `('🟢','最新')` / `('🟢|🟡|🔴','落後N日')`
 
     §1 Fail Loud:`None` 明確回「未知」灰燈,**不**樂觀當成當日 —— 不知道新不新鮮
     本身就是要讓 user 看見的資訊。
+
+    §1 標籤誠實(B4-a 修):**「最新」只保留給 lag ≤ 0**。原本 `lag <= warn` 一律
+    回「當日」,在 warn>0 時等於把「落後 3 日」寫成「當日」—— 燈號寬容是設計選擇,
+    把落後天數講成 0 則是說謊。綠燈仍是綠燈,但文字必須照實寫「落後N日」。
     """
     if lag_days is None:
         return ("⬜", "未知")
@@ -184,11 +197,76 @@ def freshness_level(
         _lag = int(lag_days)
     except (TypeError, ValueError):
         return ("⬜", "未知")
+    if _lag <= 0:
+        return ("🟢", "最新")
+    _label = f"落後{_lag}日"
     if _lag <= warn:
-        return ("🟢", "當日")
+        return ("🟢", _label)
     if _lag <= bad:
-        return ("🟡", f"落後{_lag}日")
-    return ("🔴", f"落後{_lag}日")
+        return ("🟡", _label)
+    return ("🔴", _label)
+
+
+def freshness_level_for_cadence(
+    lag_days: Optional[int],
+    cadence: str = "daily",
+    *,
+    warn_days: Optional[int] = None,
+) -> tuple[str, str]:
+    """依「資料發布頻率」取 SSOT 門檻後翻燈號(B4-a 門檻收斂用)。
+
+    Parameters
+    ----------
+    lag_days : int | None
+        `shared.staleness.staleness_days()` 的回傳值(距預期最新交易日的日曆天)。
+    cadence : str
+        `'daily'` / `'monthly'` / `'quarterly'`。未知 → 退 daily(最嚴)。
+    warn_days : int | None
+        黃燈起點(日曆天)。None → 與紅燈同門檻(等於沒有黃燈帶,只有「在合理發布
+        窗內 / 已逾窗」兩態)。給值時會被 `min(warn_days, bad)` 夾住,避免呼叫端
+        設出「黃燈比紅燈還寬」的矛盾組合。
+
+    Returns
+    -------
+    tuple[str, str]  同 `freshness_level`。
+
+    Why
+    ---
+    紅燈門檻**一律**取自 `shared.staleness.stale_days_threshold(cadence)`
+    (daily=7 / monthly=45 / quarterly=150),不再由各 UI 自己 inline 寫天數。
+    月頻指標(CPI / PMI / 出口)的 as_of 天生就是上個月,拿日頻的 7 天去量它
+    會永遠紅燈 —— 這是 B4-a 之前診斷頁「總經新鮮度」只好去量抓取時間的原因。
+    """
+    _bad = stale_days_threshold(cadence)
+    _warn = _bad if warn_days is None else min(int(warn_days), _bad)
+    return freshness_level(lag_days, warn=_warn, bad=_bad)
+
+
+def worst_freshness(
+    levels: Sequence[Optional[tuple[str, str]]],
+) -> tuple[str, str]:
+    """回一組 `(emoji, label)` 中**最差**的一組;全空 → `('⬜','未知')`。
+
+    用於「一個 Tab 由多個資料源組成」的場景(如籌碼面 = 三大法人 + 融資 + 廣度 +
+    先行指標):整列燈號取最差的那個源,並保留它的 label 供 UI 指名道姓,
+    避免「其中一源 9 天沒動,但整列仍綠」這種被平均掉的假訊號(§1)。
+    """
+    _out: Optional[tuple[str, str]] = None
+    for _lv in (levels or ()):
+        if not _lv:
+            continue
+        if _out is None or _FRESH_RANK.get(_lv[0], 1) > _FRESH_RANK.get(_out[0], 1):
+            _out = (_lv[0], _lv[1])
+    return _out or ("⬜", "未知")
+
+
+def downgrade_to_warn(emoji: str) -> str:
+    """綠燈強制降黃(其餘不動)。供「有值但值可疑」的降級路徑共用。
+
+    §1:凍結 / 沿用舊快取 / stale 旗標 等情況下,覆蓋率再滿也不得亮綠燈;
+    但已經是黃/紅/未知的不再往上調(不製造更嚇人的假訊號)。
+    """
+    return "🟡" if emoji == "🟢" else emoji
 
 
 def staleness_badge_html(
@@ -246,6 +324,6 @@ def _emoji_worse(a: str, b: str) -> str:
 
     供覆蓋率表這類「覆蓋率燈號 × 新鮮度燈號」需取交集降級的場景使用,
     避免各處自己寫 if/else 導致降級規則不一致。
+    (排序表已抽 `_FRESH_RANK`,與 `worst_freshness` 共用同一份定義。)
     """
-    _rank = {"🟢": 0, "⬜": 1, "🟡": 2, "🔴": 3}
-    return a if _rank.get(a, 1) >= _rank.get(b, 1) else b
+    return a if _FRESH_RANK.get(a, 1) >= _FRESH_RANK.get(b, 1) else b

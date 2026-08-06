@@ -13,6 +13,13 @@ from src.services.etf_sector_service import get_news_for, get_sector_returns
 from src.services.ai_structured_summary import build_structured_summary_prompt  # v18.361 F-6.5:直打 submod 避 services↔ui.render circular
 from shared.calc_helpers import calc_bias_pct, calc_bias_pct_series  # R-CALC-3 v18.412 / #23 v18.436
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+# B4-b:產業熱力圖區間口徑 / 缺值呈現 / 台股代表股揭露 SSOT(L4 → L0)。
+from shared.sector_heatmap import (
+    HEATMAP_MISSING_TEXT, SECTOR_LOOKBACK_TRADING_DAYS, SECTOR_PERIOD_LABELS,
+    SECTOR_YF_DOWNLOAD_WINDOW, TW_SINGLE_STOCK_PROXY_DISCLOSURE,
+    color_span_pct, direction_label, hover_value_text, node_area,
+    sector_display_name, sort_key_desc,
+)
 
 
 # ── 總經連動配置建議表 ────────────────────────────────────────
@@ -588,61 +595,125 @@ _US_SECTORS = {
     'XLC':  {'name': '通訊服務',    'sub': ['META','GOOGL','NFLX','DIS','T']},
 }
 
-# ── 台股類股代表 ETF/指數成分 ────────────────────────────────
+# ── 台股「類股」代表股 ────────────────────────────────────────
+# ⚠️ B4-b H-2 揭露:以下 key **全部是個股**,不是類股指數、也不是成分股平均。
+# 台股側沒有可用的類股指數日線資料源(查證結果見下),因此走「單一代表權值股近似」,
+# 並在 UI 標籤 / caption / AI prompt 三處**明確揭露**(§1 寧可誠實標示,
+# 不可讓使用者以為那是類股平均)。渲染時一律經
+# `shared.sector_heatmap.sector_display_name(..., single_stock_proxy=True)`
+# 產生「半導體（代表股 2330）」這種標籤。
+#
+# 【資料源查證】為什麼不改用真類股指數:
+# - yfinance:無 TWSE 類股指數 ticker(僅 ^TWII 大盤 / ^TWOII 櫃買),拿不到日線序列。
+# - TWSE `MI_INDEX`:確實含 29 檔類股指數,但**一次只回一個交易日**;要湊 63 根
+#   bar 需 63 次 request,且本專案已在 `daily_data_fetchers.py:324` 標記
+#   「🚫 TWSE MI_INDEX 已永久停用」(穩定性不足)。
+# - FinMind:無類股指數 dataset(`TaiwanStockInfo.industry_category` 只有分類欄位,
+#   要自行對數百檔成分股加權 → 屬新 L1 模組 + 新資料流,依 §8.1 需先送架構審。
+# - 台股類股 ETF:僅科技(0052)/ 金融(0055)/ 電子(0053)等 3~4 個產業有,
+#   塑化 / 鋼鐵 / 食品 / 航運 / 觀光 / 光電**沒有**對應 ETF,無法覆蓋整張圖。
+# → 結論:走揭露路線。升級觸發條件:若日後接上可用的類股指數日線源,
+#   把本表換成指數代號並將 `_TW_SECTOR_SINGLE_STOCK_PROXY` 改 False 即可。
+#
+# 【B4-b 一併修掉的重複計數 / 錯分類 / 已下市】
+# - `3008.TW`(大立光)原同時是「光電」母層 + 「電子製造」子成分 → 自電子製造移除。
+# - `2409.TW`(友達,面板廠)原同時掛「電信」與「光電」→ 自電信移除(本就非電信股)。
+# - `2475.TW`(華映)2019 已下市,永遠抓不到 → 移除(不猜替代標的)。
+# - `9910.TW`(豐泰)是製鞋廠卻掛在「觀光」→ 母層改 `2707.TW`(晶華酒店)。
 _TW_SECTORS = {
     '2330.TW': {'name': '半導體',    'sub': ['2303.TW','2308.TW','2454.TW','3711.TW','2379.TW']},
-    '2317.TW': {'name': '電子製造',  'sub': ['2354.TW','2356.TW','3008.TW','2382.TW','3034.TW']},
-    '2412.TW': {'name': '電信',      'sub': ['3045.TW','4904.TW','2409.TW']},
+    '2317.TW': {'name': '電子製造',  'sub': ['2354.TW','2356.TW','2382.TW','3034.TW']},
+    '2412.TW': {'name': '電信',      'sub': ['3045.TW','4904.TW']},
     '2882.TW': {'name': '金融',      'sub': ['2881.TW','2883.TW','2884.TW','2886.TW','2891.TW']},
     '1301.TW': {'name': '塑化',      'sub': ['1303.TW','1326.TW','1402.TW']},
     '2002.TW': {'name': '鋼鐵',      'sub': ['2006.TW','2007.TW','2010.TW']},
     '1216.TW': {'name': '食品',      'sub': ['1201.TW','1210.TW','1225.TW']},
     '2603.TW': {'name': '航運',      'sub': ['2609.TW','2615.TW','2617.TW']},
-    '9910.TW': {'name': '觀光',      'sub': ['2706.TW','2707.TW','2727.TW']},
-    '3008.TW': {'name': '光電',      'sub': ['2409.TW','3481.TW','2475.TW']},
+    '2707.TW': {'name': '觀光',      'sub': ['2731.TW','2727.TW']},
+    '3008.TW': {'name': '光電',      'sub': ['2409.TW','3481.TW']},
 }
 
-_PERIOD_MAP = {'1日': '5d', '5日': '1mo', '1月': '3mo', '3月': '6mo'}
+#: 該市場的「類股」是否為單一代表股近似(H-2 揭露開關)。
+#: 美股走真 GICS 類股 ETF(XLK/XLF…)→ False;台股走代表股 → True。
+_US_SECTOR_SINGLE_STOCK_PROXY = False
+_TW_SECTOR_SINGLE_STOCK_PROXY = True
+
+# ⚠️ B4-b DEPRECATED:原 `_PERIOD_MAP = {'1日':'5d','5日':'1mo','1月':'3mo','3月':'6mo'}`
+# 正是 H-1 缺陷的根源 —— 它只是 yfinance **下載窗**,卻被 `_fetch_sector_returns`
+# 當成「計算區間」(用整個窗的第一根當基期),導致「1日」實際算 ≈4 個交易日。
+# 現在區間口徑 SSOT 在 `shared/sector_heatmap.py`(下載窗 / 交易日根數分開兩張表)。
+# 本名保留純粹是 `src/ui/etf/etf_dashboard.py:46` 的 re-export shim 相容性,
+# 值指向「下載窗」對照表(**已不是計算區間**)。**新程式碼請勿引用。**
+_PERIOD_MAP = dict(SECTOR_YF_DOWNLOAD_WINDOW)
 
 
-def _build_treemap_data(sectors: dict, returns: dict, market: str) -> go.Figure:
-    """建立 Plotly Treemap 熱力圖"""
-    ids, labels, parents, values, texts, colors = [], [], [], [], [], []
+def _build_treemap_data(sectors: dict, returns: dict, market: str,
+                        *, single_stock_proxy: bool = False,
+                        period_label: str = '') -> go.Figure:
+    """建立 Plotly Treemap 熱力圖。
+
+    B4-b 修正:
+    - **H-3 缺值不再填 0**:`colors` 缺值傳 `None`(Plotly 留白),hover 文字改走
+      `customdata` 顯示「無資料」;原本 `colors.append(0)` + `%{marker.color:+.2f}%`
+      會讓「從未抓到的標的」顯示成「+0.00%」,與真實持平長得一模一樣(§1 造假)。
+    - **H-3 缺值面積縮小**:原缺值母層給 1.0 / 子層給 0.5,比一檔真實 ±0.5% 的
+      類股還大。改走 `node_area()`,缺值面積嚴格小於任何有資料節點。
+    - **H-9 空序列**:原 `max(abs(c) for c in colors if c != 0) or 5` 在「全部為 0」
+      時炸 `ValueError: max() arg is an empty sequence`(整頁白掉)。改 `color_span_pct()`。
+    - **H-2 揭露**:`single_stock_proxy=True` 時類股名帶上代表股代號。
+
+    Args:
+        sectors: `{ticker: {'name': str, 'sub': [ticker, ...]}}`。
+        returns: `{ticker: rate_pct}`;取不到的 ticker **不在** dict 內。
+        market: root 節點標籤。
+        single_stock_proxy: 該市場的「類股」是否為單一代表股近似(台股 True)。
+        period_label: 區間標籤,只用於 hover 文案(如 '1日')。
+    """
+    ids, labels, parents, values, texts, colors, hovers = [], [], [], [], [], [], []
 
     # root
     ids.append(market)
     labels.append(market)
     parents.append('')
     values.append(0)
-    texts.append('')
-    colors.append(0)
+    texts.append(market)
+    colors.append(None)      # root 不參與色階(H-9:也不會被 color_span_pct 誤算)
+    hovers.append('—')
 
     for ticker, meta in sectors.items():
         sec_ret = returns.get(ticker)
-        sec_label = f"{meta['name']}<br>{sec_ret:+.1f}%" if sec_ret is not None else meta['name']
+        _disp = sector_display_name(meta['name'], ticker,
+                                    single_stock_proxy=single_stock_proxy)
+        sec_label = (f"{_disp}<br>{sec_ret:+.1f}%" if sec_ret is not None
+                     else f"{_disp}<br>{HEATMAP_MISSING_TEXT}")
         ids.append(ticker)
         labels.append(sec_label)
         parents.append(market)
-        values.append(max(abs(sec_ret) if sec_ret is not None else 1, 0.5))
-        texts.append(ticker)
-        colors.append(sec_ret if sec_ret is not None else 0)
+        values.append(node_area(sec_ret, is_parent=True))
+        texts.append(f'{_disp} [{ticker}]')
+        colors.append(sec_ret)          # ← None 保留成 None,Plotly 留白
+        hovers.append(hover_value_text(sec_ret))
 
         # sub-items
         for sub in meta.get('sub', []):
             sub_ret = returns.get(sub)
-            sub_label = f"{sub.replace('.TW','')}<br>{sub_ret:+.1f}%" if sub_ret is not None else sub
+            _sub_disp = sub.replace('.TW', '').replace('.TWO', '')
+            sub_label = (f"{_sub_disp}<br>{sub_ret:+.1f}%" if sub_ret is not None
+                         else f"{_sub_disp}<br>{HEATMAP_MISSING_TEXT}")
             ids.append(f'{ticker}/{sub}')
             labels.append(sub_label)
             parents.append(ticker)
-            values.append(max(abs(sub_ret) if sub_ret is not None else 0.5, 0.3))
+            values.append(node_area(sub_ret, is_parent=False))
             texts.append(sub)
-            colors.append(sub_ret if sub_ret is not None else 0)
+            colors.append(sub_ret)      # ← 同上,不填 0
+            hovers.append(hover_value_text(sub_ret))
 
-    # 顏色：最大值對稱
-    max_abs = max(abs(c) for c in colors if c != 0) or 5
+    # 顏色：最大值對稱(H-9:全缺 / 全 0 時回預設跨度,不炸 max() 空序列)
+    max_abs = color_span_pct(colors)
+    _hover_prefix = f'{period_label}漲跌' if period_label else '漲跌'
     fig = go.Figure(go.Treemap(
         ids=ids, labels=labels, parents=parents,
-        values=values, text=texts,
+        values=values, text=texts, customdata=hovers,
         textinfo='label',
         marker=dict(
             colors=colors,
@@ -652,7 +723,8 @@ def _build_treemap_data(sectors: dict, returns: dict, market: str) -> go.Figure:
             colorbar=dict(title='漲跌%', thickness=12),
             line=dict(width=1, color='#0d1117'),
         ),
-        hovertemplate='<b>%{text}</b><br>漲跌：%{marker.color:+.2f}%<extra></extra>',
+        # H-3:hover 走 customdata 字串,缺值吐「無資料」而非 %{marker.color} 的 +0.00%
+        hovertemplate=f'<b>%{{text}}</b><br>{_hover_prefix}：%{{customdata}}<extra></extra>',
     ))
     fig.update_layout(
         template='plotly_dark',
@@ -665,7 +737,9 @@ def _build_treemap_data(sectors: dict, returns: dict, market: str) -> go.Figure:
 
 def render_sector_heatmap(gemini_fn=None):
     st.markdown('### 🗺️ 產業熱力圖')
-    st.caption('即時抓取各類股漲跌幅，紅=漲 / 綠=跌（台灣慣例）。點選區塊可展開子類股。')
+    # B4-b H-5:原文案寫「即時抓取」是假話 —— 實際是 yfinance 日線收盤 + 本頁
+    # TTL_30MIN 快取,盤中不會反映當下報價。
+    st.caption('各類股區間漲跌幅，紅=漲 / 綠=跌（台灣慣例）。點選區塊可展開子類股。')
     with st.expander('💡 怎麼用產業熱力圖？', expanded=False):
         st.markdown(
             '**這是什麼**：把各產業/類股的漲跌幅用顏色塊呈現（紅漲綠跌、面積≈權重），一眼看出**資金正流向哪個產業**。\n\n'
@@ -679,14 +753,30 @@ def render_sector_heatmap(gemini_fn=None):
     col_m, col_p, col_r = st.columns([2, 2, 1])
     market = col_m.selectbox('市場', ['🇺🇸 美股（GICS 11大類）', '🇹🇼 台股（主要類股）'],
                               key='heatmap_market')
-    period_label = col_p.selectbox('計算區間', list(_PERIOD_MAP.keys()),
+    period_label = col_p.selectbox('計算區間', list(SECTOR_PERIOD_LABELS),
                                     index=0, key='heatmap_period')
     col_r.markdown('<br>', unsafe_allow_html=True)
     refresh = col_r.button('🔄 刷新', key='heatmap_refresh', use_container_width=True)
 
     is_us = '美股' in market
     sectors = _US_SECTORS if is_us else _TW_SECTORS
-    period  = _PERIOD_MAP[period_label]
+    single_stock_proxy = _US_SECTOR_SINGLE_STOCK_PROXY if is_us else _TW_SECTOR_SINGLE_STOCK_PROXY
+    # B4-b H-1:傳給 L1 的是**區間標籤**(如 '1日'),不再是 yfinance 下載窗字串。
+    # 下載窗與計算區間的對照 SSOT 在 shared/sector_heatmap.py,由 L1 自行查表。
+    period  = period_label
+    _n_bars = SECTOR_LOOKBACK_TRADING_DAYS[period_label]
+
+    # B4-b H-1/H-5:口徑講清楚 —— 交易日 vs 日曆日、非即時報價。
+    st.caption(
+        f'口徑：**{period_label} ＝ 最新收盤 vs 往前 {_n_bars} 個「交易日」的收盤**'
+        f'（不是 {_n_bars} 個日曆日）；已還原除權息（adjusted close）。'
+        f'　資料來源：yfinance **日線收盤**（非即時報價，且本頁最多快取 30 分鐘）。'
+    )
+    if single_stock_proxy:
+        # ⚠️ _colored_box 走 unsafe_allow_html,markdown `**` 不會被解析 → 用 <b>
+        _colored_box(
+            f'⚠️ <b>台股的「類股」其實是單一代表股，不是類股平均</b><br>'
+            f'{TW_SINGLE_STOCK_PROXY_DISCLOSURE}', 'yellow')
 
     # 收集所有需抓取的 ticker（類股代表 + 子成分）
     all_tickers = list(sectors.keys())
@@ -719,76 +809,106 @@ def render_sector_heatmap(gemini_fn=None):
 
     # ── Treemap 主圖 ──────────────────────────────────────────
     market_label = '美股 GICS' if is_us else '台股類股'
-    fig = _build_treemap_data(sectors, returns, market_label)
+    fig = _build_treemap_data(sectors, returns, market_label,
+                              single_stock_proxy=single_stock_proxy,
+                              period_label=period_label)
     st.plotly_chart(fig, width='stretch')
 
     # ── 數值排行表（補充用）──────────────────────────────────
-    st.markdown(f'#### 📊 {market_label} 類股漲跌排行（{period_label}）')
+    st.markdown(f'#### 📊 {market_label} 漲跌排行（{period_label} = {_n_bars} 個交易日）')
+    _ret_col = f'{period_label}漲跌%'
+    _name_col = '類股（代表股）' if single_stock_proxy else '類股'
     rank_rows = []
     for ticker, meta in sectors.items():
         ret = returns.get(ticker)
         rank_rows.append({
-            '類股': meta['name'],
+            # H-2:台股側欄名 + 內容都要帶出「這是單一代表股」
+            _name_col: sector_display_name(meta['name'], ticker,
+                                           single_stock_proxy=single_stock_proxy),
             '代號': ticker,
-            f'{period_label}漲跌%': ret if ret is not None else 'N/A',
-            '方向': ('📈 上漲' if ret and ret > 0 else ('📉 下跌' if ret and ret < 0 else '➡️ 持平')),
+            # H-4:%欄與方向欄必須同源判斷,不可一格說沒資料、一格說持平
+            _ret_col: ret if ret is not None else HEATMAP_MISSING_TEXT,
+            '方向': direction_label(ret),
         })
-    rank_rows.sort(key=lambda x: x[f'{period_label}漲跌%']
-                   if isinstance(x[f'{period_label}漲跌%'], float) else 0, reverse=True)
+    # H-4:缺值排最後(原本當 0.00% 插進真實報酬中間)
+    rank_rows.sort(key=lambda r: sort_key_desc(
+        r[_ret_col] if isinstance(r[_ret_col], (int, float)) else None), reverse=True)
     rank_df = pd.DataFrame(rank_rows)
     st.dataframe(rank_df, use_container_width=True, hide_index=True)
 
-    # 覆蓋率說明
+    # ── 覆蓋率（H-7:母層 + 子成分都要算,原本只數母層）─────────────
+    _sub_tickers = [s for meta in sectors.values() for s in meta.get('sub', [])]
     fetched = sum(1 for t in sectors if returns.get(t) is not None)
     total_s = len(sectors)
-    if fetched < total_s:
+    sub_fetched = sum(1 for t in _sub_tickers if returns.get(t) is not None)
+    sub_total = len(_sub_tickers)
+    _cov = (f'類股層 {fetched}/{total_s}、子成分 {sub_fetched}/{sub_total}'
+            if sub_total else f'類股層 {fetched}/{total_s}')
+    if fetched < total_s or sub_fetched < sub_total:
         _colored_box(
-            f'⚠️ 僅取得 {fetched}/{total_s} 個類股資料，部分可能因 yfinance 限速或市場休市而缺失',
+            f'⚠️ 資料覆蓋率：{_cov}。缺的格子在圖上會<b>留白</b>、排行表顯示'
+            f'「{HEATMAP_MISSING_TEXT}」（<b>不會</b>填 0 冒充持平）；'
+            f'常見原因：yfinance 限速、市場休市、標的停牌或已下市、'
+            f'或上市未滿 {_n_bars + 1} 個交易日。',
             'yellow')
     else:
-        _colored_box(f'✅ 全部 {total_s} 個類股資料取得完整', 'green')
+        _colored_box(f'✅ 資料覆蓋率：{_cov}，全部取得完整', 'green')
 
     # ── AI 白話總結 ──────────────────────────────────────────
     if gemini_fn:
         st.markdown('---')
+        # H-6:session key 原本只有 '_sector_ai_md',不含 market / period
+        # → 切 🇹🇼→🇺🇸 或 1日→3月 後,上一組的 AI 段落會原封不動留在下面。
+        _ai_key = f'_sector_ai_md::{market_label}::{period_label}'
         clicked = st.button('🤖 生成 AI 白話總結', key='sector_ai_btn')
         if clicked:
             # 只取有數據的類股，依漲跌幅排序（最強→最弱）
-            valued = [r for r in rank_rows
-                      if isinstance(r[f'{period_label}漲跌%'], float)]
+            valued = [r for r in rank_rows if isinstance(r[_ret_col], (int, float))]
             ranking = '、'.join(
-                f"{r['類股']} {r[f'{period_label}漲跌%']:+.2f}%" for r in valued
+                f"{r[_name_col]} {r[_ret_col]:+.2f}%" for r in valued
             ) or '目前沒有可用的漲跌資料'
 
-            ups = [r for r in valued if r[f'{period_label}漲跌%'] > 0]
-            downs = [r for r in valued if r[f'{period_label}漲跌%'] < 0]
+            ups = [r for r in valued if r[_ret_col] > 0]
+            downs = [r for r in valued if r[_ret_col] < 0]
+            _miss = len(rank_rows) - len(valued)
             if valued:
                 strongest = valued[0]
                 weakest = valued[-1]
+                # H-1:區間標籤不再寫死「今天」—— 選 3月 時說「今天」是假話
                 flow = (
-                    f"上漲的有 {len(ups)} 個產業、下跌的有 {len(downs)} 個產業。"
-                    f"今天最受青睞（漲最多）的是「{strongest['類股']}」"
-                    f"（{strongest[f'{period_label}漲跌%']:+.2f}%），"
-                    f"最被冷落（跌最多）的是「{weakest['類股']}」"
-                    f"（{weakest[f'{period_label}漲跌%']:+.2f}%）。"
+                    f"上漲的有 {len(ups)} 個產業、下跌的有 {len(downs)} 個產業"
+                    + (f"、另有 {_miss} 個產業沒有資料（不列入判斷）" if _miss else '')
+                    + f"。這段期間（{period_label}，即 {_n_bars} 個交易日）"
+                    f"最受青睞（漲最多）的是「{strongest[_name_col]}」"
+                    f"（{strongest[_ret_col]:+.2f}%），"
+                    f"最被冷落（跌最多）的是「{weakest[_name_col]}」"
+                    f"（{weakest[_ret_col]:+.2f}%）。"
                 )
             else:
                 flow = '目前沒有足夠的資料判斷資金流向。'
 
             sections = [
-                {'name': '今天哪些產業在漲、哪些在跌', 'data': ranking},
+                {'name': f'近 {period_label}（{_n_bars} 個交易日）哪些產業在漲、哪些在跌',
+                 'data': ranking},
                 {'name': '錢正在往哪裡跑（資金流向的感覺）', 'data': flow},
             ]
-            news_text = get_news_for('台股', '台股 類股 輪動 產業 盤勢', 5)
+            if single_stock_proxy:
+                # H-2:揭露必須跟著數字進 prompt,否則 AI 會把單一個股報酬敘事成「類股平均」
+                sections.append({
+                    'name': '⚠️ 這批數字的口徑限制（請務必在結論中如實反映）',
+                    'data': TW_SINGLE_STOCK_PROXY_DISCLOSURE,   # SSOT 本身即純文字
+                })
+            _news_q = ('美股 類股 輪動 產業 盤勢' if is_us else '台股 類股 輪動 產業 盤勢')
+            news_text = get_news_for('美股' if is_us else '台股', _news_q, 5)
             prompt = build_structured_summary_prompt(
-                subject_title=f'今天的{market_label}產業表現',
+                subject_title=f'近 {period_label}的{market_label}產業表現',
                 sections=sections,
                 news_text=news_text,
                 overall_question='現在資金比較偏好哪些產業、有沒有明顯的輪動、一般人可以怎麼看。',
             )
             with st.spinner('AI 正在用白話幫你整理產業輪動...'):
                 md = gemini_fn(prompt, max_tokens=1300)
-            st.session_state['_sector_ai_md'] = md
+            st.session_state[_ai_key] = md
             st.markdown(md)
-        elif st.session_state.get('_sector_ai_md'):
-            st.markdown(st.session_state['_sector_ai_md'])
+        elif st.session_state.get(_ai_key):
+            st.markdown(st.session_state[_ai_key])

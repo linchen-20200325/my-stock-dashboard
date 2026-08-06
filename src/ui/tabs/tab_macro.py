@@ -444,11 +444,38 @@ def render_tab_macro():
             # [BUG FIX] 寬鬆條件:有任何 DataFrame(即使全 '-')都存入 session_state
             if df_li_a is not None and not df_li_a.empty:
                 st.session_state['li_latest'] = df_li_a
+                # 本輪真的抓到新資料 → 清掉「沿用上輪」降級標記
+                st.session_state.pop('li_retain_meta', None)
                 print(f'[先行指標] ✅ {len(df_li_a)} 筆 (有效欄={df_li_a.notna().any().sum()})')
             else:
                 if 'li_latest' not in st.session_state:
                     st.session_state.pop('li_latest', None)
-                print(f'[先行指標] ⚠️ 回傳{"空" if df_li_a is not None else "None"} — 保留舊快取')
+                # ── B4-a D-1c(§2.4「過期 cache 回傳須帶 is_stale,禁止靜默」)──
+                # 這條 else 原本是**完全靜默**的:build_leading_fast 回 None(含
+                # stale pickle 超過 leading_indicators._STALE_MAX_AGE_MIN=3 日
+                # 被擋掉的情形)時,畫面照舊渲染上一輪的 li_latest —— 而那份 df
+                # 是走正常路徑存進來的,身上沒有任何 is_stale 旗標。於是
+                # 「本輪其實什麼都沒抓到」在 UI 上與「本輪抓得好好的」長得一模一樣。
+                # 這是「9 天凍結卻無警示」的第二條漏網路徑(第一條是值本身凍結,
+                # 由 shared.data_freshness.detect_frozen_columns 在 🔎 資料診斷頁攔)。
+                # 這裡把「沿用上輪」顯式記錄成 session meta:rounds 累計失敗輪數、
+                # since 記第一次開始沿用的時刻,資料診斷頁據此把籌碼面降級 🟡 並明講。
+                # 註:只在真的還有舊資料可沿用時才記;li_latest 不存在時是單純的
+                # 「沒資料」,由覆蓋率欄顯示 ⬜,不需要這個標記。
+                _li_prev_retain = st.session_state.get('li_retain_meta')
+                if not isinstance(_li_prev_retain, dict):
+                    _li_prev_retain = {}
+                if st.session_state.get('li_latest') is not None:
+                    st.session_state['li_retain_meta'] = {
+                        'rounds': int(_li_prev_retain.get('rounds', 0) or 0) + 1,
+                        'since': _li_prev_retain.get('since') or _tw_now_str(),
+                        'last_try': _tw_now_str(),
+                        'reason': ('empty_df' if df_li_a is not None else 'none'),
+                    }
+                print(f'[先行指標] ⚠️ 回傳{"空" if df_li_a is not None else "None"} — '
+                      f'沿用舊快取(連續第 '
+                      f'{(st.session_state.get("li_retain_meta") or {}).get("rounds", 0)} '
+                      f'輪),已標記 li_retain_meta 供資料診斷頁降級')
             try:
                 _fetch_ph.empty()
             except Exception:

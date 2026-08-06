@@ -78,6 +78,22 @@ def staleness_days(
     return (exp - latest).days
 
 
+def latest_date(
+    data,
+    *,
+    date_col: str = "date",
+) -> Optional[_dt.date]:
+    """取資料的「最新資料日期(as-of)」;無法判定回 None。
+
+    與 `staleness_days` 共用同一份萃取邏輯(`_extract_latest_date`),差別只在
+    本函式回**日期本身**、前者回**落後天數**。UI 常常兩個都要(「🟡 落後3日
+    (資料日 08/01)」),抽出來避免呼叫端各自再寫一份 pandas 日期解析而漂移。
+
+    接受型別同 `staleness_days`:DataFrame / date / datetime / str / Timestamp。
+    """
+    return _extract_latest_date(data, date_col=date_col)
+
+
 def gate_for_realtime(
     days: Optional[int],
     *,

@@ -572,7 +572,10 @@ with tab_market:
         _render_tab_isolated(render_tab_macro, '總經')
 
     with tab_heatmap:
-        render_sector_heatmap(gemini_fn=gemini_call)
+        # B4-b H-9:本 tab 原為全 app 唯一未包隔離器者,任何例外(例:色階
+        # max() 空序列 ValueError)會白掉整頁。對齊鄰居「總經」寫法。
+        _render_tab_isolated(
+            lambda: render_sector_heatmap(gemini_fn=gemini_call), '產業熱力圖')
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 2: 選股（個股 + 個股組合 + 選股網）
