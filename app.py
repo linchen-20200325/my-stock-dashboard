@@ -2,59 +2,34 @@ import streamlit as st
 import datetime
 import os
 import re
-import requests
-import sys
 
-# ── Streamlit Cloud 防護（PR #82/#86 升級版）────────────────
-# tab_*.py 用 `from app import X`，Python 走 sys.modules['app'] 找模組。
-# Cloud 上 sys.modules['__main__'] 是 Streamlit CLI binary 不是 script，
-# 所以 PR #82 的 `setdefault('app', sys.modules[__name__])` 指錯模組。
-# PR #86 用 ModuleType proxy + closure，但 closure 經 method.__globals__
-# 解析 `_app_globals` 名稱對 Streamlit rerun 行為有依賴。
-# 改為把 globals dict 塞 proxy.__dict__，每次都 refresh，徹底解耦。
-import types as _types  # noqa: E402
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
-class _AppProxy(_types.ModuleType):
-    """Proxy：`from app import X` → 從 proxy 自己 dict 拿 live globals。"""
-    def __getattr__(self, name):
-        g = self.__dict__.get('__app_globals__')
-        if g is None:
-            raise AttributeError(f"module 'app' proxy uninitialized; missing {name!r}")
-        try:
-            return g[name]
-        except KeyError:
-            raise AttributeError(
-                f"module 'app' has no attribute {name!r} "
-                f"(globals has {len(g)} keys)"
-            ) from None
-
-_existing = sys.modules.get('app')
-if isinstance(_existing, _AppProxy):
-    _existing.__dict__['__app_globals__'] = globals()
-else:
-    _proxy = _AppProxy('app')
-    _proxy.__dict__['__app_globals__'] = globals()
-    sys.modules['app'] = _proxy
+# ── F2(2026-08)：`_AppProxy` / `sys.modules['app']` 劫持已移除 ──────────
+# 原註解（保留供追溯）：「tab_*.py 用 `from app import X`，Python 走
+# sys.modules['app'] 找模組。Cloud 上 sys.modules['__main__'] 是 Streamlit CLI
+# binary 不是 script…」——那整套 ModuleType proxy 的**唯一**存在理由，就是讓
+# 5 處 L5→L6 的 `from app import gemini_call / api_key / parse_stocks / _bps /
+# _get_fm_token / _tw_now_str`（CLAUDE.md V-UP-APP-1）在 Streamlit Cloud 上不炸。
+#
+# 那 5 處已於 F2 全數改走 L3/L0：
+#   gemini_call / get_gemini_api_key → src/services/app_ai_service.py  (L3)
+#   parse_stocks                     → shared/parse_helpers.py          (L0)
+#   _tw_now_str                      → shared/macro_compute.py          (L0)
+#   _get_fm_token                    → src/config/config.py             (L0)
+#   _bps                             → src/data/proxy/proxy_helper.py   (L1)
+# → production code 已 0 處 `from app import`（由 tests/test_f2_app_decomposition.py
+#   與 tests/test_c3_layering_guard.py 規則 5 共同釘住），proxy 沒有消費者了。
+#
+# ⚠️ 仍在用 `from app import` 的只剩 tests/test_parse_helpers.py::test_app_reexport，
+#    它跑在 **subprocess** 裡且是 `import app`（不是 __main__）→ Python 自己就會把
+#    真模組註冊進 sys.modules['app']，本來就不需要這個 proxy。
 
 # ── 台灣時間（UTC+8）─────────────────────────────────────
-_TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
-def _tw_now(): return datetime.datetime.now(_TW_TZ)
-def _tw_now_str(): return _tw_now().strftime('%Y-%m-%d %H:%M')
-
-def _bps():
-    try:
-        import urllib3 as _ul3
-        _ul3.disable_warnings(_ul3.exceptions.InsecureRequestWarning)
-    except Exception:
-        pass
-    try:
-        from src.data.stock import build_proxy_session as _b
-        s = _b()
-    except Exception:
-        s = requests.Session()
-    s.verify = False
-    return s
+# F2:原本這裡自建第 N 份 `timezone(timedelta(hours=8))`(§4.5 全站已有多份複本)。
+# 改吃 L0 SSOT;`_tw_now` 供下方前進式驗證 cohort 用,`_tw_now_str` 保留別名
+# 是因為 tab_macro 過去靠 `from app import _tw_now_str`(現已直接吃 L0)。
+from shared.macro_compute import tw_now as _tw_now, tw_now_str as _tw_now_str  # noqa: F401
 
 print('[INFO] main.py v3.0 戰情室 載入完成')
 
@@ -68,7 +43,8 @@ from src.ui.etf import (  # noqa: E402
 from src.ui.pages import render_data_health_raw  # noqa: E402
 from src.ui.pages import render_api_diagnostic  # noqa: E402
 from src.ui.tabs import render_grape_ladder  # noqa: E402
-from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA  # noqa: E402
+# F2:`TAIWAN_ADVISOR_PERSONA` 的唯一用途是 gemini_call 的 systemInstruction,
+# 隨 gemini_call 一起搬到 src/services/app_ai_service.py,app.py 不再需要。
 
 def _get_secret(_key: str) -> str:
     """st.secrets 優先,降級 os.environ。
@@ -89,16 +65,19 @@ api_key       = _get_secret('GEMINI_API_KEY')   # [Fixed] st.secrets 優先 + �
 FINMIND_TOKEN = _get_secret('FINMIND_TOKEN')    # [Fixed] st.secrets 優先 + 缺失降級
 
 # [Fixed] 同步到 os.environ，讓子模組頂層讀取能拿到正確值
+# F2 註:`api_key` 這個 module-level 名字**仍有用**,不是殘骸 ——
+#   (1) 下面這行把它同步進 os.environ,`macro_state_locker._default_gemini_call`
+#       等純 .py 路徑靠 os.environ 取金鑰;
+#   (2) 但它**不再**被 gemini_call 消費(金鑰池已下沉 L3,自行讀 st.secrets/env),
+#       也不再被 tab_stock 以 `from app import api_key` 取用
+#       (改走 L3 `app_ai_service.get_gemini_api_key()`)。
 if FINMIND_TOKEN:
     os.environ['FINMIND_TOKEN'] = FINMIND_TOKEN
 if api_key:
     os.environ['GEMINI_API_KEY'] = api_key
 
-def _get_fm_token():
-    """每次動態讀取最新 Token：st.secrets > os.environ"""
-    _tok = (getattr(st, 'secrets', {}).get('FINMIND_TOKEN')
-            or os.environ.get('FINMIND_TOKEN', ''))
-    return _tok
+# F2:`_get_fm_token()` 已下沉 L0 → `src.config.get_finmind_token()`(app.py 內
+# 本來就沒有 caller,唯一消費者是 tab_macro,原本靠 `from app import _get_fm_token`)。
 
 st.set_page_config(page_title='台股AI戰情室 v3.0', layout='wide',
                    page_icon='📊', initial_sidebar_state='collapsed')
@@ -153,99 +132,22 @@ st.markdown(f"""<style>
 # HELPERS
 # ════════════════════════════════════════════════════════════════
 # v18.302 §8.3 app.py 拆檔:parse_stocks 已提至 shared/parse_helpers.py(L0)。
-# 此處保 re-export 維持向後相容(tab_stock_grp.py:52 等 caller 0 改)。
+# F2:最後一個靠 `from app import parse_stocks` 的 caller(tab_stock_grp)已改直吃 L0,
+# 這行現在只服務 tests/test_parse_helpers.py::test_app_reexport 的身分驗證。
 from shared.parse_helpers import parse_stocks  # noqa: F401
 
-# ── Gemini 金鑰池（做法 B：多帳號 key 自動換手，分散額度 / 速率限制）──────
-# 讀 GEMINI_API_KEY + GEMINI_API_KEY_2 .. _6（st.secrets 優先，os.environ fallback）。
-# gemini_call 以 round-robin 起手 key（不同呼叫/不同 tab 從不同把 key 開始 → 分散負載），
-# 任一把遇到 429（速率/額度滿）或 403（無效）時自動換下一把，全部用盡才報錯。
-_GEMINI_KEY_NAMES = ['GEMINI_API_KEY'] + [f'GEMINI_API_KEY_{_i}' for _i in range(2, 7)]
-_gemini_rr = [0]  # round-robin 起手索引（每次呼叫遞增）
-# v18.435 WONTFIX-翻案 Bug #3:多 Streamlit session 併發呼叫 gemini_call 時,
-# _gemini_rr[0] 的讀+寫非 atomic(兩條指令),會讓 round-robin 跳號 →
-# 同一把 hot key 連環打 → 提前 429。加 Lock 序列化 round-robin 增量。
-import threading as _threading_rr
-_gemini_rr_lock = _threading_rr.Lock()
-
-
-def _gemini_keys() -> list:
-    """收集所有可用 Gemini API key（去重保序）。st.secrets 優先，os.environ fallback。"""
-    _keys = []
-    for _n in _GEMINI_KEY_NAMES:
-        try:
-            _v = st.secrets.get(_n, '') or os.environ.get(_n, '')
-        except Exception:
-            _v = os.environ.get(_n, '')
-        _v = str(_v or '').strip()
-        if _v and _v not in _keys:
-            _keys.append(_v)
-    if api_key and api_key not in _keys:
-        _keys.append(api_key)
-    return _keys
-
-
-def gemini_call(prompt, max_tokens=2048):
-    _keys = _gemini_keys()
-    if not _keys:
-        return '⚠️ 請設定 GEMINI_API_KEY（可另加 GEMINI_API_KEY_2 ~ _6 分散額度）'
-    # round-robin 起手：不同呼叫從不同把 key 開始，自然把負載分散到各帳號
-    # v18.435 WONTFIX-翻案 Bug #3:Lock 序列化讀+寫,避免併發 session 跳號
-    with _gemini_rr_lock:
-        _start = _gemini_rr[0] % len(_keys)
-        _gemini_rr[0] = (_gemini_rr[0] + 1) % 1_000_000
-    _keys = _keys[_start:] + _keys[:_start]
-    # 2026-03 有效模型：1.5系列全部退役，2.5為主力
-    _models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash',
-               'gemini-2.0-flash', 'gemini-2.0-flash-lite']
-    for _model in _models:
-        # Gemini 2.5 預設開「思考模式」，思考 token 會跟輸出共用 maxOutputTokens 額度
-        # → 常導致回覆只生成一半就被截斷。白話摘要不需深度推理，關閉思考（thinkingBudget=0）。
-        _gen_cfg = {'temperature': 0.3, 'maxOutputTokens': max_tokens}
-        if _model.startswith('gemini-2.5'):
-            _gen_cfg['thinkingConfig'] = {'thinkingBudget': 0}
-        for _ki, _key in enumerate(_keys):
-            try:
-                _r = requests.post(
-                    f'https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent',
-                    # v19.170:憑證只走 header,不進 query string / URL(避免落入 access log)
-                    headers=({'x-goog-api-key': _key} if _key else None),
-                    json={'systemInstruction': {'parts': [{'text': _PERSONA}]},
-                          'contents': [{'parts': [{'text': prompt}]}],
-                          'generationConfig': _gen_cfg},
-                    timeout=120
-                )
-                if _r.status_code == 200:
-                    _d = _r.json()
-                    _cands = _d.get('candidates', [])
-                    if _cands:
-                        _parts = _cands[0].get('content', {}).get('parts', [])
-                        if _parts and _parts[0].get('text'):
-                            return _parts[0]['text']
-                    # safety 攔截：換 key 無助益 → 直接換下一個 model
-                    if _cands and _cands[0].get('finishReason', '') == 'SAFETY':
-                        break
-                    continue  # 空回覆 → 試下一把 key
-                elif _r.status_code == 400:
-                    _err_msg = (_r.json() if _r.text else {}).get('error', {}).get('message', _r.text[:100])
-                    print(f'[Gemini/{_model}] 400 Bad Request: {_err_msg}')
-                    break  # 設定/prompt 問題，換 key 無用 → 換下一個 model
-                elif _r.status_code == 403:
-                    print(f'[Gemini/{_model}] 403 第 {_ki+1} 把 key 無效/無權限 → 換下一把')
-                    continue  # 換 key
-                elif _r.status_code == 404:
-                    break  # 此 model 不存在 → 換下一個 model
-                elif _r.status_code == 429:
-                    print(f'[Gemini/{_model}] 429 第 {_ki+1} 把 key 額度/速率滿 → 換下一把')
-                    continue  # 換 key（做法 B 核心：分散到別把帳號）
-                else:
-                    print(f'[Gemini/{_model}] HTTP {_r.status_code}: {_r.text[:200]}')
-                    continue  # 換 key
-            except Exception as _ge:
-                print(f'[Gemini/{_model}] key#{_ki+1} {type(_ge).__name__}: {_ge}')
-                continue  # 換 key
-    return ('⚠️ AI 服務暫時無法使用（所有 key 與模型都試過了）—— '
-            '請確認各把金鑰額度，或稍後再試')
+# ── Gemini 金鑰池 + gemini_call ── F2(2026-08)已下沉 L3 ────────────────
+# 原本整段(金鑰池常數 / round-robin Lock / _gemini_keys / gemini_call ~90 LOC)
+# 住在 app.py = L6 直接打 Gemini HTTP(CLAUDE.md V-APP-1)。現在住
+# src/services/app_ai_service.py(L3),邏輯一字未改。
+# app.py 保留 import 是因為它**確實是 orchestrator 職責**:把 gemini_fn 注入
+# 各 render(render_sector_heatmap / render_etf_single / render_grape_ladder /
+# render_etf_portfolio / render_etf_ai),以及側欄「連線狀態」顯示金鑰池偵測結果。
+from src.services.app_ai_service import (  # noqa: E402
+    GEMINI_KEY_NAMES as _GEMINI_KEY_NAMES,
+    gemini_call,
+    gemini_keys as _gemini_keys,
+)
 
 # ── 本地快取（SQLite + Pickle 雙軌）───────────────────────
 # v18.404 B3-α:cache helper 50 LOC 抽至 shared/app_cache.py(thin shim 保 caller API)。
@@ -522,44 +424,11 @@ _gl_slot = st.empty()
 # ══════════════════════════════════════════════════════════════
 
 
-def _build_llm_context(macro_info: dict) -> str:
-    """將 session_state 中的量化總經數據格式化為純文字供 LLM 使用。
-
-    v19.87 A~E 批次2:月度指標(出口/PMI/CPI/NDC)距預期最新交易日 >40 天者,
-    在該行前綴 `[STALE:Nd]`(shared/staleness.stale_tag SSOT),防 AI 把過期資料
-    當當期講(第八份 review §3.1;對齊 Fund 端既有慣例)。
-    """
-    from shared.staleness import stale_tag, staleness_days
-    _vix = macro_info.get('vix') or {}
-    _exp = macro_info.get('tw_export') or {}
-    _pmi = macro_info.get('ism_pmi') or {}
-    _cpi = macro_info.get('us_core_cpi') or {}
-    _ndc = macro_info.get('ndc_signal') or {}
-    _mi  = st.session_state.get('m1b_m2_info') or {}
-    _bi  = st.session_state.get('bias_info') or {}
-
-    def _tag(_d: dict) -> str:
-        # 月度指標 stale 閾值 40 天;date 缺失 → staleness_days 回 None → 無標籤
-        return stale_tag(staleness_days(_d.get('date')), threshold=40)
-
-    _lines = []
-    if _vix.get('current'):
-        _lines.append(f'• VIX 恐慌指數：{_vix["current"]} (MA20={_vix.get("ma20","N/A")})')
-    if _exp.get('yoy') is not None:
-        # v19.85 正名:tw_export = 海關出口年增率(非經濟部外銷訂單)
-        _lines.append(f'• {_tag(_exp)}台灣出口 YoY：{_exp["yoy"]:+.1f}%  ({_exp.get("date","")})')
-    if _pmi.get('value') is not None:
-        _lines.append(f'• {_tag(_pmi)}🇹🇼 台灣 PMI：{_pmi["value"]}  ({_pmi.get("date","")}，>50 擴張)')
-    if _cpi.get('yoy') is not None:
-        _lines.append(f'• {_tag(_cpi)}美國核心 CPI YoY：{_cpi["yoy"]:+.1f}%  ({_cpi.get("date","")})')
-    if _ndc.get('score') is not None:
-        _lines.append(f'• {_tag(_ndc)}NDC 景氣燈號分數：{_ndc["score"]:.0f}/45')
-    if _mi.get('m1b_yoy') is not None and _mi.get('m2_yoy') is not None:
-        _gap = round(float(_mi['m1b_yoy']) - float(_mi['m2_yoy']), 2)
-        _lines.append(f'• 台灣 M1B={_mi["m1b_yoy"]:.1f}%  M2={_mi["m2_yoy"]:.1f}%  Gap={_gap:+.2f}%')
-    if _bi.get('bias_240') is not None:
-        _lines.append(f'• 台股大盤年線乖離率 BIAS240：{_bi["bias_240"]:+.1f}%')
-    return '\n'.join(_lines) if _lines else '（量化數據載入中，請先按「🚀 一鍵更新全部數據」）'
+# F2(2026-08):`_build_llm_context` 已下沉 L3
+# → `src/services/app_ai_service.py::build_llm_context`(邏輯一字未改)。
+# 它組 LLM prompt 上下文 = L3 職責,住在 L6 是 CLAUDE.md V-APP-1 點名的違憲之一。
+# ⚠️ 順帶查證結果:它**0 個 production caller**(AST 全 repo 掃描)。F2 只搬家不刪,
+#    是否刪除留給 user 裁示(§-1)。
 
 
 # ══════════════════════════════════════════════════════════════

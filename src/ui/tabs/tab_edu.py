@@ -38,6 +38,10 @@ from shared.financial_health_thresholds import (  # 策略2 章節門檻 SSOT（
     FH_ROE_TOP_PCT,
 )
 from shared.fred_series import FRED_NAPM
+from shared.macro_buckets import (  # F1 v19.184：cl_data['intl'] key 鏡像（有 drift 守衛）
+    CL_INTL_KEY_DXY as _CL_INTL_KEY_DXY,
+    CL_INTL_KEY_US10Y as _CL_INTL_KEY_US10Y,
+)
 from shared.signal_thresholds import (  # B6-a v19.181:VCP 章風控數字改吃 SSOT
     ATR_STOP_MULTIPLIER,
     RR_DEFAULT_TARGET_GAIN,
@@ -68,6 +72,83 @@ _FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'XTEXVA01TWM664S': 'pc1'}
 
 
 # ════════════════════════════════════════════════════════════════
+# F1 v19.184 — 教學卡 sparkline 的警戒／危險線改吃五桶危險門檻 SSOT
+# ────────────────────────────────────────────────────────────────
+# 【修的是什麼】`_get_indicator_data()` 原本自帶一張**手打**的閾值表，
+# 與同一張卡下方判讀表（`data_registry.EDU_GUIDE`，已於 D3/B7 改吃
+# `shared/edu_tokens`）用的是**兩把不同的尺**。逐條比對（2026-08-07）：
+#
+#   identifier         手打(warn, crit)   SSOT(BUCKET_DANGER_SPECS)   結果
+#   ^TNX               (4,    5)          us10y      (4.5, 5.0)       ❌ 差 0.5
+#   FRED_NAPM          (50,   45)         ism_pmi    (50,  46)        ❌ 差 1
+#   CPILFESL           (2.5,  4)          us_core_cpi(3.5, 4.0)       ❌ warn 用了「中期卡片」那把尺，crit 用五桶那把 → 一張圖兩把尺
+#   ms1.json           (0,   -2)          m1b_m2_gap (1.0, 0.0)       ❌ 整組不同（判讀表寫 ≥1 黃金交叉 / <0 死亡交叉）
+#   BFI82U             (0, -100)          foreign_net(0.0, -200.0)    ❌ crit 差一倍
+#   NDC_signal         (32,  22)          ndc_signal 低側黃線 23       ❌ 差 1
+#   ^VIX               (22,  30)          vix        (22,  30)        ✅
+#   DX-Y.NYB           (105, 110)         dxy        (105, 110)       ✅
+#
+# ⇒ 8 條有 6 條對不上，症狀是「同一張教學卡上，趨勢圖的閾值線與判讀表的門檻
+#   互相矛盾」。使用者照著圖上的線判讀，會得到與表格相反的結論（§1）。
+#
+# 【怎麼修】不再手打，一律由 `SPECS_BY_KEY` 推。方向也一起推，
+# 不用另外維護 `high_is_bad`（原本 `^SOX` 寫 False = 「跌才壞」，但那欄根本
+# 沒有判定式，寫 False 只是佔位；現在無 spec 就誠實回 None）。
+#
+# 【band 型 spec 怎麼取】`make_sparkline` 只畫兩條線，而 band（目前只有
+# `ndc_signal`）高低兩側各有一對。取 **(高側黃線, 低側黃線)** ——
+# 即「綠燈區間的上下緣」，這與原手打值 (32, 22) 的**意圖**一致，
+# 只是把 22 換成 SSOT 的 23。取紅線那組會把圖上兩條線變成 38/16，
+# 語意從「綠燈區間」變成「紅燈起點」，屬行為變更，不在本次範圍。
+# ════════════════════════════════════════════════════════════════
+#: 教學卡 identifier → `shared.macro_buckets.SPECS_BY_KEY` 的 key。
+#: 值為 None = **本系統對該欄沒有自動判定式**，圖上不畫線（誠實留白，
+#: 不從別的指標借一條線來充數 —— 那正是 B7 修掉的 bug class）。
+_EDU_SPEC_KEY_BY_IDENTIFIER: dict[str, str | None] = {
+    '^VIX':             'vix',
+    '^TNX':             'us10y',
+    'DX-Y.NYB':         'dxy',
+    '^SOX':             None,      # 只抓 OHLCV 供人工看走勢，無判定式
+    'CPILFESL':         'us_core_cpi',
+    FRED_NAPM:          'ism_pmi',
+    'XTEXVA01TWM664S':  'tw_export',
+    'NDC_signal':       'ndc_signal',
+    'ms1.json':         'm1b_m2_gap',
+    'BFI82U':           'foreign_net',
+    'MI_MARGN':         'margin',
+}
+
+
+def edu_threshold_lines(identifier: str):
+    """教學卡 sparkline 的 (警戒線, 危險線, high_is_bad)，一律取自五桶 SSOT。
+
+    Returns
+    -------
+    tuple[float | None, float | None, bool | None]
+        - 未登記 / 登記為 None（無判定式）→ `(None, None, None)`，圖上不畫線。
+        - `high_bad` → `(yellow, red, True)`
+        - `low_bad`  → `(yellow, red, False)`
+        - `band`     → `(yellow, yellow_lo, None)`：綠燈區間的上下緣（見上方註解）。
+
+    §1 Fail Loud：登記了 spec key 卻在 `SPECS_BY_KEY` 找不到 → **不**靜默回 None，
+    印一行 log 再回全 None（畫面少兩條線看得出來，但不會拿錯的線去誤導判讀）。
+    """
+    from shared.macro_buckets import SPECS_BY_KEY
+
+    _key = _EDU_SPEC_KEY_BY_IDENTIFIER.get(identifier)
+    if _key is None:
+        return None, None, None
+    _spec = SPECS_BY_KEY.get(_key)
+    if _spec is None:
+        print(f'[tab_edu] ⚠️ `{identifier}` 登記的 spec key `{_key}` 不在 '
+              f'BUCKET_DANGER_SPECS 中 → 該卡 sparkline 不畫閾值線')
+        return None, None, None
+    if _spec.direction == 'band':
+        return _spec.yellow, _spec.yellow_lo, None
+    return _spec.yellow, _spec.red, _spec.direction == 'high_bad'
+
+
+# ════════════════════════════════════════════════════════════════
 # B6-a v19.181 — 教學文案的「活數字」佔位符（§3.3 反捏造 / SSOT）
 # ────────────────────────────────────────────────────────────────
 # 【為什麼要有這一層】
@@ -91,33 +172,38 @@ _FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'XTEXVA01TWM664S': 'pc1'}
 def _edu_tokens() -> dict[str, str]:
     """教學文案 token → SSOT 實值。**每次 render 現算**，不做 module-level 快取。
 
+    ═══ F1 v19.184：本函式不再自己定義 token，改「L0 主表 ＋ L1 衍生補充」═══
+    原本這裡有一份 21 個 token 的表，`shared/edu_tokens.py`（L0，D3 建立、供
+    `data_registry` 用）又有一份 —— 兩份的**值**雖然都取自同一批 L0 常數，
+    但「哪些 token 存在」「叫什麼名字」「怎麼格式化」是各寫各的，
+    只要有人只改一邊，同一個門檻就會在說明書與教學卡上印出不同數字
+    （這正是 D3/B7 當初要消滅的那個 bug 的翻版）。
+
+    收斂後只有兩層：
+
+        `shared.edu_tokens.edu_tokens()`  ← **唯一**定義點（純 L0 常數推得）
+        `_l1_derived_edu_tokens()`        ← 只放 L0 構不到的（需要 L1 registry）
+
+    為什麼不整份搬去 L0：`§§PMI_SOURCES§§` / `§§PMI_SOURCE_COUNT§§` 的值來自
+    `macro_core.PMI_SOURCE_REGISTRY`（**L1**），而 §8.2 硬規則「L0 不得依賴任何
+    L1+」。搬過去就是讓 L0 違憲；留在這裡是**唯一合法**的位置。
+
+    ⚠️ 合併方向刻意是 `{**L0, **L1衍生}`，且兩邊 key **不得重疊** ——
+    若 L1 那層蓋掉了 L0 的同名 token，就等於偷偷開了第二個真相，
+    `tests/test_f1_edu_token_coverage.py::test_l5_does_not_override_l0_tokens`
+    會直接紅燈。
+    """
+    from shared.edu_tokens import edu_tokens as _l0_edu_tokens
+    return {**_l0_edu_tokens(), **_l1_derived_edu_tokens()}
+
+
+def _l1_derived_edu_tokens() -> dict[str, str]:
+    """只放「需要 L1 才算得出」的 token（目前 2 個，全是 PMI 多源賽跑名單）。
+
     L1 的 `PMI_SOURCE_REGISTRY` 走函式內 late import（§8.2.A EX-PASSTHRU-1：
     L5 → L1 pass-through 讀取，模組載入期不拉整條 macro 依賴鏈）。
     """
-    import math as _m
     import sys as _sys
-
-    from shared.signal_thresholds import (
-        BREADTH_BULL_PCT,
-        BREADTH_NEUTRAL_PCT,
-        FOREIGN_5D_NET_THRESHOLD_YI,
-        FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD,
-        FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS,
-        FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS,
-        MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
-        MARGIN_BALANCE_WARN_THRESHOLD_YI,
-        RECESSION_LOGIT_COEF_INTERCEPT,
-        RECESSION_LOGIT_COEF_SPREAD,
-        TWII_20D_DROP_THRESHOLD_PCT,
-        VIX_HIGH_RISK_THRESHOLD,
-        VIX_MEDIUM_RISK_THRESHOLD,
-    )
-    from src.config import LEEK_ALERT_HIGH_PCT, LEEK_ALERT_LOW_PCT
-
-    def _recession_p(spread: float) -> float:
-        """複刻 `macro_core.recession_probability` 的算式（同一組 SSOT 係數）。"""
-        _logit = RECESSION_LOGIT_COEF_SPREAD * spread + RECESSION_LOGIT_COEF_INTERCEPT
-        return round(1 / (1 + _m.exp(-_logit)) * 100, 1)
 
     # PMI 多源賽跑順序 —— 名單與筆數皆取 registry，不手抄
     try:
@@ -133,24 +219,6 @@ def _edu_tokens() -> dict[str, str]:
         '§§PMI_SOURCES§§': (' → '.join(_pmi_names) if _pmi_names
                             else '（暫無法讀取 PMI_SOURCE_REGISTRY）'),
         '§§PMI_SOURCE_COUNT§§': str(len(_pmi_names)) if _pmi_names else '—',
-        '§§RECESSION_COEF_SPREAD§§': f'{RECESSION_LOGIT_COEF_SPREAD:g}',
-        '§§RECESSION_COEF_INTERCEPT§§': f'{RECESSION_LOGIT_COEF_INTERCEPT:g}',
-        '§§RECESSION_P_AT_0§§': f'{_recession_p(0.0):.0f}',
-        '§§RECESSION_P_AT_M1§§': f'{_recession_p(-1.0):.0f}',
-        '§§RECESSION_P_AT_M2§§': f'{_recession_p(-2.0):.0f}',
-        '§§FUT_DEFENSE_LOTS§§': f'{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}',
-        '§§FUT_V4_RED_LOTS§§': f'{FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS:,}',
-        '§§FUT_V4_YELLOW_LOTS§§': f'{FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS:,}',
-        '§§VIX_V4_RED§§': f'{VIX_HIGH_RISK_THRESHOLD:g}',
-        '§§VIX_V4_YELLOW§§': f'{VIX_MEDIUM_RISK_THRESHOLD:g}',
-        '§§FOREIGN_5D_YI§§': f'{FOREIGN_5D_NET_THRESHOLD_YI:,.0f}',
-        '§§TWII_20D_PCT§§': f'{TWII_20D_DROP_THRESHOLD_PCT:g}',
-        '§§MARGIN_WARN_YI§§': f'{MARGIN_BALANCE_WARN_THRESHOLD_YI:,.0f}',
-        '§§MARGIN_OVERHEAT_YI§§': f'{MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:,.0f}',
-        '§§LEEK_ALERT_HIGH§§': f'{LEEK_ALERT_HIGH_PCT:+g}',
-        '§§LEEK_ALERT_LOW§§': f'{LEEK_ALERT_LOW_PCT:+g}',
-        '§§BREADTH_BULL§§': f'{BREADTH_BULL_PCT:g}',
-        '§§BREADTH_NEUTRAL§§': f'{BREADTH_NEUTRAL_PCT:g}',
     }
 
 
@@ -161,12 +229,12 @@ def _resolve_edu_tokens(text: str, tokens: dict[str, str] | None = None) -> str:
     `_edu_tokens()` 取一份重複傳入，避免每段都重跑 late import。
     未登記的 token **保持原樣**印在畫面上 —— 這是刻意的：
     漏改的佔位符要看得見（§1 降級不靜默），不可悄悄消失成空字串。
+
+    F1 v19.184：取代邏輯本身也改吃 L0 的 `resolve_edu_tokens`，
+    本函式只負責「tokens 省略時要合併 L1 衍生那兩個」這件 L5 專屬的事。
     """
-    if tokens is None:
-        tokens = _edu_tokens()
-    for _k, _v in tokens.items():
-        text = text.replace(_k, _v)
-    return text
+    from shared.edu_tokens import resolve_edu_tokens as _l0_resolve
+    return _l0_resolve(text, _edu_tokens() if tokens is None else tokens)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -370,24 +438,33 @@ def render_tab_edu():
                 覆蓋範圍：
                   ✓ 有 series：^VIX / ^TNX / ^SOX / DX-Y.NYB（cl_data.intl 有 90D OHLC）
                   ✓ 僅單值：CPILFESL / NAPM / XTEXVA01TWM664S / NDC_signal /
-                            ms1.json / MI_MARGN / BFI82U（macro_info / m1b_m2_info / cl_data）
+                            ms1.json / BFI82U（macro_info / m1b_m2_info / cl_data）
                   ✗ 無資料：BWIBBU_d（TWSE 大盤散點資料，無單一聚合值，請至個股 Tab 看）
+                  ✗ 無資料：MI_MARGN 融資餘額 —— F1 v19.184 更正：本函式從來沒有
+                            取過它的值（舊 docstring 把它列在「僅單值」是不實記載），
+                            要接得先有 session_state 取數點，屬另案。
+
+                閾值線一律由 `edu_threshold_lines()` 從五桶 SSOT 推得，
+                本函式**不得**再自帶任何手打門檻（F1 v19.184，理由見該函式上方註解）。
                 """
                 _macro = st.session_state.get('macro_info') or {}
                 _cl    = st.session_state.get('cl_data') or {}
                 _intl  = _cl.get('intl') or {}
                 _m1b   = st.session_state.get('m1b_m2_info') or {}
                 _bias  = st.session_state.get('bias_info') or {}
+                _tw, _tc, _hib = edu_threshold_lines(identifier)
 
                 # ─ 國際金融（有完整 OHLC DataFrame）─
+                # value = cl_data['intl'] 的中文 key。US10Y / DXY 兩個走
+                # `macro_buckets` 的鏡像常數（SSOT: daily_checklist.INTL_MAP），
+                # 有 drift 守衛；^SOX 無鏡像常數，維持字面。
                 _intl_map = {
-                    '^TNX':      ('10Y公債殖利率', 4,    5,   True),
-                    '^SOX':      ('費城半導體 SOX', None, None, False),
-                    'DX-Y.NYB':  ('美元指數 DXY',   105,  110, True),
+                    '^TNX':      _CL_INTL_KEY_US10Y,
+                    '^SOX':      '費城半導體 SOX',
+                    'DX-Y.NYB':  _CL_INTL_KEY_DXY,
                 }
                 if identifier in _intl_map:
-                    _name, _tw, _tc, _hib = _intl_map[identifier]
-                    _df = _intl.get(_name)
+                    _df = _intl.get(_intl_map[identifier])
                     if _df is not None and not _df.empty:
                         _ccol = 'Close' if 'Close' in _df.columns else (
                             'close' if 'close' in _df.columns else None)
@@ -404,24 +481,24 @@ def render_tab_edu():
                         try:
                             _s = _pd_edu.Series(_v['values'],
                                                 index=_pd_edu.to_datetime(_v['dates']))
-                            return _v.get('current'), _s, 22, 30, True
+                            return _v.get('current'), _s, _tw, _tc, _hib
                         except Exception:
                             pass
-                    return _v.get('current'), None, 22, 30, True
+                    return _v.get('current'), None, _tw, _tc, _hib
 
                 # ─ 單值類（無 series，但顯示當前值 + 閾值線）─
+                # 只放「怎麼從 session_state 取值」；閾值一律走 `_tw/_tc/_hib`。
                 _single = {
-                    'CPILFESL':       ((_macro.get('us_core_cpi') or {}).get('yoy'),         2.5,  4,    True),
-                    FRED_NAPM:        ((_macro.get('ism_pmi')     or {}).get('value') or
-                                       (_macro.get('ism_pmi')     or {}).get('current'),     50,   45,   False),
-                    'XTEXVA01TWM664S':  ((_macro.get('tw_export')   or {}).get('yoy'),         0,    -5,   False),
-                    'NDC_signal':     ((_macro.get('ndc_signal')  or {}).get('score') or
-                                       (_macro.get('ndc_signal')  or {}).get('value'),       32,   22,   None),
-                    'ms1.json':       ((_m1b.get('m1b_yoy')      or 0) -
-                                       (_m1b.get('m2_yoy')        or 0)
+                    'CPILFESL':       (_macro.get('us_core_cpi') or {}).get('yoy'),
+                    FRED_NAPM:        ((_macro.get('ism_pmi') or {}).get('value') or
+                                       (_macro.get('ism_pmi') or {}).get('current')),
+                    'XTEXVA01TWM664S': (_macro.get('tw_export') or {}).get('yoy'),
+                    'NDC_signal':     ((_macro.get('ndc_signal') or {}).get('score') or
+                                       (_macro.get('ndc_signal') or {}).get('value')),
+                    'ms1.json':       ((_m1b.get('m1b_yoy') or 0) - (_m1b.get('m2_yoy') or 0)
                                        if (_m1b.get('m1b_yoy') is not None
                                            and _m1b.get('m2_yoy') is not None)
-                                       else None,                                            0,    -2,   False),
+                                       else None),
                 }
                 # ─ BFI82U：三大法人現貨買賣超（取外資 net，億）─
                 if identifier == 'BFI82U':
@@ -431,11 +508,11 @@ def render_tab_edu():
                         _net = _inst.get(_foreign_key, {}).get('net')
                         if _net is not None:
                             _val = float(_net) / 1e8 if abs(float(_net)) > 1e6 else float(_net)
-                            return _val, None, 0, -100, False
-                    return None, None, 0, -100, False
+                            return _val, None, _tw, _tc, _hib
+                    return None, None, _tw, _tc, _hib
 
                 if identifier in _single:
-                    _v, _tw, _tc, _hib = _single[identifier]
+                    _v = _single[identifier]
                     _funits = _FRED_EDU_UNITS.get(identifier)
                     if _funits is not None:
                         _ser = _fetch_fred_series_edu(identifier, _funits)

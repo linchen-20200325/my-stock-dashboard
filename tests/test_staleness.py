@@ -132,16 +132,44 @@ class TestShimDelegation:
 
 
 class TestLlmContextStaleWiring:
-    """app.py `_build_llm_context` 接 stale_tag(app.py 難以單元 import,故 source-scan;
-    邏輯由上方 stale_tag/staleness_days 單元測試覆蓋)。"""
+    """`build_llm_context` 接 stale_tag。
 
-    def test_build_llm_context_imports_staleness(self):
-        from pathlib import Path
-        src = (Path(__file__).resolve().parent.parent / "app.py").read_text(encoding="utf-8")
-        assert "from shared.staleness import stale_tag, staleness_days" in src
-        assert "_tag(_exp)" in src and "_tag(_pmi)" in src, "月度指標應套 stale 標籤"
-        # v19.85 正名一併帶入 AI prompt
-        assert "台灣出口 YoY" in src and "台灣外銷訂單 YoY" not in src
+    F2(2026-08):函式已從 `app.py`(L6)下沉到
+    `src/services/app_ai_service.py`(L3),本測試同步改指新家。
+    改為**真的呼叫函式**驗行為(舊版是 source-scan,因為 app.py 難以單元 import;
+    L3 module 沒有這個限制,行為斷言比字串掃描強)。
+    """
+
+    def _ctx(self, macro_info):
+        from src.services.app_ai_service import build_llm_context
+        return build_llm_context(macro_info)
+
+    def test_fresh_monthly_indicator_has_no_stale_tag(self):
+        _today = dt.date.today().isoformat()
+        out = self._ctx({"tw_export": {"yoy": 12.3, "date": _today}})
+        assert "台灣出口 YoY" in out
+        assert "+12.3%" in out
+        assert "[STALE" not in out, "當期資料不該被標 stale"
+
+    def test_stale_monthly_indicator_is_tagged(self):
+        _old = (dt.date.today() - dt.timedelta(days=200)).isoformat()
+        out = self._ctx({"ism_pmi": {"value": 51.2, "date": _old}})
+        assert "台灣 PMI" in out
+        assert "[STALE" in out, "距今 200 天的月度指標必須標 stale(閾值 40 天)"
+
+    def test_empty_macro_info_says_loading(self):
+        out = self._ctx({})
+        assert "量化數據載入中" in out
+
+    # 反向守衛(app.py 不得再持有這段 L3 邏輯 → 否則會變兩份)由
+    # tests/test_f2_app_decomposition.py::test_app_py_does_not_define 以 AST 釘住,
+    # 這裡不重複寫字串掃描版(註解裡就有 `_build_llm_context` 字樣,字串掃描易假紅)。
+
+    def test_export_naming_not_reverted(self):
+        """v19.85 正名:tw_export = 海關出口,不得寫回「外銷訂單」。"""
+        _today = dt.date.today().isoformat()
+        out = self._ctx({"tw_export": {"yoy": 1.0, "date": _today}})
+        assert "台灣出口 YoY" in out and "外銷訂單" not in out
 
     def test_global_redlight_gated_by_staleness(self):
         """v19.88 批次2 收尾:全域紅綠燈過期時撤 actionable 建議、標記過期。"""

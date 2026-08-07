@@ -9,9 +9,10 @@
   * 外部模組: v4_strategy_engine / daily_checklist / v5_modules
     / financial_health_engine / tech_indicators / scoring_helpers / scoring_engine
     / ui_widgets / chart_plotter / data_loader
-  * app.py 內部 (11): _fetch_stock_news / api_key / fetch_dividend_data
-    / fetch_financials / fetch_price_data / fetch_quarterly / fetch_quarterly_extra
-    / fetch_revenue / gemini_call / generate_ai_comment / render_health_score
+  * 原「app.py 內部 (11)」已全數歸位,本檔 F2(2026-08)起 **0 處 `from app import`**:
+    _fetch_stock_news → L1 src.data.news;fetch_* 六個 → L1 src.data.stock.app_stock_fetchers;
+    generate_ai_comment / gemini_call / api_key → L3 src.services.app_ai_service
+    (api_key 改呼叫 `get_gemini_api_key()`);render_health_score → L4 src.ui.render.app_render。
 
 呼叫端
 ======
@@ -162,8 +163,13 @@ def render_tab_stock():
     # U2-b v18.403:再補 border_left_banner 收 3 處 banner pattern
     from src.ui.render.tab_sections import border_left_banner, box_wrapper_close, box_wrapper_open
     from src.data.core import fetch_financial_statements
-    # app.py 內部 helper
-    from app import api_key, gemini_call
+    # F2(2026-08):原 `from app import api_key, gemini_call`(L5→L6 上行 import,
+    # CLAUDE.md V-UP-APP-1)。兩者已下沉 L3。`api_key` 維持同名區域變數 —— 下方
+    # `analyze_financial_health(api_key, ...)` 的呼叫形式一字未改。
+    # 行為差異:原本是 app.py import 當下的**快照**,現在每次 render 重讀
+    # st.secrets/env(值相同,但改 Secrets 後不必重啟才生效)。
+    from src.services.app_ai_service import gemini_call, get_gemini_api_key
+    api_key = get_gemini_api_key()
     # U5 B3-δ v18.405:6 fetcher 已抽至 L1 src/data/stock/app_stock_fetchers.py
     from src.data.stock.app_stock_fetchers import (
         fetch_dividend_data, fetch_financials, fetch_price_data,

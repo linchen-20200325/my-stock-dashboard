@@ -36,6 +36,12 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.thresholds import YIELD_HIGH
+# F1 v19.184 §3.3：全台股基本面初篩的說明文字改吃同一份 SSOT（原手抄 50% / EPS>0 / 四項）
+from shared.fundamental_prescreen_thresholds import (
+    DEBT_RATIO_MAX as _PRESCREEN_DEBT_MAX,
+    EPS_MIN as _PRESCREEN_EPS_MIN,
+    PRESCREEN_REQUIRED_PASSES as _PRESCREEN_N,
+)
 from src.config import FINMIND_API_URL  # Batch 10 v18.412 SSOT
 
 # ── 三階段濾網門檻（SSOT，§3.3 反捏造：禁止 inline magic number）─────────────
@@ -43,6 +49,55 @@ from src.config import FINMIND_API_URL  # Batch 10 v18.412 SSOT
 PICKER_S1_MIN_PASS = 6   # Stage 1 基本面：9 項中至少通過項數（進入通過清單門檻）
 PICKER_S2_MIN_PASS = 3   # Stage 2 籌碼技術：6 項中至少通過項數
 PICKER_DEEP_SCAN_N = 50  # 選股網候選池深掃檔數上限（依估值排序取前 N，控管 FinMind API 用量）
+
+# ── F1 v19.184 §3.3：逐項判定門檻抽 SSOT ──────────────────────────────────
+# 【為什麼】這 6 個數字原本**同時**出現在兩個地方且各寫各的：
+#   (a) 判定式裡的 inline magic（`abs(_chg) < 30`、`_turnover > 4`、`_ratio > 0.05`、
+#       `_yoy_pct > 20`、`_ratio > 1.3`、`_pos == 5`）；
+#   (b) 表格下方 `st.caption` 的手抄說明（「季變動 < 30%」「年化 > 4 次」…）。
+# 這正是 v18.466 那個 bug 的形狀：`PICKER_S1_MIN_PASS` 由 5 改 6 時，同檔三處 caption
+# 都改了，只有餵給 AI 的統計沒改 → 送進 LLM 的篩選標準是假的（v19.178 才修）。
+# 現在把 (a)(b) 綁在同一個常數上，改一次兩邊一起動。
+#
+# 📌 待辦（非本批）：整個 `PICKER_*` 區塊應搬去 `shared/picker_thresholds.py`（L0），
+#    與 `shared/rs_screen_thresholds.py` / `shared/shortage_screen_thresholds.py` 一致。
+#    那是純搬家（零行為變更），但會動到 `tests/test_picker_funnel.py` 的 import 路徑，
+#    與本批「只接說明文字」的範圍無關，故不在此順手做。
+PICKER_AR_TURNOVER_STABLE_QOQ_PCT = 30.0
+"""應收帳款天數「穩定」判定：|季增率| < 30%（單位：%）。原 `_check_ar_turnover` inline。"""
+
+PICKER_INV_TURNOVER_MIN_TIMES = 4.0
+"""存貨周轉率「OK」判定：年化 > 4 次/年。原 `_check_inventory_turnover` inline。"""
+
+PICKER_CAPEX_EQUITY_MIN_RATIO = 0.05
+"""資本支出「積極」判定：單季 CapEx / 股東權益 > 0.05（≈ 年化 0.2）。
+⚠️ 單位是**比值**不是 %，caption 顯示時要自己 ×100（§4.1 百分比 vs 小數）。
+原 `_check_capex_vs_equity` inline。"""
+
+PICKER_CONTRACT_LIAB_YOY_MIN_PCT = 20.0
+"""合約負債「OK」判定：YoY > 20%（單位：%）且同時滿足連續季增。
+原 `_check_contract_liab_yoy` inline（兩處 `> 20`）。"""
+
+PICKER_CONTRACT_LIAB_QOQ_QUARTERS = 2
+"""合約負債連續季增的季數要求（本季 > 前季 > 前前季 ＝ 2 段成長）。
+⚠️ 判定式是**鏈式比較**寫死 3 個點；本常數目前只餵說明文字，
+改成 3 段以上需同時改判定式（屬行為變更，不是文案修正）。"""
+
+PICKER_BOLL_OPENING_RATIO = 1.3
+"""布林開口判定：近 N 日 band 寬度均值 > 前 M 日均值的 1.3 倍。
+原 `_check_bollinger_opening` inline。"""
+
+PICKER_BOLL_RECENT_DAYS = 5
+"""布林開口的「近期」窗（交易日）。原 `_width.iloc[-5:]` inline。
+⚠️ 與 `PICKER_INST_BUY_STREAK_DAYS`（同為 5）**同數字不同義**，
+兩者刻意各自具名，禁止互相代入（§3.3 前綴分名防耦合）。"""
+
+PICKER_BOLL_BASELINE_DAYS = 20
+"""布林開口的「基準」窗（交易日）。原 `_width.iloc[-25:-5]` inline（25 − 5 = 20）。"""
+
+PICKER_INST_BUY_STREAK_DAYS = 5
+"""投信「連續買超」判定所需的交易日數。原 `_check_institutional_buying` inline
+（`[:5]` / `len(_dates) < 5` / `_pos == 5` 三處同值）。"""
 
 # ── 15 項條件 SSOT：(result dict label 欄, 顯示名)。自訂篩選器 + 兩張表共用 ──────
 # 每項「過/沒過」以 label 開頭是否為 '✅' 判定（同 s1/s2_pass_cnt 計數邏輯）。
@@ -95,8 +150,13 @@ def render_prescreen_panel(*, refresh: bool = False) -> None:
     with st.expander(
             f'🔬 全台股基本面初篩結果 — 四項全過 {len(_surv)}/{len(_df)} 檔 · {_q}{_yoy}',
             expanded=False):
-        st.caption('四項：①負債比<50% ②三率三升 YoY（毛利/營益/淨利率 本季>去年同季）'
-                   '③淨流動值>0（流動資產>總負債）④EPS>0。**四項全過**才入選股網候選池。')
+        # F1 v19.184 §3.3：「<50%」「EPS>0」原為手抄，改吃初篩 SSOT
+        #（`shared/fundamental_prescreen_thresholds`）。「四項」改吃
+        # `PRESCREEN_REQUIRED_PASSES` —— 那個常數的 docstring 明文寫「禁止 UI/L2 端寫死 == 4」。
+        st.caption(f'{_PRESCREEN_N} 項：①負債比<{_PRESCREEN_DEBT_MAX * 100:g}% '
+                   f'②三率三升 YoY（毛利/營益/淨利率 本季>去年同季）'
+                   f'③淨流動值>0（流動資產>總負債）④EPS>{_PRESCREEN_EPS_MIN:g}。'
+                   f'**{_PRESCREEN_N} 項全過**才入選股網候選池。')
         # v19.71 涵蓋率診斷（§5）：讓「慢公布是否已納入」看得見
         _cov = describe_snapshot_coverage(_meta)
         (st.warning if _cov['possibly_incomplete'] else st.caption)(f'📦 {_cov["text"]}')
@@ -166,12 +226,22 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
     import pandas as pd
 
     st.caption(f'從上方「{source_label}」候選清單勾選標的，系統自動跑三階段篩選並提供配置建議。'
-               f'全 15 項條件：3️⃣ 基本面 ×9 → 4️⃣ 籌碼技術 ×6 → 5️⃣ AI 綜合建議。')
+               f'全 {len(PICKER_ALL_CONDITIONS)} 項條件：'
+               f'3️⃣ 基本面 ×{len(PICKER_S1_CONDITIONS)} → '
+               f'4️⃣ 籌碼技術 ×{len(PICKER_S2_CONDITIONS)} → 5️⃣ AI 綜合建議。')
 
     with st.expander('💡 三階段濾網在篩什麼？（基本面 → 籌碼技術 → AI）', expanded=False):
+        # F1 v19.184 §3.3：這段原本把「9 項 / 7% / 6 項 / 6 項」全手抄 ——
+        # 而且「過 6 項以上（PICKER_S1_MIN_PASS）」還把常數名寫在旁邊卻不引用它，
+        # 正是 v18.466 那個「門檻由 5 改 6、文案漏改」bug 的溫床。全部改插值。
         st.markdown(
-            '**Stage 1 · 基本面防禦（9 項）**：負債比、三率三升（毛利/營益/淨利率同步走高）、連續 5 年配息且均殖利率>7%、本益比估值區、應收帳款週轉、存貨週轉、資本支出/股東權益、淨值比、合約負債 YoY。→ 過 6 項以上（PICKER_S1_MIN_PASS）視為體質健康。\n\n'
-            '**Stage 2 · 籌碼技術（6 項）**：站上 20MA 且上彎、MACD 翻多、KD 黃金交叉、布林通道開口、三大法人買超、集保大戶持股增加。→ 抓「便宜又剛要發動」的時機。\n\n'
+            f'**Stage 1 · 基本面防禦（{len(PICKER_S1_CONDITIONS)} 項）**：負債比、'
+            f'三率三升（毛利/營益/淨利率同步走高）、連續 5 年配息且均殖利率>{YIELD_HIGH:g}%、'
+            f'本益比估值區、應收帳款週轉、存貨週轉、資本支出/股東權益、淨值比、合約負債 YoY。'
+            f'→ 過 {PICKER_S1_MIN_PASS} 項以上（`PICKER_S1_MIN_PASS`）視為體質健康。\n\n'
+            f'**Stage 2 · 籌碼技術（{len(PICKER_S2_CONDITIONS)} 項）**：站上 20MA 且上彎、'
+            f'MACD 翻多、KD 黃金交叉、布林通道開口、三大法人買超、集保大戶持股增加。'
+            f'→ 抓「便宜又剛要發動」的時機。\n\n'
             '**Stage 3 · AI 綜合建議**：把上述量化結果＋新聞餵給 AI，輸出客觀的進場/觀望總結與配置權重。\n\n'
             '🎯 核心邏輯：**先用基本面排除地雷，再用籌碼技術抓發動點** —— 避免買到便宜卻沒人要的「價值陷阱」。'
         )
@@ -294,10 +364,16 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         'S1 通過':    f"{r['s1_pass_cnt']}/9",
     } for r in results])
     st.dataframe(_s1_df, hide_index=True, use_container_width=True)
-    st.caption(f'💡 通過數 = 9 項實作條件中過的個數；{PICKER_S1_MIN_PASS}+ 通過視為基本面健康。'
-               '「應收周轉」穩定 = 季變動 < 30%；「存貨周轉」OK = 年化 > 4 次；'
-               '「資本支出」積極 = CapEx > 股東權益 5%；「淨流動值」OK = 流動資產 > 總負債；'
-               '「合約負債」OK = YoY > 20% 且連 2 季增。'
+    # F1 v19.184 §3.3：門檻全部插 SSOT（見檔頭 `PICKER_*` 區塊註解）。
+    st.caption(f'💡 通過數 = {len(PICKER_S1_CONDITIONS)} 項實作條件中過的個數；'
+               f'{PICKER_S1_MIN_PASS}+ 通過視為基本面健康。'
+               f'「應收周轉」穩定 = 季變動 < {PICKER_AR_TURNOVER_STABLE_QOQ_PCT:g}%；'
+               f'「存貨周轉」OK = 年化 > {PICKER_INV_TURNOVER_MIN_TIMES:g} 次；'
+               f'「資本支出」積極 = CapEx > 股東權益 '
+               f'{PICKER_CAPEX_EQUITY_MIN_RATIO * 100:g}%；'
+               f'「淨流動值」OK = 流動資產 > 總負債；'
+               f'「合約負債」OK = YoY > {PICKER_CONTRACT_LIAB_YOY_MIN_PCT:g}% '
+               f'且連 {PICKER_CONTRACT_LIAB_QOQ_QUARTERS} 季增。'
                + ('「負債比」判定與上方「批次財報體檢」共用同一套門檻（不會兩處顯示不同顏色）。'
                   if fh_map else ''))
 
@@ -315,9 +391,12 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
         'S2 通過':    f"{r['s2_pass_cnt']}/6",
     } for r in results])
     st.dataframe(_s2_df, hide_index=True, use_container_width=True)
-    st.caption(f'💡 S1 ≥ {PICKER_S1_MIN_PASS}/9 且 S2 ≥ {PICKER_S2_MIN_PASS}/6 → 進入 Stage 3 AI 重點分析。'
-               '「布林開口」= 近 5 日 band 寬度 > 前 20 日 1.3 倍；'
-               '「投信買超」= 近 5 日連續買超；「大戶持股」= ≥1000 張級距近 2 週比例增加。')
+    st.caption(f'💡 S1 ≥ {PICKER_S1_MIN_PASS}/{len(PICKER_S1_CONDITIONS)} 且 '
+               f'S2 ≥ {PICKER_S2_MIN_PASS}/{len(PICKER_S2_CONDITIONS)} → 進入 Stage 3 AI 重點分析。'
+               f'「布林開口」= 近 {PICKER_BOLL_RECENT_DAYS} 日 band 寬度 > 前 '
+               f'{PICKER_BOLL_BASELINE_DAYS} 日 {PICKER_BOLL_OPENING_RATIO:g} 倍；'
+               f'「投信買超」= 近 {PICKER_INST_BUY_STREAK_DAYS} 日連續買超；'
+               f'「大戶持股」= ≥1000 張級距近 2 週比例增加。')
 
     # ── ⚠️ 追高風險警示(v19.62：位階過熱 = 遠離均線 / RSI 過熱)──
     _hot = [r for r in results
@@ -332,11 +411,14 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
 
     # ── 🎛️ 自訂必過條件（v19.61：改打勾格子，一次全看得到，比下拉選單好操作）──
     st.markdown('#### 🎛️ 自訂必過條件（可選）')
-    st.caption('勾你要求的條件，再設下方「至少過幾項」；全部不勾 = 用預設 S1≥6 且 S2≥3。'
-               '（勾選會即時重篩，不會重跑三階段掃描）')
+    # F1 v19.184 §3.3：「S1≥6 且 S2≥3」「基本面 9 項」「籌碼技術 6 項」原為手抄。
+    st.caption(f'勾你要求的條件，再設下方「至少過幾項」；'
+               f'全部不勾 = 用預設 S1≥{PICKER_S1_MIN_PASS} 且 S2≥{PICKER_S2_MIN_PASS}。'
+               f'（勾選會即時重篩，不會重跑三階段掃描）')
     _sel_keys: list[str] = []
-    for _grp_title, _grp_conds in (('基本面 9 項', PICKER_S1_CONDITIONS),
-                                   ('籌碼技術 6 項', PICKER_S2_CONDITIONS)):
+    for _grp_title, _grp_conds in (
+            (f'基本面 {len(PICKER_S1_CONDITIONS)} 項', PICKER_S1_CONDITIONS),
+            (f'籌碼技術 {len(PICKER_S2_CONDITIONS)} 項', PICKER_S2_CONDITIONS)):
         st.markdown(f'**{_grp_title}**')
         _cb_cols = st.columns(3)
         for _ci, (_ck, _cname) in enumerate(_grp_conds):
@@ -354,13 +436,15 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
     _custom = filter_by_custom_conditions(results, _sel_keys, int(_min_pass))
     if _custom is not None:
         _qualified = _custom
-        st.caption(f'🎛️ 自訂模式：15 項中選 {len(_sel_keys)} 項、至少過 {int(_min_pass)} 項')
+        st.caption(f'🎛️ 自訂模式：{len(PICKER_ALL_CONDITIONS)} 項中選 {len(_sel_keys)} 項、'
+                   f'至少過 {int(_min_pass)} 項')
         _crit_txt = f'自訂條件（{len(_sel_keys)} 選 {int(_min_pass)} 過）'
     else:
         _qualified = [r for r in results
                       if r['s1_pass_cnt'] >= PICKER_S1_MIN_PASS
                       and r['s2_pass_cnt'] >= PICKER_S2_MIN_PASS]
-        _crit_txt = f'S1 ≥ {PICKER_S1_MIN_PASS}/9 且 S2 ≥ {PICKER_S2_MIN_PASS}/6'
+        _crit_txt = (f'S1 ≥ {PICKER_S1_MIN_PASS}/{len(PICKER_S1_CONDITIONS)} 且 '
+                     f'S2 ≥ {PICKER_S2_MIN_PASS}/{len(PICKER_S2_CONDITIONS)}')
     if _qualified:
         st.success(f'✅ 符合條件（{_crit_txt}）：{len(_qualified)} 檔 → {[r["ticker"] for r in _qualified]}')
     else:
@@ -700,7 +784,7 @@ def _check_pe_zone(qis: dict, df) -> str:
 
 
 def _check_ar_turnover(fs: dict) -> str:
-    """應收周轉天數穩定（季增率 < 30% 變化視為穩定）。"""
+    """應收周轉天數穩定（季增率 < `PICKER_AR_TURNOVER_STABLE_QOQ_PCT`% 視為穩定）。"""
     if not fs:
         return '❓ 無財報'
     _days = fs.get('應收帳款天數')
@@ -709,8 +793,8 @@ def _check_ar_turnover(fs: dict) -> str:
         return '❓ N/A'
     try:
         _d = float(_days)
-        # 季增率 None or 在 ±30% 內 視為穩定
-        _stable = _chg is None or abs(float(_chg)) < 30
+        # 季增率 None or 在 ±門檻內 視為穩定（門檻與下方 caption 同一常數，F1 v19.184）
+        _stable = _chg is None or abs(float(_chg)) < PICKER_AR_TURNOVER_STABLE_QOQ_PCT
         return f'✅ {_d:.0f}天' if _stable else f'❌ {_d:.0f}天 季變{_chg:+.0f}%'
     except (TypeError, ValueError):
         return '❓ N/A'
@@ -729,8 +813,10 @@ def _check_inventory_turnover(fs: dict) -> str:
         _avg_inv = (float(_inv) + float(_inv_p)) / 2 if (_inv_p > 0) else float(_inv)
         if _avg_inv <= 0:
             return '❓ 存貨=0'
-        _turnover = (float(_cogs) * 4) / _avg_inv   # 年化
-        return f'✅ {_turnover:.1f}次/年' if _turnover > 4 else f'❌ {_turnover:.1f}次/年'
+        _turnover = (float(_cogs) * 4) / _avg_inv   # 年化（×4 = 每年 4 季，日曆常數非門檻）
+        return (f'✅ {_turnover:.1f}次/年'
+                if _turnover > PICKER_INV_TURNOVER_MIN_TIMES
+                else f'❌ {_turnover:.1f}次/年')
     except (TypeError, ValueError, ZeroDivisionError):
         return '❓ N/A'
 
@@ -749,7 +835,9 @@ def _check_capex_vs_equity(fs: dict) -> str:
         return '❓ N/A'
     try:
         _ratio = abs(float(_capex)) / float(_equity)
-        return f'✅ {_ratio*100:.1f}%/權益' if _ratio > 0.05 else f'❌ {_ratio*100:.1f}%/權益'
+        return (f'✅ {_ratio*100:.1f}%/權益'
+                if _ratio > PICKER_CAPEX_EQUITY_MIN_RATIO
+                else f'❌ {_ratio*100:.1f}%/權益')
     except (TypeError, ValueError, ZeroDivisionError):
         return '❓ N/A'
 
@@ -819,10 +907,11 @@ def _check_contract_liab_yoy(stock_id: str) -> str:
         _prev = _quarters[_dates[1]]
         _prev2 = _quarters[_dates[2]] if len(_dates) > 2 else 0
         _yoy_pct = (_now - _yoy) / _yoy * 100 if _yoy > 0 else 0
-        _qoq_2 = _now > _prev > _prev2  # 連兩季季增
-        if _yoy_pct > 20 and _qoq_2:
-            return f'✅ YoY+{_yoy_pct:.0f}% 連2季增'
-        if _yoy_pct > 20:
+        _qoq_2 = _now > _prev > _prev2  # 連兩季季增（= PICKER_CONTRACT_LIAB_QOQ_QUARTERS）
+        if _yoy_pct > PICKER_CONTRACT_LIAB_YOY_MIN_PCT and _qoq_2:
+            return (f'✅ YoY+{_yoy_pct:.0f}% '
+                    f'連{PICKER_CONTRACT_LIAB_QOQ_QUARTERS}季增')
+        if _yoy_pct > PICKER_CONTRACT_LIAB_YOY_MIN_PCT:
             return f'⚠️ YoY+{_yoy_pct:.0f}% 季未連增'
         return f'❌ YoY{_yoy_pct:+.0f}%'
     except Exception as _e:
@@ -895,12 +984,14 @@ def _check_bollinger_opening(df) -> str:
         _width = calc_bollinger_width_series(_close, window=20, k=2.0).dropna()
         if len(_width) < 25:
             return '❓ 不足 25 日'
-        _recent = _width.iloc[-5:].mean()
-        _baseline = _width.iloc[-25:-5].mean()
+        _recent = _width.iloc[-PICKER_BOLL_RECENT_DAYS:].mean()
+        _baseline = _width.iloc[
+            -(PICKER_BOLL_RECENT_DAYS + PICKER_BOLL_BASELINE_DAYS):
+            -PICKER_BOLL_RECENT_DAYS].mean()
         if _baseline <= 0:
             return '❓ baseline=0'
         _ratio = _recent / _baseline
-        if _ratio > 1.3:
+        if _ratio > PICKER_BOLL_OPENING_RATIO:
             return f'✅ 開口 ×{_ratio:.2f}'
         elif _ratio > 1.0:
             return f'⚠️ 微擴 ×{_ratio:.2f}'
@@ -973,15 +1064,19 @@ def _check_institutional_buying(stock_id: str) -> str:
             _by_date[_d] = _buy - _sell
         if not _by_date:
             return '❓ 無投信資料'
-        _dates = sorted(_by_date.keys(), reverse=True)[:5]
-        if len(_dates) < 5:
+        _n = PICKER_INST_BUY_STREAK_DAYS
+        _dates = sorted(_by_date.keys(), reverse=True)[:_n]
+        if len(_dates) < _n:
             return f'❓ 僅 {len(_dates)} 日'
         _pos = sum(1 for d in _dates if _by_date[d] > 0)
-        if _pos == 5:
-            return '✅ 連5日買超'
+        if _pos == _n:
+            return f'✅ 連{_n}日買超'
+        # ⚠️ 這個 `3` 是「部分買超 ⚠️」的中間帶，與 PICKER_S2_MIN_PASS(3) 同數字不同義，
+        #    刻意不共用常數（§3.3 防同數字不同義耦合）。它不影響 ✅/❌ 通過判定，
+        #    只切 ⚠️ 與 ❌ 的顯示，故未另立常數；若日後要調整再具名。
         if _pos >= 3:
-            return f'⚠️ {_pos}/5 日買超'
-        return f'❌ {_pos}/5 日買超'
+            return f'⚠️ {_pos}/{_n} 日買超'
+        return f'❌ {_pos}/{_n} 日買超'
     except Exception as _e:
         return f'❓ {type(_e).__name__}'
 

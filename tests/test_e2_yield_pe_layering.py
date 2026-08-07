@@ -350,7 +350,11 @@ class TestTwseFetcherParity:
         from src.data.stock import yield_pe_fetcher as ypf
         with patch.object(ypf, "proxy_fetch_url", return_value=_resp(_TWSE_RAW)):
             _df = ypf.fetch_twse_yield_pe()
-        assert list(_df.columns[:5]) == ["代碼", "名稱", "本益比", "殖利率(%)", "股價淨值比"]
+        # ⚠️ 比對**集合**不比順序：欄位順序沿用 TWSE payload 的原始鍵序，不是契約。
+        # 所有 consumer（`fetch_pe_name_maps` / `_fetch_pbratio_from_twse`）都以
+        # **欄名**取值，沒有任何一處靠位置索引。原本寫死順序（本益比 在 殖利率(%) 前）
+        # 與實際相反 → 這條測試在對「上游 JSON 的鍵序」下斷言，那是它管不著也不該管的事。
+        assert set(_df.columns[:5]) == {"代碼", "名稱", "本益比", "殖利率(%)", "股價淨值比"}
         assert "" not in set(_df["代碼"]) and "   " not in set(_df["代碼"])
         assert len(_df) == 3
 

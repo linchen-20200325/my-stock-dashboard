@@ -29,6 +29,20 @@ def _tw_today_dl():
     return datetime.datetime.now(_TW_TZ_DL).date()
 
 
+def tw_now() -> datetime.datetime:
+    """現在時刻(台灣時區 UTC+8,tz-aware)。
+
+    F2(2026-08):原 `app.py::_tw_now`。放這裡是因為本檔已經持有 `_TW_TZ_DL`
+    這個 UTC+8 常數(§4.5),再開一份 `timezone(timedelta(hours=8))` 就是第 N 份複本。
+    """
+    return datetime.datetime.now(_TW_TZ_DL)
+
+
+def tw_now_str() -> str:
+    """`tw_now()` 的 `'%Y-%m-%d %H:%M'` 字串(原 `app.py::_tw_now_str`,格式一字未改)。"""
+    return tw_now().strftime('%Y-%m-%d %H:%M')
+
+
 def _recent_date(fmt: str = "%Y%m%d"):
     """回最近一個交易日(週末退到週五),預設 YYYYMMDD 格式。"""
     d = _tw_today_dl()

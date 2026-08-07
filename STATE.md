@@ -1,5 +1,173 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🏛️ 2026-08-07 C/D/E/F 全 tab 稽核 + 核心總表 + 分層守衛(v19.184~187,5053 passed)
+
+> user:「請協助繼續審查目前的架構…透過**清晰分類**與**導引說明**降低初學者理解門檻。
+> 頂層核心總表 / 下方依業務邏輯分類 + 說明導引」+「每一個 TAB 都需要檢查,最後再一次修正」
+
+### C1 regime 唯一仲裁點(`shared/regime_arbiter.py` 新 L0)
+
+**4 個 producer 同一天給相反答案**:P1 `calc_traffic_light` icon 反推 / P2 `mkt_info['regime']`
+→ warroom → `get_macro_state` / P3 ETF 三處 `mkt_info.get('regime','neutral')` **直讀 + 捏預設** /
+P4 `warroom_summary['traffic_light']` 中文 substring。
+
+⚠️ **P4 比原判定更嚴重**:`traffic_light` 存的是 label,只可能是
+`空頭防禦｜降低部位` / `多頭市場｜積極操作` / `保守防禦｜縮減部位` / `震盪整理｜謹慎觀望`
+—— **四個都不含「綠」「黃」「紅」** ⇒ 個股組合 🚦 卡的三個條件**恆不命中**,永遠 `#484f58` 灰。
+
+⚠️ **原假設「fut −20,000 觸發防禦」錯誤**:`FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD=30000`
+且判定式嚴格大於,需 ≤ −30,001。矛盾仍在(P1 neutral vs P2 bull),只是不是 🔴 vs 🟢。
+
+**設計**:決策樹下沉 L0 回 frozen `RegimeVerdict{regime,light,source,defense,is_loaded}`;
+`calc_traffic_light`(L2)與 `get_macro_state`(L3)**呼叫同一支**,反推消失。未載入 →
+`regime='unknown'` + `light='⬜'`,**不再 `normalize_regime(None)` 回 `'neutral'`**
+(把「不知道」偽裝成「判斷為震盪」)。`is_loaded` 從 `health is not None` 收緊成
+`_is_finite_number()`(NaN health 原本被當已評估,一路傳進姿態油門)。
+UI 唯一橋樑 `allocation_service.get_macro_regime()`。1,372 個輸入點與舊決策樹逐點對拍。
+
+### C2 文件校正 + C3 分層守衛(`tests/test_c3_layering_guard.py` 新)
+
+**CLAUDE.md 已嚴重失真**:`app.py` 寫 882 LOC 實際 989 且含 L1/L3 職責;
+EX-CACHE-1 寫「已收齊 9 處」實際 **22**;EX-PASSTHRU-1 寫「25+」實際 **58**,
+**行號 100% 過期**(唯一還對的是 `handlers.py:51`);註 2 宣告「已移出例外」的檔案早被加回。
+
+⚠️ **註 1 的豁免理由是倒置的**:寫 `render_leading_table`「是 render fn 而非 fetcher,合 L4/略豁」
+—— 但它定義在 `leading_indicators.py`(**L1**)。「它是 render fn」正是它**不該住 L1** 的理由。
+ARCHITECTURE.md §0.10「0 違憲確認」9 條複驗後**至少 4 條被推翻**,其中 L3→L4 那條同型倒置。
+
+**C3 守衛**:AST(不用字串)、`ast.walk` 抓 late import、**展開 PEP 562 barrel**
+(`from src.data.proxy import fetch_url` 實際命中 `proxy_helper`,天真 grep 掃不到)、
+白名單不記行號、**反向守衛**(修好卻沒移出清單 → 紅)。
+現況基線:R1 23 / R2 1 / R3 1 / R4 60 / R5 26。
+
+**分類裁決**:`scripts/**` 不歸 L1 —— cron/CLI entrypoint 職責等同 L6,往下呼叫 L2/L3 是設計本意;
+`shared/` = L0(純函式住 L0 沒問題,叫它 L2 才是錯的)。
+
+### D1 🔬 個股(本 session 唯一沒被專門稽核過的分頁)
+
+| 缺陷 | 根因 |
+|---|---|
+| **「💎 非357昂貴區」對每一檔恆 ✅** | `t2_data.get('val','')` —— `'val'` **全站零寫入點** ⇒ `'昂貴' not in ''` 恆 True |
+| **「💰 融資安全」恆 ✅** | `cl_data.get('margin', 0) or 0` ⇒ `0 < 2500億` 恆真 |
+| **近 5 日外資淨買 = 單日 × 5** | 把 session 的**單日**值廣播成整欄再 `tail(5).sum()`;「連續3日流入✅」只反映最新一天 |
+| **外本比分母捏造 1,000,000 張** | 台積電實際 2,593 萬張,差 26 倍,卻印成具體百分比 |
+| **v5「🔬 財報領先」是死區** | 3 個判定輸入恆 `None` + 第 5 個是零寫入點幽靈 key ⇒ 只可能回「⚪ 一般水準」= 把「沒算」講成「算過不達標」 |
+| **「✅ 龍多確認」判定式是 `>0`** | 副標卻寫「>股本50%/80%」⇒ 幾乎每檔製造業綠燈,與同頁真的照比例判的「🏆 龍頭預警區」相反 |
+| **v4 上方賣壓新股恆綠** | 引擎在「<60 日」與「計算失敗」都回 `has_pressure=False`,舊碼只看該旗標 |
+| **`dir()` 反模式** | `_msg if '_msg' in dir() else ...` —— `dir()` 查的是「作用域現有哪些名字」不是「本次有沒有賦值」⇒ 撿上一輪殘留當本次結論。修了 `section_vcp_bollinger` 卻漏 `section_kline_chart:153` |
+| **殘留真實人名** | `section_when_buy_sell.py:230`。掃描器**早就涵蓋該檔** —— 是黑名單沒收錄那個名字。⇒「掃描過 = 清乾淨了」這個推論不成立 |
+
+**冷啟動試算**:2330 從 `4/5 🚀 可以考慮操作` → `2/5 ⛔ 建議等待（⬜2 項未評估）`。
+
+### D2 🌍 總經剩餘 section
+
+- **🔴 拐點回測 lookahead**:`find_uninversion_events` 要求「翻正日**之後** N 天皆 ≥0」,
+  但 `_forward_return` 從**翻正日**起算 ⇒ 白吃 5 根 K 棒。加上 T10Y2Y 是 FRED 日頻、
+  D 日值 ≈ D+1 04:00 台北才發布,**連翻正日的 TWII 收盤都不可執行**。
+  合成案例:翻正日 100、隔天跳空 150 → 舊算法 **+50.0%/勝率 100%**,修後 **0.0%**。
+- **🔴 30 分鐘新鮮度閘門形同不存在**:`render_traffic_light_top` 過期時刻意不算燈號、
+  印「⏳ 燈號等待中」,但 `section_state` 尾段**無條件重算**並把它蓋成一張自信的燈號卡。
+- **🔴 `.get(key, default)` 的 default 只在 key 缺席時生效**:`section_cross_ai` 7 處。
+  真正的失敗態是「key 在、值是 None」(`fetch_us10y_block` 全敗回 `{'_err':…,'current':None}`)
+  ⇒ `_ai_vix=0.0` → 印「🟢 美股平穩,無系統性風險」。同坑 `section_mid` v19.170 修過,§九 沒跟。
+- **🔴 `not _cycle_exp`**:PMI+CLI 雙缺時 `not None` 為 True ⇒ 印「景氣觸底回升 💎（**收縮**但出口反彈）」
+  而背後**一份景氣資料都沒有**,還讓 `_bull_score` +1。
+- **🔴 `bias_info` 值為 None → `None.get()`** 炸掉整個 §九。
+- **🔴 拐點色碼用舊調色盤** `'#da3633'`,下游 `aggregate_pivot_families` 嚴格比對 `TRAFFIC_RED`
+  ⇒ 月線過熱/超賣兩盞燈**永遠**落 neutral(小卡印紅、分群明細寫中性)。
+- **🔴 M1B 代理值無法辨識**:`is_proxy` 是幽靈 key(真旗標 `is_proxy_tier` 在上游重新打包時被丟掉)
+  ⇒ Tier 3「^TWII 動量硬湊」被印成央行 M1B/M2,「（大盤動能代理估算）」一次都沒出現過。
+- 「外銷訂單YoY」5 處實為**財政部海關出口**(`section_mid` v19.85 已正名,§九 漏改)。
+
+### D3 🔧 工具箱 + 教學卡
+
+⚠️ **原指示「教學卡門檻改成 SSOT」本身有陷阱**:CPI/VIX/10Y **各有兩組並存的正式門檻**
+(CPI 3.5/4.0 vs `US_CORE_CPI_YOY_BANDS` 2.5/3.5 等),挑其中一把 = 製造第三種說法。
+改為兩把都列並標明哪條屬哪個畫面。⚠️ 另糾正:`MACRO_ALERT_RULES` **全 repo 不存在**;
+前五大留倉**有**判定式(`_top5 < -10000 → -1 分`),只有前十大真的零判定式。
+
+- `health_inspector` **yearly 恆綠**(直接 `return '🟢'` 不看 age);**static fall-through 到日頻**
+  ⇒ ETF 經理人「到職日」被當資料日期,在職 3 年標「1,100天前 🔴」列入資料異常清單。
+- `reconcile_panel` 寫死 `score/4*100`,真滿分 4/5/6 ⇒ max_score=6 時**高估 50%**;
+  `rows[0]`/`rows[2]` 硬編碼 ⇒ 對帳列數變 2 就 IndexError 炸整個面板。
+- `calibration_ui` 印 json 面值,而系統實際走 `load_calibrated_thresholds()`(有值域守門,
+  越界整組退回預設)⇒ json 寫 99、面板印 99、系統在用 35。
+
+### E1 核心總表(`shared/core_summary.py` L0 + L3 + L4 + L6 佔位)
+
+8 個 KPI × 三態(有值 / 無法判定 / 失敗)。**價值不只 UI** —— 本 session 最高頻缺陷是
+「同頁多個互斥數字」,總表把「一個 KPI 一個 producer」變成結構性強制。
+
+- **KPI #5 producer 在 L5** → 選 **L6 注入**(不下沉、不在 L3 重算一份)。副作用:
+  覆蓋率與新鮮度**吃同一份 rows**,「覆蓋率說 4 個分頁、新鮮度說 3 個」結構上不可能發生。
+- **時序**:照 v19.171 🔴-1 的 placeholder 修法(頂端 `st.empty()`、tab 全跑完才填),
+  且**斬斷 session 殘留依賴**(regime/持股/cap 一律向 canonical 取,不讀會被覆寫的中繼 key)。
+- **`cell_ok()` 收到 ⬜/❌ 直接 raise** —— 「未評估偽裝成有結論」在建構當下就炸。
+- 冷啟動 8 格全 ⬜、零彩燈、**一個數字都不出現**(regex `\d` 釘住)。
+
+🔴 **測試抓到的唯一真 bug,且是最關鍵那格**:`getattr(df,"columns",[]) or []` ——
+`df.columns` 是 pandas `Index`,取布林值 `ValueError: truth value of a Index is ambiguous`。
+**任何非空 DataFrame 都會踩** ⇒ KPI #6「值凍結告警」在 production 必然 ❌。
+且**有兩份複本**(`data_freshness.py` + `core_summary.py`)。
+⚠️ 這個 bug **逃過整批靜態審查** —— `X or []` 對 list 是完全正常的慣用法,
+只有 X 是 pandas Index 才炸。**型別相關的 runtime 錯誤,讀 code 讀不出來。**
+
+### E2 / F1 / F2
+
+- **E2**:三個 yield/PE fetcher 從 L5 UI Tab 下沉 L1。原本兩支 **headless cron**
+  (含每月凍結前進式驗證那支)`from src.ui.tabs.yield_screener import` ⇒ 會把整個 streamlit
+  UI 鏈拉進來,import 鏈一斷**前進式驗證紀錄靜默停更**。而
+  `update_forward_test_freeze.py:40` docstring 自己寫著「走 SSOT …(**L5**);本腳本為
+  orchestrator 可直呼」—— **知道是 L5,然後用一句話把它敘述成設計**(§8.2.A.0 規則 5 的反模式)。
+  順帶掃出 **22 處 patch 目標失效**(`test_tpex_yield_pe` 15 + `test_pb_industry_bands` 7),
+  失效後測試**不會紅,會去打真的 OpenAPI** —— 同時失去防護與可重現性(§5)。
+- **F1**:`^TNX` 閾值線不一致不是孤例 —— **手打表 8 條有 6 條對不上 SSOT**,
+  其中 CPI **同一張卡的趨勢圖與判讀表兩把尺**。另抽 12 個 inline magic 成 SSOT。
+- **F2**:`gemini_call` + `_build_llm_context` → L3、`_bps` → L1、`api_key`/`parse_stocks`/
+  `_tw_now_str`/`_get_fm_token` 各歸其位 ⇒ **5 處 `from app import` 全消失**,
+  `_AppProxy` + `sys.modules['app']` 劫持整套刪除。
+  ⚠️ 原判定「`_bps` 有 2 份複本」錯誤,實際 **4 份**;`daily_checklist._bps` **零 caller**(死碼);
+  `_build_llm_context` **零 production caller**(搬家後仍是死碼,刪不刪待裁示)。
+  順帶修掉潛在必崩:`app._get_fm_token` **無 try/except**,無 `secrets.toml` 時
+  `st.secrets.get()` raise,而 `tab_macro:329` 是裸呼叫 ⇒ 整頁炸。
+
+### 假紅燈統計:本輪 9 次,7 次是「守衛掃字面」
+
+| # | 案例 |
+|---|---|
+| 1-2 | 我自己的修正註解含守衛禁止的字面(連續兩次,第二次就在我警告完之後) |
+| 3 | `st.spinner('…約 8-12 秒…')` —— 數量詞白名單漏了「秒」 |
+| 4 | B3 把實作抽 L0 SSOT → 三條掃字面的守衛全紅(**行為沒變,實作搬家了**) |
+| 5 | 同一 agent 對同一函式寫**兩條互斥預期**(日頻期待 🟡、月頻期待 🟢,而預設只有一種行為) |
+| 6 | 守衛 docstring 明寫允許 `_mk_sig['color']`,實作卻把 subscript 的 key `'color'` 當寫死色碼 |
+| 7 | 正則 `(停利\|停損)…[+-]?\d` 把 f-string 常數 `'停利2 +'` 的**序號 2** 當成百分比 |
+| 8 | 測試 stub 只實作 `markdown`/`expander`,agent 新增 `st.caption` → stub 的覆蓋面變成隱性契約 |
+| 9 | `_SRC.find('analyze_financial_health(api_key')` 命中 F2 的**解釋註解**(位置遠早於按鈕) |
+
+**共同結構**:守衛把「實作長什麼樣」當成「行為對不對」的代理 ⇒ 任何描述該實作的文字都會觸發它,
+而真正改壞邏輯時它未必抓得到。活標本:`test_reader_default_unchanged` 斷言
+`get(..., 1000000)` **存在**、註解還寫著「§1:股本抓不到時不虛構」—— **1,000,000 正是那個虛構值**。
+
+**已全部改成行為斷言或 AST**(排除註解/docstring、失敗訊息印該行原文)。
+改完立刻抓到一個真缺口:`is_today_balance_col("MarginPurchaseYesterdayBalance")` 回 True
+—— 只檢查 `startswith('yes')`,而該欄名以 `marginpurchase` 開頭。
+**原本三條掃字面的守衛從來沒發現,因為它們照抄的就是那段不完整的實作。**
+
+### 待辦(未動,§-1 等指派)
+
+- 🔴 **margin parquet 重抓** —— `data` 分支的 `margin` 表已消失(B3 gate 生效),
+  下游 `2026_strategy_0719` 影響**未確認**(問過 4 次未回)
+- 🟡 死碼真刪 6 模組(`macro_signal_lookback_tw` / `multi_factor_optimization` /
+  `signal_threshold_optimization` / `macro_validation_tw` / `tw_backtest` / `portfolio_manager`)
+  + barrel 改 lazy(現在每次冷啟動都載入,含一支 module-load 時讀 Parquet 的)
+- 🟡 `risk_radar` I/O 下沉(V-RADAR-1,L2 內 HTTP + read_csv)
+- 🟡 `verify=False` 6 個建構點 → NAS CA 憑證。**代價已寫明:這條連線無法偵測中間人,
+  代理被替換或 DNS 劫持時回來的資料可任意偽造,而 §1 Fail Loud 在此完全失效**
+- ⚪ `_build_llm_context` 零 caller,刪不刪待裁示;`gemini_call` 與 `ai_fetcher.post_gemini`
+  endpoint 版本(v1beta vs v1)與 sleep 策略不等價,合併屬行為變更
+- ⚪ `section_chips` caption `PCR<100偏空` —— 系統 PCR 是比值刻度(0.5/0.7/1.2/1.5),
+  **沒有 1.0 這條線**。畫面顯示 1.15 而 caption 說「<100 偏空」= 韭菜指數量綱錯誤的翻版
+
 ## 🚨 2026-08-06 B5「綠燈不代表算過」批次(v19.183)
 
 > 共同主題:**綠燈的語意被偷換成「沒算」**。B4 修的是顯示層的量錯對象,

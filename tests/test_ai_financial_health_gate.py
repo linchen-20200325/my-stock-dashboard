@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 _SRC = (Path(__file__).parents[1] / 'src/ui/tabs/tab_stock.py').read_text(encoding='utf-8')
@@ -19,12 +20,54 @@ def test_ai_financial_health_has_generate_button():
     assert '_fh_req_' in _SRC, '應以 session flag(_fh_req_*)記憶已請求生成'
 
 
+def _call_linenos(name: str) -> list[int]:
+    """所有「呼叫 `name`」的**真實 Call 節點**行號（AST，註解/docstring 天然不算）。"""
+    _out: list[int] = []
+    for _n in ast.walk(ast.parse(_SRC)):
+        if not isinstance(_n, ast.Call):
+            continue
+        _f = _n.func
+        _nm = (_f.id if isinstance(_f, ast.Name)
+               else _f.attr if isinstance(_f, ast.Attribute) else None)
+        if _nm == name:
+            _out.append(_n.lineno)
+    return sorted(_out)
+
+
+def _button_linenos(label_substr: str) -> list[int]:
+    """所有 `st.button(...)`（或任何 `.button(...)`）其字面參數含 `label_substr` 的行號。"""
+    _out: list[int] = []
+    for _n in ast.walk(ast.parse(_SRC)):
+        if not (isinstance(_n, ast.Call) and isinstance(_n.func, ast.Attribute)
+                and _n.func.attr == 'button'):
+            continue
+        _lits = [c.value for c in ast.walk(_n)
+                 if isinstance(c, ast.Constant) and isinstance(c.value, str)]
+        if any(label_substr in s for s in _lits):
+            _out.append(_n.lineno)
+    return sorted(_out)
+
+
 def test_ai_call_gated_behind_button():
-    """analyze_financial_health(Gemini)呼叫必須在生成按鈕之後(opt-in gate)。"""
-    _idx_btn = _SRC.find('生成 AI 財報體檢')
-    _idx_ai = _SRC.find('analyze_financial_health(api_key')
-    assert _idx_btn != -1, '缺生成按鈕'
-    assert _idx_ai != -1, '缺 analyze_financial_health 呼叫'
-    assert _idx_btn < _idx_ai, (
-        '生成按鈕須在 analyze_financial_health(api_key ...) 呼叫之前 — '
-        '否則等於自動觸發 Gemini(回退 bug)')
+    """analyze_financial_health(Gemini)呼叫必須在生成按鈕之後(opt-in gate)。
+
+    ⚠️ v19.187 改用 AST（本 session 第 9 次同類假紅燈的處置）
+    ────────────────────────────────────────────────────────
+    原本兩行是 `_SRC.find('analyze_financial_health(api_key')` 掃**字面**。
+    F2 把 `api_key` 從 `from app import`（L5→L6 上行）改成 L3 `get_gemini_api_key()`
+    時，在檔頭寫了一段解釋註解，內容含 ``analyze_financial_health(api_key, ...)``
+    —— 於是 `find()` 命中那則**註解**（位置遠早於按鈕）→ 判定「AI 在按鈕前被呼叫」。
+    實際呼叫點沒動過，gate 也完好。
+
+    這是本 session 反覆出現的形狀：**守衛照抄實作字面，於是任何提到該實作的
+    文字都會觸發它，而真正改壞邏輯時它未必抓得到**。改成比對真實 `ast.Call`
+    節點的行號：註解與 docstring 天然不在 AST 裡，且函式改名/換行都不影響判定。
+    """
+    _btn = _button_linenos('生成 AI 財報體檢')
+    _ai = _call_linenos('analyze_financial_health')
+    assert _btn, '缺「生成 AI 財報體檢」按鈕'
+    assert _ai, '缺 analyze_financial_health 呼叫'
+    assert min(_btn) < min(_ai), (
+        f'生成按鈕（行 {min(_btn)}）須在 analyze_financial_health 呼叫'
+        f'（行 {min(_ai)}）之前 — 否則等於自動觸發 Gemini(回退 bug)\n'
+        f'  按鈕行號={_btn}\n  呼叫行號={_ai}')

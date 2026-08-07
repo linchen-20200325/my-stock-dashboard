@@ -15,8 +15,13 @@ from shared.colors import (
     TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW,
 )
 from shared.signal_thresholds import (
+    # F1 v19.184 §3.3：先行指標表 caption 的「外資空單>3萬 / 前五大>1萬」原為手抄。
+    FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD,
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
     MARGIN_BALANCE_WARN_THRESHOLD_YI,
+    MARKET_VOLUME_SHRINK_RATIO,
+    MARKET_VOLUME_SURGE_RATIO,
+    TOP5_LARGE_TRADER_NET_WARN_LOTS,
 )
 from src.compute.strategy import V4StrategyEngine
 # v19.176 P0-D:韭菜門檻 + 兩個「否決」判定的正式名稱一律走 L0 SSOT(§3.3)
@@ -243,8 +248,15 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             _pcr_txt = f' | PCR {_pcr4:.1f}' if _pcr4 else ''
             _l4_ind = f'外資期貨 {_fut4:,.0f}口{_pcr_txt}'
             # 絕對口數門檻（容錯率最高）
-            if _fut4 <= -30000:
-                _l4c = f'外資期貨空單 {abs(_fut4):,.0f}口 > 3萬口，啟動強制防禦，等待空單回補'
+            # F1 v19.184 §3.3：`-30000` 改吃 `FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD`
+            #   （同值 30000，零行為變更），結論文字裡的「3萬口」同步插值。
+            # ⚠️ 下一階 `-15000` 目前**沒有**對應 SSOT 常數（B 類待抽）——
+            #   它不出現在任何說明文字裡，故本批只留記錄不動它；
+            #   要抽需另立具名常數（如 `FOREIGN_FUTURES_ACCUM_WATCH_LOT_THRESHOLD`）。
+            if _fut4 <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:
+                _l4c = (f'外資期貨空單 {abs(_fut4):,.0f}口 > '
+                        f'{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}口，'
+                        f'啟動強制防禦，等待空單回補')
                 _l4a = '啟動強制防禦，嚴禁追高攤平，保護本金　→ 實際持股見 🎚️ 建議持股油門'
             elif _fut4 <= -15000:
                 _l4c = f'外資期貨空單 {abs(_fut4):,.0f}口，空單累積中，大戶動向保守，逢高調節'
@@ -289,9 +301,17 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         if _li_dates:
             _d0 = _li_dates[0]
             _d1 = _li_dates[-1]
+            # F1 v19.184 §3.3：前兩條門檻插 SSOT（原手抄「3萬」「1萬」）。
+            # ⚠️ 第三條「PCR<100偏空」**刻意原樣保留** —— 它對不上任何判定式：
+            #   系統的 PCR 規則是 `config.MACRO_ALERT_RULES['pcr']`
+            #   （比值刻度 red_above 1.5 / yellow_above 1.2 / yellow_below 0.7 /
+            #    red_below 0.5），沒有「1.0（＝百分比刻度 100）」這條線。
+            #   §1：不會為了讓它「有 SSOT」而挑一條線硬套（那是發明門檻），
+            #   也不擅自改寫使用者已習慣的文字 —— 列為待確認項回報，由 user 定奪。
             st.caption(
                 f'📅 資料期間：{_d0} ~ {_d1}  共 {len(df_li_show)} 筆  '
-                f'｜外資空單>3萬⚠️  前五大>1萬⚠️  PCR<100偏空'
+                f'｜外資空單>{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}口⚠️  '
+                f'前五大>{abs(TOP5_LARGE_TRADER_NET_WARN_LOTS):,}口⚠️  PCR<100偏空'
             )
             # v18.342 PR-L2:stale fallback 顯示「📦 上次有效資料」chip(§2.4)
             if _is_stale_li:
@@ -424,14 +444,18 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             if len(_vols) >= 3:
                 _avg_vol = sum(_vols[:-1]) / len(_vols[:-1])
                 _last_vol = _vols[-1]
-                if _last_vol < _avg_vol * 0.7:
+                # F1 v19.184 §3.3 + §4.1：比值 0.7/1.5 抽 SSOT，
+                # 文案的「30%」「50%」由同一個比值**現算**（原本是人腦換算後手寫）。
+                if _last_vol < _avg_vol * MARKET_VOLUME_SHRINK_RATIO:
                     _warnings.append(('🟡', '成交量急萎縮（市場觀望）',
                         f'今日成交量{_last_vol:.0f}億（前{len(_vols)-1}日均量{_avg_vol:.0f}億的{_last_vol/_avg_vol*100:.0f}%）',
-                        '量縮超過30%代表市場觀望，方向選擇前勿輕易追高'))
-                elif _last_vol > _avg_vol * 1.5:
+                        f'量縮超過{(1 - MARKET_VOLUME_SHRINK_RATIO) * 100:.0f}%'
+                        f'代表市場觀望，方向選擇前勿輕易追高'))
+                elif _last_vol > _avg_vol * MARKET_VOLUME_SURGE_RATIO:
                     _warnings.append(('🔵', '成交量急放（趨勢加速）',
                         f'今日成交量{_last_vol:.0f}億（前均量{_avg_vol:.0f}億的{_last_vol/_avg_vol*100:.0f}%）',
-                        '成交量暴增50%以上，趨勢加速，注意是否配合方向'))
+                        f'成交量暴增{(MARKET_VOLUME_SURGE_RATIO - 1) * 100:.0f}%以上，'
+                        f'趨勢加速，注意是否配合方向'))
         except Exception:
             pass
 

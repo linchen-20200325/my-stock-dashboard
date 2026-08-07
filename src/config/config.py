@@ -235,6 +235,36 @@ try:
 except ImportError:
     FINMIND_TOKEN = _os.environ.get('FINMIND_TOKEN', '')
 
+
+def get_finmind_token() -> str:
+    """**每次呼叫即時**讀最新 FinMind Token:st.secrets > os.environ。
+
+    與上方 module-level `FINMIND_TOKEN` 的差別:那是 **import 當下的快照**,
+    Streamlit Cloud 改 Secrets 後要重啟才生效;本函式每次重讀,適合 UI 端
+    「Token 狀態提示」與抓取前取值。
+
+    F2(2026-08):原 `app.py::_get_fm_token`。搬來 L0 是為了拆掉
+    `tab_macro`(L5)→ `app`(L6) 的上行 import(CLAUDE.md V-UP-APP-1)。
+    conditional import streamlit 沿用同檔既有的 EX-L0-1 例外(僅讀 st.secrets,
+    無 UI lifecycle 依賴)。
+
+    ⚠️ **與 app.py 版的一處行為差異(刻意)**:原版寫
+    `getattr(st, 'secrets', {}).get('FINMIND_TOKEN') or os.environ.get(...)`,
+    **沒有** try/except —— 在無 `secrets.toml` 的環境(本機裸跑 / CI)
+    `st.secrets.get()` 會 raise `StreamlitSecretNotFoundError`,而唯一 caller
+    `tab_macro` 是裸呼叫 → 整頁炸。這裡補上 try/except 降級到 os.environ,
+    與同檔 module-level `FINMIND_TOKEN` 及 `app.py::_get_secret` 的既有寫法一致。
+    不是「掩蓋問題」:缺 secrets.toml 本來就該走 env fallback,而 token 真的缺時
+    回空字串,caller(tab_macro)已有明確的 `🔑 FINMIND_TOKEN 未設定` 錯誤提示。
+    """
+    try:
+        import streamlit as _st_t  # noqa: PLC0415 -- EX-L0-1,見上方 v18.241 A1 註解
+        _tok = (getattr(_st_t, 'secrets', None) or {}).get('FINMIND_TOKEN', '')
+    except Exception:  # noqa: BLE001 — 無 streamlit / 無 secrets.toml → 走 env
+        _tok = ''
+    return _tok or _os.environ.get('FINMIND_TOKEN', '')
+
+
 # Batch 10 v18.412 R-FETCH「附帶」:FinMind API endpoint SSOT
 # 原 22 檔散落 hardcoded URL(37 occurrences),改 import 收 SSOT
 FINMIND_API_URL = 'https://api.finmindtrade.com/api/v4/data'

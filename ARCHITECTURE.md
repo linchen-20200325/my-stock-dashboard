@@ -211,7 +211,7 @@ LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 
 | 原宣稱 | 2026-08-07 複驗 |
 |---|---|
-| ✅ 0 root 業務 .py(app.py 642 LOC,純 router + orchestrator) | ⚠️ **LOC 與「純 orchestrator」皆不實**:app.py 實測 **989 行**,且含 `_bps()`(造 requests.Session,L1)、`gemini_call()`(直打 Gemini HTTP,L3)、`_build_llm_context()`(L3)、選股網整段(L5)。見 CLAUDE.md **V-APP-1** |
+| ✅ 0 root 業務 .py(app.py 642 LOC,純 router + orchestrator) | ⚠️ **LOC 與「純 orchestrator」皆不實**:app.py 實測 **989 行**(量測日 2026-08-07),且含 `_bps()`(造 requests.Session,L1)、`gemini_call()`(直打 Gemini HTTP,L3)、`_build_llm_context()`(L3)、選股網整段(L5)。見 CLAUDE.md **V-APP-1**。<br>**F2(2026-08)更新**:前三項已下沉(`_bps`→L1 `proxy_helper`;`gemini_call`+金鑰池+`_build_llm_context`→L3 `services/app_ai_service.py`),`_AppProxy` / `sys.modules['app']` 劫持一併刪除。**仍未修**:選股網整段(L5)→ 故「純 orchestrator」依然不成立 |
 | ✅ 0 dead public function | ⚠️ **至少 1 個死模組**:`src/compute/macro/macro_signal_lookback_tw.py` 零 production caller(僅 barrel / tests / scripts / 註解引用),與 `STATE.md` 既有判定一致 |
 | ✅ 0 stale 路徑註解 | ⚠️ 本檔 §0.3 目錄樹即有:`daily/ (2) # daily_data_fetchers / daily_checklist` — `daily_checklist.py` 實際位於 `src/services/`(L3),不在 `src/data/daily/` |
 | ✅ 0 §3.3 反捏造違憲 | ⚠️ `src/ui/etf/etf_tab_smart.py` 5 個 `@st.cache_data(ttl=…)` 全為 inline 數字(1800/3600/3600/7200/86400),未走 `shared/ttls.py` SSOT。見 CLAUDE.md **V-SMART-CACHE-1** |
@@ -1520,6 +1520,11 @@ tab_stock.py / tab_stock_grp.py / tab_macro.py  (module-level import)
 - **循環 import 風險**：tab_xxx.py 與 app.py 互相 import；由 late import inside function 完美解決（呼叫時 app 模組已完整載入）
 
 **app.py 內部 helper 跨檔使用統計（從各 tab_*.py late import）**：
+
+> ⚠️ **本表為歷史快照(F2 2026-08 前)。** 表中所有 helper 原本都經
+> `from app import ...`(L5→L6 上行 import,CLAUDE.md V-UP-APP-1)取得;
+> F2 之後 **production code 已 0 處 `from app import`**,各 helper 落點見
+> CLAUDE.md §8.2.A.2 V-UP-APP-1 結案說明。保留本表僅供追溯「誰用過什麼」。
 
 | Helper | tab_macro | tab_stock | tab_stock_grp | tab_edu |
 |---|---|---|---|---|

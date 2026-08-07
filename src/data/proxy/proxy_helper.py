@@ -122,6 +122,39 @@ def make_retry_session() -> requests.Session:
     return _s
 
 
+def build_unverified_proxy_session() -> requests.Session:
+    """Squid Proxy session,**關閉 TLS 憑證驗證**(`verify=False`)。
+
+    F2(2026-08)§2.1 SSOT:本函式是原本散落 4 份、逐字重複的 `_bps()` 唯一出處
+    (`app.py`(L6,違憲)/ `src/services/daily_checklist.py`(L3,死碼)/
+     `src/data/macro/leading_indicators.py` / `src/data/daily/daily_data_fetchers.py`)。
+    後兩者改為 `import ... as _bps` 別名,呼叫點一字未改。
+
+    ⚠️ **`verify=False` 是既有行為,不是本次新增**:NAS Squid 走自簽憑證,開啟驗證
+    會讓所有經代理的請求 SSLError。代價是這條連線**無法偵測中間人**。
+    要收掉它必須改為「把 NAS CA 憑證裝進 `verify=<ca_bundle 路徑>`」,屬行為變更,
+    需獨立提案 —— F2 這批**刻意不動**(見 PR 描述「verify=False 風險說明」)。
+
+    `build_proxy_session()`(L1 `tw_stock_data_fetcher`)拿不到時降級為裸 Session:
+    這是**顯式降級**(直連,無 proxy),非靜默補值 —— 呼叫端拿到的仍是可用 Session,
+    後續請求失敗會照常拋(§1)。
+    """
+    try:
+        import urllib3 as _ul3
+        _ul3.disable_warnings(_ul3.exceptions.InsecureRequestWarning)
+    except Exception:  # noqa: BLE001 — 只是關警告,失敗不影響連線行為
+        pass
+    try:
+        # late import:避免 module load 期就把 src.data.stock 整包依賴鏈拉進來
+        # (原 4 份 _bps 皆為此寫法,行為原封不動)。
+        from src.data.stock import build_proxy_session as _b
+        s = _b()
+    except Exception:  # noqa: BLE001 — 顯式降級為直連,見 docstring
+        s = requests.Session()
+    s.verify = False
+    return s
+
+
 def _get_thread_session(lean: bool = False) -> requests.Session:
     """回傳本執行緒共用 Session(懶建立;lean=無 5xx Retry 版)。
 

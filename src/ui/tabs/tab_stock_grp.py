@@ -3,8 +3,11 @@
 依賴策略
 ========
 - Top-level: streamlit
-- 函式內 late import: 27 個依賴（含 app.py 內部 helper 與外部模組函式），
-  避免循環 import（tab_stock_grp.py ← app.py ← tab_stock_grp.py）。
+- 函式內 late import: 27 個依賴。
+  F2(2026-08)前含 2 處 `from app import`(L5→L6 上行,CLAUDE.md V-UP-APP-1),
+  註解宣稱「避免循環 import(tab_stock_grp ← app ← tab_stock_grp)」——
+  **循環本身就是依賴方向倒置的症狀,不是理由**。現已改吃 L3/L0,循環從根消失;
+  late import 保留純粹是為了不在 module load 期拉全依賴鏈。
 
 呼叫端
 ======
@@ -23,8 +26,11 @@ def render_stock_grp():
     # 外部模組
     from src.services import build_structured_summary_prompt
     from src.services.stock_grp_service import get_news_for as _fetch_news_for  # R1 v18.405
-    # app.py 內部 helper
-    from app import gemini_call, parse_stocks
+    # F2(2026-08):原 `from app import gemini_call, parse_stocks`(L5→L6 上行 import,
+    # CLAUDE.md V-UP-APP-1)。gemini_call 已下沉 L3;parse_stocks 早在 v18.302 就住
+    # shared/parse_helpers.py(L0),app.py 那行只是 re-export shim → 直接吃 L0。
+    from src.services.app_ai_service import gemini_call
+    from shared.parse_helpers import parse_stocks
 
     st.markdown("""<div style="padding:6px 0 4px;">
 <span style="font-size:20px;font-weight:900;color:#e6edf3;">📊 比較 × 排行</span>
@@ -509,7 +515,9 @@ def _render_stage_picker_section(stock_list: list[str], *,
     import pandas as pd
     import streamlit as _st  # noqa: F811
 
-    from app import gemini_call  # late import 沿用 render_stock_grp 同模式避循環
+    # F2:原 `from app import gemini_call`(L5→L6)。改吃 L3;維持 late import
+    # (本函式是 button-gated 路徑,延後 import 避免 module load 拉全依賴鏈)。
+    from src.services.app_ai_service import gemini_call
     from src.ui.tabs.tab_stock_picker import render_tab_stock_picker
 
     _st.markdown('---')

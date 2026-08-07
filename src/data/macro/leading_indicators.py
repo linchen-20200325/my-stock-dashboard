@@ -39,14 +39,13 @@ from shared.ttls import TTL_30MIN
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-def _bps():
-    try:
-        from src.data.stock import build_proxy_session as _b
-        s = _b()
-    except Exception:
-        s = requests.Session()
-    s.verify = False
-    return s
+# F2(2026-08)§2.1 SSOT:原本這裡有一份逐字複製的 `_bps()`(全 repo 共 4 份)。
+# 唯一實作已收斂到 L1 `src/data/proxy/proxy_helper.build_unverified_proxy_session`,
+# 這裡只留別名 —— 下方 3 個呼叫點(`_TWSE_S` / TAIFEX largeTrader / TAIFEX 探針)一字未改。
+# 同層 import(L1 → L1),不涉分層。
+from src.data.proxy.proxy_helper import (  # noqa: E402
+    build_unverified_proxy_session as _bps,
+)
 
 _TWSE_S = _bps()
 from bs4 import BeautifulSoup

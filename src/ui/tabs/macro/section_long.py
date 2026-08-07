@@ -11,6 +11,10 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
+from shared.signal_thresholds import (  # F1 v19.184：健康評分權重說明改吃 SSOT
+    HEALTH_WEIGHT_JQ,
+    HEALTH_WEIGHT_SCORE,
+)
 from src.config import FINMIND_TOKEN  # noqa: F401
 from src.ui.render.macro_ui_components import section_header
 # v19.174 去識別化：改用策略代號常數 + 新函式名 strategy_conclusion（原 teacher_conclusion）
@@ -212,8 +216,12 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     # v19.177 P1-B 反捏造（§1）：原文寫「旌旗指數（站上 20MA 家數比）」——
     # 全站沒有任何一行在算「站上均線的家數比」。真值 = 上漲佔比的 5 日均
     # （src/services/jingqi_calc.py:43）。名詞 SSOT: ui_widgets.BREADTH_JINGQI。
-    st.caption('🩺 **總經健康評分怎麼算的**：旌旗指數（上漲佔比的 5 日均）60% ＋ '
-               '大盤評分 40%，就這兩項 — 實質是「趨勢廣度分數」。'
+    # F1 v19.184 §3.3：60% / 40% 原為手抄 —— 但那兩個數字是 v19.102 AUC 校準的
+    # 產物（`HEALTH_WEIGHT_JQ` 0.4→0.6），**還會再被季度 recalibrate 改**。
+    # 手抄 = 下次校準後這句話立刻變成假的。改吃同一組常數。
+    st.caption(f'🩺 **總經健康評分怎麼算的**：旌旗指數（上漲佔比的 5 日均）'
+               f'{HEALTH_WEIGHT_JQ * 100:g}% ＋ '
+               f'大盤評分 {HEALTH_WEIGHT_SCORE * 100:g}%，就這兩項 — 實質是「趨勢廣度分數」。'
                '**不含**融資／外資期貨／年線乖離／NDC／M1B-M2／VIX／PMI／CPI／'
                '出口／ADL／新聞，那些請直接看五桶燈號。'
                '所以「五桶多盞紅、但這個分數不低」不是矛盾，是兩者評估範疇不同。')

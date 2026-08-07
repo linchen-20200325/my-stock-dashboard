@@ -27,6 +27,13 @@ import streamlit as st
 from src.compute.etf import auto_role
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.signal_thresholds import (
+    # F1 v19.184 §3.3：σ 位階說明文字（3σ / 2σ / 1σ / +2σ）原本是手抄，
+    # 判定式在 `etf_helpers.classify_etf_quick_sigma` 讀這 5 個常數 →
+    # 改了倍數只有燈會動、說明不會動。改由同一組常數插值。
+    ETF_QUICK_SIGMA_CHEAP,
+    ETF_QUICK_SIGMA_DISASTER,
+    ETF_QUICK_SIGMA_OVERBOUGHT,
+    ETF_QUICK_SIGMA_OVERSOLD,
     ETF_CORR_HIGH_THRESHOLD,
     # B5-a v19.180:持股 Overlap 的兩個門檻(`PORTFOLIO_OVERLAP_WEIGHT_THRESHOLD_PCT`
     # / `PORTFOLIO_OVERLAP_JACCARD_THRESHOLD_PCT`)改由 L2
@@ -44,6 +51,40 @@ from shared.thresholds import YIELD_MID, YIELD_LOW
 
 # B5-a v19.180:目標權重輸入欄名 SSOT(data_editor column_config / 解析 / 說明文案共用)。
 TARGET_PCT_COL: str = '目標比例%'
+
+# F1 v19.184 §3.3 — regime → 核/衛目標比例的**說明文字**
+# ────────────────────────────────────────────────────────────────
+# 原本這句話是手抄的字串常值:「多頭 60/40 / 中性 70/30 / 保守 80/20 / 空頭 85/15」。
+# 真正的 SSOT 是 L2 `src/compute/strategy/portfolio_manager._CORE_RATIO`,
+# 而那是**私有** dict(底線開頭)—— L5 直取私有符號是 §8.2.A.2 V-PICKER-PRIV-1 同款違憲。
+# 解法:用該類別的 **public API**(`CoreSatelliteManager(...).core_ratio`)逐 regime 問一次。
+# 零 L2 改動、零新常數,而且日後有人調 `_CORE_RATIO`,這句話會自己跟著改。
+#
+# regime 代碼 → 中文顯示名。⚠️ 中文名只是 UI label,**不是**判定依據;
+# 代碼本身是 `market_regime` 的契約值(見 `shared/regime_arbiter.normalize_regime`)。
+_REGIME_ZH_ORDER: tuple[tuple[str, str], ...] = (
+    ('bull', '多頭'), ('neutral', '中性'), ('caution', '保守'), ('bear', '空頭'),
+)
+
+
+def _regime_core_sat_text() -> str:
+    """「多頭 60/40 / 中性 70/30 / …」這句話，由 SSOT 現算。
+
+    §1 Fail Loud：L2 取不到時**不回一個看起來合理的預設字串**（那等於把
+    「60/40」這組數字重新捏造一次），而是明說讀不到、並在 log 留原因。
+    """
+    try:
+        from src.compute.strategy import CoreSatelliteManager as _CSM_txt
+    except Exception as _e_rt:   # noqa: BLE001
+        print(f'[etf_tab_portfolio/regime_text] 讀不到 CoreSatelliteManager:'
+              f'{type(_e_rt).__name__}: {_e_rt}')
+        return '（讀不到 CoreSatelliteManager，目標比例暫無法顯示）'
+    _parts = []
+    for _rk, _zh in _REGIME_ZH_ORDER:
+        # total_capital 只是為了合法建構（建構子要求 > 0），不影響 core_ratio。
+        _m = _CSM_txt(1.0, regime=_rk)
+        _parts.append(f'{_zh} {_m.core_ratio * 100:.0f}/{_m.satellite_ratio * 100:.0f}')
+    return ' / '.join(_parts)
 
 
 def _fetch_usdtwd_spot():
@@ -614,7 +655,10 @@ def render_etf_portfolio(gemini_fn=None):
         '距月線%':      st.column_config.NumberColumn('距 MA20%', format='%+.2f%%',
                           help='相對月線乖離；σ 分級的基準'),
         'σ位階':        st.column_config.TextColumn('⚡短線 σ 位階', width='medium',
-                          help='⚡短線(MA20基準):-3σ 股災 / -2σ 超跌 / -1σ 便宜 / +2σ 停利。'
+                          help=f'⚡短線(MA20基準):-{ETF_QUICK_SIGMA_DISASTER:g}σ 股災 / '
+                               f'-{ETF_QUICK_SIGMA_OVERSOLD:g}σ 超跌 / '
+                               f'-{ETF_QUICK_SIGMA_CHEAP:g}σ 便宜 / '
+                               f'+{ETF_QUICK_SIGMA_OVERBOUGHT:g}σ 停利。'
                                '單檔 Tab「📅長線 σ」用 MA240 z-score,訊號差異屬不同時間尺度正常。'),
         '1年含息報酬%': st.column_config.NumberColumn('1年含息報酬%', format='%+.2f%%'),
         '走勢':         st.column_config.LineChartColumn('近30日走勢'),
@@ -651,7 +695,16 @@ def render_etf_portfolio(gemini_fn=None):
                      use_container_width=True, hide_index=True)
     if _sat_rows:
         st.markdown('##### 🚀 衛星資產戰情室（目標 20%）— 跌了就買 σ 分級')
-        st.caption('🟢🟢🟢 < MA20-3σ 股災價(大買 50%) ｜ 🟢🟢 < -2σ 超跌(30%) ｜ 🟢 < -1σ 便宜(20%) ｜ 🔴 ≥ +2σ 停利')
+        # F1 v19.184：σ 倍數插 SSOT（見 import 段註解）。
+        # ⚠️ 加碼比例「50% / 30% / 20%」**刻意保留字面** —— 它們目前只以字串常值
+        # 存在於 `src/compute/etf/etf_helpers.classify_etf_quick_sigma` 的回傳值裡
+        # （`'大買 50%'`），全站沒有對應常數。在這裡新造一個 L0 常數而不改那邊，
+        # 只會製造第二份真相（正是本批要消滅的東西）→ 列為 B 類待辦，
+        # 需連同 `etf_helpers` 一起抽，不在本批範圍（該檔屬 L2，不在 F1 施工範圍）。
+        st.caption(f'🟢🟢🟢 < MA20-{ETF_QUICK_SIGMA_DISASTER:g}σ 股災價(大買 50%) ｜ '
+                   f'🟢🟢 < -{ETF_QUICK_SIGMA_OVERSOLD:g}σ 超跌(30%) ｜ '
+                   f'🟢 < -{ETF_QUICK_SIGMA_CHEAP:g}σ 便宜(20%) ｜ '
+                   f'🔴 ≥ +{ETF_QUICK_SIGMA_OVERBOUGHT:g}σ 停利')
         _sat_df = pd.DataFrame(_sat_rows)[
             ['代號', '名稱', '市價', '距月線%', 'σ位階',
              '1年含息報酬%', '走勢', '健康燈號', '動作建議']
@@ -739,7 +792,7 @@ def render_etf_portfolio(gemini_fn=None):
         st.caption(f'ℹ️ 債券部位（佔總市值 {_cs_split["bond_pct_of_total"]:.1f}%）'
                    '**不計入**核心/衛星分母 —— 核衛是「股票部位怎麼拆」，'
                    '債券請看上方「🧭 股債比」。')
-    st.caption(f'💡 **regime 目標**：多頭 60/40 / 中性 70/30 / 保守 80/20 / 空頭 85/15'
+    st.caption(f'💡 **regime 目標**：{_regime_core_sat_text()}'
                f'（核/衛），雙邊容忍 ±{_cs_tol:.0f}pp。'
                '分類規則：債券 → 台股 ETF 分類表（市值型=核心，其餘類別=衛星）→ '
                '海外寬基白名單（VT/VTI/VOO/SPY…）→ 未分類。')

@@ -462,7 +462,9 @@ _R_PASSTHRU = (
 )
 for _f, _m in (
     # ── L6 App ──
-    ("app.py", "src.data.stock"),
+    # F2(2026-08)已移除:("app.py", "src.data.stock") —— 那是 `app.py::_bps()` 內的
+    # `from src.data.stock import build_proxy_session`。_bps 整個下沉 L1
+    # (proxy_helper.build_unverified_proxy_session),app.py 不再碰 src.data.stock 本體。
     ("app.py", "src.data.stock.app_stock_fetchers"),
     ("app.py", "src.data.portfolio.oauth_state"),
     # ── L5 UI Tabs ──
@@ -595,20 +597,22 @@ _KNOWN_VIOLATIONS[("R5", "src/services/daily_checklist.py", "src.ui.render.macro
     "未修原因:要修得找出所有 `from src.services.daily_checklist import <render fn>` "
     "的 caller 改直打 L4,再刪 re-export shim。純機械改動但影響面要先盤點。"
 )
-for _f in (
-    "src/ui/tabs/tab_macro.py",
-    "src/ui/tabs/tab_stock.py",
-    "src/ui/tabs/tab_stock_grp.py",
-    "src/ui/tabs/macro/section_news_ai.py",
-):
-    _KNOWN_VIOLATIONS[("R5", _f, "app")] = (
-        "TODO(C3-f):L5 → L6。late import `from app import gemini_call / api_key / "
-        "parse_stocks / _bps / _get_fm_token / _tw_now_str`,寫在 render 函式內避免"
-        "循環 import —— 循環 import 本身就是分層倒置的症狀。"
-        "未修原因:正解是把 gemini_call 等 helper 下沉到 L3(src/services/ai_fetcher.py "
-        "已有 post_gemini,可能直接改用),app.py 只留 orchestration。"
-        "需先確認 app.py 版的 gemini_call 與 L3 版行為是否等價。"
-    )
+# ── C3-f(V-UP-APP-1)已結案 —— F2(2026-08),條目已移除 ────────────────
+# 原有 4 條 `("R5", <L5 檔>, "app")`:tab_macro / tab_stock / tab_stock_grp /
+# macro/section_news_ai,共 5 處 `from app import gemini_call / api_key /
+# parse_stocks / _bps / _get_fm_token / _tw_now_str`。
+# 修法(與 V-APP-1 同一根因,一起解):
+#   gemini_call + 金鑰池 + build_llm_context → L3 src/services/app_ai_service.py
+#   get_gemini_api_key(原 app.api_key)      → 同上
+#   parse_stocks                             → L0 shared/parse_helpers.py(本來就在)
+#   _tw_now_str                              → L0 shared/macro_compute.py
+#   _get_fm_token                            → L0 src/config/config.py
+#   _bps                                     → L1 src/data/proxy/proxy_helper.py
+#                                              (tab_macro 改為不傳 bps_session,
+#                                               由 L3 macro_fetch_orchestrator 取)
+# 連帶:app.py 的 `_AppProxy` / `sys.modules['app']` 劫持已刪(它唯一的存在理由
+# 就是撐住這 5 處上行 import)。行為等價性由 tests/test_f2_app_decomposition.py 釘。
+# 留這段註解是為了讓下一個讀者知道「這裡曾經有 4 條、為什麼不見了」(§8.2.A.0 規則 3)。
 
 # L1 scripts/** → L2/L3(20 條,同一根因:scripts 分層標籤)
 for _f, _m in (
@@ -877,8 +881,13 @@ def test_rule5_known_violations_not_stale():
 def test_rule5_late_imports_are_detected():
     """守衛的守衛:確認巢狀(函式內)的 late import 有被掃到。
 
-    §8.2 最常見的違憲就藏在函式內(避循環 import 的 `from app import ...`)。
+    §8.2 最常見的違憲就藏在函式內(本專案大量 late import 避循環 / 延後依賴鏈)。
     如果哪天有人把掃描改成只看 tree.body,這些會全部漏掉 = 假綠燈。
+
+    ⚠️ F2(2026-08)改寫:本測試原本用「專案內存在 `from app import ...`」當真實
+    證據 —— 那正是 C3-f 待修違憲。違憲修好後這條會紅(把「守衛能力」跟「違憲存在」
+    綁在一起 = 修對了反而被擋)。改用**不依賴任何特定違憲**的證據:專案內任一
+    函式內的 late import 都算數,且用合成 source 端到端驗 ast.walk 的走訪深度。
     """
     src = (
         "import os\n"
@@ -897,9 +906,13 @@ def test_rule5_late_imports_are_detected():
     assert {"app", "yfinance", "os"} <= targets, (
         "ast.walk 應該掃到函式內 / try 內 / if 內的 import"
     )
-    # 真實資料上的證據:專案內確實存在被掃到的 late import
-    late = [r for r in _ALL_IMPORTS if r.func and r.target == "app"]
-    assert late, "應至少掃到一筆函式內 `from app import ...`(L5→L6 違憲)"
+    # 真實資料上的證據:專案內確實有被掃到、且標記了 enclosing function 的 late import
+    late = [r for r in _ALL_IMPORTS if r.func and r.target.startswith("src.")]
+    assert len(late) > 20, (
+        f"只掃到 {len(late)} 筆函式內 late import — 巢狀走訪可能已失效(假綠燈)"
+    )
+    # 且 enclosing function 名稱有被記錄(evidence 訊息要指得出位置)
+    assert any(r.func for r in late), "late import 的 enclosing function 名稱未被記錄"
 
 
 # ════════════════════════════════════════════════════════════════════

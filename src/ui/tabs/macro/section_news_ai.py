@@ -72,8 +72,11 @@ _pcr_alert_rule = _pcr_rule_text
 
 def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
     """渲染§十一 News AI 總裁決區(原 tab_macro line 4227-4521)。"""
-    # app.py 內部 helper(lazy import,避 L5→L6 違憲於 module load 時 trigger)
-    from app import gemini_call  # noqa: F401
+    # F2(2026-08):原 `from app import gemini_call` —— 舊註解寫「lazy import,避
+    # L5→L6 違憲於 module load 時 trigger」,但 late import **不會**讓上行 import
+    # 變合憲,只是把它藏進函式體(§8.2.A.0 規則 5 的理由倒置)。真正的修法是換方向:
+    # gemini_call 已下沉 L3。保留 late import 純粹是為了不在 module load 期拉依賴鏈。
+    from src.services.app_ai_service import gemini_call  # noqa: F401
     # v18.398 P5-B3-β R8:news fetcher 已抽至 src/data/news
     from src.data.news import fetch_macro_news as _fetch_macro_news
     # ══════════════════════════════════════════════════════════════

@@ -18,7 +18,10 @@
     - market_strategy: get_market_assessment
     - leading_indicators: build_leading_fast / render_leading_table
     - ui_widgets: beginner_kpi / kpi / strategy_conclusion（v19.174 去識別化改名）
-  * app.py 內部 (4): _bps / _get_fm_token / _tw_now_str / gemini_call
+  * F2(2026-08)前為「app.py 內部 (4): _bps / _get_fm_token / _tw_now_str /
+    gemini_call」(L5→L6 上行 import)。現已全部歸位:gemini_call → L3
+    src.services.app_ai_service;_get_fm_token → L0 src.config.get_finmind_token;
+    _tw_now_str → L0 shared.macro_compute;_bps 整個拿掉(session 由 L3 orchestrator 建)。
   * src/data/news (1): fetch_macro_news(P5-B3-β R8 抽出,原 app._fetch_macro_news)
 
 呼叫端
@@ -124,10 +127,16 @@ def render_tab_macro():
     from src.data.macro import render_leading_table
     # v19.174 去識別化：teacher_conclusion → strategy_conclusion
     from src.ui.render import beginner_kpi, cond_badge, kpi, strategy_conclusion
-    # app.py 內部 helper（v18.192：還原 section 十一 → 需要 gemini_call）
-    from app import (
-        _bps, _get_fm_token, _tw_now_str, gemini_call,
-    )
+    # F2(2026-08):原本這裡是 `from app import _bps, _get_fm_token, _tw_now_str,
+    # gemini_call`(L5→L6 上行 import,CLAUDE.md V-UP-APP-1)。四個名字各自歸位:
+    #   gemini_call  → L3 src/services/app_ai_service.py
+    #   _get_fm_token→ L0 src/config/config.py::get_finmind_token
+    #   _tw_now_str  → L0 shared/macro_compute.py::tw_now_str
+    #   _bps         → 本檔不再需要:唯一用途是餵 fetch_macro_bundle 的
+    #                  bps_session,現由 L3 orchestrator 自行向 L1 取(見下方呼叫)
+    from src.services.app_ai_service import gemini_call
+    from src.config import get_finmind_token as _get_fm_token
+    from shared.macro_compute import tw_now_str as _tw_now_str
     # v18.398 P5-B3-β R8:news fetcher 已抽至 src/data/news
     from src.data.news import fetch_macro_news as _fetch_macro_news
 
@@ -403,7 +412,9 @@ def render_tab_macro():
                           or os.environ.get('FINMIND_TOKEN', '')),
                 li_token=(_get_fm_token() or FINMIND_TOKEN
                           or os.environ.get('FINMIND_TOKEN', '')),
-                bps_session=_bps(),
+                # F2:原 `bps_session=_bps()`(L5 自己造 requests.Session,且要靠
+                # `from app import _bps` 上行取)。改為不傳 → L3 orchestrator 內部
+                # 向 L1 proxy_helper 取 SSOT session,建立時點不變。
                 intl_map=INTL_MAP, tw_map=TW_MAP, tech_map=TECH_MAP,
                 fetch_single=fetch_single,
                 fetch_institutional=fetch_institutional,

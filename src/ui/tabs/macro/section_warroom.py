@@ -24,10 +24,18 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.macro_buckets import SPECS_BY_KEY as _SPECS_BY_KEY
 from shared.signal_thresholds import (
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
     MARGIN_BALANCE_WARN_THRESHOLD_YI,
+    MONTHLY_LOSS_HALT_DAYS,
+    MONTHLY_LOSS_HALT_PCT,
 )
+
+# F1 v19.184 §3.3：大盤年線乖離 ±20% 原為本檔 3 處 inline（:121 / :123 / 小卡文案）。
+# SSOT 是五桶危險門檻的 `bias_240` 紅線（`macro_buckets.BUCKET_DANGER_SPECS`），
+# 與個股的 `STOCK_BIAS_OVERHEAT_PCT`（同為 20 但語意是**個股**）刻意分開，不可互換。
+_BIAS240_RED: float = float(_SPECS_BY_KEY['bias_240'].red)
 # v19.175 P0:`cl_data['inst']` 型別收斂 SSOT(L5 → L2,合法下行依賴)
 from src.compute.macro import coerce_inst_dict
 
@@ -118,9 +126,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
 
         if _wr_bias:
             _b240 = _wr_bias.get('bias_240', 0)
-            if _b240 > 20:
+            if _b240 > _BIAS240_RED:
                 _wr_warns.append(('🟡', f'年線乖離 {_b240:+.1f}%，大盤偏高，勿追買'))
-            elif _b240 < -20:
+            elif _b240 < -_BIAS240_RED:
                 _wr_warns.append(('✅', f'年線負乖離 {_b240:+.1f}%，長期布局機會'))
 
         if _wr_fnet is not None and _wr_fnet < -20:
@@ -157,12 +165,18 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
              _wr_reg == 'bull', '多頭才積極操作'),
             ('外資方向', f'{"買超" if (_wr_fnet or 0)>0 else "賣超"} {abs(_wr_fnet or 0):.0f}億' if _wr_fnet is not None else '未知',
              (_wr_fnet or 0) > 0, '外資買超=跟著走'),
+            # F1 v19.184 §3.3：兩張小卡的提示語原本手抄「>2500億警戒，>3400億極危」
+            # 與「超過±20%要警惕」—— 同一列的**判定式**已經在讀 SSOT
+            # （`MARGIN_BALANCE_WARN_THRESHOLD_YI` / `_BIAS240_RED`），只有給人看的
+            # 那句是手打的。改門檻時判定會動、文字不會動 → 燈色與說明相反。
             ('融資餘額',
              f'{_wr_margin:.0f}億' if _wr_margin else '未取得 (N/A)',
              not _wr_margin or _wr_margin <= MARGIN_BALANCE_WARN_THRESHOLD_YI,
-             '>2500億警戒，>3400億極危'),
+             f'>{MARGIN_BALANCE_WARN_THRESHOLD_YI:,.0f}億警戒，'
+             f'>{MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:,.0f}億極危'),
             ('年線位置', f'乖離{_wr_bias.get("bias_240",0):+.1f}%' if _wr_bias else '未知',
-             not _wr_bias or abs(_wr_bias.get("bias_240", 0)) < 20, '超過±20%要警惕'),
+             not _wr_bias or abs(_wr_bias.get("bias_240", 0)) < _BIAS240_RED,
+             f'超過±{_BIAS240_RED:.0f}%要警惕'),
             # v19.170 P0-1:第 5 格同讀 SSOT;未評估誠實顯示,被硬否決壓低時給 ⚠️ 而非 ✅
             ('持股比例', f'建議{_wr_exp}' if _alloc.is_loaded else '⬜ 總經未評估',
              _alloc.is_loaded and not _alloc.capped, '按建議比例，不要滿倉'),
@@ -196,14 +210,16 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     unsafe_allow_html=True)
 
         # 月虧損強制停機警示
+        # F1 v19.184 §3.3：`-10` 與文案「7 天」原本各寫各的 → 改吃同一組 L0 常數。
         _monthly_loss = st.session_state.get('monthly_loss_pct', 0)
-        if _monthly_loss < -10:
+        if _monthly_loss < MONTHLY_LOSS_HALT_PCT:
             st.markdown(
                 f'<div style="background:#3a0000;border:2px solid {TRAFFIC_RED};border-radius:10px;'
                 f'padding:14px;margin:10px 0;text-align:center;">'
                 f'<div style="font-size:16px;font-weight:900;color:{TRAFFIC_RED};">⛔ 月虧損警示</div>'
                 f'<div style="font-size:13px;color:#c9d1d9;margin-top:6px;">'
-                f'本月虧損已達 {abs(_monthly_loss):.1f}%，建議暫停操作 7 天<br>'
+                f'本月虧損已達 {abs(_monthly_loss):.1f}%，'
+                f'建議暫停操作 {MONTHLY_LOSS_HALT_DAYS} 天<br>'
                 f'冷靜後重新評估選股邏輯</div></div>',
                 unsafe_allow_html=True)
 

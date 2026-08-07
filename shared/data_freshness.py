@@ -380,7 +380,11 @@ def leading_frozen_columns(
 
     if df is None or getattr(df, "empty", True):
         return (0, [])
-    _df_cols = list(getattr(df, "columns", []) or [])
+    # ⚠️ 不可寫成 `getattr(df, "columns", []) or []` —— `df.columns` 是 pandas
+    # `Index`,對它取布林值會 `ValueError: The truth value of a Index is ambiguous`。
+    # 任何**非空**的真實 DataFrame 都會踩到,等於這支函式在 production 必然拋例外。
+    _cols_attr = getattr(df, "columns", None)
+    _df_cols = list(_cols_attr) if _cols_attr is not None else []
     if not any(c in _df_cols for c in _cols):
         return (0, [])
 

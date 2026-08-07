@@ -5,7 +5,7 @@ daily_checklist.py v6.0 — Squid Proxy 模式
 🔄 ADL / yfinance / FinMind：不受 geo-block 影響，直連
 """
 import logging as _cl_log
-import requests, os
+import os  # F2:`requests` 隨 _bps 一起移除(本檔已無直接 HTTP 呼叫)
 import urllib3
 
 _logger = _cl_log.getLogger(__name__)
@@ -19,14 +19,14 @@ from shared.signal_thresholds import (  # noqa: F401
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-def _bps():
-    try:
-        from src.data.stock import build_proxy_session as _b
-        s = _b()
-    except Exception:
-        s = requests.Session()
-    s.verify = False
-    return s
+# F2(2026-08)§2.1 SSOT:本檔原本自己 `def _bps()`,與 `app.py` / `leading_indicators`
+# / `daily_data_fetchers` 三處**逐字重複**(CLAUDE.md V-APP-1 已點名)。實測本檔這份
+# **零呼叫點**(全 repo 無 `from ... daily_checklist import _bps`)—— 是 v18.346 PR-N3
+# 把 fetcher 搬走後留下的殘骸。本檔是 re-export barrel,故保留同名別名維持介面,
+# 唯一實作收斂至 L1。若確認無外部 caller,下一批可直接刪掉這行。
+from src.data.proxy.proxy_helper import (  # noqa: F401
+    build_unverified_proxy_session as _bps,
+)
 
 import streamlit as st
 

@@ -38,7 +38,7 @@ def fetch_macro_bundle(
     prev_cl_data: dict,
     fm_token: str,
     li_token: str,
-    bps_session,
+    bps_session=None,
     intl_map: dict,
     tw_map: dict,
     tech_map: dict,
@@ -54,7 +54,18 @@ def fetch_macro_bundle(
         prev_cl_data: dict     上一輪 cl_data(冷啟動用)
         fm_token: str          FinMind token(inst rescue 用)
         li_token: str          先行指標用 token
-        bps_session: Session   app._bps() 回傳的 requests session(FinMind inst rescue 用)
+        bps_session: Session | None
+                               FinMind inst rescue 用的 requests session。
+                               F2(2026-08):預設 None → 由本層向 L1 取
+                               (`proxy_helper.build_unverified_proxy_session`)。
+                               原本由 L5 `tab_macro` 呼叫 `app._bps()` 後注入 ——
+                               那條路同時是 L5→L6 上行 import(V-UP-APP-1)與
+                               「L6 造 requests.Session」(V-APP-1)。現在 L5 不再
+                               碰 session,取數細節收在 L3/L1。
+                               ⚠️ 建立時機刻意維持「進 fetch_macro_bundle 就建」
+                               (與舊版 caller 端 `bps_session=_bps()` 同一時點),
+                               不改為延後到 rescue 分支才建 —— 避免順手引入
+                               本批未驗證的時序差異。
         intl_map/tw_map/tech_map: dict  各市場 ticker 對照(name → symbol)
         fetch_single/...:      L1 fetcher callables(由 caller 注入,避 L3→L1 import 循環)
 
@@ -68,6 +79,12 @@ def fetch_macro_bundle(
         }
     """
     _t_start = _time.time()
+
+    # F2:caller 未注入 session 時,本層(L3)向 L1 取 SSOT。
+    # 時點對齊舊版(caller 端 `bps_session=_bps()`),不延後到 rescue 分支。
+    if bps_session is None:
+        from src.data.proxy.proxy_helper import build_unverified_proxy_session
+        bps_session = build_unverified_proxy_session()
 
     # ── 並發任務定義 ────────────────────────────────────
     # v18.193 perf:3 個 job 內部從 ticker 序列改為內層 ThreadPoolExecutor 並行

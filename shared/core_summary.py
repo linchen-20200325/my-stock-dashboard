@@ -557,7 +557,11 @@ def build_frozen_cell(leading_df: Any) -> KpiCell:
     _n, _cols = leading_frozen_columns(leading_df)
     if _n <= 0:
         # 區分「掃過且沒凍結」與「根本沒有可掃的欄」——後者不得亮綠燈。
-        _have = [c for c in getattr(leading_df, 'columns', []) or []]
+        # ⚠️ 同 data_freshness.leading_frozen_columns:`df.columns` 是 pandas
+        # `Index`,`... or []` 會觸發 `ValueError: truth value of a Index is
+        # ambiguous`。這裡與該處是同一個 bug 的兩份複本(§2.1)。
+        _cols_attr = getattr(leading_df, 'columns', None)
+        _have = list(_cols_attr) if _cols_attr is not None else []
         _W = FROZEN_WATCH_COLS_LEADING
         if not any(c in _have for c in _W):
             return cell_unknown(

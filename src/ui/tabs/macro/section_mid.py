@@ -163,7 +163,16 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 principle='剔除食品能源的美國核心通膨年增率,Fed 目標 2%',
                 unit='%', date=_m8_cpi.get('date', ''), extra=_ctrend,
             ), unsafe_allow_html=True)
-            st.caption('💡 Fed 目標值 = 2%。CPI > 3.5% 時升息預期升高，外資易從台股提款。')
+            # F1 v19.184 §3.3：`3.5` 原為手抄，改吃**上面那張卡用的同一組帶**
+            #   (`US_CORE_CPI_YOY_BANDS` 的 red 線)。刻意不用五桶 `us_core_cpi.yellow`
+            #   —— 兩者目前同為 3.5 但語意不同（一個是本卡的紅帶起點，一個是五桶黃線），
+            #   同數字不同義若耦合，日後只調一邊就會讓這句話跟卡片顏色對不上。
+            # ⚠️ 「Fed 目標值 = 2%」是 Fed 官方通膨目標（外部事實，非本系統門檻）→ C 類，維持字面。
+            _cpi_red_band = next((b[0] for b in US_CORE_CPI_YOY_BANDS if b[1] == 'red'), None)
+            st.caption('💡 Fed 目標值 = 2%。'
+                       + (f'CPI > {_cpi_red_band:g}% 時升息預期升高，外資易從台股提款。'
+                          if _cpi_red_band is not None
+                          else 'CPI 紅帶門檻讀取失敗（US_CORE_CPI_YOY_BANDS 缺 red 帶）。'))
         else:
             st.markdown(unified_indicator_card_pending(
                 title='美國核心CPI YoY', nickname='美國通膨體溫計',

@@ -70,16 +70,13 @@ def _prov_log(fn_name: str, source: str, ticker: str, result_summary: str):
         pass
 
 
-def _bps():
-    """Squid Proxy session(對齊 daily_checklist._bps 行為)。"""
-    import requests as _rq
-    try:
-        from src.data.stock import build_proxy_session as _b
-        s = _b()
-    except Exception:
-        s = _rq.Session()
-    s.verify = False
-    return s
+# F2(2026-08)§2.1 SSOT:原本這裡有一份逐字複製的 `_bps()`(全 repo 共 4 份,
+# 本檔原 docstring 自陳「對齊 daily_checklist._bps 行為」= 已知是複製品)。
+# 唯一實作已收斂到 L1 `src/data/proxy/proxy_helper.build_unverified_proxy_session`;
+# 這裡只留別名,唯一呼叫點(fetch_institutional 的 FinMind 路)一字未改。
+from src.data.proxy.proxy_helper import (  # noqa: E402
+    build_unverified_proxy_session as _bps,
+)
 
 
 # FINMIND_TOKEN lazy 讀(避免 module-level import streamlit 違反 PR-N2 守衛

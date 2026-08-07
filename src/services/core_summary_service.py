@@ -22,8 +22,10 @@
    一行 HTTP 都不打。總表的語意是「顯示已經算過的東西」;沒算過就顯示
    ⬜ 未評估 + 引導。否則原本 button-gated 的抓取路徑會變成無條件執行
    (app.py 的 5 個 `st.button` gate + tab_macro 的一鍵更新)。
-2. **不 `from app import`。** 全專案已有 5 處 L5→L6 late import 是最重的架構債,
-   本檔不變成第 6 處(需要 AI 走 `src/services/app_ai_service`;此處根本不需要 AI)。
+2. **不 `from app import`。**(F2 2026-08 更新:原文寫「全專案已有 5 處 L5→L6
+   late import」—— 那 5 處已全數收斂,production code 現為 **0 處**,見
+   CLAUDE.md V-UP-APP-1 結案說明。)本檔一開始就沒沾,維持 0
+   (需要 AI 走 `src/services/app_ai_service`;此處根本不需要 AI)。
 3. **不 import `src.ui.*`。** L3 不得 import L5(§8.2)。KPI 5/6 因此走注入 —— 見下。
 4. **不重算任何已有 producer 的數字。** 每個 KPI 只搬既有 SSOT 的輸出。
 

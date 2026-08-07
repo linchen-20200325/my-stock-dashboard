@@ -29,6 +29,8 @@ from shared.signal_thresholds import (
     MARKET_BREADTH_NEUTRAL_PCT,                 # 50.0%：市場廣度中性分界（v19.170 同上）
     FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS,  # -10000 口：外資期貨黃線
     FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS,    # -20000 口：外資期貨紅線
+    HEALTH_WEIGHT_JQ,                           # 0.6：健康評分 — 旌旗指數權重（F1 v19.184）
+    HEALTH_WEIGHT_SCORE,                        # 0.4：健康評分 — 大盤評分權重（F1 v19.184）
 )
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_YELLOW, TRAFFIC_RED
 
@@ -196,12 +198,19 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     # ── 🌳 長期：結構 / 景氣位階 ──
     DangerSpec("health", "總經健康評分", "long", "", "low_bad",
                yellow=_HEALTH_YELLOW, red=_HEALTH_RED, decimals=0,
-               note="<35 防禦 / <50 轉弱"
-                    "（v19.173:此分只有 2 個輸入 — 旌旗指數(上漲佔比 5 日均) 60% ＋ "
-                    "大盤評分 40%,實質是「趨勢廣度分數」;不含融資／外資期貨／"
-                    "年線乖離／NDC／M1B-M2／VIX／PMI／CPI／出口／ADL／新聞,"
-                    "那些各自有燈號。故五桶多盞紅而本分數不低非矛盾,是評估範疇不同）",
-               source="SSOT:HEALTH_DEFENSE_THRESHOLD(35)+DESIGN(50)",
+               # F1 v19.184 §3.3：本 note 會**印在畫面上**（五桶指標卡的 📋 註解），
+               # 原本 "<35 / <50 / 60% / 40%" 四個數字全是手抄 —— 而 35/50 就在同一行
+               # 的 `yellow=` / `red=` 參數裡、60/40 是 v19.102 AUC 校準值（會再被季度
+               # recalibrate 改）。四個都改成插值，改常數時說明自動跟著動。
+               note=f"<{_HEALTH_RED:g} 防禦 / <{_HEALTH_YELLOW:g} 轉弱"
+                    f"（v19.173:此分只有 2 個輸入 — 旌旗指數(上漲佔比 5 日均) "
+                    f"{HEALTH_WEIGHT_JQ * 100:g}% ＋ "
+                    f"大盤評分 {HEALTH_WEIGHT_SCORE * 100:g}%,實質是「趨勢廣度分數」;"
+                    f"不含融資／外資期貨／"
+                    f"年線乖離／NDC／M1B-M2／VIX／PMI／CPI／出口／ADL／新聞,"
+                    f"那些各自有燈號。故五桶多盞紅而本分數不低非矛盾,是評估範疇不同）",
+               source=f"SSOT:HEALTH_DEFENSE_THRESHOLD({_HEALTH_RED:g})"
+                      f"+DESIGN({_HEALTH_YELLOW:g})",
                emoji="🩺"),
     DangerSpec("ndc_signal", "NDC 景氣對策燈號", "long", "分", "band",
                yellow=32.0, red=38.0, yellow_lo=23.0, red_lo=16.0, decimals=0,
