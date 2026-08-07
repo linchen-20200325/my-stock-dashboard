@@ -64,11 +64,49 @@ class TestV4SharesWrite:
         _lots = int(_cap_twd / 10000)
         assert 25_000_000 < _lots < 27_000_000
 
-    def test_reader_default_unchanged(self):
-        """section_health_score 讀取端 fallback 1,000,000 不動(§1:股本抓不到時不虛構)。"""
+    def test_reader_has_no_fabricated_share_default(self):
+        """讀取端**不得**再有 1,000,000 張的假分母（D1 v19.185 修正）。
+
+        原測試斷言的是 `st.session_state.get(f't2_shares_{sid2}', 1000000)`
+        這個**實作字面**，註解還寫「§1:股本抓不到時不虛構」—— 但 1,000,000
+        正是那個虛構值：台積電 2,593 萬張、小型股 2 萬張，用固定 100 萬張
+        當分母算出的外本比與 0.5%/0.3%/0.1% 三個門檻完全對不上，卻照樣被
+        印成一個具體百分比。守衛照抄實作字面 ⇒ 它永遠不會發現實作有問題。
+
+        改為斷言**行為契約**：AST 掃出 `t2_shares_{sid}` 的讀取節點，確認
+        沒有任何正數 fallback（缺值一律走 `_shares_known=False` 的未評估分支）。
+        """
+        import ast
+        _p = REPO / "src/ui/tabs/stock_sections/section_health_score.py"
+        _tree = ast.parse(_p.read_text(encoding="utf-8"), filename=str(_p))
+        _bad: list[str] = []
+        for _n in ast.walk(_tree):
+            # 找 `<x>.get(f't2_shares_{...}', <default>)` 形式的呼叫
+            if not (isinstance(_n, ast.Call) and isinstance(_n.func, ast.Attribute)
+                    and _n.func.attr == "get" and len(_n.args) >= 1):
+                continue
+            _a0 = _n.args[0]
+            _is_shares_key = (
+                isinstance(_a0, ast.JoinedStr)
+                and any(isinstance(_v, ast.Constant) and "t2_shares_" in str(_v.value)
+                        for _v in _a0.values)
+            )
+            if not _is_shares_key:
+                continue
+            if len(_n.args) >= 2:
+                _d = _n.args[1]
+                if isinstance(_d, ast.Constant) and isinstance(_d.value, (int, float)) \
+                        and _d.value > 0:
+                    _bad.append(f"line {_n.lineno}: 讀 t2_shares 時給了正數預設 {_d.value!r}")
+        assert not _bad, (
+            "外本比分母不得有捏造的預設張數（§1）：\n  " + "\n  ".join(_bad))
+
+    def test_reader_gates_chip_card_on_known_shares(self):
+        """股本未知時，v4 相對籌碼卡必須走「未評估」分支而不是印百分比。"""
         src = (REPO / "src/ui/tabs/stock_sections/section_health_score.py").read_text(
             encoding="utf-8")
-        assert "st.session_state.get(f't2_shares_{sid2}', 1000000)" in src
+        assert "_shares_known" in src, "缺少『發行張數是否已知』的三態旗標"
+        assert "if not _shares_known:" in src, "未評估分支未接進渲染"
 
 
 # ══════════════════════════════════════════════════════════════

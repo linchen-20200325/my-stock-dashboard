@@ -28,6 +28,8 @@ from src.services.daily_checklist import (
 )
 # v19.170 P1-4 死區判定（L0 純函式，無 I/O）
 from shared.stats_helpers import ewma_vol, signal_with_deadband
+# v19.183 D2:M1B/M2 是否為「^TWII 動能代理」的判定 SSOT(原用從未被寫入的 is_proxy 鍵)。
+from shared.macro_provenance import is_m1b_m2_proxy
 
 # ════════════════════════════════════════════════════════════════
 # v19.170 — P1-4（缺死區）／ P1-5（匯率方向語意反轉）修正用常數 + helper
@@ -264,9 +266,23 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
             _diff   = round(_m1b_v - _m2_v, 2)
             _mc     = '#da3633' if _diff > 0 else '#2ea043'
             _ml     = '✅ 資金流入股市' if _diff > 0 else '🔴 資金撤離股市'
-            _proxy_note = '（大盤動能代理估算）' if _m1b_info.get('is_proxy') else ''
+            # ── v19.183 D2 §3.3 幽靈 key:`.get('is_proxy')` 從未被寫入 ────────────
+            # `m1b_m2_info` 的產生者 `macro_snapshot.fetch_m1b_m2_block()` 回傳鍵只有
+            # {m1b_yoy, m2_yoy, gap, source} —— **沒有 `is_proxy`**;真旗標
+            # (`is_proxy_tier`)在更上游 `tw_macro.fetch_cbc_m1b_m2()`,重新打包時被丟掉,
+            # 資訊只剩 `source == 'TWII-proxy'`。
+            # 後果:CBC 官方兩層全敗、退到「^TWII 20/60 日動量硬湊」的 Tier 3 時,
+            # 這張卡照樣把兩個代理數字印成央行 M1B/M2 年增率,**「（大盤動能代理估算）」
+            # 這行註記一次都沒出現過** —— 揭露機制寫了但永遠不啟動(§1 降級須可見)。
+            # 判定改走 L0 SSOT,並把提示從括號註記升級為獨立警語(括號太容易被略過)。
+            _is_m1b_proxy = is_m1b_m2_proxy(_m1b_info)
+            _proxy_note = '（大盤動能代理估算）' if _is_m1b_proxy else ''
             st.markdown(kpi('M1B-M2 差距', f'{_diff:+.2f}%{_proxy_note}',
                             f'M1B:{_m1b_info.get("m1b_yoy",0):.1f}%  M2:{_m1b_info.get("m2_yoy",0):.1f}%  {_ml}', _mc, '#0d1117'), unsafe_allow_html=True)
+            if _is_m1b_proxy:
+                st.caption('⚠️ 央行 M1B/M2 三層來源全部失敗，上方兩個數字是以 '
+                           '**^TWII 20/60 日動量反推的代理估算**，'
+                           '不是真實貨幣供給年增率 —— 請勿據此判斷資金行情。')
         else:
             st.markdown(kpi('M1B-M2 差距', '抓取中', '更新總經數據後自動計算', '#484f58', '#0d1117'), unsafe_allow_html=True)
     

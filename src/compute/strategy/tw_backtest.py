@@ -39,9 +39,23 @@ def find_uninversion_events(s: pd.Series,
       2. 翻正日 T10Y2Y ≥ 0 且後續 stable_days 日皆 ≥ 0（去抖）
       3. 距上一事件 ≥ cooldown_days（避免同週期重複觸發）
 
+    ⚠️ PIT / lookahead（v19.183 D2）—— `date` 不是可執行進場日
+    -----------------------------------------------------------
+    條件 2 的「後續 stable_days 日皆 ≥ 0」**用到 `date` 之後的資料**。
+    站在 `date` 當天的人不可能知道接下來 5 天會不會再翻回負值，
+    因此 `date` 是「事後標定的翻正首日」，不是「當下可決策的日子」。
+
+    本函式因此同時回 `confirm_date = dates[i + stable_days - 1]`
+    —— 去抖窗口的最後一天，也就是這個事件**第一次成為已知事實**的日子。
+    任何前瞻報酬（`_forward_return`）都必須以 `confirm_date` 起算，
+    否則會白吃 stable_days 根 K 棒的漲跌（CLAUDE.md §2.3 禁止 lookahead）。
+
+    `date` 欄位保留原語意（翻正首日）供畫面標示與既有 caller，
+    **不改值**；新增欄位為 schema-additive。
+
     Returns
     -------
-    [{"date": Timestamp, "t10y2y_min_pre": float}, ...]
+    [{"date": Timestamp, "confirm_date": Timestamp, "t10y2y_min_pre": float}, ...]
     """
     if s is None or s.empty or len(s) < stable_days + 2:
         return []
@@ -71,6 +85,10 @@ def find_uninversion_events(s: pd.Series,
                        or (t - last_event_t).days >= cooldown_days:
                         events.append({
                             "date": t,
+                            # 去抖窗口最後一天 = 事件第一次成為已知事實的日子。
+                            # end = i + stable_days 已通過 `end <= len(vals)` 檢查，
+                            # 故 i + stable_days - 1 必為合法索引。
+                            "confirm_date": dates[i + stable_days - 1],
                             "t10y2y_min_pre": float(round(seg_min, 3)),
                         })
                         last_event_t = t
@@ -79,17 +97,45 @@ def find_uninversion_events(s: pd.Series,
     return events
 
 
+def _entry_index(idx: pd.Series, t0: pd.Timestamp,
+                 strict_after: bool = False) -> Optional[int]:
+    """回「可進場那一根 K 棒」的位置索引；超出序列尾端回 None。
+
+    strict_after=False → 第一根 **≥ t0** 的 K 棒（原行為）。
+    strict_after=True  → 第一根 **> t0** 的 K 棒（v19.183 D2 PIT 修正）。
+
+    為何需要 strict_after（CLAUDE.md §2.3 / §4.1 時區）
+    -------------------------------------------------
+    T10Y2Y 是 FRED 日頻序列，observation date = D 的那筆值要等 **D 當天美股收盤後**
+    才發布（≈ D+1 04:00 台北時間）。台股當天 13:30 就收盤了 ——
+    也就是「D 這天的 T10Y2Y」對台股投資人而言，最早只能在 **D 的下一根 TWII K 棒**
+    才拿得到。用 D 當天的 TWII 收盤當進場價，等於用還沒發布的資料下單。
+    """
+    if idx is None or idx.empty:
+        return None
+    i0 = int(idx.index.searchsorted(t0, side='right' if strict_after else 'left'))
+    return None if i0 >= len(idx) else i0
+
+
 def _forward_return(idx: pd.Series, t0: pd.Timestamp,
-                    days: int) -> Optional[float]:
-    """指數從 t0 起 days 天後的累計報酬（%）。窗口未到期回 None。"""
+                    days: int, *, strict_after: bool = False) -> Optional[float]:
+    """指數從 t0（或其後第一根可交易 K 棒）起 days 天後的累計報酬（%）。
+
+    窗口未到期回 None。`days` 為 **日曆日**（182 / 365 / 547 ≈ 6M / 12M / 18M），
+    前瞻窗口以**實際進場 K 棒日期**起算，而非 t0（兩者在 strict_after=True 時不同）。
+
+    strict_after：見 `_entry_index`。預設 False 保留原行為（既有 caller / 測試無感）；
+    回測主路徑一律傳 True（§2.3 防 lookahead）。
+    """
     if idx is None or idx.empty:
         return None
     try:
-        idx0 = idx.index.searchsorted(t0)
-        if idx0 >= len(idx):
+        idx0 = _entry_index(idx, t0, strict_after=strict_after)
+        if idx0 is None:
             return None
+        entry_ts = idx.index[idx0]
         p0 = float(idx.iloc[idx0])
-        t1 = t0 + pd.Timedelta(days=days)
+        t1 = entry_ts + pd.Timedelta(days=days)
         idx1 = idx.index.searchsorted(t1)
         if idx1 >= len(idx):
             return None
@@ -119,7 +165,10 @@ def backtest_twii_turning_points(
     -------
     {
       "events": [
-        {"date": Timestamp, "t10y2y_min_pre": float,
+        {"date": Timestamp,          # 翻正首日（事後標定，**非**可執行日）
+         "confirm_date": Timestamp,  # 去抖窗口最後一天 = 事件成為已知事實之日
+         "entry_date": Timestamp|None,  # 實際進場 K 棒（confirm_date 之後第一根）
+         "t10y2y_min_pre": float,
          "ret_6m": float|None, "ret_12m": float|None, "ret_18m": float|None,
          "complete": bool},
         ...
@@ -212,15 +261,29 @@ def backtest_twii_turning_points(
     today = pd.Timestamp.today().normalize()
     # v18.436 #10:18 月回測完整度門檻 547 inline → SSOT(同值原寫兩處)
     from shared.signal_thresholds import BACKTEST_18M_DAYS_THRESHOLD
+    # ⚠️ v19.183 D2（§2.3 防 lookahead）：前瞻報酬一律以 **confirm_date 之後的
+    #    第一根 TWII K 棒** 起算，不再用 `ev['date']`（翻正首日）。
+    #    舊碼白吃了 stable_days 根 K 棒 + 1 天 FRED 發布延遲的漲跌 ——
+    #    那段報酬只有「已經知道未來 5 天不會翻回負值」的人才拿得到。
+    #    `date` 欄位語意不變（畫面仍標翻正首日），另出 `entry_date` 讓使用者
+    #    看得到「真正可以下單的是哪一天」。
     enriched: list = []
     for ev in events:
         t0 = ev["date"]
-        r6  = _forward_return(out["twii_series"], t0, 182)
-        r12 = _forward_return(out["twii_series"], t0, 365)
-        r18 = _forward_return(out["twii_series"], t0, BACKTEST_18M_DAYS_THRESHOLD)
-        complete = (today - t0).days >= BACKTEST_18M_DAYS_THRESHOLD and r18 is not None
+        t_conf = ev.get("confirm_date") or t0
+        _ei = _entry_index(out["twii_series"], t_conf, strict_after=True)
+        _entry_ts = (out["twii_series"].index[_ei] if _ei is not None else None)
+        r6  = _forward_return(out["twii_series"], t_conf, 182, strict_after=True)
+        r12 = _forward_return(out["twii_series"], t_conf, 365, strict_after=True)
+        r18 = _forward_return(out["twii_series"], t_conf,
+                              BACKTEST_18M_DAYS_THRESHOLD, strict_after=True)
+        complete = (_entry_ts is not None
+                    and (today - _entry_ts).days >= BACKTEST_18M_DAYS_THRESHOLD
+                    and r18 is not None)
         enriched.append({
             "date": t0,
+            "confirm_date": t_conf,
+            "entry_date": _entry_ts,
             "t10y2y_min_pre": ev["t10y2y_min_pre"],
             "ret_6m":  r6,
             "ret_12m": r12,

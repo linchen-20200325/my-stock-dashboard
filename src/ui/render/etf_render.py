@@ -76,6 +76,12 @@ def _alloc_banner_desc(alloc) -> tuple[str, str, str]:
          「為何總經多頭卻只給 20%」。
       4. `regime` 只作**輔助語氣**（括號內的總經背景），不得單獨決定方向。
 
+    C1 v19.182：`alloc.regime`（→ `alloc.regime_text`）現在來自
+    `shared.regime_arbiter` 的**生效結論**，不再是 raw `mkt_info['regime']`。
+    以前的破口：總經紅綠燈判 🔴 空頭防禦、持股被壓到 20% 的那天，本函式
+    仍會在括號裡寫「總經多頭」——因為它讀到的是趨勢面輸入。現在
+    「數字（final_mid）」與「總經背景（regime_text）」出自同一次仲裁。
+
     Args:
         alloc: `allocation_service.get_allocation()` 的回傳（`is_loaded=True`）。
 

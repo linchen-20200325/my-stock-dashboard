@@ -14,7 +14,9 @@ import sys
 from typing import Any, Optional
 
 import pandas as pd
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.colors import (
+    TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW,
+)
 # v18.241 E1+E2: 抽 inline magic 到 shared SSOT（CLAUDE.md §3.3）
 from shared.signal_thresholds import (
     HEALTH_WEIGHT_JQ, HEALTH_WEIGHT_SCORE, HEALTH_FNET_BONUS, CONFIDENCE_SOURCE_COUNT,
@@ -31,6 +33,10 @@ _QE_MAP = {'1': '03-31', '2': '06-30', '3': '09-30', '4': '12-31'}
 from shared.macro_calibration import load_calibrated_thresholds as _load_calibrated_thresholds
 
 HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE = _load_calibrated_thresholds()
+
+# C1 v19.182:大盤 regime 唯一仲裁點（L2 → L0，合法下行依賴）。
+# 以 module alias 引用是為了讓 `_TL_COPY_BY_SOURCE` 的 key 直接綁 SSOT 常數。
+from shared import regime_arbiter as _RA  # noqa: E402
 
 # ── v19.177 P1-B ②:信心來源標籤 —— 「站上均線比例」是捏造描述,已除役 ──────────
 # 舊值:'旌旗指數 (站上均線比例)'。**全站沒有任何一行 code 在算「站上均線的
@@ -104,6 +110,53 @@ def coerce_inst_dict(cl_data: Optional[dict], *, where: str) -> dict:
     return {}
 
 
+# ── C1 v19.182:燈號文案表（key = `regime_arbiter` 的 `source`）────────────────
+# 為什麼 key 是 `source` 而不是顏色 / regime：舊碼有**兩條 🔴 分支文案不同** ——
+# 「空頭防禦｜降低部位」(總經惡化，分支 1/2) vs 「保守防禦｜縮減部位」(趨勢轉空，
+# 分支 4)。只看 icon 或 regime 都無法還原該印哪一組字，這也正是舊碼要把整棵決策樹
+# 展開寫在 if/elif 裡的原因。改以 `source` 當 key 後，判定（arbiter）與文案（本表）
+# 才能真正分離而不失資訊。
+#
+# ⚠️ 文字一字未改（含全形標點與 emoji），對照 v19.181 原 if/elif 逐分支搬移。
+# key 一律引用 arbiter 的 `SOURCE_*` 常數，**不寫字面值**（§3.3 反捏造：
+# 兩處各抄一份字串 = 改一邊漏一邊）。
+_TL_COPY_BY_SOURCE: dict = {
+    # 分支 1 / 2：總經惡化凌駕技術面 → 同一組文案。
+    _RA.SOURCE_DEFENSE_FUTURES: (
+        TRAFFIC_RED,
+        '空頭防禦｜降低部位',
+        '⛔ 大環境惡化，系統已啟動資金保護機制',
+        '建議持有現金，等待市場明確訊號，禁止追買任何個股'),
+    _RA.SOURCE_DEFENSE_HEALTH: (
+        TRAFFIC_RED,
+        '空頭防禦｜降低部位',
+        '⛔ 大環境惡化，系統已啟動資金保護機制',
+        '建議持有現金，等待市場明確訊號，禁止追買任何個股'),
+    _RA.SOURCE_BULL_SCORE: (
+        TRAFFIC_GREEN,
+        '多頭市場｜積極操作',
+        '✅ 市場健康，籌碼乾淨，可積極尋找強勢標的',
+        '可積極尋找強勢標的，留意趨勢延續性'),
+    _RA.SOURCE_BEAR_TREND: (
+        TRAFFIC_RED,
+        '保守防禦｜縮減部位',
+        '⛔ 市場走弱，建議縮減持股比例，等待多頭確認',
+        '降低風險暴露，避免新開倉，等待多頭重啟'),
+    _RA.SOURCE_NEUTRAL_FALLTHROUGH: (
+        TRAFFIC_YELLOW,
+        '震盪整理｜謹慎觀望',
+        '⚠️ 市場處於整理期，謹慎操作，降低部位',
+        '持有現有倉位觀望，不追高，等待更明確信號'),
+    # 健康分算不出來（極端情況：上游把 score 餵成 NaN）→ arbiter 回 unloaded。
+    # §1：誠實說「算不出來」，不拿 🟡 震盪頂替（🟡 是一個**市場判斷**，不是缺值標記）。
+    _RA.SOURCE_UNLOADED: (
+        TRAFFIC_NEUTRAL,
+        '總經未評估｜資料不足',
+        '⬜ 健康評分無法計算（上游輸入缺失或非數值）',
+        '請按「🚀 一鍵更新全部數據」重新抓取；在此之前不做多空判斷'),
+}
+
+
 def calc_traffic_light(
     mkt_info: Optional[dict],
     jingqi_info: Optional[dict],
@@ -119,10 +172,9 @@ def calc_traffic_light(
 
     決策樹（v18.140 校準後收斂門檻，常數見模組 HEALTH_DEFENSE_THRESHOLD / BULL_MIN_SCORE）：
       1. 三來源全空 → None（由 placeholder 顯示等待）
-      2. defense 觸發（score<2 且外資期貨大空單）或 health<HEALTH_DEFENSE_THRESHOLD → 🔴 空頭防禦
-      3. regime=='bull' AND score>=BULL_MIN_SCORE → 🟢 多頭積極
-      4. regime in ('caution','bear') → 🔴 保守防禦
-      5. 其他 → 🟡 震盪整理
+      2~5. **C1 v19.182 起下沉至 `shared.regime_arbiter.arbitrate_regime()`**
+           （全站唯一仲裁點；本函式只負責備料 + 貼文案）。分支順序與門檻
+           一字未改，見該模組 docstring。
 
     Args:
         mkt_info:    market_regime() 回傳，含 'score' / 'regime'
@@ -133,10 +185,18 @@ def calc_traffic_light(
     Returns:
         dict (color, icon, label, action, sub, health, health_partial, defense,
               score, jqavg, leek, fnet, fk, fut_net, conf, missing_sources,
-              regime) 或 None
+              regime, effective_regime, light, regime_source) 或 None
 
         ⚠️ v19.177 起 `jqavg` / `leek` / `fut_net` **可能為 None**(= 該來源沒拿到),
         消費端格式化前必須先判 None。詳見下方 P1-B 註解。
+
+        ⚠️ C1 v19.182 **regime 三欄位契約**（消費端請務必看清楚）：
+          - `regime`           = 趨勢面**輸入**（raw `mkt_info['regime']`），
+                                 保留舊 key 舊語意，僅供揭露「被壓制的反向訊號」。
+          - `effective_regime` = 本函式的**結論**（canonical，全站唯一真相）。
+          - `light` / `regime_source` = 同一次仲裁的燈號與生效分支識別碼。
+        取多空判斷一律用 `effective_regime`，**不得**用 `regime`，
+        也**不得**再由 `icon` 反推（那正是 C1 修掉的破口）。
     """
     if not mkt_info and not jingqi_info and not cl_data:
         return None
@@ -209,14 +269,12 @@ def calc_traffic_light(
             if '韭菜指數' in li_latest.columns:
                 _leek = _safe_float(_li_row.get('韭菜指數'))
 
+    # ⚠️ `_regime` 是**趨勢面輸入**（market_regime 的技術面判定），**不是本函式的結論**。
+    # 決策樹的分支 1/2（外資期貨防禦 / 健康分跌破門檻）會直接覆蓋它 —— 這正是
+    # C1 稽核抓到的矛盾根源：舊碼把它原樣塞進 `warroom_summary['regime']`，
+    # 於是置底常駐條印「🟢 多頭」而同一頁上方的燈號卡印「🔴 空頭防禦」。
+    # 本函式回傳的 canonical 結論改看 `effective_regime`（見下方 arbiter）。
     _regime  = _mkt.get('regime', 'neutral')
-    # v18.436 #3:外資期貨防禦門檻 SSOT 化
-    from shared.signal_thresholds import FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD
-    # v19.177:`_fut_net is None`(未取得)**既不觸發也不抑制**防禦 —— 缺資料不是
-    # 「沒有大空單」。與舊碼(0)在燈號上同為 False,但語意與 log/信心揭露不同。
-    _defense = (_fut_net is not None and _score < 2
-                and abs(_fut_net) > FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD
-                and _fut_net < 0)
     # v18.241 E1: 健康評分權重從 SSOT 引入（原 0.4/0.4/20 inline）
     # v19.102 校準採納(方案 B,MACRO_HEALTH_WEIGHT_PROPOSAL.md AUC 0.753):
     # ① 權重 0.6/0.4/0(SSOT 已改);② score 正規化除數自 CONFIDENCE_SOURCE_COUNT(5,
@@ -283,26 +341,26 @@ def calc_traffic_light(
     _h_thr = health_defense_threshold if health_defense_threshold is not None else HEALTH_DEFENSE_THRESHOLD
     _s_thr = bull_min_score if bull_min_score is not None else BULL_MIN_SCORE
 
-    if _defense or _health < _h_thr:
-        _color, _icon  = TRAFFIC_RED, '🔴'
-        _label  = '空頭防禦｜降低部位'
-        _action = '⛔ 大環境惡化，系統已啟動資金保護機制'
-        _sub    = '建議持有現金，等待市場明確訊號，禁止追買任何個股'
-    elif _regime == 'bull' and _score >= _s_thr:
-        _color, _icon  = TRAFFIC_GREEN, '🟢'
-        _label  = '多頭市場｜積極操作'
-        _action = '✅ 市場健康，籌碼乾淨，可積極尋找強勢標的'
-        _sub    = '可積極尋找強勢標的，留意趨勢延續性'
-    elif _regime in ('caution', 'bear'):
-        _color, _icon  = TRAFFIC_RED, '🔴'
-        _label  = '保守防禦｜縮減部位'
-        _action = '⛔ 市場走弱，建議縮減持股比例，等待多頭確認'
-        _sub    = '降低風險暴露，避免新開倉，等待多頭重啟'
-    else:
-        _color, _icon  = TRAFFIC_YELLOW, '🟡'
-        _label  = '震盪整理｜謹慎觀望'
-        _action = '⚠️ 市場處於整理期，謹慎操作，降低部位'
-        _sub    = '持有現有倉位觀望，不追高，等待更明確信號'
+    # ── C1 v19.182:決策樹下沉至唯一仲裁點 `shared.regime_arbiter` ─────────────
+    # 修的是什麼:本函式的 if/elif 樹**才是**實際決定畫面燈號的那條規則,但它只吐
+    # icon;下游 `section_traffic_light.py` 只好用 `{'🔴':'bear','🟢':'bull',
+    # '🟡':'neutral'}.get(icon)` **反推** regime,而同一份 warroom 又把 raw
+    # `mkt_info['regime']` 原樣塞進 `'regime'` key 給置底常駐條 / ETF 頁用
+    # → 同一天兩個相反答案(§2.1 SSOT 破口)。
+    # 現在燈色與 canonical regime **出自同一次 `arbitrate_regime()` 呼叫**,
+    # 結構上不可能再分歧,而且 `source` 明講是哪條分支生效。
+    # 判定邏輯逐分支等價,**行為零位移**(見 tests/test_c1_regime_arbitration.py
+    # 的 legacy 決策樹對拍測試)。
+    _verdict = _RA.arbitrate_regime(
+        trend_regime=_regime, market_score=_score, health=_health,
+        futures_net_lots=_fut_net,
+        health_defense_threshold=_h_thr, bull_min_score=_s_thr,
+    )
+    _defense = _verdict.defense
+    # 文案表以 `source`(哪條分支生效)為 key —— 舊碼兩條 🔴 分支的 label 不同
+    # (空頭防禦 vs 保守防禦),不能只看顏色/icon 決定文字。
+    _color, _label, _action, _sub = _TL_COPY_BY_SOURCE[_verdict.source]
+    _icon = _verdict.light
 
     _conf_sources = [
         ('大盤趨勢評分 (market_regime)', bool(mkt_info)),
@@ -334,7 +392,18 @@ def calc_traffic_light(
         'health_partial': _health_partial,
         'defense': _defense, 'score': _score, 'jqavg': _jqavg,
         'leek': _leek, 'fnet': _fnet, 'fk': _fk, 'fut_net': _fut_net,
-        'conf': _conf, 'missing_sources': _missing, 'regime': _regime,
+        'conf': _conf, 'missing_sources': _missing,
+        # ── C1 v19.182:regime 三欄位契約（schema-additive，既有 caller 無感）──
+        # `regime`            = **趨勢面輸入**（raw `mkt_info['regime']`）。
+        #                       保留原 key 原語意，供畫面揭露「被壓制的反向訊號」
+        #                       （例：趨勢 bull 但健康分跌破 → 燈號仍 🔴）。
+        #                       ⚠️ **不是**本函式的結論，消費端不得拿它當多空判斷。
+        # `effective_regime`  = 本函式的 canonical 結論（全站唯一真相）。
+        # `light` / `regime_source` = 同一次仲裁產生的燈號與生效分支。
+        'regime': _regime,
+        'effective_regime': _verdict.regime,
+        'light': _verdict.light,
+        'regime_source': _verdict.source,
     }
 
 

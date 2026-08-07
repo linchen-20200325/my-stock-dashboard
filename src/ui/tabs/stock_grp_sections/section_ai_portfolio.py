@@ -130,8 +130,20 @@ def _build_portfolio_prompt(
             f"財報體檢: DNA={_dna_p} 現金水位={_fhp.get('cash_ratio_value','-') if _fhp else '-'} "
             f"OCF={_fhp.get('ocf_value','-') if _fhp else '-'} 負債比={_fhp.get('debt_ratio_value','-') if _fhp else '-'} 雷達均分={_rad_avg_p}"
         )
-    _reg_p = st.session_state.get('mkt_info', {}).get('regime', 'neutral')
-    _reg_txt_p = '多頭市場(積極操作)' if _reg_p == 'bull' else ('空頭市場(縮減部位)' if _reg_p == 'bear' else '震盪整理(謹慎觀望)')
+    # D1 v19.185（C1 接線 · §1 Fail Loud）：原碼直讀 `mkt_info['regime']`（趨勢面
+    # **輸入**）並在缺席時捏 'neutral'，於是 (a) 健康分跌破防禦門檻那天 prompt 仍寫
+    # 「多頭市場(積極操作)」與總經頁 🔴 打架；(b) 總經沒評估時 LLM 收到的是
+    # 「震盪整理(謹慎觀望)」這個**看似已判斷**的結論。改吃全站唯一仲裁點。
+    from src.services.allocation_service import get_macro_regime as _gmr_p
+    _macro_reg_p = _gmr_p()
+    _reg_p = str(_macro_reg_p.get('regime') or 'unknown') if _macro_reg_p.get('is_loaded') else 'unknown'
+    _reg_txt_p = {
+        'bull': '多頭市場(積極操作)',
+        'neutral': '震盪整理(謹慎觀望)',
+        'caution': '轉守(縮減部位)',
+        'bear': '空頭市場(縮減部位)',
+        'unknown': '未評估(總經尚未計算，禁止在報告中推估大盤多空方向)',
+    }.get(_reg_p, _reg_p)
     # v19.170 SSOT 修正:建議持股上限改讀 allocation_service(全站唯一來源)。
     # 原寫法 `macro_state.get('exposure_limit_pct', 'N/A')` 有 bug:該 key 存在但值為
     # None,`dict.get` 的 default 只在 key 缺席時才生效 → prompt 實際送出
@@ -154,13 +166,22 @@ def _build_portfolio_prompt(
     for _ri, _rr in enumerate(_ranked_t3, 1):
         _sid_r = _rr.get('stock_id', _rr.get('代碼', ''))
         _nm_r  = _rr.get('stock_name', _rr.get('名稱', _sid_r))
-        _sc_r  = _rr.get('total', _rr.get('健康度', 0)) or 0
         _ht_r  = _rr.get('_health', 0) or 0
-        _ma_r  = '均線多頭排列' if (_rr.get('ma_above', 0) or 0) >= 2 else '均線空頭排列'
+        # v19.184:results_t3 **沒有** 'total' 這個 key(它在 score_t3),原本
+        # `.get('total', .get('健康度'))` 會靜默拿健康度充當「綜合評分」印給 LLM。
+        # 排序仍可用健康度當 fallback(那只是排序),但**標籤不得謊稱是綜合評分**(§1)。
+        _tot_r = _rr.get('total')
+        _sc_txt = (f"綜合評分={float(_tot_r):.0f} " if _tot_r is not None
+                   else "綜合評分=未評分 ")
+        # v19.184:同檔 :104-109 已修過一次,這裡是**第二處**漏網 ——
+        # 'ma_above' 全 repo 從未被寫入,default 0 讓每一檔都被說成「均線空頭排列」。
+        # 真 key 是 '趨勢'(字串,如 多頭 / 整理 / -)。
+        _tr_r  = str(_rr.get('趨勢') or '').strip()
+        _ma_r  = f"趨勢={_tr_r}" if _tr_r and _tr_r != '-' else "趨勢=未知"
         _fb_r  = _rr.get('foreign_buy', 0) or 0
         # v18.349 PR-O1:單位「張」(同上),原 /1e8「億」是錯誤假設元的舊 bug
         _strong_lines.append(
-            f"第{_ri}名 [{_sid_r} {_nm_r}] 綜合評分={_sc_r:.0f} 健康度={_ht_r:.0f} | "
+            f"第{_ri}名 [{_sid_r} {_nm_r}] {_sc_txt}健康度={_ht_r:.0f} | "
             f"{_ma_r}、外資近20日{'買超' if _fb_r > 0 else '賣超'}{abs(_fb_r):,.0f}張"
         )
     _strong_str = '\n'.join(_strong_lines) if _strong_lines else '(沒有可排序的股票)'

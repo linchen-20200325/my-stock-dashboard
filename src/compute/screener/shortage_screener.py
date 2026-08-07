@@ -13,6 +13,10 @@
 §1 fail-loud:缺值/無科目一律回 None + 標「資料不足 / 無科目」旗標,**絕不補 0 造假**,
   也絕不拋 Exception（單股異常不影響整批）。
 §3.3:所有門檻/權重從 SSOT import,無 inline magic number。
+§4.5 時序對齊:t-1 / t-4 / TTM 四季一律以 **季序**(label 'YYYYQn' 或 date)取,
+  不用 list 位置 —— 季序列有洞時位置 4 ≠ 去年同季(B6-b 2026-08 修,同
+  monthly_revenue_calc v19.83「位置索引當去年同月」的 bug 形狀)。
+  季別無 label/date 可定序時才退回位置索引(舊行為;連續序列兩法等價)。
 
 輸入 schema（per stock）:
     {
@@ -135,27 +139,106 @@ def _q_get(quarters: Any, idx: int, key: str) -> float | None:
     return _num(q.get(key))
 
 
-def _gm_at(quarters: Any, idx: int) -> float | None:
-    """第 idx 季毛利率(%) = 毛利 / 營收 × 100。營收 ≤ 0 → None（§4.4 防除零）。"""
-    rev = _q_get(quarters, idx, "revenue")
-    gp = _q_get(quarters, idx, "gross_profit")
+# ════════════════════════════════════════════════════════════════
+# 季序對齊（§2.3 PIT / §4.5 時序對齊）— 不用「位置」當「季距」
+# ════════════════════════════════════════════════════════════════
+# B6-b(2026-08):原本 t-1 / t-4 / TTM 四季一律用 **list 位置** 索引(quarters[1] /
+# quarters[4] / range(idx, idx+4)),等於假設「季序列連續無缺季」。實際 L1
+# `fetch_quarterly_shortage_frame` 的季別來自「損益表日期 ∪ 資產負債表日期」的
+# 聯集,任一邊缺季 / FinMind 該季無資料 → 序列出現洞,位置 4 就不再是「去年同季」,
+# 而會**靜默**拿前年 Q4 之類的錯基期算 YoY。
+# 這與 monthly_revenue_calc v19.83 修掉的「位置索引 −12 當去年同月」是同一個 bug
+# 形狀(見 src/compute/health/monthly_revenue_calc.py:63-66 註解),此處補上同一解法:
+# 以 label 'YYYYQn' / date 'YYYY-MM-DD' 換算「季序 ordinal」查表;整批無法定序時
+# 才退回位置索引(舊行為,連續序列兩法等價)。缺該季 → 回 None(§1 絕不拿鄰季冒充)。
+_QUARTERS_PER_YEAR = 4
+
+
+def _q_ordinal(q: Any) -> int | None:
+    """單季 → 季序 ordinal(年×4 + 季−1)。優先 label 'YYYYQn',退 date 'YYYY-MM-DD'。
+
+    兩者皆無法解析 → None(caller 整批退回位置索引 = 舊行為)。
+    """
+    if not isinstance(q, dict):
+        return None
+    _lab = str(q.get("label") or "").strip().upper()
+    if "Q" in _lab:
+        _y_txt, _, _s_txt = _lab.partition("Q")
+        try:
+            _y, _s = int(_y_txt), int(_s_txt)
+        except ValueError:
+            _y = _s = 0
+        if _y > 0 and 1 <= _s <= _QUARTERS_PER_YEAR:
+            return _y * _QUARTERS_PER_YEAR + (_s - 1)
+    _d = str(q.get("date") or "").strip()
+    if len(_d) >= 7:
+        try:
+            _y, _m = int(_d[:4]), int(_d[5:7])
+        except ValueError:
+            return None
+        if _y > 0 and 1 <= _m <= 12:
+            return _y * _QUARTERS_PER_YEAR + ((_m - 1) // 3)
+    return None
+
+
+def _offset_index_map(quarters: Any) -> dict[int, int] | None:
+    """{距最新季幾季: list index}。任一季無法定序 → None(退回位置索引)。"""
+    if not isinstance(quarters, list) or not quarters:
+        return None
+    _ords: list[tuple[int, int]] = []
+    for _i, _q in enumerate(quarters):
+        _o = _q_ordinal(_q)
+        if _o is None:
+            return None                       # 混雜/無標記 → 整批退回位置索引
+        _ords.append((_o, _i))
+    # 整批季別標記**全部相同**(如 label 全 'Q'、date 全同一天)⇒ 該欄位不帶季序資訊,
+    # 與「無標記」同類 → 退回位置索引。若不擋,下面 setdefault 會產出只剩
+    # {0: 0} 的**退化 map**,t-1 / t-4 一律查不到 ⇒ 每個 YoY 訊號都被誤標資料不足。
+    # ⚠️ 只擋「全同一季」這種完全退化;偶有重複(如某季被重報兩次)仍走 ordinal 路徑,
+    #    由下面的 setdefault 取先出現者,缺的那季照常標資料不足(那才是正確的 §1 行為)。
+    if len({_o for _o, _ in _ords}) == 1 and len(_ords) > 1:
+        return None
+    _latest = max(_o for _o, _ in _ords)
+    _out: dict[int, int] = {}
+    for _o, _i in _ords:
+        _out.setdefault(_latest - _o, _i)     # 同季重複 → 取先出現者(近→遠慣例)
+    return _out
+
+
+def _at(quarters: Any, omap: dict[int, int] | None, offset: int) -> int:
+    """「最新季往前 offset 季」的 list index。
+
+    omap 為 None(無法定序)→ 退回位置索引 offset(舊行為)。
+    可定序但**該季不存在** → 回 -1 ⇒ `_q_get` 回 None ⇒ 該訊號標資料不足(§1)。
+    """
+    if omap is None:
+        return int(offset)
+    return omap.get(int(offset), -1)
+
+
+def _gm_at(quarters: Any, omap: dict[int, int] | None, offset: int) -> float | None:
+    """距最新季 offset 季的毛利率(%) = 毛利 / 營收 × 100。營收 ≤ 0 → None（§4.4 防除零）。"""
+    _i = _at(quarters, omap, offset)
+    rev = _q_get(quarters, _i, "revenue")
+    gp = _q_get(quarters, _i, "gross_profit")
     if rev is None or gp is None or rev <= 0:
         return None
     return gp / rev * 100.0
 
 
-def _dio_at(quarters: Any, idx: int) -> float | None:
-    """第 idx 季存貨在手天數 DIO = 存貨 /（近 4 季營業成本 / 365）。
+def _dio_at(quarters: Any, omap: dict[int, int] | None, offset: int) -> float | None:
+    """距最新季 offset 季的存貨在手天數 DIO = 存貨 /（近 4 季營業成本 / 365）。
 
-    需 idx..idx+3 四季成本齊全且和 > 0、idx 季存貨齊全,否則 None（§4.1：用近 4 季
-    成本年化,避免單季成本 ×90 粗估失真）。
+    需 offset..offset+3 **四個真實季**的成本齊全且和 > 0、該季存貨齊全,否則 None
+    （§4.1：用近 4 季成本年化,避免單季成本 ×90 粗估失真;§4.5：四季以「季序」取,
+    缺季不以鄰季頂替）。
     """
-    inv = _q_get(quarters, idx, "inventory")
+    inv = _q_get(quarters, _at(quarters, omap, offset), "inventory")
     if inv is None:
         return None
     cogs_ttm = 0.0
-    for j in range(idx, idx + 4):
-        c = _q_get(quarters, j, "cogs")
+    for j in range(int(offset), int(offset) + _QUARTERS_PER_YEAR):
+        c = _q_get(quarters, _at(quarters, omap, j), "cogs")
         if c is None:
             return None
         cogs_ttm += c
@@ -167,11 +250,11 @@ def _dio_at(quarters: Any, idx: int) -> float | None:
 # ════════════════════════════════════════════════════════════════
 # ① 合約負債（35）
 # ════════════════════════════════════════════════════════════════
-def _score_contract_liab(quarters: Any) -> tuple[float, bool, str, dict]:
+def _score_contract_liab(quarters: Any, omap: dict[int, int] | None) -> tuple[float, bool, str, dict]:
     """回 (score, cl_na, reason, metrics)。cl_na=True 表示無合約負債科目（不當壞事,標降級）。"""
-    cl_t = _q_get(quarters, 0, "contract_liab")
-    cl_t1 = _q_get(quarters, 1, "contract_liab")
-    cl_t4 = _q_get(quarters, 4, "contract_liab")
+    cl_t = _q_get(quarters, _at(quarters, omap, 0), "contract_liab")
+    cl_t1 = _q_get(quarters, _at(quarters, omap, 1), "contract_liab")
+    cl_t4 = _q_get(quarters, _at(quarters, omap, _QUARTERS_PER_YEAR), "contract_liab")
 
     if cl_t is None:
         return 0.0, True, "⚪合約負債：無此科目（服務/金融業常見，信心降級）", {
@@ -211,10 +294,10 @@ def _score_contract_liab(quarters: Any) -> tuple[float, bool, str, dict]:
 # ════════════════════════════════════════════════════════════════
 # ② 毛利率走揚（25）
 # ════════════════════════════════════════════════════════════════
-def _score_gross_margin(quarters: Any) -> tuple[float, str, dict]:
-    gm_t = _gm_at(quarters, 0)
-    gm_t1 = _gm_at(quarters, 1)
-    gm_t4 = _gm_at(quarters, 4)
+def _score_gross_margin(quarters: Any, omap: dict[int, int] | None) -> tuple[float, str, dict]:
+    gm_t = _gm_at(quarters, omap, 0)
+    gm_t1 = _gm_at(quarters, omap, 1)
+    gm_t4 = _gm_at(quarters, omap, _QUARTERS_PER_YEAR)
     metrics = {"gm_t": gm_t, "gm_t1": gm_t1, "gm_t4": gm_t4}
 
     if gm_t is None or gm_t1 is None or gm_t4 is None:
@@ -233,10 +316,10 @@ def _score_gross_margin(quarters: Any) -> tuple[float, str, dict]:
 # ════════════════════════════════════════════════════════════════
 # ③ 存貨週轉天數下降（20）
 # ════════════════════════════════════════════════════════════════
-def _score_inventory_days(quarters: Any) -> tuple[float, str, dict]:
-    dio_t = _dio_at(quarters, 0)
-    dio_t1 = _dio_at(quarters, 1)
-    dio_t4 = _dio_at(quarters, 4)
+def _score_inventory_days(quarters: Any, omap: dict[int, int] | None) -> tuple[float, str, dict]:
+    dio_t = _dio_at(quarters, omap, 0)
+    dio_t1 = _dio_at(quarters, omap, 1)
+    dio_t4 = _dio_at(quarters, omap, _QUARTERS_PER_YEAR)
     metrics = {"dio_t": dio_t, "dio_t1": dio_t1, "dio_t4": dio_t4}
 
     if dio_t is None or dio_t1 is None:
@@ -318,9 +401,13 @@ def score_shortage(stock: Any) -> ShortageScore:
         return _na_result(stock_id, name, TIER_INSUFFICIENT,
                           f"季財報僅 {n_q} 季（需 ≥{SHORTAGE_MIN_QUARTERS} 季算年增）")
 
-    c1, cl_na, r1, m1 = _score_contract_liab(quarters)
-    c2, r2, m2 = _score_gross_margin(quarters)
-    c3, r3, m3 = _score_inventory_days(quarters)
+    # 季序對齊表(§4.5):有 label/date → 以「季序」取 t-1 / t-4 / TTM 四季;
+    # 無標記 → None ⇒ 退回位置索引(舊行為,連續序列等價)。
+    omap = _offset_index_map(quarters)
+
+    c1, cl_na, r1, m1 = _score_contract_liab(quarters, omap)
+    c2, r2, m2 = _score_gross_margin(quarters, omap)
+    c3, r3, m3 = _score_inventory_days(quarters, omap)
     c4, r4, m4 = _score_revenue_yoy(stock.get("revenue_yoy_last3"))
 
     total = c1 + c2 + c3 + c4
@@ -332,7 +419,10 @@ def score_shortage(stock: Any) -> ShortageScore:
         tier = TIER_MID
         reasons.append("⚠️因無合約負債科目，強訊號降級為中度")
 
-    metrics = {**m1, **m2, **m3, **m4, "n_quarters": n_q}
+    # §5 可觀測性:quarter_aligned=False 代表該檔季別無 label/date 可定序,
+    # t-1 / t-4 是用「list 位置」取的(連續序列才等價)。
+    metrics = {**m1, **m2, **m3, **m4, "n_quarters": n_q,
+               "quarter_aligned": omap is not None}
     return ShortageScore(
         stock_id=stock_id, name=name, total=total, tier=tier,
         tier_icon=TIER_ICONS.get(tier, ""),

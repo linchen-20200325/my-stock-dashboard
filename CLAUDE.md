@@ -453,17 +453,23 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 
 ### 8.2 本專案分層與依賴硬規則（evidence: ARCHITECTURE.md §1-§7 + SPEC.md §5）
 
-**7 層架構**(由低到高,~21,323 LOC 跨 19 核心模組)：
+**7 層架構**(由低到高)：
+
+> ⚠️ **不寫 LOC / 檔數**(v19.180 稽核修正)。原文寫「~21,323 LOC 跨 19 核心模組」— 該數字沿自
+> `ARCHITECTURE.md §1.4`(v7.1 歷史表),實測 repo `**/*.py` 為 **545 檔**(量測日 2026-08-07),
+> 差距 28 倍。規模數字每次重構就失真,且沒有任何判斷依賴它 → 一律不寫在憲法裡;
+> 需要規模數字時**現場量測**,不引用本檔。下表「代表檔案」只列**判斷分層歸屬時的錨點**,
+> 不求窮舉(窮舉必然漏、必然過期;窮舉的工作交給 `tests/test_c3_layering_guard.py`)。
 
 | 層 | 職責 | 代表檔案 |
 |---|---|---|
 | **L0 Infra** | 常數 / TTL / 門檻 / 全域 config | `src/config/{config,data_config,persona,stock_names}.py`(v18.359 F-6.1 搬入)、`shared/ttls.py`、`shared/thresholds.py`、`shared/health_thresholds.py`、`shared/fred_series.py`、`shared/roc_calendar.py`(民國↔西元 SSOT,B3 v19.152)、`shared/finmind_subject_aliases.py`(FinMind 科目別名 SSOT,B4 v19.152) |
 | **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`(B8 v19.155-156 拆分 2545→1734:抽出 `financial_statements_fetcher.py`(財報體檢原始數據,B8-a)+ `data_loader_inst_fetchers.py`(TWSE/TPEX 三大法人 fallback,B8-b),皆同 `src/data/core/`,套件 __getattr__ / import-back 轉發介面不變)、`data_registry.py`、`proxy_helper.py`、`scripts/update_macro_history.py`(cron CLI,v18.359 F-2 搬入)、`scripts/update_forward_test_freeze.py`(前進式驗證每月凍結 cron CLI,v19.147)、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`(含 `fetch_etf_close_history`,B7-a 從 UI 下沉)、`tw_stock_data_fetcher.py`、`src/data/portfolio/forward_test_store.py`(前進式驗證本地落地 parquet,v19.147) |
-| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`(含 `compute_macd` + `weekly_macd_hist` MACD SSOT kernel,B6 v19.153)、`macro_signal_lookback_tw.py`、`compute/screener/{fundamental_prescreen,shortage_screener,rs_leader_screener,cross_quarter_trends,forward_test}.py`、`compute/risk/risk_contribution.py`(~~`merrill_clock.py`~~ v18.359 F-4 已刪) |
+| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`(含 `compute_macd` + `weekly_macd_hist` MACD SSOT kernel,B6 v19.153)、`compute/screener/{fundamental_prescreen,shortage_screener,rs_leader_screener,cross_quarter_trends,forward_test}.py`、`compute/risk/{risk_contribution,risk_radar}.py`(⚠️ `risk_radar` 見 §8.2.A.2 **V-RADAR-1**)(~~`merrill_clock.py`~~ v18.359 F-4 已刪;~~`macro_signal_lookback_tw.py`~~ **零 production caller,見 §8.2.A.2 死碼表**) |
 | **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_structured_summary.py`、`daily_checklist.py`、`macro_state_locker.py`(① 接線 v19.148:`get_macro_state` canonical 總經契約 + `normalize_regime` 中→英)、`services/{fundamental_screener_service,rs_leader_service,shortage_screener_service,forward_test_service}.py`(選股網編排,v19.14x;`fundamental_screener_service.get_ranked_picks` = 畫面/cron 同源排名,v19.147)(~~`ai_engine.py`~~ P5-DEAD-δ 已刪、~~`unified_decision.py`~~ F-4 已刪) |
 | **L4 Render** | 圖表生成 / 通用 UI 元件（無 Streamlit container） | `chart_plotter.py`、`etf_render.py`、`ui_widgets.py`、`render/risk_contribution_render.py`(v19.138) |
-| **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`pattern_targets_ui.py`(型態目標價,`render_pattern_targets_for_ticker` 內嵌 🔬 個股 + 🏆 個股組合;v19.164 組合改**批次表 + 下鑽共用批次 df**,無獨立分頁;v19.174 去識別化改名,舊檔名/函式名為人名羅馬拼音,舊名 alias 過渡中)、`etf_dashboard.py`、`etf_tab_*.py`(**~~體檢轉機獨立分頁~~(舊檔名帶人名縮寫,v19.174 不再列出) v19.164 退役真刪**:「找體質差→變好」轉機能力已合併進 🏆 個股組合「📊 財報趨勢×轉機」區塊 — `compute_one_stock_trend` 用同一份季快照附帶算 `diff_verdict`,零額外抓取、去第二輸入框 + 去重複第二張表) |
-| **L6 App** | session_state 路由 + 全域編排 | `app.py`(882 LOC,僅 orchestrator;原 7,300 經 R7/R8/B3-γ/B3-δ 等多輪重構收斂,B9 v19.157 同步) |
+| **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`pattern_targets_ui.py`(型態目標價,`render_pattern_targets_for_ticker` 內嵌 🔬 個股 + 🏆 個股組合;v19.164 組合改**批次表 + 下鑽共用批次 df**,無獨立分頁;v19.174 去識別化改名,舊檔名/函式名為人名羅馬拼音,舊名 alias 過渡中)、`etf_dashboard.py`、`etf_tab_*.py`(含 `etf_tab_smart.py` — ⚠️ L5 自建 cache 層,見 §8.2.A.2 **V-SMART-CACHE-1**)(**~~體檢轉機獨立分頁~~(舊檔名帶人名縮寫,v19.174 不再列出) v19.164 退役真刪**:「找體質差→變好」轉機能力已合併進 🏆 個股組合「📊 財報趨勢×轉機」區塊 — `compute_one_stock_trend` 用同一份季快照附帶算 `diff_verdict`,零額外抓取、去第二輸入框 + 去重複第二張表) |
+| **L6 App** | session_state 路由 + 全域編排 | `app.py` — ⚠️ **尚非純 orchestrator**(原文寫「882 LOC,僅 orchestrator」,兩項皆不實):`_bps()` 造 requests.Session(L1 職責)、`gemini_call()` 直打 Gemini HTTP(L3 職責)、`_build_llm_context()`(L3)、選股網整段內嵌 UI+編排邏輯(L5)。詳見 §8.2.A.2 **V-APP-1** |
 
 **硬規則（violation = 違憲）**：
 - ❌ **L1 Data 不得 import streamlit** — 資料層脫離 UI 框架,可單獨測試
@@ -479,14 +485,83 @@ etf_fetch.py (L1, I/O) → etf_calc.py (L2, 純函式) → etf_render.py (L4, �
 
 **8.2.A 已知例外清單**（豁免 §8.2 硬規則的特定模式,需明確標註理由）：
 
-| ID | 檔:行 | 例外規則 | 理由 |
+---
+
+#### 8.2.A.0 這份清單怎麼維護（v19.180 新增 — 讀者請先看這段）
+
+> **本節存在的理由**:2026-08-07 唯讀稽核發現本清單已嚴重失真 — EX-CACHE-1 寫「已收齊 9 處」實測 24 檔、
+> EX-PASSTHRU-1 寫「25+ 處」實測 70+ 處且**行號 100% 過期**(唯一還對的是 `macro/handlers.py:51`)、
+> 註 2 宣告「已移出例外」的檔案早被加回、註 1 把違憲寫成合憲。
+> 一份**會說謊的憲法比沒有憲法更危險** —— 後續每次 AI 判斷都建立在錯資訊上。故立下列維護規則。
+
+**規則 1｜禁止寫行號。** 例外一律以「**檔案路徑 + 符號名 + 模式描述**」登記。
+行號在任何一次重構後就失效,而重構**不會**觸發本清單更新 → 行號是「保證會過期的資訊」。
+（本節 v19.180 已把全部既有行號拔除。）
+
+**規則 2｜禁止寫「共 N 處」「已收齊」「全域重盤」等窮舉宣稱。**
+窮舉清單只要漏一筆就變成「未登錄軟例外」,而 §8.2.A 自己禁止軟例外 → 清單違反自己。
+改寫「**適用模式 + 判定準則**」,讓讀者能自行判斷任一新檔是否落在例外內,不必比對名單。
+
+**規則 3｜清單由測試強制,不由人工維護。**
+分層規則的**窮舉**工作屬 `tests/test_c3_layering_guard.py`（C3,另組撰寫中）。該測試應：
+- 以 AST 掃描實作 §8.2 五條硬規則(L1↛streamlit / L2↛IO / L0↛L1+ / L5·L6↛L1 / 跨層上行);
+- 例外以**測試檔內的白名單常數**表達(檔案+符號,非行號),白名單即 machine-readable SSOT;
+- 白名單與本節文字**任一方新增都必須同步另一方**,否則測試紅燈。
+→ 本節文字負責「**為什麼**豁免」(人讀),測試白名單負責「**豁免了誰**」(機器讀)。
+**C3 落地後,本節的檔案列舉應改為指向測試白名單,不再在 .md 內重複維護。**
+
+**規則 4｜會漂移的量測值一律標日期或不寫。**
+LOC / 檔數 / 「N 處」都屬此類。若非寫不可,格式為「〈值〉(量測日 YYYY-MM-DD)」,
+讓讀者一眼知道它可能過期;否則直接不寫。
+
+**規則 5｜豁免理由必須是「為什麼這個位置是對的」,不是「它長得像什麼」。**
+反例(本節 v19.180 修正的真實錯誤):原註 1 寫
+「`render_leading_table` **是 render fn 而非 fetcher**,合 L4 / 略豁」——
+但該函式定義在 `src/data/macro/leading_indicators.py`(**L1**)。
+「它是 render fn」正是它**不該住在 L1** 的理由,不是豁免理由。**理由倒置 = 把違憲寫成合憲。**
+寫豁免理由前先自問:我在解釋這個設計為何正確,還是在替一個已知錯誤找說法?(對照 §1 判斷準則)
+
+---
+
+#### 8.2.A.1 生效中的例外
+
+| ID | 適用範圍（檔案 + 符號,**不寫行號**） | 例外規則 | 理由 |
 |---|---|---|---|
-| EX-L0-1 | `config.py:126-141` | L0 條件 import streamlit | 限於 `st.secrets` bootstrap 讀 FINMIND_TOKEN；`try/except ImportError` 已護純 .py 環境;**無 UI lifecycle 依賴**(不用 cache_data/session_state)。替代方案(移 L3 + 改函式)會打破所有 caller 介面,ROI 低。v18.241 A1 註記 |
-| **EX-CACHE-1** | L1/L2 全層 — **已收齊 9 處 letter compliant**(P2-EX v18.393 → Phase 2 v18.422~426 補 4 處):<br>- `src/data/etf/etf_fetch.py:16-30`<br>- `src/data/macro/leading_indicators.py:19-33`<br>- `src/data/proxy/yf_proxy.py:22-37`<br>- `src/data/core/data_loader.py:19-32`<br>- `src/data/stock/tw_stock_data_fetcher.py:23-38`<br>- `src/compute/etf/etf_calc.py:7-21`(Phase 2 V1 v18.422)<br>- `src/compute/etf/etf_quality.py:18-30`(Phase 2 V2 v18.422)<br>- `src/data/macro/foreign_flow_fetcher.py:24-37`(Phase 2 Batch 3a v18.425,R-UI-FETCH-1 遷出 hot_money)<br>- `src/data/stock/chip_concentration_fetcher.py:38-51`(Phase 2 Batch 3b v18.426,R-UI-FETCH-2 遷出 chip_radar)<br>(另:`src/data/macro/macro_alert.py` 用等價 `_safe_cache` inline 函式) | **`@st.cache_data` / `@st.cache_resource` 條件 import** | Streamlit Cloud cache 是部署架構核心,提供跨 session 共享 + TTL 自動失效,functools.lru_cache 不等價。**允許**在 L1/L2 模組頂部寫 `try: import streamlit as st / except ImportError: 定義 no-op fallback decorator`,前提:**完全不用** `st.session_state` / `st.error()` / `st.markdown()` 等真 UI 呼叫。違反此條件者(原 `data_loader.py:18` 同時用 session_state)**不適用本例外**,須走真重構。**S-H1 v18.244**:data_loader 內死碼 `safe_fetch_strict` 已刪除,現符合 EX-CACHE-1。**S-H3 v18.244**:etf_fetch 4 處 st.error/warning/session_state 已下沉至 print + module-level dict,現符合 EX-CACHE-1。**P2-EX v18.393**:5 處原為無條件 `import streamlit as st`(軟例外)全補 try/except + `_NoOpST` fallback,letter compliant。**Phase 2 V1+V2 v18.422 + Batch 3a/3b v18.425/426**:再補 4 處,etf_calc/etf_quality 收 letter compliance,foreign_flow/chip_concentration 從 L5 UI 遷至 L1 並採同模式。 |
-| **EX-OAUTH-1** | `src/data/portfolio/oauth_state.py:25` 無條件 `import streamlit as st` + 用 `st.success` / `st.error` / `st.rerun`(L1 含真 UI 呼叫,超出 EX-CACHE-1 範圍)| **L1 Data 含 OAuth callback flash** | OAuth `handle_oauth_callback()` 屬 auth callback middleware 本質(URL `?code=` exchange → token → flash 訊息 → rerun),類比 web framework session lifecycle。同 EX-L0-1 將 streamlit lifecycle 視為部署框架特性(非業務 UI)。原位於 `src/ui/pages/oauth_state.py`(命名錯誤,從未渲染 UI),v18.400 D4 為解 `gsheet_portfolio.py:50/104/121` 的 L1→L5 反向違憲而搬正至 L1。替代方案(把 callback 拆 L5 UI + L1 client / 或抽 framework adapter)會打破現有 OAuth 流程 + ROI 低。檔內 docstring 已說明,本例外正式登錄於此(v18.431 補)。**升級觸發條件**:若未來新增多 OAuth provider(Twitter / GitHub 等)→ 升級 L4 framework adapter。<br>**v19.159 團隊稽核擴充**:`gsheet_portfolio.py:56/84/110` 讀 `st.session_state`(gsheet_tokens / portfolio_sheet_id)同屬 OAuth session lifecycle(token 取用),納入本例外涵蓋;替代方案(caller 注入 token/sheet_id)打破現有 OAuth flow + ROI 低。 |
+| EX-L0-1 | `src/config/config.py` — secrets bootstrap 段條件 `import streamlit as _st` | L0 條件 import streamlit | 限於 `st.secrets` bootstrap 讀 FINMIND_TOKEN；`try/except ImportError` 已護純 .py 環境;**無 UI lifecycle 依賴**(不用 cache_data/session_state)。替代方案(移 L3 + 改函式)會打破所有 caller 介面,ROI 低。v18.241 A1 註記 |
+| **EX-CACHE-1** | **依模式判定,不列名單**（v19.180 改）— 適用於 `src/data/**` + `src/compute/**` 任一模組,只要同時滿足下列 3 條：<br>① 以 `try: import streamlit as st / except ImportError: _NoOpST` 條件 import（或等價的 inline `_safe_cache` wrapper,如 `src/data/macro/macro_alert.py`）;<br>② 全檔 streamlit 使用**僅限** `@st.cache_data` / `@st.cache_resource` / `st.secrets`;<br>③ **零** `st.session_state` / `st.error` / `st.warning` / `st.markdown` / `st.rerun` 等真 UI 呼叫。<br>⚠️ 2026-08-07 量測:符合本模式者 **24 檔**(`src/data/**` 21 + `src/compute/**` 3)。原文寫「已收齊 9 處」並逐一列名 → 實際漏登 12 檔(`daily_data_fetchers` / `financial_statements_fetcher` / `macro_snapshot` / `app_stock_fetchers` / `monthly_revenue_fetcher` / `quarterly_financials_fetcher` / `dividend_fetcher` / `share_capital_fetcher` / `fundamentals_snapshot_loader` / `news_fetcher` / `proxy_helper` / `exit_signals`)。**該 12 檔寫法全部合格**,問題純粹是清單沒跟上 → 依 §8.2.A.0 規則 2 改為模式判定,窮舉交 `tests/test_c3_layering_guard.py`。 | **`@st.cache_data` / `@st.cache_resource` / `st.secrets` 條件 import** | Streamlit Cloud cache 是部署架構核心,提供跨 session 共享 + TTL 自動失效,`functools.lru_cache` 不等價(無跨 session、無 TTL)。故允許 L1/L2 條件 import streamlit **僅為取得 cache decorator**。<br>**不適用本例外的情形**(須走真重構或另立例外):任何真 UI 呼叫。歷史案例:`data_loader` 曾同時用 `st.session_state`(S-H1 v18.244 刪死碼後合規)、`etf_fetch` 曾用 `st.error/warning/session_state`(S-H3 v18.244 下沉 print + module-level dict 後合規)。<br>**注意 `src/compute/**` 的額外限制**:L2 用本例外只能為 cache;若同時 import `requests` / `proxy_helper` / `yfinance` / FinMind SDK 則另外違反 §8.2「L2 不得 I/O」,**本例外不涵蓋**（現況見 §8.2.A.2 的 `risk_radar`）。 |
+| **EX-OAUTH-1** | `src/data/portfolio/oauth_state.py` — **無條件** `import streamlit as st` + `handle_oauth_callback()` 內用 `st.success` / `st.error` / `st.rerun`(L1 含真 UI 呼叫,超出 EX-CACHE-1 範圍)<br>`src/data/portfolio/gsheet_portfolio.py` — 讀 `st.session_state['gsheet_tokens']` / `['portfolio_sheet_id']`(v19.159 擴充納入) | **L1 Data 含 OAuth callback flash / token 取用** | OAuth `handle_oauth_callback()` 屬 auth callback middleware 本質(URL `?code=` exchange → token → flash 訊息 → rerun),類比 web framework session lifecycle。同 EX-L0-1 將 streamlit lifecycle 視為部署框架特性(非業務 UI)。原位於 `src/ui/pages/oauth_state.py`(命名錯誤,從未渲染 UI),v18.400 D4 為解 `gsheet_portfolio` 的 L1→L5 反向違憲而搬正至 L1。替代方案(把 callback 拆 L5 UI + L1 client / 或抽 framework adapter / caller 注入 token+sheet_id)會打破現有 OAuth 流程 + ROI 低。檔內 docstring 已說明,本例外正式登錄於此(v18.431 補,v19.159 擴充)。**升級觸發條件**:若未來新增多 OAuth provider(Twitter / GitHub 等)→ 升級 L4 framework adapter。 |
 | ~~EX-AI-1~~(已退役 v18.399 P5-DEAD-δ) | ~~`ai_engine.py` 全檔 public 函式~~ | ~~LLM 輸出回 **str** 而非 `LLMOutput`~~ | **v18.399 P5-DEAD-δ 整檔真刪**:AST-strict audit 確認 ai_engine.py 5 個 public fn 全 dead(0 production caller / 1 test ref / 1 internal helper 串到另一個 dead fn)。EX-AI-1 例外原文寫「~10+ caller」實際 0 — 例外建立在錯誤前提。真 production AI 走 `app.py:gemini_call` + `ai_fetcher.post_gemini` + `ai_structured_summary.build_structured_summary_prompt` 三條路,本例外正式退役。 |
-| **EX-PASSTHRU-1** | UI 直呼以下 L1 fetcher(無對應 L3 業務 wrapper)— **U3 v18.403 全域重盤收齊 25+ 處**:<br>**Module-level import**:<br>- `app.py:62` `from src.data.core import StockDataLoader, _LOADER_VERSION`<br>- `src/ui/etf/etf_dashboard.py:16` `from src.data.etf import ...`<br>- `src/ui/tabs/tab_stock.py:68` `from src.data.core import fetch_bps, fetch_industry_category`<br>- `src/ui/tabs/macro/section_mid.py:17` `from src.data.macro import check_macro_alerts, fetch_macro_snapshot`(v19.159:render_macro_alerts 已歸位 L4 macro_ui_components)<br>**Lazy import**(button click / on-demand):<br>- `src/ui/tabs/tab_edu.py:29,154` `from src.data.proxy import fetch_url`、`from src.data.core import get_categories ...`<br>- `src/ui/tabs/yield_screener.py:33,80` `from src.data.proxy import fetch_url / get_proxy_config`(實際走 L3 yield_screener_service)<br>- `src/ui/tabs/macro/section_short.py:311` `from src.data.macro import fetch_twse_breadth`<br>- `src/ui/tabs/macro/section_state.py:140` `from src.data.macro import ...`<br>- `src/ui/tabs/macro/handlers.py:51` `from src.data.proxy import proxy_helper`(cache clear button)<br>- `src/ui/tabs/tab_stock.py:249,260,2723` `fetch_financial_statements / fetch_stock_news / fetch_5_years_cash_flow`<br>- `src/ui/tabs/tab_stock_grp.py:74` `from src.data.news import fetch_stock_news`(R8 v18.398 新增)<br>- `src/ui/tabs/tab_stock_grp.py` `from src.data.stock.picker_fetcher import fetch_stock_history_1y`(v19.138 風險貢獻分解 button-gated lazy;pass-through、L1 內已 @st.cache_data,同 tab_stock_picker 既有用法)<br>- `src/ui/tabs/tab_macro.py:119,123,130` `src.data.macro` × 2 + `from src.data.news import fetch_macro_news`<br>- `src/ui/tabs/macro/section_news_ai.py:30` `from src.data.news import fetch_macro_news`<br>- `src/ui/tabs/tab_stock_picker.py:282,329,868` `picker_fetcher / core / etf` 3 處<br>- `src/ui/tabs/chip_radar.py:194` `from src.data.proxy import fetch_url`<br>- `src/ui/tabs/hot_money.py:142` `from src.data.macro import finmind_get`<br>- `src/ui/etf/etf_tab_single.py:116,145,684,739` `fetch_etf_zh_name / fetch_etf_manager / is_active_etf / _fetch_news_for` 4 處<br>- `src/ui/etf/etf_tab_portfolio.py:818,1072` `oauth_state(D4 已歸位 L1)/ gsheet_portfolio`<br>- `src/ui/pages/api_diagnostic.py:122` `from src.data.proxy import get_proxy_config`<br>- `src/ui/pages/health_inspector.py:248,275,331,1071,1139,1180` 6 處診斷頁 lazy fetch<br>- `src/ui/tabs/tab_stock_grp.py` `_grp_load_holdings_callback` → `from src.data.portfolio import gsheet_portfolio`(v19.164 帶入持股移到組合唯一輸入旁;on_click callback lazy pass-through。~~原體檢轉機獨立分頁:85,220~~(舊檔名帶人名縮寫,v19.174 不再列出)該檔 v19.164 退役真刪,財報體檢改由 `compute_one_stock_trend` 經 L3 service 注入,不再直呼 L1)<br>- `src/ui/tabs/pattern_targets_ui.py` `from src.data.stock.picker_fetcher import fetch_stock_history_1y`(v19.162 型態目標價,v19.174 去識別化改名;button-gated lazy pass-through、L1 已 @st.cache_data。v19.164 組合下鑽改吃 preloaded 批次 df,不重抓)<br>**L4 Render lazy fallback**:<br>- `src/ui/render/etf_render.py:277` `from src.data.etf import fetch_etf_holdings`(holdings 未預傳時 lazy 抓,P5-B1 漏網 1 處;rationale:fallback 抓比強制 caller pre-fetch 對 ETF 多檔 dashboard 體驗較佳)<br>(註 1:`src/ui/tabs/macro/section_chips.py:22 render_leading_table` 是 render fn 而非 fetcher,合 L4 / 略豁)<br>(註 2:`src/ui/etf/etf_tab_grp_compare.py:25` 已 R4 升 `src/services/etf_grp_compare_service.py`,移出例外)<br>(註 3:`src/ui/tabs/tab_stock_grp.py:37,68-72` 已 R1 升 `src/services/stock_grp_service.py`,移出例外) | L5 UI Tab / L6 App / L4 Render lazy fallback 可直接 import L1 「pass-through 用 + 無 L3 業務值」的 fetcher | §8.2 規則「cache 才能集中」核心理由失效於本場景:L1 模組內已用 `@st.cache_data`(EX-CACHE-1)集中緩存,L3 wrapper 加一層只是 pure pass-through = §8.1 step 6「用不到的抽象」反例。Lazy import 多在 button click / on-demand 場景,延遲 import 避免 module load 時跑全 dependency chain。**升級觸發條件**:若未來新增跨多 fetcher 統一 TTL、多源 fallback chain、或結果後處理 → 升級 L3 service。S-H5/S-H6 v18.244 + P2-EX v18.393 + P5-B2 v18.396 + U3 v18.403 全域重盤決策。 |
+| **EX-PASSTHRU-1** | **依模式判定,不列名單**（v19.180 改）— L5 UI Tab / L6 App / L4 Render 直接 `from src.data.* import <fetcher>`,只要滿足：<br>① 該 fetcher **無對應 L3 service**,且 caller 端**只是取數**（無多源 fallback、無跨 fetcher TTL 統一、無結果後處理）;<br>② 該 fetcher 在 L1 內已自帶 `@st.cache_data`（即 EX-CACHE-1 已集中緩存）。<br>⚠️ 2026-08-07 量測:符合本模式者 **70+ 處 import 陳述,散佈 `src/ui/**` 約 28 檔 + `app.py`**。原文寫「U3 v18.403 全域重盤收齊 25+ 處」並逐一列行號 → 覆蓋率約 4 成、**行號幾乎全數過期**(逐一比對後唯一仍正確的是 `src/ui/tabs/macro/handlers.py:51`)。依 §8.2.A.0 規則 1+2 改為模式判定。<br>**集中度最高的 caller**（給讀者定位用,非窮舉）:`tab_stock_picker` / `health_inspector` / `etf_tab_single` / `etf_tab_portfolio` / `etf_tab_smart` / `tab_stock` / `tab_stock_grp` / `tab_macro` / `macro/section_*` / `stock_grp_sections/section_*` / `stock_sections/section_*` / `app.py`。<br>**L4 Render lazy fallback**（同屬本例外,理由:fallback 抓比強制 caller pre-fetch 對多檔 dashboard 體驗佳）:`src/ui/render/etf_render.py` → `fetch_etf_holdings`;`src/ui/render/app_render.py` → `fetch_macro_compass`;`src/ui/render/macro_ui_components.py` → `macro_alert.alert_summary`。<br>**⚠️ 明確排除**（**不**適用本例外,見 §8.2.A.2 待修）:`src/ui/tabs/tab_stock_picker.py` 直呼 `src.data.core.data_loader._fm_raw_headers`（**private symbol**,非 public pass-through API,pass-through 前提不成立）。<br>**已解決,移出清單**:<br>- `app.py` → `StockDataLoader`：**已遷** `src/ui/tabs/stock_grp_sections/section_batch_fetcher.py`,`app.py` 不再持有(2026-08-07 複驗)<br>- `src/ui/tabs/yield_screener.py`：**已全部改走** L3 `src/services/yield_screener_service.py`,0 直呼 L1(2026-08-07 複驗)<br>**⚠️ 已解決宣告被推翻,重新納入例外**:`src/ui/etf/etf_tab_grp_compare.py` — 原註 2 宣告「已 R4 升 `etf_grp_compare_service`,移出例外」,但該檔 v18.452 又加回 `from src.data.etf import fetch_etf_zh_name`(另有 `src.data.core.provenance` import)。**升級後又退回 = 例外必須重新登記**,不能靠一次性宣告永久除名 → 正是 §8.2.A.0 規則 3(清單須由測試強制)要防的失效模式。 | L5 UI Tab / L6 App / L4 Render lazy fallback 可直接 import L1 「pass-through 用 + 無 L3 業務值」的 **public** fetcher | §8.2 規則「cache 才能集中」核心理由失效於本場景:L1 模組內已用 `@st.cache_data`(EX-CACHE-1)集中緩存,L3 wrapper 加一層只是 pure pass-through = §8.1 step 6「用不到的抽象」反例。Lazy import 多在 button click / on-demand 場景,延遲 import 避免 module load 時跑全 dependency chain。**升級觸發條件**:若未來新增跨多 fetcher 統一 TTL、多源 fallback chain、或結果後處理 → 升級 L3 service。S-H5/S-H6 v18.244 + P2-EX v18.393 + P5-B2 v18.396 + U3 v18.403 決策沿用,僅登記方式改為模式判定。 |
 | ~~EX-RENDER-1~~(已升級退役 v18.396 P5-B1) | ~~`src/ui/render/etf_render.py:11`~~ | ~~L4 Render 直 import L1 Data fetcher~~ | **v18.396 P5-B1 已重構**:L4→L3→L1 走 `src/services/etf_sector_service.py`(L3 wrapper),封裝 `get_sector_returns(*, refresh=False)` + `get_news_for(...)`。L4 anti-pattern `_fetch_sector_returns.clear()` 已下沉至 L3 service。本例外正式退役,不再需要登錄。 |
+
+---
+
+#### 8.2.A.2 待修違憲清單（**不是**例外 — 這些沒有豁免理由,只是還沒修）
+
+> 2026-08-07 唯讀稽核新增。與 §8.2.A.1 的差別:**上表是「這樣寫是對的」,本表是「這樣寫是錯的,待修」**。
+> 兩者放在一起是為了避免下一個讀者又把違憲誤當例外(§8.2.A.0 規則 5)。
+> **依 §-1**:本表**不構成**主動動工的授權 —— 沒有 user 指派 / 沒有實際 bug 觸發就不要碰。
+> 本表的用途是:(a) 動到這些檔案時知道現況、(b) 給 `tests/test_c3_layering_guard.py` 當初始 xfail 清單。
+
+| ID | 位置（檔案 + 符號） | 違反哪條硬規則 | 說明 |
+|---|---|---|---|
+| **V-RADAR-1** | `src/compute/risk/risk_radar.py` — module-level `from src.data.macro import fetch_fred, fetch_yf_close`;函式內 `from src.data.proxy import fetch_url` + 呼叫 + `pd.read_csv(io.StringIO(r.text))` | L2 不得 import `requests`/`proxy_helper`/yfinance;L2↛L1 | **規則字面點名禁止的 `proxy_helper`**,經 `src.data.proxy` barrel(PEP 562 `__getattr__`)轉發而躲過人工 grep。且 L2 純函式層直接做 HTTP + CSV 解析。修法:抽 fetch 至 L1,`risk_radar` 只收 DataFrame |
+| **V-L0-NAME-1** | `src/config/stock_names.py` — `get_stock_name` / `refresh` 內 late import `from src.data.core.stock_names_fetcher import ...` | L0 不得依賴任何 L1+ | late import **不改變依賴方向**,只是把違憲藏在函式體內躲過 module-level grep。檔內註解自陳「lazy import 避 L0 啟動時拉 requests」= 已知有依賴。修法:靜態表留 L0,動態查詢介面上移 |
+| **V-FT-STORE-1** | `src/data/portfolio/forward_test_store.py` — `from src.compute.screener.forward_test import PICK_SNAPSHOT_HEADERS` | L1 不得 import L2 | 只為取一個 schema 常數。修法:`PICK_SNAPSHOT_HEADERS` 下沉 `shared/forward_test_thresholds.py`(L0),L1+L2 都從 L0 取 → 反向消除。**低風險、高 ROI** |
+| **V-CHECKLIST-1** | `src/services/daily_checklist.py` — `from src.ui.render.macro_ui_components import` 8 個畫圖函式(`sparkline` / `multi_chart` / `bar_chart_institutional` / `stat_card` / `margin_card` / `section_header` / `_hex2rgba` / `_base_layout`) | L3 不得 import L4/L5 | ⚠️ `ARCHITECTURE.md §0.10` 把這條寫成「**為 L4 import 合規**」— **理由倒置**,同 §8.2.A.0 規則 5 所述錯誤(L3→L4 正是硬規則明文禁止的方向)。本檔現為純 re-export barrel,這 8 個 re-export 是為了讓舊 caller `from daily_checklist import sparkline` 不用改。修法:caller 改直接 import L4,barrel 刪掉這段 |
+| **V-LEAD-RENDER-1** | `src/data/macro/leading_indicators.py` — `def render_leading_table(df)`（L1 檔內定義 render 函式）;consumer:`src/ui/tabs/macro/section_chips.py`、`src/ui/tabs/tab_macro.py` | L1 不得 import streamlit / 不得含 UI | ⚠️ **原 EX-PASSTHRU-1 註 1 把這條寫成合憲**（「是 render fn 而非 fetcher,合 L4 / 略豁」）。理由倒置:它是 render fn ⇒ 它不該住 L1。修法:整個函式移至 `src/ui/render/`(L4),L1 只留資料 |
+| **V-PICKER-PRIV-1** | `src/ui/tabs/tab_stock_picker.py` — 4 處 `from src.data.core.data_loader import _fm_raw_headers` | L5 不得直呼 L1（且 EX-PASSTHRU-1 不涵蓋 private symbol） | 跨層直取**底線開頭的私有符號**,連 pass-through 的前提(public API)都不成立。修法:`_fm_raw_headers` 若真要跨層用就轉 public + 登記;否則改走 L3 |
+| **V-APP-1** | `app.py` — `_bps()`(造 `requests.Session`,L1 職責)、`gemini_call()`(直打 Gemini HTTP,L3 職責)、`_build_llm_context()`(L3)、選股網區塊(整段 UI + 編排,L5) | L6 應僅 orchestrate | 原 §8.2 寫「僅 orchestrator」不實。另:`_bps()` 與 `src/services/daily_checklist.py` 的 `_bps()` **程式碼完全重複**(§3.3 SSOT)。修法:`_bps` 收 L1 單一出處;`gemini_call` 移 L3(`src/services/app_ai_service.py` 已存在);選股網移 L5 |
+| **V-UP-APP-1** | 5 處 `from app import`(L5→L6):`src/ui/tabs/tab_stock_grp.py`(×2)、`src/ui/tabs/tab_stock.py`、`src/ui/tabs/tab_macro.py`、`src/ui/tabs/macro/section_news_ai.py` — 取 `gemini_call` / `api_key` / `parse_stocks` | 跨層上行 import | 靠 `app.py` 頂部的 `_AppProxy` module hack 才不會循環 import。`gemini_call` 一旦依 V-APP-1 移至 L3,這 5 處自然消失(**同一根因**) |
+| **V-SMART-CACHE-1** | `src/ui/etf/etf_tab_smart.py` — 5 個 `@st.cache_data(ttl=<literal>)` 自建 cache 函式(`_cached_price` / `_cached_peer_prices` / `_cached_holdings` / `_cached_price_long` / `_cached_zh_name`) | §8.2「cache 才能集中」+ §3.3 反捏造 | L5 自建快取層 = 把本該在 L1 集中的 TTL 分散到 UI;且 5 個 `ttl=` 全是 inline 數字(1800/3600/3600/7200/86400),**未走 `shared/ttls.py` SSOT** → 同時違反 §3.3。修法:cache 下沉 L1 fetcher,或至少 ttl 改引 `TTL_30MIN` / `TTL_1HOUR` / `TTL_2HOUR` / `TTL_1DAY` |
+
+**已確認死碼（非違憲,但 §8.2 代表檔清單不該再列它）**
+
+| 位置 | 現況 |
+|---|---|
+| `src/compute/macro/macro_signal_lookback_tw.py` | **零 production caller**（2026-08-07 複驗:全 repo 只剩 `src/compute/macro/__init__.py` barrel、tests、`scripts/` 診斷腳本、以及各處註解 / docstring 引用）。與 `STATE.md` 既有判定一致。⚠️ 但 §4.1 單位陷阱表仍以本檔為 evidence — 刪檔前需先把 evidence 改指 `shared/signal_thresholds.py` 與 `shared/margin_schema.py`，否則會製造新的失真 |
+
+---
 
 **符合 EX-CACHE-1 的標準寫法**(P2-EX v18.393 補 `secrets`):
 ```python
@@ -505,19 +580,36 @@ except ImportError:
     st = _NoOpST()  # noqa
 ```
 
-新增例外**必須**:(1) 在此表登錄、(2) 對應檔案加註解指回此表、(3) PR 描述附理由。**禁止**未經登錄的潛在「軟例外」。
+新增例外**必須**:(1) 在 §8.2.A.1 登錄（寫**模式**,不寫行號）、(2) 同步 `tests/test_c3_layering_guard.py` 白名單、(3) 對應檔案加註解指回此表、(4) PR 描述附理由。**禁止**未經登錄的潛在「軟例外」。
 
-### 8.3 灰色地帶（待 step 3 audit 確認是否違憲）
+⚠️ **本條在 v19.180 前形同虛設**:EX-CACHE-1 漏登 12 檔、EX-PASSTHRU-1 漏登逾半,全都是「未經登錄的軟例外」——
+清單自己違反了自己寫的禁令。根因是**靠人工同步一份窮舉名單**。§8.2.A.0 規則 3 的測試強制,
+就是為了讓「漏登 = CI 紅燈」而非「漏登 = 沒人發現」。**C3 測試落地前,本條只能靠自律,請據此打折信任本清單。**
 
-- ~~`macro_helpers.py`：分類 L2 但有輕度 I/O（讀 `macro_thresholds.json`）→ audit 看是否該抽 config-loader 到 L0~~ **S-GRAY-1 v18.244 已修**:loader 抽至 `shared/macro_calibration.py`(L0),`macro_helpers` 改 import,介面 0 改
-- **`daily_checklist.py`**：跨 L1+L2+L3(fetch + cache + 摘要 + pkl 持久化)→ audit 看是否該拆檔
-- ~~**`app.py`**：7,300 LOC,部分計算邏輯可能該下沉到 L2~~ **已收斂至 882 LOC**(R7/R8/B3-γ/B3-δ 拆 AI service / news fetcher / render / fetcher 至 L1-L4;B9 v19.157 同步),現純 orchestrator
+### 8.3 灰色地帶（audit 後的分類結果）
+
+> **v19.180 稽核重整**:本節原本 3 條裡有 2 條已過期(見下)。灰色地帶的定義是「**還沒判定**」;
+> 一旦 audit 判出結果就該搬走 —— 判定為違憲的搬 §8.2.A.2、判定為合憲的搬 §8.2.A.1、
+> 已修的畫刪除線留追溯。留在本節的只該是**真的還沒判定**的。
+
+**已結案(留追溯)**
+
+- ~~`macro_helpers.py`：分類 L2 但有輕度 I/O（讀 `macro_thresholds.json`）~~ → **S-GRAY-1 v18.244 已修**:loader 抽至 `shared/macro_calibration.py`(L0),`macro_helpers` 改 import,介面 0 改
+- ~~**`daily_checklist.py`**：跨 L1+L2+L3(fetch + cache + 摘要 + pkl 持久化)→ audit 看是否該拆檔~~ → **拆檔已完成**(PR-N1~N5 等,fetch 下沉 `src/data/daily/`、計算下沉 `shared/macro_compute.py` + `shared/stats_helpers.py`、cache 下沉 `shared/cache_layer.py`);全檔現為**純 re-export barrel**(2026-08-07 複驗:143 行,除 `_bps()` 外無實作)。<br>⚠️ **但問題換了一個**:剩下的 barrel 含 **L3→L4 上行 import**(8 個畫圖函式)+ `_bps()` 與 `app.py` 完全重複 → 已改列 §8.2.A.2 **V-CHECKLIST-1** / **V-APP-1**。原文「待 audit 是否該拆檔」已不再是待辦。
+- ~~**`app.py`**：7,300 LOC,部分計算邏輯可能該下沉到 L2~~ → 大幅收斂(R7/R8/B3-γ/B3-δ 拆 AI service / news fetcher / render / fetcher 至 L1-L4)。<br>⚠️ **但「已收斂至 882 LOC,現純 orchestrator」不實**(2026-08-07 複驗:989 行,且含 L1/L3/L5 職責)→ 已改列 §8.2.A.2 **V-APP-1**。
+
+**尚未判定（真灰色地帶）**
+
+- **`src/data/macro/macro_core.py` / `tw_macro.py` 的 fallback 鏈深度**：多源賽跑 + durable last-known-good 快照,介於 L1 取數與 L2 仲裁之間;是否該把「源優先序仲裁」抽成 L2 純函式(可單測)尚未判定。**無 bug 觸發,§-1 不主動動工。**
+- **`src/services/` 內 wrapper vs 真編排的界線**：部分 service 是 pure pass-through(等於 §8.1 step 6 的「用不到的抽象」),部分是真編排。是否該把 pure pass-through 的 service 刪掉、讓 UI 走 EX-PASSTHRU-1,尚未逐檔判定。
+
+> 📌 **提醒**:§8.4 步驟 2 寫「§8.3 灰色地帶已點名 3 處」。該數字已不成立 —— audit 時請以 §8.2.A.2 待修表 + 本節「尚未判定」為準,**不要**以為只有 3 處。
 
 ### 8.4 做到一半的新增功能 — 先盤點再動
 
 新增功能前 audit pipeline：
 1. 現有程式大致分成哪幾塊？資料怎麼流？（對照 §8.2 七層）
-2. 哪裡**違反分層**？列檔名 + 行號（§8.3 灰色地帶已點名 3 處,audit 時補上更多）
+2. 哪裡**違反分層**？列**檔名 + 符號名**（不是行號 —— §8.2.A.0 規則 1）。起點:§8.2.A.2 待修表 + §8.3「尚未判定」;**不要**假設那就是全部,audit 時實測補上。
 3. 這次的新功能該放哪一塊？會不會被現有壞結構卡住？
 4. 若需要先重構才好加,**分開提案**：「為這次必須改」vs「建議但可延後」,讓我決定範圍,**禁止**自作主張大重構。
 

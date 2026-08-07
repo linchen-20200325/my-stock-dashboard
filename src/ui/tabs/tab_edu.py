@@ -38,6 +38,13 @@ from shared.financial_health_thresholds import (  # 策略2 章節門檻 SSOT（
     FH_ROE_TOP_PCT,
 )
 from shared.fred_series import FRED_NAPM
+from shared.signal_thresholds import (  # B6-a v19.181:VCP 章風控數字改吃 SSOT
+    ATR_STOP_MULTIPLIER,
+    RR_DEFAULT_TARGET_GAIN,
+    RR_MIN,
+    STOP_LOSS_DEFAULT_PCT,
+    VCP_ATR_CONTRACTION_RATIO,
+)
 from shared.ttls import TTL_1DAY
 from src.ui.render.ui_widgets import (  # v19.175：章節標題改吃策略代號 SSOT
     STRATEGY_FINANCIAL,
@@ -48,7 +55,118 @@ from src.ui.render.ui_widgets import (  # v19.175：章節標題改吃策略代�
 
 
 # #U7：單值總經指標若 identifier 為 FRED series id → 可抓歷史序列畫 sparkline
-_FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'XTEXVA01TWM664S': 'pc1', FRED_NAPM: 'lin'}
+#
+# ⚠️ B6-a v19.181 移除 `FRED_NAPM: 'lin'`（§1 反捏造）：
+#   下方 `_single` 把 `FRED_NAPM` 這個 key 對到 `macro_info['ism_pmi']`，
+#   而該 key 的**內容其實是台灣 PMI**（`macro_snapshot.fetch_tw_pmi_block:649-659`
+#   明講「session_state key 仍為 'ism_pmi' 維持向後相容，內容是台灣 PMI」）。
+#   一旦掛上 FRED `NAPM`（**美國** ISM）序列，就會拿台灣的當期值去跟美國的
+#   歷史分布算 Z-Score（`:471 calc_z_score(_series, _val)`）—— 那個 Z 是假的，
+#   閾值線也是美規的。寧可沒有趨勢圖，也不要一個跨國混算的 Z。
+#   要恢復 sparkline，得先接上**台灣** PMI 的歷史序列（`tw_macro.fetch_pmi_history`）。
+_FRED_EDU_UNITS = {'CPILFESL': 'pc1', 'XTEXVA01TWM664S': 'pc1'}
+
+
+# ════════════════════════════════════════════════════════════════
+# B6-a v19.181 — 教學文案的「活數字」佔位符（§3.3 反捏造 / SSOT）
+# ────────────────────────────────────────────────────────────────
+# 【為什麼要有這一層】
+# 這份說明書被 user 當**學習材料**在讀。全面對帳後發現：凡是門檻 / 係數 /
+# 來源清單用**手打字串**寫進教學段落的地方，最後全都跟實作漂開了 ——
+#   - PMI 多源「賽跑 10 個源(…MacroMicro…FinMind…)」→ 實際 8 源，
+#     MacroMicro v19.113 拔除、FinMind v19.85 拔除（同一頁 :161 已是新版，
+#     原理教室那段沒跟著改 ⇒ 同一份文件自己打自己）
+#   - 衰退機率 logit 手寫 `0.5 + 0.55 × spread` → 實作是 −0.8 / −1.5
+#   - 外資期貨「系統實際 logic」手寫 −50000 + MA240 → 全站不存在這條規則
+#
+# 【對策】可被 code 證實或證偽的數字**一律不手寫**，寫成 `§§TOKEN§§`，
+# 由 `_resolve_edu_tokens()` 在 render 期從 SSOT 取值替換。
+# 之後改常數，文案自動跟著動；漏掉的 token 會**原樣印在畫面上**（不是靜默
+# 消失），等於自己會喊的 §1 fail-loud。
+#
+# 用 `§§…§§` 而不是 `str.format` 的 `{}`：教學段落裡有大量 markdown 表格與
+# code fence，套 `.format()` 會被 `{` 誤炸；token 取代是純字串替換，零風險。
+# ════════════════════════════════════════════════════════════════
+
+def _edu_tokens() -> dict[str, str]:
+    """教學文案 token → SSOT 實值。**每次 render 現算**，不做 module-level 快取。
+
+    L1 的 `PMI_SOURCE_REGISTRY` 走函式內 late import（§8.2.A EX-PASSTHRU-1：
+    L5 → L1 pass-through 讀取，模組載入期不拉整條 macro 依賴鏈）。
+    """
+    import math as _m
+    import sys as _sys
+
+    from shared.signal_thresholds import (
+        BREADTH_BULL_PCT,
+        BREADTH_NEUTRAL_PCT,
+        FOREIGN_5D_NET_THRESHOLD_YI,
+        FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD,
+        FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS,
+        FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS,
+        MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
+        MARGIN_BALANCE_WARN_THRESHOLD_YI,
+        RECESSION_LOGIT_COEF_INTERCEPT,
+        RECESSION_LOGIT_COEF_SPREAD,
+        TWII_20D_DROP_THRESHOLD_PCT,
+        VIX_HIGH_RISK_THRESHOLD,
+        VIX_MEDIUM_RISK_THRESHOLD,
+    )
+    from src.config import LEEK_ALERT_HIGH_PCT, LEEK_ALERT_LOW_PCT
+
+    def _recession_p(spread: float) -> float:
+        """複刻 `macro_core.recession_probability` 的算式（同一組 SSOT 係數）。"""
+        _logit = RECESSION_LOGIT_COEF_SPREAD * spread + RECESSION_LOGIT_COEF_INTERCEPT
+        return round(1 / (1 + _m.exp(-_logit)) * 100, 1)
+
+    # PMI 多源賽跑順序 —— 名單與筆數皆取 registry，不手抄
+    try:
+        from src.data.macro.macro_core import PMI_SOURCE_REGISTRY
+        _pmi_names = [_n for _n, _fn in PMI_SOURCE_REGISTRY]
+    except Exception as _e_pmi:  # noqa: BLE001 — 教學頁不因 macro 依賴失敗而整頁炸
+        print(f'[tab_edu] PMI_SOURCE_REGISTRY 讀取失敗:'
+              f'{type(_e_pmi).__name__}: {_e_pmi} → 來源清單顯示「暫無法讀取」',
+              file=_sys.stderr)
+        _pmi_names = []
+
+    return {
+        '§§PMI_SOURCES§§': (' → '.join(_pmi_names) if _pmi_names
+                            else '（暫無法讀取 PMI_SOURCE_REGISTRY）'),
+        '§§PMI_SOURCE_COUNT§§': str(len(_pmi_names)) if _pmi_names else '—',
+        '§§RECESSION_COEF_SPREAD§§': f'{RECESSION_LOGIT_COEF_SPREAD:g}',
+        '§§RECESSION_COEF_INTERCEPT§§': f'{RECESSION_LOGIT_COEF_INTERCEPT:g}',
+        '§§RECESSION_P_AT_0§§': f'{_recession_p(0.0):.0f}',
+        '§§RECESSION_P_AT_M1§§': f'{_recession_p(-1.0):.0f}',
+        '§§RECESSION_P_AT_M2§§': f'{_recession_p(-2.0):.0f}',
+        '§§FUT_DEFENSE_LOTS§§': f'{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}',
+        '§§FUT_V4_RED_LOTS§§': f'{FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS:,}',
+        '§§FUT_V4_YELLOW_LOTS§§': f'{FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS:,}',
+        '§§VIX_V4_RED§§': f'{VIX_HIGH_RISK_THRESHOLD:g}',
+        '§§VIX_V4_YELLOW§§': f'{VIX_MEDIUM_RISK_THRESHOLD:g}',
+        '§§FOREIGN_5D_YI§§': f'{FOREIGN_5D_NET_THRESHOLD_YI:,.0f}',
+        '§§TWII_20D_PCT§§': f'{TWII_20D_DROP_THRESHOLD_PCT:g}',
+        '§§MARGIN_WARN_YI§§': f'{MARGIN_BALANCE_WARN_THRESHOLD_YI:,.0f}',
+        '§§MARGIN_OVERHEAT_YI§§': f'{MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:,.0f}',
+        '§§LEEK_ALERT_HIGH§§': f'{LEEK_ALERT_HIGH_PCT:+g}',
+        '§§LEEK_ALERT_LOW§§': f'{LEEK_ALERT_LOW_PCT:+g}',
+        '§§BREADTH_BULL§§': f'{BREADTH_BULL_PCT:g}',
+        '§§BREADTH_NEUTRAL§§': f'{BREADTH_NEUTRAL_PCT:g}',
+    }
+
+
+def _resolve_edu_tokens(text: str, tokens: dict[str, str] | None = None) -> str:
+    """把教學文字裡的 `§§TOKEN§§` 換成 SSOT 實值。
+
+    `tokens` 省略時現算一份（單一段落用）；批次渲染多段時請先呼叫
+    `_edu_tokens()` 取一份重複傳入，避免每段都重跑 late import。
+    未登記的 token **保持原樣**印在畫面上 —— 這是刻意的：
+    漏改的佔位符要看得見（§1 降級不靜默），不可悄悄消失成空字串。
+    """
+    if tokens is None:
+        tokens = _edu_tokens()
+    for _k, _v in tokens.items():
+        text = text.replace(_k, _v)
+    return text
 
 
 # ════════════════════════════════════════════════════════════════
@@ -149,39 +267,42 @@ def render_tab_edu():
         st.caption('本系統各 Tab 用到的所有資料來源,對照 CLAUDE.md §2.1 SSOT 5-Tier 權威分級。'
                    '**任一筆失敗會在 🔎 資料診斷 Tab 用紅燈標出**。')
         _dm = [
-            ('📈 美國總經指標', '🌐 總經',
+            ('📈 美國總經指標', '🌍 總經',
              'FRED API（NAPM / DGS10 / DGS2 / DGS3MO / BAMLH0A0HYM2 / M2SL / WALCL / CPIAUCSL / FEDFUNDS / UNRATE / PPIACO）',
              'FRED 30min / 月後 ~13 天（CPI/NFP 有修正）',
              'FRED → DBnomics → ISM 官網 → MacroMicro'),
-            ('📊 VIX / DXY / 銅', '🌐 總經',
+            ('📊 VIX / DXY / 銅', '🌍 總經',
              'Yahoo Chart（^VIX / DX-Y.NYB / HG=F）',
              'Yahoo 1hr / EOD 翌日 04:00 TW',
              'Yahoo → CBOE CDN（VIX）'),
-            ('🇹🇼 TW PMI', '🌐 總經',
+            ('🇹🇼 TW PMI', '🌍 總經',
              '8 源賽跑：CIER-EN → data.gov.tw → NDC → CIER首頁 → StockFeel → Cnyes → CIER-cid8 → MoneyDJ（v19.113）',
              '月後第 1 營業日',
              'PMI_SOURCE_REGISTRY 順序賽跑,取第一命中（禁止平均）'),
-            ('🏦 CBC M1B / M2', '🌐 總經',
+            ('🏦 CBC M1B / M2', '🌍 總經',
              'CBC ms1.json（央行）',
              '月後 ~5-7 天,90 天 cache',
              'CBC（TWD）→ IMF（USD,僅 fallback,禁跨幣別平均）'),
-            ('🇨🇳 中國拖累 modifier', '🌐 總經',
+            ('🇨🇳 中國拖累 modifier', '🌍 總經',
              'FRED（CNCPIALLMINMEI / IRLTCT01CNM156N / MYAGM3CNM189N / XTEXVA01CNM664S）',
              '月頻,90 天 cache',
              '全敗 → modifier = 1.0 中性'),
-            ('💹 個股 OHLCV', '📈 個股',
+            # B6-a v19.181:Tab 名對齊 app.py:476/568/584/809/870 的真實 label。
+            # 原寫「📈 個股」「💰 籌碼」—— 前者 emoji 錯(真名 🔬 個股),
+            # 後者根本不是 Tab(籌碼是 🌍 總經 底下的 §三 區塊),照著找找不到。
+            ('💹 個股 OHLCV', '🔬 個股',
              'TWSE OpenAPI / TPEX OpenAPI / FinMind / Yahoo',
              '同日盤後 14:30 TW,30min cache',
              'TWSE → FinMind → Yahoo'),
-            ('💰 三大法人 / 融資', '📈 個股 / 💰 籌碼',
+            ('💰 三大法人 / 融資', '🔬 個股 / 🌍 總經§籌碼',
              'TWSE 三大法人表 / TWSE 融資餘額',
              '同日盤後,30min cache',
              'TWSE → HiStock → Wearn（融資）'),
-            ('📐 期貨 / 選擇權 PCR', '💰 籌碼',
+            ('📐 期貨 / 選擇權 PCR', '🌍 總經§籌碼',
              'TAIFEX（外資 TX 期貨 / Put-Call Ratio）',
              '同日盤後 14:00 TW',
              'TAIFEX 主源,無備援'),
-            ('📅 月營收', '📈 個股',
+            ('📅 月營收', '🔬 個股',
              'FinMind / MOPS / Goodinfo',
              '月後 ~10 天,3 天 cache',
              'FinMind → MOPS → Goodinfo'),
@@ -189,12 +310,17 @@ def render_tab_edu():
              'etf_fetch（TWSE / 投信官網）',
              '2hr cache',
              'fallback chain 內部處理'),
-            ('📰 新聞 RSS', '🌐 總經',
+            ('📰 新聞 RSS', '🌍 總經',
              'Google News / Bloomberg / CNBC / Yahoo Finance',  # v18.458: Reuters removed (dead since 2020)
              '即時',
              '個別失敗 → 其他源繼續'),
-            ('🤖 AI 摘要', '🌐 總經 / 📈 個股',
-             'Google Gemini API（EX-AI-1 例外,回 str）',
+            # B6-a v19.181:原寫「EX-AI-1 例外,回 str」—— EX-AI-1 這條例外
+            # 已於 v18.399 P5-DEAD-δ 隨 `ai_engine.py` 整檔刪除而**正式退役**
+            # (CLAUDE.md §0 步驟 4 + §8.2.A 該列已標「已退役」)。
+            # 現行 AI 走 `app.py:gemini_call` → `ai_fetcher.post_gemini`,
+            # prompt 由 `ai_structured_summary.build_structured_summary_prompt` 組。
+            ('🤖 AI 摘要', '🌍 總經 / 🔬 個股',
+             'Google Gemini API（ai_fetcher.post_gemini）',
              'On-demand 無 cache',
              'GEMINI_KEY 未設 → AI 區塊跳過（不擋畫面）'),
         ]
@@ -321,7 +447,29 @@ def render_tab_edu():
                 # ─ 其他（暫無資料，後續 PR 處理）─
                 return None, None, None, None, None
 
-            _edu_total = get_edu_count()
+            # ── B6-a v19.181:「已撰寫 N 個」改數**真的會渲染出來的**卡片 ──────
+            # 原本寫 `get_edu_count()` = `len(EDU_GUIDE)`,但下方渲染迴圈只印
+            # 「EDU key 能對上 DATA_REGISTRY.identifier」的卡（:462-463 的 join）。
+            # 兩個 EDU key 對不上任何 identifier（`NAPM`、`NDC_signal` —— registry
+            # 用的是 `cier-pmi` / `TaiwanBusinessIndicator` 等），所以宣稱數字比
+            # 畫面上看得到的多 2 張，使用者會一直找那兩張找不到的卡。
+            # 改成先把要渲染的清單算出來再報數 → 「說的」與「畫的」同一份資料。
+            _cat_pairs: list[tuple[str, list]] = []
+            for _cat in get_categories():
+                _pairs = [(e, get_edu(e.get('identifier')))
+                          for e in get_by_category(_cat)]
+                _pairs = [(e, ed) for e, ed in _pairs if ed is not None]
+                if _pairs:
+                    _cat_pairs.append((_cat, _pairs))
+            _edu_total = sum(len(_p) for _, _p in _cat_pairs)
+            _edu_written = get_edu_count()
+            # 掛不上任何 identifier 的教學文稿數 —— 有就誠實講,沒有就不提(§1)
+            _edu_orphans = max(_edu_written - _edu_total, 0)
+            _edu_orphan_note = (
+                f'　⚠️ 另有 **{_edu_orphans} 篇**教學文稿已寫好但**掛不上任何指標**'
+                f'（EDU key 對不到 `DATA_REGISTRY` 的 identifier），因此不會顯示 —— '
+                f'這是待修的接線問題，不是你漏看。'
+            ) if _edu_orphans else ''
             st.markdown(
                 f"""
 **新人最大的痛點**：指標一堆，但每個是什麼？要怎麼看？要搭配什麼一起看？
@@ -337,16 +485,12 @@ def render_tab_edu():
 | ⬇️ **下游果** | 這指標會影響誰（找連動效應） |
 | 📈 **即時值 + 24M 趨勢** | 當前值 + Z-Score + 趨勢圖（含警戒/危險閾值線） |
 
-📌 目前已撰寫 **{_edu_total} 個** 核心指標教學卡（持續擴充中）。
+📌 本頁下方會列出 **{_edu_total} 張** 核心指標教學卡（持續擴充中）。
 未列出的指標請見「🔎 資料診斷」Tab → 各類別展開查看完整資料目錄。
+{_edu_orphan_note}
 """)
             st.markdown('---')
-            for _cat in get_categories():
-                _entries_in_cat = get_by_category(_cat)
-                _edu_pairs = [(e, get_edu(e.get('identifier'))) for e in _entries_in_cat]
-                _edu_pairs = [(e, ed) for e, ed in _edu_pairs if ed is not None]
-                if not _edu_pairs:
-                    continue
+            for _cat, _edu_pairs in _cat_pairs:
                 st.markdown(f'### {_cat}')
                 for _e, _edu in _edu_pairs:
                     _id = _e.get('identifier', '')
@@ -555,23 +699,38 @@ def render_tab_edu():
 
 本策略認為，K線型態是「資金博弈的足跡」。主力洗盤完畢後，往往留下可辨識的底部型態。
 
+> 📍 **在系統哪裡看**：🔬 個股 / 🏆 個股組合 的「型態目標價」區塊
+> （`compute/strategy/pattern_targets.py`）。
+> ⚠️ 該模組**只判三種型態**：`破底翻` / `N字整理` / `型態未明`。
+> 以下「頭肩底」一節屬**通用型態學教材**，系統**沒有**頭肩底偵測器 ——
+> 別在畫面上找它，找不到不是你的問題。
+
 ---
 
 #### 🔑 型態一：破底翻（Fake Breakdown Reversal）
 
-> 股價跌破前低 → 但**隔日收回**前低之上 → 散戶停損被洗出後主力拉抬
+> 股價跌破前低 → 但**又站回**前低之上 → 散戶停損被洗出後主力拉抬
 
-| 步驟 | 判斷標準 |
+**系統實際判定式**（`pattern_targets.derive_pattern_levels`，純價格、不看量）：
+
+```
+破底翻 = (最低擺動低 < 前低/支撐)  AND  (現價 > 前低/支撐)
+```
+
+| 教材上的加分條件 | 系統有沒有在判 |
 |------|---------|
-| ① 量縮跌破前低 | 成交量明顯萎縮（代表散戶恐慌賣壓，非主力出貨） |
-| ② 當日或隔日大量紅K | 量比 ≥ 1.5，收盤站回前低之上 |
-| ③ 連續 2 根紅K確認 | 第 2 根紅 K 收盤突破近期高點 → 破底翻確認 |
+| ① 量縮跌破前低（散戶恐慌賣壓，非主力出貨） | ❌ 不判，要自己看圖 |
+| ② 大量紅K收盤站回前低之上 | ❌ 不判，要自己看圖 |
+| ③ 連續 2 根紅K，第 2 根突破近期高點 | ❌ 不判，要自己看圖 |
 
-**停損設定**：破底翻 K 棒低點即為硬停損，跌破即出場。
+> ⚠️ 舊版本章把上面三條寫成「判斷標準」，讀起來像系統在檢查它們 —— 並沒有。
+> 系統給的是**價格關鍵位**（頸線 / 止損 / 等幅目標），量價確認由你自己補。
+
+**停損設定**：系統取 `破底低 × (1 − buffer)`；教材口訣「跌破破底翻 K 棒低點即出場」同義。
 
 ---
 
-#### 🔑 型態二：頭肩底（Inverse Head & Shoulders）
+#### 🔑 型態二：頭肩底（Inverse Head & Shoulders）— ⚠️ 通用教材，系統未實作
 
 ```
          左肩          右肩
@@ -594,9 +753,13 @@ def render_tab_edu():
 #### 🔑 操作細節：頸線突破買點
 
 1. **等收盤確認**：不追日內突破，等收盤穩站頸線之上
-2. **回測不破**：突破後如回測頸線不跌破 → 加碼機會
-3. **目標價**：頸線 + 頭部到頸線距離（等幅量測）
-4. **停損**：跌破右肩低點即出場
+2. **拉回不破**：突破後若拉回測試頸線不跌破 → 加碼機會
+   （這裡的「回測」是**價格回來測試頸線**，不是歷史績效模擬的那個回測）
+3. **目標價**：頸線 + 型態高度（等幅量測）
+4. **停損**：跌破型態低點即出場
+
+> 系統的等幅量測用的是：`target = 頸線 + (第一波高 − 箱底)`、
+> `target2 = 頸線 + 2 ×(同一段幅)`（`pattern_targets.compute_pattern_targets`）。
 """)
 
     # ── 策略3 章節 2/3：VCP 波幅收縮 — v19.174 去識別化；v19.175 標題吃 SSOT ──
@@ -609,14 +772,42 @@ VCP（Volatility Contraction Pattern）找的是「橫盤整理中能量不斷�
 
 ---
 
-#### 🔑 VCP 四大關鍵條件
+#### 🔑 VCP 四大關鍵條件（通用教材版）
 
 | 條件 | 標準 | 說明 |
 |------|------|------|
-| ① **多次波幅收縮** | ≥ 3 次 | 每次高低振幅比前次縮小 ≥ 1/3 |
-| ② **成交量持續萎縮** | 量比 < 0.8 | 籌碼鎖定，浮額洗盡 |
-| ③ **不跌破關鍵均線** | 站上 MA20 | 型態不能在均線下方整理 |
-| ④ **突破需有爆量** | 量比 ≥ 2.0 | 收盤突破近期整理高點 + 巨量 = 有效突破 |
+| ① **多次波幅收縮** | ≥ 3 次 | 每次高低振幅比前次縮小 |
+| ② **整理期間量能萎縮** | 量能遞減 | 籌碼鎖定，浮額洗盡 |
+| ③ **不跌破關鍵均線** | 站上均線 | 型態不能在均線下方整理 |
+| ④ **突破需有爆量** | 突破日放量 | 收盤突破整理高點 + 巨量 = 有效突破 |
+
+---
+
+#### 🔑 本系統實際判定式（與上表**不完全一樣**，看畫面請以這裡為準）
+
+> ⚠️ **v19.181 更正**：舊版把 ②寫成「量比 < 0.8」、③寫成「站上 MA20」、
+> ④寫成「量比 ≥ 2.0」。這三個數字**都不是**系統在用的值 ——
+> `0.8` 在程式裡是 **ATR 波動收縮比**（`VCP_ATR_CONTRACTION_RATIO`），
+> 跟成交量無關；量比 2.0 全站不存在。實際有兩支不同的實作：
+
+**個股（`scoring_engine.check_vcp_atr_filter`）** — 只有一條，純波動：
+```
+VCP 收縮確認 = ATR5 < ATR20 × {VCP_ATR_CONTRACTION_RATIO:g}   (SSOT: VCP_ATR_CONTRACTION_RATIO)
+資料 < 25 根 → 回「資料不足」，不硬判
+```
+
+**ETF（`etf_calc.check_vcp_signal`）** — 四條全成立才亮訊號：
+```
+① 收盤 > MA50            ② 收盤 > MA200
+③ 近 2 週均振幅 < 前 2 週均振幅 × 0.6      ← 波幅收縮
+④ 當日量 > 50 日均量                       ← **放量**，不是萎縮
+資料 < 210 個交易日 (ETF_VCP_MIN_DAYS) → 不判
+```
+
+> 📌 兩點特別容易看錯：
+> (a) 用的是 **MA50 / MA200**，不是教材講的 MA20；
+> (b) ④是「**放量**才算數」——「量能萎縮」講的是**整理期間**，
+> 突破當下反而要**放量**。舊版把兩個階段的量能寫成同一條，方向剛好相反。
 
 ---
 
@@ -639,17 +830,23 @@ VCP（Volatility Contraction Pattern）找的是「橫盤整理中能量不斷�
 
 | 動作 | 標準 |
 |------|------|
-| **進場** | 突破 Pivot Point（整理高點）+ 當日收盤接近最高（收盤在當日高點 95% 以上） |
-| **加碼** | 突破後回測 Pivot 不破，再加 0.5 倍部位 |
-| **停損** | 跌破進場 K 棒低點（通常約 7–8% 以內） |
-| **停利** | 距停損 3 倍獲利（盈虧比 ≥ 3:1）先設目標；強勢股跟蹤 MA10 |
+| **進場** | 突破 Pivot Point（整理高點）+ 當日收盤接近最高 |
+| **加碼** | 突破後拉回測試 Pivot 不破，再加碼 |
+| **停損** | 跌破進場 K 棒低點；系統預設固定停損 **−{STOP_LOSS_DEFAULT_PCT:.0f}%**（`STOP_LOSS_DEFAULT_PCT`），ATR 模式為 `Entry − {ATR_STOP_MULTIPLIER:g}×ATR14` |
+| **停利** | 系統的盈虧比通過門檻是 **≥ {RR_MIN:g}**（`RR_MIN`，低於此不顯示），預設目標漲幅 **+{RR_DEFAULT_TARGET_GAIN * 100:.0f}%**（`RR_DEFAULT_TARGET_GAIN`） |
+
+> ⚠️ **v19.181 更正**：舊版手寫的盈虧比目標比系統實際門檻（{RR_MIN:g}）高，
+> 停損寫成一個區間、加碼倍數也是全站不存在的規則。
+> 上表數字現已全部改由 `shared/signal_thresholds.py` 常數代入。
 
 > **{STRATEGY_TECHNICAL} 心法**：「量縮到極點就是爆發前夕。等的不是上漲，等的是籌碼。」
 """)
 
     # ── 策略3 章節 3/3：資金動能 — v19.174 去識別化；v19.175 標題改吃 SSOT ──
+    # B6-a v19.181:本章的廣度門檻改走 §§TOKEN§§ → `_resolve_edu_tokens`（SSOT），
+    # 不再手寫 60 / 40（`BREADTH_BULL_PCT` / `BREADTH_NEUTRAL_PCT`）。
     with st.expander(_EDU_STRATEGY_TITLES['liquidity'], expanded=True):
-        st.markdown("""
+        st.markdown(_resolve_edu_tokens("""
 ### 核心邏輯：用「總體資金」判斷大盤體質，而非個股
 
 本策略認為，股票市場是資金推動的遊戲。M1B-M2 利差是最領先的資金指標，
@@ -686,9 +883,12 @@ VCP（Volatility Contraction Pattern）找的是「橫盤整理中能量不斷�
 
 | 旌旗指數 | 市場意義 |
 |---------|---------|
-| ≥ **60%** | 🟢 多頭格局強健，可積極持股 |
-| **40–60%** | 🟡 多空拉鋸，選股不選市 |
-| ≤ **40%** | 🔴 熊市格局，嚴控倉位 |
+| ≥ **§§BREADTH_BULL§§%** | 🟢 多頭格局強健，可積極持股 |
+| **§§BREADTH_NEUTRAL§§–§§BREADTH_BULL§§%** | 🟡 多空拉鋸，選股不選市 |
+| < **§§BREADTH_NEUTRAL§§%** | 🔴 熊市格局，嚴控倉位 |
+
+（門檻 SSOT：`BREADTH_BULL_PCT` / `BREADTH_NEUTRAL_PCT`，由常數即時代入；
+判定用 `>=`，所以恰好等於門檻時算**上面那一格**。）
 
 搭配「大盤 vs 個股」強弱：
 - 指數創高但廣度不創高 → 警訊（領頭羊撐盤，底層崩潰）
@@ -698,12 +898,19 @@ VCP（Volatility Contraction Pattern）找的是「橫盤整理中能量不斷�
 
 #### 🔑 指標三：外資期貨空單防守線
 
+*（教學示意，實際持股以 🎚️ 建議持股油門為準；系統真正的期貨門檻見下方）*
+
 | 外資期貨淨部位 | 訊號 | 操作建議 |
 |--------------|------|---------|
 | 淨**多單** > 0 且擴大 | 🟢 外資看多台股 | 可積極作多 |
 | 淨多單縮減中 | 🟡 外資降低多頭暴露 | 適度降低倉位 |
 | 淨**空單** > 0 | 🔴 外資對沖台股風險 | 大盤需謹慎 |
-| 淨空單急速擴大 | 🚨 系統性風險信號 | 立即減碼至 30% 以下 |
+| 淨空單急速擴大 | 🚨 系統性風險信號 | 大幅降低曝險 |
+
+> 📌 **系統實際門檻**（SSOT，非教材示意）：v4 引擎風險燈
+> 🟡 期貨淨部位 < §§FUT_V4_YELLOW_LOTS§§ 口 ／ 🔴 < §§FUT_V4_RED_LOTS§§ 口；
+> 紅綠燈「空頭防禦」旗標另用 |淨部位| > §§FUT_DEFENSE_LOTS§§ 口（且市場分數 < 2）。
+> 三者用途不同、刻意不統一，詳見「📐 外資籌碼」章。
 
 ---
 
@@ -713,9 +920,9 @@ VCP（Volatility Contraction Pattern）找的是「橫盤整理中能量不斷�
 
 | M1B-M2 | 旌旗指數（廣度） | 外資期貨 | 建議倉位 |
 |--------|---------|---------|---------|
-| ✅ 寬鬆 | ✅ ≥60% | ✅ 多單 | **滿倉 80–100%** |
-| ✅ 寬鬆 | ✅ ≥60% | ❌ 空單 | **七成 70%** |
-| ✅ 寬鬆 | ❌ <40% | 任何 | **五成 50%，選股不選市** |
+| ✅ 寬鬆 | ✅ ≥§§BREADTH_BULL§§% | ✅ 多單 | **滿倉 80–100%** |
+| ✅ 寬鬆 | ✅ ≥§§BREADTH_BULL§§% | ❌ 空單 | **七成 70%** |
+| ✅ 寬鬆 | ❌ <§§BREADTH_NEUTRAL§§% | 任何 | **五成 50%，選股不選市** |
 | ❌ 緊縮 | 任何 | 任何 | **防守 0–30%，保留現金** |
 
 > **記憶口訣**：「M1B-M2 翻正是起跑槍，廣度過半是加速器，外資空單是急剎車。」
@@ -732,7 +939,7 @@ VCP（Volatility Contraction Pattern）找的是「橫盤整理中能量不斷�
 | ⚠️ 股漲匯貶 | ↑ | 貶值 | 疑似拉高出貨 | **50%，不追高** |
 | 🔴 股匯雙殺 | ↓ | 貶值 | 大舉提款撤出 | **0–30%，嚴格防守** |
 | 🟡 股跌匯升 | ↓ | 升值 | 資金停泊台灣 | **50–70%，找錯殺股** |
-""")
+"""))
 
     # ── v18.281 原理教室(從 macro_classroom 移入,合併成單一說明書)──
     render_principle_classroom()
@@ -789,7 +996,7 @@ _PRINCIPLE_CHAPTERS: list[tuple[str, str]] = [
         "📊 PMI 為何 50 是分水嶺?",
         """
 PMI(Purchasing Managers Index, 採購經理人指數)向採購經理調查 5 個面向(新訂單 / 生產 /
-雇用 / 供應商交貨 / 存貨)。每面向「比上月好/差/持平」三選一,**好佔比 - 差佔比 + 50 = PMI**。
+雇用 / 供應商交貨 / 存貨)。每面向「比上月好/差/持平」三選一,再合成擴散指數(diffusion index)。
 
 - PMI > 50:**多數企業比上月好** → 經濟擴張
 - PMI < 50:**多數企業比上月差** → 經濟收縮
@@ -797,19 +1004,29 @@ PMI(Purchasing Managers Index, 採購經理人指數)向採購經理調查 5 個
 
 **領先性**:PMI 領先實質 GDP / 工業生產 約 1-3 個月,因為採購決定先於生產。
 
-**TW 在地來源**:本系統按優先序賽跑 10 個源(CIER → data.gov.tw → NDC → MacroMicro →
-StockFeel → FinMind → MoneyDJ 等),**禁止平均**(混合不同方法論 = 雜訊)。
+**TW 在地來源**:本系統按優先序賽跑 **§§PMI_SOURCE_COUNT§§ 個源**
+(§§PMI_SOURCES§§),取**第一個命中**即停,**禁止平均**(混合不同方法論 = 雜訊)。
+順序 SSOT:`macro_core.PMI_SOURCE_REGISTRY`(上面這串名單由該 registry 即時產生,
+不是手打的,所以拔源 / 加源時這段會自動跟著改)。
 台灣官方製造業 PMI 由中華經濟研究院(CIER)**2012/7 才創編**,故 2008-09 金融海嘯**無台灣官方 PMI**,僅能參照美國 ISM。
 
 📐 **數學定義**
 
 ```
-PMI = 30% × 新訂單 + 25% × 生產 + 20% × 雇用 + 15% × 供應商交貨 + 10% × 存貨
+單一面向擴散指數 = (回答「好」的%) + 0.5 × (回答「持平」的%)      → 落 0~100
 
-各子指標 = (好的%) + 0.5 × (持平%) + 50 - 50 → 落 0~100
+  等價寫法:50 + (好% − 差%) ÷ 2
+  ⚠️ 常見誤寫:「好% − 差% + 50」——  少除以 2,好60/持平20/差20 會算成 90(真值 70)
+
+PMI = 5 個面向擴散指數的**等權**平均(各 20%)
 ```
 
-**權重邏輯**:新訂單最領先(下單→生產→出貨→銷售 chain 最早),故給最高權重 30%。
+**⚠️ 權重的歷史沿革**:ISM 曾用 30/25/20/15/10 的加權(新訂單最重),
+但**自 2008 年 1 月起已改為 5 項等權(各 20%)**;台灣中經院 PMI 建置時即採等權版本。
+若你在舊教材看到 30% 新訂單那組數字,那是 2008 年前的舊制。
+
+**注意**:本系統**不自行計算 PMI**,只抓各來源**已公布**的 PMI 數值。
+上面的定義是給你看懂這個數字怎麼來的,不是系統內的運算式。
 
 📜 **歷史案例(製造業 PMI vs TWII)**
 
@@ -888,11 +1105,21 @@ if Spread < 0 → 倒掛
 if Spread < 0 持續 ≥ 3 月 → 高機率衰退
 ```
 
-**Fed NY logistic 衰退機率**:
+**本系統的 logistic 衰退機率(`macro_core.recession_probability`)**:
 ```
-P(recession) = 1 / (1 + exp(0.5 + 0.55 × Spread_10Y3M_12M_avg))
+logit = §§RECESSION_COEF_SPREAD§§ × Spread_10Y3M + (§§RECESSION_COEF_INTERCEPT§§)
+P(recession) = 1 / (1 + exp(−logit)) × 100%
 ```
-Spread = -1% → P ≈ 50%;Spread = -2% → P ≈ 78%。
+係數 SSOT:`shared/signal_thresholds.RECESSION_LOGIT_COEF_SPREAD / _INTERCEPT`
+(上面的數字由該常數即時代入,不是手打)。代幾個值感受一下:
+Spread = 0% → P ≈ **§§RECESSION_P_AT_0§§%**;
+Spread = −1% → P ≈ **§§RECESSION_P_AT_M1§§%**;
+Spread = −2% → P ≈ **§§RECESSION_P_AT_M2§§%**。
+
+> ⚠️ 這組係數是本系統自用的簡化式(輸入為**當期**利差),**不是** Fed NY 官方
+> 那條「12 個月移動平均利差」模型 —— 兩者係數與輸入都不同,數字不可互相對照。
+> 本段舊版手寫了另一組係數與對照百分比,既不符實作、算術上也跟它自己的式子
+> 對不起來;v19.181 起全數改由 SSOT 常數即時代入,不再手打。
 
 📜 **歷史案例(倒掛 → TWII 反應)**
 
@@ -915,29 +1142,44 @@ Spread = -1% → P ≈ 50%;Spread = -2% → P ≈ 78%。
 TW 股市外資持股比 ~40%(2024 年),日均成交量占比 25-30%,**外資動向是定價核心**。
 
 本系統三大外資觀察:
-- **外資現貨買賣超**:當日 net buy/sell,> +100 億 = 強買,< -100 億 = 強賣
-- **外資期貨大小**:多空淨部位(口數),> +30000 口 = 看多 / < -30000 = 看空
+- **外資現貨買賣超**:當日 net buy/sell(億 TWD)。單日數字系統**不設門檻**,
+  真正會亮燈的是**5 日累積** ≤ §§FOREIGN_5D_YI§§ 億(見下方③)
+- **外資期貨淨部位**:多空淨未平倉(口數)。系統有**兩組**門檻:
+  防禦旗標用 |淨部位| > §§FUT_DEFENSE_LOTS§§ 口、v4 風險燈用
+  §§FUT_V4_YELLOW_LOTS§§ / §§FUT_V4_RED_LOTS§§ 口(見下方①②)
 - **三大法人**:外資 + 投信 + 自營商合計動向
 
-**外資撤退的早期訊號**:
-1. 連續 5 個交易日淨賣超
+**外資撤退的早期訊號**(觀念,非系統判定式):
+1. 連續多個交易日淨賣超,且 5 日累積達警戒量級
 2. 期貨大空單建立 + 現貨同時賣超
 3. 押注大跌:put/call 比飆高
 
-**TW 在地警訊**:外資期貨大空單 > 5 萬口 + 大盤跌破年線 → 系統強制「防禦模式」。
-
 📐 **數學定義(系統實際 logic)**
 
-```
-外資現貨買賣超 (億 TWD)  = TWSE 三大法人表「外資及陸資」買進 - 賣出
-外資期貨大空 (口)        = TAIFEX「外資」TX 期貨未平倉淨額(多 - 空)
+> ⚠️ **v19.181 更正**:本段舊版寫「期貨 net < −50000 AND TWII < MA240 → 防禦模式」,
+> 以及「30000 口對應 ~6 億 TWD、歷史回測 6 月 −8%」—— **全站沒有任何一行程式**
+> 跑那條 −50000 + 年線的規則,那組回測數字也沒有任何出處(§1 反捏造)。
+> 下面是三條**真的存在**的判定,門檻一律由 SSOT 常數即時代入。
 
-警訊觸發 = (期貨 net < -30000) AND (現貨連 5 日 net < 0)
-強警訊   = (期貨 net < -50000) AND (TWII < MA240)  → 防禦模式
+```
+外資現貨買賣超 (億 TWD) = TWSE 三大法人表「外資及陸資」買進 − 賣出
+外資期貨淨部位 (口)      = TAIFEX「外資」TX 期貨未平倉淨額(多 − 空)
+
+① 紅綠燈「空頭防禦」旗標  (macro_helpers.calc_traffic_light)
+   市場分數 < 2  AND  |期貨淨部位| > §§FUT_DEFENSE_LOTS§§ 口  AND  期貨淨部位 < 0
+   ※ 期貨資料**沒抓到**時既不觸發也不抑制 —— 缺資料 ≠ 沒有大空單
+
+② v4 引擎風險燈  (v4_strategy_engine.macro_risk_signal)
+   🔴 VIX > §§VIX_V4_RED§§    或  期貨淨部位 < §§FUT_V4_RED_LOTS§§ 口
+   🟡 VIX > §§VIX_V4_YELLOW§§ 或  期貨淨部位 < §§FUT_V4_YELLOW_LOTS§§ 口
+
+③ 外資現貨賣超紅旗  (macro_signal_lookback_tw.DEFAULT_TW_SIGNALS)
+   外資 5 日累積買賣超 ≤ §§FOREIGN_5D_YI§§ 億  (搭配 TWII 20 日跌幅 ≤ §§TWII_20D_PCT§§% 同時亮)
 ```
 
-**為何選 30000 口為閾值?** 對應 ~6 億 TWD 名目部位,歷史回測 30000 口空單持續 5 日後
-TWII 6 月平均報酬 -8%。
+**為什麼同一個「外資期貨」有三個不同門檻?** 因為它們**用途不同**:①是健康評分裡的
+單一防禦觸發、②是分級紅黃燈、③看的是現貨不是期貨。刻意各自具名、**不合併**
+(合併 = 行為變更);細節見 `shared/signal_thresholds.py` 各常數 docstring。
 
 📜 **歷史案例**
 
@@ -953,50 +1195,72 @@ TWII 6 月平均報酬 -8%。
         """.strip(),
     ),
     (
-        "💸 韭菜指數(融資餘額)— 散戶情緒反指標",
+        "💸 散戶情緒反指標 — 融資餘額 × 韭菜指數(兩個不同的量,別搞混)",
         """
-**融資餘額**:散戶向券商借錢買股的金額。本系統「韭菜指數」歸一到 0-100:
-- 韭菜指數 > 35:散戶**過度樂觀**(歷史頂部訊號)
-- 韭菜指數 10-35:正常
-- 韭菜指數 < 10:散戶**極度悲觀**(歷史底部訊號)
+> ⚠️ **v19.181 更正 —— 先講清楚,不然你會對著畫面看不懂**
+> 本系統裡有**兩個都叫「韭菜指數」但單位完全不同**的東西
+> (定名 SSOT:`src/config/config.py`「韭菜指數門檻 SSOT」)。
+> 本章舊版只講了 (A),但**畫面上實際顯示的是 (B)** ——
+> 讀者拿 (A) 的門檻去看 (B) 的數字,必然誤判。
 
-**為何是反指標?** 散戶資訊不對稱、追高殺低 → 集體買進時往往接近頂、集體賣出時接近底。
-本系統用作「逆向確認」:多頭訊號 + 韭菜偏低 = 高勝率;多頭訊號 + 韭菜飆高 = 警覺。
+| | (A) 融資 5Y 標準化指數 | (B) 小台法人空多比 ← **畫面顯示的是這個** |
+|---|---|---|
+| 值域 | 0 ~ 100,中位 **50** | 約 −100 ~ +100,中位 **0** |
+| 定義 | (融資餘額 − μ_5Y) ÷ σ_5Y 標準化後映到 0-100 | (法人空方 MTX 未平倉 − 法人多方 MTX 未平倉) ÷ 小台全體未平倉 × 100 |
+| 系統有沒有在算 | ❌ **沒有**。全 repo 無任何一行程式產生此數列(無融資 Z-score fetcher),門檻 `LEEK_HIGH/LOW_THRESHOLD` 目前 **0 consumer** | ✅ 有,`leading_indicators.py` 每日產出 |
+| 正負讀法 | 越高 = 散戶越樂觀 | **正值** = 散戶被迫站多方(危險);**負值** = 散戶淨空(機會) |
 
-**歷史**:2021 年 11 月韭菜飆 45 → 2022 年大盤 18619 跌至 12629(-32%)。
+**(B) 的實際門檻**(`config.LEEK_ALERT_*`,由 SSOT 即時代入):
+法人空多比 > **§§LEEK_ALERT_HIGH§§%** → 🔴 散戶過度樂觀(頂部訊號);
+< **§§LEEK_ALERT_LOW§§%** → 🟢 軋空動能極強(機會)。
+另有兩組較敏感的門檻(籌碼綜合評分 / 拐點偵測)用途不同、刻意不統一,見 config 該段。
+
+---
+
+**融資餘額**(億 TWD)本身是**另一個獨立指標**,系統確實有抓,門檻也真的在用:
+> **🟡 警戒 > §§MARGIN_WARN_YI§§ 億** ／ **🔴 過熱 > §§MARGIN_OVERHEAT_YI§§ 億**
+> (SSOT:`MARGIN_BALANCE_WARN_THRESHOLD_YI` / `MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI`)
+
+**為何是反指標?** 散戶資訊不對稱、追高殺低 → 集體借錢買進時往往接近頂、
+集體斷頭時接近底。用法是「逆向確認」:多頭訊號 + 散戶不熱 = 高勝率;
+多頭訊號 + 融資飆高 = 警覺。
 
 📐 **數學定義**
 
 ```
-原始融資餘額 = TWSE + TPEX 每日融資餘額總和(億 TWD)
+融資餘額 = TWSE + TPEX 每日融資餘額總和(億 TWD)   ← 系統實際使用,絕對金額比門檻
 
-韭菜指數 = ((融資 - μ_5Y) / σ_5Y + 2) / 4 × 100
+法人空多比(畫面「韭菜指數」)
+  = (法人空方 MTX 未平倉 − 法人多方 MTX 未平倉) ÷ 小台全體未平倉 × 100   (%)
 
-其中:
-  μ_5Y = 過去 5 年融資餘額均值
-  σ_5Y = 過去 5 年融資餘額標準差
-
-clip 到 [0, 100],對應 Z-Score:
-  韭菜 = 100 → Z ≈ +2(極端樂觀)
-  韭菜 = 50  → Z ≈ 0(中性)
-  韭菜 = 0   → Z ≈ -2(極端悲觀)
+── 以下僅為「教材概念」,系統目前未實作 ──────────────────
+標準化情緒指數 = ((融資 − μ_5Y) ÷ σ_5Y + 2) ÷ 4 × 100,clip 到 [0, 100]
+  對應 Z:100 → Z ≈ +2(極端樂觀) / 50 → Z ≈ 0 / 0 → Z ≈ −2(極端悲觀)
+  想法:融資結構隨市場規模變化,絕對金額跨年代不可比,標準化才有意義。
+  ⚠️ 下表的歷史「韭菜值」是這個**未實作**指標的回推示意,
+     **不可**拿去對照畫面上那個 ±% 的法人空多比。
 ```
-
-**為何用 5Y 滾動?** 融資結構隨市場規模變化,絕對金額不可比,標準化才有意義。
 
 📜 **歷史案例(融資頂峰 vs TWII 修正)**
 
-| 韭菜高峰日 | 韭菜值 | 融資餘額 | TWII | 後 12 月 TWII |
+| 融資高峰日 | 融資餘額 | 標準化指數(未實作,示意)| TWII | 後 12 月 TWII |
 |---|---|---|---|---|
-| 2000/4(融資天花板)| 48 | **5,956 億**(史上最高)| 9855 | -50% |
-| 2007/10(海嘯前) | 42 | 約 3,200 億 | 9809 | -60% |
-| 2018/1 | 38 | 1,840 億 | 11103 | -16% |
-| **2021/11** | **45** | 約 2,540 億 | 17840 | **-29%** |
-| 2024/7 | 35 | 約 2,500 億 | 24416 | 警戒中 |
+| 2000/4(融資天花板)| **5,956 億**(史上最高)| 48 | 9855 | -50% |
+| 2007/10(海嘯前) | 約 3,200 億 | 42 | 9809 | -60% |
+| 2018/1 | 1,840 億 | 38 | 11103 | -16% |
+| **2021/11** | 約 2,540 億 | 45 | 17840 | **-29%** |
+| 2024/7 | 約 2,500 億 | 35 | 24416 | 警戒中 |
 
-> 註:融資**絕對**金額史上最高在 2000/4(5,956 億);2021 這輪絕對峰在 4 月(約 2,600 億),11 月為韭菜**指數**(5Y 標準化)高點。
+> 註 1:「標準化指數」欄是上面那個**系統未實作**的 (A) 指標之回推示意,
+> 放在這裡只為說明「絕對金額」與「相對位階」會給出不同結論 ——
+> **不要**拿它去對照畫面上的法人空多比(±%),兩者尺度不同。
+> 註 2:融資**絕對**金額史上最高在 2000/4(5,956 億);2021 這輪絕對峰在 4 月
+> (約 2,600 億),11 月是相對位階的高點。
+> 註 3:對照現行門檻 —— 2021/11 與 2024/7 的約 2,5xx 億都已越過
+> §§MARGIN_WARN_YI§§ 億黃線,但未達 §§MARGIN_OVERHEAT_YI§§ 億紅線。
 
-**底部反例**:2009/3 韭菜跌至 8 → TWII 後 12 月 +97%。極端低位 = 散戶絕望 = 反向買點。
+**底部反例**:2009/3 融資極度萎縮(標準化位階 ≈ 8)→ TWII 後 12 月 +97%。
+極端低位 = 散戶絕望 = 反向買點。
         """.strip(),
     ),
     (
@@ -1181,10 +1445,23 @@ Z = (x_current - μ) / σ
   P(|Z| > 2) ≈ 4.55% → 「20 次出現 1 次」
 ```
 
-**Lookback 選擇(本系統)**:
-- 個股 vol / 韭菜指數 → **252 / 1250 交易日**(1Y / 5Y)
-- 殖利率 / VIX → **252 交易日**
-- M1B-M2 spread → **60 月**(5Y 月頻)
+**Lookback 選擇(本系統實際)**:
+
+> ⚠️ **v19.181 更正**:本段舊版寫「個股 vol / 韭菜指數 → 252 / 1250 交易日、
+> 殖利率 / VIX → 252 交易日、M1B-M2 spread → 60 月」—— 全 repo grep
+> `1250` 與 5 年月頻 z-score **一個都不存在**,韭菜指數更是連 z-score 都沒算
+> (見「散戶情緒反指標」章)。實際上系統只有**一處**在算 Z-Score:
+
+- **指標解讀手冊的即時值卡**(本頁上方,`shared.macro_card.calc_z_score`):
+  拿該指標**手上有的整段序列**當母體,不另設固定視窗 ——
+  `^VIX` ≈ 60 個交易日、`^TNX` / `^SOX` / `DXY` ≈ 90 個交易日、
+  FRED 系列(核心 CPI / 出口 YoY / PMI)≈ 24 個月。
+  少於 10 點就不顯示 Z(寧可不給,不給一個樣本數不足的假 Z)。
+- 趨勢圖(sparkline)另外只取**最後 60 點**,那是視覺裁切,**不是** Z 的母體。
+
+> 📌 `TRADING_DAYS_PER_YEAR = 252`(`shared/signal_thresholds.py`)確實存在,
+> 但它的用途是**年化換算**(IRR / 年化波動率 / Sharpe),不是 Z-Score 視窗 ——
+> 兩件事不要混為一談。
 
 📜 **歷史案例(TW 在地 Z-Score 應用)**
 
@@ -1218,7 +1495,11 @@ def render_principle_classroom() -> None:
             "每段都解釋「是什麼 / 為何重要 / 怎麼判讀」。"
             "建議按順序讀完,之後看其他指標就會通。"
         )
+        # B6-a v19.181:章節內文的門檻 / 係數 / 來源清單一律走 `§§TOKEN§§`,
+        # 由 SSOT 即時代入(見 `_edu_tokens`)。token 表**取一次**重複用,
+        # 避免每章都重跑 PMI_SOURCE_REGISTRY 的 late import。
+        _tokens = _edu_tokens()
         for _i, (_title, _body) in enumerate(_PRINCIPLE_CHAPTERS, 1):
-            st.markdown(f"### {_i}. {_title}")
-            st.markdown(_body)
+            st.markdown(f"### {_i}. {_resolve_edu_tokens(_title, _tokens)}")
+            st.markdown(_resolve_edu_tokens(_body, _tokens))
             st.markdown("---")

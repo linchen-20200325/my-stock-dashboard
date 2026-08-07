@@ -14,28 +14,58 @@ import streamlit as st
 
 
 def _show_threshold_status():
-    """顯示 macro_thresholds.json 內現行門檻 + 最後校準時間（季度排程寫入）。"""
+    """顯示 macro_thresholds.json 內現行門檻 + 最後校準時間（季度排程寫入）。
+
+    B6-a v19.181 修 path bug：原本用
+    `os.path.join(os.path.dirname(__file__), 'macro_thresholds.json')`
+    → 指向 `src/ui/pages/macro_thresholds.json`，那裡**沒有**這個檔
+    （真檔在 repo root，SSOT 見 `shared/macro_calibration._CALIBRATION_PATH`）。
+    於是 `os.path.exists` 恆為 False → 靜默 `return` → 這行「現行門檻 /
+    最後校準」的 caption **從來沒有被渲染出來過**。
+    改為直接引用 loader 的路徑常數，路徑只有一份，不會再各寫各的。
+    """
     import json as _json
     import os as _os
-    _path = _os.path.join(_os.path.dirname(__file__), 'macro_thresholds.json')
+
+    from shared.macro_calibration import _CALIBRATION_PATH as _path
     if not _os.path.exists(_path):
+        # 檔案真的不在（首次部署、尚未跑過季度校準）→ 誠實說，不要靜默消失
+        st.caption('🤖 **現行門檻**：尚未產生 `macro_thresholds.json`，'
+                   '系統使用 `shared/macro_calibration.py` 的預設值。')
         return
     try:
         with open(_path, 'r', encoding='utf-8') as _fp:
             _cfg = _json.load(_fp)
-    except Exception:
+    except Exception as _e_cfg:  # noqa: BLE001 — 設定檔壞掉不該擋整個診斷頁
+        st.caption(f'🤖 **現行門檻**：`macro_thresholds.json` 讀取失敗'
+                   f'（{type(_e_cfg).__name__}），畫面改用預設值；請檢查該檔。')
         return
-    # C3 v18.402:fallback default 改引 SSOT(shared/macro_calibration.py)
+    # ── v19.181 D3:顯示「系統真正在用的值」,不是「json 檔裡寫的值」 ──────────
+    # 【原本錯在哪】舊碼直接印 `_cfg.get('HEALTH_DEFENSE_THRESHOLD', 預設)`,
+    # 但真正生效的是 `load_calibrated_thresholds()` —— 它有值域守門
+    # (health ∈ [20,60] / score ∈ [1,6]),**任一項越界就整組退回 default**。
+    # 於是 json 若被寫成 `HEALTH_DEFENSE_THRESHOLD: 99`,舊面板會印「HEALTH <99」,
+    # 而系統其實在用 35 ⇒ 面板宣稱的門檻與實際判定不同(§1:錯的數字比沒有數字危險)。
+    # 改為印 loader 的回傳值,並在 json 與生效值不一致時**大聲說**是哪一項被打回。
     from shared.macro_calibration import (
         BULL_MIN_SCORE_DEFAULT,
         HEALTH_DEFENSE_THRESHOLD_DEFAULT,
+        load_calibrated_thresholds,
     )
-    _h = _cfg.get('HEALTH_DEFENSE_THRESHOLD', HEALTH_DEFENSE_THRESHOLD_DEFAULT)
-    _s = _cfg.get('BULL_MIN_SCORE', BULL_MIN_SCORE_DEFAULT)
+    _h, _s = load_calibrated_thresholds()          # ← 系統實際生效的兩個切點
+    _h_raw = _cfg.get('HEALTH_DEFENSE_THRESHOLD', HEALTH_DEFENSE_THRESHOLD_DEFAULT)
+    _s_raw = _cfg.get('BULL_MIN_SCORE', BULL_MIN_SCORE_DEFAULT)
     _ts = _cfg.get('last_calibrated') or '尚未校準（使用預設）'
     _method = _cfg.get('method', '')
-    st.caption(f'🤖 **現行門檻**：HEALTH `<{_h}` 觸發 🔴 防禦、SCORE `≥{_s}` 升 🟢 多頭　'
+    st.caption(f'🤖 **現行門檻（實際生效）**：HEALTH `<{_h}` 觸發 🔴 防禦、'
+               f'SCORE `≥{_s}` 升 🟢 多頭　'
                f'|　**最後校準**：{_ts}　|　{_method}')
+    if (_h_raw, _s_raw) != (_h, _s):
+        st.warning(
+            f'⚠️ `macro_thresholds.json` 寫的是 HEALTH={_h_raw} / SCORE={_s_raw}，'
+            f'但**未生效** —— `load_calibrated_thresholds()` 的值域守門'
+            f'（HEALTH ∈ [20,60]、SCORE ∈ [1,6]）把整組打回預設 '
+            f'HEALTH={_h} / SCORE={_s}。請修正該檔，否則校準結果不會進到系統。')
 
 
 def render_calibration_panel():

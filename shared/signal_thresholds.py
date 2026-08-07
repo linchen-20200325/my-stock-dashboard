@@ -63,8 +63,8 @@ EFFICIENT_FRONTIER_N_BINS: int = 25
 #              + min(score / max_score × 100, 100) × HEALTH_WEIGHT_SCORE
 #              + (HEALTH_FNET_BONUS if fnet > 0 else 0)
 #
-# ① 名不副實：這條式子**建構上只有 2 個輸入**（jqavg = 旌旗指數＝站上 20MA
-#    家數比，是「廣度」；score = 大盤評分）。融資／外資期貨／年線乖離／NDC／
+# ① 名不副實：這條式子**建構上只有 2 個輸入**（jqavg = 旌旗指數 = **上漲佔比的
+#    5 日移動平均**，屬「市場廣度」家族；score = 大盤評分）。融資／外資期貨／年線乖離／NDC／
 #    M1B-M2／VIX／PMI／CPI／出口／ADL／新聞**一個都沒進來** —— 那些走
 #    shared/macro_buckets 五桶燈號各自判讀。UI 上「五桶多盞紅、健康度仍不低」
 #    因此不是 bug。顯示端揭露見 macro_buckets 的 health DangerSpec.note
@@ -147,6 +147,30 @@ FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS: int = -20000
 
 FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS: int = -10000
 """外資期貨中風險黃燈門檻（單位：口）。< -10000 口空單觸發黃燈。原 v4_strategy_engine.py:87 inline"""
+
+
+# ── 大額交易人「前五大留倉」計分門檻(D3/B7 抽出,單位:口)────────────────
+# ⚠️ **與上面那條 -10000 同數字、不同義,嚴禁互相引用**:
+#   `FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS` 量的是「**外資**期貨淨口」
+#   (TX 大台 + MTX 小台×0.25,`li_latest['外資大小']`);
+#   本組量的是「**台指期前五大交易人**未平倉淨部位」(TAIFEX largeTraderFutQryTbl,
+#   `li_latest['前五大留倉']`)—— 兩者是不同的統計母體,只是門檻碰巧撞號。
+#   同 `src/config/config.py` LEEK_* 三組門檻的分名理由(§3.3:同數字不同義不得合併)。
+#
+# 【現況誠實揭露】本組常數目前**還沒有 production consumer** ——
+#   唯一在用這兩個數字的是 `src/ui/tabs/macro/section_chips.py` 的
+#   「🎯 籌碼綜合判斷」計分器,那裡仍是 inline literal(`_top5 < -10000` / `_top5 > 0`)。
+#   D3 只負責讓**教學卡**不再手打數字(改引本常數);把 section_chips 改成 import
+#   本常數屬 🌍 總經分頁的施工範圍,不在 D3 批次內。
+#   `tests/test_d3_toolbox_registry.py` 有 AST 漂移守衛盯著兩邊的數字一致。
+TOP5_LARGE_TRADER_NET_WARN_LOTS: int = -10000
+"""前五大交易人留倉淨部位**警戒線**（單位：口）。< -10000 口 → 籌碼綜合判斷 -1 分。
+畫面 caption 寫作「前五大>1萬⚠️」。原 section_chips.py 籌碼綜合判斷 inline。"""
+
+TOP5_LARGE_TRADER_NET_BULL_LOTS: int = 0
+"""前五大交易人留倉淨部位**偏多線**（單位：口）。> 0 口 → 籌碼綜合判斷 +1 分。
+⚠️ 0 與 -10000 之間**不計分**（既非加分也非減分）—— 這是刻意的稀疏設計,
+不是漏寫;教學卡必須照實說「這區間不亮燈」,不得腦補一個中性帶。"""
 
 
 # ════════════════════════════════════════════════════════════════
@@ -592,6 +616,49 @@ v18.327：統一黃線，「全市場健康度」beginner KPI(880) 原 30 已上
 BREADTH_BEAR_PCT: float = 20.0
 """市場廣度位階標籤底線：≥20% → '20~40%' 位階；< 20% → '0~20%'（極弱）。原 tab_macro:1345 inline。"""
 
+# ── v19.183 D2：短線急殺桶「上漲佔比 × ADL」判讀門檻（§3.3 收斂）─────────────
+# 同一個檔（section_short.py）同時存在兩套寫法：KPI 卡已走 BREADTH_BULL/NEUTRAL，
+# 但上方的 `_adl_concl` 分支還寫著 inline 70 / 60 / 40 —— 改一邊漏一邊的典型佈局。
+# 60 / 40 直接改吃既有常數；70 這一階原本沒有具名常數，於此補上。
+
+BREADTH_STRONG_BULL_PCT: float = 70.0
+"""市場廣度「全面多頭」線：上漲佔比 ≥70% → 廣度充足，可積極持股。
+比 `BREADTH_BULL_PCT`(60) 更嚴的一階，只用於 section_short 的敘事分級，
+**不參與**任何燈號 / regime 判定。原 section_short.py `_ratio2 >= 70` inline。"""
+
+# ── AD 值（漲家 − 跌家，單位：家數）判讀門檻 ─────────────────────────────
+# ⚠️ §4.1 量綱：AD 值是**家數差**（整數，量級數百），與上方 BREADTH_*（**百分比**）
+# 不同量綱，兩者不可互相代入。
+
+BREADTH_AD_EXPANSION_COUNT: int = 200
+"""AD 值 > +200 家 → 🟢 廣度擴張、多頭健康。原 section_short.py inline `_adl_ad > 200`。"""
+
+BREADTH_AD_CONTRACTION_COUNT: int = -100
+"""AD 值 < −100 家 → 🔴 廣度萎縮、主力集中在少數股；
+−100 ≤ AD ≤ +200 → 🟡 廣度收窄、市場整理。原 section_short.py inline `_adl_ad >= -100`。"""
+
+BREADTH_AD_DIVERGENCE_COUNT: int = -50
+"""指數上漲但 AD 值 < −50 家 → 背離警訊（少數權值股撐盤）。
+原 section_short.py inline `_ad2 < -50` / `_adl_ad < -50`（兩處同值）。"""
+
+BREADTH_DIVERGENCE_INDEX_PCT: float = 0.5
+"""背離偵測所需的**指數**日漲跌幅門檻（%）：|大盤 pct| > 0.5% 才視為「指數明確上漲/下跌」，
+避免用 ±0.05% 的雜訊日去宣告「指數漲但廣度萎縮」。
+原 section_short.py inline `_twii_pct2 > 0.5` / `< -0.5` / `_twii_pct > 0.5`（三處同值）。"""
+
+# ── v19.183 D2：拐點面板乖離門檻（§3.3 收斂）────────────────────────────────
+# ⚠️ 與 `STOCK_BIAS_*`（個股，±20 / ±15）**同名不同義**：本組是**大盤指數**
+# （^TWII）的拐點偵測門檻，敏感度刻意更高（頂/底轉折要早知道），不可互換。
+
+PIVOT_BIAS_240_PCT: float = 10.0
+"""大盤年線(MA240)乖離拐點門檻（%，左右對稱）：
+> +10% → 頂部拐點區間；< −10% → 底部拐點區間。
+原 src/ui/tabs/macro/section_state.py inline `_b240 > 10` / `< -10`。"""
+
+PIVOT_BIAS_20_PCT: float = 8.0
+"""大盤月線(MA20)乖離拐點門檻（%，取絕對值）：|bias20| > 8% → 短線過熱 / 超賣。
+原 src/ui/tabs/macro/section_state.py inline `abs(_b20) > 8`。"""
+
 TNX_VALUATION_PRESSURE_PCT: float = 4.5
 """macro_compass 10Y 殖利率(TNX)估值壓力**紅線**：≥4.5% → 🔴 估值壓力（科技股不利）。
 注意：與 MACRO_THRESHOLDS['US10Y'] 的 red_above=5.0 **刻意不同源**（compass 快訊用較嚴 4.5，
@@ -651,6 +718,17 @@ STOP_LOSS_DEFAULT_PCT: float = 8.0
 """預設停損:跌破認賠(-8%)。原 tab_stock.py:577 inline `_cur_p * 0.92`。
 注意:與 ATR_STOP_FIXED_PCT(8% / scoring_engine 風控)同值但語意分離 —
 本常數是「個股 Tab 顯示用建議值」,後者是「ATR 失敗 fallback」。"""
+
+HARD_STOP_LOSS_PCT: float = 7.0
+"""「什麼時候買/賣」區塊的**硬停損**(-7%)。原 `section_when_buy_sell.py`
+inline `round(_p2 * 0.93, 2)` + 兩處手打的「-7%」字面(D1 v19.185 抽出)。
+
+⚠️ 與 `STOP_LOSS_DEFAULT_PCT`(8%)**刻意不同值、不同語意**:
+  - 8% = 頁頂「建議停損」卡的預設方案(對應 FIXED_PLAN_RR_*);
+  - 7% = 進出場訊號區的較緊硬停損,與「月線停損 / 5MA 停利」並列成一組
+    由緊到鬆的價位帶。
+兩者同時出現在同一頁,故各自具名,**禁止**互相取代(取代會讓 K 線圖上兩條
+不同的水平線疊在一起,使用者會以為系統只有一個停損)。"""
 
 # ── 固定停利停損方案的「先天盈虧比」(v19.179 B1-b)────────────────
 # tab_stock.py:640 原寫 `(_tp1_p - _cur_p) / (_cur_p - _sl_p)`,而 _tp1_p / _sl_p
@@ -906,6 +984,44 @@ STOCK_BIAS_DEEP_DEVIATION_PCT: float = 20.0
 STOCK_BIAS_MILD_DEVIATION_PCT: float = 15.0
 """個股月線(MA20)中度乖離警示:|bias| > 15% → 短線過熱 / 過冷。
 原 tab_stock.py:803/830/832 inline 多處。"""
+
+# ── 勝利方程式 / SOP 進場檢核(D1 v19.185)──
+WINNING_FORMULA_HEALTH_MIN: float = 75.0
+"""「🏆 勝利方程式」個股健康度條件:health ≥ 75 才算通過。
+
+原 `section_psy_checklist.py` inline 裸數字 `75`,而**同一行的畫面文案**也各自
+手寫「≥75」—— 兩份複本(§3.3)。抽出後 code 與 label 共用同一個數字。
+**數值完全未變**。語意:比 `HEALTH_GRADE_A_MIN`(80,技術面 A 級)寬一階,
+因為勝利方程式是「5 項合議」而非單項把關,單項門檻不需要頂到 A 級。"""
+
+WINNING_FORMULA_MIN_PASS: int = 4
+"""「🏆 勝利方程式」放行門檻:5 項條件中至少 4 項成立。
+
+原 inline 裸數字 `4`,而卡片標題卻寫「需全部符合」(= 5 項) —— **畫面宣稱的門檻
+≠ 判定式**(D1 v19.185 稽核)。抽出後標題改由本常數插值,不可能再各說各話。"""
+
+SOP_SURGE_LOOKBACK_DAYS: int = 5
+"""SOP 進場檢核 / 今日禁止操作的「近 N 日漲幅」回看**交易日**數。
+
+D1 v19.185:原 `section_psy_checklist.py` 同一頁用了兩個基期 —— 檢核 ② 取
+`close.iloc[-6]`(= 5 個交易日前)、禁止操作清單取 `close.iloc[-5]`(= 4 個交易日
+前),兩個都標「近5日漲幅」卻是不同數字。收斂為單一常數 + 單一算式(`iloc[-(N+1)]`)。
+※ 交易日 ≠ 日曆日(§4.1)。"""
+
+SOP_SURGE_WARN_PCT: float = 5.0
+"""SOP 進場檢核 ②「未追高」門檻:|近 5 交易日漲幅| ≤ 5% 視為通過。原 inline `5`。"""
+
+SOP_SURGE_HARD_PCT: float = 10.0
+"""SOP 進場檢核 ② 的**硬鎖**門檻:|近 5 交易日漲幅| > 10% → checkbox 禁止勾選。
+原 inline `10`。"""
+
+SOP_BAN_SURGE_PCT: float = 4.0
+"""「今日禁止操作」追高條款:|近 5 交易日漲幅| > 4% → 列入禁止清單。原 inline `4`。
+※ 比 `SOP_SURGE_WARN_PCT`(5%)嚴 —— 兩者**語意不同**(勸阻 vs 通過檢核),
+不是同一個門檻的兩份複本,故各自具名。"""
+
+SOP_BAN_MONTHLY_LOSS_PCT: float = -5.0
+"""「今日禁止操作」情緒條款:本月報酬 < -5% → 列入禁止清單。原 inline `-5`。"""
 
 
 # ════════════════════════════════════════════════════════════════

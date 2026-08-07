@@ -1,12 +1,16 @@
 """
 ETF AI 儀表板 — Public API Shim
-Tab ⑥ 單一 ETF 深度診斷 | Tab ⑦ 組合配置 | Tab ⑧ 回測 | Tab ⑨ AI 綜合評斷
+🔍 單檔診斷 | ⚖️ ETF 組合 | 🧬 AI 綜合評斷（tab 名以 app.py:809-811 為準）
+
+B6-a v19.181：原檔頭寫「Tab ⑥/⑦/⑧ 回測/⑨」四個 tab —— **⑧ 回測已於 v18.265
+隨 `etf_tab_backtest.py` 刪除**，本檔下方也只 re-export 三個入口。舊標題會讓
+讀者以為還有一個回測分頁可用。
 
 P2-B Phase 7C：fetch / calc / render 三層分檔重構（2026-05-16）
   - etf_fetch.py    純 I/O：價格 / 配息 / 基本資訊 / 費用率 / NAV / 類股漲跌 / 新聞
   - etf_calc.py     純計算：殖利率 / 總報酬 / 折溢價 / 風險指標 / 同儕排名 / 戰情室列
   - etf_render.py   Streamlit/Plotly UI：橫幅 / 走勢圖 / BIAS / 蒙地卡羅 / 類股熱力圖
-  - etf_tab_*.py    Phase 6 已抽出的四大 tab 渲染入口
+  - etf_tab_*.py    Phase 6 已抽出的 tab 渲染入口（現存 3 個，見檔尾 import）
 
 此檔僅作 re-export，保持下游 6 個 importer（app / etf_quality / etf_tab_* / grape_ladder）
 既有 `from etf_dashboard import ...` 不變。新程式碼建議直接 import 對應子模組。
@@ -47,7 +51,7 @@ from src.ui.render import (  # noqa: F401
     _build_treemap_data, render_sector_heatmap,
 )
 
-# ── 四大 tab 入口（Phase 6 已抽出）──────────────────────────
+# ── tab 入口（Phase 6 已抽出；回測入口 v18.265 已刪，故為 3 個）────────
 from src.ui.etf.etf_tab_single import render_etf_single  # noqa: F401
 from src.ui.etf.etf_tab_portfolio import render_etf_portfolio  # noqa: F401
 from src.ui.etf.etf_tab_ai import render_etf_ai  # noqa: F401

@@ -62,8 +62,14 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     _wr_margin = _wr_cd.get('margin')
     _wr_adl = _wr_cd.get('adl')
     _wr_ts = _wr_inp.cl_ts
-    # 以交通燈有效 regime 為主,確保與頂部卡片結論一致
-    _wr_reg = _tl_eff_reg or (_wr_mkt.get('regime', 'neutral') if _wr_mkt else 'neutral')
+    # ── C1 v19.182:唯一出口 + 移除捏造的 'neutral' 預設 ──────────────────────
+    # 原碼 `_tl_eff_reg or _wr_mkt.get('regime','neutral')` 有兩個問題:
+    #   (a) fallback 到 raw `mkt_info['regime']`(第 2 個 producer)—— 紅綠燈判 🔴
+    #       而 mkt_info 是 bull 的那天,本卡的「今日唯一行動建議」會印
+    #       「🟢 趨勢偏多 — 可逢回布局核心部位」,和同頁上方燈號卡當場相反;
+    #   (b) 兩層 `'neutral'` 預設把「不知道」寫成「判斷為震盪」(§1)。
+    # `_tl_eff_reg` 現已是 canonical 結論(`calc_traffic_light.effective_regime`)。
+    _wr_reg = _tl_eff_reg or 'unknown'
     # v4 引擎:解耦趨勢與位階,取得精準操作建議
     _wr_fut_net = _wr_inp.futures_net
     _v4 = evaluate_market_status_v4_final(
@@ -142,7 +148,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         # 今日5分鐘清單 — v18.318:5 列垂直清單 → 5 欄總結小卡(比照桶卡片視覺)
         st.markdown('##### ✅ 今日操作前 5 分鐘清單')
         _cl_items = [
-            ('大盤燈號', '🟢 多頭' if _wr_reg == 'bull' else ('🔴 空頭防禦' if _wr_reg == 'bear' else '🟡 震盪'),
+            # C1 v19.182:原三元式的 else 分支把 **任何** 非 bull/bear 值(含
+            # 「總經未評估」)一律印成「🟡 震盪」—— 缺值被寫成一個市場判斷(§1)。
+            # 改為顯式四態,未評估誠實顯示 ⬜。
+            ('大盤燈號',
+             {'bull': '🟢 多頭', 'bear': '🔴 空頭防禦',
+              'neutral': '🟡 震盪'}.get(_wr_reg, '⬜ 總經未評估'),
              _wr_reg == 'bull', '多頭才積極操作'),
             ('外資方向', f'{"買超" if (_wr_fnet or 0)>0 else "賣超"} {abs(_wr_fnet or 0):.0f}億' if _wr_fnet is not None else '未知',
              (_wr_fnet or 0) > 0, '外資買超=跟著走'),

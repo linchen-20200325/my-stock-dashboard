@@ -541,10 +541,33 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             _cC = _exp_c is not None and _exp_c >= 10
             _cD = _gap8c is not None and _gap8c >= 1.0
             _cE = _fnet8 is not None and _fnet8 >= 100
-            _cF = (float(_twii8.get('pct') or 0) > 0 and
-                   float(_twd8.get('pct') or 0) < 0)
-            _cG = (float(_sox8.get('pct') or 0) >= 1.5 or
-                   float(_nvda8.get('pct') or 0) >= 2.0)
+            # ── v19.183 D2:把「未取得」與「未達標」分開(§1 降級須可見)──────────
+            # 舊寫法 `float(x.get('pct') or 0)` 把三種狀態壓成同一個 0.0:
+            #   ① 真的平盤 0.00%  ② dict 存在但沒有 'pct'  ③ 整個 dict 沒抓到。
+            # 判定結果都是「條件不成立」(這點沒錯,也刻意不改),但**徽章文字**會
+            # 一律寫成「未雙漲 / 點火」,等於對使用者宣稱「我查過了,沒發生」——
+            # 實際上可能是根本沒查到。三個布林值 `_cF` / `_cG` 的真值 100% 不變,
+            # 只多出「資料未取得」這第三種顯示態。
+            def _pct_or_none(_stats):
+                if not isinstance(_stats, dict):
+                    return None
+                _v = _stats.get('pct')
+                if _v is None:
+                    return None
+                try:
+                    _f = float(_v)
+                except (TypeError, ValueError):
+                    return None
+                return None if _f != _f else _f
+            _twii_pct8 = _pct_or_none(_twii8)
+            _twd_pct8  = _pct_or_none(_twd8)
+            _sox_pct8  = _pct_or_none(_sox8)
+            _nvda_pct8 = _pct_or_none(_nvda8)
+            _cF_known = _twii_pct8 is not None and _twd_pct8 is not None
+            _cG_known = _sox_pct8 is not None or _nvda_pct8 is not None
+            _cF = _cF_known and _twii_pct8 > 0 and _twd_pct8 < 0
+            _cG = ((_sox_pct8 is not None and _sox_pct8 >= 1.5) or
+                   (_nvda_pct8 is not None and _nvda_pct8 >= 2.0))
     
             _ring1_pass = _cA and _cB
             _ring2_cnt  = int(_cC) + int(_cD)
@@ -558,9 +581,15 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                         cond_badge(_cD, f'D M1B-M2={_gap8c:+.2f}%' if _gap8c is not None else 'D M1B-M2未知'))
             # v19.170 P0-1 順手修 bug:原三元運算兩邊字串相同(True/False 都印「F 股匯雙漲」),
             # 條件未成立時等於謊報。改成未成立顯示「F 股匯未雙漲」。
+            # v19.183 D2 補完 —— 上一版只修了 F 的兩態,漏了兩件事:
+            #   ① G 的徽章**至今仍兩態同字**(灰色也寫「G SOX/NVDA點火」)= 同一個謊報;
+            #   ② F/G 都沒有第三態 —— 資料沒抓到時寫「未雙漲 / 未點火」,是把
+            #      「不知道」講成「查證過沒發生」(§1)。
             _r3_html = (cond_badge(_cE, f'E 外資={_fnet8:+.0f}億' if _fnet8 is not None else 'E 外資未知') + ' ' +
-                        cond_badge(_cF, 'F 股匯雙漲' if _cF else 'F 股匯未雙漲') + ' ' +
-                        cond_badge(_cG, 'G SOX/NVDA點火'))
+                        cond_badge(_cF, ('F 股匯雙漲' if _cF else 'F 股匯未雙漲')
+                                        if _cF_known else 'F 股匯資料未取得') + ' ' +
+                        cond_badge(_cG, ('G SOX/NVDA點火' if _cG else 'G SOX/NVDA未點火')
+                                        if _cG_known else 'G SOX/NVDA資料未取得'))
 
             # v19.170 P0-1:第一環(解除保險)未過 → 登記成「天花板」交給建議持股 SSOT 仲裁,
             # 本卡不再自行輸出 `_atk_pct`(原「持股 0~20%」…),只保留火力分級文字,

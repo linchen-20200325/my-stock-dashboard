@@ -5,6 +5,23 @@
 
 §8.2 layer:L5 UI Tab section helper。
 
+D1 v19.185 稽核修正（§1 Fail Loud, Never Fake / §3.3 反捏造）
+--------------------------------------------------------------
+本檔原本是「綠燈不代表算過」的重災區,4 項一次收斂:
+
+1. **幽靈 key**:「💎 非357昂貴區」讀 `t2_data['val']` —— 該 key **全站沒有任何
+   寫入點**（`tab_stock.py` 寫的是 sid/name/df/price/avg_div/… 共 28 個 key,
+   沒有 `val`）。於是 `'昂貴' not in ''` 恆為 True ⇒ **這一項對每一檔股票、
+   任何價位都是 ✅**。現改用 `classify_stock_357_price(price, avg_div)` SSOT
+   由 `t2_data` 真有的 price/avg_div 現算。
+2. **捏造預設值**:「💰 融資安全」讀 `cl_data.margin` 缺席時退 `0`,
+   `0 < 2500億` ⇒ 總經沒載入時這一項也是 ✅。現改三態,未取得顯示 ⬜。
+3. **未載入被偽裝成震盪**:兩處 `mkt_info.get('regime','neutral')` 直讀趨勢面
+   **輸入** + 捏 `'neutral'`。現改吃 C1 唯一仲裁點 `get_macro_regime()`。
+4. **畫面宣稱門檻 ≠ 判定式**:標題寫「需全部符合」、判定式是 `>= 4`(5 項中 4 項);
+   同一頁「近5日漲幅」用了 `iloc[-6]` 與 `iloc[-5]` 兩個基期算出兩個數字。
+   兩者皆收斂到 `shared/signal_thresholds` 常數 + 單一算式。
+
 對外 API:
 - render_psy_checklist_section(sid2, df2, health2, _atr2_val) -> None
 """
@@ -12,12 +29,105 @@ from __future__ import annotations
 
 import streamlit as st
 
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED
 from shared.signal_thresholds import (
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
     MARGIN_BALANCE_WARN_THRESHOLD_YI,
+    SOP_BAN_MONTHLY_LOSS_PCT,
+    SOP_BAN_SURGE_PCT,
+    SOP_SURGE_HARD_PCT,
+    SOP_SURGE_LOOKBACK_DAYS,
+    SOP_SURGE_WARN_PCT,
+    WINNING_FORMULA_HEALTH_MIN,
+    WINNING_FORMULA_MIN_PASS,
 )
+from shared.thresholds import classify_stock_357_price
 from src.ui.render.tab_sections import border_left_banner, box_wrapper_open
+
+#: 三態旗標 → (emoji, 顏色)。None = 未評估,**不得**當成 False 渲染（§1）。
+_TRISTATE_ICON = {True: '✅', False: '❌', None: '⬜'}
+_TRISTATE_COLOR = {True: TRAFFIC_GREEN, False: TRAFFIC_RED, None: TRAFFIC_NEUTRAL}
+
+
+def _surge_pct(df2, lookback_days: int = SOP_SURGE_LOOKBACK_DAYS):
+    """近 N 個**交易日**漲幅 %(§4.1:交易日 ≠ 日曆日)。
+
+    基期 = `close.iloc[-(N+1)]`（N 根 K 棒之前的收盤）。資料不足 → None(不猜)。
+
+    D1 v19.185:原本同一頁有兩份實作 —— 檢核 ② 用 `iloc[-6]`、禁止清單用
+    `iloc[-5]`,兩者都標「近5日漲幅」卻差一根 K 棒,畫面上會出現兩個不同數字。
+    """
+    if df2 is None or 'close' not in getattr(df2, 'columns', []):
+        return None
+    if len(df2) < lookback_days + 1:
+        return None
+    try:
+        _now = float(df2['close'].iloc[-1])
+        _base = float(df2['close'].iloc[-(lookback_days + 1)])
+    except (ValueError, TypeError, IndexError):
+        return None
+    if not _base or _base <= 0 or _now != _now or _base != _base:  # 0 / NaN guard
+        return None
+    return round((_now - _base) / _base * 100, 1)
+
+
+def _read_margin_yi():
+    """總經一鍵更新寫入的融資餘額(億)。**未取得回 None**,不回 0。
+
+    §1:`0 億融資` 與「沒抓到融資」是兩件事,前者會讓「融資安全」條件變成
+    永遠成立的假綠燈。
+    """
+    _cd = st.session_state.get('cl_data')
+    if not isinstance(_cd, dict):
+        return None
+    _m = _cd.get('margin')
+    try:
+        _f = float(_m)
+    except (TypeError, ValueError):
+        return None
+    return None if _f != _f else _f  # NaN → None
+
+
+def build_winning_conditions(*, regime, macro_loaded: bool, margin_yi,
+                             health, price, avg_div, stop_set: bool):
+    """「🏆 勝利方程式」5 條件 → `[(label, state, unknown_note), ...]`（純函式）。
+
+    `state` 是**三態**：True 成立 / False 不成立 / **None 未評估**。
+    §1：把 None 壓成 False 或 True 都是造假 —— 前者說「查過，不符合」、
+    後者說「查過，符合」，而事實是「沒查」。
+
+    抽成純函式的理由（D1 v19.185）：這 5 條的判定原本內嵌在 render 裡，
+    只能靠掃字串驗，而字串守衛照抄實作字面 ⇒ 永遠驗不出實作本身錯了
+    （例如「💎 非357昂貴區」讀一個不存在的 key 卻恆綠，掃字串完全看不出來）。
+    現在測試可以直接餵輸入、驗輸出。
+
+    Args:
+        regime: canonical regime（`get_macro_regime()['regime']`）。
+        macro_loaded: 總經是否已評估。False → 大盤那條為 None。
+        margin_yi: 市場融資餘額（億）。None = 未取得（**不是** 0）。
+        health: 個股健康分 0-100。None = 未算。
+        price / avg_div: 現價 / 5 年均股利 → 357 分級（None/0 → 未評估）。
+        stop_set: 使用者是否已勾「已設停損點」。
+
+    Returns:
+        list[tuple[str, bool|None, str]]
+    """
+    _code357, _ = classify_stock_357_price(price, avg_div)
+    return [
+        ('🌍 大盤多頭燈號',
+         (str(regime) == 'bull') if macro_loaded else None,
+         '總經未評估'),
+        (f'💰 融資安全(<{MARGIN_BALANCE_WARN_THRESHOLD_YI:.0f}億)',
+         None if margin_yi is None else (float(margin_yi) < MARGIN_BALANCE_WARN_THRESHOLD_YI),
+         '融資餘額未取得'),
+        (f'🏥 個股健康度≥{WINNING_FORMULA_HEALTH_MIN:.0f}',
+         None if health is None else (float(health) >= WINNING_FORMULA_HEALTH_MIN),
+         '健康度未算'),
+        ('💎 非357昂貴區',
+         None if _code357 == 'na' else (_code357 in ('cheap', 'fair')),
+         '無配息資料,357 不適用'),
+        ('✋ 已設停損點', bool(stop_set), ''),
+    ]
 
 
 def render_psy_checklist_section(sid2: str, df2, health2,
@@ -31,32 +141,45 @@ def render_psy_checklist_section(sid2: str, df2, health2,
         health2: 個股健康分(0-100)
         _atr2_val: ATR 值(None → 用 price × 7% 估算停損)
     """
+    # ── C1 唯一仲裁點：本 section 全部 regime 判斷共用這一次結果 ──────────
+    from src.services.allocation_service import get_macro_regime
+    _macro_reg = get_macro_regime()
+    _macro_loaded = bool(_macro_reg.get('is_loaded'))
+    _regime = str(_macro_reg.get('regime') or 'unknown') if _macro_loaded else 'unknown'
+    _is_bear = _macro_loaded and _regime in ('bear', 'caution')
+    _regime_txt = (_macro_reg.get('traffic_light')
+                   or {'bull': '多頭', 'neutral': '震盪', 'caution': '轉守',
+                       'bear': '空頭'}.get(_regime, _regime)) if _macro_loaded else '未評估'
+
     # ══ 操作前心理檢查 + 勝利方程式 ═══════════════════════
     st.markdown('---')
     st.markdown('#### 🧠 操作前必做：心理檢查 + 勝利方程式')
 
     _mc_cols = st.columns([3, 2])
 
+    _surge_chk = _surge_pct(df2)
+
     with _mc_cols[0]:
         st.markdown(box_wrapper_open('primary', padding=12), unsafe_allow_html=True)
-        st.markdown('**📋 SOP 進場強制檢核表（4關卡全通過才顯示建議）**')
-        _wr_reg_chk = st.session_state.get('mkt_info', {}).get('regime', 'neutral')
+        st.markdown('**📋 SOP 進場強制檢核表（3 關卡全通過才顯示建議）**')
         _price_chk = float(df2['close'].iloc[-1]) if df2 is not None and not df2.empty else 0
-        _open5_chk = (float(df2['close'].iloc[-6]) if df2 is not None and len(df2) >= 6
-                      else _price_chk)
-        _surge_chk = round((_price_chk - _open5_chk) / max(_open5_chk, 1) * 100, 1)
         # _atr2_val 來自 caller;若 None 則用價格 × 7% 估算停損距離
         _atr_eff = _atr2_val if _atr2_val is not None else _price_chk * 0.07
         _stop_chk = round(_price_chk - 1.5 * _atr_eff, 2)
         _q1 = st.checkbox(
-            f'① 確認非空頭格局（目前：{_wr_reg_chk}）',
-            value=_wr_reg_chk != 'bear', key=f't2_q1_{sid2}',
-            disabled=_wr_reg_chk == 'bear'
+            f'① 確認非空頭格局（目前：{_regime_txt}）',
+            value=not _is_bear, key=f't2_q1_{sid2}',
+            disabled=_is_bear,
         )
+        # §1:漲幅算不出來時,checkbox 不預先勾（不是「確認未追高」，是「無法確認」）
+        _surge_txt = (f'{_surge_chk:+.1f}%' if _surge_chk is not None
+                      else f'資料不足（需 {SOP_SURGE_LOOKBACK_DAYS + 1} 根 K 線）')
         _q2 = st.checkbox(
-            f'② 確認未追高超過5%（近5日漲幅：{_surge_chk:+.1f}%）',
-            value=abs(_surge_chk) <= 5, key=f't2_q2_{sid2}',
-            disabled=abs(_surge_chk) > 10
+            f'② 確認未追高超過{SOP_SURGE_WARN_PCT:g}%'
+            f'（近{SOP_SURGE_LOOKBACK_DAYS}交易日漲幅：{_surge_txt}）',
+            value=(_surge_chk is not None and abs(_surge_chk) <= SOP_SURGE_WARN_PCT),
+            key=f't2_q2_{sid2}',
+            disabled=(_surge_chk is not None and abs(_surge_chk) > SOP_SURGE_HARD_PCT),
         )
         _q3 = st.checkbox(
             f'③ 確認停損價（跌破 {_stop_chk} 元無條件出場）',
@@ -67,53 +190,69 @@ def render_psy_checklist_section(sid2: str, df2, health2,
             st.success('✅ 心理狀態良好，可以繼續評估操作')
         else:
             st.warning('⚠️ 尚有項目未確認，建議先暫停，避免情緒化操作')
+        if not _macro_loaded:
+            st.caption('⬜ 第 ① 關的大盤格局尚未評估（先開一次「🌡️ 總經」分頁按更新）'
+                       '—— 目前不擋你勾選，但這不等於已確認非空頭。')
         st.markdown('</div>', unsafe_allow_html=True)
 
     with _mc_cols[1]:
         st.markdown(
             f'<div style="background:#0a1628;border:1px solid {TRAFFIC_GREEN};'
             f'border-radius:10px;padding:12px;">', unsafe_allow_html=True)
-        st.markdown('**🏆 勝利方程式（需全部符合）**')
-        _wr_mkt2 = st.session_state.get('mkt_info', {})
-        _wr_reg2 = _wr_mkt2.get('regime', 'neutral') if _wr_mkt2 else 'neutral'
-        _wr_margin2 = st.session_state.get('cl_data', {}).get('margin', 0) or 0
-        _win_conds = [
-            ('🌍 大盤多頭燈號',  _wr_reg2 == 'bull'),
-            (f'💰 融資安全(<{MARGIN_BALANCE_WARN_THRESHOLD_YI:.0f}億)',
-             _wr_margin2 < MARGIN_BALANCE_WARN_THRESHOLD_YI),
-            ('🏥 個股健康度≥75', health2 >= 75 if df2 is not None else False),
-            ('💎 非357昂貴區',
-             '昂貴' not in str(st.session_state.get('t2_data', {}).get('val', ''))),
-            ('✋ 已設停損點',     _q3),
-        ]
-        _win_count = sum(1 for _, v in _win_conds if v)
-        for _wn, _wv in _win_conds:
-            _wc = TRAFFIC_GREEN if _wv else TRAFFIC_RED
-            _wi = '✅' if _wv else '❌'
-            st.markdown(f'<div style="font-size:12px;color:{_wc};padding:2px 0;">{_wi} {_wn}</div>',
+        st.markdown(f'**🏆 勝利方程式（5 項至少 {WINNING_FORMULA_MIN_PASS} 項符合）**')
+        _wr_margin2 = _read_margin_yi()
+        # 💎 357 估值：改由 t2_data 真有的 price / avg_div 現算（原讀不存在的 'val'）
+        _t2d_psy = st.session_state.get('t2_data') or {}
+        _win_conds = build_winning_conditions(
+            regime=_regime, macro_loaded=_macro_loaded,
+            margin_yi=_wr_margin2, health=health2,
+            price=_t2d_psy.get('price'), avg_div=_t2d_psy.get('avg_div'),
+            stop_set=bool(_q3),
+        )
+        _win_count = sum(1 for _, v, _n in _win_conds if v is True)
+        _win_unknown = sum(1 for _, v, _n in _win_conds if v is None)
+        for _wn, _wv, _wnote in _win_conds:
+            _wc = _TRISTATE_COLOR[_wv]
+            _wi = _TRISTATE_ICON[_wv]
+            _suffix = (f'<span style="color:{TRAFFIC_NEUTRAL};font-size:11px;">'
+                       f'（{_wnote}）</span>' if _wv is None and _wnote else '')
+            st.markdown(f'<div style="font-size:12px;color:{_wc};padding:2px 0;">'
+                        f'{_wi} {_wn}{_suffix}</div>',
                         unsafe_allow_html=True)
+        _pass = _win_count >= WINNING_FORMULA_MIN_PASS
+        _unknown_txt = (f'　⬜{_win_unknown} 項未評估' if _win_unknown else '')
         st.markdown(
             f'<div style="margin-top:8px;font-size:13px;font-weight:700;'
-            f'color:{TRAFFIC_GREEN if _win_count >= 4 else TRAFFIC_RED};">'
-            f'{"🚀 符合 " + str(_win_count) + "/5，可以考慮操作" if _win_count >= 4 else "⛔ 僅符合 " + str(_win_count) + "/5，建議等待"}'
+            f'color:{TRAFFIC_GREEN if _pass else TRAFFIC_RED};">'
+            f'{"🚀 符合 " if _pass else "⛔ 僅符合 "}{_win_count}/5，'
+            f'{"可以考慮操作" if _pass else "建議等待"}{_unknown_txt}'
             f'</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     # 今日禁止操作清單
     st.markdown('#### 🚫 今日禁止操作情況（有任何一項→今天暫停）')
     _ban_items = []
-    _wr_price = float(df2['close'].iloc[-1]) if df2 is not None and not df2.empty else 0
-    _wr_open = float(df2['close'].iloc[-5]) if df2 is not None and len(df2) >= 5 else _wr_price
-    _today_surge = (round((_wr_price - _wr_open) / max(_wr_open, 1) * 100, 1)
-                    if _wr_open else 0)
-    if abs(_today_surge) > 4:
-        _ban_items.append(f'📈 個股近5日漲幅 {_today_surge:+.1f}% 超過4%（追高風險）')
-    _ml = st.session_state.get('monthly_loss_pct', 0)
-    if _ml < -5:
-        _ban_items.append(f'📉 本月已虧損 {abs(_ml):.1f}%（情緒操作風險上升）')
-    if _wr_margin2 > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
+    _unevaluated = []
+    # §1:同一個「近 N 交易日漲幅」只算一次(上方 _surge_chk),不再另起第二個基期。
+    if _surge_chk is None:
+        _unevaluated.append(f'近{SOP_SURGE_LOOKBACK_DAYS}交易日漲幅（K 線資料不足）')
+    elif abs(_surge_chk) > SOP_BAN_SURGE_PCT:
+        _ban_items.append(f'📈 個股近{SOP_SURGE_LOOKBACK_DAYS}交易日漲幅 {_surge_chk:+.1f}% '
+                          f'超過{SOP_BAN_SURGE_PCT:g}%（追高風險）')
+    # `monthly_loss_pct` 全站無寫入點(D1 v19.185 複驗) → 恆為未追蹤。
+    # §1:不可因為「沒有虧損紀錄」就宣告「本月沒虧」,列入未評估項誠實揭露。
+    _ml = st.session_state.get('monthly_loss_pct')
+    if _ml is None:
+        _unevaluated.append('本月累計損益（系統未追蹤實際交易績效）')
+    elif float(_ml) < SOP_BAN_MONTHLY_LOSS_PCT:
+        _ban_items.append(f'📉 本月已虧損 {abs(float(_ml)):.1f}%（情緒操作風險上升）')
+    if _wr_margin2 is None:
+        _unevaluated.append('市場融資餘額（總經未載入）')
+    elif _wr_margin2 > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:
         _ban_items.append(f'💸 融資 {_wr_margin2:.0f}億 極度過熱（散戶追高期，等待）')
-    if _wr_reg2 == 'bear':
+    if not _macro_loaded:
+        _unevaluated.append('大盤格局（總經未評估）')
+    elif _is_bear:
         _ban_items.append('🔴 大盤空頭格局（禁止做多）')
 
     if _ban_items:
@@ -123,5 +262,12 @@ def render_psy_checklist_section(sid2: str, df2, health2,
                                    padding_y=7, margin_y=3, bg='#2a0d0d'),
                 unsafe_allow_html=True,
             )
+    elif _unevaluated:
+        # §1:4 條裡有幾條根本沒資料可判時,不能印「無禁止操作情況」——
+        # 那會被讀成「4 條都查過且都安全」。
+        st.info('✅ 已可判定的條款均未觸發，但下列條款**無資料可判**：'
+                + '、'.join(_unevaluated))
     else:
         st.success('✅ 今日無禁止操作情況，可以正常評估')
+    if _ban_items and _unevaluated:
+        st.caption('⬜ 另有下列條款無資料可判：' + '、'.join(_unevaluated))

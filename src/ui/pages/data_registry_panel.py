@@ -24,18 +24,40 @@ from typing import Any
 
 import streamlit as st
 
+from shared.colors import (
+    TRAFFIC_GREEN as _C_GREEN,
+    TRAFFIC_NEUTRAL as _C_IDLE,
+    TRAFFIC_RED as _C_RED,
+    TRAFFIC_YELLOW as _C_YELLOW,
+)
 from shared.data_categories import (
     ALL_CATEGORIES, CAT_FALLBACK, FRESHNESS_THRESHOLDS_DAYS, coverage_emoji_for,
 )
 
-_C_GREEN  = "#3fb950"
-_C_YELLOW = "#d29922"
-_C_RED    = "#f85149"
-_C_IDLE   = "#666"
+# v19.181 D3:色票改引 L0 SSOT `shared/colors.py`。原本這裡 inline 一組舊
+# GitHub 調色盤(#3fb950/#d29922/#f85149/#6e7681),但全站已於 v19.68 遷 Tailwind
+# ⇒ 工具箱裡同一個 🟡 在本面板與 reconcile_panel 各有一種黃,與其餘全站第三種黃。
+# 顏色是燈號語意的一部分,不同色 = 使用者會以為是不同等級。
 
 
 def _freshness_emoji(last_updated: str, frequency: str, missing: bool) -> tuple[str, str]:
     """從 last_updated + frequency + missing 判 freshness。
+
+    ⚠️ **這把尺量的東西與另外兩張表不同**（v19.181 D3 稽核補註，先讀完再改門檻）：
+      - `data_coverage` / `health_inspector` 量的是「資料的 as-of 日期 vs 預期最新
+        交易日」，門檻走 `shared.staleness.stale_days_threshold`（daily 7 / monthly 45
+        / quarterly 150）。
+      - **本表的 `last_updated` 語意是混的**：`macro_helpers.rp_entry` 塞的是
+        DataFrame 的最後一筆**資料日期**（as-of），但 `rp_scalar` 塞的是呼叫端傳進來的
+        `proxy_date`（通常＝今天，等於「抓取時間」的代理）。
+        同一欄兩種語意 ⇒ 沒有任何一組天數門檻對兩者都正確。
+      - 因此本表**刻意不套** `stale_days_threshold`（例：月頻套 45 天會讓
+        `rp_scalar` 那一半永遠綠、`rp_entry` 那一半永遠紅）。
+        `FRESHNESS_THRESHOLDS_DAYS` 是一把較寬的「這條資料線還活著嗎」的尺。
+      - 唯一跨表共同底線（由 `tests/test_d3_toolbox_registry.py` 守）：
+        **超過 SSOT 日頻紅線之後，任何一張表都不得再顯示 🟢**。
+      - 真正的收斂做法是先把 `last_updated` 拆成 `as_of` / `fetched_at` 兩欄
+        （§2.2 provenance），不是硬把三組數字調成一樣 —— 屬另案。
 
     Returns (emoji, hex_color).
     Rules:
@@ -119,7 +141,7 @@ def render_data_registry_panel() -> None:
 
     groups = compute_registry_groups()
     if not groups:
-        st.info("尚未觸發 data_registry 載入。請至 🌐 總經 Tab 按 🚀 一鍵更新。")
+        st.info("尚未觸發 data_registry 載入。請至 🌍 總經 Tab 按 🚀 一鍵更新。")
         return
 
     _th = ("font-size:10px;color:#888;font-weight:700;padding:6px 10px;"
@@ -152,9 +174,9 @@ def render_data_registry_panel() -> None:
                 _bg = ("#0a1a0a" if _e['emoji'] == "🟢" else
                        ("#1a1200" if _e['emoji'] == "🟡" else
                         ("#1a0606" if _e['emoji'] == "🔴" else "#0d1117")))
-                _missing_tag = ("<span style='color:#f85149;font-size:9px;"
-                                "padding:0 4px;border:1px solid #f85149;border-radius:3px;"
-                                "margin-left:6px'>缺</span>" if _e['missing'] else "")
+                _missing_tag = (f"<span style='color:{_C_RED};font-size:9px;"
+                                f"padding:0 4px;border:1px solid {_C_RED};border-radius:3px;"
+                                f"margin-left:6px'>缺</span>" if _e['missing'] else "")
                 _html += (
                     f"<div style='display:grid;grid-template-columns:0.4fr 2.4fr 1.1fr 0.7fr 0.8fr;"
                     f"background:{_bg};border-bottom:1px solid #21262d'>"
@@ -173,7 +195,7 @@ def render_data_registry_panel() -> None:
     _total = sum(len(v) for v in groups.values())
     st.caption(
         f"全 {_total} 筆資料源,分 {len(groups)} 個 SSOT category。"
-        "細項缺失 → 🌐 總經 Tab 按更新觸發,或檢查下方 API Key / Proxy 診斷。"
+        "細項缺失 → 🌍 總經 Tab 按更新觸發,或檢查下方 API Key / Proxy 診斷。"
     )
 
 

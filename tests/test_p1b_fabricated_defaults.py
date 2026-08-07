@@ -206,24 +206,61 @@ class TestNoFabricatedDefaultsInSource:
             "該欄是小台法人空多比（±100%、中位 0），50 在此尺度上是極端值不是中性（§4.1）。"
         )
 
-    def test_defense_guards_none_fut_net(self):
-        """`_defense` 必須顯式判 `_fut_net is not None`，否則 `abs(None)` 會炸。"""
+    @pytest.mark.parametrize("bad_fut", [None, float("nan"), "", "N/A"])
+    def test_defense_guards_missing_fut_net(self, bad_fut):
+        """外資期貨淨口缺值時：**不觸發防禦、也不得拋例外**。
+
+        ── C1 v19.182 守衛改寫（從字面掃描 → 行為斷言）──────────────────
+        原本這條是 AST 掃 `calc_traffic_light` 裡 `_defense = ...` 那一行的
+        `ast.unparse` 字串是否含 `"_fut_net is not None"`。兩個問題：
+
+        1. **它只是照抄實作的字面**。實作寫什麼、守衛就要求什麼，所以它
+           **永遠不可能發現實作本身是錯的** —— 只要有人把判斷式改成
+           `_fut_net is not None and False`，守衛照樣綠燈。
+        2. 判定邏輯 C1 已下沉至 L0 `shared.regime_arbiter`（全站唯一仲裁點），
+           caller 端只剩 `_defense = _verdict.defense`。字面掃描看不到它，
+           會產出**假紅燈**，而 §1 想守的性質（缺值不被當成安全訊號、
+           `abs(None)` 不炸）其實沒有變。
+
+        改為直接對 `is_foreign_futures_defense()` 餵四種「缺值」表示法，
+        斷言回 False 且不拋 —— 這才會在實作真的退化時變紅。
+        （「有大空單時仍照常觸發」的反向護欄見
+        `TestDefenseNotTriggeredByMissingData::test_real_big_short_still_triggers_defense`
+        與本類的 `test_known_big_short_still_defends`，兩條方向相反、互不矛盾。）
+        """
+        from shared.regime_arbiter import is_foreign_futures_defense
+        assert is_foreign_futures_defense(market_score=1, futures_net_lots=bad_fut) is False
+
+    def test_known_big_short_still_defends(self):
+        """反向護欄：已知的大額淨空單仍必須觸發防禦（門檻 SSOT 30,000 口）。
+
+        與上一條方向相反但**不互斥** —— 上一條講「缺值」，這條講「已知且超標」。
+        """
+        from shared.regime_arbiter import is_foreign_futures_defense
+        assert is_foreign_futures_defense(market_score=1, futures_net_lots=-40000) is True
+
+    def test_defense_delegates_to_single_arbiter(self):
+        """`calc_traffic_light` 不得再自行重寫防禦判定式（§2.1 SSOT）。
+
+        這條**不是**字面抄襲守衛：它要求的是「本函式裡沒有第二份實作」，
+        而不是「這一行長得像某個樣子」。判定式若被複製回來，`_defense` 的
+        右手邊就會重新出現 `FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD` 比較。
+        """
         fn = _func(_MACRO_HELPERS, "calc_traffic_light")
-        found = False
+        offenders = []
         for n in ast.walk(fn):
             if not isinstance(n, ast.Assign):
                 continue
             if not any(isinstance(t, ast.Name) and t.id == "_defense" for t in n.targets):
                 continue
-            seg = ast.unparse(n)
-            found = "_fut_net is not None" in seg
-            assert found, (
-                _at(_MACRO_HELPERS, n.lineno)
-                + "\n   ← `_defense` 未先判 `_fut_net is not None`：\n"
-                + f"       {seg}\n"
-                "   缺資料不是「沒有大空單」，且 abs(None) 會直接 TypeError。"
-            )
-        assert found, "找不到 `_defense = ...`，守衛失效（是否被改名？）"
+            seg = ast.unparse(n.value)
+            if "FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD" in seg:
+                offenders.append(_at(_MACRO_HELPERS, n.lineno) + f"\n       {seg}")
+        assert not offenders, (
+            "`_defense` 在 calc_traffic_light 內被重新實作（應改吃 "
+            "`shared.regime_arbiter.arbitrate_regime()` 的 verdict）：\n"
+            + "\n".join(offenders)
+        )
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -442,6 +479,23 @@ class TestDegradationIsVisibleOnScreen:
 
             def expander(self, *a, **k):
                 return self
+
+            # v19.185 D2:explainer 改成同時揭露「趨勢面 regime(輸入)」與
+            # 「生效 regime(結論)」後會呼叫 st.caption / st.warning / st.info。
+            # 這個 stub 只實作 markdown+expander,於是本測試以 AttributeError 紅燈
+            # —— 但它要測的是「fut_net=None 不得崩潰」,不是「只准用 markdown」。
+            # 補齊常見的無回傳 render API,避免 stub 的覆蓋面變成隱性契約。
+            def caption(self, *a, **k):
+                return None
+
+            def warning(self, *a, **k):
+                return None
+
+            def info(self, *a, **k):
+                return None
+
+            def write(self, *a, **k):
+                return None
 
         _orig = mc.st
         mc.st = _Stub()

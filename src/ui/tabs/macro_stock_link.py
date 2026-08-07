@@ -24,13 +24,29 @@ import streamlit as st
 
 def render_macro_stock_backdrop(session_state) -> None:
     """渲染大盤總經背景 banner（純顯示，零副作用，零新 IO）。"""
-    _mkt = session_state.get("mkt_info") or {}
-    if not isinstance(_mkt, dict) or not _mkt.get("regime"):
+    # ── D1 v19.185（C1 接線 · §1 Fail Loud）────────────────────────────────
+    # 原碼直讀 `mkt_info['regime']`（趨勢面**輸入**）並補 default `'neutral'`。
+    # 兩個後果：
+    #  (a) 健康分跌破防禦門檻的那天，總經頁燈號卡印 🔴 空頭防禦，這條 banner 仍照
+    #      raw regime 印「🟢 大盤多頭 → 順勢操作環境較友善」—— 同一天兩個相反結論；
+    #  (b) 未評估時 default 'neutral' 讓 banner 直接宣告「震盪」。
+    # 改吃全站唯一仲裁點 get_macro_regime()（與燈號卡、置底常駐條同一次判定）。
+    from src.services.allocation_service import get_macro_regime
+    _reg = get_macro_regime()
+    if not _reg.get("is_loaded"):
         st.caption("🧭 載入「總經」Tab 後，這裡會顯示大盤 regime 背景（多空 / 建議持股）")
         return
 
-    _regime = str(_mkt.get("regime", "neutral"))
-    _label = str(_mkt.get("label", "") or _regime)
+    _mkt = session_state.get("mkt_info") or {}
+    if not isinstance(_mkt, dict):
+        _mkt = {}
+    _regime = str(_reg.get("regime") or "unknown")
+    # label 優先用燈號卡的中文 label（同一次仲裁的產物）；沒有才退回 mkt_info 的
+    # 趨勢面 label —— 但那是**輸入**的敘述，故加註來源避免被讀成結論。
+    _label = str(_reg.get("traffic_light") or "").strip()
+    if not _label:
+        _raw_label = str(_mkt.get("label", "") or "").strip()
+        _label = f"{_raw_label}（趨勢面）" if _raw_label else _regime
     # v19.170 P0-1:建議持股改讀全站唯一 SSOT(get_allocation),不再讀
     # mkt_info['exposure_pct'](market_strategy 自算的 80/50/20,與
     # 🎚️ 建議持股油門 打架)。§1 Fail Loud:未評估時 range_text='--' → 不顯示。
@@ -40,8 +56,10 @@ def render_macro_stock_backdrop(session_state) -> None:
     _below5 = _mkt.get("index_below_ma5")
     # v18.210 K4：走 shared/colors SSOT（traffic-light hex 散落 15 檔 110 處統一收納）
     from shared.colors import TRAFFIC_GREEN, TRAFFIC_YELLOW, TRAFFIC_RED
+    # D1 v19.185：補 'caution'（canonical 五態之一，原本落到藍色 "#58a6ff"，
+    # 看起來像「有另一種狀態」而不是「保守」）。
     _border = {"bull": TRAFFIC_GREEN, "neutral": TRAFFIC_YELLOW,
-               "bear": TRAFFIC_RED}.get(_regime, "#58a6ff")
+               "caution": TRAFFIC_RED, "bear": TRAFFIC_RED}.get(_regime, "#58a6ff")
 
     _head = f"🧭 <b>大盤總經背景</b>（來自「總經」Tab）：<b>{_label}</b>"
     if _exp:
@@ -75,7 +93,7 @@ def render_macro_stock_backdrop(session_state) -> None:
         unsafe_allow_html=True,
     )
 
-    if _regime == "bear":
+    if _regime in ("bear", "caution"):
         st.caption(
             "🔴 大盤空頭 → 個股操作宜保守 / 減碼，即使基本面強的股也難完全"
             "抗系統性風險（建議降持股比例）"

@@ -118,8 +118,22 @@ def render_etf_portfolio(gemini_fn=None):
     from src.compute.etf import calc_portfolio_stress_test
     from src.compute.etf import compute_etf_annual_cashflow
 
-    mkt_info = st.session_state.get('mkt_info', {})
-    regime   = mkt_info.get('regime', 'neutral')
+    # ── C1 v19.182:改吃 regime 唯一出口,移除捏造的 'neutral' 預設 ──────────────
+    # （原本這裡先讀 `mkt_info` 只為了取 regime，取消後該變數在本函式已無其他
+    #   讀取端，一併移除以免留下誤導性的「這頁有讀 mkt_info」痕跡。）
+    # 原碼 `mkt_info.get('regime', 'neutral')` 有兩個問題:
+    #   (a) `mkt_info['regime']` 是**趨勢面輸入**,不是總經結論 —— 總經紅綠燈判
+    #       🔴 空頭防禦(健康分跌破門檻 / 外資期貨大額淨空)的那天,這裡照樣拿到
+    #       'bull',於是下方「核心/衛星 vs regime 目標」用**多頭 60/40** 去比對,
+    #       而同一頁最上方的配置橫幅卻已印「先控制股票曝險」;
+    #   (b) 未載入時捏造 'neutral' → 整套核衛判定照跑,還會給出綠燈「符合建議」,
+    #       而同頁橫幅寫「⬜ 總經未評估」(§1 Fail Loud:同頁自打臉)。
+    # 現在未評估 → `regime=None` → 下方不建 CoreSatelliteManager → 目標比為 None
+    # → `evaluate_core_satellite_gate` 走既有的 STATUS_UNKNOWN 分支誠實顯示
+    #   「⚪ 無法判定：拿不到 regime 核心目標比」。
+    from src.services.allocation_service import get_macro_regime as _get_macro_reg
+    _macro_reg = _get_macro_reg()
+    regime = _macro_reg['regime'] if _macro_reg['is_loaded'] else None
     macro_allocation_banner(regime)
 
     st.markdown('#### 📋 輸入持股組合')
@@ -668,14 +682,18 @@ def render_etf_portfolio(gemini_fn=None):
     _target_core_pct = None
     try:
         from src.compute.strategy import CoreSatelliteManager as _CSM
-        _mgr = _CSM(total_value, regime=regime) if total_value > 0 else None
+        # C1 v19.182:`regime is None`(總經未評估)時**不得**建 manager ——
+        # `_CORE_RATIO.get(None, 0.70)` 會靜默給出 0.70,也就是把「中性 70/30」
+        # 當成一個已知目標拿去判合格。§1 明文禁止「自行估一個合理值當常數」。
+        # 目標為 None → 下方 gate 走既有 STATUS_UNKNOWN 分支誠實顯示無法判定。
+        _mgr = _CSM(total_value, regime=regime) if (total_value > 0 and regime) else None
         _target_core_pct = _mgr.core_ratio * 100 if _mgr is not None else None
     except Exception as _csm_e:
         print(f'[etf_tab_portfolio/core_sat] CoreSatelliteManager 取目標失敗:'
               f'{type(_csm_e).__name__}: {_csm_e}')
     _cs_gate = evaluate_core_satellite_gate(
         [{'ticker': r['ticker'], 'value': r['current_value']} for r in rows],
-        target_core_pct=_target_core_pct, regime=regime)
+        target_core_pct=_target_core_pct, regime=(regime or ''))
     _cs_split = _cs_gate['split']
     _cs_tol   = _cs_gate['tolerance_pp']
     _cs1, _cs2 = st.columns(2)
@@ -1325,7 +1343,8 @@ def render_etf_portfolio(gemini_fn=None):
     # 存入 session_state
     st.session_state['etf_portfolio_data'] = {
         'rows': rows, 'war_rows': _war_rows, 'rebal_actions': rebal_actions,
-        'total_value': total_value, 'regime': regime,
+        # C1 v19.182:未評估存 'unknown' 而非捏造的 'neutral'(下游 AI prompt 讀它)
+        'total_value': total_value, 'regime': (regime or 'unknown'),
         'loss_pct': loss_pct,
         # §2.2 provenance:下游(AI prompt / 診斷頁)要能知道這頁的 TWD 口徑
         # 是用哪個匯率、哪一天換的,以及有沒有持股被排除。

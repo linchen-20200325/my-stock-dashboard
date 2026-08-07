@@ -2,9 +2,15 @@
 
 原 tab_macro.py:170-235 inline(【模組一】紅綠燈卡 + warroom_summary write)。
 
-跨 page state(critical):本檔寫 `st.session_state['warroom_summary']` 8 keys,
+跨 page state(critical):本檔寫 `st.session_state['warroom_summary']`,
 被 tab_stock_grp / section_inputs / macro_helpers / macro/helpers / section_state
 5 個檔案讀取。
+
+⚠️ C1 v19.182 起 warroom 內的 regime 有**兩個 key、語意不同**:
+- `regime`           = 趨勢面**輸入**(raw `mkt_info['regime']`),僅供揭露。
+- `effective_regime` = 紅綠燈決策樹的**結論**(canonical),`get_macro_state()` 讀它。
+另附 `light`(🟢🟡🔴)與 `regime_source`(哪條分支生效)。詳見
+`shared/regime_arbiter.py`。
 
 placeholder lifecycle:`_tl_placeholder = st.empty()` 物件由 caller 沿用 ——
 後續 `_tl_placeholder.empty()` (refresh 時清空)+ `render_section_state(...,
@@ -184,11 +190,14 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
             '確保資料是今日最新，再做投資判斷。',
         )
 
-    # 統一有效市場 regime(確保交通燈與下方卡片結論一致)
-    # 🔴 對應 bear,🟢 對應 bull,🟡 對應 neutral
-    _tl_eff_reg = {'🔴': 'bear', '🟢': 'bull', '🟡': 'neutral'}.get(
-        (_tl_init or {}).get('icon', ''), None,
-    )
+    # ── C1 v19.182:改讀 canonical 結論,不再由 icon 反推 ──────────────────
+    # 原碼 `{'🔴':'bear','🟢':'bull','🟡':'neutral'}.get(tl['icon'])` 是**反向推導**
+    # —— 決策樹知道自己走了哪一條分支,卻只吐一個 emoji,下游再猜回去。
+    # 現在 `calc_traffic_light` 直接回 `effective_regime`(與燈色同源,見
+    # `shared/regime_arbiter.py`),猜的步驟消失。
+    # ⚠️ 值域與舊碼**完全一致**(bull/neutral/bear/None):arbiter 的分支 4
+    # (趨勢 caution/bear)同樣回 'bear',對應舊碼 🔴 → 'bear'。
+    _tl_eff_reg = (_tl_init or {}).get('effective_regime') or None
 
     # ── 同步寫入 session_state(其他頁面需要的值)────────────
     if _tl_init:
@@ -210,7 +219,20 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
         st.session_state['warroom_summary'] = {
             'traffic_light': _tl_init['label'],
             'health_score':  _tl_init['health'],
+            # ── C1 v19.182:regime 三欄位契約 ──────────────────────────────
+            # `regime`(舊 key)語意不變 = **趨勢面輸入** raw `mkt_info['regime']`,
+            # 保留給揭露「被壓制的反向訊號」用(例:趨勢 bull 但健康分跌破 → 燈 🔴)。
+            # `effective_regime` 才是結論 —— `get_macro_state()` 讀它,於是置底
+            # 常駐條 / ETF 配置橫幅 / 個股組合評分 與 頁頂燈號卡 **同一個答案**。
+            # ⚠️ 不可把 effective 寫回 `'regime'` key:`section_state.py:511` 的
+            # `_wr_sum.update({...'regime': _tl2_mkt.get('regime','neutral')...})`
+            # 會在本函式之後把該 key 蓋回 raw 值(該檔本輪不在授權改動範圍),
+            # 用獨立 key 才不會被蓋掉。`get_macro_state` 另備 primitives 重算路徑,
+            # 即使兩個 key 都缺也能得到同一答案。
             'regime': _tm_mkt_init.get('regime', 'neutral'),
+            'effective_regime': _tl_init['effective_regime'],
+            'light':            _tl_init['light'],
+            'regime_source':    _tl_init['regime_source'],
             'market_score':  _tl_init['score'],
             'jingqi_avg':    _tl_init['jqavg'],
             'leek_index':    _tl_init['leek'],

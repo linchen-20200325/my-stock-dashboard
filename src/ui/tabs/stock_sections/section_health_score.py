@@ -36,11 +36,33 @@ from src.ui.render import STRATEGY_TECHNICAL, kpi, strategy_conclusion  # v19.17
 from src.ui.render.app_render import render_health_score
 
 
+def attach_chip_columns(df):
+    """把 df2 的逐日「外資 / 投信」欄（張）對映成 V4 引擎要的
+    `foreign_net` / `trust_net`（純函式，回**新的** DataFrame）。
+
+    兩欄任一缺席 → **不建欄**（引擎會回「⚪ 無籌碼資料」）。§1：寧可讓下游
+    誠實說「沒有籌碼資料」，也不要用單日值廣播成整欄假裝有 5 日累計。
+
+    D1 v19.185 抽出的理由：舊碼在 render 裡寫
+    `_v4_df['foreign_net'] = st.session_state['t2_inst'].get('外資', 0)` ——
+    把**一天**的淨買量廣播到每一列，於是引擎的 `tail(5).sum()` 變成
+    「最後一日 × 5」，`tail(3)` 的「連續3日流入」也只反映最新一天。
+    抽成純函式後，「5 日加總必須等於 5 天的實際和」可以被測試直接驗。
+    """
+    _out = df.copy()
+    if '外資' in _out.columns and '投信' in _out.columns:
+        _out['foreign_net'] = pd.to_numeric(_out['外資'], errors='coerce').fillna(0)
+        _out['trust_net'] = pd.to_numeric(_out['投信'], errors='coerce').fillna(0)
+    return _out
+
+
 def render_health_score_section(
     sid2: str, health2, details2,
     df2, price2, qtr2, yearly2, avg_div2,
     rsi2, vr2, ibs2, k2, d2, bb2, vcp2, cl2,
     bb_breakout2=None,  # B9: pre-computed detect_bollinger_breakout result
+    capex2=None,        # D1 v19.185: CF 季資本支出(元) — v5 財報領先卡真正的輸入
+    capital2=None,      # D1 v19.185: 股本(元,_precompute_xsec 已算) — 同上
 ) -> None:
     """A. 個股健康度評分(0~100) + v4/v5 卡片群。
 
@@ -203,13 +225,32 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                     _col_map[_c] = 'volume'
             _v4_df = _v4_df.rename(columns=_col_map)
 
-            # Try to get chip data from session state
-            _inst2 = st.session_state.get('t2_inst', {})
-            if '外資' in _inst2:
-                _v4_df['foreign_net'] = _inst2.get('外資', 0)
-                _v4_df['trust_net'] = _inst2.get('投信', 0)
+            # ── D1 v19.185（§4.1 量綱 / §1 Fail Loud）：籌碼欄改吃 df2 的**逐日序列** ──
+            # 舊碼 `_v4_df['foreign_net'] = _inst2.get('外資', 0)` 把 session 裡的
+            # **單日**外資淨買量廣播成整欄。V4 `calc_relative_chips()` 做的是
+            # `df.tail(5)['foreign_net'].sum()`，於是「近5日外資淨買」= 最後一日 × 5
+            # （5 倍高估）；`tail(3)` 的連續判定也因為三根都同值而變成 0 或 3，
+            # 「（連續3日流入✅）」只要**最新一天**達標就會掛上 —— 用 1 天的事實
+            # 宣告 3 天的結論。
+            # df2 本來就有逐日「外資」「投信」欄（單位：張，data_loader T86/TPEX merge），
+            # 直接用即可；欄位不存在時**不建欄**，讓引擎回「⚪ 無籌碼資料」而不是
+            # 用單日值偽造 5 日累計。（判定抽在 `attach_chip_columns`，可單測。）
+            _v4_df = attach_chip_columns(_v4_df)
 
             # Macro data from li_latest
+            # D1 v19.185（§3.3 反捏造）：原碼把 `'vix': 15` 直接寫死在 UI 層 ——
+            # 那是 V4 引擎「抓不到 VIX 時的安全預設」，不該由畫面偽造成一個
+            # 已知值。真值就在 session（`macro_info.vix.current`，與建議持股油門
+            # 同源）；取不到就傳 None，讓引擎走它自己文件化的 fallback。
+            _mi_v4 = st.session_state.get('macro_info') or {}
+            _vix_obj_v4 = _mi_v4.get('vix') if isinstance(_mi_v4, dict) else None
+            _v4_vix2 = None
+            if isinstance(_vix_obj_v4, dict):
+                try:
+                    _vix_f = float(_vix_obj_v4.get('current'))
+                    _v4_vix2 = _vix_f if _vix_f == _vix_f else None   # NaN guard
+                except (TypeError, ValueError):
+                    _v4_vix2 = None
             _li_for_v4 = st.session_state.get('li_latest')
             _v4_fut2 = 0.0
             _v4_pcr2 = 100.0
@@ -223,10 +264,21 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                 except Exception:
                     pass
 
-            _shares = st.session_state.get(f't2_shares_{sid2}', 1000000)
+            # ── D1 v19.185（§1 Fail Loud）：發行張數未知時**不得**用 1,000,000 張假裝 ──
+            # 外本比 = 近5日外資淨買 ÷ 發行張數。台積電 2,593 萬張、小型股 2 萬張，
+            # 用固定 1,000,000 張當分母算出來的百分比與門檻（0.5% / 0.3% / 0.1%）
+            # 完全對不上，卻照樣印成一個具體數字。改為：股本抓到才算，抓不到就
+            # 明講「股本未取得」（`t2_shares_{sid}` 由 tab_stock 於 capital>0 時寫入）。
+            _shares_raw = st.session_state.get(f't2_shares_{sid2}')
+            try:
+                _shares = int(_shares_raw) if _shares_raw is not None else 0
+            except (TypeError, ValueError):
+                _shares = 0
+            _shares_known = _shares > 0
             _v4eng = V4StrategyEngine(_v4_df,
-                                       {'vix': 15, 'foreign_futures': _v4_fut2, 'pcr': _v4_pcr2},
-                                       max(int(_shares), 1))
+                                       {'vix': _v4_vix2, 'foreign_futures': _v4_fut2,
+                                        'pcr': _v4_pcr2},
+                                       max(_shares, 1))
             _v4rep = _v4eng.generate_report()
 
             st.markdown('---')
@@ -275,32 +327,57 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                     f'</div>', unsafe_allow_html=True)
 
             # Task 3: VPOC Resistance
+            # ── D1 v19.185（§1 綠燈不代表算過）──────────────────────────────
+            # 引擎在「資料 < 60 日」與「VPOC 計算失敗」兩種情況下都回
+            # `vpoc_price=None, has_pressure=False`。舊碼只看 `has_pressure`，
+            # 於是新股 / 壞資料一律顯示綠色的「✅ 壓力有限」，旁邊才小小地寫
+            # 「VPOC=N/A 元」—— 使用者讀到的是「查過了，上方沒壓力」。
+            # 三態：算得出才給紅/綠，算不出一律 ⚪ 未評估並附引擎給的原因。
             with _v4c2:
                 _rs = _v4rep['resistance']
-                _rs_color = '#da3633' if _rs['has_pressure'] else '#2ea043'
+                _rs_known = _rs.get('vpoc_price') is not None
+                if not _rs_known:
+                    _rs_color = TRAFFIC_NEUTRAL
+                    _rs_main = '⚪ 未評估'
+                    _rs_sub = str(_rs.get('msg') or '無法計算 VPOC').lstrip('⚪ ')
+                else:
+                    _rs_color = '#da3633' if _rs['has_pressure'] else '#2ea043'
+                    _rs_main = '⚠️ 有解套賣壓' if _rs['has_pressure'] else '✅ 壓力有限'
+                    _rs_sub = f'VPOC={_rs["vpoc_price"]} 元'
                 st.markdown(
                     f'<div style="background:#0d1117;border:1px solid {_rs_color};'
                     f'border-radius:8px;padding:12px;text-align:center;">'
                     f'<div style="font-size:10px;color:#484f58;">📊 v4 上方賣壓</div>'
                     f'<div style="font-size:14px;font-weight:900;color:{_rs_color};">'
-                    f'{"⚠️ 有解套賣壓" if _rs["has_pressure"] else "✅ 壓力有限"}</div>'
-                    f'<div style="font-size:11px;color:#8b949e;">'
-                    f'VPOC={_rs["vpoc_price"] or "N/A"} 元</div>'
+                    f'{_rs_main}</div>'
+                    f'<div style="font-size:11px;color:#8b949e;">{_rs_sub}</div>'
                     f'</div>', unsafe_allow_html=True)
 
             # Task 1: Chip Ratio
             with _v4c3:
                 _ch = _v4rep['chip_analysis']
-                _ch_color = '#da3633' if '強勢' in _ch['signal'] else ('#2ea043' if '渙散' in _ch['signal'] else '#388bfd')
-                st.markdown(
-                    f'<div style="background:#0d1117;border:1px solid {_ch_color};'
-                    f'border-radius:8px;padding:12px;text-align:center;">'
-                    f'<div style="font-size:10px;color:#484f58;">💹 v4 相對籌碼</div>'
-                    f'<div style="font-size:13px;font-weight:900;color:{_ch_color};">'
-                    f'{_ch["signal"][:10]}</div>'
-                    f'<div style="font-size:10px;color:#8b949e;">'
-                    f'外本比 {_ch["foreign_ratio"] or "--"}%</div>'
-                    f'</div>', unsafe_allow_html=True)
+                if not _shares_known:
+                    # §1：分母未知 → 外本比與其訊號都沒有意義，不印任何百分比。
+                    st.markdown(
+                        f'<div style="background:#0d1117;border:1px solid {TRAFFIC_NEUTRAL};'
+                        f'border-radius:8px;padding:12px;text-align:center;">'
+                        f'<div style="font-size:10px;color:#484f58;">💹 v4 相對籌碼</div>'
+                        f'<div style="font-size:13px;font-weight:900;color:{TRAFFIC_NEUTRAL};">'
+                        f'⚪ 未評估</div>'
+                        f'<div style="font-size:10px;color:#8b949e;">'
+                        f'股本(發行張數)未取得 → 外本比無分母</div>'
+                        f'</div>', unsafe_allow_html=True)
+                else:
+                    _ch_color = '#da3633' if '強勢' in _ch['signal'] else ('#2ea043' if '渙散' in _ch['signal'] else '#388bfd')
+                    st.markdown(
+                        f'<div style="background:#0d1117;border:1px solid {_ch_color};'
+                        f'border-radius:8px;padding:12px;text-align:center;">'
+                        f'<div style="font-size:10px;color:#484f58;">💹 v4 相對籌碼</div>'
+                        f'<div style="font-size:13px;font-weight:900;color:{_ch_color};">'
+                        f'{_ch["signal"][:10]}</div>'
+                        f'<div style="font-size:10px;color:#8b949e;">'
+                        f'外本比 {_ch["foreign_ratio"] if _ch["foreign_ratio"] is not None else "--"}%</div>'
+                        f'</div>', unsafe_allow_html=True)
     except Exception as _v4_err:
         st.caption(f'v4.0 分析略過：{type(_v4_err).__name__}')
 
@@ -351,11 +428,28 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                     f'</div>', unsafe_allow_html=True)
 
             # Task 5: 財報領先
+            # ── D1 v19.185（§1 Fail Loud）：本卡原本是**死區** ───────────────
+            # 舊碼 `analyze_fundamental_leading(cl2, None, None, None,
+            #        st.session_state.get(f't2_equity_{sid2}'))`：
+            #   • 第 2 參數 cl_prev=None  → 引擎內 `cl_yoy` 恆 None → `cl_growth` 恆假
+            #   • 第 3 參數 capex_now=None → `capex_ratio` 恆 None → `capex_ok` 恆假
+            #   • 第 5 參數讀 `t2_equity_{sid}` —— **全站零寫入點**（幽靈 key）
+            # 三個判定用的輸入全是 None ⇒ 引擎只可能回落到 else 分支
+            # 「⚪ 一般水準 / 合約負債與資本支出未達龍多標準」。也就是說：
+            # 這張卡對**任何**股票、任何財報都印同一句話，而那句話還宣稱
+            # 「未達標準」= 把「沒算」講成「算過不達標」。
+            # 現在餵入真的有的兩個輸入（CF 季資本支出 + 股本），「🟡 積極擴張」
+            # 分支終於可能成立；cl_prev 仍缺（需去年同期合約負債）→ 在卡片上
+            # **明說 YoY 未計**，不讓使用者把它讀成「已比較過 YoY」。
             with _v5_r3:
-                _fl5 = analyze_fundamental_leading(
-                    cl2, None, None, None,
-                    st.session_state.get(f't2_equity_{sid2}'))
+                _equity_v5 = capital2 if (capital2 and capital2 > 0) else None
+                _capex_v5 = capex2 if (capex2 and capex2 > 0) else None
+                _fl5 = analyze_fundamental_leading(cl2, None, _capex_v5, None, _equity_v5)
                 _fl5c = _fl5['color']
+                _fl5_notes = ['合約負債 ✅' if cl2 and cl2 > 0 else '無合約負債']
+                if _capex_v5 is None or _equity_v5 is None:
+                    _fl5_notes.append('資本支出/股本未評估')
+                _fl5_notes.append('YoY 未計(缺去年同期)')
                 st.markdown(
                     f'<div style="background:#0d1117;border:1px solid {_fl5c};'
                     f'border-radius:8px;padding:12px;text-align:center;">'
@@ -363,7 +457,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                     f'<div style="font-size:13px;font-weight:900;color:{_fl5c};">'
                     f'{_fl5["signal"][:8]}</div>'
                     f'<div style="font-size:10px;color:#8b949e;">'
-                    f'{"合約負債 ✅" if cl2 and cl2 > 0 else "無合約負債"}</div>'
+                    f'{" · ".join(_fl5_notes)}</div>'
                     f'</div>', unsafe_allow_html=True)
     except Exception as _v5e2:
         st.caption(f'v5.0 進階分析略過：{type(_v5e2).__name__}')

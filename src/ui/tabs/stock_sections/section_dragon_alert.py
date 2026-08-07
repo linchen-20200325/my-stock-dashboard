@@ -14,6 +14,14 @@ from __future__ import annotations
 
 import streamlit as st
 
+# D1 v19.185（§3.3 反捏造）：原本這裡是 inline `>= 0.5` / `>= 0.8` 兩個裸數字，
+# 而**同一個門檻**在 `tab_stock.py` 的 AI prompt、`section_financial_leading.py`
+# 的卡片副標都各自寫了一份。三份複本 = 改一處必漏兩處。改吃 SSOT。
+from shared.signal_thresholds import (
+    CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT,
+    CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT,
+)
+
 
 def render_dragon_alert_section(cl2, cx2, capital: float, *, capex=None) -> None:
     """龍頭預警區 — 龍多策略最高等級。
@@ -35,11 +43,13 @@ def render_dragon_alert_section(cl2, cx2, capital: float, *, capex=None) -> None
     _dragon_reasons = []
     try:
         if capital > 0:
-            if cl2 is not None and cl2 > 0 and cl2 / capital >= 0.5:
+            if (cl2 is not None and cl2 > 0
+                    and cl2 / capital * 100 >= CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT):
                 _dragon_reasons.append(
                     f'合約負債 {cl2/1e8:.1f}億（達股本 {cl2/capital*100:.0f}% → 未來3-6月訂單保障）')
                 _is_dragon = True
-            if _cx_for_dragon is not None and _cx_for_dragon > 0 and _cx_for_dragon / capital >= 0.8:
+            if (_cx_for_dragon is not None and _cx_for_dragon > 0
+                    and _cx_for_dragon / capital * 100 >= CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT):
                 _src_label = '季資本支出' if (capex is not None and capex > 0) else '固定資產'
                 _dragon_reasons.append(
                     f'{_src_label} {_cx_for_dragon/1e8:.1f}億（達股本 {_cx_for_dragon/capital*100:.0f}% → 大擴廠，看好未來需求）')

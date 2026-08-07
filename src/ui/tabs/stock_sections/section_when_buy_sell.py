@@ -21,11 +21,15 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_Y
 from shared.signal_thresholds import (
     BB_DROP_OUT_RATIO,
     BB_NEAR_UPPER_RATIO,
+    HARD_STOP_LOSS_PCT,
     STOCK_BIAS_DEEP_DEVIATION_PCT,
     STOCK_BIAS_MILD_DEVIATION_PCT,
     STOCK_BIAS_OVERHEAT_PCT,
     STOCK_RS_NEUTRAL_MIN,
     STOCK_RS_STRONG_MIN,
+    STOP_LOSS_DEFAULT_PCT,
+    STOP_PROFIT_T1_PCT,
+    STOP_PROFIT_T2_PCT,
 )
 from src.compute.scoring import (
     compute_tech_bearish,
@@ -178,7 +182,8 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
             '💰 你的總資金（元）— 填了才會算「建議買幾張 + 真 ATR 停損」',
             min_value=0, step=100000, key='_pos_capital', format='%d',
             help='用「單筆風險上限 1.5% ÷ ATR 停損距離」反推建議張數，不是全押。'
-                 'ATR 停損錨定進場價（現價），比下方浮動的 -7%/-8% 更貼實際波動。',
+                 'ATR 停損錨定進場價（現價），比下方浮動的 '
+                 f'-{HARD_STOP_LOSS_PCT:g}%／-{STOP_LOSS_DEFAULT_PCT:g}% 更貼實際波動。',
         )
 
         _sig_cols = st.columns(3)
@@ -227,7 +232,9 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
             if _bias_i > STOCK_BIAS_OVERHEAT_PCT:
                 _exit.append(f'⚠️ 年線乖離 {_bias_i:+.0f}% → 策略1：分批出場')
             if _p2 < _ma5:
-                _exit.append(f'⚠️ 跌破5MA({_ma5:.1f}) → 林穎：短線停利')
+                # D1 v19.185：v19.174 去識別化的漏網 —— 全 `src/` 最後一個真實人名
+                # （同區塊其他 9 行都已是「策略3」）。
+                _exit.append(f'⚠️ 跌破5MA({_ma5:.1f}) → 策略3：短線停利')
             # 週MACD 警示:標準週 MACD 12/26/9(B6 v19.153 統一,原 3/5/3 樣本受限已汰換)。
             # 走 exit_signals.weekly_macd_hist 共用 helper(全歷史合成週K + ≥35 週才算;
             # 不足誠實不顯示,不再用 30 日 6 根算失真的 3/5/3)。
@@ -250,12 +257,12 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
             st.markdown('**🎯 目標 + 停損**')
             st.markdown(f'<div style="font-size:12px;color:#c9d1d9;padding:2px 0;">📌 現價：<b>{_p2:.2f}</b></div>', unsafe_allow_html=True)
             st.markdown(f'<div style="font-size:12px;color:{TRAFFIC_GREEN};padding:2px 0;">🎯 初步目標（策略3 一比一對稱）：<b>{_target1:.2f}</b></div>', unsafe_allow_html=True)
-            _sl_hard = round(_p2 * 0.93, 2)
+            _sl_hard = round(_p2 * (1 - HARD_STOP_LOSS_PCT / 100), 2)
             _sl_ma20 = round(_ma20 * 0.99, 2)
             _dist_hard = round((_p2 - _sl_hard) / _p2 * 100, 1) if _p2 else 0
             _dist_ma20 = round((_p2 - _sl_ma20) / _p2 * 100, 1) if _p2 else 0
             _dist_ma5  = round((_p2 - _ma5) / _p2 * 100, 1) if _p2 and _ma5 else 0
-            st.markdown(f'<div style="font-size:12px;color:{TRAFFIC_RED};padding:2px 0;">🛑 硬停損(-7%)：<b>{_sl_hard:.2f}</b> <span style="color:#484f58;">（尚差{_dist_hard:.1f}%）</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="font-size:12px;color:{TRAFFIC_RED};padding:2px 0;">🛑 硬停損(-{HARD_STOP_LOSS_PCT:g}%)：<b>{_sl_hard:.2f}</b> <span style="color:#484f58;">（尚差{_dist_hard:.1f}%）</span></div>', unsafe_allow_html=True)
             st.markdown(f'<div style="font-size:12px;color:{TRAFFIC_YELLOW};padding:2px 0;">⚠️ 月線停損：<b>{_sl_ma20:.2f}</b> <span style="color:#484f58;">（尚差{_dist_ma20:.1f}%）</span></div>', unsafe_allow_html=True)
             st.markdown(f'<div style="font-size:12px;color:#58a6ff;padding:2px 0;">📍 5MA停利：<b>{_ma5:.2f}</b> <span style="color:#484f58;">（尚差{_dist_ma5:.1f}%）</span></div>', unsafe_allow_html=True)
             # 加碼點
@@ -339,16 +346,20 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
                     marker_color=_vc, name='量', showlegend=False), row=2, col=1)
             # 9 條關鍵價位水平線
             _add_pt_v = locals().get('_add_pt')
+            # D1 v19.185（§3.3）：+10% / +5% / -8% 原為圖例**寫死**的字面，
+            # 而 tp1_p / tp2_p / sl_p 的價位是 caller 用 SSOT 常數算的 —— 一旦調門檻，
+            # 線會移動、標籤不會，圖上就變成「停利1 +5%」指著 +7% 的位置。改為插值。
+            # （-7% 硬停損是本檔自己的 `_p2*0.93`，見 HARD_STOP_LOSS_PCT。）
             _hlines = [
-                (tp2_p,    '#58a6ff', 'dash',    f'停利2 +10% {tp2_p:.2f}'),
-                (tp1_p,    TRAFFIC_GREEN, 'dash',    f'停利1 +5% {tp1_p:.2f}'),
+                (tp2_p,    '#58a6ff', 'dash',    f'停利2 +{STOP_PROFIT_T2_PCT:g}% {tp2_p:.2f}'),
+                (tp1_p,    TRAFFIC_GREEN, 'dash',    f'停利1 +{STOP_PROFIT_T1_PCT:g}% {tp1_p:.2f}'),
                 (hi20_p,   '#f0883e', 'dot',     f'壓力 {hi20_p:.2f}'),
                 (_target1, '#2ea043', 'dashdot', f'初步目標 {_target1:.2f}'),
                 (_ma5,     '#FFD700', 'solid',   f'5MA {_ma5:.2f}'),
                 (lo20_p,   '#1f6feb', 'dot',     f'支撐 {lo20_p:.2f}'),
                 (_sl_ma20, '#8b949e', 'dot',     f'月線停損 {_sl_ma20:.2f}'),
-                (sl_p,     TRAFFIC_RED, 'dash',    f'停損 -8% {sl_p:.2f}'),
-                (_sl_hard, '#a40e26', 'dashdot', f'硬停損 -7% {_sl_hard:.2f}'),
+                (sl_p,     TRAFFIC_RED, 'dash',    f'停損 -{STOP_LOSS_DEFAULT_PCT:g}% {sl_p:.2f}'),
+                (_sl_hard, '#a40e26', 'dashdot', f'硬停損 -{HARD_STOP_LOSS_PCT:g}% {_sl_hard:.2f}'),
             ]
             if _add_pt_v:
                 _hlines.append((_add_pt_v, '#a371f7', 'dashdot', f'加碼點 >{_add_pt_v:.2f}'))

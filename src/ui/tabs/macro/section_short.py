@@ -19,7 +19,19 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from shared.signal_thresholds import BREADTH_BULL_PCT, BREADTH_NEUTRAL_PCT
+from shared.signal_thresholds import (
+    # v19.183 D2 §3.3:本檔原本「KPI 卡走 SSOT、上方敘事分支寫 inline 70/60/40」
+    # 兩套並存 —— 改一邊漏一邊的典型佈局，故一次收齊。
+    # ⚠️ §4.1 量綱：BREADTH_*_PCT 是**上漲家數佔比 %**；BREADTH_AD_*_COUNT 是
+    # **家數差（漲家 − 跌家）**，兩者不同量綱不可互相代入。
+    BREADTH_AD_CONTRACTION_COUNT,
+    BREADTH_AD_DIVERGENCE_COUNT,
+    BREADTH_AD_EXPANSION_COUNT,
+    BREADTH_BULL_PCT,
+    BREADTH_DIVERGENCE_INDEX_PCT,
+    BREADTH_NEUTRAL_PCT,
+    BREADTH_STRONG_BULL_PCT,
+)
 from src.config import FINMIND_TOKEN  # noqa: F401
 from src.ui.render.macro_ui_components import section_header
 # v19.174 去識別化：改用策略代號常數 + 新函式名 strategy_conclusion（原 teacher_conclusion）
@@ -115,30 +127,36 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
         _ad_ratio_int  = int(round(_ratio2)) if _ratio2 else 0
         _adl_above_ma  = (_adl2 is not None and _ma2 is not None and _adl2 > _ma2)
         _adl_below_ma  = (_adl2 is not None and _ma2 is not None and _adl2 < _ma2)
+        # ── v19.183 D2 §3.3:本段原本全是 inline magic（70 / 60 / 40 / ±50 / 0.5），
+        #    而同一支檔案下方的 KPI 卡早就走 BREADTH_BULL_PCT / BREADTH_NEUTRAL_PCT。
+        #    同檔兩套門檻 = 調一邊、另一邊悄悄不動 → 畫面上「KPI 卡說中性、
+        #    上面那句結論說多頭」。全部改吃 shared/signal_thresholds SSOT。
+        #    **數值一字未改**（70/60/40/−50/+50/0.5 逐一對應同值常數），零行為變更。
+        _AD_DIVERGE_UP = -BREADTH_AD_DIVERGENCE_COUNT   # +50：跌勢中的正向擴散對稱門檻
         _adl_concl = []
-        if _twii_pct2 > 0.5 and _ad2 < -50:
+        if _twii_pct2 > BREADTH_DIVERGENCE_INDEX_PCT and _ad2 < BREADTH_AD_DIVERGENCE_COUNT:
             _adl_concl.append(
-                f'🔴 指數漲({_twii_pct2:+.1f}%) 但 AD值({_ad2:+,}) < -50 → '
+                f'🔴 指數漲({_twii_pct2:+.1f}%) 但 AD值({_ad2:+,}) < {BREADTH_AD_DIVERGENCE_COUNT} → '
                 f'背離！僅少數大型股撐盤，廣度萎縮，建議準備降倉')
-        elif _twii_pct2 < -0.5 and _ad2 > 50:
+        elif _twii_pct2 < -BREADTH_DIVERGENCE_INDEX_PCT and _ad2 > _AD_DIVERGE_UP:
             _adl_concl.append(
-                f'🟢 指數跌({_twii_pct2:+.1f}%) 但 AD值({_ad2:+,}) > 50 → '
+                f'🟢 指數跌({_twii_pct2:+.1f}%) 但 AD值({_ad2:+,}) > {_AD_DIVERGE_UP} → '
                 f'底部擴散！多數股票止跌，可留意逢低布局機會')
-        elif _ratio2 >= 70 and _adl_above_ma:
+        elif _ratio2 >= BREADTH_STRONG_BULL_PCT and _adl_above_ma:
             _adl_concl.append(
-                f'✅ 上漲佔比 {_ad_ratio_int}%（>70%）+ ADL在MA上 → '
+                f'✅ 上漲佔比 {_ad_ratio_int}%（>{BREADTH_STRONG_BULL_PCT:.0f}%）+ ADL在MA上 → '
                 f'全面多頭，市場廣度充足，可積極持股')
-        elif _ratio2 >= 60 and _adl_above_ma:
+        elif _ratio2 >= BREADTH_BULL_PCT and _adl_above_ma:
             _adl_concl.append(
-                f'✅ 上漲佔比 {_ad_ratio_int}%（60~70%）+ ADL在MA上 → '
-                f'多頭健康，可持股偏多，注意量能配合')
-        elif _ratio2 < 40 and _adl_below_ma:
+                f'✅ 上漲佔比 {_ad_ratio_int}%（{BREADTH_BULL_PCT:.0f}~{BREADTH_STRONG_BULL_PCT:.0f}%）'
+                f'+ ADL在MA上 → 多頭健康，可持股偏多，注意量能配合')
+        elif _ratio2 < BREADTH_NEUTRAL_PCT and _adl_below_ma:
             _adl_concl.append(
-                f'🔴 上漲佔比 {_ad_ratio_int}%（<40%）+ ADL破MA → '
+                f'🔴 上漲佔比 {_ad_ratio_int}%（<{BREADTH_NEUTRAL_PCT:.0f}%）+ ADL破MA → '
                 f'廣泛賣壓，空頭格局，建議降倉保守')
-        elif _ratio2 < 40:
+        elif _ratio2 < BREADTH_NEUTRAL_PCT:
             _adl_concl.append(
-                f'⚠️ 上漲佔比 {_ad_ratio_int}%（<40%）→ '
+                f'⚠️ 上漲佔比 {_ad_ratio_int}%（<{BREADTH_NEUTRAL_PCT:.0f}%）→ '
                 f'廣度不足，多數股票弱勢，不宜追高')
         elif _adl_below_ma:
             _adl_concl.append(
@@ -146,7 +164,8 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
                 f'趨勢轉弱訊號，觀望等方向確認')
         else:
             _adl_concl.append(
-                f'⚪ 上漲佔比 {_ad_ratio_int}%（40~60%）→ '
+                f'⚪ 上漲佔比 {_ad_ratio_int}%'
+                f'（{BREADTH_NEUTRAL_PCT:.0f}~{BREADTH_BULL_PCT:.0f}%）→ '
                 f'廣度中性，盤整格局，等待方向選擇')
         for _ac in _adl_concl:
             _ac_c = ('#2ea043' if '✅' in _ac or '可進攻' in _ac
@@ -191,12 +210,14 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
         _adl_ma20   = df_adl['adl_ma20'].dropna().iloc[-1] if df_adl['adl_ma20'].notna().any() else _adl_val
         _adl_trend  = '↑' if _adl_val > _adl_ma20 else '↓'
         _adl_color  = '#da3633' if _adl_ad > 0 else '#2ea043'
-        _adl_signal = ('🟢 廣度擴張，多頭健康' if _adl_ad > 200
-                       else ('🟡 廣度收窄，市場整理' if _adl_ad >= -100
+        # v19.183 D2 §3.3:200 / -100 / -50 / 0.5 四個 inline magic → SSOT（同值，零行為變更）
+        _adl_signal = ('🟢 廣度擴張，多頭健康' if _adl_ad > BREADTH_AD_EXPANSION_COUNT
+                       else ('🟡 廣度收窄，市場整理' if _adl_ad >= BREADTH_AD_CONTRACTION_COUNT
                        else '🔴 廣度萎縮，主力集中在少數股'))
         # 背離偵測（指數上漲但 ADL 下跌 = 警告）
         _twii_pct = tw_s.get('台股加權指數', {}).get('pct', 0) if tw_s.get('台股加權指數') else 0
-        _divergence = _twii_pct > 0.5 and _adl_ad < -50
+        _divergence = (_twii_pct > BREADTH_DIVERGENCE_INDEX_PCT
+                       and _adl_ad < BREADTH_AD_DIVERGENCE_COUNT)
     
         # KPI 卡片
         _adl_cols = st.columns(4)
@@ -244,7 +265,9 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
                 compute_and_store_jingqi(df_adl)
     
         # 信號提示
-        _sig_color = TRAFFIC_GREEN if _adl_ad > 200 else (TRAFFIC_YELLOW if _adl_ad >= -100 else TRAFFIC_RED)
+        _sig_color = (TRAFFIC_GREEN if _adl_ad > BREADTH_AD_EXPANSION_COUNT
+                      else (TRAFFIC_YELLOW if _adl_ad >= BREADTH_AD_CONTRACTION_COUNT
+                            else TRAFFIC_RED))
         st.markdown(
             f'<div style="background:#0d1117;border-left:4px solid {_sig_color};border-radius:0 8px 8px 0;'
             f'padding:10px 14px;margin:8px 0;">'

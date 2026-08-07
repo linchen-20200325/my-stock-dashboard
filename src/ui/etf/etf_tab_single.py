@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from shared.allocation_decision import REGIME_LABEL as _REGIME_LABEL  # C1 v19.182
 from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.thresholds import classify_yield_zone
@@ -75,8 +76,17 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         fetch_etf_price, get_etf_expense_ratio_safe, _get_etf_launch_price,
     )
 
-    mkt_info = st.session_state.get('mkt_info', {})
-    regime   = mkt_info.get('regime', 'neutral')
+    # ── C1 v19.182:改吃 regime 唯一出口,移除捏造的 'neutral' 預設 ──────────────
+    # （原 `mkt_info = st.session_state.get('mkt_info', {})` 只為了取 regime，
+    #   取消後本函式已無其他讀取端，一併移除。）
+    # `mkt_info['regime']` 是趨勢面**輸入**;總經紅綠燈判 🔴 的那天它仍可能是
+    # 'bull',餵進 AI prompt 就變成「目前大盤狀態=bull」與同頁配置橫幅打架。
+    # 未評估 → `regime=None`,prompt 印「未評估」而不是捏一個中性結論(§1)。
+    from src.services.allocation_service import get_macro_regime as _get_macro_reg
+    _macro_reg = _get_macro_reg()
+    regime = _macro_reg['regime'] if _macro_reg['is_loaded'] else None
+    #: AI prompt / session 顯示用的中文狀態（未評估誠實寫「未評估」）
+    _regime_disp = _REGIME_LABEL.get(regime or 'unknown', '未評估')
     macro_allocation_banner(regime)
 
     st.markdown('#### 🔍 輸入 ETF 代號')
@@ -387,11 +397,16 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         },
     }
     if _zone_code == 'na':
-        st.info('ℹ️ 無充足配息歷史,套用回測頁評估價差績效')
+        # B6-a v19.181:原文導引使用者「前往『ETF回測』」—— 該分頁已於 v18.265
+        # 隨 `etf_tab_backtest.py` 一併刪除,現行 🏦 ETF 只有
+        # 🔍 單檔診斷 / 📊 多檔比較 / ⚖️ ETF 組合 三個(app.py:809-811)。
+        # 照著找找不到,改指向**現在真的存在**的替代看法。
+        st.info('ℹ️ 無充足配息歷史,無法用殖利率區間評估,改看價差績效')
         _strategy_conclusion(STRATEGY_VALUATION,
                              '配息歷史不足',
-                             '無法套用 7% 存股估值框架,改看回測 CAGR',
-                             '前往「ETF回測」確認年化報酬是否 ≥ 8%')
+                             '無法套用 7% 存股估值框架,改看價差報酬',
+                             '請看本頁「風險與報酬」區的 3Y CAGR / MDD / Sharpe;'
+                             '多檔橫向比較請到 📊 多檔比較')
     else:
         _ux = _ZONE_UX[_zone_code]
         if _ux['box'] is not None:
@@ -817,7 +832,8 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         'ticker': ticker, 'name': etf_name,
         'cur_yield': cur_yield, 'avg_yield': avg_yield,
         'total_ret': total_ret, 'vcp': vcp,
-        'premium': prem, 'te': te, 'regime': regime,
+        # C1 v19.182:未評估存 'unknown' 而非捏造的 'neutral'
+        'premium': prem, 'te': te, 'regime': (regime or 'unknown'),
         'price_df': df,
         'expense': expense, 'beta': beta, 'aum': aum,
         'k_val': _kv_ai, 'd_val': _dv_ai,
@@ -913,7 +929,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                     f'跌破季線 MA60（中期約一季的平均成本線）={("是" if _below_ma60 else "否")}；'
                     f'死亡交叉（短期均線往下穿過中期均線，常被視為轉弱訊號）='
                     f'{("是" if (_ma20 is not None and _ma60_v is not None and _ma20 < _ma60_v) else "否")}；'
-                    f'目前大盤狀態={regime}。'
+                    f'目前大盤狀態={_regime_disp}。'
                 ),
             },
         ]

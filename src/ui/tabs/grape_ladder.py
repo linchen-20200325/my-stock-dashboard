@@ -365,14 +365,23 @@ def _render_curated_recommendation() -> None:
     with _c1:
         _max_etfs = st.slider('最多 ETF 數', 1, 5, value=4, key='_grape_max_etfs')
     with _c2:
+        # B6-a v19.181:help 原寫「3+ 才過濾」—— `recommend_income_ladder:109`
+        # 是 `if min_stars >= 2:`,設 2 就已經開始剔除。文案改對齊判定式。
+        # 另補「未評等者保留」(:116-118),否則使用者會以為抓不到評等的會被砍掉。
         _min_stars = st.slider('最低品質星等 ⭐', 1, 5, value=3,
                                key='_grape_min_stars',
-                               help='1 = 不過濾；3+ 用 etf_quality 4 因子預先剔除低品質 ETF')
+                               help='1 = 不過濾；**2 以上**即用 etf_quality 4 因子'
+                                    '預先剔除低星等 ETF（抓不到評等的一律保留，避免誤殺）')
     with _c3:
         _excl = st.checkbox('排除月配高息（00929/00940/00939）',
                             value=False, key='_grape_excl_monthly')
     if not st.button('🍇 生成提議', key='_grape_btn_propose', type='primary'):
-        st.caption('點上方按鈕產生建議組合。提議引擎會嘗試所有 1~N 檔組合（最多 C(10,5)=252 種）。')
+        # B6-a v19.181:原寫「最多 C(10,5)=252 種」—— 引擎是 `for k in 1..N` **累加**
+        # (`recommend_income_ladder:147-149`),C(10,5) 只是最大的那一層,不是總數。
+        # 實際 N=4 → ΣC(10,1..4)=385、N=5 → 637。同一畫面 :396「嘗試組合」metric
+        # 印的是真實累計值,兩個數字對不起來。改為只描述行為 + 指向該 metric。
+        st.caption('點上方按鈕產生建議組合。提議引擎會**窮舉** 1 到「最多 ETF 數」的'
+                   '所有組合（各層數量累加），實際跑了幾種請看結果區的「嘗試組合」。')
         return
     with st.spinner('搜尋最佳組合中…（< 10 秒）'):
         _res = recommend_income_ladder(

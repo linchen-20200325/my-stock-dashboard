@@ -294,6 +294,48 @@ def get_allocation() -> AllocationDecision:
     return _decision
 
 
+def get_macro_regime() -> dict:
+    """回傳全站唯一的大盤 regime 契約（C1 v19.182；唯讀）。
+
+    這是 `macro_state_locker.get_macro_state()`（L3 純函式）與 Streamlit
+    `session_state` 之間的**唯一橋樑** —— 等同 `get_allocation()` 之於持股%。
+    任何 UI 一律::
+
+        from src.services.allocation_service import get_macro_regime
+        _reg = get_macro_regime()
+        if not _reg['is_loaded']:
+            st.info('⬜ 總經未評估 — 請先按「🚀 一鍵更新全部數據」')
+            return
+        ...使用 _reg['regime'] / _reg['light']
+
+    而**不得**再：
+
+    - 直讀 `st.session_state['mkt_info']['regime']`（那是趨勢面**輸入**，
+      不是結論；且各處還會補一個捏造的 `'neutral'` 預設）
+    - 對 `warroom_summary['traffic_light']` 做 `'綠'/'黃'/'紅'` substring 比對
+      （那 4 個 label 根本不含這些字，比對恆不命中）
+    - 由紅綠燈 `icon` 反推 regime
+
+    Returns:
+        `get_macro_state()` 的 dict。取數失敗一律降級為未評估
+        （`is_loaded=False` / `regime='unknown'` / `light='⬜'`），
+        **不回填任何預設多空**（§1 Fail Loud）。
+    """
+    _wr = st.session_state.get('warroom_summary') or {}
+    try:
+        from src.services.macro_state_locker import get_macro_state
+        return get_macro_state(_wr)
+    except Exception as _e:  # noqa: BLE001 — 讀檔/匯入失敗當未評估，不炸畫面
+        print(f'[allocation] get_macro_regime failed: {type(_e).__name__}: {_e}')
+        from shared.regime_arbiter import UNLOADED_VERDICT as _UV
+        return {
+            'regime': _UV.regime, 'light': _UV.light, 'source': _UV.source,
+            'trend_regime': None, 'health': None, 'defense': False,
+            'exposure_limit_pct': None, 'traffic_light': None,
+            'is_loaded': False,
+        }
+
+
 def get_allocation_sleeves() -> dict[str, int] | None:
     """ETF 三桶配置(股/債/現金)，由 `get_allocation()` 的中值推導。
 

@@ -15,17 +15,35 @@ import pandas as pd
 import streamlit as st
 
 from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
+from shared.colors import (  # noqa: F401
+    TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW,
+)
 from src.config import FINMIND_TOKEN  # noqa: F401
 # v19.176 P0-D:韭菜指數拐點門檻走 L0 SSOT(§3.3);與另外兩組同名不同義的
 # 門檻分別命名,詳見 src/config/config.py「韭菜指數門檻 SSOT」區塊。
 from src.config import LEEK_PIVOT_HIGH_PCT, LEEK_PIVOT_LOW_PCT
+# v19.183 D2 §3.3:拐點面板乖離門檻 ±10 / ±8 原為 inline magic number,抽至 L0 SSOT。
+from shared.signal_thresholds import PIVOT_BIAS_20_PCT, PIVOT_BIAS_240_PCT
+# v19.183 D2:M1B/M2 是否為「^TWII 動能代理」的判定 SSOT(原用從未被寫入的 is_proxy 鍵)。
+from shared.macro_provenance import is_m1b_m2_proxy
 from src.compute.macro import calc_traffic_light  # noqa: F401
 from src.ui.tabs.macro.handlers import _render_traffic_light  # noqa: F401
 
 
-def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> None:
-    """渲染 §二 拐點偵測 + 市場狀態(原 tab_macro line 2186-2565)。"""
+def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
+                         show_market_data: bool = True) -> None:
+    """渲染 §二 拐點偵測 + 市場狀態(原 tab_macro line 2186-2565)。
+
+    Args:
+        _mkt_info: `market_regime()` 結果(從 S1 算出)。
+        _mkt_placeholder / _tl_placeholder: S1 預留的 st.empty 佔位符。
+        cd: `cl_data` alias。
+        show_market_data: 快取是否新鮮(≤30 分且非刷新中)——**與
+            `section_traffic_light.render_traffic_light_top()` 回傳的第二個值同源**。
+            False 時本函式**不重算也不回填**紅綠燈卡,讓頁頂維持「⏳ 燈號等待中」,
+            避免用過期快取蓋掉新鮮度警告(§2.4;詳見函式尾端註解)。
+            預設 True 是為了不破壞既有 positional caller(tab_macro 已改為顯式傳值)。
+    """
     # ══════════════════════════════════════════════════════════════
     # 拐點偵測系統（整合六大面向 + CPI×Fed 雙頂回落，v18.169；v19.173 正名）
     # ══════════════════════════════════════════════════════════════
@@ -36,7 +54,14 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
         _ma200  = _mi2.get('ma200', 0)
         _idx2   = _mi2.get('index_price', 0)
         _sigs2  = _mi2.get('signals', [])
-        _regime2= _mi2.get('regime','neutral')
+        # v19.183 D2:原本這裡有 `_regime2 = _mi2.get('regime','neutral')`。
+        # 兩個問題,故整行移除:
+        #   ① **死變數** —— 全檔零 reference(2026-08-07 複驗),只是 C1 之前的殘留。
+        #   ② 它直讀 raw `mkt_info['regime']`(趨勢面**輸入**)並在缺值時捏 'neutral',
+        #      正是 C1 `shared/regime_arbiter.py` 要消滅的第 3 個 producer(P3)。
+        #      留著等於留一顆地雷:下一個人看到現成變數就會拿去當「大盤 regime」用。
+        # 本 section 若日後真的需要 regime,一律取 `calc_traffic_light` 的
+        # `effective_regime`(canonical 結論),不得再讀 raw。
         _m1b2   = st.session_state.get('m1b_m2_info', {})
         _bias2  = st.session_state.get('bias_info', {})
         _li2    = st.session_state.get('li_latest')
@@ -76,7 +101,13 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
                 pivot_signals.append(('均線空頭確認','🔴',TRAFFIC_RED,
                     f'跌破MA60({_d60:.1f}%) + 均線向下 → 中期起跌訊號'))
             elif _above60 and not _above120:
-                pivot_signals.append(('整理區間','⚪','#8b949e',
+                # v19.183 D2:'#8b949e' → TRAFFIC_NEUTRAL(語意相同的灰,行為不變:
+                # 兩者都不等於 TRAFFIC_RED/GREEN → aggregate_pivot_families 判 neutral)。
+                # 收成具名常數是為了讓「拐點色碼只能用 traffic SSOT」這條不變量
+                # 可以被 tests/test_d2_macro_sections.py 的 AST 守衛精確驗證 ——
+                # 只要清單裡還留一個 hex 字面值,守衛就得放寬,下一個寫死的
+                # '#da3633' 就又會混進來(那正是本次修掉的月線乖離 bug)。
+                pivot_signals.append(('整理區間','⚪',TRAFFIC_NEUTRAL,
                     '站上MA60但未過MA120 → 等待方向確認'))
     
         # 2. 乖離率（與台股體質 ±7~10% 門檻）
@@ -85,21 +116,43 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
             _b240 = _bias2.get('bias_240', 0)
             _b60  = _bias2.get('bias_60', _bias2.get('bias_20', 0))
             _b20  = _bias2.get('bias_20', 0)
-            if _b240 > 10:
+            if _b240 > PIVOT_BIAS_240_PCT:
                 pivot_signals.append(('年線乖離過大','⚠️',TRAFFIC_RED,
-                    f'年線乖離 +{_b240:.1f}% > 10% → 頂部拐點區間，考慮減碼'))
-            elif _b240 < -10:
+                    f'年線乖離 +{_b240:.1f}% > {PIVOT_BIAS_240_PCT:.0f}% → 頂部拐點區間，考慮減碼'))
+            elif _b240 < -PIVOT_BIAS_240_PCT:
                 pivot_signals.append(('年線深度低估','💡',TRAFFIC_GREEN,
-                    f'年線乖離 {_b240:.1f}% < -10% → 底部拐點區間，考慮布局'))
-            if abs(_b20) > 8:
+                    f'年線乖離 {_b240:.1f}% < -{PIVOT_BIAS_240_PCT:.0f}% → 底部拐點區間，考慮布局'))
+            if abs(_b20) > PIVOT_BIAS_20_PCT:
                 _bl20 = '過熱' if _b20 > 0 else '超賣'
+                # ── v19.183 D2 §2.1:色碼改吃 traffic SSOT（原 '#da3633' / '#2ea043'）──
+                # 【為什麼這是 bug 而不是配色偏好】下游
+                # `macro_helpers.aggregate_pivot_families` 判「這一群偏多還偏空」是
+                # **嚴格比對** `color == TRAFFIC_RED` / `TRAFFIC_GREEN`
+                # （= '#ef4444' / '#22c55e'，見 shared/colors.py）。
+                # '#da3633' / '#2ea043' 是 v19.68 換色前的舊 GitHub 色票，兩者都
+                # **永遠不相等** → 這兩盞燈落進 `setdefault(..., 'neutral')`，
+                # 「位階（乖離率）」群在只有月線訊號的日子恆判「中性」。
+                # 實際後果：畫面小卡印紅色「⚠️ 月線過熱」，同一頁上方的分群明細
+                # 卻寫「位階（乖離率）：中性」，而且該群不進 n_bear 分子 →
+                # 綜合拐點結論被系統性拉向「訊號分歧」。
+                # macro_helpers 的 docstring 已把這條列為「已知落差、待 section_state
+                # 端單獨修」，此即該修正。
                 pivot_signals.append((f'月線{_bl20}',
                     '⚠️' if _b20 > 0 else '💡',
-                    '#da3633' if _b20>0 else '#2ea043',
+                    TRAFFIC_RED if _b20 > 0 else TRAFFIC_GREEN,
                     f'月線乖離 {_b20:+.1f}% → 短線{_bl20}修正機率高'))
     
         # 3. M1B-M2（資金面黃金/死亡交叉）
-        if _m1b2 and not _m1b2.get('is_proxy'):
+        # ── v19.183 D2 §3.3 幽靈 key：`_m1b2.get('is_proxy')` 從未被寫入 ──────────
+        # `m1b_m2_info` 由 `macro_snapshot.fetch_m1b_m2_block()` 產生，回傳鍵只有
+        # {m1b_yoy, m2_yoy, gap, source} —— 沒有 `is_proxy`。真正的旗標是更上游
+        # `tw_macro.fetch_cbc_m1b_m2()` 的 `is_proxy_tier`，被重新打包時丟掉了。
+        # 於是這道守門「代理值不得產生黃金/死亡交叉訊號」**一次都沒擋到過**：
+        # CBC 兩層全敗、退到 ^TWII 20/60 日動量硬湊出來的假 M1B/M2，照樣被寫成
+        # 「M1B>M2 黃金交叉 → 資金由定存轉入股市，長線起漲徵兆」。
+        # 判定改走 L0 SSOT `shared.macro_provenance.is_m1b_m2_proxy()`（同時吃
+        # 布林旗標與 source 標籤，精確比對不做 substring 嗅探）。
+        if _m1b2 and not is_m1b_m2_proxy(_m1b2):
             _fam_ok.add('liquidity')   # v19.173：M1B/M2 到位 → 資金群可評估
             _m1b_y = _m1b2.get('m1b_yoy', 0)
             _m2_y  = _m1b2.get('m2_yoy', 0)
@@ -439,7 +492,14 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
                 _ev_df = pd.DataFrame(_bt['events'])
                 if not _ev_df.empty:
                     _ev_df['翻正日'] = pd.to_datetime(_ev_df['date']).dt.date
-                    _ev_df_disp = _ev_df[['翻正日', 't10y2y_min_pre',
+                    # v19.183 D2（§2.3）：翻正日 ≠ 可執行進場日。把兩個日期同時
+                    # 攤在表上，使用者才看得出這條績效是「哪一天買」算出來的。
+                    _bt_cols = ['翻正日']
+                    if 'entry_date' in _ev_df.columns:
+                        _ev_df['可進場日'] = pd.to_datetime(
+                            _ev_df['entry_date'], errors='coerce').dt.date
+                        _bt_cols.append('可進場日')
+                    _ev_df_disp = _ev_df[_bt_cols + ['t10y2y_min_pre',
                                             'ret_6m', 'ret_12m', 'ret_18m']].rename(
                         columns={'t10y2y_min_pre': '倒掛最深(%)',
                                  'ret_6m':  '+6M (%)',
@@ -451,6 +511,19 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
                     '💡 **解讀**：美債 10Y-2Y 倒掛翻正後 6~18 個月內，'
                     '^TWII 歷史中位數正報酬率 = 底部累積期布局訊號；'
                     '但台股與美股相關性 ~0.6，需搭配 NDC 景氣燈號雙重確認。'
+                )
+                # ── v19.183 D2（CLAUDE.md §2.3 防 lookahead）誠實揭露 ────────────
+                # 事件判定需要「翻正後連 5 日不再翻負」才成立 → 站在翻正日當天
+                # 沒有人知道這件事。且 T10Y2Y 是 FRED 日頻，D 日的值要等 D 日
+                # 美股收盤後才發布（≈ D+1 04:00 台北），台股當天早已收盤。
+                # 因此報酬一律從「確認日之後第一根 TWII K 棒」起算 ——
+                # 這也是為什麼上表會有兩個日期欄。
+                st.caption(
+                    '🔒 **這條績效沒有偷看未來**：事件要「翻正後連 5 日不再翻負」才算數，'
+                    '而這件事在翻正日當天無從得知；加上 FRED 的 T10Y2Y 當日值要等'
+                    '美股收盤後才發布（台股早已收盤）。故 +6M/+12M/+18M 一律以'
+                    '**「可進場日」＝ 確認日之後第一根加權指數 K 棒**的收盤價當進場價，'
+                    '而非翻正日收盤。'
                 )
     
         if _twd_df is not None and not _twd_df.empty:
@@ -478,6 +551,32 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
             st.info('📡 請點擊「🚀 一鍵更新全部數據」載入大盤數據')
     # ── ③ 資料到位後，回填紅綠燈佔位符（修復「未審先判」Bug）────
     # C1-E v18.291:走 section_inputs SSOT(對齊 C1-D 紅綠燈初次計算路徑)
+    #
+    # ⚠️ v19.183 D2:本段整包加上 `show_market_data` 閘門。修的是兩個問題 ——
+    #
+    # 【① 30 分鐘新鮮度閘門被架空(§2.4)】
+    #   `section_traffic_light.render_traffic_light_top()` 刻意在快取超過 30 分鐘
+    #   或刷新中時**不算燈號**,改在 placeholder 印「⏳ 燈號等待中（上次更新 45
+    #   分鐘前，已過期）」。但本段原本**無條件**重算一次 `calc_traffic_light`
+    #   並 `_render_traffic_light(_tl_placeholder, ...)` —— 用的是同一份過期
+    #   session 資料,卻直接把那句警告蓋掉、換成一張自信滿滿的燈號卡。
+    #   結果:那道閘門在「已載入過但快取過期」的每一次 rerun 都等於不存在。
+    #   (do_refresh 路徑不受影響:tab_macro 在該路徑最後 `st.rerun()`,本函式
+    #    根本跑不到;故加閘門後「資料到位後回填」的原始用途完全不受損。)
+    #
+    # 【② warroom 的 health 與 regime 來自不同次計算(§2.1)】
+    #   本段的 `_wr_sum.update({...})` 只寫 primitives,**不寫**
+    #   `effective_regime` / `light` / `regime_source`。而 `get_macro_state()`
+    #   的快路徑優先讀 `effective_regime`(由 render_traffic_light_top 寫入)。
+    #   兩次計算若輸入不同(例如跨 rerun 之間 jingqi_info 才補到),就會湊出
+    #   「health_score 是新的、effective_regime 是舊的」這種混血 warroom。
+    #   修法:本段真的要寫時,把同一次仲裁的三個 regime 欄位一併寫回,
+    #   讓 warroom 內部恆為「同一次 calc_traffic_light 的完整快照」。
+    if not show_market_data:
+        # 燈號卡維持 render_traffic_light_top 印的等待訊息(§1:不拿過期資料
+        # 冒充當日結論);同理不渲染建議持股油門與「為何這個顏色」——
+        # 那兩者都是對「當前燈號」的說明,燈號都還沒亮就先解釋等於憑空捏造。
+        return
     from src.services import load_section_inputs as _load_si_tl2
     _tl2_inp = _load_si_tl2(st.session_state)
     _tl2_mkt = _tl2_inp.mkt_info or {}
@@ -511,7 +610,18 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd) -> No
         _wr_sum.update({
             'traffic_light': _tl_final['label'],
             'health_score':  _tl_final['health'],
-            'regime': _tl2_mkt.get('regime', 'neutral'),
+            # ── C1 regime 三欄位契約(v19.183 D2 補齊)────────────────────────
+            # `regime` 維持舊語意 = 趨勢面**輸入** raw `mkt_info['regime']`,
+            # 供畫面揭露「被壓制的反向訊號」。⚠️ 它**不是**結論。
+            # `effective_regime` / `light` / `regime_source` 才是本次仲裁的結論,
+            # 三者與上面的 health_score 出自**同一次** `calc_traffic_light`,
+            # 不會再出現「新 health 配舊 regime」的混血 warroom(§2.1)。
+            # 缺值時退回 raw 而非捏 'neutral':`.get('regime')` 為 None 時
+            # `get_macro_state()` 會走 arbiter 重算路徑,那是正確的降級。
+            'regime': _tl2_mkt.get('regime'),
+            'effective_regime': _tl_final.get('effective_regime'),
+            'light':            _tl_final.get('light'),
+            'regime_source':    _tl_final.get('regime_source'),
             'market_score':  _tl_final['score'],
             'jingqi_avg':    _tl_final['jqavg'],
             'leek_index':    _tl_final['leek'],

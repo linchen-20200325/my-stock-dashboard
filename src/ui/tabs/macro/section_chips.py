@@ -134,9 +134,21 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
     if inst:
         _fk3 = next((k for k in inst if '外資' in k and '陸資' in k), None) or next((k for k in inst if '外資' in k), None)
         _tk3 = next((k for k in inst if '投信' in k), None)
-        _fn3 = inst[_fk3]['net'] if _fk3 else 0
-        _tn3 = inst[_tk3]['net'] if _tk3 else 0
-        if _fn3 >= 100:
+        # ── v19.183 D2 §1:找不到「外資」欄位時不得回填 0（原 `if _fk3 else 0`）──
+        # `inst` 有值但沒有外資 key（TWSE BFI82U 欄名變動 / FinMind rescue 只補到
+        # 投信自營）時，舊碼把 `_fn3` 設 0，落進下方 `else` 分支印出
+        # 「外資 +0.0億（觀望區間）→ 資金觀望，區間操作」——
+        # 一個**沒有任何外資資料**的日子，被寫成「外資今天不買不賣」這個明確結論。
+        # 改為 None，並在敘事上與「真的接近 0」分開（後者仍走觀望區間）。
+        _fn3 = inst[_fk3]['net'] if _fk3 else None
+        _tn3 = inst[_tk3]['net'] if _tk3 else None
+        if _fn3 is None:
+            _hye_c = TRAFFIC_NEUTRAL
+            _hye_ind = '外資買賣超 ⬜ 未取得'
+            _hye_concl = '三大法人資料缺「外資」欄位，本卡不下籌碼結論'
+            _hye_act = ('先按「🚀 一鍵更新全部數據」；仍缺請看下方'
+                        '「🔍 資料來源診斷」確認 TWSE BFI82U / FinMind 狀態')
+        elif _fn3 >= 100:
             _hye_c = TRAFFIC_GREEN
             _hye_ind = f'外資大買超 {_fn3:.1f}億'
             _hye_concl = '大戶點火，跟著大戶走 → 積極加碼'
@@ -153,35 +165,48 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             _hye_act = '高出低進，等方向表態　→ 實際持股見 🎚️ 建議持股油門'
         st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _hye_ind, _hye_concl, color=_hye_c), unsafe_allow_html=True)
         st.markdown(f'<div style="color:#8b949e;font-size:11px;padding:1px 8px 6px 8px;">→ 建議行動：{_hye_act}</div>', unsafe_allow_html=True)
-        if _tn3 > 5:
+        if _tn3 is not None and _tn3 > 5:
             st.markdown(f'<div style="color:#58a6ff;font-size:12px;padding:2px 6px;">• 投信買超 {_tn3:.1f}億 → 連續買超是加碼訊號</div>', unsafe_allow_html=True)
         # 三大法人買賣超柱狀圖（直接用 plotly，繞過 st.bar_chart→altair 相容性問題）
+        # ── v19.183 D2 §1：缺哪一類就**不畫那根柱子**（原碼 `float(x or 0)`）──────
+        # 舊碼把「沒抓到」畫成一根高度 0 的柱子並標「+0.0億」——
+        # 讀者無從分辨「今天真的買賣超 0 億」與「今天這一類根本沒資料」。
+        # 順帶清掉 `_bc_colors` 被連續賦值三次（前兩次是死碼，v19.183 移除）。
         _zk3 = next((k for k in inst if '自營' in k), None)
-        _bc_vals = [float(_fn3 or 0),
-                    float(_tn3 or 0),
-                    float((inst.get(_zk3) or {}).get('net', 0) or 0)]
-        _bc_colors = ['#58a6ff' if v >= 0 else TRAFFIC_RED for v in _bc_vals] + \
-                     [TRAFFIC_GREEN if _bc_vals[1] >= 0 else TRAFFIC_RED,
-                      '#ffd700' if _bc_vals[2] >= 0 else TRAFFIC_RED]
-        _bc_colors = ['#58a6ff' if _bc_vals[0] >= 0 else TRAFFIC_RED,
-                      TRAFFIC_GREEN if _bc_vals[1] >= 0 else TRAFFIC_RED,
-                      '#ffd700' if _bc_vals[2] >= 0 else TRAFFIC_RED]
-        try:
-            import plotly.graph_objects as _go_bc
-            _fig_bc = _go_bc.Figure(_go_bc.Bar(
-                x=['外資', '投信', '自營商'], y=_bc_vals,
-                marker_color=_bc_colors, text=[f'{v:+.1f}億' for v in _bc_vals],
-                textposition='outside'))
-            _fig_bc.update_layout(
-                height=200, margin=dict(t=30, b=10, l=10, r=10),
-                paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
-                font=dict(color='#e6edf3', size=12),
-                yaxis=dict(showgrid=False, zeroline=True,
-                           zerolinecolor='#484f58', showticklabels=False))
-            st.plotly_chart(_fig_bc, use_container_width=True,
-                            config={'displayModeBar': False})
-        except Exception as _bc_err:
-            st.caption(f'外資 {_bc_vals[0]:+.1f}億 ｜ 投信 {_bc_vals[1]:+.1f}億 ｜ 自營商 {_bc_vals[2]:+.1f}億')
+        _zn3 = (inst.get(_zk3) or {}).get('net') if _zk3 else None
+        _bc_spec = [('外資', _fn3, '#58a6ff'),
+                    ('投信', _tn3, TRAFFIC_GREEN),
+                    ('自營商', _zn3, '#ffd700')]
+        _bc_known = [(_nm, float(_v), _pos_c) for _nm, _v, _pos_c in _bc_spec
+                     if _v is not None]
+        _bc_missing = [_nm for _nm, _v, _ in _bc_spec if _v is None]
+        if _bc_known:
+            _bc_x = [_nm for _nm, _, _ in _bc_known]
+            _bc_vals = [_v for _, _v, _ in _bc_known]
+            _bc_colors = [(_pos_c if _v >= 0 else TRAFFIC_RED)
+                          for _, _v, _pos_c in _bc_known]
+            try:
+                import plotly.graph_objects as _go_bc
+                _fig_bc = _go_bc.Figure(_go_bc.Bar(
+                    x=_bc_x, y=_bc_vals,
+                    marker_color=_bc_colors, text=[f'{v:+.1f}億' for v in _bc_vals],
+                    textposition='outside'))
+                _fig_bc.update_layout(
+                    height=200, margin=dict(t=30, b=10, l=10, r=10),
+                    paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
+                    font=dict(color='#e6edf3', size=12),
+                    yaxis=dict(showgrid=False, zeroline=True,
+                               zerolinecolor='#484f58', showticklabels=False))
+                st.plotly_chart(_fig_bc, use_container_width=True,
+                                config={'displayModeBar': False})
+            except Exception as _bc_err:
+                print(f'[section_chips/三大法人柱狀圖] '
+                      f'{type(_bc_err).__name__}: {_bc_err}')
+                st.caption('　｜　'.join(f'{_nm} {_v:+.1f}億'
+                                        for _nm, _v, _ in _bc_known))
+        if _bc_missing:
+            st.caption(f'⬜ 未取得：{"、".join(_bc_missing)}（該類今日無資料，'
+                       f'非買賣超 0 億）')
     # v19.170 P0-1 順手修 bug:原 `if margin:` 會把 margin == 0(真的收到 0 億)當成沒資料
     # 整段靜默跳過 → 改 `is not None`,0 也照常判讀(§1:有資料就要顯示)。
     if margin is not None:

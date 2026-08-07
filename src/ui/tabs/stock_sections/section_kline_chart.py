@@ -24,6 +24,40 @@ from src.ui.render.tab_sections import border_left_banner
 from src.ui.tabs.tab_helpers import classify_trend_4tier
 
 
+def kline_chip_verdict(above_ma20: bool, foreign_net):
+    """月線位置 × 外資買賣超 → (標題片段, 結論, 下一步)（純函式）。
+
+    三態的 `foreign_net`：>0 買超 / <0 賣超 / ==0 淨額為 0 / **None 未取得**。
+
+    D1 v19.185 抽出的理由：原本是 render 裡的 4 分支 if/elif/else，最後那支
+    `else` 直接寫死「月線下方且外資賣超」。但 `foreign_net` 有第三種值 0
+    （`t2_inst` 為空 = 沒抓到籌碼，或當日法人淨額恰為 0），於是
+    **(站上月線, 0)** 會落進 else ⇒ 結論說「月線下方」，而同一張卡的標題
+    同時印「站月線」。抽成純函式後，這個組合可以被測試直接釘住。
+
+    Returns:
+        (net_label, verdict, next_step)
+    """
+    _ma_txt = '站上月線' if above_ma20 else '月線下方'
+    if foreign_net is None:
+        return ('未取得',
+                f'{_ma_txt}；外資買賣超未取得，籌碼面無法判定',
+                '趨勢面偏多，但缺籌碼佐證' if above_ma20 else '趨勢面偏弱，且缺籌碼佐證')
+    if foreign_net > 0:
+        return ('買超',
+                (f'{_ma_txt} + 外資買超，主力進駐訊號，可跟進' if above_ma20
+                 else f'{_ma_txt}但外資買超，可能正在築底'),
+                '停損設月線下方' if above_ma20 else '等待重回月線確認後再評估')
+    if foreign_net < 0:
+        return ('賣超',
+                (f'{_ma_txt}但外資賣超，需謹慎確認主力方向' if above_ma20
+                 else f'{_ma_txt}且外資賣超，趨勢偏空，暫時迴避'),
+                '等待外資轉買後再行動' if above_ma20 else '等待更明確的多頭訊號')
+    return ('中性',
+            f'{_ma_txt}；外資當日淨額為 0（無明顯方向）',
+            '趨勢面偏多，籌碼面中性' if above_ma20 else '趨勢面偏弱，籌碼面中性')
+
+
 def render_kline_chart_section(sid2: str, name2: str, df2, price2,
                                 health2, rsi2, show_ma_dict,
                                 t2_adjusted: bool, t2d: dict) -> None:
@@ -50,21 +84,24 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
         _p_now_f = float(df2['close'].iloc[-1])
         _ma20_f = float(df2['close'].rolling(20).mean().iloc[-1])
         _above_f = _p_now_f > _ma20_f
-        _inst_f = st.session_state.get('t2_inst', {})
-        _fnet_f = _inst_f.get('外資', 0) if _inst_f else 0
-        if _above_f and _fnet_f > 0:
-            _fb_txt = '站上月線 + 外資買超，主力進駐訊號，可跟進'
-            _fc_txt = '停損設月線下方'
-        elif _above_f and _fnet_f < 0:
-            _fb_txt = '站上月線但外資賣超，需謹慎確認主力方向'
-            _fc_txt = '等待外資轉買後再行動'
-        elif not _above_f and _fnet_f > 0:
-            _fb_txt = '月線下方但外資買超，可能正在築底'
-            _fc_txt = '等待重回月線確認後再評估'
-        else:
-            _fb_txt = '月線下方且外資賣超，趨勢偏空，暫時迴避'
-            _fc_txt = '等待更明確的多頭訊號'
-        _fa = f'{sid2} 現價{_p_now_f:.1f}（{"站月線" if _above_f else "跌月線"}）| 外資{"買超" if _fnet_f > 0 else "賣超" if _fnet_f < 0 else "中性"}'
+        # ── D1 v19.185（形狀 #6 恆不命中的條件 → else 講出與事實相反的話）──
+        # 舊碼的 4 分支只涵蓋 (站月線,買超) / (站月線,賣超) / (跌月線,買超)，
+        # 第 4 支 else 直接寫死「月線下方且外資賣超」。但 `_fnet_f` 有第三種值：
+        # **0**（`t2_inst` 為空 dict = 沒抓到籌碼，或當日法人淨額恰為 0）。
+        # 於是「站上月線 + 外資 0」會落進 else ⇒ 結論說「月線下方且外資賣超，
+        # 趨勢偏空」，而同一行的標題 `_fa` 卻印「站月線 | 外資中性」——
+        # 同一張卡自己打自己。改為顯式三態，且「未取得」與「淨額 0」分開講。
+        _inst_f = st.session_state.get('t2_inst') or {}
+        _fnet_f = _inst_f.get('外資') if isinstance(_inst_f, dict) else None
+        try:
+            _fnet_f = float(_fnet_f) if _fnet_f is not None else None
+        except (TypeError, ValueError):
+            _fnet_f = None
+        if _fnet_f is not None and _fnet_f != _fnet_f:   # NaN
+            _fnet_f = None
+        _fnet_txt, _fb_txt, _fc_txt = kline_chip_verdict(_above_f, _fnet_f)
+        _fa = (f'{sid2} 現價{_p_now_f:.1f}（{"站月線" if _above_f else "跌月線"}）'
+               f'| 外資{_fnet_txt}')
     else:
         _fb_txt = '技術資料載入中，請先點擊「🔍 載入完整分析」'
     st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _fa, _fb_txt, _fc_txt), unsafe_allow_html=True)
@@ -78,6 +115,12 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
         if t2d.get('err'):
             st.error(f'❌ {t2d["err"]}')
     # ── K線動態趨勢建議(SSOT: tab_helpers.classify_trend_4tier,組合 Tab 共用)──
+    # D1 v19.185(§1):顯式初始化。下方結論條原本用 `'_trend_msg' in dir()` 判斷
+    # 「有沒有算過」—— 但 dir() 查的是**當前作用域現有哪些名字**,而非本次是否賦值。
+    # 這個 if 不成立時(df2 為 None 或缺 MA 欄),名字要嘛不存在(→ 正確落 fallback),
+    # 要嘛在同一次函式呼叫的更早分支被綁過(→ 撿到舊值當成本次結論)。
+    # 顯式 None + `or` fallback 讓「沒算」永遠是「沒算」。
+    _trend_msg = None
     if df2 is not None and 'MA20' in df2.columns and 'MA100' in df2.columns:
         import pandas as _pd_kl
         _kp = price2
@@ -113,7 +156,7 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
 
     # K線均線結論(安全版)
     # R-UI-1 v18.412:inline `<div border-left>` → border_left_banner SSOT
-    _trend_msg_safe = _trend_msg if '_trend_msg' in dir() else '⚪ K線資料不足'
+    _trend_msg_safe = _trend_msg or '⚪ K線資料不足'
     _kl_c = TRAFFIC_GREEN if '多頭' in _trend_msg_safe or '✅' in _trend_msg_safe else (TRAFFIC_RED if '空頭' in _trend_msg_safe else TRAFFIC_YELLOW)
     st.markdown(border_left_banner(
         _kl_c,

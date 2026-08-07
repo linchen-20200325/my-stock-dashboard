@@ -887,6 +887,9 @@ padding:14px 18px;margin-bottom:12px;">
             sid2, health2, details2, df2, price2, qtr2, yearly2, avg_div2,
             rsi2, vr2, ibs2, k2, d2, bb2, vcp2, cl2,
             bb_breakout2=bb_breakout2,
+            # D1 v19.185：v5「財報領先」卡原本收到 4 個 None + 1 個幽靈 session key，
+            # 只可能回「⚪ 一般水準」(死區)。這兩個值本函式早就算好了，直接傳。
+            capex2=_capex2, capital2=_xsec.get('capital'),
         )
 
         # ══ E. VCP+布林(U4 Phase 3-E v18.409:抽至 stock_sections.section_vcp_bollinger)══
@@ -925,7 +928,10 @@ padding:14px 18px;margin-bottom:12px;">
         render_financial_leading_section(sid2, cl2, cx2,
                                           _cl_src2=_cl_src2, _cx_src2=_cx_src2,
                                           _fin_errs2=_fin_errs2,
-                                          capex=_capex2)  # v18.458: CF 季資本支出(流量)
+                                          capex=_capex2,  # v18.458: CF 季資本支出(流量)
+                                          # D1 v19.185：卡片副標一直宣稱門檻是「>股本50%/80%」，
+                                          # 但判定式只有 `>0`。傳入股本才算得出真的佔股本比。
+                                          capital=_xsec.get('capital'))
 
         # ══ D. 月營收 + 季毛利率(U4 Phase 2-D v18.406:抽至 stock_sections.section_revenue)══
         from src.ui.tabs.stock_sections import render_revenue_trend_section
@@ -943,7 +949,14 @@ padding:14px 18px;margin-bottom:12px;">
         render_d2_leading_section(rev2, qtr2, qtr_extra2)
 
         # ── 資料彙整（供 AI 總結使用）──────────────────────────
-        _regime2 = st.session_state.get('mkt_info', {}).get('regime', 'neutral')
+        # D1 v19.185（C1 接線 · §1 Fail Loud）：原碼 `mkt_info.get('regime','neutral')`
+        # 有兩個問題：(a) `mkt_info['regime']` 是**趨勢面輸入**，不是紅綠燈的結論 ——
+        # 健康分跌破防禦門檻那天總經頁印 🔴，這裡照樣送「多頭市場（積極操作）」給 LLM；
+        # (b) 總經根本沒評估時 default `'neutral'` 把「不知道」偽裝成「判斷為震盪」，
+        # LLM 會照著震盪劇本寫一整段大盤結論。改吃全站唯一仲裁點 get_macro_regime()。
+        from src.services.allocation_service import get_macro_regime as _gmr2
+        _macro_reg2 = _gmr2()
+        _regime2 = _macro_reg2.get('regime') or 'unknown'
         _rev_yoy_list = []
         if rev2 is not None and not rev2.empty and 'yoy' in rev2.columns:
             # P4b: vectorized — 對齊 date/index 後一次 apply
@@ -1616,7 +1629,16 @@ padding:14px 18px;margin-bottom:12px;">
                 )
             # ── 彙整市場背景 ──────────────────────────────────────
             _mkt_info2 = st.session_state.get('mkt_info', {})
-            _regime_txt2 = {'bull':'多頭市場（積極操作）','neutral':'震盪整理（謹慎觀望）','bear':'空頭市場（縮減部位）'}.get(_regime2, _regime2)
+            # D1 v19.185：'unknown' / 'caution' 兩個 canonical 值原本不在表內 →
+            # `.get(k, k)` 會把英文碼原封不動送進 prompt。'unknown' 更必須明講是
+            # 「未評估」並禁止 LLM 推估（§1：不知道 ≠ 震盪）。
+            _regime_txt2 = {
+                'bull': '多頭市場（積極操作）',
+                'neutral': '震盪整理（謹慎觀望）',
+                'caution': '轉守（縮減部位）',
+                'bear': '空頭市場（縮減部位）',
+                'unknown': '未評估（總經尚未計算，禁止在報告中推估大盤多空方向）',
+            }.get(_regime2, _regime2)
             # 宏觀指標彙整（VIX / 美核心CPI / 🇹🇼 台灣 PMI / 美10Y / 費半 SOX）— 供 AI 跨資產判讀
             _macro_info2 = st.session_state.get('macro_info', {}) or {}
             _ma_snap2    = st.session_state.get('ma_snap', {}) or {}

@@ -23,6 +23,31 @@ from src.ui.render import STRATEGY_TECHNICAL, kpi, signal_box, strategy_conclusi
 from src.ui.render.tab_sections import border_left_banner
 
 
+def vcp_bollinger_verdicts(vcp2, bb2) -> tuple[str, str]:
+    """(VCP 結論句, 布林 結論句)（純函式）。任一無資料 → 該項為空字串。
+
+    D1 v19.185 抽出的理由：原本兩句是在 render 裡用同一個 `for _msg in [...]`
+    迴圈掃出來的，迴圈結束後 `_msg` 保留的是**最後一則**（= 布林那句），
+    而下方「🎓 策略3 · VCP」的結論條就直接印 `_msg` ⇒ **VCP 的標籤配布林的
+    內容**。抽成回傳兩個具名值後，結構上不可能再錯配，測試也能直接驗
+    「VCP 那句不得等於布林那句」。
+    """
+    _vcp_verdict = ''
+    _bb_verdict = ''
+    if vcp2:
+        _vcp_verdict = (f'✅ VCP確認收縮：等待帶量突破頸線，是高確信進場點 [{STRATEGY_TECHNICAL}]'
+                        if vcp2.get('contracting')
+                        else '⚪ 波幅尚未收縮：等待整理完成後再觀察')
+    if bb2:
+        if bb2['bw'] < bb2['bw_mean'] * BB_BW_SHRINK_ACTION_RATIO:
+            _bb_verdict = f'🔵 布林帶寬極度收縮：即將爆發，注意量能確認方向 [{STRATEGY_TECHNICAL}]'
+        elif bb2.get('near_upper'):
+            _bb_verdict = f'🟢 股價黏近上軌＋強勢：搭配大量是突破確認訊號 [{STRATEGY_TECHNICAL}]'
+        else:
+            _bb_verdict = f'⚪ 布林帶寬{bb2["bw"]:.1f}%（均值{bb2["bw_mean"]:.1f}%）：尚未到關鍵位置'
+    return _vcp_verdict, _bb_verdict
+
+
 def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
     """E. VCP 波幅收縮 + 布林通道。
 
@@ -88,37 +113,32 @@ def render_vcp_bollinger_section(sid2: str, vcp2, bb2) -> None:
                 st.markdown(signal_box('🟢股價黏近上軌', 'green', '強勢突破訊號，搭配大量更可信'),
                             unsafe_allow_html=True)
     # ── VCP+布林動態建議 ──
-    _vcp_verdict = ''
-    _bb_verdict = ''
     # v19.180 B2-a：本檔所有 `[策略3]` 一律改吃常數，避免「一半常數一半手打」
-    if vcp2:
-        _vcp_verdict = (f'✅ VCP確認收縮：等待帶量突破頸線，是高確信進場點 [{STRATEGY_TECHNICAL}]'
-                        if vcp2['contracting']
-                        else '⚪ 波幅尚未收縮：等待整理完成後再觀察')
-    if bb2:
-        if bb2['bw'] < bb2['bw_mean'] * BB_BW_SHRINK_ACTION_RATIO:
-            _bb_verdict = f'🔵 布林帶寬極度收縮：即將爆發，注意量能確認方向 [{STRATEGY_TECHNICAL}]'
-        elif bb2['near_upper']:
-            _bb_verdict = f'🟢 股價黏近上軌＋強勢：搭配大量是突破確認訊號 [{STRATEGY_TECHNICAL}]'
-        else:
-            _bb_verdict = f'⚪ 布林帶寬{bb2["bw"]:.1f}%（均值{bb2["bw_mean"]:.1f}%）：尚未到關鍵位置'
+    # D1 v19.185：兩句改由純函式一次算出（見 vcp_bollinger_verdicts 的說明）
+    _vcp_verdict, _bb_verdict = vcp_bollinger_verdicts(vcp2, bb2)
     if _vcp_verdict or _bb_verdict:
         for _msg in [m for m in [_vcp_verdict, _bb_verdict] if m]:
             _mc2 = TRAFFIC_GREEN if '✅' in _msg or '🟢' in _msg else ('#58a6ff' if '🔵' in _msg else '#8b949e')
             st.markdown(border_left_banner(_mc2, _msg), unsafe_allow_html=True)
 
-    # VCP+布林結論(安全版:加入 _msg 預設值)
+    # VCP+布林結論
+    # ── D1 v19.185（標籤 vs 內容錯配）─────────────────────────────────────
+    # 舊碼是 `_msg = _msg if '_msg' in dir() else '⚪ VCP/布林資料不足'`，而 `_msg`
+    # 是上面那個 for 迴圈的**迴圈變數** —— 迴圈跑完它保留的是**最後一則**訊息。
+    # 當 VCP 與布林都有結論時，list 是 [vcp, bb]，`_msg` 最後等於 **_bb_verdict**，
+    # 於是這張標著「🎓 策略3 · VCP」的結論條，印出來的其實是**布林**的結論
+    # （下一條又把同一句布林結論再印一次）。改為明確取 `_vcp_verdict`。
     # R-UI-1 v18.412:inline `<div border-left>` → border_left_banner SSOT
-    _msg = _msg if '_msg' in dir() else '⚪ VCP/布林資料不足'
-    _vcp_c = TRAFFIC_GREEN if '✅' in _msg or '🟢' in _msg else (TRAFFIC_YELLOW if '⚠️' in _msg else '#484f58')
+    _vcp_msg = _vcp_verdict or '⚪ VCP/布林資料不足'
+    _vcp_c = TRAFFIC_GREEN if '✅' in _vcp_msg or '🟢' in _vcp_msg else (TRAFFIC_YELLOW if '⚠️' in _vcp_msg else '#484f58')
     st.markdown(border_left_banner(
         _vcp_c,
         f'<span style="font-size:11px;color:#8b949e;">🎓 {STRATEGY_TECHNICAL} · VCP</span>　'
-        f'<span style="font-weight:700;">{_msg}</span>',
+        f'<span style="font-weight:700;">{_vcp_msg}</span>',
         padding_y=7, font_size=13,
     ), unsafe_allow_html=True)
     if bb2:
-        _bb_verdict_safe = _bb_verdict if '_bb_verdict' in dir() else '⚪ 布林資料不足'
+        _bb_verdict_safe = _bb_verdict or '⚪ 布林資料不足'
         _bb_c = TRAFFIC_GREEN if '✅' in _bb_verdict_safe or '🟢' in _bb_verdict_safe else ('#3aa2f5' if '🔵' in _bb_verdict_safe else TRAFFIC_YELLOW)
         st.markdown(border_left_banner(
             _bb_c,

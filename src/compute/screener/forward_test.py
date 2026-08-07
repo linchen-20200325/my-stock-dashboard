@@ -1,8 +1,16 @@
 """src/compute/screener/forward_test.py — 前進式驗證對帳(Forward-test, L2 純函式).
 
 前進式驗證:凍結每期選股(pick snapshot)→ 一段時間後拿現價對帳,累積真實績效
-vs 被動基準(0050)。**零 lookahead、零存活者偏誤**(都是當下真實決定 + 事後真實現價)。
-取代已移除的舊回測引擎(v18.265) — 舊回測有未來函數 + 只含現存公司的偏誤問題。
+vs 被動基準(0050)。取代已移除的舊回測引擎(v18.265) — 舊回測有未來函數 + 只含現存
+公司的偏誤問題。
+
+**偏誤範圍(§1 誠實界定,B6-b 2026-08 修正原本一句話的「零存活者偏誤」宣稱)**:
+  ✅ 選股端零 lookahead:凍結用的是當下才拿得到的資料(季快照走公告截止日 →
+     `scripts/update_fundamentals_snapshot.latest_published_quarter`)。
+  ✅ 選股端零存活者偏誤:母體是**凍結當下真實在市**的公司,不是「今天還活著的公司」。
+  ⚠️ **對帳端仍有存活者偏誤**:凍結後下市 / 長期停牌 / 代碼變更而抓不到現價的檔會被
+     剔除(n_dropped),不計入平均報酬 —— 最壞結局被排除 ⇒ 報酬偏樂觀。已於 overall
+     的 n_dropped_total + note 明講,不再宣稱「零存活者偏誤」。
 
 對帳邏輯(§7 對齊):
   每檔前進報酬  fwd_i     = 現價_i / 進場價_i − 1
@@ -140,8 +148,11 @@ def reconcile_forward_test(
     Returns:
         (per_cohort_df, overall)。
           per_cohort_df 欄見 _OUT_COLS(依 cohort 排序);報酬皆 %。
-          overall: {n_cohorts, n_picks_total, n_valid_total, avg_excess_pct(有基準的加權),
-                    overall_hit_rate_pct, note}。
+          overall: {n_cohorts, n_cohorts_solid, n_picks_total, n_valid_total,
+                    n_dropped_total(抓不到現價被剔除的檔數,存活者偏誤揭露),
+                    n_cohorts_no_bench(無 0050 基準的批數),
+                    avg_excess_pct(「樣本足夠且有基準」cohort 的**等權平均**,非依檔數加權),
+                    avg_return_pct, overall_hit_rate_pct, note}。
         空 picks / 缺欄 → 空表 + note。
     """
     _empty = pd.DataFrame(columns=_OUT_COLS)
@@ -202,15 +213,34 @@ def reconcile_forward_test(
     # overall:只用「樣本足夠 + 有基準」的 cohort 算平均超額(誠實,不被小樣本汙染)
     _solid = out[out["enough_sample"] & out["excess_pct"].notna()]
     _valid_all = out[out["enough_sample"]]
+    _n_dropped_total = int(out["n_dropped"].sum())
+    _n_no_bench = int(out["benchmark_return_pct"].isna().sum())
+    # ⚠️ B6-b(2026-08)誠實揭露:cohort 內「抓不到現價」的檔(下市 / 長期停牌 / 代碼變更)
+    # 被剔除不計入 avg_return_pct —— 這正是**存活者偏誤**的入口:最壞結局(下市)被靜默
+    # 排除,平均報酬會被高估。選股當下的母體無 lookahead / 無存活者偏誤(都是當時真實
+    # 在市的公司),但**對帳這一端**有。n_dropped 早已逐 cohort 計算,卻沒有任何彙總 /
+    # 提示會被畫面看到(app.py 顯示的欄位不含 n_dropped)→ 在此 note 明講。
+    _notes: list[str] = []
+    if _solid.empty:
+        _notes.append("樣本足夠的 cohort 尚不足,績效僅供參考(前進式驗證需時間累積)。")
+    if _n_dropped_total:
+        _notes.append(
+            f"⚠️ 共 {_n_dropped_total} 檔凍結持股抓不到現價(下市 / 停牌 / 代碼變更)已被剔除,"
+            "未計入平均報酬 —— 這些多半是最壞結局,故上列報酬**偏樂觀**(存活者偏誤)。")
+    if _n_no_bench:
+        _notes.append(
+            f"⚠️ {_n_no_bench} 批無 0050 同期基準(基準價序列未涵蓋該凍結日),"
+            "其超額 / 贏基準率為空白,且不計入「平均超額」。")
     overall = {
         "n_cohorts": int(len(out)),
         "n_cohorts_solid": int(len(_solid)),
         "n_picks_total": int(out["n_picks"].sum()),
         "n_valid_total": int(out["n_valid"].sum()),
+        "n_dropped_total": _n_dropped_total,
+        "n_cohorts_no_bench": _n_no_bench,
         "avg_excess_pct": round(float(_solid["excess_pct"].mean()), 2) if not _solid.empty else np.nan,
         "avg_return_pct": round(float(_valid_all["avg_return_pct"].mean()), 2) if not _valid_all.empty else np.nan,
         "overall_hit_rate_pct": round(float(_valid_all["hit_rate_pct"].mean()), 1) if not _valid_all.empty else np.nan,
-        "note": ("樣本足夠的 cohort 尚不足,績效僅供參考(前進式驗證需時間累積)。"
-                 if _solid.empty else ""),
+        "note": " ".join(_notes),
     }
     return out, overall

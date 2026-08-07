@@ -34,7 +34,14 @@ def render_op_recommendation_section(sid2: str, health2,
         cx2: 資本支出(元)
     """
     st.markdown('#### 💡 即時操作建議（規則引擎）')
-    _reg_op = st.session_state.get('mkt_info', {}).get('regime', 'neutral')
+    # D1 v19.185（C1 接線 · §1 Fail Loud）：原碼 `mkt_info.get('regime','neutral')`
+    # 直讀趨勢面**輸入**並在未評估時捏 'neutral'。後果：健康分跌破防禦門檻那天，
+    # 總經頁印 🔴 而這張卡照 raw regime 給 4 訊號中的「大盤」一分；總經根本沒開過
+    # 的冷啟動則被講成「震盪」。改吃全站唯一仲裁點。
+    from src.services.allocation_service import get_macro_regime
+    _macro_reg = get_macro_regime()
+    _macro_loaded = bool(_macro_reg.get('is_loaded'))
+    _reg_op = str(_macro_reg.get('regime') or 'unknown') if _macro_loaded else 'unknown'
     _sig_count = sum([
         1 if health2 >= HEALTH_GRADE_A_MIN else 0,
         1 if _reg_op == 'bull' else 0,
@@ -42,7 +49,7 @@ def render_op_recommendation_section(sid2: str, health2,
         1 if (avg_div2 > 0 and price2 > 0
               and price2 <= round(avg_div2 / YIELD_MID_DEC, 1)) else 0,
     ])
-    if _reg_op == 'bear':
+    if _reg_op in ('bear', 'caution'):
         # v19.171:移除硬編碼「先降倉至20%以下」—— 個股卡片沒有資格宣告全站持股
         # 水位(那是 get_allocation() 的職責),否則同畫面會出現第二個競爭數字。
         # 這裡只保留「方向性判斷」,實際百分比指回建議持股 SSOT。
@@ -60,6 +67,11 @@ def render_op_recommendation_section(sid2: str, health2,
         _op_b = '耐心等待，寧可錯過勿強求'
     st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, f'{sid2} 共振訊號 {_sig_count}/4', _op_a, _op_b),
                 unsafe_allow_html=True)
+    # §1：「大盤」這一分是 4 個訊號之一。未評估時它必然拿不到分 —— 必須說清楚
+    # 那是「還沒判斷」而不是「判斷為非多頭」，否則 user 會以為大盤已被評為不利。
+    if not _macro_loaded:
+        st.caption('⬜ 大盤格局尚未評估（先開一次「🌡️ 總經」分頁按更新）→ 上面 4 個共振訊號中的'
+                   '「大盤」這一項**未計分**，不代表大盤不利。')
     try:
         _mkt_top_g = st.session_state.get('mkt_info', {})
         _m1b_top_g = st.session_state.get('m1b_m2_info', {})

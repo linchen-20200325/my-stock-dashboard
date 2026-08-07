@@ -281,6 +281,19 @@ _REGIME_ZH_TO_EN: dict = {
 _REGIME_EN = ("bull", "neutral", "caution", "bear")
 
 
+def _is_finite_number(value) -> bool:
+    """value 是否為有限實數（None / 非數字 / NaN / inf → False）。
+
+    C1 v19.182：`get_macro_state` 判 `is_loaded` 用。原本只判 `is not None`，
+    健康分為 NaN 時會被當成「已評估」，再一路傳進姿態油門變成 nan% 持股。
+    """
+    try:
+        _f = float(value)
+    except (TypeError, ValueError):
+        return False
+    return _f == _f and _f not in (float('inf'), float('-inf'))
+
+
 def normalize_regime(value) -> str:
     """任意 regime 字串(中/英/含 emoji/市場後綴)→ 英文 {bull,neutral,caution,bear}。
 
@@ -300,30 +313,97 @@ def normalize_regime(value) -> str:
 
 def get_macro_state(warroom_summary: dict | None = None, *,
                     state_file_path: str = "macro_state.json") -> dict:
-    """『總經 tab 已算好的狀態』→ 個股/選股決策共用的 canonical dict(① 接線單一契約)。
+    """『總經 tab 已算好的狀態』→ 全站唯一的 canonical 總經契約（① 接線 + C1 仲裁）。
 
-    來源(§2.1 上層贏、不平均):
-      - regime / health / traffic_light ← warroom_summary(總經紅綠燈,英文 regime + health_score)
-      - exposure_limit_pct ← macro_state.json(calculate_system_state 曝險上限)
-    正規化:regime 一律英文;defense = regime∈{bear,caution} 或 health < HEALTH_DEFENSE_THRESHOLD。
-    is_loaded:總經是否已評估(warroom 有 health 或 macro_state.json 非 fail-safe)。
-      **False → 消費端誠實顯示「總經未評估」,不假裝通過(§1);不回填假多空**。
+    來源優先序（§2.1 上層贏、**禁止平均**）::
+
+        1. warroom_summary['effective_regime']    ← 紅綠燈決策樹的生效結論（P1）
+        2. warroom_summary 原始欄位重算 arbiter    ← 舊 session / section_state
+                                                     只寫了 primitives 的相容路徑
+        3. macro_state.json['market_regime']      ← AI 鎖定快照（規則引擎曝險分級）
+        4. 皆無 → 'unknown'（**不是** 'neutral'）
+
+    Returns:
+        dict::
+
+            {
+              'regime':             'bull'|'neutral'|'caution'|'bear'|'unknown',
+              'light':              '🟢'|'🟡'|'🔴'|'⬜',
+              'source':             哪條分支/來源生效（regime_arbiter.SOURCE_*）,
+              'trend_regime':       趨勢面**輸入**（raw mkt_info['regime']），僅供揭露,
+              'health':             float | None,
+              'defense':            bool,
+              'exposure_limit_pct': int | None,
+              'traffic_light':      str | None（燈號卡的中文 label）,
+              'is_loaded':          bool,
+            }
+
+    C1 v19.182 修了什麼
+    -------------------
+    舊碼 `normalize_regime(_wr.get("regime"))` 讀的是 **raw `mkt_info['regime']`**
+    —— 那是趨勢面**輸入**，不是紅綠燈的結論。於是 `regime='bull'` 但健康分跌破
+    防禦門檻的那天，總經頁燈號卡印 🔴 空頭防禦，而吃本函式的置底常駐條 /
+    ETF 配置橫幅 / 個股組合評分照樣拿到 `'bull'`。現在一律走
+    `shared.regime_arbiter`（與燈號卡同一個仲裁器）。
+
+    另修 §1 違規：未評估時舊碼經 `normalize_regime(None)` 回 `'neutral'`
+    —— 把「不知道」偽裝成「判斷為震盪」。現改回 `'unknown'` + `light='⬜'`。
 
     純函式:warroom_summary 由 caller 從 session 傳入(本層不碰 session_state);只讀檔。
     """
+    from shared import regime_arbiter as _RA
+
     _wr = warroom_summary or {}
     try:
         _file = load_macro_state(state_file_path) or {}
     except Exception:  # noqa: BLE001 — 檔讀不到當未評估,不炸
         _file = {}
 
-    _wr_ok = bool(_wr) and _wr.get("health_score") is not None
+    # C1 v19.182:`health_score` 存在但不是有限數（上游把 score 餵成 NaN 時
+    # `round(nan, 1)` 仍是 nan，`is not None` 為 True）→ 舊碼會判 is_loaded=True
+    # 再一路把 nan 傳進姿態油門。NaN 不是一個健康分，視同未載入（§1）。
+    _wr_ok = bool(_wr) and _is_finite_number(_wr.get("health_score"))
     _file_ok = bool(_file) and _file.get("market_regime") not in (None, "系統異常")
     _is_loaded = _wr_ok or _file_ok
 
-    _regime = normalize_regime(_wr.get("regime") if _wr_ok else _file.get("market_regime"))
     _health = _wr.get("health_score") if _wr_ok else None
     _exposure = _file.get("exposure_limit_pct") if _file_ok else None
+    _trend_regime = _wr.get("regime") if _wr_ok else None
+
+    if _wr_ok:
+        _eff = _wr.get("effective_regime")
+        if _eff:
+            # 快路徑：紅綠燈已把仲裁結果寫進 warroom（section_traffic_light）。
+            # ⚠️ 不能無條件套 `normalize_regime()` —— 它不認得 'unknown'，會把它
+            # 正規化成 'neutral'，等於把「未評估」重新偽裝成「震盪」（§1）。
+            # 已是 canonical 值就直接用；只有非 canonical（中文 / emoji / 舊格式）
+            # 才走正規化。
+            _regime = str(_eff).strip().lower()
+            if _regime not in _RA.REGIME_LIGHT:
+                _regime = normalize_regime(_eff)
+            _light = _wr.get("light") or _RA.light_for_regime(_regime)
+            _source = _wr.get("regime_source") or _RA.SOURCE_NEUTRAL_FALLTHROUGH
+        else:
+            # 相容路徑：`section_state.py` 的 `_wr_sum.update({...})` 只寫 primitives
+            # （traffic_light / health_score / regime / market_score / futures_net…），
+            # 不寫 effective_regime。此處用**同一個** arbiter 由 primitives 重算 ——
+            # 是同一份實作的第二個呼叫點，不是第二套演算法（給定同輸入必同輸出）。
+            _v = _RA.arbitrate_regime(
+                trend_regime=_trend_regime,
+                market_score=_wr.get("market_score"),
+                health=_health,
+                futures_net_lots=_wr.get("futures_net"),
+            )
+            _regime, _light, _source = _v.regime, _v.light, _v.source
+    elif _file_ok:
+        _regime = normalize_regime(_file.get("market_regime"))
+        _light = _RA.light_for_regime(_regime)
+        _source = _RA.SOURCE_FILE_RULE_ENGINE
+    else:
+        # §1 Fail Loud：未評估 → 'unknown' / ⬜，**絕不退回 'neutral'**。
+        _regime = _RA.UNLOADED_VERDICT.regime
+        _light = _RA.UNLOADED_VERDICT.light
+        _source = _RA.UNLOADED_VERDICT.source
 
     try:
         from src.compute.macro.macro_helpers import HEALTH_DEFENSE_THRESHOLD as _HD
@@ -334,6 +414,9 @@ def get_macro_state(warroom_summary: dict | None = None, *,
 
     return {
         "regime": _regime,
+        "light": _light,
+        "source": _source,
+        "trend_regime": _trend_regime,
         "health": (float(_health) if _health is not None else None),
         "defense": bool(_defense),
         "exposure_limit_pct": (int(_exposure) if _exposure is not None else None),

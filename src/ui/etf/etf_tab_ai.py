@@ -17,22 +17,36 @@ from __future__ import annotations
 
 import streamlit as st
 
+from shared.allocation_decision import REGIME_LABEL as _REGIME_LABEL  # C1 v19.182
+
 
 def render_etf_ai(gemini_fn=None):
     # v19.170 P0-1:移除 MACRO_ALLOC 引用 —— 該靜態表與 🎚️ 建議持股油門 脫鉤
     # (bull 一律股票 70%),餵給 AI 會產出與畫面矛盾的配置文字給使用者看。
     from src.ui.etf import _fetch_news_for, macro_allocation_banner
 
+    # ── C1 v19.182:改吃 regime 唯一出口,移除捏造的 'neutral' 預設 ──────────────
+    # `mkt_info['regime']` 是趨勢面**輸入**,不是總經結論;未載入時舊碼還會捏
+    # 'neutral' 餵給 AI → 報告裡出現「目前為中性市場」而畫面橫幅寫「總經未評估」。
+    # 未評估 → `regime=None` → 顯示 / prompt 一律「未評估」(§1)。
+    from src.services.allocation_service import get_macro_regime as _get_macro_reg
+    _macro_reg = _get_macro_reg()
+    regime = _macro_reg['regime'] if _macro_reg['is_loaded'] else None
+    _regime_disp = _REGIME_LABEL.get(regime or 'unknown', '未評估')
     mkt_info = st.session_state.get('mkt_info', {})
-    regime   = mkt_info.get('regime', 'neutral')
     macro_allocation_banner(regime)
 
     st.markdown('### 🤖 ETF AI 首席策略師')
-    st.caption('依組合配置 + 健康燈號 + 回測 + 總經 + 新聞，生成結構化戰情報告。'
+    # B6-a v19.181:原文宣傳「依組合配置 + 健康燈號 + **回測** + 總經 + 新聞」——
+    # ETF 回測分頁已於 v18.265 刪除,`etf_backtest_data` 全 repo **只有讀者、
+    # 沒有任何寫入者**,所以「回測」那一節恆為「（尚未執行回測）」。
+    # 文案不再宣傳一個永遠拿不到的輸入(§1 不對使用者承諾不存在的能力)。
+    st.caption('依組合配置 + 健康燈號 + 總經 + 新聞，生成結構化戰情報告。'
                '個股的 AI 評斷請至「🔬 個股」Tab，本區聚焦 ETF 組合層級決策。')
 
     # ── 讀取資料（不再讀 etf_single_data，個股有自己的 AI）──────
     port_d     = st.session_state.get('etf_portfolio_data')
+    # 保留讀取:若未來重新接上回測資料源,此處無需再改。目前恆為 None。
     backtest_d = st.session_state.get('etf_backtest_data')
 
     if not port_d:
@@ -51,7 +65,7 @@ def render_etf_ai(gemini_fn=None):
         f'border-radius:0 6px 6px 0;margin:8px 0;font-size:12px;color:#c9d1d9;">'
         f'📊 將分析 <b>{len(port_d.get("rows", []))} 檔持股</b> '
         f'｜總現值 <b>{port_d.get("total_value", 0):,.0f} 元</b>'
-        f'｜總經狀態 <b>{regime}</b>'
+        f'｜總經狀態 <b>{_macro_reg["light"]} {_regime_disp}</b>'
         + (f'｜回測 CAGR <b>{backtest_d["cagr"]:.1f}%</b> / Sharpe <b>{backtest_d["sharpe"]:.2f}</b>'
            if backtest_d else '')
         + '</div>', unsafe_allow_html=True)
@@ -61,7 +75,9 @@ def render_etf_ai(gemini_fn=None):
         if not gemini_fn:
             st.warning('⚠️ 請設定 GEMINI_API_KEY 才能使用 AI 功能')
         else:
-            _generate_report(gemini_fn, port_d, backtest_d, regime,
+            # C1 v19.182:prompt 內的大盤狀態改傳中文顯示字串(未評估 → 「未評估」),
+            # 不再傳可能被捏造成 'neutral' 的英文 code。
+            _generate_report(gemini_fn, port_d, backtest_d, _regime_disp,
                              _fetch_news_for, mkt_info)
 
     # ── 顯示已生成報告 ────────────────────────────────────────
@@ -83,7 +99,7 @@ def render_etf_ai(gemini_fn=None):
     _render_free_qa(gemini_fn)
 
 
-def _generate_report(gemini_fn, port_d, backtest_d, regime,
+def _generate_report(gemini_fn, port_d, backtest_d, regime_disp,
                      fetch_news_fn, mkt_info):
     """組裝 Markdown prompt 並呼叫 Gemini 生成結構化戰情報告。
 
@@ -128,7 +144,11 @@ def _generate_report(gemini_fn, port_d, backtest_d, regime,
         for a in rebal) if rebal else '無需再平衡'
 
     # ── 回測（可選）──────────────────────────────────────────
-    _bt_str = '（尚未執行回測）'
+    # B6-a v19.181:`etf_backtest_data` 無寫入者(回測分頁 v18.265 已刪),
+    # 故實務上永遠走這條。原字串「（尚未執行回測）」會讓 AI 以為使用者
+    # 「還沒按」而在報告裡叫人去跑一個不存在的功能 → 改成講清楚沒有這項輸入。
+    _bt_str = ('（本系統目前沒有 ETF 組合歷史回測功能，此項無資料；'
+               '請勿在報告中要求使用者去執行回測，也不要推估任何回測數字）')
     if backtest_d:
         _w_txt = ', '.join(f'{t}:{w*100:.0f}%' for t, w in backtest_d['weights'].items())
         _bt_str = (
@@ -149,7 +169,9 @@ def _generate_report(gemini_fn, port_d, backtest_d, regime,
 
     _alloc_dec = get_allocation()
     _sleeves = get_allocation_sleeves()
-    _macro_lines = [f'• 大盤狀態：{regime}']
+    # C1 v19.182:`regime_disp` 已是中文顯示字串（未評估 → 「未評估」），
+    # 由 `render_etf_ai` 從 regime 唯一出口取得，本函式不再自行判定。
+    _macro_lines = [f'• 大盤狀態：{regime_disp}']
     if _sleeves is not None:
         _macro_lines.append(f'• 系統最終建議持股（唯一真相）：{_alloc_dec.range_text}')
         _macro_lines.append(
@@ -214,7 +236,9 @@ def _generate_report(gemini_fn, port_d, backtest_d, regime,
         f'{_bt_str}\n'
         '名詞白話：CAGR（過去平均一年賺幾%）｜Sharpe（每承受一分風險換到多少報酬，越高越划算，>1 算不錯）｜'
         'MDD 最大回檔（過去最慘從高點往下跌掉幾%，數字越大代表你曾經要忍受越大的帳面虧損）｜'
-        '年化波動率（價格平常上下震盪有多劇烈，越大代表越會心驚膽跳）。'
+        '年化波動率（價格平常上下震盪有多劇烈，越大代表越會心驚膽跳）。\n'
+        '⚠️ 上面這幾個名詞在本系統是**單檔**層級（🔍 單檔診斷 / 📊 多檔比較）有算，'
+        '組合層級沒有；請勿把單檔數字當成組合數字寫進報告。'
     )
 
     # v19.170 P0-1:配置護欄 —— 明令 AI 只能沿用 SSOT 的數字,

@@ -54,7 +54,8 @@
 
 ```
 my-stock-dashboard/
-├── app.py                     # L6 唯一入口(642 LOC,已從 1,722 經 R7+R8+B3-γ+B3-δ 四輪重構收斂)
+├── app.py                     # L6 唯一入口(989 行 @2026-08-07;原記 642 已過期。
+│                              #   ⚠️ 尚非純 orchestrator,見 CLAUDE.md V-APP-1)
 ├── README.md / CLAUDE.md / PROCESS.md / STATE.md / SPEC.md /
 ├── ARCHITECTURE.md / DATASTATION.md / STRATEGY_MANUAL.md /
 ├── ARCHIVED_FEATURES.md
@@ -73,7 +74,8 @@ my-stock-dashboard/
 │   │   ├── proxy/     (4)     # proxy_helper / yf_proxy / nas_server / get_proxy_config
 │   │   ├── news/      (2)     # news_fetcher(stock + macro)
 │   │   ├── portfolio/ (3)     # gsheet_portfolio / oauth_state(D4 已歸位)
-│   │   └── daily/     (2)     # daily_data_fetchers / daily_checklist
+│   │   └── daily/            # daily_data_fetchers
+│   │                          #   (⚠️ 原記「daily_checklist」有誤:該檔在 src/services/,屬 L3)
 │   ├── compute/               # 39 檔(L2)
 │   │   ├── scoring/   (6)     # scoring_engine / scoring_helpers / tech_indicators
 │   │   ├── strategy/  (6)     # V4StrategyEngine / V5 modules / tech_indicators series
@@ -82,7 +84,8 @@ my-stock-dashboard/
 │   │   │                      #   (v19.174 改名;舊 mj_*.py 已縮為 deprecation 轉發,待刪)
 │   │   ├── risk/      (6)     # risk_control / exit_signals / reconcile
 │   │   ├── etf/       (7)     # etf_calc / etf_quality / etf_helpers / σ 統一層
-│   │   ├── macro/     (5)     # macro_helpers / macro_signal_lookback_tw
+│   │   ├── macro/            # macro_helpers
+│   │   │                      #   (macro_signal_lookback_tw = 死碼,零 production caller)
 │   │   └── screener/  (2)     # monthly_revenue_screener / yield_screener
 │   ├── services/              # 19 檔(L3 業務編排)
 │   │   ├── ai_*               # ai_structured_summary / app_ai_service / market_strategy
@@ -128,9 +131,12 @@ my-stock-dashboard/
 
 ### 0.4 程式規模實況(2026-06-30 audit 確認)
 
+> ⚠️ **本表為 2026-06-30 快照,已漂移**(v19.180 標註)。實測 repo `**/*.py` = **545 檔**
+> (量測日 2026-08-07,含 tests/scripts),vs 表列 312。**規模數字請現場量測,勿引用本表。**
+
 | 範圍 | 檔數 | LOC | 變化 vs v18.359 |
 |---|---:|---:|---|
-| Root `.py` | **1**(app.py)| 642 | -86 檔 / -43,658 LOC(F-6 完成)|
+| Root `.py` | **1**(app.py)| ~~642~~ → **989** @2026-08-07 | -86 檔 / -43,658 LOC(F-6 完成)|
 | `src/` | 164 | ~50,800 | **新建大樹**(從 root 搬入)|
 | `shared/` | 20 | ~3,400 | +3 檔 / +850(SSOT 收斂)|
 | `infra/` | 2 | ~200 | 持平 |
@@ -197,17 +203,23 @@ LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 | TTL | `shared/ttls.py:TTL_{15MIN,30MIN,1HOUR,...}` | SSOT |
 | 27 資料源 | `src/data/core/data_registry.py` + `macro_core.PMI_SOURCE_REGISTRY` | SSOT registry |
 
-### 0.10 0 違憲確認
+### 0.10 ~~0 違憲確認~~ ⚠️ **本節多數宣稱已於 2026-08-07 複驗推翻**
 
-- ✅ **0 root 業務 .py**(只有 app.py 1 檔,642 LOC,純 router + orchestrator)
-- ✅ **0 dead public function**(P5-DEAD 6 輪審計收斂飽和;`_fetch_share_capital` / `_precompute_xsec` 確認有 caller)
-- ✅ **0 commented-out function 區塊**(`# def` / `# class` 全清)
-- ✅ **0 stale 路徑註解**(指向已不存在的檔案 0 處;`# 已移除` / `# 已下沉` 註解皆指向有效新位置)
-- ✅ **0 §3.3 反捏造違憲**(原 14 類 magic number 全 SSOT 化)
-- ✅ **0 §8.2 高項違憲**(EX-AI-1 / EX-RENDER-1 已退役;只剩 EX-L0-1 / EX-CACHE-1 / EX-PASSTHRU-1 三類已登錄例外)
-- ✅ **0 L1 → L2/L3 上行 import**(2026-06-30 grep 驗證 `src/data/` 無 `from src.compute|src.services`)
-- ✅ **0 L2 → L3 上行 import**(grep 驗證 `src/compute/` 無 `from src.services`)
-- ✅ **0 L3 → L4/L5 上行 import**(grep 驗證 `src/services/` 無 `from src.ui`,daily_checklist 2 處 `from src.ui.render.macro_ui_components` 為 L4 import 合規)
+> **v19.180 稽核**:本節原以「✅ 0 違憲」列 9 條。複驗發現**至少 4 條不成立**,其中 1 條的
+> 理由是**倒置的**(把違憲寫成合憲)。0 違憲的宣稱比一般失真更危險 —— 它會讓後續 audit
+> 直接跳過整個 §8.2。逐條更正如下,**權威清單以 `CLAUDE.md §8.2.A.2 待修違憲表`為準**。
+
+| 原宣稱 | 2026-08-07 複驗 |
+|---|---|
+| ✅ 0 root 業務 .py(app.py 642 LOC,純 router + orchestrator) | ⚠️ **LOC 與「純 orchestrator」皆不實**:app.py 實測 **989 行**,且含 `_bps()`(造 requests.Session,L1)、`gemini_call()`(直打 Gemini HTTP,L3)、`_build_llm_context()`(L3)、選股網整段(L5)。見 CLAUDE.md **V-APP-1** |
+| ✅ 0 dead public function | ⚠️ **至少 1 個死模組**:`src/compute/macro/macro_signal_lookback_tw.py` 零 production caller(僅 barrel / tests / scripts / 註解引用),與 `STATE.md` 既有判定一致 |
+| ✅ 0 stale 路徑註解 | ⚠️ 本檔 §0.3 目錄樹即有:`daily/ (2) # daily_data_fetchers / daily_checklist` — `daily_checklist.py` 實際位於 `src/services/`(L3),不在 `src/data/daily/` |
+| ✅ 0 §3.3 反捏造違憲 | ⚠️ `src/ui/etf/etf_tab_smart.py` 5 個 `@st.cache_data(ttl=…)` 全為 inline 數字(1800/3600/3600/7200/86400),未走 `shared/ttls.py` SSOT。見 CLAUDE.md **V-SMART-CACHE-1** |
+| ✅ 0 §8.2 高項違憲（只剩三類已登錄例外） | ⚠️ **不成立**。CLAUDE.md §8.2.A.2 現列 9 項待修(V-RADAR-1 / V-L0-NAME-1 / V-FT-STORE-1 / V-CHECKLIST-1 / V-LEAD-RENDER-1 / V-PICKER-PRIV-1 / V-APP-1 / V-UP-APP-1 / V-SMART-CACHE-1)。另 EX-CACHE-1 漏登 12 檔、EX-PASSTHRU-1 漏登逾半(皆屬清單失真,非寫法錯誤) |
+| ✅ 0 L1 → L2/L3 上行 import | ⚠️ **1 處**:`src/data/portfolio/forward_test_store.py` → `from src.compute.screener.forward_test import PICK_SNAPSHOT_HEADERS`。見 **V-FT-STORE-1** |
+| ✅ 0 L2 → L3 上行 import | ✅ **仍成立**(`src/compute/` 無 `from src.services`)。但 L2 另有 **L2→L1 + L2 做 I/O**:`src/compute/risk/risk_radar.py`。見 **V-RADAR-1** |
+| ✅ 0 L3 → L4/L5 上行 import<br>（原文:「daily_checklist 2 處 `from src.ui.render.macro_ui_components` 為 **L4 import 合規**」） | 🔴 **理由倒置 —— 這正是硬規則明文禁止的方向**。§8.2 寫「L3 不得 import L4/L5」,所以「它是 L4 import」是**違憲的證明**,不是合規的理由。實測 `src/services/daily_checklist.py` 自 `src/ui/render/macro_ui_components` import **8 個畫圖函式**。見 **V-CHECKLIST-1**。<br>（同型錯誤亦見於 CLAUDE.md 原 EX-PASSTHRU-1 註 1 對 `render_leading_table` 的豁免說法,已一併更正） |
+| ✅ 0 commented-out function 區塊 | 未複驗,暫存疑 |
 
 ### 0.11 v18.421 Phase 1 second-pass 新發現(2026-06-30)
 
@@ -218,10 +230,14 @@ LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 
 | ID | 位置 | 證據 | 嚴重度 |
 |---|---|---|---|
-| **V1** | `src/compute/etf/etf_calc.py:7` | 直接 `import streamlit as st`,無 try/except + `_NoOpST` fallback;CLAUDE.md §8.2.A 規定 EX-CACHE-1 例外**必須** letter compliant(L2 Compute 不應依賴 streamlit 運行時) | 🟡 中 |
-| **V2** | `src/compute/etf/etf_quality.py:16` | 同 V1 | 🟡 中 |
+| ~~**V1**~~ | `src/compute/etf/etf_calc.py` | ~~直接 `import streamlit as st`,無 try/except + `_NoOpST` fallback~~ | ✅ **已修**(2026-08-07 複驗:已為 `try/except ImportError` 條件 import) |
+| ~~**V2**~~ | `src/compute/etf/etf_quality.py` | 同 V1 | ✅ **已修**(同上複驗) |
 
-→ 修法:加 `try: import streamlit as st / except ImportError: class _NoOpST: ... st = _NoOpST()` 包裝,對齊 EX-CACHE-1 P2-EX v18.393 標準寫法。
+→ 修法(已落地):加 `try: import streamlit as st / except ImportError: class _NoOpST: ... st = _NoOpST()` 包裝,對齊 EX-CACHE-1 P2-EX v18.393 標準寫法。
+
+> ⚠️ 但同期另有 **1 處 L2 條件 import streamlit 未登記**:`src/compute/scoring/exit_signals.py`
+> (`_build_cached_judge()` 內 lazy import,寫法合格)。屬 CLAUDE.md EX-CACHE-1 漏登的 12 檔之一,
+> v19.180 已改為模式判定,不再逐一列名。
 
 **🟡 L1 → L2 反向 import(9 處,潛在 §8.2 違規)**
 
@@ -269,6 +285,35 @@ LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 - 上版 §0.5 寫 app.py「7,300 LOC orchestrator」 → 實際 642 LOC(原 R7+R8 + U5 B3 抽完後)
 - 上版 §0.8 寫「R-UI-1 inline 殘留 12 處」 → 實際 51 處,但 audit 確認皆為 multi-line bespoke(`border_left_banner` SSOT 套不下),維持 WONTFIX
 - 上版 §0.7 寫「stats_helpers.py:55 趨勢分類 inline」 → 該檔不存在,過時 reference
+
+---
+
+### 0.12 v19.180 分層記載稽核（2026-08-07）— **分層違憲的權威來源在 CLAUDE.md**
+
+> 本次唯讀稽核針對「文件記載 vs 實際 codebase」,結論:`CLAUDE.md §8.2 / §8.2.A / §8.3` 與
+> 本檔 §0.3 / §0.4 / §0.10 / §1.4 皆有嚴重失真,已同批更正。
+
+**單一權威（SSOT）約定**
+
+| 主題 | 權威來源 | 本檔角色 |
+|---|---|---|
+| 七層定義 + 5 條硬規則 | `CLAUDE.md §8.2` | 只做敘述性補充,**不得**另立規則 |
+| 已登錄例外（EX-*） | `CLAUDE.md §8.2.A.1` | 不重複列舉 |
+| 待修違憲（V-*） | `CLAUDE.md §8.2.A.2` | 不重複列舉 |
+| 例外/違憲的**機器化窮舉** | `tests/test_c3_layering_guard.py`（C3,撰寫中） | — |
+| 規模數字（LOC / 檔數） | **現場量測** | 本檔所有規模表已標註量測日或標為失效 |
+
+**本次更正摘要**
+
+- §0.3：app.py `642` → **989 行**;`daily/` 樹誤列 `daily_checklist`（實際在 `src/services/`）;`compute/macro/` 標註 `macro_signal_lookback_tw` 為死碼
+- §0.4：加註表為 2026-06-30 快照;Root `.py` LOC 更正
+- §0.10：**「0 違憲」9 條中至少 4 條推翻**;其中 L3→L4 一條原以「為 L4 import 合規」豁免 —— **理由倒置**,已更正
+- §0.11：V1 / V2 標記已修;補記 `exit_signals.py` 屬 EX-CACHE-1 漏登
+- §1.4：v7.1 規模表標為失效（該表曾被 `CLAUDE.md §8.2` 引用而擴散錯誤數字）
+
+**為何要立這個約定**：分層記載一旦分散在兩份 .md 各寫一份,就必然出現「一邊改、一邊沒改」,
+而**兩份都自稱是規範**時,讀者無從判斷該信哪份。本次 `render_leading_table` 與 `daily_checklist`
+兩處理由倒置,正是雙份記載各自漂移的結果。
 
 ---
 
@@ -395,6 +440,13 @@ my-stock-dashboard/
 
 ### 1.4 程式碼規模概覽
 
+> 🔴 **本表為 v7.1 歷史數字,已完全失效,請勿引用**（v19.180 稽核標註）。
+> 實測 repo `**/*.py` 為 **545 檔**（量測日 2026-08-07）,與下表「合計 19 檔」差 28 倍;
+> 表列模組多數已搬遷或刪除（`backtest_engine` / `ai_engine` / `unified_decision` 等均已不存在）。
+>
+> ⚠️ **這張表曾經造成實害**:`CLAUDE.md §8.2` 一度以它為據寫「~21,323 LOC 跨 19 核心模組」,
+> 讓憲法本身帶錯數字。該處已於 v19.180 改為不寫規模數字。**需要規模數字請現場量測,不要引用本表。**
+
 | 分類 | 檔案數 | 總行數 |
 |------|-------:|-------:|
 | 應用層 | 1 | ~9,082 |
@@ -406,7 +458,7 @@ my-stock-dashboard/
 | 基礎設施 | 4 | ~806 |
 | **合計** | **19** | **~21,323** |
 
-> 資料層新增 `data_config.py`（快取 TTL + 來源優先順序）；基礎設施新增 `data_config.py`。`daily_checklist.py` 因 v4.1/v4.5 重構，從 733 行增至 1,465 行。
+> （以上為 v7.1 快照,保留僅供追溯演進脈絡。）
 
 ---
 

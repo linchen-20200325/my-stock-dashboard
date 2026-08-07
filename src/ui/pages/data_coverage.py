@@ -389,7 +389,7 @@ def compute_tab_coverage(state: dict | None = None) -> list[dict]:
 
     rows = []
 
-    # ══ 🌐 總經:macro_info 6 指標 + M1B-M2 + 領先指標 ══════════════
+    # ══ 🌍 總經:macro_info 6 指標 + M1B-M2 + 領先指標 ══════════════
     _ma = _get("macro_info") or {}
     _mi = _get("m1b_m2_info") or {}
     _li = _get("li_latest")
@@ -446,10 +446,10 @@ def compute_tab_coverage(state: dict | None = None) -> list[dict]:
         # 明講這是抓取時刻,不是資料日期 —— D-2 的整個病灶就是把這兩件事混為一談
         _detail1_parts.append(f"本輪抓取於 {_loaded_at_txt[5:16]}（≠ 資料日期）")
     rows.append({
-        "tab": "🌐 總經",
+        "tab": "🌍 總經",
         "emoji": _e1, "color": _hex(_e1),
         "ratio_txt": f"{_macro_have_all}/{_macro_total_all}" if _ma_loaded else "未載入",
-        "detail": " ｜ ".join(_detail1_parts) if _ma_loaded else "在 🌐 總經 Tab 按更新觸發",
+        "detail": " ｜ ".join(_detail1_parts) if _ma_loaded else "在 🌍 總經 Tab 按更新觸發",
         "action": "缺值 → 看下方 API Key / Proxy 診斷",
         "fresh_emoji": _f1e, "fresh_label": _f1l, "fresh_color": _hex(_f1e),
         "fresh_asof": _macro_asof,
@@ -463,7 +463,8 @@ def compute_tab_coverage(state: dict | None = None) -> list[dict]:
     _t2_df = _t2.get("df") if _t2_is_dict else None
     if not _t2_loaded:
         _e2, _ratio2 = "⬜", "未查"
-        _detail2 = "在 📈 個股 Tab 查股票代號觸發"
+        # B6-a v19.181:Tab 名對齊 app.py:584（真名 🔬 個股，非 📈 個股）
+        _detail2 = "在 🔬 個股 Tab 查股票代號觸發"
     elif _t2_err:
         # D-5:tab_stock 無條件寫 t2_data(含 err),失敗時 dict 仍非空 →
         #      原本照樣 🟢「已載入(28 欄)」。抓取失敗必須看起來就是失敗。
@@ -528,7 +529,7 @@ def compute_tab_coverage(state: dict | None = None) -> list[dict]:
     _detail3 = (" ｜ ".join(
         f"{_lbl} {'✓' if (_cl_is_dict and _has_value(_cl.get(_k))) else '✗'}"
         for _k, _lbl in _cl_keys)
-        if _has_value(_cl) else "在 🌐 總經 Tab 載入籌碼觸發")
+        if _has_value(_cl) else "在 🌍 總經 Tab 載入籌碼觸發")
 
     # ── 三條強制降級(§1 Fail Loud:壞掉要說出來,不能用綠燈蓋過去)──────
     # 覆蓋率再滿,只要值本身可疑,整列一律降到 🟡 並在細項講清楚是哪一種可疑。

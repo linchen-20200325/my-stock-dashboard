@@ -16,6 +16,9 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.regime_arbiter import (
+    LIGHT_BEAR, LIGHT_BULL, LIGHT_NEUTRAL, LIGHT_UNKNOWN,
+)
 
 
 def render_market_status_section() -> None:
@@ -27,13 +30,36 @@ def render_market_status_section() -> None:
     # v19.170 P0-1:原本這裡還讀 mkt_info 供「建議持股」卡使用,
     # 已改走 get_allocation() SSOT,故不再需要 mkt_info。
     _t3_tl  = st.session_state.get('warroom_summary', {}) or {}
+    # C1 v19.182:燈色改讀 canonical `light`,不再對中文 label 做 substring 比對。
+    from src.services.allocation_service import get_macro_regime as _get_macro_reg
+    _t3_reg = _get_macro_reg()
 
     _t3c1, _t3c2, _t3c3 = st.columns(3)
     with _t3c1:
+        # ══════════════════════════════════════════════════════════════════
+        # C1 v19.182:這張卡**原本永遠是灰的** —— 不是「比對脆弱」而是**恆不命中**
+        # ------------------------------------------------------------------
+        # 舊碼對 `warroom_summary['traffic_light']` 找 '綠'/'黃'/'紅' 三個字,
+        # 但那個值是 `calc_traffic_light` 的 `label`,只可能是這四個之一:
+        #     '空頭防禦｜降低部位' / '多頭市場｜積極操作'
+        #     '保守防禦｜縮減部位' / '震盪整理｜謹慎觀望'
+        # **四個都不含「綠」「黃」「紅」**⇒ 三個條件恆為 False ⇒ 永遠落到
+        # `'#484f58'`(灰)。也就是說個股組合頁的 🚦 大盤燈號從來沒亮過顏色,
+        # 不論當天總經是 🟢 還是 🔴。
+        # 改為讀 canonical `light`(🟢/🟡/🔴/⬜),與總經頁燈號卡同一個仲裁結果。
+        # ══════════════════════════════════════════════════════════════════
+        _tl_light = _t3_reg.get('light') or LIGHT_UNKNOWN
         _tl_label = _t3_tl.get('traffic_light') or '未載入'
-        _tl_color = (TRAFFIC_GREEN if '綠' in _tl_label else
-                     TRAFFIC_YELLOW if '黃' in _tl_label else
-                     TRAFFIC_RED if '紅' in _tl_label else '#484f58')
+        if not _t3_reg.get('is_loaded'):
+            # §1 Fail Loud:未評估就別掛一個看起來像結論的中文 label。
+            _tl_label = '⬜ 總經未評估'
+        elif _tl_label != '未載入':
+            _tl_label = f'{_tl_light} {_tl_label}'
+        _tl_color = {
+            LIGHT_BULL:    TRAFFIC_GREEN,
+            LIGHT_NEUTRAL: TRAFFIC_YELLOW,
+            LIGHT_BEAR:    TRAFFIC_RED,
+        }.get(_tl_light, '#484f58')
         st.markdown(
             f'<div style="background:#0d1117;border:1px solid {_tl_color}33;border-radius:8px;'
             f'padding:10px 14px;text-align:center;">'

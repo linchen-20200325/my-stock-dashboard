@@ -560,7 +560,12 @@ def render_tab_macro():
 
 
     # F-7.1 B-S2:Section 2 拐點偵測 / 市場狀態抽至 src/ui/tabs/macro/section_state.py
-    render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd)
+    # v19.183 D2:顯式傳 `_show_market_data`(= 快取 ≤30 分且非刷新中)。
+    # 沒傳之前,本 section 會在快取過期時**無條件**重算紅綠燈並蓋掉頁頂那句
+    # 「⏳ 燈號等待中（已過期）」→ 30 分鐘新鮮度閘門形同不存在(§2.4)。
+    # 與 render_traffic_light_top 回傳的旗標同源,兩邊不可能再各判各的。
+    render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
+                         show_market_data=_show_market_data)
     intl_s = {n:calc_stats(s) for n,s in intl.items()}
     tw_s   = {n:calc_stats(s) for n,s in tw.items()}
     tech_s = {n:calc_stats(s) for n,s in tech.items()}

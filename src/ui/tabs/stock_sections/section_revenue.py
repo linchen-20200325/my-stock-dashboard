@@ -64,8 +64,12 @@ def render_revenue_trend_section(sid2: str, name2: str, rev2, qtr2,
         f'<div style="background:#0a1628;border-left:3px solid {TRAFFIC_GREEN};padding:8px 12px;'
         'border-radius:0 6px 6px 0;margin-bottom:8px;font-size:12px;color:#c9d1d9;">'
         '💡 月營收年增率（YoY%）= 今年這個月比去年同月多賺了幾%'
-        '<br>🟢 <b>連續3個月YoY>15%</b> = 業績爆發，股價可能跟著漲'
-        '<br>🔴 <b>連續3個月YoY<0%</b> = 業績衰退，要小心'
+        # D1 v19.185（形狀 #5 畫面宣稱門檻 ≠ 判定式）：原文寫「連續3個月YoY>15%」，
+        # 但上方判定式是 `近3月平均 > 15% 且三個月皆為正`——例如 [+50, +1, +1]
+        # 只有一個月超過 15%，卻會被判「業績爆發，重點關注」。這裡改寫成
+        # **實際在跑的規則**（判定式本身是合理的，說謊的是這段說明文字）。
+        '<br>🟢 <b>近3個月YoY平均 &gt;15% 且三個月都是正成長</b> = 業績爆發，股價可能跟著漲'
+        '<br>🔴 <b>近3個月YoY平均 ≤0%</b> = 業績衰退，要小心'
         '</div>', unsafe_allow_html=True)
     if rev2 is not None and not rev2.empty:
         if _rev2_cached:

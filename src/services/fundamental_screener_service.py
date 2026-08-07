@@ -108,6 +108,12 @@ def build_trend_map(*, refresh: bool = False) -> dict[str, int]:
 
     favorable_count ∈ [0,4] = 毛利/營益率升·負債降·營收增 中「方向為佳」的個數。
     快照缺 / 計算失敗 → 回空 dict(不炸選股;§1 缺料下游不計入該因子)。
+
+    §1 B6-b(2026-08):**favorable_of == 0 的檔不放 key**。favorable_of 是「算得出來的
+    因子數」,為 0 代表四個趨勢因子全 NaN(季數不足 / 營收·資產為 0 → 比率算不出),
+    此時 favorable_count 必為 0 —— 那是「沒有證據」不是「四項全不佳」。原本一律放
+    {sid: 0} 會讓 `_percentile_scores` 把它當**真實讀數**給最低百分位分,還算進
+    SCREENER_MIN_FACTOR_COVERAGE_RATIO 涵蓋門檻的分子(= 一個捏造值幫它通過門檻)。
     """
     try:
         _df = get_cross_quarter_trends(refresh=refresh)
@@ -116,7 +122,11 @@ def build_trend_map(*, refresh: bool = False) -> dict[str, int]:
         return {}
     if _df is None or _df.empty:
         return {}
-    return {str(s): int(c) for s, c in zip(_df["stock_id"], _df["favorable_count"])}
+    if "favorable_of" not in _df.columns:      # 舊 schema → 保守全收(不靜默丟資料)
+        return {str(s): int(c) for s, c in zip(_df["stock_id"], _df["favorable_count"])}
+    return {str(s): int(c)
+            for s, c, n in zip(_df["stock_id"], _df["favorable_count"], _df["favorable_of"])
+            if int(n) > 0}
 
 
 def describe_snapshot_coverage(meta: dict) -> dict:
@@ -168,7 +178,11 @@ SCREEN_ANGLE_LABELS: dict[str, str] = {
     "估值便宜（本益比低）": "pe_low",
     "高 EPS（獲利高）": "eps_high",
     "缺貨動能（供不應求 4 訊號）": "shortage",
-    "抗跌 RS 強（弱勢仍贏大盤）": "rs_leader",
+    # B6-b(2026-08)文案修:原「抗跌 RS 強（弱勢仍贏大盤）」承諾了判定式沒做的事 ——
+    # 綜合評分走 `run_rs_leader_scan(beat_only=False)`(見 get_ranked_picks),排行含
+    # 「落後大盤」分級(RS_RANKABLE_TIERS 含 TIER_LAG),故 RS 分只是**相對強弱百分位**,
+    # 不保證該檔贏過大盤(大盤大漲時整池都可能沒贏)。label 改為描述實際判定式。
+    "抗跌 RS（相對強弱 σ，越高越抗跌；不保證贏大盤）": "rs_leader",
     "跨季轉強（毛利/營益率升·負債降·營收增）": "trend",
 }
 
@@ -296,6 +310,7 @@ def composite_rank_candidates(
     shortage_rows: list[dict] | None = None,
     rs_rows: list[dict] | None = None,
     trend_map: dict | None = None,
+    drop_unscored: bool = False,
 ) -> tuple[pd.DataFrame, str]:
     """從存活池，依【複選因子】的綜合評分排序 → 候選 DataFrame（含 '代碼' 欄）。
 
@@ -304,9 +319,15 @@ def composite_rank_candidates(
     綜合分 = 該股**有資料的因子**百分位分（0-100）的平均（v19.90：缺料因子不計入、不記 0）。
     顯示欄：缺料因子該股為空白（None），不是 0，避免誤導。
 
+    drop_unscored（B6-b 2026-08）：True → 綜合分為 None 的檔**不出現在結果**。
+      預設 False 保留既有「排最後、綜合分空白」行為（直接呼叫本函式的既有 caller/測試）；
+      `get_ranked_picks`（畫面 / 每月凍結 / MCP / 推播 同源入口）一律傳 True ——
+      §1：沒算出綜合分的檔不該被當成「綜合評分排序」的入選結果拿去凍結進前進式驗證紀錄。
+
     Returns: (df[代碼/名稱/綜合分/各因子分], note)。
       - factors 空 → 空 + 「請至少勾一個因子」
       - 勾了缺貨/RS 但尚未掃描 → note 提示（該因子暫無資料、不計入，不擋其他因子）
+      - 有因子只覆蓋部分存活池（如缺貨深掃上限 50 檔）→ note 揭露實際覆蓋分母（§5）
     """
     pe_map = pe_map or {}
     name_map = name_map or {}
@@ -361,7 +382,12 @@ def composite_rank_candidates(
             _composite[i] = None
             if _present:  # 「有部分資料但不足過半」才計入(全無資料本就 None,非新擋下)
                 _n_below_coverage += 1
-    ranked = sorted(ids, key=lambda i: (_composite[i] is None, -(_composite[i] or 0)))[: int(top_n)]
+    ranked = sorted(ids, key=lambda i: (_composite[i] is None, -(_composite[i] or 0)))
+    _n_unscored_dropped = 0
+    if drop_unscored:
+        _n_unscored_dropped = sum(1 for i in ranked if _composite[i] is None)
+        ranked = [i for i in ranked if _composite[i] is not None]
+    ranked = ranked[: int(top_n)]
 
     out = pd.DataFrame({
         "代碼": ranked,
@@ -384,6 +410,23 @@ def composite_rank_candidates(
         _cov_txt = (f"（{_n_below_coverage} 檔因「勾選因子涵蓋未過半」未列入綜合排序;"
                     f"需 >{_pct}% 勾選因子有資料,避免單一因子高分股衝頂。）")
         note = f"{note} {_cov_txt}".strip() if note else _cov_txt
+
+    # B6-b(§5 可觀測性):某因子「掃到了但只覆蓋部分存活池」時,原本完全無提示 ——
+    # 例如缺貨深掃上限 50 檔(SHORTAGE_DEEP_SCAN_MAX)、存活池 324 檔,使用者以為整份
+    # 榜是依缺貨排的,實際 85% 的股根本沒有缺貨分。把實際覆蓋分母攤開。
+    # ⚠️ 用「覆蓋」而非「涵蓋」二字:「涵蓋」已被上面的門檻提示佔用,兩者語意不同
+    #   （涵蓋門檻 = 個股層級被擋;覆蓋 = 因子層級的母體大小）。
+    _cov_bits = [f"{_cfg[_f][2]} {len(_col_scores[_f])}/{len(ids)}"
+                 for _f in factors
+                 if _col_scores[_f] and len(_col_scores[_f]) < len(ids)]
+    if _cov_bits:
+        _bit_txt = ("（因子實際覆蓋:" + "、".join(_cov_bits)
+                    + " —— 未覆蓋到的個股該因子不計分,不是 0 分。）")
+        note = f"{note} {_bit_txt}".strip() if note else _bit_txt
+    if _n_unscored_dropped:
+        _drop_txt = (f"（{_n_unscored_dropped} 檔未取得綜合分（勾選因子資料不足）"
+                     "→ 已排除於名單外,不列為入選。）")
+        note = f"{note} {_drop_txt}".strip() if note else _drop_txt
     return out, note
 
 
@@ -446,10 +489,15 @@ def get_ranked_picks(
         if "trend" in _factors and trend_map is None:
             trend_map = build_trend_map(refresh=refresh)
 
+    # drop_unscored=True(B6-b 2026-08):本函式是「畫面 / 每月凍結 / MCP / 推播」四處
+    # 同源入口,回傳值會被 `.head(N)` 當「綜合評分排序前 N 名」直接凍結進 forward-test
+    # 紀錄。綜合分 None = 該檔**從未被評分**(勾選因子資料不足),把它排在後面仍可能因
+    # 「有分的檔不足 N 個」被 head(N) 撈進凍結名單 → 污染畫面與凍結紀錄(§1 綠燈假象)。
     return composite_rank_candidates(
         survivors_df, factors=_factors, top_n=top_n,
         pe_map=pe_map, name_map=name_map,
         shortage_rows=shortage_rows, rs_rows=rs_rows, trend_map=trend_map,
+        drop_unscored=True,
     )
 
 

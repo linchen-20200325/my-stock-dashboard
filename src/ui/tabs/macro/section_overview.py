@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import streamlit as st
 
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.colors import (
+    TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW,
+)
 from shared.signal_thresholds import BREADTH_BULL_PCT, BREADTH_NEUTRAL_PCT
 
 
@@ -34,14 +36,29 @@ def render_section_overview(_tl_eff_reg, _show_market_data: bool) -> None:
     if _show_market_data and any([_ov_mkt, _ov_jq, _ov_cd]):
         _ov_cols = st.columns(2)
         with _ov_cols[0]:
-            # 以交通燈有效 regime 為主,確保與頂部卡片結論一致
-            _ov_reg = _tl_eff_reg or (_ov_mkt.get('regime', 'neutral') if _ov_mkt else 'neutral')
-            _ov_lbl = {'bull': '🟢 多頭', 'neutral': '🟡 震盪', 'bear': '🔴 空頭防禦'}.get(_ov_reg, '⚪')
+            # ── C1 v19.182:唯一出口 + 移除捏造的 'neutral' 預設 ────────────
+            # 原碼 `_tl_eff_reg or _ov_mkt.get('regime','neutral')`:
+            #   (a) fallback 到 raw `mkt_info['regime']` = 第 2 個 producer ——
+            #       紅綠燈判 🔴 而 mkt_info 是 bull 時,這張卡會印「🟢 多頭」;
+            #   (b) 兩層 `'neutral'` 預設 = 拿不到資料時**捏造**「震盪」這個結論
+            #       (§1:不知道 ≠ 判斷為震盪)。
+            # 現在 `_tl_eff_reg` 已是 canonical 結論(見 section_traffic_light),
+            # 拿不到就誠實印 ⬜ 未評估。
+            _ov_reg = _tl_eff_reg or 'unknown'
+            _ov_lbl = {'bull': '🟢 多頭', 'neutral': '🟡 震盪',
+                       'bear': '🔴 空頭防禦'}.get(_ov_reg, '⬜ 未評估')
+            _ov_clr = (TRAFFIC_GREEN if _ov_reg == 'bull' else
+                       TRAFFIC_RED if _ov_reg == 'bear' else
+                       TRAFFIC_YELLOW if _ov_reg == 'neutral' else TRAFFIC_NEUTRAL)
+            _ov_note = ('大盤多空方向（持股比例見下方清單）' if _ov_reg != 'unknown'
+                        else '總經尚未評估 — 請先按「🚀 一鍵更新全部數據」')
+            # 順手修一個畫面上的垃圾字串（C1 附帶，非 regime 相關）：
+            # `beginner_kpi(title, value, plain_meaning, color, tip)` 的第 5 個
+            # 位置參數是 **tip**，舊碼卻傳了背景色字面值 `'#0d1117'`，於是卡片
+            # 底下實際印出「💡 #0d1117」。這裡直接不傳 tip。
             st.markdown(beginner_kpi(
-                '今日市場狀態', _ov_lbl, '大盤多空方向（持股比例見下方清單）',
-                TRAFFIC_GREEN if _ov_reg == 'bull' else (
-                    TRAFFIC_RED if _ov_reg == 'bear' else TRAFFIC_YELLOW),
-                '#0d1117'), unsafe_allow_html=True)
+                '今日市場狀態', _ov_lbl, _ov_note, _ov_clr),
+                unsafe_allow_html=True)
         # 旌旗指數(市場廣度家族 — 5 分鐘清單未涵蓋,保留唯一)
         # ── P0-C 定名（2026-08-05）────────────────────────────────
         # 原標題「全市場健康度」+ 說明「有幾%的股票站在均線之上」兩處都要改：

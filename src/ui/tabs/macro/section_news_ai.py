@@ -473,6 +473,10 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
             unsafe_allow_html=True)
     
         # 快照時效檢查：與即時紅綠燈比對，不一致則提醒重新裁決（避免依過期判斷操作）
+        # C1 v19.182:`_tl_eff_reg` 現為 canonical 結論(`calc_traffic_light` 的
+        # `effective_regime`,與燈色同源),不再是由 icon 反推的值。
+        # 未評估('unknown' / None)→ 對照不到中文 → `_live_reg_zh` 為空字串 →
+        # 下方 gate 直接跳過提醒(§1:沒有即時判斷就不宣稱快照「不一致」)。
         _live_reg_zh = {'bull': '多頭', 'neutral': '震盪', 'bear': '空頭'}.get(_tl_eff_reg, '')
         if _ms_ts and _live_reg_zh and _regime in ('多頭', '震盪', '空頭') and _regime != _live_reg_zh:
             st.warning(

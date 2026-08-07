@@ -1,7 +1,7 @@
 """src/ui/pages/reconcile_panel.py — §4.3 重算對帳 UI panel(v18.403 #8+#12)。
 
 把 `src/compute/risk/reconcile.py` 三個對帳函式的結果攤在診斷 tab 上:
-- US10Y:FRED DGS10 vs Yahoo ^TNX/10
+- US10Y:FRED DGS10 vs Yahoo ^TNX(**刻度自動偵測**,v19.177 起不再寫死 ÷10)
 - 月營收 YoY:自算(now/y_ago - 1)vs FinMind 預算欄
 - 健康評分:v1 arithmetic vs v2 min_of_factors(Liebig 短板)
 
@@ -14,16 +14,25 @@ from typing import Any
 
 import streamlit as st
 
+# v19.181 D3:色票改引 L0 SSOT。原本這裡 inline 一組舊 GitHub 調色盤
+# (#3fb950/#d29922/#f85149/#6e7681),全站已於 v19.68 遷 Tailwind
+# (shared/colors.py 的 docstring 就記著這次遷移)⇒ 工具箱裡的 🟡 有兩種黃:
+# 本面板一個、data_registry_panel 一個、其餘全站第三個。
+from shared.colors import (
+    TRAFFIC_GREEN as _C_GREEN,
+    TRAFFIC_NEUTRAL as _C_IDLE,
+    TRAFFIC_RED as _C_RED,
+)
 from src.compute.risk.reconcile import (
     reconcile_health_score,
     reconcile_monthly_revenue_yoy,
     reconcile_us10y_yield,
 )
 
-_C_GREEN  = "#3fb950"
-_C_YELLOW = "#d29922"
-_C_RED    = "#f85149"
-_C_IDLE   = "#666"
+#: market_regime 未回報 max_score 時的分母。**必須**與
+#: `macro_helpers.calc_traffic_light` 健康段的 `float(_mkt.get('max_score') or 4.0)`
+#: 同值 —— 這是對帳面板,分母跟 production 不一樣就等於在對一個假的帳。
+_MAX_SCORE_FALLBACK = 4.0
 
 _STATUS_COLOR: dict[str, str] = {
     'agree':         _C_GREEN,
@@ -85,14 +94,47 @@ def _get_health_params() -> tuple[float | None, float | None, float | None]:
         _jingqi = _ss('jingqi_info', {}) or {}
         _jqavg = _jingqi.get('avg')
 
+    # ── v19.181 D3:score 折換 0-100 的分母改吃 `mkt_info['max_score']` ─────────
+    # 【原本錯在哪】舊碼寫死 `score / 4.0 * 100`,註解還說是「從 macro_helpers
+    # .calc_traffic_light 邏輯」。但 v19.102 起 macro_helpers 早就改成
+    #     _max_score = float(_mkt.get('max_score') or 4.0)
+    #     _score_pct = min(_score / _max_score * 100, 100)
+    # (macro_helpers.py 健康段;SSOT 說明見 signal_thresholds.HEALTH_WEIGHT_SCORE)。
+    # `market_regime` 的真滿分是 **4 / 5 / 6**:固定 4 項一定會評,
+    # ad_ratio 有傳 +1、m1b_m2_gap 有傳 +1(market_strategy.py `_max` 計算)。
+    # ⇒ max_score=6 時舊碼把 score_pct 算成 1.5 倍(score=3 → 75 而非 50),
+    #   對帳面板拿一個**高估 50%** 的輸入去跟 production 對帳,差值本身就是假的。
+    # 【為何連 clamp 也要抄】`min(..., 100)` 不是防呆而是語意:score 可能因
+    # M1B-M2 的 +0.5 分出現非整數,分母又是動態的,不夾住就可能 >100。
+    # 【為何連 `or` 的 falsy 行為也要抄】production 寫的是
+    # `float(_mkt.get('max_score') or 4.0)` —— `max_score` 為 **0** 時也會退 4.0
+    # (0 是 falsy)。本面板刻意用同一個 `or`,而**不是**寫成
+    # `if max_score is None`:對帳面板的職責是把 production 算過的那筆帳再算一次,
+    # 不是在這裡「順手修好」production 的邊界處理。真要改 0 的語意,要改的是
+    # `macro_helpers`,兩邊一起改;面板單方面「變聰明」= 對到一筆別人沒算過的帳。
+    # 唯一額外的守衛是**負分母**:market_regime 的 `_max` 是 4.0 + 0/1 + 0/1,
+    # 結構上不可能為負,出現即代表 session 被汙染 → §1 誠實回 None(面板顯示 ⬜),
+    # 不讓一個負的 score_pct 悄悄流進對帳差值。
     _score = _mkt.get('score')
-    # score 折換 0-100:從 macro_helpers.calc_traffic_light 邏輯(score / 4 * 100)
     _score_pct = None
     if _score is not None:
         try:
-            _score_pct = float(_score) / 4.0 * 100.0
-        except Exception:
-            _score_pct = None
+            _max_score = float(_mkt.get('max_score') or _MAX_SCORE_FALLBACK)
+        except (TypeError, ValueError):
+            print(f"[reconcile_panel] ⚠️ mkt_info['max_score'] 無法轉 float: "
+                  f"{_mkt.get('max_score')!r} → score_pct 視為未取得(§1)")
+            _max_score = None
+        if _max_score is not None and _max_score < 0:
+            print(f"[reconcile_panel] ⚠️ mkt_info['max_score'] 為負: {_max_score!r} "
+                  f"→ score_pct 視為未取得(§1,不硬算出一個負百分比)")
+            _max_score = None
+        if _max_score is not None:
+            try:
+                _score_pct = min(float(_score) / _max_score * 100.0, 100.0)
+            except (TypeError, ValueError, ZeroDivisionError):
+                print(f"[reconcile_panel] ⚠️ score 無法轉 float: {_score!r} "
+                      f"→ 視為未取得(§1)")
+                _score_pct = None
 
     # ── v19.177 P1-B:`_fnet` 缺值改 None,不再捏 0(§1)──────────────────────
     # 舊碼三處都寫死 0。看似無害(v1 的 HEALTH_FNET_BONUS 已校準歸零),但
@@ -179,6 +221,28 @@ def compute_reconcile_rows() -> list[dict[str, Any]]:
     return rows
 
 
+def reconcile_caption(rows: list[dict[str, Any]]) -> str:
+    """對帳表下方的統計 caption(純函式,易測)。
+
+    v19.181 D3:原本 caption 開頭寫死字串「3 個對帳」,與 `len(rows)` 脫鉤 ——
+    `compute_reconcile_rows()` 加一列或少一列,畫面照樣說 3 個。同一段還寫死
+    `rows[0]` / `rows[2]` 取 source,列數一變就 IndexError 或指到別人的來源。
+    改為全部由 rows 推導,並抽成純函式讓測試能直接對「說的 == 算的」。
+    """
+    _agree = sum(1 for r in rows if r.get('status') == 'agree')
+    _dis = sum(1 for r in rows if r.get('status') == 'disagree')
+    _mis = sum(1 for r in rows if 'missing' in str(r.get('status', '')))
+    _srcs = ' ／ '.join(
+        f"{r.get('source_a', '?')} vs {r.get('source_b', '?')}"
+        for r in rows
+        # 兩源都缺(從未觸發)的列不列 source —— 印出來只是雜訊
+        if r.get('status') != 'both_missing'
+    )
+    _head = (f"{len(rows)} 個對帳 ｜🟢 一致 {_agree}　🔴 不一致 {_dis}　"
+             f"⬜ 未觸發 {_mis}")
+    return f"{_head} ｜ 對帳來源:{_srcs}" if _srcs else _head
+
+
 def render_reconcile_panel() -> None:
     """渲染「📐 §4.3 重算對帳 panel」(在 data_registry_panel 之後)。"""
     st.markdown("### 📐 §4.3 重算對帳(雙演算法/雙源 cross-check)")
@@ -225,12 +289,5 @@ def render_reconcile_panel() -> None:
         f"{_html}</div>", unsafe_allow_html=True,
     )
 
-    # caption:統計 + sources
-    _agree = sum(1 for r in rows if r['status'] == 'agree')
-    _dis = sum(1 for r in rows if r['status'] == 'disagree')
-    _mis = sum(1 for r in rows if 'missing' in r['status'])
-    st.caption(
-        f"3 個對帳 ｜🟢 一致 {_agree}　🔴 不一致 {_dis}　⬜ 未觸發 {_mis} ｜"
-        f"unrolled sources:{rows[0]['source_a']} vs {rows[0]['source_b']} ／"
-        f" {rows[2]['source_a']} vs {rows[2]['source_b']}"
-    )
+    # caption:統計 + sources(全部由 rows 推導,見 `reconcile_caption` docstring)
+    st.caption(reconcile_caption(rows))

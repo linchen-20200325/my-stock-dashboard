@@ -71,12 +71,19 @@ def render_chips_20d_section(df2, sec_lv_chips: dict) -> None:
             f'</div>', unsafe_allow_html=True)
     _g20c1, _g20c2 = st.columns(2)
     with _g20c1:
+        # D1 v19.185（形狀 #5 同卡兩套門檻）：原 delta 是 `'吸籌' if _con20 >= 0`，
+        # 於是集中度 +0.3% 時 metric 標「吸籌」，正上方的 banner 卻依真門檻
+        # （>+5% 且延續性>50%）標「🟡 籌碼發散」—— 同一張卡兩個相反的字。
+        # delta 改由**同一個 signal** 推導，兩處不可能再打架（§2.1 SSOT）。
+        _delta_txt = ('吸籌' if '吸籌' in _sig20
+                      else ('倒貨' if '倒貨' in _sig20 else '未達吸籌/倒貨門檻'))
         st.metric(
             label='指標A：集中度（外+投淨買／總量）',
             value=f'{_con20:+.2f}%',
-            delta='吸籌' if _con20 >= 0 else '倒貨',
-            delta_color='normal' if _con20 >= 0 else 'inverse',
-            help='> +5% 且延續性 > 50% → 大戶吸籌；< -5% → 大戶倒貨')
+            delta=_delta_txt,
+            delta_color=('normal' if '吸籌' in _sig20
+                         else ('inverse' if '倒貨' in _sig20 else 'off')),
+            help='> +5% 且延續性 > 50% → 大戶吸籌；< -5% → 大戶倒貨；其餘為籌碼發散')
         st.progress(min(abs(_con20) / 20.0, 1.0),
                     text=f'集中度絕對值 {abs(_con20):.1f}% / 20%上限')
     with _g20c2:

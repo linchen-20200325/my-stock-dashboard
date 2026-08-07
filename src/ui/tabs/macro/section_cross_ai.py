@@ -42,29 +42,68 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
     _m8_pmi = _macro_info_for_s9.get('ism_pmi')
     _m8_exp = _macro_info_for_s9.get('tw_export')
     _m8_cpi = _macro_info_for_s9.get('us_core_cpi')
-    _ai_vix  = float(_m8_vix.get('current', 0))  if _m8_vix else None
-    _ai_vma  = float(_m8_vix.get('ma20', 0))     if _m8_vix else None
-    _ai_is_cli = bool(_m8_pmi.get('is_oecd_cli', False)) if _m8_pmi else False
-    _ai_cli  = float(_m8_pmi.get('value', 100))  if (_m8_pmi and _ai_is_cli) else None
-    _ai_pmi  = float(_m8_pmi.get('value', 50))   if (_m8_pmi and not _ai_is_cli) else None
-    _ai_exp  = float(_m8_exp.get('yoy', 0))      if _m8_exp else None
-    _ai_cpi  = float(_m8_cpi.get('yoy', 0))      if _m8_cpi else None
+    # ── v19.183 D2 §1/§3.3:取數一律「缺 → None」,禁止捏造中性/安全預設值 ──────
+    # 【修的是什麼】原碼一律寫成 `float(node.get('key', <預設>)) if node else None`。
+    # `dict.get` 的預設值**只在 key 不存在時生效**,而這裡真正常見的失敗態是
+    # **「node 在、值卻缺」** —— 例如 `macro_snapshot.fetch_us10y_block()` 全敗時
+    # 就回 `{'us10y': {'_err': ..., 'current': None}}`,同款寫法在 vix/pmi/cpi 上
+    # 只要上游哪天照辦就會中招。中招時的後果全是**假安全**:
+    #   ・`current` 缺 → `_ai_vix = 0.0` → 下方 `_ai_vix < 20 and _cpi_ok`
+    #     → 卡片印「🟢 美股平穩，降息預期支撐 / 無系統性風險」;
+    #   ・`yoy` 缺   → `_ai_cpi = 0.0` → `_cpi_ok` 成立(通膨看起來完全沒問題);
+    #   ・`value` 缺 → `_ai_pmi = 50` / `_ai_cli = 100` → 恰好是榮枯線,
+    #     「景氣位階」直接拿一個憑空的分水嶺值去分類。
+    # 這正是 section_mid v19.170 已修過的同一個坑(該檔註解寫得很清楚),
+    # 但 §九 這份 copy 沒跟著修。此處統一收斂。
+    def _num(node, key):
+        """`node[key]` → float;node 非 dict / key 缺 / 值為 None 或 NaN → None。"""
+        if not isinstance(node, dict):
+            return None
+        _v = node.get(key)
+        if _v is None:
+            return None
+        try:
+            _f = float(_v)
+        except (TypeError, ValueError):
+            return None
+        return None if _f != _f else _f   # NaN guard
+
+    _ai_vix  = _num(_m8_vix, 'current')
+    _ai_vma  = _num(_m8_vix, 'ma20')
+    _ai_is_cli = bool(_m8_pmi.get('is_oecd_cli', False)) if isinstance(_m8_pmi, dict) else False
+    _ai_cli  = _num(_m8_pmi, 'value') if _ai_is_cli else None
+    _ai_pmi  = _num(_m8_pmi, 'value') if not _ai_is_cli else None
+    _ai_exp  = _num(_m8_exp, 'yoy')
+    _ai_cpi  = _num(_m8_cpi, 'yoy')
     _ai_mi8  = st.session_state.get('m1b_m2_info') or {}
-    _ai_m1b  = float(_ai_mi8['m1b_yoy']) if _ai_mi8.get('m1b_yoy') is not None else None
-    _ai_m2   = float(_ai_mi8['m2_yoy'])  if _ai_mi8.get('m2_yoy') is not None else None
+    _ai_m1b  = _num(_ai_mi8, 'm1b_yoy')
+    _ai_m2   = _num(_ai_mi8, 'm2_yoy')
     _ai_gap  = round(_ai_m1b - _ai_m2, 2) if (_ai_m1b is not None and _ai_m2 is not None) else None
-    _ai_bias = float(st.session_state.get('bias_info', {}).get('bias_240', 0))
-    _ai_sox  = float((tech_s.get('費城半導體 SOX') or {}).get('pct') or 0)
-    _ai_nvda = float((tech_s.get('輝達 NVDA') or {}).get('pct') or 0)
-    _ai_twii_pct = float((tech_s.get('大盤 TWII') or tw_s.get('台股加權指數') or {}).get('pct') or 0)
+    # `st.session_state.get('bias_info', {})` 的預設同樣只在 key 不存在時生效 ——
+    # key 在、值為 None 時原碼會 `None.get(...)` → AttributeError 炸掉整個 §九。
+    # 改 `or {}` 同時涵蓋兩種缺法;乖離拿不到就是 None,不是 0%(0% 會被下方
+    # 結論條列當成「乖離正常」而靜默略過,那是把未知當成已知)。
+    _ai_bias = _num(st.session_state.get('bias_info') or {}, 'bias_240')
+    _ai_sox  = _num(tech_s.get('費城半導體 SOX'), 'pct')
+    _ai_nvda = _num(tech_s.get('輝達 NVDA'), 'pct')
+    # 註:原本還有一個 `_ai_twii_pct`,全檔零 reference(死變數)→ v19.183 D2 移除。
 
     # ── ① 目前總經位階 ──────────────────────────────────────────
     _ai1_lbl, _ai1_clr, _ai1_desc, _ai1_cyc = (
         '資料載入中', '#484f58', '請先按上方「🚀 一鍵更新全部數據」', None)
     _cycle_ref = _ai_cli if _ai_cli is not None else (_ai_pmi if _ai_pmi is not None else None)
     _cycle_exp = (_cycle_ref >= 100.0) if (_ai_cli is not None) else (_cycle_ref >= 50.0 if _cycle_ref is not None else None)
-    if _ai_exp is not None:
-        _exp_str = f'外銷訂單YoY={_ai_exp:+.1f}%'
+    # ── v19.183 D2:`_cycle_exp is None`(PMI/CLI 都沒抓到)不得走「收縮」分支 ──────
+    # 【原缺陷】舊條件寫 `elif not _cycle_exp and ...`。Python 的 `not None` 是 **True**,
+    # 所以 PMI 與 CLI **雙雙抓不到**時,這兩條分支照樣成立,卡片印出
+    # 「景氣觸底回升 💎（收縮但出口反彈）」/「景氣收縮期 📉（收縮）」——
+    # 「收縮」這個斷言背後**一份景氣資料都沒有**(`_cli_str` 當下是空字串,
+    # 連指標名都印不出來)。而且它會把 `_ai1_cyc='recovery'` 餵進下方 ⑤ 結論的
+    # `_bull_score`,讓一個憑空的判斷再加一分(§1:寧可不講,不可腦補)。
+    # 【修法】景氣位階四象限一律要求 `_cycle_exp is not None`;只有出口、沒有
+    # PMI/CLI 時走新增的降級分支,誠實說「只有一半的資料」。
+    if _ai_exp is not None and _cycle_exp is not None:
+        _exp_str = f'台灣出口YoY={_ai_exp:+.1f}%'
         _cli_str = (f'OECD CLI={_ai_cli:.2f}' if _ai_cli is not None else
                     f'台灣 PMI={_ai_pmi:.1f}' if _ai_pmi is not None else '')
         if _cycle_exp and _ai_exp >= 10:
@@ -85,21 +124,36 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
         else:
             _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣整理期 🟡', TRAFFIC_YELLOW, 'neutral'
             _ai1_desc = f'{_cli_str} × {_exp_str}— 方向待確認，保守持股'
-    elif _cycle_ref is not None:
+    elif _cycle_exp is not None:
         _cli_str = f'OECD CLI={_ai_cli:.2f}' if _ai_cli is not None else f'台灣 PMI={_ai_pmi:.1f}'
         _ai1_lbl = '景氣擴張（出口待確認）' if _cycle_exp else '景氣趨緩（出口待確認）'
         _ai1_clr = TRAFFIC_GREEN if _cycle_exp else TRAFFIC_YELLOW
         _ai1_cyc = 'bull' if _cycle_exp else 'neutral'
-        _ai1_desc = f'{_cli_str} — 外銷訂單數據載入中'
+        _ai1_desc = f'{_cli_str} — 台灣出口數據載入中'
+    elif _ai_exp is not None:
+        # v19.183 D2 新增:只有出口、沒有 PMI/CLI。**不宣稱擴張或收縮**
+        # （景氣位階的另一半根本沒到位），只把手上有的講清楚，並讓 `_ai1_cyc`
+        # 維持 None → 不進下方 ⑤ 的多空計分（未知 ≠ 中性，也 ≠ 偏空）。
+        _ai1_lbl, _ai1_clr = '景氣位階僅一半資料', TRAFFIC_YELLOW
+        _ai1_desc = (f'台灣出口YoY={_ai_exp:+.1f}%（已取得）× '
+                     '台灣 PMI／OECD CLI（未取得）— '
+                     '缺景氣面另一半，本卡不判定擴張或收縮。')
 
     # v19.72 fail-loud（§1/§5）：其餘總經已載入（VIX/M1B/CPI 有值）卻算不出景氣位階 →
     # 代表「外銷訂單 + PMI/CLI」這兩個來源本次抓取失敗，而**非使用者尚未更新**。
     # 不再誤顯示「請點擊更新」（那會讓已更新的人找不到按鈕又困惑），改講實情。
     _macro_loaded = any(v is not None for v in (_ai_vix, _ai_m1b, _ai_cpi))
-    if _ai1_cyc is None and _macro_loaded:
+    # v19.183 D2 補 `_ai_exp is None`:新增的「僅一半資料」分支也讓 `_ai1_cyc`
+    # 維持 None,若不加這個條件,下面這段會把它覆蓋成「兩個來源都失敗」——
+    # 但出口明明拿到了,那句話就成了新的不實陳述(§1)。
+    if _ai1_cyc is None and _macro_loaded and _ai_exp is None:
         _ai1_lbl, _ai1_clr = '景氣位階資料未就緒', TRAFFIC_YELLOW
-        _ai1_desc = ('缺「外銷訂單 YoY ＋ 台灣 PMI／OECD CLI」——這兩個景氣來源本次抓取失敗'
-                     '（多為 CIER／經濟部第三方網站暫時不可用）；其餘總經已載入。'
+        # v19.183 D2 正名:`macro_info['tw_export']` 是**財政部海關出口金額年增率**,
+        # 不是經濟部外銷訂單(section_mid.py 已於 v19.85 正名,§九 這份 copy 漏改)。
+        # 兩者是不同統計、不同發布單位、不同發布時點,寫錯 = 畫面宣稱 ≠ 實際來源。
+        _ai1_desc = ('缺「台灣出口 YoY（財政部海關）＋ 台灣 PMI／OECD CLI」——'
+                     '這兩個景氣來源本次抓取失敗'
+                     '（多為 CIER／財政部第三方鏡像暫時不可用）；其餘總經已載入。'
                      '可於收盤後再按「🚀 一鍵更新全部數據」重試。')
 
     # ── ② 建議配置 ──────────────────────────────────────────────
@@ -159,9 +213,16 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
         _cpi_wrm = _ai_cpi is not None and 3.0 <= _ai_cpi < 4.0
         _cpi_hot = _ai_cpi is not None and _ai_cpi >= 4.0
         _cpi_s   = f' CPI={_ai_cpi:.1f}%' if _ai_cpi is not None else ''
-        _sox_s   = f' SOX={_ai_sox:+.1f}%' if _ai_sox else ''
-        _vma_s   = f' MA20={_ai_vma:.1f}' if _ai_vma else ''
-        if _ai_vix < 20 and _cpi_ok and (_ai_sox >= 1.5 or _ai_nvda >= 2.0):
+        # v19.183 D2:`if _ai_sox` 會把「真的 0.0%（平盤）」也當成沒資料而不顯示；
+        # 改判 None（沒資料才不印）。同理 `_ai_vma`。
+        _sox_s   = f' SOX={_ai_sox:+.1f}%' if _ai_sox is not None else ''
+        _vma_s   = f' MA20={_ai_vma:.1f}' if _ai_vma is not None else ''
+        # 半導體點火：沒抓到 SOX/NVDA 就是「無法確認點火」，不是「確認沒點火」，
+        # 但兩者對本分支的效果相同（不升級成🚀）→ None 直接視為條件不成立即可，
+        # 只需避免 `None >= 1.5` 拋 TypeError（v19.183 取數改回 None 後的必要收尾）。
+        _sox_fire = (_ai_sox is not None and _ai_sox >= 1.5) or \
+                    (_ai_nvda is not None and _ai_nvda >= 2.0)
+        if _ai_vix < 20 and _cpi_ok and _sox_fire:
             _ai4_lbl, _ai4_clr = '🚀 美股強勢，科技領漲', TRAFFIC_RED
             _ai4_desc = f'VIX={_ai_vix:.1f}（恐慌低）{_sox_s}（半導體點火）{_cpi_s} — 台股跟漲機率高，可積極佈局科技'
         elif _ai_vix < 20 and _cpi_ok:
@@ -202,15 +263,19 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
             _ai5_pts.append(f'VIX={_ai_vix:.1f} 安全窗口')
         elif _ai_vix >= 30:
             _ai5_pts.append(f'VIX={_ai_vix:.1f} 觸發危機，暫停攻擊')
-    if _ai_bias >= 15:
-        _ai5_pts.append(f'年線乖離+{_ai_bias:.1f}% 高估值需嚴設停損')
-    elif _ai_bias <= -5:
-        _ai5_pts.append(f'年線乖離{_ai_bias:.1f}% 超跌逢低佈局')
+    # v19.183 D2:`_ai_bias` 取數改為 None-able 後必須加守門（原本它被 `.get(...,0)`
+    # 保證是 float，缺值時靜默當成「乖離 0%」而略過整段判讀）。
+    if _ai_bias is not None:
+        if _ai_bias >= 15:
+            _ai5_pts.append(f'年線乖離+{_ai_bias:.1f}% 高估值需嚴設停損')
+        elif _ai_bias <= -5:
+            _ai5_pts.append(f'年線乖離{_ai_bias:.1f}% 超跌逢低佈局')
     if _ai_exp is not None:
+        # v19.183 D2 正名:tw_export = 財政部海關出口年增率,非經濟部外銷訂單。
         if _ai_exp >= 10:
-            _ai5_pts.append(f'外銷訂單YoY={_ai_exp:+.1f}% 出口強勁')
+            _ai5_pts.append(f'台灣出口YoY={_ai_exp:+.1f}% 出口強勁')
         elif _ai_exp < -5:
-            _ai5_pts.append(f'外銷訂單YoY={_ai_exp:+.1f}% 出口衰退警訊')
+            _ai5_pts.append(f'台灣出口YoY={_ai_exp:+.1f}% 出口衰退警訊')
 
     if _ai5_pts:
         _ai5_txt = '；'.join(_ai5_pts) + '。'

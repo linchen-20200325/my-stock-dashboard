@@ -8,9 +8,136 @@
 
 呼叫端：app.py:9055 `render_data_health_raw()`
 """
+import datetime as _dt
+from typing import Optional
+
 import streamlit as st
 from shared.colors import MATERIAL_ORANGE, TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.data_freshness import freshness_level
+from shared.staleness import stale_days_threshold, staleness_days
 from shared.ttls import TTL_1DAY
+
+
+# ══════════════════════════════════════════════════════════════════
+# 資料新鮮度燈號 — v19.181 D3:從 `render_data_health_raw` 內的巢狀 closure
+# `_light()` 抽到模組層,原因有三:(1) 巢狀 closure 無法單測;(2) 門檻全是
+# 沒有名字的 inline 數字;(3) 其中兩條是實打實的錯,不是政策差異。
+#
+# ═══ 修的是什麼(逐條)═══════════════════════════════════════════════
+# 【① 日頻沒有黃燈,而且紅線是全站第三個數字】
+#   舊碼:`age <= 5 → 🟢,否則 🔴`。落後 6 天的日頻資料在這頁直接紅,
+#   但同一個「🔎 資料診斷」Tab 的另外兩張表會說:
+#       data_coverage(B4-a)   lag 6 → 🟡(warn 3 / bad = SSOT 7)
+#       data_registry_panel   6 ≤ 7 → 🟢(FRESHNESS_THRESHOLDS_DAYS)
+#   同一筆資料、同一個分頁,三種顏色。本版把**紅線**收斂到 SSOT
+#   `shared.staleness.stale_days_threshold('daily')`,並補上黃燈帶,
+#   黃燈起點沿用 data_coverage 已論證過的 3 天(= 一個週末的自然差值上限)。
+#
+# 【② `yearly` 恆綠 —— 這是說謊,不是寬鬆】
+#   舊碼對 freq='yearly' 直接 `return '🟢', f'{age}天前'`,不看 age。
+#   於是「最後一次配息在 2019 年」的個股,股利歷史照樣亮 🟢。
+#   年頻資料一年一筆,超過一年又一個公告緩衝仍無新筆 = 真的斷了。
+#
+# 【③ `static` 落到日頻規則 → 把「任期長」判成「資料過期」】
+#   ETF 經理人那列傳的 date 是**到職日**(`_mgr['since']`),freq='static'
+#   在舊碼會 fall-through 到日頻的 `age <= 5`,於是一位在職 3 年的經理人
+#   會被標成「1,100天前 ⚠️ 🔴」並列進「⚠️ 資料異常清單」。
+#   到職日久遠是**好事**,語意上根本不是新鮮度問題 → static 只有兩態:抓到 / 沒抓到。
+#
+# ═══ 沒有動的是什麼(以及為什麼)═════════════════════════════════════
+# 月頻的 90 / 120 天**刻意保留**,不改成 SSOT 的 `STALE_DAYS_MONTHLY=45`:
+#   `STALE_DAYS_MONTHLY=45` 的推導是「as_of = 月營收所屬月份 + 月後 10-13 天公布」,
+#   前提是 **as_of 落在該月月底**。但本表的月頻大戶是 FRED 系列(CPILFESL),
+#   它的 as_of 是**月初觀測日**(6 月 CPI 的 as_of = 06-01,7 月中才發布)——
+#   健康狀態下 age 就會走到 44~75 天。套 45 天會讓一筆完全正常的 CPI 永久亮黃/紅,
+#   那是假警報,不是嚴格。⇒ 這條差異是**有理由的**,故保留數值但具名 + 寫明理由。
+#   (`STALE_DAYS_MONTHLY` 的 as_of 假設值得補進該常數的 docstring,屬另案。)
+# ══════════════════════════════════════════════════════════════════
+
+#: 日頻黃燈起點(日曆天)。與 `data_coverage._DIAG_DAILY_WARN_DAYS` **同值同理由**:
+#: `staleness_days` 量的是日曆天,而「週五資料在週一被讀到」是完全正常的狀態,
+#: lag 卻等於 3 → 低於 3 不報警,否則每個週一早上整頁假黃。
+_INSPECTOR_DAILY_WARN_DAYS = 3
+
+#: 月頻黃/紅(日曆天)。**刻意不套 `STALE_DAYS_MONTHLY=45`**,理由見上方區塊。
+_INSPECTOR_MONTHLY_WARN_DAYS = 90
+_INSPECTOR_MONTHLY_BAD_DAYS = 120
+
+#: 年頻黃/紅(日曆天)。370 = 一年 + 5 天公告緩衝;400 = 再多一個多月仍無新筆 = 斷了。
+#: (台股股利以「年度」標記,2025 年度股利在 2026 年中發放 → 標 2025-12-31,
+#:  故 2026-08 讀到 2025-12-31 的 age≈219 天屬正常,不能用一年整當紅線。)
+_INSPECTOR_YEARLY_WARN_DAYS = 370
+_INSPECTOR_YEARLY_BAD_DAYS = 400
+
+#: 「不過期」類別:經理人姓名 / 到職日這種**屬性**,只有「抓到 / 沒抓到」兩態。
+FREQ_STATIC = 'static'
+
+
+def freshness_bands(freq: str) -> tuple[int, int]:
+    """回本頁對某發布頻率採用的 `(黃燈起點, 紅燈起點)`(日曆天)。
+
+    紅線能取自 SSOT 的一律取自 `shared.staleness.stale_days_threshold()`;
+    取不到的(月頻 / 年頻)用本檔具名常數,且每一條都在上方寫明為什麼不同。
+
+    不變量(由 `tests/test_d3_toolbox_registry.py` 守):**warn ≤ bad**。
+    設出「黃燈比紅燈還寬」= 黃燈永遠不會出現,是靜默失效。
+    """
+    if freq == 'monthly':
+        return (_INSPECTOR_MONTHLY_WARN_DAYS, _INSPECTOR_MONTHLY_BAD_DAYS)
+    if freq == 'quarterly':
+        # 季頻沿用 SSOT 150 天,且**不設黃燈帶**(warn = bad)——
+        # 對齊 data_coverage 的既有立場:季報要嘛是當期最新一筆,要嘛就是逾期,
+        # 中間沒有「有點舊」的語意。150 的推導見 `shared/staleness.py`。
+        _bad = stale_days_threshold('quarterly')
+        return (_bad, _bad)
+    if freq == 'yearly':
+        return (_INSPECTOR_YEARLY_WARN_DAYS, _INSPECTOR_YEARLY_BAD_DAYS)
+    # daily 與所有未登記頻率 → 走最嚴的日頻(同 `stale_days_threshold` 的 fallback 政策)
+    return (_INSPECTOR_DAILY_WARN_DAYS, stale_days_threshold('daily'))
+
+
+def freshness_light(
+    date_str,
+    freq: str = 'daily',
+    *,
+    today: Optional[_dt.date] = None,
+) -> tuple[str, str]:
+    """資料日期 → `(emoji, 人看的標籤)`。
+
+    Parameters
+    ----------
+    date_str : str | date | None
+        資料的最新日期(as-of)。None / 空 → 🔴 未取得。
+    freq : str
+        `daily` / `monthly` / `quarterly` / `yearly` / `static`;
+        未知值一律退 daily(最嚴)。
+    today : date | None
+        測試注入用;None → 由 `shared.staleness` 取「預期最新交易日」。
+
+    Notes
+    -----
+    **落後天數的量法也統一了**:舊碼用 `Timestamp.now().normalize()`(日曆今天),
+    本版改吃 `shared.staleness.staleness_days()`(= 距**預期最新交易日**),
+    與 data_coverage 同一個基準 —— 否則週末讀盤後資料會憑空多算 1-2 天 lag。
+
+    燈號的 emoji 規則本身委派給 L0 `shared.data_freshness.freshness_level()`,
+    本檔只決定「這個頻率該用哪組門檻」+ 標籤措辭,不重寫一套 emoji 判定。
+    """
+    if not date_str:
+        return '🔴', '未取得'
+    if freq == FREQ_STATIC:
+        # 屬性類:有值就是有值,不隨時間過期(到職日越久 = 任期越長 = 好事)。
+        return '🟢', '已取得'
+    _lag = staleness_days(date_str, today=today)
+    if _lag is None:
+        return '🔴', '無法解析'
+    _warn, _bad = freshness_bands(freq)
+    _emoji, _ = freshness_level(_lag, warn=_warn, bad=_bad)
+    _age = max(0, int(_lag))
+    _lbl = '今天' if _age == 0 else ('昨天' if _age == 1 else f'{_age}天前')
+    if _emoji == '🔴':
+        return _emoji, f'{_age}天前 ⚠️'
+    return _emoji, _lbl
 
 # ══════════════════════════════════════════════════════════════════
 # 資料診斷 v2：嚴格 Raw-only 版
@@ -24,7 +151,9 @@ def render_data_health_raw():
     import pandas as _pd_r
     import datetime as _dt_r
 
-    _today = _pd_r.Timestamp.now().normalize()
+    # v19.181 D3:原本這裡有 `_today = Timestamp.now().normalize()`,只被舊的
+    # 巢狀 `_light()` 用來算日曆天差。落後天數改由 `shared.staleness.staleness_days`
+    # (基準 = 預期最新交易日)計算後,本變數已無 caller,刪除。
 
     def _last_date(df):
         """從 DataFrame 取最新日期字串 YYYY-MM-DD"""
@@ -102,27 +231,17 @@ def render_data_health_raw():
             return ('fail', None)
 
     def _light(date_str, freq='daily'):
-        """回傳 (icon, label)；freq: daily / monthly / quarterly / yearly"""
-        if not date_str:
-            return '🔴', '未取得'
-        try:
-            age = max(0, (_today - _pd_r.Timestamp(date_str)).days)
-        except Exception:
-            return '🔴', '無法解析'
-        if freq == 'yearly':
-            return '🟢', f'{age}天前'
-        lbl = '今天' if age == 0 else ('昨天' if age == 1 else f'{age}天前')
-        if freq == 'daily':
-            return ('🟢', lbl) if age <= 5 else ('🔴', f'{age}天前 ⚠️')
-        if freq == 'monthly':
-            if age <= 90: return '🟢', lbl
-            if age <= 120: return '🟡', f'{age}天前'
-            return '🔴', f'{age}天前 ⚠️'
-        if freq == 'quarterly':
-            return ('🟢', lbl) if age <= 150 else ('🔴', f'{age}天前 ⚠️')
-        return ('🟢', lbl) if age <= 5 else ('🔴', f'{age}天前 ⚠️')
+        """回傳 (icon, label)。門檻與量法一律走模組層 `freshness_light`(v19.181 D3)。
 
-    _FREQ_LBL = {'daily': '日頻', 'monthly': '月頻', 'quarterly': '季頻', 'yearly': '不定期'}
+        保留這層薄 wrapper 只是為了不動下方 ~40 處 caller 的呼叫寫法;
+        真正的規則、常數與理由全在 `freshness_light` / `freshness_bands`。
+        """
+        return freshness_light(date_str, freq)
+
+    # 'static' = 不隨時間過期的屬性(經理人姓名 / 到職日)。原本沒登記,
+    # 於是「頻率」欄會直接印出英文 `static`,與其餘中文標籤不一致。
+    _FREQ_LBL = {'daily': '日頻', 'monthly': '月頻', 'quarterly': '季頻',
+                 'yearly': '不定期', FREQ_STATIC: '不過期'}
 
     def _row(name, date_str, freq='daily', error_msg=None, optional=False,
              source='', endpoint='', proxy=False, probe_status=None):
@@ -594,7 +713,8 @@ def render_data_health_raw():
                     # 改為誠實導引使用者手動觸發,對齊 L561 註解。
                     rows.append({**{'資料名稱': label, '頻率': _FREQ_LBL.get(freq, freq),
                                     '來源': src, '端點': ep, 'Proxy': '✅' if px else '—'},
-                                 '最後更新': '⚪ 尚未抓取（請至「🌐 總經」分頁點「🚀 一鍵更新」）',
+                                 # B6-a v19.181:Tab 名對齊 app.py:568（真名 🌍 總經）
+                                 '最後更新': '⚪ 尚未抓取（請至「🌍 總經」分頁點「🚀 一鍵更新」）',
                                  '日期': '—', '狀態': '⚪'})
                     continue
                 if _ma_all_failed:

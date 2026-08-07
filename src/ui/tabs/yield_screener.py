@@ -26,10 +26,23 @@ TPEX_PERATIO_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_an
 # ══════════════════════════════════════════════════════════════════════════════
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def fetch_twse_yield_pe() -> pd.DataFrame:
-    """從 TWSE OpenAPI 一次取得全市場本益比 / 殖利率 / 股價淨值比。
+    """從 TWSE OpenAPI 一次取得**全上市**本益比 / 殖利率 / 股價淨值比。
+
+    ⚠️ B6-b（2026-08）修：原本回傳前做 `dropna(subset=['殖利率(%)'])`，把「沒有殖利率」
+    的上市股整列丟掉。BWIBBU_d 對未配息 / 尚未公告配息的公司 `DividendYield` 給空字串
+    （2026-08-05 實測前 410 檔中 99 檔為空 ≈ 24%），其中不乏本益比正常可用者
+    （如 2514 龍邦 PEratio 7.07、2516 新建 11.82、2524 京城 61.32）。
+    後果：選股網「估值便宜」因子與名稱 map 走本函式（`fetch_pe_name_maps` SSOT），
+    這些股會變成「無估值分 + 名稱空白」——不是「PE 貴被排後面」，而是**沒有參賽資格**，
+    還可能因 SCREENER_MIN_FACTOR_COVERAGE_RATIO 涵蓋門檻被整檔擋出榜單。
+    而上櫃版 `fetch_tpex_yield_pe` 早已刻意不做這個 dropna（見該函式 docstring）→
+    同一個因子，上市 / 上櫃兩套母體規則（§2.1 SSOT 不一致）。
+    改為**不丟**：殖利率缺 → 該欄 NaN（§1 缺值就是缺值，不用它連坐 PE / 名稱）。
+    需要「只看有配息」的呼叫端請自行 `dropna(subset=['殖利率(%)'])`。
 
     Returns:
         DataFrame with columns: 代碼 / 名稱 / 本益比 / 殖利率(%) / 股價淨值比
+        （殖利率 / 本益比 / 股價淨值比 可能為 NaN = 該欄無資料）
         失敗回傳空 DataFrame（呼叫端用 .empty 檢查）
     """
     # v18.406 R5:L3 wrapper(EX-PASSTHRU-1 Group A 升級)
@@ -53,7 +66,11 @@ def fetch_twse_yield_pe() -> pd.DataFrame:
         for _c in ['本益比', '殖利率(%)', '股價淨值比']:
             if _c in _df.columns:
                 _df[_c] = pd.to_numeric(_df[_c], errors='coerce')
-        _result = _df.dropna(subset=['殖利率(%)']).reset_index(drop=True)
+        # B6-b:**不**依殖利率 dropna（見 docstring）—— 未配息股仍保留其 PE / 名稱 / PB。
+        if '代碼' in _df.columns:
+            _df['代碼'] = _df['代碼'].astype(str).str.strip()
+            _df = _df[_df['代碼'] != '']
+        _result = _df.reset_index(drop=True)
         # v18.356 PR-Q5b S-PROV-1 phase 19:DataFrame 走 attrs
         try:
             _result.attrs.setdefault('source', 'TWSE:OpenAPI:BWIBBU_d')
@@ -135,8 +152,13 @@ def fetch_pe_name_maps() -> tuple[dict, dict]:
     防偶發重碼（§2.1：同 T1 官方源，不平均、上層先填者贏）。任一源失敗 **fail-soft**
     ——只少半邊涵蓋、不炸；缺料的股在 `_percentile_scores` 會自動不計入（§1）。
 
+    B6-b（2026-08）：本益比 ≤ 0 視為「無本益比」而**不放進 pe_map**（§1 不造假）。
+    pe_low 因子是「值越小分越高」，若讓 0 / 負數進榜，虧損股會被排成「全市場最便宜」
+    —— 那是缺值，不是估值。（TWSE 目前給空字串、TPEX 給 '-'，都已是 NaN；本檢查是
+    對「來源改用 0 佔位」的防呆，且順手擋掉理論上的負 PE。）
+
     Returns:
-        (pe_map, name_map)：pe_map = {代碼: 本益比(float，可能 NaN)}；
+        (pe_map, name_map)：pe_map = {代碼: 本益比(float > 0)}；
         name_map = {代碼: 名稱}（過濾空字串 / 'nan'，避免畫面顯示 "nan"）。
     """
     pe_map: dict = {}
@@ -152,7 +174,13 @@ def fetch_pe_name_maps() -> tuple[dict, dict]:
         _codes = _df['代碼'].astype(str)
         if '本益比' in _df.columns:
             for _c, _v in zip(_codes, _df['本益比']):
-                pe_map.setdefault(_c, _v)
+                try:
+                    _pe = float(_v)
+                except (TypeError, ValueError):
+                    continue
+                if _pe != _pe or _pe <= 0:      # NaN / ≤0 → 無本益比,不放 key
+                    continue
+                pe_map.setdefault(_c, _pe)
         if '名稱' in _df.columns:
             for _c, _n in zip(_codes, _df['名稱'].astype(str)):
                 _n = _n.strip()
