@@ -43,21 +43,26 @@ from shared.data_categories import (
 def _freshness_emoji(last_updated: str, frequency: str, missing: bool) -> tuple[str, str]:
     """從 last_updated + frequency + missing 判 freshness。
 
-    ⚠️ **這把尺量的東西與另外兩張表不同**（v19.181 D3 稽核補註，先讀完再改門檻）：
-      - `data_coverage` / `health_inspector` 量的是「資料的 as-of 日期 vs 預期最新
-        交易日」，門檻走 `shared.staleness.stale_days_threshold`（daily 7 / monthly 45
-        / quarterly 150）。
+    ⚠️ **這把尺量的東西與另外兩張表不同**（v19.181 D3 補註；G2 2026-08-08 更新）：
+      - `data_coverage` / `health_inspector` 量的是「資料的 as-of」。日頻走
+        `shared.staleness.stale_days_threshold`（daily 7 / quarterly 150）；
+        **月頻已於 G2 改判「距預期最新資料月落後幾期」**
+        （`shared.staleness.monthly_release_status`），不再有月頻天數門檻
+        —— 原本的 45 天會讓當期最新一筆的 CPI/PMI 天天亮假紅。
       - **本表的 `last_updated` 語意是混的**：`macro_helpers.rp_entry` 塞的是
         DataFrame 的最後一筆**資料日期**（as-of），但 `rp_scalar` 塞的是呼叫端傳進來的
-        `proxy_date`（通常＝今天，等於「抓取時間」的代理）。
+        `proxy_date`（通常＝今天，等於「抓取時間」的代理）。月頻裡 M1B / M2 /
+        M1B-M2 缺口三筆走的正是後者（evidence: `data_registry_scanner`）。
         同一欄兩種語意 ⇒ 沒有任何一組天數門檻對兩者都正確。
-      - 因此本表**刻意不套** `stale_days_threshold`（例：月頻套 45 天會讓
-        `rp_scalar` 那一半永遠綠、`rp_entry` 那一半永遠紅）。
-        `FRESHNESS_THRESHOLDS_DAYS` 是一把較寬的「這條資料線還活著嗎」的尺。
-      - 唯一跨表共同底線（由 `tests/test_d3_toolbox_registry.py` 守）：
-        **超過 SSOT 日頻紅線之後，任何一張表都不得再顯示 🟢**。
+      - 因此本表**刻意不套** as-of 尺，`FRESHNESS_THRESHOLDS_DAYS` 是一把較寬的
+        「這條資料線還活著嗎」的尺。
+      - 跨表共同底線（測試守）：
+        (a) **超過 SSOT 日頻紅線之後，任何一張表都不得再顯示 🟢**
+            （`tests/test_d3_toolbox_registry.py`）；
+        (b) **月頻本表只會比 as-of 尺更寬、不會更嚴**：本表判 🔴 時 as-of 尺必為 🔴
+            （`tests/test_g2_monthly_freshness.py`）。
       - 真正的收斂做法是先把 `last_updated` 拆成 `as_of` / `fetched_at` 兩欄
-        （§2.2 provenance），不是硬把三組數字調成一樣 —— 屬另案。
+        （§2.2 provenance），不是硬把數字調成一樣 —— 屬另案。
 
     Returns (emoji, hex_color).
     Rules:

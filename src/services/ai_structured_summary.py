@@ -60,6 +60,77 @@ def danger_rule_text(key: str) -> str:
     return f'畫面燈號同一套門檻：{_body}'
 
 
+# ══════════════════════════════════════════════════════════════════════
+# G1(2026-08-07)— 餵給 LLM 的月頻總經數字必須帶「時效」
+#
+# 【修的是什麼】`shared/staleness.stale_tag`(月度指標 >N 天 → 行首 `[STALE:Nd]`)
+# 做好了,但**唯一的消費者 `app_ai_service.build_llm_context` 有 0 個 production
+# caller** ⇒ 真正在跑的兩處總經 prompt(`section_news_ai._ctx`、
+# `tab_stock._macro_lines2`)送給 Gemini 的 CPI / PMI / 出口 / NDC **完全沒有
+# 時效資訊,連資料日期都沒有**。一份 6 月的 CPI 與昨天的 VIX 在 prompt 裡長得
+# 一模一樣,LLM 沒有任何依據可以分辨,只能當成「現在」講。
+#
+# 【為何放這裡】與 `danger_rule_text` 同一個理由:本模組是唯一同時被總經 /
+# 個股 prompt 建構點 import 的 L3 元件。門檻(天數)在 L0
+# `shared/staleness.monthly_stale_threshold`,本檔只負責**把它翻成 prompt 文字**。
+#
+# 【§1 的關鍵差異】`stale_tag(None)` 回空字串 —— 對「沒有日期」的資料等於**默認
+# 它是新鮮的**。餵 LLM 時這正好是最危險的一格(fallback 來源如 `ma_snap['cpi']`
+# 根本不帶日期)。故本層改為:無法判定日期 → 明確標 `[STALE:資料日期不明]`,
+# 不得靜默放行。
+# ══════════════════════════════════════════════════════════════════════
+#: 無法判定資料日期時的標記(§1:不確定 ≠ 新鮮)。
+MACRO_STALE_UNKNOWN_TAG = '[STALE:資料日期不明] '
+
+#: 標記圖例 —— `[STALE:...]` 對 LLM 不是自明的,不解釋等於沒標。
+MACRO_STALE_LEGEND = (
+    '⚠️ 時效標記說明（務必遵守）：行首 `[STALE:Nd]` 代表該指標的資料日期距今 N 天，'
+    '已超過它自己的正常發布週期 —— 這是**舊資料**，只能敘述成「最近一次公布的是…」，'
+    '**不得**講成「目前 / 現在 / 本月」的狀況，也不得拿它推論當下轉折。'
+    '行首 `[STALE:資料日期不明] ` 代表系統無法確認該筆數字的歸屬月份，'
+    '同樣不得當成當期，並請在報告中明講「這項的資料日期無法確認」。'
+    '沒有標記的行才是在正常發布週期內的當期資料。'
+)
+
+
+def macro_stale_prefix(key: str, date_value, *, today=None) -> str:
+    """月頻總經指標的 prompt 行首時效標記;當期 → 空字串。
+
+    Parameters
+    ----------
+    key : str
+        `macro_info` 的 key(`us_core_cpi` / `ism_pmi` / `tw_export` /
+        `ndc_signal` / `fed_funds`)。未登錄 → `KeyError`(§1,見
+        `shared.staleness.monthly_stale_threshold`)。
+    date_value : str | date | datetime | DataFrame | None
+        該指標的**資料歸屬日**(as_of),不是抓取時間。
+        `macro_info[key]['date']` 一律是資料歸屬月的月初,可直接傳入。
+    today : date | None
+        測試 / 時區注入用;None → `date.today()`。
+
+    Returns
+    -------
+    str
+        `'[STALE:67d] '` / `'[STALE:資料日期不明] '` / `''`(末尾含一個空格,
+        可直接串在指標名稱前)。
+    """
+    from shared.staleness import monthly_stale_threshold, stale_tag, staleness_days
+    _th = monthly_stale_threshold(key)          # 未登錄指標在這裡就炸,不靜默放行
+    _days = staleness_days(date_value, today=today)
+    if _days is None:
+        return MACRO_STALE_UNKNOWN_TAG
+    return stale_tag(_days, threshold=_th)
+
+
+def macro_stale_legend(context_text: str) -> str:
+    """若 `context_text` 內含任何 `[STALE:` 標記 → 回圖例行,否則回空字串。
+
+    沒有任何一行過期時不加圖例:平時少一段雜訊,LLM 也不會因為「有人跟我解釋
+    過期是什麼」而腦補出根本不存在的過期資料。
+    """
+    return MACRO_STALE_LEGEND if '[STALE:' in (context_text or '') else ''
+
+
 def pcr_rule_text() -> str:
     """由 `src/config.MACRO_ALERT_RULES['pcr']` 產生 PCR 判讀句。
 

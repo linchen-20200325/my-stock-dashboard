@@ -32,6 +32,8 @@ from src.config import (  # noqa: F401
 )
 from src.services.ai_structured_summary import (
     danger_rule_text as _danger_rule_text,
+    macro_stale_legend as _macro_stale_legend,
+    macro_stale_prefix as _macro_stale_prefix,
     pcr_rule_text as _pcr_rule_text,
 )
 from src.ui.render.macro_ui_components import section_header
@@ -68,6 +70,32 @@ from src.services.macro_state_locker import (
 # ══════════════════════════════════════════════════════════════════════
 _danger_rule = _danger_rule_text     # 本檔沿用短名（呼叫點密集，維持可讀性）
 _pcr_alert_rule = _pcr_rule_text
+
+# ══════════════════════════════════════════════════════════════════════
+# G1(2026-08-07)— 月頻總經數字必須帶 as_of 日期 + 過期標記
+#
+# 【修的是什麼】本檔 `_ctx` 的 4 條月頻指標(NDC / PMI / 台灣出口 / 美核心 CPI)
+# 原本**一個日期都沒有**,而它們的天然發布延遲是 1~27 天、資料歸屬月又是「上個月」
+# ⇒ 送進 Gemini 時,一份 6 月的 CPI 與昨天的 VIX 在 prompt 裡長得一模一樣。
+# LLM 只能當成「現在」講,使用者則以為 AI 講的是當下。
+# `shared/staleness.stale_tag` 這個防護早就寫好了,但它唯一的消費者
+# (`app_ai_service.build_llm_context`)0 caller —— 做好了卻從來沒接上。
+#
+# 【怎麼接】只借用 SSOT,**不**改吃 `build_llm_context`:後者是本區塊的**子集**
+# (少了法人/融資/PCR/ADL/期貨/韭菜,且沒有 v19.178 的 `danger_rule_text` 門檻),
+# 改吃它等於用資訊量更少的版本覆蓋掉現況(§2.1 收斂的方向要往資訊多的那邊收)。
+# 門檻走 L0 `shared.staleness.monthly_stale_threshold`(每個指標依自己的發布
+# 週期算,不是一律 40 天 —— 見該處註解:40 天會讓當期 CPI 每天都被誤標過期)。
+# ══════════════════════════════════════════════════════════════════════
+def _stale(_key: str, _d: dict) -> str:
+    """月頻指標行首時效標記。`_d` 為 `macro_info[_key]`;無 date → 標「日期不明」。"""
+    return _macro_stale_prefix(_key, (_d or {}).get('date'))
+
+
+def _asof(_d: dict) -> str:
+    """資料歸屬日註記。§1:抓不到日期要照實講,不留白讓 LLM 以為是今天。"""
+    _v = str((_d or {}).get('date') or '').strip()
+    return f'資料月份 {_v}' if _v else '資料月份不明'
 
 
 def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
@@ -303,22 +331,28 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 # 是 dead context。NDC 實際就在本函式的 `_macro_info` 參數裡,直接取用。
                 _ndc_v = _macro_info.get('ndc_signal') or {}
                 if _ndc_v.get('score') is not None:
+                    # G1:以下 4 條為**月頻**指標 —— 一律帶 as_of 月份 + 過期標記。
                     _ctx.append(
-                        f'• NDC 景氣對策信號：{float(_ndc_v["score"]):.0f}分'
-                        f'（國發會 9 項指標合成，分數越高景氣越熱；'
+                        f'• {_stale("ndc_signal", _ndc_v)}NDC 景氣對策信號：'
+                        f'{float(_ndc_v["score"]):.0f}分'
+                        f'（{_asof(_ndc_v)}；國發會 9 項指標合成，分數越高景氣越熱；'
                         f'{_danger_rule("ndc_signal")}）')
                 if _pmi_cur is not None:
-                    _ctx.append(f'• 台灣 PMI（製造業採購經理人指數）：{_pmi_cur}'
-                                f'（{_danger_rule("ism_pmi")}；黃線即榮枯分界，'
-                                f'低於代表製造業收縮）')
+                    _ctx.append(f'• {_stale("ism_pmi", _pmi_d)}'
+                                f'台灣 PMI（製造業採購經理人指數）：{_pmi_cur}'
+                                f'（{_asof(_pmi_d)}；{_danger_rule("ism_pmi")}；'
+                                f'黃線即榮枯分界，低於代表製造業收縮）')
                 if _exp_d.get('yoy') is not None:
                     # v19.178 正名:`tw_export` = 財政部海關**出口**年增率,不是經濟部
                     # 外銷訂單(v19.85 已於畫面正名,此處為漏網的第二份)。
-                    _ctx.append(f'• 台灣出口 YoY（財政部海關出口金額年增率）：'
-                                f'{_exp_d["yoy"]:+.1f}%（{_danger_rule("tw_export")}）')
+                    _ctx.append(f'• {_stale("tw_export", _exp_d)}'
+                                f'台灣出口 YoY（財政部海關出口金額年增率）：'
+                                f'{_exp_d["yoy"]:+.1f}%'
+                                f'（{_asof(_exp_d)}；{_danger_rule("tw_export")}）')
                 if _cpi_d.get('yoy') is not None:
-                    _ctx.append(f'• 美國核心 CPI YoY：{_cpi_d["yoy"]:+.1f}%'
-                                f'（{_danger_rule("us_core_cpi")}；'
+                    _ctx.append(f'• {_stale("us_core_cpi", _cpi_d)}'
+                                f'美國核心 CPI YoY：{_cpi_d["yoy"]:+.1f}%'
+                                f'（{_asof(_cpi_d)}；{_danger_rule("us_core_cpi")}；'
                                 f'通膨高→升息壓力→壓抑高本益比成長股估值）')
                 # v19.178 §1:`_ai_sox` / `_ai_nvda` 同樣從未在本函式賦值(它們是
                 # section_cross_ai 的 local),故美股科技動能這條也是 dead context。
@@ -326,6 +360,11 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 # 分開提案),本版**不擴大改動面**,改為明確標注待接線,不再假裝有值。
                 # (原碼 `locals().get(...) or 0` 會讓 if 恆為 False,靜默吞掉整條)
                 _v_macro_ctx = '\n'.join(_ctx) if _ctx else '（數據尚未載入，請先按「🚀 一鍵更新全部數據」）'
+                # G1:有任何一行被標過期 → 把圖例放在最前面。不解釋 `[STALE:Nd]`
+                # 等於沒標(LLM 不會自己知道那是什麼);全部當期時不加,免製造雜訊。
+                _stale_legend = _macro_stale_legend(_v_macro_ctx)
+                if _stale_legend:
+                    _v_macro_ctx = f'{_stale_legend}\n\n{_v_macro_ctx}'
                 _locker = MacroStateLocker()
                 _locker.lock_system_state_only(_system_state)
                 # 組裝 Markdown 提示語（不依賴 JSON 解析，與 Tab 2 AI 首席顧問同風格）

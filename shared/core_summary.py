@@ -501,7 +501,11 @@ def build_freshness_cell(coverage_rows: Any) -> KpiCell:
     if _n_pending:
         _extra.append(f'⬜ 另有 {_n_pending} 個分頁尚未載入 / 取不到資料日期，'
                       '未納入「最差」比較 —— 它們的新鮮度是未知，不是良好。')
-    _extra.append('門檻走 shared/staleness SSOT（日頻 7 天 / 月頻 45 天 / 季頻 150 天）。')
+    # G2 2026-08-08:原文寫「月頻 45 天」已不成立 —— 月頻的 as_of 是資料月月初,
+    # 當期最新一筆天生就 60~90 天,45 天門檻等於每天假紅。月頻已改判「落後幾個
+    # 發布期」(shared/staleness.monthly_release_status),這裡跟著改口徑。
+    _extra.append('門檻走 shared/staleness SSOT（日頻 7 天 / 季頻 150 天；'
+                  '月頻改判「距預期最新資料月落後幾期」，不用天數）。')
     return cell_ok(KPI_FRESHNESS, _emoji, _label, _extra)
 
 

@@ -107,6 +107,24 @@ def coverage_emoji_for(category: str) -> str:
 #   - monthly:    90 日內 🟢 / 90~180 🟡 / >180 🔴
 #   - quarterly/yearly:180 日內 🟢 / 180~365 🟡 / >365 🔴
 #   - event:走 caller 特殊 path(always 🟢,觸發型),不在此 mapping
+#
+# ⚠️ **這不是「資料 as_of 是否當期」的尺,別拿去跟另外兩張表對齊**(G2 2026-08-08)
+#    量的東西不同,所以數字不同是**刻意的**:
+#      - `data_coverage` / `health_inspector` 量的是**資料 as_of**,月頻已改判
+#        「距預期最新資料月落後幾期」(`shared.staleness.monthly_release_status`),
+#        月頻連 day threshold 都不用了。
+#      - 本表量的是 registry entry 的 `last_updated`,而該欄**語意是混的**:
+#        `macro_helpers.rp_entry` 塞 DataFrame 最後一筆資料日期(as_of),
+#        `rp_scalar` 塞呼叫端傳入的 `proxy_date`(≈ 今天,等於抓取時間);
+#        月頻裡 M1B / M2 / M1B-M2 缺口三筆走的正是後者
+#        (evidence: `data_registry_scanner` 對這三筆傳 `_proxy_date`)。
+#        同一欄兩種語意 ⇒ 沒有任何一組門檻對兩者都正確,故本表刻意當一把**較寬**的
+#        「這條資料線還活著嗎」的尺,不追求 as_of 精度。
+#    可驗證的跨表不變量(由 `tests/test_g2_monthly_freshness.py` 釘):
+#      **本表只會比 as_of 尺更寬,不會更嚴** —— 本表若判 🔴,as_of 尺必定也是 🔴。
+#      (成立理由:monthly crit=180 天 > 任何已登錄月頻指標的當期上限 96 天。)
+#    真正的收斂做法是先把 `last_updated` 拆成 `as_of` / `fetched_at` 兩欄
+#    (§2.2 provenance),不是硬把數字調成一樣 —— 屬另案。
 FRESHNESS_THRESHOLDS_DAYS: dict[str, tuple[int, int]] = {
     'daily':     (7, 30),
     'weekly':    (7, 30),

@@ -158,15 +158,33 @@ def gemini_call(prompt, max_tokens=2048):
 def build_llm_context(macro_info: dict) -> str:
     """將 session_state 中的量化總經數據格式化為純文字供 LLM 使用。
 
-    v19.87 A~E 批次2:月度指標(出口/PMI/CPI/NDC)距預期最新交易日 >40 天者,
-    在該行前綴 `[STALE:Nd]`(shared/staleness.stale_tag SSOT),防 AI 把過期資料
-    當當期講(第八份 review §3.1;對齊 Fund 端既有慣例)。
+    v19.87 A~E 批次2:月度指標(出口/PMI/CPI/NDC)距預期最新交易日超過該指標
+    自身發布週期者,在該行前綴 `[STALE:Nd]`,防 AI 把過期資料當當期講
+    (第八份 review §3.1;對齊 Fund 端既有慣例)。
 
     F2(2026-08)自 `app.py::_build_llm_context` 原封搬入(L3 職責住在 L6)。
-    ⚠️ **實測 0 個 production caller**(AST 全 repo 掃描,只有定義與文件引用)。
-    F2 只做搬家,不自行決定刪除 —— 是否刪請 user 裁示(§-1:沒指派不動)。
+
+    ⚠️ **本函式仍 0 production caller**(2026-08-07 G1 複驗)。真正在跑的兩處
+    總經 prompt 是 `section_news_ai._ctx` 與 `tab_stock._macro_lines2`,兩者的
+    內容都是本函式的**超集**(多了法人 / 融資 / PCR / ADL / 期貨 / 韭菜,且門檻
+    走 v19.178 `danger_rule_text`)。G1 因此**不**把它們改成呼叫本函式(那會是
+    往資訊量少的方向收斂),而是把本函式的時效標記能力抽成共用 SSOT
+    (`ai_structured_summary.macro_stale_prefix`)接到那兩處去。
+    本函式保留但改吃同一份 SSOT,不再是第二套門檻。是否刪除仍請 user 裁示。
+
+    G1 修掉的兩個自身 bug(0 caller ⇒ 這段從未被實際執行過,錯了也沒人發現):
+      1. **門檻 40 天對每個指標都錯**:這些 `date` 是資料歸屬月的月初,而
+         月頻資料在被下一期取代前 as_of 年齡本來就會長到 62 天 + 發布延遲
+         (美核心 CPI 可達 ~75 天)⇒ 原本 40 天會讓**當期**資料每天都被誤標
+         過期。改走 `shared.staleness.monthly_stale_threshold(指標)`。
+      2. **date 缺失時 `stale_tag(None)` 回空字串 = 默認新鮮**(§1 反例)。
+         改為明確標 `[STALE:資料日期不明]`。
+    另外補上 NDC 那行原本漏掉的資料月份(其餘三行本來就有)。
     """
-    from shared.staleness import stale_tag, staleness_days
+    from src.services.ai_structured_summary import (
+        macro_stale_legend as _legend,
+        macro_stale_prefix as _prefix,
+    )
     _vix = macro_info.get('vix') or {}
     _exp = macro_info.get('tw_export') or {}
     _pmi = macro_info.get('ism_pmi') or {}
@@ -176,28 +194,38 @@ def build_llm_context(macro_info: dict) -> str:
     _mi  = _ss.get('m1b_m2_info') or {}
     _bi  = _ss.get('bias_info') or {}
 
-    def _tag(_d: dict) -> str:
-        # 月度指標 stale 閾值 40 天;date 缺失 → staleness_days 回 None → 無標籤
-        return stale_tag(staleness_days(_d.get('date')), threshold=40)
+    def _tag(_key: str, _d: dict) -> str:
+        # 門檻依指標自身發布週期(L0 SSOT);date 缺失 → 標「資料日期不明」而非放行
+        return _prefix(_key, (_d or {}).get('date'))
 
     _lines = []
     if _vix.get('current'):
+        # VIX 是**日頻**,過期語意與月頻不同(不套月頻標記)
         _lines.append(f'• VIX 恐慌指數：{_vix["current"]} (MA20={_vix.get("ma20","N/A")})')
     if _exp.get('yoy') is not None:
         # v19.85 正名:tw_export = 海關出口年增率(非經濟部外銷訂單)
-        _lines.append(f'• {_tag(_exp)}台灣出口 YoY：{_exp["yoy"]:+.1f}%  ({_exp.get("date","")})')
+        _lines.append(f'• {_tag("tw_export", _exp)}台灣出口 YoY：'
+                      f'{_exp["yoy"]:+.1f}%  ({_exp.get("date","") or "資料月份不明"})')
     if _pmi.get('value') is not None:
-        _lines.append(f'• {_tag(_pmi)}🇹🇼 台灣 PMI：{_pmi["value"]}  ({_pmi.get("date","")}，>50 擴張)')
+        _lines.append(f'• {_tag("ism_pmi", _pmi)}🇹🇼 台灣 PMI：{_pmi["value"]}  '
+                      f'({_pmi.get("date","") or "資料月份不明"}，>50 擴張)')
     if _cpi.get('yoy') is not None:
-        _lines.append(f'• {_tag(_cpi)}美國核心 CPI YoY：{_cpi["yoy"]:+.1f}%  ({_cpi.get("date","")})')
+        _lines.append(f'• {_tag("us_core_cpi", _cpi)}美國核心 CPI YoY：'
+                      f'{_cpi["yoy"]:+.1f}%  ({_cpi.get("date","") or "資料月份不明"})')
     if _ndc.get('score') is not None:
-        _lines.append(f'• {_tag(_ndc)}NDC 景氣燈號分數：{_ndc["score"]:.0f}/45')
+        _lines.append(f'• {_tag("ndc_signal", _ndc)}NDC 景氣燈號分數：'
+                      f'{_ndc["score"]:.0f}/45  ({_ndc.get("date","") or "資料月份不明"})')
     if _mi.get('m1b_yoy') is not None and _mi.get('m2_yoy') is not None:
         _gap = round(float(_mi['m1b_yoy']) - float(_mi['m2_yoy']), 2)
         _lines.append(f'• 台灣 M1B={_mi["m1b_yoy"]:.1f}%  M2={_mi["m2_yoy"]:.1f}%  Gap={_gap:+.2f}%')
     if _bi.get('bias_240') is not None:
         _lines.append(f'• 台股大盤年線乖離率 BIAS240：{_bi["bias_240"]:+.1f}%')
-    return '\n'.join(_lines) if _lines else '（量化數據載入中，請先按「🚀 一鍵更新全部數據」）'
+    if not _lines:
+        return '（量化數據載入中，請先按「🚀 一鍵更新全部數據」）'
+    _out = '\n'.join(_lines)
+    # 有任何一行被標過期 → 附圖例;不解釋 `[STALE:Nd]` 等於沒標(LLM 不會自己懂)
+    _lg = _legend(_out)
+    return f'{_lg}\n\n{_out}' if _lg else _out
 
 
 def generate_ai_comment(data: dict) -> str:

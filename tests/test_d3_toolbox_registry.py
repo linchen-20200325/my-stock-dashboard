@@ -567,7 +567,10 @@ class TestInspectorFreshness:
         assert freshness_light('', 'daily', today=self.TODAY) == ('🔴', '未取得')
         assert freshness_light('not-a-date', 'daily', today=self.TODAY)[0] == '🔴'
 
-    @pytest.mark.parametrize('freq', ['daily', 'monthly', 'quarterly', 'yearly',
+    # ⚠️ 'monthly' 已於 G2（2026-08-08）離開「日曆天門檻」體系，改判發布期數
+    #    → `freshness_bands('monthly')` 會 raise（見下一條測試），故不列入本組。
+    #    月頻的行為斷言在 `tests/test_g2_monthly_freshness.py`。
+    @pytest.mark.parametrize('freq', ['daily', 'quarterly', 'yearly',
                                       'unknown-freq'])
     def test_bands_invariant_warn_le_bad(self, freq):
         """不變量：黃燈起點 ≤ 紅燈起點。
@@ -580,7 +583,19 @@ class TestInspectorFreshness:
         _warn, _bad = freshness_bands(freq)
         assert _warn <= _bad, f'{freq}: warn={_warn} > bad={_bad}'
 
-    @pytest.mark.parametrize('freq', ['daily', 'monthly', 'quarterly', 'yearly'])
+    def test_monthly_has_no_calendar_day_band(self):
+        """月頻不得再有日曆天門檻（G2）。
+
+        月頻 as_of 落在資料月月初，任何天數門檻都會二選一：設小 → 當期假紅
+        （B4-a 的 45 天），設大 → 漏一整期卻假綠。這裡釘死「連問都不能問」，
+        否則下一個人只會再塞第四組數字進去。
+        """
+        from src.ui.pages.health_inspector import freshness_bands
+
+        with pytest.raises(ValueError):
+            freshness_bands('monthly')
+
+    @pytest.mark.parametrize('freq', ['daily', 'quarterly', 'yearly'])
     def test_light_is_monotonic_in_lag(self, freq):
         """單調性：lag 越大燈號只會越差，不會忽紅忽綠。"""
         from shared.data_freshness import _FRESH_RANK

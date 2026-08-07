@@ -13,7 +13,7 @@ from typing import Optional
 
 import streamlit as st
 from shared.colors import MATERIAL_ORANGE, TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from shared.data_freshness import freshness_level
+from shared.data_freshness import freshness_level, monthly_freshness_level
 from shared.staleness import stale_days_threshold, staleness_days
 from shared.ttls import TTL_1DAY
 
@@ -44,24 +44,28 @@ from shared.ttls import TTL_1DAY
 #   會被標成「1,100天前 ⚠️ 🔴」並列進「⚠️ 資料異常清單」。
 #   到職日久遠是**好事**,語意上根本不是新鮮度問題 → static 只有兩態:抓到 / 沒抓到。
 #
-# ═══ 沒有動的是什麼(以及為什麼)═════════════════════════════════════
-# 月頻的 90 / 120 天**刻意保留**,不改成 SSOT 的 `STALE_DAYS_MONTHLY=45`:
-#   `STALE_DAYS_MONTHLY=45` 的推導是「as_of = 月營收所屬月份 + 月後 10-13 天公布」,
-#   前提是 **as_of 落在該月月底**。但本表的月頻大戶是 FRED 系列(CPILFESL),
-#   它的 as_of 是**月初觀測日**(6 月 CPI 的 as_of = 06-01,7 月中才發布)——
-#   健康狀態下 age 就會走到 44~75 天。套 45 天會讓一筆完全正常的 CPI 永久亮黃/紅,
-#   那是假警報,不是嚴格。⇒ 這條差異是**有理由的**,故保留數值但具名 + 寫明理由。
-#   (`STALE_DAYS_MONTHLY` 的 as_of 假設值得補進該常數的 docstring,屬另案。)
+# ═══ 月頻:v19.181 D3 的 90/120 已於 G2(2026-08-08)收斂 ══════════════
+# D3 當時的判斷「不能套 `STALE_DAYS_MONTHLY=45`」是**對的**(45 的推導前提是
+# as_of 落在月底,而本表月頻大戶 FRED 的 as_of 是月初觀測日),但那時只是換上
+# 另外兩個沒有推導過程的數字(90 / 120),於是全站月頻有三把尺:
+#       data_coverage        45          → 當期 CPI 每天假紅
+#       health_inspector     90 / 120    → 落後**整整一期**的資料只亮 🟡
+#       data_registry_panel  90 / 180
+# G2 的結論:病根不是「門檻幾天」,而是**拿日曆天去量一個以月為發布單位的東西**。
+# 本檔月頻改與 data_coverage 共用同一條 L0 規則
+# (`shared.data_freshness.monthly_freshness_level` → `staleness.monthly_release_status`):
+#       落後 0 期 → 🟢 當期        (不論它的 as_of 是 37 天還是 89 天前)
+#       下期逾原定發布日、仍在緩衝內 → 🟡 待公布（逾N日）
+#       落後 ≥1 期 → 🔴 落後N期
+# 代價:每一列月頻資料**必須指名它是哪個序列**(`indicator=`),因為發布延遲
+# 逐源不同(PMI 1 天 / 出口 10 天 / CPI 13 天 / NDC 27 天)。沒指名 → ⬜「門檻未登錄」,
+# **不**退回猜一個門檻(§1:不確定 ≠ 新鮮,也 ≠ 過期)。
 # ══════════════════════════════════════════════════════════════════
 
 #: 日頻黃燈起點(日曆天)。與 `data_coverage._DIAG_DAILY_WARN_DAYS` **同值同理由**:
 #: `staleness_days` 量的是日曆天,而「週五資料在週一被讀到」是完全正常的狀態,
 #: lag 卻等於 3 → 低於 3 不報警,否則每個週一早上整頁假黃。
 _INSPECTOR_DAILY_WARN_DAYS = 3
-
-#: 月頻黃/紅(日曆天)。**刻意不套 `STALE_DAYS_MONTHLY=45`**,理由見上方區塊。
-_INSPECTOR_MONTHLY_WARN_DAYS = 90
-_INSPECTOR_MONTHLY_BAD_DAYS = 120
 
 #: 年頻黃/紅(日曆天)。370 = 一年 + 5 天公告緩衝;400 = 再多一個多月仍無新筆 = 斷了。
 #: (台股股利以「年度」標記,2025 年度股利在 2026 年中發放 → 標 2025-12-31,
@@ -74,16 +78,26 @@ FREQ_STATIC = 'static'
 
 
 def freshness_bands(freq: str) -> tuple[int, int]:
-    """回本頁對某發布頻率採用的 `(黃燈起點, 紅燈起點)`(日曆天)。
+    """回本頁對某發布頻率採用的 `(黃燈起點, 紅燈起點)`(**日曆天**)。
 
     紅線能取自 SSOT 的一律取自 `shared.staleness.stale_days_threshold()`;
-    取不到的(月頻 / 年頻)用本檔具名常數,且每一條都在上方寫明為什麼不同。
+    取不到的(年頻)用本檔具名常數,且在上方寫明為什麼不同。
 
     不變量(由 `tests/test_d3_toolbox_registry.py` 守):**warn ≤ bad**。
     設出「黃燈比紅燈還寬」= 黃燈永遠不會出現,是靜默失效。
+
+    Raises
+    ------
+    ValueError
+        `freq == 'monthly'`。月頻**不存在**正確的日曆天門檻(見上方 G2 區塊):
+        設小 → 當期假紅,設大 → 漏一期假綠。這裡刻意炸掉而不是回一組數字,
+        是為了讓「有人又想給月頻一個天數」在第一時間就停下來,而不是多出第四把尺。
     """
     if freq == 'monthly':
-        return (_INSPECTOR_MONTHLY_WARN_DAYS, _INSPECTOR_MONTHLY_BAD_DAYS)
+        raise ValueError(
+            "月頻不使用日曆天門檻:as_of 是資料月月初,任何天數門檻都會在"
+            "『當期假紅』與『漏一期假綠』之間二選一。"
+            "請改用 shared.data_freshness.monthly_freshness_level(as_of, indicator=...)")
     if freq == 'quarterly':
         # 季頻沿用 SSOT 150 天,且**不設黃燈帶**(warn = bad)——
         # 對齊 data_coverage 的既有立場:季報要嘛是當期最新一筆,要嘛就是逾期,
@@ -101,6 +115,7 @@ def freshness_light(
     freq: str = 'daily',
     *,
     today: Optional[_dt.date] = None,
+    indicator: Optional[str] = None,
 ) -> tuple[str, str]:
     """資料日期 → `(emoji, 人看的標籤)`。
 
@@ -113,6 +128,11 @@ def freshness_light(
         未知值一律退 daily(最嚴)。
     today : date | None
         測試注入用;None → 由 `shared.staleness` 取「預期最新交易日」。
+    indicator : str | None
+        **`freq='monthly'` 時必填**:該序列在
+        `shared.staleness.MACRO_PUBLICATION_LAG_DAYS` 的 key
+        (`us_core_cpi` / `ism_pmi` / `tw_export` / `ndc_signal` / `fed_funds` /
+        `tw_monthly_revenue` / `m1b_m2`)。缺 / 未登錄 → ⬜「門檻未登錄」。
 
     Notes
     -----
@@ -120,7 +140,11 @@ def freshness_light(
     本版改吃 `shared.staleness.staleness_days()`(= 距**預期最新交易日**),
     與 data_coverage 同一個基準 —— 否則週末讀盤後資料會憑空多算 1-2 天 lag。
 
-    燈號的 emoji 規則本身委派給 L0 `shared.data_freshness.freshness_level()`,
+    **月頻不走天數**(G2,見上方區塊):委派 L0
+    `shared.data_freshness.monthly_freshness_level()`,與 data_coverage 同一份規則
+    —— 同一筆 as_of 在兩頁必得同一個燈號(由 tests/test_g2_monthly_freshness.py 釘)。
+
+    其餘頻率的 emoji 規則委派 L0 `shared.data_freshness.freshness_level()`,
     本檔只決定「這個頻率該用哪組門檻」+ 標籤措辭,不重寫一套 emoji 判定。
     """
     if not date_str:
@@ -128,6 +152,8 @@ def freshness_light(
     if freq == FREQ_STATIC:
         # 屬性類:有值就是有值,不隨時間過期(到職日越久 = 任期越長 = 好事)。
         return '🟢', '已取得'
+    if freq == 'monthly':
+        return monthly_freshness_level(date_str, indicator=indicator, today=today)
     _lag = staleness_days(date_str, today=today)
     if _lag is None:
         return '🔴', '無法解析'
@@ -230,13 +256,16 @@ def render_data_health_raw():
         except Exception:
             return ('fail', None)
 
-    def _light(date_str, freq='daily'):
+    def _light(date_str, freq='daily', indicator=None):
         """回傳 (icon, label)。門檻與量法一律走模組層 `freshness_light`(v19.181 D3)。
 
         保留這層薄 wrapper 只是為了不動下方 ~40 處 caller 的呼叫寫法;
         真正的規則、常數與理由全在 `freshness_light` / `freshness_bands`。
+
+        `indicator` 只有 freq='monthly' 用得到(G2:月頻改判發布期數,
+        各序列的發布延遲不同 → 必須指名是哪一個序列)。
         """
-        return freshness_light(date_str, freq)
+        return freshness_light(date_str, freq, indicator=indicator)
 
     # 'static' = 不隨時間過期的屬性(經理人姓名 / 到職日)。原本沒登記,
     # 於是「頻率」欄會直接印出英文 `static`,與其餘中文標籤不一致。
@@ -244,8 +273,10 @@ def render_data_health_raw():
                  'yearly': '不定期', FREQ_STATIC: '不過期'}
 
     def _row(name, date_str, freq='daily', error_msg=None, optional=False,
-             source='', endpoint='', proxy=False, probe_status=None):
+             source='', endpoint='', proxy=False, probe_status=None,
+             indicator=None):
         """資料新鮮度單列。
+        indicator: freq='monthly' 時必填，見 `freshness_light` docstring
         source: 來源系統（如 FRED / yfinance / FinMind）
         endpoint: API 端點 / Ticker（如 NAPM / ^VIX）
         proxy: 是否經 Squid Proxy 出口（True=✅ / False=—）
@@ -279,7 +310,7 @@ def render_data_health_raw():
             return {**_base, '最後更新': '⚪ 此股無此科目', '日期': '—', '狀態': '⚪'}
         if not date_str:
             return {**_base, '最後更新': '🔴 未取得', '日期': '—', '狀態': '🔴'}
-        icon, lbl = _light(date_str, freq)
+        icon, lbl = _light(date_str, freq, indicator)
         return {**_base, '最後更新': lbl, '日期': str(date_str)[:10], '狀態': icon}
 
     def _tbl(rows):
@@ -469,7 +500,8 @@ def render_data_health_raw():
     _global_rows = []
 
     def _g_add(name, source, freq, df=None, date_str=None, count=None,
-               fred_series_id: str = ''):
+               fred_series_id: str = '', indicator: str = ''):
+        """indicator: freq='monthly' 時必填(G2),見 `freshness_light` docstring。"""
         if isinstance(df, _pd_r.DataFrame) and not df.empty:
             _d = _last_date(df)
             _cnt = len(df) if count is None else count
@@ -477,7 +509,7 @@ def render_data_health_raw():
             _d = date_str
             _cnt = count
         if _d:
-            icon, lbl = _light(_d, freq)
+            icon, lbl = _light(_d, freq, indicator or None)
             _fresh = f'{icon} {lbl}'
         else:
             _fresh = '🔴 未取得'
@@ -499,16 +531,23 @@ def render_data_health_raw():
                     if (_ma_g.get('vix') or {}).get('current') is not None else None)
     _g_add('美國核心 CPI YoY', 'FRED',           'monthly',
            date_str=str((_ma_g.get('us_core_cpi') or {}).get('date',''))[:10] or None,
-           fred_series_id='CPILFESL')
+           fred_series_id='CPILFESL', indicator='us_core_cpi')
     _g_add('🇹🇼 台灣製造業 PMI',
            'CIER-EN+data.gov.tw+NDC+CIER首頁+StockFeel+鉅亨+CIER-cid8+MoneyDJ 8 段', 'monthly',
-           date_str=str((_ma_g.get('ism_pmi') or {}).get('date',''))[:10] or None)
+           date_str=str((_ma_g.get('ism_pmi') or {}).get('date',''))[:10] or None,
+           indicator='ism_pmi')
     _g_add('NDC 景氣燈號',      'StockFeel+MacroMicro 雙源', 'monthly',
-           date_str=str((_ma_g.get('ndc_signal') or {}).get('date',''))[:10] or None)
+           date_str=str((_ma_g.get('ndc_signal') or {}).get('date',''))[:10] or None,
+           indicator='ndc_signal')
     _g_add('台灣出口 YoY',      'stat.gov.tw+FRED+data.gov.tw/6053(海關新臺幣)+CKAN 5段', 'monthly',
-           date_str=str((_ma_g.get('tw_export') or {}).get('date',''))[:10] or None)
+           date_str=str((_ma_g.get('tw_export') or {}).get('date',''))[:10] or None,
+           indicator='tw_export')
+    # ⚠️ 已知 provenance 缺口(G2 記錄,非本輪修):本列餵進去的 `cl_ts` 是**抓取時間**,
+    #    不是 M1B/M2 的資料月 as_of(m1b_m2_info 目前不帶資料日期)。任何新鮮度規則
+    #    量抓取時間都只會恆綠。改法屬 §2.2 provenance 另案(要 fetcher 先帶出 as_of)。
     _g_add('台灣 M1B / M2',    'CBC + FinMind 雙源',         'monthly',
-           date_str=(_cl_ts_g if _mi_g.get('m1b_yoy') is not None else None))
+           date_str=(_cl_ts_g if _mi_g.get('m1b_yoy') is not None else None),
+           indicator='m1b_m2')
 
     # v18.226：外資連續日數（fetch_foreign_consecutive_days → _fi_streak_cache）
     _fi_streak_g = st.session_state.get('_fi_streak_cache') or {}
@@ -554,7 +593,7 @@ def render_data_health_raw():
         _g_add(f'個股 K線 {_t2_g.get("sid","-")}', 'FinMind / yfinance', 'daily',
                df=_t2_g.get('df'))
         _g_add(f'個股月營收 {_t2_g.get("sid","-")}', 'FinMind', 'monthly',
-               df=_t2_g.get('rev'))
+               df=_t2_g.get('rev'), indicator='tw_monthly_revenue')
         _g_add(f'個股季財報 {_t2_g.get("sid","-")}', 'FinMind', 'quarterly',
                df=_t2_g.get('qtr'))
 
@@ -728,18 +767,23 @@ def render_data_health_raw():
                 rows.append(_row(label, None, freq,
                                  error_msg=err, source=src, endpoint=ep, proxy=px))
             else:
+                # G2:月頻走發布期數規則 → indicator 就是 macro_info 的 key
+                # (與 shared.staleness.MACRO_PUBLICATION_LAG_DAYS 同名)。
                 rows.append(_row(label, str(date)[:10], freq,
-                                 source=src, endpoint=ep, proxy=px))
+                                 source=src, endpoint=ep, proxy=px,
+                                 indicator=key))
         # M1B / M2（無獨立 date 欄位，以 cl_ts 代理）
         _mi = st.session_state.get('m1b_m2_info') or {}
         _mi_date = None
         if _mi.get('m1b_yoy') is not None:
             _mi_date = str(st.session_state.get('cl_ts', ''))[:10] or str(_dt_r.date.today())
         if _mi_date:
+            # ⚠️ 同上方全域表:_mi_date 目前是抓取時間(cl_ts)而非資料月 as_of,
+            #    屬 §2.2 provenance 另案(G2 記錄,未修)。
             rows.append(_row('M1B / M2 貨幣供給', _mi_date, 'monthly',
                              source='CBC + FinMind 雙源',
                              endpoint='cbc.gov.tw / TaiwanStockMonetaryAggregates',
-                             proxy=True))
+                             proxy=True, indicator='m1b_m2'))
         else:
             # m1b_m2_info 尚未抓取 → 黃燈提示，與上方 5 個 macro 一致
             _m1b_never = not _mi
@@ -854,7 +898,7 @@ def render_data_health_raw():
                              endpoint='TaiwanStockPrice / Ticker.history', proxy=False))
             rows.append(_row('月營收', _last_date(_t2.get('rev')), 'monthly',
                              source='FinMind', endpoint='TaiwanStockMonthRevenue',
-                             proxy=False))
+                             proxy=False, indicator='tw_monthly_revenue'))
             # qtr 拆成個別欄位
             _qtr2 = _t2.get('qtr')
             rows.append(_row('季營收', _last_date_col(_qtr2, '營收'), 'quarterly',
@@ -1415,16 +1459,22 @@ def render_data_health_raw():
                         _hd = None
                         print(f'[diag/holdings] {_tk_p}: {type(_ehd).__name__}: {_ehd}')
                     if _hd:
+                        # G2:本列餵的 `_today_ep` 是**本次探測時間**,不是持股表的
+                        # 資料月 as_of(fetch_etf_holdings 不回資料日期)。原本標
+                        # 'monthly' 等於拿抓取時間冒充月頻 as_of —— 任何月頻規則
+                        # 量它都恆綠,是 D-2 那類「量抓取時間」的病灶。改標
+                        # FREQ_STATIC:語意就是「探測到 / 沒探測到」兩態,燈號不變(🟢),
+                        # 但不再假裝這是一個資料日期判定。
                         _probe_rows.append(_row(
                             f'{_tk_p} 持股 = {len(_hd)} 檔',
-                            _today_ep, 'monthly',
+                            _today_ep, FREQ_STATIC,
                             source='yfinance/MoneyDJ',
                             endpoint='funds_data → Basic0007/0008/RankA0001',
                             proxy=True))
                     else:
                         _probe_rows.append(_row(
                             f'{_tk_p} 持股',
-                            None, 'monthly', optional=True,
+                            None, FREQ_STATIC, optional=True,
                             error_msg='三條備援 URL 全失敗（403 / 端點變動）',
                             source='yfinance/MoneyDJ',
                             endpoint='funds_data → Basic0007/0008/RankA0001',

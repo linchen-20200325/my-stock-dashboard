@@ -41,7 +41,7 @@ from shared.colors import (
 )
 # 「合理最舊」天數門檻的 SSOT 在 staleness(頻率感知);本檔只負責翻成燈號,
 # **不自己定義天數**(B4-a:診斷頁原本 inline 寫死 1/3 天,與此 SSOT 打架)。
-from shared.staleness import stale_days_threshold
+from shared.staleness import monthly_release_status, stale_days_threshold
 
 # 預設燈號 → 色票對照(呼叫端可用 color_map 覆寫)
 _DEFAULT_COLOR_MAP = {
@@ -263,10 +263,72 @@ def freshness_level_for_cadence(
     (daily=7 / monthly=45 / quarterly=150),不再由各 UI 自己 inline 寫天數。
     月頻指標(CPI / PMI / 出口)的 as_of 天生就是上個月,拿日頻的 7 天去量它
     會永遠紅燈 —— 這是 B4-a 之前診斷頁「總經新鮮度」只好去量抓取時間的原因。
+
+    ⚠️ **`cadence='monthly'` 已無 production 消費端(G2 2026-08-08)**:
+    月頻資料的 as_of 落在**資料月月初**,任何「距今幾天」的門檻都會在
+    「當期卻超齡(45d 太緊 → 假紅)」與「已漏一期但天數未達(62+lag 太鬆 →
+    假綠)」之間二選一。月頻請改呼叫本檔 `monthly_freshness_level()`
+    (以**發布期數**判定,規則本體在 `shared.staleness.monthly_release_status`)。
+    本函式保留 monthly 分支僅為向下相容與既有測試。
     """
     _bad = stale_days_threshold(cadence)
     _warn = _bad if warn_days is None else min(int(warn_days), _bad)
     return freshness_level(lag_days, warn=_warn, bad=_bad)
+
+
+# ── 月頻:以「發布期數」判定的唯一燈號入口(G2 2026-08-08)────────────────
+#: 月頻燈號的三種可解釋狀態(不設「有點舊」的模糊帶 —— 月頻要嘛是當期最新一筆,
+#: 要嘛上游遲到中,要嘛真的漏了整期,三者的處置方式完全不同)。
+MONTHLY_LABEL_CURRENT = "當期"
+MONTHLY_LABEL_UNKNOWN = "門檻未登錄"
+
+
+def monthly_freshness_level(
+    as_of,
+    *,
+    indicator: Optional[str] = None,
+    lag_days: Optional[int] = None,
+    today=None,
+) -> tuple[str, str]:
+    """月頻資料的 `(emoji, label)` —— **全站月頻燈號只准從這裡出**。
+
+    Parameters
+    ----------
+    as_of :
+        資料歸屬日期(月頻一律是資料月月初);型別同 `staleness.staleness_days`。
+    indicator / lag_days :
+        擇一。`indicator` = `MACRO_PUBLICATION_LAG_DAYS` 的 key;
+        `lag_days` = 呼叫端確知的發布延遲(供未登錄序列)。
+    today :
+        基準日;**測試必須注入**,否則斷言會隨執行當天飄。
+
+    Returns
+    -------
+    tuple[str, str]
+        - `('⬜','未知')`        as_of 解析不出來
+        - `('⬜','門檻未登錄')`   該序列沒有登錄發布延遲 → 不猜(§1)
+        - `('🟢','當期')`        as_of 就是預期最新資料月(或更新)
+        - `('🟡','待公布（逾N日）')` 下一期原定發布日已過,仍在緩衝內
+        - `('🔴','落後N期')`     真的漏掉 N 個發布期
+
+    Why 不回天數
+    ------------
+    「落後 67 日」對月頻資料是無意義的數字(當期最新一筆本來就會是 63~89 日),
+    使用者看到只會學會忽略它。「落後 1 期」則是可行動的:那一期沒抓到。
+    """
+    _behind, _overdue = monthly_release_status(
+        as_of, indicator=indicator, lag_days=lag_days, today=today)
+    if _behind is None:
+        # 分辨「日期讀不出來」與「門檻沒登錄」—— 兩者的修法完全不同
+        from shared.staleness import latest_date as _ld
+        if _ld(as_of) is None:
+            return ("⬜", "未知")
+        return ("⬜", MONTHLY_LABEL_UNKNOWN)
+    if _behind >= 1:
+        return ("🔴", f"落後{_behind}期")
+    if _overdue:
+        return ("🟡", f"待公布（逾{_overdue}日）")
+    return ("🟢", MONTHLY_LABEL_CURRENT)
 
 
 def worst_freshness(

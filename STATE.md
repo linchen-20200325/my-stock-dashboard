@@ -127,9 +127,43 @@ ARCHITECTURE.md §0.10「0 違憲確認」9 條複驗後**至少 4 條被推翻*
   `_tw_now_str`/`_get_fm_token` 各歸其位 ⇒ **5 處 `from app import` 全消失**,
   `_AppProxy` + `sys.modules['app']` 劫持整套刪除。
   ⚠️ 原判定「`_bps` 有 2 份複本」錯誤,實際 **4 份**;`daily_checklist._bps` **零 caller**(死碼);
-  `_build_llm_context` **零 production caller**(搬家後仍是死碼,刪不刪待裁示)。
+  `_build_llm_context` **零 production caller**(搬家後仍是死碼 → **G1 已處理,見下**)。
   順帶修掉潛在必崩:`app._get_fm_token` **無 try/except**,無 `secrets.toml` 時
   `st.secrets.get()` raise,而 `tab_macro:329` 是裸呼叫 ⇒ 整頁炸。
+
+### G1 — 做好卻從來沒接上的時效防護（`[STALE:Nd]`）
+
+`shared/staleness.stale_tag`(月頻指標過期 → prompt 行首標記,防 AI 把過期資料當當期講)
+**唯一的消費者 `build_llm_context` 有 0 caller** ⇒ 真正在跑的兩處總經 prompt
+(`section_news_ai._ctx`、`tab_stock._macro_lines2`)送給 Gemini 的
+NDC / 台灣 PMI / 台灣出口 / 美核心 CPI **連資料日期都沒有**。
+
+🔴 **而那段從未被執行過的程式碼本身有兩個 bug**(0 caller ⇒ 錯了也沒人發現):
+
+1. **`threshold=40` 對每一個月頻指標都是錯的。** 這些 `date` 是**資料歸屬月的月初**
+   ('YYYY-MM-01'),不是公布日;月頻資料在被下一期取代前,as_of 年齡本來就會長到
+   「62 天 + 發布延遲」(PMI ~63d / 出口 ~72d / CPI ~75d / NDC ~89d)。
+   ⇒ 40 天會讓**當期**資料**每天都被標成過期**。100% 觸發的警告等於沒有警告 ——
+   §1「不得把過期當當期」被反向濫用成「把當期當過期」,一樣是說謊。
+   實測 2026-08-07:當期 CPI(as_of 2026-06-01,7 月號 8/13 才公布)距今 67 天,
+   舊碼會標 `[STALE:67d]`。門檻改走 L0 `shared.staleness.monthly_stale_threshold`
+   (依 CLAUDE.md §2.3 各源發布延遲逐指標推導:PMI 70 / 出口 79 / CPI 82 / NDC 96)。
+2. **`stale_tag(None)` 回空字串 = 沒有日期就默認新鮮。** 而這正是最危險的一格
+   (`tab_stock` 的 CPI 有 `ma_snap` fallback,那個扁平 dict 根本不帶日期)。
+   改為明確標 `[STALE:資料日期不明]`(§1:不確定 ≠ 新鮮)。
+
+**接法**:抽 L3 共用 helper `ai_structured_summary.macro_stale_prefix / macro_stale_legend`
+(門檻在 L0,本層只把它翻成 prompt 文字,同 `danger_rule_text` 的既有分工),
+接到**兩處 live prompt** 的月頻行(日頻的 VIX / US10Y / SOX **不接** —— 過期語意不同),
+並補上原本完全缺席的 as_of 月份 + 一段給 LLM 看的標記圖例(只丟 `[STALE:Nd]` 不解釋
+等於沒標)。**刻意不**讓兩處改吃 `build_llm_context` —— 它是那兩處的**子集**
+(少了法人/融資/PCR/ADL/期貨/韭菜,也沒有 v19.178 的 `danger_rule_text` 門檻),
+改吃它是往資訊量少的方向收斂。`build_llm_context` 本身保留、改吃同一份 SSOT
+(不再是第二套門檻),但**仍是 0 caller**,是否刪除待裁示。
+
+回歸網:`tests/test_g1_llm_stale_tagging.py` —— 行為斷言為主(門檻值 / 三態標記 /
+`build_llm_context` 實際輸出 / 加標記後 prompt 結構不破);wiring 用 **AST**(不掃字面)
+並附 `TestGuardItself` 證明它不會被註解 / docstring / 字串字面騙到。
 
 ### 假紅燈統計:本輪 9 次,7 次是「守衛掃字面」
 
@@ -163,8 +197,17 @@ ARCHITECTURE.md §0.10「0 違憲確認」9 條複驗後**至少 4 條被推翻*
 - 🟡 `risk_radar` I/O 下沉(V-RADAR-1,L2 內 HTTP + read_csv)
 - 🟡 `verify=False` 6 個建構點 → NAS CA 憑證。**代價已寫明:這條連線無法偵測中間人,
   代理被替換或 DNS 劫持時回來的資料可任意偽造,而 §1 Fail Loud 在此完全失效**
-- ⚪ `_build_llm_context` 零 caller,刪不刪待裁示;`gemini_call` 與 `ai_fetcher.post_gemini`
-  endpoint 版本(v1beta vs v1)與 sleep 策略不等價,合併屬行為變更
+- ⚪ `build_llm_context` **仍零 caller,刪不刪待裁示** —— 但 G1 已把它的時效標記能力
+  抽成共用 SSOT 並接到兩處 live prompt,且順手修掉它自己的 40d 門檻 / 缺日期默認新鮮
+  兩個 bug(見上「G1」段);它現在是**正確但沒人用**,不再是**錯誤且沒人用**。
+  刪除它不會影響任何 production 路徑;保留它的唯一理由是那 4 條 M1B/BIAS 的組法。
+  `gemini_call` 與 `ai_fetcher.post_gemini` endpoint 版本(v1beta vs v1)與 sleep
+  策略不等價,合併屬行為變更
+- 🟡 **`STALE_DAYS_MONTHLY = 45` 也有同款嫌疑(G1 順手發現,未動)** —— 🔎 資料診斷頁
+  (`data_coverage.py`)用它量 `macro_info` 的月頻 as_of,而當期 CPI / 出口 / NDC 的
+  as_of 年齡本來就會超過 45 天 ⇒ 該頁的月頻新鮮度燈很可能長期假紅。G1 **刻意不改**
+  (§-1:那是另一個消費端、無 bug 回報、改了會動到診斷頁行為),另立
+  `monthly_stale_threshold` 供 prompt 端使用。要不要收斂請 user 裁示
 - ⚪ `section_chips` caption `PCR<100偏空` —— 系統 PCR 是比值刻度(0.5/0.7/1.2/1.5),
   **沒有 1.0 這條線**。畫面顯示 1.15 而 caption 說「<100 偏空」= 韭菜指數量綱錯誤的翻版
 

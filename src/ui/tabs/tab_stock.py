@@ -1657,7 +1657,24 @@ padding:14px 18px;margin-bottom:12px;">
             # CPI 3.5/4.0、PMI 50/46、US10Y 4.5/5.0）不同。
             # ⇒ 同一個 VIX 值，個股頁 AI、總經頁 AI、畫面燈號可以講出三種結論。
             # 現統一走 L3 共用元件 `danger_rule_text()`（與總經 Tab 同一份真相）。
-            from src.services.ai_structured_summary import danger_rule_text as _drt2
+            from src.services.ai_structured_summary import (
+                danger_rule_text as _drt2,
+                macro_stale_legend as _msl2,
+                macro_stale_prefix as _msp2,
+            )
+            # ── G1（2026-08-07）：月頻指標補 as_of 月份 + 過期標記 ────────────
+            # 本段的 5 條裡，CPI 與台灣 PMI 是**月頻**（其餘 VIX / US10Y / SOX 是日頻，
+            # 過期語意不同，不套本標記）。原本兩條都不帶日期 → 一份兩個月前的 CPI 與
+            # 昨天的 VIX 在 prompt 裡長得一模一樣，個股 AI 只能當成「現在」講。
+            # ⚠️ CPI 有 `_ma_snap2` fallback，而 `ma_snap` 是扁平 dict（{'cpi': 3.1}）
+            # **不帶任何日期** → 走 fallback 時標「資料日期不明」，不得默認新鮮（§1）。
+            _cpi_blk2 = _macro_info2.get('us_core_cpi') or {}
+            _pmi_blk2 = _macro_info2.get('ism_pmi') or {}
+
+            def _asof2(_blk: dict) -> str:
+                _v = str((_blk or {}).get('date') or '').strip()
+                return f'資料月份 {_v}' if _v else '資料月份不明'
+
             _macro_lines2 = []
             _vix_v2 = (_macro_info2.get('vix') or {}).get('current') or _ma_snap2.get('vix')
             if _vix_v2 is not None:
@@ -1666,21 +1683,24 @@ padding:14px 18px;margin-bottom:12px;">
                         f"VIX 恐慌指數={float(_vix_v2):.2f}（{_drt2('vix')}）")
                 except (TypeError, ValueError):
                     pass
-            _cpi_v2 = (_macro_info2.get('us_core_cpi') or {}).get('yoy') or _ma_snap2.get('cpi')
+            _cpi_v2 = _cpi_blk2.get('yoy') or _ma_snap2.get('cpi')
             if _cpi_v2 is not None:
                 try:
                     _macro_lines2.append(
+                        f"{_msp2('us_core_cpi', _cpi_blk2.get('date'))}"
                         f"美核心 CPI YoY={float(_cpi_v2):+.2f}%"
-                        f"（{_drt2('us_core_cpi')}；通膨高→升息壓力→壓抑高本益比成長股估值）")
+                        f"（{_asof2(_cpi_blk2)}；{_drt2('us_core_cpi')}；"
+                        f"通膨高→升息壓力→壓抑高本益比成長股估值）")
                 except (TypeError, ValueError):
                     pass
-            _pmi_v2 = (_macro_info2.get('ism_pmi') or {}).get('value')
+            _pmi_v2 = _pmi_blk2.get('value')
             if _pmi_v2 is not None:
                 try:
                     _macro_lines2.append(
+                        f"{_msp2('ism_pmi', _pmi_blk2.get('date'))}"
                         f"🇹🇼 台灣 PMI={float(_pmi_v2):.1f}"
-                        f"（CIER；{_drt2('ism_pmi')}；黃線即榮枯分界，"
-                        f"低於代表製造業收縮；台灣製造業景氣領先指標）")
+                        f"（{_asof2(_pmi_blk2)}；CIER；{_drt2('ism_pmi')}；"
+                        f"黃線即榮枯分界，低於代表製造業收縮；台灣製造業景氣領先指標）")
                 except (TypeError, ValueError):
                     pass
             _tnx_v2 = (_intl_snap2.get('tnx') or {}).get('last') or _ma_snap2.get('us10y')
@@ -1701,6 +1721,10 @@ padding:14px 18px;margin-bottom:12px;">
                 except (TypeError, ValueError):
                     pass
             _macro_extra2 = "\n  • " + "\n  • ".join(_macro_lines2) if _macro_lines2 else "（暫無，請先到「宏觀拼圖」分頁更新）"
+            # G1：有任何一條被標過期 → 附圖例（不解釋 `[STALE:Nd]` 等於沒標）。
+            _stale_legend2 = _msl2(_macro_extra2)
+            if _stale_legend2:
+                _macro_extra2 = f"\n  {_stale_legend2}{_macro_extra2}"
             # v19.170 SSOT 修正:建議持股改讀 allocation_service(全站唯一來源)。
             # 原寫法 `_mkt_info2.get('exposure_limit_pct', macro_state.get(...,'N/A'))`
             # 有雙重 bug:(a) mkt_info 根本沒有 exposure_limit_pct 這個 key;

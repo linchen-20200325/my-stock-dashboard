@@ -65,6 +65,7 @@ from shared.data_freshness import (
     downgrade_to_warn,
     freshness_level_for_cadence,
     frozen_summary,
+    monthly_freshness_level,
     worst_freshness,
 )
 from shared.staleness import STALE_DAYS_DAILY, latest_date, staleness_days
@@ -76,8 +77,15 @@ _COVER_GREEN_RATIO = 0.85
 _COVER_YELLOW_RATIO = 0.50
 
 # ── 新鮮度門檻 ─────────────────────────────────────────────────────
-# 【紅燈】一律走 SSOT `shared.staleness.stale_days_threshold(cadence)`
-#   (daily=7 / monthly=45 / quarterly=150),本檔**不再自己寫天數**。
+# 【日頻紅燈】走 SSOT `shared.staleness.stale_days_threshold('daily')`=7,
+#   本檔**不自己寫天數**。
+# 【月頻】G2 2026-08-08 **改為以「發布期數」判定**,不再用日曆天門檻:
+#   B4-a 當初套 `stale_days_threshold('monthly')`=45,但 macro_info 月頻指標的
+#   `date` 是**資料月月初**(PMI/CPI/出口/NDC/Fed 全部),當期最新一筆的 as_of
+#   年齡天生就是 63~89 天 ⇒ 這一列的新鮮度燈**在健康狀態下也永遠 🔴**。
+#   一個 100% 觸發的警告等於沒有警告。改走
+#   `shared.data_freshness.monthly_freshness_level(as_of, indicator=key)`,
+#   規則本體在 `shared.staleness.monthly_release_status`,全站月頻同一份。
 # 【黃燈】診斷頁刻意比一般頁嚴格,保留一個具名的日頻黃燈起點:
 _DIAG_DAILY_WARN_DAYS = 3
 # 為什麼是 3 而不是沿用 SSOT 的 7:
@@ -88,12 +96,17 @@ _DIAG_DAILY_WARN_DAYS = 3
 #       週一被讀到」是完全正常的狀態,lag 卻等於 3。舊門檻 warn=1/bad=3 會讓
 #       每個週一早上整頁亮黃、週二早上亮紅,全是假警報。3 = 一個週末的自然差值
 #       上限,低於此不報警。
-# 【月頻/季頻】不設黃燈帶(warn=bad):月頻指標要嘛是當期最新一筆,要嘛就是逾期,
-#   中間沒有「有點舊」的語意。
+# 【季頻】不設黃燈帶(warn=bad):季報要嘛是當期最新一筆,要嘛就是逾期。
+# 【月頻】黃燈有明確語意(不是「有點舊」):下一期的**原定發布日已過**、但還在
+#   `MONTHLY_PUBLICATION_MARGIN_DAYS` 緩衝內 → 🟡「待公布」;
+#   緩衝過完仍沒有新的一期 → 🔴「落後N期」。
 
-# macro_info 各 key 的發布頻率 → 決定套哪一條 SSOT 門檻(§2.3 發布延遲表)。
+# macro_info 各 key 的發布頻率 → 決定走哪一條規則(§2.3 發布延遲表)。
 # ⚠️ 新增 MACRO_INFO_KEYS 時必須同步在此登記;
 #   tests/test_b4a_data_coverage_honesty.py 有漂移守衛會擋。
+# ⚠️ 標 "monthly" 的 key **必須**同時登錄在
+#   `shared.staleness.MACRO_PUBLICATION_LAG_DAYS`(否則該格顯示 ⬜「門檻未登錄」);
+#   tests/test_g2_monthly_freshness.py 有守衛會擋。
 _MACRO_KEY_CADENCE: dict[str, str] = {
     "vix":         "daily",     # yfinance ^VIX,日線
     "ism_pmi":     "monthly",   # 台灣 PMI(CIER),月後第 1 營業日
@@ -195,11 +208,14 @@ def _fmt_date(d) -> str:
         return str(d)[:10]
 
 
-def _asof_of_mapping(obj, paths, *, tab: str):
+def _asof_of_mapping(obj, paths, *, tab: str, today: _dt.date | None = None):
     """從 dict 依序找第一個可解析的 as-of 日期。
 
     回 `(as_of_date|None, lag_days|None, reason)`;
     reason ∈ {'ok', 'not_loaded', 'no_date_key', 'unparsable'}。
+
+    `today` 供測試注入(不注入 → `date.today()`;測試若吃執行當天日期,
+    斷言會在某些日子隨機轉紅)。
 
     §1:找不到就誠實回 None + reason,**不**退回抓取時間頂替(D-2 就是這樣爛掉的)。
     """
@@ -220,10 +236,10 @@ def _asof_of_mapping(obj, paths, *, tab: str):
     if _d is None:
         print(f"[coverage] ⚠️ {tab}:資料日期無法解析 raw={_raw!r}")
         return (None, None, "unparsable")
-    return (_d, staleness_days(_raw), "ok")
+    return (_d, staleness_days(_raw, today=today), "ok")
 
 
-def _asof_of_df(df, *, date_col: str, tab: str):
+def _asof_of_df(df, *, date_col: str, tab: str, today: _dt.date | None = None):
     """從 DataFrame 取 as-of。無 columns / 無該欄 → 'no_date_key'(含 loud log)。"""
     if not _has_value(df):
         return (None, None, "not_loaded")
@@ -239,10 +255,10 @@ def _asof_of_df(df, *, date_col: str, tab: str):
     _d = latest_date(df, date_col=date_col)
     if _d is None:
         return (None, None, "unparsable")
-    return (_d, staleness_days(df, date_col=date_col), "ok")
+    return (_d, staleness_days(df, date_col=date_col, today=today), "ok")
 
 
-def _asof_of_df_index(df, *, tab: str):
+def _asof_of_df_index(df, *, tab: str, today: _dt.date | None = None):
     """從 DataFrame 的 DatetimeIndex 取 as-of(yfinance 價量表沒有 date 欄)。
 
     ⚠️ 只接受**日期型 index**。預設的 RangeIndex 取 max 會拿到 0/1/2…,
@@ -265,7 +281,7 @@ def _asof_of_df_index(df, *, tab: str):
     _d = latest_date(_mx)
     if _d is None:
         return (None, None, "unparsable")
-    return (_d, staleness_days(_mx), "ok")
+    return (_d, staleness_days(_mx, today=today), "ok")
 
 
 _REASON_LABEL = {
@@ -275,17 +291,28 @@ _REASON_LABEL = {
 }
 
 
-def _level_from_asof(asof, lag, reason, *, cadence: str):
+def _level_from_asof(asof, lag, reason, *, cadence: str,
+                     indicator: str | None = None,
+                     today: _dt.date | None = None):
     """把 `(as_of, lag, reason)` 翻成 `(emoji, label, asof_txt)`。
 
     reason != 'ok' 一律 ⬜,但 label 分得出「真的沒觸發」vs「接錯/解析不了」——
     後者是**程式 bug 的徵狀**,不該跟前者長一樣(D-4 的教訓)。
+
+    cadence == 'monthly' 走**期數**規則(需 `indicator`),其餘走日曆天門檻。
+    兩條路的規則本體都在 L0,本檔只負責挑路。
     """
     if reason != "ok":
         return ("⬜", _REASON_LABEL.get(reason, "未知"), "")
+    _at = _fmt_date(asof) if asof is not None else ""
+    if cadence == "monthly":
+        # 未登錄發布延遲 → monthly_freshness_level 自己會回 ⬜「門檻未登錄」+ log,
+        # **不**退回日曆天門檻頂替(退回去就等於把 G2 修掉的假紅燈再放回來)。
+        _e, _l = monthly_freshness_level(asof, indicator=indicator, today=today)
+        return (_e, _l, _at)
     _warn = _DIAG_DAILY_WARN_DAYS if cadence == "daily" else None
     _e, _l = freshness_level_for_cadence(lag, cadence, warn_days=_warn)
-    return (_e, _l, _fmt_date(asof) if asof is not None else "")
+    return (_e, _l, _at)
 
 
 def _ss(key: str):
@@ -374,10 +401,13 @@ def _li_frozen_cols(df) -> tuple[int, list]:
 # ══════════════════════════════════════════════════════════════════
 # 主計算
 # ══════════════════════════════════════════════════════════════════
-def compute_tab_coverage(state: dict | None = None) -> list[dict]:
+def compute_tab_coverage(state: dict | None = None,
+                         today: _dt.date | None = None) -> list[dict]:
     """計算各資料 Tab 的「有值率」與「新鮮度」。
 
     state: 測試可注入 dict;None → 讀 st.session_state。
+    today: 測試可注入基準日;None → `date.today()`。
+           (不可省 —— 新鮮度斷言若吃執行當天日期,會在某些日子隨機轉色。)
     回傳 list[dict],每筆:
       {tab, emoji, color, ratio_txt, detail, action,
        fresh_emoji, fresh_label, fresh_color, fresh_asof}
@@ -416,11 +446,15 @@ def compute_tab_coverage(state: dict | None = None) -> list[dict]:
             if not _macro_block_has_value(_blk):
                 continue                     # 沒值的由覆蓋率那欄負責,不重複扣新鮮度
             _cad = _MACRO_KEY_CADENCE.get(_k, _MACRO_CADENCE_FALLBACK)
-            _a, _lag, _rsn = _asof_of_mapping(_blk, ("date",), tab=f"總經:{_k}")
+            _a, _lag, _rsn = _asof_of_mapping(_blk, ("date",), tab=f"總經:{_k}",
+                                              today=today)
             if _rsn != "ok":
                 _macro_no_date.append(_k)
                 continue
-            _e, _l, _at = _level_from_asof(_a, _lag, _rsn, cadence=_cad)
+            # 月頻走期數規則 → indicator 就是 macro_info 的 key(與
+            # MACRO_PUBLICATION_LAG_DAYS 同名);日頻用不到 indicator。
+            _e, _l, _at = _level_from_asof(_a, _lag, _rsn, cadence=_cad,
+                                           indicator=_k, today=today)
             _macro_entries.append((_e, f"{_k} {_l}", _at))
     _macro_asof = ""
     if _macro_entries:
@@ -480,8 +514,10 @@ def compute_tab_coverage(state: dict | None = None) -> list[dict]:
         _detail2 = (f"{_t2.get('sid', '')} 已載入（{len(_t2)} 欄，"
                     f"K 線 {_n_bars} 筆）").strip()
     # D-4:原本讀 `t2_data['date']`(根本不存在)→ 永遠 ⬜。真正的 as-of 在 df.date。
-    _a2, _lag2, _rsn2 = _asof_of_df(_t2_df, date_col="date", tab="個股 t2_data['df']")
-    _f2e, _f2l, _f2a = _level_from_asof(_a2, _lag2, _rsn2, cadence="daily")
+    _a2, _lag2, _rsn2 = _asof_of_df(_t2_df, date_col="date", tab="個股 t2_data['df']",
+                                    today=today)
+    _f2e, _f2l, _f2a = _level_from_asof(_a2, _lag2, _rsn2, cadence="daily",
+                                        today=today)
     rows.append({
         "tab": "📈 個股",
         "emoji": _e2, "color": _hex(_e2),
@@ -507,21 +543,23 @@ def compute_tab_coverage(state: dict | None = None) -> list[dict]:
     if _has_value(_cl):
         # ① 三大法人:cl_data['inst_date'](既有但從未被讀)
         if _cl_is_dict and _has_value(_cl.get("inst")):
-            _a, _lg, _rs = _asof_of_mapping(_cl, ("inst_date",), tab="籌碼 cl_data")
-            _e, _l, _at = _level_from_asof(_a, _lg, _rs, cadence="daily")
+            _a, _lg, _rs = _asof_of_mapping(_cl, ("inst_date",), tab="籌碼 cl_data",
+                                            today=today)
+            _e, _l, _at = _level_from_asof(_a, _lg, _rs, cadence="daily", today=today)
             _chip_levels.append((_e, f"法人 {_l}"))
             _chip_asof = _at or _chip_asof
         # ② 廣度 ADL:df 內建 date 欄
         if _cl_is_dict and _has_value(_cl.get("adl")):
             _a, _lg, _rs = _asof_of_df(_cl.get("adl"), date_col="date",
-                                       tab="籌碼 cl_data['adl']")
-            _e, _l, _at = _level_from_asof(_a, _lg, _rs, cadence="daily")
+                                       tab="籌碼 cl_data['adl']", today=today)
+            _e, _l, _at = _level_from_asof(_a, _lg, _rs, cadence="daily", today=today)
             _chip_levels.append((_e, f"廣度 {_l}"))
             _chip_asof = _chip_asof or _at
     # ③ 先行指標:li_latest 的 _date(舊版把它當成整列的唯一新鮮度來源 = D-3)
     if _has_value(_li):
-        _a, _lg, _rs = _asof_of_df(_li, date_col=_LI_DATE_COL, tab="籌碼 li_latest")
-        _e, _l, _at = _level_from_asof(_a, _lg, _rs, cadence="daily")
+        _a, _lg, _rs = _asof_of_df(_li, date_col=_LI_DATE_COL, tab="籌碼 li_latest",
+                                   today=today)
+        _e, _l, _at = _level_from_asof(_a, _lg, _rs, cadence="daily", today=today)
         _chip_levels.append((_e, f"先行 {_l}"))
         _chip_asof = _chip_asof or _at
     _f3e, _f3l = worst_freshness(_chip_levels) if _chip_levels else ("⬜", "未載入")
@@ -580,12 +618,14 @@ def compute_tab_coverage(state: dict | None = None) -> list[dict]:
         _e4 = downgrade_to_warn(_e4)
         _detail4 += f" ｜ ⚠️ NAV 缺:{str(_err_nav)[:50]}"
     # D-4:nav_date **巢狀在 premium 內**,原本讀 top-level `nav_date` → 永遠 ⬜。
-    _a4, _lag4, _rsn4 = _asof_of_mapping(_e1d, _ASOF_PATHS_ETF, tab="ETF etf_single_data")
+    _a4, _lag4, _rsn4 = _asof_of_mapping(_e1d, _ASOF_PATHS_ETF,
+                                         tab="ETF etf_single_data", today=today)
     if _rsn4 != "ok":
         # premium 三個日期都沒有時,退用價格序列的最後一根 K(誠實標示這是價格日)
         _a4, _lag4, _rsn4 = _asof_of_df_index(
-            _e1d.get("price_df") if _etf_is_dict else None, tab="ETF price_df")
-    _f4e, _f4l, _f4a = _level_from_asof(_a4, _lag4, _rsn4, cadence="daily")
+            _e1d.get("price_df") if _etf_is_dict else None, tab="ETF price_df",
+            today=today)
+    _f4e, _f4l, _f4a = _level_from_asof(_a4, _lag4, _rsn4, cadence="daily", today=today)
     rows.append({
         "tab": "🏦 ETF",
         "emoji": _e4, "color": _hex(_e4),
@@ -608,6 +648,10 @@ def render_data_coverage() -> None:
         "以及細項裡的 🧊 凍結 / 📦 過期快取 / ♻️ 沿用上輪 三種降級標記。"
         f"日頻紅燈門檻走 SSOT `STALE_DAYS_DAILY={STALE_DAYS_DAILY}` 日,"
         f"黃燈起點本頁刻意較嚴({_DIAG_DAILY_WARN_DAYS} 日)。"
+        "**月頻(PMI / CPI / 出口 / NDC / Fed)不用天數判定** —— 它們的資料日是"
+        "「資料月月初」,當期最新一筆天生就是 60~90 天前;改判"
+        "「距預期最新資料月**落後幾期**」:當期 🟢 ／ 下期已逾原定發布日但仍在"
+        "緩衝內 🟡 ／ 真的漏掉整期 🔴。"
     )
 
     rows = compute_tab_coverage()
