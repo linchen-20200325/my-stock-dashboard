@@ -1,9 +1,11 @@
 """mcp_server/server.py — 台股資料 MCP Server(無頭第二前端,v20 首波)。
 
 把已過憲法把關的 L3 service 包成 MCP 工具,讓 Claude Desktop / Cursor 等 MCP client
-用對話查台股。本檔為 **orchestrator**(同 app.py L6 / scripts cron)——允許跨層 import
-L3 service + L5 fetcher(§8.2 orchestrator 慣例:app.py / update_forward_test_freeze.py
+用對話查台股。本檔為 **orchestrator**(同 app.py L6 / scripts cron)——允許**往下**跨層
+import L3 service + L1 fetcher(§8.2 orchestrator 慣例:app.py / update_forward_test_freeze.py
 皆如此);本檔只做「組裝 + 序列化」,不寫任何業務邏輯 / 門檻 / 公式(那些留在 L2/L3)。
+⚠️ orchestrator 身分不涵蓋「去 L5 UI 取數」(方向錯,非例外)——E2 2026-08 已把 PE /
+名稱 fetcher 從 `src.ui.tabs.yield_screener` 下沉到 L1 `src.data.stock.yield_pe_fetcher`。
 
 架構定位(§8.2):
     Streamlit 網頁 (app.py, L6) ─┐
@@ -45,12 +47,15 @@ def _now_utc_iso() -> str:
 def _build_pe_name_maps() -> tuple[dict, dict]:
     """全市場(上市 TWSE + 上櫃 TPEX)本益比 / 名稱 → (pe_map, name_map)。抓不到 → 兩個空 dict。
 
-    走 SSOT `fetch_pe_name_maps`（畫面 / 推播 / 凍結 / MCP 四 orchestrator 同源），
-    確保「MCP 選股 = 畫面 / cron 選股」且上櫃股同樣有估值 + 名稱(§8 SSOT)。pe_low 因子
-    缺 pe_map 時 composite 自動不計入、不記 0(§1),不炸整體。
+    走 SSOT `fetch_pe_name_maps`(**L1** `src/data/stock/yield_pe_fetcher.py`;畫面 / 推播 /
+    凍結 / MCP 四 orchestrator 同源),確保「MCP 選股 = 畫面 / cron 選股」且上櫃股同樣有
+    估值 + 名稱(§8 SSOT)。pe_low 因子缺 pe_map 時 composite 自動不計入、不記 0(§1),不炸整體。
+
+    E2(2026-08)修:原 import `src.ui.tabs.yield_screener`(L5,無條件 import streamlit)
+    —— 本 server 是 headless stdio 進程,不該把 streamlit UI 鏈拉進來。
     """
     try:
-        from src.ui.tabs.yield_screener import fetch_pe_name_maps
+        from src.data.stock.yield_pe_fetcher import fetch_pe_name_maps
         return fetch_pe_name_maps()
     except Exception as _e:  # noqa: BLE001 — PE 抓不到 → pe_low 缺料,不炸
         print(f"[mcp_server] 本益比抓取失敗:{type(_e).__name__}: {_e}", file=sys.stderr)

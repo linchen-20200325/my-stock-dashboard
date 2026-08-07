@@ -47,6 +47,13 @@ def _clear_caches():
             pass
 
 
+# E2(2026-08):`fetch_twse_yield_pe` 已從 src/ui/tabs/yield_screener.py(L5)下沉到
+# src/data/stock/yield_pe_fetcher.py(L1);`_fetch_pbratio_from_twse` 也改直接 late
+# import L1。patch 舊的 L5 路徑只會改到 re-export 別名的綁定 → 打不到,測試會靜默
+# 去打真 TWSE OpenAPI(假綠燈)。故 patch 目標集中成一個常數,只有一處要維護。
+_TWSE_PE_TARGET = 'src.data.stock.yield_pe_fetcher.fetch_twse_yield_pe'
+
+
 def _mk_twse_df(rows: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
@@ -69,7 +76,7 @@ class TestTwsePbratioFetch:
             {'代碼': '2330', '名稱': '台積電', '股價淨值比': 5.5},
             {'代碼': '2317', '名稱': '鴻海', '股價淨值比': 1.2},
         ])
-        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch(_TWSE_PE_TARGET, return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert abs(pb - 5.5) < 0.01
 
@@ -77,7 +84,7 @@ class TestTwsePbratioFetch:
         # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 stock_sections.section_357_valuation
         from src.ui.tabs.stock_sections import section_357_valuation as tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 5.5}])
-        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch(_TWSE_PE_TARGET, return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('9999')
         assert pb == 0.0
 
@@ -85,7 +92,7 @@ class TestTwsePbratioFetch:
         # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 stock_sections.section_357_valuation
         from src.ui.tabs.stock_sections import section_357_valuation as tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 50.0}])
-        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch(_TWSE_PE_TARGET, return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert abs(pb - 50.0) < 0.01
 
@@ -93,7 +100,7 @@ class TestTwsePbratioFetch:
         # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 stock_sections.section_357_valuation
         from src.ui.tabs.stock_sections import section_357_valuation as tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 200.0}])
-        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch(_TWSE_PE_TARGET, return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert pb == 0.0
 
@@ -101,14 +108,14 @@ class TestTwsePbratioFetch:
         # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 stock_sections.section_357_valuation
         from src.ui.tabs.stock_sections import section_357_valuation as tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': -1.0}])
-        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch(_TWSE_PE_TARGET, return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert pb == 0.0
 
     def test_empty_df_returns_zero(self):
         # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 stock_sections.section_357_valuation
         from src.ui.tabs.stock_sections import section_357_valuation as tab_stock
-        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=pd.DataFrame()):
+        with patch(_TWSE_PE_TARGET, return_value=pd.DataFrame()):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         assert pb == 0.0
 
@@ -216,7 +223,7 @@ class TestTwseBpsBackCalc:
         # U4 Phase 3-B v18.407:_fetch_pbratio_from_twse 已搬至 stock_sections.section_357_valuation
         from src.ui.tabs.stock_sections import section_357_valuation as tab_stock
         df = _mk_twse_df([{'代碼': '2330', '名稱': '台積電', '股價淨值比': 5.0}])
-        with patch('src.ui.tabs.yield_screener.fetch_twse_yield_pe', return_value=df):
+        with patch(_TWSE_PE_TARGET, return_value=df):
             pb = tab_stock._fetch_pbratio_from_twse('2330')
         bps = 750.0 / pb if pb > 0 else 0
         assert 149.0 < bps < 151.0

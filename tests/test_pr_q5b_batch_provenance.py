@@ -32,8 +32,11 @@ class TestQ5bMarkersInSource(unittest.TestCase):
 
     def test_yield_screener_2(self):
         # P1-1b v18.375:fetch_dividend_history 整檔搬至 src/data/stock/dividend_fetcher.py。
-        # source check 改合集(yield_screener 仍有 fetch_twse_yield_pe + thin re-export)。
+        # E2 2026-08:fetch_twse_yield_pe / fetch_tpex_yield_pe / fetch_pe_name_maps 整組
+        #   搬至 src/data/stock/yield_pe_fetcher.py(L1),yield_screener 只剩 re-export。
+        # source check 走三檔合集(provenance marker 跟著實作走,不跟著檔名走)。
         src = (self._read('src/ui/tabs/yield_screener.py')
+               + self._read('src/data/stock/yield_pe_fetcher.py')
                + self._read('src/data/stock/dividend_fetcher.py'))
         # fetch_twse_yield_pe — DataFrame attrs
         self.assertIn("'TWSE:OpenAPI:BWIBBU_d'", src)
@@ -60,7 +63,8 @@ class TestQ5bMarkersInSource(unittest.TestCase):
                + self._read('src/data/stock/share_capital_fetcher.py'))
         # _fetch_share_capital + _fetch_pbratio_from_twse 新增 success-path log
         self.assertIn('FinMind:TaiwanStockBalanceSheet', src)
-        self.assertIn('TWSE:OpenAPI:BWIBBU_d(via yield_screener)', src)
+        # E2 2026-08:fetcher 下沉 L1,血緣標籤同步改 (via yield_pe_fetcher)
+        self.assertIn('TWSE:OpenAPI:BWIBBU_d(via yield_pe_fetcher)', src)
 
 
 class TestImports(unittest.TestCase):

@@ -15,7 +15,9 @@ cron 無 OAuth 用不了)。本腳本每月自動跑「完整選股網」→ 取
 
 §1 fail-loud:存活池空 / 綜合排名空(季快照未就緒)→ log + exit 0(該月不凍結,非錯誤,
 不讓 workflow 紅燈);真實例外 → exit 1。§5 冪等:同 (cohort, stock_id) 重跑不重複新增。
-§8.2:本檔為 orchestrator(同 app.py / update_fundamentals_snapshot),可跨層 import。
+§8.2:本檔為 orchestrator(同 app.py / update_fundamentals_snapshot),可**往下**跨層 import
+(L2/L3;已登記 C3-a)。⚠️ 但 orchestrator 身分**不涵蓋**去 L5 UI 層取數 —— 那是方向錯,
+不是例外(E2 2026-08 已修:PE / 名稱改吃 L1 `src.data.stock.yield_pe_fetcher`)。
 """
 from __future__ import annotations
 
@@ -37,11 +39,19 @@ def _tw_today() -> str:
 def _build_pe_name_maps() -> tuple[dict, dict]:
     """全市場(上市 TWSE + 上櫃 TPEX)本益比 / 名稱 → (pe_map, name_map)。抓不到 → 兩個空 dict。
 
-    走 SSOT `fetch_pe_name_maps`(L5);本腳本為 orchestrator 可直呼。抓不到時 pe_low
-    因子自然缺料(composite 不計入、不記 0),不炸(§1)。上櫃股同樣有估值 + 名稱。
+    走 SSOT `fetch_pe_name_maps`(**L1** `src/data/stock/yield_pe_fetcher.py`)——
+    畫面 / 推播 / 凍結 / MCP 四 orchestrator 同源。抓不到時 pe_low 因子自然缺料
+    (composite 不計入、不記 0),不炸(§1)。上櫃股同樣有估值 + 名稱。
+
+    E2(2026-08)修:原本 import 的是 `src.ui.tabs.yield_screener`(**L5 UI Tab**,該檔
+    module-level 無條件 `import streamlit`),原註解寫「本腳本為 orchestrator 可直呼」
+    —— 那不是豁免理由,是把已知錯誤敘述成設計(§8.2.A.0 規則 5)。真實風險:本腳本是
+    headless cron,走那條 import 等於把整條 streamlit UI 依賴鏈拉進 cron,鏈一斷
+    前進式驗證紀錄就**靜默停止更新**(§1),而那是本專案唯一零 lookahead / 零存活者
+    偏誤的績效量測。fetcher 已下沉 L1,cron(L1)取 L1 是同層,不再違憲。
     """
     try:
-        from src.ui.tabs.yield_screener import fetch_pe_name_maps
+        from src.data.stock.yield_pe_fetcher import fetch_pe_name_maps
         return fetch_pe_name_maps()
     except Exception as _e:  # noqa: BLE001 — PE 抓不到 → pe_low 缺料,不炸整體
         print(f"[ft_freeze] 本益比抓取失敗:{type(_e).__name__}: {_e}")

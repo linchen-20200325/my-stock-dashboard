@@ -40,11 +40,18 @@ from src.ui.render import STRATEGY_VALUATION, kpi, strategy_conclusion  # v19.17
 def _fetch_pbratio_from_twse(sid: str) -> float:
     """v18.175:從 TWSE OpenAPI BWIBBU_d 直取個股 P/B 股價淨值比(伺服器端權威值)。
 
-    重用既有 yield_screener.fetch_twse_yield_pe() 1 日快取的全市場 DataFrame,
-    過濾出指定 sid 的「股價淨值比」欄位。涵蓋全 TWSE 上市股(TPEx 退 FinMind)。
+    重用既有 `fetch_twse_yield_pe()` 1 日快取的全市場 DataFrame,過濾出指定 sid 的
+    「股價淨值比」欄位。涵蓋全 TWSE 上市股(TPEx 退 FinMind)。
+
+    E2(2026-08):改直取 L1 `src.data.stock.yield_pe_fetcher`(原走 `src.ui.tabs` barrel
+    → yield_screener re-export,L5→L5 繞一圈拿的其實還是同一個 L1 fetcher)。
+    §8.2.A EX-PASSTHRU-1:L5 直呼 L1 pass-through fetcher,L1 內已自帶 @st.cache_data
+    集中緩存;已登記於 tests/test_c3_layering_guard.py `_WHITELIST`。
+    ⚠️ 測試 patch 目標 = `src.data.stock.yield_pe_fetcher.fetch_twse_yield_pe`
+    (late import,呼叫時才解析 → patch 生效)。
     """
     try:
-        from src.ui.tabs import fetch_twse_yield_pe
+        from src.data.stock.yield_pe_fetcher import fetch_twse_yield_pe
         _df = fetch_twse_yield_pe()
         if _df is None or _df.empty:
             return 0.0
@@ -58,7 +65,9 @@ def _fetch_pbratio_from_twse(sid: str) -> float:
         if not (0.01 < _pb_v < 100):
             return 0.0
         # v18.356 PR-Q5b S-PROV-1 phase 19:success-path provenance
-        prov_log('_fetch_pbratio_from_twse', 'TWSE:OpenAPI:BWIBBU_d(via yield_screener)',
+        # E2(2026-08):血緣標籤跟著實作走 —— 來源模組已改 L1 yield_pe_fetcher(§2.2
+        # provenance 必須指向真正的產生者,不能停在舊模組名)。
+        prov_log('_fetch_pbratio_from_twse', 'TWSE:OpenAPI:BWIBBU_d(via yield_pe_fetcher)',
                  f'float:{_pb_v}', ticker=sid)
         return _pb_v
     except Exception as _e:

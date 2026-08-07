@@ -1,24 +1,21 @@
 """src/services/yield_screener_service.py — 高股息篩選 L3 wrapper(v18.406 R5)。
 
-對齊 user 建議 R5:`yield_screener.py` 4 處 L1 import 集中至 L3:
-- L33 `from src.data.proxy import fetch_url`(lazy,於 fetch_twse_yields 內)
-- L71 `from src.data.stock.dividend_fetcher import fetch_annual_dividends`(module-level alias)
-- L80 `from src.data.proxy import get_proxy_config`(lazy,於 _proxy_status_badge 內)
+對齊 user 建議 R5:`yield_screener.py` 的 L1 import 集中至 L3:
+- `from src.data.stock.dividend_fetcher import fetch_annual_dividends`(單檔配息歷史)
+- `from src.data.proxy import get_proxy_config`(_proxy_status_badge 的 NAS 狀態徽章)
 
 §8.2 L3 service:thin pass-through(對齊 stock_grp_service / etf_grp_compare_service)。
-EX-PASSTHRU-1 Group A 升級觸發條件(4 處 lazy import 散落,加篩選器併排會觸發)滿足。
+
+E2(2026-08):`proxy_fetch_url` 已移除 —— 它唯一的 caller 是 `fetch_twse_yield_pe` /
+`fetch_tpex_yield_pe`,兩者已下沉 L1(`src/data/stock/yield_pe_fetcher.py`),L1 直接
+走 `src.data.proxy`(同層),不再經 L3 繞行(L1→L3 會是 §8.2 上行違憲)。留著會是死碼。
 """
 from __future__ import annotations
 
 from typing import Any
 
-from src.data.proxy import fetch_url, get_proxy_config
+from src.data.proxy import get_proxy_config
 from src.data.stock.dividend_fetcher import fetch_annual_dividends
-
-
-def proxy_fetch_url(url: str, *args, **kwargs) -> Any:
-    """走 NAS proxy 抓 URL(thin pass-through)。"""
-    return fetch_url(url, *args, **kwargs)
 
 
 def get_proxy_status_config() -> Any:

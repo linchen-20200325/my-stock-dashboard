@@ -303,21 +303,30 @@ def test_missing_benchmark_cohorts_are_counted():
 
 # ════════════════════════════════════════════════════════════════
 # F9 TWSE 估值 / 名稱 map:未配息股不再被連坐丟掉
+#
+# ⚠️ E2(2026-08)搬遷後的 patch 目標 —— 這段踩過坑,勿回退：
+#   三個 fetcher 已從 `src/ui/tabs/yield_screener.py`(L5)下沉到
+#   `src/data/stock/yield_pe_fetcher.py`(L1);`yield_screener` 只剩 re-export。
+#   `fetch_pe_name_maps` 在**呼叫時**從 **L1 模組的 globals** 取兩個 fetcher,所以
+#     patch.object(yield_screener, "fetch_tpex_yield_pe")   ← 打不到(只改別名綁定)
+#     patch("src.services.yield_screener_service.proxy_fetch_url")  ← 打不到(L1 不再繞 L3)
+#   兩者都會讓測試「照樣綠」但實際去打真網路 = 最惡劣的假綠燈。
+#   下面每個 mock 都額外斷言 **被呼叫過**(call_count / call_args),patch 若沒生效
+#   會在那條斷言炸掉,而不是靜默通過。
 # ════════════════════════════════════════════════════════════════
 @pytest.fixture()
 def _clear_pe_caches():
-    from src.ui.tabs import yield_screener as ys
-    for _fn in ("fetch_twse_yield_pe", "fetch_tpex_yield_pe"):
-        try:
-            getattr(ys, _fn).clear()
-        except Exception:
-            pass
+    """清 L1 fetcher 的 @st.cache_data,避免 case 間串擾。"""
+    from src.data.stock import yield_pe_fetcher as ypf
+    def _clear():
+        for _fn in ("fetch_twse_yield_pe", "fetch_tpex_yield_pe"):
+            try:
+                getattr(ypf, _fn).clear()
+            except Exception:
+                pass
+    _clear()
     yield
-    for _fn in ("fetch_twse_yield_pe", "fetch_tpex_yield_pe"):
-        try:
-            getattr(ys, _fn).clear()
-        except Exception:
-            pass
+    _clear()
 
 
 def _resp(payload):
@@ -338,12 +347,29 @@ _TWSE_RAW = [
 ]
 
 
+def _assert_patches_landed(_http, _tpex):
+    """證明兩個 mock 真的被走到（patch 目標打錯 → 這裡炸，而不是靜默打真網路）。"""
+    assert _http.call_count == 1, (
+        f"proxy_fetch_url mock 被呼叫 {_http.call_count} 次（預期 1）—— "
+        "patch 目標沒打到 L1 的 HTTP 出口，這條測試可能正在打真網路"
+    )
+    assert "openapi.twse.com.tw" in str(_http.call_args), (
+        f"proxy_fetch_url 收到的 URL 不是 TWSE BWIBBU：{_http.call_args}"
+    )
+    assert _tpex.call_count == 1, (
+        f"fetch_tpex_yield_pe mock 被呼叫 {_tpex.call_count} 次（預期 1）—— "
+        "patch.object 打在 re-export 別名上而非 L1 模組，真 TPEX fetcher 正在被呼叫"
+    )
+
+
 def test_non_dividend_stock_keeps_pe_and_name(_clear_pe_caches):
-    from src.ui.tabs import yield_screener as ys
-    with patch("src.services.yield_screener_service.proxy_fetch_url",
-               return_value=_resp(_TWSE_RAW)), \
-         patch.object(ys, "fetch_tpex_yield_pe", return_value=pd.DataFrame()):
-        pe_map, name_map = ys.fetch_pe_name_maps()
+    from src.data.stock import yield_pe_fetcher as ypf
+    with patch.object(ypf, "proxy_fetch_url",
+                      return_value=_resp(_TWSE_RAW)) as _http, \
+         patch.object(ypf, "fetch_tpex_yield_pe",
+                      return_value=pd.DataFrame()) as _tpex:
+        pe_map, name_map = ypf.fetch_pe_name_maps()
+        _assert_patches_landed(_http, _tpex)
     assert "2514" in pe_map, "未配息的上市股被殖利率 dropna 連坐丟掉了 PE"
     assert math.isclose(pe_map["2514"], 7.07, rel_tol=1e-9)
     assert name_map["2514"] == "龍邦", "未配息的上市股名稱空白"
@@ -353,12 +379,14 @@ def test_non_dividend_stock_keeps_pe_and_name(_clear_pe_caches):
 
 def test_non_dividend_stock_actually_reaches_the_valuation_factor(_clear_pe_caches):
     """端到端：修好之後，未配息股在『估值便宜』因子拿得到分（而且是最便宜的那個）。"""
+    from src.data.stock import yield_pe_fetcher as ypf
     from src.services.fundamental_screener_service import _percentile_scores
-    from src.ui.tabs import yield_screener as ys
-    with patch("src.services.yield_screener_service.proxy_fetch_url",
-               return_value=_resp(_TWSE_RAW)), \
-         patch.object(ys, "fetch_tpex_yield_pe", return_value=pd.DataFrame()):
-        pe_map, _ = ys.fetch_pe_name_maps()
+    with patch.object(ypf, "proxy_fetch_url",
+                      return_value=_resp(_TWSE_RAW)) as _http, \
+         patch.object(ypf, "fetch_tpex_yield_pe",
+                      return_value=pd.DataFrame()) as _tpex:
+        pe_map, _ = ypf.fetch_pe_name_maps()
+        _assert_patches_landed(_http, _tpex)
     _scores = _percentile_scores(["1102", "2514", "1101"], pe_map, higher_better=False)
     assert _scores["2514"] == 100.0
     assert "1101" not in _scores        # 無 PE → 無估值分，不是 0 分
@@ -366,18 +394,45 @@ def test_non_dividend_stock_actually_reaches_the_valuation_factor(_clear_pe_cach
 
 def test_nonpositive_pe_treated_as_missing(_clear_pe_caches):
     """PE = 0 / 負數是「無本益比」，不是「全市場最便宜」（§1 不造假）。"""
-    from src.ui.tabs import yield_screener as ys
+    from src.data.stock import yield_pe_fetcher as ypf
     _raw = [{"Code": "AAA", "Name": "零PE", "DividendYield": "1.0",
              "PEratio": "0.00", "PBratio": "1.0"},
             {"Code": "BBB", "Name": "負PE", "DividendYield": "1.0",
              "PEratio": "-3.50", "PBratio": "1.0"},
             {"Code": "CCC", "Name": "正常", "DividendYield": "1.0",
              "PEratio": "12.00", "PBratio": "1.0"}]
-    with patch("src.services.yield_screener_service.proxy_fetch_url",
-               return_value=_resp(_raw)), \
-         patch.object(ys, "fetch_tpex_yield_pe", return_value=pd.DataFrame()):
-        pe_map, _ = ys.fetch_pe_name_maps()
+    with patch.object(ypf, "proxy_fetch_url",
+                      return_value=_resp(_raw)) as _http, \
+         patch.object(ypf, "fetch_tpex_yield_pe",
+                      return_value=pd.DataFrame()) as _tpex:
+        pe_map, _ = ypf.fetch_pe_name_maps()
+        _assert_patches_landed(_http, _tpex)
     assert set(pe_map) == {"CCC"}
+
+
+def test_yield_screener_reexport_is_the_same_object_as_l1(_clear_pe_caches):
+    """L5 re-export 與 L1 是同一個物件 —— app.py / 既有 caller 的舊 import 路徑不變。
+
+    同時把「為什麼 patch 要打 L1」釘成行為契約：re-export 只是別名，
+    重綁它不會改變 `fetch_pe_name_maps` 內部解析到的函式。
+    """
+    from src.data.stock import yield_pe_fetcher as ypf
+    from src.ui.tabs import yield_screener as ys
+    for _fn in ("fetch_twse_yield_pe", "fetch_tpex_yield_pe", "fetch_pe_name_maps"):
+        assert getattr(ys, _fn) is getattr(ypf, _fn), f"{_fn} re-export 不是同一物件"
+
+    # 行為證明：patch L5 別名 → L1 內部呼叫**不受影響**（打不到）
+    _sentinel = pd.DataFrame({"代碼": ["9999"], "名稱": ["別名"], "本益比": [1.0]})
+    with patch.object(ys, "fetch_twse_yield_pe", return_value=_sentinel), \
+         patch.object(ypf, "fetch_twse_yield_pe",
+                      return_value=pd.DataFrame()) as _real, \
+         patch.object(ypf, "fetch_tpex_yield_pe", return_value=pd.DataFrame()):
+        pe_map, _ = ypf.fetch_pe_name_maps()
+    assert _real.call_count == 1
+    assert "9999" not in pe_map, (
+        "patch L5 re-export 竟然影響了 L1 內部呼叫 —— 若哪天成立，"
+        "上面幾條測試的 patch 目標說明就過期了，請一起更新"
+    )
 
 
 # ════════════════════════════════════════════════════════════════

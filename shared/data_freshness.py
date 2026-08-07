@@ -55,6 +55,33 @@ _DEFAULT_COLOR_MAP = {
 # ⬜ 排在綠之後 —— 「不知道新不新鮮」比「確定很新」差,但比「確定過期」好。
 _FRESH_RANK = {"🟢": 0, "⬜": 1, "🟡": 2, "🔴": 3}
 
+# ── 先行指標「值凍結」監看契約 SSOT(E1 v19.185)────────────────────────────
+# 為什麼放這裡:`detect_frozen_columns` 是純偵測器,**要看哪幾欄、連續幾期算凍結**
+# 是它的輸入契約。原本這份契約只存在於 `src/ui/pages/data_coverage.py` 的私有常數
+# `_LI_FROZEN_WATCH_COLS` / `_LI_FROZEN_STALE_PERIODS` / `_LI_DATE_COL`(L5),
+# 於是「核心總表」要回答同一個問題(哪幾欄凍結)時,只能自己再寫一份欄位清單 ——
+# 兩份清單一漂移,同一份 li_latest 在診斷頁和總表就會給出**互相否定的凍結欄數**。
+#
+# 收斂方式對齊 `shared/macro_buckets.py` 既有慣例(L0 鏡像 + CI drift test):
+#   - 本檔為契約 SSOT;
+#   - `data_coverage.py` 的私有副本由 `tests/test_e1_core_summary.py` 的
+#     AST drift 守衛釘住(值不相等 → CI 紅燈,並印出該檔實際字面);
+#   - 該檔不在本次可改範圍,待其可改時直接 import 本常數即可刪除副本。
+FROZEN_WATCH_COLS_LEADING: tuple[str, ...] = (
+    "外資", "投信", "自營", "外資大小",
+    "前五大留倉", "前十大留倉", "未平倉口數",
+)
+"""先行指標(li_latest)受值凍結監看的欄位。
+
+刻意**不含**「成交量」(字串 "1234.5億")與「融資/融券餘額」(四捨五入到整數億,
+真有可能連續持平)—— 避免製造假紅燈。與 data_coverage 私有副本逐字相同。"""
+
+FROZEN_STALE_PERIODS_LEADING: int = 3
+"""連續 N 期一階差分為 0 才判凍結(3 = 3 個交易日 = 4 筆一模一樣的值)。"""
+
+LEADING_DATE_COL: str = "_date"
+"""li_latest 的時間欄名。`detect_frozen_columns` 明文要求 caller 先由舊到新排序。"""
+
 
 def detect_frozen_columns(
     df,
@@ -317,6 +344,59 @@ def frozen_summary(result: dict[str, dict]) -> tuple[int, list]:
     """
     _frozen = [c for c, v in (result or {}).items() if v and v.get("frozen")]
     return (len(_frozen), _frozen)
+
+
+def leading_frozen_columns(
+    df,
+    *,
+    cols: Optional[Iterable[str]] = None,
+    stale_periods: Optional[int] = None,
+    date_col: Optional[str] = None,
+) -> tuple[int, list]:
+    """先行指標值凍結偵測的**單一實作**:排序 → 偵測 → 摘要,回 (凍結欄數, 欄名)。
+
+    Parameters
+    ----------
+    df : pd.DataFrame | None
+        `session_state['li_latest']`。None / 空 / 無受監看欄 → `(0, [])`。
+    cols / stale_periods / date_col : 覆寫預設契約(預設走本檔 SSOT 常數)。
+
+    Returns
+    -------
+    tuple[int, list]
+        同 `frozen_summary`。
+
+    Notes
+    -----
+    - **排序內建**:`detect_frozen_columns` 明文要求 caller 先把列由舊到新排好,
+      漏排會讓「尾端 N 期」不是最近 N 期 → 誤判。把排序併進本函式,消除
+      「每個 caller 各自記得要排序」這個必然會漏的步驟。
+    - §1:偵測器自己壞掉一律回 `(0, [])` + log,**不**假裝有凍結結論
+      (不確定 ≠ 凍結);同樣也不吞掉錯誤訊息。
+    """
+    _cols = tuple(cols) if cols is not None else FROZEN_WATCH_COLS_LEADING
+    _n = FROZEN_STALE_PERIODS_LEADING if stale_periods is None else int(stale_periods)
+    _dc = LEADING_DATE_COL if date_col is None else str(date_col)
+
+    if df is None or getattr(df, "empty", True):
+        return (0, [])
+    _df_cols = list(getattr(df, "columns", []) or [])
+    if not any(c in _df_cols for c in _cols):
+        return (0, [])
+
+    _sorted = df
+    if _dc in _df_cols:
+        try:
+            _sorted = df.sort_values(_dc)
+        except Exception as _e_sort:  # noqa: BLE001 — 排序失敗沿用原順序但要出聲
+            print(f"[freshness] ⚠️ li 依 {_dc} 排序失敗,沿用原順序: "
+                  f"{type(_e_sort).__name__}: {_e_sort}")
+    try:
+        _res = detect_frozen_columns(_sorted, _cols, stale_periods=_n)
+    except Exception as _e_det:  # noqa: BLE001 — 偵測器壞掉不得反噬呼叫端
+        print(f"[freshness] ⚠️ 凍結偵測失敗: {type(_e_det).__name__}: {_e_det}")
+        return (0, [])
+    return frozen_summary(_res)
 
 
 def _emoji_worse(a: str, b: str) -> str:

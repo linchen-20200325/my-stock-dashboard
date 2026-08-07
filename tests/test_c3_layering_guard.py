@@ -422,6 +422,8 @@ for _f in (
     "src/data/stock/quarterly_financials_fetcher.py",
     "src/data/stock/share_capital_fetcher.py",
     "src/data/stock/tw_stock_data_fetcher.py",
+    # E2(2026-08):自 src/ui/tabs/yield_screener.py 下沉,見 C3-d 結案
+    "src/data/stock/yield_pe_fetcher.py",
 ):
     _WHITELIST[("R1", _f, "streamlit")] = (EX_CACHE_1, _R_CACHE)
 
@@ -479,6 +481,8 @@ for _f, _m in (
     ("src/ui/tabs/stock_grp_sections/section_portfolio_summary.py", "src.data.stock.app_stock_fetchers"),
     ("src/ui/tabs/stock_sections/section_357_valuation.py", "src.data.core"),
     ("src/ui/tabs/stock_sections/section_357_valuation.py", "src.data.core.provenance"),
+    # E2(2026-08):_fetch_pbratio_from_twse 改直取 L1(原繞 src.ui.tabs barrel → L5 re-export)
+    ("src/ui/tabs/stock_sections/section_357_valuation.py", "src.data.stock.yield_pe_fetcher"),
     ("src/ui/tabs/stock_sections/section_when_buy_sell.py", "src.data.news"),
     ("src/ui/tabs/tab_edu.py", "src.data.core"),
     ("src/ui/tabs/tab_edu.py", "src.data.macro.macro_core"),
@@ -499,6 +503,9 @@ for _f, _m in (
     ("src/ui/tabs/tab_stock_picker.py", "src.data.etf"),
     ("src/ui/tabs/tab_stock_picker.py", "src.data.proxy"),
     ("src/ui/tabs/tab_stock_picker.py", "src.data.stock.picker_fetcher"),
+    # E2(2026-08):估值 fetcher 下沉 L1 後,本檔只留 backward-compat re-export
+    # (app.py / 既有測試仍 `from src.ui.tabs.yield_screener import ...`)。
+    ("src/ui/tabs/yield_screener.py", "src.data.stock.yield_pe_fetcher"),
     # ── L5 UI ETF ──
     ("src/ui/etf/etf_dashboard.py", "src.data.etf"),
     ("src/ui/etf/etf_tab_grp_compare.py", "src.data.core.provenance"),
@@ -551,28 +558,12 @@ _KNOWN_VIOLATIONS[("R2", "src/compute/risk/risk_radar.py", "src.data.proxy")] = 
     "抓取下沉到 L1(如 src/data/macro/),屬跨層重構,需 §8.1 架構先行提案。"
 )
 
-# ── 規則 5:cron 腳本從 L5 UI Tab 取數 ──────────────────────────────
-# ⚠️ 這兩條**不適用**「scripts 是 entrypoint,往下呼叫任何層都是設計本意」的判斷。
-# 就算 scripts/** 等同 L6 orchestrator,去 **UI 層**取數仍然是錯的方向。
-_C3_YIELD_SCREENER_TODO = (
-    "TODO(C3-d):cron 從 L5 UI Tab import L1 fetcher。根因不在 scripts —— 是 "
-    "`fetch_pe_name_maps` / `fetch_twse_yield_pe` / `fetch_tpex_yield_pe` 這三個 "
-    "L1 fetcher 住在 `src/ui/tabs/yield_screener.py`(該檔 :14 module-level "
-    "`import streamlit as st`)。實務風險:headless cron 走這條 import 會把整個 "
-    "streamlit UI 鏈拉進來;`update_forward_test_freeze.py` 正是每月凍結前進式驗證的"
-    "那支,import 鏈一斷紀錄就靜默停止更新,而那是本專案唯一的誠實績效量測。"
-    "另兩個同源 caller:`app.py`(L6)、`mcp_server/server.py`。"
-    "正解:三個 fetcher 下沉 L1(如 `src/data/stock/yield_pe_fetcher.py`,走 "
-    "EX-CACHE-1 條件 import),`yield_screener.py` 保留 re-export 供 UI 與既有測試。"
-    "⚠️ 搬遷會動到 `tests/test_b6b_screener_audit.py` 的 "
-    "`patch.object(ys, 'fetch_tpex_yield_pe')` —— patch 目標要跟著改到 L1 模組,"
-    "否則 `fetch_pe_name_maps` 內部呼叫的是 L1 的真函式、patch 打不到。"
-    "未修原因:動到凍結路徑,需單獨一批 + 完整跑測試驗證,不與本批混做。"
-)
-_KNOWN_VIOLATIONS[("R5", "scripts/push_daily_signals.py", "src.ui.tabs.yield_screener")] = (
-    _C3_YIELD_SCREENER_TODO)
-_KNOWN_VIOLATIONS[("R5", "scripts/update_forward_test_freeze.py", "src.ui.tabs.yield_screener")] = (
-    _C3_YIELD_SCREENER_TODO)
+# ── 規則 5:cron 腳本從 L5 UI Tab 取數 ── ✅ C3-d 已結案(E2,2026-08),條目已移除 ──
+# 原有兩條(push_daily_signals / update_forward_test_freeze → src.ui.tabs.yield_screener)。
+# 修法:`fetch_twse_yield_pe` / `fetch_tpex_yield_pe` / `fetch_pe_name_maps` 三個 L1
+# fetcher 整組下沉 `src/data/stock/yield_pe_fetcher.py`(EX-CACHE-1 條件 import),
+# `yield_screener.py` 只留 re-export。cron(scripts/** = L1)取 L1 是同層,不再違憲。
+# 留這段註解是為了讓下一個讀者知道「這裡曾經有兩條、為什麼不見了」(§8.2.A.0 規則 3)。
 
 # ── 規則 3:L0 Infra 依賴 L1 ────────────────────────────────────────
 _KNOWN_VIOLATIONS[("R3", "src/config/stock_names.py", "src.data.core.stock_names_fetcher")] = (

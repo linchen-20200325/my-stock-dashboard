@@ -39,11 +39,16 @@ def _tw_now() -> str:
 def _build_pe_name_maps() -> tuple[dict, dict]:
     """全市場(上市 TWSE + 上櫃 TPEX)PE / 名稱 → (pe_map, name_map)。抓不到 → 空 dict。
 
-    走 SSOT `fetch_pe_name_maps` —— 畫面 / 凍結 / MCP / 推播 四 orchestrator 同源,確保
-    推播選股 = 畫面選股,且上櫃股同樣有估值分 + 中文名(原僅 TWSE → 上櫃股空白)(§8 SSOT)。
+    走 SSOT `fetch_pe_name_maps`(**L1** `src/data/stock/yield_pe_fetcher.py`)—— 畫面 /
+    凍結 / MCP / 推播 四 orchestrator 同源,確保推播選股 = 畫面選股,且上櫃股同樣有估值分
+    + 中文名(原僅 TWSE → 上櫃股空白)(§8 SSOT)。
+
+    E2(2026-08)修:原 import `src.ui.tabs.yield_screener`(L5 UI Tab,module-level 無條件
+    `import streamlit`)—— headless cron 走那條會把整個 streamlit UI 鏈拉進來。fetcher
+    已下沉 L1,cron 取 L1 是同層(§8.2 C3-d 結案)。
     """
     try:
-        from src.ui.tabs.yield_screener import fetch_pe_name_maps
+        from src.data.stock.yield_pe_fetcher import fetch_pe_name_maps
         return fetch_pe_name_maps()
     except Exception as _e:  # noqa: BLE001 — PE 抓不到 → pe_low 缺料,不炸
         print(f"[push_signals] PE 抓取失敗:{type(_e).__name__}: {_e}", file=sys.stderr)

@@ -452,8 +452,12 @@ def get_ranked_picks(
     分層（§8.2 L3）:
       - survivors / shortage / rs / trend 全走 L3 service（get_fundamental_survivors /
         run_shortage_scan / run_rs_leader_scan / build_trend_map）——合法。
-      - `pe_map` / `name_map` 由 **orchestrator（app 或 cron）自 TWSE BWIBBU 抓後傳入**：
-        PE fetcher（fetch_twse_yield_pe）在 L5，L3 不反向 import，改由 caller 注入。
+      - `pe_map` / `name_map` 由 **orchestrator（app / cron / MCP）抓後傳入**：四個入口
+        共用同一支 `fetch_pe_name_maps`（E2 2026-08 起在 L1
+        `src/data/stock/yield_pe_fetcher.py`；此前住在 L5 `src/ui/tabs/yield_screener.py`，
+        「L3 不反向 import」才是當時改由 caller 注入的理由）。現在 L3 直呼 L1 已無分層
+        障礙，但**維持注入**：畫面端本來就要拿 name_map 顯示，注入可避免重抓 + 讓
+        「畫面 / 推播 / 凍結 / MCP」四處明確共用同一份 map（§2.1 SSOT）。
 
     參數:
       - survivors_df: 已備存活池則傳入（app 端已抓，避免重抓；不傳則本層自抓，cron 用）。
