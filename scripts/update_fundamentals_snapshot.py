@@ -34,8 +34,13 @@ import pandas as pd
 # 允許從 repo root 直接跑
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from shared.roc_calendar import gregorian_to_roc_year  # noqa: E402  B3 SSOT-H2:西元→民國
-
+# G3 v19.189:`latest_published_quarter` 已下沉 L0 SSOT。
+# 為什麼一定要同源:本檔決定 cron **抓哪一季**,而 `ai_qa_service` /
+# `health_inspector` 用同一份法定公告日曆判**那一季算不算過期**。兩份一漂,
+# 就會出現「cron 抓了 Q3、診斷頁說 Q3 過期、AI 據此寫進建議」——
+# 而且三者各自都「照自己的表做對了」,沒有人會發現。
+# (原私有實作在此檔 :101-117,與 L0 版逐日比對 500 天全等後刪除。)
+from shared.staleness import latest_published_quarter
 from src.data.stock.mops_bulk_fetcher import (  # noqa: E402
     fetch_mops_balance_bulk,
     fetch_mops_income_bulk,
@@ -96,25 +101,6 @@ def _write_latest_json(cache_dir: Path) -> tuple[int, int] | None:
         },
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     return roc_year, season
-
-
-def latest_published_quarter(today: _dt.date) -> tuple[int, int]:
-    """依台股財報公告截止日,回最新『應已公布』的季 → (民國年, season)。
-
-    Q1(3/31)~5/15、Q2(6/30)~8/14、Q3(9/30)~11/14、Q4 年報(12/31)~次年 3/31。
-    """
-    y, md = today.year, (today.month, today.day)
-    if md >= (11, 14):
-        cal_year, season = y, 3
-    elif md >= (8, 14):
-        cal_year, season = y, 2
-    elif md >= (5, 15):
-        cal_year, season = y, 1
-    elif md >= (3, 31):
-        cal_year, season = y - 1, 4      # 去年年報
-    else:
-        cal_year, season = y - 1, 3      # 年報尚未出 → 去年 Q3
-    return gregorian_to_roc_year(cal_year), season
 
 
 def _parse_seasons(raw: str | None) -> list[int]:

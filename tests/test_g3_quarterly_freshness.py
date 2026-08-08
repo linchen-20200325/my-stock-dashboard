@@ -323,28 +323,33 @@ class TestStatutoryCalendarSSOT:
         """`latest_published_quarter` 回**民國年**,每個截止日兩側都測。"""
         assert latest_published_quarter(today) == expect
 
-    def test_latest_published_quarter_matches_the_scripts_copy(self):
-        """漂移守衛(行為,非字面):`scripts/` 的私有同名實作必須逐日等值。
+    def test_scripts_uses_the_l0_ssot_not_a_private_copy(self):
+        """cron 與 UI 必須是**同一個函式物件**,不是「兩份逐日等值的實作」。
 
-        L0 SSOT 已建在 `shared/staleness.py`,但 `scripts/update_fundamentals_snapshot.py`
-        仍持有一份逐字等價的複本(該檔不在 G3 可改範圍)。**兩份會漂**,而漂掉的
-        後果是「補抓哪一季」與「這一季新不新鮮」給出互相矛盾的答案。
-        這條掃一整年逐日比對 —— scripts 那支改吃 L0 之後,本條依然成立(且變成廢話,
-        那時可以刪);在它還沒改之前,本條就是唯一的防線。
+        v19.189 收斂:`scripts/update_fundamentals_snapshot.py` 原本持有一份私有
+        `latest_published_quarter`(:101-117),與 L0 版逐日比對 500 天全等後刪除,
+        改為 `from shared.staleness import latest_published_quarter`。
+
+        ⚠️ 為什麼從「逐日等值」改成 **identity**:
+        等值比對只能證明「今天兩份還一樣」,擋不住有人再貼一份私有實作進去 ——
+        只要新複本當下也算得一樣,測試照樣綠,而它們會在下一次法規調整時分頭漂。
+        本 session 的核心教訓正是「同一件事兩個實作,只有一個是對的」
+        (B3 融資 schema / C1 regime 四個 producer / B5-b 候選數三個算式)。
+        identity 斷言把「不准有第二份」寫成契約,而不是「第二份要算對」。
+
+        為什麼這件事非同源不可:本檔決定 cron **抓哪一季**,而
+        `ai_qa_service` / `health_inspector` 用同一份法定公告日曆判**那一季算不算
+        過期**。兩份一漂,就會出現「cron 抓了 Q3、診斷頁說 Q3 過期、AI 據此寫進
+        建議」—— 而且三者各自都「照自己的表做對了」,沒有人會發現。
         """
         from scripts.update_fundamentals_snapshot import (
             latest_published_quarter as _scripts_lpq,
         )
 
-        _bad = []
-        _d = dt.date(2025, 12, 1)
-        for _ in range(500):
-            if latest_published_quarter(_d) != _scripts_lpq(_d):
-                _bad.append((_d.isoformat(), latest_published_quarter(_d),
-                             _scripts_lpq(_d)))
-            _d += dt.timedelta(days=1)
-        assert not _bad, (
-            f"L0 SSOT 與 scripts 私有複本已漂移,反例 (日期, L0, scripts) = {_bad[:5]}")
+        assert _scripts_lpq is latest_published_quarter, (
+            "scripts 又出現獨立的 latest_published_quarter 實作 —— "
+            "請改回 `from shared.staleness import latest_published_quarter`。"
+            "季報公告日曆只准有一份;要調整判定請改 L0,不要在 cron 端另開一份。")
 
     def test_expected_quarter_is_the_quarter_end_of_latest_published(self):
         """兩個入口必須指向同一季:`expected_latest_data_quarter(grace=0)` 的季末
