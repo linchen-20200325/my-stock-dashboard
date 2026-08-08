@@ -41,7 +41,11 @@ from shared.colors import (
 )
 # 「合理最舊」天數門檻的 SSOT 在 staleness(頻率感知);本檔只負責翻成燈號,
 # **不自己定義天數**(B4-a:診斷頁原本 inline 寫死 1/3 天,與此 SSOT 打架)。
-from shared.staleness import monthly_release_status, stale_days_threshold
+from shared.staleness import (
+    monthly_release_status,
+    quarterly_release_status,
+    stale_days_threshold,
+)
 
 # 預設燈號 → 色票對照(呼叫端可用 color_map 覆寫)
 _DEFAULT_COLOR_MAP = {
@@ -270,16 +274,27 @@ def freshness_level_for_cadence(
     假綠)」之間二選一。月頻請改呼叫本檔 `monthly_freshness_level()`
     (以**發布期數**判定,規則本體在 `shared.staleness.monthly_release_status`)。
     本函式保留 monthly 分支僅為向下相容與既有測試。
+
+    ⚠️ **`cadence='quarterly'` 同樣已無 production 消費端(G3 2026-08-08)**:
+    台股季報的公告截止日是四個**固定日曆日**(5/15 / 8/14 / 11/14 / 次年 3/31),
+    Q3 之後要等 4.5 個月才有下一份 ⇒ 當期 Q3 的 as_of 年齡上限 196 天,
+    150d 門檻每年約 3/02–4/14 對一份完全當期的財報亮假紅。季頻請改呼叫本檔
+    `quarterly_freshness_level()`(規則本體在
+    `shared.staleness.quarterly_release_status`)。
     """
     _bad = stale_days_threshold(cadence)
     _warn = _bad if warn_days is None else min(int(warn_days), _bad)
     return freshness_level(lag_days, warn=_warn, bad=_bad)
 
 
-# ── 月頻:以「發布期數」判定的唯一燈號入口(G2 2026-08-08)────────────────
-#: 月頻燈號的三種可解釋狀態(不設「有點舊」的模糊帶 —— 月頻要嘛是當期最新一筆,
+# ── 月頻 / 季頻:以「發布期數」判定的唯一燈號入口(G2 + G3 2026-08-08)──────
+#: 期數型燈號的三種可解釋狀態(不設「有點舊」的模糊帶 —— 要嘛是當期最新一筆,
 #: 要嘛上游遲到中,要嘛真的漏了整期,三者的處置方式完全不同)。
-MONTHLY_LABEL_CURRENT = "當期"
+PERIOD_LABEL_CURRENT = "當期"
+#: 月頻 / 季頻共用同一組字面(同一個語意不該有兩種寫法);
+#: 舊名保留為 alias,避免既有 import 斷掉。
+MONTHLY_LABEL_CURRENT = PERIOD_LABEL_CURRENT
+QUARTERLY_LABEL_CURRENT = PERIOD_LABEL_CURRENT
 MONTHLY_LABEL_UNKNOWN = "門檻未登錄"
 
 
@@ -329,6 +344,42 @@ def monthly_freshness_level(
     if _overdue:
         return ("🟡", f"待公布（逾{_overdue}日）")
     return ("🟢", MONTHLY_LABEL_CURRENT)
+
+
+def quarterly_freshness_level(as_of, *, today=None) -> tuple[str, str]:
+    """季頻(台股季報)的 `(emoji, label)` —— **全站季頻燈號只准從這裡出**。
+
+    Parameters
+    ----------
+    as_of :
+        資料歸屬日期(季頻一律是季末日 03-31/06-30/09-30/12-31);
+        型別同 `staleness.staleness_days`。季內任一天都會判進同一季。
+    today :
+        基準日;**測試必須注入**,否則斷言會隨執行當天飄。
+
+    Returns
+    -------
+    tuple[str, str]
+        - `('⬜','未知')`            as_of 解析不出來
+        - `('🟢','當期')`            as_of 就是預期最新季別(或更新)
+        - `('🟡','待公布（逾N日）')`  下一季已過**法定公告截止日**,仍在鏡像緩衝內
+        - `('🔴','落後N期')`         真的漏掉 N 個發布期
+
+    Why 不回天數 / 不需要 indicator
+    -------------------------------
+    「落後 182 日」對季頻資料是無意義的數字 —— 當期最新的 Q3 財報本來就會是
+    136~196 日,使用者(與 LLM)看到只會學會忽略它。「落後 1 期」則是可行動的:
+    有一季沒抓到。且與月頻不同,台股季報的公告截止日是全市場一致的**法定日曆**
+    (不逐序列不同),故不需要 `indicator=`,也不存在「門檻未登錄」狀態。
+    """
+    _behind, _overdue = quarterly_release_status(as_of, today=today)
+    if _behind is None:
+        return ("⬜", "未知")
+    if _behind >= 1:
+        return ("🔴", f"落後{_behind}期")
+    if _overdue:
+        return ("🟡", f"待公布（逾{_overdue}日）")
+    return ("🟢", QUARTERLY_LABEL_CURRENT)
 
 
 def worst_freshness(

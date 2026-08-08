@@ -9,6 +9,8 @@ test_ai_qa_service.py — AI 分析師 panel + 問答 golden test（v19.121 Phas
 
 執行:  pytest tests/test_ai_qa_service.py -q
 """
+import datetime as _dt
+
 try:
     from src.services.ai_qa_service import (
         run_agent, discuss, discuss_stock, summarize_tab, PANELS,
@@ -181,19 +183,34 @@ def _as_of_days_ago(n):
 
 
 def test_quarterly_financial_not_flagged_when_latest():
-    """複現 bug:季報 as_of=季末,季後~45d 才公告;力積電 Q1(as_of~106d 前)是當期最新一季,
-    修前套日頻 7d 門檻 → 誤標「已過期106天」。修後 quarterly 走 150d 門檻 → 不標。"""
+    """複現 bug:季報 as_of=季末,季後~45d 才公告;力積電 Q1(as_of 3/31)在 7/15 是當期
+    最新一季,修前套日頻 7d 門檻 → 誤標「已過期106天」。
+
+    ⚠️ G3(2026-08-08)改寫測資:原本用 `_as_of_days_ago(106)` 即「執行當天往前 106 天」,
+    等於**吃執行日**。季頻判準有四個相位(法定公告截止日 5/15 / 8/14 / 11/14 / 次年 3/31),
+    吃執行日的測資只是碰巧在多數日子成立。改注入固定 today,結論不再隨跑測試的那天飄。
+    """
+    _today = _dt.date(2026, 7, 15)          # Q1 財報(3/31)公告後、Q2(8/14)公告前
     r = _annotate_staleness({"ok": True, "data": {"EPS": 3.36},
-                             "provenance": {"source": "FinMind 季報", "as_of": _as_of_days_ago(106),
-                                            "cadence": "quarterly"}})
+                             "provenance": {"source": "FinMind 季報",
+                                            "as_of": "2026-03-31",
+                                            "cadence": "quarterly"}}, today=_today)
     assert "_stale_days" not in r                       # 當期最新一季不該被標過期
+    assert (_today - _dt.date(2026, 3, 31)).days == 106, "測資年齡算錯,先修測資"
 
 
 def test_quarterly_financial_flagged_when_truly_overdue():
-    """季報若真的停在舊季(>150d,下一季早該公告)→ 仍須標過期(§1 不放水)。"""
+    """季報若真的停在舊季(下一季早該公告)→ 仍須標過期(§1 不放水)。
+
+    2026-08-20 手上還停在 2025Q4(年報,as_of 2025-12-31):2026Q1 早該在 5/15 公布,
+    連 14 天鏡像緩衝都過完了 ⇒ 確實漏掉一整季。
+    """
+    _today = _dt.date(2026, 8, 20)
     r = _annotate_staleness({"ok": True, "data": {"EPS": 1.0},
-                             "provenance": {"as_of": _as_of_days_ago(200), "cadence": "quarterly"}})
-    assert r.get("_stale_days") == 200
+                             "provenance": {"as_of": "2025-12-31",
+                                            "cadence": "quarterly"}}, today=_today)
+    assert r.get("_stale_days") == (_today - _dt.date(2025, 12, 31)).days == 232
+    assert r.get("_stale_quarters") == 1
 
 
 def test_daily_cadence_unchanged_still_7d():

@@ -13,7 +13,11 @@ from typing import Optional
 
 import streamlit as st
 from shared.colors import MATERIAL_ORANGE, TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
-from shared.data_freshness import freshness_level, monthly_freshness_level
+from shared.data_freshness import (
+    freshness_level,
+    monthly_freshness_level,
+    quarterly_freshness_level,
+)
 from shared.staleness import stale_days_threshold, staleness_days
 from shared.ttls import TTL_1DAY
 
@@ -60,6 +64,16 @@ from shared.ttls import TTL_1DAY
 # 代價:每一列月頻資料**必須指名它是哪個序列**(`indicator=`),因為發布延遲
 # 逐源不同(PMI 1 天 / 出口 10 天 / CPI 13 天 / NDC 27 天)。沒指名 → ⬜「門檻未登錄」,
 # **不**退回猜一個門檻(§1:不確定 ≠ 新鮮,也 ≠ 過期)。
+#
+# ═══ 季頻:G3(2026-08-08)把 150 天也一併收掉 ════════════════════════
+# 同一個病在季頻更嚴重。台股季報 as_of = 季末,但下一份何時出現由**法定公告
+# 截止日**決定,而那四個日子**不等距**:
+#       Q1 5/15、Q2 8/14、Q3 11/14(以上皆季末 +45 天)、Q4 年報 次年 3/31(+90 天)
+# ⇒ Q3 公布後要等 **4.5 個月**才有下一份,當期 Q3 的 as_of 年齡上限 196 天,
+#   150 天門檻每年約 **3/02–4/14** 對一份完全當期的財報亮 🔴(每年約 30~44 天)。
+# 本檔季頻改與 `ai_qa_service` 共用同一條 L0 規則
+# (`shared.data_freshness.quarterly_freshness_level` → `staleness.quarterly_release_status`),
+# 三態語意與月頻逐字相同,且**不需要 indicator**(法定日曆全市場一致)。
 # ══════════════════════════════════════════════════════════════════
 
 #: 日頻黃燈起點(日曆天)。與 `data_coverage._DIAG_DAILY_WARN_DAYS` **同值同理由**:
@@ -89,9 +103,10 @@ def freshness_bands(freq: str) -> tuple[int, int]:
     Raises
     ------
     ValueError
-        `freq == 'monthly'`。月頻**不存在**正確的日曆天門檻(見上方 G2 區塊):
-        設小 → 當期假紅,設大 → 漏一期假綠。這裡刻意炸掉而不是回一組數字,
-        是為了讓「有人又想給月頻一個天數」在第一時間就停下來,而不是多出第四把尺。
+        `freq in ('monthly', 'quarterly')`。這兩種頻率**不存在**正確的日曆天
+        門檻(見上方 G2 / G3 區塊):設小 → 當期假紅,設大 → 漏一期假綠。
+        這裡刻意炸掉而不是回一組數字,是為了讓「有人又想給它一個天數」在第一
+        時間就停下來,而不是多出第四把尺。
     """
     if freq == 'monthly':
         raise ValueError(
@@ -99,11 +114,12 @@ def freshness_bands(freq: str) -> tuple[int, int]:
             "『當期假紅』與『漏一期假綠』之間二選一。"
             "請改用 shared.data_freshness.monthly_freshness_level(as_of, indicator=...)")
     if freq == 'quarterly':
-        # 季頻沿用 SSOT 150 天,且**不設黃燈帶**(warn = bad)——
-        # 對齊 data_coverage 的既有立場:季報要嘛是當期最新一筆,要嘛就是逾期,
-        # 中間沒有「有點舊」的語意。150 的推導見 `shared/staleness.py`。
-        _bad = stale_days_threshold('quarterly')
-        return (_bad, _bad)
+        raise ValueError(
+            "季頻不使用日曆天門檻:台股季報的公告截止日是四個固定日曆日"
+            "(Q1 5/15 / Q2 8/14 / Q3 11/14 / Q4 年報次年 3/31),Q3 之後要等 "
+            "4.5 個月才有下一份 ⇒ 當期 Q3 的 as_of 年齡上限 196 天,"
+            "150 天門檻每年約 3/02–4/14 對一份完全當期的財報亮假紅。"
+            "請改用 shared.data_freshness.quarterly_freshness_level(as_of)")
     if freq == 'yearly':
         return (_INSPECTOR_YEARLY_WARN_DAYS, _INSPECTOR_YEARLY_BAD_DAYS)
     # daily 與所有未登記頻率 → 走最嚴的日頻(同 `stale_days_threshold` 的 fallback 政策)
@@ -154,6 +170,11 @@ def freshness_light(
         return '🟢', '已取得'
     if freq == 'monthly':
         return monthly_freshness_level(date_str, indicator=indicator, today=today)
+    if freq == 'quarterly':
+        # G3:季頻同樣改判發布期數(as_of = 季末,下一份由**法定公告截止日**決定,
+        # 而那四個日子不等距 → 任何日曆天門檻都會對 Q3 假紅)。不需要 indicator:
+        # 台股季報公告期限是全市場一致的法定日曆,不逐序列不同。
+        return quarterly_freshness_level(date_str, today=today)
     _lag = staleness_days(date_str, today=today)
     if _lag is None:
         return '🔴', '無法解析'

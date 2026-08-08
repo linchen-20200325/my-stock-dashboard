@@ -413,14 +413,19 @@ class TestHealthInspectorPage:
         with pytest.raises(ValueError):
             freshness_bands('monthly')
 
-    def test_daily_and_quarterly_bands_untouched(self):
-        """G2 只動月頻:日頻 / 季頻的門檻來源不得被順手改掉。"""
+    def test_daily_band_untouched(self):
+        """G2 只動月頻:日頻的門檻來源不得被順手改掉。
+
+        ⚠️ 本條原本還斷言「季頻 == `stale_days_threshold('quarterly')`」。
+        G3(2026-08-08)把季頻也移出日曆天體系(理由:台股四個法定公告截止日
+        不等距,Q3 之後隔 4.5 個月 → 150 天門檻每年對當期 Q3 假紅約 30~44 天),
+        `freshness_bands('quarterly')` 現在會 raise。季頻的斷言改由
+        `tests/test_g3_quarterly_freshness.py` 接手,不在 G2 這裡重複維護。
+        """
         from shared.staleness import stale_days_threshold
         from src.ui.pages.health_inspector import freshness_bands
 
         assert freshness_bands('daily')[1] == stale_days_threshold('daily')
-        assert freshness_bands('quarterly') == (stale_days_threshold('quarterly'),
-                                                stale_days_threshold('quarterly'))
 
     def test_monthly_revenue_row_uses_its_own_publication_lag(self):
         """個股月營收(月後 ~10 天)也走同一條規則,而不是另外一套數字。"""

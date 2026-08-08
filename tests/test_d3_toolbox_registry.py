@@ -567,11 +567,11 @@ class TestInspectorFreshness:
         assert freshness_light('', 'daily', today=self.TODAY) == ('🔴', '未取得')
         assert freshness_light('not-a-date', 'daily', today=self.TODAY)[0] == '🔴'
 
-    # ⚠️ 'monthly' 已於 G2（2026-08-08）離開「日曆天門檻」體系，改判發布期數
-    #    → `freshness_bands('monthly')` 會 raise（見下一條測試），故不列入本組。
-    #    月頻的行為斷言在 `tests/test_g2_monthly_freshness.py`。
-    @pytest.mark.parametrize('freq', ['daily', 'quarterly', 'yearly',
-                                      'unknown-freq'])
+    # ⚠️ 'monthly' 已於 G2（2026-08-08）、'quarterly' 已於 G3（2026-08-08）
+    #    離開「日曆天門檻」體系，改判發布期數 → `freshness_bands()` 對兩者都會
+    #    raise（見下一條測試），故不列入本組。行為斷言分別在
+    #    `tests/test_g2_monthly_freshness.py` / `tests/test_g3_quarterly_freshness.py`。
+    @pytest.mark.parametrize('freq', ['daily', 'yearly', 'unknown-freq'])
     def test_bands_invariant_warn_le_bad(self, freq):
         """不變量：黃燈起點 ≤ 紅燈起點。
 
@@ -583,27 +583,29 @@ class TestInspectorFreshness:
         _warn, _bad = freshness_bands(freq)
         assert _warn <= _bad, f'{freq}: warn={_warn} > bad={_bad}'
 
-    def test_monthly_has_no_calendar_day_band(self):
-        """月頻不得再有日曆天門檻（G2）。
+    @pytest.mark.parametrize('freq', ['monthly', 'quarterly'])
+    def test_period_frequencies_have_no_calendar_day_band(self, freq):
+        """月頻（G2）/ 季頻（G3）不得再有日曆天門檻。
 
-        月頻 as_of 落在資料月月初，任何天數門檻都會二選一：設小 → 當期假紅
-        （B4-a 的 45 天），設大 → 漏一整期卻假綠。這裡釘死「連問都不能問」，
-        否則下一個人只會再塞第四組數字進去。
+        月頻 as_of 落在資料月月初、季頻 as_of 落在季末且四個公告截止日不等距，
+        任何天數門檻都會二選一：設小 → 當期假紅（月頻 45 天 / 季頻 150 天），
+        設大 → 漏一整期卻假綠。這裡釘死「連問都不能問」，
+        否則下一個人只會再塞一組數字進去。
         """
         from src.ui.pages.health_inspector import freshness_bands
 
         with pytest.raises(ValueError):
-            freshness_bands('monthly')
+            freshness_bands(freq)
 
-    @pytest.mark.parametrize('freq', ['daily', 'quarterly', 'yearly'])
+    @pytest.mark.parametrize('freq', ['daily', 'yearly'])
     def test_light_is_monotonic_in_lag(self, freq):
         """單調性：lag 越大燈號只會越差，不會忽紅忽綠。"""
         from shared.data_freshness import _FRESH_RANK
         from src.ui.pages.health_inspector import freshness_bands, freshness_light
 
         _warn, _bad = freshness_bands(freq)
-        # 季頻的 warn == bad（刻意無黃燈帶）→ 必須先排序去重，
-        # 否則 lag 序列會出現「151 之後又回到 150」，測出來的不是單調性而是我自己的 bug。
+        # 先排序去重：warn == bad 的頻率會讓 lag 序列出現「N+1 之後又回到 N」，
+        # 測出來的不是單調性而是我自己的 bug。
         _lags = sorted({0, 1, _warn, _warn + 1, _bad, _bad + 1, _bad + 500})
         _prev, _prev_lag = -1, None
         for _lag in _lags:

@@ -31,7 +31,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
-from shared.staleness import stale_days_threshold  # 頻率感知過期門檻 SSOT(L0)
+from shared.staleness import (  # 頻率感知過期門檻 SSOT(L0)
+    quarterly_periods_behind,
+    stale_days_threshold,
+)
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -162,8 +165,9 @@ def _tool_get_financial_health(stock_id: str) -> dict:
     if _roe_q is not None:
         _data["ROE(單季%)"] = _roe_q
     return {"ok": True, "data": _data,
-            # cadence="quarterly":季報 as_of=季末,~45d 後才公告 → 過期門檻走季頻(150d)非日頻(7d),
-            # 否則當期最新一季會被誤標「已過期100+天」(SSOT: shared/staleness.stale_days_threshold)
+            # cadence="quarterly":季報 as_of=季末 → 新鮮度改判**發布期數**(法定公告截止日
+            # Q1 5/15 / Q2 8/14 / Q3 11/14 / Q4 年報次年 3/31),不用任何日曆天門檻,
+            # 否則當期最新一季會被誤標「已過期100+天」(G3;SSOT: shared/staleness.quarterly_periods_behind)
             "provenance": {"source": "FinMind 季報 (季後~45d,公告日對齊)",
                            "as_of": fd.get("period"), "cadence": "quarterly"}}
 
@@ -348,16 +352,45 @@ def _fmt_gemini_error(prefix: str, e) -> str:
     return f"{prefix}:{msg}"
 
 
-def _annotate_staleness(result: dict) -> dict:
+def _annotate_staleness(result: dict, *, today=None) -> dict:
+    """給 tool result 補過期標記(這份 dict 會**原樣 json.dumps 進 Gemini payload**)。
+
+    ⚠️ 這裡的誤判成本比 UI 燈號高一階:模型看到 `_stale_days` 就會在建議裡寫
+    「此為 N 天前的舊資料」,而使用者只看得到那句話,看不到判準。故:
+
+    - **季頻(台股季報)不用天數門檻**(G3 2026-08-08)。季報 as_of = 季末,
+      下一份何時出現由**法定公告截止日**決定,而那四個日子不等距
+      (Q1 5/15 / Q2 8/14 / Q3 11/14 皆季末 +45 天;**Q4 年報是次年 3/31,+90 天**)
+      ⇒ Q3 之後要等 4.5 個月才有下一份,當期 Q3 的 as_of 年齡上限 196 天。
+      舊碼的 `STALE_DAYS_QUARTERLY = 150` 於是**每年約 3/02–4/14** 對一份
+      完全當期的 Q3 財報標「已過期 150+ 天」,AI 再據此寫進投資建議 ——
+      §1 反過來被濫用成「把當期當過期」。改判**落後幾個發布期**,
+      規則本體 = `shared.staleness.quarterly_periods_behind`(與健診頁同源)。
+    - 其餘 cadence(daily / 未宣告)行為完全不變,仍走
+      `stale_days_threshold`(§8.5:一次只改一件事)。
+
+    Parameters
+    ----------
+    today : date | None
+        基準日;None → UTC 今天。**測試必須注入**,否則斷言會隨執行當天飄
+        (季頻判準有 4 個相位,吃執行日的測資必然出現「某幾天才紅」的假綠/假紅)。
+    """
     try:
         prov = result.get("provenance") or {}
         as_of = prov.get("as_of")
         if as_of:
             d = datetime.fromisoformat(str(as_of)[:10]).replace(tzinfo=timezone.utc)
-            age = (datetime.now(timezone.utc) - d).days
-            # 頻率感知門檻:季報 as_of=季末,季後~45d 才公告,不可用日頻 7d 誤標過期。
-            # cadence 由各 tool 於 provenance 宣告(未宣告 → daily 最嚴)。SSOT: shared/staleness.py
-            if age > stale_days_threshold(prov.get("cadence", "daily")):
+            _today = today or datetime.now(timezone.utc).date()
+            age = (_today - d.date()).days
+            _cadence = prov.get("cadence", "daily")
+            if _cadence == "quarterly":
+                # 以「期」判定;≥1 期才標,並同時給出可行動的期數
+                # (「落後 182 日」對季報是無意義的數字,模型只會學會忽略它)。
+                _behind = quarterly_periods_behind(d.date(), today=_today)
+                if _behind is not None and _behind >= 1:
+                    result["_stale_quarters"] = _behind
+                    result["_stale_days"] = age
+            elif age > stale_days_threshold(_cadence):
                 result["_stale_days"] = age
     except Exception:
         pass
