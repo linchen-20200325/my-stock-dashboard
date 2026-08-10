@@ -1,0 +1,73 @@
+name: Update Sector Flow (Daily)
+
+# 板塊資金泡泡圖 Stage 1:每日收盤後抓「全市場三大法人淨買超 × 收盤 × 產業別」,
+# 彙總成 per-sector 每日 net 金額 → data_cache/sector_flow/ parquet + json,commit 進 repo。
+# 子目錄落點 → git 追蹤不受 data_cache/*.parquet gitignore 影響(免 -f)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: '回抓近 N 日曆日（初次部署 / 補洞用）'
+        required: false
+        default: 'false'
+      days:
+        description: 'bootstrap 回溯日曆天（預設 30 ≈ 20 交易日）'
+        required: false
+        default: '30'
+  schedule:
+    # 每日 UTC 09:30（TW 17:30 收盤後，T86 / TPEX 三大法人盤後已備齊）
+    - cron: '30 9 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  update-sector-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-sector-flow-${{ hashFiles('requirements.txt') }}
+
+      - name: Install deps
+        # 完整 requirements:import src.data.core.* / src.data.stock.* 會觸發套件
+        # __init__ sibling eager import(data_loader → streamlit、tw_stock_data_fetcher → bs4),
+        # 裝齊避免 ModuleNotFoundError(同 update_macro_history / update_fundamentals 慣例)。
+        run: pip install -r requirements.txt
+
+      - name: Fetch sector flow data
+        env:
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          NAS_BASE_URL: ${{ secrets.NAS_BASE_URL }}
+          NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.bootstrap }}" = "true" ]; then
+            python scripts/update_sector_flow.py --bootstrap --days ${{ github.event.inputs.days || '30' }}
+          else
+            python scripts/update_sector_flow.py
+          fi
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          # 子目錄 data_cache/sector_flow/ 不受 data_cache/*.parquet gitignore 影響 → 免 -f
+          git add data_cache/sector_flow/
+          if git diff --staged --quiet; then
+            echo "→ data_cache/sector_flow/ 無變更，跳過 commit"
+          else
+            git commit -m "🤖 板塊資金泡泡圖每日增量：$(date +%Y-%m-%d)"
+            git push
+          fi
