@@ -591,6 +591,12 @@ _KNOWN_VIOLATIONS[("R5", "src/data/portfolio/forward_test_store.py", "src.comput
     "shared/schemas.py 或新開 shared/forward_test_schema.py),兩層都 import L0。"
     "屬 SSOT 搬遷,低風險但要動 L2 caller,留給獨立 PR。"
 )
+# ── 規則 5:cron orchestrator import L2(scripts 分層問題 = 同 TODO C3-a)──
+_KNOWN_VIOLATIONS[("R5", "scripts/update_sector_flow.py", "src.compute.sector_flow")] = (
+    "板塊資金泡泡圖 Stage 1 cron:module-level import L2 純函式 compute_sector_daily_net "
+    "/ compute_bubble(編排 L1 fetch → L2 彙總 → parquet)。cron 為 orchestrator,呼叫 "
+    "L2 是設計本意、非真違憲。" + _TODO_SCRIPTS_LAYER
+)
 _KNOWN_VIOLATIONS[("R5", "src/services/daily_checklist.py", "src.ui.render.macro_ui_components")] = (
     "TODO(C3-e):L3 → L4。module-level,為了 re-export 8 個渲染函式維持 v18.344 "
     "拆檔前的相容介面(_hex2rgba / sparkline / stat_card ...)。"
