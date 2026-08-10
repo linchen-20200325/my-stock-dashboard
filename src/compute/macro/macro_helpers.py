@@ -1612,6 +1612,18 @@ def compute_five_bucket_summary(
         "ism_pmi":       _num(_g(macro_info, "ism_pmi", "value")),
         "us_core_cpi":   _num(_g(macro_info, "us_core_cpi", "yoy")),
         "tw_export":     _num(_g(macro_info, "tw_export", "yoy")),
+        # ⚠️ H2 2026-08 揭露（**本版不改行為，只寫清楚現況**）：
+        #   `bias_info` 由 `src/data/macro/macro_snapshot.compute_twii_bias` 產生，
+        #   它在 TWII 歷史 < 240 天時**用現有天數的均值當 MA240**
+        #   （`_cs.tail(min(240, _n)).mean()`），並回傳 `data_days` + `is_estimated=True`。
+        #   也就是說 `bias_240` 有可能其實是「距 MA90 的乖離」。
+        #   目前全 repo **只有 `src/ui/tabs/macro/section_long.py` 一處**會把
+        #   `is_estimated` 顯示出來（標題加「（估算）」+「N天資料」）；本函式與
+        #   `services/app_ai_service.build_llm_context`、`macro/section_news_ai`、
+        #   `section_warroom`、`section_mid`、`stock_sections/section_op_recommendation`
+        #   等消費點都只取 `bias_240` 數值，估算旗標在這裡被靜默丟掉。
+        #   → 本行若改成「is_estimated 時回 None」會**改變五桶燈號**（行為變更），
+        #     依 §-1 需 user 指派才動；先在此留下標記，避免下一個讀者以為已揭露。
         "bias_240":      _num(_g(bias_info, "bias_240")),
         # v19.175 P0-B:接線(原本 values 完全沒有這兩個 key → 永久 gray)。
         # 單位皆與 spec 門檻同刻度:us10y=百分點(4.5/5.0)、dxy=指數點(105/110)。

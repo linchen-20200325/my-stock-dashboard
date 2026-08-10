@@ -447,6 +447,27 @@ RS_SIGMA_MILD_MIN: float = 0.3
 RS_SIGMA_LAG_MAX: float = -0.3
 """RS σ 落後門檻：avg_rs < −0.3σ → 🟢 弱勢（弱於大盤，空頭優先出清）；[−0.3,0.3) → ⚪ 同步。原 v5_modules.py:130 inline"""
 
+RS_MARKET_SIGMA_MIN_PCT: float = 0.01
+"""RS σ 標準化的**分母下限**（單位：%，＝大盤日報酬標準差 ×100）。
+
+`m_std ≤ 0.01%` 視為「大盤波動率算不出來」——分母趨近 0 時
+`(個股區間報酬 − 大盤區間報酬) / σ` 不再是相對強度，而是雜訊放大器
+（任何微小超額都會被放大成任意大的 σ）。
+
+⚠️ **H2 2026-08 語意修正（數值未變，變的是「算不出來時回什麼」）**
+原 `v5_modules.calc_relative_strength` 寫 `_rs = ... if m_std > 0.01 else 0.0`。
+`0.0σ` 在本專案的 RS 分級裡**有明確語意**：
+`RS_SIGMA_LAG_MAX(-0.3) ≤ 0.0 < RS_SIGMA_MILD_MIN(0.3)` ⇒ 「⚪ 同步大盤」。
+於是「分母不成立、算不出來」被顯示成「已測量，結論是與大盤同步」
+（§1：不確定 ≠ 中性）。現改為回 `None`，上游
+`rs_leader_screener.score_rs_leader` 依既有 `avg_rs is None` 分支判
+`TIER_INSUFFICIENT`（該檔不進排行），與其他缺料路徑一致。
+
+觸發現實嗎：TWII 日報酬 σ 幾乎不可能 ≤0.01%，所以這是**潛伏**而非正在燒。
+但當大盤序列被凍結（管線卡住、連日同值 → σ 恰為 0）或 σ 算成 NaN 時它必然觸發，
+而那正是最需要 fail loud 的時刻 —— 舊行為會讓**全池每一檔**都拿到 0.0σ「同步大盤」。
+※ 判斷式含 NaN guard：`float('nan') > x` 恆 False，NaN 亦走「不可用」分支。"""
+
 # ── 獲利品質 SQ（calc_quality_score）─────────────────────────
 SQ_GM_TREND_DELTA_PCT: float = 1.0
 """毛利率趨勢顯著門檻：近2季均 - 前2季均 > +1pp → ↑；< -1pp → ↓；其間 → 持穩。原 scoring_engine.py:470 inline"""
@@ -1118,12 +1139,37 @@ USDTWD_SANITY_MAX: float = 40.0
 
 # ── #3 外資期貨防禦訊號(macro_helpers 健康評分)──
 FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD: int = 30000
-"""外資期貨淨部位「大空單防禦訊號」門檻(單位:口,絕對值)。
-macro_helpers.compute_macro_health:健康評分 <2 且外資淨空單 |部位| >30000 口
-且方向為空(<0)→ 觸發 _defense 防禦旗標。約 75 億 TWD 規模。
-原 src/compute/macro/macro_helpers.py:92 inline。注意:與 v4_strategy_engine 的
-FOREIGN_FUTURES_HIGH/MEDIUM_RISK(-20000/-10000)語意不同 — 後者是分級紅黃燈,
-本常數是健康評分內的單一防禦觸發,刻意分離。"""
+"""外資期貨淨部位「大空單防禦訊號」門檻(單位:**TX 當量口**,絕對值)。
+
+判定式(唯一實作):`shared.regime_arbiter.is_foreign_futures_defense` ——
+市場評分 < `DEFENSE_MAX_MARKET_SCORE`、淨口為負、且 |淨口| > 本門檻
+→ `arbitrate_regime` 走 `SOURCE_DEFENSE_FUTURES`(🔴 bear + defense=True)。
+輸入為 `li_latest['外資大小']`,其定義見 `src/data/macro/leading_indicators.py`:
+**外資大小 = 外資 TX 淨口 + 0.25 × 外資 MTX 淨口**
+(MTX 契約乘數 50 元/點 ÷ TX 200 元/點 = 0.25)⇒ 單位是「大台 TX **當量**口」,
+不是原始口數加總(v19.172 P0a 已正名)。
+
+⚠️ **H2 2026-08:原文「約 75 億 TWD 規模」已移除 —— 那是口徑未定,不是筆誤。**
+同一個「30,000 口」在不同口徑下差兩個數量級,而原文沒說是哪一個:
+
+  - **名目價值(notional)** = 口數 × 指數點數 × 200 元/點。
+    以指數 24,000 點計 → 30,000 × 24,000 × 200 = **1,440 億 TWD**。
+    ⚠️ 隨指數浮動 —— 任何寫死的「約 N 億」都會隨大盤漲跌失真。
+  - **保證金(margin)** = 口數 × TAIFEX 當期原始保證金/口。原始保證金由期交所
+    依波動度**不定期調整**(近年約 20~30 萬/口量級)→ 30,000 口約 **60~90 億**。
+    「約 75 億」極可能出自此(30,000 × 25 萬 = 75 億),但同樣**會過期**。
+  - 更早的文案曾寫「~6 億」,兩個口徑都對不上(30,000 口 × 200 元/點 = 600 萬
+    **元/點**,疑似把「每點價值」當成總值)—— 三個數字互不相容。
+
+**§1**:與其填一個看似合理、卻會隨指數與保證金調整而失效的金額,不如標明
+「金額口徑未定」。**判定式只用口數,沒有任何 code 依賴這個金額** —— 它純屬說明文字。
+📌 **待 user 裁示**:說明文字要採哪個口徑(名目 / 保證金 / 契約當量),
+或維持不引用金額。裁示後應改為由公式插值(指數點數 / 保證金率當參數),
+不再把換算結果寫死在 docstring 裡。
+
+注意:與 v4_strategy_engine 的 FOREIGN_FUTURES_HIGH/MEDIUM_RISK(-20000/-10000)
+語意不同 — 後者是分級紅黃燈,本常數是 regime 仲裁內的單一防禦觸發,刻意分離。
+原 src/compute/macro/macro_helpers.py:92 inline(判定 v19.182 C1 已下沉 arbiter)。"""
 
 # ── #4 VPOC 套牢賣壓距離(v4_strategy_engine Task 3)──
 VPOC_PRESSURE_DISTANCE_THRESHOLD: float = 0.15

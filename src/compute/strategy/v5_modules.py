@@ -22,6 +22,7 @@ from shared.signal_thresholds import (
     RS_SIGMA_LEAD_MIN,   # v19.70:RS σ 分級 SSOT（原 1.0/0.3/-0.3 inline，抗跌 RS 選股共用）
     RS_SIGMA_MILD_MIN,
     RS_SIGMA_LAG_MAX,
+    RS_MARKET_SIGMA_MIN_PCT,  # H2 2026-08:σ 分母下限（原 inline `m_std > 0.01`）
     VOLUME_RATIO_SURGE,  # v19.95 批次3(a):布林突破量能確認 gate（既有 SSOT 1.5×,不新增常數）
 )
 
@@ -104,9 +105,16 @@ def calc_relative_strength(df_stock: pd.DataFrame, df_market: pd.DataFrame,
         periods:   多週期評估（預設 20/60/120 日）
 
     Edge E-C(資料不足): 若 len < period → 跳過該週期
-    Edge E-B(波動率=0): σ=0 時 RS=0，避免 ZeroDivisionError
+    Edge E-B(大盤 σ 不可用): σ ≤ RS_MARKET_SIGMA_MIN_PCT 或 NaN → 該週期 rs=None
+        （**不是 0.0**，見下方 H2 註解）；全週期皆不可用 → signal「⚪ 無法標準化」、
+        avg_rs=None，但區間報酬仍照實回傳。
 
-    Returns: {rs_scores: {20: 1.23, 60: 0.8, ...}, signal, color, msg}
+    Returns: {rs_scores: {20: 1.23, 60: 0.8, ...}, signal, color, msg,
+              avg_rs, avg_stock_ret, avg_market_ret}
+        ⚠️ `avg_rs` 與 `rs_scores` 的值**可能為 None**（= 算不出來），
+        消費端格式化前必須先判 None。既有唯一消費點
+        `rs_leader_screener.score_rs_leader` 早已有 `avg_rs is None` 分支
+        （判 TIER_INSUFFICIENT），故本次改動對它是既有路徑、非新分支。
     """
     R = '#da3633'; G = '#2ea043'; Y = TRAFFIC_YELLOW; N = '#484f58'
 
@@ -117,22 +125,45 @@ def calc_relative_strength(df_stock: pd.DataFrame, df_market: pd.DataFrame,
         s_ret = (df_stock['close'].iloc[-1] / df_stock['close'].iloc[-n] - 1) * 100
         m_ret = (df_market['close'].iloc[-1] / df_market['close'].iloc[-n] - 1) * 100
         m_std = df_market['close'].pct_change().tail(n).std() * 100
-        _rs = round((s_ret - m_ret) / m_std, 2) if m_std > 0.01 else 0.0
+        # ── H2 2026-08 §1:σ 不可用 → rs=None（「算不出來」），不再回 0.0 ──────
+        # 舊碼 `... if m_std > 0.01 else 0.0`。0.0σ 在本專案 RS 分級裡**有語意**:
+        # RS_SIGMA_LAG_MAX(-0.3) ≤ 0.0 < RS_SIGMA_MILD_MIN(0.3) ⇒「⚪ 同步大盤」
+        # ⇒ 分母不成立被顯示成「已測量，結論是與大盤同步」（不確定 ≠ 中性）。
+        # NaN 亦走此分支（`nan > x` 恆 False，`m_std == m_std` 為 NaN guard）。
+        _usable = (m_std == m_std) and (m_std > RS_MARKET_SIGMA_MIN_PCT)
+        _rs = round((s_ret - m_ret) / m_std, 2) if _usable else None
         return {"rs": _rs, "s_ret": round(s_ret, 2), "m_ret": round(m_ret, 2)}
 
     detail = {p: _rs_one(p) for p in periods}
     scores = {p: (d["rs"] if d else None) for p, d in detail.items()}
-    valid  = [d for d in detail.values() if d is not None]
+    # 兩個口徑刻意分離(H2 2026-08):
+    #   _ret_ok = 區間報酬算得出來的週期 → avg_stock_ret / avg_market_ret
+    #   _rs_ok  = 連 σ 標準化也算得出來的週期 → avg_rs
+    # σ 不可用時「個股/大盤區間報酬」仍是**真實讀數**，沒理由連它一起丟；
+    # 但 avg_rs 一定要是 None，否則就會退化成舊碼那個 0.0σ 假讀數。
+    _ret_ok = [d for d in detail.values() if d is not None]
+    _rs_ok = [d for d in _ret_ok if d["rs"] is not None]
 
-    if not valid:
+    if not _ret_ok:
         return {"rs_scores": scores, "signal": "⚪ 資料不足", "color": N,
                 "avg_rs": None, "avg_stock_ret": None, "avg_market_ret": None,
                 "msg": "資料不足，無法計算相對強度"}
 
-    avg_rs = round(sum(d["rs"] for d in valid) / len(valid), 2)
     # v19.70:回原始報酬均值(顯示用)。σRS 排名 + 這兩欄讓 UI 直接標「個股 vs 大盤」超額。
-    avg_stock_ret = round(sum(d["s_ret"] for d in valid) / len(valid), 2)
-    avg_market_ret = round(sum(d["m_ret"] for d in valid) / len(valid), 2)
+    avg_stock_ret = round(sum(d["s_ret"] for d in _ret_ok) / len(_ret_ok), 2)
+    avg_market_ret = round(sum(d["m_ret"] for d in _ret_ok) / len(_ret_ok), 2)
+
+    if not _rs_ok:
+        # 有區間報酬、但大盤 σ 全週期不可用（σ≈0 / NaN；典型成因＝大盤序列凍結）。
+        # §1:不拿 0.0σ 頂替 —— 那會被分級成「⚪ 同步大盤」＝憑空生出一個測量結論。
+        return {"rs_scores": scores, "signal": "⚪ 無法標準化", "color": N,
+                "avg_rs": None, "avg_stock_ret": avg_stock_ret,
+                "avg_market_ret": avg_market_ret,
+                "msg": (f"大盤日報酬 σ ≤ {RS_MARKET_SIGMA_MIN_PCT:g}%（趨近 0 或無法計算），"
+                        f"RS 的分母不成立 → 不輸出 σ 讀數。"
+                        f"區間報酬:個股 {avg_stock_ret:+.2f}% vs 大盤 {avg_market_ret:+.2f}%")}
+
+    avg_rs = round(sum(d["rs"] for d in _rs_ok) / len(_rs_ok), 2)
 
     if avg_rs >= RS_SIGMA_LEAD_MIN:
         signal, color = "🔴 逆勢強股（領漲）", R

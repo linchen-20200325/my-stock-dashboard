@@ -14,6 +14,13 @@ import streamlit as st
 from shared.colors import (
     TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW,
 )
+# H1 §3.3：先行指標表「選PCR」欄的著色帶 + 平價點（百分比刻度 SSOT）。
+# 原 caption 手抄「PCR<100偏空」，對不上它所標示的那張表（<80 紅 / >120 綠）。
+from shared.pcr_scale import (
+    PCR_PCT_COMPLACENCY_MAX,
+    PCR_PCT_FEAR_MIN,
+    PCR_PCT_PARITY,
+)
 from shared.signal_thresholds import (
     # F1 v19.184 §3.3：先行指標表 caption 的「外資空單>3萬 / 前五大>1萬」原為手抄。
     FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD,
@@ -302,16 +309,37 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             _d0 = _li_dates[0]
             _d1 = _li_dates[-1]
             # F1 v19.184 §3.3：前兩條門檻插 SSOT（原手抄「3萬」「1萬」）。
-            # ⚠️ 第三條「PCR<100偏空」**刻意原樣保留** —— 它對不上任何判定式：
-            #   系統的 PCR 規則是 `config.MACRO_ALERT_RULES['pcr']`
-            #   （比值刻度 red_above 1.5 / yellow_above 1.2 / yellow_below 0.7 /
-            #    red_below 0.5），沒有「1.0（＝百分比刻度 100）」這條線。
-            #   §1：不會為了讓它「有 SSOT」而挑一條線硬套（那是發明門檻），
-            #   也不擅自改寫使用者已習慣的文字 —— 列為待確認項回報，由 user 定奪。
+            # H1：第三條原為手抄的「PCR<100偏空」，本版改寫。查證結果與 F1 當時
+            # 的註記**不同**，記在這裡免得又被改回去：
+            #   (a) 「100」並非憑空 —— 本頁最底下的「🎯 籌碼綜合判斷」計分器確實
+            #       用 >130 / >100 / ≤100 三段（見本檔下方 `_score` 那段）。
+            #   (b) 但這行 caption 是**它正下方那張表**的圖例，而那張表
+            #       （`render_leading_table`）的著色判定式是 <80 紅 / >120 綠。
+            #       圖例標的線 ≠ 表格用的線 → 讀數 90 的那天，caption 說「偏空」、
+            #       表格塗中性色。
+            #   (c) 本區顯示的 PCR 是**百分比刻度**（126.8 這種數字），不是比值。
+            #       `li_latest['選PCR']` 由 `leading_indicators` 寫入時已 ×100，
+            #       B2-b 的 `normalize_pcr_to_ratio()` 只在取值端換算給規則引擎/
+            #       LLM 用，**沒有回寫** li_latest。所以這行不可改寫成比值刻度，
+            #       否則會出現「caption 說 0.8、表格印 126.8」的新矛盾。
+            # → 改為指向表格真正會亮燈的兩條帶（SSOT: shared/pcr_scale），
+            #   並另起一行把刻度與「1.0 平價點是常識、不是本系統門檻」講明。
             st.caption(
                 f'📅 資料期間：{_d0} ~ {_d1}  共 {len(df_li_show)} 筆  '
                 f'｜外資空單>{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}口⚠️  '
-                f'前五大>{abs(TOP5_LARGE_TRADER_NET_WARN_LOTS):,}口⚠️  PCR<100偏空'
+                f'前五大>{abs(TOP5_LARGE_TRADER_NET_WARN_LOTS):,}口⚠️  '
+                f'選PCR<{PCR_PCT_COMPLACENCY_MAX:.0f}🔴過樂觀／'
+                f'>{PCR_PCT_FEAR_MIN:.0f}🟢恐慌區'
+            )
+            st.caption(
+                f'ℹ️ 本表「選PCR」為**百分比刻度**（＝標準 Put/Call 比值×100，'
+                f'例：{PCR_PCT_FEAR_MIN:.0f} ＝ 比值 {PCR_PCT_FEAR_MIN / 100:.1f}）。'
+                f'比值 1.0（本表 {PCR_PCT_PARITY:.0f}）是選擇權 put/call 的**平價點**，'
+                f'屬市場常識，**不是本系統的判定線**；'
+                f'本表著色帶為 <{PCR_PCT_COMPLACENCY_MAX:.0f} 紅（保護不足）／'
+                f'>{PCR_PCT_FEAR_MIN:.0f} 綠（避險濃厚）。'
+                f'下方「⚡ 進階警示」與「🎯 籌碼綜合判斷」另有各自的敏感度，'
+                f'三者用途不同、刻意不合併。'
             )
             # v18.342 PR-L2:stale fallback 顯示「📦 上次有效資料」chip(§2.4)
             if _is_stale_li:

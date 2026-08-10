@@ -479,7 +479,9 @@ with tab_stocks:
         # v19.111 選股網極簡版：① 基本面優選（自動）→ ② 勾條件（4 因子可複選）→ ③ 一鍵出名單。
         # 只留最上方「開始選股」一顆按鈕；移除下方進階掃描 expander + 籌碼×6 picker（user 要求極簡）。
         st.markdown('### 🔭 選股網 — 勾條件 → 一鍵選股')
-        from src.ui.tabs.tab_stock_picker import render_prescreen_panel
+        from src.ui.tabs.tab_stock_picker import (
+            render_prescreen_panel, summarize_factor_hits,
+        )
         from src.ui.tabs.yield_screener import fetch_pe_name_maps
         from src.services.fundamental_screener_service import (
             SCREEN_ANGLE_LABELS, get_fundamental_survivors, get_ranked_picks,
@@ -558,13 +560,21 @@ with tab_stocks:
             else:
                 # 🔭 選股結果總覽卡(v19.167:一眼看命中,對稱個股 🧭 / ETF 🚦 頁頂卡)。
                 # 命中數只在該因子有掃到結果(session 值存在)時顯示,§1 掃失敗不假報 0。
-                _hit_bits = []
-                if 'shortage' in _factors and st.session_state.get('_shortage_rows') is not None:
-                    _hit_bits.append(f'缺貨命中 {len(st.session_state["_shortage_rows"])}')
-                if 'rs_leader' in _factors and st.session_state.get('_rs_rows_all') is not None:
-                    _hit_bits.append(f'抗跌RS {len(st.session_state["_rs_rows_all"])}')
-                if 'trend' in _factors and st.session_state.get('_trend_map') is not None:
-                    _hit_bits.append(f'跨季轉強 {len(st.session_state["_trend_map"])}')
+                #
+                # ── H2 2026-08:三個裸 len() 冠「命中」全部名不副實,改吃 SSOT tier ──
+                # 舊碼:`缺貨命中 {len(_shortage_rows)}` / `抗跌RS {len(_rs_rows_all)}` /
+                #      `跨季轉強 {len(_trend_map)}`。三個分母全被當成分子印出去:
+                #   - _shortage_rows 含 TIER_WEAK「⬜ 不明顯」→ 是被評分數不是命中數
+                #   - _rs_rows_all 走 beat_only=False → 含「同步大盤 / 落後大盤」,不是抗跌數
+                #   - _trend_map 含 favorable_count==0 的檔 → 是「可算檔數」≈ 全市場 ~2000
+                # 計數邏輯抽 `tab_stock_picker.summarize_factor_hits`(純函式,可單測);
+                # 分子一律用既有 tier SSOT 邊界,不新增門檻;分子/分母同時顯示。
+                _hit_bits = summarize_factor_hits(
+                    _factors,
+                    shortage_rows=st.session_state.get('_shortage_rows'),
+                    rs_rows=st.session_state.get('_rs_rows_all'),
+                    trend_map=st.session_state.get('_trend_map'),
+                )
                 _hit_txt = ' · '.join(_hit_bits) if _hit_bits else '僅基本面四項全過'
                 st.markdown(
                     f'<div style="background:#0d1117;border:2px solid #3fb950;border-radius:10px;'

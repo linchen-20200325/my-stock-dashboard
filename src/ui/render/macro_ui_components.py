@@ -171,8 +171,21 @@ def margin_card(margin):
         return margin_card(None)
     mc = (TRAFFIC_RED if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI
           else (TRAFFIC_YELLOW if margin > MARGIN_BALANCE_WARN_THRESHOLD_YI else TRAFFIC_GREEN))
-    label = ('🔴超過3400億高危' if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI
-             else ('⚡超過2500億警戒' if margin > MARGIN_BALANCE_WARN_THRESHOLD_YI
+    # H1 §3.3：label 裡的門檻原為**手打**（'🔴超過3400億高危' / '⚡超過2500億警戒'），
+    # 比較式卻吃 SSOT 常數 —— 只要有人調 `MARGIN_BALANCE_*_THRESHOLD_YI`，顏色會跟著
+    # 變、字卻還在講舊數字，卡片當場開始說謊（這正是 B7 在教學卡上修過的同型缺陷）。
+    #
+    # 為什麼**不**走 `shared/edu_tokens` 的 §§TOKEN§§ 機制（F1 v19.187）：
+    # 那套機制是為了「文案存在**資料結構**裡、無法用 f-string」的場景設計的
+    # （`data_registry.EDU_GUIDE` 的 how_to_read 是 list[tuple]、`tab_edu` 是整段
+    # markdown blob）。本函式本來就是在 Python 裡組字串，直接插值即可拿到完全相同
+    # 的「改常數→文案跟著動」保證，卻少一層 dict 建置與字串掃描 —— 套 token 機制在
+    # 這裡屬 §8.1 step 6 的「用不到的抽象」。
+    # 格式用 `:.0f` 而非 `:,.0f`：維持原本「3400」的無千分位樣式，畫面零位移。
+    label = (f'🔴超過{MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:.0f}億高危'
+             if margin > MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI
+             else (f'⚡超過{MARGIN_BALANCE_WARN_THRESHOLD_YI:.0f}億警戒'
+                   if margin > MARGIN_BALANCE_WARN_THRESHOLD_YI
                    else '✅安全水位'))
     return (f'<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;padding:14px;">'
             f'<div style="font-size:11px;color:#484f58;">融資餘額</div>'

@@ -27,9 +27,22 @@ Stage 2：籌碼與技術面鎖定（6 項）
 Stage 3：AI 綜合建議
 - ✅ Gemini Markdown 報告 — 積極型 / 保守型 / 止損紀律三型分析
 
-呼叫端
-======
-- app.py 於「💎 高息網」(tab_screener) 候選清單下方呼叫，candidates 帶入 render_yield_screener() 的篩選結果
+呼叫端（H2 2026-08 更正 —— 舊文寫的三件事全部不成立）
+======================================================
+舊文：「app.py 於『💎 高息網』(tab_screener) 候選清單下方呼叫，candidates 帶入
+       render_yield_screener() 的篩選結果」。逐項查證：
+  (a) **「💎 高息網」這個模組不存在** —— `render_yield_screener` 全 repo 零定義
+      （`src/ui/tabs/yield_screener.py` 只有 `render_yield_confirm` 等）。
+      選股分頁的真名是 **「🔭 選股網」**（app.py `st.tabs([... '🔭 選股網'])`）。
+  (b) app.py **不再呼叫本函式** —— v19.111 選股網極簡化時移除，並由
+      `tests/test_app_no_magic_bare_ternary.py::test_screener_keeps_only_single_button_flow`
+      反向釘住（app.py 再出現 `render_tab_stock_picker` = 測試紅燈）。
+  (c) 候選來源也不是殖利率篩選，而是基本面存活池 / 使用者輸入。
+
+現況（2026-08 實測）：
+- `render_tab_stock_picker` 的唯一 production caller = `src/ui/tabs/tab_stock_grp.py`
+  （🏆 個股組合 → 三階段濾網），傳 `source_label='個股組合輸入'`。
+- `render_prescreen_panel` 由 app.py「🔭 選股網」①基本面優選 呼叫。
 """
 from __future__ import annotations
 
@@ -41,6 +54,16 @@ from shared.fundamental_prescreen_thresholds import (
     DEBT_RATIO_MAX as _PRESCREEN_DEBT_MAX,
     EPS_MIN as _PRESCREEN_EPS_MIN,
     PRESCREEN_REQUIRED_PASSES as _PRESCREEN_N,
+)
+# H2 2026-08：選股網總覽卡「本次因子」摘要用的既有 tier SSOT（不新增門檻）。
+# 兩個模組都有 `TIER_MID` 等同名常數 → 一律加前綴 alias，避免同名不同義互相覆蓋。
+from shared.rs_screen_thresholds import (
+    TIER_LEAD as _RS_TIER_LEAD,
+    TIER_MILD as _RS_TIER_MILD,
+)
+from shared.shortage_screen_thresholds import (
+    TIER_MID as _SHORT_TIER_MID,
+    TIER_STRONG as _SHORT_TIER_STRONG,
 )
 from src.config import FINMIND_API_URL  # Batch 10 v18.412 SSOT
 
@@ -204,8 +227,102 @@ def filter_by_custom_conditions(results, selected_keys, min_pass: int):
     return [r for r in results if count_condition_passes(r, selected_keys) >= _n]
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# 🔭 選股網總覽卡「本次因子」摘要（H2 2026-08）
+# ══════════════════════════════════════════════════════════════════════════════
+# 【修的是什麼】app.py 的選股結果總覽卡原本印三個裸 `len(...)` 並冠上「命中」：
+#   ① 「缺貨命中 N」的 N = len(_shortage_rows)。但
+#      `shortage_screener_service._RANKABLE_TIERS = (TIER_STRONG, TIER_MID, TIER_WEAK)`
+#      **含 TIER_WEAK（畫面字樣「⬜ 不明顯」）** ⇒ 那是「被評分的檔數」，不是命中數。
+#   ② 「抗跌RS N」的 N = len(_rs_rows_all)。但選股網走
+#      `run_rs_leader_scan(beat_only=False, top_n=RS_SCAN_MAX)`，
+#      `RS_RANKABLE_TIERS` **含 TIER_SYNC（同步大盤）/ TIER_LAG（落後大盤）**
+#      ⇒ 冠上「抗跌」不成立。`SCREEN_ANGLE_LABELS` 早在 B6-b 就為同一理由改過文案
+#      （「不保證贏大盤」），總覽卡沒跟上 —— 同一個事實，同一頁兩種說法。
+#   ③ 「跨季轉強 N」的 N = len(_trend_map)。但 `build_trend_map` 只濾掉
+#      `favorable_of == 0`（＝四個趨勢因子全算不出來），
+#      **`favorable_count == 0`（四項全不佳）照樣有 key** ⇒ 那是「有資料可算的檔數」，
+#      規模≈全市場（app.py 同頁另一個 expander 自己就寫「全市場 ~2000 檔」）。
+#
+# 【修法】不發明新門檻：分子一律取**既有 SSOT tier 邊界**，並且分子/分母一起印，
+#         讓「N 檔裡有 M 檔真的有訊號」直接看得到。
+_SHORTAGE_SIGNAL_TIERS: tuple[str, ...] = (_SHORT_TIER_STRONG, _SHORT_TIER_MID)
+"""缺貨「有訊號」= 🟥 強缺貨 + 🟧 中度（＝ 分數 ≥ SHORTAGE_TIER_MID_MIN）。
+排除 ⬜ 不明顯（TIER_WEAK）—— 它的畫面字樣自己就叫「不明顯」。"""
+
+_RS_RESILIENT_TIERS: tuple[str, ...] = (_RS_TIER_LEAD, _RS_TIER_MILD)
+"""RS「偏強以上」= 🔴 逆勢強股 + 🟡 偏強抗跌（＝ avg_rs ≥ RS_SIGMA_MILD_MIN）。
+排除 ⚪ 同步大盤 / 🟢 落後大盤。"""
+
+
+def _count_tier(rows, tiers) -> int | None:
+    """rows 中 `_tier` ∈ tiers 的筆數；**沒有任何一列帶 `_tier` 時回 None**。
+
+    §1：None 的語意是「分級欄不存在 → 數不出來」，不是「0 筆」。
+    caller 必須據此改印誠實文案，不得把 None 當 0 顯示。
+    （`_tier` 是 shortage_screener / rs_leader_screener `to_row()` 的固定欄位，
+      正常情況不會缺；這條防的是上游 schema 悄悄改掉時不要靜默報 0。）
+    """
+    _typed = [r for r in rows if isinstance(r, dict) and r.get('_tier')]
+    if rows and not _typed:
+        return None
+    return sum(1 for r in _typed if r.get('_tier') in tiers)
+
+
+def _is_favorable(v) -> bool:
+    """跨季趨勢 favorable_count > 0（至少一項方向為佳）。非數字 → False（不猜）。"""
+    try:
+        return float(v) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def summarize_factor_hits(factors, *, shortage_rows=None, rs_rows=None,
+                          trend_map=None) -> list[str]:
+    """🔭 選股網總覽卡「本次因子」片語清單（純函式：不讀 session_state、不碰 streamlit）。
+
+    Args:
+        factors: 本次勾選的因子 key（SCREEN_ANGLE_LABELS 的值，如 'shortage'）。
+        shortage_rows / rs_rows: 掃描結果 list[dict]（含 `_tier`）。
+            **None = 沒掃 / 掃失敗 → 不產生片語**（§1：掃失敗不假報 0，
+            沿用 app.py 原本的 `is not None` 判斷）；`[]` = 掃了但零結果 → 印 0/0。
+        trend_map: `build_trend_map()` 的 {stock_id: favorable_count 0-4}。
+
+    Returns:
+        list[str]，每個片語都是「分子/分母」形式，caller 以 ' · ' 串接。
+    """
+    _f = set(factors or ())
+    out: list[str] = []
+
+    if 'shortage' in _f and shortage_rows is not None:
+        _n = len(shortage_rows)
+        _sig = _count_tier(shortage_rows, _SHORTAGE_SIGNAL_TIERS)
+        out.append(f'缺貨 訊號{_sig}/已評分{_n}' if _sig is not None
+                   else f'缺貨 已評分{_n}（分級欄缺失，訊號數不明）')
+
+    if 'rs_leader' in _f and rs_rows is not None:
+        _n = len(rs_rows)
+        _res = _count_tier(rs_rows, _RS_RESILIENT_TIERS)
+        # 刻意不寫「抗跌 N」：這份排行含同步/落後分級（beat_only=False）。
+        out.append(f'RS 偏強以上{_res}/已排名{_n}' if _res is not None
+                   else f'RS 已排名{_n}（分級欄缺失，偏強數不明）')
+
+    if 'trend' in _f and trend_map is not None:
+        _n = len(trend_map)
+        _fav = sum(1 for v in trend_map.values() if _is_favorable(v))
+        out.append(f'跨季 佳項>0 共{_fav}/可算{_n}')
+
+    return out
+
+
 def render_tab_stock_picker(gemini_fn=None, candidates=None,
-                              source_label: str = '高息網',
+                              # H2 2026-08:預設值原為 '高息網' —— 那個模組全 repo 零定義
+                              # (見檔頭「呼叫端」段)，而本參數會直接插進 4 處 st.caption /
+                              # st.markdown / st.multiselect 標籤渲染到畫面。現況所有 caller
+                              # 都顯式傳值(tab_stock_grp='個股組合輸入'、測試='基本面優選')，
+                              # 所以這個預設**沒有正在**渲染 —— 但它是「哪天有人漏傳就印出
+                              # 不存在模組名」的地雷。改成中性且為真的字串。
+                              source_label: str = '上游候選',
                               key_prefix: str = 'picker',
                               *, auto_run: bool = False,
                               auto_pick: bool = False,
@@ -214,12 +331,14 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
     """v19.58：source_label + key_prefix 抽參數，個股組合 tab 共用此函式（不複製 Stage 1/2/3 邏輯）。
 
     candidates: pandas.DataFrame，需含 '代碼' 欄。為 None / 空 → 顯示 info 提示。
-    source_label: 候選清單來源顯示名（高息網 / 個股組合輸入 / ...）。
+    source_label: 候選清單來源顯示名。實際在用的值：'個股組合輸入'(tab_stock_grp)、
+    '基本面優選'(測試)。**會渲染到畫面**（caption / multiselect 標籤共 4 處），
+    故不得填不存在的模組名（H2 2026-08 移除舊預設 '高息網'）。
     key_prefix: 所有 st.* widget key 前綴，避免同一頁多處渲染碰撞。
     auto_run: v18.223 — True 時跳過「開始三階段篩選」按鈕直接跑，AI 三型報告也自動生成（cache 防 rerun 重跑）。
     fh_map: v18.453 — dict[代碼, analyze_financial_health() 結果]。個股組合 tab 已跑過
     「批次財報體檢」時傳入,Stage 1 負債比檢查會直接沿用其判定(避免同頁兩處門檻不一致);
-    高息網等未跑財報體檢的呼叫端省略此參數即可,行為與改動前完全相同。
+    未跑財報體檢的呼叫端省略此參數即可,行為與改動前完全相同。
     """
     # ─ Late imports（避免循環 import + 啟動時間）─
     import datetime as _dt_sp
@@ -617,7 +736,7 @@ def _check_debt_ratio(fs: dict, fh_result: dict | None = None) -> str:
     與本函式舊版各自獨立計算相比,同一檔股票不會在「財報體檢」顯示🟡、「智慧選股」
     卻顯示✅(user 回報:兩張表門檻不一致造成混淆,40/60% 三級 vs 本函式舊版 <50%
     二分)。financial_health_engine 版本另有負債比為 0 時從原始科目重算的 fallback,
-    判定更完整。無 fh_result(如「高息網」等未跑財報體檢的呼叫場景)則維持原邏輯。
+    判定更完整。無 fh_result(未跑財報體檢的呼叫場景)則維持原邏輯。
     """
     if fh_result:
         _fsm = fh_result.get('financial_structure_module', {}).get('Debt_Ratio', {})

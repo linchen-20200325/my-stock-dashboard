@@ -4,7 +4,9 @@
 
 職責(L3 service):
 - 每次頁面渲染補建 data_registry 中的個股(t2_data)、ETF 單一(etf_single_data)、
-  ETF 組合(etf_portfolio_data)、ETF 回測(etf_backtest_data)、比較排行(t3_data)
+  ETF 組合(etf_portfolio_data)、比較排行(t3_data)
+  ⚠️ H1 起**不再補建「ETF 回測」** —— 該功能 v18.265 已刪、`etf_backtest_data`
+  零寫入者,補建只會在資料診斷頁產生一列永久紅燈(詳見下方該處註解)
 - 缺失大盤項目時從 cl_data + macro_info 補建(rebuild fallback)
 - 整段 try/except 內聚,失敗 print 不向 caller 拋
 
@@ -160,15 +162,15 @@ def patch_registry(
             _rp['[ETF組合] 再平衡分析'] = {'last_updated': 'N/A', 'rows': 0,
                                           'category': CAT_ETF, 'frequency': 'daily', 'missing': True}
 
-        # ── ETF 回測 ──────────────────────────────────────────────────
-        _e3rp = st.session_state.get('etf_backtest_data') or {}
-        if _e3rp.get('cagr') is not None:
-            _e3n = len(_e3rp.get('weights', {}))
-            _rp[f'[ETF回測] 回測績效（{_e3n}檔）'] = {'last_updated': _proxy_rp, 'rows': _e3n,
-                                                     'category': CAT_ETF, 'frequency': 'daily'}
-        else:
-            _rp['[ETF回測] 回測績效'] = {'last_updated': 'N/A', 'rows': 0,
-                                        'category': CAT_ETF, 'frequency': 'daily', 'missing': True}
+        # ── ETF 回測 —— H1 移除(功能不存在,登記它只會製造永久紅燈)────────
+        # 原本這裡讀 `etf_backtest_data` 並在拿不到 `cagr` 時寫一列 missing=True。
+        # ETF 回測分頁 v18.265 隨 `etf_tab_backtest.py` / `backtest_engine.py`
+        # 整批刪除,該 session key 全 repo **只有讀者、零寫入者**
+        # (`tests/test_b6a_edu_doc_parity.py` 有無寫入者守衛)→ 那個 else 分支
+        # **每一次 render 都會執行**,「🔍 資料診斷」頁上這一列永遠是紅燈「缺」。
+        # 永遠觸發的警告等於沒有警告,還會稀釋同頁真紅燈的可信度(同 G2/G3 假紅)。
+        # 上方的刪除迴圈**刻意保留** `'[ETF回測]' in _ok` 那一條:同一個 process
+        # 內若有舊 key 殘留(升級前寫入 / 手動注入),仍會被清掉,不會卡在畫面上。
 
         # 若大盤層項目(INTL/TW/TECH/籌碼/總經)完全缺失,從 cl_data 補建。
         # v18.394 SSOT:檢查 4 個 SSOT category(CAT_INTL/CAT_TW_MARKET/CAT_CHIPS/CAT_TW_MACRO/CAT_US_MACRO),

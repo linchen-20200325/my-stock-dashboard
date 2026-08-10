@@ -25,6 +25,9 @@ import streamlit as st
 
 from shared.app_cache import _load_cache, _save_cache
 from shared.calc_helpers import calc_bias_pct
+# H1:「多因子總分能不能算」的唯一判定(L0 純函式)。原碼在此捏造 regime='neutral',
+# 見該模組 docstring 的完整病史與「拒絕評分 vs 挑保守權重」的設計決定。
+from shared.scoring_regime_gate import resolve_scoring_regime
 from shared.thresholds import YIELD_HIGH_DEC, YIELD_LOW_DEC, YIELD_MID_DEC
 from src.compute.scoring import (
     calc_health_score,
@@ -75,6 +78,16 @@ def run_batch_fetch(stock_list: list[str]) -> None:
     """
     results_t3 = []          # 汰弱留強(健康度)結果
     score_t3   = []          # 多因子評分結果
+
+    # ── 總經 regime:全批取一次,由唯一仲裁點供給(C1 v19.182 → H1)──────────
+    # 每檔各讀一次 session 沒有意義(同一次 rerun 內不會變),而且一旦分檔讀就有
+    # 「同一批股票用了兩種權重」的空間。此處取一次、全批共用。
+    from src.services.allocation_service import get_macro_regime
+    _regime_dec = resolve_scoring_regime(get_macro_regime())
+    if not _regime_dec.usable:
+        # §1 降級不靜默:log 一行,畫面另由 risk_alerts_t3 揭露(見本函式結尾)。
+        print(f'[section_batch_fetcher regime] {_regime_dec.reason} '
+              f'→ 本批不計算多因子總分')
 
     prog_t3 = st.progress(0, text='批次分析中...')
 
@@ -224,17 +237,28 @@ def run_batch_fetch(stock_list: list[str]) -> None:
                 print(f'[section_batch_fetcher 狀態燈] {sid4} {type(_e_lamp).__name__}: {_e_lamp}')
 
             # ── 多因子評分 ─────────────────────────────────
-            if df4 is not None and not df4.empty:
+            # v19.148 ① 接線:6 因子評分依總經 regime 切 WEIGHT_TABLES
+            # (bull 重趨勢/動能、bear 重風控/基本面)。
+            #
+            # H1 修:原碼 `(session_state.get('macro_state', {}) or {}).get('regime')
+            # or 'neutral'` —— 舊註解寫「未評估 → neutral(誠實不誤判多空)」,但
+            # **neutral 不是「不判斷」,它是「判斷為震盪」的那一組權重**。冷啟動
+            # (沒開過 🌍 總經頁)時 `macro_state` 這個 key 根本不存在 → 全批股票
+            # 被震盪權重評分,而畫面印出一組看起來完全正常的分數與排名。
+            # 現改走唯一仲裁點 `get_macro_regime()` + L0 gate:未評估一律**不評分**,
+            # 走下游既有的「⚪ 無法評分」三態(scorability.CandidateStats),
+            # 並在 risk_alerts 揭露原因。完整理由見 shared/scoring_regime_gate.py。
+            if df4 is not None and not df4.empty and _regime_dec.usable:
                 try:
                     _n4_use = name4 or get_stock_name(sid4)
-                    # v19.148 ① 接線:個股組合 6 因子評分依總經 regime 切 WEIGHT_TABLES
-                    # (bull 重趨勢/動能、bear 重風控/基本面)。原本沒傳 regime → 恆 neutral;
-                    # macro_state 未評估(沒開總經頁)→ neutral(誠實不誤判多空)。
-                    _grp_regime = (st.session_state.get('macro_state', {}) or {}).get('regime') or 'neutral'
-                    sf = score_single_stock(df4, sid4, _n4_use, regime=_grp_regime)
+                    sf = score_single_stock(df4, sid4, _n4_use,
+                                            regime=_regime_dec.regime)
                     score_t3.append(sf)
-                except Exception:
-                    pass
+                except Exception as _e_sc4:
+                    # §1:原碼 `except Exception: pass` —— 評分整檔消失且零 log,
+                    # 與「總經未評估」在畫面上長得一模一樣,無從分辨。
+                    print(f'[section_batch_fetcher score] {sid4} '
+                          f'{type(_e_sc4).__name__}: {_e_sc4}')
 
         except Exception:
             results_t3.append({
@@ -252,7 +276,20 @@ def run_batch_fetch(stock_list: list[str]) -> None:
     # ── AI 風控警示 ────────────────────────────────────────
     _t3_mkt = st.session_state.get('mkt_info', {}) or {}
     risk_alerts_t3 = []
-    if _t3_mkt.get('regime') == 'bear':
+
+    # H1 §1:總經未評估 → 多因子總分被擋掉這件事必須讓使用者看見。
+    # 這條放**第一位**:下方「⚠️ 風控警示」是本頁唯一會逐條印出的自由文字區,
+    # 而總表的「⚪ 無法評分」標記同時服務「抓不到 K 線」與「總經未評估」兩種原因,
+    # 不在這裡點名,使用者會誤以為是網路/資料源問題而去重抓。
+    if not _regime_dec.usable:
+        risk_alerts_t3.append(_regime_dec.notice())
+
+    # H1:原碼讀 `mkt_info['regime']` —— 那是**趨勢面輸入**(價格 vs MA60/MA120 +
+    # 外資現貨),不是總經紅綠燈的結論。後果與 C1 v19.182 修掉的其他 7 處同型:
+    # 健康分跌破防禦門檻 / 外資期貨大額淨空的那天,總經頁印 🔴 而這條警示**不出現**
+    # (因為趨勢面還是 bull);反之趨勢轉弱但總經燈仍 🟢 時它又會喊偏空。
+    # 改吃與上方評分權重**同一次**仲裁結果 → 同頁不可能再出現兩種多空結論。
+    if _regime_dec.regime == 'bear':
         # v19.170 P0-1:移除硬編碼持股%,持股水位一律由建議持股 SSOT 決定
         risk_alerts_t3.append('大盤偏空,建議降低持股比重 → 實際持股見 🎚️ 建議持股油門')
     if _t3_mkt.get('foreign_net', 0) < -5e9:

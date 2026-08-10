@@ -1,5 +1,93 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## ⏳ 2026-08-08 G/H「日曆天量期數資料」+ 最後的捏造值(v19.188~190,5368 passed)
+
+### G1~G3:同一個根因的三次現身 —— **拿日曆天去量一個以「期」為單位發布的東西**
+
+| 批 | 消費端 | 病灶 |
+|---|---|---|
+| **G1** | `app_ai_service.build_llm_context`(餵 LLM) | 40 天門檻。月頻 `date` 是**資料月月初**,當期資料 as_of 年齡天生 63~89 天 ⇒ **4 個指標裡 3 個天天被標 `[STALE]`**。100% 觸發的警告等於沒有警告 |
+| **G2** | `data_coverage`(🔎 資料診斷) | `STALE_DAYS_MONTHLY=45`。同上 ⇒ **🌍 總經列的新鮮度燈每天都是 🔴**;且 `worst_freshness` 取最差,不是某格紅,是**整列**紅 |
+| **G3** | `health_inspector` + **`ai_qa_service._annotate_staleness`(注進送 Gemini 的 tool result)** | `STALE_DAYS_QUARTERLY=150`。Q3 as_of 9/30 要等**年報 3/31** 才被取代 = 182 天 ⇒ **每年 3 月假紅 30~44 天,AI 被告知一份當期財報「已過期」** |
+
+⚠️ **「把門檻調大」不是解法** —— G2 證明那會製造**假綠窗口**:今天 2026-03-10、PMI 停在 2026-01-01,
+2 月 PMI 早該在 3/08 前公布(確實漏一整期),但 as_of 年齡 68 天 < 門檻 70 天 → 日曆天規則說「還新鮮」。
+**假紅與假綠是同一個病的兩面。**
+
+**正解(G2/G3)**:改量「as_of 距**預期最新資料期**落後幾期」。
+- 月頻 `due(M) = (M+1)/01 + 該序列 lag`(每期同一個 lag)
+- 季頻 `due(Q) =` **台股法定公告截止日**(Q1 5/15 / Q2 8/14 / Q3 11/14 / **Q4 年報次年 3/31**)
+  ⇒ **季頻不是「季末 + 固定 lag」**:Q1~Q3 是 +45 天,**Q4 是 +90 天**。套任何單一 lag 都會錯一整季
+  —— 那正是 150 的病根,硬共用等於把病根搬進共用層。故只抽「期數核心」,due-date 各自注入。
+- 三態:🟢 當期 / 🟡 待公布(逾N日,原定截止日已過但在緩衝內)/ 🔴 落後N期 / ⬜ 未登錄。
+- `freshness_bands('monthly'|'quarterly')` 改 **raise ValueError** —— 有人再想給期頻一個天數,第一時間就停。
+- 三把尺 → 兩把:`data_registry_panel` **刻意保留且具名**(它的 `last_updated` 語意是混的 ——
+  `rp_entry` 塞 as_of、`rp_scalar` 塞 `_proxy_date`≈今天,**同一欄兩種語意,沒有任何門檻對兩者都對**)。
+
+**`latest_published_quarter` 收斂 L0**:`scripts/update_fundamentals_snapshot.py` 原有一份私有實作,
+與 L0 版逐日比對 500 天全等後刪除,改 import。**守衛從「逐日等值」改成 identity 斷言** ——
+等值只能證明「今天兩份還一樣」,擋不住有人再貼一份;identity 把「不准有第二份」寫成契約。
+理由:本檔決定 cron **抓哪一季**,而 `ai_qa_service`/`health_inspector` 用同一份日曆判**那一季算不算過期**。
+兩份一漂就會出現「cron 抓了 Q3、診斷頁說 Q3 過期、AI 據此寫進建議」—— **三者各自都照自己的表做對了,沒有人會發現。**
+
+⚠️ **G1 另修一條 §1**:`stale_tag(None)` 回空字串 = **沒有日期就默認新鮮**,而 `tab_stock` 的 CPI
+有個不帶日期的 `ma_snap` fallback ⇒ **最危險的一格反而靜默放行**。
+
+### H1:全 repo 最後的捏造 regime,以及它決定的東西
+
+`section_batch_fetcher` 的 `(...).get('regime') or 'neutral'` —— 冷啟動時 `macro_state` **key 根本不存在**。
+查證該值餵進 `stock_score` → `WEIGHT_TABLES.get(regime, ...)`,三態權重差距是**排名會換人**的量級
+(trend 0.30↔0.15、risk 0.05↔0.25)。實算:衝勁型 bull 69.0 / bear 46.5;防禦型 bull 49.0 / bear 67.75
+→ **順序對調**。
+
+**設計決定:拒絕評分**(新增 L0 `shared/scoring_regime_gate.py`),不是挑一組保守權重。理由:
+挑 bear ＝「不知道就當空頭」、挑 neutral ＝「不知道就當震盪」,都是 §1 禁止的「自行估一個合理值當常數」。
+下游 `scorability` 已有三態(⚪ 無法評分不進分子也不進分母),零改動即可承接。
+被擋掉的**只有加權總分那一個數字**,健康度/趨勢/357/出場/型態全部照算。
+順帶關掉潛伏坑:`caution` 是 canonical regime 但 `WEIGHT_TABLES` 沒這個 key,會靜默拿 neutral。
+
+**同批另修**:`[ETF回測] 回測績效` 註冊列 —— 該功能 v18.265 已刪、`etf_backtest_data` 零寫入者
+⇒ 資料診斷頁**永遠一列紅燈「缺」**(同 G2/G3 的假紅家族);`margin_card` 的 label 手打 2500/3400 改插值。
+
+### H2
+
+- `calc_relative_strength` σ 不可用時給 `0.0` —— 而 0.0σ 在本專案**有明確語意**(`⚪ 同步大盤`)
+  ⇒ 把「分母不成立」演成「已測量、結論是同步」。⚠️ 且**不只是潛伏**:σ 為 NaN 時 `nan > 0.01` 恆 False
+  同樣落 0.0,而大盤序列凍結在本 repo 有前例(v19.170 先行指標連 9 個交易日不變)
+  → 舊行為下**全存活池每一檔**都會拿 0.00σ 並全部進 RS 排行。
+- `app.py` 總覽卡三個 `len()` 標成「命中 N」,實際是「被評分數」(含 `⬜ 不明顯`/`TIER_SYNC`/`TIER_LAG`)。
+  **`抗跌RS N` 那條 B6-b 早已為同一理由改過 `SCREEN_ANGLE_LABELS` 的文案,總覽卡沒跟上。**
+- `source_label='高息網'` 是**會渲染到畫面**的預設值(該模組全 repo 零定義);目前 0 caller 漏傳 = 地雷非失火。
+- `expanded=(_cat in _entries[0].get('category', _cat))` 恆真 —— ⚠️ **改成 `==` 同樣恆真**
+  (`compute_registry_groups` 建 entry 時就寫死 `category = _cat`),唯一會改行為的是 `False`,
+  而那是 UX 決定 → 保留現狀 + 換成字面 `True` + 註解說明為何 `==` 不是修法。
+- `FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD` 的「30,000 口 ≈ 75 億」**移除金額宣稱**,改寫公式。
+  三個口徑:名目 = 口數×指數×200 ≈ **1,440 億**;保證金 ≈ 60~90 億(**舊文案 75 億極可能是這個**);
+  舊「~6 億」疑似把「每點價值」當總值。**判定式不需要任何金額換算,無 code 依賴它。**
+
+### 我判斷錯而被 agent 推翻的(記錄形狀,不是記錄丟臉)
+
+| 我說的 | 實況 |
+|---|---|
+| PCR caption `<100` 對不上任何判定式 | **錯**。同頁「🎯 籌碼綜合判斷」計分器**真的**用 `>130/>100/≤100` |
+| B2-b 之後畫面顯示 1.15,使用者會誤讀 | **錯**。`normalize_pcr_to_ratio` 只在**取值端**換算給規則引擎/LLM,**沒有回寫** `li_latest` ⇒ 畫面是 **126.8**。**照我說的「改成比值刻度」會製造新的謊**(caption 說 0.8、表格印 126.8)。真 bug 是 caption 標的線(100)≠ 它正下方那張表的著色線(80/120),而同一欄位同頁有**三組帶** |
+| 這是最後一處捏造 regime | **錯**。`ai_qa_service._regime()` 在 `macro_state.json` 不存在時回 `'neutral'` 直接餵 `score_single_stock` ⇒ **AI 問答的個股分數是同一種捏造**(未修,見待辦) |
+| `compute_twii_bias` 在 `macro_helpers`、且已揭露 | **錯**。它在 `macro_snapshot.py`(禁改清單內);「已揭露」只成立於 **1/10 個消費點**,其餘 9 處拿裸值,**含直接餵 Gemini 的 `build_llm_context`** |
+| 假紅窗口 32 天 | 修正為 **30~44 天**(`staleness_days` 量「距預期最新**交易日**」,3/01 週末退位到 2/27,age 恰 150 卡邊界仍綠;首個紅燈日是 3/02) |
+| `_bps` 有 2 份複本 | **4 份**;且 `daily_checklist._bps` **零 caller**(死碼) |
+
+### 待辦(新增,§-1 等指派)
+
+- 🔴 `ai_qa_service._regime()` 的 `'neutral'` 捏造 —— 餵 AI 問答的個股評分
+- 🟡 `bias_240` 的 `is_estimated` 在 9 個消費點被丟掉(含 `build_llm_context`)。修法會改五桶燈號與 AI prompt = 行為變更
+- 🟡 `section_portfolio_summary._render_multifactor_ranking` 的 caption **寫死 `WEIGHT_TABLES['neutral']`**
+  ⇒ regime=bull 時仍宣稱用中性權重(H1 同檔發現的第二個謊);同檔「多因子資料計算中」在總經未評估時是錯的措辭
+- 🟡 `rs_leader_service._scan_cached` 空排行的 note 把原因寫死成「歷史不足/抓不到價」,σ 死掉會被歸因錯誤
+- ⚪ `FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD` 說明採哪個口徑(名目/保證金/不引金額)—— **建議「不引金額,寫公式」**:
+  指數與保證金率都會變,寫死的數字不會,而 F1 的 `§§TOKEN§§` 只服務住在 SSOT 常數裡的值,活資料套不上
+- ⚪ `tests/test_scoring_engine.py:1572` 精心構造 `cl_vals` 後**傳了另一組字面**(結論碰巧相同故綠燈);同檔 `:1606` 同型
+- ⚪ `tests/` 從未跑過 ruff(實測 3015 條基線,1235 條可自動修)—— 要收是獨立一批
+
 ## 🏛️ 2026-08-07 C/D/E/F 全 tab 稽核 + 核心總表 + 分層守衛(v19.184~187,5053 passed)
 
 > user:「請協助繼續審查目前的架構…透過**清晰分類**與**導引說明**降低初學者理解門檻。

@@ -163,8 +163,23 @@ def render_data_registry_panel() -> None:
             f"🔴 {_emo_cnt['🔴']}  "
             f"⬜ {_emo_cnt['⬜']}"
         )
+        # ── H2 2026-08：把恆真的算式換成字面 True（**行為零變更**，僅止住誤導）──
+        # 原碼：`expanded=(_cat in _entries[0].get('category', _cat))`。
+        # 它讀起來像「只展開某些分類」，實際上**恆為 True**：
+        #   `compute_registry_groups` 在建 entry 時就寫死 `_entry['category'] = _cat`，
+        #   所以 `_entries[0]['category']` 必然等於 `_cat`，而 `x in x`（str 子字串）
+        #   對任何字串恆真 ⇒ 每一個分類永遠展開。
+        # ⚠️ 「原意可能是 `==`」這個猜測不成立 —— 由上述不變式，`_cat == _entries[0]
+        #    ['category']` **同樣恆為 True**，改成 `==` 一樣不會改變任何行為，只會把
+        #    同一個誤導換一種寫法。真正會改變行為的只有 `False`（或其他述詞）。
+        # 【為什麼不順手改成 False】原始意圖查不出來（git blame 無說明、v18.394 的
+        #    STATE.md 紀錄只寫「按 11 emoji 分組 expander」未提展開策略、
+        #    tests/test_data_registry_panel.py 也沒斷言過），而預設展開/收合是 **UX 決定**
+        #    （11 個分類 × 50+ 筆的 HTML 表）。§-1：沒有 user 指派就不擅改 UX。
+        #    現狀維持「全部展開」，並由 tests/test_h2_naming_and_fake_readings.py 釘住 ——
+        #    日後要改成收合是**刻意行為變更**，不會再被誤當成 bugfix 順手改掉。
         with st.expander(f"{coverage_emoji_for(_cat)}（{len(_entries)} 筆 ｜ {_summary}）",
-                          expanded=(_cat in _entries[0].get('category', _cat))):
+                          expanded=True):
             _html = (
                 f"<div style='display:grid;grid-template-columns:0.4fr 2.4fr 1.1fr 0.7fr 0.8fr;"
                 f"background:#0d1117;border-radius:6px 6px 0 0'>"

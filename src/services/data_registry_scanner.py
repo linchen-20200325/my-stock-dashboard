@@ -10,7 +10,8 @@
   5. M1B/M2 + M1B-M2 資金缺口(月)
   6. 6 個宏觀指標(VIX/CPI/Fed/PMI/出口/NDC)
   7. 先行指標 5 個分組(三大法人現貨/外資期貨/PCR/成交量/未平倉)
-  8. 個股 5 細項 + 比較排行 + ETF 3 細項
+  8. 個股 5 細項 + 比較排行 + ETF 2 細項(單一 / 組合;**回測已於 H1 移除**,
+     見下方該處註解 —— ETF 回測功能 v18.265 已刪,登記它只會製造永久紅燈)
 
 §8.2 L3 service:純 compute + 1 個 session_state write。
 caller(tab_macro)注入 INTL/TW/TECH MAP 對齊 macro_registry_patch /
@@ -91,7 +92,8 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
     讀(session_state):
         cl_data / m1b_m2_info / bias_info / jingqi_info / macro_info /
         li_latest / cl_ts / t2_data / t3_data /
-        etf_single_data / etf_portfolio_data / etf_backtest_data
+        etf_single_data / etf_portfolio_data
+        (H1 起**不再讀** etf_backtest_data —— 該 key 零寫入者,見下方註解)
 
     寫(session_state):
         data_registry: dict[name → {last_updated, rows, category, frequency, [missing]}]
@@ -319,14 +321,14 @@ def scan_and_write_data_registry(*, intl_map: dict, tw_map: dict, tech_map: dict
             }
         else:
             _reg_missing(_reg_new, '[ETF組合] 再平衡分析', category=CAT_ETF, frequency='daily')
-        _etf3_reg = st.session_state.get('etf_backtest_data') or {}
-        if _etf3_reg.get('cagr') is not None:
-            _etf3n = len(_etf3_reg.get('weights', {}))
-            _reg_new[f'[ETF回測] 回測績效（{_etf3n}檔）'] = {
-                'last_updated': 'N/A', 'rows': _etf3n, 'category': CAT_ETF, 'frequency': 'daily',
-            }
-        else:
-            _reg_missing(_reg_new, '[ETF回測] 回測績效', category=CAT_ETF, frequency='daily')
+        # H1:原本這裡還登錄「[ETF回測] 回測績效」。**該功能已不存在** ——
+        # ETF 回測分頁 v18.265 隨 `etf_tab_backtest.py` / `backtest_engine.py`
+        # 整批刪除,`etf_backtest_data` 全 repo **只有讀者、零寫入者**
+        # (由 `tests/test_b6a_edu_doc_parity.py` 的無寫入者守衛釘住)。
+        # 於是 `_etf3_reg.get('cagr')` 恆為 None → 這一列在「🔍 資料診斷」頁
+        # **永遠是紅燈「缺」**。一個永遠觸發的警告等於沒有警告,而且它會把整頁的
+        # 紅燈數灌水、拉低其他真紅燈的可信度(與 G2/G3 修掉的月頻/季頻假紅同型)。
+        # 修法是**拿掉登記**而不是標豁免:功能不存在就不該出現在資料源清單裡。
 
         # ── B5 v19.75(review 監控盲區收斂):籌碼集中度 / 股本 / 5年現金流量比率 ──
         # 原三源抓壞時診斷 Tab 不會亮紅(未登錄 registry)。producer 端只 stash 元資料
