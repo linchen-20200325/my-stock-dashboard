@@ -27,6 +27,9 @@ import pandas as pd
 import streamlit as st
 
 from shared.health_thresholds import HEALTH_GRADE_A_MIN, HEALTH_GRADE_B_MIN
+# I1:「多因子總分能不能算」的唯一判定(L0,H1)。本檔用它把「排行是空的」三態分開:
+# 計算中 / 總經未評估(不會自己算完)/ 真的沒有可評分的檔。
+from shared.scoring_regime_gate import resolve_scoring_regime
 from shared.signal_thresholds import (
     GRP_NEWS_BEARISH_CONFIDENCE_MIN,
     MULTIFACTOR_ENTRY_MIN,
@@ -44,6 +47,7 @@ from src.data.stock.app_stock_fetchers import (
     fetch_quarterly,
     fetch_quarterly_extra,
 )
+from src.services.allocation_service import get_macro_regime
 from src.services.stock_grp_service import (
     get_bps as fetch_bps,
     get_industry_category as fetch_industry_category,
@@ -355,12 +359,70 @@ B5-b(2026-08)刪掉的舊欄:`'RS': r.get('rs_score', 50)` —— `score_single_
 """
 
 
+def _batch_scoring_regime(score_t3: list[dict]) -> tuple[str | None, str]:
+    """本批分數**實際使用**的 regime → `(regime, 說不出來的原因)`。
+
+    I1 2026-08-10。來源 = `score_single_stock()` 回傳 dict 上的 `'regime'` 欄
+    —— 評分當下就蓋上去的戳記(§2.2 provenance)。
+
+    **刻意不在渲染時重讀一次總經**:那描述的是「現在的市場」,不是「螢幕上這些
+    數字是用什麼算出來的」。使用者跑完批次再去開 🌍 總經頁,兩者立刻分岔,
+    caption 就會再一次宣稱一組不是真的用過的權重 —— 正是本次要修的那個病。
+    (現在與當下總經的落差另外揭露,見 `_render_multifactor_ranking`。)
+
+    Returns:
+        `(regime, '')` 可宣告;`(None, 原因)` 不可宣告 —— 此時 caller **不得**
+        退回任何一組權重當展示值(§1)。
+    """
+    _rows = [s for s in (score_t3 or []) if isinstance(s, dict) and 'error' not in s]
+    if not _rows:
+        return None, '本批沒有任何多因子評分結果'
+    _regs = {str(s.get('regime') or '').strip().lower() for s in _rows}
+    _regs.discard('')
+    if not _regs:
+        return None, ('評分結果未帶 regime 標記'
+                      '(score_single_stock 的輸出契約變了?)')
+    if len(_regs) > 1:
+        # 同一批本來就只取一次 regime(section_batch_fetcher 全批共用一個判定),
+        # 出現多個代表接線壞掉 —— 這種時候更不能挑一個印出來。
+        return None, f'同一批出現多個 regime:{" / ".join(sorted(_regs))}(不該發生)'
+    _r = _regs.pop()
+    if _r not in WEIGHT_TABLES:
+        return None, f'regime={_r!r} 在 config.WEIGHT_TABLES 找不到對應權重表'
+    return _r, ''
+
+
+def _no_multifactor_reason(stats: CandidateStats) -> tuple[str, str]:
+    """「多因子排行是空的」的三態歸因 → `(結論句, 行動句)`。
+
+    I1 2026-08-10:原文案固定是「多因子資料計算中 / 等待評分載入」。H1 之後
+    **「總經未評估」也會讓 `score_t3` 為空**(§1 拒絕評分),那時「計算中」是錯的
+    措辭 —— 它不會自己算完,使用者會一直等一件永遠不會發生的事,而真正該做的動作
+    (去開 🌍 總經頁)完全沒被提到。
+    """
+    if stats.n_total == 0:
+        return ('尚未執行批次分析(本頁目前沒有任何標的)',
+                '在上方輸入股票代碼並執行批次分析')
+    _dec = resolve_scoring_regime(get_macro_regime())
+    if not _dec.usable:
+        return (f'本批 {stats.n_total} 檔都沒有多因子總分 —— 目前總經狀態:{_dec.reason}',
+                '按「🚀 一鍵更新全部數據」,或先開 🌍 總經頁讓紅綠燈算出結論後重跑批次'
+                '(§1:總經沒有結論時任選一組權重都等於替你做大盤判斷,寧可不給)')
+    return (f'本批 {stats.n_total} 檔全部無法評分'
+            f'({stats.n_unscored} 檔抓不到 K 線 / 評分失敗)',
+            '先確認 K 線來源(yfinance / FinMind)是否可用 —— 這**不會**自己算完')
+
+
 def _render_multifactor_dims(score_t3: list[dict]) -> None:
     """📈 多因子維度拆解 — 主表「多因子」欄的子分數(唯一棲身)。"""
     _rows = [r for r in (score_t3 or [])
              if isinstance(r, dict) and 'error' not in r and r.get('stock_id')]
     if not _rows:
-        st.info('多因子維度資料載入中')
+        # I1:原文案「多因子維度資料載入中」—— 能走到這裡代表 score_t3 有東西
+        # (caller 已 `len(score_t3) >= 2`)但每一列不是帶 error 就是沒有代碼,
+        # 也就是**已經算完而且失敗了**,不是還在載入。
+        st.info('本批的多因子評分結果全部帶錯誤或缺代碼,沒有子維度可拆解'
+                '(不是還在計算)')
         return
     _sdf = pd.DataFrame([
         {'代碼': r['stock_id'], '總分': r.get('total', 0),
@@ -450,12 +512,30 @@ def _render_multifactor_ranking(
     舊版自己重算一次且分母用 `len(score_t3)`,與 KPI 的 `len(results_t3)` 打架。
     """
     st.markdown('##### ③ 多因子評分排行')
-    _w = WEIGHT_TABLES['neutral']
-    st.caption(
-        f"趨勢×{_w['trend']:.2f} + 動能×{_w['momentum']:.2f} + 籌碼×{_w['chip']:.2f} + "
-        f"量價×{_w['volume']:.2f} + 風險×{_w['risk']:.2f} + 基本面×{_w['fundamental']:.2f}"
-        f"(neutral 權重,SSOT 來自 config.WEIGHT_TABLES)"
-    )
+    # ── I1 §1:權重 caption 必須是**這批分數真的用過**的那一組 ──────────────
+    # 原碼 `_w = WEIGHT_TABLES['neutral']` + 字串寫死「(neutral 權重)」:
+    # regime=bull 時畫面上的分數確實是用 bull 權重算的,caption 卻宣稱中性
+    # —— 說明文字與數字來自兩個不同的 regime,而使用者只看得到說明文字。
+    _reg, _reg_why = _batch_scoring_regime(score_t3)
+    if _reg:
+        _w = WEIGHT_TABLES[_reg]
+        st.caption(
+            f"趨勢×{_w['trend']:.2f} + 動能×{_w['momentum']:.2f} + 籌碼×{_w['chip']:.2f} + "
+            f"量價×{_w['volume']:.2f} + 風險×{_w['risk']:.2f} + 基本面×{_w['fundamental']:.2f}"
+            f"({_reg} 權重 — 本批評分**當下實際採用**的那一組,SSOT 來自 config.WEIGHT_TABLES)"
+        )
+    else:
+        st.caption(f'⬜ 本批沒有可宣告的加權權重:{_reg_why}。'
+                   '(§1:多因子權重是總經 regime 的函數,不知道實際用了哪一組時,'
+                   '寧可不寫,也不挑一組數字給你看)')
+    # 批次跑完之後總經才變 → 螢幕上的排名是舊 regime 算的。不講,使用者會拿它跟
+    # 頁面其他地方(建議持股 / 紅綠燈)的新 regime 對照,得到一個同頁互相矛盾的畫面。
+    if _reg:
+        _cur = resolve_scoring_regime(get_macro_regime())
+        if _cur.usable and _cur.regime != _reg:
+            st.warning(f'⚠️ 這份排行是用「{_reg}」權重算的,但目前總經 regime 已經是'
+                       f'「{_cur.regime}」—— 權重表不同,名次可能已經換人。'
+                       f'請重跑一次批次分析再據此決策。')
     st.caption('🔰 另三欄基本面白話:SQ品質分＝獲利品質(賺得乾不乾淨)、FGMS前瞻＝前瞻成長動能(未來成長力道),皆 0~100 越高越好;EPS／毛利率／殖利率為對照。')
     from src.compute.scoring import rank_stocks as _rk3
     _ranked3 = _rk3(score_t3 or [])       # 與 stats.n_scored 同一條篩選規則(丟掉 error 列)
@@ -468,8 +548,9 @@ def _render_multifactor_ranking(
             _mf3c += f'(另 {stats.n_unscored} 檔無法評分,未列入)'
         _mf3a = f'≥{_entry_txt}分方可列入候選,其餘繼續觀察'
     else:
-        _mf3c = '多因子資料計算中'
-        _mf3a = '等待評分載入'
+        # I1:三態歸因(尚未執行 / 總經未評估 / 真的沒有可評分的檔),取代原本
+        # 一律「多因子資料計算中 + 等待評分載入」的錯誤措辭。
+        _mf3c, _mf3a = _no_multifactor_reason(stats)
     st.markdown(strategy_conclusion(STRATEGY_VALUATION, '多因子總分排行', _mf3c, _mf3a), unsafe_allow_html=True)
     if _ranked3:
         _rank_rows = []
@@ -500,7 +581,11 @@ def _render_multifactor_ranking(
                          'P/B評價':  st.column_config.TextColumn('P/B 估值(產業帶狀)'),
                      })
     else:
-        st.info('多因子評分資料載入中')
+        # I1:同上三態 —— 這裡與上方結論句是**同一個** `_ranked3` 為空的分支
+        # (`_top_score_r = _ranked3[0] if _ranked3 else None`),直接沿用同一份文字,
+        # 不重算一次(也避免兩處各自去讀一次總經而講出不同的話)。
+        # 原文案「多因子評分資料載入中」在「總經未評估」時是假的:沒有任何背景工作會把它算完。
+        st.info(f'{_mf3c}。{_mf3a}')
 
 
 def _render_elimination_detail(

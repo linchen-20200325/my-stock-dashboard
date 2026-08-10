@@ -12,7 +12,12 @@ ai_qa_service.py — AI 分析師 panel + 問答服務(L3 Service)
   §1 Fail Loud, Never Fake:資料先由工具/tab 提供真實數字 → 交 LLM 討論;**LLM 只討論不生成數字**;
      缺資料回結構化 error,不 fabricate。
   EX-AI-1(已退役但精神保留):AI 敘述帶 🧬 旗標(L5 渲染);權威數字由 tool/bundle 結果渲染,不從 AI 字串萃取。
-  §8.2:本檔 L3 Service(允許 I/O),只 import 既有 public 函式(lazy),不 import streamlit。唯讀。
+  §8.2:本檔 L3 Service(允許 I/O),只 import 既有 public 函式(lazy),**自身不 import streamlit**。唯讀。
+     ⚠️ 例外說明(I1 2026-08-10):`_macro_state()` 會 lazy import 同層 L3
+     `allocation_service`(它 module-level import streamlit,因為 C1 唯一仲裁點必須讀
+     `session_state` 裡的 warroom)。這是 L3→L3 合法橫向依賴,且 import 失敗時本檔會
+     自動退回純函式 `macro_state_locker.get_macro_state()` —— 離線 / 無 Streamlit
+     runtime 仍可跑,不新增硬相依。
 
 Stock adapter(v19.121 Phase 1,已對實際簽名校正,evidence: 驗證 agent + 冒煙測試):
   - import 路徑改 src.* 實際包;`calc_atr_stop` 在 src.compute.scoring(非 risk_control)。
@@ -31,6 +36,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
+from shared.scoring_regime_gate import (  # 「多因子總分能不能算」的唯一判定(L0,H1)
+    ScoringRegimeDecision,
+    resolve_scoring_regime,
+)
 from shared.staleness import (  # 頻率感知過期門檻 SSOT(L0)
     quarterly_periods_behind,
     stale_days_threshold,
@@ -82,33 +91,130 @@ def _finmind_token() -> Optional[str]:
     return os.environ.get("FINMIND_TOKEN")
 
 
-def _regime() -> str:
-    """回英文 regime {bull,neutral,caution,bear} 供 WEIGHT_TABLES 切權重。
+def _macro_state() -> dict:
+    """canonical 總經契約(`macro_state_locker.get_macro_state()` 的回傳)。取不到 → `{}`。
 
-    v19.148 ① 接線:原直接回 load_macro_state 的中文 market_regime → WEIGHT_TABLES(英文 key)
-    永遠 fallback neutral(regime 自適應權重從未生效的 bug)。改用 normalize_regime 轉英文。
+    ⚠️ I1 2026-08-10:本檔**所有**碰 regime 的地方一律只走這一支 —— 既包含「消費」
+    regime 的 `get_stock_score`(它決定 WEIGHT_TABLES),也包含「報告」regime 的
+    `get_market_state`。兩者若各讀各的來源,同一段對話就會同時出現兩個多空結論
+    (模型照單全收,使用者看不到那是兩個來源),那是 C1 v19.182 修掉的病再長一次。
+
+    來源優先序(§2.1 上層贏,禁止平均):
+
+      1. `allocation_service.get_macro_regime()` —— C1 唯一仲裁點。會併入 🌍 總經頁
+         **本次 session** 算出的紅綠燈結論(`warroom_summary`),是使用者眼睛看到的那個燈。
+      2. `macro_state_locker.get_macro_state()` —— **同一支函式**,只是 warroom 缺席
+         (非 Streamlit context:離線 CLI / 測試),退化成只讀 macro_state.json。
+         這不是第二套演算法,是同一個仲裁器少一個輸入。
+      3. 兩者皆失敗 → `{}`。由 `resolve_scoring_regime` 判「取數失敗 → 拒絕評分」,
+         **不回填任何預設多空**(§1)。
+
+    註:1 讀 `st.session_state`,在無 Streamlit runtime 時會拋 —— 那正是走 2 的時機,
+    所以這裡是 try/except 而不是「有沒有裝 streamlit」的判斷。
     """
     try:
-        from src.services.macro_state_locker import load_macro_state, normalize_regime
-        return normalize_regime((load_macro_state() or {}).get("market_regime"))
-    except Exception:
-        return "neutral"
+        from src.services.allocation_service import get_macro_regime
+        return get_macro_regime()
+    except Exception as _e:      # noqa: BLE001 — 無 session context 屬預期,退第 2 順位
+        print(f"[ai_qa regime] get_macro_regime 不可用({type(_e).__name__}: {_e})"
+              f" → 退回 macro_state_locker.get_macro_state()(僅讀 macro_state.json)")
+    try:
+        from src.services.macro_state_locker import get_macro_state
+        return get_macro_state()
+    except Exception as _e:      # noqa: BLE001 — §1:取數失敗就是失敗,不猜一個 regime
+        print(f"[ai_qa regime] get_macro_state 也失敗:{type(_e).__name__}: {_e}")
+        return {}
+
+
+def _scoring_regime() -> ScoringRegimeDecision:
+    """「這次能不能算多因子總分」的判定(H1 L0 gate,與 🏆 個股組合同一支)。"""
+    return resolve_scoring_regime(_macro_state())
+
+
+def _regime_blocked_error(dec: ScoringRegimeDecision) -> str:
+    """regime 不可用時 `get_stock_score` 回的 error 字串(**會原樣進 Gemini payload**)。
+
+    為什麼對話情境要「整份拒絕」,而不是像 🏆 個股組合那樣「只留白總分、其餘照顯示」
+    ——────────────────────────────────────────────────────────────────
+    `stock_score` 只有 `total`(與由它推導的 `grade`)是 regime 的函數;
+    `trend/momentum/chip/volume/risk` 五個子分數不吃 regime。所以理論上可以
+    「回子分數、不回總分」。表格情境這樣做是對的:空白格就是空白格,使用者
+    無從把它填起來。
+
+    **但這裡的下游是 LLM,空白格會被自動填。** 六因子加權表就是「把這幾個子分數
+    合成一個數字」的規則;把五個子分數交給一個被 `SYSTEM_INSTRUCTION` 第 3 條
+    要求「開頭第一句必須先下明確方向判斷」的模型,它幾乎一定會自己綜合 ——
+    而未加權綜合 = 悄悄選了一組等權重,正是本次要擋的捏造,只是改用散文包裝、
+    且使用者無法稽核。故這裡採**更嚴**的作法:整個工具回 ok=False。
+
+    代價很小:`discuss_stock` 另外兩支工具(財務體質、停損/倉位)不吃 regime,
+    照常回真實數字,`discuss()` 只有在**全部**工具都失敗時才不呼叫 LLM。
+    """
+    return (
+        f"無法計算多因子評分:{dec.reason}。"
+        "多因子總分的 6 因子加權表(config.WEIGHT_TABLES)分 bull / neutral / bear 三態,"
+        "總經沒有結論時任選一組都等於替使用者做一個大盤判斷,"
+        "因此本工具**完全不輸出分數與等級**(§1 寧可不給,不給假的)。"
+        "**這不是個股資料抓取失敗,也不代表這檔股票不好** —— 是大盤狀態未知。"
+        "請如實說明這一點,**不得**用其他工具的數字或自己的判斷推估總分/等級/名次。"
+        "救法:先開 🌍 總經頁按「🚀 一鍵更新全部數據」讓紅綠燈算出結論,再問一次。"
+        "不受影響、仍可正常使用:財務體質(get_financial_health)、"
+        "停損與倉位(get_risk_plan)、大盤籌碼(get_market_leading)、ETF 品質(get_etf_quality)。"
+    )
 
 
 def _tool_get_market_state() -> dict:
+    """目前總經/大盤狀態 —— 與 `get_stock_score` 用的是**同一份** canonical 契約。
+
+    I1 2026-08-10 改:原碼直接讀 `macro_state.json` 的 `market_regime`(AI 鎖定快照),
+    而評分那邊(修好之後)走 C1 仲裁契約。兩者在「快照過期」或「只有 warroom 有結論」
+    時會給出不同的多空結論 —— 同一段對話兩個 regime。現在都走 `_macro_state()`。
+    """
+    _ms = _macro_state()
+    if not isinstance(_ms, dict) or not _ms.get("is_loaded"):
+        return {"ok": False,
+                "error": ("總經尚未評估:🌍 總經紅綠燈本次 session 未算出結論,"
+                          "且 macro_state.json 無可用的鎖定快照。"
+                          "請先開 🌍 總經頁按「🚀 一鍵更新全部數據」。"
+                          "(§1:未評估就是未評估,**不退回「中性/震盪」當預設**;"
+                          "請勿把「未評估」講成「市場中性」。)")}
+    _data = {
+        "regime": _ms.get("regime"),
+        "light": _ms.get("light"),
+        "regime_source": _ms.get("source"),
+        "health": _ms.get("health"),
+        "defense": _ms.get("defense"),
+        "exposure_limit_pct": _ms.get("exposure_limit_pct"),
+        "traffic_light": _ms.get("traffic_light"),
+        # 趨勢面**輸入**(價格 vs 均線 + 外資現貨),不是紅綠燈結論。key 名寫死提醒,
+        # 否則模型會把它當成第二個 regime 講出來(C1 修掉的那一類誤用)。
+        "trend_regime_僅為輸入非結論": _ms.get("trend_regime"),
+    }
+    # macro_state.json 鎖定快照才有、canonical 契約未涵蓋的欄位(標明來源,避免與上方混淆)
+    _file = {}
     try:
         from src.services.macro_state_locker import load_macro_state
-    except Exception as e:
-        return {"ok": False, "error": f"import macro_state_locker 失敗:{e}"}
-    st = load_macro_state()
-    if not st:
-        return {"ok": False, "error": "macro_state 尚未鎖定(macro_state.json 不存在或為空)"}
-    keys = ("market_regime", "systemic_risk_level", "exposure_limit_pct", "Macro_Phase")
-    return {"ok": True, "data": {k: st.get(k) for k in keys if k in st},
-            "provenance": {"source": "macro_state.json (locked)", "as_of": st.get("timestamp")}}
+        _file = load_macro_state() or {}
+    except Exception as _e:      # noqa: BLE001 — 附加欄位缺席不影響主結論
+        print(f"[ai_qa regime] 讀 macro_state.json 附加欄位失敗:{type(_e).__name__}: {_e}")
+    _extra = {k: _file[k] for k in ("systemic_risk_level", "Macro_Phase") if k in _file}
+    if _extra:
+        _data["鎖定快照額外欄位_macro_state_json"] = _extra
+    return {"ok": True, "data": _data,
+            "provenance": {"source": f"canonical 總經契約(仲裁來源:{_ms.get('source')})",
+                           "as_of": _file.get("timestamp")}}
 
 
 def _tool_get_stock_score(stock_id: str) -> dict:
+    # ── I1 §1:regime 不可用 → 不評分,而且**先擋再抓** ────────────────────
+    # 原碼 `regime=_regime()`:macro_state.json 不存在時 `normalize_regime(None)`
+    # 回 "neutral",except 也回 "neutral" → 直接餵 score_single_stock,
+    # 使用者拿到一組用「震盪」權重算出來、看起來完全正常的分數與等級。
+    # (H1 已在 🏆 個股組合修掉同型的最後一處;這裡是**另一個消費端**,漏網。)
+    # 既然拒絕輸出,就沒有理由先去打 FinMind / Yahoo —— 提前 return 省一趟 I/O。
+    _dec = _scoring_regime()
+    if not _dec.usable:
+        return {"ok": False, "error": _regime_blocked_error(_dec)}
     try:
         from src.data.core import StockDataLoader
         from src.compute.scoring import score_single_stock
@@ -123,11 +229,12 @@ def _tool_get_stock_score(stock_id: str) -> dict:
         rev_df, _ = loader.get_monthly_revenue(stock_id)   # 選配:缺了評分仍可算(基本面因子內部自處理)
     except Exception:
         rev_df = None
-    res = score_single_stock(df=df, stock_id=stock_id, stock_name=name, regime=_regime(),
+    res = score_single_stock(df=df, stock_id=stock_id, stock_name=name, regime=_dec.regime,
                              revenue_df=rev_df)
     # 實際輸出 key(無 fundamental;vcp_atr_pass 為小寫,evidence: scoring_engine.py:436-452)
+    # `regime` 一併帶出:總分是 regime 的函數,不標出來模型無從說明「這是哪一組權重算的」(§2.2)。
     keys = ("total", "grade", "trend", "momentum", "chip", "volume", "risk",
-            "momentum_signal", "vcp_atr_pass", "vcp_atr_label", "squeeze_label")
+            "momentum_signal", "vcp_atr_pass", "vcp_atr_label", "squeeze_label", "regime")
     as_of = str(df["date"].iloc[-1]) if "date" in getattr(df, "columns", []) else None
     return {"ok": True,
             "data": {"stock_id": stock_id, "stock_name": name,
@@ -203,7 +310,19 @@ def _tool_get_risk_plan(stock_id: str, capital_twd: float = 1_000_000) -> dict:
         return {"ok": False, "error": f"個股資料抓取失敗({stock_id}):{err or 'empty'}"}
     entry = float(df["close"].iloc[-1])
     stop = calc_atr_stop(df, entry_price=entry)
-    alloc = RiskController(portfolio_value=float(capital_twd), regime=_regime()).position_size(price=entry)
+    # ── I1:本工具**不必**因為 regime 未評估而拒絕輸出 ──────────────────────
+    # 查證(2026-08-10,evidence: `compute/risk/risk_control.py::RiskController`):
+    # `position_size()` 只用 `self.max_single_weight`(= MAX_POSITION_PER_STOCK 常數),
+    # **完全沒有讀 regime**;regime 只影響 `target_exposure` / `max_stock_budget`,
+    # 而本工具沒有呼叫那兩個。停損價/ATR/張數/金額因此都不是 regime 的函數
+    #  ⇒ 這裡原本傳的那個捏造 'neutral' 是**惰性**的(不改變任何回傳數字),
+    #    但它是顆地雷:哪天 position_size 開始吃 regime,就會靜默變成造假。
+    # 作法:算得出來才傳真值;算不出來就不傳(不假裝知道)。
+    # 守衛:`tests/test_i1_ai_qa_regime.py::test_position_size_is_regime_independent`
+    #       —— position_size 一旦真的開始吃 regime,那條會紅,必須回來改成拒絕輸出。
+    _dec = _scoring_regime()
+    _rc_kw = {"regime": _dec.regime} if _dec.usable else {}
+    alloc = RiskController(portfolio_value=float(capital_twd), **_rc_kw).position_size(price=entry)
     return {"ok": True,
             "data": {"stock_id": stock_id, "stock_name": name, "entry_price": entry,
                      "stop_loss": stop.get("stop_loss"), "atr": stop.get("atr"),

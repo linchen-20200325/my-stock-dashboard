@@ -307,6 +307,13 @@ def compute_twii_bias(twii_local) -> dict | None:
             {bias_20/60/240, price, ma20/60/120/240, data_days, is_estimated}
             data_days < 240 時 is_estimated=True(caller 顯示「估算」chip)。
             twii 全空 / Close 欄缺失 / fetch 全敗 → None。
+
+    ⚠️ **消費端契約(I2, 2026-08-10)**:`is_estimated=True` 時 `ma240` 其實是
+    `MA<data_days>`,`bias_240` 是「距該均線的乖離」。**任何**顯示或餵給 LLM 的
+    地方都必須帶揭露,文案 SSOT 在 `src/compute/macro/macro_helpers.py` 的 I2 區塊
+    (`bias_estimated_badge` / `bias_estimated_note` / `bias_estimated_prompt_prefix`)
+    —— 不要在 caller 端自己寫第二份字串。I2 只做揭露:燈號 / 門檻 / 桶判定
+    **仍直接套用這個估算值**,尚未針對估算另設規則(要改屬行為變更,§-1 需 user 指派)。
     """
     _twii = twii_local
     _cc_b = 'Close' if (_twii is not None and 'Close' in getattr(_twii, 'columns', [])) else 'close'

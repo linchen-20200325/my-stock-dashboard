@@ -37,7 +37,12 @@ from shared.signal_thresholds import (
 # 與個股的 `STOCK_BIAS_OVERHEAT_PCT`（同為 20 但語意是**個股**）刻意分開，不可互換。
 _BIAS240_RED: float = float(_SPECS_BY_KEY['bias_240'].red)
 # v19.175 P0:`cl_data['inst']` 型別收斂 SSOT(L5 → L2,合法下行依賴)
-from src.compute.macro import coerce_inst_dict
+# I2(2026-08-10):`bias_240` / `ma240` 估算揭露文案 SSOT(同上,L5 → L2)。
+from src.compute.macro import (
+    bias_estimated_badge as _bias_est_badge,
+    bias_estimated_note as _bias_est_note,
+    coerce_inst_dict,
+)
 
 
 def render_section_warroom(_tl_eff_reg, _show_market_data: bool, do_refresh: bool) -> None:
@@ -108,8 +113,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _wr_base, _wr_action_color = _wr_reg_map.get(_wr_reg, ('請先更新總經數據', '#484f58'))
         _wr_action = (f'{_wr_base}（建議持股 {_wr_exp}）'
                       if _wr_exp not in ('--', None, '') else _wr_base)
+        # I2(2026-08-10):`_wr_bias` 的 `price` / `ma240` 若來自不足 240 天的歷史,
+        # 上面 `evaluate_market_status_v4_final` 算出的 `Bias_240` / `Is_Bull`
+        # /`Is_Overheated` 全是對「MA<N>」的判斷。本批**只在顯示文字揭露**,
+        # v4 引擎的輸入與 `_BIAS240_RED` 判定式一行未動(§-1 範圍限制)。
+        _wr_bias_badge = _bias_est_badge(_wr_bias)
         # v4 年線位階資訊 → 降為補充提示,不再覆蓋主結論
-        _v4_bits = [f'年線乖離 {_v4["Bias_240"]:+.1f}%']
+        _v4_bits = [f'年線乖離 {_v4["Bias_240"]:+.1f}%{_wr_bias_badge}']
         if not _v4.get('Is_Bull'):
             _v4_bits.append('股價在年線下')
         if _v4.get('Is_Overheated'):
@@ -127,9 +137,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         if _wr_bias:
             _b240 = _wr_bias.get('bias_240', 0)
             if _b240 > _BIAS240_RED:
-                _wr_warns.append(('🟡', f'年線乖離 {_b240:+.1f}%，大盤偏高，勿追買'))
+                _wr_warns.append(('🟡', f'年線乖離 {_b240:+.1f}%{_wr_bias_badge}，大盤偏高，勿追買'))
             elif _b240 < -_BIAS240_RED:
-                _wr_warns.append(('✅', f'年線負乖離 {_b240:+.1f}%，長期布局機會'))
+                _wr_warns.append(('✅', f'年線負乖離 {_b240:+.1f}%{_wr_bias_badge}，長期布局機會'))
 
         if _wr_fnet is not None and _wr_fnet < -20:
             _wr_warns.append(('🔴', f'外資賣超 {abs(_wr_fnet):.1f}億，主力離場，謹慎'))
@@ -174,7 +184,10 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
              not _wr_margin or _wr_margin <= MARGIN_BALANCE_WARN_THRESHOLD_YI,
              f'>{MARGIN_BALANCE_WARN_THRESHOLD_YI:,.0f}億警戒，'
              f'>{MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:,.0f}億極危'),
-            ('年線位置', f'乖離{_wr_bias.get("bias_240",0):+.1f}%' if _wr_bias else '未知',
+            # I2:`_val` 加估算徽章;第 3 欄(`_ok`,決定 ✅/⚠️ 與卡片顏色)與
+            # 第 4 欄門檻文字皆未動 —— 揭露不改判定。
+            ('年線位置',
+             f'乖離{_wr_bias.get("bias_240",0):+.1f}%{_wr_bias_badge}' if _wr_bias else '未知',
              not _wr_bias or abs(_wr_bias.get("bias_240", 0)) < _BIAS240_RED,
              f'超過±{_BIAS240_RED:.0f}%要警惕'),
             # v19.170 P0-1:第 5 格同讀 SSOT;未評估誠實顯示,被硬否決壓低時給 ⚠️ 而非 ✅
@@ -198,6 +211,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
                     f"</div>"
                     f"<div style='font-size:10px;color:#484f58;line-height:1.3;'>{_tip}</div>"
                     f"</div>", unsafe_allow_html=True)
+
+        # I2:「年線位置」那格與上方 v4 位階提示若是估算值 → 在清單下方講清楚。
+        # 徽章只有三個字,不夠說明「所以這個數字代表什麼」;比照 section_long 補全句。
+        _wr_bias_note = _bias_est_note(_wr_bias)
+        if _wr_bias_note:
+            st.caption(_wr_bias_note)
 
         # 風險警示
         if _wr_warns:

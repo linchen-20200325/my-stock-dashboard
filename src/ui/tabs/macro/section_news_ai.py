@@ -39,7 +39,12 @@ from src.services.ai_structured_summary import (
 from src.ui.render.macro_ui_components import section_header
 from src.ui.tabs.macro.helpers import render_macro_bucket_summary_bar  # noqa: F401
 # v19.175 P0:`cl_data['inst']` 型別收斂 SSOT(L5 → L2,合法下行依賴)
-from src.compute.macro import coerce_inst_dict
+# I2(2026-08-10):BIAS240 估算揭露 SSOT 同樣在 L2(說明見 macro_helpers 的 I2 區塊)。
+from src.compute.macro import (
+    bias_estimated_prompt_prefix as _bias_est_prefix,
+    coerce_inst_dict,
+    macro_estimated_legend as _macro_est_legend,
+)
 from src.services.macro_state_locker import (
     MACRO_VETO_FUTURES_NET_SHORT_LOTS,
     MACRO_VETO_FUTURES_EXPOSURE_CAP_PCT,
@@ -258,8 +263,13 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                     # v19.178:原「>15%偏貴、<-10%低估」為 prompt 內寫死,與五桶 SSOT
                     # (黃 10 / 紅 20,high_bad 單向)不符。負乖離側 SSOT **刻意不設門檻**
                     # (spec.note:「負乖離為超賣機會,非危險」),故如實告知而非另編一個 -10。
+                    # I2(2026-08-10):TWII 歷史不足 240 天時,`bias_240` 的分母其實是
+                    # MA<N>(見 macro_snapshot.compute_twii_bias)。這條**只送數字**時
+                    # LLM 沒有任何依據能分辨,只能當實測年線寫進建議 —— 與 G1 的
+                    # `[STALE:Nd]` 同一類問題,故沿用同一套行首標記 + 圖例。
                     _ctx.append(
-                        f'• 大盤年線乖離率 BIAS240：{_bi_d["bias_240"]:+.1f}%'
+                        f'• {_bias_est_prefix(_bi_d)}大盤年線乖離率 BIAS240：'
+                        f'{_bi_d["bias_240"]:+.1f}%'
                         f'（{_danger_rule("bias_240")}；'
                         f'負乖離＝低於年線,系統視為超賣機會而非危險,不設危險門檻）')
                 if _mi_d.get('m1b_yoy') is not None:
@@ -362,9 +372,14 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 _v_macro_ctx = '\n'.join(_ctx) if _ctx else '（數據尚未載入，請先按「🚀 一鍵更新全部數據」）'
                 # G1:有任何一行被標過期 → 把圖例放在最前面。不解釋 `[STALE:Nd]`
                 # 等於沒標(LLM 不會自己知道那是什麼);全部當期時不加,免製造雜訊。
-                _stale_legend = _macro_stale_legend(_v_macro_ctx)
-                if _stale_legend:
-                    _v_macro_ctx = f'{_stale_legend}\n\n{_v_macro_ctx}'
+                # I2:`[ESTIMATED:MA<N>/240]` 同理,各自獨立判斷、各自獨立附圖例。
+                _ctx_legends = [
+                    _lg for _lg in (_macro_stale_legend(_v_macro_ctx),
+                                    _macro_est_legend(_v_macro_ctx)) if _lg
+                ]
+                if _ctx_legends:
+                    _v_macro_ctx = '{}\n\n{}'.format('\n'.join(_ctx_legends),
+                                                     _v_macro_ctx)
                 _locker = MacroStateLocker()
                 _locker.lock_system_state_only(_system_state)
                 # 組裝 Markdown 提示語（不依賴 JSON 解析，與 Tab 2 AI 首席顧問同風格）

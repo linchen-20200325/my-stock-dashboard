@@ -34,6 +34,11 @@ from src.services.daily_checklist import (
 from shared.stats_helpers import ewma_vol, signal_with_deadband
 # v19.183 D2:M1B/M2 是否為「^TWII 動能代理」的判定 SSOT(原用從未被寫入的 is_proxy 鍵)。
 from shared.macro_provenance import is_m1b_m2_proxy
+# I2(2026-08-10):`bias_240` 估算揭露文案 SSOT(L5 → L2 合法下行)。本檔原本是全 repo
+# 唯一有揭露的地方,但那兩句是 inline 字面 —— 其餘 9 個消費點要一起揭露就得複製,
+# 故收成 L2 一份真相(§3.3),本檔改為引用同一份,顯示內容不變 + 補一句完整說明。
+from src.compute.macro import bias_estimated_badge as _bias_est_badge
+from src.compute.macro import bias_estimated_note as _bias_est_note
 
 # ════════════════════════════════════════════════════════════════
 # v19.170 — P1-4（缺死區）／ P1-5（匯率方向語意反轉）修正用常數 + helper
@@ -252,7 +257,8 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
                                  '資金撤離，空手觀望！', TRAFFIC_RED))
     if _bias_info:
         _bv2 = _bias_info.get('bias_240', 0)
-        _ind_bias = f'年線乖離 {_bv2:+.1f}%'
+        # I2:估算徽章只進**指標文字**,下方 `_bv2 > 20` / `< -20` 判定一行未動。
+        _ind_bias = f'年線乖離 {_bv2:+.1f}%{_bias_est_badge(_bias_info)}'
         if _bv2 > 20:
             _macro_concl.append((STRATEGY_VALUATION, f'{_ind_bias} 過大',
                                  '開始分批減碼（乖離>20%啟動停利）', TRAFFIC_RED))
@@ -302,7 +308,9 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
             _bl     = ('⚠️ 乖離過大，考慮減碼' if _bias_v > 20
                        else ('✅ 嚴重低估，可積極布局' if _bias_v < -20
                        else '⚪ 乖離正常區間'))
-            _est_note = '（估算）' if _bias_info.get('is_estimated') else ''
+            # I2:徽章改吃 L2 SSOT（輸出仍是 '（估算）'／''，畫面文字不變）;
+            # `_days_note` 維持原樣（它是從 data_days 現算的，不是門檻常數）。
+            _est_note = _bias_est_badge(_bias_info)
             _days_note = f" {_bias_info.get('data_days',0)}天資料" if _bias_info.get('is_estimated') else ''
             # 月線乖離併入副標（過熱/超賣時加 emoji 提示）
             _bl20_short = ('⚠️過熱' if _bias_20 > 10 else
@@ -310,6 +318,13 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
             st.markdown(kpi(f'年線乖離率(240MA){_est_note}', f'{_bias_v:+.1f}%',
                             f'{_bl}{_days_note}　｜　月線20MA: {_bias_20:+.1f}% ({_bl20_short})',
                             _bc, '#0d1117'), unsafe_allow_html=True)
+            # I2:原本只有卡片標題那三個字「（估算）」——與 v19.183 的 M1B 代理註記
+            # 同款問題(括號註記太容易被略過,且沒說「所以這個數字代表什麼」)。
+            # 比照該處升級為獨立警語:講清楚實際用了幾天、年線需要幾天、
+            # 以及「燈號仍照這個估算值判定」(§1 降級須可見)。
+            _bias_note_long = _bias_est_note(_bias_info)
+            if _bias_note_long:
+                st.caption(_bias_note_long)
         else:
             st.markdown(kpi('年線乖離率(240MA)', '計算中', '大盤收盤/年線（月線乖離併顯示）', '#484f58', '#0d1117'), unsafe_allow_html=True)
     

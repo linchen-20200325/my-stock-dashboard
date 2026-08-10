@@ -22,6 +22,8 @@ from src.ui.render.ui_widgets import (
 )
 from src.ui.tabs.macro.helpers import add_danger_hlines  # noqa: F401
 # v19.175 P0:`cl_data['inst']` 型別收斂 SSOT(L5 → L2,合法下行依賴)
+# I2(2026-08-10):`bias_240` 估算揭露文案 SSOT(同上,L5 → L2)。
+from src.compute.macro import bias_estimated_note as _bias_est_note
 from src.compute.macro import coerce_inst_dict
 from src.data.macro import check_macro_alerts, fetch_macro_snapshot
 from src.ui.render.macro_ui_components import render_macro_alerts  # v19.159:render 歸位 L4
@@ -511,7 +513,16 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                     _sqi8  = f'年線乖離 {_sql_b:.1f}%（整理·觀望） {_cli_txt8}'
                     _sqc8t = '🟡 台灣出口待取得，景氣尚未明確擴張，持股保守等待訊號。'
             st.markdown(strategy_conclusion(STRATEGY_VALUATION, _sqi8, _sqc8t, color=_sqc8), unsafe_allow_html=True)
-    
+            # I2(2026-08-10):上面 8 個分支全部以 `_sql_b`(= bias_240)當第一維,
+            # 而 TWII 歷史不足 240 天時它其實是「距 MA<N> 的乖離」
+            # (見 macro_snapshot.compute_twii_bias)。矩陣的判定式(>=15 / >0 / <=0)
+            # 本批一行未動,只在卡片下方把「這一維是估算」講出來 —— 徽章塞進 8 個
+            # f-string 會讓「（估算）」黏在「→ 🚀 有基之彈」後面被讀成結論是估算的,
+            # 反而更容易誤解,故採整段獨立揭露。
+            _mid_bias_note = _bias_est_note(_bias_info8)
+            if _mid_bias_note:
+                st.caption(_mid_bias_note)
+
         # ── ⚔️ 攻擊火力分級（三環公式 SSS/A/B）────────────────────
         with st.expander('⚔️ 攻擊發動判定 — 三環公式 + 火力分級', expanded=True):
             # 取得需要的變數

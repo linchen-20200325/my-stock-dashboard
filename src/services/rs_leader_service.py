@@ -36,9 +36,11 @@ from shared.rs_screen_thresholds import (
     RS_LEADER_TOP_N,
     RS_LEADER_VERSION,
     RS_MAX_WORKERS,
+    RS_MIN_ALIGNED_ROWS,
     RS_SCAN_MAX,
 )
 from shared.signal_thresholds import (  # v19.178:AI prompt 引 RS σ 分級 SSOT
+    RS_MARKET_SIGMA_MIN_PCT,           # I1:空排行歸因要講出 σ 門檻,不寫死數字(§3.3)
     RS_SIGMA_LAG_MAX,
     RS_SIGMA_LEAD_MIN,
     RS_SIGMA_MILD_MIN,
@@ -48,6 +50,7 @@ from src.compute.screener.rs_leader_screener import (
     count_insufficient,
     market_interval_return,
     rank_rs_leaders,
+    score_rs_leader,
     to_rows,
 )
 from src.data.macro import fetch_yf_close
@@ -117,6 +120,88 @@ def _market_context(df_market: pd.DataFrame, lookback: int) -> dict:
     return {"market_ret_pct": ret, "is_down": _down, "banner": banner}
 
 
+def _has_price(stock: dict) -> bool:
+    """這一檔到底有沒有拿到任何 K 線 —— 把「抓不到價」與「有價但排不進」分開。"""
+    _df = (stock or {}).get("df")
+    try:
+        return _df is not None and len(_df) > 0
+    except TypeError:                     # 非序列型別(理論上不該發生)→ 視為沒有價
+        return False
+
+
+def _market_baseline_unusable(df_market: pd.DataFrame, lookback: int) -> bool:
+    """大盤基準自己能不能產出 σ 標準化讀數。True ＝ 不能(問題在**大盤側**)。
+
+    §2.1 SSOT:這裡**不自己算一次 σ** —— 直接用 L2 的 `score_rs_leader` 把大盤當成
+    一檔股票丟進去(個股序列＝大盤序列 ⇒ 超額恆 0),那麼唯一還會讓 `avg_rs` 變成
+    `None` 的只剩兩件事:對齊後共同交易日不足、或分母 σ ≤ `RS_MARKET_SIGMA_MIN_PCT`
+    /NaN。兩者都在大盤側。重寫一份 σ 判準就是第二套演算法,兩邊一漂又是一個假歸因。
+    """
+    return score_rs_leader(
+        {"stock_id": _TWII_TICKER, "name": "", "df": df_market},
+        df_market, lookback=int(lookback),
+    ).avg_rs is None
+
+
+def _empty_scan_note(stocks: list[dict], df_market: pd.DataFrame, *,
+                     lookback: int, beat_only: bool) -> str:
+    """排行為空時的**歸因**(§5 可觀測性;§1 不把單一猜測寫成原因)。
+
+    I1 2026-08-10 修掉的原文::
+
+        note = (f"⚠️ 掃描 {len(stocks)} 檔後無可排名標的：其中資料不足 {_insuff} 檔"
+                f"（歷史 < lookback 或 yfinance 抓不到價）"
+                + ("；且已勾選『只留贏過大盤』，此期間存活池全數未贏過大盤。" if beat_only else "。"))
+
+    兩句都可能是假的:
+
+      (a) H2(2026-08)之後,`calc_relative_strength` 在「大盤日報酬 σ ≤
+          `RS_MARKET_SIGMA_MIN_PCT` 或 NaN」時回 `avg_rs=None` → `TIER_INSUFFICIENT`。
+          那是**大盤側**的分母問題,個股資料再完整也排不進去;而畫面卻叫使用者去查
+          個股歷史長度與 yfinance —— 查一整天也查不到東西。
+      (b) 一檔都沒被成功量測時,「此期間存活池全數未贏過大盤」是憑空生出來的**市場
+          結論**:沒有人被量過,就不知道有沒有人贏。這比 (a) 更嚴重 —— (a) 只是指錯
+          方向,(b) 是無中生有一個投資判斷。
+    """
+    _n = len(stocks)
+    _insuff = count_insufficient(stocks, df_market, lookback=int(lookback))
+    # RS_RANKABLE_TIERS 涵蓋「資料不足」以外的全部分級 ⇒ 量測成功數 = 總數 − 資料不足數。
+    _measured = _n - _insuff
+    _need = max(int(lookback), RS_MIN_ALIGNED_ROWS)
+
+    if _measured > 0:
+        if beat_only:
+            return (f"⚠️ 掃描 {_n} 檔:成功量測 {_measured} 檔,但其中 **0 檔**在此期間"
+                    f"贏過大盤(已勾選「只留贏過大盤」)。取消勾選即可看到完整相對強弱"
+                    f"排序(含落後大盤的檔);另有 {_insuff} 檔資料不足,未列入量測。")
+        # beat_only=False 且有量測成功卻排不出列 → 只可能是排序/取數環節壞了。
+        # 不編一個像樣的理由蓋過去(§1),直接講「這不該發生」。
+        return (f"⚠️ 內部不一致:成功量測 {_measured} 檔,卻排不出任何一列"
+                f"(未勾選「只留贏過大盤」,理論上不該發生)。另有 {_insuff} 檔資料不足。"
+                f"請回報這段訊息。")
+
+    # ── 以下:一檔都沒有被成功量測(_measured == 0,即全部判「資料不足」)──────
+    _no_price = sum(1 for s in stocks if not _has_price(s))
+    _with_price = _insuff - _no_price
+    if _market_baseline_unusable(df_market, lookback):
+        _note = (f"⚠️ 掃描 {_n} 檔後無可排名標的,{_n} 檔全部判「資料不足」。"
+                 f"**問題指向大盤側**:基準 ^TWII 自己也產不出 σ 標準化讀數"
+                 f"(大盤日報酬標準差 ≤ {RS_MARKET_SIGMA_MIN_PCT:g}%,"
+                 f"或對齊後交易日 < {_need} 日)—— RS 的分母來自大盤,"
+                 f"分母不成立時每一檔都會踩到同一個問題。"
+                 f"請先確認 ^TWII 序列是否停更/凍結,**再考慮重抓個股**。")
+    else:
+        _note = (f"⚠️ 掃描 {_n} 檔後無可排名標的,{_n} 檔全部判「資料不足」:"
+                 f"其中 {_no_price} 檔完全抓不到 K 線(yfinance 回空)、"
+                 f"{_with_price} 檔有 K 線但與大盤對齊後的共同交易日 < {_need} 日"
+                 f"(歷史太短 / 欄位不符 / 日期對不上)。"
+                 f"大盤基準 ^TWII 本身正常(σ 可用),因此這是個股側的資料問題。")
+    if beat_only:
+        _note += ("(已勾選「只留贏過大盤」,但本次沒有任何一檔被成功量測,"
+                  "因此**無法**判斷有沒有人贏過大盤 —— 這不等於「全數落後」。)")
+    return _note
+
+
 @st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def _scan_cached(lookback: int, max_scan: int, beat_only: bool,
                  top_n: int = RS_LEADER_TOP_N) -> tuple[list[dict], dict]:
@@ -154,10 +239,7 @@ def _scan_cached(lookback: int, max_scan: int, beat_only: bool,
 
     note = ""
     if not rows:
-        _insuff = count_insufficient(stocks, dfm, lookback=lookback)
-        note = (f"⚠️ 掃描 {len(stocks)} 檔後無可排名標的：其中資料不足 {_insuff} 檔"
-                f"（歷史 < lookback 或 yfinance 抓不到價）"
-                + ("；且已勾選『只留贏過大盤』，此期間存活池全數未贏過大盤。" if beat_only else "。"))
+        note = _empty_scan_note(stocks, dfm, lookback=lookback, beat_only=beat_only)
 
     return rows, {**_base_meta, "candidates": len(survivors), "scanned": len(stocks),
                   "scored": len(rows), "pool_source": "基本面存活池（免費離線快照）",

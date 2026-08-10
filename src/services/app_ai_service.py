@@ -185,6 +185,13 @@ def build_llm_context(macro_info: dict) -> str:
         macro_stale_legend as _legend,
         macro_stale_prefix as _prefix,
     )
+    # I2(2026-08-10):BIAS240 的「這其實是 MA<N> 不是 MA240」估算標記。
+    # 語法與上面 G1 的 `[STALE:Nd] ` 同一套(行首方括號 + 圖例),SSOT 在 L2
+    # `src/compute/macro/macro_helpers.py`(L3 → L2 合法下行)。
+    from src.compute.macro.macro_helpers import (
+        bias_estimated_prompt_prefix as _est_prefix,
+        macro_estimated_legend as _est_legend,
+    )
     _vix = macro_info.get('vix') or {}
     _exp = macro_info.get('tw_export') or {}
     _pmi = macro_info.get('ism_pmi') or {}
@@ -219,13 +226,18 @@ def build_llm_context(macro_info: dict) -> str:
         _gap = round(float(_mi['m1b_yoy']) - float(_mi['m2_yoy']), 2)
         _lines.append(f'• 台灣 M1B={_mi["m1b_yoy"]:.1f}%  M2={_mi["m2_yoy"]:.1f}%  Gap={_gap:+.2f}%')
     if _bi.get('bias_240') is not None:
-        _lines.append(f'• 台股大盤年線乖離率 BIAS240：{_bi["bias_240"]:+.1f}%')
+        # I2:BIAS240 是**日頻**(不套月頻過期標記),但它有另一種「不是實測值」的
+        # 失真 —— TWII 歷史不足 240 天時 `ma240` 其實是 MA<N>。只寫數字的話
+        # LLM 會把它當實測年線寫進建議(§1)。行首標記 + 下方圖例補上這件事。
+        _lines.append(f'• {_est_prefix(_bi)}台股大盤年線乖離率 BIAS240：'
+                      f'{_bi["bias_240"]:+.1f}%')
     if not _lines:
         return '（量化數據載入中，請先按「🚀 一鍵更新全部數據」）'
     _out = '\n'.join(_lines)
-    # 有任何一行被標過期 → 附圖例;不解釋 `[STALE:Nd]` 等於沒標(LLM 不會自己懂)
-    _lg = _legend(_out)
-    return f'{_lg}\n\n{_out}' if _lg else _out
+    # 有任何一行被標過期 / 標估算 → 附對應圖例;不解釋 `[STALE:Nd]` / `[ESTIMATED:...]`
+    # 等於沒標(LLM 不會自己懂)。兩種標記各自獨立判斷,沒命中的那種不加(免雜訊)。
+    _lgs = [_lg for _lg in (_legend(_out), _est_legend(_out)) if _lg]
+    return '{}\n\n{}'.format('\n'.join(_lgs), _out) if _lgs else _out
 
 
 def generate_ai_comment(data: dict) -> str:
@@ -237,10 +249,18 @@ def generate_ai_comment(data: dict) -> str:
             val_label (357評價), trend, cl (合約負債億), cx (資本支出億)
             foreign_buy, trust_buy (三大法人, 億), score (多因子總分)
             m1b_diff (M1B-M2 差距%)
+            bias_info (**選填**, I2):整包 `session_state['bias_info']`。
+                只用來判斷 `bias_240` 是否為「資料不足 240 天」的估算值,
+                並在文案裡加「（估算）」徽章。**不影響任何判定分支**
+                （下方 `b240 > 25` / `< -20` 一行未動）;缺這個 key 時
+                徽章為空字串,輸出與 I2 前逐字元相同。
 
     Returns:
         多行建議文字(每行前綴 '• ')
     """
+    # I2:估算徽章。純顯示 —— 不參與任何 if 判斷(§-1 本批不改判定)。
+    from src.compute.macro.macro_helpers import bias_estimated_badge as _bias_badge_fn
+    b240_badge = _bias_badge_fn(data.get('bias_info'))
     lines = []
     score  = data.get('score', 0)
     rsi    = data.get('rsi') or 50
@@ -299,14 +319,14 @@ def generate_ai_comment(data: dict) -> str:
         lines.append(f'📈 RSI={rsi:.0f}（超買區），注意短線回調風險，不宜追高。')
 
     if b240 > 25:
-        lines.append(f'🔴 【過熱警告】年線正乖離{b240:.0f}%（>25%），策略1：開始分批減碼。'
+        lines.append(f'🔴 【過熱警告】年線正乖離{b240:.0f}%{b240_badge}（>25%），策略1：開始分批減碼。'
                      '建議回收本金，剩餘部位守10週線（≈50MA）。')
     elif b240 < -20:
-        lines.append(f'✅ 【低估機會】年線負乖離{abs(b240):.0f}%（<-20%），'
+        lines.append(f'✅ 【低估機會】年線負乖離{abs(b240):.0f}%{b240_badge}（<-20%），'
                      '策略1：左側布局最佳時機，分批進場（2008/2020模式）。')
 
     if b240 > 25 and b20 > 10:
-        lines.append('🟠 【分批減碼】年線乖離>25% + 月線乖離>10%雙重過熱，'
+        lines.append(f'🟠 【分批減碼】年線乖離>25%{b240_badge} + 月線乖離>10%雙重過熱，'
                      '建議先減50%部位，剩餘守5MA停利。')
 
     if score < 60 and '空頭' in trend:

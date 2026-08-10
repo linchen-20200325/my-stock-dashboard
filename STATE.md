@@ -1,5 +1,80 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🗣️ 2026-08-08 I 批:對話端的捏造 regime + 估算值揭露(v19.191,5518 passed)
+
+### I1-① `ai_qa_service._regime()` —— C1 之後真正的最後一處
+
+`macro_state.json` 不存在時回 `'neutral'`(`normalize_regime(None)` 與 `except` 兩條路都是),
+**直接餵 `score_single_stock`**。H1 已查證 regime 決定 `WEIGHT_TABLES`,三態差距是**排名換人**的量級。
+
+**兩個 caller,只有一個是活的**:
+- `_tool_get_stock_score` → **真謊**(total/grade 是 regime 的函數)
+- `_tool_get_risk_plan` → **惰性**:`RiskController.position_size()` 只用 `MAX_POSITION_PER_STOCK`,
+  regime 只影響 `target_exposure`/`max_stock_budget` 而該工具沒呼叫。⇒ 不連坐拒絕(停損/ATR 不吃 regime,
+  擋掉是假 fail-loud),改成「算得出來才傳」+ **行為斷言釘住前提**:bull/bear/預設/junk 四種 regime 的
+  `position_size` 輸出必須相等,並以 `portfolio_exposure('bull') != ('bear')` 自證非空測。
+  哪天有人把曝險接進 position_size,那條會紅。
+
+**設計決定:對話端整份拒絕(`ok=False`),比 H1 的表格版更嚴。** 理由:
+五個子分數不吃 regime,技術上可以回;**表格情境這樣做是對的(空白格就是空白格)**。
+**但下游是 LLM,空白格會被自動填** —— 六因子加權表的定義就是「把子分數合成一個數字」,
+加上 `SYSTEM_INSTRUCTION` 第 3 條**強制**模型「開頭第一句先下明確方向判斷」
+⇒ 交出五個子分數等於結構性地邀請它自己綜合,而未加權綜合 = 悄悄選了一組等權重、包在散文裡,
+**使用者無從稽核 —— 比表格造假更難發現**。
+判定理由是 SSOT(共用 `ScoringRegimeDecision.reason`),**措辭不共用**(H1 的 `notice()` 叫使用者去看
+「多因子評分排行」那張表,在對話裡是錯的指引;有測試釘住)。
+
+**連帶必修**:`_tool_get_market_state` 原直讀 `macro_state.json` 的 `market_regime` ⇒ 評分改走 C1 契約後,
+**同一段對話會出現兩個 regime**。兩支工具現在同走 `get_macro_regime()` → 退 `get_macro_state()`
+(**同一支函式**,只是 warroom 缺席,不是第二套演算法);`trend_regime` 欄名加註「僅為輸入非結論」。
+
+### I1-② 權重 caption
+
+`_render_multifactor_ranking` 寫死 `WEIGHT_TABLES['neutral']` ⇒ regime=bull 時宣稱中性權重,
+而畫面上那些分數**確實是用 bull 權重算的**。
+修法:改吃 `score_single_stock()` 回傳 dict 上的 `'regime'` 戳記 = **這批數字當下真的用過的那一組**,
+而非渲染時重讀總經(重讀描述的是「現在的市場」,跑完批次再開總經頁又會分岔)。
+說不出用了哪組 → **一個權重數字都不印**。另加落差警示:戳記 ≠ 當前 regime 時提示「名次可能換人,請重跑」。
+同檔「多因子資料計算中」三態化(H1 之後「總經未評估」也會讓 `score_t3` 空,那時「計算中」是錯的措辭)。
+
+### I1-③ RS 空排行 —— **原判斷低估,有兩句假話**
+
+(a) 歸因寫死「歷史 < lookback 或 yfinance 抓不到價」,漏掉 H2 剛修的 σ 路徑;
+(b) `beat_only` 時**無條件**接「此期間存活池全數未贏過大盤」——
+**一檔都沒被量測到時,那是憑空生出來的市場結論**。(a) 指錯方向,(b) 無中生有一個投資判斷。
+
+四態歸因:量到了才可以斷言 / 內部不一致就直說不該發生 / 大盤側 σ 不成立(**指向 ^TWII,明講「先別重抓個股」**)/
+個股側再拆「完全抓不到 K 線」vs「共同交易日不足」。σ 判定用「把大盤當一檔股票丟進 `score_rs_leader`」
+(**不自己重算 σ** —— 重寫一份就是第二套演算法)。
+
+### I2 `bias_240` 估算值揭露(**只揭露,判定一行不動**)
+
+`compute_twii_bias` 在 `len < 240` 時把 90 日均值稱作 MA240,帶 `is_estimated` 旗標
+—— **但 10 個消費點只有 1 個顯示它**,其餘拿裸值,含**直接餵 Gemini 的兩處**。
+
+揭露 SSOT 放 L2 `macro_helpers`(消費端橫跨 L3+L5,放任一 L5 立刻變 5 份複本);
+prompt 標記 `[ESTIMATED:MA90/240] ` **沿用 G1 的 `[STALE:Nd] ` 同形語法**,不另發明第二套。
+零行為變更以 11 個取值(涵蓋綠/黃/紅/負乖離邊界)× 估算/非估算逐位對帳 + 遞迴 `_strip_badge()` 證明
+整棵輸出樹唯一差異就是那三個字。
+
+⚠️ **下一步的陷阱(已寫進報告,未做)**:若讓 `is_estimated` 影響判定,作戰室 5 分鐘清單的
+「年線位置」格 `_ok` 會 False→True ⇒ **⚠️紅 變 ✅綠**。**「未知」被實作成「有利」** ——
+正是本 session 一路在拆的東西,只是這次會由「修好一個問題」順手製造出來。正解是第三態 ⬜。
+
+⚠️ **且 ROI 存疑**:`compute_twii_bias` 會**先**試 `fetch_twii_2y_for_ma240()`,只有那條也失敗才落估算
+⇒ 線上正常路徑幾乎不觸發。**建議先量測實際頻率再決定要不要動那 10 個判定點。**
+
+### 待辦(新增)
+
+- 🟡 `is_estimated` 是否影響判定 —— 10 個判定點清單已備妥(含 `calculate_system_state` →
+  `exposure_limit_pct` → 建議持股油門這條最敏感的)。**要動就一次統一成「第三態:未評估」**,只改一部分會同頁矛盾
+- 🟡 `section_state`(拐點)/ `section_cross_ai`(⑤ 計分)/ `tab_edu` 的 `bias_240` 消費點未揭露(不在 I2 範圍)
+- ⚪ `rs_leader_service._market_context()` 在區間報酬**恰為 0.0%** 時印「大盤其實在漲」(`_down = ret < 0`),凍結序列會踩到
+- ⚪ `BIAS_MA240_FULL_WINDOW_DAYS` 暫放 L2,語意上該住 L0。⚠️ 順帶查到 **CLAUDE.md §3.3 表列的 `ANNUAL_MA`
+  指向 `config.py:14`,但 grep 全 repo 找不到該常數的定義** —— 該表列已失真
+- ⚪ `section_traffic_light.py:232` 寫進 warroom 的 `regime` 仍是 `get('regime','neutral')`(趨勢面輸入,
+  目前只污染揭露欄位,不觸發 `get_macro_state` 的 compat 重算)
+
 ## ⏳ 2026-08-08 G/H「日曆天量期數資料」+ 最後的捏造值(v19.188~190,5368 passed)
 
 ### G1~G3:同一個根因的三次現身 —— **拿日曆天去量一個以「期」為單位發布的東西**

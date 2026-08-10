@@ -14,6 +14,8 @@ import streamlit as st
 
 from shared.health_thresholds import HEALTH_GRADE_A_MIN
 from shared.thresholds import YIELD_MID_DEC
+# I2(2026-08-10):大盤 `bias_240` 估算揭露文案 SSOT(L5 → L2,合法下行依賴)。
+from src.compute.macro import bias_estimated_note as _bias_est_note
 from src.services.app_ai_service import generate_ai_comment
 from src.ui.render import STRATEGY_TECHNICAL, strategy_conclusion  # v19.174 去識別化
 
@@ -72,10 +74,13 @@ def render_op_recommendation_section(sid2: str, health2,
     if not _macro_loaded:
         st.caption('⬜ 大盤格局尚未評估（先開一次「🌡️ 總經」分頁按更新）→ 上面 4 個共振訊號中的'
                    '「大盤」這一項**未計分**，不代表大盤不利。')
+    # I2:取值**提到 try 之外**（取法一字未改，仍是 `.get('bias_info', {})`，
+    # 故 None 值時下方仍會照舊拋 AttributeError → 走原本的降級警語，行為不變）。
+    # 這樣做的理由：估算揭露不該被「AI 文案那段出錯」一起吞掉（§1 降級要看得見）。
+    _bias_g = st.session_state.get('bias_info', {})
     try:
         _mkt_top_g = st.session_state.get('mkt_info', {})
         _m1b_top_g = st.session_state.get('m1b_m2_info', {})
-        _bias_g = st.session_state.get('bias_info', {})
         _m1b_diff_g = (_m1b_top_g.get('m1b_yoy', 0) - _m1b_top_g.get('m2_yoy', 0)
                        if _m1b_top_g else 0)
         # 取 Tab3 最近分析的外資資料
@@ -90,6 +95,10 @@ def render_op_recommendation_section(sid2: str, health2,
             'vcp_ok':      bool(vcp2 and isinstance(vcp2, dict) and vcp2.get('contracting')),
             'bias_240':    _bias_g.get('bias_240', 0),
             'bias_20':     _bias_g.get('bias_20', 0),
+            # I2:整包帶進去只為了讓 generate_ai_comment 能在年線乖離那兩句
+            # 加「（估算）」徽章。**不影響任何判定分支**(該函式的 b240 門檻未動);
+            # 缺這個 key 時徽章為空字串,輸出與 I2 前逐字元相同。
+            'bias_info':   _bias_g,
             # val_label / trend 在原 tab_stock 內走 `if 'xx' in dir()`,但 _357_label2 /
             # _trend_text2 從未在 render_tab_stock 內被定義,故 dir() 永遠 False,實質 ''
             'val_label':   '',
@@ -110,3 +119,9 @@ def render_op_recommendation_section(sid2: str, health2,
                 '</div>', unsafe_allow_html=True)
     except Exception as _ai_err:
         st.warning(f'⚠️ AI 分析暫時無法使用（{type(_ai_err).__name__}），以上為規則引擎建議。')
+    # I2:上面那段文案裡的「年線正/負乖離」是**大盤** TWII 的乖離,
+    # 而它在 TWII 歷史不足 240 天時是估算值。徽章只有三個字,補一句完整說明。
+    # 放在 try/except 之外 —— 揭露不該因為 AI 文案那段失敗就一起消失。
+    _op_bias_note = _bias_est_note(_bias_g)
+    if _op_bias_note:
+        st.caption(_op_bias_note)

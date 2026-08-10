@@ -1474,6 +1474,137 @@ def get_china_snapshot(fred_api_key: str) -> dict:
     return china_macro_snapshot(fetch_china_macro(fred_api_key))
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# I2（2026-08-10）— `bias_240` 估算旗標的「揭露」SSOT（**只揭露，不改判定**）
+#
+# 【修的是什麼】`src/data/macro/macro_snapshot.compute_twii_bias` 在 TWII 歷史
+# 不足 240 個交易日時，是用「手上全部資料的均值」當 MA240
+# （`_cs.tail(min(240, _n)).mean()`），並誠實回傳 `is_estimated=True` + `data_days=N`。
+# 但 2026-08-10 盤點：全 repo 讀 `bias_240` 的 10 個消費點裡，**只有
+# `src/ui/tabs/macro/section_long.py` 一處**讀那個旗標；其餘（五桶燈號、今日作戰室
+# 紅線、中期策略矩陣、個股即時操作建議、以及**兩處實際餵給 Gemini 的 prompt**）
+# 拿到的都是裸數字 —— 一個「距 90 日均線的乖離」被當成年線乖離講給人與 LLM 聽。
+# 對 LLM 尤其危險：prompt 裡只有數字時，模型沒有任何依據能分辨，只能當實測值寫進建議
+# （§1「錯誤的數字比沒有數字更危險」）。
+#
+# 【本批的範圍限制（§-1）】只做揭露 —— 顯示文字 + prompt 文字。
+# **不得**讓 `is_estimated` 影響任何燈號 / 門檻 / 分數 / 桶判定：那是行為變更，
+# 需 user 明確指派範圍。故本區塊全部是「產生字串」，**沒有任何一個函式回傳布林
+# 以外的判定結果**，也沒有任何 caller 拿它做分支判斷。
+#
+# 【為何放 L2】本區塊只做純字串組裝（無 I/O、無 streamlit），而消費端橫跨
+# L3（`src/services/app_ai_service.py`）與 L5（4 個 macro section + 1 個 stock
+# section）。L3 / L5 都能合法下行 import L2（§8.2）；放進其中任一個 L5 檔會立刻
+# 變成第 2~6 份逐字複本（§3.3 反捏造：同一句揭露文案不得有兩份真相）。
+#
+# 【標記語法沿用 G1，不另發明第二套】`[ESTIMATED:...] ` 為**行首**、方括號、
+# 結尾一個空格 —— 形狀與 `src/services/ai_structured_summary.py` 的
+# `macro_stale_prefix()` / `MACRO_STALE_LEGEND`（`[STALE:67d] `）完全一致，
+# 且同樣附一段「圖例」把標記的意思講給 LLM 聽（不解釋 = 等於沒標）。
+# ════════════════════════════════════════════════════════════════════════════
+
+#: 「年線」成形所需的交易日數。
+#: ⚠️ 這**不是新門檻** —— 它必須與 `macro_snapshot.compute_twii_bias` 的
+#: `is_estimated = _n < 240` 是同一個數字。兩邊一致性由
+#: `tests/test_i2_bias_estimated_disclosure.py` 以**行為**釘住
+#: （239 天 → is_estimated True、240 天 → False），不靠掃描原始碼字面。
+BIAS_MA240_FULL_WINDOW_DAYS: int = 240
+
+#: 餵給 LLM 的估算標記圖例。`[ESTIMATED:...]` 對模型不是自明的，不解釋等於沒標。
+MACRO_ESTIMATED_LEGEND = (
+    '⚠️ 估算標記說明（務必遵守）：行首 `[ESTIMATED:MA<實際>/<名目>]` 代表該指標名稱裡的'
+    '均線長度**尚未成形** —— 系統手上的大盤歷史只有 <實際> 個交易日，'
+    '所謂「年線（MA240）」實際上是用這 <實際> 日算出來的均線。'
+    '這是**估算值**：只能敘述成「以目前僅有的 <實際> 日均線估算」，'
+    '**不得**當成真正的年線乖離率陳述、不得據此判斷長期位階或多空循環位置，'
+    '也不得拿它推論「站上／跌破年線」。'
+    '沒有標記的行才是足額 240 個交易日的真實年線。'
+)
+
+
+def bias_is_estimated(bias_info) -> bool:
+    """`bias_info['bias_240']` 是否為「資料不足 240 天」下的估算值。
+
+    §1：旗標缺席 → `False`。理由：唯一的 producer（`compute_twii_bias`）**一定**
+    會帶這個 key，缺席代表這份 dict 不是它產的（例：測試 fixture、舊快照），
+    此時**不猜、不反推**（不從 `data_days` 倒推，那會變成第二套判定）。
+
+    Parameters
+    ----------
+    bias_info : dict | None
+        `st.session_state['bias_info']` 或 `compute_twii_bias()` 的回傳。
+    """
+    if not isinstance(bias_info, dict):
+        return False
+    return bool(bias_info.get('is_estimated'))
+
+
+def bias_data_days(bias_info):
+    """估算時實際用了幾個交易日；取不到 → `None`。
+
+    §1：取不到時回 `None` 而**不是 0** —— 0 會被下游格式化成「0 天資料」，
+    那是一個具體但假的讀數。
+    """
+    if not isinstance(bias_info, dict):
+        return None
+    try:
+        _d = int(bias_info['data_days'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return _d if _d > 0 else None
+
+
+def bias_estimated_badge(bias_info) -> str:
+    """畫面用短徽章：估算 → `'（估算）'`；否則 `''`（可直接串在數字/標題後）。"""
+    return '（估算）' if bias_is_estimated(bias_info) else ''
+
+
+def bias_estimated_note(bias_info) -> str:
+    """畫面用完整揭露句（`st.caption` 等）；非估算 → `''`。
+
+    刻意把「判定沒有跟著調整」也講出來：本批只揭露不改判定，若只寫「這是估算」
+    而不寫「燈號仍照它判」，使用者會誤以為系統已經對估算值做了特別處理。
+    """
+    if not bias_is_estimated(bias_info):
+        return ''
+    _d = bias_data_days(bias_info)
+    if _d is not None:
+        _head = (f'目前只有 {_d} 個交易日的大盤歷史，'
+                 f'而年線需要 {BIAS_MA240_FULL_WINDOW_DAYS} 個交易日')
+    else:
+        # §1:天數缺席時不得填 0（那是一個具體但假的讀數），照實說「不明」。
+        _head = (f'系統手上的大盤歷史天數不明（有標估算、但沒帶 data_days），'
+                 f'總之未達年線所需的 {BIAS_MA240_FULL_WINDOW_DAYS} 個交易日')
+    return (f'⚠️ 年線乖離是**估算值**：{_head} —— '
+            '畫面上的「MA240／年線」實際是用手上這些天數算出來的均線，'
+            '不是真正的年線位階。'
+            '（目前燈號與門檻仍直接套用這個估算值判定，尚未針對估算另設規則。）')
+
+
+def bias_estimated_prompt_prefix(bias_info) -> str:
+    """LLM prompt 的行首估算標記：`'[ESTIMATED:MA90/240] '`；非估算 → `''`。
+
+    形狀對齊 `ai_structured_summary.macro_stale_prefix()` 的 `'[STALE:67d] '`
+    （行首、方括號、結尾一個空格，可直接串在指標名稱前），不另發明第二套語法。
+    天數不明時實際天數寫 `?`（§1：不留白、不假裝知道）。
+    """
+    if not bias_is_estimated(bias_info):
+        return ''
+    _d = bias_data_days(bias_info)
+    _actual = str(_d) if _d is not None else '?'
+    return f'[ESTIMATED:MA{_actual}/{BIAS_MA240_FULL_WINDOW_DAYS}] '
+
+
+def macro_estimated_legend(context_text: str) -> str:
+    """`context_text` 內含任何 `[ESTIMATED:` → 回圖例；否則 `''`。
+
+    判斷方式與 `ai_structured_summary.macro_stale_legend()` 一致（子字串偵測）：
+    沒有任何估算行時不加圖例 —— 免得 LLM 因為「有人跟我解釋過估算」而腦補出
+    根本不存在的估算值。
+    """
+    return MACRO_ESTIMATED_LEGEND if '[ESTIMATED:' in (context_text or '') else ''
+
+
 # ════════════════════════════════════════════════════════════════
 # v18.284 — 總經五桶總結（長期/中期/短線急殺/籌碼/新聞）純函式
 #   閾值全讀 shared.macro_buckets SSOT；本函式只負責「取值 → 分級 → 聚合」。
@@ -1612,18 +1743,17 @@ def compute_five_bucket_summary(
         "ism_pmi":       _num(_g(macro_info, "ism_pmi", "value")),
         "us_core_cpi":   _num(_g(macro_info, "us_core_cpi", "yoy")),
         "tw_export":     _num(_g(macro_info, "tw_export", "yoy")),
-        # ⚠️ H2 2026-08 揭露（**本版不改行為，只寫清楚現況**）：
+        # ⚠️ H2 2026-08 揭露 → I2 2026-08-10 接線（**判定仍不變**）：
         #   `bias_info` 由 `src/data/macro/macro_snapshot.compute_twii_bias` 產生，
         #   它在 TWII 歷史 < 240 天時**用現有天數的均值當 MA240**
         #   （`_cs.tail(min(240, _n)).mean()`），並回傳 `data_days` + `is_estimated=True`。
         #   也就是說 `bias_240` 有可能其實是「距 MA90 的乖離」。
-        #   目前全 repo **只有 `src/ui/tabs/macro/section_long.py` 一處**會把
-        #   `is_estimated` 顯示出來（標題加「（估算）」+「N天資料」）；本函式與
-        #   `services/app_ai_service.build_llm_context`、`macro/section_news_ai`、
-        #   `section_warroom`、`section_mid`、`stock_sections/section_op_recommendation`
-        #   等消費點都只取 `bias_240` 數值，估算旗標在這裡被靜默丟掉。
-        #   → 本行若改成「is_estimated 時回 None」會**改變五桶燈號**（行為變更），
-        #     依 §-1 需 user 指派才動；先在此留下標記，避免下一個讀者以為已揭露。
+        #   H2 當時：全 repo 只有 `section_long.py` 一處顯示該旗標，其餘消費點靜默丟掉。
+        #   I2 已補上揭露 —— 但**只補在顯示字串與 prompt 文字**（見下方 `_bias_badge`
+        #   與各 caller），本行取值一字未改：`values["bias_240"]` 仍是原始數值，
+        #   `classify_danger` / `aggregate_level` 逐位不變。
+        #   → 若改成「is_estimated 時回 None」會**改變五桶燈號**（行為變更），
+        #     依 §-1 需 user 指派才動；本批明確不做（見 PR 說明的「若要改判定」清單）。
         "bias_240":      _num(_g(bias_info, "bias_240")),
         # v19.175 P0-B:接線(原本 values 完全沒有這兩個 key → 永久 gray)。
         # 單位皆與 spec 門檻同刻度:us10y=百分點(4.5/5.0)、dxy=指數點(105/110)。
@@ -1651,14 +1781,25 @@ def compute_five_bucket_summary(
         "news_systemic": _news_sys,
     }
 
+    # I2：`bias_240` 為估算值時，只在**顯示字串**後綴徽章（「+32.7%（估算）」）。
+    # `classify_danger` 吃的仍是 `values[...]` 原始數值 → 燈號 / 桶等級 / headline
+    # 的主因挑選逐位不變。非估算（或 producer 沒帶旗標）時 badge 為空字串，
+    # 輸出與本次改動前**逐字元相同**。
+    _bias_badge = bias_estimated_badge(bias_info)
+
     out: dict = {}
     for bucket in BUCKET_ORDER:
         details = []
         for s in specs_for_bucket(bucket):
             v = values.get(s.key)
+            _value_str = fmt_value(v, s)
+            if s.key == "bias_240" and v is not None and _bias_badge:
+                # v is None 時 fmt_value 已回「—」，再貼「（估算）」只會變成
+                # 「—（估算）」這種沒有意義的組合 → 只在真有數字時貼。
+                _value_str = f"{_value_str}{_bias_badge}"
             details.append({
                 "key": s.key, "label": s.label,
-                "value_str": fmt_value(v, s),
+                "value_str": _value_str,
                 "danger": classify_danger(v, s), "note": s.note,
             })
         blevel = aggregate_level([d["danger"] for d in details])
