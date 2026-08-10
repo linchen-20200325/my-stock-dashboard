@@ -50,6 +50,78 @@ _TOOLS = {
 _BUNDLE = {"評分": {"ok": True, "data": {"total": 82}, "provenance": {"source": "FinMind", "as_of": "2026-07-11"}}}
 
 
+# ---- 決定方向的工具失敗時,第一句不得是方向詞（I1 後續 · 2026-08-11 實機發現）-----
+#
+# 【這條在防什麼】
+# I1 已讓 `get_stock_score` 在總經未評估時整份拒絕(ok=False),實機驗證通過:
+# 工具確實不吐分數,模型也如實轉述了原因。**但模型的第一句仍是「判斷為中性」。**
+#
+# 根因是 `SYSTEM_INSTRUCTION` 第 3 條列的五個詞 ——
+#     偏強 / 中性偏多 / 中性 / 中性偏弱 / 偏弱
+# —— **全部都是方向詞,沒有逃生口**。模型被強制要在第一句下方向判斷,而它沒有依據,
+# 於是挑了中間那個。這就是本 session 一路在拆的「不知道 → 當成中性」,只是這次
+# 發生在**散文層**:前面每一層(權重表、gate、工具契約)都拒絕捏造了,最後被那句話還原回來。
+#
+# 傷害性不對稱:使用者掃第一句就走,會記得「AI 說中性」,不會記得後面三段解釋。
+#
+# 【為什麼這組測試只能做到這樣】
+# 這是 prompt 改動,真正的效果發生在 LLM 身上,無法用單元測試證明模型「真的照做」。
+# 所以這裡驗兩件**做得到**的事:
+#   (a) 逃生口存在,且**綁定在 ok=false 這個條件上**(不是一句飄著的建議);
+#   (b) instruction 真的有送進 Gemini payload(wiring,行為斷言)。
+# 模型是否遵守,只能靠實機抽驗 —— 這點如實寫在這裡,不假裝測試涵蓋了它。
+def test_direction_verdict_has_a_non_directional_escape():
+    """(a) 第 3 條的詞表必須有非方向選項,且該選項綁定在「決定方向的工具 ok=false」。"""
+    from src.services.ai_qa_service import SYSTEM_INSTRUCTION as _SI
+
+    assert "無法判斷方向" in _SI, (
+        "第一句的可選詞全是方向詞(偏強/中性偏多/中性/中性偏弱/偏弱)時,"
+        "模型在沒有依據的情況下只能挑中間值 —— 必須給一個非方向的逃生口。")
+    # 逃生口不能是「模型自己看著辦」,要綁在明確的觸發條件上
+    assert "ok=false" in _SI.lower(), "逃生口必須綁定在『工具回 ok=false』這個條件上"
+    assert "get_stock_score" in _SI and "get_market_state" in _SI, (
+        "必須點名『哪個工具』決定方向,否則模型不知道何時該走例外")
+    # 最關鍵:必須明講「中性」不是「沒有判斷」的替代品
+    _tail = _SI[_SI.index("無法判斷方向"):]
+    assert "中性" in _tail and ("嚴禁" in _tail or "不得" in _tail), (
+        "必須明文禁止用『中性』替代 —— 『中性』本身就是一個方向判斷,"
+        "缺乏依據時說中性 = 把『不知道』講成『我判斷是持平』")
+
+
+def test_system_instruction_is_actually_sent_when_tool_refuses():
+    """(b) wiring 行為斷言:工具回 ok=false 時,instruction 仍隨 payload 送出。
+
+    不驗字面內容(那是上一條的事),只驗「它真的有到 Gemini 手上」——
+    prompt 規則寫得再好,沒接上就等於沒有。
+    """
+    from src.services.ai_qa_service import SYSTEM_INSTRUCTION as _SI
+
+    seen = {}
+
+    class _CapHttp:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, payload):
+            self.calls += 1
+            seen.setdefault("systems", []).append(
+                payload.get("system_instruction", {}).get("parts", [{}])[0].get("text", ""))
+            if self.calls == 1:
+                return _fc("get_stock_score", {"stock_id": "2330"})
+            return _t("無法判斷方向:總經未評估。")
+
+    _refusing = {"get_stock_score":
+                 lambda stock_id: {"ok": False, "error": "總經未評估:紅綠燈尚未算出結論。"}}
+    _http = _CapHttp()
+    r = run_agent("2330 值得買嗎?", api_key="x", gemini_http=_http, tools=_refusing)
+
+    assert _http.calls == 2, "工具回 ok=false 後仍應把結果送回模型讓它說明(而非直接中止)"
+    assert r.tool_calls[0]["result"]["ok"] is False
+    assert all(_SI == s for s in seen["systems"]), (
+        "每一輪都必須帶上同一份 SYSTEM_INSTRUCTION;"
+        "若第二輪(工具失敗後那輪)漏帶,模型就是在沒有規則的情況下自由發揮")
+
+
 # ---- 聊天 -------------------------------------------------------------------
 def test_chat_numbers_from_tools():
     g = _Http([_fc("get_stock_score", {"stock_id": "2330"}), _t("2330 評分 82。")])
