@@ -63,6 +63,8 @@ CACHE_DIR = Path("data_cache/sector_flow")
 PARQUET_PATH = CACHE_DIR / "daily_net.parquet"
 BUBBLE_PATH = CACHE_DIR / "bubble_latest.json"
 META_PATH = CACHE_DIR / "metadata.json"
+#: Stage 2 UI 秒讀:{裸股號: 產業別},供把使用者持股對映板塊(highlight)。
+TICKER_SECTOR_PATH = CACHE_DIR / "ticker_sector.json"
 
 #: bootstrap 預設回溯日曆天(≈ 20 交易日 + 週末/短假緩衝,湊滿 WINDOW_SIZE)。
 _DEFAULT_BOOTSTRAP_DAYS = 30
@@ -174,6 +176,27 @@ def _write_bubble_json(full: pd.DataFrame) -> dict:
     return meta
 
 
+def _write_ticker_sector_json(industry_map: dict) -> None:
+    """多存一份 {裸股號: 產業別} 供 Stage 2 UI 把持股對映板塊(highlight)。
+
+    §1 Fail Loud, Never Fake:industry_map 空(FinMind + openapi 皆敗)→ **不寫**,
+    不留一份空表冒充成功;既有(上次成功那份)保留不動。只清洗掉 code/sector 任一為空
+    的髒列(不臆造產業別)。
+    """
+    if not industry_map:
+        print("[sector_flow] ⚠️ industry_map 空 → 不寫 ticker_sector.json(§1 不造假,保留既有)")
+        return
+    clean = {str(k).strip(): str(v).strip()
+             for k, v in industry_map.items()
+             if str(k).strip() and str(v).strip()}
+    if not clean:
+        print("[sector_flow] ⚠️ industry_map 清洗後為空 → 不寫 ticker_sector.json")
+        return
+    TICKER_SECTOR_PATH.write_text(
+        json.dumps(clean, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"[sector_flow] ✅ ticker_sector.json:{len(clean)} 檔 → {TICKER_SECTOR_PATH}")
+
+
 def _write_metadata(full: pd.DataFrame, diag: dict, cov: dict,
                     last_error: str | None) -> None:
     payload = {
@@ -257,6 +280,9 @@ def main(argv=None) -> int:
     full = _merge_dedupe(existing, sector_daily)
     full.to_parquet(PARQUET_PATH, compression="snappy", index=False)
     print(f"[sector_flow] ✅ 寫入 {len(full)} 列 → {PARQUET_PATH}")
+
+    # parquet 成功後多存一份持股→板塊對映(Stage 2 UI highlight 用);空表不寫(§1)。
+    _write_ticker_sector_json(industry_map)
 
     _write_bubble_json(full)
     _write_metadata(full, diag, cov, last_error=None)

@@ -51,3 +51,9 @@ SECTOR_UNCLASSIFIED: str = "未分類"
 #: 一個板塊在某交易日「有效成分股」數量下限;低於此該板塊當日流入代表性不足。
 #: 目前僅作為 coverage 診斷欄位輸出(不濾除),Stage 2 畫圖可據此決定是否淡化顯示。
 MIN_SECTOR_STOCKS: int = 1
+
+# ── Stage 2 UI:快取新鮮度門檻(§3.3 具名常數;§4.1 交易日≠日曆日)──────────
+#: bubble/metadata 快取「過期」的 wall-clock 上限(日曆日)。cron 每個「交易日」凍結一次,
+#: 業務語意是「允許落後 2 個交易日」;但跨週末 2 個交易日最長 = 週五→週二 = 4 個日曆日,
+#: 故以 4 個日曆日作為 metadata.updated_at 距今的 staleness wall-clock 門檻(超過 → is_stale)。
+SECTOR_FLOW_STALE_MAX_CALENDAR_DAYS: int = 4
