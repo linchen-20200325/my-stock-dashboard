@@ -230,3 +230,60 @@ def test_apptest_render_tab_sector_flow_real_data():
     if at.exception:
         msgs = [f"{e.type}: {str(e.value)[:300]}" for e in at.exception]
         pytest.fail("render_tab_sector_flow 有 uncaught exception:\n" + "\n".join(msgs))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# cron main() — ticker_sector.json 與三大法人資料解耦(§1 稽核回歸)
+# ═══════════════════════════════════════════════════════════════════════
+def _patch_cron_paths(monkeypatch, U, tmp_path):
+    """把 cron 全部落點導向 tmp_path,並固定候選交易日(免受跑測當天是週末影響)。"""
+    import datetime as _d
+    monkeypatch.setattr(U, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(U, "PARQUET_PATH", tmp_path / "daily_net.parquet")
+    monkeypatch.setattr(U, "BUBBLE_PATH", tmp_path / "bubble_latest.json")
+    monkeypatch.setattr(U, "META_PATH", tmp_path / "metadata.json")
+    monkeypatch.setattr(U, "TICKER_SECTOR_PATH", tmp_path / "ticker_sector.json")
+    monkeypatch.setattr(U, "_candidate_trading_days",
+                        lambda *a, **k: [_d.date(2026, 8, 11)])   # 固定一個平日
+
+
+def test_cron_writes_ticker_sector_when_inst_empty_but_map_present(monkeypatch, tmp_path):
+    """回歸:盤前手動跑(當日三大法人未公布 → inst_df 空)時,只要 industry_map 抓得到,
+    ticker_sector.json 仍須落地。highlight 只依賴這份對映,與「今天 inst 出了沒」無關。
+
+    這正是實機 run(盤前 09:56 TW 手動觸發)走 `inst_df.empty` 早退 → 從沒生成
+    ticker_sector.json → ⭐ 持股高亮失效的根因;修法把該寫入上移到抓 map 之後。"""
+    import scripts.update_sector_flow as U
+    _patch_cron_paths(monkeypatch, U, tmp_path)
+    monkeypatch.setattr(U, "fetch_industry_map_bulk",
+                        lambda: {"2330": "半導體業", "2317": "電子工業"})
+    # 三大法人整天空(盤前尚未公布)+ 無既有 parquet → 走 inst_df.empty 分支(return 1)
+    monkeypatch.setattr(U, "_get_t86_day", lambda ds: {})
+    monkeypatch.setattr(U, "_get_tpex_day", lambda ds: {})
+    monkeypatch.setattr(U, "fetch_twse_close_day", lambda ds: {})
+    monkeypatch.setattr(U, "fetch_tpex_close_day", lambda ds: {})
+
+    rc = U.main([])
+
+    tk = tmp_path / "ticker_sector.json"
+    assert tk.exists(), "盤前 inst 空、但 map 抓得到時,仍須寫出 ticker_sector.json"
+    got = json.loads(tk.read_text(encoding="utf-8"))
+    assert got == {"2330": "半導體業", "2317": "電子工業"}
+    # 無任何交易資料 → 誠實非零 exit(§1),但參考對映仍落地(兩者解耦)
+    assert rc == 1
+
+
+def test_cron_skips_ticker_sector_when_map_empty(monkeypatch, tmp_path):
+    """§1 反造假:industry_map 全敗(空)→ 不得寫一份空 ticker_sector.json 冒充成功。"""
+    import scripts.update_sector_flow as U
+    _patch_cron_paths(monkeypatch, U, tmp_path)
+    monkeypatch.setattr(U, "fetch_industry_map_bulk", lambda: {})
+    monkeypatch.setattr(U, "_get_t86_day", lambda ds: {})
+    monkeypatch.setattr(U, "_get_tpex_day", lambda ds: {})
+    monkeypatch.setattr(U, "fetch_twse_close_day", lambda ds: {})
+    monkeypatch.setattr(U, "fetch_tpex_close_day", lambda ds: {})
+
+    U.main([])
+
+    assert not (tmp_path / "ticker_sector.json").exists(), \
+        "map 空時不得產生 ticker_sector.json(§1 不造假)"
