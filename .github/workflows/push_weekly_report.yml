@@ -1,0 +1,60 @@
+name: "每週組合週報推播（LINE）"
+
+# 每週一早上把「大盤定調 + 逐檔體檢(vs 基準是否落後) + AI 建議」推到 LINE。
+# 追蹤清單來源 = 使用者「發布到網路」的 Google Sheet CSV(WEEKLY_WATCH_CSV_URL)。
+# cron "0 21 * * 0" = 週日 21:00 UTC = 週一 05:00 TW（盤前，用上週五收盤資料）。
+# ⚠️ 未濾 TW 國定假日（無第三方 trading calendar，見 CLAUDE.md §4.5）。
+on:
+  schedule:
+    - cron: "0 21 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只印訊息不送（true/false）"
+        default: "false"
+        required: false
+
+concurrency:
+  group: push-weekly-report
+  cancel-in-progress: false
+
+jobs:
+  push:
+    name: "Push weekly report"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Push weekly report
+        env:
+          # 管道:line（預設）/ telegram。可於 repo Variables 設 NOTIFY_CHANNEL 覆寫。
+          NOTIFY_CHANNEL: ${{ vars.NOTIFY_CHANNEL || 'line' }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          # Telegram（備援管道）
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # 追蹤清單來源:發布到網路的 Google Sheet CSV 連結（含代號的分頁）
+          WEEKLY_WATCH_CSV_URL: ${{ secrets.WEEKLY_WATCH_CSV_URL }}
+          # AI 建議（選填；未設則自動略過只送真實數據摘要）
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          # yfinance 取價（^TWII / 個股 / ETF）走 NAS proxy 避海外 IP 封鎖；未設則降級直連
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          NAS_BASE_URL: ${{ secrets.NAS_BASE_URL }}
+          NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
+        run: >
+          python scripts/push_weekly_report.py
+          ${{ (github.event.inputs.dry_run == 'true') && '--dry-run' || '' }}
