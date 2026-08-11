@@ -1395,6 +1395,60 @@ def render_etf_portfolio(gemini_fn=None):
     else:
         st.info('⏳ 配息資料無法取得（可能為非配息型ETF或yfinance資料限制）')
 
+    # ── 💰 配息稅後試算（二代健保 + 綜所稅二擇一）── L3 dividend_tax_service ──
+    # §3.3:文案內的稅率/門檻一律由 L0 常數組出(不硬寫),兌現「改 L0 即全站同步」。
+    from shared.dividend_tax_thresholds import (
+        DIVIDEND_SEPARATE_TAX_RATE, MARGINAL_TAX_RATE_OPTIONS,
+        NHI_SINGLE_PAYMENT_MIN_TWD, NHI_SUPPLEMENTARY_RATE,
+    )
+    from src.services.dividend_tax_service import get_dividend_tax_view
+    _nhi_rate_txt = f'{NHI_SUPPLEMENTARY_RATE * 100:g}%'          # 2.11%
+    _nhi_min_txt = f'{NHI_SINGLE_PAYMENT_MIN_TWD:,} 元'           # 20,000 元
+    _sep_rate_txt = f'{DIVIDEND_SEPARATE_TAX_RATE * 100:g}%'      # 28%
+    st.markdown('#### 💰 配息稅後試算（二代健保 ＋ 綜所稅）')
+    st.caption(f'依近 1 年配息 × 持有股數，逐筆算二代健保補充保費（單筆 ≥ {_nhi_min_txt} 課 '
+               f'{_nhi_rate_txt}、整元無條件捨去），綜所稅可選「合併 vs 分開」自動取較省。'
+               '海外/美元 ETF 稅制不同，先排除標記。')
+    _rate_labels = (['先不估（只算二代健保）']
+                    + [f'{int(_r * 100)}%' for _r in MARGINAL_TAX_RATE_OPTIONS])
+    _rate_pick = st.selectbox(
+        '你的綜所稅邊際稅率', _rate_labels, index=0, key='_divtax_rate',
+        help=f'選你落點的級距，系統自動比較「合併計稅 vs 分開計稅 {_sep_rate_txt}」取較省者')
+    _marg = (None if _rate_pick.startswith('先不估')
+             else MARGINAL_TAX_RATE_OPTIONS[_rate_labels.index(_rate_pick) - 1])
+    _tax_view = get_dividend_tax_view(
+        [{'ticker': r['ticker'], 'shares': r['shares']} for r in rows],
+        marginal_rate=_marg)
+    _ts = _tax_view['summary']
+    if _ts['gross'] <= 0:
+        st.info('目前組合近 1 年無台幣配息紀錄可試算（或持股皆為海外 ETF）。')
+    else:
+        _tc1, _tc2, _tc3, _tc4 = st.columns(4)
+        _tc1.metric('稅前配息（近1年）', f"{_ts['gross']:,}")
+        _tc2.metric('二代健保', f"−{_ts['nhi_premium']:,}")
+        if _ts['income_tax'] is not None:
+            _sgn = '−' if _ts['income_tax'] >= 0 else '+'   # 負=退稅 → 顯示 +
+            _tc3.metric(f"綜所稅（{_ts['tax_method']}）",
+                        f"{_sgn}{abs(_ts['income_tax']):,}")
+        else:
+            _tc3.metric('綜所稅', '未估')
+        _tc4.metric('稅後淨額', f"{_ts['net_after_all']:,}")
+        if _ts.get('tax_detail'):
+            _td = _ts['tax_detail']
+            _note = (f"合併計稅 {_td['combined']:,} ｜ 分開 {_sep_rate_txt} {_td['separate']:,} "
+                     f"→ 系統採較省的「{_td['method']}」")
+            if _td['best'] < 0:
+                _note += "（負值＝股利可抵減 > 應納稅，實質退稅/節稅）"
+            st.caption('🧮 ' + _note)
+        if _tax_view['per_etf']:
+            st.dataframe(pd.DataFrame(_tax_view['per_etf']),
+                         use_container_width=True, hide_index=True)
+        if _tax_view['overseas']:
+            st.caption('🌏 海外/美元 ETF（稅制不同，未納入上表）：'
+                       + '、'.join(_tax_view['overseas']))
+        st.caption(f'※ 二代健保逐筆（月配每月各自比 {_nhi_min_txt}門檻）；綜所稅為年度合計估算，'
+                   '實際以個人綜合所得與國稅局申報為準。')
+
     # 存入 session_state
     st.session_state['etf_portfolio_data'] = {
         'rows': rows, 'war_rows': _war_rows, 'rebal_actions': rebal_actions,
