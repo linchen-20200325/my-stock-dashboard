@@ -244,6 +244,12 @@ def main(argv=None) -> int:
         # §1:無產業別 → L2 會全歸「未分類」;仍可算「全市場」但失去板塊維度 → loud
         print("[sector_flow] ⚠️ 產業別整表為空,全部將歸『未分類』桶")
 
+    # 持股→板塊對映(Stage 2 UI highlight)**只依賴 industry_map**,與「當日三大法人是否
+    # 已公布」完全無關 → 抓到 map 就立刻落地。若擺在後段 happy-path,盤前手動跑(inst 未出)
+    # 會走下面 `inst_df.empty` 早退 → ticker_sector.json 永遠不生成(highlight 失效)。
+    # 空 map 由 `_write_ticker_sector_json` 內 §1 守衛不寫、保留既有。
+    _write_ticker_sector_json(industry_map)
+
     inst_df, price_df, diag = _collect_days(cand)
     print(f"[sector_flow] fetch 診斷:{diag}")
 
@@ -281,9 +287,7 @@ def main(argv=None) -> int:
     full.to_parquet(PARQUET_PATH, compression="snappy", index=False)
     print(f"[sector_flow] ✅ 寫入 {len(full)} 列 → {PARQUET_PATH}")
 
-    # parquet 成功後多存一份持股→板塊對映(Stage 2 UI highlight 用);空表不寫(§1)。
-    _write_ticker_sector_json(industry_map)
-
+    # ticker_sector.json 已於前段 industry_map 抓取後就落地(與 inst 資料解耦),此處不再重寫。
     _write_bubble_json(full)
     _write_metadata(full, diag, cov, last_error=None)
 
