@@ -52,8 +52,8 @@ from shared.signal_thresholds import (
     ETF_AVG_VOL_20D_LOW_LOTS,
     # v18.335 PR-H3:ETF_QUICK_SIGMA_* 5 個由 classify_etf_quick_sigma 內部消費,移除 etf_calc 直引
     ETF_SHARPE_RF_FALLBACK_PCT,  # v19.106 ⑨:夏普 rf fallback(原 inline 5.33)
-    ETF_UP_DOWN_DAYS_THRESHOLD,  # C-2 v18.382 抽自 inline 60
-    ETF_MANAGER_TENURE_NEW_DAYS,  # v18.436 #5 抽自 inline 180
+    # ETF_UP_DOWN_DAYS_THRESHOLD / ETF_MANAGER_TENURE_NEW_DAYS 已隨燈號判定下沉
+    # asset_lag.classify_lag_verdict(§3.3 SSOT 去重),etf_calc 不再直引。
     ETF_VCP_MIN_DAYS,
     TRADING_DAYS_PER_YEAR,
 )
@@ -1071,28 +1071,12 @@ def compute_etf_weakness_row(ticker: str, name: str = '',
                 _row['任期'] = f'自 {_mg["since"]}'
 
     if _is_act:
-        _down = _row['大跌弱勢率%'] or 0
-        _up = _row['反彈弱勢率%'] or 0
-        _streak = _row['連敗季數'] or 0
-        _new_manager = isinstance(_tenure_days, int) and _tenure_days < ETF_MANAGER_TENURE_NEW_DAYS
-        if _streak >= 2:
-            _row['燈號'] = f'🚨 連續{_streak}季輸盤'
-            _row['動作建議'] = ('⏳ 新經理人 <6 月，再給時間'
-                              if _new_manager
-                              else '考慮換到大盤被動式 ETF（如 0050）')
-        # C-2 v18.382:60 inline → SSOT
-        elif _down > ETF_UP_DOWN_DAYS_THRESHOLD and _up > ETF_UP_DOWN_DAYS_THRESHOLD:
-            _row['燈號'] = '🔴 雙向弱勢'
-            _row['動作建議'] = '近期表現雙向落後大盤；觀察 1-2 季'
-        elif _down > ETF_UP_DOWN_DAYS_THRESHOLD:
-            _row['燈號'] = '🟡 大跌弱勢'
-            _row['動作建議'] = '下跌防禦力不足，注意'
-        elif _up > ETF_UP_DOWN_DAYS_THRESHOLD:
-            _row['燈號'] = '🟡 反彈無力'
-            _row['動作建議'] = '反彈追不上大盤，績效落後'
-        else:
-            _row['燈號'] = '🟢 體質正常'
-            _row['動作建議'] = '續抱觀察'
+        # 燈號/動作建議走 asset_lag.classify_lag_verdict SSOT(原此處 inline 判定已抽出,
+        # 與組合體檢共用同一份;§3.3 消除兩份真相)。行為不變:同指標→同燈號。
+        from src.compute.etf.asset_lag import classify_lag_verdict
+        _verdict = classify_lag_verdict(_m, is_etf=True, tenure_days=_tenure_days)
+        _row['燈號'] = _verdict['燈號']
+        _row['動作建議'] = _verdict['動作建議']
 
     return _row
 

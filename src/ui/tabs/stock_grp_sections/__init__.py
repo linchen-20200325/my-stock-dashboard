@@ -26,11 +26,15 @@ from src.ui.tabs.stock_grp_sections.section_market_status import (
 from src.ui.tabs.stock_grp_sections.section_portfolio_summary import (
     render_portfolio_summary_section,
 )
+from src.ui.tabs.stock_grp_sections.section_watchlist_health import (
+    render_watchlist_health_section,
+)
 
 __all__ = [
     'render_ai_portfolio_section',
     'render_financial_health_section',
     'render_market_status_section',
     'render_portfolio_summary_section',
+    'render_watchlist_health_section',
     'run_batch_fetch',
 ]

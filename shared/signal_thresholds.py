@@ -1120,6 +1120,16 @@ PORTFOLIO_BENCHMARK_TICKER: str = "0050.TW"
 但兩者服務不同 fetcher:forward_test 走 fetch_stock_history_1y(無 .TW 後綴),ETF 投組走
 fetch_etf_price(yfinance,需 .TW 後綴)。故格式不同、各自 SSOT,不硬併。"""
 
+STOCK_BENCHMARK_TICKER: str = "^TWII"
+"""個股「與大盤比較」的基準代號 = 台股加權指數(§3.3 反捏造:禁止 inline '^TWII')。
+組合體檢(watchlist_health)判「個股 vs 大盤」用此;ETF 則用 PORTFOLIO_BENCHMARK_TICKER
+(0050.TW)。原 etf_calc._auto_bench_for_etf 內 inline '^TWII' 為此值的散落複本,
+本常數為其 SSOT(供 asset_lag.pick_benchmark 對映個股→大盤)。yfinance 代號,fetch_etf_price 通用。"""
+
+LAG_ALERT_STREAK_QUARTERS: int = 2
+"""落後燈號「連續輸基準」觸發的最少季數(§3.3:原 etf_calc.py:1078 `_streak >= 2` +
+etf_tab_portfolio 逐檔篩選 inline 2 的 SSOT)。連續 ≥ 此季數輸基準 → 🚨 亮警示。"""
+
 # ── §3.2 USD/TWD 即期匯率合理範圍 sanity(B1-a v19.179)──
 USDTWD_SANITY_MIN: float = 25.0
 """USD/TWD 即期匯率 sanity 下界(TWD per 1 USD)。低於此視為抓錯欄位/單位反了
