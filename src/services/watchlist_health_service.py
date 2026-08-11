@@ -20,7 +20,7 @@ from src.compute.etf.etf_calc import (
     calc_weakness_metrics,
     compute_portfolio_vs_benchmark,
 )
-from src.compute.etf.etf_helpers import normalize_etf_ticker
+from src.compute.etf.etf_helpers import bare_etf_code, normalize_etf_ticker
 from src.compute.etf.asset_lag import (
     ASSET_ETF,
     classify_asset_kind,
@@ -29,6 +29,28 @@ from src.compute.etf.asset_lag import (
 )
 
 _KIND_LABEL = {"etf": "ETF", "stock": "個股", "unknown": "未知"}
+
+
+def _resolve_and_fetch(ticker, period: str):
+    """裸碼補後綴 + 上市/上櫃 fallback,回 (df, 實際使用的 yf 代號)。
+
+    §1 誠實:清單多為裸碼(如 '6488'/'00980D');先試上市 `.TW`,抓不到再試上櫃 `.TWO`
+    —— 上櫃股(如 6488/8069、上櫃 ETF 00980D)才不會被誤標「價格資料不足」(其實有價)。
+    已帶後綴 / 指數(^)代號 → 原樣抓。抓取例外**不吞**(往上拋,由 caller 標「抓取失敗」)。
+    """
+    _t = str(ticker).strip().upper()
+    if _t.endswith((".TW", ".TWO")) or _t.startswith("^"):
+        return fetch_etf_price(_t, period=period), _t
+    _code = bare_etf_code(_t)
+    _tw = f"{_code}.TW"
+    _df = fetch_etf_price(_tw, period=period)
+    if _df is not None and not _df.empty:
+        return _df, _tw
+    _two = f"{_code}.TWO"                 # 上市抓不到 → 試上櫃(誠實 fallback,非造假)
+    _df2 = fetch_etf_price(_two, period=period)
+    if _df2 is not None and not _df2.empty:
+        return _df2, _two
+    return _df, _tw                      # 兩者皆空 → 回 .TW 空 df + 代號(顯示用)
 
 
 def _base_row(ticker: str, kind: str, bench: str | None) -> dict:
@@ -69,13 +91,12 @@ def evaluate_one(ticker: str, *, period: str = "1y") -> dict:
         row["燈號"] = "⚪ 無法判定（非台股代號）"
         return row
 
-    # 清單多為裸碼(如 '2330'/'00980A');fetch_etf_price 走 yfinance 需 .TW/.TWO 後綴。
-    # ⚠️ normalize 一律補 .TW → 上櫃(.TWO)股票會抓不到而落「價格資料不足」(§1 誠實降級,不亂猜)。
-    _yf = normalize_etf_ticker(ticker)
-    row = _base_row(_yf, kind, bench)
+    # 預設顯示代號(resolve 後以實際抓到價的 .TW/.TWO 代號覆寫);清單多為裸碼。
+    row = _base_row(normalize_etf_ticker(ticker), kind, bench)
 
     try:
-        _etf_df = fetch_etf_price(_yf, period=period)
+        _etf_df, _yf = _resolve_and_fetch(ticker, period)   # 上市→上櫃 fallback
+        row["代號"] = _yf
         _bench_df = fetch_etf_price(bench, period=period)
         if _etf_df is None or _etf_df.empty or _bench_df is None or _bench_df.empty:
             row["燈號"] = "⚪ 價格資料不足"
@@ -107,14 +128,20 @@ def evaluate_one(ticker: str, *, period: str = "1y") -> dict:
 
 
 def get_watchlist_health_rows(tickers, *, period: str = "1y") -> list[dict]:
-    """一組清單代號 → 逐檔體檢 rows(去重保序)。空清單 → []。"""
+    """一組清單代號 → 逐檔體檢 rows(去重保序)。空清單 → []。
+
+    去重鍵用**裸碼**(bare_etf_code):'2330' 與 '2330.TW' 視為同檔,不重複列/重複抓價。
+    """
     _seen: set[str] = set()
     out: list[dict] = []
     for _raw in (tickers or []):
         _t = str(_raw).strip().upper()
-        if not _t or _t in _seen:
+        if not _t:
             continue
-        _seen.add(_t)
+        _key = bare_etf_code(_t) or _t     # 裸碼去重:裸碼與後綴同檔
+        if _key in _seen:
+            continue
+        _seen.add(_key)
         out.append(evaluate_one(_t, period=period))
     return out
 

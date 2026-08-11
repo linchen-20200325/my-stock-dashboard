@@ -97,6 +97,48 @@ def test_benchmark_not_ok_relative_pct_none(monkeypatch):
     assert row["燈號"] == "🟢 體質正常"
 
 
+def test_otc_two_fallback_user_holding(monkeypatch):
+    """DEFECT 1 回歸:00980D 是上櫃(.TWO)ETF —— .TW 抓不到應 fallback .TWO,
+    不得誤標「價格資料不足」(否則使用者的實際持股會顯示無資料)。"""
+    def _fetch(t, *a, **k):
+        if t.endswith(".TWO") or t in ("0050.TW", "^TWII"):
+            return _price_df()
+        return pd.DataFrame({"Close": []})       # .TW 一律空
+    monkeypatch.setattr(svc, "fetch_etf_price", _fetch)
+    monkeypatch.setattr(svc, "calc_weakness_metrics",
+                        lambda *a, **k: {"quarter_lose_streak": 0, "down_ratio": 10,
+                                         "up_ratio": 10, "sample": 200})
+    monkeypatch.setattr(svc, "compute_portfolio_vs_benchmark", lambda *a, **k: _GOOD_VB)
+    row = svc.evaluate_one("00980D")             # 裸碼上櫃 ETF
+    assert row["代號"] == "00980D.TWO"           # 用 .TWO 抓到,顯示 .TWO
+    assert row["基準"] == "0050.TW"
+    assert row["燈號"] == "🟢 體質正常"           # 有資料 → 正常判定,非「資料不足」
+
+
+def test_otc_two_fallback_stock(monkeypatch):
+    """上櫃個股(裸碼)同樣 .TW→.TWO fallback。"""
+    def _fetch(t, *a, **k):
+        return _price_df() if (t.endswith(".TWO") or t == "^TWII") else pd.DataFrame({"Close": []})
+    monkeypatch.setattr(svc, "fetch_etf_price", _fetch)
+    monkeypatch.setattr(svc, "calc_weakness_metrics",
+                        lambda *a, **k: {"quarter_lose_streak": 0, "down_ratio": 10,
+                                         "up_ratio": 10, "sample": 200})
+    monkeypatch.setattr(svc, "compute_portfolio_vs_benchmark", lambda *a, **k: _GOOD_VB)
+    row = svc.evaluate_one("6488")
+    assert row["代號"] == "6488.TWO"
+    assert row["基準"] == "^TWII"
+
+
+def test_get_rows_dedup_bare_vs_suffix(monkeypatch):
+    """DEFECT 2 回歸:'2330' 與 '2330.TW' 視為同檔,去重成一列(不重複抓價)。"""
+    _patch(monkeypatch,
+           metrics={"quarter_lose_streak": 0, "down_ratio": 10, "up_ratio": 10, "sample": 200},
+           vb=_GOOD_VB)
+    rows = svc.get_watchlist_health_rows(["2330", "2330.TW", "00980A.TW"])
+    assert len(rows) == 2                        # 2330/2330.TW 合一 + 00980A
+    assert [r["代號"] for r in rows] == ["2330.TW", "00980A.TW"]
+
+
 def test_get_rows_dedup_and_order(monkeypatch):
     _patch(monkeypatch,
            metrics={"quarter_lose_streak": 0, "down_ratio": 10, "up_ratio": 10, "sample": 200},
