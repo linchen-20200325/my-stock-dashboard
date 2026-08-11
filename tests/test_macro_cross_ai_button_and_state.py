@@ -80,7 +80,9 @@ class TestCard1RenderAppTest:
         allmd = " ".join(m.value for m in at.markdown)
         # 卡①不再誤說「請點擊更新」，改講實情：這兩個來源抓取失敗
         assert "景氣位階資料未就緒" in allmd
-        assert "外銷訂單" in allmd and "PMI" in allmd
+        # v19.85/v19.183 正名:該來源實為「財政部海關出口年增率」(非經濟部外銷訂單),
+        # 畫面已改渲染「台灣出口 YoY」→ 測試斷言同步更新(section_cross_ai.py:154)。
+        assert "台灣出口" in allmd and "PMI" in allmd
         assert "請先按上方" not in allmd     # 已更新 → 不該再叫他去按更新
         # 其餘卡仍正常填（不受影響）
         assert "資金明顯外逃" in allmd or "M2" in allmd
