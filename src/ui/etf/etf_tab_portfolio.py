@@ -46,6 +46,7 @@ from shared.signal_thresholds import (
     PORTFOLIO_VAR_95_PERCENTILE,
     PORTFOLIO_VAR_99_PERCENTILE,
     PORTFOLIO_VAR_MONTHLY_WARN_PCT,
+    LAG_ALERT_STREAK_QUARTERS,   # 換股建議「連續輸盤季數」門檻 SSOT(與 asset_lag 燈號同源)
 )
 from shared.thresholds import YIELD_MID, YIELD_LOW
 
@@ -1010,7 +1011,8 @@ def render_etf_portfolio(gemini_fn=None):
         _render_weakness_table(_w_rows)
         # 換股建議匯總
         _switch_targets = [r for r in _w_rows
-                           if r.get('主被動') == '主動式' and (r.get('連敗季數') or 0) >= 2]
+                           if r.get('主被動') == '主動式'
+                           and (r.get('連敗季數') or 0) >= LAG_ALERT_STREAK_QUARTERS]
         if _switch_targets:
             _lines = []
             for _r in _switch_targets:

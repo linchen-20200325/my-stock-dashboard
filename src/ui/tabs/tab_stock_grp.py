@@ -73,6 +73,10 @@ def render_stock_grp():
     # ══ ②b 個股組合雲端儲存(Phase 1 個股/ETF 分家:專屬 stock_portfolio_sheet_id)══
     _render_stock_cloud_storage(stock_list_t3)
 
+    # ══ ②c 🩺 組合體檢(逐檔 vs 基準:個股→大盤、ETF→0050)—— 就上方清單判是否落後 ══
+    from src.ui.tabs.stock_grp_sections import render_watchlist_health_section
+    render_watchlist_health_section(stock_list_t3)
+
     # ══ 批次分析邏輯(Batch 7-2 v18.414:抽至 stock_grp_sections.section_batch_fetcher)══
     if t3_run_btn and stock_list_t3:
         from src.ui.tabs.stock_grp_sections import run_batch_fetch
