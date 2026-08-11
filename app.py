@@ -449,7 +449,8 @@ def _render_tab_isolated(_render, _label):
 # GROUP 1: 市場環境（總經 + 產業熱力圖）
 # ══════════════════════════════════════════════════════════════
 with tab_market:
-    tab_macro, tab_heatmap = st.tabs(['🌍 總經', '🗺️ 產業熱力圖'])
+    tab_macro, tab_heatmap, tab_sector_flow = st.tabs(
+        ['🌍 總經', '🗺️ 產業熱力圖', '🌊 板塊資金潮汐'])
 
     with tab_macro:
         from src.ui.tabs import render_tab_macro
@@ -460,6 +461,12 @@ with tab_market:
         # max() 空序列 ValueError)會白掉整頁。對齊鄰居「總經」寫法。
         _render_tab_isolated(
             lambda: render_sector_heatmap(gemini_fn=gemini_call), '產業熱力圖')
+
+    with tab_sector_flow:
+        # 板塊資金泡泡圖 Stage 2:讀 L3 sector_flow_service(L1 本地快取 + L2 持股對映)
+        # → L4 泡泡圖。與「產業熱力圖」同屬市場/板塊視角,故並列於市場環境群組。
+        from src.ui.tabs.tab_sector_flow import render_tab_sector_flow
+        _render_tab_isolated(render_tab_sector_flow, '板塊資金潮汐')
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 2: 選股（個股 + 個股組合 + 選股網）
