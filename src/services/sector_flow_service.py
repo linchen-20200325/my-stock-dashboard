@@ -72,7 +72,7 @@ def get_sector_flow_view(*, etf_tickers=None, stock_sheet_id=None,
     """
     from src.data.sector_flow.reader import read_sector_flow_cache
     from src.compute.sector_flow import map_tickers_to_sectors
-    from shared.sector_flow_thresholds import SECTOR_UNCLASSIFIED
+    from shared.sector_flow_thresholds import SECTOR_UNCLASSIFIED, canonical_sector
 
     view = read_sector_flow_cache()
     if not view.get("ok"):
@@ -88,10 +88,13 @@ def get_sector_flow_view(*, etf_tickers=None, stock_sheet_id=None,
     _ticker_sector = view.get("ticker_sector") or {}
     _holding_map = map_tickers_to_sectors(_codes, _ticker_sector)
 
-    # 只 highlight「確實對映到已知板塊」的:未分類 + 不在泡泡圖中的板塊不標,避免亂框。
-    _bubble_sectors = {str(s.get("sector")) for s in view.get("sectors", [])}
-    _highlight = {sec for sec in _holding_map.values()
-                  if sec != SECTOR_UNCLASSIFIED and sec in _bubble_sectors}
+    # 持股板塊(canonical:ETF 家族細分標籤 上櫃ETF/… → "ETF"),去未分類。
+    _holding_canon = {canonical_sector(s) for s in _holding_map.values()
+                      if s != SECTOR_UNCLASSIFIED}
+    # 只 highlight「確實出現在泡泡圖」的板塊;回傳泡泡的**原始 label**(canonical 後比對),
+    # 讓 render 直接以原 sector 字串比對即可,免動 L4。ETF 標籤不一致由 canonical 消弭。
+    _highlight = {str(s.get("sector")) for s in view.get("sectors", [])
+                  if canonical_sector(str(s.get("sector"))) in _holding_canon}
 
     view["holding_sectors"] = _holding_map
     view["highlight_sectors"] = _highlight

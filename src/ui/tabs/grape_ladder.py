@@ -15,8 +15,10 @@ import pandas as pd
 import streamlit as st
 
 from src.compute.etf import ETF_PEER_GROUPS
+from src.compute.etf.etf_dividend_schedule import classify_pay_frequency
 from src.ui.etf import fetch_etf_dividends
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED
+from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.dividend_frequency import PAY_FREQ_LABEL_MONTHLY
 from shared.ttls import TTL_1DAY
 
 # ── Constants ─────────────────────────────────────────────────
@@ -53,6 +55,25 @@ def get_pay_months(ticker: str, lookback_days: int = LOOKBACK_DAYS) -> set[int]:
     if len(_recent) < MIN_PAYMENTS_FOR_VALID:
         return set()
     return set(_recent.index.month.tolist())
+
+
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
+def get_pay_profile(ticker: str, lookback_days: int = LOOKBACK_DAYS) -> dict:
+    """近 lookback_days 除息 profile:{'months': set[int], 'n_payments': int}。
+
+    比 get_pay_months 多回配息次數,供 classify_pay_frequency 判「月配」——用來區分
+    「月配 ETF 新上市未滿一年、某月尚未觀察到除息」(待觀察)與「結構性缺月」(真缺口)。
+    §1:資料不足(< MIN_PAYMENTS_FOR_VALID)/ 抓取失敗 → months 空 set、n_payments 0,不捏造。
+    """
+    _divs = fetch_etf_dividends(ticker)
+    if _divs is None or _divs.empty:
+        return {'months': set(), 'n_payments': 0}
+    _cutoff = pd.Timestamp(_dt.date.today() - _dt.timedelta(days=lookback_days))
+    _recent = _divs[_divs.index >= _cutoff]
+    if len(_recent) < MIN_PAYMENTS_FOR_VALID:
+        return {'months': set(), 'n_payments': 0}
+    return {'months': set(_recent.index.month.tolist()),
+            'n_payments': int(len(_recent))}
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
@@ -177,11 +198,11 @@ def recommend_income_ladder(
 
 
 def evaluate_income_ladder(holdings: list[str]) -> dict:
-    """評估「使用者持股」的月月領息覆蓋率（純函式，資料源＝get_pay_months）。
+    """評估「使用者持股」的月月領息覆蓋率（純函式，資料源＝get_pay_profile）。
 
     與 recommend_income_ladder 不同：**不做組合搜尋**，直接就 user 實際持有的
-    tickers 逐檔取配息月份，回傳覆蓋 / 缺口 / 每月配息名單。§1 誠實原則：
-    無配息歷史的 ETF（get_pay_months 回空 set）→ 不貢獻任何月份、不捏造。
+    tickers 逐檔取配息 profile（月份 + 次數），回傳覆蓋 / 缺口 / 待觀察 / 每月配息名單。
+    §1 誠實原則：無配息歷史的 ETF（get_pay_profile 回空 months）→ 不貢獻任何月份、不捏造。
 
     Parameters
     ----------
@@ -192,13 +213,18 @@ def evaluate_income_ladder(holdings: list[str]) -> dict:
     Returns
     -------
     dict
-      covered_months  : list[int]              有息覆蓋的月份（1-12，排序）
-      gap_months      : list[int]              1-12 中未被任何持股覆蓋的月份（排序）
-      month_map       : dict[int, list[str]]   {月份: [該月配息的持股 tickers]}（排序）
-      per_ticker      : dict[str, list[int]]   {ticker: 該檔配息月份（排序）}
-      no_data_tickers : list[str]              無配息歷史（貢獻 0 月，誠實列出）
-      coverage_pct    : float                  len(covered)/12 * 100
-      holdings_count  : int                    去重後持股數
+      covered_months        : list[int]            有息覆蓋的月份（1-12，排序）
+      gap_months            : list[int]            **結構性**缺月（未覆蓋且無月配新上市 ETF 會補）
+      pending_months        : list[int]            待觀察缺月（月配 ETF 上市未滿一年，尚未觀察到該月除息）
+      young_monthly_tickers : list[str]            造成 pending 的月配新上市 ETF（除息史未跨滿 12 月）
+      month_map             : dict[int, list[str]] {月份: [該月配息的持股 tickers]}（排序）
+      per_ticker            : dict[str, list[int]] {ticker: 該檔配息月份（排序）}
+      no_data_tickers       : list[str]            無配息歷史（貢獻 0 月，誠實列出）
+      coverage_pct          : float                len(covered)/12 * 100
+      holdings_count        : int                  去重後持股數
+
+    §1：pending_months **不塗綠**（未真的觀察到除息），只與結構性缺口區分——避免把「月配
+    ETF 剛上市、某月還沒輪到」誤標成永久紅缺口 + 亂建議補檔。
     """
     # 去重保序 + 去空白
     _seen: set[str] = set()
@@ -212,8 +238,10 @@ def evaluate_income_ladder(holdings: list[str]) -> dict:
     _month_map: dict[int, list[str]] = {}
     _per_ticker: dict[str, list[int]] = {}
     _no_data: list[str] = []
+    _young_monthly: list[str] = []            # 月配但除息史未跨滿 12 月（新上市未滿一年）
     for _t in _holdings:
-        _months = get_pay_months(_t)
+        _prof = get_pay_profile(_t)
+        _months = _prof['months']
         if not _months:                       # §1：無配息歷史 → 不貢獻月份，不捏造
             _no_data.append(_t)
             _per_ticker[_t] = []
@@ -221,12 +249,24 @@ def evaluate_income_ladder(holdings: list[str]) -> dict:
         _per_ticker[_t] = sorted(_months)
         for _m in _months:
             _month_map.setdefault(_m, []).append(_t)
+        # 月配（≥PAY_FREQ_MONTHLY_MIN 次/年）但尚未觀察到全 12 月 → 新上市未滿一年
+        if (classify_pay_frequency(_prof['n_payments']) == PAY_FREQ_LABEL_MONTHLY
+                and len(_months) < TARGET_MONTHS_FULL):
+            _young_monthly.append(_t)
 
     _covered = sorted(_month_map.keys())
-    _gap = [_m for _m in range(1, 13) if _m not in _month_map]
+    _uncovered = [_m for _m in range(1, 13) if _m not in _month_map]
+    # 組合內若有「月配新上市」ETF → 該檔成熟後必覆蓋每一個月 → 目前未覆蓋月份皆屬「待觀察」，
+    # 非結構性缺口（§1：不塗綠假裝已配，只把紅『缺口』改成黃『待觀察』並停止亂建議補檔）。
+    if _young_monthly:
+        _pending, _gap = _uncovered, []
+    else:
+        _pending, _gap = [], _uncovered
     return {
         'covered_months': _covered,
         'gap_months': _gap,
+        'pending_months': _pending,
+        'young_monthly_tickers': _young_monthly,
         'month_map': {_m: sorted(_ts) for _m, _ts in _month_map.items()},
         'per_ticker': _per_ticker,
         'no_data_tickers': _no_data,
@@ -272,8 +312,13 @@ def suggest_fill_for_gaps(
 # UI Helpers
 # ══════════════════════════════════════════════════════════════
 
-def _render_month_grid(month_etfs: dict[int, list[str]], missing: set[int]) -> None:
-    """12 月份 3×4 grid；該月有配 → 綠底 + ETF chips；缺月 → 紅底 ❌。"""
+def _render_month_grid(month_etfs: dict[int, list[str]],
+                       pending: set[int] | None = None) -> None:
+    """12 月份 3×4 grid；有配 → 綠底 + ETF chips；待觀察（月配新上市）→ 黃底 🕓；真缺月 → 紅底 ❌。
+
+    綠/黃/紅由「該月是否在 month_etfs」+「是否 pending」決定；缺月即非上兩者（不需另傳缺月集）。
+    """
+    _pending = set(pending or set())
     for _row in range(3):
         _cols = st.columns(4)
         for _i in range(4):
@@ -281,15 +326,22 @@ def _render_month_grid(month_etfs: dict[int, list[str]], missing: set[int]) -> N
             with _cols[_i]:
                 _etfs = month_etfs.get(_m, [])
                 _has = bool(_etfs)
-                _bg = '#0d2818' if _has else '#2d0e0e'
-                _border = TRAFFIC_GREEN if _has else TRAFFIC_RED
-                _icon = '✅' if _has else '❌'
-                _content = ('<br>'.join(
-                    f"<span style='background:#1f6feb22;color:#79c0ff;"
-                    f"padding:2px 6px;border-radius:8px;font-size:10px;"
-                    f"margin:2px 0;display:inline-block'>{_e}</span>"
-                    for _e in _etfs)
-                    if _has else '<span style="color:#8b949e">無 ETF</span>')
+                if _has:
+                    _bg, _border, _icon = '#0d2818', TRAFFIC_GREEN, '✅'
+                elif _m in _pending:                       # 月配新上市未滿一年 → 待觀察
+                    _bg, _border, _icon = '#1e1a00', TRAFFIC_YELLOW, '🕓'
+                else:
+                    _bg, _border, _icon = '#2d0e0e', TRAFFIC_RED, '❌'
+                if _has:
+                    _content = '<br>'.join(
+                        f"<span style='background:#1f6feb22;color:#79c0ff;"
+                        f"padding:2px 6px;border-radius:8px;font-size:10px;"
+                        f"margin:2px 0;display:inline-block'>{_e}</span>"
+                        for _e in _etfs)
+                elif _m in _pending:
+                    _content = '<span style="color:#d4a017">待觀察（新上市）</span>'
+                else:
+                    _content = '<span style="color:#8b949e">無 ETF</span>'
                 st.markdown(
                     f"<div style='background:{_bg};border:1px solid {_border};"
                     f"border-radius:6px;padding:8px;min-height:80px'>"
@@ -306,19 +358,27 @@ def _render_holdings_coverage(holdings: list[str]) -> None:
     _res = evaluate_income_ladder(holdings)
     _covered = _res['covered_months']
     _gaps = _res['gap_months']
+    _pending = _res.get('pending_months', [])
+    _young = _res.get('young_monthly_tickers', [])
 
     _m1, _m2, _m3 = st.columns(3)
     _m1.metric('覆蓋月數', f'{len(_covered)}/12')
-    _m2.metric('缺口月數', len(_gaps))
+    _m2.metric('缺口月數', len(_gaps), help='結構性缺月（不含月配新上市的待觀察月）')
     _m3.metric('覆蓋率', f'{_res["coverage_pct"]}%')
 
     if _gaps:
         st.warning('⚠️ 缺月份：' + '、'.join(_MONTH_NAMES[_m - 1] for _m in _gaps))
+    elif _pending:
+        st.info(
+            '🕓 待觀察月份：' + '、'.join(_MONTH_NAMES[_m - 1] for _m in _pending)
+            + '。你持有的月配 ETF（' + '、'.join(_young)
+            + '）上市未滿一年，這些月份只是**尚未觀察到**除息紀錄（去年還沒上市、今年還沒輪到），'
+            '該檔滿一年後應會覆蓋 —— 屬待觀察、**非**永久缺口，故不建議為此補檔。')
     else:
         st.success('✅ 你的持股已覆蓋全部 12 個月，月月有息可領！')
 
     st.markdown('##### 📅 12 月份覆蓋圖（你的持股）')
-    _render_month_grid(_res['month_map'], set(_gaps))
+    _render_month_grid(_res['month_map'], pending=set(_pending))
 
     st.markdown('##### 📋 每月配息明細')
     _tbl = [{
@@ -404,7 +464,8 @@ def _render_curated_recommendation() -> None:
     _m3.metric('ETF 數', len(_combo))
     _m4.metric('嘗試組合', _res['all_candidates_evaluated'])
     st.markdown('##### 📅 12 月份覆蓋圖')
-    _render_month_grid(_res['month_map'], _res['missing_months'])
+    # 提議路徑無「月配新上市」概念,未覆蓋月一律紅缺月(不傳 pending)。
+    _render_month_grid(_res['month_map'])
     if _res.get('skipped_tickers'):
         st.caption(f'⚪ 略過（配息資料不足）：{", ".join(_res["skipped_tickers"])}')
     if _res.get('low_quality'):

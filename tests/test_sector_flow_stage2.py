@@ -209,6 +209,52 @@ def test_service_reader_not_ok_passthrough(monkeypatch):
     assert v["holding_sectors"] == {}
 
 
+def _etf_family_view():
+    """泡泡圖只有單一 'ETF' 桶,但持股 industry_map 標成細分的 '上櫃ETF'。"""
+    return {
+        "ok": True,
+        "sectors": [
+            {"sector": "ETF", "x_yi": 20.7, "y_yi": -1.2, "size_yi": 40.0,
+             "quadrant": "輪動", "n_days": 20, "insufficient": False},
+            {"sector": "半導體業", "x_yi": 136.7, "y_yi": -21.4, "size_yi": 413.6,
+             "quadrant": QUADRANT_EBBING, "n_days": 20, "insufficient": False},
+        ],
+        "updated_at": "2026-08-11T02:26:00+00:00",
+        "window_size": 20, "n_trading_days_used": 20,
+        # 00980A 上市 ETF → "ETF";00980D 上櫃 ETF → "上櫃ETF"(來源標籤不一致)
+        "ticker_sector": {"00980A": "ETF", "00980D": "上櫃ETF"},
+        "is_stale": False, "stale_reason": None,
+        "meta_updated_at": "2026-08-11T02:26:00+00:00",
+    }
+
+
+def test_service_etf_family_label_normalized_to_bubble(monkeypatch):
+    """回歸:持有上櫃 ETF(industry_map 標 '上櫃ETF')應 highlight 泡泡的 'ETF' 桶。
+
+    根因:fetch_industry_map_bulk 對上市/上櫃 ETF 給的細分標籤不一致,但泡泡只有
+    單一 'ETF' 桶 → 未正規化前 '上櫃ETF' 對不上 'ETF' → 00980D 永遠標不到星。
+    canonical_sector 把 ETF 家族細分標籤併成 'ETF' 後即可對上。"""
+    from src.data.sector_flow import reader as R
+    monkeypatch.setattr(R, "read_sector_flow_cache", lambda: _etf_family_view())
+    from src.services.sector_flow_service import get_sector_flow_view
+    # 上市 00980A('ETF')與上櫃 00980D('上櫃ETF')都應把泡泡 'ETF' 桶點亮
+    v = get_sector_flow_view(etf_tickers=["00980A.TW", "00980D.TWO"],
+                             include_stock_watchlists=False)
+    assert v["highlight_sectors"] == {"ETF"}
+    # holding_sectors 保留**原始**標籤(誠實顯示,不被 canonical 汙染)
+    assert v["holding_sectors"]["00980D"] == "上櫃ETF"
+
+
+def test_service_canonical_sector_helper():
+    """canonical_sector:ETF 家族併成 'ETF';非 ETF 板塊 + ETN/受益證券 原樣。"""
+    from shared.sector_flow_thresholds import canonical_sector
+    assert canonical_sector("上櫃ETF") == "ETF"
+    assert canonical_sector("上市指數股票型基金(ETF)") == "ETF"
+    assert canonical_sector("半導體業") == "半導體業"
+    assert canonical_sector("ETN") == "ETN"          # 不同商品,不併
+    assert canonical_sector("受益證券") == "受益證券"  # 不同商品,不併
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # AppTest smoke(slow)— 真實 mount 分頁
 # ═══════════════════════════════════════════════════════════════════════

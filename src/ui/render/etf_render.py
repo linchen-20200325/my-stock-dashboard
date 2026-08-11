@@ -559,31 +559,66 @@ _ETF_SECTOR_MAP = {
 }
 
 
+# ETF → GICS 對照表的「未對映」收容桶(主動/廣泛型 ETF 本身即一籃子分散標的,
+# 不對映任何單一 GICS 類股)。§1:此桶**不參與**「超限」判定——把「沒對映」誤報成
+# 「單一類股集中」是「沒算卻給結論」,對齊本頁其他閘門的三態(pass/fail/unknown)精神。
+_SECTOR_UNMAPPED = '其他'
+#: 單一 GICS 類股集中度上限(%);已對映類股佔比超過此值 → 集中風險「超限」。
+_SECTOR_CONCENTRATION_MAX_PCT = 30
+#: 未對映佔比 ≥ 此值(%)→ 視為「幾乎全未對映」,整體改標無法判定(不亮綠也不亮紅)。
+_SECTOR_ALL_UNMAPPED_PCT = 99.9
+#: 未對映佔比 > 此值(%)才在綠燈附註提示未計入(避免 0.x% 也囉嗦)。
+_SECTOR_UNMAPPED_NOTE_MIN_PCT = 0.5
+
+
 def _check_sector_exposure(rows: list, total_value: float) -> None:
-    """計算各 GICS 類股曝險，標記超過 30% 的集中風險"""
+    """計算各 GICS 類股曝險，標記超過集中上限的風險。
+
+    §1：對映不到單一 GICS 類股的 ETF（多為主動/廣泛型，本身已是分散籃子）歸「其他」，
+    **不觸發「超限」紅燈**，改標「⚪ 無法判定」；只有真被對映到具體類股者才判集中。
+    避免對一個全是分散型 ETF 的組合誤報「其他 100% 超限、建議分散」（與事實相反）。
+    """
     sector_vals: dict = {}
     for r in rows:
-        sector = _ETF_SECTOR_MAP.get(r['ticker'], '其他')
+        sector = _ETF_SECTOR_MAP.get(r['ticker'], _SECTOR_UNMAPPED)
         sector_vals[sector] = sector_vals.get(sector, 0) + r['current_value']
 
     sector_rows = []
     warnings = []
+    _unmapped_val = sector_vals.get(_SECTOR_UNMAPPED, 0.0)
     for sec, val in sorted(sector_vals.items(), key=lambda x: -x[1]):
-        pct = val / total_value * 100
-        flag = '⚠️ 超限' if pct > 30 else '✅'
+        pct = val / total_value * 100 if total_value else 0.0
+        if sec == _SECTOR_UNMAPPED:
+            flag = '⚪ 無法判定'            # 沒對映到單一類股 → 不判超限(§1)
+        elif pct > _SECTOR_CONCENTRATION_MAX_PCT:
+            flag = '⚠️ 超限'
+            warnings.append((sec, pct))
+        else:
+            flag = '✅'
         sector_rows.append({'類股': sec, '合計現值(元)': f'{val:,.0f}',
                              '佔比': f'{pct:.1f}%', '狀態': flag})
-        if pct > 30:
-            warnings.append((sec, pct))
 
     st.dataframe(pd.DataFrame(sector_rows), use_container_width=True, hide_index=True)
+
+    _unmapped_pct = _unmapped_val / total_value * 100 if total_value else 0.0
     if warnings:
         for sec, pct in warnings:
             _colored_box(
-                f'⚠️ <b>{sec}</b> 類股佔比 <b>{pct:.1f}%</b> 超過 30% 上限，'
+                f'⚠️ <b>{sec}</b> 類股佔比 <b>{pct:.1f}%</b> 超過 '
+                f'{_SECTOR_CONCENTRATION_MAX_PCT}% 上限，'
                 f'建議分散至其他類股或降低持倉', 'red')
+    elif _unmapped_pct >= _SECTOR_ALL_UNMAPPED_PCT:
+        # 全部都對映不到 → 這個檢查對本組合不適用(誠實無法判定,不亮假紅燈)
+        _colored_box(
+            '⚪ <b>無法判定產業集中度</b>：你的持股多為主動/廣泛型 ETF，無法對映到單一 '
+            f'GICS 類股（每檔本身就是一籃子分散標的）。此「單一類股 ≤{_SECTOR_CONCENTRATION_MAX_PCT}%」'
+            '檢查適用於類股型 ETF（如 XLK/XLF）或個股組合。', 'yellow')
     else:
-        _colored_box('✅ 所有類股曝險均在 30% 以內，產業分散度良好', 'green')
+        _msg = ('✅ 可對映類股的曝險均在 '
+                f'{_SECTOR_CONCENTRATION_MAX_PCT}% 以內，產業分散度良好')
+        if _unmapped_pct > _SECTOR_UNMAPPED_NOTE_MIN_PCT:
+            _msg += f'（另有 {_unmapped_pct:.0f}% 為無法對映的分散型 ETF，未計入判定）'
+        _colored_box(_msg, 'green')
 
 
 # ── 美股 11 大 GICS 類股 ETF ─────────────────────────────────

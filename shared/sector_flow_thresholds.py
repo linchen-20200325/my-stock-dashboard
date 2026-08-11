@@ -48,6 +48,24 @@ QUADRANT_INSUFFICIENT: str = "資料不足"   # 交易日 < WINDOW_Y_MIN_DAYS,�
 #: ticker 無 industry_category(新上市未收錄 / ETF / 權證)→ 歸此桶,不臆造。
 SECTOR_UNCLASSIFIED: str = "未分類"
 
+# ── ETF 家族板塊別名正規化(§3.3 別名走 SSOT,不 inline)──────────────────
+#: `fetch_industry_map_bulk` 對不同上市/上櫃 ETF 給的細分標籤不一致
+#: (上市 → "ETF"、上櫃 → "上櫃ETF"、部分來源 → "上市/上櫃指數股票型基金(ETF)"),
+#: 但泡泡圖三大法人聚合桶只會出現單一 "ETF"。做持股→泡泡 highlight 交集時,
+#: 需把 ETF 家族細分標籤正規化成同一 canonical,否則持有上櫃 ETF(如 00980D→上櫃ETF)
+#: 永遠對不到 "ETF" 泡泡。⚠️ ETN / 受益證券 / 存託憑證屬不同商品,**不**併入。
+SECTOR_ETF_CANONICAL: str = "ETF"
+SECTOR_ETF_FAMILY_ALIASES: frozenset = frozenset({
+    "ETF", "上市ETF", "上櫃ETF",
+    "指數股票型基金(ETF)", "上市指數股票型基金(ETF)", "上櫃指數股票型基金(ETF)",
+})
+
+
+def canonical_sector(label) -> str:
+    """ETF 家族細分標籤 → canonical "ETF";其餘板塊原樣返回(highlight 交集前用)。"""
+    s = str(label or "").strip()
+    return SECTOR_ETF_CANONICAL if s in SECTOR_ETF_FAMILY_ALIASES else s
+
 #: 一個板塊在某交易日「有效成分股」數量下限;低於此該板塊當日流入代表性不足。
 #: 目前僅作為 coverage 診斷欄位輸出(不濾除),Stage 2 畫圖可據此決定是否淡化顯示。
 MIN_SECTOR_STOCKS: int = 1
