@@ -635,6 +635,7 @@ for _f, _m in (
     ("scripts/push_daily_signals.py", "src.services.ai_fetcher"),
     ("scripts/push_daily_signals.py", "src.services.fundamental_screener_service"),
     ("scripts/push_daily_signals.py", "src.services.shortage_screener_service"),
+    ("scripts/push_weekly_report.py", "src.services.weekly_review_service"),
     ("scripts/shortage_cli.py", "src.compute.health.monthly_revenue_calc"),
     ("scripts/shortage_cli.py", "src.compute.screener.shortage_screener"),
     ("scripts/update_forward_test_freeze.py", "src.services.forward_test_service"),
