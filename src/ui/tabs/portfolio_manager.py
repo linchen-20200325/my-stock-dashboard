@@ -97,16 +97,29 @@ def _render_etf_section(_gsp, pd, sid) -> None:
             st.session_state[_dkey] = pd.DataFrame(
                 etf_rows_to_records(_rows) or [{"代號": "", "張數": None, "均價": None}])
             st.session_state["_mgmt_etf_name"] = _pick
+            # ⚠️ 必須清掉 data_editor 的 widget-state,否則 Streamlit 會把「載入前的舊編輯」
+            # 以 delta 疊回新載入的資料 → 存回 Sheet 就是髒資料(§1)。對齊 etf_tab_portfolio。
+            st.session_state.pop("_mgmt_etf_editor", None)
             st.rerun()
         except Exception as _e:
             st.warning(f"載入失敗：{type(_e).__name__}")
     if _dc.button("🗑️ 刪除", key="_mgmt_etf_del", use_container_width=True) and _pick != "—":
-        try:
-            _n = _gsp.delete_portfolio(_pick, sheet_id=sid)
-            st.success(f"已刪除組合「{_pick}」（{_n} 檔）")
+        st.session_state["_mgmt_etf_pending_del"] = _pick     # 兩段式:先標記待刪
+        st.rerun()
+    _pend = st.session_state.get("_mgmt_etf_pending_del")
+    if _pend:
+        st.warning(f"確定刪除組合「{_pend}」？此動作無法復原。")
+        _yc, _nc = st.columns(2)
+        if _yc.button("✅ 確認刪除", key="_mgmt_etf_del_yes", use_container_width=True):
+            try:
+                _gsp.delete_portfolio(_pend, sheet_id=sid)
+            except Exception as _e:
+                st.warning(f"刪除失敗：{type(_e).__name__}")
+            st.session_state.pop("_mgmt_etf_pending_del", None)
             st.rerun()
-        except Exception as _e:
-            st.warning(f"刪除失敗：{type(_e).__name__}")
+        if _nc.button("取消", key="_mgmt_etf_del_no", use_container_width=True):
+            st.session_state.pop("_mgmt_etf_pending_del", None)
+            st.rerun()
 
     _edited = st.data_editor(
         st.session_state[_dkey], num_rows="dynamic", key="_mgmt_etf_editor",
@@ -148,16 +161,27 @@ def _render_stock_section(_gsp, pd, sid) -> None:
             _codes = _gsp.load_stock_watchlist(_pick, sheet_id=sid)
             st.session_state[_dkey] = pd.DataFrame(codes_to_records(_codes) or [{"代號": ""}])
             st.session_state["_mgmt_stk_name"] = _pick
+            st.session_state.pop("_mgmt_stk_editor", None)   # 同 ETF:清舊 delta,不疊髒資料(§1)
             st.rerun()
         except Exception as _e:
             st.warning(f"載入失敗：{type(_e).__name__}")
     if _dc.button("🗑️ 刪除", key="_mgmt_stk_del", use_container_width=True) and _pick != "—":
-        try:
-            _n = _gsp.delete_stock_watchlist(_pick, sheet_id=sid)
-            st.success(f"已刪除清單「{_pick}」（{_n} 檔）")
+        st.session_state["_mgmt_stk_pending_del"] = _pick
+        st.rerun()
+    _pend = st.session_state.get("_mgmt_stk_pending_del")
+    if _pend:
+        st.warning(f"確定刪除清單「{_pend}」？此動作無法復原。")
+        _yc, _nc = st.columns(2)
+        if _yc.button("✅ 確認刪除", key="_mgmt_stk_del_yes", use_container_width=True):
+            try:
+                _gsp.delete_stock_watchlist(_pend, sheet_id=sid)
+            except Exception as _e:
+                st.warning(f"刪除失敗：{type(_e).__name__}")
+            st.session_state.pop("_mgmt_stk_pending_del", None)
             st.rerun()
-        except Exception as _e:
-            st.warning(f"刪除失敗：{type(_e).__name__}")
+        if _nc.button("取消", key="_mgmt_stk_del_no", use_container_width=True):
+            st.session_state.pop("_mgmt_stk_pending_del", None)
+            st.rerun()
 
     _edited = st.data_editor(
         st.session_state[_dkey], num_rows="dynamic", key="_mgmt_stk_editor",
