@@ -28,8 +28,10 @@ from src.compute.notify.weekly_review_prompt import (
     build_weekly_review_prompt,
 )
 
-#: 大盤定調用的年線窗(交易日)。與個股 config.ANNUAL_MA 同義(240),此處為 cron 端獨立輕量計算。
-_ANNUAL_MA_DAYS = 240
+#: 年線窗(240 交易日)直接引 L0 SSOT(§3.3:禁 inline,原 _ANNUAL_MA_DAYS=240 為明知的複本)。
+from src.config.config import MA_ANNUAL
+#: 近期報酬回看窗(交易日)。語意=「近 N 交易日報酬」,與 MA 移動平均窗不同義 → 獨立具名
+#: (§3.3 避免同數字不同義耦合;不硬借 config.MA_SHORT)。
 _RECENT_WINDOW_DAYS = 20
 
 
@@ -47,9 +49,9 @@ def _macro_lite_lines() -> list[str]:
             return ["加權指數：資料暫時無法取得"]
         _last = float(_close.iloc[-1])
         _lines = [f"加權指數 收 {_last:,.0f}"]
-        if len(_close) >= _ANNUAL_MA_DAYS:
-            _ma = float(_close.tail(_ANNUAL_MA_DAYS).mean())
-            _lines.append(f"年線({_ANNUAL_MA_DAYS}日均) {_ma:,.0f}｜"
+        if len(_close) >= MA_ANNUAL:
+            _ma = float(_close.tail(MA_ANNUAL).mean())
+            _lines.append(f"年線({MA_ANNUAL}日均) {_ma:,.0f}｜"
                           + ("站上年線" if _last >= _ma else "跌破年線"))
         if len(_close) > _RECENT_WINDOW_DAYS:
             _chg = (_last / float(_close.iloc[-(_RECENT_WINDOW_DAYS + 1)]) - 1) * 100
@@ -91,6 +93,7 @@ def format_weekly_message(review, *, as_of: str = "") -> str:
 
     _out.append("〔大盤定調〕")
     _out += (review.get("macro_lines") or ["加權指數：資料暫時無法取得"])
+    _out.append("（僅大盤位階，非完整6因子總經健康）")   # §1 誠實:別讓人誤以為是完整總經
     _out.append("")
 
     _out.append("〔逐檔體檢〕")

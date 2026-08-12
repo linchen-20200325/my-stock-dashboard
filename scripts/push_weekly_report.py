@@ -35,13 +35,14 @@ if str(_REPO_ROOT) not in sys.path:
 
 #: 台股代號 token:個股 4 碼(首位 1-9,可帶字母)或 ETF/受益證券 00 開頭。排除數量(如 30000)。
 _TICKER_RE = re.compile(r"^(?:00\d{2,4}[A-Za-z]?|[1-9]\d{3}[A-Za-z]?)$")
-#: 常見「代號」欄位表頭(發布的分頁若有表頭,優先讀這欄)。
-_TICKER_HEADERS = ("ticker", "代號", "代碼", "股號", "symbol")
+#: 「代號」欄位表頭關鍵字(以**包含**判定,故 `股票代號`/`證券代碼`/`stock code` 等變體皆命中,
+#: 優先鎖定該欄 → 避免退回 scan-all 把 4 位數量誤當代號)。
+_TICKER_HEADERS = ("ticker", "代號", "代碼", "股號", "symbol", "code")
 _TW_NOW_TZ = _dt.timezone(_dt.timedelta(hours=8))
 
 
 def _strip_suffix(tok: str) -> str:
-    _t = tok.strip().upper()
+    _t = str(tok).replace("\ufeff", "").strip().upper()   # 去 BOM(utf-8-sig 首格)
     for _s in (".TWO", ".TW"):
         if _t.endswith(_s):
             return _t[: -len(_s)]
@@ -66,18 +67,21 @@ def extract_tickers_from_csv(text: str) -> list[str]:
             _seen.add(_c)
             out.append(_c)
 
-    _header = [h.strip().lower() for h in _rows[0]]
-    _col = next((i for i, h in enumerate(_header) if h in _TICKER_HEADERS), None)
+    _header = [str(h).replace("\ufeff", "").strip().lower() for h in _rows[0]]
+    # 以「包含」判定:`股票代號`/`證券代碼`/`stock code` 等變體皆命中,鎖定該欄 → 避免退回
+    # scan-all 把 4 位數量(如持股數 1101/3000)誤當代號(稽核 item 3b)。
+    _col = next((i for i, h in enumerate(_header)
+                 if any(_k in h for _k in _TICKER_HEADERS)), None)
     if _col is not None:
         for _r in _rows[1:]:
             if _col < len(_r):
                 _add(_r[_col])
         if out:
             return out
-    # 無表頭代號欄 → 掃全表 token(cell 可能是 "2330 台積電" → 拆 token)
+    # 無表頭代號欄 → 掃全表 token(cell 可能是 "2330 台積電" → 拆 token;含全形逗號)
     for _r in _rows:
         for _cell in _r:
-            for _tok in re.split(r"[\s,、]+", str(_cell)):
+            for _tok in re.split(r"[\s,、，]+", str(_cell)):
                 _add(_tok)
     return out
 
@@ -105,7 +109,8 @@ def main(argv=None) -> int:
     try:
         _csv_text = _fetch_csv(_url)
     except Exception as _e:
-        print(f"[weekly_report] ❌ 追蹤清單 CSV 抓取失敗:{type(_e).__name__}: {_e}")
+        # 只印例外類型,不印 {_e}(requests 例外訊息常內嵌完整 URL → 避免 log 洩漏清單連結)
+        print(f"[weekly_report] ❌ 追蹤清單 CSV 抓取失敗:{type(_e).__name__}")
         return 1
 
     _tickers = extract_tickers_from_csv(_csv_text)

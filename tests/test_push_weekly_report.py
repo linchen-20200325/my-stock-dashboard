@@ -37,3 +37,24 @@ def test_etf_letter_suffix():
 def test_empty_or_garbage():
     assert extract_tickers_from_csv("") == []
     assert extract_tickers_from_csv("你好,世界\nfoo,bar\n") == []
+
+
+def test_header_variant_contains_match():
+    """常見表頭變體(股票代號/證券代碼/stock code)以『包含』命中 → 鎖定該欄,
+    數量欄(1101/3000,含真實碼樣式)不誤入(稽核 item 3b 回歸)。"""
+    assert extract_tickers_from_csv(
+        "股票代號,持股數\n2330,1101\n2454,3000\n") == ["2330", "2454"]
+    assert extract_tickers_from_csv(
+        "證券代碼,張數\n2330,5\n") == ["2330"]
+    assert extract_tickers_from_csv(
+        "stock code,shares\n2330,1000\n") == ["2330"]
+
+
+def test_bom_first_cell():
+    """utf-8-sig BOM 在首格 → 去 BOM 後仍正確解析(稽核 item 3e)。"""
+    assert extract_tickers_from_csv("\ufeff2330,台積電\n00980A\n") == ["2330", "00980A"]
+
+
+def test_fullwidth_comma_scan():
+    """無表頭、全形逗號分隔 → 正確拆 token(稽核 item 3e)。"""
+    assert extract_tickers_from_csv("2330，2454\n") == ["2330", "2454"]

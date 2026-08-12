@@ -107,6 +107,7 @@ def test_format_message_laggards_ai_and_disclaimer():
     assert "00980A" in msg and "🚨" in msg and "亮警示 1/2" in msg
     assert "AI 建議段落" in msg
     assert "非投資建議" in msg
+    assert "非完整6因子總經" in msg          # §1 誠實:標明大盤定調為簡版
 
 
 def test_format_message_ai_absent_still_sends_real_data():
