@@ -204,6 +204,41 @@ def test_delete_portfolio_empty_sheet(fake_ws):
     assert gsp.delete_portfolio('x') == 0
 
 
+# ── delete_stock_watchlist（新補：個股端原缺刪除能力）──────────────────
+def _stock_ws(rows):
+    return _FakeWorksheet([gsp._STOCK_WATCHLIST_HEADERS] + rows)
+
+
+def test_delete_stock_watchlist_existing():
+    ws = _stock_ws([
+        ['清單A', '2330', 'ts'], ['清單A', '2454', 'ts'], ['清單B', '0050', 'ts'],
+    ])
+    with patch.object(gsp, '_ws', return_value=ws):
+        n = gsp.delete_stock_watchlist('清單A')
+    assert n == 2
+    assert ws.rows[0] == gsp._STOCK_WATCHLIST_HEADERS
+    assert ws.rows[1:] == [['清單B', '0050', 'ts']]   # 只剩清單B,不誤刪
+
+
+def test_delete_stock_watchlist_missing():
+    ws = _stock_ws([['清單A', '2330', 'ts']])
+    with patch.object(gsp, '_ws', return_value=ws):
+        assert gsp.delete_stock_watchlist('不存在') == 0
+    assert ws.rows[1:] == [['清單A', '2330', 'ts']]   # 原資料不變
+
+
+def test_delete_stock_watchlist_empty_name():
+    ws = _stock_ws([['清單A', '2330', 'ts']])
+    with patch.object(gsp, '_ws', return_value=ws):
+        assert gsp.delete_stock_watchlist('') == 0
+
+
+def test_delete_stock_watchlist_empty_sheet():
+    ws = _stock_ws([])
+    with patch.object(gsp, '_ws', return_value=ws):
+        assert gsp.delete_stock_watchlist('x') == 0
+
+
 # ══ Phase 1: 個股 / ETF 雲端 sheet 分家（sheet_id 參數化 + 個股專屬通道）══════
 def _fake_client_capturing():
     """回 (client, opened)：client.open_by_key 記錄每次的 sheet_id 到 opened，
