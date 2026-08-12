@@ -390,8 +390,8 @@ render_macro_compass()
 # v18.182 ARCHIVED: 🧪 回測找參數 / v18.187 ARCHIVED: 📈 月營收進退 / v18.189 ARCHIVED: 📊 財報體檢變化
 # 各暫封存模組保留磁碟，啟用方式見各 ARCHIVED 原始注解。
 # v18.463: UI 重構 — 10 平鋪 Tab → 4 大群組 + Sub-tabs（sub-tab 變數名稱維持不變，測試仍通過）
-tab_market, tab_stocks, tab_etf_main, tab_tools, tab_ai = st.tabs([
-    '🌍 市場環境', '🔬 選股', '🏦 ETF', '🔧 工具箱', '🧬 AI 問答',
+tab_market, tab_stocks, tab_etf_main, tab_tools, tab_mgmt, tab_ai = st.tabs([
+    '🌍 市場環境', '🔬 選股', '🏦 ETF', '🔧 工具箱', '📁 組合管理', '🧬 AI 問答',
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -800,6 +800,11 @@ with tab_tools:
     with tab_edu:
         from src.ui.tabs import render_tab_edu
         _render_tab_isolated(render_tab_edu, '教學')
+
+# ── 📁 組合管理（統一頁:ETF 組合 + 個股清單,存 Google Sheet）──────────
+with tab_mgmt:
+    from src.ui.tabs.portfolio_manager import render_portfolio_manager
+    _render_tab_isolated(render_portfolio_manager, '組合管理')
 
 # ── 🧬 AI 問答（v19.121 Phase 1，L5→L3 ai_qa_service）──────────────
 with tab_ai:

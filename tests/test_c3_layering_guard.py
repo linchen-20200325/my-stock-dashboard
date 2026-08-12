@@ -477,6 +477,9 @@ for _f, _m in (
     ("src/ui/tabs/macro/section_short.py", "src.data.macro"),
     ("src/ui/tabs/macro/section_state.py", "src.data.macro"),
     ("src/ui/tabs/pattern_targets_ui.py", "src.data.stock.picker_fetcher"),
+    # 📁 組合管理統一頁:lazy import L1 gsheet_portfolio(存/讀 Sheet,同 tab_stock_grp 範式;
+    # L1 內已 @st.cache/OAuth 集中緩存,加 L3 wrapper 只是 pure pass-through)。
+    ("src/ui/tabs/portfolio_manager.py", "src.data.portfolio"),
     ("src/ui/tabs/stock_grp_sections/section_batch_fetcher.py", "src.data.core"),
     ("src/ui/tabs/stock_grp_sections/section_batch_fetcher.py", "src.data.stock.app_stock_fetchers"),
     ("src/ui/tabs/stock_grp_sections/section_portfolio_summary.py", "src.data.news"),

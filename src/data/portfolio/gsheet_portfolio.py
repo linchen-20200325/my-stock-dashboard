@@ -703,3 +703,29 @@ def delete_portfolio(name: str, *, sheet_id: str | None = None) -> int:
     if keep_rows:
         ws.append_rows(keep_rows)
     return deleted
+
+
+def delete_stock_watchlist(name: str, *, sheet_id: str | None = None) -> int:
+    """刪除指定名稱的**個股觀察清單**(所有代碼列),回傳刪除的列數。
+
+    語意鏡像 delete_portfolio,但操作 `stock_watchlist` 分頁(純代碼、無價格)。
+    補齊個股端原缺的刪除能力(ETF 早有 delete_portfolio,個股一直只能同名覆蓋)。
+    sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合分家用)。
+    """
+    name = (name or '').strip()
+    if not name:
+        return 0
+    ws = _ws(sheet_id=sheet_id, worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
+             headers=_STOCK_WATCHLIST_HEADERS)
+    existing = ws.get_all_values()
+    if len(existing) <= 1:
+        return 0
+    keep_rows = [r for r in existing[1:] if (r and r[0].strip() != name)]
+    deleted = (len(existing) - 1) - len(keep_rows)
+    if deleted == 0:
+        return 0
+    ws.clear()
+    ws.append_row(_STOCK_WATCHLIST_HEADERS)
+    if keep_rows:
+        ws.append_rows(keep_rows)
+    return deleted
