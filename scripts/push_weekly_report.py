@@ -8,6 +8,10 @@
 為何用「發布 CSV」而非 gsheet SA:cron 無使用者 session、OAuth 拿不到私有 Sheet;
 使用者把追蹤清單分頁「發布到網路」→ 公開 CSV 連結,plain HTTP 即可讀,零認證、零 GCP 設定。
 
+WEEKLY_WATCH_CSV_URL 可放**多行**(一行一個發布 CSV):讓「組合管理頁」維護的 ETF 分頁
+與個股分頁各發布一份 → 週報**聯集去重**兩份代號,自動跟著管理頁清單走。只設一行 = 單來源
+(向後相容)。⚠️ ETF 分頁含張數/均價,若整頁發布會公開部位;週報只需代號,建議發布只含代號的視圖。
+
 §1 Fail Loud:
 - 無 CSV URL / 抓不到 / 解析 0 代號 → 印錯 + 非零 exit,不送空/假訊息。
 - 取價/AI 失敗由 service 端誠實降級(AI 缺席仍送真實數據摘要)。
@@ -86,13 +90,55 @@ def extract_tickers_from_csv(text: str) -> list[str]:
     return out
 
 
+def _split_urls(raw: str) -> list[str]:
+    """把來源字串拆成 URL 清單(去重保序)。
+
+    支援多行/空白分隔:一行一個發布 CSV 連結(ETF 分頁、個股分頁各一行);只設一個時
+    = 原單來源行為(向後相容)。合法的 published-CSV URL 內不含空白,故以空白切分安全。
+    """
+    return list(dict.fromkeys(str(raw or "").split()))   # split() 去空行 + fromkeys 去重保序
+
+
 def _fetch_csv(url: str, timeout: int = 30) -> str:
     import requests
     _r = requests.get(url, timeout=timeout)
     if _r.status_code != 200:
         raise RuntimeError(f"CSV 抓取 HTTP {_r.status_code}")
+    # 誤用 pubhtml 連結或發布已撤銷 → Google 回 HTML 頁(status 200)。靜默解析會得 0 代號 →
+    # 多來源下被另一分頁掩蓋成殘缺清單(違 §1),故在此 fail loud。
+    #   主判:content-type 含 html。
+    #   備判(稽核 B 低度強化):content-type **缺失**時,看 body 前綴是否 <!doctype / <html
+    #     —— 撤銷頁可能不帶 header。只在缺 header 時才 body-sniff → 不誤殺帶正確 text/csv 的
+    #     合法 CSV(合法 CSV 幾乎不可能以 <!doctype/<html 起頭)。訊息不帶 URL(避免 log 洩漏)。
+    _ctype = (_r.headers.get("content-type") or "").lower()
     _r.encoding = _r.apparent_encoding or "utf-8"
-    return _r.text
+    _text = _r.text
+    _head = _text.lstrip(chr(0xFEFF) + " \t\r\n").lower()   # 去 BOM + 前導空白後看首 token
+    _looks_html = _head.startswith(("<!doctype", "<html"))
+    if "html" in _ctype or (not _ctype and _looks_html):
+        raise RuntimeError("非 CSV 回應(疑似 pubhtml 網頁或發布已撤銷;請確認貼的是 output=csv 連結)")
+    return _text
+
+
+def collect_tickers(urls, *, fetch=_fetch_csv) -> list[str]:
+    """逐一抓取每份來源 CSV → 聯集台股代號(跨來源去重、保序)。
+
+    §1 失敗大聲:任一「已設定」來源抓取/解析失敗即 raise(不送只涵蓋一半的殘缺週報);
+    抓到但解析 0 代號的空分頁**不算**失敗(是否 fail 由 caller 依聯集後總數判定)。
+    fetch 可注入以利測試(免真連網)。
+    """
+    _all: list[str] = []
+    for _i, _u in enumerate(urls, 1):
+        try:
+            _codes = extract_tickers_from_csv(fetch(_u))
+        except Exception as _e:
+            # 只帶「第幾份 / 共幾份」+ 例外類型;**不帶** URL 或 CSV 內容(避免 log 洩漏
+            # 清單連結),但足以讓 operator 定位是哪一份來源壞掉。
+            raise RuntimeError(
+                f"第 {_i}/{len(urls)} 份來源處理失敗({type(_e).__name__})"
+            ) from _e
+        _all.extend(_codes)
+    return list(dict.fromkeys(_all))               # 跨來源去重、保序
 
 
 def main(argv=None) -> int:
@@ -101,23 +147,23 @@ def main(argv=None) -> int:
     ap.add_argument("--csv-url", default=None, help="覆寫 WEEKLY_WATCH_CSV_URL")
     args = ap.parse_args(argv)
 
-    _url = args.csv_url or os.environ.get("WEEKLY_WATCH_CSV_URL", "").strip()
-    if not _url:
-        print("[weekly_report] ❌ 未設定 WEEKLY_WATCH_CSV_URL(發布的追蹤清單 CSV 連結)")
+    _urls = _split_urls(args.csv_url or os.environ.get("WEEKLY_WATCH_CSV_URL", ""))
+    if not _urls:
+        print("[weekly_report] ❌ 未設定 WEEKLY_WATCH_CSV_URL(發布的追蹤清單 CSV 連結;可多行,一行一個分頁)")
         return 1
 
     try:
-        _csv_text = _fetch_csv(_url)
+        _tickers = collect_tickers(_urls)
     except Exception as _e:
-        # 只印例外類型,不印 {_e}(requests 例外訊息常內嵌完整 URL → 避免 log 洩漏清單連結)
-        print(f"[weekly_report] ❌ 追蹤清單 CSV 抓取失敗:{type(_e).__name__}")
+        # collect_tickers 已把訊息清成不含 URL(僅「第幾份 + 例外類型」)→ 可安全直印,
+        # 讓 operator 知道是哪一份來源壞掉(原設計只印類型名,無法定位多來源中的哪一個)。
+        print(f"[weekly_report] ❌ 追蹤清單 CSV 抓取失敗:{_e}")
         return 1
 
-    _tickers = extract_tickers_from_csv(_csv_text)
     if not _tickers:
         print("[weekly_report] ❌ CSV 解析出 0 個台股代號 → 不送(§1 不送空訊息)")
         return 1
-    print(f"[weekly_report] 追蹤 {len(_tickers)} 檔:{', '.join(_tickers)}")
+    print(f"[weekly_report] 追蹤 {len(_tickers)} 檔(來源 {len(_urls)} 份):{', '.join(_tickers)}")
 
     _as_of = _dt.datetime.now(_TW_NOW_TZ).strftime("%Y-%m-%d")
     from src.services.weekly_review_service import (

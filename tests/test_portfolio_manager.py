@@ -17,12 +17,21 @@ from src.ui.tabs.portfolio_manager import (
 
 
 def test_parse_sheet_id():
-    # 完整 URL → 抓 id
+    # 完整編輯 URL → 抓 id
     assert parse_sheet_id(
         "https://docs.google.com/spreadsheets/d/1lFhwvD-ISZ0kf/edit?gid=0#gid=0"
     ) == "1lFhwvD-ISZ0kf"
-    # 發布網址(pub) 也含 /spreadsheets/d/e/... → 抓到帶 e/ 的 id 段(可接受)
-    assert parse_sheet_id("  1lFhwvD-ISZ0kf  ") == "1lFhwvD-ISZ0kf"   # 純 id 去空白
+    # 純 id(含 _ / -)→ 去空白
+    assert parse_sheet_id("  1lFhwvD-ISZ0kf  ") == "1lFhwvD-ISZ0kf"
+    # 發布連結(pubhtml / pub?output=csv,含 /d/e/<token>)→ 回 ""(非可用 key;管理頁需編輯用
+    # URL。舊行為會抓到單字元 "e" → open_by_key("e") 拋錯,屬稽核 A 低度缺失,已修)
+    assert parse_sheet_id(
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQyRldDGV/pubhtml") == ""
+    assert parse_sheet_id(
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQyR/pub?output=csv") == ""
+    # 真實 id 以 e 開頭 → **不**誤判為發布連結(只有 /d/e/ 正好單字元 e+斜線才是發布)
+    assert parse_sheet_id(
+        "https://docs.google.com/spreadsheets/d/eABCdef123/edit") == "eABCdef123"
     assert parse_sheet_id("") == "" and parse_sheet_id(None) == ""
 
 

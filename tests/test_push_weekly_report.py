@@ -5,7 +5,14 @@
 """
 from __future__ import annotations
 
-from scripts.push_weekly_report import extract_tickers_from_csv
+import pytest
+
+from scripts.push_weekly_report import (
+    _fetch_csv,
+    _split_urls,
+    collect_tickers,
+    extract_tickers_from_csv,
+)
 
 
 def test_header_ticker_column():
@@ -58,3 +65,101 @@ def test_bom_first_cell():
 def test_fullwidth_comma_scan():
     """無表頭、全形逗號分隔 → 正確拆 token(稽核 item 3e)。"""
     assert extract_tickers_from_csv("2330，2454\n") == ["2330", "2454"]
+
+
+# ── 多來源聯集(組合管理頁 ETF 分頁 + 個股分頁 → 週報自動跟著走)───────────────
+
+def test_split_urls_multiline_dedup():
+    """多行/空白分隔 → 去空行、去重、保序;單行=向後相容;空/None → []。"""
+    raw = (
+        "https://x/pub?gid=0&output=csv\n"
+        "  https://x/pub?gid=9&output=csv \n"
+        "\n"
+        "https://x/pub?gid=0&output=csv\n"   # 與第 1 行重複 → 去重
+    )
+    assert _split_urls(raw) == [
+        "https://x/pub?gid=0&output=csv",
+        "https://x/pub?gid=9&output=csv",
+    ]
+    assert _split_urls("") == [] and _split_urls(None) == []
+    assert _split_urls("  https://only/one  ") == ["https://only/one"]
+
+
+def test_collect_tickers_union_dedup():
+    """兩份來源 CSV → 聯集、保序、跨來源去重(ETF∪個股,0050 重疊只留一次)。"""
+    _sources = {
+        "ETF": "ticker\n00980A\n0050\n",
+        "STK": "ticker\n3006\n0050\n",       # 0050 與 ETF 分頁重疊
+    }
+    out = collect_tickers(["ETF", "STK"], fetch=lambda u: _sources[u])
+    assert out == ["00980A", "0050", "3006"]
+
+
+def test_collect_tickers_fail_loud_on_fetch_error():
+    """任一來源抓取失敗 → raise(§1 不送只涵蓋一半的殘缺週報),不吞成半份清單;
+    訊息帶「第幾份/共幾份」以利定位,且**不**洩漏 URL。"""
+    def _fetch(u: str) -> str:
+        if u == "BAD":
+            raise RuntimeError("HTTP 404 https://secret/pub?gid=9")   # 例外訊息內嵌 URL
+        return "ticker\n2330\n"
+    with pytest.raises(RuntimeError, match=r"第 2/2 份") as _ei:
+        collect_tickers(["GOOD", "BAD"], fetch=_fetch)
+    assert "secret" not in str(_ei.value)      # 外層訊息不得含原始 URL(no-leak)
+
+
+def test_collect_tickers_empty_tab_not_failure():
+    """某分頁抓到但 0 代號(空分頁)不算失敗 → 由聯集後總數決定(此處仍有另一份的碼)。"""
+    _sources = {"EMPTY": "ticker\n", "STK": "ticker\n3006\n"}
+    assert collect_tickers(["EMPTY", "STK"], fetch=lambda u: _sources[u]) == ["3006"]
+
+
+def test_fetch_csv_rejects_html_response(monkeypatch):
+    """誤用 pubhtml 連結/發布撤銷 → Google 回 text/html(status 200)→ fail loud,
+    不讓它靜默解析成 0 代號後被另一分頁掩蓋成殘缺清單(§1)。"""
+    class _Resp:
+        status_code = 200
+        headers = {"content-type": "text/html; charset=UTF-8"}
+        apparent_encoding = "utf-8"
+        encoding = "utf-8"
+        text = "<!DOCTYPE html><html><body>not csv</body></html>"
+    monkeypatch.setattr("requests.get", lambda *a, **k: _Resp())
+    with pytest.raises(RuntimeError, match=r"非 CSV"):
+        _fetch_csv("https://x/pubhtml")
+
+
+def test_fetch_csv_accepts_csv_response(monkeypatch):
+    """正常 text/csv → 照常回傳文字(content-type 守衛不誤殺合法 CSV)。"""
+    class _Resp:
+        status_code = 200
+        headers = {"content-type": "text/csv"}
+        apparent_encoding = "utf-8"
+        encoding = None
+        text = "ticker\n2330\n"
+    monkeypatch.setattr("requests.get", lambda *a, **k: _Resp())
+    assert _fetch_csv("https://x/pub?output=csv") == "ticker\n2330\n"
+
+
+def test_fetch_csv_rejects_html_body_without_content_type(monkeypatch):
+    """撤銷發布 → 回 HTML 但**無** content-type header → 靠 body 前綴 <!DOCTYPE 判定仍 fail
+    loud(稽核 B 低度強化:含 BOM/前導空白也認得)。"""
+    class _Resp:
+        status_code = 200
+        headers = {}                                # 無 content-type
+        apparent_encoding = "utf-8"
+        encoding = None
+        text = chr(0xFEFF) + "  \n<!DOCTYPE html><html><body>revoked</body></html>"
+    monkeypatch.setattr("requests.get", lambda *a, **k: _Resp())
+    with pytest.raises(RuntimeError, match=r"非 CSV"):
+        _fetch_csv("https://x/pub")
+
+
+def test_fetch_csv_accepts_csv_body_without_content_type(monkeypatch):
+    """無 content-type 但 body 是正常 CSV → 不誤殺(body-sniff 只認 <!doctype/<html 起頭)。"""
+    class _Resp:
+        status_code = 200
+        headers = {}
+        apparent_encoding = "utf-8"
+        encoding = None
+        text = "ticker\n2330\n"
+    monkeypatch.setattr("requests.get", lambda *a, **k: _Resp())
+    assert _fetch_csv("https://x/pub?output=csv") == "ticker\n2330\n"
