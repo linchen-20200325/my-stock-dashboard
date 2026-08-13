@@ -42,7 +42,7 @@ def render_stock_grp():
     render_market_status_section()
 
     # ══ ② 輸入多檔代碼(v19.164 唯一來源:型態目標價 / 財報體質 / 三階段濾網全部吃這裡)═══
-    # session_state-backed(供「帶入持股」回填;不用 value= 避免 widget 衝突警告)
+    # session_state-backed(提供預設值;不用 value= 避免 widget 衝突警告)
     if 'multi_input' not in st.session_state:
         st.session_state['multi_input'] = '2330 2454 2317 2382 3017 2308 2303 2376 6669 3661'
     with st.container(border=True):

@@ -242,13 +242,13 @@ with st.sidebar:
                 for _k in ('gsheet_tokens', 'gsheet_email', '_oauth_state'):
                     st.session_state.pop(_k, None)
                 st.rerun()
-            # ── Google Sheet ID（集中於帳號區；ETF 組合面板可從 Drive 挑選/新建）──
+            # ── Google Sheet ID（集中於帳號區；亦可於「📁 組合管理」頁設定）──
             _sb_sid_cur = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
             _sb_sid_raw = st.text_input(
                 'Google Sheet ID 或完整 URL（系統會自動解析 ID）',
                 value=_sb_sid_cur, key='sb_portfolio_sheet_id_input',
                 placeholder='貼上 https://docs.google.com/spreadsheets/d/...',
-                help='貼 URL/ID 設定投組資料庫；或到「ETF 組合」Tab 從 Drive 挑選 / 一鍵新建')
+                help='貼 URL/ID 設定投組資料庫（或在「📁 組合管理」頁設定）')
             _sb_m = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', _sb_sid_raw)
             _sb_sid_new = _sb_m.group(1) if _sb_m else _sb_sid_raw.strip()
             if _sb_sid_new and _sb_sid_new != _sb_sid_cur:
@@ -256,16 +256,16 @@ with st.sidebar:
             if _sb_sid_new:
                 st.caption(f'✅ Sheet ID：`{_sb_sid_new}`')
             else:
-                st.caption('💡 未設定 — 貼上 URL/ID 或到「ETF 組合」Tab 挑選')
+                st.caption('💡 未設定 — 貼上 URL/ID（或在「📁 組合管理」頁設定）')
         elif _sb_buildurl and _sb_cfg:
             _sb_url = _sb_buildurl(_sb_cfg['client_id'], _sb_cfg['redirect_uri'],
                                    state=_sb_login_state())
             st.link_button('🔐 用 Google 登入', _sb_url, use_container_width=True)
-            st.caption('登入後 ETF 組合 Tab 可雲端存取')
+            st.caption('登入後可在「📁 組合管理」頁雲端存取')
     elif _sb_gsa and _sb_sid:
         st.caption('ℹ️ 使用 Service Account（舊版部署）')
     else:
-        st.caption('⚙️ OAuth 尚未設定 — 至「ETF 組合」Tab 展開「💾 雲端儲存」設定')
+        st.caption('⚙️ OAuth 尚未設定 — 需於部署端 secrets.toml 設定 [google_oauth]（或改用 Service Account）')
 
     st.markdown('---')
     st.markdown('### 🔌 連線狀態')
@@ -602,7 +602,7 @@ with tab_stocks:
                 from src.services.forward_test_service import (
                     freeze_current_picks, is_freeze_available)
                 if not is_freeze_available():
-                    st.info('⚪ 需先在「⚖️ ETF 組合 → 💾 雲端儲存」設定 Google Sheet，才能凍結存檔。')
+                    st.info('⚪ 需先在側欄「🔐 Google 帳號」貼上 Google Sheet ID（或在「📁 組合管理」頁設定），才能凍結存檔。')
                 elif st.button('🧊 凍結前 20 名（存 Google Sheet）', key='ft_freeze_go'):
                     _ft_top = _cands.head(20)
                     _ft_codes = [str(c) for c in _ft_top['代碼'].tolist()]
