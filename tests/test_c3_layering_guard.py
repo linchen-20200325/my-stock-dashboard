@@ -499,8 +499,7 @@ for _f, _m in (
     ("src/ui/tabs/tab_stock.py", "src.data.stock"),
     ("src/ui/tabs/tab_stock.py", "src.data.stock.app_stock_fetchers"),
     ("src/ui/tabs/tab_stock.py", "src.data.stock.share_capital_fetcher"),
-    ("src/ui/tabs/tab_stock_grp.py", "src.data.portfolio"),
-    ("src/ui/tabs/tab_stock_grp.py", "src.data.portfolio.oauth_state"),
+    # 個股組合 tab 的雲端儲存/帶入持股已移除(管理集中 📁 組合管理)→ 不再直呼 L1 portfolio。
     ("src/ui/tabs/tab_stock_grp.py", "src.data.stock.picker_fetcher"),
     ("src/ui/tabs/tab_stock_picker.py", "src.data.core"),
     ("src/ui/tabs/tab_stock_picker.py", "src.data.core.data_loader"),
@@ -517,8 +516,7 @@ for _f, _m in (
     ("src/ui/etf/etf_tab_grp_compare.py", "src.data.etf"),
     ("src/ui/etf/etf_tab_portfolio.py", "src.data.etf.etf_fetch"),
     ("src/ui/etf/etf_tab_portfolio.py", "src.data.macro"),
-    ("src/ui/etf/etf_tab_portfolio.py", "src.data.portfolio"),
-    ("src/ui/etf/etf_tab_portfolio.py", "src.data.portfolio.oauth_state"),
+    # ETF 組合 tab 的雲端儲存面板已移除(管理集中 📁 組合管理)→ 不再直呼 L1 portfolio。
     ("src/ui/etf/etf_tab_single.py", "src.data.etf"),
     ("src/ui/etf/etf_tab_single.py", "src.data.etf.etf_fetch"),
     ("src/ui/etf/etf_tab_smart.py", "src.data.etf"),

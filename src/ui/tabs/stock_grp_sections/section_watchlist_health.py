@@ -1,6 +1,6 @@
 """src/ui/tabs/stock_grp_sections/section_watchlist_health.py — 🩺 組合體檢 section(L5).
 
-就使用者維護的清單(上方輸入框 / 「帶入我的持股」/ 選股池)逐檔判「vs 基準是否落後」:
+就使用者維護的清單(上方輸入框 / 選股池)逐檔判「vs 基準是否落後」:
 個股 vs 大盤(加權指數 ^TWII)、ETF vs 0050。資料入口 = L3 watchlist_health_service
 (它讀 L1 取價 + L2 純判定);本層只組裝畫面。
 
@@ -30,7 +30,7 @@ def render_watchlist_health_section(stock_list) -> None:
 
     _codes = [str(c).strip() for c in (stock_list or []) if str(c).strip()]
     if not _codes:
-        st.info("💡 先在上方輸入代碼、或按「🔗 帶入我的持股（Google Sheet）」載入清單，再執行體檢。")
+        st.info("💡 先在上方輸入代碼再執行體檢（清單維護請到「📁 組合管理」分頁）。")
         return
 
     if st.button("🩺 執行組合體檢（逐檔抓價比對，約數秒）", key="_wh_run_btn"):

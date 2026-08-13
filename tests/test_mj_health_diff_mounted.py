@@ -56,8 +56,10 @@ def test_quarterly_verdict_preserved():
 
 
 def test_stock_grp_single_ticker_source():
-    """v19.164 單一來源:組合不再有獨立 selectbox / 第二批次輸入,改帶入持股填唯一輸入。"""
+    """單一來源 + 汰除 tab 內 Sheet:組合不再有獨立 selectbox / 第二批次輸入;且
+    tab 內 Sheet 儲存/帶入持股已移除(管理集中到 📁 組合管理),此 tab 純分析、不碰 Sheet。"""
     grp = (_REPO / "src/ui/tabs/tab_stock_grp.py").read_text(encoding="utf-8")
     assert "_csgrp_pick" not in grp, "仍有獨立『選擇標的』selectbox(第二來源未清)"
     assert "_mj_batch_input" not in grp, "仍有獨立批次輸入框(第三來源未清)"
-    assert "_grp_load_holdings_callback" in grp, "帶入持股改填唯一輸入的 callback 缺失"
+    assert "_grp_load_holdings_callback" not in grp, "已汰除 Sheet 帶入(管理移 📁 組合管理)"
+    assert "_render_stock_cloud_storage" not in grp, "已汰除 tab 內 Sheet 儲存面板"
