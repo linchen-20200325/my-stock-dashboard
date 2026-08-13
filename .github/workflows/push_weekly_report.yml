@@ -2,6 +2,7 @@ name: "每週組合週報推播（LINE）"
 
 # 每週一早上把「大盤定調 + 逐檔體檢(vs 基準是否落後) + AI 建議」推到 LINE。
 # 追蹤清單來源 = 使用者「發布到網路」的 Google Sheet CSV(WEEKLY_WATCH_CSV_URL)。
+# 該 secret 可放多行(一行一個分頁:ETF 分頁、個股分頁)→ 週報聯集去重;只設一行=單來源。
 # cron "0 21 * * 0" = 週日 21:00 UTC = 週一 05:00 TW（盤前，用上週五收盤資料）。
 # ⚠️ 未濾 TW 國定假日（無第三方 trading calendar，見 CLAUDE.md §4.5）。
 on:
@@ -46,7 +47,8 @@ jobs:
           # Telegram（備援管道）
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          # 追蹤清單來源:發布到網路的 Google Sheet CSV 連結（含代號的分頁）
+          # 追蹤清單來源:發布到網路的 Google Sheet CSV 連結(含代號的分頁)。
+          # 可多行(一行一個分頁:組合管理頁的 ETF 分頁一行、個股分頁一行 → 聯集去重)。
           WEEKLY_WATCH_CSV_URL: ${{ secrets.WEEKLY_WATCH_CSV_URL }}
           # AI 建議（選填；未設則自動略過只送真實數據摘要）
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
