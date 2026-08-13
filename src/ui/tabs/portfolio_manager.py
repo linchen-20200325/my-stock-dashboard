@@ -49,6 +49,14 @@ def records_to_codes(records) -> list[str]:
     return out
 
 
+def parse_sheet_id(raw) -> str:
+    """由貼上的內容取 Google Sheet ID:完整 URL → 抓 `/spreadsheets/d/<id>`;否則原樣去空白。"""
+    import re
+    _s = str(raw or "").strip()
+    _m = re.search(r"/spreadsheets/d/([a-zA-Z0-9_-]+)", _s)
+    return _m.group(1) if _m else _s
+
+
 # ── UI ──────────────────────────────────────────────────────────────────
 def render_portfolio_manager() -> None:
     """📁 投資組合管理主入口:ETF 組合 + 個股清單,存你的 Google Sheet。"""
@@ -58,26 +66,51 @@ def render_portfolio_manager() -> None:
     from src.data.portfolio import gsheet_portfolio as _gsp   # EX-PASSTHRU-1
 
     st.markdown("### 📁 投資組合管理 — 一頁管 ETF 組合 + 個股清單（存你的 Google Sheet）")
-    st.caption("在這裡新增/編輯/儲存/載入/刪除你的「ETF 組合」與「個股清單」。"
-               "登入與 Sheet 設定沿用既有：ETF 在側欄「🔐 Google 帳號」、個股在「個股組合」分頁設定。")
+    st.caption("在這裡新增/編輯/儲存/載入/刪除你的「ETF 組合」與「個股清單」，"
+               "並可直接在下方各自貼上 Google Sheet 網址/ID —— 一頁搞定，不用再跑側欄或別的分頁。")
 
     if not st.session_state.get("gsheet_tokens"):
         st.info("ℹ️ 尚未用 Google 登入 —— 左側 sidebar「🔐 Google 帳號」登入後，這裡就能存取你的 Sheet。")
 
-    _etf_sid = _gsp._get_active_sheet_id() or None
-    _stk_sid = _gsp._get_active_stock_sheet_id() or None
-
     _c1, _c2 = st.columns(2)
     with _c1:
-        _render_etf_section(_gsp, pd, _etf_sid)
+        _render_etf_section(_gsp, pd)
     with _c2:
-        _render_stock_section(_gsp, pd, _stk_sid)
+        _render_stock_section(_gsp, pd)
 
 
-def _render_etf_section(_gsp, pd, sid) -> None:
+def _sheet_id_input(_gsp, kind: str):
+    """在本頁直接設定 ETF / 個股 的 Google Sheet(貼 URL/ID)。回最新 sheet_id(空→None)。
+
+    寫入既有 session channel(ETF=PORTFOLIO_SHEET_KEY / 個股=STOCK_PORTFOLIO_SHEET_KEY),
+    與側欄 / 個股分頁面板**同一把 key** → 兩處設定互通。用各自的 `_prev_raw` 守衛「只在本輸入框
+    真的變動時才套用」,避免兩處同 key 的 rerun 競態互相蓋掉(對齊 tab_stock_grp 既有做法)。
+    """
+    if kind == "etf":
+        _cur = _gsp._get_active_sheet_id()
+        _skey, _wkey, _pkey = _gsp.PORTFOLIO_SHEET_KEY, "_mgmt_etf_sid_input", "_mgmt_etf_prev_raw"
+        _label = "ETF 組合 Google Sheet 網址 / ID"
+    else:
+        _cur = _gsp._get_active_stock_sheet_id()
+        _skey, _wkey, _pkey = (_gsp.STOCK_PORTFOLIO_SHEET_KEY,
+                               "_mgmt_stk_sid_input", "_mgmt_stk_prev_raw")
+        _label = "個股清單 Google Sheet 網址 / ID"
+    _raw = st.text_input(_label, value=_cur, key=_wkey,
+                         placeholder="貼上 https://docs.google.com/spreadsheets/d/...（系統自動解析 ID）")
+    _new = parse_sheet_id(_raw)
+    if _raw != st.session_state.get(_pkey):          # 只在本框變動時套用(防同 key 競態)
+        st.session_state[_pkey] = _raw
+        if _new and _new != _cur:
+            st.session_state[_skey] = _new
+            return _new
+    return _cur or None
+
+
+def _render_etf_section(_gsp, pd) -> None:
     st.markdown("#### 🏦 ETF 組合（含張數 / 均價）")
+    sid = _sheet_id_input(_gsp, "etf")
     if not sid:
-        st.caption("⚠️ 尚未設定 ETF Google Sheet —— 到側欄或「🏦 ETF」分頁設定後回來。")
+        st.caption("⚠️ 貼上你的 ETF Google Sheet 網址/ID（上方欄位）即可開始。")
         return
     try:
         _names = _gsp.list_portfolios(sheet_id=sid)
@@ -140,10 +173,11 @@ def _render_etf_section(_gsp, pd, sid) -> None:
             st.warning(f"儲存失敗：{_e}")
 
 
-def _render_stock_section(_gsp, pd, sid) -> None:
+def _render_stock_section(_gsp, pd) -> None:
     st.markdown("#### 📈 個股清單（純代號，供週報/體檢用）")
+    sid = _sheet_id_input(_gsp, "stock")
     if not sid:
-        st.caption("⚠️ 尚未設定個股 Google Sheet —— 到「📊 比較 × 排行 → 個股組合」分頁設定後回來。")
+        st.caption("⚠️ 貼上你的個股 Google Sheet 網址/ID（上方欄位）即可開始。")
         return
     try:
         _names = _gsp.list_stock_watchlists(sheet_id=sid)
