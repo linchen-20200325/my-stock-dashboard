@@ -137,3 +137,29 @@ def test_fetch_csv_accepts_csv_response(monkeypatch):
         text = "ticker\n2330\n"
     monkeypatch.setattr("requests.get", lambda *a, **k: _Resp())
     assert _fetch_csv("https://x/pub?output=csv") == "ticker\n2330\n"
+
+
+def test_fetch_csv_rejects_html_body_without_content_type(monkeypatch):
+    """撤銷發布 → 回 HTML 但**無** content-type header → 靠 body 前綴 <!DOCTYPE 判定仍 fail
+    loud(稽核 B 低度強化:含 BOM/前導空白也認得)。"""
+    class _Resp:
+        status_code = 200
+        headers = {}                                # 無 content-type
+        apparent_encoding = "utf-8"
+        encoding = None
+        text = chr(0xFEFF) + "  \n<!DOCTYPE html><html><body>revoked</body></html>"
+    monkeypatch.setattr("requests.get", lambda *a, **k: _Resp())
+    with pytest.raises(RuntimeError, match=r"非 CSV"):
+        _fetch_csv("https://x/pub")
+
+
+def test_fetch_csv_accepts_csv_body_without_content_type(monkeypatch):
+    """無 content-type 但 body 是正常 CSV → 不誤殺(body-sniff 只認 <!doctype/<html 起頭)。"""
+    class _Resp:
+        status_code = 200
+        headers = {}
+        apparent_encoding = "utf-8"
+        encoding = None
+        text = "ticker\n2330\n"
+    monkeypatch.setattr("requests.get", lambda *a, **k: _Resp())
+    assert _fetch_csv("https://x/pub?output=csv") == "ticker\n2330\n"

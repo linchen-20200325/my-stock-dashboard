@@ -50,9 +50,20 @@ def records_to_codes(records) -> list[str]:
 
 
 def parse_sheet_id(raw) -> str:
-    """由貼上的內容取 Google Sheet ID:完整 URL → 抓 `/spreadsheets/d/<id>`;否則原樣去空白。"""
+    """由貼上的內容取 Google Sheet ID。
+
+    - 完整編輯 URL `/spreadsheets/d/<id>/edit` → 抓 <id>
+    - 純 ID(含 _ / -) → 原樣去空白
+    - **發布連結** `/spreadsheets/d/e/<token>/pubhtml|pub?...` → 回 ""(空):
+      發布 token(`2PACX-…`)**不是** spreadsheet key,無法用 gspread `open_by_key` 開啟;
+      管理頁需要「編輯用」網址或 Sheet ID。回空讓 caller 提示使用者改貼正確連結,避免舊行為
+      抓到 `/d/` 後單字元 `e` → `open_by_key("e")` 拋錯的誤導(稽核 A 低度缺失修正)。
+    - 空 / None → ""
+    """
     import re
     _s = str(raw or "").strip()
+    if re.search(r"/spreadsheets/d/e/", _s):          # 發布連結(pubhtml/pub)→ 非可用 key
+        return ""
     _m = re.search(r"/spreadsheets/d/([a-zA-Z0-9_-]+)", _s)
     return _m.group(1) if _m else _s
 
@@ -98,6 +109,9 @@ def _sheet_id_input(_gsp, kind: str):
     _raw = st.text_input(_label, value=_cur, key=_wkey,
                          placeholder="貼上 https://docs.google.com/spreadsheets/d/...（系統自動解析 ID）")
     _new = parse_sheet_id(_raw)
+    if _raw.strip() and not _new:                    # 貼了東西卻解不出 ID → 多半是「發布連結」
+        st.warning("這看起來是「發布連結」（pubhtml / pub?output=csv）。管理頁需要**編輯用**網址"
+                   "（`.../spreadsheets/d/<ID>/edit`）或 Sheet ID；發布 CSV 連結是給每週週報用的，兩者不同。")
     if _raw != st.session_state.get(_pkey):          # 只在本框變動時套用(防同 key 競態)
         st.session_state[_pkey] = _raw
         if _new and _new != _cur:

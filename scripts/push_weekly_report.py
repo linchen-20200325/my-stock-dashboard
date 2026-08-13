@@ -104,13 +104,20 @@ def _fetch_csv(url: str, timeout: int = 30) -> str:
     _r = requests.get(url, timeout=timeout)
     if _r.status_code != 200:
         raise RuntimeError(f"CSV 抓取 HTTP {_r.status_code}")
-    # 誤用 pubhtml 連結或發布已撤銷 → Google 回 text/html 頁(status 200)。靜默解析會得
-    # 0 代號 → 多來源下被另一分頁掩蓋成殘缺清單(違 §1),故在此 fail loud。content-type
-    # 缺失時不誤殺(只擋明確 html)。訊息不帶 URL(避免 log 洩漏連結)。
-    if "html" in (_r.headers.get("content-type") or "").lower():
-        raise RuntimeError("非 CSV 回應(content-type=html;是否誤用 pubhtml 連結或發布已撤銷?)")
+    # 誤用 pubhtml 連結或發布已撤銷 → Google 回 HTML 頁(status 200)。靜默解析會得 0 代號 →
+    # 多來源下被另一分頁掩蓋成殘缺清單(違 §1),故在此 fail loud。
+    #   主判:content-type 含 html。
+    #   備判(稽核 B 低度強化):content-type **缺失**時,看 body 前綴是否 <!doctype / <html
+    #     —— 撤銷頁可能不帶 header。只在缺 header 時才 body-sniff → 不誤殺帶正確 text/csv 的
+    #     合法 CSV(合法 CSV 幾乎不可能以 <!doctype/<html 起頭)。訊息不帶 URL(避免 log 洩漏)。
+    _ctype = (_r.headers.get("content-type") or "").lower()
     _r.encoding = _r.apparent_encoding or "utf-8"
-    return _r.text
+    _text = _r.text
+    _head = _text.lstrip(chr(0xFEFF) + " \t\r\n").lower()   # 去 BOM + 前導空白後看首 token
+    _looks_html = _head.startswith(("<!doctype", "<html"))
+    if "html" in _ctype or (not _ctype and _looks_html):
+        raise RuntimeError("非 CSV 回應(疑似 pubhtml 網頁或發布已撤銷;請確認貼的是 output=csv 連結)")
+    return _text
 
 
 def collect_tickers(urls, *, fetch=_fetch_csv) -> list[str]:
