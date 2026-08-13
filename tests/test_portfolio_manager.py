@@ -10,9 +10,20 @@ import pytest
 from src.ui.tabs.portfolio_manager import (
     codes_to_records,
     etf_rows_to_records,
+    parse_sheet_id,
     records_to_codes,
     records_to_etf_rows,
 )
+
+
+def test_parse_sheet_id():
+    # 完整 URL → 抓 id
+    assert parse_sheet_id(
+        "https://docs.google.com/spreadsheets/d/1lFhwvD-ISZ0kf/edit?gid=0#gid=0"
+    ) == "1lFhwvD-ISZ0kf"
+    # 發布網址(pub) 也含 /spreadsheets/d/e/... → 抓到帶 e/ 的 id 段(可接受)
+    assert parse_sheet_id("  1lFhwvD-ISZ0kf  ") == "1lFhwvD-ISZ0kf"   # 純 id 去空白
+    assert parse_sheet_id("") == "" and parse_sheet_id(None) == ""
 
 
 def test_etf_rows_records_roundtrip():
