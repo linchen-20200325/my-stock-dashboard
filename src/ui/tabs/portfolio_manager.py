@@ -77,8 +77,10 @@ def render_portfolio_manager() -> None:
     from src.data.portfolio import gsheet_portfolio as _gsp   # EX-PASSTHRU-1
 
     st.markdown("### 📁 投資組合管理 — 一頁管 ETF 組合 + 個股清單（存你的 Google Sheet）")
-    st.caption("在這裡新增/編輯/儲存/載入/刪除你的「ETF 組合」與「個股清單」，"
-               "並可直接在下方各自貼上 Google Sheet 網址/ID —— 一頁搞定，不用再跑側欄或別的分頁。")
+    st.info("👉 **這裡放的是「你自己的持股 / 追蹤清單」**，不是選股建議。"
+            "想找**系統幫你篩的候選股**請去『🔬 選股 → 🔭 選股網』。")
+    st.caption("下方左欄＝🏦 你的 ETF 組合、右欄＝📈 你的個股清單；各自貼上對應的 Google Sheet 網址/ID 即可"
+               "新增/編輯/儲存/載入/刪除 —— 一頁搞定，不用再跑側欄或別的分頁。")
 
     if not st.session_state.get("gsheet_tokens"):
         st.info("ℹ️ 尚未用 Google 登入 —— 左側 sidebar「🔐 Google 帳號」登入後，這裡就能存取你的 Sheet。")
@@ -100,12 +102,12 @@ def _sheet_id_input(_gsp, kind: str):
     if kind == "etf":
         _cur = _gsp._get_active_sheet_id()
         _skey, _wkey, _pkey = _gsp.PORTFOLIO_SHEET_KEY, "_mgmt_etf_sid_input", "_mgmt_etf_prev_raw"
-        _label = "ETF 組合 Google Sheet 網址 / ID"
+        _label = "🏦 我的 ETF 組合 — Google Sheet 網址 / ID"
     else:
         _cur = _gsp._get_active_stock_sheet_id()
         _skey, _wkey, _pkey = (_gsp.STOCK_PORTFOLIO_SHEET_KEY,
                                "_mgmt_stk_sid_input", "_mgmt_stk_prev_raw")
-        _label = "個股清單 Google Sheet 網址 / ID"
+        _label = "📈 我的個股清單 — Google Sheet 網址 / ID"
     _raw = st.text_input(_label, value=_cur, key=_wkey,
                          placeholder="貼上 https://docs.google.com/spreadsheets/d/...（系統自動解析 ID）")
     _new = parse_sheet_id(_raw)
@@ -121,7 +123,7 @@ def _sheet_id_input(_gsp, kind: str):
 
 
 def _render_etf_section(_gsp, pd) -> None:
-    st.markdown("#### 🏦 ETF 組合（含張數 / 均價）")
+    st.markdown("#### 🏦 我的 ETF 組合（含張數 / 均價）")
     sid = _sheet_id_input(_gsp, "etf")
     if not sid:
         st.caption("⚠️ 貼上你的 ETF Google Sheet 網址/ID（上方欄位）即可開始。")
@@ -136,7 +138,8 @@ def _render_etf_section(_gsp, pd) -> None:
     if _dkey not in st.session_state:
         st.session_state[_dkey] = pd.DataFrame(
             [{"代號": "", "張數": None, "均價": None}])
-    _pick = st.selectbox("載入既有組合", ["—"] + _names, key="_mgmt_etf_pick")
+    _pick = st.selectbox("載入我的 ETF 組合（選一個 → 按下方 📂 載入）", ["—"] + _names,
+                         key="_mgmt_etf_pick")
     _lc, _dc = st.columns(2)
     if _lc.button("📂 載入", key="_mgmt_etf_load", use_container_width=True) and _pick != "—":
         try:
@@ -188,7 +191,7 @@ def _render_etf_section(_gsp, pd) -> None:
 
 
 def _render_stock_section(_gsp, pd) -> None:
-    st.markdown("#### 📈 個股清單（純代號，供週報/體檢用）")
+    st.markdown("#### 📈 我的個股清單（純代號，供週報 / 體檢用）")
     sid = _sheet_id_input(_gsp, "stock")
     if not sid:
         st.caption("⚠️ 貼上你的個股 Google Sheet 網址/ID（上方欄位）即可開始。")
@@ -202,7 +205,8 @@ def _render_stock_section(_gsp, pd) -> None:
     _dkey = "_mgmt_stk_df"
     if _dkey not in st.session_state:
         st.session_state[_dkey] = pd.DataFrame([{"代號": ""}])
-    _pick = st.selectbox("載入既有清單", ["—"] + _names, key="_mgmt_stk_pick")
+    _pick = st.selectbox("載入我的個股清單（選一個 → 按下方 📂 載入）", ["—"] + _names,
+                         key="_mgmt_stk_pick")
     _lc, _dc = st.columns(2)
     if _lc.button("📂 載入", key="_mgmt_stk_load", use_container_width=True) and _pick != "—":
         try:
