@@ -110,12 +110,28 @@ def _market_context(df_market: pd.DataFrame, lookback: int) -> dict:
         return {"market_ret_pct": None, "is_down": None,
                 "banner": "⚠️ 大盤 ^TWII 區間報酬無法計算（歷史不足）"}
     ret = float(ret)                 # numpy → python，避免下游 is True/is False 比較踩雷
-    _down = bool(ret < 0)
-    if _down:
-        banner = (f"📉 此期間大盤（^TWII）約 {ret:+.1f}% — 屬下跌情境；"
+    # FIX(§1 / 顯示一致性): 原為二分法 `_down = bool(ret < 0)`，無中性帶，且
+    #   上游 market_interval_return 已 round(...,2)、此處顯示又用 {:+.1f} ——
+    #   三者相乘造成兩個實際發生的畫面矛盾：
+    #     (a) ret=-0.04 印「📉 約 -0.0% — 屬下跌情境」、ret=+0.04 印「📈 約 +0.0% — 大盤其實在漲」
+    #         → 畫面數字一模一樣、結論相反。
+    #     (b) 真值落在 (-0.005, 0) 時 round 產生 -0.0，而 `-0.0 < 0` 為 False
+    #         → 印出「📈 此期間大盤約 **-0.0%** — 大盤其實在漲」的自相矛盾句。
+    #   且此 banner 會被 build_rs_ai_prompt 原文餵給 LLM。
+    #   修法：補「持平」第三態 + 顯示精度改 {:+.2f} 與上游 round(2) 對齊。
+    #   門檻 0.5% 為顯示用中性帶，不參與任何排序或評分（is_down 僅供文案分支）。
+    _FLAT_BAND_PCT = 0.5
+    if abs(ret) < _FLAT_BAND_PCT:
+        _down = None                 # 三態：None = 持平，不宣稱漲也不宣稱跌
+        banner = (f"⚖️ 此期間大盤（^TWII）約 {ret:+.2f}% — 大致持平；"
+                  f"「抗跌」與「領漲」語意此時都不成立，以下 RS 僅代表相對強弱。")
+    elif ret < 0:
+        _down = True
+        banner = (f"📉 此期間大盤（^TWII）約 {ret:+.2f}% — 屬下跌情境；"
                   f"以下為「跌勢中仍相對抗跌 / 逆勢贏過大盤」的個股。")
     else:
-        banner = (f"📈 此期間大盤（^TWII）約 {ret:+.1f}% — 大盤其實在漲，"
+        _down = False
+        banner = (f"📈 此期間大盤（^TWII）約 {ret:+.2f}% — 大盤其實在漲，"
                   f"「抗跌」語意此時不成立；以下 RS 僅代表相對強弱（誰漲更多）。")
     return {"market_ret_pct": ret, "is_down": _down, "banner": banner}
 

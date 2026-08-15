@@ -465,7 +465,11 @@ for _f, _m in (
     # F2(2026-08)已移除:("app.py", "src.data.stock") —— 那是 `app.py::_bps()` 內的
     # `from src.data.stock import build_proxy_session`。_bps 整個下沉 L1
     # (proxy_helper.build_unverified_proxy_session),app.py 不再碰 src.data.stock 本體。
-    ("app.py", "src.data.stock.app_stock_fetchers"),
+    # A-2(2026-08)已移除:("app.py", "src.data.stock.app_stock_fetchers") ——
+    # 那是 v18.405 U5 B3-δ 抽出 6 個 fetcher 時，為了讓舊 caller
+    # `from app import fetch_price_data` 不用改而留的 re-export shim(`# noqa: F401`)。
+    # F2 收掉 5 處 L5→L6 上行 import 後 production 已零 `from app import`(規則 5 反向守衛
+    # 生效)，app.py 自己也不用這些符號 ⇒ 轉發層兩端皆空，整段 import 刪除。
     ("app.py", "src.data.portfolio.oauth_state"),
     # ── L5 UI Tabs ──
     ("src/ui/tabs/chip_radar.py", "src.data.stock.chip_concentration_fetcher"),
@@ -623,7 +627,9 @@ _KNOWN_VIOLATIONS[("R5", "src/services/daily_checklist.py", "src.ui.render.macro
 # 就是撐住這 5 處上行 import)。行為等價性由 tests/test_f2_app_decomposition.py 釘。
 # 留這段註解是為了讓下一個讀者知道「這裡曾經有 4 條、為什麼不見了」(§8.2.A.0 規則 3)。
 
-# L1 scripts/** → L2/L3(20 條,同一根因:scripts 分層標籤)
+# L1 scripts/** → L2/L3(23 條,同一根因:scripts 分層標籤)
+# ⚠️ 數字每次新增 cron 都會變 —— 依 §8.2.A.0 規則 4,量測值本就易失真;
+#    真正的權威是下面這份 tuple 本身,這個數字只是給讀者的規模感。
 for _f, _m in (
     ("scripts/analyze_ring1_gate.py", "src.services.allocation_service"),
     ("scripts/calibrate_health_weights.py", "src.compute.macro.health_calibration"),
@@ -638,6 +644,11 @@ for _f, _m in (
     ("scripts/push_daily_signals.py", "src.services.ai_fetcher"),
     ("scripts/push_daily_signals.py", "src.services.fundamental_screener_service"),
     ("scripts/push_daily_signals.py", "src.services.shortage_screener_service"),
+    # T3(2026-08)觀察池訊號推播 —— 與上面兩支推播完全同一根因。
+    # 本支只碰 L1(picker_fetcher / dispatch)+ L2(watchlist_*)+ L0(config)，
+    # 零 `src.ui.*`(headless cron 走 L5 會把整個 streamlit UI 鏈拉進來)。
+    ("scripts/push_watchlist_signals.py", "src.compute.notify.watchlist_message"),
+    ("scripts/push_watchlist_signals.py", "src.compute.notify.watchlist_triggers"),
     ("scripts/push_weekly_report.py", "src.services.weekly_review_service"),
     ("scripts/shortage_cli.py", "src.compute.health.monthly_revenue_calc"),
     ("scripts/shortage_cli.py", "src.compute.screener.shortage_screener"),

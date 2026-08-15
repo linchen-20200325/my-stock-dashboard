@@ -9,11 +9,21 @@ font = "sans serif"
 [server]
 headless = true
 runOnSave = false
+# ⚠️ enableCORS = false 在 enableXsrfProtection 預設為 true 時會被 Streamlit
+#    自動覆寫回 true 並印出 warning（實機 log 已確認）。保留此行只是聲明意圖，
+#    實際生效值仍是 true。若真要關閉 CORS，必須同時顯式寫 enableXsrfProtection = false
+#    —— 那是資安取捨，需另案決定，本次不動。
 enableCORS = false
-enableMarkdownUnsafeHTML = true
+# FIX: 移除 `enableMarkdownUnsafeHTML = true` —— 這**不是 Streamlit 的合法設定鍵**，
+#      實機啟動 log 明確回報 "is not a valid config option"，屬 no-op。
+#      它的存在會讓人誤以為「HTML 已全域開啟」，實際上 HTML 是由各呼叫點的
+#      `unsafe_allow_html=True` 逐處控制的（全站約 900+ 處）。
 
 [browser]
 gatherUsageStats = false
 
 [logger]
-level = "error"
+# FIX: 原為 "error" —— 會把 Streamlit 框架自己的設定警告（例如上方 enableCORS
+#      被覆寫那條）整個吃掉，等於讓框架級的問題永遠不會被看見。
+#      §1 Fail Loud 精神：框架警告不該被靜音。改為 warning。
+level = "warning"

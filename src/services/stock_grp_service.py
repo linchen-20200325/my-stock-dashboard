@@ -63,3 +63,46 @@ def get_financial_statements(sid: str, fm_token: str = '') -> Any:
 def get_5_years_cash_flow(sid: str, fm_token: str = '') -> Any:
     """取得個股 5 年現金流量。"""
     return fetch_5_years_cash_flow(sid, fm_token)
+
+
+# ── T2(2026-08)產業集中度：真編排(非 pass-through)──────────
+# 這是本 service 第一個**有業務值**的函式:逐檔取產業別(L1,已 @st.cache_data
+# ttl=TTL_1DAY)→ 交 L2 純函式聚合。依賴方向 L3→L1 + L3→L2,全部下行,合規。
+
+def get_portfolio_concentration(tickers) -> Any:
+    """計算個股組合的產業集中度。
+
+    Args:
+        tickers: 股票代號序列。重複代號會先去重(同一檔不重複計權)。
+
+    Returns:
+        `src.compute.risk.concentration.ConcentrationResult`。
+        空清單回 `n_total=0` 且 `is_computable=False`,**不拋例外**
+        (空組合是正常狀態,非錯誤)。
+
+    §1 逐檔降級策略(**不是** silent catch):
+        單一檔查產業失敗 → 該檔記為「未分類」並 print 到 stderr,
+        **不中斷**其餘檔的計算。理由:一檔 FinMind 逾時不該讓整個區塊消失。
+        失敗**沒有被隱藏** —— 它會反映在回傳物件的 `n_unclassified` 與
+        `coverage_pct` 上,UI 據此顯示「N 檔無產業資料,數值代表性有限」。
+        若**全部**失敗 → `is_computable=False`,UI 顯示診斷卡而非任何數字。
+
+    效能:N 檔 → N 次 L1 呼叫,但 `fetch_industry_category` 有 1 日快取,
+    且同一頁的 P/B 估值分級(`section_portfolio_summary.py`)本來就會逐檔呼叫
+    同一支函式 —— 快取命中後本函式的邊際成本 ≈ 0,不會新增任何外部請求。
+    """
+    from src.compute.risk.concentration import compute_industry_concentration
+
+    _seen: dict[str, object] = {}
+    for _t in (tickers or []):
+        _sid = str(_t).strip().upper()
+        if not _sid or _sid in _seen:
+            continue
+        try:
+            _seen[_sid] = fetch_industry_category(_sid)
+        except Exception as _e:  # noqa: BLE001 — 逐檔降級,見 docstring §1 說明
+            print(f'[concentration] {_sid} 產業別查詢失敗 → 記為未分類: '
+                  f'{type(_e).__name__}: {_e}')
+            _seen[_sid] = None
+
+    return compute_industry_concentration(_seen)

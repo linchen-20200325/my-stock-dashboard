@@ -122,6 +122,17 @@ def render_stock_grp():
         build_prompt_fn=build_structured_summary_prompt,
     )
 
+    # ── 🏭 產業集中度（T2 2026-08：等權假設，不需輸入張數、不需按批次分析）──
+    # 刻意放在風險貢獻**之前**：兩者同屬「集中度」家族，但本區塊零輸入即可看，
+    # 下方風險貢獻需手動填張數。先給隨手可得的，再給要花力氣的。
+    from src.ui.tabs.stock_grp_sections import (
+        render_industry_concentration_section,
+        render_macro_exposure_link_section,
+    )
+    # T1-b：總經建議持股 vs 你目前檔數（並列，刻意不相減 —— 無張數資料）
+    render_macro_exposure_link_section(stock_list_t3)
+    render_industry_concentration_section(stock_list_t3)
+
     # ── 🎚️ 風險貢獻分解（v19.138：輸入持股張數 → 市值權重 → Euler 分解，與 ETF 組合共用 L2/L4）──
     _render_risk_contribution_section(stock_list_t3)
 

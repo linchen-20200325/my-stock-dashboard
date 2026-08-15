@@ -193,9 +193,45 @@ class TestTabStockBoundaries:
             _ = "".split()[0]
 
     def test_s4_nlargest_guard_present(self):
-        src = self._tab
-        assert "_red_k[_red_k['volume'].notna()].nlargest(1, 'volume')" in src
-        assert "if not _top_red.empty:" in src
+        """S4 的 NaN 防呆必須存在 —— T4(2026-08)起改用**行為斷言**。
+
+        原本斷言 `tab_stock.py` 原始碼含
+        `_red_k[_red_k['volume'].notna()].nlargest(1, 'volume')` 字面。
+        T4 把這段紅K挑選邏輯抽至 L2 `src/compute/strategy/entry_stop_levels.py`
+        （個股頁與個股組合頁共用同一份，§2.1 SSOT）→ 字串不再出現在 tab_stock。
+
+        改為直接呼叫該純函式驗行為，比原字串比對**更強**：
+        字串在、但防呆被改壞（例如有人拿掉 notna()）時，舊版照樣綠燈；
+        本版會紅。下方 `test_s4_all_nan_volume_filtered_pattern_is_empty`
+        仍保留，它文件化的是 pandas 兩版差異本身。
+        """
+        from src.compute.strategy.entry_stop_levels import compute_entry_stop_levels
+
+        # 全 NaN 成交量:舊 pandas → nlargest 回空 → .iloc[0] IndexError;
+        # pandas 3.x → 回含 NaN 的任意列 → **靜默選錯紅K**(價位算在錯的 bar)。
+        # 正確行為:兩版都應「找不到錨點」,而非拋例外、也非選到錯的 bar。
+        _df = pd.DataFrame({
+            "open":   [9.0, 10.0, 11.0, 12.0, 13.0, 14.0],
+            "high":   [20.0, 21.0, 22.0, 23.0, 24.0, 25.0],
+            "low":    [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "close":  [10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+            "volume": [np.nan] * 6,
+        })
+        _r = compute_entry_stop_levels(_df, current_price=15.0)
+        assert not _r.has_anchor, "全 NaN 成交量卻選出了紅K錨點(靜默選錯)"
+        assert _r.abs_stop is None and _r.entry_half is None
+        assert _r.unavailable_reason, "找不到錨點卻沒說原因(§1)"
+
+    def test_s4_logic_moved_out_of_tab_stock(self):
+        """反向守衛:tab_stock 不得留著第二份紅K挑選實作。
+
+        T4 的目的就是讓這份判定只剩一份 —— 若有人日後在 tab_stock 又寫回來，
+        兩份會漂移（而那 18 行裡有三個踩過坑才寫下的防呆，複製必漏）。
+        """
+        assert "nlargest(1, 'volume')" not in self._tab, (
+            "tab_stock.py 又出現紅K挑選實作 —— 應呼叫 "
+            "src/compute/strategy/entry_stop_levels.compute_entry_stop_levels"
+        )
 
     def test_s4_all_nan_volume_filtered_pattern_is_empty(self):
         # 文件化修復依據:pandas 3.x nlargest 對全 NaN 會回含 NaN 的列(靜默選錯),

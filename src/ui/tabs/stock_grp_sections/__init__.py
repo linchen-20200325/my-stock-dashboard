@@ -20,6 +20,10 @@ from src.ui.tabs.stock_grp_sections.section_batch_fetcher import (
 from src.ui.tabs.stock_grp_sections.section_financial_health import (
     render_financial_health_section,
 )
+from src.ui.tabs.stock_grp_sections.section_industry_concentration import (
+    render_industry_concentration_section,
+    render_macro_exposure_link_section,
+)
 from src.ui.tabs.stock_grp_sections.section_market_status import (
     render_market_status_section,
 )
@@ -33,6 +37,8 @@ from src.ui.tabs.stock_grp_sections.section_watchlist_health import (
 __all__ = [
     'render_ai_portfolio_section',
     'render_financial_health_section',
+    'render_industry_concentration_section',
+    'render_macro_exposure_link_section',
     'render_market_status_section',
     'render_portfolio_summary_section',
     'render_watchlist_health_section',

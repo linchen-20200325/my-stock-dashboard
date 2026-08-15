@@ -319,6 +319,14 @@ def _render_master_table(
             '出場': f'{ev["icon"]} {ev["score"]}/3',
             '型態': cs.get('pattern') or '—',
             '風報比': f'{rr:.2f}' if isinstance(rr, (int, float)) else '—',
+            # ── T4(2026-08)錨點型價位:三欄都**因股而異**,才有比較價值 ──
+            # 刻意**不放**停利價與固定盈虧比:tab_stock.py:648-677(v19.179 B1-b)
+            # 已證明 RR=(P×1.05−P)/(P−P×0.92)=0.625,P 完全約掉 ⇒ 20 列會印同一個數。
+            '絕對停損': _fmt_abs_stop(r),
+            '停損RR': (f'{r["_rr_anchor"]:.2f}'
+                       if isinstance(r.get('_rr_anchor'), (int, float)) else '—'),
+            '距支撐': (f'{r["_sr_dist_sup"]:+.1f}%'
+                       if isinstance(r.get('_sr_dist_sup'), (int, float)) else '—'),
             'EPS(4Q)': fd.get('近4季EPS', '-'),
             '毛利%': fd.get('毛利率%', '-'),
             '殖利%': fd.get('殖利率%', '-'),
@@ -342,9 +350,49 @@ def _render_master_table(
         '健康度': st.column_config.NumberColumn('健康度', format='%d 🏥'),
         '出場': st.column_config.TextColumn('出場', help='技術+籌碼二維;利空新聞第三維在下方「逐檔技術明細」按「AI 掃利空」'),
         '型態': st.column_config.TextColumn('型態'),
-        '風報比': st.column_config.TextColumn('風報比', help='等幅滿足;型態未明→「—」不給假高值'),
+        '風報比': st.column_config.TextColumn(
+            '風報比',
+            help='**型態**等幅滿足推算;型態未明→「—」不給假高值。'
+                 '與右方「停損RR」錨點不同 —— 這個看型態目標,那個看紅K低點。'),
+        # ── T4(2026-08)三個錨點型欄位 ──────────────────────────
+        '絕對停損': st.column_config.TextColumn(
+            '絕對停損',
+            help='近 20 根紅K中**最大量**那根的低點再往下 0.5%,括號為距現價%。\n\n'
+                 '這是各股自己的價量結構位置,不是「現價 −8%」那種固定倍數。\n\n'
+                 '找不到大量紅K → 「—」。§1:**不**退回固定 −8% 冒充錨點。'),
+        '停損RR': st.column_config.TextColumn(
+            '停損RR',
+            help='(停利目標1 − 現價) ÷ (現價 − 絕對停損)。\n\n'
+                 '⚠️ 與「風報比」是**兩個不同的東西**:本欄分母是**紅K低點**,'
+                 '故因股而異;個股頁另有一個「固定方案盈虧比」恆為 0.625'
+                 '(現價在分子分母約掉),那個放進比較表沒有意義,故本表不列。\n\n'
+                 '現價已跌破紅K低點 → 「—」(分母為負,舊版會噴出數千倍假數字)。'),
+        '距支撐': st.column_config.TextColumn(
+            '距支撐',
+            help='現價距**近 20 個交易日**最低點的百分比。正值 = 支撐在下方。\n\n'
+                 '⚠️ 這裡的「20」與「絕對停損」欄的「20」意思不同:'
+                 '本欄是最後 20 根 **K 線**,那欄是最後 20 根 **紅 K**(可能橫跨數月)。'),
         'P/B': st.column_config.TextColumn('P/B 估值'),
     })
+
+
+def _fmt_abs_stop(row: dict) -> str:
+    """T4：絕對停損價 + 距現價% 合成一格（`89.55 (-10.4%)`）。
+
+    §1：`_abs_stop` 為 None（近 20 根紅K無有效成交量）→ 回「—」，
+    **不可**退回固定 −8% —— 那是現價的固定倍數，會讓這一欄退化成
+    「每檔都一樣」的假錨點（v19.179 B1-b 就是在修這個）。
+
+    距離為負代表現價已跌破停損線，是**有意義的狀態**（該出場了），
+    照樣顯示，不當成錯誤。
+    """
+    _stop = row.get('_abs_stop')
+    if not isinstance(_stop, (int, float)):
+        return '—'
+    _dist = row.get('_stop_dist_pct')
+    if not isinstance(_dist, (int, float)):
+        return f'{_stop:.2f}'
+    return f'{_stop:.2f} ({_dist:+.1f}%)'
 
 
 _MF_DIMS = (('趨勢', 'trend'), ('動能', 'momentum'), ('籌碼', 'chip'),
@@ -499,6 +547,27 @@ def _render_pattern_batch(
             _pre_df = None
         from src.ui.tabs.pattern_targets_ui import render_pattern_targets_for_ticker
         render_pattern_targets_for_ticker(_sel, key_prefix='cs_grp', preloaded_df=_pre_df)
+
+        # ── T4-2(2026-08)VCP + 布林:**複用同一個 selectbox**,不另開選擇器 ──
+        # 單筆頁的 `render_vcp_bollinger_section` 直接吃 (sid, vcp, bb) 三個值,
+        # 而 vcp / bb 在 run_batch_fetch:158-159 就已算好並存進 `_vcp` / `_bb`
+        # ⇒ 這裡零計算、零抓取,純渲染(同 `_pattern` 的 v19.164 範式)。
+        #
+        # 為什麼掛在型態下鑽底下而不是自成一區:使用者已經在這裡選好標的了,
+        # 再給第二個「看哪一檔的 VCP」選擇器 = 同一件事問兩次
+        # (user 2026-08 明確要求「簡化選項與功能」)。
+        _sel_row = next((r for r in results_t3
+                         if str(r.get('stock_id', r.get('代碼', ''))) == str(_sel)), None)
+        if _sel_row is not None:
+            _vcp_d, _bb_d = _sel_row.get('_vcp'), _sel_row.get('_bb')
+            if _vcp_d or _bb_d:
+                st.markdown('---')
+                from src.ui.tabs.stock_sections import render_vcp_bollinger_section
+                render_vcp_bollinger_section(_sel, _vcp_d, _bb_d)
+            else:
+                # §1:算不出來要說,不可留白讓人以為「這檔沒型態問題」
+                st.caption(f'⚪ {_sel} 的 VCP / 布林未計算'
+                           '（K 線不足 30 根，或該檔抓取失敗）。')
 
 
 def _render_multifactor_ranking(

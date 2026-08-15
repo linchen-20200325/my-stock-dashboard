@@ -1,0 +1,96 @@
+name: "觀察池訊號推播（LINE / Telegram）"
+
+# 盯「你自己在追蹤的股票」——與 push_daily_signals.yml（全市場選股排名）不同。
+# 觸發規則：跌破 MA20 穿越 / 技術面轉空 / 三維出場達「建議減碼」以上。
+#
+# 兩條排程（user 2026-08-14 裁示「有訊號即推 + 每週一健康碼」）：
+#   · 平日 UTC 09:00 = TW 17:00 —— **只在有觸發時推**，沒事完全不發
+#     （收到 = 真的要看；每天發「今日無觸發」會在三週內把人訓練成不看）
+#   · 週一 UTC 09:30 = TW 17:30 —— 加 --health-check，沒訊號也送一則狀態
+#     （解掉純事件驅動的盲點：連續多日沒消息時，分不出「市場平靜」與「cron 掛了」）
+#
+# ⚠️ 排 Mon-Fri，未濾 TW 國定假日（無第三方 trading calendar，見 CLAUDE.md §4.5）。
+#    訊息一律標資料日期，假日跑到舊資料時可辨識。
+on:
+  schedule:
+    - cron: "0 9 * * 1-5"     # 平日盤後：有訊號才推
+    - cron: "30 9 * * 1"      # 週一：健康碼（沒訊號也送）
+  workflow_dispatch:
+    inputs:
+      ma_windows:
+        description: "均線期數（逗號分隔，例如 20 或 20,60）"
+        default: "20"
+        required: false
+      health_check:
+        description: "沒訊號時也送狀態訊息"
+        type: boolean
+        default: false
+        required: false
+      dry_run:
+        description: "只印訊息不送（測試用）"
+        type: boolean
+        default: false
+        required: false
+
+concurrency:
+  group: push-watchlist-signals
+  cancel-in-progress: false
+
+jobs:
+  push:
+    name: "Push watchlist signals"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 週一那條排程（cron "30 9 * * 1"）自動帶 --health-check；
+      # 手動觸發時由 inputs.health_check 決定。
+      - name: Resolve flags
+        id: flags
+        run: |
+          FLAGS=""
+          if [ "${{ github.event.schedule }}" = "30 9 * * 1" ]; then
+            FLAGS="$FLAGS --health-check"
+          fi
+          if [ "${{ github.event.inputs.health_check }}" = "true" ]; then
+            FLAGS="$FLAGS --health-check"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+          fi
+          echo "flags=$FLAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Push watchlist signals
+        env:
+          # 管道：line（預設）/ telegram
+          NOTIFY_CHANNEL: ${{ vars.NOTIFY_CHANNEL || 'line' }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          # 觀察池來源：Google Sheet「發布為 CSV」連結（可多行，一行一個分頁）。
+          # 兩條都傳；script 內優先序 WATCHLIST_CSV_URL > WEEKLY_WATCH_CSV_URL。
+          # 週報那條指的就是「使用者發布的追蹤清單」= 同一份東西，故直接沿用，
+          # 不要求使用者再發布第二份（會變成兩份會漂移的清單）。
+          # 想讓週報與本支盯不同清單時，才另設 WATCHLIST_CSV_URL 覆寫。
+          WATCHLIST_CSV_URL: ${{ secrets.WATCHLIST_CSV_URL }}
+          WEEKLY_WATCH_CSV_URL: ${{ secrets.WEEKLY_WATCH_CSV_URL }}
+          # 深連結目標：Streamlit app 網址（未設 → 訊息不附連結，不印壞 URL）
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+        run: >
+          python scripts/push_watchlist_signals.py
+          --ma-windows "${{ github.event.inputs.ma_windows || '20' }}"
+          ${{ steps.flags.outputs.flags }}

@@ -17,10 +17,15 @@ import streamlit as st
 # D1 v19.185（§3.3 反捏造）：原本這裡是 inline `>= 0.5` / `>= 0.8` 兩個裸數字，
 # 而**同一個門檻**在 `tab_stock.py` 的 AI prompt、`section_financial_leading.py`
 # 的卡片副標都各自寫了一份。三份複本 = 改一處必漏兩處。改吃 SSOT。
-from shared.signal_thresholds import (
-    CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT,
-    CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT,
-)
+# FIX(§3.3 SSOT): 原本本檔自行用兩個門檻常數 + 自寫比例計算 + `except: pass`，
+#   與 section_financial_leading.evaluate_leading_gates() 是**逐字重複的第二份實作**
+#   （同層 L5，import 不違反 §8.2）。改為共用該純函式：
+#     - 消除兩份門檻判定漂移的風險
+#     - 順帶拿掉本檔的 `except: pass`（gates 內部已處理 None / 型別 / 非正值）
+#   ✅ **OR→AND 已於 2026-08-14 經 user 裁示統一**（見下方 render 函式內 FIX 註記）。
+#      現行：本檔與 section_financial_leading:185 **同為 AND**，
+#      不再出現「本檔掛極稀有金卡、隔壁卻只給部分訊號黃燈」的自相矛盾。
+from .section_financial_leading import evaluate_leading_gates
 
 
 def render_dragon_alert_section(cl2, cx2, capital: float, *, capex=None) -> None:
@@ -39,23 +44,26 @@ def render_dragon_alert_section(cl2, cx2, capital: float, *, capex=None) -> None
     # PP&E 存量是幾十年的累積，製造業幾乎永遠 ≥ 股本；capex 是本季實際花錢，才能反映擴產意願
     _cx_for_dragon = capex if (capex is not None and capex > 0) else cx2
 
-    _is_dragon = False
+    # SSOT：門檻與比例計算一律交給 evaluate_leading_gates（同一份實作，兩處共用）
+    _gates = evaluate_leading_gates(cl2, _cx_for_dragon, capital)
     _dragon_reasons = []
-    try:
-        if capital > 0:
-            if (cl2 is not None and cl2 > 0
-                    and cl2 / capital * 100 >= CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT):
-                _dragon_reasons.append(
-                    f'合約負債 {cl2/1e8:.1f}億（達股本 {cl2/capital*100:.0f}% → 未來3-6月訂單保障）')
-                _is_dragon = True
-            if (_cx_for_dragon is not None and _cx_for_dragon > 0
-                    and _cx_for_dragon / capital * 100 >= CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT):
-                _src_label = '季資本支出' if (capex is not None and capex > 0) else '固定資產'
-                _dragon_reasons.append(
-                    f'{_src_label} {_cx_for_dragon/1e8:.1f}億（達股本 {_cx_for_dragon/capital*100:.0f}% → 大擴廠，看好未來需求）')
-                _is_dragon = True
-    except Exception:
-        pass
+    if _gates['cl_lead']:
+        _dragon_reasons.append(
+            f'合約負債 {cl2/1e8:.1f}億（達股本 {_gates["cl_pct"]:.0f}% → 未來3-6月訂單保障）')
+    if _gates['cx_lead']:
+        _src_label = '季資本支出' if (capex is not None and capex > 0) else '固定資產'
+        _dragon_reasons.append(
+            f'{_src_label} {_cx_for_dragon/1e8:.1f}億'
+            f'（達股本 {_gates["cx_pct"]:.0f}% → 大擴廠，看好未來需求）')
+    # FIX(定義統一 OR→AND，user 2026-08-14 裁示): 原為 `bool(_dragon_reasons)`＝任一
+    #   gate 成立就掛「🏆 龍頭預警區 — 極稀有高成長標的」金卡。但同一頁的
+    #   `section_financial_leading` 用 **AND** 才寫「✅ 龍多確認」——
+    #   於是同一支股票可以同時出現「極稀有」金卡與「⚠️ 部分訊號」黃燈，自相矛盾。
+    #   且「極稀有」這個文案本身就在宣告 AND 語意：只滿足一個條件的標的並不稀有。
+    #   統一為 AND 後徽章觸發率下降（這是預期的行為變更，不是回歸）。
+    #   ⚠️ `_dragon_reasons` 仍逐條累積：AND 成立時兩條理由都會列出，
+    #      使用者看得到「合約負債 + 資本支出」兩個獨立證據，而非只知道「有達標」。
+    _is_dragon = bool(_gates['cl_lead'] and _gates['cx_lead'])
 
     if _is_dragon:
         st.markdown(

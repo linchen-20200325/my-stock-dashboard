@@ -740,6 +740,18 @@ STOP_LOSS_DEFAULT_PCT: float = 8.0
 注意:與 ATR_STOP_FIXED_PCT(8% / scoring_engine 風控)同值但語意分離 —
 本常數是「個股 Tab 顯示用建議值」,後者是「ATR 失敗 fallback」。"""
 
+BIG_RED_STOP_BUFFER_PCT: float = 0.5
+"""大量紅 K「絕對停損線」在紅 K 低點下方再讓的緩衝（0.5%）。
+
+T4(2026-08)抽出：原為 `tab_stock.py` inline `round(_rk_low * 0.995, 2)` 的
+裸數字 `0.995`（§3.3 反捏造）。抽成常數後 L2 純函式與個股 / 個股組合兩頁共用同一份。
+
+語意：停損掛在紅 K 低點**正下方一點點**，避免剛好觸價就被掃出場
+（紅 K 低點本身是多方防守位，掛在它上面等於自己先投降）。
+與 `STOP_LOSS_DEFAULT_PCT`(8%) / `HARD_STOP_LOSS_PCT`(7%) 語意完全不同 ——
+那兩者是「距現價多少 %」，本常數是「距**紅 K 低點**多少 %」，基準點不同。
+"""
+
 HARD_STOP_LOSS_PCT: float = 7.0
 """「什麼時候買/賣」區塊的**硬停損**(-7%)。原 `section_when_buy_sell.py`
 inline `round(_p2 * 0.93, 2)` + 兩處手打的「-7%」字面(D1 v19.185 抽出)。

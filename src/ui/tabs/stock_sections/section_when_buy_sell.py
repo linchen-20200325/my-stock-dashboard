@@ -20,7 +20,7 @@ import streamlit as st
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.signal_thresholds import (
     BB_DROP_OUT_RATIO,
-    BB_NEAR_UPPER_RATIO,
+    # BB_NEAR_UPPER_RATIO 已移除 —— 它唯一的 consumer `_bb_near_up` 是死碼（見下方 FIX）。
     HARD_STOP_LOSS_PCT,
     STOCK_BIAS_DEEP_DEVIATION_PCT,
     STOCK_BIAS_MILD_DEVIATION_PCT,
@@ -122,10 +122,23 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
             print(f'[when_buy_sell] add_gate: {type(_e_gate).__name__}: {_e_gate}')
 
         # 布林帶訊號
-        _bb_upper    = (bb2.get('upper', 0) if isinstance(bb2, dict) else 0) or float('inf')
-        _bb_ma       = (bb2.get('ma', 0)    if isinstance(bb2, dict) else 0)
-        _bb_near_up  = bool(bb2) and _p2 >= _bb_upper * BB_NEAR_UPPER_RATIO
-        _bb_drop_out = bool(bb2) and _p2 < _bb_upper * BB_DROP_OUT_RATIO and _p2 > _bb_ma
+        # FIX(§1 哨兵方向 + 死碼) 原寫法：
+        #     _bb_upper = (bb2.get('upper', 0) ...) or float('inf')
+        #     _bb_ma    = (bb2.get('ma', 0) ...)          ← 無 inf 保護
+        #   把「缺值」對應到**最寬鬆**的哨兵：upper=inf 讓 `_p2 < upper` 恆真、
+        #   ma=0 讓 `_p2 > ma` 恆真 → 兩條件同時塌縮，_bb_drop_out 變無條件 True，
+        #   直接印出「⚠️ 脫離布林上軌 → 策略3：減碼50%」這種實盤等級建議。
+        #   實測目前不會誤觸發（calc_bollinger 只回 None 或完整 dict，且 bb2 唯一來源
+        #   是 tab_stock.py 的 calc_bollinger(df2)），但方向與 §1 相反 ——
+        #   缺值應「不出訊號」，而不是「出最激進的訊號」。改為顯式 None 守衛。
+        #   一併移除 `_bb_near_up`：全 repo 僅此一處賦值、從未被讀取，且
+        #   calc_bollinger 內部已算好同語意的 bb2['near_upper']（兩份平行實作，一份死掉）。
+        _bb_ok = (isinstance(bb2, dict)
+                  and bb2.get('upper') is not None and bb2.get('ma') is not None)
+        _bb_upper = float(bb2['upper']) if _bb_ok else None
+        _bb_ma    = float(bb2['ma'])    if _bb_ok else None
+        _bb_drop_out = bool(
+            _bb_ok and _p2 < _bb_upper * BB_DROP_OUT_RATIO and _p2 > _bb_ma)
 
         # KD 訊號
         _kd_gold = k2 and d2 and k2 > d2  # 黃金交叉方向

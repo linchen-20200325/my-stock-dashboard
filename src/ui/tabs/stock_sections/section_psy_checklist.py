@@ -174,12 +174,30 @@ def render_psy_checklist_section(sid2: str, df2, health2,
         # §1:漲幅算不出來時,checkbox 不預先勾（不是「確認未追高」，是「無法確認」）
         _surge_txt = (f'{_surge_chk:+.1f}%' if _surge_chk is not None
                       else f'資料不足（需 {SOP_SURGE_LOOKBACK_DAYS + 1} 根 K 線）')
+        # FIX(職責分離，非放寬安全閘): 原本 value / disabled 都用 abs()，**大漲與大跌一視同仁** ——
+        #   一檔近 5 交易日跌 12% 的股票會被鎖住第②關，而使用者看到的理由是「追高」，
+        #   完全對不上（跌 12% 的定義上不可能是追高）。這是 category error，不是保守。
+        #
+        #   改為**單邊判定**：第②關只管它名字所說的那件事 ——「未追高」。
+        #   ⚠️ 這**不會**讓急跌失去攔截，因為急跌已經在另一處被攔且理由正確：
+        #      同檔 `_ban_items` 的「今日禁止操作」條款（Batch A 已修）會印
+        #      「📉 個股近 N 交易日跌幅 X% 超過 4%（急跌，先確認有無基本面利空再進場）」，
+        #      走的是更嚴的 SOP_BAN_SURGE_PCT=4.0，比本關的 WARN=5% / HARD=10% 都早觸發。
+        #   ⇒ 淨效果是「同一件事只在一個地方講，且講對理由」，不是少講一件事。
+        #
+        #   §1 三態保留：`_surge_chk is None`（K 線不足）時 value 仍為 False ——
+        #   那是「無法確認」，不是「確認未追高」，不可預先勾選。
         _q2 = st.checkbox(
-            f'② 確認未追高超過{SOP_SURGE_WARN_PCT:g}%'
-            f'（近{SOP_SURGE_LOOKBACK_DAYS}交易日漲幅：{_surge_txt}）',
-            value=(_surge_chk is not None and abs(_surge_chk) <= SOP_SURGE_WARN_PCT),
+            f'② 確認近{SOP_SURGE_LOOKBACK_DAYS}交易日漲幅未超過 {SOP_SURGE_WARN_PCT:g}%'
+            f'（目前：{_surge_txt}）',
+            value=(_surge_chk is not None and _surge_chk <= SOP_SURGE_WARN_PCT),
             key=f't2_q2_{sid2}',
-            disabled=(_surge_chk is not None and abs(_surge_chk) > SOP_SURGE_HARD_PCT),
+            help=f'本關只管追高：漲超過 {SOP_SURGE_WARN_PCT:g}% 不自動勾選，'
+                 f'超過 {SOP_SURGE_HARD_PCT:g}% 直接鎖住。\n\n'
+                 f'急跌不在本關處理 —— 近{SOP_SURGE_LOOKBACK_DAYS}交易日跌幅超過 '
+                 f'{SOP_BAN_SURGE_PCT:g}% 會列入上方「今日禁止操作」，'
+                 '並提醒先確認有無基本面利空。',
+            disabled=(_surge_chk is not None and _surge_chk > SOP_SURGE_HARD_PCT),
         )
         _q3 = st.checkbox(
             f'③ 確認停損價（跌破 {_stop_chk} 元無條件出場）',
@@ -234,11 +252,22 @@ def render_psy_checklist_section(sid2: str, df2, health2,
     _ban_items = []
     _unevaluated = []
     # §1:同一個「近 N 交易日漲幅」只算一次(上方 _surge_chk),不再另起第二個基期。
+    # FIX(方向性 bug): 原為 `abs(_surge_chk) > SOP_BAN_SURGE_PCT` —— 用絕對值判斷
+    #   「追高風險」，等於把**大跌**也算成追高。SOP_BAN_SURGE_PCT = 4.0，所以一檔
+    #   近 5 交易日跌 18% 的股票會印出：
+    #       「📈 個股近5交易日漲幅 -18.0% 超過4%（追高風險）」
+    #   —— 數字是負的、emoji 是上漲箭頭、理由是追高，三者互相矛盾。
+    #   修法：正向才算追高；負向另立分支，講「急跌」而不是「追高」。
+    #   ⚠️ 門檻值一律不動（改門檻屬行為變更）；負向沿用同一個 SOP_BAN_SURGE_PCT，
+    #      只是把單邊判定拆成兩邊，讓文案與方向一致。
     if _surge_chk is None:
         _unevaluated.append(f'近{SOP_SURGE_LOOKBACK_DAYS}交易日漲幅（K 線資料不足）')
-    elif abs(_surge_chk) > SOP_BAN_SURGE_PCT:
+    elif _surge_chk > SOP_BAN_SURGE_PCT:
         _ban_items.append(f'📈 個股近{SOP_SURGE_LOOKBACK_DAYS}交易日漲幅 {_surge_chk:+.1f}% '
                           f'超過{SOP_BAN_SURGE_PCT:g}%（追高風險）')
+    elif _surge_chk < -SOP_BAN_SURGE_PCT:
+        _ban_items.append(f'📉 個股近{SOP_SURGE_LOOKBACK_DAYS}交易日跌幅 {_surge_chk:+.1f}% '
+                          f'超過{SOP_BAN_SURGE_PCT:g}%（急跌，先確認有無基本面利空再進場）')
     # `monthly_loss_pct` 全站無寫入點(D1 v19.185 複驗) → 恆為未追蹤。
     # §1:不可因為「沒有虧損紀錄」就宣告「本月沒虧」,列入未評估項誠實揭露。
     _ml = st.session_state.get('monthly_loss_pct')
