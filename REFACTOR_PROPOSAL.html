@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>my-stock-dashboard 全 Tab 重構提案 v2 · 互動檢視</title>
+<style>
+:root{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--bd:#30363d;--tx:#e6edf3;--tx2:#8b949e;
+--ac:#58a6ff;--r:#f85149;--y:#d29922;--g:#3fb950;--p:#bc8cff;--o:#fb923c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif;font-size:15px;line-height:1.65}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 80px}
+header{border-bottom:1px solid var(--bd);padding-bottom:16px;margin-bottom:18px}
+h1{font-size:22px;margin:0 0 6px}
+.sub{color:var(--tx2);font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:9px;margin:16px 0}
+.stat{background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:10px 13px}
+.stat b{display:block;font-size:21px;line-height:1.2}
+.stat span{font-size:11px;color:var(--tx2)}
+.panel{background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:18px;position:sticky;top:0;z-index:20}
+.frow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+.frow:last-child{margin-bottom:0}
+.flabel{font-size:11px;color:var(--tx2);width:56px;flex-shrink:0}
+button.chip{background:var(--bg3);border:1px solid var(--bd);color:var(--tx2);border-radius:999px;padding:4px 11px;font-size:12px;cursor:pointer;font-family:inherit;transition:.12s}
+button.chip:hover{border-color:var(--ac);color:var(--tx)}
+button.chip.on{background:var(--ac);border-color:var(--ac);color:#05101f;font-weight:700}
+#q{background:var(--bg3);border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:7px 11px;font-size:13px;flex:1;min-width:150px;font-family:inherit}
+.item{background:var(--bg2);border:1px solid var(--bd);border-left-width:4px;border-radius:8px;margin-bottom:9px;overflow:hidden}
+.item[data-s="H"]{border-left-color:var(--r)}
+.item[data-s="M"]{border-left-color:var(--y)}
+.item[data-s="L"]{border-left-color:var(--tx2)}
+.item[data-s="P"]{border-left-color:var(--g)}
+.item[data-s="X"]{border-left-color:var(--o)}
+.hd{display:flex;gap:9px;align-items:flex-start;padding:11px 13px;cursor:pointer}
+.hd:hover{background:var(--bg3)}
+.sev{font-size:14px;flex-shrink:0;width:18px;text-align:center;line-height:1.5}
+.tt{flex:1;font-weight:600;font-size:14px}
+.meta{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.tag{font-size:10.5px;padding:1.5px 7px;border-radius:4px;background:var(--bg3);color:var(--tx2);border:1px solid var(--bd);white-space:nowrap}
+.tag.b{background:rgba(88,166,255,.13);color:var(--ac);border-color:rgba(88,166,255,.3)}
+.tag.c{background:rgba(188,140,255,.13);color:var(--p);border-color:rgba(188,140,255,.3)}
+.tag.n{background:rgba(248,81,73,.15);color:var(--r);border-color:rgba(248,81,73,.35);font-weight:700}
+.tag.t{background:rgba(251,146,60,.13);color:var(--o);border-color:rgba(251,146,60,.3)}
+.arw{color:var(--tx2);font-size:11px;flex-shrink:0;transition:.15s;margin-top:3px}
+.item.op .arw{transform:rotate(90deg)}
+.bd{display:none;padding:0 13px 13px 40px;font-size:13.5px}
+.item.op .bd{display:block}
+.bd h4{margin:12px 0 5px;font-size:12px;color:var(--tx2);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+.bd h4:first-child{margin-top:0}
+pre{background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:9px 11px;overflow-x:auto;font-size:12px;margin:0;font-family:"SF Mono",Consolas,"Noto Sans Mono CJK TC",monospace;color:#c9d1d9;white-space:pre-wrap;word-break:break-word}
+.files{font-size:11.5px;color:var(--tx2);font-family:"SF Mono",Consolas,monospace;word-break:break-all}
+.grp{margin:26px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:baseline}
+.grp h2{font-size:16px;margin:0}
+.grp span{font-size:11.5px;color:var(--tx2)}
+.empty{display:none;text-align:center;color:var(--tx2);padding:40px;font-size:13px}
+.note{border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;border:1px solid}
+.n-r{background:rgba(248,81,73,.08);border-color:rgba(248,81,73,.3)}
+.n-r b{color:var(--r)}
+.n-g{background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.3)}
+.n-g b{color:var(--g)}
+.n-o{background:rgba(251,146,60,.08);border-color:rgba(251,146,60,.3)}
+.n-o b{color:var(--o)}
+footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--bd);color:var(--tx2);font-size:12px}
+@media(max-width:620px){.flabel{width:100%;margin-bottom:2px}.bd{padding-left:13px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>📊 my-stock-dashboard 全 Tab 重構提案 <span style="color:var(--ac)">v2</span></h1>
+  <div class="sub">第一階段：診斷與提案 ｜ 本機 clone <b>v19.192</b>（712 檔 · UI 層 82 檔 100% 覆蓋）｜ 2026-08-14 ｜ <b>尚未修改任何一行程式碼</b></div>
+</header>
+
+<div class="note n-o">
+  <b>⚠️ 為什麼有 v2</b>：v1 透過 CDN 抓檔，單次在 52–70KB 截斷、無法跨檔 grep，導致 <b>19 項判斷需要修正</b>（`app.py` 936 行不是 1542、`tab_stock.py` 12 個 marker 不是 24、`unified_indicator_card` 其實存在於 `macro_ui_components.py`…）。
+  本機 clone 後八組 agent 全文重跑，另找到 <b>14 條全新發現</b>。<b>本版取代 v1，所有數字皆可用 Grep 複現。</b>
+</div>
+
+<div class="note n-r">
+  <b>🔴 最嚴重的三條</b>：
+  ① <code>scoring_helpers.py:160-162</code> <b>無 MA 數據時 <code>score += 15</code></b> —— 趨勢佔 30/100，新上市股憑空拿半分；
+  ② <b>薩姆規則是幽靈把關</b> —— UI 宣稱 5 條硬否決，`allocation_service` 只註冊了 2 條；
+  ③ <b>`recalibrate_macro.yml` 是全 repo 唯一用 `git diff --quiet` 的錯誤變體</b>，且 `macro_thresholds.json` 從未由腳本產生過 → 季度校準整條空轉。
+</div>
+
+<div class="note n-g">
+  <b>✅ v2 新增第五個專家面向：測試與 CI 守衛</b> —— 294 個測試檔逐條比對「哪些修改會紅燈」。關鍵發現：四個名字像全域 SSOT 守衛的測試，實際只掃 1–12 檔白名單且<b>只看字串不看數字</b>；CI 無 lint、無 coverage、slow lane <code>continue-on-error</code>；15 個 cron <b>零失敗告警</b>。<b>規則沒被落實，是因為沒有任何自動化東西會在沒落實時變紅。</b>
+</div>
+
+<div class="stats" id="stats"></div>
+
+<div class="panel">
+  <div class="frow"><span class="flabel">嚴重度</span>
+    <button class="chip on" data-f="s" data-v="all">全部</button>
+    <button class="chip" data-f="s" data-v="H">🔴 高</button>
+    <button class="chip" data-f="s" data-v="M">🟡 中</button>
+    <button class="chip" data-f="s" data-v="X">🔀 v1 修正</button>
+    <button class="chip" data-f="s" data-v="P">✅ 正面</button>
+  </div>
+  <div class="frow"><span class="flabel">面向</span>
+    <button class="chip on" data-f="c" data-v="all">全部</button>
+    <button class="chip" data-f="c" data-v="資料">🔍 資料稽核</button>
+    <button class="chip" data-f="c" data-v="UI">🎨 UI/UX</button>
+    <button class="chip" data-f="c" data-v="程式">⚙️ 程式碼</button>
+    <button class="chip" data-f="c" data-v="金融">💹 金融邏輯</button>
+    <button class="chip" data-f="c" data-v="測試">🧪 測試/CI</button>
+  </div>
+  <div class="frow"><span class="flabel">批次</span>
+    <button class="chip on" data-f="b" data-v="all">全部</button>
+    <button class="chip" data-f="b" data-v="A">A 零風險快贏</button>
+    <button class="chip" data-f="b" data-v="B">B 資料真實性</button>
+    <button class="chip" data-f="b" data-v="C">C 新手友善</button>
+    <button class="chip" data-f="b" data-v="D">D 版面瘦身</button>
+    <button class="chip" data-f="b" data-v="E">E 效能SSOT</button>
+    <button class="chip" data-f="b" data-v="F">F 需裁示</button>
+    <button class="chip" data-f="b" data-v="G">G 文件測試</button>
+  </div>
+  <div class="frow"><span class="flabel">搜尋</span>
+    <input id="q" placeholder="搜尋標題、檔名、關鍵字…（例：ffill、AUM、cron、白名單）">
+    <button class="chip" id="ea">全部展開</button>
+    <button class="chip" id="ca">全部收合</button>
+  </div>
+</div>
+
+<div id="list"></div>
+<div class="empty" id="empty">沒有符合條件的項目</div>
+
+<footer>
+  📌 第一階段提案，<b>尚未修改任何程式碼</b>。第二階段人員編組（實作員 → 領域複核員 → 測試守衛員 → <b>獨立最終稽核 AI</b>）與五段自審交付標準見 <code>REFACTOR_PROPOSAL.md §6</code>。<br>
+  完整版（含 §4 測試判定表、§7 十個裁示點、§8 白話文附錄 62 詞）請見 <code>REFACTOR_PROPOSAL.md</code>。
+</footer>
+</div>
+
+<script>
+const TABS=[
+ ["NEW","🆕 v2 全新發現（v1 完全沒抓到）"],
+ ["FIX","🔀 v1 → v2 修正紀錄"],
+ ["G","🌐 全站橫向（跨 Tab）"],
+ ["TEST","🧪 測試與 CI 守衛"],
+ ["APP","🧱 全域版面 + Sidebar"],
+ ["MACRO","🌍 市場環境 → 總經"],
+ ["HEAT","🌍 市場環境 → 產業熱力圖"],
+ ["FLOW","🌍 市場環境 → 板塊資金潮汐"],
+ ["STOCK","🔬 選股 → 個股"],
+ ["GRP","🔬 選股 → 個股組合"],
+ ["SCR","🔬 選股 → 選股網"],
+ ["ETF1","🏦 ETF → 單檔診斷"],
+ ["ETF2","🏦 ETF → 多檔比較"],
+ ["ETF3","🏦 ETF → ETF 組合"],
+ ["DIAG","🔧 工具箱 → 資料診斷"],
+ ["EDU","🔧 工具箱 → 教學"],
+ ["MGMT","📁 組合管理"],
+ ["AI","🧬 AI 問答"]
+];
+const D=[
+// ══ 全新發現 ══
+{t:"NEW",s:"H",c:"金融",b:"B",n:"N-1 無 MA 數據白送 15 分 —— 本案最嚴重的一條",
+ e:"# src/compute/scoring/scoring_helpers.py:160-162\n    else:\n        score += 15\n        details['趨勢'] = ('無MA數據', 15, 30)\n\n趨勢是 6 因子中權重最高的一項（30/100）。新上市股 MA100 未成形時，憑空拿到滿分的一半。\n同一支股票在 section_health_score.py:170 顯示「趨勢 − 無MA數據」（誠實），但 health2 分數裡已經含了這 15 分\n→ 「趨勢未知」的股票健康度天花板是 85 而非 70。",
+ f:"src/compute/scoring/scoring_helpers.py:160-162",
+ x:"details['趨勢'] = ('無MA數據', None, 30) + 分母改 70，並在量表標「本次滿分 70（趨勢未評估）」。\n⚠️ 測試風險 🟡：test_scoring_helpers.py:156 釘 score==15、:125 釘 isinstance(score,int) → 需同 PR 改 2 條。"},
+{t:"NEW",s:"H",c:"資料",b:"B",n:"N-2 薩姆規則是幽靈把關 —— 畫面宣稱 5 條硬否決，實際只註冊 2 條",
+ e:"# src/ui/tabs/macro/section_news_ai.py:230\n'Sahm_Rule_Triggered': False,  # 尚無薩姆規則資料來源，預設 False\n\n# 消費端 src/services/macro_state_locker.py:484,527\nsahm = _b(\"Sahm_Rule_Triggered\")\nif sahm: exposure = min(exposure, MACRO_VETO_SAHM_EXPOSURE_CAP_PCT)\n\n# 但 UI 對使用者宣稱（section_traffic_light.py:101-103）\n'🔒 風險上限＝薩姆／PMI／外資期貨／VIX 否決權／三環第一環 的硬否決天花板'\n\n三重不成立：\n(a) 薩姆恆 False\n(b) allocation_service.py:152 的 _INTRINSIC_CAP_NAMES 只有 {'VIX 否決權','三環第一環'}\n    全 repo register_cap 僅兩個內部呼叫點（:355 apply_vix_veto / :364 apply_ring_gate）\n    → 薩姆／PMI／外資期貨三條 cap 在建議持股鏈路上根本不存在\n(c) 全 repo grep -i sahm 在 allocation_service 零命中",
+ f:"section_news_ai.py:230 · macro_state_locker.py:484 · section_traffic_light.py:101-103 · allocation_service.py:152",
+ x:"文案刪掉不存在的三項，或在畫面標「⬜ 薩姆：無資料源，未納入」。\n測試風險 🟢（test_position_ceiling 釘的是 _cap_line:64，不是這行 caption）。"},
+{t:"NEW",s:"H",c:"資料",b:"B",n:"N-3 calculate_system_state 全缺值自動吐「曝險 60%」",
+ e:"# src/services/macro_state_locker.py:476-518\nvix→20.0 / pmi→50.0 / m1b,m2→0.0 / bias→0.0 / pcr→1.0，score = 60 基準\n\n零資料代入後所有分支皆不觸發 → exposure = 60。\n這是 §1「錯誤的數字比沒有數字更危險」的教科書案例。\n持股數字雖已被 v19.170 改讀 allocation_service，但 market_regime / systemic_risk_level 仍由本函式產出並渲染於 §十一 巨字卡。",
+ f:"src/services/macro_state_locker.py:476-518",
+ x:"缺值改 raise 或回 None，UI 端顯示 ⬜ 未評估。"},
+{t:"NEW",s:"H",c:"資料",b:"B",n:"N-4 etf_fetch 對原始 OHLCV 靜默 ffill，且與同檔政策自相矛盾",
+ e:"# src/data/etf/etf_fetch.py:214\nout = df.ffill()        # 無 log、無 is_imputed 旗標\n\n# 而同一檔 :1960-1962 才剛寫明\n「移除原 close.ffill()：停牌/尚未上市造成的洞被 ffill 後…\n  把『沒有交易』偽裝成『持平』，§4.6 明文禁止」\n\n_fetch_etf_price_max 是全 ETF 頁唯一的價格來源（切片供 5d/1y/2y/5y）。",
+ f:"src/data/etf/etf_fetch.py:214",
+ x:"拔掉 .ffill()，或改顯式 n_filled = df['Close'].isna().sum() + print + out.attrs['imputed_rows']=n。"},
+{t:"NEW",s:"H",c:"資料",b:"B",n:"N-5 AUM 幣別的第三處問題在評分層（美股 ETF 用 TWD 刻度）",
+ e:"口徑已定案為 TWD：\n· etf_fetch.py:331 aum_twd = float(...) * 1e8（億→元）→ :435-436 填進 totalAssets\n· signal_thresholds.py:920-924 寫「億 TWD」\n· etf_quality.py:53 寫 # AUM in TWD\n\n❌ 錯誤處 1&2（v1 已抓）：etf_tab_single.py:195 f'{aum/1e9:.1f}B USD'、:918 AI prompt「B 美元」\n   0050 約 5,000 億 TWD → 畫面印「500.0B USD」；同檔 :202 expander 卻用「億」推理 → 檔內自相矛盾\n\n❌ 錯誤處 3（v1 沒抓到）：etf_quality.py:54-55 _AUM_LO_LOG=9.0/_AUM_HI_LOG=10.0\n   與 etf_scoring_helpers.py:36 'aum_log':(10.0,9.0) 都以 TWD 10億/100億 為刻度，\n   卻直接吃 info['totalAssets'] —— 美股 ETF 該欄是 USD\n   → 一檔 $8 億 USD（≈250 億台幣、規模健康）被算成 log10(8e8)=8.9 → AUM 得 0 分\n   → 白扣 8%(多檔)/30%(品質星等) 權重",
+ f:"etf_tab_single.py:195,918 · etf_quality.py:54-55 · etf_scoring_helpers.py:36",
+ x:"① :195/:918 改 f'{aum/1e8:,.0f} 億'（Batch A，5 分鐘）\n② 評分層取 AUM 前先過 holding_currency(ticker)（portfolio_fx.py 已有），非 TWD 者換算或改用該幣別刻度。"},
+{t:"NEW",s:"H",c:"程式",b:"E",n:"N-6 health_inspector 的 per-ETF 迴圈在 if _do_deep 之外（漏縮排）",
+ e:"# src/ui/pages/health_inspector.py:1425-1427（縮排 16 空格，而 :1365 `if _do_deep:` 的 body 是 20 空格）\n                _probe_rows = []\n                for _pr in _ep_rows:\n...\n1442                            _mgr = fetch_etf_manager(_tk_p)     # 打 MoneyDJ\n1478                        _hd = fetch_etf_holdings(_tk_p)         # 打持股\n\n只要 etf_portfolio_data.rows 非空就每次 render 對每檔主動 ETF 外抓。\n另兩條同型：:1264-1265 單一 ETF 路徑、:538 _next_release_cached('CPILFESL') 每次展開就打 FRED。\n三者都有 @st.cache_data 兜底，但 cache miss / TTL 到期 = N 次 proxy 往返在畫面 render 途中同步阻塞。\n\n⚠️ 對照更正：6 個進階診斷 panel 本身確實無網路 I/O（雙跑實測、回測皆 button-gated）\n→ v1 的「6 panel 每 rerun 打外部 API」需修正為「真問題在 health_inspector 這 3 條漏 gate」。",
+ f:"src/ui/pages/health_inspector.py:1425,1264,538",
+ x:"整段包進 if st.button('🔬 探測 ETF 經理人/持股')；FRED release 改由總經 Tab 既有抓取供給。"},
+{t:"NEW",s:"H",c:"資料",b:"B",n:"N-7 _get_worksheet 純讀也會覆寫使用者 Sheet 第 1 列",
+ e:"# src/data/portfolio/gsheet_portfolio.py:225\nws.update(f'A1:{_col_letter(len(headers))}1', [headers])\n\nheader 不符即覆寫，而 list_portfolios（純讀）也會走到這裡。\n使用者若自己改過標題列，光是打開組合管理頁就被改掉，無任何提示。\n這是 §1 的鏡像違反（靜默修改而非 fail loud）。",
+ f:"src/data/portfolio/gsheet_portfolio.py:225",
+ x:"純讀路徑不寫；偵測不符時 st.warning 詢問是否修復。"},
+{t:"NEW",s:"H",c:"資料",b:"F",n:"N-8 OAuth 三重風險：state fail-open + id_token 不驗簽 + token dict 渲染到畫面",
+ e:"# src/data/portfolio/oauth_state.py:133-135\nif expected_state and got_state and got_state != expected_state:\n    return False\nreturn True\n\ndocstring :128-131 自列真值表：expected=None,got=ABC → True｜expected=ABC,got=None → True\n即 session 遺失或 URL 未帶 state 一律放行 —— CSRF 防護在最需要它的情境下失效。\n\n# infra/oauth.py:86-88 明說 id_token 不驗簽，直接 base64 解 payload 取 email\n# infra/oauth.py:139\nraise OAuthError(f\"token response 缺 access_token：{tokens}\")\n  ↓ 再由 oauth_state.py:168\nst.error(f\"❌ OAuth 失敗：{_oe}\")    ← 整個 token response dict 渲染到畫面",
+ f:"oauth_state.py:133,168 · infra/oauth.py:86-88,139",
+ x:"state 缺失改 return False + 重導登入；:139 只印 keys 不印 values；id_token 驗簽或改走 userinfo endpoint。\n⚠️ 會碰到現有登入流程，需你裁示。"},
+{t:"NEW",s:"H",c:"測試",b:"F",n:"N-9 測試把 bug 釘成規格：「全空財報 = Pass」",
+ e:"# tests/test_financial_health_engine.py:98-111\n# ── All items N/A → rule_st=\"Pass\" (no data is not a fail) ───\nself.assertEqual(rule[\"Status\"], \"Pass\")\n\n這個註解就是設計宣告，與 CLAUDE.md §1「Fail Loud, Never Fake」直接衝突。\n\n同款「把缺值釘成規格」的測試還有 9 條（全在 test_scoring_engine.py）：\n· calc_rs_score(None) == 50           :696-700\n· calc_chip_score(None) == 50.0       :231-233\n· calc_revenue_yoy_score(None) == 50.0 :447-451\n· calc_volume_score(None) == 50.0     :258-262\n· calc_trend_score(None) == 0.0       :70-78   ← 缺值被報成「最差趨勢」\n· score_single_stock(None)['total']==0 :364-372\n· test_none_df_returns_fixed_8pct     :484-487 ← 零筆歷史仍回具體停損價 92.0\n· MA60 全 NaN → 0.5 分，總分 83.3     :307-311\n\n對照組（好的慣例同時存在）：\ntest_b1b_stock_math.py:330-335\n  assert r[\"est_yield\"] is None, \"缺資料必須回 None（未評估），不可回 0\"\n→ 同一 repo 兩套互斥慣例，scoring/financial_health 是釘住壞慣例的口袋。",
+ f:"tests/test_financial_health_engine.py:98-111 · tests/test_scoring_engine.py（9 處）",
+ x:"這是政策決定不是 bug fix，需你先裁示（§7 決策點 2）。若要改，程式碼 + 測試必須同一個 PR。"},
+{t:"NEW",s:"H",c:"測試",b:"A",n:"N-10 recalibrate_macro.yml 是全 repo 唯一的錯誤變體，季度校準整條空轉",
+ e:"# .github/workflows/recalibrate_macro.yml:56-64\nif git diff --quiet macro_thresholds.json MACRO_CALIBRATION_PROPOSAL.md; then\n  echo \"changed=false\" >> $GITHUB_OUTPUT\n\n四環證據：\n① MACRO_CALIBRATION_PROPOSAL.md 在 repo 內不存在，也不在 .gitignore\n   → 它是 untracked，而 git diff（未 git add）本質上看不到 untracked 檔\n② scripts/calibrate_macro_traffic.py:709-711 在 rec == current 時 return False 不寫檔\n   :970-971 過擬合時主動回退預設 → macro_thresholds.json 多半根本不變\n③ → 兩個 pathspec 皆無 diff → changed=false → PR 永不開啟\n④ 現檔 macro_thresholds.json:4-7 是 \"last_calibrated\": null / \"method\": \"default (uncalibrated)\"\n   且 _comment 含腳本 :717 不會寫的 \"Override calc_traffic_light thresholds.\"\n   還有腳本不產生的 _comment_v19_173 key → 這檔是手寫的，寫入端從頭到尾沒被驗證過\n\n對照：其餘 7 個寫入型 cron 一律用 git add -f 之後 git diff --staged --quiet（看得到 untracked）",
+ f:".github/workflows/recalibrate_macro.yml:59 · scripts/calibrate_macro_traffic.py:709-718",
+ x:"① yml 改先 git add 再 git diff --staged --quiet（直接抄其他 7 個 cron）\n② emit_thresholds_json 無變動時仍寫 last_verified 欄，面板顯示「最後驗證：YYYY-MM-DD（結論：維持現行）」"},
+{t:"NEW",s:"H",c:"測試",b:"G",n:"N-11 cron 同分鐘撞車 + 15 個 workflow 零失敗告警",
+ e:"update_health_history  30 9 * * 1-5   ┐ 平日同一分鐘啟動\nupdate_sector_flow     30 9 * * *     ┘ 且都 push 同一分支\nupdate_macro_history   0 9 * * *      ┐ 同刻\npush_daily_signals     0 9 * * 1-5    ┘\n\n所有 commit 步驟皆為裸 git push：\n· 無 git pull --rebase\n· 無 concurrency group（只有不寫 repo 的三個有）\n→ 撞到即 non-fast-forward 失敗\n\n而 15 個 workflow 全部未找到 if: failure() / issue 建立 / Slack / 郵件\n→ 資料管線壞掉是零告警，只會在 Actions 分頁靜默變紅。",
+ f:".github/workflows/（15 檔）",
+ x:"寫檔型 cron 加 concurrency group + git pull --rebase；全部補 if: failure() 通知步驟。"},
+{t:"NEW",s:"M",c:"測試",b:"G",n:"N-14 test_c3_layering_guard 品質很高，但兩條待修違憲被白名單放行",
+ e:"實作 6 個掃描器（R1/R1-L0/R2/R3/R4/R5），AST + PEP 562 barrel 展開，全檔 0 個 xfail，\n且有「守衛的守衛」（:827 驗 barrel 展開、:891 驗 late import、:931 驗掃到檔案）—— 品質比 CLAUDE.md prose 可信得多。\n\n但：\n🔴 V-PICKER-PRIV-1 → :506 (\"src/ui/tabs/tab_stock_picker.py\",\"src.data.core.data_loader\") 登記在 EX-PASSTHRU-1 白名單\n   而 CLAUDE.md §8.2.A.1 明文「⚠️ 明確排除…直呼 _fm_raw_headers（private symbol，pass-through 前提不成立）」\n   守衛的 key 是 (規則,檔案,模組) 無符號粒度 → 機器可讀 SSOT 與憲法文字互相矛盾，且是機器這邊放水\n🔴 V-LEAD-RENDER-1 → :413 leading_indicators.py 列在 EX-CACHE-1\n   而該檔真正問題是「L1 檔內定義 render_leading_table」—— 守衛只看 import，看不到這件事\n⚪ V-APP-1 / V-SMART-CACHE-1 → 結構外，無對應守衛\n\n另 :627-650 用 _TODO_SCRIPTS_LAYER 對 20 條 scripts/** → L2/L3 發同一張免死金牌。",
+ f:"tests/test_c3_layering_guard.py:413,506,627-650",
+ x:"白名單加符號粒度（規則,檔案,模組,符號）；scripts 分層標籤定案後收掉 _TODO_SCRIPTS_LAYER。"},
+{t:"NEW",s:"M",c:"程式",b:"E",n:"N-13 分散度混用 2 維與 3 維分數直接比大小，且把佐證欄砍掉",
+ e:"# src/ui/etf/etf_tab_smart.py:309\n_tickers_to_fetch = [_ticker] + _peers_in_pivot[:30]\n\n但 universe 是整份 ETF_PEER_GROUPS（10 類約 48 檔）→ 第 31 檔起 holdings_map 為空\n→ etf_smart_analysis.py:324-330 走 has_h=False 分支把權重 rescale 成 price 0.667 / category 0.333\n→ 同一張排行榜裡，有些列是 3 維分數、有些是 2 維分數，直接比大小。\n\n更糟：:403 _d.drop(columns=['可用維度']) —— 唯一能讓使用者看出差別的欄位被明細表刪掉了。",
+ f:"src/ui/etf/etf_tab_smart.py:309,403",
+ x:"保留「可用維度」欄並在 2 維列加 ⚠️；或把 [:30] 提高到全 universe（_cached_holdings 已 1h 快取 + ThreadPool 8）。"},
+{t:"NEW",s:"M",c:"資料",b:"B",n:"N-12b 教學頁毛利率門檻同頁漂移 30% vs 40%",
+ e:"# src/ui/tabs/tab_edu.py:677  手寫\n「毛利率 ≥ 30%」\n# 同一頁 :751  f-string 代入 SSOT\nFH_GROSS_MARGIN_GOOD_PCT = 40.0\n\n→ 策略1 說 30、策略2 說 40。\n另 :655/669 手寫 50%/80%，SSOT 已有同值常數卻未 import。\nmacro_classroom:99 寫死 / 6，同檔 :229-230 自陳「滿分隨資料齊全度浮動(4~6)」→ 同一個 expander 內自相矛盾。",
+ f:"src/ui/tabs/tab_edu.py:655,669,677,751 · macro_classroom.py:99,229",
+ x:"全部改 f-string 代入 SSOT；加 golden test 釘教學頁數字與 shared/* 一致。"},
+
+// ══ v1 → v2 修正 ══
+{t:"FIX",s:"X",c:"程式",b:"G",n:"規模數字全面更正：app.py 936 行、tab_stock.py 12 個 marker",
+ e:"app.py：實測 936 行，top-level def 只有 2 個（_get_secret:49、_render_tab_isolated:437）\n  → v1 引用的 docs/APP_PY_AUDIT.md 的 1542 行已過期\n\ntab_stock.py：實測 1,876 行、#### marker 12 個（v1 說 24、二次驗證說 12 → v2 定案 12）\n  其中 9 個在「AI 財報體檢」expander 內，主流程實際只有 3 個 ####\n  「巨型 def」的定性仍成立：render_tab_stock() 佔 L134-1876 ≈ 全檔 93%\n\n_render_tab_isolated：8/13 不是 8/14（葉節點 tab 是 13 個）\n  未包 5 個：選股網 L485、ETF ×3 L714/726/730、資料診斷 L773\n  已包 8 個含產業熱力圖與板塊資金潮汐（v1 漏列這兩個）",
+ f:"app.py · tab_stock.py · docs/APP_PY_AUDIT.md · docs/TAB_STOCK_AUDIT.md",
+ x:"Batch G：把新數字回寫進 docs/*.md（既有 audit 文件已失真）。"},
+{t:"FIX",s:"X",c:"UI",b:"C",n:"unified_indicator_card 確實存在 —— v1 兩次都判錯",
+ e:"v1 先說「有」、二次驗證說「不存在」→ 都不對。\n\n正解：定義於 src/ui/render/macro_ui_components.py:317（另有 unified_indicator_card_pending:356），\n在 src/ui/tabs/macro/section_mid.py 被呼叫 5 + 5 次，\n且有 tests/test_unified_indicator_card_v19_109.py 9 個測試釘住。\n\n正確表述應為：「它不在 ui_widgets.py，而在 macro_ui_components.py，且只接了總經中期一個 section」。",
+ f:"src/ui/render/macro_ui_components.py:317",
+ x:"Batch C 不需新建此元件，而是把它推廣到 section_chips 與其他手刻卡片區塊。"},
+{t:"FIX",s:"X",c:"程式",b:"E",n:"進階診斷 6 panel 本身無網路 I/O —— 真問題在 health_inspector 的 3 條漏 gate",
+ e:"v2 逐 panel 量化：\n· render_data_registry_panel  → 純讀 session_state，0 外部 API\n· render_fetch_monitor_panel  → registry + set-diff，0\n· render_reconcile_panel      → 3 次純函式對帳，0\n· render_api_diagnostic       → 雙跑實測 button-gated（:150），0\n· render_calibration_panel    → 回測 button-gated（:92），0（但每 rerun 一次磁碟 I/O 讀 json）\n· render_data_health_raw      → 最重，但真正的破口不在 expander 內部\n\n→ v1 的「6 panel 每 rerun 打外部 API」需修正為 N-6（health_inspector:1425/1264/538 三條漏 gate）。\n仍應加 gate，但理由是 HTML/DataFrame 組裝成本，不是 API 風暴。",
+ f:"app.py:785-798 · health_inspector.py",
+ x:"Batch A 仍照修（加 checkbox gate），但同時處理 N-6 才是真正解掉外抓。"},
+{t:"FIX",s:"X",c:"程式",b:"B",n:"except: pass 61 處（v1 說 54）、tab_stock 22 處（v1 說 15）",
+ e:"src/ui 全部 except → 330 處 / 58 檔\n· except …: pass          61（app.py 另 1）\n· except …: continue       5\n· except …: return 預設值  46\n· except 內有 st.error/warning/info/exception 或 raise → 31（僅 9.4%）\n\ntab_stock.py 精確重算 = 22 處（15 個 except Exception + 5 個 except (TypeError,ValueError) + sections 7）\n\ntop 違規檔：tab_stock 15、section_portfolio_summary 6、section_chips 6、health_inspector 6、section_news_ai 4",
+ f:"src/ui/**（58 檔）",
+ x:"🔴 級 28 處優先（吞掉後畫面仍顯示結論）。範本：portfolio_manager.py 9 處 except 全部 st.error/warning。"},
+{t:"FIX",s:"X",c:"金融",b:"B",n:"SOP_BAN_SURGE_PCT = 4.0 不是 15 —— 誤判更容易觸發",
+ e:"# shared/signal_thresholds.py:1039\nSOP_BAN_SURGE_PCT = 4.0\n\n# section_psy_checklist.py:239-241\nelif abs(_surge_chk) > SOP_BAN_SURGE_PCT:\n    _ban_items.append(f'📈 個股近{N}交易日漲幅 {_surge_chk:+.1f}% 超過{SOP_BAN_SURGE_PCT:g}%（追高風險）')\n\n→ 近 5 日跌 18% 的股票會印「📈 個股近5交易日漲幅 -18.0% 超過4%（追高風險）」，emoji 還是上漲箭頭。\n更嚴重：:180 的 value= 與 :182 的 disabled= 同樣用 abs() → 大跌 12% 會讓 SOP 第②關被鎖死，理由是「追高」。\n\n其餘 3 條複驗：\n· monthly_loss_pct 確認全站無寫入點，但已誠實列入 _unevaluated（:246）→ v1 的「死碼」判定需修正\n· 融資餘額（:249-252）確認是全市場數字（cl_data['margin']），放在「個股禁止操作」清單裡語意錯位 ✅屬實",
+ f:"section_psy_checklist.py:180,182,239 · shared/signal_thresholds.py:1039",
+ x:"_surge_chk > SOP_BAN_SURGE_PCT（去 abs）；負向另立 SOP_BAN_CRASH_PCT 走「📉 近期急跌，先確認有無基本面利空」。"},
+{t:"FIX",s:"X",c:"金融",b:"D",n:"D2 的 I6 已被正確排除出分母 —— 真問題是標題寫「六大」",
+ e:"# section_d2_leading.py:197\n_n_scored = sum(1 for r in _li2 if r['signal'] in ('🟢','🟡','🔴'))\n→ I6（董監持股，恆為 ⚪ N/A「需要付費資料源」）已被正確排除。v1 的「計入分母」不成立。\n\n真問題有兩個：\n① shared/stock_buckets.py:213  headline = f\"六大先行指標 🟢{_g} 🟡{_y} 🔴{_r}\"\n   標題寫「六大」，三個數字加起來永遠 ≤5 → 使用者數不出第六個在哪\n② section_d2_leading.py:78 模組四標題「👔 模組四：籌碼深度前瞻」+ :27 的描述\n   「籌碼集中度與外資動向，主力積累往往出現在股價啟動之前」\n   → 描述的是一個根本沒有實作的東西（實際只有一張 ⚪ N/A 卡）",
+ f:"section_d2_leading.py:78,197 · shared/stock_buckets.py:213",
+ x:"標題改「先行指標」或明確標「6 項中 5 項可評分（I6 需付費資料源）」；模組四描述改為誠實說明未實作。"},
+{t:"FIX",s:"X",c:"資料",b:"G",n:"其餘 13 條修正（合併）",
+ e:"· bias_240 四個消費點：section_warroom.py:38 有用 SSOT（_BIAS240_RED = _SPECS_BY_KEY['bias_240'].red），其餘三處 inline\n· 熱力圖口徑 caption 位置合理（etf_render.py:811-815，選完區間後、看圖前），內容精準 → v1 批評不成立；真問題只有「面積≈權重」\n· etf_margin_simulator.py 不存在（v18.464 移除乾淨）\n· 資金潮汐「ETF 桶重複計算」不成立 → 應為「經濟意義重疊」（per-stock 加總，0050 與 2330 是不同 stock_id）\n· forward_test 1 年窗有 n_cohorts_no_bench note 揭露 → 「誠實但功能受限」\n· _ws() 不是「正確選擇不 cache」→ src/data/portfolio/ 全層 cache 0 命中，是整層無快取的副產品\n· section_kline_chart 的 total:0 不持久化（只寫 session；health_history_service 無寫入函式）→ 但會與 cron 真實列混在同一 list\n· risk_control 不是全空轉 → portfolio_exposure / check_portfolio_limits / RiskController 都有 caller\n· config.toml「logger 掩護」不成立 → 實機兩條警告都印出來；但 enableMarkdownUnsafeHTML 確實是無效鍵\n· generate_ai_comment 不打 LLM → app_ai_service.py:244 docstring「Rule-based，無 AI API」；但把決策樹叫「AI 分析」是 UX 誠實問題\n· Sahm 在 section_news_ai.py 不在 section_cross_ai.py；後者已於 v19.183 用 _num() 修好，反而是正面案例\n· _macro_session_reset 漏清 16-18 個、已清 10 個（清單裡的 futures_net 是死 pop）→ 未清數多於已清數\n· etf_tab_single 的 or 0.0 是 5 處不是 3 處（含 etf_render.py:455）",
+ f:"多檔",x:"以上皆已併入 §3 對應 Tab 章節。"},
+
+// ══ 橫向 ══
+{t:"G",s:"H",c:"資料",b:"B",n:"H-1「不知道」被寫成「中性/0/50/Pass」—— 本案最核心的病灶",
+ e:"你在 v19.192 已修掉散文層的「中性」逃生口，但數值層仍是系統性的。實測 14 個位置（見 MD §2 H-1 表）。\n最具代表性的三個：\n· scoring_helpers.py:160-162  無 MA → score += 15（權重最高的因子憑空給半分）\n· macro_state_locker.py:476-518  全缺值 → exposure = 60\n· financial_health_engine.py 5 處  全 N/A → 50 分、cl==0 → \"Pass (無短期債務)\"、ppe<=0 → \"Pass\"\n\n現成範本就在 repo 內：\n· section_cross_ai.py:58-69 的 _num()（v19.183）\n· tab_stock_grp.py:691-838 的 split_trend_rows 三態表\n· core_summary_service._safe() 失敗回例外物件本身而非 None（下游才能區分 ⬜未評估 / ❌取數失敗）",
+ f:"14 個位置跨 10 檔",
+ x:"統一改 .get(k) + is None → ⬜ 未評估。⚠️ 有測試阻力（見 N-9），financial_health 與 scoring_engine 屬政策決定。"},
+{t:"G",s:"H",c:"程式",b:"E",n:"H-3 Streamlit 兩個「以為不會執行、其實會執行」的陷阱",
+ e:"陷阱 A：st.tabs 是 eager render —— 切換 tab 只是前端 CSS，每次 rerun 執行全部 13 個葉節點 tab 的 Python。\n  使用者在「AI 問答」打一個字，總經/個股/ETF/診斷頁全部重跑。\n  _render_tab_isolated 只是 try/except，與延遲渲染完全無關，且覆蓋率 8/13。\n\n陷阱 B：st.expander(expanded=False) 只收合視覺 ——\n  · section_state.py:456-462  30 年 ^TWII + FRED 回測，每次 rerun 都跑\n  · etf_tab_portfolio.py:1737 _render_cloud_storage → list_portfolios()（無快取）\n  · health_inspector.py:1425  per-ETF MoneyDJ 迴圈（且它連 expander 都不在，是漏縮排）",
+ f:"app.py · section_state.py · etf_tab_portfolio.py · health_inspector.py",
+ x:"① 5 處補 _render_tab_isolated（30 分）\n② 導入 _lazy_tab 延遲載入器，先套最重的三頁（ETF 組合、資料診斷、選股網）\n③ 重運算一律 button/checkbox gate"},
+{t:"G",s:"H",c:"程式",b:"E",n:"H-4 macro/handlers.py 是隱形全域 store，「一鍵更新」只清不到四成",
+ e:"全站相異 session_state key ≥ 90（497 個存取點）。\n_macro_session_reset（handlers.py:21-25）清 11 個，其中 futures_net 是死 pop（全 repo 無寫入端）→ 實際有效 10 個。\n\n未清的 macro 相關 key 實測 16-18 個：\nmacro_info、m1b_m2_info、bias_info、macro_alerts、macro_state、li_retain_meta、intl_snap、ma_snap、\n_pivot_signals、_ndc_hist_cache、_ndc_li_cache、_fi_streak_cache、_s10_prev_pmi_value、\n_macro_ai_report、_macro_ai_ts、_macro_news_items（+ 邊界兩項）\n\n→ 未清數多於已清數。其中 macro_info / bias_info / macro_state 直接參與燈號與持股比例判定\n→ 使用者按了「🚀 一鍵更新」，畫面卻混合新舊資料，正是 handlers.py:88 自己警告的情形。\n\n另有三個 session 快取（_ndc_hist_cache / _ndc_li_cache / _fi_streak_cache）連「🆕 強制重抓」也清不掉。\n\n跨 Tab 最危險的三把：\n· cl_data     ← macro_helpers(L2)/section_short(L5)/health_inspector(L5) 都寫 → 12+ 點跨 4 大 Tab 群讀\n· li_latest   ← macro_alert(L1)/tab_macro(L5)/shared×2 → L1·L3·L5 三層同時寫同一把 key\n· macro_state ← section_traffic_light(L5) 寫 → shared/scoring_regime_gate(L0) 讀（L0 讀 L5 寫的值）",
+ f:"src/ui/tabs/macro/handlers.py:21-25",
+ x:"① key 清單抽 shared/MACRO_SESSION_KEYS frozenset + 加測試釘「所有 macro 域 key ∈ 清單」\n② 中期改 MacroSnapshot dataclass + 存取器（讀不到就 raise）\n⚠️ macro_alerts 不能補進 reset —— test_p0a_key_alerts_and_spinner.py:170 明文禁止。"},
+{t:"G",s:"M",c:"UI",b:"C",n:"H-5 名詞說明的基礎設施完備，接線量為零",
+ e:"你不需要造輪子，輪子已經造好了：\n\n符號                    定義                   production 呼叫\nTERM_EXPLAIN            ui_widgets.py:162+181  15 個名詞\nshow_term_help(term)    :233                   3 次，全在 app.py:188 同一行 → _TERM_HELP_LI 是死碼，畫面從未渲染\nexplain_box()           :197                   0（僅被 show_term_help 內部呼叫）\nbeginner_kpi()          :220                   2 次（皆在 section_overview.py）\nBREADTH_TERMS           :121                   4 個 NamedTuple（含 evidence 存 file:line 供覆核）\nkpi()                   :241                   50+ 次，但簽名無任何參數可掛 tooltip\nunified_indicator_card  macro_ui_components:317 10 次，只在 section_mid.py\n\nhelp= 覆蓋率：全站 91 處 / 控制項 79 個，但 st.metric 28 處只有 4 處帶 help → 14.3%\n零 help 的重災檔：section_financial_health(4/0)、chip_radar(3/0)、section_psy_checklist(3/0)、\n                  section_mid(0)、section_chips(0)、選股網 216 行(0)、tab_edu+macro_classroom(0)、tab_ai_chat(0)",
+ f:"src/ui/render/ui_widgets.py · macro_ui_components.py:317 · 全站 UI",
+ x:"投報率最高的一項：\n① 刪 app.py:188 死碼\n② kpi() 加 term='' 參數，內部查 TERM_EXPLAIN 產生 title= HTML 屬性 → 一次改動覆蓋 50+ 張卡\n③ TERM_EXPLAIN 擴到 ~60 詞（白話文案 §8 附錄已備妥）\n④ 28 處 st.metric 補 help=\n⑤ 加 CI 守衛：st.metric 無 help= 即失敗"},
+{t:"G",s:"M",c:"UI",b:"E",n:"H-6 RWD：全站 overflow-x 出現 0 次",
+ e:"st.columns( 126 處 / 37 檔：硬編 N=4 有 17 處、N=5 有 5 處、N=6 有 1 處（tab_stock.py:219 六欄均線列，全站最寬）\nmin-height 固定值 7 處\n\nN≥4 且含固定 min-height 的高風險組合：\n· macro/helpers.py         5 欄×104px、4 欄×150px\n· macro/section_warroom.py 5 欄×108px\n· grape_ladder.py          4 欄×80px\n\n自繪表格 14 處，13 個無 overflow-x（最寬 7 欄，health_inspector.py:684）\n唯一正確的是 core_summary_render.py:104 的 repeat(auto-fit, minmax(...)) ← 可直接當修法樣板\n\n寬度 API：use_container_width 132 次（已 deprecated）vs width='stretch' 32 次 → 舊 API 佔 80.5%，5 檔同檔混用\nst.dataframe 47/47、st.plotly_chart 41/41 零缺漏（很好），破口全在 15 個 st.button 沒帶寬度\nStreamlit pin >=1.36.0,<1.60.0；st.experimental_* / st.cache / .applymap 全站 0 次",
+ f:"src/ui/**（37 檔）",
+ x:"① grid 統一包 overflow-x:auto（抽 scrollable_grid_open() helper）\n② 4 個高風險檔改可折行版面或移除 min-height\n③ 全站機械替換 use_container_width → width='stretch' + 補 15 個 button"},
+{t:"G",s:"M",c:"UI",b:"E",n:"H-7 色彩 SSOT 只涵蓋紅綠燈，版面色 731 次裸寫",
+ e:"硬編 #xxxxxx 全站 925 次 / 57 檔（tab_stock 88、macro_ui_components 58、etf_render 42…）\n\nshared/colors.py 只有 8 個純量 hex（5 TRAFFIC + 3 MATERIAL）+ 3 個容器\n⚠️ COLORS_7（L49-52）自己夾帶 5 個未 SSOT 化的裸 hex —— 色票 SSOT 檔自己違反 §3.3\n\n· 「已有 SSOT 卻仍被裸寫」：精確 14 處 / 6 檔\n· 真正的大宗：16 個 GitHub 深色調色盤 731 次 = 81%，一次也沒進 colors.py\n  （#8b949e ~130、#c9d1d9、#0d1117 vs config.toml 的 #0e1117 差 1 碼並存…）\n\nborder-left banner 64 次，扣掉 helper 定義內 16 次 → consumer 端 inline 48 次\n而 border_left_banner() 實際只被呼叫 10 次 → SSOT 覆蓋率 17.2%\nalert_box() 與 traffic_light_card() production 呼叫 0 次（死 helper）\n⚠️ section_header 確實同名不同簽名：tab_sections.py:76（0 呼叫）vs macro_ui_components.py:197（9 次）",
+ f:"shared/colors.py · src/ui/**（57 檔）",
+ x:"補 BG/BG_ALT/TEXT/TEXT_DIM/BORDER 5 個常數對齊 config.toml；紅綠各 4 套收斂；\n48 處 banner 收斂到單一 helper（順手解 section_header 撞名地雷）。"},
+{t:"G",s:"M",c:"程式",b:"A",n:"H-8 三套 TTL 體系並存，45.5% 違規集中在一檔",
+ e:"UI 層 @st.cache_data 11 個：\n· 6 個走 shared/ttls.py ✅（grape_ladder ×3、health_inspector、tab_edu、section_357_valuation）\n· 5 個全在 etf_tab_smart.py 且全是 inline literal ❌\n\n_cached_price       ttl=1800  → TTL_30MIN\n_cached_peer_prices ttl=3600  → TTL_1HOUR\n_cached_holdings    ttl=3600  → TTL_1HOUR\n_cached_price_long  ttl=7200  → TTL_2HOUR\n_cached_zh_name     ttl=86400 → TTL_1DAY\n\n五個值在 shared/ttls.py 都有一模一樣的常數，該檔完全沒有 from shared.ttls import。\n\n第三套是 shared/app_cache.py 的 pickle 層（單位「小時」）：ttl_hours=4 / 0.5 / 預設 6 —— 三個數字都沒有 SSOT 常數。",
+ f:"src/ui/etf/etf_tab_smart.py:26,32,38,49,56",
+ x:"5 行 import 替換即歸零。零測試風險（tests/ grep _cached_price 零命中）。"},
+
+// ══ 測試 ══
+{t:"TEST",s:"H",c:"測試",b:"G",n:"四個「SSOT 守衛」的真實涵蓋率：全是 1–12 檔白名單，且只掃字串不掃數字",
+ e:"測試                          掃描範圍  偵測內容                                    抓得到 inline magic 嗎\ntest_consumed_ssot_guard.py    3 檔     4 條正則，只認 3400/80/50                   ❌ 三個目標檔都不在名單\ntest_app_no_magic_bare_ternary 1 檔     Expr(value=IfExp)（Streamlit magic display） ❌ 完全無數字邏輯\ntest_financial_health_ssot.py  5 檔     反 inline 只有 3 個字面子字串                ❌ 連同檔的 _score(...) return 20 都抓不到\ntest_ai_prompt_thresholds.py   12 檔    :296-299 if not isinstance(node.value, str): continue  ❌ 數字 Constant 一律不看\n\n問題不是它們說謊 —— test_ai_prompt_thresholds.py:48-53 的 docstring 已誠實揭露\n「_SITES 是白名單，不是全 repo 掃描…其餘 UI 顯示字串不在守衛範圍內」\n是名字讓人以為涵蓋率遠高於實際。",
+ f:"tests/（4 檔）",
+ x:"新增守衛：@st.cache_data(ttl=<數字字面量>) 即失敗、st.metric 無 help= 即失敗。\n既有守衛的白名單範圍在 docstring 已誠實，可保留但建議改名（如 test_*_whitelist_guard.py）。"},
+{t:"TEST",s:"H",c:"測試",b:"G",n:"CI 守衛強度遠低於「5520 tests passed」給人的印象",
+ e:"pr-check.yml:39   pytest -v（吃 pytest.ini 的 -m \"not slow\"）\nlint              ❌ :36 裝了 pyflakes 但沒有任何執行步驟\n                  ❌ 全庫無 ruff.toml / pyproject.toml / setup.cfg → 沒有設定檔就沒有 gate\n                  （STATE.md:217,2262 自承一致）\ncoverage 門檻      ❌ 未找到\nslow lane         :49 continue-on-error: true → 24 個 AppTest 永遠不阻擋 merge\n                  ⚠️ 且 slow lane :65 沒裝 pyflakes → test_no_undefined_names.py 在該 lane 靜默 skip\npytest.ini        addopts = --strict-markers -m \"not slow\"，無 -x / --maxfail / coverage\nconftest.py       161 行全讀完，無任何網路 mock（唯一 autouse 是 :107-118 _isolate_module_caches）\n                  → 架構上沒有東西阻止測試打外網（個別測試自律良好，441 處 patch）",
+ f:".github/workflows/pr-check.yml · pytest.ini · tests/conftest.py",
+ x:"① pytest.ini 加 --disable-socket --allow-unix-socket\n② CI 加 ruff step（先只跑 src/）\n③ slow lane 補裝 pyflakes 或移除該 skipif"},
+{t:"TEST",s:"M",c:"測試",b:"G",n:"test_scoring_engine.py:1572 的假綠燈仍在，且有 5 處空洞斷言",
+ e:"def test_i3_flat_qoq_yellow(self):\n    \"\"\"合約負債 QoQ -5~5% → 🟡 持平（line 794）\"\"\"\n    cl_vals = [100.0, 100.0, 100.0, 100.0, 103.0, 103.0, 103.0, 103.0]\n    bs_cf, qtr = _make_bs_cf(n=8, ..., cl_vals=[1000.0, 1020.0])   ← 工廠實收的是這組\n    ...\n    assert i3['signal'] in ('🟢', '🟡', '🔴')                      ← 空洞斷言\n\n三重缺陷：\n① cl_vals（:1572）賦值後從未被引用\n② 斷言 in ('🟢','🟡','🔴') 是空洞的 —— 🟢/🔴 也會過，docstring 宣稱的「→🟡 持平」從未被驗證\n③ 同款空洞斷言另見 :1523 / :1549 / :1558 / :1578\n\n→ 5520 綠燈裡至少有這 5 條是無效測試。",
+ f:"tests/test_scoring_engine.py:1523,1549,1558,1572,1578",
+ x:"刪死變數；斷言改 assert i3['signal'] == '🟡'。Batch G，成本極低。"},
+{t:"TEST",s:"H",c:"測試",b:"B",n:"動工前必讀：3 個修改會破多個測試，需先與你對齊",
+ e:"🔴 #14 stock_score regime 必填 + raise\n   · test_scoring_engine.py 約 12 個呼叫未傳 regime（改必填即 TypeError）\n   · :952-953 斷言 regime='unknown' 與 'neutral' 結果相等\n   · test_h1_scoring_regime_gate.py:203 docstring 明寫「釘住既有的靜默 fallback —— gate 存在的直接理由」\n   → 改引擎等於推翻「引擎刻意寬鬆、gate 才是防線」這個架構決策\n\n🔴 #13 _macro_session_reset 補 macro_alerts\n   · test_p0a_key_alerts_and_spinner.py:170-176\n     assert 'macro_alerts' not in _m.group(1), 'macro_alerts 被 on_click pop → 填充會讀到空,需改用其他傳遞方式'\n   → 其餘 16 個 key 可安全補，macro_alerts 需另尋傳遞機制\n\n🔴 #10 app.py 刪 dead code\n   · test_c3_layering_guard.py:468 的 _WHITELIST 有 (\"app.py\",\"src.data.stock.app_stock_fetchers\")\n   · test_rule4_whitelist_not_stale 是反向守衛：刪 import 卻沒刪白名單 = 紅燈\n   → 必須同 PR 改白名單 + CLAUDE.md §8.2.A",
+ f:"tests/test_scoring_engine.py · test_h1_scoring_regime_gate.py:203 · test_p0a_key_alerts_and_spinner.py:170 · test_c3_layering_guard.py:468",
+ x:"見 MD §4.1 完整 15 列判定表與 §7 裁示點。"},
+
+// ══ 全域 ══
+{t:"APP",s:"H",c:"資料",b:"A",n:"旌旗均值雙重造假 —— 且同專案已修過同一件事",
+ e:"# app.py:870\n_jqpct = _jq_top.get('avg', 50) if _jq_top else None\n# :919\nf'旌旗均值 {_jqpct:.0f}%'\n# :341 註解\n# ── 旌旗指數計算（站上 MA20/MA60/MA120/MA240 的家數比例）──\n\n而 section_overview.py:63-72 已把這件事判定為 §1 違憲並修好：\n  # 2. 說明是**捏造**（§1 反捏造）—— 全站無任何一行在算「站上均線家數比」；\n  #    jingqi_info['avg'] 實為「上漲佔比的 5 日均」(jingqi_calc.py:43)。\n  _ov_jqp = _ov_jq.get('avg', None) if _ov_jq else None\n\n→ app.py 是漏網的第二處：(a) 缺 key 憑空印 50%（正好是中性值，最不會被發現）(b) 沿用已被正名退役的錯誤定義。",
+ f:"app.py:341,870,919",
+ x:"get('avg')（無 default）+ None 時整段不印；:341 註解刪除或改指 ui_widgets.BREADTH_JINGQI。"},
+{t:"APP",s:"H",c:"資料",b:"A",n:"側欄綠燈與系統狀態零關聯",
+ e:"# app.py:217\nst.success('🟢 系統正常運作中')\n\n下方 :287-300 明明已有 FinMind/Gemini/Proxy 三顆真燈，:217 卻在其上方先蓋一句無條件的綠。\n三源全紅時使用者第一眼仍看到綠。",
+ f:"app.py:217",x:"刪除（下方三燈已足），或改依 _fm_tok and _gm_keys 判定。"},
+{t:"APP",s:"H",c:"UI",b:"C",n:"Sidebar 預設收合 + 6 個關鍵控制項全在裡面",
+ e:"# app.py:83  initial_sidebar_state='collapsed'\n\nSidebar 精確控制項清單（含 key）：\n:240  🚪 登出 button                 btn_oauth_logout_sb\n:247  Google Sheet ID text_input     sb_portfolio_sheet_id_input\n:263  🔐 用 Google 登入 link_button   (無 key)\n:311  🔍 測試連線 button              sb_conn_test\n:347  🔄 強制刷新數據 button          _sb_force_refresh\nsidebar_health.py:222  🤖 AI 解讀資料異常  btn_data_health_ai\n\n其中「登入」與「強制刷新」是首次使用必經路徑 → 新使用者開站看不到任何入口。\n首次進站畫面：頁首 → 核心總表（多數 ⬜ 未評估）→ 總經指南針 → Tab 列 → 置底條不存在。",
+ f:"app.py:83,203-359",
+ x:"initial_sidebar_state 改 'expanded'；核心總表下方加 onboarding banner。"},
+{t:"APP",s:"H",c:"UI",b:"A",n:"置底條在空狀態整條消失，而 ⬜ 分支就在下面幾行",
+ e:"# app.py:869\nif (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):\n...\n# :896  自己寫好的 ⬜ 路徑\n_gl_color, _gl_label = '#8b949e', '⬜ 總經未評估'\n\n:896 只有在 :869 為真時才有機會執行。首次進站兩者都空 → 整條 bar 消失，使用者無從得知「還沒算」。\n這正是 v19.171 🔴-1 想修但沒修完的那一半。",
+ f:"app.py:869,896",
+ x:"移除 if 判斷，falsy 時走 _alloc=None 分支印 ⬜ + 「請至 🌍 總經 按一鍵更新」。"},
+{t:"APP",s:"M",c:"UI",b:"D",n:"Sidebar 兩區塊順序倒錯 + 指路到已不存在的面板",
+ e:"兩塊 with st.sidebar: 在 :203 與 :346\n免責聲明在 :336（A 塊尾），但 :347「🔄 強制刷新」與 :356 資料健康在其下方渲染\nB 塊只有 13 行，沒有分開的技術理由\n\n# :213-214\n'### 🤖 AI 分析' + caption「頁面底部有 AI 整合報告面板」\n→ 檔案最底（:935）是免責聲明；AI 現在住在 tab_ai（🧬 AI 問答，:810）",
+ f:"app.py:203,213-215,336,346-359",
+ x:"兩塊合併，順序：標題/日期 → 🔄 強制刷新（加確認）→ 🔌 連線狀態 → 📊 資料健康 → 🔐 Google 帳號 → 免責（最末）。刪 AI 分析 section 與 ai_run。"},
+{t:"APP",s:"M",c:"資料",b:"E",n:"pickle cache 資安 + 半寫檔；測試連線全域關閉 TLS 警告",
+ e:"# shared/app_cache.py:31\nos.makedirs(_CACHE_DIR, exist_ok=True)      ← 無 mode=，/tmp 預設 0755\n# :63-67\nopen(path,'wb') ... except: pass           ← 留下截斷檔\n\n多租戶主機上任意使用者可讀寫，pickle.load 對可寫路徑 = RCE 面。\n寫到一半例外被吞 → 下次 _load_cache 反序列化失敗（同樣靜默）→ 每次都重抓，快取實質失效且無人知。\n\n# app.py:313-314\nimport urllib3 as _ul3\n_ul3.disable_warnings(...)                 ← process-wide 副作用",
+ f:"shared/app_cache.py:31,63-67 · app.py:313-314",
+ x:"makedirs(..., mode=0o700) + 寫 .tmp 後 os.replace() 原子改名 + except 加 print；\ndisable_warnings 改用 warnings.catch_warnings() context manager 局部抑制。"},
+{t:"APP",s:"P",c:"資料",b:"G",n:"✅ core_summary_render 是全站三態模型的最佳樣板",
+ e:"全檔零 I/O、零 session_state 讀取。\n_hex() 特別為 🟠 補色，註解寫明「不補這條會被退成灰 → 使用者分不出『轉守』和『還沒算』」。\ncore_summary_service._safe()（:81-92）失敗回例外物件本身而非 None → 下游才能區分 ⬜未評估 / ❌取數失敗。\n另 core_summary_render.py:104 的 repeat(auto-fit,minmax(...)) 是全站唯一 RWD 安全的 grid。\n另 _esc()（:50-58）已有 HTML 逸出正解（而 app.py:443 沒用）。",
+ f:"src/ui/render/core_summary_render.py · core_summary_service.py",
+ x:"建議把這套三態模型當全站樣板推廣。"},
+
+// ══ 總經 ══
+{t:"MACRO",s:"H",c:"資料",b:"B",n:"show_market_data 閘門在 §二主體之後，過期資料照樣出結論並流進 AI",
+ e:"# section_state.py:575  才 if not show_market_data: return\n而 L50-547 的拐點六大面向、綜合結論卡、30 年回測、熱錢面板全部已經印完。\n\n快取過期 45 分時：頁頂誠實顯示「⏳ 燈號等待中（已過期）」，\n下方卻印出完整的「🔴 3/5 群偏空 → 考慮減碼」結論卡，零過期標記。\n\n更糟：:349 st.session_state['_pivot_signals'] = list(pivot_signals) 在閘門之前\n→ section_news_ai.py:426 會把這份過期拐點餵給 Gemini。",
+ f:"src/ui/tabs/macro/section_state.py:349,575",
+ x:"閘門上移到 if _mkt_info:（L50）之前，或對拐點面板加過期浮水印。"},
+{t:"MACRO",s:"H",c:"金融",b:"F",n:"「黃金交叉」不是交叉 —— 水位測試冒充交叉事件",
+ e:"# section_state.py:157-165\n_m1b_y = _m1b2.get('m1b_yoy', 0)\n_m2_y  = _m1b2.get('m2_yoy', 0)\n_diff  = _m1b_y - _m2_y\nif _diff > 0:      … 黃金交叉 …\nelif _diff < -1:   … 死亡交叉 …\n\n三個缺陷：\n① 缺值捏 0（同檔 L155 才剛用 is_m1b_m2_proxy() 擋代理值，下一行就捏 0）\n② 只看當期，無 prev → M1B 持續高於 M2 的一兩年裡，每天都印一次「黃金交叉 → 長線起漲徵兆」\n③ 門檻不對稱（>0 vs <-1），-1 ≤ _diff ≤ 0 靜默無訊號\n\n且只缺 m2_yoy 時 _diff 必為正 → 憑空印「M2(0.0%) 黃金交叉」",
+ f:"src/ui/tabs/macro/section_state.py:157-165",
+ x:"加 prev 比較改真交叉判定 + 三態化。範本：同目錄 section_cross_ai.py:58-69 的 _num()（v19.183 已修同型缺陷）。\n⚠️ 測試風險 🟡：test_d2_macro_sections.py:254 的 assert seen >= 10。"},
+{t:"MACRO",s:"H",c:"程式",b:"F",n:"BUCKET_DANGER_SPECS 只被畫線函式消費，六個指標的判定式全 inline",
+ e:"指標      SSOT                    實際判定式                                     後果\nVIX       黃22/紅30               section_mid:401,406  >=30 / >=20                VIX=21 → 五桶🟢、否決權卡🟡，同頁互打\nPMI       黃50/紅46               section_mid:301      < 48                       48 不在 SSOT 任何一條\nbias_240  黃10/紅20               section_mid:451 >=15；section_long:262,307 ±20；  四種門檻\n                                  section_cross_ai:269,271 >=15/<=-5              （section_warroom:38 ✅ 有用 SSOT）\nfut_net   黃-10000/紅-20000       section_chips:263,268；section_state:192,195,198  五種門檻\nCPI       黃3.5/紅4.0             section_cross_ai:212-214  3.0/4.0\nadl       黃50/紅35               section_warroom:149  inline < 35                ad_ratio∈[35,40] 時 §五判🔴、五桶判🟡",
+ f:"shared/macro_buckets.py + macro/ 6 檔",
+ x:"把 BUCKET_DANGER_SPECS 從「只畫線」升級為「判定式唯一來源」，優先修 VIX 與 bias_240 兩處同頁互打。\n⚠️ 會改變燈號行為，需你裁示（§7 決策點 5）。"},
+{t:"MACRO",s:"H",c:"資料",b:"B",n:"6 處 except: pass 包住 5 張警示卡 + 快取降級旗標算了沒傳",
+ e:"# section_chips.py 六處\n:372（provenance chip）/ :409（期貨大空警戒）/ :431（軋空動能極強）\n:447（外資投信同賣）/ :462（PCR 恐慌區）/ :487（成交量急放）\n→ 最強烈的五張紅色警示卡，全部可以無聲消失。使用者讀到的是「今天沒事」。\n\n# tab_macro.py:556-563 算出 _inst_is_cached / _margin_is_cached\n# :626 卻是 render_section_chips(inst, margin, cd)   ← 兩個旗標沒傳進去\n→ 全 repo 零其他 reference\n# li_retain_meta 在 section_chips.py 出現 0 次（僅 data_coverage.py:587 消費）\n→ 先行指標連續 N 輪抓失敗時，🧩 籌碼桶照常渲染舊表，降級標記只在另一個分頁看得到",
+ f:"section_chips.py（6 處）· tab_macro.py:556-563,626 · section_long.py（3 處）",
+ x:"except 改「讓失敗本身變成一條可見警示」：_warnings.append(('⬜','警示計算失敗', str(e)))；\nrender_section_chips 加 inst_is_cached / margin_is_cached 參數，li_retain_meta 顯示 📦 chip。"},
+{t:"MACRO",s:"H",c:"資料",b:"B",n:"畫面寫死「台股與美股相關性 ~0.6」，同檔上下自相矛盾",
+ e:"# section_state.py:513\n'…但台股與美股相關性 ~0.6，需搭配 NDC 景氣燈號雙重確認。'\n→ 全 repo 無任何一行計算此值\n\n# 而同檔 L366-368 才剛自訂紀律\n「ρ̄ = 0.7 是量級假設而非本專案實測，故不印到畫面；§3.3 反捏造」",
+ f:"src/ui/tabs/macro/section_state.py:366-368,513",x:"刪除該句，或改標「文獻量級假設，非本系統實測」。"},
+{t:"MACRO",s:"M",c:"程式",b:"E",n:"五桶被重算 5 次 + 30 年回測 expander 無條件執行 + 三個 session 快取永不失效",
+ e:"五桶：section_summary_bar:29 ×1 + helpers:413 被 section_long:213、:337、section_short:67、section_news_ai:124 各呼叫一次 = 5 次\n每次都重跑 16 條 spec 取值 + _intl_close DataFrame iloc[-1]\n\n# section_state.py:456-462\nwith st.expander('📊 歷史回測：美債倒掛翻正後 ^TWII 6/12/18M 表現', expanded=False):\n    _bt = _bt_twii(_fred_key_tw_bt)      ← expander body 不論展不展開都會執行\n→ 每次 rerun 打 FRED T10Y2Y + 30 年 ^TWII\n\n# section_state.py:227-238\n_ndc_hist_cache / _ndc_li_cache / _fi_streak_cache 三個 key 不在 handlers.py:21-23 的 pop 清單內\n→ 連「🆕 強制重抓（清快取）」也清不掉，只要 session 不重啟就永遠是第一次抓到的值",
+ f:"macro/helpers.py:413 · section_state.py:227-238,456-462",
+ x:"五桶由 caller 算一次注入；回測加 button gate 或 @st.cache_data(ttl=TTL_1DAY)；三個 cache key 補進 reset 清單。"},
+{t:"MACRO",s:"H",c:"UI",b:"C",n:"macro 15 檔 help= 只有 4 個，最密集的兩檔是 0",
+ e:"macro 15 檔全部 help= 只有 4 個：helpers×1、section_long×1、section_news_ai×1、section_state×1\n\nsection_mid.py = 0、section_chips.py = 0\n→ 全頁最密集的「總經拼圖 5 卡 + 三環 7 徽章」與「籌碼 8 欄先行指標表 + 5 張警示卡 + 計分器」一個 tooltip 都沒有\n\n根因：這兩檔全走 st.markdown(unsafe_allow_html=True) 手刻卡片，無處可掛 help=\n且 section_chips.py:378 的欄位說明還被搬到 Tab 5 策略手冊 → 新手得離開本頁才看得懂眼前的表",
+ f:"macro/section_mid.py · section_chips.py",
+ x:"接上 unified_indicator_card（macro_ui_components.py:317 已存在，目前只服務 section_mid 一部分）；\n欄位說明搬回本頁改為欄名 tooltip。21 個總經名詞白話文見 MD §8。"},
+{t:"MACRO",s:"M",c:"金融",b:"F",n:"籌碼桶恆紅 + 旌旗雙重計數 + 計分器結構性偏空",
+ e:"# shared/macro_buckets.py:280-283  margin spec 的 note 自己承認\n「絕對門檻已被市值成長淹沒—實測 5,148 億早已穿透兩線，燈號恆紅、鑑別力歸零」\n而 aggregate_level 取最危險者 → 🧩 籌碼桶永久紅燈\n\n# :293 jingqi 註冊在 chips 桶；:157 health = jqavg × 0.6 + score × 0.4，而 health(:199) 註冊在 long 桶\n→ 同一個旌旗指數同時決定籌碼桶燈號、又佔長期桶健康分 60% 權重\n→ 廣度一弱兩桶同時轉紅，使用者讀成「兩份獨立證據」\n\n# section_chips.py:774-846 計分器\n_fnet(-2/-1/+1) + _pcr(±1) + _opt(±1) + _top5(±1) + _leek(±1) → 域 [-6,+5]\n切點卻對稱：≤-3 強烈偏空 / >2 強烈偏多\n→「強烈偏多」只有 {3,4,5} 三格、「強烈偏空」有 {-6..-3} 四格",
+ f:"shared/macro_buckets.py:157,199,280-293 · section_chips.py:774-846",
+ x:"融資改「相對自身區間的百分位」（shared/relative_thresholds.margin_leverage_ratio 已寫好但未接線）；\njingqi 二選一避免雙重計數；切點依實際分數域重新校準。⚠️ 會改變燈號，需裁示。"},
+{t:"MACRO",s:"M",c:"金融",b:"D",n:"三句對新手最危險的話",
+ e:"① section_mid.py:637（SSS 級全面總攻）\n   '…天時地利人和。勇敢追擊強勢突破股，重壓半導體主流。'\n   → 「重壓」是集中度指令，同卡卻只導向持股比例，未談個股集中度上限\n\n② section_mid.py:204\n   st.caption('💡 與 CPI 配對：兩者同步月降 → ⭐ CPI×Fed 雙頂回落（多頭最佳買點）')\n   → 該判定僅為兩點差分（同檔 :147-149 自承「與 Mann-Kendall 無關」），樣本 n=2，卻用絕對級措辭\n   → 2001/2007 兩次衰退起點都會觸發\n\n③ section_chips.py:461（PCR>150）\n   '大量買保護代表市場恐慌，通常是逆向布局訊號'\n   → 逆向交易對新手是最高難度策略，且該分支被 :462 except: pass 包住可能無聲消失",
+ f:"section_mid.py:204,637 · section_chips.py:461",
+ x:"三處都加時間窗限定與但書；具名個股建議移除或改為類別描述。"},
+
+// ══ 熱力圖 / 資金潮汐 ══
+{t:"HEAT",s:"H",c:"資料",b:"A",n:"「面積≈權重」是假話",
+ e:"# src/ui/render/etf_render.py:786\n'…（紅漲綠跌、面積≈權重），一眼看出資金正流向哪個產業。'\n\n# 實際 shared/sector_heatmap.py:173-178\nnode_area() 回 max(abs(ret_pct), floor)     ← 面積 = 漲跌幅絕對值，與市值權重無關\n\n→ 「跌 5% 的小類股」方塊比「漲 1% 的半導體」大，恰好誤導成「資金流向」。",
+ f:"src/ui/render/etf_render.py:786 · shared/sector_heatmap.py:173",
+ x:"改寫成「面積＝漲跌幅絕對值（越大代表變動越劇烈），不代表市值權重」。2 分鐘。"},
+{t:"HEAT",s:"P",c:"UI",b:"G",n:"✅ 口徑說明位置其實合理 —— v1 批評不成立",
+ e:"etf_render.py:811-815 的口徑 caption 位置合理（選完區間後、看圖前），\n且內容精準（交易日 vs 日曆日、非即時報價、adjusted close）。\n這是本範圍寫得最好的揭露文案。",
+ f:"src/ui/render/etf_render.py:811-815",x:"維持現狀。只需修「面積≈權重」那句。"},
+{t:"FLOW",s:"H",c:"程式",b:"E",n:"全鏈路零 cache，每次 rerun N+1 次 Sheets 全表讀",
+ e:"# tab_sector_flow.py:47  無條件呼叫（st.tabs 所有 tab body 每次 rerun 都執行）\nget_sector_flow_view(...)\n  ↓ sector_flow_service.py:48-49\nfor _name in (_gsp.list_stock_watchlists(sheet_id=...) or []):\n    out.extend(_gsp.load_stock_watchlist(_name, sheet_id=...) or [])\n\nlist_stock_watchlists（gsheet_portfolio.py:381）與 load_stock_watchlist（:400）各自呼叫一次 _all_records()\n而 _all_records（:241-246）是裸 get_all_records()，無 @st.cache_data\n→ 5 個 watchlist = 6 次同一張表的完整網路讀取，每次全站 rerun 都重跑",
+ f:"tab_sector_flow.py:47 · sector_flow_service.py:48 · gsheet_portfolio.py:241",
+ x:"_all_records 加 @st.cache_data(ttl=TTL_1DAY)，或 _collect_stock_watchlist_tickers 改單次全表讀 + 本地過濾。"},
+{t:"FLOW",s:"H",c:"金融",b:"F",n:"未做規模正規化 + size 與 X 軸共線 + abs 讓流入流出同大小",
+ e:"# src/compute/sector_flow.py:245-253\nsize_yi = float(abs(vals.sum()))        ← 流入 100 億與流出 100 億泡泡一樣大\nsize 用 WINDOW_SIZE=20、x_yi 用 WINDOW_X=5，vals[-20:] 完整包含 vals[-5:]  ← 結構性共線\n無規模正規化（絕對億元，未除市值/成分股數）  ← 半導體泡泡恆最大\n\n→ 圖表反映的是板塊市值，不是資金輪動。\n\n⚠️ 「ETF 桶與半導體重複計算」不成立 —— compute_sector_daily_net 是 per-stock 加總，\n   0050 與 2330 是不同 stock_id，法人淨額不會被算兩次。正確描述是「經濟意義重疊」。",
+ f:"src/compute/sector_flow.py:245-253",
+ x:"加「按市值正規化」toggle（兩種視角都保留）；size 改用 20日−5日（去共線）；流入/流出用顏色區分；\nETF 桶加註「與個股板塊有經濟意義重疊，勿加總」。"},
+
+// ══ 個股 ══
+{t:"STOCK",s:"H",c:"程式",b:"F",n:"Compute 層 4 個 SSOT 是 production dead，UI 另開 2–4 套平行實作",
+ e:"已全域窮舉（src/ui/** + src/services/** 共 109 個 .py 逐檔 grep）：\n\n函式                              production caller   UI 平行實作與門檻差異\ncheck_bollinger_squeeze  :1250    0                  vcp_bollinger:42,109 用 ACTION_RATIO、同頁 :103 又用 WARN(0.7)\n                                                     → 同一張卡兩個門檻；另 health_score:174、picker:1091(×1.3)\ncheck_contract_liability_surge :1231  0              SSOT 版看 YoY，UI 版（financial_leading:35 / dragon_alert:44）\n                                                     只看當期佔股本比（health_score:452 自承「YoY 未計」）\ncheck_fake_breakout      :1283    0                  production 完全不存在假突破濾網，\n                                                     v5_modules.py:293 註解自承是 \"mirror … pattern\"\ncheck_relative_strength  :1306    0                  UI 走 calc_rs_score + rs_slope，完全不同演算法\ncalculate_position_size  :1353    1（when_buy_sell:289） ✅ v19.146 已接線\n\n⚠️ risk_control 不是全空轉：portfolio_exposure / check_portfolio_limits / RiskController 都有 caller\n   只有 atr_stop_price / stop_loss_trigger / trailing_stop_trigger 無外部 caller\n   但個股頁完全不碰 risk_control → 全站兩套停損引擎並存",
+ f:"src/compute/scoring/scoring_engine.py:1231,1250,1283,1306 · 4 個 UI 檔",
+ x:"接回 compute 層 SSOT。⚠️ 會改變評分結果，需先跑 golden test 對照 + 你裁示（§7 決策點 10）。"},
+{t:"STOCK",s:"H",c:"程式",b:"A",n:"dragon_alert 逐字重寫 evaluate_leading_gates，且 OR vs AND 打架",
+ e:"# section_dragon_alert.py:45-56\nif cl/capital*100 >= 50: _is_dragon = True\nif cx/capital*100 >= 80: _is_dragon = True      ← OR（任一達標就掛 🏆 龍頭預警）\n\n# section_financial_leading.py:185\nif _cl_lead and _cx_lead: '✅ 龍多確認'          ← AND\n\n同一頁、同一組門檻、同一份資料：\n上方掛金色「🏆 龍頭預警區 — 極稀有高成長標的」\n下方寫「⚠️ 部分訊號：合約負債達門檻，資本支出未達」\n\ndragon_alert 明明只要 from .section_financial_leading import evaluate_leading_gates 就好，\n卻自己重寫了 _ratio_to_equity_pct 的邏輯（且 :57-58 還包一個 except: pass）。",
+ f:"section_dragon_alert.py:45-58 · section_financial_leading.py:35,185",
+ x:"_gates = evaluate_leading_gates(cl2, _cx_for_dragon, capital)；徽章條件統一為 AND（「極稀有」的字面就該是 AND）。\n測試風險 🟢（section_dragon_alert 本身未找到測試）。"},
+{t:"STOCK",s:"H",c:"UI",b:"D",n:"停損有 7 個數字散在 4 個檔，其中兩個相差 3.5 倍",
+ e:"畫面位置        行號                      數字                依據\n停利停損卡      tab_stock.py:664          現價 × 0.92         STOP_LOSS_DEFAULT_PCT=8.0\n絕對停損線      tab_stock.py:818,831      紅K低點 × 0.995     大量紅K\n硬停損          when_buy_sell.py:260,265  現價 × 0.93         HARD_STOP_LOSS_PCT=7.0\n月線停損        when_buy_sell.py:261,266  MA20 × 0.99         均線\nATR 真停損      when_buy_sell.py:298,309  calc_atr_stop       ATR14 × 1.5\nSOP 停損價      psy_checklist.py:168      現價 × 0.895        7% 估算（恆走此路徑）\nv4 防守價       health_score.py:306,313   MA20 / 爆量紅K低點  V4 引擎\n\n對低波動股（ATR%≈2%），when_buy_sell 的 1.5×ATR 與 psy_checklist 的 1.5×(price×7%) 差距達 3.5 倍。",
+ f:"tab_stock.py · when_buy_sell.py · psy_checklist.py · health_score.py",
+ x:"頁頂做一張「停損總覽」表，一次列出 7 個候選 + 各自距現價 %，並標「系統建議採用：ATR 真停損」；其餘卡片改為「詳見停損總覽」。"},
+{t:"STOCK",s:"H",c:"資料",b:"B",n:"psy_checklist 的 ATR 停損 100% 走 7% 估算，畫面卻不標估算",
+ e:"# section_psy_checklist.py:167-168\n_atr_eff = _atr2_val if _atr2_val is not None else _price_chk * 0.07\n_stop_chk = round(_price_chk - 1.5 * _atr_eff, 2)\n\n# caller tab_stock.py:875 明文傳 _atr2_val=None\n# 且 :869-871 註解自陳「_atr2_val 在本函式從未被賦值」\n→ 恆走估算路徑\n\n畫面 :185 只印「③ 確認停損價（跌破 X 元無條件出場）」，沒有任何「估算」字樣。\n1.5 是 ATR_STOP_MULTIPLIER（signal_thresholds.py:575）的 inline 複本；0.07 全站唯一。",
+ f:"section_psy_checklist.py:167-168 · tab_stock.py:875",
+ x:"caller 改傳 calc_atr_stop(df2, price)['atr']（同頁 when_buy_sell.py:282 已經算過一次），拿不到就顯示「⬜ 停損距離未評估」。"},
+{t:"STOCK",s:"H",c:"UI",b:"C",n:"色彩語意反向 3 處，且同檔混用兩套色彩語言",
+ e:"① section_chips_20d.py:49-50\n   TRAFFIC_RED(#ef4444) 給「吸籌」(利多)、#da3633 給「倒貨」(利空) —— 兩個都紅但語意相反\n   而 st.metric 的 delta_color 又是 normal/inverse（綠/紅）\n   → 同一張卡上「集中度 +8.2%」左邊紅框、右邊綠 delta\n\n② section_health_score.py:371\n   外資「強勢」= #da3633 紅、「渙散」= #2ea043 綠     ← 台股慣例\n   而同檔 :199 用 TRAFFIC_GREEN if health2 >= 80       ← 西方慣例（綠＝好）\n   → 同一個檔案混用兩套色彩語言\n\n③ section_vcp_bollinger.py:88\n   signal_box('🔴等待帶量突破頸線', 'green', '確認突破才進場')  ← emoji 紅、box 綠、文字中性",
+ f:"section_chips_20d.py:49 · section_health_score.py:199,371 · section_vcp_bollinger.py:88",
+ x:"shared/colors.py 新增 TW_UP/TW_DOWN（台股慣例，K線/籌碼流向用）與 SEMANTIC_GOOD/SEMANTIC_BAD（燈號/評分用），強制分離、禁止混用。"},
+{t:"STOCK",s:"H",c:"程式",b:"E",n:"零計算層快取 + _precompute_xsec 算完下游又重算 3 次",
+ e:"@st.cache_data 全 tab 只有 1 個（section_357_valuation.py:39，且只 cache TWSE PB）\n\n# section_when_buy_sell.py:181-187 的 st.number_input（總資金）沒有 on_change\n每次輸入完整 rerun render_tab_stock()：\n  compute_std_bands(252) + weekly_macd_hist（全歷史合成週K）+ analyze_20d_chips_from_df\n  + make_subplots 180 根 K 線 + 9 條 add_hline + _precompute_xsec 全部 + 13 個 section 全部重畫\n  （含 3 張 plotly 河流圖，其中 PE 河流還跑一次 merge_asof）\n\n_xsec key          算在              下游重算                                  實際次數\ncon20/cty20/sig20  tab_stock:105     chips_20d:40 + when_buy_sell:146          3×\nrs_val             :114              tab_stock:788 + when_buy_sell:207         2-3×\nli_results         :124              d2_leading:47                             2×\ncapital            :119              三個 section 皆走傳參 ✅                   1×（正確示範）",
+ f:"tab_stock.py:105-129 · when_buy_sell.py:146,181,207 · chips_20d.py:40 · d2_leading.py:47",
+ x:"① 四個純函式加 @st.cache_data(ttl=TTL_1HOUR)\n② 三處重算改傳參（capital 已示範怎麼做對）"},
+{t:"STOCK",s:"H",c:"金融",b:"F",n:"健康度 6 因子共線：六個因子有五個在量同一件事",
+ e:"# scoring_helpers.py:122-274\n趨勢 30 / RSI 20 / 量比 15 / IBS 10 / KD 15 / 布林 10\n\n· RSI(20) + KD(15) = 35%：兩者都是「收盤價在近期區間的相對位置」的變形，長期相關係數 >0.8\n· 再加布林 10 分：:258-263 的 near_upper / price > ma 判定的其實也是價格相對位置\n· 趨勢 30% 也是價格 vs 均線\n→ 真正的「位置類」因子合計 45%，只有量比(15%) 是獨立維度",
+ f:"src/compute/scoring/scoring_helpers.py:122-274",
+ x:"改 3 大類各自封頂：趨勢 40 / 動能（RSI∪KD∪布林，取三者最差而非相加）30 / 量能 30。\n⚠️ 會改變評分，需裁示。"},
+{t:"STOCK",s:"H",c:"金融",b:"F",n:"合約負債分母用股本 —— 財務上是錯的分母",
+ e:"section_financial_leading.py:23-32 / section_dragon_alert.py:47 / tab_stock.py:1806-1807 三處都是 / capital\n\n合約負債是「營運規模」的函數（客戶預付款 ∝ 訂單量 ∝ 營收），股本是「歷史籌資」的函數。\n· 台積電股本 2,593 億但年營收 2.9 兆 → 合約負債/股本 天生就低\n· 股本 5 億、營收 20 億的小廠只要 2.5 億預收就「達標 50%」\n→ 同門檻套在不同股本結構的公司上完全不可比\n\n且 dragon_alert:38-40 註解已察覺分母語意變了（capex 從 PP&E 存量改季流量），卻沿用同一個 80% 門檻\n→ 季 CapEx/股本 ≥80% 對台積電以外幾乎不可能觸發\n且 :40 _cx_for_dragon = capex if (capex > 0) else cx2\n→ 抓不到 capex 就 fallback PP&E 存量套同一個 80% → 資料越差、結論越樂觀",
+ f:"section_financial_leading.py:23-32 · section_dragon_alert.py:38-47 · tab_stock.py:1806",
+ x:"分母改「近四季營收」（訂單能見度＝幾個月的營收）；CapEx 門檻依季流量重新校準。⚠️ 會改變觸發率，需裁示。"},
+{t:"STOCK",s:"H",c:"金融",b:"D",n:"「4 訊號共振」名不副實，可出現「共振 3/4」配「今日不操作」",
+ e:"# section_op_recommendation.py:47-53\n_sig_count = sum([\n    1 if health2 >= HEALTH_GRADE_A_MIN else 0,\n    1 if _reg_op == 'bull' else 0,\n    1 if (vcp2 and vcp2.get('contracting')) else 0,\n    1 if (avg_div2 > 0 and price2 <= round(avg_div2 / YIELD_MID_DEC, 1)) else 0,\n])\n\n· 簡單加總無權重：「大盤多頭」（系統性風險）與「VCP 收縮」（型態訊號）同權重\n· rsi2 收了參數（:25）只在 :93 塞進 _comment_data，不進 _sig_count\n· :54-59 空頭分支覆寫 _op_a/_op_b，但 :70 的標題照印 3/4\n  → 同時出現「共振訊號 3/4」和「大盤空頭格局，無論評分多高，先控制風險」\n· 估值那條用 YIELD_MID_DEC（5% 合理價）當「便宜」，與 section_357_valuation 的 YIELD_HIGH_DEC（7%）不同標準",
+ f:"section_op_recommendation.py:25,47-70,93",
+ x:"加權重或改名為「4 項檢查」；rsi2 接上或刪參數；否決時同步隱藏 _sig_count；估值標準統一。"},
+{t:"STOCK",s:"H",c:"金融",b:"F",n:"★ 策略核心價值未實作：月營收 × 合約負債零交叉判讀",
+ e:"全 tab grep 無任何地方同時比對 rev2 的 YoY 與 cl2 的方向。\n\n這是最有價值的一組交叉訊號：\n· 合約負債增 + 月營收減 ＝ 訂單在但還沒認列 → 領先轉強\n· 合約負債減 + 月營收增 ＝ 吃老本 → 領先轉弱\n\n資料兩邊都已在手（tab_stock.py:265,289），只差一個 4 象限判定。ROI 極高。",
+ f:"（新 section 檔）",x:"新功能，需先做 CLAUDE.md §7 資料四問對齊（endpoint/單位 → 發布延遲 → 邊界 → 數學式）。"},
+{t:"STOCK",s:"P",c:"金融",b:"G",n:"✅ compute_stop_levels 的誠實化是全報告最佳實踐",
+ e:"# tab_stock.py:648-677\n明講「固定方案盈虧比 T1 0.63x / T2 1.25x，與個股無關」\n拿掉「≥1.5 較理想」的假門檻\n:846 補「現價已跌破紅K低點 → 分母為負」邊界\n\n另 v19.185 D1 已修 4 項（psy_checklist 幽靈 key / 融資 or 0 → 三態 / regime 改走 get_macro_regime() / 雙基期 → 單一 _surge_pct）\nsection_health_score:39-56 已修「單日外資廣播成整欄」、:267-277 移除 1,000,000 張假分母、:241-253 移除 'vix': 15 寫死",
+ f:"tab_stock.py:648-677 · section_psy_checklist.py · section_health_score.py",
+ x:"建議把這個文案風格推廣到其他區塊。"},
+
+// ══ 個股組合 ══
+{t:"GRP",s:"H",c:"資料",b:"B",n:"抓取失敗灌 0，一行擊穿整套三態架構",
+ e:"# section_batch_fetcher.py:263-270（全檔唯一無 log 的 except）\nexcept Exception:\n    results_t3.append({\n        'stock_id': sid4, '名稱': '失敗', '現價': '-',\n        '健康度': 0, ...\n        '_health': 0, '_val': '-', '_trend': '-',\n\n關鍵在於寫 literal 0 而非 None：\n· scorability.summarize_candidates:159  health = _as_float(r.get(\"健康度\")) → 0.0 非 None\n  → 不進 health_unknown_ids，直接進 eliminated\n· section_portfolio_summary.py:93-96 的 _health_vals 也收進 0 → 拉低平均\n· :318 float(_health_raw) → 總表印出「健康度 0」\n\n→ 整套 B5-b 三態架構被這一行擊穿。",
+ f:"src/ui/tabs/stock_grp_sections/section_batch_fetcher.py:263-270",
+ x:"該 dict 的 健康度/_health 改 None，並補 print(f'[section_batch_fetcher] {sid4} 整檔失敗: {type(_e).__name__}: {_e}')。"},
+{t:"GRP",s:"H",c:"UI",b:"A",n:"AI 投組報告顯示邏輯有真 bug：等 30 秒後一片空白",
+ e:"# section_ai_portfolio.py:55\n_t3ai_cached = st.session_state.get(_t3ai_key, '')     ← 在按鈕之前讀\n# :63-75  按下後才寫回 session_state\n# :76\nif _t3ai_cached:                                       ← 此時仍是 ''  → 不顯示\n# :78\nelif not _t3ai_btn:                                    ← 為 False    → 連提示都沒有\n\n使用者等 30 秒後畫面一片空白，要再互動一次才看到報告。\n且 :74 gemini_call_fn(...) 無 try/except → 配額用罄整頁 traceback。",
+ f:"src/ui/tabs/stock_grp_sections/section_ai_portfolio.py:55,74-78",
+ x:":75 後補 _t3ai_cached = _t3ai_result 或直接 st.rerun()；gemini_call_fn 包 try/except → st.error。"},
+{t:"GRP",s:"H",c:"資料",b:"B",n:"三處缺料偽裝成「通過」／「綠燈」／「近 4 季」",
+ e:"① tab_stock_picker.py:971-977  _check_book_value 只守分子不守 _liab\n   _ca = fs.get('流動資產(千)') or 0\n   _liab = fs.get('總負債(千)') or 0        ← 缺值變 0\n   if _ca <= 0: return '❓ N/A'              ← 只守 _ca\n   → FinMind 缺「總負債」→ 淨流動 = 流動資產 → 必回 ✅ 並讓 s1_pass_cnt +1\n\n② section_portfolio_summary.py:219-221\n   _es3 = pd.to_numeric(_qtr3[_ec3].tail(4), errors='coerce').dropna()\n   if len(_es3) >= 1: _eps3 = round(float(_es3.sum()), 2)\n   而欄名 :322 標 'EPS(4Q)'   ← 只有 1 季也叫「近 4 季 EPS」\n\n③ section_financial_health.py:347-349\n   _ccc_f = str(_oper_f.get('Cash_Gap_Days', '0'))\n   _ccc_num_f = float(''.join(c for c in _ccc_f if c in '0123456789.-') or '0')\n   _ccc_color_f = TRAFFIC_GREEN if _ccc_num_f <= 0 else ...\n   → 'N/A' 過濾後為空 → or '0' → 0 <= 0 → 假綠燈",
+ f:"tab_stock_picker.py:971 · section_portfolio_summary.py:219 · section_financial_health.py:347",
+ x:"① _liab 對稱守衛 ② len==4 才給值，否則標「N Q 加總」 ③ 缺值 _ccc_num_f = None，色改 #8b949e、值印 N/A"},
+{t:"GRP",s:"M",c:"程式",b:"E",n:"UI 層 4 處裸 requests.get，最壞 120 次未受管控併發請求",
+ e:"# tab_stock_picker.py 四處直呼 FinMind API\n:783   _fetch_quarterly_is\n:999   _check_contract_liab_yoy\n:1166  _check_institutional_buying\n:1220  _check_major_holders\n\n全部 timeout=15、無 proxy_helper、無退避、無快取\n配 :455 max_workers=5、:423-425 上限 30 檔 → 最壞 120 次未受管控請求併發 5\n\n且四處皆 from src.data.core.data_loader import _fm_raw_headers（private symbol，V-PICKER-PRIV-1）\n而 test_c3_layering_guard.py:506 把它登記在 EX-PASSTHRU-1 白名單放行（見 N-14）",
+ f:"src/ui/tabs/tab_stock_picker.py:783,999,1166,1220",
+ x:"4 支下沉 src/data/stock/picker_fetcher.py，走 proxy_helper.fetch_url + @st.cache_data(ttl=TTL_6HOUR)；\n_fm_raw_headers 轉 public 或由 L1 內部使用。順帶結案 V-PICKER-PRIV-1。"},
+{t:"GRP",s:"M",c:"程式",b:"E",n:"_dates[4] 位置索引當去年同季 —— L2 已修、L5 沒跟上",
+ e:"# tab_stock_picker.py:814\n_lat, _yoy = qis[_dates[0]], qis[_dates[4]]\n# :1025\n_yoy = _quarters[_dates[4]]\n\n# 而 L2 已明文修掉（shortage_screener.py:17）\n「不用 list 位置 —— 季序列有洞時位置 4 ≠ 去年同季（B6-b 2026-08 修）」\n\n橫向重複實作計數（grep 合約負債|負債比率|流動資產.*總負債）：\ntab_stock_picker.py 23 處、data_loader.py 15、shortage_screener.py 14、fundamental_prescreen.py 4",
+ f:"tab_stock_picker.py:814,1025 · shortage_screener.py:17",
+ x:"_dates[4] 改按 (year-1, same_quarter) 查表，與 shortage_screener 共用 helper。"},
+{t:"GRP",s:"P",c:"程式",b:"G",n:"✅ regime gate 與 provenance 反推是全 repo 兩個最好的實作",
+ e:"# section_batch_fetcher.py:86,251,284-285\n_regime_dec = resolve_scoring_regime(get_macro_regime())\nif df4 is not None and not df4.empty and _regime_dec.usable:\n    sf = score_single_stock(df4, sid4, _n4_use, regime=_regime_dec.regime)\nrisk_alerts_t3.append(_regime_dec.notice())\n→ 接線完整正確，舊的 .get('regime') or 'neutral' 已完全清除\n\n# section_portfolio_summary.py:362-392 _batch_scoring_regime\n從 score_single_stock 回傳的 regime 戳記反推「這批分數實際用過哪組權重」\n:533-538 比對當下 regime 不同時 st.warning 提醒重跑\n→ provenance 應用的教科書案例\n\n# tab_stock_grp.py:691-838 _render_fin_trend_table\nsplit_trend_rows 切出無法評分列 + 第 6 個 KPI 帶 help + st.warning 點名 + 排到表尾 + 數值欄一律 '—'\n→「三態誠實」的標竿實作",
+ f:"section_batch_fetcher.py:86 · section_portfolio_summary.py:362 · tab_stock_grp.py:691",
+ x:"三者都建議推廣。但 scoring_engine.py:299/308/415 三處預設值未改 → gate 是唯一防線（見 §7 決策點 3）。"},
+
+// ══ 選股網 ══
+{t:"SCR",s:"H",c:"資料",b:"B",n:"三處掃描失敗只 print，使用者以為 4 因子實際 3 因子",
+ e:"# app.py:519 / 530 / 537（三處同構）\nexcept Exception as _es:  # noqa: BLE001 — 掃描失敗不炸選股\n    print(f'[screener] 缺貨自動掃失敗: {type(_es).__name__}: {_es}')\n\n掃描炸掉後 session key 仍是空，get_ranked_picks(auto_fetch=False) 靜默少算一個因子繼續排名，\n而「② 勾選條件」的勾勾還在。\n\n所幸 composite_rank_candidates:402-406 的 note 會說「尚未掃描」，\n但「掃描失敗」與「尚未掃描」文案相同，且 print 不進畫面\n→ 使用者被引導去重按，可無限循環。",
+ f:"app.py:519,530,537",
+ x:"三處 except 改寫 st.session_state['_screener_errs'].append(...)，結果區以 st.warning 逐條列出；\n並把失敗因子從 _factors 移除後再傳給 get_ranked_picks，讓總覽卡的「本次因子」文字同步。"},
+{t:"SCR",s:"H",c:"金融",b:"A",n:"_market_context 0.0% bug：畫面數字一樣、語意相反，還會自相矛盾",
+ e:"# rs_leader_service.py:113\n_down = bool(ret < 0)                          ← 無 dead band\n# 上游 rs_leader_screener.py:204\nreturn round((dm[\"close\"].iloc[-1] / dm[\"close\"].iloc[-int(lookback)] - 1) * 100, 2)\n# 顯示 :115/118\nf\"📈 此期間大盤（^TWII）約 {ret:+.1f}% — 大盤其實在漲\"\n\n· ret = -0.04 → 判「📉 下跌情境」但畫面印「約 -0.0%」\n· ret = +0.04 → 判「📈 大盤其實在漲」印「約 +0.0%」\n· 真實值落在 (-0.005, 0) 時 round 產生 -0.0，而 -0.0 < 0 為 False\n  → 印出自相矛盾的「📈 此期間大盤約 -0.0% — 大盤其實在漲」\n\n且此 banner 被 build_rs_ai_prompt 原文餵給 LLM。\n緩解：is_down 全 repo 僅在 :110/120 產生、零消費端，故只影響文案。",
+ f:"src/services/rs_leader_service.py:113-119 · rs_leader_screener.py:204",
+ x:"加中性帶 abs(ret) < RS_MARKET_FLAT_PCT（建議 0.5）→「⚖️ 大盤此期間大致持平，RS 僅代表相對強弱」；\nbanner 改 {ret:+.2f} 與上游 round 精度對齊。"},
+{t:"SCR",s:"M",c:"UI",b:"A",n:"跨季趨勢 expander 縮排在 gate 之外，與上一行提示直接矛盾",
+ e:"# app.py:541\nif not st.session_state.get('_screener_ran'):\n    st.info('👆 勾好條件後，點「🎯 開始選股」…')     ← :542\n...\n# :669  縮排 8 空格，與 :541 同層\n        with st.expander('🌍 全台股跨季趨勢排行（全市場，不限存活池）'):\n\n→ 未按「開始選股」也會渲染，與 :542 的提示矛盾。\n且它與「跨季轉強」因子是同一份計算的兩個入口、兩顆按鈕、兩個 session key。",
+ f:"app.py:541,669",x:"整段縮進 :543 的 else: 內，並與「跨季轉強」因子合併為單一入口。"},
+{t:"SCR",s:"P",c:"資料",b:"G",n:"✅ PIT 與偏誤揭露是全 repo 最嚴謹的兩處",
+ e:"# shared/staleness.py:641-662  latest_published_quarter\n明確 grace_days=0 並註「它回答的是法律問題（該公布了嗎）」\nTW_QUARTER_STATUTORY_DUE:571-576 把 Q4 年報 3/31 與 Q1-Q3 +45 天分開\n→ 不會偷看未來季報\n⚠️ 唯 :648-651 自陳 scripts/update_fundamentals_snapshot.py 另有逐字複本待收斂\n\n# src/compute/screener/forward_test.py:7-13\n檔頭三行 ✅/✅/⚠️ 界定偏誤範圍（選股端零 lookahead / 零存活者偏誤；對帳端仍有存活者偏誤）\n:218-229 明講「這些多半是最壞結局，故上列報酬偏樂觀（存活者偏誤）」\n→ 最佳文案樣板",
+ f:"shared/staleness.py:641 · src/compute/screener/forward_test.py:7,218",
+ x:"建議把這口吻推廣到其他區塊。前進式驗證表建議加「剔除檔數」與「樣本足夠」兩欄（目前 _ft_cols 不含）。"},
+
+// ══ ETF ══
+{t:"ETF1",s:"H",c:"資料",b:"B",n:"3-3-3 的 C3 結構性永遠算不出來，且對使用者說謊",
+ e:"# etf_tab_smart.py:33-35\n@st.cache_data(ttl=3600, show_spinner=False)\ndef _cached_peer_prices(tickers_tuple): return fetch_etf_peer_history(tickers_tuple, period='2y')\n\n# etf_smart_analysis.py:519\nif ay >= 2.5 and sp_p > 0 and ep_p > 0:\n    peer_ann_rets[col] = (ep_p / sp_p) ** (1.0 / ay) - 1.0\n\n2y 下載窗最多給 ~2.0 年 → peer_ann_rets 恆空 → c3_pass=None\n→ :535 if all(p is not None for p in passes) 永不成立 → 「🏆 三項全過！」是死碼\n\n更糟：使用者勾了「啟用同儕排名（較慢）」等 15-30 秒後，:438 回：\nrank_str = f'前 {rank*100:.0f}%' if rank is not None else 'N/A（未啟用同儕排名）'\n→ 顯示「未啟用」而非「資料不足」，直接對使用者說謊。",
+ f:"etf_tab_smart.py:33-35,438 · etf_smart_analysis.py:519,535",
+ x:"_cached_peer_prices 加 period 參數，3-3-3 路徑傳 '5y'（與 _cached_price_long 一致）；\n:438 三態化為「N/A（未啟用）」/「資料不足（同儕歷史 < 2.5 年）」/ 實值。"},
+{t:"ETF1",s:"H",c:"金融",b:"F",n:"品質評等 Beta 因子讓債券 ETF 必得 0 分，與同 App 教學直接打架",
+ e:"# etf_quality.py:63-64\n_BETA_HI = 0.1    # |β-1| ≤ 0.1 滿分\n_BETA_LO = 0.8    # |β-1| ≥ 0.8 零分\n# :111-116 score_beta 用 abs(β-1)\n\n債券 ETF β≈0~0.2 → _dev≈0.8-1.0 → score=0，佔 20% 權重（:49）\n\n而同一個 App：\n· etf_tab_portfolio.py:456「真正的抗跌來自債券/現金，不是挑不相關的股票型 ETF」\n· etf_tab_smart.py:391「真正的抗跌分散要靠不同資產類別(債券/現金)」\n\n→ 使用者照建議買 00679B，回到單檔頁看到它品質 2★、最弱項「Beta 合理性」。",
+ f:"src/compute/etf/etf_quality.py:49,63-64,111-116",
+ x:"依 portfolio_gates.classify_portfolio_role 判角色 —— 債券/貨幣型直接 score_beta → None（走既有 rescale :154-163），\n或改用「β 落在該類別合理帶」而非一律以 1.0 為錨。⚠️ 會改變星等，需裁示。"},
+{t:"ETF1",s:"H",c:"資料",b:"B",n:"資料不足回 0.0 被當真值進評分 → 新上市 ETF 系統性低估",
+ e:"# etf_calc.py:698-699   夏普\nif len(ret) < 20: return 0.0\n# :674-675            CAGR\nif days < 30: return 0.0\n# :682-684            例外亦 return 0.0\n\n這些 0.0 進 compute_etf_composite_score 後 _norm(0.0, 1.0, 0.2)=0.0\n→ 拿到最低分並佔用權重，而不是回 None 走「缺項 rescale 有效權重」\n（etf_scoring_helpers.py:154-159 明明支援）\n\n同理 calc_current_yield（:223-224）把「抓失敗」與「真的不配息」都回 0.0\n→ 單檔頁 :263 直接印「現金殖利率 0.00%」",
+ f:"src/compute/etf/etf_calc.py:223,674,682,698",
+ x:"三處 return 0.0 → return None；calc_current_yield 加 divs is None（抓失敗）vs divs.empty（無配息）二態。"},
+{t:"ETF1",s:"M",c:"金融",b:"D",n:"標準差帶三個統計問題：對價格做常態假設 + 靜默縮窗 + 說明脫鉤",
+ e:"# etf_smart_analysis.py:80-82\n_w = min(window, len(s))                                    ← 靜默縮窗\nmu_s  = s.rolling(_w, min_periods=max(20, _w//4)).mean()    ← 對「價格」不是「報酬」\nstd_s = s.rolling(_w, min_periods=max(20, _w//4)).std()     ← ddof=1 未揭露\n\n① 對價格水準做常態假設：價格是非定態序列，長期上漲的 0050 會長期貼 +1σ~+2σ\n   :104 判 caution/sell，UI 文案「越靠近 +2σ = 相對高點，注意風險」\n   → 對趨勢型 ETF 等於長年叫人減碼\n② 靜默縮窗：etf_tab_smart.py:109-112 caption 固定寫「過去 252 個交易日」\n   但 :120-126 讓使用者選 120/252/500，而 _cached_price 只抓 2y(≈490 根)\n   → 選 500 實際只有 ~490，兩層都被誤導\n③ .std() 是 ddof=1 樣本標準差，介面未揭露",
+ f:"etf_smart_analysis.py:80-82,104 · etf_tab_smart.py:109-126",
+ x:"caption 改 f-string 插 _win；compute_std_bands 回傳 window_used vs window_requested，不等時標「⚠️ 實際採用 490 日」；\n加警語「本帶以價格水準計算，長期上漲的 ETF 會長期停留在上緣，不等於該賣」；docstring 註明 ddof=1。"},
+{t:"ETF1",s:"P",c:"金融",b:"G",n:"✅ 折溢價四態 + 分散度三維加權 + 空頭相關 —— 全站最好的兩處設計",
+ e:"折溢價 stale 分四態（etf_calc.py:387/435/440/452/477）：\n  nav_value_stale / G1 / G3 / G1b，各自帶 nav_date / price_date / premium_raw / prem_max\n  → 比 v1 說的三態更細，全站最好的 §1 實作\n\n分散度（etf_smart_analysis.py:225-244）：\n  三維加權（價格相關 0.4 / Jaccard 持股重疊 0.4 / 類別 cosine 0.2）\n  + 空頭相關 _downside_corr_series 只取「t 跌最凶的 20% 交易日」重算（DOWNSIDE_QUANTILE=0.20）\n  + etf_tab_smart.py:391 明說「真正的抗跌分散要靠不同資產類別(債券/現金)」\n  → 不賣弄指標、直接講後果，把一般散戶完全不知道的陷阱攤開講\n\n另：VaR align_portfolio_returns 只取共同交易日並揭露「受最短檔壓縮」；\n匯率取不到即排除美元持股並 st.error 紅字；經理人 tenure_approx；\n平準金誠實說明「無穩定 API 故不顯示」並附手動查法；\n_check_sector_exposure（etf_render.py:591-621）把「對映不到 GICS」獨立成 ⚪ 無法判定、不亮假紅燈",
+ f:"etf_calc.py:387-477 · etf_smart_analysis.py:225-244 · etf_tab_single.py · etf_render.py:591",
+ x:"保留並推廣。缺陷只有 NaN→0.5（見 MD §3-8）與 top_n=15 / [:30] 造成維度不齊（N-13）。"},
+{t:"ETF2",s:"P",c:"UI",b:"D",n:"✅ 全站漸進式揭露最佳示範：主表 11 欄 + expander 完整 24 欄",
+ e:"# etf_tab_grp_compare.py:277-292\n主表 _CORE_COLS 11 欄 → expander 完整 24 欄\n:285-286 明說「主表為 11 個決策核心欄;折溢價 / 1Y·3Y 報酬 / AUM / 5Y均殖 / … 完整指標見下方 ⬇️」",
+ f:"src/ui/etf/etf_tab_grp_compare.py:277-292",
+ x:"直接複製到：ETF 組合持股明細（16 欄）、個股組合排行總表（14 欄）、每月配息矩陣（18 欄）。"},
+{t:"ETF2",s:"M",c:"程式",b:"E",n:"session cache 無 TTL 無清除入口 + 費用率兩套來源",
+ e:"# etf_tab_grp_compare.py:132\n_cache_key = f'_etf_grp_results_{hash(tuple(tickers))}'\nhash() 同 process 內穩定，碰撞不是主要風險 ——\n真問題是這份 session cache 沒有 TTL、沒有清除入口：\n使用者今天算完，明天回到同一 session 再按「🎯 開始批次評分」→ :133-134 直接回傳昨天的 rows，毫無提示。\n本頁沒有組合頁那種「🔄 強制重抓」按鈕。\n\n費用率兩套來源（新發現）：\n· 單檔頁 etf_tab_single.py:146 走 get_etf_expense_ratio_safe（4 段備援 MoneyDJ→SITCA→Yuanta→yfinance）\n· 本頁共用的 build_etf_score_row 走 etf_scoring_helpers.py:106 的 info.get('annualReportExpenseRatio') 單一鍵\n· 而 fetch_etf_info:439 只補了 MoneyDJ 一段 → SITCA / Yuanta 兩段 fallback 完全用不到\n→ 同一檔在單檔頁有費用率、在多檔表卻空白，還連帶讓 12% 權重被 rescale 掉",
+ f:"etf_tab_grp_compare.py:87-89,132 · etf_scoring_helpers.py:106 · etf_fetch.py:439",
+ x:"key 改 '|'.join(sorted(tickers)) + 存 fetched_at + 「🔄 重抓」按鈕；\nbuild_etf_score_row 加 expense_ratio=None 參數由 caller 注入（保持 L2 零 I/O）。"},
+{t:"ETF3",s:"H",c:"資料",b:"B",n:"AI prompt 假偏離 —— 畫面顯示「—」、AI 卻說「偏離 +0.0pp」",
+ e:"# etf_tab_portfolio.py:427-428（:425-426 註解自陳「已知殘留」）\nr['target_pct'] = r['actual_pct']\nr['deviation']  = 0.0\n\n# etf_tab_ai.py:123-124\nf'希望比例 {r.get(\"target_pct\",0):.1f}% / 實際 {r.get(\"actual_pct\",0):.1f}%（偏離 {r.get(\"deviation\",0):+.1f}pp）'\n\n畫面誠實顯示「—」（:593/:595），AI 卻拿到假的完美貼合。\n\n❌ loss_pct 那半條不成立 —— :1042/:1457 一定寫入真值，.get(...,0) 只在舊版 session 殘留時才觸發。",
+ f:"etf_tab_portfolio.py:427-428 · etf_tab_ai.py:116-125",
+ x:"rows 已帶 target_source；加 if r.get('target_source') != 'user': 寫「使用者未設定目標比例，本節不得評論再平衡」。"},
+{t:"ETF3",s:"H",c:"金融",b:"D",n:"葡萄串只看「有沒有配」，不看配多少 / 健不健康 / 填不填息",
+ e:"# grape_ladder.py\n演算法：取近 LOOKBACK_DAYS = 400 天的除息月份集合，暴力 itertools.combinations 搜「覆蓋最多月、檔數最少」\n→ 一檔配 0.01 元和一檔配 1.5 元在覆蓋圖上都是綠色 ✅\n\n:80 get_avg_monthly_cash 定義完整（含 shares 參數），全 repo 零 caller\n主視圖 _render_holdings_coverage:383-389 只印「檔數 / 配息 ETF 名單」\n\n⚠️「零警語」需修正：:405「領息 ≠ 賺錢…仍請看品質星等與含息總報酬」與 :501 同樣警語都存在，\n只是 :405 只在有缺月時出現、:501 收在預設收合的 expander 裡\n→ 覆蓋率 metric 那一行（:364-367）旁確實沒有\n\n另「填息」全 ETF 頁零出現（全 src/ grep 只命中一檔 ETF 中文名）",
+ f:"src/ui/tabs/grape_ladder.py:80,364-367,383-389,405,501",
+ x:"① :384-388 表格加「約可領(TWD)」欄（資料源就是現成的 get_avg_monthly_cash）\n② :367 覆蓋率 metric 加 help='只算「有沒有配」，不含配多少、填不填息、含息總報酬'\n③ build_etf_score_row 加 fill_rate_90d（資料現成：df + divs 都在手）"},
+{t:"ETF3",s:"M",c:"程式",b:"E",n:"1y 價格迴圈跑兩次 + 三個序列迴圈未並行 + list_portfolios 每 rerun 打 Sheets",
+ e:"# :874-877 相關矩陣\nfor t in tickers: df_t = fetch_etf_price(t, period='1y')\n# :1066-1069 VaR\nfor r in rows: _df_v = fetch_etf_price(r['ticker'], period='1y')\n→ 程式碼幾乎逐字重複（差別只在後者多 .dropna()），且 _var_rets 之後又被 vs0050、效率前緣複用\n→ 作者知道可複用，只是漏了第一份\n\n三個序列 for 迴圈未並行（而同檔 :328 已示範 ThreadPoolExecutor(max_workers=6)）：\n:629-631 _compute_etf_warroom_row（每檔內部 3 次 fetch）\n:1008-1009 compute_etf_weakness_row（spinner 自承「5-15 秒」）\n:912-913 fetch_etf_holdings（自承「10-20 秒」）\n\n:233 _render_cloud_storage 在「計算組合」gate 之前無條件呼叫\n→ :1744 names = _gsp.list_portfolios() 無快取 → 在 data_editor 改一個數字就再打一次 Sheets",
+ f:"etf_tab_portfolio.py:233,629,874,912,1008,1066,1744",
+ x:"迴圈合併；三處各套 ThreadPoolExecutor（三函式皆 @st.cache_data 純資料、thread-safe）；\nlist_portfolios 包 @st.cache_data(ttl=TTL_1HOUR)。"},
+
+// ══ 工具箱 / 管理 / AI ══
+{t:"DIAG",s:"H",c:"資料",b:"A",n:"校準鏈路整條空轉，且該 json 從未由腳本產生（見 N-10）",
+ e:"三環相扣：\n① calibrate_macro_traffic.py:709-711  值沒變就 return False 不寫檔 → last_calibrated 永遠 null\n② recalibrate_macro.yml:59  git diff --quiet（全 repo 唯一錯誤變體）+ 目標檔之一不存在 → PR 永不開\n③ macro_thresholds.json 內容與腳本輸出不符 → 是手寫的，寫入端從頭到尾沒被驗證過\n\n→ 面板永遠印「尚未校準（使用預設）」，無法區分「從未跑過」與「跑過 N 次、每次都確認無需調整」\n\n且 calibration_ui:108-110 只 import 4 支，反過擬合三支（walk_forward_validate:520 /\ngrid_search_thresholds:498 / _objective_with_penalty:479）與 build_proposal_report:627 零 UI caller\n→ 使用者按「🚀 執行校準」拿到的是全樣本 in-sample 回測，\n  而 build_report 的「## (c) 門檻調整建議」（:810-870）會給可操作建議：\n  f\"- 🔴 防禦 precision {metrics['red_precision']}% < 40%：現行 health < {_HDT}，可考慮再收緊至 {max(_HDT-5,25)}\"\n→ 拿 in-sample 數字建議調 production 門檻，正是 :384-390 自己寫的「永不在訓練窗報告分數」所禁止的事",
+ f:"scripts/calibrate_macro_traffic.py:709-718,810-870 · recalibrate_macro.yml:59 · calibration_ui.py:108 · macro_thresholds.json",
+ x:"① emit_thresholds_json 無變動時仍寫 last_verified\n② yml 改 git add → git diff --staged --quiet\n③ 面板加 st.warning('⚠️ 本報告為 in-sample 全樣本回測，(c) 段建議未經 OOS 驗證，僅供觀察')\n④ 長期：UI 改呼叫 walk_forward_validate + build_proposal_report"},
+{t:"DIAG",s:"H",c:"資料",b:"F",n:"_probe 用 verify=False 帶真實憑證，判讀指南零提及 TLS",
+ e:"# src/ui/pages/api_diagnostic.py:71-73\nr = requests.get(url, params=params, proxies=proxies,\n                 timeout=timeout, verify=False,\n                 headers=_hdr)\n\nheaders 帶 :161 {'Authorization': f'Bearer {_fm_tok}'} 與 :167 {'x-goog-api-key': _gm_key}\n:213-217 的「📌 結果判讀指南」四條全講 proxy/key/DNS，沒有一條提 TLS\n→ 面板宣稱「✅ 可達」時，使用者無從得知那個 ✅ 是不驗憑證換來的\n\n全 repo verify=False 精確盤點：\n· session 建構點 6 個：data_loader:99、app_stock_fetchers:81,287、proxy_helper:154、macro_snapshot:134,865\n· per-request kwarg 8 個：proxy_helper:317、nas_server:165,223,277,312,357、macro_snapshot:493、api_diagnostic:72\n→ 憲法「6 個建構點」數字正確",
+ f:"src/ui/pages/api_diagnostic.py:71-73,213-217",
+ x:"_probe 改雙跑 verify=True/False；判讀指南加第五條「⚠️ 本測試未驗 TLS 憑證」。根治需 NAS CA 憑證（需裁示）。"},
+{t:"DIAG",s:"M",c:"UI",b:"C",n:"★ 資料診斷頁缺一句話結論 —— 把工程師工具變成一般人工具的最小改動",
+ e:"# data_coverage.py:645-655 的 caption 開頭\n「『有值』欄只回答『這個欄位不是空的』,不回答『值是不是活的』」\n→ 寫得很嚴謹，但這是寫給稽核員看的\n\n一般使用者打開這頁，看到 4 列表格 + 2 段密集 caption，仍然不知道「所以我現在能不能相信畫面上的數字」。\n且順序是「先給統計、後給解釋」，對新手是反的。",
+ f:"src/ui/pages/data_coverage.py:645-716",
+ x:"在 ### ⓪ 標題正下方加「一句話結論」卡（純由既有 rows 推導、零新資料）：\n全🟢 →「✅ 目前 4 個資料區塊都有值且在正常發布窗內，畫面數字可以照常看。」\n有🔴 →「⚠️「💰籌碼面」缺 2/3 資料，涉及籌碼的判讀先別採信 —— 到 🌍 總經 Tab 按『🚀 一鍵更新全部數據』。」\n有🧊 →「🧊 先行指標的 3 個欄位連續 3 天完全沒動，數字看起來新但可能是死的。」\nemoji 統計兩行 caption 降級到卡片下方。"},
+{t:"DIAG",s:"P",c:"資料",b:"G",n:"✅ 覆蓋率分母定義 + 校準門檻「顯示 vs 生效」是兩個模範",
+ e:"# data_coverage.py:74-77\n_COVER_GREEN_RATIO = 0.85 / _COVER_YELLOW_RATIO = 0.50   ← 具名 + 註解寫明推導（8 項容忍缺 1 → 7/8=0.875）\n_macro_block_has_value 專門處理「失敗但回了個 dict」的兩種形狀\n\n# calibration_ui.py:55-68\n_h, _s = load_calibrated_thresholds()          ← 印實際生效值而非 json 面值\nif (_h_raw, _s_raw) != (_h, _s):\n    st.warning(f'⚠️ macro_thresholds.json 寫的是 HEALTH={_h_raw} / SCORE={_s_raw}，但未生效 —— …值域守門…')\n註解寫「錯的數字比沒有數字危險」\n\n# reconcile.py:133-170 normalize_tnx_quote\n偵測刻度而非猜換算，越界回 None + log；:117-119 明說「不拿 FRED 去挑比較接近的刻度，否則對帳就失去意義」",
+ f:"data_coverage.py:74 · calibration_ui.py:55 · reconcile.py:117-170",x:"無可議，建議推廣。"},
+{t:"EDU",s:"M",c:"UI",b:"D",n:"6 個 expander 預設全開、0 個 help、無目錄 —— 而 STRATEGY_MANUAL.md 有現成的 72 個錨點",
+ e:"tab_edu.py:425（指標手冊）+ :640/694/773/843/925（五個策略）全部 expanded=True\n內文合計約 700 行 markdown 一次攤開；全檔 st.tabs / st.header / 輸入元件皆 0\n唯一導覽是 :627 一行標題；help= = 0（tab_edu + macro_classroom 合計）\n\n諷刺的是 STRATEGY_MANUAL.md:7-17 有完整目錄與 72 個 # 章節錨點，但該檔沒有任何 UI 讀取。",
+ f:"src/ui/tabs/tab_edu.py:425,627,640-925 · STRATEGY_MANUAL.md:7-17",
+ x:"5 個策略 expander 改 expanded=False；:627 下加 st.tabs 或 anchor 目錄（可直接讀 STRATEGY_MANUAL.md 既有錨點）；\n★ 把擴充後的 TERM_EXPLAIN（~60 詞）做成可搜尋的名詞索引放本頁最上方。"},
+{t:"MGMT",s:"H",c:"程式",b:"E",n:"每次 rerun 最少 6 次 Sheets API，quota 只有 60/分鐘",
+ e:"src/data/portfolio/ 全層 grep cache_data|cache_resource → 0 命中\ngsheet_portfolio.py:232 docstring 自承「每次重新建立」\n\n單次 list_portfolios = 3 次 API：\n  :217 sh.worksheet metadata → :223 ws.row_values(1) → :243 get_all_records\nrender 呼叫兩次（:132 ETF + :200 個股）= 6 次\n本檔另有 8 處 st.rerun()（:153/158/169/172/217/222/233/236），每次再付一輪\n\n⚠️ 措辭更正：_ws()（:229-238）兩種 cache 都沒有。「沒踩 pickle 地雷」屬實，\n但那不是設計選擇，是整層無快取的副產品。",
+ f:"portfolio_manager.py:132,200 · gsheet_portfolio.py:217-243",
+ x:"list_portfolios / list_stock_watchlists 加 @st.cache_data(ttl=TTL_1HOUR)，寫入後 .clear()（不動 _ws() 契約）。"},
+{t:"MGMT",s:"M",c:"UI",b:"C",n:"儲存無二次確認，但 save_portfolio 第一步就是 ws.clear()",
+ e:"刪除有兩段式確認（:156-172 / :220-236），儲存沒有（:183-190 直接 save_portfolio）\n而 save_portfolio:323 第一步就是 ws.clear() 清空整張表再重寫\n→ 使用者若在 data_editor 誤刪列，按儲存即永久生效\n且無「這會覆寫整張工作表」的警語、無「如何建立 Sheet」步驟說明\n\n另 Sheet ID 解析共 3 份實作，只有 portfolio_manager.py:65 處理 /d/e/ 發布連結：\napp.py:252-253（sidebar）與 tab_stock_grp.py:227-228 皆無\n→ 貼發布連結會把字串 \"e\" 寫進 st.session_state['portfolio_sheet_id']（正是 portfolio_manager 讀的同一把 key）",
+ f:"portfolio_manager.py:65,183-190 · gsheet_portfolio.py:323 · app.py:252 · tab_stock_grp.py:227",
+ x:"儲存加二次確認 + 明確警語；parse_sheet_id 下沉 shared/（L0）三處共用。"},
+{t:"MGMT",s:"P",c:"資料",b:"G",n:"✅ 9 處 except 全部 st.error/warning —— 全站 fail loud 最徹底",
+ e:"portfolio_manager.py :16/133/154/166/189/201/218/230/253 全部有 UI 提示，零 except: pass。\n⚠️ 但 :166-169 與 :230-233 的 warning 後緊接 st.rerun()，訊息被畫面重繪吃掉；\n且多數只印 type(_e).__name__ 不含訊息內容。",
+ f:"src/ui/tabs/portfolio_manager.py",x:"建議當 fail loud 範本。warning 後改用 st.toast 或不要立刻 rerun。"},
+{t:"AI",s:"P",c:"資料",b:"G",n:"✅ grounding 是本次稽核最紮實的一塊 —— 建議複製到其他三條 AI 路徑",
+ e:"# ai_qa_service.py:55  第 1 條\n「需要數字時一律呼叫工具,**嚴禁自行計算/推估/杜撰數字**」\n# :58-63  第 3-1 條\n「此時**嚴禁**改用『中性』『中性偏多』『中性偏弱』或任何方向詞替代 ——\n  『中性』本身就是一個方向判斷,不是「沒有判斷」。缺乏依據時說『中性』,\n  等於把『不知道』講成『我判斷是持平』」\n\n# :222-224 _tool_get_stock_score 在 regime 不可用時整份拒絕輸出（不是只留白總分）\n  理由：「下游是 LLM,空白格會被自動填」\n\n⚠️ 範圍限定（v2 補）：3-1 條只在「決定方向的那個工具回 ok=false」時生效，\n且僅限 get_stock_score / get_market_state 兩支。\n工具回 ok=true 但欄位為 None 的情況不在涵蓋內，仍受第 3 條約束（必須從五個方向詞選一個）\n→ 資料半殘時模型仍會被逼出一個方向。",
+ f:"src/services/ai_qa_service.py:55,58-63,222-224",
+ x:"複製到 macro AI（section_news_ai）、個股 AI（tab_stock 五維）、ETF AI（etf_tab_ai）三條路徑；\n3-1 條的觸發改為「ok=false 或關鍵欄位為 None」。"},
+{t:"AI",s:"M",c:"資料",b:"B",n:"get_market_leading 的 fail-soft 把整列 16+ 欄丟進 Gemini",
+ e:"# src/services/ai_qa_service.py:299-302\nwant = (\"日期\",\"外資\",\"投信\",\"自營\",\"選PCR\",\"韭菜指數\",\"融資餘額\",\"前十大留倉\",\"source\")\ndata = {str(k): _jsonable(last[k]) for k in want if k in last}\nif not data:\n    data = {str(k): _jsonable(v) for k, v in last.items()}   # 欄名若變動 → 退回整列(fail-soft 不漏資料)\n\n以 ok=True 送出，payload 內是語意不明的欄位，且無任何「欄名不明」旗標\n→ 模型會照著念出它不理解的數字。§1 的典型違反（用 fail-soft 掩蓋契約漂移）。\n\n另兩條隱性預設值路徑：\n· :330-332 _tool_get_risk_plan regime 不可用時落到 risk_control.py:153 的 'neutral' 預設，\n  且回傳 payload 不含 regime 欄位 → Gemini 無從得知倉位是用「中性」算的\n· :521-522 _annotate_staleness 的 except: pass → 過期標記算失敗即等同「默認新鮮」進 payload",
+ f:"src/services/ai_qa_service.py:299-302,330-332,521-522",
+ x:"if not data: 改回 ok=False, error=\"leading 欄名契約已變（實際欄：…）\"；payload 帶 regime 旗標；staleness 失敗改標記。"},
+{t:"AI",s:"M",c:"UI",b:"C",n:"缺獨立免責 + 範例問題藏在 placeholder + 無串流進度 + history 無上限",
+ e:"全檔 145 行 grep「僅供參考/不構成/投資建議」→ 0 命中（全站免責只在 app.py:336 與 :935 頁尾）\n範例問題只存在於 :119 的 chat_input placeholder（輸入框一有字就消失）\n使用者不知道背後有哪 6 支工具（get_market_state / get_stock_score / get_financial_health /\n  get_market_leading / get_risk_plan / get_etf_quality）\nrun_agent（ai_qa_service:693-700）是 max_rounds=4 同步迴圈，:132 只有一顆「查詢中…」spinner，4 輪期間零進度\n:114 setdefault(\"ai_qa_history\", []) 全檔無 trim，:115-117 每次 rerun 全量重播\n  （送 Gemini 有界 :684 max_turns=8，但 session_state 與 DOM 無界）",
+ f:"src/ui/tabs/tab_ai_chat.py:107,114-119,132",
+ x:"加免責卡 + 3-4 顆快捷問題 st.button + 首次進入列「我可以回答什麼」清單；\nspinner 文字由 run_agent 逐輪 callback 更新；ai_qa_history 加 _MAX_HISTORY = 50 具名常數。"}
+];
+
+const SEV={H:["🔴","高"],M:["🟡","中"],L:["⚪","低"],P:["✅","正面"],X:["🔀","修正"]};
+const CAT={"資料":"🔍 資料稽核","UI":"🎨 UI/UX","程式":"⚙️ 程式碼","金融":"💹 金融邏輯","測試":"🧪 測試/CI"};
+const F={s:"all",c:"all",b:"all",q:""};
+function esc(t){return String(t).replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));}
+function build(){
+  const L=document.getElementById("list");let h="";
+  TABS.forEach(([k,label])=>{
+    const rows=D.filter(d=>d.t===k);if(!rows.length)return;
+    h+=`<div class="grp" data-g="${k}"><h2>${esc(label)}</h2><span>${rows.length} 項</span></div>`;
+    rows.forEach((d,i)=>{
+      const id=k+"_"+i, blob=(d.n+" "+d.e+" "+d.f+" "+d.x+" "+label).toLowerCase();
+      const isNew=(k==="NEW")?'<span class="tag n">v2 全新</span>':'';
+      const isFix=(k==="FIX")?'<span class="tag t">v1 修正</span>':'';
+      h+=`<div class="item" data-s="${d.s}" data-c="${d.c}" data-b="${d.b}" data-g="${k}" data-q="${esc(blob)}" id="${id}">
+        <div class="hd" onclick="document.getElementById('${id}').classList.toggle('op')">
+          <span class="sev">${SEV[d.s][0]}</span>
+          <div class="tt">${esc(d.n)}<div class="meta">${isNew}${isFix}<span class="tag b">${esc(CAT[d.c])}</span><span class="tag c">Batch ${d.b}</span><span class="tag">${esc(label)}</span></div></div>
+          <span class="arw">▶</span></div>
+        <div class="bd"><h4>現狀診斷與證據</h4><pre>${esc(d.e)}</pre>
+          <h4>改善優化方案</h4><pre>${esc(d.x)}</pre>
+          <h4>涉及檔案</h4><div class="files">${esc(d.f)}</div></div></div>`;
+    });
+  });
+  L.innerHTML=h;
+}
+function stats(){
+  const c={H:0,M:0,L:0,P:0,X:0};D.forEach(d=>c[d.s]++);
+  const nNew=D.filter(d=>d.t==="NEW").length, nFix=D.filter(d=>d.t==="FIX").length;
+  document.getElementById("stats").innerHTML=
+   `<div class="stat"><b style="color:var(--r)">${c.H}</b><span>🔴 高嚴重度</span></div>
+    <div class="stat"><b style="color:var(--y)">${c.M}</b><span>🟡 中嚴重度</span></div>
+    <div class="stat"><b style="color:var(--g)">${c.P}</b><span>✅ 正面發現</span></div>
+    <div class="stat"><b style="color:var(--o)">${nNew}</b><span>🆕 v2 全新</span></div>
+    <div class="stat"><b style="color:var(--ac)">19</b><span>🔀 v1 修正</span></div>
+    <div class="stat"><b>${D.length}</b><span>總項目</span></div>
+    <div class="stat"><b>15</b><span>診斷單元</span></div>
+    <div class="stat"><b>82</b><span>UI 檔 100% 覆蓋</span></div>`;
+}
+function apply(){
+  let vis=0;
+  document.querySelectorAll(".item").forEach(el=>{
+    const ok=(F.s==="all"||el.dataset.s===F.s)&&(F.c==="all"||el.dataset.c===F.c)
+      &&(F.b==="all"||el.dataset.b===F.b)&&(!F.q||el.dataset.q.includes(F.q));
+    el.style.display=ok?"":"none";if(ok)vis++;
+  });
+  document.querySelectorAll(".grp").forEach(g=>{
+    const n=[...document.querySelectorAll(`.item[data-g="${g.dataset.g}"]`)].filter(e=>e.style.display!=="none").length;
+    g.style.display=n?"flex":"none";if(n)g.querySelector("span").textContent=n+" 項";
+  });
+  document.getElementById("empty").style.display=vis?"none":"block";
+}
+stats();build();
+document.querySelectorAll("button.chip[data-f]").forEach(b=>{
+  b.onclick=()=>{document.querySelectorAll(`button.chip[data-f="${b.dataset.f}"]`).forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");F[b.dataset.f]=b.dataset.v;apply();};
+});
+document.getElementById("q").oninput=e=>{F.q=e.target.value.trim().toLowerCase();apply();};
+document.getElementById("ea").onclick=()=>document.querySelectorAll(".item").forEach(e=>{if(e.style.display!=="none")e.classList.add("op")});
+document.getElementById("ca").onclick=()=>document.querySelectorAll(".item").forEach(e=>e.classList.remove("op"));
+apply();
+</script>
+</body>
+</html>

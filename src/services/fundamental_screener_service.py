@@ -34,6 +34,10 @@ except ImportError:
 import pandas as pd
 
 from shared.fundamental_prescreen_thresholds import SNAPSHOT_COVERAGE_WARN_RATIO
+# T1-a(2026-08)：空頭濾網的 regime 集合走既有 L0 SSOT，不另立常數（§3.3）。
+# `regime_arbiter.py:66` 已把 THROTTLE_VETO_REGIMES 當成「caution 與 bear 同列否決」
+# 的權威定義，本模組對齊同一份。
+from shared.position_throttle import THROTTLE_VETO_REGIMES
 from shared.ttls import TTL_1DAY
 from src.compute.screener.cross_quarter_trends import compute_cross_quarter_trends
 from src.compute.screener.fundamental_prescreen import (
@@ -442,6 +446,7 @@ def get_ranked_picks(
     trend_map: dict | None = None,
     auto_fetch: bool = True,
     refresh: bool = False,
+    regime: str | None = None,
 ) -> tuple[pd.DataFrame, str]:
     """選股網「一鍵選股」同源編排：存活池 +（缺貨/RS/跨季）+ PE → 綜合排名。
 
@@ -463,6 +468,23 @@ def get_ranked_picks(
       - survivors_df: 已備存活池則傳入（app 端已抓，避免重抓；不傳則本層自抓，cron 用）。
       - auto_fetch: True（cron）→ 缺的 shortage/rs/trend 自動掃；False（app）→ 只用傳入的
         session 快取值，不重掃（保留畫面既有「按鈕觸發掃描 + session 快取」行為）。
+      - regime: canonical 總經五態（`allocation_service.get_macro_regime()`）。
+        `bear` / `caution` → 套用**空頭濾網**（見下）。None / 其他值 → 不套用。
+
+    ── T1-a(2026-08)空頭濾網 ──────────────────────────────────
+    §8「總經影響全系統風控」的接線點：空頭中弱勢股的下檔風險顯著高於強勢股，
+    故 `regime ∈ {bear, caution}` 時剔除「區間報酬未贏過大盤」的候選。
+
+    ⚠️ **刻意不改 `beat_only`**（原規劃曾如此提案，實作時查證後推翻）：
+      `:487` 的 `run_rs_leader_scan(beat_only=False)` 決定的是**百分位的分母**，
+      不是濾網開關。改成 True 會讓落後股從 `rs_map` 消失 → 對它們而言 RS 因子
+      變成「缺料」→ 依 `:319` 的規則**不計入**平均 → 若 RS 本來在拖累它們，
+      綜合分反而**上升**。那是「幫落後股加分」，與空頭濾網的意圖完全相反。
+      故改為在**排名結果**上做顯式後濾，百分位計算完全不動。
+
+    §1：RS 資料不存在（未勾選 rs_leader 因子 / 掃描失敗）時**無法**套用濾網。
+      此時 note 明確寫出「未套用」，**不可**靜默跳過 —— 否則使用者會以為
+      空頭防禦已經生效。
 
     §1：任一掃描失敗 → 該因子缺料（composite 自動不計入、不記 0），不炸整體。
     Returns: (cands_df[代碼/名稱/綜合分/各因子分], note)。
@@ -497,12 +519,69 @@ def get_ranked_picks(
     # 同源入口,回傳值會被 `.head(N)` 當「綜合評分排序前 N 名」直接凍結進 forward-test
     # 紀錄。綜合分 None = 該檔**從未被評分**(勾選因子資料不足),把它排在後面仍可能因
     # 「有分的檔不足 N 個」被 head(N) 撈進凍結名單 → 污染畫面與凍結紀錄(§1 綠燈假象)。
-    return composite_rank_candidates(
+    _df, _note = composite_rank_candidates(
         survivors_df, factors=_factors, top_n=top_n,
         pe_map=pe_map, name_map=name_map,
         shortage_rows=shortage_rows, rs_rows=rs_rows, trend_map=trend_map,
         drop_unscored=True,
     )
+    return _apply_bear_market_filter(_df, _note, regime=regime, rs_rows=rs_rows)
+
+
+def _apply_bear_market_filter(
+    df: pd.DataFrame,
+    note: str,
+    *,
+    regime: str | None,
+    rs_rows: list[dict] | None,
+) -> tuple[pd.DataFrame, str]:
+    """T1-a：`regime ∈ {bear, caution}` → 剔除「未贏過大盤」的候選。
+
+    這是「總經 → 全系統風控」在**選股引擎**上的接線點。此前
+    `fundamental_screener_service` 全檔零 `regime` 引用 —— 總經說空頭防禦時，
+    選股網照樣用同一組門檻選出同一批股票。
+
+    防禦性 regime 集合走 L0 SSOT `shared.position_throttle.THROTTLE_VETO_REGIMES`
+    （`regime_arbiter.py:66` 已把它當成 caution/bear 同列否決的權威定義），
+    **不另立常數**（§3.3）。
+
+    §1 三種情形都必須在 note 講清楚，不可靜默：
+      1. 未套用（regime 非防禦態 / 未評估）→ 不加註（避免每次都刷一行雜訊）
+      2. 想套用但**沒有 RS 資料** → 明寫「無法套用」+ 原因
+      3. 套用了 → 明寫剔除幾檔
+    """
+    if regime not in THROTTLE_VETO_REGIMES:
+        return df, note
+
+    # 情形 2：RS 資料缺席 → 濾網無法生效。§1 必須說，否則使用者會誤以為
+    # 「總經空頭 → 系統已經幫我濾掉弱勢股」，而實際上什麼都沒發生。
+    if not rs_rows:
+        return df, (
+            f"{note}\n\n⚠️ 總經為「{regime}」但**未套用空頭濾網** —— "
+            "本次沒有相對強弱（RS）資料，無法判斷哪些檔贏過大盤。"
+            "勾選「抗跌 RS」因子後重跑即可啟用。"
+        )
+
+    if df is None or df.empty or "代碼" not in df.columns:
+        return df, note
+
+    _beat = {str(r.get("代碼", "")).strip() for r in rs_rows if r.get("贏過大盤")}
+    _before = len(df)
+    _filtered = df[df["代碼"].astype(str).str.strip().isin(_beat)]
+    _dropped = _before - len(_filtered)
+
+    # 情形 3：套用了就講清楚剔除了什麼、依據什麼。
+    _msg = (
+        f"{note}\n\n🛡️ 總經為「{regime}」→ 已套用**空頭濾網**："
+        f"剔除 {_dropped} 檔區間報酬未贏過大盤者，剩 {len(_filtered)} 檔。"
+        "（空頭中弱勢股的下檔風險顯著高於強勢股；"
+        "此濾網只在總經為 bear / caution 時啟用。）"
+    )
+    if _filtered.empty:
+        # §1：空表要說明「為什麼是空的」，不可讓使用者以為系統壞了。
+        # 空頭中沒有任何存活池成員贏過大盤，是**有意義的訊號**，不是故障。
+        _msg += "\n\n本次**沒有任何一檔**贏過大盤 —— 這本身就是空頭訊號，不是系統故障。"
+    return _filtered, _msg
 
 
 def gate_pool_by_fundamentals(

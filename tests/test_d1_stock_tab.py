@@ -630,10 +630,48 @@ class TestRenderTextHonesty:
         assert not _lies, "圖例／文案又出現寫死的停利停損百分比：\n  " + "\n  ".join(_lies)
 
     def test_dragon_alert_uses_ssot_thresholds(self):
-        """龍頭預警的 50% / 80% 曾有三份複本（此處 inline、AI prompt、財報卡副標）。"""
-        _names = _referenced_names(_tree("src/ui/tabs/stock_sections/section_dragon_alert.py"))
-        assert "CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT" in _names
-        assert "CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT" in _names
+        """龍頭預警的 50% / 80% 曾有三份複本（此處 inline、AI prompt、財報卡副標）。
+
+        Batch A(2026-08) 更新 —— 守衛強度只增不減：
+
+        原本斷言「本檔必須直接引用兩個門檻常數」。但本檔已改為委派
+        `section_financial_leading.evaluate_leading_gates()`（同層 L5 純函式），
+        由**那一支**引用 SSOT 常數並負責比例計算 —— 這比各自引用常數再各寫一次
+        `value / capital * 100 >= 門檻` 更強：連「判定式」本身都只剩一份。
+        直接沿用舊斷言會逼著本檔為了過測試而 import 兩個用不到的常數。
+
+        改為「二擇一 + 負向檢查」：
+          (1) 直接引用兩個常數，**或** 委派 `evaluate_leading_gates`；
+          (2) **新增**：檔內不得出現這兩個門檻的數值複本 —— 這才是 docstring 裡
+              「三份複本」真正要防的事，舊版反而沒有檢查。
+        """
+        from shared.signal_thresholds import (
+            CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT as _CX_TH,
+            CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT as _CL_TH,
+        )
+        _rel = "src/ui/tabs/stock_sections/section_dragon_alert.py"
+        _t = _tree(_rel)
+        _names = _referenced_names(_t)
+
+        _direct = ("CONTRACT_LIABILITY_TO_EQUITY_RATIO_THRESHOLD_PCT" in _names
+                   and "CAPEX_TO_EQUITY_RATIO_THRESHOLD_PCT" in _names)
+        _delegated = "evaluate_leading_gates" in _names
+        assert _direct or _delegated, (
+            f"{_rel} 既未引用兩個 SSOT 門檻常數，也未委派 evaluate_leading_gates "
+            "→ 門檻判定很可能又自己寫了一份")
+
+        # 負向檢查：門檻「數值」不得以字面量形式出現在本檔（SSOT 一改就漂移）。
+        # 只掃數值 Constant —— docstring 裡的「≥ 50%」是字串，不算複本。
+        _dupes = [
+            f"line {_n.lineno}: {_n.value!r}"
+            for _n in ast.walk(_t)
+            if isinstance(_n, ast.Constant)
+            and isinstance(_n.value, (int, float))
+            and not isinstance(_n.value, bool)
+            and float(_n.value) in (float(_CL_TH), float(_CX_TH))
+        ]
+        assert not _dupes, (
+            f"{_rel} 出現門檻數值複本（SSOT 一改就會漂移）：\n  " + "\n  ".join(_dupes))
 
 
 # ══════════════════════════════════════════════════════════════════════

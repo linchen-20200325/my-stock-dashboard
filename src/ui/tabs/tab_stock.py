@@ -798,24 +798,24 @@ padding:14px 18px;margin-bottom:12px;">
         _dist_hi = round((_hi20_p/_cur_p-1)*100, 1) if _cur_p > 0 else 0
         _dist_lo = round((1-_lo20_p/_cur_p)*100, 1) if _cur_p > 0 else 0
         # ── 大量紅K 進場價計算 ──────────────────────────────
-        _entry_half = None
-        _abs_sl     = None
-        if df2 is not None and not df2.empty and len(df2) >= 5:
-            # 找近20日最大量的紅K
-            _red_k = df2[(df2['close'] > df2['open']) if 'open' in df2.columns
-                         else df2['close'] > df2['close'].shift(1)].tail(20)
-            if 'volume' in _red_k.columns and not _red_k.empty:
-                # S4 v19.78:volume 全 NaN 時 — 舊版 pandas nlargest 剔 NaN 回空 df
-                # → .iloc[0] IndexError;pandas 3.x 則回含 NaN 的任意列 → 靜默選錯
-                # 紅K(進場價/停損算在錯的 bar 上)。先濾 NaN 再取,兩版行為統一:
-                # 全 NaN → 空 → 維持 _entry_half=None 走「計算中」格,不造假。
-                _top_red = _red_k[_red_k['volume'].notna()].nlargest(1, 'volume')
-                if not _top_red.empty:
-                    _big_red = _top_red.iloc[0]
-                    _rk_high = float(_big_red.get('high', _big_red['close']))
-                    _rk_low  = float(_big_red.get('low',  _big_red['close']) )
-                    _entry_half = round((_rk_high + _rk_low) / 2, 2)  # 1/2 進場價
-                    _abs_sl     = round(_rk_low * 0.995, 2)             # 紅K低點-0.5%
+        # FIX(T4 2026-08 · §2.1 SSOT): 原為本檔行內約 18 行的紅K挑選 + 價位計算。
+        #   個股組合頁要顯示同樣的「絕對停損線 / 實際盈虧比」時，若在那邊再寫一次，
+        #   就會變成兩份會漂移的實作 —— 而這段裡有三個踩過坑才寫下的防呆
+        #   （S4 v19.78 的 pandas NaN 版本差異、v19.179 B1-b 的兩條），
+        #   複製過去必然漏掉其中一兩條。故抽成 L2 純函式兩頁共用。
+        #
+        #   行為完全等價：紅K定義、tail(20)、NaN 過濾、nlargest、high/low fallback、
+        #   (high+low)/2、低點×0.995 全部照搬，僅 0.995 收斂為 L0 常數
+        #   `BIG_RED_STOP_BUFFER_PCT`（§3.3：原為裸數字）。
+        #   守衛見 tests/test_t4_entry_stop_levels.py（30 測，含新舊 pandas 的 NaN 情境）。
+        #
+        #   ⚠️ 抽取時發現但**刻意未改**：`tail(20)` 是「最後 20 **根紅K**」而非
+        #   「近 20 **日**內的紅K」，與下方標籤文案不符。改它會變動錨點 → 停損線 →
+        #   盈虧比，屬影響決策的行為變更，需另案裁示（L2 已備 `lookback_bars` 參數）。
+        from src.compute.strategy.entry_stop_levels import compute_entry_stop_levels
+        _esl2 = compute_entry_stop_levels(df2)
+        _entry_half = _esl2.entry_half
+        _abs_sl     = _esl2.abs_stop
 
         _sp_c5b, _sp_c6b, _sp_c7b = st.columns(3)
         with _sp_c5b:

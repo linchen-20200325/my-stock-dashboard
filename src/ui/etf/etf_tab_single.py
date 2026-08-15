@@ -192,8 +192,17 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     c3.metric('Beta', f'{float(beta):.2f}' if beta else 'N/A',
               help=(f'資料來源：{_beta_src}（vs 基準日報酬回歸）' if beta and _beta_src != 'yfinance'
                     else (None if beta else 'yfinance .info 無資料，且價格重疊不足 60 交易日無法回歸估算')))
-    c4.metric('AUM', f'{aum/1e9:.1f}B USD' if aum and aum > 1e6 else 'N/A',
-              help=None if (aum and aum > 1e6) else '主動式/私募 ETF 規模未揭露，或 yfinance .info 海外 IP 受限')
+    # FIX(AUM 幣別): 原為 f'{aum/1e9:.1f}B USD' —— info['totalAssets'] 對台股 ETF 是「元(TWD)」而非 USD。
+    #   證據 1: etf_fetch.py fetch_etf_info() 缺 totalAssets 時直接填 MoneyDJ 的 aum_twd(億 × 1e8 = 元)
+    #   證據 2: shared/signal_thresholds.py ETF_AUM_LOW_YI / ETF_AUM_FAIR_YI 的 docstring 明寫「億 TWD」
+    #   證據 3: src/compute/etf/etf_quality.py 註「# AUM in TWD」，score_aum docstring 寫「AUM (元)」
+    #   原顯示讓 0050(≈2.28 兆 TWD) 印成「2283.7B USD」(≈2.28 兆美元)，且與本頁下方品質評等卡的
+    #   「22837.3 億」自相矛盾。改為與品質卡／多檔比較頁一致的「億」口徑。
+    c4.metric('AUM', f'{aum/1e8:,.1f} 億' if aum and aum > 1e6 else 'N/A',
+              help=('新台幣計價（元 ÷ 1e8）。與下方「⭐ 品質評等」的 AUM 規模、'
+                    '「📊 多檔比較」頁的 AUM(億) 同一口徑。'
+                    if (aum and aum > 1e6)
+                    else '主動式/私募 ETF 規模未揭露，或 yfinance .info 海外 IP 受限'))
 
     with st.expander('💡 這項數據代表什麼？（內扣費用率 · Beta · AUM）', expanded=False):
         st.markdown(
@@ -915,7 +924,9 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                     f'追蹤誤差（它跟它要追的指數差多少，越小代表越貼、越乖）={_fmt(te, "%")}；'
                     f'內扣費用率（每年自動從你錢裡扣掉的管理費 %）={_fmt(expense * 100, "%") if expense else "N/A"}；'
                     f'規模 AUM（這檔總共管多少錢，越大通常越穩、越不怕清算）='
-                    f'{f"{aum / 1e9:.1f}B 美元" if (aum and aum > 1e6) else "N/A"}；'
+                    # FIX(AUM 幣別): 同上，原為 1e9 + 「美元」，實為新台幣「元」。
+                    #   此處是餵給 LLM 的 prompt，錯誤幣別會讓 AI 產出「規模 2283.7B 美元」的荒謬敘述。
+                    f'{f"{aum / 1e8:,.1f} 億元（新台幣）" if (aum and aum > 1e6) else "N/A"}；'
                     f'Beta（跟著大盤上下震動的幅度，>1 比大盤更激動、<1 比較穩）={_fmt(beta)}。'
                 ),
             },

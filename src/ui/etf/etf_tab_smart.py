@@ -16,6 +16,12 @@ from typing import TYPE_CHECKING
 
 import streamlit as st
 
+# FIX(§3.3 SSOT / CLAUDE.md V-SMART-CACHE-1):
+#   本檔原有 5 個 `@st.cache_data(ttl=<數字字面量>)`（1800/3600/3600/7200/86400），
+#   是全站 UI 層唯一沒有走 shared/ttls.py 的快取宣告 —— 其餘 6 個都已引用常數。
+#   五個數值與 SSOT 常數**完全相同**，故本次改動為純命名收斂，**零行為變更**。
+from shared.ttls import TTL_30MIN, TTL_1HOUR, TTL_2HOUR, TTL_1DAY
+
 if TYPE_CHECKING:  # 僅供 "pd.DataFrame" 字串型別註解解析用，不在 runtime import（L5 無 pandas 依賴）
     import pandas as pd
 
@@ -23,19 +29,19 @@ if TYPE_CHECKING:  # 僅供 "pd.DataFrame" 字串型別註解解析用，不在 
 # @st.cache_data 供跨 session 共享 + TTL 自動失效（EX-PASSTHRU-1 / EX-CACHE-1 精神）
 
 
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=TTL_30MIN, show_spinner=False)
 def _cached_price(ticker: str) -> "pd.DataFrame":
     from src.data.etf.etf_fetch import fetch_etf_price  # EX-PASSTHRU-1
     return fetch_etf_price(ticker, period='2y')
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def _cached_peer_prices(tickers_tuple: tuple) -> "pd.DataFrame":
     from src.data.etf.etf_fetch import fetch_etf_peer_history  # EX-PASSTHRU-1
     return fetch_etf_peer_history(tickers_tuple, period='2y')
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
 def _cached_holdings(ticker: str) -> list:
     try:
         from src.data.etf.etf_fetch import fetch_etf_holdings  # EX-PASSTHRU-1
@@ -46,14 +52,14 @@ def _cached_holdings(ticker: str) -> list:
         return []
 
 
-@st.cache_data(ttl=7200, show_spinner=False)
+@st.cache_data(ttl=TTL_2HOUR, show_spinner=False)
 def _cached_price_long(ticker: str) -> "pd.DataFrame":
     """取 5 年歷史（供 3-3-3 成立年數 / 3 年報酬計算）。"""
     from src.data.etf.etf_fetch import fetch_etf_price  # EX-PASSTHRU-1
     return fetch_etf_price(ticker, period='5y')
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=TTL_1DAY, show_spinner=False)
 def _cached_zh_name(ticker: str) -> str:
     try:
         from src.data.etf import fetch_etf_zh_name  # EX-PASSTHRU-1

@@ -274,13 +274,19 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     #          signal_thresholds.MARGIN_BALANCE_WARN_THRESHOLD_YI（同值 2500.0），
     #          消除與 macro_ui_components.margin_card 兩處各自寫死的 SSOT 漂移風險。
     #          **數值未變**（改門檻屬行為變更，需獨立回測）。
+    # ⚠️ note 欄會**原文渲染在五桶「🧩 籌碼」的指標明細卡上給一般使用者看**。
+    #    v19.170 起這裡誤植了開發者備忘（含版本號、實測值、模組路徑
+    #    `shared/relative_thresholds.margin_leverage_ratio + classify_by_pct_rank`），
+    #    實機驗證確認整段被印到畫面。技術備忘留在本註解，note 只留使用者看得懂的話。
+    #    技術現況：絕對門檻已被市值成長淹沒，實測 5,148 億早已穿透兩線 → 燈號恆紅、
+    #    鑑別力歸零。相對化方案見 shared/relative_thresholds（尚未接線，屬行為變更需另案）。
     DangerSpec("margin", "融資餘額", "chips", "億", "high_bad",
                yellow=float(MARGIN_BALANCE_WARN_THRESHOLD_YI),
                red=float(MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI), decimals=0,
                note="2500-3400 警戒 / >3400 散戶槓桿極危"
-                    "（v19.170:絕對門檻已被市值成長淹沒—實測 5,148 億早已穿透兩線,"
-                    "燈號恆紅、鑑別力歸零;相對化見 shared/relative_thresholds"
-                    ".margin_leverage_ratio + classify_by_pct_rank）",
+                    "（⚠️ 本項用的是絕對金額門檻，未隨市場總市值成長調整 —— "
+                    "目前餘額已長期高於兩條線，燈號會持續偏紅；"
+                    "判讀時請看「相對自身近年區間的變化方向」，而非只看有沒有超過門檻）",
                source="SSOT:MARGIN_BALANCE_OVERHEAT(3400)+MARGIN_BALANCE_WARN(2500)"),
     # ── v19.177 P1-B 反捏造(§1):label / source 兩處都在說謊 ──────────────────
     # 舊 label「旌旗指數（站上 20MA %）」+ 舊 source「DESIGN:站上均線比例慣例」。

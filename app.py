@@ -1,5 +1,4 @@
 import streamlit as st
-import datetime
 import os
 import re
 
@@ -93,23 +92,56 @@ except Exception as _oauth_err:
 # ── App 初始化閘門（每個 Session 僅執行一次，防重複迴圈）────────────
 if '_app_boot_done' not in st.session_state:
     st.session_state['_app_boot_done'] = True
-    # [Phase 3] 從 URL query_params 恢復關鍵狀態（手機斷線重連可保留設定）
+    # [Phase 3] 從 URL query_params 恢復關鍵狀態（手機斷線重連可保留「設定」）
+    #
+    # FIX(S1 §1 Fail Loud｜殭屍已載入態): 原本這裡還有一段
+    #     if _qp.get('chips') == '1':
+    #         st.session_state['chips_loaded'] = True
+    #   它把「已載入」**旗標**從 URL 還原，但**資料**（cl_data / cl_ts / mkt_info /
+    #   macro_info / warroom_summary）全都住在 session_state，一個也救不回來。
+    #   而 chips_loaded 一個人就同時滿足 tab_macro.py:146-150 的 `_macro_loaded`
+    #   與 tab_macro.py:372 的 `_load_heavy` ⇒ **空 session 被渲染成「已載入」**：
+    #     · 跳過 tab_macro.py:200-208 誠實的「👉 點擊上方按鈕載入總經資料」
+    #     · 燈號卡印「⏳ 燈號等待中（尚無資料）」(section_traffic_light.py:185-191)
+    #     · warroom_summary 不存在 → get_macro_state() 回 regime='unknown'
+    #       (macro_state_locker.py:365-367) → 個股 / 個股組合 / 選股網 / ETF /
+    #       工具箱 五頁同時顯示「⬜ 總經未評估」
+    #     · 今日關鍵從 2 項掉成 1 項 —— CPI 只讀 session_state['macro_info']
+    #       (macro_alert.py:276-282，零 fallback) 故死；美債 10Y 走
+    #       @st.cache_data(TTL_30MIN)(macro_alert.py:204-205) 是 **server 級、
+    #       跨 session 存活** 故活。這個不對稱正是「session 沒了、cache 還在」
+    #       的指紋，也是本 bug 唯一能從畫面反推根因的線索。
+    #
+    #   ⚠️ 本修法**不阻止 session 被重建** —— 那是 Cloud 容器回收 / websocket
+    #   斷線 / 記憶體壓力，非 code 可控。它做的是讓重建後**誠實承認沒資料**：
+    #   使用者看到空狀態 → 按一次按鈕 → 快取還熱 → 數秒回來，
+    #   而不是對著一整頁空值以為系統壞掉。§1「寧可炸掉，不可造假」。
+    #
+    #   ⚠️ chips_loaded 本身**不是**壞設計，切勿一併拔除：
+    #     · tab_macro.py:185 由「使用者真的按下按鈕」寫入 —— 語意是「本 session
+    #       嘗試過載入」。抓取失敗時它仍須為 True，畫面才能顯示失敗診斷，
+    #       而不是退回「還沒載入」假裝什麼都沒發生。
+    #     · section_chips.py:136-137 / :752 用它算 `_attempted`，區分
+    #       「按過但三源全空（→ 印 FINMIND_TOKEN 診斷卡）」vs「根本還沒按」。
+    #   壞掉的只有「跨 session 還原」這一件事，故只拔還原、不動語意。
+    #
+    #   sid 保留還原：那是「使用者選了哪支股票」＝設定，不是抓回來的資料，
+    #   跨 session 還原它不會製造任何假的已載入狀態。
     try:
         _qp = st.query_params
-        if _qp.get('chips') == '1':
-            st.session_state['chips_loaded'] = True
         _qp_sid = _qp.get('sid')
         if _qp_sid and isinstance(_qp_sid, str) and _qp_sid.isdigit():
             st.session_state['_qp_sid'] = _qp_sid  # 個股 Tab 啟動時讀取
     except Exception as _qpe:
         print(f'[query_params restore] {_qpe}')
 
-# [Phase 3] 雙向同步：session_state → query_params（讓重連後 URL 仍帶狀態）
+# [Phase 3] 單向清理（原為雙向同步）：舊版會把 chips_loaded 寫回 URL 成 ?chips=1，
+# 專供上方那段已移除的還原邏輯使用。還原端沒了，這個參數就**零 reader**，
+# 留著只會讓使用者的書籤 / 分享連結帶著一個看似有意義、實則無效的狀態。
+# 這裡順手清掉殘留值（含使用者從舊版複製的舊網址）。
 try:
     _qp_w = st.query_params
-    if st.session_state.get('chips_loaded') and _qp_w.get('chips') != '1':
-        _qp_w['chips'] = '1'
-    elif not st.session_state.get('chips_loaded') and _qp_w.get('chips') == '1':
+    if _qp_w.get('chips') is not None:
         del _qp_w['chips']
 except Exception:
     pass
@@ -149,22 +181,23 @@ from src.services.app_ai_service import (  # noqa: E402
     gemini_keys as _gemini_keys,
 )
 
-# ── 本地快取（SQLite + Pickle 雙軌）───────────────────────
-# v18.404 B3-α:cache helper 50 LOC 抽至 shared/app_cache.py(thin shim 保 caller API)。
-from shared.app_cache import _cache_key, _load_cache, _save_cache, _CACHE_DIR  # noqa: F401
-
-# 6 fetchers + _get_loader + _expected_latest_trading_date 已抽至
-# src/data/stock/app_stock_fetchers.py(v18.405 U5 B3-δ)
-from src.data.stock.app_stock_fetchers import (  # noqa: E402,F401
-    _expected_latest_trading_date,
-    _get_loader,
-    fetch_dividend_data,
-    fetch_financials,
-    fetch_price_data,
-    fetch_quarterly,
-    fetch_quarterly_extra,
-    fetch_revenue,
-)
+# ── 本地快取 / 個股 fetcher ────────────────────────────────
+# FIX(A-2 死碼清理): 這裡原有兩組 `# noqa: F401` 的 re-export shim ——
+#   (1) `from shared.app_cache import _cache_key, _load_cache, _save_cache, _CACHE_DIR`
+#       (v18.404 B3-α 抽出時留的 thin shim)
+#   (2) `from src.data.stock.app_stock_fetchers import` 6 個 fetcher + `_get_loader`
+#       + `_expected_latest_trading_date`(v18.405 U5 B3-δ 抽出時留的)
+#   兩組都是「為了讓舊 caller `from app import xxx` 不用改」而留的轉發層。
+#   但 F2(2026-08)收掉 5 處 L5→L6 上行 import 後，**production 已零 `from app import`**
+#   (`test_c3_layering_guard.py` 規則 5 的 `_KNOWN_VIOLATIONS` 4 條已移除、反向守衛生效)；
+#   app.py 自己也完全不用這些符號(`noqa: F401` 就是 flake8 早就在講的話)。
+#   ⇒ 轉發層的兩端都沒人了，屬純歷史殘骸。真 caller 一律直接吃 L0 `shared.app_cache`
+#     與 L1 `src.data.stock.app_stock_fetchers`。
+#   連帶同步移除 `test_c3_layering_guard.py` 的 EX-PASSTHRU-1 白名單條目
+#   `("R4", "app.py", "src.data.stock.app_stock_fetchers")` —— 該檔 `test_rule4_whitelist_not_stale`
+#   是**反向守衛**：留著已不違憲的條目會直接紅燈（設計上刻意如此，防清單越長越假）。
+#   ⚠️ 唯一保留的 re-export 是上方的 `parse_stocks`(shared/parse_helpers)：
+#     `tests/test_parse_helpers.py` 仍以 subprocess 走 `from app import parse_stocks`。
 
 
 
@@ -179,13 +212,15 @@ from src.data.stock.app_stock_fetchers import (  # noqa: E402,F401
 # ════════════════════════════════════════════════════════════════
 # 初學者友善說明系統 — 已抽出至 ui_widgets.py（PR P2-B Phase 2）
 # ════════════════════════════════════════════════════════════════
-from src.ui.render import (  # noqa: E402
-    traffic_light, show_term_help,
-)
+from src.ui.render import traffic_light  # noqa: E402
 # P2-B Phase 5 A/B/C/D: 4 個 TAB 全部已抽到獨立模組（app.py 9208→1394 行，−85%）
 
-# 在先行指標 section 使用
-_TERM_HELP_LI = show_term_help('PCR') + show_term_help('ADL') + show_term_help('M1B-M2')
+# FIX(A-2 死碼清理): 原有 `_TERM_HELP_LI = show_term_help('PCR') + ... ('ADL') + ... ('M1B-M2')`，
+#   註解寫「在先行指標 section 使用」—— 但全檔零讀取點（先行指標區早已搬到
+#   `src/ui/tabs/macro/section_chips.py`，自己呼叫 show_term_help）。
+#   它是 **module level** 賦值 ⇒ 每一次 rerun 都白呼叫 3 次組出一段沒人看的 HTML。
+#   連帶 `show_term_help` 在 app.py 失去唯一 caller，故從 import 一併移除
+#   （`traffic_light` 仍在 :958 使用，保留）。
 
 # generate_ai_comment 已抽至 src/services/app_ai_service.py(v18.398 P5-B3-β R7)
 # caller 改走 `from src.services.app_ai_service import generate_ai_comment`
@@ -197,24 +232,29 @@ _TERM_HELP_LI = show_term_help('PCR') + show_term_help('ADL') + show_term_help('
 # caller 改走 `from src.ui.render.app_render import render_health_score`
 
 
-primary_stock = '2330'
+# FIX(A-2 死碼清理): 原有 `primary_stock = '2330'` —— 全 repo 零讀取點
+#   （只有本行賦值）。個股預設代號真正的來源是 `?sid=` query param 還原
+#   （見上方開機閘門的 `_qp_sid`）與各 Tab 自己的 `st.text_input` 預設值。
 
 # ── Sidebar: 整合 AI 分析 ───────────────────────────────────────
 with st.sidebar:
     st.markdown('<div style="text-align:center;padding:8px 0;font-size:15px;font-weight:900;color:#e6edf3;">&#128202; 台股AI戰情室 v3.0</div>', unsafe_allow_html=True)
     st.markdown('---')
     # v18.461 FIX: 使用台灣時區（UTC+8），避免 Streamlit Cloud UTC 服務器在 00:00~08:00 TW 顯示昨天日期
-    _TW_TZ_SB = datetime.timezone(datetime.timedelta(hours=8))
-    _today_sb = datetime.datetime.now(_TW_TZ_SB).date()
+    # FIX(§3.3 SSOT): 原自建 `_TW_TZ_SB = timezone(timedelta(hours=8))`,而本檔 L32 已
+    #   `from shared.macro_compute import tw_now as _tw_now`(同一個 UTC+8 定義)。
+    #   原註解自陳「§4.5 全站已有多份複本」,結果同一檔又生一份 —— 改吃 L0 SSOT。
+    _today_sb = _tw_now().date()
     _wd_sb = {0:'一',1:'二',2:'三',3:'四',4:'五',5:'六',6:'日'}[_today_sb.weekday()]
     _trade_sb = '✅ 交易日' if _today_sb.weekday() < 5 else '❌ 非交易日'
     st.caption(f'{_today_sb.strftime("%Y/%m/%d")} 週{_wd_sb}  {_trade_sb}')
-    st.markdown('---')
-    st.markdown('### 🤖 AI 分析')
-    st.caption('頁面底部有 AI 整合報告面板')
-    ai_run = False  # AI button moved to bottom panel
-    st.markdown('---')
-    st.success('🟢 系統正常運作中')
+    # FIX(誠實性): 移除兩段與實際狀態無關的側欄顯示 ——
+    #   (1)「### 🤖 AI 分析 / 頁面底部有 AI 整合報告面板」:該面板已不存在。
+    #       AI 現在住在「🧬 AI 問答」主頁籤,原指路會把使用者送到頁尾免責聲明。
+    #   (2) `st.success('🟢 系統正常運作中')`:硬編碼常數,不讀任何狀態,且印在下方
+    #       「🔌 連線狀態」三顆真燈**上方** —— FinMind/Gemini/Proxy 全紅時第一眼仍是綠。
+    #       真實狀態由下方 `_fm_tok / _gm_keys / _px_host` 三顆燈負責,不需要這句。
+    #   附帶移除 `ai_run = False`(全 repo 僅此 1 處、零 consumer,含 tests)。
 
     # ── Google 帳號（OAuth）— ETF 組合雲端存取用 ─────────────────
     st.markdown('---')
@@ -338,7 +378,10 @@ with st.sidebar:
 # v3.0 RENDER FUNCTIONS (§9.3)
 # ════════════════════════════════════════════════════════════════
 
-# ── 旌旗指數計算（站上 MA20/MA60/MA120/MA240 的家數比例）──────
+# ── 旌旗指數 = 上漲佔比(ad_ratio) 的 5 日移動平均（src/services/jingqi_calc.py）──
+#    FIX(§3.3 反捏造): 原註解寫「站上 MA20/MA60/MA120/MA240 的家數比例」——
+#    全站沒有任何一行 code 在算站上均線家數比。同一個錯誤定義已在
+#    shared/macro_buckets.py(v19.177 P1-B) 與 section_overview.py 正名退役,此處為漏網。
 # ════════════════════════════════════════════════════════════════
 # TABS: 3 主頁籤
 # ════════════════════════════════════════════════════════════════
@@ -551,13 +594,28 @@ with tab_stocks:
             _pe_map, _name_map = fetch_pe_name_maps()
             # v19.147:改走 L3 get_ranked_picks（畫面/cron 同源，保證自動凍結清單=畫面清單）。
             # auto_fetch=False = 只用 session 已快取的掃描結果（掃描仍由上方「開始選股」按鈕觸發），行為不變。
+            # T1-a(2026-08)「總經 → 全系統風控」接線：把 canonical regime 傳進選股引擎。
+            #   此前 fundamental_screener_service 全檔零 regime 引用 —— 總經顯示「空頭防禦」
+            #   時，選股網照樣用同一組門檻選出同一批股票（流程圖層次 1 那支箭頭在此是斷的）。
+            #   regime ∈ {bear, caution} → 剔除區間報酬未贏過大盤的候選；其餘不變。
+            #   取不到就傳 None（= 不套用），並由 service 端在 note 明講「未套用」（§1）。
+            #   ⚠️ 只有**畫面**傳 regime；凍結 cron / MCP / 推播三處維持 None ——
+            #     前進式驗證要的是「當下真實決定」的跨期可比性，濾網改變凍結內容會破壞它。
+            try:
+                from src.services.allocation_service import get_macro_regime as _gmr
+                _screen_regime = _gmr()
+            except Exception as _e_reg:  # noqa: BLE001 — 總經取不到不該炸掉選股
+                _screen_regime = None
+                print(f'[screener] regime 取得失敗，不套用空頭濾網: '
+                      f'{type(_e_reg).__name__}: {_e_reg}')
             _cands, _cnote = get_ranked_picks(
                 _factors, top_n=300, survivors_df=_surv_df,
                 pe_map=_pe_map, name_map=_name_map,
                 shortage_rows=st.session_state.get('_shortage_rows'),
                 rs_rows=st.session_state.get('_rs_rows_all'),  # v19.90 全存活池 RS（非 top-50）
                 trend_map=st.session_state.get('_trend_map'),  # A-2 v19.140 跨季轉強
-                auto_fetch=False)
+                auto_fetch=False,
+                regime=_screen_regime)
             if _cnote:
                 st.info(_cnote)
             st.markdown('#### ③ 選股結果（綜合評分排序）')
@@ -721,16 +779,22 @@ with tab_etf_main:
             render_333_section(_tk, key_suffix='_single')
             render_std_band_section(_tk, key_suffix='_single')
             render_correlation_finder(_tk, key_suffix='_single')
-        render_etf_single(gemini_fn=gemini_call, before_ai_hook=_etf_single_smart)
+        # FIX(隔離器): ETF 三頁原為裸呼叫,是全站唯一沒有隔離保護的一組。
+        _render_tab_isolated(
+            lambda: render_etf_single(gemini_fn=gemini_call, before_ai_hook=_etf_single_smart),
+            'ETF 單檔診斷')
 
     with tab_etf_compare:
         from src.ui.etf import render_etf_grp_compare
-        render_etf_grp_compare()
+        _render_tab_isolated(render_etf_grp_compare, 'ETF 多檔比較')
 
     with tab_etf_grp:
-        render_etf_portfolio(gemini_fn=gemini_call)
+        # FIX(隔離器): 本頁一次串 6 個渲染器,原為裸呼叫 —— 任一 raise 會吃掉後面全部區塊
+        #   (例如 render_etf_portfolio 失敗會連葡萄串、3-3-3、標準差帶、分散度、AI 一起消失)。
+        #   刻意**逐個渲染器各包一次**,而非整段包一次:單一 section 失敗不影響其餘。
+        _render_tab_isolated(lambda: render_etf_portfolio(gemini_fn=gemini_call), 'ETF 組合')
         st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
-        render_grape_ladder(gemini_fn=gemini_call)
+        _render_tab_isolated(lambda: render_grape_ladder(gemini_fn=gemini_call), '葡萄串領息法')
         st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
         from src.ui.etf.etf_tab_smart import (
             render_std_band_section, render_correlation_finder, render_333_section,
@@ -757,12 +821,12 @@ with tab_etf_main:
             st.caption('（尚未載入組合 —— 於上方填入持股並按「計算組合」後，'
                        '這裡會自動帶入你的持股清單供選擇；目前用手動輸入。）')
             _etf_grp_tk = render_smart_ticker_input(key_suffix='_grp')
-        render_333_section(_etf_grp_tk, key_suffix='_grp')
-        render_std_band_section(_etf_grp_tk, key_suffix='_grp')
-        render_correlation_finder(_etf_grp_tk, key_suffix='_grp')
+        _render_tab_isolated(lambda: render_333_section(_etf_grp_tk, key_suffix='_grp'), '3-3-3 評估')
+        _render_tab_isolated(lambda: render_std_band_section(_etf_grp_tk, key_suffix='_grp'), '標準差買賣帶')
+        _render_tab_isolated(lambda: render_correlation_finder(_etf_grp_tk, key_suffix='_grp'), '分散度分析')
         # AI 置底（移到 smart 區塊之後）
         st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
-        render_etf_ai(gemini_fn=gemini_call)
+        _render_tab_isolated(lambda: render_etf_ai(gemini_fn=gemini_call), 'ETF AI 研判')
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 4: 工具箱（資料診斷 + 教學）
@@ -778,24 +842,33 @@ with tab_tools:
             render_reconcile_panel,
         )
         # v19.168 IMPL-E:使用者版 —— 資料覆蓋率/新鮮度總覽常駐(一般使用者只需看這張燈號表)。
-        render_data_coverage()
+        # FIX(隔離器): 原為裸呼叫,本頁任一例外會炸掉整個 app。補上與其他 tab 一致的隔離。
+        _render_tab_isolated(render_data_coverage, '資料診斷')
         # v19.168 IMPL-E:工程師版 —— 資料源清單 / Fetcher 監控 / §4.3 雙演算法對帳 / API 根因 /
         # 原始資料表 / 門檻校準,全對照 CLAUDE.md §編號、談 SSOT/proxy/@monitored,一般使用者用不到,
         # 收進折疊、預設隱藏(不刪 —— 診斷仍在,只是不干擾主畫面)。
         with st.expander(
-                '🔧 進階診斷（工程師版：資料源清單 · Fetcher 監控 · §4.3 對帳 · API 根因 · 原始表 · 門檻校準）',
+                '🔧 進階診斷（工程師用；一般使用者不需要打開）',
                 expanded=False):
-            render_data_registry_panel()
-            render_fetch_monitor_panel()   # v19.96:@monitored 監控 + 孤兒 set-diff
-            st.markdown('---')
-            render_reconcile_panel()
-            st.markdown('---')
-            render_api_diagnostic()
-            st.markdown('---')
-            render_data_health_raw()
-            st.markdown('---')
-            from src.ui.pages import render_calibration_panel
-            render_calibration_panel()
+            # FIX(效能): st.expander(expanded=False) 只收合**視覺**,body 每次 rerun 仍會完整執行。
+            #   原本 6 個 panel 無條件跑:render_data_registry_panel 每次組 50+ 筆 HTML、
+            #   render_data_health_raw 內另有未受 button 保護的 per-ETF 外抓(MoneyDJ/SITCA)。
+            #   改為 checkbox gate —— 預設不執行,要看才載入。診斷內容一項未刪。
+            if st.checkbox(
+                    '載入進階診斷（較耗時，部分項目會實際打外部 API）',
+                    key='_diag_adv_on',
+                    help='資料源清單 · Fetcher 監控 · §4.3 對帳 · API 根因 · 原始表 · 門檻校準'):
+                render_data_registry_panel()
+                render_fetch_monitor_panel()   # v19.96:@monitored 監控 + 孤兒 set-diff
+                st.markdown('---')
+                render_reconcile_panel()
+                st.markdown('---')
+                render_api_diagnostic()
+                st.markdown('---')
+                render_data_health_raw()
+                st.markdown('---')
+                from src.ui.pages import render_calibration_panel
+                render_calibration_panel()
 
     with tab_edu:
         from src.ui.tabs import render_tab_edu
@@ -867,7 +940,12 @@ _mkt_top  = st.session_state.get('mkt_info', {})
 _jq_top   = st.session_state.get('jingqi_info', {})
 _ts_top   = st.session_state.get('cl_ts', '')
 if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
-    _jqpct = _jq_top.get('avg', 50) if _jq_top else None
+    # FIX(§1 反捏造): 原為 `_jq_top.get('avg', 50)` —— jingqi_info 存在但缺 'avg' 鍵時
+    #   會憑空印出「旌旗均值 50%」,而 50 正好是最不容易被察覺的中性值。
+    #   下方 L937 已有 `if _jqpct is not None` 守衛,拿掉 default 即自動改為「不顯示」。
+    #   同型問題 section_overview.py 已於稍早修正(改 .get('avg', None) 並註明是 §1 違憲),
+    #   本處是當時的漏網第二處。
+    _jqpct = _jq_top.get('avg') if _jq_top else None
     # v19.170 P0-1:燈號 label 與持股% 全部改讀建議持股 SSOT(get_allocation)——
     # 原本 label 自行看 mkt_info.regime + jingqi_info.avg;持股% 則是
     # warroom_summary['throttle'](v19.168 SSOT,會被 section_state 整包覆寫抹掉)

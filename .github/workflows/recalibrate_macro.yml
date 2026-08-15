@@ -55,8 +55,18 @@ jobs:
 
       - name: Detect Changes
         id: check
+        # FIX: 原為 `git diff --quiet <兩個檔案>`（未先 git add）。
+        #   `git diff` 比較的是「工作區 vs index」，**看不到 untracked 檔案**，
+        #   而 MACRO_CALIBRATION_PROPOSAL.md 不在 repo 內、也不在 .gitignore
+        #   → 它每次都是 untracked → 對 exit code 完全沒有貢獻。
+        #   加上 calibrate_macro_traffic.py::emit_thresholds_json 在「建議值 == 現行值」
+        #   時 return False 不寫檔（最常見且最健康的結果），macro_thresholds.json 多半也沒動
+        #   → 兩個 pathspec 皆無 diff → changed=false → **PR 永遠不會開**。
+        #   本 repo 其餘 7 個寫入型 cron 全部是「先 git add，再 git diff --staged --quiet」，
+        #   本檔是唯一的錯誤變體。改為與其他 cron 一致的正解。
         run: |
-          if git diff --quiet macro_thresholds.json MACRO_CALIBRATION_PROPOSAL.md; then
+          git add -f macro_thresholds.json MACRO_CALIBRATION_PROPOSAL.md 2>/dev/null || true
+          if git diff --staged --quiet -- macro_thresholds.json MACRO_CALIBRATION_PROPOSAL.md; then
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "→ 門檻 & proposal 無變動，跳過開 PR"
           else

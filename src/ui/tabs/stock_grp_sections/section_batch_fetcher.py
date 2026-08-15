@@ -28,7 +28,17 @@ from shared.calc_helpers import calc_bias_pct
 # H1:「多因子總分能不能算」的唯一判定(L0 純函式)。原碼在此捏造 regime='neutral',
 # 見該模組 docstring 的完整病史與「拒絕評分 vs 挑保守權重」的設計決定。
 from shared.scoring_regime_gate import resolve_scoring_regime
+# T4(2026-08)：停利目標 1 的百分比 —— 算「實際盈虧比」的分子用。
+from shared.signal_thresholds import STOP_PROFIT_T1_PCT
 from shared.thresholds import YIELD_HIGH_DEC, YIELD_LOW_DEC, YIELD_MID_DEC
+# T4(2026-08)：與個股頁**共用**的紅K錨點 / 壓力支撐純函式（§2.1 SSOT）。
+# 這兩支抽自 tab_stock.py 行內邏輯，內含三個踩過坑的防呆
+# （S4 v19.78 pandas NaN 版本差異、v19.179 B1-b 兩條）——
+# 在這裡重寫一份必然漏掉其中一兩條，故走同一支。
+from src.compute.strategy.entry_stop_levels import (
+    compute_entry_stop_levels,
+    compute_support_resistance,
+)
 from src.compute.scoring import (
     calc_health_score,
     compute_tech_bearish,
@@ -193,9 +203,39 @@ def run_batch_fetch(stock_list: list[str]) -> None:
             except Exception as _e_fb:
                 print(f'[section_batch_fetcher foreign_buy] {sid4} {type(_e_fb).__name__}: {_e_fb}')
 
+            # ── T4(2026-08)大量紅K錨點 + 近N日壓力支撐 ────────────────
+            # 零額外抓取:直接吃迴圈內已有的 df4(同 v19.164 `_pattern4` 範式 ——
+            # 批次算一次 → 總表加欄 + 下鑽 seed 共用)。
+            #
+            # ⚠️ 為什麼**不**放停利價 / 固定盈虧比:tab_stock.py:648-677 的
+            #   v19.179 B1-b 已證明 RR=(P×1.05−P)/(P−P×0.92)=0.625,**P 完全約掉**
+            #   ⇒ 那組數字對每一檔都一樣,放進 20 檔比較表等於印 20 列相同值。
+            #   此處只放「以紅K低點為錨」的版本 —— 錨點來自各股自己的價量結構,
+            #   才具備比較價值(該處畫面亦已正名為「實際盈虧比(紅K低點停損)」)。
+            _tp1_4 = price4 * (1 + STOP_PROFIT_T1_PCT / 100.0) if price4 else None
+            _esl4 = compute_entry_stop_levels(
+                df4, current_price=price4 or None, take_profit_price=_tp1_4)
+            _sr4 = compute_support_resistance(df4, current_price=price4 or None)
+
             results_t3.append({
                 'stock_id': sid4,
                 '代碼': sid4, '名稱': name4 or sid4, '現價': f'{price4:.2f}',
+                # T4:錨點型價位(因股而異,可比)。None 一律留白,§1 不填 0。
+                '_abs_stop':      _esl4.abs_stop,
+                '_stop_dist_pct': _esl4.stop_distance_pct,
+                '_rr_anchor':     _esl4.risk_reward,
+                '_rr_why':        _esl4.unavailable_reason,
+                '_entry_half':    _esl4.entry_half,
+                '_sr_support':    _sr4.support,
+                '_sr_resistance': _sr4.resistance,
+                '_sr_dist_sup':   _sr4.distance_to_support_pct,
+                '_sr_dist_res':   _sr4.distance_to_resistance_pct,
+                '_sr_window':     _sr4.window_bars,
+                # T4-2:VCP / 布林**完整 dict**(非只有徽章字串),供下鑽卡片渲染。
+                # 兩者在 :158-159 本就算好,這裡只是留住它們 —— 零額外計算、零額外抓取。
+                # 都是小 dict(非 DataFrame),20 檔的記憶體成本可忽略。
+                '_vcp':           vcp4,
+                '_bb':            bb4,
                 '健康度': health4, '評級': f'{emoji4}{grade4}',
                 'RSI':  f'{rsi4}' if rsi4 else '-',
                 '量比': f'{vr4}' if vr4 else '-',
