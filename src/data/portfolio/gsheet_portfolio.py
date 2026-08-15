@@ -31,7 +31,7 @@ Schema
 
 呼叫端
 ======
-- etf_tab_portfolio.py 經「💾 雲端儲存」expander 取用
+- src/ui/tabs/portfolio_manager.py（📁 組合管理頁）— ETF 組合 + 個股清單的唯一管理入口
 
 設計
 ====
