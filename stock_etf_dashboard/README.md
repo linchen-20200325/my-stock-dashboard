@@ -22,7 +22,8 @@ L2/L3 Services  services/                純運算 + 編排
    └ pool_state_service.py               觀察池↔持股 單向狀態機 + 出場訊號
 L1 Repositories repositories/            外部資料,出口過 schema + 血緣
    ├ market_repo.py                      yfinance OHLCV / 配息 / 估值序列 / 最新收盤
-   ├ etf_repo.py                         yfinance funds_data ETF 成分（小數→%,去後綴）
+   ├ etf_repo.py                         ETF 成分兩源：yfinance funds_data → 台灣 Yahoo
+   │                                       /holding（優先抓代號對齊；小數→%；全敗 fail-loud）
    ├ chip_repo.py                        TWSE T86 三大法人（股→張）
    └ sheets_repo.py                      Google Sheets（PoolStore 介面 + 記憶體後端）
 L0 Infra        core/                     被全層 import,禁依賴上層

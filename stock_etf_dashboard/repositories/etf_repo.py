@@ -1,25 +1,45 @@
-"""L1 Repository — ETF 成分股（穿透用）。
+"""L1 Repository — ETF 成分股（穿透用），兩源 fallback。
 
-主源 yfinance `funds_data.top_holdings`（Symbol 索引 + 'Holding Percent' 小數）。
-純解析 `_normalize_holdings` 與 I/O 分離,可離線單測。
-抓不到成分 → Fail Loud（§1）,交由 L2 穿透引擎標記「不完整」,不捏造權重。
+來源鏈（抓到就停）：
+  1. yfinance `funds_data.top_holdings` — 海外 ETF 主源；台股常 None。
+  2. 台灣 Yahoo 股市 `/quote/{代碼}/holding` — 台股 ETF 在地源（繞海外源封鎖）。
 
-⚠️ 已知限制：yfinance 對台股 ETF 成分覆蓋不穩;抓不到時本函式 raise,
-上層（exposure_service）會把該 ETF 記為 incomplete → 覆蓋率下降、曝險標「下限」。
-未來要補 TWSE/MoneyDJ 第二、三源時,於此函式加 fallback 鏈即可,介面不變。
+⚠️ 為何不是 TWSE：TWSE（mis.twse）只揭露 ETF **淨值/價格**,**不提供成分股權重**;
+台股 ETF 成分的實務在地來源是台灣 Yahoo 股市 holding 頁（與主專案 etf_fetch 同源）。
+官方 PCF（實物申購買回清單）為各投信逐檔揭露、格式雜,未納入本 fallback。
+
+兩源都優先抓「成分**代號**」（去交易所後綴）→ 與直接持股代碼對齊,穿透才能去重複計數;
+Yahoo 頁抓不到代號時退成分名（穿透引擎會把對不上的標「無法判定」,不假裝合併）。
+
+純解析（`_normalize_holdings` / `_parse_yahoo_tw_holdings` / `_scale_to_percent`）與 I/O
+分離,離線可單測。全鏈失敗 → Fail Loud（§1）,交 L2 穿透引擎標「不完整」,不捏造權重。
 """
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 
-from ..core.circuit_breaker import require
+from ..core.circuit_breaker import FailLoudError, require
 from ..core.provenance import prov_log
 
 _WEIGHT_COLS = ("Holding Percent", "holdingPercent", "% Assets", "weight")
+_YAHOO_TW_HOLDING_URL = "https://tw.stock.yahoo.com/quote/{sym}/holding"
+_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+_MAX_HOLDINGS = 60
+
+# Yahoo TW 頁內嵌 JSON：同一物件內（不跨 {}）symbol/name 鍵 + 權重鍵就近配對
+_YH_SYMBOL_RE = re.compile(
+    r'"symbol"\s*:\s*"([^"]{1,12})"[^{}]{0,240}?'
+    r'"(?:weighting|holdingPercent|percent|weight|ratio)"\s*:\s*"?([0-9]+(?:\.[0-9]+)?)"?')
+_YH_NAME_RE = re.compile(
+    r'"(?:symbolName|holdingName|stockName|name)"\s*:\s*"([^"]{1,40})"[^{}]{0,240}?'
+    r'"(?:weighting|holdingPercent|percent|weight|ratio)"\s*:\s*"?([0-9]+(?:\.[0-9]+)?)"?')
 
 
 def _strip_suffix(sym: str) -> str:
-    """'2330.TW' → '2330'；'AAPL' → 'AAPL'（去交易所後綴,方便對齊直接持股代碼）。"""
+    """'2330.TW' → '2330'；'AAPL' → 'AAPL'（去交易所後綴,對齊直接持股代碼）。"""
     s = str(sym).strip().upper()
     return s.split(".")[0] if s else s
 
@@ -32,12 +52,24 @@ def _yahoo_symbol(ticker: str) -> str:
     return f"{s}.TW" if s.isdigit() else s
 
 
-def _normalize_holdings(raw: pd.DataFrame) -> dict[str, float]:
-    """yfinance top_holdings DataFrame → {成分代號: 權重%}（純函式）。
+def _scale_to_percent(raw: dict[str, float]) -> dict[str, float]:
+    """統一權重單位：整組最大值 <=1 視為小數 → ×100；否則已是百分比。
 
-    - 權重來源欄自動偵測；小數(0~1) → 自動 ×100 轉百分比。
-    - key 優先用 Symbol（去後綴）,無則退成分名。
+    只保留 0<w<=100 的合理值（濾掉解析雜訊）。同 key 累加。
     """
+    require(bool(raw), "無成分權重可正規化")
+    factor = 100.0 if max(raw.values()) <= 1.0 else 1.0
+    out: dict[str, float] = {}
+    for k, v in raw.items():
+        w = v * factor
+        if 0 < w <= 100:
+            out[k] = round(out.get(k, 0.0) + w, 4)
+    require(bool(out), "成分權重全部超出合理範圍 (0,100]")
+    return out
+
+
+def _normalize_holdings(raw: pd.DataFrame) -> dict[str, float]:
+    """yfinance top_holdings DataFrame → {成分代號: 權重%}（純函式）。"""
     require(raw is not None and not raw.empty, "ETF 成分表為空")
     df = raw
     wcol = next((c for c in _WEIGHT_COLS if c in df.columns), None)
@@ -49,7 +81,7 @@ def _normalize_holdings(raw: pd.DataFrame) -> dict[str, float]:
         symbols = [str(x) for x in df.index.tolist()]
     names = [str(x) for x in df["Name"].tolist()] if "Name" in df.columns else [""] * len(df)
 
-    pairs: list[tuple[str, float]] = []
+    raw_map: dict[str, float] = {}
     for sym, nm, w in zip(symbols, names, df[wcol].tolist()):
         if pd.isna(w):
             continue
@@ -58,32 +90,72 @@ def _normalize_holdings(raw: pd.DataFrame) -> dict[str, float]:
             continue
         wv = float(w)
         require(wv >= 0, f"成分權重不可為負: {key}={wv}")
-        pairs.append((key, wv))
-    require(len(pairs) > 0, "成分表無有效列")
+        raw_map[key] = raw_map.get(key, 0.0) + wv
+    return _scale_to_percent(raw_map)
 
-    factor = 100.0 if max(w for _, w in pairs) <= 1.0 else 1.0   # 小數→百分比
-    out: dict[str, float] = {}
-    for key, w in pairs:
-        out[key] = round(out.get(key, 0.0) + w * factor, 4)
-    return out
+
+def _parse_yahoo_tw_holdings(html: str) -> dict[str, float]:
+    """台灣 Yahoo holding 頁 HTML → {成分代號或名稱: 權重%}（純函式）。
+
+    優先抓 symbol（代號,去後綴對齊直接持股）;抓不到 symbol 才退 name。
+    """
+    require(bool(html and html.strip()), "Yahoo TW 頁面為空")
+    raw: dict[str, float] = {}
+    for m in _YH_SYMBOL_RE.finditer(html):
+        code = _strip_suffix(m.group(1))
+        if not code or code.lower() in ("nan", "none"):
+            continue
+        raw.setdefault(code, float(m.group(2)))
+        if len(raw) >= _MAX_HOLDINGS:
+            break
+    if not raw:                              # 無代號 → 退成分名
+        for m in _YH_NAME_RE.finditer(html):
+            nm = m.group(1).strip()
+            if not nm or nm.isdigit():
+                continue
+            raw.setdefault(nm.upper(), float(m.group(2)))
+            if len(raw) >= _MAX_HOLDINGS:
+                break
+    require(bool(raw), "Yahoo TW 頁面無可解析持股")
+    return _scale_to_percent(raw)
+
+
+# ── I/O 來源（可被測試 monkeypatch）─────────────────────────────────────
+def _from_yfinance(ticker: str) -> dict[str, float]:
+    import yfinance as yf
+
+    raw = yf.Ticker(_yahoo_symbol(ticker)).funds_data.top_holdings
+    return _normalize_holdings(raw)
+
+
+def _from_yahoo_tw(ticker: str) -> dict[str, float]:
+    import requests
+
+    url = _YAHOO_TW_HOLDING_URL.format(sym=_yahoo_symbol(ticker))
+    r = requests.get(url, headers={"User-Agent": _UA}, timeout=15)
+    require(r.status_code == 200, f"Yahoo TW 非 200：{r.status_code}")
+    r.encoding = "utf-8"
+    return _parse_yahoo_tw_holdings(r.text)
 
 
 def fetch_etf_holdings(ticker: str) -> dict[str, float]:
-    """抓 ETF 成分 → {成分代號: 權重%}。抓不到 → Fail Loud。"""
-    import yfinance as yf
-
+    """抓 ETF 成分 → {成分代號: 權重%}。兩源依序 fallback,全敗 → Fail Loud。"""
     require(bool(ticker), "ticker 不可為空")
-    err = None
-    holdings = None
-    try:
-        raw = yf.Ticker(_yahoo_symbol(ticker)).funds_data.top_holdings
-        holdings = _normalize_holdings(raw)
-    except Exception as e:  # noqa: BLE001 - 統一轉 Fail Loud（帶原因）
-        err = e
-    require(bool(holdings),
-            f"{ticker} 無法取得 ETF 成分（yfinance funds_data 無資料"
-            f"{f'：{err}' if err else ''}）")
-    prov_log("fetch_etf_holdings", source=f"yfinance:{ticker}:top_holdings",
-             summary=f"{len(holdings)} 檔成分,權重和 {sum(holdings.values()):.1f}%",
-             ticker=ticker)
-    return holdings
+    # 於呼叫時解析 globals（便於測試 monkeypatch 兩段 fetcher）
+    chain = (("yfinance", _from_yfinance), ("yahoo_tw", _from_yahoo_tw))
+    errs: list[str] = []
+    for name, fn in chain:
+        try:
+            holdings = fn(ticker)
+        except Exception as e:  # noqa: BLE001 - 單源失敗續走下一源
+            errs.append(f"{name}:{type(e).__name__}:{e}")
+            continue
+        if holdings:
+            prov_log("fetch_etf_holdings",
+                     source=f"{name}:{ticker}",
+                     summary=f"{len(holdings)} 檔,權重和 {sum(holdings.values()):.1f}%",
+                     ticker=ticker)
+            return holdings
+        errs.append(f"{name}:empty")
+    raise FailLoudError(
+        f"{ticker} 無法取得 ETF 成分（兩源皆敗：{' | '.join(errs)}）")
