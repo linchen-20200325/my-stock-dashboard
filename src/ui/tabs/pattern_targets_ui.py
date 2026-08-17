@@ -177,7 +177,7 @@ def _render_chart(data: dict, r: dict, chart_key: str) -> None:
 
 
 def render_pattern_targets_for_ticker(code: str, *, key_prefix: str = "cs", default_pct: int = 8,
-                                      preloaded_df=None) -> None:
+                                      preloaded_df=None, external_run: bool | None = None) -> None:
     """可重用核心:對單一代碼跑型態目標價分析(自動偵測 + 可手動覆寫)。
 
     v19.174 去識別化：舊名 `render_caisen_for_ticker`（檔尾保留 alias）。
@@ -185,6 +185,9 @@ def render_pattern_targets_for_ticker(code: str, *, key_prefix: str = "cs", defa
     key_prefix 隔離 session(獨立分頁 / 個股 / 組合 三處共用不衝突)。
     preloaded_df(v19.164 組合下鑽):傳入批次已抓的 df → 不重抓、換檔自動算,
     確保「批次型態表 vs 下鑽線圖」同源同數(§1);None → 個股 Tab 走自抓。
+    external_run(v19.166 個股一鍵合併):非 None = **合併模式** —— 不顯示自有「抓K線」
+    按鈕,改由外部按鈕(個股 Tab 的「🔍 載入完整分析」)觸發;True 時本次立即偵測。
+    None = 舊行為(自有按鈕)。只作用於 preloaded_df is None 的個股自抓情境。
     """
     st.caption("⚠️ **演算法推導,非型態判定**：系統只機械抓「擺動轉折點」，型態是否成立請自行看圖確認，"
                "並可下方**手動微調每個關鍵點**。僅供研究，風險自負。")
@@ -195,11 +198,18 @@ def render_pattern_targets_for_ticker(code: str, *, key_prefix: str = "cs", defa
     pct = cc1.slider("ZigZag 靈敏度（反轉 %）", 3, 15, default_pct, key=f"_{prefix}_pct",
                      help="越小抓越多小轉折;越大只抓大波段。") / 100.0
     cc2.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-    _btn_label = (f"🔄 重新計算（{code or '—'}）" if preloaded_df is not None
-                  else f"🔍 抓 K 線並計算（{code or '—'}）")
-    if cc2.button(_btn_label, type="primary",
-                  use_container_width=True, key=f"_{prefix}_go", disabled=not code):
-        _run_detect(code, pct, prefix, preloaded_df=preloaded_df)
+    # v19.166 個股 Tab 併入「🔍 載入完整分析」一鍵:合併模式不顯示自有按鈕,由外部觸發。
+    _merged = external_run is not None and preloaded_df is None
+    if _merged:
+        cc2.caption("＋ 隨「🔍 載入完整分析」一起算")
+        if external_run and code:
+            _run_detect(code, pct, prefix, preloaded_df=None)
+    else:
+        _btn_label = (f"🔄 重新計算（{code or '—'}）" if preloaded_df is not None
+                      else f"🔍 抓 K 線並計算（{code or '—'}）")
+        if cc2.button(_btn_label, type="primary",
+                      use_container_width=True, key=f"_{prefix}_go", disabled=not code):
+            _run_detect(code, pct, prefix, preloaded_df=preloaded_df)
 
     data = st.session_state.get(f"_{prefix}_data")
     # 組合下鑽:換檔(或首次)自動用批次 df 算,免按鈕、免重抓(§1 表↔圖同源)
@@ -208,7 +218,9 @@ def render_pattern_targets_for_ticker(code: str, *, key_prefix: str = "cs", defa
         data = st.session_state.get(f"_{prefix}_data")
 
     if not data:
-        st.info(f"👆 按「抓 K 線並計算」，系統會抓 **{code or '該標的'}** 近一年 K 線並偵測型態關鍵點。")
+        _hint = ("👆 上方按「🔍 載入完整分析」會一併抓 " if _merged
+                 else "👆 按「抓 K 線並計算」，系統會抓 ")
+        st.info(f"{_hint}**{code or '該標的'}** 近一年 K 線並偵測型態關鍵點。")
         return
     if data.get("error"):
         st.error(f"🔴 {data['error']}")
