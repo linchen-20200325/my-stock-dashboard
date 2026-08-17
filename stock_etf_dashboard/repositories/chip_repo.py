@@ -9,12 +9,13 @@ from datetime import date, timedelta
 
 import pandas as pd
 
+from ..core import constants as C
 from ..core.circuit_breaker import require
 from ..core.provenance import prov_log, stamp_df
 from ..core.schemas import ChipSchema, validate_or_reject
 
 _T86_URL = "https://www.twse.com.tw/rwd/zh/fund/T86"
-_SHARES_PER_LOT = 1000.0
+_SHARES_PER_LOT = C.SHARES_PER_LOT   # SSOT（§3.3）
 
 
 def _num(x) -> float:

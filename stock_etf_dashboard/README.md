@@ -15,12 +15,14 @@ python -m pytest stock_etf_dashboard/tests -q   # 43 項單元/邊界測試
 
 ```
 L3 UI          app.py                    頂部風控列 + 左右雙池 + 側欄行動中心
-L2 Services    services/                 純運算,無 I/O
+L2/L3 Services  services/                純運算 + 編排
    ├ stock_scoring_engine.py             PE/PB 河流圖位階 + MA20/60 + MACD + 籌碼同步
    ├ etf_overlap_calc.py                 ETF 成分穿透 + 去重複計數 + >30% 集中度警戒
+   ├ exposure_service.py                 讀持股→抓 ETF 成分→穿透（依賴注入,離線可測）
    └ pool_state_service.py               觀察池↔持股 單向狀態機 + 出場訊號
 L1 Repositories repositories/            外部資料,出口過 schema + 血緣
-   ├ market_repo.py                      yfinance OHLCV / 配息 / 估值序列
+   ├ market_repo.py                      yfinance OHLCV / 配息 / 估值序列 / 最新收盤
+   ├ etf_repo.py                         yfinance funds_data ETF 成分（小數→%,去後綴）
    ├ chip_repo.py                        TWSE T86 三大法人（股→張）
    └ sheets_repo.py                      Google Sheets（PoolStore 介面 + 記憶體後端）
 L0 Infra        core/                     被全層 import,禁依賴上層
@@ -55,5 +57,6 @@ LINE 推播需環境變數 `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_USER_ID`。
 - **置信度鎖定**：資料齊全度×新鮮度×來源可靠度 < 70 → 鎖定，不給操作建議。
 - **除權息防呆**：除息開低跳空自動還原參考價，避免誤觸移動停損。
 - **穿透去重複計數**：直接持 2330 + 0050 內含 2330 → 合併到同一底層曝險；成分抓不到
-  → 標「下限」而非補 0。
+  → 標「下限」而非補 0。UI「🔓 從我的持股自動穿透」讀持股組合 → yfinance 抓 ETF 成分
+  （`etf_repo.fetch_etf_holdings`）→ 逐檔算市值穿透；無現價的標的跳過並回報,不捏造市值。
 - **單向狀態機**：買入只能從觀察池、賣出只能從持股；每次轉移寫帳本。
