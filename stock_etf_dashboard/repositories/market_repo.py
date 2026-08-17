@@ -56,6 +56,13 @@ def fetch_ohlcv(ticker: str, *, period: str = "2y", interval: str = "1d",
     return df
 
 
+def fetch_latest_close(ticker: str) -> float:
+    """最新收盤價（供市值換算）。抓不到 → Fail Loud。"""
+    df = fetch_ohlcv(ticker, period="5d", auto_adjust=True)
+    require(not df.empty, f"{ticker} 無最新收盤價")
+    return float(df["close"].iloc[-1])
+
+
 def fetch_dividends(ticker: str) -> pd.Series:
     """配息事件（date→金額）。無配息回空 Series（非錯誤）。"""
     import yfinance as yf

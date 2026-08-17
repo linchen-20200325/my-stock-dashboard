@@ -28,6 +28,7 @@ from stock_etf_dashboard.repositories import chip_repo, market_repo  # noqa: E40
 from stock_etf_dashboard.repositories.sheets_repo import (  # noqa: E402
     GoogleSheetsStore, InMemoryStore)
 from stock_etf_dashboard.services import etf_overlap_calc as ov  # noqa: E402
+from stock_etf_dashboard.services import exposure_service as exs  # noqa: E402
 from stock_etf_dashboard.services import stock_scoring_engine as se  # noqa: E402
 from stock_etf_dashboard.services.pool_state_service import (  # noqa: E402
     PoolStateService, check_exit)
@@ -248,11 +249,44 @@ def _render_sell_form(holding: dict):
 
 
 # ── 穿透曝險總覽 ────────────────────────────────────────────────────────
+def _render_exposure_report(rep):
+    """共用：把 ExposureReport 畫成表 + 警戒。"""
+    (st.success if rep.is_complete else st.warning)(rep.note)
+    df = pd.DataFrame([{
+        "標的": r.name, "曝險%": r.exposure_pct, "市值": r.market_value,
+        "直接": r.via_direct, "ETF穿透": r.via_etf,
+        "警戒": "⚠️" if r.breach else ""} for r in rep.rows])
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    if rep.alerts:
+        st.error(f"🚨 集中度超標：{', '.join(rep.alerts)}（>"
+                 f"{C.SINGLE_NAME_EXPOSURE_ALERT_PCT:.0f}%）")
+
+
 def render_exposure():
     st.subheader("🔬 ETF 成分穿透 × 重疊曝險")
     st.caption("直接持股 + ETF 內含成分穿透到底層標的（去重複計數）；"
                f"單一標的 > {C.SINGLE_NAME_EXPOSURE_ALERT_PCT:.0f}% 觸發集中度警戒。")
-    st.markdown("**手動輸入試算**（正式版接 `fetch_etf_holdings`）")
+
+    # ── 自動穿透：讀「我的持股」→ 真實抓 ETF 成分 ──────────────────────
+    st.markdown("**🔓 從我的持股自動穿透**（讀持股組合 → yfinance 抓 ETF 成分）")
+    if st.button("計算我的持股穿透曝險"):
+        try:
+            res = exs.build_portfolio_exposure(_get_store())
+        except (FailLoudError, Exception) as e:  # noqa: BLE001
+            st.error(f"自動穿透失敗（Fail Loud，不捏造）：{e}")
+        else:
+            st.session_state["_exposure_report"] = res.report
+            st.caption(f"納入 {len(res.priced)} 檔（ETF {len(res.etf_tickers)} 檔）"
+                       f"｜總市值 {res.report.total_value:,.0f}")
+            if res.skipped_no_price:
+                st.warning("無現價被跳過（未捏造市值）："
+                           + "、".join(x["ticker"] for x in res.skipped_no_price))
+            _render_exposure_report(res.report)
+    st.caption("💡 台股 ETF 成分在部署端才抓得到（沙箱代理擋 yfinance）；"
+               "抓不到的 ETF 會標『成分未知』並把曝險列為下限。")
+
+    st.divider()
+    st.markdown("**✍️ 手動輸入試算**（免抓取，驗證穿透邏輯用）")
     cold, cole = st.columns(2)
     direct_txt = cold.text_area("直接持股（代碼,市值 每行一筆）",
                                 "2330,300000", height=120)
@@ -267,15 +301,7 @@ def render_exposure():
             st.error(f"穿透計算失敗：{e}")
             return
         st.session_state["_exposure_report"] = rep
-        (st.success if rep.is_complete else st.warning)(rep.note)
-        df = pd.DataFrame([{
-            "標的": r.name, "曝險%": r.exposure_pct, "市值": r.market_value,
-            "直接": r.via_direct, "ETF穿透": r.via_etf,
-            "警戒": "⚠️" if r.breach else ""} for r in rep.rows])
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        if rep.alerts:
-            st.error(f"🚨 集中度超標：{', '.join(rep.alerts)}（>"
-                     f"{C.SINGLE_NAME_EXPOSURE_ALERT_PCT:.0f}%）")
+        _render_exposure_report(rep)
 
 
 def _parse_direct(txt: str) -> list[dict]:

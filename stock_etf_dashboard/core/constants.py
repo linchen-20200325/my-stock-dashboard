@@ -61,6 +61,12 @@ DEFAULT_TAKE_PROFIT_PCT: float = 20.0    # 停利目標 %
 FLOAT_REL_TOL: float = 1e-9
 FLOAT_ABS_TOL: float = 1e-12
 
+# ── 單位換算 (§4.1) ─────────────────────────────────────────────────────
+SHARES_PER_LOT: float = 1000.0           # 台股 1 張 = 1000 股
+
+# ── 資產類別判斷（台股 ETF 代碼慣例：00 開頭，如 0050/0056/00878）────────
+TW_ETF_CODE_PREFIX: str = "00"
+
 # ── 資料合理範圍 (§3.2 range check) ─────────────────────────────────────
 PE_VALID_RANGE: tuple[float, float] = (0.0, 500.0)
 PB_VALID_RANGE: tuple[float, float] = (0.0, 100.0)
