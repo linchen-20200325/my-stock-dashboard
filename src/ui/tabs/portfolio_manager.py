@@ -80,19 +80,14 @@ def render_portfolio_manager() -> None:
     st.info("👉 **這裡放的是「你自己的持股 / 追蹤清單」**，不是選股建議。"
             "想找**系統幫你篩的候選股**請去『🔬 選股 → 🔭 選股網』。")
     st.caption("先用下方「🚀 從 Drive 挑一本 Sheet」選定投組資料庫（ETF + 個股共用一本）；"
-               "或展開「⚙️ 進階」手動貼網址、分別指定。選好後左欄管 🏦 ETF 組合、右欄管 📈 個股清單。")
+               "選好後左欄管 🏦 ETF 組合、右欄管 📈 個股清單。")
 
     if not st.session_state.get("gsheet_tokens"):
         st.info("ℹ️ 尚未用 Google 登入 —— 左側 sidebar「🔐 Google 帳號」登入後，這裡就能從 Drive 挑 Sheet。")
 
-    # 🚀 主要入口:從 Drive 挑選 / 新建 Sheet(v19.166 重接;取代手動貼為主要方式)
+    # 🚀 唯一入口:從 Drive 挑選 / 新建 Sheet(v19.166;手動貼網址已移除 —— 與挑選器重複)。
+    # 若需純手動貼 Sheet ID(SA/未登入情境),走左側 sidebar「🔐 Google 帳號」的 Sheet ID 欄。
     _render_drive_picker(_gsp)
-
-    # ⚙️ 進階:手動貼網址 / 分別指定 ETF 與個股 Sheet(收合;Drive 挑選器為主後退為次要)
-    with st.expander("⚙️ 進階：手動貼 Google Sheet 網址 / ID（可分別指定 ETF 與個股）",
-                     expanded=False):
-        _sheet_id_input(_gsp, "etf")
-        _sheet_id_input(_gsp, "stock")
 
     _c1, _c2 = st.columns(2)
     with _c1:
@@ -165,49 +160,16 @@ def _render_drive_picker(_gsp) -> None:
 
 
 def _apply_active_sheet(_gsp, sid: str) -> None:
-    """把選定的 sheet_id 同時套到 ETF 與個股兩通道,並清手動貼框的 prev-guard。"""
+    """把選定的 sheet_id 同時套到 ETF 與個股兩通道（共用一本）。"""
     st.session_state[_gsp.PORTFOLIO_SHEET_KEY] = sid
     st.session_state[_gsp.STOCK_PORTFOLIO_SHEET_KEY] = sid
-    # 清掉手動貼框的「上次原始值」守衛,避免其舊值在下次 rerun 把選擇蓋回
-    st.session_state.pop("_mgmt_etf_prev_raw", None)
-    st.session_state.pop("_mgmt_stk_prev_raw", None)
-
-
-def _sheet_id_input(_gsp, kind: str):
-    """在本頁直接設定 ETF / 個股 的 Google Sheet(貼 URL/ID)。回最新 sheet_id(空→None)。
-
-    寫入既有 session channel(ETF=PORTFOLIO_SHEET_KEY / 個股=STOCK_PORTFOLIO_SHEET_KEY),
-    與側欄 / 個股分頁面板**同一把 key** → 兩處設定互通。用各自的 `_prev_raw` 守衛「只在本輸入框
-    真的變動時才套用」,避免兩處同 key 的 rerun 競態互相蓋掉(對齊 tab_stock_grp 既有做法)。
-    """
-    if kind == "etf":
-        _cur = _gsp._get_active_sheet_id()
-        _skey, _wkey, _pkey = _gsp.PORTFOLIO_SHEET_KEY, "_mgmt_etf_sid_input", "_mgmt_etf_prev_raw"
-        _label = "🏦 我的 ETF 組合 — Google Sheet 網址 / ID"
-    else:
-        _cur = _gsp._get_active_stock_sheet_id()
-        _skey, _wkey, _pkey = (_gsp.STOCK_PORTFOLIO_SHEET_KEY,
-                               "_mgmt_stk_sid_input", "_mgmt_stk_prev_raw")
-        _label = "📈 我的個股清單 — Google Sheet 網址 / ID"
-    _raw = st.text_input(_label, value=_cur, key=_wkey,
-                         placeholder="貼上 https://docs.google.com/spreadsheets/d/...（系統自動解析 ID）")
-    _new = parse_sheet_id(_raw)
-    if _raw.strip() and not _new:                    # 貼了東西卻解不出 ID → 多半是「發布連結」
-        st.warning("這看起來是「發布連結」（pubhtml / pub?output=csv）。管理頁需要**編輯用**網址"
-                   "（`.../spreadsheets/d/<ID>/edit`）或 Sheet ID；發布 CSV 連結是給每週週報用的，兩者不同。")
-    if _raw != st.session_state.get(_pkey):          # 只在本框變動時套用(防同 key 競態)
-        st.session_state[_pkey] = _raw
-        if _new and _new != _cur:
-            st.session_state[_skey] = _new
-            return _new
-    return _cur or None
 
 
 def _render_etf_section(_gsp, pd) -> None:
     st.markdown("#### 🏦 我的 ETF 組合（含張數 / 均價）")
     sid = _gsp._get_active_sheet_id()
     if not sid:
-        st.caption("⚠️ 先用上方「🚀 從 Drive 挑一本 Sheet」選定，或展開「⚙️ 進階」手動貼網址。")
+        st.caption("⚠️ 先用上方「🚀 從 Drive 挑一本 Sheet」選定。")
         return
     try:
         _names = _gsp.list_portfolios(sheet_id=sid)
@@ -275,7 +237,7 @@ def _render_stock_section(_gsp, pd) -> None:
     st.markdown("#### 📈 我的個股清單（純代號，供週報 / 體檢用）")
     sid = _gsp._get_active_stock_sheet_id()
     if not sid:
-        st.caption("⚠️ 先用上方「🚀 從 Drive 挑一本 Sheet」選定，或展開「⚙️ 進階」手動貼網址。")
+        st.caption("⚠️ 先用上方「🚀 從 Drive 挑一本 Sheet」選定。")
         return
     try:
         _names = _gsp.list_stock_watchlists(sheet_id=sid)
