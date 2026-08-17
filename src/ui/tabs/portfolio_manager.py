@@ -79,17 +79,98 @@ def render_portfolio_manager() -> None:
     st.markdown("### 📁 投資組合管理 — 一頁管 ETF 組合 + 個股清單（存你的 Google Sheet）")
     st.info("👉 **這裡放的是「你自己的持股 / 追蹤清單」**，不是選股建議。"
             "想找**系統幫你篩的候選股**請去『🔬 選股 → 🔭 選股網』。")
-    st.caption("下方左欄＝🏦 你的 ETF 組合、右欄＝📈 你的個股清單；各自貼上對應的 Google Sheet 網址/ID 即可"
-               "新增/編輯/儲存/載入/刪除 —— 一頁搞定，不用再跑側欄或別的分頁。")
+    st.caption("先用下方「🚀 從 Drive 挑一本 Sheet」選定投組資料庫（ETF + 個股共用一本）；"
+               "或展開「⚙️ 進階」手動貼網址、分別指定。選好後左欄管 🏦 ETF 組合、右欄管 📈 個股清單。")
 
     if not st.session_state.get("gsheet_tokens"):
-        st.info("ℹ️ 尚未用 Google 登入 —— 左側 sidebar「🔐 Google 帳號」登入後，這裡就能存取你的 Sheet。")
+        st.info("ℹ️ 尚未用 Google 登入 —— 左側 sidebar「🔐 Google 帳號」登入後，這裡就能從 Drive 挑 Sheet。")
+
+    # 🚀 主要入口:從 Drive 挑選 / 新建 Sheet(v19.166 重接;取代手動貼為主要方式)
+    _render_drive_picker(_gsp)
+
+    # ⚙️ 進階:手動貼網址 / 分別指定 ETF 與個股 Sheet(收合;Drive 挑選器為主後退為次要)
+    with st.expander("⚙️ 進階：手動貼 Google Sheet 網址 / ID（可分別指定 ETF 與個股）",
+                     expanded=False):
+        _sheet_id_input(_gsp, "etf")
+        _sheet_id_input(_gsp, "stock")
 
     _c1, _c2 = st.columns(2)
     with _c1:
         _render_etf_section(_gsp, pd)
     with _c2:
         _render_stock_section(_gsp, pd)
+
+
+def _render_drive_picker(_gsp) -> None:
+    """🚀 從 Google Drive 列出 / 新建 Sheet,一鍵設為投組資料庫（ETF + 個股共用）。
+
+    §8.2.A EX-PASSTHRU-1:L5 直呼 L1 gsheet_portfolio 的 Drive 函式(list_user_folders /
+    list_user_sheets / create_new_sheet)。§1:未登入 / 讀取失敗 → 誠實提示,不靜默。
+    設定同時寫 ETF(PORTFOLIO_SHEET_KEY)與個股(STOCK_PORTFOLIO_SHEET_KEY)兩通道。
+    """
+    st.markdown("#### 🚀 從 Drive 挑一本 Sheet（設為投組資料庫）")
+    if not _gsp._has_oauth_tokens():
+        st.caption("ℹ️ 用左側 sidebar「🔐 Google 帳號」登入後，這裡就能直接從 Drive 列出並挑選 Sheet。")
+        return
+
+    _cur_etf = _gsp._get_active_sheet_id()
+    _cur_stk = _gsp._get_active_stock_sheet_id()
+    if _cur_etf or _cur_stk:
+        _same = bool(_cur_etf) and _cur_etf == _cur_stk
+        st.caption(f"目前投組資料庫 — ETF：`{_cur_etf or '未設'}`　個股：`{_cur_stk or '未設'}`"
+                   + ("　（同一本 ✅）" if _same else "　（兩本不同）" if (_cur_etf and _cur_stk) else ""))
+
+    # 限定資料夾(可選)
+    _fmap = {"整個帳號（不限資料夾）": ""}
+    try:
+        for _f in _gsp.list_user_folders():
+            _fmap[_f["name"]] = _f["id"]
+    except Exception as _e:                       # §1 誠實:資料夾讀不到就只列全部
+        st.caption(f"（資料夾列表讀取失敗：{type(_e).__name__}，可直接列全部）")
+    _fsel = st.selectbox("限定資料夾（可選）", list(_fmap.keys()), key="_mgmt_drive_folder")
+
+    _lc, _nc = st.columns([3, 2])
+    if _lc.button("📂 從 Drive 列出 Sheets", key="_mgmt_drive_list", use_container_width=True):
+        try:
+            st.session_state["_mgmt_drive_sheets"] = _gsp.list_user_sheets(_fmap.get(_fsel, ""))
+        except Exception as _e:                   # §1 列檔失敗誠實報,不捏造清單
+            st.error(f"列出 Sheets 失敗：{type(_e).__name__}")
+            st.session_state.pop("_mgmt_drive_sheets", None)
+    if _nc.button("🆕 建立新投組 Sheet", key="_mgmt_drive_new", use_container_width=True):
+        try:
+            _sid, _url = _gsp.create_new_sheet()
+            _apply_active_sheet(_gsp, _sid)
+            st.success(f"已建立新 Sheet 並設為投組資料庫（ETF + 個股共用）。")
+            st.rerun()
+        except Exception as _e:
+            st.error(f"建立新 Sheet 失敗：{_e}")
+
+    _sheets = st.session_state.get("_mgmt_drive_sheets")
+    if _sheets is None:
+        return
+    if not _sheets:
+        st.info("此範圍找不到 Sheets。可按「🆕 建立新投組 Sheet」，或用「⚙️ 進階」手動貼網址。")
+        return
+
+    _smap = {f'{s["name"]}（{s["id"][:12]}…）': s["id"] for s in _sheets}
+    _pick = st.selectbox(f"清單共 {len(_sheets)} 本 — 選一本", list(_smap.keys()),
+                         key="_mgmt_drive_pick")
+    if st.button("✅ 使用此 Sheet 作為投組資料庫（ETF + 個股共用）", key="_mgmt_drive_use",
+                 type="primary", use_container_width=True):
+        _sid = _smap.get(_pick, "")
+        if _sid:
+            _apply_active_sheet(_gsp, _sid)
+            st.success(f"已設定投組資料庫為「{_pick}」（ETF + 個股共用此本）。")
+            st.rerun()
+
+
+def _apply_active_sheet(_gsp, sid: str) -> None:
+    """把選定的 sheet_id 同時套到 ETF 與個股兩通道,並清手動貼框的 prev-guard。"""
+    st.session_state[_gsp.PORTFOLIO_SHEET_KEY] = sid
+    st.session_state[_gsp.STOCK_PORTFOLIO_SHEET_KEY] = sid
+    # 清掉手動貼框的「上次原始值」守衛,避免其舊值在下次 rerun 把選擇蓋回
+    st.session_state.pop("_mgmt_etf_prev_raw", None)
+    st.session_state.pop("_mgmt_stk_prev_raw", None)
 
 
 def _sheet_id_input(_gsp, kind: str):
@@ -124,9 +205,9 @@ def _sheet_id_input(_gsp, kind: str):
 
 def _render_etf_section(_gsp, pd) -> None:
     st.markdown("#### 🏦 我的 ETF 組合（含張數 / 均價）")
-    sid = _sheet_id_input(_gsp, "etf")
+    sid = _gsp._get_active_sheet_id()
     if not sid:
-        st.caption("⚠️ 貼上你的 ETF Google Sheet 網址/ID（上方欄位）即可開始。")
+        st.caption("⚠️ 先用上方「🚀 從 Drive 挑一本 Sheet」選定，或展開「⚙️ 進階」手動貼網址。")
         return
     try:
         _names = _gsp.list_portfolios(sheet_id=sid)
@@ -192,9 +273,9 @@ def _render_etf_section(_gsp, pd) -> None:
 
 def _render_stock_section(_gsp, pd) -> None:
     st.markdown("#### 📈 我的個股清單（純代號，供週報 / 體檢用）")
-    sid = _sheet_id_input(_gsp, "stock")
+    sid = _gsp._get_active_stock_sheet_id()
     if not sid:
-        st.caption("⚠️ 貼上你的個股 Google Sheet 網址/ID（上方欄位）即可開始。")
+        st.caption("⚠️ 先用上方「🚀 從 Drive 挑一本 Sheet」選定，或展開「⚙️ 進階」手動貼網址。")
         return
     try:
         _names = _gsp.list_stock_watchlists(sheet_id=sid)

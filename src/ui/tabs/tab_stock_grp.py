@@ -54,18 +54,20 @@ def render_stock_grp():
                 placeholder='例：2330 2454 2317 2382 3017')
         with t3c2:
             st.markdown('<br>', unsafe_allow_html=True)
-            t3_run_btn = st.button('🚀 批次分析', type='primary',
+            t3_run_btn = st.button('🚀 批次分析 ＋ 🩺 組合體檢', type='primary',
                                    use_container_width=True, key='t3_run_btn')
     stock_list_t3 = parse_stocks(multi_input)[:10]
     if stock_list_t3:
         st.caption(f'待分析：{", ".join(stock_list_t3)}（共{len(stock_list_t3)}檔）'
-                   '　·　按「🚀 批次分析」一鍵串跑：排行總表 + 型態目標價 + 財報趨勢×轉機 + 三階段濾網')
+                   '　·　按「🚀 批次分析 ＋ 🩺 組合體檢」一鍵串跑：'
+                   '組合體檢 vs 基準 + 排行總表 + 型態目標價 + 財報趨勢×轉機 + 三階段濾網')
     elif t3_run_btn:
-        st.warning('⚠️ 請先在上方輸入至少一個有效股票代碼，再按「🚀 批次分析」')
+        st.warning('⚠️ 請先在上方輸入至少一個有效股票代碼，再按「🚀 批次分析 ＋ 🩺 組合體檢」')
 
     # ══ ②c 🩺 組合體檢(逐檔 vs 基準:個股→大盤、ETF→0050)—— 就上方清單判是否落後 ══
+    # v19.166:與「批次分析」合併成一鍵 → 同一顆按鈕觸發抓價體檢(run_now)。
     from src.ui.tabs.stock_grp_sections import render_watchlist_health_section
-    render_watchlist_health_section(stock_list_t3)
+    render_watchlist_health_section(stock_list_t3, run_now=bool(t3_run_btn and stock_list_t3))
 
     # ══ 批次分析邏輯(Batch 7-2 v18.414:抽至 stock_grp_sections.section_batch_fetcher)══
     if t3_run_btn and stock_list_t3:
