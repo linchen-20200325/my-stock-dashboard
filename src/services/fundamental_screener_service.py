@@ -550,6 +550,11 @@ def _apply_bear_market_filter(
       2. 想套用但**沒有 RS 資料** → 明寫「無法套用」+ 原因
       3. 套用了 → 明寫剔除幾檔
     """
+    # 防呆:契約是 str|None,但若上游誤傳整個 macro-state dict(get_macro_regime 的回傳),
+    # 取其 'regime' 字串,避免 `dict not in frozenset` 拋 TypeError(unhashable)炸掉選股。
+    if isinstance(regime, dict):
+        regime = regime.get('regime')
+
     if regime not in THROTTLE_VETO_REGIMES:
         return df, note
 

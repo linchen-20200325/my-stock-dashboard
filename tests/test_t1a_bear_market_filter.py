@@ -206,3 +206,34 @@ class TestDoesNotTouchPercentileSemantics:
             "未從 shared.position_throttle 取用 THROTTLE_VETO_REGIMES —— "
             "自己列 {'bear','caution'} 會與 regime_arbiter.py:66 的定義漂移"
         )
+
+
+# ════════════════════════════════════════════════════════════════════
+# 6. Regression:regime 誤傳整個 macro-state dict → 不得 TypeError
+# ════════════════════════════════════════════════════════════════════
+class TestRegimeDictCoercion:
+    """`app.py` 選股網曾把 `get_macro_regime()` 的 **dict** 契約整包當 `regime`
+    傳進來 → `dict not in frozenset(...)` 拋 `TypeError: unhashable type: 'dict'`,
+    使用者一按「開始選股」就炸。service 端須容錯:取 `dict['regime']` 字串。
+    （真正的修正在 app.py 只傳字串;本 class 釘住 service 端防呆不回退。）
+    """
+
+    def test_dict_regime_bear_applies_filter_not_typeerror(self):
+        _in = _df("1101", "2330")
+        _rows = _rs(("2330", True), ("1101", False))
+        _out, _note = _apply_bear_market_filter(
+            _in, "", regime={"regime": "bear", "is_loaded": True}, rs_rows=_rows)
+        assert set(_out["代碼"]) == {"2330"}, "dict regime 應被當成 'bear' 套用,而非炸掉"
+
+    def test_dict_regime_neutral_is_passthrough(self):
+        _in = _df("1101", "2330")
+        _out, _note = _apply_bear_market_filter(
+            _in, "原註記", regime={"regime": "neutral", "is_loaded": True},
+            rs_rows=_rs(("2330", True)))
+        assert len(_out) == 2 and _note == "原註記"
+
+    def test_dict_regime_missing_key_is_passthrough(self):
+        _in = _df("1101", "2330")
+        _out, _ = _apply_bear_market_filter(
+            _in, "", regime={"foo": "bar"}, rs_rows=_rs(("2330", True)))
+        assert len(_out) == 2, "dict 無 regime 鍵 → coerce None → passthrough,不炸"
