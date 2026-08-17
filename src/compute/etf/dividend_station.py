@@ -235,7 +235,7 @@ def light_235(*, vix: float | None, weekly_close: float | None,
     else:
         best, reasons = T.LIGHT_CRUISE, ["VIX/週線/布林 均未觸發"]
 
-    # 深水防守（§ 郭俊宏）：破年線後**站回季線** = 落底回升（較具體,優先）；
+    # 深水防守（§ 深水防守）：破年線後**站回季線** = 落底回升（較具體,優先）；
     # 否則破年線但布林未達 -2σ（尚不夠深）→ 等共伴確認。已 <-2σ 則屬燈三,不另註。
     deepwater = None
     if (weekly_close is not None and ma52w is not None and weekly_close < ma52w):
@@ -347,7 +347,7 @@ def assess_holding(*, ticker: str, name: str, asset_class: str,
 def suggest_action(a: HoldingAssessment) -> str:
     """依優先序給單一建議（純函式）：汰弱 > 停利 > 趨勢暫停 > 加碼 > 高溢價 > 巡航。
 
-    ⚠️ 郭俊宏防守邏輯：即使 235 亮加碼燈,若健檢 C「趨勢轉弱」→ **暫停加碼**（不追）。
+    ⚠️ 存股防守邏輯：即使 235 亮加碼燈,若健檢 C「趨勢轉弱」→ **暫停加碼**（不追）。
     """
     # 1) 吃本金 / 夏普<0 → 汰弱留強（最優先）
     if a.health_a.level == "🔴" or a.health_b.level == "🔴":
