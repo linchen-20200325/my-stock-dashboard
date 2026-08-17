@@ -525,6 +525,9 @@ for _f, _m in (
     ("src/ui/etf/etf_tab_single.py", "src.data.etf.etf_fetch"),
     ("src/ui/etf/etf_tab_smart.py", "src.data.etf"),
     ("src/ui/etf/etf_tab_smart.py", "src.data.etf.etf_fetch"),
+    # 💰 存股戰情室「帶入我的組合管理 ETF 清單」:lazy import L1 gsheet_portfolio
+    # (同 portfolio_manager 範式,L1 內已 @st.cache/OAuth 集中緩存 → pure pass-through)。
+    ("src/ui/etf/etf_tab_dividend_station.py", "src.data.portfolio"),
     # ── L5 UI Pages ──
     ("src/ui/pages/api_diagnostic.py", "src.data.proxy"),
     ("src/ui/pages/health_inspector.py", "src.data.etf"),

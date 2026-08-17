@@ -765,8 +765,8 @@ with tab_stocks:
 # v18.465: 新增 3-3-3 原則評估（成立>3年 / 3年年化>7% / 同儕前1/3）
 # ══════════════════════════════════════════════════════════════
 with tab_etf_main:
-    tab_etf, tab_etf_compare, tab_etf_grp = st.tabs([
-        '🔍 單檔診斷', '📊 多檔比較', '⚖️ ETF 組合',
+    tab_etf, tab_etf_compare, tab_etf_grp, tab_etf_station = st.tabs([
+        '🔍 單檔診斷', '📊 多檔比較', '⚖️ ETF 組合', '💰 存股戰情室',
     ])
 
     with tab_etf:
@@ -787,6 +787,11 @@ with tab_etf_main:
     with tab_etf_compare:
         from src.ui.etf import render_etf_grp_compare
         _render_tab_isolated(render_etf_grp_compare, 'ETF 多檔比較')
+
+    with tab_etf_station:
+        # 💰 存股戰情室(v19.166):以息養股 + 3-3-3 + 235 加碼引擎
+        from src.ui.etf.etf_tab_dividend_station import render_dividend_station
+        _render_tab_isolated(render_dividend_station, '存股戰情室')
 
     with tab_etf_grp:
         # FIX(隔離器): 本頁一次串 6 個渲染器,原為裸呼叫 —— 任一 raise 會吃掉後面全部區塊
