@@ -528,42 +528,14 @@ def render_tab_stock_picker(gemini_fn=None, candidates=None,
                    '**遠離均線 / RSI 過熱 = 題材已發酵，追高風險大**。體質好也要等**拉回**再進，'
                    '別追在頭部。')
 
-    # ── 🎛️ 自訂必過條件（v19.61：改打勾格子，一次全看得到，比下拉選單好操作）──
-    st.markdown('#### 🎛️ 自訂必過條件（可選）')
-    # F1 v19.184 §3.3：「S1≥6 且 S2≥3」「基本面 9 項」「籌碼技術 6 項」原為手抄。
-    st.caption(f'勾你要求的條件，再設下方「至少過幾項」；'
-               f'全部不勾 = 用預設 S1≥{PICKER_S1_MIN_PASS} 且 S2≥{PICKER_S2_MIN_PASS}。'
-               f'（勾選會即時重篩，不會重跑三階段掃描）')
-    _sel_keys: list[str] = []
-    for _grp_title, _grp_conds in (
-            (f'基本面 {len(PICKER_S1_CONDITIONS)} 項', PICKER_S1_CONDITIONS),
-            (f'籌碼技術 {len(PICKER_S2_CONDITIONS)} 項', PICKER_S2_CONDITIONS)):
-        st.markdown(f'**{_grp_title}**')
-        _cb_cols = st.columns(3)
-        for _ci, (_ck, _cname) in enumerate(_grp_conds):
-            if _cb_cols[_ci % 3].checkbox(_cname, key=f'{key_prefix}_cb_{_ck}'):
-                _sel_keys.append(_ck)
-    _min_pass = len(_sel_keys)
-    if _sel_keys:
-        # key 綁定勾選數量：改變勾選數時重置 value（避免舊值 > 新上限的 clamp 錯誤）
-        _min_pass = st.number_input(
-            f'這些條件裡至少要過幾項（1 ~ {len(_sel_keys)}）',
-            min_value=1, max_value=len(_sel_keys), value=len(_sel_keys),
-            step=1, key=f'{key_prefix}_cond_minpass_{len(_sel_keys)}')
-
-    # ── 通過清單：自訂條件優先；未啟用則走預設門檻（S1≥6 & S2≥3，SSOT）──
-    _custom = filter_by_custom_conditions(results, _sel_keys, int(_min_pass))
-    if _custom is not None:
-        _qualified = _custom
-        st.caption(f'🎛️ 自訂模式：{len(PICKER_ALL_CONDITIONS)} 項中選 {len(_sel_keys)} 項、'
-                   f'至少過 {int(_min_pass)} 項')
-        _crit_txt = f'自訂條件（{len(_sel_keys)} 選 {int(_min_pass)} 過）'
-    else:
-        _qualified = [r for r in results
-                      if r['s1_pass_cnt'] >= PICKER_S1_MIN_PASS
-                      and r['s2_pass_cnt'] >= PICKER_S2_MIN_PASS]
-        _crit_txt = (f'S1 ≥ {PICKER_S1_MIN_PASS}/{len(PICKER_S1_CONDITIONS)} 且 '
-                     f'S2 ≥ {PICKER_S2_MIN_PASS}/{len(PICKER_S2_CONDITIONS)}')
+    # ── 通過清單：預設門檻（S1≥6 & S2≥3，SSOT）──
+    # v19.166 user 要求移除「🎛️ 自訂必過條件（可選）」面板（勾選 + 至少過幾項）→
+    # 一律走預設門檻,不再提供自訂勾選(簡化操作)。
+    _qualified = [r for r in results
+                  if r['s1_pass_cnt'] >= PICKER_S1_MIN_PASS
+                  and r['s2_pass_cnt'] >= PICKER_S2_MIN_PASS]
+    _crit_txt = (f'S1 ≥ {PICKER_S1_MIN_PASS}/{len(PICKER_S1_CONDITIONS)} 且 '
+                 f'S2 ≥ {PICKER_S2_MIN_PASS}/{len(PICKER_S2_CONDITIONS)}')
     if _qualified:
         st.success(f'✅ 符合條件（{_crit_txt}）：{len(_qualified)} 檔 → {[r["ticker"] for r in _qualified]}')
     else:
