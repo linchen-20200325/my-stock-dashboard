@@ -26,7 +26,10 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
         "健檢": a.worst_health,
         "235 燈號": f"{a.light.icon} {a.light.label}",
         "加碼金": _add,
-        "3-3-3": "✅ 合格" if a.screen.passed else "❌ 未過",
+        "3-3-3": ("✅ 合格" if a.screen.passed
+                  else ("❔ 待資料"
+                        if None in (a.screen.inception_ok, a.screen.return_ok, a.screen.peer_ok)
+                        else "❌ 未過")),
         "建議動作": ds.suggest_action(a),
         # 展開明細（UI 下鑽用；不進主表）
         "_detail": {
@@ -98,40 +101,73 @@ def fetch_vix() -> float | None:
 def fetch_metrics(ticker: str) -> dict:
     """逐檔抓 L2 所需指標（best-effort;缺的回 None → 該項標資料不足）。
 
-    週K 為必要（無則 raise 讓上層標該列失敗）；其餘缺失以 None 誠實降級。
-    ⚠️ 需部署端網路：折溢價走 TWSE MIS（proxy）、價量走 FinMind/yfinance。
+    日線走 L1 `fetch_etf_price`（proxy-aware、auto_adjust 還原含息）→ 週K + 報酬 + 夏普 +
+    成立年；配息走 `fetch_etf_dividends`→ 年化配息率；折溢價走 `fetch_etf_nav_history`。
+    ⚠️ 需部署端網路（沙箱代理擋）。日線為必要,無則 raise（該列標抓取失敗,§1 誠實不假裝）。
+    同儕排名（3-3-3 ③）Phase 2 未接 → peer_ranks=None（3-3-3 顯示「待資料」非「未過」）。
     """
     import pandas as pd
 
-    weekly = None
-    # 日收盤 → 週K（優先用 ETF 收盤歷史；退 yfinance）
+    # 1) 日線（還原價）→ 週K（必要）
     try:
-        from src.data.etf.etf_fetch import fetch_etf_close_history  # EX-PASSTHRU-1
-        _daily = fetch_etf_close_history(ticker)
-        if _daily is not None and len(_daily):
-            _s = _daily["close"] if "close" in getattr(_daily, "columns", []) else _daily
-            _s = pd.Series(_s)
-            if not isinstance(_s.index, pd.DatetimeIndex) and "date" in getattr(_daily, "columns", []):
-                _s.index = pd.to_datetime(_daily["date"])
-            weekly = ds.weekly_closes(_s)
+        from src.data.etf.etf_fetch import fetch_etf_price   # EX-PASSTHRU-1
+        _px = fetch_etf_price(ticker, period="5y")
     except Exception as _e:  # noqa: BLE001
-        print(f"[dividend_station] {ticker} 週K 主源失敗: {type(_e).__name__}")
+        raise ValueError(f"{ticker} 日線抓取失敗: {type(_e).__name__}: {_e}") from _e
+    if _px is None or getattr(_px, "empty", True):
+        raise ValueError(f"{ticker} 無日線資料（部署端網路/代碼確認）")
+    _col = next((c for c in ("Close", "close") if c in _px.columns), None)
+    if _col is None:
+        raise ValueError(f"{ticker} 日線缺 Close 欄")
+    _close = pd.Series(_px[_col]).dropna()
+    if not isinstance(_close.index, pd.DatetimeIndex):
+        _close.index = pd.to_datetime(_close.index)
+    _close = _close.sort_index()
+    weekly = ds.weekly_closes(_close)
     if weekly is None or len(weekly) == 0:
-        raise ValueError(f"{ticker} 無週K 資料（部署端網路/代碼確認）")
+        raise ValueError(f"{ticker} 週K 為空")
 
     m: dict = {"weekly_close": weekly}
-    # 折溢價（TWSE MIS iNAV）
+    _as_of = pd.Timestamp.today().normalize()
+    _cur = float(_close.iloc[-1])
+
+    def _close_before(days: int) -> float | None:
+        _sub = _close.loc[:_as_of - pd.Timedelta(days=days)]
+        return float(_sub.iloc[-1]) if len(_sub) else None
+
+    # 成立年數（以 5y 資料窗估算,足以判定「≥3 年」門檻）
+    m["inception_years"] = ds.inception_years(_close.index.min(), _as_of)
+    # 報酬（還原價 → 已含息）
+    m["total_return_1y_pct"] = ds.total_return_pct(_close_before(365), _cur)
+    m["cum_return_3y_pct"] = ds.total_return_pct(_close_before(365 * 3), _cur)
+    m["ann_return_3y_pct"] = ds.annualized_return_pct(_close_before(365 * 3), _cur, 3.0)
+    # 夏普（週報酬,rf=0 簡化）
+    m["sharpe"] = ds.sharpe_weekly(weekly)
+
+    # 2) 年化配息率
+    try:
+        from src.data.etf.etf_fetch import fetch_etf_dividends
+        _div = pd.Series(fetch_etf_dividends(ticker))
+        if len(_div):
+            _div.index = pd.to_datetime(_div.index)
+            _ttm = float(_div[_div.index >= (_as_of - pd.Timedelta(days=365))].sum())
+            m["annual_yield_pct"] = ds.annual_yield_pct(_ttm, _cur)
+    except Exception as _e:  # noqa: BLE001 — 配息缺 → 健檢 A 標資料不足,不炸
+        print(f"[dividend_station] {ticker} 配息缺: {type(_e).__name__}")
+
+    # 3) 折溢價（TWSE MIS iNAV;欄位 g 已是「折溢價率(%)」,同單位比 1.5%）
     try:
         from src.data.etf.etf_fetch import fetch_etf_nav_history
         _nav = fetch_etf_nav_history(ticker)
         if _nav is not None and len(_nav):
-            _prem_col = next((c for c in _nav.columns if "折溢價" in str(c)), None)
-            if _prem_col:
-                m["premium_pct"] = float(pd.to_numeric(_nav[_prem_col], errors="coerce").dropna().iloc[-1])
+            _pcol = next((c for c in _nav.columns if "折溢價" in str(c)), None)
+            if _pcol:
+                m["premium_pct"] = float(pd.to_numeric(_nav[_pcol], errors="coerce").dropna().iloc[-1])
     except Exception as _e:  # noqa: BLE001
         print(f"[dividend_station] {ticker} 折溢價缺: {type(_e).__name__}")
-    # 其餘指標（配息率/報酬/夏普/成立年/3年報酬/同儕）留待部署端逐步接；
-    # 缺失以 None 誠實降級（健檢/3-3-3 對應項標「資料不足」而非捏造）。
+
+    # 同儕排名（3-3-3 ③）Phase 2 未接
+    m["peer_ranks"] = None
     return m
 
 

@@ -27,6 +27,7 @@ def weekly_closes(daily_close: pd.Series) -> pd.Series:
         s.index = pd.to_datetime(s.index)
     if s.empty:
         raise ValueError("weekly_closes: 去 NaN 後為空")
+    s = s.sort_index()          # ⚠️ 台股來源常新→舊排序;不排序會讓下方防呆誤刪整週(稽核 M2)
     wk = s.resample("W-FRI").last().dropna()
     # 當週未到週五 → 週標籤(Friday) > 最後交易日 → 丟棄（保守,寧可少一週不 lookahead）
     if len(wk) and wk.index[-1] > s.index[-1]:
@@ -59,11 +60,66 @@ def bollinger_z(weekly_close: pd.Series,
     if weekly_close is None or len(weekly_close) < period_weeks:
         return None
     window = weekly_close.iloc[-period_weeks:]
+    last = float(weekly_close.iloc[-1])
     ma = float(window.mean())
     sd = float(window.std(ddof=0))
+    if not (math.isfinite(last) and math.isfinite(ma) and math.isfinite(sd)):
+        return None                      # NaN 污染 → 不判定,不可回 NaN 誤當「全清」(稽核 L5)
     if math.isclose(sd, 0.0, abs_tol=T.FLOAT_ABS_TOL):
         return None
-    return (float(weekly_close.iloc[-1]) - ma) / sd
+    return (last - ma) / sd
+
+
+# ── 報酬 / 配息 / 夏普（純函式,供 L3 抓到序列後計算）───────────────────
+def annual_yield_pct(ttm_dividend: float | None, price: float | None) -> float | None:
+    """年化配息率% = 近 12 月配息 / 現價 × 100。缺值或價<=0 → None。"""
+    if ttm_dividend is None or price is None or price <= 0:
+        return None
+    return float(ttm_dividend) / float(price) * 100.0
+
+
+def total_return_pct(start_close: float | None, end_close: float | None) -> float | None:
+    """區間總報酬%（用還原價 → 已含息）=（end/start − 1）×100。start<=0 → None。"""
+    if start_close is None or end_close is None or start_close <= 0:
+        return None
+    return (float(end_close) / float(start_close) - 1.0) * 100.0
+
+
+def annualized_return_pct(start_close: float | None, end_close: float | None,
+                          years: float) -> float | None:
+    """年化報酬% =（(end/start)^(1/years) − 1）×100。years<=0 或 start<=0 → None。"""
+    if start_close is None or end_close is None or start_close <= 0 or years <= 0:
+        return None
+    return ((float(end_close) / float(start_close)) ** (1.0 / years) - 1.0) * 100.0
+
+
+def sharpe_weekly(weekly_close: pd.Series, *, min_weeks: int = T.MA_QUARTER_WEEKS) -> float | None:
+    """用週報酬算年化夏普（無風險利率取 0,MVP 簡化）= mean/std × √52。
+
+    週數不足 min_weeks 或波動≈0 → None（§1 不猜）。已用還原價 → 週報酬含息。
+    """
+    if weekly_close is None or len(weekly_close) < min_weeks + 1:
+        return None
+    rets = pd.Series(weekly_close).pct_change().dropna()
+    if len(rets) < min_weeks:
+        return None
+    mu = float(rets.mean())
+    sd = float(rets.std(ddof=1))
+    if not (math.isfinite(mu) and math.isfinite(sd)) or math.isclose(sd, 0.0, abs_tol=T.FLOAT_ABS_TOL):
+        return None
+    return mu / sd * math.sqrt(52.0)
+
+
+def inception_years(first_date, as_of=None) -> float | None:
+    """成立年數 =（as_of − 最早資料日）/ 365.25。缺 → None。"""
+    if first_date is None:
+        return None
+    first = pd.Timestamp(first_date)
+    ref = pd.Timestamp(as_of) if as_of is not None else first  # as_of 由 caller 傳(避免不純)
+    if as_of is None:
+        return None
+    days = (ref - first).days
+    return None if days < 0 else days / 365.25
 
 
 # ── 健檢 A/B/C/D ────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from shared import dividend_station_thresholds as T
 from src.services import dividend_station_service as svc
@@ -58,6 +59,47 @@ def test_build_rows_mixed_good_and_bad():
 def test_build_rows_skips_blank_ticker():
     rows = svc.build_station_rows([{"ticker": "  ", "name": ""}], vix=18, metrics_fn=_good_metrics)
     assert rows == []
+
+
+def test_fetch_metrics_wires_real_sources(monkeypatch):
+    """稽核 H1/M3 回歸：fetch_metrics 走 fetch_etf_price（非已刪函式）並算出
+    週K/報酬/夏普/配息/折溢價,不再每檔都變 error 列。用假 L1 模組注入。"""
+    import sys
+    import types
+
+    idx = pd.bdate_range("2020-01-02", periods=900)     # ~3.5 年
+    close = pd.Series(np.linspace(50, 100, len(idx)), index=idx)
+    px = pd.DataFrame({"Close": close})
+    divs = pd.Series([1.0, 1.2],
+                     index=pd.to_datetime(["2024-07-01", "2025-01-02"]))
+    nav = pd.DataFrame({"折溢價率(%)": [0.3, 0.5]})
+
+    fake = types.ModuleType("src.data.etf.etf_fetch")
+    fake.fetch_etf_price = lambda t, period="5y": px
+    fake.fetch_etf_dividends = lambda t: divs
+    fake.fetch_etf_nav_history = lambda t, *a, **k: nav
+    monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
+
+    m = svc.fetch_metrics("0056")
+    assert "weekly_close" in m and len(m["weekly_close"]) > 20
+    assert m["total_return_1y_pct"] is not None
+    assert m["ann_return_3y_pct"] is not None
+    assert m["sharpe"] is not None
+    assert m["annual_yield_pct"] is not None
+    assert m["premium_pct"] == 0.5
+    assert m["inception_years"] is not None and m["inception_years"] >= 3
+    assert m["peer_ranks"] is None            # Phase 2 未接
+
+
+def test_fetch_metrics_no_daily_raises(monkeypatch):
+    """日線抓不到 → raise（該列標抓取失敗,§1 不假裝成功；不再被當資料不足吞掉）。"""
+    import sys
+    import types
+    fake = types.ModuleType("src.data.etf.etf_fetch")
+    fake.fetch_etf_price = lambda t, period="5y": pd.DataFrame()
+    monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
+    with pytest.raises(ValueError):
+        svc.fetch_metrics("9999")
 
 
 def test_row_detail_has_health_and_235():

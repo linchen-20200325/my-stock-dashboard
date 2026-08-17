@@ -40,6 +40,21 @@ def test_weekly_closes_empty_raises():
         ds.weekly_closes(pd.Series([], dtype=float))
 
 
+def test_weekly_closes_descending_input_not_dropping_complete_week():
+    """稽核 M2：台股常新→舊排序;不排序會誤刪整週。升冪/降冪結果須一致。"""
+    s = _daily(list(range(1, 41)))          # 到週五收尾
+    asc = ds.weekly_closes(s)
+    desc = ds.weekly_closes(s.iloc[::-1])   # 反轉成降冪
+    assert len(asc) == len(desc) and asc.index[-1] == desc.index[-1]
+
+
+def test_bollinger_z_nan_last_returns_none():
+    """稽核 L5：最新值 NaN → 回 None（不可回 NaN 被 235 誤當「全清」）。"""
+    idx = pd.date_range("2022-01-07", periods=21, freq="W-FRI")
+    vals = list(np.linspace(100, 120, 20)) + [np.nan]
+    assert ds.bollinger_z(pd.Series(vals, index=idx)) is None
+
+
 # ── 布林 / 均線 ─────────────────────────────────────────────────────────
 def test_bollinger_z_insufficient_returns_none():
     assert ds.bollinger_z(_weekly(10)) is None
@@ -60,6 +75,34 @@ def test_week_ma_slope_down():
     idx = pd.date_range("2022-01-07", periods=15, freq="W-FRI")
     wk = pd.Series(np.linspace(120, 100, 15), index=idx)     # 下降
     assert ds.week_ma_slope(wk, T.MA_QUARTER_WEEKS) < 0
+
+
+# ── 報酬 / 配息 / 夏普 helper ────────────────────────────────────────────
+def test_annual_yield_pct():
+    assert ds.annual_yield_pct(6.0, 100.0) == 6.0
+    assert ds.annual_yield_pct(None, 100.0) is None
+    assert ds.annual_yield_pct(6.0, 0.0) is None
+
+
+def test_total_and_annualized_return():
+    assert ds.total_return_pct(100.0, 121.0) == pytest.approx(21.0)
+    assert ds.annualized_return_pct(100.0, 121.0, 2.0) == pytest.approx(10.0, abs=1e-6)
+    assert ds.total_return_pct(0.0, 121.0) is None
+    assert ds.annualized_return_pct(100.0, 121.0, 0.0) is None
+
+
+def test_sharpe_weekly_positive_and_insufficient():
+    idx = pd.date_range("2022-01-07", periods=30, freq="W-FRI")
+    up = pd.Series(np.linspace(100, 130, 30), index=idx)
+    assert ds.sharpe_weekly(up) > 0
+    assert ds.sharpe_weekly(_weekly(5)) is None          # 不足
+    assert ds.sharpe_weekly(_weekly(30, 100.0)) is None  # 無波動
+
+
+def test_inception_years():
+    first = pd.Timestamp("2015-01-01")
+    assert ds.inception_years(first, pd.Timestamp("2025-01-01")) == pytest.approx(10.0, abs=0.1)
+    assert ds.inception_years(None, pd.Timestamp("2025-01-01")) is None
 
 
 # ── 健檢 ────────────────────────────────────────────────────────────────
