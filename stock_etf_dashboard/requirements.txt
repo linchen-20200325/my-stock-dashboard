@@ -1,0 +1,10 @@
+# Stock & ETF 智慧投資儀表板 — 獨立套件相依
+streamlit>=1.30
+pandas>=2.0
+numpy>=1.24
+pandera>=0.20,<2.0
+yfinance>=0.2.40
+gspread>=6.0
+google-auth>=2.20
+requests>=2.31
+pytest>=7.0
