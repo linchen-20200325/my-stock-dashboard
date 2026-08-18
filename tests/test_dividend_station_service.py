@@ -110,6 +110,8 @@ def test_fetch_metrics_wires_real_sources(monkeypatch):
     fake.fetch_etf_nav_history = lambda t, *a, **k: nav
     monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
 
+    # 3-3-3③ 同儕排名已接(#37):隔離掉真同儕抓取,只驗 fetch_metrics 有把它接進 m。
+    monkeypatch.setattr(svc, "_fetch_peer_ranks", lambda t: {3: 0.1, 6: 0.2, 12: 0.3})
     m = svc.fetch_metrics("0056")
     assert seen["price"] == "0056.TW", "台股裸碼須正規化補 .TW 再抓,否則 yfinance 抓空整排 error"
     assert "weekly_close" in m and len(m["weekly_close"]) > 20
@@ -119,7 +121,7 @@ def test_fetch_metrics_wires_real_sources(monkeypatch):
     assert m["annual_yield_pct"] is not None
     assert m["premium_pct"] == 0.5
     assert m["inception_years"] is not None and m["inception_years"] >= 3
-    assert m["peer_ranks"] is None            # Phase 2 未接
+    assert m["peer_ranks"] == {3: 0.1, 6: 0.2, 12: 0.3}   # 3-3-3③ 已接(不再 Phase 2 None)
 
 
 def test_fetch_metrics_otc_twoo_fallback(monkeypatch):
@@ -301,3 +303,46 @@ def test_summary_prompt_includes_switch_and_regime():
     assert "換股建議" in p and "bear" in p
     assert "00980D" in p and "2412" in p          # 換出/換入都入 prompt
     assert "換入從嚴" in p                          # 轉守攻守指引
+
+
+# ── 3-3-3③ 同儕排名 adapter（#37：接 compute_etf_peer_ranking）──────────────
+def test_fetch_peer_ranks_converts_percentile_and_days(monkeypatch):
+    """percentile(越高越強)→分位(0=最強) = (100-p)/100;交易日 63/126/252→月 3/6/12。"""
+    from src.compute.etf import etf_calc
+    monkeypatch.setattr(etf_calc, "compute_etf_peer_ranking",
+                        lambda t, periods=(63, 126, 252): {
+                            63: {"percentile": 90.0}, 126: {"percentile": 50.0},
+                            252: {"percentile": 70.0}, "category": "高股息", "peers": ["a", "b", "c"]})
+    out = svc._fetch_peer_ranks("0056.TW")
+    assert set(out.keys()) == {3, 6, 12}
+    assert out[3] == pytest.approx(0.1)      # 贏 90% → 分位 0.1(前段)
+    assert out[6] == pytest.approx(0.5)
+    assert out[12] == pytest.approx(0.3)
+
+
+def test_fetch_peer_ranks_err_returns_none(monkeypatch):
+    """§1：同儕不足/抓取失敗(_err) → None（→ kernel peer_ok 維持「待資料」不硬判）。"""
+    from src.compute.etf import etf_calc
+    monkeypatch.setattr(etf_calc, "compute_etf_peer_ranking",
+                        lambda t, periods=(63, 126, 252): {"_err": "同儕資料不足", "category": ""})
+    assert svc._fetch_peer_ranks("0056.TW") is None
+
+
+def test_fetch_peer_ranks_partial_window_omitted(monkeypatch):
+    """某視窗資料不足 → 該月不填(partial) → kernel 因不齊而不判定(§1)。"""
+    from src.compute.etf import etf_calc
+    monkeypatch.setattr(etf_calc, "compute_etf_peer_ranking",
+                        lambda t, periods=(63, 126, 252): {
+                            63: {"percentile": 80.0}, 126: {"_err": "資料不足 126 日"},
+                            252: {"percentile": 60.0}})
+    out = svc._fetch_peer_ranks("0056.TW")
+    assert set(out.keys()) == {3, 12}        # 6M 缺 → 不填
+
+
+def test_fetch_peer_ranks_swallows_exception(monkeypatch):
+    """compute 拋例外 → None，不擋整檔健檢。"""
+    from src.compute.etf import etf_calc
+    def _boom(t, periods=(63, 126, 252)):
+        raise RuntimeError("net down")
+    monkeypatch.setattr(etf_calc, "compute_etf_peer_ranking", _boom)
+    assert svc._fetch_peer_ranks("0056.TW") is None
