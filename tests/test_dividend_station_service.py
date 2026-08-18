@@ -74,13 +74,18 @@ def test_fetch_metrics_wires_real_sources(monkeypatch):
                      index=pd.to_datetime(["2024-07-01", "2025-01-02"]))
     nav = pd.DataFrame({"折溢價率(%)": [0.3, 0.5]})
 
+    seen = {}
     fake = types.ModuleType("src.data.etf.etf_fetch")
-    fake.fetch_etf_price = lambda t, period="5y": px
+    def _cap_price(t, period="5y"):
+        seen["price"] = t
+        return px
+    fake.fetch_etf_price = _cap_price
     fake.fetch_etf_dividends = lambda t: divs
     fake.fetch_etf_nav_history = lambda t, *a, **k: nav
     monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
 
     m = svc.fetch_metrics("0056")
+    assert seen["price"] == "0056.TW", "台股裸碼須正規化補 .TW 再抓,否則 yfinance 抓空整排 error"
     assert "weekly_close" in m and len(m["weekly_close"]) > 20
     assert m["total_return_1y_pct"] is not None
     assert m["ann_return_3y_pct"] is not None

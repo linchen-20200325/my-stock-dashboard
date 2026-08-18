@@ -107,11 +107,16 @@ def fetch_metrics(ticker: str) -> dict:
     同儕排名（3-3-3 ③）Phase 2 未接 → peer_ranks=None（3-3-3 顯示「待資料」非「未過」）。
     """
     import pandas as pd
+    from src.compute.etf import normalize_etf_ticker
+
+    # ⚠️ 台股代碼須補 .TW(0056→0056.TW) 再抓,否則 fetch_etf_price/yfinance 抓空 →
+    # 每檔 raise「無日線」= 整排 error(部署端實測回報)。既有 ETF 分頁都先做這步。
+    _yf = normalize_etf_ticker(ticker) or ticker
 
     # 1) 日線（還原價）→ 週K（必要）
     try:
         from src.data.etf.etf_fetch import fetch_etf_price   # EX-PASSTHRU-1
-        _px = fetch_etf_price(ticker, period="5y")
+        _px = fetch_etf_price(_yf, period="5y")
     except Exception as _e:  # noqa: BLE001
         raise ValueError(f"{ticker} 日線抓取失敗: {type(_e).__name__}: {_e}") from _e
     if _px is None or getattr(_px, "empty", True):
@@ -147,7 +152,7 @@ def fetch_metrics(ticker: str) -> dict:
     # 2) 年化配息率
     try:
         from src.data.etf.etf_fetch import fetch_etf_dividends
-        _div = pd.Series(fetch_etf_dividends(ticker))
+        _div = pd.Series(fetch_etf_dividends(_yf))
         if len(_div):
             _div.index = pd.to_datetime(_div.index)
             _ttm = float(_div[_div.index >= (_as_of - pd.Timedelta(days=365))].sum())
@@ -158,7 +163,7 @@ def fetch_metrics(ticker: str) -> dict:
     # 3) 折溢價（TWSE MIS iNAV;欄位 g 已是「折溢價率(%)」,同單位比 1.5%）
     try:
         from src.data.etf.etf_fetch import fetch_etf_nav_history
-        _nav = fetch_etf_nav_history(ticker)
+        _nav = fetch_etf_nav_history(_yf)
         if _nav is not None and len(_nav):
             _pcol = next((c for c in _nav.columns if "折溢價" in str(c)), None)
             if _pcol:
