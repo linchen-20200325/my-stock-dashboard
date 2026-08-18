@@ -190,9 +190,36 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
         except Exception as _e:  # noqa: BLE001
             print(f"[dividend_station] {ticker} 折溢價缺: {type(_e).__name__}")
 
-    # 同儕排名（3-3-3 ③）Phase 2 未接
-    m["peer_ranks"] = None
+    # 同儕排名（3-3-3 ③）：僅 ETF 接 compute_etf_peer_ranking（個股 3-3-3 不適用 → None）。
+    #   §1 best-effort：同儕不足 / 抓取失敗 → None → 該項顯示「❔ 待資料」不硬判。
+    m["peer_ranks"] = _fetch_peer_ranks(_yf) if asset_kind == T.KIND_ETF else None
     return m
+
+
+def _fetch_peer_ranks(ticker: str) -> dict[int, float] | None:
+    """接 L2 `compute_etf_peer_ranking` → 3-3-3 kernel 期望的 {月數: 分位(0=最強)}。
+
+    轉換（§4.1 語意對齊）：
+    - 交易日視窗 63/126/252 → 月 3/6/12（PEER_WINDOWS_MONTHS）。
+    - percentile（0~100，贏過同儕的%，**越高越強**）→ 分位 `(100−percentile)/100`
+      （0=最強、1=最弱；kernel 的「前 1/3」= 分位 ≤ 1/3 = percentile ≥ 66.7）。
+    §1：`_err`（同儕不足/抓取失敗）或某視窗缺 → 該月不填 → kernel peer_ok 維持不可判定。
+    """
+    try:
+        from src.compute.etf.etf_calc import compute_etf_peer_ranking
+        _pr = compute_etf_peer_ranking(ticker)
+    except Exception as _e:  # noqa: BLE001 — 同儕算不出不擋整檔健檢
+        print(f"[dividend_station] {ticker} 同儕排名失敗: {type(_e).__name__}: {_e}")
+        return None
+    if not isinstance(_pr, dict) or _pr.get("_err"):
+        return None
+    _day_to_month = {63: 3, 126: 6, 252: 12}
+    _out: dict[int, float] = {}
+    for _days, _mon in _day_to_month.items():
+        _slot = _pr.get(_days)
+        if isinstance(_slot, dict) and _slot.get("percentile") is not None:
+            _out[_mon] = (100.0 - float(_slot["percentile"])) / 100.0
+    return _out or None
 
 
 def get_station_rows(holdings: list[dict]) -> tuple[list[dict], float | None]:
