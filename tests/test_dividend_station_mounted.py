@@ -20,9 +20,9 @@ def test_render_dividend_station_mounts_clean(tmp_path):
 
     at = AppTest.from_file(str(script), default_timeout=60)
     at.run()
-    assert not at.exception, f"存股戰情室 mount 有 uncaught exception: {at.exception}"
+    assert not at.exception, f"我的持股戰情室 mount 有 uncaught exception: {at.exception}"
     # 未按執行前顯示提示,不應自動抓取
     heads = [m.value for m in at.markdown]
-    assert any("存股戰情室" in h for h in heads)
+    assert any("持股戰情室" in h for h in heads)
     labels = [b.label for b in at.button]
     assert "🚀 跑存股戰情室" in labels

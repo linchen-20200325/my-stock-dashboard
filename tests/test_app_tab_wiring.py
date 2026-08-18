@@ -31,7 +31,7 @@ _RENDER_TABS = [
 
 # 其餘以 with-block 內聯渲染的分頁
 _INLINE_TABS = ["tab_heatmap", "tab_screener", "tab_etf",
-                "tab_etf_grp", "tab_diag"]
+                "tab_etf_warroom", "tab_diag"]   # v19.167: tab_etf_grp+tab_etf_station 併成 tab_etf_warroom
 
 
 def test_render_fn_tabs_wired():

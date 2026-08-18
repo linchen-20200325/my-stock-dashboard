@@ -19,17 +19,20 @@ _CLASS_ICON = {T.ASSET_CORE: "🛡️ 核心", T.ASSET_SATELLITE: "🚀 衛星"}
 def row_from_assessment(a: ds.HoldingAssessment) -> dict:
     """HoldingAssessment → 表格一列（純函式）。"""
     _add = f"{a.light.deploy_pct:.0f}%" if a.light.deploy_pct else ""
+    _is_stock = a.asset_kind == T.KIND_STOCK
     return {
         "代號": a.ticker,
         "名稱": a.name,
+        "種類": "個股" if _is_stock else "ETF",
         "類別": _CLASS_ICON.get(a.asset_class, a.asset_class),
         "健檢": a.worst_health,
         "235 燈號": f"{a.light.icon} {a.light.label}",
         "加碼金": _add,
-        "3-3-3": ("✅ 合格" if a.screen.passed
-                  else ("❔ 待資料"
-                        if None in (a.screen.inception_ok, a.screen.return_ok, a.screen.peer_ok)
-                        else "❌ 未過")),
+        "3-3-3": ("—" if _is_stock
+                  else ("✅ 合格" if a.screen.passed
+                        else ("❔ 待資料"
+                              if None in (a.screen.inception_ok, a.screen.return_ok, a.screen.peer_ok)
+                              else "❌ 未過"))),
         "建議動作": ds.suggest_action(a),
         # 展開明細（UI 下鑽用；不進主表）
         "_detail": {
@@ -65,13 +68,14 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
         tk = str(h.get("ticker", "") or "").strip()
         nm = str(h.get("name", "") or "")
         ac = h.get("asset_class", T.ASSET_CORE)
+        ak = h.get("asset_kind", T.KIND_ETF)         # stock / etf（fetcher 分流 + 適用性）
         if not tk:
             continue
         try:
-            m = metrics_fn(tk)
+            m = metrics_fn(tk, ak)
             a = ds.assess_holding(
                 ticker=tk, name=nm or str(m.get("name", "")), asset_class=ac,
-                weekly_close=m["weekly_close"], vix=vix,
+                asset_kind=ak, weekly_close=m["weekly_close"], vix=vix,
                 premium_pct=m.get("premium_pct"), sharpe=m.get("sharpe"),
                 total_return_1y_pct=m.get("total_return_1y_pct"),
                 annual_yield_pct=m.get("annual_yield_pct"),
@@ -98,13 +102,14 @@ def fetch_vix() -> float | None:
     return None
 
 
-def fetch_metrics(ticker: str) -> dict:
+def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
     """逐檔抓 L2 所需指標（best-effort;缺的回 None → 該項標資料不足）。
 
-    日線走 L1 `fetch_etf_price`（proxy-aware、auto_adjust 還原含息）→ 週K + 報酬 + 夏普 +
-    成立年；配息走 `fetch_etf_dividends`→ 年化配息率；折溢價走 `fetch_etf_nav_history`。
+    日線走 L1 `fetch_etf_price`（proxy-aware、auto_adjust；**本質是 yfinance 歷史,個股
+    2330.TW 亦適用**）→ 週K + 報酬 + 夏普 + 成立年；配息走 `fetch_etf_dividends`→ 年化
+    配息率（個股亦可）。折溢價 `fetch_etf_nav_history` **僅 ETF**（個股無 iNAV,跳過）。
     ⚠️ 需部署端網路（沙箱代理擋）。日線為必要,無則 raise（該列標抓取失敗,§1 誠實不假裝）。
-    同儕排名（3-3-3 ③）Phase 2 未接 → peer_ranks=None（3-3-3 顯示「待資料」非「未過」）。
+    同儕排名（3-3-3 ③）Phase 2 未接 → peer_ranks=None。
     """
     import pandas as pd
     from src.compute.etf import normalize_etf_ticker
@@ -160,16 +165,18 @@ def fetch_metrics(ticker: str) -> dict:
     except Exception as _e:  # noqa: BLE001 — 配息缺 → 健檢 A 標資料不足,不炸
         print(f"[dividend_station] {ticker} 配息缺: {type(_e).__name__}")
 
-    # 3) 折溢價（TWSE MIS iNAV;欄位 g 已是「折溢價率(%)」,同單位比 1.5%）
-    try:
-        from src.data.etf.etf_fetch import fetch_etf_nav_history
-        _nav = fetch_etf_nav_history(_yf)
-        if _nav is not None and len(_nav):
-            _pcol = next((c for c in _nav.columns if "折溢價" in str(c)), None)
-            if _pcol:
-                m["premium_pct"] = float(pd.to_numeric(_nav[_pcol], errors="coerce").dropna().iloc[-1])
-    except Exception as _e:  # noqa: BLE001
-        print(f"[dividend_station] {ticker} 折溢價缺: {type(_e).__name__}")
+    # 3) 折溢價（TWSE MIS iNAV;欄位 g 已是「折溢價率(%)」,同單位比 1.5%）—— 僅 ETF
+    if asset_kind == T.KIND_ETF:
+        try:
+            from src.data.etf.etf_fetch import fetch_etf_nav_history
+            _nav = fetch_etf_nav_history(_yf)
+            if _nav is not None and len(_nav):
+                _pcol = next((c for c in _nav.columns if "折溢價" in str(c)), None)
+                if _pcol:
+                    m["premium_pct"] = float(
+                        pd.to_numeric(_nav[_pcol], errors="coerce").dropna().iloc[-1])
+        except Exception as _e:  # noqa: BLE001
+            print(f"[dividend_station] {ticker} 折溢價缺: {type(_e).__name__}")
 
     # 同儕排名（3-3-3 ③）Phase 2 未接
     m["peer_ranks"] = None

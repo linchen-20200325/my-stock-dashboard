@@ -253,6 +253,22 @@ def test_suggest_action_cruise():
     assert ds.suggest_action(a).startswith("⚪ 巡航")
 
 
+def test_assess_holding_stock_kind_skips_d_and_333():
+    """個股：D折溢價、3-3-3 不適用（即使給值也不判）；A/B/C/235 照跑。"""
+    idx = pd.date_range("2022-01-07", periods=60, freq="W-FRI")
+    wk = pd.Series(np.linspace(80, 120, 60), index=idx)
+    a = ds.assess_holding(
+        ticker="2330", name="台積電", asset_class=T.ASSET_SATELLITE,
+        asset_kind=T.KIND_STOCK, weekly_close=wk, vix=18,
+        premium_pct=1.9, sharpe=1.0, total_return_1y_pct=20, annual_yield_pct=2,
+        inception_years=10, ann_return_3y_pct=15, cum_return_3y_pct=None,
+        peer_ranks={m: 0.1 for m in T.PEER_WINDOWS_MONTHS})
+    assert a.asset_kind == T.KIND_STOCK
+    assert a.health_d.level == "⚪" and "個股不適用" in a.health_d.msg   # premium 1.9 不判 🟡
+    assert a.screen.passed is False and "個股不適用" in a.screen.detail  # peer 0.1 不判 ✅
+    assert a.health_b.level == "🟢"                                     # B/C/235 仍照跑
+
+
 def test_assess_holding_empty_raises():
     with pytest.raises(ValueError):
         ds.assess_holding(
