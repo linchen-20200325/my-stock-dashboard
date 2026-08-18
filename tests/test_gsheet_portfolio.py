@@ -6,6 +6,14 @@ import pytest
 from src.data.portfolio import gsheet_portfolio as gsp
 
 
+@pytest.fixture(autouse=True)
+def _clear_read_cache():
+    """每測試前後清 L1 讀取快取 —— 防 @st.cache_data 跨測試殘留污染（429 根治的副作用）。"""
+    gsp.clear_read_cache()
+    yield
+    gsp.clear_read_cache()
+
+
 class _FakeWorksheet:
     """模擬 gspread.Worksheet：用 list[list] 存 2D 資料 + header。"""
     def __init__(self, initial_rows=None):
@@ -741,3 +749,48 @@ def test_create_new_sheet_empty_folder_name_treated_as_root():
 def test_stock_drive_folder_name_constant():
     """§3.3 專屬資料夾名為具名常數。"""
     assert gsp._STOCK_DRIVE_FOLDER_NAME == '台股 Dashboard（個股組合）'
+
+
+# ══ 429 根治:讀取快取(TTL_15MIN)+寫入即清 ═══════════════════════════════════
+def test_read_cache_hit_avoids_refetch():
+    """同參數第二次讀取命中快取,不再打 _ws(降 Sheets API,根治 429/每分鐘配額)。"""
+    ws = _FakeWorksheet([gsp._HEADERS, ['A', '0050.TW', 1, 100, 'ts']])
+    calls = {'n': 0}
+
+    def _counting_ws(**kwargs):
+        calls['n'] += 1
+        return ws
+    with patch.object(gsp, '_ws', side_effect=_counting_ws):
+        r1 = gsp.list_portfolios(sheet_id='SID_X')
+        r2 = gsp.list_portfolios(sheet_id='SID_X')
+    assert r1 == r2 == ['A']
+    assert calls['n'] == 1, '第二次應命中快取,不重打 _ws（否則 429 沒根治）'
+
+
+def test_clear_read_cache_forces_refetch():
+    """clear_read_cache() → 下次讀取重抓（手動刷新 / 寫入後失效的機制）。"""
+    ws = _FakeWorksheet([gsp._HEADERS, ['A', '0050.TW', 1, 100, 'ts']])
+    calls = {'n': 0}
+
+    def _counting_ws(**kwargs):
+        calls['n'] += 1
+        return ws
+    with patch.object(gsp, '_ws', side_effect=_counting_ws):
+        gsp.list_portfolios(sheet_id='SID_Y')
+        gsp.clear_read_cache()
+        gsp.list_portfolios(sheet_id='SID_Y')
+    assert calls['n'] == 2, 'clear 後應重抓'
+
+
+def test_save_portfolio_clears_read_cache(populated_ws):
+    """§1:save 後讀取快取自動失效 → 使用者自己存的新組合立刻看得到,不服務髒快取。"""
+    assert '攻擊組合' in gsp.list_portfolios()          # 先讀進快取
+    gsp.save_portfolio('新組', [{'ticker': '2330', 'lots': 1, 'avg_price': 100}])
+    assert '新組' in gsp.list_portfolios()              # save 已清快取 → 看得到新組
+
+
+def test_save_stock_watchlist_clears_read_cache(fake_watchlist_ws):
+    """§1:save watchlist 後讀取快取自動失效。"""
+    gsp.list_stock_watchlists()                         # 先讀進快取(空)
+    gsp.save_stock_watchlist('觀察', ['2330', '2454'])
+    assert '觀察' in gsp.list_stock_watchlists()        # 清快取後看得到

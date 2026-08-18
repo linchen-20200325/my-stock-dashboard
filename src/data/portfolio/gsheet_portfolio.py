@@ -50,6 +50,34 @@ try:
 except ImportError:
     st = None
 
+from shared.ttls import TTL_15MIN   # L0 SSOT(§3.3):Google Sheet 讀取快取 TTL
+
+
+def _cache_data(**kwargs):
+    """§8.2.A EX-CACHE-1:取 st.cache_data 當讀取快取;無 streamlit(純 .py)→ 退化 identity。
+
+    根治 429:list/load 每次呼叫對 Sheets 打 4~5 個 read request,Streamlit 每次 rerun
+    重跑 → 撞「每分鐘每使用者 60 讀取」配額。快取讓 rerun 命中快取(0 API),TTL 到期或
+    寫入清快取才重抓。
+    """
+    if st is None:
+        return lambda _f: _f
+    return st.cache_data(**kwargs)
+
+
+def clear_read_cache() -> None:
+    """清掉 Google Sheet 讀取快取(list/load × Portfolio/Watchlist)。
+
+    §5 可觀測性 + §1:寫入(save/delete)一律清 → 使用者自己的編輯即時可見,不服務髒資料;
+    外部直接改 Sheet 者靠 TTL_15MIN 過期,或 UI 的「🔄 重新載入」手動呼叫本函式。
+    """
+    for _fn in (list_portfolios, load_portfolio,
+                list_stock_watchlists, load_stock_watchlist):
+        _clear = getattr(_fn, 'clear', None)
+        if callable(_clear):
+            _clear()
+
+
 _WORKSHEET_NAME = 'portfolios'
 _HEADERS = ['name', 'ticker', 'lots', 'avg_price', 'updated_at']
 
@@ -246,10 +274,12 @@ def _all_records(*, sheet_id: str | None = None,
                headers=headers).get_all_records()
 
 
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def list_portfolios(*, sheet_id: str | None = None) -> list[str]:
     """列出所有不重複的組合名稱（按字母排序）。
 
     sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
+    ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
     """
     names: set[str] = set()
     for rec in _all_records(sheet_id=sheet_id):
@@ -259,10 +289,12 @@ def list_portfolios(*, sheet_id: str | None = None) -> list[str]:
     return sorted(names)
 
 
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def load_portfolio(name: str, *, sheet_id: str | None = None) -> list[dict[str, Any]]:
     """讀取指定名稱的組合，回傳 `[{ticker, lots, avg_price}, ...]`。
 
     sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
+    ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
     """
     name = (name or '').strip()
     if not name:
@@ -325,6 +357,7 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
     if keep_rows:
         ws.append_rows(keep_rows)
     ws.append_rows(new_rows)
+    clear_read_cache()          # 寫入即清:使用者自己的編輯即時可見(§1)
     return len(new_rows)
 
 
@@ -369,13 +402,16 @@ def save_stock_watchlist(name: str, tickers: list[str], *,
     if keep_rows:
         ws.append_rows(keep_rows)
     ws.append_rows(new_rows)
+    clear_read_cache()          # 寫入即清:使用者自己的編輯即時可見(§1)
     return len(new_rows)
 
 
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def list_stock_watchlists(*, sheet_id: str | None = None) -> list[str]:
     """列出 `stock_watchlist` 分頁內所有不重複的清單名稱(字母排序)。
 
     sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合)。
+    ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
     """
     names: set[str] = set()
     for rec in _all_records(sheet_id=sheet_id,
@@ -387,10 +423,12 @@ def list_stock_watchlists(*, sheet_id: str | None = None) -> list[str]:
     return sorted(names)
 
 
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def load_stock_watchlist(name: str, *, sheet_id: str | None = None) -> list[str]:
     """讀取指定名稱的**純代碼**清單(保序、去重),回傳 `list[str]`,**無**價格欄位。
 
     sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合)。
+    ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
     """
     name = (name or '').strip()
     if not name:
@@ -702,6 +740,7 @@ def delete_portfolio(name: str, *, sheet_id: str | None = None) -> int:
     ws.append_row(_HEADERS)
     if keep_rows:
         ws.append_rows(keep_rows)
+    clear_read_cache()          # 刪除即清(§1)
     return deleted
 
 
@@ -728,4 +767,5 @@ def delete_stock_watchlist(name: str, *, sheet_id: str | None = None) -> int:
     ws.append_row(_STOCK_WATCHLIST_HEADERS)
     if keep_rows:
         ws.append_rows(keep_rows)
+    clear_read_cache()          # 刪除即清(§1)
     return deleted

@@ -1,7 +1,7 @@
 """L5 UI — 💼 我的持股戰情室（個股 + ETF 統一分析,掛在 🏦 ETF）。
 
 定位：**持股 Sheet 綁定** → 定期健檢 → AI 總結（可推播）。
-- 標的**唯一來源 = 📁 組合管理**（ETF 組合 + 個股清單）,進頁自動載入、**唯讀不可改**;
+- 標的**唯一來源 = 📁 組合管理**（投資組合 Portfolio + 觀察清單 Watchlist）,進頁自動載入、**唯讀不可改**;
   無手動輸入代號的入口（§ user 2026-08：單一來源、去凌亂）。
 - 逐檔（個股+ETF）跑健檢 + 235 燈 + 3-3-3,顏色高亮。
 - 🤖 AI 戰情總結：先出規則式事實（汰弱 / 235 加碼 / 抓取失敗）,有金鑰再 AI 潤成推播文字。
@@ -47,7 +47,7 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     import pandas as pd
 
     st.markdown("### 💼 我的持股戰情室 — 定期健檢 · 235 加碼 · AI 總結")
-    st.caption("標的**唯一來源 = 📁 組合管理**（ETF 組合 + 個股清單）,自動載入、唯讀。逐檔看健檢"
+    st.caption("標的**唯一來源 = 📁 組合管理**（投資組合 Portfolio + 觀察清單 Watchlist）,自動載入、唯讀。逐檔看健檢"
                "（A賺息賠本／B夏普／C季線轉弱／D高溢價）＋235 加碼燈,AI 幫你濃縮成「今天要不要動作」。"
                "個股：D折溢價／3-3-3 標「—」不適用;資料不足標「不判定」不猜（§1）。")
 
@@ -57,6 +57,11 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     _c_reload, _c_hint = st.columns([1, 4])
     with _c_reload:
         if st.button("🔄 重新載入", key="_station_reload", help="重抓 📁 組合管理的持股清單"):
+            try:   # 手動刷新 → 清 L1 讀取快取,繞過 TTL 抓最新(§1 使用者要的是即時)
+                from src.data.portfolio import gsheet_portfolio as _gsp   # EX-PASSTHRU-1
+                _gsp.clear_read_cache()
+            except Exception:  # noqa: BLE001 — 清快取失敗不該擋重載
+                pass
             st.session_state[_HOLDINGS_KEY] = _load_holdings_from_portfolio()
             st.session_state.pop("_station_rows", None)
             st.session_state.pop("_station_vix", None)
@@ -66,7 +71,7 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     if not _holdings:
         with _c_hint:
             st.caption("尚未載入到持股。")
-        st.warning("尚未載入到持股 —— 請先到 **📁 組合管理** 選定 Sheet 並存「ETF 組合」/「個股清單」,"
+        st.warning("尚未載入到持股 —— 請先到 **📁 組合管理** 選定 Sheet 並存「投資組合 Portfolio」/「觀察清單 Watchlist」,"
                    "再回來按「🔄 重新載入」。")
     else:
         with _c_hint:
@@ -166,7 +171,7 @@ def _render_ai_summary(rows: list[dict], vix, gemini_fn: Callable[..., str] | No
 
 
 def _load_holdings_from_portfolio() -> list[dict]:
-    """從 📁 組合管理帶入 ETF 組合（種類=ETF/核心）+ 個股清單（種類=個股/衛星）。
+    """從 📁 組合管理帶入 投資組合 Portfolio（種類=ETF/核心）+ 觀察清單 Watchlist（種類=個股/衛星）。
 
     回 service 格式 [{ticker,name,asset_class,asset_kind}, ...]。
     best-effort：任一份讀不到就略過該份;兩份都空 → 提示 + [] （未登入/未設）。§1 不靜默。
@@ -178,12 +183,12 @@ def _load_holdings_from_portfolio() -> list[dict]:
         return []
 
     _out: list[dict] = []
-    # ETF 組合（種類=ETF,預設核心）
+    # 投資組合 Portfolio（種類=ETF,預設核心）
     try:
         _etf_sid = _gsp._get_active_sheet_id()
     except Exception as _e:  # noqa: BLE001 — §1 不靜默:accessor 理應回 '' 不 raise,真炸也留痕
         _etf_sid = None
-        st.caption(f"（ETF 組合 Sheet 判定略過：{type(_e).__name__}：{_e}）")
+        st.caption(f"（投資組合 Portfolio Sheet 判定略過：{type(_e).__name__}：{_e}）")
     if _etf_sid:
         try:
             _names = _gsp.list_portfolios(sheet_id=_etf_sid)
@@ -195,15 +200,15 @@ def _load_holdings_from_portfolio() -> list[dict]:
                         _out.append({"ticker": _c, "name": "",
                                      "asset_kind": T.KIND_ETF, "asset_class": T.ASSET_CORE})
                 _more = "；此 Sheet 有多本組合,只取第一本" if len(_names) > 1 else ""
-                st.caption(f"✅ 帶入 ETF 組合「{_names[0]}」（{len(_out) - _n0} 檔）{_more}")
+                st.caption(f"✅ 帶入 投資組合 Portfolio「{_names[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」
-            st.warning(f"ETF 組合讀取失敗：{type(_e).__name__}：{_e}")
-    # 個股清單（種類=個股,預設衛星）
+            st.warning(f"投資組合 Portfolio讀取失敗：{type(_e).__name__}：{_e}")
+    # 觀察清單 Watchlist（種類=個股,預設衛星）
     try:
         _stk_sid = _gsp._get_active_stock_sheet_id()
     except Exception as _e:  # noqa: BLE001 — §1 不靜默:同上,真炸也留痕
         _stk_sid = None
-        st.caption(f"（個股清單 Sheet 判定略過：{type(_e).__name__}：{_e}）")
+        st.caption(f"（觀察清單 Watchlist Sheet 判定略過：{type(_e).__name__}：{_e}）")
     if _stk_sid:
         try:
             _snames = _gsp.list_stock_watchlists(sheet_id=_stk_sid)
@@ -215,8 +220,8 @@ def _load_holdings_from_portfolio() -> list[dict]:
                         _out.append({"ticker": _c, "name": "",
                                      "asset_kind": T.KIND_STOCK, "asset_class": T.ASSET_SATELLITE})
                 _more = "；此 Sheet 有多份清單,只取第一份" if len(_snames) > 1 else ""
-                st.caption(f"✅ 帶入 個股清單「{_snames[0]}」（{len(_out) - _n0} 檔）{_more}")
+                st.caption(f"✅ 帶入 觀察清單 Watchlist「{_snames[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」
-            st.warning(f"個股清單讀取失敗：{type(_e).__name__}：{_e}")
+            st.warning(f"觀察清單 Watchlist讀取失敗：{type(_e).__name__}：{_e}")
 
     return _out
