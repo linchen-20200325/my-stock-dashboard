@@ -25,6 +25,7 @@ st.session_state[_t3ai_key] 防 rerun 重打。
 """
 from __future__ import annotations
 
+import hashlib as _hashlib
 from typing import Any, Callable
 
 import streamlit as st
@@ -51,7 +52,11 @@ def render_ai_portfolio_section(
 
     st.markdown('---')
     st.markdown("""<div style="margin:16px 0 8px;padding:8px 16px;background:linear-gradient(90deg,#76e3ea18,#0d1117);border-left:4px solid #76e3ea;border-radius:0 6px 6px 0;"><span style="font-size:15px;font-weight:900;color:#76e3ea;">🤖 AI 投資組合綜合判讀</span><span style="font-size:11px;color:#8b949e;margin-left:8px;">台股資深基金經理人 · 強弱排序 · 汰弱留強 · 風險診斷</span></div>""", unsafe_allow_html=True)
-    _t3ai_key = 't3_port_' + '_'.join(sorted(r.get('stock_id', r.get('代碼','')) for r in results_t3[:10]))
+    # E-2(稽核):快取 key 涵蓋**全部**代號 + 健康度(資料版本)→ 換組合/資料變動即自然失效,
+    #   不再只取前 10 檔(窄碰撞)也不再因價格/位階變了仍顯示舊報告。
+    _sig = '|'.join(f"{r.get('stock_id', r.get('代碼', ''))}:{r.get('_health', '')}"
+                    for r in results_t3)
+    _t3ai_key = 't3_port_' + _hashlib.md5(_sig.encode('utf-8')).hexdigest()[:16]
     _t3ai_cached = st.session_state.get(_t3ai_key, '')
     _t3ai_c1, _t3ai_c2 = st.columns([3, 1])
     with _t3ai_c1:
@@ -73,6 +78,9 @@ def render_ai_portfolio_section(
         with st.spinner('AI 基金經理人分析中(約 30 秒)...'):
             _t3ai_result = gemini_call_fn(_t3ai_prompt, max_tokens=2000)
         st.session_state[_t3ai_key] = _t3ai_result
+        # E-1(稽核):生成後立刻回寫本地變數 → 本次 rerun 就顯示新報告,
+        #   不再「慢一個 rerun」或在重新生成時秀上一份舊報告。
+        _t3ai_cached = _t3ai_result
     if _t3ai_cached:
         st.markdown(_t3ai_cached)
     elif not _t3ai_btn:
@@ -157,9 +165,14 @@ def _build_portfolio_prompt(
         else f'系統建議的持股上限:{_alloc_p.range_text}'
     )
     # ── 依綜合評分排出強弱順序(重用上方已算好的資料)──────────
+    # A(稽核):綜合評分一律從 score_t3(_sc_map3)取**真分**,與第 1 節一致。results_t3 本身
+    #   無 'total'(它在 score_t3),原本標籤恆印「未評分」→ 與第 1 節「多因子=80」自打架。
+    _real_tot = {_sid: _s['total'] for _sid, _s in _sc_map3.items()
+                 if isinstance(_s, dict) and 'error' not in _s and _s.get('total') is not None}
     _ranked_t3 = sorted(
         results_t3,
-        key=lambda _r: _r.get('total', _r.get('健康度', 0)) or 0,
+        key=lambda _r: (_real_tot.get(_r.get('stock_id', _r.get('代碼', '')),
+                                      _r.get('_health', 0) or 0)),
         reverse=True,
     )
     _strong_lines = []
@@ -167,10 +180,8 @@ def _build_portfolio_prompt(
         _sid_r = _rr.get('stock_id', _rr.get('代碼', ''))
         _nm_r  = _rr.get('stock_name', _rr.get('名稱', _sid_r))
         _ht_r  = _rr.get('_health', 0) or 0
-        # v19.184:results_t3 **沒有** 'total' 這個 key(它在 score_t3),原本
-        # `.get('total', .get('健康度'))` 會靜默拿健康度充當「綜合評分」印給 LLM。
-        # 排序仍可用健康度當 fallback(那只是排序),但**標籤不得謊稱是綜合評分**(§1)。
-        _tot_r = _rr.get('total')
+        # A(稽核):綜合評分取自 score_t3 真分;真的沒評分才誠實標「未評分」(§1 不再自打架)。
+        _tot_r = _real_tot.get(_sid_r)
         _sc_txt = (f"綜合評分={float(_tot_r):.0f} " if _tot_r is not None
                    else "綜合評分=未評分 ")
         # v19.184:同檔 :104-109 已修過一次,這裡是**第二處**漏網 ——
