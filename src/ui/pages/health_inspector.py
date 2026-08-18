@@ -1151,7 +1151,7 @@ def render_data_health_raw():
         _t3_results = _t3.get('results') or []
         if _t3_results:
             st.markdown('---')
-            st.markdown(f'**🏆 個股組合逐檔診斷（{len(_t3_results)} 檔）**')
+            st.markdown(f'**📊 多檔個股比較逐檔診斷（{len(_t3_results)} 檔）**')
             _grp_diag_rows = []
             _today_grp = str(_dt_r.date.today())
             for _gr in _t3_results:

@@ -305,6 +305,7 @@ class HoldingAssessment:
     light: Light235
     screen: Screen333
     worst_health: str                # 🔴/🟡/🟢/⚪ 取最嚴重
+    asset_kind: str = T.KIND_ETF     # stock / etf（個股 D折溢價、3-3-3 不適用）
 
 
 def _worst_level(*flags: Flag) -> str:
@@ -319,8 +320,13 @@ def assess_holding(*, ticker: str, name: str, asset_class: str,
                    total_return_1y_pct: float | None, annual_yield_pct: float | None,
                    inception_years: float | None, ann_return_3y_pct: float | None,
                    cum_return_3y_pct: float | None,
-                   peer_ranks: dict[int, float] | None) -> HoldingAssessment:
-    """把單一標的的預算指標 → 健檢 + 235燈 + 3-3-3 一列。純函式。"""
+                   peer_ranks: dict[int, float] | None,
+                   asset_kind: str = T.KIND_ETF) -> HoldingAssessment:
+    """把單一標的的預算指標 → 健檢 + 235燈 + 3-3-3 一列。純函式。
+
+    asset_kind=stock（個股）：D 折溢價、3-3-3（ETF/基金挑選規則）**不適用**,標中性
+    ⚪「個股不適用」而非誤導的 🔴/🟡/❌；A/B/C + 235 照跑（§1 不硬套 ETF 規則到個股）。
+    """
     if weekly_close is None or len(weekly_close) == 0:
         raise ValueError(f"{ticker}: weekly_close 為空,無法評估（§1 不補假資料）")
 
@@ -329,17 +335,22 @@ def assess_holding(*, ticker: str, name: str, asset_class: str,
     ma13 = week_ma(weekly_close, T.MA_QUARTER_WEEKS)
     ma52 = week_ma(weekly_close, T.MA_YEAR_WEEKS)
     last_close = float(weekly_close.iloc[-1])
+    _is_etf = asset_kind == T.KIND_ETF
 
     fa = health_a(total_return_1y_pct, annual_yield_pct)
     fb = health_b(sharpe)
     fc = health_c(weekly_close)
-    fd = health_d(premium_pct)
+    fd = health_d(premium_pct) if _is_etf else Flag("⚪", "個股不適用（無折溢價/iNAV）")
     lt = light_235(vix=vix, weekly_close=last_close, ma4w=ma4, ma13w=ma13, ma52w=ma52, z=z)
-    sc = screen_333(inception_years=inception_years, ann_return_3y_pct=ann_return_3y_pct,
-                    cum_return_3y_pct=cum_return_3y_pct, peer_ranks=peer_ranks)
+    if _is_etf:
+        sc = screen_333(inception_years=inception_years, ann_return_3y_pct=ann_return_3y_pct,
+                        cum_return_3y_pct=cum_return_3y_pct, peer_ranks=peer_ranks)
+    else:                            # 個股：3-3-3 為 ETF/基金挑選規則,不適用
+        sc = Screen333(passed=False, inception_ok=None, return_ok=None, peer_ok=None,
+                       detail="個股不適用（3-3-3 為 ETF/基金挑選原則）")
 
     return HoldingAssessment(
-        ticker=ticker, name=name, asset_class=asset_class,
+        ticker=ticker, name=name, asset_class=asset_class, asset_kind=asset_kind,
         health_a=fa, health_b=fb, health_c=fc, health_d=fd,
         light=lt, screen=sc, worst_health=_worst_level(fa, fb, fc, fd))
 

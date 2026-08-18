@@ -14,7 +14,7 @@ def _wk(n=60, lo=80, hi=120):
     return pd.Series(np.linspace(lo, hi, n), index=idx)
 
 
-def _good_metrics(ticker):
+def _good_metrics(ticker, asset_kind='etf'):
     return {"weekly_close": _wk(), "premium_pct": 0.3, "sharpe": 1.1,
             "total_return_1y_pct": 15, "annual_yield_pct": 6, "inception_years": 8,
             "ann_return_3y_pct": 10, "cum_return_3y_pct": None,
@@ -33,7 +33,7 @@ def test_build_rows_shape_and_pass():
 
 
 def test_build_rows_per_ticker_failure_is_isolated():
-    def _bad(ticker):
+    def _bad(ticker, asset_kind='etf'):
         raise RuntimeError("no data")
     holdings = [{"ticker": "9999", "name": "壞檔", "asset_class": T.ASSET_SATELLITE}]
     rows = svc.build_station_rows(holdings, vix=None, metrics_fn=_bad)
@@ -43,7 +43,7 @@ def test_build_rows_per_ticker_failure_is_isolated():
 
 def test_build_rows_mixed_good_and_bad():
     calls = {"n": 0}
-    def _mixed(ticker):
+    def _mixed(ticker, asset_kind='etf'):
         calls["n"] += 1
         if ticker == "BAD":
             raise ValueError("x")
@@ -54,6 +54,32 @@ def test_build_rows_mixed_good_and_bad():
     assert len(rows) == 2
     assert rows[0]["3-3-3"].startswith("✅")
     assert "抓取失敗" in rows[1]["建議動作"]
+
+
+def test_build_rows_stock_kind_not_applicable():
+    """個股列：種類=個股、3-3-3=—、D 標個股不適用（不硬套 ETF 規則,§1）。"""
+    def _stock_metrics(ticker, asset_kind="stock"):
+        return {"weekly_close": _wk(), "sharpe": 1.0, "total_return_1y_pct": 20,
+                "annual_yield_pct": 2, "inception_years": 10, "premium_pct": 1.9,
+                "ann_return_3y_pct": 15, "cum_return_3y_pct": None,
+                "peer_ranks": {m: 0.1 for m in T.PEER_WINDOWS_MONTHS}}
+    holdings = [{"ticker": "2330", "name": "台積電", "asset_class": T.ASSET_SATELLITE,
+                 "asset_kind": T.KIND_STOCK}]
+    r = svc.build_station_rows(holdings, vix=18, metrics_fn=_stock_metrics)[0]
+    assert r["種類"] == "個股"
+    assert r["3-3-3"] == "—"                       # 個股不適用,非 ✅/❌/❔
+    assert "個股不適用" in r["_detail"]["健檢D"]   # 即使 premium=1.9 也不判 🟡
+
+
+def test_build_rows_passes_asset_kind_to_metrics_fn():
+    seen = {}
+    def _cap(ticker, asset_kind):
+        seen[ticker] = asset_kind
+        return _good_metrics(ticker)
+    holdings = [{"ticker": "0056", "asset_kind": T.KIND_ETF},
+                {"ticker": "2330", "asset_kind": T.KIND_STOCK}]
+    svc.build_station_rows(holdings, vix=18, metrics_fn=_cap)
+    assert seen == {"0056": T.KIND_ETF, "2330": T.KIND_STOCK}
 
 
 def test_build_rows_skips_blank_ticker():
@@ -94,6 +120,25 @@ def test_fetch_metrics_wires_real_sources(monkeypatch):
     assert m["premium_pct"] == 0.5
     assert m["inception_years"] is not None and m["inception_years"] >= 3
     assert m["peer_ranks"] is None            # Phase 2 未接
+
+
+def test_fetch_metrics_otc_twoo_fallback(monkeypatch):
+    """稽核 MED：上櫃股 .TW 抓空 → 自動試 .TWO（否則 OTC 存股整檔 error）。"""
+    import sys
+    import types
+    idx = pd.bdate_range("2020-01-02", periods=900)
+    px = pd.DataFrame({"Close": pd.Series(np.linspace(20, 40, len(idx)), index=idx)})
+    seen = []
+    def _price(t, period="5y"):
+        seen.append(t)
+        return px if t.endswith(".TWO") else pd.DataFrame()   # .TW 空, .TWO 有
+    fake = types.ModuleType("src.data.etf.etf_fetch")
+    fake.fetch_etf_price = _price
+    fake.fetch_etf_dividends = lambda t: pd.Series(dtype=float)
+    monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
+    m = svc.fetch_metrics("5314", asset_kind=T.KIND_STOCK)
+    assert "5314.TW" in seen and "5314.TWO" in seen          # 先 .TW 再 .TWO
+    assert len(m["weekly_close"]) > 20
 
 
 def test_fetch_metrics_no_daily_raises(monkeypatch):

@@ -515,7 +515,7 @@ with tab_market:
 # GROUP 2: 選股（個股 + 個股組合 + 選股網）
 # ══════════════════════════════════════════════════════════════
 with tab_stocks:
-    tab_stock, tab_stock_grp, tab_screener = st.tabs(['🔬 個股', '🏆 個股組合', '🔭 選股網'])
+    tab_stock, tab_stock_grp, tab_screener = st.tabs(['🔬 個股', '📊 多檔個股比較', '🔭 選股網'])
 
     with tab_stock:
         from src.ui.tabs import render_tab_stock
@@ -773,8 +773,8 @@ with tab_stocks:
 # v18.465: 新增 3-3-3 原則評估（成立>3年 / 3年年化>7% / 同儕前1/3）
 # ══════════════════════════════════════════════════════════════
 with tab_etf_main:
-    tab_etf, tab_etf_compare, tab_etf_grp, tab_etf_station = st.tabs([
-        '🔍 單檔診斷', '📊 多檔比較', '⚖️ ETF 組合', '💰 存股戰情室',
+    tab_etf, tab_etf_compare, tab_etf_warroom = st.tabs([
+        '🔍 單檔診斷', '📊 多檔比較', '💼 我的持股戰情室',
     ])
 
     with tab_etf:
@@ -796,15 +796,18 @@ with tab_etf_main:
         from src.ui.etf import render_etf_grp_compare
         _render_tab_isolated(render_etf_grp_compare, 'ETF 多檔比較')
 
-    with tab_etf_station:
-        # 💰 存股戰情室(v19.166):以息養股 + 3-3-3 + 235 加碼引擎
+    with tab_etf_warroom:
+        # 💼 我的持股戰情室(v19.167):合併「⚖️ ETF 組合」+「💰 存股戰情室」。
+        #   上半 = 個股+ETF 統一健檢/235/3-3-3 戰情表(render_dividend_station);
+        #   下半「🔬 ETF 深度工具」expander = 原 ETF 組合的組合表/葡萄串/3-3-3/標準差/分散度/AI。
         from src.ui.etf.etf_tab_dividend_station import render_dividend_station
-        _render_tab_isolated(render_dividend_station, '存股戰情室')
+        _render_tab_isolated(render_dividend_station, '我的持股戰情室')
+        st.markdown('<hr style="margin:28px 0;border-color:#30363d;">', unsafe_allow_html=True)
 
-    with tab_etf_grp:
-        # FIX(隔離器): 本頁一次串 6 個渲染器,原為裸呼叫 —— 任一 raise 會吃掉後面全部區塊
-        #   (例如 render_etf_portfolio 失敗會連葡萄串、3-3-3、標準差帶、分散度、AI 一起消失)。
-        #   刻意**逐個渲染器各包一次**,而非整段包一次:單一 section 失敗不影響其餘。
+    # 原 ETF 組合工具收進 expander(預設收合,不干擾戰情表);再入一次 tab_etf_warroom 追加內容。
+    with tab_etf_warroom, st.expander('🔬 ETF 深度工具（組合 / 葡萄串 / 3-3-3 / 標準差帶 / 分散度 / AI）',
+                                      expanded=False):
+        # FIX(隔離器): 本區一次串 6 個渲染器 —— 任一 raise 會吃掉後面全部區塊,逐個各包一次。
         _render_tab_isolated(lambda: render_etf_portfolio(gemini_fn=gemini_call), 'ETF 組合')
         st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
         _render_tab_isolated(lambda: render_grape_ladder(gemini_fn=gemini_call), '葡萄串領息法')

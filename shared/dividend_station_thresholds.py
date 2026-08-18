@@ -66,6 +66,10 @@ PEER_MIN_GROUP_SIZE: int = 3                # 同類 < 3 檔 → 同儕排名不
 MIN_WEEKS_FOR_BOLL: int = BOLL_PERIOD_WEEKS         # < 20 週 → 無布林 z
 MIN_WEEKS_FOR_YEAR_LINE: int = MA_YEAR_WEEKS        # < 52 週 → 無年線（燈三降級）
 
+# ── 資產類型（個股 vs ETF；決定哪些健檢適用）────────────────────────────
+KIND_STOCK = "stock"         # 個股：無折溢價、3-3-3(ETF/基金挑選規則)不適用
+KIND_ETF = "etf"             # ETF：A/B/C/D + 235 + 3-3-3 全套
+
 # ── 80/20 核心/衛星分流 ────────────────────────────────────────────────
 ASSET_CORE = "core"          # 核心（穩定配息,目標 80%）
 ASSET_SATELLITE = "satellite"    # 衛星（成長/主題,目標 20%）
