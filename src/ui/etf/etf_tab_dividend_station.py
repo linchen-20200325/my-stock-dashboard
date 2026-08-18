@@ -91,6 +91,20 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
                 st.session_state["_station_rows"] = _rows
                 st.session_state["_station_vix"] = _vix
                 st.session_state.pop("_station_ai_text", None)   # 重跑 → 清舊 AI 摘要
+                # 換股建議(總經位階 + 選股池候選)—— best-effort,失敗不擋戰情表(§1 誠實標)
+                try:
+                    from src.services.dividend_station_service import (
+                        build_switch_advice, get_station_macro, get_switch_in_candidates)
+                    _macro = get_station_macro()
+                    _held = [h["ticker"] for h in _holdings if h.get("held")]
+                    with st.spinner("換股建議：讀總經位階 + 選股池候選 …"):
+                        _cands = get_switch_in_candidates(regime=_macro.get("regime"),
+                                                          exclude=_held)
+                    st.session_state["_station_switch"] = build_switch_advice(
+                        _rows, _macro, _cands)
+                except Exception as _se:  # noqa: BLE001 — 換股建議失敗不擋戰情表
+                    st.session_state["_station_switch"] = None
+                    st.caption(f"（換股建議暫略：{type(_se).__name__}: {_se}）")
             except Exception as _e:  # noqa: BLE001 — 整批失敗誠實報,不假裝成功
                 st.error(f"戰情室運算失敗（Fail Loud）：{type(_e).__name__}: {_e}")
 
@@ -125,22 +139,66 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
                 st.caption(f"235 觸發：{d['235觸發']}　深水：{d.get('深水防守','—')}")
             st.markdown("---")
 
-    # ── 4️⃣ AI 戰情總結（規則事實 always;AI 潤稿需金鑰）──────────────────
-    _render_ai_summary(_rows, _vix, gemini_fn)
+    # ── 4️⃣ 換股建議（換出=持有🔴汰弱 · 換入=選股池候選 · 搭配總經位階）──────
+    _switch = st.session_state.get("_station_switch")
+    _render_switch_advice(_switch)
+
+    # ── 5️⃣ AI 戰情總結（規則事實 always;AI 潤稿需金鑰;含換股建議）──────────
+    _render_ai_summary(_rows, _vix, gemini_fn, _switch)
 
     st.caption(f"💡 目標配置：🛡️核心 {T.CORE_TARGET_PCT:.0f}% / 🚀衛星 {T.SATELLITE_TARGET_PCT:.0f}%；"
                f"衛星獲利達 {T.SATELLITE_TAKE_PROFIT_PCT:.0f}% 嚴格停利、滾回核心。"
                "本區僅研究參考,非投資建議,盈虧自負。")
 
 
-def _render_ai_summary(rows: list[dict], vix, gemini_fn: Callable[..., str] | None) -> None:
-    """🤖 AI 戰情總結：先出規則式事實（汰弱 / 235 加碼 / 抓取失敗）,有金鑰再 AI 潤稿。
+def _render_switch_advice(switch: dict | None) -> None:
+    """🔄 換股建議：換出=持有🔴汰弱、換入=選股池候選,搭配總經位階攻守（§1 位階未評估誠實標）。"""
+    st.markdown("#### 4️⃣ 🔄 換股建議（搭配總經位階）")
+    if not switch:
+        st.info("👆 按「🚀 跑存股戰情室」後產生換股建議（讀總經位階 + 選股池候選）。")
+        return
+
+    # 位階 / 攻守姿態
+    if switch.get("loaded"):
+        _p = switch.get("posture") or "—"
+        _rng = f"（建議持股 {switch['posture_range']}）" if switch.get("posture_range") else ""
+        st.caption(f"當前總經位階：**{switch.get('regime')}** ｜ 姿態 **{_p}**{_rng}")
+    else:
+        st.caption("當前總經位階：**未評估** —— 只依個股健檢給汰弱,不套總經攻守（§1 不瞎猜方向）。"
+                   "要有位階請先到「🌍 市場環境」按一鍵更新。")
+
+    _out = switch.get("switch_out") or []
+    _in = switch.get("switch_in") or []
+    _stance = switch.get("stance")
+
+    if _out:
+        st.error("🔻 **建議換出（你持有的紅燈汰弱）**：" + "、".join(
+            f"{d['代號']}（{d['建議動作']}）" for d in _out))
+    else:
+        st.success("✅ 持有部位無健檢紅燈 —— 無汰弱換出需求。")
+
+    if _stance == "defensive":
+        st.warning("🛡️ 總經轉守 → **換入從嚴**：優先處理汰弱、不急進場;下列候選僅供轉守後布局參考。")
+    if _in:
+        _label = "🔺 **建議換入（選股池候選）**：" if _stance != "defensive" else "候選（轉守觀望）："
+        st.markdown(_label + "、".join(
+            f"{d['代號']} {d.get('名稱','')}".strip()
+            + (f"（綜合分 {d['綜合分']:.0f}）" if isinstance(d.get('綜合分'), (int, float)) else "")
+            for d in _in))
+    else:
+        st.caption("選股池暫無可換入候選（未跑選股 / 掃描失敗 / 皆已持有）。")
+    st.caption("換出=你**持有**的紅燈;換入=**選股池**排名候選（已排除已持有）。研究參考,非投資建議。")
+
+
+def _render_ai_summary(rows: list[dict], vix, gemini_fn: Callable[..., str] | None,
+                       switch: dict | None = None) -> None:
+    """🤖 AI 戰情總結：先出規則式事實（汰弱 / 235 加碼 / 抓取失敗 / 換股）,有金鑰再 AI 潤稿。
 
     §1：規則事實由 L3 `build_station_digest` 純函式算,永遠有;AI 只潤稿,失敗誠實報錯不假裝。
     """
     from src.services.dividend_station_service import build_ai_summary, build_station_digest
 
-    st.markdown("#### 4️⃣ 🤖 AI 戰情總結（可作推播內容）")
+    st.markdown("#### 5️⃣ 🤖 AI 戰情總結（可作推播內容）")
     digest = build_station_digest(rows, vix)
 
     if digest["reds"]:
@@ -162,7 +220,8 @@ def _render_ai_summary(rows: list[dict], vix, gemini_fn: Callable[..., str] | No
     if st.button("✍️ 讓 AI 潤成推播文字", key="_station_ai"):
         try:
             with st.spinner("AI 撰寫推播摘要中 …"):
-                st.session_state["_station_ai_text"] = build_ai_summary(digest, gemini_fn)
+                st.session_state["_station_ai_text"] = build_ai_summary(
+                    digest, gemini_fn, switch=switch)
         except Exception as _e:  # noqa: BLE001 — §1 AI 失敗誠實報,不回假摘要
             st.error(f"AI 摘要失敗（Fail Loud）：{type(_e).__name__}: {_e}")
     _ai = st.session_state.get("_station_ai_text")
@@ -171,7 +230,9 @@ def _render_ai_summary(rows: list[dict], vix, gemini_fn: Callable[..., str] | No
 
 
 def _load_holdings_from_portfolio() -> list[dict]:
-    """從 📁 組合管理帶入 投資組合 Portfolio（種類=ETF/核心）+ 觀察清單 Watchlist（種類=個股/衛星）。
+    """從 📁 組合管理帶入 投資組合 Portfolio（held=True/核心）+ 觀察清單 Watchlist（held=False/衛星）。
+
+    種類（ETF/個股）改由 `T.classify_asset_kind(代號)` 依代號規則判,跟在哪個清單脫鉤（§ user）。
 
     回 service 格式 [{ticker,name,asset_class,asset_kind}, ...]。
     best-effort：任一份讀不到就略過該份;兩份都空 → 提示 + [] （未登入/未設）。§1 不靜默。
@@ -197,8 +258,10 @@ def _load_holdings_from_portfolio() -> list[dict]:
                 for _r in (_gsp.load_portfolio(_names[0], sheet_id=_etf_sid) or []):
                     _c = str(_r.get("ticker", "") or "").strip().upper()
                     if _c:
-                        _out.append({"ticker": _c, "name": "",
-                                     "asset_kind": T.KIND_ETF, "asset_class": T.ASSET_CORE})
+                        # held=True(持有);種類改代號規則自動判(跟清單脫鉤,§ user 2026-08)
+                        _out.append({"ticker": _c, "name": "", "held": True,
+                                     "asset_kind": T.classify_asset_kind(_c),
+                                     "asset_class": T.ASSET_CORE})
                 _more = "；此 Sheet 有多本組合,只取第一本" if len(_names) > 1 else ""
                 st.caption(f"✅ 帶入 投資組合 Portfolio「{_names[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」
@@ -217,8 +280,10 @@ def _load_holdings_from_portfolio() -> list[dict]:
                 for _c in (_gsp.load_stock_watchlist(_snames[0], sheet_id=_stk_sid) or []):
                     _c = str(_c or "").strip().upper()
                     if _c:
-                        _out.append({"ticker": _c, "name": "",
-                                     "asset_kind": T.KIND_STOCK, "asset_class": T.ASSET_SATELLITE})
+                        # held=False(僅觀察);種類改代號規則自動判(觀察 ETF 不會被誤標個股)
+                        _out.append({"ticker": _c, "name": "", "held": False,
+                                     "asset_kind": T.classify_asset_kind(_c),
+                                     "asset_class": T.ASSET_SATELLITE})
                 _more = "；此 Sheet 有多份清單,只取第一份" if len(_snames) > 1 else ""
                 st.caption(f"✅ 帶入 觀察清單 Watchlist「{_snames[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」

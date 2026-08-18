@@ -214,7 +214,7 @@ def test_build_ai_summary_injects_prompt_and_returns_text():
     out = svc.build_ai_summary(d, _fake_gemini)
     assert "2412" in seen["prompt"]             # digest 事實有進 prompt
     assert out.startswith("今日")               # 回傳 AI 文字原樣
-    assert seen["max_tokens"] == 600            # 推播摘要短輸出
+    assert seen["max_tokens"] == 700            # 推播摘要(含換股建議)短輸出
 
 
 def test_build_ai_summary_propagates_failure():
@@ -224,3 +224,80 @@ def test_build_ai_summary_propagates_failure():
     d = svc.build_station_digest(_rows_fixture())
     with pytest.raises(RuntimeError):
         svc.build_ai_summary(d, _boom)
+
+
+# ── 代號規則判 ETF/個股（L0,跟清單脫鉤）────────────────────────────────────
+def test_classify_asset_kind_by_code():
+    assert T.classify_asset_kind("0050.TW") == T.KIND_ETF        # 00 開頭 ETF
+    assert T.classify_asset_kind("00980A.TW") == T.KIND_ETF      # 帶字母後綴仍 ETF
+    assert T.classify_asset_kind("00878") == T.KIND_ETF
+    assert T.classify_asset_kind("2330") == T.KIND_STOCK         # 4 碼個股
+    assert T.classify_asset_kind("6239.TWO") == T.KIND_STOCK     # 上櫃 4 碼個股
+    assert T.classify_asset_kind("BND") == T.KIND_ETF            # 非台股 → 預設 ETF
+    assert T.classify_asset_kind("") == T.KIND_ETF               # 空 → 預設,不炸
+
+
+# ── held 旗標傳遞（換股建議依賴）─────────────────────────────────────────
+def test_build_rows_propagates_held_flag():
+    holdings = [{"ticker": "0056", "asset_class": T.ASSET_CORE, "held": True},
+                {"ticker": "2330", "asset_kind": T.KIND_STOCK,
+                 "asset_class": T.ASSET_SATELLITE, "held": False}]
+    rows = svc.build_station_rows(holdings, vix=18, metrics_fn=_good_metrics)
+    assert rows[0]["held"] is True and rows[1]["held"] is False
+
+
+def test_build_rows_held_defaults_true_and_on_error():
+    def _bad(t, ak='etf'):
+        raise RuntimeError("x")
+    rows = svc.build_station_rows([{"ticker": "9999", "held": False}],
+                                  vix=None, metrics_fn=_bad)
+    assert rows[0]["held"] is False and "抓取失敗" in rows[0]["建議動作"]  # error 列也帶 held
+
+
+# ── 換股建議純函式 ───────────────────────────────────────────────────────
+def _switch_rows():
+    return [
+        {"代號": "00980D", "健檢": "🔴", "建議動作": "汰弱:賺息賠本", "held": True, "_detail": {}},
+        {"代號": "2412", "健檢": "🔴", "建議動作": "紅燈", "held": False, "_detail": {}},  # 觀察紅燈≠換出
+        {"代號": "0056", "健檢": "🟢", "建議動作": "續抱", "held": True, "_detail": {}},
+    ]
+
+
+def test_switch_out_only_held_reds():
+    """換出只含**持有**的紅燈;觀察清單的紅燈(未持有)不算換出。"""
+    adv = svc.build_switch_advice(_switch_rows(),
+                                  {"loaded": True, "defense": False, "regime": "neutral"},
+                                  candidates=[])
+    assert [d["代號"] for d in adv["switch_out"]] == ["00980D"]     # 2412 是觀察紅燈,排除
+    assert adv["stance"] == "neutral"
+
+
+def test_switch_in_from_candidates_and_defense_trims():
+    cands = [{"代碼": f"C{i}", "名稱": f"n{i}", "綜合分": 90 - i} for i in range(6)]
+    # 正常(非防禦)→ 給 5 檔
+    adv_n = svc.build_switch_advice(_switch_rows(), {"loaded": True, "defense": False,
+                                                     "regime": "neutral"}, cands)
+    assert len(adv_n["switch_in"]) == 5
+    # 轉守 → 換入從嚴,只給 3 檔 + stance defensive
+    adv_d = svc.build_switch_advice(_switch_rows(), {"loaded": True, "defense": True,
+                                                     "regime": "bear"}, cands)
+    assert len(adv_d["switch_in"]) == 3 and adv_d["stance"] == "defensive"
+
+
+def test_switch_unknown_regime_no_posture_guess():
+    """§1：位階未評估 → stance=unknown,不套攻守方向。"""
+    adv = svc.build_switch_advice(_switch_rows(), {"loaded": False}, candidates=[])
+    assert adv["stance"] == "unknown" and adv["loaded"] is False
+    assert adv["defense"] is None            # 未評估不回填 False/True
+
+
+def test_summary_prompt_includes_switch_and_regime():
+    d = svc.build_station_digest(_switch_rows())
+    adv = svc.build_switch_advice(_switch_rows(),
+                                  {"loaded": True, "defense": True, "regime": "bear",
+                                   "posture_label": "🔴 防禦"},
+                                  [{"代碼": "2412", "名稱": "中華電", "綜合分": 88}])
+    p = svc.build_summary_prompt(d, switch=adv)
+    assert "換股建議" in p and "bear" in p
+    assert "00980D" in p and "2412" in p          # 換出/換入都入 prompt
+    assert "換入從嚴" in p                          # 轉守攻守指引

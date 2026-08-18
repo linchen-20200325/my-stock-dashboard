@@ -70,6 +70,29 @@ MIN_WEEKS_FOR_YEAR_LINE: int = MA_YEAR_WEEKS        # < 52 週 → 無年線（�
 KIND_STOCK = "stock"         # 個股：無折溢價、3-3-3(ETF/基金挑選規則)不適用
 KIND_ETF = "etf"             # ETF：A/B/C/D + 235 + 3-3-3 全套
 
+
+def classify_asset_kind(ticker: str) -> str:
+    """依台股代號規則判 ETF vs 個股（純函式,**跟「在哪個清單」脫鉤**）。
+
+    - `00` 開頭（0050 / 0056 / 00878 / 00980A / 00982T 等,可帶 A/T 後綴）→ ETF
+    - 4 碼純數字（2330 / 6239 / 3006）→ 個股
+    - 其餘（美股 BND / VOO 等非台股代號）→ 預設 ETF（本站非台股持有多為 ETF;
+      折溢價/3-3-3 對美股 fetcher 會自然抓空標「—」,不誤傷）
+    先去除 `.TW` / `.TWO` 後綴再判。
+    §1:此為代號規則啟發式,非權威。個股被誤判成 ETF 的風險已由「4 碼→個股」優先攔下
+    （避免對個股誤套折溢價/3-3-3）。
+    """
+    code = str(ticker or "").strip().upper()
+    for _suf in (".TWO", ".TW"):
+        if code.endswith(_suf):
+            code = code[:-len(_suf)]
+            break
+    if code.startswith("00"):
+        return KIND_ETF
+    if len(code) == 4 and code.isdigit():
+        return KIND_STOCK
+    return KIND_ETF
+
 # ── 80/20 核心/衛星分流 ────────────────────────────────────────────────
 ASSET_CORE = "core"          # 核心（穩定配息,目標 80%）
 ASSET_SATELLITE = "satellite"    # 衛星（成長/主題,目標 20%）
