@@ -8,12 +8,26 @@ from __future__ import annotations
 import pytest
 
 from src.ui.tabs.portfolio_manager import (
+    _classify_sheet_api_error,
     codes_to_records,
     etf_rows_to_records,
     parse_sheet_id,
     records_to_codes,
     records_to_etf_rows,
 )
+
+
+def test_classify_sheet_api_error_maps_status_codes():
+    """§1：把 gspread APIError 原始碼況翻成可行動提示（讓「APIError」不再是死胡同）。"""
+    q = _classify_sheet_api_error(RuntimeError(
+        "APIError: {'code': 429, 'status': 'RESOURCE_EXHAUSTED', "
+        "'message': 'Quota exceeded for quota metric'}"))
+    assert q and "429" in q and "配額" in q
+    assert "401" in _classify_sheet_api_error(Exception("{'code': 401, 'status': 'UNAUTHENTICATED'}"))
+    assert "403" in _classify_sheet_api_error(Exception("PERMISSION_DENIED"))
+    assert "404" in _classify_sheet_api_error(Exception("{'code': 404, 'status': 'NOT_FOUND'}"))
+    # 無法歸類 → None（不硬湊提示）
+    assert _classify_sheet_api_error(ValueError("空名")) is None
 
 
 def test_parse_sheet_id():

@@ -183,7 +183,7 @@ def _load_holdings_from_portfolio() -> list[dict]:
         _etf_sid = _gsp._get_active_sheet_id()
     except Exception as _e:  # noqa: BLE001 — §1 不靜默:accessor 理應回 '' 不 raise,真炸也留痕
         _etf_sid = None
-        st.caption(f"（ETF 組合 Sheet 判定略過：{type(_e).__name__}）")
+        st.caption(f"（ETF 組合 Sheet 判定略過：{type(_e).__name__}：{_e}）")
     if _etf_sid:
         try:
             _names = _gsp.list_portfolios(sheet_id=_etf_sid)
@@ -196,14 +196,14 @@ def _load_holdings_from_portfolio() -> list[dict]:
                                      "asset_kind": T.KIND_ETF, "asset_class": T.ASSET_CORE})
                 _more = "；此 Sheet 有多本組合,只取第一本" if len(_names) > 1 else ""
                 st.caption(f"✅ 帶入 ETF 組合「{_names[0]}」（{len(_out) - _n0} 檔）{_more}")
-        except Exception as _e:  # noqa: BLE001
-            st.caption(f"（ETF 組合讀取略過：{type(_e).__name__}）")
+        except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」
+            st.warning(f"ETF 組合讀取失敗：{type(_e).__name__}：{_e}")
     # 個股清單（種類=個股,預設衛星）
     try:
         _stk_sid = _gsp._get_active_stock_sheet_id()
     except Exception as _e:  # noqa: BLE001 — §1 不靜默:同上,真炸也留痕
         _stk_sid = None
-        st.caption(f"（個股清單 Sheet 判定略過：{type(_e).__name__}）")
+        st.caption(f"（個股清單 Sheet 判定略過：{type(_e).__name__}：{_e}）")
     if _stk_sid:
         try:
             _snames = _gsp.list_stock_watchlists(sheet_id=_stk_sid)
@@ -216,7 +216,7 @@ def _load_holdings_from_portfolio() -> list[dict]:
                                      "asset_kind": T.KIND_STOCK, "asset_class": T.ASSET_SATELLITE})
                 _more = "；此 Sheet 有多份清單,只取第一份" if len(_snames) > 1 else ""
                 st.caption(f"✅ 帶入 個股清單「{_snames[0]}」（{len(_out) - _n0} 檔）{_more}")
-        except Exception as _e:  # noqa: BLE001
-            st.caption(f"（個股清單讀取略過：{type(_e).__name__}）")
+        except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」
+            st.warning(f"個股清單讀取失敗：{type(_e).__name__}：{_e}")
 
     return _out
