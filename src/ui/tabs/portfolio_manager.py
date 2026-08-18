@@ -39,6 +39,31 @@ def codes_to_records(codes) -> list[dict]:
     return [{"代號": str(c or "").strip()} for c in (codes or []) if str(c or "").strip()]
 
 
+def _classify_sheet_api_error(e) -> str | None:
+    """把 Google Sheets 讀取例外歸類成可行動提示（純函式,可單測）。
+
+    回傳提示字串;無法歸類 → None。§1：不吞錯,只是把 gspread 的原始碼況翻成使用者看得懂的下一步。
+    """
+    _s = str(e)
+    if any(k in _s for k in ("429", "RESOURCE_EXHAUSTED", "Quota exceeded", "quota")):
+        return ("↑ 這是 Google Sheets 讀取配額暫時用罄（429）—— 免費配額約每分鐘 60 次讀取。"
+                "請等 1 分鐘再按一次;若頻繁發生,回報我加讀取快取（降低 API 呼叫次數）根治。")
+    if any(k in _s for k in ("401", "UNAUTHENTICATED", "invalid_grant", "Token has been expired")):
+        return "↑ Google 登入憑證過期或失效（401）—— 請到側欄重新「🔐 用 Google 登入」再試。"
+    if any(k in _s for k in ("403", "PERMISSION_DENIED", "does not have permission")):
+        return "↑ 沒有這本 Sheet 的存取權（403）—— 確認登入的 Google 帳號就是該 Sheet 的擁有者/協作者。"
+    if "404" in _s or "NOT_FOUND" in _s:
+        return "↑ 找不到這本 Sheet（404）—— 可能已被刪除或改了共用設定,請重新從 Drive 挑一本。"
+    return None
+
+
+def _sheet_api_error_hint(e) -> None:
+    """有可行動提示就顯示（§1：讓錯誤可被使用者處理,不只是丟型別名）。"""
+    _hint = _classify_sheet_api_error(e)
+    if _hint:
+        st.caption(_hint)
+
+
 def records_to_codes(records) -> list[str]:
     _seen, out = set(), []
     for r in (records or []):
@@ -174,7 +199,8 @@ def _render_etf_section(_gsp, pd) -> None:
     try:
         _names = _gsp.list_portfolios(sheet_id=sid)
     except Exception as _e:                        # §1 讀取失敗誠實報,不捏造清單
-        st.error(f"讀取 ETF 組合清單失敗：{type(_e).__name__}")
+        st.error(f"讀取 ETF 組合清單失敗：{type(_e).__name__}：{_e}")
+        _sheet_api_error_hint(_e)
         return
 
     _dkey = "_mgmt_etf_df"
@@ -242,7 +268,8 @@ def _render_stock_section(_gsp, pd) -> None:
     try:
         _names = _gsp.list_stock_watchlists(sheet_id=sid)
     except Exception as _e:
-        st.error(f"讀取個股清單失敗：{type(_e).__name__}")
+        st.error(f"讀取個股清單失敗：{type(_e).__name__}：{_e}")
+        _sheet_api_error_hint(_e)
         return
 
     _dkey = "_mgmt_stk_df"
