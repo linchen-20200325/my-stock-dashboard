@@ -158,3 +158,69 @@ def test_row_detail_has_health_and_235():
     d = r["_detail"]
     for k in ("健檢A", "健檢B", "健檢C", "健檢D", "235觸發", "3-3-3明細"):
         assert k in d
+
+
+# ── AI 戰情總結（digest 純函式 + AI 潤稿注入）──────────────────────────────
+def _rows_fixture():
+    """涵蓋：紅燈汰弱 / 235 加碼 / 抓取失敗 / 正常 四種列。"""
+    return [
+        {"代號": "2412", "健檢": "🔴", "加碼金": "", "235 燈號": "⚪ 巡航",
+         "建議動作": "汰弱：賺息賠本", "_detail": {}},
+        {"代號": "0056", "健檢": "🟡", "加碼金": "20%", "235 燈號": "🟢 小跌加碼",
+         "建議動作": "小跌加碼", "_detail": {}},
+        {"代號": "9999", "健檢": "⚪", "加碼金": "", "235 燈號": "—",
+         "建議動作": "⚠️ 資料不足/抓取失敗：無日線", "_detail": {"error": "無日線"}},
+        {"代號": "00878", "健檢": "🟢", "加碼金": "", "235 燈號": "⚪ 巡航",
+         "建議動作": "續抱", "_detail": {}},
+    ]
+
+
+def test_digest_classifies_reds_adds_errors():
+    d = svc.build_station_digest(_rows_fixture(), vix=22.5)
+    assert [r["代號"] for r in d["reds"]] == ["2412"]        # 只有 🔴 進汰弱
+    assert [a["代號"] for a in d["adds"]] == ["0056"]        # 加碼金非空 = 235 觸發
+    assert d["errors"] == ["9999"]                           # error 列誠實排除
+    assert d["total"] == 3                                   # 有效 = 4 - 1 抓取失敗
+    assert d["vix"] == 22.5
+
+
+def test_digest_no_fake_config_key():
+    """§1：戰情室無部位金額 → digest 不得捏造核心/衛星配置偏離。"""
+    d = svc.build_station_digest(_rows_fixture())
+    assert not any("配置" in k or "core" in k.lower() for k in d.keys())
+
+
+def test_digest_empty_rows():
+    d = svc.build_station_digest([], vix=None)
+    assert d == {"total": 0, "vix": None, "reds": [], "adds": [], "errors": []}
+
+
+def test_summary_prompt_contains_facts_and_hold_instruction():
+    d = svc.build_station_digest(_rows_fixture(), vix=22.5)
+    p = svc.build_summary_prompt(d)
+    assert "2412" in p and "0056" in p          # 汰弱 + 加碼代號都入 prompt
+    assert "22.5" in p                          # VIX 帶入
+    assert "續抱" in p                          # 無事時要 AI 明講續抱
+    assert "杜撰" in p                          # §1：禁 AI 生數字的指示
+
+
+def test_build_ai_summary_injects_prompt_and_returns_text():
+    seen = {}
+    def _fake_gemini(prompt, max_tokens=2048):
+        seen["prompt"] = prompt
+        seen["max_tokens"] = max_tokens
+        return "今日 2412 亮紅燈建議汰弱,0056 小跌可加碼 20%。"
+    d = svc.build_station_digest(_rows_fixture(), vix=22.5)
+    out = svc.build_ai_summary(d, _fake_gemini)
+    assert "2412" in seen["prompt"]             # digest 事實有進 prompt
+    assert out.startswith("今日")               # 回傳 AI 文字原樣
+    assert seen["max_tokens"] == 600            # 推播摘要短輸出
+
+
+def test_build_ai_summary_propagates_failure():
+    """§1：AI 失敗往上拋,不吞成假摘要。"""
+    def _boom(prompt, max_tokens=2048):
+        raise RuntimeError("gemini down")
+    d = svc.build_station_digest(_rows_fixture())
+    with pytest.raises(RuntimeError):
+        svc.build_ai_summary(d, _boom)

@@ -195,3 +195,63 @@ def get_station_rows(holdings: list[dict]) -> tuple[list[dict], float | None]:
     vix = fetch_vix()
     rows = build_station_rows(holdings, vix=vix, metrics_fn=fetch_metrics)
     return rows, vix
+
+
+# ── AI 戰情總結（規則式事實 + AI 潤稿;推播內容來源）──────────────────────
+def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
+    """戰情表 rows → 可推播的「規則式事實」摘要（純函式,離線可測,§1 不生數字）。
+
+    只彙整**已算好**的欄位,不重抓、不推估：
+    - reds：健檢 🔴 需汰弱（代號 + 建議動作）
+    - adds：235 加碼觸發（加碼金非空 = deploy_pct>0）
+    - errors：抓取失敗未納入判斷的代號（§1 誠實排除,不當作「無事」）
+    ⚠️ 刻意**不算**核心/衛星配置偏離 —— 戰情室無部位金額資料,80/20 是價值比,
+       無金額即無從計算,§1 不捏造（目標配置僅作靜態參考,見 UI caption）。
+    """
+    reds: list[dict] = []
+    adds: list[dict] = []
+    errors: list[str] = []
+    valid = 0
+    for r in (rows or []):
+        if r.get("_detail", {}).get("error"):
+            errors.append(str(r.get("代號", "")))
+            continue
+        valid += 1
+        if r.get("健檢") == "🔴":
+            reds.append({"代號": str(r.get("代號", "")),
+                         "建議動作": str(r.get("建議動作", ""))})
+        if str(r.get("加碼金", "") or "").strip():
+            adds.append({"代號": str(r.get("代號", "")),
+                         "235": str(r.get("235 燈號", "")),
+                         "加碼金": str(r.get("加碼金", ""))})
+    return {"total": valid, "vix": vix, "reds": reds, "adds": adds, "errors": errors}
+
+
+def build_summary_prompt(digest: dict) -> str:
+    """digest → LLM prompt（純字串組裝,數字全來自 digest；AI 僅潤稿不得杜撰,§1 / T5）。"""
+    _vix = digest.get("vix")
+    _vix_txt = f"{_vix:.1f}" if isinstance(_vix, (int, float)) else "抓取失敗"
+    _reds = "、".join(f"{d['代號']}（{d['建議動作']}）" for d in digest.get("reds", [])) or "無"
+    _adds = "、".join(f"{d['代號']} {d['235']} 加碼{d['加碼金']}"
+                      for d in digest.get("adds", [])) or "無"
+    _errs = "、".join(digest.get("errors", [])) or "無"
+    return (
+        "你是台股『存股戰情室』的推播助理。根據以下今日持股健檢結果,用繁體中文寫 3~5 句的推播摘要,"
+        "聚焦『今天要不要動作』。只能引用下列數據,嚴禁自行杜撰任何代號、數字或未列出的結論;"
+        "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。\n"
+        f"- 目前 VIX：{_vix_txt}\n"
+        f"- 有效判斷檔數：{digest.get('total', 0)}\n"
+        f"- 健檢紅燈需汰弱：{_reds}\n"
+        f"- 235 加碼觸發：{_adds}\n"
+        f"- 抓取失敗未納入：{_errs}\n"
+    )
+
+
+def build_ai_summary(digest: dict, gemini_fn: Callable[..., str]) -> str:
+    """digest + 注入的 gemini_fn → AI 潤稿推播文字。
+
+    §8.2 L3：AI 呼叫由 caller 注入（gemini_fn），本層只組 prompt + 轉呼叫。
+    §1：gemini_fn 失敗**往上拋**,由 UI 誠實顯示錯誤,不回假摘要。
+    """
+    prompt = build_summary_prompt(digest)
+    return gemini_fn(prompt, max_tokens=600)
