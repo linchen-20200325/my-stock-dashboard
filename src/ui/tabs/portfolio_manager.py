@@ -1,6 +1,6 @@
 """src/ui/tabs/portfolio_manager.py — 📁 投資組合管理(統一頁,L5).
 
-一頁同時管「ETF 組合(含張數/成本)」+「個股清單(純代號)」,都存到你自己的 Google Sheet。
+一頁同時管「投資組合 Portfolio(含張數/成本)」+「觀察清單 Watchlist(純代號)」,都存到你自己的 Google Sheet。
 重用 L1 `gsheet_portfolio` 儲存層(list/load/save/delete),不重造;登入 + 設定 Sheet
 沿用既有機制(sidebar / 各分頁面板已設好的 sheet_id + OAuth token),本頁只讀 session 狀態
 + 做 CRUD。
@@ -95,17 +95,18 @@ def parse_sheet_id(raw) -> str:
 
 # ── UI ──────────────────────────────────────────────────────────────────
 def render_portfolio_manager() -> None:
-    """📁 投資組合管理主入口:ETF 組合 + 個股清單,存你的 Google Sheet。"""
+    """📁 投資組合管理主入口:投資組合 Portfolio（持有部位）+ 觀察清單 Watchlist（純代號）,存你的 Google Sheet。"""
     if st is None:
         return
     import pandas as pd
     from src.data.portfolio import gsheet_portfolio as _gsp   # EX-PASSTHRU-1
 
-    st.markdown("### 📁 投資組合管理 — 一頁管 ETF 組合 + 個股清單（存你的 Google Sheet）")
+    st.markdown("### 📁 投資組合管理 — 一頁管 投資組合 Portfolio + 觀察清單 Watchlist（存你的 Google Sheet）")
     st.info("👉 **這裡放的是「你自己的持股 / 追蹤清單」**，不是選股建議。"
             "想找**系統幫你篩的候選股**請去『🔬 選股 → 🔭 選股網』。")
-    st.caption("先用下方「🚀 從 Drive 挑一本 Sheet」選定投組資料庫（ETF + 個股共用一本）；"
-               "選好後左欄管 🏦 ETF 組合、右欄管 📈 個股清單。")
+    st.caption("先用下方「🚀 從 Drive 挑一本 Sheet」選定投組資料庫（Portfolio + Watchlist 共用一本）；"
+               "選好後左欄管 🏦 **投資組合 Portfolio**（你持有的部位，含張數/均價）、"
+               "右欄管 📈 **觀察清單 Watchlist**（只追蹤的純代號）。")
 
     if not st.session_state.get("gsheet_tokens"):
         st.info("ℹ️ 尚未用 Google 登入 —— 左側 sidebar「🔐 Google 帳號」登入後，這裡就能從 Drive 挑 Sheet。")
@@ -191,7 +192,7 @@ def _apply_active_sheet(_gsp, sid: str) -> None:
 
 
 def _render_etf_section(_gsp, pd) -> None:
-    st.markdown("#### 🏦 我的 ETF 組合（含張數 / 均價）")
+    st.markdown("#### 🏦 我的投資組合 Portfolio（你持有的部位，含張數 / 均價）")
     sid = _gsp._get_active_sheet_id()
     if not sid:
         st.caption("⚠️ 先用上方「🚀 從 Drive 挑一本 Sheet」選定。")
@@ -199,7 +200,7 @@ def _render_etf_section(_gsp, pd) -> None:
     try:
         _names = _gsp.list_portfolios(sheet_id=sid)
     except Exception as _e:                        # §1 讀取失敗誠實報,不捏造清單
-        st.error(f"讀取 ETF 組合清單失敗：{type(_e).__name__}：{_e}")
+        st.error(f"讀取投資組合清單失敗：{type(_e).__name__}：{_e}")
         _sheet_api_error_hint(_e)
         return
 
@@ -207,7 +208,7 @@ def _render_etf_section(_gsp, pd) -> None:
     if _dkey not in st.session_state:
         st.session_state[_dkey] = pd.DataFrame(
             [{"代號": "", "張數": None, "均價": None}])
-    _pick = st.selectbox("載入我的 ETF 組合（選一個 → 按下方 📂 載入）", ["—"] + _names,
+    _pick = st.selectbox("載入我的投資組合 Portfolio（選一個 → 按下方 📂 載入）", ["—"] + _names,
                          key="_mgmt_etf_pick")
     _lc, _dc = st.columns(2)
     if _lc.button("📂 載入", key="_mgmt_etf_load", use_container_width=True) and _pick != "—":
@@ -248,8 +249,8 @@ def _render_etf_section(_gsp, pd) -> None:
             "張數": st.column_config.NumberColumn("張數", min_value=0.0, format="%.2f"),
             "均價": st.column_config.NumberColumn("均價", min_value=0.0, format="%.2f"),
         })
-    _name = st.text_input("組合名稱", key="_mgmt_etf_name", placeholder="例：核心配置")
-    if st.button("💾 儲存 ETF 組合", key="_mgmt_etf_save", type="primary",
+    _name = st.text_input("投資組合名稱", key="_mgmt_etf_name", placeholder="例：核心配置")
+    if st.button("💾 儲存投資組合 Portfolio", key="_mgmt_etf_save", type="primary",
                  use_container_width=True):
         try:
             _rows = records_to_etf_rows(_edited.to_dict("records"))
@@ -260,7 +261,7 @@ def _render_etf_section(_gsp, pd) -> None:
 
 
 def _render_stock_section(_gsp, pd) -> None:
-    st.markdown("#### 📈 我的個股清單（純代號，供週報 / 體檢用）")
+    st.markdown("#### 📈 我的觀察清單 Watchlist（純代號，只追蹤不一定持有，供週報 / 體檢用）")
     sid = _gsp._get_active_stock_sheet_id()
     if not sid:
         st.caption("⚠️ 先用上方「🚀 從 Drive 挑一本 Sheet」選定。")
@@ -268,14 +269,14 @@ def _render_stock_section(_gsp, pd) -> None:
     try:
         _names = _gsp.list_stock_watchlists(sheet_id=sid)
     except Exception as _e:
-        st.error(f"讀取個股清單失敗：{type(_e).__name__}：{_e}")
+        st.error(f"讀取觀察清單失敗：{type(_e).__name__}：{_e}")
         _sheet_api_error_hint(_e)
         return
 
     _dkey = "_mgmt_stk_df"
     if _dkey not in st.session_state:
         st.session_state[_dkey] = pd.DataFrame([{"代號": ""}])
-    _pick = st.selectbox("載入我的個股清單（選一個 → 按下方 📂 載入）", ["—"] + _names,
+    _pick = st.selectbox("載入我的觀察清單 Watchlist（選一個 → 按下方 📂 載入）", ["—"] + _names,
                          key="_mgmt_stk_pick")
     _lc, _dc = st.columns(2)
     if _lc.button("📂 載入", key="_mgmt_stk_load", use_container_width=True) and _pick != "—":
@@ -310,8 +311,8 @@ def _render_stock_section(_gsp, pd) -> None:
         use_container_width=True, hide_index=True,
         column_config={"代號": st.column_config.TextColumn(
             "代號", help="個股或 ETF 代號（純代號，不需張數/成本）")})
-    _name = st.text_input("清單名稱", key="_mgmt_stk_name", placeholder="例：週報追蹤")
-    if st.button("💾 儲存個股清單", key="_mgmt_stk_save", type="primary",
+    _name = st.text_input("觀察清單名稱", key="_mgmt_stk_name", placeholder="例：週報追蹤")
+    if st.button("💾 儲存觀察清單 Watchlist", key="_mgmt_stk_save", type="primary",
                  use_container_width=True):
         try:
             _codes = records_to_codes(_edited.to_dict("records"))
