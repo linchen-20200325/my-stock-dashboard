@@ -157,10 +157,14 @@ def _try_import_from_portfolio(pd):
         try:
             _names = _gsp.list_portfolios(sheet_id=_etf_sid)
             if _names:
+                _n0 = len(_out)
                 for _r in (_gsp.load_portfolio(_names[0], sheet_id=_etf_sid) or []):
                     _c = str(_r.get("ticker", "") or "").strip()
                     if _c:
                         _out.append({"代號": _c, "名稱": "", "種類": "ETF", "類別": "核心"})
+                # §1 不靜默:明講帶入哪一本(list_portfolios 是排序後取 [0])
+                _more = "；此 Sheet 有多本組合,只取第一本" if len(_names) > 1 else ""
+                st.caption(f"✅ 帶入 ETF 組合「{_names[0]}」（{len(_out) - _n0} 檔){_more}")
         except Exception as _e:  # noqa: BLE001
             st.caption(f"（ETF 組合讀取略過：{type(_e).__name__}）")
     # 個股清單（種類=個股,預設衛星）
@@ -169,10 +173,13 @@ def _try_import_from_portfolio(pd):
         try:
             _snames = _gsp.list_stock_watchlists(sheet_id=_stk_sid)
             if _snames:
+                _n0 = len(_out)
                 for _c in (_gsp.load_stock_watchlist(_snames[0], sheet_id=_stk_sid) or []):
                     _c = str(_c or "").strip()
                     if _c:
                         _out.append({"代號": _c, "名稱": "", "種類": "個股", "類別": "衛星"})
+                _more = "；此 Sheet 有多份清單,只取第一份" if len(_snames) > 1 else ""
+                st.caption(f"✅ 帶入 個股清單「{_snames[0]}」（{len(_out) - _n0} 檔){_more}")
         except Exception as _e:  # noqa: BLE001
             st.caption(f"（個股清單讀取略過：{type(_e).__name__}）")
 

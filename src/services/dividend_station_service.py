@@ -45,9 +45,10 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
     }
 
 
-def _error_row(ticker: str, name: str, asset_class: str, reason: str) -> dict:
+def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason: str) -> dict:
     return {
         "代號": ticker, "名稱": name,
+        "種類": "個股" if asset_kind == T.KIND_STOCK else "ETF",
         "類別": _CLASS_ICON.get(asset_class, asset_class),
         "健檢": "⚪", "235 燈號": "—", "加碼金": "", "3-3-3": "—",
         "建議動作": f"⚠️ 資料不足/抓取失敗：{reason}",
@@ -56,7 +57,7 @@ def _error_row(ticker: str, name: str, asset_class: str, reason: str) -> dict:
 
 
 def build_station_rows(holdings: list[dict], *, vix: float | None,
-                       metrics_fn: Callable[[str], dict]) -> list[dict]:
+                       metrics_fn: Callable[[str, str], dict]) -> list[dict]:
     """逐檔評估 → 組表。metrics_fn(ticker) 回一 dict 指標（依賴注入,離線可測）。
 
     holdings: [{'ticker','name','asset_class'}, ...]
@@ -85,7 +86,7 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
                 peer_ranks=m.get("peer_ranks"))
             rows.append(row_from_assessment(a))
         except Exception as e:  # noqa: BLE001 — 單檔失敗不炸整表（§1 誠實標記）
-            rows.append(_error_row(tk, nm, ac, f"{type(e).__name__}: {e}"))
+            rows.append(_error_row(tk, nm, ac, ak, f"{type(e).__name__}: {e}"))
     return rows
 
 
@@ -118,14 +119,20 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
     # 每檔 raise「無日線」= 整排 error(部署端實測回報)。既有 ETF 分頁都先做這步。
     _yf = normalize_etf_ticker(ticker) or ticker
 
-    # 1) 日線（還原價）→ 週K（必要）
+    # 1) 日線（還原價）→ 週K（必要）。normalize 一律補 .TW（上市）;抓空 → 試 .TWO（上櫃,
+    #    稽核 MED:上櫃存股 5314/8069 等 yfinance 用 .TWO,否則整檔 error）。
     try:
         from src.data.etf.etf_fetch import fetch_etf_price   # EX-PASSTHRU-1
         _px = fetch_etf_price(_yf, period="5y")
+        if (_px is None or getattr(_px, "empty", True)) and _yf.endswith(".TW"):
+            _alt = _yf[:-3] + ".TWO"
+            _px2 = fetch_etf_price(_alt, period="5y")
+            if _px2 is not None and not getattr(_px2, "empty", True):
+                _px, _yf = _px2, _alt        # 上櫃命中 → 後續配息/折溢價亦改用 .TWO
     except Exception as _e:  # noqa: BLE001
         raise ValueError(f"{ticker} 日線抓取失敗: {type(_e).__name__}: {_e}") from _e
     if _px is None or getattr(_px, "empty", True):
-        raise ValueError(f"{ticker} 無日線資料（部署端網路/代碼確認）")
+        raise ValueError(f"{ticker} 無日線資料（.TW/.TWO 皆無;部署端網路或代碼確認）")
     _col = next((c for c in ("Close", "close") if c in _px.columns), None)
     if _col is None:
         raise ValueError(f"{ticker} 日線缺 Close 欄")

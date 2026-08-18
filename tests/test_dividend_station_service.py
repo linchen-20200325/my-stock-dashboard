@@ -122,6 +122,25 @@ def test_fetch_metrics_wires_real_sources(monkeypatch):
     assert m["peer_ranks"] is None            # Phase 2 未接
 
 
+def test_fetch_metrics_otc_twoo_fallback(monkeypatch):
+    """稽核 MED：上櫃股 .TW 抓空 → 自動試 .TWO（否則 OTC 存股整檔 error）。"""
+    import sys
+    import types
+    idx = pd.bdate_range("2020-01-02", periods=900)
+    px = pd.DataFrame({"Close": pd.Series(np.linspace(20, 40, len(idx)), index=idx)})
+    seen = []
+    def _price(t, period="5y"):
+        seen.append(t)
+        return px if t.endswith(".TWO") else pd.DataFrame()   # .TW 空, .TWO 有
+    fake = types.ModuleType("src.data.etf.etf_fetch")
+    fake.fetch_etf_price = _price
+    fake.fetch_etf_dividends = lambda t: pd.Series(dtype=float)
+    monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
+    m = svc.fetch_metrics("5314", asset_kind=T.KIND_STOCK)
+    assert "5314.TW" in seen and "5314.TWO" in seen          # 先 .TW 再 .TWO
+    assert len(m["weekly_close"]) > 20
+
+
 def test_fetch_metrics_no_daily_raises(monkeypatch):
     """日線抓不到 → raise（該列標抓取失敗,§1 不假裝成功；不再被當資料不足吞掉）。"""
     import sys
