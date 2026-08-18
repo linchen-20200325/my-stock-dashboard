@@ -797,15 +797,16 @@ with tab_etf_main:
         _render_tab_isolated(render_etf_grp_compare, 'ETF 多檔比較')
 
     with tab_etf_warroom:
-        # 💼 我的持股戰情室(v19.167):合併「⚖️ ETF 組合」+「💰 存股戰情室」。
-        #   上半 = 個股+ETF 統一健檢/235/3-3-3 戰情表(render_dividend_station);
-        #   下半「🔬 ETF 深度工具」expander = 原 ETF 組合的組合表/葡萄串/3-3-3/標準差/分散度/AI。
+        # 💼 我的持股戰情室:標的**唯一來源 = 📁 組合管理**(自動載入、唯讀),個股+ETF 統一
+        #   健檢/235/3-3-3 + 🤖 AI 戰情總結(可推播)。原下半「🔬 ETF 深度工具」已搬到
+        #   「📊 多檔比較」(移除戰情室第二個標的輸入框 → 單一來源、去凌亂;user 2026-08)。
         from src.ui.etf.etf_tab_dividend_station import render_dividend_station
-        _render_tab_isolated(render_dividend_station, '我的持股戰情室')
-        st.markdown('<hr style="margin:28px 0;border-color:#30363d;">', unsafe_allow_html=True)
+        _render_tab_isolated(lambda: render_dividend_station(gemini_fn=gemini_call),
+                             '我的持股戰情室')
 
-    # 原 ETF 組合工具收進 expander(預設收合,不干擾戰情表);再入一次 tab_etf_warroom 追加內容。
-    with tab_etf_warroom, st.expander('🔬 ETF 深度工具（組合 / 葡萄串 / 3-3-3 / 標準差帶 / 分散度 / AI）',
+    # 🔬 ETF 深度工具(從戰情室搬來):組合/葡萄串/3-3-3/標準差/分散度/AI —— 這些各自要另外輸入
+    # 標的,屬「研究 ETF」非「追蹤我的持股」,故移出戰情室、改掛多檔比較。再入一次 tab_etf_compare 追加。
+    with tab_etf_compare, st.expander('🔬 ETF 深度工具（組合 / 葡萄串 / 3-3-3 / 標準差帶 / 分散度 / AI）',
                                       expanded=False):
         # FIX(隔離器): 本區一次串 6 個渲染器 —— 任一 raise 會吃掉後面全部區塊,逐個各包一次。
         _render_tab_isolated(lambda: render_etf_portfolio(gemini_fn=gemini_call), 'ETF 組合')

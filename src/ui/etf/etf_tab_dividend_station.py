@@ -1,34 +1,24 @@
 """L5 UI — 💼 我的持股戰情室（個股 + ETF 統一分析,掛在 🏦 ETF）。
 
-以息養股 / 3-3-3 挑三 / 235 加碼。逐檔（個股+ETF）跑健檢 + 235 燈 + 3-3-3,顏色高亮、
-隱藏開高低收。§8.2 L5：只呼叫 L3 `dividend_station_service`,不自算。§1：抓取失敗
-逐列誠實標記,不炸整表。抓取 button-gated（不每次 rerun 重抓）。
-個股：D折溢價 / 3-3-3 標「—」不適用（§1 不硬套 ETF 規則）。
+定位：**持股 Sheet 綁定** → 定期健檢 → AI 總結（可推播）。
+- 標的**唯一來源 = 📁 組合管理**（ETF 組合 + 個股清單）,進頁自動載入、**唯讀不可改**;
+  無手動輸入代號的入口（§ user 2026-08：單一來源、去凌亂）。
+- 逐檔（個股+ETF）跑健檢 + 235 燈 + 3-3-3,顏色高亮。
+- 🤖 AI 戰情總結：先出規則式事實（汰弱 / 235 加碼 / 抓取失敗）,有金鑰再 AI 潤成推播文字。
+
+§8.2 L5：只呼叫 L3 `dividend_station_service`,不自算。§1：抓取失敗逐列誠實標記,不炸整表;
+抓取 button-gated（不每次 rerun 重抓）。個股：D折溢價 / 3-3-3 標「—」不適用(§1 不硬套 ETF 規則)。
 """
 from __future__ import annotations
+
+from typing import Callable
 
 import streamlit as st
 
 from shared import dividend_station_thresholds as T
 
-_CLASS_OPTIONS = ["核心", "衛星"]
-_CLASS_MAP = {"核心": T.ASSET_CORE, "衛星": T.ASSET_SATELLITE}
-_KIND_OPTIONS = ["ETF", "個股"]
-_KIND_MAP = {"ETF": T.KIND_ETF, "個股": T.KIND_STOCK}
 _MAIN_COLS = ["代號", "名稱", "種類", "類別", "健檢", "235 燈號", "加碼金", "3-3-3", "建議動作"]
-
-
-def _holdings_from_editor(records) -> list[dict]:
-    """data_editor records → [{ticker,name,asset_class,asset_kind}]（空代號略過）。"""
-    out = []
-    for r in (records or []):
-        _tk = str(r.get("代號", "") or "").strip().upper()
-        if not _tk:
-            continue
-        out.append({"ticker": _tk, "name": str(r.get("名稱", "") or ""),
-                    "asset_class": _CLASS_MAP.get(str(r.get("類別", "核心")), T.ASSET_CORE),
-                    "asset_kind": _KIND_MAP.get(str(r.get("種類", "ETF")), T.KIND_ETF)})
-    return out
+_HOLDINGS_KEY = "_station_holdings"
 
 
 def _style_rows(df):
@@ -43,50 +33,51 @@ def _style_rows(df):
     return df.style.map(_bg, subset=[c for c in ("健檢", "建議動作") if c in df.columns])
 
 
-def render_dividend_station() -> None:
+def _holding_preview_row(h: dict) -> dict:
+    """service 持股 dict → 唯讀預覽列。"""
+    return {
+        "代號": h.get("ticker", ""),
+        "名稱": h.get("name", ""),
+        "種類": "個股" if h.get("asset_kind") == T.KIND_STOCK else "ETF",
+        "類別": "🚀 衛星" if h.get("asset_class") == T.ASSET_SATELLITE else "🛡️ 核心",
+    }
+
+
+def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None:
     import pandas as pd
 
-    st.markdown("### 💼 我的持股戰情室 — 個股 + ETF 統一健檢 · 235 加碼")
-    st.caption("把你的**個股與 ETF 持股**放一起逐檔看：健檢（A賺息賠本 / B夏普 / C季線轉弱 / "
-               "D高溢價）＋ 235 加碼燈 ＋ 3-3-3。以息養股：核心 80% 領息、衛星 20% 賺價差嚴格停利。")
-    st.caption("ℹ️ 個股：D折溢價 / 3-3-3 標「—」不適用（無 iNAV、非 ETF 挑選規則）。"
-               "資料不足一律標「不判定」不猜（§1）。3-3-3③ 同儕排名 Phase 2 待接。")
+    st.markdown("### 💼 我的持股戰情室 — 定期健檢 · 235 加碼 · AI 總結")
+    st.caption("標的**唯一來源 = 📁 組合管理**（ETF 組合 + 個股清單）,自動載入、唯讀。逐檔看健檢"
+               "（A賺息賠本／B夏普／C季線轉弱／D高溢價）＋235 加碼燈,AI 幫你濃縮成「今天要不要動作」。"
+               "個股：D折溢價／3-3-3 標「—」不適用;資料不足標「不判定」不猜（§1）。")
 
-    # ── 1️⃣ 你的清單（個股 + ETF）─────────────────────────────────────────
-    st.markdown("#### 1️⃣ 你的持股清單（標 種類 + 🛡️核心 / 🚀衛星）")
-    _dkey = "_station_df"
-    if _dkey not in st.session_state:
-        st.session_state[_dkey] = pd.DataFrame([
-            {"代號": "0056", "名稱": "", "種類": "ETF", "類別": "核心"},
-            {"代號": "00878", "名稱": "", "種類": "ETF", "類別": "核心"},
-            {"代號": "2330", "名稱": "", "種類": "個股", "類別": "衛星"},
-        ])
-
-    if st.button("📥 帶入我的組合管理（ETF 組合 + 個股清單）", key="_station_import"):
-        _imported = _try_import_from_portfolio(pd)
-        if _imported is not None:
-            st.session_state[_dkey] = _imported
-            st.session_state.pop("_station_editor", None)
+    # ── 1️⃣ 我的持股（唯讀,自動載入自持股 Sheet）─────────────────────────
+    if _HOLDINGS_KEY not in st.session_state:
+        st.session_state[_HOLDINGS_KEY] = _load_holdings_from_portfolio()
+    _c_reload, _c_hint = st.columns([1, 4])
+    with _c_reload:
+        if st.button("🔄 重新載入", key="_station_reload", help="重抓 📁 組合管理的持股清單"):
+            st.session_state[_HOLDINGS_KEY] = _load_holdings_from_portfolio()
+            st.session_state.pop("_station_rows", None)
+            st.session_state.pop("_station_vix", None)
+            st.session_state.pop("_station_ai_text", None)
             st.rerun()
-
-    _edited = st.data_editor(
-        st.session_state[_dkey], num_rows="dynamic", key="_station_editor",
-        use_container_width=True, hide_index=True,
-        column_config={
-            "代號": st.column_config.TextColumn("代號", help="ETF 或個股代號,如 0056 / 2330"),
-            "名稱": st.column_config.TextColumn("名稱", help="可留空"),
-            "種類": st.column_config.SelectboxColumn("種類", options=_KIND_OPTIONS, default="ETF"),
-            "類別": st.column_config.SelectboxColumn("類別", options=_CLASS_OPTIONS,
-                                                     default="核心"),
-        })
+    _holdings = st.session_state.get(_HOLDINGS_KEY) or []
+    if not _holdings:
+        with _c_hint:
+            st.caption("尚未載入到持股。")
+        st.warning("尚未載入到持股 —— 請先到 **📁 組合管理** 選定 Sheet 並存「ETF 組合」/「個股清單」,"
+                   "再回來按「🔄 重新載入」。")
+    else:
+        with _c_hint:
+            st.caption(f"共 **{len(_holdings)}** 檔（來源：持股 Sheet,唯讀;要改請到 📁 組合管理）。")
+        st.dataframe(pd.DataFrame([_holding_preview_row(h) for h in _holdings]),
+                     use_container_width=True, hide_index=True)
 
     # ── 2️⃣ 執行 ────────────────────────────────────────────────────────
-    st.markdown("#### 2️⃣ 執行戰情室")
-    st.caption("按下方會抓 VIX + 逐檔週K / 折溢價等即時算（部署端網路才抓得到台股資料）。")
     if st.button("🚀 跑存股戰情室", type="primary", key="_station_run"):
-        _holdings = _holdings_from_editor(_edited.to_dict("records"))
         if not _holdings:
-            st.warning("清單是空的,請先填 ETF 代號。")
+            st.warning("清單是空的,請先載入持股。")
         else:
             try:
                 from src.services.dividend_station_service import get_station_rows
@@ -94,13 +85,14 @@ def render_dividend_station() -> None:
                     _rows, _vix = get_station_rows(_holdings)
                 st.session_state["_station_rows"] = _rows
                 st.session_state["_station_vix"] = _vix
+                st.session_state.pop("_station_ai_text", None)   # 重跑 → 清舊 AI 摘要
             except Exception as _e:  # noqa: BLE001 — 整批失敗誠實報,不假裝成功
                 st.error(f"戰情室運算失敗（Fail Loud）：{type(_e).__name__}: {_e}")
 
     # ── 3️⃣ 結果 ────────────────────────────────────────────────────────
     _rows = st.session_state.get("_station_rows")
     if not _rows:
-        st.info("👆 填清單 → 按「🚀 跑存股戰情室」。台股 ETF 折溢價 / 週K 需部署端網路。")
+        st.info("👆 按「🚀 跑存股戰情室」。台股 ETF 折溢價 / 週K 需部署端網路。")
         return
 
     _vix = st.session_state.get("_station_vix")
@@ -112,12 +104,6 @@ def render_dividend_station() -> None:
         st.dataframe(_style_rows(_df), use_container_width=True, hide_index=True)
     except Exception:  # noqa: BLE001 — Styler 相容性問題退無樣式,不炸
         st.dataframe(_df, use_container_width=True, hide_index=True)
-
-    # 汰弱紅燈摘要
-    _reds = [r for r in _rows if r.get("健檢") == "🔴"]
-    if _reds:
-        st.error("🔴 **汰弱警訊**：" + "、".join(
-            f"{r['代號']}（{r['建議動作']}）" for r in _reds))
 
     # 逐檔明細
     with st.expander("🔎 逐檔明細（健檢 A/B/C/D · 235 觸發 · 3-3-3）", expanded=False):
@@ -134,56 +120,103 @@ def render_dividend_station() -> None:
                 st.caption(f"235 觸發：{d['235觸發']}　深水：{d.get('深水防守','—')}")
             st.markdown("---")
 
+    # ── 4️⃣ AI 戰情總結（規則事實 always;AI 潤稿需金鑰）──────────────────
+    _render_ai_summary(_rows, _vix, gemini_fn)
+
     st.caption(f"💡 目標配置：🛡️核心 {T.CORE_TARGET_PCT:.0f}% / 🚀衛星 {T.SATELLITE_TARGET_PCT:.0f}%；"
                f"衛星獲利達 {T.SATELLITE_TAKE_PROFIT_PCT:.0f}% 嚴格停利、滾回核心。"
                "本區僅研究參考,非投資建議,盈虧自負。")
 
 
-def _try_import_from_portfolio(pd):
-    """從 📁 組合管理帶入 ETF 組合（種類=ETF）+ 個股清單（種類=個股）。
+def _render_ai_summary(rows: list[dict], vix, gemini_fn: Callable[..., str] | None) -> None:
+    """🤖 AI 戰情總結：先出規則式事實（汰弱 / 235 加碼 / 抓取失敗）,有金鑰再 AI 潤稿。
 
-    best-effort：任一份讀不到就略過該份;兩份都空 → 提示 + None（未登入/未設）。
+    §1：規則事實由 L3 `build_station_digest` 純函式算,永遠有;AI 只潤稿,失敗誠實報錯不假裝。
+    """
+    from src.services.dividend_station_service import build_ai_summary, build_station_digest
+
+    st.markdown("#### 4️⃣ 🤖 AI 戰情總結（可作推播內容）")
+    digest = build_station_digest(rows, vix)
+
+    if digest["reds"]:
+        st.error("🔴 **汰弱警訊**：" + "、".join(
+            f"{d['代號']}（{d['建議動作']}）" for d in digest["reds"]))
+    if digest["adds"]:
+        st.warning("🚦 **235 加碼觸發**：" + "、".join(
+            f"{d['代號']} {d['235']}｜加碼 {d['加碼金']}" for d in digest["adds"]))
+    if not digest["reds"] and not digest["adds"]:
+        st.success("✅ 今日無汰弱紅燈、無 235 加碼觸發 —— 續抱、定期定額即可。")
+    if digest["errors"]:
+        st.caption(f"⚠️ {len(digest['errors'])} 檔抓取失敗未納入判斷（§1 誠實排除）："
+                   + "、".join(digest["errors"]))
+
+    if gemini_fn is None:
+        st.caption("（未接 AI 金鑰,以上為規則式摘要;此摘要即為推播內容來源。）")
+        return
+
+    if st.button("✍️ 讓 AI 潤成推播文字", key="_station_ai"):
+        try:
+            with st.spinner("AI 撰寫推播摘要中 …"):
+                st.session_state["_station_ai_text"] = build_ai_summary(digest, gemini_fn)
+        except Exception as _e:  # noqa: BLE001 — §1 AI 失敗誠實報,不回假摘要
+            st.error(f"AI 摘要失敗（Fail Loud）：{type(_e).__name__}: {_e}")
+    _ai = st.session_state.get("_station_ai_text")
+    if _ai:
+        st.info(_ai)
+
+
+def _load_holdings_from_portfolio() -> list[dict]:
+    """從 📁 組合管理帶入 ETF 組合（種類=ETF/核心）+ 個股清單（種類=個股/衛星）。
+
+    回 service 格式 [{ticker,name,asset_class,asset_kind}, ...]。
+    best-effort：任一份讀不到就略過該份;兩份都空 → 提示 + [] （未登入/未設）。§1 不靜默。
     """
     try:
         from src.data.portfolio import gsheet_portfolio as _gsp   # EX-PASSTHRU-1
     except Exception as _e:  # noqa: BLE001
-        st.error(f"帶入失敗：{type(_e).__name__}: {_e}")
-        return None
+        st.caption(f"（持股 Sheet 元件載入失敗：{type(_e).__name__}）")
+        return []
 
     _out: list[dict] = []
     # ETF 組合（種類=ETF,預設核心）
-    _etf_sid = _gsp._get_active_sheet_id()
+    try:
+        _etf_sid = _gsp._get_active_sheet_id()
+    except Exception as _e:  # noqa: BLE001 — §1 不靜默:accessor 理應回 '' 不 raise,真炸也留痕
+        _etf_sid = None
+        st.caption(f"（ETF 組合 Sheet 判定略過：{type(_e).__name__}）")
     if _etf_sid:
         try:
             _names = _gsp.list_portfolios(sheet_id=_etf_sid)
             if _names:
                 _n0 = len(_out)
                 for _r in (_gsp.load_portfolio(_names[0], sheet_id=_etf_sid) or []):
-                    _c = str(_r.get("ticker", "") or "").strip()
+                    _c = str(_r.get("ticker", "") or "").strip().upper()
                     if _c:
-                        _out.append({"代號": _c, "名稱": "", "種類": "ETF", "類別": "核心"})
-                # §1 不靜默:明講帶入哪一本(list_portfolios 是排序後取 [0])
+                        _out.append({"ticker": _c, "name": "",
+                                     "asset_kind": T.KIND_ETF, "asset_class": T.ASSET_CORE})
                 _more = "；此 Sheet 有多本組合,只取第一本" if len(_names) > 1 else ""
-                st.caption(f"✅ 帶入 ETF 組合「{_names[0]}」（{len(_out) - _n0} 檔){_more}")
+                st.caption(f"✅ 帶入 ETF 組合「{_names[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001
             st.caption(f"（ETF 組合讀取略過：{type(_e).__name__}）")
     # 個股清單（種類=個股,預設衛星）
-    _stk_sid = _gsp._get_active_stock_sheet_id()
+    try:
+        _stk_sid = _gsp._get_active_stock_sheet_id()
+    except Exception as _e:  # noqa: BLE001 — §1 不靜默:同上,真炸也留痕
+        _stk_sid = None
+        st.caption(f"（個股清單 Sheet 判定略過：{type(_e).__name__}）")
     if _stk_sid:
         try:
             _snames = _gsp.list_stock_watchlists(sheet_id=_stk_sid)
             if _snames:
                 _n0 = len(_out)
                 for _c in (_gsp.load_stock_watchlist(_snames[0], sheet_id=_stk_sid) or []):
-                    _c = str(_c or "").strip()
+                    _c = str(_c or "").strip().upper()
                     if _c:
-                        _out.append({"代號": _c, "名稱": "", "種類": "個股", "類別": "衛星"})
+                        _out.append({"ticker": _c, "name": "",
+                                     "asset_kind": T.KIND_STOCK, "asset_class": T.ASSET_SATELLITE})
                 _more = "；此 Sheet 有多份清單,只取第一份" if len(_snames) > 1 else ""
-                st.caption(f"✅ 帶入 個股清單「{_snames[0]}」（{len(_out) - _n0} 檔){_more}")
+                st.caption(f"✅ 帶入 個股清單「{_snames[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001
             st.caption(f"（個股清單讀取略過：{type(_e).__name__}）")
 
-    if not _out:
-        st.warning("組合管理沒有可帶入的持股 —— 請先到 📁 組合管理選 Sheet 並存 ETF 組合 / 個股清單。")
-        return None
-    return pd.DataFrame(_out)
+    return _out
