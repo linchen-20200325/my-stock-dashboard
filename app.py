@@ -433,8 +433,8 @@ render_macro_compass()
 # v18.182 ARCHIVED: 🧪 回測找參數 / v18.187 ARCHIVED: 📈 月營收進退 / v18.189 ARCHIVED: 📊 財報體檢變化
 # 各暫封存模組保留磁碟，啟用方式見各 ARCHIVED 原始注解。
 # v18.463: UI 重構 — 10 平鋪 Tab → 4 大群組 + Sub-tabs（sub-tab 變數名稱維持不變，測試仍通過）
-tab_market, tab_stocks, tab_etf_main, tab_tools, tab_mgmt, tab_ai = st.tabs([
-    '🌍 市場環境', '🔬 選股', '🏦 ETF', '🔧 工具箱', '📁 組合管理', '🧬 AI 問答',
+tab_market, tab_stocks, tab_etf_main, tab_tools, tab_warroom, tab_mgmt, tab_ai = st.tabs([
+    '🌍 市場環境', '🔬 選股', '🏦 ETF', '🔧 工具箱', '💼 我的持股戰情室', '📁 組合管理', '🧬 AI 問答',
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -773,8 +773,8 @@ with tab_stocks:
 # v18.465: 新增 3-3-3 原則評估（成立>3年 / 3年年化>7% / 同儕前1/3）
 # ══════════════════════════════════════════════════════════════
 with tab_etf_main:
-    tab_etf, tab_etf_compare, tab_etf_warroom = st.tabs([
-        '🔍 單檔診斷', '📊 多檔比較', '💼 我的持股戰情室',
+    tab_etf, tab_etf_compare = st.tabs([
+        '🔍 單檔診斷', '📊 多檔比較',
     ])
 
     with tab_etf:
@@ -795,14 +795,6 @@ with tab_etf_main:
     with tab_etf_compare:
         from src.ui.etf import render_etf_grp_compare
         _render_tab_isolated(render_etf_grp_compare, 'ETF 多檔比較')
-
-    with tab_etf_warroom:
-        # 💼 我的持股戰情室:標的**唯一來源 = 📁 組合管理**(自動載入、唯讀),個股+ETF 統一
-        #   健檢/235/3-3-3 + 🤖 AI 戰情總結(可推播)。原下半「🔬 ETF 深度工具」已搬到
-        #   「📊 多檔比較」(移除戰情室第二個標的輸入框 → 單一來源、去凌亂;user 2026-08)。
-        from src.ui.etf.etf_tab_dividend_station import render_dividend_station
-        _render_tab_isolated(lambda: render_dividend_station(gemini_fn=gemini_call),
-                             '我的持股戰情室')
 
     # 🔬 ETF 深度工具(從戰情室搬來):組合/葡萄串/3-3-3/標準差/分散度/AI —— 這些各自要另外輸入
     # 標的,屬「研究 ETF」非「追蹤我的持股」,故移出戰情室、改掛多檔比較。再入一次 tab_etf_compare 追加。
@@ -890,6 +882,14 @@ with tab_tools:
     with tab_edu:
         from src.ui.tabs import render_tab_edu
         _render_tab_isolated(render_tab_edu, '教學')
+
+# ── 💼 我的持股戰情室（v19.x 提升為頂層分頁,原為 ETF 子分頁;user 2026-08）──────
+#   標的唯一來源 = 📁 組合管理(自動載入、唯讀),個股+ETF 統一健檢/235/3-3-3
+#   + 🔄 換股建議(搭配總經位階) + 🤖 AI 戰情總結(可推播)。
+with tab_warroom:
+    from src.ui.etf.etf_tab_dividend_station import render_dividend_station
+    _render_tab_isolated(lambda: render_dividend_station(gemini_fn=gemini_call),
+                         '我的持股戰情室')
 
 # ── 📁 組合管理（統一頁:ETF 組合 + 個股清單,存 Google Sheet）──────────
 with tab_mgmt:
