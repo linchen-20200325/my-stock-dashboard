@@ -242,8 +242,10 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
 
     with st.expander('🎯 型態目標價（本檔 K 線自動算：甜蜜價·止損·目標）', expanded=False):
         # v19.163 user 要求:型態目標價接進個股,套用當前 t2_sid 標的。(v19.174 去識別化)
+        # v19.166 一鍵合併:併入上方「🔍 載入完整分析」—— external_run=t2_run,型態不再自帶按鈕。
         from src.ui.tabs.pattern_targets_ui import render_pattern_targets_for_ticker
-        render_pattern_targets_for_ticker(t2_sid or '2330', key_prefix='cs_stk')
+        render_pattern_targets_for_ticker(t2_sid or '2330', key_prefix='cs_stk',
+                                          external_run=bool(t2_run))
 
     if t2_run:
         sid2 = t2_sid or '2330'

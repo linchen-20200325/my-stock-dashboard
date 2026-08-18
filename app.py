@@ -603,7 +603,15 @@ with tab_stocks:
             #     前進式驗證要的是「當下真實決定」的跨期可比性，濾網改變凍結內容會破壞它。
             try:
                 from src.services.allocation_service import get_macro_regime as _gmr
-                _screen_regime = _gmr()
+                # ⚠️ get_macro_regime() 回的是 dict 契約(regime/light/is_loaded…),
+                # 不是字串。選股濾網只吃「regime 字串」,且僅在總經**已評估**時套用
+                # (§1:未評估→None,不套用、不捏造多空)。此前誤把整個 dict 當 regime 傳,
+                # 到 `_apply_bear_market_filter` 的 `regime not in frozenset` → TypeError
+                # (dict unhashable),選股網一按就炸。
+                _reg_state = _gmr()
+                _screen_regime = (_reg_state.get('regime')
+                                  if isinstance(_reg_state, dict)
+                                  and _reg_state.get('is_loaded') else None)
             except Exception as _e_reg:  # noqa: BLE001 — 總經取不到不該炸掉選股
                 _screen_regime = None
                 print(f'[screener] regime 取得失敗，不套用空頭濾網: '
