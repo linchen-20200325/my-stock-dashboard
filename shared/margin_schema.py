@@ -37,7 +37,7 @@ L0 是唯一兩邊都能合法 import 的層。先例:`shared/schemas.py`(pander
   考證:2026-08 線上真值 619,648,244,000 元 = 6,196 億 ∈ sanity[500,10000]億。
 - `MarginPurchaseVolume` 單位 = **張**,量級 ~1e7 — **永遠不可**當金額換算。
 - `data_cache/finmind_margin.parquet` 的 `margin_balance` 欄契約 = **元**
-  (下游 `src/compute/macro/macro_signal_lookback_tw.py:139` 以 /1e8 轉億)。
+  (原下游 `macro_signal_lookback_tw.py` 以 /1e8 轉億,該檔已於 v19.181 detox 移除)。
 """
 from __future__ import annotations
 

@@ -5,8 +5,6 @@ covers（每個 class 對應一個實際抓到的缺陷，不是為了湊測試�
 ===========================  ==========================================================
 class                        釘住的缺陷
 ===========================  ==========================================================
-TestBacktestNoLookahead      §2.3 拐點回測 lookahead：事件要「翻正後連 N 日不再翻負」
-                             才成立，但報酬卻從翻正日起算 → 白吃去抖窗口那幾根 K 棒。
 TestM1bM2ProxyDetection      §3.3 幽靈 key：`m1b_m2_info['is_proxy']` 從未被寫入，
                              兩處「代理值」揭露 / 守門因此永遠不生效。
 TestPivotSignalColorSsot     §2.1 色碼非 SSOT → `aggregate_pivot_families` 的嚴格比對
@@ -30,8 +28,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 import pytest
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -56,105 +52,6 @@ def _src_of(node, lines: list[str]) -> str:
     except Exception:
         _ln = getattr(node, 'lineno', 0)
         return lines[_ln - 1].strip() if 0 < _ln <= len(lines) else '<unavailable>'
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# 1. §2.3 PIT — 倒掛翻正回測不得偷看未來
-# ══════════════════════════════════════════════════════════════════════════
-class TestBacktestNoLookahead:
-    """`find_uninversion_events` 的成立條件用到 t0 之後 stable_days 天的資料。
-
-    站在 t0 當天沒有人知道「接下來 5 天不會再翻回負值」，因此
-    **報酬不得從 t0 起算**。本組測試用一條「剛好在去抖窗口內跳空 +50%」的
-    合成 TWII 把差異放到最大：舊錨點會報 +50%，正確錨點應報 0%。
-    """
-
-    def test_confirm_date_is_end_of_stability_window(self):
-        from src.compute.strategy import tw_backtest
-        vals = [0.5, 0.3, 0.0, -0.1, -0.3, -0.3, -0.2, 0.1, 0.2, 0.3, 0.4, 0.5]
-        idx = pd.date_range('2020-01-01', periods=len(vals), freq='D')
-        ev = tw_backtest.find_uninversion_events(
-            pd.Series(vals, index=idx), min_inversion_depth=-0.1, stable_days=5)
-        assert len(ev) == 1
-        # `date` 語意不變（翻正首日）—— 既有 test_tw_backtest.py 依賴它
-        assert ev[0]['date'] == idx[7]
-        # 去抖窗口 = idx[7]..idx[11]，最後一天才是「這件事成為已知事實」的日子
-        assert ev[0]['confirm_date'] == idx[11], (
-            f"confirm_date 應為去抖窗口最後一天 {idx[11].date()}，"
-            f"實得 {ev[0]['confirm_date']}"
-        )
-        assert ev[0]['confirm_date'] > ev[0]['date']
-
-    def test_forward_return_strict_after_skips_anchor_bar(self):
-        """strict_after=True → 進場價取 t0 **之後**那一根，不是 t0 當根。"""
-        from src.compute.strategy import tw_backtest
-        idx = pd.date_range('2020-01-01', periods=400, freq='D')
-        # t0 當根 = 100，之後全部 200 → 兩種錨點差距一目了然
-        s = pd.Series([100.0] + [200.0] * 399, index=idx)
-        r_lax = tw_backtest._forward_return(s, idx[0], 182, strict_after=False)
-        r_pit = tw_backtest._forward_return(s, idx[0], 182, strict_after=True)
-        assert r_lax == pytest.approx(100.0), '寬鬆錨點應吃到 100→200 的跳空'
-        assert r_pit == pytest.approx(0.0), 'PIT 錨點應已在跳空之後進場'
-
-    def test_default_strict_after_preserves_legacy_behaviour(self):
-        """預設值不得改變既有 caller 行為（test_tw_backtest.py 仍在跑）。"""
-        from src.compute.strategy import tw_backtest
-        idx = pd.date_range('2020-01-01', periods=300, freq='D')
-        s = pd.Series(np.linspace(100, 130, 300), index=idx)
-        assert (tw_backtest._forward_return(s, idx[0], 182)
-                == tw_backtest._forward_return(s, idx[0], 182, strict_after=False))
-
-    def test_returns_measured_from_confirmed_entry_not_uninversion_day(
-            self, monkeypatch):
-        """端到端：跳空發生在「翻正日之後、確認日之前」→ 報酬不得包含它。"""
-        from src.data.macro import macro_core
-        from src.compute.strategy import tw_backtest
-
-        # T10Y2Y：500 日正 → 200 日倒掛 → 800 日翻正且持續
-        t_dates = pd.date_range('2018-01-01', periods=1500, freq='D')
-        t_vals = np.concatenate([np.full(500, 0.5),
-                                 np.full(200, -0.3),
-                                 np.full(800, 0.3)])
-        _uninvert_day = t_dates[700]          # 翻正首日
-        _confirm_day = t_dates[704]           # stable_days=5 → 窗口最後一天
-
-        # TWII：翻正日當天仍是 100，隔天起跳到 150 並永久持平。
-        #   舊錨點（翻正日）→ p0=100，6M 後 150 → +50%
-        #   PIT 錨點（確認日之後）→ p0=150，6M 後 150 → 0%
-        twii_dates = pd.date_range('2010-01-01', periods=5000, freq='D')
-        twii_vals = np.where(twii_dates <= _uninvert_day, 100.0, 150.0)
-        twii = pd.Series(twii_vals, index=twii_dates, name='^TWII')
-
-        monkeypatch.setattr(
-            macro_core, 'fetch_fred',
-            lambda sid, key, n=250: (pd.DataFrame({'date': t_dates, 'value': t_vals})
-                                     if sid == 'T10Y2Y'
-                                     else pd.DataFrame(columns=['date', 'value'])))
-        monkeypatch.setattr(
-            macro_core, 'fetch_yf_close',
-            lambda ticker, range_='2y', interval='1d': (
-                twii if ticker == '^TWII' else pd.Series(dtype=float)))
-
-        out = tw_backtest.backtest_twii_turning_points('dummy')
-        assert out['source_ok'] is True
-        assert out['summary']['n_events'] == 1
-        ev = out['events'][0]
-
-        assert ev['date'] == _uninvert_day
-        assert ev['confirm_date'] == _confirm_day
-        assert ev['entry_date'] is not None and ev['entry_date'] > _confirm_day, (
-            '進場 K 棒必須嚴格晚於確認日：FRED 的 T10Y2Y 當日值要等美股收盤後'
-            f"才發布，台股當天早已收盤。實得 entry_date={ev['entry_date']}"
-        )
-        assert ev['ret_6m'] == pytest.approx(0.0), (
-            f"+6M 報酬應為 0%（跳空發生在確認之前，不可計入），實得 {ev['ret_6m']}%。"
-            '若得到 +50% 代表報酬又從翻正日起算 = lookahead 回歸。'
-        )
-        assert ev['ret_12m'] == pytest.approx(0.0)
-        # 反向對照：證明這條測試不是空轉 —— 舊錨點確實會報 +50%
-        assert tw_backtest._forward_return(
-            out['twii_series'], ev['date'], 182,
-            strict_after=False) == pytest.approx(50.0)
 
 
 # ══════════════════════════════════════════════════════════════════════════

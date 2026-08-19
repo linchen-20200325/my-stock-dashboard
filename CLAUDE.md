@@ -147,7 +147,7 @@ class DataPoint:
 
 ### 2.3 Point-in-Time — 防 Lookahead
 
-本專案**無傳統歷史回測**(v18.265 移除 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py` — 因只有現存公司快照 + 短歷史,回頭測必踩 lookahead + 存活者偏誤)。**改採前進式驗證(Forward-test,v19.141~148)**:凍結當下選股 → 事後真實現價對帳 vs 0050(`src/compute/screener/forward_test.py` L2 + `services/forward_test_service.py` L3),**零 lookahead、零存活者偏誤**(都是當下真實決定 + 事後真實現價)。**v19.147 自動化**:`scripts/update_forward_test_freeze.py` + `.github/workflows/update_forward_test.yml` 每月自動凍結(走與選股網畫面同源的 L3 `get_ranked_picks`)→ 落地 git 追蹤 `data_cache/forward_test/picks.parquet`(L1 `forward_test_store.py`);對帳讀「本地 ∪ Google Sheet」去重。解原本「手動 + 只存私人 sheet → 0 樣本」卡關。Macro 拐點驗證(`tw_backtest.py` SPX/TWII 倒掛翻正)+ macro 校準歷史驗算(`scripts/calibrate_macro_traffic.py`,v18.359 F-2 搬入 `scripts/`)仍須遵守 PIT,**禁止 lookahead**。
+本專案**無傳統歷史回測**(v18.265 移除 `backtest_engine.py` / `tab_backtest_optimization.py` / `etf_tab_backtest.py` — 因只有現存公司快照 + 短歷史,回頭測必踩 lookahead + 存活者偏誤)。**改採前進式驗證(Forward-test,v19.141~148)**:凍結當下選股 → 事後真實現價對帳 vs 0050(`src/compute/screener/forward_test.py` L2 + `services/forward_test_service.py` L3),**零 lookahead、零存活者偏誤**(都是當下真實決定 + 事後真實現價)。**v19.147 自動化**:`scripts/update_forward_test_freeze.py` + `.github/workflows/update_forward_test.yml` 每月自動凍結(走與選股網畫面同源的 L3 `get_ranked_picks`)→ 落地 git 追蹤 `data_cache/forward_test/picks.parquet`(L1 `forward_test_store.py`);對帳讀「本地 ∪ Google Sheet」去重。解原本「手動 + 只存私人 sheet → 0 樣本」卡關。macro 校準歷史驗算(`scripts/calibrate_macro_traffic.py`,v18.359 F-2 搬入 `scripts/`)仍須遵守 PIT,**禁止 lookahead**。(v19.181 detox：未接線的 `tw_backtest.py` 拐點驗證死碼已移除 —— 前進式驗證 forward_test 才是現行的驗證路徑。)
 
 **各來源發布延遲 + 修正風險**:
 
@@ -294,13 +294,13 @@ class DataPoint:
 | 陷阱 | 描述 | Evidence |
 |---|---|---|
 | **百分比 vs 小數** | `YIELD_HIGH=7.0`(%) vs `YIELD_HIGH_DEC=0.07`,呼叫端混用 = 100× 誤差 | shared/thresholds.py:21-27 |
-| **元 vs 百萬元 vs 億** | FinMind margin 用「元」,macro signal threshold 3400 用「億」(`/1e8` 轉換) | macro_signal_lookback_tw.py:127-131,288 |
+| **元 vs 百萬元 vs 億** | FinMind margin 用「元」,macro signal threshold 3400 用「億」(`/1e8` 轉換) | shared/signal_thresholds.py `MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI=3400` + shared/margin_schema.py（元→億 /1e8）(v19.181 detox 前為 macro_signal_lookback_tw.py) |
 | **TWD vs USD** | CBC M1B（TWD）vs IMF M1B（M USD）**禁止平均**,IMF 僅作 fallback | data_registry.py:345-350 |
 | **YoY vs MoM** | CPI 用 YoY (%);PMI 用月度 level;merrill_clock 用 CPI YoY | merrill_clock.py:5,133, macro_core.py:216 |
 | **名目 vs 實質** | CPI 預設名目;尚未實作實質報酬轉換（待後續需求） | — |
-| **交易日 vs 日曆日** | `pct_change(20)` = 20 交易日 ≈ 4 週,**非** 20 日曆日 | macro_signal_lookback_tw.py:167 |
+| **交易日 vs 日曆日** | `pct_change(20)` = 20 交易日 ≈ 4 週,**非** 20 日曆日 | shared/signal_thresholds.py `TRADING_DAYS_PER_YEAR=252`（交易日常數；通則）(v19.181 detox 前為 macro_signal_lookback_tw.py) |
 | **TW 時區 vs UTC** | Yahoo Finance EOD 為 UTC;TWSE/CBC/TAIFEX 為 TW 時間 (UTC+8) | app.py:47, daily_checklist.py:131 |
-| **點數 vs 百分比** | M1B-M2 gap 用「點/月」差分（diff()）,**非** %  | macro_signal_lookback_tw.py:296 |
+| **點數 vs 百分比** | M1B-M2 gap 用「點/月」差分（diff()）,**非** %  | shared/signal_thresholds.py `M1B_M2_GAP_DETERIORATION_THRESHOLD=-2.0`（單位 pts/月）(v19.181 detox 前為 macro_signal_lookback_tw.py) |
 
 **命名規範**：新增變數**必須**編碼單位,例：`rate_pct` / `rate_ratio` / `amount_twd` / `amount_twd_m`（百萬）/ `amount_twd_yi`（億）/ `qty_shares` / `count`。
 
@@ -465,7 +465,7 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 |---|---|---|
 | **L0 Infra** | 常數 / TTL / 門檻 / 全域 config | `src/config/{config,data_config,persona,stock_names}.py`(v18.359 F-6.1 搬入)、`shared/ttls.py`、`shared/thresholds.py`、`shared/health_thresholds.py`、`shared/fred_series.py`、`shared/roc_calendar.py`(民國↔西元 SSOT,B3 v19.152)、`shared/finmind_subject_aliases.py`(FinMind 科目別名 SSOT,B4 v19.152) |
 | **L1 Data** | 外部資料抓取 / 快取 / proxy | `data_loader.py`(B8 v19.155-156 拆分 2545→1734:抽出 `financial_statements_fetcher.py`(財報體檢原始數據,B8-a)+ `data_loader_inst_fetchers.py`(TWSE/TPEX 三大法人 fallback,B8-b),皆同 `src/data/core/`,套件 __getattr__ / import-back 轉發介面不變)、`data_registry.py`、`proxy_helper.py`、`scripts/update_macro_history.py`(cron CLI,v18.359 F-2 搬入)、`scripts/update_forward_test_freeze.py`(前進式驗證每月凍結 cron CLI,v19.147)、`tw_macro.py`、`macro_core.py`、`leading_indicators.py`、`etf_fetch.py`(含 `fetch_etf_close_history`,B7-a 從 UI 下沉)、`tw_stock_data_fetcher.py`、`src/data/portfolio/forward_test_store.py`(前進式驗證本地落地 parquet,v19.147) |
-| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`(含 `compute_macd` + `weekly_macd_hist` MACD SSOT kernel,B6 v19.153)、`compute/screener/{fundamental_prescreen,shortage_screener,rs_leader_screener,cross_quarter_trends,forward_test}.py`、`compute/risk/{risk_contribution,risk_radar,concentration}.py`(⚠️ `risk_radar` 見 §8.2.A.2 **V-RADAR-1**)(~~`merrill_clock.py`~~ v18.359 F-4 已刪;~~`macro_signal_lookback_tw.py`~~ **零 production caller,見 §8.2.A.2 死碼表**) |
+| **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`(含 `compute_macd` + `weekly_macd_hist` MACD SSOT kernel,B6 v19.153)、`compute/screener/{fundamental_prescreen,shortage_screener,rs_leader_screener,cross_quarter_trends,forward_test}.py`、`compute/risk/{risk_contribution,risk_radar,concentration}.py`(⚠️ `risk_radar` 見 §8.2.A.2 **V-RADAR-1**)(~~`merrill_clock.py`~~ v18.359 F-4 已刪;~~`macro_signal_lookback_tw.py`~~ v19.181 detox 已刪（連同 `macro_validation_tw` / `signal_threshold_optimization` / `multi_factor_optimization` / `tw_backtest` 封閉死簇一併移除）) |
 | **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_structured_summary.py`、`daily_checklist.py`、`macro_state_locker.py`(① 接線 v19.148:`get_macro_state` canonical 總經契約 + `normalize_regime` 中→英)、`services/{fundamental_screener_service,rs_leader_service,shortage_screener_service,forward_test_service}.py`(選股網編排,v19.14x;`fundamental_screener_service.get_ranked_picks` = 畫面/cron 同源排名,v19.147)(~~`ai_engine.py`~~ P5-DEAD-δ 已刪、~~`unified_decision.py`~~ F-4 已刪) |
 | **L4 Render** | 圖表生成 / 通用 UI 元件（無 Streamlit container） | `chart_plotter.py`、`etf_render.py`、`ui_widgets.py`、`render/risk_contribution_render.py`(v19.138) |
 | **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`pattern_targets_ui.py`(型態目標價,`render_pattern_targets_for_ticker` 內嵌 🔬 個股 + 🏆 個股組合;v19.164 組合改**批次表 + 下鑽共用批次 df**,無獨立分頁;v19.174 去識別化改名,舊檔名/函式名為人名羅馬拼音,舊名 alias 過渡中)、`etf_dashboard.py`、`etf_tab_*.py`(含 `etf_tab_smart.py` — ⚠️ L5 自建 cache 層,見 §8.2.A.2 **V-SMART-CACHE-1**)(**~~體檢轉機獨立分頁~~(舊檔名帶人名縮寫,v19.174 不再列出) v19.164 退役真刪**:「找體質差→變好」轉機能力已合併進 🏆 個股組合「📊 財報趨勢×轉機」區塊 — `compute_one_stock_trend` 用同一份季快照附帶算 `diff_verdict`,零額外抓取、去第二輸入框 + 去重複第二張表) |
@@ -555,11 +555,9 @@ LOC / 檔數 / 「N 處」都屬此類。若非寫不可,格式為「〈值〉(�
 | ~~**V-UP-APP-1**~~(**已結案 F2 2026-08**) | ~~5 處 `from app import`(L5→L6):`src/ui/tabs/tab_stock_grp.py`(×2)、`src/ui/tabs/tab_stock.py`、`src/ui/tabs/tab_macro.py`、`src/ui/tabs/macro/section_news_ai.py`~~ | 跨層上行 import | 如原文預測,與 V-APP-1 **同一根因**,一起解:`gemini_call` → L3;`api_key` → L3 `get_gemini_api_key()`;`parse_stocks` → L0 `shared/parse_helpers.py`;`_tw_now_str` → L0 `shared/macro_compute.py::tw_now_str`;`_get_fm_token` → L0 `src/config/config.py::get_finmind_token`;`_bps` → tab_macro 不再需要(session 改由 L3 `macro_fetch_orchestrator` 向 L1 取)。連帶刪除 `app.py` 的 `_AppProxy` + `sys.modules['app']` 劫持(其唯一存在理由就是撐住這 5 處)。守衛:`tests/test_c3_layering_guard.py` 規則 5(`_KNOWN_VIOLATIONS` 4 條已移除,反向守衛生效)+ `tests/test_f2_app_decomposition.py` |
 | **V-SMART-CACHE-1** | `src/ui/etf/etf_tab_smart.py` — 5 個 `@st.cache_data(ttl=<literal>)` 自建 cache 函式(`_cached_price` / `_cached_peer_prices` / `_cached_holdings` / `_cached_price_long` / `_cached_zh_name`) | §8.2「cache 才能集中」+ §3.3 反捏造 | L5 自建快取層 = 把本該在 L1 集中的 TTL 分散到 UI;且 5 個 `ttl=` 全是 inline 數字(1800/3600/3600/7200/86400),**未走 `shared/ttls.py` SSOT** → 同時違反 §3.3。修法:cache 下沉 L1 fetcher,或至少 ttl 改引 `TTL_30MIN` / `TTL_1HOUR` / `TTL_2HOUR` / `TTL_1DAY` |
 
-**已確認死碼（非違憲,但 §8.2 代表檔清單不該再列它）**
+**已確認死碼 → 已移除（v19.181 detox）**
 
-| 位置 | 現況 |
-|---|---|
-| `src/compute/macro/macro_signal_lookback_tw.py` | **零 production caller**（2026-08-07 複驗:全 repo 只剩 `src/compute/macro/__init__.py` barrel、tests、`scripts/` 診斷腳本、以及各處註解 / docstring 引用）。與 `STATE.md` 既有判定一致。⚠️ 但 §4.1 單位陷阱表仍以本檔為 evidence — 刪檔前需先把 evidence 改指 `shared/signal_thresholds.py` 與 `shared/margin_schema.py`，否則會製造新的失真 |
+`macro_signal_lookback_tw.py`(581) + 其**封閉死簇** `macro_validation_tw.py`(134) / `signal_threshold_optimization.py`(201，獨佔依賴前二者、自身零接線) / `multi_factor_optimization.py`(521) / `tw_backtest.py`(323) 已於 v19.181 全數移除（連同 barrel 登錄、5 個專屬 test；`test_d2_macro_sections.py` 外科移除 `TestBacktestNoLookahead`、`test_hot_money.py` 收留 tw_backtest 檔內寄生的 hot_money 測試；§4.1 evidence 已改指 `shared/signal_thresholds.py`+`shared/margin_schema.py`、§2.3 拐點驗證 clause 同步更新）。**保留** `src/data/macro/macro_cache_reader.py`(73)：`scripts/analyze_ring1_gate.py` 仍真 import。
 
 ---
 

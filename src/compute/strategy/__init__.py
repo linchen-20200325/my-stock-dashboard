@@ -7,13 +7,13 @@ public 名稱被解析兩次。舊 public 名（`compute_caisen_targets` 等）�
 """
 from . import (  # noqa: F401
     v4_strategy_engine, v5_modules,
-    tw_backtest, portfolio_manager, tech_indicators,
+    portfolio_manager, tech_indicators,
     pattern_targets,
 )
 
 _SUBMODULES = (
     v4_strategy_engine, v5_modules,
-    tw_backtest, portfolio_manager, tech_indicators,
+    portfolio_manager, tech_indicators,
     pattern_targets,
 )
 

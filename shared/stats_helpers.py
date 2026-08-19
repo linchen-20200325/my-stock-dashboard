@@ -95,7 +95,7 @@ def calc_stats(df: Any) -> Optional[dict]:
 #
 # 【為何新增而非改 zscore()】
 # 上方 `zscore()` 是「全樣本、非滾動、無 winsorize」的母體式 z-score，
-# 已被多處消費（macro_core / multi_factor_optimization），改它＝行為變更。
+# 已被多處消費（macro_core 等），改它＝行為變更。
 # 本區塊只**新增**工具，呼叫端自行決定是否採用，零回歸風險。
 #
 # 【本組工具解決的稽核問題】

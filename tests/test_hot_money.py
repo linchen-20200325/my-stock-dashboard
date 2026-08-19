@@ -219,3 +219,13 @@ def test_altair_import_chain_does_not_raise():
                 "(typing_extensions 太舊 / altair 版本不對？)"
             ) from e
         raise
+
+
+# ────────────────────────────────────────────────────────────────────────
+# get_latest_hot_money_state helper（v19.181 自已退役的 test_tw_backtest.py 搬入）
+def test_get_latest_hot_money_state_empty_twd():
+    """空 twd_df → return None。"""
+    from src.ui.tabs import hot_money
+    r = hot_money.get_latest_hot_money_state(
+        pd.DataFrame(columns=['close']), token='')
+    assert r is None

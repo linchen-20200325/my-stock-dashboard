@@ -1250,7 +1250,7 @@ TW 股市外資持股比 ~40%(2024 年),日均成交量占比 25-30%,**外資動
    🔴 VIX > §§VIX_V4_RED§§    或  期貨淨部位 < §§FUT_V4_RED_LOTS§§ 口
    🟡 VIX > §§VIX_V4_YELLOW§§ 或  期貨淨部位 < §§FUT_V4_YELLOW_LOTS§§ 口
 
-③ 外資現貨賣超紅旗  (macro_signal_lookback_tw.DEFAULT_TW_SIGNALS)
+③ 外資現貨賣超紅旗
    外資 5 日累積買賣超 ≤ §§FOREIGN_5D_YI§§ 億  (搭配 TWII 20 日跌幅 ≤ §§TWII_20D_PCT§§% 同時亮)
 ```
 
