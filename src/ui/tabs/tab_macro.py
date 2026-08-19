@@ -561,7 +561,6 @@ def render_tab_macro():
     if not margin and st.session_state.get('_last_margin'):
         margin = st.session_state['_last_margin']
         _margin_is_cached = True
-    df_adl = cd.get('adl')  # 騰落指標 DataFrame
 
     # ── 市場狀態卡：用已載入的真實資料渲染 ────────────────
     _mkt_info = st.session_state.get('mkt_info')
