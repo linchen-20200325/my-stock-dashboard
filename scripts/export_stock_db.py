@@ -170,8 +170,63 @@ def write_margin(conn: sqlite3.Connection) -> int:
     return len(df)
 
 
+def _money_supply_sanity_gate(df: pd.DataFrame) -> tuple[bool, str]:
+    """貨幣供給 §3.2 sanity（外送下游前的守門）。回 (ok, 說明)。
+
+    完全比照 `_margin_sanity_gate`：**整表**判定，不做逐列剔除 ——
+    逐列剔除會產出一張「看起來有效但其實是另一個量」的表，比整表缺席更危險。
+
+    三條檢查，前兩條是**定義**不是可調參數：
+      ① `m1b > 0` 且 `m2 > 0` —— 貨幣供給額是存量（某時點餘額），不可能為負
+      ② `m2 >= m1b`           —— M2 依定義涵蓋 M1B
+      ③ `|gap| <= 30` pp      —— 真實量綱 ±10；攔「量綱壞掉」非「數值偏高」
+
+    2026-08-19 實測（n=239）：**201 列（84.1%）任一不過**（① 86 列、② 63 列、
+    ③ 188 列）。且通過的 38 列也不可信 —— 2006-12 的 m1b=325,888 與
+    2007-04 的 22,383 相差 15 倍，那是**月變動額**不是餘額，只是剛好落在
+    合理區間。根因在 `scripts/update_macro_history.fetch_finmind_m1m2` 的
+    CBC PXWeb 解析把「流量」當「存量」。
+    """
+    from shared.signal_thresholds import (
+        M1B_M2_GAP_SANITY_ABS_MAX_PP,
+        MONEY_SUPPLY_LEVEL_MIN,
+    )
+    if df.empty:
+        return False, "空表"
+    _lv = (df["m1b"] <= MONEY_SUPPLY_LEVEL_MIN) | (df["m2"] <= MONEY_SUPPLY_LEVEL_MIN)
+    _ord = df["m2"] < df["m1b"]
+    _gap = df["m1b_m2_gap"].abs() > M1B_M2_GAP_SANITY_ABS_MAX_PP
+    bad = _lv | _ord | _gap
+    if not bad.any():
+        return True, f"{len(df)} 列全數通過"
+    _s = df.loc[bad, ["date", "m1b", "m2", "m1b_m2_gap"]].head(3)
+    return False, (
+        f"{int(bad.sum())}/{len(df)} 列不合格"
+        f"（餘額 ≤ {MONEY_SUPPLY_LEVEL_MIN:.0f}：{int(_lv.sum())} 列、"
+        f"m2 < m1b：{int(_ord.sum())} 列、"
+        f"|gap| > {M1B_M2_GAP_SANITY_ABS_MAX_PP:.0f}pp：{int(_gap.sum())} 列）"
+        f"；樣本={_s.to_dict('records')}"
+        " → 疑似抓到「月變動額」而非「餘額」,不外送下游"
+    )
+
+
 def write_money_supply(conn: sqlite3.Connection) -> int:
+    """M1B/M2 月供給 → money_supply。
+
+    §3.2 sanity 不過 → **略過整表**（+ DROP 舊表）並回 -1，
+    照本檔既有慣例（同 `write_margin`）：讓下游「少一張表」而不是「拿到錯的表」。
+
+    ⚠️ 2026-08-19 加此 gate 前，本函式是**無條件外送** —— 而同一個檔案裡的
+    `write_margin` 早有 gate。兩套標準。實測當時的 parquet 有 36% 的列
+    貨幣供給額為負，每日經 `data` 分支送到下游 repo。
+    """
     df = _read_cache_parquet("finmind_m1m2", ["date", "m1b", "m2", "m1b_m2_gap"])
+    ok, msg = _money_supply_sanity_gate(df)
+    if not ok:
+        _log(f"⚠️ 略過 money_supply：{msg}")
+        conn.execute("DROP TABLE IF EXISTS money_supply")
+        return -1
+    _log(f"   money_supply sanity：{msg}")
     df.to_sql("money_supply", conn, if_exists="replace", index=False)
     return len(df)
 

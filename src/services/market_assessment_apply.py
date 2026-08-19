@@ -53,7 +53,12 @@ def compute_and_apply_market_assessment(
     from src.services import get_market_assessment
 
     try:
-        _foreign_net_loaded = 0  # 0 = 尚無資料(market_regime 會顯示「待更新」)
+        # ── P1 v19.470:預設值自 `0` 改 `None` ────────────────────────────
+        # 舊註解自陳「0 = 尚無資料」—— 這正是問題:0 在 `market_regime` 裡是一個
+        # **合法的市場觀測值**(買賣相抵),不是缺值標記。兩者共用同一個編碼,
+        # 等於把「不知道」寫成一個看起來正常的數字(§1)。三態化後由 None 表示
+        # 「沒拿到」,0.0 保留給「真的持平」。
+        _foreign_net_loaded = None
         for _k, _v in inst.items():
             if '外資' in _k:
                 _net_v = _v.get('net')
@@ -63,13 +68,20 @@ def compute_and_apply_market_assessment(
         _twii_df_loaded = tw_raw.get('台股加權指數')
         print(f'[市場評估] 大盤DF shape={getattr(_twii_df_loaded,"shape",None)}, '
               f'columns={list(getattr(_twii_df_loaded,"columns",[]))}, '
-              f'外資淨={_foreign_net_loaded/1e8:.1f}億')
+              f'外資淨={"未取得" if _foreign_net_loaded is None else f"{_foreign_net_loaded/1e8:.1f}億"}')
         # 取得 M1B-M2 資金活水資料(資金面評分維度)
         _m1b2 = st.session_state.get('m1b_m2_info') or {}
         _m1b2_gap = (round(float(_m1b2['m1b_yoy']) - float(_m1b2['m2_yoy']), 2)
                      if _m1b2.get('m1b_yoy') is not None and _m1b2.get('m2_yoy') is not None
                      else None)
-        _m1b2_prev = _m1b2.get('m1b_m2_gap_prev')  # 上月 gap(若有)
+        # ⚠️ 2026-08-19 實測:`m1b_m2_gap_prev` 全 repo **只有這一個讀取點,
+        #    零個寫入點** —— 線上恆為 None,`market_regime` ⑤ 的「+1 分(活水正向
+        #    且上升)」分支**在線上從未觸發過**,最多只能拿 +0.5。而校準腳本用
+        #    `iloc[-22]` 有真的 prev ⇒ 兩邊連可達分數空間都不同。
+        #    本次不補寫入端:整條腿已停用(`M1B_M2_LEG_ENABLED = False`),
+        #    補了也沒人用。**列為復活前置條件之一** —— 若日後把腿打開卻沒補
+        #    寫入端,線上就會靜默地少一分,又是一次「兩套系統」。
+        _m1b2_prev = _m1b2.get('m1b_m2_gap_prev')  # 上月 gap(現況恆 None,見上)
         # 市場廣度真值(v18.449):df_adl 最後一列的 ad_ratio(0-100% 上漲家數佔比)。
         # 無資料/空值 → None(不納入評分,§1 寧缺勿假,不塞假中性值)。
         _ad_ratio_loaded = None
@@ -93,8 +105,16 @@ def compute_and_apply_market_assessment(
             print(f'[市場評估] 成功:{_mkt_loaded.get("label")} 評分{_mkt_loaded.get("score")}')
         else:
             # 備援:直接用 yfinance 重抓
+            # ── 2026-08-19:備援分支補傳 m1b_m2_gap / m1b_m2_prev ────────────────
+            # 原本主分支(上方)有傳、備援分支沒傳,於是**同一天走哪條路徑會算出不同分數**:
+            # `market_regime` 的 `_max` 是 `4.0 + (ad_ratio 有值) + (m1b_m2_gap 有值)`,
+            # 少傳一條腿 ⇒ 分母 6→5 ⇒ 同一組原始 score 的百分比**上升**。
+            # 實測(2007-2026 n=4,789 重建):max_score 5 vs 6 讓 12.4% 的交易日換 tier,
+            # 而換燈方向偏綠(轉守→中性偏多 366 天)。也就是「資料缺失」被編碼成「利多」,
+            # 與 P1(commit 5ab04cf)修的 6 處是同一類病、方向相反。
             print('[市場評估] df_index 失敗,用 yfinance 備援')
             _mkt_fb = get_market_assessment(df_index=None, foreign_net=_foreign_net_loaded,
+                                            m1b_m2_gap=_m1b2_gap, m1b_m2_prev=_m1b2_prev,
                                             ad_ratio=_ad_ratio_loaded)
             if _mkt_fb:
                 _append_margin_signals(_mkt_fb, margin)

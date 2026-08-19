@@ -14,7 +14,7 @@ except ImportError:
     EXPOSURE_BULL = 0.8; EXPOSURE_NEUTRAL = 0.5; EXPOSURE_BEAR = 0.2
 
 # v18.449:市場廣度中性門檻 SSOT(原 inline `1.0`，尺度語意錯誤，見下方 market_regime docstring）
-from shared.signal_thresholds import MARKET_BREADTH_NEUTRAL_PCT
+from shared.signal_thresholds import M1B_M2_LEG_ENABLED, MARKET_BREADTH_NEUTRAL_PCT
 
 # P0-2 v18.369 深層拔毒:portfolio_exposure SSOT 收攏至 L2 risk_control(原本兩處同名異實作)
 from src.compute.risk.risk_control import portfolio_exposure  # noqa: F401
@@ -104,8 +104,16 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
         signals.append(_lbl)
 
     # ③ 外資方向
-    if foreign_buy is None or foreign_buy == 0:
+    # ── P1 v19.470:`foreign_buy == 0` 原本與 `None` 共用同一條「待更新」分支 ──
+    # 兩者語意完全不同:`None` = 沒抓到(不知道),`0` = 真的買賣相抵(知道,且是中性)。
+    # 舊碼把兩者混為一談,再配上 `market_assessment_apply` 端 `_foreign_net_loaded = 0`
+    # 的預設值,等於**把「不知道」編碼成一個合法的市場觀測值**(§1)。
+    # 兩者計分都是 0 分(持平本來就不該加分),差別在**畫面要說實話**:
+    # 一個是「還沒公布」,一個是「公布了,剛好持平」。
+    if foreign_buy is None:
         signals.append('⏰ 外資數據待更新（收盤後15:30可用）')
+    elif foreign_buy == 0:
+        signals.append('➖ 外資買賣相抵（持平，0 分）')
     elif foreign_buy > 0:
         score += 1
         signals.append(f'✅ 外資買超 {foreign_buy/1e8:.1f}億')
@@ -121,7 +129,19 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
             signals.append(f'❌ 市場廣度偏弱 ({ad_ratio:.1f}%)')
 
     # ⑤ M1B-M2 資金活水（選填，不傳則略過，向後相容）
-    if m1b_m2_gap is not None:
+    # ── 2026-08-19：本條腿已停用（`M1B_M2_LEG_ENABLED = False`）────────────
+    # 停用理由與復活條件全寫在 `shared/signal_thresholds.M1B_M2_LEG_ENABLED`
+    # 的 docstring（AUC 0.5366、lift 1.019 vs 0.984、方向與設計假設相反，
+    # 且來源資料量綱本身就是壞的）。**計分邏輯刻意保留**，同
+    # `HEALTH_FNET_BONUS = 0` 的處置 —— 刪掉會讓「評估過、結論是無預測力」
+    # 這件事從程式碼裡消失。開關在 L0，離線校準與線上畫面**同一個開關**，
+    # 不會再出現「校準與線上是兩套系統」（本次修正的問題之一）。
+    if m1b_m2_gap is not None and not M1B_M2_LEG_ENABLED:
+        # 停用 ≠ 缺資料。上游確實給了值，只是我們判定它不該進分數 ——
+        # 這件事要說出來（§1），否則使用者只會發現「資金活水那行不見了」。
+        signals.append(f'⬜ M1B-M2 資金活水已停用（{m1b_m2_gap:+.2f}%，'
+                       f'AUC 0.54 無預測力＋來源量綱異常）— 不計分')
+    elif m1b_m2_gap is not None:
         _trending_up = (m1b_m2_prev is not None) and (m1b_m2_gap > m1b_m2_prev)
         if m1b_m2_gap > 0 and _trending_up:
             score += 1
@@ -141,9 +161,17 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
         regime = 'neutral' # 🟡 多雲：所有過渡狀態（含單日訊號、均線走平等）
 
     # ── 瘋牛濾網
-    _bullrun = vol_today > avg_vol_20 * 1.3 if avg_vol_20 > 0 else False
+    # ── P1 v19.470:`else False` 把「沒有量資料」靜默等同「沒有瘋牛」──────────
+    # 實測 `data_cache/twii_ohlcv.parquet` 自 2026-07-09 起 volume 每日皆為 0
+    # (Yahoo Chart API 對 ^TWII 停止回傳量),整條濾網已**靜默死亡一個多月**,
+    # 不 log、不 raise、不帶旗標 —— 完全符合 §1 所禁的「讓程式不報錯」。
+    # 瘋牛本來就不計分(只 append signal),故行為零位移;差別在**畫面說實話**。
+    _vol_ok  = (avg_vol_20 or 0) > 0 and (vol_today or 0) > 0
+    _bullrun = (vol_today > avg_vol_20 * 1.3) if _vol_ok else False
     if _bullrun:
         signals.append(f'💹 瘋牛模式：成交量 {vol_today/avg_vol_20:.1f}x 均量')
+    elif not _vol_ok:
+        signals.append('⬜ 成交量資料缺失（瘋牛濾網未評估）')
 
     # v18.449:max_score 須反映「實際可拿到的滿分」——固定 4 項一定會評（MA60/MA60斜率
     # /MA120/MA120斜率共 3.0 + 外資 1.0 = 4.0），ad_ratio/m1b_m2_gap 未傳入時不該計入
@@ -151,8 +179,35 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     _max = 4.0
     if ad_ratio is not None:
         _max += 1
-    if m1b_m2_gap is not None:
+    # 停用的腿**不進分母**——否則分子恆拿不到那 1 分、分母卻算它，等於把
+    # 「我們決定不看這條腿」編碼成「這條腿是利空」（正是本輪在修的那類錯）。
+    if m1b_m2_gap is not None and M1B_M2_LEG_ENABLED:
         _max += 1
+
+    # ── 2026-08-19:選填腿缺席必須可見(§1 降級不得靜默)────────────────────────
+    # `_max` 隨「當天有沒有拿到這兩條選填腿」在 4/5/6 之間浮動。數學上這是權重
+    # 重新歸一化(缺的腿同時退出分子與分母),與 macro_helpers 對 jqavg 的做法一致;
+    # **但它有一個危險的副作用**:同一組原始 score,腿缺席時百分比會**上升**。
+    #   例:base 4 腿拿 4 分 → 有 m1b 腿(該腿 0 分)= 4/5 = 80%
+    #                        → 無 m1b 腿          = 4/4 = 100%
+    # 也就是「沒抓到」看起來比「抓到了但偏弱」更樂觀。實測(2007-2026 n=4,789):
+    # max_score 5 vs 6 讓 12.4% 的交易日換 tier,方向偏綠(轉守→中性偏多 366 天)。
+    #
+    # 上游已於同版修掉主要來源(`market_assessment_apply` 備援分支漏傳 m1b_m2_gap)。
+    # 這裡補的是**可見性**:schema-additive 兩個欄位 + stderr log,不改任何計分。
+    # 消費端可據 `missing_factors` 標示「本次評分少了哪幾條腿」。
+    _missing_factors = []
+    if ad_ratio is None:
+        _missing_factors.append('市場廣度')
+    # 「停用」不算「缺失」——腿停用時分子分母同時不算它，數學上不存在
+    # 上面警告的那種偏移；把它列進 missing 會每天噴一次假警報。
+    if m1b_m2_gap is None and M1B_M2_LEG_ENABLED:
+        _missing_factors.append('M1B-M2 資金活水')
+    if _missing_factors:
+        import sys as _sys_mr
+        print(f'[market_regime] ⚠️ 選填腿缺席:{"、".join(_missing_factors)}'
+              f' → max_score={_max:.0f}(滿分 6)。同一組 score 在腿缺席時百分比會偏高,'
+              f' 消費端請據 missing_factors 標示降級', file=_sys_mr.stderr)
 
     return {
         'regime': regime,
@@ -162,6 +217,9 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
         'signals': signals,
         'label': {'bull': '🟢 多頭（晴天）', 'neutral': '🟡 震盪（多雲）', 'bear': '🔴 空頭防禦（雨天）'}[regime],
         'm1b_m2_gap': m1b_m2_gap,
+        # 2026-08-19 schema-additive:選填腿缺席揭露(不改計分,見上方 _max 註解)
+        'missing_factors': _missing_factors,
+        'score_partial': bool(_missing_factors),
     }
 
 
@@ -173,13 +231,21 @@ def market_score(index_price, ma200, foreign_buy, volume, avg_volume=1000):
         score += 2; signals.append('✅ 站上年線 (+2)')
     else:
         signals.append('❌ 跌破年線 (0)')
-    _fb_bn = round(foreign_buy / 1e8, 1) if abs(foreign_buy) > 1e6 else foreign_buy
-    if foreign_buy > 0:
-        score += 2; signals.append(f'✅ 外資買超 {_fb_bn:+.1f}億 (+2)')
+    # P1 v19.470:foreign_buy 可能為 None(上游三態化後)→ `abs(None)` 會 TypeError。
+    if foreign_buy is None:
+        signals.append('⏰ 外資數據待更新 (0)')
     else:
-        signals.append(f'❌ 外資賣超 {abs(_fb_bn):.1f}億 (0)')
-    _vol_ratio = round(volume / avg_volume, 2) if avg_volume > 0 else 1
-    if volume > avg_volume:
+        _fb_bn = round(foreign_buy / 1e8, 1) if abs(foreign_buy) > 1e6 else foreign_buy
+        if foreign_buy > 0:
+            score += 2; signals.append(f'✅ 外資買超 {_fb_bn:+.1f}億 (+2)')
+        else:
+            signals.append(f'❌ 外資賣超 {abs(_fb_bn):.1f}億 (0)')
+    # P1 v19.470:`else 1` 是捏造值 —— 沒有均量時「量比 = 1.0x」是憑空生出來的
+    # 觀測(§1「自行估一個合理值當常數」)。改為 None + 誠實文案,不計分不扣分。
+    _vol_ratio = round(volume / avg_volume, 2) if (avg_volume or 0) > 0 else None
+    if _vol_ratio is None:
+        signals.append('⬜ 成交量資料缺失（量能項未評估）')
+    elif volume > avg_volume:
         score += 1; signals.append(f'✅ 量能放大 {_vol_ratio:.1f}x (+1)')
     else:
         signals.append(f'⚠️ 量能萎縮 {_vol_ratio:.1f}x (0)')
@@ -271,7 +337,11 @@ def get_market_assessment(df_index=None, foreign_net=None,
 
     if foreign_net is None:
         mkt = fetch_market_data()
-        foreign_net = mkt.get('foreign_net') or 0
+        # P1 v19.470:`or 0` 又把 None 折回 0(且 falsy 回退連「真的 0」也吃掉)。
+        # `fetch_market_data` 本來就會在失敗時回 `foreign_net=None`,並在
+        # docstring 明說「None 表示資料取得失敗,非『零』」—— 這行把上游的誠實
+        # 又抹掉一次。保留 None,交給 `market_regime` 的三態分支處理。
+        foreign_net = mkt.get('foreign_net')
 
     regime_result = market_regime(
         current_price, ma60, ma120, foreign_net, ad_ratio=ad_ratio,

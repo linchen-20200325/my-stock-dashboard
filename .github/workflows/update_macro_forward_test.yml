@@ -1,0 +1,87 @@
+name: 總經燈號每日落地 (Weekdays)
+
+# 總經紅綠燈前進式驗證:每個交易日收盤後跑一次「與畫面完全同一條」的抓取 +
+# calc_traffic_light,把當天的燈號/健康分/信心分數落地成一列 parquet。
+#
+# 為什麼需要:2026-08-19 實測發現 calc_traffic_light 的輸出從來沒有離開過瀏覽器
+# session ⇒「紅燈準不準」在本 repo 沒有樣本外證據。唯一能離線重算的
+# calibrate_macro_traffic 是重建版,實測至少兩處與線上系統性不同
+# (conf 恆 60 vs 可達 100;m1b_m2_prev 有真值 vs 恆 None)。
+#
+# ⚠️ 誠實的預期:ICC 0.240 → 設計效應 8.9 → 每年僅約 7.5 個有效觀測 ⇒
+# 要把紅燈 precision 的信賴區間收到 ±10pp 約需 10 年。本 workflow 的即期價值
+# 不是統計顯著,而是讓這個數字第一次可被離線稽核。
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '交易日 YYYY-MM-DD（留空 = 今天 TW）'
+        required: false
+        default: ''
+      dry_run:
+        description: '只印不寫（true / 留空）'
+        required: false
+        default: ''
+  schedule:
+    # UTC 09:40 = TW 17:40,週一~週五。
+    # 17:40 是刻意的:TWSE 三大法人約 14:30 才齊(CLAUDE.md §2.3),
+    # Yahoo EOD 更晚;太早跑會系統性記到「資料還沒到」的缺腿狀態。
+    - cron: '40 9 * * 1-5'
+
+permissions:
+  contents: write
+
+jobs:
+  capture-macro-signal:
+    runs-on: ubuntu-latest
+    # 抓取鏈含多源 fallback + 重試;fetch_macro_bundle 自身上限 100s,
+    # 但冷啟動加上 FinMind/TWSE 重試實測可達數分鐘,給足預算。
+    timeout-minutes: 25
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Capture macro traffic light
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          NAS_BASE_URL: ${{ secrets.NAS_BASE_URL }}
+          NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            ARGS="$ARGS --date ${{ github.event.inputs.date }}"
+          fi
+          if [ -n "${{ github.event.inputs.dry_run }}" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          python scripts/update_macro_forward_test.py $ARGS
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add data_cache/macro_forward_test/
+          if git diff --staged --quiet; then
+            # 休市日 / 三來源全空 → 腳本刻意 exit 0 不寫列(§1 不落空殼),
+            # 這裡無變更是**正常**,不是失敗。
+            echo "→ data_cache/macro_forward_test/ 無變更（休市日或資料全敗），跳過 commit"
+          else
+            git commit -m "🤖 總經燈號落地：$(date +%Y-%m-%d)"
+            git push
+          fi

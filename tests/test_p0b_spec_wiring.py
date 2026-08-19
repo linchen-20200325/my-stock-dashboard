@@ -415,10 +415,20 @@ class TestNoDegenerateRangeString:
                 assert f'{_p}{EN_DASH}{_p}%' not in _line, f'{_line}'
 
     def test_normal_range_still_shows_both_ends(self):
-        """收斂只在 lo == hi 時發生；正常區間仍要印完整兩端。"""
+        """收斂只在 lo == hi 時發生；正常區間仍要印完整兩端。
+
+        ⚠️ 2026-08-19 期望值自 `50–70%` 改為 `80–100%` —— **本測試的意圖沒變，
+        是 tier 邊界動了**：`THROTTLE_HEALTH_A` 自 80 改為 65（總經 health 的
+        20 年實測值域是 [21.6, 78.1]，舊切點 80 落在值域外，「積極」級從未觸發過；
+        新值取 n=4,769 的 P90≈65.6）。於是 health=75 由「中性偏多」升為「積極」。
+
+        本測試驗的是「非退化區間必須印完整兩端」，與 tier 無關；期望值跟著
+        SSOT 走即可。刻意**不改 fixture 的 75**去閃避 —— 改 fixture 會讓這次
+        行為變更在測試裡消失無蹤。
+        """
         d = build_allocation_decision(_ms(75))
-        assert d.range_text == f'50{EN_DASH}70%'
-        assert f'50{EN_DASH}70%' in d.drivers[-1]
+        assert d.range_text == f'80{EN_DASH}100%'
+        assert f'80{EN_DASH}100%' in d.drivers[-1]
 
     def test_range_text_and_drivers_agree(self):
         """SSOT 內部自我一致：drivers 末行的區間字串 == range_text。"""

@@ -63,7 +63,8 @@ def _render_traffic_light(placeholder, tl, mkt_info=None):
     mkt_info: 選填，來自 market_regime() 的原始 dict，用以合併顯示市場評分與信號。
     以較保守信號為主（traffic light 已含 defense/health 降級邏輯）。
 
-    信心門檻：conf < 70% 時不顯示燈號，改列出缺失資料避免誤導決策。
+    擋燈條件（2026-08-19 方案 C 改）：不再用「conf < 70%」這個**數量**門檻，
+    改判**獨立故障域**是否還撐得住結論。conf 數字本身照舊顯示、公式一字未改。
     """
     if tl is None:
         placeholder.info(
@@ -73,8 +74,45 @@ def _render_traffic_light(placeholder, tl, mkt_info=None):
         )
         return
 
-    # ── 信心門檻 gating：conf<70% 直接擋燈號，逐項列出缺失資料 ──
-    if tl.get('conf', 0) < 70:
+    # ── 擋燈 gating（2026-08-19 方案 C）────────────────────────────────────
+    # 舊條件 `conf < 70`（= 最多只能缺 1 項）有一個量綱錯誤：`conf` 的分母 5 是
+    # **項數**，但這 5 項只有 **3 個獨立故障域**，權重實際是 3:1:1
+    # （`shared/signal_thresholds.CONFIDENCE_SOURCE_GROUPS` 有完整證據鏈）。
+    # 於是「同一份 ^TWII 掉了 2 個視角」（扣 40 分，擋燈）被判得比
+    # 「整個 TWSE 三大法人來源全滅」（扣 20 分，照顯示）**更嚴重** —— 方向是反的。
+    #
+    # 新條件三個都要成立才顯示燈號：
+    #   ① ^TWII 域至少 1 項活著   —— 沒有價格骨幹就沒有 regime 可言
+    #   ② 兩個獨立域至少 1 個活著 —— 全靠 ^TWII 自我印證不足以下結論
+    #   ③ health 至少站在 1 條腿上 —— 兩腿全缺時 arbiter 只會回 ⬜，
+    #      此時列出缺了什麼比顯示一個空白燈更有用
+    #
+    # ⚠️ **這是純放寬，不是等價改寫**：全 32 種可用性組合中 **12 種**由「擋」
+    #    變成「顯示」，**0 種**反向變嚴。變動的 12 種全部滿足上述三條件
+    #    （代表性例子：缺 ADL+外資 → conf 60% 舊擋，新顯示，因為先行指標這個
+    #    完全獨立的域還活著、health 兩條腿都在）。若日後發現放寬過頭，
+    #    收斂點在條件 ②（改成「兩個獨立域都要活」），不要退回數量門檻。
+    _groups = tl.get('conf_groups') or {}
+    if _groups:
+        _twii_ok = bool(_groups.get('yfinance_twii'))
+        _indep_ok = bool(_groups.get('twse_bfi82u') or _groups.get('finmind_taifex'))
+        _health_ok = tl.get('health') is not None
+        _blocked = not (_twii_ok and _indep_ok and _health_ok)
+    else:
+        # `conf_groups` 缺席 = 上游是舊版 tl dict（例如測試 fixture 或尚未更新的
+        # 快照）。此時退回舊的數量門檻，**不靜默放行**（§1）。
+        _blocked = tl.get('conf', 0) < 70
+    if _blocked:
+        # 擋燈理由要說**是哪一個域倒了**,不要只說「信心不足」——
+        # 使用者看到「60%」無從得知該去修哪條線(§1 可診斷性)。
+        if not _groups:
+            _gate_reason = '門檻 70%,避免新舊資料混雜誤導決策'
+        elif not _groups.get('yfinance_twii'):
+            _gate_reason = '大盤價格來源(^TWII)全滅 — 沒有價格骨幹就判不出趨勢'
+        elif not (_groups.get('twse_bfi82u') or _groups.get('finmind_taifex')):
+            _gate_reason = '兩個獨立來源(三大法人 / 期貨籌碼)同時失效 — 只剩 ^TWII 自我印證'
+        else:
+            _gate_reason = '健康評分的兩條腿(大盤趨勢評分 / 旌旗指數)都缺 — 算不出健康度'
         _missing = tl.get('missing_sources', []) or []
         _missing_lines = ''.join(
             f'<li style="margin:4px 0;color:{TRAFFIC_RED};">❌ {m}</li>' for m in _missing
@@ -86,7 +124,7 @@ def _render_traffic_light(placeholder, tl, mkt_info=None):
                 f'<div style="font-size:22px;font-weight:900;color:{TRAFFIC_YELLOW};">⏸️ 資料不足，無法判斷市場狀態</div>'
                 f'<div style="font-size:13px;color:#c9d1d9;margin-top:8px;">'
                 f'目前數據信心 <b style="color:{TRAFFIC_RED};">{tl["conf"]}%</b>'
-                f'（門檻 70%，避免新舊資料混雜誤導決策）</div>'
+                f'（{_gate_reason}）</div>'
                 f'<div style="font-size:12px;color:#8b949e;margin-top:10px;">缺少以下資料來源：</div>'
                 f'<ul style="font-size:13px;margin:6px 0 0 4px;padding-left:20px;">{_missing_lines}</ul>'
                 f'<div style="font-size:12px;color:#58a6ff;margin-top:12px;">'
@@ -95,6 +133,12 @@ def _render_traffic_light(placeholder, tl, mkt_info=None):
                 unsafe_allow_html=True,
             )
         return
+
+    # ── P1 v19.470:`health` 三態後可能為 None(兩條腿都沒拿到)──────────────
+    # 舊碼直接 `{tl["health"]:.0f}` 會 TypeError 炸掉整個總經分頁。
+    # §1:算不出來就顯示「--」,**不可**印 0(0 分在這張卡的語意是「極度惡化」)。
+    _h_raw  = tl.get('health')
+    _h_text = f'{_h_raw:.0f}' if isinstance(_h_raw, (int, float)) else '--'
 
     # ── 整合 market_regime() 的輔助資訊 ──────────────────────
     _mi      = mkt_info or {}
@@ -145,7 +189,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
   </div>
   <div style="text-align:right;flex-shrink:0;">
 <div style="font-size:12px;color:#484f58;">綜合健康度</div>
-<div style="font-size:36px;font-weight:900;color:{tl["color"]};">{tl["health"]:.0f}</div>
+<div style="font-size:36px;font-weight:900;color:{tl["color"]};">{_h_text}</div>
 <div style="font-size:11px;color:#484f58;">/ 100分｜信心{tl["conf"]}%</div>
 <div style="font-size:10px;color:#6e7681;margin-top:3px;max-width:170px;line-height:1.3;">📊 台股籌碼 / 技術面<br>（全球美股面看下方各桶）</div>
   </div>
@@ -177,9 +221,19 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
                     + '、'.join(_missing_now) + '。')
             # 健康評分少了旌旗(廣度)那條腿時要特別講 —— 它佔權重 60%,
             # 缺了之後分數只由大盤評分推算,量級意義與平常不同(§1 不可靜默降級)。
+            # P1 v19.470:原文寫死「未含旌旗指數」—— health_partial 現在也可能是
+            # **大盤評分**那條腿缺席(v19.470 前它被 `get('score', 0)` 捏成 0 分,
+            # 所以永遠不會「缺席」,只會靜默變成最強利空)。改為據實列出缺哪條腿。
             if tl.get('health_partial'):
-                _msg += ('　🩺 **綜合健康度未含旌旗指數（廣度）**，本次僅由大盤評分'
-                         '推算（權重已重新歸一化，非補中性值），請降低對該分數的信賴。')
+                _legs = []
+                if tl.get('jqavg') is None:
+                    _legs.append('旌旗指數（廣度，權重 60%）')
+                if tl.get('score') is None:
+                    _legs.append('大盤趨勢評分（權重 40%）')
+                _leg_txt = '、'.join(_legs) if _legs else '部分分項'
+                _msg += (f'　🩺 **綜合健康度未含 {_leg_txt}**，本次僅由其餘分項'
+                         '推算（權重已重新歸一化，非補中性值/非補 0），'
+                         '請降低對該分數的信賴。')
             _msg += '　建議按「🚀 一鍵更新全部數據」後再操作。'
             st.warning(_msg)
 

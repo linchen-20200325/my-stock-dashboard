@@ -56,8 +56,10 @@ def test_durable_export_from_real_parquet(tmp_path):
     db = tmp_path / "stock.db"
     res = E.export_all(db, token="")
     for t in ("stock_fundamentals", "market_index", "institutional_flow",
-              "money_supply", "macro_tw_pmi"):
+              "macro_tw_pmi"):
         assert res[t] > 0, f"{t} 應有列"
+    # money_supply 2026-08-19 起同受 §3.2 sanity gate 管轄（同 margin），
+    # 故**不**斷言它一定有列 —— 改在下方斷言與資料狀態無關的不變量。
     assert res["stock_technical"] == -1        # 缺 token → 略過（不造假）
     assert res["monthly_revenue"] == -1
     assert res["macro_tw_signal"] == -1
@@ -76,6 +78,21 @@ def test_durable_export_from_real_parquet(tmp_path):
         vals = pd.read_sql("SELECT margin_balance FROM margin", conn)["margin_balance"]
         assert bool(margin_twd_sanity_mask(vals).all()), \
             "落地的 margin 必須全列通過 §3.2 區間（單位=元）"
+    # money_supply：不變量（不論 parquet 目前乾不乾淨都該成立）
+    #
+    # 2026-08-19 加 gate 前，本表是**無條件外送**——而同檔的 margin 早有 gate，
+    # 同一個檔案兩套標準。實測當時 parquet 有 36% 的列貨幣供給額為負，
+    # 每日經 `data` 分支送到下游 repo。
+    from scripts.export_stock_db import _money_supply_sanity_gate
+    if res["money_supply"] < 0:
+        assert "money_supply" not in tables, \
+            "sanity 未過 → 整表不得落地（少一張表 ≠ 錯的表）"
+    else:
+        assert res["money_supply"] > 0 and "money_supply" in tables
+        _ms = pd.read_sql("SELECT date, m1b, m2, m1b_m2_gap FROM money_supply", conn)
+        _ok, _msg = _money_supply_sanity_gate(_ms)
+        assert _ok, f"落地的 money_supply 必須全列通過 §3.2：{_msg}"
+
     cols = [d[1] for d in conn.execute("PRAGMA table_info(stock_fundamentals)")]
     assert {"stock_id", "revenue", "eps", "total_equity"}.issubset(cols)
 
@@ -88,6 +105,9 @@ def test_durable_export_from_real_parquet(tmp_path):
     assert health["market_index"] == ("ok", res["market_index"])
     # B3：margin 被 sanity gate 擋下時，下游要從 source_health 看得見「這維缺料」
     assert health["margin"][0] == ("absent" if res["margin"] < 0 else "ok")
+    # 同精神：money_supply 被擋下時，下游要從 source_health 看得見「這維缺料」，
+    # 而不是「這張表從來就不存在」。
+    assert health["money_supply"][0] == ("absent" if res["money_supply"] < 0 else "ok")
     conn.close()
 
 

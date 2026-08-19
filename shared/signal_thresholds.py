@@ -54,7 +54,14 @@ EFFICIENT_FRONTIER_N_BINS: int = 25
 
 
 # ════════════════════════════════════════════════════════════════
-# Macro 健康評分（macro_helpers.py compute_macro_health）
+# Macro 健康評分（實作 inline 於 macro_helpers.calc_traffic_light 的 _health_parts 段）
+#
+# ⚠️ 2026-08-19 稽核更正:本區塊原寫「macro_helpers.py compute_macro_health」——
+#    **全站沒有這個函式**。它只存在於 8 個檔案的註解/docstring 裡
+#    (本檔、macro_buckets、position_throttle、section_long、tab_macro、
+#     macro_classroom、ui_widgets、tests/test_macro_buckets)。真正的實作是
+#    `calc_traffic_light` 內的 `_health_parts` / `_w_sum` / `_health` 那段 inline 程式碼。
+#    一個「被 8 處引用、卻不存在的符號名」本身就是 §3.3 反捏造要防的東西。
 #
 # ⚠️ v19.173 校準狀態誠實化（AI-H）— 只是註解，**不動任何數值**
 # ────────────────────────────────────────────────────────────────
@@ -87,12 +94,52 @@ HEALTH_WEIGHT_JQ: float = 0.6
 v19.102 校準採納(user 核准方案 B):MACRO_HEALTH_WEIGHT_PROPOSAL.md
 (真實 2006~2026 二十年、n=4748、val AUC 0.753、overfit_flag=False)
 顯示 jqavg:score 相對重要性 ≈ 0.0337:0.0228 ≈ 60:40 → 自 0.4 升 0.6。
-權重和 = 0.6+0.4 = 1.0(同步治癒 CLAUDE.md §4.2「權重和=1」漂移)。"""
+權重和 = 0.6+0.4 = 1.0(同步治癒 CLAUDE.md §4.2「權重和=1」漂移)。
+
+⚠️ **這個 0.6 是在「另一個變數」上擬合出來的（2026-08-19 稽核,尚未在線上變數驗證）**
+────────────────────────────────────────────────────────────────────────
+擬合管線:`scripts/calibrate_health_weights.reconstruct_score` →
+`src/compute/macro/health_calibration.ad_ratio_from_twii` → **`close.pct_change()`**
+線上實作:`src/data/daily/daily_data_fetchers.fetch_adl` → **`(close − open) / open`**
+
+兩者係數相同(每 1% ≈ ±150 家),但**餵進去的報酬定義不同**:一個收對收、一個日內。
+實測 2006-2026 全樣本:日內平均報酬 −0.047%/日、隔夜跳空 +0.094%/日 —— TWII
+二十年的正報酬幾乎全來自隔夜,線上公式恰好只取沒有 drift 的那一半。兩序列
+corr ≈ 0.79,對 ">50" 的判定有 **20.25% 的日子相反**。clip 方式也不同
+(線上分母恆 1800;校準端分母浮動)。
+
+所以「已校準」這個標籤在此是**誤導性的**:它比「未校準」更危險,因為它會讓
+下一個人不去質疑這個數字。真實狀態是 —— 權重有實證基礎,但那個實證基礎
+**不是**線上跑的那條腿。收斂路徑見 `health_calibration.ad_ratio_from_twii`
+的 parity 警語(結論:應走「修校準管線 + 重跑」,而非逕改歷史基準)。
+
+另有一個獨立的量綱問題(2026-08-19 實測):線上 `ad_ratio = 50 + 8.333 × 日內漲跌%`
+是對 ^TWII 日內漲跌的**仿射變換**,`ad_ratio > 50 ⟺ close > open`,
+**不含任何家數資訊**。σ(jqavg)=3.18 vs σ(score_pct)=27.57,故本權重雖名目 0.6,
+對 health 變異的實際貢獻僅約 **2.9%**(corr(health, score_pct)=0.987)。
+「名目權重 ≠ 有效權重」這件事在解讀本常數時必須一併考慮。"""
 
 HEALTH_WEIGHT_SCORE: float = 0.4
 """市場狀態評分 (score/max_score×100) 在健康評分的權重。
 v19.102:正規化除數自 CONFIDENCE_SOURCE_COUNT(5,借用錯配 — market_regime
-真實滿分為 4/6)改用 mkt_info['max_score'],詳 macro_helpers 健康段。"""
+真實滿分為 4/6)改用 mkt_info['max_score'],詳 macro_helpers 健康段。
+
+⚠️ **2026-08-19 揭露:本權重的訓練特徵已經移動,權重本身未重擬。**
+v19.102 的 0.6/0.4 是用「m1b_m2 腿仍計分」時的 `score_norm` 擬出來的
+(n=4748 / val AUC 0.753)。同日 `M1B_M2_LEG_ENABLED = False` 之後,同一份
+20 年樣本重算的 `score_norm` 分布是:
+
+| | 腿啟用(擬合當時) | 腿停用(現在) |
+|---|---|---|
+| mean | 47.61 | **51.32**(+3.71) |
+| std | 24.85 | **29.12** |
+| 與舊序列 corr | — | 0.9652 |
+
+corr 0.9652 表示排序關係大致保留,**但這不等於權重仍最佳**。
+刻意**不**順手重擬:改權重 = 改每一天的 health 數字,屬獨立的模型變更,
+須有自己的 walk-forward 與人工審閱,不該夾帶在「停用一條腿」這個 PR 裡。
+本條存在的目的是讓下一個讀者知道**這個已知落差存在**,而不是讓它靜靜過期。
+(同檔 `M1B_M2_LEG_ENABLED` 的復活條件若達成,兩者需一併重跑。)"""
 
 HEALTH_FNET_BONUS: int = 0
 """外資淨買超為正時的健康評分加分。
@@ -107,8 +154,101 @@ v19.173 補述:**0 是「校準後的明示歸零」,不是漏寫的 bug** —�
 外資、結論是無預測力」這件事從程式碼裡消失,下一個人很可能又把它加回去。
 若未來重校準判定 fnet 仍無效,再考慮連同公式一起收斂(屬另案,需重跑 AUC)。"""
 
+# ── 貨幣供給 §3.2 sanity(外送下游前的守門)──────────────────────────────
+MONEY_SUPPLY_LEVEL_MIN: float = 0.0
+"""貨幣供給額(M1B / M2)餘額下限,**開區間**(值須 > 此)。
+
+不是可調參數,是**定義**:M1B / M2 是「存量」(某時點的餘額),不可能為負。
+出現負值只有一種解釋 —— 抓到的不是餘額(例如抓成月變動額)。
+
+實測觸發(2026-08-19,`data_cache/finmind_m1m2.parquet` n=239):
+**86 列(36.0%)的 m1b 或 m2 ≤ 0**。"""
+
+M1B_M2_GAP_SANITY_ABS_MAX_PP: float = 30.0
+"""`m1b_m2_gap`(M1B YoY − M2 YoY,單位:百分點)的絕對值上限。
+
+真實量綱是 ±10 個百分點左右(`shared/macro_buckets.py` 的 DangerSpec
+以 yellow=1.0 / red=0.0 訂界,就是照這個量綱)。取 30 是寬鬆上界 ——
+目的是攔「量綱整個壞掉」,不是攔「數值偏高」。
+
+實測觸發(同上):**188 列(78.7%)的 |gap| > 30**,最極端為 -13,976 / +36,034。"""
+
+M1B_M2_LEG_ENABLED: bool = False
+"""M1B-M2 資金活水是否計入 `market_regime` 評分。**2026-08-19 校準後歸零。**
+
+與 `HEALTH_FNET_BONUS = 0` 同一種處置:**校準後的明示停用,不是漏寫的 bug**,
+且**刻意保留計分程式碼與參數** —— 刪掉會讓「曾經評估過這條腿、結論是無預測力」
+這件事從程式碼裡消失,下一個人很可能又原封不動加回來。
+
+證據(2007-2026 n=4,843,真值 = 後 60 日路徑 MDD < -10% 且 60 日報酬 < 0,
+base rate 17.22%):
+
+| 量測 | 值 | 對照 |
+|---|---|---|
+| `m1b_m2_gap` 排序 AUC | **0.5366** | MA120 乖離 0.6189 |
+| 只用月頻原始觀測(非 ffill,n=132) | **0.4992** | ≈ 擲硬幣 |
+| `gap > 0`(實際進分數的判定)lift | **1.019** | `gap ≤ 0` lift 0.984 |
+
+lift 1.019 vs 0.984 —— 區分力在小數點後第二位,**且方向與設計假設相反**
+(gap 越高,後續回撤機率反而略高)。
+
+**更根本的問題:餵進來的數字本身不是 M1B-M2 缺口。**
+`data_cache/finmind_m1m2.parquet` 實測 `m1b_m2_gap` ∈ [-13,976, +36,034]
+(真實量綱是 ±10 個百分點),且 `m1b` 欄 239 筆中有 **72 筆為負** ——
+貨幣供給額不可能為負。根因在 `scripts/update_macro_history.fetch_finmind_m1m2`
+的 CBC PXWeb 解析把「月變動量(流量)」當成「餘額(存量)」,再對一個會變號的
+序列算 YoY。**這個根因本次未修**(修好也只是把 AUC 0.54 換成 AUC 0.50,見上表)。
+
+線上路徑另有獨立問題(本次同樣未修,僅記錄):`tw_macro._try_cbc_ms1` 不讀日期欄、
+無 as-of;三層 fallback 的 Tier 3 `_try_twii_proxy` 回傳的是 **^TWII 的 20 日與
+60 日報酬**,卻以「M1B 年增率」的名義往下傳,且代理旗標從未顯示在 UI 上。
+
+**復活條件**(缺一不可):(1) `update_macro_history` 的餘額/流量解析修正並通過
+sanity gate(`m1b > 0` 且 `|gap| < 30`);(2) 用修正後的資料重跑 AUC,顯著高於
+0.55;(3) 線上路徑能回報 as-of 與是否走代理。三條都達成再把本旗標翻 True,
+**並同批重跑門檻校準**(見 `macro_thresholds.json`)。"""
+
 CONFIDENCE_SOURCE_COUNT: int = 5
-"""信心度計算的來源總數（PMI/CPI/M2/Foreign/VIX 等 5 大來源）。原 macro_helpers.py:148 inline"""
+"""信心度計算的來源**項數**（分母）。`calc_traffic_light` 的 `_conf_sources` 長度。
+
+⚠️ 2026-08-19 更正 docstring：原文寫「PMI/CPI/M2/Foreign/VIX 等 5 大來源」——
+**這五個名字沒有一個是真的**。實際 5 項是：大盤趨勢評分 / 旌旗指數 /
+外資買賣超 / 先行指標 / ADL 騰落指標（見 `macro_helpers._conf_sources`）。
+本常數從一開始就沒對準它現在的用途（同檔 :124 另記一次「借用錯配」）。
+
+⚠️ **這 5 項只有 3 個獨立故障域**（2026-08-19 實測，見 `CONFIDENCE_SOURCE_GROUPS`）。
+本常數維持 5 是刻意的：它是「畫面顯示的分數」的分母，改動它會讓歷史截圖
+與使用者記憶中的數字對不上。**可用性判斷請用 `CONFIDENCE_SOURCE_GROUPS`，
+不要用這個分母。**"""
+
+CONFIDENCE_SOURCE_GROUPS: dict[str, tuple[str, ...]] = {
+    # group_key: (該組涵蓋的 _conf_sources 項目代號, ...)
+    'yfinance_twii':  ('score', 'jqavg', 'adl'),
+    'twse_bfi82u':    ('fnet',),
+    'finmind_taifex': ('li',),
+}
+"""信心來源的**獨立故障域**分組（可用性判斷 SSOT）。
+
+2026-08-19 實測的資料鏈追查結果 —— `conf = n/5` 把 **3 個獨立故障域編碼成
+5 張等權票**，實際權重是 **3:1:1**：
+
+| 故障域 | 涵蓋項 | 一次失敗扣多少 conf |
+|---|---|---|
+| yfinance / Chart API `^TWII` | score, jqavg, adl | **60 分（3/5）** |
+| TWSE BFI82U（三大法人） | fnet | 20 分 |
+| FinMind 期貨 + TAIFEX | li | 20 分 |
+
+證據：
+- `jqavg` 與 `adl` 來自**同一次** `fetch_adl()` 呼叫的同一個 DataFrame
+  （`tab_macro` 取出後同時餵給 `compute_and_store_jingqi` 與 `cl_data['adl']`）。
+- `fetch_adl` 的唯一真實來源 TWSE MI_INDEX **已永久停用**
+  （`daily_data_fetchers` 檔內註記），現僅剩 `^TWII` 日內漲跌推估
+  （`ad_ratio = 50 + 8.333 × 日內漲跌%`，不含任何家數資訊）。
+- `score`（`market_regime`）的價格骨幹 close/MA60/MA120 同為 `^TWII`，
+  且它吃的 `ad_ratio` 參數就是上面同一條線。
+
+這個 3:1:1 從來沒有人設計過 —— 它是「同一份資料被數了三次」的副產品。
+**新增信心來源時必須同步在此登記其故障域**，否則等於再製造一次同樣的錯。"""
 
 
 # ════════════════════════════════════════════════════════════════
