@@ -98,8 +98,16 @@ def compute_and_apply_market_assessment(
             print(f'[市場評估] 成功:{_mkt_loaded.get("label")} 評分{_mkt_loaded.get("score")}')
         else:
             # 備援:直接用 yfinance 重抓
+            # ── 2026-08-19:備援分支補傳 m1b_m2_gap / m1b_m2_prev ────────────────
+            # 原本主分支(上方)有傳、備援分支沒傳,於是**同一天走哪條路徑會算出不同分數**:
+            # `market_regime` 的 `_max` 是 `4.0 + (ad_ratio 有值) + (m1b_m2_gap 有值)`,
+            # 少傳一條腿 ⇒ 分母 6→5 ⇒ 同一組原始 score 的百分比**上升**。
+            # 實測(2007-2026 n=4,789 重建):max_score 5 vs 6 讓 12.4% 的交易日換 tier,
+            # 而換燈方向偏綠(轉守→中性偏多 366 天)。也就是「資料缺失」被編碼成「利多」,
+            # 與 P1(commit 5ab04cf)修的 6 處是同一類病、方向相反。
             print('[市場評估] df_index 失敗,用 yfinance 備援')
             _mkt_fb = get_market_assessment(df_index=None, foreign_net=_foreign_net_loaded,
+                                            m1b_m2_gap=_m1b2_gap, m1b_m2_prev=_m1b2_prev,
                                             ad_ratio=_ad_ratio_loaded)
             if _mkt_fb:
                 _append_margin_signals(_mkt_fb, margin)

@@ -170,6 +170,29 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     if m1b_m2_gap is not None:
         _max += 1
 
+    # ── 2026-08-19:選填腿缺席必須可見(§1 降級不得靜默)────────────────────────
+    # `_max` 隨「當天有沒有拿到這兩條選填腿」在 4/5/6 之間浮動。數學上這是權重
+    # 重新歸一化(缺的腿同時退出分子與分母),與 macro_helpers 對 jqavg 的做法一致;
+    # **但它有一個危險的副作用**:同一組原始 score,腿缺席時百分比會**上升**。
+    #   例:base 4 腿拿 4 分 → 有 m1b 腿(該腿 0 分)= 4/5 = 80%
+    #                        → 無 m1b 腿          = 4/4 = 100%
+    # 也就是「沒抓到」看起來比「抓到了但偏弱」更樂觀。實測(2007-2026 n=4,789):
+    # max_score 5 vs 6 讓 12.4% 的交易日換 tier,方向偏綠(轉守→中性偏多 366 天)。
+    #
+    # 上游已於同版修掉主要來源(`market_assessment_apply` 備援分支漏傳 m1b_m2_gap)。
+    # 這裡補的是**可見性**:schema-additive 兩個欄位 + stderr log,不改任何計分。
+    # 消費端可據 `missing_factors` 標示「本次評分少了哪幾條腿」。
+    _missing_factors = []
+    if ad_ratio is None:
+        _missing_factors.append('市場廣度')
+    if m1b_m2_gap is None:
+        _missing_factors.append('M1B-M2 資金活水')
+    if _missing_factors:
+        import sys as _sys_mr
+        print(f'[market_regime] ⚠️ 選填腿缺席:{"、".join(_missing_factors)}'
+              f' → max_score={_max:.0f}(滿分 6)。同一組 score 在腿缺席時百分比會偏高,'
+              f' 消費端請據 missing_factors 標示降級', file=_sys_mr.stderr)
+
     return {
         'regime': regime,
         'bullrun': _bullrun,
@@ -178,6 +201,9 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
         'signals': signals,
         'label': {'bull': '🟢 多頭（晴天）', 'neutral': '🟡 震盪（多雲）', 'bear': '🔴 空頭防禦（雨天）'}[regime],
         'm1b_m2_gap': m1b_m2_gap,
+        # 2026-08-19 schema-additive:選填腿缺席揭露(不改計分,見上方 _max 註解)
+        'missing_factors': _missing_factors,
+        'score_partial': bool(_missing_factors),
     }
 
 
