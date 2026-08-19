@@ -96,6 +96,12 @@ def _render_traffic_light(placeholder, tl, mkt_info=None):
             )
         return
 
+    # ── P1 v19.470:`health` 三態後可能為 None(兩條腿都沒拿到)──────────────
+    # 舊碼直接 `{tl["health"]:.0f}` 會 TypeError 炸掉整個總經分頁。
+    # §1:算不出來就顯示「--」,**不可**印 0(0 分在這張卡的語意是「極度惡化」)。
+    _h_raw  = tl.get('health')
+    _h_text = f'{_h_raw:.0f}' if isinstance(_h_raw, (int, float)) else '--'
+
     # ── 整合 market_regime() 的輔助資訊 ──────────────────────
     _mi      = mkt_info or {}
     _mi_score  = _mi.get('score')
@@ -145,7 +151,7 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
   </div>
   <div style="text-align:right;flex-shrink:0;">
 <div style="font-size:12px;color:#484f58;">綜合健康度</div>
-<div style="font-size:36px;font-weight:900;color:{tl["color"]};">{tl["health"]:.0f}</div>
+<div style="font-size:36px;font-weight:900;color:{tl["color"]};">{_h_text}</div>
 <div style="font-size:11px;color:#484f58;">/ 100分｜信心{tl["conf"]}%</div>
 <div style="font-size:10px;color:#6e7681;margin-top:3px;max-width:170px;line-height:1.3;">📊 台股籌碼 / 技術面<br>（全球美股面看下方各桶）</div>
   </div>
@@ -177,9 +183,19 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
                     + '、'.join(_missing_now) + '。')
             # 健康評分少了旌旗(廣度)那條腿時要特別講 —— 它佔權重 60%,
             # 缺了之後分數只由大盤評分推算,量級意義與平常不同(§1 不可靜默降級)。
+            # P1 v19.470:原文寫死「未含旌旗指數」—— health_partial 現在也可能是
+            # **大盤評分**那條腿缺席(v19.470 前它被 `get('score', 0)` 捏成 0 分,
+            # 所以永遠不會「缺席」,只會靜默變成最強利空)。改為據實列出缺哪條腿。
             if tl.get('health_partial'):
-                _msg += ('　🩺 **綜合健康度未含旌旗指數（廣度）**，本次僅由大盤評分'
-                         '推算（權重已重新歸一化，非補中性值），請降低對該分數的信賴。')
+                _legs = []
+                if tl.get('jqavg') is None:
+                    _legs.append('旌旗指數（廣度，權重 60%）')
+                if tl.get('score') is None:
+                    _legs.append('大盤趨勢評分（權重 40%）')
+                _leg_txt = '、'.join(_legs) if _legs else '部分分項'
+                _msg += (f'　🩺 **綜合健康度未含 {_leg_txt}**，本次僅由其餘分項'
+                         '推算（權重已重新歸一化，非補中性值/非補 0），'
+                         '請降低對該分數的信賴。')
             _msg += '　建議按「🚀 一鍵更新全部數據」後再操作。'
             st.warning(_msg)
 

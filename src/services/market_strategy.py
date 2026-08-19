@@ -104,8 +104,16 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
         signals.append(_lbl)
 
     # ③ 外資方向
-    if foreign_buy is None or foreign_buy == 0:
+    # ── P1 v19.470:`foreign_buy == 0` 原本與 `None` 共用同一條「待更新」分支 ──
+    # 兩者語意完全不同:`None` = 沒抓到(不知道),`0` = 真的買賣相抵(知道,且是中性)。
+    # 舊碼把兩者混為一談,再配上 `market_assessment_apply` 端 `_foreign_net_loaded = 0`
+    # 的預設值,等於**把「不知道」編碼成一個合法的市場觀測值**(§1)。
+    # 兩者計分都是 0 分(持平本來就不該加分),差別在**畫面要說實話**:
+    # 一個是「還沒公布」,一個是「公布了,剛好持平」。
+    if foreign_buy is None:
         signals.append('⏰ 外資數據待更新（收盤後15:30可用）')
+    elif foreign_buy == 0:
+        signals.append('➖ 外資買賣相抵（持平，0 分）')
     elif foreign_buy > 0:
         score += 1
         signals.append(f'✅ 外資買超 {foreign_buy/1e8:.1f}億')
@@ -141,9 +149,17 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
         regime = 'neutral' # 🟡 多雲：所有過渡狀態（含單日訊號、均線走平等）
 
     # ── 瘋牛濾網
-    _bullrun = vol_today > avg_vol_20 * 1.3 if avg_vol_20 > 0 else False
+    # ── P1 v19.470:`else False` 把「沒有量資料」靜默等同「沒有瘋牛」──────────
+    # 實測 `data_cache/twii_ohlcv.parquet` 自 2026-07-09 起 volume 每日皆為 0
+    # (Yahoo Chart API 對 ^TWII 停止回傳量),整條濾網已**靜默死亡一個多月**,
+    # 不 log、不 raise、不帶旗標 —— 完全符合 §1 所禁的「讓程式不報錯」。
+    # 瘋牛本來就不計分(只 append signal),故行為零位移;差別在**畫面說實話**。
+    _vol_ok  = (avg_vol_20 or 0) > 0 and (vol_today or 0) > 0
+    _bullrun = (vol_today > avg_vol_20 * 1.3) if _vol_ok else False
     if _bullrun:
         signals.append(f'💹 瘋牛模式：成交量 {vol_today/avg_vol_20:.1f}x 均量')
+    elif not _vol_ok:
+        signals.append('⬜ 成交量資料缺失（瘋牛濾網未評估）')
 
     # v18.449:max_score 須反映「實際可拿到的滿分」——固定 4 項一定會評（MA60/MA60斜率
     # /MA120/MA120斜率共 3.0 + 外資 1.0 = 4.0），ad_ratio/m1b_m2_gap 未傳入時不該計入
@@ -173,13 +189,21 @@ def market_score(index_price, ma200, foreign_buy, volume, avg_volume=1000):
         score += 2; signals.append('✅ 站上年線 (+2)')
     else:
         signals.append('❌ 跌破年線 (0)')
-    _fb_bn = round(foreign_buy / 1e8, 1) if abs(foreign_buy) > 1e6 else foreign_buy
-    if foreign_buy > 0:
-        score += 2; signals.append(f'✅ 外資買超 {_fb_bn:+.1f}億 (+2)')
+    # P1 v19.470:foreign_buy 可能為 None(上游三態化後)→ `abs(None)` 會 TypeError。
+    if foreign_buy is None:
+        signals.append('⏰ 外資數據待更新 (0)')
     else:
-        signals.append(f'❌ 外資賣超 {abs(_fb_bn):.1f}億 (0)')
-    _vol_ratio = round(volume / avg_volume, 2) if avg_volume > 0 else 1
-    if volume > avg_volume:
+        _fb_bn = round(foreign_buy / 1e8, 1) if abs(foreign_buy) > 1e6 else foreign_buy
+        if foreign_buy > 0:
+            score += 2; signals.append(f'✅ 外資買超 {_fb_bn:+.1f}億 (+2)')
+        else:
+            signals.append(f'❌ 外資賣超 {abs(_fb_bn):.1f}億 (0)')
+    # P1 v19.470:`else 1` 是捏造值 —— 沒有均量時「量比 = 1.0x」是憑空生出來的
+    # 觀測(§1「自行估一個合理值當常數」)。改為 None + 誠實文案,不計分不扣分。
+    _vol_ratio = round(volume / avg_volume, 2) if (avg_volume or 0) > 0 else None
+    if _vol_ratio is None:
+        signals.append('⬜ 成交量資料缺失（量能項未評估）')
+    elif volume > avg_volume:
         score += 1; signals.append(f'✅ 量能放大 {_vol_ratio:.1f}x (+1)')
     else:
         signals.append(f'⚠️ 量能萎縮 {_vol_ratio:.1f}x (0)')
@@ -271,7 +295,11 @@ def get_market_assessment(df_index=None, foreign_net=None,
 
     if foreign_net is None:
         mkt = fetch_market_data()
-        foreign_net = mkt.get('foreign_net') or 0
+        # P1 v19.470:`or 0` 又把 None 折回 0(且 falsy 回退連「真的 0」也吃掉)。
+        # `fetch_market_data` 本來就會在失敗時回 `foreign_net=None`,並在
+        # docstring 明說「None 表示資料取得失敗,非『零』」—— 這行把上游的誠實
+        # 又抹掉一次。保留 None,交給 `market_regime` 的三態分支處理。
+        foreign_net = mkt.get('foreign_net')
 
     regime_result = market_regime(
         current_price, ma60, ma120, foreign_net, ad_ratio=ad_ratio,

@@ -53,7 +53,12 @@ def compute_and_apply_market_assessment(
     from src.services import get_market_assessment
 
     try:
-        _foreign_net_loaded = 0  # 0 = 尚無資料(market_regime 會顯示「待更新」)
+        # ── P1 v19.470:預設值自 `0` 改 `None` ────────────────────────────
+        # 舊註解自陳「0 = 尚無資料」—— 這正是問題:0 在 `market_regime` 裡是一個
+        # **合法的市場觀測值**(買賣相抵),不是缺值標記。兩者共用同一個編碼,
+        # 等於把「不知道」寫成一個看起來正常的數字(§1)。三態化後由 None 表示
+        # 「沒拿到」,0.0 保留給「真的持平」。
+        _foreign_net_loaded = None
         for _k, _v in inst.items():
             if '外資' in _k:
                 _net_v = _v.get('net')
@@ -63,7 +68,7 @@ def compute_and_apply_market_assessment(
         _twii_df_loaded = tw_raw.get('台股加權指數')
         print(f'[市場評估] 大盤DF shape={getattr(_twii_df_loaded,"shape",None)}, '
               f'columns={list(getattr(_twii_df_loaded,"columns",[]))}, '
-              f'外資淨={_foreign_net_loaded/1e8:.1f}億')
+              f'外資淨={"未取得" if _foreign_net_loaded is None else f"{_foreign_net_loaded/1e8:.1f}億"}')
         # 取得 M1B-M2 資金活水資料(資金面評分維度)
         _m1b2 = st.session_state.get('m1b_m2_info') or {}
         _m1b2_gap = (round(float(_m1b2['m1b_yoy']) - float(_m1b2['m2_yoy']), 2)

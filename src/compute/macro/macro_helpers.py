@@ -203,7 +203,21 @@ def calc_traffic_light(
     _mkt    = mkt_info   or {}
     _jq     = jingqi_info or {}
     _cd     = cl_data    or {}
-    _score  = _mkt.get('score', 0)
+    # ── P1 v19.470:`_mkt.get('score', 0)` 把「沒抓到大盤」寫成「大盤 0 分」──
+    # `dict.get` 的預設值只在 key 不存在時生效,而 `get_market_assessment` 在
+    # yfinance 抓取失敗 / 資料超過 7 天 / MA120 bar 不足時**整包回 None**
+    # (`market_strategy.py` 的三個 return None),於是 `_mkt = {}` ⇒ score=0
+    # ⇒ score_pct=0 ⇒ health 被硬生生拉低 40 個百分點(0.4×100),
+    # 極易跌破 `HEALTH_DEFENSE_THRESHOLD` ⇒ 🔴「大環境惡化,禁止追買任何個股」。
+    # **把缺資料靜默轉成最強利空**,正是 §1 明令禁止的「讓流程看起來成功」。
+    #
+    # 同一份 `shared/regime_arbiter.py` 對 `health=None` 早就有誠實的
+    # `UNLOADED_VERDICT` 路徑 —— 這條防護原則本來就在,只是漏了 score 這條腿。
+    # 改 `_safe_float(...)`:拿不到 → None → (a) 不進健康評分分子/分母
+    # (權重重新歸一化,同 v19.177 對 jqavg 的做法)、(b) 以 None 傳進 arbiter
+    # (`is_foreign_futures_defense` / 分支 3 都已有 None guard)、
+    # (c) `health_partial=True` + 列入 `missing_sources` 讓畫面顯式降級。
+    _score  = _safe_float(_mkt.get('score'))
     # ── v19.177 P1-B ①:`_jq.get('avg', 50)` 捏造中性值 → 改 None(§1 Fail Loud)──
     # 舊碼:`_jqavg = _jq.get('avg', 50)`。
     # 50 在旌旗 0~100% 的尺度上**確實**是中點,但它以 HEALTH_WEIGHT_JQ(0.6)的權重
@@ -230,7 +244,14 @@ def calc_traffic_light(
     # 「⬜ 總經未評估 / 建議持股 --」。
     _inst = coerce_inst_dict(_cd, where='calc_traffic_light')
     _fk     = next((k for k in _inst if '外資' in str(k)), None)
-    _fnet   = _inst.get(_fk, {}).get('net', 0) if _fk else 0
+    # ── P1 v19.470:`.get('net', 0)` 同樣把「沒有數字」寫成「淨買賣 0」──
+    # 上游 `fetch_institutional` 在部分失敗時會留下 key 但 `net=None`,
+    # 而 `dict.get` 的預設值對「key 在、值為 None」無效 ⇒ 舊碼拿到 None
+    # 後在 `_fnet > 0` 崩(或在 HEALTH_FNET_BONUS 非 0 的舊版靜默少加分)。
+    # 更關鍵的是 `_conf_sources` 判的是 `bool(_fk)`(key 在不在),於是
+    # 「key 在但沒數字」會**同時**顯示「信心 100%」與「⏰ 外資數據待更新」。
+    # 三態化:None = 沒拿到(信心扣分 + 列缺失)、0.0 = 真的持平、其他 = 實值。
+    _fnet   = _safe_float(_inst.get(_fk, {}).get('net')) if _fk else None
 
     # 先行指標：期貨外資大小、韭菜指數
     # ── v19.177 P1-B ①:兩者缺值一律 None,不再捏 0 / 50(§1 + §4.1)────────────
@@ -281,7 +302,9 @@ def calc_traffic_light(
     # 借用錯配)改用 market_regime 回傳的真 max_score(預設 4.0 = market_regime 基本
     # 滿分,ad_ratio/m1b_m2 有傳才升 5/6)— 修「預設模式 score 永遠到不了 100」。
     _max_score = float(_mkt.get('max_score') or 4.0)
-    _score_pct = min(_score / _max_score * 100, 100)
+    # P1 v19.470:`_score` 現為三態,None ⇒ 這條腿整條缺席(不是 0 分)。
+    _score_pct = (min(_score / _max_score * 100, 100)
+                  if _score is not None else None)
     # ── v19.177 P1-B:缺項改「權重重新歸一化」,不再用捏造的中性值頂替 ──────────
     # 舊式:health = jqavg×0.6 + score_pct×0.4 + fnet_bonus,jqavg 缺時塞 50。
     # 新式:只對**真的拿得到**的分項加權後歸一化 ——
@@ -295,15 +318,26 @@ def calc_traffic_light(
     _health_parts: list[tuple[float, float]] = []
     if _jqavg is not None:
         _health_parts.append((_jqavg, HEALTH_WEIGHT_JQ))
-    # score 恆有值(`_mkt.get('score', 0)`);mkt_info 整包缺時 `bool(mkt_info)`
-    # 已在 `_conf_sources` 扣信心,且三來源全空在函式開頭就 return None。
-    _health_parts.append((_score_pct, HEALTH_WEIGHT_SCORE))
+    # ── P1 v19.470:score 這條腿改與 jqavg **對稱**處理 ────────────────────
+    # 原註解寫「score 恆有值」—— 那是 `_mkt.get('score', 0)` 造成的假象:
+    # 值恆在,但缺資料時那個值是**捏造的 0**。改三態後兩條腿規則一致:
+    # 有值才進分子/分母,缺了就重新歸一化,而不是拿 0(最強利空)頂替。
+    if _score_pct is not None:
+        _health_parts.append((_score_pct, HEALTH_WEIGHT_SCORE))
     _w_sum = sum(_w for _, _w in _health_parts)
-    _health = round(
-        sum(_v * _w for _v, _w in _health_parts) / _w_sum
-        + (HEALTH_FNET_BONUS if _fnet > 0 else 0), 1
-    )
-    _health_partial = _jqavg is None
+    # 兩條腿都缺 ⇒ 沒有任何依據可言 ⇒ health=None,由 arbiter 回
+    # `UNLOADED_VERDICT`(⬜ 總經未評估)。§1:誠實說「算不出來」,
+    # **不是** 0 分(0 分會被判成最強利空),也不是 🟡(🟡 是一個市場判斷)。
+    if _w_sum <= 0:
+        _health = None
+    else:
+        _health = round(
+            sum(_v * _w for _v, _w in _health_parts) / _w_sum
+            # `_fnet` 三態後可能是 None;None 不代表「沒買超」,故不加分也不扣分。
+            + (HEALTH_FNET_BONUS if (_fnet is not None and _fnet > 0) else 0), 1
+        )
+    # 任一條腿缺席都算 partial(原本只認 jqavg 缺席)。
+    _health_partial = (_jqavg is None) or (_score_pct is None)
 
     # R-CALC-4 v18.412:Method A ↔ Method B 雙演算法對帳(§4.3)
     # 嵌入 production render 路徑(原只在 reconcile_panel diagnostic page);
@@ -314,7 +348,9 @@ def calc_traffic_light(
     # 預設 —— 兩者對「缺值」的定義不同,硬對帳只會產出恆定噪音告警。
     # 對帳屬觀測性而非主邏輯,故僅在**輸入齊全**時才跑(§4.3 精神:比的是演算法差異,
     # 不是比誰的缺值預設比較好)。Method B 的 50.0 預設本身屬另案(該檔不在本批範圍)。
-    if _jqavg is not None:
+    # P1 v19.470:gate 再加 `_score_pct`/`_health` —— score 缺席時 Method A 也走了
+    # 權重歸一化,與 Method B 的預設同樣不可比;health=None 則根本無從對帳。
+    if _jqavg is not None and _score_pct is not None and _health is not None:
         try:
             from src.compute.health.health_reconcile import reconcile_health_score as _reconcile
             _rec = _reconcile(_health, jqavg=_jqavg, score=_score, fnet=_fnet,
@@ -334,8 +370,9 @@ def calc_traffic_light(
             except Exception:
                 pass
     else:
-        print('[health_reconcile] skip:jqavg 未取得,Method A 已權重歸一化而 '
-              'Method B 仍用 50 預設,兩者不可比 → 本輪不對帳(§4.3)', file=sys.stderr)
+        print('[health_reconcile] skip:jqavg / 大盤評分 / health 任一未取得,'
+              'Method A 已權重歸一化而 Method B 仍用固定預設,兩者不可比 → '
+              '本輪不對帳(§4.3)', file=sys.stderr)
 
     # 校準腳本可注入測試門檻；正式呼叫不傳 → 用模組常數
     _h_thr = health_defense_threshold if health_defense_threshold is not None else HEALTH_DEFENSE_THRESHOLD
@@ -363,7 +400,10 @@ def calc_traffic_light(
     _icon = _verdict.light
 
     _conf_sources = [
-        ('大盤趨勢評分 (market_regime)', bool(mkt_info)),
+        # ── P1 v19.470:原判 `bool(mkt_info)`(dict 空不空)——與 v19.177 修 jqavg
+        # 時抓到的破口同型:`section_inputs` 會合成只有部分 key 的 dict,dict 非空
+        # 但拿不到 score ⇒ 信心不降、缺項不列。改判「真的有評分」。
+        ('大盤趨勢評分 (market_regime)', _score is not None),
         # ── v19.177 P1-B ② 兩處同時修 ────────────────────────────────────
         # (a) 標籤反捏造:原文「旌旗指數 (站上均線比例)」—— **全站沒有任何一行
         #     在算「站上均線的家數比」**。真值 = 上漲佔比(ad_ratio)的 5 日移動
@@ -377,7 +417,10 @@ def calc_traffic_light(
         #     為 True(dict 非空)⇒ 明明沒有旌旗值,信心分數卻不降、缺項也不列
         #     = 缺失被吃掉。改判 `_jqavg is not None`。
         (_CONF_LABEL_JINGQI,              _jqavg is not None),
-        ('外資買賣超 (三大法人)',         bool(_fk)),
+        # ── P1 v19.470:原判 `bool(_fk)`(key 在不在)——「key 在但 net 為 None」
+        # 會判 True,於是畫面同時出現「信心 100%」與「⏰ 外資數據待更新」兩個
+        # 互相矛盾的訊息且無告警。改判「真的拿到數字」,與 jqavg 那條一致。
+        ('外資買賣超 (三大法人)',         _fnet is not None),
         ('先行指標 (期貨/PCR/韭菜)',      bool(li_latest is not None and not li_latest.empty)),
         ('ADL 騰落指標',                  bool(_cd.get('adl') is not None)),
     ]

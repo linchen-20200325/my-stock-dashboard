@@ -90,11 +90,17 @@ class TestCalcTrafficLightNoneInst:
         assert isinstance(tl, dict)
 
     def test_none_inst_reports_missing_source(self):
-        """§1:缺三大法人要被**列出來**,不可靜默當成「有資料且為 0」。"""
+        """§1:缺三大法人要被**列出來**,不可靜默當成「有資料且為 0」。
+
+        P1 v19.470 斷言更正:本測試的 docstring 一直寫著「不可靜默當成有資料
+        且為 0」,但原斷言卻是 `tl['fnet'] == 0` —— **與自己的意圖相反**。
+        0 在下游 `market_regime` / `HEALTH_FNET_BONUS` 裡是一個合法的觀測值
+        (買賣相抵),拿它當缺值標記正是本測試要防的事。三態化後改判 None。
+        """
         tl = calc_traffic_light(_MKT, _JQ, _prod_cl_data(None), None)
         assert tl['fk'] is None
         assert _FOREIGN_SOURCE_LABEL in tl['missing_sources']
-        assert tl['fnet'] == 0
+        assert tl['fnet'] is None, 'fnet 應為 None(沒拿到),不可退回 0(=持平)'
 
     def test_none_inst_confidence_below_gate(self):
         """conf 必須跌破 70 → handlers._render_traffic_light 會擋掉燈號並列缺項。
