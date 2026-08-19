@@ -194,6 +194,55 @@ class _Features:
     foreign_buy: float = float("nan")
     m1b_m2_gap: float = float("nan")
     m1b_m2_prev: float = float("nan")
+    # PR-2 2026-08-19:廣度兩腿。原本一個寫死 1.0、一個整條缺席,見下方註解。
+    ad_ratio: float = float("nan")   # 當日 → market_regime ④
+    jqavg: float = float("nan")      # 5 日均 → health 的 0.6 權重腿
+
+
+# ════════════════════════════════════════════════════════════════
+# PR-2（2026-08-19）:修正校準管線的特徵重建
+# ════════════════════════════════════════════════════════════════
+# 修的是什麼
+# ----------
+# 本腳本原本以兩個寫死值餵 `calc_traffic_light`,導致**校準的 health 與線上的
+# health 不是同一個變數**,而 `macro_thresholds.json` 的門檻正是由本腳本產出:
+#
+#   (a) `ad_ratio=1.0` —— 註解自稱「暫保留中性 1.0」,但 market_regime ④ 的
+#       比較對象是 `MARKET_BREADTH_NEUTRAL_PCT = 50.0`(0–100% 尺度)。
+#       `1.0 > 50` **恆為 False** ⇒ 廣度項每一天都判 0 分;同時 `_max` 仍因
+#       「有傳 ad_ratio」而由 4.0 抬到 5.0 ⇒ **score_pct 系統性低估 20%**。
+#       1.0 在這個尺度上不是中性,是極端偏空 —— 與 v18.449 修掉的
+#       `ad_ratio 預設 1.0 + 門檻 >1.0` 是同一個量綱錯誤的殘留。
+#
+#   (b) `jingqi_info=None` —— jqavg 那條腿(名目權重 0.6)整條缺席。
+#       v19.177 的權重歸一化會把缺席腿踢出分母 ⇒ 校準時 `health = score_pct`
+#       單腿,線上是 `0.6×jqavg + 0.4×score_pct` 雙腿。分布形狀完全不同,
+#       `health_partial` 在原管線裡是 **337/337 天全為 True**。
+#
+# 怎麼修
+# ------
+# 用 `health_calibration.ad_ratio_live_parity()` —— 與線上 `fetch_adl` **逐位
+# 等價**(含 int() 截斷、clip(50,1750)、分母恆 1800、出口 round(1))的重建器。
+# 已對 2026-08-12~18 驗證:重建 [56.3, 56.3, 44.7, 50.3, 38.8]、jqavg 49.28,
+# 與線上實測逐位相同。
+#
+# ⚠️ 為什麼不用既有的 `ad_ratio_from_twii`
+# ----------------------------------------
+# 那個函式用**收盤對收盤**(`close.pct_change()`),線上用**日內**
+# (`(close-open)/open`)。兩者 corl≈0.79、對 ">50" 的判定有 20.25% 的日子相反。
+# 用它只會把 parity 問題從一處搬到另一處(詳見該函式的 parity 警語)。
+JQ_WINDOW = 5   # 對齊 jingqi_calc 的 tail(5).mean
+
+
+def _opt(x) -> Optional[float]:
+    """NaN → None（§1:讓下游走「該項缺席」而非「該項為 0 分」）。"""
+    return None if x is None or pd.isna(x) else float(x)
+
+
+def _jq_info(jqavg) -> Optional[dict]:
+    """jqavg → `jingqi_info` dict;缺值回 None（沿用既有缺席語意,不捏中性值）。"""
+    v = _opt(jqavg)
+    return None if v is None else {"avg": v}
 
 
 def _build_features_at(df: pd.DataFrame, t: int) -> Optional[_Features]:
@@ -226,6 +275,18 @@ def _build_features_at(df: pd.DataFrame, t: int) -> Optional[_Features]:
     ma120_rising = (not pd.isna(ma120_5ago)) and (ma120 > ma120_5ago)
     ma120_falling = (not pd.isna(ma120_5ago)) and (ma120 < ma120_5ago)
     ma60_prev = float(ma60_series.iloc[-2]) if len(sub) >= 61 else ma60
+    # ── PR-2:用與線上逐位等價的公式重建廣度兩腿（日內口徑）────────────────
+    # 只吃 sub（= df.iloc[:t+1]）⇒ 無 lookahead。
+    _ar = _adr_series = float("nan")
+    _jq = float("nan")
+    if "Open" in sub.columns:
+        from src.compute.macro.health_calibration import ad_ratio_live_parity
+        _adr_s = ad_ratio_live_parity(sub["Open"].iloc[-JQ_WINDOW:],
+                                      close.iloc[-JQ_WINDOW:])
+        if len(_adr_s) > 0 and not pd.isna(_adr_s.iloc[-1]):
+            _ar = float(_adr_s.iloc[-1])
+            if len(_adr_s) >= JQ_WINDOW and not _adr_s.tail(JQ_WINDOW).isna().any():
+                _jq = float(_adr_s.tail(JQ_WINDOW).mean())
     vol_today = float(sub["Volume"].iloc[-1]) if "Volume" in sub.columns else 0.0
     avg_vol = (float(sub["Volume"].rolling(20).mean().iloc[-1])
                if "Volume" in sub.columns and len(sub) >= 20 else 1.0)
@@ -242,6 +303,7 @@ def _build_features_at(df: pd.DataFrame, t: int) -> Optional[_Features]:
         ma120_rising=ma120_rising, ma120_falling=ma120_falling,
         ma60_prev=ma60_prev, vol_today=vol_today, avg_vol_20=avg_vol,
         foreign_buy=fb, m1b_m2_gap=m_cur, m1b_m2_prev=m_prev,
+        ad_ratio=_ar, jqavg=_jq,
     )
 
 
@@ -254,7 +316,7 @@ def _features_to_traffic_light(f: _Features) -> dict:
     mp = None if pd.isna(f.m1b_m2_prev) else float(f.m1b_m2_prev)
     mkt = market_regime(
         index_close=f.close, ma60=f.ma60, ma120=f.ma120,
-        foreign_buy=fb, ad_ratio=1.0,  # ADL 無歷史 cache，暫保留中性 1.0
+        foreign_buy=fb, ad_ratio=_opt(f.ad_ratio),   # PR-2:真值(見 _build_features_at)
         ma60_prev=f.ma60_prev, ma120_prev=None,
         vol_today=f.vol_today, avg_vol_20=f.avg_vol_20,
         m1b_m2_gap=mg, m1b_m2_prev=mp,
@@ -264,7 +326,7 @@ def _features_to_traffic_light(f: _Features) -> dict:
     )
     # 餵 cl_data 進去：foreign_buy 非 NaN 才填，否則沿用 None（避免假資料）
     cl = ({"inst": {"外資": {"net": fb * 1e8}}} if not pd.isna(f.foreign_buy) else None)
-    tl = calc_traffic_light(mkt_info=mkt, jingqi_info=None,
+    tl = calc_traffic_light(mkt_info=mkt, jingqi_info=_jq_info(f.jqavg),
                             cl_data=cl, li_latest=None)
     return tl or {}
 
@@ -281,6 +343,23 @@ def _forward_return(df: pd.DataFrame, t: int, n: int) -> Optional[float]:
     if p0 <= 0:
         return None
     return (p1 / p0 - 1.0) * 100.0
+
+
+def _forward_mdd(df: pd.DataFrame, t: int, n: int) -> Optional[float]:
+    """自 index t 的收盤起算,未來 n 個交易日的**路徑**最大回撤（%,負值）。
+
+    用 Low 而非 Close —— 使用者是活在路徑上的:一段 60 日內先殺 13% 再拉回
+    收 −6% 的走勢,以收盤對收盤衡量會判「沒事」,但那正是散戶砍在地板上的那一段。
+    窗口未滿回 None（§1 不以較短窗湊數）。
+    """
+    if t + n >= len(df):
+        return None
+    p0 = float(df["Close"].iloc[t])
+    if p0 <= 0:
+        return None
+    col = "Low" if "Low" in df.columns else "Close"
+    lo = float(df[col].iloc[t + 1:t + n + 1].min())
+    return (lo / p0 - 1.0) * 100.0
 
 
 def run_backtest(df: pd.DataFrame) -> pd.DataFrame:
@@ -301,6 +380,7 @@ def run_backtest(df: pd.DataFrame) -> pd.DataFrame:
             "health": float(tl.get("health") or 0),
             "ret_20d": _forward_return(df, t, 20),
             "ret_60d": _forward_return(df, t, 60),
+            "mdd_60d": _forward_mdd(df, t, 60),
         })
     return pd.DataFrame(rows)
 
@@ -308,13 +388,40 @@ def run_backtest(df: pd.DataFrame) -> pd.DataFrame:
 # ════════════════════════════════════════════════════════════════
 # 真值定義 + 命中率
 # ════════════════════════════════════════════════════════════════
+# ── 舊真值（point-to-point,2026-08-19 前唯一定義）────────────────────
 RED_20D_THR = -8.0      # 後 20 日 TWII 跌幅 > 8%
 RED_60D_THR = -15.0     # 或後 60 日跌幅 > 15%
 GREEN_20D_THR = +5.0    # 後 20 日 TWII 漲幅 > 5%
 
+# ── PR-2 新真值:路徑回撤（user 2026-08-19 拍板「紅燈＝趨勢轉弱時降曝險」）──
+#
+# 為什麼換
+# --------
+# 1. **舊真值選了三個候選目標裡最不可預測的那一個**（以落後 20 日波動當唯一
+#    預測子,20 年實測）:未來 20 日波動 R²=31.5%、路徑最大回撤 R²=5.3%、
+#    點對點報酬 R²=**0.6%**。用 R²=0.6% 的目標校準,precision 天花板極低。
+#    （但**不改用「波動放大」** —— 波動最好預測不代表該減碼,2020/4 起是高波動
+#    大多頭。那是把「可預測性」誤當成「有用性」。）
+# 2. **舊真值漏掉近六成真正讓人痛的回撤**:實測
+#    `P(MDD60 < -10% | 舊真值) = 97.8%`,反向只有 41.2% —— 舊定義幾乎是新定義的
+#    嚴格子集。那些盤中殺到 −12% 但第 20/60 日剛好收在 −7% 的路徑全被判「沒事」。
+# 3. **舊真值的有效樣本是 1 次事件**:2025-01~2026-06 的 18 個真值日裡,
+#    17 個落在 2025-03-03~03-27 同一段。任何 precision/lift 都撐不起結論。
+#    新定義 base rate ≈ 17%（20 年實測）,稀有度仍合理但樣本足夠。
+#
+# `AND r60 < 0` 那條腿是為了濾掉「深回撤但完全收復」的多頭洗盤 —— 那種情況
+# 減碼是錯的。
+RED_MDD60_THR = -10.0   # 後 60 日路徑最大回撤 < −10%
+RED_R60_MAX = 0.0       # 且後 60 日報酬 < 0
 
-def label_hit(row: pd.Series) -> str:
-    """ground truth：'red_hit' / 'green_hit' / 'neutral'。"""
+#: 真值模式。'path'(預設,PR-2 後) / 'legacy'(舊 point-to-point,供對照)。
+#: 兩者都會在報告中並列輸出,讓門檻建議的來源可追溯。
+TRUTH_MODE = "path"
+
+
+def label_hit_legacy(row: pd.Series) -> str:
+    """舊真值（point-to-point）。保留供報告並列對照,勿刪 —— 刪掉會讓
+    「曾經用過這個定義、以及它為何被換掉」從程式碼裡消失。"""
     r20 = row["ret_20d"]
     r60 = row["ret_60d"]
     if r20 is not None and not pd.isna(r20):
@@ -327,10 +434,38 @@ def label_hit(row: pd.Series) -> str:
     return "neutral"
 
 
+def label_hit_path(row: pd.Series) -> str:
+    """PR-2 新真值:以**路徑**最大回撤定義 red_hit。
+
+    red_hit  = 後 60 日路徑 MDD < RED_MDD60_THR **且** 後 60 日報酬 < RED_R60_MAX
+    green_hit= 沿用舊定義（後 20 日漲 > GREEN_20D_THR）—— 綠燈那側本次不動,
+               避免同一個 PR 同時位移紅/綠兩端而無法歸因。
+    缺 mdd_60d 欄（舊 cache）→ 自動退回 legacy,並不靜默假裝有值。
+    """
+    if "mdd_60d" not in row.index or pd.isna(row.get("mdd_60d")):
+        return label_hit_legacy(row)
+    mdd = float(row["mdd_60d"])
+    r60 = row.get("ret_60d")
+    r20 = row.get("ret_20d")
+    if mdd < RED_MDD60_THR and r60 is not None and not pd.isna(r60) \
+            and float(r60) < RED_R60_MAX:
+        return "red_hit"
+    if r20 is not None and not pd.isna(r20) and float(r20) > GREEN_20D_THR:
+        return "green_hit"
+    return "neutral"
+
+
+def label_hit(row: pd.Series) -> str:
+    """依 `TRUTH_MODE` 派發。預設 'path'（PR-2 後,user 2026-08-19 拍板）。"""
+    return label_hit_legacy(row) if TRUTH_MODE == "legacy" else label_hit_path(row)
+
+
 def compute_metrics(bt: pd.DataFrame) -> dict:
     """precision / recall / confusion matrix 計算。"""
     bt = bt.copy()
     bt["truth"] = bt.apply(label_hit, axis=1)
+    # PR-2:同時算舊真值,供報告並列（讓「換了真值之後數字為何變」可歸因）。
+    bt["truth_legacy"] = bt.apply(label_hit_legacy, axis=1)
     # 預測類別：🟢=green_pred / 🟡=neutral_pred / 🔴=red_pred
     bt["pred"] = bt["color"].map({"🟢": "green_pred", "🟡": "neutral_pred",
                                    "🔴": "red_pred"}).fillna("neutral_pred")
@@ -410,7 +545,7 @@ def _backtest_with_inputs_cache(df: pd.DataFrame) -> list[dict]:
         mp = None if pd.isna(f.m1b_m2_prev) else float(f.m1b_m2_prev)
         mkt = market_regime(
             index_close=f.close, ma60=f.ma60, ma120=f.ma120,
-            foreign_buy=fb, ad_ratio=1.0,
+            foreign_buy=fb, ad_ratio=_opt(f.ad_ratio),   # PR-2:真值
             ma60_prev=f.ma60_prev, ma120_prev=None,
             vol_today=f.vol_today, avg_vol_20=f.avg_vol_20,
             m1b_m2_gap=mg, m1b_m2_prev=mp,
@@ -426,7 +561,7 @@ def _backtest_with_inputs_cache(df: pd.DataFrame) -> list[dict]:
             'ret_20d': _forward_return(df, t, 20),
             'ret_60d': _forward_return(df, t, 60),
             'mkt_info': mkt,
-            'jingqi_info': None,
+            'jingqi_info': _jq_info(f.jqavg),
             'cl_data': cl,
             'li_latest': None,
         })
@@ -504,7 +639,11 @@ def grid_search_thresholds(
 ) -> tuple[int, int, dict]:
     """在 (h, s) 網格上找最大 objective，回 (best_h, best_s, best_metrics)。"""
     if h_grid is None:
-        h_grid = list(range(25, 46, 2))   # [25, 27, ..., 45]
+        # PR-2:步進 2 → 1。原網格 [25,27,...,45] **全是奇數**,
+        # 於是報告 (c) 節那句硬編碼的「可考慮再收緊至 30」
+        # (`max(_HDT-5, 25)`)所指的值,現行 pipeline **根本搜尋不到**,
+        # 永遠無法驗證。改 step=1 讓建議值與可驗證集合一致。
+        h_grid = list(range(25, 46, 1))
     if s_grid is None:
         s_grid = [2, 3, 4, 5]
     best = (-float('inf'), h_default, s_default, None)

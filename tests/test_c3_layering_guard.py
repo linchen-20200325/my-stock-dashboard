@@ -636,6 +636,13 @@ for _f, _m in (
     ("scripts/calibrate_health_weights.py", "src.compute.macro.health_calibration"),
     ("scripts/calibrate_health_weights.py", "src.services.market_strategy"),
     ("scripts/calibrate_macro_traffic.py", "src.compute.macro"),
+    # PR-2 2026-08-19:與正上方 calibrate_health_weights → health_calibration 同一
+    # 前例、同一根因(scripts 分層標籤)。本支改用 `ad_ratio_live_parity` 重建與線上
+    # `fetch_adl` 逐位等價的廣度序列,取代原本寫死的 `ad_ratio=1.0` / `jingqi_info=None`
+    # —— 那兩個寫死值讓校準的 health 與線上的 health 不是同一個變數。
+    # 走 package `src.compute.macro` 無法解:health_calibration 不在該 package 的
+    # `_SUBMODULES`,加進去會把它拉進 eager import chain(不必要的副作用)。
+    ("scripts/calibrate_macro_traffic.py", "src.compute.macro.health_calibration"),
     ("scripts/calibrate_macro_traffic.py", "src.services"),
     ("scripts/export_stock_db.py", "src.compute.scoring.scoring_engine"),
     ("scripts/export_stock_db.py", "src.compute.strategy.tech_indicators"),

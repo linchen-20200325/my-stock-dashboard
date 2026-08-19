@@ -54,7 +54,14 @@ EFFICIENT_FRONTIER_N_BINS: int = 25
 
 
 # ════════════════════════════════════════════════════════════════
-# Macro 健康評分（macro_helpers.py compute_macro_health）
+# Macro 健康評分（實作 inline 於 macro_helpers.calc_traffic_light 的 _health_parts 段）
+#
+# ⚠️ 2026-08-19 稽核更正:本區塊原寫「macro_helpers.py compute_macro_health」——
+#    **全站沒有這個函式**。它只存在於 8 個檔案的註解/docstring 裡
+#    (本檔、macro_buckets、position_throttle、section_long、tab_macro、
+#     macro_classroom、ui_widgets、tests/test_macro_buckets)。真正的實作是
+#    `calc_traffic_light` 內的 `_health_parts` / `_w_sum` / `_health` 那段 inline 程式碼。
+#    一個「被 8 處引用、卻不存在的符號名」本身就是 §3.3 反捏造要防的東西。
 #
 # ⚠️ v19.173 校準狀態誠實化（AI-H）— 只是註解，**不動任何數值**
 # ────────────────────────────────────────────────────────────────
@@ -87,7 +94,30 @@ HEALTH_WEIGHT_JQ: float = 0.6
 v19.102 校準採納(user 核准方案 B):MACRO_HEALTH_WEIGHT_PROPOSAL.md
 (真實 2006~2026 二十年、n=4748、val AUC 0.753、overfit_flag=False)
 顯示 jqavg:score 相對重要性 ≈ 0.0337:0.0228 ≈ 60:40 → 自 0.4 升 0.6。
-權重和 = 0.6+0.4 = 1.0(同步治癒 CLAUDE.md §4.2「權重和=1」漂移)。"""
+權重和 = 0.6+0.4 = 1.0(同步治癒 CLAUDE.md §4.2「權重和=1」漂移)。
+
+⚠️ **這個 0.6 是在「另一個變數」上擬合出來的（2026-08-19 稽核,尚未在線上變數驗證）**
+────────────────────────────────────────────────────────────────────────
+擬合管線:`scripts/calibrate_health_weights.reconstruct_score` →
+`src/compute/macro/health_calibration.ad_ratio_from_twii` → **`close.pct_change()`**
+線上實作:`src/data/daily/daily_data_fetchers.fetch_adl` → **`(close − open) / open`**
+
+兩者係數相同(每 1% ≈ ±150 家),但**餵進去的報酬定義不同**:一個收對收、一個日內。
+實測 2006-2026 全樣本:日內平均報酬 −0.047%/日、隔夜跳空 +0.094%/日 —— TWII
+二十年的正報酬幾乎全來自隔夜,線上公式恰好只取沒有 drift 的那一半。兩序列
+corr ≈ 0.79,對 ">50" 的判定有 **20.25% 的日子相反**。clip 方式也不同
+(線上分母恆 1800;校準端分母浮動)。
+
+所以「已校準」這個標籤在此是**誤導性的**:它比「未校準」更危險,因為它會讓
+下一個人不去質疑這個數字。真實狀態是 —— 權重有實證基礎,但那個實證基礎
+**不是**線上跑的那條腿。收斂路徑見 `health_calibration.ad_ratio_from_twii`
+的 parity 警語(結論:應走「修校準管線 + 重跑」,而非逕改歷史基準)。
+
+另有一個獨立的量綱問題(2026-08-19 實測):線上 `ad_ratio = 50 + 8.333 × 日內漲跌%`
+是對 ^TWII 日內漲跌的**仿射變換**,`ad_ratio > 50 ⟺ close > open`,
+**不含任何家數資訊**。σ(jqavg)=3.18 vs σ(score_pct)=27.57,故本權重雖名目 0.6,
+對 health 變異的實際貢獻僅約 **2.9%**(corr(health, score_pct)=0.987)。
+「名目權重 ≠ 有效權重」這件事在解讀本常數時必須一併考慮。"""
 
 HEALTH_WEIGHT_SCORE: float = 0.4
 """市場狀態評分 (score/max_score×100) 在健康評分的權重。
