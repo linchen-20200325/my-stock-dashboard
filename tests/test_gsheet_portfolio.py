@@ -794,3 +794,30 @@ def test_save_stock_watchlist_clears_read_cache(fake_watchlist_ws):
     gsp.list_stock_watchlists()                         # 先讀進快取(空)
     gsp.save_stock_watchlist('觀察', ['2330', '2454'])
     assert '觀察' in gsp.list_stock_watchlists()        # 清快取後看得到
+
+
+# ── #33：add_to_stock_watchlist 併入(聯集去重保序,不覆蓋)────────────────────
+def test_add_to_stock_watchlist_merges_dedup():
+    ws = _FakeWorksheet([gsp._STOCK_WATCHLIST_HEADERS,
+                         ["觀察", "2330", "ts"], ["觀察", "2454", "ts"]])
+    with patch.object(gsp, "_ws", return_value=ws):
+        n = gsp.add_to_stock_watchlist("觀察", ["2454", "1101", "2330"])   # 2454/2330 已在
+        assert n == 3                                     # 去重後 2330,2454,1101
+        assert gsp.load_stock_watchlist("觀察") == ["2330", "2454", "1101"]  # 保序,新增在後
+
+
+def test_add_to_stock_watchlist_new_name_from_empty():
+    ws = _FakeWorksheet([gsp._STOCK_WATCHLIST_HEADERS])
+    with patch.object(gsp, "_ws", return_value=ws):
+        n = gsp.add_to_stock_watchlist("新池", ["2330", "2330", "2454"])   # 同名去重
+        assert n == 2
+        assert gsp.load_stock_watchlist("新池") == ["2330", "2454"]
+
+
+def test_add_to_stock_watchlist_empty_raises():
+    ws = _FakeWorksheet([gsp._STOCK_WATCHLIST_HEADERS])
+    with patch.object(gsp, "_ws", return_value=ws):
+        with pytest.raises(ValueError):
+            gsp.add_to_stock_watchlist("", ["2330"])
+        with pytest.raises(ValueError):
+            gsp.add_to_stock_watchlist("x", [])

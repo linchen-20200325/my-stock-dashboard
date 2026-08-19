@@ -194,7 +194,8 @@ def test_digest_no_fake_config_key():
 
 def test_digest_empty_rows():
     d = svc.build_station_digest([], vix=None)
-    assert d == {"total": 0, "vix": None, "reds": [], "adds": [], "errors": []}
+    assert d == {"total": 0, "vix": None, "reds": [], "adds": [], "errors": [],
+                 "allocation": None, "take_profit": []}
 
 
 def test_summary_prompt_contains_facts_and_hold_instruction():
@@ -346,3 +347,96 @@ def test_fetch_peer_ranks_swallows_exception(monkeypatch):
         raise RuntimeError("net down")
     monkeypatch.setattr(etf_calc, "compute_etf_peer_ranking", _boom)
     assert svc._fetch_peer_ranks("0056.TW") is None
+
+
+# ── #38：80/20 配置偏離 + 衛星停利（有張數/均價才算）────────────────────────
+def _alloc_rows():
+    return [
+        {"代號": "0056", "種類": "ETF", "held": True, "市值": 800000.0, "損益%": 5.0,
+         "健檢": "🟢", "_detail": {}},
+        {"代號": "2330", "種類": "個股", "held": True, "市值": 300000.0, "損益%": 18.0,
+         "健檢": "🟢", "_detail": {}},
+        {"代號": "6239", "種類": "個股", "held": True, "市值": None, "損益%": None,
+         "健檢": "🟢", "_detail": {}},                         # 缺金額
+        {"代號": "1101", "種類": "個股", "held": False, "市值": 999.0, "損益%": 50.0,
+         "健檢": "🟢", "_detail": {}},                         # 觀察(未持有)不算
+    ]
+
+
+def test_allocation_split_core_satellite_and_partial():
+    a = svc.compute_allocation_split(_alloc_rows())
+    # 核心(ETF 0056)80萬 / 衛星(個股 2330)30萬 → 核心 72.7%
+    assert a["core_pct"] == pytest.approx(72.7, abs=0.1)
+    assert a["sat_pct"] == pytest.approx(27.3, abs=0.1)
+    assert a["core_dev"] == pytest.approx(-7.3, abs=0.1)      # 目標 80 → 偏離 -7.3
+    assert a["partial"] is True and a["held_n"] == 3 and a["valued_n"] == 2  # 6239 缺,觀察排除
+
+
+def test_allocation_split_none_when_no_market_value():
+    rows = [{"代號": "0056", "種類": "ETF", "held": True, "市值": None, "_detail": {}}]
+    assert svc.compute_allocation_split(rows) is None      # §1 無市值不捏造
+
+
+def test_take_profit_satellite_over_threshold_only():
+    tp = svc.flag_take_profit(_alloc_rows())
+    assert [d["代號"] for d in tp] == ["2330"]             # 個股 +18%≥15;ETF/觀察/無成本都不列
+
+
+def test_take_profit_skips_no_cost_and_etf():
+    rows = [
+        {"代號": "00878", "種類": "ETF", "held": True, "損益%": 30.0, "_detail": {}},   # ETF 不算衛星停利
+        {"代號": "3006", "種類": "個股", "held": True, "損益%": None, "_detail": {}},   # 無成本 → 不判
+        {"代號": "6770", "種類": "個股", "held": False, "損益%": 40.0, "_detail": {}},  # 觀察不算
+    ]
+    assert svc.flag_take_profit(rows) == []
+
+
+def test_build_rows_computes_market_value_and_pnl():
+    """build_station_rows 由 holding lots/avg + metrics current_price 算市值/損益%。"""
+    def _m(t, ak="etf"):
+        return {"weekly_close": _wk(), "sharpe": 1.0, "current_price": 60.0,
+                "inception_years": 8, "ann_return_3y_pct": 10, "total_return_1y_pct": 15,
+                "annual_yield_pct": 6, "peer_ranks": None}
+    holdings = [{"ticker": "2330", "asset_kind": T.KIND_STOCK,
+                 "asset_class": T.ASSET_SATELLITE, "held": True,
+                 "lots": 2.0, "avg_price": 50.0}]
+    r = svc.build_station_rows(holdings, vix=18, metrics_fn=_m)[0]
+    assert r["市值"] == pytest.approx(120.0)                # 2 張 × 60
+    assert r["損益%"] == pytest.approx(20.0)                # (60/50-1)*100
+
+
+def test_build_rows_market_value_none_without_lots():
+    """§1：無張數/均價 → 市值/損益% = None(不捏 0)。"""
+    def _m(t, ak="etf"):
+        return {"weekly_close": _wk(), "sharpe": 1.0, "current_price": 60.0,
+                "inception_years": 8, "peer_ranks": None}
+    holdings = [{"ticker": "0056", "held": True}]           # 無 lots/avg
+    r = svc.build_station_rows(holdings, vix=18, metrics_fn=_m)[0]
+    assert r["市值"] is None and r["損益%"] is None
+
+
+def test_summary_prompt_includes_allocation_and_take_profit():
+    d = svc.build_station_digest(_alloc_rows(), vix=18)
+    p = svc.build_summary_prompt(d)
+    assert "實際配置" in p and "核心 73%" in p and "偏離 -7%" in p
+    assert "衛星達停利" in p and "2330(+18%)" in p
+    assert f"≥{T.SATELLITE_TAKE_PROFIT_PCT:.0f}%" in p   # §3.3 門檻走 SSOT(改門檻不漂移)
+
+
+# ── #34：換股建議換入優先用觀察清單綠燈（空才 fallback 選股池）─────────────
+def test_switch_in_prefers_watchlist_greens():
+    rows = [{"代號": "00980D", "健檢": "🔴", "held": True, "建議動作": "汰弱", "_detail": {}},
+            {"代號": "2412", "名稱": "中華電", "健檢": "🟢", "held": False, "_detail": {}},  # 觀察綠燈
+            {"代號": "2330", "健檢": "🟢", "held": True, "_detail": {}}]                    # 持有綠燈≠換入
+    cands = [{"代碼": "9999", "名稱": "選股池股", "綜合分": 88}]
+    a = svc.build_switch_advice(rows, {"loaded": False}, cands)
+    assert a["switch_in_src"] == "watchlist"
+    assert [d["代號"] for d in a["switch_in"]] == ["2412"]     # 觀察綠燈,非持有綠燈/非選股池
+
+
+def test_switch_in_fallback_to_screener_when_no_watchlist_greens():
+    rows = [{"代號": "00980D", "健檢": "🔴", "held": True, "建議動作": "汰弱", "_detail": {}}]
+    cands = [{"代碼": "9999", "名稱": "選股池股", "綜合分": 88}]
+    b = svc.build_switch_advice(rows, {"loaded": False}, cands)
+    assert b["switch_in_src"] == "screener"
+    assert [d["代號"] for d in b["switch_in"]] == ["9999"]

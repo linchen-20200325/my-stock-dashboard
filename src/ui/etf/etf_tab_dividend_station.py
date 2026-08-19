@@ -124,6 +124,9 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     except Exception:  # noqa: BLE001 — Styler 相容性問題退無樣式,不炸
         st.dataframe(_df, use_container_width=True, hide_index=True)
 
+    # ── 📊 80/20 實際配置偏離 + 衛星停利（#38,有張數/均價才算）─────────────
+    _render_allocation_take_profit(_rows)
+
     # 逐檔明細
     with st.expander("🔎 逐檔明細（健檢 A/B/C/D · 235 觸發 · 3-3-3）", expanded=False):
         for r in _rows:
@@ -149,6 +152,38 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     st.caption(f"💡 目標配置：🛡️核心 {T.CORE_TARGET_PCT:.0f}% / 🚀衛星 {T.SATELLITE_TARGET_PCT:.0f}%；"
                f"衛星獲利達 {T.SATELLITE_TAKE_PROFIT_PCT:.0f}% 嚴格停利、滾回核心。"
                "本區僅研究參考,非投資建議,盈虧自負。")
+
+
+def _render_allocation_take_profit(rows: list[dict]) -> None:
+    """📊 80/20 實際配置偏離 + 衛星停利（有張數/均價才算;§1 缺金額誠實標,不捏造）。"""
+    from src.services.dividend_station_service import (
+        compute_allocation_split, flag_take_profit)
+    _alloc = compute_allocation_split(rows)
+    _tp = flag_take_profit(rows)
+
+    if _alloc:
+        _dev = _alloc["core_dev"]
+        _msg = (f"📊 **實際配置**：🛡️核心 {_alloc['core_pct']:.0f}% / 🚀衛星 {_alloc['sat_pct']:.0f}%"
+                f"　·　目標 {_alloc['core_target']:.0f}/{_alloc['sat_target']:.0f}"
+                f"　·　核心偏離 **{_dev:+.0f}%**")
+        if abs(_dev) < 5:
+            st.success(_msg + "（接近目標）")
+        elif _dev < 0:
+            st.warning(_msg + "（核心偏低 → 可加碼核心）")
+        else:
+            st.warning(_msg + "（核心偏高 → 衛星部位不足）")
+        _note = "核心=ETF、衛星=個股（依代號近似;若你把主題型 ETF 當衛星,此偏離僅供參考）。"
+        if _alloc.get("partial"):
+            _note += (f"　⚠️ 另有 {_alloc['held_n'] - _alloc['valued_n']}/{_alloc['held_n']} 檔"
+                      "缺張數/均價未納入計算。")
+        st.caption(_note)
+    else:
+        st.caption("📊 80/20 配置偏離：你的持股未帶張數/均價（或無市值）→ 無法計算實際佔比。"
+                   "到 📁 組合管理的 Portfolio 填張數/均價即可顯示。")
+
+    if _tp:
+        st.info(f"💰 **衛星停利**（獲利達 {T.SATELLITE_TAKE_PROFIT_PCT:.0f}% 建議嚴格停利、滾回核心）："
+                + "、".join(f"{d['代號']}（+{d['損益%']:.0f}%）" for d in _tp))
 
 
 def _render_switch_advice(switch: dict | None) -> None:
@@ -177,17 +212,21 @@ def _render_switch_advice(switch: dict | None) -> None:
     else:
         st.success("✅ 持有部位無健檢紅燈 —— 無汰弱換出需求。")
 
+    _src = switch.get("switch_in_src", "screener")
+    _src_txt = "你的觀察清單" if _src == "watchlist" else "選股池(全自動排名)"
     if _stance == "defensive":
         st.warning("🛡️ 總經轉守 → **換入從嚴**：優先處理汰弱、不急進場;下列候選僅供轉守後布局參考。")
     if _in:
-        _label = "🔺 **建議換入（選股池候選）**：" if _stance != "defensive" else "候選（轉守觀望）："
+        _label = (f"🔺 **建議換入（{_src_txt}）**：" if _stance != "defensive"
+                  else f"候選（{_src_txt}·轉守觀望）：")
         st.markdown(_label + "、".join(
             f"{d['代號']} {d.get('名稱','')}".strip()
             + (f"（綜合分 {d['綜合分']:.0f}）" if isinstance(d.get('綜合分'), (int, float)) else "")
             for d in _in))
     else:
-        st.caption("選股池暫無可換入候選（未跑選股 / 掃描失敗 / 皆已持有）。")
-    st.caption("換出=你**持有**的紅燈;換入=**選股池**排名候選（已排除已持有）。研究參考,非投資建議。")
+        st.caption("暫無可換入候選（觀察清單無綠燈、選股池也未跑 / 皆已持有）。")
+    st.caption(f"換出=你**持有**的紅燈;換入**優先**你觀察清單的綠燈(親手選的),空才用選股池"
+               f"全自動排名。本次換入來源：**{_src_txt}**。研究參考,非投資建議。")
 
 
 def _render_ai_summary(rows: list[dict], vix, gemini_fn: Callable[..., str] | None,
@@ -258,10 +297,15 @@ def _load_holdings_from_portfolio() -> list[dict]:
                 for _r in (_gsp.load_portfolio(_names[0], sheet_id=_etf_sid) or []):
                     _c = str(_r.get("ticker", "") or "").strip().upper()
                     if _c:
-                        # held=True(持有);種類改代號規則自動判(跟清單脫鉤,§ user 2026-08)
-                        _out.append({"ticker": _c, "name": "", "held": True,
-                                     "asset_kind": T.classify_asset_kind(_c),
-                                     "asset_class": T.ASSET_CORE})
+                        _kind = T.classify_asset_kind(_c)
+                        # held=True(持有);種類+類別依代號自動判(郭俊宏:核心=配息ETF/衛星=成長股
+                        #   → 以 ETF/個股 近似);保留張數/均價供 80/20 偏離 + 衛星停利(#38)。
+                        _out.append({
+                            "ticker": _c, "name": "", "held": True,
+                            "asset_kind": _kind,
+                            "asset_class": (T.ASSET_CORE if _kind == T.KIND_ETF
+                                            else T.ASSET_SATELLITE),
+                            "lots": _r.get("lots"), "avg_price": _r.get("avg_price")})
                 _more = "；此 Sheet 有多本組合,只取第一本" if len(_names) > 1 else ""
                 st.caption(f"✅ 帶入 投資組合 Portfolio「{_names[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」
@@ -280,10 +324,14 @@ def _load_holdings_from_portfolio() -> list[dict]:
                 for _c in (_gsp.load_stock_watchlist(_snames[0], sheet_id=_stk_sid) or []):
                     _c = str(_c or "").strip().upper()
                     if _c:
-                        # held=False(僅觀察);種類改代號規則自動判(觀察 ETF 不會被誤標個股)
-                        _out.append({"ticker": _c, "name": "", "held": False,
-                                     "asset_kind": T.classify_asset_kind(_c),
-                                     "asset_class": T.ASSET_SATELLITE})
+                        _kind = T.classify_asset_kind(_c)
+                        # held=False(僅觀察,無金額);類別同以 ETF=核心/個股=衛星判(一致)。
+                        _out.append({
+                            "ticker": _c, "name": "", "held": False,
+                            "asset_kind": _kind,
+                            "asset_class": (T.ASSET_CORE if _kind == T.KIND_ETF
+                                            else T.ASSET_SATELLITE),
+                            "lots": None, "avg_price": None})
                 _more = "；此 Sheet 有多份清單,只取第一份" if len(_snames) > 1 else ""
                 st.caption(f"✅ 帶入 觀察清單 Watchlist「{_snames[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」
