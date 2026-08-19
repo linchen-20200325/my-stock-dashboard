@@ -591,6 +591,18 @@ _KNOWN_VIOLATIONS[("R4", "src/ui/pages/calibration_ui.py", "scripts.calibrate_ma
     "UI 與 CLI 共用。與 " + _TODO_SCRIPTS_LAYER
 )
 
+# ── 規則 1:cron 腳本 import streamlit(同 _TODO_SCRIPTS_LAYER 根因)──────
+_KNOWN_VIOLATIONS[("R1", "scripts/update_macro_forward_test.py", "streamlit")] = (
+    "TODO(C3-a'):總經燈號 headless 落地 cron。需要 streamlit 純粹是因為它呼叫的兩支 "
+    "L3(`compute_and_store_jingqi` / `compute_and_apply_market_assessment`)"
+    "**以 `st.session_state` 當輸出通道**,本腳本得把結果讀回來(bare 模式可用,已實測)。\n"
+    "為什麼不繞開:繞開的唯一辦法是不呼叫那兩支、自己重算 —— 但它們裡面有真實邏輯"
+    "(外資腿抽取、融資三段燈、旌旗 5 日均)。重寫 = 製造第二份真相,而"
+    "「線上與離線是兩套不同的系統」正是本腳本要消滅的問題(見其 docstring)。\n"
+    "正解與 " + _TODO_SCRIPTS_LAYER + " 同:要嘛改分層標籤,要嘛把那兩支 L3 的"
+    "session_state 寫入與計算拆開(回傳 dict + 另一層負責寫)。後者屬獨立重構,需 user 裁示。"
+)
+
 # ── 規則 5:跨層上行 import ─────────────────────────────────────────
 _KNOWN_VIOLATIONS[("R5", "src/data/portfolio/forward_test_store.py", "src.compute.screener.forward_test")] = (
     "TODO(C3-d):L1 → L2。module-level import,為了拿 PICK_SNAPSHOT_HEADERS 這個 "
@@ -665,6 +677,14 @@ for _f, _m in (
     ("scripts/update_health_history.py", "src.compute.scoring"),
     ("scripts/update_health_history.py", "src.compute.strategy"),
     ("scripts/update_health_history.py", "src.services.health_history_service"),
+    # P7(2026-08-19)總經燈號 headless 落地 —— 與上列 cron 完全同一根因。
+    # 本支刻意「呼叫與畫面同一組 L3」,一行公式都不重寫(避免第二份真相)。
+    ("scripts/update_macro_forward_test.py", "src.compute.macro"),
+    ("scripts/update_macro_forward_test.py", "src.compute.macro.macro_forward_test"),
+    ("scripts/update_macro_forward_test.py", "src.services.daily_checklist"),
+    ("scripts/update_macro_forward_test.py", "src.services.jingqi_calc"),
+    ("scripts/update_macro_forward_test.py", "src.services.macro_fetch_orchestrator"),
+    ("scripts/update_macro_forward_test.py", "src.services.market_assessment_apply"),
 ):
     _KNOWN_VIOLATIONS[("R5", _f, _m)] = _TODO_SCRIPTS_LAYER
 
