@@ -16,7 +16,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pandas as pd
-import pytest
 
 from src.compute.etf import (
     classify_etf_deep_sigma,

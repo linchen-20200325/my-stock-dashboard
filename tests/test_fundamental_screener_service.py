@@ -2,7 +2,6 @@
 
 用 monkeypatch 注入假快照,避免依賴真實 parquet;另附真實資料 smoke。
 """
-import numpy as np
 import pandas as pd
 import pytest
 

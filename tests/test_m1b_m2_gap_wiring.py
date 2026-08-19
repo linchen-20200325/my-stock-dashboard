@@ -51,7 +51,6 @@ class TestTier0CbcGap:
 class TestTier1FredGap:
     def test_gap_computed_inline_for_fred_path(self, monkeypatch):
         """Tier 0(CBC)失敗 → 落到 FRED,FRED 路徑本身沒有 gap 欄,須內聯算出。"""
-        import pandas as pd
         import src.data.macro.macro_snapshot as ms
 
         monkeypatch.setattr(

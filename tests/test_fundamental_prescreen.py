@@ -9,7 +9,6 @@ import pytest
 
 from shared.fundamental_prescreen_thresholds import DEBT_RATIO_MAX, PRESCREEN_REQUIRED_PASSES
 from src.compute.screener.fundamental_prescreen import (
-    REQUIRED_COLS,
     run_fundamental_prescreen,
     survivors_only,
 )

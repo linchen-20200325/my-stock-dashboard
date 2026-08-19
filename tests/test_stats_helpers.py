@@ -8,7 +8,6 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-import math
 
 from shared.stats_helpers import calc_stats, zscore
 

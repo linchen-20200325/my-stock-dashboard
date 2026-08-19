@@ -14,7 +14,6 @@ from __future__ import annotations
 import io
 import sys
 import pandas as pd
-import pytest
 
 
 # ─────────── A. etf_calc silent except → stderr ───────────

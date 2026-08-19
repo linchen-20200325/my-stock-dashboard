@@ -404,7 +404,6 @@ class TestConflictScenarioAllConsumersAgree:
 
     def test_all_four_consumers_report_the_same_regime(self, tl, tmp_path):
         """一句話總結：四個消費端的答案必須**完全相同**。"""
-        from src.compute.strategy import CoreSatelliteManager
 
         ms = get_macro_state(_warroom_full(tl, _CONFLICT_MKT),
                              state_file_path=_no_file(tmp_path))

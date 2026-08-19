@@ -34,7 +34,7 @@ producer 換 label 時測試會紅（而不是靜默退回「非代理」）。
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Optional
 
 #: `macro_snapshot.fetch_m1b_m2_block()` 在走到 Tier 3（^TWII 動能代理）時
 #: 寫進 `m1b_m2_info['source']` 的字面值。

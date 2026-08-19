@@ -9,7 +9,6 @@ import pytest
 
 from shared.shortage_screen_thresholds import (
     SHORTAGE_CL_GROWTH_SCORE,
-    SHORTAGE_CL_SURGE_SCORE,
     SHORTAGE_GM_DUAL_UP_SCORE,
     SHORTAGE_GM_SINGLE_UP_SCORE,
     SHORTAGE_INV_DUAL_DOWN_SCORE,

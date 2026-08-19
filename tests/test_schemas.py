@@ -13,8 +13,7 @@ import pytest
 
 from shared.schemas import (
     PANDERA_AVAILABLE,
-    OHLCVSchema, MonthlyRevenueSchema, MacroDFSchema,
-    PMISchema, ForeignFlowSchema,
+    OHLCVSchema, MonthlyRevenueSchema, PMISchema, ForeignFlowSchema,
     try_validate,
 )
 
