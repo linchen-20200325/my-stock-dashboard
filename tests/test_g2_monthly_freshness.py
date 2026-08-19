@@ -34,7 +34,6 @@ from shared.data_freshness import (
 from shared.staleness import (
     MACRO_PUBLICATION_LAG_DAYS,
     MONTHLY_PUBLICATION_MARGIN_DAYS,
-    expected_latest_data_month,
     monthly_periods_behind,
     monthly_release_status,
     monthly_stale_threshold,

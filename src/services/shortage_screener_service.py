@@ -46,7 +46,7 @@ from shared.shortage_screen_thresholds import (
 _RANKABLE_TIERS = (TIER_STRONG, TIER_MID, TIER_WEAK)
 from shared.ttls import TTL_1DAY
 from src.compute.health.monthly_revenue_calc import classify_trend, compute_yoy_mom
-from src.compute.screener.shortage_screener import rank_shortage, to_rows
+from src.compute.screener.shortage_screener import rank_shortage
 from src.data.stock.monthly_revenue_fetcher import (
     fetch_batch_monthly_revenue,
     fetch_monthly_revenue,

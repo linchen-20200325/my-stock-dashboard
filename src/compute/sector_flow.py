@@ -46,7 +46,6 @@ from shared.sector_flow_thresholds import (
     SHARES_PER_LOT,
     WINDOW_SIZE,
     WINDOW_X,
-    WINDOW_Y_MIN_DAYS,
     WINDOW_Y_PRIOR,
     WINDOW_Y_RECENT,
     YUAN_PER_YI,

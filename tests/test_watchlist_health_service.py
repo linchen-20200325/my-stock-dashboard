@@ -7,7 +7,6 @@ classify_lag_verdict 保留真實 → 驗證指標→燈號整合。
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 import src.services.watchlist_health_service as svc
 

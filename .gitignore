@@ -26,6 +26,11 @@ macro_state.json
 htmlcov/
 coverage.xml
 
+# Tooling cache (v19.181 detox: on-disk 存在但未 ignore → 防誤 commit)
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -37,6 +42,12 @@ debug.log
 
 # Runtime data cache (regenerated at runtime; keep dir via .gitkeep)
 data_cache/*.parquet
+# v19.181: 下列頂層 parquet 為「刻意 force-track」的凍結校準快照(scripts/calibrate_* / analyze_* 讀取),
+#          非 runtime cache;明示 negation 以解「規則忽略卻被追蹤」的矛盾。
+!data_cache/finmind_inst.parquet
+!data_cache/finmind_m1m2.parquet
+!data_cache/finmind_margin.parquet
+!data_cache/twii_ohlcv.parquet
 data_cache/metadata.json
 
 # Local push helper scripts (contain local paths / account names — never commit)

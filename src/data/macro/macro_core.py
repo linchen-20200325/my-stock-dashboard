@@ -34,7 +34,6 @@ import os as _os
 import re as _re
 from typing import Callable, Optional
 
-import numpy as np
 import pandas as pd
 
 from src.data.proxy import fetch_url

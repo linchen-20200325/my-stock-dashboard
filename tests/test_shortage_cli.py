@@ -10,7 +10,6 @@ import json
 import os
 
 import pandas as pd
-import pytest
 
 from src.compute.screener.shortage_screener import ShortageScore
 

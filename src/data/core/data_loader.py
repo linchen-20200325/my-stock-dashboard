@@ -175,11 +175,12 @@ from src.config import (  # Batch 10 v18.412; _FINMIND_TOKEN_CFG reads st.secret
 # src/data/core/data_loader_inst_fetchers.py(B8-b v19.156;僅該 fetcher 使用)。
 
 
-from src.data.core.data_loader_inst_fetchers import (  # noqa: F401  B8-b v19.156 拆出,import 回供內部/外部 caller
+# B8-b v19.156 拆出三大法人 fetcher;以下三者於本檔內部使用(呼叫點見
+# _normalize_inst_pivot / _fetch_twse_inst_fallback / _fetch_tpex_inst_fallback),
+# 故直接 import(內部使用,非對外 re-export → 無需 noqa)。
+from src.data.core.data_loader_inst_fetchers import (
     _fetch_tpex_inst_fallback,
     _fetch_twse_inst_fallback,
-    _get_t86_day,
-    _get_tpex_day,
     _normalize_inst_pivot,
 )
 

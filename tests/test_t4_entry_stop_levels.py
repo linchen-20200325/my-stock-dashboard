@@ -33,7 +33,6 @@ from shared.signal_thresholds import BIG_RED_STOP_BUFFER_PCT
 from src.compute.strategy.entry_stop_levels import (
     DEFAULT_LOOKBACK_BARS,
     EntryStopLevels,
-    SupportResistance,
     compute_entry_stop_levels,
     compute_support_resistance,
 )

@@ -14,7 +14,6 @@ fetch_financials / fetch_revenue / fetch_quarterly / fetch_quarterly_extra)。
 from __future__ import annotations
 
 import datetime
-import os
 
 import pytest
 

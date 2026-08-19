@@ -38,12 +38,12 @@ curl-cffi>=0.6.0,<1.0
 requests>=2.31.0,<3.0.0
 beautifulsoup4>=4.12.0,<5.0.0
 lxml>=5.3.0,<7.0.0
-html5lib>=1.1,<2.0
+# v19.181 detox:移除 html5lib — 全 repo 0 import/0 parser-string 引用;bs4 走 lxml(已 pin)
 
 # ── 工具(major version stable)─────────────────────────────
-ta>=0.10.2,<1.0
+# v19.181 detox:移除 ta(RSI/ATR/MACD 全手刻於 tech_indicators.py,0 import)
+#              + dbnomics(DBnomics 走 macro_core 純 JSON HTTP,非 SDK,0 import)
 nest-asyncio>=1.6.0,<2.0
-dbnomics>=0.7.0,<2.0
 feedparser>=6.0.0,<7.0
 
 # ── Google API ──────────────────────────────────────────────

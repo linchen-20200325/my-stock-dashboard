@@ -5,12 +5,10 @@ CLAUDE.md §3.2:|inst_net_shares| > 30D 均量 × 5 → outlier 旗標。
 """
 from __future__ import annotations
 
-import pytest
 
 from src.compute.risk import (
     is_inst_net_outlier,
     flag_inst_net_outliers_batch,
-    InstNetSanityResult,
 )
 from shared.signal_thresholds import INST_NET_OUTLIER_VOLUME_RATIO
 

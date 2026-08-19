@@ -29,7 +29,6 @@ from shared.thresholds import (
     YIELD_MID_DEC,
     classify_stock_357_price,  # Batch 9 v18.418:357 SSOT helper
 )
-from src.ui.render.tab_sections import border_left_banner  # R-UI-1 v18.412
 from shared.ttls import TTL_1DAY
 from src.data.core import fetch_bps, fetch_industry_category
 from src.data.core.provenance import prov_log
