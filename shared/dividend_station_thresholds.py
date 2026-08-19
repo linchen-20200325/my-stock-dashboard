@@ -75,6 +75,10 @@ KIND_ETF = "etf"             # ETF：A/B/C/D + 235 + 3-3-3 全套（定期定額
 # A+ / A / B / B+ / C / F（F=高危、C=明顯改善空間）。列於此的 grade 視為
 # 「基本面汰弱」→ 建議換出（KD 只當進出場時機輔證,不獨立決定換股）。
 STOCK_SWAP_GRADES: tuple[str, ...] = ("C", "F")
+# 財報體檢 grade 全集（**須與 `financial_health_engine.no_ai_overall_verdict` 一致**）。
+# assess_stock 用此防禦:非此集合的 grade（上游契約漂移 / 髒值）一律當「資料不足」,
+# 不誤判成「續抱」(§1 不對不可信的 grade 假裝有結論)。
+STOCK_HEALTH_GRADES: tuple[str, ...] = ("A+", "A", "B+", "B", "C", "F")
 
 
 def classify_asset_kind(ticker: str) -> str:

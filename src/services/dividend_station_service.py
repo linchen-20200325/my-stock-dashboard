@@ -98,7 +98,8 @@ def resolve_holding_names(holdings: list[dict]) -> list[dict]:
                 if _nm == code:                       # 查無時回代號本身 → 視為未知
                     _nm = ""
             else:
-                from src.data.etf.etf_fetch import fetch_etf_zh_name   # EX-PASSTHRU-1
+                # L3→L1 取數 = 正常編排方向（非 EX-PASSTHRU-1;那是 L4/L5/L6→L1 豁免）
+                from src.data.etf.etf_fetch import fetch_etf_zh_name
                 _nm = str(fetch_etf_zh_name(tk) or "").strip()
         except Exception as _e:  # noqa: BLE001 — 名稱抓取失敗不致命,留空（§1 不捏造）
             print(f"[dividend_station] {tk} 名稱抓取失敗: {type(_e).__name__}: {_e}")
@@ -234,7 +235,7 @@ def _fetch_stock_metrics(ticker: str) -> dict:
 
     # 1) 日 OHLC → KD（.TW 抓空試 .TWO;個股上櫃）
     try:
-        from src.data.etf.etf_fetch import fetch_etf_price   # EX-PASSTHRU-1
+        from src.data.etf.etf_fetch import fetch_etf_price   # L3→L1 正常編排
         _px = fetch_etf_price(_yf, period="1y")
         if (_px is None or getattr(_px, "empty", True)) and _yf.endswith(".TW"):
             _px2 = fetch_etf_price(_yf[:-3] + ".TWO", period="1y")
@@ -258,7 +259,9 @@ def _fetch_stock_metrics(ticker: str) -> dict:
     try:
         from src.config.config import get_finmind_token
         _tok = get_finmind_token() or ""
-    except Exception:  # noqa: BLE001 — token 讀不到 → 交給 fetcher 用 env fallback
+    except Exception as _e:  # noqa: BLE001 — token 讀不到 → 交給 fetcher 用 env fallback
+        print(f"[dividend_station] {ticker} FINMIND_TOKEN 讀取失敗,改用 env fallback: "
+              f"{type(_e).__name__}")
         _tok = ""
     try:
         from src.data.core.financial_statements_fetcher import fetch_financial_statements

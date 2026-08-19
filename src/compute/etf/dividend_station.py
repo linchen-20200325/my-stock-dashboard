@@ -424,7 +424,8 @@ def assess_stock(*, ticker: str, name: str, asset_class: str,
     _fails = list(mj_fail_items or [])
     _fail_txt = "、".join(_fails[:3])
 
-    if mj_grade is None:
+    if mj_grade is None or mj_grade not in T.STOCK_HEALTH_GRADES:
+        # 缺財報 或 grade 非已知分級（上游契約漂移/髒值）→ 不對不可信 grade 假裝有結論
         level = "⚪"
         action = f"⚪ 財報資料不足,僅供 KD 參考：{kd_label}"
     elif mj_grade in T.STOCK_SWAP_GRADES:            # 基本面汰弱（C/F）

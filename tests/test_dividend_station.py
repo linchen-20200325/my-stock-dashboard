@@ -353,3 +353,11 @@ def test_assess_stock_no_kd_still_fundamentals_only():
                          mj_fail_items=["現金"], kd=None)
     assert sa.swap_level == "🔴" and "換出" in sa.swap_action
     assert sa.kd_label == "資料不足"
+
+
+def test_assess_stock_unknown_grade_treated_as_insufficient():
+    """上游 grade 非已知分級（契約漂移/髒值）→ ⚪ 資料不足,不誤判續抱（§1）。"""
+    sa = ds.assess_stock(ticker="9999", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="ZZZ", mj_score_pct=50, mj_headline="?",
+                         mj_fail_items=[], kd=_kd(label="無"))
+    assert sa.swap_level == "⚪" and "資料不足" in sa.swap_action
