@@ -805,12 +805,11 @@ def sec_impact(rep: Reporter) -> None:
            `margin` 是**唯一沒有標單位**的一項（:12 對比 :11/:13 都有標）。
         ⇒ **最高優先級的外流點**。
 
-    [吃了，但只在離線分析] src/compute/macro/macro_signal_lookback_tw.py:136-150 / 219-238
+    [已移除 v19.181 detox] 原 src/compute/macro/macro_signal_lookback_tw.py 的
         `fetch_margin_balance_series` (MARGIN_BALANCE) 與
-        `fetch_margin_growth_5d_series` (MARGIN_GROWTH_5D)，兩者都寫死 `/1e8`。
-        消費者：src/compute/scoring/multi_factor_optimization.py:52-53,73-74。
-        對應 UI（tab_macro_validation.py）已於 v18.399 R6 整檔刪除
-        ⇒ 目前**沒有線上畫面**吃這條路，只有測試與離線腳本。
+        `fetch_margin_growth_5d_series` (MARGIN_GROWTH_5D)（兩者都寫死 `/1e8`）
+        及其消費者 multi_factor_optimization，已隨封閉死簇整組移除
+        ⇒ 這條 `/1e8` 離線路徑已不存在（對應 UI 早於 v18.399 R6 刪除）。
 
     [吃了] scripts/analyze_ring1_gate.py:383-393（本次事故的發現者本身）
 

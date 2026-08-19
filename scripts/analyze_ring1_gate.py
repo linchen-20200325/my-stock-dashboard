@@ -1243,8 +1243,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             direction="below",
             threshold_citation=consts["FOREIGN_5D_YI"].citation,
             publish_lag="TWSE 盤後約 14:30 TW 公布，故 T 日訊號最早 T+1 開盤可執行",
-            consequence="src/compute/macro/macro_signal_lookback_tw.py:297-304 "
-                        "DEFAULT_TW_SIGNALS 的警戒訊號之一",
+            consequence="外資現貨 5 日賣超警戒訊號之一"
+                        "（原 DEFAULT_TW_SIGNALS，v19.181 detox 已移除）",
         )
         fs_mask = analyze_gate(
             loaded.get("foreign_spot_5d_yi",
