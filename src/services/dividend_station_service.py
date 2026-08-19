@@ -45,6 +45,68 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
     }
 
 
+def stock_row_from_assessment(sa: ds.StockAssessment) -> dict:
+    """個股 StockAssessment → 個股汰換表一列（純函式,財報體檢 + KD）。
+
+    `健檢` 欄復用 swap_level（🔴/🟡/🟢/⚪）→ 下游 build_station_digest / build_switch_advice /
+    UI 高亮 沿用同一鍵,個股財報汰弱紅燈自然被換股建議的「換出」挑中（§ 不重造下游邏輯）。
+    """
+    _fh = f"{sa.mj_grade}（{sa.mj_score_pct}）" if sa.mj_grade else "資料不足"
+    if sa.kd_k is not None and sa.kd_d is not None:
+        _kd = f"K{sa.kd_k:.0f} D{sa.kd_d:.0f}｜{sa.kd_label}"
+    else:
+        _kd = "資料不足"
+    return {
+        "代號": sa.ticker, "名稱": sa.name, "種類": "個股",
+        "類別": _CLASS_ICON.get(sa.asset_class, sa.asset_class),
+        "財報體檢": _fh, "KD": _kd,
+        "健檢": sa.swap_level,          # 復用下游/高亮同一鍵
+        "建議動作": sa.swap_action,
+        "_detail": {
+            "財報總評": sa.mj_headline or "—",
+            "財報弱項": "、".join(sa.mj_fail_items) or "—",
+            "KD明細": _kd,
+            "KD交叉": {"golden": "黃金交叉", "death": "死亡交叉"}.get(sa.kd_cross, "無"),
+        },
+    }
+
+
+def resolve_holding_names(holdings: list[dict]) -> list[dict]:
+    """就地補持股中文名（§1 抓不到留空不捏造）。ETF→fetch_etf_zh_name、個股→get_stock_name。
+
+    載入時呼叫,讓預覽表 + 戰情表兩處都顯示名稱（原本兩處都空）。best-effort:
+    任一檔抓取失敗只 log、留原值,不擋載入。名稱查無時兩來源分別回 None / 代號本身 →
+    一律視為「未知」留空（UI 仍有代號欄,不誤導）。
+    """
+    for h in (holdings or []):
+        if str(h.get("name") or "").strip():
+            continue
+        tk = str(h.get("ticker") or "").strip().upper()
+        if not tk:
+            continue
+        code = tk
+        for _suf in (".TWO", ".TW"):
+            if code.endswith(_suf):
+                code = code[:-len(_suf)]
+                break
+        ak = h.get("asset_kind") or T.classify_asset_kind(tk)
+        _nm = ""
+        try:
+            if ak == T.KIND_STOCK:
+                from src.config.stock_names import get_stock_name
+                _nm = str(get_stock_name(code) or "").strip()
+                if _nm == code:                       # 查無時回代號本身 → 視為未知
+                    _nm = ""
+            else:
+                from src.data.etf.etf_fetch import fetch_etf_zh_name   # EX-PASSTHRU-1
+                _nm = str(fetch_etf_zh_name(tk) or "").strip()
+        except Exception as _e:  # noqa: BLE001 — 名稱抓取失敗不致命,留空（§1 不捏造）
+            print(f"[dividend_station] {tk} 名稱抓取失敗: {type(_e).__name__}: {_e}")
+        if _nm:
+            h["name"] = _nm
+    return holdings
+
+
 def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason: str,
                *, held: bool = True) -> dict:
     return {
@@ -60,11 +122,14 @@ def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason
 
 def build_station_rows(holdings: list[dict], *, vix: float | None,
                        metrics_fn: Callable[[str, str], dict]) -> list[dict]:
-    """逐檔評估 → 組表。metrics_fn(ticker) 回一 dict 指標（依賴注入,離線可測）。
+    """逐檔評估 → 組表。metrics_fn(ticker, asset_kind) 回一 dict 指標（依賴注入,離線可測）。
 
-    holdings: [{'ticker','name','asset_class'}, ...]
-    metrics_fn 需回：weekly_close(必要) + premium_pct/sharpe/total_return_1y_pct/
+    holdings: [{'ticker','name','asset_class','asset_kind'}, ...]
+    metrics_fn 依 asset_kind 回不同指標：
+    - ETF（定期定額）：weekly_close(必要) + premium_pct/sharpe/total_return_1y_pct/
       annual_yield_pct/inception_years/ann_return_3y_pct/cum_return_3y_pct/peer_ranks（可缺）。
+    - 個股（汰換）：mj_grade/mj_score_pct/mj_headline/mj_fail_items（財報體檢）+
+      kd_state（KD 狀態 dict）+ current_price（可缺;缺者標資料不足,§1）。
     """
     rows: list[dict] = []
     for h in (holdings or []):
@@ -77,17 +142,25 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
             continue
         try:
             m = metrics_fn(tk, ak)
-            a = ds.assess_holding(
-                ticker=tk, name=nm or str(m.get("name", "")), asset_class=ac,
-                asset_kind=ak, weekly_close=m["weekly_close"], vix=vix,
-                premium_pct=m.get("premium_pct"), sharpe=m.get("sharpe"),
-                total_return_1y_pct=m.get("total_return_1y_pct"),
-                annual_yield_pct=m.get("annual_yield_pct"),
-                inception_years=m.get("inception_years"),
-                ann_return_3y_pct=m.get("ann_return_3y_pct"),
-                cum_return_3y_pct=m.get("cum_return_3y_pct"),
-                peer_ranks=m.get("peer_ranks"))
-            _row = row_from_assessment(a)
+            if ak == T.KIND_STOCK:                       # 個股：財報體檢 + KD 汰換
+                sa = ds.assess_stock(
+                    ticker=tk, name=nm or str(m.get("name", "")), asset_class=ac,
+                    mj_grade=m.get("mj_grade"), mj_score_pct=m.get("mj_score_pct"),
+                    mj_headline=m.get("mj_headline", ""),
+                    mj_fail_items=m.get("mj_fail_items"), kd=m.get("kd_state"))
+                _row = stock_row_from_assessment(sa)
+            else:                                        # ETF：定期定額 235 + 3-3-3
+                a = ds.assess_holding(
+                    ticker=tk, name=nm or str(m.get("name", "")), asset_class=ac,
+                    asset_kind=ak, weekly_close=m["weekly_close"], vix=vix,
+                    premium_pct=m.get("premium_pct"), sharpe=m.get("sharpe"),
+                    total_return_1y_pct=m.get("total_return_1y_pct"),
+                    annual_yield_pct=m.get("annual_yield_pct"),
+                    inception_years=m.get("inception_years"),
+                    ann_return_3y_pct=m.get("ann_return_3y_pct"),
+                    cum_return_3y_pct=m.get("cum_return_3y_pct"),
+                    peer_ranks=m.get("peer_ranks"))
+                _row = row_from_assessment(a)
             _row["held"] = held
             # #38：市值 = 張數 × 現價、損益% = (現價/均價-1)。§1 缺張數/均價/現價就不算,
             #   回 None(不捏 0),下游 80/20 偏離 / 衛星停利 對 None 誠實略過。
@@ -117,6 +190,106 @@ def fetch_vix() -> float | None:
     return None
 
 
+def _stock_ohlc_lower(px) -> "object | None":
+    """yfinance 大寫 OHLC → KD 需要的小寫 close/high/low DataFrame（DatetimeIndex,升序）。
+
+    缺任一欄回 None（§1 不補假欄）。純轉換,無 I/O。
+    """
+    import pandas as pd
+    cols: dict = {}
+    for _lc, _cands in (("close", ("Close", "close")),
+                        ("high", ("High", "high")),
+                        ("low", ("Low", "low"))):
+        _c = next((c for c in _cands if c in px.columns), None)
+        if _c is None:
+            return None
+        cols[_lc] = pd.to_numeric(px[_c], errors="coerce")
+    df = pd.DataFrame(cols).dropna()
+    if not len(df):
+        return None
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index)
+    return df.sort_index()
+
+
+def _fetch_stock_metrics(ticker: str) -> dict:
+    """個股汰換指標：財報體檢(no-AI grade) + KD 狀態 + 現價（供市值/損益%）。
+
+    §1 best-effort：日線/KD、財報、名稱三者各自獨立 try,任一失敗只 log + 標資料不足,
+    **不 raise、不炸整表**。財報走 L1 `fetch_financial_statements` → L3 no-AI
+    `analyze_financial_health` + `no_ai_overall_verdict`；KD 走日 OHLC → L2
+    `analyze_kd_state` + `kd_cross_state`。⚠️ 需部署端網路（沙箱代理擋 TW/FinMind）。
+    """
+    from src.compute.etf import normalize_etf_ticker
+
+    _yf = normalize_etf_ticker(ticker) or ticker
+    code = str(ticker or "").strip().upper()
+    for _suf in (".TWO", ".TW"):
+        if code.endswith(_suf):
+            code = code[:-len(_suf)]
+            break
+
+    m: dict = {"mj_grade": None, "mj_score_pct": None, "mj_headline": "",
+               "mj_fail_items": [], "kd_state": None, "current_price": None, "name": ""}
+
+    # 1) 日 OHLC → KD（.TW 抓空試 .TWO;個股上櫃）
+    try:
+        from src.data.etf.etf_fetch import fetch_etf_price   # EX-PASSTHRU-1
+        _px = fetch_etf_price(_yf, period="1y")
+        if (_px is None or getattr(_px, "empty", True)) and _yf.endswith(".TW"):
+            _px2 = fetch_etf_price(_yf[:-3] + ".TWO", period="1y")
+            if _px2 is not None and not getattr(_px2, "empty", True):
+                _px = _px2
+        if _px is not None and not getattr(_px, "empty", True):
+            _ohlc = _stock_ohlc_lower(_px)
+            if _ohlc is not None:
+                m["current_price"] = float(_ohlc["close"].iloc[-1])
+                from src.compute.strategy.tech_indicators import (
+                    analyze_kd_state, kd_cross_state)
+                _kd = analyze_kd_state(_ohlc)
+                if _kd:
+                    _kd = dict(_kd)
+                    _kd["cross"] = kd_cross_state(_ohlc)
+                    m["kd_state"] = _kd
+    except Exception as _e:  # noqa: BLE001 — 日線/KD 失敗不致命,標資料不足
+        print(f"[dividend_station] {ticker} 日線/KD 失敗: {type(_e).__name__}: {_e}")
+
+    # 2) 財報體檢（no-AI grade）
+    try:
+        from src.config.config import get_finmind_token
+        _tok = get_finmind_token() or ""
+    except Exception:  # noqa: BLE001 — token 讀不到 → 交給 fetcher 用 env fallback
+        _tok = ""
+    try:
+        from src.data.core.financial_statements_fetcher import fetch_financial_statements
+        from src.services.financial_health_engine import (
+            analyze_financial_health, no_ai_overall_verdict)
+        _fin = fetch_financial_statements(code, _tok)
+        if isinstance(_fin, dict) and not _fin.get("error"):
+            _fh = analyze_financial_health("", code, _fin)   # api_key="" → 純 no-AI 路徑
+            _ov = no_ai_overall_verdict(_fin, _fh)
+            m["mj_grade"] = _ov.get("grade")
+            m["mj_score_pct"] = _ov.get("score_pct")
+            m["mj_headline"] = str(_ov.get("headline", ""))
+            m["mj_fail_items"] = list(_ov.get("fail_items", []) or [])
+        else:
+            _err = _fin.get("error") if isinstance(_fin, dict) else "財報抓取失敗"
+            print(f"[dividend_station] {ticker} 財報缺: {_err}")
+    except Exception as _e:  # noqa: BLE001 — 財報失敗 → 財報體檢標資料不足,不炸整表
+        print(f"[dividend_station] {ticker} 財報健檢失敗: {type(_e).__name__}: {_e}")
+
+    # 3) 名稱（get_stock_name 查無回代號本身 → 視為未知留空）
+    try:
+        from src.config.stock_names import get_stock_name
+        _nm = str(get_stock_name(code) or "").strip()
+        if _nm and _nm != code:
+            m["name"] = _nm
+    except Exception as _e:  # noqa: BLE001
+        print(f"[dividend_station] {ticker} 名稱抓取失敗: {type(_e).__name__}")
+
+    return m
+
+
 def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
     """逐檔抓 L2 所需指標（best-effort;缺的回 None → 該項標資料不足）。
 
@@ -125,7 +298,11 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
     配息率（個股亦可）。折溢價 `fetch_etf_nav_history` **僅 ETF**（個股無 iNAV,跳過）。
     ⚠️ 需部署端網路（沙箱代理擋）。日線為必要,無則 raise（該列標抓取失敗,§1 誠實不假裝）。
     同儕排名（3-3-3 ③）Phase 2 未接 → peer_ranks=None。
+    **個股（asset_kind=stock）改走 `_fetch_stock_metrics`（財報體檢 + KD）,不套 235/3-3-3。**
     """
+    if asset_kind == T.KIND_STOCK:
+        return _fetch_stock_metrics(ticker)
+
     import pandas as pd
     from src.compute.etf import normalize_etf_ticker
 

@@ -3,11 +3,13 @@
 定位：**持股 Sheet 綁定** → 定期健檢 → AI 總結（可推播）。
 - 標的**唯一來源 = 📁 組合管理**（投資組合 Portfolio + 觀察清單 Watchlist）,進頁自動載入、**唯讀不可改**;
   無手動輸入代號的入口（§ user 2026-08：單一來源、去凌亂）。
-- 逐檔（個股+ETF）跑健檢 + 235 燈 + 3-3-3,顏色高亮。
+- 戰情表**分兩區**（§ user 2026-08）：
+  · 🛡️ 定期定額策略（ETF）→ 健檢 A/B/C/D + 235 加碼燈 + 3-3-3；
+  · 🚀 個股汰換（衛星）→ 財報體檢（grade）+ KD → 是否更換（財報為主、KD 為時機輔證）。
 - 🤖 AI 戰情總結：先出規則式事實（汰弱 / 235 加碼 / 抓取失敗）,有金鑰再 AI 潤成推播文字。
 
 §8.2 L5：只呼叫 L3 `dividend_station_service`,不自算。§1：抓取失敗逐列誠實標記,不炸整表;
-抓取 button-gated（不每次 rerun 重抓）。個股：D折溢價 / 3-3-3 標「—」不適用(§1 不硬套 ETF 規則)。
+抓取 button-gated（不每次 rerun 重抓）。個股不套 235/3-3-3（ETF/基金規則）,資料不足標「資料不足」不猜。
 """
 from __future__ import annotations
 
@@ -17,12 +19,14 @@ import streamlit as st
 
 from shared import dividend_station_thresholds as T
 
-_MAIN_COLS = ["代號", "名稱", "種類", "類別", "健檢", "235 燈號", "加碼金", "3-3-3", "建議動作"]
+# 戰情表分兩區（§ user 2026-08）：ETF 走定期定額 235/3-3-3、個股走 財報體檢 + KD。
+_ETF_COLS = ["代號", "名稱", "健檢", "235 燈號", "加碼金", "3-3-3", "建議動作"]
+_STOCK_COLS = ["代號", "名稱", "財報體檢", "KD", "建議動作"]
 _HOLDINGS_KEY = "_station_holdings"
 
 
 def _style_rows(df):
-    """健檢/建議 有 🔴/🟡 → 背景高亮（紅/琥珀）。"""
+    """健檢/財報體檢/建議 有 🔴/🟡 → 背景高亮（紅/琥珀）。"""
     def _bg(val):
         s = str(val)
         if "🔴" in s:
@@ -30,7 +34,16 @@ def _style_rows(df):
         if "🟡" in s:
             return "background-color:#3a3416"
         return ""
-    return df.style.map(_bg, subset=[c for c in ("健檢", "建議動作") if c in df.columns])
+    return df.style.map(_bg, subset=[c for c in ("健檢", "財報體檢", "建議動作")
+                                     if c in df.columns])
+
+
+def _safe_dataframe(styled, plain) -> None:
+    """Styler 相容性問題退無樣式,不炸（§1）。"""
+    try:
+        st.dataframe(styled, use_container_width=True, hide_index=True)
+    except Exception:  # noqa: BLE001 — Styler 相容性退無樣式
+        st.dataframe(plain, use_container_width=True, hide_index=True)
 
 
 def _holding_preview_row(h: dict) -> dict:
@@ -47,9 +60,9 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     import pandas as pd
 
     st.markdown("### 💼 我的持股戰情室 — 定期健檢 · 235 加碼 · AI 總結")
-    st.caption("標的**唯一來源 = 📁 組合管理**（投資組合 Portfolio + 觀察清單 Watchlist）,自動載入、唯讀。逐檔看健檢"
-               "（A賺息賠本／B夏普／C季線轉弱／D高溢價）＋235 加碼燈,AI 幫你濃縮成「今天要不要動作」。"
-               "個股：D折溢價／3-3-3 標「—」不適用;資料不足標「不判定」不猜（§1）。")
+    st.caption("標的**唯一來源 = 📁 組合管理**（投資組合 Portfolio + 觀察清單 Watchlist）,自動載入、唯讀。"
+               "戰情表分兩區：**ETF**＝定期定額（健檢 A/B/C/D＋235 加碼＋3-3-3）;**個股**＝汰換"
+               "（財報體檢 grade＋KD → 是否更換）。AI 幫你濃縮成「今天要不要動作」;資料不足標「資料不足」不猜（§1）。")
 
     # ── 1️⃣ 我的持股（唯讀,自動載入自持股 Sheet）─────────────────────────
     if _HOLDINGS_KEY not in st.session_state:
@@ -118,28 +131,45 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     _vix_txt = f"{_vix:.1f}" if isinstance(_vix, (int, float)) else "抓取失敗（235 的 VIX 條件本次不觸發）"
     st.markdown(f"#### 3️⃣ 戰情表　·　VIX：**{_vix_txt}**")
 
-    _df = pd.DataFrame([{c: r.get(c, "") for c in _MAIN_COLS} for r in _rows])
-    try:
-        st.dataframe(_style_rows(_df), use_container_width=True, hide_index=True)
-    except Exception:  # noqa: BLE001 — Styler 相容性問題退無樣式,不炸
-        st.dataframe(_df, use_container_width=True, hide_index=True)
+    # 分兩區呈現（§ user 2026-08）：ETF＝定期定額策略、個股＝汰換判斷。
+    _etf_rows = [r for r in _rows if r.get("種類") != "個股"]
+    _stock_rows = [r for r in _rows if r.get("種類") == "個股"]
+
+    if _etf_rows:
+        st.markdown("##### 🛡️ 定期定額策略（ETF）　·　235 加碼燈 ＋ 3-3-3")
+        _edf = pd.DataFrame([{c: r.get(c, "") for c in _ETF_COLS} for r in _etf_rows])
+        _safe_dataframe(_style_rows(_edf), _edf)
+    if _stock_rows:
+        st.markdown("##### 🚀 個股汰換（衛星）　·　財報體檢 ＋ KD → 是否更換")
+        st.caption("個股不套 235/3-3-3（那是 ETF 定期定額規則）。**財報 grade 決定汰弱、KD 定進出時機**："
+                   "財報 C/F → 建議換出;KD 死亡交叉/頂背離＝賣點確認、黃金交叉/底背離＝轉強留。")
+        _sdf = pd.DataFrame([{c: r.get(c, "") for c in _STOCK_COLS} for r in _stock_rows])
+        _safe_dataframe(_style_rows(_sdf), _sdf)
+    if not _etf_rows and not _stock_rows:
+        st.info("無可顯示的持股列。")
 
     # ── 📊 80/20 實際配置偏離 + 衛星停利（#38,有張數/均價才算）─────────────
     _render_allocation_take_profit(_rows)
 
-    # 逐檔明細
-    with st.expander("🔎 逐檔明細（健檢 A/B/C/D · 235 觸發 · 3-3-3）", expanded=False):
+    # 逐檔明細（ETF：健檢 A/B/C/D · 235 · 3-3-3｜個股：財報體檢 · KD）
+    with st.expander("🔎 逐檔明細（ETF：A/B/C/D · 235 · 3-3-3｜個股：財報體檢 · KD）", expanded=False):
         for r in _rows:
             d = r.get("_detail", {})
+            _hdr = f"**{r['代號']} {r.get('名稱','')}**"
             if d.get("error"):
-                st.markdown(f"**{r['代號']} {r.get('名稱','')}** — ⚠️ {d['error']}")
+                st.markdown(f"{_hdr} — ⚠️ {d['error']}")
+                st.markdown("---")
                 continue
-            st.markdown(f"**{r['代號']} {r.get('名稱','')}**　{r.get('235 燈號','')}　"
-                        f"3-3-3：{d.get('3-3-3明細','')}")
-            st.caption(f"A：{d.get('健檢A','')}　｜　B：{d.get('健檢B','')}")
-            st.caption(f"C：{d.get('健檢C','')}　｜　D：{d.get('健檢D','')}")
-            if d.get("235觸發"):
-                st.caption(f"235 觸發：{d['235觸發']}　深水：{d.get('深水防守','—')}")
+            if r.get("種類") == "個股":
+                st.markdown(f"{_hdr}　財報：{r.get('財報體檢','')}　KD：{r.get('KD','')}")
+                st.caption(f"財報總評：{d.get('財報總評','—')}")
+                st.caption(f"財報弱項：{d.get('財報弱項','—')}　｜　KD 交叉：{d.get('KD交叉','無')}")
+            else:
+                st.markdown(f"{_hdr}　{r.get('235 燈號','')}　3-3-3：{d.get('3-3-3明細','')}")
+                st.caption(f"A：{d.get('健檢A','')}　｜　B：{d.get('健檢B','')}")
+                st.caption(f"C：{d.get('健檢C','')}　｜　D：{d.get('健檢D','')}")
+                if d.get("235觸發"):
+                    st.caption(f"235 觸發：{d['235觸發']}　深水：{d.get('深水防守','—')}")
             st.markdown("---")
 
     # ── 4️⃣ 換股建議（換出=持有🔴汰弱 · 換入=選股池候選 · 搭配總經位階）──────
@@ -336,5 +366,13 @@ def _load_holdings_from_portfolio() -> list[dict]:
                 st.caption(f"✅ 帶入 觀察清單 Watchlist「{_snames[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」
             st.warning(f"觀察清單 Watchlist讀取失敗：{type(_e).__name__}：{_e}")
+
+    # 補中文名（ETF→fetch_etf_zh_name、個股→get_stock_name;§1 抓不到留空不捏造）。
+    # 讓預覽表 + 戰情表兩處都顯示名稱（原本兩處 name 都寫死空字串）。best-effort。
+    try:
+        from src.services.dividend_station_service import resolve_holding_names
+        resolve_holding_names(_out)
+    except Exception as _e:  # noqa: BLE001 — 名稱解析失敗不擋載入
+        st.caption(f"（名稱解析略過：{type(_e).__name__}）")
 
     return _out

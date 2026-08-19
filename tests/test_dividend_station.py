@@ -275,3 +275,81 @@ def test_assess_holding_empty_raises():
             ticker="X", name="", asset_class=T.ASSET_CORE, weekly_close=pd.Series([], dtype=float),
             vix=18, premium_pct=None, sharpe=None, total_return_1y_pct=None, annual_yield_pct=None,
             inception_years=None, ann_return_3y_pct=None, cum_return_3y_pct=None, peer_ranks=None)
+
+
+# ── 個股汰換：assess_stock（財報為主·KD為輔,§ user 2026-08）─────────────────
+def _kd(label="無", cross=None, high=False, low=False, bear=False, bull=False,
+        k=50.0, d=50.0):
+    return {"k": k, "d": d, "label": label, "cross": cross,
+            "high_passivation": high, "low_passivation": low,
+            "bearish_divergence": bear, "bullish_divergence": bull}
+
+
+def test_assess_stock_grade_f_bearish_kd_swap_out():
+    """財報 F + KD 死亡交叉 → 🔴 換出（賣點確認）。"""
+    sa = ds.assess_stock(ticker="1111", name="爛股", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="F", mj_score_pct=15, mj_headline="🔴 高危",
+                         mj_fail_items=["負債比率", "流動比率", "現金"],
+                         kd=_kd(label="死亡交叉", cross="death"))
+    assert sa.swap_level == "🔴"
+    assert "換出" in sa.swap_action and "賣點確認" in sa.swap_action
+
+
+def test_assess_stock_grade_c_bullish_kd_batch():
+    """財報 C（汰弱）但 KD 轉強（黃金交叉）→ 🟡 分批換/觀察（不急砍）。"""
+    sa = ds.assess_stock(ticker="2222", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="C", mj_score_pct=40, mj_headline="🟡",
+                         mj_fail_items=["毛利率"], kd=_kd(label="黃金交叉", cross="golden"))
+    assert sa.swap_level == "🟡"
+    assert "分批換" in sa.swap_action or "觀察" in sa.swap_action
+
+
+def test_assess_stock_grade_c_neutral_kd_swap_out():
+    """財報 C + KD 無明顯訊號 → 仍 🔴 換出（基本面主導）。"""
+    sa = ds.assess_stock(ticker="3333", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="C", mj_score_pct=45, mj_headline="🟡",
+                         mj_fail_items=["負債比率"], kd=_kd(label="無"))
+    assert sa.swap_level == "🔴" and "換出" in sa.swap_action
+
+
+def test_assess_stock_grade_a_high_passivation_strong_hold():
+    """財報 A + KD 高檔鈍化 → 🟢 強勢續抱。"""
+    sa = ds.assess_stock(ticker="4444", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="A", mj_score_pct=85, mj_headline="🟢",
+                         mj_fail_items=[], kd=_kd(label="高檔鈍化", high=True, k=92, d=90))
+    assert sa.swap_level == "🟢" and "強勢續抱" in sa.swap_action
+
+
+def test_assess_stock_grade_a_bearish_kd_watch():
+    """財報 A（佳）但 KD 短線轉弱（頂背離）→ 🟡 留意、暫不加碼（不換出）。"""
+    sa = ds.assess_stock(ticker="5555", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="A", mj_score_pct=80, mj_headline="🟢",
+                         mj_fail_items=[], kd=_kd(label="頂背離", bear=True))
+    assert sa.swap_level == "🟡"
+    assert "留意" in sa.swap_action and "換出" not in sa.swap_action
+
+
+def test_assess_stock_grade_b_neutral_hold():
+    """財報 B（非汰弱門檻）+ KD 中性 → 🟢 續抱。"""
+    sa = ds.assess_stock(ticker="6666", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="B", mj_score_pct=65, mj_headline="🔵",
+                         mj_fail_items=[], kd=_kd(label="無"))
+    assert sa.swap_level == "🟢" and "續抱" in sa.swap_action
+
+
+def test_assess_stock_no_financials_data_insufficient():
+    """財報資料不足（grade=None）→ ⚪ 只供 KD 參考,不猜、不捏 grade（§1）。"""
+    sa = ds.assess_stock(ticker="7777", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade=None, mj_score_pct=None, mj_headline="",
+                         mj_fail_items=None, kd=_kd(label="低檔鈍化", low=True))
+    assert sa.swap_level == "⚪" and "資料不足" in sa.swap_action
+    assert sa.mj_grade is None
+
+
+def test_assess_stock_no_kd_still_fundamentals_only():
+    """KD 資料不足（kd=None）→ 仍用財報判:F → 🔴 換出;kd_label 標資料不足。"""
+    sa = ds.assess_stock(ticker="8888", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="F", mj_score_pct=10, mj_headline="🔴",
+                         mj_fail_items=["現金"], kd=None)
+    assert sa.swap_level == "🔴" and "換出" in sa.swap_action
+    assert sa.kd_label == "資料不足"

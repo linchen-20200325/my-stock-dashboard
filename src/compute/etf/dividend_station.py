@@ -380,3 +380,81 @@ def suggest_action(a: HoldingAssessment) -> str:
         return f"🟡 {a.health_d.msg}"
     # 5) 巡航
     return "⚪ 巡航：維持定期定額"
+
+
+# ── 個股汰換評估（財報體檢為主 · KD 為輔）─────────────────────────────────
+@dataclass(frozen=True)
+class StockAssessment:
+    """個股「是否更換」評估（§ user 2026-08：個股改走 財報體檢 + KD,不套 235/3-3-3）。"""
+    ticker: str
+    name: str
+    asset_class: str
+    mj_grade: str | None             # A+/A/B/B+/C/F；None = 財報資料不足
+    mj_score_pct: int | None
+    mj_headline: str
+    mj_fail_items: list[str]
+    kd_k: float | None
+    kd_d: float | None
+    kd_label: str                    # 高檔鈍化/死亡交叉/... 或「無」/「資料不足」
+    kd_cross: str | None             # golden / death / None
+    swap_level: str                  # 🔴換出 / 🟡留意 / 🟢續抱 / ⚪資料不足
+    swap_action: str
+
+
+def assess_stock(*, ticker: str, name: str, asset_class: str,
+                 mj_grade: str | None, mj_score_pct: int | None,
+                 mj_headline: str, mj_fail_items: list[str] | None,
+                 kd: dict | None) -> StockAssessment:
+    """個股汰換判定（純函式,財報為主 · KD 為輔）。
+
+    決策（§ user 2026-08 核准）：
+    - **財報 grade 決定汰弱**：grade ∈ STOCK_SWAP_GRADES(C/F) → 建議換出。
+    - **KD 只當進出場時機輔證**（不獨立決定換股）：
+      死亡交叉 / 頂背離 = 賣點確認；黃金交叉 / 底背離 / 低檔鈍化 = 轉強（留 / 分批）；
+      高檔鈍化 = 強勢續抱。
+    §1：財報資料不足 → grade=None → 標「資料不足」僅供 KD 參考,不猜、不捏 grade。
+    """
+    kd = kd or {}
+    kd_label = str(kd.get("label") or ("資料不足" if not kd else "無"))
+    cross = kd.get("cross")
+    bearish_kd = (cross == "death") or bool(kd.get("bearish_divergence"))
+    bullish_kd = ((cross == "golden") or bool(kd.get("bullish_divergence"))
+                  or bool(kd.get("low_passivation")))
+    strong_kd = bool(kd.get("high_passivation"))
+    _fails = list(mj_fail_items or [])
+    _fail_txt = "、".join(_fails[:3])
+
+    if mj_grade is None:
+        level = "⚪"
+        action = f"⚪ 財報資料不足,僅供 KD 參考：{kd_label}"
+    elif mj_grade in T.STOCK_SWAP_GRADES:            # 基本面汰弱（C/F）
+        if bearish_kd:
+            level = "🔴"
+            action = (f"🔴 建議換出：財報 {mj_grade}"
+                      + (f"（{_fail_txt}）" if _fail_txt else "")
+                      + f" + KD 轉弱（{kd_label}）賣點確認")
+        elif bullish_kd:
+            level = "🟡"
+            action = (f"🟡 財報弱（{mj_grade}）但 KD 轉強（{kd_label}）→ 分批換 / 再觀察")
+        else:
+            level = "🔴"
+            action = (f"🔴 建議換出：財報體質 {mj_grade}"
+                      + (f"（{_fail_txt}）" if _fail_txt else ""))
+    else:                                            # 基本面 OK（A+/A/B/B+）
+        if bearish_kd:
+            level = "🟡"
+            action = (f"🟡 財報佳（{mj_grade}）但 KD 短線轉弱（{kd_label}）→ 留意、暫不加碼")
+        elif strong_kd:
+            level = "🟢"
+            action = f"🟢 強勢續抱：財報 {mj_grade} + KD 高檔鈍化"
+        else:
+            _kd_txt = f"｜KD {kd_label}" if kd_label not in ("無", "資料不足") else ""
+            level = "🟢"
+            action = f"🟢 續抱：財報 {mj_grade}{_kd_txt}"
+
+    return StockAssessment(
+        ticker=ticker, name=name, asset_class=asset_class,
+        mj_grade=mj_grade, mj_score_pct=mj_score_pct, mj_headline=mj_headline,
+        mj_fail_items=_fails,
+        kd_k=kd.get("k"), kd_d=kd.get("d"), kd_label=kd_label, kd_cross=cross,
+        swap_level=level, swap_action=action)

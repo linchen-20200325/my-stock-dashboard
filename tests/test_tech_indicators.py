@@ -278,3 +278,32 @@ class TestCalcVcp:
         # 缺 high/low 欄回 None,不再要求 caller 防炸(tab_stock:266 為裸呼叫)。
         df = pd.DataFrame({'foo': list(range(50))})
         assert calc_vcp(df) is None
+
+
+# ── kd_cross_state：黃金/死亡交叉（v19.x 個股汰換 KD 輔證）────────────────────
+def _kd_df(closes):
+    return _ohlcv(closes, highs=[c + 1 for c in closes], lows=[c - 1 for c in closes])
+
+
+class TestKdCrossState:
+    def test_golden_cross_after_decline_then_rally(self):
+        from src.compute.strategy import kd_cross_state
+        closes = list(range(80, 55, -1)) + [78]      # 長跌(K,D≈0,K≈D)後一根急拉 → K 上穿 D
+        assert kd_cross_state(_kd_df(closes)) == 'golden'
+
+    def test_death_cross_after_rally_then_drop(self):
+        from src.compute.strategy import kd_cross_state
+        closes = list(range(55, 80)) + [57]          # 長漲(K,D≈100)後一根急殺 → K 下破 D
+        assert kd_cross_state(_kd_df(closes)) == 'death'
+
+    def test_no_cross_when_flat(self):
+        from src.compute.strategy import kd_cross_state
+        assert kd_cross_state(_kd_df([50] * 30)) is None
+
+    def test_none_on_insufficient_data(self):
+        from src.compute.strategy import kd_cross_state
+        assert kd_cross_state(_kd_df([50, 51, 52])) is None      # < period+1
+
+    def test_none_on_none_df(self):
+        from src.compute.strategy import kd_cross_state
+        assert kd_cross_state(None) is None
