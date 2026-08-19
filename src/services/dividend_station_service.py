@@ -89,6 +89,15 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
                 peer_ranks=m.get("peer_ranks"))
             _row = row_from_assessment(a)
             _row["held"] = held
+            # #38：市值 = 張數 × 現價、損益% = (現價/均價-1)。§1 缺張數/均價/現價就不算,
+            #   回 None(不捏 0),下游 80/20 偏離 / 衛星停利 對 None 誠實略過。
+            _lots = h.get("lots")
+            _avg = h.get("avg_price")
+            _cur = m.get("current_price")
+            _row["市值"] = (float(_lots) * float(_cur)
+                            if _lots and _cur and float(_lots) > 0 and float(_cur) > 0 else None)
+            _row["損益%"] = (round((float(_cur) / float(_avg) - 1.0) * 100.0, 1)
+                             if _avg and _cur and float(_avg) > 0 and float(_cur) > 0 else None)
             rows.append(_row)
         except Exception as e:  # noqa: BLE001 — 單檔失敗不炸整表（§1 誠實標記）
             rows.append(_error_row(tk, nm, ac, ak, f"{type(e).__name__}: {e}", held=held))
@@ -152,6 +161,7 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
     m: dict = {"weekly_close": weekly}
     _as_of = pd.Timestamp.today().normalize()
     _cur = float(_close.iloc[-1])
+    m["current_price"] = _cur          # #38：供 市值 = 張數×現價 / 損益% 計算
 
     def _close_before(days: int) -> float | None:
         _sub = _close.loc[:_as_of - pd.Timedelta(days=days)]
@@ -350,16 +360,69 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
     }
 
 
+# ── 80/20 配置偏離 + 衛星停利（#38：有張數/均價才算,§1 缺就不算）───────────
+def compute_allocation_split(rows: list[dict]) -> dict | None:
+    """80/20 實際配置偏離（純函式）。核心=ETF、衛星=個股（郭俊宏:核心配息ETF/衛星成長股,
+    以代號類型近似;主題型 ETF 會被算核心,UI 已註記此近似）。
+
+    只納入 **held 且有市值(市值>0)** 的列。§1：部分 held 缺金額 → partial=True(僅供參考);
+    全無市值 → None（UI 不顯示、不捏造）。
+    """
+    _core = _sat = 0.0
+    _held_n = _valued_n = 0
+    for r in (rows or []):
+        if not r.get("held") or r.get("_detail", {}).get("error"):
+            continue
+        _held_n += 1
+        _v = r.get("市值")
+        if not isinstance(_v, (int, float)) or _v <= 0:
+            continue
+        _valued_n += 1
+        if r.get("種類") == "個股":
+            _sat += float(_v)
+        else:
+            _core += float(_v)
+    _total = _core + _sat
+    if _total <= 0:
+        return None
+    _core_pct = _core / _total * 100.0
+    return {
+        "core_pct": round(_core_pct, 1), "sat_pct": round(100.0 - _core_pct, 1),
+        "core_target": T.CORE_TARGET_PCT, "sat_target": T.SATELLITE_TARGET_PCT,
+        "core_dev": round(_core_pct - T.CORE_TARGET_PCT, 1),
+        "total_value": round(_total, 0),
+        "partial": _valued_n < _held_n, "held_n": _held_n, "valued_n": _valued_n,
+    }
+
+
+def flag_take_profit(rows: list[dict]) -> list[dict]:
+    """衛星（個股）獲利達停利門檻 → 嚴格停利滾回核心（純函式）。
+
+    郭俊宏:衛星獲利 15~20% 嚴格停利。門檻 `SATELLITE_TAKE_PROFIT_PCT`(=15)。
+    §1：僅對 held 衛星(個股)且**有損益%**者判;無成本(損益%=None) → 不判、不捏造。
+    """
+    _out: list[dict] = []
+    for r in (rows or []):
+        if not r.get("held") or r.get("_detail", {}).get("error"):
+            continue
+        if r.get("種類") != "個股":          # 衛星 = 個股（同 80/20 近似）
+            continue
+        _pnl = r.get("損益%")
+        if isinstance(_pnl, (int, float)) and _pnl >= T.SATELLITE_TAKE_PROFIT_PCT:
+            _out.append({"代號": str(r.get("代號", "")), "損益%": round(float(_pnl), 1)})
+    return _out
+
+
 # ── AI 戰情總結（規則式事實 + AI 潤稿;推播內容來源）──────────────────────
 def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
     """戰情表 rows → 可推播的「規則式事實」摘要（純函式,離線可測,§1 不生數字）。
 
-    只彙整**已算好**的欄位,不重抓、不推估：
+    彙整**已算好**的欄位,不重抓、不推估：
     - reds：健檢 🔴 需汰弱（代號 + 建議動作）
     - adds：235 加碼觸發（加碼金非空 = deploy_pct>0）
     - errors：抓取失敗未納入判斷的代號（§1 誠實排除,不當作「無事」）
-    ⚠️ 刻意**不算**核心/衛星配置偏離 —— 戰情室無部位金額資料,80/20 是價值比,
-       無金額即無從計算,§1 不捏造（目標配置僅作靜態參考,見 UI caption）。
+    - allocation：80/20 實際配置偏離（有張數/均價才算;缺 → None,#38）
+    - take_profit：衛星獲利達 15% 嚴格停利清單（有損益%才判;#38）
     """
     reds: list[dict] = []
     adds: list[dict] = []
@@ -377,7 +440,9 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
             adds.append({"代號": str(r.get("代號", "")),
                          "235": str(r.get("235 燈號", "")),
                          "加碼金": str(r.get("加碼金", ""))})
-    return {"total": valid, "vix": vix, "reds": reds, "adds": adds, "errors": errors}
+    return {"total": valid, "vix": vix, "reds": reds, "adds": adds, "errors": errors,
+            "allocation": compute_allocation_split(rows),
+            "take_profit": flag_take_profit(rows)}
 
 
 def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
@@ -401,6 +466,19 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
         f"- 235 加碼觸發：{_adds}\n"
         f"- 抓取失敗未納入：{_errs}\n"
     )
+    _alloc = digest.get("allocation")
+    if _alloc:
+        _partial = "（部分持股缺金額,僅供參考）" if _alloc.get("partial") else ""
+        _base += (
+            f"- 實際配置：核心 {_alloc['core_pct']:.0f}% / 衛星 {_alloc['sat_pct']:.0f}%"
+            f"（目標 {_alloc['core_target']:.0f}/{_alloc['sat_target']:.0f}，"
+            f"核心偏離 {_alloc['core_dev']:+.0f}%）{_partial}\n"
+        )
+    _tp = digest.get("take_profit") or []
+    if _tp:
+        _tp_txt = "、".join(f"{d['代號']}(+{d['損益%']:.0f}%)" for d in _tp)
+        _base += (f"- 衛星達停利門檻(≥{T.SATELLITE_TAKE_PROFIT_PCT:.0f}%)"
+                  f"建議嚴格停利滾回核心：{_tp_txt}\n")   # §3.3 走 SSOT,不硬寫 15
     if switch:
         _out = "、".join(f"{d['代號']}（{d['建議動作']}）"
                          for d in switch.get("switch_out", [])) or "無"
