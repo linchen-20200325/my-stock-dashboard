@@ -421,3 +421,22 @@ def test_summary_prompt_includes_allocation_and_take_profit():
     assert "實際配置" in p and "核心 73%" in p and "偏離 -7%" in p
     assert "衛星達停利" in p and "2330(+18%)" in p
     assert f"≥{T.SATELLITE_TAKE_PROFIT_PCT:.0f}%" in p   # §3.3 門檻走 SSOT(改門檻不漂移)
+
+
+# ── #34：換股建議換入優先用觀察清單綠燈（空才 fallback 選股池）─────────────
+def test_switch_in_prefers_watchlist_greens():
+    rows = [{"代號": "00980D", "健檢": "🔴", "held": True, "建議動作": "汰弱", "_detail": {}},
+            {"代號": "2412", "名稱": "中華電", "健檢": "🟢", "held": False, "_detail": {}},  # 觀察綠燈
+            {"代號": "2330", "健檢": "🟢", "held": True, "_detail": {}}]                    # 持有綠燈≠換入
+    cands = [{"代碼": "9999", "名稱": "選股池股", "綜合分": 88}]
+    a = svc.build_switch_advice(rows, {"loaded": False}, cands)
+    assert a["switch_in_src"] == "watchlist"
+    assert [d["代號"] for d in a["switch_in"]] == ["2412"]     # 觀察綠燈,非持有綠燈/非選股池
+
+
+def test_switch_in_fallback_to_screener_when_no_watchlist_greens():
+    rows = [{"代號": "00980D", "健檢": "🔴", "held": True, "建議動作": "汰弱", "_detail": {}}]
+    cands = [{"代碼": "9999", "名稱": "選股池股", "綜合分": 88}]
+    b = svc.build_switch_advice(rows, {"loaded": False}, cands)
+    assert b["switch_in_src"] == "screener"
+    assert [d["代號"] for d in b["switch_in"]] == ["9999"]

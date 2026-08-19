@@ -406,6 +406,31 @@ def save_stock_watchlist(name: str, tickers: list[str], *,
     return len(new_rows)
 
 
+def add_to_stock_watchlist(name: str, tickers: list[str], *,
+                           sheet_id: str | None = None) -> int:
+    """把 tickers **併入**既有觀察清單（讀現有 → 聯集去重保序 → 存),回合併後總檔數。
+
+    與 `save_stock_watchlist`(覆蓋)不同:此為「加入」語意 —— 選股網勾選後不覆蓋你既有的
+    清單。§1:name/代碼皆空 → raise;既有清單不存在 → 視同從空開始(等同新建)。
+    大寫正規化 + 去重(同 save_stock_watchlist)。內部呼 save → clear_read_cache 已含。
+    """
+    name = (name or '').strip()
+    if not name:
+        raise ValueError('清單名稱不可為空')
+    _add = [str(_t or '').strip().upper() for _t in (tickers or []) if str(_t or '').strip()]
+    if not _add:
+        raise ValueError('沒有可加入的代碼')
+    clear_read_cache()   # 合併前讀「最新」既有清單(繞過 15 分快取,避免漏併他處剛加的;稽核 low-sev)
+    _existing = load_stock_watchlist(name, sheet_id=sheet_id)   # 現有(可能空)
+    _merged = list(_existing)
+    _seen = set(_existing)
+    for _t in _add:
+        if _t not in _seen:
+            _seen.add(_t)
+            _merged.append(_t)
+    return save_stock_watchlist(name, _merged, sheet_id=sheet_id)
+
+
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def list_stock_watchlists(*, sheet_id: str | None = None) -> list[str]:
     """列出 `stock_watchlist` 分頁內所有不重複的清單名稱(字母排序)。

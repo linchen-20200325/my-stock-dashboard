@@ -661,6 +661,37 @@ with tab_stocks:
                 st.download_button('💾 下載選股結果 CSV', data=_csv,
                                    file_name='screener_result.csv', mime='text/csv',
                                    key='screener_csv')
+                # ── ☑️ 加入觀察清單（選股池閉環 #33）：勾選 → 併入你的觀察清單 ──
+                st.markdown('##### ☑️ 加入觀察清單（選進你的池子 → 💼 戰情室追蹤 + 換股建議換入）')
+                _add_opts = [f"{r['代碼']} {r.get('名稱', '')}".strip()
+                             for _, r in _cands.head(50).iterrows()]
+                _add_pick = st.multiselect('勾選要加入的標的（可多選）', _add_opts,
+                                           key='screener_add_watch_pick')
+                from src.services.watchlist_service import (
+                    add_picks_to_watchlist, get_watchlist_add_context)
+                _stk_sid_add, _wl_names = get_watchlist_add_context()
+                if not _stk_sid_add:
+                    st.caption('（需先在 📁 組合管理 選定個股清單 Sheet,才能加入觀察清單。）')
+                else:
+                    _NEW_WL = '＋ 新建清單'
+                    _wl_sel = st.selectbox('加到哪份觀察清單', _wl_names + [_NEW_WL],
+                                           key='screener_add_watch_name')
+                    _wl_final = (st.text_input('新清單名稱', key='screener_add_watch_new',
+                                               placeholder='例：選股池')
+                                 if _wl_sel == _NEW_WL else _wl_sel)
+                    if st.button('➕ 加入觀察清單', key='screener_add_watch_go', type='primary'):
+                        _codes_add = [p.split()[0] for p in _add_pick]
+                        if not _codes_add:
+                            st.warning('請先勾選標的。')
+                        elif not (_wl_final or '').strip():
+                            st.warning('請選或填觀察清單名稱。')
+                        else:
+                            try:
+                                _n_wl = add_picks_to_watchlist(_wl_final.strip(), _codes_add)
+                                st.success(f'✅ 已把 {len(_codes_add)} 檔加入「{_wl_final.strip()}」'
+                                           f'（現共 {_n_wl} 檔）。到 💼 戰情室按 🔄 重新載入即生效。')
+                            except Exception as _e_add:  # noqa: BLE001 — §1 失敗誠實報
+                                st.error(f'加入失敗：{type(_e_add).__name__}: {_e_add}')
                 # ── 🧊 前進式驗證：凍結本次選股（FT-2 v19.142）→ 存 Google Sheet，日後對帳 vs 0050 ──
                 st.markdown('##### 🧊 前進式驗證：凍結本次選股')
                 st.caption('把前 20 名凍結存進你的 Google Sheet（含當下進場價 + 勾選因子），'

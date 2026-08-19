@@ -212,17 +212,21 @@ def _render_switch_advice(switch: dict | None) -> None:
     else:
         st.success("✅ 持有部位無健檢紅燈 —— 無汰弱換出需求。")
 
+    _src = switch.get("switch_in_src", "screener")
+    _src_txt = "你的觀察清單" if _src == "watchlist" else "選股池(全自動排名)"
     if _stance == "defensive":
         st.warning("🛡️ 總經轉守 → **換入從嚴**：優先處理汰弱、不急進場;下列候選僅供轉守後布局參考。")
     if _in:
-        _label = "🔺 **建議換入（選股池候選）**：" if _stance != "defensive" else "候選（轉守觀望）："
+        _label = (f"🔺 **建議換入（{_src_txt}）**：" if _stance != "defensive"
+                  else f"候選（{_src_txt}·轉守觀望）：")
         st.markdown(_label + "、".join(
             f"{d['代號']} {d.get('名稱','')}".strip()
             + (f"（綜合分 {d['綜合分']:.0f}）" if isinstance(d.get('綜合分'), (int, float)) else "")
             for d in _in))
     else:
-        st.caption("選股池暫無可換入候選（未跑選股 / 掃描失敗 / 皆已持有）。")
-    st.caption("換出=你**持有**的紅燈;換入=**選股池**排名候選（已排除已持有）。研究參考,非投資建議。")
+        st.caption("暫無可換入候選（觀察清單無綠燈、選股池也未跑 / 皆已持有）。")
+    st.caption(f"換出=你**持有**的紅燈;換入**優先**你觀察清單的綠燈(親手選的),空才用選股池"
+               f"全自動排名。本次換入來源：**{_src_txt}**。研究參考,非投資建議。")
 
 
 def _render_ai_summary(rows: list[dict], vix, gemini_fn: Callable[..., str] | None,

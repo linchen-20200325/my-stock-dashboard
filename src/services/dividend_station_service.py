@@ -325,8 +325,9 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
     """換股建議（純函式,離線可測,§1 不生標的）。
 
     - 換出 = **持有(held)** 且 健檢🔴（汰弱）。觀察清單的紅燈不算「換出」（你沒持有）。
-    - 換入 = 選股池候選（caller 已排除已持有）。總經**轉守(defense)** → 換入從嚴（少給幾檔
-      + stance=defensive）;未評估 → stance=unknown（只給個股層面汰弱,不套攻守）。
+    - 換入 = **優先**你親手選進「觀察清單(held=False)」且健檢綠燈的標的（#34）;觀察清單無
+      綠燈才 fallback 選股池 candidates（caller 已排除已持有）。總經**轉守(defense)** → 換入
+      從嚴（少給幾檔 + stance=defensive）;未評估 → stance=unknown（只給汰弱,不套攻守）。
     """
     _macro = macro or {}
     _loaded = bool(_macro.get("loaded"))
@@ -338,9 +339,20 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
 
     # 轉守 → 換入從嚴（少給候選）；未評估/正常 → 給滿 top
     _in_n = 3 if _defense else 5
-    switch_in = [{"代號": str(c.get("代碼", c.get("代號", ""))),
-                  "名稱": str(c.get("名稱", "")), "綜合分": c.get("綜合分")}
-                 for c in (candidates or [])][:_in_n]
+    # #34：換入優先 = 你觀察清單(held=False)裡健檢🟢的（親手選的池子）;空才 fallback 選股池。
+    _watch_greens = [{"代號": str(r.get("代號", "")), "名稱": str(r.get("名稱", "")),
+                      "綜合分": None}
+                     for r in (rows or [])
+                     if (not r.get("held")) and (not r.get("_detail", {}).get("error"))
+                     and r.get("健檢") == "🟢"]
+    if _watch_greens:
+        switch_in = _watch_greens[:_in_n]
+        switch_in_src = "watchlist"
+    else:
+        switch_in = [{"代號": str(c.get("代碼", c.get("代號", ""))),
+                      "名稱": str(c.get("名稱", "")), "綜合分": c.get("綜合分")}
+                     for c in (candidates or [])][:_in_n]
+        switch_in_src = "screener"
 
     if not _loaded:
         stance = "unknown"
@@ -356,7 +368,8 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
         "posture": _macro.get("posture_label"), "posture_range": _macro.get("posture_range"),
         "stance": stance,
         "switch_out": switch_out,   # 持有紅燈 → 建議換出
-        "switch_in": switch_in,     # 選股池候選 → 建議換入
+        "switch_in": switch_in,     # 換入候選（優先觀察清單綠燈,否則選股池）
+        "switch_in_src": switch_in_src,   # "watchlist"(你選的) / "screener"(全自動 fallback)
     }
 
 
@@ -496,7 +509,7 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
             f"- 當前總經位階：{switch.get('regime')}（姿態 {_posture}"
             f"{('，建議持股 ' + switch['posture_range']) if switch.get('posture_range') else ''}）\n"
             f"- 建議換出（你持有的紅燈汰弱）：{_out}\n"
-            f"- 建議換入（選股池候選）：{_in}\n"
+            f"- 建議換入（來源：{'你的觀察清單' if switch.get('switch_in_src') == 'watchlist' else '選股池全自動排名'}）：{_in}\n"
             f"- 攻守指引：{_stance_note}\n"
             "請把「換出 X → 換入 Y」講清楚;位階未評估時不要編造攻守方向。\n"
         )
