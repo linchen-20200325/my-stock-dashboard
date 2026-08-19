@@ -92,7 +92,7 @@ def _fetch_macro_snapshot() -> dict:
     try:
         vix = market_repo.fetch_ohlcv("^VIX", period="1mo", auto_adjust=True)
         out["vix"] = f"{float(vix['close'].iloc[-1]):.1f}"
-    except (FailLoudError, Exception) as e:  # noqa: BLE001
+    except (FailLoudError, Exception):  # noqa: BLE001
         out["vix"] = "抓取失敗"
     return out
 

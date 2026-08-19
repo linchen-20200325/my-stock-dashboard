@@ -1569,8 +1569,7 @@ class TestLeadingI3Branches:
 
     def test_i3_flat_qoq_yellow(self):
         """合約負債 QoQ -5~5% → 🟡 持平（line 794）"""
-        cl_vals = [100.0, 100.0, 100.0, 100.0, 103.0, 103.0, 103.0, 103.0]
-        # qoq ≈ 3% → between -5 and 5
+        # qoq ≈ 2% → between -5 and 5
         bs_cf, qtr = _make_bs_cf(n=8, has_capex=False, has_cl=True, has_inv=False,
                                   cl_vals=[1000.0, 1020.0])
         results = calc_leading_indicators_detail(bs_cf_df=bs_cf)
@@ -1603,7 +1602,6 @@ class TestLeadingI3Branches:
 class TestLeadingI4Branches:
 
     def _make_i4_data(self, cx_vals, rv_vals, disp_vals=None):
-        n = max(len(cx_vals), len(rv_vals))
         data = {'資本支出': cx_vals}
         if disp_vals:
             data['處分資產現金流入'] = disp_vals

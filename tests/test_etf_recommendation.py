@@ -106,8 +106,6 @@ def test_redundancy_marks_lower_score_peer():
         _row(ticker='00878.TW', composite=0.6),
     ]
     out = recommend_etf_actions(rows)
-    by_tk = {r['ticker'] if 'ticker' in r else None: v
-             for r, v in zip(rows, out)}
     # reason_text 一定有值
     assert all(v.get('reason_text') for v in out)
     # 分數低者帶「擇一」提示
