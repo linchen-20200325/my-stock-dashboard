@@ -20,6 +20,7 @@ from shared.colors import (
 # v18.241 E1+E2: 抽 inline magic 到 shared SSOT（CLAUDE.md §3.3）
 from shared.signal_thresholds import (
     HEALTH_WEIGHT_JQ, HEALTH_WEIGHT_SCORE, HEALTH_FNET_BONUS, CONFIDENCE_SOURCE_COUNT,
+    CONFIDENCE_SOURCE_GROUPS,
 )
 
 # 季末日對照（DataFrame 內「季度標籤 2024Q4」→「2024-12-31」用）
@@ -426,7 +427,7 @@ def calc_traffic_light(
         # ── P1 v19.470:原判 `bool(mkt_info)`(dict 空不空)——與 v19.177 修 jqavg
         # 時抓到的破口同型:`section_inputs` 會合成只有部分 key 的 dict,dict 非空
         # 但拿不到 score ⇒ 信心不降、缺項不列。改判「真的有評分」。
-        ('大盤趨勢評分 (market_regime)', _score is not None),
+        ('大盤趨勢評分 (market_regime)', _score is not None, 'score'),
         # ── v19.177 P1-B ② 兩處同時修 ────────────────────────────────────
         # (a) 標籤反捏造:原文「旌旗指數 (站上均線比例)」—— **全站沒有任何一行
         #     在算「站上均線的家數比」**。真值 = 上漲佔比(ad_ratio)的 5 日移動
@@ -439,17 +440,30 @@ def calc_traffic_light(
         #     `section_inputs` 合成 `{'avg': None}`(section_inputs.py:97)時
         #     為 True(dict 非空)⇒ 明明沒有旌旗值,信心分數卻不降、缺項也不列
         #     = 缺失被吃掉。改判 `_jqavg is not None`。
-        (_CONF_LABEL_JINGQI,              _jqavg is not None),
+        (_CONF_LABEL_JINGQI,              _jqavg is not None, 'jqavg'),
         # ── P1 v19.470:原判 `bool(_fk)`(key 在不在)——「key 在但 net 為 None」
         # 會判 True,於是畫面同時出現「信心 100%」與「⏰ 外資數據待更新」兩個
         # 互相矛盾的訊息且無告警。改判「真的拿到數字」,與 jqavg 那條一致。
-        ('外資買賣超 (三大法人)',         _fnet is not None),
-        ('先行指標 (期貨/PCR/韭菜)',      bool(li_latest is not None and not li_latest.empty)),
-        ('ADL 騰落指標',                  bool(_cd.get('adl') is not None)),
+        ('外資買賣超 (三大法人)',         _fnet is not None, 'fnet'),
+        ('先行指標 (期貨/PCR/韭菜)',      bool(li_latest is not None and not li_latest.empty), 'li'),
+        ('ADL 騰落指標',                  bool(_cd.get('adl') is not None), 'adl'),
     ]
     # v18.241 E2: confidence 分子分母從 SSOT 引入
-    _conf = round(sum(_ok for _, _ok in _conf_sources) / CONFIDENCE_SOURCE_COUNT * 100)
-    _missing = [_name for _name, _ok in _conf_sources if not _ok]
+    # ⚠️ `conf` 是**畫面顯示用的項數比**,刻意維持 n/5 不動(改分母會讓歷史截圖
+    #    與使用者記憶對不上)。它**不適合**拿來做可用性判斷 —— 5 項只有 3 個
+    #    獨立故障域,權重實際是 3:1:1(詳 `CONFIDENCE_SOURCE_GROUPS` docstring)。
+    #    要判斷「資料夠不夠下結論」請用下面的 `conf_groups`。
+    _conf = round(sum(_ok for _, _ok, _ in _conf_sources) / CONFIDENCE_SOURCE_COUNT * 100)
+    _missing = [_name for _name, _ok, _ in _conf_sources if not _ok]
+    # ── 2026-08-19 方案 C:獨立故障域可用性(schema-additive,`conf` 一字未改)──
+    # 每組 True = 該故障域至少還有一項活著。消費端(handlers 擋燈 gate)據此判斷,
+    # 不再用「數量門檻」—— 因為數量門檻會把「同一份 ^TWII 掉了 2 個視角」
+    # 誤判成比「整個獨立來源全滅」更嚴重。
+    _ok_by_key = {_k: _ok for _, _ok, _k in _conf_sources}
+    _conf_groups = {
+        _g: any(_ok_by_key.get(_k, False) for _k in _keys)
+        for _g, _keys in CONFIDENCE_SOURCE_GROUPS.items()
+    }
     return {
         'color': _color, 'icon': _icon, 'label': _label,
         'action': _action, 'sub': _sub, 'health': _health,
@@ -458,7 +472,7 @@ def calc_traffic_light(
         'health_partial': _health_partial,
         'defense': _defense, 'score': _score, 'jqavg': _jqavg,
         'leek': _leek, 'fnet': _fnet, 'fk': _fk, 'fut_net': _fut_net,
-        'conf': _conf, 'missing_sources': _missing,
+        'conf': _conf, 'missing_sources': _missing, 'conf_groups': _conf_groups,
         # ── C1 v19.182:regime 三欄位契約（schema-additive，既有 caller 無感）──
         # `regime`            = **趨勢面輸入**（raw `mkt_info['regime']`）。
         #                       保留原 key 原語意，供畫面揭露「被壓制的反向訊號」

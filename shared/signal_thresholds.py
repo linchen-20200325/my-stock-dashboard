@@ -138,7 +138,46 @@ v19.173 補述:**0 是「校準後的明示歸零」,不是漏寫的 bug** —�
 若未來重校準判定 fnet 仍無效,再考慮連同公式一起收斂(屬另案,需重跑 AUC)。"""
 
 CONFIDENCE_SOURCE_COUNT: int = 5
-"""信心度計算的來源總數（PMI/CPI/M2/Foreign/VIX 等 5 大來源）。原 macro_helpers.py:148 inline"""
+"""信心度計算的來源**項數**（分母）。`calc_traffic_light` 的 `_conf_sources` 長度。
+
+⚠️ 2026-08-19 更正 docstring：原文寫「PMI/CPI/M2/Foreign/VIX 等 5 大來源」——
+**這五個名字沒有一個是真的**。實際 5 項是：大盤趨勢評分 / 旌旗指數 /
+外資買賣超 / 先行指標 / ADL 騰落指標（見 `macro_helpers._conf_sources`）。
+本常數從一開始就沒對準它現在的用途（同檔 :124 另記一次「借用錯配」）。
+
+⚠️ **這 5 項只有 3 個獨立故障域**（2026-08-19 實測，見 `CONFIDENCE_SOURCE_GROUPS`）。
+本常數維持 5 是刻意的：它是「畫面顯示的分數」的分母，改動它會讓歷史截圖
+與使用者記憶中的數字對不上。**可用性判斷請用 `CONFIDENCE_SOURCE_GROUPS`，
+不要用這個分母。**"""
+
+CONFIDENCE_SOURCE_GROUPS: dict[str, tuple[str, ...]] = {
+    # group_key: (該組涵蓋的 _conf_sources 項目代號, ...)
+    'yfinance_twii':  ('score', 'jqavg', 'adl'),
+    'twse_bfi82u':    ('fnet',),
+    'finmind_taifex': ('li',),
+}
+"""信心來源的**獨立故障域**分組（可用性判斷 SSOT）。
+
+2026-08-19 實測的資料鏈追查結果 —— `conf = n/5` 把 **3 個獨立故障域編碼成
+5 張等權票**，實際權重是 **3:1:1**：
+
+| 故障域 | 涵蓋項 | 一次失敗扣多少 conf |
+|---|---|---|
+| yfinance / Chart API `^TWII` | score, jqavg, adl | **60 分（3/5）** |
+| TWSE BFI82U（三大法人） | fnet | 20 分 |
+| FinMind 期貨 + TAIFEX | li | 20 分 |
+
+證據：
+- `jqavg` 與 `adl` 來自**同一次** `fetch_adl()` 呼叫的同一個 DataFrame
+  （`tab_macro` 取出後同時餵給 `compute_and_store_jingqi` 與 `cl_data['adl']`）。
+- `fetch_adl` 的唯一真實來源 TWSE MI_INDEX **已永久停用**
+  （`daily_data_fetchers` 檔內註記），現僅剩 `^TWII` 日內漲跌推估
+  （`ad_ratio = 50 + 8.333 × 日內漲跌%`，不含任何家數資訊）。
+- `score`（`market_regime`）的價格骨幹 close/MA60/MA120 同為 `^TWII`，
+  且它吃的 `ad_ratio` 參數就是上面同一條線。
+
+這個 3:1:1 從來沒有人設計過 —— 它是「同一份資料被數了三次」的副產品。
+**新增信心來源時必須同步在此登記其故障域**，否則等於再製造一次同樣的錯。"""
 
 
 # ════════════════════════════════════════════════════════════════
