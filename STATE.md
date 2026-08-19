@@ -1,5 +1,31 @@
 # 重構狀態看板(深層拔毒 v18.369+)
 
+## 🧹 2026-08-19 全倉庫排毒瘦身三批合並(v19.196,#621/#622/#623)
+
+外部「程式碼審查與專案排毒瘦身」稽核 → 三批**零功能變更、CI 全綠、稽核AI 逐批 PASS**:
+
+- **#621 Tier 1**(`ea9e045`):重複文件×4(root↔`docs/audit-2026-08/` md5 相同,−3,239 行/−348KB)
+  + 死依賴×3(`ta`/`dbnomics`/`html5lib`,全 repo 0 import;RSI/ATR/MACD 手刻、DBnomics 走純 JSON HTTP、bs4 走 lxml)
+  + 未用 import×32 檔(ruff F401)。**外科跳過 `tab_stock`/`tab_macro`** —— 其「未用」import 是
+  SSOT/分層 guard 釘的消費標記,機械 --fix 撞 12 個 guard(F401 全自動清除在本憲法 repo **非零風險**,已降級為安全子集)。
+  + `.gitignore` 補 `.pytest_cache`/`.ruff_cache`/`.mypy_cache` + 修正 `data_cache/*.parquet` 規則與 4 個 force-track 凍結快照的矛盾(negation 明示)。
+- **#622 F841**(`4d1d6da`):5 個未用區域變數,**逐個人工核 RHS 無 side effect** 才刪(非 ruff 自動 --fix)。
+- **#623 Bucket A 封閉死簇**(`9f61437`,淨 **−3,312 行**):真刪 5 模組 ——
+  `macro_signal_lookback_tw`(581)+`macro_validation_tw`(134)+`signal_threshold_optimization`(201)(三者互鎖死簇,不能刪母體留優化器)
+  + `multi_factor_optimization`(521)+`tw_backtest`(323)。連帶:3 barrel 拔死模組名、刪 7 專屬 test、
+  `test_d2_macro_sections` 外科移除 `TestBacktestNoLookahead`、tw_backtest 寄生的 hot_money 測試搬入 `test_hot_money.py`、
+  CLAUDE.md §2.3/§4.1×3/§8.2/§8.3 同步。**保留 `macro_cache_reader`**(`scripts/analyze_ring1_gate.py` 仍真 import)。
+  **未刪 `portfolio_manager`** —— 原「死碼真刪 6 模組」清單含它,查證為 **live**(仍在 strategy barrel `_SUBMODULES`),非死碼。
+
+**盲點捕獲**:死符號經 barrel `__getattr__` 以「符號名」被 `test_phase_e_cross_source` import(模組名 grep 抓不到)
+→ 全量測試抓出 → 查證 `fetch_pmi_below_50_series`/`TW_SIGNAL_FETCHERS`/`DEFAULT_TW_SIGNALS` 零 production 消費後才刪。
+
+> **稽核結論**:真 cruft 已清乾淨。其餘「孤兒」皆**刻意保留**,依 §-1 不動 —— `mk_test`/`relative_thresholds`
+> (production 註解指向的 planned wiring)、notify/push cron 推播管線(#35 要用)、`scripts/calibrate_*` 凍結快照。
+> 三批合計清約 **6,600+ 行**;repo 更精實、無殘留技術債。
+
+---
+
 ## 🔀 2026-08-14 T4-1 單筆/多筆對稱化 —— 先讓判定只剩一份(v19.195,5856 passed)
 
 流程圖層次 2「單/多筆標的即時診斷」旁標的**「補齊詳細維度」**。
@@ -728,9 +754,9 @@ NDC / 台灣 PMI / 台灣出口 / 美核心 CPI **連資料日期都沒有**。
 
 - 🔴 **margin parquet 重抓** —— `data` 分支的 `margin` 表已消失(B3 gate 生效),
   下游 `2026_strategy_0719` 影響**未確認**(問過 4 次未回)
-- 🟡 死碼真刪 6 模組(`macro_signal_lookback_tw` / `multi_factor_optimization` /
-  `signal_threshold_optimization` / `macro_validation_tw` / `tw_backtest` / `portfolio_manager`)
-  + barrel 改 lazy(現在每次冷啟動都載入,含一支 module-load 時讀 Parquet 的)
+- ✅ **死碼真刪 → 2026-08-19 #623 已刪 5/6**(`macro_signal_lookback_tw` / `multi_factor_optimization` /
+  `signal_threshold_optimization` / `macro_validation_tw` / `tw_backtest`);**`portfolio_manager` 查證為 live**
+  (仍在 strategy barrel `_SUBMODULES`,非死碼 → 保留)。barrel 改 lazy **仍未動**(§-1 等指派)
 - 🟡 `risk_radar` I/O 下沉(V-RADAR-1,L2 內 HTTP + read_csv)
 - 🟡 `verify=False` 6 個建構點 → NAS CA 憑證。**代價已寫明:這條連線無法偵測中間人,
   代理被替換或 DNS 劫持時回來的資料可任意偽造,而 §1 Fail Loud 在此完全失效**
@@ -951,8 +977,8 @@ out = raw[["date", bal_col]].copy()                                    # ← 全
 
 - 🟡 `recalibrate_macro.yml` **至今從未成功寫過** `macro_thresholds.json`
   (`last_calibrated: null` / `method: "default (uncalibrated)"`)—— 季度校準等於沒在跑
-- ⚪ `macro_signal_lookback_tw` + `multi_factor_optimization` 確認為死碼,可刪(與
-  `DEAD_CODE_AUDIT.md` 既有記載一致)
+- ✅ `macro_signal_lookback_tw` + `multi_factor_optimization` 確認為死碼 → **2026-08-19 #623 已真刪**
+  (連同封閉死簇 `macro_validation_tw` / `signal_threshold_optimization` / `tw_backtest` 共 5 模組)
 
 ---
 
