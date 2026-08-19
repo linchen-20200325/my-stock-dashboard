@@ -179,10 +179,20 @@ def test_market_regime_ad_ratio_scale_is_percentage_not_ratio():
     assert any('市場廣度偏弱' in s for s in r['signals'])
 
 
-def test_market_regime_max_score_accounts_for_both_optional_factors():
-    """ad_ratio 與 m1b_m2_gap 皆提供 → max_score = 4(保底) + 1 + 1 = 6。"""
+def test_market_regime_max_score_accounts_for_enabled_optional_factors():
+    """max_score = 4(保底) + 1(ad_ratio) + 1(m1b_m2_gap **若該腿啟用**)。
+
+    ⚠️ 2026-08-19 改述：原標題/斷言寫死 `== 6.0`（「兩條選填腿都算」）。
+    同日 `M1B_M2_LEG_ENABLED = False` 把 m1b_m2 腿停用（AUC 0.5366、
+    lift 1.019 vs 0.984、來源資料量綱本身就是壞的 —— 完整證據在
+    `shared/signal_thresholds.M1B_M2_LEG_ENABLED` 的 docstring）。
+
+    這裡**不寫死 5.0**，而是讓斷言跟著開關走：若日後滿足復活條件把旗標翻回
+    True，本測試會自動改回期望 6.0，不需要有人記得回來改它。
+    """
+    from shared.signal_thresholds import M1B_M2_LEG_ENABLED
     r = market_strategy.market_regime(**_MR_BASE_KW, ad_ratio=60.0, m1b_m2_gap=0.5)
-    assert r['max_score'] == 6.0
+    assert r['max_score'] == (6.0 if M1B_M2_LEG_ENABLED else 5.0)
 
 
 def test_get_market_assessment_forwards_ad_ratio(monkeypatch):

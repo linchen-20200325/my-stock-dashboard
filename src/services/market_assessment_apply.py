@@ -74,7 +74,14 @@ def compute_and_apply_market_assessment(
         _m1b2_gap = (round(float(_m1b2['m1b_yoy']) - float(_m1b2['m2_yoy']), 2)
                      if _m1b2.get('m1b_yoy') is not None and _m1b2.get('m2_yoy') is not None
                      else None)
-        _m1b2_prev = _m1b2.get('m1b_m2_gap_prev')  # 上月 gap(若有)
+        # ⚠️ 2026-08-19 實測:`m1b_m2_gap_prev` 全 repo **只有這一個讀取點,
+        #    零個寫入點** —— 線上恆為 None,`market_regime` ⑤ 的「+1 分(活水正向
+        #    且上升)」分支**在線上從未觸發過**,最多只能拿 +0.5。而校準腳本用
+        #    `iloc[-22]` 有真的 prev ⇒ 兩邊連可達分數空間都不同。
+        #    本次不補寫入端:整條腿已停用(`M1B_M2_LEG_ENABLED = False`),
+        #    補了也沒人用。**列為復活前置條件之一** —— 若日後把腿打開卻沒補
+        #    寫入端,線上就會靜默地少一分,又是一次「兩套系統」。
+        _m1b2_prev = _m1b2.get('m1b_m2_gap_prev')  # 上月 gap(現況恆 None,見上)
         # 市場廣度真值(v18.449):df_adl 最後一列的 ad_ratio(0-100% 上漲家數佔比)。
         # 無資料/空值 → None(不納入評分,§1 寧缺勿假,不塞假中性值)。
         _ad_ratio_loaded = None

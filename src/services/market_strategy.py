@@ -14,7 +14,7 @@ except ImportError:
     EXPOSURE_BULL = 0.8; EXPOSURE_NEUTRAL = 0.5; EXPOSURE_BEAR = 0.2
 
 # v18.449:市場廣度中性門檻 SSOT(原 inline `1.0`，尺度語意錯誤，見下方 market_regime docstring）
-from shared.signal_thresholds import MARKET_BREADTH_NEUTRAL_PCT
+from shared.signal_thresholds import M1B_M2_LEG_ENABLED, MARKET_BREADTH_NEUTRAL_PCT
 
 # P0-2 v18.369 深層拔毒:portfolio_exposure SSOT 收攏至 L2 risk_control(原本兩處同名異實作)
 from src.compute.risk.risk_control import portfolio_exposure  # noqa: F401
@@ -129,7 +129,19 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
             signals.append(f'❌ 市場廣度偏弱 ({ad_ratio:.1f}%)')
 
     # ⑤ M1B-M2 資金活水（選填，不傳則略過，向後相容）
-    if m1b_m2_gap is not None:
+    # ── 2026-08-19：本條腿已停用（`M1B_M2_LEG_ENABLED = False`）────────────
+    # 停用理由與復活條件全寫在 `shared/signal_thresholds.M1B_M2_LEG_ENABLED`
+    # 的 docstring（AUC 0.5366、lift 1.019 vs 0.984、方向與設計假設相反，
+    # 且來源資料量綱本身就是壞的）。**計分邏輯刻意保留**，同
+    # `HEALTH_FNET_BONUS = 0` 的處置 —— 刪掉會讓「評估過、結論是無預測力」
+    # 這件事從程式碼裡消失。開關在 L0，離線校準與線上畫面**同一個開關**，
+    # 不會再出現「校準與線上是兩套系統」（本次修正的問題之一）。
+    if m1b_m2_gap is not None and not M1B_M2_LEG_ENABLED:
+        # 停用 ≠ 缺資料。上游確實給了值，只是我們判定它不該進分數 ——
+        # 這件事要說出來（§1），否則使用者只會發現「資金活水那行不見了」。
+        signals.append(f'⬜ M1B-M2 資金活水已停用（{m1b_m2_gap:+.2f}%，'
+                       f'AUC 0.54 無預測力＋來源量綱異常）— 不計分')
+    elif m1b_m2_gap is not None:
         _trending_up = (m1b_m2_prev is not None) and (m1b_m2_gap > m1b_m2_prev)
         if m1b_m2_gap > 0 and _trending_up:
             score += 1
@@ -167,7 +179,9 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     _max = 4.0
     if ad_ratio is not None:
         _max += 1
-    if m1b_m2_gap is not None:
+    # 停用的腿**不進分母**——否則分子恆拿不到那 1 分、分母卻算它，等於把
+    # 「我們決定不看這條腿」編碼成「這條腿是利空」（正是本輪在修的那類錯）。
+    if m1b_m2_gap is not None and M1B_M2_LEG_ENABLED:
         _max += 1
 
     # ── 2026-08-19:選填腿缺席必須可見(§1 降級不得靜默)────────────────────────
@@ -185,7 +199,9 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     _missing_factors = []
     if ad_ratio is None:
         _missing_factors.append('市場廣度')
-    if m1b_m2_gap is None:
+    # 「停用」不算「缺失」——腿停用時分子分母同時不算它，數學上不存在
+    # 上面警告的那種偏移；把它列進 missing 會每天噴一次假警報。
+    if m1b_m2_gap is None and M1B_M2_LEG_ENABLED:
         _missing_factors.append('M1B-M2 資金活水')
     if _missing_factors:
         import sys as _sys_mr

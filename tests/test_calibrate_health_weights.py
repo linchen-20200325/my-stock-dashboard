@@ -59,16 +59,25 @@ class TestMaFlags:
 
 
 class TestReconstructScoreParity:
-    def test_strict_uptrend_full_6_of_6(self):
-        """強勢上升 + 外資買超 + m1m2 正向上升 → 真 market_regime 滿分 6/6 → score_norm=100。
+    def test_strict_uptrend_is_full_marks(self):
+        """強勢上升 + 外資買超 + 廣度正向 → 真 market_regime 滿分 → score_norm=100。
 
         非循環:斷言基於「全因子正向 → market_regime 定義上必得滿分」的獨立推理。
+
+        ⚠️ 2026-08-19 改述：原標題/斷言寫死 `6/6`。同日
+        `M1B_M2_LEG_ENABLED = False` 把 m1b_m2 腿停用（證據見
+        `shared/signal_thresholds.M1B_M2_LEG_ENABLED`），滿分變 5/5。
+        **這裡釘的是「滿分 ⇒ score_norm=100」這條不變量**，不是那個絕對數字；
+        故分母改為跟著開關走，翻開關時測試自動跟上，不需要有人記得回來改。
         """
+        from shared.signal_thresholds import M1B_M2_LEG_ENABLED
+        _full = 6.0 if M1B_M2_LEG_ENABLED else 5.0
         close = _prep_close(_twii())
         sc = reconstruct_score(close, _inst(), _m1m2())
         row = sc.iloc[130]   # ≥120 日歷史 + 非首月（gap_prev 存在）
-        assert row["max_score"] == 6.0    # ad_ratio + m1m2 皆傳入
-        assert row["score"] == 6.0        # 4 MA 因子 + 外資 + 廣度 + 活水全正向
+        assert row["max_score"] == _full
+        assert row["score"] == _full      # 4 MA 因子 + 外資 + 廣度（+ 活水，若啟用）全正向
+        # 真正的不變量：全因子正向 ⇒ 正規化後必為 100，與腿數無關。
         assert row["score_norm"] == 100.0
 
     def test_early_days_before_ma120_are_nan(self):

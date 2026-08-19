@@ -71,15 +71,35 @@ class TestHealthScaleBoundaries:
         assert r['posture'] == '積極', (
             f'health={MEASURED_HEALTH_MAX}（20 年實測最高）仍非積極 → 該級不可達')
 
+    # ⚠️ 2026-08-19 下午更新：A 切點 65 → 70。**不是為了讓測試變綠改數字** ——
+    #    65 是從「腿啟用」時的 health 分布 P90≈65.6 推出來的；同日
+    #    `M1B_M2_LEG_ENABLED = False` 讓分布右移變寬（mean 50.61→52.46、
+    #    std 11.91→13.90、P90 65.6→70.5），65 在定義上就作廢了。
+    #    這裡是把同一條規則（取 P90 的整數切點）重新套在新分布上。
+    #    若不改，「積極」會從每年 28.7 天暴增到 54.4 天，推翻該級的稀有度設計。
     @pytest.mark.parametrize('health,expect', [
-        (78.1, '積極'), (65, '積極'), (64.9, '中性偏多'),
+        (78.1, '積極'), (70, '積極'), (69.9, '中性偏多'),
         (50, '中性偏多'), (49.9, '轉守'), (35, '轉守'), (34.9, '防禦'), (21.6, '防禦'),
     ])
     def test_band_edges(self, health, expect):
         assert compute_position_throttle(health, regime='bull')['posture'] == expect
 
-    def test_defense_band_unchanged_by_this_change(self):
-        """本次只動 A 切點；防禦帶天數必須完全不受影響（依定義）。"""
+    def test_defense_band_edges_unchanged(self):
+        """防禦**帶的定義**不動（切點 35、區間 0-20%）。
+
+        ⚠️ 注意用詞：這裡釘的是「帶的定義」，**不是**「防禦天數」。
+        原標題寫 `..._unchanged_by_this_change` 並在 docstring 宣稱
+        「防禦帶天數必須完全不受影響」—— 那句話對「A 切點單獨改」成立，
+        對 2026-08-19 下午「拿掉一條計分腿」**不成立**：實測防禦帶從
+        12.45% 升到 13.61%（每年 31.4 → 34.3 天）。留著原句會變成一條
+        說謊的測試（比沒有測試更危險），故改名 + 改述。
+
+        為什麼不同步調 DEF 來抵銷那 1.16pp：DEF 對齊
+        `HEALTH_DEFENSE_THRESHOLD`（macro_thresholds.json），該門檻的
+        walk-forward 校準跑出 4 折 4 種答案、第 3 折 OOS precision 0%、
+        平均 train→test 衰退 -111.5% ⇒ 無證據支持調整。用雜訊覆蓋手訂值
+        不會比較誠實。
+        """
         assert THROTTLE_HEALTH_DEF == 35
         assert THROTTLE_TIERS[-1][1:3] == (0, 20)
 
@@ -97,14 +117,43 @@ class TestMaxScoreDoesNotRewardMissingData:
         r = market_regime(100, 90, 80, 1e9, ad_ratio=None, m1b_m2_gap=None)
         assert r['score_partial'] is True
         assert '市場廣度' in r['missing_factors']
-        assert 'M1B-M2 資金活水' in r['missing_factors']
+
+    def test_retired_leg_is_not_reported_as_missing(self):
+        """**停用 ≠ 缺失** —— 兩者必須用不同管道說。
+
+        2026-08-19：`M1B_M2_LEG_ENABLED = False` 之後，m1b_m2 腿不再進分子
+        也不再進分母。把它列進 `missing_factors` 會每天噴一次假警報
+        （「資料缺失」），但資料其實有，是我們決定不看 —— 那是另一件事。
+
+        原測試斷言 `'M1B-M2 資金活水' in missing_factors`；本次**移除該斷言
+        而非放寬它**，並在此正面釘住相反的性質，讓語意分離不會被人再合回去。
+        """
+        r = market_regime(100, 90, 80, 1e9, ad_ratio=60.0, m1b_m2_gap=None)
+        assert 'M1B-M2' not in ''.join(r['missing_factors']), (
+            '停用的腿被當成「缺資料」回報 —— 會產生每日假警報')
+
+    def test_retired_leg_still_discloses_when_a_value_arrives(self):
+        """上游仍送值進來時，畫面必須說「已停用、不計分」，不可靜默吞掉（§1）。"""
+        r = market_regime(100, 90, 80, 1e9, ad_ratio=60.0, m1b_m2_gap=-38.67)
+        assert any('停用' in s and 'M1B' in s for s in r['signals']), (
+            f'上游給了 m1b_m2_gap 卻沒有任何揭露訊號：{r["signals"]}')
+
+    def test_retired_leg_does_not_enter_denominator(self):
+        """停用的腿不進分母 —— 否則等於把「我們不看它」編碼成「它是利空」。"""
+        r_with = market_regime(100, 90, 80, 1e9, ad_ratio=60.0,
+                               m1b_m2_gap=1.0, m1b_m2_prev=0.5)
+        r_without = market_regime(100, 90, 80, 1e9, ad_ratio=60.0, m1b_m2_gap=None)
+        assert r_with['max_score'] == r_without['max_score'] == 5.0, (
+            '傳不傳 m1b_m2_gap 竟然算出不同分母 —— 校準與線上又變成兩套系統')
+        assert r_with['score'] == r_without['score']
 
     def test_full_inputs_report_no_missing(self):
         r = market_regime(100, 90, 80, 1e9, ad_ratio=60.0,
                           m1b_m2_gap=1.0, m1b_m2_prev=0.5)
         assert r['score_partial'] is False
         assert r['missing_factors'] == []
-        assert r['max_score'] == 6.0
+        # 4.0（固定腿）+ 1.0（ad_ratio）= 5.0。m1b_m2 腿已停用不計分母。
+        assert r['max_score'] == 5.0
 
     def test_renormalisation_asymmetry_is_known_and_must_be_disclosed(self):
         """釘住一個**不可消除、只能揭露**的性質（這條測試本身就是文件）。
