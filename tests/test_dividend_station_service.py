@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from shared import dividend_station_thresholds as T
+from src.compute.etf import dividend_station as ds
 from src.services import dividend_station_service as svc
 
 
@@ -56,19 +57,27 @@ def test_build_rows_mixed_good_and_bad():
     assert "抓取失敗" in rows[1]["建議動作"]
 
 
-def test_build_rows_stock_kind_not_applicable():
-    """個股列：種類=個股、3-3-3=—、D 標個股不適用（不硬套 ETF 規則,§1）。"""
+def test_build_rows_stock_kind_mj_kd():
+    """個股列改走 財報體檢 + KD（§ user 2026-08：不套 235/3-3-3）。
+
+    財報 F + KD 死亡交叉 → 建議換出 🔴。個股 row 不含 235/3-3-3 欄,改含 財報體檢/KD。
+    """
     def _stock_metrics(ticker, asset_kind="stock"):
-        return {"weekly_close": _wk(), "sharpe": 1.0, "total_return_1y_pct": 20,
-                "annual_yield_pct": 2, "inception_years": 10, "premium_pct": 1.9,
-                "ann_return_3y_pct": 15, "cum_return_3y_pct": None,
-                "peer_ranks": {m: 0.1 for m in T.PEER_WINDOWS_MONTHS}}
+        return {"mj_grade": "F", "mj_score_pct": 20, "mj_headline": "🔴 高危企業",
+                "mj_fail_items": ["負債比率", "流動比率"],
+                "kd_state": {"k": 82.0, "d": 88.0, "label": "死亡交叉", "cross": "death",
+                             "high_passivation": False, "bearish_divergence": False,
+                             "bullish_divergence": False, "low_passivation": False},
+                "current_price": 30.0}
     holdings = [{"ticker": "2330", "name": "台積電", "asset_class": T.ASSET_SATELLITE,
                  "asset_kind": T.KIND_STOCK}]
     r = svc.build_station_rows(holdings, vix=18, metrics_fn=_stock_metrics)[0]
     assert r["種類"] == "個股"
-    assert r["3-3-3"] == "—"                       # 個股不適用,非 ✅/❌/❔
-    assert "個股不適用" in r["_detail"]["健檢D"]   # 即使 premium=1.9 也不判 🟡
+    assert "3-3-3" not in r and "235 燈號" not in r       # 個股不套 ETF 規則
+    assert "財報體檢" in r and "KD" in r
+    assert r["健檢"] == "🔴"                              # F + KD 轉弱 → 汰弱換出
+    assert "換出" in r["建議動作"]
+    assert r["_detail"]["KD交叉"] == "死亡交叉"
 
 
 def test_build_rows_passes_asset_kind_to_metrics_fn():
@@ -124,23 +133,31 @@ def test_fetch_metrics_wires_real_sources(monkeypatch):
     assert m["peer_ranks"] == {3: 0.1, 6: 0.2, 12: 0.3}   # 3-3-3③ 已接(不再 Phase 2 None)
 
 
-def test_fetch_metrics_otc_twoo_fallback(monkeypatch):
-    """稽核 MED：上櫃股 .TW 抓空 → 自動試 .TWO（否則 OTC 存股整檔 error）。"""
+def test_fetch_metrics_stock_otc_twoo_fallback(monkeypatch):
+    """個股上櫃股 .TW 抓空 → 自動試 .TWO;個股走 財報體檢+KD（回現價 + KD 狀態,非 weekly_close）。"""
     import sys
     import types
-    idx = pd.bdate_range("2020-01-02", periods=900)
-    px = pd.DataFrame({"Close": pd.Series(np.linspace(20, 40, len(idx)), index=idx)})
+    idx = pd.bdate_range("2020-01-02", periods=300)
+    _base = np.linspace(20, 40, len(idx))
+    px = pd.DataFrame({"Close": _base, "High": _base + 0.5, "Low": _base - 0.5}, index=idx)
     seen = []
-    def _price(t, period="5y"):
+    def _price(t, period="1y"):
         seen.append(t)
         return px if t.endswith(".TWO") else pd.DataFrame()   # .TW 空, .TWO 有
     fake = types.ModuleType("src.data.etf.etf_fetch")
     fake.fetch_etf_price = _price
-    fake.fetch_etf_dividends = lambda t: pd.Series(dtype=float)
     monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
+    # 隔離財報 + 名稱網路（本測聚焦 .TW→.TWO 價格 fallback + KD 計算）
+    monkeypatch.setattr(
+        "src.data.core.financial_statements_fetcher.fetch_financial_statements",
+        lambda *a, **k: {"error": "test-skip"}, raising=False)
+    monkeypatch.setattr("src.config.stock_names.get_stock_name",
+                        lambda code: code, raising=False)
     m = svc.fetch_metrics("5314", asset_kind=T.KIND_STOCK)
     assert "5314.TW" in seen and "5314.TWO" in seen          # 先 .TW 再 .TWO
-    assert len(m["weekly_close"]) > 20
+    assert m["current_price"] == pytest.approx(40.0, abs=1.0)
+    assert m["kd_state"] is not None and m["kd_state"].get("k") is not None
+    assert m["mj_grade"] is None                             # 財報隔離 → 標資料不足
 
 
 def test_fetch_metrics_no_daily_raises(monkeypatch):
@@ -440,3 +457,52 @@ def test_switch_in_fallback_to_screener_when_no_watchlist_greens():
     b = svc.build_switch_advice(rows, {"loaded": False}, cands)
     assert b["switch_in_src"] == "screener"
     assert [d["代號"] for d in b["switch_in"]] == ["9999"]
+
+
+# ── 名稱解析 + 個股組表（v19.x 名稱抓進 + 個股 財報體檢/KD 分區）─────────────
+def test_resolve_holding_names_stock_etf_and_fallback(monkeypatch):
+    """ETF→fetch_etf_zh_name、個股→get_stock_name;查無留空、已有不覆蓋（§1 不捏造）。"""
+    import sys
+    import types
+    monkeypatch.setattr("src.config.stock_names.get_stock_name",
+                        lambda code: {"2330": "台積電"}.get(code, code), raising=False)
+    fake = types.ModuleType("src.data.etf.etf_fetch")
+    fake.fetch_etf_zh_name = lambda t: {"0056": "元大高股息"}.get(t)
+    monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
+
+    holdings = [
+        {"ticker": "2330", "name": "", "asset_kind": T.KIND_STOCK},
+        {"ticker": "0056", "name": "", "asset_kind": T.KIND_ETF},
+        {"ticker": "9999", "name": "", "asset_kind": T.KIND_STOCK},   # 查無→回代號→留空
+        {"ticker": "0050", "name": "既有", "asset_kind": T.KIND_ETF},  # 已有→不覆蓋
+    ]
+    out = svc.resolve_holding_names(holdings)
+    assert out is holdings                                    # 就地更新回同一 list
+    assert holdings[0]["name"] == "台積電"
+    assert holdings[1]["name"] == "元大高股息"
+    assert holdings[2]["name"] == ""                          # §1 查無留空
+    assert holdings[3]["name"] == "既有"
+
+
+def test_stock_row_from_assessment_shape():
+    sa = ds.assess_stock(ticker="2330", name="台積電", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="A", mj_score_pct=85, mj_headline="🟢 優質",
+                         mj_fail_items=[],
+                         kd={"k": 70.0, "d": 65.0, "label": "黃金交叉", "cross": "golden",
+                             "high_passivation": False, "low_passivation": False,
+                             "bearish_divergence": False, "bullish_divergence": False})
+    row = svc.stock_row_from_assessment(sa)
+    assert row["種類"] == "個股" and row["名稱"] == "台積電"
+    assert row["財報體檢"] == "A（85）"
+    assert row["KD"].startswith("K70") and "黃金交叉" in row["KD"]
+    assert row["健檢"] == sa.swap_level                       # 復用鍵給下游/高亮
+    assert row["_detail"]["KD交叉"] == "黃金交叉"
+    assert "3-3-3" not in row and "235 燈號" not in row       # 個股不含 ETF 欄
+
+
+def test_stock_row_data_insufficient_labels():
+    sa = ds.assess_stock(ticker="9999", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade=None, mj_score_pct=None, mj_headline="",
+                         mj_fail_items=None, kd=None)
+    row = svc.stock_row_from_assessment(sa)
+    assert row["財報體檢"] == "資料不足" and row["KD"] == "資料不足"

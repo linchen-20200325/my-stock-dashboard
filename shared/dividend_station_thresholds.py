@@ -67,8 +67,18 @@ MIN_WEEKS_FOR_BOLL: int = BOLL_PERIOD_WEEKS         # < 20 週 → 無布林 z
 MIN_WEEKS_FOR_YEAR_LINE: int = MA_YEAR_WEEKS        # < 52 週 → 無年線（燈三降級）
 
 # ── 資產類型（個股 vs ETF；決定哪些健檢適用）────────────────────────────
-KIND_STOCK = "stock"         # 個股：無折溢價、3-3-3(ETF/基金挑選規則)不適用
-KIND_ETF = "etf"             # ETF：A/B/C/D + 235 + 3-3-3 全套
+KIND_STOCK = "stock"         # 個股：235/3-3-3 不適用,改走 財報體檢 + KD 判汰換
+KIND_ETF = "etf"             # ETF：A/B/C/D + 235 + 3-3-3 全套（定期定額策略）
+
+# ── 個股汰換（財報為主·KD為輔）：財報體檢 grade → 汰弱門檻 ──────────────────
+# `financial_health_engine.no_ai_overall_verdict` 的 grade 分級為
+# A+ / A / B / B+ / C / F（F=高危、C=明顯改善空間）。列於此的 grade 視為
+# 「基本面汰弱」→ 建議換出（KD 只當進出場時機輔證,不獨立決定換股）。
+STOCK_SWAP_GRADES: tuple[str, ...] = ("C", "F")
+# 財報體檢 grade 全集（**須與 `financial_health_engine.no_ai_overall_verdict` 一致**）。
+# assess_stock 用此防禦:非此集合的 grade（上游契約漂移 / 髒值）一律當「資料不足」,
+# 不誤判成「續抱」(§1 不對不可信的 grade 假裝有結論)。
+STOCK_HEALTH_GRADES: tuple[str, ...] = ("A+", "A", "B+", "B", "C", "F")
 
 
 def classify_asset_kind(ticker: str) -> str:

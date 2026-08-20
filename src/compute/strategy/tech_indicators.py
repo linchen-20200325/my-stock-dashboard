@@ -184,6 +184,36 @@ def calc_kd_series(close: pd.Series, high: pd.Series, low: pd.Series,
     return k, d
 
 
+def kd_cross_state(df, period: int = 9) -> str | None:
+    """最近一日 K/D 交叉判定（純 L2,失敗回 None,同儕 calc_kd 契約,不 raise）。
+
+    K 由下上穿 D → 'golden'（黃金交叉,轉強）；K 由上下破 D → 'death'（死亡交叉,轉弱）；
+    無交叉 → None。用「相鄰兩日」K/D 相對位置變化判定（去 NaN 對齊後比最後兩點）。
+
+    Args:
+        df: 需含 close/high/low 欄的日 OHLC（同 calc_kd）
+        period: RSV 窗口,預設 9
+    """
+    try:
+        if df is None or len(df) < period + 1:
+            return None
+        k_s, d_s = calc_kd_series(df['close'], df['high'], df['low'], period)
+        al = pd.DataFrame({'k': k_s, 'd': d_s}).dropna()
+        if len(al) < 2:
+            return None
+        k0, d0 = float(al['k'].iloc[-2]), float(al['d'].iloc[-2])
+        k1, d1 = float(al['k'].iloc[-1]), float(al['d'].iloc[-1])
+        if k0 <= d0 and k1 > d1:
+            return 'golden'
+        if k0 >= d0 and k1 < d1:
+            return 'death'
+        return None
+    except Exception as e:
+        print(f'[tech_indicators/kd_cross_state] fail: {type(e).__name__}: {e}',
+              file=sys.stderr)
+        return None
+
+
 def analyze_kd_state(df, period: int = 9):
     """KD 鈍化(passivation) + 背離(divergence) 偵測（v19.94，§7 user 核准）。
 
