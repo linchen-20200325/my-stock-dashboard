@@ -261,10 +261,20 @@ def _precompute_fund_map(results_t3: list[dict]) -> dict[str, dict]:
                     _pb_eval3 = f'{_pb_raw3:.2f} {classify_pb_level(_pb_raw3, _bands3)}'
         except Exception:
             pass
+        # §4.1(2026-08 稽核)殖利率單位修正:_avg3 = 年均現金股利(**元**,fetch_dividend_data
+        # 首元素),原本直接印成「殖利率%」→ 台積電印 13.7「%」其實是 13.7 元(真殖利率
+        # 0.58%,差 ~23×)。改算真殖利率 = 年均股利 ÷ 現價 × 100(現價已在 _r3)。
+        _price_yld3 = None
+        try:
+            _price_yld3 = float(str(_r3.get('現價', '0')).replace(',', ''))
+        except (TypeError, ValueError):
+            _price_yld3 = None
+        _yield3 = (round(_avg3 / _price_yld3 * 100, 2)
+                   if (_avg3 and _price_yld3 and _price_yld3 > 0) else None)
         _fund_map[_sid3] = {
             '近4季EPS': f'{_eps3:.2f}' if _eps3 is not None else '-',
             '毛利率%':  f'{_gp3:.1f}'  if _gp3  is not None else '-',
-            '殖利率%':  f'{_avg3:.1f}' if _avg3  is not None else '-',
+            '殖利率%':  f'{_yield3:.2f}' if _yield3 is not None else '-',
             'SQ評分':   _sq3   if _sq3   is not None else '-',
             'FGMS':     _fgms3 if _fgms3 is not None else '-',
             'P/B評價':  _pb_eval3,
@@ -386,6 +396,10 @@ def _fmt_abs_stop(row: dict) -> str:
 
     距離為負代表現價已跌破停損線，是**有意義的狀態**（該出場了），
     照樣顯示，不當成錯誤。
+
+    2026-08 稽核修：距離為負(現價已跌破紅K低點錨,停損價反在現價之上)時,原本只印
+    `314.69 (-17.2%)`,讀起來像「停損價高於現價」的壞資料。改前綴 `🚨已跌破` 明示
+    這是「早該出場」狀態(對齊個股單檔頁 section_health_score 的 🚨已跌破 三態)。
     """
     _stop = row.get('_abs_stop')
     if not isinstance(_stop, (int, float)):
@@ -393,6 +407,9 @@ def _fmt_abs_stop(row: dict) -> str:
     _dist = row.get('_stop_dist_pct')
     if not isinstance(_dist, (int, float)):
         return f'{_stop:.2f}'
+    if _dist < 0:
+        # 現價已跌破紅K低點錨 → 停損價在現價之上 = 早該出場,明示不誤讀為壞資料
+        return f'🚨已跌破 {_stop:.2f} ({_dist:+.1f}%)'
     return f'{_stop:.2f} ({_dist:+.1f}%)'
 
 

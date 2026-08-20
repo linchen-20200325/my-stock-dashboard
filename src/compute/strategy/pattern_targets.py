@@ -341,11 +341,16 @@ def compute_pattern_targets(
     rr = None
     if target1 is not None and sweet is not None and stop is not None:
         denom = sweet - stop
-        if denom > _EPS:
+        if denom <= _EPS:
+            notes.append("rr=None(分母 sweet-stop ≤ 0)")
+        elif target1 <= sweet:
+            # §1(2026-08 稽核):目標價 ≤ 進場(甜蜜)價 → 風報比 ≤ 0,對做多無意義,
+            # 不可誤導成「可操作」。破底翻盲目「N字優先」時,若整理低 < wave1_start,
+            # target_n 會落在 sweet 之下 → 產生 -0.02 這種負 rr。gate 成 None(顯示「—」)。
+            notes.append("rr=None(target1 ≤ sweet,目標低於進場價,不可做多)")
+        else:
             rr = (target1 - sweet) / denom
             notes.append(f"rr=(target1-sweet)/(sweet-stop)={rr:.3f}")
-        else:
-            notes.append("rr=None(分母 sweet-stop ≤ 0)")
     else:
         _miss = [k for k, v in (("target1", target1), ("sweet", sweet),
                                 ("stop", stop)) if v is None]
