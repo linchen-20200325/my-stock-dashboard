@@ -1036,6 +1036,10 @@ def render_etf_portfolio(gemini_fn=None):
                       for r in _stress['per_etf']]
     total_stress = _stress['total_loss']
     st.dataframe(pd.DataFrame(stress_results), use_container_width=True, hide_index=True)
+    # P3-A(§1/§3.1):beta 缺以 1.0 估算者須揭示,不靜默捏造
+    if _stress.get('beta_imputed_count'):
+        st.caption(f"⚠️ 其中 {_stress['beta_imputed_count']} 檔查無 Beta，以 1.0 估算納入壓測"
+                   f"（{'、'.join(_stress['beta_imputed_tickers'])}）—— 該檔虧損為估計值、非真實 Beta。")
     loss_pct = _stress['loss_pct']
     _stress_warn = loss_pct > PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT
     color    = 'red' if _stress_warn else 'green'
