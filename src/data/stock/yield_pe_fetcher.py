@@ -234,3 +234,65 @@ def fetch_pe_name_maps() -> tuple[dict, dict]:
                 if _n and _n.lower() != 'nan':
                     name_map.setdefault(_c, _n)
     return pe_map, name_map
+
+
+def _twse_official_pbratio(sid: str) -> float | None:
+    """TWSE OpenAPI BWIBBU_d 官方個股 P/B(T1,伺服器端權威值);查無 / 越界回 None。
+
+    C4(v19.197):原邏輯散在 `section_357_valuation._fetch_pbratio_from_twse`(L5),
+    抽到 L1 成為單檔 / 多檔共用的唯一 TWSE-P/B 取值點(§2.1 / §3.3 一份源鏈)。
+    重用 `fetch_twse_yield_pe()` 的 1 日快取全市場 DataFrame。涵蓋全 TWSE 上市股。
+    """
+    _df = fetch_twse_yield_pe()
+    if _df is None or _df.empty or '代碼' not in _df.columns:
+        return None
+    _hit = _df[_df['代碼'].astype(str) == str(sid)]
+    if _hit.empty:
+        return None
+    _pb = _hit.iloc[0].get('股價淨值比')
+    if _pb is None:
+        return None
+    try:
+        _pb_v = float(_pb)
+    except (TypeError, ValueError):
+        return None
+    return _pb_v if 0.01 < _pb_v < 100 else None
+
+
+def get_pb_ratio(sid: str, price: float | None = None) -> dict:
+    """個股 P/B 股價淨值比 SSOT(v19.197 C4:單檔 / 多檔共用一條源鏈)。
+
+    來源權威序(§2.1,上層先命中者贏,不平均):
+      ① TWSE 官方 PBratio(BWIBBU_d,T1)—— 直接是官方 P/B;
+      ② FinMind BS 季度 / yfinance bookValue(`fetch_bps`,T2)—— BPS,回推 P/B = price / BPS。
+    §1:兩源皆無 → pb=None(不捏造)。price 缺時 ① 仍回官方 pb,但 bps 無法反推(None);
+    ② 需 price 才能算 P/B。
+
+    原本單檔頁走 ①→②、多檔頁只走 ② → 同股跨頁可能落不同 P/B 帶(違 §2.1)。本函式讓兩頁同源。
+
+    Returns:
+        {"pb": float|None, "bps": float|None, "source": str}。
+    """
+    _p = (float(price) if isinstance(price, (int, float)) and price and float(price) > 0
+          else None)
+    # ① TWSE 官方 PBratio
+    try:
+        _pb_t1 = _twse_official_pbratio(str(sid))
+        if _pb_t1 is not None:
+            return {"pb": _pb_t1, "bps": (_p / _pb_t1) if _p else None,
+                    "source": "TWSE:BWIBBU_d 官方 PBratio(T1)"}
+    except Exception as _e:  # noqa: BLE001 — T1 失敗 → 落 ② fetch_bps,不炸
+        print(f'[yield_pe_fetcher.get_pb_ratio] {sid} TWSE PBratio 失敗:'
+              f'{type(_e).__name__}: {_e}')
+    # ② FinMind BS / yfinance bookValue → P/B = price / BPS
+    try:
+        from src.data.core import fetch_bps
+        _bps = fetch_bps(str(sid))
+        if _bps and float(_bps) > 0:
+            _bps_v = float(_bps)
+            return {"pb": (_p / _bps_v) if _p else None, "bps": _bps_v,
+                    "source": "FinMind BS 季度 / yfinance bookValue(T2)"}
+    except Exception as _e:  # noqa: BLE001 — 兩源皆敗回 None,§1 不捏造
+        print(f'[yield_pe_fetcher.get_pb_ratio] {sid} fetch_bps 失敗:'
+              f'{type(_e).__name__}: {_e}')
+    return {"pb": None, "bps": None, "source": "無(TWSE / FinMind 皆無)"}

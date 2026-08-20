@@ -49,23 +49,14 @@ def _fetch_pbratio_from_twse(sid: str) -> float:
     ⚠️ 測試 patch 目標 = `src.data.stock.yield_pe_fetcher.fetch_twse_yield_pe`
     (late import,呼叫時才解析 → patch 生效)。
     """
+    # C4(v19.197):TWSE 官方 PBratio 取值已下沉 L1 `yield_pe_fetcher._twse_official_pbratio`
+    # (單檔 / 多檔共用一份源鏈,§2.1 / §3.3)。本函式保留為單檔頁的 prov_log 包裝,
+    # 外層 PRIMARY→FALLBACK 邏輯與顯示值完全不變(查無 / 越界仍回 0.0)。
     try:
-        from src.data.stock.yield_pe_fetcher import fetch_twse_yield_pe
-        _df = fetch_twse_yield_pe()
-        if _df is None or _df.empty:
+        from src.data.stock.yield_pe_fetcher import _twse_official_pbratio
+        _pb_v = _twse_official_pbratio(str(sid))
+        if _pb_v is None:
             return 0.0
-        _hit = _df[_df['代碼'].astype(str) == str(sid)]
-        if _hit.empty:
-            return 0.0
-        _pb = _hit.iloc[0].get('股價淨值比')
-        if _pb is None:
-            return 0.0
-        _pb_v = float(_pb)
-        if not (0.01 < _pb_v < 100):
-            return 0.0
-        # v18.356 PR-Q5b S-PROV-1 phase 19:success-path provenance
-        # E2(2026-08):血緣標籤跟著實作走 —— 來源模組已改 L1 yield_pe_fetcher(§2.2
-        # provenance 必須指向真正的產生者,不能停在舊模組名)。
         prov_log('_fetch_pbratio_from_twse', 'TWSE:OpenAPI:BWIBBU_d(via yield_pe_fetcher)',
                  f'float:{_pb_v}', ticker=sid)
         return _pb_v

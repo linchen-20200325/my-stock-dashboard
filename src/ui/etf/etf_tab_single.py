@@ -164,6 +164,10 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         from src.compute.etf import (
             build_etf_score_row, compute_etf_composite_score,
             recommend_etf_action, compute_etf_quality)
+        # A1(v19.197):評分前注入即時 FEDFUNDS rf(與多檔比較頁同源)。原本只有多檔頁
+        # 注入 → 單檔頁 Sharpe 依 process 稍早是否開過多檔頁給兩值(§5 冪等破口)。
+        from src.services.etf_scoring_service import ensure_etf_rf_injected
+        ensure_etf_rf_injected()
         _vrow = build_etf_score_row(ticker, df, divs, info,
                                     quality=compute_etf_quality(ticker), zh_name=_zh_name)
         _vrow['composite'], _ = compute_etf_composite_score(_vrow)

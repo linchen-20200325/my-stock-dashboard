@@ -486,8 +486,14 @@ for _f, _m in (
     ("src/ui/tabs/portfolio_manager.py", "src.data.portfolio"),
     ("src/ui/tabs/stock_grp_sections/section_batch_fetcher.py", "src.data.core"),
     ("src/ui/tabs/stock_grp_sections/section_batch_fetcher.py", "src.data.stock.app_stock_fetchers"),
+    # C2(v19.197):多檔批次補抓股本(龍頭 gate 分母);同 tab_stock 既有 share_capital_fetcher
+    # pass-through 範式(L1 內已 @st.cache_data TTL_1DAY 集中緩存,加 L3 wrapper 純 pass-through)。
+    ("src/ui/tabs/stock_grp_sections/section_batch_fetcher.py", "src.data.stock.share_capital_fetcher"),
     ("src/ui/tabs/stock_grp_sections/section_portfolio_summary.py", "src.data.news"),
     ("src/ui/tabs/stock_grp_sections/section_portfolio_summary.py", "src.data.stock.app_stock_fetchers"),
+    # C4(v19.197):多檔 P/B 改走 L1 SSOT get_pb_ratio(TWSE 官方→FinMind),與單檔頁同源
+    # (§2.1);同 section_357_valuation 既有 yield_pe_fetcher pass-through 範式。
+    ("src/ui/tabs/stock_grp_sections/section_portfolio_summary.py", "src.data.stock.yield_pe_fetcher"),
     ("src/ui/tabs/stock_sections/section_357_valuation.py", "src.data.core"),
     ("src/ui/tabs/stock_sections/section_357_valuation.py", "src.data.core.provenance"),
     # E2(2026-08):_fetch_pbratio_from_twse 改直取 L1(原繞 src.ui.tabs barrel → L5 re-export)
