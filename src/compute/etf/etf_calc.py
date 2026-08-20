@@ -123,7 +123,10 @@ def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
         info = fetch_etf_info(ticker)
 
         _cur = float(df['Close'].iloc[-1])
-        _ttl = calc_total_return_1y(df, divs)
+        # P3-A(v19.199):require_full_period=True 對齊 etf_tab_single / build_etf_score_row。
+        #   原預設 False → 上市未滿 1 年 ETF 把「上市至今報酬」誤當 1Y(00981A 曾顯示 212%),
+        #   虛高報酬 >> 殖利率 → 核心「賺息賠本」邏輯判假🟢綠燈;同檔單/多檔頁則判資料不足。
+        _ttl = calc_total_return_1y(df, divs, require_full_period=True)
         _yld = calc_current_yield(df, divs)
         _prem = calc_premium_discount(info, df, ticker)
         _prem_pct = _prem.get('premium_pct') if isinstance(_prem, dict) else None
@@ -165,7 +168,11 @@ def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
             elif _prem_pct is not None and _prem_pct < 0:
                 _extra.append(f'折價({_prem_pct:+.2f}%)')
 
-            if _has_yld and _ttl < _yld:
+            if _ttl is None:
+                # P3-A:年輕 ETF(不足 1 年)→ 年報酬不可信 → 不判賺息賠本(§1 不假綠)
+                _lamp = '⚪ 資料不足（上市未滿 1 年，年報酬不可信）'
+                _action_hint = '待滿 1 年再評估'
+            elif _has_yld and _ttl < _yld:
                 _lamp = f'🔴 賺息賠本({_ttl:.1f}%<{_yld:.1f}%)→考慮換股'
                 _action_hint = '考慮換股（核心紀律不容侵蝕本金）'
             elif _below_ma60:
@@ -192,7 +199,7 @@ def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
         else:
             # 其他角色：保留舊邏輯精簡版
             _warns = []
-            if _yld and _yld > 0 and _ttl < _yld:
+            if _yld and _yld > 0 and _ttl is not None and _ttl < _yld:
                 _warns.append('賺息賠本')
             if _prem_pct is not None and _prem_pct > 1:
                 _warns.append(f'溢價{_prem_pct:+.2f}%')
@@ -204,7 +211,7 @@ def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
             '市價': round(_cur, 2),
             '折溢價%': (round(_prem_pct, 2) if _prem_pct is not None else None),
             '年化配息率%': (round(_yld, 2) if _yld else None),
-            '1年含息報酬%': round(_ttl, 2),
+            '1年含息報酬%': (round(_ttl, 2) if _ttl is not None else None),
             '距月線%': _bias20,
             '距季線%': _bias60,
             'σ位階': (f'{_sigma_emoji} {_sigma_label}' if _sigma_emoji else None),
@@ -592,10 +599,14 @@ def calc_portfolio_stress_test(rows: list, total_value: float,
           'total_loss': float,         # 總虧損(元,正負同 drop_pct)
           'loss_pct': float,           # |total_loss| / total_value × 100
           'drop_pct': float,           # 實際使用的下跌幅度
+          'beta_imputed_count': int,   # P3-A:beta 缺以 1.0 估算的檔數(0=全真實)
+          'beta_imputed_tickers': list,# P3-A:被估算的代號清單(UI 須揭示)
         }
+        per_etf 每筆另含 '_beta_imputed': bool(該檔 beta 是否為估算)。
 
     SSOT 政策:任何投組層壓力測試呼叫本函式,不再 inline Beta 加權計算。
-    Beta cast 失敗 fallback 1.0 + 對應 print log(fail loud)。
+    P3-A(§1/§3.1):beta 缺(None/0)或 cast 失敗 → 以 1.0 估算但**帶 _beta_imputed 旗標**
+    (原 `or 1.0` 靜默捏造),count/tickers 回傳供 UI 誠實揭示。
     """
     from shared.signal_thresholds import PORTFOLIO_STRESS_TEST_DROP_PCT
     if drop_pct is None:
@@ -605,13 +616,18 @@ def calc_portfolio_stress_test(rows: list, total_value: float,
     _drop_ratio = drop_pct / 100
     for r in rows:
         _info = fetch_etf_info(r['ticker'])
-        _beta = _info.get('beta') or _info.get('beta3Year') or 1.0
-        try:
-            _beta = float(_beta)
-        except Exception as _e_beta:
-            print(f"[calc_portfolio_stress_test] {r['ticker']} beta cast 失敗:"
-                  f'{type(_e_beta).__name__},fallback 1.0')
-            _beta = 1.0
+        _beta_raw = _info.get('beta') or _info.get('beta3Year')
+        # P3-A(v19.199,§1/§3.1):beta 缺(None/0)→ 以 1.0 估算但**帶 is_imputed 旗標**,
+        #   不再靜默捏造。原 `or 1.0` 把缺 beta 的 ETF 悄悄以 1.0 算進壓測總虧損,無標記。
+        _imputed = not _beta_raw
+        _beta = 1.0
+        if _beta_raw:
+            try:
+                _beta = float(_beta_raw)
+            except Exception as _e_beta:
+                print(f"[calc_portfolio_stress_test] {r['ticker']} beta cast 失敗:"
+                      f'{type(_e_beta).__name__},以 1.0 估算')
+                _beta, _imputed = 1.0, True
         _loss = r['actual_pct'] / 100 * _beta * _drop_ratio * total_value
         _total_loss += _loss
         _per_etf.append({
@@ -619,13 +635,17 @@ def calc_portfolio_stress_test(rows: list, total_value: float,
             '實際權重%': r['actual_pct'],
             '預估虧損(元)': f'{_loss:,.0f}',
             '_loss': _loss,
+            '_beta_imputed': _imputed,       # §1:beta 缺以 1.0 估算 → 帶旗標供 UI 揭示
         })
     _loss_pct = (abs(_total_loss) / total_value * 100) if total_value > 0 else 0.0
+    _imputed_tickers = [e['ETF'] for e in _per_etf if e['_beta_imputed']]
     return {
         'per_etf': _per_etf,
         'total_loss': _total_loss,
         'loss_pct': _loss_pct,
         'drop_pct': drop_pct,
+        'beta_imputed_count': len(_imputed_tickers),    # §1:估算檔數(0=全真實)
+        'beta_imputed_tickers': _imputed_tickers,
     }
 
 
