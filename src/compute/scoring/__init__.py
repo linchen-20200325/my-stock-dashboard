@@ -1,12 +1,12 @@
 """src/compute/scoring/ — 評分 / 出場訊號 / 閾值優化 / 多因子。PEP 562 lazy forward。"""
 from . import (  # noqa: F401
     scoring_engine, exit_signals,
-    scoring_helpers,
+    scoring_helpers, unified_verdict,
 )
 
 _SUBMODULES = (
     scoring_engine, exit_signals,
-    scoring_helpers,
+    scoring_helpers, unified_verdict,
 )
 
 

@@ -1468,6 +1468,27 @@ padding:14px 18px;margin-bottom:12px;">
                     unsafe_allow_html=True,
                 )
 
+                # ── 🧭 統一裁決(技術主軸 + 基本面次軸背離;新增不取代)──────────
+                # 統一 Health Score 引擎 v19.201:技術健康分 + 財報 grade → 統一三態
+                # (不平均,§2.1)。個股深度分析採交易視角 → 技術主軸、基本面做背離加註。
+                # 此處兩軸皆已在手(health2 技術 + _ov['grade'] 財報),零額外抓取。
+                try:
+                    from shared.unified_verdict_thresholds import PROFILE_TRADING
+                    from src.compute.scoring import assess_unified
+                    from src.ui.render.unified_verdict_render import (
+                        render_unified_verdict_html,
+                    )
+                    _uv2 = assess_unified(
+                        profile=PROFILE_TRADING,
+                        technical_health=health2,
+                        fundamental_grade=_ov.get('grade'),
+                    )
+                    st.markdown(render_unified_verdict_html(_uv2),
+                                unsafe_allow_html=True)
+                except Exception as _uv_err2:
+                    print(f'[tab_stock unified_verdict] {sid2} '
+                          f'{type(_uv_err2).__name__}: {_uv_err2}')
+
         # ══ 💠 集保籌碼大戶雷達（隨主代碼 sid2 自動查詢；置於 AI 總結上方供其引用）══
         st.markdown('---')
         from src.ui.tabs import render_chip_radar
