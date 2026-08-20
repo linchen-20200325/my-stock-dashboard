@@ -671,6 +671,13 @@ with tab_stocks:
                     add_picks_to_watchlist, get_watchlist_add_context)
                 _stk_sid_add, _wl_names = get_watchlist_add_context()
                 if not _stk_sid_add:
+                    # 2026-08 UX 修:原本這裡只印說明、把「加入」按鈕整個藏掉 → user 看到
+                    # 有勾選框卻沒有按鈕,以為「少了加入選股池的按鈕」。改成按鈕照樣顯示
+                    # (disabled 灰態 + tooltip),明講要先在 組合管理 選個股清單 Sheet。
+                    st.button('➕ 加入觀察清單', key='screener_add_watch_go_disabled',
+                              type='primary', disabled=True,
+                              help='需先在 📁 組合管理 選定「個股清單 Sheet」才能加入 —— '
+                                   '設定後這顆按鈕就會啟用。')
                     st.caption('（需先在 📁 組合管理 選定個股清單 Sheet,才能加入觀察清單。）')
                 else:
                     _NEW_WL = '＋ 新建清單'
