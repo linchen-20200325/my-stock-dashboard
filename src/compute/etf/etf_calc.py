@@ -599,10 +599,14 @@ def calc_portfolio_stress_test(rows: list, total_value: float,
           'total_loss': float,         # 總虧損(元,正負同 drop_pct)
           'loss_pct': float,           # |total_loss| / total_value × 100
           'drop_pct': float,           # 實際使用的下跌幅度
+          'beta_imputed_count': int,   # P3-A:beta 缺以 1.0 估算的檔數(0=全真實)
+          'beta_imputed_tickers': list,# P3-A:被估算的代號清單(UI 須揭示)
         }
+        per_etf 每筆另含 '_beta_imputed': bool(該檔 beta 是否為估算)。
 
     SSOT 政策:任何投組層壓力測試呼叫本函式,不再 inline Beta 加權計算。
-    Beta cast 失敗 fallback 1.0 + 對應 print log(fail loud)。
+    P3-A(§1/§3.1):beta 缺(None/0)或 cast 失敗 → 以 1.0 估算但**帶 _beta_imputed 旗標**
+    (原 `or 1.0` 靜默捏造),count/tickers 回傳供 UI 誠實揭示。
     """
     from shared.signal_thresholds import PORTFOLIO_STRESS_TEST_DROP_PCT
     if drop_pct is None:
