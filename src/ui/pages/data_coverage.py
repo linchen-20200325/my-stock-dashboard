@@ -56,7 +56,11 @@ from shared.colors import TRAFFIC_NEUTRAL as _C_IDLE, emoji_to_hex as _hex
 
 # v18.349 — macro_info 核心指標 key 契約走 SSOT(L0)，與 tab_macro 寫入端共用，
 # 杜絕 v18.282 那種 key 名各自寫死 → 漂移 → 覆蓋率永遠紅燈。
-from shared.macro_buckets import MACRO_INFO_KEYS
+from shared.macro_buckets import (
+    MACRO_INFO_KEYS, SPECS_BY_KEY,
+    MISSING_NOT_LOADED, MISSING_NO_VALUE, MISSING_OUT_OF_RANGE,
+    MISSING_NO_EXTRACTION,
+)
 
 # v19.170 P0-4:覆蓋率 ≠ 新鮮度。覆蓋率只問「有沒有值」,問不出「值是不是 9 天沒動
 # 的死資料」。故本表分兩欄,燈號規則走 L0 SSOT。
@@ -430,8 +434,46 @@ def compute_tab_coverage(state: dict | None = None,
                       if _ma_is_dict and _macro_block_has_value(_ma.get(k)))
     _macro_total = len(_macro_keys)
     _macro_extra = int(_has_value(_mi)) + int(_has_value(_li))
-    _macro_have_all = _macro_have + _macro_extra
-    _macro_total_all = _macro_total + 2
+
+    # ── 決策燈 readiness(2026-08-20)────────────────────────────────────
+    # 舊分母是 `MACRO_INFO_KEYS` 這 6 個 macro_info 容器,但**真正驅動五桶決策的
+    # 是 `BUCKET_DANGER_SPECS` 的 16 盞燈** —— 差集 11 個從來不在覆蓋率檢查裡。
+    #
+    # 改為直接問決策函式自己:16 盞燈有幾盞拿到值、沒拿到的**為什麼**。
+    # readiness 是 `compute_five_bucket_summary` 的副產物(從餵給 classify_danger
+    # 的同一個 values dict 生出來),所以「新增一盞燈」與「新增一筆 readiness」
+    # 是同一個動作 —— 不是偵測漂移,是沒有第二份東西可以漂移。
+    #
+    # L5 → L2 下行 import,既有先例(`macro/helpers.py`、`section_summary_bar.py`)。
+    _readiness: dict = {}
+    try:
+        from src.compute.macro import compute_five_bucket_summary  # noqa: PLC0415
+        compute_five_bucket_summary(
+            macro_info=_ma if _ma_is_dict else None,
+            mkt_info=_get("mkt_info"), warroom_summary=_get("warroom_summary"),
+            m1b_m2_info=_mi, bias_info=_get("bias_info"),
+            cl_data=_get("cl_data"), li_latest=_li,
+            jingqi_info=_get("jingqi_info"), news_items=_get("_macro_news_items"),
+            readiness_out=_readiness,
+        )
+    except Exception as _e_rd:
+        # §1:算不出來就說,不要靜默退回舊分母後假裝一切正常。
+        print(f"[data_coverage] ⚠️ readiness 取得失敗,總經列退回舊口徑:"
+              f"{type(_e_rd).__name__}: {_e_rd}")
+
+    # 分母**不含刻意未接線者** —— 一個 100% 恆亮的警告等於沒有警告(同 G2 教訓)。
+    _rd_wired = [r for r in _readiness.values() if r.get("wired")]
+    _rd_ok = [r for r in _rd_wired if r.get("state") == "ok"]
+    _rd_unwired = [r for r in _readiness.values() if not r.get("wired")]
+
+    if _rd_wired:
+        # 主計數 = 決策燈;`fed_funds` 等「在 macro_info 但不是五桶燈」的容器
+        # 走第二個子計數(user 2026-08-20 裁示:不把不同語意的東西加在一起)。
+        _macro_have_all = len(_rd_ok)
+        _macro_total_all = len(_rd_wired)
+    else:
+        _macro_have_all = _macro_have + _macro_extra
+        _macro_total_all = _macro_total + 2
     # 判 macro_info「有被跑過」:排除純 _ 開頭 meta key(_loaded_at / _all_failed)
     _ma_loaded = _ma_is_dict and any(not str(k).startswith("_") for k in _ma)
     _e1 = _coverage_emoji(_macro_have_all, _macro_total_all) if _ma_loaded else "⬜"
@@ -468,11 +510,48 @@ def compute_tab_coverage(state: dict | None = None,
         _f1e, _f1l = "⬜", "未載入"
 
     _loaded_at_txt = str(_ma.get("_loaded_at") or "") if _ma_is_dict else ""
-    _detail1_parts = [
-        f"核心指標 {_macro_have}/{_macro_total} 有值",
-        f"M1B-M2 {'✓' if _has_value(_mi) else '✗'}",
-        f"領先 {'✓' if _has_value(_li) else '✗'}",
-    ]
+    if _rd_wired:
+        # 主計數 = 決策燈;缺席者**依原因分組**列出 —— 五種灰燈長得一樣但處置完全不同,
+        # 混在一起講「缺 N 項」等於要使用者自己猜該做什麼(user 原話:避免誤判)。
+        _by_reason: dict = {}
+        for _r in _rd_wired:
+            if _r.get("state") != "ok":
+                _by_reason.setdefault(_r.get("reason") or "?", []).append(_r["key"])
+        _REASON_TXT = {
+            MISSING_NOT_LOADED:    ("🔌", "未載入", "在 🌍 總經 按更新"),
+            MISSING_NO_VALUE:      ("📵", "上游無值", "看下方 API 根因診斷"),
+            MISSING_OUT_OF_RANGE:  ("📐", "量綱異常", "上游換標的/報價慣例改變"),
+            MISSING_NO_EXTRACTION: ("🐛", "spec 無取值", "程式 bug,非資料問題"),
+        }
+        _detail1_parts = [f"決策燈 {len(_rd_ok)}/{len(_rd_wired)} 有值"]
+        for _rs, _keys in _by_reason.items():
+            _ic, _nm, _act = _REASON_TXT.get(_rs, ("⬜", str(_rs), ""))
+            _detail1_parts.append(f"{_ic} {_nm}({len(_keys)}):{'/'.join(_keys)} → {_act}")
+        # 量綱異常最毒(有值、數字看起來正常、但尺度錯) → 把實際被擋的值講出來
+        for _r in _rd_wired:
+            if _r.get("reason") == MISSING_OUT_OF_RANGE:
+                for _lbl, _v, _why in (_r.get("rejected") or []):
+                    _detail1_parts.append(f"　└ {_r['key']}:{_lbl} = {_v} {_why}")
+        # 刻意未接線者:不計入分母,但要具名說明,否則使用者會以為它壞了
+        for _r in _rd_unwired:
+            _sp_u = SPECS_BY_KEY.get(_r["key"])
+            _detail1_parts.append(
+                f"⛔ 未接線:{_r['key']} — {getattr(_sp_u, 'unwired_reason', '')[:40]}"
+                f"（不計入分母，此燈永遠不會亮）")
+        # user 2026-08-20 裁示:fed_funds 這類「在 macro_info 但不是五桶決策燈」的
+        # 容器保留為**第二個子計數**,不與決策燈加總(語意不同的東西不該相加)。
+        _detail1_parts.append(f"另 macro 容器 {_macro_have}/{_macro_total} 有值")
+    else:
+        _detail1_parts = [
+            f"核心指標 {_macro_have}/{_macro_total} 有值",
+            f"M1B-M2 {'✓' if _has_value(_mi) else '✗'}",
+            f"領先 {'✓' if _has_value(_li) else '✗'}",
+        ]
+    # 大盤評分本輪少了哪幾條腿 —— `market_regime` 2026-08-19 起就在算 `missing_factors`,
+    # 但診斷頁從來沒有人讀它。這是一行的事。
+    _mkt_missing = (_get("mkt_info") or {}).get("missing_factors") or []
+    if _mkt_missing:
+        _detail1_parts.append(f"⚠️ 大盤評分本輪少了:{'、'.join(_mkt_missing)}")
     if _macro_no_date:
         _detail1_parts.append(f"⚠️ {len(_macro_no_date)} 項無資料日期:"
                               f"{'/'.join(_macro_no_date)}")

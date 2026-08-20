@@ -89,8 +89,18 @@ def test_data_coverage_consumes_macro_info_keys_ssot():
     _macro = {k: {"current": 1.0} for k in mb.MACRO_INFO_KEYS}
     rows = compute_tab_coverage(state={"macro_info": _macro})
     macro_row = next(r for r in rows if "總經" in r["tab"])
-    # have = len(SSOT)(全部 6 核心命中), total = len(SSOT)+2(M1B + 領先)
-    assert macro_row["ratio_txt"] == f"{len(mb.MACRO_INFO_KEYS)}/{len(mb.MACRO_INFO_KEYS) + 2}"
+    # ⚠️ 2026-08-20:分母改為**已接線的決策燈**(`BUCKET_DANGER_SPECS`),
+    #    不再是 macro_info 容器數。本測試的原始意圖(「非各自寫死、隨 SSOT 連動」)
+    #    完全不變 —— 只是連動的對象換成真正驅動五桶決策的那一份清單。
+    #    改動理由:舊分母 6 個容器,而決策實際吃 16 盞燈,差集 11 盞從不在檢查裡。
+    _n_wired = sum(1 for s in mb.BUCKET_DANGER_SPECS if s.wired)
+    assert macro_row["ratio_txt"].endswith(f"/{_n_wired}"), (
+        f"覆蓋率分母未連動決策燈 SSOT：{macro_row['ratio_txt']}")
+    # 且 macro_info 容器計數仍以第二個子計數出現(user 2026-08-20 裁示:
+    # fed_funds 這類「在 macro_info 但不是決策燈」的不該掉出畫面,
+    # 但也不該與決策燈加總 —— 語意不同的東西不相加)。
+    assert f"/{len(mb.MACRO_INFO_KEYS)} 有值" in macro_row["detail"], (
+        f"macro 容器子計數消失：{macro_row['detail']}")
 
 
 # ──────────────────────────────────────────────────────────

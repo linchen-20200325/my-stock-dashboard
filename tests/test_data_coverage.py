@@ -111,21 +111,46 @@ class TestComputeTabCoverage:
                 assert f in r, f"缺欄位 {f}"
 
     def test_macro_full_coverage_green(self):
-        """v18.282: 用真實 macro_info key；v18.349 由 SSOT MACRO_INFO_KEYS 派生"""
+        """v18.282: 用真實 macro_info key；v18.349 由 SSOT MACRO_INFO_KEYS 派生。
+
+        ⚠️ 2026-08-20 改寫 fixture（**不是改期望值**）。原 fixture 給 6 個
+        macro_info key 一律塞 `{"current": 1.0}` 就期望 🟢 —— 但決策層對其中
+        4 個讀的根本不是 `.current`（`ism_pmi` 讀 `.value`、`us_core_cpi`/
+        `tw_export` 讀 `.yoy`、`ndc_signal` 讀 `.score`）。
+
+        也就是說**舊 fixture 代表的是「容器都在但決策層拿不到值」，而它期望 🟢**
+        —— 這正是本次要修的病（數容器不數可用值）。改用決策層真的會讀的欄位名，
+        這個測試才真的在測它名字宣稱的「full coverage → green」。
+        """
+        import pandas as pd
         from src.ui.pages import compute_tab_coverage
-        from shared.macro_buckets import MACRO_INFO_KEYS
-        _full_macro = {k: {"current": 1.0} for k in MACRO_INFO_KEYS}
         rows = compute_tab_coverage(state={
-            "macro_info": _full_macro,
-            "m1b_m2_info": {"v": 1},
-            "li_latest": {"v": 1},
+            "macro_info": {
+                "vix": {"current": 17.2}, "ism_pmi": {"value": 52.4},
+                "us_core_cpi": {"yoy": 3.1}, "tw_export": {"yoy": 8.5},
+                "fed_funds": {"current": 4.5}, "ndc_signal": {"score": 28},
+                "us10y": {"current": 4.28},
+            },
+            "m1b_m2_info": {"gap": 1.8},
+            "li_latest": pd.DataFrame({"外資大小": [-12000]}),
+            "warroom_summary": {"health_score": 58.0},
+            "bias_info": {"bias_240": 12.4},
+            "jingqi_info": {"avg": 51.3},
+            "cl_data": {
+                "intl": {"美元指數 DXY": pd.DataFrame({"close": [104.2]})},
+                "adl": pd.DataFrame({"ad_ratio": [53.1]}),
+                "margin": 2480.0,
+            },
+            "_macro_news_items": [],
         })
         macro_row = next(r for r in rows if "總經" in r["tab"])
-        assert macro_row["emoji"] == "🟢"
-        # 分母 = 核心 6 key + M1B-M2 + 領先 = SSOT 長度 + 2(漂移守門:
-        #   改 MACRO_INFO_KEYS → 覆蓋率分母自動跟著,不再各自寫死)
-        _expect = f"{len(MACRO_INFO_KEYS) + 2}/{len(MACRO_INFO_KEYS) + 2}"
-        assert macro_row["ratio_txt"] == _expect
+        assert macro_row["emoji"] == "🟢", (
+            f"15 盞決策燈全有值卻不是綠燈：{macro_row['ratio_txt']} / {macro_row['detail']}")
+        # 分母 = **已接線的決策燈**數(漂移守門:改 BUCKET_DANGER_SPECS →
+        #   覆蓋率分母自動跟著,不再各自寫死)。2026-08-20 自 MACRO_INFO_KEYS+2 改。
+        from shared.macro_buckets import BUCKET_DANGER_SPECS
+        _n_wired = sum(1 for s in BUCKET_DANGER_SPECS if s.wired)
+        assert macro_row["ratio_txt"] == f"{_n_wired}/{_n_wired}"
 
     def test_macro_coverage_uses_ssot_keys(self):
         """v18.349: data_coverage 認列的 macro key 數 = SSOT 清單長度。
@@ -136,8 +161,14 @@ class TestComputeTabCoverage:
         _macro = {k: {"current": 1.0} for k in MACRO_INFO_KEYS}
         rows = compute_tab_coverage(state={"macro_info": _macro})
         macro_row = next(r for r in rows if "總經" in r["tab"])
-        # have = len(SSOT)，total = len(SSOT)+2
-        assert macro_row["ratio_txt"] == f"{len(MACRO_INFO_KEYS)}/{len(MACRO_INFO_KEYS) + 2}"
+        # ⚠️ 2026-08-20:分母改為**決策燈**(`BUCKET_DANGER_SPECS` 已接線者),
+        #    不再是 macro_info 容器數。本測試的原始意圖「覆蓋率隨 SSOT 連動、
+        #    證明非寫死」不變,只是 SSOT 換成了真正驅動決策的那一份。
+        #    舊分母 6 個容器 vs 新分母 15 盞燈 —— 差集 11 盞從來不在檢查裡。
+        from shared.macro_buckets import BUCKET_DANGER_SPECS
+        _n_wired = sum(1 for s in BUCKET_DANGER_SPECS if s.wired)
+        assert macro_row["ratio_txt"].endswith(f"/{_n_wired}"), (
+            f"分母未連動決策燈 SSOT：{macro_row['ratio_txt']}（應為 x/{_n_wired}）")
 
     def test_macro_meta_only_is_idle(self):
         """只有 _loaded_at meta key(全 fetch 失敗)→ 未觸發,非綠"""
