@@ -167,6 +167,11 @@ def build_holdings_set(holdings, top_n: int = 15) -> set:
             records = list(holdings)[:top_n]
         except Exception:
             return set()
+    # P3-C(v19.199 對稱性稽核):正規化收斂到 calc_jaccard_overlap 用的同一支
+    #   _canonical_holding_key(去「(代碼)」括號 + 去空白 + lower;portfolio_gates 亦用此)。
+    #   原 str().strip().upper() 漏去括號 → 跨來源「台積電 (2330)」(yfinance) vs「台積電」
+    #   (Yahoo TW)同股被當兩支 → 交集低估 → 分散度被高估(偏樂觀),與多檔頁 Jaccard 對不上。
+    from src.compute.etf.etf_calc import _canonical_holding_key
     codes: set[str] = set()
     for h in records:
         try:
@@ -174,7 +179,7 @@ def build_holdings_set(holdings, top_n: int = 15) -> set:
                 sym = h.get('symbol') or h.get('Symbol') or h.get('code') or ''
             else:
                 sym = str(h)
-            sym = str(sym).strip().upper()
+            sym = _canonical_holding_key(sym)
             if sym:
                 codes.add(sym)
         except Exception:
