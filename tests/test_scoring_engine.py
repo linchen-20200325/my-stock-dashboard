@@ -5,9 +5,8 @@
   calc_trend_score / calc_momentum_score / momentum_signal
   chip_score / calc_chip_score / calc_volume_score / calc_risk_score
   stock_score / score_single_stock / rank_stocks
-  calc_revenue_yoy_score / calc_atr_stop / check_time_stop
-  check_contract_liability_surge / check_bollinger_squeeze
-  check_fake_breakout / calc_rr_ratio / calculate_position_size
+  calc_revenue_yoy_score / calc_atr_stop
+  calc_rr_ratio / calculate_position_size
   calc_rs_score
 """
 
@@ -30,10 +29,6 @@ from src.compute.scoring import (
     rank_stocks,
     calc_revenue_yoy_score,
     calc_atr_stop,
-    check_time_stop,
-    check_contract_liability_surge,
-    check_bollinger_squeeze,
-    check_fake_breakout,
     calc_rr_ratio,
     calculate_position_size,
     calc_rs_score,
@@ -505,126 +500,6 @@ class TestCalcAtrStop:
         r1 = calc_atr_stop(df, entry_price=115, multiplier=1.0)
         r2 = calc_atr_stop(df, entry_price=115, multiplier=2.0)
         assert r2["stop_loss"] < r1["stop_loss"]
-
-
-# ══════════════════════════════════════════════════════════════
-# 13. check_time_stop
-# ══════════════════════════════════════════════════════════════
-
-class TestCheckTimeStop:
-
-    def test_triggered_long_hold_low_gain(self):
-        """持有 15 天，報酬僅 1% < 2% → 觸發"""
-        r = check_time_stop(100, 101, hold_days=15, min_gain=0.02, max_days=15)
-        assert r["triggered"] is True
-
-    def test_not_triggered_sufficient_gain(self):
-        """持有 15 天，報酬 3% > 2% → 不觸發"""
-        r = check_time_stop(100, 103, hold_days=15, min_gain=0.02, max_days=15)
-        assert r["triggered"] is False
-
-    def test_not_triggered_hold_days_short(self):
-        """持有僅 10 天 < 15 天上限 → 不觸發"""
-        r = check_time_stop(100, 101, hold_days=10, min_gain=0.02, max_days=15)
-        assert r["triggered"] is False
-
-    def test_gain_pct_reported_correctly(self):
-        r = check_time_stop(100, 112, hold_days=5)
-        assert r["gain_pct"] == pytest.approx(12.0)
-
-    def test_negative_gain_can_trigger(self):
-        """虧損狀態也可觸發時間停損"""
-        r = check_time_stop(100, 98, hold_days=20, min_gain=0.02, max_days=15)
-        assert r["triggered"] is True
-
-
-# ══════════════════════════════════════════════════════════════
-# 14. check_contract_liability_surge
-# ══════════════════════════════════════════════════════════════
-
-class TestCheckContractLiabilitySurge:
-
-    def test_no_data_returns_no_surge(self):
-        r = check_contract_liability_surge(None, None, 100)
-        assert r["is_surge"] is False
-
-    def test_zero_prev_year_returns_no_surge(self):
-        r = check_contract_liability_surge(100, 0, 1000)
-        assert r["is_surge"] is False
-
-    def test_strong_surge_detected(self):
-        """YoY=+100%（>30%）且 ratio=20%（>10%）→ 隱形冠軍潛力"""
-        r = check_contract_liability_surge(
-            cl_current=200, cl_prev_year=100, paid_in_capital=1000
-        )
-        assert r["is_surge"] is True
-        assert r["yoy_pct"] == pytest.approx(100.0)
-        assert r["cl_ratio"] == pytest.approx(20.0)
-
-    def test_moderate_growth_no_surge_flag(self):
-        """YoY=+20%（>15% 但<30%）→ 成長標籤但非隱形冠軍"""
-        r = check_contract_liability_surge(
-            cl_current=120, cl_prev_year=100, paid_in_capital=1000
-        )
-        assert r["is_surge"] is False
-        assert "成長" in r["label"]
-
-    def test_high_yoy_but_low_ratio_no_surge(self):
-        """YoY=+50% 但 ratio=2%（<10%）→ 不觸發"""
-        r = check_contract_liability_surge(
-            cl_current=150, cl_prev_year=100, paid_in_capital=5000
-        )
-        assert r["is_surge"] is False
-
-
-# ══════════════════════════════════════════════════════════════
-# 15. check_bollinger_squeeze
-# ══════════════════════════════════════════════════════════════
-
-class TestCheckBollingerSqueeze:
-
-    def test_insufficient_data_no_signal(self):
-        assert check_bollinger_squeeze(None)["is_squeeze_break"] is False
-        assert check_bollinger_squeeze(make_ohlcv(rising(20)))["is_squeeze_break"] is False
-
-    def test_flat_prices_narrow_band(self):
-        """完全橫盤：std=0，帶寬≈0 → 應標記為蓄勢"""
-        prices = [100.0] * 30
-        r = check_bollinger_squeeze(make_ohlcv(prices, atr_pct=0.0001))
-        assert r["bw_today"] is not None
-        assert r["bw_today"] < 2.0
-
-    def test_result_has_required_keys(self):
-        r = check_bollinger_squeeze(make_ohlcv(rising(130)))
-        for k in ("is_squeeze_break", "bw_today", "bw_avg5"):
-            assert k in r
-
-
-# ══════════════════════════════════════════════════════════════
-# 16. check_fake_breakout
-# ══════════════════════════════════════════════════════════════
-
-class TestCheckFakeBreakout:
-
-    def test_insufficient_data_no_signal(self):
-        assert check_fake_breakout(make_ohlcv(rising(20)))["is_fake"] is False
-
-    def test_normal_day_not_flagged(self):
-        assert check_fake_breakout(make_ohlcv(rising(130)))["is_fake"] is False
-
-    def test_fake_breakout_detected(self):
-        """
-        最後一天：爆量(4×)、創20日新高、長上影線（收盤近最低）→ 假突破
-        tail_ratio = (high-close)/(high-low) = 35/40 = 0.875 > 0.6 ✓
-        """
-        prices  = rising(130)
-        volumes = [1_000_000] * 129 + [4_000_000]
-        df = make_ohlcv(prices, volumes=volumes)
-        df.at[df.index[-1], "high"]   = 250.0
-        df.at[df.index[-1], "close"]  = 215.0
-        df.at[df.index[-1], "low"]    = 210.0
-        r = check_fake_breakout(df)
-        assert r["is_fake"] is True
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1317,21 +1192,6 @@ class TestCalcForwardMomentumScoreExtended:
         })
         r = calc_forward_momentum_score(quarterly_df=qtr, bs_cf_df=bs_cf)
         assert r['fgms'] is not None
-
-
-class TestBollingerSqueezeBreak:
-
-    def test_squeeze_break_detected(self):
-        """
-        前29天橫盤（bw_avg5≈0%），最後1天價格跳漲：
-        bw_today>3% 且 close≈upper → is_squeeze_break=True
-        """
-        prices_flat = [100.0] * 29
-        prices = prices_flat + [115.0]
-        df = make_ohlcv(prices, atr_pct=0.001)
-        r = check_bollinger_squeeze(df)
-        assert r['is_squeeze_break'] is True
-        assert '🚀' in r['label']
 
 
 class TestVcpAtrFilterException:

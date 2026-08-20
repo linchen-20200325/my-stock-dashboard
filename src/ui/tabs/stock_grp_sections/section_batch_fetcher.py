@@ -42,6 +42,7 @@ from src.compute.strategy.entry_stop_levels import (
 from src.compute.scoring import (
     calc_health_score,
     compute_tech_bearish,
+    derive_short_squeeze_inputs,   # #2:從 df 導券資比 + 法人連買(軋空加分輸入)
     health_grade,
     score_single_stock,
 )
@@ -314,9 +315,14 @@ def run_batch_fetch(stock_list: list[str]) -> None:
             if df4 is not None and not df4.empty and _regime_dec.usable:
                 try:
                     _n4_use = name4 or get_stock_name(sid4)
+                    # #2:券資比 + 法人連買(§5.2 軋空加分輸入,原恆 0 → 加分永不觸發)。
+                    # df4 已在手 → 純函式導出,零額外抓取。
+                    _sq_in = derive_short_squeeze_inputs(df4)
                     sf = score_single_stock(df4, sid4, _n4_use,
                                             regime=_regime_dec.regime,
-                                            revenue_df=rev_df4)
+                                            revenue_df=rev_df4,
+                                            short_ratio=_sq_in['short_ratio'],
+                                            inst_consec_buy=_sq_in['inst_consec_buy'])
                     score_t3.append(sf)
                 except Exception as _e_sc4:
                     # §1:原碼 `except Exception: pass` —— 評分整檔消失且零 log,

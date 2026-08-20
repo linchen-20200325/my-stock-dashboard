@@ -2,7 +2,7 @@
 """v19.95 — 批次3(a) 布林突破量能確認（§7 user 核准:加 vol_ratio gate）。
 
 detect_bollinger_breakout 原 docstring 聲明吃 volume 但從未用。改:
-- vol_ratio = 今量 / 20 日均量(mirror check_fake_breakout;SSOT VOLUME_RATIO_SURGE=1.5)
+- vol_ratio = 今量 / 20 日均量(量能確認範式;SSOT VOLUME_RATIO_SURGE=1.5)
 - near_upper 且 bw>3:有量 → 🔴 突破爆發(量增);量不足 → 🟡 突破待確認(防假突破);
   量未知(缺 volume 欄) → 維持舊 🔴(誠實標「量能未知」,不偽造 1.0)
 - dict 加 vol_ratio / volume_confirmed(schema-additive)
