@@ -35,13 +35,13 @@ print('[INFO] main.py v3.0 戰情室 載入完成')
 # ── 新增模組（根據說明書 v1.0）──────────────────────────────
 # ── v3.0 新增模組（§5-§11）──────────────────────────────────
 from src.ui.etf import (  # noqa: E402
-    render_etf_single, render_etf_portfolio,
-    render_etf_ai,
+    render_etf_single,
     render_sector_heatmap,
 )
+# P3 v19.202:render_etf_portfolio / render_etf_ai / render_grape_ladder 的呼叫已搬進
+# 💼 我的持股戰情室(組合深度分析 + 葡萄串),app.py 不再直接呼叫 → 移除頂層 import。
 from src.ui.pages import render_data_health_raw  # noqa: E402
 from src.ui.pages import render_api_diagnostic  # noqa: E402
-from src.ui.tabs import render_grape_ladder  # noqa: E402
 # F2:`TAIWAN_ADVISOR_PERSONA` 的唯一用途是 gemini_call 的 systemInstruction,
 # 隨 gemini_call 一起搬到 src/services/app_ai_service.py,app.py 不再需要。
 
@@ -834,46 +834,12 @@ with tab_etf_main:
         from src.ui.etf import render_etf_grp_compare
         _render_tab_isolated(render_etf_grp_compare, 'ETF 多檔比較')
 
-    # 🔬 ETF 深度工具(從戰情室搬來):組合/葡萄串/3-3-3/標準差/分散度/AI —— 這些各自要另外輸入
-    # 標的,屬「研究 ETF」非「追蹤我的持股」,故移出戰情室、改掛多檔比較。再入一次 tab_etf_compare 追加。
-    with tab_etf_compare, st.expander('🔬 ETF 深度工具（組合 / 葡萄串 / 3-3-3 / 標準差帶 / 分散度 / AI）',
-                                      expanded=False):
-        # FIX(隔離器): 本區一次串 6 個渲染器 —— 任一 raise 會吃掉後面全部區塊,逐個各包一次。
-        _render_tab_isolated(lambda: render_etf_portfolio(gemini_fn=gemini_call), 'ETF 組合')
-        st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
-        _render_tab_isolated(lambda: render_grape_ladder(gemini_fn=gemini_call), '葡萄串領息法')
-        st.markdown('<hr style="margin:32px 0;border-color:#30363d;">', unsafe_allow_html=True)
-        from src.ui.etf.etf_tab_smart import (
-            render_std_band_section, render_correlation_finder, render_333_section,
-            render_smart_ticker_input,
-        )
-        # 組合頁三項分析標的：優先取自使用者組合（etf_portfolio_rows，按「計算組合」後寫入）
-        # → selectbox 供選；未載入組合時 fallback 共用手動輸入框（render_smart_ticker_input）。
-        _grp_rows = st.session_state.get('etf_portfolio_rows', []) or []
-        _seen_gt: set = set()
-        _grp_tickers = []  # 去重保序：同一檔重複輸入不會在下拉出現兩筆
-        for _r in _grp_rows:
-            if isinstance(_r, dict) and _r.get('ticker') and _r['ticker'] not in _seen_gt:
-                _seen_gt.add(_r['ticker'])
-                _grp_tickers.append(_r['ticker'])
-        if _grp_tickers:
-            _etf_grp_tk = st.selectbox(
-                '分析標的（取自你的組合）',
-                options=_grp_tickers,
-                index=0,
-                key='etf_grp_analysis_ticker_sel',
-                help='下方 標準差帶 / 分散度 / 3-3-3 三項分析共用此標的（取自上方組合持股）。',
-            )
-        else:
-            st.caption('（尚未載入組合 —— 於上方填入持股並按「計算組合」後，'
-                       '這裡會自動帶入你的持股清單供選擇；目前用手動輸入。）')
-            _etf_grp_tk = render_smart_ticker_input(key_suffix='_grp')
-        _render_tab_isolated(lambda: render_333_section(_etf_grp_tk, key_suffix='_grp'), '3-3-3 評估')
-        _render_tab_isolated(lambda: render_std_band_section(_etf_grp_tk, key_suffix='_grp'), '標準差買賣帶')
-        _render_tab_isolated(lambda: render_correlation_finder(_etf_grp_tk, key_suffix='_grp'), '分散度分析')
-        # AI 置底（移到 smart 區塊之後）
-        st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
-        _render_tab_isolated(lambda: render_etf_ai(gemini_fn=gemini_call), 'ETF AI 研判')
+    # 🔬 ETF 深度工具已於 P3 v19.202 搬入 💼 我的持股戰情室(user 指派「輸入持股組合分析全移到戰情室」):
+    #   • 組合(再平衡/核衛80-20/壓測/VaR/效率前緣/配息現金流/稅後)+ 葡萄串領息
+    #       → 戰情室「5️⃣ 📊 組合深度分析」(輸入改吃 📁 組合管理持股,見 portfolio_analysis_bridge);
+    #   • 3-3-3 / 標準差帶 / 分散度 → 與 🔍 單檔診斷(上方 _etf_single_smart)逐字重複,不再於多檔比較重出;
+    #   • ETF AI 研判 → 戰情室已有「6️⃣ 🤖 AI 戰情總結」等價功能。
+    # 多檔比較僅保留 render_etf_grp_compare(7 維評分表)本體,回歸乾淨。
 
 # ══════════════════════════════════════════════════════════════
 # GROUP 4: 工具箱（資料診斷 + 教學）

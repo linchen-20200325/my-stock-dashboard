@@ -227,7 +227,27 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     _switch = st.session_state.get("_station_switch")
     _render_switch_advice(_switch)
 
-    # ── 5️⃣ AI 戰情總結（規則事實 always;AI 潤稿需金鑰;含換股建議）──────────
+    # ── 5️⃣ 📊 組合深度分析（P2b v19.202:從 ETF 多檔比較搬入戰情室）──────────────
+    # user 指派「輸入持股組合的分析全移到戰情室」:再平衡 / 核衛 80-20 / 壓測 / VaR /
+    # 效率前緣 / 配息日曆×現金流 / 稅後(組合)+ 葡萄串領息法,改在此處呈現。輸入已由
+    # P2a 自動帶入 📁 組合管理真實持股(不再手打範例列)。各區 try/except 隔離,任一
+    # raise 不吃掉後面(同 app.py _render_tab_isolated 精神,§1 Fail Loud)。
+    with st.expander("5️⃣ 📊 組合深度分析（再平衡 / 核衛 / 壓測 / VaR / 配息現金流 / 葡萄串領息）",
+                     expanded=False):
+        st.caption("標的＝📁 組合管理載入的持股（上方已自動帶入,不必再手打範例列）。")
+        try:
+            from src.ui.etf.etf_tab_portfolio import render_etf_portfolio
+            render_etf_portfolio(gemini_fn=gemini_fn)
+        except Exception as _e_pf:  # noqa: BLE001 — §1 單區失敗不吃掉後面
+            st.error(f"組合深度分析載入失敗（Fail Loud）：{type(_e_pf).__name__}: {_e_pf}")
+        st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
+        try:
+            from src.ui.tabs.grape_ladder import render_grape_ladder
+            render_grape_ladder(gemini_fn=gemini_fn)
+        except Exception as _e_gl:  # noqa: BLE001
+            st.error(f"葡萄串領息法載入失敗（Fail Loud）：{type(_e_gl).__name__}: {_e_gl}")
+
+    # ── 6️⃣ AI 戰情總結（規則事實 always;AI 潤稿需金鑰;含換股建議）──────────
     _render_ai_summary(_rows, _vix, gemini_fn, _switch)
 
     st.caption(f"💡 目標配置：🛡️核心 {T.CORE_TARGET_PCT:.0f}% / 🚀衛星 {T.SATELLITE_TARGET_PCT:.0f}%；"
