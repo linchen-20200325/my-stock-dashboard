@@ -518,3 +518,31 @@ def test_fetch_vix_via_fetch_yf_close(monkeypatch):
     monkeypatch.setattr("src.data.macro.macro_core.fetch_yf_close",
                         lambda t, range_="6mo": pd.Series([15.0, 16.5, 17.2]), raising=False)
     assert svc.fetch_vix() == pytest.approx(17.2)
+
+
+def test_build_rows_etf_quality_expense_pct():
+    """B4/M1:ETF 品質 display —— 費用率為比例(0.0036),顯示須 ×100 = 0.36%(非 0.00%,§4.1)。"""
+    def _m(ticker, asset_kind='etf'):
+        d = _good_metrics(ticker)
+        d["etf_quality"] = {"stars": 4, "factors": {
+            "aum": {"val": 5e10, "score": 1.0},
+            "expense": {"val": 0.0036, "score": 0.9}}}
+        return d
+    r = svc.build_station_rows([{"ticker": "0056", "asset_class": T.ASSET_CORE}],
+                               vix=18, metrics_fn=_m)[0]
+    _q = r["_detail"]["ETF品質"]
+    assert "費用率 0.36%" in _q          # 比例 0.0036 ×100 = 0.36%,非壓成 0.00%
+    assert "AUM 500億" in _q
+
+
+def test_build_rows_etf_quality_liquidation_risk():
+    """B4:AUM 因子 score≤0(=AUM≤10億)→ 顯示清算風險徽章(不另立門檻,§3.3)。"""
+    def _m(ticker, asset_kind='etf'):
+        d = _good_metrics(ticker)
+        d["etf_quality"] = {"stars": 2, "factors": {
+            "aum": {"val": 5e8, "score": 0.0},      # 5億 → score 0 → 清算風險
+            "expense": {"val": 0.005, "score": 0.5}}}
+        return d
+    r = svc.build_station_rows([{"ticker": "00xxx", "asset_class": T.ASSET_CORE}],
+                               vix=18, metrics_fn=_m)[0]
+    assert "清算風險" in r["_detail"]["ETF品質"]

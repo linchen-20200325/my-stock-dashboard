@@ -377,7 +377,7 @@ def test_assess_stock_breakdown_early_warning():
     sa = ds.assess_stock(ticker="2330", name="", asset_class=T.ASSET_SATELLITE,
                          mj_grade="B", mj_score_pct=60, mj_headline="", mj_fail_items=[],
                          kd=_kd(label="無"), trend={"is_breakdown": True})
-    assert sa.swap_level == "🟡" and "趨勢轉差" in sa.swap_action
+    assert sa.swap_level == "🟡" and "盈轉虧" in sa.swap_action
 
 
 def test_assess_stock_ok_no_breakdown_still_hold():

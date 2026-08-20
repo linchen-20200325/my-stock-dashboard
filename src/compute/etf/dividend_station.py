@@ -440,7 +440,7 @@ def assess_stock(*, ticker: str, name: str, asset_class: str,
         level = "⚪"
         action = f"⚪ 財報資料不足,僅供 KD 參考：{kd_label}"
     elif mj_grade in T.STOCK_SWAP_GRADES:            # 基本面汰弱（C/F）
-        _bd = "，且財報逐季惡化" if _breakdown else ""
+        _bd = "，且本業由盈轉虧" if _breakdown else ""
         if bearish_kd:
             level = "🔴"
             action = (f"🔴 建議換出：財報 {mj_grade}"
@@ -453,12 +453,12 @@ def assess_stock(*, ticker: str, name: str, asset_class: str,
             level = "🔴"
             action = (f"🔴 建議換出：財報體質 {mj_grade}"
                       + (f"（{_fail_txt}）" if _fail_txt else "") + _bd)
-    elif _breakdown:                                 # B3:基本面 OK 但正在惡化 → 提前預警
+    elif _breakdown:                                 # B3:基本面 OK 但本業由盈轉虧 → 提前預警
         level = "🟡"
-        action = (f"🟡 財報 {mj_grade} 但財報趨勢轉差（盈轉虧 / 逐季多項轉弱）→ "
+        action = (f"🟡 財報 {mj_grade} 但本業由盈轉虧 → "
                   f"減碼觀察、勿加碼（趁 grade 未掉到 C 前）")
     else:                                            # 基本面 OK（A+/A/B/B+）且無惡化
-        _ta = "，財報逐季改善" if _turnaround else ""
+        _ta = "，本業由虧轉盈" if _turnaround else ""
         if bearish_kd:
             level = "🟡"
             action = (f"🟡 財報佳（{mj_grade}）但 KD 短線轉弱（{kd_label}）→ 留意、暫不加碼{_ta}")

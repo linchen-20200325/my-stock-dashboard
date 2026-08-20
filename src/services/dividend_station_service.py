@@ -57,9 +57,11 @@ def stock_row_from_assessment(sa: ds.StockAssessment) -> dict:
     else:
         _kd = "資料不足"
     _tv = sa.trend_verdict or {}          # B3:財報趨勢摘要
-    _trend_txt = ("⚠️ 盈轉虧 / 逐季惡化" if _tv.get("is_breakdown")
-                  else "🌟 虧轉盈 / 逐季改善" if _tv.get("is_turnaround")
-                  else (str(_tv.get("verdict", "—")) if _tv else "—"))
+    _VMAP = {"deteriorating": "逐季轉差", "improving": "逐季改善",
+             "mixed": "漲跌互見", "stable": "大致持平"}   # diff_fin_health verdict 中文化
+    _trend_txt = ("⚠️ 本業由盈轉虧" if _tv.get("is_breakdown")
+                  else "🌟 本業由虧轉盈" if _tv.get("is_turnaround")
+                  else (_VMAP.get(str(_tv.get("verdict", "")), "—") if _tv else "—"))
     return {
         "代號": sa.ticker, "名稱": sa.name, "種類": "個股",
         "類別": _CLASS_ICON.get(sa.asset_class, sa.asset_class),
@@ -181,7 +183,8 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
                             if isinstance(_aum_score, (int, float)) and _aum_score <= 0.0 else "")
                     _row["_detail"]["ETF品質"] = (
                         "★" * int(_q["stars"])
-                        + (f"｜費用率 {_exp:.2f}%" if isinstance(_exp, (int, float)) else "")
+                        # _exp 為比例形式(0.0036 = 0.36%,get_etf_expense_ratio_safe /100 SSOT)→ ×100 顯示
+                        + (f"｜費用率 {_exp * 100:.2f}%" if isinstance(_exp, (int, float)) else "")
                         + (f"｜AUM {_aum / 1e8:.0f}億" if isinstance(_aum, (int, float)) else "")
                         + _liq)
                 elif isinstance(_q, dict) and _q.get("_err"):
