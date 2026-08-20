@@ -189,6 +189,43 @@ class DangerSpec:
     # 取值端應改回 gray + log（§1 不猜尺度、不偽綠/偽紅）。
     valid_min: Optional[float] = None
     valid_max: Optional[float] = None
+    # ── 2026-08-20:接線狀態(readiness 側車用)────────────────────────────
+    # `wired=False` = **決策端刻意沒有接取值**,不是抓取失敗。
+    # 兩者在畫面上長得一樣(⬜ 灰燈),但處置完全相反:
+    #   抓取失敗 → 去修上游 / 按更新
+    #   刻意未接 → 沒有東西可修,它永遠不會亮
+    # 把後者算進「x/16 有值」的分母,等於製造一個 100% 恆亮的警告 ——
+    # 而恆亮的警告等於沒有警告(同 G2 月頻新鮮度的教訓)。
+    wired: bool = True
+    unwired_reason: str = ""   # wired=False 時**必填**(tests 有守衛)
+
+
+# ════════════════════════════════════════════════════════════════
+# 缺值原因五態 — 灰燈長得一樣,處置完全不同
+# ════════════════════════════════════════════════════════════════
+# 2026-08-20 跨儀表板稽核的核心發現:診斷頁把五種完全不同的情況都畫成 ⬜,
+# 於是使用者無從判斷該做什麼 —— 這就是 user 說的「沒有對齊導致的誤判」。
+MISSING_NOT_LOADED: str = "not_loaded"
+"""這輪沒抓 / 容器不在 → 按「🚀 一鍵更新全部數據」即可。"""
+
+MISSING_NO_VALUE: str = "no_value"
+"""容器在、欄位空 → 上游該源失敗,看 API 根因診斷。"""
+
+MISSING_OUT_OF_RANGE: str = "out_of_range"
+"""有值但被 §3.2 `valid_min/max` 擋下 → **量綱或標的漂移,最毒的一種**。
+
+例:`^TNX` 回 46.3 而非 4.63(殖利率 ×10 慣例)、DXY fallback 到 UUP(~27 vs ~105)。
+這種情況下「有資料」且「數字看起來正常」,只有範圍守衛擋得住。"""
+
+MISSING_NOT_WIRED: str = "not_wired"
+"""決策端刻意未接線(`DangerSpec.wired=False`)→ 永遠不會亮,**不計入分母**。"""
+
+MISSING_NO_EXTRACTION: str = "no_extraction"
+"""spec 註冊了但沒有人寫取值 → **程式 bug**。
+
+實例:`us10y` 自 v18.286 註冊、到 v19.175 才接線,中間 4 個版本永久灰燈,
+而上游 `fetch_us10y_block` 全程抓取成功 —— 沒有任何生產端能回報這種病。
+`tests/test_decision_readiness.py` 有機械守衛,新增 spec 忘了接取值即 CI 紅燈。"""
 
 
 # ════════════════════════════════════════════════════════════════
@@ -302,9 +339,18 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                     "（v19.177:此值為**上漲佔比的 5 日均**,不是「站上均線的家數比」——"
                     "本專案並未計算後者）",
                source="DESIGN:廣度佔比經驗切點(60/40)"),
+    # ⚠️ 2026-08-20:標記為**未接線**。`macro_helpers.compute_five_bucket_summary`
+    #    的 values dict 對本 key 寫死 `None`(§4.1 FinMind inst net 單位未確認),
+    #    所以這盞燈**自註冊以來從未亮過**。原本它靜靜地是一盞永久灰燈,
+    #    使用者無從分辨「今天沒資料」與「這個功能根本沒接」。
     DangerSpec("foreign_net", "外資現貨淨買賣", "chips", "億", "low_bad",
                yellow=0.0, red=-200.0, decimals=0,
-               note=">0 買超 / <0 賣超 / <-200 大賣（軟線）", source="DESIGN:外資現貨流向"),
+               note=">0 買超 / <0 賣超 / <-200 大賣（軟線）", source="DESIGN:外資現貨流向",
+               wired=False,
+               unwired_reason=(
+                   "FinMind inst net 單位未確認（股 / 千股 / 億元）—— §4.1。"
+                   "確認前填值會直接誤判紅綠燈，故決策端刻意回 None（§1 寧缺勿錯）。"
+               )),
 
     # ── 📰 新聞：系統性風險掃描 ──
     DangerSpec("news_systemic", "系統性風險新聞數", "news", "則", "high_bad",

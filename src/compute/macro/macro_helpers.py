@@ -1699,6 +1699,8 @@ def compute_five_bucket_summary(
     li_latest: Any = None,
     jingqi_info: Optional[dict] = None,
     news_items: Optional[list] = None,
+    *,
+    readiness_out: Optional[dict] = None,
 ) -> dict:
     """總經五桶總結純函式。
 
@@ -1723,6 +1725,9 @@ def compute_five_bucket_summary(
     #   分流過熱 / 惡化)；danger_exceedance 用來在同桶多盞同色燈時挑主因。
     # v19.175：us10y / dxy 接線 → 需 CL_INTL_KEY_* 鏡像 key 與 within_valid_range。
     from shared.macro_buckets import (
+    BUCKET_DANGER_SPECS,
+    MISSING_NOT_LOADED, MISSING_NO_VALUE, MISSING_OUT_OF_RANGE,
+    MISSING_NOT_WIRED, MISSING_NO_EXTRACTION,
         BUCKET_ORDER, LEVEL_COLOR, LEVEL_EMOJI, SPECS_BY_KEY,
         CL_INTL_KEY_DXY, CL_INTL_KEY_US10Y,
         specs_for_bucket, classify_danger, aggregate_level, fmt_value,
@@ -1788,24 +1793,84 @@ def compute_five_bucket_summary(
                 return _v_intl
         return None
 
+    _SENTINEL = object()   # 「沒傳 container」與「傳了 None」要分得開
+
+    # ── readiness 側車(2026-08-20)──────────────────────────────────────
+    # 設計選擇:side-car out-param 而非改回傳型別。既有 3 個 caller 傳 None
+    # 行為零變化(同 Fund repo `calculate_composite_score(provenance_out=)` 先例)。
+    _rd: dict = readiness_out if isinstance(readiness_out, dict) else {}
+
+    def _rec(key, *, state, reason=None, hit=None, candidates=None, rejected=None):
+        """記一盞燈的取值結果。**恆為 16 筆** —— 缺席也要有紀錄,否則就是隱形。"""
+        _sp = SPECS_BY_KEY.get(key)
+        _rd[key] = {
+            "key": key,
+            "label": getattr(_sp, "label", key),
+            "bucket": getattr(_sp, "bucket", ""),
+            "wired": bool(getattr(_sp, "wired", True)),
+            "state": state,               # ok | missing
+            "reason": reason,             # MISSING_* (state=missing 時)
+            "hit_source": hit,            # 命中的那一源;None = 全敗
+            "candidates": list(candidates or []),
+            "rejected": list(rejected or []),
+        }
+
+    def _traced(key, label, raw, container=_SENTINEL):
+        """單源取值 + 記錄。等價於原本的 `_num(raw)`(單源、無 valid range 時)。
+
+        `container`:該值所在的 session 容器。用來分辨兩種**處置完全不同**的缺值:
+          - 容器不在/空  → `not_loaded`,按「🚀 一鍵更新全部數據」就會好
+          - 容器在、值空 → `no_value`,上游該源失敗,要去看 API 根因診斷
+        不傳 container 時退回 `no_value`(保守:不宣稱「按更新就好」)。
+        """
+        _v = _first_sane(key, (label, raw))
+        if _v is None and container is not _SENTINEL and not container:
+            _r = _rd.get(key)
+            if _r is not None and _r.get("reason") == MISSING_NO_VALUE:
+                _r["reason"] = MISSING_NOT_LOADED
+        return _v
+
+    def _unwired(key):
+        """決策端刻意未接線 —— 不是失敗,不計入分母。"""
+        _sp = SPECS_BY_KEY.get(key)
+        _rec(key, state="missing", reason=MISSING_NOT_WIRED,
+             hit=None, candidates=[], rejected=[])
+        if _sp is not None and not _sp.unwired_reason:
+            print(f"[五桶/{key}] ⚠️ 標記 wired=False 但沒填 unwired_reason")
+        return None
+
     def _first_sane(key, *sources):
         """多源賽跑取第一個「有值且通過 §3.2 合理範圍」者；全不過 → None(gray)。
 
         sources: (來源標籤, 原始值) tuple 序列，依權威分級由高到低排列。
+
+        2026-08-20:順帶把「試了哪些源、命中哪個、為什麼跳過」記進 `_rd`
+        (readiness 側車)。**記錄寫在取值這一行**,不是另一份對照表 ——
+        所以「新增一盞燈」與「新增一筆 readiness」在物理上是同一個動作,
+        沒有第二份東西可以漂移。
         """
         _spec_fs = SPECS_BY_KEY.get(key)
+        _cands = [_lbl for _lbl, _ in sources]
+        _rejected: list = []
         for _src_label, _raw in sources:
             _v_fs = _num(_raw)
             if _v_fs is None:
                 continue
             if _spec_fs is not None and not within_valid_range(_v_fs, _spec_fs):
+                _rejected.append((_src_label, _v_fs,
+                                  f"out_of_range[{_spec_fs.valid_min},{_spec_fs.valid_max}]"))
                 # §1:出聲不吞。這行 log 就是「上游換標的 / 換慣例」的偵測點。
                 print(f"[五桶/{key}] ⚠️ 來源 {_src_label} 值 {_v_fs} 超出合理範圍 "
                       f"[{_spec_fs.valid_min}, {_spec_fs.valid_max}] → 跳過此源(§3.2)。"
                       f"常見主因:上游 fallback 換成不同尺度標的(如 DXY→UUP)"
                       f"或報價慣例改變(如 ^TNX 殖利率×10)。**不猜換算**。")
                 continue
+            _rec(key, state="ok", hit=_src_label, candidates=_cands, rejected=_rejected)
             return _v_fs
+        # 全不過:區分「有值但全被範圍擋下」與「根本沒值」—— 處置完全不同
+        _rec(key, state="missing",
+             reason=(MISSING_OUT_OF_RANGE if _rejected else MISSING_NO_VALUE),
+             hit=None, candidates=_cands, rejected=_rejected)
         return None
 
     _news_sys = None
@@ -1817,12 +1882,12 @@ def compute_five_bucket_summary(
             _news_sys = None
 
     values = {
-        "health":        _num(_g(warroom_summary, "health_score")),
-        "ndc_signal":    _num(_g(macro_info, "ndc_signal", "score")),
-        "m1b_m2_gap":    _num(_g(m1b_m2_info, "gap")),
-        "ism_pmi":       _num(_g(macro_info, "ism_pmi", "value")),
-        "us_core_cpi":   _num(_g(macro_info, "us_core_cpi", "yoy")),
-        "tw_export":     _num(_g(macro_info, "tw_export", "yoy")),
+        "health":        _traced("health", "warroom_summary.health_score (calc_traffic_light)", _g(warroom_summary, "health_score"), warroom_summary),
+        "ndc_signal":    _traced("ndc_signal", "macro_info.ndc_signal.score (FinMind TaiwanBusinessIndicator)", _g(macro_info, "ndc_signal", "score"), macro_info),
+        "m1b_m2_gap":    _traced("m1b_m2_gap", "m1b_m2_info.gap (CBC ms1 → FRED → IMF → ^TWII proxy)", _g(m1b_m2_info, "gap"), m1b_m2_info),
+        "ism_pmi":       _traced("ism_pmi", "macro_info.ism_pmi.value (PMI_SOURCE_REGISTRY 多源賽跑)", _g(macro_info, "ism_pmi", "value"), macro_info),
+        "us_core_cpi":   _traced("us_core_cpi", "macro_info.us_core_cpi.yoy (FRED CPILFESL)", _g(macro_info, "us_core_cpi", "yoy"), macro_info),
+        "tw_export":     _traced("tw_export", "macro_info.tw_export.yoy (MOF 進出口)", _g(macro_info, "tw_export", "yoy"), macro_info),
         # ⚠️ H2 2026-08 揭露 → I2 2026-08-10 接線（**判定仍不變**）：
         #   `bias_info` 由 `src/data/macro/macro_snapshot.compute_twii_bias` 產生，
         #   它在 TWII 歷史 < 240 天時**用現有天數的均值當 MA240**
@@ -1834,7 +1899,7 @@ def compute_five_bucket_summary(
         #   `classify_danger` / `aggregate_level` 逐位不變。
         #   → 若改成「is_estimated 時回 None」會**改變五桶燈號**（行為變更），
         #     依 §-1 需 user 指派才動；本批明確不做（見 PR 說明的「若要改判定」清單）。
-        "bias_240":      _num(_g(bias_info, "bias_240")),
+        "bias_240":      _traced("bias_240", "bias_info.bias_240 (compute_twii_bias ← ^TWII)", _g(bias_info, "bias_240"), bias_info),
         # v19.175 P0-B:接線(原本 values 完全沒有這兩個 key → 永久 gray)。
         # 單位皆與 spec 門檻同刻度:us10y=百分點(4.5/5.0)、dxy=指數點(105/110)。
         "us10y":         _first_sane(
@@ -1847,19 +1912,31 @@ def compute_five_bucket_summary(
             "dxy",
             ("Yahoo:DX-Y.NYB(cl_data.intl)", _intl_close(CL_INTL_KEY_DXY)),
         ),
-        "vix":           _num(_g(macro_info, "vix", "current")),
-        "adl":           _df_last(_g(cl_data, "adl"), "ad_ratio"),
-        "fut_net":       _df_last(li_latest, "外資大小"),
-        "margin":        _num(_g(cl_data, "margin")),
-        "jingqi":        _num(_g(jingqi_info, "avg")),
+        "vix":           _traced("vix", "macro_info.vix.current (Yahoo ^VIX → FRED VIXCLS)", _g(macro_info, "vix", "current"), macro_info),
+        "adl":           _traced("adl", "cl_data.adl[ad_ratio] (fetch_adl ← ^TWII 估算)", _df_last(_g(cl_data, "adl"), "ad_ratio"), cl_data),
+        "fut_net":       _traced("fut_net", "li_latest[外資大小] (FinMind 期貨 + TAIFEX)", _df_last(li_latest, "外資大小"), li_latest),
+        "margin":        _traced("margin", "cl_data.margin (TWSE → HiStock → Wearn)", _g(cl_data, "margin"), cl_data),
+        "jingqi":        _traced("jingqi", "jingqi_info.avg (ad_ratio 5 日均)", _g(jingqi_info, "avg"), jingqi_info),
         # §4.1 inst net 單位待確認 → 故意回 None(§1 fail-safe:寧缺勿錯)。
         # v18.436 #20:此為「外部資訊阻斷」項,非程式 bug。啟用前置條件:
         #   確認 FinMind TaiwanStockInstitutionalInvestorsBuySell 的 buy/sell 單位
         #   (股 vs 千股 vs 億元)→ 才能對齊 spec 門檻判讀。在確認前 None 是正解,
         #   不可猜單位填值(會誤判紅綠燈)。ForeignFlowSchema(71b310c)已備 schema。
-        "foreign_net":   None,
-        "news_systemic": _news_sys,
+        "foreign_net":   _unwired("foreign_net"),
+        "news_systemic": _traced("news_systemic", "_macro_news_items (RSS 系統性風險掃描)", _news_sys, news_items),
     }
+
+    # ── no_extraction 掃描(2026-08-20)──────────────────────────────────
+    # spec 註冊在 BUCKET_DANGER_SPECS、但上面的 values dict 根本沒有它 ⇒
+    # 這盞燈永遠是灰的,而**沒有任何生產端能回報這種病** —— 上游可能一直抓得
+    # 好好的。實例:`us10y` 自 v18.286 註冊、v19.175 才接線,中間 4 個版本
+    # 永久灰燈,而 `fetch_us10y_block` 全程成功。
+    # 這裡把它從「靜靜的灰」變成具名的程式 bug;
+    # `tests/test_decision_readiness.py` 有 CI 守衛。
+    for _sp_all in BUCKET_DANGER_SPECS:
+        if _sp_all.key not in _rd:
+            _rec(_sp_all.key, state="missing", reason=MISSING_NO_EXTRACTION)
+            print(f"[五桶/{_sp_all.key}] 🐛 spec 已註冊但 values 沒有取值 → 永久灰燈")
 
     # I2：`bias_240` 為估算值時，只在**顯示字串**後綴徽章（「+32.7%（估算）」）。
     # `classify_danger` 吃的仍是 `values[...]` 原始數值 → 燈號 / 桶等級 / headline
