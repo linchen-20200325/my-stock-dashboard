@@ -521,8 +521,14 @@ def render_data_health_raw():
     _global_rows = []
 
     def _g_add(name, source, freq, df=None, date_str=None, count=None,
-               fred_series_id: str = '', indicator: str = ''):
-        """indicator: freq='monthly' 時必填(G2),見 `freshness_light` docstring。"""
+               fred_series_id: str = '', indicator: str = '',
+               has_value_no_date: bool = False):
+        """indicator: freq='monthly' 時必填(G2),見 `freshness_light` docstring。
+
+        has_value_no_date(P3-D §1):有資料但 fetcher 未帶資料日 as_of 時傳 True →
+        標「⬜ 有值·無資料日期」,**不可用抓取時間冒充 as_of**(monthly 規則量抓取時間會恆綠),
+        也**不標 🔴未取得**(資料確實有)。
+        """
         if isinstance(df, _pd_r.DataFrame) and not df.empty:
             _d = _last_date(df)
             _cnt = len(df) if count is None else count
@@ -532,6 +538,9 @@ def render_data_health_raw():
         if _d:
             icon, lbl = _light(_d, freq, indicator or None)
             _fresh = f'{icon} {lbl}'
+        elif has_value_no_date:
+            _fresh = '⬜ 有值·無資料日期'
+            _d = '無(未帶 as_of)'
         else:
             _fresh = '🔴 未取得'
         # v18.225 T2：僅 FRED-backed 指標查下次 release，其餘留空 "—"
@@ -563,11 +572,11 @@ def render_data_health_raw():
     _g_add('台灣出口 YoY',      'stat.gov.tw+FRED+data.gov.tw/6053(海關新臺幣)+CKAN 5段', 'monthly',
            date_str=str((_ma_g.get('tw_export') or {}).get('date',''))[:10] or None,
            indicator='tw_export')
-    # ⚠️ 已知 provenance 缺口(G2 記錄,非本輪修):本列餵進去的 `cl_ts` 是**抓取時間**,
-    #    不是 M1B/M2 的資料月 as_of(m1b_m2_info 目前不帶資料日期)。任何新鮮度規則
-    #    量抓取時間都只會恆綠。改法屬 §2.2 provenance 另案(要 fetcher 先帶出 as_of)。
+    # P3-D(v19.199,§1 誠實性):原餵 `cl_ts`(抓取時間)當 as_of → monthly 新鮮度規則量抓取
+    #    時間恆綠(假🟢當期),掩蓋實際落後 1-2 月。改:有值時標「⬜ 有值·無資料日期」不冒充新鮮,
+    #    無值才 🔴未取得。根治仍待 m1b_m2 fetcher 帶出資料月 as_of(§2.2 provenance,另案)。
     _g_add('台灣 M1B / M2',    'CBC + FinMind 雙源',         'monthly',
-           date_str=(_cl_ts_g if _mi_g.get('m1b_yoy') is not None else None),
+           date_str=None, has_value_no_date=(_mi_g.get('m1b_yoy') is not None),
            indicator='m1b_m2')
 
     # v18.226：外資連續日數（fetch_foreign_consecutive_days → _fi_streak_cache）
