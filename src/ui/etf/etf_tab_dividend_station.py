@@ -21,7 +21,7 @@ from shared import dividend_station_thresholds as T
 
 # 戰情表分兩區（§ user 2026-08）：ETF 走定期定額 235/3-3-3、個股走 財報體檢 + KD。
 _ETF_COLS = ["代號", "名稱", "健檢", "235 燈號", "加碼金", "3-3-3", "建議動作"]
-_STOCK_COLS = ["代號", "名稱", "財報體檢", "KD", "建議動作"]
+_STOCK_COLS = ["代號", "名稱", "財報體檢", "財報趨勢", "KD", "建議動作"]  # B3:加財報趨勢欄
 _HOLDINGS_KEY = "_station_holdings"
 
 
@@ -162,12 +162,14 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
                 continue
             if r.get("種類") == "個股":
                 st.markdown(f"{_hdr}　財報：{r.get('財報體檢','')}　KD：{r.get('KD','')}")
-                st.caption(f"財報總評：{d.get('財報總評','—')}")
+                st.caption(f"財報總評：{d.get('財報總評','—')}　｜　財報趨勢：{d.get('財報趨勢','—')}")
                 st.caption(f"財報弱項：{d.get('財報弱項','—')}　｜　KD 交叉：{d.get('KD交叉','無')}")
             else:
                 st.markdown(f"{_hdr}　{r.get('235 燈號','')}　3-3-3：{d.get('3-3-3明細','')}")
                 st.caption(f"A：{d.get('健檢A','')}　｜　B：{d.get('健檢B','')}")
                 st.caption(f"C：{d.get('健檢C','')}　｜　D：{d.get('健檢D','')}")
+                if d.get("ETF品質"):
+                    st.caption(f"ETF 品質：{d['ETF品質']}")   # B4:費用率/AUM/清算風險 display
                 if d.get("235觸發"):
                     st.caption(f"235 觸發：{d['235觸發']}　深水：{d.get('深水防守','—')}")
             st.markdown("---")

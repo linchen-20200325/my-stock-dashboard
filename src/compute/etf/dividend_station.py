@@ -93,9 +93,14 @@ def annualized_return_pct(start_close: float | None, end_close: float | None,
     return ((float(end_close) / float(start_close)) ** (1.0 / years) - 1.0) * 100.0
 
 
-def sharpe_weekly(weekly_close: pd.Series, *, min_weeks: int = T.MA_QUARTER_WEEKS) -> float | None:
-    """用週報酬算年化夏普（無風險利率取 0,MVP 簡化）= mean/std × √52。
+def sharpe_weekly(weekly_close: pd.Series, *, min_weeks: int = T.MA_QUARTER_WEEKS,
+                  rf_pct: float = 0.0) -> float | None:
+    """用週報酬算年化夏普 =（週均超額報酬 − 週無風險利率）/ 週std × √52。
 
+    rf_pct：無風險利率（年化 %，如 FEDFUNDS）。B2(v19.198)：原寫死 rf=0（MVP 簡化）
+    系統性偏寬鬆（更多 ETF 被算成正夏普）→ 對齊 ETF `calc_sharpe` 的 rf SSOT
+    (`ETF_SHARPE_RF_FALLBACK_PCT` / 注入的即時 FEDFUNDS) 後，health_b「承擔風險卻無超額
+    報酬」名副其實。週無風險利率 = rf_pct/100/52（與 calc_sharpe 同刻度，年化 rf 除週數）。
     週數不足 min_weeks 或波動≈0 → None（§1 不猜）。已用還原價 → 週報酬含息。
     """
     if weekly_close is None or len(weekly_close) < min_weeks + 1:
@@ -103,7 +108,8 @@ def sharpe_weekly(weekly_close: pd.Series, *, min_weeks: int = T.MA_QUARTER_WEEK
     rets = pd.Series(weekly_close).pct_change().dropna()
     if len(rets) < min_weeks:
         return None
-    mu = float(rets.mean())
+    _rf_weekly = float(rf_pct) / 100.0 / 52.0
+    mu = float(rets.mean()) - _rf_weekly
     sd = float(rets.std(ddof=1))
     if not (math.isfinite(mu) and math.isfinite(sd)) or math.isclose(sd, 0.0, abs_tol=T.FLOAT_ABS_TOL):
         return None
@@ -399,19 +405,21 @@ class StockAssessment:
     kd_cross: str | None             # golden / death / None
     swap_level: str                  # 🔴換出 / 🟡留意 / 🟢續抱 / ⚪資料不足
     swap_action: str
+    trend_verdict: dict | None = None    # B3:財報趨勢(盈轉虧/逐季惡化)diff_fin_health 摘要
 
 
 def assess_stock(*, ticker: str, name: str, asset_class: str,
                  mj_grade: str | None, mj_score_pct: int | None,
                  mj_headline: str, mj_fail_items: list[str] | None,
-                 kd: dict | None) -> StockAssessment:
-    """個股汰換判定（純函式,財報為主 · KD 為輔）。
+                 kd: dict | None, trend: dict | None = None) -> StockAssessment:
+    """個股汰換判定（純函式,財報為主 · KD 為輔 · 財報趨勢提前預警）。
 
     決策（§ user 2026-08 核准）：
     - **財報 grade 決定汰弱**：grade ∈ STOCK_SWAP_GRADES(C/F) → 建議換出。
-    - **KD 只當進出場時機輔證**（不獨立決定換股）：
-      死亡交叉 / 頂背離 = 賣點確認；黃金交叉 / 底背離 / 低檔鈍化 = 轉強（留 / 分批）；
-      高檔鈍化 = 強勢續抱。
+    - **財報趨勢(B3,v19.198)**：grade 尚 OK 但**盈轉虧 / 逐季多項轉差**(is_breakdown)→ 在
+      grade 掉到 C 之前就提前 🟡 減碼觀察（user 核准「允許改判定」）。
+    - **KD 只當進出場時機輔證**：死亡交叉 / 頂背離 = 賣點確認；黃金交叉 / 底背離 / 低檔鈍化
+      = 轉強（留 / 分批）；高檔鈍化 = 強勢續抱。
     §1：財報資料不足 → grade=None → 標「資料不足」僅供 KD 參考,不猜、不捏 grade。
     """
     kd = kd or {}
@@ -423,39 +431,49 @@ def assess_stock(*, ticker: str, name: str, asset_class: str,
     strong_kd = bool(kd.get("high_passivation"))
     _fails = list(mj_fail_items or [])
     _fail_txt = "、".join(_fails[:3])
+    trend = trend or {}
+    _breakdown = bool(trend.get("is_breakdown"))     # 盈轉虧 / 逐季多項轉差
+    _turnaround = bool(trend.get("is_turnaround"))   # 虧轉盈 / 逐季改善
 
     if mj_grade is None or mj_grade not in T.STOCK_HEALTH_GRADES:
         # 缺財報 或 grade 非已知分級（上游契約漂移/髒值）→ 不對不可信 grade 假裝有結論
         level = "⚪"
         action = f"⚪ 財報資料不足,僅供 KD 參考：{kd_label}"
     elif mj_grade in T.STOCK_SWAP_GRADES:            # 基本面汰弱（C/F）
+        _bd = "，且財報逐季惡化" if _breakdown else ""
         if bearish_kd:
             level = "🔴"
             action = (f"🔴 建議換出：財報 {mj_grade}"
                       + (f"（{_fail_txt}）" if _fail_txt else "")
-                      + f" + KD 轉弱（{kd_label}）賣點確認")
+                      + f" + KD 轉弱（{kd_label}）賣點確認{_bd}")
         elif bullish_kd:
             level = "🟡"
-            action = (f"🟡 財報弱（{mj_grade}）但 KD 轉強（{kd_label}）→ 分批換 / 再觀察")
+            action = (f"🟡 財報弱（{mj_grade}）但 KD 轉強（{kd_label}）→ 分批換 / 再觀察{_bd}")
         else:
             level = "🔴"
             action = (f"🔴 建議換出：財報體質 {mj_grade}"
-                      + (f"（{_fail_txt}）" if _fail_txt else ""))
-    else:                                            # 基本面 OK（A+/A/B/B+）
+                      + (f"（{_fail_txt}）" if _fail_txt else "") + _bd)
+    elif _breakdown:                                 # B3:基本面 OK 但正在惡化 → 提前預警
+        level = "🟡"
+        action = (f"🟡 財報 {mj_grade} 但財報趨勢轉差（盈轉虧 / 逐季多項轉弱）→ "
+                  f"減碼觀察、勿加碼（趁 grade 未掉到 C 前）")
+    else:                                            # 基本面 OK（A+/A/B/B+）且無惡化
+        _ta = "，財報逐季改善" if _turnaround else ""
         if bearish_kd:
             level = "🟡"
-            action = (f"🟡 財報佳（{mj_grade}）但 KD 短線轉弱（{kd_label}）→ 留意、暫不加碼")
+            action = (f"🟡 財報佳（{mj_grade}）但 KD 短線轉弱（{kd_label}）→ 留意、暫不加碼{_ta}")
         elif strong_kd:
             level = "🟢"
-            action = f"🟢 強勢續抱：財報 {mj_grade} + KD 高檔鈍化"
+            action = f"🟢 強勢續抱：財報 {mj_grade} + KD 高檔鈍化{_ta}"
         else:
             _kd_txt = f"｜KD {kd_label}" if kd_label not in ("無", "資料不足") else ""
             level = "🟢"
-            action = f"🟢 續抱：財報 {mj_grade}{_kd_txt}"
+            action = f"🟢 續抱：財報 {mj_grade}{_kd_txt}{_ta}"
 
     return StockAssessment(
         ticker=ticker, name=name, asset_class=asset_class,
         mj_grade=mj_grade, mj_score_pct=mj_score_pct, mj_headline=mj_headline,
         mj_fail_items=_fails,
         kd_k=kd.get("k"), kd_d=kd.get("d"), kd_label=kd_label, kd_cross=cross,
-        swap_level=level, swap_action=action)
+        swap_level=level, swap_action=action,
+        trend_verdict=(trend or None))
