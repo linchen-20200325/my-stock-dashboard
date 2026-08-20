@@ -126,3 +126,21 @@ def get_category_name(ticker: str) -> str:
         if _t in _peers:
             return _name
     return ''
+
+
+# 市值型類別名(SSOT:ETF_PEER_GROUPS 首鍵)。集中此處,避免 caller 散寫字面。
+MARKET_CAP_CATEGORY = '市值型'
+
+
+def is_market_cap_type(ticker: str) -> bool:
+    """ticker 是否屬「市值型」(理應追蹤 0050 類市值指數者)。
+
+    #3 v19.200:追蹤誤差(TE)一律以 auto_detect_benchmark → 0050.TW 為基準計算。
+    只有**市值型**(追蹤台灣 50 / 大盤市值指數)拿 TE vs 0050 才有「追不準 = 隱藏成本」
+    的缺陷意義;高股息 / 主題 / 債券 / 海外等**本就不追 0050** 的 ETF,其 TE vs 0050
+    天生偏高、屬設計差異而非缺陷 → 不可拿此門檻降級(§-1 不誤殺核心存股持股)。
+
+    註:`get_category_name` 依 ETF_PEER_GROUPS 插入序回首匹配,而「市值型」為首鍵 →
+    凡屬市值型(即使同時掛在別類,如某些 ESG/公司治理)必先命中「市值型」。
+    """
+    return get_category_name(ticker) == MARKET_CAP_CATEGORY
