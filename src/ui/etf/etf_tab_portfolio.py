@@ -192,12 +192,29 @@ def render_etf_portfolio(gemini_fn=None):
         )
 
     # ── 結構化表單輸入（取代 text_area）─────────────────────
-    # 組合載入已移至「📁 組合管理」頁(不再從本頁預填)→ 表格開在範例列,使用者自行編輯。
-    _default_df = pd.DataFrame({
-        '股票代號':       ['0050.TW', '00713.TW', 'BND', '00878.TW'],
-        '持有張數':       [1.0, 0.5, 0.2, 2.0],
-        '平均買入價格':   [135.50, 82.30, 72.50, 20.10],
-    })
+    # P2 v19.202(user 指派「輸入持股組合分析移到戰情室」):輸入來源改**優先帶入
+    # 📁 組合管理的真實持股**(戰情室 bridge 寫入 etf_portfolio_rows),解稽核發現的
+    # 「手打範例列與持股脫節 → 工具鏈空轉」。未載入時才退回範例列供試玩。
+    # ⚠️ Streamlit data_editor 帶 key 後,使用者一旦編輯即以 widget state 為準,此 seed
+    # 僅影響「該持股組首次渲染」;要重帶最新持股用下方 🔄 以持股組簽章重置 editor key。
+    _pf_seed = [r for r in (st.session_state.get('etf_portfolio_rows') or [])
+                if isinstance(r, dict) and r.get('ticker')
+                and r.get('lots') and r.get('avg_price')]
+    if _pf_seed:
+        _default_df = pd.DataFrame({
+            '股票代號':     [r['ticker'] for r in _pf_seed],
+            '持有張數':     [float(r['lots']) for r in _pf_seed],
+            '平均買入價格': [float(r['avg_price']) for r in _pf_seed],
+        })
+        st.caption(f'✅ 已帶入 📁 組合管理的持股（{len(_pf_seed)} 檔;可微調,目標比例仍需自填）。')
+    else:
+        st.caption('（📁 組合管理未載入 → 表格開在範例列。先到 💼 我的持股戰情室 / 📁 組合管理 '
+                   '載入持股,即可自動帶入真實部位。）')
+        _default_df = pd.DataFrame({
+            '股票代號':       ['0050.TW', '00713.TW', 'BND', '00878.TW'],
+            '持有張數':       [1.0, 0.5, 0.2, 2.0],
+            '平均買入價格':   [135.50, 82.30, 72.50, 20.10],
+        })
     # B5-a v19.180:再平衡的「目標」必須由使用者給。原碼拿現況當目標 → 偏離恆 0 →
     # 永遠印「✅ 無需再平衡」(§1 假綠燈)。選填欄:留白 = 明說「沒設定」而非 0。
     # 表格只帶 3 欄(代號/張數/均價),故一律在此補齊目標比例欄,避免 KeyError。
@@ -206,9 +223,15 @@ def render_etf_portfolio(gemini_fn=None):
         # 解析端把 NaN 判成「沒填」→ 不會被誤當「目標 0%」。
         _default_df[TARGET_PCT_COL] = pd.Series(
             [float('nan')] * len(_default_df), dtype='float64')
+    # editor key 綁「持股組簽章」→ 從 📁 組合管理重新載入(持股變動)時 editor 以新持股重 seed;
+    # 同一持股組內的手動微調照常保留(key 不變)。無 seed(範例列)→ 固定 'example'。
+    import hashlib as _hl_pf
+    _sig_raw = ('|'.join(f"{r['ticker']}:{float(r['lots']):g}:{float(r['avg_price']):g}"
+                         for r in _pf_seed) if _pf_seed else 'example')
+    _editor_sig = _hl_pf.md5(_sig_raw.encode()).hexdigest()[:10]
     edited_df = st.data_editor(
         _default_df, num_rows='dynamic', hide_index=True,
-        use_container_width=True, key='etf_p_table',
+        use_container_width=True, key=f'etf_p_table_{_editor_sig}',
         column_config={
             '股票代號':     st.column_config.TextColumn(
                 '股票代號', required=True, width='medium',
