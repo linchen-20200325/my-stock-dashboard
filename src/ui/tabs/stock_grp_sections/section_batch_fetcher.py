@@ -42,6 +42,7 @@ from src.compute.strategy.entry_stop_levels import (
 from src.compute.scoring import (
     calc_health_score,
     compute_tech_bearish,
+    derive_short_squeeze_inputs,   # #2:從 df 導券資比 + 法人連買(軋空加分輸入)
     health_grade,
     score_single_stock,
 )
@@ -58,6 +59,7 @@ from src.config import get_stock_name
 from src.data.stock.app_stock_fetchers import (
     fetch_dividend_data,
     fetch_financials,
+    fetch_revenue,
 )
 # C2(v19.197):多檔補股本分母 → 重用單檔龍頭 gate,修「合約負債有值就當高」假陽性。
 from src.data.stock.share_capital_fetcher import fetch_share_capital
@@ -118,8 +120,14 @@ def run_batch_fetch(stock_list: list[str]) -> None:
             avg_div4, _, _ = fetch_dividend_data(sid4)
             cl4, cx4, _capex4, _cl_src4, _cx_src4, _, _fin_errs4 = fetch_financials(sid4, industry='')
             _cap4 = fetch_share_capital(sid4)   # C2:股本分母(龍頭 gate 用);失敗回 0
+            # #1 v19.200(對稱性稽核):月營收 → 六因子「基本面」維度真計分。
+            # 原批次未抓月營收 → score_single_stock 收不到 revenue_df → calc_revenue_yoy_score
+            # 一律回中性 50(個股單檔頁有抓,多檔頁沒抓 = 不對稱)。fetch_revenue 回 (df, err);
+            # 只留 df(有 revenue/yoy 欄);抓不到 → None → 下游仍中性 50(§1 graceful,不假造)。
+            _rev4, _ = fetch_revenue(sid4)
             result4 = {'sid': sid4, 'df': df4, 'name': name4,
-                       'avg_div': avg_div4, 'cl': cl4, 'cx': cx4, 'capital': _cap4}
+                       'avg_div': avg_div4, 'cl': cl4, 'cx': cx4, 'capital': _cap4,
+                       'rev_df': _rev4}
             if df4 is None or df4.empty:
                 result4['error'] = _err4 or '無 K 線資料(yfinance + FinMind 雙源皆空)'
             else:
@@ -152,6 +160,7 @@ def run_batch_fetch(stock_list: list[str]) -> None:
             cl4     = _d4.get('cl')
             cx4     = _d4.get('cx')
             capital4 = _d4.get('capital')
+            rev_df4  = _d4.get('rev_df')   # #1:月營收 df(供六因子基本面);舊快取無此鍵→None→中性 50
             # C2(v19.197):合約負債/資本支出「佔股本比」龍頭 gate(重用單檔 SSOT 純函式)。
             # 缺股本(舊快取無 capital / 抓取失敗)→ ratio_known=False、*_lead=False(未評估,不假綠)。
             _gates4 = evaluate_leading_gates(cl4, cx4, capital4)
@@ -306,8 +315,14 @@ def run_batch_fetch(stock_list: list[str]) -> None:
             if df4 is not None and not df4.empty and _regime_dec.usable:
                 try:
                     _n4_use = name4 or get_stock_name(sid4)
+                    # #2:券資比 + 法人連買(§5.2 軋空加分輸入,原恆 0 → 加分永不觸發)。
+                    # df4 已在手 → 純函式導出,零額外抓取。
+                    _sq_in = derive_short_squeeze_inputs(df4)
                     sf = score_single_stock(df4, sid4, _n4_use,
-                                            regime=_regime_dec.regime)
+                                            regime=_regime_dec.regime,
+                                            revenue_df=rev_df4,
+                                            short_ratio=_sq_in['short_ratio'],
+                                            inst_consec_buy=_sq_in['inst_consec_buy'])
                     score_t3.append(sf)
                 except Exception as _e_sc4:
                     # §1:原碼 `except Exception: pass` —— 評分整檔消失且零 log,

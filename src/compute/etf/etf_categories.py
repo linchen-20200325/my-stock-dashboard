@@ -126,3 +126,30 @@ def get_category_name(ticker: str) -> str:
         if _t in _peers:
             return _name
     return ''
+
+
+# 追蹤「FTSE 台灣50 指數」者 —— 與 0050 追**同一支指數**。
+# #3 v19.200:追蹤誤差(TE)一律以 auto_detect_benchmark → 0050.TW 為基準。TE 只有在
+# 「該 ETF 理應追蹤 0050 追的那支指數」時才有「追不準 = 隱藏成本」的缺陷意義。
+#   ✅ 0050(元大台灣50)/ 006208(富邦台50):同追 FTSE 台灣50 指數 → TE vs 0050 應趨近 0,
+#      有明顯 TE 即真缺陷。(0050 本身 auto_detect_benchmark 會跳過自我基準 → 實務上
+#      唯一會被評 TE 的是 006208。)
+#   ❌ 其餘「市值型」成員追的是**不同**指數,TE vs 0050 天生偏高、屬設計差異而非缺陷:
+#      0051(中型100,ranks 51-150 互斥宇宙)/ 00922(領袖50)/ 00923(ESG低碳50)/
+#      00692(公司治理100)/ 00850(ESG永續)…;高股息 / 主題 / 債券 / 海外亦然。
+#   → 故 TE red-flag 的閘門用「同指數」精確集合,不用寬鬆的「市值型」類別
+#      (否則會誤殺 0051 等,正是本修法要避免的 §-1 誤判,只是換個位置重演)。
+# 維護:未來若有新的 FTSE 台灣50 指數 ETF 掛牌,手動加入(同 ETF_PEER_GROUPS 維護模型)。
+TW50_INDEX_TRACKERS = frozenset({'0050.TW', '006208.TW'})
+
+
+def tracks_tw50_index(ticker: str) -> bool:
+    """ticker 是否追蹤「FTSE 台灣50 指數」(與 0050 同指數) → TE vs 0050 才有缺陷意義。
+
+    見 TW50_INDEX_TRACKERS 註解:高股息 / 中型 / 主題 / 債券 / 海外 / 其餘市值型
+    皆追不同指數,TE vs 0050 天生偏高非缺陷,一律回 False(§-1 不誤殺)。
+    """
+    _t = (ticker or '').replace('.TWO', '.TW').strip()
+    if '.' not in _t and _t.isdigit():
+        _t = f'{_t}.TW'
+    return _t in TW50_INDEX_TRACKERS

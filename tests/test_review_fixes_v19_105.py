@@ -144,8 +144,12 @@ class TestWeightTablesInvariant:
 class TestBollingerPopulationSigma:
     def test_ddof0_in_all_bollinger_sites(self):
         assert _src('src/compute/strategy/tech_indicators.py').count('.std(ddof=0)') == 2
-        assert '.std(ddof=0)' in _src('src/compute/scoring/scoring_engine.py')
+        # #4 v19.200:scoring_engine 原唯一 Bollinger 母體 σ 站點位於死碼
+        # check_bollinger_squeeze(零 production caller,已刪);該檔現無任何
+        # Bollinger std 站點 → 不再守衛(原斷言會誤鎖一個已不存在的站點)。
         assert '.std(ddof=0)' in _src('src/compute/strategy/v5_modules.py')
+        # 反向守衛:確認 scoring_engine 真的不再有 Bollinger std 站點(死碼確已清除)
+        assert '.std(' not in _src('src/compute/scoring/scoring_engine.py')
 
     def test_width_series_matches_population_sigma(self):
         from src.compute.strategy.tech_indicators import calc_bollinger_width_series

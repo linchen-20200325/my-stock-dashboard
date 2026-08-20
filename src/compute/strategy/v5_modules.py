@@ -186,63 +186,6 @@ def calc_relative_strength(df_stock: pd.DataFrame, df_market: pd.DataFrame,
 # ══════════════════════════════════════════════════════════════════════════════
 # [Task 7] 估值河流圖（PE / PB 滾動 μ ± σ 分區）
 # ══════════════════════════════════════════════════════════════════════════════
-def calc_valuation_zone(price: float, eps_ttm: float, bvps: float,
-                         hist_pe_mean: float, hist_pe_std: float,
-                         hist_pb_mean: float, hist_pb_std: float) -> dict:
-    """
-    根據滾動 PE/PB 的歷史均值 ± 標準差，判定現在估值位階。
-
-    區間: 特價(<μ-2σ) | 便宜(μ-2σ~μ-σ) | 合理(μ-σ~μ+σ) | 昂貴(μ+σ~μ+2σ) | 超貴(>μ+2σ)
-
-    Edge E-A(EPS=0負): eps_ttm <= 0 → 改用 PB 評估，跳過 PE
-    Edge E-B(歷史不足): hist_std = 0 → 只顯示現值，無法分區
-    """
-    R = '#da3633'; G = '#2ea043'; N = '#484f58'
-
-    result = {"pe": None, "pb": None, "pe_zone": "N/A", "pb_zone": "N/A",
-              "signal": "⚪", "color": N, "msg": ""}
-
-    def _zone(val, mu, sigma):
-        if sigma < 0.01: return "無歷史基準", N
-        if val < mu - 2*sigma: return "🟢便宜（特價）", G
-        if val < mu - sigma:   return "🟢便宜", G
-        if val < mu + sigma:   return "⚪合理", N
-        if val < mu + 2*sigma: return "🔴昂貴", R
-        return "🔴超貴", R
-
-    # PE 評估
-    if eps_ttm and eps_ttm > 0 and price > 0:
-        pe = round(price / eps_ttm, 1)
-        pe_zone, _ = _zone(pe, hist_pe_mean, hist_pe_std)
-        result.update({"pe": pe, "pe_zone": pe_zone})
-    else:
-        pe_zone = "EPS<0（虧損）"
-        result.update({"pe": None, "pe_zone": pe_zone})
-
-    # PB 評估
-    if bvps and bvps > 0 and price > 0:
-        pb = round(price / bvps, 2)
-        pb_zone, _ = _zone(pb, hist_pb_mean, hist_pb_std)
-        result.update({"pb": pb, "pb_zone": pb_zone})
-    else:
-        pb_zone = "無資料"
-        result.update({"pb": None, "pb_zone": pb_zone})
-
-    # 綜合訊號（PE 優先，PB 備援）
-    primary_zone  = pe_zone  if result['pe'] else pb_zone
-
-    if "便宜" in primary_zone or "特價" in primary_zone:
-        result.update({"signal": "🟢 估值便宜", "color": G,
-                        "msg": f"PE={result['pe']} 位於{primary_zone} — 估值具吸引力，可分批布局"})
-    elif "昂貴" in primary_zone or "超貴" in primary_zone:
-        result.update({"signal": "🔴 估值昂貴", "color": R,
-                        "msg": f"PE={result['pe']} 位於{primary_zone} — 估值偏高，追高風險大"})
-    else:
-        result.update({"signal": "⚪ 估值合理", "color": N,
-                        "msg": f"PE={result['pe']} 位於合理區間 — 可持有，等候更好買點"})
-    return result
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 # [Task 9] 布林帶寬爆發偵測
 # 公式: BW = (Upper - Lower) / MA20 × 100%
@@ -290,7 +233,7 @@ def detect_bollinger_breakout(df: pd.DataFrame, window: int = 20, std_k: float =
     bw_pct  = round(float((bw_hist.tail(120) < bw).mean() * 100), 1)
 
     # v19.95 批次3(a) 量能確認（§7 user 核准）:docstring 一直聲明吃 volume 但從未用 —
-    # 無量突破常為假突破。vol_ratio = 今量 / 20 日均量(mirror check_fake_breakout pattern);
+    # 無量突破常為假突破。vol_ratio = 今量 / 20 日均量(量能確認範式);
     # 缺 volume 欄 / 均量無效 → None(誠實未知,不偽造 1.0),此時不降級(維持舊行為)。
     vol_ratio = None
     if 'volume' in df.columns:
@@ -540,17 +483,6 @@ if __name__ == "__main__":
         # 邊界：資料不足
         r2 = calc_relative_strength(df_s.head(5), df_m)
         print(f"  資料不足防禦: {r2['signal']}  ✅")
-    except Exception as e:
-        print(f"  ❌ {e}"); traceback.print_exc()
-
-    # ── Task 7: 估值河流圖
-    print("\n[Task 7] 估值河流圖")
-    try:
-        r = calc_valuation_zone(100, 8, 60, 12, 3, 1.5, 0.3)
-        print(f"  {r['signal']}: PE={r['pe']}  ✅")
-        r2 = calc_valuation_zone(100, -1, 60, 12, 3, 1.5, 0.3)
-        assert r2['pe'] is None
-        print(f"  EPS<0防禦: pe={r2['pe']}  ✅")
     except Exception as e:
         print(f"  ❌ {e}"); traceback.print_exc()
 

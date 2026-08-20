@@ -29,12 +29,9 @@ from shared.signal_thresholds import (
     LEAD_CL_QOQ_SURGE_PCT, LEAD_CL_QOQ_UP_PCT, LEAD_CL_QOQ_DOWN_PCT,
     LEAD_ASSET_DISPOSAL_RATIO, LEAD_CAPEX_RATIO_CHG_UP_PCT, LEAD_CAPEX_RATIO_CHG_DOWN_PCT,
     LEAD_INV_QOQ_DROP_PCT, LEAD_INV_QOQ_RISE_PCT,
-    CL_SURGE_YOY_PCT, CL_SURGE_RATIO_PCT, CL_GROWTH_YOY_PCT,
-    BOLL_BW_WIDE_PCT, BOLL_BW_TIGHT_PCT, BOLL_UPPER_PROXIMITY,
-    FAKEOUT_VOL_RATIO, FAKEOUT_TAIL_RATIO, RS_STRONG_DAYS_MIN,
+    RS_STRONG_DAYS_MIN,
     RR_DEFAULT_TARGET_GAIN, RR_MIN,
     ATR_STOP_MULTIPLIER, ATR_STOP_FIXED_PCT,
-    TIME_STOP_MIN_GAIN, TIME_STOP_MAX_DAYS,
     VCP_ATR_CONTRACTION_RATIO,
     SQUEEZE_SHORT_RATIO_MIN, SQUEEZE_INST_BUY_DAYS_MIN, SQUEEZE_BONUS,
     POS_MAX_RISK_PCT, POS_ATR_MULTIPLIER, POS_MAX_STOP_PCT,
@@ -1153,24 +1150,6 @@ def calc_atr_stop(df, entry_price: float, multiplier: float = ATR_STOP_MULTIPLIE
                 'method': 'fixed_8pct', 'error': f"{type(e).__name__}: {e}"}
 
 # ── 時間停損判斷 ────────────────────────────────────────────
-def check_time_stop(entry_price: float, current_price: float,
-                    hold_days: int,
-                    min_gain: float = TIME_STOP_MIN_GAIN, max_days: int = TIME_STOP_MAX_DAYS) -> dict:
-    """
-    時間停損：防止資金被低效套牢（溫水煮青蛙效應）
-    持倉超過 max_days 天但報酬不足 min_gain → 建議換股
-    """
-    gain = (current_price - entry_price) / entry_price
-    triggered = hold_days >= max_days and gain < min_gain
-    return {
-        'triggered': triggered,
-        'hold_days': hold_days,
-        'gain_pct': round(gain * 100, 2),
-        'message': (f'⏰ 時間停損：持有 {hold_days} 天，報酬僅 {gain*100:.1f}%，建議換股'
-                    if triggered else
-                    f'持倉 {hold_days} 天，報酬 {gain*100:.1f}%，繼續持有'),
-    }
-
 # ── VCP 個股 ATR 濾網 ──────────────────────────────────────
 def check_vcp_atr_filter(df) -> dict:
     """
@@ -1224,84 +1203,59 @@ def calc_short_squeeze_bonus(short_ratio: float = 0.0,
     return {'bonus': bonus, 'label': label, 'short_ratio': short_ratio,
             'inst_consecutive_buy': inst_consecutive_buy}
 
+
+def derive_short_squeeze_inputs(df) -> dict:
+    """從 combined df 導出軋空加分輸入(券資比 + 法人連買天數)—— 純函式,零 I/O。
+
+    #2 v19.200(對稱性稽核):`calc_short_squeeze_bonus` 已存在,但多檔批次評分從未
+    餵入真實 short_ratio / inst_consec_buy(恆 0.0 / 0 → 軋空加分永不觸發)。本 helper
+    從 `get_combined_data` 的 df 導出兩個輸入,讓 §5.2 軋空加分實際生效。
+
+    - **券資比(short_ratio)** = 最新融券餘額 / 最新融資餘額。兩者同單位「張」(§4.1),
+      相除得無量綱 ratio(0~1)。取「最後一列融資餘額 > 0」的同一列讀券/資(避開
+      data_loader `fillna(0)` 補的空列 —— 融資=0 非真 0,是當日尚無資料)。
+    - **法人連買(inst_consec_buy)** = df 尾端「主力合計(三大法人合計)> 0」的連續天數。
+      data_loader 已把缺資料日 `fillna(0)`,0 非 > 0 → 自動中斷連買(§1 保守不假造:
+      寧可少算軋空,不可把「無資料」當「買超」)。
+
+    缺欄 / 融資=0 / NaN → 該項回保守 0(不觸發軋空)。回 {short_ratio, inst_consec_buy}。
+    """
+    import math
+
+    import pandas as pd
+    out = {'short_ratio': 0.0, 'inst_consec_buy': 0}
+    if df is None or getattr(df, 'empty', True):
+        return out
+
+    # ── 券資比 = 融券餘額 / 融資餘額(同「張」→ ratio)──
+    if '融資餘額' in df.columns and '融券餘額' in df.columns:
+        _m = pd.DataFrame({
+            'fin': pd.to_numeric(df['融資餘額'], errors='coerce'),
+            'short': pd.to_numeric(df['融券餘額'], errors='coerce'),
+        })
+        _m = _m[_m['fin'] > 0]                       # 排除 fillna(0) 補的空列
+        if not _m.empty:
+            _fin = float(_m['fin'].iloc[-1])
+            _short = float(_m['short'].iloc[-1])
+            if _fin > 0 and math.isfinite(_short) and _short >= 0:
+                out['short_ratio'] = _short / _fin
+
+    # ── 法人連買天數 = 尾端「主力合計 > 0」連續數 ──
+    if '主力合計' in df.columns:
+        _inst = pd.to_numeric(df['主力合計'], errors='coerce').fillna(0.0)
+        _cnt = 0
+        for _v in reversed(_inst.tolist()):
+            if _v > 0:
+                _cnt += 1
+            else:
+                break
+        out['inst_consec_buy'] = _cnt
+
+    return out
+
 # ════════════════════════════════════════════════════════════
 # 模組二：進階量化選股因子（v3.2 新增）
 # ════════════════════════════════════════════════════════════
-
-def check_contract_liability_surge(cl_current, cl_prev_year, paid_in_capital) -> dict:
-    """
-    合約負債大增檢測（隱形冠軍因子）
-    條件：YoY增長>30% 且 合約負債/資本額>10%
-    """
-    result = {'is_surge': False, 'yoy_pct': None, 'cl_ratio': None, 'label': ''}
-    if not cl_current or not cl_prev_year or cl_prev_year <= 0:
-        return result
-    yoy = (cl_current - cl_prev_year) / cl_prev_year * 100
-    ratio = (cl_current / paid_in_capital * 100) if paid_in_capital and paid_in_capital > 0 else 0
-    result['yoy_pct'] = round(yoy, 1)
-    result['cl_ratio'] = round(ratio, 1)
-    if yoy > CL_SURGE_YOY_PCT and ratio > CL_SURGE_RATIO_PCT:
-        result['is_surge'] = True
-        result['label'] = '🌟 隱形冠軍潛力（合約負債大增）'
-    elif yoy > CL_GROWTH_YOY_PCT:
-        result['label'] = '📈 合約負債成長中'
-    return result
-
-def check_bollinger_squeeze(df) -> dict:
-    """
-    布林帶寬壓縮後爆發（動能發動點）
-    條件：今日帶寬>3% 且 前5日平均帶寬<3% 且 收盤>=上軌×0.98
-    """
-    result = {'is_squeeze_break': False, 'bw_today': None, 'bw_avg5': None, 'label': ''}
-    if df is None or len(df) < 25:
-        return result
-    from src.compute.strategy.tech_indicators import calc_bollinger_width_series
-    close = df['close']
-    ma20  = close.rolling(20).mean()
-    std20 = close.rolling(20).std(ddof=0)  # v19.105:Bollinger 原始定義用母體 σ(ddof=0);樣本 σ 使帶寬虛胖 ~2.6%
-    upper = ma20 + 2 * std20
-    # D1 v18.437:帶寬% =(upper-lower)/MA×100 = 4σ/MA×100 → 收 SSOT(helper 回比率,×100 轉%)
-    bw = calc_bollinger_width_series(close, 20, 2.0) * 100
-
-    bw_today = float(bw.iloc[-1]) if not bw.iloc[-1] != bw.iloc[-1] else 0
-    bw_avg5  = float(bw.iloc[-6:-1].mean()) if len(bw) >= 6 else bw_today
-
-    result['bw_today'] = round(bw_today, 2)
-    result['bw_avg5']  = round(bw_avg5, 2)
-    result['upper']    = round(float(upper.iloc[-1]), 2)
-
-    close_now = float(close.iloc[-1])
-    upper_now = float(upper.iloc[-1])
-
-    if bw_today > BOLL_BW_WIDE_PCT and bw_avg5 < BOLL_BW_WIDE_PCT and close_now >= upper_now * BOLL_UPPER_PROXIMITY:
-        result['is_squeeze_break'] = True
-        result['label'] = '🚀 布林帶突破—動能發動點'
-    elif bw_today < BOLL_BW_TIGHT_PCT:
-        result['label'] = '🔵 帶寬收縮中（蓄勢待發）'
-    return result
-
-def check_fake_breakout(df) -> dict:
-    """
-    假突破過濾（爆量長上影線 = 主力出貨）
-    條件：成交量>20日均量3倍 且 今日創20日新高 且 收盤<最高-(最高-最低)×0.6
-    """
-    result = {'is_fake': False, 'label': ''}
-    if df is None or len(df) < 21:
-        return result
-    close  = df['close'].iloc[-1]
-    high   = df['high'].iloc[-1]
-    low    = df['low'].iloc[-1]
-    vol    = df['volume'].iloc[-1]
-    avg_v  = df['volume'].rolling(20).mean().iloc[-1]
-    hi20   = df['high'].tail(20).max()
-
-    vol_ratio = vol / (avg_v + 1e-10)
-    tail_ratio= (high - close) / (high - low + 1e-10)
-
-    if vol_ratio > FAKEOUT_VOL_RATIO and high >= hi20 and tail_ratio > FAKEOUT_TAIL_RATIO:
-        result['is_fake'] = True
-        result['label'] = '☠️ 異常量假突破警告（主力出貨）'
-    return result
 
 def check_relative_strength(df, df_index=None, days=5) -> dict:
     """
