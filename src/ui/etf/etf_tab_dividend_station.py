@@ -20,8 +20,39 @@ import streamlit as st
 from shared import dividend_station_thresholds as T
 
 # 戰情表分兩區（§ user 2026-08）：ETF 走定期定額 235/3-3-3、個股走 財報體檢 + KD。
-_ETF_COLS = ["代號", "名稱", "健檢", "235 燈號", "加碼金", "3-3-3", "建議動作"]
-_STOCK_COLS = ["代號", "名稱", "財報體檢", "財報趨勢", "KD", "建議動作"]  # B3:加財報趨勢欄
+_ETF_COLS = ["代號", "名稱", "張數", "均價", "現價", "損益%", "市值",
+             "健檢", "235 燈號", "加碼金", "3-3-3", "建議動作"]
+_STOCK_COLS = ["代號", "名稱", "張數", "均價", "現價", "損益%", "市值",
+               "財報體檢", "財報趨勢", "KD", "建議動作"]  # B3:加財報趨勢欄
+
+
+def _perf_row(r: dict, cols: list[str]) -> dict:
+    """依欄位序取值;績效欄(張數/均價/現價/損益%/市值)格式化,缺 → 「—」(§1 不捏 0)。
+
+    市值(萬) = 張數 × 現價 × 1000股/張 ÷ 1e4 = 張數 × 現價 ÷ 10（service 的「市值」欄
+    是張×現價、供 80/20 比例用不含 ×1000,顯示絕對值須自算含股數）。
+    """
+    _lots = r.get("張數")
+    _cur = r.get("現價")
+    _out: dict = {}
+    for _c in cols:
+        if _c == "張數":
+            _out[_c] = f"{_lots:g}" if isinstance(_lots, (int, float)) else "—"
+        elif _c == "均價":
+            _a = r.get("均價")
+            _out[_c] = f"{_a:.2f}" if isinstance(_a, (int, float)) else "—"
+        elif _c == "現價":
+            _out[_c] = f"{_cur:.2f}" if isinstance(_cur, (int, float)) else "—"
+        elif _c == "損益%":
+            _p = r.get("損益%")
+            _out[_c] = f"{_p:+.1f}%" if isinstance(_p, (int, float)) else "—"
+        elif _c == "市值":
+            _out[_c] = (f"{_lots * _cur / 10:,.1f}萬"
+                        if isinstance(_lots, (int, float)) and isinstance(_cur, (int, float))
+                        else "—")
+        else:
+            _out[_c] = r.get(_c, "")
+    return _out
 _HOLDINGS_KEY = "_station_holdings"
 
 
@@ -47,12 +78,17 @@ def _safe_dataframe(styled, plain) -> None:
 
 
 def _holding_preview_row(h: dict) -> dict:
-    """service 持股 dict → 唯讀預覽列。"""
+    """service 持股 dict → 唯讀預覽列（含張數/均價;現價/績效在下方戰情表,需跑計算才有）。"""
+    _lots = h.get("lots")
+    _avg = h.get("avg_price")
     return {
         "代號": h.get("ticker", ""),
         "名稱": h.get("name", ""),
         "種類": "個股" if h.get("asset_kind") == T.KIND_STOCK else "ETF",
         "類別": "🚀 衛星" if h.get("asset_class") == T.ASSET_SATELLITE else "🛡️ 核心",
+        # 張數/均價來自持股 Sheet(觀察清單無金額 → —);現價/報酬在下方戰情表(跑計算後)。
+        "張數": f"{float(_lots):g}" if _lots else "—",
+        "均價": f"{float(_avg):.2f}" if _avg else "—",
     }
 
 
@@ -137,13 +173,13 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
 
     if _etf_rows:
         st.markdown("##### 🛡️ 定期定額策略（ETF）　·　235 加碼燈 ＋ 3-3-3")
-        _edf = pd.DataFrame([{c: r.get(c, "") for c in _ETF_COLS} for r in _etf_rows])
+        _edf = pd.DataFrame([_perf_row(r, _ETF_COLS) for r in _etf_rows])
         _safe_dataframe(_style_rows(_edf), _edf)
     if _stock_rows:
         st.markdown("##### 🚀 個股汰換（衛星）　·　財報體檢 ＋ KD → 是否更換")
         st.caption("個股不套 235/3-3-3（那是 ETF 定期定額規則）。**財報 grade 決定汰弱、KD 定進出時機**："
                    "財報 C/F → 建議換出;KD 死亡交叉/頂背離＝賣點確認、黃金交叉/底背離＝轉強留。")
-        _sdf = pd.DataFrame([{c: r.get(c, "") for c in _STOCK_COLS} for r in _stock_rows])
+        _sdf = pd.DataFrame([_perf_row(r, _STOCK_COLS) for r in _stock_rows])
         _safe_dataframe(_style_rows(_sdf), _sdf)
     if not _etf_rows and not _stock_rows:
         st.info("無可顯示的持股列。")

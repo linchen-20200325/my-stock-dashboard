@@ -199,6 +199,10 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
                             if _lots and _cur and float(_lots) > 0 and float(_cur) > 0 else None)
             _row["損益%"] = (round((float(_cur) / float(_avg) - 1.0) * 100.0, 1)
                              if _avg and _cur and float(_avg) > 0 and float(_cur) > 0 else None)
+            # 績效原值(供 UI 顯示張數/均價/現價;§1 缺 → None 不捏 0)。市值/損益% 上面已存。
+            _row["張數"] = float(_lots) if _lots and float(_lots) > 0 else None
+            _row["均價"] = float(_avg) if _avg and float(_avg) > 0 else None
+            _row["現價"] = float(_cur) if _cur and float(_cur) > 0 else None
             rows.append(_row)
         except Exception as e:  # noqa: BLE001 — 單檔失敗不炸整表（§1 誠實標記）
             rows.append(_error_row(tk, nm, ac, ak, f"{type(e).__name__}: {e}", held=held))
