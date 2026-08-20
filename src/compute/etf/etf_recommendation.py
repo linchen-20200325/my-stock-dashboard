@@ -69,18 +69,19 @@ def recommend_etf_action(row: dict) -> dict:
         red_flags.append('流動性高風險(量小/規模小,不易進出)')
     if '吃本金' in div_health:
         red_flags.append('配息吃本金(含息報酬 < 殖利率)')
-    # #3 v19.200:追蹤誤差 red-flag —— **僅市值型**(理應追蹤 0050 類市值指數者)。
-    # TE 一律以 auto_detect_benchmark → 0050 為基準;高股息/主題/債券等本就不追 0050,
-    # 其 TE vs 0050 天生偏高、屬設計差異而非缺陷,強制降級會誤殺 user 核心存股持股
-    # (§-1)。故只有市值型的高 TE 才視為真隱藏成本。單檔頁只是 ⚠️ 提示,多檔頁原本
-    # 連提示都沒有 → 此處補進留/觀察/換 判定(僅市值型)。
+    # #3 v19.200:追蹤誤差 red-flag —— **僅追蹤 FTSE 台灣50 指數者**(與 0050 同指數)。
+    # TE 一律以 auto_detect_benchmark → 0050 為基準,只有「本就該追 0050 那支指數」的
+    # ETF(0050 / 006208)拿 TE vs 0050 才有「追不準=隱藏成本」的缺陷意義。高股息/主題/
+    # 債券/中型100/領袖50 等追**不同**指數者,TE vs 0050 天生偏高、屬設計差異非缺陷 →
+    # 強制降級會誤殺(§-1)。故閘門用精確「同指數」集合而非寬鬆「市值型」類別(後者含
+    # 0051 中型等,仍會誤判)。單檔頁只是 ⚠️ 提示,多檔頁原本連提示都沒有 → 此處補進判定。
     _te = _as_float(_row.get('tracking_error'))
     if _te is not None and _te > ETF_TRACKING_ERROR_MAX_PCT:
-        from src.compute.etf.etf_categories import is_market_cap_type  # noqa: PLC0415
-        if is_market_cap_type(_row.get('ticker')):
+        from src.compute.etf.etf_categories import tracks_tw50_index  # noqa: PLC0415
+        if tracks_tw50_index(_row.get('ticker')):
             red_flags.append(
-                f'市值型追蹤誤差 {_te:.2f}% > {ETF_TRACKING_ERROR_MAX_PCT:.1f}%'
-                f'(vs 0050,追不準=隱藏成本)')
+                f'追蹤誤差 {_te:.2f}% > {ETF_TRACKING_ERROR_MAX_PCT:.1f}%'
+                f'(vs 0050 同指數,追不準=隱藏成本)')
 
     reasons: list[str] = []
     # ── 基準判斷:綜合分分級 ──
