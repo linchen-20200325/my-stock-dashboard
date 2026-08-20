@@ -117,6 +117,19 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
             st.session_state.pop("_station_ai_text", None)
             st.rerun()
     _holdings = st.session_state.get(_HOLDINGS_KEY) or []
+    # P1 v19.202(user 指派「輸入持股組合分析全移到戰情室」):把 📁 組合管理載入的持股
+    # 轉成 etf_portfolio_rows 契約寫入 session → 下游 葡萄串 / 標準差·分散度·3-3-3 selectbox /
+    # portfolio_linkage / tab_sector_flow 直接吃真實持股,不再靠 ETF 組合頁的手打範例列。
+    # 只在產出真實持有列時才覆寫(觀察清單候選/缺張數均價會被 §1 跳過,不拿空清單清掉既有)。
+    try:
+        from src.services.portfolio_analysis_bridge import (
+            build_portfolio_rows_from_holdings,
+        )
+        _pf_bridge = build_portfolio_rows_from_holdings(_holdings)
+        if _pf_bridge.rows:
+            st.session_state['etf_portfolio_rows'] = list(_pf_bridge.rows)
+    except Exception as _e_pf_bridge:  # noqa: BLE001 — 橋接失敗不擋戰情室渲染
+        print(f'[station portfolio bridge] {type(_e_pf_bridge).__name__}: {_e_pf_bridge}')
     if not _holdings:
         with _c_hint:
             st.caption("尚未載入到持股。")
