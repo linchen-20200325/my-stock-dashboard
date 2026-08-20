@@ -126,15 +126,24 @@ def _generate_report(gemini_fn, port_d, backtest_d, regime_disp,
     _hold_str = '\n'.join(_hold_lines) if _hold_lines else '（無持股）'
 
     # ── 健康燈號 + 動作建議（來自 _compute_etf_warroom_row）────
+    def _wf(w, k, unit=''):
+        """None-safe：present-but-None 也回 '—'（dict.get 只對 missing key 生效）。
+
+        P3-D(v19.199)：warroom 對年輕 ETF 的 1年含息報酬%/σ位階/折溢價% 等鍵**存在但值 None**
+        (require_full_period=True 後),原 `w.get(k,"—")` 會回 None → prompt 出現字面 'None%' 餵 LLM。
+        """
+        _v = w.get(k)
+        return '—' if _v is None else f'{_v}{unit}'
+
     _war_lines = []
     for w in war_rows:
         _war_lines.append(
-            f'  - {w.get("代號","?")}：健康燈號 {w.get("健康燈號","—")}｜'
-            f'σ位階 {w.get("σ位階","—")}｜'
-            f'距MA20 {w.get("距月線%","—")}%｜距MA60 {w.get("距季線%","—")}%｜'
-            f'折溢價 {w.get("折溢價%","—")}%｜年化配息率 {w.get("年化配息率%","—")}%｜'
-            f'1年含息報酬 {w.get("1年含息報酬%","—")}%｜'
-            f'動作建議：{w.get("動作建議","—")}'
+            f'  - {w.get("代號","?")}：健康燈號 {w.get("健康燈號") or "—"}｜'
+            f'σ位階 {_wf(w, "σ位階")}｜'
+            f'距MA20 {_wf(w, "距月線%", "%")}｜距MA60 {_wf(w, "距季線%", "%")}｜'
+            f'折溢價 {_wf(w, "折溢價%", "%")}｜年化配息率 {_wf(w, "年化配息率%", "%")}｜'
+            f'1年含息報酬 {_wf(w, "1年含息報酬%", "%")}｜'
+            f'動作建議：{w.get("動作建議") or "—"}'
         )
     _war_str = '\n'.join(_war_lines) if _war_lines else '（無健檢資料）'
 
