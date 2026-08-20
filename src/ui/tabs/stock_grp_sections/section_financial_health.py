@@ -98,7 +98,12 @@ def render_financial_health_section(
                 continue
             _sid_hm = _r_hm.get('stock_id', _r_hm.get('代碼', ''))
             _h_hm = _r_hm.get('健康度')
-            if _sid_hm and isinstance(_h_hm, (int, float)) and not isinstance(_h_hm, bool):
+            # §1(對抗式稽核 0b2558a):抓不到 K 線的列會塞「健康度:0」佔位(非真讀數 ——
+            # section_batch_fetcher except 分支 + df 空時 calc_health_score 回 0)。0 餵進
+            # 技術主軸會誤判 🔴汰弱(把「無資料」當「體質弱」)。排除 <=0 → 該股技術軸讀
+            # missing → 統一裁決回 ⚪ 無法評分,不假 🔴(§1 寧缺勿假)。
+            if (_sid_hm and isinstance(_h_hm, (int, float))
+                    and not isinstance(_h_hm, bool) and _h_hm > 0):
                 _health_map[_sid_hm] = float(_h_hm)
         _render_summary_table(_fh_t3_cached, _health_map)
         _render_operating_compare(_fh_t3_cached)
