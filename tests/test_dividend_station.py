@@ -361,3 +361,28 @@ def test_assess_stock_unknown_grade_treated_as_insufficient():
                          mj_grade="ZZZ", mj_score_pct=50, mj_headline="?",
                          mj_fail_items=[], kd=_kd(label="無"))
     assert sa.swap_level == "⚪" and "資料不足" in sa.swap_action
+
+
+def test_sharpe_weekly_rf_lowers_sharpe():
+    """B2:rf>0 → 超額報酬下降 → sharpe 較 rf=0 低(health_b「無超額報酬」名副其實)。"""
+    idx = pd.date_range("2022-01-07", periods=30, freq="W-FRI")
+    up = pd.Series(np.linspace(100, 130, 30), index=idx)
+    s0 = ds.sharpe_weekly(up, rf_pct=0.0)
+    s5 = ds.sharpe_weekly(up, rf_pct=5.33)
+    assert s0 is not None and s5 is not None and s5 < s0
+
+
+def test_assess_stock_breakdown_early_warning():
+    """B3:財報 grade OK(B)但盈轉虧/逐季惡化 → 提前 🟡 減碼(不再 🟢 續抱)。"""
+    sa = ds.assess_stock(ticker="2330", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="B", mj_score_pct=60, mj_headline="", mj_fail_items=[],
+                         kd=_kd(label="無"), trend={"is_breakdown": True})
+    assert sa.swap_level == "🟡" and "盈轉虧" in sa.swap_action
+
+
+def test_assess_stock_ok_no_breakdown_still_hold():
+    """B3:grade OK 且無惡化 → 維持 🟢 續抱(不誤觸發)。"""
+    sa = ds.assess_stock(ticker="2330", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade="B", mj_score_pct=60, mj_headline="", mj_fail_items=[],
+                         kd=_kd(label="無"), trend={"is_breakdown": False})
+    assert sa.swap_level == "🟢"

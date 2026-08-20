@@ -107,7 +107,6 @@ def test_fetch_metrics_wires_real_sources(monkeypatch):
     px = pd.DataFrame({"Close": close})
     divs = pd.Series([1.0, 1.2],
                      index=pd.to_datetime(["2024-07-01", "2025-01-02"]))
-    nav = pd.DataFrame({"折溢價率(%)": [0.3, 0.5]})
 
     seen = {}
     fake = types.ModuleType("src.data.etf.etf_fetch")
@@ -116,9 +115,16 @@ def test_fetch_metrics_wires_real_sources(monkeypatch):
         return px
     fake.fetch_etf_price = _cap_price
     fake.fetch_etf_dividends = lambda t: divs
-    fake.fetch_etf_nav_history = lambda t, *a, **k: nav
+    fake.fetch_etf_info = lambda t, *a, **k: {}
     monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
 
+    # A2:折溢價改走 calc_premium_discount SSOT;B4:品質 display;B2:rf 注入 —— 皆 patch 隔離網路
+    monkeypatch.setattr("src.compute.etf.etf_calc.calc_premium_discount",
+                        lambda info, df, tk='': {"premium_pct": 0.5}, raising=False)
+    monkeypatch.setattr("src.compute.etf.etf_quality.compute_etf_quality",
+                        lambda t: {"stars": None}, raising=False)
+    monkeypatch.setattr("src.services.etf_scoring_service.ensure_etf_rf_injected",
+                        lambda: None, raising=False)
     # 3-3-3③ 同儕排名已接(#37):隔離掉真同儕抓取,只驗 fetch_metrics 有把它接進 m。
     monkeypatch.setattr(svc, "_fetch_peer_ranks", lambda t: {3: 0.1, 6: 0.2, 12: 0.3})
     m = svc.fetch_metrics("0056")
@@ -133,28 +139,26 @@ def test_fetch_metrics_wires_real_sources(monkeypatch):
     assert m["peer_ranks"] == {3: 0.1, 6: 0.2, 12: 0.3}   # 3-3-3③ 已接(不再 Phase 2 None)
 
 
-def test_fetch_metrics_stock_otc_twoo_fallback(monkeypatch):
-    """個股上櫃股 .TW 抓空 → 自動試 .TWO;個股走 財報體檢+KD（回現價 + KD 狀態,非 weekly_close）。"""
-    import sys
-    import types
+def test_fetch_metrics_stock_kd_via_get_combined_data(monkeypatch):
+    """B1(v19.198):個股 KD 改走 StockDataLoader.get_combined_data(4 源鏈,含 .TWO 內部
+    fallback,回小寫 OHLC)。回現價 + KD 狀態(非 weekly_close)。財報隔離 → mj_grade None。"""
     idx = pd.bdate_range("2020-01-02", periods=300)
     _base = np.linspace(20, 40, len(idx))
-    px = pd.DataFrame({"Close": _base, "High": _base + 0.5, "Low": _base - 0.5}, index=idx)
+    _df = pd.DataFrame({"close": _base, "high": _base + 0.5, "low": _base - 0.5}, index=idx)
     seen = []
-    def _price(t, period="1y"):
-        seen.append(t)
-        return px if t.endswith(".TWO") else pd.DataFrame()   # .TW 空, .TWO 有
-    fake = types.ModuleType("src.data.etf.etf_fetch")
-    fake.fetch_etf_price = _price
-    monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
-    # 隔離財報 + 名稱網路（本測聚焦 .TW→.TWO 價格 fallback + KD 計算）
+    def _gcd(self, stock_id, days, use_adjusted=True):
+        seen.append((stock_id, days, use_adjusted))
+        return _df, None, "測試股"
+    monkeypatch.setattr("src.data.core.data_loader.StockDataLoader.get_combined_data",
+                        _gcd, raising=False)
+    # 隔離財報 + 名稱網路（本測聚焦 KD 計算走新來源）
     monkeypatch.setattr(
         "src.data.core.financial_statements_fetcher.fetch_financial_statements",
         lambda *a, **k: {"error": "test-skip"}, raising=False)
     monkeypatch.setattr("src.config.stock_names.get_stock_name",
                         lambda code: code, raising=False)
     m = svc.fetch_metrics("5314", asset_kind=T.KIND_STOCK)
-    assert "5314.TW" in seen and "5314.TWO" in seen          # 先 .TW 再 .TWO
+    assert seen and seen[0][0] == "5314"                     # 走 get_combined_data(裸碼,非 .TW)
     assert m["current_price"] == pytest.approx(40.0, abs=1.0)
     assert m["kd_state"] is not None and m["kd_state"].get("k") is not None
     assert m["mj_grade"] is None                             # 財報隔離 → 標資料不足
@@ -506,3 +510,39 @@ def test_stock_row_data_insufficient_labels():
                          mj_fail_items=None, kd=None)
     row = svc.stock_row_from_assessment(sa)
     assert row["財報體檢"] == "資料不足" and row["KD"] == "資料不足"
+
+
+def test_fetch_vix_via_fetch_yf_close(monkeypatch):
+    """D1(v19.198):VIX 改走 macro_core.fetch_yf_close(全站 SSOT 抓取點,NAS proxy+cache),
+    取序列末值,不再直呼 yfinance。"""
+    monkeypatch.setattr("src.data.macro.macro_core.fetch_yf_close",
+                        lambda t, range_="6mo": pd.Series([15.0, 16.5, 17.2]), raising=False)
+    assert svc.fetch_vix() == pytest.approx(17.2)
+
+
+def test_build_rows_etf_quality_expense_pct():
+    """B4/M1:ETF 品質 display —— 費用率為比例(0.0036),顯示須 ×100 = 0.36%(非 0.00%,§4.1)。"""
+    def _m(ticker, asset_kind='etf'):
+        d = _good_metrics(ticker)
+        d["etf_quality"] = {"stars": 4, "factors": {
+            "aum": {"val": 5e10, "score": 1.0},
+            "expense": {"val": 0.0036, "score": 0.9}}}
+        return d
+    r = svc.build_station_rows([{"ticker": "0056", "asset_class": T.ASSET_CORE}],
+                               vix=18, metrics_fn=_m)[0]
+    _q = r["_detail"]["ETF品質"]
+    assert "費用率 0.36%" in _q          # 比例 0.0036 ×100 = 0.36%,非壓成 0.00%
+    assert "AUM 500億" in _q
+
+
+def test_build_rows_etf_quality_liquidation_risk():
+    """B4:AUM 因子 score≤0(=AUM≤10億)→ 顯示清算風險徽章(不另立門檻,§3.3)。"""
+    def _m(ticker, asset_kind='etf'):
+        d = _good_metrics(ticker)
+        d["etf_quality"] = {"stars": 2, "factors": {
+            "aum": {"val": 5e8, "score": 0.0},      # 5億 → score 0 → 清算風險
+            "expense": {"val": 0.005, "score": 0.5}}}
+        return d
+    r = svc.build_station_rows([{"ticker": "00xxx", "asset_class": T.ASSET_CORE}],
+                               vix=18, metrics_fn=_m)[0]
+    assert "清算風險" in r["_detail"]["ETF品質"]

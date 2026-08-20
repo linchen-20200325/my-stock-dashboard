@@ -56,15 +56,22 @@ def stock_row_from_assessment(sa: ds.StockAssessment) -> dict:
         _kd = f"K{sa.kd_k:.0f} D{sa.kd_d:.0f}｜{sa.kd_label}"
     else:
         _kd = "資料不足"
+    _tv = sa.trend_verdict or {}          # B3:財報趨勢摘要
+    _VMAP = {"deteriorating": "逐季轉差", "improving": "逐季改善",
+             "mixed": "漲跌互見", "stable": "大致持平"}   # diff_fin_health verdict 中文化
+    _trend_txt = ("⚠️ 本業由盈轉虧" if _tv.get("is_breakdown")
+                  else "🌟 本業由虧轉盈" if _tv.get("is_turnaround")
+                  else (_VMAP.get(str(_tv.get("verdict", "")), "—") if _tv else "—"))
     return {
         "代號": sa.ticker, "名稱": sa.name, "種類": "個股",
         "類別": _CLASS_ICON.get(sa.asset_class, sa.asset_class),
-        "財報體檢": _fh, "KD": _kd,
+        "財報體檢": _fh, "KD": _kd, "財報趨勢": _trend_txt,
         "健檢": sa.swap_level,          # 復用下游/高亮同一鍵
         "建議動作": sa.swap_action,
         "_detail": {
             "財報總評": sa.mj_headline or "—",
             "財報弱項": "、".join(sa.mj_fail_items) or "—",
+            "財報趨勢": _trend_txt,
             "KD明細": _kd,
             "KD交叉": {"golden": "黃金交叉", "death": "死亡交叉"}.get(sa.kd_cross, "無"),
         },
@@ -148,7 +155,8 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
                     ticker=tk, name=nm or str(m.get("name", "")), asset_class=ac,
                     mj_grade=m.get("mj_grade"), mj_score_pct=m.get("mj_score_pct"),
                     mj_headline=m.get("mj_headline", ""),
-                    mj_fail_items=m.get("mj_fail_items"), kd=m.get("kd_state"))
+                    mj_fail_items=m.get("mj_fail_items"), kd=m.get("kd_state"),
+                    trend=m.get("trend_verdict"))
                 _row = stock_row_from_assessment(sa)
             else:                                        # ETF：定期定額 235 + 3-3-3
                 a = ds.assess_holding(
@@ -162,6 +170,25 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
                     cum_return_3y_pct=m.get("cum_return_3y_pct"),
                     peer_ranks=m.get("peer_ranks"))
                 _row = row_from_assessment(a)
+                # B4(v19.198):ETF 品質評等 display-only 併入明細（星等 / 費用率 / AUM 清算風險）。
+                #   清算風險用 aum 因子 score≤0（= AUM≤10億,etf_quality score_aum 的 SSOT floor）判,
+                #   不另立門檻(§3.3)。不動健檢 A/B/C/D 主判(架構師建議 display-first)。
+                _q = m.get("etf_quality")
+                if isinstance(_q, dict) and _q.get("stars") is not None:
+                    _fac = _q.get("factors") or {}
+                    _aum = (_fac.get("aum") or {}).get("val")
+                    _aum_score = (_fac.get("aum") or {}).get("score")
+                    _exp = (_fac.get("expense") or {}).get("val")
+                    _liq = ("　⚠️ AUM 偏小、清算風險"
+                            if isinstance(_aum_score, (int, float)) and _aum_score <= 0.0 else "")
+                    _row["_detail"]["ETF品質"] = (
+                        "★" * int(_q["stars"])
+                        # _exp 為比例形式(0.0036 = 0.36%,get_etf_expense_ratio_safe /100 SSOT)→ ×100 顯示
+                        + (f"｜費用率 {_exp * 100:.2f}%" if isinstance(_exp, (int, float)) else "")
+                        + (f"｜AUM {_aum / 1e8:.0f}億" if isinstance(_aum, (int, float)) else "")
+                        + _liq)
+                elif isinstance(_q, dict) and _q.get("_err"):
+                    _row["_detail"]["ETF品質"] = f"資料不足（{_q['_err']}）"
             _row["held"] = held
             # #38：市值 = 張數 × 現價、損益% = (現價/均價-1)。§1 缺張數/均價/現價就不算,
             #   回 None(不捏 0),下游 80/20 偏離 / 衛星停利 對 None 誠實略過。
@@ -180,37 +207,23 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
 
 # ── 真實抓取（部署端網路才跑得到；沙箱代理擋 TW/yfinance）────────────────
 def fetch_vix() -> float | None:
-    """最新 VIX（^VIX 收盤）。抓不到 → None（§1 不猜,235 該條件不觸發）。"""
+    """最新 VIX（^VIX 收盤）。抓不到 → None（§1 不猜,235 該條件不觸發）。
+
+    D1(v19.198):改走 `macro_core.fetch_yf_close`（全站唯一 Yahoo 抓取點 —— NAS proxy +
+    module-level cache）。原本直呼 yfinance 繞過此點 → 雲端節點 IP 常被 429 靜默降級,
+    且同 process 同日 ^VIX 被抓兩次不共享（§2.4）。range_="6mo" 對齊 risk_radar 同源快取。
+    """
     try:
-        import yfinance as yf
-        _df = yf.Ticker("^VIX").history(period="5d")
-        if _df is not None and not _df.empty:
-            return float(_df["Close"].dropna().iloc[-1])
+        from src.data.macro.macro_core import fetch_yf_close
+        _s = fetch_yf_close("^VIX", range_="6mo")
+        if _s is not None and len(_s):
+            import pandas as pd
+            _v = pd.Series(_s).dropna()
+            if len(_v):
+                return float(_v.iloc[-1])
     except Exception as _e:  # noqa: BLE001
         print(f"[dividend_station] VIX 抓取失敗: {type(_e).__name__}: {_e}")
     return None
-
-
-def _stock_ohlc_lower(px) -> "object | None":
-    """yfinance 大寫 OHLC → KD 需要的小寫 close/high/low DataFrame（DatetimeIndex,升序）。
-
-    缺任一欄回 None（§1 不補假欄）。純轉換,無 I/O。
-    """
-    import pandas as pd
-    cols: dict = {}
-    for _lc, _cands in (("close", ("Close", "close")),
-                        ("high", ("High", "high")),
-                        ("low", ("Low", "low"))):
-        _c = next((c for c in _cands if c in px.columns), None)
-        if _c is None:
-            return None
-        cols[_lc] = pd.to_numeric(px[_c], errors="coerce")
-    df = pd.DataFrame(cols).dropna()
-    if not len(df):
-        return None
-    if not isinstance(df.index, pd.DatetimeIndex):
-        df.index = pd.to_datetime(df.index)
-    return df.sort_index()
 
 
 def _fetch_stock_metrics(ticker: str) -> dict:
@@ -221,9 +234,6 @@ def _fetch_stock_metrics(ticker: str) -> dict:
     `analyze_financial_health` + `no_ai_overall_verdict`；KD 走日 OHLC → L2
     `analyze_kd_state` + `kd_cross_state`。⚠️ 需部署端網路（沙箱代理擋 TW/FinMind）。
     """
-    from src.compute.etf import normalize_etf_ticker
-
-    _yf = normalize_etf_ticker(ticker) or ticker
     code = str(ticker or "").strip().upper()
     for _suf in (".TWO", ".TW"):
         if code.endswith(_suf):
@@ -231,19 +241,19 @@ def _fetch_stock_metrics(ticker: str) -> dict:
             break
 
     m: dict = {"mj_grade": None, "mj_score_pct": None, "mj_headline": "",
-               "mj_fail_items": [], "kd_state": None, "current_price": None, "name": ""}
+               "mj_fail_items": [], "kd_state": None, "current_price": None, "name": "",
+               "trend_verdict": None}
 
-    # 1) 日 OHLC → KD（.TW 抓空試 .TWO;個股上櫃）
+    # 1) 日 OHLC → KD。B1(v19.198):改走 StockDataLoader.get_combined_data(個股專屬 4 源鏈
+    #    yfinance→FinMind→.TWO,與個股單/多檔頁同源),取代原 fetch_etf_price(ETF 抓價函式:
+    #    Yahoo 單源、無 FinMind fallback → 雲端 IP 被擋就整列 error)。回小寫 OHLC df,直接餵 KD。
     try:
-        from src.data.etf.etf_fetch import fetch_etf_price   # L3→L1 正常編排
-        _px = fetch_etf_price(_yf, period="1y")
-        if (_px is None or getattr(_px, "empty", True)) and _yf.endswith(".TW"):
-            _px2 = fetch_etf_price(_yf[:-3] + ".TWO", period="1y")
-            if _px2 is not None and not getattr(_px2, "empty", True):
-                _px = _px2
-        if _px is not None and not getattr(_px, "empty", True):
-            _ohlc = _stock_ohlc_lower(_px)
-            if _ohlc is not None:
+        from src.data.core.data_loader import StockDataLoader
+        _df_stk, _err_stk, _ = StockDataLoader().get_combined_data(code, 360, True)
+        if (_df_stk is not None and not getattr(_df_stk, "empty", True)
+                and {"close", "high", "low"}.issubset(_df_stk.columns)):
+            _ohlc = _df_stk[["close", "high", "low"]].dropna()
+            if len(_ohlc):
                 m["current_price"] = float(_ohlc["close"].iloc[-1])
                 from src.compute.strategy.tech_indicators import (
                     analyze_kd_state, kd_cross_state)
@@ -252,6 +262,8 @@ def _fetch_stock_metrics(ticker: str) -> dict:
                     _kd = dict(_kd)
                     _kd["cross"] = kd_cross_state(_ohlc)
                     m["kd_state"] = _kd
+        else:
+            print(f"[dividend_station] {ticker} 日線/KD 無資料: {_err_stk}")
     except Exception as _e:  # noqa: BLE001 — 日線/KD 失敗不致命,標資料不足
         print(f"[dividend_station] {ticker} 日線/KD 失敗: {type(_e).__name__}: {_e}")
 
@@ -275,6 +287,21 @@ def _fetch_stock_metrics(ticker: str) -> dict:
             m["mj_score_pct"] = _ov.get("score_pct")
             m["mj_headline"] = str(_ov.get("headline", ""))
             m["mj_fail_items"] = list(_ov.get("fail_items", []) or [])
+            # B3(v19.198):財報趨勢(盈轉虧/逐季惡化)。fetch_financial_statements 已回
+            #   prev_period_data(730天窗 bootstrap,v18.456)→ 對上一季跑同 no-AI 體檢 →
+            #   diff_fin_health 取 is_breakdown/is_turnaround → assess_stock 在 grade 掉到 C 前提前預警。
+            #   近零額外抓取(prev 已在手)。§1:趨勢算不出不擋汰弱主判。
+            try:
+                _prev_fd = _fin.get("prev_period_data")
+                if _prev_fd:
+                    from src.compute.health.fin_health_diff import diff_fin_health
+                    _prev_fh = analyze_financial_health("", code, _prev_fd)
+                    _tv = diff_fin_health(_prev_fh, _fh, code)
+                    m["trend_verdict"] = {"is_breakdown": bool(_tv.is_breakdown),
+                                          "is_turnaround": bool(_tv.is_turnaround),
+                                          "verdict": str(_tv.verdict)}
+            except Exception as _te:  # noqa: BLE001 — 趨勢算不出不擋汰弱主判
+                print(f"[dividend_station] {ticker} 財報趨勢失敗: {type(_te).__name__}")
         else:
             _err = _fin.get("error") if isinstance(_fin, dict) else "財報抓取失敗"
             print(f"[dividend_station] {ticker} 財報缺: {_err}")
@@ -353,8 +380,18 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
     m["total_return_1y_pct"] = ds.total_return_pct(_close_before(365), _cur)
     m["cum_return_3y_pct"] = ds.total_return_pct(_close_before(365 * 3), _cur)
     m["ann_return_3y_pct"] = ds.annualized_return_pct(_close_before(365 * 3), _cur, 3.0)
-    # 夏普（週報酬,rf=0 簡化）
-    m["sharpe"] = ds.sharpe_weekly(weekly)
+    # 夏普（週報酬）。B2(v19.198):對齊 ETF calc_sharpe 的 rf SSOT —— 注入即時 FEDFUNDS
+    #   (失敗維持 ETF_SHARPE_RF_FALLBACK_PCT),原寫死 rf=0 系統性偏寬鬆。個股走 _fetch_stock_metrics
+    #   不算夏普,本段僅 ETF。
+    try:
+        from src.compute.etf.etf_calc import get_risk_free_rate_pct
+        from src.services.etf_scoring_service import ensure_etf_rf_injected
+        ensure_etf_rf_injected()               # cached(FEDFUNDS @st.cache_data 1h)
+        _rf_ds = get_risk_free_rate_pct()
+    except Exception as _e_rf:  # noqa: BLE001 — 取 rf 失敗 → 退 rf=0(等同修前行為),不炸
+        print(f"[dividend_station] {ticker} rf 取得失敗,退 rf=0: {type(_e_rf).__name__}")
+        _rf_ds = 0.0
+    m["sharpe"] = ds.sharpe_weekly(weekly, rf_pct=_rf_ds)
 
     # 2) 年化配息率
     try:
@@ -367,18 +404,29 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
     except Exception as _e:  # noqa: BLE001 — 配息缺 → 健檢 A 標資料不足,不炸
         print(f"[dividend_station] {ticker} 配息缺: {type(_e).__name__}")
 
-    # 3) 折溢價（TWSE MIS iNAV;欄位 g 已是「折溢價率(%)」,同單位比 1.5%）—— 僅 ETF
+    # 3) 折溢價 —— 僅 ETF。A2(v19.198):改走 calc_premium_discount SSOT(官方 iNAV 同日
+    #    inner-join + 3 守門員 G1/G2/G3 + sanity 上限),與 ETF 單/多檔頁同源。原本直取
+    #    nav_history「折溢價」欄末值,末端 fallback 到 yfinance navPrice 會回「最後已公告淨值」
+    #    被硬戳今日 → 假溢價卻觸發健檢D 假🟡(§1 Fail-Loud 破口,即 v18.442 修的 0050 假+5.07%)。
+    #    stale_nav / premium_pct=None → **不填** m["premium_pct"] → 健檢D 標「無折溢價資料」不假判。
     if asset_kind == T.KIND_ETF:
         try:
-            from src.data.etf.etf_fetch import fetch_etf_nav_history
-            _nav = fetch_etf_nav_history(_yf)
-            if _nav is not None and len(_nav):
-                _pcol = next((c for c in _nav.columns if "折溢價" in str(c)), None)
-                if _pcol:
-                    m["premium_pct"] = float(
-                        pd.to_numeric(_nav[_pcol], errors="coerce").dropna().iloc[-1])
+            from src.compute.etf.etf_calc import calc_premium_discount
+            from src.data.etf.etf_fetch import fetch_etf_info
+            _pd_res = calc_premium_discount(fetch_etf_info(_yf) or {}, _px, _yf)
+            if isinstance(_pd_res, dict) and _pd_res.get("premium_pct") is not None:
+                m["premium_pct"] = float(_pd_res["premium_pct"])
         except Exception as _e:  # noqa: BLE001
             print(f"[dividend_station] {ticker} 折溢價缺: {type(_e).__name__}")
+
+    # B4(v19.198):ETF 品質評等（內扣費用率 / AUM 清算風險 / Beta / 殖利率 CV）—— display-only,
+    #   對「存股 ETF 定期健檢」補上長期內扣成本 + 清算存續維度（原本整組省略）。§1 抓不到 stars=None。
+    if asset_kind == T.KIND_ETF:
+        try:
+            from src.compute.etf.etf_quality import compute_etf_quality
+            m["etf_quality"] = compute_etf_quality(_yf)
+        except Exception as _e:  # noqa: BLE001 — 品質評等缺不擋健檢主判
+            print(f"[dividend_station] {ticker} ETF 品質評等缺: {type(_e).__name__}")
 
     # 同儕排名（3-3-3 ③）：僅 ETF 接 compute_etf_peer_ranking（個股 3-3-3 不適用 → None）。
     #   §1 best-effort：同儕不足 / 抓取失敗 → None → 該項顯示「❔ 待資料」不硬判。
