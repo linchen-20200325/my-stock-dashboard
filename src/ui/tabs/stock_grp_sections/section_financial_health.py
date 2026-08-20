@@ -63,7 +63,19 @@ def render_financial_health_section(
                         _fd3['b_item_5y'] = fetch_5_years_cash_flow(sid, finmind_token)
                     except Exception:
                         pass
-                return sid, analyze_financial_health("", sid, _fd3)
+                _res3 = analyze_financial_health("", sid, _fd3)
+                # 🧭 統一裁決用:此處 fin_data(_fd3) + fh_result(_res3) 皆在手,順帶算
+                # A+…F grade 附到結果 dict(供摘要表「統一裁決」欄的基本面軸)。
+                # 抓不到 → 不附 → 下游技術主軸仍可評(§1 不腦補)。
+                try:
+                    from src.services import no_ai_overall_verdict
+                    if isinstance(_res3, dict):
+                        _res3['_overall_grade'] = no_ai_overall_verdict(
+                            fin_data=_fd3, fh_result=_res3).get('grade')
+                except Exception as _ov3e:
+                    print(f'[section_financial_health overall] {sid} '
+                          f'{type(_ov3e).__name__}: {_ov3e}')
+                return sid, _res3
             _done3 = 0
             with ThreadPoolExecutor(max_workers=3) as _ex3:
                 _fts3 = {_ex3.submit(_fh3_fn, s): s for s in stock_list}
@@ -79,7 +91,16 @@ def render_financial_health_section(
     _fh_t3_cached = st.session_state.get('_fh_t3_results', {})
 
     if _fh_t3_cached:
-        _render_summary_table(_fh_t3_cached)
+        # 🧭 統一裁決欄用:每股技術健康分(results_t3「健康度」)→ 與財報 grade 跨軸融合。
+        _health_map: dict[str, float] = {}
+        for _r_hm in (results_t3 or []):
+            if not isinstance(_r_hm, dict):
+                continue
+            _sid_hm = _r_hm.get('stock_id', _r_hm.get('代碼', ''))
+            _h_hm = _r_hm.get('健康度')
+            if _sid_hm and isinstance(_h_hm, (int, float)) and not isinstance(_h_hm, bool):
+                _health_map[_sid_hm] = float(_h_hm)
+        _render_summary_table(_fh_t3_cached, _health_map)
         _render_operating_compare(_fh_t3_cached)
         _render_profitability_compare(_fh_t3_cached)
         _render_per_stock_detail(_fh_t3_cached)
@@ -87,12 +108,18 @@ def render_financial_health_section(
     return _fh_t3_cached
 
 
-def _render_summary_table(fh_cached: dict) -> None:
-    """📊 體檢摘要比較表(現金水位 / OCF / 負債比 / DNA / 雷達均分 / 紅旗)。"""
+def _render_summary_table(fh_cached: dict, health_map: dict | None = None) -> None:
+    """📊 體檢摘要比較表(現金水位 / OCF / 負債比 / DNA / 雷達均分 / 紅旗 / 🧭統一裁決)。"""
+    # 🧭 統一裁決引擎 v19.201:多檔頁補技術×財報跨軸統一三態(交易視角 → 技術主軸,
+    # 基本面 grade 做背離加註)。原多檔頁只有「平均健康度」= 純技術;此欄補上跨軸。
+    from shared.unified_verdict_thresholds import PROFILE_TRADING
+    from src.compute.scoring import assess_unified
+    _health_map = health_map or {}
     st.markdown('##### 📊 體檢摘要比較表')
     # v19.174 去識別化:標題改用策略代號,不再掛人名／稱謂
     st.caption('🔰 欄位白話(策略2):現金水位＝現金佔總資產(>25%佳);OCF＝營業現金流(須為正,否則「黑字破產」);'
-               '負債比＝欠錢比例(<60%穩);企業DNA＝商業模式類型;雷達均分＝五力體質平均(越高越好)。')
+               '負債比＝欠錢比例(<60%穩);企業DNA＝商業模式類型;雷達均分＝五力體質平均(越高越好);'
+               '🧭統一裁決＝技術健康分×財報grade 跨軸三態(技術主軸;⚠️背離＝兩軸對立)。')
     _fh_rows = []
     for _sid_f, _fd_f in fh_cached.items():
         _scores_f = _fd_f.get('radar_scores', {})
@@ -103,8 +130,16 @@ def _render_summary_table(fh_cached: dict) -> None:
         # NaN(非 None):下方 sort_values('雷達均分') 才不會拿 None 跟 float 比而炸
         _avg_f = (float('nan') if _err_f or not _scores_f
                   else round(sum(_scores_f.values()) / len(_scores_f), 1))
+        # 🧭 統一裁決:技術主軸(健康分)+ 基本面次軸(財報 grade);抓不到的軸 → 該軸缺,
+        # 主軸(技術)缺才 ⚪。背離時附 ⚠️(表格用精簡標籤,非完整徽章)。
+        _uv_f = assess_unified(
+            profile=PROFILE_TRADING,
+            technical_health=_health_map.get(_sid_f),
+            fundamental_grade=(None if _err_f else _fd_f.get('_overall_grade')),
+        )
         _fh_rows.append({
             '代碼':     _sid_f,
+            '🧭統一裁決': _uv_f.label + (' ⚠️背離' if _uv_f.divergence else ''),
             '現金水位':  _fd_f.get('cash_ratio_status', '?') + ' ' + _fd_f.get('cash_ratio_value', ''),
             'OCF':      _fd_f.get('ocf_status', '?') + ' ' + _fd_f.get('ocf_value', ''),
             '負債比':   _fd_f.get('debt_ratio_status', '?') + ' ' + _fd_f.get('debt_ratio_value', ''),
@@ -119,6 +154,7 @@ def _render_summary_table(fh_cached: dict) -> None:
         _df_fh, use_container_width=True, hide_index=True,
         column_config={
             '代碼':     st.column_config.TextColumn('代碼',   width='small'),
+            '🧭統一裁決': st.column_config.TextColumn('🧭統一裁決', width='medium'),
             '現金水位': st.column_config.TextColumn('現金水位'),
             'OCF':      st.column_config.TextColumn('OCF'),
             '負債比':   st.column_config.TextColumn('負債比'),
