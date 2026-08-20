@@ -59,6 +59,9 @@ from src.data.stock.app_stock_fetchers import (
     fetch_dividend_data,
     fetch_financials,
 )
+# C2(v19.197):多檔補股本分母 → 重用單檔龍頭 gate,修「合約負債有值就當高」假陽性。
+from src.data.stock.share_capital_fetcher import fetch_share_capital
+from src.ui.tabs.stock_sections.section_financial_leading import evaluate_leading_gates
 from src.services import analyze_20d_chips_from_df
 from src.ui.tabs.tab_helpers import (
     classify_stock_status_lamp,
@@ -114,8 +117,9 @@ def run_batch_fetch(stock_list: list[str]) -> None:
             name4 = (_name4 if _name4 and _name4 != sid4 else None) or get_stock_name(sid4) or sid4
             avg_div4, _, _ = fetch_dividend_data(sid4)
             cl4, cx4, _capex4, _cl_src4, _cx_src4, _, _fin_errs4 = fetch_financials(sid4, industry='')
+            _cap4 = fetch_share_capital(sid4)   # C2:股本分母(龍頭 gate 用);失敗回 0
             result4 = {'sid': sid4, 'df': df4, 'name': name4,
-                       'avg_div': avg_div4, 'cl': cl4, 'cx': cx4}
+                       'avg_div': avg_div4, 'cl': cl4, 'cx': cx4, 'capital': _cap4}
             if df4 is None or df4.empty:
                 result4['error'] = _err4 or '無 K 線資料(yfinance + FinMind 雙源皆空)'
             else:
@@ -147,6 +151,10 @@ def run_batch_fetch(stock_list: list[str]) -> None:
             avg_div4= _d4.get('avg_div', 0)
             cl4     = _d4.get('cl')
             cx4     = _d4.get('cx')
+            capital4 = _d4.get('capital')
+            # C2(v19.197):合約負債/資本支出「佔股本比」龍頭 gate(重用單檔 SSOT 純函式)。
+            # 缺股本(舊快取無 capital / 抓取失敗)→ ratio_known=False、*_lead=False(未評估,不假綠)。
+            _gates4 = evaluate_leading_gates(cl4, cx4, capital4)
 
             price4  = float(df4['close'].iloc[-1]) if df4 is not None and not df4.empty else 0
             ma20_4  = float(df4['MA20'].iloc[-1])  if df4 is not None and 'MA20'  in df4.columns else None
@@ -243,15 +251,22 @@ def run_batch_fetch(stock_list: list[str]) -> None:
                 'KD':   f'K{k4}/D{d4}' if k4 else '-',
                 '趨勢': trend4, '357評價': val4,
                 'VCP':  '✅收縮' if vcp_ok4 else '⚪',
-                '合約負債': f'{cl4/1e8:.1f}億' if cl4 and cl4 > 0 else '-',
+                # C2:raw 億值 + 佔股本比龍頭 badge(達門檻才亮,取代「有值就當高」)。
+                '合約負債': ((f'{cl4/1e8:.1f}億'
+                             + (f' 🔴龍頭({_gates4["cl_pct"]:.0f}%股本)'
+                                if _gates4['cl_lead'] and _gates4['cl_pct'] is not None else ''))
+                            if cl4 and cl4 > 0 else '-'),
                 '_health': health4, '_val': val4, '_trend': trend4,
                 'foreign_buy': _fb4,
                 '_ex_tech': _ex_tech4, '_ex_chip_sig': _ex_chip_sig4,
                 '_price_date': (str(df4['date'].iloc[-1])[:10]
                                 if df4 is not None and not df4.empty
                                 and 'date' in df4.columns else None),
-                '_cl_ok':      bool(cl4 and cl4 > 0),
+                '_cl_ok':      bool(cl4 and cl4 > 0),   # has-value(health_inspector probe 用,勿改語意)
                 '_cx_ok':      bool(cx4 and cx4 > 0),
+                # C2:佔股本比龍頭 gate 真判定(cl_lead/cx_lead)+ 比例,供下游/測試釘住
+                '_cl_lead':    _gates4['cl_lead'], '_cx_lead': _gates4['cx_lead'],
+                '_cl_pct':     _gates4['cl_pct'],  '_cx_pct':  _gates4['cx_pct'],
                 '_has_div':    bool(avg_div4 and avg_div4 > 0),
                 '_fetch_err':  _d4.get('error'),
                 '_pattern':    _pattern4,  # v19.164:型態批次摘要(供總表型態欄 + 下鑽 seed)

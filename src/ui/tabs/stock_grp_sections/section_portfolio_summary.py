@@ -49,7 +49,6 @@ from src.data.stock.app_stock_fetchers import (
 )
 from src.services.allocation_service import get_macro_regime
 from src.services.stock_grp_service import (
-    get_bps as fetch_bps,
     get_industry_category as fetch_industry_category,
 )
 from src.ui.render import (  # v19.174 去識別化：改吃策略代號常數 + 新函式名
@@ -252,9 +251,11 @@ def _precompute_fund_map(results_t3: list[dict]) -> dict[str, dict]:
         try:
             _price_num3 = float(str(_r3.get('現價', '0')).replace(',', ''))
             if _price_num3 > 0:
-                _bps_v3 = fetch_bps(_sid3)
-                if _bps_v3 > 0:
-                    _pb_raw3 = _price_num3 / _bps_v3
+                # C4(v19.197):P/B 改走 SSOT get_pb_ratio(TWSE 官方 PBratio T1 → FinMind BS T2),
+                # 與單檔頁同源;原本只用 FinMind fetch_bps(T2)→ 同股跨頁 P/B 帶可能不一致(§2.1)。
+                from src.data.stock.yield_pe_fetcher import get_pb_ratio
+                _pb_raw3 = get_pb_ratio(_sid3, _price_num3).get('pb')
+                if _pb_raw3 and _pb_raw3 > 0:
                     _ind3 = fetch_industry_category(_sid3)
                     _bands3 = get_pb_bands(_ind3)
                     _pb_eval3 = f'{_pb_raw3:.2f} {classify_pb_level(_pb_raw3, _bands3)}'
