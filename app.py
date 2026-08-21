@@ -140,11 +140,11 @@ if '_app_boot_done' not in st.session_state:
         # 已手動選過則不覆寫(當次選擇優先)。
         _qp_sheet = _qp.get('sheet')
         if _qp_sheet and isinstance(_qp_sheet, str) and _qp_sheet.strip():
-            from src.data.portfolio.gsheet_portfolio import (
-                PORTFOLIO_SHEET_KEY as _PSK, STOCK_PORTFOLIO_SHEET_KEY as _SPSK,
-            )
-            st.session_state.setdefault(_PSK, _qp_sheet.strip())
-            st.session_state.setdefault(_SPSK, _qp_sheet.strip())
+            # §8.2 R4:app.py(L6)不得 import L1 gsheet_portfolio 取常數 → 用其 session key
+            # 字面值(與本檔側欄既有 'portfolio_sheet_id' / 'stock_portfolio_sheet_id' 一致;
+            # gsheet_portfolio 的 PORTFOLIO_SHEET_KEY/STOCK_PORTFOLIO_SHEET_KEY 即這兩個值)。
+            st.session_state.setdefault('portfolio_sheet_id', _qp_sheet.strip())
+            st.session_state.setdefault('stock_portfolio_sheet_id', _qp_sheet.strip())
     except Exception as _qpe:
         print(f'[query_params restore] {_qpe}')
 

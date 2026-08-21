@@ -69,6 +69,8 @@ def test_drive_picker_auto_selects_single_sheet():
 def test_app_boot_restores_sheet_id_to_both_channels():
     src = (_REPO / 'app.py').read_text(encoding='utf-8')
     assert "_qp.get('sheet')" in src, 'app.py 開機應還原 ?sheet='
-    assert 'PORTFOLIO_SHEET_KEY' in src and 'STOCK_PORTFOLIO_SHEET_KEY' in src, \
+    # §8.2 R4:app.py(L6)不得 import L1 gsheet_portfolio 取常數 → 用其 session key 字面值。
+    # PORTFOLIO_SHEET_KEY/STOCK_PORTFOLIO_SHEET_KEY 的值即這兩個字串,還原到 ETF+個股兩通道。
+    assert 'portfolio_sheet_id' in src and 'stock_portfolio_sheet_id' in src, \
         '應還原到 ETF+個股兩通道'
     assert 'setdefault' in src, '應以 setdefault 還原(本 session 已選則不覆寫)'
