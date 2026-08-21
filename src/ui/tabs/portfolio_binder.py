@@ -42,14 +42,15 @@ def apply_active_sheet(_gsp, sid: str) -> None:
         pass
 
 
-def render_login_cta(*, key_suffix: str = '') -> bool:
+def render_login_cta(*, key_suffix: str = '', sheet_id: str = '') -> bool:
     """未登入時的**就地** Google 登入按鈕。回傳 True=已顯示登入鈕,False=OAuth 未設定（降級提示）。
 
     §8.2 EX-PASSTHRU-1：lazy import L1 oauth_state / infra.oauth 只為組授權 URL（同 app.py 側欄）。
-    P2 會在此把目前 sheet id 夾帶進 state,讓新登入後自動回綁;本 P1 先用純 nonce（login_state）。
+    P2(v19.206)：把當前 sheet_id 夾帶進 state（`login_state_with_sheet`）→ 新登入轉跳回來自動回綁,
+    不必再繞 📁 組合管理。sheet_id 由 caller 注入（戰情室空狀態傳 `_gsp._get_active_sheet_id()`）。
     """
     try:
-        from src.data.portfolio.oauth_state import get_oauth_cfg, get_login_state
+        from src.data.portfolio.oauth_state import get_oauth_cfg, login_state_with_sheet
         from infra.oauth import build_authorize_url
         _cfg = get_oauth_cfg()
     except Exception:  # noqa: BLE001 — oauth 模組/設定缺 → 降級,不炸
@@ -57,7 +58,8 @@ def render_login_cta(*, key_suffix: str = '') -> bool:
     if not _cfg:
         st.caption('⚙️ 尚未設定 Google 登入（OAuth）。可用左側「🔐 Google 帳號」貼 Sheet 網址／ID。')
         return False
-    _url = build_authorize_url(_cfg['client_id'], _cfg['redirect_uri'], state=get_login_state())
+    _url = build_authorize_url(_cfg['client_id'], _cfg['redirect_uri'],
+                               state=login_state_with_sheet(sheet_id))
     # 註:st.link_button 非 stateful widget,無 key 參數(同 app.py 側欄登入鈕);多顆同時
     # 存在也不撞(不像 button/text_input 需唯一 key)。key_suffix 保留供 P2/P3a 語意擴充。
     st.link_button('🔐 用 Google 登入', _url, use_container_width=True)
@@ -150,7 +152,8 @@ def render_holdings_binder(_gsp, *, key_prefix: str) -> None:
         st.markdown('##### 🔗 綁定一次,之後這頁自動載入')
         st.caption('綁定 Google Sheet 後,戰情室會自動抓你的持股做健檢 / 235 加碼 / AI 總結,'
                    '不必每次再來設定。')
-        render_login_cta(key_suffix=key_prefix)
+        # P2:把當前(若曾綁過)的 Sheet ID 夾帶進登入 state → 新登入回來自動回綁。
+        render_login_cta(key_suffix=key_prefix, sheet_id=_gsp._get_active_sheet_id())
         st.caption('想先看不用綁表也能用的? → 🔬 個股 / 📊 多檔比較：直接打代碼就能分析。')
         return
     st.markdown('##### 🔗 選一份持股表就開工')

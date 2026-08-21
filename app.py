@@ -275,7 +275,7 @@ with st.sidebar:
     try:
         from src.data.portfolio.oauth_state import (
             get_oauth_cfg as _sb_get_cfg,
-            get_login_state as _sb_login_state,
+            login_state_with_sheet as _sb_login_state_with_sheet,
             _gsa_secret as _sb_gsa,
             _sheet_id_secret as _sb_sid,
         )
@@ -319,8 +319,11 @@ with st.sidebar:
             else:
                 st.caption('💡 未設定 — 貼上 URL/ID（或在「📁 組合管理」頁設定）')
         elif _sb_buildurl and _sb_cfg:
+            # P2(v19.206):把目前(若曾綁過 / 由書籤 ?sheet= 還原的)Sheet ID 夾帶進登入 state
+            # → Google 轉跳回來自動回綁,不必再繞 📁 組合管理。Sheet ID 非憑證(§ P2 安全前提)。
+            _sb_cur_sid = str(st.session_state.get('portfolio_sheet_id', '') or '')
             _sb_url = _sb_buildurl(_sb_cfg['client_id'], _sb_cfg['redirect_uri'],
-                                   state=_sb_login_state())
+                                   state=_sb_login_state_with_sheet(_sb_cur_sid))
             st.link_button('🔐 用 Google 登入', _sb_url, use_container_width=True)
             st.caption('登入後可在「📁 組合管理」頁雲端存取')
     elif _sb_gsa and _sb_sid:
