@@ -150,6 +150,21 @@ def test_render_never_crashes_page(monkeypatch):
     assert not any(c[0] == 'popover' for c in fst.calls)   # 失敗 → 不畫
 
 
+def test_render_body_throw_does_not_crash_page(monkeypatch):
+    """§1:狀態列跑在每頁最頂 → 連 popover **內容** render 丟例外也不能炸整頁
+    (try/except 要包住 _render_bar_body,不只包讀狀態)。"""
+    fst, _binder = _wire_bar(monkeypatch, svc.BindingState(False, '', None, svc.STATUS_UNBOUND))
+    # binder 在 popover 內丟例外(模擬 render 期間任何失敗)
+    import src.ui.tabs.portfolio_binder as pb
+
+    def _boom(*_a, **_k):
+        raise RuntimeError('binder blew up mid-render')
+    monkeypatch.setattr(pb, 'render_holdings_binder', _boom)
+
+    bar.render_portfolio_status_bar()          # 不應 raise(否則整頁死)
+    assert any(c[0] == 'popover' for c in fst.calls)   # popover 有開,但內部例外被吞
+
+
 # ── app.py 掛載守衛:狀態列在總經指南針之前 ──────────────────────────────
 def test_app_mounts_status_bar_before_compass():
     src = (_REPO / 'app.py').read_text(encoding='utf-8')

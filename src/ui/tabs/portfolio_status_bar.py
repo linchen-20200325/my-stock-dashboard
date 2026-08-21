@@ -27,25 +27,28 @@ _BAR_KEY = "_pfbar_"
 
 
 def render_portfolio_status_bar() -> None:
-    """標題下、總經指南針之上,渲染一條常駐「🔗 我的組合」狀態列。"""
+    """標題下、總經指南針之上,渲染一條常駐「🔗 我的組合」狀態列。
+
+    §1:狀態列跑在**每頁最頂**(module-level,早於各 tab)。任何環節丟例外都會炸掉整頁 →
+    **整個 render 包 try/except**(不只讀狀態,連 popover 內容 _render_bar_body 也要包),
+    失敗誠實 log + 不畫,絕不擋整頁。
+    """
     try:
         from src.services.portfolio_binding_service import get_binding_state
         _bs = get_binding_state()
-    except Exception as _e:  # noqa: BLE001 — 全域 chrome,讀取失敗誠實 log + 不畫,不擋整頁(§1)
-        print(f"[portfolio status bar] {type(_e).__name__}: {_e}")
-        return
-
-    _label, _help = _label_for(_bs)
-    # 用 popover(浮層,不推擠內容)。requirements 已 pin streamlit>=1.36(popover 自 1.31 起),
-    # 故 popover 必在;hasattr 僅為極舊環境的防禦性退路。⚠️ popover 內可放 expander,但
-    # **expander 內不可再放 expander** —— render_holdings_binder 自帶「貼網址」expander,
-    # 故本檔外層一律用 popover、且**不得**自行再包 expander(否則與 binder 內的 expander 撞)。
-    if hasattr(st, "popover"):
-        with st.popover(_label, help=_help, use_container_width=False):
+        _label, _help = _label_for(_bs)
+        # 用 popover(浮層,不推擠內容)。requirements 已 pin streamlit>=1.36(popover 自 1.31 起),
+        # 故 popover 必在;hasattr 僅為極舊環境的防禦性退路。⚠️ popover 內可放 expander,但
+        # **expander 內不可再放 expander** —— render_holdings_binder 自帶「貼網址」expander,
+        # 故本檔外層一律用 popover、且**不得**自行再包 expander(否則與 binder 內的 expander 撞)。
+        if hasattr(st, "popover"):
+            with st.popover(_label, help=_help, use_container_width=False):
+                _render_bar_body(_bs)
+        else:  # 極舊 streamlit(理論上被版本 floor 擋掉):inline 展開,避免 expander 巢狀
+            st.caption(_label)
             _render_bar_body(_bs)
-    else:  # 極舊 streamlit(理論上被版本 floor 擋掉):inline 展開,避免 expander 巢狀
-        st.caption(_label)
-        _render_bar_body(_bs)
+    except Exception as _e:  # noqa: BLE001 — 全域 chrome,任何環節失敗誠實 log + 不擋整頁(§1)
+        print(f"[portfolio status bar] {type(_e).__name__}: {_e}")
 
 
 def _label_for(_bs) -> "tuple[str, str]":
