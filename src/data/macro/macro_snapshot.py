@@ -703,6 +703,27 @@ def fetch_ndc_block() -> dict:
     except Exception as _e_tbi:
         print(f'[NDC/FinMind-TBI] ❌ {type(_e_tbi).__name__}: {_e_tbi}')
 
+    # 方案 0.5(v19.203 稽核修): 官方 data.gov.tw 6099「景氣指標及燈號」ZIP(keyless,
+    # 走 NAS proxy 可達 TW,含官方 monitoring_color 燈號字串)。
+    # 原 fetch_ndc_block 從 TBI(疑付費 tier/被 egress 擋)直接跳到 StockFeel 的**凍結
+    # 靜態文章**(實測停在舊月號)→ 面板永遠落後;而姊妹 fetch_ndc_signal_history 早就
+    # 在用這個官方 ZIP 源。此處補齊該官方 fallback(§2.1 官方優先於第三方 HTML 抓)。
+    try:
+        from src.data.macro.tw_macro import _dgtw_ndc_signal_from_zip as _f_zip_ndc
+        _z_ndc = _f_zip_ndc(label='ndc_signal')
+        if _z_ndc is not None and not _z_ndc.empty:
+            _row_z = _z_ndc.iloc[-1]                      # 官方 ZIP 升序 → 末列為最新
+            _sc_z = int(round(float(_row_z['value'])))
+            if 9 <= _sc_z <= 45:
+                _d_z = str(_row_z['date'])[:10]
+                _col_z = (str(_row_z.get('color') or '').strip() or None)
+                print(f'[NDC/dgtw-6099-ZIP] ✅ score={_sc_z} date={_d_z} color={_col_z}')
+                return {'ndc_signal': {'score': _sc_z, 'signal': _col_z, 'date': _d_z,
+                                       'source': 'data.gov.tw:6099(景氣指標及燈號)'}}
+            print(f'[NDC/dgtw-6099-ZIP] ⚠️ 分數 {_sc_z} 超出 [9,45] sanity,跳過')
+    except Exception as _e_zip_ndc:
+        print(f'[NDC/dgtw-6099-ZIP] ❌ {type(_e_zip_ndc).__name__}: {_e_zip_ndc}')
+
     # 方案 A: StockFeel 股感(每月更新文章,HTML 含「綜合分數 39」)
     try:
         _sf_url = ('https://www.stockfeel.com.tw/'

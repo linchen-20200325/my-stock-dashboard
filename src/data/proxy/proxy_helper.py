@@ -234,6 +234,17 @@ def fetch_url(url: str, headers: dict = None,
                 print(f'[Proxy] 已透過 Synology NAS 成功抓取: {_path}')
                 _url_cache_put(_cache_key, _r.content)   # v19.83:統一入口(上限+過期清理)
                 return _r
+            # v19.203 稽核修(§1 Fail Loud):402/429/5xx 等未明列狀態原本被**靜默丟棄**,
+            # caller 只看到 None → 記成誤導的「無回應」,掩蓋權限/配額(如 FinMind 402
+            # backer-tier)、資源不存在(404)、伺服器錯誤(5xx)的真因。此處明確 log 狀態碼
+            # + body 前段(§1 不掩蓋)。**控制流不變** —— 仍走既有重試/直連/NAS 中繼 fallback。
+            _bh = ''
+            try:
+                _bh = (_r.text or '')[:140].replace('\n', ' ').strip()
+            except Exception:  # noqa: BLE001 — 讀 body 失敗不該擋 log 主線
+                pass
+            print(f'[proxy] ⚠️ HTTP {_r.status_code}（非 200/403/407 → 視為失敗）'
+                  f' {url[:70]} · body「{_bh}」')
         except requests.exceptions.ProxyError as _e:
             _perr += 1
             print(f'[proxy] ProxyError attempt {_attempt + 1}: {_e}')
