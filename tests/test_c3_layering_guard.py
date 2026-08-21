@@ -484,6 +484,11 @@ for _f, _m in (
     # 📁 組合管理統一頁:lazy import L1 gsheet_portfolio(存/讀 Sheet,同 tab_stock_grp 範式;
     # L1 內已 @st.cache/OAuth 集中緩存,加 L3 wrapper 只是 pure pass-through)。
     ("src/ui/tabs/portfolio_manager.py", "src.data.portfolio"),
+    # P1(v19.205 順暢化):共用「綁定持股 Sheet」元件(SSOT)。挑選器主體自 portfolio_manager
+    # 抽出,供 📁 組合管理 + 💼 戰情室空狀態共用。gsheet_portfolio 由 caller 以 `_gsp` 參數注入
+    # (故本檔不直呼),只有登入 CTA 直 import oauth_state 組授權 URL(同 app.py 側欄範式,
+    # line 473 已同 EX-ID 登記)= pure pass-through,L1 內 OAuth session lifecycle 集中管理。
+    ("src/ui/tabs/portfolio_binder.py", "src.data.portfolio.oauth_state"),
     ("src/ui/tabs/stock_grp_sections/section_batch_fetcher.py", "src.data.core"),
     ("src/ui/tabs/stock_grp_sections/section_batch_fetcher.py", "src.data.stock.app_stock_fetchers"),
     # C2(v19.197):多檔批次補抓股本(龍頭 gate 分母);同 tab_stock 既有 share_capital_fetcher

@@ -125,9 +125,10 @@ def render_portfolio_manager() -> None:
 def _render_drive_picker(_gsp) -> None:
     """🚀 從 Google Drive 列出 / 新建 Sheet,一鍵設為投組資料庫（ETF + 個股共用）。
 
-    §8.2.A EX-PASSTHRU-1:L5 直呼 L1 gsheet_portfolio 的 Drive 函式(list_user_folders /
-    list_user_sheets / create_new_sheet)。§1:未登入 / 讀取失敗 → 誠實提示,不靜默。
-    設定同時寫 ETF(PORTFOLIO_SHEET_KEY)與個股(STOCK_PORTFOLIO_SHEET_KEY)兩通道。
+    v19.205 P1：挑選器主體已抽至 `portfolio_binder.render_drive_picker`（SSOT,與 💼 戰情室
+    空狀態共用,消滅「先繞組合管理才能綁 Sheet」的順序痛點）。本頁只保留標題 + 登入前提示
+    + 目前綁定現況,主體委派共用元件（widget key 仍用 `_mgmt_drive_` 前綴,行為不變）。
+    §8.2.A EX-PASSTHRU-1:L5 直呼 L1 gsheet_portfolio。§1:未登入 / 讀取失敗 → 誠實提示。
     """
     st.markdown("#### 🚀 從 Drive 挑一本 Sheet（設為投組資料庫）")
     if not _gsp._has_oauth_tokens():
@@ -141,68 +142,19 @@ def _render_drive_picker(_gsp) -> None:
         st.caption(f"目前投組資料庫 — ETF：`{_cur_etf or '未設'}`　個股：`{_cur_stk or '未設'}`"
                    + ("　（同一本 ✅）" if _same else "　（兩本不同）" if (_cur_etf and _cur_stk) else ""))
 
-    # 限定資料夾(可選)
-    _fmap = {"整個帳號（不限資料夾）": ""}
-    try:
-        for _f in _gsp.list_user_folders():
-            _fmap[_f["name"]] = _f["id"]
-    except Exception as _e:                       # §1 誠實:資料夾讀不到就只列全部
-        st.caption(f"（資料夾列表讀取失敗：{type(_e).__name__}，可直接列全部）")
-    _fsel = st.selectbox("限定資料夾（可選）", list(_fmap.keys()), key="_mgmt_drive_folder")
-
-    _lc, _nc = st.columns([3, 2])
-    if _lc.button("📂 從 Drive 列出 Sheets", key="_mgmt_drive_list", use_container_width=True):
-        try:
-            st.session_state["_mgmt_drive_sheets"] = _gsp.list_user_sheets(_fmap.get(_fsel, ""))
-        except Exception as _e:                   # §1 列檔失敗誠實報,不捏造清單
-            st.error(f"列出 Sheets 失敗：{type(_e).__name__}")
-            st.session_state.pop("_mgmt_drive_sheets", None)
-    if _nc.button("🆕 建立新投組 Sheet", key="_mgmt_drive_new", use_container_width=True):
-        try:
-            _sid, _url = _gsp.create_new_sheet()
-            _apply_active_sheet(_gsp, _sid)
-            st.success(f"已建立新 Sheet 並設為投組資料庫（ETF + 個股共用）。")
-            st.rerun()
-        except Exception as _e:
-            st.error(f"建立新 Sheet 失敗：{_e}")
-
-    _sheets = st.session_state.get("_mgmt_drive_sheets")
-    if _sheets is None:
-        return
-    if not _sheets:
-        st.info("此範圍找不到 Sheets。可按「🆕 建立新投組 Sheet」，或用「⚙️ 進階」手動貼網址。")
-        return
-
-    # C(v19.204 順暢化):清單只有 1 本且尚未設定 → 自動選用,省一次點擊(首次設定更順;
-    # 之後由 A 的 ?sheet= 持久化,回訪不必再進本頁)。已設定則不動(尊重使用者當前選擇)。
-    if len(_sheets) == 1 and not _gsp._get_active_sheet_id():
-        _apply_active_sheet(_gsp, _sheets[0]["id"])
-        st.success(f"清單只有 1 本,已自動設為投組資料庫「{_sheets[0]['name']}」。")
-        st.rerun()
-
-    _smap = {f'{s["name"]}（{s["id"][:12]}…）': s["id"] for s in _sheets}
-    _pick = st.selectbox(f"清單共 {len(_sheets)} 本 — 選一本", list(_smap.keys()),
-                         key="_mgmt_drive_pick")
-    if st.button("✅ 使用此 Sheet 作為投組資料庫（ETF + 個股共用）", key="_mgmt_drive_use",
-                 type="primary", use_container_width=True):
-        _sid = _smap.get(_pick, "")
-        if _sid:
-            _apply_active_sheet(_gsp, _sid)
-            st.success(f"已設定投組資料庫為「{_pick}」（ETF + 個股共用此本）。")
-            st.rerun()
+    from src.ui.tabs.portfolio_binder import render_drive_picker as _shared_drive_picker
+    _shared_drive_picker(_gsp, key_prefix="_mgmt_drive_")
 
 
 def _apply_active_sheet(_gsp, sid: str) -> None:
-    """把選定的 sheet_id 同時套到 ETF 與個股兩通道（共用一本）。"""
-    st.session_state[_gsp.PORTFOLIO_SHEET_KEY] = sid
-    st.session_state[_gsp.STOCK_PORTFOLIO_SHEET_KEY] = sid
-    # A(v19.204 順暢化):同步寫入 URL query param → 重整/斷線重連/直接開任一頁(戰情室/選股)
-    # 自動還原 Sheet 源(app.py 開機 gate 讀 ?sheet=),不必再回本頁重挑。Sheet ID 非憑證,
-    # 存取仍需 OAuth + Sheet ACL;僅是「上次用哪本」的設定持久化(同 sid 個股代號既有做法)。
-    try:
-        st.query_params['sheet'] = sid
-    except Exception:  # noqa: BLE001 — query param 寫入失敗不該擋設定主線
-        pass
+    """把選定的 sheet_id 同時套到 ETF 與個股兩通道 + 寫 ?sheet=（委派 SSOT 寫入契約）。
+
+    v19.205 P1：兩通道 + query param 的寫入已集中於 `portfolio_binder.apply_active_sheet`
+    （原散 3 份:本檔 / 側欄 / app.py 開機 gate）。本函式保留為 backward-compat 薄殼,
+    既有 caller 介面不變。
+    """
+    from src.ui.tabs.portfolio_binder import apply_active_sheet
+    apply_active_sheet(_gsp, sid)
 
 
 def _render_etf_section(_gsp, pd) -> None:
