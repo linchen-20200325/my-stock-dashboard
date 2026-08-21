@@ -448,6 +448,14 @@ st.markdown(
 _core_summary_slot = st.empty()
 
 # ══════════════════════════════════════════════════════
+# 🔗 我的組合 — 全域綁定狀態列(P3a v19.207 順暢化):把「選 Sheet」從必經分頁
+# (📁 組合管理)提升為標題下常駐的全域狀態,點開就地綁定,去「先繞組合管理」心智模型。
+# 分頁結構不動。L6 掛 L5 render(向下,合規)。
+# ══════════════════════════════════════════════════════
+from src.ui.tabs.portfolio_status_bar import render_portfolio_status_bar  # noqa: E402
+render_portfolio_status_bar()
+
+# ══════════════════════════════════════════════════════
 # 🧭 總經指南針 — render_macro_compass 已抽至 src/ui/render/app_render.py
 # (v18.404 U5 B3-γ);_render_compass_card 同步搬走(internal helper)
 # ══════════════════════════════════════════════════════
