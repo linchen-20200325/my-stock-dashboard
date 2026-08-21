@@ -489,6 +489,10 @@ for _f, _m in (
     # (故本檔不直呼),只有登入 CTA 直 import oauth_state 組授權 URL(同 app.py 側欄範式,
     # line 473 已同 EX-ID 登記)= pure pass-through,L1 內 OAuth session lifecycle 集中管理。
     ("src/ui/tabs/portfolio_binder.py", "src.data.portfolio.oauth_state"),
+    # P3a(v19.207 順暢化):全域「🔗 我的組合」狀態列。狀態由 L3 portfolio_binding_service 讀,
+    # 本檔直呼 L1 gsheet_portfolio 僅為把 `_gsp` 注入共用 binder(同 💼 戰情室 line 536 範式)
+    # = pure pass-through,L1 內已 @st.cache/OAuth 集中緩存。
+    ("src/ui/tabs/portfolio_status_bar.py", "src.data.portfolio"),
     ("src/ui/tabs/stock_grp_sections/section_batch_fetcher.py", "src.data.core"),
     ("src/ui/tabs/stock_grp_sections/section_batch_fetcher.py", "src.data.stock.app_stock_fetchers"),
     # C2(v19.197):多檔批次補抓股本(龍頭 gate 分母);同 tab_stock 既有 share_capital_fetcher
