@@ -133,8 +133,25 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     if not _holdings:
         with _c_hint:
             st.caption("尚未載入到持股。")
-        st.warning("尚未載入到持股 —— 請先到 **📁 組合管理** 選定 Sheet 並存「投資組合 Portfolio」/「觀察清單 Watchlist」,"
-                   "再回來按「🔄 重新載入」。")
+        # P1 v19.205(順暢化):把原本「請先到 📁 組合管理…」的死路指路牌,改成**就地**三態綁定
+        # —— 使用者不必離開本頁去別的分頁找設定(解 user 反映的順序痛點)。
+        #   ⚪ 未登入      → 就地 Google 登入 CTA(portfolio_binder)
+        #   🟡 已登入未綁  → 就地 Drive 挑選器 + 貼網址/ID
+        #   🟢 已綁但空表  → 誠實提示去 📁 組合管理 補持股(§1 三態不混:綁定 ≠ 有資料)
+        _sid_bound = ""
+        try:
+            from src.data.portfolio import gsheet_portfolio as _gsp   # EX-PASSTHRU-1
+            _sid_bound = _gsp._get_active_sheet_id()
+        except Exception as _e_gsp:  # noqa: BLE001 — 綁定狀態讀取失敗不擋渲染(§1 誠實印 log)
+            print(f"[station empty-state] {type(_e_gsp).__name__}: {_e_gsp}")
+            _gsp = None
+        if _sid_bound:
+            st.info("✅ 已綁定持股 Sheet,但目前讀不到任何持股列 —— 可能是空表或尚未填寫。"
+                    "到 **📁 組合管理** 新增「投資組合 Portfolio」/「觀察清單 Watchlist」後,"
+                    "按上方「🔄 重新載入」。")
+        elif _gsp is not None:
+            from src.ui.tabs.portfolio_binder import render_holdings_binder
+            render_holdings_binder(_gsp, key_prefix="_station_")
     else:
         with _c_hint:
             st.caption(f"共 **{len(_holdings)}** 檔（來源：持股 Sheet,唯讀;要改請到 📁 組合管理）。")
