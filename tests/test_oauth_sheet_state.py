@@ -156,20 +156,19 @@ def test_callback_malicious_sheet_is_dropped(monkeypatch):
     assert 'sheet' not in fst.query_params
 
 
-# ── F1(安全 blocker 修正):CSRF 弱驗放行路徑不得回綁攻擊者的 Sheet ──────────
-def test_callback_empty_nonce_does_not_rebind_even_with_active_session(monkeypatch):
-    """攻擊:state='.<攻擊者Sheet>'(空 nonce)→ _oauth_state_ok 放行(既有迴圈修正),
-    但**強驗不通過**(''≠受害者 nonce)→ 登入仍走,但**絕不回綁**攻擊者的 Sheet。"""
+# ── F1 + R1(安全):CSRF 弱驗路徑 —— 攻擊者的 Sheet 不得回綁,空 nonce 更直接拒登入 ──
+def test_callback_empty_nonce_with_active_session_is_rejected(monkeypatch):
+    """R1 硬化:本 session 有自己的 nonce,卻收到**空 nonce** callback(state='.<攻擊者Sheet>')
+    → 絕非本 session 合法回呼 → **整個 callback 拒絕**(login-CSRF + 跨帳號 Sheet 注入雙擋):
+    不換 token、不回綁。"""
     fst = _wire_callback(
         monkeypatch,
         session={'_oauth_state': 'VICTIM_NONCE'},
         qp={'code': 'CODE', 'state': '.ATTACKER_SHEET'})
 
-    with pytest.raises(_Rerun):          # 登入照舊放行(不動既有迴圈修正)
-        ost.handle_oauth_callback()
+    ost.handle_oauth_callback()          # 提早 return,不應 raise _Rerun
 
-    assert fst.session_state['gsheet_tokens']['access_token'] == 'AT'
-    # 關鍵:跨帳號 Sheet 注入被擋 —— 未強驗就不信 state 載荷
+    assert 'gsheet_tokens' not in fst.session_state, 'R1:空 nonce + active session 應拒登入'
     assert 'portfolio_sheet_id' not in fst.session_state
     assert 'stock_portfolio_sheet_id' not in fst.session_state
     assert 'sheet' not in fst.query_params

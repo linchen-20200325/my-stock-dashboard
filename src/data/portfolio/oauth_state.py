@@ -205,6 +205,13 @@ def handle_oauth_callback() -> None:
         _got_nonce, _got_sheet = _split_login_state(_qp.get("state"))
         if not _oauth_state_ok(_expected_state, _got_nonce):
             return  # 別的 session 發起的授權碼 → 不吞
+        # R1(v19.206 安全硬化,順手併入 P2):本 session 確實發起過 OAuth(有 _expected_state)
+        # 卻收到**空 nonce** 的 callback → 絕非本 session 的合法回呼(我們一定把 nonce 塞進
+        # authorize URL 的 state,Google 一定原樣帶回)。擋掉 login-CSRF / session-fixation 的
+        # 空 nonce 變體(`state=.xxx` / 無 state)。**不動** expected=None 的迴圈修正
+        # (session 遺失時仍放行,見 _oauth_state_ok row 2)—— 只收「有自己的 nonce 卻收到空」這條。
+        if _expected_state and not _got_nonce:
+            return
         # P2 F1(安全稽核 blocker 修正):**回綁 Sheet 只在 CSRF 強驗通過時執行**。
         # `_oauth_state_ok` 為修「登入無限迴圈」刻意保留放行路徑(expected=None / nonce 空 → True),
         # 但那條路徑下 state 載荷**不可信**(攻擊者可構造 `state=.<自己的Sheet>` 空 nonce 繞檢查)。
