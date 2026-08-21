@@ -132,6 +132,19 @@ if '_app_boot_done' not in st.session_state:
         _qp_sid = _qp.get('sid')
         if _qp_sid and isinstance(_qp_sid, str) and _qp_sid.isdigit():
             st.session_state['_qp_sid'] = _qp_sid  # 個股 Tab 啟動時讀取
+        # A+C(v19.204 順暢化):還原上次選定的投組 Sheet ID(?sheet=)→ ETF+個股兩通道。
+        # 解「必須先繞 📁 組合管理選 Sheet 才能去戰情室/選股分析」的順序痛點:選過一次後,
+        # 重整/斷線重連/直接開任一頁都自動有源(戰情室/選股的既有 auto-load + 15min 快取即生效)。
+        # 安全:Sheet ID 非憑證(存取仍需 OAuth + Sheet ACL),且屬「設定」非抓回來的資料 →
+        # 跨 session 還原不會製造假「已載入」態(同上方 sid 的理由;§1)。setdefault:本 session
+        # 已手動選過則不覆寫(當次選擇優先)。
+        _qp_sheet = _qp.get('sheet')
+        if _qp_sheet and isinstance(_qp_sheet, str) and _qp_sheet.strip():
+            # §8.2 R4:app.py(L6)不得 import L1 gsheet_portfolio 取常數 → 用其 session key
+            # 字面值(與本檔側欄既有 'portfolio_sheet_id' / 'stock_portfolio_sheet_id' 一致;
+            # gsheet_portfolio 的 PORTFOLIO_SHEET_KEY/STOCK_PORTFOLIO_SHEET_KEY 即這兩個值)。
+            st.session_state.setdefault('portfolio_sheet_id', _qp_sheet.strip())
+            st.session_state.setdefault('stock_portfolio_sheet_id', _qp_sheet.strip())
     except Exception as _qpe:
         print(f'[query_params restore] {_qpe}')
 
@@ -292,7 +305,15 @@ with st.sidebar:
             _sb_m = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', _sb_sid_raw)
             _sb_sid_new = _sb_m.group(1) if _sb_m else _sb_sid_raw.strip()
             if _sb_sid_new and _sb_sid_new != _sb_sid_cur:
+                # A(v19.204 順暢化):側欄設 Sheet 也走「ETF+個股兩通道 + ?sheet= 持久化」,
+                # 與 📁 組合管理 的 _apply_active_sheet 一致 —— 否則從側欄設的 Sheet 不持久
+                # (重整就沒了)、也漏設個股通道(個股組合讀不到)。稽核抓到的不對稱,補齊。
                 st.session_state['portfolio_sheet_id'] = _sb_sid_new
+                st.session_state['stock_portfolio_sheet_id'] = _sb_sid_new
+                try:
+                    st.query_params['sheet'] = _sb_sid_new
+                except Exception:  # noqa: BLE001 — query param 寫入失敗不擋設定
+                    pass
             if _sb_sid_new:
                 st.caption(f'✅ Sheet ID：`{_sb_sid_new}`')
             else:
