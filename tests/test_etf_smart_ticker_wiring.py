@@ -70,6 +70,21 @@ def test_app_wires_single_tab_to_etf_s_active():
     # 單檔頁:smart 區塊經 before_ai_hook 插在 AI 之前 → AI 置底
     assert "render_333_section(_tk, key_suffix='_single')" in app_src
     assert "before_ai_hook=_etf_single_smart" in app_src
-    # 組合頁改用共用輸入框
-    assert "render_smart_ticker_input(key_suffix='_grp')" in app_src
-    assert "render_333_section(_etf_grp_tk, key_suffix='_grp')" in app_src
+    # P3 v19.202:多檔比較的「🔬 ETF 深度工具」整區已搬進 💼 戰情室(組合/葡萄串)或刪除
+    # (3-3-3/標準差/分散度 與單檔逐字重複)→ app.py 不再有組合頁 _grp smart 三區塊。反向守衛防回退。
+    assert "key_suffix='_grp'" not in app_src, "組合頁 _grp smart 區塊應已移除(搬戰情室/去重複)"
+    assert "render_smart_ticker_input(key_suffix='_grp')" not in app_src
+
+
+def test_portfolio_deep_analysis_moved_to_station():
+    """P3 v19.202:組合深度分析(render_etf_portfolio)+ 葡萄串搬進 💼 戰情室,不再掛 app.py 多檔比較。"""
+    with open('src/ui/etf/etf_tab_dividend_station.py', encoding='utf-8') as f:
+        station_src = f.read()
+    assert 'render_etf_portfolio' in station_src, '戰情室應呼叫 render_etf_portfolio(組合深度分析)'
+    assert 'render_grape_ladder' in station_src, '戰情室應呼叫 render_grape_ladder(葡萄串)'
+    with open('app.py', encoding='utf-8') as f:
+        app_src = f.read()
+    # app.py 不再直接呼叫組合/葡萄串/ETF AI(呼叫已搬走,頂層 import 亦移除)
+    assert 'render_etf_portfolio(gemini_fn=gemini_call)' not in app_src
+    assert 'render_grape_ladder(gemini_fn=gemini_call)' not in app_src
+    assert 'render_etf_ai(gemini_fn=gemini_call)' not in app_src

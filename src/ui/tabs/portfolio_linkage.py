@@ -61,13 +61,22 @@ def render_stock_portfolio_membership(session_state, sid: str, name: str = "") -
     _parts: list = []
     if _hit_etf:
         _lots = float(_hit_etf.get("lots") or 0)
-        _pct = float(_hit_etf.get("actual_pct") or 0)
         _role = str(_hit_etf.get("role") or "—")
-        _pnl = float(_hit_etf.get("capital_gain_pct") or 0)
         _role_zh = "🎯 核心" if _role == "core" else ("🛰️ 衛星" if _role == "satellite" else _role)
+        # §1(2026-08 稽核):P1 bridge 帶入的持股列(尚未按「計算組合」)沒有 actual_pct /
+        # capital_gain_pct → 顯示「—（未計算）」而非硬湊 0.0%(避免把「未計算」誤讀成
+        # 「權重 0% / 損益 0%」)。按下「計算組合」後 render_etf_portfolio 會補齊真值。
+        def _fpct(v, sign=False):
+            if isinstance(v, (int, float)) and not isinstance(v, bool) and v == v:
+                return f"{float(v):+.1f}%" if sign else f"{float(v):.1f}%"
+            return None
+        _pct_s = _fpct(_hit_etf.get("actual_pct"))
+        _pnl_s = _fpct(_hit_etf.get("capital_gain_pct"), sign=True)
+        _pct_txt = f"權重 {_pct_s}" if _pct_s else "權重 —（未計算）"
+        _pnl_txt = f"損益 {_pnl_s}" if _pnl_s else "損益 —（未計算）"
         _parts.append(
-            f"✅ <b>已在 ETF 投組</b> · {_lots:.1f} 張 · 權重 {_pct:.1f}% · "
-            f"{_role_zh} · 損益 {_pnl:+.1f}%"
+            f"✅ <b>已在 ETF 投組</b> · {_lots:.1f} 張 · {_pct_txt} · "
+            f"{_role_zh} · {_pnl_txt}"
         )
     if _hit_t3:
         _health = _hit_t3.get("健康度")

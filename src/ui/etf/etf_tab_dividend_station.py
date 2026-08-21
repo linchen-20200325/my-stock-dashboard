@@ -20,8 +20,39 @@ import streamlit as st
 from shared import dividend_station_thresholds as T
 
 # 戰情表分兩區（§ user 2026-08）：ETF 走定期定額 235/3-3-3、個股走 財報體檢 + KD。
-_ETF_COLS = ["代號", "名稱", "健檢", "235 燈號", "加碼金", "3-3-3", "建議動作"]
-_STOCK_COLS = ["代號", "名稱", "財報體檢", "財報趨勢", "KD", "建議動作"]  # B3:加財報趨勢欄
+_ETF_COLS = ["代號", "名稱", "張數", "均價", "現價", "損益%", "市值",
+             "健檢", "235 燈號", "加碼金", "3-3-3", "建議動作"]
+_STOCK_COLS = ["代號", "名稱", "張數", "均價", "現價", "損益%", "市值",
+               "財報體檢", "財報趨勢", "KD", "建議動作"]  # B3:加財報趨勢欄
+
+
+def _perf_row(r: dict, cols: list[str]) -> dict:
+    """依欄位序取值;績效欄(張數/均價/現價/損益%/市值)格式化,缺 → 「—」(§1 不捏 0)。
+
+    市值(萬) = 張數 × 現價 × 1000股/張 ÷ 1e4 = 張數 × 現價 ÷ 10（service 的「市值」欄
+    是張×現價、供 80/20 比例用不含 ×1000,顯示絕對值須自算含股數）。
+    """
+    _lots = r.get("張數")
+    _cur = r.get("現價")
+    _out: dict = {}
+    for _c in cols:
+        if _c == "張數":
+            _out[_c] = f"{_lots:g}" if isinstance(_lots, (int, float)) else "—"
+        elif _c == "均價":
+            _a = r.get("均價")
+            _out[_c] = f"{_a:.2f}" if isinstance(_a, (int, float)) else "—"
+        elif _c == "現價":
+            _out[_c] = f"{_cur:.2f}" if isinstance(_cur, (int, float)) else "—"
+        elif _c == "損益%":
+            _p = r.get("損益%")
+            _out[_c] = f"{_p:+.1f}%" if isinstance(_p, (int, float)) else "—"
+        elif _c == "市值":
+            _out[_c] = (f"{_lots * _cur / 10:,.1f}萬"
+                        if isinstance(_lots, (int, float)) and isinstance(_cur, (int, float))
+                        else "—")
+        else:
+            _out[_c] = r.get(_c, "")
+    return _out
 _HOLDINGS_KEY = "_station_holdings"
 
 
@@ -47,12 +78,17 @@ def _safe_dataframe(styled, plain) -> None:
 
 
 def _holding_preview_row(h: dict) -> dict:
-    """service 持股 dict → 唯讀預覽列。"""
+    """service 持股 dict → 唯讀預覽列（含張數/均價;現價/績效在下方戰情表,需跑計算才有）。"""
+    _lots = h.get("lots")
+    _avg = h.get("avg_price")
     return {
         "代號": h.get("ticker", ""),
         "名稱": h.get("name", ""),
         "種類": "個股" if h.get("asset_kind") == T.KIND_STOCK else "ETF",
         "類別": "🚀 衛星" if h.get("asset_class") == T.ASSET_SATELLITE else "🛡️ 核心",
+        # 張數/均價來自持股 Sheet(觀察清單無金額 → —);現價/報酬在下方戰情表(跑計算後)。
+        "張數": f"{float(_lots):g}" if _lots else "—",
+        "均價": f"{float(_avg):.2f}" if _avg else "—",
     }
 
 
@@ -81,6 +117,19 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
             st.session_state.pop("_station_ai_text", None)
             st.rerun()
     _holdings = st.session_state.get(_HOLDINGS_KEY) or []
+    # P1 v19.202(user 指派「輸入持股組合分析全移到戰情室」):把 📁 組合管理載入的持股
+    # 轉成 etf_portfolio_rows 契約寫入 session → 下游 葡萄串 / 標準差·分散度·3-3-3 selectbox /
+    # portfolio_linkage / tab_sector_flow 直接吃真實持股,不再靠 ETF 組合頁的手打範例列。
+    # 只在產出真實持有列時才覆寫(觀察清單候選/缺張數均價會被 §1 跳過,不拿空清單清掉既有)。
+    try:
+        from src.services.portfolio_analysis_bridge import (
+            build_portfolio_rows_from_holdings,
+        )
+        _pf_bridge = build_portfolio_rows_from_holdings(_holdings)
+        if _pf_bridge.rows:
+            st.session_state['etf_portfolio_rows'] = list(_pf_bridge.rows)
+    except Exception as _e_pf_bridge:  # noqa: BLE001 — 橋接失敗不擋戰情室渲染
+        print(f'[station portfolio bridge] {type(_e_pf_bridge).__name__}: {_e_pf_bridge}')
     if not _holdings:
         with _c_hint:
             st.caption("尚未載入到持股。")
@@ -137,13 +186,13 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
 
     if _etf_rows:
         st.markdown("##### 🛡️ 定期定額策略（ETF）　·　235 加碼燈 ＋ 3-3-3")
-        _edf = pd.DataFrame([{c: r.get(c, "") for c in _ETF_COLS} for r in _etf_rows])
+        _edf = pd.DataFrame([_perf_row(r, _ETF_COLS) for r in _etf_rows])
         _safe_dataframe(_style_rows(_edf), _edf)
     if _stock_rows:
         st.markdown("##### 🚀 個股汰換（衛星）　·　財報體檢 ＋ KD → 是否更換")
         st.caption("個股不套 235/3-3-3（那是 ETF 定期定額規則）。**財報 grade 決定汰弱、KD 定進出時機**："
                    "財報 C/F → 建議換出;KD 死亡交叉/頂背離＝賣點確認、黃金交叉/底背離＝轉強留。")
-        _sdf = pd.DataFrame([{c: r.get(c, "") for c in _STOCK_COLS} for r in _stock_rows])
+        _sdf = pd.DataFrame([_perf_row(r, _STOCK_COLS) for r in _stock_rows])
         _safe_dataframe(_style_rows(_sdf), _sdf)
     if not _etf_rows and not _stock_rows:
         st.info("無可顯示的持股列。")
@@ -178,7 +227,27 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     _switch = st.session_state.get("_station_switch")
     _render_switch_advice(_switch)
 
-    # ── 5️⃣ AI 戰情總結（規則事實 always;AI 潤稿需金鑰;含換股建議）──────────
+    # ── 5️⃣ 📊 組合深度分析（P2b v19.202:從 ETF 多檔比較搬入戰情室）──────────────
+    # user 指派「輸入持股組合的分析全移到戰情室」:再平衡 / 核衛 80-20 / 壓測 / VaR /
+    # 效率前緣 / 配息日曆×現金流 / 稅後(組合)+ 葡萄串領息法,改在此處呈現。輸入已由
+    # P2a 自動帶入 📁 組合管理真實持股(不再手打範例列)。各區 try/except 隔離,任一
+    # raise 不吃掉後面(同 app.py _render_tab_isolated 精神,§1 Fail Loud)。
+    with st.expander("5️⃣ 📊 組合深度分析（再平衡 / 核衛 / 壓測 / VaR / 配息現金流 / 葡萄串領息）",
+                     expanded=False):
+        st.caption("標的＝📁 組合管理載入的持股（上方已自動帶入,不必再手打範例列）。")
+        try:
+            from src.ui.etf.etf_tab_portfolio import render_etf_portfolio
+            render_etf_portfolio(gemini_fn=gemini_fn)
+        except Exception as _e_pf:  # noqa: BLE001 — §1 單區失敗不吃掉後面
+            st.error(f"組合深度分析載入失敗（Fail Loud）：{type(_e_pf).__name__}: {_e_pf}")
+        st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
+        try:
+            from src.ui.tabs.grape_ladder import render_grape_ladder
+            render_grape_ladder(gemini_fn=gemini_fn)
+        except Exception as _e_gl:  # noqa: BLE001
+            st.error(f"葡萄串領息法載入失敗（Fail Loud）：{type(_e_gl).__name__}: {_e_gl}")
+
+    # ── 6️⃣ AI 戰情總結（規則事實 always;AI 潤稿需金鑰;含換股建議）──────────
     _render_ai_summary(_rows, _vix, gemini_fn, _switch)
 
     st.caption(f"💡 目標配置：🛡️核心 {T.CORE_TARGET_PCT:.0f}% / 🚀衛星 {T.SATELLITE_TARGET_PCT:.0f}%；"
