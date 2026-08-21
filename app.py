@@ -305,7 +305,15 @@ with st.sidebar:
             _sb_m = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', _sb_sid_raw)
             _sb_sid_new = _sb_m.group(1) if _sb_m else _sb_sid_raw.strip()
             if _sb_sid_new and _sb_sid_new != _sb_sid_cur:
+                # A(v19.204 順暢化):側欄設 Sheet 也走「ETF+個股兩通道 + ?sheet= 持久化」,
+                # 與 📁 組合管理 的 _apply_active_sheet 一致 —— 否則從側欄設的 Sheet 不持久
+                # (重整就沒了)、也漏設個股通道(個股組合讀不到)。稽核抓到的不對稱,補齊。
                 st.session_state['portfolio_sheet_id'] = _sb_sid_new
+                st.session_state['stock_portfolio_sheet_id'] = _sb_sid_new
+                try:
+                    st.query_params['sheet'] = _sb_sid_new
+                except Exception:  # noqa: BLE001 — query param 寫入失敗不擋設定
+                    pass
             if _sb_sid_new:
                 st.caption(f'✅ Sheet ID：`{_sb_sid_new}`')
             else:
