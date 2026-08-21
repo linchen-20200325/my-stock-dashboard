@@ -173,6 +173,13 @@ def _render_drive_picker(_gsp) -> None:
         st.info("此範圍找不到 Sheets。可按「🆕 建立新投組 Sheet」，或用「⚙️ 進階」手動貼網址。")
         return
 
+    # C(v19.204 順暢化):清單只有 1 本且尚未設定 → 自動選用,省一次點擊(首次設定更順;
+    # 之後由 A 的 ?sheet= 持久化,回訪不必再進本頁)。已設定則不動(尊重使用者當前選擇)。
+    if len(_sheets) == 1 and not _gsp._get_active_sheet_id():
+        _apply_active_sheet(_gsp, _sheets[0]["id"])
+        st.success(f"清單只有 1 本,已自動設為投組資料庫「{_sheets[0]['name']}」。")
+        st.rerun()
+
     _smap = {f'{s["name"]}（{s["id"][:12]}…）': s["id"] for s in _sheets}
     _pick = st.selectbox(f"清單共 {len(_sheets)} 本 — 選一本", list(_smap.keys()),
                          key="_mgmt_drive_pick")
@@ -189,6 +196,13 @@ def _apply_active_sheet(_gsp, sid: str) -> None:
     """把選定的 sheet_id 同時套到 ETF 與個股兩通道（共用一本）。"""
     st.session_state[_gsp.PORTFOLIO_SHEET_KEY] = sid
     st.session_state[_gsp.STOCK_PORTFOLIO_SHEET_KEY] = sid
+    # A(v19.204 順暢化):同步寫入 URL query param → 重整/斷線重連/直接開任一頁(戰情室/選股)
+    # 自動還原 Sheet 源(app.py 開機 gate 讀 ?sheet=),不必再回本頁重挑。Sheet ID 非憑證,
+    # 存取仍需 OAuth + Sheet ACL;僅是「上次用哪本」的設定持久化(同 sid 個股代號既有做法)。
+    try:
+        st.query_params['sheet'] = sid
+    except Exception:  # noqa: BLE001 — query param 寫入失敗不該擋設定主線
+        pass
 
 
 def _render_etf_section(_gsp, pd) -> None:

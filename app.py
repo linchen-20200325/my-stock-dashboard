@@ -132,6 +132,19 @@ if '_app_boot_done' not in st.session_state:
         _qp_sid = _qp.get('sid')
         if _qp_sid and isinstance(_qp_sid, str) and _qp_sid.isdigit():
             st.session_state['_qp_sid'] = _qp_sid  # 個股 Tab 啟動時讀取
+        # A+C(v19.204 順暢化):還原上次選定的投組 Sheet ID(?sheet=)→ ETF+個股兩通道。
+        # 解「必須先繞 📁 組合管理選 Sheet 才能去戰情室/選股分析」的順序痛點:選過一次後,
+        # 重整/斷線重連/直接開任一頁都自動有源(戰情室/選股的既有 auto-load + 15min 快取即生效)。
+        # 安全:Sheet ID 非憑證(存取仍需 OAuth + Sheet ACL),且屬「設定」非抓回來的資料 →
+        # 跨 session 還原不會製造假「已載入」態(同上方 sid 的理由;§1)。setdefault:本 session
+        # 已手動選過則不覆寫(當次選擇優先)。
+        _qp_sheet = _qp.get('sheet')
+        if _qp_sheet and isinstance(_qp_sheet, str) and _qp_sheet.strip():
+            from src.data.portfolio.gsheet_portfolio import (
+                PORTFOLIO_SHEET_KEY as _PSK, STOCK_PORTFOLIO_SHEET_KEY as _SPSK,
+            )
+            st.session_state.setdefault(_PSK, _qp_sheet.strip())
+            st.session_state.setdefault(_SPSK, _qp_sheet.strip())
     except Exception as _qpe:
         print(f'[query_params restore] {_qpe}')
 
