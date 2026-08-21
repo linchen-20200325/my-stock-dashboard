@@ -47,9 +47,12 @@ def get_binding_state() -> BindingState:
         return BindingState(logged_in=_logged, sheet_id=_sid,
                             portfolio_count=None, status=STATUS_UNBOUND)
 
-    # 已登入 + 已綁 → 看有沒有組合資料(區分 🟡 空 vs 🟢 有)
+    # 已登入 + 已綁 → 看有沒有組合資料(區分 🟡 空 vs 🟢 有)。
+    # ⚠️ 明確傳 sheet_id=_sid(而非預設 None):list_portfolios 以參數為 @st.cache_data 快取鍵,
+    # 傳 None 時鍵恆為空、內部才靠 session 解析 active sheet → 換 Sheet 後 15 分鐘內會拿到
+    # **上一本的本數**(張冠李戴)。傳 _sid 讓快取鍵隨 Sheet 變動,一併正確定位(§ P3a 稽核 #3)。
     try:
-        _count = len(_gsp.list_portfolios())          # active sheet;cached
+        _count = len(_gsp.list_portfolios(sheet_id=_sid))
     except Exception:  # noqa: BLE001 — 讀組合清單失敗 → 中性「已綁定」,不炸狀態列、不腦補
         return BindingState(logged_in=_logged, sheet_id=_sid,
                             portfolio_count=None, status=STATUS_BOUND)

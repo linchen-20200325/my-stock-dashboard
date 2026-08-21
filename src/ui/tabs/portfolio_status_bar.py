@@ -54,7 +54,9 @@ def render_portfolio_status_bar() -> None:
 def _label_for(_bs) -> "tuple[str, str]":
     """三態 → (晶片文字, tooltip)。純函式,易測。"""
     if _bs.status == STATUS_BOUND:
-        return (f"🟢 我的組合：已綁定 · {_bs.portfolio_count} 本",
+        # count is None = 已綁但本數讀取失敗(降級)→ 誠實顯「數量未知」,**不印字面 None、不腦補**(§1)。
+        _cnt = f" · {_bs.portfolio_count} 本" if _bs.portfolio_count is not None else "（數量未知）"
+        return (f"🟢 我的組合：已綁定{_cnt}",
                 f"Sheet：{_bs.sheet_id[:16]}…　點開可換一本")
     if _bs.status == STATUS_BOUND_EMPTY:
         return ("🟡 我的組合：已綁定,但還沒有組合資料",
@@ -74,7 +76,8 @@ def _render_bar_body(_bs) -> None:
     # 已綁(空表或有資料)→ 顯示現況。⚠️ 不可用 st.expander 包 render_holdings_binder
     # (binder 內已自帶「貼網址」expander,expander 巢狀會炸);用 markdown 標題即可。
     st.caption(f"目前投組資料庫 Sheet：`{_bs.sheet_id}`"
-               + (f"　（{_bs.portfolio_count} 本組合）" if _bs.status == STATUS_BOUND else ""))
+               + (f"　（{_bs.portfolio_count} 本組合）"
+                  if _bs.status == STATUS_BOUND and _bs.portfolio_count is not None else ""))
     if _bs.status == STATUS_BOUND_EMPTY:
         st.info("這本 Sheet 還沒有組合資料 —— 到 **📁 組合管理** 新增「投資組合 / 觀察清單」。")
     st.markdown("**🔄 換一本 Sheet**")

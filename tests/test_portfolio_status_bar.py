@@ -68,6 +68,22 @@ def test_binding_state_degrades_when_list_fails(monkeypatch):
     assert bs.portfolio_count is None          # 讀不到 → 未知,不是 0
 
 
+def test_binding_state_lists_portfolios_by_sheet_id(monkeypatch):
+    """#3:必須以 sheet_id 為 @st.cache_data 快取鍵(傳 None 會讓換 Sheet 後 15 分鐘拿到舊本數)。"""
+    import src.data.portfolio.gsheet_portfolio as gsp
+    monkeypatch.setattr(gsp, '_has_oauth_tokens', lambda: True)
+    monkeypatch.setattr(gsp, '_get_active_sheet_id', lambda: 'SHEET_K')
+    _seen = {}
+
+    def _list(*a, **k):
+        _seen['sheet_id'] = k.get('sheet_id', '<missing>')
+        return ['x']
+    monkeypatch.setattr(gsp, 'list_portfolios', _list)
+
+    svc.get_binding_state()
+    assert _seen['sheet_id'] == 'SHEET_K', '應傳入 active sheet_id 作快取鍵,不可用預設 None'
+
+
 def test_binding_state_token_check_failure_is_logged_out(monkeypatch):
     _patch_gsp(monkeypatch, logged=RuntimeError('boom'), sid='ABC', portfolios=['a'])
     bs = svc.get_binding_state()
@@ -82,6 +98,21 @@ def test_label_for_three_states():
     assert '3 本' in bar._label_for(B(True, 'S', 3, svc.STATUS_BOUND))[0]
     assert '🟡' in bar._label_for(B(True, 'S', 0, svc.STATUS_BOUND_EMPTY))[0]
     assert '⚪' in bar._label_for(B(False, '', None, svc.STATUS_UNBOUND))[0]
+
+
+def test_label_for_degraded_count_shows_no_literal_none():
+    """#4:BOUND + count=None(讀取降級)→ 不得把字面「None 本」丟給使用者(§1)。"""
+    lbl = bar._label_for(svc.BindingState(True, 'SHEETID', None, svc.STATUS_BOUND))[0]
+    assert 'None' not in lbl, '降級態不得顯示字面 None'
+    assert '數量未知' in lbl, '應誠實顯示數量未知'
+
+
+def test_render_bound_degraded_never_prints_none(monkeypatch):
+    """#4:降級態(BOUND+None)整條狀態列(晶片 + caption)都不得出現字面 None。"""
+    fst, _binder = _wire_bar(monkeypatch, svc.BindingState(True, 'SHEET_X', None, svc.STATUS_BOUND))
+    bar.render_portfolio_status_bar()
+    _txt = ' '.join(str(c) for c in fst.calls)
+    assert 'None' not in _txt, f'降級態把字面 None 顯示出來了：{_txt}'
 
 
 # ── L5:render 分支 + 不炸整頁(fake st)────────────────────────────────
