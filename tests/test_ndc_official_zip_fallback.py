@@ -44,7 +44,11 @@ def test_fetch_ndc_block_zip_before_stockfeel(monkeypatch):
     def _boom_fu(*_a, **_k):
         _sf_called['hit'] = True          # StockFeel/MacroMicro 走 fetch_url
         return None
-    monkeypatch.setattr('src.data.proxy.fetch_url', _boom_fu, raising=False)
+    # patch 真正持有者 proxy_helper.fetch_url,**不要** patch `src.data.proxy.fetch_url`
+    # ——後者是 PEP 562 __getattr__ 轉發,monkeypatch teardown 會把它變成具體屬性遮蔽
+    # 轉發器,污染整包(test_zz_proxy_pollution_lock 專門守這個;v19.74/v19.113 前科)。
+    # fetch_ndc_block 於呼叫時 `from src.data.proxy import fetch_url`,轉發器仍會解析到本 mock。
+    monkeypatch.setattr('src.data.proxy.proxy_helper.fetch_url', _boom_fu)
 
     ms.fetch_ndc_block()
     assert _sf_called['hit'] is False, 'ZIP 命中後不應再打 StockFeel/MacroMicro(fetch_url)'
