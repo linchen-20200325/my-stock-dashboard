@@ -274,6 +274,48 @@ def _all_records(*, sheet_id: str | None = None,
                headers=headers).get_all_records()
 
 
+# ── 純解析器（§2.1 SSOT + §4 無 I/O 離線可測）───────────────────────────
+# `portfolios` / `stock_watchlist` 分頁 records → 乾淨清單。抽出讓 load_portfolio /
+# load_stock_watchlist（OAuth/streamlit 路徑）與 headless SA reader（gsheet_sa_reader,
+# cron 用）共用**同一套** 欄位鍵 + 完整性規則,避免兩邊 schema/濾值邏輯漂移。
+def parse_portfolio_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """`portfolios` records → `[{ticker, lots, avg_price}, ...]`（純函式,不分 name）。
+
+    §1 資料完整性:ticker 非空、lots>0、avg_price>0,否則丟棄（不納入零值/髒列,不捏造）。
+    ticker 保留原樣（不改大小寫,與 load_portfolio 既有行為一致）。
+    """
+    out: list[dict[str, Any]] = []
+    for rec in (records or []):
+        tk = str(rec.get('ticker', '')).strip()
+        if not tk:
+            continue
+        try:
+            lots = float(rec.get('lots') or 0)
+            avg = float(rec.get('avg_price') or 0)
+        except (TypeError, ValueError):
+            continue
+        if lots <= 0 or avg <= 0:
+            continue
+        out.append({'ticker': tk, 'lots': lots, 'avg_price': avg})
+    return out
+
+
+def parse_watchlist_records(records: list[dict[str, Any]]) -> list[str]:
+    """`stock_watchlist` records → 純代碼 `list[str]`（保序、去重;純函式,不分 name）。
+
+    §1 反捏造:只取 ticker 欄,**不**觸碰任何價格。ticker 保留原樣（與
+    load_stock_watchlist 既有行為一致;save 端已存大寫）。
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for rec in (records or []):
+        tk = str(rec.get('ticker', '')).strip()
+        if tk and tk not in seen:
+            seen.add(tk)
+            out.append(tk)
+    return out
+
+
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def list_portfolios(*, sheet_id: str | None = None) -> list[str]:
     """列出所有不重複的組合名稱（按字母排序）。
@@ -299,22 +341,9 @@ def load_portfolio(name: str, *, sheet_id: str | None = None) -> list[dict[str, 
     name = (name or '').strip()
     if not name:
         return []
-    out: list[dict[str, Any]] = []
-    for rec in _all_records(sheet_id=sheet_id):
-        if str(rec.get('name', '')).strip() != name:
-            continue
-        tk = str(rec.get('ticker', '')).strip()
-        if not tk:
-            continue
-        try:
-            lots = float(rec.get('lots') or 0)
-            avg = float(rec.get('avg_price') or 0)
-        except (TypeError, ValueError):
-            continue
-        if lots <= 0 or avg <= 0:
-            continue
-        out.append({'ticker': tk, 'lots': lots, 'avg_price': avg})
-    return out
+    recs = [r for r in _all_records(sheet_id=sheet_id)
+            if str(r.get('name', '')).strip() == name]
+    return parse_portfolio_records(recs)   # §2.1 共用純解析器（同 headless SA reader）
 
 
 def save_portfolio(name: str, rows: list[dict[str, Any]], *,
@@ -458,18 +487,11 @@ def load_stock_watchlist(name: str, *, sheet_id: str | None = None) -> list[str]
     name = (name or '').strip()
     if not name:
         return []
-    out: list[str] = []
-    seen: set[str] = set()
-    for rec in _all_records(sheet_id=sheet_id,
-                            worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
-                            headers=_STOCK_WATCHLIST_HEADERS):
-        if str(rec.get('name', '')).strip() != name:
-            continue
-        tk = str(rec.get('ticker', '')).strip()
-        if tk and tk not in seen:
-            seen.add(tk)
-            out.append(tk)
-    return out
+    recs = [r for r in _all_records(sheet_id=sheet_id,
+                                    worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
+                                    headers=_STOCK_WATCHLIST_HEADERS)
+            if str(r.get('name', '')).strip() == name]
+    return parse_watchlist_records(recs)   # §2.1 共用純解析器（同 headless SA reader）
 
 
 # ── 前進式驗證:選股凍結紀錄(獨立 worksheet,不污染 portfolios)── FT-2 v19.142

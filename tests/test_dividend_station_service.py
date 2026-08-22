@@ -253,12 +253,44 @@ def test_build_ai_summary_propagates_failure():
 # ── 代號規則判 ETF/個股（L0,跟清單脫鉤）────────────────────────────────────
 def test_classify_asset_kind_by_code():
     assert T.classify_asset_kind("0050.TW") == T.KIND_ETF        # 00 開頭 ETF
-    assert T.classify_asset_kind("00980A.TW") == T.KIND_ETF      # 帶字母後綴仍 ETF
+    assert T.classify_asset_kind("00980A.TW") == T.KIND_ETF      # 帶字母後綴仍 ETF（00 先攔）
     assert T.classify_asset_kind("00878") == T.KIND_ETF
     assert T.classify_asset_kind("2330") == T.KIND_STOCK         # 4 碼個股
     assert T.classify_asset_kind("6239.TWO") == T.KIND_STOCK     # 上櫃 4 碼個股
+    assert T.classify_asset_kind("2881A") == T.KIND_STOCK        # 特別股 → 個股（稽核2a）
+    assert T.classify_asset_kind("2882A.TW") == T.KIND_STOCK     # 特別股帶後綴 → 個股
     assert T.classify_asset_kind("BND") == T.KIND_ETF            # 非台股 → 預設 ETF
     assert T.classify_asset_kind("") == T.KIND_ETF               # 空 → 預設,不炸
+
+
+def test_normalize_ticker():
+    """後綴 SSOT:去 .TW/.TWO + 大寫;空/None 不炸。"""
+    assert T.normalize_ticker("2330.TW") == "2330"
+    assert T.normalize_ticker("6239.two") == "6239"
+    assert T.normalize_ticker(" 0050 ") == "0050"
+    assert T.normalize_ticker("2330") == "2330"
+    assert T.normalize_ticker(None) == ""
+
+
+def test_get_switch_in_candidates_excludes_held_suffix_aware(monkeypatch):
+    """稽核1b+6a:已持有 2330.TW 必須擋掉 bare 2330 候選（exclude 走 normalize_ticker）。"""
+    import src.services.fundamental_screener_service as FS
+    _df = pd.DataFrame([{"代碼": "2330", "名稱": "台積電", "綜合分": 90},
+                        {"代碼": "2317", "名稱": "鴻海", "綜合分": 80}])
+    monkeypatch.setattr(FS, "get_ranked_picks", lambda *a, **k: (_df, ""))
+    out = svc.get_switch_in_candidates(exclude=["2330.TW"], top_n=5)
+    _codes = [c["代碼"] for c in out]
+    assert "2330" not in _codes, "已持有(2330.TW)卻把 bare 2330 當換入候選"
+    assert "2317" in _codes
+
+
+def test_get_switch_in_candidates_empty_on_screener_fail(monkeypatch):
+    """§1:選股網不可用 → 回 []（不捏造標的）。"""
+    import src.services.fundamental_screener_service as FS
+    def _boom(*a, **k):
+        raise RuntimeError("screener down")
+    monkeypatch.setattr(FS, "get_ranked_picks", _boom)
+    assert svc.get_switch_in_candidates(exclude=[]) == []
 
 
 # ── held 旗標傳遞（換股建議依賴）─────────────────────────────────────────

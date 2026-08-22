@@ -1,0 +1,59 @@
+name: "每日持股續抱/換股推播（LINE / Telegram）"
+
+# 收盤後把「你私有 Sheet 的持股健檢 → 續抱/換股 + 換入候選」推到手機。
+# UTC 09:15 = TW 17:15（比選股訊號推播 push_daily_signals 的 17:00 晚 15 分,錯開避免同分鐘兩則）。
+# ⚠️ 排 Mon-Fri,未濾 TW 國定假日（無第三方 trading calendar,見 CLAUDE.md §4.5）。
+#
+# 需要的 GitHub Secrets（Settings → Secrets and variables → Actions）:
+#   GCP_SERVICE_ACCOUNT_JSON — 整段 service account JSON;並把你的 Sheet 分享給其 client_email
+#   PORTFOLIO_SHEET_ID       — ETF / legacy 組合 Sheet ID（選填）
+#   STOCK_PORTFOLIO_SHEET_ID — 個股組合 + 觀察清單 Sheet ID（選填;兩者至少一個）
+#   LINE_CHANNEL_ACCESS_TOKEN / LINE_USER_ID — LINE Messaging API（沿用既有推播）
+#   FINMIND_TOKEN            — 抓財報/籌碼
+#   GEMINI_API_KEY           — AI 潤稿（選填;未設則只送規則式訊息）
+on:
+  schedule:
+    - cron: "15 9 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: push-holdings-daily
+  cancel-in-progress: false
+
+jobs:
+  push:
+    name: "Push holdings review"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Push holdings review
+        env:
+          # 管道:line（預設）/ telegram。可於 repo Variables 設 NOTIFY_CHANNEL 覆寫。
+          NOTIFY_CHANNEL: ${{ vars.NOTIFY_CHANNEL || 'line' }}
+          # 讀你私有 Sheet 的 Service Account（headless,無瀏覽器 OAuth）
+          GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          PORTFOLIO_SHEET_ID: ${{ secrets.PORTFOLIO_SHEET_ID }}
+          STOCK_PORTFOLIO_SHEET_ID: ${{ secrets.STOCK_PORTFOLIO_SHEET_ID }}
+          # LINE Messaging API（LINE Notify 已停用）
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          # Telegram（備援管道）
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          # AI 潤稿 — 選填;未設則自動略過只送規則式訊息
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scripts/push_holdings_daily.py
