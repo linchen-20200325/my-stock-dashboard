@@ -60,6 +60,8 @@ def _build_entries(hold_raw: list[dict], wl_raw: list[str]) -> list[dict]:
 
     entries: list[dict] = []
     seen: set[str] = set()
+    _drop_hold: list[str] = []
+    _drop_wl: list[str] = []
 
     def _kind_class(tk: str):
         _ak = T.classify_asset_kind(tk)
@@ -68,8 +70,11 @@ def _build_entries(hold_raw: list[dict], wl_raw: list[str]) -> list[dict]:
 
     for h in (hold_raw or []):
         tk = str(h.get("ticker", "") or "").strip()
-        key = tk.upper()
-        if not tk or key in seen:
+        if not tk:
+            continue
+        key = T.normalize_ticker(tk)   # 2330 與 2330.TW 同一檔（後綴 SSOT,跨兩 sheet 通道亦然）
+        if key in seen:
+            _drop_hold.append(tk)
             continue
         seen.add(key)
         _ak, _ac = _kind_class(tk)
@@ -78,13 +83,21 @@ def _build_entries(hold_raw: list[dict], wl_raw: list[str]) -> list[dict]:
 
     for _t in (wl_raw or []):
         tk = str(_t or "").strip()
-        key = tk.upper()
-        if not tk or key in seen:
+        if not tk:
+            continue
+        key = T.normalize_ticker(tk)
+        if key in seen:                # 已在持股（或觀察清單自身）出現 → 不重列（持股優先,§1 去重要 log）
+            _drop_wl.append(tk)
             continue
         seen.add(key)
         _ak, _ac = _kind_class(tk)
         entries.append({"ticker": tk, "name": "", "asset_kind": _ak, "asset_class": _ac,
                         "held": False, "lots": None, "avg_price": None})
+
+    if _drop_hold:
+        print(f"[push_holdings] 持股跨來源去重:略過重複 {len(_drop_hold)} 筆 → {'、'.join(_drop_hold)}")
+    if _drop_wl:
+        print(f"[push_holdings] 觀察清單與持股重複:略過 {len(_drop_wl)} 筆 → {'、'.join(_drop_wl)}")
 
     return entries
 

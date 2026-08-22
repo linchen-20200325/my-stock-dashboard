@@ -9,13 +9,22 @@ LINE 可讀文字。這是每日推播的**可靠主體**（不需 AI 也成立;
 """
 from __future__ import annotations
 
+import numbers
+
 from shared import dividend_station_thresholds as T
 
 _DISCLAIMER = "　研究參考,非投資建議。"
 
 
 def _num(x) -> "float | None":
-    return x if isinstance(x, (int, float)) else None
+    # numbers.Real 涵蓋 np.int64 / np.float64（pandas 衍生值）;排除 bool（True/False 不是數字）。
+    return x if isinstance(x, numbers.Real) and not isinstance(x, bool) else None
+
+
+def _code(d: dict, key: str = "代號") -> str:
+    """安全取代號/字串欄:`.get(k,'')` 只在 key 缺席時給預設,present-but-None 仍會印字面
+    "None" → 一律 `str(... or '')`（§1/§3.3 不印 None、不捏造）。"""
+    return str(d.get(key) or "")
 
 
 def _macro_line(switch: "dict | None") -> str:
@@ -43,7 +52,7 @@ def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:
     _lines = [f"🔴 建議換出（持有紅燈汰弱）{_caveat}"]
     for d in _outs:
         _act = str(d.get("建議動作", "") or "").strip()
-        _lines.append(f"　・{d.get('代號', '')}" + (f"（{_act}）" if _act else ""))
+        _lines.append(f"　・{_code(d)}" + (f"（{_act}）" if _act else ""))
     return _lines
 
 
@@ -60,7 +69,7 @@ def _switch_in_lines(switch: "dict | None") -> list[str]:
         _nm = str(c.get("名稱", "") or "").strip()
         _score = _num(c.get("綜合分"))
         _tail = f"（綜合分 {_score:.0f}）" if _score is not None else ""
-        _lines.append(f"　・{c.get('代號', '')} {_nm}".rstrip() + _tail)
+        _lines.append(f"　・{_code(c)} {_nm}".rstrip() + _tail)
     return _lines
 
 
@@ -71,8 +80,8 @@ def _adds_lines(digest: dict) -> list[str]:
         return []
     _lines = ["➕ 235 逢低加碼觸發"]
     for d in _adds:
-        _lines.append(f"　・{d.get('代號', '')} {d.get('235', '')}"
-                      f" 加碼{d.get('加碼金', '')}".rstrip())
+        _lines.append(f"　・{_code(d)} {_code(d, '235')}"
+                      f" 加碼{_code(d, '加碼金')}".rstrip())
     return _lines
 
 
@@ -84,20 +93,24 @@ def _take_profit_lines(digest: dict) -> list[str]:
     _lines = [f"💰 衛星達停利門檻（≥{T.SATELLITE_TAKE_PROFIT_PCT:.0f}%,建議滾回核心）"]
     for d in _tp:
         _pnl = _num(d.get("損益%"))
-        _lines.append(f"　・{d.get('代號', '')}"
+        _lines.append(f"　・{_code(d)}"
                       + (f"（+{_pnl:.0f}%）" if _pnl is not None else ""))
     return _lines
 
 
 def _allocation_line(digest: dict) -> list[str]:
-    """80/20 實際配置偏離。缺（無張數/均價）→ 略過（§1 不捏造）。"""
+    """80/20 實際配置偏離。缺（無張數/均價 → allocation=None,或上游契約漂移缺鍵）→ 略過
+    （§1 不捏造;不因單一區段缺鍵而 KeyError 炸掉整則推播,與其他區段一致走 .get + _num）。"""
     _a = digest.get("allocation")
     if not _a:
         return []
+    _core, _sat = _num(_a.get("core_pct")), _num(_a.get("sat_pct"))
+    _ct, _st, _dev = _num(_a.get("core_target")), _num(_a.get("sat_target")), _num(_a.get("core_dev"))
+    if None in (_core, _sat, _ct, _st, _dev):
+        return []
     _partial = "（部分持股缺金額,僅供參考）" if _a.get("partial") else ""
-    return [f"⚖️ 配置：核心 {_a['core_pct']:.0f}% / 衛星 {_a['sat_pct']:.0f}%"
-            f"（目標 {_a['core_target']:.0f}/{_a['sat_target']:.0f},"
-            f"核心偏離 {_a['core_dev']:+.0f}%）{_partial}"]
+    return [f"⚖️ 配置：核心 {_core:.0f}% / 衛星 {_sat:.0f}%"
+            f"（目標 {_ct:.0f}/{_st:.0f},核心偏離 {_dev:+.0f}%）{_partial}"]
 
 
 def _errors_line(digest: dict) -> list[str]:
@@ -118,7 +131,7 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     digest = digest or {}
     _vix = _num(digest.get("vix"))
     _vix_txt = f"{_vix:.1f}" if _vix is not None else "抓取失敗"
-    _total = int(digest.get("total", 0) or 0)
+    _total = int(_num(digest.get("total")) or 0)   # 契約漂移防禦:非數 total → 0,不 ValueError
 
     lines: list[str] = [
         "💼 持股戰情室｜每日續抱 / 換股",
@@ -136,12 +149,17 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
         if _seg:
             lines += [""] + _seg
 
-    # 「今日無需動作」:無換出（held 紅燈）、無 235 加碼、無停利 → 明講續抱（§1 不含糊）。
+    # 收尾判定（§1 不含糊、不從零資料給安心結論）:
+    #   total==0（代號讀到了但每檔抓取全失敗,例如 FinMind quota/斷網）→ 誠實「未能判斷」,
+    #     **絕不**印「續抱、無需動作」的假 all-clear（稽核 🔴 A）;
+    #   total>0 且無換出/加碼/停利 → 明講續抱。
     _switch_out = (switch or {}).get("switch_out") if switch is not None else digest.get("reds")
     _no_action = (not (_switch_out or [])
                   and not (digest.get("adds") or [])
                   and not (digest.get("take_profit") or []))
-    if _no_action:
+    if _total <= 0:
+        lines += ["", "⚠️ 今日無任何持股完成評估（資料抓取全失敗），未能判斷 —— 請稍後檢視或查 log。"]
+    elif _no_action:
         lines += ["", "📭 今日無需動作：續抱、定期定額即可。"]
 
     lines += ["", _DISCLAIMER]

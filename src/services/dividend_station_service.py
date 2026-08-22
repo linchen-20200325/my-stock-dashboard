@@ -527,7 +527,9 @@ def get_switch_in_candidates(*, regime: str | None = None,
     §1：選股網不可用 / 空 → 回 []（caller 顯示「選股池暫無候選」）,不捏造標的。
     exclude：已持有代號（不建議換入自己已有的）。regime 傳給選股網套空頭濾網。
     """
-    _exclude = {str(t or "").strip().upper() for t in (exclude or [])}
+    # §後綴 SSOT:exclude（已持有代號）去 .TW/.TWO 再比對,否則 '2330.TW' 擋不掉 bare '2330'
+    # → 已持有卻被推「換入」(稽核 1b)。候選 _code 亦 normalize 後比對。
+    _exclude = {T.normalize_ticker(t) for t in (exclude or []) if str(t or "").strip()}
     try:
         from src.services.fundamental_screener_service import (
             SCREEN_ANGLE_LABELS, get_ranked_picks)

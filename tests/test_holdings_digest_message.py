@@ -110,3 +110,36 @@ def test_never_prints_literal_none_when_scores_missing():
     msg = F(_full_digest(), s, as_of=_AS_OF)
     assert "2330 台積電" in msg
     assert "None" not in msg
+
+
+def test_total_zero_never_gives_false_all_clear():
+    """稽核🔴A:代號讀到但每檔抓取全失敗(total=0)→ 不得印「無需動作/續抱」的假安心,
+    改誠實「未能判斷」（§1:不從零資料給結論）。"""
+    d = {"total": 0, "vix": None, "reds": [], "adds": [], "errors": ["2412", "2330"],
+         "allocation": None, "take_profit": []}
+    s = {"regime": "unknown", "loaded": False, "switch_out": [], "switch_in": [],
+         "switch_in_src": "screener"}
+    msg = F(d, s, as_of=_AS_OF)
+    assert "無需動作" not in msg and "續抱、定期定額" not in msg
+    assert "未能判斷" in msg and "抓取全失敗" in msg
+    assert "None" not in msg
+
+
+def test_code_or_badge_none_never_prints_literal_none():
+    """稽核🟡D:代號/235/加碼金 present-but-None（非缺席）不得印字面 None。"""
+    d = {"total": 2, "vix": 20.0, "reds": [],
+         "adds": [{"代號": None, "235": None, "加碼金": None}],
+         "errors": [], "allocation": None, "take_profit": [{"代號": None, "損益%": 16.0}]}
+    s = {"regime": "bull", "loaded": True, "posture": "x", "switch_out": [],
+         "switch_in": [{"代號": None, "名稱": "台積電", "綜合分": None}], "switch_in_src": "screener"}
+    msg = F(d, s, as_of=_AS_OF)
+    assert "None" not in msg
+
+
+def test_partial_allocation_does_not_crash():
+    """稽核🟢E:allocation 缺鍵(上游契約漂移)→ 略過該段,不 KeyError 炸整則。"""
+    d = _full_digest()
+    d["allocation"] = {"core_pct": 72.0}   # 缺 sat_pct / core_target / ... 等鍵
+    msg = F(d, _full_switch(), as_of=_AS_OF)   # 不應 raise
+    assert "配置" not in msg
+    assert "非投資建議" in msg

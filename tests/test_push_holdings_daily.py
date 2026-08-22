@@ -42,6 +42,33 @@ def test_build_entries_empty():
     assert P._build_entries([], []) == []
 
 
+def test_build_entries_suffix_aware_dedup():
+    """稽核1a:持有 2330、觀察清單放 2330.TW → 不重列（不會反推換入已持有）。"""
+    ent = P._build_entries([{"ticker": "2330", "lots": 1, "avg_price": 600}],
+                           ["2330.TW", "2317"])
+    _tk = [e["ticker"] for e in ent]
+    assert "2330" in _tk and "2330.TW" not in _tk
+    assert [e for e in ent if e["ticker"] == "2317"][0]["held"] is False
+
+
+def test_read_inputs_merges_two_sheets(monkeypatch):
+    """稽核6b:兩條 sheet 通道都設 → 持股/觀察清單跨表合併。"""
+    monkeypatch.setenv("PORTFOLIO_SHEET_ID", "ETF_SHEET")
+    monkeypatch.setenv("STOCK_PORTFOLIO_SHEET_ID", "STK_SHEET")
+
+    def _rh(sid, creds):
+        return {"ETF_SHEET": [{"ticker": "0050", "lots": 1, "avg_price": 130}],
+                "STK_SHEET": [{"ticker": "2330", "lots": 1, "avg_price": 600}]}.get(sid, [])
+
+    def _rw(sid, creds):
+        return {"STK_SHEET": ["2317"]}.get(sid, [])
+    monkeypatch.setattr(R, "read_holdings", _rh)
+    monkeypatch.setattr(R, "read_watchlist", _rw)
+    hold, wl = P._read_inputs({"x": 1})
+    assert {h["ticker"] for h in hold} == {"0050", "2330"}
+    assert wl == ["2317"]
+
+
 # ── fail-loud（§1）──────────────────────────────────────────────────────
 def test_main_missing_credentials_raises(monkeypatch):
     monkeypatch.delenv("GCP_SERVICE_ACCOUNT_JSON", raising=False)
@@ -159,3 +186,29 @@ def test_script_no_toplevel_streamlit():
     """headless cron:腳本本體不得 top-level import streamlit（沿用 push_daily_signals 慣例）。"""
     src = (_REPO / "scripts/push_holdings_daily.py").read_text(encoding="utf-8")
     assert "import streamlit" not in src
+
+
+def test_script_runtime_pulls_no_l5_ui():
+    """稽核4a:headless cron 匯入鏈不得拉進 L5 UI（src.ui.tabs / src.ui.etf）——那會把整個
+    streamlit 分頁 UI 拉進 cron。grep 只看本文抓不到 transitive 洩漏,故用 subprocess 實測
+    sys.modules。(L4 render 因既有 V-CHECKLIST-1 被 src.services.__init__ 帶入屬另案,此處
+    只釘「不得碰 L5 分頁」這條真正的 headless 界線。)"""
+    import subprocess
+    import sys
+    _code = (
+        "import scripts.push_holdings_daily\n"
+        "import src.services.dividend_station_service\n"          # main() 會 import 的重鏈
+        "import src.compute.notify.holdings_digest_message\n"
+        "import src.data.portfolio.gsheet_sa_reader\n"
+        "import src.data.notify.dispatch\n"
+        "import sys\n"
+        "bad=[m for m in sys.modules if m.startswith('src.ui.tabs') "
+        "or m.startswith('src.ui.etf')]\n"
+        "assert not bad, bad\n"
+        "print('HEADLESS_OK')\n"
+    )
+    r = subprocess.run([sys.executable, "-c", _code], cwd=str(_REPO),
+                       capture_output=True, text=True)
+    assert r.returncode == 0, (
+        f"headless 匯入鏈拉進 L5 UI 或失敗:\nSTDOUT:{r.stdout}\nSTDERR:{r.stderr[-1500:]}")
+    assert "HEADLESS_OK" in r.stdout

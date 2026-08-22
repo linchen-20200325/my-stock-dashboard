@@ -30,7 +30,9 @@ from __future__ import annotations
 import json
 import os
 
-# §2.1 SSOT:分頁名 + 純解析器一律取自 gsheet_portfolio（同層 L1→L1,非跨層違憲）。
+# §2.1 SSOT:分頁名 + 純解析器一律取自 gsheet_portfolio（同層 L1→L1,非跨層違憲）;
+# 代號正規化（去 .TW/.TWO）走 L0 normalize_ticker SSOT（與分類/去重/exclude 比對同一套）。
+from shared.dividend_station_thresholds import normalize_ticker
 from src.data.portfolio.gsheet_portfolio import (
     _STOCK_WATCHLIST_WORKSHEET,
     _WORKSHEET_NAME,
@@ -99,17 +101,23 @@ def read_holdings(sheet_id: str, creds_dict: dict) -> list[dict]:
     client = _build_client(creds_dict)
     _parsed = parse_portfolio_records(_worksheet_records(client, sheet_id, _WORKSHEET_NAME))
     _out: list[dict] = []
-    _seen: set[str] = set()
-    _dups = 0
+    _first: dict[str, dict] = {}
+    _dropped: list[str] = []
     for _h in _parsed:
-        _tk = str(_h.get("ticker", "")).strip().upper()
-        if _tk in _seen:
-            _dups += 1
+        _key = normalize_ticker(_h.get("ticker", ""))   # 2330 與 2330.TW 視為同一檔（後綴 SSOT）
+        if _key in _first:
+            # §1 缺值/衝突要 log:v1 保留首見（加權合併屬 v2）;同代號不同均價則明列衝突,不靜默。
+            _prev_avg = _first[_key].get("avg_price")
+            _this_avg = _h.get("avg_price")
+            _flag = "" if _prev_avg == _this_avg else f"(均價衝突 {_prev_avg}→丟棄 {_this_avg})"
+            _dropped.append(f"{_h.get('ticker')}{_flag}")
             continue
-        _seen.add(_tk)
+        _first[_key] = _h
         _out.append(_h)
-    if _dups:
-        print(f"[gsheet_sa_reader] {sheet_id[:12]}… 持股去重:略過 {_dups} 筆重複代號（保留首見）")
+    if _dropped:
+        # §1 不印 sheet_id（GitHub Secret,遮罩不含子字串）;改列被丟代號,可觀測又不洩密。
+        print(f"[gsheet_sa_reader] 持股去重:保留首見,略過重複代號 {len(_dropped)} 筆 → "
+              + "、".join(_dropped))
     return _out
 
 

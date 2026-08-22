@@ -135,6 +135,20 @@ def test_read_watchlist_worksheet_missing_returns_empty(monkeypatch):
     assert R.read_watchlist("S1", {}) == []
 
 
+def test_read_holdings_suffix_aware_dedup_and_logs(monkeypatch, capsys):
+    """稽核1a+C:2330 與 2330.TW 視為同一檔（後綴 SSOT 去重）;同代號不同均價明列 log,不印 sheet_id。"""
+    _ss = _FakeSS({"portfolios": [
+        {"name": "a", "ticker": "2330", "lots": 1, "avg_price": 600},
+        {"name": "b", "ticker": "2330.TW", "lots": 2, "avg_price": 590},  # 同檔不同均價 → 丟+log
+    ]})
+    _patch(monkeypatch, {"SHEETID_SECRET": _ss})
+    out = R.read_holdings("SHEETID_SECRET", {})
+    assert [h["ticker"] for h in out] == ["2330"]          # 保留首見
+    _log = capsys.readouterr().out
+    assert "去重" in _log and "2330.TW" in _log and "均價衝突" in _log
+    assert "SHEETID_SECRET" not in _log                    # §1 不印 sheet_id（GitHub Secret）
+
+
 def test_scopes_are_readonly():
     """§1 最小權限:cron 只讀不寫使用者 Sheet。"""
     assert R._SCOPES == ["https://www.googleapis.com/auth/spreadsheets.readonly"]
