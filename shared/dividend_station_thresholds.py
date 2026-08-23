@@ -81,25 +81,39 @@ STOCK_SWAP_GRADES: tuple[str, ...] = ("C", "F")
 STOCK_HEALTH_GRADES: tuple[str, ...] = ("A+", "A", "B+", "B", "C", "F")
 
 
+def normalize_ticker(ticker: str) -> str:
+    """去 `.TW` / `.TWO` 後綴 + 轉大寫（純函式,SSOT）。
+
+    供「分類 / 去重 / exclude 比對」共用同一套正規化 —— 避免各處各自 strip 造成**後綴盲**的
+    比對 bug（同一檔 `2330` 與 `2330.TW` 被當兩檔:重複列 / 已持有卻被推「換入」)。
+    """
+    code = str(ticker or "").strip().upper()
+    for _suf in (".TWO", ".TW"):
+        if code.endswith(_suf):
+            return code[:-len(_suf)]
+    return code
+
+
 def classify_asset_kind(ticker: str) -> str:
     """依台股代號規則判 ETF vs 個股（純函式,**跟「在哪個清單」脫鉤**）。
 
     - `00` 開頭（0050 / 0056 / 00878 / 00980A / 00982T 等,可帶 A/T 後綴）→ ETF
     - 4 碼純數字（2330 / 6239 / 3006）→ 個股
+    - 4 碼 + 單一字母（**特別股** 2881A 富邦金特 / 2882A 國泰金特 等,存股常見）→ 個股
+      （走財報體檢 + KD 汰弱路徑,而非 ETF 的 235/3-3-3;`00` 開頭者上面先攔,故
+      00980A/00982T 仍 ETF、不受影響）
     - 其餘（美股 BND / VOO 等非台股代號）→ 預設 ETF（本站非台股持有多為 ETF;
       折溢價/3-3-3 對美股 fetcher 會自然抓空標「—」,不誤傷）
-    先去除 `.TW` / `.TWO` 後綴再判。
-    §1:此為代號規則啟發式,非權威。個股被誤判成 ETF 的風險已由「4 碼→個股」優先攔下
-    （避免對個股誤套折溢價/3-3-3）。
+    先去除 `.TW` / `.TWO` 後綴再判（走 `normalize_ticker` SSOT）。
+    §1:此為代號規則啟發式,非權威。個股被誤判成 ETF 的風險已由「4 碼(+字母)→個股」優先攔下
+    （避免對個股/特別股誤套折溢價/3-3-3）。
     """
-    code = str(ticker or "").strip().upper()
-    for _suf in (".TWO", ".TW"):
-        if code.endswith(_suf):
-            code = code[:-len(_suf)]
-            break
+    code = normalize_ticker(ticker)
     if code.startswith("00"):
         return KIND_ETF
     if len(code) == 4 and code.isdigit():
+        return KIND_STOCK
+    if len(code) == 5 and code[:4].isdigit() and code[4:].isalpha():
         return KIND_STOCK
     return KIND_ETF
 

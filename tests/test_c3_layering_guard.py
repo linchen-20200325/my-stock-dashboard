@@ -685,6 +685,13 @@ for _f, _m in (
     ("scripts/push_watchlist_signals.py", "src.compute.notify.watchlist_message"),
     ("scripts/push_watchlist_signals.py", "src.compute.notify.watchlist_triggers"),
     ("scripts/push_weekly_report.py", "src.services.weekly_review_service"),
+    # #35(2026-08)每日持股續抱/換股推播 —— 與上面推播家族完全同一根因(scripts 分層標籤)。
+    # 沿用「💼 持股戰情室」引擎(dividend_station_service)+ L2 訊息(holdings_digest_message)
+    # + AI 潤稿(ai_fetcher),零 src.ui.*(headless cron 走 L5 會拉整個 streamlit UI 鏈)。
+    ("scripts/push_holdings_daily.py", "src.compute.notify.ai_judgment"),
+    ("scripts/push_holdings_daily.py", "src.compute.notify.holdings_digest_message"),
+    ("scripts/push_holdings_daily.py", "src.services.ai_fetcher"),
+    ("scripts/push_holdings_daily.py", "src.services.dividend_station_service"),
     ("scripts/shortage_cli.py", "src.compute.health.monthly_revenue_calc"),
     ("scripts/shortage_cli.py", "src.compute.screener.shortage_screener"),
     ("scripts/update_forward_test_freeze.py", "src.services.forward_test_service"),
