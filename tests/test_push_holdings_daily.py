@@ -198,12 +198,43 @@ def test_main_ai_failure_degrades_to_rule_message(monkeypatch):
 # ── workflow 結構 + headless ─────────────────────────────────────────────
 def test_workflow_file_structure():
     y = (_REPO / ".github/workflows/push_holdings_daily.yml").read_text(encoding="utf-8")
-    assert 'cron: "15 9 * * 1-5"' in y                # TW 17:15,錯開選股推
+    # 2026-08-23 user 決定:從 TW 17:15(收盤後)搬到 TW 06:30(開盤前),讓結論在
+    # 還能下單的時點送達,並與風險警語的時效對齊。
+    assert 'cron: "30 22 * * 0-4"' in y
+    assert 'cron: "15 9 * * 1-5"' not in y, "舊的收盤後排程沒清掉 → 一天會推兩則"
     assert "scripts/push_holdings_daily.py" in y
     for _sec in ("GCP_SERVICE_ACCOUNT_JSON", "PORTFOLIO_SHEET_ID",
                  "STOCK_PORTFOLIO_SHEET_ID", "LINE_CHANNEL_ACCESS_TOKEN",
                  "FINMIND_TOKEN", "GEMINI_API_KEY"):
         assert _sec in y, f"workflow 缺 secret env: {_sec}"
+
+
+def test_cron_really_lands_on_tw_weekday_0630():
+    """把 cron 實際換算成台灣時間 —— 釘住最容易寫錯的那一步。
+
+    台灣是 UTC+8,TW 06:30 落在 UTC 前一日 22:30,所以**星期欄必須一起往前挪**
+    (1-5 → 0-4)。只改時不改星期的話:週一那班變成台灣週二、週五那班整個消失,
+    而且 workflow 照樣是合法 YAML、CI 全綠 —— 沒有這條測試不會有人發現。
+    """
+    import datetime as _dt
+    import re
+
+    y = (_REPO / ".github/workflows/push_holdings_daily.yml").read_text(encoding="utf-8")
+    _m = re.search(r'cron:\s*"(\S+) (\S+) (\S+) (\S+) (\S+)"', y)
+    assert _m, "找不到 cron"
+    _min, _hour, _dom, _mon, _dow = _m.groups()
+    assert _dom == "*" and _mon == "*"
+
+    _lo, _hi = (int(x) for x in _dow.split("-"))
+    _tw_days = set()
+    for _d in range(_lo, _hi + 1):
+        # 取一個該 UTC 星期幾的具體日期(2026-08-23 是週日 = cron 的 0),換算成台灣時間
+        _base = _dt.datetime(2026, 8, 23, int(_hour), int(_min), tzinfo=_dt.timezone.utc)
+        _utc = _base + _dt.timedelta(days=_d)
+        _tw = _utc.astimezone(_dt.timezone(_dt.timedelta(hours=8)))
+        assert (_tw.hour, _tw.minute) == (6, 30), f"台灣時間是 {_tw:%H:%M},不是 06:30"
+        _tw_days.add(_tw.weekday())          # Monday=0
+    assert _tw_days == {0, 1, 2, 3, 4}, f"台灣的星期落點是 {sorted(_tw_days)},應為週一~週五"
 
 
 def test_script_no_toplevel_streamlit():

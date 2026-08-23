@@ -1,0 +1,105 @@
+# -*- coding: utf-8 -*-
+"""shared/global_lead_markets.py — 對台股有時間差領先性的國際市場清冊（L0,純常數）。
+
+═══ 這份清冊是從哪來的、為什麼是複本 ═══════════════════════════════════
+移植自 **mynews repo** 的 `index_fetcher.SYMBOLS`(2026-08-23)。那邊每天台灣 06:0x
+用它產出「🚨 國際盤大跌預警」LINE 推播;本 repo 需要同一個判斷來當持股推播的**提示層**。
+
+原本評估過「直接讀 mynews 產出的 latest_intl_alert.json」,實測後放棄:
+  - mynews 是 **private** repo → raw.githubusercontent 匿名抓回 404,要新增跨 repo PAT;
+  - 該檔在 NAS 沒開機的日子會**原地保留昨天的內容**(檔案還在、讀得到、不報錯),
+    消費端得自己比對 report_date 才分得出新舊 —— 一個不比自己算便宜的失敗模式;
+  - 本 repo 已有 `src/data/macro/macro_core.fetch_yf_close` 打同一個 Yahoo Chart API,
+    自己算反而少一條外部依賴。
+
+⚠️ **代價要講清楚:這是複本,會漂移。** mynews 那邊改了門檻或標的,這邊不會自動跟。
+兩邊檔頭互相註明對方位置,但註解擋不住漂移 —— 真要擋住需要跨 repo 漂移測試,
+屬另一件工程(§8.1 step 6:先不做,等真的需要再加)。
+
+═══ 為什麼只當「提示層」,不當動作級閘門 ═════════════════════════════════
+2026-08-23 用 mynews 的 71 天逐日歸檔(2026-06-10 ~ 08-19,零斷檔)實測:
+
+    定義                          觸發率(交易日)  抓到幾成台股真大跌
+    任一領先市場 <= -1.5%(現行)      53.1%          100%  (8/8)
+    任一領先市場 <= -3.0%            42.9%           75%  (6/8)
+    任一領先市場 <= -5.0%            24.5%           38%  (3/8)
+    那斯達克綜合 <= -4.0%             8.2%           25%  (2/8)
+
+「響得少」與「不漏」在這個訊號上是**衝突的目標**。而且視窗內台股跌最兇的一天
+(2026-07-17,-6.47%)當天早上那斯達克只跌 1.24% —— **台股大跌常常不是美股帶來的**,
+靠美股指數當警報,本質上就有一塊看不到。
+
+所以本清冊維持 -1.5%(與 mynews 一致、100% 不漏),輸出**只描述事實、不下動作指令**。
+動作級閘門走台股本地的兩腿共振,見 `shared/signal_thresholds.EXTREME_TWII_20D_DROP_PCT`。
+
+統計上這條線是有資訊量的,不是亂響:觸發日當天 TWII 中位數 -0.37%、未觸發日 +0.43%,
+permutation test 單尾 p = 0.021(n=49 交易日)。問題純粹在頻率。
+
+§8.2 分層:L0 Shared —— 純常數,無 I/O,不得 import 任何 L1+。
+"""
+from __future__ import annotations
+
+from typing import NamedTuple
+
+
+class LeadMarket(NamedTuple):
+    """一個領先市場標的。
+
+    symbol : Yahoo Finance ticker
+    name   : 顯示用中文名
+    lead   : 對台股的時間差性質 —— 決定它在台灣早上 06:30 時「新不新」
+    """
+
+    symbol: str
+    name: str
+    lead: str
+
+
+LEAD_OVERNIGHT = "隔夜領先"
+"""美股**現貨**收盤 → 領先台股一個交易夜。
+
+⚠️ 週末與美股假日會**凍結在前一交易日收盤**:2026-08-23 實測 mynews 71 天歸檔,
+四個現貨指數各有 21/69 日(30%)與前一日數值完全相同。本 repo 只在台股交易日推播,
+天然避開大部分,但遇到「美股放假、台股有開」仍會拿到昨天的數字 —— 這不是故障,
+是真的沒有新報價,故不特別標示,由 `lead` 欄讓消費端自行判斷。"""
+
+LEAD_PREMARKET = "盤前即時"
+"""美股**期貨**,近乎 24 小時連續交易 → 台灣早上 06:30 時是即時的。
+
+同一份實測:期貨只有 11/69 日(16%)與前一日相同,明顯比現貨活。"""
+
+
+LEAD_MARKETS: tuple[LeadMarket, ...] = (
+    LeadMarket("^GSPC", "標普 500", LEAD_OVERNIGHT),
+    LeadMarket("^IXIC", "那斯達克綜合", LEAD_OVERNIGHT),
+    LeadMarket("^DJI", "道瓊工業", LEAD_OVERNIGHT),
+    LeadMarket("^SOX", "費城半導體", LEAD_OVERNIGHT),
+    LeadMarket("ES=F", "標普 500 期貨", LEAD_PREMARKET),
+    LeadMarket("NQ=F", "那斯達克 100 期貨", LEAD_PREMARKET),
+)
+"""六個對台股有時間差領先性的標的（順序 = 訊息中的顯示順序）。
+
+**刻意不收**美10年債殖利率 / 美元指數 / 新台幣匯率 —— mynews 那邊也把它們的
+lead_type 留空、不列入大跌判定:殖利率與匯率「上漲」才是收緊訊號,把它們和股價指數
+混在同一個「跌幅」判斷裡會反向誤判(§4.1 sign convention)。
+
+**刻意不收台指期夜盤**:mynews 有這個標的,但它在 71 天裡有 15 天缺料(21%),
+而本 repo 的判斷已有台股本地兩腿,不需要再靠一個高缺料率的代理。"""
+
+
+GLOBAL_LEAD_DROP_PCT: float = -1.5
+"""領先市場「大跌」門檻（單位：%,日變動）。
+
+與 mynews `index_fetcher.DEFAULT_DROP_THRESHOLD` 同值 —— **刻意保持一致**,
+讓兩邊推播不會對同一天講不一樣的話。
+
+⚠️ 實測 -1.5 與 -2.0 觸發完全相同(71 天裡沒有任何領先市場落在 (-2.0, -1.5] 區間),
+所以「稍微調嚴一點」在這個訊號上是沒有效果的操作 —— 要降頻只能大幅改變定義,
+而那會犧牲召回率(見檔頭表)。想動這個值前先讀檔頭。"""
+
+
+def is_lead_drop(change_pct: float | None) -> bool:
+    """單一標的的日變動是否構成「大跌」。None(缺料) → False,**但呼叫端必須另外
+    追蹤缺料**:六個標的全缺時「沒有人大跌」與「什麼都不知道」在此函式回值上長得一樣。
+    """
+    return change_pct is not None and change_pct <= GLOBAL_LEAD_DROP_PCT
