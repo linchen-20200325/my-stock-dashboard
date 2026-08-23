@@ -73,6 +73,25 @@ def _switch_in_lines(switch: "dict | None") -> list[str]:
     return _lines
 
 
+def _picks_lines(picks) -> list[str]:
+    """今日選股 Top N（換股池,已排除持股 → 全是「可換入」標的）。空/None → 略過。
+
+    picks 來源 = get_switch_in_candidates（同一次 get_ranked_picks,不重抓),鍵為 代碼/名稱/綜合分。
+    這段把「每日選股清單」併進持股推:換出的持股從這個池 + 觀察清單🟢 挑換入(§ user 2026-08-23)。
+    ⚠️ 「已排除持股」由 caller 保證（picks 傳自 get_switch_in_candidates(exclude=held)）,
+    本純函式不自行過濾;若他處重用本函式且未先排除持股,header 措辭需相應調整。
+    """
+    if not picks:
+        return []
+    _lines = [f"📈 今日選股 Top{len(picks)}（換股池·已排除持股）"]
+    for _i, c in enumerate(picks, 1):
+        _nm = str(c.get("名稱", "") or "").strip()
+        _score = _num(c.get("綜合分"))
+        _tail = f"（綜合分 {_score:.0f}）" if _score is not None else ""
+        _lines.append(f"　{_i}. {_code(c, '代碼')} {_nm}".rstrip() + _tail)
+    return _lines
+
+
 def _adds_lines(digest: dict) -> list[str]:
     """235 逢低加碼觸發。空 → 略過。"""
     _adds = digest.get("adds") or []
@@ -122,10 +141,13 @@ def _errors_line(digest: dict) -> list[str]:
 
 
 def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
-                            as_of: str) -> str:
-    """digest(+switch) → 每日持股續抱/換股 LINE 訊息（純函式,§1 數字全來自上游）。
+                            as_of: str, picks: "list | None" = None) -> str:
+    """digest(+switch+picks) → 每日持股續抱/換股 LINE 訊息（純函式,§1 數字全來自上游）。
 
-    區段:標題 → 位階 → VIX → 換出 → 換入 → 235 加碼 → 衛星停利 → 配置 → 抓取失敗 → 免責。
+    區段:標題 → 位階 → VIX → 換出 → 換入 → 今日選股 Top N（換股池）→ 235 加碼 →
+    衛星停利 → 配置 → 抓取失敗 → 免責。
+    picks（get_switch_in_candidates 的清單,已排除持股）併入「每日選股」→ 一則涵蓋
+    持股續抱/換股 + 選股清單（§ user 2026-08-23 合併需求）;None → 不顯示該段（向後相容）。
     「今日無需動作」判定:無換出、無加碼、無停利 → 明講續抱（對齊 build_summary_prompt 語氣）。
     """
     digest = digest or {}
@@ -142,8 +164,26 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     ]
     lines += _switch_out_lines(digest, switch)
     _in = _switch_in_lines(switch)
-    if _in:
+    _src = (switch or {}).get("switch_in_src")
+    # 換入段顯示條件:來自你的觀察清單🟢 → 顯示(與全市場排名不同來源,各有價值);
+    #   來自 screener 排名 + 已附「今日選股(換股池)」→ 同一批,只留清單(去重)。
+    _show_in = bool(_in) and not (picks and _src == "screener")
+    # cross-section 去重:換入段有顯示時,選股清單別重列同一檔(觀察清單🟢 也可能同時排進 screener)。
+    _picks_show = picks
+    if _show_in and picks:
+        _in_codes = {T.normalize_ticker(d.get("代號"))
+                     for d in (switch or {}).get("switch_in", [])}
+        _picks_show = [c for c in picks
+                       if T.normalize_ticker(c.get("代碼")) not in _in_codes]
+    _pk = _picks_lines(_picks_show)
+    if _show_in:
         lines += [""] + _in
+    if _pk:
+        lines += [""] + _pk
+        # 風控(稽核🟡):總經轉守時 build_switch_advice 本把換入 cap 到 3 檔,但 screener 去重把
+        # 換入段抹平 → 防禦盤易讀成「買這 10 檔」。補「換股從嚴」提醒,不需 AI 也看得到防禦訊號。
+        if (switch or {}).get("stance") == "defensive":
+            lines += ["　⚠️ 總經轉守：換股從嚴、優先汰弱、勿追高（此為換股池,非全數買進建議）"]
     for _seg in (_adds_lines(digest), _take_profit_lines(digest),
                  _allocation_line(digest), _errors_line(digest)):
         if _seg:

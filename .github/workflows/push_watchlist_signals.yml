@@ -12,9 +12,8 @@ name: "觀察池訊號推播（LINE / Telegram）"
 # ⚠️ 排 Mon-Fri，未濾 TW 國定假日（無第三方 trading calendar，見 CLAUDE.md §4.5）。
 #    訊息一律標資料日期，假日跑到舊資料時可辨識。
 on:
-  schedule:
-    - cron: "0 9 * * 1-5"     # 平日盤後：有訊號才推
-    - cron: "30 9 * * 1"      # 週一：健康碼（沒訊號也送）
+  # 排程已停用（user 2026-08-23）：與「每日持股續抱/換股推播」重複 → 停自動推,
+  # 保留 workflow_dispatch 供需要時手動觸發（要復原自動推:加回上面兩條 cron 即可）。
   workflow_dispatch:
     inputs:
       ma_windows:
