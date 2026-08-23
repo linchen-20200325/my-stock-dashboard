@@ -73,6 +73,23 @@ def _switch_in_lines(switch: "dict | None") -> list[str]:
     return _lines
 
 
+def _picks_lines(picks) -> list[str]:
+    """今日選股 Top N（換股池,已排除持股 → 全是「可換入」標的）。空/None → 略過。
+
+    picks 來源 = get_switch_in_candidates（同一次 get_ranked_picks,不重抓),鍵為 代碼/名稱/綜合分。
+    這段把「每日選股清單」併進持股推:換出的持股從這個池 + 觀察清單🟢 挑換入(§ user 2026-08-23)。
+    """
+    if not picks:
+        return []
+    _lines = [f"📈 今日選股 Top{len(picks)}（換股池·已排除持股）"]
+    for _i, c in enumerate(picks, 1):
+        _nm = str(c.get("名稱", "") or "").strip()
+        _score = _num(c.get("綜合分"))
+        _tail = f"（綜合分 {_score:.0f}）" if _score is not None else ""
+        _lines.append(f"　{_i}. {_code(c, '代碼')} {_nm}".rstrip() + _tail)
+    return _lines
+
+
 def _adds_lines(digest: dict) -> list[str]:
     """235 逢低加碼觸發。空 → 略過。"""
     _adds = digest.get("adds") or []
@@ -122,10 +139,13 @@ def _errors_line(digest: dict) -> list[str]:
 
 
 def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
-                            as_of: str) -> str:
-    """digest(+switch) → 每日持股續抱/換股 LINE 訊息（純函式,§1 數字全來自上游）。
+                            as_of: str, picks: "list | None" = None) -> str:
+    """digest(+switch+picks) → 每日持股續抱/換股 LINE 訊息（純函式,§1 數字全來自上游）。
 
-    區段:標題 → 位階 → VIX → 換出 → 換入 → 235 加碼 → 衛星停利 → 配置 → 抓取失敗 → 免責。
+    區段:標題 → 位階 → VIX → 換出 → 換入 → 今日選股 Top N（換股池）→ 235 加碼 →
+    衛星停利 → 配置 → 抓取失敗 → 免責。
+    picks（get_switch_in_candidates 的清單,已排除持股）併入「每日選股」→ 一則涵蓋
+    持股續抱/換股 + 選股清單（§ user 2026-08-23 合併需求）;None → 不顯示該段（向後相容）。
     「今日無需動作」判定:無換出、無加碼、無停利 → 明講續抱（對齊 build_summary_prompt 語氣）。
     """
     digest = digest or {}
@@ -142,8 +162,14 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     ]
     lines += _switch_out_lines(digest, switch)
     _in = _switch_in_lines(switch)
-    if _in:
+    _pk = _picks_lines(picks)
+    # 去重:換入清單若來自 screener 排名、且下方已附「今日選股（換股池）」→ 兩者同一批,只留清單;
+    # 換入來自你的觀察清單🟢 時保留(與全市場排名不同來源,各有價值 → user「選股池 與 選股清單」)。
+    _src = (switch or {}).get("switch_in_src")
+    if _in and not (_pk and _src == "screener"):
         lines += [""] + _in
+    if _pk:
+        lines += [""] + _pk
     for _seg in (_adds_lines(digest), _take_profit_lines(digest),
                  _allocation_line(digest), _errors_line(digest)):
         if _seg:

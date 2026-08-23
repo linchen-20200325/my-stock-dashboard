@@ -135,9 +135,33 @@ def test_main_populated_sends_switch_message(monkeypatch):
     assert rc == 0
     _t = _sent["t"]
     assert "建議換出" in _t and "2412" in _t          # 持有紅燈 → 換出
-    assert "建議換入" in _t and "2330" in _t          # 選股池候選 → 換入
+    assert "今日選股" in _t and "2330" in _t          # 選股清單(換股池)含候選(screener 換入已併入清單)
     assert "AI 總結" not in _t                        # 無 GEMINI_API_KEY → 無 AI 段
     assert "非投資建議" in _t
+
+
+def test_main_requests_top10_picks_and_shows_list(monkeypatch):
+    """§ user 2026-08-23 合併每日選股:換入候選以 top_n=10 抓,訊息併入「今日選股」清單。"""
+    _sent = _wire_populated(monkeypatch)
+    _seen = {}
+
+    def _cands(**k):
+        _seen["top_n"] = k.get("top_n")
+        return [{"代碼": "2330", "名稱": "台積電", "綜合分": 92},
+                {"代碼": "2454", "名稱": "聯發科", "綜合分": 88}]
+    monkeypatch.setattr(DS, "get_switch_in_candidates", _cands)   # 覆蓋 _wire_populated 的預設
+    rc = P.main([])
+    assert rc == 0
+    assert _seen["top_n"] == 10, "選股清單應抓前 10 名"
+    assert "今日選股" in _sent["t"] and "2454" in _sent["t"]
+
+
+def test_redundant_push_workflows_schedule_disabled():
+    """§ user 2026-08-23:選股/觀察池推播已停自動排程（併入持股推）,只保留手動觸發。"""
+    for _f in ("push_daily_signals.yml", "push_watchlist_signals.yml"):
+        y = (_REPO / ".github/workflows" / _f).read_text(encoding="utf-8")
+        assert "cron:" not in y, f"{_f} 不應再有 cron 排程（已併入持股推）"
+        assert "workflow_dispatch" in y, f"{_f} 應保留手動觸發"
 
 
 def test_main_dry_run_does_not_send(monkeypatch, capsys):

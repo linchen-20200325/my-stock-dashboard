@@ -6,8 +6,10 @@
 L2 純函式組訊息（`format_holdings_message`）→（選配）Gemini AI 潤稿 → 推 LINE / Telegram
 （`NOTIFY_CHANNEL`,預設 line）。
 
-與 `push_daily_signals.py` 的分工:那支推「選股網清單」(公開資料);本支推「你的持股」
-(私有 Sheet,需 SA)。兩支各自獨立 cron,互不影響。
+合併每日選股（§ user 2026-08-23）:訊息**併入「今日選股 Top10（換股池）」**—— 與換入候選
+同一次 `get_ranked_picks`（不重抓）,讓持股續抱/換股 + 選股清單集中成**一則** LINE。
+原獨立的 `push_daily_signals.py`（全市場選股清單）與 `push_watchlist_signals.py`（觀察池）
+排程已停用（改保留手動觸發）,不再各自推播,避免重複。
 
 §8.2:orchestrator（同 push_daily_signals / update_forward_test_freeze）,可跨層 import。
 §1 Fail-Loud:
@@ -42,6 +44,10 @@ _TW_TZ = _dt.timezone(_dt.timedelta(hours=8))
 # 兩者皆選填,但至少要有一個（§1:皆缺 → raise）。
 _PORTFOLIO_SHEET_ENV = "PORTFOLIO_SHEET_ID"
 _STOCK_SHEET_ENV = "STOCK_PORTFOLIO_SHEET_ID"
+
+# 併入「每日選股」清單的名次（§ user 2026-08-23:持股推 + 選股清單合成一則,前 10 名)。
+# 同一份候選同時餵 build_switch_advice（精選換入）+ 訊息「今日選股 Top10 換股池」顯示。
+_PICKS_TOP_N = 10
 
 
 def _tw_now() -> str:
@@ -201,11 +207,15 @@ def main(argv=None) -> int:
     _rows, _vix = get_station_rows(_entries)    # 逐檔抓價/財報/KD（單檔失敗標資料不足,不炸）
     _macro = get_station_macro()                # 總經位階（讀不到 → unknown,不瞎給攻守）
     _held = [e["ticker"] for e in _entries if e.get("held")]
-    _cands = get_switch_in_candidates(regime=_macro.get("regime"), exclude=_held)  # 內含 fail→[]
+    # 換入候選 + 今日選股清單同源:一次 get_ranked_picks（經 get_switch_in_candidates,headless
+    # 無 st cache 故刻意只呼叫一次,避免重抓）→ 前幾檔給 build_switch_advice 當精選換入,
+    # 全 Top10 併入訊息「今日選股（換股池）」（§ user 2026-08-23 合併每日選股 → 一則）。
+    _cands = get_switch_in_candidates(regime=_macro.get("regime"), exclude=_held,
+                                      top_n=_PICKS_TOP_N)   # 內含 fail→[]
     _switch = build_switch_advice(_rows, _macro, _cands)   # 純函式
     _digest = build_station_digest(_rows, _vix)            # 純函式
 
-    _msg = format_holdings_message(_digest, _switch, as_of=_as_of)
+    _msg = format_holdings_message(_digest, _switch, as_of=_as_of, picks=_cands)
     _msg += _maybe_ai_summary(_digest, _switch)
 
     if args.dry_run:

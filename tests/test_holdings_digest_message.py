@@ -143,3 +143,44 @@ def test_partial_allocation_does_not_crash():
     msg = F(d, _full_switch(), as_of=_AS_OF)   # 不應 raise
     assert "配置" not in msg
     assert "非投資建議" in msg
+
+
+# ── 合併每日選股（§ user 2026-08-23）─────────────────────────────────────
+def test_picks_section_rendered():
+    """今日選股 Top N（換股池）併入同一則,含編號 + 代號/名稱/綜合分。"""
+    picks = [{"代碼": "2330", "名稱": "台積電", "綜合分": 92},
+             {"代碼": "2454", "名稱": "聯發科", "綜合分": 88}]
+    msg = F(_full_digest(), _full_switch(), as_of=_AS_OF, picks=picks)
+    assert "今日選股" in msg and "換股池" in msg
+    assert "1. 2330 台積電" in msg and "2454 聯發科" in msg
+
+
+def test_picks_none_omits_section():
+    """picks 預設 None（向後相容）→ 不顯示選股段。"""
+    msg = F(_full_digest(), _full_switch(), as_of=_AS_OF)
+    assert "今日選股" not in msg
+
+
+def test_picks_missing_score_no_literal_none():
+    """§1:選股候選缺綜合分 → 不印字面 None。"""
+    picks = [{"代碼": "2330", "名稱": "台積電", "綜合分": None}]
+    msg = F(_full_digest(), _full_switch(), as_of=_AS_OF, picks=picks)
+    assert "2330 台積電" in msg and "None" not in msg
+
+
+def test_switch_in_suppressed_when_screener_and_picks_shown():
+    """去重:換入來自 screener + 有選股清單 → 只留清單,不重印換入段。"""
+    s = _full_switch()
+    s["switch_in_src"] = "screener"
+    picks = [{"代碼": "2330", "名稱": "台積電", "綜合分": 92}]
+    msg = F(_full_digest(), s, as_of=_AS_OF, picks=picks)
+    assert "建議換入" not in msg and "今日選股" in msg
+
+
+def test_switch_in_kept_when_watchlist_even_with_picks():
+    """換入來自你的觀察清單🟢 → 與選股清單各有價值,兩段都留。"""
+    s = _full_switch()
+    s["switch_in_src"] = "watchlist"
+    picks = [{"代碼": "2454", "名稱": "聯發科", "綜合分": 88}]
+    msg = F(_full_digest(), s, as_of=_AS_OF, picks=picks)
+    assert "建議換入" in msg and "今日選股" in msg

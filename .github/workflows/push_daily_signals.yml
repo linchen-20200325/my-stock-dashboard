@@ -4,8 +4,8 @@ name: "每日選股訊號推播（LINE / Telegram）"
 # UTC 09:00 = TW 17:00（收盤後、當日盤後資料齊；對齊 update_macro_history.yml）。
 # ⚠️ 排 Mon-Fri，未濾 TW 國定假日（無第三方 trading calendar，見 CLAUDE.md §4.5）。
 on:
-  schedule:
-    - cron: "0 9 * * 1-5"
+  # 排程已停用（user 2026-08-23）：改由「每日持股續抱/換股推播」整合「換入候選」,
+  # 此則全市場選股清單對 user 重複 → 停自動推,保留 workflow_dispatch 供需要時手動觸發。
   workflow_dispatch:
     inputs:
       top_n:
