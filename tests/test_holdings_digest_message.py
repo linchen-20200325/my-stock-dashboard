@@ -148,9 +148,11 @@ def test_partial_allocation_does_not_crash():
 # ── 合併每日選股（§ user 2026-08-23）─────────────────────────────────────
 def test_picks_section_rendered():
     """今日選股 Top N（換股池）併入同一則,含編號 + 代號/名稱/綜合分。"""
+    s = _full_switch()
+    s["switch_in_src"] = "screener"      # screener → 換入併入清單,清單完整渲染
     picks = [{"代碼": "2330", "名稱": "台積電", "綜合分": 92},
              {"代碼": "2454", "名稱": "聯發科", "綜合分": 88}]
-    msg = F(_full_digest(), _full_switch(), as_of=_AS_OF, picks=picks)
+    msg = F(_full_digest(), s, as_of=_AS_OF, picks=picks)
     assert "今日選股" in msg and "換股池" in msg
     assert "1. 2330 台積電" in msg and "2454 聯發科" in msg
 
@@ -163,9 +165,37 @@ def test_picks_none_omits_section():
 
 def test_picks_missing_score_no_literal_none():
     """§1:選股候選缺綜合分 → 不印字面 None。"""
+    s = _full_switch()
+    s["switch_in_src"] = "screener"
     picks = [{"代碼": "2330", "名稱": "台積電", "綜合分": None}]
-    msg = F(_full_digest(), _full_switch(), as_of=_AS_OF, picks=picks)
+    msg = F(_full_digest(), s, as_of=_AS_OF, picks=picks)
     assert "2330 台積電" in msg and "None" not in msg
+
+
+def test_defensive_picks_shows_caveat_even_without_ai():
+    """稽核🟡:總經轉守 + screener 換入被去重 → 選股清單須帶「換股從嚴」提醒（純規則訊息,無 AI 也看得到）。"""
+    s = _full_switch()
+    s["stance"] = "defensive"
+    s["defense"] = True
+    s["switch_in_src"] = "screener"
+    picks = [{"代碼": str(2000 + i), "名稱": f"股{i}", "綜合分": 90 - i} for i in range(10)]
+    msg = F(_full_digest(), s, as_of=_AS_OF, picks=picks)
+    assert "今日選股 Top10" in msg
+    assert "轉守" in msg and "換股從嚴" in msg
+    assert "建議換入" not in msg          # screener → 換入併入清單
+
+
+def test_picks_dedup_against_watchlist_switch_in():
+    """去重:換入(觀察清單🟢)已列的檔,選股清單不重複列同一檔。"""
+    s = _full_switch()
+    s["switch_in_src"] = "watchlist"
+    s["switch_in"] = [{"代號": "2454", "名稱": "聯發科", "綜合分": None}]
+    picks = [{"代碼": "2454", "名稱": "聯發科", "綜合分": 88},
+             {"代碼": "2330", "名稱": "台積電", "綜合分": 92}]
+    msg = F(_full_digest(), s, as_of=_AS_OF, picks=picks)
+    assert "建議換入" in msg                       # watchlist → 換入段保留
+    _picks_block = msg.split("今日選股")[1]
+    assert "2330" in _picks_block and "2454" not in _picks_block   # 2454 已在換入段,清單不重列
 
 
 def test_switch_in_suppressed_when_screener_and_picks_shown():
