@@ -311,7 +311,7 @@ class TestNoContradictoryAdvice:
         return format_holdings_message(
             {"vix": 38.2, "total": 6, "adds": [], "take_profit": [], "reds": []},
             {"switch_out": [], "switch_in": []},
-            as_of="2026-08-23", alert_block=blk, alert_extreme=extreme)
+            as_of="2026-08-23", alert_block=blk, alert_has_action=extreme)
 
     def test_extreme_suppresses_the_no_action_line(self):
         msg = self._msg(extreme=True)
@@ -403,3 +403,130 @@ class TestInProgressBarIsDropped:
         # 標普 -1.43% 差 0.07pp 沒到門檻 —— 不得被列入(釘住邊界沒有被放寬)
         assert "標普" not in line
         assert "道瓊" not in line
+
+
+class TestBroadLeadSelloff:
+    """動作層 B:國際盤**至少 3 個**領先市場同日大跌 → 建議持股降至 20%。
+
+    這一層是 2026-08-24 user 指定新增。設計要點是**看廣度不看深度** ——
+    實測樣本裡 18 次提示層觸發有 17 次是費半單獨在跌(高波動指數,單日 ±1.5% 是常態),
+    那是族群輪動不是系統性風險。用「幾個市場同時跌」當閘門剛好切開這兩者。
+    """
+
+    @staticmethod
+    def _c(**kw):
+        """六個標的預設持平,只覆寫指定的。"""
+        base = {"^GSPC": 0.2, "^IXIC": 0.1, "^DJI": 0.3,
+                "^SOX": -0.4, "ES=F": 0.1, "NQ=F": 0.2}
+        base.update(kw)
+        return base
+
+    def test_three_markets_down_fires(self):
+        from src.compute.notify.market_alert_banner import evaluate_broad_lead_selloff
+        v = evaluate_broad_lead_selloff(self._c(**{"^GSPC": -1.6, "^IXIC": -2.0, "^DJI": -1.7}))
+        assert v.is_fired and v.n_drops == 3
+
+    def test_two_markets_down_does_not_fire(self):
+        """反向守衛:差一個就不能響。沒有這條,把門檻寫成 >=1 也能讓上一條過,
+        而那正是 user 明確不要的(一年 77 次)。"""
+        from src.compute.notify.market_alert_banner import evaluate_broad_lead_selloff
+        v = evaluate_broad_lead_selloff(self._c(**{"^GSPC": -1.6, "^IXIC": -2.0}))
+        assert not v.is_fired and v.state == "clear"
+
+    def test_sox_alone_crashing_does_not_fire(self):
+        """整個設計的核心案例:費半單獨崩 8% 也不下動作指令 ——
+        但提示層仍必須點名它(資訊不可以被吃掉)。"""
+        from src.compute.notify.market_alert_banner import (
+            build_alert_block,
+            evaluate_broad_lead_selloff,
+        )
+        c = self._c(**{"^SOX": -8.0})
+        assert not evaluate_broad_lead_selloff(c).is_fired
+        blk = build_alert_block(_v(-1.0, +100.0), c)
+        assert "降至 20%" not in blk, "單一族群大跌不該觸發動作層"
+        assert "費城半導體" in blk and "-8.0%" in blk, "提示層必須照常點名"
+
+    def test_missing_quotes_that_could_reach_threshold_are_unknown(self):
+        """§1 三態:已知 2 跌 + 2 缺 → 缺的那兩個可能正在崩,**不可**說「沒有全面大跌」。"""
+        from src.compute.notify.market_alert_banner import evaluate_broad_lead_selloff
+        v = evaluate_broad_lead_selloff(
+            {"^GSPC": -1.6, "^IXIC": -2.0, "^DJI": None, "^SOX": None,
+             "ES=F": 0.1, "NQ=F": 0.2})
+        assert v.state == "unknown" and v.n_missing == 2
+
+    def test_missing_quotes_that_cannot_reach_threshold_are_clear(self):
+        """反向守衛:已知 1 跌 + 1 缺 → 最多湊到 2,低於門檻 3 → CLEAR 是**算得出來**的
+        結論,不是猜的。沒有這條,「有缺料一律 unknown」也能讓上一條過,那會讓
+        ⬜ 區塊天天出現而失去意義。"""
+        from src.compute.notify.market_alert_banner import evaluate_broad_lead_selloff
+        v = evaluate_broad_lead_selloff(
+            {"^GSPC": -1.6, "^IXIC": 0.1, "^DJI": None, "^SOX": -0.4,
+             "ES=F": 0.1, "NQ=F": 0.2})
+        assert v.state == "clear"
+
+    def test_unknown_never_looks_like_safe(self):
+        from src.compute.notify.market_alert_banner import (
+            evaluate_broad_lead_selloff,
+            format_broad_selloff_banner,
+        )
+        txt = format_broad_selloff_banner(evaluate_broad_lead_selloff({}))
+        assert txt and "這不代表安全" in txt
+
+    def test_stricter_directive_wins_when_both_layers_fire(self):
+        """兩個動作層同時成立 → 只留 10%,不可以讓 20% 也印出來。
+        同一則訊息出現兩個持股數字,使用者不知道該聽哪個。"""
+        from src.compute.notify.market_alert_banner import build_alert_block
+        c = self._c(**{"^GSPC": -1.6, "^IXIC": -2.0, "^DJI": -1.7})
+        blk = build_alert_block(_v(-9.1, -612.0), c)
+        assert "降至 10%" in blk
+        assert "降至 20%" not in blk
+
+    def test_broad_alone_still_gives_20(self):
+        """反向守衛:台股兩腿沒事時,20% 那層必須照常出現 ——
+        否則把 B 層整個關掉也能讓上一條過。"""
+        from src.compute.notify.market_alert_banner import build_alert_block
+        c = self._c(**{"^GSPC": -1.6, "^IXIC": -2.0, "^DJI": -1.7})
+        blk = build_alert_block(_v(-1.0, +100.0), c)
+        assert "降至 20%" in blk and "降至 10%" not in blk
+
+    def test_action_flag_covers_both_layers(self):
+        from src.compute.notify.market_alert_banner import has_action_directive
+        c_broad = self._c(**{"^GSPC": -1.6, "^IXIC": -2.0, "^DJI": -1.7})
+        assert has_action_directive(_v(-1.0, +100.0), c_broad) is True
+        assert has_action_directive(_v(-9.1, -612.0), self._c()) is True
+        assert has_action_directive(_v(-1.0, +100.0), self._c()) is False
+
+    def test_unknown_is_not_an_action_directive(self):
+        """⬜ 沒有叫使用者做任何事,不該抑制「今日無需動作」——
+        它自己會講「這不代表安全」。"""
+        from src.compute.notify.market_alert_banner import has_action_directive
+        assert has_action_directive(_v(-1.0, +100.0), None) is False
+
+    def test_threshold_matches_the_documented_evidence(self):
+        """漂移鎖:門檻改了就要重跑頻率量測、重寫 L0 檔頭那張表。
+        3 → 2 會讓指令從一年 13 次變成 34 次,那是行為改變不是參數微調。"""
+        from shared.global_lead_markets import (
+            GLOBAL_LEAD_DROP_PCT,
+            LEAD_BROAD_DROP_MIN_MARKETS,
+            LEAD_MARKETS,
+            LEAD_TARGET_POSITION_PCT,
+        )
+        assert LEAD_BROAD_DROP_MIN_MARKETS == 3
+        assert LEAD_TARGET_POSITION_PCT == 20
+        assert GLOBAL_LEAD_DROP_PCT == -1.5
+        assert len(LEAD_MARKETS) == 6
+
+
+class TestMacroLineRemoved:
+    """user 2026-08-24 指定移除「🧭 總經位階」整行(LINE + AI prompt 兩邊)。"""
+
+    def test_message_has_no_macro_regime_line(self):
+        from src.compute.notify.holdings_digest_message import format_holdings_message
+        msg = format_holdings_message(
+            {"vix": 15.9, "total": 14, "adds": [], "take_profit": [], "reds": []},
+            {"loaded": True, "regime": "bull", "posture": "🟢 進攻",
+             "posture_range": "70–90%", "switch_out": [], "switch_in": []},
+            as_of="2026-08-24 06:30")
+        assert "總經位階" not in msg
+        assert "bull" not in msg and "70–90%" not in msg
+        assert "VIX：15.9" in msg, "移除位階不得誤傷相鄰的 VIX 行"

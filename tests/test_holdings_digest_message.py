@@ -36,7 +36,10 @@ def _full_switch():
 def test_full_message_has_all_sections():
     msg = F(_full_digest(), _full_switch(), as_of=_AS_OF)
     assert "持股戰情室" in msg and _AS_OF in msg
-    assert "bull" in msg and "70–90%" in msg           # 位階/姿態
+    # 2026-08-24 user 指定移除總經位階 → 反向守衛:這行不可以回來。
+    # 用「bull/70–90% 不得出現」而非單純刪掉斷言 —— 刪掉的話,哪天有人把
+    # _macro_line 加回去也沒人會發現。
+    assert "總經位階" not in msg and "bull" not in msg and "70–90%" not in msg
     assert "VIX：22.3" in msg
     assert "建議換出" in msg and "2412" in msg
     assert "建議換入" in msg and "2330 台積電" in msg and "你的觀察清單" in msg
@@ -67,7 +70,7 @@ def test_empty_state_says_hold():
          "switch_in_src": "screener"}
     msg = F(d, s, as_of=_AS_OF)
     assert "無需動作" in msg and "續抱" in msg
-    assert "未評估" in msg                       # 位階未載入誠實標
+    assert "未評估" not in msg                   # 位階整行已移除(見上方反向守衛)
     assert "None" not in msg
 
 

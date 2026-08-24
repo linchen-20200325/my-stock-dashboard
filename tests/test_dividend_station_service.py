@@ -347,16 +347,24 @@ def test_switch_unknown_regime_no_posture_guess():
     assert adv["defense"] is None            # 未評估不回填 False/True
 
 
-def test_summary_prompt_includes_switch_and_regime():
+def test_summary_prompt_has_switch_but_never_regime():
     d = svc.build_station_digest(_switch_rows())
     adv = svc.build_switch_advice(_switch_rows(),
                                   {"loaded": True, "defense": True, "regime": "bear",
                                    "posture_label": "🔴 防禦"},
                                   [{"代碼": "2412", "名稱": "中華電", "綜合分": 88}])
     p = svc.build_summary_prompt(d, switch=adv)
-    assert "換股建議" in p and "bear" in p
+    assert "換股建議" in p
     assert "00980D" in p and "2412" in p          # 換出/換入都入 prompt
-    assert "換入從嚴" in p                          # 轉守攻守指引
+    # 2026-08-24 user 指定移除總經位階。LINE 本文那行刪了,AI prompt 這邊若留著,
+    # 總結段落還是會講位階 —— 使用者看到訊息沒有的數字,無從對照來源。
+    # 反向守衛:regime 值(bear)、姿態、攻守指引都不得再進 prompt。
+    assert "bear" not in p, "總經位階值仍進了 AI prompt"
+    assert "換入從嚴" not in p, "攻守指引仍進了 AI prompt"
+    # 註:禁止指示本身刻意不寫「建議持股」四個字(改寫成「持股成數」),
+    # 這條守衛才不會被自己的禁止句觸發 —— 守衛要能分辨「講了」與「叫 AI 別講」。
+    assert "建議持股" not in p, "建議持股比例仍進了 AI prompt"
+    assert "不要" in p and "總經位階" in p, "缺少『禁止 AI 自行補位階』的指示"
 
 
 # ── 3-3-3③ 同儕排名 adapter（#37：接 compute_etf_peer_ranking）──────────────
