@@ -166,6 +166,44 @@ def _empty_notice(as_of: str) -> str:
             "（§1：不偽造持股清單，寧可提醒你檢查設定。）")
 
 
+def _build_risk_alert() -> "tuple[str, bool]":
+    """極端風險警語 + 國際盤提示 → 置頂區塊字串。整段失敗也不擋推播。
+
+    §1 的分寸在這裡:**取數失敗與判定為安全,結果必須不同**。
+      - 兩腿讀得到 → market_alert_banner 決定 extreme / clear
+      - 兩腿讀不到 → legs 回 None → banner 印「⬜ 無法判斷…這不代表安全」
+      - **整個函式炸掉** → 回 ("", False),警語整段消失
+
+    最後那條是刻意的取捨:這段是附加資訊,不該讓它的 bug 吃掉整則持股推播
+    (使用者真正每天要看的是續抱/換股)。但它也因此是本功能唯一的靜默失敗路徑,
+    故 except 一定 print 到 stderr 讓 Actions log 留痕,不是 `except: pass`。
+    """
+    try:
+        from src.compute.notify.market_alert_banner import (
+            build_alert_block, evaluate_extreme_risk,
+        )
+        from src.data.macro.macro_cache_reader import (
+            fetch_lead_market_changes, load_extreme_risk_legs,
+        )
+        _legs = load_extreme_risk_legs()
+        _verdict = evaluate_extreme_risk(
+            twii_20d_pct=_legs.get("twii_20d_pct"),
+            foreign_5d_yi=_legs.get("foreign_5d_yi"),
+        )
+        try:
+            _changes = fetch_lead_market_changes()
+        except Exception as e:  # noqa: BLE001
+            print(f"[push_holdings] 國際盤取數失敗（提示層降級）:{e}", file=sys.stderr)
+            _changes = {}
+        print(f"[push_holdings] 極端風險={_verdict.state} "
+              f"20D={_legs.get('twii_20d_pct')} 外資5D={_legs.get('foreign_5d_yi')} "
+              f"資料日={_legs.get('twii_date')}/{_legs.get('foreign_date')}")
+        return build_alert_block(_verdict, _changes), _verdict.is_extreme
+    except Exception as e:  # noqa: BLE001
+        print(f"[push_holdings] 風險警語整段失敗（本則不含警語）:{e}", file=sys.stderr)
+        return "", False
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="每日持股續抱/換股推播（收盤後）")
     ap.add_argument("--dry-run", action="store_true", help="只印訊息不送（本地測）")
@@ -215,7 +253,9 @@ def main(argv=None) -> int:
     _switch = build_switch_advice(_rows, _macro, _cands)   # 純函式
     _digest = build_station_digest(_rows, _vix)            # 純函式
 
-    _msg = format_holdings_message(_digest, _switch, as_of=_as_of, picks=_cands)
+    _alert, _alert_extreme = _build_risk_alert()
+    _msg = format_holdings_message(_digest, _switch, as_of=_as_of, picks=_cands,
+                                   alert_block=_alert, alert_extreme=_alert_extreme)
     _msg += _maybe_ai_summary(_digest, _switch)
 
     if args.dry_run:

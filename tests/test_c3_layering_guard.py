@@ -690,6 +690,9 @@ for _f, _m in (
     # + AI 潤稿(ai_fetcher),零 src.ui.*(headless cron 走 L5 會拉整個 streamlit UI 鏈)。
     ("scripts/push_holdings_daily.py", "src.compute.notify.ai_judgment"),
     ("scripts/push_holdings_daily.py", "src.compute.notify.holdings_digest_message"),
+    # 極端風險警語(2026-08-23):orchestrator 抓 L1 兩腿 → 餵 L2 純函式組字,
+    # 與同檔既有的 holdings_digest_message 同精神(取數在 script、判定與組字在 L2)。
+    ("scripts/push_holdings_daily.py", "src.compute.notify.market_alert_banner"),
     ("scripts/push_holdings_daily.py", "src.services.ai_fetcher"),
     ("scripts/push_holdings_daily.py", "src.services.dividend_station_service"),
     ("scripts/shortage_cli.py", "src.compute.health.monthly_revenue_calc"),

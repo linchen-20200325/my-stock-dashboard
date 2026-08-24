@@ -1,8 +1,18 @@
 name: "每日持股續抱/換股推播（LINE / Telegram）"
 
-# 收盤後把「你私有 Sheet 的持股健檢 → 續抱/換股 + 換入候選」推到手機。
-# UTC 09:15 = TW 17:15（比選股訊號推播 push_daily_signals 的 17:00 晚 15 分,錯開避免同分鐘兩則）。
-# ⚠️ 排 Mon-Fri,未濾 TW 國定假日（無第三方 trading calendar,見 CLAUDE.md §4.5）。
+# 開盤前把「你私有 Sheet 的持股健檢 → 續抱/換股 + 換入候選 + 風險警語」推到手機。
+#
+# cron "30 22 * * 0-4" = UTC 週日~週四 22:30 = **TW 週一~週五 06:30**（開盤前 2.5 小時）。
+# ⚠️ 台灣是 UTC+8,換算跨過午夜 → **星期欄必須跟著往前挪一天**（1-5 → 0-4）。
+#    只改時不改星期的話,週一那班會落到台灣週二、週五那班整個消失（CLAUDE.md §4.5）。
+#
+# 為什麼從 TW 17:15 搬到 06:30（user 2026-08-23 決定）:
+#   收盤後才告訴你「今天算出什麼」,當天已經來不及做任何事;搬到開盤前,同一批收盤
+#   資料變成「進場前」的資訊。資料內容不變(用的都是最近一個交易日收盤),只是送達
+#   時點從當天傍晚移到隔天早上,而且那時 TWSE 資料一定齊。
+#   代價:週五收盤的結論要到週一早上才送達(週六不推)—— 但那也是你第一個能下單的時點。
+#
+# ⚠️ 排 Mon-Fri(台灣),未濾 TW 國定假日（無第三方 trading calendar,見 CLAUDE.md §4.5）。
 #
 # 需要的 GitHub Secrets（Settings → Secrets and variables → Actions）:
 #   GCP_SERVICE_ACCOUNT_JSON — 整段 service account JSON;並把你的 Sheet 分享給其 client_email
@@ -13,7 +23,7 @@ name: "每日持股續抱/換股推播（LINE / Telegram）"
 #   GEMINI_API_KEY           — AI 潤稿（選填;未設則只送規則式訊息）
 on:
   schedule:
-    - cron: "15 9 * * 1-5"
+    - cron: "30 22 * * 0-4"
   workflow_dispatch:
 
 concurrency:

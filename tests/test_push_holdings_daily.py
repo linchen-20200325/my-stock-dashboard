@@ -17,6 +17,9 @@ import src.data.portfolio.gsheet_sa_reader as R
 import src.services.dividend_station_service as DS
 
 _REPO = Path(__file__).resolve().parents[1]
+# 在任何 monkeypatch 之前抓住真實實作 —— `_wire_populated` 會把它換成短路版。
+_REAL_BUILD_RISK_ALERT = P._build_risk_alert
+from shared.global_lead_markets import LEAD_MARKETS as _LEAD_MARKETS  # noqa: E402
 _VALID_SA = json.dumps({"client_email": "bot@proj.iam.gserviceaccount.com",
                         "private_key": "-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----"})
 
@@ -126,6 +129,10 @@ def _wire_populated(monkeypatch, *, with_ai_key=False):
     _sent = {}
     monkeypatch.setattr(D, "send_notification",
                         lambda text, **k: (_sent.setdefault("t", text), 1)[1])
+    # 風險警語預設短路 —— 它會打 6 次 Yahoo（國際盤提示層）。不擋的話每一條走 main()
+    # 的測試都要等真實網路逾時:實測單條 0.69s → 75s。警語自身的行為由
+    # tests/test_extreme_risk_banner.py 與下方 test_main_wires_risk_alert 覆蓋。
+    monkeypatch.setattr(P, "_build_risk_alert", lambda: ("", False))
     return _sent
 
 
@@ -154,6 +161,81 @@ def test_main_requests_top10_picks_and_shows_list(monkeypatch):
     assert rc == 0
     assert _seen["top_n"] == 10, "選股清單應抓前 10 名"
     assert "今日選股" in _sent["t"] and "2454" in _sent["t"]
+
+
+def test_main_wires_risk_alert(monkeypatch):
+    """警語真的有接進訊息 —— L1 取數 stub 掉,不碰網路。
+
+    `_wire_populated` 預設把 `_build_risk_alert` 短路(避免每條測試等真實網路),
+    所以**必須**有這一條把真的那支裝回來,否則「orchestrator 忘了呼叫警語」
+    會完全沒有測試發現。
+    """
+    _sent = _wire_populated(monkeypatch)
+    monkeypatch.setattr(P, "_build_risk_alert", _REAL_BUILD_RISK_ALERT)
+
+    import src.data.macro.macro_cache_reader as MCR
+    monkeypatch.setattr(MCR, "load_extreme_risk_legs",
+                        lambda *a, **k: {"twii_20d_pct": -9.1, "foreign_5d_yi": -612.0,
+                                         "twii_date": None, "foreign_date": None})
+    monkeypatch.setattr(MCR, "fetch_lead_market_changes", lambda *a, **k: {"^SOX": -6.1})
+
+    rc = P.main([])
+    assert rc == 0
+    _t = _sent["t"]
+    assert _t.startswith("🚨 極端風險"), f"警語沒排在最前面：{_t[:40]!r}"
+    assert "10%" in _t and "停止買賣" in _t
+    assert "費城半導體" in _t                             # 提示層也接上了
+    assert "今日無需動作：續抱、定期定額即可。" not in _t   # 矛盾抑制生效
+
+
+def test_main_no_risk_alert_on_calm_day(monkeypatch):
+    """反向守衛:兩腿都沒到 → 訊息裡不得出現任何警語,且原本的續抱那行要在。
+
+    沒有這條,把警語寫成「無條件輸出」也能讓上面那條過。
+    """
+    _sent = _wire_populated(monkeypatch)
+    monkeypatch.setattr(P, "_build_risk_alert", _REAL_BUILD_RISK_ALERT)
+    import src.data.macro.macro_cache_reader as MCR
+    monkeypatch.setattr(MCR, "load_extreme_risk_legs",
+                        lambda *a, **k: {"twii_20d_pct": +3.6, "foreign_5d_yi": +239.0,
+                                         "twii_date": None, "foreign_date": None})
+    monkeypatch.setattr(MCR, "fetch_lead_market_changes",
+                        lambda *a, **k: {m.symbol: -0.2 for m in _LEAD_MARKETS})
+    assert P.main([]) == 0
+    _t = _sent["t"]
+    assert "🚨" not in _t and "⬜ 極端風險" not in _t
+    assert _t.startswith("💼 持股戰情室")
+
+
+def test_risk_alert_survives_fetch_failure(monkeypatch):
+    """L1 取數整個炸掉 → `_build_risk_alert` 回 ("", False),不把持股推播一起拖垮。
+
+    測的是**真的那支函式**的容錯,不是 monkeypatch 本身。
+    """
+    import src.data.macro.macro_cache_reader as MCR
+
+    def _boom(*a, **k):
+        raise RuntimeError("simulated upstream failure")
+    monkeypatch.setattr(MCR, "load_extreme_risk_legs", _boom)
+    monkeypatch.setattr(MCR, "fetch_lead_market_changes", _boom)
+    assert _REAL_BUILD_RISK_ALERT() == ("", False)
+
+
+def test_risk_alert_reports_unknown_when_legs_missing(monkeypatch):
+    """取數回 None（parquet 缺 / 過舊）→ **不是**沉默,而是明講無法判斷。
+
+    這條與上一條的差別是本功能的核心:
+      「整支炸掉」→ 靜默(可接受,警語是附加)
+      「取數回 None」→ 必須出聲(這是資料問題,使用者要知道)
+    """
+    import src.data.macro.macro_cache_reader as MCR
+    monkeypatch.setattr(MCR, "load_extreme_risk_legs",
+                        lambda *a, **k: {"twii_20d_pct": None, "foreign_5d_yi": None,
+                                         "twii_date": None, "foreign_date": None})
+    monkeypatch.setattr(MCR, "fetch_lead_market_changes", lambda *a, **k: {})
+    _block, _extreme = _REAL_BUILD_RISK_ALERT()
+    assert "無法判斷" in _block and "不代表安全" in _block
+    assert _extreme is False
 
 
 def test_redundant_push_workflows_schedule_disabled():
@@ -198,12 +280,43 @@ def test_main_ai_failure_degrades_to_rule_message(monkeypatch):
 # ── workflow 結構 + headless ─────────────────────────────────────────────
 def test_workflow_file_structure():
     y = (_REPO / ".github/workflows/push_holdings_daily.yml").read_text(encoding="utf-8")
-    assert 'cron: "15 9 * * 1-5"' in y                # TW 17:15,錯開選股推
+    # 2026-08-23 user 決定:從 TW 17:15(收盤後)搬到 TW 06:30(開盤前),讓結論在
+    # 還能下單的時點送達,並與風險警語的時效對齊。
+    assert 'cron: "30 22 * * 0-4"' in y
+    assert 'cron: "15 9 * * 1-5"' not in y, "舊的收盤後排程沒清掉 → 一天會推兩則"
     assert "scripts/push_holdings_daily.py" in y
     for _sec in ("GCP_SERVICE_ACCOUNT_JSON", "PORTFOLIO_SHEET_ID",
                  "STOCK_PORTFOLIO_SHEET_ID", "LINE_CHANNEL_ACCESS_TOKEN",
                  "FINMIND_TOKEN", "GEMINI_API_KEY"):
         assert _sec in y, f"workflow 缺 secret env: {_sec}"
+
+
+def test_cron_really_lands_on_tw_weekday_0630():
+    """把 cron 實際換算成台灣時間 —— 釘住最容易寫錯的那一步。
+
+    台灣是 UTC+8,TW 06:30 落在 UTC 前一日 22:30,所以**星期欄必須一起往前挪**
+    (1-5 → 0-4)。只改時不改星期的話:週一那班變成台灣週二、週五那班整個消失,
+    而且 workflow 照樣是合法 YAML、CI 全綠 —— 沒有這條測試不會有人發現。
+    """
+    import datetime as _dt
+    import re
+
+    y = (_REPO / ".github/workflows/push_holdings_daily.yml").read_text(encoding="utf-8")
+    _m = re.search(r'cron:\s*"(\S+) (\S+) (\S+) (\S+) (\S+)"', y)
+    assert _m, "找不到 cron"
+    _min, _hour, _dom, _mon, _dow = _m.groups()
+    assert _dom == "*" and _mon == "*"
+
+    _lo, _hi = (int(x) for x in _dow.split("-"))
+    _tw_days = set()
+    for _d in range(_lo, _hi + 1):
+        # 取一個該 UTC 星期幾的具體日期(2026-08-23 是週日 = cron 的 0),換算成台灣時間
+        _base = _dt.datetime(2026, 8, 23, int(_hour), int(_min), tzinfo=_dt.timezone.utc)
+        _utc = _base + _dt.timedelta(days=_d)
+        _tw = _utc.astimezone(_dt.timezone(_dt.timedelta(hours=8)))
+        assert (_tw.hour, _tw.minute) == (6, 30), f"台灣時間是 {_tw:%H:%M},不是 06:30"
+        _tw_days.add(_tw.weekday())          # Monday=0
+    assert _tw_days == {0, 1, 2, 3, 4}, f"台灣的星期落點是 {sorted(_tw_days)},應為週一~週五"
 
 
 def test_script_no_toplevel_streamlit():
