@@ -169,7 +169,13 @@ class TestGlobalLeadLine:
         assert "費城半導體" in format_global_lead_line(q)
 
     def test_gives_no_action_instruction(self):
-        """提示層一年出現 130 次以上;它若也叫人清倉,動作層就沒有意義了。"""
+        """提示層一年約出現 77 次;它若也叫人清倉,動作層就沒有意義了。
+
+        ⚠️ 2026-08-24 更正:原文寫「130 次以上」—— 那個數字同樣是用 mynews 那個
+        壞掉的欄位算出來的(五日累計冒充日變動,自然灌高)。用真實日變動重測是
+        **31% 的交易日、約 77 次/年**。`market_alert_banner.py` 與
+        `shared/global_lead_markets.py` 都已更正,這裡當時漏了。
+        """
         line = format_global_lead_line(dict(self._ALL_CALM, **{"^SOX": -6.1}))
         for word in ("停止買賣", "脫手", "降至", "清倉"):
             assert word not in line
@@ -333,20 +339,22 @@ class TestNoContradictoryAdvice:
 
 
 class TestInProgressBarIsDropped:
-    """2026-08-24 事故的迴歸測試。
+    """`drop_in_progress_bar` 的規則測試:進行中的 K 棒不得被當成收盤。
 
-    當天 08:42 UTC(TW 16:42)手動觸發推播,提示層**整行沒印**;而同日 mynews
-    歸檔的同一批標的是 ^SOX **-5.45%** / ^IXIC **-2.05%**(as_of 2026-08-23 22:02 UTC,
-    即上一個完整交易日 2026-08-21 vs 08-20)。production log 證實六個標的
-    **全部抓取成功** —— 抓到了,但算出來的變動沒有一個達標。
+    ═══ 撤回:本組原本掛在一個不存在的「事故」上(2026-08-24 當日更正)═══════
+    原 docstring 寫「2026-08-24 事故的迴歸測試」,並引用 ^SOX **-5.45%** /
+    ^IXIC **-2.05%** 當作「提示層漏報」的證據。**那組數字是錯的,那天也沒有事故。**
 
-    最可能的機制:Yahoo 的 `interval=1d` 在盤前就為「今天」開了一根未收盤的棒,
-    於是 `iloc[-1]/iloc[-2]` 算的是「今天到目前為止」(≈0%)而非「上一個完整交易日」。
+    它取自 mynews `index_fetcher` 一個有 bug 的欄位(把約五個交易日的累計變動
+    當成隔夜變動)。當天六個標的的**真實單日變動**見
+    `test_the_2026_08_24_numbers_correctly_produce_no_alert` —— 沒有一個到 -1.5%,
+    四個還是漲的,所以當天整行不印是**正確行為**。
 
-    ⚠️ 誠實揭露:此成因為**推論**,非實測確認 —— 沙箱連不到 Yahoo
-    (`curl` 回 `CONNECT tunnel failed 403`),無法取得當下的原始序列。
-    故本輪同時補了逐標的 log(哪兩天/什麼值/幾 %),下一次真實執行即可確認。
-    本組測試釘的是**規則本身**,那部分是確定的:進行中的棒不該被當成收盤。
+    **規則本身仍然成立**,而且與那天有沒有出事無關:拿一根還沒收盤的 K 棒當
+    「收盤價」在任何時候都是錯的。本組測試釘的就是這條規則。
+
+    ⚠️ 教訓寫在這裡而不是刪掉:當初會誤判,是因為拿了一個**沒有記錄日期**的數字
+    當第一手證據。同樣的病,mynews 那邊犯了三個月沒人發現。
     """
 
     @staticmethod
@@ -364,9 +372,12 @@ class TestInProgressBarIsDropped:
 
     def test_premarket_bar_is_dropped(self):
         """盤前觸發:今天那根未收盤的棒必須丟掉,改用前一個完整交易日。"""
+        # 真實收盤:08-20 = 11800.02、08-21 = 11740.37(來源見 class docstring)。
+        # 原本這裡寫 12417.05 當 08-20 —— 那其實是 **08-14** 的收盤,
+        # 沿用會把同一個誤解帶進 fixture。
         s = self._series(["2026-08-20", "2026-08-21", "2026-08-24"],
-                         [12417.05, 11740.37, 11740.37])
-        out = self._drop(s, self._now(2026, 8, 24, 8))     # 08:42 UTC ≈ 事故時點
+                         [11800.02, 11740.37, 11740.37])
+        out = self._drop(s, self._now(2026, 8, 24, 8))     # 08:42 UTC ≈ 當初誤判的時點
         assert len(out) == 2
         assert out.index[-1].date().isoformat() == "2026-08-21"
 
@@ -377,30 +388,50 @@ class TestInProgressBarIsDropped:
         每天 06:30 的推播永遠慢一個交易日。
         """
         s = self._series(["2026-08-20", "2026-08-21", "2026-08-24"],
-                         [12417.05, 11740.37, 11000.0])
+                         [11800.02, 11740.37, 11000.0])
         out = self._drop(s, self._now(2026, 8, 24, 22))    # 22:30 UTC = TW 06:30
         assert len(out) == 3
         assert out.index[-1].date().isoformat() == "2026-08-24"
 
     def test_older_last_bar_is_never_dropped(self):
         """最後一根不是「今天」→ 與收盤與否無關,一律保留。"""
-        s = self._series(["2026-08-20", "2026-08-21"], [12417.05, 11740.37])
+        s = self._series(["2026-08-20", "2026-08-21"], [11800.02, 11740.37])
         for _h in (8, 22):
             assert len(self._drop(s, self._now(2026, 8, 24, _h))) == 2
 
-    def test_real_incident_numbers_would_have_fired(self):
-        """把當天的真實報價餵進去,提示層必須點名費半與那斯達克。
+    def test_the_2026_08_24_numbers_correctly_produce_no_alert(self):
+        """2026-08-24 的**真實**報價 → 提示層必須回空字串(沉默是對的)。
 
-        數字取自 mynews `data/intl_alert/2026-08-24.json`(第一手歸檔,非我推算)。
+        本條取代原 `test_real_incident_numbers_would_have_fired`。那條餵的是
+        ^SOX -5.45% / ^IXIC -2.05%,並註明「第一手歸檔,非我推算」—— **註明是錯的**,
+        那組數字來自 mynews 一個有 bug 的欄位。
+
+        下面是真實單日變動,兩個獨立來源交叉驗證:
+          (1) 本 repo 自己的 production log `[lead_mkt]`(run 32720204915)
+          (2) mynews 歸檔 `last` 欄重建 —— 該欄對得上獨立新聞
+              (同期報導「道瓊大跌 703 點」,重建為 -703.84 點)
+
+        四個標的實際是**漲**的。這條測試現在釘的是:**那天不印任何東西是正確的**。
+        """
+        _chg = {"^GSPC": +0.43, "^IXIC": +0.43, "^DJI": +0.98,
+                "^SOX": -0.51, "ES=F": +0.38, "NQ=F": +0.30}
+        assert format_global_lead_line(_chg) == "", \
+            "六個標的都沒到 -1.5%,提示層應保持沉默"
+
+    def test_threshold_boundary_is_not_quietly_widened(self):
+        """門檻邊界守衛:剛好沒到的不得列入,到了的必須列入。
+
+        ⚠️ 下面的數字是**合成的**,不是任何一天的真實報價 —— 上一條已經用真實數字
+        釘住「那天該沉默」,這一條只負責釘邊界,兩者用途不同不可混為一談。
+        (原本這兩件事被擠在同一條測試裡,而它用的還是錯的數字。)
         """
         _chg = {"^GSPC": -1.43, "^IXIC": -2.05, "^DJI": -0.85,
                 "^SOX": -5.45, "ES=F": -0.29, "NQ=F": -0.67}
         line = format_global_lead_line(_chg)
         # ⚠️ `-2.05` → `-2.0%`,不是 `-2.1%`:Python 的 format 走 round-half-to-even。
-        #    我第一版把期望值寫成 -2.1% 而測試紅了 —— **改的是測試不是程式**,
-        #    因為顯示層四捨五入的方式不影響「有沒有達標」的判定。
+        #    顯示層四捨五入的方式不影響「有沒有達標」的判定。
         assert "費城半導體 -5.5%" in line and "那斯達克綜合 -2.0%" in line
-        # 標普 -1.43% 差 0.07pp 沒到門檻 —— 不得被列入(釘住邊界沒有被放寬)
+        # 標普 -1.43% 差 0.07pp 沒到門檻 —— 不得被列入
         assert "標普" not in line
         assert "道瓊" not in line
 
