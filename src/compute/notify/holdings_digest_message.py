@@ -27,6 +27,44 @@ def _code(d: dict, key: str = "代號") -> str:
     return str(d.get(key) or "")
 
 
+def _vix_line(vix: "float | None", total: int) -> list[str]:
+    """VIX 一行 + **一句白話該怎麼辦**（user 2026-08-24:「我也不知道該怎麼半」）。
+
+    原本只印一個裸數字「😱 VIX：15.9」—— 對不看盤的人那等於沒有資訊,
+    他無從判斷 15.9 是好是壞、更不知道要做什麼。故補上分級與對應動作。
+
+    ═══ 門檻一律走 SSOT,不在這裡編數字 ═══════════════════════════════
+    分級用 `shared/macro_buckets.SPECS_BY_KEY["vix"]` + `classify_danger()`,
+    即全站統一的 **黃 22 / 紅 30**(對齊 `macro_core.MACRO_THRESHOLDS['VIX']`,
+    由 `test_macro_buckets.py::test_mirror_matches_macro_core` 擋漂移)。
+    §3.3:**禁止**在本檔寫 22 / 30 這種 inline magic number —— 那會讓推播與看板
+    在同一個 VIX 值上講不一樣的話。
+
+    ═══ §1:抓不到就不給建議 ═══════════════════════════════════════════
+    VIX 缺值 → classify 回 'gray' → 只誠實說抓取失敗,**不給任何動作建議**。
+    沒有數字卻給「照原計畫」等於憑空捏造一個「市場平靜」的結論。
+    """
+    from shared.macro_buckets import LEVEL_EMOJI, SPECS_BY_KEY, classify_danger
+
+    _spec = SPECS_BY_KEY["vix"]
+    _level = classify_danger(vix, _spec)
+
+    if _level == "gray":
+        return [f"😱 VIX：抓取失敗　有效判斷 {total} 檔",
+                "　→ 本項無資料，不做波動度判讀（不是「市場平靜」）。"]
+
+    _label, _advice = {
+        "green": ("市場平靜",
+                  "照原計畫走，定期定額正常扣款即可。"),
+        "yellow": ("波動升高",
+                   "新單放慢、分批進場，不追高；手上部位先不動。"),
+        "red": ("市場恐慌",
+                "別急著接刀，也別恐慌殺出；等波動收斂再分批，不要一次全下。"),
+    }[_level]
+    return [f"😱 VIX：{vix:.1f}　{LEVEL_EMOJI[_level]} {_label}　有效判斷 {total} 檔",
+            f"　→ {_advice}"]
+
+
 def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:
     """建議換出（持有紅燈汰弱）。優先用 switch.switch_out（held-only,語意正確:只換你持有的）;
     switch 缺（極少數 build 失敗）才退 digest.reds,並誠實標「含觀察清單」以免暗示賣掉未持有標的。"""
@@ -153,7 +191,6 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     """
     digest = digest or {}
     _vix = _num(digest.get("vix"))
-    _vix_txt = f"{_vix:.1f}" if _vix is not None else "抓取失敗"
     _total = int(_num(digest.get("total")) or 0)   # 契約漂移防禦:非數 total → 0,不 ValueError
 
     # 風險警語置頂:LINE 手機通知的預覽只顯示開頭數十字,要行動的訊息若排在
@@ -162,7 +199,7 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     lines: list[str] = ([alert_block, ""] if alert_block else []) + [
         "💼 持股戰情室｜每日續抱 / 換股",
         f"🕐 {as_of}（開盤前檢視,價格以最近交易日收盤為準）",
-        f"😱 VIX：{_vix_txt}　有效判斷 {_total} 檔",
+        *_vix_line(_vix, _total),
         "",
     ]
     lines += _switch_out_lines(digest, switch)

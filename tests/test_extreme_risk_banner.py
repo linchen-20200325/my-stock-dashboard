@@ -530,3 +530,74 @@ class TestMacroLineRemoved:
         assert "總經位階" not in msg
         assert "bull" not in msg and "70–90%" not in msg
         assert "VIX：15.9" in msg, "移除位階不得誤傷相鄰的 VIX 行"
+
+
+class TestVixPlainLanguageAdvice:
+    """VIX 從「裸數字」改成「數字 + 一句該怎麼辦」(user 2026-08-24)。
+
+    原本只印「😱 VIX：15.9」—— 對不看盤的人等於沒有資訊。
+    """
+
+    @staticmethod
+    def _msg(vix):
+        from src.compute.notify.holdings_digest_message import format_holdings_message
+        return format_holdings_message(
+            {"vix": vix, "total": 14, "adds": [], "take_profit": [], "reds": []},
+            {"switch_out": [], "switch_in": []}, as_of="2026-08-25 06:30")
+
+    def test_calm_vix_gives_actionable_advice(self):
+        msg = self._msg(15.9)
+        assert "VIX：15.9" in msg, "數字本身必須保留（user 明確要求保留這行）"
+        assert "市場平靜" in msg and "定期定額" in msg
+
+    def test_panic_vix_says_do_not_catch_falling_knife(self):
+        msg = self._msg(38.2)
+        assert "市場恐慌" in msg and "接刀" in msg
+
+    def test_elevated_vix_is_distinct_from_both(self):
+        """反向守衛:黃燈不可以跟綠燈或紅燈講一樣的話 ——
+        否則寫成「一律回同一句」也能讓上面兩條過。
+
+        註:斷言只看 `_vix_line` 的輸出,不看整則訊息 —— 訊息別處另有一句
+        「今日無需動作:續抱、定期定額即可」,拿整則訊息比對會誤判。"""
+        from src.compute.notify.holdings_digest_message import _vix_line
+        _advice = [_vix_line(v, 14)[1] for v in (15.9, 24.0, 38.2)]
+        assert "波動升高" in _vix_line(24.0, 14)[0]
+        assert "定期定額" not in _advice[1] and "接刀" not in _advice[1]
+        assert len(set(_advice)) == 3, "三級建議必須互不相同"
+
+    def test_missing_vix_gives_no_advice_at_all(self):
+        """§1:抓不到就不准給建議。沒有數字卻說「照原計畫」等於捏造一個平靜結論。
+
+        同上,只看 VIX 那兩行 —— 訊息別處的「續抱、定期定額」是個股健檢的結論,
+        與波動度判讀無關,不該被這條守衛掃到。"""
+        from src.compute.notify.holdings_digest_message import _vix_line
+        _lines = _vix_line(None, 14)
+        assert "抓取失敗" in _lines[0]
+        assert "不是「市場平靜」" in _lines[1]
+        _joined = "".join(_lines)
+        assert "定期定額" not in _joined and "分批" not in _joined, \
+            "缺值時 VIX 段不得給任何動作建議"
+        assert "抓取失敗" in self._msg(None), "整則訊息仍須印出這行"
+
+    def test_thresholds_come_from_ssot_not_inline(self):
+        """VIX 分級必須走全站 SSOT（黃 22 / 紅 30），不可在推播模組另寫一套 ——
+        否則同一個 VIX 值，推播與看板會講不一樣的話。"""
+        import inspect
+
+        from shared.macro_buckets import SPECS_BY_KEY
+        from src.compute.notify import holdings_digest_message as m
+
+        _spec = SPECS_BY_KEY["vix"]
+        assert (_spec.yellow, _spec.red) == (22.0, 30.0)
+        # 邊界對齊 SSOT：21.9 綠、22.0 黃、29.9 黃、30.0 紅
+        assert "市場平靜" in self._msg(_spec.yellow - 0.1)
+        assert "波動升高" in self._msg(_spec.yellow)
+        assert "波動升高" in self._msg(_spec.red - 0.1)
+        assert "市場恐慌" in self._msg(_spec.red)
+        # 原始碼（**扣掉 docstring**）不得出現 inline 門檻（§3.3）。
+        # docstring 本來就要寫明「黃 22 / 紅 30」讓讀的人知道走哪套 SSOT,
+        # 那是說明不是邏輯 —— 守衛只該看真正會執行的那幾行。
+        _src = inspect.getsource(m._vix_line)
+        _body = _src.replace(m._vix_line.__doc__ or "", "")
+        assert "22" not in _body and "30" not in _body, "VIX 門檻被寫死在推播模組"
