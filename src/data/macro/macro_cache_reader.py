@@ -161,7 +161,34 @@ def load_extreme_risk_legs(
     return out
 
 
-def fetch_lead_market_changes(*, range_: str = "5d") -> dict:
+def drop_in_progress_bar(s, now_utc):
+    """丟掉「今天且美股尚未收盤」的那根**進行中** K 棒（純函式,可單測）。
+
+    Yahoo 的 `interval=1d` 在盤中(含盤前)就會為當天開一根未收盤的棒。若直接拿
+    `iloc[-1]` 當「最新收盤」、`iloc[-2]` 當「前一日收盤」,算出來的是
+    **「今天到目前為止的變動」**(常常 ≈ 0%),而不是我們要的
+    **「上一個完整交易日的隔夜變動」** —— 後者才是對台股開盤有領先意義的量。
+
+    2026-08-24 08:42 UTC 的推播就是這個時段:提示層整行沒印,而同日 mynews
+    歸檔的同一批標的是 ^SOX -5.45% / ^IXIC -2.05%。
+
+    判定用 `US_SESSION_CLOSE_UTC_HOUR`(21,保守取冬令收盤)。排程時點 22:30 UTC
+    在收盤之後 → 不丟棄,行為不變;手動在盤前/盤中觸發才會生效。
+
+    ⚠️ 這只處理成因 (a)。若真正的成因是 (b)「上游給過期序列」,本函式不會有作用 ——
+    那一種由 caller 的 `LEAD_QUOTE_MAX_AGE_DAYS` 檢查擋下,兩者互補。
+    """
+    from shared.global_lead_markets import US_SESSION_CLOSE_UTC_HOUR
+
+    if s is None or len(s) < 1:
+        return s
+    _last_date = s.index[-1].date()
+    if _last_date == now_utc.date() and now_utc.hour < US_SESSION_CLOSE_UTC_HOUR:
+        return s.iloc[:-1]
+    return s
+
+
+def fetch_lead_market_changes(*, range_: str = "5d", now_utc=None) -> dict:
     """國際盤領先市場的**日變動 %** → {symbol: pct | None}。
 
     提示層用(門檻 shared/global_lead_markets.GLOBAL_LEAD_DROP_PCT)。抓不到的
@@ -174,20 +201,42 @@ def fetch_lead_market_changes(*, range_: str = "5d") -> dict:
 
     §8.2:本函式在 L1,做網路 I/O 是對的位置。
     """
-    from shared.global_lead_markets import LEAD_MARKETS
+    import datetime as _dt
 
+    from shared.global_lead_markets import LEAD_MARKETS, LEAD_QUOTE_MAX_AGE_DAYS
+
+    _now = now_utc or _dt.datetime.now(_dt.timezone.utc)
     out: dict = {}
     for m in LEAD_MARKETS:
         try:
             from src.data.macro.macro_core import fetch_yf_close
-            s = fetch_yf_close(m.symbol, range_=range_)
+            s = drop_in_progress_bar(fetch_yf_close(m.symbol, range_=range_), _now)
             if s is None or len(s) < 2:
                 out[m.symbol] = None
-                print(f"[macro_cache_reader/fetch_lead_market_changes] {m.symbol} 資料不足")
+                print(f"[lead_mkt] {m.symbol} 資料不足(去掉進行中棒後僅 "
+                      f"{0 if s is None else len(s)} 根)")
+                continue
+            _prev_ts, _last_ts = s.index[-2], s.index[-1]
+            _age = (_now.date() - _last_ts.date()).days
+            if _age > LEAD_QUOTE_MAX_AGE_DAYS:
+                out[m.symbol] = None
+                print(f"[lead_mkt] {m.symbol} 報價過舊:最新 {_last_ts.date()} "
+                      f"落後 {_age} 天(上限 {LEAD_QUOTE_MAX_AGE_DAYS})→ 判為未取得")
                 continue
             prev, last = float(s.iloc[-2]), float(s.iloc[-1])
-            out[m.symbol] = float((last / prev - 1.0) * 100.0) if prev > 0 else None
+            if prev <= 0:
+                out[m.symbol] = None
+                print(f"[lead_mkt] {m.symbol} 前值 {prev} <= 0,無法算變動")
+                continue
+            _chg = float((last / prev - 1.0) * 100.0)
+            out[m.symbol] = _chg
+            # ⚠️ 這行 log 是 2026-08-24 事故的直接產物:當時只印了極端風險兩腿,
+            # 六個國際標的算出什麼**一個字都沒有**,以致於事後只能靠推論。
+            # 「用了哪兩天、值多少、算出幾 %」缺一不可 —— 少了日期就分不出
+            # 「進行中的棒」與「過期序列」這兩種完全不同的故障。
+            print(f"[lead_mkt] {m.symbol:9s} {_prev_ts.date()} {prev:>10.2f} → "
+                  f"{_last_ts.date()} {last:>10.2f} = {_chg:+.2f}%")
         except Exception as e:  # noqa: BLE001
             out[m.symbol] = None
-            print(f"[macro_cache_reader/fetch_lead_market_changes] {m.symbol} 失敗:{e}")
+            print(f"[lead_mkt] {m.symbol} 失敗:{type(e).__name__}: {e}")
     return out
