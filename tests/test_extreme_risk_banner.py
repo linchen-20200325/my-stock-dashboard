@@ -330,3 +330,76 @@ class TestNoContradictoryAdvice:
     def test_banner_sits_above_the_title(self):
         """LINE 通知預覽只顯示開頭 —— 警語排在標題後面等於看不到。"""
         assert self._msg(extreme=True).splitlines()[0].startswith("🚨")
+
+
+class TestInProgressBarIsDropped:
+    """2026-08-24 事故的迴歸測試。
+
+    當天 08:42 UTC(TW 16:42)手動觸發推播,提示層**整行沒印**;而同日 mynews
+    歸檔的同一批標的是 ^SOX **-5.45%** / ^IXIC **-2.05%**(as_of 2026-08-23 22:02 UTC,
+    即上一個完整交易日 2026-08-21 vs 08-20)。production log 證實六個標的
+    **全部抓取成功** —— 抓到了,但算出來的變動沒有一個達標。
+
+    最可能的機制:Yahoo 的 `interval=1d` 在盤前就為「今天」開了一根未收盤的棒,
+    於是 `iloc[-1]/iloc[-2]` 算的是「今天到目前為止」(≈0%)而非「上一個完整交易日」。
+
+    ⚠️ 誠實揭露:此成因為**推論**,非實測確認 —— 沙箱連不到 Yahoo
+    (`curl` 回 `CONNECT tunnel failed 403`),無法取得當下的原始序列。
+    故本輪同時補了逐標的 log(哪兩天/什麼值/幾 %),下一次真實執行即可確認。
+    本組測試釘的是**規則本身**,那部分是確定的:進行中的棒不該被當成收盤。
+    """
+
+    @staticmethod
+    def _series(dates, values):
+        pd = pytest.importorskip("pandas")
+        return pd.Series(values, index=pd.to_datetime(dates), dtype=float)
+
+    def _drop(self, s, now):
+        from src.data.macro.macro_cache_reader import drop_in_progress_bar
+        return drop_in_progress_bar(s, now)
+
+    def _now(self, y, m, d, h):
+        import datetime as dt
+        return dt.datetime(y, m, d, h, tzinfo=dt.timezone.utc)
+
+    def test_premarket_bar_is_dropped(self):
+        """盤前觸發:今天那根未收盤的棒必須丟掉,改用前一個完整交易日。"""
+        s = self._series(["2026-08-20", "2026-08-21", "2026-08-24"],
+                         [12417.05, 11740.37, 11740.37])
+        out = self._drop(s, self._now(2026, 8, 24, 8))     # 08:42 UTC ≈ 事故時點
+        assert len(out) == 2
+        assert out.index[-1].date().isoformat() == "2026-08-21"
+
+    def test_after_close_bar_is_kept(self):
+        """**反向守衛**:收盤後(排程 22:30 UTC)那根是完整的,不得丟。
+
+        沒有這條,把函式寫成「一律丟最後一根」也能讓上面那條過 —— 而那會讓
+        每天 06:30 的推播永遠慢一個交易日。
+        """
+        s = self._series(["2026-08-20", "2026-08-21", "2026-08-24"],
+                         [12417.05, 11740.37, 11000.0])
+        out = self._drop(s, self._now(2026, 8, 24, 22))    # 22:30 UTC = TW 06:30
+        assert len(out) == 3
+        assert out.index[-1].date().isoformat() == "2026-08-24"
+
+    def test_older_last_bar_is_never_dropped(self):
+        """最後一根不是「今天」→ 與收盤與否無關,一律保留。"""
+        s = self._series(["2026-08-20", "2026-08-21"], [12417.05, 11740.37])
+        for _h in (8, 22):
+            assert len(self._drop(s, self._now(2026, 8, 24, _h))) == 2
+
+    def test_real_incident_numbers_would_have_fired(self):
+        """把當天的真實報價餵進去,提示層必須點名費半與那斯達克。
+
+        數字取自 mynews `data/intl_alert/2026-08-24.json`(第一手歸檔,非我推算)。
+        """
+        _chg = {"^GSPC": -1.43, "^IXIC": -2.05, "^DJI": -0.85,
+                "^SOX": -5.45, "ES=F": -0.29, "NQ=F": -0.67}
+        line = format_global_lead_line(_chg)
+        # ⚠️ `-2.05` → `-2.0%`,不是 `-2.1%`:Python 的 format 走 round-half-to-even。
+        #    我第一版把期望值寫成 -2.1% 而測試紅了 —— **改的是測試不是程式**,
+        #    因為顯示層四捨五入的方式不影響「有沒有達標」的判定。
+        assert "費城半導體 -5.5%" in line and "那斯達克綜合 -2.0%" in line
+        # 標普 -1.43% 差 0.07pp 沒到門檻 —— 不得被列入(釘住邊界沒有被放寬)
+        assert "標普" not in line
+        assert "道瓊" not in line
