@@ -27,15 +27,42 @@ def _code(d: dict, key: str = "代號") -> str:
     return str(d.get(key) or "")
 
 
-def _macro_line(switch: "dict | None") -> str:
-    """總經位階一行（未評估時誠實標,不瞎給攻守）。"""
-    if not switch or not switch.get("loaded"):
-        return "🧭 總經位階：未評估（僅依個股健檢汰弱,不套攻守）"
-    _regime = switch.get("regime") or "unknown"
-    _posture = switch.get("posture") or "—"
-    _rng = switch.get("posture_range")
-    _tail = f"｜建議持股 {_rng}" if _rng else ""
-    return f"🧭 總經位階：{_regime}｜{_posture}{_tail}"
+def _vix_line(vix: "float | None", total: int) -> list[str]:
+    """VIX 一行 + **一句白話該怎麼辦**（user 2026-08-24:「我也不知道該怎麼半」）。
+
+    原本只印一個裸數字「😱 VIX：15.9」—— 對不看盤的人那等於沒有資訊,
+    他無從判斷 15.9 是好是壞、更不知道要做什麼。故補上分級與對應動作。
+
+    ═══ 門檻一律走 SSOT,不在這裡編數字 ═══════════════════════════════
+    分級用 `shared/macro_buckets.SPECS_BY_KEY["vix"]` + `classify_danger()`,
+    即全站統一的 **黃 22 / 紅 30**(對齊 `macro_core.MACRO_THRESHOLDS['VIX']`,
+    由 `test_macro_buckets.py::test_mirror_matches_macro_core` 擋漂移)。
+    §3.3:**禁止**在本檔寫 22 / 30 這種 inline magic number —— 那會讓推播與看板
+    在同一個 VIX 值上講不一樣的話。
+
+    ═══ §1:抓不到就不給建議 ═══════════════════════════════════════════
+    VIX 缺值 → classify 回 'gray' → 只誠實說抓取失敗,**不給任何動作建議**。
+    沒有數字卻給「照原計畫」等於憑空捏造一個「市場平靜」的結論。
+    """
+    from shared.macro_buckets import LEVEL_EMOJI, SPECS_BY_KEY, classify_danger
+
+    _spec = SPECS_BY_KEY["vix"]
+    _level = classify_danger(vix, _spec)
+
+    if _level == "gray":
+        return [f"😱 VIX：抓取失敗　有效判斷 {total} 檔",
+                "　→ 本項無資料，不做波動度判讀（不是「市場平靜」）。"]
+
+    _label, _advice = {
+        "green": ("市場平靜",
+                  "照原計畫走，定期定額正常扣款即可。"),
+        "yellow": ("波動升高",
+                   "新單放慢、分批進場，不追高；手上部位先不動。"),
+        "red": ("市場恐慌",
+                "別急著接刀，也別恐慌殺出；等波動收斂再分批，不要一次全下。"),
+    }[_level]
+    return [f"😱 VIX：{vix:.1f}　{LEVEL_EMOJI[_level]} {_label}　有效判斷 {total} 檔",
+            f"　→ {_advice}"]
 
 
 def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:
@@ -142,18 +169,28 @@ def _errors_line(digest: dict) -> list[str]:
 
 def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
                             as_of: str, picks: "list | None" = None,
-                            alert_block: str = "", alert_extreme: bool = False) -> str:
+                            alert_block: str = "", alert_has_action: bool = False) -> str:
     """digest(+switch+picks) → 每日持股續抱/換股 LINE 訊息（純函式,§1 數字全來自上游）。
 
-    區段:標題 → 位階 → VIX → 換出 → 換入 → 今日選股 Top N（換股池）→ 235 加碼 →
+    區段:標題 → VIX → 換出 → 換入 → 今日選股 Top N（換股池）→ 235 加碼 →
     衛星停利 → 配置 → 抓取失敗 → 免責。
+
+    ⚠️ 2026-08-24 起**不再有「總經位階」那一行**(user 指定移除)。原本它在標題與 VIX
+    之間印「🧭 總經位階：…｜建議持股 …」。移除理由:那一行給的是**常態的**建議持股
+    區間,而 `alert_block` 給的是**極端狀況的**持股上限 —— 兩個數字語意不同卻長得像,
+    同時出現在一則訊息裡只會讓人分不清該聽哪個。AI 摘要端的對應段落亦一併移除
+    (`services/dividend_station_service.build_summary_prompt`),否則刪了這行、
+    AI 總結還在講總經位階,等於沒刪。
+
+    `alert_has_action`:上方警語是否含**動作指令**(任一動作層成立)。用來抑制
+    「今日無需動作:續抱」——同一則訊息不可同時出現「盡量脫手」與「續抱」。
+    由 `market_alert_banner.has_action_directive()` 算出。
     picks（get_switch_in_candidates 的清單,已排除持股）併入「每日選股」→ 一則涵蓋
     持股續抱/換股 + 選股清單（§ user 2026-08-23 合併需求）;None → 不顯示該段（向後相容）。
     「今日無需動作」判定:無換出、無加碼、無停利 → 明講續抱（對齊 build_summary_prompt 語氣）。
     """
     digest = digest or {}
     _vix = _num(digest.get("vix"))
-    _vix_txt = f"{_vix:.1f}" if _vix is not None else "抓取失敗"
     _total = int(_num(digest.get("total")) or 0)   # 契約漂移防禦:非數 total → 0,不 ValueError
 
     # 風險警語置頂:LINE 手機通知的預覽只顯示開頭數十字,要行動的訊息若排在
@@ -162,8 +199,7 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     lines: list[str] = ([alert_block, ""] if alert_block else []) + [
         "💼 持股戰情室｜每日續抱 / 換股",
         f"🕐 {as_of}（開盤前檢視,價格以最近交易日收盤為準）",
-        _macro_line(switch),
-        f"😱 VIX：{_vix_txt}　有效判斷 {_total} 檔",
+        *_vix_line(_vix, _total),
         "",
     ]
     lines += _switch_out_lines(digest, switch)
@@ -203,14 +239,15 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
                   and not (digest.get("take_profit") or []))
     if _total <= 0:
         lines += ["", "⚠️ 今日無任何持股完成評估（資料抓取全失敗），未能判斷 —— 請稍後檢視或查 log。"]
-    elif _no_action and alert_extreme:
-        # 個股健檢與大盤極端風險是**兩個不同的判斷範圍**,結論可以相反:
-        # 手上每一檔的體質都還行(無換出/加碼/停利)、但大盤與資金面同時崩。
+    elif _no_action and alert_has_action:
+        # 個股健檢與大盤/國際盤風險是**兩個不同的判斷範圍**,結論可以相反:
+        # 手上每一檔的體質都還行(無換出/加碼/停利)、但大盤與資金面同時崩,
+        # 或國際盤全面 risk-off。
         # 若照常印「今日無需動作:續抱」,使用者會在同一則訊息裡讀到
         # 「清倉」與「續抱」兩個相反指令,而多數人會採信讓自己舒服的那個。
-        # 故極端風險成立時明確限縮這句話的範圍,並把裁決權指回上方警語。
+        # 故任一動作層成立時明確限縮這句話的範圍,並把裁決權指回上方警語。
         lines += ["", "📭 個股層面無須換出 —— 但這只看單一持股體質，"
-                      "不覆蓋上方的大盤極端風險，請以警語為準。"]
+                      "不覆蓋上方的大盤／國際盤風險，請以警語為準。"]
     elif _no_action:
         lines += ["", "📭 今日無需動作：續抱、定期定額即可。"]
 

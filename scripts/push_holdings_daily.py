@@ -169,6 +169,9 @@ def _empty_notice(as_of: str) -> str:
 def _build_risk_alert() -> "tuple[str, bool]":
     """極端風險警語 + 國際盤提示 → 置頂區塊字串。整段失敗也不擋推播。
 
+    回傳 `(警語區塊, 是否含動作指令)`。第二個值涵蓋**兩個**動作層(台股兩腿共振 10%
+    與國際盤全面大跌 20%),供訊息端抑制「今日無需動作:續抱」。
+
     §1 的分寸在這裡:**取數失敗與判定為安全,結果必須不同**。
       - 兩腿讀得到 → market_alert_banner 決定 extreme / clear
       - 兩腿讀不到 → legs 回 None → banner 印「⬜ 無法判斷…這不代表安全」
@@ -180,7 +183,7 @@ def _build_risk_alert() -> "tuple[str, bool]":
     """
     try:
         from src.compute.notify.market_alert_banner import (
-            build_alert_block, evaluate_extreme_risk,
+            build_alert_block, evaluate_extreme_risk, has_action_directive,
         )
         from src.data.macro.macro_cache_reader import (
             fetch_lead_market_changes, load_extreme_risk_legs,
@@ -198,7 +201,8 @@ def _build_risk_alert() -> "tuple[str, bool]":
         print(f"[push_holdings] 極端風險={_verdict.state} "
               f"20D={_legs.get('twii_20d_pct')} 外資5D={_legs.get('foreign_5d_yi')} "
               f"資料日={_legs.get('twii_date')}/{_legs.get('foreign_date')}")
-        return build_alert_block(_verdict, _changes), _verdict.is_extreme
+        return (build_alert_block(_verdict, _changes),
+                has_action_directive(_verdict, _changes))
     except Exception as e:  # noqa: BLE001
         print(f"[push_holdings] 風險警語整段失敗（本則不含警語）:{e}", file=sys.stderr)
         return "", False
@@ -253,9 +257,9 @@ def main(argv=None) -> int:
     _switch = build_switch_advice(_rows, _macro, _cands)   # 純函式
     _digest = build_station_digest(_rows, _vix)            # 純函式
 
-    _alert, _alert_extreme = _build_risk_alert()
+    _alert, _alert_action = _build_risk_alert()
     _msg = format_holdings_message(_digest, _switch, as_of=_as_of, picks=_cands,
-                                   alert_block=_alert, alert_extreme=_alert_extreme)
+                                   alert_block=_alert, alert_has_action=_alert_action)
     _msg += _maybe_ai_summary(_digest, _switch)
 
     if args.dry_run:

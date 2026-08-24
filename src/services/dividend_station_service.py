@@ -731,21 +731,18 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
                          for d in switch.get("switch_out", [])) or "無"
         _in = "、".join(f"{d['代號']} {d.get('名稱', '')}".strip()
                         for d in switch.get("switch_in", [])) or "無"
-        _posture = switch.get("posture") or "總經未評估"
-        _stance_note = {
-            "defensive": "總經轉守 → 偏守:優先汰弱、換入從嚴、勿追高。",
-            "aggressive": "總經多頭 → 可積極把汰弱標的換成選股池強候選。",
-            "neutral": "總經中性 → 正常汰弱換優。",
-            "unknown": "總經未評估 → 只依個股健檢汰弱,不套總經攻守(不瞎猜方向)。",
-        }.get(switch.get("stance", "unknown"), "")
+        # ⚠️ 2026-08-24 user 指定移除「總經位階」:LINE 訊息那一行已拿掉
+        # (src/compute/notify/holdings_digest_message.py),AI prompt 這段若留著,
+        # 總結段落仍會講「當前總經位階 / 建議持股 X%」—— 刪一半等於沒刪,而且更糟:
+        # 訊息本文沒有的東西卻由 AI 講出來,使用者無從對照數字從哪來。
+        # 連帶移除 `_stance_note`(攻守指引)—— 它整段語意都建立在總經位階上。
         _base += (
-            "── 換股建議（搭配總經位階）──\n"
-            f"- 當前總經位階：{switch.get('regime')}（姿態 {_posture}"
-            f"{('，建議持股 ' + switch['posture_range']) if switch.get('posture_range') else ''}）\n"
+            "── 換股建議 ──\n"
             f"- 建議換出（你持有的紅燈汰弱）：{_out}\n"
             f"- 建議換入（來源：{'你的觀察清單' if switch.get('switch_in_src') == 'watchlist' else '選股池全自動排名'}）：{_in}\n"
-            f"- 攻守指引：{_stance_note}\n"
-            "請把「換出 X → 換入 Y」講清楚;位階未評估時不要編造攻守方向。\n"
+            "請把「換出 X → 換入 Y」講清楚。\n"
+            "**不要**提及總經位階、景氣循環階段、或任何持股成數 —— "
+            "本則訊息不提供這些判斷,由 AI 自行補上等同捏造(§1)。\n"
         )
     return _base
 
