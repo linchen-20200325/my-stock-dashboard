@@ -68,9 +68,13 @@ _FRESH_RANK = {"🟢": 0, "⬜": 1, "🟡": 2, "🔴": 3}
 #
 # 收斂方式對齊 `shared/macro_buckets.py` 既有慣例(L0 鏡像 + CI drift test):
 #   - 本檔為契約 SSOT;
-#   - `data_coverage.py` 的私有副本由 `tests/test_e1_core_summary.py` 的
-#     AST drift 守衛釘住(值不相等 → CI 紅燈,並印出該檔實際字面);
-#   - 該檔不在本次可改範圍,待其可改時直接 import 本常數即可刪除副本。
+#   - `data_coverage.py` 的私有副本由 `tests/test_data_coverage.py::
+#     test_frozen_watch_contract_does_not_drift_from_data_coverage` 的 AST drift
+#     守衛釘住(值不相等 → CI 紅燈,並印出該檔實際字面)。
+#     ⚠️ 2026-08-25:該守衛原本住在 `tests/test_e1_core_summary.py`,核心總表
+#     整組拔除時**刻意撈出來**搬進 test_data_coverage.py —— 它守的是
+#     data_coverage 的副本,與核心總表無關,跟著刪等於白白失去保護。
+#   - 待該檔可改時直接 import 本常數即可刪除副本。
 FROZEN_WATCH_COLS_LEADING: tuple[str, ...] = (
     "外資", "投信", "自營", "外資大小",
     "前五大留倉", "前十大留倉", "未平倉口數",
@@ -459,6 +463,16 @@ def frozen_summary(result: dict[str, dict]) -> tuple[int, list]:
     return (len(_frozen), _frozen)
 
 
+# ⚠️ 2026-08-25:本函式目前 **0 caller**。
+#    原唯一 caller 是 `shared/core_summary.py`(核心總表),該功能已整組拔除。
+#    **刻意保留而非刪除**,兩個理由:
+#      (1) `src/ui/pages/data_coverage.py` 有一份私有副本 `_li_frozen_cols()`,
+#          本函式正是它該收斂過來的目標 —— 刪掉等於把「兩份實作合一」這條路
+#          先堵死;上面檔頭註解記的收斂計畫也會失去落點。
+#      (2) 函式體內嵌一個實際踩過的 bug 修正(`df.columns` 是 pandas `Index`,
+#          取布林值會 ValueError,見下方註解)。刪掉再重寫必然重踩。
+#    **處置觸發**:若 user 決定把 data_coverage 收斂過來 → 接上即恢復 caller;
+#    若決定兩邊都不用 → 屆時連同私有副本一起刪。§-1:無指派不主動動工。
 def leading_frozen_columns(
     df,
     *,

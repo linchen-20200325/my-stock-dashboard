@@ -234,3 +234,83 @@ class TestComputeTabCoverage:
     def test_render_no_raise(self):
         from src.ui.pages import render_data_coverage
         render_data_coverage()  # 空 session_state stub,不 raise
+
+
+# ══════════════════════════════════════════════════════════════════
+# 凍結欄位契約守衛 —— 2026-08-25 從 tests/test_e1_core_summary.py 撈過來收留
+# ══════════════════════════════════════════════════════════════════
+#
+# 這條測試原本寄生在核心總表的專屬測試檔裡，但它守的是**別的東西**：
+# `data_coverage.py` 有一份凍結欄位常數的私有副本，這條釘它不准跟 L0 SSOT 漂移。
+# 核心總表整組拔除時若跟著刪，等於白白失去一道與它無關的保護 ——
+# 故搬來本檔（同 v19.181 刪 tw_backtest 時把寄生的 hot_money 測試撈進
+# test_hot_money.py 的先例）。
+#
+# 為什麼是 AST 而不是 import 比對:那三個常數是**私有**副本(底線開頭)，
+# 直接 import 會把「私有」變成事實上的公開介面。讀原始碼的 literal 值
+# 則不動介面 —— 且比對的是 `literal_eval` 出來的**值**，註解 / 排版 /
+# 換行怎麼改都不影響。
+
+import ast as _ast
+from pathlib import Path as _Path
+
+from shared.data_freshness import (
+    FROZEN_STALE_PERIODS_LEADING,
+    FROZEN_WATCH_COLS_LEADING,
+    LEADING_DATE_COL,
+)
+
+_REPO_ROOT = _Path(__file__).resolve().parents[1]
+
+
+def _module_level_assign_value(tree: _ast.Module, name: str):
+    """取 module-level `name = <literal>` / `name: T = <literal>` 的值 + 節點。"""
+    for _n in tree.body:
+        if isinstance(_n, _ast.Assign):
+            for _t in _n.targets:
+                if isinstance(_t, _ast.Name) and _t.id == name:
+                    return _ast.literal_eval(_n.value), _n
+        elif isinstance(_n, _ast.AnnAssign) and isinstance(_n.target, _ast.Name) \
+                and _n.target.id == name and _n.value is not None:
+            return _ast.literal_eval(_n.value), _n
+    return None, None
+
+
+def test_frozen_watch_contract_does_not_drift_from_data_coverage():
+    """凍結欄位契約只准有一份答案。
+
+    `src/ui/pages/data_coverage.py`(L5)有一份私有副本，SSOT 在
+    `shared/data_freshness.py`(L0)。兩份**值**不相等 → 同一份 li_latest 會在
+    不同畫面得到互相否定的凍結欄數。
+
+    若該檔已改成直接 import L0 SSOT(副本消失)→ 本測試改驗那條 import。
+    """
+    _src = (_REPO_ROOT / 'src' / 'ui' / 'pages' / 'data_coverage.py').read_text(
+        encoding='utf-8')
+    _tree = _ast.parse(_src)
+    _expected = {
+        '_LI_FROZEN_WATCH_COLS': FROZEN_WATCH_COLS_LEADING,
+        '_LI_FROZEN_STALE_PERIODS': FROZEN_STALE_PERIODS_LEADING,
+        '_LI_DATE_COL': LEADING_DATE_COL,
+    }
+    _found_any = False
+    for _name, _want in _expected.items():
+        _value, _node = _module_level_assign_value(_tree, _name)
+        if _node is None:
+            continue
+        _found_any = True
+        assert _value == _want, (
+            f'凍結契約漂移：data_coverage.{_name} = {_value!r}，'
+            f'但 shared/data_freshness SSOT = {_want!r}。\n'
+            f'該檔第 {_node.lineno} 行原文：\n'
+            f'{_ast.get_source_segment(_src, _node)}')
+    if not _found_any:
+        _mods = set()
+        for _n in _ast.walk(_tree):
+            if isinstance(_n, _ast.Import):
+                _mods |= {a.name for a in _n.names}
+            elif isinstance(_n, _ast.ImportFrom):
+                _mods.add(_n.module or '')
+        assert 'shared.data_freshness' in _mods, (
+            'data_coverage.py 既沒有 _LI_FROZEN_* 私有副本，也沒有 import '
+            'shared.data_freshness —— 凍結契約失去單一出處，請修守衛或修實作。')
