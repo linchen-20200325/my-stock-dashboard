@@ -10,7 +10,7 @@ section render 函式(類比 `macro/` 子目錄模式)。
    先 import 目標(見 tests/test_zz_streamlit_pollution_lock.py 第四層守衛)。
 """
 from . import (  # noqa: F401
-    tab_edu, tab_helpers, tab_macro,
+    tab_edu, tab_helpers, tab_macro, tab_macro_v2,
     tab_stock, tab_stock_grp,
     tab_stock_picker,
     # F-8 補搬:L5 渲染元件(非單一 tab,但同層性質)
@@ -23,7 +23,7 @@ from . import (  # noqa: F401
 # (UI + etf_margin_simulator L2 engine + fetch_etf_close_history + 測試),見 docs/ARCHIVED_FEATURES.md
 
 _SUBMODULES = (
-    tab_edu, tab_helpers, tab_macro,
+    tab_edu, tab_helpers, tab_macro, tab_macro_v2,
     tab_stock, tab_stock_grp,
     tab_stock_picker,
     chip_radar, grape_ladder, hot_money, macro_classroom, macro_stock_link,
