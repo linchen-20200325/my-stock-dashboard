@@ -1,4 +1,4 @@
-"""src/compute/screener/ — 基本面 / 月營收 / 缺貨 / 抗跌RS 等篩選器計算。PEP 562 lazy forward。"""
+"""src/compute/screener/ — 基本面 / 月營收 / 缺貨 / 抗跌RS 等篩選器計算。PEP 562 `__getattr__` 即時轉發。"""
 from . import (  # noqa: F401
     cross_quarter_trends,
     forward_test,

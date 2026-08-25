@@ -11,6 +11,7 @@
 - `DEFAULT_PARQUET_CACHE_DIR`:預設 cache 目錄(Path("data_cache"))
 - `load_parquet_safe(path, required_cols) -> DataFrame | None`:通用 safe loader
 - `load_twii_close(cache_dir) -> Series`:讀 twii_ohlcv.parquet → close series
+- `load_v2_chart_series(cache_dir) -> dict[str, Series]`:總經 v2 走勢卡的長歷史序列
 """
 from __future__ import annotations
 
@@ -259,4 +260,75 @@ def fetch_lead_market_changes(*, range_: str = "5d", now_utc=None) -> dict:
         except Exception as e:  # noqa: BLE001
             out[m.symbol] = None
             print(f"[lead_mkt] {m.symbol} 失敗:{type(e).__name__}: {e}")
+    return out
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 總經 v2 走勢卡的長歷史序列（2026-08-25）
+# ══════════════════════════════════════════════════════════════════════
+#
+# 消費端:src/ui/tabs/tab_macro_v2.py（L5，經 L3 無業務加工，屬 EX-PASSTHRU-1 精神）
+#
+# 為什麼取數在這裡而不在 L2/L5:要讀 parquet，是 I/O。§8.2 明文「L2 不得 I/O」，
+# 且 L5 直接讀檔會把 cache 路徑散到 UI。同檔上方「極端風險閘門兩腿」是同一理由。
+#
+# ⚠️ 為什麼只有這兩個指標:2026-08-25 盤點 16 盞燈的歷史資料，**只有這兩個**
+#    有落地的長序列可畫（twii_ohlcv 4,919 列 / finmind_margin 4,943 列）。
+#    其餘 14 個要嘛完全查無序列（vix / 台灣 PMI / jingqi / news_systemic），
+#    要嘛只有記憶體內 14~60 日短窗（us10y / dxy / adl / fut_net，隨 session 消失）。
+#    §1:沒有序列的指標**不畫圖**，由消費端改用純數值卡，不以合成資料充當走勢。
+
+def load_v2_chart_series(
+    cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+) -> dict[str, pd.Series]:
+    """讀總經 v2 走勢卡要用的長歷史序列。
+
+    Returns:
+        dict，key 為 `DangerSpec.key`，value 為 date-indexed pd.Series：
+          - `"bias_240"`:台股距年線乖離 %（由 twii close 算 MA240 → 乖離）
+          - `"margin"`  :融資餘額（**億元**，已由元換算）
+        取不到的 key **不會出現在 dict 裡**（§1:不放空 Series 讓消費端誤以為有資料）。
+
+    單位（§4.1）:
+        bias_240 → %（與 DangerSpec.unit 一致）
+        margin   → 億元（parquet 原欄 `margin_balance` 單位是**元**，
+                   除以 `shared.margin_schema.TWD_PER_YI`；門檻 2500/3400 也是億）
+    """
+    from shared.margin_schema import TWD_PER_YI
+    from shared.relative_thresholds import DEFAULT_BIAS_MA_LEN
+
+    out: dict[str, pd.Series] = {}
+
+    # ── bias_240:close → MA240 → 乖離 % ──────────────────────────────
+    _close = load_twii_close(cache_dir)
+    if len(_close) >= DEFAULT_BIAS_MA_LEN:
+        try:
+            _ma = _close.rolling(DEFAULT_BIAS_MA_LEN).mean()
+            _bias = ((_close / _ma - 1.0) * 100.0).dropna()
+            if len(_bias):
+                _bias.name = "bias_240"
+                out["bias_240"] = _bias
+        except Exception as e:  # noqa: BLE001 — 單一序列失敗不該讓整頁炸
+            print(f"[macro_cache_reader/load_v2_chart_series] bias_240 計算失敗:{e}")
+    elif len(_close):
+        # §1:出聲不吞。資料不足畫不出年線乖離，明講而不是偷偷用較短的均線。
+        print(f"[macro_cache_reader/load_v2_chart_series] twii close 只有 "
+              f"{len(_close)} 筆 < MA{DEFAULT_BIAS_MA_LEN}，不畫 bias_240"
+              f"（不以較短均線冒充年線）")
+
+    # ── margin:元 → 億 ────────────────────────────────────────────────
+    _df = load_parquet_safe(cache_dir / "finmind_margin.parquet",
+                            {"date", "margin_balance"})
+    if _df is not None:
+        try:
+            _d = _df.copy()
+            _d["date"] = pd.to_datetime(_d["date"])
+            _s = (_d.set_index("date")["margin_balance"].astype(float)
+                    .sort_index().dropna() / TWD_PER_YI)
+            if len(_s):
+                _s.name = "margin"
+                out["margin"] = _s
+        except Exception as e:  # noqa: BLE001
+            print(f"[macro_cache_reader/load_v2_chart_series] margin 處理失敗:{e}")
+
     return out

@@ -1800,7 +1800,8 @@ def compute_five_bucket_summary(
     # 行為零變化(同 Fund repo `calculate_composite_score(provenance_out=)` 先例)。
     _rd: dict = readiness_out if isinstance(readiness_out, dict) else {}
 
-    def _rec(key, *, state, reason=None, hit=None, candidates=None, rejected=None):
+    def _rec(key, *, state, reason=None, hit=None, candidates=None, rejected=None,
+             value=None):
         """記一盞燈的取值結果。**恆為 16 筆** —— 缺席也要有紀錄,否則就是隱形。"""
         _sp = SPECS_BY_KEY.get(key)
         # 2026-08-25:鑑別力旗標與 `wired` 同層 —— 兩者都是「別信這盞燈」,
@@ -1817,6 +1818,12 @@ def compute_five_bucket_summary(
             "discriminative": _disc,
             "state": state,               # ok | missing
             "reason": reason,             # MISSING_* (state=missing 時)
+            # 2026-08-25:命中的**原始數值**(state=missing 時恆 None)。
+            # 加這欄的理由:消費端(總經 v2 卡片/走勢圖)需要 float 才能畫圖與判燈,
+            # 而 `details[].value_str` 只有格式化後的字串。若讓消費端自己再從
+            # session_state 抽一次,就會出現第二條取數路徑 → 必然漂移(§3.3)。
+            # 寫在 `_rec` 這裡 = 與 readiness 其餘欄位同源同刻,物理上無法分岔。
+            "value": value,
             "hit_source": hit,            # 命中的那一源;None = 全敗
             "candidates": list(candidates or []),
             "rejected": list(rejected or []),
@@ -1872,7 +1879,8 @@ def compute_five_bucket_summary(
                       f"常見主因:上游 fallback 換成不同尺度標的(如 DXY→UUP)"
                       f"或報價慣例改變(如 ^TNX 殖利率×10)。**不猜換算**。")
                 continue
-            _rec(key, state="ok", hit=_src_label, candidates=_cands, rejected=_rejected)
+            _rec(key, state="ok", hit=_src_label, candidates=_cands,
+                 rejected=_rejected, value=_v_fs)
             return _v_fs
         # 全不過:區分「有值但全被範圍擋下」與「根本沒值」—— 處置完全不同
         _rec(key, state="missing",

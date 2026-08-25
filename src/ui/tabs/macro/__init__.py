@@ -76,7 +76,7 @@
 - intl/tw/tech/inst/margin/mkt_info bridge + 8 個 render_section_* call
 
 ═══════════════════════════════════════════════════════════════════════════
-📐 PEP 562 lazy forward(caller 可用 `from src.ui.tabs.macro import X` 取)
+📐 PEP 562 `__getattr__` 即時轉發(caller 可用 `from src.ui.tabs.macro import X` 取)
 ═══════════════════════════════════════════════════════════════════════════
 """
 from . import helpers  # noqa: F401

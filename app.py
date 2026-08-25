@@ -524,12 +524,19 @@ def _render_tab_isolated(_render, _label):
 # GROUP 1: 市場環境（總經 + 產業熱力圖）
 # ══════════════════════════════════════════════════════════════
 with tab_market:
-    tab_macro, tab_heatmap, tab_sector_flow = st.tabs(
-        ['🌍 總經', '🗺️ 產業熱力圖', '🌊 板塊資金潮汐'])
+    tab_macro, tab_macro_v2, tab_heatmap, tab_sector_flow = st.tabs(
+        ['🌍 總經', '🚦 總經 v2', '🗺️ 產業熱力圖', '🌊 板塊資金潮汐'])
 
     with tab_macro:
         from src.ui.tabs import render_tab_macro
         _render_tab_isolated(render_tab_macro, '總經')
+
+    with tab_macro_v2:
+        # 總經 v2(2026-08-25):位階評估 + 五桶的三層重新呈現。與左邊「🌍 總經」
+        # 讀**同一份資料**(同一個 compute_five_bucket_summary),不重複取數、
+        # 不取代舊分頁 —— 並排讓 user 對照確認後再決定去留。
+        from src.ui.tabs.tab_macro_v2 import render_tab_macro_v2
+        _render_tab_isolated(render_tab_macro_v2, '總經 v2')
 
     with tab_heatmap:
         # B4-b H-9:本 tab 原為全 app 唯一未包隔離器者,任何例外(例:色階

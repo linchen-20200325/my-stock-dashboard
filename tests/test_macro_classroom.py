@@ -79,8 +79,19 @@ def _scoped_streamlit_stub():
     卡假 st。改:本檔測試期間才裝 stub,測完還原進場前的真身並 reload
     目標模組 rebind(進出各一次,同 test_data_coverage 同模式)。
     """
+    from tests.conftest import rebind_modules_bound_to
+
+    # ① 裝 stub **之前**先在真 streamlit 下 import 目標。`src/ui/tabs/__init__.py`
+    #    是 eager barrel,「import 一個 tab」會連鎖拉進整棵樹;若那發生在 stub
+    #    視窗內,那批模組的 module-level `st` 會**永久**綁在待丟棄的 stub 上
+    #    (實測 81 個),就算下面把 sys.modules 還原得乾乾淨淨也救不回來。
+    #    先行 import 讓視窗內不再有任何「首次 import」。
+    import src.ui.tabs.macro_classroom  # noqa: F401
+    import src.ui.tabs.tab_edu  # noqa: F401 — 只為觸發 import,不取用符號
+
     _saved = sys.modules.get("streamlit")
     _stub_streamlit()
+    _stub = sys.modules["streamlit"]
     _force_reload_targets()
     yield
     if _saved is not None:
@@ -88,6 +99,9 @@ def _scoped_streamlit_stub():
     else:
         sys.modules.pop("streamlit", None)
     _force_reload_targets()
+    # ② 補漏:視窗內若仍有模組綁到 stub(例如測試執行中才觸發的函式內 import),
+    #    針對性 reload 它們。不是無差別 reload 全樹。
+    rebind_modules_bound_to(_stub)
 
 
 # ════════════════════════════════════════════════════════════════

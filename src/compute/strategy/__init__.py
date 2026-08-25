@@ -1,4 +1,4 @@
-"""src/compute/strategy/ — v4/v5 策略 / 組合管理 / 回測 / 技術指標。PEP 562 lazy forward。
+"""src/compute/strategy/ — v4/v5 策略 / 組合管理 / 回測 / 技術指標。PEP 562 `__getattr__` 即時轉發。
 
 v19.174 去識別化：`caisen_targets` 已改名為 `pattern_targets`。舊檔僅保留
 deprecation re-export（待手動刪除），**不**登記於 `_SUBMODULES`，避免同一批

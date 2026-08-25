@@ -1,6 +1,6 @@
 """src/data/proxy/ — 代理層(Squid / 直連 / NAS / yfinance)。
 
-PEP 562 lazy forward,見 macro/__init__.py 註釋。
+PEP 562 `__getattr__` 即時轉發,見 macro/__init__.py 註釋。
 nas_server.py 故意不 re-export:它是 FastAPI server entry,不該被當 lib import。
 """
 from . import proxy_helper, yf_proxy  # noqa: F401

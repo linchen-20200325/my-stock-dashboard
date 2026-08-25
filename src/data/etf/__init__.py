@@ -1,4 +1,4 @@
-"""src/data/etf/ — ETF 資料 fetcher。PEP 562 lazy forward,見 macro/__init__.py 註釋。"""
+"""src/data/etf/ — ETF 資料 fetcher。PEP 562 `__getattr__` 即時轉發,見 macro/__init__.py 註釋。"""
 from . import etf_fetch  # noqa: F401
 
 _SUBMODULES = (etf_fetch,)

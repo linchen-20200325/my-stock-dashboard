@@ -1,4 +1,4 @@
-"""src/compute/macro/ — 總經 helper / 訊號 lookback / 驗證 / 跨資產流動性。PEP 562 lazy forward。"""
+"""src/compute/macro/ — 總經 helper / 訊號 lookback / 驗證 / 跨資產流動性。PEP 562 `__getattr__` 即時轉發。"""
 from . import (  # noqa: F401
     macro_helpers, flow_engine,
 )
