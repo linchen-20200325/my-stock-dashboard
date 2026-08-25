@@ -41,6 +41,60 @@ from dataclasses import dataclass
 from shared import dividend_station_thresholds as T
 
 # ══════════════════════════════════════════════════════════════════
+# 燈的 canonical key —— 一個字串只准定義一次
+# ══════════════════════════════════════════════════════════════════
+#
+# 為什麼要把 key 抽成常數:這些字串**同時**是規格表的主鍵、與 L2 回報缺值原因時
+# 的字典鍵（`Screen333.miss_reasons` / 組表的 `_health_miss`）。兩邊各自寫字面值 =
+# 改一個字就靜默斷開對照，而且斷開時**不會有任何錯誤** —— 只是明細面板從此查不到
+# 那盞燈的 label / why / source（§3.3 SSOT）。
+KEY_HEALTH_A = "health_a"
+KEY_HEALTH_B = "health_b"
+KEY_HEALTH_C = "health_c"
+KEY_HEALTH_D = "health_d"
+KEY_LIGHT235 = "light235"
+KEY_SCREEN_INCEPTION = "screen_inception"
+KEY_SCREEN_RETURN = "screen_return"
+KEY_SCREEN_PEER = "screen_peer"
+KEY_STOCK_HEALTH = "stock_health"
+KEY_STOCK_TREND = "stock_trend"
+KEY_STOCK_KD = "stock_kd"
+KEY_STOCK_SWAP = "stock_swap"
+
+# ══════════════════════════════════════════════════════════════════
+# 235 加碼燈的三個判斷軸
+# ══════════════════════════════════════════════════════════════════
+#
+# 為什麼三個軸要具名:235 是「三取一取最嚴重」，任一軸沒資料**燈照樣會亮**
+# （剩下的軸還在判）。所以「這盞燈用了幾個依據」是燈本身以外的獨立資訊 ——
+# 只用 1 個依據亮出來的巡航燈，跟三個依據都同意的巡航燈，可信度差很多。
+# 消費端要能講出「少了哪一個」而不只是「少了幾個」，故用具名軸而非計數。
+AXIS_VIX = "vix"
+AXIS_WEEKLY = "weekly"
+AXIS_BOLL = "boll"
+
+#: 固定順序 —— 畫面文字一律照這個序組出，不隨傳入順序漂移。
+LIGHT235_AXES: tuple[str, ...] = (AXIS_VIX, AXIS_WEEKLY, AXIS_BOLL)
+
+#: 軸 → 畫面用短名（表格塞得下）。
+AXIS_LABELS: dict[str, str] = {
+    AXIS_VIX: "VIX",
+    AXIS_WEEKLY: "週線",
+    AXIS_BOLL: "布林",
+}
+
+
+def axes_text(axes) -> str:
+    """把軸代號串成畫面文字（如 `"VIX/週線"`）。順序固定為 `LIGHT235_AXES`。
+
+    傳入順序**刻意忽略** —— 同一組軸不該因為呼叫端迴圈順序不同就印出兩種字串
+    （那會讓「文案有沒有變」變成不可判定的事）。
+    """
+    _s = set(axes or ())
+    return "/".join(AXIS_LABELS[a] for a in LIGHT235_AXES if a in _s)
+
+
+# ══════════════════════════════════════════════════════════════════
 # 規格
 # ══════════════════════════════════════════════════════════════════
 
@@ -79,28 +133,28 @@ class StationSpec:
 STATION_SPECS: list[StationSpec] = [
     # ── ETF 健檢 A/B/C/D ──────────────────────────────────────────
     StationSpec(
-        key="health_a", label="A 不吃本金", kind=T.KIND_ETF, group="health",
+        key=KEY_HEALTH_A, label="A 不吃本金", kind=T.KIND_ETF, group="health",
         unit="%", direction="low_bad",
         threshold_text="🔴 近一年總報酬 < 年化配息率（吃到本金）",
         source="ETF 5 年日線回推 365 天總報酬 vs TTM 配息 / 現價",
         why="配息看起來很香，但如果總報酬追不上配息率，領到的是自己的本金。",
     ),
     StationSpec(
-        key="health_b", label="B 夏普", kind=T.KIND_ETF, group="health",
+        key=KEY_HEALTH_B, label="B 夏普", kind=T.KIND_ETF, group="health",
         unit="", direction="low_bad",
         threshold_text=f"🔴 Sharpe < {T.SHARPE_NEG_THRESHOLD:g}",
         source="5 年日報酬年化（無風險利率視為 0）",
         why="承擔了波動卻沒換到超額報酬 —— 那不如放定存。",
     ),
     StationSpec(
-        key="health_c", label="C 趨勢防守", kind=T.KIND_ETF, group="health",
+        key=KEY_HEALTH_C, label="C 趨勢防守", kind=T.KIND_ETF, group="health",
         unit="", direction="categorical",
         threshold_text=f"🟡 週收 < {T.MA_QUARTER_WEEKS} 週季線**且**季線下彎",
         source="週 K（由日線衍生）",
         why="兩個條件同時成立才算轉弱 —— 只是跌破季線不夠，季線本身要開始往下。",
     ),
     StationSpec(
-        key="health_d", label="D 折溢價", kind=T.KIND_ETF, group="health",
+        key=KEY_HEALTH_D, label="D 折溢價", kind=T.KIND_ETF, group="health",
         unit="%", direction="high_bad",
         threshold_text=f"🟡 溢價 > {T.PREMIUM_ALERT_PCT:g}%",
         source="近 35 交易日 NAV 對照市價",
@@ -108,7 +162,7 @@ STATION_SPECS: list[StationSpec] = [
     ),
     # ── ETF 235 加碼引擎（三取一取最嚴重）──────────────────────────
     StationSpec(
-        key="light235", label="235 加碼燈", kind=T.KIND_ETF, group="timing",
+        key=KEY_LIGHT235, label="235 加碼燈", kind=T.KIND_ETF, group="timing",
         unit="σ", direction="low_bad",
         threshold_text=(
             f"{T.BOLL_PERIOD_WEEKS} 週布林 z ≤ −1σ / −2σ / −3σ "
@@ -120,21 +174,21 @@ STATION_SPECS: list[StationSpec] = [
     ),
     # ── ETF 3-3-3 篩選（三個子項）─────────────────────────────────
     StationSpec(
-        key="screen_inception", label="3-3-3 ① 成立年數", kind=T.KIND_ETF,
+        key=KEY_SCREEN_INCEPTION, label="3-3-3 ① 成立年數", kind=T.KIND_ETF,
         group="screen", unit="年", direction="low_bad",
         threshold_text=f"需 ≥ {T.MIN_INCEPTION_YEARS:g} 年",
         source="ETF 基本資料成立日",
         why="太年輕的 ETF 沒經歷過完整多空，過去表現參考價值有限。",
     ),
     StationSpec(
-        key="screen_return", label="3-3-3 ② 三年報酬", kind=T.KIND_ETF,
+        key=KEY_SCREEN_RETURN, label="3-3-3 ② 三年報酬", kind=T.KIND_ETF,
         group="screen", unit="%", direction="low_bad",
         threshold_text="需為正報酬",
         source="ETF 5 年日線回推 3 年",
         why="三年還是負的，代表這不是短期回檔的問題。",
     ),
     StationSpec(
-        key="screen_peer", label="3-3-3 ③ 同儕排名", kind=T.KIND_ETF,
+        key=KEY_SCREEN_PEER, label="3-3-3 ③ 同儕排名", kind=T.KIND_ETF,
         group="screen", unit="", direction="low_bad",
         threshold_text=(
             f"需 {'/'.join(f'{m}M' for m in T.PEER_WINDOWS_MONTHS)} "
@@ -150,7 +204,7 @@ STATION_SPECS: list[StationSpec] = [
     ),
     # ── 個股 4 盞 ─────────────────────────────────────────────────
     StationSpec(
-        key="stock_health", label="財報體檢", kind=T.KIND_STOCK, group="stock",
+        key=KEY_STOCK_HEALTH, label="財報體檢", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
         threshold_text=(
             f"評等 {'/'.join(T.STOCK_HEALTH_GRADES)}；"
@@ -160,7 +214,7 @@ STATION_SPECS: list[StationSpec] = [
         why="個股不像 ETF 有一籃子分散，體質壞掉就是壞掉。",
     ),
     StationSpec(
-        key="stock_trend", label="財報趨勢", kind=T.KIND_STOCK, group="stock",
+        key=KEY_STOCK_TREND, label="財報趨勢", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
         threshold_text="盈轉虧 / 逐季惡化 / 轉機（兩季比較）",
         source="本季 vs 上一季財報",
@@ -174,14 +228,14 @@ STATION_SPECS: list[StationSpec] = [
         ),
     ),
     StationSpec(
-        key="stock_kd", label="KD 指標", kind=T.KIND_STOCK, group="stock",
+        key=KEY_STOCK_KD, label="KD 指標", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
         threshold_text="高檔鈍化 / 黃金交叉 / 死亡交叉",
         source="個股 360 日 OHLC",
         why="短線進出場的參考，不決定要不要續抱。",
     ),
     StationSpec(
-        key="stock_swap", label="汰換建議", kind=T.KIND_STOCK, group="stock",
+        key=KEY_STOCK_SWAP, label="汰換建議", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
         threshold_text="🔴 換出 / 🟡 留意 / 🟢 續抱",
         source="財報體檢 + 趨勢 + KD 匯總",
@@ -216,6 +270,12 @@ MISS_NO_INPUT = "no_input"          #: 該項的輸入沒抓到（如缺配息�
 MISS_FETCH_FAILED = "fetch_failed"  #: 整檔抓取失敗
 MISS_NOT_ENOUGH = "not_enough"      #: 有資料但不足以計算（如週數 < 20）
 MISS_NOT_APPLICABLE = "n/a"         #: 這類持股不適用（如個股沒有折溢價）
+#: 上游**給了值，但值不在約定的形態裡**（如財報評等回了不在分級表內的字串）。
+#: 2026-08-25 新增。為什麼上面四個都不能用：前四個講的都是「沒有值」，
+#: 處置是等、是重跑、是不用管；這一個是**有值但值不對** —— 那是上下游契約破了，
+#: 重跑一百次也一樣，要改的是程式。把它併進 `MISS_NO_INPUT` 會讓一個
+#: **程式 bug 訊號**被畫成「來源這輪失敗，可以重跑一次」而永遠沒人去修。
+MISS_CONTRACT_DRIFT = "contract_drift"
 
 #: 缺值原因 → 給使用者的「該怎麼辦」。畫面直接印這句。
 MISS_TEXT: dict[str, str] = {
@@ -223,7 +283,41 @@ MISS_TEXT: dict[str, str] = {
     MISS_FETCH_FAILED: "這一檔整批抓取失敗 —— 看該列的錯誤訊息，多半是代號或來源問題。",
     MISS_NOT_ENOUGH: "資料筆數不夠算 —— 新上市或剛納入的標的會這樣，等時間累積。",
     MISS_NOT_APPLICABLE: "這類持股不適用這盞燈（不是壞掉）。",
+    MISS_CONTRACT_DRIFT: "上游給的值不在約定的形態裡（不是沒資料，是資料長得不對）"
+                         "—— 重跑不會好，這是程式要修的訊號，請回報。",
 }
+
+#: 「誰比較根本」的排序：**同一盞燈同時有多個缺值原因時，取排在前面的那個**。
+#:
+#: 為什麼需要這個而不是各處自己挑一個：把「哪個原因該勝出」寫死在各個判燈函式裡，
+#: 等於同一個問題有 N 份答案，而且彼此不知道對方存在（健檢 A 兩因、組表四盞燈彙總、
+#: 3-3-3 三子項 —— 現況就是三個地方各挑各的）。排序理由是**解釋力涵蓋範圍**：
+#:   1. 整檔抓取失敗 → 其他項不可能算得出來，它解釋了全部
+#:   2. 契約漂移     → 有值但值不對，是程式 bug，優先於任何「等一等就好」
+#:   3. 資料不足     → 結構性、等時間累積會好
+#:   4. 該項沒抓到   → 單項的、重跑可能就好
+#:   5. 不適用       → 根本不是問題，只有在**全部**都不適用時才該勝出
+MISS_PRIORITY: tuple[str, ...] = (
+    MISS_FETCH_FAILED,
+    MISS_CONTRACT_DRIFT,
+    MISS_NOT_ENOUGH,
+    MISS_NO_INPUT,
+    MISS_NOT_APPLICABLE,
+)
+
+
+def most_fundamental_miss(reasons) -> str:
+    """多個缺值原因 → 取最根本的那個（依 `MISS_PRIORITY`）。全空 → 回 `""`。
+
+    §1：這裡**不發明**新原因、也不合併成「多項缺失」這種等於沒講的字眼；
+    只從實際發生過的原因裡挑一個最能解釋現況的，其餘由呼叫端保留明細。
+    未登錄的原因字串一律排在最後（不認得的東西不該贏過認得的）。
+    """
+    _seen = [r for r in (reasons or ()) if r]
+    if not _seen:
+        return ""
+    return min(_seen, key=lambda r: (MISS_PRIORITY.index(r)
+                                     if r in MISS_PRIORITY else len(MISS_PRIORITY)))
 
 
 def classify_state(spec: StationSpec, *, has_value: bool,

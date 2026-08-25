@@ -11,15 +11,33 @@ from __future__ import annotations
 from typing import Callable
 
 from shared import dividend_station_thresholds as T
+from shared import station_specs as SS
 from src.compute.etf import dividend_station as ds
 
 _CLASS_ICON = {T.ASSET_CORE: "🛡️ 核心", T.ASSET_SATELLITE: "🚀 衛星"}
 
 
 def row_from_assessment(a: ds.HoldingAssessment) -> dict:
-    """HoldingAssessment → 表格一列（純函式）。"""
+    """HoldingAssessment → 表格一列（純函式）。
+
+    ⚠️ `健檢` 欄是 `worst_health`（四盞燈取最嚴重）—— 這一步會把「為什麼」整個丟掉:
+    四盞燈都 ⚪ 時只剩一個裸 ⚪,而那可能是新上市(等時間)、配息沒抓到(可重跑)、
+    或個股不適用(不是壞掉)。row dict 是 UI / 推播 / 換股建議共同的輸入,原因在這裡
+    斷掉就再也接不回去,故補兩個**底線開頭的非顯示欄**（同 `_detail` 慣例,不進表格）:
+      - `_health_miss`:{規格表 key → MISS_*},逐盞燈的原因,無損。
+      - `_miss_reason`:整列一句話版本(只在 `健檢` 為 ⚪ 時有值),給只想顯示一個
+        圖示 + 一句話的消費端用；多盞燈原因不同時取最根本者（`most_fundamental_miss`）。
+    """
     _add = f"{a.light.deploy_pct:.0f}%" if a.light.deploy_pct else ""
     _is_stock = a.asset_kind == T.KIND_STOCK
+    # 只收「⚪ 且有登記原因」的燈:判得出來的燈沒有原因可講,塞進去會讓消費端
+    # 誤以為它也缺（§1 不製造假的缺值紀錄）。
+    _health_miss = {
+        _k: _f.miss_reason
+        for _k, _f in ((SS.KEY_HEALTH_A, a.health_a), (SS.KEY_HEALTH_B, a.health_b),
+                       (SS.KEY_HEALTH_C, a.health_c), (SS.KEY_HEALTH_D, a.health_d))
+        if _f.level == "⚪" and _f.miss_reason
+    }
     return {
         "代號": a.ticker,
         "名稱": a.name,
@@ -42,6 +60,13 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
             "深水防守": a.light.deepwater_note or "—",
             "3-3-3明細": a.screen.detail,
         },
+        # 揭露用（非顯示欄,不進 _ETF_COLS）：見本函式 docstring。
+        "_health_miss": _health_miss,
+        "_miss_reason": (SS.most_fundamental_miss(_health_miss.values())
+                         if a.worst_health == "⚪" else ""),
+        "_light_miss": a.light.miss_reason,          # 235 燈三軸全無資料時才有值
+        "_light_axes_used": list(a.light.axes_used),  # 這盞 235 燈用了哪幾個依據
+        "_screen_miss": dict(a.screen.miss_reasons),  # 3-3-3 三子項各自為什麼 ❔
     }
 
 
@@ -75,6 +100,9 @@ def stock_row_from_assessment(sa: ds.StockAssessment) -> dict:
             "KD明細": _kd,
             "KD交叉": {"golden": "黃金交叉", "death": "死亡交叉"}.get(sa.kd_cross, "無"),
         },
+        # 與 ETF 列同鍵（消費端不必分兩種列型判斷）：⚪ 時說得出是「沒抓到」還是
+        # 「上游給的評等不在分級表裡」——後者是 bug 訊號,不該被畫成一般的資料不足。
+        "_miss_reason": sa.miss_reason,
     }
 
 
@@ -117,6 +145,13 @@ def resolve_holding_names(holdings: list[dict]) -> list[dict]:
 
 def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason: str,
                *, held: bool = True) -> dict:
+    """單檔抓取/評估整個失敗 → 一列誠實的空白（§1 不炸整表、不捏數字）。
+
+    `健檢` 維持 ⚪（**判燈結果不動**）,但補上 `_miss_reason=MISS_FETCH_FAILED`:
+    這一列的 ⚪ 與「某盞燈缺輸入」的 ⚪ 是兩件事 —— 這裡是**整檔**沒有任何數字,
+    該看的是本列的錯誤訊息（多半是代號錯或來源掛掉）,不是等時間累積。
+    `MISS_FETCH_FAILED` 的定義（「這一檔整批抓取失敗」）就是為這個位置寫的。
+    """
     return {
         "代號": ticker, "名稱": name,
         "種類": "個股" if asset_kind == T.KIND_STOCK else "ETF",
@@ -125,6 +160,7 @@ def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason
         "建議動作": f"⚠️ 資料不足/抓取失敗：{reason}",
         "held": held,   # 換股建議用:持有(Portfolio) vs 觀察(Watchlist)
         "_detail": {"error": reason},
+        "_miss_reason": SS.MISS_FETCH_FAILED,
     }
 
 
