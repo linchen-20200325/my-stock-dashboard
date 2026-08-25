@@ -647,3 +647,176 @@ def assess_stock(*, ticker: str, name: str, asset_class: str,
         kd_k=kd.get("k"), kd_d=kd.get("d"), kd_label=kd_label, kd_cross=cross,
         swap_level=level, swap_action=action,
         trend_verdict=(trend or None), miss_reason=_miss)
+
+
+# ── 逐盞燈 → 可程式判讀的格子（**純轉換,不重新判燈**）───────────────────
+#
+# 為什麼需要這一段:組表那一步（L3 `row_from_assessment`）把四盞健檢燈壓成一個
+# `worst_health`,把 3-3-3 三個子項壓成一個「✅合格 / ❌未過 / ❔待資料」字串 ——
+# **逐盞燈的判定在那裡整個消失**。畫面要畫「每檔 8 格燈」或算「N/40 盞可信度」,
+# 現況唯一的來源是 `_detail` 裡的中文 msg 字串,而解析字串太脆弱（改一個字就壞,
+# 且不會有任何錯誤 —— 見 `Flag.miss_reason` 的註解）。
+#
+# ⚠️ 本段**一個判斷式都沒有新增**。所有 `level` 一律從既有的 `Flag` / `Light235` /
+#    `Screen333` / `StockAssessment` **原樣讀出**,`state` 一律走 L0
+#    `station_specs.classify_state()`。改判燈規則不該動這裡,改揭露方式才動這裡。
+
+#: `Screen333` 三個 bool 子項的符號 —— **沿用 `Screen333.detail` 已經在用的那一組**。
+#:
+#: 為什麼不換成 🟢/🔴/⚪:3-3-3 是「挑選條件過不過」,不是健康度告警 ——
+#: `_worst_level` 刻意只收四盞健檢 `Flag`,3-3-3 從來不參與 `worst_health`。
+#: 把「未過」畫成 🔴,等於在格子牆上憑空多出一盞主表沒有的紅燈:那是**新判斷**,
+#: 不是轉換（§1）。要不要把它上色成紅,是消費端的呈現決定,不該由本層偷渡。
+_SCREEN_SYMBOL: dict = {True: "✅", False: "❌", None: "❔"}
+
+#: L2 **從未為這盞燈判過等級**時 `LightCell.level` 的值。
+#:
+#: 個股 4 盞裡有 3 盞（財報體檢 / 財報趨勢 / KD）是這種情況:`assess_stock` 只把
+#: 它們當成 `swap_level` 的輸入,沒有各自的 🔴/🟡/🟢。硬生一個等級出來就是新判燈
+#: （§1）,所以這裡誠實留空 —— 消費端看到空字串就知道「這格沒有判定可以填色」,
+#: 而不是拿到一個看起來像判定、其實是本層發明的東西。
+LEVEL_UNJUDGED = ""
+
+
+@dataclass(frozen=True)
+class LightCell:
+    """一盞燈的「判定 ＋ 這盞燈可不可信」,給畫面逐格渲染用。
+
+    - `key`:規格表 canonical key（`station_specs.KEY_*`）→ 消費端可
+      `SS.SPECS_BY_KEY[key]` 查到 label / why / source / threshold_text,
+      不必自己再維護一份對照表。
+    - `level`:**該盞燈自己的判定符號,原樣搬運**。⚠️ 字母表**逐燈不同**,刻意的:
+      健檢 A/B/C/D 與個股汰換是 🔴/🟡/🟢/⚪（`Flag.level` / `swap_level`）;
+      235 是 `LIGHT_META` 的 icon（多一個 💰 停利）;3-3-3 三子項是 ✅/❌/❔
+      （見 `_SCREEN_SYMBOL` 的理由）;沒有判定的是 `LEVEL_UNJUDGED`（空字串）。
+      統一成同一組符號需要決定「未過算不算紅」—— 那是判斷,不是轉換。
+    - `state`:四態,走 `station_specs.classify_state()`（唯一 SSOT,本層不自己判）。
+    - `miss_reason`:`station_specs.MISS_*`,原樣搬運;上游沒登記就是空字串
+      （**不猜** —— 挑錯 `MISS_*` 會給出「重跑一次就好」這種錯誤指引）。
+    - `axes_used`:只有 235 燈有值（`SS.LIGHT235_AXES` 的子集,順序固定）。
+      消費端用 `len(axes_used)/len(SS.LIGHT235_AXES)` 揭露「這盞燈幾個依據可用」。
+
+    frozen dataclass 而非 dict:與本檔既有 `Flag` / `Light235` / `Screen333` 同一慣例,
+    且欄名打錯會當場 `AttributeError`（dict 的 `.get("levl")` 只會靜默回 None,
+    正是 §1 要擋的「看起來成功」）。
+    """
+
+    key: str
+    level: str
+    state: str
+    miss_reason: str = ""
+    axes_used: tuple[str, ...] = ()
+
+
+def _cell(spec, *, level: str, has_value: bool, reason: str,
+          axes: tuple[str, ...] = ()) -> LightCell:
+    """組一格。`state` 一律由 L0 `classify_state` 決定,本層不自己判四態。"""
+    return LightCell(key=spec.key, level=level, miss_reason=reason, axes_used=axes,
+                     state=SS.classify_state(spec, has_value=has_value, reason=reason))
+
+
+def _etf_light_cells(a: HoldingAssessment) -> tuple[LightCell, ...]:
+    """ETF 8 盞（健檢 A/B/C/D ＋ 235 ＋ 3-3-3 三子項）。
+
+    燈的清單走 `SS.specs_for(T.KIND_ETF)`,**不在這裡自己列** —— 規格表加一盞、
+    這裡沒接上,下面的 `raise` 會當場炸（§1）,而不是畫面上永遠空著一格沒人發現。
+    """
+    _flags = {SS.KEY_HEALTH_A: a.health_a, SS.KEY_HEALTH_B: a.health_b,
+              SS.KEY_HEALTH_C: a.health_c, SS.KEY_HEALTH_D: a.health_d}
+    # `Screen333` 三個子項是 bool | None:None = 不可判定,對應規格表的 missing。
+    _screen = {SS.KEY_SCREEN_INCEPTION: a.screen.inception_ok,
+               SS.KEY_SCREEN_RETURN: a.screen.return_ok,
+               SS.KEY_SCREEN_PEER: a.screen.peer_ok}
+
+    _out: list[LightCell] = []
+    for spec in SS.specs_for(T.KIND_ETF):
+        if spec.key in _flags:
+            _f = _flags[spec.key]
+            # ⚪ 是 `Flag` 對「不判定」的唯一表示（四個 health_* 皆然）→ 直接當 has_value。
+            _out.append(_cell(spec, level=_f.level, has_value=_f.level != "⚪",
+                              reason=_f.miss_reason))
+        elif spec.key == SS.KEY_LIGHT235:
+            # 235 永遠有 light（三軸全空時落 cruise）→ 「有沒有值」看的是**有沒有依據**,
+            # 也就是 `axes_used`。這正是「什麼都沒抓到卻顯示⚪巡航、繼續買」那個坑。
+            _out.append(_cell(spec, level=a.light.icon, has_value=bool(a.light.axes_used),
+                              reason=a.light.miss_reason, axes=a.light.axes_used))
+        elif spec.key in _screen:
+            _ok = _screen[spec.key]
+            _out.append(_cell(spec, level=_SCREEN_SYMBOL[_ok], has_value=_ok is not None,
+                              reason=a.screen.miss_reasons.get(spec.key, "")))
+        else:
+            raise KeyError(
+                f"light_cells: 規格表有 ETF 燈 {spec.key!r} 但本函式沒接上 —— "
+                f"新增 StationSpec 時必須同步這裡（§1 寧可炸掉,不可畫一格永遠空白的燈）")
+    return tuple(_out)
+
+
+def _stock_light_cells(sa: StockAssessment) -> tuple[LightCell, ...]:
+    """個股 4 盞（財報體檢 / 財報趨勢 / KD / 汰換建議）。
+
+    ⚠️ 4 盞裡只有「汰換建議」有既有判定（`swap_level`）—— 另外三盞 `assess_stock`
+    只當輸入用,從來沒有各自的等級。故它們的 `level` 是 `LEVEL_UNJUDGED`,
+    只回得出四態。**不在這裡補判**(那是新判燈,§1)。
+    """
+    _out: list[LightCell] = []
+    for spec in SS.specs_for(T.KIND_STOCK):
+        if spec.key == SS.KEY_STOCK_HEALTH:
+            # `sa.miss_reason` 就是「grade 不可用」的登記（`assess_stock` 只在
+            # grade 缺 / 不在分級表時才填）→ 直接讀,不在這裡重寫一次同樣的判斷。
+            _out.append(_cell(spec, level=LEVEL_UNJUDGED, has_value=not sa.miss_reason,
+                              reason=sa.miss_reason))
+        elif spec.key == SS.KEY_STOCK_TREND:
+            # `assess_stock` 存的是 `trend or None` → None 就是「這輪沒有趨勢資料」。
+            # 上游沒登記 MISS_* → 這裡留空,不代它挑一個（挑錯就是錯誤指引）。
+            _out.append(_cell(spec, level=LEVEL_UNJUDGED,
+                              has_value=sa.trend_verdict is not None, reason=""))
+        elif spec.key == SS.KEY_STOCK_KD:
+            # 與 `stock_row_from_assessment` 的 KD 欄同一個判準:k / d 皆在才算有值
+            # （只有 label 沒有 K/D 值時,那一欄顯示的就是「資料不足」）。
+            _out.append(_cell(spec, level=LEVEL_UNJUDGED,
+                              has_value=sa.kd_k is not None and sa.kd_d is not None,
+                              reason=""))
+        elif spec.key == SS.KEY_STOCK_SWAP:
+            # 唯一有既有判定的一盞。⚪ 是 `assess_stock` 對「不判定」的表示。
+            _out.append(_cell(spec, level=sa.swap_level, has_value=sa.swap_level != "⚪",
+                              reason=sa.miss_reason))
+        else:
+            raise KeyError(
+                f"light_cells: 規格表有個股燈 {spec.key!r} 但本函式沒接上 —— "
+                f"新增 StationSpec 時必須同步這裡（§1 寧可炸掉,不可畫一格永遠空白的燈）")
+    return tuple(_out)
+
+
+def light_cells(assessment) -> tuple[LightCell, ...]:
+    """`HoldingAssessment` / `StockAssessment` → 逐盞燈的格子。**純轉換**。
+
+    燈的清單由 **assessment 的型別**決定,不是由 ticker 的 `asset_kind` 決定 ——
+    這兩件事在本專案裡不總是一致:
+      - `HoldingAssessment` 結構上**永遠**帶 ETF 那 8 盞。`assess_holding` 允許
+        `asset_kind=stock`（此時 D 折溢價 / 3-3-3 標 `MISS_NOT_APPLICABLE`）,
+        但它身上並沒有 `specs_for(KIND_STOCK)` 的那 4 盞可以回。
+      - `StockAssessment` 結構上**永遠**帶個股那 4 盞。
+    production 的 `build_station_rows` 本來就是二選一分流（`ak == KIND_STOCK` 走
+    `assess_stock`）,故兩者一致;會不一致的是直接呼叫 L2 的測試/工具路徑。
+    """
+    if isinstance(assessment, HoldingAssessment):
+        return _etf_light_cells(assessment)
+    if isinstance(assessment, StockAssessment):
+        return _stock_light_cells(assessment)
+    raise TypeError(
+        f"light_cells: 不認得的 assessment 型別 {type(assessment).__name__} —— "
+        f"只吃 HoldingAssessment / StockAssessment（§1 不猜）")
+
+
+def missing_light_cells(asset_kind: str, *, reason: str) -> tuple[LightCell, ...]:
+    """**整檔**沒有 assessment（抓取/評估失敗）→ 該類別每一盞燈都標同一個原因。
+
+    為什麼要有這個而不是讓那些列沒有 `_lights`:第 1 層的「N/40 盞」可信度是把
+    每一列的格子加總 —— 抓取失敗的列若整個不出現,分母會**悄悄變小**,畫面就會
+    顯示「可信度很高」（因為算不出來的都不算了）。那正是 §1 要擋的東西。
+
+    `level` 一律 `LEVEL_UNJUDGED`:這一列**沒有任何一盞燈跑過**,不是判定為 ⚪。
+    """
+    _kind = T.KIND_STOCK if asset_kind == T.KIND_STOCK else T.KIND_ETF
+    return tuple(_cell(_s, level=LEVEL_UNJUDGED, has_value=False, reason=reason)
+                 for _s in SS.specs_for(_kind))

@@ -27,6 +27,12 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
       - `_health_miss`:{規格表 key → MISS_*},逐盞燈的原因,無損。
       - `_miss_reason`:整列一句話版本(只在 `健檢` 為 ⚪ 時有值),給只想顯示一個
         圖示 + 一句話的消費端用；多盞燈原因不同時取最根本者（`most_fundamental_miss`）。
+
+    ⚠️ 上面兩個鍵只收「**⚪ 且有登記原因**」的燈 —— 一盞 🟢 和一盞 🟡 在 row 裡
+    產出的東西一模一樣（都是空的）。要畫「每檔 8 格燈」或算「N/40 盞可信度」,
+    這兩個鍵給不出來。故再補第三個非顯示欄:
+      - `_lights`:`tuple[ds.LightCell, ...]`,**逐盞燈**的 key / level / 四態 /
+        缺值原因（235 另帶 `axes_used`）。純轉換,判燈結果一個字都沒動。
     """
     _add = f"{a.light.deploy_pct:.0f}%" if a.light.deploy_pct else ""
     _is_stock = a.asset_kind == T.KIND_STOCK
@@ -67,6 +73,8 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
         "_light_miss": a.light.miss_reason,          # 235 燈三軸全無資料時才有值
         "_light_axes_used": list(a.light.axes_used),  # 這盞 235 燈用了哪幾個依據
         "_screen_miss": dict(a.screen.miss_reasons),  # 3-3-3 三子項各自為什麼 ❔
+        # 逐盞燈的判定 + 四態(ETF 8 盞)。上面三個鍵是「只有缺的才有」,本鍵是**全部都有**。
+        "_lights": ds.light_cells(a),
     }
 
 
@@ -103,6 +111,10 @@ def stock_row_from_assessment(sa: ds.StockAssessment) -> dict:
         # 與 ETF 列同鍵（消費端不必分兩種列型判斷）：⚪ 時說得出是「沒抓到」還是
         # 「上游給的評等不在分級表裡」——後者是 bug 訊號,不該被畫成一般的資料不足。
         "_miss_reason": sa.miss_reason,
+        # 逐盞燈(個股 4 盞),與 ETF 列同鍵。⚠️ 4 盞裡只有「汰換建議」有既有判定,
+        # 另三盞 `assess_stock` 從未各自判過等級 → `level` 為空字串（見 L2 的
+        # `LEVEL_UNJUDGED`）。這是實作現況的誠實揭露,不是本層漏填。
+        "_lights": ds.light_cells(sa),
     }
 
 
@@ -161,6 +173,10 @@ def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason
         "held": held,   # 換股建議用:持有(Portfolio) vs 觀察(Watchlist)
         "_detail": {"error": reason},
         "_miss_reason": SS.MISS_FETCH_FAILED,
+        # 這一列沒有 assessment,但**每一盞燈都要出現** —— 否則「N/40 盞可信度」的
+        # 分母會因為抓取失敗的列整個消失而悄悄變小,畫面反而顯示可信度更高（§1）。
+        # 原因與上面 `_miss_reason` 同一個常數,不另寫字面值以免兩邊漂移。
+        "_lights": ds.missing_light_cells(asset_kind, reason=SS.MISS_FETCH_FAILED),
     }
 
 
