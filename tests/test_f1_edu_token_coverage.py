@@ -103,11 +103,19 @@ def tab_edu_mod():
     """在 streamlit stub 下 import L5 `tab_edu`，退出時還原（避免污染其他測試）。"""
     import importlib
 
+    # ① 先在**真 streamlit** 下把整棵樹 import 起來。
+    #    `src/ui/tabs/__init__.py` 是 eager barrel(docstring 雖寫 "PEP 562 lazy"
+    #    但頂上那行 `from . import (...)` 是立即的),它會連鎖拉進 `src/ui/pages/`,
+    #    於是「import 一個 tab」= 首次 import 近千個模組。若在 stub 視窗內做這件事,
+    #    那近千個模組的 module-level `st` 會**永久**綁在待丟棄的 stub 上。
+    #    先行 import 讓 stub 視窗內不會有任何「首次 import」。
+    import src.ui.tabs.tab_edu  # noqa: F401 — 只為觸發 import,不取用符號
+    from tests.conftest import rebind_modules_bound_to
+
     _saved = sys.modules.get('streamlit')
     _install_streamlit_stub()
-    for _name in ('src.ui.tabs.tab_edu',):
-        if _name in sys.modules:
-            importlib.reload(sys.modules[_name])
+    _stub = sys.modules['streamlit']
+    importlib.reload(sys.modules['src.ui.tabs.tab_edu'])
     try:
         import src.ui.tabs.tab_edu as _mod
         yield _mod
@@ -116,11 +124,9 @@ def tab_edu_mod():
             sys.modules['streamlit'] = _saved
         else:
             sys.modules.pop('streamlit', None)
-        if 'src.ui.tabs.tab_edu' in sys.modules:
-            try:
-                importlib.reload(sys.modules['src.ui.tabs.tab_edu'])
-            except Exception:
-                sys.modules.pop('src.ui.tabs.tab_edu', None)
+        # ② 補漏:視窗內若仍有模組綁到 stub(例如測試執行中才觸發的函式內 import),
+        #    針對性 reload 它們。不是無差別 reload 全樹。
+        rebind_modules_bound_to(_stub)
 
 
 # ════════════════════════════════════════════════════════════════
