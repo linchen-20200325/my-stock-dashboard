@@ -671,6 +671,17 @@ for _f, _m in (
     # `_SUBMODULES`,加進去會把它拉進 eager import chain(不必要的副作用)。
     ("scripts/calibrate_macro_traffic.py", "src.compute.macro.health_calibration"),
     ("scripts/calibrate_macro_traffic.py", "src.services"),
+    # 2026-08-25「1Y 含息報酬重複計息」修正的影響對照表 CLI(一次性診斷,非 cron)——
+    # 與上列 cron 完全同一根因(scripts 分層標籤)。本支刻意**全部 import production
+    # 判定函式**、一行判定式都不自己複寫(戰情室燈號 / 配息健康度 / 綜合分 / 留觀換
+    # 四個判定各跑「修前 vs 修後」兩遍),所以它非踩 L2/L3 不可 —— 改成「只吃 L1、
+    # 判定另寫一份」等於為了滿足分層標籤而製造第二份真相,那才是真的違憲(§2.1 SSOT)。
+    ("scripts/diagnose_etf_total_return_fix.py", "src.compute.etf.etf_calc"),
+    ("scripts/diagnose_etf_total_return_fix.py", "src.compute.etf.etf_helpers"),
+    ("scripts/diagnose_etf_total_return_fix.py", "src.compute.etf.etf_quality"),
+    ("scripts/diagnose_etf_total_return_fix.py", "src.compute.etf.etf_recommendation"),
+    ("scripts/diagnose_etf_total_return_fix.py", "src.compute.etf.etf_scoring_helpers"),
+    ("scripts/diagnose_etf_total_return_fix.py", "src.services.etf_scoring_service"),
     ("scripts/export_stock_db.py", "src.compute.scoring.scoring_engine"),
     ("scripts/export_stock_db.py", "src.compute.strategy.tech_indicators"),
     ("scripts/push_daily_signals.py", "src.compute.notify.ai_judgment"),
