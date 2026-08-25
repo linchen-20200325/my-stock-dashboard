@@ -57,6 +57,61 @@ def reload_prefixed_modules(prefixes: tuple[str, ...]) -> None:
             pass  # smoke-allow-pass — 個別模組 reload 失敗不炸整個 fixture
 
 
+#: 掃描哪些前綴的模組會持有 module-level `st` / `_st`。
+#: 三層都要:L0 config 的 secrets bootstrap、L1 fetcher 的 @st.cache_data、L5 UI。
+_ST_HOLDER_PREFIXES: tuple[str, ...] = ("src", "shared", "infra")
+
+#: 模組層綁定 streamlit 的常見變數名(本專案兩種寫法都有)。
+_ST_ATTR_NAMES: tuple[str, ...] = ("st", "_st")
+
+
+def modules_bound_to(module_obj, prefixes: tuple[str, ...] = _ST_HOLDER_PREFIXES) -> list[str]:
+    """回傳所有 module-level `st` / `_st` **指向 module_obj** 的已載入模組名。
+
+    用途:stub fixture 收尾時,找出「在 stub 視窗內首次 import、因而永久綁著
+    死 stub」的模組。這是 `sys.modules['streamlit']` 那一層鎖**看不到**的維度
+    —— 它只檢查 sys.modules 有沒有還原,不檢查各模組手上那份引用。
+    """
+    out = []
+    for _name in sorted(k for k in list(sys.modules)
+                        if any(k == p or k.startswith(p + ".") for p in prefixes)):
+        _mod = sys.modules.get(_name)
+        if _mod is None:
+            continue
+        for _attr in _ST_ATTR_NAMES:
+            if getattr(_mod, _attr, None) is module_obj:
+                out.append(_name)
+                break
+    return out
+
+
+def rebind_modules_bound_to(module_obj,
+                            prefixes: tuple[str, ...] = _ST_HOLDER_PREFIXES) -> list[str]:
+    """把持有 module_obj 的模組 reload 掉,讓它們重新綁定目前的 streamlit。
+
+    比 `reload_prefixed_modules(("src",))` 精準得多:只動真的被污染的那幾個,
+    不是無差別 reload 五百個模組(後者慢,且大圖 reload 有自己的身分風險)。
+    回傳實際被 reload 的模組名,方便 fixture 在除錯時印出來。
+    """
+    import importlib
+    _hit = modules_bound_to(module_obj, prefixes)
+    _done: list[str] = []
+    for _name in _hit:
+        _mod = sys.modules.get(_name)
+        if _mod is None or getattr(_mod, "__spec__", None) is None:
+            continue
+        try:
+            importlib.reload(_mod)
+        except Exception as _e:  # noqa: BLE001 — 個別模組 reload 失敗不該炸整個 fixture
+            # §3.3:不吞例外。這裡不 raise 是因為單一模組 reload 失敗
+            # **不影響其他模組解毒**,但一定要留痕 —— 沉默失敗會讓
+            # zz 第四層守衛紅燈時查不出是哪個模組沒回來。
+            print(f"[rebind_modules_bound_to] reload {_name} 失敗,該模組仍持有舊 stub:{_e!r}")
+            continue
+        _done.append(_name)
+    return _done
+
+
 def restore_pristine_streamlit() -> bool:
     """把 sys.modules['streamlit'] 換回 conftest 載入時捕捉的真身(身分比對,
     不認任何 stub 記號)。回傳是否有做置換。"""

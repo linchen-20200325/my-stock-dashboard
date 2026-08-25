@@ -114,9 +114,17 @@ def rendered_classroom():
     這是**行為**斷言的基底：對帳的是「使用者真的會看到的字」，
     不是原始碼字面 —— 佔位符沒被替換、章節沒被渲染，這裡都會現形。
     """
+    # ① 先在**真 streamlit** 下 import 目標。`src/ui/tabs/__init__.py` 是 eager
+    #    barrel,會連鎖拉進 `src/ui/pages/` —— 若在 stub 視窗內首次 import,
+    #    近千個模組的 module-level `st` 會永久綁在待丟棄的 stub 上。
+    import src.ui.tabs.macro_classroom  # 只為觸發 import,不取用符號
+    import src.ui.tabs.tab_edu  # noqa: F401 — 同上
+    from tests.conftest import rebind_modules_bound_to
+
     _saved = sys.modules.get('streamlit')
     _rec = _MarkdownRecorder()
     _install_stub(_rec)
+    _stub = sys.modules['streamlit']
     _reload_targets()
     try:
         from src.ui.tabs.tab_edu import render_principle_classroom
@@ -128,6 +136,8 @@ def rendered_classroom():
         else:
             sys.modules.pop('streamlit', None)
         _reload_targets()
+        # ② 補漏:針對性 reload 仍綁著 stub 的模組(渲染過程中的函式內 import)。
+        rebind_modules_bound_to(_stub)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -362,9 +372,15 @@ class TestJingqiFormulaParity:
         若哪天實作改成別的（例如真的改抓站上均線家數比），這裡先紅。
         """
         import importlib
+
+        # 先在真 streamlit 下 import,stub 視窗內才不會有「首次 import」
+        import src.services.jingqi_calc  # noqa: F401 — 只為觸發 import,不取用符號
+        from tests.conftest import rebind_modules_bound_to
+
         pd = pytest.importorskip('pandas')
         _saved = sys.modules.get('streamlit')
         _install_stub(_MarkdownRecorder())
+        _stub = sys.modules['streamlit']
         try:
             import src.services.jingqi_calc as _jq
             importlib.reload(_jq)
@@ -383,6 +399,7 @@ class TestJingqiFormulaParity:
             else:
                 sys.modules.pop('streamlit', None)
             importlib.reload(sys.modules['src.services.jingqi_calc'])
+            rebind_modules_bound_to(_stub)
 
     def test_term_table_states_the_real_formula(self):
         from src.ui.render.ui_widgets import BREADTH_JINGQI
