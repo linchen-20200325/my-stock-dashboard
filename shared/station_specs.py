@@ -324,11 +324,28 @@ def classify_state(spec: StationSpec, *, has_value: bool,
                    reason: str | None = None) -> str:
     """決定一盞燈的四態。**不判燈**，只判「這盞燈可不可信」。
 
-    順序有意義：
-      1. `wired=False`   → 永遠 unwired（就算硬塞值進來也一樣）
-      2. `discriminative=False` → degraded（**有值、燈照亮**，只是別照門檻讀）
-      3. 沒值           → missing
-      4. 其餘           → live
+    順序有意義（下列即**程式碼的實際順序**；程式碼是 SSOT，文件對齊程式碼）：
+      1. `wired=False`          → 永遠 unwired（就算硬塞值進來也一樣）
+      2. 沒值                    → missing
+      3. `discriminative=False` → degraded（**有值、燈照亮**，只是別照門檻讀）
+      4. 其餘                    → live
+
+    為什麼 missing 必須排在 degraded 前面（**勿再對調**）
+    ────────────────────────────────────────────────
+    degraded 的語意是「**有值**，但門檻失準，別照門檻讀」—— 它本身就預設
+    「有東西可讀」。當一個值都沒有時，「門檻準不準」是個沒有意義的問題：
+    先判 degraded 會讓畫面對著空資料說「門檻已失準」，使用者讀成「有值，
+    只是別太當真」，而事實是**根本沒有值**。「沒值」比「門檻失準」更根本，
+    故先判（§1：錯的敘述比沒有敘述更危險）。
+
+    ⚠️ 2026-08-25 更正本 docstring：原文把第 2、3 步寫反（列成
+       discriminative → missing），而開頭又寫著「順序有意義」——
+       **把順序寫反的文件比沒有文件更糟**。現行行為已有測試釘住
+       （`tests/test_station_specs.py` 的 `classify_state` 四態 +
+       `tests/test_station_light_cells.py::test_no_value_beats_not_discriminative`
+       —— 後者釘的正是 `stock_trend` 沒趨勢資料時是 missing 而非 degraded）。
+       這次改的是**文件**，程式碼一行未動；若日後真要換順序，
+       先改測試並在 PR 說明為什麼，不要「順手把 docstring 改回去」。
     """
     if not spec.wired:
         return STATE_UNWIRED

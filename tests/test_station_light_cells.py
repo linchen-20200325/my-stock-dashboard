@@ -230,9 +230,13 @@ class TestStates:
         """`stock_trend` 沒有趨勢資料時 → missing（**不是** degraded）。
 
         這是 `classify_state` 的實際行為（`has_value` 先判）。門檻失不失準,
-        在「根本沒有值」時是沒有意義的問題。⚠️ `classify_state` 的 docstring
-        把 discriminative 列在 has_value **之前**,與程式碼相反 —— 本測試釘的是
-        **程式碼**（L0 SSOT 的實際行為）。
+        在「根本沒有值」時是沒有意義的問題。本測試釘的是**程式碼**
+        （L0 SSOT 的實際行為）。
+
+        ⚠️ 舊註記(2026-08-25 前)寫「`classify_state` 的 docstring 把
+        discriminative 列在 has_value 之前,與程式碼相反」—— 那份寫反的
+        docstring 已於 2026-08-25 更正對齊程式碼,兩邊現在同一個順序。
+        留這段是給下一個讀者知道「這裡曾經不一致過」,別再把順序改回去。
         """
         cell = _by_key(ds.light_cells(_stock(trend=None)))[SS.KEY_STOCK_TREND]
         assert cell.state == SS.STATE_MISSING
