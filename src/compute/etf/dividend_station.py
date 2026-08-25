@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from shared import dividend_station_thresholds as T
+from shared import station_specs as SS
 
 
 # ── 週K / 均線 / 布林（純函式）─────────────────────────────────────────
@@ -133,13 +134,19 @@ def inception_years(first_date, as_of=None) -> float | None:
 class Flag:
     level: str      # 🔴 / 🟡 / 🟢 / ⚪(資料不足)
     msg: str
+    #: level=="⚪" 時的缺值原因（`shared.station_specs.MISS_*`）。
+    #: 2026-08-25 新增:原本「該項缺輸入」「整檔抓取失敗」「這類不適用」
+    #: 三種處置完全不同的情況全部只有一個 ⚪,消費端無法分辨。
+    #: **不改判燈**,只是把原因從中文 msg 裡抽成可程式判讀的欄位
+    #: （解析 msg 字串太脆弱 —— 改一個字就壞）。
+    miss_reason: str = ""
 
 
 def health_a(total_return_1y_pct: float | None,
              annual_yield_pct: float | None) -> Flag:
     """A 不吃本金：近一年含息總報酬 < 年化配息率 → 🔴 賺息賠本（吃本金）。"""
     if total_return_1y_pct is None or annual_yield_pct is None:
-        return Flag("⚪", "A 資料不足（缺報酬或配息率）")
+        return Flag("⚪", "A 資料不足（缺報酬或配息率）", miss_reason=SS.MISS_NO_INPUT)
     if total_return_1y_pct < annual_yield_pct:
         return Flag("🔴", f"賺息賠本：年報酬 {total_return_1y_pct:.1f}% < 配息率 "
                           f"{annual_yield_pct:.1f}%（吃到本金）")
@@ -150,7 +157,7 @@ def health_a(total_return_1y_pct: float | None,
 def health_b(sharpe: float | None) -> Flag:
     """B 夏普：Sharpe < 0 → 🔴 承擔風險無超額報酬（ETF 亦套用,v19.166）。"""
     if sharpe is None:
-        return Flag("⚪", "B 無夏普資料")
+        return Flag("⚪", "B 無夏普資料", miss_reason=SS.MISS_NO_INPUT)
     if sharpe < T.SHARPE_NEG_THRESHOLD:
         return Flag("🔴", f"Sharpe {sharpe:.2f} < 0：承擔風險卻無超額報酬")
     return Flag("🟢", f"Sharpe {sharpe:.2f} ≥ 0")
@@ -161,7 +168,7 @@ def health_c(weekly_close: pd.Series) -> Flag:
     ma13 = week_ma(weekly_close, T.MA_QUARTER_WEEKS)
     slope = week_ma_slope(weekly_close, T.MA_QUARTER_WEEKS)
     if ma13 is None or slope is None:
-        return Flag("⚪", "C 週數不足（<13週季線）")
+        return Flag("⚪", "C 週數不足（<13週季線）", miss_reason=SS.MISS_NOT_ENOUGH)
     close = float(weekly_close.iloc[-1])
     if close < ma13 and slope < 0:
         return Flag("🟡", f"趨勢轉弱：週收 {close:.2f} < 季線 {ma13:.2f} 且季線下彎 → 暫停加碼")
@@ -171,7 +178,7 @@ def health_c(weekly_close: pd.Series) -> Flag:
 def health_d(premium_pct: float | None) -> Flag:
     """D 折溢價（ETF專屬）：市價溢價 > 1.5% → 🟡 高溢價不追高。"""
     if premium_pct is None:
-        return Flag("⚪", "D 無折溢價資料")
+        return Flag("⚪", "D 無折溢價資料", miss_reason=SS.MISS_NO_INPUT)
     if premium_pct > T.PREMIUM_ALERT_PCT:
         return Flag("🟡", f"高溢價 {premium_pct:.2f}% > {T.PREMIUM_ALERT_PCT}% → 不追高")
     return Flag("🟢", f"折溢價 {premium_pct:.2f}%（正常）")
@@ -187,6 +194,13 @@ class Light235:
     reasons: list[str] = field(default_factory=list)     # 哪個條件觸發（可多個）
     take_profit: str | None = None   # None / "partial"(+2σ) / "force"(+3σ)
     deepwater_note: str | None = None
+    #: 三個軸(VIX / 週線 / 布林 z)**全部無值**時填 `MISS_NO_INPUT`。
+    #: ⚠️ 這是 ⚪ 濫用最危險的一處:三軸全空時 `conds` 為空 → 落到
+    #: `LIGHT_CRUISE`,畫面顯示「⚪ 巡航:維持定期定額」——
+    #: **什麼都沒抓到，卻告訴使用者一切正常、繼續買**。
+    #: 本欄不改判燈結果(仍是 cruise),只讓消費端能把這種 cruise
+    #: 跟「真的很平靜」的 cruise 分開顯示(§1)。
+    miss_reason: str = ""
 
 
 def light_235(*, vix: float | None, weekly_close: float | None,
@@ -197,6 +211,7 @@ def light_235(*, vix: float | None, weekly_close: float | None,
     參數皆為**最新值純量**（weekly_close = 最新週收）。缺值不觸發該條件（§1）。
     """
     conds: list[tuple[str, str]] = []
+    _cruise_miss = ""          # 見下方 cruise 分支:三軸全空時才填
 
     # 燈三（最嚴重）
     if vix is not None and vix >= T.VIX_LIGHT3:
@@ -240,6 +255,11 @@ def light_235(*, vix: float | None, weekly_close: float | None,
         reasons = [r for (l, r) in conds if l == best]
     else:
         best, reasons = T.LIGHT_CRUISE, ["VIX/週線/布林 均未觸發"]
+        # ⚠️ 區分兩種 cruise:三軸真的都沒觸發(平靜) vs 三軸根本沒資料。
+        #    後者原本與前者完全同形,等於「沒抓到 → 顯示一切正常」。
+        if vix is None and z is None and weekly_close is None:
+            _cruise_miss = SS.MISS_NO_INPUT
+            reasons = ["VIX / 週線 / 布林 三個判斷依據都沒有資料"]
 
     # 深水防守（§ 深水防守）：破年線後**站回季線** = 落底回升（較具體,優先）；
     # 否則破年線但布林未達 -2σ（尚不夠深）→ 等共伴確認。已 <-2σ 則屬燈三,不另註。
@@ -253,7 +273,8 @@ def light_235(*, vix: float | None, weekly_close: float | None,
     meta = T.LIGHT_META[best]
     return Light235(light=best, icon=meta["icon"], label=meta["label"],
                     deploy_pct=meta["deploy_pct"], reasons=reasons,
-                    take_profit=None, deepwater_note=deepwater)
+                    take_profit=None, deepwater_note=deepwater,
+                    miss_reason=_cruise_miss)
 
 
 # ── 3-3-3 挑三原則 ──────────────────────────────────────────────────────
@@ -346,7 +367,7 @@ def assess_holding(*, ticker: str, name: str, asset_class: str,
     fa = health_a(total_return_1y_pct, annual_yield_pct)
     fb = health_b(sharpe)
     fc = health_c(weekly_close)
-    fd = health_d(premium_pct) if _is_etf else Flag("⚪", "個股不適用（無折溢價/iNAV）")
+    fd = health_d(premium_pct) if _is_etf else Flag("⚪", "個股不適用（無折溢價/iNAV）", miss_reason=SS.MISS_NOT_APPLICABLE)
     lt = light_235(vix=vix, weekly_close=last_close, ma4w=ma4, ma13w=ma13, ma52w=ma52, z=z)
     if _is_etf:
         sc = screen_333(inception_years=inception_years, ann_return_3y_pct=ann_return_3y_pct,
