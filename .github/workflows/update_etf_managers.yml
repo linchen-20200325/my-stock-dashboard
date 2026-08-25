@@ -23,7 +23,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install Dependencies
-        run: pip install requests urllib3
+        # pandas 不是本腳本用的 —— 是 `src/data/proxy/__init__.py` 這個 barrel
+        # 在 import 時會一併載入 sibling `yf_proxy`,而它需要 pandas。
+        # 詳見 scripts/update_etf_managers.py 檔頭「相依現況」段。
+        run: pip install requests urllib3 pandas
 
       - name: Fetch ETF managers
         env:

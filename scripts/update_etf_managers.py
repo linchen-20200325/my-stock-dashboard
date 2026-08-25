@@ -11,8 +11,20 @@
 紅色「經理人異動」框幾乎不會跳。改由 Actions 定期抓 → commit 此 JSON →
 app 讀檔當持久基準，換手紀錄就能跨重啟存活。
 
-刻意維持「無 streamlit / 無 pandas」相依，只用 requests/urllib3 + proxy_helper，
-在 Actions runner 上 `pip install requests urllib3` 即可跑（沙箱無網路抓不到屬正常）。
+相依現況（2026-08-25 更正 —— 原文宣稱「無 pandas 相依」已不成立）:
+  本腳本自己只用 requests / urllib3,不碰 streamlit、不碰 pandas、不碰 DataFrame。
+  **但** 它要的 `fetch_url` 住在 `src/data/proxy/proxy_helper.py`,而 Python 取用
+  子模組前必先執行 package 的 `__init__.py`,那裡有一行
+  `from . import proxy_helper, yf_proxy` —— sibling `yf_proxy` 需要 pandas。
+  於是 runner 上會炸 `ModuleNotFoundError: No module named 'pandas'`。
+
+  為什麼不改 barrel 改成 lazy import:試過,會同時打斷兩個由實際事故長出來的守衛
+  ——`tests/test_c3_layering_guard.py` 的 `_barrel_exports()` 用 AST 認那一行的固定
+  寫法(改掉它就靜默失效、判不出 risk_radar 的分層違憲),以及
+  `tests/test_zz_proxy_pollution_lock.py`(v19.74 / v19.113 兩次 order-dependent
+  事故的鎖,只允許三個實體屬性)。為了在一支週更 workflow 上省十幾秒安裝時間,
+  去動兩個事故催生的守衛,不划算(CLAUDE.md §8.1 step 6)。故改為誠實安裝 pandas。
+
 連線統一走 proxy_helper（讀 env 的 PROXY_URL）。
 """
 
