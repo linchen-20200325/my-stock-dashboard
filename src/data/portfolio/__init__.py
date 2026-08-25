@@ -1,4 +1,4 @@
-"""src/data/portfolio/ — 持股組合資料 fetcher。PEP 562 lazy forward,見 macro/__init__.py 註釋。"""
+"""src/data/portfolio/ — 持股組合資料 fetcher。PEP 562 `__getattr__` 即時轉發,見 macro/__init__.py 註釋。"""
 from . import gsheet_portfolio  # noqa: F401
 
 _SUBMODULES = (gsheet_portfolio,)

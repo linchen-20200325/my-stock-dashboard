@@ -1,4 +1,4 @@
-"""src/compute/health/ — 健康度 / 財報體檢計算。PEP 562 lazy forward。
+"""src/compute/health/ — 健康度 / 財報體檢計算。PEP 562 `__getattr__` 即時轉發。
 
 v19.174 去識別化：`mj_health_diff` / `mj_snapshot_io` / `mj_trend_score` 三檔
 已改名為 `fin_health_diff` / `fin_snapshot_io` / `fin_trend_score`。

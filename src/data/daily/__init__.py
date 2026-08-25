@@ -1,4 +1,4 @@
-"""src/data/daily/ — 日間快照 fetcher。PEP 562 lazy forward,見 macro/__init__.py 註釋。"""
+"""src/data/daily/ — 日間快照 fetcher。PEP 562 `__getattr__` 即時轉發,見 macro/__init__.py 註釋。"""
 from . import daily_data_fetchers  # noqa: F401
 
 _SUBMODULES = (daily_data_fetchers,)

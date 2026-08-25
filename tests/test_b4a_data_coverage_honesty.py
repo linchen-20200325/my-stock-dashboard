@@ -98,8 +98,17 @@ def _reload_pages_modules() -> None:
 
 @pytest.fixture(autouse=True, scope="module")
 def _scoped_streamlit_stub():
+    from tests.conftest import rebind_modules_bound_to
+
+    # ① 裝 stub **之前**先在真 streamlit 下 import 目標。`src/ui/pages/__init__.py`
+    #    是 eager barrel,一次拉進全部 7 個子模組及其相依;若那發生在 stub 視窗內,
+    #    那批模組的 module-level `st` 會**永久**綁在待丟棄的 stub 上(實測 8 個)。
+    #    先行 import 讓視窗內不再有任何「首次 import」。
+    import src.ui.pages  # noqa: F401 — 只為觸發 import,不取用符號
+
     _saved = sys.modules.get("streamlit")
     _stub_st()
+    _stub = sys.modules["streamlit"]
     _reload_pages_modules()
     yield
     if _saved is not None:
@@ -107,6 +116,9 @@ def _scoped_streamlit_stub():
     else:
         sys.modules.pop("streamlit", None)
     _reload_pages_modules()
+    # ② 補漏:`_reload_pages_modules` 只掃 src.ui.pages.*,視窗內被連帶
+    #    首次 import 的其他模組(src.data.* 等)它看不到。這行針對性補齊。
+    rebind_modules_bound_to(_stub)
 
 
 # ══════════════════════════════════════════════════════════════════

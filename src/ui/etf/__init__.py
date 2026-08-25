@@ -1,4 +1,4 @@
-"""src/ui/etf/ — L5 ETF dashboard + 子 Tab。PEP 562 lazy forward。"""
+"""src/ui/etf/ — L5 ETF dashboard + 子 Tab。PEP 562 `__getattr__` 即時轉發。"""
 from . import (  # noqa: F401
     etf_dashboard, etf_tab_ai, etf_tab_grp_compare, etf_tab_portfolio,
     etf_tab_single,
