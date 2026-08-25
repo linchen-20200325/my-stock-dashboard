@@ -8,11 +8,13 @@
   1. 縱向資訊梯度取代模式切換 —— 頂部結論 / 中部理由 / 底部明細。
   2. 每個指標只有一個正典位置。現行總經頁把同一組數字重講數十次
      (repo 自己的 STATE.md:1816 記為「同一資訊重複 4~18 次」)。
-  3. 指標的**四態**是畫面上的一等公民:運作中 / 資料過期 / 鑑別力失效 / 未接線。
+  3. 指標的**四態**是畫面上的一等公民:運作中 / 資料過期 / 門檻已失準 / 未接線。
      現行畫面上「從沒亮過的燈」與「正常的綠燈」長得一模一樣。
 
-§3.3 反捏造 —— 本檔**不重抄任何門檻或教學數字**:
+§3.3 反捏造 —— 本檔**不重抄任何門檻或教學數字**,也不維護任何指標名單:
   · 門檻      ← shared.macro_buckets.BUCKET_DANGER_SPECS(16 個 DangerSpec)
+  · 可信度旗標 ← 同上的 `wired` / `discriminative` 兩個欄位(2026-08-25 user 核准
+                 把「門檻已失準」升格為正式旗標,守衛 tests/test_discriminative_flag.py)
   · 教學文案  ← src.data.core.data_registry.EDU_GUIDE(14 個 how_to_read)
   · 門檻代入  ← shared.edu_tokens.resolve_edu_tokens(§§TOKEN§§ → 實值)
   上游改門檻,本頁自動跟著改;不存在「教學卡寫 🔴 但production 顯示 🟡」那類漂移
@@ -66,7 +68,7 @@ _EDU_KEY = {
 _STATE_META = {
     "live":     ("運作中",     "#0ca30c"),
     "stale":    ("資料過期",   "#fab219"),
-    "degraded": ("鑑別力失效", "#ec835a"),
+    "degraded": ("門檻已失準", "#ec835a"),
     "unwired":  ("未接線",     "#8a8e96"),
 }
 _BAND_META = {
@@ -91,18 +93,6 @@ _DEMO_ASOF = {
     "fut_net": "昨天 15:00", "margin": "昨天 15:00",
 }
 _DEMO_ASOF_DEFAULT = "今天 05:00"
-
-# 「鑑別力失效」目前 SSOT **沒有**對應欄位 —— 這是本設計提出的新概念。
-# 在 DangerSpec 補一個 `discriminative=False` 之前,先在此登記,並附 repo 出處,
-# 讓讀者能自行驗證這不是我編的。
-_KNOWN_DEGRADED = {
-    "margin": (
-        "門檻是絕對金額,未隨市場總市值成長調整。repo 自己的註解寫:"
-        "「絕對門檻已被市值成長淹沒,實測 5,148 億早已穿透兩線 → 燈號恆紅、鑑別力歸零」"
-        "(shared/macro_buckets.py:318)。判讀請看「相對自身近年區間的方向」,"
-        "不要只看有沒有超過門檻。"
-    ),
-}
 
 # 有真實走勢可畫的指標(預覽用確定性偽序列,收尾強制對齊卡片值)
 _CHART_KEYS = ["vix", "fut_net", "adl"]
@@ -166,10 +156,14 @@ def classify_band(value: float | None, spec) -> str:
 
 
 def classify_state(spec, value: float | None) -> str:
-    """四態。unwired 直接讀 SSOT 的 wired 旗標,不猜。"""
+    """四態。兩個旗標都直接讀 SSOT,本檔不維護任何名單、不猜。
+
+    · `wired=False`          → 沒有值,燈永遠不亮
+    · `discriminative=False` → 有值、燈會亮,但門檻本身已失準
+    """
     if getattr(spec, "wired", True) is False:
         return "unwired"
-    if spec.key in _KNOWN_DEGRADED:
+    if getattr(spec, "discriminative", True) is False:
         return "degraded"
     if value is None:
         return "unwired"
@@ -544,12 +538,13 @@ def render_detail(row: Row, spec) -> None:
             unsafe_allow_html=True)
         st.caption("原因直接讀 `DangerSpec.unwired_reason`,不是我寫的說法。")
     elif row.state == "degraded":
-        st.markdown(
-            f'<div class="v2-note"><b>這盞燈的判讀已失效</b><br>'
-            f'{_KNOWN_DEGRADED[row.key]}</div>', unsafe_allow_html=True)
+        # 標題不另寫 —— degraded_reason 的第一句本身就是結論,再加一句會重複。
+        st.warning(
+            getattr(spec, "degraded_reason", "") or "（SSOT 未填寫原因）",
+            icon="⚠️")
         st.caption(
-            "⚠️ SSOT 目前**沒有**「鑑別力」欄位,本狀態登記在 `_KNOWN_DEGRADED`。"
-            "建議在 `DangerSpec` 補一個旗標,讓它跟 `wired` 一樣可被程式驗證。")
+            "說明文字讀自 `DangerSpec.degraded_reason`（L0 SSOT）。"
+            "改上游即改這裡，本頁不另存一份。")
 
     if row.note:
         st.markdown(f'<div class="v2-note">{row.note}</div>', unsafe_allow_html=True)

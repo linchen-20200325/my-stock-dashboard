@@ -1803,11 +1803,18 @@ def compute_five_bucket_summary(
     def _rec(key, *, state, reason=None, hit=None, candidates=None, rejected=None):
         """記一盞燈的取值結果。**恆為 16 筆** —— 缺席也要有紀錄,否則就是隱形。"""
         _sp = SPECS_BY_KEY.get(key)
+        # 2026-08-25:鑑別力旗標與 `wired` 同層 —— 兩者都是「別信這盞燈」,
+        # 但 wired=False 是「沒值」、discriminative=False 是「有值但門檻失效」。
+        # ⚠️ 刻意**不**排除出分母:這盞燈是真的會亮,只是判讀沒意義。
+        _disc = bool(getattr(_sp, "discriminative", True))
+        if _sp is not None and not _disc and not getattr(_sp, "degraded_reason", ""):
+            print(f"[五桶/{key}] ⚠️ 標記 discriminative=False 但沒填 degraded_reason")
         _rd[key] = {
             "key": key,
             "label": getattr(_sp, "label", key),
             "bucket": getattr(_sp, "bucket", ""),
             "wired": bool(getattr(_sp, "wired", True)),
+            "discriminative": _disc,
             "state": state,               # ok | missing
             "reason": reason,             # MISSING_* (state=missing 時)
             "hit_source": hit,            # 命中的那一源;None = 全敗
