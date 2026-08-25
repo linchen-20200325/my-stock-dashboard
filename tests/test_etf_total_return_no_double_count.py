@@ -20,6 +20,13 @@
 不驗數值,所以這個 bug 活了下來;本檔專釘**數值**。
 
 ⚠️ 給後人:本檔任一測試變紅,最可能的原因就是有人把 `+ div_sum` 加回去了。
+
+2026-08-25 補(G / H 節):A~F 節盯的是**函式**(簽章 / 本體 / 一個戰情室消費者),
+獨立驗證組實測證明那樣有洞 —— 把 `+ div_sum` 加在**呼叫端**,全套件 0 紅。
+這個 bug 是**管線**的 bug,不是函式的 bug。故:
+  G 節 = 真實跑 `build_etf_score_row` 評分管線,盯出口的不變量(行為守衛);
+  H 節 = 掃全部呼叫端(自動探,不寫死名單),擋回傳值就地被加減(結構守衛,
+         它的極限寫在該節開頭,請一併讀)。
 """
 from __future__ import annotations
 
@@ -299,3 +306,205 @@ def test_warroom_action_hint_follows_the_lamp(
     mock_divs.return_value = _divs(5.0)
     row = _compute_etf_warroom_row(f'TEST-ACT-{p_end}', '動作建議', '核心')
     assert row['動作建議'] == expected_action, (row['健康燈號'], row['動作建議'])
+
+
+# ── G. 第 2 個 production 消費者:評分管線 build_etf_score_row ────────────
+#
+# 2026-08-25 獨立驗證組實測:上面 A~F 全部通過,**但**把 `+ div_sum` 加在
+# `etf_scoring_helpers.build_etf_score_row` 的**呼叫端**(而不是函式本體),
+# 全套件 0 紅 —— A/B 只盯 `calc_total_return_1y` 自己的簽章與本體,E/F 只覆蓋
+# 三個 production 消費者裡的一個(`_compute_etf_warroom_row`)。
+#
+# 「這組守衛是**函式形狀**的守衛,但這個 bug 是**管線**的 bug。」
+#
+# 本節因此改盯**不變量**:同一組輸入餵進真實的 `build_etf_score_row`,
+# 出口的 `total_ret_1y` / `dividend_health` / `composite` / 留觀換 verdict
+# 必須是「沒有重複計息」該有的樣子。**刻意不**自己重算一次再比對 ——
+# 那樣只是把 A 節的直呼測試換個地方寫,同一個洞會再出現一次。
+#
+# 判別帶只有 r≈0 附近(代數見檔頭):r=+10% 或 r=-10% 時重複計息只讓數字虛高,
+# 燈不會翻面;唯有價格持平 + 有配息時 🔴/✅ 會整個顛倒。故主案例固定用它。
+
+def _score_row(p_end: float, div_amount: float = 5.0, **kw) -> dict:
+    """跑真實的 `build_etf_score_row`(只擋掉會走網路的折溢價)。
+
+    ⚠️ 只 patch `calc_premium_discount`(它會打 TWSE / FinMind / yfinance),
+    其餘 —— 含 `calc_total_return_1y` / `calc_current_yield` /
+    `dividend_health_label` —— 全部走真貨,否則本節就退化成「盯函式」。
+    """
+    from src.compute.etf.etf_scoring_helpers import build_etf_score_row
+    with patch('src.compute.etf.etf_calc.calc_premium_discount',
+               return_value={'premium_pct': None, 'stale_nav': False}):
+        return build_etf_score_row('TEST-SCORE', _flat_or_ramp(100.0, p_end),
+                                   _divs(div_amount), {}, **kw)
+
+
+def test_score_row_flat_price_with_dividend_is_zero_not_the_dividend():
+    """價格持平 + 配息 5 元 → `total_ret_1y` 必須是 0.00,不是 5.00。
+
+    重複計息版會得到 5.00(= 配息本身),因為還原價價差 0 又被加了一次現金配息。
+    """
+    row = _score_row(100.0)
+    assert row['error'] is None, row['error']
+    assert row['total_ret_1y'] == pytest.approx(0.0, abs=1e-9), (
+        f"build_etf_score_row 出口的 1Y 總報酬 = {row['total_ret_1y']} —— "
+        '價格持平時應為 0.00;得到 5.00 表示配息在呼叫端被加了第二次'
+    )
+    assert row['div_yield'] == pytest.approx(5.0, abs=1e-9)
+
+
+def test_score_row_flat_price_with_dividend_labels_eats_capital():
+    """同一列的 `dividend_health` 必須是 🔴 吃本金 −5.0pp,不是 ✅ 雙贏 +0.0pp。
+
+    這是 UI 直接顯示的字串(多檔比較表「配息健康」欄 + 單檔頁研判卡)。
+    重複計息版剛好得到 `✅ 雙贏 +0.0pp` —— 那個 `+0.0` 就是代數上殖利率被
+    消掉的殘骸,看起來像「剛好打平」,其實是「本金被吃掉一整年的息」。
+    """
+    row = _score_row(100.0)
+    assert row['dividend_health'] == '🔴 吃本金 -5.0pp', (
+        f"配息健康標籤 = {row['dividend_health']!r};"
+        "得到 '✅ 雙贏 +0.0pp' = 呼叫端重複計息(§1 錯的數字比沒有數字更危險)"
+    )
+
+
+def test_score_row_price_up_with_dividend_still_wins():
+    """反向守衛:真的漲 10% 時不可被誤殺成 🔴 —— 綠燈路徑必須還在。"""
+    row = _score_row(110.0)
+    assert row['total_ret_1y'] == pytest.approx(10.0, abs=1e-9)
+    assert row['dividend_health'].startswith('✅ 雙贏'), row['dividend_health']
+
+
+@pytest.mark.parametrize('p_end,expected', [(110.0, 10.0), (100.0, 0.0), (90.0, -10.0)])
+def test_score_row_agrees_with_the_station_baseline(p_end, expected):
+    """評分管線出口 vs 存股戰情站基準(`dividend_station.total_return_pct`)。
+
+    F 節釘的是 `calc_total_return_1y` 直呼 vs 基準;本條把**管線出口**也綁到
+    同一個基準 —— 呼叫端做任何加工(不只 `+ div_sum`)都會讓兩邊分岔。
+    ⚠️ 基準那條路不可動,它本來就是對的。
+    """
+    row = _score_row(p_end)
+    baseline = _station_total_return(_flat_or_ramp(100.0, p_end))
+    assert row['total_ret_1y'] == pytest.approx(expected, abs=1e-9)
+    assert row['total_ret_1y'] == pytest.approx(baseline, abs=1e-9), (
+        f"評分管線 {row['total_ret_1y']} vs 存股戰情站 {baseline} —— "
+        '同一檔 ETF 在兩個畫面上的「近一年含息總報酬」不一樣'
+    )
+
+
+def test_score_row_feeds_switch_verdict_and_red_flag():
+    """一路走到使用者真正看到的那句話:紅旗 + 留/觀察/換。
+
+    `total_ret_1y` 在 `compute_etf_composite_score` 裡權重 0.25(7 維最大)、
+    正規化跨距只有 15pp,所以虛高 5pp ≈ 綜合分 +0.083;`recommend_etf_action`
+    又對「吃本金」設了 force downgrade 紅旗。兩者疊加 → 重複計息會把
+    「考慮換」洗成「觀察」,而且連降級的理由都不會出現在畫面上。
+
+    ⚠️ 這裡**不**寫死綜合分數值(它同時受 sharpe / mdd 正規化影響,別人調那些
+    參數不該讓本檔變紅);只釘「修正版必須更保守」這個方向,以及紅旗必須存在。
+    """
+    from shared.etf_recommendation_thresholds import VERDICT_SWITCH
+    from src.compute.etf.etf_helpers import dividend_health_label
+    from src.compute.etf.etf_recommendation import recommend_etf_action
+    from src.compute.etf.etf_scoring_helpers import compute_etf_composite_score
+
+    row = _score_row(100.0)
+    row['composite'], _stars = compute_etf_composite_score(row)
+    verdict = recommend_etf_action(row)
+    assert any('吃本金' in _f for _f in verdict['red_flags']), (
+        f"「配息吃本金」紅旗沒有升起:{verdict['red_flags']}(row={row['dividend_health']!r})"
+    )
+    assert verdict['verdict'] == VERDICT_SWITCH, verdict
+
+    # 對照組:只把 total_ret_1y 換成重複計息的值(其餘欄位一字不動),
+    # 用來證明「差別確實來自這一個數字」,而不是本測試碰巧通過。
+    _dbl = dict(row)
+    _dbl['total_ret_1y'] = 5.0
+    _dbl['dividend_health'] = dividend_health_label(
+        _dbl['div_yield'], _dbl['total_ret_1y'], _dbl['cagr_3y'])
+    _dbl['composite'], _ = compute_etf_composite_score(_dbl)
+    assert row['composite'] < _dbl['composite'], '重複計息本來就會讓綜合分虛高'
+    assert recommend_etf_action(_dbl)['verdict'] != VERDICT_SWITCH, (
+        '對照組走樣:重複計息版本應該逃掉「考慮換」'
+    )
+
+
+# ── H. 第 3 個 production 消費者(etf_tab_single,L5)+ 未來新增的消費者 ────
+#
+# 為什麼這裡是**結構**守衛而不是像 G 節那樣的行為守衛 —— 誠實交代取捨:
+#
+# `etf_tab_single.render_etf_single` 是單一 924 行的 Streamlit render 函式。
+# 它在**兩個地方**算同一個數字:
+#   ① 🚦綜合研判卡 → `build_etf_score_row(ticker, df, divs, info, ...)`
+#      → 已被 G 節行為覆蓋(同一份 df/divs,壞了 G 節會紅)
+#   ② 策略一「近1年含息總報酬」→ 自己再呼一次 `calc_total_return_1y(df, ...)`
+#      → 餵 st.metric + 🔴/🟢 警示框 + 「含息報酬 − 殖利率」pp 值 + 兩段 AI prompt
+# ② 是獨立算式,G 節碰不到它。
+#
+# 要行為覆蓋 ② 必須真的跑 render:先過 session_state gate(`etf_s_active`)、
+# 擋掉 4 個網路 fetcher + `get_macro_regime` + proxy secrets 探測 +
+# `fetch_etf_zh_name` / `get_etf_expense_ratio_safe` / `calc_beta`,再讓它跑完
+# 後面約 650 行(圖表 / 持股 / 新聞 / AI),最後還要用假的 `st.columns` 攔
+# `st.metric` 才讀得回那個數字。約 150 行、且與 UI 排版順序強耦合 ——
+# 任何版面調整都會讓它變紅,而「因為無關原因常常變紅的測試」正是會訓練後人
+# 「改測試而不是改程式」的那種測試。加上本 repo 的 conftest 有一整套
+# streamlit stub 汙染防治(`pytest_collection_finish` 身分還原 +
+# `test_zz_streamlit_pollution_lock.py`),就是因為模組級 stub 曾經害 CI 全滅 ——
+# 新增 stub 站點在這個 repo 是實測過的風險,不是假想。
+#
+# 折衷:本節只釘一件**呼叫端**的事 —— `calc_total_return_1y(...)` 的回傳值
+# 不得就地被加減。這正是原 bug 最可能的復發寫法(原 commit 已寫明:這個 bug
+# 能活下來,是因為沒有任何一行字擋住「怎麼沒加配息?我補一下」)。
+#
+# ⚠️ 本節的極限,講在前面:它是**形狀**守衛,拆成兩句就繞得過去 ——
+#     t = calc_total_return_1y(df, require_full_period=True)
+#     total_ret = t + div_sum / p_start * 100      ← 本節看不到
+# 在 ① / 戰情室那兩條路上,G / E-F 節的行為守衛會接住這種寫法;
+# 在 ② 這條路上**接不住**。要真正封死 ②,正解是讓它別自己再算一次
+# (改讀研判卡那張 row 的 `total_ret_1y`)—— 那是 production 行為變更,
+# 需要 user 核准,不在本次(只加測試)範圍內。
+
+def _production_files_calling_it() -> list:
+    """自動探出所有呼叫 `calc_total_return_1y` 的 production 檔(不寫死名單)。
+
+    §8.2.A.0 規則 2:窮舉名單只要漏一筆就變成沒人看守的軟例外。改成每次現場掃,
+    將來第 4 個消費者出現時自動納管,不必有人記得回來改這份名單。
+    """
+    import pathlib
+    _root = pathlib.Path(__file__).resolve().parents[1]
+    return [_p for _p in sorted((_root / 'src').rglob('*.py'))
+            if 'calc_total_return_1y' in _p.read_text(encoding='utf-8')]
+
+
+def test_production_callers_exist_so_this_guard_is_not_vacuous():
+    """先證明掃得到東西 —— 否則下面那條會在「找不到任何檔案」時假通過。"""
+    _files = _production_files_calling_it()
+    _names = {_f.name for _f in _files}
+    assert _names >= {'etf_calc.py', 'etf_scoring_helpers.py', 'etf_tab_single.py'}, (
+        f'三個已知 production 消費者沒被掃到(掃到:{sorted(_names)})—— '
+        '守衛失效或檔案被搬走'
+    )
+
+
+def test_no_production_caller_adds_anything_to_the_return_value():
+    """呼叫端不得就地對 `calc_total_return_1y(...)` 的回傳值做加減。
+
+    回傳值已經是「近一年含息總報酬 %」;在呼叫端再 `+ 配息` 就是把同一筆息
+    算第二次(2026-08-25 的 production bug 本體)。任何合法的單位換算都該
+    發生在函式**內部**,不該散在三個呼叫端各寫一次。
+    """
+    _offenders = []
+    for _f in _production_files_calling_it():
+        _tree = ast.parse(_f.read_text(encoding='utf-8'), filename=str(_f))
+        for _node in ast.walk(_tree):
+            if not isinstance(_node, ast.BinOp):
+                continue
+            for _side in (_node.left, _node.right):
+                if (isinstance(_side, ast.Call)
+                        and getattr(_side.func, 'id', getattr(_side.func, 'attr', None))
+                        == 'calc_total_return_1y'):
+                    _offenders.append(
+                        f'{_f.name}:{_node.lineno}: {ast.unparse(_node)}')
+    assert not _offenders, (
+        '有呼叫端對 calc_total_return_1y 的回傳值就地做算術 —— '
+        '重複計息 bug 從呼叫端回歸:\n  ' + '\n  '.join(_offenders)
+    )
