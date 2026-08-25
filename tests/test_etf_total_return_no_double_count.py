@@ -432,13 +432,17 @@ def test_score_row_feeds_switch_verdict_and_red_flag():
 #
 # 為什麼這裡是**結構**守衛而不是像 G 節那樣的行為守衛 —— 誠實交代取捨:
 #
+# ⚠️ 2026-08-25 更新:本節原本描述的「② 獨立算式」**已經不存在了**(user 核准的
+#    production 行為變更,見本節末 `test_single_tab_does_not_recompute_total_return`)。
+#    以下這段保留原文,是為了讓後人看得懂那個洞長什麼樣、以及它是怎麼被封掉的。
+#
 # `etf_tab_single.render_etf_single` 是單一 924 行的 Streamlit render 函式。
 # 它在**兩個地方**算同一個數字:
 #   ① 🚦綜合研判卡 → `build_etf_score_row(ticker, df, divs, info, ...)`
 #      → 已被 G 節行為覆蓋(同一份 df/divs,壞了 G 節會紅)
 #   ② 策略一「近1年含息總報酬」→ 自己再呼一次 `calc_total_return_1y(df, ...)`
 #      → 餵 st.metric + 🔴/🟢 警示框 + 「含息報酬 − 殖利率」pp 值 + 兩段 AI prompt
-# ② 是獨立算式,G 節碰不到它。
+# ② 是獨立算式,G 節碰不到它。  ← **已於 2026-08-25 收掉:② 改讀 ① 那張 row**
 #
 # 要行為覆蓋 ② 必須真的跑 render:先過 session_state gate(`etf_s_active`)、
 # 擋掉 4 個網路 fetcher + `get_macro_regime` + proxy secrets 探測 +
@@ -462,6 +466,16 @@ def test_score_row_feeds_switch_verdict_and_red_flag():
 # 在 ② 這條路上**接不住**。要真正封死 ②,正解是讓它別自己再算一次
 # (改讀研判卡那張 row 的 `total_ret_1y`)—— 那是 production 行為變更,
 # 需要 user 核准,不在本次(只加測試)範圍內。
+#
+# ✅ **2026-08-25 已收**:user 核准後 ② 改讀 `_vrow['total_ret_1y']`,
+#    `etf_tab_single` 不再呼叫 `calc_total_return_1y` —— 那條「拆成兩句」的繞法
+#    在這條路上**沒有立足點了**(沒有回傳值可以就地加減)。要繞得改 L2 的
+#    `build_etf_score_row` / `calc_total_return_1y` 本體,而那裡有 E/F/G 節的
+#    **行為**守衛(真的比對數字)接住。下面 `test_single_tab_does_not_recompute_total_return`
+#    釘住這件事不准回退。
+#    ⚠️ 連帶降級:研判卡失敗時 `_vrow is None`,單檔頁**不退回自己算**,改顯示
+#    「取不到」(§1 寧可炸掉不可造假)—— 退回自己算等於把洞留在最不容易被發現的
+#    路徑上(研判卡都掛了,沒人會回頭查策略一的數字)。
 
 def _production_files_calling_it() -> list:
     """自動探出所有呼叫 `calc_total_return_1y` 的 production 檔(不寫死名單)。
@@ -476,11 +490,17 @@ def _production_files_calling_it() -> list:
 
 
 def test_production_callers_exist_so_this_guard_is_not_vacuous():
-    """先證明掃得到東西 —— 否則下面那條會在「找不到任何檔案」時假通過。"""
+    """先證明掃得到東西 —— 否則下面那條會在「找不到任何檔案」時假通過。
+
+    ⚠️ 2026-08-25 起 `etf_tab_single.py` **不再是呼叫端**(② 已改讀研判卡那張 row),
+    故不再列入必須掃到的名單。它現在仍會被 `_production_files_calling_it()` 掃出來,
+    但那只是因為檔內註解提到這個函式名 —— 掃不掃得到它都不影響本守衛的有效性,
+    真正的呼叫端是下面兩個 L2 檔。
+    """
     _files = _production_files_calling_it()
     _names = {_f.name for _f in _files}
-    assert _names >= {'etf_calc.py', 'etf_scoring_helpers.py', 'etf_tab_single.py'}, (
-        f'三個已知 production 消費者沒被掃到(掃到:{sorted(_names)})—— '
+    assert _names >= {'etf_calc.py', 'etf_scoring_helpers.py'}, (
+        f'兩個已知 production 呼叫端沒被掃到(掃到:{sorted(_names)})—— '
         '守衛失效或檔案被搬走'
     )
 
@@ -507,4 +527,123 @@ def test_no_production_caller_adds_anything_to_the_return_value():
     assert not _offenders, (
         '有呼叫端對 calc_total_return_1y 的回傳值就地做算術 —— '
         '重複計息 bug 從呼叫端回歸:\n  ' + '\n  '.join(_offenders)
+    )
+
+
+# ── H-2. 單檔頁不准再自己算一次(2026-08-25 收掉 ② 之後的反向守衛)──────────
+#
+# 上面 H 節那段長註解描述的「② 獨立算式」已經被移除:`etf_tab_single` 的策略一
+# 改讀 🚦 研判卡那張 row 的 `total_ret_1y`。本節釘住它**不准長回來**。
+#
+# 為什麼這條比 H 節的 BinOp 守衛強:H 節擋的是「回傳值就地加減」這個**形狀**,
+# 拆成兩句就繞得過;本節擋的是「這個檔裡根本不該有第二次呼叫」——
+# 沒有回傳值,就沒有東西可以被偷偷加減。
+
+
+def _single_tab_tree():
+    import pathlib
+    _p = (pathlib.Path(__file__).resolve().parents[1]
+          / 'src/ui/etf/etf_tab_single.py')
+    return _p, ast.parse(_p.read_text(encoding='utf-8'), filename=str(_p))
+
+
+def test_single_tab_does_not_recompute_total_return():
+    """`etf_tab_single` 不得再呼叫 `calc_total_return_1y`(同頁第二套算式)。
+
+    ⚠️ 後人看到本條紅燈:要修的是**程式**,不是測試。單檔頁的「近1年含息總報酬」
+    只有一個合法來源 —— 🚦 研判卡的 `build_etf_score_row(...)['total_ret_1y']`。
+    再開第二個入口,就是把 2026-08-25 修掉的那個 bug 的地形重新造出來
+    (同一份 df、同一個數字、相隔約 100 行的兩個算式,而只有其中一個有行為守衛)。
+    """
+    _p, _tree = _single_tab_tree()
+    _calls = [
+        f'{_p.name}:{_n.lineno}: {ast.unparse(_n)}'
+        for _n in ast.walk(_tree)
+        if isinstance(_n, ast.Call)
+        and getattr(_n.func, 'id', getattr(_n.func, 'attr', None)) == 'calc_total_return_1y'
+    ]
+    assert not _calls, (
+        'etf_tab_single 又自己呼叫 calc_total_return_1y 了 —— 同頁第二套算式復活:\n  '
+        + '\n  '.join(_calls)
+    )
+
+
+def test_single_tab_reads_total_return_from_the_verdict_row():
+    """而且它必須**真的**改讀那張 row —— 不是把整段刪掉了事。
+
+    只驗「沒有第二次呼叫」會在「有人把整個總報酬區塊刪掉」時假通過,
+    所以這裡正面驗:檔內確實從 row 取 `total_ret_1y`。
+    """
+    _p, _ = _single_tab_tree()
+    _src = _p.read_text(encoding='utf-8')
+    assert "total_ret_1y" in _src, (
+        '單檔頁找不到 total_ret_1y —— 策略一應改讀研判卡那張 row 的欄位'
+    )
+    assert "_vrow" in _src, '單檔頁找不到 _vrow(研判卡 row 變數)'
+
+
+def test_single_tab_initialises_verdict_row_before_the_try_block():
+    """降級不可以 NameError:`_vrow` 必須在 try 之外先綁定。
+
+    研判卡整段包在 `try/except` 內,失敗時 `_vrow` 不會被賦值;策略一若直接讀它
+    就是 `NameError` 炸掉整頁(比舊行為更糟)。這裡用 AST 確認 `_vrow` 的第一次
+    賦值發生在**任何 Try 節點之外**,而不是靠讀註解相信它有做。
+    """
+    _p, _tree = _single_tab_tree()
+    _fn = next(_n for _n in ast.walk(_tree)
+               if isinstance(_n, ast.FunctionDef) and _n.name == 'render_etf_single')
+    # 收集所有 Try 節點內部的 node id,用來判斷某個賦值是否落在 try 內
+    _in_try = set()
+    for _n in ast.walk(_fn):
+        if isinstance(_n, ast.Try):
+            for _sub in ast.walk(_n):
+                _in_try.add(id(_sub))
+    _binds = [_n for _n in ast.walk(_fn)
+              if isinstance(_n, (ast.Assign, ast.AnnAssign))
+              and any(getattr(_t, 'id', None) == '_vrow'
+                      for _t in (_n.targets if isinstance(_n, ast.Assign) else [_n.target]))]
+    assert _binds, 'render_etf_single 內找不到 _vrow 的賦值'
+    _first = min(_binds, key=lambda _n: _n.lineno)
+    assert id(_first) not in _in_try, (
+        f'_vrow 的第一次賦值(line {_first.lineno})落在 try 區塊內 —— '
+        '研判卡失敗時策略一會 NameError。請在 try 之前先 `_vrow = None`。'
+    )
+
+
+def test_single_tab_does_not_do_arithmetic_on_the_row_field():
+    """收掉 ② 之後,「加回配息」唯一剩下的寫法是對 row 欄位動手 —— 也擋掉。
+
+    誠實交代這條的**極限**(與 H 節同一類):這是**形狀**守衛。
+    `_vrow['total_ret_1y'] + div` 會被抓到;先存成中間變數再加就抓不到:
+        t = _vrow['total_ret_1y']
+        total_ret = t + div_sum / p * 100        ← 本條看不到
+    真正能接住任意寫法的只有「跑完 render 再讀畫面上那個數字」的行為守衛,
+    而 H 節已經評估過:約 150 行 streamlit stub、與版面順序強耦合,且本 repo
+    有 module 級 stub 汙染害 CI 全滅的實績(見 `test_zz_streamlit_pollution_lock.py`)。
+    所以這裡的定位是「把最可能的復發寫法變貴」,不是「證明不可能復發」——
+    別把它當成後者。
+    """
+    _p, _tree = _single_tab_tree()
+    _bad = []
+    for _n in ast.walk(_tree):
+        if not isinstance(_n, ast.BinOp):
+            continue
+        for _side in (_n.left, _n.right):
+            _hit = (
+                # _vrow['total_ret_1y'] + x
+                (isinstance(_side, ast.Subscript)
+                 and isinstance(_side.slice, ast.Constant)
+                 and _side.slice.value == 'total_ret_1y')
+                # _vrow.get('total_ret_1y') + x
+                or (isinstance(_side, ast.Call)
+                    and getattr(_side.func, 'attr', None) == 'get'
+                    and _side.args
+                    and isinstance(_side.args[0], ast.Constant)
+                    and _side.args[0].value == 'total_ret_1y')
+            )
+            if _hit:
+                _bad.append(f'{_p.name}:{_n.lineno}: {ast.unparse(_n)}')
+    assert not _bad, (
+        '單檔頁對研判卡 row 的 total_ret_1y 就地做算術 —— '
+        '重複計息 bug 換個入口回歸:\n  ' + '\n  '.join(_bad)
     )
