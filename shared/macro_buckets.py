@@ -259,7 +259,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                # 的 `yellow=` / `red=` 參數裡、60/40 是 v19.102 AUC 校準值（會再被季度
                # recalibrate 改）。四個都改成插值，改常數時說明自動跟著動。
                note=f"<{_HEALTH_RED:g} 防禦 / <{_HEALTH_YELLOW:g} 轉弱"
-                    f"（v19.173:此分只有 2 個輸入 — 旌旗指數(上漲佔比 5 日均) "
+                    f"（此分只有 2 個輸入 — 旌旗指數(上漲佔比 5 日均) "
                     f"{HEALTH_WEIGHT_JQ * 100:g}% ＋ "
                     f"大盤評分 {HEALTH_WEIGHT_SCORE * 100:g}%,實質是「趨勢廣度分數」;"
                     f"不含融資／外資期貨／"
@@ -317,8 +317,8 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     DangerSpec("adl", "ADL 漲跌家數比", "short", "%", "low_bad",
                yellow=float(MARKET_BREADTH_NEUTRAL_PCT), red=35.0, decimals=1,
                note="<50 廣度轉弱 / <35 廣度崩（大型股獨撐）"
-                    "（v19.170:此為佔比類指標,不受市值成長侵蝕,但仍建議看歷史分位,"
-                    "相對化見 shared/relative_thresholds）",
+                    # 技術備忘:相對化方案見 shared/relative_thresholds(尚未接線)。
+                    "（此為佔比類指標,不受市值成長侵蝕,但仍建議對照歷史分位判讀）",
                source="SSOT:MARKET_BREADTH_NEUTRAL_PCT(50)+DESIGN(35)"),
     DangerSpec("fut_net", "外資期貨淨口", "short", "口", "low_bad",
                yellow=float(FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS),
@@ -371,7 +371,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     DangerSpec("jingqi", "旌旗指數（上漲佔比 5 日均 %）", "chips", "%", "low_bad",
                yellow=60.0, red=40.0, decimals=0,
                note=">60 積極 / 40-60 中性 / <40 弱勢"
-                    "（v19.177:此值為**上漲佔比的 5 日均**,不是「站上均線的家數比」——"
+                    "（此值為上漲佔比的 5 日均,不是「站上均線的家數比」——"
                     "本專案並未計算後者）",
                source="DESIGN:廣度佔比經驗切點(60/40)"),
     # ⚠️ 2026-08-20:標記為**未接線**。`macro_helpers.compute_five_bucket_summary`

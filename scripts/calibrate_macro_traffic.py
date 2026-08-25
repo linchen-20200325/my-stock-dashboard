@@ -121,7 +121,9 @@ def _enrich_with_finmind(df_twii: pd.DataFrame) -> pd.DataFrame:
 def fetch_twii_ohlcv(range_: str = "2y") -> Optional[pd.DataFrame]:
     """抓 ^TWII OHLCV 全歷史；失敗回 None。"""
     try:
-        from macro_core import fetch_yf_ohlcv
+        # v18.359 拔掉根目錄 shim 後,舊的 `from macro_core import ...` 恆 ImportError。
+        # 2026-08-25 修正:改正式路徑。同一個根因也讓 update_etf_managers.py 紅了 9 週。
+        from src.data.macro.macro_core import fetch_yf_ohlcv
         df = fetch_yf_ohlcv("^TWII", range_=range_, interval="1d")
         if df is None or df.empty:
             return None
@@ -136,6 +138,15 @@ def fetch_twii_ohlcv(range_: str = "2y") -> Optional[pd.DataFrame]:
         except (AttributeError, TypeError):
             pass
         return df.sort_index()
+    except ImportError as e:
+        # §1 Fail Loud:import 失敗是**程式 bug**,不是「抓不到資料」。
+        # 舊寫法把它吞進下面那個 except,於是 main() 印「NAS proxy 不可達」
+        # 並自動 fallback 到 synthetic_twii_ohlcv()(隨機漫步)—— 校準會拿
+        # **合成資料**跑完並 emit macro_thresholds.json。錯的門檻比沒有門檻更危險。
+        raise RuntimeError(
+            f"fetch_twii_ohlcv 的 import 掛了,這是程式 bug 不是資料問題:{e}。"
+            f"拒絕 fallback 到合成資料 —— 校準結果會是假的。"
+        ) from e
     except Exception as e:
         print(f"[calibrate] fetch_twii_ohlcv 異常：{type(e).__name__}: {e}")
         return None
