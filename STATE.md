@@ -656,7 +656,23 @@ ARCHITECTURE.md §0.10「0 違憲確認」9 條複驗後**至少 4 條被推翻*
 - `calibration_ui` 印 json 面值,而系統實際走 `load_calibrated_thresholds()`(有值域守門,
   越界整組退回預設)⇒ json 寫 99、面板印 99、系統在用 35。
 
-### E1 核心總表(`shared/core_summary.py` L0 + L3 + L4 + L6 佔位)
+### ~~E1 核心總表~~(**2026-08-25 整組退役真刪**)
+
+> **退役原因**:user 指派移除 —— 頂端總表在手機上擋住分頁列,而
+> 「🚦 總經 v2」分頁已用三層梯度重新呈現位階與訊號可信度。
+> **刪除範圍**:`app.py` 佔位段 + 延後填充段、`shared/core_summary.py`(669)、
+> `src/services/core_summary_service.py`(193)、`src/ui/render/core_summary_render.py`(132)、
+> `tests/test_e1_core_summary.py`(733)。
+> **8 個 KPI 一個都沒消失** —— 動手前逐一查證過,全部在別的分頁另有原生顯示點
+> (建議持股 / 硬否決天花板的主場是 🌍 總經的「🎚️ 建議持股油門」卡)。
+> 真正失去的只有兩個**全站彙總**視角(「最差資料源是誰」「資料完整 N/M 分頁」),
+> 逐分頁明細仍在 🔎 資料診斷頁。
+> **刻意保留**:`shared/data_freshness.py::leading_frozen_columns`(0 caller,
+> 理由見該處註解)+ 凍結契約 drift 守衛(已撈進 `tests/test_data_coverage.py`)。
+>
+> 以下為退役前的設計紀錄,留作追溯。
+
+### E1 核心總表(原文,`shared/core_summary.py` L0 + L3 + L4 + L6 佔位)
 
 8 個 KPI × 三態(有值 / 無法判定 / 失敗)。**價值不只 UI** —— 本 session 最高頻缺陷是
 「同頁多個互斥數字」,總表把「一個 KPI 一個 producer」變成結構性強制。

@@ -432,21 +432,6 @@ st.markdown(
     '<div style="display:flex;align-items:center;gap:10px;padding:4px 0 8px;">'    '<span style="font-size:22px;font-weight:900;color:#e6edf3;">&#128202; 台股 AI 戰情室</span>'    '<span style="font-size:10px;color:#484f58;background:#161b22;border-radius:10px;padding:2px 8px;">v3.0</span>'    '</div>',
     unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════
-# 🧭 核心總表（E1 v19.185）— 此處只「佔位」，內容延後到所有 tab render 完才填
-# ══════════════════════════════════════════════════════════════
-# 【版面】使用者要求「頂層放核心總表提供最高階整體概況與 KPI，下方才是依業務邏輯
-#   分類的詳細數據」→ 佔位建立在標題正下方、總經指南針與 tabs **之上**。
-# 【時序】內容**不能**在這裡算。本段是 module level，執行順序早於 `with tab_x:`，
-#   而總表要用的 `warroom_summary` / `macro_alerts` / `li_latest` / `t3_data`
-#   全是 tab render 期間才寫入 session_state 的；加上「🚀 一鍵更新全部數據」的
-#   on_click callback 會先 pop 掉 `warroom_summary`，在這裡算必然全部讀到空值 →
-#   總表會 100% 複製 v19.171 🔴-1 那個「置底紅綠燈永遠停在 ⬜ 未評估」的實機事故
-#   （見下方 `_gl_slot` 的完整病史）。
-#   故沿用同一套 placeholder 模式：`st.empty()` 現在佔住版面位置，
-#   實際內容由檔案最後的填充區塊寫入（那時 tab 都 render 完了）。
-_core_summary_slot = st.empty()
-
 # ══════════════════════════════════════════════════════
 # 🔗 我的組合 — 全域綁定狀態列(P3a v19.207 順暢化):把「選 Sheet」從必經分頁
 # (📁 組合管理)提升為標題下常駐的全域狀態,點開就地綁定,去「先繞組合管理」心智模型。
@@ -943,47 +928,6 @@ with tab_mgmt:
 with tab_ai:
     from src.ui.tabs import tab_ai_chat
     _render_tab_isolated(tab_ai_chat.render, 'AI 問答')
-
-# ══════════════════════════════════════════════════════════════
-# 🧭 核心總表 — 延後填充（E1 v19.185）
-# ══════════════════════════════════════════════════════════════
-# 執行時機：所有 `with tab_*:` 都已 render 完 → `warroom_summary` / `macro_alerts`
-#   / `li_latest` / `t3_data` 都是本輪最新值。渲染位置：上方 `_core_summary_slot`
-#   （頁面最頂端），使用者看到的是「總表在最上面、詳細數據在下面」。
-#
-# `compute_tab_coverage()` 在**這裡**呼叫而不是在 L3 service 內：
-#   它住在 `src/ui/pages/data_coverage.py`（L5），而 §8.2 硬規則禁止 L3 import L5。
-#   若讓 L3 自己再寫一份覆蓋率算法，就會出現「同一個量兩個實作、兩個答案」——
-#   正是核心總表要消滅的缺陷。改由 L6（同時合法看得見 L5 與 L3）注入，
-#   依賴方向 L6→L5、L6→L3，零上行 import。長期正解是把該函式的純計算部分
-#   下沉 L2 由兩者共用（該檔不在 E1 可改範圍）。
-#
-# ⚠️ 本段**不得**觸發任何 fetch：`compute_tab_coverage()` 純讀 session_state，
-#   `get_core_summary()` 只讀 session_state + macro_state.json。沒算過的 KPI
-#   一律顯示「⬜ 未評估 + 怎麼補」，絕不順手幫使用者抓資料（那會把原本
-#   button-gated 的抓取路徑變成無條件執行）。
-try:
-    from src.services.core_summary_service import get_core_summary
-    from src.ui.pages.data_coverage import compute_tab_coverage
-    from src.ui.render.core_summary_render import render_core_summary
-
-    try:
-        _cs_rows = compute_tab_coverage()
-    except Exception as _cs_cov_err:  # noqa: BLE001 — 覆蓋率壞掉只讓那兩格 ⬜
-        print('[app/核心總表] compute_tab_coverage() 失敗，'
-              f'覆蓋率/新鮮度兩格降為未評估：{type(_cs_cov_err).__name__}: {_cs_cov_err}')
-        _cs_rows = None
-
-    with _core_summary_slot.container():
-        render_core_summary(get_core_summary(coverage_rows=_cs_rows))
-except Exception as _cs_err:  # noqa: BLE001 — module level，不得讓它炸掉全站
-    import traceback as _tb_cs
-    print(f'[app/核心總表] 組裝失敗：{type(_cs_err).__name__}: {_cs_err}')
-    _tb_cs.print_exc()
-    # §1 Fail Loud：失敗要看得見，且說得出是哪一種例外 —— 不留白、不假裝正常。
-    _core_summary_slot.error(
-        f'❌ 核心總表組裝失敗（{type(_cs_err).__name__}）：'
-        f'{str(_cs_err)[:200]} —— 其餘分頁不受影響。')
 
 # ══════════════════════════════════════════════════════════════
 # 全域置底常駐條 — 延後填充（v19.171 🔴-1）

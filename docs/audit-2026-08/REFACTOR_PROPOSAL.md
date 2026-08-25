@@ -258,6 +258,7 @@ def _lazy_tab(container, key, render_fn, label):
 **N≥4 且含固定 min-height 的高風險組合**：`macro/helpers.py`（5 欄×104px、4 欄×150px）、`section_warroom.py`（5 欄×108px）、`grape_ladder.py`（4 欄×80px）。
 
 **自繪表格 14 處，13 個無 `overflow-x`**（最寬 7 欄，`health_inspector.py:684`）。唯一正確的是 `core_summary_render.py:104` 的 `repeat(auto-fit, minmax(...))` —— **可直接當修法樣板**。
+> ⚠️ 2026-08-25:該檔已隨核心總表整組刪除。樣板寫法本身仍有效,但要看原文請查 git history(`git show 31a1924:src/ui/render/core_summary_render.py`)。
 
 **寬度 API**：`use_container_width` **132 次**（已 deprecated）vs `width='stretch'` **32 次** → 舊 API 佔 80.5%，5 檔同檔混用。`st.dataframe` 47/47、`st.plotly_chart` 41/41 **零缺漏**（很好），破口全在 **15 個 `st.button` 沒帶寬度**。
 Streamlit pin 是 `>=1.36.0,<1.60.0`；`st.experimental_*` / `st.cache` / `.applymap` 全站 **0 次** → 相容性風險高度集中在單一 API、可機械化批次替換。
@@ -312,6 +313,7 @@ UI 層 `@st.cache_data` **11 個**：6 個走 `shared/ttls.py` ✅、**5 個全�
 - 🟡 **健康卡缺值與 0 分同形**（`app_render.py:65-68`）：`sc = fs.get('score', 0)` + `_sc_cl[0]` 灰色。
 - 🟡 **`🔍 測試連線` 全域關閉 TLS 警告**（`app.py:313-314`）：`_ul3.disable_warnings(...)` 是 process-wide 副作用，按一次之後全站所有 `verify=False` 請求都不再警告。
 - 🟡 **pickle cache 資安 + 半寫檔**（`app_cache.py:31` / `:63-67`）：`makedirs` 無 `mode=0o700`（`/tmp` 預設 0755，多租戶主機上 `pickle.load` = RCE 面）；`except: pass` 留下截斷檔 → 之後每次 load 失敗（同樣靜默）→ 快取實質失效且無人知。
+- ⚠️ 2026-08-25:`core_summary_render.py` / `core_summary_service.py` 已隨核心總表整組刪除,以下評述僅存追溯價值。
 - ✅ **`core_summary_render.py` 是本範圍最佳實踐**：全檔零 I/O、零 session_state 讀取；`_hex()` 特別為 🟠 補色，註解寫明「不補這條會被退成灰 → 使用者分不出『轉守』和『還沒算』」；`core_summary_service._safe()`（`:81-92`）失敗回**例外物件本身**而非 None，下游才能區分 ⬜未評估 / ❌取數失敗。**建議把這套三態模型當全站樣板**。
 
 **UI/UX 與操作體驗問題**
