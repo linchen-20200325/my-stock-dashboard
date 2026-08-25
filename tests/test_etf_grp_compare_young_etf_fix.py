@@ -103,22 +103,19 @@ class TestTotalReturn1yRequireFullPeriod:
         """實際資料跨度僅 300 天(< 365 天的 90% = 328.5 天)+ require_full_period=True
         → 應回 None,不得把「上市至今報酬」誤標為「1Y累積」。"""
         df = _price_df(300)
-        divs = pd.Series(dtype=float)
-        r = calc_total_return_1y(df, divs, require_full_period=True)
+        r = calc_total_return_1y(df, require_full_period=True)
         assert r is None, f'資料跨度僅 300 天(<365*90%),不應算出 1Y 報酬:{r}'
 
     def test_mature_etf_full_history_computes_real_value(self):
         """資料跨度 ≥ 365 天(容差內)→ 正常算出數值,不誤殺老牌 ETF。"""
         df = _price_df(500)
-        divs = pd.Series(dtype=float)
-        r = calc_total_return_1y(df, divs, require_full_period=True)
+        r = calc_total_return_1y(df, require_full_period=True)
         assert r is not None
 
     def test_backward_compat_default_false(self):
         """require_full_period 預設 False → 維持舊行為(短窗仍會算出數字)。"""
         df = _price_df(300)
-        divs = pd.Series(dtype=float)
-        r = calc_total_return_1y(df, divs)
+        r = calc_total_return_1y(df)
         assert r is not None and r != 0.0
 
 

@@ -33,7 +33,11 @@ import re
 import pytest
 
 from shared import dividend_station_thresholds as T
+from shared import station_specs as SS
 from shared.station_specs import (
+    AXIS_LABELS,
+    LIGHT235_AXES,
+    MISS_PRIORITY,
     MISS_TEXT,
     SPECS_BY_KEY,
     STATE_DEGRADED,
@@ -42,7 +46,9 @@ from shared.station_specs import (
     STATE_MISSING,
     STATE_UNWIRED,
     STATION_SPECS,
+    axes_text,
     classify_state,
+    most_fundamental_miss,
     specs_for,
 )
 
@@ -262,3 +268,84 @@ class TestCopyIsUserFacing:
     def test_label_is_short_enough_for_mobile(self, spec):
         """標籤要塞得進手機的表格欄位。"""
         assert len(spec.label) <= 12, f"{spec.key} 的 label 太長:{spec.label}"
+
+
+# ════════════════════════════════════════════════════════════════
+# 六、缺值原因的排序與 235 三軸（2026-08-25 新增）
+#
+# 這一組守的是「原因」本身的完整性:少一條文案 / 少一個排序位,
+# 畫面就會印出 `no_input` 這種內部代號,或把某個原因悄悄降到最低優先。
+# ════════════════════════════════════════════════════════════════
+class TestMissReasonRegistry:
+
+    def _all_miss_constants(self) -> set[str]:
+        return {v for k, v in vars(SS).items()
+                if k.startswith("MISS_") and isinstance(v, str)}
+
+    def test_every_reason_has_text_and_a_rank(self):
+        """新增一個 MISS_* 卻忘了補文案或排序 —— 這條會當場紅。"""
+        consts = self._all_miss_constants()
+        assert consts - set(MISS_TEXT) == set(), "有原因沒有使用者文案"
+        assert consts - set(MISS_PRIORITY) == set(), "有原因沒有排在 MISS_PRIORITY 裡"
+        assert set(MISS_PRIORITY) == set(MISS_TEXT), "文案表與排序表不同步"
+
+    def test_priority_has_no_duplicates(self):
+        assert len(MISS_PRIORITY) == len(set(MISS_PRIORITY))
+
+    def test_not_applicable_never_wins(self):
+        """「不適用」不是問題 —— 只有在**全部**都不適用時才該勝出。
+
+        個股列的健檢同時有「歷史不足」與「D 折溢價不適用」,若 n/a 贏了,
+        使用者會被告知「這檔不適用」而不是「資料還不夠」。
+        """
+        for other in set(MISS_PRIORITY) - {SS.MISS_NOT_APPLICABLE}:
+            assert most_fundamental_miss([SS.MISS_NOT_APPLICABLE, other]) == other
+        assert most_fundamental_miss([SS.MISS_NOT_APPLICABLE]) == SS.MISS_NOT_APPLICABLE
+
+    def test_fetch_failed_wins_everything(self):
+        """整檔沒抓到 → 其他項不可能算得出來,它解釋了全部。"""
+        for other in set(MISS_PRIORITY) - {SS.MISS_FETCH_FAILED}:
+            assert most_fundamental_miss([other, SS.MISS_FETCH_FAILED]) == SS.MISS_FETCH_FAILED
+
+    def test_structural_beats_transient(self):
+        """歷史不足（等時間）比單項沒抓到（可重跑）根本 —— 對應健檢 A 兩因皆缺的取捨。"""
+        assert most_fundamental_miss([SS.MISS_NO_INPUT,
+                                      SS.MISS_NOT_ENOUGH]) == SS.MISS_NOT_ENOUGH
+
+    def test_unknown_reason_never_outranks_a_known_one(self):
+        assert most_fundamental_miss(["某個沒登錄的原因",
+                                      SS.MISS_NOT_APPLICABLE]) == SS.MISS_NOT_APPLICABLE
+
+    def test_empty_input_is_empty_output(self):
+        assert most_fundamental_miss([]) == ""
+        assert most_fundamental_miss(None) == ""
+        assert most_fundamental_miss(["", ""]) == ""
+
+    def test_contract_drift_text_says_it_is_a_bug_not_a_wait(self):
+        """契約漂移的文案若寫成「等一下再試」,就沒有人會去修那個 bug。"""
+        txt = MISS_TEXT[SS.MISS_CONTRACT_DRIFT]
+        assert "重跑" in txt and ("修" in txt or "回報" in txt)
+
+
+class TestLight235Axes:
+
+    def test_every_axis_has_a_label(self):
+        assert set(LIGHT235_AXES) == set(AXIS_LABELS)
+        assert len(LIGHT235_AXES) == len(set(LIGHT235_AXES)) == 3
+
+    def test_axes_text_follows_canonical_order(self):
+        """傳入順序不影響輸出 —— 否則「文案有沒有變」會變成不可判定的事。"""
+        assert axes_text(LIGHT235_AXES) == axes_text(tuple(reversed(LIGHT235_AXES)))
+        assert axes_text(LIGHT235_AXES) == "VIX/週線/布林"
+
+    def test_axes_text_of_nothing_is_empty(self):
+        assert axes_text(()) == "" and axes_text(None) == ""
+
+    def test_spec_keys_are_constants_not_literals(self):
+        """規格表的 key 必須就是 KEY_* 常數本身（跨層字典鍵靠它對齊）。"""
+        for key in (SS.KEY_HEALTH_A, SS.KEY_HEALTH_B, SS.KEY_HEALTH_C, SS.KEY_HEALTH_D,
+                    SS.KEY_LIGHT235, SS.KEY_SCREEN_INCEPTION, SS.KEY_SCREEN_RETURN,
+                    SS.KEY_SCREEN_PEER, SS.KEY_STOCK_HEALTH, SS.KEY_STOCK_TREND,
+                    SS.KEY_STOCK_KD, SS.KEY_STOCK_SWAP):
+            assert key in SPECS_BY_KEY, f"{key} 不在規格表裡"
+        assert len(SPECS_BY_KEY) == len(STATION_SPECS)

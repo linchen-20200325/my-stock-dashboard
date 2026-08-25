@@ -42,8 +42,7 @@ class TestEtfCalcStderrLog:
     def test_calc_total_return_1y_logs(self):
         from src.compute.etf import calc_total_return_1y
         _bad_df = pd.DataFrame({'Close': [1, 2]}, index=['x', 'y'])
-        _divs = pd.Series(dtype=float)
-        r, err = self._capture_stderr(lambda: calc_total_return_1y(_bad_df, _divs))
+        r, err = self._capture_stderr(lambda: calc_total_return_1y(_bad_df))
         assert r == 0.0
         assert '[calc_total_return_1y]' in err
 

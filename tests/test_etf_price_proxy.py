@@ -12,6 +12,7 @@ FIX:把 history 呼叫包進 yf_proxy._proxy_env()(臨時設 HTTPS/HTTP_PROXY,fi
 2. 空 history 仍回空 DataFrame(§1 fail loud,不造假)。
 3. etf_fetch 複用 yf_proxy._proxy_env SSOT(未自行重寫 env backup/restore)。
 4. import etf_fetch + yf_proxy 無 import cycle。
+5. history 必須帶 auto_adjust=True(還原權息)—— 見下方 §auto_adjust 兩條釘子。
 
 CLAUDE.md §8:etf_fetch(L1 Data)import L1 proxy helper 合法,EX-CACHE-1 適用。
 """
@@ -147,6 +148,87 @@ def test_source_wraps_history_in_proxy_env():
     # _proxy_env 的 with 必須出現在 history 呼叫之前
     assert src.index('with _proxy_env():') < src.index(".history(period='max'"), \
         'history 呼叫未被 _proxy_env 包住'
+
+
+# ── §auto_adjust:`auto_adjust=True` 是「含息」的唯一來源,不是可調參數 ──────
+#
+# 2026-08-25 稽核發現:`auto_adjust` 在整個 tests/ 只出現在一句 docstring 裡,
+# **沒有任何測試釘它**。這很危險 —— `etf_calc.calc_total_return_1y` 在同日
+# 修掉了「配息算兩次」的 bug,而它之所以正確,整個建立在這裡拿到的是**還原價**:
+#
+#     還原價序列 → (p_end - p_start) / p_start 本身就已經是含息總報酬
+#
+# 把它翻成 False,`Close` 變成未還原的原始收盤價,除息日的跳空不再被補回 →
+# `calc_total_return_1y` 會**靜默地**變成「純價差報酬」(低估一整年的配息),
+# 「賺息賠本」紅燈開始對健康的高股息 ETF 亂噴,多檔比較表的綜合分集體下修。
+# 而所有既有守衛用的都是**合成 df**(自己造 Close 欄),永遠不會知道上游翻了面。
+#
+# ⚠️ 後人看到本節紅燈:要修的是**程式**,不是測試。若真有「需要原始價」的需求,
+#    請另開一個 fetcher(或加參數並在呼叫端明確選擇),不要就地把 True 改掉 ——
+#    `calc_total_return_1y` / `dividend_station.total_return_pct` /
+#    `calc_avg_yield` 全部預設吃還原價,就地改等於同時改掉三個算式的意思。
+
+
+def _install_kwarg_recording_yf(monkeypatch, seen: dict, hist_df: pd.DataFrame):
+    """把 etf_fetch.yf 換成會記下 history() 收到哪些 kwargs 的假 yfinance。"""
+    class _RecTicker:
+        def __init__(self, ticker):
+            seen['ticker'] = ticker
+
+        def history(self, *args, **kwargs):
+            seen['args'] = args
+            seen['kwargs'] = kwargs
+            return hist_df.copy()
+
+    class _RecYF:
+        Ticker = _RecTicker
+
+    monkeypatch.setattr(etf_fetch, 'yf', _RecYF)
+
+
+def test_price_max_requests_adjusted_history(monkeypatch):
+    """行為鎖:history() 必須**顯式**收到 auto_adjust=True。
+
+    顯式的理由:yfinance 的 `Ticker.history` 預設值跨版本改過,靠 library 預設
+    等於把「含息與否」外包給 requirements.txt 的版本浮動 —— 那正是會靜默漂移
+    的那種前提(§5 可重現性)。
+    """
+    seen: dict = {}
+    _install_recording_env(monkeypatch, [])
+    idx = pd.to_datetime(['2020-01-02', '2020-01-03'])
+    _df = pd.DataFrame({'Close': [1.5, 2.5]}, index=idx)
+    _install_kwarg_recording_yf(monkeypatch, seen, _df)
+
+    etf_fetch._fetch_etf_price_max.clear()   # 清 st.cache_data,強制跑函式體
+    etf_fetch._fetch_etf_price_max('0050.TW')
+
+    assert seen.get('kwargs', {}).get('auto_adjust') is True, (
+        f"history() 收到的 kwargs = {seen.get('kwargs')} —— "
+        'auto_adjust 必須顯式為 True。翻成 False / 省略改吃 yfinance 預設值,'
+        'Close 就不再是還原價,calc_total_return_1y 會靜默變成「純價差報酬」'
+        '(低估一整年配息),而所有守衛都用合成 df,不會有任何一條紅。'
+    )
+
+
+def test_source_pins_auto_adjust_true():
+    """靜態鎖:原始碼裡 history(period='max') 那一呼必須寫死 auto_adjust=True。
+
+    與上一條的分工:上一條驗「這次呼叫確實傳了 True」,本條驗「原始碼裡就是
+    這個字面值」—— 擋掉把它換成變數 / 環境變數 / 設定檔的寫法(那種寫法在測試
+    環境剛好是 True、在 production 可能不是,比直接改成 False 更難查)。
+    """
+    import inspect
+    src = inspect.getsource(etf_fetch._fetch_etf_price_max)
+    assert "auto_adjust=True" in src, (
+        '_fetch_etf_price_max 不再寫死 auto_adjust=True —— '
+        '含息總報酬(etf_calc.calc_total_return_1y / dividend_station.total_return_pct '
+        '/ calc_avg_yield)全部預設 Close 是還原價,這一行是那個前提的唯一出處。'
+    )
+    assert "auto_adjust=False" not in src, \
+        '_fetch_etf_price_max 出現 auto_adjust=False —— 還原價前提被翻面'
+    # 必須就掛在 period='max' 那一呼上(而不是別處某個順手加的呼叫)
+    assert ".history(period='max', auto_adjust=True)" in src, \
+        f'auto_adjust=True 未掛在 history(period=\'max\') 那一呼上:\n{src}'
 
 
 if __name__ == '__main__':

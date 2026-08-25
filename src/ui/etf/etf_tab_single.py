@@ -11,7 +11,7 @@
     - 渲染類: _colored_box / _plot_etf_chart / _render_bias
       / _strategy_conclusion / macro_allocation_banner
     - 計算類: auto_detect_benchmark / calc_avg_yield / calc_cagr / calc_current_yield
-      / calc_premium_discount / calc_total_return_1y / calc_tracking_error
+      / calc_premium_discount / calc_tracking_error
       / check_vcp_signal / compute_etf_peer_ranking
     - 抓取類: fetch_etf_dividends / fetch_etf_info / fetch_etf_nav_history
       / fetch_etf_price / get_etf_expense_ratio_safe / _get_etf_launch_price
@@ -68,7 +68,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     )
     from src.compute.etf.etf_calc import (   # 計算類
         auto_detect_benchmark, calc_avg_yield, calc_beta, calc_cagr,
-        calc_current_yield, calc_premium_discount, calc_total_return_1y,
+        calc_current_yield, calc_premium_discount,
         calc_tracking_error, check_vcp_signal, compute_etf_peer_ranking,
     )
     from src.data.etf.etf_fetch import (     # 抓取類
@@ -160,6 +160,11 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     # ── 🚦 綜合研判卡(v19.166 版面重排:單一 留/觀察/換 + 理由,取代散落多張策略卡的「總結」)──
     # 沿用 build_etf_score_row(單檔/多檔共用 row SSOT)+ recommend_etf_action;§8.1 餵 render 已抓的
     # df/divs/info 不重抓。§1:composite 缺 → recommend_etf_action 回「觀察/資料不足」,不腦補。
+    #
+    #: 研判卡那張 row。**下方「策略一」的近1年含息總報酬也讀它**(同頁同一個數字只算一次)。
+    #: 前置初始化為 None 是必要的 —— `_vrow` 在下面的 try 區塊內才賦值,研判卡整段失敗時
+    #: 名字不存在,策略一會 NameError 炸掉整頁。降級行為見策略一該段註解。
+    _vrow: dict | None = None
     try:
         from src.compute.etf import (
             build_etf_score_row, compute_etf_composite_score,
@@ -267,14 +272,49 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
 
     # ── 策略一：以息養股避雷 ─────────────────────────────────────
     st.markdown('#### 🧠 策略一：以息養股避雷')
-    # require_full_period=True:「近1年含息總報酬」宣稱 1 年窗,資料跨度不足 90% 回 None
-    # 而非把「上市至今報酬」誤標為「1Y」(§1 寧缺勿假,同源修正見 etf_calc.calc_total_return_1y)。
-    total_ret = calc_total_return_1y(df, divs, require_full_period=True)
+    # ── 近1年含息總報酬:**讀研判卡那張 row,本頁不自己再算一次**(2026-08-25)──────
+    # 改動前:同一份 `df` 在本頁被算了兩次 —— 上面 🚦 研判卡的 `build_etf_score_row`
+    # 內部算一次,這裡再 `calc_total_return_1y(df, require_full_period=True)` 算一次,
+    # 兩個獨立算式相隔約 100 行。那正是「呼叫端偷偷把配息加回來」的形狀:
+    # `tests/test_etf_total_return_no_double_count.py` H 節的 AST 守衛只擋
+    # 「calc_total_return_1y(...) 的回傳值就地做加減」,寫成兩句就繞得過去,
+    # 而這條路上沒有任何行為守衛接得住(該節自己寫明了這個極限)。
+    # 收成單一來源後,本頁的總報酬只剩 `build_etf_score_row` 一個入口 ——
+    # 那條繞法在這裡不再有立足點(要繞得去改 L2 的 row builder,而 L2 有 E/F/G 節行為守衛)。
+    #
+    # 兩者本來就是同一個數字:`build_etf_score_row` 內部就是
+    # `calc_total_return_1y(df, require_full_period=True)`,吃的是本頁傳進去的同一份 df。
+    # require_full_period=True 的意義不變:資料跨度不足 1 年的 90% 回 None,
+    # 而非把「上市至今報酬」誤標為「1Y」(§1 寧缺勿假)。
+    #
+    # ⚠️ 降級(user 2026-08-25 裁示「妥善處理降級邏輯」):研判卡失敗 → `_vrow is None`,
+    # 這裡**刻意不退回自己算**。退回自己算等於把重複計息那個洞留在最不容易被發現的
+    # 路徑上 —— 研判卡都掛了,誰還會回頭檢查策略一的數字對不對。依 §1「寧可炸掉,
+    # 不可造假」,改成誠實顯示「取不到」,讓使用者看得出是**沒有值**,而不是「真的是這個值」。
+    # (`error` 欄同理:`build_etf_score_row` 拿不到 K 線時回 `error='無 K 線資料'`,
+    #  那張 row 的 total_ret_1y 是 None 但原因不是「上市未滿 1 年」,不可共用同一句文案。)
+    _ttl_unavailable = _vrow is None or bool(_vrow.get('error'))
+    total_ret = None if _ttl_unavailable else _vrow.get('total_ret_1y')
     cur_yield = calc_current_yield(df, divs)
     ca, cb    = st.columns(2)
-    ca.metric('近1年含息總報酬', f'{total_ret:.2f}%' if total_ret is not None else 'N/A')
+    ca.metric('近1年含息總報酬',
+              '—' if _ttl_unavailable
+              else (f'{total_ret:.2f}%' if total_ret is not None else 'N/A'),
+              help=('上方 🚦 綜合研判卡計算失敗,本頁**不改用第二套算式重算**'
+                    '(同頁兩套算式正是重複計息 bug 的來源)。這是「取不到」,不是「0%」。'
+                    if _ttl_unavailable else None))
     cb.metric('現金殖利率（近12M）', f'{cur_yield:.2f}%')
-    if total_ret is None:
+    if _ttl_unavailable:
+        _colored_box(
+            '⚠️ <b>近1年含息總報酬取不到</b>：上方 🚦 綜合研判卡計算失敗（錯誤訊息見該卡）。'
+            '本頁<b>刻意不另算一份</b>——同一頁兩套算式正是「配息被算兩次」那個 bug 的來源。'
+            '<b>這不是「報酬 0%」，是沒有值</b>；請重新整理，若持續失敗請看研判卡的錯誤類型。',
+            'red')
+        _strategy_conclusion(STRATEGY_VALUATION,
+                             '含息總報酬取不到（研判卡計算失敗）',
+                             '無法判定是否賺息賠本',
+                             '重新整理；持續失敗見上方研判卡錯誤訊息')
+    elif total_ret is None:
         st.info('ℹ️ 上市未滿 1 年，資料不足以計算真實「近1年」總報酬（避免用上市至今報酬誤導）')
         _strategy_conclusion(STRATEGY_VALUATION,
                              '上市未滿 1 年，資料不足',
@@ -287,7 +327,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                              '本金侵蝕中，高息陷阱',
                              '換標的，找總報酬為正的 ETF')
     elif cur_yield > 0:
-        _colored_box(f'✅ 含息總報酬({total_ret:.1f}%) > 殖利率({cur_yield:.1f}%)，核心資產條件通過', 'green')
+        _colored_box(f'✅ 含息總報酬({total_ret:.1f}%) ≥ 殖利率({cur_yield:.1f}%)，核心資產條件通過', 'green')
         _strategy_conclusion(STRATEGY_VALUATION,
                              f'含息總報酬 {total_ret:.1f}%，殖利率 {cur_yield:.1f}%',
                              '價差 + 配息雙贏，核心資產條件通過',
@@ -336,7 +376,10 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='略減（< 10%）', delta_color='inverse')
     else:
         _mc1.metric('配息 12M YoY', f'{_div_yoy:+.1f}%', delta='✅ 增長 / 持平', delta_color='normal')
-    if total_ret is None:
+    if _ttl_unavailable:
+        # 與上面同一個理由:研判卡失敗 → 取不到,不可說成「上市未滿1年」(那是另一回事)
+        _mc2.metric('含息報酬 − 殖利率', 'N/A', delta='研判卡失敗·取不到')
+    elif total_ret is None:
         _mc2.metric('含息報酬 − 殖利率', 'N/A', delta='上市未滿1年')
     elif cur_yield > 0 and total_ret < cur_yield:
         _mc2.metric('含息報酬 − 殖利率', f'{total_ret - cur_yield:+.1f}pp',

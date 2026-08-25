@@ -126,7 +126,7 @@ def _compute_etf_warroom_row(ticker: str, name: str, role: str) -> dict:
         # P3-A(v19.199):require_full_period=True 對齊 etf_tab_single / build_etf_score_row。
         #   原預設 False → 上市未滿 1 年 ETF 把「上市至今報酬」誤當 1Y(00981A 曾顯示 212%),
         #   虛高報酬 >> 殖利率 → 核心「賺息賠本」邏輯判假🟢綠燈;同檔單/多檔頁則判資料不足。
-        _ttl = calc_total_return_1y(df, divs, require_full_period=True)
+        _ttl = calc_total_return_1y(df, require_full_period=True)
         _yld = calc_current_yield(df, divs)
         _prem = calc_premium_discount(info, df, ticker)
         _prem_pct = _prem.get('premium_pct') if isinstance(_prem, dict) else None
@@ -240,9 +240,29 @@ def calc_current_yield(df: pd.DataFrame, divs: pd.Series) -> float:
         return 0.0
 
 
-def calc_total_return_1y(df: pd.DataFrame, divs: pd.Series,
+def calc_total_return_1y(df: pd.DataFrame, *,
                           require_full_period: bool = False) -> float | None:
-    """近1年含息總報酬率(%)。
+    """近1年含息總報酬率(%)。「含息」來自還原價,**不是**再加一次現金配息。
+
+    ⚠️ 2026-08-25 修 production bug:原式 `(p_end - p_start + div_sum) / p_start`
+    把同一筆息算了兩次。`df['Close']` 一路來自 `etf_fetch._fetch_etf_price_max` 的
+    `yf.Ticker(t).history(period='max', auto_adjust=True)` —— **已還原權息**
+    (除息日以前的歷史價被往回調降),所以 `(p_end - p_start) / p_start` 本身
+    就已經是含息總報酬(配息再投入口徑);再加 `Ticker(t).dividends` 的現金配息
+    = 重複計入。**後人請勿再把配息加回來。** 同源正解見
+    `dividend_station.total_return_pct`(docstring 亦註明「用還原價 → 已含息」)。
+
+    修正前的代數後果(r = 真實總報酬,y = 殖利率,兩者分母同為最新收盤價
+    —— 還原價最後一列不調整,故 calc_current_yield 的分母 = p_end):
+        畫面值 = r + y(1 + r)
+        「賺息賠本」判定式 `畫面值 < y` ⟺ r(1 + y) < 0 ⟺ **r < 0**
+    殖利率被代數消掉 → 那盞紅燈實際問的是「總報酬是不是負的」,而 UI 寫的是
+    「總報酬 < 殖利率」;那句話從來沒有被執行過。修正後判定式才真的等於 UI 那句。
+
+    ⚠️ 同次移除第 2 位參數 `divs`(正確算式用不到,留著等於邀請後人加回來,
+    §8.1 step 6「用不到的抽象先不做」);`require_full_period` 一併改
+    keyword-only —— 漏改的舊呼叫端 `f(df, divs)` 會當場 TypeError(§1 Fail Loud),
+    而不是把 Series 綁到旗標後被 `except Exception` 吞成 0.0。
 
     v18.454:require_full_period=True 時,若 df_1y 實際資料跨度不足 365 天的
     90%(如年輕 ETF 上市未滿 1 年),回傳 None(§1 寧缺勿假)。根因與
@@ -265,9 +285,8 @@ def calc_total_return_1y(df: pd.DataFrame, divs: pd.Series,
                 return None
         p_start = float(df_1y['Close'].iloc[0])
         p_end   = float(df_1y['Close'].iloc[-1])
-        _didx = divs.index.tz_localize(None) if (not divs.empty and divs.index.tz is not None) else divs.index
-        div_sum = float(divs[_didx >= cutoff].sum()) if not divs.empty else 0.0
-        return round((p_end - p_start + div_sum) / p_start * 100, 2)
+        # 還原價序列 → 價差本身已含息;此處**不可**再加 div_sum(理由見 docstring)
+        return round((p_end - p_start) / p_start * 100, 2)
     except Exception as _e:
         print(f'[calc_total_return_1y] swallow: {type(_e).__name__}: {_e}', file=sys.stderr)
         return 0.0

@@ -184,6 +184,12 @@ def _get_etf_launch_price(ticker: str, df: "pd.DataFrame|None" = None):
     return None
 
 
+#: `df.attrs["price_basis"]` 的值 —— 「這個 Close 是**還原權息價**」。
+#: 含息總報酬把「價差本身已含息」當前提,這個標記就是那個前提的機器可讀出處
+#: (§2.2 血緣)。想新增「原始價」來源請用**另一個值**並且**不要**餵給總報酬算式,
+#: 不要就地把這個字串改掉 —— 那會讓三個算式同時改變意思而沒有任何一條測試變紅。
+PRICE_BASIS_ADJUSTED = "adjusted"
+
 # v18.228 P1-S1：fetch_etf_price 跨 tab period 集中
 # 原本 cache key = (ticker, period)，同檔 ETF 因 1y/5y/10y 不同 period 重抓 2~3 次。
 # 改為單一 'max' fetch + 記憶體內切片，cache key 只剩 ticker。
@@ -202,6 +208,17 @@ def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
     ETF 從 2~3 次 yfinance call → 1 次（cache key 只剩 ticker）。
 
     S-PROV-1 v18.251 phase 7:成功時 df.attrs 含 source/fetched_at(§2.2)。
+
+    2026-08-25 加 `attrs["price_basis"]`(見 `PRICE_BASIS_ADJUSTED`):
+    **「這個 Close 是還原價」這件事的機器可讀標記**。含息總報酬
+    (`etf_calc.calc_total_return_1y` / `dividend_station.total_return_pct` /
+    `calc_avg_yield`)整個建立在這個前提上,但在此之前它只存在於
+    `auto_adjust=True` 那一個字面值和幾句 docstring 裡 —— 一旦有人把取價
+    改路由到別的 fetcher(FinMind / TWSE 原始價),釘 `auto_adjust` 的測試
+    仍然全綠,因為它釘的那一行已經不在路徑上了。
+    守衛:`tests/test_etf_price_basis_invariant.py`(不變量 = 餵給總報酬算式的
+    價格必須來自帶本標記的來源;新來源要進 allow-list 就得**實際被執行**
+    並證明自己既蓋章、又真的向上游要了還原價)。
     """
     try:
         # 走 NAS proxy(_proxy_env:臨時設 HTTPS/HTTP_PROXY,finally 還原)避開
@@ -215,6 +232,9 @@ def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
         # S-PROV-1 v18.251:provenance via DataFrame.attrs(§2.2)
         out.attrs["source"] = f"Yahoo:{ticker}:history_max_adj"
         out.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+        # 還原價標記 —— 蓋在「向上游要 auto_adjust=True 的**同一個函式**」裡,
+        # 這樣「有標記」與「真的要了還原價」不會各自漂移(§2.2 血緣)。
+        out.attrs["price_basis"] = PRICE_BASIS_ADJUSTED
         return out
     except Exception as e:
         # S-H3 v18.244:L1 不可 st.error → 改 print log,caller 依 empty DataFrame 判斷

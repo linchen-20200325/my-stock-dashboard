@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from shared import dividend_station_thresholds as T
+from shared import station_specs as SS
 from src.compute.etf import dividend_station as ds
 
 
@@ -356,11 +357,28 @@ def test_assess_stock_no_kd_still_fundamentals_only():
 
 
 def test_assess_stock_unknown_grade_treated_as_insufficient():
-    """上游 grade 非已知分級（契約漂移/髒值）→ ⚪ 資料不足,不誤判續抱（§1）。"""
+    """上游 grade 非已知分級（契約漂移/髒值）→ ⚪ 不判定,不誤判續抱（§1）。
+
+    ⚠️ 2026-08-25 更新斷言：原本要求動作文字含「資料不足」，但那**正是要修的問題** ——
+    「沒抓到」跟「上游給了一個不在分級表裡的值」是兩件事：前者重跑就好，後者是
+    上下游契約破了（程式要修），畫成「資料不足」等於保證沒有人會去修它。
+    **判燈結果不變**（仍是 ⚪、仍只供 KD 參考），只是原因說對。
+    """
     sa = ds.assess_stock(ticker="9999", name="", asset_class=T.ASSET_SATELLITE,
                          mj_grade="ZZZ", mj_score_pct=50, mj_headline="?",
                          mj_fail_items=[], kd=_kd(label="無"))
+    assert sa.swap_level == "⚪"                       # 判燈不變
+    assert sa.miss_reason == SS.MISS_CONTRACT_DRIFT    # 但原因是「契約漂移」不是「缺資料」
+    assert "ZZZ" in sa.swap_action, "要指出是哪個值不認得,否則沒人查得到"
+
+
+def test_assess_stock_missing_grade_is_not_contract_drift():
+    """對照組：真的沒抓到 → 同樣 ⚪,但原因是「沒抓到」(可重跑),文案維持原樣。"""
+    sa = ds.assess_stock(ticker="9999", name="", asset_class=T.ASSET_SATELLITE,
+                         mj_grade=None, mj_score_pct=None, mj_headline="",
+                         mj_fail_items=[], kd=_kd(label="無"))
     assert sa.swap_level == "⚪" and "資料不足" in sa.swap_action
+    assert sa.miss_reason == SS.MISS_NO_INPUT
 
 
 def test_sharpe_weekly_rf_lowers_sharpe():
