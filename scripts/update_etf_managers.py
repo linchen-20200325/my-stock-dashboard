@@ -26,6 +26,12 @@ from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
+# `python scripts/update_etf_managers.py` 直跑時 sys.path[0]=scripts/,不含 repo root
+# → 下方 `src.*` import 必 ImportError。同 update_macro_history.py v19.101 既有模式。
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 # 與 reader(src/data/etf/etf_fetch.py)同目錄 —— reader 以 __file__ 相對路徑讀取,
 # 故持久檔須與其 co-locate(F-6.2 src/ 搬移曾把 etf_fetch.py 移入 src/data/etf/ 卻
 # 遺留 JSON 在 root,導致 reader 讀不到 → 換手紅框跨重啟失效;B2 v19.152 歸位修復)。
@@ -115,13 +121,18 @@ def _parse_manager(html_text: str) -> dict | None:
 
 def fetch_manager(etfid: str) -> dict | None:
     """逐頁抓 MoneyDJ 經理人；名字有、到職日缺時續查其他頁（與 app 端同策略）。"""
-    import proxy_helper
+    # v18.359 檔案搬家後根目錄 shim 已刪,舊的 `import proxy_helper` 恆 ImportError
+    # → 本 workflow 自 2026-06-29 起連續 9 次 red。改正式路徑(同 v19.101 對
+    # update_macro_history.py 的修法)。
+    # 這裡刻意**不**做「直連 fallback」:MoneyDJ 擋海外 IP,GitHub runner 直連必敗,
+    # 補 fallback 只會把 ImportError(程式 bug)偽裝成「查無經理人」(§1 Fail Loud)。
+    from src.data.proxy.proxy_helper import fetch_url
 
     best = None
     for tmpl in PAGE_TEMPLATES:
         url = tmpl.format(etfid=etfid)
         try:
-            r = proxy_helper.fetch_url(
+            r = fetch_url(
                 url, headers={"Referer": "https://www.moneydj.com/"},
                 timeout=15, attempts=2)
         except Exception as e:
@@ -218,6 +229,12 @@ def main() -> int:
         rec.update({"name": name, "since": res.get("since"),
                     "tenure_days": res.get("tenure_days"), "last_seen": today})
         managers[etfid] = rec
+
+    # §1 Fail Loud:清單非空卻一檔都沒抓到 = 上游全敗,不可寫檔又回 0 裝成功
+    # (那會讓「MoneyDJ 全面擋掉」看起來跟「本週經理人都沒換」一模一樣)。
+    if ok_cnt == 0:
+        print(f"\n❌ {len(tickers)} 檔全數抓取失敗,不覆寫 {MANAGERS_PATH.name}")
+        return 1
 
     db["managers"] = managers
     db["updated_at"] = datetime.now(timezone.utc).isoformat()

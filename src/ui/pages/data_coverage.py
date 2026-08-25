@@ -538,6 +538,17 @@ def compute_tab_coverage(state: dict | None = None,
             _detail1_parts.append(
                 f"⛔ 未接線:{_r['key']} — {getattr(_sp_u, 'unwired_reason', '')[:40]}"
                 f"（不計入分母，此燈永遠不會亮）")
+        # 2026-08-25:鑑別力已失效者 —— 與「未接線」是**不同的病**。
+        # 這盞燈會亮、也計入分母(它真的有值),但門檻本身已失去判別力,
+        # 於是它跟一盞真正的紅燈長得一模一樣。不標出來,使用者無從分辨。
+        for _r in _readiness.values():
+            if _r.get("discriminative", True):
+                continue
+            _sp_d = SPECS_BY_KEY.get(_r["key"])
+            _detail1_parts.append(
+                f"🔒 門檻已失效:{_r['key']} — "
+                f"{getattr(_sp_d, 'degraded_reason', '').splitlines()[0][:40]}"
+                f"（燈會亮但別照門檻讀，看相對變化）")
         # user 2026-08-20 裁示:fed_funds 這類「在 macro_info 但不是五桶決策燈」的
         # 容器保留為**第二個子計數**,不與決策燈加總(語意不同的東西不該相加)。
         _detail1_parts.append(f"另 macro 容器 {_macro_have}/{_macro_total} 有值")

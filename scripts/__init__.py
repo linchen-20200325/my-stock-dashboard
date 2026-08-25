@@ -6,7 +6,7 @@
 成員:
   calibrate_macro_traffic — 巨觀信號歷史校準(GitHub Actions cron)
   update_macro_history    — 歷史總經資料補填(GitHub Actions cron)
-  update_etf_managers     — ETF 經理人清單一次性更新
+  update_etf_managers     — ETF 經理人清單更新(GitHub Actions 每週一)
   final_check             — 部署前驗證
   debug_financials        — 財務資料除錯
   test_fetch / test_fetchers / test_registry — 離線 print-CLI 驗證(非 pytest)

@@ -14,10 +14,18 @@ on:
         description: '逗號分隔代碼(留空=讀 data_cache/health_watchlist.json)'
         required: false
         default: ''
-  schedule:
-    # 工作日 UTC 09:30 = TW 17:30 — 盤後,TWSE 17:00 後資料完整(CLAUDE.md §4.5;
-    # 對齊 update_macro_history.yml 的 UTC 09:00 = TW 17:00 同一時段慣例)
-    - cron: '30 9 * * 1-5'
+  # 排程已停用(user 2026-08-25):health_watchlist.json 的 stocks 是空陣列,
+  # 這支自 2026-06 上線起跑了 33 次、全部成功、但**從未 commit 過任何東西**
+  # —— 每個工作日空燒一次 runner。功能本身沒壞,是「待命中」(清單為空的行為
+  # 由 script 自己定義為 exit 0 不寫檔),所以停排程而非刪 workflow。
+  #
+  # 要重新啟用:把代碼填進 data_cache/health_watchlist.json 的 stocks,再把下面
+  # 兩行取消註解即可(原時段 = 工作日 UTC 09:30 = TW 17:30 盤後,CLAUDE.md §4.5)。
+  # ⚠️ 恢復時請順手改分鐘數:原本 '30 9' 與 update_sector_flow.yml 完全同一分鐘,
+  #    兩支都對同一分支裸 git push,撞上就是 non-fast-forward 失敗
+  #    (docs/audit-2026-08/REFACTOR_PROPOSAL.md N-11 已點名)。
+  # schedule:
+  #   - cron: '35 9 * * 1-5'
 
 permissions:
   contents: write
