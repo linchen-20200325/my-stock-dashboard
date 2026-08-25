@@ -269,7 +269,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     st.markdown('#### 🧠 策略一：以息養股避雷')
     # require_full_period=True:「近1年含息總報酬」宣稱 1 年窗,資料跨度不足 90% 回 None
     # 而非把「上市至今報酬」誤標為「1Y」(§1 寧缺勿假,同源修正見 etf_calc.calc_total_return_1y)。
-    total_ret = calc_total_return_1y(df, divs, require_full_period=True)
+    total_ret = calc_total_return_1y(df, require_full_period=True)
     cur_yield = calc_current_yield(df, divs)
     ca, cb    = st.columns(2)
     ca.metric('近1年含息總報酬', f'{total_ret:.2f}%' if total_ret is not None else 'N/A')
@@ -287,7 +287,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                              '本金侵蝕中，高息陷阱',
                              '換標的，找總報酬為正的 ETF')
     elif cur_yield > 0:
-        _colored_box(f'✅ 含息總報酬({total_ret:.1f}%) > 殖利率({cur_yield:.1f}%)，核心資產條件通過', 'green')
+        _colored_box(f'✅ 含息總報酬({total_ret:.1f}%) ≥ 殖利率({cur_yield:.1f}%)，核心資產條件通過', 'green')
         _strategy_conclusion(STRATEGY_VALUATION,
                              f'含息總報酬 {total_ret:.1f}%，殖利率 {cur_yield:.1f}%',
                              '價差 + 配息雙贏，核心資產條件通過',

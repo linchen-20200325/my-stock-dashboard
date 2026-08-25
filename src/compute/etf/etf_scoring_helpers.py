@@ -98,7 +98,7 @@ def build_etf_score_row(ticker, df, divs, info, *, quality=None,
             _r['sigma_z'] = round(float(_sb['sigma_z']), 2)
     except Exception as _e_sb:
         print(f'[build_etf_score_row] {ticker} σ 帶計算失敗:{type(_e_sb).__name__}: {_e_sb}')
-    _r['total_ret_1y'] = calc_total_return_1y(df, divs, require_full_period=True)
+    _r['total_ret_1y'] = calc_total_return_1y(df, require_full_period=True)
     _r['div_yield'] = calc_current_yield(df, divs)
     _r['cagr_3y'] = calc_cagr(df, expected_years=3)
     _r['sharpe'] = calc_sharpe(df)
