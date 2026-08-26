@@ -427,8 +427,12 @@ MISS_NO_INPUT = "no_input"          #: 該項的輸入沒抓到（如缺配息�
 MISS_FETCH_FAILED = "fetch_failed"  #: 整檔抓取失敗
 MISS_NOT_ENOUGH = "not_enough"      #: 有資料但不足以計算（如週數 < 20）
 #: 這盞燈對這一類持股**結構上不適用**（不是壞掉、也不是這輪沒抓到）。
-#: 唯一會掛上它的是 `dividend_station.assess_holding` 的 `_is_etf=False` 分支
-#: （折溢價 + 3-3-3 三項共 4 盞）。
+#: 掛上它的地方（2026-08-26 起兩處，原文寫「唯一」已不成立，故據實補列）：
+#:   1. `dividend_station.assess_holding` 的 `_is_etf=False` 分支（折溢價 + 3-3-3
+#:      三項共 4 盞）—— 但那條分支 production 走不到（個股走 `assess_stock`）。
+#:   2. `dividend_station_service` 的**個股列 / 個股抓取失敗列**的週線走勢圖原料
+#:      （`_weekly_series` 鍵）—— 個股列從頭到尾沒有週K 序列，那張圖結構上不存在。
+#:      這一處**是 production 會走到的**。
 #: ⚠️ 2026-08-26 更正:原文的舉例是「如個股沒有折溢價」—— 那個例子**描述不到任何
 #: 實際會發生的情形**,個股走的是 `assess_stock`,不經過 `assess_holding`。
 #: 沿用該例的畫面文案已在同批拿掉（`render.station_cards` 兩處 docstring 記著

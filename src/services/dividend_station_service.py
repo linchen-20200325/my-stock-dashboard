@@ -164,6 +164,87 @@ def resolve_holding_names(holdings: list[dict]) -> list[dict]:
     return holdings
 
 
+KEY_WEEKLY_SERIES = "_weekly_series"
+"""row dict 上「週線走勢圖原料」那一鍵的名字（底線開頭 = 非顯示欄,同 `_detail` / `_lights`）。
+
+具名常數而非各處寫字面值:這一鍵有 4 個產出點（ETF 列 / 個股列 / 抓取失敗列 / 本檔測試）
+與下游消費端,字面值散開就會有人打錯字而**靜默**拿不到序列（dict 取不到只會回 None）。
+"""
+
+
+def _weekly_series_payload(weekly_close, *, unavailable: str = "") -> dict:
+    """週K 序列 → 走勢圖原料（純函式）。**這一步只搬運與整形,不判燈、不改任何判定。**
+
+    ## 為什麼均線 / 布林 z 在 L3 算完才進 row（不是丟原始週K 讓 L4 自己算）
+
+    1. **L4 不該 import L2。** 只帶原始週K 的話,畫圖端就得自己呼叫
+       `dividend_station.week_ma_series` / `bollinger_z_series` —— 那是 L4 反過來抓
+       L2 的計算核心（§8.2 分層）。而「編排 L1 取數 + 呼叫 L2 純函式」正是本層
+       （L3）檔頭寫明的職責,序列版兩支函式就是為此在 L2 備好的。
+    2. **同一把尺。** 圖上的均線 / z 與 235 燈用的是**同一組 L2 函式**（序列版與純量版
+       已在 L2 逐點對帳）。若讓畫面端另算一份,遲早會出現「線說沒破季線、燈說破了」。
+    3. 成本可忽略:每檔一次 rolling（實測 <1 ms）,且只在**抓取那一次**算;
+       擺到 L4 反而是每次 rerun 重算。
+
+    ## 缺值語意（§1:不靜默丟一條空序列讓畫面畫出一張空圖）
+
+    - `unavailable` 非空 → 整組沒有序列,`miss_reason` 帶該 `MISS_*`,各序列為**空
+      Series**。呼叫端（個股列 / 抓取失敗列）負責挑常數,見 `build_station_rows`。
+    - 有週K → `miss_reason=""`,但**逐條線**仍可能畫不出來,分別記在 `ma_miss` /
+      `boll_z_miss`:
+        - 週數 < 該線視窗（例:僅 30 週 → 畫不出 52 週年線）→ `MISS_NOT_ENOUGH`
+          （對齊 `dividend_station.health_c` 對「週數不足」用的同一個常數）。
+        - 週數夠、整條卻仍無有限值（實務上就是**整段價格零波動 → std≈0**,
+          布林 z 分母被遮成 NaN）→ `MISS_NO_INPUT`。理由:`light_235` 對「布林軸
+          算不出來」用的就是這條路（軸不進 `axes_used`,全無軸時 `MISS_NO_INPUT`）,
+          這裡沿用同一個標法,不另造新詞。
+      能畫的線**不列進** miss dict —— 列進去會讓消費端以為它也缺（同 `_health_miss`
+      只收「⚪ 且有登記原因」的作法）。
+
+    回傳鍵:
+      `n_weeks` / `close` / `ma`{週數: Series} / `ma_miss`{週數: MISS_*} /
+      `boll_z` / `boll_z_miss` / `boll_period_weeks` / `miss_reason`
+    """
+    import pandas as pd
+
+    def _empty():
+        # 每條線給**各自**的空 Series（不共用同一個物件）—— 共用會讓消費端任何
+        # 就地操作串到別條線上,而那種 bug 很難從畫面看出來。
+        return pd.Series(dtype="float64")
+
+    _ma_windows = (T.MA_MONTH_WEEKS, T.MA_QUARTER_WEEKS, T.MA_YEAR_WEEKS)  # §3.3 走 L0
+    if unavailable or weekly_close is None or len(weekly_close) == 0:
+        # ⚠️ 後兩個條件（None / 空）在 ETF 成功列**走不到** —— `assess_holding` 會先
+        # 對空週K raise,那一檔改走 `_error_row`。寫在這裡不是宣稱它在擋那條路,
+        # 而是本函式同時服務個股列與失敗列（那兩處本來就沒有序列),回傳形狀要一致。
+        return {"n_weeks": 0, "close": _empty(),
+                "ma": {_w: _empty() for _w in _ma_windows},
+                "ma_miss": {_w: (unavailable or SS.MISS_NOT_ENOUGH) for _w in _ma_windows},
+                "boll_z": _empty(), "boll_z_miss": unavailable or SS.MISS_NOT_ENOUGH,
+                "boll_period_weeks": T.BOLL_PERIOD_WEEKS,
+                "miss_reason": unavailable or SS.MISS_NOT_ENOUGH}
+
+    _close = pd.Series(weekly_close, dtype="float64")
+    _n = len(_close)
+    _ma = {_w: ds.week_ma_series(_close, _w) for _w in _ma_windows}
+    _z = ds.bollinger_z_series(_close, T.BOLL_PERIOD_WEEKS)
+
+    def _line_miss(series, window: int) -> str:
+        """一條線畫不畫得出來 → 原因（畫得出來回 `""`）。判準:**有沒有任何有限值**。"""
+        if _n < window:
+            return SS.MISS_NOT_ENOUGH
+        return "" if bool(series.notna().any()) else SS.MISS_NO_INPUT
+
+    _ma_miss: dict[int, str] = {}
+    for _w in _ma_windows:                    # 只收畫不出來的線（能畫的不列,見 docstring）
+        _r = _line_miss(_ma[_w], _w)
+        if _r:
+            _ma_miss[_w] = _r
+    return {"n_weeks": _n, "close": _close, "ma": _ma, "ma_miss": _ma_miss,
+            "boll_z": _z, "boll_z_miss": _line_miss(_z, T.BOLL_PERIOD_WEEKS),
+            "boll_period_weeks": T.BOLL_PERIOD_WEEKS, "miss_reason": ""}
+
+
 def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason: str,
                *, held: bool = True) -> dict:
     """單檔抓取/評估整個失敗 → 一列誠實的空白（§1 不炸整表、不捏數字）。
@@ -172,6 +253,14 @@ def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason
     這一列的 ⚪ 與「某盞燈缺輸入」的 ⚪ 是兩件事 —— 這裡是**整檔**沒有任何數字,
     該看的是本列的錯誤訊息（多半是代號錯或來源掛掉）,不是等時間累積。
     `MISS_FETCH_FAILED` 的定義（「這一檔整批抓取失敗」）就是為這個位置寫的。
+
+    ⚠️ 走勢圖原料（`KEY_WEEKLY_SERIES`）**不跟著 `_miss_reason` 走**:個股列的那張圖
+    本來就不存在（見 `build_station_rows` 的說明）,抓取成不成功都一樣。對個股標
+    `MISS_FETCH_FAILED` 等於對使用者說「看錯誤訊息、多半是代號或來源問題」——
+    修好了圖還是不會出現,那是**錯的指引**。故這一鍵**先看 `asset_kind`**:
+    個股 → `MISS_NOT_APPLICABLE`,ETF → `MISS_FETCH_FAILED`。
+    這裡刻意**不**走 `most_fundamental_miss`:那支是「同一件事有多個原因時挑最根本的」,
+    而依 `MISS_PRIORITY` 它會挑 `MISS_FETCH_FAILED` 勝出 —— 對個股正好挑到錯的那個。
     """
     return {
         "代號": ticker, "名稱": name,
@@ -193,6 +282,11 @@ def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason
         # 寫死的數字下一次組合變動就變成假話,故不寫數字。
         # 原因與上面 `_miss_reason` 同一個常數,不另寫字面值以免兩邊漂移。
         "_lights": ds.missing_light_cells(asset_kind, reason=SS.MISS_FETCH_FAILED),
+        # 走勢圖原料:整檔沒數字 → 空序列 + 原因（§1 不丟空 Series 讓畫面畫空圖）。
+        # 個股 vs ETF 挑不同常數的理由見本函式 docstring。
+        KEY_WEEKLY_SERIES: _weekly_series_payload(
+            None, unavailable=(SS.MISS_NOT_APPLICABLE if asset_kind == T.KIND_STOCK
+                               else SS.MISS_FETCH_FAILED)),
     }
 
 
@@ -206,6 +300,10 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
       annual_yield_pct/inception_years/ann_return_3y_pct/cum_return_3y_pct/peer_ranks（可缺）。
     - 個股（汰換）：mj_grade/mj_score_pct/mj_headline/mj_fail_items（財報體檢）+
       kd_state（KD 狀態 dict）+ current_price（可缺;缺者標資料不足,§1）。
+
+    每一列（ETF / 個股 / 抓取失敗三種都算）**必有** `KEY_WEEKLY_SERIES` 這個非顯示鍵,
+    內容是週線走勢圖原料（週收 + 4/13/52 週均線 + 20 週布林 z）。沒有序列的列帶空
+    Series + `miss_reason`,**不是把鍵拿掉** —— 見 `_weekly_series_payload` docstring。
     """
     rows: list[dict] = []
     for h in (holdings or []):
@@ -241,6 +339,19 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
                     mj_fail_items=m.get("mj_fail_items"), kd=m.get("kd_state"),
                     trend=m.get("trend_verdict"))
                 _row = stock_row_from_assessment(sa)
+                # 走勢圖原料:個股列**結構上沒有**這張圖 —— `_fetch_stock_metrics`
+                # 走 `StockDataLoader.get_combined_data` 只取 現價 + KD,從頭到尾
+                # 沒有週K 序列;而週線走勢圖是 235 燈 / 健檢C 的視覺化,個股走
+                # `assess_stock`（另一組 4 盞燈）根本不跑那一套。
+                # ⚠️ 常數挑 `MISS_NOT_APPLICABLE`,理由是**其餘四個都會給錯的指引**:
+                #   NOT_ENOUGH「等時間累積」→ 等一百年也不會有（不是筆數問題）;
+                #   NO_INPUT「可以重跑一次」/ FETCH_FAILED「看錯誤訊息」→ 沒有東西
+                #   失敗過,重跑一樣沒有;CONTRACT_DRIFT 是「有值但形態不對」,這裡
+                #   連值都不該有。只有「這類持股不適用（不是壞掉）」是真的。
+                # ⚠️ 這一鍵**一定要在**（不是「沒有就不放」）—— 靠鍵存不存在讓畫面
+                # 去猜「沒資料」還是「不適用」,正是 §1 要擋的那種靜默。
+                _row[KEY_WEEKLY_SERIES] = _weekly_series_payload(
+                    None, unavailable=SS.MISS_NOT_APPLICABLE)
             else:                                        # ETF：定期定額 235 + 3-3-3
                 a = ds.assess_holding(
                     ticker=tk, name=nm or str(m.get("name", "")), asset_class=ac,
@@ -253,6 +364,11 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
                     cum_return_3y_pct=m.get("cum_return_3y_pct"),
                     peer_ranks=m.get("peer_ranks"))
                 _row = row_from_assessment(a)
+                # 走勢圖原料:序列本來就在手上（`weekly_closes` 這一步算完就被丟掉）,
+                # 這裡只是把它帶進 row —— **零新增外部抓取**。均線 / 布林 z 一起在
+                # 這層算完,理由見 `_weekly_series_payload` docstring（L4 不 import L2 +
+                # 與 235 燈同一把尺）。判燈邏輯一個字都沒動。
+                _row[KEY_WEEKLY_SERIES] = _weekly_series_payload(m["weekly_close"])
                 # B4(v19.198):ETF 品質評等 display-only 併入明細（星等 / 費用率 / AUM 清算風險）。
                 #   清算風險用 aum 因子 score≤0（= AUM≤10億,etf_quality score_aum 的 SSOT floor）判,
                 #   不另立門檻(§3.3)。不動健檢 A/B/C/D 主判(架構師建議 display-first)。

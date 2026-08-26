@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from shared import dividend_station_thresholds as T
+from shared import station_specs as SS
 from src.compute.etf import dividend_station as ds
 from src.services import dividend_station_service as svc
 
@@ -586,3 +587,152 @@ def test_build_rows_etf_quality_liquidation_risk():
     r = svc.build_station_rows([{"ticker": "00xxx", "asset_class": T.ASSET_CORE}],
                                vix=18, metrics_fn=_m)[0]
     assert "清算風險" in r["_detail"]["ETF品質"]
+
+
+# ── 週線走勢圖原料 `_weekly_series`（L3 把序列帶出來,#階段D 第二塊）────────
+class TestWeeklySeriesPayload:
+    """`build_station_rows` 每一列都要帶走勢圖原料;缺的要說得出為什麼（§1）。
+
+    這一組守的是三件事:
+      1. 圖上的線與 235 燈**同一把尺**（序列末值 == L2 純量版,用容差不用 `==`,§4.3）;
+      2. 畫不出來的線各自帶原因,而且**原因不能給錯的指引**（個股 ≠ 抓取失敗）;
+      3. 鍵**永遠在**，消費端不必靠「鍵在不在」去猜（§1 不留靜默）。
+    """
+
+    _KEY = svc.KEY_WEEKLY_SERIES
+
+    def _etf_metrics(self, n):
+        def _m(ticker, asset_kind="etf"):
+            d = _good_metrics(ticker)
+            d["weekly_close"] = _wk(n)
+            return d
+        return _m
+
+    def _stock_metrics(self, ticker, asset_kind="stock"):
+        return {"mj_grade": "B", "mj_score_pct": 70, "mj_headline": "ok",
+                "mj_fail_items": [],
+                "kd_state": {"k": 50.0, "d": 50.0, "label": "—", "cross": "none",
+                             "high_passivation": False, "bearish_divergence": False,
+                             "bullish_divergence": False, "low_passivation": False},
+                "current_price": 30.0}
+
+    def _etf_row(self, n=60):
+        return svc.build_station_rows(
+            [{"ticker": "0056", "name": "高股息", "asset_class": T.ASSET_CORE}],
+            vix=18, metrics_fn=self._etf_metrics(n))[0]
+
+    def test_key_is_non_display_and_always_present(self):
+        """三種列型（ETF / 個股 / 抓取失敗）都要有鍵,且是底線開頭的非顯示欄。"""
+        def _boom(ticker, asset_kind="etf"):
+            raise RuntimeError("x")
+        _etf = self._etf_row()
+        _stk = svc.build_station_rows(
+            [{"ticker": "2330", "asset_class": T.ASSET_SATELLITE,
+              "asset_kind": T.KIND_STOCK}], vix=18, metrics_fn=self._stock_metrics)[0]
+        _err = svc.build_station_rows(
+            [{"ticker": "9999", "asset_class": T.ASSET_CORE}],
+            vix=None, metrics_fn=_boom)[0]
+        assert self._KEY.startswith("_")          # 非顯示欄（不進 _ETF_COLS / _STOCK_COLS）
+        for _r in (_etf, _stk, _err):
+            assert self._KEY in _r
+
+    def test_series_tail_matches_scalar_kernel(self):
+        """序列末值 ≡ L2 純量版（§4.3 對帳,math.isclose 不用 ==）。"""
+        import math
+        _p = self._etf_row(60)[self._KEY]
+        _w = _wk(60)
+        for _win in (T.MA_MONTH_WEEKS, T.MA_QUARTER_WEEKS, T.MA_YEAR_WEEKS):
+            _scalar = ds.week_ma(_w, _win)
+            _tail = float(_p["ma"][_win].iloc[-1])
+            if _scalar is None:
+                assert math.isnan(_tail)
+            else:
+                assert math.isclose(_scalar, _tail, rel_tol=1e-12)
+        _z = ds.bollinger_z(_w)
+        assert math.isclose(_z, float(_p["boll_z"].iloc[-1]), rel_tol=1e-12)
+
+    def test_enough_weeks_no_miss(self):
+        _p = self._etf_row(260)[self._KEY]
+        assert _p["miss_reason"] == "" and _p["ma_miss"] == {} and _p["boll_z_miss"] == ""
+        assert _p["n_weeks"] == 260 and len(_p["close"]) == 260
+        assert _p["boll_period_weeks"] == T.BOLL_PERIOD_WEEKS
+
+    def test_short_history_marks_not_enough_per_line(self):
+        """30 週:年線畫不出（NOT_ENOUGH）,月線/季線/布林照畫 —— 逐條,不是整組砍掉。"""
+        _p = self._etf_row(30)[self._KEY]
+        assert _p["miss_reason"] == ""                    # 週收本身畫得出來
+        assert _p["ma_miss"] == {T.MA_YEAR_WEEKS: SS.MISS_NOT_ENOUGH}
+        assert _p["boll_z_miss"] == ""
+
+    def test_very_short_history_marks_boll_not_enough(self):
+        _p = self._etf_row(10)[self._KEY]
+        assert _p["boll_z_miss"] == SS.MISS_NOT_ENOUGH
+        assert _p["ma_miss"] == {T.MA_QUARTER_WEEKS: SS.MISS_NOT_ENOUGH,
+                                 T.MA_YEAR_WEEKS: SS.MISS_NOT_ENOUGH}
+
+    def test_flat_price_boll_is_no_input_not_not_enough(self):
+        """週數夠但整段零波動（std≈0）→ 布林 z 無有限值。
+
+        原因用 `MISS_NO_INPUT`（沿用 `light_235` 對「布林軸算不出來」的既有標法）,
+        **不是** `MISS_NOT_ENOUGH` —— 筆數是夠的,叫使用者「等時間累積」是錯的指引。
+        """
+        def _m(ticker, asset_kind="etf"):
+            d = _good_metrics(ticker)
+            _idx = pd.date_range("2022-01-07", periods=60, freq="W-FRI")
+            d["weekly_close"] = pd.Series([50.0] * 60, index=_idx)
+            return d
+        _p = svc.build_station_rows([{"ticker": "0056", "asset_class": T.ASSET_CORE}],
+                                    vix=18, metrics_fn=_m)[0][self._KEY]
+        assert _p["boll_z_miss"] == SS.MISS_NO_INPUT
+        assert _p["ma_miss"] == {}                        # 均線照畫得出來（平盤也是線）
+
+    def test_stock_row_is_not_applicable(self):
+        """個股列**結構上沒有**這張圖 → NOT_APPLICABLE,不是「資料不足 / 重跑就好」。"""
+        _p = svc.build_station_rows(
+            [{"ticker": "2330", "asset_class": T.ASSET_SATELLITE,
+              "asset_kind": T.KIND_STOCK}], vix=18,
+            metrics_fn=self._stock_metrics)[0][self._KEY]
+        assert _p["miss_reason"] == SS.MISS_NOT_APPLICABLE
+        assert _p["n_weeks"] == 0 and len(_p["close"]) == 0
+        # 給錯指引的那三個都不可以出現
+        assert _p["miss_reason"] not in (SS.MISS_NOT_ENOUGH, SS.MISS_NO_INPUT,
+                                         SS.MISS_FETCH_FAILED)
+
+    def test_error_row_reason_depends_on_kind(self):
+        """抓取失敗列:ETF → FETCH_FAILED;**個股 → 仍是 NOT_APPLICABLE**。
+
+        個股那張圖抓得成不成功都不存在,標 FETCH_FAILED 等於叫人去修一個修好也
+        不會出圖的東西（§1 錯的指引比沒有指引更危險）。
+        """
+        def _boom(ticker, asset_kind="etf"):
+            raise RuntimeError("boom")
+        _etf = svc.build_station_rows([{"ticker": "0050", "asset_class": T.ASSET_CORE}],
+                                      vix=None, metrics_fn=_boom)[0]
+        _stk = svc.build_station_rows(
+            [{"ticker": "2317", "asset_class": T.ASSET_SATELLITE,
+              "asset_kind": T.KIND_STOCK}], vix=None, metrics_fn=_boom)[0]
+        assert _etf[self._KEY]["miss_reason"] == SS.MISS_FETCH_FAILED
+        assert _stk[self._KEY]["miss_reason"] == SS.MISS_NOT_APPLICABLE
+        assert _etf["_miss_reason"] == SS.MISS_FETCH_FAILED   # 整列原因照舊,未被連動
+
+    def test_no_extra_fetch(self):
+        """零新增外部抓取:序列本來就在 metrics 裡,metrics_fn 仍只被呼叫一次/檔。"""
+        _calls = {"n": 0}
+        _inner = self._etf_metrics(60)
+        def _count(ticker, asset_kind="etf"):
+            _calls["n"] += 1
+            return _inner(ticker, asset_kind)
+        svc.build_station_rows([{"ticker": "0056", "asset_class": T.ASSET_CORE},
+                                {"ticker": "0050", "asset_class": T.ASSET_CORE}],
+                               vix=18, metrics_fn=_count)
+        assert _calls["n"] == 2
+
+    def test_lights_and_verdicts_unchanged(self):
+        """判燈欄位不因為多帶序列而改變（本塊只搬運,不動判定）。"""
+        _r = self._etf_row(60)
+        assert _r["健檢"] in ("🔴", "🟡", "🟢", "⚪")
+        _r2 = svc.build_station_rows(
+            [{"ticker": "0056", "name": "高股息", "asset_class": T.ASSET_CORE}],
+            vix=18, metrics_fn=self._etf_metrics(60))[0]
+        for _k in ("健檢", "235 燈號", "加碼金", "3-3-3", "建議動作"):
+            assert _r[_k] == _r2[_k]
