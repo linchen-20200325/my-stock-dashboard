@@ -173,6 +173,17 @@ st.markdown(f"""<style>
 .health-C{{background:linear-gradient(90deg,#2a0d0d,#0d1117);border:2px solid {TRAFFIC_RED};border-radius:12px;padding:16px;text-align:center;}}
 </style>""", unsafe_allow_html=True)
 
+# ── 全域列印樣式(@media print)────────────────────────────────────────
+# 使用者回報:瀏覽器列印(Ctrl+P)輸出任一分頁時內容切在第一頁。根因是
+# Streamlit 的捲動不在 document 上,而它自帶的 print CSS 只還原了一半。
+# 完整比對表、脆弱選擇器說明與兩個刻意的取捨,全部寫在該模組的 docstring。
+# 刻意**另開一次 st.markdown** 而不併進上面那段 f-string:print CSS 全是
+# `@media print{...}`,擠進 f-string 要把每個大括號都寫成雙括號,那正是
+# 「漏一個大括號 → 規則洩漏到螢幕」最容易發生的地方(該檔有測試釘住)。
+from src.ui.render.print_css import PRINT_CSS
+
+st.markdown(PRINT_CSS, unsafe_allow_html=True)
+
 # ════════════════════════════════════════════════════════════════
 # HELPERS
 # ════════════════════════════════════════════════════════════════

@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import html as _html
 from dataclasses import dataclass
 
 import plotly.graph_objects as go
@@ -68,6 +69,31 @@ CSS = """
 .v2-note{font-size:12.5px; opacity:.8; background:rgba(128,128,128,.10);
          border-radius:8px; padding:10px 12px; margin:8px 0 0;}
 .v2-dead{border:1px dashed rgba(138,142,150,.7); background:rgba(138,142,150,.10);}
+
+/* ── 第 3 層的列印雙軌 ────────────────────────────────────────────────
+   螢幕看互動表(`st.dataframe`,點一列右側就地展開);列印看純 HTML 表。
+
+   為什麼非得兩份:`st.dataframe` 走 glide-data-grid,整張表畫在 <canvas>
+   上而且是**虛擬捲動** —— 捲出視窗的那幾列**根本不在 DOM 裡**。這件事
+   CSS 救不了(沒有東西可以被印),所以列印時必須另外給一份真的 HTML 表。
+
+   `.st-key-v2_detail_table` 是 Streamlit 把 widget 的 `key=` 轉成的 class
+   (`st.dataframe(key="v2_detail_table")` → 該元素容器帶 `st-key-` 前綴的
+   class)。用它**只收掉這一張表**,而不是 `[data-testid="stDataFrame"]`
+   全域收 —— 全域收會連別的分頁(個股組合批次表等)的主表一起印不出來。
+   若部署端 Streamlit 舊到不產生這個 class:列印會同時出現「截斷的互動表」
+   與「完整的 HTML 表」—— 醜,但資料仍然完整,不會少印東西。 */
+.v2-print-only{display:none;}
+@media print{
+  .v2-print-only{display:block!important;}
+  .st-key-v2_detail_table{display:none!important;}
+  .v2-print-cap{font-size:12px; margin:0 0 6px;}
+  .v2-print-tbl{border-collapse:collapse; width:100%; font-size:11.5px;}
+  .v2-print-tbl th,.v2-print-tbl td{border:1px solid #999; padding:3px 6px;
+                                    text-align:left; vertical-align:top;}
+  .v2-print-tbl th{font-weight:700;}
+  .v2-print-tbl tr{break-inside:avoid;}
+}
 </style>
 """
 
@@ -126,6 +152,41 @@ def threshold_text(spec: DangerSpec) -> str:
     if spec.red is not None:
         bits.append(f"紅 {arrow}{n(spec.red)}")
     return " / ".join(bits) or "—"
+
+
+def print_table_html(table: dict[str, list], caption: str) -> str:
+    """把 `st.dataframe` 那份欄位 dict 原樣轉成一張**純 HTML** 表(列印用)。
+
+    ⚠️ **本函式不做任何篩選、排序、格式化或補值。** 它吃什麼就畫什麼 ——
+    參數 `table` 必須就是 `tab_macro_v2.visible_table()` 回傳、同一刻餵給
+    `st.dataframe` 的**那一個 dict**。
+
+    為什麼要寫得這麼死:同一頁上兩張表如果各自組資料,遲早會分岔,而分岔
+    的樣子是「畫面說 A、印出來是 B」,兩邊都看起來很正常(§1)。把「組表」
+    這件事留在 `visible_table()` 一處、這裡只做 dict → HTML 的機械轉換,
+    分岔就在呼叫端寫不出來。
+
+    `caption` 由 caller 傳入(要把**目前的篩選條件**講出來)—— 一張印出來
+    只有 3 列的表,若沒說「16 盞裡篩了 3 盞」,讀的人會以為只有 3 盞燈。
+
+    值一律 `html.escape`:內容目前全部來自 SSOT(BAND_META / STATE_META /
+    DangerSpec),沒有使用者輸入,但把轉義做在唯一的出口比較不會出事。
+    """
+    cols = list(table)
+    n = len(table[cols[0]]) if cols else 0
+    head = "".join(f"<th>{_html.escape(str(c))}</th>" for c in cols)
+    body = "".join(
+        "<tr>" + "".join(
+            f"<td>{_html.escape(str(table[c][i]))}</td>" for c in cols
+        ) + "</tr>"
+        for i in range(n)
+    )
+    return (
+        '<div class="v2-print-only">'
+        f'<p class="v2-print-cap">{_html.escape(caption)}</p>'
+        f'<table class="v2-print-tbl"><thead><tr>{head}</tr></thead>'
+        f'<tbody>{body}</tbody></table></div>'
+    )
 
 
 def pill(text: str, color: str, hatch: bool = False) -> str:

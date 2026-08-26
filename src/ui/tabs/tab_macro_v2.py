@@ -48,6 +48,7 @@ from src.ui.render.macro_v2_cards import (
     STATE_META,
     Row,
     fmt_value,
+    print_table_html,
     render_bucket_cards,
     render_chart_card,
     render_detail,
@@ -323,6 +324,21 @@ def empty_hint(*, chip: str, query: str, total: int) -> str:
             f"{fix}「{CHIP_LABELS[_CHIP_ALL]}」即可看回全部 {total} 盞燈。")
 
 
+def print_caption(*, chip: str, query: str, shown: int, total: int) -> str:
+    """列印版表格的抬頭 —— **必須把目前的篩選條件講出來**。
+
+    §1:一張印出來只有 3 列的表,若沒寫「16 盞裡篩了 3 盞」,拿到紙本的人
+    (含幾個月後的自己)會理所當然地以為總共只有 3 盞燈。螢幕上還有 chip
+    與搜尋框可以看出自己篩了什麼,紙上**什麼都沒有** —— 所以條件要跟著印。
+    """
+    bits = [f"分類「{CHIP_LABELS.get(chip, chip)}」"]
+    q = query.strip()
+    if q:
+        bits.append(f"搜尋「{q}」")
+    return (f"第 3 層 · 全部明細 —— 顯示 {shown} / {total} 盞燈"
+            f"({'、'.join(bits)})")
+
+
 def _session_series(inputs, key: str):
     """從當輪抓取結果取記憶體內短窗序列。取不到回 (None, None)。
 
@@ -468,6 +484,42 @@ def render_tab_macro_v2() -> None:
             sel = None
             st.warning(empty_hint(chip=chip, query=query, total=len(rows)))
         st.caption(f"顯示 {len(visible)} / {len(rows)} 盞燈")
+
+        # ── 列印雙軌:螢幕看上面那張互動表,列印看這一份純 HTML 表 ──────
+        # 為什麼一定要多畫一份:`st.dataframe` 走 glide-data-grid,整張表畫在
+        # <canvas> 上而且**虛擬捲動** —— 捲出視窗的列根本不在 DOM 裡,列印時
+        # 沒有東西可以被印出來。這是 CSS 救不了的,只能另外給一份真表格。
+        #
+        # **為什麼選「常駐隱藏」而不是加一顆「列印版」toggle**:
+        #   · 使用者的動作就是直接按 Ctrl+P。toggle 只幫得到「知道要先去點
+        #     那顆 toggle」的人;沒點就按 Ctrl+P 的人拿到的還是壞掉的輸出 ——
+        #     那正是這次要修的那個 bug,等於沒修。
+        #   · toggle 是一個 widget,切一次 = 一次 rerun = app.py 七個頂層 tab
+        #     的 body 全部重跑(STATE.md v19.132 產業熱力圖冷抓事故的同一個
+        #     性質)。常駐隱藏零互動、零 rerun。
+        #   · 互動表與右側面板完全不動,既有的「面板顯示的就是表格那一列」
+        #     守衛一行都不用改。
+        #
+        # **餵的是同一個 `table`**(= 上面 `st.dataframe` 吃的那一個 dict),
+        # 不是重新篩一次 —— 兩張表要分岔,得先有人在這裡換掉這個變數。
+        #
+        # **跟著篩選走**:印出來的必須就是螢幕上看到的那幾列。若印全部 16 盞,
+        # 同一頁的螢幕與紙本會說不一樣的話(§1);抬頭會把篩選條件寫進紙裡,
+        # 所以「只有 3 列」不會被誤讀成「總共只有 3 盞燈」。想印全部 → 把
+        # chip 切回「全部」再印,那是一次點擊。
+        #
+        # 螢幕代價:多一個 `display:none` 的元素容器,在這一欄底部留下一段
+        # 約 1rem 的空白(Streamlit 垂直區塊是 flex + gap,零高度子元素仍佔一個
+        # gap)。它在**欄位底部的空白區**,沒有任何內容因此位移。
+        if visible:
+            st.markdown(
+                print_table_html(
+                    table,
+                    print_caption(chip=chip, query=query,
+                                  shown=len(visible), total=len(rows)),
+                ),
+                unsafe_allow_html=True,
+            )
 
     with panel, st.container(border=True):
         idxs = (sel.selection.rows if sel and getattr(sel, "selection", None)
