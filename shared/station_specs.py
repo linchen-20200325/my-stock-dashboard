@@ -244,7 +244,25 @@ STATION_SPECS: list[StationSpec] = [
     StationSpec(
         key=KEY_STOCK_KD, label="KD 指標", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
-        threshold_text="高檔鈍化 / 黃金交叉 / 死亡交叉",
+        # 2026-08-26:原文寫「高檔鈍化 / 黃金交叉 / 死亡交叉」—— 把**兩組不同的值**
+        # 混成一列,而且兩組都沒列全:
+        #   · 鈍化 / 背離（`analyze_kd_state` 的 `label`）實際有四種,可並列,
+        #     原文只列了「高檔鈍化」,漏掉低檔鈍化 / 頂背離 / 底背離 ——
+        #     使用者在畫面上看到「頂背離」,回頭查門檻欄卻查無此項。
+        #   · 黃金 / 死亡交叉（`kd_cross_state` 的 `cross`）根本**不在這一欄的值裡**:
+        #     這盞燈的「值」印的是 `KD明細`（K/D 數字 + label）,交叉印在下方
+        #     「其他明細」的「KD交叉」。把它列在這裡等於指著一個不在這裡的東西。
+        # ⚠️ 只改敘述:`analyze_kd_state` / `kd_cross_state` 一字未動。
+        # ⚠️ 刻意不寫數字門檻（K 連 N 日 ≥/≤ 某值、背離回看 N 日）:那幾個常數住在
+        #    `shared/signal_thresholds.py`,本檔目前只 import `T` / `UV`,為了幾個
+        #    數字新增 import 已超出「只改敘述字串」的範圍 —— 要加另案。
+        threshold_text=(
+            "鈍化 / 背離（可同時成立，畫面以「／」並列）："
+            "高檔鈍化 · 低檔鈍化 · 頂背離 · 底背離；皆不成立 → 「無」。"
+            "這盞燈只描述狀態，不判 🟢🟡🔴。"
+            "（黃金交叉 / 死亡交叉是**另一組**值 —— K、D 相鄰兩日的交叉，"
+            "不在這一欄，印在下方「其他明細」的「KD交叉」）"
+        ),
         source="個股 360 日 OHLC",
         why="短線進出場的參考，不決定要不要續抱。",
     ),
@@ -252,7 +270,13 @@ STATION_SPECS: list[StationSpec] = [
         key=KEY_STOCK_SWAP, label="汰換建議", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
         threshold_text="🔴 換出 / 🟡 留意 / 🟢 續抱",
-        source="財報體檢 + 趨勢 + KD 匯總",
+        # 2026-08-26:原文寫「財報體檢 + 趨勢 + KD 匯總」—— 與同一張卡下方的 `why`
+        # （「它自己是一條獨立的判定，不是把上面三盞燈取最嚴重的那一盞」）**正面矛盾**。
+        # 明細面板依序印「值 / 門檻 / 來源 / … / why」,兩句相隔兩個元素,使用者一眼
+        # 就看得到同一張卡自己打自己。上一輪改了 `why` 卻沒改 `source`,謊只搬了家。
+        # 新文字照 `assess_stock` 的階梯如實寫「吃什麼、各自扮什麼角色」,
+        # 並避開「匯總 / 取最嚴重」這種會讓人以為它是彙總燈的字眼。
+        source="財報體檢評等（主判）· 本業盈轉虧旗標（提前預警）· KD 短線狀態（調整急迫度）",
         # 2026-08-26:原文寫「上面三盞燈的結論。這是彙總，不是第四個獨立判斷」——
         # 與實作不符。`assess_stock` 裡的 `swap_level` 是一條**獨立的 if/elif 階梯**
         # （財報 grade 為主 · `is_breakdown` 提前預警 · KD 修飾急迫度），
