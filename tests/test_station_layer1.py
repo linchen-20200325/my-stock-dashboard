@@ -3,19 +3,29 @@
 ## 這批測試守什麼
 
 1. **N/M 的定義**（防呆 1）—— 分子要「live **且** 有 level」兩個條件同時成立;
-   分母只扣「結構上不適用」,**不扣**「今天沒抓到」。這兩件事各自都出過事:
-   - 只看 `state == live` → 個股 KD 被算進去(它資料通、但從不判等級)→ **高估**;
-   - 分母扣掉算不出來的燈 → 資料越爛分數越高,正好是這個指標要防的東西。
-2. **巡航 gate 做在顯示層**(防呆 2)—— L2 `suggest_action` 一個字都不准動,
+   分母扣掉「結構上不適用」與「依規格就不出等級」兩種燈,**不扣**「今天沒抓到」。
+   這幾件事各自都出過事:
+   - 只看 `state == live` → 個股 KD 被算進分子(它資料通、但從不判等級)→ **高估**;
+   - 分母扣掉算不出來的燈 → 資料越爛分數越高,正好是這個指標要防的東西;
+   - KD 留在分母 → 只要有一檔個股,那一列就永遠不可能滿,巡航變成印不出來的死碼
+     (2026-08-26 user 裁示移出分母;它只離開分母,沒離開畫面)。
+2. **同一頁只准有一個數字** —— 第 1 層結論卡與第 3 層燈格牆 / 選列表 / 明細面板
+   共用同一把尺(`judged_count`)。改動前第 3 層走寬鬆的 `watch_count`,
+   2330 在同一頁印出 2/4 與 3/4 兩個數字。
+3. **巡航 gate 做在顯示層**(防呆 2)—— L2 `suggest_action` 一個字都不准動,
    因為它同時餵著主表「建議動作」欄與 `scripts/push_holdings_daily.py` 的
    **LINE 每日推播**。這裡釘住「兩句話刻意不同字」,避免有人日後「順手統一」
    而把推播文案一起改掉。
-3. **金額的單位**（§4.1）—— 張 → 股要乘 `SHARES_PER_LOT`;漏乘 = 1000 倍低估。
-4. **兩套刻度表**只揭露不改判定,且引用的門檻來自 L0 SSOT(§3.3)。
+4. **金額的單位**（§4.1）—— 張 → 股要乘 `SHARES_PER_LOT`;漏乘 = 1000 倍低估。
+5. **兩套刻度表**只揭露不改判定,且引用的門檻來自 L0 SSOT(§3.3)。
 
-⚠️ 本檔只測純函式與文案,**不啟動 Streamlit runtime、不做網路 I/O**。
+⚠️ 本檔只測純函式與文案,**不啟動 Streamlit runtime、不做網路 I/O**
+(渲染那幾條用一個只收字串的假 `st`,見 `_CapturingST`)。
 """
 from __future__ import annotations
+
+import re
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -91,14 +101,23 @@ class TestJudgedCountDefinition:
         assert SC.is_fully_judged(()) is False
 
     def test_denominator_is_dynamic_not_hardcoded(self):
-        """ETF 8 盞、個股 4 盞 —— 呼叫端不得寫死總數。"""
+        """ETF 8 盞、個股 4 盞畫在牆上 —— 但個股分母是 **3**(KD 不進分母)。
+
+        2026-08-26 user 裁示:結構上永遠不出等級的燈視同不適用,移出分母。
+        燈的**張數**沒變(牆上還是 4 格,KD 照畫、照點得開),變的是分母。
+        呼叫端一律不得寫死總數 —— 混合持股的總格數隨組合成分變。
+        """
         assert len(SS.specs_for(T.KIND_ETF)) == 8
         assert len(SS.specs_for(T.KIND_STOCK)) == 4
         _etf = SC.judged_count(ds.missing_light_cells(T.KIND_ETF,
                                                      reason=SS.MISS_FETCH_FAILED))
         _stk = SC.judged_count(ds.missing_light_cells(T.KIND_STOCK,
                                                       reason=SS.MISS_FETCH_FAILED))
-        assert _etf == (0, 8) and _stk == (0, 4)
+        assert _etf == (0, 8)
+        assert _stk == (0, 3), "個股分母應為 3(4 盞扣掉不出等級的 KD)"
+        # 燈**沒有**從畫面上消失 —— 這條是硬要求,別把「移出分母」做成「移出畫面」。
+        assert len(ds.missing_light_cells(T.KIND_STOCK,
+                                          reason=SS.MISS_FETCH_FAILED)) == 4
 
 
 class TestAggregatesShareOneDenominator:
@@ -114,10 +133,198 @@ class TestAggregatesShareOneDenominator:
         assert (_n, _m) == (1, 2)
         assert sum(SC.tally_states(_rows).values()) == _m
 
+    def test_tally_matches_the_denominator_on_real_cells(self):
+        """用**真的** assessment 再驗一次 —— 假格子的 key 不在規格表裡,
+        驗不到「依規格不出等級」那條排除規則(KD)。
+
+        兩邊口徑一旦分家,卡②會同時印出「N/11 盞給得出判定」與一排加起來
+        是 12 的四態分佈 —— 同一張卡自己打自己。
+        """
+        _k = TestKdDeclaredNotToEmitLevels
+        _rows = [_k._etf_cells(), _k._stock_cells()]
+        _n, _m = SC.aggregate_judged(_rows)
+        assert (_n, _m) == (10, 11)
+        assert sum(SC.tally_states(_rows).values()) == _m
+
     def test_tally_always_has_all_four_keys(self):
         _t = SC.tally_states([(_Cell(),)])
         assert set(_t) == {SS.STATE_LIVE, SS.STATE_DEGRADED,
                            SS.STATE_MISSING, SS.STATE_UNWIRED}
+
+
+class TestKdDeclaredNotToEmitLevels:
+    """個股 KD:**結構上永遠不出等級** → 移出分母（user 2026-08-26 裁示）。
+
+    這一組守的是「移出分母」與「移出畫面」是兩件事,以及「不准為了讓分母好看
+    而在畫面上寫一句假話」。
+    """
+
+    @staticmethod
+    def _stock_cells():
+        """一檔資料齊全的個股(財報 A、KD 有值、有上季可比)。"""
+        return ds.light_cells(ds.assess_stock(
+            ticker="2330", name="台積電", asset_class=T.ASSET_SATELLITE,
+            mj_grade="A", mj_score_pct=88, mj_headline="體質佳", mj_fail_items=[],
+            kd={"k": 70.0, "d": 65.0, "label": "無"},
+            trend={"verdict": "improving"}))
+
+    @staticmethod
+    def _etf_cells():
+        """一檔什麼都算得出來的 ETF —— 8 盞全部給得出判定。"""
+        _idx = pd.date_range("2024-01-07", periods=60, freq="W-SUN")
+        return ds.light_cells(ds.assess_holding(
+            ticker="0050.TW", name="台灣50", asset_class=T.ASSET_CORE,
+            weekly_close=pd.Series([100.0] * 60, index=_idx),
+            vix=17.0, premium_pct=0.2, sharpe=1.1, total_return_1y_pct=12.0,
+            annual_yield_pct=4.0, inception_years=6.0, ann_return_3y_pct=9.0,
+            cum_return_3y_pct=30.0, peer_ranks={3: 0.2, 6: 0.2, 12: 0.2}))
+
+    def test_kd_leaves_the_denominator_but_not_the_wall(self):
+        """分母 3、格子 4 —— 少的是分母,不是燈。"""
+        _cells = self._stock_cells()
+        assert len(_cells) == 4, "KD 不准從燈格牆上消失"
+        _kd = [c for c in _cells if c.key == SS.KEY_STOCK_KD]
+        assert len(_kd) == 1 and _kd[0].state == SS.STATE_LIVE, \
+            "KD 仍然「在看」(K、D 都抓到了),只是不給判定"
+        assert SC.judged_count(_cells) == (2, 3)
+
+    def test_kd_is_not_moved_out_by_calling_it_not_applicable(self):
+        """§1:不准借用「不適用」的文案 —— 那對 KD 是假話(它對個股完全適用)。"""
+        _spec = SS.SPECS_BY_KEY[SS.KEY_STOCK_KD]
+        assert _spec.emits_level is False and _spec.no_level_reason.strip()
+        _kd = next(c for c in self._stock_cells() if c.key == SS.KEY_STOCK_KD)
+        assert _kd.miss_reason != SS.MISS_NOT_APPLICABLE, \
+            "用 MISS_NOT_APPLICABLE 把 KD 移出分母 = 在畫面上寫假話"
+        assert SS.MISS_TEXT[SS.MISS_NOT_APPLICABLE] not in _spec.no_level_reason
+        assert "還沒有判定規則" in _spec.no_level_reason
+
+    def test_a_light_that_claims_to_emit_levels_must_actually_emit_one(self):
+        """反向守衛:宣告 `emits_level=True` 的燈,亮著(live)就必須有等級。
+
+        這條是把旗標翻回 True 之後的保險 —— 哪天有人替 KD 接上判燈邏輯、
+        把旗標改回 True 卻沒真的產出等級,分母會長回來而分子長不回來,
+        巡航又會變成死碼。這裡當場抓到。
+        """
+        for _cells in (self._etf_cells(), self._stock_cells()):
+            for _c in _cells:
+                if _c.state != SS.STATE_LIVE:
+                    continue
+                if not SS.SPECS_BY_KEY[_c.key].emits_level:
+                    continue
+                assert _c.level != ds.LEVEL_UNJUDGED, \
+                    f"{_c.key} 宣告會出等級,實際亮著卻沒有等級"
+
+    def test_cruise_is_reachable_for_an_etf_only_portfolio(self):
+        """巡航分支**真的印得出來** —— 不是死碼。"""
+        _cells = self._etf_cells()
+        assert SC.is_fully_judged(_cells) is True
+        _n, _m = SC.aggregate_judged([_cells])
+        assert SC.cruise_or_gap(_n, _m, all_rows_judged=True) == SC.CRUISE_TEXT
+
+    def test_stock_rows_are_still_blocked_by_the_degraded_trend_light(self):
+        """⚠️ **已知殘留缺口,已回報 user(2026-08-26),不是預設接受的設計。**
+
+        KD 移出分母後,個股列仍然不可能「每盞都給得出判定」:財報趨勢那盞燈在
+        規格表被標為「門檻已失準」(只比兩季),有值時四態是 degraded 而非 live,
+        分子的條件是 live → 它永遠不進分子,但留在分母裡。
+        也就是說:**只要組合裡有個股,巡航那句話仍然印不出來**。
+
+        要不要讓「門檻已失準但有等級」算進分子,是語意決定(degraded 的等級算不算
+        數),不是這次授權的範圍 —— 故照實釘住現況。哪天 user 裁示改了,這條會紅,
+        改的人必須有意識地改它,而不是默默地讓一個已知缺口消失。
+        """
+        _cells = self._stock_cells()
+        _trend = next(c for c in _cells if c.key == SS.KEY_STOCK_TREND)
+        assert _trend.state == SS.STATE_DEGRADED and _trend.level != ds.LEVEL_UNJUDGED
+        assert SC.is_fully_judged(_cells) is False
+        assert SC.cruise_or_gap(2, 3, all_rows_judged=False) != SC.CRUISE_TEXT
+
+
+class _CapturingST:
+    """假的 `st` —— 只收 markdown 文字。**不啟動 Streamlit runtime。**"""
+
+    def __init__(self) -> None:
+        self.md: list[str] = []
+
+    def markdown(self, body="", **_kw) -> None:
+        self.md.append(str(body))
+
+    def error(self, *_a, **_kw) -> None:
+        pass
+
+    def caption(self, *_a, **_kw) -> None:
+        pass
+
+    def text(self) -> str:
+        return " ".join(self.md)
+
+
+class TestBothLayersPrintTheSameNumber:
+    """**本次改動真正的交付物**:同一組資料餵第 1 層與第 3 層 → 同一組數字。
+
+    2026-08-26 前:第 3 層走寬鬆的 `watch_count`(只看四態 live)、第 1 層走
+    嚴格的 `judged_count`,實測 2330 在同一頁印出 3/4 與 2/4 —— 兩個都不算錯,
+    但使用者只會讀成「有一邊算錯了」。user 裁示第 3 層改用嚴格計數。
+
+    這裡**不是**斷言 `judged_count == judged_count`(那是廢話),而是去讀
+    第 3 層渲染出來的 HTML 字串,確認它印的就是第 1 層那把尺算出來的數字 ——
+    有人把 `render_light_wall` 改回 `watch_count` 就會紅。
+    """
+
+    def _cells(self):
+        _k = TestKdDeclaredNotToEmitLevels
+        return _k._etf_cells(), _k._stock_cells()
+
+    def test_light_wall_prints_the_layer1_numbers(self, monkeypatch):
+        _etf, _stk = self._cells()
+        _fake = _CapturingST()
+        monkeypatch.setattr(SC, "st", _fake)
+        SC.render_light_wall([("0050", "台灣50", _etf), ("2330", "台積電", _stk)])
+        _pairs = [(int(_a), int(_b))
+                  for _a, _b in re.findall(r"(\d+)/(\d+) 有判定", _fake.text())]
+        assert _pairs == [SC.judged_count(_etf), SC.judged_count(_stk)]
+        assert _pairs == [(8, 8), (2, 3)]
+        # 逐列相加 = 第 1 層卡②印的那個 N/M。
+        assert (sum(_n for _n, _ in _pairs), sum(_m for _, _m in _pairs)) \
+            == SC.aggregate_judged([_etf, _stk]) == (10, 11)
+        # 舊的寬鬆計數不准再出現在這一層(它會印「N/M 在看」)。
+        assert not re.search(r"\d+/\d+ 在看", _fake.text())
+
+    def test_detail_panel_prints_the_same_number_as_the_wall(self, monkeypatch):
+        _, _stk = self._cells()
+        _fake = _CapturingST()
+        monkeypatch.setattr(SC, "st", _fake)
+        SC.render_holding_detail("2330", "台積電", _stk)
+        _m = re.search(r"(\d+)/(\d+) 盞有判定", _fake.text())
+        assert _m, "明細面板沒有印出 N/M"
+        assert (int(_m.group(1)), int(_m.group(2))) == SC.judged_count(_stk) == (2, 3)
+
+    def test_detail_panel_explains_why_the_denominator_is_smaller(self, monkeypatch):
+        """少一盞不是算錯 —— 畫面必須講得出「這盞燈還沒有判定規則」。"""
+        _, _stk = self._cells()
+        _fake = _CapturingST()
+        monkeypatch.setattr(SC, "st", _fake)
+        SC.render_holding_detail("2330", "台積電", _stk)
+        assert "這盞燈還沒有判定規則" in _fake.text()
+        assert SS.SPECS_BY_KEY[SS.KEY_STOCK_KD].no_level_reason in _fake.text()
+        # 不准借用「不適用」那句文案。
+        assert SS.MISS_TEXT[SS.MISS_NOT_APPLICABLE] not in _fake.text()
+
+    def test_layer3_table_column_uses_the_same_counter(self):
+        """L5 選列表那一欄(第三個呼叫點)同樣不准留著寬鬆計數。
+
+        這一欄住在 `st.dataframe` 裡,沒有 markdown 可以讀 → 改用原始碼掃描
+        (本 repo 既有做法,見 `test_station_empty_state.py`)。
+        """
+        _src = (Path(__file__).resolve().parents[1]
+                / "src" / "ui" / "etf" / "etf_tab_dividend_station.py"
+                ).read_text(encoding="utf-8")
+        # 只禁**用法**(呼叫 / import),不禁字面 —— 檔內註解要講得出「以前用的是
+        # 哪一把尺、為什麼換掉」,連提都不准提會逼人把歷史刪掉。
+        assert "watch_count(" not in _src, "第 3 層仍在呼叫寬鬆計數"
+        assert "    watch_count," not in _src, "第 3 層仍 import 寬鬆計數"
+        assert 'judged_count(r.get("_lights")' in _src
+        assert '"有判定": [' in _src, "欄名要跟著數字的意思改(掛舊名賣新東西 = §1)"
 
 
 class TestCruiseGate:

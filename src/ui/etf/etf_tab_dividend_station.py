@@ -30,6 +30,7 @@ from src.ui.render.station_cards import (
     aggregate_judged,
     cruise_or_gap,
     is_fully_judged,
+    judged_count,
     render_conclusion_card,
     render_credibility_card,
     render_holding_detail,
@@ -38,7 +39,6 @@ from src.ui.render.station_cards import (
     render_todo_card,
     render_two_scales,
     tally_states,
-    watch_count,
 )
 
 # 戰情表分兩區（§ user 2026-08）：ETF 走定期定額 235/3-3-3、個股走 財報體檢 + KD。
@@ -436,6 +436,8 @@ def _render_light_detail(rows: list[dict]) -> None:
         "一盞「亮著綠燈但其實沒有資料」的燈,填色會是灰的、而且帶斜紋。"
         "⚠️ 235 加碼燈的紅／黃／綠是**跌多深、該加多少碼**,不是體質好壞 —— "
         "它的 🔴 是「崩盤／深水加碼」訊號。點進去每一盞燈都會寫明白。"
+        "　「有判定」的分母**比格子數少**是正常的:結構上不適用的燈(個股沒有折溢價)、"
+        "以及還沒有判燈規則的燈(個股 KD)不算進分母 —— 點那一盞燈會寫明是哪一種。"
     )
     render_legend()
 
@@ -446,14 +448,18 @@ def _render_light_detail(rows: list[dict]) -> None:
 
     _tbl, _panel = st.columns([7, 5], gap="medium")
     with _tbl:
-        _n_m = [watch_count(r.get("_lights") or ()) for r in _rows]
+        # 「有判定」與燈格牆、與第 1 層結論卡**同一把尺**(`judged_count`)——
+        # 三處印同一件事,不准有三個數字(user 2026-08-26 裁示)。
+        # 原本這裡用寬鬆的 `watch_count`(只看四態 live),2330 在同一頁會出現
+        # 第 1 層 2/4、這裡 3/4 兩個數字。
+        _n_m = [judged_count(r.get("_lights") or ()) for r in _rows]
         _sel = st.dataframe(
             {
                 "代號": [str(r.get("代號", "")) for r in _rows],
                 "名稱": [str(r.get("名稱", "")) for r in _rows],
                 "種類": [str(r.get("種類", "")) for r in _rows],
                 "健檢": [str(r.get("健檢", "")) for r in _rows],
-                "在看": [f"{_n}/{_m}" for _n, _m in _n_m],
+                "有判定": [f"{_n}/{_m}" for _n, _m in _n_m],
             },
             hide_index=True, width="stretch",
             on_select="rerun", selection_mode="single-row",

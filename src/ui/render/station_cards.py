@@ -310,49 +310,89 @@ CSS = _CSS_TEMPLATE.replace("__ORANGE__", TRAFFIC_ORANGE)
 # 三、純函式(無 st.*、無 I/O,可單測)
 # ══════════════════════════════════════════════════════════════════════
 
+def _in_judged_denominator(cell) -> bool:
+    """這一格算不算進「給得出判定」的分母。**分子分母共用同一個判準。**
+
+    兩種格子不進分母,理由不同,兩種都**不是**「今天沒抓到」:
+
+      1. `miss_reason == MISS_NOT_APPLICABLE` —— 這類持股結構上沒有這盞燈
+         (個股沒有折溢價)。它永遠不會有值。
+      2. 規格表宣告 `emits_level=False` —— 這盞燈**依規格就不出等級**
+         (現況只有個股 KD:K、D 都在,但沒有判燈規則)。它會亮、會被看,
+         只是不會給等級。留在分母裡的後果不是「分數低一點」,而是
+         **每一列個股永遠差一盞** → 巡航那句話永遠印不出來(user 2026-08-26
+         裁示移出分母,理由見規格表該盞燈的 `no_level_reason`)。
+
+    ⚠️ 「今天沒抓到」**照樣留在分母裡**把分數拉低 —— 那正是這個指標存在的理由。
+    ⚠️ 規格表查不到的 key(上下游漂移)**算進分母**:寧可分數偏低,也不要因為
+    一個沒人發現的 key 漂移而讓畫面顯示可信度更高(§1)。
+    """
+    if cell.miss_reason == SS.MISS_NOT_APPLICABLE:
+        return False
+    _spec = SS.SPECS_BY_KEY.get(cell.key)
+    return _spec is None or _spec.emits_level
+
+
 def watch_count(cells) -> tuple[int, int]:
     """一列的「N/M 在看」—— N = 四態為 `live` 的燈數,M = 這一列的總燈數。
 
     ⚠️ 分母是**整列的燈**,不是「算得出來的燈」。抓取失敗的列同樣有 M 盞
     (L2 `missing_light_cells` 就是為此存在),否則分母會悄悄變小、畫面反而
     顯示可信度更高(§1)。
+
+    ⚠️ **2026-08-26 起 production 沒有呼叫端了**(改動後 grep 只剩測試引用):
+    第 3 層燈格牆 / 選列表 / 明細面板三處原本用這把寬鬆的尺,與第 1 層的
+    `judged_count` 在同一頁印出差 1 的兩個數字(實測 2330:第 1 層 2/4、
+    第 3 層 3/4)。user 2026-08-26 裁示三處一律改用嚴格計數,矛盾消除。
+    本函式**刻意保留不刪**(要不要刪由 user 決定);四態分佈條的「運作中」
+    那一格仍然表達同一件事,走 `tally_states`。
+    ⚠️ 原文這裡寫著「與 `judged_count` 是兩把不同的尺,**刻意的**」——
+    那句話在畫面上已經不成立,故刪除;留著會讓下一個人以為同頁兩個數字
+    本來就該不一樣。
     """
     _cs = tuple(cells or ())
     return sum(1 for c in _cs if c.state == SS.STATE_LIVE), len(_cs)
 
 
 def judged_count(cells) -> tuple[int, int]:
-    """一列的「N/M **給得出判定**」。⚠️ **與 `watch_count` 是兩把不同的尺,刻意的。**
+    """一列的「N/M **給得出判定**」。**第 1 層與第 3 層一律用這一把尺。**
 
     ```
-    分母 = 全部燈數 − 結構上不適用(miss_reason == MISS_NOT_APPLICABLE)
-    分子 = state == live  **且**  level 非空(!= LEVEL_UNJUDGED)
+    分母 = 全部燈數 − 結構上不進分母的(見 `_in_judged_denominator`)
+    分子 = 分母內  且  state == live  且  level 非空(!= LEVEL_UNJUDGED)
     ```
 
     ## 為什麼分子要多一個「level 非空」的條件
 
-    `watch_count` 只看 `state == live`,而 live 的語意是「**這盞燈的資料管道通**」——
-    它不保證那盞燈**產出過等級**。個股的 KD 就是活生生的例子:`kd_k` / `kd_d` 都在
-    → `classify_state` 判 live,但 `assess_stock` **從來沒有為 KD 判過等級**
-    (L2 `_stock_light_cells` 填的是 `LEVEL_UNJUDGED`,並在該處寫明理由)。
-    只用 live 當分子,一檔個股會被算成「4 盞裡 3 盞可用」,而實際給得出判定的
-    只有汰換建議那一盞。**「在看」≠「有判定」**(user 2026-08-26 裁示)。
+    `state == live` 的語意是「**這盞燈的資料管道通**」—— 它不保證那盞燈
+    **產出過等級**。「在看」≠「有判定」(user 2026-08-26 裁示)。
+    這個條件同時是**反向守衛**:規格表宣告 `emits_level=True` 的燈若真的沒出
+    等級,它會如實把分數拉低,而不是被當成「有判定」蒙混過去
+    (`tests/test_station_layer1.py` 另有一條測試直接釘住這件事)。
+
+    ## 個股 KD 為什麼不在分母裡(2026-08-26 改)
+
+    KD 資料通(live)、但**依規格就不出等級**(規格表 `emits_level=False`)。
+    原本把它留在分母、只是不進分子 —— 後果是**只要組合裡有任何一檔個股,
+    那一列就永遠不可能「每盞都給得出判定」**,`is_fully_judged` 恆為 False,
+    巡航那句話變成永遠印不出來的死碼。user 裁示:結構上永遠不出等級的燈
+    視同不適用,移出分母(個股分母 4 → 3)。
+    ⚠️ 它**只離開分母,沒離開畫面** —— 燈格牆照畫、明細照開,而且明細面板會
+    印出「這盞燈還沒有判定規則」把理由講清楚(**不借用**「不適用」的文案,
+    那對 KD 是假話)。
 
     ## 為什麼分母**不**扣掉「今天沒抓到」的燈
 
-    只扣**結構上不適用**的(個股沒有折溢價這盞燈,扣掉是對的 —— 它永遠不會有)。
     「這輪沒抓到」必須**留在分母裡把分數拉低** —— 那正是這個指標存在的理由。
     把算不出來的從分母移走,畫面會在資料最爛的時候顯示可信度最高(§1)。
 
-    ⚠️ 分母是**動態**的:ETF 8 盞、個股 4 盞(`SS.specs_for(kind)`)。呼叫端
-    **不得**寫死任何總數 —— 混合持股的總格數會隨組合成分改變。
+    ⚠️ 分母是**動態**的:ETF 8 盞、個股 3 盞(4 盞扣掉 KD)。呼叫端**不得**
+    寫死任何總數 —— 混合持股的總格數會隨組合成分改變。
     """
-    _cs = tuple(cells or ())
-    _denom = sum(1 for c in _cs if c.miss_reason != SS.MISS_NOT_APPLICABLE)
+    _cs = tuple(c for c in (cells or ()) if _in_judged_denominator(c))
     _num = sum(1 for c in _cs
-               if c.state == SS.STATE_LIVE and c.level != LEVEL_UNJUDGED
-               and c.miss_reason != SS.MISS_NOT_APPLICABLE)
-    return _num, _denom
+               if c.state == SS.STATE_LIVE and c.level != LEVEL_UNJUDGED)
+    return _num, len(_cs)
 
 
 def is_fully_judged(cells) -> bool:
@@ -380,14 +420,15 @@ def tally_states(cells_per_row) -> dict[str, int]:
     (缺鍵讓呼叫端 `.get(k, 0)` 也能動,但那會讓「0 格未接線」跟「忘了統計」
     長得一樣 —— 明確填 0 才分得出來)。
 
-    ⚠️ 分母口徑與 `judged_count` 一致:**排除結構上不適用的格子**,
+    ⚠️ 分母口徑與 `judged_count` **共用同一個判準**(`_in_judged_denominator`),
     否則「四態加總」會對不上卡片上那個 N/M(同一張卡兩個分母 = 自己打自己)。
+    2026-08-26 起這表示同時排除「結構上不適用」與「依規格不出等級」(KD)兩種格子。
     """
     _out = {_s: 0 for _s in (SS.STATE_LIVE, SS.STATE_DEGRADED,
                              SS.STATE_MISSING, SS.STATE_UNWIRED)}
     for _cells in (cells_per_row or ()):
         for _c in (_cells or ()):
-            if _c.miss_reason == SS.MISS_NOT_APPLICABLE:
+            if not _in_judged_denominator(_c):
                 continue
             if _c.state in _out:
                 _out[_c.state] += 1
@@ -496,9 +537,14 @@ def render_legend() -> None:
 
 
 def render_light_wall(items: list[tuple[str, str, tuple]]) -> None:
-    """燈格牆 —— 一列一行:代號 / 名稱 / 燈條 / N-M 在看。
+    """燈格牆 —— 一列一行:代號 / 名稱 / 燈條 / N-M 有判定。
 
     `items`: `[(代號, 名稱, cells), ...]`,由 L5 從 row 的 `_lights` 備妥。
+
+    ⚠️ **數字走 `judged_count`,與第 1 層結論卡同一把尺**(user 2026-08-26 裁示)。
+    原本這裡用寬鬆的 `watch_count`,同一頁上第 1 層印 2/4、這裡印 3/4 ——
+    兩個都不算錯,但使用者只會讀成「有一邊算錯了」。文字也跟著從「在看」改為
+    「有判定」:數字的意思變了,標籤不跟著改就是掛著舊名賣新東西(§1)。
 
     ⚠️ 這裡**不用 `st.expander` 也不用巢狀 `st.tabs`**:兩者的 body 在
     Streamlit 每次 app run 都會執行(收合只是前端),把 N 檔 × 12 盞燈塞進
@@ -509,14 +555,14 @@ def render_light_wall(items: list[tuple[str, str, tuple]]) -> None:
         return
     _rows = []
     for _tk, _nm, _cells in items:
-        _n, _m = watch_count(_cells)
+        _n, _m = judged_count(_cells)
         # 代號 / 名稱來自使用者的 Google Sheet → 一律 escape。名稱含 `<` 或 `&`
         # 時不 escape 會直接把整面牆的版面弄壞(不是安全問題,是會壞掉)。
         _rows.append(
             f'<div class="dsl-row"><span class="dsl-tk">{_esc(_tk)}</span>'
             f'<span class="dsl-nm">{_esc(_nm or "")}</span>'
             f'{strip_html(_cells)}'
-            f'<span class="dsl-cnt">{_n}/{_m} 在看</span></div>')
+            f'<span class="dsl-cnt">{_n}/{_m} 有判定</span></div>')
     st.markdown("".join(_rows), unsafe_allow_html=True)
 
 
@@ -530,12 +576,15 @@ def render_holding_detail(ticker: str, name: str, cells,
 
     `value_texts`: `{規格表 key: 這盞燈實際算出什麼}`。由 L5 從 row 的 `_detail`
       對應過來;沒有對應文字的燈顯示「—」,**不由本層編一句**(§1)。
+
+    ⚠️ 標題那個 N/M 與燈格牆、與第 1 層結論卡**同一把尺**(`judged_count`)——
+    同一頁三個地方印同一件事,不准有三個數字。
     """
     _vt = value_texts or {}
-    _n, _m = watch_count(cells)
+    _n, _m = judged_count(cells)
 
     st.markdown(f"### {ticker}　{name or ''}".rstrip())   # st.markdown 預設不吃 raw HTML
-    st.markdown(f'{strip_html(cells)}　<span class="dsl-cnt">{_n}/{_m} 盞在看</span>',
+    st.markdown(f'{strip_html(cells)}　<span class="dsl-cnt">{_n}/{_m} 盞有判定</span>',
                 unsafe_allow_html=True)
     if error:
         st.error(f"這一檔整批抓取失敗:{error}", icon="🚨")
@@ -566,6 +615,13 @@ def render_holding_detail(ticker: str, name: str, cells,
                 f'<div class="dsl-sub">依據　{_used}'
                 f'　（{len(_c.axes_used)}/{len(SS.LIGHT235_AXES)} 個可用）</div>',
                 unsafe_allow_html=True)
+        if not _spec.emits_level and _spec.no_level_reason:
+            # 「這盞燈依規格就不出等級」與四態、與缺值原因都是**不同的一件事**,
+            # 故獨立成塊、**不共用**任何既有文案:借用「不適用」會對 KD 講假話
+            # (它對個股完全適用),借用「無資料」會讓人以為重跑就會有(不會)。
+            # 這一塊同時是那個 N/M 分母的交代 —— 少一盞不是算錯。
+            st.markdown(f'<div class="dsl-miss"><b>這盞燈還沒有判定規則</b><br>'
+                        f'{_spec.no_level_reason}</div>', unsafe_allow_html=True)
         if _c.state == SS.STATE_UNWIRED and _spec.unwired_reason:
             st.markdown(f'<div class="dsl-miss"><b>這盞燈沒有在運作</b><br>'
                         f'{_spec.unwired_reason}</div>', unsafe_allow_html=True)
@@ -660,12 +716,15 @@ def render_credibility_card(judged: int, total: int, tally: dict) -> None:
     st.markdown(
         f'<div class="dsl-lg">{_lg}</div>'
         f'<div class="dsl-sub" style="margin-top:6px">'
-        f'分母已扣掉「這類持股結構上沒有的燈」(如個股沒有折溢價),'
-        f'但**沒有**扣掉「今天沒抓到的燈」—— 抓不到就是要把分數拉低。<br>'
-        f'⚠️ <b>上面的分子會比這一排的「運作中」少</b>,差額不是算錯:'
-        f'「運作中」只問**資料管道通不通**,分子還多要求那盞燈**真的產出了等級**。'
-        f'個股的 KD 就是差在這裡 —— K、D 都抓到了(運作中),但它從來不判 🟢🟡🔴,'
-        f'所以不算「給得出判定」。同樣的理由,這個數字也會比下方燈格牆的「在看」嚴格。'
+        f'分母扣掉兩種燈:一是「這類持股結構上沒有的」(個股沒有折溢價);'
+        f'二是「依規格就不出等級的」—— 目前只有個股 KD,'
+        f'K、D 都抓得到、也照樣畫在下面的燈格牆上,但它還沒有判燈規則,'
+        f'留在分母只會讓每一檔個股永遠差一盞。'
+        f'**沒有**扣掉「今天沒抓到的燈」—— 抓不到就是要把分數拉低。<br>'
+        f'⚠️ 分子**至多**等於這一排的「運作中」,可能更少:'
+        f'「運作中」只問**資料管道通不通**,分子還多要求那盞燈**真的產出了等級**。<br>'
+        f'✅ 這個數字與下方燈格牆的「有判定」是**同一把尺**'
+        f'(2026-08-26 起;在那之前燈格牆用的是比較寬鬆的「在看」,同一頁兩個數字差 1)。'
         f'</div></div>',
         unsafe_allow_html=True)
 

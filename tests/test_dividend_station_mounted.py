@@ -1,6 +1,7 @@
 """💰 存股戰情室 L5：headless mount 冒煙（button-gated,不觸發抓取）。"""
 from __future__ import annotations
 
+import re
 import textwrap
 
 import pytest
@@ -143,8 +144,21 @@ def test_layer1_conclusion_cards_render(tmp_path):
     assert "巡航：今天沒有需要動作的部位" not in _md, \
         "有列給不出判定卻印了巡航 —— 防呆 2 破功"
 
-    # 防呆 1:ETF 8 + 個股 4 + 抓取失敗(ETF)8 = 20,分母動態算出、非寫死
-    assert "/20 盞給得出判定" in _md, f"N/M 分母不對(應為 20):{_md[:400]}"
+    # 防呆 1:ETF 8 + 個股 **3**(4 盞扣掉不出等級的 KD)+ 抓取失敗(ETF)8 = 19,
+    # 分母動態算出、非寫死。2026-08-26 user 裁示 KD 移出分母後由 20 變 19。
+    assert "/19 盞給得出判定" in _md, f"N/M 分母不對(應為 19):{_md[:400]}"
+
+    # 同一頁不准出現兩個對不起來的數字(user 2026-08-26 裁示的第 2 件事):
+    # 第 1 層卡② 的 N/M 必須等於第 3 層燈格牆逐列相加。
+    _card = re.search(r"(\d+)/(\d+) 盞給得出判定", _md)
+    _wall = re.findall(r"(\d+)/(\d+) 有判定", _md)
+    assert _card and _wall, "第 1 層或第 3 層的數字沒有渲染出來"
+    assert (int(_card.group(1)), int(_card.group(2))) == \
+        (sum(int(_n) for _n, _ in _wall), sum(int(_m) for _, _m in _wall)), \
+        f"同一頁兩層數字對不起來:卡片 {_card.group(0)} vs 燈格牆 {_wall}"
+    # 只禁「N/M 在看」這個**數字**;卡片說明裡講「以前叫在看」的那句歷史不禁
+    # (逼人刪掉歷史,下一個人就不知道為什麼改)。
+    assert not re.search(r"\d+/\d+ 盞?在看", _md), "第 3 層還留著寬鬆的『在看』計數"
 
     # 未實現損益:張→股有乘 1000（10 張 ×(40-35) + 2 張 ×(600-500) = 250,000 元）
     assert "+250,000" in _md, "未實現損益沒有把張換成股(漏乘 = 1000 倍低估)"
