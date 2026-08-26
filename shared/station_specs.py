@@ -39,6 +39,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from shared import dividend_station_thresholds as T
+from shared import unified_verdict_thresholds as UV
 
 # ══════════════════════════════════════════════════════════════════
 # 燈的 canonical key —— 一個字串只准定義一次
@@ -206,9 +207,15 @@ STATION_SPECS: list[StationSpec] = [
     StationSpec(
         key=KEY_STOCK_HEALTH, label="財報體檢", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
+        # 2026-08-25(B3):這盞燈開始出自己的等級後，門檻文字必須講得出
+        # 「🟢/🟡/🔴 各是哪些評等」——原文只講得出「哪些列入汰換候選」，
+        # 使用者看到 🟡 會查不到它代表什麼。三段全部組自既有 SSOT（§3.3 零寫死）：
+        # KEEP/WATCH 走 `unified_verdict_thresholds`（`fundamental_grade_to_state`
+        # 用的就是這兩個），CUT 走 `STOCK_SWAP_GRADES`（同一份汰換候選名單）。
         threshold_text=(
-            f"評等 {'/'.join(T.STOCK_HEALTH_GRADES)}；"
-            f"{'/'.join(T.STOCK_SWAP_GRADES)} 列入汰換候選"
+            f"🟢 {'/'.join(UV.FUNDAMENTAL_KEEP_GRADES)}"
+            f"　🟡 {'/'.join(UV.FUNDAMENTAL_WATCH_GRADES)}"
+            f"　🔴 {'/'.join(T.STOCK_SWAP_GRADES)}（列入汰換候選）"
         ),
         source="財報體檢引擎（季報）",
         why="個股不像 ETF 有一籃子分散，體質壞掉就是壞掉。",
@@ -216,7 +223,14 @@ STATION_SPECS: list[StationSpec] = [
     StationSpec(
         key=KEY_STOCK_TREND, label="財報趨勢", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
-        threshold_text="盈轉虧 / 逐季惡化 / 轉機（兩季比較）",
+        # 2026-08-25(B3):改寫成「這盞燈的等級怎麼來的」。原文列的
+        # 「盈轉虧 / 轉機」是 `diff_fin_health` 的**另外兩個旗標**，它們餵的是
+        # 「汰換建議」那盞燈，不是本盞的等級 —— 門檻欄寫別盞燈的門檻 = 假敘述(§1)。
+        threshold_text=(
+            "兩季逐項比評等：🟢 變好多於變差　🟡 有好有壞　🔴 變差多於變好"
+            "　⚪ 每一項都沒變"
+            "（另有「本業盈轉虧 / 虧轉盈」旗標，那兩個餵的是「汰換建議」那盞燈）"
+        ),
         source="本季 vs 上一季財報",
         why="體檢分數是靜態的，趨勢告訴你它正在變好還是變壞。",
         discriminative=False,

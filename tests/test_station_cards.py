@@ -130,6 +130,53 @@ class TestMeaningIsPerScale:
             assert _s.group in SC._MEANING_BY_GROUP, \
                 f"規格表 group {_s.group!r} 沒有對應的判定尺"
 
+    def test_each_stock_light_answers_on_its_own_scale(self):
+        """B3:個股 4 盞同符號、**三把不同的尺** —— 不可回同一句。
+
+        `_SWAP_MEANING` 的 🔴 是「建議換出」。財報趨勢的 🔴 只是
+        「上一季到這一季變差的項目多於變好」—— 一檔 A+ 的公司也可能是 🔴。
+        共用汰換那把尺,明細面板會對著體質良好的股票印「建議換出」= 假敘述(§1)。
+        """
+        _swap = SC.level_meaning("stock", "🔴", key=SS.KEY_STOCK_SWAP)
+        _health = SC.level_meaning("stock", "🔴", key=SS.KEY_STOCK_HEALTH)
+        _trend = SC.level_meaning("stock", "🔴", key=SS.KEY_STOCK_TREND)
+        assert _swap and _health and _trend
+        assert len({_swap, _health, _trend}) == 3, "三盞燈的 🔴 講了同一句話"
+        # 趨勢那盞刻意**明說**它不是換出建議 —— 只檢查「不等於汰換那句」不夠,
+        # 那樣把 `_SWAP_MEANING` 改一個標點就會綠。
+        assert "不等於建議換出" in _trend
+
+    def test_stock_trend_neutral_is_a_verdict_not_a_blank(self):
+        """趨勢的 ⚪ 是「比過了、都沒變」;汰換的 ⚪ 才是「沒有判定」。"""
+        _trend = SC.level_meaning("stock", "⚪", key=SS.KEY_STOCK_TREND)
+        _swap = SC.level_meaning("stock", "⚪", key=SS.KEY_STOCK_SWAP)
+        assert _trend != _swap
+        assert "沒有判定" not in _trend
+
+    def test_key_scale_falls_back_to_the_group_scale(self):
+        """沒有自己一把尺的燈照舊走 group(舊呼叫端行為不變)。"""
+        assert SC.level_meaning("stock", "🔴", key=SS.KEY_STOCK_SWAP) == \
+            SC.level_meaning("stock", "🔴")
+        assert SC.level_meaning("health", "🟢", key=SS.KEY_HEALTH_A) == \
+            SC.level_meaning("health", "🟢")
+
+    def test_every_level_the_stock_lights_emit_has_a_meaning(self):
+        """L2 個股燈吐得出來的每一個符號,都要查得到「在這把尺上是什麼意思」。
+
+        查不到 → 明細面板那一行只剩一個裸符號,使用者無從判讀。
+        """
+        for _g in ("A+", "A", "B+", "B", "C", "F", None, "Z+"):
+            for _v in ("improving", "deteriorating", "mixed", "stable", "junk"):
+                _sa = ds.assess_stock(
+                    ticker="2330", name="t", asset_class=T.ASSET_SATELLITE,
+                    mj_grade=_g, mj_score_pct=80, mj_headline="", mj_fail_items=[],
+                    kd={"label": "無", "k": 50.0, "d": 50.0},
+                    trend={"verdict": _v})
+                for _c in ds.light_cells(_sa):
+                    _spec = SS.SPECS_BY_KEY[_c.key]
+                    assert SC.level_meaning(_spec.group, _c.level, key=_c.key), \
+                        f"{_c.key}={_c.level!r} 查不到意思"
+
     def test_unjudged_meaning_is_not_the_missing_meaning(self):
         """「從來沒判過」與「這輪沒抓到」是兩件事,文案不可共用。"""
         assert SC.UNJUDGED_TEXT != SS.MISS_TEXT[SS.MISS_NO_INPUT]

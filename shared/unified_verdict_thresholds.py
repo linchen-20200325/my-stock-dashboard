@@ -30,6 +30,41 @@ VERDICT_LABEL: dict[str, str] = {
     VERDICT_NA:    '⚪ 無法評分',
 }
 
+#: 三態 → **只有符號**(不含中文)。`VERDICT_LABEL` 是「符號 + 中文」,把它拿去當
+#: 燈號符號用會把「🟢 續抱」四個字塞進一格燈裡。故符號另立 SSOT,並由下方
+#: `_assert_icon_prefixes_label()` 釘住兩者不得漂移(改一邊沒改另一邊 = import 時炸)。
+VERDICT_ICON: dict[str, str] = {
+    VERDICT_KEEP:  '🟢',
+    VERDICT_WATCH: '🟡',
+    VERDICT_CUT:   '🔴',
+    VERDICT_NA:    '⚪',
+}
+
+
+def _assert_icon_prefixes_label() -> None:
+    """VERDICT_ICON 與 VERDICT_LABEL 必須同鍵、且 label 以 icon 開頭。
+
+    §3.3:同一個事實(哪一態長什麼樣)只准定義一次。這裡是 import 時的硬檢查 ——
+    兩張表漂移時**當場炸**,而不是畫面上某一處印 🟢、另一處印 🟡 而沒有人發現。
+    """
+    if set(VERDICT_ICON) != set(VERDICT_LABEL):
+        raise AssertionError('VERDICT_ICON / VERDICT_LABEL 鍵不一致')
+    for _k, _icon in VERDICT_ICON.items():
+        if not VERDICT_LABEL[_k].startswith(_icon):
+            raise AssertionError(f'{_k}: VERDICT_LABEL 未以 VERDICT_ICON 開頭')
+
+
+_assert_icon_prefixes_label()
+
+#: 「有判定,但結論不偏向任何一態」的中性符號。
+#:
+#: ⚠️ 與 `VERDICT_ICON[VERDICT_NA]` **同一個字元、不同意思**,刻意各自具名:
+#:   · `VERDICT_NA`      = 算不出來(主軸資料缺)—— 沒有結論。
+#:   · `LEVEL_ICON_NEUTRAL` = 算出來了,結論是「沒有偏向任何一邊」(如財報趨勢的
+#:     `stable`:兩期比過了,每一項評等都沒變)。
+#: 共用一個常數會讓下一個人把「比過了沒變」與「比不出來」當成同一件事(§1)。
+LEVEL_ICON_NEUTRAL: str = '⚪'
+
 # 嚴重度序(降級用:keep→watch→cut,cut 為底)。閘門否決時 downgrade 一階。
 VERDICT_SEVERITY: dict[str, int] = {
     VERDICT_KEEP: 0,
@@ -86,6 +121,54 @@ def default_profile_for(asset_kind: str) -> str:
 FUNDAMENTAL_KEEP_GRADES: tuple[str, ...] = ('A+', 'A', 'B+')
 FUNDAMENTAL_WATCH_GRADES: tuple[str, ...] = ('B',)
 # (CUT grades = shared.dividend_station_thresholds.STOCK_SWAP_GRADES,不在此重定義)
+
+
+# ── 財報趨勢 verdict → 三態 ──────────────────────────────────────────
+#
+# verdict 詞彙的產生者是 L2 `src/compute/health/fin_health_diff.diff_fin_health`
+# (四段:improving / deteriorating / mixed / stable)。本檔**不重新判定趨勢**,
+# 只登記「哪一個 verdict 算哪一態」—— 這一份對映原本住在 L5
+# `src/ui/tabs/tab_stock_grp._FIN_VERDICT_LABEL`(混在中文標籤裡),
+# 存股戰情室的個股燈也要用同一份,故上提到本層(§3.3 SSOT)。
+#
+# ⚠️ **中文標籤留在各自的 UI**:同一個 🟢 在組合分析頁叫「進步」、在戰情室明細
+# 面板要講「上一季到這一季變好的項目多於變差」—— 那是文案,不是判定。
+# 本層只上提判定。
+TREND_IMPROVING: str = 'improving'
+TREND_DETERIORATING: str = 'deteriorating'
+TREND_MIXED: str = 'mixed'
+TREND_STABLE: str = 'stable'
+
+#: 財報趨勢 verdict → 統一三態。**只有三個 verdict 算得出三態。**
+#:
+#: `stable` 刻意**不在表內**:它是「兩期比過了,每一項評等都沒變」,既不是好也不是
+#: 壞。把它併進 `VERDICT_NA` 會把「比過了沒變」講成「算不出來」——
+#: 那是假敘述(§1:錯的敘述比沒有敘述更危險)。要顯示它的消費端請走
+#: `TREND_NEUTRAL_VERDICTS` / `fin_trend_icon()`,各自決定文案。
+FIN_TREND_VERDICT_STATE: dict[str, str] = {
+    TREND_IMPROVING:     VERDICT_KEEP,
+    TREND_DETERIORATING: VERDICT_CUT,
+    TREND_MIXED:         VERDICT_WATCH,
+}
+
+#: 「有判定、但不屬三態」的 verdict(見上)。
+TREND_NEUTRAL_VERDICTS: tuple[str, ...] = (TREND_STABLE,)
+
+
+def fin_trend_icon(verdict) -> str:
+    """財報趨勢 verdict → 燈號符號。三態走 `VERDICT_ICON`;`stable` → 中性 ⚪。
+
+    **未知 / 空的 verdict → `''`(沒有符號)**,不 fallback 成 ⚪ ——
+    「上游給了不認得的 verdict」與「比過了沒變」是兩件事,回同一個 ⚪ 等於
+    把契約漂移畫成一個看起來很正常的中性燈(§1)。呼叫端拿到 `''` 自己決定
+    要留白還是報錯。
+    """
+    _v = str(verdict or '').strip()
+    _state = FIN_TREND_VERDICT_STATE.get(_v)
+    if _state is not None:
+        return VERDICT_ICON[_state]
+    return LEVEL_ICON_NEUTRAL if _v in TREND_NEUTRAL_VERDICTS else ''
+
 
 # ── 背離加註(§設計:只加註不翻轉)的訊息模板 ──
 # 主軸🟢 但次軸🔴 / 主軸🔴 但次軸🟢 才算背離;其餘不出旗標。

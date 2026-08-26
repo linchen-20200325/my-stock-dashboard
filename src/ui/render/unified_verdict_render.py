@@ -15,6 +15,7 @@ from shared.colors import (
 )
 from shared.unified_verdict_thresholds import (
     VERDICT_CUT,
+    VERDICT_ICON,
     VERDICT_KEEP,
     VERDICT_NA,
     VERDICT_WATCH,
@@ -27,12 +28,11 @@ _VERDICT_COLOR = {
     VERDICT_CUT: TRAFFIC_RED,
     VERDICT_NA: TRAFFIC_NEUTRAL,
 }
-_STATE_ICON = {
-    VERDICT_KEEP: '🟢',
-    VERDICT_WATCH: '🟡',
-    VERDICT_CUT: '🔴',
-    None: '⚪',
-}
+# 符號本身走 L0 SSOT `VERDICT_ICON`(2026-08-25 B3 抽出);本檔只補一個
+# `None` 鍵 —— 軸沒有值時 `axis['state']` 是 None,那不是三態之一。
+# ⚠️ 這裡的 `None` 與 `VERDICT_NA` 同符號不同意思(前者=這一軸沒值,
+# 後者=主軸沒值導致整檔無法評分),故不合併成同一個鍵。
+_STATE_ICON = {**VERDICT_ICON, None: VERDICT_ICON[VERDICT_NA]}
 
 
 def _fmt_value(val) -> str:

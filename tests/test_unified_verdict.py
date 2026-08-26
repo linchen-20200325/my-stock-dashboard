@@ -23,12 +23,20 @@ from shared.unified_verdict_thresholds import (
     PROFILE_ETF,
     PROFILE_ROLES,
     PROFILE_TRADING,
+    TREND_DETERIORATING,
+    TREND_IMPROVING,
+    TREND_MIXED,
+    TREND_NEUTRAL_VERDICTS,
+    TREND_STABLE,
     VERDICT_CUT,
+    VERDICT_ICON,
     VERDICT_KEEP,
+    VERDICT_LABEL,
     VERDICT_NA,
     VERDICT_WATCH,
     default_profile_for,
     downgrade_verdict,
+    fin_trend_icon,
 )
 from src.compute.scoring.unified_verdict import (
     assess_unified,
@@ -48,6 +56,62 @@ def test_downgrade_verdict_steps():
     assert downgrade_verdict(VERDICT_KEEP, 2) == VERDICT_CUT
     assert downgrade_verdict(VERDICT_KEEP, 0) == VERDICT_KEEP     # 不降
     assert downgrade_verdict(VERDICT_NA) == VERDICT_NA            # NA 不參與
+
+
+def test_verdict_icon_is_the_label_without_the_words():
+    """VERDICT_ICON / VERDICT_LABEL 同鍵,且 label 以 icon 開頭(§3.3 不得兩份)。"""
+    assert set(VERDICT_ICON) == set(VERDICT_LABEL)
+    for _k, _icon in VERDICT_ICON.items():
+        assert VERDICT_LABEL[_k].startswith(_icon)
+    assert len(set(VERDICT_ICON.values())) == len(VERDICT_ICON), '兩態共用同一個符號'
+
+
+def test_fin_trend_icon_maps_the_three_states():
+    """B3 從 L5 `tab_stock_grp._FIN_VERDICT_LABEL` 上提的那一份對映。"""
+    assert fin_trend_icon(TREND_IMPROVING) == VERDICT_ICON[VERDICT_KEEP]
+    assert fin_trend_icon(TREND_DETERIORATING) == VERDICT_ICON[VERDICT_CUT]
+    assert fin_trend_icon(TREND_MIXED) == VERDICT_ICON[VERDICT_WATCH]
+
+
+def test_stable_is_neutral_not_unscorable():
+    """`stable` = 比過了沒變(**有**判定),不是 `VERDICT_NA`(算不出來)。
+
+    兩者符號相同,但併成同一個常數會讓下一個人把「比過了沒變」印成
+    「無法評分」—— 那是假敘述(§1)。故 `stable` 刻意不在
+    `FIN_TREND_VERDICT_STATE` 裡,只在 `TREND_NEUTRAL_VERDICTS`。
+    """
+    from shared.unified_verdict_thresholds import FIN_TREND_VERDICT_STATE
+    assert TREND_STABLE not in FIN_TREND_VERDICT_STATE
+    assert TREND_STABLE in TREND_NEUTRAL_VERDICTS
+    assert fin_trend_icon(TREND_STABLE)                    # 有符號
+    assert VERDICT_LABEL[VERDICT_NA] != fin_trend_icon(TREND_STABLE)
+
+
+def test_unknown_trend_verdict_has_no_icon():
+    """未知 / 空 verdict → `''`,**不** fallback 成中性 ⚪(那會把 bug 畫成正常)。"""
+    for _bad in (None, '', '  ', 'spectacular', 'IMPROVING'):
+        assert fin_trend_icon(_bad) == ''
+
+
+def test_fin_health_diff_vocabulary_is_fully_registered():
+    """`diff_fin_health` 真的會回的四段 verdict,本 SSOT 一個都不能漏。
+
+    漂移鎖:上游新增第五段 verdict 而這裡沒登記 → 燈會靜默留空,沒有人發現。
+    來源是 L2 `fin_health_diff` 的實際字面值,不是這裡憑印象列的。
+    """
+    import inspect
+
+    from shared.unified_verdict_thresholds import FIN_TREND_VERDICT_STATE
+    from src.compute.health import fin_health_diff as F
+
+    _src = inspect.getsource(F.diff_fin_health)
+    _emitted = {v for v in (TREND_IMPROVING, TREND_DETERIORATING,
+                            TREND_MIXED, TREND_STABLE)
+                if f'"{v}"' in _src or f"'{v}'" in _src}
+    assert _emitted == {TREND_IMPROVING, TREND_DETERIORATING,
+                        TREND_MIXED, TREND_STABLE}, (
+        f'diff_fin_health 的 verdict 詞彙變了:{_emitted}')
+    assert _emitted == set(FIN_TREND_VERDICT_STATE) | set(TREND_NEUTRAL_VERDICTS)
 
 
 def test_default_profile_for():

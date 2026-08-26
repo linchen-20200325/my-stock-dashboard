@@ -28,7 +28,9 @@ import pytest
 
 from shared import dividend_station_thresholds as T
 from shared import station_specs as SS
+from shared import unified_verdict_thresholds as UVT
 from src.compute.etf import dividend_station as ds
+from src.compute.scoring.unified_verdict import fundamental_grade_to_state
 from src.services import dividend_station_service as svc
 
 NAN = float("nan")
@@ -172,15 +174,128 @@ class TestLevelsAreVerbatim:
             sa = _stock(mj_grade=grade)
             assert _by_key(ds.light_cells(sa))[SS.KEY_STOCK_SWAP].level == sa.swap_level
 
-    @pytest.mark.parametrize("key", [SS.KEY_STOCK_HEALTH, SS.KEY_STOCK_TREND,
-                                     SS.KEY_STOCK_KD])
+    @pytest.mark.parametrize("key", [SS.KEY_STOCK_KD])
     def test_stock_lights_without_an_upstream_verdict_stay_blank(self, key):
-        """`assess_stock` **從未**為這三盞各自判過等級（只當 `swap_level` 的輸入）。
+        """**沒有**判燈邏輯的燈必須留空。補一個等級出來就是新判燈（§1）。
 
-        補一個等級出來就是新判燈 → 這裡誠實留空,消費端才知道「這格沒有判定可填色」,
-        而不是拿到一個看起來像判定、其實是轉換層發明的東西（§1）。
+        ⚠️ 2026-08-25(B3)本測試從 3 個 key 縮成 1 個。縮小的理由**不是**
+        「規則放寬了」,而是原本的分類就把兩件不同的事混在一起:
+
+          · 財報體檢 / 財報趨勢 —— **判定本來就存在**,只是沒被搬進燈裡
+            (前者 `unified_verdict.fundamental_grade_to_state`,後者
+            `diff_fin_health` 的四段 verdict)。B3 把既有判定接上 =
+            **搬運**,零新門檻,見 `TestStockLevelsComeFromExistingSSOT`。
+          · KD —— **根本沒有判燈邏輯**(`kd_label` 是「高檔鈍化」這種描述字串,
+            不是等級)。要給它等級就得新造一盞燈,那是另一件事(user 裁示另案)。
+
+        所以「留空」這條鐵律對 KD 一字未改;改的只是「哪幾盞燈適用它」。
         """
         assert _by_key(ds.light_cells(_stock()))[key].level == ds.LEVEL_UNJUDGED
+
+    def test_kd_stays_blank_no_matter_what_kd_says(self):
+        """KD 有值、有交叉、有鈍化 —— 一律仍是空的。守「不趁機新造判燈」。"""
+        for _kd in ({"label": "高檔鈍化", "high_passivation": True, "k": 88.0, "d": 80.0},
+                    {"label": "死亡交叉", "cross": "death", "k": 20.0, "d": 30.0},
+                    {"label": "黃金交叉", "cross": "golden", "k": 30.0, "d": 20.0},
+                    None):
+            cells = _by_key(ds.light_cells(_stock(kd=_kd)))
+            assert cells[SS.KEY_STOCK_KD].level == ds.LEVEL_UNJUDGED
+
+    # ── B3(2026-08-25):個股「財報體檢 / 財報趨勢」各自出等級 ──────────
+    #
+    # 本組守的是**「這是搬運,不是新判燈」**:每一個 level 都必須逐字等於
+    # 既有 SSOT 算出來的東西。任何人日後想「順手調一下門檻」,這裡會紅。
+
+    @pytest.mark.parametrize("grade", ["A+", "A", "B+", "B", "C", "F"])
+    def test_stock_health_level_equals_the_existing_ssot(self, grade):
+        """財報體檢的燈 = `fundamental_grade_to_state` + `VERDICT_ICON`,零新門檻。"""
+        sa = _stock(mj_grade=grade)
+        want = UVT.VERDICT_ICON[fundamental_grade_to_state(grade)]
+        assert sa.health_level == want
+        assert _by_key(ds.light_cells(sa))[SS.KEY_STOCK_HEALTH].level == want
+
+    def test_stock_health_grade_vocabulary_is_fully_covered(self):
+        """6 個 grade **全部**要對得到一態 —— 少一個就會有 grade 拿到空等級。
+
+        這條是漂移鎖:財報體檢引擎日後加一個 grade(或改名),這裡當場紅,
+        而不是畫面上悄悄多出一格永遠空白的燈。
+        """
+        _covered = (set(UVT.FUNDAMENTAL_KEEP_GRADES) | set(UVT.FUNDAMENTAL_WATCH_GRADES)
+                    | set(T.STOCK_SWAP_GRADES))
+        assert set(T.STOCK_HEALTH_GRADES) == _covered
+
+    def test_stock_health_level_is_not_the_swap_level(self):
+        """兩盞燈**刻意可以不同色**:財報 C(體質🔴)+ KD 轉強 → 汰換只到 🟡。
+
+        這正是把它們拆成兩盞的理由。若哪天有人把 health_level 接成 swap_level 的
+        別名,這條會紅。
+        """
+        sa = _stock(mj_grade="C", kd={"label": "黃金交叉", "cross": "golden",
+                                      "k": 30.0, "d": 20.0})
+        assert sa.swap_level == "🟡"
+        assert sa.health_level == "🔴"
+
+    @pytest.mark.parametrize("verdict", ["improving", "deteriorating",
+                                         "mixed", "stable"])
+    def test_stock_trend_level_equals_the_uplifted_ssot(self, verdict):
+        """財報趨勢的燈 = L0 `fin_trend_icon`(B3 從 L5 `_FIN_VERDICT_LABEL` 上提)。"""
+        sa = _stock(trend={"verdict": verdict})
+        want = UVT.fin_trend_icon(verdict)
+        assert want, f"{verdict} 沒有符號 → 測資或 SSOT 壞了"
+        assert sa.trend_level == want
+        assert _by_key(ds.light_cells(sa))[SS.KEY_STOCK_TREND].level == want
+
+    def test_uplifted_mapping_still_matches_the_ui_it_came_from(self):
+        """上提之後,原出處 L5 `_FIN_VERDICT_LABEL` 的中文標籤仍以同一個符號開頭。
+
+        這條釘的是「上提沒有偷改畫面」:同一份判定,兩邊不得漂移(§3.3)。
+        """
+        from src.ui.tabs.tab_stock_grp import _FIN_VERDICT_LABEL
+        for _code in ("improving", "deteriorating", "mixed", "stable"):
+            assert _FIN_VERDICT_LABEL[_code].startswith(UVT.fin_trend_icon(_code))
+
+    def test_unknown_trend_verdict_gets_no_level(self):
+        """上游給了不認得的 verdict → 留空,**不** fallback 成 ⚪。
+
+        ⚪ 在這盞燈上是「兩期比過了、每一項都沒變」——**有判定**。
+        把契約漂移畫成 ⚪ 等於把 bug 訊號畫成一個看起來很正常的中性燈(§1)。
+        """
+        for _bad in ({"verdict": "spectacular"}, {"verdict": ""}, {"is_breakdown": True}):
+            sa = _stock(trend=_bad)
+            assert sa.trend_level == ds.LEVEL_UNJUDGED
+            assert _by_key(ds.light_cells(sa))[SS.KEY_STOCK_TREND].level \
+                == ds.LEVEL_UNJUDGED
+
+    def test_trend_level_never_hides_the_degraded_mark(self):
+        """B3 硬要求:給了等級之後,「門檻已失準（只比兩季）」的標記必須還在。
+
+        這盞燈**明知**判別力不足(規格表 `discriminative=False`)。等級讓它從
+        空格變成彩色燈 = 變醒目;degraded 標記若跟著不見,等於偷偷升級了它的
+        可信度(§1)。
+        """
+        for _v in ("improving", "deteriorating", "mixed", "stable"):
+            cell = _by_key(ds.light_cells(_stock(trend={"verdict": _v})))[
+                SS.KEY_STOCK_TREND]
+            assert cell.level, f"{_v} 應該有等級"
+            assert cell.state == SS.STATE_DEGRADED, f"{_v} 的 degraded 標記不見了"
+        # 沒有趨勢資料時仍是 missing（has_value 判準一字未動）
+        assert _by_key(ds.light_cells(_stock(trend=None)))[SS.KEY_STOCK_TREND].state \
+            == SS.STATE_MISSING
+
+    def test_missing_grade_still_leaves_the_health_light_blank(self):
+        """grade 缺 / 契約漂移 → 仍然沒有等級(不可捏一個出來)。"""
+        for _g in (None, "", "Z+"):
+            cells = _by_key(ds.light_cells(_stock(mj_grade=_g)))
+            assert cells[SS.KEY_STOCK_HEALTH].level == ds.LEVEL_UNJUDGED
+            assert cells[SS.KEY_STOCK_HEALTH].state == SS.STATE_MISSING
+
+    def test_every_stock_level_is_drawable(self):
+        """L2 吐得出來的每一個等級,L4 都要畫得出來(`cell_html` 未登錄會炸)。"""
+        from src.ui.render.station_cards import LEVEL_STYLES
+        for _g in ("A+", "A", "B+", "B", "C", "F", None, "Z+"):
+            for _v in ("improving", "deteriorating", "mixed", "stable", "junk"):
+                for c in ds.light_cells(_stock(mj_grade=_g, trend={"verdict": _v})):
+                    assert c.level in LEVEL_STYLES, f"{c.key}={c.level!r} 畫不出來"
 
     def test_transform_does_not_touch_the_assessment(self):
         """跑完 `light_cells` 後,所有判燈結果原封不動。"""

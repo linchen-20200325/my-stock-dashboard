@@ -161,7 +161,44 @@ _MEANING_BY_GROUP: dict[str, dict[str, str]] = {
     "health": _HEALTH_MEANING,     # 健檢 A/B/C/D
     "timing": _L235_MEANING,       # 235 加碼燈
     "screen": _SCREEN_MEANING,     # 3-3-3 ①②③
-    "stock": _SWAP_MEANING,        # 個股 4 盞(其中 3 盞是 LEVEL_UNJUDGED)
+    "stock": _SWAP_MEANING,        # 個股組的預設尺(汰換建議);另兩盞見 _MEANING_BY_KEY
+}
+
+#: 個股「財報體檢」那把尺(`StockAssessment.health_level`)。
+#:
+#: ⚠️ 與汰換建議**同符號、不同意思**,故不可共用 `_SWAP_MEANING`:
+#: 汰換建議還吃 KD 與趨勢,「財報 C + KD 轉強」→ 汰換是 🟡「留意 / 減碼觀察」,
+#: 而體檢仍是 🔴「體質不合格」。兩盞燈在同一列**本來就可能不同色**,
+#: 那正是把它們拆成兩盞的理由。
+_STOCK_HEALTH_MEANING: dict[str, str] = {
+    "🔴": "體質不合格 —— 列入汰換候選(評等 C / F)",
+    "🟡": "體質尚可,但要盯著(評等 B)",
+    "🟢": "體質合格(評等 A+ / A / B+)",
+    "⚪": "沒有判定(看下面的缺值原因)",
+}
+
+#: 個股「財報趨勢」那把尺(`StockAssessment.trend_level`,來自 `diff_fin_health`)。
+#:
+#: ⚠️ **這裡的 🔴 不是「建議換出」。** 它說的是「上一季到這一季,評等變差的項目多於
+#: 變好」—— 一檔 A+ 的公司也可能是 🔴(從很好變成沒那麼好)。套 `_SWAP_MEANING`
+#: 會讓明細面板對著一檔體質良好的股票印「建議換出」,那是假敘述(§1)。
+#: ⚠️ ⚪ 也不能共用:在汰換那把尺上 ⚪ 是「沒有判定」,在這裡是**有判定** ——
+#: 兩期比過了,每一項評等都沒變。
+_STOCK_TREND_MEANING: dict[str, str] = {
+    "🔴": "變差的項目多於變好(**不等於建議換出** —— 這只是上一季到這一季的方向)",
+    "🟡": "有好有壞,方向分歧",
+    "🟢": "變好的項目多於變差",
+    "⚪": "兩期比過了,每一項評等都沒變(**不是**沒資料)",
+}
+
+#: 少數幾盞燈有**自己**的尺,不跟著 group 走。key 是 L0 規格表的 canonical key。
+#:
+#: 為什麼不乾脆給它們各自的 `group`:`group` 是規格表用來分區塊的欄位(畫面把
+#: 個股 4 盞排在一起),改 group 會連帶影響任何依 group 分組的消費端。
+#: 「用哪一把尺」是**呈現決定**,和分區塊是兩件事 —— 故在 L4 這裡另立一張表。
+_MEANING_BY_KEY: dict[str, dict[str, str]] = {
+    SS.KEY_STOCK_HEALTH: _STOCK_HEALTH_MEANING,
+    SS.KEY_STOCK_TREND: _STOCK_TREND_MEANING,
 }
 
 #: `LEVEL_UNJUDGED` 的說明。**與四態的「無資料」是兩件事**,故獨立成句:
@@ -170,17 +207,23 @@ _MEANING_BY_GROUP: dict[str, dict[str, str]] = {
 UNJUDGED_TEXT = "未判定 —— 這盞燈只當上游輸入用,從來沒有各自的等級(不是這次沒抓到)"
 
 
-def level_meaning(group: str, level: str) -> str:
+def level_meaning(group: str, level: str, *, key: str = "") -> str:
     """`(規格表 group, 判定符號)` → 這個符號在**這把尺**上的意思。
 
     為什麼要帶 `group` 而不能只查符號:同一個 🔴 在健檢是「踩到紅線」、
     在 235 是「崩盤/深水加碼」(買進訊號)。只查符號必然講錯其中一邊。
 
+    `key`(選填):同一個 group 裡有自己一把尺的燈(見 `_MEANING_BY_KEY`)——
+    個股組的「財報體檢」「財報趨勢」與「汰換建議」同符號但意思不同,
+    不帶 key 會拿到汰換那把尺(在趨勢那盞燈上會講成「建議換出」= 假敘述)。
+    參數是**選填**,舊呼叫端行為不變。
+
     未登錄的符號回 `""`(呼叫端顯示原符號即可)—— 這裡**不猜**它是什麼意思。
     """
     if level == LEVEL_UNJUDGED:
         return UNJUDGED_TEXT
-    return _MEANING_BY_GROUP.get(group, {}).get(level, "")
+    _scale = _MEANING_BY_KEY.get(key) or _MEANING_BY_GROUP.get(group, {})
+    return _scale.get(level, "")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -372,7 +415,7 @@ def render_holding_detail(ticker: str, name: str, cells,
             f'<div style="margin:10px 0 0">{cell_html(_c)}'
             f'<span class="dsl-lbl">{_spec.label}</span>'
             f'<span class="dsl-sub">狀態　{SS.STATE_META[_c.state][0]}'
-            f'　·　判定　{_c.level or "—"}　{level_meaning(_spec.group, _c.level)}</span>'
+            f'　·　判定　{_c.level or "—"}　{level_meaning(_spec.group, _c.level, key=_c.key)}</span>'
             f'</div>',
             unsafe_allow_html=True)
         st.markdown(

@@ -16,6 +16,21 @@ import pandas as pd
 
 from shared import dividend_station_thresholds as T
 from shared import station_specs as SS
+from shared.unified_verdict_thresholds import VERDICT_ICON, fin_trend_icon
+from src.compute.scoring.unified_verdict import fundamental_grade_to_state
+
+
+#: L2 **從未為這盞燈判過等級**時 `LightCell.level` 的值。
+#:
+#: 硬生一個等級出來就是新判燈（§1）,所以這裡誠實留空 —— 消費端看到空字串就知道
+#: 「這格沒有判定可以填色」,而不是拿到一個看起來像判定、其實是本層發明的東西。
+#:
+#: ⚠️ 2026-08-25(B3)更正:原註寫「個股 4 盞裡有 3 盞（財報體檢 / 財報趨勢 / KD）
+#: 是這種情況」—— 現在**只剩 KD 一盞**。財報體檢與財報趨勢的判定**本來就存在**
+#: (前者 `unified_verdict.fundamental_grade_to_state`,後者 `diff_fin_health` 的
+#: 四段 verdict),只是沒有被搬進燈裡;B3 把既有判定接上,**沒有發明新門檻**。
+#: KD 沒有接上是因為它**根本沒有判燈邏輯**(要新造),那是另一件事。
+LEVEL_UNJUDGED = ""
 
 
 # ── 週K / 均線 / 布林（純函式）─────────────────────────────────────────
@@ -564,6 +579,22 @@ class StockAssessment:
     #: `swap_level=="⚪"` 時的原因（`shared.station_specs.MISS_*`）;判得出來時為空字串。
     #: 2026-08-25 新增,additive + 預設值 → 既有 positional 建構不受影響。
     miss_reason: str = ""
+    #: 「財報體檢」這盞燈**自己**的等級（🟢/🟡/🔴,判不出來 → `LEVEL_UNJUDGED`）。
+    #:
+    #: 門檻**零新增**:走既有 SSOT `unified_verdict.fundamental_grade_to_state`
+    #: (KEEP=A+/A/B+ · WATCH=B · CUT=`STOCK_SWAP_GRADES`(C/F)),已有
+    #: `tests/test_unified_verdict.py::test_fundamental_grade_to_state` 逐 grade 釘死。
+    #: ⚠️ 與 `swap_level` **不是同一件事**:`swap_level` 還吃 KD 與趨勢,
+    #: 例如「財報 C + KD 轉強」→ `swap_level` 是 🟡,而本欄仍是 🔴(體質就是不合格)。
+    health_level: str = ""
+    #: 「財報趨勢」這盞燈**自己**的等級（🟢/🟡/🔴/⚪,判不出來 → `LEVEL_UNJUDGED`）。
+    #:
+    #: 判定**零新增**:`diff_fin_health` 的四段 verdict 早就存在,對映走 L0
+    #: `unified_verdict_thresholds.fin_trend_icon()`（B3 從 L5
+    #: `tab_stock_grp._FIN_VERDICT_LABEL` 上提的那一份）。
+    #: ⚠️ 這盞燈在規格表標了 `discriminative=False`（只比最近兩季,看不出趨勢）——
+    #: 有了等級之後那個 degraded 標記**更重要**,不是可以拿掉。
+    trend_level: str = ""
 
 
 def assess_stock(*, ticker: str, name: str, asset_class: str,
@@ -640,13 +671,26 @@ def assess_stock(*, ticker: str, name: str, asset_class: str,
             level = "🟢"
             action = f"🟢 續抱：財報 {mj_grade}{_kd_txt}{_ta}"
 
+    # ── 逐盞燈自己的等級（B3）───────────────────────────────────────
+    # ⚠️ 這裡**沒有新的門檻**,兩行都是把「已經存在、但沒被搬出來」的判定接上:
+    #   · 財報體檢 → `fundamental_grade_to_state`(L2 統一裁決引擎既有 SSOT)
+    #   · 財報趨勢 → `fin_trend_icon`(L0;B3 從 L5 `_FIN_VERDICT_LABEL` 上提)
+    # 放在這裡而不是放在 `light_cells`,是因為 `light_cells` 的鐵律是「純轉換,
+    # 不得重新判燈」—— 判定一律出自本函式,轉換層只原樣讀出（見該段註解）。
+    # KD 刻意**不接**:它到今天為止**沒有任何判燈邏輯**(`kd_label` 是描述字串,
+    # 不是等級),要接就是新造一盞燈 —— user 2026-08-25 裁示切出去另案。
+    _health_level = VERDICT_ICON.get(fundamental_grade_to_state(mj_grade),
+                                     LEVEL_UNJUDGED)
+    _trend_level = fin_trend_icon(trend.get("verdict")) or LEVEL_UNJUDGED
+
     return StockAssessment(
         ticker=ticker, name=name, asset_class=asset_class,
         mj_grade=mj_grade, mj_score_pct=mj_score_pct, mj_headline=mj_headline,
         mj_fail_items=_fails,
         kd_k=kd.get("k"), kd_d=kd.get("d"), kd_label=kd_label, kd_cross=cross,
         swap_level=level, swap_action=action,
-        trend_verdict=(trend or None), miss_reason=_miss)
+        trend_verdict=(trend or None), miss_reason=_miss,
+        health_level=_health_level, trend_level=_trend_level)
 
 
 # ── 逐盞燈 → 可程式判讀的格子（**純轉換,不重新判燈**）───────────────────
@@ -668,14 +712,6 @@ def assess_stock(*, ticker: str, name: str, asset_class: str,
 #: 把「未過」畫成 🔴,等於在格子牆上憑空多出一盞主表沒有的紅燈:那是**新判斷**,
 #: 不是轉換（§1）。要不要把它上色成紅,是消費端的呈現決定,不該由本層偷渡。
 _SCREEN_SYMBOL: dict = {True: "✅", False: "❌", None: "❔"}
-
-#: L2 **從未為這盞燈判過等級**時 `LightCell.level` 的值。
-#:
-#: 個股 4 盞裡有 3 盞（財報體檢 / 財報趨勢 / KD）是這種情況:`assess_stock` 只把
-#: 它們當成 `swap_level` 的輸入,沒有各自的 🔴/🟡/🟢。硬生一個等級出來就是新判燈
-#: （§1）,所以這裡誠實留空 —— 消費端看到空字串就知道「這格沒有判定可以填色」,
-#: 而不是拿到一個看起來像判定、其實是本層發明的東西。
-LEVEL_UNJUDGED = ""
 
 
 @dataclass(frozen=True)
@@ -754,21 +790,30 @@ def _etf_light_cells(a: HoldingAssessment) -> tuple[LightCell, ...]:
 def _stock_light_cells(sa: StockAssessment) -> tuple[LightCell, ...]:
     """個股 4 盞（財報體檢 / 財報趨勢 / KD / 汰換建議）。
 
-    ⚠️ 4 盞裡只有「汰換建議」有既有判定（`swap_level`）—— 另外三盞 `assess_stock`
-    只當輸入用,從來沒有各自的等級。故它們的 `level` 是 `LEVEL_UNJUDGED`,
-    只回得出四態。**不在這裡補判**(那是新判燈,§1)。
+    ⚠️ **本函式一個判斷式都沒有**:四盞燈的 `level` 全部從 `StockAssessment`
+    原樣讀出（`health_level` / `trend_level` / `swap_level`）。判定一律在
+    `assess_stock` 裡下 —— 這是本段的鐵律,也是 `tests/test_station_light_cells.py`
+    整個檔案的前提。
+
+    ⚠️ **KD 那一盞仍然是 `LEVEL_UNJUDGED`**,而且理由與另外兩盞不同:財報體檢與
+    財報趨勢的判定**本來就存在**(只是沒被搬進燈裡),KD 則是**根本沒有判燈邏輯**
+    (`kd_label` 是「高檔鈍化」這種描述字串,不是等級)。要給它等級 = 新造一盞燈,
+    §1 禁止在轉換層做這件事;user 2026-08-25 裁示切出去另案。
     """
     _out: list[LightCell] = []
     for spec in SS.specs_for(T.KIND_STOCK):
         if spec.key == SS.KEY_STOCK_HEALTH:
             # `sa.miss_reason` 就是「grade 不可用」的登記（`assess_stock` 只在
             # grade 缺 / 不在分級表時才填）→ 直接讀,不在這裡重寫一次同樣的判斷。
-            _out.append(_cell(spec, level=LEVEL_UNJUDGED, has_value=not sa.miss_reason,
+            _out.append(_cell(spec, level=sa.health_level, has_value=not sa.miss_reason,
                               reason=sa.miss_reason))
         elif spec.key == SS.KEY_STOCK_TREND:
             # `assess_stock` 存的是 `trend or None` → None 就是「這輪沒有趨勢資料」。
             # 上游沒登記 MISS_* → 這裡留空,不代它挑一個（挑錯就是錯誤指引）。
-            _out.append(_cell(spec, level=LEVEL_UNJUDGED,
+            # ⚠️ `has_value` 判準**刻意不動**:仍看有沒有趨勢資料,不看有沒有等級。
+            # 規格表的 `discriminative=False` → `classify_state` 會判 degraded,
+            # 那個「門檻已失準（只比兩季）」的標記必須跟著等級一起出去(B3 硬要求)。
+            _out.append(_cell(spec, level=sa.trend_level,
                               has_value=sa.trend_verdict is not None, reason=""))
         elif spec.key == SS.KEY_STOCK_KD:
             # 與 `stock_row_from_assessment` 的 KD 欄同一個判準:k / d 皆在才算有值
