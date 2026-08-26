@@ -26,11 +26,16 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
     等時間)、或折溢價 / 配息這輪沒抓到(`MISS_NO_INPUT`,可重跑)。
     ⚠️ 2026-08-26 更正:原文這裡還列了第三種「或個股不適用(不是壞掉)」——
     **那是假的**,而且是上一輪編輯這支 docstring 時漏掉的同一句話。健檢四盞燈
-    只掛得上 `MISS_NOT_ENOUGH` / `MISS_NO_INPUT` 兩種原因;唯一會掛
+    只掛得上 `MISS_NOT_ENOUGH` / `MISS_NO_INPUT` 兩種原因;**健檢四盞燈裡**唯一會掛
     `MISS_NOT_APPLICABLE` 的是 `assess_holding` 裡 `_is_etf=False` 那條分支,而
     個股走的是 `assess_stock`,根本不經過 `assess_holding`(本檔
     `build_station_rows` 是它唯一的 production 呼叫端,且 `asset_kind` 已由白名單
     保證是 etf)。把不會發生的原因列進來,等於叫下一個人去查一個不存在的情形。
+    ⚠️ 「健檢四盞燈裡」這個限定不可省(2026-08-26 補):**本檔另有第二個掛載點** ——
+    `_weekly_series_payload` 對**個股列 / 個股抓取失敗列**的走勢圖原料
+    (`KEY_WEEKLY_SERIES`)標的就是 `MISS_NOT_APPLICABLE`,而且那一處 production
+    真的會走到。沒有限定詞的話,這句讀起來是「全檔唯一」的全稱句 = 假話。
+    L0 `station_specs.MISS_NOT_APPLICABLE` 的註解已同步列出兩個掛載點。
     row dict 是 UI / 推播 / 換股建議共同的輸入,原因在這裡
     斷掉就再也接不回去,故補兩個**底線開頭的非顯示欄**（同 `_detail` 慣例,不進表格）:
       - `_health_miss`:{規格表 key → MISS_*},逐盞燈的原因,無損。
