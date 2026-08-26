@@ -78,6 +78,10 @@ from shared.station_specs import (
 #: 而不是有人順手加個 flag 就悄悄改變了一盞燈的可信度語意。
 KNOWN_DEGRADED: frozenset[str] = frozenset({"stock_trend"})
 KNOWN_UNWIRED: frozenset[str] = frozenset()
+#: 目前唯一宣告「依規格就不出等級」者（2026-08-26 user 裁示，個股 KD）。
+#: 同 KNOWN_DEGRADED 的用意：這個旗標會**把一盞燈移出可信度分母**，
+#: 亦即會讓畫面上的分數變好看 —— 更不該有人順手加上去而沒被任何人看見。
+KNOWN_NO_LEVEL: frozenset[str] = frozenset({"stock_kd"})
 
 
 # ════════════════════════════════════════════════════════════════
@@ -623,17 +627,59 @@ class TestFlagsRequireReasons:
         assert not offenders, \
             f"標了 discriminative=False 卻沒填 degraded_reason:{offenders}"
 
+    def test_no_level_requires_reason(self):
+        """標了 `emits_level=False` 就必須說清楚**為什麼沒有等級**。
+
+        這個旗標的效果是「把這盞燈移出可信度分母」—— 分數會變好看。
+        不附理由 = 畫面少一盞燈卻沒有人交代得出來(§1)。
+        """
+        offenders = [s.key for s in STATION_SPECS
+                     if not s.emits_level and not s.no_level_reason.strip()]
+        assert not offenders, f"標了 emits_level=False 卻沒填 no_level_reason:{offenders}"
+
+    def test_no_level_reason_does_not_borrow_the_not_applicable_text(self):
+        """§1:不准把「還沒有規則」講成「不適用」。
+
+        兩者的處置完全不同:「不適用」是這類持股結構上沒有這盞燈(永遠不會有,
+        也不必等);「還沒有規則」是燈在、值也在,只是沒有人定義過怎麼判 ——
+        照「不適用」寫,使用者會以為 KD 對個股沒有意義,那是假的。
+        """
+        for key in sorted(KNOWN_NO_LEVEL):
+            txt = SPECS_BY_KEY[key].no_level_reason
+            assert MISS_TEXT[SS.MISS_NOT_APPLICABLE] not in txt, \
+                f"{key} 借用了「不適用」的文案"
+            if "不適用" in txt:
+                # 提到可以,但必須是**否定**它(「這不是不適用」),不能讀成在自稱不適用。
+                assert "**不是**「這類持股不適用」" in txt, \
+                    f"{key} 的理由提到「不適用」卻沒有明說它不是那一種:\n{txt}"
+
     def test_no_orphan_reasons(self):
         """反向：沒標旗標就不該有理由（寫了卻不生效的孤兒文案）。"""
         assert not [s.key for s in STATION_SPECS
                     if s.wired and s.unwired_reason.strip()]
         assert not [s.key for s in STATION_SPECS
                     if s.discriminative and s.degraded_reason.strip()]
+        assert not [s.key for s in STATION_SPECS
+                    if s.emits_level and s.no_level_reason.strip()]
 
     def test_marked_sets_match_known_lists(self):
         """被標記的集合要與本檔清單一致 —— 新增/移除都要有人有意識地改測試。"""
         assert {s.key for s in STATION_SPECS if not s.discriminative} == KNOWN_DEGRADED
         assert {s.key for s in STATION_SPECS if not s.wired} == KNOWN_UNWIRED
+        assert {s.key for s in STATION_SPECS if not s.emits_level} == KNOWN_NO_LEVEL
+
+    def test_the_three_flags_are_independent(self):
+        """三個旗標各講各的事,不得互相冒充。
+
+        KD 是 `emits_level=False` 而**不是** `wired=False`(它確實有接、燈也在看)、
+        也**不是** `discriminative=False`(它根本沒有門檻可以失準)。
+        用錯旗標的後果是畫面講錯話:標 unwired 會說「別等它亮」(它一直亮著)、
+        標 degraded 會說「門檻已失準」(它沒有門檻)。
+        """
+        for key in sorted(KNOWN_NO_LEVEL):
+            spec = SPECS_BY_KEY[key]
+            assert spec.wired is True and spec.discriminative is True
+        assert not (KNOWN_NO_LEVEL & (KNOWN_DEGRADED | KNOWN_UNWIRED))
 
     @pytest.mark.parametrize("key", sorted(KNOWN_DEGRADED))
     def test_degraded_reason_tells_user_what_to_do(self, key):
@@ -642,12 +688,17 @@ class TestFlagsRequireReasons:
         assert "該怎麼看" in txt or "改看" in txt or "請到" in txt, \
             f"{key} 只說了不能信，沒說該改看什麼:\n{txt}"
 
-    @pytest.mark.parametrize("key", sorted(KNOWN_DEGRADED | KNOWN_UNWIRED))
+    @pytest.mark.parametrize("key",
+                             sorted(KNOWN_DEGRADED | KNOWN_UNWIRED | KNOWN_NO_LEVEL))
     def test_reason_is_user_facing_not_a_dev_memo(self, key):
         """這欄會直接印給使用者。v19.170 有前科（margin.note 誤植開發者備忘，
-        實機驗證確認整段被印到畫面）。"""
+        實機驗證確認整段被印到畫面）。
+
+        `no_level_reason` 2026-08-26 納入同一個掃描 —— 它與另外兩個理由欄
+        走的是明細面板同一塊區域，沒有理由套兩種標準。"""
         spec = SPECS_BY_KEY[key]
-        txt = (spec.degraded_reason or "") + (spec.unwired_reason or "")
+        txt = ((spec.degraded_reason or "") + (spec.unwired_reason or "")
+               + (spec.no_level_reason or ""))
         for pat, why in (
             (re.compile(r"\bv\d+\.\d+"), "版本號"),
             (re.compile(r"\b[\w.]+\.py\b"), "檔名"),

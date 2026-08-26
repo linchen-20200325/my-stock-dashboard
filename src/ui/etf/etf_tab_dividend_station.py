@@ -27,10 +27,18 @@ from shared import dividend_station_thresholds as T
 from shared import station_specs as SS
 from src.ui.render.station_cards import CSS as _LIGHT_CSS
 from src.ui.render.station_cards import (
+    aggregate_judged,
+    cruise_or_gap,
+    is_fully_judged,
+    judged_count,
+    render_conclusion_card,
+    render_credibility_card,
     render_holding_detail,
     render_legend,
     render_light_wall,
-    watch_count,
+    render_todo_card,
+    render_two_scales,
+    tally_states,
 )
 
 # 戰情表分兩區（§ user 2026-08）：ETF 走定期定額 235/3-3-3、個股走 財報體檢 + KD。
@@ -208,6 +216,11 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
         return
 
     _vix = st.session_state.get("_station_vix")
+
+    # ── 1️⃣ 結論（階段 C）：三張卡放在所有細節之前 ──────────────────────
+    st.markdown(_LIGHT_CSS, unsafe_allow_html=True)   # 卡片與燈格共用同一份 CSS
+    _render_layer1(_rows, _vix)
+
     _vix_txt = f"{_vix:.1f}" if isinstance(_vix, (int, float)) else "抓取失敗（235 的 VIX 條件本次不觸發）"
     st.markdown(f"#### 3️⃣ 戰情表　·　VIX：**{_vix_txt}**")
 
@@ -230,6 +243,9 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
 
     # ── 📊 80/20 實際配置偏離 + 衛星停利（#38,有張數/均價才算）─────────────
     _render_allocation_take_profit(_rows)
+
+    # ── 2️⃣ 同一個名詞，兩套刻度（階段 C；純揭露，不改任何判定）────────────
+    render_two_scales()
 
     _render_light_detail(_rows)
 
@@ -263,6 +279,86 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     st.caption(f"💡 目標配置：🛡️核心 {T.CORE_TARGET_PCT:.0f}% / 🚀衛星 {T.SATELLITE_TARGET_PCT:.0f}%；"
                f"衛星獲利達 {T.SATELLITE_TAKE_PROFIT_PCT:.0f}% 嚴格停利、滾回核心。"
                "本區僅研究參考,非投資建議,盈虧自負。")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 第 1 層 —— 結論（階段 C）
+# ══════════════════════════════════════════════════════════════════════
+#
+# ⚠️ **一個新判斷都沒有（防呆 4）。** 三張卡把**上游已經算好的結論**排版出來:
+#   · 該換掉 / 該加碼的檔數 ← L3 `build_station_digest` 的 `reds` / `adds`
+#     （**與 LINE 每日推播吃的是同一支函式、同一組定義** —— 不另立一套「紅燈」）
+#   · 未實現損益 / 總市值   ← L3 `compute_portfolio_totals`（純乘加，張→股走 SSOT）
+#   · N/M 盞給得出判定      ← L4 `judged_count`（純計數，不看市場）
+#
+# ⚠️ **巡航 gate 做在這一層（防呆 2）。** L2 `dividend_station.suggest_action`
+#    一個字都沒動 —— 它同時餵著主表「建議動作」欄與
+#    `scripts/push_holdings_daily.py` 的 LINE 推播，在那裡加 gate 是行為變更。
+
+
+def _render_layer1(rows: list[dict], vix) -> None:
+    """1️⃣ 結論 —— 三張卡（該做什麼 / 訊號可信度 / 需要處理的檔數）。"""
+    from src.services.dividend_station_service import (
+        build_station_digest,
+        compute_portfolio_totals,
+    )
+
+    _rows = list(rows or [])
+    _digest = build_station_digest(_rows, vix)
+    _cut_n = len(_digest.get("reds") or [])
+    _add_n = len(_digest.get("adds") or [])
+    _err_n = len(_digest.get("errors") or [])
+
+    _cells = [r.get("_lights") or () for r in _rows]
+    _has_lights = any(_cells)
+    _judged, _total_lights = aggregate_judged(_cells)
+    _tally = tally_states(_cells)
+    # 「這一列每盞適用燈都給得出判定嗎」—— 抓取失敗的列 `missing_light_cells`
+    # 會回滿滿一列 missing,自然落在 False,不必另外判 error(§1 不重寫同一個判斷)。
+    _unjudged_n = sum(1 for _c in _cells if not is_fully_judged(_c))
+    _all_judged = bool(_cells) and _unjudged_n == 0
+
+    # 一句話。有東西要看就直接列出來（**不排優先序** —— 兩件事同時成立時
+    # 兩個都講，不由這一層決定誰比較重要）；都沒有才輪到巡航 gate。
+    _parts = []
+    if _cut_n:
+        _parts.append(f"{_cut_n} 檔亮汰弱紅燈")
+    if _add_n:
+        _parts.append(f"{_add_n} 檔亮加碼燈")
+    _headline = ("今天要看的：" + "、".join(_parts) if _parts
+                 else cruise_or_gap(_judged, _total_lights, all_rows_judged=_all_judged))
+
+    # 金額。§1：算不出來就不放這個數字，**不填 0**。
+    _totals = compute_portfolio_totals(_rows)
+    _figs: list[tuple[str, str]] = [(f"{len(_rows)}", "檔數")]
+    _note = ""
+    if _totals:
+        _figs.insert(0, (f"{_totals['pnl_twd']:+,.0f}",
+                         f"未實現損益（元）{_totals['pnl_pct']:+.1f}%"))
+        _figs.append((f"{_totals['value_twd']:,.0f}", "總市值（元）"))
+        if _totals["partial"]:
+            _note = (f"⚠️ {_totals['held_n'] - _totals['valued_n']}/{_totals['held_n']} 檔"
+                     f"持股缺張數或均價，**沒有**納入損益與市值 —— 上面兩個金額只涵蓋"
+                     f"其餘 {_totals['valued_n']} 檔。到 📁 組合管理補齊即可。")
+    else:
+        _note = ("未實現損益與總市值算不出來：持股沒有張數／均價／現價。"
+                 "§1 這裡**不填 0** —— 到 📁 組合管理的 Portfolio 補齊才會出現。")
+    if _err_n:
+        _note += f"{'　' if _note else ''}⚠️ 另有 {_err_n} 檔整批抓取失敗，未納入任何判斷。"
+
+    st.markdown("#### 1️⃣ 結論")
+    _c1, _c2, _c3 = st.columns([5, 4, 3], gap="medium")
+    with _c1:
+        render_conclusion_card(headline=_headline, figures=_figs, note=_note)
+    with _c2:
+        if _has_lights:
+            render_credibility_card(_judged, _total_lights, _tally)
+        else:
+            # 舊版執行結果留在 session（沒有 `_lights` 這個鍵）→ 不畫 0/0 假裝算過。
+            st.info("這份結果是舊版執行留下的，算不出訊號可信度 —— "
+                    "請重按「🚀 跑存股戰情室」。")
+    with _c3:
+        render_todo_card(add_n=_add_n, cut_n=_cut_n, unjudged_n=_unjudged_n)
 
 
 #: 規格表 key → 這盞燈的「值」寫在 row 的 `_detail` 哪個欄位。
@@ -340,6 +436,8 @@ def _render_light_detail(rows: list[dict]) -> None:
         "一盞「亮著綠燈但其實沒有資料」的燈,填色會是灰的、而且帶斜紋。"
         "⚠️ 235 加碼燈的紅／黃／綠是**跌多深、該加多少碼**,不是體質好壞 —— "
         "它的 🔴 是「崩盤／深水加碼」訊號。點進去每一盞燈都會寫明白。"
+        "　「有判定」的分母**比格子數少**是正常的:結構上不適用的燈(個股沒有折溢價)、"
+        "以及還沒有判燈規則的燈(個股 KD)不算進分母 —— 點那一盞燈會寫明是哪一種。"
     )
     render_legend()
 
@@ -350,14 +448,18 @@ def _render_light_detail(rows: list[dict]) -> None:
 
     _tbl, _panel = st.columns([7, 5], gap="medium")
     with _tbl:
-        _n_m = [watch_count(r.get("_lights") or ()) for r in _rows]
+        # 「有判定」與燈格牆、與第 1 層結論卡**同一把尺**(`judged_count`)——
+        # 三處印同一件事,不准有三個數字(user 2026-08-26 裁示)。
+        # 原本這裡用寬鬆的 `watch_count`(只看四態 live),2330 在同一頁會出現
+        # 第 1 層 2/4、這裡 3/4 兩個數字。
+        _n_m = [judged_count(r.get("_lights") or ()) for r in _rows]
         _sel = st.dataframe(
             {
                 "代號": [str(r.get("代號", "")) for r in _rows],
                 "名稱": [str(r.get("名稱", "")) for r in _rows],
                 "種類": [str(r.get("種類", "")) for r in _rows],
                 "健檢": [str(r.get("健檢", "")) for r in _rows],
-                "在看": [f"{_n}/{_m}" for _n, _m in _n_m],
+                "有判定": [f"{_n}/{_m}" for _n, _m in _n_m],
             },
             hide_index=True, width="stretch",
             on_select="rerun", selection_mode="single-row",
