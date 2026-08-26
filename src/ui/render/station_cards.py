@@ -110,9 +110,15 @@ class LevelStyle:
 #:        參與 `_worst_level` / `worst_health`,主表**沒有**這盞紅燈;給它紅色
 #:        等於在格子牆上憑空多出一盞主表沒有的紅燈,那是新判斷不是轉換(§1) |
 #: | ❔ | 只有 3-3-3 | 灰 | 無法判定 |
-#: | `""` | 個股 3 盞 + 整檔抓取失敗 | **不填色**(虛線框 + 空格) | ⚠️ `LEVEL_UNJUDGED`。
-#:        L2 **從來沒有**為這盞燈判過等級,填任何顏色都是假裝它有判定。
+#: | `""` | 個股 KD(永遠)· 整檔抓取失敗的整列 · 其餘個股燈判不出等級時
+#:        | **不填色**(虛線框 + 空格) | ⚠️ `LEVEL_UNJUDGED`。
+#:        L2 **沒有**為這一格判過等級,填任何顏色都是假裝它有判定。
 #:        虛線 = 「這格是空的」,與 ❌ 的實線框(有判定,只是不上告警色)分開 |
+#:        ⚠️ 原文寫「個股 3 盞」是**錯的**,而且與本檔 `judged_count` docstring
+#:        裡用「個股 3 盞」指**分母**撞名(同一份檔案裡同一個詞指兩件事,
+#:        其中一個還是錯的)。
+#:        個股 4 盞裡只有 KD 結構上永遠是空等級;財報體檢 / 財報趨勢 / 汰換建議
+#:        平常都有等級,只有在上游給的評等/verdict 不在分級表裡時才落到這一格。
 LEVEL_STYLES: dict[str, LevelStyle] = {
     "🔴": LevelStyle(fill=TRAFFIC_RED, glyph="", dashed=False),
     "🟡": LevelStyle(fill=TRAFFIC_YELLOW, glyph="", dashed=False),
@@ -620,6 +626,15 @@ def render_holding_detail(ticker: str, name: str, cells,
             # 故獨立成塊、**不共用**任何既有文案:借用「不適用」會對 KD 講假話
             # (它對個股完全適用),借用「無資料」會讓人以為重跑就會有(不會)。
             # 這一塊同時是那個 N/M 分母的交代 —— 少一盞不是算錯。
+            #
+            # ⚠️ 這個條件**只看旗標、不看四態**,是刻意的:分母少一盞這件事在
+            # 四態全部成立,只在 live 印會讓「今天沒抓到」那幾列的分母無人交代。
+            # 代價是這段文字會在 **live / degraded / missing / unwired 四種狀態下
+            # 都出現**,其中 missing 有兩條 production 路徑會走到
+            # (KD 沒有 k/d 值那一列、以及整檔抓取失敗的整列)——
+            # 故 `no_level_reason` **不得**寫任何「現在如何」的事實斷言,
+            # 一律用條件句描述結構事實(規格表該欄上方有對應註解與四態測試)。
+            # 想改成 `and _c.state == SS.STATE_LIVE` 之前先看那段註解。
             st.markdown(f'<div class="dsl-miss"><b>這盞燈還沒有判定規則</b><br>'
                         f'{_spec.no_level_reason}</div>', unsafe_allow_html=True)
         if _c.state == SS.STATE_UNWIRED and _spec.unwired_reason:
@@ -688,8 +703,10 @@ def render_credibility_card(judged: int, total: int, tally: dict) -> None:
     """卡②「訊號可信度」—— N/M 盞 + 四態分佈條 + 圖例。
 
     `judged` / `total` 由 `aggregate_judged` 算出(防呆 1 的定義),`tally` 由
-    `tally_states` 算出。**兩者分母口徑一致**（都排除結構上不適用的格子）——
-    否則同一張卡會出現兩個對不起來的總數。
+    `tally_states` 算出。**兩者分母口徑一致** —— 兩邊都走 `_in_judged_denominator`,
+    也就是同時排除「結構上不適用」與「依規格就不出等級」**兩類**格子
+    (2026-08-26 起後者才加進來;原文只寫了前者,漏掉一半)。
+    口徑一旦分家,同一張卡會出現兩個對不起來的總數。
 
     ⚠️ 分佈條**不用顏色編狀態**(見 CSS 註解):本檔的顏色一律代表「判定」,
     再拿來代表狀態就會有兩種讀法。四段靠紋理分辨,與燈格牆同一套語彙。

@@ -327,6 +327,221 @@ class TestBothLayersPrintTheSameNumber:
         assert '"有判定": [' in _src, "欄名要跟著數字的意思改(掛舊名賣新東西 = §1)"
 
 
+class TestKdBlockIsTrueInAllFourStates:
+    """「這盞燈還沒有判定規則」那一塊 —— **四種狀態下印出來的話都必須為真**。
+
+    2026-08-26 兩組稽核抓到的洞:那段文字原本帶著**現在式的事實斷言**
+    (「K、D 值都抓得到、鈍化／背離也照印」「把 K、D 數字…當短線參考自己判讀」),
+    而明細面板的渲染條件**只看規格旗標、不看四態** → 兩條 production 路徑會讀到假話:
+      · KD 沒有 k / d 值那一列(`assess_stock(kd=None)`)—— 該格四態 missing 而且
+        **沒有缺值原因可印**(`miss_reason` 是空字串),畫面上唯一的解釋就是這一段,
+        它卻叫使用者去看一個不存在的 K/D 數字;
+      · 整檔抓取失敗那一列(`missing_light_cells`)—— 每一盞燈都 missing,同一個面板
+        會同時印出「重跑一百次也一樣」與「這一檔整批抓取失敗,看該列的錯誤訊息」。
+
+    **修法選的是改文案(與狀態無關的結構事實),不是把渲染條件收成只在 live 印。**
+    理由:分母少一盞這件事在四態全部成立,只在 live 印會讓「今天沒抓到」那幾列的
+    分母**沒有人交代得出來** —— 而交代分母正是這一塊存在的另一半理由。
+    代價是這段字必須自己站得住:故下面第一條直接釘「四種狀態印的是同一段字」,
+    其餘幾條釘那段字的內容本身為真。
+    """
+
+    _HEAD = "這盞燈還沒有判定規則"
+
+    @staticmethod
+    def _kd_spec():
+        return SS.SPECS_BY_KEY[SS.KEY_STOCK_KD]
+
+    @staticmethod
+    def _render(cells, monkeypatch, *, error=""):
+        _fake = _CapturingST()
+        monkeypatch.setattr(SC, "st", _fake)
+        SC.render_holding_detail("2330", "台積電", cells, error=error)
+        return _fake
+
+    @classmethod
+    def _kd_block(cls, fake):
+        """面板裡「這盞燈還沒有判定規則」那一塊(整段 html)。"""
+        _hit = [_m for _m in fake.md if cls._HEAD in _m]
+        assert len(_hit) == 1, f"這一塊應該剛好印一次,實際 {len(_hit)} 次"
+        return _hit[0]
+
+    # ── 四種狀態的格子 ───────────────────────────────────────────────
+    @staticmethod
+    def _cells_live():
+        """live:K、D 都抓到了(production 正常路徑)。"""
+        return TestKdDeclaredNotToEmitLevels._stock_cells()
+
+    @staticmethod
+    def _cells_missing_no_kd():
+        """missing 之一:**production 可達** —— 上游沒給 KD,`kd_state` 是 None。
+
+        `build_station_rows` 傳的就是 `m.get("kd_state")`,拿不到就是 None。
+        """
+        return ds.light_cells(ds.assess_stock(
+            ticker="2330", name="台積電", asset_class=T.ASSET_SATELLITE,
+            mj_grade="A", mj_score_pct=88, mj_headline="體質佳", mj_fail_items=[],
+            kd=None, trend={"verdict": "improving"}))
+
+    @staticmethod
+    def _cells_missing_fetch_failed():
+        """missing 之二:**production 必經** —— 整檔抓取失敗的那一列。"""
+        return ds.missing_light_cells(T.KIND_STOCK, reason=SS.MISS_FETCH_FAILED)
+
+    @staticmethod
+    def _cells_forced(state):
+        """degraded / unwired:KD 的規格旗標讓它在 production 走不到這兩態
+        (`wired=True` + `discriminative=True`),但渲染條件不看四態 ——
+        故照樣把這兩態餵進去,確認印出來的話仍然為真。
+        """
+        return (_Cell(key=SS.KEY_STOCK_KD, level=ds.LEVEL_UNJUDGED, state=state),)
+
+    def _all_four(self):
+        return {
+            SS.STATE_LIVE: self._cells_live(),
+            SS.STATE_MISSING: self._cells_missing_no_kd(),
+            SS.STATE_DEGRADED: self._cells_forced(SS.STATE_DEGRADED),
+            SS.STATE_UNWIRED: self._cells_forced(SS.STATE_UNWIRED),
+        }
+
+    def test_the_kd_cell_really_reaches_all_four_states(self):
+        """先確認測資真的把 KD 那一格擺在四種狀態(否則下面幾條在測空氣)。"""
+        for _state, _cells in self._all_four().items():
+            _kd = next(_c for _c in _cells if _c.key == SS.KEY_STOCK_KD)
+            assert _kd.state == _state
+        _kd_err = next(_c for _c in self._cells_missing_fetch_failed()
+                       if _c.key == SS.KEY_STOCK_KD)
+        assert _kd_err.state == SS.STATE_MISSING
+
+    def test_the_block_prints_the_same_words_in_all_four_states(self, monkeypatch):
+        """**本組的骨幹**:四態印的是同一段字 → 這段字為真與否與狀態無關,
+        只要它在任一態為真就在四態都為真(下面幾條負責驗它為真)。
+
+        有人把文案改回帶狀態的寫法(「K、D 值都抓得到」)不會被這一條抓到 ——
+        那件事由 `test_the_block_makes_no_claim_about_what_is_available_now` 抓;
+        這一條抓的是另一半:有人把渲染條件改成只在某一態印。
+        """
+        _blocks = {_s: self._kd_block(self._render(_c, monkeypatch))
+                   for _s, _c in self._all_four().items()}
+        _blocks[SS.MISS_FETCH_FAILED] = self._kd_block(
+            self._render(self._cells_missing_fetch_failed(), monkeypatch,
+                         error="HTTPError: 404"))
+        assert len(set(_blocks.values())) == 1, \
+            "同一塊在不同狀態下印出不同的字 —— 它就不再是「與狀態無關的結構事實」"
+        assert self._kd_spec().no_level_reason in next(iter(_blocks.values()))
+
+    def test_the_block_makes_no_claim_about_what_is_available_now(self):
+        """§1:這段字只准講**結構事實**,不准講「現在有什麼」。
+
+        下面這幾句都是原文真的寫過、而且在兩條 missing 路徑上是**假話**的句子。
+        它們用條件句 / 反事實句改寫之後才站得住(「就算 K、D 都抓得到…」)。
+        """
+        _txt = self._kd_spec().no_level_reason
+        for _lie in ("K、D 值都抓得到、鈍化／背離也照印",
+                     "把 K、D 數字和鈍化／背離當短線參考",
+                     "也**不是**「今天沒抓到」"):
+            assert _lie not in _txt, f"這句在缺資料時是假話:{_lie}"
+        # 條件句框架必須在 —— 少了它,同樣的內容就變回事實斷言。
+        assert "就算 K、D 都抓得到" in _txt
+        assert "有 K、D 數字時" in _txt
+
+    def test_the_block_never_denies_that_the_data_could_be_missing(self):
+        """與缺值原因**不得互相打架**(這是憲法點名過的同一種錯)。
+
+        整檔抓取失敗那一列會同時印出「整批抓取失敗,看該列的錯誤訊息」——
+        這段字若還說「不是今天沒抓到」,兩句在同一個面板上正面矛盾。
+        現行寫法把「有沒有等級」與「這輪有沒有抓到」明確分開,兩句可以並存。
+        """
+        _txt = self._kd_spec().no_level_reason
+        assert "今天沒抓到" not in _txt and "這輪沒抓到" not in _txt
+        assert "這輪有沒有抓到" in _txt, "要嘛不提,要嘛把它指去「狀態」那一行"
+        # 「重跑一百次」只准掛在**等級**上,不准掛在「抓不抓得到」上。
+        assert "重跑一百次也一樣不會有等級" in _txt
+
+    def test_all_four_states_still_explain_the_missing_denominator(self, monkeypatch):
+        """硬要求:分母少一盞這件事,四態都要有交代(這是不收渲染條件的理由)。"""
+        for _state, _cells in self._all_four().items():
+            _blk = self._kd_block(self._render(_cells, monkeypatch))
+            assert "分母不把它算進去" in _blk, f"{_state} 少了分母的交代"
+
+    def test_missing_kd_row_has_no_other_explanation_on_screen(self, monkeypatch):
+        """釘住稽核那條路徑的前提:這一列的 KD 格**沒有缺值原因可印**。
+
+        `_stock_light_cells` 對 KD 刻意 `reason=""`(上游沒登記就不代它挑一個)——
+        所以畫面上唯一解釋「這格為什麼是空的」的就是這一塊。它一旦講假話,
+        使用者沒有第二個地方可以對照。
+        """
+        _cells = self._cells_missing_no_kd()
+        _kd = next(_c for _c in _cells if _c.key == SS.KEY_STOCK_KD)
+        assert _kd.miss_reason == "", "前提變了:KD 現在有缺值原因,這條要重寫"
+        _fake = self._render(_cells, monkeypatch)
+        assert not any(_t in _fake.text() for _t in SS.MISS_TEXT.values()), \
+            "這一列不該有任何 MISS_TEXT —— 唯一的解釋就是那一塊"
+        assert self._HEAD in _fake.text()
+
+    def test_fetch_failed_row_prints_both_and_they_do_not_contradict(self, monkeypatch):
+        """整檔抓取失敗:兩塊同時印,而且兩句都為真、互不否定。"""
+        _fake = self._render(self._cells_missing_fetch_failed(), monkeypatch,
+                             error="HTTPError: 404")
+        _txt = _fake.text()
+        assert SS.MISS_TEXT[SS.MISS_FETCH_FAILED] in _txt
+        assert self._HEAD in _txt
+        # 抓取失敗那句叫人去看錯誤訊息;KD 這句只講「就算抓到也沒有等級」。
+        # 兩者的交集只有「等級」,沒有「抓不抓得到」—— 那才是不打架的條件。
+        assert "就算 K、D 都抓得到" in self._kd_block(_fake)
+
+
+class TestCruiseGateIsPinnedToTheStrictScale:
+    """`is_fully_judged` **必須**走 `judged_count`,不准偷換成 `watch_count`。
+
+    2026-08-26 稽核實測:把 `is_fully_judged` 裡的 `judged_count` 換成
+    `watch_count`,完整 fast lane **6494 passed / 0 failed** —— 巡航 gate 這個
+    最關鍵的消費端,當時沒有任何一條測試釘住它用的是哪一把尺。
+    兩把尺在目前的 production 資料上碰巧同值,所以那不是行為 bug;但這顆改動的
+    核心交付物就是「同一把尺」,而**一個沒有防護力的 gate 跟沒有 gate 一樣**。
+
+    要讓兩把尺分家,測資必須含一盞**資料通(live)但沒有等級**的燈:
+    `watch_count` 會把它算成「在看」→ 說這一列滿了;`judged_count` 不算進分子
+    → 擋下。個股 KD 以外的燈只要 `emits_level=True` 卻沒出等級就是這種格子
+    (那正是 `judged_count` 分子多一個條件的理由)。
+    """
+
+    @staticmethod
+    def _live_but_unjudged_row():
+        """一盞有等級的 live 燈 + 一盞 live 但沒有等級的燈。
+
+        兩盞都在分母裡(假 key 不在規格表 → `_in_judged_denominator` 一律算進
+        分母,寧可分數偏低),差別只在**分子**。
+        """
+        return (_Cell(level="🟢"), _Cell(level=ds.LEVEL_UNJUDGED))
+
+    def test_two_scales_really_disagree_on_this_row(self):
+        """前提:這一列上兩把尺確實分家(否則下面兩條抓不到偷換)。"""
+        _cells = self._live_but_unjudged_row()
+        assert SC.judged_count(_cells) == (1, 2)
+        assert SC.watch_count(_cells) == (2, 2)
+
+    def test_gate_is_closed_by_a_live_but_unjudged_light(self):
+        """**本組最重要的一條** —— 換成 `watch_count` 這裡就會紅。"""
+        assert SC.is_fully_judged(self._live_but_unjudged_row()) is False, \
+            "巡航 gate 走的是寬鬆計數:「在看」被當成「有判定」放行了"
+
+    def test_gate_opens_when_every_light_has_a_level(self):
+        """反向:兩把尺一致時 gate 照樣開得了(不是把 gate 焊死才通過上一條)。"""
+        _cells = (_Cell(level="🟢"), _Cell(level="🔴"))
+        assert SC.judged_count(_cells) == SC.watch_count(_cells) == (2, 2)
+        assert SC.is_fully_judged(_cells) is True
+
+    def test_todo_card_counts_that_row_as_unjudged(self):
+        """同一件事在卡③的下游:那一列必須被算成「未判定」。
+
+        這行運算式與 L5 的 `_unjudged_n` 同型(見 `etf_tab_dividend_station`)——
+        gate 一旦偷換成寬鬆計數,卡③會少算一檔,畫面顯示「沒有待處理」。
+        """
+        _rows = [self._live_but_unjudged_row()]
+        assert sum(1 for _r in _rows if not SC.is_fully_judged(_r)) == 1
+
+
 class TestCruiseGate:
     """防呆 2：巡航只在全部給得出判定時才准印,而且做在顯示層。"""
 
