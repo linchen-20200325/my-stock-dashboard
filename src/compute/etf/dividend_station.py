@@ -86,6 +86,85 @@ def bollinger_z(weekly_close: pd.Series,
     return (last - ma) / sd
 
 
+def week_ma_series(weekly_close: pd.Series, period_weeks: int) -> pd.Series:
+    """N 週均線的**整條序列**版（`week_ma()` 的序列擴充,供走勢圖用）。
+
+    與純量版**同源**:第 i 點 ≡ `week_ma(weekly_close.iloc[:i + 1], period_weeks)`,
+    故 `week_ma_series(wk, N).iloc[-1]` 與 `week_ma(wk, N)` 相等（§4.3 對帳,
+    `tests/test_dividend_station_series.py` 以 `math.isclose` 釘住,不用 `==`）。
+
+    缺值語意（§1,逐條對齊純量版）:
+
+    - **週數不足**（前 N−1 點）→ `NaN` **留白**。純量版在這種情況回 `None`;序列版
+      沒有「回 None」這個位置,對應的誠實表示就是留白。**不 ffill、不補 0。**
+    - **窗內有 NaN 破洞** → 與純量版一致:**跳過 NaN 取其餘平均**。純量版用
+      `Series.mean()`（pandas 預設 `skipna=True`）,所以這裡用
+      `rolling(..., min_periods=1)` 取得同一種 skipna 行為,再把前 N−1 點遮回 NaN
+      補上「週數不足」那道關。⚠️ 直接寫 `rolling(N)`（等於 `min_periods=N`）會讓
+      **整個窗**因為一個破洞就變 NaN —— 那是**另一把尺**,畫出來的線會跟燈用的
+      均線對不起來。
+    - **窗內全 NaN** → `NaN`（純量版此時算出的也是 `float('nan')` 而非 `None`）。
+    - **輸入為 `None` / 空序列** → 回**空 Series**（float64）,不 raise。純量版回
+      `None`;序列版的回傳型別是 Series,「沒有值」的對應物是空序列。（會 raise 的是
+      `weekly_closes()`,因為它的契約是「一定要有日線才談得下去」;`week_ma` 這一族
+      的契約是「算不出來就說算不出來」。）
+
+    `period_weeks` < 1 → `raise ValueError`(§1:視窗長度無意義,不靜默給結果)。
+    視窗長度請從 L0 `shared.dividend_station_thresholds` 引入(§3.3),勿 inline。
+    """
+    if period_weeks < 1:
+        raise ValueError(f"week_ma_series: period_weeks 需 >= 1,收到 {period_weeks}")
+    s = pd.Series(dtype="float64") if weekly_close is None else pd.Series(weekly_close, dtype="float64")
+    if s.empty:
+        return s
+    ma = s.rolling(period_weeks, min_periods=1).mean()
+    ma.iloc[: period_weeks - 1] = math.nan     # 週數不足 → 留白（不 ffill、不補 0）
+    return ma
+
+
+def bollinger_z_series(weekly_close: pd.Series,
+                       period_weeks: int = T.BOLL_PERIOD_WEEKS) -> pd.Series:
+    """布林標準差位階 z 的**整條序列**版（`bollinger_z()` 的序列擴充,供走勢圖用）。
+
+    z_i =（週收_i − N週均_i）/ N週std_i,**母體標準差 `ddof=0`**,視窗 N 預設
+    `T.BOLL_PERIOD_WEEKS` —— 與純量版**逐字同源**,故
+    `bollinger_z_series(wk).iloc[-1]` 與 `bollinger_z(wk)` 相等（§4.3 對帳,測試釘住）。
+
+    ⚠️ **不要**改用 `shared.stats_helpers` 的 `zscore`（全序列 mean/std）或
+    `robust_z`（rolling median/MAD）—— 兩者公式都與本函式不同,拿來畫圖等於在同一頁
+    上多放一把尺,線上的 z 會跟 235 燈用的 z 對不起來。
+
+    缺值語意（§1,逐條對齊純量版的三條 `None` 路徑）:
+
+    - **週數不足**（前 N−1 點）→ `NaN` **留白**（純量版回 `None`）。不 ffill、不補 0。
+    - **NaN / inf 污染**(該點週收、其窗均、其窗 std 任一非有限)→ `NaN`。純量版是
+      `math.isfinite` 三連檢後回 `None`,序列版同樣三個分量逐點檢查。**不可回 inf**,
+      也不可讓 NaN 混進去被下游誤當成「z 很低 = 全清」(稽核 L5 同一個坑)。
+    - **std ≈ 0**(一條水平線;判準 `|std| <= T.FLOAT_ABS_TOL`,與純量版
+      `math.isclose(sd, 0.0, abs_tol=T.FLOAT_ABS_TOL)` 互補)→ `NaN`。
+      實作上是**先把分母遮成 NaN 再除**,而不是除完再修 —— 除以近 0 會先炸出 ±inf
+      (§4.4「大數除以小數」須 guard),遮分母讓那個 inf 根本不會產生。
+    - **窗內有 NaN 破洞但該點與統計量仍有限** → 與純量版一致,`mean`/`std` **跳過
+      NaN** 照算（同 `week_ma_series` 的說明,靠 `min_periods=1` + 前 N−1 遮罩達成）。
+    - **輸入為 `None` / 空序列** → 回**空 Series**(float64),不 raise;整條全 NaN
+      的輸入 → 回**等長全 NaN**。理由同 `week_ma_series`:與純量兄弟語意對齊。
+
+    `period_weeks` < 1 → `raise ValueError`。視窗長度自 L0 引入,勿 inline(§3.3)。
+    """
+    if period_weeks < 1:
+        raise ValueError(f"bollinger_z_series: period_weeks 需 >= 1,收到 {period_weeks}")
+    s = pd.Series(dtype="float64") if weekly_close is None else pd.Series(weekly_close, dtype="float64")
+    if s.empty:
+        return s
+    ma = s.rolling(period_weeks, min_periods=1).mean()
+    sd = s.rolling(period_weeks, min_periods=1).std(ddof=0)
+    # 三個分量都要有限(對齊純量版 math.isfinite 三連檢);`< inf` 對 NaN 亦為 False。
+    usable = ((s.abs() < math.inf) & (ma.abs() < math.inf) & (sd.abs() < math.inf)
+              & (sd.abs() > T.FLOAT_ABS_TOL))       # std≈0 → 不判定(§1 不猜)
+    usable.iloc[: period_weeks - 1] = False          # 週數不足 → 留白
+    return (s - ma) / sd.where(usable)               # 分母先遮再除,避免 ±inf(§4.4)
+
+
 # ── 報酬 / 配息 / 夏普（純函式,供 L3 抓到序列後計算）───────────────────
 def annual_yield_pct(ttm_dividend: float | None, price: float | None) -> float | None:
     """年化配息率% = 近 12 月配息 / 現價 × 100。缺值或價<=0 → None。"""
