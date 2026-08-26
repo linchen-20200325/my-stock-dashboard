@@ -30,7 +30,7 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
         圖示 + 一句話的消費端用；多盞燈原因不同時取最根本者（`most_fundamental_miss`）。
 
     ⚠️ 上面兩個鍵只收「**⚪ 且有登記原因**」的燈 —— 一盞 🟢 和一盞 🟡 在 row 裡
-    產出的東西一模一樣（都是空的）。要畫「每檔 8 格燈」或算「N/40 盞可信度」,
+    產出的東西一模一樣（都是空的）。要畫「逐盞燈的格子牆」或算「N/M 盞可信度」,
     這兩個鍵給不出來。故再補第三個非顯示欄:
       - `_lights`:`tuple[ds.LightCell, ...]`,**逐盞燈**的 key / level / 四態 /
         缺值原因（235 另帶 `axes_used`）。純轉換,判燈結果一個字都沒動。
@@ -174,8 +174,15 @@ def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason
         "held": held,   # 換股建議用:持有(Portfolio) vs 觀察(Watchlist)
         "_detail": {"error": reason},
         "_miss_reason": SS.MISS_FETCH_FAILED,
-        # 這一列沒有 assessment,但**每一盞燈都要出現** —— 否則「N/40 盞可信度」的
-        # 分母會因為抓取失敗的列整個消失而悄悄變小,畫面反而顯示可信度更高（§1）。
+        # 這一列沒有 assessment,但**該類別的每一盞燈都要照樣產出** —— 否則
+        # 「N/M 盞可信度」的分母會因為抓取失敗的列整個消失而悄悄變小,畫面反而
+        # 顯示可信度更高（§1）。
+        # ⚠️ 「都要出現」≠「都進分母」:哪幾格算進分母由消費端
+        # `render.station_cards._in_judged_denominator` 統一判（會排除「結構上
+        # 不適用」與規格表 `emits_level=False` 的燈,後者即個股 KD）。這裡管的是
+        # **不缺席**,不是分母口徑。
+        # ⚠️ 原文寫死「N/40 盞」—— 分母是**動態**的（隨持股檔數與 ETF/個股成分變）,
+        # 寫死的數字下一次組合變動就變成假話,故不寫數字。
         # 原因與上面 `_miss_reason` 同一個常數,不另寫字面值以免兩邊漂移。
         "_lights": ds.missing_light_cells(asset_kind, reason=SS.MISS_FETCH_FAILED),
     }
@@ -197,7 +204,30 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
         tk = str(h.get("ticker", "") or "").strip()
         nm = str(h.get("name", "") or "")
         ac = h.get("asset_class", T.ASSET_CORE)
-        ak = h.get("asset_kind", T.KIND_ETF)         # stock / etf（fetcher 分流 + 適用性）
+        # ⚠️ **`or`,不是 `get(key, default)`**(2026-08-26 user 核准修正)。
+        # `dict.get(k, default)` 的預設值**只在 key 缺席時生效** —— key 在、值是
+        # `None` / `""` 時會原樣通過,於是 `ak` 變成第三種值,`assess_holding` 裡的
+        # `_is_etf = asset_kind == T.KIND_ETF` 判 False,折溢價 + 3-3-3 三項共 4 盞燈
+        # 全被標成 `MISS_NOT_APPLICABLE`(實測:`None` / `""` / `"ETF"` / `"fund"` 皆然)——
+        # 一檔正常 ETF 憑空少 4 盞燈,而畫面會說「這類持股結構上沒有這盞燈」,是假話(§1)。
+        # 改成 `or` + `T.classify_asset_kind(tk)` 後,**falsy 那條路**被補起來:
+        # `None` / `""` 會落到 `classify_asset_kind`,而該 fn 每個 return 分支都只回
+        # etf / stock 兩值,故 falsy 輸入結構上再也生不出第三種值。
+        # ⚠️ **仍未關的洞(誠實記錄,不是漏看)**:`or` 只攔 falsy —— **truthy 的未知
+        # 字串**(如 `"ETF"` 大寫 / `"fund"`)照樣原樣通過,實測仍會標出 4 盞
+        # `MISS_NOT_APPLICABLE`。今天不可達(兩個 production 產出端
+        # `ui/etf/etf_tab_dividend_station._load_holdings_from_portfolio` 與
+        # `scripts/push_holdings_daily.py` 都已先跑 `T.classify_asset_kind`,只吐兩值),
+        # 故 2026-08-26 只做 falsy 這一段、不擅自擴大核准範圍。要**結構上**保證兩值,
+        # 得再加白名單(`ak if ak in (KIND_ETF, KIND_STOCK) else classify(...)`)——
+        # 那是另一個決定,待 user 裁示。守衛見
+        # `tests/test_station_layer1.py::TestAssetKindNormalisation`。
+        # ⚠️ 這裡的 `classify_asset_kind` 是 `shared/dividend_station_thresholds.py`
+        # 那一支(**兩值**)。`src/compute/etf/asset_lag.py` 有個同名函式回**三值**
+        # (多一個 `'unknown'`,給組合體檢落後燈號用)—— 拿錯那支會讓 `unknown`
+        # 直接走進 `assess_holding(_is_etf=False)`,正好把這個洞放大,**不要用**。
+        # 寫法與同檔 `resolve_holding_names` 對齊(那邊本來就是 `or`,一直是對的)。
+        ak = h.get("asset_kind") or T.classify_asset_kind(tk)   # stock / etf（fetcher 分流 + 適用性）
         held = bool(h.get("held", True))             # 持有(Portfolio) vs 觀察(Watchlist)
         if not tk:
             continue

@@ -2,16 +2,25 @@
 
 ## 這批測試守什麼
 
-1. **N/M 的定義**（防呆 1）—— 分子要「live **且** 有 level」兩個條件同時成立;
-   分母扣掉「結構上不適用」與「依規格就不出等級」兩種燈,**不扣**「今天沒抓到」。
-   這幾件事各自都出過事:
-   - 只看 `state == live` → 個股 KD 被算進分子(它資料通、但從不判等級)→ **高估**;
+1. **N/M 的定義**（防呆 1）—— 分子要「state ∈ {live, degraded}」**且**「有 level」
+   兩個條件同時成立;分母扣掉「結構上不適用」與「依規格就不出等級」兩種燈,
+   **不扣**「今天沒抓到」。這幾件事各自都出過事:
+   - 只看 `state` → 個股 KD 被算進分子(它資料通、但從不判等級)→ **高估**;
+   - 只看 `level` 非空 → **`missing` 的格子常態帶著非空 level**(缺值的 health_a
+     是 ⚪、缺值的 screen_return 是 ❔)→ 可選指標全缺的新上市 ETF 會印出
+     「8/8 給得出判定」並放行巡航,正好是這個指標要擋的坑 → **高估**;
    - 分母扣掉算不出來的燈 → 資料越爛分數越高,正好是這個指標要防的東西;
    - KD 留在分母 → 只要有一檔個股,那一列就永遠不可能滿,巡航變成印不出來的死碼
      (2026-08-26 user 裁示移出分母;它只離開分母,沒離開畫面)。
+   ⚠️ **2026-08-26 第二次裁示**:`degraded`(門檻已失準但給得出等級)**算「有判定」**,
+   不阻斷巡航。分子的 state 條件因此從「== live」放寬為**白名單** {live, degraded};
+   `missing` / `unwired` 仍然不進分子(理由見上面第二點)。
 2. **同一頁只准有一個數字** —— 第 1 層結論卡與第 3 層燈格牆 / 選列表 / 明細面板
    共用同一把尺(`judged_count`)。改動前第 3 層走寬鬆的 `watch_count`,
    2330 在同一頁印出 2/4 與 3/4 兩個數字。
+   ⚠️ `SC.watch_count` **已於 2026-08-26 刪除**(production caller 歸零 → user 裁示
+   刪死碼)。本檔需要「另一把尺」當對照組時,改用檔內的 `_loose_by_state` /
+   `_loose_by_level`(見檔頭),**不要**把它加回 production。
 3. **巡航 gate 做在顯示層**(防呆 2)—— L2 `suggest_action` 一個字都不准動,
    因為它同時餵著主表「建議動作」欄與 `scripts/push_holdings_daily.py` 的
    **LINE 每日推播**。這裡釘住「兩句話刻意不同字」,避免有人日後「順手統一」
@@ -36,6 +45,32 @@ from shared.sector_flow_thresholds import SHARES_PER_LOT
 from src.compute.etf import dividend_station as ds
 from src.services import dividend_station_service as SVC
 from src.ui.render import station_cards as SC
+
+# ── 兩把「錯的尺」（**測試檔內**,不是 production API）────────────────────
+#
+# 2026-08-26 起 production 只有一把尺 `judged_count`;原本拿來當對照組的
+# `SC.watch_count` 已隨 caller 歸零而刪除（user 裁示刪死碼）。
+# 但**對照組不能一起消失** —— 沒有對照組,「gate 用的是嚴格計數」那幾條就變成
+# 在測自己（測資有沒有鑑別力沒人驗）。故把兩種**已知會出錯的實作**寫在這裡,
+# 讓它們與 `judged_count` 在同一批測資上分家,`judged_count` 才證明得了自己嚴格。
+#
+# ⚠️ 這兩支**刻意不放進 production** —— 放回去就會有人拿去印在畫面上,
+# 那正是 2026-08-26 前「同一頁兩個數字」的成因。
+
+def _loose_by_state(cells) -> tuple[int, int]:
+    """錯法一（舊 `watch_count`）:只看四態 live,**不管有沒有等級**。分母 = 整列燈數。"""
+    _cs = tuple(cells or ())
+    return sum(1 for c in _cs if c.state == SS.STATE_LIVE), len(_cs)
+
+
+def _loose_by_level(cells) -> tuple[int, int]:
+    """錯法二:只看 level 非空,**不管四態** —— 即 user 那句裁示的字面讀法。
+
+    §1 這個讀法會放行「缺值但帶非空等級」的格子（缺值的 health_a 是 ⚪、
+    缺值的 screen_return 是 ❔），見 `TestJudgedCountDefinition` 那一組。
+    """
+    _cs = tuple(cells or ())
+    return sum(1 for c in _cs if c.level != ds.LEVEL_UNJUDGED), len(_cs)
 
 
 # ── 假格子（不碰真 assessment，讓每個案例只表達一件事）────────────────────
@@ -72,8 +107,9 @@ class TestJudgedCountDefinition:
         """
         _cells = (_Cell(level="🟢"), _Cell(level=ds.LEVEL_UNJUDGED))
         assert SC.judged_count(_cells) == (1, 2)
-        # 舊的那把尺會算成 2/2 —— 兩者刻意不同,不是誰壞掉。
-        assert SC.watch_count(_cells) == (2, 2)
+        # 只看四態的那把尺會算成 2/2 —— 兩者刻意不同,不是誰壞掉。
+        # (`SC.watch_count` 已於 2026-08-26 刪除,對照組改用本檔的 `_loose_by_state`。)
+        assert _loose_by_state(_cells) == (2, 2)
 
     def test_missing_light_stays_in_denominator(self):
         """「今天沒抓到」必須留在分母裡把分數拉低（§1）。"""
@@ -89,10 +125,70 @@ class TestJudgedCountDefinition:
                         miss_reason=SS.MISS_NOT_APPLICABLE))
         assert SC.judged_count(_cells) == (1, 1)
 
-    def test_degraded_is_not_judged(self):
-        """degraded 的門檻已失準 → 不算「給得出判定」（分母仍在）。"""
+    def test_degraded_with_a_level_is_judged(self):
+        """**2026-08-26 user 第二次裁示**:degraded = 門檻已失準**但給得出等級**
+        → 算「有判定」,不阻斷巡航。
+
+        原文這條斷言的是 `(0, 1)`（degraded 不算判定）。那是同一天稍早的現況,
+        不是被推翻的錯誤 —— user 看過那個現況之後才裁示放寬,故此處**反向重寫**
+        而不是刪掉:留著名字與位置,讓 blame 查得到語意是哪一次改的。
+        """
         _cells = (_Cell(level="🟡", state=SS.STATE_DEGRADED),)
+        assert SC.judged_count(_cells) == (1, 1)
+
+    def test_degraded_without_a_level_is_still_not_judged(self):
+        """放寬的是 **state** 這個條件,不是「有沒有等級」那個條件。
+
+        degraded 且**沒有**等級 → 照樣不算判定(分母仍在)。少了這條,
+        「degraded 一律放行」的寫法會通過上一條而不被發現。
+        """
+        _cells = (_Cell(level=ds.LEVEL_UNJUDGED, state=SS.STATE_DEGRADED),)
         assert SC.judged_count(_cells) == (0, 1)
+
+    def test_missing_with_a_non_empty_level_is_not_judged(self):
+        """⚠️ **本條是「別把 state 條件拿掉」的防線** —— 拿掉就紅。
+
+        user 那句裁示的字面是「只要有非空等級即放行」。**照字面做會違憲(§1)**:
+        `missing` 的格子**常態帶著非空 level** —— 四個 `_*_light_cells` 分支的
+        `has_value` 定義就是「level 不是 ⚪」,所以缺值的 `health_a` 是 `⚪`、
+        缺值的 `screen_return` 是 `❔`,兩個都**不是** `LEVEL_UNJUDGED`。
+        只看 level 的話,可選指標全缺的新上市 ETF 會印出「8/8 盞給得出判定」
+        並放行巡航「今天沒有需要動作的部位」。
+
+        這裡用的就是那兩個**真實形狀**(不是自己編的假格子形狀)——
+        下一條 `test_the_real_shape_above_really_occurs_in_production` 直接
+        從 `assess_holding` 生出同樣的形狀,證明這不是假想案例。
+        """
+        _cells = (_Cell(key=SS.KEY_HEALTH_A, level="⚪", state=SS.STATE_MISSING,
+                        miss_reason=SS.MISS_NOT_ENOUGH),
+                  _Cell(key=SS.KEY_SCREEN_RETURN, level="❔", state=SS.STATE_MISSING,
+                        miss_reason=SS.MISS_NOT_ENOUGH))
+        # 兩格都有非空等級 —— 照字面實作會算成 2/2。
+        assert all(_c.level != ds.LEVEL_UNJUDGED for _c in _cells)
+        assert SC.judged_count(_cells) == (0, 2)
+
+    def test_the_real_shape_above_really_occurs_in_production(self):
+        """上一條的前提**不是**假想:`assess_holding` 可選指標全缺就長這樣。
+
+        `build_station_rows` 傳的是 `metrics_fn` 拿得到什麼就傳什麼,新上市 /
+        冷門 ETF 的 sharpe / 同類排名 / 成立年數本來就是 None → production 可達。
+        """
+        _idx = pd.date_range("2024-01-07", periods=60, freq="W-SUN")
+        _cells = ds.light_cells(ds.assess_holding(
+            ticker="00XXX.TW", name="新上市", asset_class=T.ASSET_CORE,
+            asset_kind=T.KIND_ETF,
+            weekly_close=pd.Series([100.0] * 60, index=_idx),
+            vix=None, premium_pct=None, sharpe=None, total_return_1y_pct=None,
+            annual_yield_pct=None, inception_years=None, ann_return_3y_pct=None,
+            cum_return_3y_pct=None, peer_ranks=None))
+        _missing = [_c for _c in _cells if _c.state == SS.STATE_MISSING]
+        assert len(_missing) == 6, "前提變了:這一列的缺值格數不再是 6,本組要重算"
+        assert all(_c.level != ds.LEVEL_UNJUDGED for _c in _missing), \
+            "前提變了:missing 不再帶非空 level —— 那 docstring 裡的理由要重寫"
+        # 照字面「只要有非空等級即放行」→ 8/8;實裝擋在 2/8。
+        assert sum(1 for _c in _cells if _c.level != ds.LEVEL_UNJUDGED) == 8
+        assert SC.judged_count(_cells) == (2, 8)
+        assert SC.is_fully_judged(_cells) is False
 
     def test_empty_is_zero_zero_not_a_pass(self):
         assert SC.judged_count(()) == (0, 0)
@@ -143,7 +239,7 @@ class TestAggregatesShareOneDenominator:
         _k = TestKdDeclaredNotToEmitLevels
         _rows = [_k._etf_cells(), _k._stock_cells()]
         _n, _m = SC.aggregate_judged(_rows)
-        assert (_n, _m) == (10, 11)
+        assert (_n, _m) == (11, 11)      # 2026-08-26 第二次裁示前為 (10, 11)
         assert sum(SC.tally_states(_rows).values()) == _m
 
     def test_tally_always_has_all_four_keys(self):
@@ -180,13 +276,18 @@ class TestKdDeclaredNotToEmitLevels:
             cum_return_3y_pct=30.0, peer_ranks={3: 0.2, 6: 0.2, 12: 0.2}))
 
     def test_kd_leaves_the_denominator_but_not_the_wall(self):
-        """分母 3、格子 4 —— 少的是分母,不是燈。"""
+        """分母 3、格子 4 —— 少的是分母,不是燈。
+
+        ⚠️ 分子 2026-08-26 起是 **3**(原本 2):財報趨勢那盞燈是 degraded 且有等級,
+        第二次裁示把 degraded 併進「有判定」。KD 的部分(分母 3、牆上 4 格、
+        state 仍 live)**完全不受影響** —— 那三句本來就與 degraded 無關。
+        """
         _cells = self._stock_cells()
         assert len(_cells) == 4, "KD 不准從燈格牆上消失"
         _kd = [c for c in _cells if c.key == SS.KEY_STOCK_KD]
         assert len(_kd) == 1 and _kd[0].state == SS.STATE_LIVE, \
             "KD 仍然「在看」(K、D 都抓到了),只是不給判定"
-        assert SC.judged_count(_cells) == (2, 3)
+        assert SC.judged_count(_cells) == (3, 3)
 
     def test_kd_is_not_moved_out_by_calling_it_not_applicable(self):
         """§1:不准借用「不適用」的文案 —— 那對 KD 是假話(它對個股完全適用)。"""
@@ -221,23 +322,38 @@ class TestKdDeclaredNotToEmitLevels:
         _n, _m = SC.aggregate_judged([_cells])
         assert SC.cruise_or_gap(_n, _m, all_rows_judged=True) == SC.CRUISE_TEXT
 
-    def test_stock_rows_are_still_blocked_by_the_degraded_trend_light(self):
-        """⚠️ **已知殘留缺口,已回報 user(2026-08-26),不是預設接受的設計。**
+    def test_stock_rows_are_no_longer_blocked_by_the_degraded_trend_light(self):
+        """⚠️ **這條是那道「封條」,2026-08-26 user 裁示後被有意識地拆掉。**
 
-        KD 移出分母後,個股列仍然不可能「每盞都給得出判定」:財報趨勢那盞燈在
-        規格表被標為「門檻已失準」(只比兩季),有值時四態是 degraded 而非 live,
-        分子的條件是 live → 它永遠不進分子,但留在分母裡。
-        也就是說:**只要組合裡有個股,巡航那句話仍然印不出來**。
+        ═══ 原文（保留在這裡,因為它是這個缺口存在過的唯一追溯紀錄）═════════
+        原本這條叫 `test_stock_rows_are_still_blocked_by_the_degraded_trend_light`,
+        斷言的是**已知殘留缺口**:KD 移出分母後,個股列仍然不可能「每盞都給得出
+        判定」—— 財報趨勢那盞燈在規格表被標為「門檻已失準」(只比兩季),有值時
+        四態是 degraded 而非 live,而當時分子的條件是 `state == live`
+        → 它永遠不進分子,但留在分母裡。**只要組合裡有個股,巡航那句話就印不出來。**
+        原文並寫明:「要不要讓『門檻已失準但有等級』算進分子,是語意決定,不是
+        當次授權的範圍……哪天 user 裁示改了,這條會紅,**改的人必須有意識地改它**,
+        而不是默默地讓一個已知缺口消失。」
 
-        要不要讓「門檻已失準但有等級」算進分子,是語意決定(degraded 的等級算不算
-        數),不是這次授權的範圍 —— 故照實釘住現況。哪天 user 裁示改了,這條會紅,
-        改的人必須有意識地改它,而不是默默地讓一個已知缺口消失。
+        ═══ 現況（2026-08-26 user 第二次裁示）═══════════════════════════════
+        user 拍板:**門檻已失準但給得出等級 → 算「有判定」,不阻斷巡航。**
+        缺口因此關閉 —— 這條依原文的要求**有意識地反向重寫**(改斷言、改名字、
+        留原文),不是把它刪掉。刪掉等於把「這裡曾經有個缺口、是誰在哪一天用什麼
+        理由關掉的」一起刪掉。
+
+        ⚠️ 注意這條**不是**在測「degraded 一律放行」:下面仍然釘住那盞燈
+        **有等級**(`level != LEVEL_UNJUDGED`)。degraded 而沒有等級的格子照樣
+        不進分子,由 `TestJudgedCountDefinition` 那一組守。
         """
         _cells = self._stock_cells()
         _trend = next(c for c in _cells if c.key == SS.KEY_STOCK_TREND)
+        # 前提不變:這盞燈仍然是 degraded(規格表沒改),而且它**有等級**。
         assert _trend.state == SS.STATE_DEGRADED and _trend.level != ds.LEVEL_UNJUDGED
-        assert SC.is_fully_judged(_cells) is False
-        assert SC.cruise_or_gap(2, 3, all_rows_judged=False) != SC.CRUISE_TEXT
+        # 變的是這三句 —— 原文分別是 False / (2, 3) / != CRUISE_TEXT。
+        assert SC.is_fully_judged(_cells) is True
+        assert SC.judged_count(_cells) == (3, 3)
+        _n, _m = SC.aggregate_judged([_cells])
+        assert SC.cruise_or_gap(_n, _m, all_rows_judged=True) == SC.CRUISE_TEXT
 
 
 class _CapturingST:
@@ -268,7 +384,8 @@ class TestBothLayersPrintTheSameNumber:
 
     這裡**不是**斷言 `judged_count == judged_count`(那是廢話),而是去讀
     第 3 層渲染出來的 HTML 字串,確認它印的就是第 1 層那把尺算出來的數字 ——
-    有人把 `render_light_wall` 改回 `watch_count` 就會紅。
+    有人把 `render_light_wall` 改回寬鬆計數就會紅(`SC.watch_count` 本身已於
+    2026-08-26 刪除,所以現在「改回去」得先自己寫一支 —— 這一條照樣抓得到)。
     """
 
     def _cells(self):
@@ -283,10 +400,10 @@ class TestBothLayersPrintTheSameNumber:
         _pairs = [(int(_a), int(_b))
                   for _a, _b in re.findall(r"(\d+)/(\d+) 有判定", _fake.text())]
         assert _pairs == [SC.judged_count(_etf), SC.judged_count(_stk)]
-        assert _pairs == [(8, 8), (2, 3)]
+        assert _pairs == [(8, 8), (3, 3)]      # 個股 2026-08-26 第二次裁示前為 (2, 3)
         # 逐列相加 = 第 1 層卡②印的那個 N/M。
         assert (sum(_n for _n, _ in _pairs), sum(_m for _, _m in _pairs)) \
-            == SC.aggregate_judged([_etf, _stk]) == (10, 11)
+            == SC.aggregate_judged([_etf, _stk]) == (11, 11)
         # 舊的寬鬆計數不准再出現在這一層(它會印「N/M 在看」)。
         assert not re.search(r"\d+/\d+ 在看", _fake.text())
 
@@ -297,7 +414,7 @@ class TestBothLayersPrintTheSameNumber:
         SC.render_holding_detail("2330", "台積電", _stk)
         _m = re.search(r"(\d+)/(\d+) 盞有判定", _fake.text())
         assert _m, "明細面板沒有印出 N/M"
-        assert (int(_m.group(1)), int(_m.group(2))) == SC.judged_count(_stk) == (2, 3)
+        assert (int(_m.group(1)), int(_m.group(2))) == SC.judged_count(_stk) == (3, 3)
 
     def test_detail_panel_explains_why_the_denominator_is_smaller(self, monkeypatch):
         """少一盞不是算錯 —— 畫面必須講得出「這盞燈還沒有判定規則」。"""
@@ -492,7 +609,7 @@ class TestKdBlockIsTrueInAllFourStates:
 
 
 class TestCruiseGateIsPinnedToTheStrictScale:
-    """`is_fully_judged` **必須**走 `judged_count`,不准偷換成 `watch_count`。
+    """`is_fully_judged` **必須**走 `judged_count`,不准偷換成任何一把寬鬆的尺。
 
     2026-08-26 稽核實測:把 `is_fully_judged` 裡的 `judged_count` 換成
     `watch_count`,完整 fast lane **6494 passed / 0 failed** —— 巡航 gate 這個
@@ -500,8 +617,24 @@ class TestCruiseGateIsPinnedToTheStrictScale:
     兩把尺在目前的 production 資料上碰巧同值,所以那不是行為 bug;但這顆改動的
     核心交付物就是「同一把尺」,而**一個沒有防護力的 gate 跟沒有 gate 一樣**。
 
-    要讓兩把尺分家,測資必須含一盞**資料通(live)但沒有等級**的燈:
-    `watch_count` 會把它算成「在看」→ 說這一列滿了;`judged_count` 不算進分子
+    ⚠️ **2026-08-26 `SC.watch_count` 已刪除,本組的守衛力沒有跟著消失。**
+    本組守的一直是**行為**（「這一列不准通過 gate」）,不是「有沒有比對到某支
+    函式」—— 最關鍵的 `test_gate_is_closed_by_a_live_but_unjudged_light` 原文就
+    只斷言 `is_fully_judged(...) is False`,一個字都沒提 `watch_count`（只在
+    docstring 舉例）。刪掉函式不影響它。
+    改掉的只有**對照組**:由 production 的 `SC.watch_count` 換成本檔的
+    `_loose_by_state`（見檔頭）。對照組的用途是證明**測資有鑑別力**
+    ——「這一列上兩把尺確實分家」,沒有它,下面兩條可能在測一列根本分不出高下的
+    資料而自己不知道。
+
+    ⚠️ 本組現在同時守**兩種**錯法（原本只有一種）:
+      · `_loose_by_state` —— 只看四態,不管有沒有等級（舊 `watch_count`）;
+      · `_loose_by_level` —— 只看等級,不管四態（user 那句裁示的字面讀法,
+        會放行「缺值但帶非空等級」的格子,§1）。
+    兩種都必須被 gate 擋下。
+
+    要讓尺分家,測資必須含一盞**資料通(live)但沒有等級**的燈:
+    `_loose_by_state` 會把它算成「在看」→ 說這一列滿了;`judged_count` 不算進分子
     → 擋下。個股 KD 以外的燈只要 `emits_level=True` 卻沒出等級就是這種格子
     (那正是 `judged_count` 分子多一個條件的理由)。
     """
@@ -515,22 +648,66 @@ class TestCruiseGateIsPinnedToTheStrictScale:
         """
         return (_Cell(level="🟢"), _Cell(level=ds.LEVEL_UNJUDGED))
 
+    @staticmethod
+    def _missing_but_levelled_row():
+        """一盞有等級的 live 燈 + 一盞**缺值但帶非空等級**的燈(錯法二的測資)。
+
+        形狀取自 production:缺值的 `health_a` 是 `⚪`、缺值的 `screen_return`
+        是 `❔`,兩個都不是 `LEVEL_UNJUDGED`(見 `TestJudgedCountDefinition`)。
+        """
+        return (_Cell(level="🟢"),
+                _Cell(key=SS.KEY_HEALTH_A, level="⚪", state=SS.STATE_MISSING,
+                      miss_reason=SS.MISS_NOT_ENOUGH))
+
     def test_two_scales_really_disagree_on_this_row(self):
-        """前提:這一列上兩把尺確實分家(否則下面兩條抓不到偷換)。"""
+        """前提:這一列上尺確實分家(否則下面兩條抓不到偷換)。
+
+        `SC.watch_count` 2026-08-26 已刪 → 對照組改用檔頭的 `_loose_by_state`,
+        斷言的數字與原文一字不差。
+        """
         _cells = self._live_but_unjudged_row()
         assert SC.judged_count(_cells) == (1, 2)
-        assert SC.watch_count(_cells) == (2, 2)
+        assert _loose_by_state(_cells) == (2, 2)
+
+    def test_the_level_only_scale_also_disagrees(self):
+        """同樣的前提,套在**錯法二**上(2026-08-26 新增)。"""
+        _cells = self._missing_but_levelled_row()
+        assert SC.judged_count(_cells) == (1, 2)
+        assert _loose_by_level(_cells) == (2, 2)
 
     def test_gate_is_closed_by_a_live_but_unjudged_light(self):
-        """**本組最重要的一條** —— 換成 `watch_count` 這裡就會紅。"""
+        """**本組最重要的一條** —— gate 改用只看四態的寬鬆尺,這裡就會紅。"""
         assert SC.is_fully_judged(self._live_but_unjudged_row()) is False, \
             "巡航 gate 走的是寬鬆計數:「在看」被當成「有判定」放行了"
 
+    def test_gate_is_closed_by_a_missing_but_levelled_light(self):
+        """同一件事,擋的是**錯法二**(2026-08-26 新增)。
+
+        gate 改成「只要有非空等級即放行」,這裡就會紅 —— 而那正是 user 那句裁示的
+        字面讀法。缺資料的列絕不可以印出「今天沒有需要動作的部位」(§1)。
+        """
+        assert SC.is_fully_judged(self._missing_but_levelled_row()) is False, \
+            "巡航 gate 只看等級不看四態:缺資料的格子被當成「有判定」放行了"
+
     def test_gate_opens_when_every_light_has_a_level(self):
-        """反向:兩把尺一致時 gate 照樣開得了(不是把 gate 焊死才通過上一條)。"""
+        """反向:三把尺一致時 gate 照樣開得了(不是把 gate 焊死才通過上面兩條)。"""
         _cells = (_Cell(level="🟢"), _Cell(level="🔴"))
-        assert SC.judged_count(_cells) == SC.watch_count(_cells) == (2, 2)
+        assert SC.judged_count(_cells) == _loose_by_state(_cells) \
+            == _loose_by_level(_cells) == (2, 2)
         assert SC.is_fully_judged(_cells) is True
+
+    def test_gate_opens_for_a_degraded_light_with_a_level(self):
+        """2026-08-26 第二次裁示的反向:degraded 有等級 → gate 開得了。
+
+        放在這一組,是為了讓「放寬」與「不准放寬到缺資料」兩件事並排 ——
+        下一個人同時看得到界線在哪裡。
+        """
+        _cells = (_Cell(level="🟢"),
+                  _Cell(level="🟡", state=SS.STATE_DEGRADED))
+        assert SC.judged_count(_cells) == (2, 2)
+        assert SC.is_fully_judged(_cells) is True
+        # 但只看四態的舊尺會把它算成 1/2 —— 兩把尺仍然是分家的。
+        assert _loose_by_state(_cells) == (1, 2)
 
     def test_todo_card_counts_that_row_as_unjudged(self):
         """同一件事在卡③的下游:那一列必須被算成「未判定」。
@@ -568,6 +745,142 @@ class TestCruiseGate:
         _l2 = ds.suggest_action(_cruise_assessment())
         assert _l2 == "⚪ 巡航：維持定期定額"        # L2 現況（若這行紅了 = 推播文案被改）
         assert SC.CRUISE_TEXT != _l2
+
+
+class TestAssetKindNormalisation:
+    """第 5 項（user 2026-08-26 核准）：`asset_kind` 不准把第三種值放進 `assess_holding`。
+
+    ## 這一組在守什麼
+
+    `build_station_rows` 原本寫 `h.get("asset_kind", T.KIND_ETF)`。
+    `dict.get(k, default)` 的預設值**只在 key 缺席時生效** —— key 在、值是 `None`
+    或 `""` 時會**原樣通過**。那個值一路傳進 `assess_holding`,而該函式用
+    `_is_etf = asset_kind == T.KIND_ETF` 判斷,第三種值一律判 False →
+    折溢價 + 3-3-3 三項共 **4 盞燈**被標成 `MISS_NOT_APPLICABLE`。
+    後果是一檔正常 ETF 憑空少 4 盞燈,而畫面會對使用者說「這類持股結構上沒有
+    這盞燈」—— 那是假話（§1）。改成 `or` + `T.classify_asset_kind(tk)` 後補起來。
+
+    ## 與第 2 項（清「不適用」假文案）的關係
+
+    第 2 項把可信度卡與明細 caption 裡的「個股沒有折溢價」拿掉,前提是
+    **production 走不到 `MISS_NOT_APPLICABLE`**。在這一項修好之前,那個前提是
+    **偶然為真**（剛好沒有人餵得出第三種值),不是結構性為真。
+    這一組測試就是把「偶然」變成「有東西在守」——
+    文案站得住,靠的是這裡紅不紅,不是靠沒有人去踩。
+
+    ⚠️ `T.classify_asset_kind`（`shared/dividend_station_thresholds.py`）回 **兩值**。
+    `src/compute/etf/asset_lag.py` 有個**同名**函式回**三值**（多一個 `'unknown'`）,
+    那支是給組合體檢落後燈號用的 —— 拿錯會讓 `unknown` 直接走進
+    `assess_holding(_is_etf=False)`,正好把這個洞放大。下面有一條直接釘住這件事。
+    """
+
+    @staticmethod
+    def _metrics(_tk, _ak=T.KIND_ETF):
+        if _ak == T.KIND_STOCK:
+            return {"mj_grade": "A", "mj_score_pct": 88, "mj_headline": "體質佳",
+                    "mj_fail_items": [], "kd_state": {"k": 70.0, "d": 65.0, "label": "無"},
+                    "trend": {"verdict": "improving"}}
+        return {"weekly_close": pd.Series(
+            [100.0] * 60,
+            index=pd.date_range("2024-01-07", periods=60, freq="W-SUN")),
+            "premium_pct": 0.2}
+
+    def _rows(self, holding):
+        return SVC.build_station_rows([holding], vix=17.0, metrics_fn=self._metrics)
+
+    @staticmethod
+    def _na_lights(rows):
+        return [_c.key for _r in rows for _c in (_r.get("_lights") or ())
+                if _c.miss_reason == SS.MISS_NOT_APPLICABLE]
+
+    @pytest.mark.parametrize("kind", [None, ""])
+    def test_falsy_asset_kind_does_not_leak_a_third_value(self, kind):
+        """**本組最重要的一條** —— 把 `or` 改回 `get(k, default)` 這裡就會紅。
+
+        `None` / `""` 是 Google Sheet 空白欄位最可能長出來的兩種值。
+        """
+        _rows = self._rows({"ticker": "0050.TW", "name": "台灣50",
+                            "asset_class": T.ASSET_CORE, "asset_kind": kind})
+        assert self._na_lights(_rows) == [], \
+            f"asset_kind={kind!r} 漏出第三種值 → 一檔正常 ETF 被標成「結構上不適用」"
+        # 正面斷言:它被正規化成 ETF,8 盞燈一盞不少。
+        assert len(_rows[0]["_lights"]) == len(SS.specs_for(T.KIND_ETF)) == 8
+
+    @pytest.mark.parametrize("kind", [None, ""])
+    def test_falsy_asset_kind_on_a_stock_ticker_goes_to_the_stock_path(self, kind):
+        """正規化走的是**代號規則**,不是「一律當 ETF」。
+
+        2330 是 4 碼純數字 → `classify_asset_kind` 回 stock → 走 `assess_stock`
+        (4 盞個股燈),而不是被塞進 ETF 的 235/3-3-3。
+        ⚠️ 這條同時揭露一個**原寫法也錯、但不在原始回報表格裡**的情形:
+        `{"ticker": "2330"}`(asset_kind **key 缺席**)在舊寫法下 `default=KIND_ETF`
+        → 個股被當 ETF 跑 235/3-3-3。原始回報的表格用 0050 舉例,0050 本來就判 ETF,
+        所以那一格看起來「兩種寫法一樣」—— 換個代號就不一樣了。
+        """
+        _rows = self._rows({"ticker": "2330", "name": "台積電",
+                            "asset_class": T.ASSET_SATELLITE, "asset_kind": kind})
+        assert _rows[0]["種類"] == "個股"
+        assert len(_rows[0]["_lights"]) == len(SS.specs_for(T.KIND_STOCK)) == 4
+        assert self._na_lights(_rows) == []
+
+    def test_absent_key_on_a_stock_ticker_also_goes_to_the_stock_path(self):
+        """key **完全缺席**同樣走代號規則(舊寫法會回 `KIND_ETF` 把個股當 ETF 跑)。"""
+        _rows = self._rows({"ticker": "2330", "name": "台積電",
+                            "asset_class": T.ASSET_SATELLITE})
+        assert _rows[0]["種類"] == "個股"
+        assert self._na_lights(_rows) == []
+
+    @pytest.mark.parametrize("kind,expect", [(T.KIND_ETF, "ETF"), (T.KIND_STOCK, "個股")])
+    def test_explicit_values_are_untouched(self, kind, expect):
+        """反向:正常的 etf / stock 一個字都沒變(這一項不准動到既有行為)。"""
+        _tk = "0050.TW" if kind == T.KIND_ETF else "2330"
+        _rows = self._rows({"ticker": _tk, "name": "x",
+                            "asset_class": T.ASSET_CORE, "asset_kind": kind})
+        assert _rows[0]["種類"] == expect
+        assert self._na_lights(_rows) == []
+
+    @pytest.mark.parametrize("kind", ["ETF", "fund", "unknown"])
+    def test_truthy_unknown_string_is_a_KNOWN_REMAINING_GAP(self, kind):
+        """⚠️ **這條釘的是「還沒修好」,不是「已經修好」—— 讀的人別誤會。**
+
+        `or` 只攔 **falsy**。truthy 的未知字串（`"ETF"` 大寫 / `"fund"` /
+        `asset_lag` 那支三值函式會回的 `"unknown"`）**照樣原樣通過**,實測仍會標出
+        4 盞 `MISS_NOT_APPLICABLE`。
+
+        為什麼不順手一起修:2026-08-26 核准的改法明文是「改成與
+        `resolve_holding_names` 相同的寫法」(也就是 `or`)。要**結構上**保證兩值
+        得再加白名單,那是**另一個決定**,不在本次核准範圍(§-1 / §8.4「禁止自作主張」)。
+
+        為什麼今天不是 bug:兩個 production 產出端
+        (`_load_holdings_from_portfolio` 與 `scripts/push_holdings_daily.py`)
+        都已先跑 `T.classify_asset_kind`,只吐 etf / stock 兩值 → 不可達。
+
+        **哪天有人加白名單修掉它,這條會紅** —— 那時把它改成正向斷言,
+        並回頭把 `build_station_rows` 的註解與本組 docstring 一起更新。
+        """
+        _rows = self._rows({"ticker": "0050.TW", "name": "台灣50",
+                            "asset_class": T.ASSET_CORE, "asset_kind": kind})
+        assert sorted(self._na_lights(_rows)) == sorted(
+            [SS.KEY_HEALTH_D, SS.KEY_SCREEN_INCEPTION,
+             SS.KEY_SCREEN_RETURN, SS.KEY_SCREEN_PEER]), \
+            "這個洞被修掉了(好事) —— 請把本條改成正向斷言並更新兩處註解"
+
+    def test_the_right_classify_asset_kind_only_ever_returns_two_values(self):
+        """釘住「拿對函式」:`T.classify_asset_kind` 只回 etf / stock。
+
+        `src/compute/etf/asset_lag.classify_asset_kind` **同名但回三值**
+        (多一個 `'unknown'`)。真的拿錯的話,`unknown` 是 truthy → `or` 攔不住 →
+        直接走進 `assess_holding(_is_etf=False)`,把上一條那個洞從「不可達」
+        變成「每天都在發生」。故兩支一起釘。
+        """
+        from src.compute.etf.asset_lag import classify_asset_kind as _lag_classify
+
+        _probe = ["0050", "0050.TW", "00878", "00980A", "2330", "2330.TW",
+                  "2881A", "6488", "BND", "VOO", "^TWII", "", "???"]
+        assert {T.classify_asset_kind(_t) for _t in _probe} <= {T.KIND_ETF, T.KIND_STOCK}
+        # 對照組:那支同名函式**確實**會回第三種值 —— 所以不能拿它來正規化。
+        assert "unknown" in {_lag_classify(_t) for _t in _probe}
+        assert T.classify_asset_kind is not _lag_classify
 
 
 class TestPortfolioTotals:
