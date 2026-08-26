@@ -40,6 +40,7 @@ from dataclasses import dataclass
 
 from shared import dividend_station_thresholds as T
 from shared import unified_verdict_thresholds as UV
+from shared.signal_thresholds import ETF_SHARPE_RF_FALLBACK_PCT
 
 # ══════════════════════════════════════════════════════════════════
 # 燈的 canonical key —— 一個字串只准定義一次
@@ -144,7 +145,16 @@ STATION_SPECS: list[StationSpec] = [
         key=KEY_HEALTH_B, label="B 夏普", kind=T.KIND_ETF, group="health",
         unit="", direction="low_bad",
         threshold_text=f"🔴 Sharpe < {T.SHARPE_NEG_THRESHOLD:g}",
-        source="5 年日報酬年化（無風險利率視為 0）",
+        # 2026-08-26:原文寫「5 年日報酬年化（無風險利率視為 0）」—— 兩件事都錯,
+        # 而且是**會改變燈色**的錯（本盞門檻為 Sharpe < 0,rf 直接平移分子）:
+        #   · 週期:實作走 `sharpe_weekly(weekly, ...)`,用**週**報酬 ×√52 年化,不是日報酬。
+        #   · rf:實作注入即時 FEDFUNDS;注入失敗維持 SSOT fallback
+        #     `ETF_SHARPE_RF_FALLBACK_PCT`,只有連取值本身都拋例外才退 0。
+        #     也就是 production 的常態是 rf≈5% 而非 0 —— 畫面卻告訴使用者 rf=0,
+        #     使用者會把一檔「rf=5.33% 下為負」的 ETF 讀成「連 0 都跑不贏」。
+        # ⚠️ 只改敘述:`sharpe_weekly` 與 rf 注入鏈一字未動（文件修正,非行為變更）。
+        source=(f"5 年日線轉週線，週報酬 ×√52 年化；無風險利率取即時 FEDFUNDS"
+                f"（未注入時退 {ETF_SHARPE_RF_FALLBACK_PCT:g}%，連利率都取不到才退 0）"),
         why="承擔了波動卻沒換到超額報酬 —— 那不如放定存。",
     ),
     StationSpec(
@@ -165,8 +175,14 @@ STATION_SPECS: list[StationSpec] = [
     StationSpec(
         key=KEY_LIGHT235, label="235 加碼燈", kind=T.KIND_ETF, group="timing",
         unit="σ", direction="low_bad",
+        # 2026-08-26:三段加碼的 −1σ / −2σ / −3σ 原為**寫死字面值**,違反本檔開頭
+        # 自訂的「門檻文字一律用 f-string 從 T.* 組出」—— 上游改 Z_LIGHT* 這裡不會跟著動。
+        # 改走 SSOT 後畫面字串**逐字不變**（Z_LIGHT1/2/3 現值 = -1/-2/-3）,純去漂移風險。
+        # 負號寫死為「−」而數值取 abs():這三個常數依定義恆為負（下檔 σ 帶）,
+        # 直接 :g 會輸出 ASCII "-1" 而非現行排版用的 U+2212「−1」。
         threshold_text=(
-            f"{T.BOLL_PERIOD_WEEKS} 週布林 z ≤ −1σ / −2σ / −3σ "
+            f"{T.BOLL_PERIOD_WEEKS} 週布林 z ≤ −{abs(T.Z_LIGHT1):g}σ / "
+            f"−{abs(T.Z_LIGHT2):g}σ / −{abs(T.Z_LIGHT3):g}σ "
             f"三段加碼；z > +{T.Z_TAKE_PROFIT_PARTIAL:g}σ 分批停利、"
             f"> +{T.Z_TAKE_PROFIT_FORCE:g}σ 強制停利"
         ),
@@ -184,9 +200,17 @@ STATION_SPECS: list[StationSpec] = [
     StationSpec(
         key=KEY_SCREEN_RETURN, label="3-3-3 ② 三年報酬", kind=T.KIND_ETF,
         group="screen", unit="%", direction="low_bad",
-        threshold_text="需為正報酬",
+        # 2026-08-26:原文門檻寫「需為正報酬」、why 寫「三年還是負的」—— 兩句都把門檻
+        # **講寬了**。實作是 `ann_return_3y_pct >= MIN_ANN_RETURN_3Y_PCT` 或
+        # `cum_return_3y_pct >= MIN_CUM_RETURN_3Y_PCT`（達一即可）,不是「> 0」。
+        # 一檔三年年化 +5% 是正報酬、照舊文案該過,實際判 ❌ —— 使用者查門檻欄
+        # 會以為程式算錯（§1:錯的門檻比沒有門檻更危險）。
+        # ⚠️ 只改敘述:`screen_333` 一字未動（文件修正,非行為變更）。
+        threshold_text=(f"需三年年化 ≥ {T.MIN_ANN_RETURN_3Y_PCT:g}%，"
+                        f"或三年累積 ≥ {T.MIN_CUM_RETURN_3Y_PCT:g}%（兩者達一即可）"),
         source="ETF 5 年日線回推 3 年",
-        why="三年還是負的，代表這不是短期回檔的問題。",
+        why=("光是沒虧不算過關 —— 三年年化跑不到這個水準，"
+             "代表它長期就是跟不上，不是短期回檔的問題。"),
     ),
     StationSpec(
         key=KEY_SCREEN_PEER, label="3-3-3 ③ 同儕排名", kind=T.KIND_ETF,
