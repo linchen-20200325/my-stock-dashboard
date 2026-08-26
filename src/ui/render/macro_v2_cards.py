@@ -27,14 +27,80 @@ from shared.macro_buckets import DangerSpec
 # 視覺常數
 # ══════════════════════════════════════════════════════════════════════
 
-#: 四態。good/warn/serious 取本專案既有語意色慣例;
-#: 「未接線」刻意**不給顏色**(斜線紋)—— 它不是一種燈號等級,是「沒有消息」。
-STATE_META: dict[str, tuple[str, str]] = {
-    "live": ("運作中", "#0ca30c"),
-    "degraded": ("門檻已失準", "#ec835a"),
-    "missing": ("無資料", "#8a8e96"),
-    "unwired": ("未接線", "#8a8e96"),
+#: 四態 → (中文標籤, 色碼, emoji 雙重編碼)。good/warn/serious 取本專案既有
+#: 語意色慣例;「未接線」刻意**不給顏色**(斜線紋)—— 它不是一種燈號等級,
+#: 是「沒有消息」。
+#:
+#: ## 第三欄(emoji)為什麼在這裡,不在畫面層
+#:
+#: 中文標籤已經住在這張表,emoji 是**同一件事的另一種編碼**。拆兩個地方
+#: 放,就是兩把尺:上游哪天多一個狀態、或改一個標籤,必然有一邊沒跟上,
+#: 而畫面看起來完全正常(§3.3)。故兩者同列同表,物理上無法分岔。
+#: 消費端請走 `state_cell()`,不要自己拼字串。
+#:
+#: ## 為什麼「門檻已失準」是 🟠 ⚠️ 而不是 🔴 ❌
+#:
+#: 它的語意是「**有值、燈照亮,只是別照門檻讀**」—— 不是壞掉。紅色叉會
+#: 讓人以為那盞燈故障,但它正在正常回報數字(user 2026-08-26 裁示)。
+#:
+#: ## 為什麼「無資料」⚪ 與「未接線」⚫ 一定要不同
+#:
+#: 兩者的色碼本來就**同一個灰**(`#8a8e96`,見下),肉眼分不出來 —— 而這
+#: 四態存在的整個理由,就是要把「上游這次沒給值」與「決策端根本沒接這條
+#: 線」分開。色碼不區分是既有問題,emoji 這一欄把它補上。
+#:
+#: ## ⚠️ 姊妹檔 `src/ui/render/station_cards.py` 的狀態頻道**刻意不出 emoji**
+#:
+#: 那不是漏改,也不是本檔漏看 —— 兩邊的前提不同,結論才不同:
+#:   · **配息車站**的判定頻道印的就是 emoji 本身(`LEVEL_STYLES` 的
+#:     🔴/🟡/🟢/⚪)。狀態再出一個 🟢,同一格旁邊會出現**兩個 🟢**,
+#:     等於自己製造混淆再花一段文案解釋。故該檔只取 `STATE_META[...][0]`。
+#:   · **總經 v2 第 3 層**的「燈」欄印的是中文「綠 / 黃 / 紅 / 無資料」
+#:     (`BAND_META[...][0]`),**不是 emoji**。同列不存在同形符號,碰撞的
+#:     前提不成立,所以這裡出 emoji 是安全的。
+#: ⚠️ **這個豁免是有條件的**:哪天有人把「燈」欄也改成 emoji(🟢/🟡/🔴),
+#:    上面那個前提就當場失效,🟢 會與本表的 live 撞在同一列 —— 屆時請回頭
+#:    讀 `station_cards.py` 檔頭那段,不要只改一欄就上線。
+#:    (user 2026-08-26 裁示:「燈」欄維持純文字,理由是視覺重心要留給核心結論。)
+STATE_META: dict[str, tuple[str, str, str]] = {
+    "live": ("運作中", "#0ca30c", "🟢 ✅"),
+    "degraded": ("門檻已失準", "#ec835a", "🟠 ⚠️"),
+    "missing": ("無資料", "#8a8e96", "⚪ ➖"),
+    "unwired": ("未接線", "#8a8e96", "⚫ 🔌"),
 }
+
+#: 未定義狀態的 fallback。**不是第五個狀態** —— 走到這裡代表上游冒出了
+#: 四態以外的東西,是 bug 的徵兆,不是一種正常結果。故 `state_cell()` 會
+#: 同時 `print` 一行警告(§1:不靜默),畫面則誠實顯示「未知狀態」而不是
+#: 猜一個最接近的態塞給使用者。
+STATE_UNKNOWN_META: tuple[str, str, str] = ("未知狀態", "#8a8e96", "⚪ ❓")
+
+
+def state_cell(state: str) -> str:
+    """狀態欄的顯示字串 = `emoji 雙重編碼 + 中文標籤`(如 `🟢 ✅ 運作中`)。
+
+    **狀態的文字與 emoji 都只在 `STATE_META` 定義一次**,消費端呼叫本函式
+    取字串,不要自己 `f"{emoji} {label}"` 拼 —— 拼了就是第二把尺(§3.3)。
+
+    為什麼要 emoji + 中文兩種一起出而不是只出 emoji:emoji 是**冗餘**編碼,
+    是加在文字旁邊的第二個線索,不是文字的替代品。只出 emoji 等於把資訊
+    綁死在「看得懂這個符號」上,對讀螢幕的人反而更糟。
+
+    §1 —— 未定義的 `state` 不靜默:走到 fallback 代表上游出現了沒人預期的
+    狀態(四態以外),那是要有人去看的事。畫面顯示「⚪ ❓ 未知狀態」讓使用
+    者知道這格不可信,同時 `print` 一行留下痕跡(比照 `macro_helpers._rec`
+    / `_unwired` 對 SSOT 缺欄位的既有做法)。**不回退成「無資料」** ——
+    那會把一個 bug 偽裝成一種正常結果。
+    """
+    meta = STATE_META.get(state)
+    if meta is None:
+        print(f"[macro_v2_cards/state_cell] ⚠️ 未定義的狀態 {state!r}"
+              f"(已知四態:{list(STATE_META)}),畫面以「"
+              f"{STATE_UNKNOWN_META[0]}」顯示 —— 請查上游 readiness 側車")
+        meta = STATE_UNKNOWN_META
+    return f"{meta[2]} {meta[0]}"
+
+
 BAND_META: dict[str, tuple[str, str]] = {
     "green": ("綠", "#0ca30c"),
     "yellow": ("黃", "#fab219"),
@@ -221,7 +287,7 @@ def render_signal_health(rows: list[Row]) -> None:
             seg.append(f'<span style="background:{STATE_META[r.state][1]}"></span>')
     st.markdown(f'<div class="v2-sig">{"".join(seg)}</div>', unsafe_allow_html=True)
 
-    for skey, (label, color) in STATE_META.items():
+    for skey, (label, color, _emoji) in STATE_META.items():
         cnt = sum(1 for r in rows if r.state == skey)
         if not cnt:
             continue
@@ -350,7 +416,7 @@ def render_detail(row: Row, spec: DangerSpec, edu: dict | None = None,
     """右側明細面板 —— Streamlit 沒有原生 Drawer,以常駐右欄取代:
     點左表任一列即就地更新,不跳頁。"""
     zh, color = BAND_META[row.band]
-    slabel, scolor = STATE_META[row.state]
+    slabel, scolor, _semoji = STATE_META[row.state]
     hatch = row.state in ("unwired", "missing")
 
     st.markdown(f"### {row.label}")

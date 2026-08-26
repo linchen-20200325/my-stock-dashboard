@@ -571,3 +571,201 @@ class TestStreamlitFloorCompatibility:
             f"用到超出宣告 floor 的 streamlit API:{hits}。"
             f"requirements.txt 是 `streamlit>=1.36.0`,請改用 1.36 就有的元件。"
         )
+
+
+# ════════════════════════════════════════════════════════════════
+# 八、狀態欄的 emoji 雙重編碼（2026-08-26）
+#
+# 為什麼要有這一組:狀態欄原本只有中文字。加 emoji 是**冗餘**編碼 ——
+# 在文字旁邊多一個線索，不是取代文字。三件事必須被釘住，否則加了等於沒加:
+#
+#   1. **對應不能漂**。特別是「門檻已失準」**不是** 🔴 ❌ —— 它的語意是
+#      「有值、燈照亮，只是別照門檻讀」，不是故障。標紅叉會讓使用者以為
+#      那盞燈壞了，但它正在正常回報數字（user 2026-08-26 裁示）。
+#   2. **「無資料」與「未接線」必須看得出差別**。兩者的色碼本來就是同一個
+#      灰（`#8a8e96`），肉眼分不出來 —— 而四態存在的整個理由就是要把
+#      「上游沒給值」與「決策端沒接線」分開。emoji 這一欄是它們唯一的區隔。
+#   3. **文案只准有一份**。上一輪才把四態中文從畫面層收回 L4 `STATE_META`；
+#      emoji 若在畫面層另寫一份 dict，就是把它推回去（§3.3 第二把尺）。
+# ════════════════════════════════════════════════════════════════
+
+#: 狀態欄專屬的 emoji。⚠️ **刻意不列 `⚠️`** —— 它是 Streamlit 到處在用的
+#: 通用警示圖示（`st.warning(icon=...)`），拿它當「有人另寫一份狀態文案」
+#: 的證據會誤判。真的有第二份 dict 時，四態中文標籤那條斷言一樣抓得到。
+_STATE_GLYPHS = ("🟢", "🟠", "⚪", "⚫", "✅", "➖", "🔌", "❓")
+
+
+class TestStateColumnDualCoding:
+
+    # ── 四態各一條:emoji 與中文都要在，而且要對 ──────────────────
+    @pytest.mark.parametrize(("state", "emoji", "zh"), [
+        ("live",     "🟢 ✅", "運作中"),
+        ("degraded", "🟠 ⚠️", "門檻已失準"),
+        ("missing",  "⚪ ➖", "無資料"),
+        ("unwired",  "⚫ 🔌", "未接線"),
+    ])
+    def test_each_state_shows_both_emoji_and_chinese(self, state, emoji, zh):
+        """emoji 是**加在**中文旁邊的第二個線索，不是中文的替代品。
+
+        只出 emoji 等於把資訊綁死在「看得懂這個符號」上；只出中文則是這次
+        要改的現況。故兩者都必須出現，且順序固定（emoji 在前，掃視時先看到）。
+        """
+        from src.ui.render.macro_v2_cards import state_cell
+        assert state_cell(state) == f"{emoji} {zh}"
+
+    def test_degraded_is_not_a_red_cross(self):
+        """**本組最重要的一條。** 「門檻已失準」= 有值、照常亮，只是門檻
+        讀不出意義 —— 它**沒有壞**。紅色 + 叉是「故障 / 不通過」的通用語彙，
+        用在這裡會把一盞正在正常回報數字的燈講成死掉的燈（§1 反過來的錯:
+        不是編數字，是編一個比事實更嚴重的結論）。
+        """
+        from src.ui.render.macro_v2_cards import state_cell
+        cell = state_cell("degraded")
+        assert "🔴" not in cell and "❌" not in cell, (
+            f"「門檻已失準」被標成故障:{cell!r} —— 它有值、燈照常亮"
+        )
+        assert "🟠" in cell, "失準應該是橙色警示（介於正常與故障之間）"
+
+    def test_missing_and_unwired_are_visually_separable(self):
+        """兩者的**色碼是同一個灰**，emoji 是它們畫面上唯一的區隔。
+
+        這條同時把「色碼相同」這個事實釘住 —— 哪天有人把灰色拆開了，這條
+        會紅，提醒他回來看這裡的註解（那時 emoji 就不再是唯一區隔）。
+        """
+        from src.ui.render.macro_v2_cards import STATE_META, state_cell
+        assert STATE_META["missing"][1] == STATE_META["unwired"][1], (
+            "色碼已經不同了 —— 請回頭更新 STATE_META 上方那段註解的前提"
+        )
+        assert state_cell("missing") != state_cell("unwired")
+        assert STATE_META["missing"][2] != STATE_META["unwired"][2], (
+            "「無資料」與「未接線」共用同一組 emoji —— 四態又被壓成三態了"
+        )
+
+    def test_all_four_states_have_distinct_cells(self):
+        """四態兩兩不同。任何兩態撞在一起 = 使用者無從分辨（v2 的存在理由）。"""
+        from src.ui.render.macro_v2_cards import STATE_META, state_cell
+        cells = [state_cell(s) for s in STATE_META]
+        assert len(set(cells)) == len(STATE_META) == 4, f"有重複:{cells}"
+
+    # ── fallback:未定義狀態 ──────────────────────────────────────
+    def test_unknown_state_falls_back_to_a_question_mark(self):
+        """§1:未定義的狀態**不猜、不回退成「無資料」**。
+
+        回退成「無資料」會把一個 bug 偽裝成一種正常結果 —— 使用者看到的是
+        一個合法的四態之一，沒有任何跡象顯示上游出了沒人預期的事。
+        """
+        from src.ui.render.macro_v2_cards import state_cell
+        assert state_cell("ghost_state") == "⚪ ❓ 未知狀態"
+
+    def test_unknown_state_is_not_silent(self, capsys):
+        """§1:走到 fallback 代表上游冒出了四態以外的東西，那是要有人去看的
+        事。畫面顯示問號讓使用者知道這格不可信，同時要在 stdout 留下痕跡
+        （比照 `macro_helpers._rec` / `_unwired` 對 SSOT 缺欄位的既有做法）。
+        """
+        from src.ui.render.macro_v2_cards import state_cell
+        state_cell("ghost_state")
+        out = capsys.readouterr().out
+        assert "ghost_state" in out, "警告沒把那個未知狀態的值印出來"
+        assert "⚠️" in out and "state_cell" in out, f"沒留下可辨識的警告痕跡:{out!r}"
+
+    def test_known_states_do_not_warn(self, capsys):
+        """反例:四態走正常路徑時**不得**噴警告 —— 否則真的出事時沒人會看。"""
+        from src.ui.render.macro_v2_cards import STATE_META, state_cell
+        for s in STATE_META:
+            state_cell(s)
+        assert capsys.readouterr().out == ""
+
+    # ── 表格真的用了它 ───────────────────────────────────────────
+    def test_table_state_column_is_exactly_the_ssot_cell(self):
+        """總表的「狀態」欄必須逐格等於 `state_cell()` 的輸出。
+
+        `_table_columns` 若哪天改成自己拼字串，這條就會紅。
+        """
+        from src.ui.render.macro_v2_cards import state_cell
+        from src.ui.tabs.tab_macro_v2 import build_rows, visible_table
+        rows = build_rows(_mixed())
+        visible, table = visible_table(rows)
+        assert len(table["狀態"]) == len(visible) == 16
+        for r, cell in zip(visible, table["狀態"]):
+            assert cell == state_cell(r.state), f"{r.key} 的狀態欄與 SSOT 不同"
+
+    def test_table_covers_all_four_states_with_emoji(self):
+        """端到端:一份四態齊備的 readiness，總表的狀態欄要四種都出現且帶 emoji。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, visible_table
+        _, table = visible_table(build_rows(_mixed()))
+        seen = set(table["狀態"])
+        assert {"🟢 ✅ 運作中", "🟠 ⚠️ 門檻已失準",
+                "⚪ ➖ 無資料", "⚫ 🔌 未接線"} <= seen, seen
+
+    def test_light_column_stays_plain_text(self):
+        """「燈」欄維持純文字（user 2026-08-26 裁示:視覺重心留給核心結論）。
+
+        這同時是狀態欄敢出 emoji 的**前提**:同一列若兩欄都出符號，🟢 會與
+        狀態的 live 撞在一起 —— 那正是姊妹檔 `render/station_cards.py` 檔頭
+        點名拒絕 emoji 的那個坑。這條紅了，就要連著那段一起重想。
+        """
+        from src.ui.tabs.tab_macro_v2 import build_rows, visible_table
+        _, table = visible_table(build_rows(_mixed()))
+        assert set(table["燈"]) <= {"綠", "黃", "紅", "無資料"}
+        for cell in table["燈"]:
+            assert not any(g in cell for g in _STATE_GLYPHS), (
+                f"「燈」欄出現了狀態欄的符號:{cell!r} —— 同列兩個符號會互撞"
+            )
+
+    # ── SSOT 靜態守衛 ────────────────────────────────────────────
+    def test_display_layer_writes_no_second_copy_of_the_four_states(self):
+        """靜態守衛:畫面層(L5)不得自己寫四態的中文或 emoji。
+
+        比照 `test_rows_mirror_the_sidecar_exactly` 的精神 —— 用「寫不出來」
+        取代「請記得別寫」。上一輪才把四態中文從這一層收回 L4 `STATE_META`,
+        emoji 若又在這裡落地一份，兩把尺就會各自演化。
+
+        只看 **AST 的字串常數**:docstring 與註解裡提到狀態名是在解釋設計，
+        不是第二把尺（註解根本不進 AST；docstring 逐一排除）。
+        """
+        import ast
+        import pathlib
+
+        from src.ui.render.macro_v2_cards import STATE_META, STATE_UNKNOWN_META
+
+        tree = ast.parse(pathlib.Path("src/ui/tabs/tab_macro_v2.py")
+                         .read_text(encoding="utf-8"))
+        docstrings = {
+            id(node.body[0].value)
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Module, ast.ClassDef,
+                                 ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.body and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        }
+        consts = [
+            n.value for n in ast.walk(tree)
+            if isinstance(n, ast.Constant) and isinstance(n.value, str)
+            and id(n) not in docstrings
+        ]
+
+        labels = {m[0] for m in STATE_META.values()} | {STATE_UNKNOWN_META[0]}
+        for c in consts:
+            assert c not in labels, (
+                f"L5 又寫了一份四態文案:{c!r} —— 請改用 "
+                f"`macro_v2_cards.state_cell()`（§3.3 第二把尺）"
+            )
+            hit = [g for g in _STATE_GLYPHS if g in c]
+            assert not hit, (
+                f"L5 出現狀態欄的 emoji {hit} 於 {c!r} —— emoji 與中文都只准"
+                f"住在 L4 `STATE_META`"
+            )
+
+    def test_emoji_and_label_live_in_the_same_ssot_row(self):
+        """emoji 與中文必須是**同一列**的兩個欄位，不是兩張平行的表。
+
+        平行兩張表的失效模式:上游新增一個狀態，有人只加了其中一張 ——
+        另一張 KeyError 或悄悄漏掉，而這件事在畫面上看不出來。
+        """
+        from src.ui.render.macro_v2_cards import STATE_META
+        for state, meta in STATE_META.items():
+            assert len(meta) == 3, f"{state} 的 meta 不是 (中文, 色碼, emoji)"
+            label, color, emoji = meta
+            assert label and emoji, f"{state} 缺中文或 emoji"
+            assert color.startswith("#"), f"{state} 的色碼欄不是色碼:{color!r}"

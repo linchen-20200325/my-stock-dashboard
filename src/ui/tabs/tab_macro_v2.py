@@ -45,7 +45,6 @@ from src.services.section_inputs import load_section_inputs
 from src.ui.render.macro_v2_cards import (
     BAND_META,
     CSS,
-    STATE_META,
     Row,
     fmt_value,
     print_table_html,
@@ -54,6 +53,7 @@ from src.ui.render.macro_v2_cards import (
     render_detail,
     render_signal_health,
     render_value_card,
+    state_cell,
     threshold_text,
 )
 
@@ -258,15 +258,23 @@ def filter_rows(rows: list[Row], *, chip: str = _CHIP_ALL,
 def _table_columns(visible: list[Row]) -> dict[str, list]:
     """`st.dataframe` 用的欄位 dict。**吃什麼就畫什麼**,不在此再篩一次。
 
-    狀態中文字取自 L4 `STATE_META`(與訊號可信度卡同一份),不在本層再抄
-    一份四態字串 —— 抄了就是第二把尺(§3.3)。
+    狀態欄的 emoji 與中文字**都**取自 L4 `state_cell()`(背後是與訊號可信度
+    卡同一份的 `STATE_META`),不在本層再抄一份四態字串或 emoji —— 抄了就是
+    第二把尺(§3.3)。上一輪才剛把中文對照從本層收回 SSOT,emoji 再寫一份
+    等於把它推回去。
+
+    **「燈」欄維持純文字**(`BAND_META[...][0]` = 綠 / 黃 / 紅 / 無資料),
+    user 2026-08-26 裁示:視覺重心要留給核心結論,不讓兩欄的符號互搶。
+    這同時也是狀態欄敢出 emoji 的前提 —— 同列沒有第二個 🟢 可以撞
+    (完整理由見 `macro_v2_cards.STATE_META` 上方那段與姊妹檔
+    `render/station_cards.py` 檔頭)。
     """
     return {
         "桶": [_BUCKET_ZH.get(r.bucket, r.bucket) for r in visible],
         "指標": [r.label for r in visible],
         "目前值": [fmt_value(r.value, r.unit, r.decimals) for r in visible],
         "燈": [BAND_META[r.band][0] for r in visible],
-        "狀態": [STATE_META[r.state][0] for r in visible],
+        "狀態": [state_cell(r.state) for r in visible],
         "門檻帶": [r.thr_text for r in visible],
     }
 
