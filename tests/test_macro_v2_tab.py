@@ -299,3 +299,275 @@ class TestRollupMatchesLegacy:
         summ = bucket_summary(build_rows(_readiness()))
         assert [b["name"] for b in summ] == ["長期", "中期", "短線急殺", "籌碼", "新聞"]
         assert sum(b["n"] for b in summ) == 16
+
+
+# ════════════════════════════════════════════════════════════════
+# 六、第 3 層篩選（搜尋框 + 分類 chip，2026-08-26）
+#
+# 這一組守的東西只有一個核心:**畫面說 A、內容不能是 B**。
+# `st.dataframe(on_select=...)` 回的 `selection.rows` 是「畫面上那張表的列序」,
+# 一旦有了篩選就不再等於 `build_rows()` 的原始 16 列序。拿錯清單去索引,
+# 右側面板會安靜地顯示另一個指標的值與門檻 —— 兩邊看起來都很正常(§1)。
+# 其餘(搜尋 / 各 chip / 0 筆文案)是同一組篩選的邊界。
+# ════════════════════════════════════════════════════════════════
+
+def _mixed() -> dict:
+    """一份四態齊備的 readiness:綠燈 live / 紅燈 live / unwired / degraded / missing。
+
+    `is_problem` 的正反例、以及「篩選後列序 ≠ 原始列序」都靠它撐起來。
+    """
+    return _readiness(
+        macro_info={"vix": {"current": 38.0},      # 紅燈 + live（市場有問題）
+                    "ism_pmi": {"value": 58.0}},   # 綠燈 + live（都沒問題）
+        warroom_summary={"health_score": 88.0},    # 綠燈 + live
+    )
+
+
+class TestLayer3Filtering:
+
+    # ── 搜尋框 ───────────────────────────────────────────────────
+    def test_search_hits_by_substring(self):
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        got = {r.key for r in filter_rows(rows, query="融資")}
+        assert got == {"margin"}, "設計稿 placeholder 明寫「例如 VIX、融資」"
+
+    def test_search_is_case_insensitive(self):
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        lower = {r.key for r in filter_rows(rows, query="vix")}
+        upper = {r.key for r in filter_rows(rows, query="VIX")}
+        assert lower == upper == {"vix"}
+
+    def test_search_miss_yields_empty_not_everything(self):
+        """查無此指標要回空 —— 回全部等於默默把搜尋當成沒打(§1)。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        assert filter_rows(rows, query="這個指標不存在") == []
+
+    def test_blank_query_shows_everything(self):
+        """空字串 / 純空白 = 沒在搜尋,不是「查無此指標」。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        assert len(filter_rows(rows, query="")) == len(rows) == 16
+        assert len(filter_rows(rows, query="   ")) == 16
+
+    def test_search_matches_label_not_internal_key(self):
+        """只比對畫面上看得到的指標名,不比對內部 key(`ism_pmi` 那類)。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        assert filter_rows(rows, query="ism_pmi") == []
+        assert {r.key for r in filter_rows(rows, query="PMI")} == {"ism_pmi"}
+
+    # ── 分類 chip ────────────────────────────────────────────────
+    def test_seven_chips_and_bucket_names_come_from_the_existing_ssot(self):
+        """7 個 chip;5 個桶名與順序**沿用既有常數**,不是另抄一份中文字串。"""
+        from src.ui.tabs.tab_macro_v2 import (
+            _BUCKET_ORDER,
+            _BUCKET_ZH,
+            _CHIP_ALL,
+            _CHIP_PROBLEM,
+            CHIP_LABELS,
+            CHIP_ORDER,
+        )
+        assert len(CHIP_ORDER) == len(CHIP_LABELS) == 7
+        assert CHIP_ORDER[:2] == [_CHIP_ALL, _CHIP_PROBLEM]
+        assert CHIP_ORDER[2:] == _BUCKET_ORDER, "桶順序沒沿用 _BUCKET_ORDER"
+        for b in _BUCKET_ORDER:
+            assert CHIP_LABELS[b] == _BUCKET_ZH[b], (
+                f"chip 的「{b}」桶名與 _BUCKET_ZH 不同 —— 兩把尺已經漂移了"
+            )
+
+    @pytest.mark.parametrize("bucket", ["long", "mid", "short", "chips", "news"])
+    def test_each_bucket_chip_filters_to_that_bucket(self, bucket):
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        got = filter_rows(rows, chip=bucket)
+        assert got, f"{bucket} 桶篩出 0 筆 —— 16 盞燈每桶都該有成員"
+        assert all(r.bucket == bucket for r in got)
+        assert len(got) == sum(1 for r in rows if r.bucket == bucket)
+
+    def test_all_chip_filters_nothing(self):
+        from src.ui.tabs.tab_macro_v2 import _CHIP_ALL, build_rows, filter_rows
+        rows = build_rows(_mixed())
+        assert [r.key for r in filter_rows(rows, chip=_CHIP_ALL)] == \
+            [r.key for r in rows]
+
+    def test_unknown_chip_raises(self):
+        """§1:未知 chip 若默默回傳全部,畫面會長得跟「全部」一模一樣。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        with pytest.raises(ValueError, match="未知的篩選 chip"):
+            filter_rows(build_rows(_mixed()), chip="長期")   # 傳了顯示名而非 key
+
+    def test_chip_and_query_are_anded(self):
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        assert {r.key for r in filter_rows(rows, chip="short", query="VIX")} \
+            == {"vix"}
+        # VIX 在 short 桶,拿去跟 chips 桶 AND 就該是空的
+        assert filter_rows(rows, chip="chips", query="VIX") == []
+
+    # ── 「只看有問題的」 ─────────────────────────────────────────
+    def test_problem_chip_is_the_union_of_market_and_system(self):
+        """定義:黃/紅燈(市場有問題) ∪ state != live(系統有問題)。
+
+        反例(**不該**入選)必須是「綠燈且 live」—— 只有這種才是真的沒事。
+        """
+        from src.ui.tabs.tab_macro_v2 import (
+            _CHIP_PROBLEM,
+            build_rows,
+            filter_rows,
+            is_problem,
+        )
+        rows = {r.key: r for r in build_rows(_mixed())}
+
+        # 正例 1｜市場有問題:紅燈但一切正常運作
+        assert rows["vix"].band == "red" and rows["vix"].state == "live"
+        assert is_problem(rows["vix"])
+        # 正例 2｜系統有問題:未接線(不是市場的錯,但它永遠不會亮)
+        assert rows["foreign_net"].state == "unwired"
+        assert is_problem(rows["foreign_net"])
+        # 正例 3｜系統有問題:門檻已失準
+        assert rows["margin"].state == "degraded"
+        assert is_problem(rows["margin"])
+        # 正例 4｜系統有問題:無資料
+        assert rows["ndc_signal"].state == "missing"
+        assert is_problem(rows["ndc_signal"])
+        # 反例｜綠燈 + live = 真的沒事
+        for k in ("health", "ism_pmi"):
+            assert rows[k].band == "green" and rows[k].state == "live"
+            assert not is_problem(rows[k])
+
+        picked = {r.key for r in filter_rows(list(rows.values()),
+                                             chip=_CHIP_PROBLEM)}
+        assert "health" not in picked and "ism_pmi" not in picked
+        assert {"vix", "foreign_net", "margin", "ndc_signal"} <= picked
+
+    def test_unwired_light_is_never_hidden_by_the_problem_chip(self):
+        """把「未接線」藏起來 = 使用者按了 chip 後合理推論「其他都沒事」,
+        但其中一部分根本沒在回報 —— 那正是本分頁要消滅的誤解(§1)。"""
+        from src.ui.tabs.tab_macro_v2 import _CHIP_PROBLEM, build_rows, filter_rows
+        rows = build_rows(_mixed())
+        got = {r.key for r in filter_rows(rows, chip=_CHIP_PROBLEM)}
+        for r in rows:
+            if r.state != "live":
+                assert r.key in got, f"{r.key}({r.state})被「有問題」篩掉了"
+
+    # ── 選取列對應（本組最重要的一條）───────────────────────────
+    def test_panel_shows_exactly_the_row_the_table_shows(self):
+        """右側面板的指標，必須等於表格**該列**顯示的指標。
+
+        `visible_table()` 刻意把「篩選」與「組表」綁在同一次呼叫回傳;
+        若哪天有人把表格改成吃未篩選的 `rows`(或反過來),這條就會紅。
+        """
+        from src.ui.tabs.tab_macro_v2 import (
+            CHIP_ORDER,
+            build_rows,
+            selected_row,
+            visible_table,
+        )
+        rows = build_rows(_mixed())
+        for chip in CHIP_ORDER:
+            for q in ("", "率", "指數"):
+                visible, table = visible_table(rows, chip=chip, query=q)
+                assert len(table["指標"]) == len(visible)
+                for i in range(len(visible)):
+                    picked = selected_row(visible, [i])
+                    assert picked is not None
+                    assert picked.label == table["指標"][i], (
+                        f"chip={chip} query={q!r} 第 {i} 列:表格顯示"
+                        f"「{table['指標'][i]}」,面板卻拿到「{picked.label}」"
+                    )
+
+    def test_row_index_is_into_the_filtered_list_not_the_original(self):
+        """同一個索引在「篩選後」與「原始 16 列」指到不同指標 —— 用錯清單
+        就是右側面板顯示另一個指標的成因。這條釘住那個差異真的存在。"""
+        from src.ui.tabs.tab_macro_v2 import (
+            build_rows,
+            selected_row,
+            visible_table,
+        )
+        rows = build_rows(_mixed())
+        visible, _ = visible_table(rows, chip="chips")
+        assert len(visible) < len(rows)
+        i = 1
+        assert visible[i].key != rows[i].key, (
+            "測試前提失效:篩選後第 1 列剛好等於原始第 1 列，這條就測不到東西"
+        )
+        assert selected_row(visible, [i]) is visible[i]
+        assert selected_row(visible, [i]) is not rows[i]
+
+    def test_stale_selection_after_filter_change_returns_none(self):
+        """先選第 N 列 → 改篩選讓清單變短 → 舊索引越界。
+
+        §1:回 None 讓 caller 說「選取已失效」,**不得**退回第 0 列 ——
+        那等於默默換一個指標給使用者看。
+        """
+        from src.ui.tabs.tab_macro_v2 import (
+            build_rows,
+            selected_row,
+            visible_table,
+        )
+        rows = build_rows(_mixed())
+        wide, _ = visible_table(rows)                    # 16 列
+        assert selected_row(wide, [12]) is not None
+        narrow, _ = visible_table(rows, chip="news")     # 1 列
+        assert len(narrow) == 1
+        assert selected_row(narrow, [12]) is None, "越界索引沒被擋下"
+        assert selected_row(narrow, []) is None
+        assert selected_row(narrow, [-1]) is None, "負索引會從尾端取,同樣是換指標"
+
+    # ── 篩選後 0 筆 ──────────────────────────────────────────────
+    def test_zero_result_message_states_the_active_filter(self):
+        """§1:不留一張空表。文案要把 chip 與搜尋字原樣講出來。"""
+        from src.ui.tabs.tab_macro_v2 import (
+            build_rows,
+            empty_hint,
+            visible_table,
+        )
+        rows = build_rows(_mixed())
+        visible, table = visible_table(rows, chip="chips", query="VIX")
+        assert visible == [] and all(not col for col in table.values())
+        msg = empty_hint(chip="chips", query="VIX", total=len(rows))
+        assert "沒有符合的指標" in msg
+        assert "籌碼" in msg, "沒講出目前選的分類"
+        assert "VIX" in msg, "沒講出目前的搜尋字"
+        assert "16" in msg, "沒告訴使用者清掉篩選會看回幾盞燈"
+
+    def test_zero_result_message_omits_an_empty_query(self):
+        from src.ui.tabs.tab_macro_v2 import empty_hint
+        msg = empty_hint(chip="news", query="   ", total=16)
+        assert "新聞" in msg
+        assert "搜尋「" not in msg, "沒打搜尋字卻報了一個搜尋條件"
+        assert "清掉搜尋字" not in msg, "叫人清掉一個他沒打的東西"
+
+
+# ════════════════════════════════════════════════════════════════
+# 七、版本陷阱:不得使用超出 requirements.txt floor 的 widget
+# ════════════════════════════════════════════════════════════════
+class TestStreamlitFloorCompatibility:
+
+    def test_no_widget_newer_than_the_declared_floor(self):
+        """`requirements.txt` 宣告 `streamlit>=1.36.0`,但開發沙箱裝的是更新的版本。
+
+        `st.pills`(1.40+)/ `st.segmented_control`(1.42+)/ `st.fragment`(1.37+)
+        在沙箱**跑得動**,部署端若解析到 1.36 就 AttributeError —— 本機全綠、
+        production 倒站。用 AST 比對「真的被呼叫 / 當裝飾器用」的屬性,
+        文件與註解裡提到名字不算違規。
+        """
+        import ast
+        import pathlib
+
+        banned = {"pills": "1.40", "segmented_control": "1.42", "fragment": "1.37"}
+        tree = ast.parse(
+            pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8"))
+        hits = [
+            f"st.{n.attr}(需 streamlit {banned[n.attr]}+)"
+            for n in ast.walk(tree)
+            if isinstance(n, ast.Attribute) and n.attr in banned
+            and isinstance(n.value, ast.Name) and n.value.id == "st"
+        ]
+        assert not hits, (
+            f"用到超出宣告 floor 的 streamlit API:{hits}。"
+            f"requirements.txt 是 `streamlit>=1.36.0`,請改用 1.36 就有的元件。"
+        )

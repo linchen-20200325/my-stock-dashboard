@@ -5,7 +5,7 @@
 
     第 1 層 · 結論     位階 verdict + 訊號可信度 + 五桶卡
     第 2 層 · 為什麼   有真實歷史序列的指標畫走勢 + 門檻線
-    第 3 層 · 全部明細 16 盞燈總表,點任一列右側就地展開(不跳頁)
+    第 3 層 · 全部明細 16 盞燈總表(可搜尋 + 分類篩選),點任一列右側就地展開
 
 ⚠️ **範圍**(2026-08-25 user 核准):只做「位階評估 + 五桶」。
    戰情室 / 新聞 AI / 跨市場 AI / 短中長期分區仍在舊「🌍 總經」分頁,
@@ -45,6 +45,7 @@ from src.services.section_inputs import load_section_inputs
 from src.ui.render.macro_v2_cards import (
     BAND_META,
     CSS,
+    STATE_META,
     Row,
     fmt_value,
     render_bucket_cards,
@@ -85,6 +86,21 @@ _CHART_SPECS: list[tuple[str, str, str]] = [
 #: 有值有燈、但**完全沒有歷史序列**可畫者 —— 顯示純數值卡。
 #: VIX 是最典型的:天天在用,卻沒有任何落地序列。
 _VALUE_CARD_KEYS: list[str] = ["vix"]
+
+#: ── 第 3 層篩選 chip ──────────────────────────────────────────────────
+#: 兩個**跨桶** chip 的 key;其餘 5 個 chip 的 key **就是桶 key 本身**。
+_CHIP_ALL = "all"
+_CHIP_PROBLEM = "problem"
+
+#: chip key → 顯示名。5 個桶名一律**取自既有 `_BUCKET_ZH`**,不另寫一份中文
+#: 字串 —— 兩份字串就是兩把尺,上游改桶名時必然有一邊沒跟上(§3.3)。
+CHIP_LABELS: dict[str, str] = {
+    _CHIP_ALL: "全部",
+    _CHIP_PROBLEM: "只看有問題的",
+    **{b: _BUCKET_ZH[b] for b in _BUCKET_ORDER},
+}
+#: chip 顯示順序。桶的先後同樣沿用 `_BUCKET_ORDER`,不在此另排一次。
+CHIP_ORDER: list[str] = [_CHIP_ALL, _CHIP_PROBLEM, *_BUCKET_ORDER]
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -174,6 +190,137 @@ def overall_verdict(summary: list[dict]) -> tuple[str, str]:
         bits.append(f"{n_yellow} 桶黃")
     detail = "、".join(bits) or "五桶全綠"
     return worst["band"], f"{detail}　·　最差是「{worst['name']}」"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 第 3 層 · 篩選(全部是純 Python,對**已經算好的 rows** 過濾,不重新取數)
+#
+# ⚠️ 效能:app.py 是 7 個頂層 `st.tabs`,每次 rerun **所有 tab body 都會執行**
+#    (STATE.md 產業熱力圖冷抓事故)。所以篩選一律在記憶體內做,這一段
+#    **不得**出現任何取數 / `@st.cache_data` / 網路呼叫。
+# ══════════════════════════════════════════════════════════════════════
+
+def is_problem(row: Row) -> bool:
+    """「只看有問題的」的判定:**市場有問題 ∪ 系統有問題**(取聯集)。
+
+        市場有問題 = 燈是黃或紅            → `band in {"yellow", "red"}`
+        系統有問題 = 這盞燈不能信          → `state != "live"`
+                     (未接線 / 無資料 / 門檻已失準)
+
+    **為什麼取聯集,而不是只認黃紅燈**:本分頁存在的第一個理由,就是
+    「從沒亮過的燈」與「正常的綠燈」在舊畫面上長得一模一樣。若「有問題」
+    只認黃紅燈,使用者按下這個 chip 會看到一張很短的清單,然後合理推論
+    「其他都沒事」—— 但其他之中有一部分**不是沒事,是根本沒在回報**。
+    那正是本頁要消滅的誤解;把它做成預設篩選等於把 bug 產品化(§1:
+    灰燈不是綠燈,沒有數字比錯的數字安全,但**假裝沒問題**兩者都輸)。
+
+    **「未接線」算不算有問題**:算。它確實不是**市場**的問題,是**系統**的
+    問題(決策端刻意沒接取值)。但這個 chip 的語意是「**還需要我看一眼的**」,
+    不是「市場現在很糟」—— 一盞永遠不會亮的燈,正是最需要被看見的那種。
+    想「只看市場黃紅燈」的人改點對應的桶 chip 即可,資訊沒有損失;
+    反過來若把未接線藏起來,那個資訊在整頁上就再也沒有入口了。
+
+    ⚠️ 本函式只做**分類**,判燈完全沿用上游 `classify_danger` 的結果,
+    不重新判定任何門檻(§3.3;本次是純顯示層改動)。
+    """
+    return row.band in ("yellow", "red") or row.state != "live"
+
+
+def filter_rows(rows: list[Row], *, chip: str = _CHIP_ALL,
+                query: str = "") -> list[Row]:
+    """第 3 層總表的篩選。`chip` 與 `query` 是 AND(先分類,再搜尋)。
+
+    `query` 比對 `Row.label`(指標名稱),**不分大小寫、部分字串即命中**;
+    空字串 / 純空白 → 不篩(顯示全部),不當成「查無此指標」。
+
+    ⚠️ 只比對 `label`、不比對 `key`:key 是內部識別字(`ism_pmi` 之類),
+    畫面上從不出現。拿它當搜尋目標會出現「打了看得見的字找不到、打了
+    看不見的字反而找得到」這種無法解釋的行為。
+
+    §1:未知的 `chip` 直接 `raise`。若默默回傳全部,畫面會長得跟「全部」
+    一模一樣 —— 一個永遠不會被發現的 bug。
+    """
+    if chip not in CHIP_LABELS:
+        raise ValueError(
+            f"未知的篩選 chip:{chip!r}(可用:{list(CHIP_LABELS)})")
+    out = list(rows)
+    if chip == _CHIP_PROBLEM:
+        out = [r for r in out if is_problem(r)]
+    elif chip != _CHIP_ALL:          # 其餘 chip 的 key 就是桶 key
+        out = [r for r in out if r.bucket == chip]
+    q = query.strip().casefold()
+    if q:
+        out = [r for r in out if q in r.label.casefold()]
+    return out
+
+
+def _table_columns(visible: list[Row]) -> dict[str, list]:
+    """`st.dataframe` 用的欄位 dict。**吃什麼就畫什麼**,不在此再篩一次。
+
+    狀態中文字取自 L4 `STATE_META`(與訊號可信度卡同一份),不在本層再抄
+    一份四態字串 —— 抄了就是第二把尺(§3.3)。
+    """
+    return {
+        "桶": [_BUCKET_ZH.get(r.bucket, r.bucket) for r in visible],
+        "指標": [r.label for r in visible],
+        "目前值": [fmt_value(r.value, r.unit, r.decimals) for r in visible],
+        "燈": [BAND_META[r.band][0] for r in visible],
+        "狀態": [STATE_META[r.state][0] for r in visible],
+        "門檻帶": [r.thr_text for r in visible],
+    }
+
+
+def visible_table(rows: list[Row], *, chip: str = _CHIP_ALL,
+                  query: str = "") -> tuple[list[Row], dict[str, list]]:
+    """回 `(畫面上的列, st.dataframe 的欄位)` —— **同一份、同一刻**。
+
+    刻意把「篩選」與「組表」綁進同一個回傳值:兩者一旦拆成兩次呼叫,就
+    有機會餵到不同的 list,而那正是「右側面板顯示另一個指標」的成因
+    (見 `selected_row`)。綁在一起之後,那個錯誤在呼叫端寫不出來。
+    """
+    visible = filter_rows(rows, chip=chip, query=query)
+    return visible, _table_columns(visible)
+
+
+def selected_row(visible: list[Row], idxs) -> Row | None:
+    """把 `st.dataframe` 回傳的選取列索引解析成 `Row`。
+
+    ⚠️ **這是本頁最容易寫錯的一行。** `selection.rows` 給的是「**畫面上那
+    張表的列序**」,不是 `build_rows()` 的原始 16 列序。一旦有了篩選,兩者
+    就不再相等 —— 拿原始清單去索引,右側面板會顯示**另一個指標**的值、
+    門檻與教學文案:畫面說 A、內容是 B,而且兩邊都看起來很正常(§1)。
+    故本函式**只吃 `visible`**,也就是與 `st.dataframe` 同一份的那個 list。
+
+    索引越界(改了篩選、舊選取殘留在 widget state)→ 回 `None`,由 caller
+    顯示「請重新點一列」。**不回退到第 0 列** —— 那等於默默換一個指標給
+    使用者看,正是本函式要防的那個錯。
+    """
+    if not idxs:
+        return None
+    try:
+        i = int(idxs[0])
+    except (TypeError, ValueError):
+        return None
+    if not 0 <= i < len(visible):
+        return None
+    return visible[i]
+
+
+def empty_hint(*, chip: str, query: str, total: int) -> str:
+    """篩選後 0 筆時的說明 —— §1:不留一張空表讓人以為頁面壞了。
+
+    必須把**目前的篩選條件原樣講出來**:0 筆的原因永遠是「條件太窄」或
+    「打錯字」,而使用者未必看得出自己選了什麼(chip 在表格上方、搜尋字
+    可能只差一個字)。只寫「沒有資料」等於把原因藏起來。
+    """
+    bits = [f"分類「{CHIP_LABELS.get(chip, chip)}」"]
+    q = query.strip()
+    if q:
+        bits.append(f"搜尋「{q}」")
+    # 沒打搜尋字時不要叫人「清掉搜尋字」—— 那會讓人去找一個不存在的東西。
+    fix = "清掉搜尋字或改選" if q else "改選"
+    return (f"沒有符合的指標。目前篩選:{'、'.join(bits)}。"
+            f"{fix}「{CHIP_LABELS[_CHIP_ALL]}」即可看回全部 {total} 盞燈。")
 
 
 def _session_series(inputs, key: str):
@@ -281,34 +428,62 @@ def render_tab_macro_v2() -> None:
 
     # ── 第 3 層 · 全部明細 ────────────────────────────────────────────
     st.subheader("第 3 層 · 全部明細", divider="gray")
+
+    # 搜尋 + 分類 chip。**兩者都只做純 Python 篩選,不重新取數** —— app.py 是
+    # 7 個頂層 `st.tabs`,每次 rerun 所有 tab body 都會執行,任何因篩選而觸發
+    # 的取數都會被乘上 7(STATE.md 產業熱力圖冷抓事故)。
+    #
+    # ⚠️ widget 選型受 `requirements.txt` 的 floor 綁死:宣告是
+    # `streamlit>=1.36.0`,故 `st.pills`(1.40+)/ `st.segmented_control`(1.42+)
+    # / `st.fragment`(1.37+)**一律不得使用** —— 沙箱裝的是 1.61,測起來會過,
+    # 部署端解析到 1.36 就直接 AttributeError。此處用 1.36 就有的
+    # `st.text_input` + `st.radio(horizontal=True)`。
+    fcol_q, fcol_chip = st.columns([4, 8], gap="medium")
+    with fcol_q:
+        query = st.text_input(
+            "搜尋指標", value="", placeholder="搜尋指標… 例如 VIX、融資",
+            label_visibility="collapsed", key="v2_detail_query",
+        )
+    with fcol_chip:
+        chip = st.radio(
+            "分類", CHIP_ORDER, index=0, horizontal=True,
+            format_func=lambda c: CHIP_LABELS[c],
+            label_visibility="collapsed", key="v2_detail_chip",
+        )
+
+    # 篩選 + 組表**同一次呼叫、同一份 list** —— 見 `selected_row` 的警告。
+    visible, table = visible_table(rows, chip=chip, query=query)
+
     tbl, panel = st.columns([7, 5], gap="medium")
 
     with tbl:
-        table = {
-            "桶": [_BUCKET_ZH.get(r.bucket, r.bucket) for r in rows],
-            "指標": [r.label for r in rows],
-            "目前值": [fmt_value(r.value, r.unit, r.decimals) for r in rows],
-            "燈": [BAND_META[r.band][0] for r in rows],
-            "狀態": [
-                {"live": "運作中", "degraded": "門檻已失準",
-                 "unwired": "未接線", "missing": "無資料"}[r.state]
-                for r in rows
-            ],
-            "門檻帶": [r.thr_text for r in rows],
-        }
-        sel = st.dataframe(
-            table, hide_index=True, width='stretch',
-            on_select="rerun", selection_mode="single-row",
-            key="v2_detail_table",
-        )
+        if visible:
+            sel = st.dataframe(
+                table, hide_index=True, width='stretch',
+                on_select="rerun", selection_mode="single-row",
+                key="v2_detail_table",
+            )
+        else:
+            # §1:不留一張空表讓人以為頁面壞了,把目前的篩選條件講出來。
+            sel = None
+            st.warning(empty_hint(chip=chip, query=query, total=len(rows)))
+        st.caption(f"顯示 {len(visible)} / {len(rows)} 盞燈")
 
     with panel, st.container(border=True):
         idxs = (sel.selection.rows if sel and getattr(sel, "selection", None)
                 else [])
-        if idxs and 0 <= idxs[0] < len(rows):
-            row = rows[idxs[0]]
+        # ⚠️ 一定要用 `visible`(= 畫面那張表)去解析,不是原始 `rows`。
+        row = selected_row(visible, idxs)
+        if row is not None:
             render_detail(row, SPECS_BY_KEY[row.key], edu=get_edu(row.key),
                           reason_text=_REASON_TXT.get(row.reason or "", ""))
+        elif idxs:
+            st.markdown("#### 選取已失效")
+            st.caption(
+                "剛才點的那一列已經不在目前的篩選結果裡。**這裡刻意不自動改選"
+                "別列** —— 那會讓右側悄悄換成另一個指標,畫面說 A 內容是 B(§1)。"
+                "請在左表重新點一列。"
+            )
         else:
             st.markdown("#### 點左表任一列")
             st.caption(
