@@ -22,15 +22,23 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
     """HoldingAssessment → 表格一列（純函式）。
 
     ⚠️ `健檢` 欄是 `worst_health`（四盞燈取最嚴重）—— 這一步會把「為什麼」整個丟掉:
-    四盞燈都 ⚪ 時只剩一個裸 ⚪,而那可能是新上市(等時間)、配息沒抓到(可重跑)、
-    或個股不適用(不是壞掉)。row dict 是 UI / 推播 / 換股建議共同的輸入,原因在這裡
+    四盞燈都 ⚪ 時只剩一個裸 ⚪,而那可能是新上市 / 週數年數不足(`MISS_NOT_ENOUGH`,
+    等時間)、或折溢價 / 配息這輪沒抓到(`MISS_NO_INPUT`,可重跑)。
+    ⚠️ 2026-08-26 更正:原文這裡還列了第三種「或個股不適用(不是壞掉)」——
+    **那是假的**,而且是上一輪編輯這支 docstring 時漏掉的同一句話。健檢四盞燈
+    只掛得上 `MISS_NOT_ENOUGH` / `MISS_NO_INPUT` 兩種原因;唯一會掛
+    `MISS_NOT_APPLICABLE` 的是 `assess_holding` 裡 `_is_etf=False` 那條分支,而
+    個股走的是 `assess_stock`,根本不經過 `assess_holding`(本檔
+    `build_station_rows` 是它唯一的 production 呼叫端,且 `asset_kind` 已由白名單
+    保證是 etf)。把不會發生的原因列進來,等於叫下一個人去查一個不存在的情形。
+    row dict 是 UI / 推播 / 換股建議共同的輸入,原因在這裡
     斷掉就再也接不回去,故補兩個**底線開頭的非顯示欄**（同 `_detail` 慣例,不進表格）:
       - `_health_miss`:{規格表 key → MISS_*},逐盞燈的原因,無損。
       - `_miss_reason`:整列一句話版本(只在 `健檢` 為 ⚪ 時有值),給只想顯示一個
         圖示 + 一句話的消費端用；多盞燈原因不同時取最根本者（`most_fundamental_miss`）。
 
     ⚠️ 上面兩個鍵只收「**⚪ 且有登記原因**」的燈 —— 一盞 🟢 和一盞 🟡 在 row 裡
-    產出的東西一模一樣（都是空的）。要畫「每檔 8 格燈」或算「N/40 盞可信度」,
+    產出的東西一模一樣（都是空的）。要畫「逐盞燈的格子牆」或算「N/M 盞可信度」,
     這兩個鍵給不出來。故再補第三個非顯示欄:
       - `_lights`:`tuple[ds.LightCell, ...]`,**逐盞燈**的 key / level / 四態 /
         缺值原因（235 另帶 `axes_used`）。純轉換,判燈結果一個字都沒動。
@@ -174,8 +182,15 @@ def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason
         "held": held,   # 換股建議用:持有(Portfolio) vs 觀察(Watchlist)
         "_detail": {"error": reason},
         "_miss_reason": SS.MISS_FETCH_FAILED,
-        # 這一列沒有 assessment,但**每一盞燈都要出現** —— 否則「N/40 盞可信度」的
-        # 分母會因為抓取失敗的列整個消失而悄悄變小,畫面反而顯示可信度更高（§1）。
+        # 這一列沒有 assessment,但**該類別的每一盞燈都要照樣產出** —— 否則
+        # 「N/M 盞可信度」的分母會因為抓取失敗的列整個消失而悄悄變小,畫面反而
+        # 顯示可信度更高（§1）。
+        # ⚠️ 「都要出現」≠「都進分母」:哪幾格算進分母由消費端
+        # `render.station_cards._in_judged_denominator` 統一判（會排除「結構上
+        # 不適用」與規格表 `emits_level=False` 的燈,後者即個股 KD）。這裡管的是
+        # **不缺席**,不是分母口徑。
+        # ⚠️ 原文寫死「N/40 盞」—— 分母是**動態**的（隨持股檔數與 ETF/個股成分變）,
+        # 寫死的數字下一次組合變動就變成假話,故不寫數字。
         # 原因與上面 `_miss_reason` 同一個常數,不另寫字面值以免兩邊漂移。
         "_lights": ds.missing_light_cells(asset_kind, reason=SS.MISS_FETCH_FAILED),
     }
@@ -197,7 +212,22 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
         tk = str(h.get("ticker", "") or "").strip()
         nm = str(h.get("name", "") or "")
         ac = h.get("asset_class", T.ASSET_CORE)
-        ak = h.get("asset_kind", T.KIND_ETF)         # stock / etf（fetcher 分流 + 適用性）
+        # ⚠️ **走 L0 白名單,不是 `or`、更不是 `get(key, default)`**
+        # (2026-08-26 user 核准)。規則本體與完整理由在
+        # `shared/dividend_station_thresholds.normalize_asset_kind` 的 docstring:
+        # 值不在 `(KIND_ETF, KIND_STOCK)` 之內一律回頭走代號規則重判,
+        # falsy(`None` / `""`)與 truthy 髒值(`"ETF"` 大寫 / `"fund"` /
+        # `"unknown"`)都攔。
+        # 一句話版的後果:漏出第三種值 → `assess_holding` 判 `_is_etf=False` →
+        # 4 盞燈標 `MISS_NOT_APPLICABLE` → 被 `_in_judged_denominator`
+        # **移出分母** → 可信度**虛高到滿分並打開巡航 gate**
+        # (實測同一檔 0050:'etf' 是 7/8=88% gate 關,'ETF' 是 4/4=100% gate 開)。
+        # 規則放 L0 而不是留在這裡,是因為 L5 預覽表
+        # (`ui/etf/etf_tab_dividend_station._holding_preview_row`)也要用同一把尺 ——
+        # 兩邊各寫一份,同一頁的兩個「種類」欄就會不一致。
+        # 守衛:`tests/test_station_layer1.py::TestAssetKindNormalisation`
+        # (含「拿掉白名單就轉紅」與「兩支同名 classify 值域不同」兩條)。
+        ak = T.normalize_asset_kind(h.get("asset_kind"), tk)   # stock / etf（fetcher 分流 + 適用性）
         held = bool(h.get("held", True))             # 持有(Portfolio) vs 觀察(Watchlist)
         if not tk:
             continue

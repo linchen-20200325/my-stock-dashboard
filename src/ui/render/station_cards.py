@@ -321,8 +321,37 @@ def _in_judged_denominator(cell) -> bool:
 
     兩種格子不進分母,理由不同,兩種都**不是**「今天沒抓到」:
 
-      1. `miss_reason == MISS_NOT_APPLICABLE` —— 這類持股結構上沒有這盞燈
-         (個股沒有折溢價)。它永遠不會有值。
+      1. `miss_reason == MISS_NOT_APPLICABLE` —— 這盞燈標了「結構上不適用」。
+         它永遠不會有值。
+         ⚠️ **這一類在目前的 production 組合裡不會出現,但這個分支不准拿掉。**
+         原文舉的例子是「個股沒有折溢價」—— 那是**假的**:個股走
+         `assess_stock`,根本不經過會標 `MISS_NOT_APPLICABLE` 的 `assess_holding`
+         (2026-08-26 實測,正常 stock / etf 兩條路都 0 命中)。
+         唯一會命中的是**契約漂移**那條路:`build_station_rows` 的 `asset_kind`
+         一旦不是 `etf` / `stock` 兩值之一,`assess_holding` 的
+         `_is_etf = asset_kind == KIND_ETF` 判 False,4 盞燈(折溢價 + 3-3-3 三項)
+         全部標上 `MISS_NOT_APPLICABLE`。
+
+         ⚠️ **那條路真正的後果比「少 4 盞燈」嚴重得多**(2026-08-26 實測;
+         原文只寫「一檔正常 ETF 憑空少 4 盞燈」,漏掉真正該怕的那一半):
+         被標的燈會走進**本函式**、被移出分母 —— 不是「算不出來」而是「不存在」。
+         同一檔 0050、同一份指標(折溢價缺):
+
+             asset_kind='etf' → 卡面 7/8 = 88%   gate 關(「7/8 個依據可用」)
+             asset_kind='ETF' → 卡面 4/4 = 100%  gate 開(「今天沒有需要動作的部位」)
+
+         大小寫打錯一個字母,可信度不是變低,是**虛高到滿分並打開巡航 gate**。
+         ⚠️ 2026-08-26 該漏法已在上游關掉:`build_station_rows` 改走 L0
+         `T.normalize_asset_kind` **白名單**(值不在 `(KIND_ETF, KIND_STOCK)`
+         之內一律回頭走代號規則),falsy 與 truthy 髒值都攔。守衛見
+         `tests/test_station_layer1.py::TestAssetKindNormalisation`。
+
+         那**這個分支為什麼還留著**:它擋的不是上游那個特定 bug,而是
+         「有燈標了『結構上不適用』」這件事本身。拿掉的話那類燈會被當成
+         「今天沒抓到」計進分母 —— 上游哪天再長出第三種值(新增第三種
+         `asset_kind`、或有人繞過 `build_station_rows` 直呼 `assess_holding`),
+         這一層就沒有東西接住了。上游的白名單與這裡的排除是兩道獨立的防護,
+         不是同一道的兩份。
       2. 規格表宣告 `emits_level=False` —— 這盞燈**依規格就不出等級**
          (現況只有個股 KD:K、D 都在,但沒有判燈規則)。它會亮、會被看,
          只是不會給等級。留在分母裡的後果不是「分數低一點」,而是
@@ -339,25 +368,22 @@ def _in_judged_denominator(cell) -> bool:
     return _spec is None or _spec.emits_level
 
 
-def watch_count(cells) -> tuple[int, int]:
-    """一列的「N/M 在看」—— N = 四態為 `live` 的燈數,M = 這一列的總燈數。
-
-    ⚠️ 分母是**整列的燈**,不是「算得出來的燈」。抓取失敗的列同樣有 M 盞
-    (L2 `missing_light_cells` 就是為此存在),否則分母會悄悄變小、畫面反而
-    顯示可信度更高(§1)。
-
-    ⚠️ **2026-08-26 起 production 沒有呼叫端了**(改動後 grep 只剩測試引用):
-    第 3 層燈格牆 / 選列表 / 明細面板三處原本用這把寬鬆的尺,與第 1 層的
-    `judged_count` 在同一頁印出差 1 的兩個數字(實測 2330:第 1 層 2/4、
-    第 3 層 3/4)。user 2026-08-26 裁示三處一律改用嚴格計數,矛盾消除。
-    本函式**刻意保留不刪**(要不要刪由 user 決定);四態分佈條的「運作中」
-    那一格仍然表達同一件事,走 `tally_states`。
-    ⚠️ 原文這裡寫著「與 `judged_count` 是兩把不同的尺,**刻意的**」——
-    那句話在畫面上已經不成立,故刪除;留著會讓下一個人以為同頁兩個數字
-    本來就該不一樣。
-    """
-    _cs = tuple(cells or ())
-    return sum(1 for c in _cs if c.state == SS.STATE_LIVE), len(_cs)
+#: ⚠️ **`watch_count` 已於 2026-08-26 刪除(user 裁示刪死碼)。**
+#:
+#: 它算的是「N/M 在看」(N = 四態 live 的燈數,M = 整列燈數)。第 3 層燈格牆 /
+#: 選列表 / 明細面板三處原本用這把寬鬆的尺,與第 1 層的 `judged_count` 在同一頁
+#: 印出差 1 的兩個數字(實測 2330:第 1 層 2/4、第 3 層 3/4)。同日稍早 user 裁示
+#: 三處一律改用嚴格計數 → production caller 歸零,本次一併刪除函式本體。
+#:
+#: **不要為了「有個寬鬆的尺可以對照」而把它加回來。** 它表達的那件事沒有消失:
+#: 四態分佈條的「運作中」那一格走 `tally_states`,講的就是同一件事,而且與
+#: `judged_count` **共用同一個分母判準**(`_in_judged_denominator`)——
+#: `watch_count` 的分母是整列燈數,與卡片上的 N/M 分家,那正是它被換掉的原因。
+#:
+#: 巡航 gate「必須用嚴格計數」這件事**沒有**靠這支函式守:守它的是
+#: `tests/test_station_layer1.py::TestCruiseGateIsPinnedToTheStrictScale`,
+#: 該組直接斷言「一列含 live 但沒有等級的燈 → `is_fully_judged` 為 False」
+#: (行為斷言,不比對兩支函式),對照組改用測試檔內的 `_loose_*` 區域函式。
 
 
 def judged_count(cells) -> tuple[int, int]:
@@ -365,13 +391,60 @@ def judged_count(cells) -> tuple[int, int]:
 
     ```
     分母 = 全部燈數 − 結構上不進分母的(見 `_in_judged_denominator`)
-    分子 = 分母內  且  state == live  且  level 非空(!= LEVEL_UNJUDGED)
+    分子 = 分母內  且  state ∈ {live, degraded}  且  level 非空(!= LEVEL_UNJUDGED)
     ```
+
+    ## ⚠️ 為什麼分子**還要看 state** —— 別把這個條件拿掉
+
+    user 2026-08-26 裁示的原話是「**只要有非空等級即放行**」。**照那句字面實作
+    會違憲(§1),不要做。** 理由是實測出來的,不是推論:
+
+    ```
+    health_a  缺值 → state='missing'  level='⚪'    ← level 非空!
+    screen_return 缺值 → state='missing'  level='❔'  ← level 非空!
+    ```
+
+    根因是 **`level` 與 `state` 是兩個獨立頻道** —— `state` 由 `has_value`
+    決定,而 `has_value` **沒有單一規則**,`_etf_light_cells` 的 8 盞燈就分成
+    三種算法(2026-08-26 逐盞實測,別再照抄下面任何一條去推另一條):
+
+    ```
+    health_a/b/c/d  has_value = (Flag.level != "⚪")      level ← Flag.level
+        → 只有這一組,「level 是 ⚪」與「沒有值」才是同一件事
+    light235        has_value = bool(light.axes_used)     level ← light.icon(**永遠非空**)
+        → 三軸全空時 icon 仍是 ⚪ 巡航,但 axes_used 空 → 實測 level='⚪' 卻 state='live'
+    screen 三子項    has_value = (bool | None) is not None level ← _SCREEN_SYMBOL[ok]
+        → None(不可判定)映成 '❔' → 實測 level='❔' 卻 state='missing'
+    ```
+
+    也就是說「level 非空 ⇒ 有判定」在 8 盞裡**有 4 盞不成立**,而且兩個方向都會錯:
+    `light235` 是 level 空但其實在看,`screen_*` 是 level 非空但其實沒抓到。
+    只看 `level != LEVEL_UNJUDGED` 的話,一檔可選指標全缺的新上市 ETF
+    (實測 `assess_holding` 全 None:8 盞裡 6 盞 `missing`)會印出
+    **8/8 盞給得出判定**並放行巡航「今天沒有需要動作的部位」—— 正是整套燈號
+    系統要擋的那個坑。這一列的正確答案是 **2/8**(只有 `health_c` 與 `light235`
+    真的算得出來)。
+    ⚠️ 個股 4 盞同樣沒有共用規則(`stock_health` 看 `miss_reason`、`stock_trend`
+    看 `trend_verdict is not None`、`stock_kd` 看 K/D 兩值、`stock_swap` 才是
+    `level != "⚪"`)—— 要判斷「這盞燈有沒有值」一律去讀 `_*_light_cells`,
+    **不要**從 `level` 反推。
+
+    所以 user 裁示真正的內容是**把 degraded 併進「有判定」**(門檻已失準但
+    給得出等級),**不是**拿掉 state 這個頻道。`missing` / `unwired` 仍然不進分子。
+
+    ## 為什麼寫成白名單而不是「排除 missing/unwired」
+
+    兩種寫法今天等價,未來不等價:哪天多出第五種四態,白名單版**不放行**
+    (保守,分數偏低),排除版**放行**(樂觀,可信度虛高)。§1 要的是前者 ——
+    分數偏低頂多讓人多看一眼,虛高會讓人在沒有依據的時候以為沒事。
 
     ## 為什麼分子要多一個「level 非空」的條件
 
-    `state == live` 的語意是「**這盞燈的資料管道通**」—— 它不保證那盞燈
+    `live` / `degraded` 的語意都是關於「**這盞燈可不可信**」—— 兩者都不保證那盞燈
     **產出過等級**。「在看」≠「有判定」(user 2026-08-26 裁示)。
+    ⚠️ 原文這裡寫的是「`state == live` 的語意是……**所以要求 live**」——
+    推論仍然對(可信度 ≠ 有判定),但**結論已被第二次裁示推翻**:現在要求的不是
+    `live`,是白名單 {live, degraded}。故只改結論,推論原樣保留。
     這個條件同時是**反向守衛**:規格表宣告 `emits_level=True` 的燈若真的沒出
     等級,它會如實把分數拉低,而不是被當成「有判定」蒙混過去
     (`tests/test_station_layer1.py` 另有一條測試直接釘住這件事)。
@@ -396,8 +469,11 @@ def judged_count(cells) -> tuple[int, int]:
     寫死任何總數 —— 混合持股的總格數會隨組合成分改變。
     """
     _cs = tuple(c for c in (cells or ()) if _in_judged_denominator(c))
+    # ⚠️ 白名單,**不是**「排除 missing/unwired」—— 理由見 docstring
+    # 「為什麼寫成白名單」那一段(新增第五態時要 fail-closed)。
     _num = sum(1 for c in _cs
-               if c.state == SS.STATE_LIVE and c.level != LEVEL_UNJUDGED)
+               if c.state in (SS.STATE_LIVE, SS.STATE_DEGRADED)
+               and c.level != LEVEL_UNJUDGED)
     return _num, len(_cs)
 
 
@@ -451,7 +527,8 @@ CRUISE_TEXT = "⚪ 巡航：今天沒有需要動作的部位"
 def cruise_or_gap(judged: int, total: int, *, all_rows_judged: bool) -> str:
     """巡航 gate(**顯示層**,不碰 L2 判燈)。
 
-    准印巡航的條件:**每一列的每一盞適用燈都 live 且有 level**。
+    准印巡航的條件:**每一列的每一盞適用燈都「可信度是 live 或 degraded」且有 level**
+    (即 `judged_count` 的分子條件,2026-08-26 user 第二次裁示把 degraded 併入)。
     只要有一列不滿足,就不准說「沒事」—— 改說清楚「有幾個依據可用」,
     因為那兩件事在畫面上原本長得一模一樣,而它們的處置完全相反(§1)。
 
@@ -690,7 +767,11 @@ def render_conclusion_card(*, headline: str, figures: list[tuple[str, str]],
 
 
 #: 四態在分佈條上各自的 CSS class。**順序即畫面由左到右的順序**,固定為
-#: 「能用 → 半信 → 沒有 → 不會有」,讓長度變化一眼看得出往哪邊倒。
+#: 「運作中 → 門檻已失準 → 無資料 → 未接線」(即 `STATE_META` 的四個標籤,
+#: 由可信到不可信),讓長度變化一眼看得出往哪邊倒。
+#: ⚠️ 2026-08-26:原文寫「能用 → 半信 → 沒有 → 不會有」—— 那是本檔自創的四個詞,
+#: 畫面上一個都不存在(圖例印的是 `STATE_META` 的標籤)。註解不上畫面,但照著它
+#: 寫文案就會生出使用者找不到的詞,已經發生過一次,故一併對齊 SSOT 用語。
 _STATE_SEG_CLASS: tuple[tuple[str, str], ...] = (
     (SS.STATE_LIVE, "dsl-seg dsl-seg-live"),
     (SS.STATE_DEGRADED, "dsl-seg dsl-seg-ring"),
@@ -703,10 +784,16 @@ def render_credibility_card(judged: int, total: int, tally: dict) -> None:
     """卡②「訊號可信度」—— N/M 盞 + 四態分佈條 + 圖例。
 
     `judged` / `total` 由 `aggregate_judged` 算出(防呆 1 的定義),`tally` 由
-    `tally_states` 算出。**兩者分母口徑一致** —— 兩邊都走 `_in_judged_denominator`,
-    也就是同時排除「結構上不適用」與「依規格就不出等級」**兩類**格子
-    (2026-08-26 起後者才加進來;原文只寫了前者,漏掉一半)。
+    `tally_states` 算出。**兩者分母口徑一致** —— 兩邊都走 `_in_judged_denominator`。
     口徑一旦分家,同一張卡會出現兩個對不起來的總數。
+
+    ⚠️ **卡面上只講「依規格就不出等級」(KD)這一類。** `_in_judged_denominator`
+    另外還排除 `MISS_NOT_APPLICABLE`,但那一類在**目前的 production 組合裡不會發生**
+    (個股走 `assess_stock`,根本不經過會標它的 `assess_holding`;`asset_kind`
+    那條漏法也已於 2026-08-26 在 L3 `build_station_rows` 收成白名單 ——
+    走 L0 `T.normalize_asset_kind`,falsy 與 truthy 髒值都攔)——
+    對使用者寫「個股沒有折溢價」是**憑空描述一個他看不到的情形**。
+    那個分支為什麼還留著,見 `_in_judged_denominator` 的 docstring。
 
     ⚠️ 分佈條**不用顏色編狀態**(見 CSS 註解):本檔的顏色一律代表「判定」,
     再拿來代表狀態就會有兩種讀法。四段靠紋理分辨,與燈格牆同一套語彙。
@@ -730,16 +817,23 @@ def render_credibility_card(judged: int, total: int, tally: dict) -> None:
         f'{cell_html(_DemoCell(level="⚪", state=_s))}{SS.STATE_META[_s][0]} {tally.get(_s, 0)}'
         for _s, _ in _STATE_SEG_CLASS
     )
+    # ⚠️ 下面那段文案提到的兩個狀態名**也走 `STATE_META`**,不在這裡另寫一份。
+    # 2026-08-26 修正:原文用自創的「半信」指 degraded,但同一張卡的圖例印的是
+    # `STATE_META` 的「門檻已失準」(實測 `'半信' in str(STATE_META)` → False)——
+    # 使用者照著文案去那一排找,找不到那個詞。
+    _lb_live = SS.STATE_META[SS.STATE_LIVE][0]
+    _lb_degraded = SS.STATE_META[SS.STATE_DEGRADED][0]
     st.markdown(
         f'<div class="dsl-lg">{_lg}</div>'
         f'<div class="dsl-sub" style="margin-top:6px">'
-        f'分母扣掉兩種燈:一是「這類持股結構上沒有的」(個股沒有折溢價);'
-        f'二是「依規格就不出等級的」—— 目前只有個股 KD,'
+        f'分母扣掉「依規格就不出等級的」燈 —— 目前只有個股 KD,'
         f'K、D 都抓得到、也照樣畫在下面的燈格牆上,但它還沒有判燈規則,'
         f'留在分母只會讓每一檔個股永遠差一盞。'
         f'**沒有**扣掉「今天沒抓到的燈」—— 抓不到就是要把分數拉低。<br>'
-        f'⚠️ 分子**至多**等於這一排的「運作中」,可能更少:'
-        f'「運作中」只問**資料管道通不通**,分子還多要求那盞燈**真的產出了等級**。<br>'
+        f'⚠️ 分子**至多**等於這一排的「{_lb_live}」＋「{_lb_degraded}」兩段相加,'
+        f'可能更少:那兩段只問**這盞燈可不可信**,分子還多要求它**真的產出了等級**。<br>'
+        f'⚠️ 分子**可能大於「{_lb_live}」**(2026-08-26 起) —— 多出來的就是'
+        f'「{_lb_degraded}」但給得出等級的那一段,user 裁示算「有判定」。<br>'
         f'✅ 這個數字與下方燈格牆的「有判定」是**同一把尺**'
         f'(2026-08-26 起;在那之前燈格牆用的是比較寬鬆的「在看」,同一頁兩個數字差 1)。'
         f'</div></div>',

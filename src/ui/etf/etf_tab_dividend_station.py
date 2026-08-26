@@ -100,13 +100,21 @@ def _safe_dataframe(styled, plain) -> None:
 
 
 def _holding_preview_row(h: dict) -> dict:
-    """service 持股 dict → 唯讀預覽列（含張數/均價;現價/績效在下方戰情表,需跑計算才有）。"""
+    """service 持股 dict → 唯讀預覽列（含張數/均價;現價/績效在下方戰情表,需跑計算才有）。
+
+    ⚠️ 「種類」走 L0 `T.normalize_asset_kind`,**與下方戰情表同一把尺**
+    （L3 `build_station_rows` 用的是同一支）。2026-08-26 前這裡讀的是原始
+    `h["asset_kind"]` —— 髒值（`"ETF"` 大寫 / `None`）會讓同一頁出現兩個
+    對不起來的「種類」欄:預覽表寫 ETF、戰情表卻走個股路徑。
+    今天兩個持股產出端都已先分類故不可達,但同一個問題不留兩份答案（§2.1 SSOT）。
+    """
     _lots = h.get("lots")
     _avg = h.get("avg_price")
+    _kind = T.normalize_asset_kind(h.get("asset_kind"), h.get("ticker", ""))
     return {
         "代號": h.get("ticker", ""),
         "名稱": h.get("name", ""),
-        "種類": "個股" if h.get("asset_kind") == T.KIND_STOCK else "ETF",
+        "種類": "個股" if _kind == T.KIND_STOCK else "ETF",
         "類別": "🚀 衛星" if h.get("asset_class") == T.ASSET_SATELLITE else "🛡️ 核心",
         # 張數/均價來自持股 Sheet(觀察清單無金額 → —);現價/報酬在下方戰情表(跑計算後)。
         "張數": f"{float(_lots):g}" if _lots else "—",
@@ -436,8 +444,8 @@ def _render_light_detail(rows: list[dict]) -> None:
         "一盞「亮著綠燈但其實沒有資料」的燈,填色會是灰的、而且帶斜紋。"
         "⚠️ 235 加碼燈的紅／黃／綠是**跌多深、該加多少碼**,不是體質好壞 —— "
         "它的 🔴 是「崩盤／深水加碼」訊號。點進去每一盞燈都會寫明白。"
-        "　「有判定」的分母**比格子數少**是正常的:結構上不適用的燈(個股沒有折溢價)、"
-        "以及還沒有判燈規則的燈(個股 KD)不算進分母 —— 點那一盞燈會寫明是哪一種。"
+        "　「有判定」的分母**比格子數少**是正常的:還沒有判燈規則的燈(個股 KD)"
+        "不算進分母 —— 點進去會寫明理由。"
     )
     render_legend()
 

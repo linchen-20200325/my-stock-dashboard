@@ -117,6 +117,47 @@ def classify_asset_kind(ticker: str) -> str:
         return KIND_STOCK
     return KIND_ETF
 
+
+def normalize_asset_kind(raw, ticker: str) -> str:
+    """把持股 dict 上的 `asset_kind` 收斂成 **etf / stock 兩值**（純函式,SSOT）。
+
+    **白名單,不是 `or`、更不是 `dict.get(k, default)`**:`raw` 不在
+    `(KIND_ETF, KIND_STOCK)` 之內就一律回頭走 `classify_asset_kind(ticker)`
+    重判 —— 不論它是 falsy（`None` / `""`,Google Sheet 空白欄位最常見的兩種）
+    還是 truthy 的髒值（`"ETF"` 大寫 / `"fund"` / `asset_lag` 那支同名三值函式
+    會回的 `"unknown"`）。fail-closed:認不得的值一律重判,不放行。
+
+    ## 為什麼非白名單不可（2026-08-26 實測後果,不是推論）
+
+    第三種值會一路傳進 `dividend_station.assess_holding`,那裡的
+    `_is_etf = asset_kind == KIND_ETF` 判 False,折溢價 + 3-3-3 三項共 4 盞燈
+    全被標成 `MISS_NOT_APPLICABLE`。而顯示層的分母判準會把標了那個原因的燈
+    **移出分母** —— 於是那 4 盞不是「算不出來」而是「不存在」。
+    同一檔 0050、同一份指標（折溢價缺）:
+
+        asset_kind='etf' → 卡面 7/8 = 88%   巡航 gate 關（「7/8 個依據可用」）
+        asset_kind='ETF' → 卡面 4/4 = 100%  巡航 gate 開（「今天沒有需要動作的部位」）
+
+    大小寫打錯一個字母,可信度不是變低,是**虛高到滿分並打開巡航 gate**。
+    §1 要擋的正是這個:資料越爛、畫面越有把握。舊寫法 `raw or classify(...)`
+    只攔 falsy,truthy 髒值照樣走進去。
+
+    ⚠️ 正規化走的是**代號規則**,不是「一律當 ETF」:`{"ticker": "2330"}`
+    （`asset_kind` key 缺席）會判回個股,而不是被塞進 ETF 的 235/3-3-3。
+
+    ⚠️ 這裡用的是**本檔**的 `classify_asset_kind`（兩值）。
+    `src/compute/etf/asset_lag.py` 有個**同名**函式回**三值**（多一個
+    `'unknown'`,給組合體檢落後燈號用）—— 它自己就生得出第三種值,
+    **不能拿來當正規化器**。
+
+    這條規則放在 L0 的理由:白名單的內容就是本檔的 `KIND_ETF` / `KIND_STOCK`,
+    與 `classify_asset_kind` 是同一件事的兩半。放在任一個消費端 = 同一個規則
+    有兩份（實測就是這樣分家的:L3 戰情表已正規化,L5 預覽表仍讀原始值,
+    同一頁兩個「種類」欄可能不一致）。
+    """
+    return raw if raw in (KIND_ETF, KIND_STOCK) else classify_asset_kind(ticker)
+
+
 # ── 80/20 核心/衛星分流 ────────────────────────────────────────────────
 ASSET_CORE = "core"          # 核心（穩定配息,目標 80%）
 ASSET_SATELLITE = "satellite"    # 衛星（成長/主題,目標 20%）

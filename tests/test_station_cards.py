@@ -198,17 +198,22 @@ class TestMeaningIsPerScale:
 
 
 # ════════════════════════════════════════════════════════════════
-# 四、N/M 在看 —— 分母是整列的燈,不是「算得出來的燈」
+# 四、分母 —— 抓取失敗的列不可縮水
 # ════════════════════════════════════════════════════════════════
-class TestWatchCount:
+#
+# ⚠️ 原本這一節叫 `TestWatchCount`,測的是 `SC.watch_count`(「N/M 在看」)。
+#    該函式 2026-08-26 隨 production caller 歸零而刪除(user 裁示刪死碼),
+#    本節**沒有跟著刪掉,而是改測 `judged_count`** —— 它守的那件事
+#    (「抓取失敗的列分母不可縮水」)與哪一把尺無關,兩把尺都必須成立。
+class TestDenominatorDoesNotShrink:
 
     def test_denominator_survives_total_fetch_failure(self):
         """抓取失敗的列分母不可縮水(縮水會讓畫面顯示可信度更高,§1)。"""
         _cells = ds.missing_light_cells(T.KIND_ETF, reason=SS.MISS_FETCH_FAILED)
-        _n, _m = SC.watch_count(_cells)
-        assert _n == 0
+        _n, _m = SC.judged_count(_cells)
+        assert _n == 0, "一盞燈都沒跑過的列不准有任何一格算「有判定」"
         assert _m == len(SS.specs_for(T.KIND_ETF)) == 8
 
     def test_empty_is_zero_zero_not_a_crash(self):
-        assert SC.watch_count(()) == (0, 0)
-        assert SC.watch_count(None) == (0, 0)
+        assert SC.judged_count(()) == (0, 0)
+        assert SC.judged_count(None) == (0, 0)

@@ -5,7 +5,7 @@
 `row_from_assessment` 把四盞健檢燈壓成一個 `worst_health`、把 3-3-3 三個子項壓成
 一個「✅合格 / ❌未過 / ❔待資料」字串 —— **逐盞燈的判定在組表那一步整個消失**。
 既有的 `_health_miss` 只收「⚪ 且有登記原因」的燈,所以**一盞 🟢 和一盞 🟡 在 row
-裡產出的東西一模一樣（都是空的）**。要畫「每檔 8 格燈」或算「N/40 盞可信度」,
+裡產出的東西一模一樣（都是空的）**。要畫「逐盞燈的格子牆」或算「N/M 盞可信度」,
 現況唯一的來源是 `_detail` 裡的中文 msg 字串 —— 而 L2 檔內註解已明說解析 msg
 字串太脆弱（改一個字就壞,且**不會有任何錯誤**）。
 
@@ -500,8 +500,13 @@ class TestRowIsAdditiveOnly:
 
     @pytest.mark.parametrize("kind,n", [(T.KIND_ETF, 8), (T.KIND_STOCK, 4)])
     def test_error_row_still_draws_every_cell(self, kind, n):
-        """整檔抓取失敗:格子**不可消失** —— 否則「N/40 盞」的分母會悄悄變小,
+        """整檔抓取失敗:格子**不可消失** —— 否則「N/M 盞」的分母會悄悄變小,
         畫面反而顯示可信度更高（§1）。
+
+        ⚠️ 2026-08-26:原文兩處寫死「N/40 盞」—— 那個 40 是某一次組合的格子總數,
+        **分母是動態的**（隨持股檔數與 ETF/個股成分變,且還會扣掉
+        `emits_level=False` 的燈）。同批把 production 端四處寫死的數字拿掉時
+        漏掉了 `tests/`,本次補上。數字寫進敘述,下一次組合變動就變成假話。
         """
         row = svc._error_row("X", "x", T.ASSET_CORE, kind, "boom")
         cells = row["_lights"]
