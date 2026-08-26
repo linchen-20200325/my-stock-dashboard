@@ -175,6 +175,9 @@ _STOCK_HEALTH_MEANING: dict[str, str] = {
     "🟡": "體質尚可,但要盯著(評等 B)",
     "🟢": "體質合格(評等 A+ / A / B+)",
     "⚪": "沒有判定(看下面的缺值原因)",
+    # ⚠️ 這盞燈**有**自己的等級,只是這一輪算不出來 → 不可套通用的
+    # `UNJUDGED_TEXT`(那句話說「從來沒有各自的等級」,對這盞燈已經是假的)。
+    LEVEL_UNJUDGED: "這一輪沒有評等可判(看下面的缺值原因)",
 }
 
 #: 個股「財報趨勢」那把尺(`StockAssessment.trend_level`,來自 `diff_fin_health`)。
@@ -189,6 +192,8 @@ _STOCK_TREND_MEANING: dict[str, str] = {
     "🟡": "有好有壞,方向分歧",
     "🟢": "變好的項目多於變差",
     "⚪": "兩期比過了,每一項評等都沒變(**不是**沒資料)",
+    # 同上:有等級,只是這一輪比不出來(最常見的原因是缺上一季財報,沒得比)。
+    LEVEL_UNJUDGED: "這一輪比不出方向 —— 多半是缺上一季財報,沒有東西可以比",
 }
 
 #: 少數幾盞燈有**自己**的尺,不跟著 group 走。key 是 L0 規格表的 canonical key。
@@ -219,10 +224,15 @@ def level_meaning(group: str, level: str, *, key: str = "") -> str:
     參數是**選填**,舊呼叫端行為不變。
 
     未登錄的符號回 `""`(呼叫端顯示原符號即可)—— 這裡**不猜**它是什麼意思。
+
+    ⚠️ `LEVEL_UNJUDGED` 的文案也走同一把尺。通用的 `UNJUDGED_TEXT` 說的是
+    「這盞燈**從來沒有**各自的等級」—— 那句話只對「根本沒有判燈邏輯」的燈
+    (現在只剩 KD)成立。對「有等級、只是這一輪算不出來」的燈(財報體檢 /
+    財報趨勢)照印,就是假敘述(§1),故那兩盞在自己的尺裡覆寫這句。
     """
-    if level == LEVEL_UNJUDGED:
-        return UNJUDGED_TEXT
     _scale = _MEANING_BY_KEY.get(key) or _MEANING_BY_GROUP.get(group, {})
+    if level == LEVEL_UNJUDGED:
+        return _scale.get(LEVEL_UNJUDGED) or UNJUDGED_TEXT
     return _scale.get(level, "")
 
 

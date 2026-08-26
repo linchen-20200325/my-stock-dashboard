@@ -177,6 +177,20 @@ class TestMeaningIsPerScale:
                     assert SC.level_meaning(_spec.group, _c.level, key=_c.key), \
                         f"{_c.key}={_c.level!r} 查不到意思"
 
+    def test_unjudged_text_does_not_lie_about_lights_that_do_have_levels(self):
+        """B3:財報體檢 / 財報趨勢**有**自己的等級,只是有時算不出來。
+
+        通用 `UNJUDGED_TEXT` 說「這盞燈從來沒有各自的等級」—— 那句話對這兩盞
+        已經是假的(§1)。KD 那一盞才該拿到通用句(它真的沒有判燈邏輯)。
+        這條會在「有人日後給 KD 補了等級卻沒改文案」時同樣紅。
+        """
+        _kd = SC.level_meaning("stock", ds.LEVEL_UNJUDGED, key=SS.KEY_STOCK_KD)
+        assert _kd == SC.UNJUDGED_TEXT
+        for _k in (SS.KEY_STOCK_HEALTH, SS.KEY_STOCK_TREND):
+            _txt = SC.level_meaning("stock", ds.LEVEL_UNJUDGED, key=_k)
+            assert _txt and _txt != SC.UNJUDGED_TEXT, f"{_k} 拿到了假敘述"
+            assert "從來沒有" not in _txt
+
     def test_unjudged_meaning_is_not_the_missing_meaning(self):
         """「從來沒判過」與「這輪沒抓到」是兩件事,文案不可共用。"""
         assert SC.UNJUDGED_TEXT != SS.MISS_TEXT[SS.MISS_NO_INPUT]
