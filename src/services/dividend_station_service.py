@@ -22,8 +22,16 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
     """HoldingAssessment → 表格一列（純函式）。
 
     ⚠️ `健檢` 欄是 `worst_health`（四盞燈取最嚴重）—— 這一步會把「為什麼」整個丟掉:
-    四盞燈都 ⚪ 時只剩一個裸 ⚪,而那可能是新上市(等時間)、配息沒抓到(可重跑)、
-    或個股不適用(不是壞掉)。row dict 是 UI / 推播 / 換股建議共同的輸入,原因在這裡
+    四盞燈都 ⚪ 時只剩一個裸 ⚪,而那可能是新上市 / 週數年數不足(`MISS_NOT_ENOUGH`,
+    等時間)、或折溢價 / 配息這輪沒抓到(`MISS_NO_INPUT`,可重跑)。
+    ⚠️ 2026-08-26 更正:原文這裡還列了第三種「或個股不適用(不是壞掉)」——
+    **那是假的**,而且是上一輪編輯這支 docstring 時漏掉的同一句話。健檢四盞燈
+    只掛得上 `MISS_NOT_ENOUGH` / `MISS_NO_INPUT` 兩種原因;唯一會掛
+    `MISS_NOT_APPLICABLE` 的是 `assess_holding` 裡 `_is_etf=False` 那條分支,而
+    個股走的是 `assess_stock`,根本不經過 `assess_holding`(本檔
+    `build_station_rows` 是它唯一的 production 呼叫端,且 `asset_kind` 已由白名單
+    保證是 etf)。把不會發生的原因列進來,等於叫下一個人去查一個不存在的情形。
+    row dict 是 UI / 推播 / 換股建議共同的輸入,原因在這裡
     斷掉就再也接不回去,故補兩個**底線開頭的非顯示欄**（同 `_detail` 慣例,不進表格）:
       - `_health_miss`:{規格表 key → MISS_*},逐盞燈的原因,無損。
       - `_miss_reason`:整列一句話版本(只在 `健檢` 為 ⚪ 時有值),給只想顯示一個
@@ -204,30 +212,22 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
         tk = str(h.get("ticker", "") or "").strip()
         nm = str(h.get("name", "") or "")
         ac = h.get("asset_class", T.ASSET_CORE)
-        # ⚠️ **`or`,不是 `get(key, default)`**(2026-08-26 user 核准修正)。
-        # `dict.get(k, default)` 的預設值**只在 key 缺席時生效** —— key 在、值是
-        # `None` / `""` 時會原樣通過,於是 `ak` 變成第三種值,`assess_holding` 裡的
-        # `_is_etf = asset_kind == T.KIND_ETF` 判 False,折溢價 + 3-3-3 三項共 4 盞燈
-        # 全被標成 `MISS_NOT_APPLICABLE`(實測:`None` / `""` / `"ETF"` / `"fund"` 皆然)——
-        # 一檔正常 ETF 憑空少 4 盞燈,而畫面會說「這類持股結構上沒有這盞燈」,是假話(§1)。
-        # 改成 `or` + `T.classify_asset_kind(tk)` 後,**falsy 那條路**被補起來:
-        # `None` / `""` 會落到 `classify_asset_kind`,而該 fn 每個 return 分支都只回
-        # etf / stock 兩值,故 falsy 輸入結構上再也生不出第三種值。
-        # ⚠️ **仍未關的洞(誠實記錄,不是漏看)**:`or` 只攔 falsy —— **truthy 的未知
-        # 字串**(如 `"ETF"` 大寫 / `"fund"`)照樣原樣通過,實測仍會標出 4 盞
-        # `MISS_NOT_APPLICABLE`。今天不可達(兩個 production 產出端
-        # `ui/etf/etf_tab_dividend_station._load_holdings_from_portfolio` 與
-        # `scripts/push_holdings_daily.py` 都已先跑 `T.classify_asset_kind`,只吐兩值),
-        # 故 2026-08-26 只做 falsy 這一段、不擅自擴大核准範圍。要**結構上**保證兩值,
-        # 得再加白名單(`ak if ak in (KIND_ETF, KIND_STOCK) else classify(...)`)——
-        # 那是另一個決定,待 user 裁示。守衛見
-        # `tests/test_station_layer1.py::TestAssetKindNormalisation`。
-        # ⚠️ 這裡的 `classify_asset_kind` 是 `shared/dividend_station_thresholds.py`
-        # 那一支(**兩值**)。`src/compute/etf/asset_lag.py` 有個同名函式回**三值**
-        # (多一個 `'unknown'`,給組合體檢落後燈號用)—— 拿錯那支會讓 `unknown`
-        # 直接走進 `assess_holding(_is_etf=False)`,正好把這個洞放大,**不要用**。
-        # 寫法與同檔 `resolve_holding_names` 對齊(那邊本來就是 `or`,一直是對的)。
-        ak = h.get("asset_kind") or T.classify_asset_kind(tk)   # stock / etf（fetcher 分流 + 適用性）
+        # ⚠️ **走 L0 白名單,不是 `or`、更不是 `get(key, default)`**
+        # (2026-08-26 user 核准)。規則本體與完整理由在
+        # `shared/dividend_station_thresholds.normalize_asset_kind` 的 docstring:
+        # 值不在 `(KIND_ETF, KIND_STOCK)` 之內一律回頭走代號規則重判,
+        # falsy(`None` / `""`)與 truthy 髒值(`"ETF"` 大寫 / `"fund"` /
+        # `"unknown"`)都攔。
+        # 一句話版的後果:漏出第三種值 → `assess_holding` 判 `_is_etf=False` →
+        # 4 盞燈標 `MISS_NOT_APPLICABLE` → 被 `_in_judged_denominator`
+        # **移出分母** → 可信度**虛高到滿分並打開巡航 gate**
+        # (實測同一檔 0050:'etf' 是 7/8=88% gate 關,'ETF' 是 4/4=100% gate 開)。
+        # 規則放 L0 而不是留在這裡,是因為 L5 預覽表
+        # (`ui/etf/etf_tab_dividend_station._holding_preview_row`)也要用同一把尺 ——
+        # 兩邊各寫一份,同一頁的兩個「種類」欄就會不一致。
+        # 守衛:`tests/test_station_layer1.py::TestAssetKindNormalisation`
+        # (含「拿掉白名單就轉紅」與「兩支同名 classify 值域不同」兩條)。
+        ak = T.normalize_asset_kind(h.get("asset_kind"), tk)   # stock / etf（fetcher 分流 + 適用性）
         held = bool(h.get("held", True))             # 持有(Portfolio) vs 觀察(Watchlist)
         if not tk:
             continue

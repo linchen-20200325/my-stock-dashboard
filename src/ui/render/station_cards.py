@@ -327,18 +327,31 @@ def _in_judged_denominator(cell) -> bool:
          原文舉的例子是「個股沒有折溢價」—— 那是**假的**:個股走
          `assess_stock`,根本不經過會標 `MISS_NOT_APPLICABLE` 的 `assess_holding`
          (2026-08-26 實測,正常 stock / etf 兩條路都 0 命中)。
-         真正還會命中的只有**契約漂移**那條路:`build_station_rows` 的 `asset_kind`
+         唯一會命中的是**契約漂移**那條路:`build_station_rows` 的 `asset_kind`
          一旦不是 `etf` / `stock` 兩值之一,`assess_holding` 的
          `_is_etf = asset_kind == KIND_ETF` 判 False,4 盞燈(折溢價 + 3-3-3 三項)
          全部標上 `MISS_NOT_APPLICABLE`。
-         ⚠️ 2026-08-26 已補掉其中 **falsy** 那一半(`build_station_rows` 從
-         `h.get("asset_kind", T.KIND_ETF)` 改為 `h.get("asset_kind") or
-         T.classify_asset_kind(tk)` —— `get` 的預設值只在 key 缺席時生效,
-         `None` / `""` 原本會原樣通過)。**truthy 的未知字串仍會命中**
-         (實測 `'ETF'` 大寫 / `'fund'`),那一半待 user 裁示是否加白名單,
-         守衛見 `tests/test_station_layer1.py::TestAssetKindNormalisation`。
-         所以這個判準**不准拿掉**:拿掉的話那 4 盞會被當成「今天沒抓到」
-         計進分母 —— 防護跟著一起沒了。
+
+         ⚠️ **那條路真正的後果比「少 4 盞燈」嚴重得多**(2026-08-26 實測;
+         原文只寫「一檔正常 ETF 憑空少 4 盞燈」,漏掉真正該怕的那一半):
+         被標的燈會走進**本函式**、被移出分母 —— 不是「算不出來」而是「不存在」。
+         同一檔 0050、同一份指標(折溢價缺):
+
+             asset_kind='etf' → 卡面 7/8 = 88%   gate 關(「7/8 個依據可用」)
+             asset_kind='ETF' → 卡面 4/4 = 100%  gate 開(「今天沒有需要動作的部位」)
+
+         大小寫打錯一個字母,可信度不是變低,是**虛高到滿分並打開巡航 gate**。
+         ⚠️ 2026-08-26 該漏法已在上游關掉:`build_station_rows` 改走 L0
+         `T.normalize_asset_kind` **白名單**(值不在 `(KIND_ETF, KIND_STOCK)`
+         之內一律回頭走代號規則),falsy 與 truthy 髒值都攔。守衛見
+         `tests/test_station_layer1.py::TestAssetKindNormalisation`。
+
+         那**這個分支為什麼還留著**:它擋的不是上游那個特定 bug,而是
+         「有燈標了『結構上不適用』」這件事本身。拿掉的話那類燈會被當成
+         「今天沒抓到」計進分母 —— 上游哪天再長出第三種值(新增第三種
+         `asset_kind`、或有人繞過 `build_station_rows` 直呼 `assess_holding`),
+         這一層就沒有東西接住了。上游的白名單與這裡的排除是兩道獨立的防護,
+         不是同一道的兩份。
       2. 規格表宣告 `emits_level=False` —— 這盞燈**依規格就不出等級**
          (現況只有個股 KD:K、D 都在,但沒有判燈規則)。它會亮、會被看,
          只是不會給等級。留在分母裡的後果不是「分數低一點」,而是
@@ -391,13 +404,30 @@ def judged_count(cells) -> tuple[int, int]:
     screen_return 缺值 → state='missing'  level='❔'  ← level 非空!
     ```
 
-    `missing` 的格子**常態帶著非空 level** —— 四個 `_*_light_cells` 分支的
-    `has_value` 定義就是「level 不是 ⚪」,所以「沒抓到」與「抓到了判成中性」
-    在 `level` 這個頻道上長得一模一樣。只看 `level != LEVEL_UNJUDGED` 的話,
-    一檔可選指標全缺的新上市 ETF(實測 `assess_holding` 全 None:8 盞裡 6 盞
-    `missing`,而 6 盞的 `level` 全是非空的 ⚪／❔)會印出 **8/8 盞給得出判定**
-    並放行巡航「今天沒有需要動作的部位」—— 正是整套燈號系統要擋的那個坑。
-    這一列的正確答案是 **2/8**(只有 `health_c` 與 `light235` 真的算得出來)。
+    根因是 **`level` 與 `state` 是兩個獨立頻道** —— `state` 由 `has_value`
+    決定,而 `has_value` **沒有單一規則**,`_etf_light_cells` 的 8 盞燈就分成
+    三種算法(2026-08-26 逐盞實測,別再照抄下面任何一條去推另一條):
+
+    ```
+    health_a/b/c/d  has_value = (Flag.level != "⚪")      level ← Flag.level
+        → 只有這一組,「level 是 ⚪」與「沒有值」才是同一件事
+    light235        has_value = bool(light.axes_used)     level ← light.icon(**永遠非空**)
+        → 三軸全空時 icon 仍是 ⚪ 巡航,但 axes_used 空 → 實測 level='⚪' 卻 state='live'
+    screen 三子項    has_value = (bool | None) is not None level ← _SCREEN_SYMBOL[ok]
+        → None(不可判定)映成 '❔' → 實測 level='❔' 卻 state='missing'
+    ```
+
+    也就是說「level 非空 ⇒ 有判定」在 8 盞裡**有 4 盞不成立**,而且兩個方向都會錯:
+    `light235` 是 level 空但其實在看,`screen_*` 是 level 非空但其實沒抓到。
+    只看 `level != LEVEL_UNJUDGED` 的話,一檔可選指標全缺的新上市 ETF
+    (實測 `assess_holding` 全 None:8 盞裡 6 盞 `missing`)會印出
+    **8/8 盞給得出判定**並放行巡航「今天沒有需要動作的部位」—— 正是整套燈號
+    系統要擋的那個坑。這一列的正確答案是 **2/8**(只有 `health_c` 與 `light235`
+    真的算得出來)。
+    ⚠️ 個股 4 盞同樣沒有共用規則(`stock_health` 看 `miss_reason`、`stock_trend`
+    看 `trend_verdict is not None`、`stock_kd` 看 K/D 兩值、`stock_swap` 才是
+    `level != "⚪"`)—— 要判斷「這盞燈有沒有值」一律去讀 `_*_light_cells`,
+    **不要**從 `level` 反推。
 
     所以 user 裁示真正的內容是**把 degraded 併進「有判定」**(門檻已失準但
     給得出等級),**不是**拿掉 state 這個頻道。`missing` / `unwired` 仍然不進分子。
@@ -737,7 +767,11 @@ def render_conclusion_card(*, headline: str, figures: list[tuple[str, str]],
 
 
 #: 四態在分佈條上各自的 CSS class。**順序即畫面由左到右的順序**,固定為
-#: 「能用 → 半信 → 沒有 → 不會有」,讓長度變化一眼看得出往哪邊倒。
+#: 「運作中 → 門檻已失準 → 無資料 → 未接線」(即 `STATE_META` 的四個標籤,
+#: 由可信到不可信),讓長度變化一眼看得出往哪邊倒。
+#: ⚠️ 2026-08-26:原文寫「能用 → 半信 → 沒有 → 不會有」—— 那是本檔自創的四個詞,
+#: 畫面上一個都不存在(圖例印的是 `STATE_META` 的標籤)。註解不上畫面,但照著它
+#: 寫文案就會生出使用者找不到的詞,已經發生過一次,故一併對齊 SSOT 用語。
 _STATE_SEG_CLASS: tuple[tuple[str, str], ...] = (
     (SS.STATE_LIVE, "dsl-seg dsl-seg-live"),
     (SS.STATE_DEGRADED, "dsl-seg dsl-seg-ring"),
@@ -756,7 +790,8 @@ def render_credibility_card(judged: int, total: int, tally: dict) -> None:
     ⚠️ **卡面上只講「依規格就不出等級」(KD)這一類。** `_in_judged_denominator`
     另外還排除 `MISS_NOT_APPLICABLE`,但那一類在**目前的 production 組合裡不會發生**
     (個股走 `assess_stock`,根本不經過會標它的 `assess_holding`;`asset_kind`
-    falsy 那條漏法也已於 2026-08-26 在 L3 `build_station_rows` 補掉)——
+    那條漏法也已於 2026-08-26 在 L3 `build_station_rows` 收成白名單 ——
+    走 L0 `T.normalize_asset_kind`,falsy 與 truthy 髒值都攔)——
     對使用者寫「個股沒有折溢價」是**憑空描述一個他看不到的情形**。
     那個分支為什麼還留著,見 `_in_judged_denominator` 的 docstring。
 
@@ -782,6 +817,12 @@ def render_credibility_card(judged: int, total: int, tally: dict) -> None:
         f'{cell_html(_DemoCell(level="⚪", state=_s))}{SS.STATE_META[_s][0]} {tally.get(_s, 0)}'
         for _s, _ in _STATE_SEG_CLASS
     )
+    # ⚠️ 下面那段文案提到的兩個狀態名**也走 `STATE_META`**,不在這裡另寫一份。
+    # 2026-08-26 修正:原文用自創的「半信」指 degraded,但同一張卡的圖例印的是
+    # `STATE_META` 的「門檻已失準」(實測 `'半信' in str(STATE_META)` → False)——
+    # 使用者照著文案去那一排找,找不到那個詞。
+    _lb_live = SS.STATE_META[SS.STATE_LIVE][0]
+    _lb_degraded = SS.STATE_META[SS.STATE_DEGRADED][0]
     st.markdown(
         f'<div class="dsl-lg">{_lg}</div>'
         f'<div class="dsl-sub" style="margin-top:6px">'
@@ -789,11 +830,10 @@ def render_credibility_card(judged: int, total: int, tally: dict) -> None:
         f'K、D 都抓得到、也照樣畫在下面的燈格牆上,但它還沒有判燈規則,'
         f'留在分母只會讓每一檔個股永遠差一盞。'
         f'**沒有**扣掉「今天沒抓到的燈」—— 抓不到就是要把分數拉低。<br>'
-        f'⚠️ 分子**至多**等於這一排的「運作中」＋「半信」兩段相加,可能更少:'
-        f'那兩段只問**這盞燈可不可信**,分子還多要求它**真的產出了等級**。<br>'
-        f'⚠️ 分子**可能大於「運作中」**(2026-08-26 起) —— 「半信」= 門檻已失準'
-        f'但給得出等級,user 裁示算「有判定」。實測一組 ETF+個股:分子 11、'
-        f'「運作中」10,多出來的那一盞就是「半信」的財報趨勢。<br>'
+        f'⚠️ 分子**至多**等於這一排的「{_lb_live}」＋「{_lb_degraded}」兩段相加,'
+        f'可能更少:那兩段只問**這盞燈可不可信**,分子還多要求它**真的產出了等級**。<br>'
+        f'⚠️ 分子**可能大於「{_lb_live}」**(2026-08-26 起) —— 多出來的就是'
+        f'「{_lb_degraded}」但給得出等級的那一段,user 裁示算「有判定」。<br>'
         f'✅ 這個數字與下方燈格牆的「有判定」是**同一把尺**'
         f'(2026-08-26 起;在那之前燈格牆用的是比較寬鬆的「在看」,同一頁兩個數字差 1)。'
         f'</div></div>',

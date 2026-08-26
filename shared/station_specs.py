@@ -426,7 +426,14 @@ STATE_UNWIRED = "unwired"
 MISS_NO_INPUT = "no_input"          #: 該項的輸入沒抓到（如缺配息率）
 MISS_FETCH_FAILED = "fetch_failed"  #: 整檔抓取失敗
 MISS_NOT_ENOUGH = "not_enough"      #: 有資料但不足以計算（如週數 < 20）
-MISS_NOT_APPLICABLE = "n/a"         #: 這類持股不適用（如個股沒有折溢價）
+#: 這盞燈對這一類持股**結構上不適用**（不是壞掉、也不是這輪沒抓到）。
+#: 唯一會掛上它的是 `dividend_station.assess_holding` 的 `_is_etf=False` 分支
+#: （折溢價 + 3-3-3 三項共 4 盞）。
+#: ⚠️ 2026-08-26 更正:原文的舉例是「如個股沒有折溢價」—— 那個例子**描述不到任何
+#: 實際會發生的情形**,個股走的是 `assess_stock`,不經過 `assess_holding`。
+#: 沿用該例的畫面文案已在同批拿掉（`render.station_cards` 兩處 docstring 記著
+#: 分析過程）。這裡保留常數語意與那條分支的指路,但不再拿一個走不到的情形當定義。
+MISS_NOT_APPLICABLE = "n/a"
 #: 上游**給了值，但值不在約定的形態裡**（如財報評等回了不在分級表內的字串）。
 #: 2026-08-25 新增。為什麼上面四個都不能用：前四個講的都是「沒有值」，
 #: 處置是等、是重跑、是不用管；這一個是**有值但值不對** —— 那是上下游契約破了，

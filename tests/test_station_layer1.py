@@ -149,11 +149,18 @@ class TestJudgedCountDefinition:
         """⚠️ **本條是「別把 state 條件拿掉」的防線** —— 拿掉就紅。
 
         user 那句裁示的字面是「只要有非空等級即放行」。**照字面做會違憲(§1)**:
-        `missing` 的格子**常態帶著非空 level** —— 四個 `_*_light_cells` 分支的
-        `has_value` 定義就是「level 不是 ⚪」,所以缺值的 `health_a` 是 `⚪`、
-        缺值的 `screen_return` 是 `❔`,兩個都**不是** `LEVEL_UNJUDGED`。
+        `missing` 的格子**常態帶著非空 level**,因為 `level` 與 `state` 是兩個
+        獨立頻道 —— `state` 由 `has_value` 決定,而 `has_value` **沒有單一規則**,
+        `_etf_light_cells` 的 8 盞分成三種算法(2026-08-26 逐盞實測):
+        `health_a/b/c/d` 看 `Flag.level != "⚪"`、`light235` 看
+        `bool(light.axes_used)`(icon 永遠非空,實測 level='⚪' 卻 state='live')、
+        3-3-3 三子項看 `bool | None is not None`(None 映成 '❔',實測 level='❔'
+        卻 state='missing')。所以缺值的 `health_a` 是 `⚪`、缺值的
+        `screen_return` 是 `❔`,兩個都**不是** `LEVEL_UNJUDGED`。
         只看 level 的話,可選指標全缺的新上市 ETF 會印出「8/8 盞給得出判定」
         並放行巡航「今天沒有需要動作的部位」。
+        ⚠️ **別從 `level` 反推 `has_value`** —— 8 盞裡有 4 盞不成立,而且兩個方向
+        都會錯。要判斷「這盞燈有沒有值」一律去讀 `_*_light_cells` 本身。
 
         這裡用的就是那兩個**真實形狀**(不是自己編的假格子形狀)——
         下一條 `test_the_real_shape_above_really_occurs_in_production` 直接
@@ -752,13 +759,23 @@ class TestAssetKindNormalisation:
 
     ## 這一組在守什麼
 
-    `build_station_rows` 原本寫 `h.get("asset_kind", T.KIND_ETF)`。
-    `dict.get(k, default)` 的預設值**只在 key 缺席時生效** —— key 在、值是 `None`
-    或 `""` 時會**原樣通過**。那個值一路傳進 `assess_holding`,而該函式用
+    `build_station_rows` 原本寫 `h.get("asset_kind", T.KIND_ETF)`,中途改過
+    `h.get("asset_kind") or ...`（只攔 falsy）,**現行是 L0 白名單**
+    `T.normalize_asset_kind(raw, ticker)`:值不在 `(KIND_ETF, KIND_STOCK)`
+    之內一律回頭走代號規則重判（fail-closed）。
+
+    第三種值的後果:它一路傳進 `assess_holding`,該函式用
     `_is_etf = asset_kind == T.KIND_ETF` 判斷,第三種值一律判 False →
-    折溢價 + 3-3-3 三項共 **4 盞燈**被標成 `MISS_NOT_APPLICABLE`。
-    後果是一檔正常 ETF 憑空少 4 盞燈,而畫面會對使用者說「這類持股結構上沒有
-    這盞燈」—— 那是假話（§1）。改成 `or` + `T.classify_asset_kind(tk)` 後補起來。
+    折溢價 + 3-3-3 三項共 **4 盞燈**被標成 `MISS_NOT_APPLICABLE`,
+    畫面對使用者說「這類持股結構上沒有這盞燈」—— 那是假話（§1）。
+
+    ⚠️ **但真正該怕的不是那句假話**（2026-08-26 實測補記,原文只寫到上一句）:
+    標了 `MISS_NOT_APPLICABLE` 的燈會被 `_in_judged_denominator` **移出分母** ——
+    不是「算不出來」而是「不存在」。同一檔 0050、同一份指標（折溢價缺）:
+        asset_kind='etf' → 卡面 7/8 = 88%   巡航 gate 關
+        asset_kind='ETF' → 卡面 4/4 = 100%  巡航 gate 開
+    可信度不是變低,是**虛高到滿分並打開巡航 gate**（印「今天沒有需要動作的部位」）。
+    這才是這一組非守不可的理由。
 
     ## 與第 2 項（清「不適用」假文案）的關係
 
@@ -840,30 +857,84 @@ class TestAssetKindNormalisation:
         assert self._na_lights(_rows) == []
 
     @pytest.mark.parametrize("kind", ["ETF", "fund", "unknown"])
-    def test_truthy_unknown_string_is_a_KNOWN_REMAINING_GAP(self, kind):
-        """⚠️ **這條釘的是「還沒修好」,不是「已經修好」—— 讀的人別誤會。**
+    def test_truthy_unknown_string_is_normalised_too(self, kind):
+        """**truthy 的髒值也被正規化** —— 這條原本釘的是「還沒修好」,2026-08-26
+        user 核准加白名單後已改成正向斷言（改名前為
+        `test_truthy_unknown_string_is_a_KNOWN_REMAINING_GAP`）。
 
-        `or` 只攔 **falsy**。truthy 的未知字串（`"ETF"` 大寫 / `"fund"` /
-        `asset_lag` 那支三值函式會回的 `"unknown"`）**照樣原樣通過**,實測仍會標出
-        4 盞 `MISS_NOT_APPLICABLE`。
+        原文保留在此供追溯:舊寫法 `h.get("asset_kind") or ...` **只攔 falsy**,
+        truthy 的未知字串（`"ETF"` 大寫 / `"fund"` / `asset_lag` 那支三值函式會回的
+        `"unknown"`）照樣原樣通過,實測會標出 4 盞 `MISS_NOT_APPLICABLE`。
 
-        為什麼不順手一起修:2026-08-26 核准的改法明文是「改成與
-        `resolve_holding_names` 相同的寫法」(也就是 `or`)。要**結構上**保證兩值
-        得再加白名單,那是**另一個決定**,不在本次核准範圍(§-1 / §8.4「禁止自作主張」)。
+        ⚠️ **那個後果比「少 4 盞燈」嚴重得多**（2026-08-26 實測,寫下來是因為
+        原文漏了這一半）:被標 `MISS_NOT_APPLICABLE` 的燈會被
+        `_in_judged_denominator` **移出分母** —— 不是「算不出來」而是「不存在」。
+        同一檔 0050、同一份指標（折溢價缺）:
+            asset_kind='etf' → 卡面 7/8 = 88%   巡航 gate 關（「7/8 個依據可用」）
+            asset_kind='ETF' → 卡面 4/4 = 100%  巡航 gate 開（「今天沒有需要動作的部位」）
+        大小寫打錯一個字母,可信度不是變低,是**虛高到滿分並打開巡航 gate**。
 
-        為什麼今天不是 bug:兩個 production 產出端
-        (`_load_holdings_from_portfolio` 與 `scripts/push_holdings_daily.py`)
-        都已先跑 `T.classify_asset_kind`,只吐 etf / stock 兩值 → 不可達。
-
-        **哪天有人加白名單修掉它,這條會紅** —— 那時把它改成正向斷言,
-        並回頭把 `build_station_rows` 的註解與本組 docstring 一起更新。
+        現行寫法是白名單:值不在 `(KIND_ETF, KIND_STOCK)` 之內一律回頭走
+        `T.classify_asset_kind`（fail-closed）。**把白名單拿掉這條就會紅。**
         """
         _rows = self._rows({"ticker": "0050.TW", "name": "台灣50",
                             "asset_class": T.ASSET_CORE, "asset_kind": kind})
-        assert sorted(self._na_lights(_rows)) == sorted(
-            [SS.KEY_HEALTH_D, SS.KEY_SCREEN_INCEPTION,
-             SS.KEY_SCREEN_RETURN, SS.KEY_SCREEN_PEER]), \
-            "這個洞被修掉了(好事) —— 請把本條改成正向斷言並更新兩處註解"
+        assert self._na_lights(_rows) == [], \
+            f"asset_kind={kind!r} 漏出第三種值 → 4 盞燈被移出分母,可信度虛高"
+        # 正面斷言:被正規化成 ETF,8 盞燈一盞不少。
+        assert _rows[0]["種類"] == "ETF"
+        assert len(_rows[0]["_lights"]) == len(SS.specs_for(T.KIND_ETF)) == 8
+
+    @pytest.mark.parametrize("kind,expect", [
+        # 髒值 / 缺值 → 回頭走代號規則,2330 是 4 碼純數字 → 個股
+        (None, "個股"), ("", "個股"), ("ETF", "個股"),
+        ("fund", "個股"), ("unknown", "個股"),
+        # 合法兩值 → 原樣通過(user 在 Sheet 上明寫的分類不被代號規則覆寫)
+        ("etf", "ETF"), ("stock", "個股"),
+    ])
+    def test_the_preview_table_and_the_station_table_agree_on_kind(self, kind, expect):
+        """G:同一頁的兩個「種類」欄不准分家。
+
+        L5 `_holding_preview_row`（上方唯讀預覽表）與 L3 `build_station_rows`
+        （下方戰情表）2026-08-26 前是兩份判斷:預覽表讀原始 `h["asset_kind"]`,
+        戰情表已正規化 → 髒值進來時預覽表寫 ETF、戰情表卻走個股路徑。
+        兩邊現在都走 L0 `T.normalize_asset_kind` 同一支。
+
+        ⚠️ 這條**不是**在測「今天會不會發生」（今天兩個持股產出端都先分類了,
+        不可達）—— 它守的是「同一個問題只准有一份答案」。
+        """
+        from src.ui.etf.etf_tab_dividend_station import _holding_preview_row
+
+        _h = {"ticker": "2330", "name": "台積電",
+              "asset_class": T.ASSET_SATELLITE, "asset_kind": kind}
+        _preview = _holding_preview_row(dict(_h))["種類"]
+        _station = self._rows(dict(_h))[0]["種類"]
+        assert _preview == _station, \
+            f"asset_kind={kind!r}:預覽表 {_preview!r} vs 戰情表 {_station!r} 分家了"
+        assert _preview == expect
+
+    @pytest.mark.parametrize("raw", [None, "", "ETF", "fund", "unknown", "  etf", 0, [], {}])
+    def test_normalize_asset_kind_rejects_everything_outside_the_whitelist(self, raw):
+        """L0 白名單本體:**不在 `(KIND_ETF, KIND_STOCK)` 之內一律重判。**
+
+        ⚠️ 這是「拿掉白名單就會紅」的那一條（實測突變:把
+        `normalize_asset_kind` 改回 `raw or classify_asset_kind(ticker)`,
+        `"ETF"` / `"fund"` / `"unknown"` / `"  etf"` 四個 case 立刻紅）。
+        `"  etf"`（前後有空白）與非字串（`0` / `[]` / `{}`）一併釘住 ——
+        白名單是**相等比對**,不做 strip / 不做型別寬容,認不得就重判。
+        """
+        assert T.normalize_asset_kind(raw, "2330") == T.KIND_STOCK
+        assert T.normalize_asset_kind(raw, "0050.TW") == T.KIND_ETF
+
+    @pytest.mark.parametrize("raw", [T.KIND_ETF, T.KIND_STOCK])
+    def test_normalize_asset_kind_passes_the_two_legal_values_through(self, raw):
+        """反向:合法的兩值**原樣通過**,不會被代號規則覆寫。
+
+        少了這條,`normalize_asset_kind` 寫成「一律 classify」也會讓上一條通過 ——
+        那會讓使用者在 Sheet 上明寫的 `stock`（例如把某檔 ETF 當個股管）被忽略。
+        """
+        assert T.normalize_asset_kind(raw, "0050.TW") == raw
+        assert T.normalize_asset_kind(raw, "2330") == raw
 
     def test_the_right_classify_asset_kind_only_ever_returns_two_values(self):
         """釘住「拿對函式」:`T.classify_asset_kind` 只回 etf / stock。

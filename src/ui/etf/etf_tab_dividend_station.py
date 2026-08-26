@@ -100,13 +100,21 @@ def _safe_dataframe(styled, plain) -> None:
 
 
 def _holding_preview_row(h: dict) -> dict:
-    """service 持股 dict → 唯讀預覽列（含張數/均價;現價/績效在下方戰情表,需跑計算才有）。"""
+    """service 持股 dict → 唯讀預覽列（含張數/均價;現價/績效在下方戰情表,需跑計算才有）。
+
+    ⚠️ 「種類」走 L0 `T.normalize_asset_kind`,**與下方戰情表同一把尺**
+    （L3 `build_station_rows` 用的是同一支）。2026-08-26 前這裡讀的是原始
+    `h["asset_kind"]` —— 髒值（`"ETF"` 大寫 / `None`）會讓同一頁出現兩個
+    對不起來的「種類」欄:預覽表寫 ETF、戰情表卻走個股路徑。
+    今天兩個持股產出端都已先分類故不可達,但同一個問題不留兩份答案（§2.1 SSOT）。
+    """
     _lots = h.get("lots")
     _avg = h.get("avg_price")
+    _kind = T.normalize_asset_kind(h.get("asset_kind"), h.get("ticker", ""))
     return {
         "代號": h.get("ticker", ""),
         "名稱": h.get("name", ""),
-        "種類": "個股" if h.get("asset_kind") == T.KIND_STOCK else "ETF",
+        "種類": "個股" if _kind == T.KIND_STOCK else "ETF",
         "類別": "🚀 衛星" if h.get("asset_class") == T.ASSET_SATELLITE else "🛡️ 核心",
         # 張數/均價來自持股 Sheet(觀察清單無金額 → —);現價/報酬在下方戰情表(跑計算後)。
         "張數": f"{float(_lots):g}" if _lots else "—",
