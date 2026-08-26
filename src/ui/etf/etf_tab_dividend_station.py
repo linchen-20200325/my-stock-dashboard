@@ -8,6 +8,12 @@
   · 🚀 個股汰換（衛星）→ 財報體檢（grade）+ KD → 是否更換（財報為主、KD 為時機輔證）。
 - 🤖 AI 戰情總結：先出規則式事實（汰弱 / 235 加碼 / 抓取失敗）,有金鑰再 AI 潤成推播文字。
 
+- 🔎 逐盞燈明細：燈格牆 + **選列就地展開**（`st.dataframe(on_select)` + 分欄面板）。
+  ⚠️ 刻意**不用** `st.expander` / 巢狀 `st.tabs` 裝明細 —— 兩者的 body 每次 app run
+  都會執行（收合只是前端），把 N 檔 × 12 盞燈塞進去就是 STATE.md v19.132 產業熱力圖
+  那個坑的另一個入口。渲染下放 L4 `render.station_cards`（L5 → L4 為合法方向,
+  **不需**新增 §8.2.A 例外）。
+
 §8.2 L5：只呼叫 L3 `dividend_station_service`,不自算。§1：抓取失敗逐列誠實標記,不炸整表;
 抓取 button-gated（不每次 rerun 重抓）。個股不套 235/3-3-3（ETF/基金規則）,資料不足標「資料不足」不猜。
 """
@@ -18,6 +24,14 @@ from typing import Callable
 import streamlit as st
 
 from shared import dividend_station_thresholds as T
+from shared import station_specs as SS
+from src.ui.render.station_cards import CSS as _LIGHT_CSS
+from src.ui.render.station_cards import (
+    render_holding_detail,
+    render_legend,
+    render_light_wall,
+    watch_count,
+)
 
 # 戰情表分兩區（§ user 2026-08）：ETF 走定期定額 235/3-3-3、個股走 財報體檢 + KD。
 _ETF_COLS = ["代號", "名稱", "張數", "均價", "現價", "損益%", "市值",
@@ -217,28 +231,7 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     # ── 📊 80/20 實際配置偏離 + 衛星停利（#38,有張數/均價才算）─────────────
     _render_allocation_take_profit(_rows)
 
-    # 逐檔明細（ETF：健檢 A/B/C/D · 235 · 3-3-3｜個股：財報體檢 · KD）
-    with st.expander("🔎 逐檔明細（ETF：A/B/C/D · 235 · 3-3-3｜個股：財報體檢 · KD）", expanded=False):
-        for r in _rows:
-            d = r.get("_detail", {})
-            _hdr = f"**{r['代號']} {r.get('名稱','')}**"
-            if d.get("error"):
-                st.markdown(f"{_hdr} — ⚠️ {d['error']}")
-                st.markdown("---")
-                continue
-            if r.get("種類") == "個股":
-                st.markdown(f"{_hdr}　財報：{r.get('財報體檢','')}　KD：{r.get('KD','')}")
-                st.caption(f"財報總評：{d.get('財報總評','—')}　｜　財報趨勢：{d.get('財報趨勢','—')}")
-                st.caption(f"財報弱項：{d.get('財報弱項','—')}　｜　KD 交叉：{d.get('KD交叉','無')}")
-            else:
-                st.markdown(f"{_hdr}　{r.get('235 燈號','')}　3-3-3：{d.get('3-3-3明細','')}")
-                st.caption(f"A：{d.get('健檢A','')}　｜　B：{d.get('健檢B','')}")
-                st.caption(f"C：{d.get('健檢C','')}　｜　D：{d.get('健檢D','')}")
-                if d.get("ETF品質"):
-                    st.caption(f"ETF 品質：{d['ETF品質']}")   # B4:費用率/AUM/清算風險 display
-                if d.get("235觸發"):
-                    st.caption(f"235 觸發：{d['235觸發']}　深水：{d.get('深水防守','—')}")
-            st.markdown("---")
+    _render_light_detail(_rows)
 
     # ── 4️⃣ 換股建議（換出=持有🔴汰弱 · 換入=選股池候選 · 搭配總經位階）──────
     _switch = st.session_state.get("_station_switch")
@@ -270,6 +263,132 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     st.caption(f"💡 目標配置：🛡️核心 {T.CORE_TARGET_PCT:.0f}% / 🚀衛星 {T.SATELLITE_TARGET_PCT:.0f}%；"
                f"衛星獲利達 {T.SATELLITE_TAKE_PROFIT_PCT:.0f}% 嚴格停利、滾回核心。"
                "本區僅研究參考,非投資建議,盈虧自負。")
+
+
+#: 規格表 key → 這盞燈的「值」寫在 row 的 `_detail` 哪個欄位。
+#:
+#: 這是**呈現對應**(哪一段文字要印在哪一盞燈底下),故住 L5 —— row dict 的形狀由 L3
+#: 決定,而只有本檔在讀它。L4 只收 `{key: 文字}` 不認得任何欄名(它不該知道 row 長怎樣)。
+#:
+#: ⚠️ **3-3-3 三個子項刻意不在這張表裡。** `_detail["3-3-3明細"]` 是三項併成的
+#:    一句話(「成立✅　3年報酬✅　同儕前1/3❔」),要拆回三份得解析字串 —— L2 已經
+#:    明說過那樣太脆弱(改一個字就壞,而且不會有任何錯誤)。故三個子項的「值」顯示
+#:    「—」,由判定符號 + 門檻自己講清楚,**不猜**(§1);合併那句話改印在「其他明細」。
+_LIGHT_VALUE_DETAIL_KEY: dict[str, str] = {
+    SS.KEY_HEALTH_A: "健檢A",
+    SS.KEY_HEALTH_B: "健檢B",
+    SS.KEY_HEALTH_C: "健檢C",
+    SS.KEY_HEALTH_D: "健檢D",
+    SS.KEY_LIGHT235: "235觸發",
+    SS.KEY_STOCK_HEALTH: "財報總評",
+    SS.KEY_STOCK_TREND: "財報趨勢",
+    SS.KEY_STOCK_KD: "KD明細",
+}
+
+#: 汰換建議那盞燈的「值」不在 `_detail`,而是主表的「建議動作」欄。
+_LIGHT_VALUE_ROW_COL: dict[str, str] = {SS.KEY_STOCK_SWAP: "建議動作"}
+
+#: `_detail` 裡**不屬於任何一盞燈**的補充欄。舊版「🔎 逐檔明細」expander 有印這些,
+#: 換成選列展開後不能弄丟(§1 改呈現不等於可以少講事情)。順序即畫面順序。
+_EXTRA_DETAIL_KEYS: tuple[str, ...] = (
+    "3-3-3明細", "深水防守", "ETF品質", "財報弱項", "KD交叉",
+)
+
+
+def _light_value_texts(r: dict) -> dict[str, str]:
+    """row → `{規格表 key: 這盞燈實際算出什麼}`。查無對應就不放進去(L4 顯示「—」)。"""
+    _d = r.get("_detail") or {}
+    _out: dict[str, str] = {}
+    for _k, _col in _LIGHT_VALUE_DETAIL_KEY.items():
+        _v = str(_d.get(_col) or "").strip()
+        if _v:
+            _out[_k] = _v
+    for _k, _col in _LIGHT_VALUE_ROW_COL.items():
+        _v = str(r.get(_col) or "").strip()
+        if _v:
+            _out[_k] = _v
+    return _out
+
+
+def _render_light_detail(rows: list[dict]) -> None:
+    """逐盞燈明細 —— 燈格牆 + **選列就地展開**(取代原本的逐檔明細 expander)。
+
+    ## 為什麼不是 expander / 巢狀 tabs
+
+    `st.tabs()` 會執行**所有** tab body、`st.expander` 的 body 同樣每次 app run 都跑
+    (收合只是前端)。把 N 檔 × 12 盞燈塞進每列一個 expander,就是 STATE.md v19.132
+    產業熱力圖那個坑的另一個入口。這裡採 `st.dataframe(on_select="rerun")` +
+    `st.columns` —— **只渲染被選中那一列**的明細,與總經 v2 第 3 層同一套做法
+    (全 repo 目前只有那一處與本處用 `on_select`)。
+
+    燈格牆本身是一次 `st.markdown` 的純 HTML,零 widget、零額外執行成本。
+    """
+    _rows = list(rows or [])
+    if not _rows:
+        return
+
+    st.markdown(_LIGHT_CSS, unsafe_allow_html=True)
+    st.markdown("##### 🔎 逐盞燈明細　·　點左表任一列,右側就地展開")
+
+    if not any(r.get("_lights") for r in _rows):
+        # 舊版執行結果留在 session 裡(沒有 `_lights` 這個鍵)。§1:不畫空格子假裝有燈。
+        st.info("這份結果是舊版執行留下的,沒有逐盞燈資料 —— 請重按「🚀 跑存股戰情室」。")
+        return
+
+    st.caption(
+        "**填色＝這盞燈自己的判定**、**外框／紋理＝這盞燈可不可信**(四態)。兩件事分開看:"
+        "一盞「亮著綠燈但其實沒有資料」的燈,填色會是灰的、而且帶斜紋。"
+        "⚠️ 235 加碼燈的紅／黃／綠是**跌多深、該加多少碼**,不是體質好壞 —— "
+        "它的 🔴 是「崩盤／深水加碼」訊號。點進去每一盞燈都會寫明白。"
+    )
+    render_legend()
+
+    render_light_wall([
+        (str(r.get("代號", "")), str(r.get("名稱", "")), r.get("_lights") or ())
+        for r in _rows
+    ])
+
+    _tbl, _panel = st.columns([7, 5], gap="medium")
+    with _tbl:
+        _n_m = [watch_count(r.get("_lights") or ()) for r in _rows]
+        _sel = st.dataframe(
+            {
+                "代號": [str(r.get("代號", "")) for r in _rows],
+                "名稱": [str(r.get("名稱", "")) for r in _rows],
+                "種類": [str(r.get("種類", "")) for r in _rows],
+                "健檢": [str(r.get("健檢", "")) for r in _rows],
+                "在看": [f"{_n}/{_m}" for _n, _m in _n_m],
+            },
+            hide_index=True, width="stretch",
+            on_select="rerun", selection_mode="single-row",
+            key="_station_light_table",
+        )
+
+    with _panel, st.container(border=True):
+        _idxs = (_sel.selection.rows if _sel and getattr(_sel, "selection", None)
+                 else [])
+        if _idxs and 0 <= _idxs[0] < len(_rows):
+            _r = _rows[_idxs[0]]
+            _d = _r.get("_detail") or {}
+            render_holding_detail(
+                str(_r.get("代號", "")), str(_r.get("名稱", "")),
+                _r.get("_lights") or (),
+                value_texts=_light_value_texts(_r),
+                error=str(_d.get("error") or ""))
+            _extra = [(_k, str(_d.get(_k) or "").strip())
+                      for _k in _EXTRA_DETAIL_KEYS]
+            _extra = [(_k, _v) for _k, _v in _extra if _v]
+            if _extra:
+                st.markdown("**其他明細**")
+                for _k, _v in _extra:
+                    st.caption(f"{_k}：{_v}")
+        else:
+            st.markdown("#### 點左表任一列")
+            st.caption(
+                "右側會就地展開那一檔的**每一盞燈**:判定是什麼意思(依該盞燈自己那把尺)、"
+                "這盞燈可不可信、實際算出什麼值、門檻、來源、以及沒資料時**為什麼**沒資料"
+                "(全部讀自 SSOT 規格表,不是這裡編的)。"
+            )
 
 
 def _render_allocation_take_profit(rows: list[dict]) -> None:

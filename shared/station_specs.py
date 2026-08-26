@@ -39,6 +39,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from shared import dividend_station_thresholds as T
+from shared import unified_verdict_thresholds as UV
+from shared.signal_thresholds import ETF_SHARPE_RF_FALLBACK_PCT
 
 # ══════════════════════════════════════════════════════════════════
 # 燈的 canonical key —— 一個字串只准定義一次
@@ -129,6 +131,15 @@ class StationSpec:
 #
 # ⚠️ 門檻文字一律用 f-string 從 T.* 組出，**不得**寫死數字（§3.3）。
 #    上游改門檻，這裡自動跟著改；不存在「規格表寫 1.5% 但實作用 2%」的漂移。
+#
+# ⚠️ **`source` 欄同一條規矩**（2026-08-26 補）。原本只有 `threshold_text` 被守，
+#    理由是「門檻才是判燈用的」—— 但 `source` 裡的數字一樣會被使用者拿來對帳，
+#    而且已經出過兩次事:`health_b` 寫「無風險利率視為 0」（實際 5.33%）、
+#    `health_d` 寫「近 35 交易日」（實際 `days=10`,且回溯天數根本不進判燈）。
+#    用「哪一種比較嚴重」排優先序、卻用「欄位名」劃守衛範圍，是兩把不一致的尺。
+#    現行:`source` 的每個數字要嘛組自 SSOT 常數，要嘛在測試端登錄為
+#    「記法」或「上游沒有 SSOT 的既知欠債」（見 `tests/test_station_specs.py`）。
+#    **不要為了讓測試變綠而新造一個常數** —— 那是把 §3.3 的違憲藏起來。
 
 STATION_SPECS: list[StationSpec] = [
     # ── ETF 健檢 A/B/C/D ──────────────────────────────────────────
@@ -143,7 +154,16 @@ STATION_SPECS: list[StationSpec] = [
         key=KEY_HEALTH_B, label="B 夏普", kind=T.KIND_ETF, group="health",
         unit="", direction="low_bad",
         threshold_text=f"🔴 Sharpe < {T.SHARPE_NEG_THRESHOLD:g}",
-        source="5 年日報酬年化（無風險利率視為 0）",
+        # 2026-08-26:原文寫「5 年日報酬年化（無風險利率視為 0）」—— 兩件事都錯,
+        # 而且是**會改變燈色**的錯（本盞門檻為 Sharpe < 0,rf 直接平移分子）:
+        #   · 週期:實作走 `sharpe_weekly(weekly, ...)`,用**週**報酬 ×√52 年化,不是日報酬。
+        #   · rf:實作注入即時 FEDFUNDS;注入失敗維持 SSOT fallback
+        #     `ETF_SHARPE_RF_FALLBACK_PCT`,只有連取值本身都拋例外才退 0。
+        #     也就是 production 的常態是 rf≈5% 而非 0 —— 畫面卻告訴使用者 rf=0,
+        #     使用者會把一檔「rf=5.33% 下為負」的 ETF 讀成「連 0 都跑不贏」。
+        # ⚠️ 只改敘述:`sharpe_weekly` 與 rf 注入鏈一字未動（文件修正,非行為變更）。
+        source=(f"5 年日線轉週線，週報酬 ×√52 年化；無風險利率取即時 FEDFUNDS"
+                f"（未注入時退 {ETF_SHARPE_RF_FALLBACK_PCT:g}%，連利率都取不到才退 0）"),
         why="承擔了波動卻沒換到超額報酬 —— 那不如放定存。",
     ),
     StationSpec(
@@ -157,19 +177,49 @@ STATION_SPECS: list[StationSpec] = [
         key=KEY_HEALTH_D, label="D 折溢價", kind=T.KIND_ETF, group="health",
         unit="%", direction="high_bad",
         threshold_text=f"🟡 溢價 > {T.PREMIUM_ALERT_PCT:g}%",
-        source="近 35 交易日 NAV 對照市價",
+        # 2026-08-26:原文寫「近 35 交易日 NAV 對照市價」—— 那個 35 是
+        # `fetch_etf_nav_history` 的**預設值**,而本盞燈的呼叫端明確傳 `days=10`;
+        # 更根本的是「回溯幾天」根本不進判燈 —— `calc_premium_discount` 只取
+        # **最新一日**的淨值,與**同一日**的市價對照（跨日配對會產生假溢價,
+        # 那正是 3 個守門員在擋的東西）。寫一個既不是實際值、又不影響判燈的數字,
+        # 只會讓查門檻的人以為這盞燈在看一個月的區間。改成講它實際對照什麼。
+        # ⚠️ 只改敘述:`calc_premium_discount` 與 `days=10` 一字未動。
+        source="ETF 淨值取最新一日，與同一日市價對照（TWSE 官方折溢價 → 淨值歷史同日配對 → yfinance 依序備援）",
         why="溢價買進等於先付一筆看不見的手續費。個股沒有這個概念，故不適用。",
     ),
     # ── ETF 235 加碼引擎（三取一取最嚴重）──────────────────────────
     StationSpec(
         key=KEY_LIGHT235, label="235 加碼燈", kind=T.KIND_ETF, group="timing",
         unit="σ", direction="low_bad",
+        # 2026-08-26:三段加碼的 −1σ / −2σ / −3σ 原為**寫死字面值**,違反本檔開頭
+        # 自訂的「門檻文字一律用 f-string 從 T.* 組出」—— 上游改 Z_LIGHT* 這裡不會跟著動。
+        # 改走 SSOT 後畫面字串**逐字不變**（Z_LIGHT1/2/3 現值 = -1/-2/-3）,純去漂移風險。
+        # 負號寫死為「−」而數值取 abs():這三個常數依定義恆為負（下檔 σ 帶）,
+        # 直接 :g 會輸出 ASCII "-1" 而非現行排版用的 U+2212「−1」。
+        # 2026-08-26:加碼帶的符號由 `≤` 改為 `<` —— 實作是 `z < T.Z_LIGHT*`（嚴格小於）,
+        # 邊界上那一點原本是假敘述。**改文字不改程式**,證據是程式沒錯:
+        #   · `dividend_station_thresholds` 三個常數自己的註解就寫 `# z < -1σ → 燈一`;
+        #   · 判燈當下印給使用者的理由字串是 `布林<-1σ`,同樣嚴格小於;
+        #   · 同一段程式用 `z >= Z_LIGHT2` 當「布林未達 -2σ」的補集 —— 補集是 `>=`,
+        #     反證主集是 `<`（同一刀切下去,兩邊不會都含邊界）;
+        #   · 這句話的停利那半段本來就寫 `>` 且與程式一致 —— 前後兩半用兩套符號,
+        #     比較像排版手滑,不像有意宣告「加碼帶含邊界」。
+        # 反向（把程式改成 `<=`）會改變燈號行為:z 剛好等於 −1σ 時燈從不亮變成亮,
+        # 屬行為變更,需 user 核准,不在「只改敘述」的範圍內。
         threshold_text=(
-            f"{T.BOLL_PERIOD_WEEKS} 週布林 z ≤ −1σ / −2σ / −3σ "
+            f"{T.BOLL_PERIOD_WEEKS} 週布林 z < −{abs(T.Z_LIGHT1):g}σ / "
+            f"−{abs(T.Z_LIGHT2):g}σ / −{abs(T.Z_LIGHT3):g}σ "
             f"三段加碼；z > +{T.Z_TAKE_PROFIT_PARTIAL:g}σ 分批停利、"
             f"> +{T.Z_TAKE_PROFIT_FORCE:g}σ 強制停利"
         ),
-        source="週 K 20 週布林 + VIX + 年線位置，三條件取最嚴重",
+        # 2026-08-26:兩處修正。
+        #   · `20` 原為寫死字面值,而它就是隔壁 threshold_text 已在用的
+        #     `BOLL_PERIOD_WEEKS` —— 上游改週期,門檻欄會跟著動、來源欄不會,
+        #     同一張卡會自己打自己。改走同一個 SSOT。
+        #   · 「年線位置」把週線軸講窄了:週線軸實際比的是月線（燈一）/ 季線（燈二）/
+        #     年線（燈三共伴條件）三條,只寫年線會讓使用者查不到「為什麼跌破月線就亮燈一」。
+        source=(f"週 K {T.BOLL_PERIOD_WEEKS} 週布林 + VIX + 週收相對月線 / 季線 / 年線，"
+                "三條件取最嚴重"),
         why="跌得越深、加碼越多。三個條件只要有一個觸發就算，取最嚴重那個。",
     ),
     # ── ETF 3-3-3 篩選（三個子項）─────────────────────────────────
@@ -183,9 +233,17 @@ STATION_SPECS: list[StationSpec] = [
     StationSpec(
         key=KEY_SCREEN_RETURN, label="3-3-3 ② 三年報酬", kind=T.KIND_ETF,
         group="screen", unit="%", direction="low_bad",
-        threshold_text="需為正報酬",
+        # 2026-08-26:原文門檻寫「需為正報酬」、why 寫「三年還是負的」—— 兩句都把門檻
+        # **講寬了**。實作是 `ann_return_3y_pct >= MIN_ANN_RETURN_3Y_PCT` 或
+        # `cum_return_3y_pct >= MIN_CUM_RETURN_3Y_PCT`（達一即可）,不是「> 0」。
+        # 一檔三年年化 +5% 是正報酬、照舊文案該過,實際判 ❌ —— 使用者查門檻欄
+        # 會以為程式算錯（§1:錯的門檻比沒有門檻更危險）。
+        # ⚠️ 只改敘述:`screen_333` 一字未動（文件修正,非行為變更）。
+        threshold_text=(f"需三年年化 ≥ {T.MIN_ANN_RETURN_3Y_PCT:g}%，"
+                        f"或三年累積 ≥ {T.MIN_CUM_RETURN_3Y_PCT:g}%（兩者達一即可）"),
         source="ETF 5 年日線回推 3 年",
-        why="三年還是負的，代表這不是短期回檔的問題。",
+        why=("光是沒虧不算過關 —— 三年年化跑不到這個水準，"
+             "代表它長期就是跟不上，不是短期回檔的問題。"),
     ),
     StationSpec(
         key=KEY_SCREEN_PEER, label="3-3-3 ③ 同儕排名", kind=T.KIND_ETF,
@@ -206,9 +264,15 @@ STATION_SPECS: list[StationSpec] = [
     StationSpec(
         key=KEY_STOCK_HEALTH, label="財報體檢", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
+        # 2026-08-25(B3):這盞燈開始出自己的等級後，門檻文字必須講得出
+        # 「🟢/🟡/🔴 各是哪些評等」——原文只講得出「哪些列入汰換候選」，
+        # 使用者看到 🟡 會查不到它代表什麼。三段全部組自既有 SSOT（§3.3 零寫死）：
+        # KEEP/WATCH 走 `unified_verdict_thresholds`（`fundamental_grade_to_state`
+        # 用的就是這兩個），CUT 走 `STOCK_SWAP_GRADES`（同一份汰換候選名單）。
         threshold_text=(
-            f"評等 {'/'.join(T.STOCK_HEALTH_GRADES)}；"
-            f"{'/'.join(T.STOCK_SWAP_GRADES)} 列入汰換候選"
+            f"🟢 {'/'.join(UV.FUNDAMENTAL_KEEP_GRADES)}"
+            f"　🟡 {'/'.join(UV.FUNDAMENTAL_WATCH_GRADES)}"
+            f"　🔴 {'/'.join(T.STOCK_SWAP_GRADES)}（列入汰換候選）"
         ),
         source="財報體檢引擎（季報）",
         why="個股不像 ETF 有一籃子分散，體質壞掉就是壞掉。",
@@ -216,7 +280,14 @@ STATION_SPECS: list[StationSpec] = [
     StationSpec(
         key=KEY_STOCK_TREND, label="財報趨勢", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
-        threshold_text="盈轉虧 / 逐季惡化 / 轉機（兩季比較）",
+        # 2026-08-25(B3):改寫成「這盞燈的等級怎麼來的」。原文列的
+        # 「盈轉虧 / 轉機」是 `diff_fin_health` 的**另外兩個旗標**，它們餵的是
+        # 「汰換建議」那盞燈，不是本盞的等級 —— 門檻欄寫別盞燈的門檻 = 假敘述(§1)。
+        threshold_text=(
+            "兩季逐項比評等：🟢 變好多於變差　🟡 有好有壞　🔴 變差多於變好"
+            "　⚪ 每一項都沒變"
+            "（另有「本業盈轉虧 / 虧轉盈」旗標，那兩個餵的是「汰換建議」那盞燈）"
+        ),
         source="本季 vs 上一季財報",
         why="體檢分數是靜態的，趨勢告訴你它正在變好還是變壞。",
         discriminative=False,
@@ -230,7 +301,25 @@ STATION_SPECS: list[StationSpec] = [
     StationSpec(
         key=KEY_STOCK_KD, label="KD 指標", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
-        threshold_text="高檔鈍化 / 黃金交叉 / 死亡交叉",
+        # 2026-08-26:原文寫「高檔鈍化 / 黃金交叉 / 死亡交叉」—— 把**兩組不同的值**
+        # 混成一列,而且兩組都沒列全:
+        #   · 鈍化 / 背離（`analyze_kd_state` 的 `label`）實際有四種,可並列,
+        #     原文只列了「高檔鈍化」,漏掉低檔鈍化 / 頂背離 / 底背離 ——
+        #     使用者在畫面上看到「頂背離」,回頭查門檻欄卻查無此項。
+        #   · 黃金 / 死亡交叉（`kd_cross_state` 的 `cross`）根本**不在這一欄的值裡**:
+        #     這盞燈的「值」印的是 `KD明細`（K/D 數字 + label）,交叉印在下方
+        #     「其他明細」的「KD交叉」。把它列在這裡等於指著一個不在這裡的東西。
+        # ⚠️ 只改敘述:`analyze_kd_state` / `kd_cross_state` 一字未動。
+        # ⚠️ 刻意不寫數字門檻（K 連 N 日 ≥/≤ 某值、背離回看 N 日）:那幾個常數住在
+        #    `shared/signal_thresholds.py`,本檔目前只 import `T` / `UV`,為了幾個
+        #    數字新增 import 已超出「只改敘述字串」的範圍 —— 要加另案。
+        threshold_text=(
+            "鈍化 / 背離（可同時成立，畫面以「／」並列）："
+            "高檔鈍化 · 低檔鈍化 · 頂背離 · 底背離；皆不成立 → 「無」。"
+            "這盞燈只描述狀態，不判 🟢🟡🔴。"
+            "（黃金交叉 / 死亡交叉是**另一組**值 —— K、D 相鄰兩日的交叉，"
+            "不在這一欄，印在下方「其他明細」的「KD交叉」）"
+        ),
         source="個股 360 日 OHLC",
         why="短線進出場的參考，不決定要不要續抱。",
     ),
@@ -238,8 +327,27 @@ STATION_SPECS: list[StationSpec] = [
         key=KEY_STOCK_SWAP, label="汰換建議", kind=T.KIND_STOCK, group="stock",
         unit="", direction="categorical",
         threshold_text="🔴 換出 / 🟡 留意 / 🟢 續抱",
-        source="財報體檢 + 趨勢 + KD 匯總",
-        why="上面三盞燈的結論。這是彙總，不是第四個獨立判斷。",
+        # 2026-08-26:原文寫「財報體檢 + 趨勢 + KD 匯總」—— 與同一張卡下方的 `why`
+        # （「它自己是一條獨立的判定，不是把上面三盞燈取最嚴重的那一盞」）**正面矛盾**。
+        # 明細面板依序印「值 / 門檻 / 來源 / … / why」,兩句相隔兩個元素,使用者一眼
+        # 就看得到同一張卡自己打自己。上一輪改了 `why` 卻沒改 `source`,謊只搬了家。
+        # 新文字照 `assess_stock` 的階梯如實寫「吃什麼、各自扮什麼角色」,
+        # 並避開「匯總 / 取最嚴重」這種會讓人以為它是彙總燈的字眼。
+        source="財報體檢評等（主判）· 本業盈轉虧旗標（提前預警）· KD 短線狀態（調整急迫度）",
+        # 2026-08-26:原文寫「上面三盞燈的結論。這是彙總，不是第四個獨立判斷」——
+        # 與實作不符。`assess_stock` 裡的 `swap_level` 是一條**獨立的 if/elif 階梯**
+        # （財報 grade 為主 · `is_breakdown` 提前預警 · KD 修飾急迫度），
+        # 從來不是「把三盞燈取最嚴重的那一盞」。
+        # B3 讓財報體檢 / 財報趨勢各自出等級之後，同一列就看得到「體檢 🔴 + 汰換 🟡」
+        # （財報 C + KD 轉強）——照舊文案讀就是矛盾，使用者會當成 bug 回報，
+        # 所以改成講它**實際的**判法，並明講它本來就可能與成分燈不同色。
+        # ⚠️ 只改敘述:`swap_level` 一字未動（本次為文件修正，非行為變更）。
+        why=("它自己是一條獨立的判定，不是把上面三盞燈取最嚴重的那一盞。"
+             "以財報體檢的評等為主，本業由盈轉虧當提前預警，KD 只調整急迫度、"
+             "不會把「換出」講成「續抱」。所以同一列出現「體檢 🔴、汰換 🟡」"
+             "（體質不合格，但短線 KD 剛轉強 → 先分批換、還不急著全出），"
+             "或「體檢 🟢、汰換 🟡」（財報好，但本業盈轉虧、或 KD 短線轉弱），都是正常的 —— "
+             "兩盞燈各講各的，不是哪裡算錯了。"),
     ),
 ]
 

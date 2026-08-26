@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from shared import unified_verdict_thresholds as _UV
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
 
@@ -377,9 +378,20 @@ _TREND_SORT_ORDER = {
 # v19.164 稽核補回:「純季財報體質」verdict(與月+季混合的趨勢分數不同)。
 # 一檔可能月營收強 → 混合趨勢分顯示「📈 進步」,但季財報 verdict 其實是「🔴 退步」——
 # 兩者必須並列,否則「找體質差」的能力會被月營收動能蓋掉(對抗式稽核 90f5ca9 抓到的損失)。
+#
+# ⚠️ 燈號符號走 L0 SSOT `shared.unified_verdict_thresholds.fin_trend_icon()`
+#    (B3 2026-08-25 上提):「哪個 verdict 算哪一態」原本只寫在本行字面值裡,
+#    存股戰情室的個股「財報趨勢」燈要用同一份判定 —— 兩邊各寫一次必然漂移(§3.3)。
+#    **中文字留在這裡**:同一個 🟢 在本頁叫「進步」、在戰情室明細面板要講
+#    「變好的項目多於變差」,那是文案不是判定,不該上提。
+#    下面 4 個是 `diff_fin_health` 真的會回的 verdict;後 3 個是**本頁自己**的
+#    狀態碼(`_fin_verdict_code` 產生),不是 verdict,故符號留在本頁。
 _FIN_VERDICT_LABEL = {   # v19.174 去識別化：原 _MJ_VERDICT_LABEL
-    'improving': '🟢 進步', 'deteriorating': '🔴 退步', 'mixed': '🟡 分歧',
-    'stable': '⚪ 不變', 'first_snapshot': '⏳ 首季', 'fetch_failed': '❌ 失敗',
+    _UV.TREND_IMPROVING:     f'{_UV.fin_trend_icon(_UV.TREND_IMPROVING)} 進步',
+    _UV.TREND_DETERIORATING: f'{_UV.fin_trend_icon(_UV.TREND_DETERIORATING)} 退步',
+    _UV.TREND_MIXED:         f'{_UV.fin_trend_icon(_UV.TREND_MIXED)} 分歧',
+    _UV.TREND_STABLE:        f'{_UV.fin_trend_icon(_UV.TREND_STABLE)} 不變',
+    'first_snapshot': '⏳ 首季', 'fetch_failed': '❌ 失敗',
     # B5-b:0 季快照 ≠「首季」。首季 = 有 1 季但無法 diff;無快照 = 根本沒抓到。
     'no_snapshot': '⬜ 無季快照',
 }
@@ -449,10 +461,10 @@ def _render_fin_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '')
     for r in rows:
         _finv[_fin_verdict_code(r)] = _finv.get(_fin_verdict_code(r), 0) + 1
     mcols = st_mod.columns(7)
-    mcols[0].metric('🔴 財報退步', _finv['deteriorating'])
-    mcols[1].metric('🟡 分歧', _finv['mixed'])
-    mcols[2].metric('🟢 財報進步', _finv['improving'])
-    mcols[3].metric('⚪ 不變', _finv['stable'])
+    mcols[0].metric('🔴 財報退步', _finv[_UV.TREND_DETERIORATING])
+    mcols[1].metric('🟡 分歧', _finv[_UV.TREND_MIXED])
+    mcols[2].metric('🟢 財報進步', _finv[_UV.TREND_IMPROVING])
+    mcols[3].metric('⚪ 不變', _finv[_UV.TREND_STABLE])
     mcols[4].metric('⏳ 首季', _finv['first_snapshot'])
     mcols[5].metric('⬜ 無季快照', _finv['no_snapshot'])
     mcols[6].metric('❌ 失敗', _finv['fetch_failed'])
