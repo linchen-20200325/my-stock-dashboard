@@ -167,3 +167,190 @@ def test_layer1_conclusion_cards_render(tmp_path):
     assert "同一個名詞，兩套刻度" in _md, "兩套刻度表沒有渲染"
     assert "已修正" in _md and "只剩一套" in _md, "第 1 列仍是舊文案"
     assert "只揭露不改" in _md, "其餘三列沒有標明只揭露不改"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 階段 D 接線：週線走勢圖掛進「選列右側面板」
+#
+# 這一組守的是**只有接線這一步會壞掉、而且畫面看起來都正常**的事:
+#   1. **沒選列 → 一張圖都不畫。** 這是整個擺法的成本前提 —— 圖沒有被包進
+#      `st.expander` / `st.tabs`(那兩者的 body 每次 app run 都執行),而是靠
+#      「沒選就進不到那個分支」控制成本。這條若破功,STATE.md v19.132 產業
+#      熱力圖冷抓事故會從這裡再來一次,而且畫面完全正常。
+#   2. **換列 → plotly key 跟著換。** 撞 key 時 Streamlit 沿用前一個元件:
+#      面板標題寫 A、圖畫的是 B。
+#   3. **四種列型各自的降級**(ETF 齊全 / ETF 部分缺 / 個股 / 抓取失敗)——
+#      降級判斷整套在 L4,本組驗的是「L5 有沒有把對的 payload 交過去」:
+#      交錯了的話個股列會拿到「可以重跑一次」這種**錯的指引**。
+#
+# 列序（`_station_script` 建出來的,五列都走 L3 `build_station_rows` 真函式）:
+#   0 = 0050.TW ETF 60 週(齊全)　1 = 0056.TW ETF 30 週(年線缺)
+#   2 = 2330 個股　3 = 9999.TW 抓取失敗(ETF)　4 = 0050.TW 同代號第二列(觀察清單)
+# ══════════════════════════════════════════════════════════════════════
+
+#: L4 `station_charts._render_one` 組 key 用的 `key_prefix`（兩張圖各一）。
+#: 寫在這裡是為了**只數戰情室的圖**,不把頁面其他區塊的 plotly 圖算進來。
+_CHART_PREFIXES = ("station_ma_", "station_z_")
+
+
+def _station_script(tmp_path):
+    """五種列型的戰情室頁面（全離線:`metrics_fn` 注入,不打任何外部網路）。"""
+    script = tmp_path / "_mount_charts.py"
+    script.write_text(textwrap.dedent("""
+        import pandas as pd
+        import streamlit as st
+        from shared import dividend_station_thresholds as T
+        from src.services import dividend_station_service as svc
+        from src.ui.etf.etf_tab_dividend_station import render_dividend_station
+
+        def _weekly(n):
+            _idx = pd.date_range("2024-01-07", periods=n, freq="W-SUN")
+            return pd.Series([100 - i * 0.5 for i in range(n)], index=_idx)
+
+        def _metrics(tk, kind):
+            if tk == "9999.TW":                     # 整檔抓取失敗 → _error_row
+                raise RuntimeError("HTTPError: 404")
+            if kind == T.KIND_STOCK:                # 個股:沒有週K 這回事
+                return {"mj_grade": "A", "mj_score_pct": 88, "mj_headline": "體質佳",
+                        "mj_fail_items": [], "kd_state": {"k": 70.0, "d": 65.0,
+                                                          "label": "無"}}
+            return {"weekly_close": _weekly(30 if tk == "0056.TW" else 60)}
+
+        def _h(tk, nm, ac, ak, held=True):
+            return {"ticker": tk, "name": nm, "asset_class": ac,
+                    "asset_kind": ak, "held": held}
+
+        _holdings = [
+            _h("0050.TW", "台灣50", T.ASSET_CORE, T.KIND_ETF),
+            _h("0056.TW", "高股息", T.ASSET_CORE, T.KIND_ETF),
+            _h("2330", "台積電", T.ASSET_SATELLITE, T.KIND_STOCK),
+            _h("9999.TW", "壞掉", T.ASSET_CORE, T.KIND_ETF),
+            _h("0050.TW", "台灣50", T.ASSET_CORE, T.KIND_ETF, held=False),
+        ]
+        st.session_state["_station_holdings"] = []
+        st.session_state["_station_vix"] = 17.3
+        st.session_state["_station_rows"] = svc.build_station_rows(
+            _holdings, vix=17.3, metrics_fn=_metrics)
+        render_dividend_station()
+    """), encoding="utf-8")
+    return str(script)
+
+
+def _chart_keys(at) -> list[str]:
+    """畫面上**戰情室走勢圖**的 plotly key。
+
+    `AppTest` 把 plotly 當 UnknownElement（`el.key` 恆為 None）,key 只在
+    proto 的 element id 裡:`"$$ID-<hash>-<key>"`。
+    """
+    _keys = []
+    for _e in at.get("plotly_chart"):
+        _parts = str(getattr(_e.proto, "id", "") or "").split("-", 2)
+        if len(_parts) == 3 and _parts[2].startswith(_CHART_PREFIXES):
+            _keys.append(_parts[2])
+    return _keys
+
+
+def _run(path, rows=None):
+    """跑一次頁面;`rows` = 要選中的列序（None = 沒選任何列）。
+
+    `st.dataframe(on_select=...)` 的選取狀態就存在 session_state 的 widget key 底下,
+    先塞再 run 等同使用者點了那一列。
+    """
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(path, default_timeout=120)
+    if rows is not None:
+        at.session_state["_station_light_table"] = {
+            "selection": {"rows": list(rows), "columns": []}}
+    at.run()
+    assert not at.exception, f"選 {rows} 時 mount 有 uncaught exception: {at.exception}"
+    return at
+
+
+def _infos(at) -> str:
+    return " ".join(a.value for a in at.info)
+
+
+def test_charts_absent_until_a_row_is_selected(tmp_path):
+    """**沒選列 → 0 張圖**（整個擺法的成本前提）。
+
+    附鑑別力對照組:同一份頁面選了第 0 列就畫得出 2 張 —— 沒有這一半的話,
+    「0 張」也可能只是圖根本沒接上,而測試照樣綠燈。
+    """
+    _p = _station_script(tmp_path)
+
+    _idle = _run(_p)
+    assert _chart_keys(_idle) == [], "沒選任何列卻畫了圖 —— 成本前提破功"
+    _md = " ".join(m.value for m in _idle.markdown)
+    assert "點左表任一列" in _md, "沒選列時連引導文字都沒有(那是空面板,不是省成本)"
+
+    _sel = _run(_p, [0])
+    assert len(_chart_keys(_sel)) == 2, \
+        f"對照組:選了 ETF 列該有 2 張圖,實得 {_chart_keys(_sel)}"
+
+
+def test_selected_etf_row_renders_both_charts(tmp_path):
+    """ETF 資料齊全 → 2 張圖;ETF 部分缺(30 週) → 仍 2 張,但年線那條交代原因。"""
+    from shared import station_specs as SS
+
+    _p = _station_script(tmp_path)
+
+    _full = _run(_p, [0])
+    assert len(_chart_keys(_full)) == 2
+    assert SS.MISS_TEXT[SS.MISS_NOT_APPLICABLE] not in _infos(_full)
+    assert SS.MISS_TEXT[SS.MISS_FETCH_FAILED] not in _infos(_full)
+
+    _partial = _run(_p, [1])
+    assert len(_chart_keys(_partial)) == 2, \
+        "只缺年線就整張砍掉 —— 月線/季線與布林 z 都還有真資料可畫"
+    _caps = " ".join(c.value for c in _partial.caption)
+    assert "年線畫不出來" in _caps, f"缺的那條線沒有交代原因:{_caps[:300]}"
+    assert SS.MISS_TEXT[SS.MISS_NOT_ENOUGH] in _caps, "缺線原因沒有走 L0 MISS_TEXT"
+
+
+def test_stock_row_renders_no_chart_and_says_it_is_not_applicable(tmp_path):
+    """個股列 → **0 張圖 + 印 L0「不適用」**（不是空白、不是空圖）。
+
+    §1:這裡若印成「可以重跑一次」/「等時間累積」就是**錯的指引** ——
+    個股從頭到尾沒有週K 這回事,重跑一百次也不會有。
+    """
+    from shared import station_specs as SS
+
+    at = _run(_station_script(tmp_path), [2])
+    assert _chart_keys(at) == [], "個股列不該有週線走勢圖"
+    _txt = _infos(at)
+    assert SS.MISS_TEXT[SS.MISS_NOT_APPLICABLE] in _txt, f"沒印不適用:{_txt[:300]}"
+    for _r in (SS.MISS_NO_INPUT, SS.MISS_NOT_ENOUGH, SS.MISS_FETCH_FAILED):
+        assert SS.MISS_TEXT[_r] not in _txt, f"個股列給了錯的指引({_r})"
+
+
+def test_failed_row_renders_no_chart_and_blames_the_fetch(tmp_path):
+    """抓取失敗列 → 0 張圖 + 印「整批抓取失敗」那一條（不是「不適用」）。"""
+    from shared import station_specs as SS
+
+    at = _run(_station_script(tmp_path), [3])
+    assert _chart_keys(at) == [], "抓取失敗列不該有週線走勢圖"
+    _txt = _infos(at)
+    assert SS.MISS_TEXT[SS.MISS_FETCH_FAILED] in _txt, f"沒印抓取失敗:{_txt[:300]}"
+    assert SS.MISS_TEXT[SS.MISS_NOT_APPLICABLE] not in _txt, \
+        "抓取失敗被講成「不適用」—— 使用者會以為不用修"
+
+
+def test_plotly_key_follows_the_selected_row(tmp_path):
+    """**換列 → key 跟著換**（紅線 7:撞 key 會讓面板寫 A、圖是 B）。
+
+    第 0 列與第 4 列是**同一個代號**（Portfolio 一列 + Watchlist 一列）——
+    只用代號組 key 的話這兩列會撞。
+    """
+    _p = _station_script(tmp_path)
+
+    _k0 = _chart_keys(_run(_p, [0]))
+    _k1 = _chart_keys(_run(_p, [1]))
+    _k4 = _chart_keys(_run(_p, [4]))
+
+    assert len(_k0) == len(_k1) == len(_k4) == 2
+    assert set(_k0) & set(_k1) == set(), f"換到別檔 key 沒變:{_k0} vs {_k1}"
+    assert set(_k0) & set(_k4) == set(), \
+        f"同代號的兩列撞 key —— 換列會沿用上一張圖:{_k0} vs {_k4}"
+    # 兩張圖在同一列裡也不可以互撞（同一頁同時有週K 與布林 z）。
+    assert len(set(_k0)) == 2, f"同一列的兩張圖撞 key:{_k0}"
