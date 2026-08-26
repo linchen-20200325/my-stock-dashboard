@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Callable
 
 from shared import dividend_station_thresholds as T
+from shared import sector_flow_thresholds as _UNITS
 from shared import station_specs as SS
 from src.compute.etf import dividend_station as ds
 
@@ -656,6 +657,57 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
         "switch_out": switch_out,   # 持有紅燈 → 建議換出
         "switch_in": switch_in,     # 換入候選（優先觀察清單綠燈,否則選股池）
         "switch_in_src": switch_in_src,   # "watchlist"(你選的) / "screener"(全自動 fallback)
+    }
+
+
+# ── 第 1 層結論卡:組合層彙總（純函式,#階段C）────────────────────────────
+def compute_portfolio_totals(rows: list[dict]) -> dict | None:
+    """組合層的「未實現損益 / 檔數 / 總市值」（純函式,§1 缺就不算）。
+
+    為什麼放 L3 而不是讓 L5 自己乘:L5 的檔頭寫明「只呼叫 L3,不自算」,而這裡要做
+    **張 → 股 → 元** 的單位還原（§4.1 量綱陷阱:漏乘 1000 股/張 = 1000 倍低估）。
+    把它留在畫面層等於讓同一個乘法散在 UI 各處,而 `_perf_row` 已經有一份
+    「÷10 換成萬元」的變形 —— 再加一份就是第三套算式。
+
+    ⚠️ `SHARES_PER_LOT`(1 張 = 1000 股)一律取自 `shared/sector_flow_thresholds`
+    —— §3.3 不在這裡寫死 1000。該檔檔頭就是拿「漏乘 = 1000 倍低估」當單位陷阱的
+    範例;常數住在 sector_flow 檔內是既有事實,**不是**為了本函式新造一個常數。
+
+    ⚠️ 單位:`row["市值"]` 是 `張數 × 現價`（**張·元**,供 80/20 比例用,不含股數）,
+    本函式回的 `value_twd` / `pnl_twd` 是**元**（已乘 `SHARES_PER_LOT`）。
+    欄名依 §4.1 命名規範帶單位,呼叫端不必再猜。
+
+    只納入 **held 且張數/均價/現價三者皆有** 的列（`build_station_rows` 缺任一
+    就存 None,不捏 0）。部分持股缺金額 → `partial=True`,呼叫端必須把
+    `valued_n / held_n` 講出來 —— 否則使用者會把「三檔裡只算了一檔」的損益
+    當成整個組合的損益（§1 錯的數字比沒有數字更危險）。
+
+    全無可計價持股 → 回 `None`（畫面顯示「算不出來」,**不顯示 0**）。
+    """
+    _cost = _value = 0.0
+    _held_n = _valued_n = 0
+    for r in (rows or []):
+        if not r.get("held") or (r.get("_detail") or {}).get("error"):
+            continue
+        _held_n += 1
+        _lots, _avg, _cur = r.get("張數"), r.get("均價"), r.get("現價")
+        if not all(isinstance(_v, (int, float)) and _v > 0
+                   for _v in (_lots, _avg, _cur)):
+            continue
+        _valued_n += 1
+        _shares = float(_lots) * _UNITS.SHARES_PER_LOT      # 張 → 股（§4.1 SSOT,不寫死 1000）
+        _cost += _shares * float(_avg)
+        _value += _shares * float(_cur)
+    if _valued_n == 0 or _cost <= 0:
+        return None
+    return {
+        "value_twd": _value,
+        "cost_twd": _cost,
+        "pnl_twd": _value - _cost,
+        # 分母是**成本**(不是市值)—— 報酬率的定義如此;_cost>0 已在上面守住。
+        "pnl_pct": (_value / _cost - 1.0) * 100.0,
+        "held_n": _held_n, "valued_n": _valued_n,
+        "partial": _valued_n < _held_n,
     }
 
 

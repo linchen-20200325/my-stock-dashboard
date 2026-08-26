@@ -272,6 +272,34 @@ _CSS_TEMPLATE = """
           border-radius:7px; padding:7px 10px; margin:5px 0 2px;}
 .dsl-lbl{font-size:13px; font-weight:600;}
 .dsl-sub{font-size:11.5px; opacity:.62; margin:1px 0 0;}
+/* ── 第 1 層結論卡 ────────────────────────────────────────────
+   手機優先:卡片本身不設固定寬,由呼叫端的 st.columns 決定;卡內數字用
+   flex-wrap,窄螢幕自動換行而不是被截斷。 */
+.dsl-card{border:1px solid rgba(128,128,128,.28); border-radius:10px;
+          padding:11px 13px; height:100%;}
+.dsl-card h4{font-size:12px; font-weight:700; opacity:.66; margin:0 0 7px;
+             letter-spacing:.04em;}
+.dsl-head{font-size:15px; font-weight:700; line-height:1.45; margin:0 0 6px;}
+.dsl-figs{display:flex; flex-wrap:wrap; gap:4px 16px; margin-top:8px;}
+.dsl-fig{min-width:0;}
+.dsl-fig b{display:block; font-size:17px; font-weight:700; line-height:1.25;
+           font-variant-numeric:tabular-nums; white-space:nowrap;}
+.dsl-fig span{font-size:11px; opacity:.62;}
+/* 四態分佈條:**只用紋理區分狀態,不用顏色** —— 顏色在本檔一律代表「判定」,
+   拿來編狀態就會出現「綠色格子＝運作中」與「綠色格子＝判定通過」兩種讀法
+   (同檔頭「兩個 🟢」那段的理由)。故四段共用同一個中性底,靠紋理分辨。 */
+.dsl-bar-wrap{display:flex; height:15px; border-radius:8px; overflow:hidden;
+              margin:3px 0 5px; background:rgba(128,128,128,.16);}
+.dsl-seg{height:100%; background:rgba(128,128,128,.34);}
+.dsl-seg-live{background:rgba(128,128,128,.78);}
+.dsl-seg-ring{box-shadow:inset 0 0 0 2px __ORANGE__;}
+/* ── 兩套刻度對照表 ──────────────────────────────────────── */
+.dsl-tbl{width:100%; border-collapse:collapse; font-size:12px;}
+.dsl-tbl th,.dsl-tbl td{border:1px solid rgba(128,128,128,.28);
+                        padding:6px 8px; text-align:left; vertical-align:top;}
+.dsl-tbl th{opacity:.72; font-weight:700; white-space:nowrap;}
+.dsl-tbl td:first-child{font-weight:600; white-space:nowrap;}
+.dsl-scroll{overflow-x:auto;}
 </style>
 """
 
@@ -291,6 +319,103 @@ def watch_count(cells) -> tuple[int, int]:
     """
     _cs = tuple(cells or ())
     return sum(1 for c in _cs if c.state == SS.STATE_LIVE), len(_cs)
+
+
+def judged_count(cells) -> tuple[int, int]:
+    """一列的「N/M **給得出判定**」。⚠️ **與 `watch_count` 是兩把不同的尺,刻意的。**
+
+    ```
+    分母 = 全部燈數 − 結構上不適用(miss_reason == MISS_NOT_APPLICABLE)
+    分子 = state == live  **且**  level 非空(!= LEVEL_UNJUDGED)
+    ```
+
+    ## 為什麼分子要多一個「level 非空」的條件
+
+    `watch_count` 只看 `state == live`,而 live 的語意是「**這盞燈的資料管道通**」——
+    它不保證那盞燈**產出過等級**。個股的 KD 就是活生生的例子:`kd_k` / `kd_d` 都在
+    → `classify_state` 判 live,但 `assess_stock` **從來沒有為 KD 判過等級**
+    (L2 `_stock_light_cells` 填的是 `LEVEL_UNJUDGED`,並在該處寫明理由)。
+    只用 live 當分子,一檔個股會被算成「4 盞裡 3 盞可用」,而實際給得出判定的
+    只有汰換建議那一盞。**「在看」≠「有判定」**(user 2026-08-26 裁示)。
+
+    ## 為什麼分母**不**扣掉「今天沒抓到」的燈
+
+    只扣**結構上不適用**的(個股沒有折溢價這盞燈,扣掉是對的 —— 它永遠不會有)。
+    「這輪沒抓到」必須**留在分母裡把分數拉低** —— 那正是這個指標存在的理由。
+    把算不出來的從分母移走,畫面會在資料最爛的時候顯示可信度最高(§1)。
+
+    ⚠️ 分母是**動態**的:ETF 8 盞、個股 4 盞(`SS.specs_for(kind)`)。呼叫端
+    **不得**寫死任何總數 —— 混合持股的總格數會隨組合成分改變。
+    """
+    _cs = tuple(cells or ())
+    _denom = sum(1 for c in _cs if c.miss_reason != SS.MISS_NOT_APPLICABLE)
+    _num = sum(1 for c in _cs
+               if c.state == SS.STATE_LIVE and c.level != LEVEL_UNJUDGED
+               and c.miss_reason != SS.MISS_NOT_APPLICABLE)
+    return _num, _denom
+
+
+def is_fully_judged(cells) -> bool:
+    """這一列**每一盞適用的燈**都給得出判定嗎(= 巡航 gate 的准印條件)。
+
+    空列回 `False`:一盞燈都沒有的列不是「全部都好」,是「什麼都沒有」——
+    回 True 會讓 `all(...)` 在最糟的情況下反而放行(§1)。
+    """
+    _n, _m = judged_count(cells)
+    return _m > 0 and _n == _m
+
+
+def aggregate_judged(cells_per_row) -> tuple[int, int]:
+    """多列 → 整個組合的 (給得出判定, 分母)。逐列走 `judged_count` 再相加。"""
+    _n = _m = 0
+    for _cells in (cells_per_row or ()):
+        _a, _b = judged_count(_cells)
+        _n += _a
+        _m += _b
+    return _n, _m
+
+
+def tally_states(cells_per_row) -> dict[str, int]:
+    """多列 → 四態各有幾格。鍵一律是 `SS.STATE_*` 四個,**沒出現的填 0**
+    (缺鍵讓呼叫端 `.get(k, 0)` 也能動,但那會讓「0 格未接線」跟「忘了統計」
+    長得一樣 —— 明確填 0 才分得出來)。
+
+    ⚠️ 分母口徑與 `judged_count` 一致:**排除結構上不適用的格子**,
+    否則「四態加總」會對不上卡片上那個 N/M(同一張卡兩個分母 = 自己打自己)。
+    """
+    _out = {_s: 0 for _s in (SS.STATE_LIVE, SS.STATE_DEGRADED,
+                             SS.STATE_MISSING, SS.STATE_UNWIRED)}
+    for _cells in (cells_per_row or ()):
+        for _c in (_cells or ()):
+            if _c.miss_reason == SS.MISS_NOT_APPLICABLE:
+                continue
+            if _c.state in _out:
+                _out[_c.state] += 1
+    return _out
+
+
+#: 巡航這句話**只有在 gate 放行時**才准出現。與 L2 `suggest_action` 的
+#: 「⚪ 巡航：維持定期定額」**刻意不同字** —— 那一句講的是**單一持股**的建議動作
+#: (而且是 LINE 每日推播在用的字串,改它等於改推播內容);這一句講的是
+#: **整個組合今天沒有需要動作的部位**,是另一個層級的結論。
+CRUISE_TEXT = "⚪ 巡航：今天沒有需要動作的部位"
+
+
+def cruise_or_gap(judged: int, total: int, *, all_rows_judged: bool) -> str:
+    """巡航 gate(**顯示層**,不碰 L2 判燈)。
+
+    准印巡航的條件:**每一列的每一盞適用燈都 live 且有 level**。
+    只要有一列不滿足,就不准說「沒事」—— 改說清楚「有幾個依據可用」,
+    因為那兩件事在畫面上原本長得一模一樣,而它們的處置完全相反(§1)。
+
+    ⚠️ 這裡**刻意不呼叫也不修改** `dividend_station.suggest_action`。那支函式
+    同時餵著主表的「建議動作」欄與 `scripts/push_holdings_daily.py` 的 LINE 推播;
+    在那裡加 gate 會變成行為變更,需另外核准。gate 只做在畫面這一層。
+    """
+    if all_rows_judged and total > 0 and judged == total:
+        return CRUISE_TEXT
+    return (f"{judged}/{total} 個依據可用 —— "
+            f"**不是都沒事,是沒東西可以判**")
 
 
 def cell_html(cell) -> str:
@@ -456,3 +581,222 @@ def render_holding_detail(ticker: str, name: str, cells,
                             unsafe_allow_html=True)
         st.markdown(f'<div class="dsl-sub" style="margin-top:6px">{_spec.why}</div>',
                     unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 五、第 1 層 —— 結論卡（階段 C）
+# ══════════════════════════════════════════════════════════════════════
+#
+# ⚠️ **本節不做任何新判斷（防呆 4）。** 三張卡印的每一個結論都是上游**已經算好**
+#    的東西:紅燈檔數 / 加碼檔數走 L3 `build_station_digest`（與 LINE 推播吃的是
+#    同一支函式、同一組定義）,可信度走本檔 `judged_count`（純計數,不看市場）,
+#    金額走 L3 `compute_portfolio_totals`（純乘加）。
+#    這裡唯一「決定」的事情是**排版**,以及巡航那句話准不准印（`cruise_or_gap`）。
+
+
+def _fig(value: str, label: str) -> str:
+    """一個數字 + 一行標籤。`value` 已由呼叫端格式化(含單位)。"""
+    return (f'<div class="dsl-fig"><b>{_esc(value)}</b>'
+            f'<span>{_esc(label)}</span></div>')
+
+
+def render_conclusion_card(*, headline: str, figures: list[tuple[str, str]],
+                           note: str = "") -> None:
+    """卡①「這個組合現在該做什麼」—— 一句話 + 幾個數字。
+
+    `headline` 由呼叫端備妥（含巡航 gate 的結果）;本函式**不決定**它說什麼。
+    `figures`: `[(顯示值, 標籤), ...]`,顯示值已格式化;**缺資料的項目由呼叫端
+      直接不放進來或放「—」,本層不代填 0**(§1)。
+    """
+    _figs = "".join(_fig(_v, _l) for _v, _l in (figures or ()))
+    st.markdown(
+        f'<div class="dsl-card"><h4>這個組合現在該做什麼</h4>'
+        f'<div class="dsl-head">{headline}</div>'
+        f'<div class="dsl-figs">{_figs}</div>'
+        + (f'<div class="dsl-sub" style="margin-top:8px">{note}</div>' if note else "")
+        + '</div>',
+        unsafe_allow_html=True)
+
+
+#: 四態在分佈條上各自的 CSS class。**順序即畫面由左到右的順序**,固定為
+#: 「能用 → 半信 → 沒有 → 不會有」,讓長度變化一眼看得出往哪邊倒。
+_STATE_SEG_CLASS: tuple[tuple[str, str], ...] = (
+    (SS.STATE_LIVE, "dsl-seg dsl-seg-live"),
+    (SS.STATE_DEGRADED, "dsl-seg dsl-seg-ring"),
+    (SS.STATE_MISSING, "dsl-seg dsl-hatch"),
+    (SS.STATE_UNWIRED, "dsl-seg dsl-bar"),
+)
+
+
+def render_credibility_card(judged: int, total: int, tally: dict) -> None:
+    """卡②「訊號可信度」—— N/M 盞 + 四態分佈條 + 圖例。
+
+    `judged` / `total` 由 `aggregate_judged` 算出(防呆 1 的定義),`tally` 由
+    `tally_states` 算出。**兩者分母口徑一致**（都排除結構上不適用的格子）——
+    否則同一張卡會出現兩個對不起來的總數。
+
+    ⚠️ 分佈條**不用顏色編狀態**(見 CSS 註解):本檔的顏色一律代表「判定」,
+    再拿來代表狀態就會有兩種讀法。四段靠紋理分辨,與燈格牆同一套語彙。
+    """
+    _sum = sum(tally.values()) or 0
+    _segs = ""
+    for _state, _cls in _STATE_SEG_CLASS:
+        _n = tally.get(_state, 0)
+        if _n <= 0:
+            continue
+        _segs += f'<div class="{_cls}" style="width:{_n / _sum * 100:.4f}%"></div>'
+    _pct = f"{judged / total * 100:.0f}%" if total > 0 else "—"
+    st.markdown(
+        f'<div class="dsl-card"><h4>訊號可信度</h4>'
+        f'<div class="dsl-head">{judged}/{total} 盞給得出判定'
+        f'<span style="font-size:12px;opacity:.6;font-weight:400">　{_pct}</span></div>'
+        f'<div class="dsl-bar-wrap">{_segs}</div>',
+        unsafe_allow_html=True)
+    # 圖例:重用 `render_legend` 的同一組示範格 + `STATE_META` 的中文標籤(文案 SSOT)。
+    _lg = "　".join(
+        f'{cell_html(_DemoCell(level="⚪", state=_s))}{SS.STATE_META[_s][0]} {tally.get(_s, 0)}'
+        for _s, _ in _STATE_SEG_CLASS
+    )
+    st.markdown(
+        f'<div class="dsl-lg">{_lg}</div>'
+        f'<div class="dsl-sub" style="margin-top:6px">'
+        f'分母已扣掉「這類持股結構上沒有的燈」(如個股沒有折溢價),'
+        f'但**沒有**扣掉「今天沒抓到的燈」—— 抓不到就是要把分數拉低。<br>'
+        f'⚠️ <b>上面的分子會比這一排的「運作中」少</b>,差額不是算錯:'
+        f'「運作中」只問**資料管道通不通**,分子還多要求那盞燈**真的產出了等級**。'
+        f'個股的 KD 就是差在這裡 —— K、D 都抓到了(運作中),但它從來不判 🟢🟡🔴,'
+        f'所以不算「給得出判定」。同樣的理由,這個數字也會比下方燈格牆的「在看」嚴格。'
+        f'</div></div>',
+        unsafe_allow_html=True)
+
+
+def render_todo_card(*, add_n: int, cut_n: int, unjudged_n: int) -> None:
+    """卡③「需要處理的檔數」。
+
+    三個數字**全部來自上游既有結論**:`add_n` / `cut_n` 是 L3
+    `build_station_digest` 的 `adds` / `reds` 長度(與 LINE 推播同定義),
+    `unjudged_n` 是「這一列不是每盞燈都給得出判定」的列數(含整檔抓取失敗)。
+
+    ⚠️ 三者**可以重疊**（一檔可以同時亮加碼燈又有燈缺資料）,故刻意**不加總**、
+    也不寫「共 N 檔要處理」—— 那個總數會比實際檔數大,是憑空生出來的數字(§1)。
+    """
+    st.markdown(
+        f'<div class="dsl-card"><h4>需要處理的檔數</h4>'
+        f'<div class="dsl-figs" style="margin-top:2px">'
+        f'{_fig(str(add_n), "該加碼")}{_fig(str(cut_n), "該換掉")}'
+        f'{_fig(str(unjudged_n), "今天判斷不了")}</div>'
+        f'<div class="dsl-sub" style="margin-top:8px">'
+        f'三個數字**可能重疊**(同一檔可以既亮加碼燈、又有燈缺資料),故不相加。'
+        f'「該加碼」= 235 有加碼金;「該換掉」= 健檢紅燈;'
+        f'「今天判斷不了」= 這一列有燈給不出判定(含整檔抓取失敗)。</div></div>',
+        unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 六、第 2 層 —— 兩套刻度對照表
+# ══════════════════════════════════════════════════════════════════════
+#
+# ## 這張表在解什麼
+#
+# 同一個名詞在這個 app 的不同區塊被**兩套不同的尺**量。使用者對照兩個畫面時
+# 會看到兩個數字,而它們都不是錯的 —— 錯的是沒有人告訴他這是兩把尺。
+#
+# ## 這張表**不**做什麼
+#
+# **只揭露,不改判定。** 第 1 列以外的三列都維持現行行為;統一它們是策略決定,
+# 要 user 拍板,不在本次範圍。第 1 列之所以不同,是因為它已經被當成 bug 修掉了
+# (commit `1a0992b` / `1030c28`),舊文案再寫「可能相反」就是在教使用者用一把
+# 已經不存在的尺。
+#
+# §3.3:本表引用的門檻一律從 `T`(L0 SSOT)組出,不在這裡重打數字。
+# 沒有 SSOT 常數的那幾個(日線月均線的週期、σ 取樣視窗)**刻意不寫數字** ——
+# 為了讓一張說明表變綠而新造常數,只會製造第二份真相(station_specs.py 檔頭
+# 已就同一件事寫過同樣的警告)。改用「哪一層、哪個模組」定位,讀者查得到。
+
+#: 兩套刻度四列。`(名詞, 這邊怎麼量, 那邊怎麼量, 現況)`。
+#: 內容含刻意的 `<b>` 標記 → 本表**不經 `_esc`**,故**禁止**把任何使用者輸入
+#: (代號 / 名稱 / Sheet 欄位)接進這裡;這是一張純靜態文案表。
+def _two_scale_rows() -> tuple[tuple[str, str, str, str], ...]:
+    return (
+        (
+            "有沒有吃到本金",
+            "戰情室 健檢 A：近一年總報酬 vs 年化配息率",
+            "第 5 區 🏛️ 核心資產戰情室：總報酬 vs 殖利率",
+            (
+                "<b>✅ 已修正，只剩一套。</b>兩邊現在都用還原價的價差當「含息總報酬」"
+                "（<code>etf_calc.calc_total_return_1y</code> / "
+                "<code>dividend_station.total_return_pct</code>）。"
+                "舊版曾在還原價之外<b>再加一次現金配息</b>，殖利率被代數消掉、"
+                "那盞紅燈實際只在問「總報酬是不是負的」—— 已當 bug 修掉，"
+                "兩邊不再是兩把尺。"
+            ),
+        ),
+        (
+            "跌多深該加碼",
+            (
+                f"235 加碼燈：<b>週線</b> {T.BOLL_PERIOD_WEEKS} 週布林 z"
+                f"（σ 取這 {T.BOLL_PERIOD_WEEKS} 週），加碼金比例走 "
+                f"<code>LIGHT_META</code>"
+            ),
+            (
+                "第 5 區 🚀 衛星資產戰情室：<b>日線</b>月均線 ± n×σ"
+                "（σ 取近一年日線），加碼比例是另一組字面值"
+            ),
+            (
+                "⚠️ <b>兩把尺，只揭露不改。</b>同樣叫「σ」，但中心線（週均 vs 日均）、"
+                "σ 的取樣視窗、以及對應的加碼比例三者全都不同 —— "
+                "<b>同一檔在兩個畫面拿到不同的加碼建議是正常的</b>，不是哪邊算錯。"
+                "要不要統一是策略決定，等你拍板。"
+            ),
+        ),
+        (
+            "核心 / 衛星目標比",
+            (
+                f"戰情室 📊 80/20：<b>固定</b>目標 "
+                f"{T.CORE_TARGET_PCT:.0f}/{T.SATELLITE_TARGET_PCT:.0f}，"
+                f"分類用「ETF＝核心、個股＝衛星」"
+            ),
+            (
+                "第 5 區 🎯 vs regime 目標：目標<b>隨總經位階浮動</b>"
+                "（<code>CoreSatelliteManager</code>），分類走 "
+                "<code>assess_role_split</code>（債券／台股分類表／海外寬基／未知）"
+            ),
+            (
+                "⚠️ <b>兩把尺，只揭露不改。</b>固定 80/20 是存股法的原始設定；"
+                "浮動目標是依總經位階調整。一檔債券 ETF 在上面算「核心」、"
+                "在下面會被歸「債券」而<b>不進股票腿的分母</b> —— "
+                "兩個百分比本來就不會相等。"
+            ),
+        ),
+        (
+            "同一個比例出現三次",
+            "本頁 📊 80/20（分母＝有張數均價的持股市值）",
+            (
+                "第 5 區 🧱 核心/衛星拆解（分母＝總市值，含債券）<br>"
+                "第 5 區 🎯 vs regime 目標（分母＝<b>只算股票腿</b>）"
+            ),
+            (
+                "⚠️ <b>三處，三個分母，只揭露不改。</b>同一頁上「核心佔比」會出現三個"
+                "不同的百分比，因為三處的分母與分類規則都不一樣。"
+                "看的時候請認明它旁邊寫的是哪一種分母，<b>不要跨區相減</b>。"
+            ),
+        ),
+    )
+
+
+def render_two_scales() -> None:
+    """第 2 層 · 兩套刻度對照表。純靜態文案 + L0 門檻,不吃任何 row 資料。"""
+    st.markdown("##### 📏 同一個名詞，兩套刻度")
+    st.caption(
+        "這個 app 有幾個地方用**兩把不同的尺**量同一件事。兩邊都不是壞掉 —— "
+        "但如果沒有人講，你對照兩個畫面時會以為其中一邊算錯。以下四列一次講完；"
+        "除了第一列已經當 bug 修掉之外，其餘**只揭露、不改判定**（要不要統一是策略決定）。"
+    )
+    _head = ("<tr><th>名詞</th><th>這邊怎麼量</th><th>那邊怎麼量</th>"
+             "<th>現況</th></tr>")
+    _body = "".join(
+        f"<tr><td>{_n}</td><td>{_a}</td><td>{_b}</td><td>{_s}</td></tr>"
+        for _n, _a, _b, _s in _two_scale_rows())
+    st.markdown(
+        f'<div class="dsl-scroll"><table class="dsl-tbl">{_head}{_body}</table></div>',
+        unsafe_allow_html=True)
