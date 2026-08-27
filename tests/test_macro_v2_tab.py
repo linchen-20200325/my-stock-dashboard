@@ -1159,3 +1159,70 @@ class TestStateColumnDualCoding:
             label, color, emoji = meta
             assert label and emoji, f"{state} 缺中文或 emoji"
             assert color.startswith("#"), f"{state} 的色碼欄不是色碼:{color!r}"
+
+
+# ════════════════════════════════════════════════════════════════
+# 九、門檻線必須綁對 y 軸（2026-08-27,雙軸前置）
+#
+# 【這不是現存 bug】`_threshold_lines` 唯一的 caller `render_chart_card`
+# 畫的是**單軸圖**(全檔無 yaxis2 / secondary_y / overlaying / make_subplots),
+# 所以現況不傳 `yref` 也不會錯 —— plotly 省略時本來就綁主軸 `y`。
+#
+# 【為什麼還是要守】這是「**一改雙軸就會中**」的前置。若之後在同一張圖疊
+# 第二條軸(例:左軸 DXY ~105、右軸台幣 ~32),沿用「不傳 yref」的寫法會把
+# 台幣的 32/33 門檻線畫在**左軸的 32/33 位置**(圖底某處,離資料很遠),
+# 而畫面上它就是一條標著「黃線 32.0」的正常虛線 —— §1 最忌的那種錯:
+# 畫面說 A、內容是 B,兩邊都看起來正常,沒有任何東西會報錯。
+#
+# 本組守兩件事:(a) 不傳時仍是 `y`(零行為變更);(b) 傳 `y2` 時線**與它的
+# 標註**都真的跑到 y2(只有線搬過去、標籤留在主軸,同樣是說 A 做 B)。
+# ════════════════════════════════════════════════════════════════
+class TestThresholdLinesBindToTheRightAxis:
+
+    @staticmethod
+    def _fig_with_lines(**kw):
+        go = pytest.importorskip("plotly.graph_objects")
+        from src.ui.render.macro_v2_cards import _threshold_lines
+        spec = SPECS_BY_KEY["us10y"]
+        fig = go.Figure()
+        fig.add_scatter(x=[1, 2], y=[1, 2])
+        _threshold_lines(fig, spec, **kw)
+        layout = fig.to_dict()["layout"]
+        return layout.get("shapes", ()), layout.get("annotations", ())
+
+    def test_the_spec_used_here_actually_draws_lines(self):
+        """前提檢查:若 us10y 哪天沒門檻了，下面幾條會空跑而永遠綠。"""
+        shapes, annos = self._fig_with_lines()
+        assert shapes, "us10y 沒畫出任何門檻線 —— 本組測試會變成空殼"
+        assert annos, "門檻線沒有標註 —— 標註綁軸的斷言會空跑"
+
+    def test_default_stays_on_the_primary_axis(self):
+        """不傳 yref → 一律 `y`。這條在守**零行為變更**。"""
+        shapes, annos = self._fig_with_lines()
+        assert {s.get("yref") for s in shapes} == {"y"}
+        assert {a.get("yref") for a in annos} == {"y"}
+
+    def test_explicit_primary_is_identical_to_omitting_it(self):
+        """顯式傳 `"y"` 與不傳必須產出完全相同的圖(否則預設值選錯了)。"""
+        assert self._fig_with_lines() == self._fig_with_lines(yref="y")
+
+    def test_secondary_axis_moves_both_line_and_its_label(self):
+        """傳 `y2` → 線**和標註**都要在 y2。
+
+        只有線搬過去、標籤留在主軸的話，畫面上會出現一條「浮在別處的
+        數字」—— 一樣是畫面說 A、內容是 B。
+        """
+        shapes, annos = self._fig_with_lines(yref="y2")
+        assert {s.get("yref") for s in shapes} == {"y2"}
+        assert {a.get("yref") for a in annos} == {"y2"}, (
+            "門檻線搬到 y2 了，但它的標註還綁在主軸 —— 標籤會飄到別的位置"
+        )
+
+    def test_yref_is_keyword_only(self):
+        """`yref` 必須是 keyword-only —— 位置參數第 3 位以後容易誤傳。"""
+        import inspect
+
+        from src.ui.render.macro_v2_cards import _threshold_lines
+        p = inspect.signature(_threshold_lines).parameters["yref"]
+        assert p.kind is inspect.Parameter.KEYWORD_ONLY
+        assert p.default == "y", "預設值不是 'y' → 既有 caller 會行為變更"

@@ -317,8 +317,27 @@ def render_bucket_cards(summary: list[dict]) -> None:
                 unsafe_allow_html=True)
 
 
-def _threshold_lines(fig: go.Figure, spec: DangerSpec) -> None:
-    """把 DangerSpec 的門檻畫成虛線 —— 數字來自 SSOT,不在此寫死。"""
+def _threshold_lines(fig: go.Figure, spec: DangerSpec, *, yref: str = "y") -> None:
+    """把 DangerSpec 的門檻畫成虛線 —— 數字來自 SSOT,不在此寫死。
+
+    Parameters
+    ----------
+    yref : str
+        門檻線要綁哪一條 y 軸(`"y"` 主軸 / `"y2"` 副軸)。**預設 `"y"`**
+        —— plotly 省略 `yref` 時本來就綁主軸(實測 6.9.0:shape 與其
+        annotation 序列化出來都是 `yref="y"`),所以不傳 = 零行為變更。
+
+        【為什麼要有這個參數】現在唯一的 caller `render_chart_card` 畫的是
+        **單軸圖**,所以目前不傳也不會錯 —— 這不是在修一個現存 bug,是
+        **一改雙軸就會中**的前置準備。若之後在同一張圖疊第二條軸
+        (例:左軸 DXY ~105、右軸台幣 ~32),沿用「不傳 yref」的寫法會把
+        台幣的 32/33 門檻線畫在**左軸的 32/33 位置**(圖底某處,離資料很遠),
+        而畫面上它就是一條標著「黃線 32.0」的正常虛線 —— §1 最忌的那種錯:
+        **畫面說 A、內容是 B,而且兩邊都看起來正常。**
+
+        `add_hline` 會把 `yref` 同時套到虛線本身與它的標註(實測確認),
+        所以線與標籤不會各綁一條軸。
+    """
     for val, color, name in (
         (spec.yellow, "#b8860b", "黃線"),
         (spec.red, "#d03b3b", "紅線"),
@@ -329,6 +348,7 @@ def _threshold_lines(fig: go.Figure, spec: DangerSpec) -> None:
             continue
         fig.add_hline(
             y=val, line_dash="dash", line_color=color, line_width=1.2,
+            yref=yref,
             annotation_text=f"{name} {val:,.{spec.decimals}f}".replace("-", "−"),
             annotation_position="right",
             annotation_font=dict(size=11, color=color),
