@@ -253,6 +253,83 @@ def _deep_dump_v2(fetch_url) -> None:
                   f'| raw {len(r.text)} | text {len(flat)} | head={flat[:90]!r}')
 
 
+# ── 2026-08-27 第四輪:CIER-EN「那個數字到底在不在原始 HTML 裡」 ──────
+# 前三輪只量到「raw 94218 bytes → html.parser get_text 只剩 1561 chars」,
+# 而且在**取出來的文字**裡找不到 60.7 —— 但**從來沒有人去原始 HTML 裡找過那個數字**。
+# production(`macro_core._pmi_src_cier_en_monthly`)因此每月回 `no-parse/過時`。
+#
+# 這一題決定修法,兩條路差很多,不能猜(§3.3):
+#   ① 數字**在** raw 裡 → 是 html.parser 把內容吃掉了(requirements 已 pin
+#      lxml>=5.3.0)→ 換 parser 或直接對 raw 跑正則,一行的事。
+#   ② 數字**不在** raw 裡 → JS 動態載入,正則怎麼改都沒用 → 要換源
+#      (ISM World 月報 PDF),那是新增 PDF 解析相依 = 範圍擴大,須先送客戶。
+#
+# 本段唯讀,只印判讀所需的最小資訊;**不印整頁 HTML**(94KB 進 log 沒有意義)。
+_MONTH_NAMES = ['january', 'february', 'march', 'april', 'may', 'june',
+                'july', 'august', 'september', 'october', 'november', 'december']
+
+#: 逐字複製自 `macro_core._pmi_src_cier_en_monthly`(該處為 inline,無常數可 import)。
+#: 若 production 那條正則變了,這裡要跟著改 —— 本段的意義就是「拿 production 的東西去試跑」。
+_PROD_CIER_EN_PAT = (r'(?:Manufacturing\s+PMI|PMI)[^.]{0,80}?'
+                     r'(?:at|registered|reached|of|stood\s+at|rose\s+to|fell\s+to|was)?'
+                     r'[^\d]{0,15}(\d{2}\.\d)\s*(?:%|percent)?')
+
+
+def _cier_en_slugs(n_back: int = 3) -> list[str]:
+    """與 production 同一套 slug 推算（當月 / -1 / -2），避免探針打到跟線上不同的頁。"""
+    import datetime as _dt
+    today = _dt.date.today()
+    out = []
+    for _m_back in range(n_back):
+        _y, _m = today.year, today.month - _m_back
+        while _m <= 0:
+            _m += 12
+            _y -= 1
+        out.append(f'taiwan-manufacturing-pmi-{_MONTH_NAMES[_m - 1]}-{_y}')
+    return out
+
+
+def _deep_dump_v4_cier_raw(fetch_url) -> None:
+    from bs4 import BeautifulSoup
+    print('\n══ 深挖v4:CIER-EN 原始 HTML vs 取文後 —— 數字在不在 raw 裡? ══')
+    for _slug in _cier_en_slugs():
+        url = f'https://www.cier.edu.tw/en/eco/{_slug}/'
+        r = fetch_url(url, timeout=20, attempts=2)
+        if r is None:
+            print(f'❌ {_slug} | 無回應(NAS+直連皆敗)')
+            continue
+        if r.status_code != 200:
+            print(f'⚠️ {_slug} | HTTP {r.status_code}(production 在此就 continue)')
+            continue
+        r.encoding = 'utf-8'
+        raw = r.text or ''
+        # 三種表示法：raw / html.parser(production 現用) / lxml(requirements 已 pin)
+        reps: list[tuple[str, str]] = [('raw HTML', raw)]
+        for _parser in ('html.parser', 'lxml'):
+            try:
+                reps.append((f'get_text[{_parser}]',
+                             re.sub(r'\s+', ' ',
+                                    BeautifulSoup(raw, _parser).get_text(' ', strip=True))))
+            except Exception as e:
+                print(f'   ⚠️ {_parser} 取文失敗 {type(e).__name__}: {e}')
+        print(f'📄 {_slug} | HTTP 200 | ' +
+              ' | '.join(f'{_n} {len(_t)} chars' for _n, _t in reps))
+        for _name, _text in reps:
+            # 值域鎖 [30, 70]（同 production 的 sanity 範圍）——避免把年份 / 版號當 PMI
+            cands = [c for c in dict.fromkeys(re.findall(r'\d{2}\.\d', _text))
+                     if 30.0 <= float(c) <= 70.0]
+            m = re.search(_PROD_CIER_EN_PAT, _text, re.IGNORECASE)
+            print(f'   ↳ [{_name}] 值域內 xx.x 候選={cands[:12] or "無"} '
+                  f'| production 正則 {"✅ " + str(m.groups()) if m else "❌ 不匹配"}')
+        # raw 裡 PMI 附近的窗（證明內容真的在，不是我們正則寫壞）
+        _flat_raw = re.sub(r'\s+', ' ', raw)
+        for _kw in ('Manufacturing PMI', 'PMI'):
+            _i = _flat_raw.find(_kw)
+            if _i >= 0:
+                print(f'   ↳ raw「{_kw}」窗 …{_flat_raw[max(0, _i - 60):_i + 200]}…')
+                break
+
+
 def main() -> int:
     from src.data.proxy import fetch_url
 
@@ -283,6 +360,7 @@ def main() -> int:
     print(f'\n📊 結果:{n_ok}/{len(TARGETS)} 端點回 200 且內容含關鍵字')
     _deep_dump(fetch_url)      # v19.114:內文視窗 + 正則試跑
     _deep_dump_v2(fetch_url)   # v19.114:資料端點探勘
+    _deep_dump_v4_cier_raw(fetch_url)  # 2026-08-27:數字在不在 raw HTML 裡
     _prod_smoke()             # v19.116:production fetcher 端到端(驗 v19.114/115)
     return 0  # 探針本身永遠 exit 0,存活判讀看逐行輸出
 
