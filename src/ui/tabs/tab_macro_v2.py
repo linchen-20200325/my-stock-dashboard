@@ -1,9 +1,9 @@
-"""src/ui/tabs/tab_macro_v2.py — L5 總經 v2 分頁(位階評估 + 五桶)。
+"""src/ui/tabs/tab_macro_v2.py — L5 總經 v2 分頁(指標危險度 + 五桶)。
 
 現行「🌍 總經」分頁把同一組數字重講很多次,而且畫面上「從沒亮過的燈」與
 「正常的綠燈」長得一模一樣。本分頁用三層結構重新呈現**同一批資料**:
 
-    第 1 層 · 結論     位階 verdict + 訊號可信度 + 五桶卡
+    第 1 層 · 結論     指標危險度 + **並列**市場位階 + 訊號可信度 + 五桶卡
     第 2 層 · 為什麼   有真實歷史序列的指標畫走勢 + 門檻線
                        (走勢卡 / 純數值卡 / 雙軸卡 / 日 K 卡,固定 3 張一列;
                         另有「精簡總覽 ↔ 完整走勢」密度切換)
@@ -14,7 +14,16 @@
    兩者的 spec 住在 `shared.macro_buckets.REFERENCE_TREND_SPECS`,與 16 盞燈的
    `BUCKET_DANGER_SPECS` 是**物理隔離的兩張表** —— 不是同一張表加旗標。
 
+⚠️ **正名**(2026-08-27 客戶裁示):第 1 層那張卡叫「**指標危險度**」,
+   **不叫「總經位階」** —— 它算的是 16 盞燈的 worst-of(有沒有指標踩到危險
+   門檻),**不含多空方向**。真正的位階在 `services.allocation_service.
+   get_macro_regime()`(全站唯一出處,15 個消費端),本頁**唯讀並列印出**,
+   不參與它的計算、不與危險度調和成一個數字。兩者實跑比對(燈色不一致
+   39.5%、方向相反 18 組)見 `scratchpad/verify_regime_paths.md`。
+
 ⚠️ **範圍**(2026-08-25 user 核准):只做「位階評估 + 五桶」。
+   ⚠️ 該句的「位階」是 2026-08-25 當時的用語 —— 依上面那條正名,本頁第 1 層
+   實際算的是**指標危險度**;位階是 2026-08-27 才並列進來的唯讀揭露。
    戰情室 / 新聞 AI / 跨市場 AI / 短中長期分區仍在舊「🌍 總經」分頁,
    本頁**不重做**也**不取代**它們 —— 兩個分頁並排,舊版原封不動。
 
@@ -58,6 +67,7 @@ from src.compute.macro.macro_helpers import compute_five_bucket_summary
 from src.services.macro_v2_service import get_chart_series, get_edu, get_twii_ohlc
 from src.services.section_inputs import load_section_inputs
 from src.ui.render.macro_v2_cards import (
+    BAND_LIGHT,
     BAND_META,
     CSS,
     OHLC,
@@ -71,6 +81,7 @@ from src.ui.render.macro_v2_cards import (
     render_chart_card,
     render_detail,
     render_dual_axis_card,
+    render_regime_parallel,
     render_signal_health,
     render_value_card,
     state_cell,
@@ -258,8 +269,11 @@ _MARGIN_CHART_HOLD: str = (
 #: 第 2 層要畫哪些卡。名單來自 2026-08-25 對 16 盞燈的歷史資料盤點
 #: (只有這幾個有真序列)+ 2026-08-27 客戶加點的兩張新卡。
 _CHART_SPECS: list[ChartCard] = [
-    # compact=True 的兩張 = 精簡總覽保留的卡:一張回答「台股位階」
+    # compact=True 的兩張 = 精簡總覽保留的卡:一張回答「台股價格站在哪」
     # (年線乖離,唯一有長歷史的燈號走勢),一張回答「資金往哪走」(美元 / 台幣)。
+    # ⚠️ 這裡刻意**不寫「台股位階」**:2026-08-27 起「位階」在本頁是保留字,
+    #    專指 `get_macro_regime()` 的多空位階。年線乖離講的是價格相對年線的
+    #    位置,是 16 盞燈之一,兩者不是同一件事。
     ChartCard("bias_240", KIND_PARQUET,
               "台股日線 2007 迄今,年線乖離由收盤價即時算出",
               compact=True),
@@ -522,7 +536,18 @@ def bucket_summary(rows: list[Row]) -> list[dict]:
 
 
 def overall_verdict(summary: list[dict]) -> tuple[str, str]:
-    """全域位階 = 五桶取最差(worst-of),與現行五桶 rollup 同語意。
+    """**指標危險度** = 五桶取最差(worst-of),與現行五桶 rollup 同語意。
+
+    ⚠️ **正名(2026-08-27 客戶裁示):這個函式算的不是「位階」。**
+    它問的是「16 盞燈裡有沒有指標踩到危險門檻」,**不含多空方向** ——
+    `red` 的意思是「有指標踩線」,不是「空頭市場」;`green` 的意思是
+    「沒有指標踩線」,不是「多頭市場」。舊名「總經位階」把兩者混為一談,
+    而真正的位階在 `services.allocation_service.get_macro_regime()`
+    (全站唯一出處,15 個消費端)。實跑比對見
+    `scratchpad/verify_regime_paths.md`:兩者燈色不一致 39.5%、方向相反 18 組。
+
+    **本函式不吃、也不得吃 regime** —— 並列揭露的重點就是兩者各自算完
+    擺在一起(見 `parallel_verdict`),誰調和誰都會毀掉這個資訊。
 
     Returns: (band, 說明文字)
     """
@@ -540,6 +565,149 @@ def overall_verdict(summary: list[dict]) -> tuple[str, str]:
         bits.append(f"{n_yellow} 桶黃")
     detail = "、".join(bits) or "五桶全綠"
     return worst["band"], f"{detail}　·　最差是「{worst['name']}」"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 並列揭露(D1,2026-08-27 客戶核准:「採並列揭露,並將 v2 正名為指標危險度」)
+#
+# 線框原本寫的是「先驗證、再合併」。驗證做完了(`scratchpad/
+# verify_regime_paths.md`),結論是**不該合併**,客戶據此改核准並列:
+#
+#   · 兩條路徑不是同一個量。A(`get_macro_regime`)吃 warroom 的 4 個欄位
+#     + `macro_state.json`,算多空位階;B(`overall_verdict`)吃 16 盞燈,
+#     算危險度彙總。共用的輸入只有 `health` 與 `fut_net` 兩個。
+#   · 實跑 400 組格點:燈色不一致 158/400(39.5%)、方向相反 18 組。
+#   · 16 盞燈逐一單獨轉紅,A 有 15 次完全不動。
+#   · 最容易對打的不是極端值,是**健康的多頭** —— 多頭走久 BIAS240 必然
+#     放大(年線乖離)、融資餘額本來就長期在紅區。
+#
+# ⚠️ **本段的硬約束(改動前先讀)**:
+#   1. `get_macro_regime()` 是全站唯一出處,本頁**唯讀取用,一個字都不改**。
+#   2. `overall_verdict()` 的計算邏輯**不改**,本次只改名字與呈現。
+#   3. **不得**產生第三個「合併燈」。兩者分歧本身就是要給使用者看的資訊,
+#      調和掉等於重新製造 `regime_arbiter` 剛收掉的多來源問題。
+# ══════════════════════════════════════════════════════════════════════
+
+#: 第 1 層那張卡的正式名稱(客戶 2026-08-27 正名)。舊名「總經位階」是**錯的**。
+DANGER_TITLE: str = "指標危險度"
+
+#: 兩顆燈不同色時要講的話。**重點是「它們看的不是同一件事」**,
+#: 不是「系統自相矛盾」—— 使用者若讀成後者,就會開始猜哪一個才是對的,
+#: 而正確答案是「兩個都對,它們回答的是不同的問題」。
+DIVERGENCE_NOTE: str = (
+    "**兩顆燈不同色是正常的 —— 它們看的不是同一件事。**　"
+    "「指標危險度」數的是 16 盞燈有沒有踩到危險門檻(**不含多空方向**);"
+    "「市場位階」問的是現在偏多還是偏空(吃趨勢面、大盤評分、健康分、"
+    "外資期貨,**看不到 VIX／PMI／CPI／融資**)。"
+    "多頭走久了年線乖離必然放大、融資餘額本來就長期在紅區 —— "
+    "所以「位階多頭 ＋ 危險度紅」是常見組合,不是系統打架。"
+)
+
+#: 兩顆燈剛好同色時要講的話。**同色不等於同一個判斷** ——
+#: 不寫這句的話,使用者會把「兩個都綠」讀成互相佐證,下次它們分開時就會困惑。
+AGREE_NOTE: str = (
+    "兩顆燈剛好同色。**這不代表它們是同一個判斷** —— "
+    "危險度數的是「有沒有指標踩線」,位階問的是「偏多還是偏空」,"
+    "兩者各自獨立算出來,本頁**不做任何調和**。"
+)
+
+#: 位階未載入。§1:不留白、也不拿危險度的燈頂替。
+REGIME_UNLOADED_NOTE: str = (
+    "**位階尚未評估** —— 請先到「🌍 總經」按「🚀 一鍵更新全部數據」。"
+    "並列的另一半現在**沒有值**:這裡不留白,也不拿上面那顆危險度的燈"
+    "冒充位階(§1)。"
+)
+
+#: 危險度未載入(16 盞燈全無值)但位階有值。兩者資料來源不同,一邊有值
+#: 一邊沒有是可能的,要講清楚免得使用者以為畫面壞了。
+DANGER_UNLOADED_NOTE: str = (
+    "**16 盞燈目前全部沒有值**,所以上面的危險度是「無資料」。"
+    "下面的位階走的是另一條路徑(warroom 結論／AI 鎖定快照)—— "
+    "**它有值不代表這 16 盞燈也有值**。"
+)
+
+
+@dataclass(frozen=True)
+class ParallelVerdict:
+    """兩個**各自算好**的判斷,擺在一起。
+
+    ⚠️ 這個 dataclass 刻意**沒有**「合併後的燈」「總結論」這種欄位。
+    要加之前先讀上方硬約束第 3 點:並列的價值就在於保留分歧。
+    """
+    danger_band: str      # `overall_verdict()` 的 band,原樣
+    danger_light: str     # 同一個 band 換成 emoji,只為比色
+    danger_zh: str        # BAND_META 的中文
+    danger_color: str     # BAND_META 的色碼
+    danger_detail: str    # `overall_verdict()` 的說明文字,原樣
+    regime_loaded: bool
+    regime_light: str     # `get_macro_regime()['light']`,原樣
+    regime_zh: str        # REGIME_LABEL(全站統一翻譯,本頁不自己翻)
+    regime_source: str    # `regime_arbiter.SOURCE_*`,讓人看得到分支出處
+    note: str             # 兩者關係的說明
+
+
+def parallel_verdict(band: str, detail: str, regime: dict) -> ParallelVerdict:
+    """把「指標危險度」與「市場位階」擺在一起,**不做任何調和**。
+
+    Args:
+        band:   `overall_verdict()` 的 band。
+        detail: `overall_verdict()` 的說明文字。
+        regime: `services.allocation_service.get_macro_regime()` 的 dict
+                (**唯讀**;本函式不呼叫它,由 caller 傳進來 —— 這樣這一段
+                就是純函式,不碰 `session_state`,可以直接單測)。
+
+    Returns:
+        `ParallelVerdict`。**不變式(有測試釘住)**:
+
+          · `danger_band` 恆等於傳進來的 `band`(不因 regime 而改);
+          · `regime_light` 恆等於 `regime['light']`(不因 band 而改);
+          · 回傳物件裡**沒有**第三個合併燈號。
+
+    §1:`regime` 缺欄位時一律當未評估,**不補任何預設多空**。
+    """
+    from shared.allocation_decision import REGIME_LABEL
+
+    zh, color = BAND_META[band]
+    _loaded = bool(regime.get("is_loaded"))
+    _reg = str(regime.get("regime") or "unknown").strip().lower()
+    # 燈號以 `get_macro_regime()` 回的為準(它與 regime 由同一次仲裁產生,
+    # 不可能不同步);真的沒有才退 ⬜ —— 不由 regime 反推,那是第二把尺。
+    _rlight = str(regime.get("light") or "⬜")
+    _rsource = str(regime.get("source") or "unloaded")
+
+    # `BAND_LIGHT` 的**字面住在 L4**(本頁所有 emoji 與中文標籤的家;
+    # `TestStateColumnDualCoding` 明文守著「L5 不得自己寫一份 emoji」);
+    # **比較邏輯**留在本層 —— 只有這裡同時看得到兩個判斷。
+    # 直接索引而非 `.get()`:出現預期外的 band 就 fail loud(§1),
+    # 而不是默默印一顆「未評估」讓人以為位階沒載入。
+    if not _loaded:
+        # §1:`is_loaded=False` 時**不得**帶出任何方向。
+        # 這一段是本組寫測試時抓到的:`{'is_loaded': False, 'regime': 'bull'}`
+        # 這種組合(舊 session 殘留 / 上游只填一半)會讓 `regime_zh` 印出
+        # 「多頭」。L4 目前的 `loaded=False` 分支確實不會印它 —— 但那是
+        # **渲染端剛好沒用到**,不是資料誠實。欄位本身留著一個方向,下一個
+        # 消費端就會把它印出去。在來源就清成未評估。
+        _rlight, _reg = "⬜", "unknown"
+        _note = REGIME_UNLOADED_NOTE
+    elif band == "gray":
+        _note = DANGER_UNLOADED_NOTE
+    elif BAND_LIGHT[band] != _rlight:
+        _note = DIVERGENCE_NOTE
+    else:
+        _note = AGREE_NOTE
+
+    return ParallelVerdict(
+        danger_band=band,
+        danger_light=BAND_LIGHT[band],
+        danger_zh=zh,
+        danger_color=color,
+        danger_detail=detail,
+        regime_loaded=_loaded,
+        regime_light=_rlight,
+        regime_zh=REGIME_LABEL.get(_reg, "未評估"),
+        regime_source=_rsource,
+        note=_note,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -951,22 +1119,42 @@ def render_tab_macro_v2() -> None:
     left, right = st.columns([7, 5], gap="medium")
 
     band, detail = overall_verdict(summary)
-    # ⚠️ **這一處直讀 `BAND_META` 是對的,別跟著改成 `band_meta`**(2026-08-27
+    # ⚠️ **這個總結論直讀 `BAND_META` 是對的,別跟著改成 `band_meta`**(2026-08-27
     # 實查):`band_meta(band, spec)` 要一個 spec,而這個 band 來自
     # `overall_verdict(summary)` —— **五桶 rollup,不是任何一條指標**,根本沒有
     # spec 可傳。而且它的 `"gray"` 語意本來就是「尚未載入資料」(見
     # `overall_verdict` 的 early return),正是 `BAND_META["gray"]` 那句「無資料」。
     # `build_reference_row` docstring 那句「顯示端請走 band_meta」講的是
     # **逐指標的顯示端**(表格「燈」欄、卡片 pill),不含這個總結論。
-    zh, color = BAND_META[band]
+    # (2026-08-27 D1 後這次直讀搬進了 `parallel_verdict()`,理由不變。)
+    #
+    # ── 並列揭露(D1,2026-08-27 客戶核准)─────────────────────────────
+    # `get_macro_regime()` 是全站唯一的位階出處(15 個消費端:個股評分 gate /
+    # ETF 核衛配置 / AI prompt / 存股站 / 選股網 / 置底條)。本頁**唯讀取用**,
+    # 不改它一個字、也不參與它的計算。
+    # 走 function-local import:與 `section_traffic_light` / `section_warroom`
+    # 等既有 UI 消費端同一個 pattern(L5→L3 lazy),不在 module load 時就把
+    # allocation 那條 chain 拉進來。
+    from src.services.allocation_service import get_macro_regime
+    pv = parallel_verdict(band, detail, get_macro_regime())
+
     with left, st.container(border=True):
-        st.markdown('<p class="v2-t">總經位階</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="v2-t">{DANGER_TITLE}</p>', unsafe_allow_html=True)
         st.markdown(
-            f'<div class="v2-hero" style="color:{color}">{zh}</div>',
+            f'<div class="v2-hero" style="color:{pv.danger_color}">{pv.danger_zh}</div>',
             unsafe_allow_html=True)
-        st.markdown(f'<p style="opacity:.75;margin-top:6px">{detail}</p>',
+        st.markdown(f'<p style="opacity:.75;margin-top:6px">{pv.danger_detail}</p>',
                     unsafe_allow_html=True)
-        st.caption("五桶取最差(worst-of)—— 與現行總經頁同一套判定，不是另一套演算法。")
+        st.caption(
+            "五桶取最差(worst-of)——「**有沒有指標踩到危險門檻**」，"
+            "**不含多空方向**。與現行總經頁同一套判定，不是另一套演算法。"
+        )
+        # 同一張卡的下半 = 位階。**兩個判斷並列,誰都不覆蓋誰**(見
+        # `parallel_verdict` 上方的硬約束)。
+        render_regime_parallel(
+            light=pv.regime_light, zh=pv.regime_zh, source=pv.regime_source,
+            loaded=pv.regime_loaded, note=pv.note,
+        )
     with right, st.container(border=True):
         render_signal_health(rows)
 

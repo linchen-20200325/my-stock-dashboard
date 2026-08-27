@@ -205,7 +205,9 @@ class TestNoBehaviourChangeForRealLights:
 # `BAND_META` 的消費端分兩類:
 #   · L4 本檔 6 處(5 處有 spec → 已改走 `band_meta`;`render_bucket_cards`
 #     吃的是桶彙總、拿不到 spec → 維持直讀)。
-#   · L5 `tab_macro_v2.py` 2 處(第 3 層表格的「燈」欄、第 1 層總經位階),
+#   · L5 `tab_macro_v2.py` 2 處(第 3 層表格的「燈」欄、第 1 層**指標危險度** ——
+#     2026-08-27 客戶正名前叫「總經位階」,那個名字是錯的:它算的是危險度,
+#     不含多空方向;那次同時把 `BAND_META` 直讀搬進 `parallel_verdict()`),
 #     兩處都直讀 `BAND_META[...]` —— 只要它們**永遠拿不到** `"reference"`
 #     就不會 KeyError。下面把「拿不到」測出來,而不是用讀的。
 

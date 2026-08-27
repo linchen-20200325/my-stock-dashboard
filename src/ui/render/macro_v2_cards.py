@@ -134,6 +134,22 @@ BAND_META: dict[str, tuple[str, str]] = {
 }
 
 
+#: band → 燈號 emoji。**只為了回答「危險度那顆燈與位階那顆燈是不是同色」**
+#: 這一個問題(D1 並列揭露,2026-08-27),不代表 band 與 regime 語意相等 ——
+#: 它們根本不是同一個量(見 `render_regime_parallel` 的 docstring)。
+#:
+#: 為什麼住在 L4 而不是用它的 L5：本檔是這一頁**所有** emoji 與中文標籤的家
+#: (`STATE_META` / `BAND_META` 都在這裡),`tests/test_macro_v2_tab.py::
+#: TestStateColumnDualCoding` 也明文守著「L5 不得自己寫一份 emoji」。
+#: 比較邏輯留在 L5 `parallel_verdict()`，本層只提供字面。
+BAND_LIGHT: dict[str, str] = {
+    "green": "🟢",
+    "yellow": "🟡",
+    "red": "🔴",
+    "gray": "⬜",
+}
+
+
 def band_meta(band: str, spec: DangerSpec) -> tuple[str, str]:
     """band + spec → 畫面上該顯示的 (中文標籤, 色碼)。**消費端請走這裡。**
 
@@ -164,6 +180,10 @@ CSS = """
       text-transform:uppercase; opacity:.62; margin:0 0 10px;}
 .v2-hero{font-size:46px; font-weight:700; line-height:1; letter-spacing:-.02em;}
 .v2-hero small{font-size:19px; font-weight:500; opacity:.6; margin-left:3px;}
+/* 並列揭露（D1）：同一張卡的下半，印「市場位階」那一條。刻意比 .v2-hero 小 ——
+   兩者是**並列**不是主從，但危險度是本頁自己算的、位階是外部唯讀帶進來的，
+   字級相同會讓人以為本頁也在算位階。 */
+.v2-reg{font-size:24px; font-weight:700; line-height:1.25;}
 .v2-pill{display:inline-flex; align-items:center; gap:5px; font-size:11.5px;
          font-weight:500; padding:2px 9px; border-radius:99px; line-height:1.6;
          background:rgba(128,128,128,.16); white-space:nowrap;}
@@ -315,6 +335,51 @@ def pill(text: str, color: str, hatch: bool = False) -> str:
 # ══════════════════════════════════════════════════════════════════════
 # 渲染
 # ══════════════════════════════════════════════════════════════════════
+
+def render_regime_parallel(*, light: str, zh: str, source: str,
+                           loaded: bool, note: str) -> None:
+    """第 1 層標題卡的**下半**：並列印出「市場位階」（D1，2026-08-27 客戶核准）。
+
+    為什麼要並列而不是合併(驗證結論見 `scratchpad/verify_regime_paths.md`)：
+    「指標危險度」與「市場位階」**不是同一個量** —— 前者是 16 盞燈的
+    worst-of 危險度(不含多空方向)，後者是多空位階(看不到 VIX / PMI / CPI /
+    融資)。實跑 400 組格點燈色不一致 39.5%、方向相反 18 組，其中最容易對打的
+    不是極端值而是**健康的多頭**(多頭走久 BIAS240 必然放大、融資恆紅)。
+    合併等於宣稱「沒有指標踩線 = 多頭」，會把 `regime_arbiter` 剛收掉的
+    多來源問題重新製造一個。
+
+    ⚠️ **本函式只印，不判斷、不比較、不調和。** 要印什麼(含 `note` 那句話)
+    全部由 L5 `tab_macro_v2.parallel_verdict()` 決定 —— 只有那裡同時看得到
+    兩個判斷。這一層若自己再比一次，畫面上就會有第二把尺。
+
+    Args:
+        light:  位階燈號 emoji(🟢/🟡/🔴/⬜)，來自 `get_macro_regime()['light']`。
+        zh:     位階中文(`shared.allocation_decision.REGIME_LABEL`)。
+        source: 生效分支識別碼(`regime_arbiter.SOURCE_*`)，讓使用者看得到
+                「為什麼是這個燈」。
+        loaded: 位階是否已評估。False → 誠實印「尚未評估」，**不留白、
+                也不拿危險度的燈頂替**(§1)。
+        note:   兩者關係的說明(L5 依 loaded / 是否同色挑好的那一句)。
+    """
+    st.divider()
+    st.markdown('<p class="v2-t">市場位階 · 全站唯一出處</p>', unsafe_allow_html=True)
+    if loaded:
+        st.markdown(
+            f'<div class="v2-reg">{_html.escape(light)}'
+            f'<span style="margin-left:8px">{_html.escape(zh)}</span></div>'
+            f'<div class="v2-src" style="margin-top:4px">{_html.escape(source)}</div>',
+            unsafe_allow_html=True)
+    else:
+        # §1：未評估就寫未評估。這裡**不得**印綠燈、不得沿用上半的危險度燈。
+        st.markdown(
+            '<div class="v2-reg" style="opacity:.62">⬜'
+            '<span style="margin-left:8px">尚未評估</span></div>',
+            unsafe_allow_html=True)
+    # `st.caption` 走 markdown（note 是本檔外的模組常數，含 `**` 強調），
+    # 刻意不塞進 `<p class="v2-note">` —— 那條路要 raw HTML，會逼得常數改寫成
+    # 標籤，而那些字串是要給人讀的。
+    st.caption(note)
+
 
 def render_signal_health(rows: list[Row]) -> None:
     """訊號可信度卡 —— 16 盞燈裡有幾盞真的在運作。
