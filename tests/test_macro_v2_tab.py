@@ -1681,7 +1681,102 @@ class TestLayer2FetchesOnlyWhatItDraws:
                   if isinstance(n, ast.FunctionDef) and n.name == "render_tab_macro_v2")
         # 取數 gating 的來源集合 `_kinds` 必須由 `cards` 推出
         seg = ast.get_source_segment(src, fn)
-        assert "_kinds = {c.kind for c in cards}" in seg, (
+        assert "_kinds = {c.kind for c in cards" in seg, (
             "取數 gating 必須從篩選後的 `cards` 推出")
         assert "for _, kind, _ in _CHART_SPECS" not in seg
         assert "in _CHART_SPECS) else" not in seg
+
+
+# ════════════════════════════════════════════════════════════════
+# B-4 · 融資餘額：有數字、無圖、明著標原因（2026-08-27 客戶拍板）
+#
+# 本地歷史檔 4,912 列來自 2026-07-11 一次性回補，其中 60.6% 掉到近零、
+# 其餘落在 2,000〜6,300 億（相鄰列 39.5% 機率翻轉）—— 同一欄混用兩種單位。
+# 卡片上的數字走另一條即時路徑，是對的，所以卡片不會變空白。
+# ════════════════════════════════════════════════════════════════
+class TestMarginCardHoldsTheChartOnly:
+
+    @staticmethod
+    def _card():
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+        return next(c for c in _CHART_SPECS if c.key == "margin")
+
+    def test_margin_declares_a_hold_reason(self):
+        card = self._card()
+        assert card.hold_reason.strip(), "融資卡必須帶不畫圖的原因"
+
+    def test_hold_reason_states_cause_and_recovery(self):
+        """§1：原因與「重抓後恢復」都要講。只寫「暫不顯示」= 把原因藏起來。"""
+        txt = self._card().hold_reason
+        assert "資料疑義" in txt
+        assert "單位" in txt, "沒講出根因（混用兩種單位）"
+        assert "恢復" in txt, "沒講出復原條件（重抓後恢復）"
+        assert "數字" in txt, "沒講清楚『卡片上的數字仍然是對的』"
+
+    def test_held_card_still_shows_the_number_and_light(self, monkeypatch):
+        """圖不畫，但**數字與燈照顯示** —— 卡片不會變空白。"""
+        import src.ui.tabs.tab_macro_v2 as m
+
+        seen = {}
+        monkeypatch.setattr(
+            m, "render_chart_card",
+            lambda row, spec, xs, ys, **kw: seen.update(row=row, xs=xs, ys=ys))
+        caps = []
+        monkeypatch.setattr(m.st, "caption", lambda t, *a, **k: caps.append(t))
+
+        rows = m.build_rows(_readiness(cl_data={"margin": 5148.0}))
+        m.render_one_card(self._card(), by_key={r.key: r for r in rows},
+                          inputs=None, parquet_series={"margin": [("2026-01-01", 1.0)]},
+                          ohlc_raw={})
+        assert seen["ys"] == [] and seen["xs"] == [], "held 卡不得餵任何序列"
+        assert seen["row"].value == 5148.0, "數字必須照顯示"
+        assert seen["row"].band != "gray", "燈必須照亮"
+        assert "資料疑義" in seen["row"].label, "標題要看得出來"
+        assert any("資料疑義" in c for c in caps), "原因必須印在卡片下方"
+
+    def test_held_card_label_is_derived_not_hardcoded(self, monkeypatch):
+        """標題徽章是從 `row.label` 衍生的，不是另外寫死一個名字（§3.3）。"""
+        import src.ui.tabs.tab_macro_v2 as m
+        from shared.macro_buckets import SPECS_BY_KEY
+
+        seen = {}
+        monkeypatch.setattr(m, "render_chart_card",
+                            lambda row, *a, **kw: seen.update(row=row))
+        monkeypatch.setattr(m.st, "caption", lambda *a, **k: None)
+        rows = m.build_rows(_readiness())
+        m.render_one_card(self._card(), by_key={r.key: r for r in rows},
+                          inputs=None, parquet_series={}, ohlc_raw={})
+        assert seen["row"].label.startswith(SPECS_BY_KEY["margin"].label)
+
+    def test_held_card_does_not_trigger_its_fetch(self):
+        """守衛：取數 gating 必須排除 `hold_reason` 非空的卡。
+
+        漏了的話，一張根本不畫的卡照樣會讓整頁去讀 4,900+ 列的 parquet ——
+        花了成本、畫面上零產出。拿掉 `if not c.hold_reason` 這半句會轉紅。
+        """
+        import ast
+        import pathlib
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        fn = next(n for n in ast.walk(ast.parse(src))
+                  if isinstance(n, ast.FunctionDef) and n.name == "render_tab_macro_v2")
+        seg = ast.get_source_segment(src, fn)
+        assert "_kinds = {c.kind for c in cards if not c.hold_reason}" in seg
+
+    def test_margin_series_really_is_unusable(self):
+        """把「資料疑義」這個判斷本身釘成可重跑的量測，不是一句宣稱。
+
+        相鄰列在「近零」與「千億級」之間翻轉的機率若掉回 0，代表資料已經
+        被清乾淨 —— 那時這條會轉紅，提醒有人把 `hold_reason` 拿掉。
+        """
+        pd = pytest.importorskip("pandas")
+        import pathlib
+        path = pathlib.Path("data_cache/finmind_margin.parquet")
+        if not path.exists():
+            pytest.skip("本機無 finmind_margin.parquet")
+        df = pd.read_parquet(path)
+        yi = (df["margin_balance"].astype(float) / 1e8).to_numpy()
+        near_zero = yi < 10.0
+        flip = float((near_zero[:-1] != near_zero[1:]).mean())
+        assert flip > 0.10, (
+            f"相鄰列翻轉率僅 {flip:.1%} —— 歷史檔可能已清乾淨，"
+            f"請複驗後把 margin 的 `hold_reason` 拿掉並恢復繪圖。")

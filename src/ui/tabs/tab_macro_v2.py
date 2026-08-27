@@ -122,20 +122,56 @@ class ChartCard:
         **只有 `kind=KIND_DUAL` 用**:右軸那條序列的 key。
         非 dual 卡必須留空(守衛會擋)—— 留著一個沒人讀的欄位,
         下一個人會以為它有作用。
+    hold_reason : str
+        非空 = **這張卡的數字照顯示,但圖暫不繪製**,而這一句就是印在卡片
+        下方的原因。空字串 = 正常畫。
+
+        為什麼做成欄位而不是在渲染函式裡另寫一份 key 名單:名單是第二把尺
+        (§3.3)—— 哪天資料修好了,有人把這裡的旗標拿掉卻忘了改名單,
+        卡片就會出現「說要畫、實際不畫」或反過來。旗標與卡片綁在同一列,
+        物理上不會分岔。
     """
     key: str
     kind: str
     note: str
     ref_key: str = ""
+    hold_reason: str = ""
 
+
+#: 融資餘額「圖暫不繪製」的原因(客戶 2026-08-27 拍板)。
+#:
+#: 實測(2026-08-27,`data_cache/finmind_margin.parquet` 4,943 列):
+#:   · 4,912 列(99.4%)的 `fetched_at` 是**同一個時間戳**
+#:     `2026-07-11T21:32:59.059570+00:00` —— 一次性歷史回補;
+#:     其後逐日新增的 31 列 100% 乾淨(4,939〜6,183 億)。
+#:   · **那批回補列裡有 60.6%(2,975 列)掉到近零**(中位數 0.12 億),
+#:     其餘落在 2,000〜6,300 億 —— 兩種單位混在同一欄。
+#:   · 相鄰兩列有 **39.5%** 的機率在「近零」與「千億級」之間翻轉。
+#: 畫出來就是一整塊實心色塊,門檻線(2,500 / 3,400 億)埋在裡面看不見 ——
+#: 版面看起來完整,傳達的卻是假的(§1)。
+#:
+#: ⚠️ **卡片上的數字是對的**:那條走 `cl_data['margin']` 的即時路徑,
+#:    與這份歷史檔無關。所以卡片不會變空白,只有圖不畫。
+#: ⚠️ **本段不洗資料**(那是獨立工單)。判斷哪些列是髒的有一個乾淨的
+#:    boolean —— `fetched_at == 那個時間戳` —— 但清洗屬 `src/data/**`,
+#:    不在本次檔案邊界內。
+_MARGIN_CHART_HOLD: str = (
+    "⚠️ **資料疑義：圖暫不繪製。** 本地歷史檔的 4,912 列來自 2026-07-11 一次性"
+    "回補，其中 60.6% 掉到近零、其餘落在 2,000〜6,300 億 —— 同一欄混用兩種單位"
+    "（相鄰列有 39.5% 的機率在兩者之間翻轉）。照畫會是一整塊實心色塊，"
+    "門檻線埋在裡面看不見。**上方的數字走另一條即時路徑，是對的**；"
+    "歷史檔重抓後圖會自動恢復。"
+)
 
 #: 第 2 層要畫哪些卡。名單來自 2026-08-25 對 16 盞燈的歷史資料盤點
 #: (只有這幾個有真序列)+ 2026-08-27 客戶加點的兩張新卡。
 _CHART_SPECS: list[ChartCard] = [
     ChartCard("bias_240", KIND_PARQUET,
               "台股日線 2007 迄今,年線乖離由收盤價即時算出"),
+    # ── B-4(2026-08-27 客戶拍板):融資餘額**只標資料疑義,圖暫不繪製** ──
     ChartCard("margin", KIND_PARQUET,
-              "融資餘額日資料 2006 迄今(原始單位元,此處已換算為億)"),
+              "融資餘額日資料 2006 迄今(原始單位元,此處已換算為億)",
+              hold_reason=_MARGIN_CHART_HOLD),
     ChartCard("us10y", KIND_SESSION,
               "本輪抓取的近 60 個交易日(即時取得,不落地)"),
     # ── 卡 A(2026-08-27 客戶拍板):左軸 DXY、右軸台幣 ──
@@ -635,6 +671,32 @@ def _render_kline_card(card: ChartCard, *, ohlc_raw: dict) -> None:
                             series_note=card.note)
 
 
+def _render_held_card(card: ChartCard, *, by_key: dict) -> None:
+    """`hold_reason` 非空的卡:**數字照顯示,圖暫不繪製,原因寫在下面。**
+
+    走既有的 `render_chart_card` 並餵空序列 —— 它會印「歷史序列取得失敗
+    —— 不以合成資料替代。」+ 門檻帶,然後由本函式在卡片下方補上**那句
+    「取得失敗」的實際成因**與復原條件。
+
+    ⚠️ 兩個已知的取捨,都不是漏看:
+    1. L4 那句固定文案講的是「取得失敗」,而本例的實情是「取到了但不可用」。
+       L4 目前沒有「卡片層通知」這個管道,而該檔在本次的檔案邊界之外
+       (見交付回報的建議事項:替 `render_chart_card` 加一個 `notice` 參數)。
+       故改以緊接其後的說明句補齊,讀起來是**補述**而不是更正。
+    2. 說明句落在卡片框線**外**(L4 的 `st.container(border=True)` 在函式
+       內就關掉了),但仍在同一欄、緊貼卡片下方,歸屬不會被誤讀。
+
+    標題加上「⚠️ 圖表資料疑義」讓它一眼看得出來。這個字串是**從
+    `row.label` 衍生**的,不是另外寫死一個名字(§3.3)。
+    """
+    from dataclasses import replace as _replace
+
+    row = by_key[card.key]
+    render_chart_card(_replace(row, label=f"{row.label}　⚠️ 圖表資料疑義"),
+                      SPECS_BY_KEY[card.key], [], [])
+    st.caption(card.hold_reason)
+
+
 def render_one_card(card: ChartCard, *, by_key: dict, inputs,
                     parquet_series: dict, ohlc_raw: dict) -> None:
     """第 2 層的一張卡 —— 依 `kind` 派給對應的 L4 渲染函式。
@@ -642,6 +704,10 @@ def render_one_card(card: ChartCard, *, by_key: dict, inputs,
     §1:未知的 `kind` 直接 `raise`。若默默不畫,那張卡會**憑空消失**,
     而畫面上「少一張卡」與「這個指標今天沒資料」長得一模一樣。
     """
+    # 資料疑義的卡先攔下 —— 它連自己那條序列都不該去取(見 `_render_held_card`)。
+    if card.hold_reason:
+        _render_held_card(card, by_key=by_key)
+        return
     if card.kind == KIND_DUAL:
         _render_dual_card(card, by_key=by_key, inputs=inputs)
         return
@@ -720,7 +786,10 @@ def render_tab_macro_v2() -> None:
     # ── L3 取數:**看篩選後的 `cards`,不是看 `_CHART_SPECS` 這個常數** ──
     # 看常數的話「這一輪到底有沒有要畫 parquet 卡」永遠是同一個答案,
     # 於是就算一張 parquet 卡都沒有,還是會去讀 4,900+ 列的檔。
-    _kinds = {c.kind for c in cards}
+    # `hold_reason` 非空的卡不畫圖 → **也不該為它去取數**。
+    # 若這裡漏了 `not c.hold_reason`,一張根本不畫的卡照樣會讓整頁去讀
+    # 4,900+ 列的 parquet —— 花了成本、畫面上零產出。
+    _kinds = {c.kind for c in cards if not c.hold_reason}
     parquet_series: dict = get_chart_series() if KIND_PARQUET in _kinds else {}
     ohlc_raw: dict = (get_twii_ohlc(TWII_KLINE_TRADING_DAYS)
                       if KIND_OHLC in _kinds else {})
