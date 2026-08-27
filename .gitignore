@@ -53,3 +53,13 @@ data_cache/metadata.json
 # Local push helper scripts (contain local paths / account names — never commit)
 *.vbs
 data_cache/*_snapshots/
+
+# Agent git worktrees (隔離用 worktree 被建在 repo 目錄內;每份是整個 repo 的 checkout 副本 ~19MB)
+# 禁止 commit,兩個理由:
+#   (a) 它是本 repo 自己的重複副本,commit 進去等於把整個專案再存一份;
+#   (b) 會弄壞測試 —— 2026-08-27 實際事故:另一組 agent 在 repo 內留下 base_wt/,
+#       tests/test_resample_audit.py 掃全庫 .py 時把每個檔案數了兩遍,
+#       alias 計數整齊翻倍而變紅。根因是目錄污染,不是程式問題。
+#       .claude/worktrees/ 是同一個機制,故在此擋掉。
+# 刻意只擋 worktrees 這一層:.claude/ 其餘內容(settings / skills 等)保留日後版控的可能。
+.claude/worktrees/
