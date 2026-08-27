@@ -170,18 +170,37 @@ class TestNoSecondDataPath:
 class TestChartsUseRealSeriesOnly:
 
     def test_declared_chart_keys_are_real_specs(self):
-        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS, _VALUE_CARD_KEYS
-        for key, kind, note in _CHART_SPECS:
-            assert key in SPECS_BY_KEY, f"{key} 不是有效的 DangerSpec key"
-            assert kind in ("parquet", "session")
-            assert note.strip(), f"{key} 沒寫序列說明"
+        """卡片的 key **必須來自兩張註冊表之一**，不接受任意字串。
+
+        ⚠️ 2026-08-27 擴充（B-2 參考走勢卡），但**沒有放寬**：來源從
+        `SPECS_BY_KEY` 一張表變成「`SPECS_BY_KEY` ∪ `REF_SPECS_BY_KEY`」
+        兩張表的聯集 —— 兩張都是 L0 註冊表，都有自己的門檻／來源欄位與
+        drift 守衛。**沒有**開一條「隨便什麼字串都能塞」的路。
+        """
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        from src.ui.tabs.tab_macro_v2 import (
+            CHART_KINDS, KIND_DUAL, _CHART_SPECS, _VALUE_CARD_KEYS,
+        )
+        _known = set(SPECS_BY_KEY) | set(REF_SPECS_BY_KEY)
+        for card in _CHART_SPECS:
+            assert card.key in _known, (
+                f"{card.key} 既不是 DangerSpec key 也不是參考走勢 key")
+            assert card.kind in CHART_KINDS, f"{card.key} 的 kind 不合法"
+            assert card.note.strip(), f"{card.key} 沒寫序列說明"
+            if card.kind == KIND_DUAL:
+                assert card.ref_key in _known, (
+                    f"{card.key} 是雙軸卡，ref_key 必須是有效 key")
+            else:
+                assert not card.ref_key, (
+                    f"{card.key} 不是雙軸卡，ref_key 應留空"
+                    f"（留著沒人讀的欄位，下一個人會以為它有作用）")
         for key in _VALUE_CARD_KEYS:
             assert key in SPECS_BY_KEY
 
     def test_chart_and_value_cards_do_not_overlap(self):
         """同一個指標不能又畫圖又當純數值卡 —— 那就是同一資訊重複兩次。"""
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS, _VALUE_CARD_KEYS
-        chart_keys = {k for k, _, _ in _CHART_SPECS}
+        chart_keys = {c.key for c in _CHART_SPECS}
         assert not (chart_keys & set(_VALUE_CARD_KEYS))
 
     def test_vix_stays_a_value_card(self):
@@ -191,7 +210,7 @@ class TestChartsUseRealSeriesOnly:
         """
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS, _VALUE_CARD_KEYS
         assert "vix" in _VALUE_CARD_KEYS
-        assert "vix" not in {k for k, _, _ in _CHART_SPECS}
+        assert "vix" not in {c.key for c in _CHART_SPECS}
 
     def test_parquet_series_are_actually_loadable(self):
         """宣稱走 parquet 的指標，必須真的從本地快取讀得到序列。
@@ -201,7 +220,7 @@ class TestChartsUseRealSeriesOnly:
         from src.data.macro.macro_cache_reader import load_v2_chart_series
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
 
-        declared = {k for k, kind, _ in _CHART_SPECS if kind == "parquet"}
+        declared = {c.key for c in _CHART_SPECS if c.kind == "parquet"}
         if not declared:
             pytest.skip("目前沒有宣告走 parquet 的圖表指標")
         got = load_v2_chart_series()
@@ -1320,3 +1339,349 @@ class TestLayer2FixedThreePerRow:
                     and node.args[0].id == "CARDS_PER_ROW"):
                 n += 1
         assert n >= 2, f"第 2 層應有兩處 st.columns(CARDS_PER_ROW)，實際 {n} 處"
+
+
+# ════════════════════════════════════════════════════════════════
+# B-2 · 參考走勢卡不進燈號分母（2026-08-27 客戶裁示）
+#
+# 台幣與加權指數「畫圖但不算一盞燈」：不影響 x/16 分母、五桶 worst-of 彙總、
+# 訊號可信度卡。這一組是那條分界**在程式裡可驗證**的證據 —— 不是靠註解。
+# ════════════════════════════════════════════════════════════════
+class TestReferenceCardsStayOutOfTheDenominator:
+
+    @staticmethod
+    def _ref_keys():
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        return set(REF_SPECS_BY_KEY)
+
+    def test_reference_keys_absent_from_readiness_sidecar(self):
+        """readiness 側車（= x/16 的分母來源）不得出現參考走勢 key。"""
+        readiness = _readiness()
+        assert not (self._ref_keys() & set(readiness)), (
+            f"參考走勢跑進了 readiness 側車："
+            f"{sorted(self._ref_keys() & set(readiness))}")
+
+    def test_reference_keys_absent_from_rows(self):
+        """`build_rows()` 的輸出是分母、五桶彙總、可信度卡、第 3 層總表的
+        **共同上游**。只要 rows 乾淨，那四個下游就不可能被污染。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        rows = build_rows(_readiness())
+        assert not (self._ref_keys() & {r.key for r in rows})
+
+    def test_denominator_size_unchanged_by_reference_specs(self):
+        """分母 == `BUCKET_DANGER_SPECS` 的長度，一個不多、一個不少。
+
+        這是「x/16 的那個 16」。加了兩張參考走勢卡之後它若變成 18，
+        畫面上完全看不出來 —— 只會覺得「怎麼永遠有兩盞燈沒亮」。
+        """
+        from shared.macro_buckets import BUCKET_DANGER_SPECS
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        assert len(build_rows(_readiness())) == len(BUCKET_DANGER_SPECS)
+
+    def test_bucket_rollup_has_no_reference_bucket(self):
+        """五桶彙總只會有五個桶，不會冒出第六個「參考」桶。"""
+        from shared.macro_buckets import BUCKET_ORDER, REFERENCE_BUCKET
+        from src.ui.tabs.tab_macro_v2 import _BUCKET_ZH, build_rows, bucket_summary
+        summary = bucket_summary(build_rows(_mixed()))
+        assert len(summary) <= len(BUCKET_ORDER)
+        assert REFERENCE_BUCKET not in _BUCKET_ZH
+        assert _BUCKET_ZH.get(REFERENCE_BUCKET) not in {b["name"] for b in summary}
+
+    def test_reference_row_builder_never_touches_the_sidecar(self):
+        """`build_reference_row()` 的簽章**不吃 readiness** —— 物理上碰不到。
+
+        拿掉這條、讓它多收一個 `readiness` 參數，就等於開了一條「參考走勢
+        也可以從側車取值」的路，而那正是第二把尺的起點（§3.3）。
+        """
+        import inspect
+        from src.ui.tabs.tab_macro_v2 import build_reference_row
+        params = set(inspect.signature(build_reference_row).parameters)
+        assert params == {"key", "value"}, f"簽章被改了：{sorted(params)}"
+
+    def test_reference_row_uses_reference_registry_only(self):
+        """參考走勢 Row 的 bucket 必須是 `REFERENCE_BUCKET`，不是五桶之一。"""
+        from shared.macro_buckets import BUCKET_ORDER, REFERENCE_BUCKET
+        from src.ui.tabs.tab_macro_v2 import build_reference_row
+        for k in self._ref_keys():
+            row = build_reference_row(k, 1.0 if k == "usdtwd" else 23000.0)
+            assert row.bucket == REFERENCE_BUCKET
+            assert row.bucket not in BUCKET_ORDER
+
+    def test_no_threshold_reference_is_not_judged_green(self):
+        """§1：加權指數沒有門檻 → band 必須是 `gray`（不判燈），**不是 green**。
+
+        判成 green 就是一盞恆亮的假綠燈。
+        """
+        from src.ui.tabs.tab_macro_v2 import build_reference_row
+        row = build_reference_row("taiex", 23000.0)
+        assert row.band == "gray"
+        assert row.thr_text == "—"
+
+    def test_usdtwd_band_follows_the_ssot_thresholds(self):
+        """台幣**有**門檻（SSOT 鏡像 32 / 33），判燈走同一支上游函式。"""
+        from src.ui.tabs.tab_macro_v2 import build_reference_row
+        assert build_reference_row("usdtwd", 29.0).band == "green"
+        assert build_reference_row("usdtwd", 32.5).band == "yellow"
+        assert build_reference_row("usdtwd", 33.5).band == "red"
+        assert build_reference_row("usdtwd", None).band == "gray"
+
+    def test_denominator_functions_do_not_mention_reference_registry(self):
+        """原始碼層守衛：分母／彙總／可信度那三段**不得**提到參考走勢註冊表。
+
+        上面幾條驗的是「現在的行為」，這一條擋的是「以後有人在那裡加一行」。
+        拿掉本條、在 `build_rows()` 裡多迭代一次 `REFERENCE_TREND_SPECS`，
+        其餘測試會抓到，但錯誤訊息會指向分母數字而不是根因。
+        """
+        import ast
+        import pathlib
+
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        banned = {"REFERENCE_TREND_SPECS", "REF_SPECS_BY_KEY",
+                  "build_reference_row", "REFERENCE_BUCKET"}
+        targets = {"build_rows", "bucket_summary", "overall_verdict",
+                   "visible_table", "filter_rows", "_table_columns"}
+        bad = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name in targets:
+                for sub in ast.walk(node):
+                    if isinstance(sub, ast.Name) and sub.id in banned:
+                        bad.append(f"{node.name}() 提到了 {sub.id}")
+        assert not bad, ("分母／彙總／總表不得碰參考走勢註冊表："
+                         + "; ".join(sorted(set(bad))))
+
+
+# ════════════════════════════════════════════════════════════════
+# B-3 · 卡 A（雙軸 DXY／台幣）與卡 B（加權指數日 K）接線
+# ════════════════════════════════════════════════════════════════
+class TestCardAWiring:
+    """卡 A：左軸 DXY（一盞燈）／右軸台幣（參考走勢）。"""
+
+    @staticmethod
+    def _inputs(pd, *, dxy=True, twd=True):
+        from types import SimpleNamespace
+        from shared.macro_buckets import CL_INTL_KEY_DXY, CL_TW_KEY_USDTWD
+
+        def _df(vals):
+            return pd.DataFrame(
+                {"open": [v - 1 for v in vals], "high": [v + 1 for v in vals],
+                 "low": [v - 2 for v in vals], "close": list(vals)},
+                index=pd.date_range("2026-08-01", periods=len(vals), freq="D"))
+
+        cl = {"intl": {}, "tw": {}}
+        if dxy:
+            cl["intl"][CL_INTL_KEY_DXY] = _df([98.0, 99.0, 100.5])
+        if twd:
+            cl["tw"][CL_TW_KEY_USDTWD] = _df([31.5, 32.1, 32.4])
+        return SimpleNamespace(cl_data=cl)
+
+    def test_dxy_and_usdtwd_series_come_from_their_own_cl_data_groups(self):
+        """DXY 走 `cl_data['intl']`、台幣走 `cl_data['tw']` —— 兩個不同群組。
+
+        中文 key 走 L0 鏡像常數，不是字面值（L3 改名時 L0 那邊會轉紅）。
+        """
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        inp = self._inputs(pd)
+        assert _session_series(inp, "dxy")[1] == [98.0, 99.0, 100.5]
+        assert _session_series(inp, "usdtwd")[1] == [31.5, 32.1, 32.4]
+
+    def test_unregistered_session_key_fails_loud_not_silently(self, capsys):
+        """§1：沒登記取數路徑的 key 要留下痕跡，不是靜靜回 (None, None)。"""
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        assert _session_series(self._inputs(pd), "vix") == (None, None)
+        assert "沒有登記 session 取數路徑" in capsys.readouterr().out
+
+    def test_session_source_keys_cover_every_declared_session_card(self):
+        """`_CHART_SPECS` 宣告要走 session 的 key，都必須有登記取數路徑。
+
+        漏登記的後果是那張卡**永遠空著**，而畫面上與「今天沒抓到」一樣。
+        """
+        from src.ui.tabs.tab_macro_v2 import (
+            KIND_DUAL, KIND_SESSION, _CHART_SPECS, _SESSION_SERIES_SOURCE,
+        )
+        need = set()
+        for c in _CHART_SPECS:
+            if c.kind == KIND_SESSION:
+                need.add(c.key)
+            elif c.kind == KIND_DUAL:
+                need.update({c.key, c.ref_key})
+        assert need <= set(_SESSION_SERIES_SOURCE), (
+            f"這些 key 沒登記 session 取數路徑：{sorted(need - set(_SESSION_SERIES_SOURCE))}")
+
+    def test_dual_card_gives_each_axis_its_own_spec(self, monkeypatch):
+        """左右兩軸**各帶自己的 DangerSpec** —— 共用一份門檻就是畫錯軸。"""
+        pd = pytest.importorskip("pandas")
+        import src.ui.tabs.tab_macro_v2 as m
+        from shared.macro_buckets import REF_SPECS_BY_KEY, SPECS_BY_KEY
+
+        seen = {}
+
+        def _fake(title, left, right, *, series_note="", key=""):
+            seen.update(title=title, left=left, right=right, note=series_note)
+
+        monkeypatch.setattr(m, "render_dual_axis_card", _fake)
+        card = next(c for c in m._CHART_SPECS if c.kind == m.KIND_DUAL)
+        rows = m.build_rows(_readiness())
+        m._render_dual_card(card, by_key={r.key: r for r in rows},
+                            inputs=self._inputs(pd))
+
+        assert seen["left"].spec is SPECS_BY_KEY["dxy"]
+        assert seen["right"].spec is REF_SPECS_BY_KEY["usdtwd"]
+        assert seen["left"].ys == [98.0, 99.0, 100.5]
+        assert seen["right"].ys == [31.5, 32.1, 32.4]
+        # 標題由兩條線的 label 組出，不是第三個寫死的名字
+        assert seen["left"].row.label in seen["title"]
+        assert seen["right"].row.label in seen["title"]
+
+    def test_missing_leg_carries_a_reason_not_a_blank(self, monkeypatch):
+        """§1：某條線這輪沒抓到 → `miss_reason` 要有話講，不留空字串。
+
+        留空的話 L4 會印「上游沒有交代原因（程式要修）」，
+        把一個「按更新鈕就好」的情況誤導成程式 bug。
+        """
+        pd = pytest.importorskip("pandas")
+        import src.ui.tabs.tab_macro_v2 as m
+
+        seen = {}
+        monkeypatch.setattr(
+            m, "render_dual_axis_card",
+            lambda t, l, r, **kw: seen.update(left=l, right=r))
+        card = next(c for c in m._CHART_SPECS if c.kind == m.KIND_DUAL)
+        rows = m.build_rows(_readiness())
+        m._render_dual_card(card, by_key={r.key: r for r in rows},
+                            inputs=self._inputs(pd, twd=False))
+        assert seen["right"].ys == []
+        assert seen["right"].miss_reason.strip()
+        assert seen["right"].row.value is None
+        assert seen["right"].row.band == "gray"
+
+
+class TestCardBWiring:
+    """卡 B：加權指數日 K（近 60 個交易日、不畫成交量）。"""
+
+    def test_l3_returns_five_equal_length_lists_without_volume(self):
+        from src.services.macro_v2_service import get_twii_ohlc
+        from src.ui.tabs.tab_macro_v2 import TWII_KLINE_TRADING_DAYS
+
+        got = get_twii_ohlc(TWII_KLINE_TRADING_DAYS)
+        if not got:
+            pytest.skip("本機無 twii_ohlcv.parquet")
+        assert set(got) == {"xs", "open", "high", "low", "close"}, (
+            f"回傳欄位變了：{sorted(got)}　"
+            f"—— 尤其 volume 不得回傳（該欄自 2026-07-09 起恆為 0）")
+        assert len({len(v) for v in got.values()}) == 1, "五個 list 長度不一致"
+        assert len(got["xs"]) <= TWII_KLINE_TRADING_DAYS
+
+    def test_l3_respects_the_window_and_takes_the_tail(self):
+        """要的是**最近** n 個交易日，不是最舊的 n 個。"""
+        from src.services.macro_v2_service import get_twii_ohlc
+        a, b = get_twii_ohlc(10), get_twii_ohlc(30)
+        if not a or not b:
+            pytest.skip("本機無 twii_ohlcv.parquet")
+        assert len(a["xs"]) == 10 and len(b["xs"]) == 30
+        assert a["xs"][-1] == b["xs"][-1], "尾端日期不同 → 取到頭而不是尾"
+        assert a["xs"] == b["xs"][-10:]
+
+    def test_l3_rejects_non_positive_window(self):
+        """§1：n<1 要炸。回空的話畫面顯示「日 K 畫不出來」，
+        而真正的原因（呼叫端傳了 0）不會有任何人看到。"""
+        from src.services.macro_v2_service import get_twii_ohlc
+        with pytest.raises(ValueError):
+            get_twii_ohlc(0)
+
+    def test_ohlc_invariants_hold_on_real_data(self):
+        """§4.2 不變量：low ≤ open/close ≤ high，且日期單調遞增、不重複。"""
+        from src.services.macro_v2_service import get_twii_ohlc
+        from src.ui.tabs.tab_macro_v2 import TWII_KLINE_TRADING_DAYS
+        got = get_twii_ohlc(TWII_KLINE_TRADING_DAYS)
+        if not got:
+            pytest.skip("本機無 twii_ohlcv.parquet")
+        for o, h, l, c in zip(got["open"], got["high"], got["low"], got["close"]):
+            assert l <= o <= h and l <= c <= h, f"OHLC 不自洽：{o}/{h}/{l}/{c}"
+        assert got["xs"] == sorted(got["xs"]), "日期未升序"
+        assert len(set(got["xs"])) == len(got["xs"]), "日期重複"
+
+    def test_l4_ohlc_type_has_no_volume_field(self):
+        """結構層守衛：L4 的 `OHLC` 根本沒有 volume 欄位。
+
+        兩層都不碰，才不會有人「順手」把恆為 0 的成交量接回來畫成一排空白。
+        """
+        import dataclasses
+        from src.ui.render.macro_v2_cards import OHLC
+        assert "volume" not in {f.name for f in dataclasses.fields(OHLC)}
+
+    def test_l5_never_mentions_volume(self):
+        """原始碼守衛：L5 全檔不得出現 `volume`（除註解說明外）。"""
+        import ast
+        import pathlib
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        hits = [n for n in ast.walk(ast.parse(src))
+                if isinstance(n, ast.Constant) and n.value == "volume"]
+        assert not hits, "L5 出現了 'volume' 字串常數 —— 該欄目前恆為 0，不畫"
+
+    def test_kline_card_passes_reference_spec_and_no_threshold(self, monkeypatch):
+        import src.ui.tabs.tab_macro_v2 as m
+        from shared.macro_buckets import REF_SPECS_BY_KEY, has_thresholds
+
+        seen = {}
+        monkeypatch.setattr(
+            m, "render_candlestick_card",
+            lambda row, spec, ohlc, **kw: seen.update(
+                row=row, spec=spec, ohlc=ohlc, note=kw.get("series_note", "")))
+        card = next(c for c in m._CHART_SPECS if c.kind == m.KIND_OHLC)
+        m._render_kline_card(card, ohlc_raw={
+            "xs": ["2026-08-24", "2026-08-25"], "open": [1.0, 2.0],
+            "high": [3.0, 4.0], "low": [0.5, 1.5], "close": [2.5, 3.5]})
+
+        assert seen["spec"] is REF_SPECS_BY_KEY["taiex"]
+        assert not has_thresholds(seen["spec"]), "加權指數不該有門檻"
+        assert seen["row"].value == 3.5, "卡頭數字應為序列最後一根的收盤"
+        assert seen["row"].band == "gray", "沒有門檻就不判燈，不得偽綠"
+
+    def test_kline_card_with_empty_series_does_not_fabricate(self, monkeypatch):
+        """§1：完全沒有序列 → 交給 L4 印「日 K 畫不出來」，不編一根 K 棒。"""
+        import src.ui.tabs.tab_macro_v2 as m
+        from src.ui.render.macro_v2_cards import ohlc_problems
+
+        seen = {}
+        monkeypatch.setattr(
+            m, "render_candlestick_card",
+            lambda row, spec, ohlc, **kw: seen.update(row=row, ohlc=ohlc))
+        card = next(c for c in m._CHART_SPECS if c.kind == m.KIND_OHLC)
+        m._render_kline_card(card, ohlc_raw={})
+        assert seen["row"].value is None
+        assert ohlc_problems(seen["ohlc"]), "空序列必須被 L4 判為畫不出來"
+
+
+class TestLayer2FetchesOnlyWhatItDraws:
+
+    def test_unknown_card_kind_raises(self):
+        """§1：未知 kind 直接炸。默默不畫 → 那張卡**憑空消失**，
+        而「少一張卡」與「這個指標今天沒資料」在畫面上長得一模一樣。"""
+        import src.ui.tabs.tab_macro_v2 as m
+        bad = m.ChartCard("vix", "no_such_kind", "x")
+        rows = m.build_rows(_readiness())
+        with pytest.raises(ValueError):
+            m.render_one_card(bad, by_key={r.key: r for r in rows}, inputs=None,
+                              parquet_series={}, ohlc_raw={})
+
+    def test_fetch_gating_reads_the_filtered_cards_not_the_constant(self):
+        """守衛：取數的判斷式必須看**篩選後的 `cards`**，不是 `_CHART_SPECS`。
+
+        看常數的話「這一輪有沒有要畫 parquet 卡」永遠是同一個答案 ——
+        就算一張都不畫，還是會去讀 4,900+ 列的檔（B-5 密度切換的前提）。
+        """
+        import ast
+        import pathlib
+
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        fn = next(n for n in ast.walk(ast.parse(src))
+                  if isinstance(n, ast.FunctionDef) and n.name == "render_tab_macro_v2")
+        # 取數 gating 的來源集合 `_kinds` 必須由 `cards` 推出
+        seg = ast.get_source_segment(src, fn)
+        assert "_kinds = {c.kind for c in cards}" in seg, (
+            "取數 gating 必須從篩選後的 `cards` 推出")
+        assert "for _, kind, _ in _CHART_SPECS" not in seg
+        assert "in _CHART_SPECS) else" not in seg

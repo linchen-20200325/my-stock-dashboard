@@ -96,3 +96,97 @@ def get_edu(key: str) -> dict | None:
         "historical_anchor": resolve_edu_tokens(raw.get("historical_anchor", "")),
         "downstream": resolve_edu_tokens(raw.get("downstream", "")),
     }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 卡 B：加權指數日 K 的 OHLC（2026-08-27）
+# ══════════════════════════════════════════════════════════════════════
+#
+# 為什麼另開一支而不是塞進 `get_chart_series()`:那支的契約是
+# `{key: [(iso_date, value), ...]}` —— **一條**序列。K 線要 open/high/low/close
+# 四條,硬塞會讓同一個回傳值「有時是一條、有時是四條」,消費端得靠記憶判斷
+# 現在是哪一種(§3.3 的第二把尺)。形狀不同就分開,不是多一個 key 的事。
+#
+# 為什麼不在 L5 直接 `pd.read_parquet`:讀檔是 I/O,§8.2 明文 L5 不做。
+# 本層轉一手並負責 cache（parquet 4,900+ 列,每次 rerun 重讀不可接受）。
+# **本層不新增 L1 程式**,直接用既有的 `macro_cache_reader.load_parquet_safe`。
+
+#: 加權指數 OHLC 的 parquet 檔名 + 必要欄位。欄名**全小寫**（實測 4,919 列:
+#: date/open/high/low/close/volume/source/fetched_at）。
+_TWII_PARQUET_NAME: str = "twii_ohlcv.parquet"
+
+#: 回傳 dict 的四個價格欄。**只在這裡列一次** —— 取值、長度檢查、缺欄訊息
+#: 全部走這個 tuple,分兩處寫就會出現「檢查了 low、訊息卻說 close」。
+#: ⚠️ **沒有 volume**:該欄自 2026-07-09 起連續 33 個交易日全為 0
+#: （實測至 2026-08-25,之後無非零值）。畫出來是一排貼在零軸上的空白,
+#: 傳達「這段期間沒有人交易」這個假訊息 —— §1:與其畫一排零,不如不畫。
+_TWII_OHLC_COLS: tuple[str, ...] = ("open", "high", "low", "close")
+
+
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+def get_twii_ohlc(n_trading_days: int) -> dict:
+    """加權指數**最近 n 個交易日**的 OHLC。取不到 → 回 `{}`（§1:不回空殼）。
+
+    Parameters
+    ----------
+    n_trading_days : int
+        要幾根 K 棒。**沒有預設值** —— 「畫幾天」是畫面決策,屬 L5,
+        給了預設值就會出現兩個地方各有一份天數(§3.3)。
+        parquet 的**每一列就是一個交易日**,故直接取尾端 n 列,
+        不需要 trading calendar（同 `macro_cache_reader.load_extreme_risk_legs`
+        取 20 交易日報酬的既有作法）。
+
+    Returns
+    -------
+    dict
+        ``{"xs": [iso_date...], "open": [...], "high": [...],
+           "low": [...], "close": [...]}``,五個 list **等長**。
+        檔案不存在 / 壞檔 / 缺欄 / 空表 → `{}`。
+
+    Notes
+    -----
+    回可序列化的 list 而非 DataFrame:`@st.cache_data` 對 DataFrame 會做額外
+    複製,而消費端(L4 `OHLC`)的契約本來就是「已攤平的 list」。
+    """
+    from pathlib import Path
+
+    from src.data.macro.macro_cache_reader import (
+        DEFAULT_PARQUET_CACHE_DIR,
+        load_parquet_safe,
+    )
+
+    if n_trading_days < 1:
+        # §1:炸掉而不是默默回空 —— 回空的話畫面顯示「日 K 畫不出來」,
+        # 而真正的原因(呼叫端傳了 0)不會有任何人看到。
+        raise ValueError(f"n_trading_days 必須 ≥ 1,收到 {n_trading_days!r}")
+
+    _path = Path(DEFAULT_PARQUET_CACHE_DIR) / _TWII_PARQUET_NAME
+    _need = {"date", *_TWII_OHLC_COLS}
+    df = load_parquet_safe(_path, _need)
+    if df is None:
+        print(f"[macro_v2_service/get_twii_ohlc] {_TWII_PARQUET_NAME} 讀不到或缺欄"
+              f"（需要 {sorted(_need)}）→ 不畫日 K")
+        return {}
+
+    try:
+        import pandas as pd
+
+        _d = df.copy()
+        _d["date"] = pd.to_datetime(_d["date"], errors="coerce")
+        # 四欄任一為 NaN 的列整列丟掉:K 棒少一隻腳就畫不出來,
+        # 而 plotly 會照畫(缺的那一段接起來)—— 看起來正常的錯誤畫面(§1)。
+        _before = len(_d)
+        _d = _d.dropna(subset=["date", *_TWII_OHLC_COLS]).sort_values("date")
+        if _before != len(_d):
+            print(f"[macro_v2_service/get_twii_ohlc] 丟棄 {_before - len(_d)} 列"
+                  f"（date 或 OHLC 任一為空;不補值、不內插）")
+        if _d.empty:
+            return {}
+        _d = _d.tail(n_trading_days)
+        return {
+            "xs": [d.date().isoformat() for d in _d["date"]],
+            **{c: [float(v) for v in _d[c]] for c in _TWII_OHLC_COLS},
+        }
+    except Exception as e:  # noqa: BLE001 — 單張圖取不到不該讓整頁炸
+        print(f"[macro_v2_service/get_twii_ohlc] 處理失敗:{e}")
+        return {}

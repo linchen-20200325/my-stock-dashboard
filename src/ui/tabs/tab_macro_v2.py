@@ -30,27 +30,39 @@ from __future__ import annotations
 
 import streamlit as st
 
+from dataclasses import dataclass
+
 from shared.macro_buckets import (
     BUCKET_DANGER_SPECS,
+    CL_INTL_KEY_DXY,
+    CL_INTL_KEY_US10Y,
+    CL_TW_KEY_USDTWD,
     MISSING_NO_EXTRACTION,
     MISSING_NO_VALUE,
     MISSING_NOT_LOADED,
     MISSING_OUT_OF_RANGE,
+    REF_SPECS_BY_KEY,
+    REFERENCE_BUCKET,
     SPECS_BY_KEY,
     classify_danger,
+    has_thresholds,
 )
 from src.compute.macro.macro_helpers import compute_five_bucket_summary
-from src.services.macro_v2_service import get_chart_series, get_edu
+from src.services.macro_v2_service import get_chart_series, get_edu, get_twii_ohlc
 from src.services.section_inputs import load_section_inputs
 from src.ui.render.macro_v2_cards import (
     BAND_META,
     CSS,
+    OHLC,
+    AxisSeries,
     Row,
     fmt_value,
     print_table_html,
     render_bucket_cards,
+    render_candlestick_card,
     render_chart_card,
     render_detail,
+    render_dual_axis_card,
     render_signal_health,
     render_value_card,
     state_cell,
@@ -74,14 +86,70 @@ _REASON_TXT = {
     MISSING_NO_EXTRACTION: "這盞燈的 spec 沒有對應的取值路徑 —— 這是程式 bug,不是資料問題。",
 }
 
-#: 有**落地長歷史序列**、可畫走勢的指標。
-#: 名單來自 2026-08-25 對 16 盞燈的歷史資料盤點:只有這幾個有真序列。
-#: `parquet` = 走 L1 `load_v2_chart_series`;`session` = 當輪抓取的記憶體內短窗。
-_CHART_SPECS: list[tuple[str, str, str]] = [
-    # (DangerSpec.key, 來源種類, 序列說明)
-    ("bias_240", "parquet", "台股日線 2007 迄今,年線乖離由收盤價即時算出"),
-    ("margin", "parquet", "融資餘額日資料 2006 迄今(原始單位元,此處已換算為億)"),
-    ("us10y", "session", "本輪抓取的近 60 個交易日(即時取得,不落地)"),
+#: ── 第 2 層卡片的四種來源／形狀 ────────────────────────────────────────
+#: 具名常數而非裸字串:字串打錯會靜默走到 else 分支(畫成另一種卡),
+#: 常數打錯是 NameError(§1 立刻炸)。
+KIND_PARQUET: str = "parquet"   # 走 L3 `get_chart_series()` 的落地長序列
+KIND_SESSION: str = "session"   # 當輪抓取的記憶體內短窗(隨 session 消失)
+KIND_DUAL: str = "dual"         # 雙軸走勢卡(左右各一條,量級差很大)
+KIND_OHLC: str = "ohlc"         # 日 K 卡(open/high/low/close 四條)
+CHART_KINDS: tuple[str, ...] = (KIND_PARQUET, KIND_SESSION, KIND_DUAL, KIND_OHLC)
+
+#: 卡 B 要畫幾根 K 棒。**「畫幾天」是畫面決策,所以常數住在 L5**;
+#: L3 `get_twii_ohlc(n)` 沒有預設值,天數只有這裡一份(§3.3)。
+#:
+#: 為什麼是 60 而不是全部 4,919 列(客戶 2026-08-27 拍板):全畫 20 年會讓
+#: 單張圖的 HTML 膨脹到 286 KB,而且每根 K 棒不到 0.05 px —— 那已經不是
+#: 「資訊很密」,是**根本畫不出 K 棒**,實心色塊而已。
+TWII_KLINE_TRADING_DAYS: int = 60
+
+
+@dataclass(frozen=True)
+class ChartCard:
+    """第 2 層的一張卡。**名單與形狀寫在同一個地方**,不散在渲染函式裡。
+
+    Attributes
+    ----------
+    key : str
+        `SPECS_BY_KEY`(16 盞燈)或 `REF_SPECS_BY_KEY`(參考走勢)的 key。
+        **只能來自這兩張註冊表** —— 由 `tests/test_macro_v2_tab.py` 守衛,
+        不接受任意字串(否則這裡就變成第三份指標名單)。
+    kind : str
+        `CHART_KINDS` 之一。決定用哪一支 L4 渲染函式。
+    note : str
+        序列說明(來源 / 窗長 / 單位換算),印在卡片底部 caption。
+    ref_key : str
+        **只有 `kind=KIND_DUAL` 用**:右軸那條序列的 key。
+        非 dual 卡必須留空(守衛會擋)—— 留著一個沒人讀的欄位,
+        下一個人會以為它有作用。
+    """
+    key: str
+    kind: str
+    note: str
+    ref_key: str = ""
+
+
+#: 第 2 層要畫哪些卡。名單來自 2026-08-25 對 16 盞燈的歷史資料盤點
+#: (只有這幾個有真序列)+ 2026-08-27 客戶加點的兩張新卡。
+_CHART_SPECS: list[ChartCard] = [
+    ChartCard("bias_240", KIND_PARQUET,
+              "台股日線 2007 迄今,年線乖離由收盤價即時算出"),
+    ChartCard("margin", KIND_PARQUET,
+              "融資餘額日資料 2006 迄今(原始單位元,此處已換算為億)"),
+    ChartCard("us10y", KIND_SESSION,
+              "本輪抓取的近 60 個交易日(即時取得,不落地)"),
+    # ── 卡 A(2026-08-27 客戶拍板):左軸 DXY、右軸台幣 ──
+    # 為什麼要雙軸:DXY ~105、USDTWD ~32,量級差 3.3 倍。擠在同一條 y 軸上
+    # 台幣會被壓成一條貼底的水平線 —— 圖還在、線也在,但它不再傳達任何訊息。
+    ChartCard("dxy", KIND_DUAL,
+              "兩條都是本輪抓取的近 60 個交易日(即時取得,不落地)"
+              "　·　台幣為**參考走勢**:有門檻但**不計入 16 盞燈的分母**",
+              ref_key="usdtwd"),
+    # ── 卡 B(2026-08-27 客戶拍板):加權指數日 K ──
+    ChartCard("taiex", KIND_OHLC,
+              f"本地 parquet 的最近 {TWII_KLINE_TRADING_DAYS} 個交易日"
+              "　·　本卡為**參考走勢**:不判燈(右上灰標＝沒有燈號,"
+              "不是沒有資料)、無門檻線、不計入 16 盞燈的分母"),
 ]
 
 #: 有值有燈、但**完全沒有歷史序列**可畫者 —— 顯示純數值卡。
@@ -197,6 +265,53 @@ def build_rows(readiness: dict) -> list[Row]:
     order = {b: i for i, b in enumerate(_BUCKET_ORDER)}
     out.sort(key=lambda r: (order.get(r.bucket, 99), r.label))
     return out
+
+
+def build_reference_row(key: str, value: float | None) -> Row:
+    """把一條**參考走勢**包成畫面用的 `Row`。**不是一盞燈。**
+
+    參考走勢(台幣 / 加權指數)與 16 盞燈的差別,不只是「不進分母」——
+    連取數路徑都不同:
+
+        16 盞燈 → `compute_five_bucket_summary` 的 readiness 側車
+        參考走勢 → **序列自己的最後一點**(本函式的 `value`)
+
+    為什麼參考走勢不走側車:它根本不在側車裡(`REFERENCE_TREND_SPECS` 與
+    `BUCKET_DANGER_SPECS` 是兩張物理隔離的表,見 `shared/macro_buckets.py`)。
+    這裡沒有「第二條取數路徑」的問題 —— 序列就是唯一的那一條。
+
+    `band` 的兩種情形(§1:沒有門檻的東西**不判燈**,不偽綠):
+
+        有門檻(usdtwd) → `classify_danger` 判燈,與 16 盞燈同一支上游函式
+        無門檻(taiex)  → 一律 `"gray"`,**不呼叫** `classify_danger`
+                         (呼叫會 TypeError —— L0 刻意留的 fail loud)
+
+    ⚠️ **已知的畫面瑕疵,不是漏看**:L4 `BAND_META` 只有四個 band
+    (green/yellow/red/gray),沒有一個代表「參考走勢,不判燈」。故無門檻卡
+    的右上角會顯示灰標「無資料」,而卡片同時秀著真實數字 —— 兩者看似矛盾。
+    本檔的處置是在 `ChartCard.note` 明講「右上灰標＝沒有燈號,不是沒有資料」,
+    並**不動 L4**(那是另一組的檔案邊界)。正解是 L4 加第五個 band「參考」,
+    已列為交付回報中的建議事項。
+    """
+    spec = REF_SPECS_BY_KEY[key]
+    band = classify_danger(value, spec) if has_thresholds(spec) else "gray"
+    return Row(
+        key=spec.key,
+        label=spec.label,
+        bucket=REFERENCE_BUCKET,   # 刻意不是五桶之一 —— 誤餵進彙總時要落空
+        unit=spec.unit or "",
+        value=value,
+        band=band,
+        # `state` 對這兩張卡的渲染函式而言是不讀的欄位,但仍誠實填 ——
+        # 填一個假值等於留一顆定時炸彈給下一個開始讀它的人。
+        state="live" if value is not None else "missing",
+        reason=None if value is not None else MISSING_NO_VALUE,
+        hit_source=None,
+        thr_text=threshold_text(spec),   # 無門檻 → "—"
+        source=spec.source or "—",
+        note=spec.note or "",
+        decimals=spec.decimals,
+    )
 
 
 def bucket_summary(rows: list[Row]) -> list[dict]:
@@ -396,18 +511,44 @@ def print_caption(*, chip: str, query: str, shown: int, total: int) -> str:
             f"({'、'.join(bits)})")
 
 
+#: session 短窗序列的取數路徑:key → (`cl_data` 群組, 該群組的中文 key)。
+#:
+#: 中文 key **一律走 L0 鏡像常數**(`shared.macro_buckets.CL_*_KEY_*`),
+#: 不在此打字面值 —— 上游 `daily_checklist.INTL_MAP` / `TW_MAP` 改名時,
+#: L0 那邊有 AST 漂移守衛會轉紅;寫死在這裡則是**無聲**變成「取不到」,
+#: 而卡片會照畫(只是少一條線),畫面上看起來完全正常(§1 / §3.3)。
+#:
+#: ⚠️ 2026-08-27 修:本表取代原本寫死的 `intl.get("10Y公債殖利率")` ——
+#:    那個字面值與 `CL_INTL_KEY_US10Y` 是同一個字串的第二份複本。
+_SESSION_SERIES_SOURCE: dict[str, tuple[str, str]] = {
+    "us10y": ("intl", CL_INTL_KEY_US10Y),
+    "dxy": ("intl", CL_INTL_KEY_DXY),
+    "usdtwd": ("tw", CL_TW_KEY_USDTWD),
+}
+
+#: session 短窗取不到時給使用者的一句話(雙軸卡的 `miss_reason` 用)。
+#: 這一層的缺值只有一種成因:**這輪沒抓**。故文案單一,不猜其他理由(§1)。
+SESSION_MISS_REASON: str = "本輪沒有抓到（到「🌍 總經」按「🚀 一鍵更新全部數據」）"
+
+
 def _session_series(inputs, key: str):
     """從當輪抓取結果取記憶體內短窗序列。取不到回 (None, None)。
 
     §1:取不到就回 None 讓消費端顯示「歷史序列取得失敗」,不生成替代序列。
     """
-    if key != "us10y":
+    _src = _SESSION_SERIES_SOURCE.get(key)
+    if _src is None:
+        # §1:不靜默。走到這裡代表有人在 `_CHART_SPECS` 宣告了 session 卡,
+        # 卻沒有在上表登記取數路徑 —— 那是程式 bug,不是資料問題。
+        print(f"[tab_macro_v2/_session_series] {key} 沒有登記 session 取數路徑"
+              f"(已登記:{list(_SESSION_SERIES_SOURCE)})")
         return None, None
+    _group, _zh = _src
     cl = getattr(inputs, "cl_data", None) or {}
-    intl = cl.get("intl") if isinstance(cl, dict) else None
-    if not isinstance(intl, dict):
+    grp = cl.get(_group) if isinstance(cl, dict) else None
+    if not isinstance(grp, dict):
         return None, None
-    df = intl.get("10Y公債殖利率")
+    df = grp.get(_zh)
     try:
         if df is None or getattr(df, "empty", True):
             return None, None
@@ -444,6 +585,82 @@ def _session_series(inputs, key: str):
 # ══════════════════════════════════════════════════════════════════════
 # 渲染
 # ══════════════════════════════════════════════════════════════════════
+
+def _last_or_none(seq):
+    """序列末項;空 / None → None。**不回 0**(0 會被讀成「值就是零」)。"""
+    return seq[-1] if seq else None
+
+
+def _render_dual_card(card: ChartCard, *, by_key: dict, inputs) -> None:
+    """卡 A:左軸 DXY(一盞燈)、右軸台幣(參考走勢)。
+
+    左右兩邊**各帶自己的 `DangerSpec`** —— 這是 L4 `AxisSeries` 的契約,
+    右軸門檻才綁得到 y2。少給一邊在語法層就寫不出來。
+    """
+    _lx, _ly = _session_series(inputs, card.key)
+    _rx, _ry = _session_series(inputs, card.ref_key)
+    _ly, _ry = _ly or [], _ry or []
+    left = AxisSeries(row=by_key[card.key], spec=SPECS_BY_KEY[card.key],
+                      xs=_lx or [], ys=_ly, miss_reason=SESSION_MISS_REASON)
+    right = AxisSeries(
+        row=build_reference_row(card.ref_key, _last_or_none(_ry)),
+        spec=REF_SPECS_BY_KEY[card.ref_key],
+        xs=_rx or [], ys=_ry, miss_reason=SESSION_MISS_REASON)
+    # 標題由兩條線的 label 組出,**不另外寫死一個第三個名字**(§3.3):
+    # 上游改 label 時標題自動跟著改。
+    render_dual_axis_card(f"{left.row.label} / {right.row.label}",
+                          left, right, series_note=card.note)
+
+
+def _render_kline_card(card: ChartCard, *, ohlc_raw: dict) -> None:
+    """卡 B:加權指數日 K(參考走勢,不判燈、不畫門檻線)。
+
+    `ohlc_raw` 是 L3 `get_twii_ohlc()` 的回傳(五個等長 list)。
+    **本層不碰 pandas、不補值** —— 缺欄 / 長度對不上由 L4 `ohlc_problems()`
+    判定並印出缺哪一欄(§1:不挑能畫的欄位硬畫、不 fallback 成折線)。
+
+    ⚠️ **不傳 volume**:L4 的 `OHLC` 型別根本沒有這個欄位(該欄自 2026-07-09
+    起連續 33 個交易日全為 0)。這裡順帶記一筆是因為 `get_twii_ohlc()` 也
+    刻意沒有回傳它 —— 兩層都不碰,才不會有人「順手」把它接回來。
+    """
+    row = build_reference_row(card.key, _last_or_none(ohlc_raw.get("close")))
+    ohlc = OHLC(
+        xs=ohlc_raw.get("xs"),
+        open=ohlc_raw.get("open"),
+        high=ohlc_raw.get("high"),
+        low=ohlc_raw.get("low"),
+        close=ohlc_raw.get("close"),
+    )
+    render_candlestick_card(row, REF_SPECS_BY_KEY[card.key], ohlc,
+                            series_note=card.note)
+
+
+def render_one_card(card: ChartCard, *, by_key: dict, inputs,
+                    parquet_series: dict, ohlc_raw: dict) -> None:
+    """第 2 層的一張卡 —— 依 `kind` 派給對應的 L4 渲染函式。
+
+    §1:未知的 `kind` 直接 `raise`。若默默不畫,那張卡會**憑空消失**,
+    而畫面上「少一張卡」與「這個指標今天沒資料」長得一模一樣。
+    """
+    if card.kind == KIND_DUAL:
+        _render_dual_card(card, by_key=by_key, inputs=inputs)
+        return
+    if card.kind == KIND_OHLC:
+        _render_kline_card(card, ohlc_raw=ohlc_raw)
+        return
+    row, spec = by_key[card.key], SPECS_BY_KEY[card.key]
+    if card.kind == KIND_PARQUET:
+        pts = parquet_series.get(card.key) or []
+        xs = [d for d, _ in pts]
+        ys = [v for _, v in pts]
+    elif card.kind == KIND_SESSION:
+        xs, ys = _session_series(inputs, card.key)
+        xs, ys = xs or [], ys or []
+    else:
+        raise ValueError(
+            f"未知的卡片種類 {card.kind!r}(可用:{list(CHART_KINDS)})")
+    render_chart_card(row, spec, xs, ys, series_note=card.note)
+
 
 def render_tab_macro_v2() -> None:
     """總經 v2 分頁進入點。由 app.py 的「🌍 市場環境」子分頁呼叫。"""
@@ -494,27 +711,30 @@ def render_tab_macro_v2() -> None:
     )
 
     by_key = {r.key: r for r in rows}
-    # L3 取數(內含 @st.cache_data —— parquet 是 4,900+ 列,不能每次 rerun 重讀)
-    parquet_series: dict = get_chart_series() if any(
-        kind == "parquet" for _, kind, _ in _CHART_SPECS) else {}
 
-    cards = [(k, kind, note) for k, kind, note in _CHART_SPECS if k in by_key]
+    # 參考走勢卡(taiex / usdtwd)**不在 `by_key` 裡** —— 它們不是燈,不進
+    # readiness 側車。故這裡只用 `by_key` 篩掉「宣告了但那盞燈不存在」的卡。
+    cards = [c for c in _CHART_SPECS
+             if c.key in by_key or c.key in REF_SPECS_BY_KEY]
+
+    # ── L3 取數:**看篩選後的 `cards`,不是看 `_CHART_SPECS` 這個常數** ──
+    # 看常數的話「這一輪到底有沒有要畫 parquet 卡」永遠是同一個答案,
+    # 於是就算一張 parquet 卡都沒有,還是會去讀 4,900+ 列的檔。
+    _kinds = {c.kind for c in cards}
+    parquet_series: dict = get_chart_series() if KIND_PARQUET in _kinds else {}
+    ohlc_raw: dict = (get_twii_ohlc(TWII_KLINE_TRADING_DAYS)
+                      if KIND_OHLC in _kinds else {})
+
     # 固定 3 張/列:卡片數變動時**列數**變多,每張卡永遠一樣寬(見 CARDS_PER_ROW)。
     for _row_cards in chunk_cards(cards):
         # ⚠️ 這裡傳的是 `CARDS_PER_ROW` 而不是 `len(_row_cards)` —— 最後一列
         #    不滿 3 張時要**留空欄**,不能讓剩下的卡把整列撐開變形。
         cols = st.columns(CARDS_PER_ROW, gap="medium")
-        for col, (key, kind, note) in zip(cols, _row_cards):
-            row, spec = by_key[key], SPECS_BY_KEY[key]
-            if kind == "parquet":
-                pts = parquet_series.get(key) or []
-                xs = [d for d, _ in pts]
-                ys = [v for _, v in pts]
-            else:
-                xs, ys = _session_series(inputs, key)
-                xs, ys = xs or [], ys or []
+        for col, card in zip(cols, _row_cards):
             with col:
-                render_chart_card(row, spec, xs, ys, series_note=note)
+                render_one_card(card, by_key=by_key, inputs=inputs,
+                                parquet_series=parquet_series,
+                                ohlc_raw=ohlc_raw)
 
     vcards = [k for k in _VALUE_CARD_KEYS if k in by_key]
     # 純數值卡走同一組欄寬 —— 兩種卡片用不同寬度會讓第 2 層看起來像兩個區塊。
