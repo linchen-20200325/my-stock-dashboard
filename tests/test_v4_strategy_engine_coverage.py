@@ -4,7 +4,7 @@
 
 涵蓋:
 - __init__:股本=0 raise / 欄位大小寫正規化 / foreign·trust 別名匹配 / NaN ffill
-- check_macro_veto:紅/黃/綠燈三態 + SSOT 門檻 + API 斷線預設綠 + 壞值降級
+- check_macro_veto:紅/黃/綠/⬜ 四態 + SSOT 門檻 + 取不到不回填(§1) + 壞值視為未取得
 - calc_relative_chips:外本比·投本比公式 / 無籌碼欄位降級 / 連續流入旗標
 - find_overhead_resistance:<60 日不足 / VPOC 計算
 - calculate_stop_loss:<5 筆新股 / min(MA20, 爆量紅K低) 防守線
@@ -118,18 +118,72 @@ class TestMacroVeto:
         assert r["max_position"] == 100
         assert r["color"] == "#2ea043"
 
-    def test_api_disconnect_defaults_green(self):
-        # 空 macro → vix 預設 15 → 綠燈(保守安全)
-        r = self._eng({}).check_macro_veto()
-        assert r["level"] == "Safe"
-        assert r["vix"] == 15
+    # ── §1 Fail Loud：取不到就不判定 ──────────────────────────────────
+    # ⚠️ 這兩條原本叫 `test_api_disconnect_defaults_green` /
+    #    `test_bad_vix_value_degrades_to_default`，斷言的是
+    #    `level == "Safe"` 且 `vix == 15`、`futures == 0`。
+    #    **那兩條把「捏造一個 VIX=15 然後點亮綠燈」釘成了規格** ——
+    #    引擎沒抓到 VIX 時畫面會印出 `VIX=15.0`，那個數字從未存在，
+    #    而 15 是**平靜值**，等於在資料斷線時給出偏樂觀的結論（§1 明文
+    #    禁止「自行估一個合理值當常數」）。
+    #    v19.186 連同行為一起改掉。**不是為了讓測試過而改測試 ——
+    #    是這兩條測試原本釘的就是錯的行為。**
 
-    def test_bad_vix_value_degrades_to_default(self):
-        # 壞字串 vix → 降級 15 → 綠燈
+    def test_api_disconnect_gives_no_verdict(self):
+        """空 macro → ⬜ 無法判定；**不得**有任何回填值或捏造數字。"""
+        r = self._eng({}).check_macro_veto()
+        assert r["level"] == "Unknown"
+        assert r["status"].startswith("⬜")
+        assert r["vix"] is None and r["futures"] is None
+        assert r["max_position"] is None, "沒有結論就不該有持股上限"
+        assert set(r["unknown"]) == {"vix", "foreign_futures"}
+
+    def test_bad_values_are_treated_as_missing(self):
+        """壞字串 → 視為未取得（不是降級成某個數字）。"""
         r = self._eng({"vix": "garbage", "foreign_futures": "nope"}).check_macro_veto()
-        assert r["level"] == "Safe"
-        assert r["vix"] == 15
-        assert r["futures"] == 0
+        assert r["level"] == "Unknown"
+        assert r["vix"] is None and r["futures"] is None
+
+    def test_nan_is_treated_as_missing(self):
+        """NaN 特別危險:`nan > 25` 恆 False → 舊寫法會永遠不紅燈。"""
+        r = self._eng({"vix": float("nan"),
+                       "foreign_futures": float("nan")}).check_macro_veto()
+        assert r["level"] == "Unknown"
+        assert r["vix"] is None
+
+    def test_msg_never_prints_a_number_that_was_not_fetched(self):
+        """**本組最重要的一條**:畫面文案不得出現任何未取得的數字。
+
+        使用者看到的是 `msg`，不是 `vix` 欄位 —— 只鎖欄位不鎖文案的話，
+        有人把回填搬回 format 那一行照樣全綠。
+        """
+        r = self._eng({}).check_macro_veto()
+        assert "未取得" in r["msg"]
+        for _forged in ("15.0", "15 ", "=15", "0口"):
+            assert _forged not in r["msg"], f"msg 出現了未取得的數字:{r['msg']}"
+
+    def test_a_real_zero_is_not_confused_with_missing(self):
+        """外資期貨真的是 0 口（多空平衡）≠ 沒抓到。舊碼 `or 0` 兩者同值。"""
+        r = self._eng({"vix": 12.0, "foreign_futures": 0.0}).check_macro_veto()
+        assert r["level"] == "Safe", "兩項都取得且都在門檻內 → 綠燈"
+        assert r["futures"] == 0.0 and r["unknown"] == ()
+        assert "0口" in r["msg"]
+
+    def test_known_futures_alone_can_still_go_red(self):
+        """VIX 缺、期貨已達紅線 → 仍給 🔴：判定是 OR，另一項是什麼都改不了。
+
+        這是「未知」與「沒結論」的分界:有根據的結論照給，沒根據的才 ⬜。
+        """
+        r = self._eng({"foreign_futures": -25000}).check_macro_veto()
+        assert r["level"] == "High Risk"
+        assert r["vix"] is None and r["unknown"] == ("vix",)
+        assert "VIX=未取得" in r["msg"]
+
+    def test_missing_futures_blocks_the_green_light(self):
+        """VIX 平靜但期貨沒抓到 → 不得給綠燈（缺的那項可能正是紅燈那項）。"""
+        r = self._eng({"vix": 12.0}).check_macro_veto()
+        assert r["level"] == "Unknown"
+        assert r["vix"] == 12.0 and r["unknown"] == ("foreign_futures",)
 
 
 # ── Task 1: calc_relative_chips ────────────────────────────────────────

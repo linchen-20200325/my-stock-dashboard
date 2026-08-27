@@ -5,13 +5,47 @@ Author: AI戰情室 v4.0
 """
 import pandas as pd
 import numpy as np
-from shared.colors import TRAFFIC_YELLOW
+from shared.colors import TRAFFIC_NEUTRAL, TRAFFIC_YELLOW
 # v18.241 E13: VIX / 外資期貨風險門檻從 shared SSOT 引入
 from shared.signal_thresholds import (
     VIX_HIGH_RISK_THRESHOLD, VIX_MEDIUM_RISK_THRESHOLD,
     FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS, FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS,
     VPOC_PRESSURE_DISTANCE_THRESHOLD,  # v18.436 #4
 )
+
+
+def _macro_number(macro: dict, key: str) -> float | None:
+    """把 `macro` 的一個欄位讀成 float；**取不到一律回 `None`,不回填任何預設值**。
+
+    ## 為什麼不能用 `float(macro.get(key) or <預設>)`（v19.186 §1 修正）
+
+    舊寫法有兩個獨立的問題,兩個都會產生**畫面上看得到、但從未存在的數字**：
+
+    1. **`or` 吃掉合法的 0。** `0.0 or 15` → `15`。外資期貨真的是 0 口
+       （多空平衡,是一個**有意義的訊號**）與「這輪沒抓到」會被壓成同一個值。
+    2. **回填的常數會被印出去。** VIX 抓不到時舊碼填 15,而三條 msg 都寫
+       `"VIX={:.1f}".format(vix)` → 畫面直接顯示 `VIX=15.0`。
+       §1 明文禁止「自行估一個合理值當常數」,這是最典型的一例。
+
+    回 `None` 之後,判定端才有辦法把「未知」與「已知且安全」分開講
+    （見 `check_macro_veto` 的四態）。
+
+    Returns:
+        float: 可解析且有限的數值（**包含 0.0**）。
+        None:  key 不存在 / 值為 None / 無法轉 float / NaN / ±inf。
+    """
+    raw = macro.get(key)
+    if raw is None:
+        return None
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        return None
+    # NaN / ±inf 一律視為未取得 —— 它們拿去比大小會靜默給出錯誤的燈號
+    # （`float('nan') > 25` 恆為 False → 永遠不紅燈）。
+    if not np.isfinite(val):
+        return None
+    return val
 
 
 class V4StrategyEngine:
@@ -67,54 +101,101 @@ class V4StrategyEngine:
     def check_macro_veto(self) -> dict:
         """
         總經紅綠燈：VIX + 外資期貨口數 → 強制持股水位上限
-        
+
         Returns:
-            dict: {status, level, color, max_position, msg}
-        
-        Edge Case E-B: API 斷線 → 預設黃燈（保守）
+            dict: {status, level, color, max_position, msg, vix, futures, unknown}
+                  `vix` / `futures` 取不到時為 **None**（不是 0、不是 15）;
+                  `unknown` 是本次判定中「未取得」的欄位名 tuple,空 tuple = 兩項都有。
+                  `max_position` 在「⬜ 無法判定」時為 **None** —— 沒有結論就沒有水位上限。
+
+        ## 四態（v19.186 起,原本只有三態）
+
+        | 條件 | 結果 |
+        |---|---|
+        | VIX 或 期貨 **任一**觸發高風險門檻 | 🔴 紅燈 |
+        | 否則任一觸發中風險門檻 | 🟡 黃燈 |
+        | 否則**兩項都取得**且都在門檻內 | 🟢 綠燈 |
+        | 否則（有任一項未取得） | **⬜ 無法判定** |
+
+        紅/黃兩態**不需要兩項都有**:判定是 `OR`,只要拿到的那一項已經觸發,
+        另一項是什麼都改不了結論 —— 這種時候給紅燈是**有根據的**,不是猜的。
+        反過來,綠燈是「兩項都看過、都沒事」,**少一項就給不出來**：
+        缺的那一項有可能正是紅燈的那一項。
+
+        Edge Case E-B: API 斷線 → **⬜ 無法判定,不預設任何燈號**。
+            ⚠️ 舊 docstring 寫「預設黃燈（保守）」而程式碼寫 `vix = 15` → 實際走綠燈,
+            **文件與行為互相矛盾,且行為偏在危險的那一邊**（15 是平靜值）。
+            v19.186 兩者一起改掉:不再有預設值,也不再有那句不成立的宣稱。
         """
-        try:
-            vix = float(self.macro.get('vix') or 15)
-        except (TypeError, ValueError):
-            vix = 15  # 無法取得 VIX → 預設安全值
+        # §1：取不到就是 None,不回填 —— 理由見 `_macro_number` docstring。
+        vix = _macro_number(self.macro, 'vix')
+        futures = _macro_number(self.macro, 'foreign_futures')
 
-        try:
-            futures = float(self.macro.get('foreign_futures') or 0)
-        except (TypeError, ValueError):
-            futures = 0
+        # 顯示用字串。**未取得一律印「未取得」,不得印出任何代替的數字。**
+        _vix_txt = "未取得" if vix is None else "{:.1f}".format(vix)
+        _fut_txt = "未取得" if futures is None else "{:,.0f}口".format(futures)
+        _unknown = tuple(_k for _k, _v in (('vix', vix), ('foreign_futures', futures))
+                         if _v is None)
 
-        # 紅燈：高風險 — v18.241 E13: 門檻從 SSOT 引入
-        if vix > VIX_HIGH_RISK_THRESHOLD or futures < FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS:
+        # 門檻從 SSOT 引入（v18.241 E13）。`is not None` 的短路是必要的：
+        # `None > 25` 在 py3 直接 TypeError,而寫成 `(vix or 0) > 25` 就又繞回
+        # 「用一個假值參與判定」的老路。
+        _vix_red = vix is not None and vix > VIX_HIGH_RISK_THRESHOLD
+        _fut_red = (futures is not None
+                    and futures < FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS)
+        _vix_yellow = vix is not None and vix > VIX_MEDIUM_RISK_THRESHOLD
+        _fut_yellow = (futures is not None
+                       and futures < FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS)
+
+        # 紅燈：高風險
+        if _vix_red or _fut_red:
             return {
                 "status":       "🔴 紅燈",
                 "level":        "High Risk",
                 "color":        "#da3633",
                 "max_position": 20,
-                "msg":          "🚨 總經環境高風險！VIX={:.1f} / 外資期貨={:,.0f}口 — 建議持股 ≤20%，嚴禁追高攤平".format(vix, futures),
+                "msg":          "🚨 總經環境高風險！VIX={} / 外資期貨={} — 建議持股 ≤20%，嚴禁追高攤平".format(_vix_txt, _fut_txt),
                 "vix":          vix,
                 "futures":      futures,
+                "unknown":      _unknown,
             }
-        # 黃燈：中度風險 — v18.241 E13: 門檻從 SSOT 引入
-        elif vix > VIX_MEDIUM_RISK_THRESHOLD or futures < FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS:
+        # 黃燈：中度風險
+        elif _vix_yellow or _fut_yellow:
             return {
                 "status":       "🟡 黃燈",
                 "level":        "Medium Risk",
                 "color":        TRAFFIC_YELLOW,
                 "max_position": 50,
-                "msg":          "⚠️ 大盤震盪中，VIX={:.1f} — 縮小部位，跌破防守線務必嚴格執行".format(vix),
+                "msg":          "⚠️ 大盤震盪中，VIX={} / 外資期貨={} — 縮小部位，跌破防守線務必嚴格執行".format(_vix_txt, _fut_txt),
                 "vix":          vix,
                 "futures":      futures,
+                "unknown":      _unknown,
             }
-        # 綠燈：安全
+        # ⬜ 無法判定：紅黃都沒觸發,但**有欄位沒拿到** → 給不出綠燈。
+        elif _unknown:
+            _missing_zh = "、".join({'vix': 'VIX', 'foreign_futures': '外資期貨'}[k]
+                                    for k in _unknown)
+            return {
+                "status":       "⬜ 無法判定",
+                "level":        "Unknown",
+                "color":        TRAFFIC_NEUTRAL,
+                "max_position": None,
+                "msg":          "⬜ 總經環境無法判定：{} 未取得（VIX={} / 外資期貨={}）— 缺的這項有可能正是會亮紅燈的那一項，故不給結論、也不用預設值代替".format(_missing_zh, _vix_txt, _fut_txt),
+                "vix":          vix,
+                "futures":      futures,
+                "unknown":      _unknown,
+            }
+        # 綠燈：安全（**兩項都取得且都在門檻內**才走得到這裡）
         else:
             return {
                 "status":       "🟢 綠燈",
                 "level":        "Safe",
                 "color":        "#2ea043",
                 "max_position": 100,
-                "msg":          "✅ 總經環境安全，VIX={:.1f} / 外資期貨={:,.0f}口 — 可依策略佈局".format(vix, futures),
+                "msg":          "✅ 總經環境安全，VIX={} / 外資期貨={} — 可依策略佈局".format(_vix_txt, _fut_txt),
                 "vix":          vix,
                 "futures":      futures,
+                "unknown":      _unknown,
             }
 
     # ─────────────────────────────────────────────────────────────
@@ -515,12 +596,16 @@ if __name__ == "__main__":
         print(f"  ❌ {e_}")
 
     # ── 場景 B: API 斷線（macro 空字典）────────────────────────
+    # v19.186：舊版斷言 `level == 'Safe'`（因為 VIX 被回填成 15）。
+    # 那正是 §1 禁止的「估一個合理值當常數」—— 已改為 ⬜ 無法判定。
     print("\n[B] API 斷線（macro=空字典）")
     try:
         e2 = V4StrategyEngine(mock_df, {}, 100000)
         r2 = e2.check_macro_veto()
-        assert r2['level'] == 'Safe', "預設應為安全（無資料→vix=15）"
-        print(f"  {r2['status']} ✅ 預設安全燈")
+        assert r2['level'] == 'Unknown', "兩項都沒有時不得給出任何燈號"
+        assert r2['vix'] is None and r2['futures'] is None, "不得回填預設值"
+        assert '15' not in r2['msg'], "msg 不得出現任何捏造的數值"
+        print(f"  {r2['status']} ✅ 沒有資料就不判定（不再假裝 VIX=15）")
     except Exception as e_:
         print(f"  ❌ {e_}")
 
