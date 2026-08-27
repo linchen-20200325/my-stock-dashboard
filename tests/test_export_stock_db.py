@@ -55,9 +55,10 @@ def test_durable_export_from_real_parquet(tmp_path):
     """
     db = tmp_path / "stock.db"
     res = E.export_all(db, token="")
-    for t in ("stock_fundamentals", "market_index", "institutional_flow",
-              "macro_tw_pmi"):
+    for t in ("stock_fundamentals", "market_index", "institutional_flow"):
         assert res[t] > 0, f"{t} 應有列"
+    # macro_tw_pmi 2026-08-27 起同受 §2.4 月頻新鮮度 gate 管轄（同 margin / money_supply），
+    # 故**不**斷言它一定有列 —— 改在下方斷言與資料狀態無關的不變量。
     # money_supply 2026-08-19 起同受 §3.2 sanity gate 管轄（同 margin），
     # 故**不**斷言它一定有列 —— 改在下方斷言與資料狀態無關的不變量。
     assert res["stock_technical"] == -1        # 缺 token → 略過（不造假）
@@ -78,6 +79,22 @@ def test_durable_export_from_real_parquet(tmp_path):
         vals = pd.read_sql("SELECT margin_balance FROM margin", conn)["margin_balance"]
         assert bool(margin_twd_sanity_mask(vals).all()), \
             "落地的 margin 必須全列通過 §3.2 區間（單位=元）"
+    # macro_tw_pmi：不變量（不論 durable 良值目前新不新鮮都該成立）
+    #
+    # 2026-08-27 加 gate 前，本表是**無條件外送** —— 而 durable 良值檔天生就是
+    # 「抓不到時撐著的上次已知值」，實測那筆是 2026-06 的手動 seed
+    # （series_id="cier-seed-2026-06"），卻天天被當**當期** PMI 推播給下游。
+    from scripts.export_stock_db import _tw_pmi_freshness_gate
+    if res["macro_tw_pmi"] < 0:
+        assert "macro_tw_pmi" not in tables, \
+            "過期 → 整表不得落地（少一張表 ≠ 過期卻標成當期的表）"
+    else:
+        assert res["macro_tw_pmi"] > 0 and "macro_tw_pmi" in tables
+        _pmi = pd.read_sql("SELECT date, pmi FROM macro_tw_pmi", conn)
+        _ok, _msg = _tw_pmi_freshness_gate({"date": _pmi["date"].iloc[0],
+                                            "value": _pmi["pmi"].iloc[0]})
+        assert _ok, f"落地的 macro_tw_pmi 必須通過 §2.4 新鮮度：{_msg}"
+
     # money_supply：不變量（不論 parquet 目前乾不乾淨都該成立）
     #
     # 2026-08-19 加 gate 前，本表是**無條件外送**——而同檔的 margin 早有 gate，
@@ -108,17 +125,27 @@ def test_durable_export_from_real_parquet(tmp_path):
     # 同精神：money_supply 被擋下時，下游要從 source_health 看得見「這維缺料」，
     # 而不是「這張表從來就不存在」。
     assert health["money_supply"][0] == ("absent" if res["money_supply"] < 0 else "ok")
+    # 同精神：PMI 被新鮮度 gate 擋下時，下游要從 source_health 看得見「這維缺料」。
+    assert health["macro_tw_pmi"][0] == ("absent" if res["macro_tw_pmi"] < 0 else "ok")
     conn.close()
 
 
 def test_health_rows_maps_status_and_schema():
-    df = E._health_rows({"market_index": 100, "monthly_revenue": -1, "empty_ok": 0}, "2026-07-22")
+    # 2026-08-27：as_of 改吃 {field: 該表自己的資料日期 | None}。
+    # 原本是單一匯出日戳記戳滿全表 → 等於宣稱過期資料是今天的（見
+    # tests/test_source_health_as_of.py）。
+    df = E._health_rows(
+        {"market_index": 100, "monthly_revenue": -1, "empty_ok": 0},
+        {"market_index": "2026-07-22", "monthly_revenue": None, "empty_ok": None},
+    )
     m = {r["field"]: (r["status"], int(r["n_rows"])) for _, r in df.iterrows()}
     assert m["market_index"] == ("ok", 100)
     assert m["monthly_revenue"] == ("absent", 0)     # 缺料 → absent、n_rows 記 0（不造假）
     assert m["empty_ok"] == ("ok", 0)                # 0 列但有寫 → ok
     assert set(df.columns) == set(E._HEALTH_COLS)
-    assert (df["as_of"] == "2026-07-22").all()
+    a = {r["field"]: r["as_of"] for _, r in df.iterrows()}
+    assert a["market_index"] == "2026-07-22"
+    assert a["monthly_revenue"] is None and a["empty_ok"] is None
 
 
 def test_revenue_rows_drops_na_and_requires_cols():

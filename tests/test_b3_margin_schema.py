@@ -370,7 +370,9 @@ def test_export_write_margin_writes_when_clean():
 def test_export_margin_absent_marked_in_source_health():
     """回 -1 → source_health 該維 status=absent（下游看得見『少一張表』）。"""
     import export_stock_db as E
-    h = E._health_rows({"margin": -1, "market_index": 100}, "2026-08-06")
+    # 2026-08-27：as_of 改吃 {field: 資料日期|None}（不再是單一匯出日戳記）。
+    h = E._health_rows({"margin": -1, "market_index": 100},
+                       {"margin": None, "market_index": "2026-08-06"})
     row = h[h["field"] == "margin"].iloc[0]
     assert row["status"] == E._HEALTH_ABSENT and row["n_rows"] == 0
 
