@@ -87,13 +87,19 @@ class TestReadinessCarriesValue:
         def _feed_macro_info(key, value):      # macro_info.<key>.current
             return {"macro_info": {key: {"current": value}}}
 
-        def _feed_intl_df(intl_key, value):    # cl_data.intl[<中文名>] 末列 Close
+        # ⚠️ 2026-08-27:欄名原本寫死大寫 `Close`,但 **production 是小寫**——
+        #   `daily_data_fetchers.fetch_single` 出口會把欄名整批小寫化。這裡改成
+        #   兩種大小寫都跑一遍:小寫是真實形狀(必測)、大寫是 cache 反序列化 /
+        #   未來上游改版的相容路徑(保留原覆蓋)。只留大寫等於測試與 production
+        #   形狀脫節 —— 同一個脫節讓 `tab_macro_v2._session_series` 的
+        #   `"Close" in df.columns` 死碼活了很久(見 TestSessionSeriesUsesClose)。
+        def _feed_intl_df(intl_key, value, col="close"):  # cl_data.intl[<中文名>] 末列收盤
             pd = pytest.importorskip("pandas")
-            return {"cl_data": {"intl": {intl_key: pd.DataFrame({"Close": [value]})}}}
+            return {"cl_data": {"intl": {intl_key: pd.DataFrame({col: [value]})}}}
 
         _FEED = {
-            "us10y": lambda v: _feed_macro_info("us10y", v),
-            "dxy": lambda v: _feed_intl_df(CL_INTL_KEY_DXY, v),
+            "us10y": lambda v, c="close": _feed_macro_info("us10y", v),
+            "dxy": lambda v, c="close": _feed_intl_df(CL_INTL_KEY_DXY, v, c),
         }
         no_feed = [s.key for s in ranged if s.key not in _FEED]
         assert not no_feed, (
@@ -102,13 +108,16 @@ class TestReadinessCarriesValue:
         )
 
         for spec in ranged:
-            rd = _readiness(**_FEED[spec.key](spec.valid_max + 500))
-            assert rd[spec.key]["value"] is None, f"{spec.key} 超範圍的值沒被擋下"
-            assert rd[spec.key]["reason"] == "out_of_range", (
-                f"{spec.key} 被擋下的原因記成 {rd[spec.key]['reason']!r}，"
-                f"應為 out_of_range —— 記成 no_value 會讓「上游換標的」"
-                f"被誤診成「上游沒回值」，處置完全不同。"
-            )
+            for _col in ("close", "Close"):
+                rd = _readiness(**_FEED[spec.key](spec.valid_max + 500, _col))
+                assert rd[spec.key]["value"] is None, (
+                    f"{spec.key}(欄名 {_col!r})超範圍的值沒被擋下")
+                assert rd[spec.key]["reason"] == "out_of_range", (
+                    f"{spec.key}(欄名 {_col!r})被擋下的原因記成 "
+                    f"{rd[spec.key]['reason']!r}，"
+                    f"應為 out_of_range —— 記成 no_value 會讓「上游換標的」"
+                    f"被誤診成「上游沒回值」，處置完全不同。"
+                )
 
 
 # ════════════════════════════════════════════════════════════════
@@ -232,6 +241,85 @@ class TestChartsUseRealSeriesOnly:
         assert SPECS_BY_KEY["bias_240"].unit == "%"
         # 乖離率歷史上不會超過 ±100%（那是價格翻倍/歸零等級）
         assert s.abs().max() < 100, f"bias_240 值域異常，最大 {s.abs().max():.1f}"
+
+
+# ════════════════════════════════════════════════════════════════
+# 三之二、美債 10Y 走勢圖必須畫收盤價（2026-08-27）
+#
+# 【守什麼】`_session_series` 曾寫 `df["Close"] if "Close" in df.columns
+# else df.iloc[:, 0]`。上游 `daily_data_fetchers.fetch_single` 出口會把欄名
+# 整批小寫化 → `"Close"` 在 production **恆不存在** → 永遠走 `iloc[:, 0]`,
+# 而 yfinance 欄序是 Open/High/Low/Close/… → 圖畫的是**開盤價**。
+# 同一張卡的**數字**走 `macro_helpers._intl_close`(close/Close 都試)拿的是
+# 收盤價 —— **同一張卡,數字與線來自不同欄位**,而兩邊看起來都正常(§1)。
+#
+# 【為什麼以前沒被抓到】舊 fixture 餵大寫 `Close` → 測試走上分支、
+# production 走下分支。所以本組測試**一律用小寫欄名**(production 的真實
+# 形狀),並刻意把 open 設成與 close 明顯不同的值,讓取錯欄一定紅。
+# ════════════════════════════════════════════════════════════════
+class TestSessionSeriesUsesClose:
+
+    _KEY = "10Y公債殖利率"
+
+    @staticmethod
+    def _inputs(df):
+        from types import SimpleNamespace
+        return SimpleNamespace(cl_data={"intl": {TestSessionSeriesUsesClose._KEY: df}})
+
+    @staticmethod
+    def _ohlc(pd, *, col_close="close"):
+        """yfinance 形狀:open 在第一欄,close 值與 open 明顯不同。"""
+        return pd.DataFrame(
+            {"open": [1.0, 2.0, 3.0],
+             "high": [9.0, 9.0, 9.0],
+             "low": [0.1, 0.1, 0.1],
+             col_close: [4.61, 4.62, 4.63]},
+            index=pd.date_range("2026-08-01", periods=3, freq="D"),
+        )
+
+    def test_lowercase_close_is_used_not_the_first_column(self):
+        """production 真實形狀（欄名全小寫）→ 必須畫 close，不是 open。"""
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        xs, ys = _session_series(self._inputs(self._ohlc(pd)), "us10y")
+        assert ys == [4.61, 4.62, 4.63], (
+            f"取到 {ys} —— 期待 close。若拿到 [1.0, 2.0, 3.0] 就是取到 open "
+            f"(`iloc[:, 0]`),圖與同卡數字會不同源。"
+        )
+        assert len(xs) == 3
+
+    def test_uppercase_close_still_works(self):
+        """cache 反序列化 / 未來上游改版可能保留大寫 —— 兩種都要接得住。"""
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        xs, ys = _session_series(
+            self._inputs(self._ohlc(pd, col_close="Close")), "us10y")
+        assert ys == [4.61, 4.62, 4.63]
+        assert len(xs) == 3
+
+    def test_no_close_column_fails_loud_instead_of_guessing(self):
+        """§1:沒有 close 就回 (None, None)，**不准**退回第一欄冒充收盤價。
+
+        退回 `iloc[:, 0]` 會讓畫面照常出現一條線 —— 那正是「錯的數字比
+        沒有數字更危險」。消費端拿到 None 會顯示「歷史序列取得失敗」。
+        """
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        df = pd.DataFrame({"open": [1.0, 2.0], "high": [3.0, 4.0]})
+        assert _session_series(self._inputs(df), "us10y") == (None, None)
+
+    def test_series_matches_the_number_shown_on_the_same_card(self):
+        """圖的最後一點必須等於同卡數字的取法（§4.3 兩種算法對帳）。
+
+        數字側走 `macro_helpers` 的 `("close", "Close")` 解析;圖側若用
+        另一套欄位規則，同一張卡就會自相矛盾。
+        """
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        df = self._ohlc(pd)
+        _xs, ys = _session_series(self._inputs(df), "us10y")
+        col = next(c for c in ("close", "Close") if c in df.columns)
+        assert ys[-1] == float(df[col].iloc[-1])
 
 
 # ════════════════════════════════════════════════════════════════

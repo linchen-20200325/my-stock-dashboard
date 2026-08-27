@@ -379,7 +379,27 @@ def _session_series(inputs, key: str):
     try:
         if df is None or getattr(df, "empty", True):
             return None, None
-        s = df["Close"] if "Close" in df.columns else df.iloc[:, 0]
+        # ── 收盤價欄位解析(2026-08-27 修)────────────────────────────
+        # 【修的是什麼】原寫法 `df["Close"] if "Close" in df.columns else df.iloc[:, 0]`
+        #   在 production **恆走 else 分支** —— 上游 `daily_data_fetchers.fetch_single`
+        #   會把欄名整批小寫化(`h.columns = [c.lower()...]`),所以 `"Close"` 永遠不在
+        #   欄位裡;而 yfinance 的欄序是 Open/High/Low/Close/… → `iloc[:, 0]` 取到的是
+        #   **開盤價**。同一張卡的數字走 `macro_helpers._intl_close`(close/Close 都試)
+        #   拿的是收盤價 → **同卡的數字與線來自不同欄位**,兩邊看起來都很正常(§1)。
+        #   死碼能長期存活是因為既有測試 fixture 餵大寫 `Close` 走上分支,
+        #   production 走下分支 —— 測試從來沒測到真實形狀。
+        # 【為何兩種大小寫都要試】production 現況是小寫,但 pkl / cache_data 反序列化
+        #   的舊資料、以及未來上游若改版都可能是大寫。順序對齊
+        #   `macro_helpers._intl_close` 的 `("close", "Close")`,不另立第二套慣例。
+        # 【為何不留 iloc 後備】拿不到 close 就是拿不到。退回「第一欄」等於拿一個
+        #   不知道是什麼的欄位冒充收盤價 —— 正是 §1 禁止的「讓程式不報錯」。
+        #   依本函式既有契約:回 (None, None) → 消費端顯示「歷史序列取得失敗」。
+        _col = next((c for c in ("close", "Close") if c in df.columns), None)
+        if _col is None:
+            print(f"[tab_macro_v2/_session_series] {key} 無 close 欄"
+                  f"(現有欄位:{list(df.columns)})→ 不以其他欄位替代")
+            return None, None
+        s = df[_col]
         s = s.dropna()
         if s.empty:
             return None, None
