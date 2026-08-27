@@ -1011,6 +1011,32 @@ def _pmi_src_cier_en_monthly(today, max_age_days, errs):
     - HTML 簡潔（單篇報導 + 數字在標題與首段），正則命中率 >95%
     - 海外 IP 仍會 403 / cloudflare 攔截 → 走 fetch_url 自動 fallback NAS 中繼站
     - 失敗時不要拖時間：每個月最多 2 次 attempts，總共 3 個 slug
+
+    ⛔ v19.120（2026-08-27）**這一段目前結構性失效，請不要再改正則**
+    ────────────────────────────────────────────────────────────
+    上面那句「數字在標題與首段，正則命中率 >95%」**已經不成立** —— 該站改用
+    Elementor，**內文為 JS 動態載入，數值不在 server 回的 HTML 裡**。
+    探針 run 33101596383（2026-08-27，美國 IP + NAS，抓 july-2026 頁）實測：
+
+      raw HTML 97,801 chars
+      get_text[html.parser] 1,562 chars ┐ 兩個 parser **輸出字數完全相同**
+      get_text[lxml]        1,562 chars ┘ → 不是 parser 吃掉內容
+      取文後值域[30,70]內的 xx.x 候選：**0 個**
+      raw 裡 "PMI" 出現 16 次 —— 全部在 <title> 與 elementor 導覽選單，無一在內文
+      raw 全文（未截斷）比對：目標 "61.5" raw.count=**0**、"60.7" raw.count=**0**
+      raw 裡雖有 123 個落在 [30,70] 的 xx.x，但 july 與 june 兩頁的清單**幾乎逐字
+      相同**（june 只多一個 '54.3'）→ 那些是版型雜訊（?ver= / srcset 等屬性值），
+      不是內文數字
+
+    ⇒ **值根本沒被送到 client，換 parser / 改正則 / 放寬值域都不可能有效。**
+    （2026-08-27 之前已有三輪探針各花一次 CI 在這上面；第四輪一度因為只印了
+      前 12 個候選而差點得出相反結論 —— 完整未截斷比對才是上面這個結論的依據。）
+
+    **現行正解不在這一段**：同一份官方數字走 `_pmi_src_dgtw`（data.gov.tw 6100
+    → ws.ndc.gov.tw CSV）**拿得到，且更新更快** —— 同一次探針 run 實測該 CSV 末行
+    為 `202607,61.5,57.3`，交 `_parse_dgtw_pmi_csv` 得 61.5 / 2026-07-01。
+    本段**保留不刪**：slug 結構若哪天改回 server-side render 就會自己復活，
+    且它排在 registry 第一順位不影響其他源（失敗即 continue）。
     """
     _month_names = ['january', 'february', 'march', 'april', 'may', 'june',
                     'july', 'august', 'september', 'october', 'november', 'december']
@@ -1125,10 +1151,13 @@ def _pmi_src_dgtw(today, max_age_days, errs):
     """
     try:
         # metadata API 端點（多個變體：v1/v2 + .json + 直查 dataset id）
-        for _meta_url in (
-            'https://data.gov.tw/api/v2/rest/dataset/6100',
-            'https://data.gov.tw/api/v1/rest/dataset/6100',
-            'https://data.gov.tw/dataset/6100/resource',
+        # v19.120:errs 標籤改用具名 tag。原本取 `_meta_url[-18:]`,而 v1 與 v2 的
+        # 尾 18 字**同為 '/rest/dataset/6100'** → log 上兩者字面撞在一起,分不出是誰
+        # 失敗。這個觀測性缺陷讓 2026-08-27 的診斷多繞了一整輪(見下方 shape 註解)。
+        for _meta_tag, _meta_url in (
+            ('v2',   'https://data.gov.tw/api/v2/rest/dataset/6100'),
+            ('v1',   'https://data.gov.tw/api/v1/rest/dataset/6100'),
+            ('page', 'https://data.gov.tw/dataset/6100/resource'),
         ):
             try:
                 # v19.116:data.gov.tw 為慢速政府 API,實測回應常 12-18s。原
@@ -1137,23 +1166,40 @@ def _pmi_src_dgtw(today, max_age_days, errs):
                 _r_meta = fetch_url(_meta_url, timeout=25, attempts=2,
                                     headers={'Accept': 'application/json'})
                 if _r_meta is None:
-                    errs.append(f'dgtw.{_meta_url[-18:]}:無回應')
+                    errs.append(f'dgtw.{_meta_tag}:無回應')
                     continue
                 if _r_meta.status_code != 200:
-                    errs.append(f'dgtw.{_meta_url[-18:]}:HTTP{_r_meta.status_code}')
+                    errs.append(f'dgtw.{_meta_tag}:HTTP{_r_meta.status_code}')
                     continue
                 try:
                     _j_meta = _r_meta.json()
                 except Exception:
                     # v19.114:200 但非 JSON(如攔截頁/SPA 殼)原為靜默
-                    errs.append(f'dgtw.{_meta_url[-18:]}:non-JSON')
+                    errs.append(f'dgtw.{_meta_tag}:non-JSON')
                     continue
                 # 解析 resources：常見 shape `result.resources[]` / `resources[]`
+                # ⚠️ v19.120:**加回 `result.distribution[]`** —— 這是 6100 的
+                # v2 API **實際**回的 shape。探針 run 33101596383 實測(2026-08-27):
+                #   top-level keys = ['help', 'success', 'result']
+                #   result.resources → None / resources → None / data.resources → None
+                #   **result.distribution → list × 1**   ← 只有這個有東西
+                # 舊清單三種 shape 全部落空 → `_res` 為空 → 走下面那條 continue。
+                # 而那條 continue **原本不寫 errs**,於是 v2 這一段**完全靜默跳過**,
+                # log 上只看得到 v1/page 的 404,讓人誤以為「v2 也連不上」。
+                # 實際上同一次 run 裡探針用 distribution 撈得到、CSV 下載得到、
+                # 交本檔的 `_parse_dgtw_pmi_csv` 解析得到 {'value': 61.5,
+                # 'date': '2026-07-01'}。**來源一直是活的,是我們沒去接。**
                 _res = (_j_meta.get('result', {}).get('resources')
                         or _j_meta.get('resources')
+                        or _j_meta.get('result', {}).get('distribution')
                         or _j_meta.get('data', {}).get('resources')
                         or [])
                 if not _res:
+                    # v19.120:原為靜默 continue —— 正是上面那個 bug 藏了三輪探針的原因。
+                    # 200 + 合法 JSON 卻撈不到 resource,是**我們的 shape 假設過時**,
+                    # 不是來源死掉;兩者的處置完全不同,必須在 log 上分得出來(§1)。
+                    errs.append(f'dgtw.{_meta_tag}:200但無 resource'
+                                f'(keys={list(_j_meta.get("result", _j_meta))[:6]})')
                     continue
                 # v19.114:探針 run 29186611230 實錘 6100 resource =
                 # ws.ndc.gov.tw/Download.ashx?u=...（URL 無 'csv' 字樣、format 常空）
@@ -1167,7 +1213,12 @@ def _pmi_src_dgtw(today, max_age_days, errs):
                            or _it.get('downloadUrl'))
                     if not _u2:
                         continue
-                    if str(_it.get('format', '')).upper() == 'CSV':
+                    # v19.120:實測 6100 的 distribution item 用的是 `resourceFormat`
+                    # (完整 keys 見探針 run 33101596383),舊碼只看 `format` → 恆為空字串
+                    # → CSV 永遠排不到前面。只影響**順序**不影響正確性(下載後一律交
+                    # parser 判斷內容),但多資源時會白跑,一併修正。
+                    if str(_it.get('format')
+                           or _it.get('resourceFormat') or '').upper() == 'CSV':
                         _urls.insert(0, _u2)
                     else:
                         _urls.append(_u2)
@@ -1186,7 +1237,7 @@ def _pmi_src_dgtw(today, max_age_days, errs):
                                 'source': 'data.gov.tw/6100', 'is_proxy': True,
                                 'series_id': 'dgtw-6100'}
             except Exception as _e_dg:
-                errs.append(f'dgtw.{_meta_url[-15:]}:{type(_e_dg).__name__}')
+                errs.append(f'dgtw.{_meta_tag}:{type(_e_dg).__name__}')
     except Exception as _e_dg_outer:
         errs.append(f'dgtw_outer:{type(_e_dg_outer).__name__}')
         print(f'[macro_core/TW-PMI/data.gov.tw] ❌ outer {_e_dg_outer}')
