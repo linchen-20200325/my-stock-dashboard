@@ -27,7 +27,7 @@ from shared.colors import (
     TRAFFIC_RED,
     TRAFFIC_YELLOW,
 )
-from shared.macro_buckets import DangerSpec
+from shared.macro_buckets import DangerSpec, has_thresholds
 
 # ══════════════════════════════════════════════════════════════════════
 # 視覺常數
@@ -107,12 +107,54 @@ def state_cell(state: str) -> str:
     return f"{meta[2]} {meta[0]}"
 
 
+#: 「這條線不判燈」的 band key。**與 `"gray"` 是兩件事**:
+#:   · `"gray"` = 有門檻、只是這次**沒有值**(上游沒給)。
+#:   · `BAND_REFERENCE` = **本來就沒有門檻**,不存在「該亮哪盞燈」這個問題;
+#:     值可能好端端地在那裡(加權指數 24,500 點就是)。
+#: 兩者混用的後果實測過:K 線卡右上角印「無資料」,而卡片正在畫 60 根真實
+#: K 棒 —— **畫面說沒有、內容有**,正是 §1 最忌的那種矛盾。
+BAND_REFERENCE: str = "reference"
+
+#: band → (中文標籤, 色碼)。**五個 band,不是四個。**
+#:
+#: ## 為什麼「無資料」與「不判燈」共用同一個灰
+#:
+#: 兩者都不該搶視覺重心(它們都不是一盞亮著的燈),所以**色碼刻意相同**,
+#: 區分完全由中文標籤承擔。這與 `STATE_META` 的 missing/unwired 是同一個
+#: 已知取捨,差別在那邊多一欄 emoji 來補、這邊沒有 emoji 欄 ——「燈」欄
+#: 維持純文字是 user 2026-08-26 的裁示(理由見上方 `STATE_META` 那段)。
+#: ⚠️ 要改色請兩邊一起想:給「不判燈」單獨挑一個新灰,等於在畫面上**新增
+#: 一種顏色語意**,那是視覺規格,不是 L4 自己能拍板的事。
 BAND_META: dict[str, tuple[str, str]] = {
     "green": ("綠", "#0ca30c"),
     "yellow": ("黃", "#fab219"),
     "red": ("紅", "#d03b3b"),
     "gray": ("無資料", "#8a8e96"),
+    BAND_REFERENCE: ("不判燈", "#8a8e96"),
 }
+
+
+def band_meta(band: str, spec: DangerSpec) -> tuple[str, str]:
+    """band + spec → 畫面上該顯示的 (中文標籤, 色碼)。**消費端請走這裡。**
+
+    直接 `BAND_META[row.band]` 會漏掉一件事:**沒有門檻的 spec 送進來的
+    `"gray"`,語意不是「無資料」**。上游(L5)對無門檻 spec 一律填 `"gray"`
+    —— 那不是它填錯,是 `classify_danger` 對無門檻 spec 會 TypeError
+    (L0 刻意的 fail loud),它只能填一個中性值。真正知道「這條線根本沒有
+    門檻」的資訊在 `spec` 裡,而 `spec` 本來就傳到這一層了。
+
+    判定完全走 L0 SSOT `has_thresholds(spec)`,**本層不列任何指標名單** ——
+    列了就是第二把尺:上游哪天多一條參考走勢,名單不會自己長(§3.3)。
+
+    收斂條件刻意寫得很窄(`band == "gray"` **且** 無門檻):
+      · 有門檻 → 一律原樣,`"gray"` 仍讀成「無資料」(零行為變更)。
+      · 無門檻卻送來 green/yellow/red → **不動它**。那是上游出了事
+        (沒有門檻怎麼判出綠燈?),把它改寫成「不判燈」會把 bug 蓋掉。
+      · 上游若哪天直接送 `BAND_REFERENCE` 進來,這裡照樣認得。
+    """
+    if band == "gray" and not has_thresholds(spec):
+        band = BAND_REFERENCE
+    return BAND_META[band]
 
 CSS = """
 <style>
@@ -182,7 +224,10 @@ class Row:
     bucket: str           # 桶 key(long/mid/short/chips/news)
     unit: str
     value: float | None
-    band: str             # green / yellow / red / gray
+    band: str             # green / yellow / red / gray / reference
+                          # ⚠️ 顯示請走 `band_meta(band, spec)`,別直讀
+                          #    BAND_META —— 無門檻 spec 的 "gray" 不是
+                          #    「無資料」,是「不判燈」(見該函式)。
     state: str            # live / degraded / missing / unwired
     reason: str | None    # state=missing 時的 MISSING_* 原因
     hit_source: str | None
@@ -367,7 +412,7 @@ def render_value_card(row: Row, spec: DangerSpec) -> None:
     §1:不畫沒有資料的圖。與其用合成序列讓版面「看起來完整」,
     不如誠實顯示「這個指標目前沒有歷史序列可畫」。
     """
-    zh, color = BAND_META[row.band]
+    zh, color = band_meta(row.band, spec)
     with st.container(border=True):
         head, meta = st.columns([7, 3])
         with head:
@@ -390,7 +435,7 @@ def render_chart_card(row: Row, spec: DangerSpec, xs: list, ys: list[float],
 
     `xs` / `ys` 由 L5 從真實資料備妥;本函式不生成任何序列。
     """
-    zh, color = BAND_META[row.band]
+    zh, color = band_meta(row.band, spec)
     with st.container(border=True):
         head, meta = st.columns([7, 3])
         with head:
@@ -441,7 +486,7 @@ def render_detail(row: Row, spec: DangerSpec, edu: dict | None = None,
                   reason_text: str = "") -> None:
     """右側明細面板 —— Streamlit 沒有原生 Drawer,以常駐右欄取代:
     點左表任一列即就地更新,不跳頁。"""
-    zh, color = BAND_META[row.band]
+    zh, color = band_meta(row.band, spec)
     slabel, scolor, _semoji = STATE_META[row.state]
     hatch = row.state in ("unwired", "missing")
 
@@ -789,7 +834,7 @@ def build_dual_axis_figure(left: AxisSeries, right: AxisSeries) -> DualAxisPlot:
 
 def _axis_value_html(series: AxisSeries) -> str:
     """一條序列在卡頭的「名稱 + 值 + 燈」。值與燈全部沿用既有 `Row` 與 SSOT。"""
-    zh, color = BAND_META[series.row.band]
+    zh, color = band_meta(series.row.band, series.spec)
     return (
         f'<div style="display:flex;align-items:baseline;gap:7px;margin:2px 0">'
         f'<span style="font-size:12px;opacity:.7">{series.row.label}</span>'
@@ -951,8 +996,12 @@ def render_candlestick_card(row: Row, spec: DangerSpec, ohlc: OHLC, *,
     `build_candlestick_figure` 建(可離線單測)。
 
     §1 降級:四欄缺任一 → 不畫 K 線、**不改畫折線**,誠實印出缺哪一欄。
+
+    ⚠️ 右上角的燈走 `band_meta(row.band, spec)` 而不是 `BAND_META[row.band]`
+    —— 加權指數是**參考走勢、沒有門檻**,直讀 BAND_META 會印出「無資料」,
+    而卡片同時畫著真實 K 棒(§1)。
     """
-    zh, color = BAND_META[row.band]
+    zh, color = band_meta(row.band, spec)
     with st.container(border=True):
         head, meta = st.columns([7, 3])
         with head:
