@@ -121,14 +121,31 @@ def build_rows(readiness: dict) -> list[Row]:
         # 判燈用上游 SSOT 函式,不自己重寫一套(§3.3)
         band = classify_danger(value, spec)
 
+        # 四態的判定順序 = L0 SSOT `shared.station_specs.classify_state()`:
+        #   1. wired=False → unwired   2. 沒值 → missing
+        #   3. discriminative=False → degraded   4. 其餘 → live
+        #
+        # ⚠️ 這裡**刻意複製順序而不呼叫那個函式**,理由是型別不同,不是懶:
+        #   `classify_state(spec: StationSpec, ...)` 讀的是 `station_specs.StationSpec`
+        #   的 `spec.wired` / `spec.discriminative`(存股站的燈);本頁手上的是
+        #   `macro_buckets.DangerSpec`,而且旗標**不從 spec 讀** —— 走 readiness 側車
+        #   `rec`(見本函式 docstring:本檔不得有第二條取數路徑)。兩者是兩個獨立的
+        #   dataclass,硬轉只會做出一層假的共用。**日後要改順序,兩邊一起改。**
+        #
+        # 為什麼「沒值」必須排在 discriminative 前面(**勿再對調**):degraded 的語意是
+        # 「**有值**,但門檻失準,別照門檻讀」—— 它本身就預設有東西可讀。對著一個
+        # 值都沒有的指標印「門檻已失準」,使用者會讀成「有值,只是別太當真」,
+        # 而事實是**根本沒有值**。融資餘額(margin)正是實例:它 discriminative=False,
+        # 沒抓到值時應印「無資料」(§1:錯的敘述比沒有敘述更危險)。
+        has_value = rec.get("state") == "ok" and value is not None
         if not rec.get("wired", True):
             state = "unwired"
+        elif not has_value:
+            state = "missing"
         elif not rec.get("discriminative", True):
             state = "degraded"
-        elif rec.get("state") == "ok" and value is not None:
-            state = "live"
         else:
-            state = "missing"
+            state = "live"
 
         out.append(Row(
             key=spec.key,

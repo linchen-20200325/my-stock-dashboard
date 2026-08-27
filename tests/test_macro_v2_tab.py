@@ -240,9 +240,16 @@ class TestChartsUseRealSeriesOnly:
 class TestFourStatesAreDistinguishable:
 
     def test_unwired_and_degraded_are_not_conflated(self):
-        """`未接線` 與 `門檻已失準` 是兩種完全不同的「別信這盞燈」。"""
+        """`未接線` 與 `門檻已失準` 是兩種完全不同的「別信這盞燈」。
+
+        ⚠️ 2026-08-26:原本這裡餵的是**空的** `_readiness()`,卻期待 margin 是
+        degraded —— 那正是本次修掉的 bug(判定順序與 L0 SSOT 相反,沒值也被印成
+        「門檻已失準」)。degraded 的前提是**有值**,所以要驗 degraded 就得先餵值。
+        「沒值 + discriminative=False」該是什麼,由
+        `TestFourStateOrderMatchesL0SSOT` 那一組負責釘。
+        """
         from src.ui.tabs.tab_macro_v2 import build_rows
-        rows = {r.key: r for r in build_rows(_readiness())}
+        rows = {r.key: r for r in build_rows(_readiness(cl_data={"margin": 5148.0}))}
         assert rows["foreign_net"].state == "unwired"
         assert rows["margin"].state == "degraded"
 
@@ -270,6 +277,132 @@ class TestFourStatesAreDistinguishable:
         from src.ui.tabs.tab_macro_v2 import build_rows
         for r in build_rows(_readiness()):
             assert r.state != "live", f"{r.key} 全空輸入下不該是 live"
+
+
+# ════════════════════════════════════════════════════════════════
+# 四之二、四態的**判定順序**必須與 L0 SSOT 一致（2026-08-26）
+#
+# `build_rows()` 判四態的順序,在 2026-08-26 前是
+#   wired → discriminative → live → missing
+# 而 L0 SSOT `shared.station_specs.classify_state()` 是
+#   wired → 沒值 → discriminative → live
+# 兩者在「**沒值 + discriminative=False**」這一格結論相反:舊碼印
+# 「🟠 門檻已失準」,SSOT 說「▨ 無資料」。實際受害者是融資餘額(margin)——
+# 它 discriminative=False,沒抓到值時畫面卻寫「門檻已失準」,使用者讀成
+# 「有值,只是別太當真」,而事實是根本沒有值(§1:錯的敘述比沒有敘述更危險)。
+#
+# 這一格不會讓畫面看起來壞掉,所以只能靠測試釘住。
+# ⚠️ `build_rows` **刻意複製**了 SSOT 的順序而非呼叫它(型別不同,理由見該處
+#    註解),所以這裡另外加一條交叉比對:哪天有人只改了一邊,這組就紅。
+# ════════════════════════════════════════════════════════════════
+class TestFourStateOrderMatchesL0SSOT:
+
+    #: 這盞燈 discriminative=False（門檻已失準），是本組的主角。
+    _DEGRADED_KEY = "margin"
+    #: 這盞燈 wired=False（決策端刻意沒接）。
+    _UNWIRED_KEY = "foreign_net"
+
+    def test_the_fixture_keys_still_have_the_flags_this_class_assumes(self):
+        """先確認前提還成立 —— 上游把旗標翻回 True 時，本組要當場紅，
+        而不是安靜地變成一組驗不到東西的測試。"""
+        assert SPECS_BY_KEY[self._DEGRADED_KEY].discriminative is False
+        assert SPECS_BY_KEY[self._DEGRADED_KEY].wired is True
+        assert SPECS_BY_KEY[self._UNWIRED_KEY].wired is False
+
+    # ── 四態各一 ────────────────────────────────────────────────
+    def test_unwired(self):
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        rows = {r.key: r for r in build_rows(_readiness())}
+        assert rows[self._UNWIRED_KEY].state == "unwired"
+
+    def test_missing(self):
+        """一般（discriminative=True）的燈沒值 → missing。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        rows = {r.key: r for r in build_rows(_readiness())}
+        assert rows["ndc_signal"].state == "missing"
+        assert rows["ndc_signal"].value is None
+
+    def test_degraded_requires_a_value(self):
+        """discriminative=False **且有值** → degraded（燈照亮，只是別照門檻讀）。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        row = {r.key: r for r in
+               build_rows(_readiness(cl_data={"margin": 5148.0}))}[self._DEGRADED_KEY]
+        assert row.state == "degraded"
+        assert row.value == pytest.approx(5148.0)
+
+    def test_live(self):
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        rows = {r.key: r for r in
+                build_rows(_readiness(macro_info={"vix": {"current": 19.4}}))}
+        assert rows["vix"].state == "live"
+
+    # ── 本次修正的核心：順序 ────────────────────────────────────
+    def test_no_value_beats_not_discriminative(self):
+        """**沒值 + discriminative=False → missing（不是 degraded）。**
+
+        對齊 L0 SSOT 的 `classify_state`（姊妹守衛：
+        `tests/test_station_light_cells.py::test_no_value_beats_not_discriminative`）。
+        degraded 的語意是「有值，但門檻失準」—— 一個值都沒有時，「門檻準不準」
+        是個沒有意義的問題，先判 degraded 會讓畫面對著空資料說「門檻已失準」。
+
+        ⚠️ 把 `build_rows` 的順序改回「discriminative 先判」，這條會轉紅。
+        """
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        row = {r.key: r for r in build_rows(_readiness())}[self._DEGRADED_KEY]
+        assert row.value is None, "前提:全空輸入下這盞燈本來就沒有值"
+        assert row.state == "missing", (
+            f"{self._DEGRADED_KEY} 沒有值卻被判成 {row.state!r} —— "
+            f"對著空資料印「門檻已失準」會被讀成「有值只是別太當真」"
+        )
+
+    def test_missing_light_never_shows_the_degraded_wording(self):
+        """換句話說的同一件事:任何 state=missing 的列，畫面文案不得是「門檻已失準」。"""
+        from src.ui.render.macro_v2_cards import STATE_META
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        for r in build_rows(_readiness()):
+            if r.state == "missing":
+                assert STATE_META[r.state][0] == "無資料", (
+                    f"{r.key} 沒資料卻被標成 {STATE_META[r.state][0]!r}"
+                )
+
+    # ── 兩份順序不得漂移 ────────────────────────────────────────
+    def test_order_agrees_with_station_specs_classify_state(self):
+        """`build_rows` 複製了 L0 的順序（型別不同無法直接呼叫）——
+        這條交叉比對兩邊：只改一邊就紅。
+
+        `classify_state` 讀的是 `StationSpec` 的旗標，這裡用合成 spec 把
+        `build_rows` 實際看到的 `wired` / `discriminative` / 有沒有值餵進去，
+        比對兩邊對同一組輸入是否給出同一個四態。
+        """
+        from shared.station_specs import StationSpec, classify_state
+        from src.ui.tabs.tab_macro_v2 import build_rows
+
+        # ⚠️ 兩份輸入缺一不可:第一份讓 margin **有值**(→ degraded)，第二份讓它
+        #    **沒值**(→ missing)。兩份順序真正分岔的就是後者那一格，只跑第一份
+        #    的話，這條交叉比對在順序被改回去時仍然是綠的（實測過）。
+        seen: set[str] = set()
+        for rd in (_readiness(macro_info={"vix": {"current": 19.4}},
+                              cl_data={"margin": 5148.0}),
+                   _readiness(macro_info={"vix": {"current": 19.4}})):
+            for r in build_rows(rd):
+                rec = rd[r.key]
+                ghost = StationSpec(
+                    key=r.key, label=r.label, kind="both", group="macro",
+                    unit=r.unit, direction="high_bad", threshold_text="—",
+                    source="—", why="—",
+                    wired=bool(rec.get("wired", True)),
+                    unwired_reason="x",
+                    discriminative=bool(rec.get("discriminative", True)),
+                    degraded_reason="x",
+                )
+                has_value = rec.get("state") == "ok" and rec.get("value") is not None
+                assert r.state == classify_state(ghost, has_value=has_value), (
+                    f"{r.key}:tab_macro_v2 判 {r.state!r}，L0 SSOT 判 "
+                    f"{classify_state(ghost, has_value=has_value)!r} —— 兩份順序漂移了"
+                )
+                seen.add(r.state)
+        # 這兩份輸入必須真的走過四態，否則上面那圈等於沒驗到分歧點
+        assert {"live", "degraded", "unwired", "missing"} <= seen, seen
 
 
 # ════════════════════════════════════════════════════════════════
@@ -320,6 +453,10 @@ def _mixed() -> dict:
         macro_info={"vix": {"current": 38.0},      # 紅燈 + live（市場有問題）
                     "ism_pmi": {"value": 58.0}},   # 綠燈 + live（都沒問題）
         warroom_summary={"health_score": 88.0},    # 綠燈 + live
+        # degraded 的前提是**有值**（門檻失準 ≠ 沒資料）。2026-08-26 前這裡沒餵
+        # margin，卻靠當時「discriminative 先判」的錯誤順序湊出 degraded ——
+        # 順序修正後那個 degraded 就不存在了，故改成餵真值。
+        cl_data={"margin": 5148.0},                # 紅燈 + degraded（門檻已失準）
     )
 
 
