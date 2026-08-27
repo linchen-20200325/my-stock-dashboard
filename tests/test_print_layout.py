@@ -258,6 +258,38 @@ def _run_tab(tmp_path, timeout=90):
     return at
 
 
+def _chip_radio(at):
+    """取第 3 層的「分類」chip radio —— **用 key 取,不用位置取**。
+
+    ## 為什麼這裡不能寫 `at.radio[0]`(2026-08-27 回歸的根因)
+
+    本檔寫成時(commit `6909021`)整個 `render_tab_macro_v2()` 只有**一顆**
+    radio,於是 `at.radio[0]` 剛好就是分類 chip。後來 commit `9361ea9`
+    在**第 2 層**加了「密度」切換(`key="v2_chart_density"`),它渲染的位置
+    在第 3 層之前 → `at.radio[0]` 從此指向密度切換,`set_value("chips")`
+    在密度那顆上找不到對應選項,炸成
+    `ValueError: 'chips' is not in list`。
+
+    **這不是產品端的 bug** —— 兩顆 radio 各有自己的 key,行為都正確;
+    壞掉的是本檔「用位置當把手」這個假設:它把「畫面上第一顆 radio 是誰」
+    當成穩定契約,而那從來就不是契約。
+
+    改用 key 之後,若哪天 `v2_detail_chip` 真的被移除/改名,
+    `WidgetList.__call__` 會丟 `KeyError: 'v2_detail_chip'` —— 直接指出
+    是哪顆 widget 不見了,而不是留下一句要追三層 streamlit 內部才看得懂的
+    `'chips' is not in list`(§1:壞掉要講清楚壞在哪)。
+
+    ⚠️ 本函式**沒有放寬任何斷言** —— 兩表連動的檢查一字未改,
+    換掉的只是「怎麼找到那顆 chip radio」。
+    """
+    _r = at.radio("v2_detail_chip")
+    # 多一道:確認拿到的真的是分類 chip(選項是中文標籤,不是 chip key)。
+    # 若日後有人把 key 掛到別顆 widget 上,這裡就會當場講出實際選項。
+    assert "籌碼" in _r.options, (
+        f"key='v2_detail_chip' 取到的不是第 3 層分類 chip,選項為 {_r.options}")
+    return _r
+
+
 def _print_table_markup(at):
     # 比對 `<table class=` 而不只是 class 名 —— 只比 class 名會連 CSS 的
     # <style> 區塊一起命中(那裡面也有 `.v2-print-tbl` 的樣式定義)。
@@ -295,7 +327,7 @@ class TestLayer3PrintTableIsWiredToTheSameData:
         at = _run_tab(tmp_path)
         assert not at.exception, at.exception
         n_before = len(at.dataframe[0].value)
-        at.radio[0].set_value("chips").run()
+        _chip_radio(at).set_value("chips").run()
         assert not at.exception, at.exception
         shown = at.dataframe[0].value
         got = _parse_print_table(_print_table_markup(at))
@@ -307,7 +339,7 @@ class TestLayer3PrintTableIsWiredToTheSameData:
 
     def test_print_caption_reports_the_active_filter(self, tmp_path):
         at = _run_tab(tmp_path)
-        at.radio[0].set_value("chips").run()
+        _chip_radio(at).set_value("chips").run()
         assert not at.exception, at.exception
         cap = re.search(r'class="v2-print-cap">(.*?)</p>',
                         _print_table_markup(at), re.DOTALL).group(1)
