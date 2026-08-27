@@ -513,8 +513,23 @@ def fetch_tw_pmi_history(start: _dt.date, end: _dt.date) -> pd.DataFrame:
             except Exception as _e_json:
                 print(f"[tw_pmi] metadata JSON parse fail: {_e_json}")
                 continue
+            # ── v19.122:cron 端補齊 `result.distribution`（v19.120 runtime 修正的另一半）──
+            # v19.120 已在 runtime 端(`macro_core._pmi_src_dgtw`)把 6100 的**真實** shape
+            # `result.distribution[]` 接回來(探針 run 33101596383:result.resources /
+            # resources / data.resources 三者皆 None,**只有 result.distribution 有東西**),
+            # 但**寫 metadata.json / parquet 的這條 cron 路徑當時沒跟上** → 候選鏈仍只有
+            # 三種舊 shape → `_res` 恆空 → 走下面那條 continue。實證:本次修正前
+            # `data_cache/metadata.json` 的 `datasets.tw_pmi` 一直是
+            # {"last_updated": null, "row_count": 0, "last_error": "抓取結果為空"}。
+            # ⚠️ **順序必須與 macro_core 逐字一致**:兩邊都是
+            #    result.resources → resources → **result.distribution** → data.resources。
+            #    `or` 鏈是**短路取第一個非空**,順序不同 ⇒ 同一份 metadata 若同時有兩種
+            #    shape,runtime 與 cron 會挑到**不同的 resource 清單** —— 那會變成
+            #    「畫面對、存檔錯」這種最難查的分岔。順序同步鎖見
+            #    `tests/test_dgtw_pmi_cron_shape_v19_122.py::TestShapeChainParity`。
             _res = (_j_meta.get("result", {}).get("resources")
                     or _j_meta.get("resources")
+                    or _j_meta.get("result", {}).get("distribution")
                     or _j_meta.get("data", {}).get("resources")
                     or [])
             if not _res:
@@ -540,7 +555,13 @@ def fetch_tw_pmi_history(start: _dt.date, end: _dt.date) -> pd.DataFrame:
                          or _it.get("downloadUrl"))
                 if not _url2:
                     continue
-                if str(_it.get("format", "")).upper() == "CSV":
+                # v19.122:同上,補 `resourceFormat`。實測 6100 的 distribution item
+                # 用的是 `resourceFormat`(完整 key 集見探針 run 33101596383),舊碼只看
+                # `format` → 恆為空字串 → CSV 永遠排不到前面。**只影響順序不影響正確性**
+                # (下載後一律交 `_parse_pmi_csv_full` 靠內容判斷),但多資源時會白跑,
+                # 且與 runtime 端行為不一致,一併補齊。
+                if str(_it.get("format")
+                       or _it.get("resourceFormat") or "").upper() == "CSV":
                     _urls.insert(0, _url2)
                 else:
                     _urls.append(_url2)
