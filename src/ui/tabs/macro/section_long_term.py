@@ -42,9 +42,9 @@ def prepare_long_term_radar() -> tuple[Any, str, Any]:
     _lt = None
     try:
         # 2026-08-27:本行原本 import 的是 `detect_mk_golden_inflection` —— 那是
-        # `macro_helpers.py` 明文標 `DEPRECATED，勿用於新程式碼` 的向後相容 alias,
+        # `macro_helpers.py` 明文標為「退場中、勿用於新程式碼」的向後相容 alias,
         # 而它自己的註解就寫「待全部 caller 遷移完成後移除本行」。**本檔是它最後一個
-        # production caller**,不遷走的話那個 DEPRECATED 標記就是一句假話(標記說廢棄、
+        # production caller**,不遷走的話那個退場標記就是一句假話(標記說已廢、
         # 程式還在跑),下一個做垃圾清理的人會照標記刪 alias、把這裡打斷。
         # 改吃正名後的 `detect_cpi_fed_double_top`(alias 指向同一個物件,行為零變更;
         # `section_state.py` 早已用新名)。守衛:`tests/test_deprecation_honesty.py`。

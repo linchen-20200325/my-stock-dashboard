@@ -12,6 +12,28 @@
 - `load_parquet_safe(path, required_cols) -> DataFrame | None`:通用 safe loader
 - `load_twii_close(cache_dir) -> Series`:讀 twii_ohlcv.parquet → close series
 - `load_v2_chart_series(cache_dir) -> dict[str, Series]`:總經 v2 走勢卡的長歷史序列
+- `read_cache_metadata(cache_dir) -> dict`:讀 `data_cache/metadata.json`(cron 的自陳狀態)
+- `compute_cache_staleness(dataset, ...) -> dict`:單一 parquet 的年齡判定(§1 誠實預設)
+
+═══ 2026-08-27 補:讀取端的過期判定(原本完全沒有)═══════════════════════════
+本檔的 `load_twii_close` / `load_v2_chart_series` 原本**讀了就用,不看資料多舊** ——
+上游 cron 掛掉時,總經 v2 走勢卡會拿舊 parquet 照畫,畫面上一個字都看不出來。
+(實例:`finmind_m1m2.parquet` 的 `last_updated` 停在 2026-06-01、`last_error`
+ 是「抓取結果為空」,而校準 cron 照讀不誤。)
+
+做法**沿用全 repo 唯一做對的那一組** —— `src/data/sector_flow/reader.py::_compute_staleness`:
+  - 判不出年齡(缺 metadata / 缺日期欄 / 無法解析)→ **視為過期**,不假設新鮮;
+  - 門檻走既有 L0 SSOT(`shared/staleness.py`),本檔**不新增任何門檻數值**;
+  - 月頻序列(m1b_m2 的 `date` 是月初)走 `monthly_release_status`,**不**用日曆天量
+    —— 理由見 `shared/staleness.py` G2 區塊(拿日頻標準量月初 as_of 會天天假紅燈)。
+
+⚠️ **已知缺口,據實登記(本輪未修)**:年齡算出來後掛在回傳 Series 的 `.attrs`
+   上,但 `services/macro_v2_service.get_chart_series()` 會把 Series 轉成
+   `[(iso_date, value)]` 送進 `@st.cache_data`,**`.attrs` 在那一步就掉了**;
+   `tab_macro_v2.py`(L5)也還沒有顯示過期旗標的位置。
+   要讓使用者在畫面上看見,必須同時改 `services/macro_v2_service.py`(L3)與
+   `src/ui/tabs/tab_macro_v2.py`(L5)—— **兩者都不在本次派工的檔案邊界內**,故未動。
+   現況 = L1 已誠實算出並 print 出來,但**畫面仍看不到**。這是待辦,不是已完成。
 """
 from __future__ import annotations
 
@@ -21,6 +43,163 @@ from typing import Optional
 import pandas as pd
 
 DEFAULT_PARQUET_CACHE_DIR = Path("data_cache")
+
+
+#: `data_cache/metadata.json` —— cron `scripts/update_macro_history.py` 每次寫的自陳狀態
+#: (`datasets[<name>].last_updated` / `.row_count` / `.last_error`)。
+CACHE_METADATA_NAME = "metadata.json"
+
+#: dataset → (發布頻率, `shared.staleness.MACRO_PUBLICATION_LAG_DAYS` 的 indicator key)。
+#: ⚠️ 這是**頻率分類**,不是門檻 —— 門檻一律由 `shared/staleness.py` 供給(§3.3)。
+#: `finmind_m1m2` 的 `date` 欄是**資料月月初**(實測 2026-06-01),故走月頻「期」判定;
+#: 其餘三個是交易日序列,走日頻天數判定。
+CACHE_DATASET_CADENCE: dict[str, tuple] = {
+    "twii_ohlcv":     ("daily", None),
+    "finmind_inst":   ("daily", None),
+    "finmind_margin": ("daily", None),
+    "finmind_m1m2":   ("monthly", "m1b_m2"),
+}
+
+
+def read_cache_metadata(cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR) -> dict:
+    """讀 `data_cache/metadata.json`;缺檔 / 壞檔 → `{}`(不炸,由呼叫端判過期)。"""
+    import json
+
+    _p = cache_dir / CACHE_METADATA_NAME
+    if not _p.exists():
+        return {}
+    try:
+        _d = json.loads(_p.read_text(encoding="utf-8"))
+        return _d if isinstance(_d, dict) else {}
+    except Exception as e:  # noqa: BLE001 — 壞掉的 metadata 當作沒有,不該炸讀檔路徑
+        print(f"[macro_cache_reader/read_cache_metadata] {_p.name} 解析失敗:{e}")
+        return {}
+
+
+def _as_of_from_df(df) -> Optional[object]:
+    """由 parquet 的 `date` 欄取最新資料日;取不到回 None。"""
+    if df is None or "date" not in getattr(df, "columns", []):
+        return None
+    try:
+        _s = pd.to_datetime(df["date"], errors="coerce").dropna()
+        return None if _s.empty else _s.max().date()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def compute_cache_staleness(
+    dataset: str,
+    *,
+    cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+    df=None,
+    today=None,
+) -> dict:
+    """單一本地 parquet 的「多舊」判定。
+
+    Args:
+        dataset: `CACHE_DATASET_CADENCE` 的 key(= parquet 檔名去掉副檔名)。
+        cache_dir: cache 目錄。
+        df: 已讀好的 DataFrame(避免重讀);None → 由本函式自己讀。
+        today: 基準日(測試注入;None → `date.today()`)。
+
+    Returns:
+        {
+          "dataset":        str,
+          "is_stale":       bool,        # §1:判不出來 → True(不假設新鮮)
+          "reason":         str | None,  # 為什麼判過期(講得出「舊到什麼時候」)
+          "as_of":          date | None, # 資料本身的最新日期(來自 parquet 的 date 欄)
+          "age_days":       int | None,  # as_of 距 today 幾個日曆天(僅日頻有意義)
+          "periods_behind": int | None,  # 月頻:落後幾個發布期(≥1 = 真的漏了整期)
+          "upstream_error": str | None,  # metadata 自陳的 `last_error`
+          "meta_last_updated": str | None,
+        }
+
+    §1 誠實預設(照抄 `src/data/sector_flow/reader.py::_compute_staleness` 的規矩):
+    **判不出年齡就當過期**,而不是當新鮮。缺 metadata、缺 date 欄、日期無法解析、
+    dataset 沒登記在 `CACHE_DATASET_CADENCE` —— 一律 `is_stale=True` 並說明原因。
+    """
+    import datetime as _dt
+
+    from shared.staleness import monthly_release_status, stale_days_threshold
+
+    _today = today or _dt.date.today()
+    out = {"dataset": dataset, "is_stale": True, "reason": None, "as_of": None,
+           "age_days": None, "periods_behind": None,
+           "upstream_error": None, "meta_last_updated": None}
+
+    _meta = read_cache_metadata(cache_dir)
+    _entry = (_meta.get("datasets") or {}).get(dataset) or {}
+    out["upstream_error"] = _entry.get("last_error")
+    out["meta_last_updated"] = _entry.get("last_updated")
+
+    _cad = CACHE_DATASET_CADENCE.get(dataset)
+    if _cad is None:
+        out["reason"] = (f"dataset `{dataset}` 未登記於 CACHE_DATASET_CADENCE,"
+                         f"判不出發布頻率 → 一律視為過期(§1 不假設新鮮)")
+        return out
+    _cadence, _indicator = _cad
+
+    if df is None:
+        df = load_parquet_safe(cache_dir / f"{dataset}.parquet", {"date"})
+    _as_of = _as_of_from_df(df)
+    if _as_of is None:
+        out["reason"] = (f"{dataset}.parquet 缺檔 / 缺 `date` 欄 / 日期無法解析 → "
+                         f"判不出資料日期,視為過期")
+        return out
+    out["as_of"] = _as_of
+    out["age_days"] = (_today - _as_of).days
+
+    if _cadence == "monthly":
+        _behind, _overdue = monthly_release_status(
+            _as_of, indicator=_indicator, today=_today)
+        out["periods_behind"] = _behind
+        if _behind is None:
+            out["reason"] = (f"{dataset} 月頻新鮮度判不出來"
+                             f"(indicator={_indicator!r})→ 視為過期")
+        elif _behind >= 1:
+            out["reason"] = (f"{dataset} 最新資料月 {_as_of}({out['age_days']} 天前),"
+                             f"已落後 {_behind} 個發布期")
+        else:
+            out["is_stale"] = False
+            if _overdue:
+                out["reason"] = f"{dataset} 下一期已逾原定發布日 {_overdue} 天(仍在緩衝內)"
+        return out
+
+    _thr = stale_days_threshold(_cadence)
+    if out["age_days"] > _thr:
+        out["reason"] = (f"{dataset} 最新資料日 {_as_of},距今 {out['age_days']} 天,"
+                         f"超過 {_cadence} 門檻 {_thr} 天")
+    else:
+        out["is_stale"] = False
+    return out
+
+
+def _attach_staleness(series, dataset: str, *, cache_dir: Path, df=None, today=None):
+    """把 staleness 判定掛到回傳 Series 的 `.attrs`(schema-additive,不改回傳型別)。
+
+    過期時**一定 print 一行** —— §1「出聲不吞」。⚠️ 但 print 只進 log,
+    畫面仍看不到(檔頭「已知缺口」段有記)。
+    """
+    try:
+        _st = compute_cache_staleness(dataset, cache_dir=cache_dir, df=df, today=today)
+    except Exception as e:  # noqa: BLE001 — 判定本身壞掉不該讓讀檔路徑炸
+        print(f"[macro_cache_reader/_attach_staleness] {dataset} 判定失敗:{e}")
+        return series
+    try:
+        series.attrs["cache_dataset"] = dataset
+        series.attrs["is_stale"] = _st["is_stale"]
+        series.attrs["stale_reason"] = _st["reason"]
+        series.attrs["as_of"] = _st["as_of"]
+        series.attrs["age_days"] = _st["age_days"]
+        series.attrs["upstream_error"] = _st["upstream_error"]
+    except Exception:  # noqa: BLE001 — 極舊 pandas 無 .attrs;不影響資料本身
+        pass
+    if _st["is_stale"] or _st["upstream_error"]:
+        print(f"[macro_cache_reader] ⚠️ {dataset} 判為過期/上游有錯:"
+              f"{_st['reason'] or '—'}"
+              + (f";metadata.last_error={_st['upstream_error']!r}"
+                 if _st["upstream_error"] else ""))
+    return series
 
 
 def load_parquet_safe(path: Path, required_cols: set) -> Optional[pd.DataFrame]:
@@ -47,11 +226,18 @@ def load_parquet_safe(path: Path, required_cols: set) -> Optional[pd.DataFrame]:
 
 def load_twii_close(
     cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+    *,
+    today=None,
 ) -> pd.Series:
     """讀 twii_ohlcv.parquet → close pd.Series indexed by date(Timestamp)。
 
+    回傳的 Series 帶 `.attrs`(`is_stale` / `stale_reason` / `as_of` / `age_days` /
+    `upstream_error`),過期時另 print 一行。**不改回傳型別、不擋資料** ——
+    判斷要不要顯示降級是消費端的事,本層只負責把事實講出來。
+
     Args:
         cache_dir: parquet cache 目錄(預設 data_cache/)
+        today: 過期判定的基準日(測試注入;None → 今天)
 
     Returns:
         close pd.Series(name='twii_close',date 升序,NaN dropped);
@@ -62,13 +248,18 @@ def load_twii_close(
     if df is None:
         return pd.Series(dtype=float, name="twii_close")
     try:
+        _raw = df
         df = df.copy()
         df["date"] = pd.to_datetime(df["date"])
         s = (df.set_index("date")["close"]
                .astype(float)
                .sort_index())
         s.name = "twii_close"
-        return s.dropna()
+        s = s.dropna()
+        # 2026-08-27:回傳前掛上「這份 cache 多舊」。`.attrs` 是 schema-additive,
+        # 既有 caller(取值 / 算 MA)完全不受影響;過期時另有一行 log(§1 出聲不吞)。
+        return _attach_staleness(s, "twii_ohlcv", cache_dir=cache_dir,
+                                 df=_raw, today=today)
     except Exception as e:  # noqa: BLE001
         print(f"[macro_cache_reader/load_twii_close] 處理失敗:{e}")
         return pd.Series(dtype=float, name="twii_close")
@@ -280,8 +471,16 @@ def fetch_lead_market_changes(*, range_: str = "5d", now_utc=None) -> dict:
 
 def load_v2_chart_series(
     cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+    *,
+    today=None,
 ) -> dict[str, pd.Series]:
     """讀總經 v2 走勢卡要用的長歷史序列。
+
+    每條回傳的 Series 都帶 `.attrs`(`is_stale` / `stale_reason` / `as_of` /
+    `age_days` / `upstream_error`),來源 parquet 過期時另 print 一行(§1 出聲不吞)。
+    **dict 的 key 集合與 Series 內容一字未改** —— 這是 schema-additive 的附掛,
+    既有消費端(`services/macro_v2_service.get_chart_series`)行為零變化。
+    ⚠️ 但也因此**畫面目前仍看不到過期旗標**,原因與待辦見檔頭「已知缺口」段。
 
     Returns:
         dict，key 為 `DangerSpec.key`，value 為 date-indexed pd.Series：
@@ -300,13 +499,20 @@ def load_v2_chart_series(
     out: dict[str, pd.Series] = {}
 
     # ── bias_240:close → MA240 → 乖離 % ──────────────────────────────
-    _close = load_twii_close(cache_dir)
+    _close = load_twii_close(cache_dir, today=today)
     if len(_close) >= DEFAULT_BIAS_MA_LEN:
         try:
             _ma = _close.rolling(DEFAULT_BIAS_MA_LEN).mean()
             _bias = ((_close / _ma - 1.0) * 100.0).dropna()
             if len(_bias):
                 _bias.name = "bias_240"
+                # bias_240 由 twii close 推導 → 新鮮度**就是** twii_ohlcv 的新鮮度。
+                # rolling/dropna 之後 `.attrs` 不保證留著,故從 `_close` 複製一份;
+                # 直接複製而不重算,避免同一次呼叫把 parquet 讀兩遍。
+                try:
+                    _bias.attrs.update(dict(_close.attrs))
+                except Exception:  # noqa: BLE001
+                    pass
                 out["bias_240"] = _bias
         except Exception as e:  # noqa: BLE001 — 單一序列失敗不該讓整頁炸
             print(f"[macro_cache_reader/load_v2_chart_series] bias_240 計算失敗:{e}")
@@ -327,7 +533,8 @@ def load_v2_chart_series(
                     .sort_index().dropna() / TWD_PER_YI)
             if len(_s):
                 _s.name = "margin"
-                out["margin"] = _s
+                out["margin"] = _attach_staleness(
+                    _s, "finmind_margin", cache_dir=cache_dir, df=_df, today=today)
         except Exception as e:  # noqa: BLE001
             print(f"[macro_cache_reader/load_v2_chart_series] margin 處理失敗:{e}")
 
