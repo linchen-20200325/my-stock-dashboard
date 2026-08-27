@@ -23,7 +23,9 @@
                             get_combined_data 既有欄,不重算。STOCK_IDS 指定個股清單）
     - `monthly_revenue`     全市場月營收（fetch_batch_monthly_revenue,單位 元）
     - `macro_tw_signal`     景氣對策信號燈號（fetch_ndc_signal_history）
-    - `futures_oi`          台指期外資留倉淨口數（finmind_fut_oi,單位 口;+多/-空）
+    - `futures_oi`          台指期外資留倉淨口數（finmind_fut_oi,
+                            **單位 TX 當量口**＝大台淨口 ＋ 0.25×小台淨口;+多/-空。
+                            2026-08-27 正名:原標「口」與上游口徑不符,見下方單位鐵則）
     - `futures_night`       台指期日盤+夜盤收盤 → 夜盤漲跌（finmind_fut_night;盤前隔日開盤領先）
 * 🩺 健康表（每次 export 依上述各表成敗自動產生,不需外部抓取）
     - `source_health`       各表 status（ok/absent）+ n_rows + as_of（下游 2026 顯示維度降級/缺料,
@@ -37,7 +39,13 @@
     （不設 STOCK_DB → 寫本專案根目錄 stock.db）
 
 單位鐵則(對照 CLAUDE.md §4.1):財報欄=千元、eps=元、外資/M1B2=億元、月營收=元、
-**融資餘額=元**(B3 v19.179 補標;原本是本清單裡唯一沒標單位的一項)、PMI=指數。
+**融資餘額=元**(B3 v19.179 補標;原本是本清單裡唯一沒標單位的一項)、PMI=指數、
+**台指期外資留倉=TX 當量口**(2026-08-27 正名)。
+⚠️ TX 當量口:上游 `leading_indicators.finmind_fut_oi` 的口徑是
+「外資大台淨口 ＋ 0.25 × 外資小台淨口」(MTX 契約乘數 50 元/點 ÷ TX 200 元/點
+= 0.25,SSOT `leading_indicators._MTX_TO_TX_FACTOR`),**不是原始口數加總**。
+本檔原本標成裸「口」——量綱標錯會讓下游拿它去跟任何「原始口數」相比或相除時
+差到 4 倍(§4.1 量綱陷阱)。要與它相除的分母必須先換成同一當量。
 Fail-Loud:離線層任一表讀不到 → raise;live 層缺 token / 抓不到 → 略過該表 + 警告(不寫假值)。
 離線層 `margin` 另有 §3.2 sanity gate:讀得到但值不可信 → **略過該表**(非 raise),
 讓下游「少一張表」而不是「拿到錯的表」;`macro_tw_pmi` 同精神另有 §2.4 新鮮度 gate
@@ -341,7 +349,12 @@ def _revenue_rows(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _fut_oi_rows(oi: dict) -> pd.DataFrame:
-    """finmind_fut_oi dict {YYYYMMDD: 淨口} → DataFrame(date=YYYY-MM-DD, foreign_net_oi_lots)（純轉換）。"""
+    """finmind_fut_oi dict {YYYYMMDD: 淨口} → DataFrame(date, foreign_net_oi_lots)（純轉換）。
+
+    ⚠️ `foreign_net_oi_lots` 的單位是 **TX 當量口**（大台淨口 ＋ 0.25×小台淨口，
+    見 `leading_indicators._MTX_TO_TX_FACTOR`），欄名沿用歷史名稱不改（下游相容），
+    單位以本 docstring 與檔頭單位鐵則為準。2026-08-27 正名，原標「口」。
+    """
     rows = [
         {"date": f"{k[:4]}-{k[4:6]}-{k[6:8]}", "foreign_net_oi_lots": v}
         for k, v in sorted(oi.items())
@@ -351,7 +364,10 @@ def _fut_oi_rows(oi: dict) -> pd.DataFrame:
 
 
 def write_futures_oi(conn: sqlite3.Connection, token: str) -> int:
-    """台指期外資留倉 → futures_oi（缺 token → 略過 + 警告）。"""
+    """台指期外資留倉 → futures_oi（缺 token → 略過 + 警告）。
+
+    單位 **TX 當量口**（大台淨口 ＋ 0.25×小台淨口），非原始口數加總 —— 見檔頭單位鐵則。
+    """
     if not token:
         _log("⚠️ 略過 futures_oi：未設 FINMIND_TOKEN（不造假）")
         return -1
