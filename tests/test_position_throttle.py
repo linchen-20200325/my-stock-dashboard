@@ -1,5 +1,8 @@
 """姿態油門純函式測試(健康分 → 建議持股區間 + regime 否決)。"""
 from shared.position_throttle import (
+    THROTTLE_HEALTH_A,
+    THROTTLE_HEALTH_B,
+    THROTTLE_HEALTH_DEF,
     THROTTLE_TIERS,
     compute_position_throttle,
 )
@@ -39,11 +42,22 @@ def test_defense_band_low_health():
 
 
 def test_boundary_values_align_ssot():
-    # 恰在分界:80 → 積極, 50 → 中性, 35 → 轉守, 34 → 防禦
-    assert compute_position_throttle(80)['posture'] == '積極'
-    assert compute_position_throttle(50)['posture'] == '中性偏多'
-    assert compute_position_throttle(35)['posture'] == '轉守'
-    assert compute_position_throttle(34)['posture'] == '防禦'
+    """每個切點的「恰在分界 / 差一分」兩側都要驗。
+
+    ⚠️ 2026-08-27 修 false green:本案例原本寫死
+    `compute_position_throttle(80)['posture'] == '積極'` 並註明「恰在分界」——
+    但 A 切點已於 2026-08-19 自 80 改為 70(80→65→70,user 核准的尺度借用錯誤修正),
+    80 自此只是**帶內任一點**,不是分界。斷言照樣綠燈,卻**已經不再測 A 的邊界**。
+    現改為直接引用常數 + 補「切點-1」的反向案例,切點再動也不會變成 false green。
+    """
+    # 恰在分界 → 落入該帶
+    assert compute_position_throttle(THROTTLE_HEALTH_A)['posture'] == '積極'
+    assert compute_position_throttle(THROTTLE_HEALTH_B)['posture'] == '中性偏多'
+    assert compute_position_throttle(THROTTLE_HEALTH_DEF)['posture'] == '轉守'
+    # 差一分 → 掉到下一帶(反向案例,才真的釘住切點位置)
+    assert compute_position_throttle(THROTTLE_HEALTH_A - 1)['posture'] == '中性偏多'
+    assert compute_position_throttle(THROTTLE_HEALTH_B - 1)['posture'] == '轉守'
+    assert compute_position_throttle(THROTTLE_HEALTH_DEF - 1)['posture'] == '防禦'
 
 
 def test_regime_veto_caps_upper_even_if_health_high():

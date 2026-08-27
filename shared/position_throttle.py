@@ -5,19 +5,57 @@
   **不是「開關」**(全進全出)。本模組把總經健康分(0-100)映成一條「建議持股區間」,
   並保留 regime 否決(空頭防禦時強制壓低上界),讓使用者用「姿態」思考而非「進出」。
 
-邊界對齊既有 SSOT(不另立矛盾數字):
-  - 健康分界 80 / 50 / 35 對齊 HEALTH_GRADE_A_MIN / HEALTH_GRADE_B_MIN /
-    HEALTH_DEFENSE_THRESHOLD 預設。
-  - 持股 % 帶邊界對齊 EXPOSURE_BULL / NEUTRAL / BEAR(80 / 50 / 20,config.py)。
+邊界值與其出處(⚠️ 三個健康分切點裡,只有一個是真的「對齊」):
+
+  現行健康分界:A=70 / B=50 / DEF=35
+  (↑ 這一行是 machine-readable 宣告,由 `tests/test_position_throttle_docstring_honesty.py`
+    釘住「docstring 宣稱值 == 實際常數」;改常數沒改這行 → CI 紅燈。)
+
+  - ✅ **DEF=35 是真對齊**:對齊 `HEALTH_DEFENSE_THRESHOLD` 預設
+    (`shared/macro_calibration.HEALTH_DEFENSE_THRESHOLD_DEFAULT` / macro_thresholds.json)——
+    那條線本來就長在**總經 health** 這個尺度上,同尺度,可以對齊。
+  - ⛔ **A=70 不對齊 `HEALTH_GRADE_A_MIN`(=80),而且禁止拿去對齊。**
+    `HEALTH_GRADE_A_MIN` 是**個股六因子健康分**(趨勢30+RSI20+量比15+IBS10+KD15+布林10)
+    的 A 級線,與總經 health 是**兩個不同尺度的量**:總經 health 值域被壓縮在 [21.6, 78.1],
+    照 80 切會讓「積極」帶在 2007-2026 的 4,769 個交易日裡**一次都不觸發**。
+    借出方 `shared/health_thresholds.py` 的 docstring 自己就明文禁止這種借用
+    (「本模組僅收個股健康度評分 0~100 …**不收**市場曝險…**那些屬不同維度**」)。
+    A 的現值 70 來自總經 health 自身分布的 P90(完整推導與樣本見下方常數區)。
+  - ⚠️ **B=50 與 `HEALTH_GRADE_B_MIN`(=50) 是數值巧合,不是有效背書。**
+    那條線同樣出自個股六因子尺度,與 A 的錯誤**同源**,只是尚未被單獨校準過。
+    **不得**引用「B 對齊 HEALTH_GRADE_B_MIN」當成 50 正確的證據;B 目前屬**未校準手訂值**
+    (與 DEF 同一份待辦,見 macro_thresholds.json `_comment_v19_173`)。本次**不動其值**。
+  - 持股 % 帶邊界 80/50/20 對齊 `config.py` 的 EXPOSURE_BULL / NEUTRAL / BEAR
+    (⚠️ 量綱:config.py 存的是**比例** 0.80/0.50/0.20,本模組用**百分比** 80/50/20,
+     差 100×;要引用請自行 ×100,別直接 import 混用)。
+
+⚠️ **本模組零 import 任何門檻 SSOT**(理由見下方常數區「複寫值而非 import」)——
+   所以上面每一條「對齊」都只是**文字宣稱**,沒有任何 import 在背後保證它成立。
+   這正是本段 2026-08-11~08-19 期間爛掉而沒人發現的原因,故改由測試釘住,不再靠註解自律。
+
+📌 **本段追溯(2026-08-19 常數變更,有意識的政策變更,不是漏刪;決策者:user 核准)**
+   2026-08-11(commit 7d76267)起,本段原文為:
+     ~~「健康分界 80 / 50 / 35 對齊 HEALTH_GRADE_A_MIN / HEALTH_GRADE_B_MIN /
+        HEALTH_DEFENSE_THRESHOLD 預設。」~~
+   寫下當時 A **確實**是 80,該句當時為真。2026-08-19(commit ff5f00d)A 切點分兩段改成
+   80 → 65 → 70(尺度借用錯誤修正,user 核准;推導見下方常數區),**但這段 docstring 沒跟著改**,
+   自此變成假引用:數字錯(宣稱 80、實際 70),對齊對象也錯(那正是該次修掉的 bug 本身)。
+   ⛔ **照舊文「恢復對齊」把 A 改回 80 = 把 user 核准修掉的尺度借用錯誤重新種回去。**
+   (本次 docstring 更正只改文件,**未動任何常數值**。)
 
 純模組:零 L1+ 依賴,可單元測試。caller:
   `from shared.position_throttle import compute_position_throttle`
 """
 from __future__ import annotations
 
-# 健康分界(B/DEF 對齊既有分級常數;此處複寫值而非 import,避免 L0 交叉耦合,以註解釘一致)
+# 健康分界(此處複寫值而非 import,避免 L0 交叉耦合)
+# ⚠️ 「複寫值 + 以註解釘一致」在 2026-08-11~08-19 期間**失效過一次**(docstring 宣稱 80、
+#   實際已是 70,無人發現) ⇒ 現改由 `tests/test_position_throttle_docstring_honesty.py`
+#   釘住,註解不再是唯一保證。**只有 DEF 是真對齊**;A 禁止對齊、B 為數值巧合(見模組 docstring)。
 #
 # ⚠️ A 切點 2026-08-19 自 80 改為 65 —— 尺度借用錯誤修正(user 核准)
+#    ⚠️ **65 是中途值,不是現值**:同日下午再改 65 → 70(見本段下方「二次調整」),
+#      現行 `THROTTLE_HEALTH_A = 70`。讀到這裡不要停。
 # ══════════════════════════════════════════════════════════════════════════
 # 舊值 80 註解寫「對齊 HEALTH_GRADE_A_MIN」,但那是**個股六因子健康分**的 A 級線,
 # 與總經 health 是兩個不同尺度的量。借出方 `shared/health_thresholds.py` 的模組
@@ -81,11 +119,17 @@ THROTTLE_HEALTH_A: int = 70    # ≥ 此 → 積極帶(總經 health 專屬;2006
 #
 # 根因仍未解(同上一段結論):health 是 score_pct 的仿射壓縮,jqavg 那 0.6 權重
 # 打在一個準常數上。腿停用後 std 從 11.91 升到 13.90,壓縮**變輕但沒消失**。
-THROTTLE_HEALTH_B: int = 50    # ≥ 此 → 中性偏多帶(對齊 HEALTH_GRADE_B_MIN)
+# ⚠️ B 原註解寫「對齊 HEALTH_GRADE_B_MIN」—— 那與上方 A 的尺度借用**錯誤同源**
+#   (同樣是個股六因子健康分的線),只是當時沒被一起抓到。2026-08-27 更正為誠實表述:
+#   **50 與 HEALTH_GRADE_B_MIN 數值相同純屬巧合,不構成 50 正確的證據**。
+#   ⛔ 本次**不動其值**(改門檻=行為變更,須獨立校準與驗證,屬另案;待辦同 DEF,
+#      見 macro_thresholds.json `_comment_v19_173`)。
+THROTTLE_HEALTH_B: int = 50    # ≥ 此 → 中性偏多帶(未校準手訂值;非對齊 HEALTH_GRADE_B_MIN)
 THROTTLE_HEALTH_DEF: int = 35  # < 此 → 防禦帶(對齊 HEALTH_DEFENSE_THRESHOLD 預設)
 
 # 姿態油門刻度:(health_min, 持股下界%, 持股上界%, 姿態, icon)。
 # **持股** 帶邊界 80/50/20 對齊 EXPOSURE_BULL/NEUTRAL/BEAR;70/30 為區間寬度設計值。
+# ⚠️ 量綱:config.py 那三個常數存的是**比例** 0.80/0.50/0.20,此處是**百分比**,差 100×。
 # ⚠️ 別把「持股 %」與「health 切點」搞混:同樣出現 80/50,但左欄是 health(0-100 分),
 #    右邊兩欄是持股比例(%)。A 切點 2026-08-19 改 65→70 後兩者不再巧合同值(見上方註解)。
 THROTTLE_TIERS: list[tuple[int, int, int, str, str]] = [
