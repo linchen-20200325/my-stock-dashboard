@@ -63,6 +63,7 @@ from src.ui.render.macro_v2_cards import (
     OHLC,
     AxisSeries,
     Row,
+    band_meta,
     fmt_value,
     print_table_html,
     render_bucket_cards,
@@ -603,6 +604,25 @@ def filter_rows(rows: list[Row], *, chip: str = _CHIP_ALL,
     return out
 
 
+def _spec_for(row: Row):
+    """`Row` → 它的 spec。**兩張註冊表都查**(16 盞燈 + 參考走勢)。
+
+    `band_meta(band, spec)` 需要 spec 才能分辨「無資料」與「不判燈」,而 Row
+    自己不帶 spec。這裡不列任何指標名單 —— 直接查那兩張 L0 註冊表,上游哪天
+    多一條參考走勢,這裡自己會長(§3.3:名單是第二把尺)。
+
+    §1:兩張都查不到就 `raise`。回一個假 spec 會讓那一列印出一盞**算錯的燈**,
+    而畫面上「算錯的燈」與「正常的燈」長得一模一樣。
+    """
+    spec = SPECS_BY_KEY.get(row.key) or REF_SPECS_BY_KEY.get(row.key)
+    if spec is None:
+        raise KeyError(
+            f"列 {row.key!r} 不在任何註冊表裡(SPECS_BY_KEY / REF_SPECS_BY_KEY),"
+            "無法判斷它的燈該怎麼顯示 —— 這代表 rows 是從第三個地方生出來的"
+        )
+    return spec
+
+
 def _table_columns(visible: list[Row]) -> dict[str, list]:
     """`st.dataframe` 用的欄位 dict。**吃什麼就畫什麼**,不在此再篩一次。
 
@@ -611,7 +631,7 @@ def _table_columns(visible: list[Row]) -> dict[str, list]:
     第二把尺(§3.3)。上一輪才剛把中文對照從本層收回 SSOT,emoji 再寫一份
     等於把它推回去。
 
-    **「燈」欄維持純文字**(`BAND_META[...][0]` = 綠 / 黃 / 紅 / 無資料),
+    **「燈」欄維持純文字**(`band_meta(...)[0]` = 綠 / 黃 / 紅 / 無資料 / 不判燈),
     user 2026-08-26 裁示:視覺重心要留給核心結論,不讓兩欄的符號互搶。
     這同時也是狀態欄敢出 emoji 的前提 —— 同列沒有第二個 🟢 可以撞
     (完整理由見 `macro_v2_cards.STATE_META` 上方那段與姊妹檔
@@ -621,7 +641,15 @@ def _table_columns(visible: list[Row]) -> dict[str, list]:
         "桶": [_BUCKET_ZH.get(r.bucket, r.bucket) for r in visible],
         "指標": [r.label for r in visible],
         "目前值": [fmt_value(r.value, r.unit, r.decimals) for r in visible],
-        "燈": [BAND_META[r.band][0] for r in visible],
+        # ⚠️ **走 `band_meta`,不直讀 `BAND_META`**(`build_reference_row`
+        # 的 docstring 明文要求)。直讀會讓無門檻的參考列印「無資料」,而正解
+        # 是「不判燈」—— 與 A 段才修掉的那個右上角灰標是**同一個 bug 的另一
+        # 個出口**。現況參考列進不了 `visible`(`build_rows` 只跑
+        # `BUCKET_DANGER_SPECS`),所以這是**修潛伏的錯,不是修現在畫錯的字**;
+        # 但那道屏障是結構巧合,哪天它鬆了,這一格不該跟著印錯。
+        # 零行為變更已實測:16 盞燈 × 5 個 band 全枚舉,`band_meta` 與
+        # `BAND_META` 逐一相同(16 盞全部有門檻,收斂條件一次都不成立)。
+        "燈": [band_meta(r.band, _spec_for(r))[0] for r in visible],
         "狀態": [state_cell(r.state) for r in visible],
         "門檻帶": [r.thr_text for r in visible],
     }
@@ -923,6 +951,13 @@ def render_tab_macro_v2() -> None:
     left, right = st.columns([7, 5], gap="medium")
 
     band, detail = overall_verdict(summary)
+    # ⚠️ **這一處直讀 `BAND_META` 是對的,別跟著改成 `band_meta`**(2026-08-27
+    # 實查):`band_meta(band, spec)` 要一個 spec,而這個 band 來自
+    # `overall_verdict(summary)` —— **五桶 rollup,不是任何一條指標**,根本沒有
+    # spec 可傳。而且它的 `"gray"` 語意本來就是「尚未載入資料」(見
+    # `overall_verdict` 的 early return),正是 `BAND_META["gray"]` 那句「無資料」。
+    # `build_reference_row` docstring 那句「顯示端請走 band_meta」講的是
+    # **逐指標的顯示端**(表格「燈」欄、卡片 pill),不含這個總結論。
     zh, color = BAND_META[band]
     with left, st.container(border=True):
         st.markdown('<p class="v2-t">總經位階</p>', unsafe_allow_html=True)

@@ -2358,3 +2358,66 @@ class TestReferenceCardRejectsHoldReason:
         with pytest.raises(KeyError):
             T.render_one_card(bad, by_key={}, inputs=None,
                               parquet_series={}, ohlc_raw={})
+
+
+# ════════════════════════════════════════════════════════════════
+# 表格「燈」欄走 band_meta，不直讀 BAND_META（2026-08-27）
+#
+# 【修的是什麼】`build_reference_row` 的 docstring 明文寫「**顯示端請走
+# `band_meta`，別直讀 `BAND_META`**」，而同一檔的 `_table_columns` 就在直讀。
+# 後果不是崩潰，是**靜默印錯字**：無門檻的參考列若進了表格，「燈」欄會印
+# 「無資料」，正解是「不判燈」—— 與 A 段才修掉的右上角灰標是**同一個 bug 的
+# 另一個出口**（畫面說沒有、內容有）。
+#
+# 【現況風險】參考列目前進不了 `visible`（`build_rows` 只跑
+# `BUCKET_DANGER_SPECS`），所以這是修**潛伏**的錯。屏障見下一個測試類。
+# ════════════════════════════════════════════════════════════════
+
+class TestLightColumnResolvesThroughBandMeta:
+
+    @staticmethod
+    def _row(key: str, band: str):
+        from shared.macro_buckets import REF_SPECS_BY_KEY, SPECS_BY_KEY
+        from src.ui.tabs.tab_macro_v2 import Row
+        spec = SPECS_BY_KEY.get(key) or REF_SPECS_BY_KEY[key]
+        return Row(key=key, label=spec.label, bucket=spec.bucket,
+                   unit=spec.unit or "", value=1.0, band=band, state="live",
+                   reason=None, hit_source=None, thr_text="-",
+                   source="-", note="", decimals=spec.decimals)
+
+    def test_a_thresholdless_reference_row_says_not_judged_not_no_data(self):
+        """核心：無門檻的參考列印「不判燈」，**不是**「無資料」。
+
+        直讀 `BAND_META["gray"]` 會印「無資料」——畫面上與「這個指標今天沒值」
+        分不開，而 taiex 的值好端端在那裡（24,500 點）。
+        """
+        from src.ui.tabs.tab_macro_v2 import _table_columns
+        cols = _table_columns([self._row("taiex", "gray")])
+        assert cols["燈"] == ["不判燈"]
+
+    def test_the_premise_taiex_really_has_no_thresholds(self):
+        """前提：taiex 確實無門檻，所以它的 `"gray"` 不該讀成「無資料」。"""
+        from shared.macro_buckets import REF_SPECS_BY_KEY, has_thresholds
+        assert not has_thresholds(REF_SPECS_BY_KEY["taiex"])
+
+    @pytest.mark.parametrize("band,zh", [("green", "綠"), ("yellow", "黃"),
+                                         ("red", "紅"), ("gray", "無資料")])
+    def test_the_sixteen_lights_are_byte_for_byte_unchanged(self, band, zh):
+        """零行為變更：16 盞燈**全部有門檻**，收斂條件一次都不成立。
+
+        這條同時是反向守衛：不准用「一律改印不判燈」來通過上面那條。
+        """
+        from shared.macro_buckets import SPECS_BY_KEY
+        from src.ui.tabs.tab_macro_v2 import _table_columns
+        rows = [self._row(k, band) for k in SPECS_BY_KEY]
+        assert _table_columns(rows)["燈"] == [zh] * len(rows)
+
+    def test_a_row_from_nowhere_fails_loud_instead_of_guessing(self):
+        """§1：兩張註冊表都查不到 → raise，不編一盞燈出來。"""
+        from src.ui.tabs.tab_macro_v2 import Row, _table_columns
+        orphan = Row(key="不存在的指標", label="?", bucket="?", unit="",
+                     value=1.0, band="gray", state="live", reason=None,
+                     hit_source=None, thr_text="-", source="-", note="",
+                     decimals=1)
+        with pytest.raises(KeyError):
+            _table_columns([orphan])
