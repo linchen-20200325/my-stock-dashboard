@@ -14,7 +14,6 @@ from src.compute.macro import (
     aggregate_pivot_families,
     calc_traffic_light,
     classify_long_term_regime,
-    classify_short_term_regime,
     detect_cpi_fed_double_top,
     detect_mk_golden_inflection,
     rp_entry,
@@ -465,76 +464,6 @@ class TestClassifyLongTermRegime:
         r_s = classify_long_term_regime(3.0, 5.0, 5.0, 27, 50, mk_strong)
         r_w = classify_long_term_regime(3.0, 5.0, 5.0, 27, 50, mk_weak)
         assert r_s['score'] > r_w['score']
-
-
-class TestClassifyShortTermRegime:
-    """v18.170：短期總經 1Q 視角分類（對齊台股財報季偏向）。"""
-
-    def test_bullish_full_strong(self):
-        # 出口強 + PMI 強 + VIX 低 + 連買多 + CPI 月降 → ⚡ 偏多
-        r = classify_short_term_regime(18, 55, 14, 7, 3.0, 3.3)
-        assert r['regime'].startswith('⚡')
-        assert r['score'] >= 0.8
-
-    def test_neutral_mixed_signals(self):
-        # 出口溫 + PMI 51 + VIX 22 + 微連買 + CPI 持平 → ⚖️ 中性
-        r = classify_short_term_regime(3, 51, 22, 1, 3.0, 3.05)
-        assert r['regime'].startswith('⚖️')
-        assert -0.3 <= r['score'] < 0.8
-
-    def test_bearish_full_weak(self):
-        # 出口降 + PMI 弱 + VIX 高 + 連賣多 + CPI 上升 → ⚠️ 偏空
-        r = classify_short_term_regime(-10, 47, 32, -8, 3.5, 3.1)
-        assert r['regime'].startswith('⚠️')
-        assert r['score'] < -0.3
-
-    def test_insufficient_data(self):
-        r = classify_short_term_regime(None, None, None, None, None, None)
-        assert r['regime'] == '⚪ 資料不足'
-
-    def test_partial_data_export_only(self):
-        # 只有出口 YoY 一項，仍算
-        r = classify_short_term_regime(20, None, None, None, None, None)
-        assert r['regime'] != '⚪ 資料不足'
-        assert r['score'] > 0  # 出口強 → 應偏多
-
-    def test_foreign_investor_streak_positive(self):
-        # 外資連買 5 日（+2）vs 連賣 5 日（-2），分數差應顯著
-        r_buy = classify_short_term_regime(10, 52, 18, 5, 3.0, 3.1)
-        r_sell = classify_short_term_regime(10, 52, 18, -5, 3.0, 3.1)
-        assert r_buy['score'] > r_sell['score']
-
-    def test_vix_threshold_boundaries(self):
-        # VIX < 15 → +2；VIX >= 30 → -2
-        r_calm = classify_short_term_regime(0, 50, 14, 0, 3.0, 3.0)
-        r_panic = classify_short_term_regime(0, 50, 35, 0, 3.0, 3.0)
-        assert r_calm['score'] > r_panic['score']
-
-    def test_components_includes_weights(self):
-        r = classify_short_term_regime(10, 52, 18, 3, 3.0, 3.2)
-        assert len(r['components']) == 5  # 五項全有
-        names = [c[0] for c in r['components']]
-        assert '出口 YoY' in names
-        assert '台 PMI' in names
-        assert 'VIX 波動' in names
-        assert '外資籌碼' in names
-        assert 'CPI 月降' in names
-
-    def test_invalid_data_graceful(self):
-        # 字串輸入不該炸
-        r = classify_short_term_regime('bad', 'x', None, 'y', float('nan'), None)
-        assert r['regime'] == '⚪ 資料不足'
-
-    def test_cpi_month_drop_boosts_score(self):
-        # 同樣其他指標，CPI 月降 0.4 vs 月升 0.4 應有顯著分數差
-        r_drop = classify_short_term_regime(5, 51, 20, 0, 3.0, 3.4)
-        r_rise = classify_short_term_regime(5, 51, 20, 0, 3.4, 3.0)
-        assert r_drop['score'] > r_rise['score']
-
-    def test_action_message_present(self):
-        r = classify_short_term_regime(15, 54, 15, 5, 3.0, 3.3)
-        assert r.get('action') and isinstance(r['action'], str)
-        assert len(r['action']) > 5
 
 
 # ════════════════════════════════════════════════════════════════════════════

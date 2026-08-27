@@ -256,3 +256,53 @@ class TestVixGreenBelowIsDead:
             'green_below 出現了新的讀取點 —— 它若真的開始判燈，'
             '就不再是死參數，CLAUDE.md §3.2 與本檔註記都要同步更新：\n'
             + '\n'.join(_hits))
+
+
+# ════════════════════════════════════════════════════════════════
+# macro_helpers.classify_short_term_regime —— 已於 2026-08-27 刪除（死碼）
+#   它是本 repo 的**第 8 套 VIX 門檻**（15/20/25/30，見刪除前的 docstring），
+#   卻 0 production caller —— 一套沒人用、也沒人知道它存在的尺。
+#   守衛不是「永遠不准回來」，而是「要回來就得帶著 caller」。
+# ════════════════════════════════════════════════════════════════
+_DEAD_SYMBOL = 'classify_short_term_regime'
+
+
+def _production_py_files():
+    for _p in _REPO.rglob('*.py'):
+        _rel = _p.relative_to(_REPO).as_posix()
+        if _rel.startswith(('tests/', 'scratchpad/')) or '__pycache__' in _rel:
+            continue
+        yield _rel, _p
+
+
+def test_dead_ruleset_stays_dead_or_comes_back_with_a_caller():
+    """`classify_short_term_regime` 要嘛不存在，要嘛有真的 production caller。
+
+    以 AST 掃描全部 production .py：分別統計「定義」與「引用」。
+    - 兩者皆 0 → 已刪除，通過。
+    - 有定義但 0 引用 → 又是一套沒人用的孤兒 VIX 門檻 → 紅燈。
+    - 有定義也有引用 → 有人真的用它，通過（此時該補回它的測試）。
+    """
+    _defs: list[str] = []
+    _refs: list[str] = []
+    for _rel, _p in _production_py_files():
+        for _n in ast.walk(ast.parse(_p.read_text(encoding='utf-8'))):
+            if isinstance(_n, ast.FunctionDef) and _n.name == _DEAD_SYMBOL:
+                _defs.append(f'{_rel}:{_n.lineno}')
+            elif ((isinstance(_n, ast.Name) and _n.id == _DEAD_SYMBOL)
+                    or (isinstance(_n, ast.Attribute) and _n.attr == _DEAD_SYMBOL)):
+                _refs.append(f'{_rel}:{_n.lineno}')
+            elif isinstance(_n, ast.alias) and _DEAD_SYMBOL in (_n.name, _n.asname):
+                _refs.append(f'{_rel}: import')
+    assert not (_defs and not _refs), (
+        f'{_DEAD_SYMBOL} 又被定義了，但 0 production caller：{_defs}\n'
+        '它是本 repo 第 8 套 VIX 門檻（15/20/25/30）。'
+        '沒有 caller 的門檻＝沒人知道它存在的第 8 把尺，'
+        '不是「先寫好等以後用」，是下一個誤讀源。')
+
+
+def test_barrel_no_longer_forwards_the_dead_symbol():
+    """PEP 562 barrel 會即時轉發任何 submodule 屬性 —— 確認它現在真的轉發不到。"""
+    import src.compute.macro as _cm
+    with pytest.raises(AttributeError):
+        getattr(_cm, _DEAD_SYMBOL)
