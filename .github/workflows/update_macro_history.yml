@@ -62,8 +62,35 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           # v19.97 bug fix:.gitignore(v18.461) 蓋掉 data_cache/*.parquet,原 `git add data_cache/`
-          # 每日 no-op → cron 抓的歷史從未 commit(main 上 0 筆 🤖 每日總經歷史增量)。
-          # 加 -f 強制納管 parquet+metadata(CLAUDE.md §5:歷史運算用凍結快照 data_cache/ parquet)。
+          # 每日 no-op → cron 抓的歷史從未 commit。加 -f 強制納管 parquet+metadata
+          # (CLAUDE.md §5:歷史運算用凍結快照 data_cache/ parquet)。
+          #
+          # ⚠️ 2026-08-27 註解更正 —— 上面括號裡原本還有一句
+          #    ~~「(main 上 0 筆 🤖 每日總經歷史增量)」~~,**已實測不成立,故移除**。
+          #    **保留這段說明而不是直接刪掉**,是因為那句話今天實際誤導了一次調查:
+          #    有一組人依它推論出「cron 從來 commit 不出去,所以取數修好也沒用」,
+          #    方向完全錯。刪乾淨會讓後人以為這裡從來沒出過事(§-2:沒查證的宣稱
+          #    比沒有宣稱更危險)。
+          #
+          #    **它曾經是對的**:v19.97 修好**之前**,`git add data_cache/` 確實被
+          #    .gitignore 蓋掉、每天 no-op,當時 main 上「0 筆」是如實的量測。
+          #    錯的不是當初那句話,是**沒有人在修好之後回來改它** —— 它從「現況」
+          #    悄悄變成了「化石」。
+          #
+          #    **實測反證(2026-08-27)**:
+          #      - 本機 shallow 窗口(2026-08-11 起)內即有 **16 筆**
+          #        `🤖 每日總經歷史增量`,作者 github-actions[bot] —— 本組親自 git log 驗證
+          #      - 最近一筆 `b082a09`(2026-08-27 19:44 UTC)實帶 4 檔:
+          #        finmind_inst / finmind_margin / twii_ohlcv 三個 parquet + metadata.json
+          #        —— 本組親自 `git show --stat` 驗證
+          #      - 全歷史 **103 筆、最早 2026-06-02**:此數字來自 GitHub commit search
+          #        (另組覆核),**本機為 shallow clone 無法自證**,依 §-2 規則 6 據實標明出處
+          #
+          #    ⚠️ `b082a09` 那 4 檔裡**沒有 tw_pmi.parquet** —— 那不是 push 失敗,
+          #    是 tw_pmi 這個 dataset 取數本身恆空(metadata.json 長期
+          #    row_count:0 / last_error:"抓取結果為空")。真因是 dgtw 6100 的
+          #    shape 假設過時,已由 v19.122 在 `scripts/update_macro_history.py`
+          #    ::fetch_tw_pmi_history 補上 `result.distribution`(runtime 端為 v19.120)。
           git add -f data_cache/
           if git diff --staged --quiet; then
             echo "→ data_cache/ 無增量，跳過 commit"
