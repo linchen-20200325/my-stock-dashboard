@@ -1780,3 +1780,176 @@ class TestMarginCardHoldsTheChartOnly:
         assert flip > 0.10, (
             f"相鄰列翻轉率僅 {flip:.1%} —— 歷史檔可能已清乾淨，"
             f"請複驗後把 margin 的 `hold_reason` 拿掉並恢復繪圖。")
+
+
+# ════════════════════════════════════════════════════════════════
+# B-5 · 密度切換（客戶 2026-08-27 拍板「方案乙：真的少畫」）
+#
+# 「精簡」不是把卡片用 CSS 藏起來 —— 那樣圖照畫、序列照取，省的只有視覺。
+# 這一組驗的就是「真的少畫」：不建那幾張 figure，也**不去取它們的序列**。
+# ════════════════════════════════════════════════════════════════
+class TestDensityReallyDrawsLess:
+
+    @staticmethod
+    def _by_key():
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        return {r.key: r for r in build_rows(_readiness())}
+
+    def test_two_densities_have_different_card_sets(self):
+        from src.ui.tabs.tab_macro_v2 import (
+            DENSITY_COMPACT, DENSITY_FULL, visible_cards,
+        )
+        bk = self._by_key()
+        full = [c.key for c in visible_cards(DENSITY_FULL, by_key=bk)]
+        lite = [c.key for c in visible_cards(DENSITY_COMPACT, by_key=bk)]
+        assert lite, "精簡模式不能一張都不留"
+        assert set(lite) < set(full), "精簡必須是完整的**真子集**"
+        assert len(lite) < len(full)
+
+    def test_compact_membership_lives_on_the_card_not_a_second_list(self):
+        """精簡名單必須等於 `compact=True` 的那幾張 —— 不得另有一份 key 名單。
+
+        第二份名單是第二把尺：加一張卡卻忘了同步，就會出現「精簡模式反而
+        多一張」這種沒人看得懂的行為（§3.3）。
+        """
+        from src.ui.tabs.tab_macro_v2 import (
+            DENSITY_COMPACT, _CHART_SPECS, visible_cards,
+        )
+        bk = self._by_key()
+        lite = {c.key for c in visible_cards(DENSITY_COMPACT, by_key=bk)}
+        assert lite == {c.key for c in _CHART_SPECS if c.compact}
+
+    def test_unknown_density_fails_loud(self):
+        """§1：未知密度要炸。默默當成「完整」= 一顆點了沒反應的按鈕。"""
+        from src.ui.tabs.tab_macro_v2 import visible_cards
+        with pytest.raises(ValueError):
+            visible_cards("超精簡", by_key=self._by_key())
+
+    def test_compact_skips_the_ohlc_fetch_entirely(self):
+        """精簡模式不畫日 K → `KIND_OHLC` 不在 kinds → 整個跳過 parquet 讀檔。"""
+        from src.ui.tabs.tab_macro_v2 import (
+            DENSITY_COMPACT, DENSITY_FULL, KIND_OHLC, visible_cards,
+        )
+        bk = self._by_key()
+        assert KIND_OHLC in {c.kind for c in visible_cards(DENSITY_FULL, by_key=bk)}
+        assert KIND_OHLC not in {
+            c.kind for c in visible_cards(DENSITY_COMPACT, by_key=bk)}
+
+    def test_widget_is_st_radio_horizontal(self):
+        """視覺一致：與第 3 層的分類 chip 同一種單選器。
+
+        同一頁兩種外觀的單選器（radio vs pills / segmented_control）
+        會讓人以為它們的行為不同（user 2026-08-27）。
+        """
+        import ast
+        import pathlib
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        radios = [n for n in ast.walk(tree)
+                  if isinstance(n, ast.Call)
+                  and isinstance(n.func, ast.Attribute)
+                  and n.func.attr == "radio"
+                  and isinstance(n.func.value, ast.Name) and n.func.value.id == "st"]
+        assert len(radios) == 2, f"預期兩顆 st.radio（密度 + 分類），實際 {len(radios)}"
+        for r in radios:
+            kw = {k.arg: k.value for k in r.keywords}
+            assert isinstance(kw.get("horizontal"), ast.Constant) \
+                and kw["horizontal"].value is True
+        # 不得改用 floor 之上但外觀不一致的元件
+        for banned in ("pills", "segmented_control"):
+            assert not [n for n in ast.walk(tree)
+                        if isinstance(n, ast.Attribute) and n.attr == banned
+                        and isinstance(n.value, ast.Name) and n.value.id == "st"], (
+                f"st.{banned} 與第 3 層 chip 外觀不一致")
+
+    def test_default_density_is_full_so_nothing_disappears(self):
+        """預設不得是精簡 —— 「卡片不見了」與「今天沒資料」很難分辨。"""
+        from src.ui.tabs.tab_macro_v2 import (
+            DENSITY_DEFAULT_INDEX, DENSITY_FULL, DENSITY_OPTIONS,
+        )
+        assert DENSITY_OPTIONS[DENSITY_DEFAULT_INDEX] == DENSITY_FULL
+
+    #: AppTest 用的最小 app：把兩支 L3 取數換成計數器後，跑**真的**整頁。
+    #: 刻意不在測試裡重寫一遍 gating 邏輯 —— 重寫的話，production 那段改壞了
+    #: 這條也不會轉紅（守衛守的是自己的複本，不是產品）。
+    _APP = """\
+import json
+import pathlib
+import sys
+
+sys.path.insert(0, {repo!r})
+
+import src.ui.tabs.tab_macro_v2 as m
+
+_hits = {{"get_chart_series": 0, "get_twii_ohlc": 0}}
+
+
+def _count(name, ret):
+    def _fn(*a, **k):
+        _hits[name] += 1
+        return ret
+    return _fn
+
+
+_ORIG_RADIO = m.st.radio
+m.st.radio = lambda label, options, **k: (
+    _ORIG_RADIO(label, options, **k) if k.get("key") != "v2_chart_density"
+    else {density!r})
+m.get_chart_series = _count("get_chart_series", {{}})
+m.get_twii_ohlc = _count("get_twii_ohlc", {{}})
+m.render_tab_macro_v2()
+pathlib.Path({out!r}).write_text(json.dumps(_hits), encoding='utf-8')
+"""
+
+    def _run_app(self, tmp_path, density):
+        """跑一次真的整頁，回傳兩支 L3 取數各被呼叫幾次。"""
+        import json
+        import pathlib
+        AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+
+        out = tmp_path / ("hits_%s.json" % abs(hash(density)))
+        script = tmp_path / ("app_%s.py" % abs(hash(density)))
+        script.write_text(
+            self._APP.format(repo=str(pathlib.Path.cwd()), out=str(out),
+                             density=density),
+            encoding="utf-8")
+        at = AppTest.from_file(str(script), default_timeout=180)
+        at.run()
+        assert not at.exception, [str(e.value) for e in at.exception]
+        return json.loads(out.read_text(encoding="utf-8"))
+
+    def test_compact_really_skips_the_fetch_on_a_real_page_run(self, tmp_path):
+        """整頁真的跑一次：精簡模式下日 K 的 parquet 讀檔**一次都不能被呼叫**。
+
+        這是「方案乙：真的少畫」那句話的證據。若精簡只是把卡片藏起來，
+        或取數 gating 改回讀 `_CHART_SPECS` 常數，這條就會轉紅。
+
+        （`bias_240` 目前仍留在精簡模式，所以 `get_chart_series()` 兩種密度
+        下都會被呼叫一次 —— 那是設計，不是漏網；量測顯示它才是本頁真正的
+        傳輸大戶，該不該在精簡模式縮窗已列入交付回報請客戶裁示。）
+        """
+        from src.ui.tabs.tab_macro_v2 import DENSITY_COMPACT, DENSITY_FULL
+
+        lite = self._run_app(tmp_path, DENSITY_COMPACT)
+        full = self._run_app(tmp_path, DENSITY_FULL)
+        assert lite["get_twii_ohlc"] == 0, "精簡模式仍去讀了日 K 的 parquet"
+        assert full["get_twii_ohlc"] == 1, "完整模式應該要讀一次日 K"
+
+    def test_full_page_render_in_both_densities(self, monkeypatch):
+        """端到端：兩種密度都要能整頁跑完，且精簡確實少畫幾張圖。"""
+        import src.ui.tabs.tab_macro_v2 as m
+
+        drawn = []
+        for fn in ("render_chart_card", "render_dual_axis_card",
+                   "render_candlestick_card", "render_value_card"):
+            monkeypatch.setattr(m, fn,
+                                (lambda name: lambda *a, **k: drawn.append(name))(fn))
+        bk = self._by_key()
+        counts = {}
+        for density in (m.DENSITY_COMPACT, m.DENSITY_FULL):
+            drawn.clear()
+            for card in m.visible_cards(density, by_key=bk):
+                m.render_one_card(card, by_key=bk, inputs=None,
+                                  parquet_series={}, ohlc_raw={})
+            counts[density] = len(drawn)
+        assert counts[m.DENSITY_COMPACT] < counts[m.DENSITY_FULL]

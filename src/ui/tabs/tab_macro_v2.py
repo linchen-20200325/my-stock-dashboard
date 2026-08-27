@@ -98,9 +98,13 @@ CHART_KINDS: tuple[str, ...] = (KIND_PARQUET, KIND_SESSION, KIND_DUAL, KIND_OHLC
 #: 卡 B 要畫幾根 K 棒。**「畫幾天」是畫面決策,所以常數住在 L5**;
 #: L3 `get_twii_ohlc(n)` 沒有預設值,天數只有這裡一份(§3.3)。
 #:
-#: 為什麼是 60 而不是全部 4,919 列(客戶 2026-08-27 拍板):全畫 20 年會讓
-#: 單張圖的 HTML 膨脹到 286 KB,而且每根 K 棒不到 0.05 px —— 那已經不是
-#: 「資訊很密」,是**根本畫不出 K 棒**,實心色塊而已。
+#: 為什麼是 60 而不是全部 4,919 列(客戶 2026-08-27 拍板):本機實測
+#: (2026-08-27,plotly 6.9.0,`fig.to_json()` 位元組數)——
+#:     60 根    →   8.0 KB
+#:     4,919 根 → 361.1 KB(**45 倍**)
+#: 而 3 欄版面下單張圖的繪圖區約 304 px,4,919 根等於**每根 0.06 px** ——
+#: 那已經不是「資訊很密」,是根本畫不出 K 棒,實心色塊而已。
+#: ⚠️ 工單寫的是「286 KB」,本機量到 361.1 KB。**結論不變,數字以實測為準。**
 TWII_KLINE_TRADING_DAYS: int = 60
 
 
@@ -130,13 +134,50 @@ class ChartCard:
         (§3.3)—— 哪天資料修好了,有人把這裡的旗標拿掉卻忘了改名單,
         卡片就會出現「說要畫、實際不畫」或反過來。旗標與卡片綁在同一列,
         物理上不會分岔。
+    compact : bool
+        **「精簡總覽」密度下要不要留這張卡。** 同樣是欄位而不是名單 ——
+        名單是第二把尺:加一張卡卻忘了同步名單,就會出現「精簡模式反而
+        多一張」這種沒人看得懂的行為。
     """
     key: str
     kind: str
     note: str
     ref_key: str = ""
     hold_reason: str = ""
+    compact: bool = False
 
+
+#: ── 第 2 層 · 密度切換(客戶 2026-08-27 拍板「方案乙:真的少畫」)────────
+#: 「精簡」不是把卡片用 CSS 藏起來 —— 那樣圖照畫、序列照取,省的只有視覺,
+#: CPU 與傳輸一毛都沒省。本頁的精簡是**真的不建那幾個 figure、也不去取
+#: 它們的序列**(見 `visible_cards` 與取數 gating)。
+#:
+#: ⚠️ **預設是「完整走勢」**,不是精簡。理由:精簡會讓卡片消失,而「卡片
+#: 不見了」與「這個指標今天沒資料」在畫面上很難分辨。最小破壞 = 不主動
+#: 拿走任何東西,想要更快的人自己點一下。
+#:
+#: ── 實測收益(2026-08-27,plotly 6.9.0,7 次取中位數)────────────────────
+#: `build` = 建 figure 耗時;`payload` = `fig.to_json()` 位元組數
+#: (**不含** streamlit 自身的傳輸開銷,故為下界):
+#:
+#:     us10y 折線(60 點)       build  7.6 ms   payload   4.5 KB   ← 精簡時省掉
+#:     加權指數日 K(60 根)      build  5.5 ms   payload   8.0 KB   ← 精簡時省掉
+#:     卡 A 雙軸(60 點×2)      build 14.9 ms   payload   6.8 KB   ← 精簡保留
+#:     bias_240 折線(4,680 點)  build 18.2 ms   payload 190.0 KB   ← 精簡保留
+#:
+#: 精簡模式實際省下 **≈ 13 ms CPU + ≈ 12.5 KB**,外加整個跳過
+#: `get_twii_ohlc()` 的 parquet 讀檔。
+#: ⚠️ 工單估的是「每張圖 ≈ 59 ms、省 0.18 s + 352 KB」——**本機量不到**。
+#: 據實記錄實測值(§1:沒查證的數字比沒有數字更危險)。
+#:
+#: 📌 **量測帶出的重點**:本頁的傳輸成本 94% 集中在 `bias_240` 那一張
+#: (4,680 點、190 KB),而它正是精簡模式保留的核心卡。真要省傳輸,該做的是
+#: **在精簡模式縮短 bias_240 的窗長**(例如近 250 個交易日),而不是拿掉
+#: 另外兩張小圖。那屬視覺規格取捨,已列入交付回報請客戶裁示,本段不自作主張。
+DENSITY_COMPACT: str = "精簡總覽"
+DENSITY_FULL: str = "完整走勢"
+DENSITY_OPTIONS: tuple[str, ...] = (DENSITY_COMPACT, DENSITY_FULL)
+DENSITY_DEFAULT_INDEX: int = DENSITY_OPTIONS.index(DENSITY_FULL)
 
 #: 融資餘額「圖暫不繪製」的原因(客戶 2026-08-27 拍板)。
 #:
@@ -166,8 +207,11 @@ _MARGIN_CHART_HOLD: str = (
 #: 第 2 層要畫哪些卡。名單來自 2026-08-25 對 16 盞燈的歷史資料盤點
 #: (只有這幾個有真序列)+ 2026-08-27 客戶加點的兩張新卡。
 _CHART_SPECS: list[ChartCard] = [
+    # compact=True 的兩張 = 精簡總覽保留的卡:一張回答「台股位階」
+    # (年線乖離,唯一有長歷史的燈號走勢),一張回答「資金往哪走」(美元 / 台幣)。
     ChartCard("bias_240", KIND_PARQUET,
-              "台股日線 2007 迄今,年線乖離由收盤價即時算出"),
+              "台股日線 2007 迄今,年線乖離由收盤價即時算出",
+              compact=True),
     # ── B-4(2026-08-27 客戶拍板):融資餘額**只標資料疑義,圖暫不繪製** ──
     ChartCard("margin", KIND_PARQUET,
               "融資餘額日資料 2006 迄今(原始單位元,此處已換算為億)",
@@ -180,7 +224,7 @@ _CHART_SPECS: list[ChartCard] = [
     ChartCard("dxy", KIND_DUAL,
               "兩條都是本輪抓取的近 60 個交易日(即時取得,不落地)"
               "　·　台幣為**參考走勢**:有門檻但**不計入 16 盞燈的分母**",
-              ref_key="usdtwd"),
+              ref_key="usdtwd", compact=True),
     # ── 卡 B(2026-08-27 客戶拍板):加權指數日 K ──
     ChartCard("taiex", KIND_OHLC,
               f"本地 parquet 的最近 {TWII_KLINE_TRADING_DAYS} 個交易日"
@@ -222,6 +266,28 @@ def chunk_cards(items: list, per_row: int = CARDS_PER_ROW) -> list[list]:
     if per_row < 1:
         raise ValueError(f"per_row 必須 ≥ 1,收到 {per_row!r}")
     return [items[i:i + per_row] for i in range(0, len(items), per_row)]
+
+
+def visible_cards(density: str, *, by_key: dict) -> list["ChartCard"]:
+    """這一輪第 2 層要畫哪幾張卡。**純函式,可離線斷言。**
+
+    兩層篩選,順序不可對調:
+
+    1. **這盞燈存在嗎** —— 燈號卡要在 `by_key`(readiness 側車攤平後的 rows)
+       裡;參考走勢卡不在側車裡,改看 `REF_SPECS_BY_KEY`。
+    2. **這個密度要不要它** —— `DENSITY_COMPACT` 只留 `compact=True` 的卡。
+
+    §1:未知的 `density` 直接 `raise`。若默默當成「完整」,使用者會看到
+    一個點了沒反應的按鈕,而且永遠查不出為什麼。
+    """
+    if density not in DENSITY_OPTIONS:
+        raise ValueError(
+            f"未知的密度 {density!r}(可用:{list(DENSITY_OPTIONS)})")
+    out = [c for c in _CHART_SPECS
+           if c.key in by_key or c.key in REF_SPECS_BY_KEY]
+    if density == DENSITY_COMPACT:
+        out = [c for c in out if c.compact]
+    return out
 
 
 #: ── 第 3 層篩選 chip ──────────────────────────────────────────────────
@@ -774,14 +840,33 @@ def render_tab_macro_v2() -> None:
     st.caption(
         "只有**具備真實歷史序列**的指標才畫走勢。16 盞燈裡多數沒有落地序列"
         "(如 VIX、台灣 PMI),那些改用純數值卡 —— 不以合成資料充當走勢(§1)。"
+        "　·　台幣與加權指數是**參考走勢**:畫圖但**不算一盞燈**,"
+        "不影響上方的「x / 16」、五桶彙總與訊號可信度。"
+        "　·　「精簡總覽」是**真的少畫**(不建那幾張圖、也不去取它們的序列),"
+        "不是把卡片藏起來。"
     )
 
     by_key = {r.key: r for r in rows}
 
+    # ── 密度切換 ────────────────────────────────────────────────────────
+    # widget 選型:`st.radio(horizontal=True)`。`st.pills`(1.40+)/
+    # `st.segmented_control`(1.42+)在現行 floor(`requirements.txt` 已抬到
+    # 1.56)底下**是可以用的**,但第 3 層的分類 chip 已經在用
+    # `st.radio(horizontal=True)` —— 同一頁兩種外觀的單選器會讓人以為它們
+    # 的行為不同。視覺一致優先(user 2026-08-27)。
+    #
+    # ⚠️ 切換一次 = 一次 rerun = app.py 七個頂層 tab 的 body 全部重跑
+    #    (STATE.md v19.132 產業熱力圖冷抓事故的同一個性質)。所以這顆 widget
+    #    的價值必須大於它自己的代價 —— 而它省下的正是**整頁**的圖表建置,
+    #    不只是本分頁的。
+    density = st.radio(
+        "密度", DENSITY_OPTIONS, index=DENSITY_DEFAULT_INDEX, horizontal=True,
+        label_visibility="collapsed", key="v2_chart_density",
+    )
+
     # 參考走勢卡(taiex / usdtwd)**不在 `by_key` 裡** —— 它們不是燈,不進
-    # readiness 側車。故這裡只用 `by_key` 篩掉「宣告了但那盞燈不存在」的卡。
-    cards = [c for c in _CHART_SPECS
-             if c.key in by_key or c.key in REF_SPECS_BY_KEY]
+    # readiness 側車。篩選與密度一次做完(見 `visible_cards`)。
+    cards = visible_cards(density, by_key=by_key)
 
     # ── L3 取數:**看篩選後的 `cards`,不是看 `_CHART_SPECS` 這個常數** ──
     # 看常數的話「這一輪到底有沒有要畫 parquet 卡」永遠是同一個答案,
@@ -820,11 +905,17 @@ def render_tab_macro_v2() -> None:
     # 7 個頂層 `st.tabs`,每次 rerun 所有 tab body 都會執行,任何因篩選而觸發
     # 的取數都會被乘上 7(STATE.md 產業熱力圖冷抓事故)。
     #
-    # ⚠️ widget 選型受 `requirements.txt` 的 floor 綁死:宣告是
-    # `streamlit>=1.36.0`,故 `st.pills`(1.40+)/ `st.segmented_control`(1.42+)
-    # / `st.fragment`(1.37+)**一律不得使用** —— 沙箱裝的是 1.61,測起來會過,
-    # 部署端解析到 1.36 就直接 AttributeError。此處用 1.36 就有的
-    # `st.text_input` + `st.radio(horizontal=True)`。
+    # ⚠️ widget 選型受 `requirements.txt` 的 floor 綁死 —— 沙箱裝的是 1.61,
+    # 測起來一律會過,部署端解析到 floor 才 AttributeError。
+    #
+    # 【2026-08-27 更正】本段原本寫「floor 是 1.36,故 st.pills(1.40+)/
+    # st.segmented_control(1.42+)/ st.fragment(1.37+) 一律不得使用」。
+    # **那個版本號已經過期**:同日 commit `fa8e90b` 把 floor 抬到 1.56,
+    # 上述三個 API 現在全都在 floor 之上,禁令的**理由已不成立**。
+    # 保留 `st.radio(horizontal=True)` 的理由換成**視覺一致**:本頁第 2 層的
+    # 密度切換也用同一種單選器,同一頁兩種外觀的單選器會讓人以為行為不同。
+    # 真正的版本守衛是 `tests/test_macro_v2_tab.py::TestStreamlitFloorCompatibility`
+    # (從 `requirements.txt` 反解 floor,唯一真相源)—— 不是這段註解。
     fcol_q, fcol_chip = st.columns([4, 8], gap="medium")
     with fcol_q:
         query = st.text_input(
