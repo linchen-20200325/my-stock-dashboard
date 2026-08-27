@@ -88,6 +88,38 @@ _CHART_SPECS: list[tuple[str, str, str]] = [
 #: VIX 是最典型的:天天在用,卻沒有任何落地序列。
 _VALUE_CARD_KEYS: list[str] = ["vix"]
 
+#: ── 第 2 層 · 卡片版面 ────────────────────────────────────────────────
+#: **固定每列 3 張**,卡片變多就往下長,不是每張變窄。
+#:
+#: 為什麼是固定值而不是 `st.columns(len(cards))`:舊寫法讓每張卡的寬度
+#: 隨卡片數量反比縮水,於是「多加一張卡」與「把整排圖壓到看不見」是同一個
+#: 動作。1440px 螢幕實測(扣卡片內距與圖表固定右留白 78px 後的真正繪圖區):
+#:
+#:     3 欄 = 304px ✅ / 4 欄 = 192px 🟡 / 6 欄 = 85px 🔴 / 7 欄 = 54px
+#:
+#: 7 欄時**標註留白比繪圖區還寬**,圖等於消失 —— 而畫面上它還在,只是變成
+#: 一團色塊(§1:看起來正常的壞畫面最危險)。3 是本 repo 既有慣例
+#: (`ui/helpers/macro/helpers.py` 的 9 張卡同樣 3/列)。
+#:
+#: ⚠️ 最後一列不滿時**留空欄**(見 `_chart_row_columns`)—— 那是正確行為,
+#: 不是瑕疵:把 2 張卡拉成半頁寬會讓同一張圖在不同篩選下長得不一樣。
+CARDS_PER_ROW: int = 3
+
+
+def chunk_cards(items: list, per_row: int = CARDS_PER_ROW) -> list[list]:
+    """把卡片切成「每列固定 per_row 張」。**純函式,可離線斷言。**
+
+    空 list → 回 `[]`(**不是** `[[]]`)。差別很重要:回 `[[]]` 的話呼叫端
+    會為一列不存在的卡片開一次 `st.columns()`,在畫面上留下一段莫名的空白。
+
+    `per_row` 必須 ≥ 1,否則 `range(0, n, 0)` 直接無窮迴圈 —— §1:寧可炸,
+    不要吊死在一個沒有錯誤訊息的畫面上。
+    """
+    if per_row < 1:
+        raise ValueError(f"per_row 必須 ≥ 1,收到 {per_row!r}")
+    return [items[i:i + per_row] for i in range(0, len(items), per_row)]
+
+
 #: ── 第 3 層篩選 chip ──────────────────────────────────────────────────
 #: 兩個**跨桶** chip 的 key;其餘 5 個 chip 的 key **就是桶 key 本身**。
 _CHIP_ALL = "all"
@@ -467,23 +499,28 @@ def render_tab_macro_v2() -> None:
         kind == "parquet" for _, kind, _ in _CHART_SPECS) else {}
 
     cards = [(k, kind, note) for k, kind, note in _CHART_SPECS if k in by_key]
-    cols = st.columns(max(len(cards), 1), gap="medium")
-    for col, (key, kind, note) in zip(cols, cards):
-        row, spec = by_key[key], SPECS_BY_KEY[key]
-        if kind == "parquet":
-            pts = parquet_series.get(key) or []
-            xs = [d for d, _ in pts]
-            ys = [v for _, v in pts]
-        else:
-            xs, ys = _session_series(inputs, key)
-            xs, ys = xs or [], ys or []
-        with col:
-            render_chart_card(row, spec, xs, ys, series_note=note)
+    # 固定 3 張/列:卡片數變動時**列數**變多,每張卡永遠一樣寬(見 CARDS_PER_ROW)。
+    for _row_cards in chunk_cards(cards):
+        # ⚠️ 這裡傳的是 `CARDS_PER_ROW` 而不是 `len(_row_cards)` —— 最後一列
+        #    不滿 3 張時要**留空欄**,不能讓剩下的卡把整列撐開變形。
+        cols = st.columns(CARDS_PER_ROW, gap="medium")
+        for col, (key, kind, note) in zip(cols, _row_cards):
+            row, spec = by_key[key], SPECS_BY_KEY[key]
+            if kind == "parquet":
+                pts = parquet_series.get(key) or []
+                xs = [d for d, _ in pts]
+                ys = [v for _, v in pts]
+            else:
+                xs, ys = _session_series(inputs, key)
+                xs, ys = xs or [], ys or []
+            with col:
+                render_chart_card(row, spec, xs, ys, series_note=note)
 
     vcards = [k for k in _VALUE_CARD_KEYS if k in by_key]
-    if vcards:
-        vcols = st.columns(max(len(vcards), 1), gap="medium")
-        for col, key in zip(vcols, vcards):
+    # 純數值卡走同一組欄寬 —— 兩種卡片用不同寬度會讓第 2 層看起來像兩個區塊。
+    for _row_keys in chunk_cards(vcards):
+        vcols = st.columns(CARDS_PER_ROW, gap="medium")
+        for col, key in zip(vcols, _row_keys):
             with col:
                 render_value_card(by_key[key], SPECS_BY_KEY[key])
 

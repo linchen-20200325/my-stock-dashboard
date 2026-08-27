@@ -1226,3 +1226,97 @@ class TestThresholdLinesBindToTheRightAxis:
         p = inspect.signature(_threshold_lines).parameters["yref"]
         assert p.kind is inspect.Parameter.KEYWORD_ONLY
         assert p.default == "y", "預設值不是 'y' → 既有 caller 會行為變更"
+
+
+# ════════════════════════════════════════════════════════════════
+# B-1 · 第 2 層固定 3 張／列（2026-08-27 客戶拍板）
+#
+# 舊寫法 `st.columns(max(len(cards), 1))` 讓每張卡的寬度隨卡片數反比縮水 ——
+# 「多加一張卡」與「把整排圖壓到看不見」變成同一個動作。1440px 實測繪圖區：
+# 3 欄 304px ✅ / 4 欄 192px 🟡 / 6 欄 85px 🔴 / 7 欄 54px（標註留白比繪圖區還寬）。
+# ════════════════════════════════════════════════════════════════
+class TestLayer2FixedThreePerRow:
+
+    def test_chunk_cards_edge_counts(self):
+        """卡片數 0 / 1 / 2 / 3 / 4 / 7 的切列結果。
+
+        4 張是最關鍵的一組:它是**第一個會跨列**的數量,而跨列正是舊寫法
+        永遠不會發生的事(舊寫法會把 4 張擠成一列 192px)。
+        """
+        from src.ui.tabs.tab_macro_v2 import chunk_cards
+
+        assert chunk_cards([]) == []          # ⚠️ 不是 [[]] —— 見函式 docstring
+        assert chunk_cards(["a"]) == [["a"]]
+        assert chunk_cards(["a", "b"]) == [["a", "b"]]
+        assert chunk_cards(["a", "b", "c"]) == [["a", "b", "c"]]
+        assert chunk_cards(["a", "b", "c", "d"]) == [["a", "b", "c"], ["d"]]
+        assert chunk_cards(list("abcdefg")) == [
+            ["a", "b", "c"], ["d", "e", "f"], ["g"]]
+
+    def test_chunk_cards_preserves_order_and_completeness(self):
+        """切列不得漏卡、不得改順序 —— 攤平回來要與輸入逐項相等。"""
+        from src.ui.tabs.tab_macro_v2 import chunk_cards
+
+        for n in range(0, 13):
+            items = list(range(n))
+            flat = [x for row in chunk_cards(items) for x in row]
+            assert flat == items, f"n={n} 攤平後與輸入不符"
+
+    def test_chunk_cards_rejects_zero_per_row(self):
+        """§1:`per_row=0` 會讓 `range(0, n, 0)` 直接 ValueError/無窮迴圈,
+        寧可炸掉也不要吊死在一個沒有錯誤訊息的畫面上。"""
+        from src.ui.tabs.tab_macro_v2 import chunk_cards
+
+        with pytest.raises(ValueError):
+            chunk_cards(["a"], per_row=0)
+        with pytest.raises(ValueError):
+            chunk_cards(["a"], per_row=-1)
+
+    def test_no_st_columns_call_depends_on_card_count(self):
+        """守衛:本檔任何 `st.columns(...)` 的參數都**不得**含 `len(`。
+
+        這是「卡越多每張越窄」那個 bug 的形狀。拿掉本條、把
+        `st.columns(CARDS_PER_ROW)` 改回 `st.columns(max(len(cards), 1))`
+        就會轉紅。
+        """
+        import ast
+        import pathlib
+
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        bad = []
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "columns"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "st"):
+                arg_src = ast.get_source_segment(src, node.args[0]) if node.args else ""
+                if "len(" in (arg_src or ""):
+                    bad.append(f"{node.lineno}: st.columns({arg_src})")
+        assert not bad, ("st.columns 的欄數不得取決於卡片數量（卡越多每張越窄）："
+                         + "; ".join(bad))
+
+    def test_layer2_uses_the_fixed_constant(self):
+        """第 2 層的兩處 `st.columns` 必須吃 `CARDS_PER_ROW` 這個常數本身。
+
+        寫死 `st.columns(3)` 也會過上一條,但那就是第二把尺(§3.3)——
+        改 `CARDS_PER_ROW` 時畫面不會跟著動。
+        """
+        import ast
+        import pathlib
+
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        n = 0
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "columns"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "st"
+                    and node.args
+                    and isinstance(node.args[0], ast.Name)
+                    and node.args[0].id == "CARDS_PER_ROW"):
+                n += 1
+        assert n >= 2, f"第 2 層應有兩處 st.columns(CARDS_PER_ROW)，實際 {n} 處"
