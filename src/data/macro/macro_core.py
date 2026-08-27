@@ -254,8 +254,28 @@ def fred_get_next_release_date(series_id: str, api_key: str) -> Optional[_dt.dat
 # 統一閾值表
 #   全球/美國指標兩 repo 共用一份;台灣指標(v18.270 起)併入此表,
 #   stock 端為主消費者,fund 端跨幣別配置需要時可借用。
+#
+# ⚠️ 2026-08-27 誠實化補註 —— **`green_*` 系列不參與判燈**(值一個都沒動,只是標明)
+#   本表的三個判燈消費者都**只吃 yellow/red**,沒有一個讀 `green_*`:
+#     - macro_buckets.classify_danger  (high_bad/low_bad 各兩刀;green = 「都沒踩到」的殘值)
+#     - macro_alert._classify_level    (只讀 red_above/yellow_above/red_below/yellow_below)
+#     - macro_core._sig_vix            (只讀 VIX 的 red_above/yellow_above)
+#   `macro_helpers._classify_china_zone` 雖有 `green_below` 分支,但它吃的是自己那份
+#   `_CHINA_SUBSCORE_THRESHOLDS`,**不是**本表 —— 別被名字一樣騙了。
+#
+#   ⛔ 刻意不刪:本表是對外 schema(macro_thresholds JSON 契約 + 兩 repo 共用),
+#      刪 key 會動到契約;它們仍是「這條線在哪」的文件價值。標明即可。
+#      唯一有實際消費者的是 USDTWD 的 green_below —— 由 macro_buckets 鏡像成
+#      `_USDTWD_GREEN_BELOW`,只用在卡片文案「＜30.5 為台幣強勢區,非燈號等級」
+#      (顯示用,不判燈),該處已有同款註記,本註即照那個慣例補齊。
 # ══════════════════════════════════════════════════════════════
 MACRO_THRESHOLDS: dict = {
+    # ⚠️ VIX 的 `green_below: 18` 是**死參數**:連顯示端都沒有消費者(USDTWD 至少還有
+    #    卡片文案在用)。實測 VIX=16 / 18 / 19 / 21 全部回 green —— 18 這條線在畫面上
+    #    **不存在**,`classify_danger` 只有黃 22 / 紅 30 兩刀。
+    #    ⚠️ CLAUDE.md §3.2 把它列在表上,讀憲法的人會以為全站綠線是 18 —— 那是誤讀源,
+    #       憲法端另案處理(本次不動 CLAUDE.md)。守衛:tests/test_vix_honesty.py
+    #       ::TestVixGreenBelowIsDead —— 改動它的值不得改變任何判燈輸出。
     "VIX":         {"green_below": 18, "yellow_above": 22, "red_above": 30},
     "CPI":         {"green_low": 1.5, "green_high": 2.5, "yellow_above": 3.5, "red_above": 4.0},
     "US10Y":       {"yellow_above": 4.5, "red_above": 5.0},

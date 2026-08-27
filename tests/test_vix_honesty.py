@@ -18,9 +18,9 @@ import pathlib
 
 import pytest
 
-from shared.allocation_decision import vix_veto_cap
 import shared.allocation_decision as _ad
-from shared.macro_buckets import SPECS_BY_KEY
+from shared.allocation_decision import vix_veto_cap
+from shared.macro_buckets import SPECS_BY_KEY, classify_danger
 from shared.signal_thresholds import (
     VIX_HIGH_RISK_THRESHOLD,
     VIX_MEDIUM_RISK_THRESHOLD,
@@ -182,3 +182,77 @@ class TestSectionMidVixReadsSSOT:
         _src = _SECTION_MID.read_text(encoding='utf-8')
         assert '≥22警戒 / ≥30危機' not in _src, (
             '「待取得」KPI 副標的 22/30 是字面值 —— 留著就是下一個會漂移的說謊點')
+
+
+# ════════════════════════════════════════════════════════════════
+# MACRO_THRESHOLDS['VIX']['green_below'] = 18 是**死參數**
+#   CLAUDE.md §3.2 把它列在表上 → 讀憲法的人會以為「全站綠線是 18」。
+#   實際上 classify_danger 只有黃 22 / 紅 30 兩刀，18 這條線在畫面上不存在。
+#   本組**不刪**它（動到對外 schema / JSON 契約），改成把「它不判燈」這件事
+#   釘成可執行規格：值怎麼動，判燈輸出都不准動。
+# ════════════════════════════════════════════════════════════════
+class TestVixGreenBelowIsDead:
+
+    @pytest.mark.parametrize('vix', [10.0, 16.0, 17.9, 18.0, 19.0, 21.0, 21.9])
+    def test_18_is_not_a_cut_at_all(self, vix):
+        """18 兩側全部是 green —— 那條線在畫面上不存在。"""
+        assert classify_danger(vix, SPECS_BY_KEY['vix']) == 'green'
+
+    def test_moving_green_below_changes_nothing(self, monkeypatch):
+        """把 green_below 從 18 搬到 99，判燈輸出必須一字不變。
+
+        這就是「死參數」的可執行定義。哪天有人把它接上判燈（那會改變輸出、
+        屬業務規則、須送客戶），這條測試會先紅。
+        """
+        from src.data.macro import macro_alert as _ma
+        from src.data.macro import macro_core as _mc
+        _probe = [10.0, 16.0, 18.0, 19.0, 21.9, 22.0, 25.0, 29.9, 30.0, 31.0]
+
+        def _snap():
+            return ([classify_danger(v, SPECS_BY_KEY['vix']) for v in _probe],
+                    # 直接把本表當 rule 餵進 macro_alert 的分級器 ——
+                    # 它若讀 green_below，搬家後就會變。
+                    [_ma._classify_level(v, _mc.MACRO_THRESHOLDS['VIX']) for v in _probe])
+
+        _before = _snap()
+        monkeypatch.setitem(_mc.MACRO_THRESHOLDS['VIX'], 'green_below', 99)
+        assert _snap() == _before
+
+    def test_sig_vix_only_reads_yellow_and_red(self):
+        """`macro_core._sig_vix`（巢狀函式，runtime 取不到）以 AST 證明它不讀 green_*。"""
+        _tree = ast.parse((_REPO / 'src' / 'data' / 'macro' / 'macro_core.py')
+                          .read_text(encoding='utf-8'))
+        _fn = next(_n for _n in ast.walk(_tree)
+                   if isinstance(_n, ast.FunctionDef) and _n.name == '_sig_vix')
+        _keys = {_n.slice.value for _n in ast.walk(_fn)
+                 if isinstance(_n, ast.Subscript)
+                 and isinstance(_n.slice, ast.Constant)
+                 and isinstance(_n.slice.value, str)}
+        assert _keys == {'VIX', 'red_above', 'yellow_above'}, (
+            f'_sig_vix 讀取的 key 變了：{_keys}')
+
+    def test_no_production_code_reads_it(self):
+        """全 repo（不含 tests）不得出現讀 `MACRO_THRESHOLDS[...]['green_below']` 的程式碼。
+
+        唯一合法的 `green_below` 讀取點是 `macro_helpers._classify_china_zone`，
+        而它吃的是自己那份 `_CHINA_SUBSCORE_THRESHOLDS`，**不是**本表 —— 名字一樣，
+        來源不同，別被騙。
+        """
+        _hits: list[str] = []
+        for _p in _REPO.rglob('*.py'):
+            _rel = _p.relative_to(_REPO).as_posix()
+            if _rel.startswith(('tests/', '.git/')) or '__pycache__' in _rel:
+                continue
+            for _i, _line in enumerate(_p.read_text(encoding='utf-8').splitlines(), 1):
+                if 'green_below' not in _line or _line.lstrip().startswith('#'):
+                    continue
+                # 允許：定義本身、macro_buckets 的 USDTWD 鏡像、China 副盤自己那份
+                if _rel in ('src/data/macro/macro_core.py',
+                            'shared/macro_buckets.py',
+                            'src/compute/macro/macro_helpers.py'):
+                    continue
+                _hits.append(f'{_rel}:{_i}: {_line.strip()}')
+        assert not _hits, (
+            'green_below 出現了新的讀取點 —— 它若真的開始判燈，'
+            '就不再是死參數，CLAUDE.md §3.2 與本檔註記都要同步更新：\n'
+            + '\n'.join(_hits))
