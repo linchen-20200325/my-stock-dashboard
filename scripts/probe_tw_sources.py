@@ -330,6 +330,188 @@ def _deep_dump_v4_cier_raw(fetch_url) -> None:
                 break
 
 
+# ── 2026-08-27 第五輪:補 v4 的洞 ——「不在 raw 裡」這個結論當時其實不成立 ────
+# v4 印候選時寫的是 `cands[:12]`,**只印前 12 個**。而 july-2026 與 june-2026
+# 兩頁印出來的 12 個完全相同(['60.5','31.3','57.3',...]) —— 兩個不同月份的
+# 報導不可能有一模一樣的內文數字,那 12 個是**版型 boilerplate**(來自 CSS/
+# srcset/?ver= 之類的屬性值);真正的 PMI 值若存在,只會排在第 13 個之後,
+# **正好被截掉**。拿一份被截斷的清單去斷言「數字不在裡面」= 用沒查證的東西
+# 當事實(§3.3 / §-2 規則 6),故本段補洞後才准下結論。
+#
+# 本段唯讀,只回答一件事:**指定的那個數字,字面上在不在 raw HTML 裡?**
+#   - 不截斷:印候選**總數**與**全部**去重候選;
+#   - 直接對 raw 做 substring membership(不經 parser、不經正則),最不容易騙人;
+#   - 命中就印它在 raw 裡的上下文窗 → 分辨是內文還是版型雜訊;
+#   - 印 raw 裡 'PMI' 的出現次數與前幾個窗 → 判斷內文究竟有沒有被送過來。
+
+#: 要在 raw 裡找的目標值。61.5 = user 指定的 2026-07 值;60.7 = 現行 stale-cache
+#: 裡的 2026-06 值(cached_at=2026-07-01,見 v19.116 smoke 輸出)。兩個都找,
+#: 因為「新月份的頁面上通常同時出現本月值與上月值」,任一命中都證明內文有送。
+_CIER_TARGETS = ('61.5', '60.7')
+
+
+def _windows(text: str, needle: str, limit: int = 3, half: int = 110) -> list[str]:
+    """回傳 needle 在 text 中前 limit 次出現的上下文窗(已壓成單行)。"""
+    out, start = [], 0
+    while len(out) < limit:
+        i = text.find(needle, start)
+        if i < 0:
+            break
+        out.append(text[max(0, i - half):i + half])
+        start = i + 1
+    return out
+
+
+def _deep_dump_v5_cier_where(fetch_url) -> None:
+    print('\n══ 深挖v5:CIER-EN raw HTML —— 不截斷地找那個數字 ══')
+    for _slug in _cier_en_slugs():
+        url = f'https://www.cier.edu.tw/en/eco/{_slug}/'
+        r = fetch_url(url, timeout=20, attempts=2)
+        if r is None:
+            print(f'❌ {_slug} | 無回應(NAS+直連皆敗)')
+            continue
+        if r.status_code != 200:
+            print(f'⚠️ {_slug} | HTTP {r.status_code}(production 在此就 continue)')
+            continue
+        r.encoding = 'utf-8'
+        raw = r.text or ''
+        flat = re.sub(r'\s+', ' ', raw)
+
+        all_hits = re.findall(r'\d{2}\.\d', raw)
+        uniq = list(dict.fromkeys(all_hits))
+        in_band = [c for c in uniq if 30.0 <= float(c) <= 70.0]
+        print(f'📄 {_slug} | HTTP 200 | raw {len(raw)} chars '
+              f'| xx.x 總命中 {len(all_hits)} 次 / 去重 {len(uniq)} 個 '
+              f'/ 值域[30,70] 內 {len(in_band)} 個')
+        # ⚠️ 不加 [:N] —— v4 就是栽在這裡
+        print(f'   ↳ 值域內全部候選(未截斷)={in_band or "無"}')
+
+        # 最直接的證據:字面 substring,不經 parser 也不經正則
+        for _t in _CIER_TARGETS:
+            if _t in raw:
+                print(f'   ✅ 目標「{_t}」**字面出現在 raw HTML 裡**,共 {raw.count(_t)} 次')
+                for _w in _windows(flat, _t):
+                    print(f'      窗 …{_w}…')
+            else:
+                print(f'   ❌ 目標「{_t}」字面**不在** raw HTML 裡(raw.count=0)')
+
+        n_pmi = flat.count('PMI')
+        print(f'   ↳ raw 裡 "PMI" 出現 {n_pmi} 次;前 3 窗:')
+        for _w in _windows(flat, 'PMI', limit=3):
+            print(f'      …{_w}…')
+
+
+# ── 2026-08-27 第六輪:dgtw 6100 —— 探針拿得到、production 拿不到,差在哪 ──────
+# 同一次 run(33100973836)內:
+#   探針 section C  → `📄 C.dgtw 6100 resources × 1` + CSV 下載 HTTP 200 / 2899 bytes
+#   production 端到端 → `dgtw./rest/dataset/6100:無回應`、`dgtw.aset/6100/resource:無回應`
+# 兩邊打的**第一個 URL 完全相同**(都是 `/api/v2/rest/dataset/6100`,同樣帶
+# `Accept: application/json`,production 的 timeout 還更寬:25s/2 vs 探針 15s/2)
+# → **不是**「打錯 endpoint」,也**不是** timeout。
+#
+# 讀 code 後的待驗假設(本段就是要證實/否證它):
+#   兩邊從 metadata JSON 撈 resource 清單的 **shape 候選list 不一樣** —
+#     探針:      result.resources → resources → **result.distribution**
+#     production:result.resources → resources → **data.resources**
+#   若 v2 API 實際回的是 DCAT 風格的 `result.distribution[]`,則探針撈得到、
+#   production 撈到空 list → 走 `if not _res: continue`,而那條 continue
+#   **不寫 errs** → 整段靜默跳過。
+#
+# 這個假設能同時解釋 log 裡三件本來對不起來的事:
+#   (a) 3 個 meta URL 卻只有 2 筆 dgtw errs(v2 靜默跳過,v1 與第三個各 404→無回應);
+#   (b) production 區段完全沒有 `Download.ashx` 的 proxy 成功行(CSV 根本沒被下載);
+#   (c) 探針同時間同一個 URL 卻拿得到 resources。
+#
+# 本段唯讀,且**不修改 production** —— 只做三件事:
+#   ① 印 metadata JSON 的實際 shape(top-level keys / result keys / 四種候選各自長度);
+#   ② 原封呼叫 production 的 `_pmi_src_dgtw`,印它的回傳與它寫進 errs 的內容;
+#   ③ 在探針端**模擬**修好後的撈法(加回 distribution),下載 CSV 後交
+#      **production 的真 `_parse_dgtw_pmi_csv`** 解析,印出實際數值與日期。
+#   ③ 若印得出值 → 修法確定可行,且那個值就是修好後 production 會拿到的值。
+
+
+def _deep_dump_v6_dgtw_shape(fetch_url) -> None:
+    import datetime as _dt6
+    print('\n══ 深挖v6:dgtw 6100 metadata shape —— 探針 vs production 差在哪 ══')
+    meta_url = 'https://data.gov.tw/api/v2/rest/dataset/6100'
+    r = fetch_url(meta_url, timeout=25, attempts=2,
+                  headers={'Accept': 'application/json'})
+    if r is None:
+        print(f'❌ metadata 無回應:{meta_url}')
+        return
+    print(f'📄 metadata HTTP {r.status_code} | {len(r.text)} chars')
+    if r.status_code != 200:
+        return
+    try:
+        j = r.json()
+    except Exception as e:
+        print(f'❌ 非 JSON {type(e).__name__} | head={r.text[:160]!r}')
+        return
+
+    _result = j.get('result') if isinstance(j.get('result'), dict) else {}
+    _data = j.get('data') if isinstance(j.get('data'), dict) else {}
+    print(f'   ↳ top-level keys = {list(j)[:12]}')
+    print(f'   ↳ result keys    = {list(_result)[:20]}')
+    shapes = {
+        'result.resources    [兩邊都有]': _result.get('resources'),
+        'resources           [兩邊都有]': j.get('resources'),
+        'result.distribution [只有探針有]': _result.get('distribution'),
+        'data.resources      [只有 production 有]': _data.get('resources'),
+    }
+    for _k, _v in shapes.items():
+        print(f'   ↳ {_k} → {("list × " + str(len(_v))) if isinstance(_v, list) else type(_v).__name__}')
+    _hit = [k for k, v in shapes.items() if isinstance(v, list) and v]
+    print(f'   🎯 實際命中的 shape = {_hit or "全部皆空"}')
+
+    # ② production 現況:原封呼叫,看它到底回什麼、寫了什麼 errs
+    print('\n   —— ② production `_pmi_src_dgtw` 原封呼叫（現況）——')
+    try:
+        from src.data.macro.macro_core import _pmi_src_dgtw
+        _errs6: list = []
+        _out = _pmi_src_dgtw(_dt6.date.today(), 90, _errs6)
+        print(f'   🎯 _pmi_src_dgtw() → {_out!r}')
+        print(f'   🎯 它寫進 errs 的內容 = {_errs6}')
+    except Exception as _e:
+        import traceback
+        print(f'   ❌ EXC {type(_e).__name__}: {_e}')
+        traceback.print_exc()
+
+    # ③ 模擬修好後的撈法（**只在探針裡模擬,production 未改**）
+    print('\n   —— ③ 模擬修法:候選 list 加回 distribution,再交 production 的真 parser ——')
+    _res = (_result.get('resources') or j.get('resources')
+            or _result.get('distribution') or _data.get('resources') or [])
+    if not _res:
+        print('   ❌ 四種 shape 全空 → 假設被否證,不是 shape 問題,另尋根因')
+        return
+    print(f'   ↳ 撈到 resource × {len(_res)};第一筆 keys = '
+          f'{list(_res[0])[:14] if isinstance(_res[0], dict) else type(_res[0]).__name__}')
+    for _it in _res[:4]:
+        if not isinstance(_it, dict):
+            continue
+        _u = (_it.get('url') or _it.get('resourceDownloadUrl')
+              or _it.get('downloadUrl') or '')
+        print(f'   ↳ [format={_it.get("format", "?")!r}] {_u[:100]}')
+        if not _u:
+            continue
+        _rc = fetch_url(_u, timeout=25, attempts=2)
+        if _rc is None or _rc.status_code != 200:
+            print(f'      ⬇️ 下載失敗:{"無回應" if _rc is None else _rc.status_code}')
+            continue
+        _txt = _rc.content.decode('utf-8-sig', errors='ignore')
+        _lines = [ln for ln in _txt.splitlines() if ln.strip()]
+        print(f'      ⬇️ HTTP 200 | {len(_rc.content)} bytes | {len(_lines)} 行')
+        # ⚠️ 這幾行直接回答總管的 Q3:這條路拿得到的**最新月份到哪**
+        print(f'      ↳ 首行={_lines[0]!r} | 末3行={_lines[-3:]!r}')
+        try:
+            from src.data.macro.macro_core import _parse_dgtw_pmi_csv
+            for _age in (90, 3650):
+                _p = _parse_dgtw_pmi_csv(_txt, today=_dt6.date.today(),
+                                         max_age_days=_age)
+                print(f'      🎯 _parse_dgtw_pmi_csv(max_age_days={_age}) → {_p!r}')
+        except Exception as _e:
+            print(f'      ❌ parser EXC {type(_e).__name__}: {_e}')
+
+
 def main() -> int:
     from src.data.proxy import fetch_url
 
@@ -361,6 +543,8 @@ def main() -> int:
     _deep_dump(fetch_url)      # v19.114:內文視窗 + 正則試跑
     _deep_dump_v2(fetch_url)   # v19.114:資料端點探勘
     _deep_dump_v4_cier_raw(fetch_url)  # 2026-08-27:數字在不在 raw HTML 裡
+    _deep_dump_v5_cier_where(fetch_url)   # 2026-08-27:補 v4 的截斷洞
+    _deep_dump_v6_dgtw_shape(fetch_url)   # 2026-08-27:dgtw shape 差異
     _prod_smoke()             # v19.116:production fetcher 端到端(驗 v19.114/115)
     return 0  # 探針本身永遠 exit 0,存活判讀看逐行輸出
 
