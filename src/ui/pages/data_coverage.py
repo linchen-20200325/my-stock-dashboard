@@ -20,7 +20,7 @@ D-1  覆蓋率只判 `is not None` → `inst` 全敗時 macro_fetch_orchestrator
      的 block 一律算沒值)。
 D-1b `shared.data_freshness.detect_frozen_columns`(值凍結偵測)全 repo 零 caller。
      修:本檔接上 —— 籌碼面對 li_latest 的 7 個日頻欄跑一階差分,連續
-     `_LI_FROZEN_STALE_PERIODS` 期無變化即點名降級。
+     `FROZEN_STALE_PERIODS_LEADING`(L0 SSOT)期無變化即點名降級。
 D-1c 既有 `_is_stale` 旗標路徑接不到:`_STALE_MAX_AGE_MIN=3 日`,超齡 pickle 直接
      回 None,旗標永遠不會被設;而 tab_macro 收到 None 時**靜默沿用上一輪的
      li_latest**(那份 df 身上沒有任何旗標)。修:tab_macro 改把「沿用上輪」寫成
@@ -65,10 +65,11 @@ from shared.macro_buckets import (
 # v19.170 P0-4:覆蓋率 ≠ 新鮮度。覆蓋率只問「有沒有值」,問不出「值是不是 9 天沒動
 # 的死資料」。故本表分兩欄,燈號規則走 L0 SSOT。
 from shared.data_freshness import (
-    detect_frozen_columns,
+    FROZEN_STALE_PERIODS_LEADING,
+    LEADING_DATE_COL,
     downgrade_to_warn,
     freshness_level_for_cadence,
-    frozen_summary,
+    leading_frozen_columns,
     monthly_freshness_level,
     worst_freshness,
 )
@@ -129,18 +130,14 @@ _MACRO_BLOCK_META_KEYS = frozenset({
     "source", "fetched_at", "series_id", "date", "dates", "values", "cadence",
 })
 
-# ── 先行指標凍結偵測(D-1b:接上零 caller 的 detect_frozen_columns)──────
-# 監看欄 = 日頻淨額 / 未平倉類。這些數字連續數個交易日**一模一樣**在物理上
-# 幾乎不可能,出現即代表管線卡住(稽核事故的三欄全在其中)。
-# 刻意不含「成交量」(字串 "1234.5億")與「融資/融券餘額」(四捨五入到整數億,
-# 真有可能連續持平),避免製造假紅燈。
-_LI_FROZEN_WATCH_COLS: tuple[str, ...] = (
-    "外資", "投信", "自營", "外資大小",
-    "前五大留倉", "前十大留倉", "未平倉口數",
-)
-# 連續 N 期一階差分為 0 才判凍結。3 = 3 個交易日(= 4 筆一模一樣的值)。
-_LI_FROZEN_STALE_PERIODS = 3
-_LI_DATE_COL = "_date"
+# ── 先行指標凍結偵測(D-1b)────────────────────────────────────────────
+# 2026-08-27:本檔原有三個私有副本 `_LI_FROZEN_WATCH_COLS` /
+# `_LI_FROZEN_STALE_PERIODS` / `_LI_DATE_COL`(與 L0 逐字相同,靠
+# `tests/test_data_coverage.py` 的 AST drift 守衛釘住)。**副本已刪,改直接
+# 用 L0 SSOT** —— 主畫面(L2 判燈)也要問同一個問題「哪幾欄凍結」,再留一份
+# 副本就會有第三份答案。監看欄與期數的**選法理由**(為什麼只挑日頻淨額 /
+# 未平倉類、為什麼刻意排除成交量與融資餘額)寫在 L0 常數的 docstring,
+# 不在這裡重述 —— 理由重述兩份,漂移的就是理由。
 
 # 各 Tab 取 as-of 日期時「找過哪些路徑」——接錯 key 時要能在畫面上看見找過什麼,
 # 而不是只留下一個永遠不會變色的 ⬜(D-4 的根因就是沒人發現 key 接錯)。
@@ -339,19 +336,6 @@ def _coverage_emoji(have: int, total: int) -> str:
     return "🔴"
 
 
-def _li_sorted(df):
-    """依 `_date` 由舊到新排序(detect_frozen_columns 明文要求 caller 先排好)。"""
-    _cols = getattr(df, "columns", None)
-    if _cols is None or _LI_DATE_COL not in list(_cols):
-        return df
-    try:
-        return df.sort_values(_LI_DATE_COL)
-    except Exception as _e:                  # noqa: BLE001
-        print(f"[coverage] ⚠️ li_latest 依 {_LI_DATE_COL} 排序失敗,"
-              f"沿用原順序: {type(_e).__name__}: {_e}")
-        return df
-
-
 def _li_frozen_info(df) -> tuple[bool, float | None]:
     """讀 li_latest 的欄位版 stale 旗標,回 (是否凍結, 凍結分鐘數|None)。
 
@@ -380,26 +364,6 @@ def _li_frozen_info(df) -> tuple[bool, float | None]:
         if _stale:
             _age = _attrs.get("stale_age_min")
     return (_stale, _age)
-
-
-def _li_frozen_cols(df) -> tuple[int, list]:
-    """D-1b:對 li_latest 跑值凍結偵測,回 (凍結欄數, 欄名 list)。
-
-    這是本輪事故的**主偵測器** —— 9 天不變的三欄靠 `_is_stale` 旗標抓不到
-    (旗標只在走 stale pickle fallback 時才設,而超齡 pickle 根本不會被載入),
-    但一階差分連續為 0 一定抓得到,且不需要知道資料是怎麼來的。
-    """
-    if df is None:
-        return (0, [])
-    try:
-        _res = detect_frozen_columns(
-            _li_sorted(df), _LI_FROZEN_WATCH_COLS,
-            stale_periods=_LI_FROZEN_STALE_PERIODS,
-        )
-    except Exception as _e:                  # noqa: BLE001 — 偵測器自己壞掉不得炸整頁
-        print(f"[coverage] ⚠️ 凍結偵測失敗: {type(_e).__name__}: {_e}")
-        return (0, [])
-    return frozen_summary(_res)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -647,7 +611,7 @@ def compute_tab_coverage(state: dict | None = None,
             _chip_asof = _chip_asof or _at
     # ③ 先行指標:li_latest 的 _date(舊版把它當成整列的唯一新鮮度來源 = D-3)
     if _has_value(_li):
-        _a, _lg, _rs = _asof_of_df(_li, date_col=_LI_DATE_COL, tab="籌碼 li_latest",
+        _a, _lg, _rs = _asof_of_df(_li, date_col=LEADING_DATE_COL, tab="籌碼 li_latest",
                                    today=today)
         _e, _l, _at = _level_from_asof(_a, _lg, _rs, cadence="daily", today=today)
         _chip_levels.append((_e, f"先行 {_l}"))
@@ -663,9 +627,11 @@ def compute_tab_coverage(state: dict | None = None,
     # 覆蓋率再滿,只要值本身可疑,整列一律降到 🟡 並在細項講清楚是哪一種可疑。
     _warns = []
     # (a) D-1b 值凍結 —— 本輪事故的主偵測器
-    _n_frozen, _frozen_cols = _li_frozen_cols(_li)
+    # 排序 + 偵測 + 摘要全在 L0 `leading_frozen_columns` 裡(它自己排序,
+    # 消掉「每個 caller 都要記得先排序」這個必然會漏的步驟)。
+    _n_frozen, _frozen_cols = leading_frozen_columns(_li)
     if _n_frozen:
-        _warns.append(f"🧊 {_n_frozen} 欄數值凍結（連續 {_LI_FROZEN_STALE_PERIODS} "
+        _warns.append(f"🧊 {_n_frozen} 欄數值凍結（連續 {FROZEN_STALE_PERIODS_LEADING} "
                       f"期一階差分為 0）：{'/'.join(str(c) for c in _frozen_cols)}")
     # (b) 走了 stale pickle fallback(旗標版;只在 pickle 未超齡時才會出現)
     _li_stale, _li_age = _li_frozen_info(_li)

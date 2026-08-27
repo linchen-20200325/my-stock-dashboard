@@ -761,3 +761,153 @@ class TestAggregatePivotFamilies:
         assert out['verdict'] == 'bear'      # 燈號顏色不變，仍是 🔴
         assert '3 群偏空' in out['headline']
         assert '可評估 6/6 群' in out['headline']
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 值凍結 → 降級為「不判定」（2026-08-27）
+#
+# 事故原型（`src/ui/pages/data_coverage.py` 檔頭 B4-a）：先行指標三欄連續
+# **9 個交易日**數值完全不變，畫面照樣顯示「🟢 3/3 完整 / 🟢 當日」。
+# 偵測器 `shared.data_freshness.detect_frozen_columns` 當時就寫好了，
+# 判準也訂得很好 —— **問題純粹是它只接在 🔎 資料診斷頁**。
+# 本組守的就是「有沒有真的接上主畫面的判燈路徑」。
+# ══════════════════════════════════════════════════════════════════════
+class TestFrozenLeadingColumnsAreNotJudged:
+
+    _FUT = "外資大小"
+
+    @staticmethod
+    def _li(fut_values, n_other=None):
+        """造一份 li_latest（由舊到新），`外資大小` 用給定的序列。"""
+        _n = len(fut_values)
+        return pd.DataFrame({
+            "_date": [f"2026081{i}" for i in range(_n)],
+            "外資大小": list(fut_values),
+            "韭菜指數": [50 + i for i in range(_n)] if n_other is None else n_other,
+        })
+
+    @staticmethod
+    def _tl(li):
+        return calc_traffic_light({'score': 3, 'regime': 'neutral'},
+                                  {'avg': 60}, {'inst': {}}, li)
+
+    def test_moving_futures_is_judged_normally(self):
+        """前提：值天天在動 → 照常進判燈（否則下一條證明不了什麼）。"""
+        tl = self._tl(self._li([-5000, -8000, -12000, -19000, -25000]))
+        assert tl['fut_net'] == -25000
+        assert tl['fut_net_frozen'] is False
+        assert tl['frozen_cols'] == []
+
+    def test_frozen_futures_is_downgraded_to_unknown(self):
+        """連續不變 → `fut_net` 降為 None，**不拿凍住的數字判燈**。
+
+        這一筆若照判，會是 -25,000 口 → 觸發 `arbitrate_regime` 的外資期貨
+        防禦分支 → 畫面亮 🔴 空頭防禦。用三天前的部位當今天的部位下這種結論，
+        與 §1 禁止的「拿舊值假裝當期值」是同一件事。
+        """
+        tl = self._tl(self._li([-25000] * 5))
+        assert tl['fut_net'] is None, "凍結的期貨部位仍被拿去判燈"
+        assert tl['fut_net_frozen'] is True
+        assert self._FUT in tl['frozen_cols']
+
+    def test_the_downgrade_is_visible_not_silent(self):
+        """§1：降級必須說出來。畫面逐項印 `missing_sources`，故列在那裡。"""
+        tl = self._tl(self._li([-25000] * 5))
+        _hit = [m for m in tl['missing_sources'] if self._FUT in m]
+        assert _hit, f"凍結降級沒有出現在 missing_sources：{tl['missing_sources']}"
+        assert "未更新" in _hit[0] or "未變動" in _hit[0]
+
+    def test_frozen_does_not_change_the_confidence_percentage(self):
+        """`conf` 刻意不動：那 5 項量的是「來源有沒有回東西」。
+
+        這條是**行為邊界**，不是可有可無的細節 —— 若哪天決定讓凍結也扣 conf，
+        會連帶動到 handlers 的 70% 擋燈 gate，那是另一種等級的改動。
+        """
+        _moving = self._tl(self._li([-5000, -8000, -12000, -19000, -25000]))
+        _frozen = self._tl(self._li([-25000] * 5))
+        assert _frozen['conf'] == _moving['conf']
+
+    def test_too_few_rows_is_not_frozen(self):
+        """樣本不足不下結論（有效 diff < 3 期）—— 不確定 ≠ 凍結。"""
+        tl = self._tl(self._li([-25000, -25000]))
+        assert tl['fut_net'] == -25000
+        assert tl['fut_net_frozen'] is False
+
+    def test_nan_gap_is_not_frozen(self):
+        """全 NaN = 缺失，不得被包裝成「穩定」而報凍結（L0 明文設計）。"""
+        tl = self._tl(self._li([float('nan')] * 5))
+        assert tl['fut_net'] is None          # 缺值本來就是 None
+        assert tl['fut_net_frozen'] is False, "缺失被誤判成凍結"
+
+    def test_watch_contract_is_not_widened_here(self):
+        """**硬約束守衛**：判燈端不得自己放寬監看契約。
+
+        擴大監看欄 / 放寬期數 = 製造假紅燈，而假紅燈會讓使用者學會忽略警示 ——
+        真凍結時也沒人看，等於白做。故本檔只准**用** L0 契約，不准覆寫它。
+        """
+        import ast
+        import pathlib
+        _src = pathlib.Path('src/compute/macro/macro_helpers.py').read_text(
+            encoding='utf-8')
+        _tree = ast.parse(_src)
+        for _n in ast.walk(_tree):
+            if not (isinstance(_n, ast.Call)
+                    and getattr(_n.func, 'id', '') == '_leading_frozen_columns'):
+                continue
+            _kw = {k.arg for k in _n.keywords}
+            assert not (_kw & {'cols', 'stale_periods'}), (
+                f"第 {_n.lineno} 行覆寫了 L0 的監看契約（{_kw}）—— "
+                "擴大範圍或放寬期數會製造假紅燈，請改在 L0 討論。")
+        assert '_leading_frozen_columns(' in _src, "凍結偵測沒有接上判燈路徑"
+
+    def test_l0_contract_values_are_unchanged(self):
+        """L0 契約本身的黃金值（改動 = 改變全站凍結判準，必須是有意識的決定）。"""
+        from shared.data_freshness import (
+            FROZEN_STALE_PERIODS_LEADING,
+            FROZEN_WATCH_COLS_LEADING,
+        )
+        assert FROZEN_STALE_PERIODS_LEADING == 3
+        assert FROZEN_WATCH_COLS_LEADING == (
+            "外資", "投信", "自營", "外資大小",
+            "前五大留倉", "前十大留倉", "未平倉口數",
+        )
+        for _excluded in ("成交量", "融資餘額", "融券餘額"):
+            assert _excluded not in FROZEN_WATCH_COLS_LEADING, (
+                f"{_excluded} 被加進監看欄 —— 它會真的連續持平（字串 / 四捨五入到"
+                "整數億），加進來就是製造假紅燈。理由見 L0 docstring。")
+
+
+class TestFrozenDetectorIsActuallyWired:
+    """`leading_frozen_columns` 必須有 production caller。
+
+    這條擋的就是本項的病灶本身：**偵測器寫好了、判準也對，但沒有人呼叫它**
+    （2026-08-25 起它 0 caller，檔內註解自陳「刻意保留」）。
+    """
+
+    def test_has_a_production_caller(self):
+        """用 AST 驗「真的 import 了 L0 那一支」，不是字串命中。
+
+        ⚠️ 純字串比對擋不住一種假接線：某個檔自己定義一個同名（或
+        `_leading_frozen_columns` 這種帶底線前綴的）函式回 `(0, [])` ——
+        字面上有這串字，實際上偵測器仍然沒被呼叫。實測過:那樣的突變
+        用字串版測試是**綠的**。
+        """
+        import ast
+        import pathlib
+        _root = pathlib.Path('.')
+        _hits = []
+        for _p in list(_root.glob('src/**/*.py')) + list(_root.glob('shared/*.py')):
+            if _p.name == 'data_freshness.py':      # 定義處不算 caller
+                continue
+            try:
+                _tree = ast.parse(_p.read_text(encoding='utf-8'), filename=str(_p))
+            except SyntaxError:                     # 語法錯由別的測試負責
+                continue
+            for _n in ast.walk(_tree):
+                if (isinstance(_n, ast.ImportFrom)
+                        and _n.module == 'shared.data_freshness'
+                        and any(a.name == 'leading_frozen_columns' for a in _n.names)):
+                    _hits.append(str(_p))
+        assert _hits, ("沒有任何 production 檔 import "
+                       "`shared.data_freshness.leading_frozen_columns` —— "
+                       "偵測器寫好卻沒接上，正是本項要修的那個病。")

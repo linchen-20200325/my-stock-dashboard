@@ -305,12 +305,19 @@ def test_frozen_watch_contract_does_not_drift_from_data_coverage():
             f'該檔第 {_node.lineno} 行原文：\n'
             f'{_ast.get_source_segment(_src, _node)}')
     if not _found_any:
-        _mods = set()
+        # 2026-08-27 起走的就是這一條:副本已刪，改直接用 L0。
+        # ⚠️ 這裡**不能只驗「有 import 這個模組」** —— 那個斷言在該檔為了別的
+        # 函式(`worst_freshness` 等)而 import 同一個模組時恆真，等於一道
+        # 永遠綠的假護欄。改為驗**具體符號真的被引進來**。
+        _imported: set[str] = set()
         for _n in _ast.walk(_tree):
-            if isinstance(_n, _ast.Import):
-                _mods |= {a.name for a in _n.names}
-            elif isinstance(_n, _ast.ImportFrom):
-                _mods.add(_n.module or '')
-        assert 'shared.data_freshness' in _mods, (
-            'data_coverage.py 既沒有 _LI_FROZEN_* 私有副本，也沒有 import '
-            'shared.data_freshness —— 凍結契約失去單一出處，請修守衛或修實作。')
+            if isinstance(_n, _ast.ImportFrom) and _n.module == 'shared.data_freshness':
+                _imported |= {a.asname or a.name for a in _n.names}
+        assert 'leading_frozen_columns' in _imported, (
+            'data_coverage.py 沒有私有副本，也沒有 import '
+            '`shared.data_freshness.leading_frozen_columns` —— 凍結偵測要嘛沒接上、'
+            '要嘛又長出了第三份實作。')
+        for _need in ('FROZEN_STALE_PERIODS_LEADING', 'LEADING_DATE_COL'):
+            assert _need in _imported, (
+                f'data_coverage.py 沒有 import L0 的 {_need} —— '
+                f'期數/日期欄若又寫成字面值，畫面與 L0 會再度各說各話。')

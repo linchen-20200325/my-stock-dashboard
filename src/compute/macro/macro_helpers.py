@@ -39,6 +39,18 @@ HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE = _load_calibrated_thresholds()
 # 以 module alias 引用是為了讓 `_TL_COPY_BY_SOURCE` 的 key 直接綁 SSOT 常數。
 from shared import regime_arbiter as _RA  # noqa: E402
 
+# 2026-08-27:值凍結偵測（L2 → L0，合法下行依賴）。監看欄與期數的契約在 L0，
+# 本檔**不重寫一份** —— 診斷頁與判燈路徑要問同一個問題「哪幾欄凍住了」。
+from shared.data_freshness import (  # noqa: E402
+    FROZEN_STALE_PERIODS_LEADING,
+    leading_frozen_columns as _leading_frozen_columns,
+)
+
+#: 判燈路徑實際會拿去用的那一個監看欄（外資期貨淨口，進 `arbitrate_regime` 的
+#: 防禦分支）。寫成常數是為了讓「凍結降級」與「取值」綁在同一個字面值上 ——
+#: 兩邊各寫一次 '外資大小'，改欄名時只改到一邊就會靜默失效。
+_FUT_NET_COL = "外資大小"
+
 # ── v19.177 P1-B ②:信心來源標籤 —— 「站上均線比例」是捏造描述,已除役 ──────────
 # 舊值:'旌旗指數 (站上均線比例)'。**全站沒有任何一行 code 在算「站上均線的
 # 股票家數比」**(grep `站上|above_ma|pct_above` 的命中都是別的量:
@@ -207,11 +219,15 @@ def calc_traffic_light(
 
     Returns:
         dict (color, icon, label, action, sub, health, health_partial, defense,
-              score, jqavg, leek, fnet, fk, fut_net, conf, missing_sources,
-              regime, effective_regime, light, regime_source) 或 None
+              score, jqavg, leek, fnet, fk, fut_net, frozen_cols, fut_net_frozen,
+              conf, missing_sources, regime, effective_regime, light,
+              regime_source) 或 None
 
         ⚠️ v19.177 起 `jqavg` / `leek` / `fut_net` **可能為 None**(= 該來源沒拿到),
         消費端格式化前必須先判 None。詳見下方 P1-B 註解。
+        ⚠️ 2026-08-27 起 `fut_net` 還有第二種 None:**值凍結**(上游沒更新,
+        數字卡住)。兩者都是「不知道現在的部位」,但成因不同 ——
+        `fut_net_frozen=True` 才是凍結,並已列進 `missing_sources`。
 
         ⚠️ C1 v19.182 **regime 三欄位契約**（消費端請務必看清楚）：
           - `regime`           = 趨勢面**輸入**（raw `mkt_info['regime']`），
@@ -298,7 +314,24 @@ def calc_traffic_light(
     # NaN 也算缺:`leading_indicators` 對沒抓到的日子會塞 None/NaN,舊碼
     # `float(None)` 拋 TypeError 被 except 吞掉 → 悄悄退回捏造值;`_safe_float`
     # 統一把 None / NaN / 非數字都收斂成 None。
+    # ── 2026-08-27:值凍結 → 降級為「未取得」,不拿凍住的數字判燈 ──────────────
+    # 事故原型(記在 `src/ui/pages/data_coverage.py` 檔頭 B4-a):先行指標
+    # 「前五大留倉 / 前十大留倉 / 未平倉口數」連續 **9 個交易日**數值完全不變,
+    # 而畫面照樣顯示「🟢 3/3 完整 / 🟢 當日」。偵測器
+    # (`shared.data_freshness.detect_frozen_columns`)當時就已經寫好、判準也訂得
+    # 很好,**但只接在 🔎 資料診斷頁** —— 主畫面的判燈路徑拿到的還是那個凍住的
+    # 數字,照樣拿去判「外資期貨有沒有大空單」。使用者不會為了看一盞燈先去翻診斷頁。
+    #
+    # ⚠️ **本段只做降級,不新增監看欄、不放寬期數**(L0 契約一字未動)。
+    #    擴大監看範圍 = 製造假紅燈,而假紅燈會讓使用者學會忽略警示 —— 真凍結時
+    #    也沒人看,等於白做(理由完整寫在 L0 `FROZEN_WATCH_COLS_LEADING` docstring)。
+    # ⚠️ 為什麼是降成 None 而不是「照判但加註」:`_fut_net` 進的是
+    #    `arbitrate_regime(futures_net_lots=...)` 的**防禦分支**。凍住的數字拿去判
+    #    等於「用三天前的部位當今天的部位」—— 那與 §1 禁止的「拿舊值假裝當期值」
+    #    是同一件事,只是這次值是真的、時間是假的。
+    _frozen_n, _frozen_cols = _leading_frozen_columns(li_latest)
     _fut_net = None
+    _fut_frozen = False
     _leek = None
     if li_latest is not None and not li_latest.empty:
         try:
@@ -309,9 +342,20 @@ def calc_traffic_light(
                   file=sys.stderr)
             _li_row = None
         if _li_row is not None:
-            if '外資大小' in li_latest.columns:
-                _fut_net = _safe_float(_li_row.get('外資大小'))
+            if _FUT_NET_COL in li_latest.columns:
+                if _FUT_NET_COL in _frozen_cols:
+                    # 值凍結 = 不知道現在的部位,與「沒抓到」同一種未知（§1）。
+                    _fut_frozen = True
+                    print(f"[calc_traffic_light] ⚠️ 先行指標「{_FUT_NET_COL}」數值凍結"
+                          f"（連續 {FROZEN_STALE_PERIODS_LEADING} 期一階差分為 0;"
+                          f"本輪共 {_frozen_n} 欄凍結:"
+                          f"{'/'.join(str(c) for c in _frozen_cols)}）"
+                          f"→ 外資期貨視為未取得,不進判燈", file=sys.stderr)
+                else:
+                    _fut_net = _safe_float(_li_row.get(_FUT_NET_COL))
             if '韭菜指數' in li_latest.columns:
+                # ⚠️ 韭菜指數**不在**監看欄內（L0 契約），故不做凍結降級 ——
+                # 不是漏掉，是「不新增監看欄」那條硬約束的必然結果。
                 _leek = _safe_float(_li_row.get('韭菜指數'))
 
     # ⚠️ `_regime` 是**趨勢面輸入**（market_regime 的技術面判定），**不是本函式的結論**。
@@ -455,6 +499,17 @@ def calc_traffic_light(
     #    要判斷「資料夠不夠下結論」請用下面的 `conf_groups`。
     _conf = round(sum(_ok for _, _ok, _ in _conf_sources) / CONFIDENCE_SOURCE_COUNT * 100)
     _missing = [_name for _name, _ok, _ in _conf_sources if not _ok]
+    # ── 2026-08-27:凍結降級必須看得見（§1:降級不得靜默）─────────────────────
+    # `_fut_net` 被降成 None 之後,若不講出來,畫面只會少一個數字而沒有人知道
+    # 為什麼 —— 那正是本次要修的「悄悄降級」本身。
+    # ⚠️ **刻意不動 `conf`**:那 5 項量的是「這個來源有沒有回東西」,而先行指標
+    #    確實回了東西（只是值卡住）。把凍結算進 conf 分母會讓同一個百分比同時
+    #    代表兩種不同的失效，反而讓 70% 那道 gate 的語意變模糊。
+    #    凍結走**列名**這條路（畫面本來就會逐項印出 `missing_sources`）。
+    if _fut_frozen:
+        _missing.append(
+            f"外資期貨（{_FUT_NET_COL} 連續 {FROZEN_STALE_PERIODS_LEADING} 期"
+            f"數值未變動，判定為上游未更新，本輪不判讀）")
     # ── 2026-08-19 方案 C:獨立故障域可用性(schema-additive,`conf` 一字未改)──
     # 每組 True = 該故障域至少還有一項活著。消費端(handlers 擋燈 gate)據此判斷,
     # 不再用「數量門檻」—— 因為數量門檻會把「同一份 ^TWII 掉了 2 個視角」
@@ -472,6 +527,11 @@ def calc_traffic_light(
         'health_partial': _health_partial,
         'defense': _defense, 'score': _score, 'jqavg': _jqavg,
         'leek': _leek, 'fnet': _fnet, 'fk': _fk, 'fut_net': _fut_net,
+        # ── 2026-08-27 schema-additive:值凍結（既有 caller 無感）────────────
+        # `frozen_cols` = 這一輪偵測到凍結的**全部**監看欄（不只判燈用到的那一欄）;
+        # `fut_net_frozen` = 判燈用的外資期貨是不是因為凍結而被降成 None
+        #   —— 與「本來就沒抓到」都表現為 `fut_net is None`，靠這個旗標分辨。
+        'frozen_cols': _frozen_cols, 'fut_net_frozen': _fut_frozen,
         'conf': _conf, 'missing_sources': _missing, 'conf_groups': _conf_groups,
         # ── C1 v19.182:regime 三欄位契約（schema-additive，既有 caller 無感）──
         # `regime`            = **趨勢面輸入**（raw `mkt_info['regime']`）。
