@@ -534,6 +534,35 @@ _THR_SIDE_RIGHT: str = "right"
 NO_REASON_TEXT: str = "上游沒有交代原因（程式要修）"
 
 
+# ── 序列取用的兩個小工具 ────────────────────────────────────────────────
+# 本區塊兩張新卡的契約是「**已攤平的 list**」(L4 不碰 pandas,見檔頭 §8.2)。
+# 但 L5 手上的資料多半來自 DataFrame,`df["close"]` 這種寫法很自然就會傳進來。
+# 下面兩個 helper 不是「支援 pandas」,是**讓契約被違反時炸在對的地方、
+# 講對的話** —— 直接寫 `bool(seq)` / `seq[-1]` 的話,傳進 Series 會得到
+# `ValueError: truth value ... ambiguous` 與 pandas 的**標籤**查找 KeyError,
+# 兩個訊息都不會告訴讀的人「這一層要的是 list」。
+
+
+def _has_points(seq) -> bool:
+    """序列裡有沒有東西。`None` / 空 → False。
+
+    刻意**不用** `bool(seq)`:pandas Series 的真值判斷會直接丟
+    `ValueError: The truth value of a Series is ambiguous`,而那個訊息與
+    「這條線沒有資料」是兩件完全不同的事,混在一起會讓人查錯方向。
+    """
+    return seq is not None and len(seq) > 0
+
+
+def _last(seq):
+    """序列末項(末點圓點用)。
+
+    ⚠️ 不能直接寫 `seq[-1]`:對 pandas Series 那是**標籤**查找(找一個叫 -1 的
+    索引),不是取最後一筆 —— 沒有這個標籤就 KeyError,有的話拿到的還是錯的那筆。
+    """
+    _iloc = getattr(seq, "iloc", None)
+    return seq[-1] if _iloc is None else _iloc[-1]
+
+
 def _threshold_lines_ssot(fig: go.Figure, spec: DangerSpec, *,
                           yref: str, side: str = _THR_SIDE_RIGHT) -> None:
     """把 `DangerSpec` 的門檻畫成虛線。數字來自 SSOT,色票來自 `shared.colors`。
@@ -675,8 +704,9 @@ def _add_axis_trace(fig: go.Figure, series: AxisSeries, *,
         x=series.xs, y=series.ys, mode="lines", name=series.row.label,
         line=dict(color=color, width=2), yaxis=yaxis,
         hovertemplate=f"{series.row.label} %{{y:,.{_dec}f}}<extra></extra>")
+    # ↓ 修正點:`xs[-1]` 對 pandas Series 是標籤查找,不是取最後一筆(見 `_last`)
     fig.add_scatter(
-        x=[series.xs[-1]], y=[series.ys[-1]], mode="markers",
+        x=[_last(series.xs)], y=[_last(series.ys)], mode="markers",
         marker=dict(color=color, size=9), yaxis=yaxis,
         showlegend=False, hoverinfo="skip")
 
@@ -725,7 +755,7 @@ def build_dual_axis_figure(left: AxisSeries, right: AxisSeries) -> DualAxisPlot:
 
     任何降級都會在 `notes` 裡逐條說明「哪一條沒有、為什麼」。
     """
-    _l_ok, _r_ok = bool(left.ys), bool(right.ys)
+    _l_ok, _r_ok = _has_points(left.ys), _has_points(right.ys)
 
     if not _l_ok and not _r_ok:
         return DualAxisPlot(fig=None, mode=MODE_NONE,
@@ -852,10 +882,12 @@ def ohlc_problems(ohlc: OHLC) -> list[str]:
     §1:一有問題就**不畫**,不挑能畫的欄位硬畫、也不 fallback 成折線。
     """
     _probs: list[str] = []
-    if not ohlc.xs:
+    # ↓ 修正點:`not seq` 對 pandas Series 會丟 ValueError(訊息與「沒有資料」
+    #   無關,會害人查錯方向)—— 走 `_has_points` 統一判定
+    if not _has_points(ohlc.xs):
         _probs.append("日期軸 xs：沒有資料")
     for _f, _zh in OHLC_FIELDS:
-        if not getattr(ohlc, _f):
+        if not _has_points(getattr(ohlc, _f)):
             _probs.append(f"{_zh}價 {_f}：沒有資料")
     if _probs:
         return _probs

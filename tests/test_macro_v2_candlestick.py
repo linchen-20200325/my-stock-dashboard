@@ -264,3 +264,23 @@ class TestSSOTAndSeparation:
         C.render_candlestick_card(_row(), _SPEC, _ohlc())
         assert fake.kinds().count("plotly_chart") == 1
         assert fake.figs[0].data[0].type == "candlestick"
+
+
+class TestSequenceContract:
+    """契約是「已攤平的 list」；傳 pandas Series 進來時，**缺欄判定不准變成
+    一個看不懂的 ValueError**（`not Series` 會丟 truth-value ambiguous，
+    那個訊息與「沒有資料」是兩件事，會害人查錯方向）。"""
+
+    def test_series_columns_do_not_crash_the_missing_check(self):
+        pd = pytest.importorskip("pandas")
+        o = _ohlc()
+        as_series = C.OHLC(xs=o.xs, open=pd.Series(o.open), high=pd.Series(o.high),
+                           low=pd.Series(o.low), close=pd.Series(o.close))
+        assert C.ohlc_problems(as_series) == []
+
+    def test_empty_series_column_is_reported_as_missing(self):
+        pd = pytest.importorskip("pandas")
+        broken = dataclasses.replace(_ohlc(), low=pd.Series(dtype=float))
+        probs = C.ohlc_problems(broken)
+        assert probs and "low" in probs[0]
+        assert C.build_candlestick_figure(broken, _SPEC) is None

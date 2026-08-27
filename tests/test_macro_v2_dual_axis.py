@@ -432,3 +432,51 @@ class TestLayering:
         src = inspect.getsource(C.build_dual_axis_figure)
         assert "st." not in src
         assert isinstance(C.build_dual_axis_figure(_left(), _right()).fig, go.Figure)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 十、契約被違反時要炸在對的地方、講對的話
+# ══════════════════════════════════════════════════════════════════════
+
+class TestSequenceContract:
+    """本層的契約是「已攤平的 list」。但 L5 手上多半是 DataFrame，
+    `df["close"]` 這種寫法很自然就會傳進來。
+
+    這裡守的**不是**「支援 pandas」，是**失敗訊息要對**：
+      · `bool(Series)` → `ValueError: truth value ... ambiguous`
+      · `Series[-1]`   → pandas 的**標籤**查找（找一個叫 -1 的索引），KeyError
+    兩個訊息都不會告訴讀的人「這一層要的是 list」，會害人查錯方向。
+    """
+
+    def test_has_points_does_not_choke_on_a_pandas_series(self):
+        pd = pytest.importorskip("pandas")
+        assert C._has_points(pd.Series([1.0, 2.0])) is True
+        assert C._has_points(pd.Series(dtype=float)) is False
+        assert C._has_points(None) is False
+        assert C._has_points([]) is False
+
+    def test_empty_series_is_treated_as_missing_not_as_a_crash(self):
+        pd = pytest.importorskip("pandas")
+        blank = dataclasses.replace(_right(), xs=pd.Series(dtype=float),
+                                    ys=pd.Series(dtype=float),
+                                    miss_reason="上游空表")
+        plot = C.build_dual_axis_figure(_left(), blank)
+        assert plot.mode == C.MODE_LEFT_ONLY
+        assert "上游空表" in plot.notes[0]
+
+    def test_last_takes_the_final_row_not_a_label_called_minus_one(self):
+        """★ `Series[-1]` 是標籤查找。index 不是 0..n-1 時它不但不是最後一筆，
+        還可能安靜地拿到別筆 —— 末點圓點會標在錯的地方而畫面看不出來。"""
+        pd = pytest.importorskip("pandas")
+        s = pd.Series([10.0, 20.0, 30.0], index=[5, 6, 7])
+        assert C._last(s) == 30.0
+        assert C._last([10.0, 20.0, 30.0]) == 30.0
+
+    def test_end_marker_lands_on_the_real_last_point_for_a_series(self):
+        pd = pytest.importorskip("pandas")
+        ser = dataclasses.replace(
+            _right(), xs=list(range(3)),
+            ys=pd.Series([31.0, 31.5, 32.5], index=[5, 6, 7]))
+        plot = C.build_dual_axis_figure(_left(3), ser)
+        markers = [t for t in plot.fig.data if t.mode == "markers"]
+        assert list(markers[1].y) == [32.5]
