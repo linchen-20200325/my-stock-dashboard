@@ -197,6 +197,32 @@ class TestChartsUseRealSeriesOnly:
         for key in _VALUE_CARD_KEYS:
             assert key in SPECS_BY_KEY
 
+    def test_each_kind_takes_its_key_from_the_registry_it_actually_reads(self):
+        """每種 kind 的 `key` 必須來自**它的渲染函式真的會去查的那張表**。
+
+        2026-08-27 自審抓到的潛在 KeyError：
+          · `parquet` / `session` / `dual` 的主 key 走 `by_key` + `SPECS_BY_KEY`
+            → 必須是一盞燈；填了參考走勢 key 會 KeyError。
+          · `ohlc` 走 `REF_SPECS_BY_KEY` → 必須是參考走勢 key。
+          · `hold_reason` 非空的卡走 `by_key` → 必須是一盞燈。
+        目前的名單全部合規，本條擋的是**下一張卡填錯表**。
+        """
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        from src.ui.tabs.tab_macro_v2 import (
+            KIND_DUAL, KIND_OHLC, KIND_PARQUET, KIND_SESSION, _CHART_SPECS,
+        )
+        for card in _CHART_SPECS:
+            if card.kind in (KIND_PARQUET, KIND_SESSION, KIND_DUAL):
+                assert card.key in SPECS_BY_KEY, (
+                    f"{card.key}（{card.kind}）由 SPECS_BY_KEY 取 spec，"
+                    f"填參考走勢 key 會 KeyError")
+            elif card.kind == KIND_OHLC:
+                assert card.key in REF_SPECS_BY_KEY, (
+                    f"{card.key}（ohlc）由 REF_SPECS_BY_KEY 取 spec")
+            if card.hold_reason:
+                assert card.key in SPECS_BY_KEY, (
+                    f"{card.key} 是 held 卡，數字走 by_key，必須是一盞燈")
+
     def test_chart_and_value_cards_do_not_overlap(self):
         """同一個指標不能又畫圖又當純數值卡 —— 那就是同一資訊重複兩次。"""
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS, _VALUE_CARD_KEYS

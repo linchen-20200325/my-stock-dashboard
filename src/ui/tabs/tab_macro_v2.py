@@ -5,7 +5,14 @@
 
     第 1 層 · 結論     位階 verdict + 訊號可信度 + 五桶卡
     第 2 層 · 為什麼   有真實歷史序列的指標畫走勢 + 門檻線
+                       (走勢卡 / 純數值卡 / 雙軸卡 / 日 K 卡,固定 3 張一列;
+                        另有「精簡總覽 ↔ 完整走勢」密度切換)
     第 3 層 · 全部明細 16 盞燈總表(可搜尋 + 分類篩選),點任一列右側就地展開
+
+⚠️ **參考走勢 ≠ 一盞燈**(2026-08-27 客戶裁示):台幣與加權指數在第 2 層
+   畫走勢,但**不進**「x / 16」分母、不進五桶 worst-of、不進訊號可信度卡。
+   兩者的 spec 住在 `shared.macro_buckets.REFERENCE_TREND_SPECS`,與 16 盞燈的
+   `BUCKET_DANGER_SPECS` 是**物理隔離的兩張表** —— 不是同一張表加旗標。
 
 ⚠️ **範圍**(2026-08-25 user 核准):只做「位階評估 + 五桶」。
    戰情室 / 新聞 AI / 跨市場 AI / 短中長期分區仍在舊「🌍 總經」分頁,
@@ -226,10 +233,16 @@ _CHART_SPECS: list[ChartCard] = [
               "　·　台幣為**參考走勢**:有門檻但**不計入 16 盞燈的分母**",
               ref_key="usdtwd", compact=True),
     # ── 卡 B(2026-08-27 客戶拍板):加權指數日 K ──
+    # ⚠️ 文案不寫「無門檻線」,雖然本卡確實一條都沒畫(spec 四個門檻欄全 None,
+    #    實測 `fig.layout.shapes == 0`)。理由:L4 `render_candlestick_card` 的
+    #    固定 caption 開頭是「門檻線由 SSOT 畫出」,而 `series_note` 是接在
+    #    **同一行**後面 —— 寫上去會變成同一句話裡「有畫」與「沒畫」對打。
+    #    那句固定文案是 L4 的通則,本次檔案邊界動不到(見交付回報的建議事項:
+    #    該 caption 應依 spec 有無門檻分支)。「不判燈」已足以說明語意。
     ChartCard("taiex", KIND_OHLC,
               f"本地 parquet 的最近 {TWII_KLINE_TRADING_DAYS} 個交易日"
               "　·　本卡為**參考走勢**:不判燈(右上灰標＝沒有燈號,"
-              "不是沒有資料)、無門檻線、不計入 16 盞燈的分母"),
+              "不是沒有資料),不計入 16 盞燈的分母"),
 ]
 
 #: 有值有燈、但**完全沒有歷史序列**可畫者 —— 顯示純數值卡。
@@ -689,7 +702,14 @@ def _session_series(inputs, key: str):
 # ══════════════════════════════════════════════════════════════════════
 
 def _last_or_none(seq):
-    """序列末項;空 / None → None。**不回 0**(0 會被讀成「值就是零」)。"""
+    """序列末項;空 / None → None。**不回 0**(0 會被讀成「值就是零」)。
+
+    ⚠️ 只吃 **list**。本層拿到的序列一律來自 L3(已攤平的 list)或
+    `_session_series`(也是 list),不會是 pandas 物件 —— 真要餵 Series,
+    `seq[-1]` 是**標籤**查找不是取最後一筆(L4 的 `_last()` 就是為此存在)。
+    這裡不重做一份那個 helper,因為本層的契約是「不碰 pandas」;
+    真的有人餵進 Series,該炸的是契約不是這一行。
+    """
     return seq[-1] if seq else None
 
 
@@ -892,6 +912,10 @@ def render_tab_macro_v2() -> None:
 
     vcards = [k for k in _VALUE_CARD_KEYS if k in by_key]
     # 純數值卡走同一組欄寬 —— 兩種卡片用不同寬度會讓第 2 層看起來像兩個區塊。
+    #
+    # ⚠️ **純數值卡不受密度切換影響**,這是刻意的:它們一張圖都不畫,
+    #    精簡掉它們**一毫秒、一個 byte 都省不到**,只是把資訊拿走。
+    #    「少畫」省的是 figure,不是卡片數量。
     for _row_keys in chunk_cards(vcards):
         vcols = st.columns(CARDS_PER_ROW, gap="medium")
         for col, key in zip(vcols, _row_keys):
