@@ -2268,3 +2268,93 @@ class TestReferenceFootnoteSaysEachThingOnce:
                      "那句固定文案是 L4 的通則"):
             assert gone in src, f"已失真的原文 {gone!r} 被整段刪掉，追溯斷了"
             assert "非漏刪" in src
+
+
+# ════════════════════════════════════════════════════════════════
+# 潛伏 bug · 參考走勢卡帶 `hold_reason` 會炸（2026-08-27）
+#
+# 【這一類與上面那條的差別，請先讀完再改】
+# `TestOtherEmptySeriesCardsAreUnchanged::test_every_other_chart_card_has_no_
+# hold_reason` 釘的是「**現況**只有融資卡走 notice 這條路」——那是一條
+# 現況快照，**不是**「填了會怎樣」的守衛。後人若因為正當業務需求要替第二張
+# 卡加 `hold_reason`，會先看到那條紅燈，然後很合理地把它改寬
+# （`{"margin"}` → `{"margin", "xxx"}`），**接著才在畫面上炸**。
+#
+# 本類守的就是那個「接著」：把 `hold_reason` 填到**參考走勢卡**上，
+# 必須在寫下的那一刻炸，而且錯誤訊息要講清楚為什麼這兩件事互斥。
+#
+# 【為什麼是互斥而不是「還沒接」】`hold_reason` 的契約是「數字照顯示、圖暫
+# 不繪製」，成立前提是數字與圖走兩條路（數字走 readiness 側車 `by_key`）。
+# 參考走勢卡只有一條路——數字就是那條序列的最後一點，圖不畫數字就不存在。
+# 所以正解是 raise，不是拿 `.get()` 補一個空 Row 把它變成一張看起來正常、
+# 實際沒有數字的卡（§1：那是把 bug 偽裝成正常畫面）。
+#
+# 【動這裡會炸】要讓參考走勢卡支援 `hold_reason`，得先解決「圖不畫時數字
+# 從哪來」——在那之前，本類必須是紅的。
+# ════════════════════════════════════════════════════════════════
+
+class TestReferenceCardRejectsHoldReason:
+    """參考走勢卡填 `hold_reason` → **建構當場 raise**，不留到渲染才 KeyError。"""
+
+    @staticmethod
+    def _ref_card():
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        return next(c for c in _CHART_SPECS if c.key in REF_SPECS_BY_KEY)
+
+    def test_the_premise_there_really_is_a_reference_chart_card(self):
+        """前提：`_CHART_SPECS` 裡確實有一張參考走勢卡（現況是 taiex）。"""
+        from shared.macro_buckets import REF_SPECS_BY_KEY, SPECS_BY_KEY
+        card = self._ref_card()
+        assert card.key in REF_SPECS_BY_KEY
+        assert card.key not in SPECS_BY_KEY, "前提：它不在 16 盞燈的側車註冊表裡"
+
+    def test_adding_a_hold_reason_to_a_reference_card_raises(self):
+        """核心：填上去就炸，不是等到渲染才 `KeyError`。"""
+        from dataclasses import replace
+        with pytest.raises(ValueError) as ei:
+            replace(self._ref_card(), hold_reason="假裝這張卡也想標資料疑義")
+        assert "hold_reason" in str(ei.value)
+
+    def test_the_error_explains_why_instead_of_just_failing(self):
+        """§1：錯誤訊息要講清楚為什麼互斥，不是丟一個不講原因的 KeyError。
+
+        原本的失敗形態是 `_render_held_card` 的 `KeyError: 'taiex'` ——
+        讀的人只會以為是註冊表漏登，跑去把 taiex 塞進側車（那才是真的壞）。
+        """
+        from dataclasses import replace
+        with pytest.raises(ValueError) as ei:
+            replace(self._ref_card(), hold_reason="x")
+        msg = str(ei.value)
+        assert "SPECS_BY_KEY" in msg, "要指出它不在哪張註冊表"
+        assert "數字" in msg and "圖" in msg, "要說明數字與圖為何無法分開"
+        assert "移除" in msg, "要給出正解（把卡拿掉），否則下一個人只會繞過它"
+
+    def test_a_light_card_can_still_hold_its_chart(self):
+        """反向守衛：不准用「一律禁止 hold_reason」來通過上面幾條。
+
+        融資卡（在側車裡）照樣要能標資料疑義 —— 那是這個欄位存在的理由。
+        """
+        from dataclasses import replace
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+        margin = next(c for c in _CHART_SPECS if c.key == "margin")
+        assert margin.hold_reason, "前提：融資卡本來就帶著 hold_reason"
+        assert replace(margin, hold_reason="換一句原因").hold_reason == "換一句原因"
+
+    def test_the_render_path_never_sees_the_bad_combination(self, monkeypatch):
+        """端到端：擋在建構,所以渲染端拿不到這種卡 —— 沒有第二條漏網路徑。
+
+        以「渲染真的會炸」反證守衛的必要性：繞過 `__post_init__`
+        （`object.__new__` + 直接寫欄位）造出一張非法卡餵給 `render_one_card`，
+        它就是會 `KeyError` —— 這正是守衛存在的理由。
+        """
+        from src.ui.tabs import tab_macro_v2 as T
+        bad = object.__new__(T.ChartCard)
+        ref = self._ref_card()
+        for f, v in (("key", ref.key), ("kind", ref.kind), ("note", ref.note),
+                     ("ref_key", ""), ("hold_reason", "繞過守衛"),
+                     ("compact", False)):
+            object.__setattr__(bad, f, v)
+        with pytest.raises(KeyError):
+            T.render_one_card(bad, by_key={}, inputs=None,
+                              parquet_series={}, ohlc_raw={})

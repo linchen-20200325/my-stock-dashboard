@@ -153,6 +153,48 @@ class ChartCard:
     hold_reason: str = ""
     compact: bool = False
 
+    def __post_init__(self) -> None:
+        """§1 —— **參考走勢卡不接受 `hold_reason`,當場炸掉。**
+
+        不是「這裡剛好還沒接」,是這兩件事在語意上**互斥**:
+
+        `hold_reason` 的契約是「**數字照顯示,圖暫不繪製**」,而它成立的
+        前提是**數字與圖走兩條不同的路** —— 燈號卡的數字來自 readiness
+        側車(`by_key`),圖來自 parquet / session,拿掉圖不影響數字
+        (融資餘額就是這樣:即時路徑的數字是對的,只有歷史檔髒)。
+
+        參考走勢卡**只有一條路**:它的數字就是那條序列的最後一點
+        (`build_reference_row(key, _last_or_none(...))`),而且取數 gating
+        (`_kinds = {c.kind for c in cards if not c.hold_reason}`)會因為
+        `hold_reason` 非空而**整個跳過取數** —— 於是「照顯示的數字」根本
+        不存在。硬要讓它走得通,只能餵一個 `None` 進去,那就是拿一張
+        「有標題、沒數字、沒圖」的空卡冒充「數字照顯示」(§1 造假)。
+
+        所以正解不是把 `by_key[card.key]` 改成 `.get()` 補一個預設 Row ——
+        那會把這個矛盾**變成一個看起來正常的畫面**。參考走勢的資料若真的
+        不可用,誠實的做法是**把這張卡從 `_CHART_SPECS` 拿掉**,而不是留一
+        張說「數字照顯示」卻沒有數字的卡。
+
+        為什麼守在 `__post_init__` 而不是渲染函式裡:這裡是**唯一**的建構
+        入口(`_CHART_SPECS` 的字面量與 `dataclasses.replace` 都會經過),
+        所以錯誤在**寫下那一刻**就炸,而不是等到某個密度下剛好渲染到它。
+        原本的失敗形態是 `_render_held_card` 的 `KeyError: 'taiex'` ——
+        一個不講原因的 KeyError,讀的人只會以為是註冊表漏登。
+        """
+        if self.hold_reason and self.key not in SPECS_BY_KEY:
+            where = ("REFERENCE_TREND_SPECS(參考走勢)"
+                     if self.key in REF_SPECS_BY_KEY else "任何註冊表都不在")
+            raise ValueError(
+                f"卡片 {self.key!r} 不支援 hold_reason —— 它不在 16 盞燈的"
+                f"註冊表 SPECS_BY_KEY 裡({where})。"
+                "`hold_reason` 的語意是「數字照顯示、圖暫不繪製」,前提是"
+                "數字與圖走兩條不同的路(數字走 readiness 側車 `by_key`,"
+                "圖走 parquet / session)。參考走勢卡只有一條路:它的數字"
+                "就是那條序列的最後一點 —— 圖不畫,數字也就不存在。"
+                "資料真的不可用時請把這張卡從 `_CHART_SPECS` 移除,"
+                "不要用 hold_reason 生一張沒有數字的「數字卡」。"
+            )
+
 
 #: ── 第 2 層 · 密度切換(客戶 2026-08-27 拍板「方案乙:真的少畫」)────────
 #: 「精簡」不是把卡片用 CSS 藏起來 —— 那樣圖照畫、序列照取,省的只有視覺,
