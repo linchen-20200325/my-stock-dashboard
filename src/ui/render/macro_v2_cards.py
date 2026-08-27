@@ -21,6 +21,11 @@ from dataclasses import dataclass
 import plotly.graph_objects as go
 import streamlit as st
 
+from shared.colors import (
+    COLORS_7,
+    TRAFFIC_RED,
+    TRAFFIC_YELLOW,
+)
 from shared.macro_buckets import DangerSpec
 
 # ══════════════════════════════════════════════════════════════════════
@@ -484,3 +489,308 @@ def render_detail(row: Row, spec: DangerSpec, edu: dict | None = None,
 
     st.markdown("**門檻來源**")
     st.markdown(f'<span class="v2-src">{row.source}</span>', unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 卡 A：雙軸走勢卡
+# ══════════════════════════════════════════════════════════════════════
+#
+# 為什麼需要「第二種走勢卡」而不是把 `render_chart_card` 撐大:
+# 卡 A「美元指數 / 台幣」左邊 DXY ~105、右邊 USDTWD ~32,**量級差 3.3 倍**。
+# 兩條擠在同一條 y 軸上,台幣那條會被壓成一條貼底的水平線 —— 圖還在、線也在,
+# 但它已經不傳達任何訊息。這不是美觀問題,是「畫面說有走勢、其實看不出走勢」。
+#
+# ⚠️ 本區塊最容易出錯、而且**錯了看起來完全正常**的地方是門檻線綁軸:
+# plotly 省略 `yref` 時一律綁主軸,右軸台幣的 32 / 33 門檻會被畫在**左軸的
+# 32 / 33 位置**(圖底某處),畫面上它就是一條標著「黃線 32.0」的正常虛線。
+# 故本區塊的門檻線 helper 把 `yref` 設成**必填的具名參數**(見
+# `_threshold_lines_ssot`)—— 讓「忘了傳」在語法層就寫不出來。
+
+#: 門檻線色 —— **走 L0 `shared.colors` SSOT**,本區塊不寫 inline hex。
+#:
+#: ⚠️ 既有的 `_threshold_lines()` 用的是 inline `#b8860b` / `#d03b3b`。那是既有
+#: 瑕疵,姊妹檔 `station_charts.py` 的測試已明文記載「刻意不抄過來」。本區塊
+#: 是新寫的,沒有理由把瑕疵複製一份 —— 故走 SSOT。
+#: **兩支函式的門檻「數字」仍然同源**(都只讀 `DangerSpec`,誰都沒有自己的一份),
+#: 分岔只在色票,而且新的這一邊是對的。把舊函式一併收乾淨屬既有函式的行為變更,
+#: 不在本次範圍內(避免夾帶),留待有人動 `render_chart_card` 時一起處理。
+_THR_YELLOW: str = TRAFFIC_YELLOW
+_THR_RED: str = TRAFFIC_RED
+
+#: 序列本身的線色(「這是資料」,不是「這是門檻」)。取 L0 `COLORS_7`:
+#: 第 1 色藍為本站多序列圖的第一條線慣例;右軸取第 5 色紫 —— 刻意**避開**
+#: 黃 / 紅 / 橘,那幾個色在本頁已經被門檻與燈號佔用,撞色會讓人以為線在示警。
+_SERIES_COLOR_LEFT: str = COLORS_7[0]
+_SERIES_COLOR_RIGHT: str = COLORS_7[4]
+
+#: 門檻標註要放在哪一側。**標註跟著自己的軸走** —— 左軸的門檻標在左邊、
+#: 右軸的標在右邊。標在同一側的話,兩組數字會疊在一起而且看不出誰是誰的。
+_THR_SIDE_LEFT: str = "left"
+_THR_SIDE_RIGHT: str = "right"
+
+#: 缺 `miss_reason` 時的文案。§1:**不猜**上游為什麼沒給,直接說這是程式要修的事。
+#: (比照 `station_charts.miss_text_for` 對未登記 `MISS_*` 的處置。)
+NO_REASON_TEXT: str = "上游沒有交代原因（程式要修）"
+
+
+def _threshold_lines_ssot(fig: go.Figure, spec: DangerSpec, *,
+                          yref: str, side: str = _THR_SIDE_RIGHT) -> None:
+    """把 `DangerSpec` 的門檻畫成虛線。數字來自 SSOT,色票來自 `shared.colors`。
+
+    Parameters
+    ----------
+    yref : str
+        **必填、且是具名參數**(沒有預設值)。`"y"` = 主軸,`"y2"` = 副軸。
+
+        為什麼不給預設值 —— 這是本檔既有 `_threshold_lines(yref="y")` 的教訓
+        反過來用:那支函式給了預設值,是為了讓既有 caller 零行為變更;但**新**
+        的 caller 全都在畫雙軸圖,「忘了傳」在那裡不是零變更,是把右軸的門檻
+        畫到左軸的座標上,而且畫面完全看不出來。必填 = 這個錯誤寫不出來。
+    side : str
+        標註放哪一側(`"left"` / `"right"`)。與 `yref` 分開兩個參數,是因為
+        降級成單軸時軸會從 `y2` 變回 `y`,但標註仍該留在原本那一側。
+
+    Notes
+    -----
+    **刻意不用 `fig.add_hline()`,改用顯式 `add_shape` + `add_annotation`。**
+    `add_hline` 會不會把 `yref` 一併套到它產生的標註上,是它的內部行為:
+    沙箱 plotly 6.9.0 實測**會**,但 `requirements.txt` 宣告的 floor 是
+    **5.18.0**,那一版我在此無法實測。線綁對軸、標籤卻綁錯軸 = 一個「浮在
+    別處的數字」,同樣是畫面說 A 內容是 B。顯式綁定讓這件事與 plotly 版本無關。
+    """
+    _x_anchor = "right" if side == _THR_SIDE_LEFT else "left"
+    _x_paper = 0.0 if side == _THR_SIDE_LEFT else 1.0
+    for val, color, name in (
+        (spec.yellow, _THR_YELLOW, "黃線"),
+        (spec.red, _THR_RED, "紅線"),
+        (spec.yellow_lo, _THR_YELLOW, "黃線(下)"),
+        (spec.red_lo, _THR_RED, "紅線(下)"),
+    ):
+        if val is None:
+            continue
+        fig.add_shape(
+            type="line", xref="paper", x0=0, x1=1, yref=yref, y0=val, y1=val,
+            line=dict(color=color, width=1.2, dash="dash"),
+        )
+        fig.add_annotation(
+            xref="paper", x=_x_paper, xanchor=_x_anchor,
+            yref=yref, y=val, yanchor="middle", showarrow=False,
+            text=f"{name} {val:,.{spec.decimals}f}".replace("-", "−"),
+            font=dict(size=11, color=color),
+        )
+
+
+def _v2_base_layout(fig: go.Figure, *, left_margin: int, right_margin: int) -> None:
+    """本區塊兩張新卡共用的版面 —— 與既有 `render_chart_card` 同一組透明底設定。
+
+    透明底 + 中性灰格線,**不硬碼任何背景色**:寫死背景塞進
+    `st.container(border=True)` 會出現色塊接縫,而且亮 / 暗兩種佈景必有一邊不能看。
+    (同 `station_charts._base_layout` 的理由;那邊檔頭寫得更完整。)
+
+    ⚠️ 這是既有 `render_chart_card` 那份 layout 的第二份複本 —— 複本會漂移。
+    故 `tests/test_macro_v2_dual_kline.py::TestLayoutMatchesExistingCard` 逐鍵
+    比對兩者,任一邊改了視覺基調而另一邊沒跟上就轉紅。
+    """
+    fig.update_layout(
+        height=210, margin=dict(l=left_margin, r=right_margin, t=8, b=24),
+        showlegend=False,
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        hovermode="x unified",
+        xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=10)),
+        yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,.16)",
+                   zeroline=False),
+    )
+
+
+@dataclass(frozen=True)
+class AxisSeries:
+    """雙軸圖的**一條**序列。左右兩邊是同一個型別,結構完全對稱。
+
+    ## 為什麼是「一個型別 × 兩個具名參數」而不是「一個可有可無的 spec」
+
+    最直覺的寫法是讓 `render_dual_axis_card(row, spec, ..., spec2=None)` ——
+    右邊沒有就不傳。那等於讓同一個參數位置**有時代表一條線的門檻、有時代表
+    兩條線的門檻**,呼叫端要靠記憶判斷現在是哪一種,而判斷錯了畫面照樣畫得
+    出來(§3.3 的第二把尺)。這裡把「一條序列該有什麼」封成一個型別,左右各
+    給一份 —— 少給一邊在語法層就是錯的,不需要任何人記得。
+
+    Attributes
+    ----------
+    row : Row
+        這條序列對應的那盞燈。label / value / unit / decimals / band 全部沿用
+        既有 `Row`,**本型別不另外開一份平行欄位**(開了就是第二把尺)。
+    spec : DangerSpec
+        **這條序列自己的**門檻。左右各一份,不共用。
+    xs, ys : list
+        由 L5 從真實資料備妥。本層不生成、不補值、不對齊 —— `ys` 是空的就是
+        真的沒有(§1)。
+    miss_reason : str
+        `ys` 為空時,上游要交代**為什麼**沒有(給使用者看的一句話)。
+        沒交代 → 畫面顯示 `NO_REASON_TEXT`,不編一個理由。
+    """
+    row: Row
+    spec: DangerSpec
+    xs: list
+    ys: list[float]
+    miss_reason: str = ""
+
+
+#: `build_dual_axis_figure` 的四種結果。**「兩條都有」以外的三種都是降級**,
+#: 而降級一定要在畫面上講清楚 —— 一張只剩一條線的圖若不說明,使用者會以為
+#: 另一條「就是沒有變化」。
+MODE_DUAL: str = "dual"
+MODE_LEFT_ONLY: str = "left_only"
+MODE_RIGHT_ONLY: str = "right_only"
+MODE_NONE: str = "none"
+
+
+@dataclass(frozen=True)
+class DualAxisPlot:
+    """`build_dual_axis_figure` 的產物 —— 圖 + 走了哪條路 + 要交代什麼。
+
+    把「建 figure」與「渲染」分開,是為了讓 `fig` 能在測試裡直接斷言
+    (比照姊妹檔 `station_charts.build_*_figure`)。既有 `render_chart_card`
+    把 fig 建在函式體內、外面拿不到 —— 那個瑕疵不在這裡沿用。
+    """
+    fig: go.Figure | None
+    mode: str
+    notes: list[str]
+
+
+def _miss_note(series: AxisSeries) -> str:
+    """「某條線為什麼不在」的一句話。§1:上游沒說就說「程式要修」,不編理由。"""
+    return f"{series.row.label}：{series.miss_reason or NO_REASON_TEXT}"
+
+
+def _add_axis_trace(fig: go.Figure, series: AxisSeries, *,
+                    color: str, yaxis: str) -> None:
+    """畫一條線 + 末點圓點(與既有 `render_chart_card` 的線型一致)。
+
+    雙軸圖**刻意不用 `fill="tozeroy"`**:既有單序列卡有填色,但兩條半透明
+    填色疊在一起,交疊處會混出第三個顏色,看起來像第三條序列。
+    """
+    _dec = series.row.decimals
+    fig.add_scatter(
+        x=series.xs, y=series.ys, mode="lines", name=series.row.label,
+        line=dict(color=color, width=2), yaxis=yaxis,
+        hovertemplate=f"{series.row.label} %{{y:,.{_dec}f}}<extra></extra>")
+    fig.add_scatter(
+        x=[series.xs[-1]], y=[series.ys[-1]], mode="markers",
+        marker=dict(color=color, size=9), yaxis=yaxis,
+        showlegend=False, hoverinfo="skip")
+
+
+def _build_single_axis(series: AxisSeries, *, color: str, side: str,
+                       notes: list[str]) -> DualAxisPlot:
+    """降級路徑:只有一條線有資料 → **單軸單線,完全不建立 y2**。
+
+    ⚠️ 兩個一起做才算對,少做任何一個都會留下一個「看起來正常」的錯誤畫面:
+
+    1. **不留空的右軸。** 留著一條沒有資料的 y2,畫面上會出現一排從 32 到 33
+       的刻度而沒有任何線 —— 讀的人會以為那條線的值是 0(貼在軸底),而不是
+       「這條線根本沒抓到」。
+    2. **門檻線的 `yref` 要跟著改回 `"y"`。** 這條線現在住在主軸上,它的門檻
+       若還綁 `"y2"`,plotly 會**憑空生出**一條隱形的 y2 並把門檻畫在那條軸的
+       座標上 —— 又是一條位置錯誤但外觀正常的虛線。
+    """
+    fig = go.Figure()
+    _add_axis_trace(fig, series, color=color, yaxis="y")
+    _v2_base_layout(fig, left_margin=(78 if side == _THR_SIDE_LEFT else 8),
+                    right_margin=(78 if side == _THR_SIDE_RIGHT else 8))
+    # ↓ 修正點:降級後主軸是 "y" 而非 "y2"(見本函式 docstring 第 2 點)
+    _threshold_lines_ssot(fig, series.spec, yref="y", side=side)
+    return DualAxisPlot(
+        fig=fig,
+        mode=(MODE_LEFT_ONLY if side == _THR_SIDE_LEFT else MODE_RIGHT_ONLY),
+        notes=notes)
+
+
+def build_dual_axis_figure(left: AxisSeries, right: AxisSeries) -> DualAxisPlot:
+    """兩條量級差很大的序列 → 左右雙軸 `go.Figure`。**純函式,可離線斷言。**
+
+    `left` / `right` 是**兩個對稱的具名參數**,各自帶自己的 `DangerSpec` ——
+    理由見 `AxisSeries` 的 docstring。
+
+    降級(§1,一律誠實交代,不留看起來正常的空殼):
+
+    ==================  ==========================================
+    情況                 結果
+    ==================  ==========================================
+    兩條都有             `MODE_DUAL`,左軸 + 右軸
+    只有左邊有           `MODE_LEFT_ONLY`,單軸單線,**不建 y2**
+    只有右邊有           `MODE_RIGHT_ONLY`,單軸單線,**不建 y2**
+    兩條都沒有           `MODE_NONE`,`fig` 為 `None`(不畫空圖)
+    ==================  ==========================================
+
+    任何降級都會在 `notes` 裡逐條說明「哪一條沒有、為什麼」。
+    """
+    _l_ok, _r_ok = bool(left.ys), bool(right.ys)
+
+    if not _l_ok and not _r_ok:
+        return DualAxisPlot(fig=None, mode=MODE_NONE,
+                            notes=[_miss_note(left), _miss_note(right)])
+    if not _r_ok:
+        return _build_single_axis(left, color=_SERIES_COLOR_LEFT,
+                                  side=_THR_SIDE_LEFT, notes=[_miss_note(right)])
+    if not _l_ok:
+        return _build_single_axis(right, color=_SERIES_COLOR_RIGHT,
+                                  side=_THR_SIDE_RIGHT, notes=[_miss_note(left)])
+
+    fig = go.Figure()
+    _add_axis_trace(fig, left, color=_SERIES_COLOR_LEFT, yaxis="y")
+    _add_axis_trace(fig, right, color=_SERIES_COLOR_RIGHT, yaxis="y2")
+    _v2_base_layout(fig, left_margin=78, right_margin=78)
+    # y2 必須在畫門檻線**之前**存在,否則右軸門檻會綁到一條 plotly 臨時生出來的軸。
+    fig.update_layout(
+        yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,.16)",
+                   zeroline=False, tickfont=dict(size=10),
+                   title=dict(text=left.row.label, font=dict(size=10))),
+        yaxis2=dict(overlaying="y", side="right", showgrid=False,
+                    zeroline=False, tickfont=dict(size=10),
+                    title=dict(text=right.row.label, font=dict(size=10))),
+    )
+    _threshold_lines_ssot(fig, left.spec, yref="y", side=_THR_SIDE_LEFT)
+    # ↓ 本卡最關鍵的一行:右軸的門檻**必須**綁 y2。漏了就是「黃線 32.0」畫在
+    #   左軸的 32 —— 標籤寫對、位置全錯,而且畫面看不出來(見本區塊檔頭警語)。
+    _threshold_lines_ssot(fig, right.spec, yref="y2", side=_THR_SIDE_RIGHT)
+    return DualAxisPlot(fig=fig, mode=MODE_DUAL, notes=[])
+
+
+def _axis_value_html(series: AxisSeries) -> str:
+    """一條序列在卡頭的「名稱 + 值 + 燈」。值與燈全部沿用既有 `Row` 與 SSOT。"""
+    zh, color = BAND_META[series.row.band]
+    return (
+        f'<div style="display:flex;align-items:baseline;gap:7px;margin:2px 0">'
+        f'<span style="font-size:12px;opacity:.7">{series.row.label}</span>'
+        f'<span style="font-size:22px;font-weight:700;'
+        f'font-variant-numeric:tabular-nums">'
+        f'{fmt_value(series.row.value, series.row.unit, series.row.decimals)}</span>'
+        f'{pill(zh, color)}</div>')
+
+
+def render_dual_axis_card(title: str, left: AxisSeries, right: AxisSeries, *,
+                          series_note: str = "", key: str = "") -> None:
+    """雙軸走勢卡(卡 A「美元指數 / 台幣」用)。
+
+    L4 純渲染:序列由 L5 備妥,本函式**不取數、不判燈、不補值**。
+    圖本身由 `build_dual_axis_figure` 建(可離線單測),這裡只負責擺上畫面。
+
+    `key`: `st.plotly_chart` 的 key(同一頁多張圖不可撞);留空則由兩盞燈的
+    key 組出來。**不參與任何判斷。**
+    """
+    plot = build_dual_axis_figure(left, right)
+    with st.container(border=True):
+        st.markdown(f'<p class="v2-t">{title}</p>', unsafe_allow_html=True)
+        st.markdown(_axis_value_html(left) + _axis_value_html(right),
+                    unsafe_allow_html=True)
+
+        if plot.fig is None:
+            st.caption("兩條序列都取不到 —— 不以合成資料替代。")
+        else:
+            _k = key or f"v2dual_{left.row.key}_{right.row.key}"
+            st.plotly_chart(plot.fig, width="stretch",
+                            config={"displayModeBar": False}, key=_k)
+        for _n in plot.notes:
+            st.caption(f"這條線畫不出來　·　{_n}")
+        st.caption("門檻線由 SSOT 畫出,左右軸各綁自己的門檻"
+                   + (f"　·　{series_note}" if series_note else ""))
