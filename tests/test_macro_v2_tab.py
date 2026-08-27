@@ -2075,8 +2075,9 @@ class TestHeldCardNoticeTellsTheTruth:
 
     def test_the_premise_l4_default_sentence_is_still_that_wording(self):
         """本組的前提。L4 哪天改了預設句，先在這裡紅，而不是默默失效。"""
-        import src.ui.render.macro_v2_cards as C
         import inspect
+
+        import src.ui.render.macro_v2_cards as C
         src = inspect.getsource(C.render_chart_card)
         assert _DEFAULT_EMPTY_SENTENCE in src
 
@@ -2111,6 +2112,7 @@ class TestHeldCardNoticeTellsTheTruth:
     def test_notice_is_keyword_only_so_it_cannot_collide_with_kind(self):
         """A 段刻意把 `notice` 放在 `*` 之後。改成位置參數會撞到 `kind`。"""
         import inspect
+
         import src.ui.render.macro_v2_cards as C
         sig = inspect.signature(C.render_chart_card)
         assert sig.parameters["notice"].kind is inspect.Parameter.KEYWORD_ONLY
@@ -2172,3 +2174,97 @@ class TestOtherEmptySeriesCardsAreUnchanged:
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
         held = {c.key for c in _CHART_SPECS if c.hold_reason}
         assert held == {"margin"}
+
+
+# ════════════════════════════════════════════════════════════════
+# B-4 收尾 · 參考走勢卡的腳註不得同義反覆（2026-08-27）
+#
+# 【修的是什麼】taiex 的 note 原本寫「不判燈(右上灰標＝沒有燈號,不是沒有
+# 資料)」。那是**根因未修時的補救文案** —— 當時 `BAND_META` 只有四個 band，
+# 右上角印的是「無資料」，而卡片同時畫著 60 根真實 K 棒，只能靠腳註去解釋
+# 那個灰標。A 段補上第 5 個 band 之後右上角直接寫「不判燈」，這句話就變成
+# 在解釋一個**已經不存在的畫面**。
+#
+# 【為什麼算 bug 不算文案潔癖】腳註跟畫面對不上，跟數字跟畫面對不上是同一
+# 種病：兩邊都看起來很正常，而讀的人會以為右上角現在還印著「無資料」。
+# ════════════════════════════════════════════════════════════════
+
+class TestReferenceFootnoteSaysEachThingOnce:
+
+    @staticmethod
+    def _note() -> str:
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+        return next(c for c in _CHART_SPECS if c.key == "taiex").note
+
+    @staticmethod
+    def _render(monkeypatch) -> _FakeST:
+        """真的 L4 K 線卡跑一遍 —— 斷言螢幕上實際出現的字。"""
+        n = 5
+        return _render_card_for_real(monkeypatch, "taiex", ohlc_raw={
+            "xs": [f"2026-08-{i + 1:02d}" for i in range(n)],
+            "open": [24_000.0 + i for i in range(n)],
+            "high": [24_100.0 + i for i in range(n)],
+            "low": [23_900.0 + i for i in range(n)],
+            "close": [24_050.0 + i for i in range(n)],
+        })
+
+    def test_the_premise_the_pill_really_says_it_is_not_judged(self):
+        """本組的前提：右上角確實已經自己講了「不判燈」。"""
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        from src.ui.render.macro_v2_cards import band_meta
+        assert band_meta("gray", REF_SPECS_BY_KEY["taiex"])[0] == "不判燈"
+
+    def test_the_note_no_longer_explains_a_gray_pill_that_is_gone(self):
+        note = self._note()
+        assert "灰標" not in note
+        assert "不是沒有資料" not in note
+
+    def test_the_note_no_longer_repeats_the_pill(self):
+        """「不判燈」由 pill 講；note 再講一次就是同一張卡上說兩次。"""
+        assert "不判燈" not in self._note()
+
+    def test_the_note_no_longer_repeats_the_threshold_caption(self):
+        """「沒有門檻線」由 L4 `threshold_caption` 講（A 段已改成依 spec 分支）。"""
+        note = self._note()
+        assert "門檻線" not in note and "無門檻" not in note
+
+    def test_the_note_still_carries_the_one_thing_only_it_knows(self):
+        """反向守衛：不准用「把 note 清空」來通過上面三條。
+
+        「不計入 16 盞燈的分母」是畫面上**沒有別人會說**的一件事 ——
+        pill 只說不判燈，L4 腳註只說沒有門檻線，兩者都不等於「不進分母」。
+        """
+        note = self._note()
+        assert "參考走勢" in note
+        assert "分母" in note
+
+    def test_on_screen_each_statement_appears_exactly_once(self, monkeypatch):
+        """端到端：整張卡跑完，三句話各只出現一次。"""
+        fake = self._render(monkeypatch)
+        screen = fake.screen()
+        assert len(fake.figs) == 1, "前提：這一輪確實畫了 K 線"
+        assert screen.count("不判燈") == 1, "pill 與腳註重複說了同一件事"
+        assert screen.count("沒有門檻線") == 1
+        assert screen.count("分母") == 1
+
+    def test_and_the_screen_still_says_all_three(self, monkeypatch):
+        """去重不等於減資訊 —— 三件事在畫面上都還在。"""
+        screen = self._render(monkeypatch).screen()
+        assert "不判燈" in screen
+        assert "本卡沒有門檻線" in screen
+        assert "不計入 16 盞燈的分母" in screen
+        assert "無資料" not in screen, "右上角不得再說無資料（A 段缺口 1）"
+
+    def test_the_superseded_wording_is_kept_for_traceability(self):
+        """**不是只把它刪掉**：已失真的敘述要留得下追溯（本 repo 慣例）。
+
+        這一條守的不是文案品質，是「後人讀得到為什麼曾經那樣寫」。原文若被
+        整段清掉，下一個看到 note 這麼短的人會以為它一直就這麼短，而看不到
+        「它曾經在替一個壞掉的右上角打補丁」。
+        """
+        import pathlib
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        for gone in ("右上灰標＝沒有燈號", "BAND_META` 只有四個 band",
+                     "那句固定文案是 L4 的通則"):
+            assert gone in src, f"已失真的原文 {gone!r} 被整段刪掉，追溯斷了"
+            assert "非漏刪" in src

@@ -234,16 +234,31 @@ _CHART_SPECS: list[ChartCard] = [
               "　·　台幣為**參考走勢**:有門檻但**不計入 16 盞燈的分母**",
               ref_key="usdtwd", compact=True),
     # ── 卡 B(2026-08-27 客戶拍板):加權指數日 K ──
-    # ⚠️ 文案不寫「無門檻線」,雖然本卡確實一條都沒畫(spec 四個門檻欄全 None,
-    #    實測 `fig.layout.shapes == 0`)。理由:L4 `render_candlestick_card` 的
-    #    固定 caption 開頭是「門檻線由 SSOT 畫出」,而 `series_note` 是接在
-    #    **同一行**後面 —— 寫上去會變成同一句話裡「有畫」與「沒畫」對打。
-    #    那句固定文案是 L4 的通則,本次檔案邊界動不到(見交付回報的建議事項:
-    #    該 caption 應依 spec 有無門檻分支)。「不判燈」已足以說明語意。
+    # ⚠️ 本卡的 note **刻意只講一件事**:不計入 16 盞燈的分母。另外兩件事
+    #    畫面上已經有人說了,這裡再說一次就是同義反覆:
+    #      · 「沒有門檻線」→ L4 `threshold_caption(spec)` 依 SSOT
+    #        `has_thresholds` 印「本卡沒有門檻線（這個指標未設門檻）」
+    #      · 「不判燈」    → 右上角的 pill 就是這三個字
+    #        (L4 `BAND_META[BAND_REFERENCE]`,由 `band_meta(band, spec)` 解析)
+    #
+    # ~~文案不寫「無門檻線」,雖然本卡確實一條都沒畫(spec 四個門檻欄全 None,~~
+    # ~~實測 `fig.layout.shapes == 0`)。理由:L4 `render_candlestick_card` 的~~
+    # ~~固定 caption 開頭是「門檻線由 SSOT 畫出」,而 `series_note` 是接在~~
+    # ~~**同一行**後面 —— 寫上去會變成同一句話裡「有畫」與「沒畫」對打。~~
+    # ~~那句固定文案是 L4 的通則,本次檔案邊界動不到(見交付回報的建議事項:~~
+    # ~~該 caption 應依 spec 有無門檻分支)。「不判燈」已足以說明語意。~~
+    # **2026-08-27 已失效,非漏刪**:上面點名的建議事項已由 A 段落地 ——
+    # 那句 caption 現在依 spec 分支,「有畫 vs 沒畫」對打的前提消失。保留原文
+    # 是為了讓後人知道「為什麼這張卡的 note 曾經刻意留白」,不是這裡沒發生過事。
+    #
+    # ⚠️ 同一次一併拿掉 note 裡的「(右上灰標＝沒有燈號,不是沒有資料)」——
+    # 那是**根因未修時的補救文案**:當時 `BAND_META` 只有四個 band,右上角
+    # 印的是「無資料」,而卡片同時畫著 60 根真實 K 棒,只能靠腳註去解釋那個
+    # 灰標。A 段補上第 5 個 band 之後右上角直接寫「不判燈」,這句話就變成
+    # 解釋一個已經不存在的畫面(§1:留著等於在說一件畫面上沒發生的事)。
     ChartCard("taiex", KIND_OHLC,
               f"本地 parquet 的最近 {TWII_KLINE_TRADING_DAYS} 個交易日"
-              "　·　本卡為**參考走勢**:不判燈(右上灰標＝沒有燈號,"
-              "不是沒有資料),不計入 16 盞燈的分母"),
+              "　·　本卡為**參考走勢**:不計入 16 盞燈的分母"),
 ]
 
 #: 有值有燈、但**完全沒有歷史序列**可畫者 —— 顯示純數值卡。
@@ -403,12 +418,22 @@ def build_reference_row(key: str, value: float | None) -> Row:
         無門檻(taiex)  → 一律 `"gray"`,**不呼叫** `classify_danger`
                          (呼叫會 TypeError —— L0 刻意留的 fail loud)
 
-    ⚠️ **已知的畫面瑕疵,不是漏看**:L4 `BAND_META` 只有四個 band
-    (green/yellow/red/gray),沒有一個代表「參考走勢,不判燈」。故無門檻卡
-    的右上角會顯示灰標「無資料」,而卡片同時秀著真實數字 —— 兩者看似矛盾。
-    本檔的處置是在 `ChartCard.note` 明講「右上灰標＝沒有燈號,不是沒有資料」,
-    並**不動 L4**(那是另一組的檔案邊界)。正解是 L4 加第五個 band「參考」,
-    已列為交付回報中的建議事項。
+    ⚠️ **本函式對無門檻 spec 仍然只填 `"gray"`** —— 那不是填錯,是
+    `classify_danger` 對無門檻 spec 會 TypeError(L0 刻意的 fail loud),
+    這裡只能填一個中性值。「這條線根本沒有門檻」的資訊在 `spec` 裡,由 L4
+    `band_meta(band, spec)` 依 L0 `has_thresholds(spec)` 解析成「不判燈」。
+    **顯示端請走 `band_meta`,別直讀 `BAND_META`。**
+
+    ~~⚠️ **已知的畫面瑕疵,不是漏看**:L4 `BAND_META` 只有四個 band~~
+    ~~(green/yellow/red/gray),沒有一個代表「參考走勢,不判燈」。故無門檻卡~~
+    ~~的右上角會顯示灰標「無資料」,而卡片同時秀著真實數字 —— 兩者看似矛盾。~~
+    ~~本檔的處置是在 `ChartCard.note` 明講「右上灰標＝沒有燈號,不是沒有資料」,~~
+    ~~並**不動 L4**(那是另一組的檔案邊界)。正解是 L4 加第五個 band「參考」,~~
+    ~~已列為交付回報中的建議事項。~~
+    **2026-08-27 已修,非漏刪**:上面點名的「正解」已由 A 段落地 ——
+    `BAND_META` 現在是**五個** band,第五個的標籤是「**不判燈**」(不是原文
+    預想的「參考」)。`ChartCard.note` 那句補救文案已同步移除。保留原文是為了
+    讓後人知道「為什麼這裡填 gray 曾經會在畫面上讀成無資料」。
     """
     spec = REF_SPECS_BY_KEY[key]
     band = classify_danger(value, spec) if has_thresholds(spec) else "gray"
@@ -760,7 +785,7 @@ def _render_kline_card(card: ChartCard, *, ohlc_raw: dict) -> None:
 
 
 def _render_held_card(card: ChartCard, *, by_key: dict) -> None:
-    """`hold_reason` 非空的卡:**數字照顯示,圖暫不繪製,原因寫在下面。**
+    """`hold_reason` 非空的卡:**數字照顯示,圖暫不繪製,原因印在卡片之內。**
 
     走既有的 `render_chart_card` 並餵空序列,但**把 `hold_reason` 當
     `notice` 傳進去** —— 於是空序列那一格印的是本例的實際成因與復原條件,
