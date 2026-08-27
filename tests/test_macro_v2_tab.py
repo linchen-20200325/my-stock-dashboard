@@ -2421,3 +2421,92 @@ class TestLightColumnResolvesThroughBandMeta:
                      decimals=1)
         with pytest.raises(KeyError):
             _table_columns([orphan])
+
+
+# ════════════════════════════════════════════════════════════════
+# 補上缺的守衛 · 參考走勢列不得進第 3 層總表（2026-08-27）
+#
+# 【為什麼要補】`TestReferenceCardsStayOutOfTheDenominator` 釘的是
+# **分母那一端**（readiness 側車 / `build_rows` / 五桶彙總）。它的 docstring
+# 自陳「只要 rows 乾淨，那四個下游就不可能被污染」—— 那句話**是前提，不是
+# 被驗過的事實**：它成立只因為「`build_rows` 只跑 `BUCKET_DANGER_SPECS`、
+# 參考列在另一份 list」這個**結構巧合**，而**沒有任何測試守著顯示端那一頭**。
+#
+# 結構巧合不是守衛：哪天有人為了「總表也想看得到台幣」在第 3 層併一次
+# `REFERENCE_TREND_SPECS`，分母那組測試會轉紅，但錯誤訊息會指向
+# **分母數字**（16 變 18），讀的人得自己想通那跟總表有什麼關係。
+# 本類讓失敗直接指向「總表混進了不是燈的列」。
+#
+# 【為什麼混進去是錯的，不只是難看】總表的每一列都被讀成「一盞燈」——
+# 有桶、有燈、有狀態、右側面板點下去還會出教學卡。參考走勢**不是燈**
+# （不判燈、不進分母、bucket 是 `REFERENCE_BUCKET` 不在五桶內），
+# 混進去會讓使用者數到 18 盞燈而畫面說 16（§1：畫面與內容對不上）。
+# ════════════════════════════════════════════════════════════════
+
+class TestReferenceRowsNeverReachTheVisibleTable:
+
+    @staticmethod
+    def _ref_keys():
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        return set(REF_SPECS_BY_KEY)
+
+    def test_the_default_view_has_no_reference_row(self):
+        """走真正的顯示管線：`build_rows` → `visible_table`（預設「全部」chip）。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, visible_table
+        visible, _ = visible_table(build_rows(_mixed()))
+        leaked = self._ref_keys() & {r.key for r in visible}
+        assert not leaked, f"參考走勢列混進了第 3 層總表：{sorted(leaked)}"
+
+    def test_no_chip_can_surface_one(self):
+        """每一個 chip 都掃 —— 包含「只看有問題的」。
+
+        參考列的 band 是 `gray`、state 是 `live` 或 `missing`，
+        `is_problem` 取的是聯集（黃紅燈 ∪ 非 live）→ 它**進得去**那個 chip。
+        所以這條不是形式主義：真漏了，最先冒出來的就是「有問題」那一頁。
+        """
+        from src.ui.tabs.tab_macro_v2 import CHIP_ORDER, build_rows, visible_table
+        rows = build_rows(_mixed())
+        for chip in CHIP_ORDER:
+            visible, _ = visible_table(rows, chip=chip)
+            leaked = self._ref_keys() & {r.key for r in visible}
+            assert not leaked, f"chip={chip!r} 讓參考走勢列現身：{sorted(leaked)}"
+
+    def test_no_reference_bucket_column_in_the_table(self):
+        """欄位層：「桶」欄不得出現參考桶 —— 它不是五桶之一。"""
+        from shared.macro_buckets import REFERENCE_BUCKET
+        from src.ui.tabs.tab_macro_v2 import _BUCKET_ZH, build_rows, visible_table
+        _, cols = visible_table(build_rows(_mixed()))
+        assert REFERENCE_BUCKET not in cols["桶"]
+        assert _BUCKET_ZH.get(REFERENCE_BUCKET) not in cols["桶"]
+
+    def test_the_visible_count_is_the_denominator_not_more(self):
+        """「全部」chip 的列數 == `BUCKET_DANGER_SPECS` 長度，一列不多。
+
+        使用者會數畫面上的列。列數若是 18 而卡片說 16，兩個數字都在畫面上，
+        對不上的那一刻沒有人知道該信哪個。
+        """
+        from shared.macro_buckets import BUCKET_DANGER_SPECS
+        from src.ui.tabs.tab_macro_v2 import build_rows, visible_table
+        visible, _ = visible_table(build_rows(_mixed()))
+        assert len(visible) == len(BUCKET_DANGER_SPECS)
+
+    def test_the_side_panel_cannot_select_one_either(self):
+        """右側詳情面板吃的是 `visible` 的索引 —— 選不到不存在的列。
+
+        這條把守衛延伸到**點下去之後**：總表乾淨，面板就不可能秀出一張
+        「參考走勢的教學卡」（那張卡根本沒有門檻可講）。
+        """
+        from src.ui.tabs.tab_macro_v2 import build_rows, selected_row, visible_table
+        visible, _ = visible_table(build_rows(_mixed()))
+        picked = [selected_row(visible, [i]) for i in range(len(visible))]
+        assert not (self._ref_keys() & {r.key for r in picked if r})
+
+    def test_the_premise_a_reference_row_would_be_visible_if_it_got_in(self):
+        """反證前提：參考列**不是**天生被 `filter_rows` 濾掉的。
+
+        沒有這條，上面幾條可能因為「反正它會被濾掉」而恆綠 —— 那樣它們釘的
+        就不是「進不來」，只是「進來也看不到」，是兩件事。
+        """
+        from src.ui.tabs.tab_macro_v2 import build_reference_row, filter_rows
+        row = build_reference_row("taiex", 23000.0)
+        assert filter_rows([row]) == [row], "參考列若混進 rows，總表就會照顯示"
