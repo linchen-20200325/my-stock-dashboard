@@ -260,7 +260,8 @@ _VALUE_CARD_KEYS: list[str] = ["vix"]
 #:
 #: 7 欄時**標註留白比繪圖區還寬**,圖等於消失 —— 而畫面上它還在,只是變成
 #: 一團色塊(§1:看起來正常的壞畫面最危險)。3 是本 repo 既有慣例
-#: (`ui/helpers/macro/helpers.py` 的 9 張卡同樣 3/列)。
+#: (`src/ui/tabs/macro/helpers.py:177` 的 9 張卡同樣 3/列 ——
+#:  2026-08-27 實測命中,`for _row_start in range(0, len(_keys), 3)`)。
 #:
 #: ⚠️ 最後一列不滿時**留空欄**(見 `_chart_row_columns`)—— 那是正確行為,
 #: 不是瑕疵:把 2 張卡拉成半頁寬會讓同一張圖在不同篩選下長得不一樣。
