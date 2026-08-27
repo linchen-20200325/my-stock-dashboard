@@ -97,3 +97,24 @@
 **我沒有做的事（刻意）**：不 amend、不 rebase、不改寫 `a76efe8`
 —— 那會改寫別組 agent 的 commit，且逾越我的檔案邊界。
 改以本檔（doc-only）補上完整理由並指回 `a76efe8`，把可追溯性補回來。
+
+## 7. 更正上一節（§6 已過時，不刪、就地更正）
+
+§6 寫「內容已於 `a76efe8` 落地」—— **該敘述在寫下後隨即失效**，據實更正：
+
+1. 16:23 別組 agent 的無 pathspec commit `a76efe8` 掃入我的三個檔案（§6 所述，屬實）。
+2. 我隨後 commit `4fc0c63`（scratchpad）。
+3. **之後別組 agent 改寫了歷史**：`a76efe8` 已不在分支上（`git merge-base --is-ancestor` 為否），
+   被同標題的 `d43292a` 取代，而**該重寫把我的三個檔案從 branch 上拿掉了** ——
+   HEAD 版 `shared/position_throttle.py` 一度回到 line 9 的假引用原文。
+   ⚠️ 工作區檔案未受影響（三檔逐一 diff 我的備份 → 完好），所以無資料遺失。
+4. **處置**：重新以 pathspec 提交我的三個檔案為 **`fb7f695`**（我自己的 commit message）。
+   已驗證 HEAD 版三檔與我的版本逐檔一致、常數 70/50/35 未動、24 tests 綠。
+
+**現行有效 commit：`fb7f695`**（§6 提到的 `a76efe8` 已不存在於分支，請勿再引用）。
+
+📌 **方法論教訓（值得寫進總管的併發規則）**：多組 agent 共用同一個 worktree 與 git index 時，
+`git add` + 無 pathspec `git commit` 會互相掃檔，且**後續的 amend/rebase 會靜默移除別組已提交的檔案**。
+本次是靠「提交後回頭 `git show HEAD:<file>` 逐檔比對」才發現，
+若只看「commit 成功」就收工，這個修正會在毫無徵兆下消失。
+⇒ **併發情境下，commit 之後必須再驗一次 HEAD 內容，commit 成功不等於改動還在。**
