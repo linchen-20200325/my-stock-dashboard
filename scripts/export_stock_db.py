@@ -13,7 +13,9 @@
                             B3 v19.179 加 §3.2 sanity gate：全列須 ∈[500,10000]億,
                             否則整表略過 + 警告,不把混口徑序列外送下游）
     - `money_supply`        M1B/M2 月供給（finmind_m1m2.parquet,億元 level + gap 點差）
-    - `macro_tw_pmi`        台灣 PMI 最後良值（macro_last_good/tw_pmi.json）
+    - `macro_tw_pmi`        台灣 PMI 最後良值（macro_last_good/tw_pmi.json,**單位 指數**；
+                            2026-08-27 加月頻新鮮度 gate：as_of 落後 ≥1 個發布期
+                            → 整表略過 + 警告,不把過期良值當當期外送下游）
 * 🔴 live 層（需 `FINMIND_TOKEN`；**缺 token → Fail-Loud 略過該表 + 警告,不造假**）
     - `stock_technical`     個股 close/RSI/布林軌/均線(MA20,60)/KD/逐檔籌碼(外資,投信,三大法人 張)
                             （下游 2026 個股盯盤卡的主要輸入;全部重用 SSOT 指標函式
@@ -36,7 +38,8 @@
 **融資餘額=元**(B3 v19.179 補標;原本是本清單裡唯一沒標單位的一項)、PMI=指數。
 Fail-Loud:離線層任一表讀不到 → raise;live 層缺 token / 抓不到 → 略過該表 + 警告(不寫假值)。
 離線層 `margin` 另有 §3.2 sanity gate:讀得到但值不可信 → **略過該表**(非 raise),
-讓下游「少一張表」而不是「拿到錯的表」;其餘離線表照舊 raise。
+讓下游「少一張表」而不是「拿到錯的表」;`macro_tw_pmi` 同精神另有 §2.4 新鮮度 gate
+(讀得到但已過期 → 略過該表);其餘離線表照舊 raise。
 """
 
 from __future__ import annotations
@@ -231,13 +234,83 @@ def write_money_supply(conn: sqlite3.Connection) -> int:
     return len(df)
 
 
+# 台灣 PMI 在 `shared/staleness.MACRO_PUBLICATION_LAG_DAYS` 的登錄鍵。
+# ⚠️ 名稱 `ism_pmi` 是歷史遺留（session key 沿用），該筆註解已明寫「台灣 PMI(CIER)：
+# 月後第 1 營業日」—— 值是對的、名字是舊的。**不在此另立第二個發布延遲常數**（§3.3）。
+_TW_PMI_STALENESS_KEY = "ism_pmi"
+
+
+def _tw_pmi_freshness_gate(d: dict, *, today=None) -> tuple[bool, str]:
+    """`macro_tw_pmi` 表放行判定（純函式,無 I/O,便於單測）→ (可否寫入, 診斷訊息)。
+
+    2026-08-27。`data_cache/macro_last_good/tw_pmi.json` 是 **durable「上次已知良值」**
+    快照(v19.118),抓取全敗時它就是唯一還在的值。原本 `write_macro_tw_pmi`
+    **無條件**把它寫進 stock.db 外送下游 —— 而 `data_cache/metadata.json` 的
+    `datasets.tw_pmi` 實測是 `{last_updated: null, row_count: 0,
+    last_error: "抓取結果為空"}`,即時抓取從未成功、durable 從沒被覆寫過。
+    結果:一筆 2026-06 的手動 seed(`series_id="cier-seed-2026-06"`)被當成**當期**
+    PMI 每天推播出去。這正是 §1 說的「錯的數字比沒有數字更危險」。
+
+    【為什麼不用「距今幾天」】PMI 是**月頻**。日頻門檻套月頻,在剛跨月時會亮假紅、
+    在月中又放過真的漏期(理由完整寫在 `shared/staleness.py` G2 區塊)。故判準一律走
+    既有 SSOT `monthly_release_status()`:「as_of 距**預期最新資料月**幾個發布期」,
+    發布延遲取 `MACRO_PUBLICATION_LAG_DAYS[_TW_PMI_STALENESS_KEY]`,
+    **本檔不自造門檻**(§3.3 反捏造)。
+
+    - `periods_behind >= 1` → 真的漏掉整期 → **不放行**
+    - `periods_behind <= 0` → 當期(`overdue_days > 0` 只代表上游遲到,仍在緩衝內 → 放行)
+    - 判不出來(缺 date / 無法解析) → **不放行**(§1:不確定 ≠ 新鮮)
+    """
+    from shared.staleness import monthly_release_status
+
+    if not isinstance(d, dict):
+        return False, f"良值檔格式非 dict（type={type(d).__name__}）"
+    _as_of = d.get("date")
+    _val = d.get("value")
+    if _val is None:
+        return False, "良值檔 value 為空 → 無值可外送（不寫空表）"
+    if not _as_of:
+        return False, "良值檔缺 date 欄 → 無法判定新鮮度（§1：不確定 ≠ 新鮮）"
+    _behind, _overdue = monthly_release_status(
+        _as_of, indicator=_TW_PMI_STALENESS_KEY, today=today)
+    if _behind is None:
+        return False, f"as_of={_as_of} 無法解析為資料月 → 無法判定新鮮度（§1）"
+    if _behind >= 1:
+        return False, (
+            f"as_of={_as_of} 已落後 {_behind} 個發布期"
+            f"（月頻判準 shared.staleness.monthly_release_status；"
+            f"發布延遲 lag={_TW_PMI_STALENESS_KEY}）"
+            " → 過期良值不外送下游"
+        )
+    _late = f"（上游遲到 {_overdue} 天,仍在緩衝內）" if _overdue else ""
+    return True, f"as_of={_as_of} 為當期{_late}"
+
+
 def write_macro_tw_pmi(conn: sqlite3.Connection) -> int:
+    """台灣 PMI 最後良值 → macro_tw_pmi（過期 → **略過整表** + DROP 舊表,回 -1）。
+
+    照本檔既有慣例（同 `write_margin` / `write_money_supply`）：讓下游
+    「少一張表」而不是「拿到過期卻標成當期的表」。
+
+    **為什麼是「不匯出」而不是「匯出 + is_stale 旗標」**：下游
+    `2026_strategy_0719/multi_agent_system/macro_db.py::read_tw_macro` 是
+    `SELECT ... ORDER BY date DESC LIMIT 1` 直接取值,**沒有任何旗標欄的消費端**
+    （全 repo 0 處 `source_health` reader）→ 多加一欄等於旗標寫了沒人看,
+    過期值照樣被當當期播出去 = 沒修。而該函式對「表不存在」**已有正確處理**：
+    `pmi=None` → 顯示「資料不足」,其 docstring 明寫「不捏造」。
+    """
     import json
 
     path = _DATA_CACHE / "macro_last_good" / "tw_pmi.json"
     if not path.exists():
         raise RuntimeError(f"台灣 PMI 良值檔不存在:{path}")
     d = json.loads(path.read_text(encoding="utf-8"))
+    ok, msg = _tw_pmi_freshness_gate(d)
+    if not ok:
+        _log(f"⚠️ 略過 macro_tw_pmi：{msg}")
+        conn.execute("DROP TABLE IF EXISTS macro_tw_pmi")
+        return -1
+    _log(f"   macro_tw_pmi 新鮮度：{msg}")
     df = pd.DataFrame([{
         "date": d.get("date"), "pmi": d.get("value"),
         "label": d.get("label"), "source": d.get("source"),
