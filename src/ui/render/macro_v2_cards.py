@@ -23,6 +23,7 @@ import streamlit as st
 
 from shared.colors import (
     COLORS_7,
+    TRAFFIC_GREEN,
     TRAFFIC_RED,
     TRAFFIC_YELLOW,
 )
@@ -793,4 +794,156 @@ def render_dual_axis_card(title: str, left: AxisSeries, right: AxisSeries, *,
         for _n in plot.notes:
             st.caption(f"這條線畫不出來　·　{_n}")
         st.caption("門檻線由 SSOT 畫出,左右軸各綁自己的門檻"
+                   + (f"　·　{series_note}" if series_note else ""))
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 卡 B：K 線卡
+# ══════════════════════════════════════════════════════════════════════
+#
+# 為什麼不是把 `render_chart_card` 撐成四態萬用函式:它的 `kind` 只有
+# `line` / `bar`,兩者都吃**一條** `ys`。K 線要 open / high / low / close
+# **四條**,不是多一個 kind 的事,是參數形狀根本不同。硬塞的話那支函式會變成
+# 「有時吃一條、有時吃四條」—— 同一個參數位置意義會飄(§3.3 的第二把尺)。
+
+#: 漲跌色 —— **台股慣例紅漲綠跌**(與美股相反)。色票走 L0 `shared.colors`,
+#: 與本 repo 既有台股 K 線(`ui/tabs/macro/section_long.py` 的加權指數日K)
+#: 同一組常數,不另外挑色。
+_KL_UP: str = TRAFFIC_RED
+_KL_DOWN: str = TRAFFIC_GREEN
+
+#: OHLC 四欄的欄名與中文。**只在這裡定義一次** —— 缺欄訊息、契約檢查、
+#: 取值全部走這張表,分兩個地方寫就會出現「檢查了 low、訊息卻說 close」。
+OHLC_FIELDS: tuple[tuple[str, str], ...] = (
+    ("open", "開盤"),
+    ("high", "最高"),
+    ("low", "最低"),
+    ("close", "收盤"),
+)
+
+
+@dataclass(frozen=True)
+class OHLC:
+    """一段 K 線的四條序列 + x 軸。**四條缺一不可。**
+
+    每一欄都可以是 `None`(上游根本沒給這一欄)或空 list(給了但沒有資料),
+    兩種都算缺 —— 由 `ohlc_problems()` 判定並說出缺哪一欄。
+
+    ⚠️ **沒有 `volume`。** 不是忘了加,是刻意不收:見
+    `build_candlestick_figure` 的 docstring。
+    """
+    xs: list | None = None
+    open: list[float] | None = None
+    high: list[float] | None = None
+    low: list[float] | None = None
+    close: list[float] | None = None
+
+
+def ohlc_problems(ohlc: OHLC) -> list[str]:
+    """K 線畫不出來的原因(畫得出來 → 空 list)。**純函式,可離線斷言。**
+
+    兩類問題,分開講(混在一起會讓契約漂移偽裝成缺資料而沒人去修):
+
+    1. **缺欄** —— `xs` 或四欄任一為 `None` / 空。
+    2. **長度對不上** —— 四欄長度彼此不同,或與 `xs` 不同。這不是「沒資料」,
+       是上游給的東西**形狀不對**;plotly 會照畫(短的那欄補空),畫出來是一根
+       根位置錯開的 K 棒,而畫面上完全看不出來。故一律擋掉。
+
+    §1:一有問題就**不畫**,不挑能畫的欄位硬畫、也不 fallback 成折線。
+    """
+    _probs: list[str] = []
+    if not ohlc.xs:
+        _probs.append("日期軸 xs：沒有資料")
+    for _f, _zh in OHLC_FIELDS:
+        if not getattr(ohlc, _f):
+            _probs.append(f"{_zh}價 {_f}：沒有資料")
+    if _probs:
+        return _probs
+
+    _lens = {_f: len(getattr(ohlc, _f)) for _f, _ in OHLC_FIELDS}
+    _lens["xs"] = len(ohlc.xs)
+    if len(set(_lens.values())) > 1:
+        _probs.append(f"四欄與日期軸長度對不上（{_lens}）—— 這是上游契約漂移，"
+                      f"不是缺資料")
+    return _probs
+
+
+def build_candlestick_figure(ohlc: OHLC, spec: DangerSpec, *,
+                             name: str = "") -> go.Figure | None:
+    """OHLC → 日 K `go.Figure`;畫不出來 → **回 `None`**。純函式,可離線斷言。
+
+    ## 為什麼不畫成交量(客戶 2026-08-27 拍板)
+
+    加權指數的 `volume` 欄自 **2026-07-09 起連續 33 個交易日全為 0**。
+    畫出來就是圖表下方一整排貼在零軸上的空白 —— 版面看起來完整,傳達的
+    卻是「這段期間沒有人交易」這個假訊息。與其畫一排零,不如不畫(§1)。
+    ⚠️ 這是**資料現況**造成的決定,不是「K 線圖不該有量」。哪天 volume 修好了,
+    要加回來是新的一次決策,不要看到這段就以為 by-design 永遠不畫。
+
+    ## 為什麼關掉 rangeslider
+
+    plotly `Candlestick` 預設會在圖下方長出一條時間縮放條。本卡 `height=210`,
+    那條會吃掉將近一半的高度,K 棒被壓到只剩一百多 px —— 縮放條本身在小卡上
+    也沒人拖得動。故 `xaxis.rangeslider.visible=False`。
+
+    ## 缺欄降級
+
+    四欄任一缺 → **不畫,而且不 fallback 成折線**。標題寫「日 K」卻畫出一條
+    收盤折線,是畫面說 A 內容是 B —— 使用者會以為自己在看 K 線的高低影線。
+    缺哪一欄由 `ohlc_problems()` 說,呼叫端負責印出來。
+    """
+    if ohlc_problems(ohlc):
+        return None
+
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(
+        x=ohlc.xs, open=ohlc.open, high=ohlc.high,
+        low=ohlc.low, close=ohlc.close,
+        name=name or "日 K", showlegend=False,
+        increasing_line_color=_KL_UP, decreasing_line_color=_KL_DOWN,
+    ))
+    _v2_base_layout(fig, left_margin=8, right_margin=78)
+    # ↓ 修正點:`_v2_base_layout` 的 xaxis 不含 rangeslider,而 Candlestick 的
+    #   預設是**顯示**。不顯式關掉的話小卡會被縮放條吃掉近一半高度。
+    fig.update_layout(xaxis=dict(rangeslider=dict(visible=False)))
+    _threshold_lines_ssot(fig, spec, yref="y", side=_THR_SIDE_RIGHT)
+    return fig
+
+
+def render_candlestick_card(row: Row, spec: DangerSpec, ohlc: OHLC, *,
+                            series_note: str = "", key: str = "") -> None:
+    """K 線卡(卡 B「加權指數日 K」用)。
+
+    L4 純渲染:OHLC 由 L5 從真實資料備妥,本函式**不取數、不判燈、不補值**。
+    卡頭與既有 `render_chart_card` 同一組(指標名 + 現值 + 燈),圖由
+    `build_candlestick_figure` 建(可離線單測)。
+
+    §1 降級:四欄缺任一 → 不畫 K 線、**不改畫折線**,誠實印出缺哪一欄。
+    """
+    zh, color = BAND_META[row.band]
+    with st.container(border=True):
+        head, meta = st.columns([7, 3])
+        with head:
+            st.markdown(f'<p class="v2-t">{row.label}</p>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="font-size:26px;font-weight:700;'
+                f'font-variant-numeric:tabular-nums">'
+                f'{fmt_value(row.value, row.unit, row.decimals)}</div>',
+                unsafe_allow_html=True)
+        with meta:
+            st.markdown(f'<div style="text-align:right">{pill(zh, color)}</div>',
+                        unsafe_allow_html=True)
+
+        _probs = ohlc_problems(ohlc)
+        if _probs:
+            st.caption("日 K 畫不出來 —— 不以折線或合成資料替代。")
+            for _p in _probs:
+                st.caption(f"　· {_p}")
+            st.caption(f"門檻帶　{row.thr_text}")
+            return
+
+        st.plotly_chart(build_candlestick_figure(ohlc, spec, name=row.label),
+                        width="stretch", config={"displayModeBar": False},
+                        key=key or f"v2kline_{row.key}")
+        st.caption("門檻線由 SSOT 畫出　·　不畫成交量（該欄目前恆為 0）"
                    + (f"　·　{series_note}" if series_note else ""))
