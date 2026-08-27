@@ -214,9 +214,21 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             _vcur8 = _m8_vix.get('current', 0)
             _vma8  = _m8_vix.get('ma20', 0)
             # v18.284：VIX 燈號門檻統一至 SSOT（macro_buckets / MACRO_THRESHOLDS：22 黃 / 30 紅）
-            _vc8   = TRAFFIC_RED if _vcur8 >= 30 else (TRAFFIC_YELLOW if _vcur8 >= 22 else TRAFFIC_GREEN)
-            _vl8   = ('🚨 恐慌衝頂，強制空手' if _vcur8 >= 30 else
-                      ('⚠️ 市場緊張，降低持倉' if _vcur8 >= 22 else '✅ 市場平靜'))
+            # ⚠️ 2026-08-27：上面那句在本版之前是**假的** —— 它宣稱「統一至 SSOT」，
+            #    下一行卻是 `_vcur8 >= 30` / `>= 22` 兩個字面值，全檔只 import 了
+            #    MACRO_INFO_KEYS。數值碰巧一致，但改 SSOT 不會跟著動（§3.3 反捏造）。
+            #    更難看的是**同一張圖內部就不一致**：下面 add_danger_hlines(_vfig8,'vix')
+            #    畫的黃/紅線是真的讀 SSOT 的 —— SSOT 一改，線會動、文字和顏色不會動，
+            #    圖上會出現「線在 25，字說 ≥22 才黃」這種自打嘴巴。
+            #    本版改成真的讀同一份 spec，讓那句宣稱成真；**門檻值一個都沒動**
+            #    （user 2026-06-26 已撤銷過「harmonize 統一值」，本輪只修文件說謊）。
+            #    lazy import 沿用同檔 add_danger_hlines 的既有寫法（L5→L0，合法下行）。
+            from shared.macro_buckets import SPECS_BY_KEY as _SPECS8
+            _vspec8 = _SPECS8['vix']          # 與 add_danger_hlines 畫線用的是同一個 spec 物件
+            _vc8   = TRAFFIC_RED if _vcur8 >= _vspec8.red else (
+                TRAFFIC_YELLOW if _vcur8 >= _vspec8.yellow else TRAFFIC_GREEN)
+            _vl8   = ('🚨 恐慌衝頂，強制空手' if _vcur8 >= _vspec8.red else
+                      ('⚠️ 市場緊張，降低持倉' if _vcur8 >= _vspec8.yellow else '✅ 市場平靜'))
             import plotly.graph_objects as _go8
             _vfig8 = _go8.Figure()
             _vfig8.add_trace(_go8.Scatter(
@@ -239,7 +251,12 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                            font=dict(size=11, color=_vc8), x=0))
             st.plotly_chart(_vfig8, width='stretch')
         else:
-            st.markdown(kpi('VIX 恐慌指數', '待取得', '≥22警戒 / ≥30危機→強制空手', '#484f58', '#0d1117'), unsafe_allow_html=True)
+            # 副標的 22 / 30 同樣改讀 spec：留字面值 = 留下一個會漂移的說謊點。
+            from shared.macro_buckets import SPECS_BY_KEY as _SPECS8B
+            _vspec8b = _SPECS8B['vix']
+            st.markdown(kpi('VIX 恐慌指數', '待取得',
+                            f'≥{_vspec8b.yellow:g}警戒 / ≥{_vspec8b.red:g}危機→強制空手',
+                            '#484f58', '#0d1117'), unsafe_allow_html=True)
     
     # v18.194 fail trace：失敗 fetcher 錯誤碼浮上 UI（仿 Fund v19.43 RadarFailTrace）
     # 三狀態：① _macro_info 為空 → 未刷新或 outer 80s timeout 全失敗；② 有 _err_* → 局部失敗；③ 全綠 → 不顯示

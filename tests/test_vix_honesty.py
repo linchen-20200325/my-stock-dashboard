@@ -81,3 +81,104 @@ class TestVixVetoCapIsRealSSOT:
         _c = vix_veto_cap(vix)
         assert _c is not None and _c.pct == 30
         assert '警戒帶' in _c.reason
+
+
+# ════════════════════════════════════════════════════════════════
+# src/ui/tabs/macro/section_mid.py —— 第二處假宣稱
+#   註解寫「VIX 燈號門檻統一至 SSOT（macro_buckets / MACRO_THRESHOLDS：22 黃 / 30 紅）」，
+#   下一行卻是 `_vcur8 >= 30` / `>= 22` 兩個字面值，全檔只 import 了 MACRO_INFO_KEYS。
+#   同一張圖裡 add_danger_hlines(_vfig8,'vix') 畫的線**是**讀 SSOT 的 ——
+#   SSOT 一改，線會動、字和顏色不會動，圖會自打嘴巴。
+# ════════════════════════════════════════════════════════════════
+_SECTION_MID = _REPO / 'src' / 'ui' / 'tabs' / 'macro' / 'section_mid.py'
+
+
+def _eval_assign(var: str, ns: dict):
+    """把 section_mid.py 裡 `<var> = <expr>` 的**真實 production 運算式**抓出來求值。
+
+    不是複寫一份等價邏輯（那會變成自己驗自己），是直接 eval 原始碼那一行。
+    """
+    _tree = ast.parse(_SECTION_MID.read_text(encoding='utf-8'))
+    for _n in ast.walk(_tree):
+        if (isinstance(_n, ast.Assign) and len(_n.targets) == 1
+                and isinstance(_n.targets[0], ast.Name)
+                and _n.targets[0].id == var):
+            _expr = ast.Expression(body=_n.value)
+            ast.fix_missing_locations(_expr)
+            return eval(compile(_expr, str(_SECTION_MID), 'eval'), dict(ns))
+    raise AssertionError(f'section_mid.py 找不到 `{var} = ...` 指派')
+
+
+class _FakeSpec:
+    """假的 DangerSpec —— 只要判斷式真的讀 spec，門檻就會跟著搬家。"""
+    yellow = 40.0
+    red = 60.0
+
+
+class TestSectionMidVixReadsSSOT:
+
+    def test_file_really_imports_the_ssot_it_claims(self):
+        """註解宣稱「統一至 SSOT」，那就必須真的 import 得到它。"""
+        _src = _SECTION_MID.read_text(encoding='utf-8')
+        assert 'from shared.macro_buckets import SPECS_BY_KEY' in _src, (
+            'section_mid.py 宣稱 VIX 燈號門檻統一至 SSOT，卻沒有 import 它')
+
+    @pytest.mark.parametrize('vix,want_yellow_or_worse,want_red', [
+        (39.9, False, False),   # 假 spec 黃線 40 之下 → 綠
+        (40.0, True, False),
+        (59.9, True, False),
+        (60.0, True, True),     # 假 spec 紅線 60 → 紅
+    ])
+    def test_colour_and_label_follow_the_spec_not_literals(
+            self, vix, want_yellow_or_worse, want_red):
+        """搬走 spec 門檻，顏色與文案必須跟著搬。
+
+        突變測試：改回 `_vcur8 >= 30` / `>= 22` → 這幾點全部答錯 → 轉紅。
+        （用 40/60 這種現實中不會與 22/30 混淆的值，避免「碰巧也對」。）
+        """
+        from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+        _ns = {'_vcur8': vix, '_vspec8': _FakeSpec,
+               'TRAFFIC_GREEN': TRAFFIC_GREEN, 'TRAFFIC_YELLOW': TRAFFIC_YELLOW,
+               'TRAFFIC_RED': TRAFFIC_RED}
+        _colour = _eval_assign('_vc8', _ns)
+        _label = _eval_assign('_vl8', _ns)
+        if want_red:
+            assert _colour == TRAFFIC_RED and _label.startswith('🚨')
+        elif want_yellow_or_worse:
+            assert _colour == TRAFFIC_YELLOW and _label.startswith('⚠️')
+        else:
+            assert _colour == TRAFFIC_GREEN and _label.startswith('✅')
+
+    @pytest.mark.parametrize('vix,colour_name,label_head', [
+        (21.9, 'green', '✅'), (22.0, 'yellow', '⚠️'),
+        (29.9, 'yellow', '⚠️'), (30.0, 'red', '🚨'),
+    ])
+    def test_real_spec_gives_the_same_answers_as_before(
+            self, vix, colour_name, label_head):
+        """漂移鎖：接上真 spec 後，四個邊界點的判燈與本版前**完全一樣**。
+
+        本輪只修文件說謊，**不改任何門檻值**
+        （user 2026-06-26 已撤銷過「harmonize 統一值」）。
+        """
+        from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+        _want = {'green': TRAFFIC_GREEN, 'yellow': TRAFFIC_YELLOW,
+                 'red': TRAFFIC_RED}[colour_name]
+        _ns = {'_vcur8': vix, '_vspec8': SPECS_BY_KEY['vix'],
+               'TRAFFIC_GREEN': TRAFFIC_GREEN, 'TRAFFIC_YELLOW': TRAFFIC_YELLOW,
+               'TRAFFIC_RED': TRAFFIC_RED}
+        assert _eval_assign('_vc8', _ns) == _want
+        assert _eval_assign('_vl8', _ns).startswith(label_head)
+
+    def test_no_bare_vix_literals_left_in_the_file(self):
+        """反向守衛：不准把 22 / 30 再寫回去（含「待取得」KPI 副標那一行）。"""
+        _tree = ast.parse(_SECTION_MID.read_text(encoding='utf-8'))
+        _bad = [f'line {_n.lineno}'
+                for _n in ast.walk(_tree)
+                if isinstance(_n, ast.Compare)
+                and isinstance(_n.left, ast.Name) and _n.left.id == '_vcur8'
+                and any(isinstance(_c, ast.Constant) and _c.value in (22, 30, 22.0, 30.0)
+                        for _c in _n.comparators)]
+        assert not _bad, f'_vcur8 又被拿去和字面值 22/30 比較：{_bad}'
+        _src = _SECTION_MID.read_text(encoding='utf-8')
+        assert '≥22警戒 / ≥30危機' not in _src, (
+            '「待取得」KPI 副標的 22/30 是字面值 —— 留著就是下一個會漂移的說謊點')
