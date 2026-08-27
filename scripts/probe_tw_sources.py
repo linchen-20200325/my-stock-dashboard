@@ -428,6 +428,64 @@ def _deep_dump_v5_cier_where(fetch_url) -> None:
 #   ③ 在探針端**模擬**修好後的撈法(加回 distribution),下載 CSV 後交
 #      **production 的真 `_parse_dgtw_pmi_csv`** 解析,印出實際數值與日期。
 #   ③ 若印得出值 → 修法確定可行,且那個值就是修好後 production 會拿到的值。
+#
+# ── 2026-08-27 後續:假設**已被證實**,修法已進 production(v19.120 / 23ff938) ──
+# 實測 shape 就是 `result.distribution`;candidate 清單已在 macro_core 補上,
+# 那條靜默的 `continue` 也改成會寫 errs。**本段因此改變用途,不再是一次性診斷**:
+#   舊:證明假設(一次性)          新:**常設 shape drift 偵測**(每次跑都在看)
+# 為什麼值得常設 —— 這次事故的形狀是「**來源換了 shape,而我們的候選清單沒跟上,
+# 且不會報錯**」。那種漂移沒有任何徵兆:HTTP 200、JSON 合法、程式不拋例外,
+# 只有數字悄悄不再更新。本段現在做三件以前沒做的事:
+#   (a) **指名** production 的 `or` 鏈會停在哪一個 shape(不再只印「哪些非空」);
+#   (b) **反向掃描**整份 JSON 找出所有 resource 清單,凡是 production 候選鏈裡
+#       沒有的路徑就喊 SHAPE DRIFT —— 下次同類問題**第一輪探針就會指出來**,
+#       不必再像這次燒掉三輪才定位;
+#   (c) 印 resource item 的**完整 keys**,並明講 format / URL 是**哪一個欄名**真的有值
+#       (v19.120 的第二半 bug 就是 `format` → `resourceFormat` 欄名漂移)。
+
+
+#: production `_pmi_src_dgtw` 的 resource shape 候選鏈,**順序與 macro_core 那條 `or` 鏈一致**。
+#: 該處為 inline 運算式、無常數可 import → 這裡是**複本**;production 那條鏈改了,這裡要跟著改。
+#: (同 `_PROD_CIER_EN_PAT` 的既有做法:探針的價值來自「拿 production 的東西去試跑」。)
+_PROD_SHAPE_CHAIN: list[tuple[str, tuple[str, ...]]] = [
+    ('result.resources', ('result', 'resources')),
+    ('resources', ('resources',)),
+    ('result.distribution', ('result', 'distribution')),   # v19.120 補上的那一個
+    ('data.resources', ('data', 'resources')),
+]
+
+#: resource item 用來擺下載連結的欄名(production 同樣依序 or 下去)。
+_RES_URL_KEYS = ('url', 'resourceDownloadUrl', 'downloadUrl')
+
+
+def _dig(obj, path: tuple[str, ...]):
+    """依 dotted path 取值;中途不是 dict 就回 None(不拋)。"""
+    for _k in path:
+        if not isinstance(obj, dict):
+            return None
+        obj = obj.get(_k)
+    return obj
+
+
+def _find_resource_lists(node, path: str = '', out=None, depth: int = 0):
+    """遞迴找出 JSON 裡**所有**長得像 resource 清單的節點(list[dict] 且含 URL 欄)。
+
+    這是 shape drift 偵測的核心:不去猜來源「應該」把清單放在哪,而是把它**實際**
+    放的所有位置攤出來,再跟 `_PROD_SHAPE_CHAIN` 對比。少一個路徑就是一次靜默失效。
+    """
+    if out is None:
+        out = []
+    if depth > 4:            # 防禦性:metadata 再深就不是 resource 清單了
+        return out
+    if isinstance(node, list):
+        if node and all(isinstance(_i, dict) for _i in node) and any(
+                _k in _i for _i in node for _k in _RES_URL_KEYS):
+            out.append((path or '<root>', len(node)))
+        return out
+    if isinstance(node, dict):
+        for _k, _v in node.items():
+            _find_resource_lists(_v, f'{path}.{_k}' if path else _k, out, depth + 1)
+    return out
 
 
 def _deep_dump_v6_dgtw_shape(fetch_url) -> None:
@@ -449,19 +507,33 @@ def _deep_dump_v6_dgtw_shape(fetch_url) -> None:
         return
 
     _result = j.get('result') if isinstance(j.get('result'), dict) else {}
-    _data = j.get('data') if isinstance(j.get('data'), dict) else {}
     print(f'   ↳ top-level keys = {list(j)[:12]}')
     print(f'   ↳ result keys    = {list(_result)[:20]}')
-    shapes = {
-        'result.resources    [兩邊都有]': _result.get('resources'),
-        'resources           [兩邊都有]': j.get('resources'),
-        'result.distribution [只有探針有]': _result.get('distribution'),
-        'data.resources      [只有 production 有]': _data.get('resources'),
-    }
-    for _k, _v in shapes.items():
-        print(f'   ↳ {_k} → {("list × " + str(len(_v))) if isinstance(_v, list) else type(_v).__name__}')
-    _hit = [k for k, v in shapes.items() if isinstance(v, list) and v]
-    print(f'   🎯 實際命中的 shape = {_hit or "全部皆空"}')
+    # ① production 候選鏈逐項量測 + **指名**它的 `or` 會停在哪一個
+    #    (原本只印「哪些非空」,讀者還要自己心算 or 的短路順序 —— 這次就是這樣讀漏的)
+    _winner = None
+    for _name, _shape_path in _PROD_SHAPE_CHAIN:
+        _v = _dig(j, _shape_path)
+        _desc = f'list × {len(_v)}' if isinstance(_v, list) else type(_v).__name__
+        if _winner is None and isinstance(_v, list) and _v:
+            _winner = _name
+            _desc += '   ← production 的 or 鏈會停在這裡'
+        print(f'   ↳ {_name:<19} → {_desc}')
+    print(f'   🎯 命中 shape = {_winner or "全部皆空(production 會撈到空 list → 走 200但無 resource)"}')
+
+    # ①-b shape drift:live 回應裡有 resource 清單、但 production 候選鏈沒涵蓋的路徑。
+    #     這一行就是為了讓「下次同類問題不必再燒三輪探針」。
+    _live_lists = _find_resource_lists(j)
+    _known_paths = {_n for _n, _ in _PROD_SHAPE_CHAIN}
+    _drift = [(_p, _n) for _p, _n in _live_lists if _p not in _known_paths]
+    if _drift:
+        print(f'   ⚠️ SHAPE DRIFT:live 有 resource 清單,但 production 候選鏈**沒有**這些路徑 → {_drift}')
+        print('      → 照 v19.120 的前例,這會讓 production 撈到空 list 而**不報錯**;'
+              '請把路徑補進 macro_core 的 or 鏈與本檔 _PROD_SHAPE_CHAIN(兩邊都要)。')
+    elif not _live_lists:
+        print('   ⚠️ SHAPE DRIFT:整份 JSON 裡找不到任何 resource 清單 → 是來源本身變了,不是 shape 對不上。')
+    else:
+        print(f'   ✅ 無 shape drift:live 的 resource 清單 {[_p for _p, _ in _live_lists]} 全在 production 候選鏈內')
 
     # ② production 現況:原封呼叫,看它到底回什麼、寫了什麼 errs
     print('\n   —— ② production `_pmi_src_dgtw` 原封呼叫（現況）——')
@@ -476,15 +548,23 @@ def _deep_dump_v6_dgtw_shape(fetch_url) -> None:
         print(f'   ❌ EXC {type(_e).__name__}: {_e}')
         traceback.print_exc()
 
-    # ③ 模擬修好後的撈法（**只在探針裡模擬,production 未改**）
-    print('\n   —— ③ 模擬修法:候選 list 加回 distribution,再交 production 的真 parser ——')
-    _res = (_result.get('resources') or j.get('resources')
-            or _result.get('distribution') or _data.get('resources') or [])
+    # ③ resource item 的**真實欄位形狀** + CSV 原始內容佐證。
+    #    v19.120 前這裡是「模擬修法」;修法已進 production(23ff938),故改為佐證用 ——
+    #    印出 CSV 實際末行,讓 ② 拿到的值可以跟原始資料**逐字對照**,而不是只信一個回傳值。
+    print('\n   —— ③ resource 欄位形狀 + CSV 原始內容佐證 ——')
+    _res = _dig(j, dict(_PROD_SHAPE_CHAIN)[_winner]) if _winner else []
     if not _res:
-        print('   ❌ 四種 shape 全空 → 假設被否證,不是 shape 問題,另尋根因')
+        print('   ❌ production 候選鏈全空 → 這一輪 dgtw 這條路必然拿不到值(見上方 drift 判讀)')
         return
-    print(f'   ↳ 撈到 resource × {len(_res)};第一筆 keys = '
-          f'{list(_res[0])[:14] if isinstance(_res[0], dict) else type(_res[0]).__name__}')
+    _first = _res[0] if isinstance(_res[0], dict) else {}
+    print(f'   ↳ shape={_winner} | resource × {len(_res)} | 第一筆完整 keys = {list(_first)}')
+    # v19.120 的**第二半** bug:format 欄名也漂移了(`format` → `resourceFormat`),
+    # 舊碼只看 `format` → 恆為空 → CSV 永遠排不到前面。明講哪個欄名真的有值,免得下次再猜。
+    print(f'   ↳ format 類欄位有值的是 '
+          f'{[_k for _k in ("format", "resourceFormat") if _first.get(_k)] or "都沒有值"} '
+          f'(format={_first.get("format")!r} / resourceFormat={_first.get("resourceFormat")!r})')
+    print(f'   ↳ URL 類欄位有值的是 '
+          f'{[_k for _k in _RES_URL_KEYS if _first.get(_k)] or "都沒有值"}')
     for _it in _res[:4]:
         if not isinstance(_it, dict):
             continue
@@ -560,9 +640,19 @@ def _prod_smoke() -> None:
     try:
         from src.data.macro.macro_core import fetch_tw_pmi
         _r = fetch_tw_pmi()
+        # 2026-08-27:`is_stale` **只有走 stale fallback 那條路徑才會被寫**;命中 live 時
+        # 這個 key 根本不存在 → 原本直接印 `_r.get("is_stale")` 會印出 `None`,而 `None`
+        # 讀起來像「不知道」,無法回答驗收要問的那一句「這次到底走 live 還是快照」。
+        # 故改為在此判定並印**明確二值 + 一行結論**(§1:不確定就講清楚,不要讓人猜)。
+        _stale_flag = bool(_r.get('is_stale'))
+        _verdict = ('🟡 STALE — 8 段全失敗,回的是 90 天內的舊快照' if _stale_flag
+                    else ('🟢 LIVE — 本次命中即時來源,非快照' if _r.get('value') is not None
+                          else '🔴 無值 — 既沒命中 live,也沒有可用快照'))
         print(f'🎯 fetch_tw_pmi() → value={_r.get("value")} date={_r.get("date")} '
-              f'source={_r.get("source")} is_stale={_r.get("is_stale")} '
+              f'source={_r.get("source")} is_stale={_stale_flag} '
               f'_err_pmi={_r.get("_err_pmi")}')
+        print(f'   ↳ 判定：{_verdict}'
+              f'｜cached_at={_r.get("cached_at")}｜fetched_at={_r.get("fetched_at")}')
     except Exception as _e:
         import traceback
         print(f'❌ fetch_tw_pmi EXC {type(_e).__name__}: {_e}')
