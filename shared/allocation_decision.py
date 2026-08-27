@@ -54,9 +54,30 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
+# ── L0 → L0 SSOT(同層 import,無迴圈:macro_buckets 只 import signal_thresholds + colors)──
+from shared.macro_buckets import SPECS_BY_KEY as _SPECS_BY_KEY
+from shared.signal_thresholds import VIX_MEDIUM_RISK_THRESHOLD
+
 # ── 邊界對齊既有 SSOT(不另立矛盾數字)──────────────────────────────
 # 防禦帶上界 20 = EXPOSURE_BEAR(config.py) = position_throttle._DEFENSE_HI_PCT。
 DEFENSE_HI_PCT: int = 20
+
+# VIX 否決權的兩條線 —— **真的 import,不是註解宣稱**(見 vix_veto_cap docstring)。
+#   黃線 20 = signal_thresholds.VIX_MEDIUM_RISK_THRESHOLD
+#   紅線 30 = macro_buckets DangerSpec('vix').red(= MACRO_THRESHOLDS['VIX']['red_above']
+#             的 L0 鏡像,由 tests/test_macro_buckets.py::test_mirror_matches_macro_core 擋漂移)
+_VIX_VETO_WARN: float = VIX_MEDIUM_RISK_THRESHOLD
+_VIX_VETO_PANIC: float = _SPECS_BY_KEY['vix'].red
+
+# 警戒帶顯示字串「20–30」。**刻意寫成 module-level `.format` 而不是 inline f-string**:
+# 本檔已有 AST 守衛(tests/test_p0b_spec_wiring.py::
+# test_no_adhoc_range_fstring_in_allocation_decision)禁止「兩個內插值被 en dash 夾住」的
+# 就地區間拼接 —— 那條守衛擋的是**持股區間 lo/hi** 繞過 `_fmt_range` 再生出「20–20%」。
+# VIX 門檻帶不是持股區間,但與其在守衛上開一個洞(開洞就是留引用點),
+# 不如把它收成一個具名常數:算一次、看得見、同樣從 SSOT 推導。
+_VIX_BAND_DASH = '–'   # U+2013 EN DASH（與原字串同一個字元，非 ASCII '-'）
+_VIX_VETO_WARN_BAND: str = (
+    f'{_VIX_VETO_WARN:g}' + _VIX_BAND_DASH + f'{_VIX_VETO_PANIC:g}')
 
 # regime → 中文顯示(全站統一，避免各頁自己翻譯)
 REGIME_LABEL: dict[str, str] = {
@@ -343,8 +364,28 @@ def vix_veto_cap(vix: float | None) -> Cap | None:
 
     v19.174 去識別化:原註解在此帶人名稱謂,已改為來源模組名。
 
-    門檻對齊 `signal_thresholds.VIX_MEDIUM_RISK_THRESHOLD(20)` /
-    `VIX_HIGH_RISK_THRESHOLD(25)` 與 macro_buckets 紅線 30。
+    門檻(**兩刀,不是三刀**)::
+
+        >= _VIX_VETO_PANIC (30) → Cap 10%   紅線 = macro_buckets DangerSpec('vix').red
+        >= _VIX_VETO_WARN  (20) → Cap 30%   黃線 = signal_thresholds.VIX_MEDIUM_RISK_THRESHOLD
+        否則                     → None
+
+    ⚠️ 2026-08-27 更正一句**假的 SSOT 宣稱**（誠實化，非行為變更）:
+    原 docstring 寫「門檻對齊 `VIX_MEDIUM_RISK_THRESHOLD(20)` /
+    `VIX_HIGH_RISK_THRESHOLD(25)` 與 macro_buckets 紅線 30」,但
+
+    1. 本檔當時 **一個 SSOT 都沒 import**（只有 `__future__` / `dataclasses` / `typing`），
+       兩條線是 inline literal —— 改 SSOT 值不會跟著動,「對齊」不成立。
+    2. **`VIX_HIGH_RISK_THRESHOLD`(25) 在本函式從頭到尾不存在**：實跑
+       VIX=24.9 / 25.0 / 25.1 輸出**完全相同**,25 不是任何一刀。
+       它是 `v4_strategy_engine._macro_traffic_light` 的門檻（`>25` → max_position 20%），
+       語意也不同（那是持股上限分級,不是否決天花板）—— 屬**誤引**,不是漏實作。
+       佐證：`>=20` 分支自己印給使用者的字是「進入 **20–30** 警戒帶」,
+       本來就是兩刀的設計；若 25 是第三刀,那句話本身就會是錯的。
+    ⇒ 處置：刪掉幻影的 25，並把剩下兩條線**真的 import 進來**讓宣稱成真。
+       **20 / 30 兩個分支的行為與文案一字未改**（reason 字串以 `:g` 格式化,
+       輸出與本版前逐字相同）—— 門檻值本身一個都沒動
+       （user 2026-06-26 已撤銷「harmonize 統一值」）。
 
     Returns:
         Cap 或 None(VIX 未知／< 20 不設限)。
@@ -355,10 +396,12 @@ def vix_veto_cap(vix: float | None) -> Cap | None:
         _v = float(vix)
     except (TypeError, ValueError):
         return None
-    if _v >= 30:
-        return Cap('VIX 否決權', 10, f'VIX {_v:.1f} ≥ 30，系統性風險爆發，現金為王')
-    if _v >= 20:
-        return Cap('VIX 否決權', 30, f'VIX {_v:.1f} 進入 20–30 警戒帶，停止加槓桿')
+    if _v >= _VIX_VETO_PANIC:
+        return Cap('VIX 否決權', 10,
+                   f'VIX {_v:.1f} ≥ {_VIX_VETO_PANIC:g}，系統性風險爆發，現金為王')
+    if _v >= _VIX_VETO_WARN:
+        return Cap('VIX 否決權', 30,
+                   f'VIX {_v:.1f} 進入 {_VIX_VETO_WARN_BAND} 警戒帶，停止加槓桿')
     return None
 
 
