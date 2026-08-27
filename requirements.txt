@@ -3,7 +3,22 @@
 # 注意:不降級 production — upper bound 高於目前實際 deploy 的主版本即可。
 
 # ── Streamlit / UI 核心 ────────────────────────────────────────
-streamlit>=1.36.0,<1.60.0
+# 2026-08-27:floor 1.36.0 → 1.56.0。**這是把宣告改成誠實,不是升級。**
+# 原本宣告的 1.36 是假的 —— 現有程式碼在 1.36 上根本跑不起來,只是因為沒有 lock 檔、
+# resolver 一律解到 cap 內最新的 1.59.2,所以 production 從來沒炸過、也就沒人發現。
+# 三個實測出來的驅動版本(wheel 二分 + streamlit.testing.v1.AppTest 就地實跑):
+#   1.49.0 — `st.dataframe(width='stretch')`。1.48.1 直接
+#            `TypeError: 'str' object cannot be interpreted as an integer`(硬炸)。
+#   1.51.0 — `st.plotly_chart(width='stretch')` 才是真參數。≤1.50 被 `**kwargs` 吞掉,
+#            proto 與「完全不傳 width」逐欄相同 = 該參數形同不存在,且零錯誤訊息。
+#            (≤1.50 圖仍是滿版 —— 因為那個年代 use_container_width 預設就是 True;
+#             也就是說這條在 1.50 上是「靜默無效」,不是「圖變窄」。)
+#   1.56.0 — `st.dataframe(selection_default=...)` 程式化指定表格選取列;1.55.0 無此參數。
+# 上限 `<1.60.0` **刻意不動**:resolver 仍解到 1.59.2,部署實際安裝的版本零變化 ——
+# 這次只改宣告,不夾帶任何行為變更。(上限的解禁條件見下方 starlette 段。)
+# 守衛:tests/test_macro_v2_tab.py::TestStreamlitFloorCompatibility 會從本行反解 floor,
+# 掃 AST 擋住「超出本 floor 的 API / 關鍵字參數」,floor 一改守衛自動跟著改。
+streamlit>=1.56.0,<1.60.0
 # v19.172 hotfix(2026-08-05):starlette 1.4.0(當日 09:36 UTC 發布)重構 gzip
 # middleware,GZipResponder.__init__ 新增「必填」keyword-only 參數 thread_minimum_size。
 # streamlit 1.59.2 的 _MediaAwareGZipResponder 子類沿用舊簽章呼叫

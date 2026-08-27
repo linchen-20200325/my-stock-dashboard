@@ -683,30 +683,195 @@ class TestLayer3Filtering:
 # 七、版本陷阱:不得使用超出 requirements.txt floor 的 widget
 # ════════════════════════════════════════════════════════════════
 class TestStreamlitFloorCompatibility:
+    """守住「宣告的 floor」與「程式碼真正需要的版本」不脫節。
 
-    def test_no_widget_newer_than_the_declared_floor(self):
-        """`requirements.txt` 宣告 `streamlit>=1.36.0`,但開發沙箱裝的是更新的版本。
+    ⚠️ 2026-08-27 重寫。舊版是**壞掉的守衛**,三個獨立問題:
 
-        `st.pills`(1.40+)/ `st.segmented_control`(1.42+)/ `st.fragment`(1.37+)
-        在沙箱**跑得動**,部署端若解析到 1.36 就 AttributeError —— 本機全綠、
-        production 倒站。用 AST 比對「真的被呼叫 / 當裝飾器用」的屬性,
-        文件與註解裡提到名字不算違規。
-        """
-        import ast
+    1. **地板寫死在測試裡**。舊版 `banned` 表拿 1.36 當基準。而 2026-08-27 把
+       `requirements.txt` 的 floor 抬到 1.56 之後,表裡那三個(pills 1.40 /
+       segmented_control 1.42 / fragment 1.37)**全部落在地板底下** ——
+       整條守衛會變成永遠不會擋任何東西的綠燈裝飾品。
+       → 現在 floor **從 `requirements.txt` 反解**,是唯一真相源。地板一改,
+         哪些 API 該擋自動跟著改,不需要有人記得回來同步這張表。
+    2. **只比對屬性名,不看關鍵字參數**。舊版只看 `st.<name>`,所以它掃的那個檔案裡
+       就擺著 `st.dataframe(..., width='stretch')`(需 1.49)而它抓不到 ——
+       這正是本次事故的形狀:壞掉的東西不在元件名,在參數。
+       → 現在 `(元件, 關鍵字)` 與 `(*, 關鍵字)` 兩層都掃。
+    3. **只掃單一檔案** `tab_macro_v2.py`。同一組畫面的姊妹檔
+       `macro_v2_cards.py` 完全在守備範圍外。
+       → 現在掃 `src/**/*.py` + `app.py` 全域,並另有一條斷言釘死那兩個檔案
+         必須在掃描範圍內,避免日後範圍被悄悄縮回去。
+
+    **表裡每一個版本號都是實測的,不是查文件抄的**(wheel `pip download --no-deps`
+    解壓 + `PYTHONPATH` 就地跑 `streamlit.testing.v1.AppTest`)。為了不編造「首個
+    支援版本」,表的語意刻意定成 **「已實測**不**支援的最高版本」**:
+    判定式是 `floor <= 該值 → 違規`。這樣每個數字都是我親眼看它壞掉的那一版,
+    沒有任何靠推論填空的區間。
+    """
+
+    #: `st.<name>` 本身在該版本**實測不存在**(hasattr 為 False)。
+    _ATTR_UNSUPPORTED_AT = {
+        # 1.36.0 實測 hasattr 皆 False(沿用舊表的三個,但版本改為實測值)
+        "pills": "1.36.0",
+        "segmented_control": "1.36.0",
+        "fragment": "1.36.0",
+        # 1.56.0 實測 hasattr 皆 False,沙箱 1.61.1 為 True —— 典型「本機全綠、
+        # 部署 AttributeError」的形狀,正是這條守衛存在的理由。
+        "mermaid_chart": "1.56.0",
+        "pagination": "1.56.0",
+        "skeleton": "1.56.0",
+        "bottom": "1.56.0",
+    }
+
+    #: `st.<元件>(<關鍵字>=...)` 在該版本**實測無效**。`"*"` = 任何 `st.*` 呼叫。
+    _KWARG_UNSUPPORTED_AT = {
+        # ── 本次事故的兩條主角 ──────────────────────────────
+        # 1.48.1 實測直接 TypeError: 'str' object cannot be interpreted as an
+        # integer(硬炸,至少會被發現);1.49.0 通過。
+        ("dataframe", "width"): "1.48.1",
+        # 1.50.0 實測被 `**kwargs` 吞掉:產生的 proto 與「完全不傳 width」逐欄相同,
+        # 且零錯誤訊息 —— 比硬炸危險,因為沒有任何跡象。1.51.0 才是真參數。
+        ("plotly_chart", "width"): "1.50.0",
+        # ── 這次把 floor 抬到 1.56 的驅動:程式化指定表格選取列 ──
+        ("dataframe", "selection_default"): "1.55.0",
+        # ── 1.56.0 實測不存在、沙箱 1.61.1 存在的關鍵字 ────────
+        ("dataframe", "lazy"): "1.56.0",
+        ("metric", "icon"): "1.56.0",
+        ("tabs", "height"): "1.56.0",
+        ("expander", "type"): "1.56.0",
+        ("status", "type"): "1.56.0",
+        ("markdown", "anchors"): "1.56.0",
+        ("chat_input", "submit_mode"): "1.56.0",
+        ("camera_input", "resolution"): "1.56.0",
+        ("cache_data", "refresh_mode"): "1.56.0",
+        ("cache_resource", "refresh_mode"): "1.56.0",
+        ("fragment", "parallel"): "1.56.0",
+        ("time_input", "format"): "1.56.0",
+        ("error", "title"): "1.56.0",
+        ("info", "title"): "1.56.0",
+        ("success", "title"): "1.56.0",
+        ("warning", "title"): "1.56.0",
+        # `persist_state` 1.56.0 實測橫跨 16 個 widget 全無 —— 逐個列會漏,
+        # 用萬用字元蓋掉任何 `st.*(persist_state=...)`。
+        ("*", "persist_state"): "1.56.0",
+    }
+
+    #: 掃描範圍最低限度必須含這兩個檔(同一組畫面的正副檔)。
+    _MUST_COVER = ("src/ui/tabs/tab_macro_v2.py", "src/ui/render/macro_v2_cards.py")
+
+    @staticmethod
+    def _ver(text: str) -> tuple[int, ...]:
+        return tuple(int(p) for p in text.split("."))
+
+    @classmethod
+    def _declared_floor(cls) -> tuple[int, ...]:
+        """從 `requirements.txt` 反解 streamlit 的 floor —— 唯一真相源。"""
+        import pathlib
+        import re
+
+        for line in pathlib.Path("requirements.txt").read_text(
+                encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("#") or not line.startswith("streamlit"):
+                continue
+            m = re.match(r"streamlit>=(\d+(?:\.\d+)*)", line)
+            assert m, f"requirements.txt 的 streamlit 行沒有可解析的 floor:{line!r}"
+            return cls._ver(m.group(1))
+        raise AssertionError("requirements.txt 找不到 streamlit 這一行")
+
+    @classmethod
+    def _scan_targets(cls):
         import pathlib
 
-        banned = {"pills": "1.40", "segmented_control": "1.42", "fragment": "1.37"}
-        tree = ast.parse(
-            pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8"))
-        hits = [
-            f"st.{n.attr}(需 streamlit {banned[n.attr]}+)"
-            for n in ast.walk(tree)
-            if isinstance(n, ast.Attribute) and n.attr in banned
-            and isinstance(n.value, ast.Name) and n.value.id == "st"
-        ]
+        files = sorted(pathlib.Path("src").rglob("*.py"))
+        app = pathlib.Path("app.py")
+        if app.exists():
+            files.append(app)
+        return files
+
+    def _violations(self, floor):
+        import ast
+
+        hits = []
+        for path in self._scan_targets():
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                # (1) 元件本身太新 —— 也涵蓋 `@st.fragment` 這種裝飾器用法
+                if (isinstance(node, ast.Attribute)
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "st"):
+                    bad = self._ATTR_UNSUPPORTED_AT.get(node.attr)
+                    if bad and floor <= self._ver(bad):
+                        hits.append(
+                            f"{path}:{node.lineno} st.{node.attr}"
+                            f"(實測 {bad} 尚無此 API)")
+                # (2) 元件沒問題但關鍵字參數太新 —— 舊守衛完全看不到的那一層
+                if (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "st"):
+                    for kw in node.keywords:
+                        if kw.arg is None:  # **kwargs 展開,無法靜態判定
+                            continue
+                        for key in ((node.func.attr, kw.arg), ("*", kw.arg)):
+                            bad = self._KWARG_UNSUPPORTED_AT.get(key)
+                            if bad and floor <= self._ver(bad):
+                                hits.append(
+                                    f"{path}:{node.lineno} "
+                                    f"st.{node.func.attr}({kw.arg}=...)"
+                                    f"(實測 {bad} 此參數無效)")
+        return sorted(set(hits))
+
+    # ── 守衛本體 ──────────────────────────────────────────────
+    def test_no_streamlit_api_newer_than_the_declared_floor(self):
+        """程式碼不得用到超出 `requirements.txt` 宣告 floor 的 streamlit API。
+
+        沒有 lock 檔時 resolver 會解到 cap 內最新版,所以沙箱與 production 都
+        跑得動 —— 宣告與實況脫節不會有任何症狀,直到有人真的照著宣告去裝。
+        """
+        floor = self._declared_floor()
+        hits = self._violations(floor)
         assert not hits, (
-            f"用到超出宣告 floor 的 streamlit API:{hits}。"
-            f"requirements.txt 是 `streamlit>=1.36.0`,請改用 1.36 就有的元件。"
+            "用到超出宣告 floor 的 streamlit API:\n  "
+            + "\n  ".join(hits)
+            + f"\n\nrequirements.txt 宣告 streamlit>="
+            + ".".join(str(p) for p in floor)
+            + "。要嘛改用該版本就有的寫法,要嘛連同 requirements.txt 一起把 floor 抬上去"
+              "(抬 floor 記得同步 tests/test_hotfix_v19_79.py 的逐字 pin)。"
+        )
+
+    # ── 守衛的守衛:確保它真的還會擋東西、範圍沒被縮掉 ──────────
+    def test_scan_covers_both_macro_v2_files(self):
+        """掃描範圍不得縮回單一檔案 —— 舊版只掃 tab_macro_v2.py 就漏掉了姊妹檔。"""
+        scanned = {p.as_posix() for p in self._scan_targets()}
+        missing = [f for f in self._MUST_COVER if f not in scanned]
+        assert not missing, f"這些檔案掉出掃描範圍:{missing}"
+
+    def test_guard_actually_bites(self):
+        """反向驗證:守衛必須真的抓得到違規,不能是永遠綠燈的裝飾品。
+
+        舊版守衛就是死在這裡 —— floor 抬到 1.56 後表裡三個 API 全在地板下,
+        它變成不可能紅燈,但沒有任何測試會告訴你這件事。故這條直接把地板往下壓,
+        要求它一定要吐出東西來。
+        """
+        # 壓到 1.36:全 repo 現有的 width='stretch' 都該被抓出來
+        hits_136 = self._violations(self._ver("1.36.0"))
+        assert hits_136, "把 floor 壓到 1.36 竟然抓不到任何東西 —— 守衛已失效"
+        assert any("dataframe(width=" in h for h in hits_136)
+        assert any("plotly_chart(width=" in h for h in hits_136)
+        # 壓到 1.49:dataframe 的 width 已合法,plotly 的還不合法 —— 證明它辨識得出
+        # 「同一個關鍵字、不同元件、不同版本」,不是一刀切。
+        hits_149 = self._violations(self._ver("1.49.0"))
+        assert not any("dataframe(width=" in h for h in hits_149)
+        assert any("plotly_chart(width=" in h for h in hits_149)
+        # 現行 floor 之上仍有東西可擋 —— 表沒有整組落到地板底下(舊版的死法)
+        floor = self._declared_floor()
+        live = [v for v in (*self._ATTR_UNSUPPORTED_AT.values(),
+                            *self._KWARG_UNSUPPORTED_AT.values())
+                if floor <= self._ver(v)]
+        assert live, (
+            f"現行 floor {floor} 之上一條規則都不剩 —— 守衛已退化成裝飾品,"
+            "請補上比 floor 更新的 API/參數(照表頭說明:填『實測不支援的最高版本』)。"
         )
 
 

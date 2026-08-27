@@ -34,8 +34,19 @@ class TestRequirementsHotfix:
         assert not any(ln.startswith("FinMind") for ln in active)
 
     def test_core_pins_still_present(self):
+        """⚠️ 2026-08-27:streamlit floor 由 `1.36.0` 改為 `1.56.0`。
+        **這是有意識的政策變更,不是把守衛放寬** —— 上限 `<1.60.0` 一字未動,
+        本斷言仍然是「逐字釘死完整 specifier」的強度,只是釘的字串換了一個。
+
+        為什麼原本的 1.36 非改不可:它是**假的**。現有程式碼實測在 1.36 上跑不起來
+        (`st.dataframe(width='stretch')` 需 1.49、`st.plotly_chart(width='stretch')`
+        需 1.51,再加上接下來要用的程式化選取列需 1.56)。因為沒有 lock 檔,resolver
+        一律解到 cap 內最新的 1.59.2,所以 production 從沒炸過、宣告與實況不符也沒人發現。
+        改完後 resolver 解出來的版本**完全沒變**(仍是 1.59.2)—— 零部署行為變更。
+        完整實測證據與三個驅動版本寫在 `requirements.txt` 該行上方的註解。
+        """
         req = self._req
-        for token in ("streamlit>=1.36.0,<1.60.0", "pandas>=2.0.0,<4.0.0",
+        for token in ("streamlit>=1.56.0,<1.60.0", "pandas>=2.0.0,<4.0.0",
                       "numpy>=1.24.0,<3.0.0"):
             assert token in req
 
