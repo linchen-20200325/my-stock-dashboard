@@ -55,6 +55,15 @@ _US10Y_YELLOW = 4.5  # 對齊 MACRO_THRESHOLDS['US10Y']['yellow_above']
 _US10Y_RED    = 5.0  # 對齊 MACRO_THRESHOLDS['US10Y']['red_above']
 _DXY_YELLOW   = 105.0  # 對齊 MACRO_THRESHOLDS['DXY']['yellow_above']
 _DXY_RED      = 110.0  # 對齊 MACRO_THRESHOLDS['DXY']['red_above']
+# 2026-08-27 — 參考走勢卡(REFERENCE_TREND_SPECS)用:USDTWD 三段門檻鏡像。
+# 與上面 6 組鏡像同一個理由與同一條守衛(test_macro_buckets.py::
+# test_mirror_matches_macro_core):MACRO_THRESHOLDS 在 L1,L0 不可 import。
+# ⚠️ `green_below`(30.5) 目前**不參與判燈** —— `classify_danger` 的 high_bad
+#    只吃 yellow/red 兩條線,30.5 是「台幣強勢」的敘述線,不是第三個燈號等級。
+#    鏡像它是為了讓 drift test 一併釘住,不是為了拿來判燈(判了就是第三把尺)。
+_USDTWD_GREEN_BELOW = 30.5   # 對齊 MACRO_THRESHOLDS['USDTWD']['green_below']
+_USDTWD_YELLOW      = 32.0   # 對齊 MACRO_THRESHOLDS['USDTWD']['yellow_above']
+_USDTWD_RED         = 33.0   # 對齊 MACRO_THRESHOLDS['USDTWD']['red_above']
 
 # ════════════════════════════════════════════════════════════════
 # v19.175 — 合理範圍（CLAUDE.md §3.2 範圍/合理性檢查）
@@ -88,6 +97,11 @@ _DXY_VALID_MAX   = 130.0
 # 擋漂移(同 _VIX_YELLOW 等鏡像常數的既有作法)。
 CL_INTL_KEY_US10Y = "10Y公債殖利率"   # INTL_MAP → '^TNX'
 CL_INTL_KEY_DXY   = "美元指數 DXY"    # INTL_MAP → 'DX-Y.NYB'
+
+# ── cl_data['tw'] 的中文 key 鏡像(SSOT: services/daily_checklist.TW_MAP)──
+# 同上,L0 不可 import L3 → 鏡像 key 名,由 tests/test_p0b_spec_wiring.py 的
+# 同一支 mirror 測試擋漂移。2026-08-27 為卡 A(美元指數 / 台幣)新增。
+CL_TW_KEY_USDTWD = "新台幣匯率"       # TW_MAP → 'TWD=X'
 
 # ════════════════════════════════════════════════════════════════
 # 桶 meta：順序鎖定 + emoji + 副標（對齊下方詳細區由上而下閱讀序）
@@ -397,6 +411,77 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
 
 # 快速查表
 SPECS_BY_KEY: dict[str, DangerSpec] = {s.key: s for s in BUCKET_DANGER_SPECS}
+
+
+# ════════════════════════════════════════════════════════════════
+# 2026-08-27 — 參考走勢（REFERENCE TREND）：畫圖，但**不是一盞燈**
+# ════════════════════════════════════════════════════════════════
+#
+# 客戶裁示（2026-08-27）：台幣與加權指數要在總經 v2 第 2 層畫走勢，但
+# **不算一盞燈** —— 不進「x/16 有值」的分母、不進五桶 worst-of 彙總、
+# 不進訊號可信度卡。
+#
+# 【為什麼另開一份 list 而不是加進 BUCKET_DANGER_SPECS + 加一個 `is_ref` 旗標】
+# `BUCKET_DANGER_SPECS` 是**「哪些東西算一盞燈」的定義本身** —— 它同時是
+# `compute_five_bucket_summary` 的迭代來源、readiness 側車的 key 全集、
+# 以及 `x/16` 的那個 16。把不算燈的東西放進去再靠旗標排除，等於要求
+# **每一個現有與未來的消費端**都記得過濾；漏掉一個，分母就悄悄變成 18，
+# 而畫面上完全看不出來（§1：錯的數字比沒有數字更危險）。
+# 兩份 list 物理隔離之後，「漏過濾」這個錯誤在消費端寫不出來。
+#
+# 【型別為什麼沿用 DangerSpec】L4 的兩張新卡（`render_dual_axis_card` /
+# `render_candlestick_card`）吃的就是 `DangerSpec`，用來畫門檻線與門檻帶文字。
+# 另開一個平行 dataclass 只會做出第二把尺（§3.3），且逼 L4 寫兩套分支。
+
+#: 參考走勢卡的 bucket 值。**刻意不是** BUCKET_ORDER 裡的任何一個 ——
+#: 萬一哪天有人把 ref spec 誤餵進桶彙總，它會落在「沒有這個桶」而不是
+#: 悄悄混進長期/中期某一桶裡改掉那桶的 worst-of。
+REFERENCE_BUCKET: str = "reference"
+
+REFERENCE_TREND_SPECS: list[DangerSpec] = [
+    # ── 台幣：有門檻（SSOT 鏡像），但不算燈 ──
+    # 門檻方向 high_bad：USD/TWD 數字**越大 = 台幣越貶**（外資撤離壓力），
+    # 與 macro_core 註解「>32 yellow / >33 red」同向。
+    DangerSpec("usdtwd", "新台幣匯率", REFERENCE_BUCKET, "TWD/USD", "high_bad",
+               yellow=_USDTWD_YELLOW, red=_USDTWD_RED, decimals=2,
+               note=f"＞{_USDTWD_YELLOW:g} 台幣貶值警戒 / ＞{_USDTWD_RED:g} 外資撤離壓力"
+                    f"（＜{_USDTWD_GREEN_BELOW:g} 為台幣強勢區，非燈號等級）"
+                    "。**參考走勢：不計入 16 盞燈的分母、不進五桶彙總。**",
+               source="SSOT:MACRO_THRESHOLDS.USDTWD",
+               emoji="💱"),
+    # ── 加權指數：**沒有門檻，也不需要** ──
+    # 客戶 2026-08-27 裁示：K 線卡不畫門檻線。四個門檻欄一律 None：
+    #   · `_threshold_lines_ssot` 逐欄 `if val is None: continue` → 不畫任何線 ✅
+    #   · `threshold_text` 兩側都 None → 回 "—" ✅
+    #   · `classify_danger` 會 **TypeError**（float 與 None 比大小）——
+    #     這是**刻意留著的 fail loud**：沒有門檻的東西不該被判成「綠燈」。
+    #     消費端請先問 `has_thresholds(spec)`，不要 try/except 吞掉（§1）。
+    # ⚠️ 型別標註寫 float 卻放 None，是 DangerSpec 既有欄位型別（`yellow: float`）
+    #    與「這條線沒有門檻」之間的張力。**沒有改 DangerSpec 的欄位型別**，因為
+    #    那會讓 16 盞燈的 spec 也變成「門檻可有可無」，而它們的門檻是必填的。
+    #    改由 `has_thresholds()` + 守衛測試把這件事講明白。
+    DangerSpec("taiex", "加權指數", REFERENCE_BUCKET, "點", "high_bad",
+               yellow=None, red=None, decimals=0,
+               note="日 K 走勢。**參考走勢：不判燈、不畫門檻線、"
+                    "不計入 16 盞燈的分母。**",
+               source="DESIGN:無門檻（參考走勢）",
+               emoji="📈"),
+]
+
+#: 參考走勢快速查表。**與 `SPECS_BY_KEY` 是兩張分開的表** ——
+#: 合併成一張的那一刻，「這是不是一盞燈」就再也分不出來了。
+REF_SPECS_BY_KEY: dict[str, DangerSpec] = {
+    s.key: s for s in REFERENCE_TREND_SPECS}
+
+
+def has_thresholds(spec: DangerSpec) -> bool:
+    """這條 spec 有沒有可判燈的門檻（yellow / red 皆非 None）。
+
+    §1：`classify_danger` 對沒有門檻的 spec 會 TypeError（刻意不吞）。
+    消費端要先問這個函式，而不是 try/except —— 吞掉例外的結果是
+    「沒有門檻的東西被畫成一盞綠燈」，那正是最危險的那種假訊息。
+    """
+    return spec.yellow is not None and spec.red is not None
 
 # ════════════════════════════════════════════════════════════════
 # v18.349 — session_state["macro_info"] 核心指標 key 契約（SSOT）

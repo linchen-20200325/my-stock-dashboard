@@ -369,6 +369,26 @@ def test_intl_key_mirror_matches_daily_checklist():
     assert _intl_map[mb.CL_INTL_KEY_DXY] == 'DX-Y.NYB'
 
 
+def test_tw_key_mirror_matches_daily_checklist():
+    """`macro_buckets.CL_TW_KEY_USDTWD` 必須 == `daily_checklist.TW_MAP` 的 key。
+
+    與上一支同一個理由、同一個手法（AST 讀原始碼，不跨層 import）。
+    2026-08-27 卡 A「美元指數 / 台幣」新增：台幣序列走
+    `cl_data['tw']['新台幣匯率']`，key 名在 L3 改掉而 L0 沒跟 → 台幣那條線
+    **無聲**變成「取不到」，而卡片會照畫（只剩 DXY 一條），看起來完全正常。
+    """
+    _tree = ast.parse(_DAILY_CHECKLIST_PATH.read_text(encoding='utf-8'))
+    _tw_map = None
+    for _node in ast.walk(_tree):
+        if isinstance(_node, ast.Assign):
+            for _t in _node.targets:
+                if isinstance(_t, ast.Name) and _t.id == 'TW_MAP':
+                    _tw_map = ast.literal_eval(_node.value)
+    assert _tw_map, 'daily_checklist.TW_MAP 找不到（模組被重構？）'
+    assert mb.CL_TW_KEY_USDTWD in _tw_map
+    assert _tw_map[mb.CL_TW_KEY_USDTWD] == 'TWD=X'
+
+
 def test_thresholds_and_valid_range_are_coherent():
     """§4.1 量綱自洽：門檻必須落在合理範圍內，否則兩者不是同一個刻度。
 
