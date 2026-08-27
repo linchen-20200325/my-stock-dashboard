@@ -223,9 +223,46 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     }
 
 
-# ── 舊版評分（已棄用，僅保留相容性，新版請使用 market_regime）───
+# ── market_score:**現役程式碼**,不是相容性殘骸(2026-08-27 更正一句說謊的註解)──
+#
+# 本行以上原本掛著一句「舊版評分(退場中、僅保留相容性,新版請用 market_regime)」
+# —— **那句話與事實相反**。照它動手(把本函式當垃圾清掉)會直接打斷主流程,因為:
+#   `get_market_assessment()` 在下方**無條件**呼叫本函式,再把兩份結果合併成
+#   `{**old_result, **regime_result}` 交給整個總經 / 大盤格局鏈路。
+#
+# 本函式**現在**的真實角色(2026-08-27 實查,非轉述):
+#   1. 合併時 `score` / `max_score` / `signals` 三個 key **一律被 `market_regime()`
+#      蓋掉**(regime 在右邊)。所以本函式對外的**獨佔輸出只剩兩個**:
+#         `status`     — 多頭 / 盤整 / 空頭(中文字串)
+#         `confidence` — 0~100
+#      這兩個 key 是 `get_market_assessment()` 回傳 dict 裡**唯一**由本函式提供的東西。
+#   2. 另有直接單測 caller:`tests/test_p1_unknown_vs_bearish.py::test_market_score_*`
+#      —— 釘住兩條 §1 修補(`foreign_buy=None` 不得 TypeError;沒有均量時
+#      不得捏 `量比 = 1.0x`)。那兩條測的是「不捏造」,與本函式存廢無關。
+#
+# 什麼條件下才可以**真的**退場(三條全成立才准動;缺一即為誤刪):
+#   (a) 確認 `status` / `confidence` 兩個 key 在全 repo 沒有消費端 ——
+#       含 `session_state['mkt_info']` 的下游、AI prompt 組裝、置底常駐條;
+#   (b) **同時**刪掉下方的呼叫行與 `{**old_result, **regime_result}` 合併 ——
+#       只刪函式會變 NameError,只刪呼叫會讓那兩個 key 靜默消失;
+#   (c) 為 `tests/test_p1_unknown_vs_bearish.py` 的兩條 §1 迴歸另找宿主,
+#       **不可**隨手連測試一起刪。
+#
+# ⚠️ (a) 的「目前無消費端」是 2026-08-27 **單組**掃描結果,**沒有第二組獨立驗過**
+#    (§-2 規則 6)→ 只能當**待驗事項**,不得直接當成刪除許可。
+#
+# 守衛:`tests/test_deprecation_honesty.py`
+#   - 有人把退場標記寫回本函式(而它仍有 caller)→ 轉紅;
+#   - `status` / `confidence` 從 `get_market_assessment()` 的結果裡消失 → 轉紅。
+#
+# ⚠️ 本段刻意**不寫出**那句舊標記的原字串 —— 守衛是靠掃描標記文字判定的,
+#    在這裡照抄一次會讓守衛把這段誠實的更正註解本身當成違規(實測過)。
 def market_score(index_price, ma200, foreign_buy, volume, avg_volume=1000):
-    """舊版市場評分（MA200 年線 + 外資 + 量能），保留相容性"""
+    """MA200 年線 + 外資 + 量能的三因子評分。**現役**,由 `get_market_assessment()` 呼叫。
+
+    對外的獨佔輸出是 `status` / `confidence`(其餘 key 合併時會被 `market_regime()` 蓋掉)。
+    退場條件見上方註解 —— 這不是「保留相容性」的死碼。
+    """
     score = 0; signals = []
     if index_price > ma200:
         score += 2; signals.append('✅ 站上年線 (+2)')
@@ -352,6 +389,9 @@ def get_market_assessment(df_index=None, foreign_net=None,
         ma120_above_3d=ma120_above_3d, ma120_below_3d=ma120_below_3d,
         ma120_rising=ma120_rising, ma120_falling=ma120_falling,
     )
+    # ⚠️ 本行**不是**相容性殘留:`market_score` 是現役的(2026-08-27 更正,見其定義處註解)。
+    # 合併後 score/max_score/signals 由 regime 蓋掉,`old_result` 對外只剩
+    # `status` / `confidence` 兩個 key —— 刪這行等於靜默拿掉那兩個欄位。
     old_result    = market_score(current_price, ma200, foreign_net, vol_today, avg_vol)
 
     # P5修正: 保留新版signals，不讓old_result.signals覆蓋

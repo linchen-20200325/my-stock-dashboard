@@ -13,6 +13,9 @@
   都會執行（收合只是前端），把 N 檔 × 12 盞燈塞進去就是 STATE.md v19.132 產業熱力圖
   那個坑的另一個入口。渲染下放 L4 `render.station_cards`（L5 → L4 為合法方向,
   **不需**新增 §8.2.A 例外）。
+  · 選中那一列的面板裡另接兩張**週線走勢圖**（週K vs 均線 / 布林 z）,渲染下放 L4
+    `render.station_charts`,原料是 L3 row 的 `KEY_WEEKLY_SERIES`（抓取那一次就算好）。
+    本層**不判斷該不該畫、不編缺值文案** —— 個股 / 抓取失敗列的降級在 L4。
 
 §8.2 L5：只呼叫 L3 `dividend_station_service`,不自算。§1：抓取失敗逐列誠實標記,不炸整表;
 抓取 button-gated（不每次 rerun 重抓）。個股不套 235/3-3-3（ETF/基金規則）,資料不足標「資料不足」不猜。
@@ -414,6 +417,23 @@ def _light_value_texts(r: dict) -> dict[str, str]:
     return _out
 
 
+def _chart_row_key(row: dict, idx: int) -> str:
+    """走勢圖 `st.plotly_chart` 的 key 用的**這一列的身分**（純函式,可單測）。
+
+    L4 `render_weekly_ma_chart` / `render_boll_z_chart` 的 `ticker=` 只拿來組 key、
+    **不參與任何判斷**（見該檔 docstring）,故這裡給的是「哪一列」而不是純代號。
+
+    - **不能只用 `代號`**:同一檔可以同時出現在 📁 Portfolio 與 Watchlist（`held`
+      True / False 兩列）,兩列同代號 → key 撞在一起,Streamlit 會沿用前一個元件,
+      畫面說 A、圖是 B。
+    - **不能只用列序**:重跑戰情室後同一個位置換成另一檔,列序沒變 → key 沒變,
+      同樣沿用舊圖。
+    兩個一起帶,換列與換內容都必定換 key。
+    """
+    _code = str(row.get("代號", "") or "")
+    return f"{idx}_{_code}"
+
+
 def _render_light_detail(rows: list[dict]) -> None:
     """逐盞燈明細 —— 燈格牆 + **選列就地展開**(取代原本的逐檔明細 expander)。
 
@@ -485,6 +505,30 @@ def _render_light_detail(rows: list[dict]) -> None:
                 _r.get("_lights") or (),
                 value_texts=_light_value_texts(_r),
                 error=str(_d.get("error") or ""))
+            # ── 週線走勢圖（階段 D 接線）────────────────────────────────
+            # **位置**:接在燈明細之後、「其他明細」之前。理由是身分歸屬 ——
+            # 「### 代號 名稱」這個標題印在 `render_holding_detail` 的最上面,
+            # 圖排在它後面才明確屬於這一檔;排在它前面的話圖上方沒有任何標題,
+            # 換列時最容易變成「畫面說 A、圖是 B」。而且這兩張圖正是上面 235 /
+            # 健檢C 那幾盞燈的視覺依據 —— 證據緊接著結論,不隔一段雜項。
+            # ⚠️ **不包 `st.expander` / `st.tabs`**:那兩者的 body 每次 app run
+            #   都會執行(收合只是前端),N 檔全展開就是 STATE.md v19.132 產業
+            #   熱力圖那個坑的另一個入口。這裡靠「**沒選列就進不到這個分支**」
+            #   天然控制成本 —— 沒選任何列時一張圖都不畫。
+            # ⚠️ **本層不判斷該不該畫、也不編缺值文案**:個股列 / 抓取失敗列
+            #   的降級(不畫圖、改印 L0 `MISS_TEXT`)整套在 L4,這裡只把 L3 的
+            #   payload 原樣交過去。在這裡再判一次就是第二把尺。
+            # 兩個 import 都放函式內:與本檔 pandas / service 的既有作法一致,
+            # 且 plotly 只在真的有人選列時才載入。
+            from src.services.dividend_station_service import KEY_WEEKLY_SERIES
+            from src.ui.render.station_charts import (
+                render_boll_z_chart,
+                render_weekly_ma_chart,
+            )
+            _ck = _chart_row_key(_r, _idxs[0])
+            _series = _r.get(KEY_WEEKLY_SERIES)
+            render_weekly_ma_chart(_series, ticker=_ck)
+            render_boll_z_chart(_series, ticker=_ck)
             _extra = [(_k, str(_d.get(_k) or "").strip())
                       for _k in _EXTRA_DETAIL_KEYS]
             _extra = [(_k, _v) for _k, _v in _extra if _v]

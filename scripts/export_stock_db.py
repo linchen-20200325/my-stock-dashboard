@@ -13,7 +13,9 @@
                             B3 v19.179 加 §3.2 sanity gate：全列須 ∈[500,10000]億,
                             否則整表略過 + 警告,不把混口徑序列外送下游）
     - `money_supply`        M1B/M2 月供給（finmind_m1m2.parquet,億元 level + gap 點差）
-    - `macro_tw_pmi`        台灣 PMI 最後良值（macro_last_good/tw_pmi.json）
+    - `macro_tw_pmi`        台灣 PMI 最後良值（macro_last_good/tw_pmi.json,**單位 指數**；
+                            2026-08-27 加月頻新鮮度 gate：as_of 落後 ≥1 個發布期
+                            → 整表略過 + 警告,不把過期良值當當期外送下游）
 * 🔴 live 層（需 `FINMIND_TOKEN`；**缺 token → Fail-Loud 略過該表 + 警告,不造假**）
     - `stock_technical`     個股 close/RSI/布林軌/均線(MA20,60)/KD/逐檔籌碼(外資,投信,三大法人 張)
                             （下游 2026 個股盯盤卡的主要輸入;全部重用 SSOT 指標函式
@@ -21,10 +23,14 @@
                             get_combined_data 既有欄,不重算。STOCK_IDS 指定個股清單）
     - `monthly_revenue`     全市場月營收（fetch_batch_monthly_revenue,單位 元）
     - `macro_tw_signal`     景氣對策信號燈號（fetch_ndc_signal_history）
-    - `futures_oi`          台指期外資留倉淨口數（finmind_fut_oi,單位 口;+多/-空）
+    - `futures_oi`          台指期外資留倉淨口數（finmind_fut_oi,
+                            **單位 TX 當量口**＝大台淨口 ＋ 0.25×小台淨口;+多/-空。
+                            2026-08-27 正名:原標「口」與上游口徑不符,見下方單位鐵則）
     - `futures_night`       台指期日盤+夜盤收盤 → 夜盤漲跌（finmind_fut_night;盤前隔日開盤領先）
 * 🩺 健康表（每次 export 依上述各表成敗自動產生,不需外部抓取）
-    - `source_health`       各表 status（ok/absent）+ n_rows + as_of（下游 2026 顯示維度降級/缺料,不再默默消失）
+    - `source_health`       各表 status（ok/absent）+ n_rows + as_of（下游 2026 顯示維度降級/缺料,
+                            不再默默消失）。**as_of = 該表自己的資料日期**（MAX(date)），
+                            取不到留空;2026-08-27 前是每列都戳匯出日 → 等於宣稱過期資料是今天的。
 
 （`stock_health`（財報評級）為下一增量,需財報體檢管線,另接。v19.174 去識別化:原帶稱謂。）
 
@@ -33,10 +39,17 @@
     （不設 STOCK_DB → 寫本專案根目錄 stock.db）
 
 單位鐵則(對照 CLAUDE.md §4.1):財報欄=千元、eps=元、外資/M1B2=億元、月營收=元、
-**融資餘額=元**(B3 v19.179 補標;原本是本清單裡唯一沒標單位的一項)、PMI=指數。
+**融資餘額=元**(B3 v19.179 補標;原本是本清單裡唯一沒標單位的一項)、PMI=指數、
+**台指期外資留倉=TX 當量口**(2026-08-27 正名)。
+⚠️ TX 當量口:上游 `leading_indicators.finmind_fut_oi` 的口徑是
+「外資大台淨口 ＋ 0.25 × 外資小台淨口」(MTX 契約乘數 50 元/點 ÷ TX 200 元/點
+= 0.25,SSOT `leading_indicators._MTX_TO_TX_FACTOR`),**不是原始口數加總**。
+本檔原本標成裸「口」——量綱標錯會讓下游拿它去跟任何「原始口數」相比或相除時
+差到 4 倍(§4.1 量綱陷阱)。要與它相除的分母必須先換成同一當量。
 Fail-Loud:離線層任一表讀不到 → raise;live 層缺 token / 抓不到 → 略過該表 + 警告(不寫假值)。
 離線層 `margin` 另有 §3.2 sanity gate:讀得到但值不可信 → **略過該表**(非 raise),
-讓下游「少一張表」而不是「拿到錯的表」;其餘離線表照舊 raise。
+讓下游「少一張表」而不是「拿到錯的表」;`macro_tw_pmi` 同精神另有 §2.4 新鮮度 gate
+(讀得到但已過期 → 略過該表);其餘離線表照舊 raise。
 """
 
 from __future__ import annotations
@@ -55,11 +68,19 @@ _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 _DATA_CACHE = _ROOT / "data_cache"
 
-# TW 時區（UTC+8）—— source_health as_of 戳記用（對照 CLAUDE.md §4.5：TW 時間一律 std datetime）。
+# TW 時區（UTC+8）——「今天是哪一天」用（對照 CLAUDE.md §4.5：TW 時間一律 std datetime）。
+# ⚠️ 2026-08-27 起**不再**用於 source_health 的 as_of：as_of 是資料歸屬日，不是匯出日。
 _TW_TZ = timezone(timedelta(hours=8))
 
 
 def _now_tw_date() -> str:
+    """今天（TW）的 ISO 日期。
+
+    ⚠️ 2026-08-27 起 production 路徑**不再呼叫**它 —— 它唯一的舊用途是給
+    `source_health.as_of` 蓋匯出日戳記，那正是被修掉的錯誤敘述。保留是因為
+    `tests/test_source_health_as_of.py` 需要一個「今天」當**反例基準**
+    （斷言 as_of 不得等於它）。新增 as_of / 日期欄位前請先讀 `_table_as_of`。
+    """
     return datetime.now(_TW_TZ).date().isoformat()
 
 
@@ -231,13 +252,83 @@ def write_money_supply(conn: sqlite3.Connection) -> int:
     return len(df)
 
 
+# 台灣 PMI 在 `shared/staleness.MACRO_PUBLICATION_LAG_DAYS` 的登錄鍵。
+# ⚠️ 名稱 `ism_pmi` 是歷史遺留（session key 沿用），該筆註解已明寫「台灣 PMI(CIER)：
+# 月後第 1 營業日」—— 值是對的、名字是舊的。**不在此另立第二個發布延遲常數**（§3.3）。
+_TW_PMI_STALENESS_KEY = "ism_pmi"
+
+
+def _tw_pmi_freshness_gate(d: dict, *, today=None) -> tuple[bool, str]:
+    """`macro_tw_pmi` 表放行判定（純函式,無 I/O,便於單測）→ (可否寫入, 診斷訊息)。
+
+    2026-08-27。`data_cache/macro_last_good/tw_pmi.json` 是 **durable「上次已知良值」**
+    快照(v19.118),抓取全敗時它就是唯一還在的值。原本 `write_macro_tw_pmi`
+    **無條件**把它寫進 stock.db 外送下游 —— 而 `data_cache/metadata.json` 的
+    `datasets.tw_pmi` 實測是 `{last_updated: null, row_count: 0,
+    last_error: "抓取結果為空"}`,即時抓取從未成功、durable 從沒被覆寫過。
+    結果:一筆 2026-06 的手動 seed(`series_id="cier-seed-2026-06"`)被當成**當期**
+    PMI 每天推播出去。這正是 §1 說的「錯的數字比沒有數字更危險」。
+
+    【為什麼不用「距今幾天」】PMI 是**月頻**。日頻門檻套月頻,在剛跨月時會亮假紅、
+    在月中又放過真的漏期(理由完整寫在 `shared/staleness.py` G2 區塊)。故判準一律走
+    既有 SSOT `monthly_release_status()`:「as_of 距**預期最新資料月**幾個發布期」,
+    發布延遲取 `MACRO_PUBLICATION_LAG_DAYS[_TW_PMI_STALENESS_KEY]`,
+    **本檔不自造門檻**(§3.3 反捏造)。
+
+    - `periods_behind >= 1` → 真的漏掉整期 → **不放行**
+    - `periods_behind <= 0` → 當期(`overdue_days > 0` 只代表上游遲到,仍在緩衝內 → 放行)
+    - 判不出來(缺 date / 無法解析) → **不放行**(§1:不確定 ≠ 新鮮)
+    """
+    from shared.staleness import monthly_release_status
+
+    if not isinstance(d, dict):
+        return False, f"良值檔格式非 dict（type={type(d).__name__}）"
+    _as_of = d.get("date")
+    _val = d.get("value")
+    if _val is None:
+        return False, "良值檔 value 為空 → 無值可外送（不寫空表）"
+    if not _as_of:
+        return False, "良值檔缺 date 欄 → 無法判定新鮮度（§1：不確定 ≠ 新鮮）"
+    _behind, _overdue = monthly_release_status(
+        _as_of, indicator=_TW_PMI_STALENESS_KEY, today=today)
+    if _behind is None:
+        return False, f"as_of={_as_of} 無法解析為資料月 → 無法判定新鮮度（§1）"
+    if _behind >= 1:
+        return False, (
+            f"as_of={_as_of} 已落後 {_behind} 個發布期"
+            f"（月頻判準 shared.staleness.monthly_release_status；"
+            f"發布延遲 lag={_TW_PMI_STALENESS_KEY}）"
+            " → 過期良值不外送下游"
+        )
+    _late = f"（上游遲到 {_overdue} 天,仍在緩衝內）" if _overdue else ""
+    return True, f"as_of={_as_of} 為當期{_late}"
+
+
 def write_macro_tw_pmi(conn: sqlite3.Connection) -> int:
+    """台灣 PMI 最後良值 → macro_tw_pmi（過期 → **略過整表** + DROP 舊表,回 -1）。
+
+    照本檔既有慣例（同 `write_margin` / `write_money_supply`）：讓下游
+    「少一張表」而不是「拿到過期卻標成當期的表」。
+
+    **為什麼是「不匯出」而不是「匯出 + is_stale 旗標」**：下游
+    `2026_strategy_0719/multi_agent_system/macro_db.py::read_tw_macro` 是
+    `SELECT ... ORDER BY date DESC LIMIT 1` 直接取值,**沒有任何旗標欄的消費端**
+    （全 repo 0 處 `source_health` reader）→ 多加一欄等於旗標寫了沒人看,
+    過期值照樣被當當期播出去 = 沒修。而該函式對「表不存在」**已有正確處理**：
+    `pmi=None` → 顯示「資料不足」,其 docstring 明寫「不捏造」。
+    """
     import json
 
     path = _DATA_CACHE / "macro_last_good" / "tw_pmi.json"
     if not path.exists():
         raise RuntimeError(f"台灣 PMI 良值檔不存在:{path}")
     d = json.loads(path.read_text(encoding="utf-8"))
+    ok, msg = _tw_pmi_freshness_gate(d)
+    if not ok:
+        _log(f"⚠️ 略過 macro_tw_pmi：{msg}")
+        conn.execute("DROP TABLE IF EXISTS macro_tw_pmi")
+        return -1
+    _log(f"   macro_tw_pmi 新鮮度：{msg}")
     df = pd.DataFrame([{
         "date": d.get("date"), "pmi": d.get("value"),
         "label": d.get("label"), "source": d.get("source"),
@@ -258,7 +349,12 @@ def _revenue_rows(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _fut_oi_rows(oi: dict) -> pd.DataFrame:
-    """finmind_fut_oi dict {YYYYMMDD: 淨口} → DataFrame(date=YYYY-MM-DD, foreign_net_oi_lots)（純轉換）。"""
+    """finmind_fut_oi dict {YYYYMMDD: 淨口} → DataFrame(date, foreign_net_oi_lots)（純轉換）。
+
+    ⚠️ `foreign_net_oi_lots` 的單位是 **TX 當量口**（大台淨口 ＋ 0.25×小台淨口，
+    見 `leading_indicators._MTX_TO_TX_FACTOR`），欄名沿用歷史名稱不改（下游相容），
+    單位以本 docstring 與檔頭單位鐵則為準。2026-08-27 正名，原標「口」。
+    """
     rows = [
         {"date": f"{k[:4]}-{k[4:6]}-{k[6:8]}", "foreign_net_oi_lots": v}
         for k, v in sorted(oi.items())
@@ -268,7 +364,10 @@ def _fut_oi_rows(oi: dict) -> pd.DataFrame:
 
 
 def write_futures_oi(conn: sqlite3.Connection, token: str) -> int:
-    """台指期外資留倉 → futures_oi（缺 token → 略過 + 警告）。"""
+    """台指期外資留倉 → futures_oi（缺 token → 略過 + 警告）。
+
+    單位 **TX 當量口**（大台淨口 ＋ 0.25×小台淨口），非原始口數加總 —— 見檔頭單位鐵則。
+    """
     if not token:
         _log("⚠️ 略過 futures_oi：未設 FINMIND_TOKEN（不造假）")
         return -1
@@ -458,26 +557,76 @@ _HEALTH_OK = "ok"
 _HEALTH_ABSENT = "absent"        # 缺 token / 抓不到 → 該表未寫
 
 
-def _health_rows(result: dict[str, int], as_of: str) -> pd.DataFrame:
+def _table_as_of(conn: sqlite3.Connection, table: str) -> str | None:
+    """該表**實際落地資料**的最新日期（`MAX(date)`）；取不到回 None（= unknown）。
+
+    2026-08-27。「取不到」有三種,都回 None,**一律不得 fallback 成匯出日**：
+    (a) 表不存在（被 gate 擋下 / 缺 token 略過）;
+    (b) 表沒有 `date` 欄（現況只有 `stock_fundamentals`,它的期別是
+        `roc_year`+`season` 不是日期 —— 硬湊一個日期就是造假,故誠實留 unknown）;
+    (c) 表是空的 / 日期全 NULL。
+    """
+    try:
+        _cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{table}")')]
+    except sqlite3.Error:
+        return None
+    if not _cols or "date" not in _cols:
+        return None
+    try:
+        _row = conn.execute(f'SELECT MAX("date") FROM "{table}"').fetchone()
+    except sqlite3.Error:
+        return None
+    if not _row or _row[0] is None:
+        return None
+    return str(_row[0])[:10]
+
+
+def _health_rows(
+    result: dict[str, int],
+    as_of_by_field: "dict[str, str | None]",
+) -> pd.DataFrame:
     """export result dict → source_health 落地（純轉換，無 I/O，便於單測）。
 
     status：n < 0（略過 / 缺料）→ absent；否則 ok。n_rows：實際落地列數（absent 記 0）。
+
+    as_of：**每一列帶自己那張表的真實資料日期**，取不到留空（None → SQL NULL）。
+
+    ⚠️ 2026-08-27 修正。本函式原本收單一 `as_of: str`（= 匯出日 `_now_tw_date()`）
+    並戳在**每一列**上 —— 包括那筆 as_of 停在 2026-06 的 PMI。這比不標更糟：
+    不標只是缺資訊，戳匯出日是**主動宣稱「這是今天的資料」**（§1：錯的敘述比
+    沒有敘述更危險；§2.2：provenance 的 `as_of` 是資料歸屬日,不是抓取日）。
+    故簽章改吃 `{field: 資料日期 | None}`，且**刻意不留預設值** ——
+    未登錄的欄位回 None（unknown），不會有任何路徑再把時鐘寫進 as_of。
     """
     rows = [
         {
             "field": field,
             "status": _HEALTH_ABSENT if n < 0 else _HEALTH_OK,
             "n_rows": max(n, 0),
-            "as_of": as_of,
+            "as_of": as_of_by_field.get(field),
         }
         for field, n in result.items()
     ]
-    return pd.DataFrame(rows, columns=_HEALTH_COLS)
+    _df = pd.DataFrame(rows, columns=_HEALTH_COLS)
+    # pandas 會把 dict 裡的 None 轉成 NaN；unknown 要留成貨真價實的 None，
+    # 讓「未知」在 DataFrame 與 SQL NULL 兩端都是同一件事（也讓守衛測得動）。
+    _df["as_of"] = _df["as_of"].astype(object)
+    _df.loc[_df["as_of"].isna(), "as_of"] = None
+    return _df
 
 
-def write_source_health(conn: sqlite3.Connection, result: dict[str, int], as_of: str) -> int:
-    """各表成敗（ok / absent）落地成 source_health，供下游 2026 顯示『維度降級 / 缺料』。"""
-    _health_rows(result, as_of).to_sql("source_health", conn, if_exists="replace", index=False)
+def write_source_health(conn: sqlite3.Connection, result: dict[str, int]) -> int:
+    """各表成敗（ok / absent）落地成 source_health，供下游 2026 顯示『維度降級 / 缺料』。
+
+    `as_of` 逐表向**已落地的資料本身**問（`_table_as_of`），不吃任何時鐘參數 ——
+    「拿不到匯出日」在型別上就成立，避免舊行為被誰不小心接回去。
+    """
+    _as_of = {field: _table_as_of(conn, field) for field in result}
+    _unknown = [f for f, v in _as_of.items() if v is None and result.get(f, -1) >= 0]
+    if _unknown:
+        _log(f"   source_health：{', '.join(_unknown)} 無 date 欄 → as_of 留空（unknown，不填匯出日）")
+    _health_rows(result, _as_of).to_sql(
+        "source_health", conn, if_exists="replace", index=False)
     return len(result)
 
 
@@ -506,7 +655,7 @@ def export_all(db_path: Path, token: str, stock_ids: list[str] | None = None) ->
         result["macro_tw_signal"] = write_macro_tw_signal(conn, token)
         result["futures_oi"] = write_futures_oi(conn, token)
         result["futures_night"] = write_futures_night(conn, token)
-        write_source_health(conn, result, _now_tw_date())
+        write_source_health(conn, result)
         conn.commit()
     finally:
         conn.close()

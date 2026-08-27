@@ -200,5 +200,155 @@ class TestFetchTwPmiHistory:
         assert list(df.columns) == ["date", "pmi"]
 
 
+# ══════════════════════════════════════════════════════════════════════
+# cron 端 dgtw 雙重 gate 回歸鎖（2026-08-27）
+#
+# 為什麼要有這一段：v19.114 只修了 **runtime** 的 `macro_core._pmi_src_dgtw`,
+# 沒有同步 cron 這一份 `scripts/update_macro_history.py::fetch_tw_pmi_history`
+# —— 而 cron 這條才是寫 `data_cache/metadata.json` 與 parquet 的路徑。
+# 症狀:`metadata.json` 的 tw_pmi 長期 `row_count: 0 / last_error: "抓取結果為空"`。
+#
+# 下面的 fixture **不是編的**,是探針 run 29227373503（2026-07-13,美國 IP + NAS）
+# section C 實際印出來的東西:
+#     📄 C.dgtw 6100 resources × 1
+#        ↳ [?] https://ws.ndc.gov.tw/Download.ashx?u=LzAwMS9hZG1pbmlzdHJhdG9y…
+#        ⬇️ 首資源 HTTP 200 | 2881 bytes | head='Date,PMI,NMI 201207,47.1,- …'
+# `[?]` 就是 `it.get('format', '?')` 取到預設值 —— **format 欄不存在**;
+# URL 也沒有 'csv' 字樣。舊碼的「format in (CSV,JSON)」gate 因此恆不命中。
+#
+# 突變測試（§0.5 / v3 §03-1「拔掉修復必須轉紅燈」）：把
+# `if _fmt in ("CSV","JSON") and _url2:` 那個 gate 放回去,
+# `test_real_dgtw_resource_without_format_field_is_parsed` 必須紅燈。
+# ══════════════════════════════════════════════════════════════════════
+
+#: 探針實測的 6100 resource URL（base64 query,無副檔名、無 'csv' 字樣）
+_REAL_6100_RESOURCE_URL = (
+    "https://ws.ndc.gov.tw/Download.ashx?u=LzAwMS9hZG1pbmlzdHJhdG9yLzEwL3Jl"
+    "bGZpbGUvNTc4MS82MzkxL2JmOGE0ZWI3LTEwZmUt"
+)
+#: 探針實測的 CSV head（`-` 為 NMI 缺值佔位,原樣保留）
+_REAL_6100_CSV = (
+    "Date,PMI,NMI\n"
+    "201207,47.1,-\n201208,48.2,-\n201209,49.9,-\n201210,49.3,-\n"
+    "202605,61.4,-\n202606,60.7,-\n"
+)
+
+
+def _mk_meta_resp_no_format(url: str) -> MagicMock:
+    """metadata 回單一 resource,且 **format 欄不存在**（探針實測形狀）。"""
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.json.return_value = {"result": {"resources": [{"url": url}]}}
+    return resp
+
+
+class TestDgtwDoubleGateRegression:
+    def test_real_dgtw_resource_without_format_field_is_parsed(self, monkeypatch):
+        """format 欄缺席 + URL 無 'csv' → 仍必須下載並解析（舊雙重 gate 會靜默跳過）。"""
+        from scripts import update_macro_history as umh
+        seen: list[str] = []
+
+        def _fake(url, params=None, timeout=25):
+            seen.append(url)
+            if "data.gov.tw" in url:
+                return _mk_meta_resp_no_format(_REAL_6100_RESOURCE_URL)
+            return _mk_csv_resp(_REAL_6100_CSV)
+
+        monkeypatch.setattr(umh, "_fetch_url_via_proxy", _fake)
+        df = umh.fetch_tw_pmi_history(dt.date(2006, 1, 1), dt.date(2026, 8, 25))
+        assert not df.empty, "format 欄缺席的活 CSV 必須被解析（雙重 gate 回歸）"
+        assert _REAL_6100_RESOURCE_URL in seen, "resource URL 必須真的被下載"
+        assert float(df.iloc[-1]["pmi"]) == 60.7
+        assert df.iloc[-1]["date"] == dt.date(2026, 6, 1)
+        assert df.iloc[-1]["source"] == "data.gov.tw:dataset:6100"
+
+    def test_all_resources_tried_not_just_first(self, monkeypatch):
+        """第一個 resource 解不出東西 → 必須續試下一個,而非整包放棄。"""
+        from scripts import update_macro_history as umh
+        bodies = {
+            "https://example.tw/readme.txt": "這不是 CSV",
+            _REAL_6100_RESOURCE_URL: _REAL_6100_CSV,
+        }
+
+        def _fake(url, params=None, timeout=25):
+            if "data.gov.tw" in url:
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.json.return_value = {"result": {"resources": [
+                    {"url": "https://example.tw/readme.txt"},
+                    {"url": _REAL_6100_RESOURCE_URL},
+                ]}}
+                return resp
+            return _mk_csv_resp(bodies[url])
+
+        monkeypatch.setattr(umh, "_fetch_url_via_proxy", _fake)
+        df = umh.fetch_tw_pmi_history(dt.date(2006, 1, 1), dt.date(2026, 8, 25))
+        assert not df.empty
+        assert float(df.iloc[-1]["pmi"]) == 60.7
+
+    def test_declared_csv_resource_is_tried_first(self, monkeypatch):
+        """有 format=CSV 的 resource 時排最前（省一次下載），但非唯一入選條件。"""
+        from scripts import update_macro_history as umh
+        order: list[str] = []
+
+        def _fake(url, params=None, timeout=25):
+            if "data.gov.tw" in url:
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.json.return_value = {"result": {"resources": [
+                    {"url": "https://example.tw/other.bin"},
+                    {"format": "CSV", "url": "https://example.tw/real.csv"},
+                ]}}
+                return resp
+            order.append(url)
+            return _mk_csv_resp(_REAL_6100_CSV)
+
+        monkeypatch.setattr(umh, "_fetch_url_via_proxy", _fake)
+        umh.fetch_tw_pmi_history(dt.date(2006, 1, 1), dt.date(2026, 8, 25))
+        assert order[0] == "https://example.tw/real.csv"
+
+    def test_no_resources_leaves_a_trace(self, monkeypatch, capsys):
+        """metadata 200 但無 resources → 必須留痕（原為靜默 continue）。"""
+        from scripts import update_macro_history as umh
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"result": {}}
+        monkeypatch.setattr(umh, "_fetch_url_via_proxy", lambda *a, **kw: resp)
+        df = umh.fetch_tw_pmi_history(dt.date(2024, 1, 1), dt.date(2024, 12, 31))
+        assert df.empty
+        assert "無 resources" in capsys.readouterr().out
+
+    def test_undownloadable_resource_leaves_a_trace(self, monkeypatch, capsys):
+        """resource 下載非 200 → 必須印出 status 與 URL 尾段（原無 URL 可追）。"""
+        from scripts import update_macro_history as umh
+
+        def _fake(url, params=None, timeout=25):
+            if "data.gov.tw" in url:
+                return _mk_meta_resp_no_format(_REAL_6100_RESOURCE_URL)
+            bad = MagicMock()
+            bad.status_code = 503
+            return bad
+
+        monkeypatch.setattr(umh, "_fetch_url_via_proxy", _fake)
+        df = umh.fetch_tw_pmi_history(dt.date(2024, 1, 1), dt.date(2024, 12, 31))
+        assert df.empty
+        out = capsys.readouterr().out
+        assert "resource HTTP=503" in out
+
+    def test_unparseable_body_leaves_a_trace(self, monkeypatch, capsys):
+        """下載成功但解析後 0 列 → 必須印出 bytes 與 URL（原無 URL 可追）。"""
+        from scripts import update_macro_history as umh
+
+        def _fake(url, params=None, timeout=25):
+            if "data.gov.tw" in url:
+                return _mk_meta_resp_no_format(_REAL_6100_RESOURCE_URL)
+            return _mk_csv_resp("<html>Page Not Found</html>")
+
+        monkeypatch.setattr(umh, "_fetch_url_via_proxy", _fake)
+        df = umh.fetch_tw_pmi_history(dt.date(2024, 1, 1), dt.date(2024, 12, 31))
+        assert df.empty
+        assert "解析後無有效列" in capsys.readouterr().out
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -518,33 +518,54 @@ def fetch_tw_pmi_history(start: _dt.date, end: _dt.date) -> pd.DataFrame:
                     or _j_meta.get("data", {}).get("resources")
                     or [])
             if not _res:
+                # 原為靜默 continue —— 200 但 metadata 無 resources 陣列時無痕
+                print(f"[tw_pmi] metadata 200 但無 resources"
+                      f"（keys={list(_j_meta)[:8]}）url=…{_meta_url[-24:]}")
                 continue
-            # 找 CSV / JSON resource
-            _csv_url = None
+            # ── 雙重 gate 移除（同步 macro_core._pmi_src_dgtw 的 v19.114 修正）──
+            # 舊碼:「format in (CSV, JSON)」+ 只取第一個命中 → 6100 的**唯一** resource
+            # 是 `https://ws.ndc.gov.tw/Download.ashx?u=…`,**format 欄根本不存在**
+            # (探針 run 29227373503 section C 印出 `[?]` = `it.get('format','?')` 取到
+            #  預設值)、URL 也無 'csv' 字樣,但內容是合法 CSV:
+            #      `Date,PMI,NMI / 201207,47.1,- / … / 202606,60.7,-`（HTTP 200, 2881 bytes）
+            # → 這條**活 CSV 從未被解析**,`_csv_url` 恆 None、靜默 continue,
+            #   metadata.json 因此長期 `row_count: 0 / last_error: "抓取結果為空"`。
+            #   v19.114 已在 runtime 端(`macro_core._pmi_src_dgtw`)修掉,但 cron 這一份
+            #   （= 寫 metadata.json / parquet 的那條路徑）當時未同步 → 本次補上。
+            # 改法同 runtime:收**所有** resource url(宣告 CSV 者排前),逐一下載後交
+            # `_parse_pmi_csv_full` 靠**內容**判斷,不靠 URL 副檔名 / format 欄。
+            _urls: list[str] = []
             for _it in _res:
-                _fmt = str(_it.get("format", "")).upper()
-                _url2 = _it.get("url") or _it.get("resourceDownloadUrl")
-                if _fmt in ("CSV", "JSON") and _url2:
-                    _csv_url = _url2
-                    break
-            if not _csv_url:
+                _url2 = (_it.get("url") or _it.get("resourceDownloadUrl")
+                         or _it.get("downloadUrl"))
+                if not _url2:
+                    continue
+                if str(_it.get("format", "")).upper() == "CSV":
+                    _urls.insert(0, _url2)
+                else:
+                    _urls.append(_url2)
+            if not _urls:
+                print(f"[tw_pmi] resources×{len(_res)} 但無任何可下載 url")
                 continue
-            _r_csv = _fetch_url_via_proxy(_csv_url, timeout=15)
-            if _r_csv is None or _r_csv.status_code != 200:
-                print(f"[tw_pmi] CSV HTTP={getattr(_r_csv, 'status_code', 'None')}")
-                continue
-            _txt = _r_csv.content.decode("utf-8-sig", errors="ignore")
-            _df = _parse_pmi_csv_full(_txt)
-            if _df.empty:
-                print("[tw_pmi] CSV 解析後無有效列")
-                continue
-            _df = _df[(_df["date"] >= start) & (_df["date"] <= end)].reset_index(drop=True)
-            print(f"[tw_pmi] ✅ data.gov.tw {len(_df)} rows ({start}~{end})")
-            # S-PROV-1 phase 14 v18.260 — provenance(schema-additive)
-            if not _df.empty:
-                _df["source"] = "data.gov.tw:dataset:6100"
-                _df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
-            return _df
+            for _res_url in _urls:
+                _r_csv = _fetch_url_via_proxy(_res_url, timeout=15)
+                if _r_csv is None or _r_csv.status_code != 200:
+                    print(f"[tw_pmi] resource HTTP="
+                          f"{getattr(_r_csv, 'status_code', 'None')} url=…{_res_url[-40:]}")
+                    continue
+                _txt = _r_csv.content.decode("utf-8-sig", errors="ignore")
+                _df = _parse_pmi_csv_full(_txt)
+                if _df.empty:
+                    print(f"[tw_pmi] 解析後無有效列（{len(_r_csv.content)} bytes）"
+                          f"url=…{_res_url[-40:]}")
+                    continue
+                _df = _df[(_df["date"] >= start) & (_df["date"] <= end)].reset_index(drop=True)
+                print(f"[tw_pmi] ✅ data.gov.tw {len(_df)} rows ({start}~{end})")
+                # S-PROV-1 phase 14 v18.260 — provenance(schema-additive)
+                if not _df.empty:
+                    _df["source"] = "data.gov.tw:dataset:6100"
+                    _df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+                return _df
         except Exception as _e_outer:
             print(f"[tw_pmi] outer {type(_e_outer).__name__}: {_e_outer}")
     print("[tw_pmi] ❌ 所有 dgtw metadata URL 皆失敗")

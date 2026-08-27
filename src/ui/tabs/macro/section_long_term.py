@@ -33,14 +33,24 @@ def prepare_long_term_radar() -> tuple[Any, str, Any]:
         - _slow_v: slow_verdict dict(或 None)
     """
     # ── v18.171 長期 vs 短期 雙視角總經面板 ─────
-    # 長期 (12M):景氣大循環位階;短期 (1Q):對齊台股財報季偏向
-    # 純函式集中於 macro_helpers.classify_long_term_regime / classify_short_term_regime
+    # 長期 (12M):景氣大循環位階。純函式:macro_helpers.classify_long_term_regime。
+    # ⚠️ 2026-08-27:本行原本還寫著「/ classify_short_term_regime」——
+    #    那個「短期 (1Q) 對齊台股財報季偏向」的半邊,其 UI 區塊早在 v18.190 就移除了
+    #    (見下方 v18.190 註),函式自此 0 production caller、只剩測試撐著。
+    #    本輪確認為死碼並刪除,故本行同步拿掉,免得留下一個指向不存在函式的路標。
     # v18.173:_lt hoist 到 try 外,供下方雙速合議使用
     _lt = None
     try:
+        # 2026-08-27:本行原本 import 的是 `detect_mk_golden_inflection` —— 那是
+        # `macro_helpers.py` 明文標為「退場中、勿用於新程式碼」的向後相容 alias,
+        # 而它自己的註解就寫「待全部 caller 遷移完成後移除本行」。**本檔是它最後一個
+        # production caller**,不遷走的話那個退場標記就是一句假話(標記說已廢、
+        # 程式還在跑),下一個做垃圾清理的人會照標記刪 alias、把這裡打斷。
+        # 改吃正名後的 `detect_cpi_fed_double_top`(alias 指向同一個物件,行為零變更;
+        # `section_state.py` 早已用新名)。守衛:`tests/test_deprecation_honesty.py`。
         from src.compute.macro import (
             classify_long_term_regime as _cls_lt,
-            detect_mk_golden_inflection as _det_mk2,
+            detect_cpi_fed_double_top as _det_mk2,
         )
         # C1-E v18.291:雙視角 macro_info 走 section_inputs SSOT。
         from src.services import load_section_inputs as _load_si_lt

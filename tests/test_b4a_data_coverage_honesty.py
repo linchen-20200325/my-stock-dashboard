@@ -151,10 +151,12 @@ def _li_frame(*, frozen_cols=(), n=8, frozen_tail=None) -> pd.DataFrame:
     用來驗證「尾端 N 期」是依日期而非依物理列序判定的。
     `_date` 為 YYYYMMDD 字串,同 production 的 build_leading_fast。
     """
-    from src.ui.pages.data_coverage import _LI_FROZEN_WATCH_COLS
+    # 2026-08-27:原本 import `data_coverage._LI_FROZEN_WATCH_COLS`(該檔的私有副本)。
+    # 副本已收斂掉,契約只剩 L0 一份 —— 測試跟著改讀 SSOT。
+    from shared.data_freshness import FROZEN_WATCH_COLS_LEADING
     _dates = [_behind(n - 1 - i) for i in range(n)]
     _df = pd.DataFrame({"_date": [d.strftime("%Y%m%d") for d in _dates]})
-    for _i, _c in enumerate(_LI_FROZEN_WATCH_COLS):
+    for _i, _c in enumerate(FROZEN_WATCH_COLS_LEADING):
         if _c not in frozen_cols:
             _df[_c] = [100 + _i * 7 + _j * 13 for _j in range(n)]
         elif frozen_tail:
@@ -286,16 +288,18 @@ class TestD1bFrozenDetection:
         - 走 compute_tab_coverage(內部先依 `_date` 排序)→ 必須抓到。
         兩段一起斷言,證明「有排序」這件事是必要的而非碰巧通過。
         """
-        from shared.data_freshness import detect_frozen_columns, frozen_summary
-        from src.ui.pages.data_coverage import (
-            _LI_FROZEN_STALE_PERIODS, _LI_FROZEN_WATCH_COLS,
+        from shared.data_freshness import (
+            FROZEN_STALE_PERIODS_LEADING,
+            FROZEN_WATCH_COLS_LEADING,
+            detect_frozen_columns,
+            frozen_summary,
         )
         _asc = _li_frame(frozen_cols=self._AUDIT_COLS, n=8, frozen_tail=4)
         _desc = _asc.iloc[::-1].reset_index(drop=True)     # 新 → 舊
 
         _n_unsorted, _ = frozen_summary(detect_frozen_columns(
-            _desc, _LI_FROZEN_WATCH_COLS,
-            stale_periods=_LI_FROZEN_STALE_PERIODS))
+            _desc, FROZEN_WATCH_COLS_LEADING,
+            stale_periods=FROZEN_STALE_PERIODS_LEADING))
         assert _n_unsorted == 0, "前提不成立:未排序時本來就該抓不到"
 
         chip = _row(_cover(_full_chip_state(li_latest=_desc)), "籌碼")

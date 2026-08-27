@@ -28,6 +28,63 @@ def test_mirror_matches_macro_core():
     assert mb._US10Y_RED == MACRO_THRESHOLDS["US10Y"]["red_above"]
     assert mb._DXY_YELLOW == MACRO_THRESHOLDS["DXY"]["yellow_above"]
     assert mb._DXY_RED == MACRO_THRESHOLDS["DXY"]["red_above"]
+    # 2026-08-27 加入 USDTWD 鏡像（參考走勢卡 卡 A 右軸）
+    assert mb._USDTWD_GREEN_BELOW == MACRO_THRESHOLDS["USDTWD"]["green_below"]
+    assert mb._USDTWD_YELLOW == MACRO_THRESHOLDS["USDTWD"]["yellow_above"]
+    assert mb._USDTWD_RED == MACRO_THRESHOLDS["USDTWD"]["red_above"]
+
+
+# ──────────────────────────────────────────────────────────
+# 1c. 參考走勢（REFERENCE_TREND_SPECS）— 畫圖但**不是一盞燈**
+#     2026-08-27 客戶裁示：台幣 / 加權指數不進 x/16 分母、五桶、可信度卡。
+# ──────────────────────────────────────────────────────────
+class TestReferenceTrendSpecsAreNotLights:
+
+    def test_two_registries_are_physically_disjoint(self):
+        """參考走勢 key **不得**同時是一盞燈 —— 兩張表交集必須是空的。
+
+        這條是整組隔離的地基：只要交集非空，`x/16` 的 16 與五桶彙總就會
+        把參考走勢算進去，而畫面上完全看不出來。
+        """
+        assert not (set(mb.REF_SPECS_BY_KEY) & set(mb.SPECS_BY_KEY))
+
+    def test_reference_specs_not_in_bucket_registry(self):
+        """反向：ref spec 物件本身不得出現在 `BUCKET_DANGER_SPECS` 裡。"""
+        _lit = {id(s) for s in mb.BUCKET_DANGER_SPECS}
+        for s in mb.REFERENCE_TREND_SPECS:
+            assert id(s) not in _lit, f"{s.key} 混進了燈號註冊表"
+
+    def test_reference_bucket_is_not_one_of_the_five(self):
+        """ref 的 bucket 不能是五桶之一 —— 誤餵進彙總時要落在「沒有這個桶」，
+        而不是悄悄改掉某一桶的 worst-of。"""
+        assert mb.REFERENCE_BUCKET not in mb.BUCKET_ORDER
+        for s in mb.REFERENCE_TREND_SPECS:
+            assert s.bucket == mb.REFERENCE_BUCKET
+
+    def test_usdtwd_thresholds_come_from_ssot_mirror(self):
+        """台幣門檻必須是 SSOT 鏡像常數本身，不是抄一份數字。"""
+        u = mb.REF_SPECS_BY_KEY["usdtwd"]
+        assert u.yellow == mb._USDTWD_YELLOW
+        assert u.red == mb._USDTWD_RED
+        assert mb.has_thresholds(u)
+
+    def test_taiex_has_no_thresholds(self):
+        """加權指數**沒有門檻**（客戶裁示 K 線卡不畫門檻線）。"""
+        t = mb.REF_SPECS_BY_KEY["taiex"]
+        assert t.yellow is None and t.red is None
+        assert t.yellow_lo is None and t.red_lo is None
+        assert not mb.has_thresholds(t)
+
+    def test_classify_danger_fails_loud_on_no_threshold_spec(self):
+        """§1：沒有門檻的 spec 被拿去判燈要**炸**，不可回 'green'。
+
+        這條刻意把「TypeError」釘成期望行為。若哪天有人在
+        `classify_danger` 裡加 `if spec.red is None: return "green"`，
+        加權指數會變成一盞**恆亮的綠燈** —— 一個永遠不會被發現的假訊息。
+        """
+        t = mb.REF_SPECS_BY_KEY["taiex"]
+        with pytest.raises(TypeError):
+            mb.classify_danger(23000.0, t)
 
 
 def test_us10y_dxy_specs_registered():

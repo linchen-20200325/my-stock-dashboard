@@ -87,13 +87,19 @@ class TestReadinessCarriesValue:
         def _feed_macro_info(key, value):      # macro_info.<key>.current
             return {"macro_info": {key: {"current": value}}}
 
-        def _feed_intl_df(intl_key, value):    # cl_data.intl[<中文名>] 末列 Close
+        # ⚠️ 2026-08-27:欄名原本寫死大寫 `Close`,但 **production 是小寫**——
+        #   `daily_data_fetchers.fetch_single` 出口會把欄名整批小寫化。這裡改成
+        #   兩種大小寫都跑一遍:小寫是真實形狀(必測)、大寫是 cache 反序列化 /
+        #   未來上游改版的相容路徑(保留原覆蓋)。只留大寫等於測試與 production
+        #   形狀脫節 —— 同一個脫節讓 `tab_macro_v2._session_series` 的
+        #   `"Close" in df.columns` 死碼活了很久(見 TestSessionSeriesUsesClose)。
+        def _feed_intl_df(intl_key, value, col="close"):  # cl_data.intl[<中文名>] 末列收盤
             pd = pytest.importorskip("pandas")
-            return {"cl_data": {"intl": {intl_key: pd.DataFrame({"Close": [value]})}}}
+            return {"cl_data": {"intl": {intl_key: pd.DataFrame({col: [value]})}}}
 
         _FEED = {
-            "us10y": lambda v: _feed_macro_info("us10y", v),
-            "dxy": lambda v: _feed_intl_df(CL_INTL_KEY_DXY, v),
+            "us10y": lambda v, c="close": _feed_macro_info("us10y", v),
+            "dxy": lambda v, c="close": _feed_intl_df(CL_INTL_KEY_DXY, v, c),
         }
         no_feed = [s.key for s in ranged if s.key not in _FEED]
         assert not no_feed, (
@@ -102,13 +108,16 @@ class TestReadinessCarriesValue:
         )
 
         for spec in ranged:
-            rd = _readiness(**_FEED[spec.key](spec.valid_max + 500))
-            assert rd[spec.key]["value"] is None, f"{spec.key} 超範圍的值沒被擋下"
-            assert rd[spec.key]["reason"] == "out_of_range", (
-                f"{spec.key} 被擋下的原因記成 {rd[spec.key]['reason']!r}，"
-                f"應為 out_of_range —— 記成 no_value 會讓「上游換標的」"
-                f"被誤診成「上游沒回值」，處置完全不同。"
-            )
+            for _col in ("close", "Close"):
+                rd = _readiness(**_FEED[spec.key](spec.valid_max + 500, _col))
+                assert rd[spec.key]["value"] is None, (
+                    f"{spec.key}(欄名 {_col!r})超範圍的值沒被擋下")
+                assert rd[spec.key]["reason"] == "out_of_range", (
+                    f"{spec.key}(欄名 {_col!r})被擋下的原因記成 "
+                    f"{rd[spec.key]['reason']!r}，"
+                    f"應為 out_of_range —— 記成 no_value 會讓「上游換標的」"
+                    f"被誤診成「上游沒回值」，處置完全不同。"
+                )
 
 
 # ════════════════════════════════════════════════════════════════
@@ -161,18 +170,63 @@ class TestNoSecondDataPath:
 class TestChartsUseRealSeriesOnly:
 
     def test_declared_chart_keys_are_real_specs(self):
-        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS, _VALUE_CARD_KEYS
-        for key, kind, note in _CHART_SPECS:
-            assert key in SPECS_BY_KEY, f"{key} 不是有效的 DangerSpec key"
-            assert kind in ("parquet", "session")
-            assert note.strip(), f"{key} 沒寫序列說明"
+        """卡片的 key **必須來自兩張註冊表之一**，不接受任意字串。
+
+        ⚠️ 2026-08-27 擴充（B-2 參考走勢卡），但**沒有放寬**：來源從
+        `SPECS_BY_KEY` 一張表變成「`SPECS_BY_KEY` ∪ `REF_SPECS_BY_KEY`」
+        兩張表的聯集 —— 兩張都是 L0 註冊表，都有自己的門檻／來源欄位與
+        drift 守衛。**沒有**開一條「隨便什麼字串都能塞」的路。
+        """
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        from src.ui.tabs.tab_macro_v2 import (
+            CHART_KINDS, KIND_DUAL, _CHART_SPECS, _VALUE_CARD_KEYS,
+        )
+        _known = set(SPECS_BY_KEY) | set(REF_SPECS_BY_KEY)
+        for card in _CHART_SPECS:
+            assert card.key in _known, (
+                f"{card.key} 既不是 DangerSpec key 也不是參考走勢 key")
+            assert card.kind in CHART_KINDS, f"{card.key} 的 kind 不合法"
+            assert card.note.strip(), f"{card.key} 沒寫序列說明"
+            if card.kind == KIND_DUAL:
+                assert card.ref_key in _known, (
+                    f"{card.key} 是雙軸卡，ref_key 必須是有效 key")
+            else:
+                assert not card.ref_key, (
+                    f"{card.key} 不是雙軸卡，ref_key 應留空"
+                    f"（留著沒人讀的欄位，下一個人會以為它有作用）")
         for key in _VALUE_CARD_KEYS:
             assert key in SPECS_BY_KEY
+
+    def test_each_kind_takes_its_key_from_the_registry_it_actually_reads(self):
+        """每種 kind 的 `key` 必須來自**它的渲染函式真的會去查的那張表**。
+
+        2026-08-27 自審抓到的潛在 KeyError：
+          · `parquet` / `session` / `dual` 的主 key 走 `by_key` + `SPECS_BY_KEY`
+            → 必須是一盞燈；填了參考走勢 key 會 KeyError。
+          · `ohlc` 走 `REF_SPECS_BY_KEY` → 必須是參考走勢 key。
+          · `hold_reason` 非空的卡走 `by_key` → 必須是一盞燈。
+        目前的名單全部合規，本條擋的是**下一張卡填錯表**。
+        """
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        from src.ui.tabs.tab_macro_v2 import (
+            KIND_DUAL, KIND_OHLC, KIND_PARQUET, KIND_SESSION, _CHART_SPECS,
+        )
+        for card in _CHART_SPECS:
+            if card.kind in (KIND_PARQUET, KIND_SESSION, KIND_DUAL):
+                assert card.key in SPECS_BY_KEY, (
+                    f"{card.key}（{card.kind}）由 SPECS_BY_KEY 取 spec，"
+                    f"填參考走勢 key 會 KeyError")
+            elif card.kind == KIND_OHLC:
+                assert card.key in REF_SPECS_BY_KEY, (
+                    f"{card.key}（ohlc）由 REF_SPECS_BY_KEY 取 spec")
+            if card.hold_reason:
+                assert card.key in SPECS_BY_KEY, (
+                    f"{card.key} 是 held 卡，數字走 by_key，必須是一盞燈")
 
     def test_chart_and_value_cards_do_not_overlap(self):
         """同一個指標不能又畫圖又當純數值卡 —— 那就是同一資訊重複兩次。"""
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS, _VALUE_CARD_KEYS
-        chart_keys = {k for k, _, _ in _CHART_SPECS}
+        chart_keys = {c.key for c in _CHART_SPECS}
         assert not (chart_keys & set(_VALUE_CARD_KEYS))
 
     def test_vix_stays_a_value_card(self):
@@ -182,7 +236,7 @@ class TestChartsUseRealSeriesOnly:
         """
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS, _VALUE_CARD_KEYS
         assert "vix" in _VALUE_CARD_KEYS
-        assert "vix" not in {k for k, _, _ in _CHART_SPECS}
+        assert "vix" not in {c.key for c in _CHART_SPECS}
 
     def test_parquet_series_are_actually_loadable(self):
         """宣稱走 parquet 的指標，必須真的從本地快取讀得到序列。
@@ -192,7 +246,7 @@ class TestChartsUseRealSeriesOnly:
         from src.data.macro.macro_cache_reader import load_v2_chart_series
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
 
-        declared = {k for k, kind, _ in _CHART_SPECS if kind == "parquet"}
+        declared = {c.key for c in _CHART_SPECS if c.kind == "parquet"}
         if not declared:
             pytest.skip("目前沒有宣告走 parquet 的圖表指標")
         got = load_v2_chart_series()
@@ -235,14 +289,100 @@ class TestChartsUseRealSeriesOnly:
 
 
 # ════════════════════════════════════════════════════════════════
+# 三之二、美債 10Y 走勢圖必須畫收盤價（2026-08-27）
+#
+# 【守什麼】`_session_series` 曾寫 `df["Close"] if "Close" in df.columns
+# else df.iloc[:, 0]`。上游 `daily_data_fetchers.fetch_single` 出口會把欄名
+# 整批小寫化 → `"Close"` 在 production **恆不存在** → 永遠走 `iloc[:, 0]`,
+# 而 yfinance 欄序是 Open/High/Low/Close/… → 圖畫的是**開盤價**。
+# 同一張卡的**數字**走 `macro_helpers._intl_close`(close/Close 都試)拿的是
+# 收盤價 —— **同一張卡,數字與線來自不同欄位**,而兩邊看起來都正常(§1)。
+#
+# 【為什麼以前沒被抓到】舊 fixture 餵大寫 `Close` → 測試走上分支、
+# production 走下分支。所以本組測試**一律用小寫欄名**(production 的真實
+# 形狀),並刻意把 open 設成與 close 明顯不同的值,讓取錯欄一定紅。
+# ════════════════════════════════════════════════════════════════
+class TestSessionSeriesUsesClose:
+
+    _KEY = "10Y公債殖利率"
+
+    @staticmethod
+    def _inputs(df):
+        from types import SimpleNamespace
+        return SimpleNamespace(cl_data={"intl": {TestSessionSeriesUsesClose._KEY: df}})
+
+    @staticmethod
+    def _ohlc(pd, *, col_close="close"):
+        """yfinance 形狀:open 在第一欄,close 值與 open 明顯不同。"""
+        return pd.DataFrame(
+            {"open": [1.0, 2.0, 3.0],
+             "high": [9.0, 9.0, 9.0],
+             "low": [0.1, 0.1, 0.1],
+             col_close: [4.61, 4.62, 4.63]},
+            index=pd.date_range("2026-08-01", periods=3, freq="D"),
+        )
+
+    def test_lowercase_close_is_used_not_the_first_column(self):
+        """production 真實形狀（欄名全小寫）→ 必須畫 close，不是 open。"""
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        xs, ys = _session_series(self._inputs(self._ohlc(pd)), "us10y")
+        assert ys == [4.61, 4.62, 4.63], (
+            f"取到 {ys} —— 期待 close。若拿到 [1.0, 2.0, 3.0] 就是取到 open "
+            f"(`iloc[:, 0]`),圖與同卡數字會不同源。"
+        )
+        assert len(xs) == 3
+
+    def test_uppercase_close_still_works(self):
+        """cache 反序列化 / 未來上游改版可能保留大寫 —— 兩種都要接得住。"""
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        xs, ys = _session_series(
+            self._inputs(self._ohlc(pd, col_close="Close")), "us10y")
+        assert ys == [4.61, 4.62, 4.63]
+        assert len(xs) == 3
+
+    def test_no_close_column_fails_loud_instead_of_guessing(self):
+        """§1:沒有 close 就回 (None, None)，**不准**退回第一欄冒充收盤價。
+
+        退回 `iloc[:, 0]` 會讓畫面照常出現一條線 —— 那正是「錯的數字比
+        沒有數字更危險」。消費端拿到 None 會顯示「歷史序列取得失敗」。
+        """
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        df = pd.DataFrame({"open": [1.0, 2.0], "high": [3.0, 4.0]})
+        assert _session_series(self._inputs(df), "us10y") == (None, None)
+
+    def test_series_matches_the_number_shown_on_the_same_card(self):
+        """圖的最後一點必須等於同卡數字的取法（§4.3 兩種算法對帳）。
+
+        數字側走 `macro_helpers` 的 `("close", "Close")` 解析;圖側若用
+        另一套欄位規則，同一張卡就會自相矛盾。
+        """
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        df = self._ohlc(pd)
+        _xs, ys = _session_series(self._inputs(df), "us10y")
+        col = next(c for c in ("close", "Close") if c in df.columns)
+        assert ys[-1] == float(df[col].iloc[-1])
+
+
+# ════════════════════════════════════════════════════════════════
 # 四、四態必須各自可辨（v2 的主要價值）
 # ════════════════════════════════════════════════════════════════
 class TestFourStatesAreDistinguishable:
 
     def test_unwired_and_degraded_are_not_conflated(self):
-        """`未接線` 與 `門檻已失準` 是兩種完全不同的「別信這盞燈」。"""
+        """`未接線` 與 `門檻已失準` 是兩種完全不同的「別信這盞燈」。
+
+        ⚠️ 2026-08-26:原本這裡餵的是**空的** `_readiness()`,卻期待 margin 是
+        degraded —— 那正是本次修掉的 bug(判定順序與 L0 SSOT 相反,沒值也被印成
+        「門檻已失準」)。degraded 的前提是**有值**,所以要驗 degraded 就得先餵值。
+        「沒值 + discriminative=False」該是什麼,由
+        `TestFourStateOrderMatchesL0SSOT` 那一組負責釘。
+        """
         from src.ui.tabs.tab_macro_v2 import build_rows
-        rows = {r.key: r for r in build_rows(_readiness())}
+        rows = {r.key: r for r in build_rows(_readiness(cl_data={"margin": 5148.0}))}
         assert rows["foreign_net"].state == "unwired"
         assert rows["margin"].state == "degraded"
 
@@ -273,6 +413,132 @@ class TestFourStatesAreDistinguishable:
 
 
 # ════════════════════════════════════════════════════════════════
+# 四之二、四態的**判定順序**必須與 L0 SSOT 一致（2026-08-26）
+#
+# `build_rows()` 判四態的順序,在 2026-08-26 前是
+#   wired → discriminative → live → missing
+# 而 L0 SSOT `shared.station_specs.classify_state()` 是
+#   wired → 沒值 → discriminative → live
+# 兩者在「**沒值 + discriminative=False**」這一格結論相反:舊碼印
+# 「🟠 門檻已失準」,SSOT 說「▨ 無資料」。實際受害者是融資餘額(margin)——
+# 它 discriminative=False,沒抓到值時畫面卻寫「門檻已失準」,使用者讀成
+# 「有值,只是別太當真」,而事實是根本沒有值(§1:錯的敘述比沒有敘述更危險)。
+#
+# 這一格不會讓畫面看起來壞掉,所以只能靠測試釘住。
+# ⚠️ `build_rows` **刻意複製**了 SSOT 的順序而非呼叫它(型別不同,理由見該處
+#    註解),所以這裡另外加一條交叉比對:哪天有人只改了一邊,這組就紅。
+# ════════════════════════════════════════════════════════════════
+class TestFourStateOrderMatchesL0SSOT:
+
+    #: 這盞燈 discriminative=False（門檻已失準），是本組的主角。
+    _DEGRADED_KEY = "margin"
+    #: 這盞燈 wired=False（決策端刻意沒接）。
+    _UNWIRED_KEY = "foreign_net"
+
+    def test_the_fixture_keys_still_have_the_flags_this_class_assumes(self):
+        """先確認前提還成立 —— 上游把旗標翻回 True 時，本組要當場紅，
+        而不是安靜地變成一組驗不到東西的測試。"""
+        assert SPECS_BY_KEY[self._DEGRADED_KEY].discriminative is False
+        assert SPECS_BY_KEY[self._DEGRADED_KEY].wired is True
+        assert SPECS_BY_KEY[self._UNWIRED_KEY].wired is False
+
+    # ── 四態各一 ────────────────────────────────────────────────
+    def test_unwired(self):
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        rows = {r.key: r for r in build_rows(_readiness())}
+        assert rows[self._UNWIRED_KEY].state == "unwired"
+
+    def test_missing(self):
+        """一般（discriminative=True）的燈沒值 → missing。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        rows = {r.key: r for r in build_rows(_readiness())}
+        assert rows["ndc_signal"].state == "missing"
+        assert rows["ndc_signal"].value is None
+
+    def test_degraded_requires_a_value(self):
+        """discriminative=False **且有值** → degraded（燈照亮，只是別照門檻讀）。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        row = {r.key: r for r in
+               build_rows(_readiness(cl_data={"margin": 5148.0}))}[self._DEGRADED_KEY]
+        assert row.state == "degraded"
+        assert row.value == pytest.approx(5148.0)
+
+    def test_live(self):
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        rows = {r.key: r for r in
+                build_rows(_readiness(macro_info={"vix": {"current": 19.4}}))}
+        assert rows["vix"].state == "live"
+
+    # ── 本次修正的核心：順序 ────────────────────────────────────
+    def test_no_value_beats_not_discriminative(self):
+        """**沒值 + discriminative=False → missing（不是 degraded）。**
+
+        對齊 L0 SSOT 的 `classify_state`（姊妹守衛：
+        `tests/test_station_light_cells.py::test_no_value_beats_not_discriminative`）。
+        degraded 的語意是「有值，但門檻失準」—— 一個值都沒有時，「門檻準不準」
+        是個沒有意義的問題，先判 degraded 會讓畫面對著空資料說「門檻已失準」。
+
+        ⚠️ 把 `build_rows` 的順序改回「discriminative 先判」，這條會轉紅。
+        """
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        row = {r.key: r for r in build_rows(_readiness())}[self._DEGRADED_KEY]
+        assert row.value is None, "前提:全空輸入下這盞燈本來就沒有值"
+        assert row.state == "missing", (
+            f"{self._DEGRADED_KEY} 沒有值卻被判成 {row.state!r} —— "
+            f"對著空資料印「門檻已失準」會被讀成「有值只是別太當真」"
+        )
+
+    def test_missing_light_never_shows_the_degraded_wording(self):
+        """換句話說的同一件事:任何 state=missing 的列，畫面文案不得是「門檻已失準」。"""
+        from src.ui.render.macro_v2_cards import STATE_META
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        for r in build_rows(_readiness()):
+            if r.state == "missing":
+                assert STATE_META[r.state][0] == "無資料", (
+                    f"{r.key} 沒資料卻被標成 {STATE_META[r.state][0]!r}"
+                )
+
+    # ── 兩份順序不得漂移 ────────────────────────────────────────
+    def test_order_agrees_with_station_specs_classify_state(self):
+        """`build_rows` 複製了 L0 的順序（型別不同無法直接呼叫）——
+        這條交叉比對兩邊：只改一邊就紅。
+
+        `classify_state` 讀的是 `StationSpec` 的旗標，這裡用合成 spec 把
+        `build_rows` 實際看到的 `wired` / `discriminative` / 有沒有值餵進去，
+        比對兩邊對同一組輸入是否給出同一個四態。
+        """
+        from shared.station_specs import StationSpec, classify_state
+        from src.ui.tabs.tab_macro_v2 import build_rows
+
+        # ⚠️ 兩份輸入缺一不可:第一份讓 margin **有值**(→ degraded)，第二份讓它
+        #    **沒值**(→ missing)。兩份順序真正分岔的就是後者那一格，只跑第一份
+        #    的話，這條交叉比對在順序被改回去時仍然是綠的（實測過）。
+        seen: set[str] = set()
+        for rd in (_readiness(macro_info={"vix": {"current": 19.4}},
+                              cl_data={"margin": 5148.0}),
+                   _readiness(macro_info={"vix": {"current": 19.4}})):
+            for r in build_rows(rd):
+                rec = rd[r.key]
+                ghost = StationSpec(
+                    key=r.key, label=r.label, kind="both", group="macro",
+                    unit=r.unit, direction="high_bad", threshold_text="—",
+                    source="—", why="—",
+                    wired=bool(rec.get("wired", True)),
+                    unwired_reason="x",
+                    discriminative=bool(rec.get("discriminative", True)),
+                    degraded_reason="x",
+                )
+                has_value = rec.get("state") == "ok" and rec.get("value") is not None
+                assert r.state == classify_state(ghost, has_value=has_value), (
+                    f"{r.key}:tab_macro_v2 判 {r.state!r}，L0 SSOT 判 "
+                    f"{classify_state(ghost, has_value=has_value)!r} —— 兩份順序漂移了"
+                )
+                seen.add(r.state)
+        # 這兩份輸入必須真的走過四態，否則上面那圈等於沒驗到分歧點
+        assert {"live", "degraded", "unwired", "missing"} <= seen, seen
+
+
+# ════════════════════════════════════════════════════════════════
 # 五、rollup 與舊分頁同語意
 # ════════════════════════════════════════════════════════════════
 class TestRollupMatchesLegacy:
@@ -299,3 +565,1948 @@ class TestRollupMatchesLegacy:
         summ = bucket_summary(build_rows(_readiness()))
         assert [b["name"] for b in summ] == ["長期", "中期", "短線急殺", "籌碼", "新聞"]
         assert sum(b["n"] for b in summ) == 16
+
+
+# ════════════════════════════════════════════════════════════════
+# 六、第 3 層篩選（搜尋框 + 分類 chip，2026-08-26）
+#
+# 這一組守的東西只有一個核心:**畫面說 A、內容不能是 B**。
+# `st.dataframe(on_select=...)` 回的 `selection.rows` 是「畫面上那張表的列序」,
+# 一旦有了篩選就不再等於 `build_rows()` 的原始 16 列序。拿錯清單去索引,
+# 右側面板會安靜地顯示另一個指標的值與門檻 —— 兩邊看起來都很正常(§1)。
+# 其餘(搜尋 / 各 chip / 0 筆文案)是同一組篩選的邊界。
+# ════════════════════════════════════════════════════════════════
+
+def _mixed() -> dict:
+    """一份四態齊備的 readiness:綠燈 live / 紅燈 live / unwired / degraded / missing。
+
+    `is_problem` 的正反例、以及「篩選後列序 ≠ 原始列序」都靠它撐起來。
+    """
+    return _readiness(
+        macro_info={"vix": {"current": 38.0},      # 紅燈 + live（市場有問題）
+                    "ism_pmi": {"value": 58.0}},   # 綠燈 + live（都沒問題）
+        warroom_summary={"health_score": 88.0},    # 綠燈 + live
+        # degraded 的前提是**有值**（門檻失準 ≠ 沒資料）。2026-08-26 前這裡沒餵
+        # margin，卻靠當時「discriminative 先判」的錯誤順序湊出 degraded ——
+        # 順序修正後那個 degraded 就不存在了，故改成餵真值。
+        cl_data={"margin": 5148.0},                # 紅燈 + degraded（門檻已失準）
+    )
+
+
+class TestLayer3Filtering:
+
+    # ── 搜尋框 ───────────────────────────────────────────────────
+    def test_search_hits_by_substring(self):
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        got = {r.key for r in filter_rows(rows, query="融資")}
+        assert got == {"margin"}, "設計稿 placeholder 明寫「例如 VIX、融資」"
+
+    def test_search_is_case_insensitive(self):
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        lower = {r.key for r in filter_rows(rows, query="vix")}
+        upper = {r.key for r in filter_rows(rows, query="VIX")}
+        assert lower == upper == {"vix"}
+
+    def test_search_miss_yields_empty_not_everything(self):
+        """查無此指標要回空 —— 回全部等於默默把搜尋當成沒打(§1)。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        assert filter_rows(rows, query="這個指標不存在") == []
+
+    def test_blank_query_shows_everything(self):
+        """空字串 / 純空白 = 沒在搜尋,不是「查無此指標」。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        assert len(filter_rows(rows, query="")) == len(rows) == 16
+        assert len(filter_rows(rows, query="   ")) == 16
+
+    def test_search_matches_label_not_internal_key(self):
+        """只比對畫面上看得到的指標名,不比對內部 key(`ism_pmi` 那類)。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        assert filter_rows(rows, query="ism_pmi") == []
+        assert {r.key for r in filter_rows(rows, query="PMI")} == {"ism_pmi"}
+
+    # ── 分類 chip ────────────────────────────────────────────────
+    def test_seven_chips_and_bucket_names_come_from_the_existing_ssot(self):
+        """7 個 chip;5 個桶名與順序**沿用既有常數**,不是另抄一份中文字串。"""
+        from src.ui.tabs.tab_macro_v2 import (
+            _BUCKET_ORDER,
+            _BUCKET_ZH,
+            _CHIP_ALL,
+            _CHIP_PROBLEM,
+            CHIP_LABELS,
+            CHIP_ORDER,
+        )
+        assert len(CHIP_ORDER) == len(CHIP_LABELS) == 7
+        assert CHIP_ORDER[:2] == [_CHIP_ALL, _CHIP_PROBLEM]
+        assert CHIP_ORDER[2:] == _BUCKET_ORDER, "桶順序沒沿用 _BUCKET_ORDER"
+        for b in _BUCKET_ORDER:
+            assert CHIP_LABELS[b] == _BUCKET_ZH[b], (
+                f"chip 的「{b}」桶名與 _BUCKET_ZH 不同 —— 兩把尺已經漂移了"
+            )
+
+    @pytest.mark.parametrize("bucket", ["long", "mid", "short", "chips", "news"])
+    def test_each_bucket_chip_filters_to_that_bucket(self, bucket):
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        got = filter_rows(rows, chip=bucket)
+        assert got, f"{bucket} 桶篩出 0 筆 —— 16 盞燈每桶都該有成員"
+        assert all(r.bucket == bucket for r in got)
+        assert len(got) == sum(1 for r in rows if r.bucket == bucket)
+
+    def test_all_chip_filters_nothing(self):
+        from src.ui.tabs.tab_macro_v2 import _CHIP_ALL, build_rows, filter_rows
+        rows = build_rows(_mixed())
+        assert [r.key for r in filter_rows(rows, chip=_CHIP_ALL)] == \
+            [r.key for r in rows]
+
+    def test_unknown_chip_raises(self):
+        """§1:未知 chip 若默默回傳全部,畫面會長得跟「全部」一模一樣。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        with pytest.raises(ValueError, match="未知的篩選 chip"):
+            filter_rows(build_rows(_mixed()), chip="長期")   # 傳了顯示名而非 key
+
+    def test_chip_and_query_are_anded(self):
+        from src.ui.tabs.tab_macro_v2 import build_rows, filter_rows
+        rows = build_rows(_mixed())
+        assert {r.key for r in filter_rows(rows, chip="short", query="VIX")} \
+            == {"vix"}
+        # VIX 在 short 桶,拿去跟 chips 桶 AND 就該是空的
+        assert filter_rows(rows, chip="chips", query="VIX") == []
+
+    # ── 「只看有問題的」 ─────────────────────────────────────────
+    def test_problem_chip_is_the_union_of_market_and_system(self):
+        """定義:黃/紅燈(市場有問題) ∪ state != live(系統有問題)。
+
+        反例(**不該**入選)必須是「綠燈且 live」—— 只有這種才是真的沒事。
+        """
+        from src.ui.tabs.tab_macro_v2 import (
+            _CHIP_PROBLEM,
+            build_rows,
+            filter_rows,
+            is_problem,
+        )
+        rows = {r.key: r for r in build_rows(_mixed())}
+
+        # 正例 1｜市場有問題:紅燈但一切正常運作
+        assert rows["vix"].band == "red" and rows["vix"].state == "live"
+        assert is_problem(rows["vix"])
+        # 正例 2｜系統有問題:未接線(不是市場的錯,但它永遠不會亮)
+        assert rows["foreign_net"].state == "unwired"
+        assert is_problem(rows["foreign_net"])
+        # 正例 3｜系統有問題:門檻已失準
+        assert rows["margin"].state == "degraded"
+        assert is_problem(rows["margin"])
+        # 正例 4｜系統有問題:無資料
+        assert rows["ndc_signal"].state == "missing"
+        assert is_problem(rows["ndc_signal"])
+        # 反例｜綠燈 + live = 真的沒事
+        for k in ("health", "ism_pmi"):
+            assert rows[k].band == "green" and rows[k].state == "live"
+            assert not is_problem(rows[k])
+
+        picked = {r.key for r in filter_rows(list(rows.values()),
+                                             chip=_CHIP_PROBLEM)}
+        assert "health" not in picked and "ism_pmi" not in picked
+        assert {"vix", "foreign_net", "margin", "ndc_signal"} <= picked
+
+    def test_unwired_light_is_never_hidden_by_the_problem_chip(self):
+        """把「未接線」藏起來 = 使用者按了 chip 後合理推論「其他都沒事」,
+        但其中一部分根本沒在回報 —— 那正是本分頁要消滅的誤解(§1)。"""
+        from src.ui.tabs.tab_macro_v2 import _CHIP_PROBLEM, build_rows, filter_rows
+        rows = build_rows(_mixed())
+        got = {r.key for r in filter_rows(rows, chip=_CHIP_PROBLEM)}
+        for r in rows:
+            if r.state != "live":
+                assert r.key in got, f"{r.key}({r.state})被「有問題」篩掉了"
+
+    # ── 選取列對應（本組最重要的一條）───────────────────────────
+    def test_panel_shows_exactly_the_row_the_table_shows(self):
+        """右側面板的指標，必須等於表格**該列**顯示的指標。
+
+        `visible_table()` 刻意把「篩選」與「組表」綁在同一次呼叫回傳;
+        若哪天有人把表格改成吃未篩選的 `rows`(或反過來),這條就會紅。
+        """
+        from src.ui.tabs.tab_macro_v2 import (
+            CHIP_ORDER,
+            build_rows,
+            selected_row,
+            visible_table,
+        )
+        rows = build_rows(_mixed())
+        for chip in CHIP_ORDER:
+            for q in ("", "率", "指數"):
+                visible, table = visible_table(rows, chip=chip, query=q)
+                assert len(table["指標"]) == len(visible)
+                for i in range(len(visible)):
+                    picked = selected_row(visible, [i])
+                    assert picked is not None
+                    assert picked.label == table["指標"][i], (
+                        f"chip={chip} query={q!r} 第 {i} 列:表格顯示"
+                        f"「{table['指標'][i]}」,面板卻拿到「{picked.label}」"
+                    )
+
+    def test_row_index_is_into_the_filtered_list_not_the_original(self):
+        """同一個索引在「篩選後」與「原始 16 列」指到不同指標 —— 用錯清單
+        就是右側面板顯示另一個指標的成因。這條釘住那個差異真的存在。"""
+        from src.ui.tabs.tab_macro_v2 import (
+            build_rows,
+            selected_row,
+            visible_table,
+        )
+        rows = build_rows(_mixed())
+        visible, _ = visible_table(rows, chip="chips")
+        assert len(visible) < len(rows)
+        i = 1
+        assert visible[i].key != rows[i].key, (
+            "測試前提失效:篩選後第 1 列剛好等於原始第 1 列，這條就測不到東西"
+        )
+        assert selected_row(visible, [i]) is visible[i]
+        assert selected_row(visible, [i]) is not rows[i]
+
+    def test_stale_selection_after_filter_change_returns_none(self):
+        """先選第 N 列 → 改篩選讓清單變短 → 舊索引越界。
+
+        §1:回 None 讓 caller 說「選取已失效」,**不得**退回第 0 列 ——
+        那等於默默換一個指標給使用者看。
+        """
+        from src.ui.tabs.tab_macro_v2 import (
+            build_rows,
+            selected_row,
+            visible_table,
+        )
+        rows = build_rows(_mixed())
+        wide, _ = visible_table(rows)                    # 16 列
+        assert selected_row(wide, [12]) is not None
+        narrow, _ = visible_table(rows, chip="news")     # 1 列
+        assert len(narrow) == 1
+        assert selected_row(narrow, [12]) is None, "越界索引沒被擋下"
+        assert selected_row(narrow, []) is None
+        assert selected_row(narrow, [-1]) is None, "負索引會從尾端取,同樣是換指標"
+
+    # ── 篩選後 0 筆 ──────────────────────────────────────────────
+    def test_zero_result_message_states_the_active_filter(self):
+        """§1:不留一張空表。文案要把 chip 與搜尋字原樣講出來。"""
+        from src.ui.tabs.tab_macro_v2 import (
+            build_rows,
+            empty_hint,
+            visible_table,
+        )
+        rows = build_rows(_mixed())
+        visible, table = visible_table(rows, chip="chips", query="VIX")
+        assert visible == [] and all(not col for col in table.values())
+        msg = empty_hint(chip="chips", query="VIX", total=len(rows))
+        assert "沒有符合的指標" in msg
+        assert "籌碼" in msg, "沒講出目前選的分類"
+        assert "VIX" in msg, "沒講出目前的搜尋字"
+        assert "16" in msg, "沒告訴使用者清掉篩選會看回幾盞燈"
+
+    def test_zero_result_message_omits_an_empty_query(self):
+        from src.ui.tabs.tab_macro_v2 import empty_hint
+        msg = empty_hint(chip="news", query="   ", total=16)
+        assert "新聞" in msg
+        assert "搜尋「" not in msg, "沒打搜尋字卻報了一個搜尋條件"
+        assert "清掉搜尋字" not in msg, "叫人清掉一個他沒打的東西"
+
+
+# ════════════════════════════════════════════════════════════════
+# 七、版本陷阱:不得使用超出 requirements.txt floor 的 widget
+# ════════════════════════════════════════════════════════════════
+class TestStreamlitFloorCompatibility:
+    """守住「宣告的 floor」與「程式碼真正需要的版本」不脫節。
+
+    ⚠️ 2026-08-27 重寫。舊版是**壞掉的守衛**,三個獨立問題:
+
+    1. **地板寫死在測試裡**。舊版 `banned` 表拿 1.36 當基準。而 2026-08-27 把
+       `requirements.txt` 的 floor 抬到 1.56 之後,表裡那三個(pills 1.40 /
+       segmented_control 1.42 / fragment 1.37)**全部落在地板底下** ——
+       整條守衛會變成永遠不會擋任何東西的綠燈裝飾品。
+       → 現在 floor **從 `requirements.txt` 反解**,是唯一真相源。地板一改,
+         哪些 API 該擋自動跟著改,不需要有人記得回來同步這張表。
+    2. **只比對屬性名,不看關鍵字參數**。舊版只看 `st.<name>`,所以它掃的那個檔案裡
+       就擺著 `st.dataframe(..., width='stretch')`(需 1.49)而它抓不到 ——
+       這正是本次事故的形狀:壞掉的東西不在元件名,在參數。
+       → 現在 `(元件, 關鍵字)` 與 `(*, 關鍵字)` 兩層都掃。
+    3. **只掃單一檔案** `tab_macro_v2.py`。同一組畫面的姊妹檔
+       `macro_v2_cards.py` 完全在守備範圍外。
+       → 現在掃 `src/**/*.py` + `app.py` 全域,並另有一條斷言釘死那兩個檔案
+         必須在掃描範圍內,避免日後範圍被悄悄縮回去。
+
+    **表裡每一個版本號都是實測的,不是查文件抄的**(wheel `pip download --no-deps`
+    解壓 + `PYTHONPATH` 就地跑 `streamlit.testing.v1.AppTest`)。為了不編造「首個
+    支援版本」,表的語意刻意定成 **「已實測**不**支援的最高版本」**:
+    判定式是 `floor <= 該值 → 違規`。這樣每個數字都是我親眼看它壞掉的那一版,
+    沒有任何靠推論填空的區間。
+    """
+
+    #: `st.<name>` 本身在該版本**實測不存在**(hasattr 為 False)。
+    _ATTR_UNSUPPORTED_AT = {
+        # 1.36.0 實測 hasattr 皆 False(沿用舊表的三個,但版本改為實測值)
+        "pills": "1.36.0",
+        "segmented_control": "1.36.0",
+        "fragment": "1.36.0",
+        # 1.56.0 實測 hasattr 皆 False,沙箱 1.61.1 為 True —— 典型「本機全綠、
+        # 部署 AttributeError」的形狀,正是這條守衛存在的理由。
+        "mermaid_chart": "1.56.0",
+        "pagination": "1.56.0",
+        "skeleton": "1.56.0",
+        "bottom": "1.56.0",
+    }
+
+    #: `st.<元件>(<關鍵字>=...)` 在該版本**實測無效**。`"*"` = 任何 `st.*` 呼叫。
+    _KWARG_UNSUPPORTED_AT = {
+        # ── 本次事故的兩條主角 ──────────────────────────────
+        # 1.48.1 實測直接 TypeError: 'str' object cannot be interpreted as an
+        # integer(硬炸,至少會被發現);1.49.0 通過。
+        ("dataframe", "width"): "1.48.1",
+        # 1.50.0 實測被 `**kwargs` 吞掉:產生的 proto 與「完全不傳 width」逐欄相同,
+        # 且零錯誤訊息 —— 比硬炸危險,因為沒有任何跡象。1.51.0 才是真參數。
+        ("plotly_chart", "width"): "1.50.0",
+        # ── 這次把 floor 抬到 1.56 的驅動:程式化指定表格選取列 ──
+        ("dataframe", "selection_default"): "1.55.0",
+        # ── 1.56.0 實測不存在、沙箱 1.61.1 存在的關鍵字 ────────
+        ("dataframe", "lazy"): "1.56.0",
+        ("metric", "icon"): "1.56.0",
+        ("tabs", "height"): "1.56.0",
+        ("expander", "type"): "1.56.0",
+        ("status", "type"): "1.56.0",
+        ("markdown", "anchors"): "1.56.0",
+        ("chat_input", "submit_mode"): "1.56.0",
+        ("camera_input", "resolution"): "1.56.0",
+        ("cache_data", "refresh_mode"): "1.56.0",
+        ("cache_resource", "refresh_mode"): "1.56.0",
+        ("fragment", "parallel"): "1.56.0",
+        ("time_input", "format"): "1.56.0",
+        ("error", "title"): "1.56.0",
+        ("info", "title"): "1.56.0",
+        ("success", "title"): "1.56.0",
+        ("warning", "title"): "1.56.0",
+        # `persist_state` 1.56.0 實測橫跨 16 個 widget 全無 —— 逐個列會漏,
+        # 用萬用字元蓋掉任何 `st.*(persist_state=...)`。
+        ("*", "persist_state"): "1.56.0",
+    }
+
+    #: 掃描範圍最低限度必須含這兩個檔(同一組畫面的正副檔)。
+    _MUST_COVER = ("src/ui/tabs/tab_macro_v2.py", "src/ui/render/macro_v2_cards.py")
+
+    @staticmethod
+    def _ver(text: str) -> tuple[int, ...]:
+        return tuple(int(p) for p in text.split("."))
+
+    @classmethod
+    def _declared_floor(cls) -> tuple[int, ...]:
+        """從 `requirements.txt` 反解 streamlit 的 floor —— 唯一真相源。"""
+        import pathlib
+        import re
+
+        for line in pathlib.Path("requirements.txt").read_text(
+                encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("#") or not line.startswith("streamlit"):
+                continue
+            m = re.match(r"streamlit>=(\d+(?:\.\d+)*)", line)
+            assert m, f"requirements.txt 的 streamlit 行沒有可解析的 floor:{line!r}"
+            return cls._ver(m.group(1))
+        raise AssertionError("requirements.txt 找不到 streamlit 這一行")
+
+    @classmethod
+    def _scan_targets(cls):
+        import pathlib
+
+        files = sorted(pathlib.Path("src").rglob("*.py"))
+        app = pathlib.Path("app.py")
+        if app.exists():
+            files.append(app)
+        return files
+
+    def _violations(self, floor):
+        import ast
+
+        hits = []
+        for path in self._scan_targets():
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                # (1) 元件本身太新 —— 也涵蓋 `@st.fragment` 這種裝飾器用法
+                if (isinstance(node, ast.Attribute)
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "st"):
+                    bad = self._ATTR_UNSUPPORTED_AT.get(node.attr)
+                    if bad and floor <= self._ver(bad):
+                        hits.append(
+                            f"{path}:{node.lineno} st.{node.attr}"
+                            f"(實測 {bad} 尚無此 API)")
+                # (2) 元件沒問題但關鍵字參數太新 —— 舊守衛完全看不到的那一層
+                if (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "st"):
+                    for kw in node.keywords:
+                        if kw.arg is None:  # **kwargs 展開,無法靜態判定
+                            continue
+                        for key in ((node.func.attr, kw.arg), ("*", kw.arg)):
+                            bad = self._KWARG_UNSUPPORTED_AT.get(key)
+                            if bad and floor <= self._ver(bad):
+                                hits.append(
+                                    f"{path}:{node.lineno} "
+                                    f"st.{node.func.attr}({kw.arg}=...)"
+                                    f"(實測 {bad} 此參數無效)")
+        return sorted(set(hits))
+
+    # ── 守衛本體 ──────────────────────────────────────────────
+    def test_no_streamlit_api_newer_than_the_declared_floor(self):
+        """程式碼不得用到超出 `requirements.txt` 宣告 floor 的 streamlit API。
+
+        沒有 lock 檔時 resolver 會解到 cap 內最新版,所以沙箱與 production 都
+        跑得動 —— 宣告與實況脫節不會有任何症狀,直到有人真的照著宣告去裝。
+        """
+        floor = self._declared_floor()
+        hits = self._violations(floor)
+        assert not hits, (
+            "用到超出宣告 floor 的 streamlit API:\n  "
+            + "\n  ".join(hits)
+            + f"\n\nrequirements.txt 宣告 streamlit>="
+            + ".".join(str(p) for p in floor)
+            + "。要嘛改用該版本就有的寫法,要嘛連同 requirements.txt 一起把 floor 抬上去"
+              "(抬 floor 記得同步 tests/test_hotfix_v19_79.py 的逐字 pin)。"
+        )
+
+    # ── 守衛的守衛:確保它真的還會擋東西、範圍沒被縮掉 ──────────
+    def test_scan_covers_both_macro_v2_files(self):
+        """掃描範圍不得縮回單一檔案 —— 舊版只掃 tab_macro_v2.py 就漏掉了姊妹檔。"""
+        scanned = {p.as_posix() for p in self._scan_targets()}
+        missing = [f for f in self._MUST_COVER if f not in scanned]
+        assert not missing, f"這些檔案掉出掃描範圍:{missing}"
+
+    def test_guard_actually_bites(self):
+        """反向驗證:守衛必須真的抓得到違規,不能是永遠綠燈的裝飾品。
+
+        舊版守衛就是死在這裡 —— floor 抬到 1.56 後表裡三個 API 全在地板下,
+        它變成不可能紅燈,但沒有任何測試會告訴你這件事。故這條直接把地板往下壓,
+        要求它一定要吐出東西來。
+        """
+        # 壓到 1.36:全 repo 現有的 width='stretch' 都該被抓出來
+        hits_136 = self._violations(self._ver("1.36.0"))
+        assert hits_136, "把 floor 壓到 1.36 竟然抓不到任何東西 —— 守衛已失效"
+        assert any("dataframe(width=" in h for h in hits_136)
+        assert any("plotly_chart(width=" in h for h in hits_136)
+        # 壓到 1.49:dataframe 的 width 已合法,plotly 的還不合法 —— 證明它辨識得出
+        # 「同一個關鍵字、不同元件、不同版本」,不是一刀切。
+        hits_149 = self._violations(self._ver("1.49.0"))
+        assert not any("dataframe(width=" in h for h in hits_149)
+        assert any("plotly_chart(width=" in h for h in hits_149)
+        # 現行 floor 之上仍有東西可擋 —— 表沒有整組落到地板底下(舊版的死法)
+        floor = self._declared_floor()
+        live = [v for v in (*self._ATTR_UNSUPPORTED_AT.values(),
+                            *self._KWARG_UNSUPPORTED_AT.values())
+                if floor <= self._ver(v)]
+        assert live, (
+            f"現行 floor {floor} 之上一條規則都不剩 —— 守衛已退化成裝飾品,"
+            "請補上比 floor 更新的 API/參數(照表頭說明:填『實測不支援的最高版本』)。"
+        )
+
+
+# ════════════════════════════════════════════════════════════════
+# 八、狀態欄的 emoji 雙重編碼（2026-08-26）
+#
+# 為什麼要有這一組:狀態欄原本只有中文字。加 emoji 是**冗餘**編碼 ——
+# 在文字旁邊多一個線索，不是取代文字。三件事必須被釘住，否則加了等於沒加:
+#
+#   1. **對應不能漂**。特別是「門檻已失準」**不是** 🔴 ❌ —— 它的語意是
+#      「有值、燈照亮，只是別照門檻讀」，不是故障。標紅叉會讓使用者以為
+#      那盞燈壞了，但它正在正常回報數字（user 2026-08-26 裁示）。
+#   2. **「無資料」與「未接線」必須看得出差別**。兩者的色碼本來就是同一個
+#      灰（`#8a8e96`），肉眼分不出來 —— 而四態存在的整個理由就是要把
+#      「上游沒給值」與「決策端沒接線」分開。emoji 這一欄是它們唯一的區隔。
+#   3. **文案只准有一份**。上一輪才把四態中文從畫面層收回 L4 `STATE_META`；
+#      emoji 若在畫面層另寫一份 dict，就是把它推回去（§3.3 第二把尺）。
+# ════════════════════════════════════════════════════════════════
+
+#: 狀態欄專屬的 emoji。⚠️ **刻意不列 `⚠️`** —— 它是 Streamlit 到處在用的
+#: 通用警示圖示（`st.warning(icon=...)`），拿它當「有人另寫一份狀態文案」
+#: 的證據會誤判。真的有第二份 dict 時，四態中文標籤那條斷言一樣抓得到。
+_STATE_GLYPHS = ("🟢", "🟠", "⚪", "⚫", "✅", "➖", "🔌", "❓")
+
+
+class TestStateColumnDualCoding:
+
+    # ── 四態各一條:emoji 與中文都要在，而且要對 ──────────────────
+    @pytest.mark.parametrize(("state", "emoji", "zh"), [
+        ("live",     "🟢 ✅", "運作中"),
+        ("degraded", "🟠 ⚠️", "門檻已失準"),
+        ("missing",  "⚪ ➖", "無資料"),
+        ("unwired",  "⚫ 🔌", "未接線"),
+    ])
+    def test_each_state_shows_both_emoji_and_chinese(self, state, emoji, zh):
+        """emoji 是**加在**中文旁邊的第二個線索，不是中文的替代品。
+
+        只出 emoji 等於把資訊綁死在「看得懂這個符號」上；只出中文則是這次
+        要改的現況。故兩者都必須出現，且順序固定（emoji 在前，掃視時先看到）。
+        """
+        from src.ui.render.macro_v2_cards import state_cell
+        assert state_cell(state) == f"{emoji} {zh}"
+
+    def test_degraded_is_not_a_red_cross(self):
+        """**本組最重要的一條。** 「門檻已失準」= 有值、照常亮，只是門檻
+        讀不出意義 —— 它**沒有壞**。紅色 + 叉是「故障 / 不通過」的通用語彙，
+        用在這裡會把一盞正在正常回報數字的燈講成死掉的燈（§1 反過來的錯:
+        不是編數字，是編一個比事實更嚴重的結論）。
+        """
+        from src.ui.render.macro_v2_cards import state_cell
+        cell = state_cell("degraded")
+        assert "🔴" not in cell and "❌" not in cell, (
+            f"「門檻已失準」被標成故障:{cell!r} —— 它有值、燈照常亮"
+        )
+        assert "🟠" in cell, "失準應該是橙色警示（介於正常與故障之間）"
+
+    def test_missing_and_unwired_are_visually_separable(self):
+        """兩者的**色碼是同一個灰**，emoji 是它們畫面上唯一的區隔。
+
+        這條同時把「色碼相同」這個事實釘住 —— 哪天有人把灰色拆開了，這條
+        會紅，提醒他回來看這裡的註解（那時 emoji 就不再是唯一區隔）。
+        """
+        from src.ui.render.macro_v2_cards import STATE_META, state_cell
+        assert STATE_META["missing"][1] == STATE_META["unwired"][1], (
+            "色碼已經不同了 —— 請回頭更新 STATE_META 上方那段註解的前提"
+        )
+        assert state_cell("missing") != state_cell("unwired")
+        assert STATE_META["missing"][2] != STATE_META["unwired"][2], (
+            "「無資料」與「未接線」共用同一組 emoji —— 四態又被壓成三態了"
+        )
+
+    def test_all_four_states_have_distinct_cells(self):
+        """四態兩兩不同。任何兩態撞在一起 = 使用者無從分辨（v2 的存在理由）。"""
+        from src.ui.render.macro_v2_cards import STATE_META, state_cell
+        cells = [state_cell(s) for s in STATE_META]
+        assert len(set(cells)) == len(STATE_META) == 4, f"有重複:{cells}"
+
+    # ── fallback:未定義狀態 ──────────────────────────────────────
+    def test_unknown_state_falls_back_to_a_question_mark(self):
+        """§1:未定義的狀態**不猜、不回退成「無資料」**。
+
+        回退成「無資料」會把一個 bug 偽裝成一種正常結果 —— 使用者看到的是
+        一個合法的四態之一，沒有任何跡象顯示上游出了沒人預期的事。
+        """
+        from src.ui.render.macro_v2_cards import state_cell
+        assert state_cell("ghost_state") == "⚪ ❓ 未知狀態"
+
+    def test_unknown_state_is_not_silent(self, capsys):
+        """§1:走到 fallback 代表上游冒出了四態以外的東西，那是要有人去看的
+        事。畫面顯示問號讓使用者知道這格不可信，同時要在 stdout 留下痕跡
+        （比照 `macro_helpers._rec` / `_unwired` 對 SSOT 缺欄位的既有做法）。
+        """
+        from src.ui.render.macro_v2_cards import state_cell
+        state_cell("ghost_state")
+        out = capsys.readouterr().out
+        assert "ghost_state" in out, "警告沒把那個未知狀態的值印出來"
+        assert "⚠️" in out and "state_cell" in out, f"沒留下可辨識的警告痕跡:{out!r}"
+
+    def test_known_states_do_not_warn(self, capsys):
+        """反例:四態走正常路徑時**不得**噴警告 —— 否則真的出事時沒人會看。"""
+        from src.ui.render.macro_v2_cards import STATE_META, state_cell
+        for s in STATE_META:
+            state_cell(s)
+        assert capsys.readouterr().out == ""
+
+    # ── 表格真的用了它 ───────────────────────────────────────────
+    def test_table_state_column_is_exactly_the_ssot_cell(self):
+        """總表的「狀態」欄必須逐格等於 `state_cell()` 的輸出。
+
+        `_table_columns` 若哪天改成自己拼字串，這條就會紅。
+        """
+        from src.ui.render.macro_v2_cards import state_cell
+        from src.ui.tabs.tab_macro_v2 import build_rows, visible_table
+        rows = build_rows(_mixed())
+        visible, table = visible_table(rows)
+        assert len(table["狀態"]) == len(visible) == 16
+        for r, cell in zip(visible, table["狀態"]):
+            assert cell == state_cell(r.state), f"{r.key} 的狀態欄與 SSOT 不同"
+
+    def test_table_covers_all_four_states_with_emoji(self):
+        """端到端:一份四態齊備的 readiness，總表的狀態欄要四種都出現且帶 emoji。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, visible_table
+        _, table = visible_table(build_rows(_mixed()))
+        seen = set(table["狀態"])
+        assert {"🟢 ✅ 運作中", "🟠 ⚠️ 門檻已失準",
+                "⚪ ➖ 無資料", "⚫ 🔌 未接線"} <= seen, seen
+
+    def test_light_column_stays_plain_text(self):
+        """「燈」欄維持純文字（user 2026-08-26 裁示:視覺重心留給核心結論）。
+
+        這同時是狀態欄敢出 emoji 的**前提**:同一列若兩欄都出符號，🟢 會與
+        狀態的 live 撞在一起 —— 那正是姊妹檔 `render/station_cards.py` 檔頭
+        點名拒絕 emoji 的那個坑。這條紅了，就要連著那段一起重想。
+        """
+        from src.ui.tabs.tab_macro_v2 import build_rows, visible_table
+        _, table = visible_table(build_rows(_mixed()))
+        assert set(table["燈"]) <= {"綠", "黃", "紅", "無資料"}
+        for cell in table["燈"]:
+            assert not any(g in cell for g in _STATE_GLYPHS), (
+                f"「燈」欄出現了狀態欄的符號:{cell!r} —— 同列兩個符號會互撞"
+            )
+
+    # ── SSOT 靜態守衛 ────────────────────────────────────────────
+    def test_display_layer_writes_no_second_copy_of_the_four_states(self):
+        """靜態守衛:畫面層(L5)不得自己寫四態的中文或 emoji。
+
+        比照 `test_rows_mirror_the_sidecar_exactly` 的精神 —— 用「寫不出來」
+        取代「請記得別寫」。上一輪才把四態中文從這一層收回 L4 `STATE_META`,
+        emoji 若又在這裡落地一份，兩把尺就會各自演化。
+
+        只看 **AST 的字串常數**:docstring 與註解裡提到狀態名是在解釋設計，
+        不是第二把尺（註解根本不進 AST；docstring 逐一排除）。
+        """
+        import ast
+        import pathlib
+
+        from src.ui.render.macro_v2_cards import STATE_META, STATE_UNKNOWN_META
+
+        tree = ast.parse(pathlib.Path("src/ui/tabs/tab_macro_v2.py")
+                         .read_text(encoding="utf-8"))
+        docstrings = {
+            id(node.body[0].value)
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Module, ast.ClassDef,
+                                 ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.body and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        }
+        consts = [
+            n.value for n in ast.walk(tree)
+            if isinstance(n, ast.Constant) and isinstance(n.value, str)
+            and id(n) not in docstrings
+        ]
+
+        labels = {m[0] for m in STATE_META.values()} | {STATE_UNKNOWN_META[0]}
+        for c in consts:
+            assert c not in labels, (
+                f"L5 又寫了一份四態文案:{c!r} —— 請改用 "
+                f"`macro_v2_cards.state_cell()`（§3.3 第二把尺）"
+            )
+            hit = [g for g in _STATE_GLYPHS if g in c]
+            assert not hit, (
+                f"L5 出現狀態欄的 emoji {hit} 於 {c!r} —— emoji 與中文都只准"
+                f"住在 L4 `STATE_META`"
+            )
+
+    def test_emoji_and_label_live_in_the_same_ssot_row(self):
+        """emoji 與中文必須是**同一列**的兩個欄位，不是兩張平行的表。
+
+        平行兩張表的失效模式:上游新增一個狀態，有人只加了其中一張 ——
+        另一張 KeyError 或悄悄漏掉，而這件事在畫面上看不出來。
+        """
+        from src.ui.render.macro_v2_cards import STATE_META
+        for state, meta in STATE_META.items():
+            assert len(meta) == 3, f"{state} 的 meta 不是 (中文, 色碼, emoji)"
+            label, color, emoji = meta
+            assert label and emoji, f"{state} 缺中文或 emoji"
+            assert color.startswith("#"), f"{state} 的色碼欄不是色碼:{color!r}"
+
+
+# ════════════════════════════════════════════════════════════════
+# 九、門檻線必須綁對 y 軸（2026-08-27,雙軸前置）
+#
+# 【這不是現存 bug】`_threshold_lines` 唯一的 caller `render_chart_card`
+# 畫的是**單軸圖**(全檔無 yaxis2 / secondary_y / overlaying / make_subplots),
+# 所以現況不傳 `yref` 也不會錯 —— plotly 省略時本來就綁主軸 `y`。
+#
+# 【為什麼還是要守】這是「**一改雙軸就會中**」的前置。若之後在同一張圖疊
+# 第二條軸(例:左軸 DXY ~105、右軸台幣 ~32),沿用「不傳 yref」的寫法會把
+# 台幣的 32/33 門檻線畫在**左軸的 32/33 位置**(圖底某處,離資料很遠),
+# 而畫面上它就是一條標著「黃線 32.0」的正常虛線 —— §1 最忌的那種錯:
+# 畫面說 A、內容是 B,兩邊都看起來正常,沒有任何東西會報錯。
+#
+# 本組守兩件事:(a) 不傳時仍是 `y`(零行為變更);(b) 傳 `y2` 時線**與它的
+# 標註**都真的跑到 y2(只有線搬過去、標籤留在主軸,同樣是說 A 做 B)。
+# ════════════════════════════════════════════════════════════════
+class TestThresholdLinesBindToTheRightAxis:
+
+    @staticmethod
+    def _fig_with_lines(**kw):
+        go = pytest.importorskip("plotly.graph_objects")
+        from src.ui.render.macro_v2_cards import _threshold_lines
+        spec = SPECS_BY_KEY["us10y"]
+        fig = go.Figure()
+        fig.add_scatter(x=[1, 2], y=[1, 2])
+        _threshold_lines(fig, spec, **kw)
+        layout = fig.to_dict()["layout"]
+        return layout.get("shapes", ()), layout.get("annotations", ())
+
+    def test_the_spec_used_here_actually_draws_lines(self):
+        """前提檢查:若 us10y 哪天沒門檻了，下面幾條會空跑而永遠綠。"""
+        shapes, annos = self._fig_with_lines()
+        assert shapes, "us10y 沒畫出任何門檻線 —— 本組測試會變成空殼"
+        assert annos, "門檻線沒有標註 —— 標註綁軸的斷言會空跑"
+
+    def test_default_stays_on_the_primary_axis(self):
+        """不傳 yref → 一律 `y`。這條在守**零行為變更**。"""
+        shapes, annos = self._fig_with_lines()
+        assert {s.get("yref") for s in shapes} == {"y"}
+        assert {a.get("yref") for a in annos} == {"y"}
+
+    def test_explicit_primary_is_identical_to_omitting_it(self):
+        """顯式傳 `"y"` 與不傳必須產出完全相同的圖(否則預設值選錯了)。"""
+        assert self._fig_with_lines() == self._fig_with_lines(yref="y")
+
+    def test_secondary_axis_moves_both_line_and_its_label(self):
+        """傳 `y2` → 線**和標註**都要在 y2。
+
+        只有線搬過去、標籤留在主軸的話，畫面上會出現一條「浮在別處的
+        數字」—— 一樣是畫面說 A、內容是 B。
+        """
+        shapes, annos = self._fig_with_lines(yref="y2")
+        assert {s.get("yref") for s in shapes} == {"y2"}
+        assert {a.get("yref") for a in annos} == {"y2"}, (
+            "門檻線搬到 y2 了，但它的標註還綁在主軸 —— 標籤會飄到別的位置"
+        )
+
+    def test_yref_is_keyword_only(self):
+        """`yref` 必須是 keyword-only —— 位置參數第 3 位以後容易誤傳。"""
+        import inspect
+
+        from src.ui.render.macro_v2_cards import _threshold_lines
+        p = inspect.signature(_threshold_lines).parameters["yref"]
+        assert p.kind is inspect.Parameter.KEYWORD_ONLY
+        assert p.default == "y", "預設值不是 'y' → 既有 caller 會行為變更"
+
+
+# ════════════════════════════════════════════════════════════════
+# B-1 · 第 2 層固定 3 張／列（2026-08-27 客戶拍板）
+#
+# 舊寫法 `st.columns(max(len(cards), 1))` 讓每張卡的寬度隨卡片數反比縮水 ——
+# 「多加一張卡」與「把整排圖壓到看不見」變成同一個動作。1440px 實測繪圖區：
+# 3 欄 304px ✅ / 4 欄 192px 🟡 / 6 欄 85px 🔴 / 7 欄 54px（標註留白比繪圖區還寬）。
+# ════════════════════════════════════════════════════════════════
+class TestLayer2FixedThreePerRow:
+
+    def test_chunk_cards_edge_counts(self):
+        """卡片數 0 / 1 / 2 / 3 / 4 / 7 的切列結果。
+
+        4 張是最關鍵的一組:它是**第一個會跨列**的數量,而跨列正是舊寫法
+        永遠不會發生的事(舊寫法會把 4 張擠成一列 192px)。
+        """
+        from src.ui.tabs.tab_macro_v2 import chunk_cards
+
+        assert chunk_cards([]) == []          # ⚠️ 不是 [[]] —— 見函式 docstring
+        assert chunk_cards(["a"]) == [["a"]]
+        assert chunk_cards(["a", "b"]) == [["a", "b"]]
+        assert chunk_cards(["a", "b", "c"]) == [["a", "b", "c"]]
+        assert chunk_cards(["a", "b", "c", "d"]) == [["a", "b", "c"], ["d"]]
+        assert chunk_cards(list("abcdefg")) == [
+            ["a", "b", "c"], ["d", "e", "f"], ["g"]]
+
+    def test_chunk_cards_preserves_order_and_completeness(self):
+        """切列不得漏卡、不得改順序 —— 攤平回來要與輸入逐項相等。"""
+        from src.ui.tabs.tab_macro_v2 import chunk_cards
+
+        for n in range(0, 13):
+            items = list(range(n))
+            flat = [x for row in chunk_cards(items) for x in row]
+            assert flat == items, f"n={n} 攤平後與輸入不符"
+
+    def test_chunk_cards_rejects_zero_per_row(self):
+        """§1:`per_row=0` 會讓 `range(0, n, 0)` 直接 ValueError/無窮迴圈,
+        寧可炸掉也不要吊死在一個沒有錯誤訊息的畫面上。"""
+        from src.ui.tabs.tab_macro_v2 import chunk_cards
+
+        with pytest.raises(ValueError):
+            chunk_cards(["a"], per_row=0)
+        with pytest.raises(ValueError):
+            chunk_cards(["a"], per_row=-1)
+
+    def test_no_st_columns_call_depends_on_card_count(self):
+        """守衛:本檔任何 `st.columns(...)` 的參數都**不得**含 `len(`。
+
+        這是「卡越多每張越窄」那個 bug 的形狀。拿掉本條、把
+        `st.columns(CARDS_PER_ROW)` 改回 `st.columns(max(len(cards), 1))`
+        就會轉紅。
+        """
+        import ast
+        import pathlib
+
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        bad = []
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "columns"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "st"):
+                arg_src = ast.get_source_segment(src, node.args[0]) if node.args else ""
+                if "len(" in (arg_src or ""):
+                    bad.append(f"{node.lineno}: st.columns({arg_src})")
+        assert not bad, ("st.columns 的欄數不得取決於卡片數量（卡越多每張越窄）："
+                         + "; ".join(bad))
+
+    def test_layer2_uses_the_fixed_constant(self):
+        """第 2 層的兩處 `st.columns` 必須吃 `CARDS_PER_ROW` 這個常數本身。
+
+        寫死 `st.columns(3)` 也會過上一條,但那就是第二把尺(§3.3)——
+        改 `CARDS_PER_ROW` 時畫面不會跟著動。
+        """
+        import ast
+        import pathlib
+
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        n = 0
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "columns"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "st"
+                    and node.args
+                    and isinstance(node.args[0], ast.Name)
+                    and node.args[0].id == "CARDS_PER_ROW"):
+                n += 1
+        assert n >= 2, f"第 2 層應有兩處 st.columns(CARDS_PER_ROW)，實際 {n} 處"
+
+
+# ════════════════════════════════════════════════════════════════
+# B-2 · 參考走勢卡不進燈號分母（2026-08-27 客戶裁示）
+#
+# 台幣與加權指數「畫圖但不算一盞燈」：不影響 x/16 分母、五桶 worst-of 彙總、
+# 訊號可信度卡。這一組是那條分界**在程式裡可驗證**的證據 —— 不是靠註解。
+# ════════════════════════════════════════════════════════════════
+class TestReferenceCardsStayOutOfTheDenominator:
+
+    @staticmethod
+    def _ref_keys():
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        return set(REF_SPECS_BY_KEY)
+
+    def test_reference_keys_absent_from_readiness_sidecar(self):
+        """readiness 側車（= x/16 的分母來源）不得出現參考走勢 key。"""
+        readiness = _readiness()
+        assert not (self._ref_keys() & set(readiness)), (
+            f"參考走勢跑進了 readiness 側車："
+            f"{sorted(self._ref_keys() & set(readiness))}")
+
+    def test_reference_keys_absent_from_rows(self):
+        """`build_rows()` 的輸出是分母、五桶彙總、可信度卡、第 3 層總表的
+        **共同上游**。只要 rows 乾淨，那四個下游就不可能被污染。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        rows = build_rows(_readiness())
+        assert not (self._ref_keys() & {r.key for r in rows})
+
+    def test_denominator_size_unchanged_by_reference_specs(self):
+        """分母 == `BUCKET_DANGER_SPECS` 的長度，一個不多、一個不少。
+
+        這是「x/16 的那個 16」。加了兩張參考走勢卡之後它若變成 18，
+        畫面上完全看不出來 —— 只會覺得「怎麼永遠有兩盞燈沒亮」。
+        """
+        from shared.macro_buckets import BUCKET_DANGER_SPECS
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        assert len(build_rows(_readiness())) == len(BUCKET_DANGER_SPECS)
+
+    def test_bucket_rollup_has_no_reference_bucket(self):
+        """五桶彙總只會有五個桶，不會冒出第六個「參考」桶。"""
+        from shared.macro_buckets import BUCKET_ORDER, REFERENCE_BUCKET
+        from src.ui.tabs.tab_macro_v2 import _BUCKET_ZH, build_rows, bucket_summary
+        summary = bucket_summary(build_rows(_mixed()))
+        assert len(summary) <= len(BUCKET_ORDER)
+        assert REFERENCE_BUCKET not in _BUCKET_ZH
+        assert _BUCKET_ZH.get(REFERENCE_BUCKET) not in {b["name"] for b in summary}
+
+    def test_reference_row_builder_never_touches_the_sidecar(self):
+        """`build_reference_row()` 的簽章**不吃 readiness** —— 物理上碰不到。
+
+        拿掉這條、讓它多收一個 `readiness` 參數，就等於開了一條「參考走勢
+        也可以從側車取值」的路，而那正是第二把尺的起點（§3.3）。
+        """
+        import inspect
+        from src.ui.tabs.tab_macro_v2 import build_reference_row
+        params = set(inspect.signature(build_reference_row).parameters)
+        assert params == {"key", "value"}, f"簽章被改了：{sorted(params)}"
+
+    def test_reference_row_uses_reference_registry_only(self):
+        """參考走勢 Row 的 bucket 必須是 `REFERENCE_BUCKET`，不是五桶之一。"""
+        from shared.macro_buckets import BUCKET_ORDER, REFERENCE_BUCKET
+        from src.ui.tabs.tab_macro_v2 import build_reference_row
+        for k in self._ref_keys():
+            row = build_reference_row(k, 1.0 if k == "usdtwd" else 23000.0)
+            assert row.bucket == REFERENCE_BUCKET
+            assert row.bucket not in BUCKET_ORDER
+
+    def test_no_threshold_reference_is_not_judged_green(self):
+        """§1：加權指數沒有門檻 → band 必須是 `gray`（不判燈），**不是 green**。
+
+        判成 green 就是一盞恆亮的假綠燈。
+        """
+        from src.ui.tabs.tab_macro_v2 import build_reference_row
+        row = build_reference_row("taiex", 23000.0)
+        assert row.band == "gray"
+        assert row.thr_text == "—"
+
+    def test_usdtwd_band_follows_the_ssot_thresholds(self):
+        """台幣**有**門檻（SSOT 鏡像 32 / 33），判燈走同一支上游函式。"""
+        from src.ui.tabs.tab_macro_v2 import build_reference_row
+        assert build_reference_row("usdtwd", 29.0).band == "green"
+        assert build_reference_row("usdtwd", 32.5).band == "yellow"
+        assert build_reference_row("usdtwd", 33.5).band == "red"
+        assert build_reference_row("usdtwd", None).band == "gray"
+
+    def test_denominator_functions_do_not_mention_reference_registry(self):
+        """原始碼層守衛：分母／彙總／可信度那三段**不得**提到參考走勢註冊表。
+
+        上面幾條驗的是「現在的行為」，這一條擋的是「以後有人在那裡加一行」。
+        拿掉本條、在 `build_rows()` 裡多迭代一次 `REFERENCE_TREND_SPECS`，
+        其餘測試會抓到，但錯誤訊息會指向分母數字而不是根因。
+        """
+        import ast
+        import pathlib
+
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        banned = {"REFERENCE_TREND_SPECS", "REF_SPECS_BY_KEY",
+                  "build_reference_row", "REFERENCE_BUCKET"}
+        targets = {"build_rows", "bucket_summary", "overall_verdict",
+                   "visible_table", "filter_rows", "_table_columns"}
+        bad = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name in targets:
+                for sub in ast.walk(node):
+                    if isinstance(sub, ast.Name) and sub.id in banned:
+                        bad.append(f"{node.name}() 提到了 {sub.id}")
+        assert not bad, ("分母／彙總／總表不得碰參考走勢註冊表："
+                         + "; ".join(sorted(set(bad))))
+
+
+# ════════════════════════════════════════════════════════════════
+# B-3 · 卡 A（雙軸 DXY／台幣）與卡 B（加權指數日 K）接線
+# ════════════════════════════════════════════════════════════════
+class TestCardAWiring:
+    """卡 A：左軸 DXY（一盞燈）／右軸台幣（參考走勢）。"""
+
+    @staticmethod
+    def _inputs(pd, *, dxy=True, twd=True):
+        from types import SimpleNamespace
+        from shared.macro_buckets import CL_INTL_KEY_DXY, CL_TW_KEY_USDTWD
+
+        def _df(vals):
+            return pd.DataFrame(
+                {"open": [v - 1 for v in vals], "high": [v + 1 for v in vals],
+                 "low": [v - 2 for v in vals], "close": list(vals)},
+                index=pd.date_range("2026-08-01", periods=len(vals), freq="D"))
+
+        cl = {"intl": {}, "tw": {}}
+        if dxy:
+            cl["intl"][CL_INTL_KEY_DXY] = _df([98.0, 99.0, 100.5])
+        if twd:
+            cl["tw"][CL_TW_KEY_USDTWD] = _df([31.5, 32.1, 32.4])
+        return SimpleNamespace(cl_data=cl)
+
+    def test_dxy_and_usdtwd_series_come_from_their_own_cl_data_groups(self):
+        """DXY 走 `cl_data['intl']`、台幣走 `cl_data['tw']` —— 兩個不同群組。
+
+        中文 key 走 L0 鏡像常數，不是字面值（L3 改名時 L0 那邊會轉紅）。
+        """
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        inp = self._inputs(pd)
+        assert _session_series(inp, "dxy")[1] == [98.0, 99.0, 100.5]
+        assert _session_series(inp, "usdtwd")[1] == [31.5, 32.1, 32.4]
+
+    def test_unregistered_session_key_fails_loud_not_silently(self, capsys):
+        """§1：沒登記取數路徑的 key 要留下痕跡，不是靜靜回 (None, None)。"""
+        pd = pytest.importorskip("pandas")
+        from src.ui.tabs.tab_macro_v2 import _session_series
+        assert _session_series(self._inputs(pd), "vix") == (None, None)
+        assert "沒有登記 session 取數路徑" in capsys.readouterr().out
+
+    def test_session_source_keys_cover_every_declared_session_card(self):
+        """`_CHART_SPECS` 宣告要走 session 的 key，都必須有登記取數路徑。
+
+        漏登記的後果是那張卡**永遠空著**，而畫面上與「今天沒抓到」一樣。
+        """
+        from src.ui.tabs.tab_macro_v2 import (
+            KIND_DUAL, KIND_SESSION, _CHART_SPECS, _SESSION_SERIES_SOURCE,
+        )
+        need = set()
+        for c in _CHART_SPECS:
+            if c.kind == KIND_SESSION:
+                need.add(c.key)
+            elif c.kind == KIND_DUAL:
+                need.update({c.key, c.ref_key})
+        assert need <= set(_SESSION_SERIES_SOURCE), (
+            f"這些 key 沒登記 session 取數路徑：{sorted(need - set(_SESSION_SERIES_SOURCE))}")
+
+    def test_dual_card_gives_each_axis_its_own_spec(self, monkeypatch):
+        """左右兩軸**各帶自己的 DangerSpec** —— 共用一份門檻就是畫錯軸。"""
+        pd = pytest.importorskip("pandas")
+        import src.ui.tabs.tab_macro_v2 as m
+        from shared.macro_buckets import REF_SPECS_BY_KEY, SPECS_BY_KEY
+
+        seen = {}
+
+        def _fake(title, left, right, *, series_note="", key=""):
+            seen.update(title=title, left=left, right=right, note=series_note)
+
+        monkeypatch.setattr(m, "render_dual_axis_card", _fake)
+        card = next(c for c in m._CHART_SPECS if c.kind == m.KIND_DUAL)
+        rows = m.build_rows(_readiness())
+        m._render_dual_card(card, by_key={r.key: r for r in rows},
+                            inputs=self._inputs(pd))
+
+        assert seen["left"].spec is SPECS_BY_KEY["dxy"]
+        assert seen["right"].spec is REF_SPECS_BY_KEY["usdtwd"]
+        assert seen["left"].ys == [98.0, 99.0, 100.5]
+        assert seen["right"].ys == [31.5, 32.1, 32.4]
+        # 標題由兩條線的 label 組出，不是第三個寫死的名字
+        assert seen["left"].row.label in seen["title"]
+        assert seen["right"].row.label in seen["title"]
+
+    def test_missing_leg_carries_a_reason_not_a_blank(self, monkeypatch):
+        """§1：某條線這輪沒抓到 → `miss_reason` 要有話講，不留空字串。
+
+        留空的話 L4 會印「上游沒有交代原因（程式要修）」，
+        把一個「按更新鈕就好」的情況誤導成程式 bug。
+        """
+        pd = pytest.importorskip("pandas")
+        import src.ui.tabs.tab_macro_v2 as m
+
+        seen = {}
+        monkeypatch.setattr(
+            m, "render_dual_axis_card",
+            lambda t, l, r, **kw: seen.update(left=l, right=r))
+        card = next(c for c in m._CHART_SPECS if c.kind == m.KIND_DUAL)
+        rows = m.build_rows(_readiness())
+        m._render_dual_card(card, by_key={r.key: r for r in rows},
+                            inputs=self._inputs(pd, twd=False))
+        assert seen["right"].ys == []
+        assert seen["right"].miss_reason.strip()
+        assert seen["right"].row.value is None
+        assert seen["right"].row.band == "gray"
+
+
+class TestCardBWiring:
+    """卡 B：加權指數日 K（近 60 個交易日、不畫成交量）。"""
+
+    def test_l3_returns_five_equal_length_lists_without_volume(self):
+        from src.services.macro_v2_service import get_twii_ohlc
+        from src.ui.tabs.tab_macro_v2 import TWII_KLINE_TRADING_DAYS
+
+        got = get_twii_ohlc(TWII_KLINE_TRADING_DAYS)
+        if not got:
+            pytest.skip("本機無 twii_ohlcv.parquet")
+        assert set(got) == {"xs", "open", "high", "low", "close"}, (
+            f"回傳欄位變了：{sorted(got)}　"
+            f"—— 尤其 volume 不得回傳（該欄自 2026-07-09 起恆為 0）")
+        assert len({len(v) for v in got.values()}) == 1, "五個 list 長度不一致"
+        assert len(got["xs"]) <= TWII_KLINE_TRADING_DAYS
+
+    def test_l3_respects_the_window_and_takes_the_tail(self):
+        """要的是**最近** n 個交易日，不是最舊的 n 個。"""
+        from src.services.macro_v2_service import get_twii_ohlc
+        a, b = get_twii_ohlc(10), get_twii_ohlc(30)
+        if not a or not b:
+            pytest.skip("本機無 twii_ohlcv.parquet")
+        assert len(a["xs"]) == 10 and len(b["xs"]) == 30
+        assert a["xs"][-1] == b["xs"][-1], "尾端日期不同 → 取到頭而不是尾"
+        assert a["xs"] == b["xs"][-10:]
+
+    def test_l3_rejects_non_positive_window(self):
+        """§1：n<1 要炸。回空的話畫面顯示「日 K 畫不出來」，
+        而真正的原因（呼叫端傳了 0）不會有任何人看到。"""
+        from src.services.macro_v2_service import get_twii_ohlc
+        with pytest.raises(ValueError):
+            get_twii_ohlc(0)
+
+    def test_ohlc_invariants_hold_on_real_data(self):
+        """§4.2 不變量：low ≤ open/close ≤ high，且日期單調遞增、不重複。"""
+        from src.services.macro_v2_service import get_twii_ohlc
+        from src.ui.tabs.tab_macro_v2 import TWII_KLINE_TRADING_DAYS
+        got = get_twii_ohlc(TWII_KLINE_TRADING_DAYS)
+        if not got:
+            pytest.skip("本機無 twii_ohlcv.parquet")
+        for o, h, l, c in zip(got["open"], got["high"], got["low"], got["close"]):
+            assert l <= o <= h and l <= c <= h, f"OHLC 不自洽：{o}/{h}/{l}/{c}"
+        assert got["xs"] == sorted(got["xs"]), "日期未升序"
+        assert len(set(got["xs"])) == len(got["xs"]), "日期重複"
+
+    def test_l4_ohlc_type_has_no_volume_field(self):
+        """結構層守衛：L4 的 `OHLC` 根本沒有 volume 欄位。
+
+        兩層都不碰，才不會有人「順手」把恆為 0 的成交量接回來畫成一排空白。
+        """
+        import dataclasses
+        from src.ui.render.macro_v2_cards import OHLC
+        assert "volume" not in {f.name for f in dataclasses.fields(OHLC)}
+
+    def test_l5_never_mentions_volume(self):
+        """原始碼守衛：L5 全檔不得出現 `volume`（除註解說明外）。"""
+        import ast
+        import pathlib
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        hits = [n for n in ast.walk(ast.parse(src))
+                if isinstance(n, ast.Constant) and n.value == "volume"]
+        assert not hits, "L5 出現了 'volume' 字串常數 —— 該欄目前恆為 0，不畫"
+
+    def test_kline_card_passes_reference_spec_and_no_threshold(self, monkeypatch):
+        import src.ui.tabs.tab_macro_v2 as m
+        from shared.macro_buckets import REF_SPECS_BY_KEY, has_thresholds
+
+        seen = {}
+        monkeypatch.setattr(
+            m, "render_candlestick_card",
+            lambda row, spec, ohlc, **kw: seen.update(
+                row=row, spec=spec, ohlc=ohlc, note=kw.get("series_note", "")))
+        card = next(c for c in m._CHART_SPECS if c.kind == m.KIND_OHLC)
+        m._render_kline_card(card, ohlc_raw={
+            "xs": ["2026-08-24", "2026-08-25"], "open": [1.0, 2.0],
+            "high": [3.0, 4.0], "low": [0.5, 1.5], "close": [2.5, 3.5]})
+
+        assert seen["spec"] is REF_SPECS_BY_KEY["taiex"]
+        assert not has_thresholds(seen["spec"]), "加權指數不該有門檻"
+        assert seen["row"].value == 3.5, "卡頭數字應為序列最後一根的收盤"
+        assert seen["row"].band == "gray", "沒有門檻就不判燈，不得偽綠"
+
+    def test_kline_card_with_empty_series_does_not_fabricate(self, monkeypatch):
+        """§1：完全沒有序列 → 交給 L4 印「日 K 畫不出來」，不編一根 K 棒。"""
+        import src.ui.tabs.tab_macro_v2 as m
+        from src.ui.render.macro_v2_cards import ohlc_problems
+
+        seen = {}
+        monkeypatch.setattr(
+            m, "render_candlestick_card",
+            lambda row, spec, ohlc, **kw: seen.update(row=row, ohlc=ohlc))
+        card = next(c for c in m._CHART_SPECS if c.kind == m.KIND_OHLC)
+        m._render_kline_card(card, ohlc_raw={})
+        assert seen["row"].value is None
+        assert ohlc_problems(seen["ohlc"]), "空序列必須被 L4 判為畫不出來"
+
+
+class TestLayer2FetchesOnlyWhatItDraws:
+
+    def test_unknown_card_kind_raises(self):
+        """§1：未知 kind 直接炸。默默不畫 → 那張卡**憑空消失**，
+        而「少一張卡」與「這個指標今天沒資料」在畫面上長得一模一樣。"""
+        import src.ui.tabs.tab_macro_v2 as m
+        bad = m.ChartCard("vix", "no_such_kind", "x")
+        rows = m.build_rows(_readiness())
+        with pytest.raises(ValueError):
+            m.render_one_card(bad, by_key={r.key: r for r in rows}, inputs=None,
+                              parquet_series={}, ohlc_raw={})
+
+    def test_fetch_gating_reads_the_filtered_cards_not_the_constant(self):
+        """守衛：取數的判斷式必須看**篩選後的 `cards`**，不是 `_CHART_SPECS`。
+
+        看常數的話「這一輪有沒有要畫 parquet 卡」永遠是同一個答案 ——
+        就算一張都不畫，還是會去讀 4,900+ 列的檔（B-5 密度切換的前提）。
+        """
+        import ast
+        import pathlib
+
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        fn = next(n for n in ast.walk(ast.parse(src))
+                  if isinstance(n, ast.FunctionDef) and n.name == "render_tab_macro_v2")
+        # 取數 gating 的來源集合 `_kinds` 必須由 `cards` 推出
+        seg = ast.get_source_segment(src, fn)
+        assert "_kinds = {c.kind for c in cards" in seg, (
+            "取數 gating 必須從篩選後的 `cards` 推出")
+        assert "for _, kind, _ in _CHART_SPECS" not in seg
+        assert "in _CHART_SPECS) else" not in seg
+
+
+# ════════════════════════════════════════════════════════════════
+# B-4 · 融資餘額：有數字、無圖、明著標原因（2026-08-27 客戶拍板）
+#
+# 本地歷史檔 4,912 列來自 2026-07-11 一次性回補，其中 60.6% 掉到近零、
+# 其餘落在 2,000〜6,300 億（相鄰列 39.5% 機率翻轉）—— 同一欄混用兩種單位。
+# 卡片上的數字走另一條即時路徑，是對的，所以卡片不會變空白。
+# ════════════════════════════════════════════════════════════════
+class TestMarginCardHoldsTheChartOnly:
+
+    @staticmethod
+    def _card():
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+        return next(c for c in _CHART_SPECS if c.key == "margin")
+
+    def test_margin_declares_a_hold_reason(self):
+        card = self._card()
+        assert card.hold_reason.strip(), "融資卡必須帶不畫圖的原因"
+
+    def test_hold_reason_states_cause_and_recovery(self):
+        """§1：原因與「重抓後恢復」都要講。只寫「暫不顯示」= 把原因藏起來。"""
+        txt = self._card().hold_reason
+        assert "資料疑義" in txt
+        assert "單位" in txt, "沒講出根因（混用兩種單位）"
+        assert "恢復" in txt, "沒講出復原條件（重抓後恢復）"
+        assert "數字" in txt, "沒講清楚『卡片上的數字仍然是對的』"
+
+    def test_held_card_still_shows_the_number_and_light(self, monkeypatch):
+        """圖不畫，但**數字與燈照顯示** —— 卡片不會變空白。
+
+        ⚠️ 2026-08-27 收尾改動：原本最後一條斷言是
+        `assert any("資料疑義" in c for c in caps), "原因必須印在卡片下方"`
+        —— 那時原因印在卡片框線**外**（L4 還沒有 `notice` 管道）。
+        管道接上後原因改走 `notice=` 印在**卡片之內**，框線外那句已移除，
+        故這裡改驗 `notice`。**不是把斷言放寬**：印出來的字串一模一樣，
+        只是位置從「卡片外的 st.caption」變成「傳給 L4 的 notice」。
+        「同一段字只印一次」另由 `TestHeldCardNoticeTellsTheTruth` 端到端釘住。
+        """
+        import src.ui.tabs.tab_macro_v2 as m
+
+        seen = {}
+        monkeypatch.setattr(
+            m, "render_chart_card",
+            lambda row, spec, xs, ys, **kw: seen.update(row=row, xs=xs, ys=ys,
+                                                        kw=kw))
+        caps = []
+        monkeypatch.setattr(m.st, "caption", lambda t, *a, **k: caps.append(t))
+
+        rows = m.build_rows(_readiness(cl_data={"margin": 5148.0}))
+        m.render_one_card(self._card(), by_key={r.key: r for r in rows},
+                          inputs=None, parquet_series={"margin": [("2026-01-01", 1.0)]},
+                          ohlc_raw={})
+        assert seen["ys"] == [] and seen["xs"] == [], "held 卡不得餵任何序列"
+        assert seen["row"].value == 5148.0, "數字必須照顯示"
+        assert seen["row"].band != "gray", "燈必須照亮"
+        assert "資料疑義" in seen["row"].label, "標題要看得出來"
+        assert "資料疑義" in seen["kw"].get("notice", ""), "原因必須經 notice 進卡片"
+        assert not caps, "原因已改印在卡片之內，框線外不該再補一次"
+
+    def test_held_card_label_is_derived_not_hardcoded(self, monkeypatch):
+        """標題徽章是從 `row.label` 衍生的，不是另外寫死一個名字（§3.3）。"""
+        import src.ui.tabs.tab_macro_v2 as m
+        from shared.macro_buckets import SPECS_BY_KEY
+
+        seen = {}
+        monkeypatch.setattr(m, "render_chart_card",
+                            lambda row, *a, **kw: seen.update(row=row))
+        monkeypatch.setattr(m.st, "caption", lambda *a, **k: None)
+        rows = m.build_rows(_readiness())
+        m.render_one_card(self._card(), by_key={r.key: r for r in rows},
+                          inputs=None, parquet_series={}, ohlc_raw={})
+        assert seen["row"].label.startswith(SPECS_BY_KEY["margin"].label)
+
+    def test_held_card_does_not_trigger_its_fetch(self):
+        """守衛：取數 gating 必須排除 `hold_reason` 非空的卡。
+
+        漏了的話，一張根本不畫的卡照樣會讓整頁去讀 4,900+ 列的 parquet ——
+        花了成本、畫面上零產出。拿掉 `if not c.hold_reason` 這半句會轉紅。
+        """
+        import ast
+        import pathlib
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        fn = next(n for n in ast.walk(ast.parse(src))
+                  if isinstance(n, ast.FunctionDef) and n.name == "render_tab_macro_v2")
+        seg = ast.get_source_segment(src, fn)
+        assert "_kinds = {c.kind for c in cards if not c.hold_reason}" in seg
+
+    def test_margin_series_really_is_unusable(self):
+        """把「資料疑義」這個判斷本身釘成可重跑的量測，不是一句宣稱。
+
+        相鄰列在「近零」與「千億級」之間翻轉的機率若掉回 0，代表資料已經
+        被清乾淨 —— 那時這條會轉紅，提醒有人把 `hold_reason` 拿掉。
+        """
+        pd = pytest.importorskip("pandas")
+        import pathlib
+        path = pathlib.Path("data_cache/finmind_margin.parquet")
+        if not path.exists():
+            pytest.skip("本機無 finmind_margin.parquet")
+        df = pd.read_parquet(path)
+        yi = (df["margin_balance"].astype(float) / 1e8).to_numpy()
+        near_zero = yi < 10.0
+        flip = float((near_zero[:-1] != near_zero[1:]).mean())
+        assert flip > 0.10, (
+            f"相鄰列翻轉率僅 {flip:.1%} —— 歷史檔可能已清乾淨，"
+            f"請複驗後把 margin 的 `hold_reason` 拿掉並恢復繪圖。")
+
+
+# ════════════════════════════════════════════════════════════════
+# B-5 · 密度切換（客戶 2026-08-27 拍板「方案乙：真的少畫」）
+#
+# 「精簡」不是把卡片用 CSS 藏起來 —— 那樣圖照畫、序列照取，省的只有視覺。
+# 這一組驗的就是「真的少畫」：不建那幾張 figure，也**不去取它們的序列**。
+# ════════════════════════════════════════════════════════════════
+class TestDensityReallyDrawsLess:
+
+    @staticmethod
+    def _by_key():
+        from src.ui.tabs.tab_macro_v2 import build_rows
+        return {r.key: r for r in build_rows(_readiness())}
+
+    def test_two_densities_have_different_card_sets(self):
+        from src.ui.tabs.tab_macro_v2 import (
+            DENSITY_COMPACT, DENSITY_FULL, visible_cards,
+        )
+        bk = self._by_key()
+        full = [c.key for c in visible_cards(DENSITY_FULL, by_key=bk)]
+        lite = [c.key for c in visible_cards(DENSITY_COMPACT, by_key=bk)]
+        assert lite, "精簡模式不能一張都不留"
+        assert set(lite) < set(full), "精簡必須是完整的**真子集**"
+        assert len(lite) < len(full)
+
+    def test_compact_membership_lives_on_the_card_not_a_second_list(self):
+        """精簡名單必須等於 `compact=True` 的那幾張 —— 不得另有一份 key 名單。
+
+        第二份名單是第二把尺：加一張卡卻忘了同步，就會出現「精簡模式反而
+        多一張」這種沒人看得懂的行為（§3.3）。
+        """
+        from src.ui.tabs.tab_macro_v2 import (
+            DENSITY_COMPACT, _CHART_SPECS, visible_cards,
+        )
+        bk = self._by_key()
+        lite = {c.key for c in visible_cards(DENSITY_COMPACT, by_key=bk)}
+        assert lite == {c.key for c in _CHART_SPECS if c.compact}
+
+    def test_unknown_density_fails_loud(self):
+        """§1：未知密度要炸。默默當成「完整」= 一顆點了沒反應的按鈕。"""
+        from src.ui.tabs.tab_macro_v2 import visible_cards
+        with pytest.raises(ValueError):
+            visible_cards("超精簡", by_key=self._by_key())
+
+    def test_compact_skips_the_ohlc_fetch_entirely(self):
+        """精簡模式不畫日 K → `KIND_OHLC` 不在 kinds → 整個跳過 parquet 讀檔。"""
+        from src.ui.tabs.tab_macro_v2 import (
+            DENSITY_COMPACT, DENSITY_FULL, KIND_OHLC, visible_cards,
+        )
+        bk = self._by_key()
+        assert KIND_OHLC in {c.kind for c in visible_cards(DENSITY_FULL, by_key=bk)}
+        assert KIND_OHLC not in {
+            c.kind for c in visible_cards(DENSITY_COMPACT, by_key=bk)}
+
+    def test_widget_is_st_radio_horizontal(self):
+        """視覺一致：與第 3 層的分類 chip 同一種單選器。
+
+        同一頁兩種外觀的單選器（radio vs pills / segmented_control）
+        會讓人以為它們的行為不同（user 2026-08-27）。
+        """
+        import ast
+        import pathlib
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        radios = [n for n in ast.walk(tree)
+                  if isinstance(n, ast.Call)
+                  and isinstance(n.func, ast.Attribute)
+                  and n.func.attr == "radio"
+                  and isinstance(n.func.value, ast.Name) and n.func.value.id == "st"]
+        assert len(radios) == 2, f"預期兩顆 st.radio（密度 + 分類），實際 {len(radios)}"
+        for r in radios:
+            kw = {k.arg: k.value for k in r.keywords}
+            assert isinstance(kw.get("horizontal"), ast.Constant) \
+                and kw["horizontal"].value is True
+        # 不得改用 floor 之上但外觀不一致的元件
+        for banned in ("pills", "segmented_control"):
+            assert not [n for n in ast.walk(tree)
+                        if isinstance(n, ast.Attribute) and n.attr == banned
+                        and isinstance(n.value, ast.Name) and n.value.id == "st"], (
+                f"st.{banned} 與第 3 層 chip 外觀不一致")
+
+    def test_default_density_is_full_so_nothing_disappears(self):
+        """預設不得是精簡 —— 「卡片不見了」與「今天沒資料」很難分辨。"""
+        from src.ui.tabs.tab_macro_v2 import (
+            DENSITY_DEFAULT_INDEX, DENSITY_FULL, DENSITY_OPTIONS,
+        )
+        assert DENSITY_OPTIONS[DENSITY_DEFAULT_INDEX] == DENSITY_FULL
+
+    #: AppTest 用的最小 app：把兩支 L3 取數換成計數器後，跑**真的**整頁。
+    #: 刻意不在測試裡重寫一遍 gating 邏輯 —— 重寫的話，production 那段改壞了
+    #: 這條也不會轉紅（守衛守的是自己的複本，不是產品）。
+    _APP = """\
+import json
+import pathlib
+import sys
+
+sys.path.insert(0, {repo!r})
+
+import src.ui.tabs.tab_macro_v2 as m
+
+_hits = {{"get_chart_series": 0, "get_twii_ohlc": 0}}
+
+
+def _count(name, ret):
+    def _fn(*a, **k):
+        _hits[name] += 1
+        return ret
+    return _fn
+
+
+_ORIG_RADIO = m.st.radio
+m.st.radio = lambda label, options, **k: (
+    _ORIG_RADIO(label, options, **k) if k.get("key") != "v2_chart_density"
+    else {density!r})
+m.get_chart_series = _count("get_chart_series", {{}})
+m.get_twii_ohlc = _count("get_twii_ohlc", {{}})
+m.render_tab_macro_v2()
+pathlib.Path({out!r}).write_text(json.dumps(_hits), encoding='utf-8')
+"""
+
+    def _run_app(self, tmp_path, density):
+        """跑一次真的整頁，回傳兩支 L3 取數各被呼叫幾次。"""
+        import json
+        import pathlib
+        AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+
+        out = tmp_path / ("hits_%s.json" % abs(hash(density)))
+        script = tmp_path / ("app_%s.py" % abs(hash(density)))
+        script.write_text(
+            self._APP.format(repo=str(pathlib.Path.cwd()), out=str(out),
+                             density=density),
+            encoding="utf-8")
+        at = AppTest.from_file(str(script), default_timeout=180)
+        at.run()
+        assert not at.exception, [str(e.value) for e in at.exception]
+        return json.loads(out.read_text(encoding="utf-8"))
+
+    def test_compact_really_skips_the_fetch_on_a_real_page_run(self, tmp_path):
+        """整頁真的跑一次：精簡模式下日 K 的 parquet 讀檔**一次都不能被呼叫**。
+
+        這是「方案乙：真的少畫」那句話的證據。若精簡只是把卡片藏起來，
+        或取數 gating 改回讀 `_CHART_SPECS` 常數，這條就會轉紅。
+
+        （`bias_240` 目前仍留在精簡模式，所以 `get_chart_series()` 兩種密度
+        下都會被呼叫一次 —— 那是設計，不是漏網；量測顯示它才是本頁真正的
+        傳輸大戶，該不該在精簡模式縮窗已列入交付回報請客戶裁示。）
+        """
+        from src.ui.tabs.tab_macro_v2 import DENSITY_COMPACT, DENSITY_FULL
+
+        lite = self._run_app(tmp_path, DENSITY_COMPACT)
+        full = self._run_app(tmp_path, DENSITY_FULL)
+        assert lite["get_twii_ohlc"] == 0, "精簡模式仍去讀了日 K 的 parquet"
+        assert full["get_twii_ohlc"] == 1, "完整模式應該要讀一次日 K"
+
+    def test_full_page_render_in_both_densities(self, monkeypatch):
+        """端到端：兩種密度都要能整頁跑完，且精簡確實少畫幾張圖。"""
+        import src.ui.tabs.tab_macro_v2 as m
+
+        drawn = []
+        for fn in ("render_chart_card", "render_dual_axis_card",
+                   "render_candlestick_card", "render_value_card"):
+            monkeypatch.setattr(m, fn,
+                                (lambda name: lambda *a, **k: drawn.append(name))(fn))
+        bk = self._by_key()
+        counts = {}
+        for density in (m.DENSITY_COMPACT, m.DENSITY_FULL):
+            drawn.clear()
+            for card in m.visible_cards(density, by_key=bk):
+                m.render_one_card(card, by_key=bk, inputs=None,
+                                  parquet_series={}, ohlc_raw={})
+            counts[density] = len(drawn)
+        assert counts[m.DENSITY_COMPACT] < counts[m.DENSITY_FULL]
+
+
+# ════════════════════════════════════════════════════════════════
+# B-4 收尾 · 融資卡的空序列說明必須講實話（2026-08-27）
+#
+# 【修的是什麼】L4 `render_chart_card` 遇空序列的預設句是「歷史序列取得
+# 失敗 —— 不以合成資料替代。」。融資餘額卡的實情**不是取得失敗** ——
+# 4,912 列都拿到了，是同一欄混用兩種單位所以不可用。印「取得失敗」等於
+# 叫使用者去查一個不存在的連線問題（§1：錯的說明比沒有說明更危險）。
+#
+# 【為什麼要端到端】上一組 `TestMarginCardHoldsTheChartOnly` 把 L4 整支
+# monkeypatch 掉，驗的是「L5 傳了什麼」。傳對了畫面上仍可能是錯的（例如
+# 同一段字印兩次）。本組**放真的 L4 進來跑**，只換掉 streamlit，斷言的是
+# 「螢幕上實際出現了哪些字」。
+#
+# ⚠️ 本組不啟動 Streamlit runtime；`st` 以假物件離線攔截。
+# ════════════════════════════════════════════════════════════════
+
+class _NullCtx:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class _FakeST:
+    """只記錄「畫面上出現過哪些字」，不模擬 Streamlit 任何行為。
+
+    刻意與 `tests/test_macro_v2_card_honesty.py` 的同名類別各留一份：那一份
+    釘的是 L4 單體，這一份跨 L5+L4 兩個模組注入。共用會讓其中一邊改壞時
+    另一邊也跟著紅，反而看不出是誰壞的。
+    """
+
+    def __init__(self):
+        self.calls: list[tuple[str, str]] = []
+        self.figs: list = []
+
+    def markdown(self, body, **kw):
+        self.calls.append(("markdown", str(body)))
+
+    def caption(self, body, **kw):
+        self.calls.append(("caption", str(body)))
+
+    def plotly_chart(self, fig, **kw):
+        self.figs.append(fig)
+        self.calls.append(("plotly_chart", str(kw.get("key", ""))))
+
+    def container(self, **kw):
+        return _NullCtx()
+
+    def columns(self, spec, **kw):
+        n = len(spec) if isinstance(spec, (list, tuple)) else int(spec)
+        return [_NullCtx() for _ in range(n)]
+
+    def screen(self) -> str:
+        return "\n".join(b for _, b in self.calls)
+
+    def captions(self) -> list[str]:
+        return [b for k, b in self.calls if k == "caption"]
+
+
+_DEFAULT_EMPTY_SENTENCE = "歷史序列取得失敗 —— 不以合成資料替代。"
+
+
+def _render_card_for_real(monkeypatch, key: str, **kw) -> _FakeST:
+    """跑真正的 L5→L4，只把 streamlit 換掉。回傳畫面攔截器。"""
+    import src.ui.render.macro_v2_cards as C
+    import src.ui.tabs.tab_macro_v2 as m
+
+    fake = _FakeST()
+    monkeypatch.setattr(m, "st", fake)
+    monkeypatch.setattr(C, "st", fake)
+    rows = m.build_rows(_readiness(cl_data={"margin": 5148.0}))
+    card = next(c for c in m._CHART_SPECS if c.key == key)
+    m.render_one_card(card, by_key={r.key: r for r in rows},
+                      inputs=kw.get("inputs"), parquet_series=kw.get("parquet_series", {}),
+                      ohlc_raw=kw.get("ohlc_raw", {}))
+    return fake
+
+
+class TestHeldCardNoticeTellsTheTruth:
+
+    def test_the_premise_l4_default_sentence_is_still_that_wording(self):
+        """本組的前提。L4 哪天改了預設句，先在這裡紅，而不是默默失效。"""
+        import inspect
+
+        import src.ui.render.macro_v2_cards as C
+        src = inspect.getsource(C.render_chart_card)
+        assert _DEFAULT_EMPTY_SENTENCE in src
+
+    def test_margin_card_no_longer_claims_a_fetch_failure(self, monkeypatch):
+        """本次收尾的本體：融資卡實際渲染時不准再說「取得失敗」。"""
+        fake = _render_card_for_real(monkeypatch, "margin")
+        assert "歷史序列取得失敗" not in fake.screen()
+
+    def test_margin_card_states_its_real_reason_instead(self, monkeypatch):
+        """反向守衛：不准用「把那句話刪掉」來通過上一條。"""
+        import src.ui.tabs.tab_macro_v2 as m
+        fake = _render_card_for_real(monkeypatch, "margin")
+        card = next(c for c in m._CHART_SPECS if c.key == "margin")
+        assert card.hold_reason in fake.captions(), "疑義原因必須逐字出現在畫面上"
+
+    def test_the_reason_is_printed_exactly_once(self, monkeypatch):
+        """接上 `notice` 後若沒把框線外那句拿掉，同一段 ~150 字會印兩次。"""
+        import src.ui.tabs.tab_macro_v2 as m
+        fake = _render_card_for_real(monkeypatch, "margin")
+        card = next(c for c in m._CHART_SPECS if c.key == "margin")
+        assert fake.screen().count(card.hold_reason) == 1
+
+    def test_the_number_and_the_threshold_band_are_still_there(self, monkeypatch):
+        """把圖拿掉不等於把卡片挖空 —— 數字、燈、門檻帶都要留著。"""
+        fake = _render_card_for_real(monkeypatch, "margin")
+        screen = fake.screen()
+        assert "5,148" in screen, "上方的即時數字是對的，必須照顯示"
+        assert "門檻帶" in screen
+        assert "資料疑義" in screen, "標題徽章要看得出來"
+        assert not fake.figs, "held 卡不得畫出任何 figure"
+
+    def test_notice_is_keyword_only_so_it_cannot_collide_with_kind(self):
+        """A 段刻意把 `notice` 放在 `*` 之後。改成位置參數會撞到 `kind`。"""
+        import inspect
+
+        import src.ui.render.macro_v2_cards as C
+        sig = inspect.signature(C.render_chart_card)
+        assert sig.parameters["notice"].kind is inspect.Parameter.KEYWORD_ONLY
+        assert sig.parameters["notice"].default == ""
+
+    def test_l5_passes_it_by_keyword(self):
+        """守衛呼叫端寫法：拿掉 `notice=` 這一行會轉紅。"""
+        import ast
+        import pathlib
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        fn = next(n for n in ast.walk(ast.parse(src))
+                  if isinstance(n, ast.FunctionDef) and n.name == "_render_held_card")
+        assert "notice=card.hold_reason" in ast.get_source_segment(src, fn)
+
+    def test_the_reason_string_stays_in_l5(self):
+        """業務原因不得下沉 L4 —— L4 只開管道，不寫死任何指標的原因（§3.3）。
+
+        ⚠️ 比對的是 **L4 會印出去的字串常值**，不是整份原始碼：L4 的
+        docstring 拿融資餘額當「為什麼要有這個參數」的說明例子，那是散文
+        不是分支，不算把業務原因硬編進渲染層。用整檔 `in` 比對會把這種
+        合法的說明也判成違規 —— 測錯東西比沒測更糟。
+        """
+        import ast
+        import pathlib
+        tree = ast.parse(pathlib.Path(
+            "src/ui/render/macro_v2_cards.py").read_text(encoding="utf-8"))
+        # docstring 節點先扣掉：它們是說明，不會被 render 出去。
+        docstrings = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef)):
+                body = getattr(node, "body", None) or []
+                if (body and isinstance(body[0], ast.Expr)
+                        and isinstance(body[0].value, ast.Constant)
+                        and isinstance(body[0].value.value, str)):
+                    docstrings.add(id(body[0].value))
+        literals = [n.value for n in ast.walk(tree)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                    and id(n) not in docstrings]
+        for bad in ("融資", "資料疑義", "單位"):
+            offenders = [t for t in literals if bad in t]
+            assert not offenders, f"L4 的字串常值出現業務原因 {bad!r}：{offenders}"
+
+
+class TestOtherEmptySeriesCardsAreUnchanged:
+    """零行為變更：**沒有** `hold_reason` 的卡遇空序列，仍印原本那句。"""
+
+    def test_a_session_card_with_no_series_still_prints_the_default(self, monkeypatch):
+        # us10y 是 KIND_SESSION；inputs=None → `_session_series` 回 (None, None)
+        fake = _render_card_for_real(monkeypatch, "us10y", inputs=None)
+        assert _DEFAULT_EMPTY_SENTENCE in fake.captions()
+
+    def test_a_parquet_card_with_no_series_still_prints_the_default(self, monkeypatch):
+        fake = _render_card_for_real(monkeypatch, "bias_240", parquet_series={})
+        assert _DEFAULT_EMPTY_SENTENCE in fake.captions()
+
+    def test_every_other_chart_card_has_no_hold_reason(self):
+        """上面兩條只抽驗了兩張卡；這條釘住「只有融資卡走 notice 這條路」。"""
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+        held = {c.key for c in _CHART_SPECS if c.hold_reason}
+        assert held == {"margin"}
+
+
+# ════════════════════════════════════════════════════════════════
+# B-4 收尾 · 參考走勢卡的腳註不得同義反覆（2026-08-27）
+#
+# 【修的是什麼】taiex 的 note 原本寫「不判燈(右上灰標＝沒有燈號,不是沒有
+# 資料)」。那是**根因未修時的補救文案** —— 當時 `BAND_META` 只有四個 band，
+# 右上角印的是「無資料」，而卡片同時畫著 60 根真實 K 棒，只能靠腳註去解釋
+# 那個灰標。A 段補上第 5 個 band 之後右上角直接寫「不判燈」，這句話就變成
+# 在解釋一個**已經不存在的畫面**。
+#
+# 【為什麼算 bug 不算文案潔癖】腳註跟畫面對不上，跟數字跟畫面對不上是同一
+# 種病：兩邊都看起來很正常，而讀的人會以為右上角現在還印著「無資料」。
+# ════════════════════════════════════════════════════════════════
+
+class TestReferenceFootnoteSaysEachThingOnce:
+
+    @staticmethod
+    def _note() -> str:
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+        return next(c for c in _CHART_SPECS if c.key == "taiex").note
+
+    @staticmethod
+    def _render(monkeypatch) -> _FakeST:
+        """真的 L4 K 線卡跑一遍 —— 斷言螢幕上實際出現的字。"""
+        n = 5
+        return _render_card_for_real(monkeypatch, "taiex", ohlc_raw={
+            "xs": [f"2026-08-{i + 1:02d}" for i in range(n)],
+            "open": [24_000.0 + i for i in range(n)],
+            "high": [24_100.0 + i for i in range(n)],
+            "low": [23_900.0 + i for i in range(n)],
+            "close": [24_050.0 + i for i in range(n)],
+        })
+
+    def test_the_premise_the_pill_really_says_it_is_not_judged(self):
+        """本組的前提：右上角確實已經自己講了「不判燈」。"""
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        from src.ui.render.macro_v2_cards import band_meta
+        assert band_meta("gray", REF_SPECS_BY_KEY["taiex"])[0] == "不判燈"
+
+    def test_the_note_no_longer_explains_a_gray_pill_that_is_gone(self):
+        note = self._note()
+        assert "灰標" not in note
+        assert "不是沒有資料" not in note
+
+    def test_the_note_no_longer_repeats_the_pill(self):
+        """「不判燈」由 pill 講；note 再講一次就是同一張卡上說兩次。"""
+        assert "不判燈" not in self._note()
+
+    def test_the_note_no_longer_repeats_the_threshold_caption(self):
+        """「沒有門檻線」由 L4 `threshold_caption` 講（A 段已改成依 spec 分支）。"""
+        note = self._note()
+        assert "門檻線" not in note and "無門檻" not in note
+
+    def test_the_note_still_carries_the_one_thing_only_it_knows(self):
+        """反向守衛：不准用「把 note 清空」來通過上面三條。
+
+        「不計入 16 盞燈的分母」是畫面上**沒有別人會說**的一件事 ——
+        pill 只說不判燈，L4 腳註只說沒有門檻線，兩者都不等於「不進分母」。
+        """
+        note = self._note()
+        assert "參考走勢" in note
+        assert "分母" in note
+
+    def test_on_screen_each_statement_appears_exactly_once(self, monkeypatch):
+        """端到端：整張卡跑完，三句話各只出現一次。"""
+        fake = self._render(monkeypatch)
+        screen = fake.screen()
+        assert len(fake.figs) == 1, "前提：這一輪確實畫了 K 線"
+        assert screen.count("不判燈") == 1, "pill 與腳註重複說了同一件事"
+        assert screen.count("沒有門檻線") == 1
+        assert screen.count("分母") == 1
+
+    def test_and_the_screen_still_says_all_three(self, monkeypatch):
+        """去重不等於減資訊 —— 三件事在畫面上都還在。"""
+        screen = self._render(monkeypatch).screen()
+        assert "不判燈" in screen
+        assert "本卡沒有門檻線" in screen
+        assert "不計入 16 盞燈的分母" in screen
+        assert "無資料" not in screen, "右上角不得再說無資料（A 段缺口 1）"
+
+    def test_the_superseded_wording_is_kept_for_traceability(self):
+        """**不是只把它刪掉**：已失真的敘述要留得下追溯（本 repo 慣例）。
+
+        這一條守的不是文案品質，是「後人讀得到為什麼曾經那樣寫」。原文若被
+        整段清掉，下一個看到 note 這麼短的人會以為它一直就這麼短，而看不到
+        「它曾經在替一個壞掉的右上角打補丁」。
+        """
+        import pathlib
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        for gone in ("右上灰標＝沒有燈號", "BAND_META` 只有四個 band",
+                     "那句固定文案是 L4 的通則"):
+            assert gone in src, f"已失真的原文 {gone!r} 被整段刪掉，追溯斷了"
+            assert "非漏刪" in src
+
+
+# ════════════════════════════════════════════════════════════════
+# 潛伏 bug · 參考走勢卡帶 `hold_reason` 會炸（2026-08-27）
+#
+# 【這一類與上面那條的差別，請先讀完再改】
+# `TestOtherEmptySeriesCardsAreUnchanged::test_every_other_chart_card_has_no_
+# hold_reason` 釘的是「**現況**只有融資卡走 notice 這條路」——那是一條
+# 現況快照，**不是**「填了會怎樣」的守衛。後人若因為正當業務需求要替第二張
+# 卡加 `hold_reason`，會先看到那條紅燈，然後很合理地把它改寬
+# （`{"margin"}` → `{"margin", "xxx"}`），**接著才在畫面上炸**。
+#
+# 本類守的就是那個「接著」：把 `hold_reason` 填到**參考走勢卡**上，
+# 必須在寫下的那一刻炸，而且錯誤訊息要講清楚為什麼這兩件事互斥。
+#
+# 【為什麼是互斥而不是「還沒接」】`hold_reason` 的契約是「數字照顯示、圖暫
+# 不繪製」，成立前提是數字與圖走兩條路（數字走 readiness 側車 `by_key`）。
+# 參考走勢卡只有一條路——數字就是那條序列的最後一點，圖不畫數字就不存在。
+# 所以正解是 raise，不是拿 `.get()` 補一個空 Row 把它變成一張看起來正常、
+# 實際沒有數字的卡（§1：那是把 bug 偽裝成正常畫面）。
+#
+# 【動這裡會炸】要讓參考走勢卡支援 `hold_reason`，得先解決「圖不畫時數字
+# 從哪來」——在那之前，本類必須是紅的。
+# ════════════════════════════════════════════════════════════════
+
+class TestReferenceCardRejectsHoldReason:
+    """參考走勢卡填 `hold_reason` → **建構當場 raise**，不留到渲染才 KeyError。"""
+
+    @staticmethod
+    def _ref_card():
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        return next(c for c in _CHART_SPECS if c.key in REF_SPECS_BY_KEY)
+
+    def test_the_premise_there_really_is_a_reference_chart_card(self):
+        """前提：`_CHART_SPECS` 裡確實有一張參考走勢卡（現況是 taiex）。"""
+        from shared.macro_buckets import REF_SPECS_BY_KEY, SPECS_BY_KEY
+        card = self._ref_card()
+        assert card.key in REF_SPECS_BY_KEY
+        assert card.key not in SPECS_BY_KEY, "前提：它不在 16 盞燈的側車註冊表裡"
+
+    def test_adding_a_hold_reason_to_a_reference_card_raises(self):
+        """核心：填上去就炸，不是等到渲染才 `KeyError`。"""
+        from dataclasses import replace
+        with pytest.raises(ValueError) as ei:
+            replace(self._ref_card(), hold_reason="假裝這張卡也想標資料疑義")
+        assert "hold_reason" in str(ei.value)
+
+    def test_the_error_explains_why_instead_of_just_failing(self):
+        """§1：錯誤訊息要講清楚為什麼互斥，不是丟一個不講原因的 KeyError。
+
+        原本的失敗形態是 `_render_held_card` 的 `KeyError: 'taiex'` ——
+        讀的人只會以為是註冊表漏登，跑去把 taiex 塞進側車（那才是真的壞）。
+        """
+        from dataclasses import replace
+        with pytest.raises(ValueError) as ei:
+            replace(self._ref_card(), hold_reason="x")
+        msg = str(ei.value)
+        assert "SPECS_BY_KEY" in msg, "要指出它不在哪張註冊表"
+        assert "數字" in msg and "圖" in msg, "要說明數字與圖為何無法分開"
+        assert "移除" in msg, "要給出正解（把卡拿掉），否則下一個人只會繞過它"
+
+    def test_a_light_card_can_still_hold_its_chart(self):
+        """反向守衛：不准用「一律禁止 hold_reason」來通過上面幾條。
+
+        融資卡（在側車裡）照樣要能標資料疑義 —— 那是這個欄位存在的理由。
+        """
+        from dataclasses import replace
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+        margin = next(c for c in _CHART_SPECS if c.key == "margin")
+        assert margin.hold_reason, "前提：融資卡本來就帶著 hold_reason"
+        assert replace(margin, hold_reason="換一句原因").hold_reason == "換一句原因"
+
+    def test_the_render_path_never_sees_the_bad_combination(self, monkeypatch):
+        """端到端：擋在建構,所以渲染端拿不到這種卡 —— 沒有第二條漏網路徑。
+
+        以「渲染真的會炸」反證守衛的必要性：繞過 `__post_init__`
+        （`object.__new__` + 直接寫欄位）造出一張非法卡餵給 `render_one_card`，
+        它就是會 `KeyError` —— 這正是守衛存在的理由。
+        """
+        from src.ui.tabs import tab_macro_v2 as T
+        bad = object.__new__(T.ChartCard)
+        ref = self._ref_card()
+        for f, v in (("key", ref.key), ("kind", ref.kind), ("note", ref.note),
+                     ("ref_key", ""), ("hold_reason", "繞過守衛"),
+                     ("compact", False)):
+            object.__setattr__(bad, f, v)
+        with pytest.raises(KeyError):
+            T.render_one_card(bad, by_key={}, inputs=None,
+                              parquet_series={}, ohlc_raw={})
+
+
+# ════════════════════════════════════════════════════════════════
+# 表格「燈」欄走 band_meta，不直讀 BAND_META（2026-08-27）
+#
+# 【修的是什麼】`build_reference_row` 的 docstring 明文寫「**顯示端請走
+# `band_meta`，別直讀 `BAND_META`**」，而同一檔的 `_table_columns` 就在直讀。
+# 後果不是崩潰，是**靜默印錯字**：無門檻的參考列若進了表格，「燈」欄會印
+# 「無資料」，正解是「不判燈」—— 與 A 段才修掉的右上角灰標是**同一個 bug 的
+# 另一個出口**（畫面說沒有、內容有）。
+#
+# 【現況風險】參考列目前進不了 `visible`（`build_rows` 只跑
+# `BUCKET_DANGER_SPECS`），所以這是修**潛伏**的錯。屏障見下一個測試類。
+# ════════════════════════════════════════════════════════════════
+
+class TestLightColumnResolvesThroughBandMeta:
+
+    @staticmethod
+    def _row(key: str, band: str):
+        from shared.macro_buckets import REF_SPECS_BY_KEY, SPECS_BY_KEY
+        from src.ui.tabs.tab_macro_v2 import Row
+        spec = SPECS_BY_KEY.get(key) or REF_SPECS_BY_KEY[key]
+        return Row(key=key, label=spec.label, bucket=spec.bucket,
+                   unit=spec.unit or "", value=1.0, band=band, state="live",
+                   reason=None, hit_source=None, thr_text="-",
+                   source="-", note="", decimals=spec.decimals)
+
+    def test_a_thresholdless_reference_row_says_not_judged_not_no_data(self):
+        """核心：無門檻的參考列印「不判燈」，**不是**「無資料」。
+
+        直讀 `BAND_META["gray"]` 會印「無資料」——畫面上與「這個指標今天沒值」
+        分不開，而 taiex 的值好端端在那裡（24,500 點）。
+        """
+        from src.ui.tabs.tab_macro_v2 import _table_columns
+        cols = _table_columns([self._row("taiex", "gray")])
+        assert cols["燈"] == ["不判燈"]
+
+    def test_the_premise_taiex_really_has_no_thresholds(self):
+        """前提：taiex 確實無門檻，所以它的 `"gray"` 不該讀成「無資料」。"""
+        from shared.macro_buckets import REF_SPECS_BY_KEY, has_thresholds
+        assert not has_thresholds(REF_SPECS_BY_KEY["taiex"])
+
+    @pytest.mark.parametrize("band,zh", [("green", "綠"), ("yellow", "黃"),
+                                         ("red", "紅"), ("gray", "無資料")])
+    def test_the_sixteen_lights_are_byte_for_byte_unchanged(self, band, zh):
+        """零行為變更：16 盞燈**全部有門檻**，收斂條件一次都不成立。
+
+        這條同時是反向守衛：不准用「一律改印不判燈」來通過上面那條。
+        """
+        from shared.macro_buckets import SPECS_BY_KEY
+        from src.ui.tabs.tab_macro_v2 import _table_columns
+        rows = [self._row(k, band) for k in SPECS_BY_KEY]
+        assert _table_columns(rows)["燈"] == [zh] * len(rows)
+
+    def test_a_row_from_nowhere_fails_loud_instead_of_guessing(self):
+        """§1：兩張註冊表都查不到 → raise，不編一盞燈出來。"""
+        from src.ui.tabs.tab_macro_v2 import Row, _table_columns
+        orphan = Row(key="不存在的指標", label="?", bucket="?", unit="",
+                     value=1.0, band="gray", state="live", reason=None,
+                     hit_source=None, thr_text="-", source="-", note="",
+                     decimals=1)
+        with pytest.raises(KeyError):
+            _table_columns([orphan])
+
+
+# ════════════════════════════════════════════════════════════════
+# 補上缺的守衛 · 參考走勢列不得進第 3 層總表（2026-08-27）
+#
+# 【為什麼要補】`TestReferenceCardsStayOutOfTheDenominator` 釘的是
+# **分母那一端**（readiness 側車 / `build_rows` / 五桶彙總）。它的 docstring
+# 自陳「只要 rows 乾淨，那四個下游就不可能被污染」—— 那句話**是前提，不是
+# 被驗過的事實**：它成立只因為「`build_rows` 只跑 `BUCKET_DANGER_SPECS`、
+# 參考列在另一份 list」這個**結構巧合**，而**沒有任何測試守著顯示端那一頭**。
+#
+# 結構巧合不是守衛：哪天有人為了「總表也想看得到台幣」在第 3 層併一次
+# `REFERENCE_TREND_SPECS`，分母那組測試會轉紅，但錯誤訊息會指向
+# **分母數字**（16 變 18），讀的人得自己想通那跟總表有什麼關係。
+# 本類讓失敗直接指向「總表混進了不是燈的列」。
+#
+# 【為什麼混進去是錯的，不只是難看】總表的每一列都被讀成「一盞燈」——
+# 有桶、有燈、有狀態、右側面板點下去還會出教學卡。參考走勢**不是燈**
+# （不判燈、不進分母、bucket 是 `REFERENCE_BUCKET` 不在五桶內），
+# 混進去會讓使用者數到 18 盞燈而畫面說 16（§1：畫面與內容對不上）。
+# ════════════════════════════════════════════════════════════════
+
+class TestReferenceRowsNeverReachTheVisibleTable:
+
+    @staticmethod
+    def _ref_keys():
+        from shared.macro_buckets import REF_SPECS_BY_KEY
+        return set(REF_SPECS_BY_KEY)
+
+    def test_the_default_view_has_no_reference_row(self):
+        """走真正的顯示管線：`build_rows` → `visible_table`（預設「全部」chip）。"""
+        from src.ui.tabs.tab_macro_v2 import build_rows, visible_table
+        visible, _ = visible_table(build_rows(_mixed()))
+        leaked = self._ref_keys() & {r.key for r in visible}
+        assert not leaked, f"參考走勢列混進了第 3 層總表：{sorted(leaked)}"
+
+    def test_no_chip_can_surface_one(self):
+        """每一個 chip 都掃 —— 包含「只看有問題的」。
+
+        參考列的 band 是 `gray`、state 是 `live` 或 `missing`，
+        `is_problem` 取的是聯集（黃紅燈 ∪ 非 live）→ 它**進得去**那個 chip。
+        所以這條不是形式主義：真漏了，最先冒出來的就是「有問題」那一頁。
+        """
+        from src.ui.tabs.tab_macro_v2 import CHIP_ORDER, build_rows, visible_table
+        rows = build_rows(_mixed())
+        for chip in CHIP_ORDER:
+            visible, _ = visible_table(rows, chip=chip)
+            leaked = self._ref_keys() & {r.key for r in visible}
+            assert not leaked, f"chip={chip!r} 讓參考走勢列現身：{sorted(leaked)}"
+
+    def test_no_reference_bucket_column_in_the_table(self):
+        """欄位層：「桶」欄不得出現參考桶 —— 它不是五桶之一。"""
+        from shared.macro_buckets import REFERENCE_BUCKET
+        from src.ui.tabs.tab_macro_v2 import _BUCKET_ZH, build_rows, visible_table
+        _, cols = visible_table(build_rows(_mixed()))
+        assert REFERENCE_BUCKET not in cols["桶"]
+        assert _BUCKET_ZH.get(REFERENCE_BUCKET) not in cols["桶"]
+
+    def test_the_visible_count_is_the_denominator_not_more(self):
+        """「全部」chip 的列數 == `BUCKET_DANGER_SPECS` 長度，一列不多。
+
+        使用者會數畫面上的列。列數若是 18 而卡片說 16，兩個數字都在畫面上，
+        對不上的那一刻沒有人知道該信哪個。
+        """
+        from shared.macro_buckets import BUCKET_DANGER_SPECS
+        from src.ui.tabs.tab_macro_v2 import build_rows, visible_table
+        visible, _ = visible_table(build_rows(_mixed()))
+        assert len(visible) == len(BUCKET_DANGER_SPECS)
+
+    def test_the_side_panel_cannot_select_one_either(self):
+        """右側詳情面板吃的是 `visible` 的索引 —— 選不到不存在的列。
+
+        這條把守衛延伸到**點下去之後**：總表乾淨，面板就不可能秀出一張
+        「參考走勢的教學卡」（那張卡根本沒有門檻可講）。
+        """
+        from src.ui.tabs.tab_macro_v2 import build_rows, selected_row, visible_table
+        visible, _ = visible_table(build_rows(_mixed()))
+        picked = [selected_row(visible, [i]) for i in range(len(visible))]
+        assert not (self._ref_keys() & {r.key for r in picked if r})
+
+    def test_the_premise_a_reference_row_would_be_visible_if_it_got_in(self):
+        """反證前提：參考列**不是**天生被 `filter_rows` 濾掉的。
+
+        沒有這條，上面幾條可能因為「反正它會被濾掉」而恆綠 —— 那樣它們釘的
+        就不是「進不來」，只是「進來也看不到」，是兩件事。
+        """
+        from src.ui.tabs.tab_macro_v2 import build_reference_row, filter_rows
+        row = build_reference_row("taiex", 23000.0)
+        assert filter_rows([row]) == [row], "參考列若混進 rows，總表就會照顯示"

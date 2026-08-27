@@ -16,6 +16,7 @@ import datetime as _dt
 
 import streamlit as st
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ui_state import UI_FAILED, UI_IDLE, classify_ui_state
 
 # 各資料源「主源」值集合（命中即 🟢；missing→🔴；空/unknown→⬜；其餘→🟠 降級）
 # 對齊 tab_stock.py L462-474（B1）+ E2 財報三段的 LABEL dict 慣例。
@@ -111,6 +112,14 @@ def render_sidebar_data_health(session_state) -> None:
 
     # ── 個股 t2_data ──
     _t2d = session_state.get("t2_data") or {}
+    # v3 §02:「有沒有被叫過」由**key 在不在 session 裡**決定,不由 `_lines` 有沒有
+    # 東西反推。`tab_stock.py` 只在跑完個股 pipeline 後才寫 `t2_data`,所以
+    # 「key 存在」是上游留下的請求痕跡。
+    # ⚠️ 反過來 **key 不存在是有歧義的**（從沒載過 / 或載到一半就拋例外),
+    #    本函式無法分辨 —— 這一點在下方 `_lines` 為空時的文案裡**據實說出來**,
+    #    不假裝知道（§1:錯的敘述比沒有敘述更危險）。
+    _stock_requested = "t2_data" in session_state
+    _stock_error = (_t2d.get("err") if isinstance(_t2d, dict) else None)
     if isinstance(_t2d, dict) and _t2d.get("sid"):
         _sid = str(_t2d.get("sid", "?"))
         _nm = str(_t2d.get("name", "") or _sid)[:8]
@@ -139,6 +148,12 @@ def render_sidebar_data_health(session_state) -> None:
 
     # ── 總經羅盤 _macro_compass_cache ──
     _mc = session_state.get("_macro_compass_cache") or {}
+    # v3 §02:羅盤這一格的 requested 訊號**是乾淨的** ——
+    # `app_render.render_macro_compass._do_fetch()` 在 try/except **之後**
+    # 無條件寫入 `_macro_compass_cache`（成功寫 data、失敗寫 `_err`），
+    # 所以 key 存在 = 按鈕按過了,且 `_err` 直接告訴我們為什麼沒有值。
+    _mc_requested = "_macro_compass_cache" in session_state
+    _mc_error = (_mc.get("_err") if isinstance(_mc, dict) else None)
     if isinstance(_mc, dict) and _mc.get("data"):
         _ts = _mc.get("_ts")
         _emoji = "🟢"
@@ -156,7 +171,63 @@ def render_sidebar_data_health(session_state) -> None:
     # ── headline + render ──
     st.markdown("##### 📊 全局資料健康")
     if not _lines:
-        st.caption("⬜ 尚未載入；載入個股 / 總經後這裡顯示總覽")
+        # ══════════════════════════════════════════════════════════════════
+        # v3 §02「介面狀態嚴格分離」(2026-08-27) —— **這一格是本次五處裡唯一的
+        # 「模式」,不是個案**,所以註解寫長一點。
+        #
+        # 【原本錯在哪】原碼是 `if not _lines: st.caption("⬜ 尚未載入…")`。
+        #   `_lines` 只在**拿到資料時**才 append。於是「全站抓取全滅」與
+        #   「使用者根本還沒載入」產生**一模一樣的空 list**,而畫面對兩者
+        #   都說「尚未載入」。**全局資料健康總覽,在全站掛掉的那一刻,
+        #   說系統還沒開始載入。** 使用者出事時第一個會來看的就是這一格。
+        #
+        # 【為什麼這是模式不是個案】姊妹 repo `my-Fund-dashboard` 的
+        #   `ui/helpers/io/freshness.py` **獨立長出逐字同型的東西**。
+        #   兩個 repo、不同作者、沒有互相抄 —— 會重複發生,是因為
+        #   「蒐集成 list → 用 list 空不空當狀態」是**寫聚合器時最自然的寫法**。
+        #   `if not <蒐集到的東西>:` 天生分不出「沒去蒐集」與「蒐集了但一無所獲」。
+        #
+        # 【怎麼讓它不會第三次長出來】不是靠這裡多寫一個 if,是靠三層:
+        #   1. L0 `classify_ui_state` **強制**要一個 `requested` 參數(必填、
+        #      無預設)—— 拿不到狀態,除非你先回答「有沒有被叫過」;
+        #   2. 該函式在 `requested=False` 卻帶著值/錯誤時**直接 raise**;
+        #   3. `tests/test_ui_state_model.py` 的 AST 守衛掃全 repo,
+        #      禁止 `requested=` 與 `has_value=` 綁同一個運算式
+        #      —— 那正是「用資料的有無反推有沒有被叫過」的簽名。
+        #   本格的修法只是**這三層的第一個消費者**。
+        # ══════════════════════════════════════════════════════════════════
+        _domain_states = {
+            "個股": classify_ui_state(
+                requested=_stock_requested,
+                error=_stock_error if _stock_requested else None,
+                has_value=False,
+            ),
+            "總經羅盤": classify_ui_state(
+                requested=_mc_requested,
+                error=_mc_error if _mc_requested else None,
+                has_value=False,
+            ),
+        }
+        _failed = [_n for _n, _s in _domain_states.items() if _s == UI_FAILED]
+        _tried = [_n for _n, _s in _domain_states.items() if _s != UI_IDLE]
+        if _failed:
+            st.caption(
+                f"🔴 {'、'.join(_failed)} 載入失敗,總覽算不出來 —— "
+                "**不是還沒載入**。請開「🔎 資料診斷」查對應來源。"
+            )
+        elif _tried:
+            st.caption(
+                f"▨ {'、'.join(_tried)} 已載入過,但沒有任何資料源回傳可用內容 —— "
+                "**不是還沒載入**。請開「🔎 資料診斷」確認上游狀態。"
+            )
+        else:
+            # 兩個 domain 都沒有留下請求痕跡。
+            # ⚠️ 措辭刻意保留歧義(§1):個股那條路徑若在寫 `t2_data` 之前就拋例外,
+            #    這裡看起來會與「從沒載過」一模一樣。與其斷言一個查不到的事實,
+            #    不如講一句在兩種情況下都為真的話,並指出去哪裡確認。
+            st.caption("⬜ 這裡還沒收到任何資料源的回報 —— "
+                       "載入個股 / 總經後會顯示總覽;"
+                       "若你已經載入過,代表載入中途就中斷了,請看「🔎 資料診斷」。")
         return
     _order = {"🔴": 3, "🟠": 2, "🟢": 1, "⬜": 0}
     _headline = max(_domain_emojis, key=lambda e: _order.get(e, 0)) if _domain_emojis else "⬜"

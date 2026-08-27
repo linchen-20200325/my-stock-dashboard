@@ -463,16 +463,19 @@ def frozen_summary(result: dict[str, dict]) -> tuple[int, list]:
     return (len(_frozen), _frozen)
 
 
-# ⚠️ 2026-08-25:本函式目前 **0 caller**。
-#    原唯一 caller 是 `shared/core_summary.py`(核心總表),該功能已整組拔除。
-#    **刻意保留而非刪除**,兩個理由:
-#      (1) `src/ui/pages/data_coverage.py` 有一份私有副本 `_li_frozen_cols()`,
-#          本函式正是它該收斂過來的目標 —— 刪掉等於把「兩份實作合一」這條路
-#          先堵死;上面檔頭註解記的收斂計畫也會失去落點。
-#      (2) 函式體內嵌一個實際踩過的 bug 修正(`df.columns` 是 pandas `Index`,
-#          取布林值會 ValueError,見下方註解)。刪掉再重寫必然重踩。
-#    **處置觸發**:若 user 決定把 data_coverage 收斂過來 → 接上即恢復 caller;
-#    若決定兩邊都不用 → 屆時連同私有副本一起刪。§-1:無指派不主動動工。
+# ⚠️ ~~2026-08-25:本函式目前 **0 caller**~~ → **2026-08-27 已接線,不再是 0 caller。**
+#    （狀態更新,不是把舊註解刪掉重寫 —— 舊註解記的是「為什麼當時刻意保留它」,
+#     那個判斷後來被證明是對的:真的有人來接了。）
+#    現行 caller(2 處,量測日 2026-08-27):
+#      (1) `src/ui/pages/data_coverage.py`(🔎 資料診斷頁)—— 該檔原本有一份私有
+#          副本 `_li_frozen_cols()` + 三個私有常數,**已刪除、改呼叫本函式**,
+#          舊註解裡「兩份實作合一」的收斂計畫至此落地。
+#      (2) `src/compute/macro/macro_helpers.py::calc_traffic_light`(L2 判燈路徑)
+#          —— 監看欄 `外資大小` 凍結時把 `fut_net` 降為 None,不拿凍住的數字
+#          判「外資期貨有沒有大空單」。**這一處才是修掉事故的關鍵**:偵測器
+#          先前只接在診斷頁,主畫面照樣拿凍結值判燈。
+#    ⚠️ 保留舊註解 (2) 那個理由:函式體內嵌一個實際踩過的 bug 修正
+#      (`df.columns` 是 pandas `Index`,取布林值會 ValueError,見下方註解)。
 def leading_frozen_columns(
     df,
     *,

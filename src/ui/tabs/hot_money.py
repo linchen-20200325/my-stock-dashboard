@@ -16,6 +16,9 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from shared.station_specs import MISS_CONTRACT_DRIFT
+from shared.ui_state import UI_FAILED, UI_IDLE, classify_ui_state
+
 # 狀態白話解讀（供非專業讀者）
 STATE_TEXT = {
     "同步流入": "外資資金正流入股市，並同步推升新台幣——資金動向乾淨、方向一致，偏多訊號。",
@@ -185,17 +188,61 @@ def get_latest_hot_money_state(twd_df: pd.DataFrame, token: str = "",
 # UI render：在 caller expander 內顯示完整三角交叉視圖
 # ────────────────────────────────────────────────────────────────────────
 def render_hot_money_section(twd_df: pd.DataFrame, token: str = "",
-                                key_prefix: str = "hot_money") -> None:
+                                key_prefix: str = "hot_money", *,
+                                requested: bool = True,
+                                fx_error: str | None = None) -> None:
     """渲染熱錢三角交叉深度視圖。
 
     Args:
         twd_df: caller 已抓的 yfinance TWD=X DataFrame（_tw2.get('新台幣匯率')）
         token:  FinMind token
         key_prefix: widget key 前綴避免衝突
+        requested: 上游有沒有實際去抓過匯率（v3 §02，2026-08-27 新增）。
+            **由 caller 帶下來**，本函式不從 `twd_df` 的有無反推 ——
+            見下方 `fx_df.empty` 分支的長註解。預設 `True`：本函式的唯一
+            production caller（`macro/section_state.py`）只在展開熱錢
+            expander 時才呼叫，那本身就是「已請求」的路徑；預設 False
+            會讓沒改到的呼叫點顯示假的閒置態。
+        fx_error: 上游取匯率時的錯誤（有值 = 系統真出錯）。
     """
     fx_df = _twd_df_to_series(twd_df)
     if fx_df.empty:
-        st.warning("⚠️ 無新台幣匯率資料（caller 應已抓 TWD=X）；無法計算熱錢訊號。")
+        # ── v3 §02「介面狀態嚴格分離」(2026-08-27) ───────────────────────────
+        # 【修的是什麼】原文案是
+        #   「⚠️ 無新台幣匯率資料（caller **應該**已抓 TWD=X）；無法計算熱錢訊號。」
+        #
+        # 【為什麼那是錯的】那句話**自己承認它分不出來** ——「caller 應該已抓」
+        #   是一句猜測。真正發生的兩種情況需要的動作完全相反：
+        #     · 上游根本沒去抓 → 使用者該去按載入；
+        #     · 上游抓了、失敗了（或抓回來的東西解析不出序列）→ 按載入沒有用，
+        #       該去看那個來源。
+        #   原文案把**上游的取數失敗說成本層的資料缺席**，使用者被指去看錯的地方。
+        #
+        # 【改成什麼】`requested` / `fx_error` 由 caller 帶下來（本模組不猜），
+        #   交給 L0 `classify_ui_state` 判，三種情況給三種話。
+        _fx_state = classify_ui_state(
+            requested=bool(requested),
+            error=fx_error if requested else None,
+            has_value=False,
+            # 上游說有抓過、也沒給錯誤，卻連一條序列都解不出來 →
+            # 那是**上下游契約破了**（拿到東西但形狀不對），不是「沒資料」。
+            # `MISS_CONTRACT_DRIFT` 在 `FAILED_REASONS` 內 → 升為 failed（紅）。
+            reason=(MISS_CONTRACT_DRIFT
+                    if (requested and not fx_error and twd_df is not None
+                        and getattr(twd_df, "empty", True) is False)
+                    else ""),
+        )
+        if _fx_state == UI_IDLE:
+            st.caption("⬜ 尚未載入新台幣匯率 — 先在上方按「🚀 一鍵更新全部數據」，"
+                       "熱錢三角交叉會在匯率到位後自動出現。")
+        elif _fx_state == UI_FAILED:
+            st.error("🔴 新台幣匯率（TWD=X）取得失敗"
+                     + (f"：{fx_error}" if fx_error else
+                        "：上游回傳的資料解析不出匯率序列（形態與約定不符）")
+                     + " — 熱錢訊號無法計算。**重按更新對這個原因不一定有效**，"
+                       "請到「🔎 資料診斷」確認 TWD=X 這一列。")
+        else:
+            st.warning("🟠 新台幣匯率（TWD=X）這輪沒有資料 — 熱錢訊號無法計算。")
         return
 
     # 控制 panel — 用 inline columns 不污染 sidebar

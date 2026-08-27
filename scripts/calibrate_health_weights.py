@@ -17,6 +17,13 @@ score_norm = score / max_score × 100（用真 max_score 4/6,**修正 health 原
 - `twii_ohlcv.parquet`  : date / open / high / low / close / volume
 - `finmind_inst.parquet`: date / foreign_buy（**億**,外資淨買賣超;score 只看正負號,單位不影響）
 - `finmind_m1m2.parquet`: date / m1b / m2 / m1b_m2_gap（月頻,百分點）
+
+⚠️ **2026-08-27 新增輸入新鮮度閘門(行為變更)**:`main()` 原本只擋「檔案不存在」。
+實測 `finmind_m1m2.parquet` 檔在、讀得到,但最新資料月停在 **2026-06-01**、
+`metadata.json` 的 `last_error` 是「抓取結果為空」—— 也就是本 cron 一直在拿
+三個月前的 M1B-M2 gap 擬權重,產出的提案看起來完全正常。
+現行:過期 / 上游自陳失敗 → **`SystemExit` 擋下**(§1,理由與「為何不留旁路」
+見 `check_inputs_fresh` docstring);能跑時,提案尾端會自動附上每個輸入的 as-of。
 """
 from __future__ import annotations
 
@@ -188,8 +195,54 @@ def render_proposal(result: dict, feat: pd.DataFrame) -> str:
     )
 
 
+_REQUIRED_DATASETS = ("twii_ohlcv", "finmind_inst", "finmind_m1m2")
+
+
+def check_inputs_fresh(cache_dir: Path = _CACHE, *, today=None) -> list:
+    """回「不可用」的輸入清單(過期 or 上游自陳抓取失敗)。全新鮮 → 空 list。
+
+    ═══ 為什麼要有這道閘門(2026-08-27 新增,這是行為變更,不是重構)═══════════
+    原本 `main()` 只擋「**檔案不存在**」。實測:`finmind_m1m2.parquet` 檔案在、
+    讀得到、239 列 —— 但它的最新資料月是 **2026-06-01**,`metadata.json` 的
+    `last_error` 是「抓取結果為空」,也就是上游已經連續幾個月沒成功寫進去了。
+    而本 script 是 cron,**每次照讀不誤**,把三個月前的 M1B-M2 gap 當成當期特徵
+    擬出權重,再寫進 `MACRO_HEALTH_WEIGHT_PROPOSAL.md` 給人審。
+
+    §1 Fail Loud:**錯的數字比沒有數字更危險**。一份看起來正常、實際吃過期資料
+    擬出來的權重提案,會讓人審者在假前提上決定要不要改 SSOT 門檻 —— 那比
+    「今天沒有提案」危險得多。故過期一律**擋下**,並在訊息裡講清楚舊到什麼時候。
+
+    ⚠️ **刻意不提供「強制略過」之類的旗標旁路** —— 留一條「加個旗標就能跑」的路,
+    等於留下一個可被引用來合理化「這次先跑一下」的正當出口。要跑就先把上游修好。
+
+    門檻與頻率判定全部委派 `macro_cache_reader.compute_cache_staleness`
+    (它再委派 L0 `shared/staleness.py`),本檔**不自己訂任何天數**(§3.3)。
+    """
+    from src.data.macro.macro_cache_reader import compute_cache_staleness
+
+    bad = []
+    for _name in _REQUIRED_DATASETS:
+        _st = compute_cache_staleness(_name, cache_dir=cache_dir, today=today)
+        if _st["is_stale"] or _st["upstream_error"]:
+            bad.append(_st)
+    return bad
+
+
+def _render_staleness_section(states: list) -> str:
+    """把每個輸入的 as_of 寫進提案(§2.2 provenance:人審者要看得到吃的是哪一天的資料)。"""
+    _rows = "\n".join(
+        f"| {s['dataset']} | {s['as_of'] or '—'} | "
+        f"{'—' if s['age_days'] is None else str(s['age_days']) + ' 天'} | "
+        f"{s['meta_last_updated'] or '—'} |"
+        for s in states
+    )
+    return ("\n## 輸入資料的 as-of（自動填,勿手改）\n\n"
+            "| 資料集 | 最新資料日 | 距產出日 | metadata.last_updated |\n"
+            "|---|---|---|---|\n" + _rows + "\n")
+
+
 def main() -> None:
-    missing = [n for n in ("twii_ohlcv", "finmind_inst", "finmind_m1m2")
+    missing = [n for n in _REQUIRED_DATASETS
                if not (_CACHE / f"{n}.parquet").exists()]
     if missing:
         # §1 Fail Loud:缺真實資料就炸,不用合成資料擬合偽權重
@@ -197,12 +250,30 @@ def main() -> None:
             f"[calibrate] ❌ 缺 parquet: {missing} — 請先於部署環境跑 "
             f"scripts/update_macro_history.py（沙箱無此資料、egress 被擋）"
         )
+    # §1 Fail Loud(2026-08-27):檔案「在」不等於「可用」——過期同樣擋下。
+    stale = check_inputs_fresh()
+    if stale:
+        _lines = "\n".join(
+            f"  - {s['dataset']}:{s['reason'] or '判為過期'}"
+            + (f"（metadata.last_error={s['upstream_error']!r}）"
+               if s["upstream_error"] else "")
+            for s in stale
+        )
+        raise SystemExit(
+            "[calibrate] ❌ 輸入資料過期 / 上游抓取失敗,拒絕用它擬權重:\n"
+            f"{_lines}\n"
+            "  修法:先讓 scripts/update_macro_history.py 在部署環境成功寫入上述資料集,"
+            "確認 data_cache/metadata.json 的 last_error 為 null 後再跑本 script。\n"
+            "  ⚠️ 不要改門檻或加旁路來繞過這道檢查 —— 那只是把過期資料換個方式吃進來。"
+        )
     twii = pd.read_parquet(_CACHE / "twii_ohlcv.parquet")
     inst = pd.read_parquet(_CACHE / "finmind_inst.parquet")
     m1m2 = pd.read_parquet(_CACHE / "finmind_m1m2.parquet")
     feat = build_feature_frame(twii, inst, m1m2)
     result = run_calibration(feat)
-    md = render_proposal(result, feat)
+    from src.data.macro.macro_cache_reader import compute_cache_staleness
+    md = render_proposal(result, feat) + _render_staleness_section(
+        [compute_cache_staleness(n, cache_dir=_CACHE) for n in _REQUIRED_DATASETS])
     out = _REPO / "MACRO_HEALTH_WEIGHT_PROPOSAL.md"
     out.write_text(md, encoding="utf-8")
     print(f"[calibrate] ✅ 寫入 {out}（overfit_flag={result['overfit_flag']}）")
