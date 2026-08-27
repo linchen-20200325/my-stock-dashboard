@@ -25,12 +25,15 @@ from src.config import LEEK_PIVOT_HIGH_PCT, LEEK_PIVOT_LOW_PCT
 from shared.signal_thresholds import PIVOT_BIAS_20_PCT, PIVOT_BIAS_240_PCT
 # v19.183 D2:M1B/M2 是否為「^TWII 動能代理」的判定 SSOT(原用從未被寫入的 is_proxy 鍵)。
 from shared.macro_provenance import is_m1b_m2_proxy
+from shared.station_specs import MISS_FETCH_FAILED
+from shared.ui_state import UI_IDLE, classify_ui_state
 from src.compute.macro import calc_traffic_light  # noqa: F401
 from src.ui.tabs.macro.handlers import _render_traffic_light  # noqa: F401
 
 
 def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
-                         show_market_data: bool = True) -> None:
+                         show_market_data: bool = True,
+                         *, requested: bool | None = None) -> None:
     """渲染 §二 拐點偵測 + 市場狀態(原 tab_macro line 2186-2565)。
 
     Args:
@@ -42,7 +45,19 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
             False 時本函式**不重算也不回填**紅綠燈卡,讓頁頂維持「⏳ 燈號等待中」,
             避免用過期快取蓋掉新鮮度警告(§2.4;詳見函式尾端註解)。
             預設 True 是為了不破壞既有 positional caller(tab_macro 已改為顯式傳值)。
+        requested: 使用者有沒有實際按過更新(v3 §02,2026-08-27 新增)。
+            `None` = 呼叫端沒傳 → 就地讀**按鈕 handler 寫入的 session gate 旗標**
+            (`chips_loaded` / `cl_ts`),沿用 `section_chips.py::_attempted3` 的寫法。
+            ⚠️ 這**不是** `shared/ui_state.py` 鐵律禁止的「由 `if not data:` 推導」
+            —— 那條禁的是從**資料的有無**反推有沒有被叫過;這裡讀的是**按鈕
+            on_click 寫下的旗標本身**,正是該鐵律要求的「由上游帶下來」。
     """
+    # v3 §02:先定下「有沒有被叫過」,它決定下方 `not cd` 那一格要標灰還是標紅。
+    if requested is None:
+        _requested = bool(st.session_state.get('chips_loaded')
+                          or st.session_state.get('cl_ts'))
+    else:
+        _requested = bool(requested)
     # ══════════════════════════════════════════════════════════════
     # 拐點偵測系統（整合六大面向 + CPI×Fed 雙頂回落，v18.169；v19.173 正名）
     # ══════════════════════════════════════════════════════════════
@@ -460,14 +475,46 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
                 )
                 try:
                     from src.ui.tabs import render_hot_money_section
+                    # v3 §02:`requested` 由本 section 的 gate 旗標帶下來,
+                    # hot_money 端不再靠「caller 應該已抓」這種猜測寫文案。
                     render_hot_money_section(
-                        _twd_df, FINMIND_TOKEN, key_prefix="tab_macro_hm")
+                        _twd_df, FINMIND_TOKEN, key_prefix="tab_macro_hm",
+                        requested=_requested)
                 except Exception as _hme:
                     st.error(f"熱錢監測渲染失敗：[{type(_hme).__name__}] {_hme}")
     
     elif not cd:
+        # ── v3 §02「介面狀態嚴格分離」(2026-08-27) ───────────────────────────
+        # 【這條路徑是真的,不是理論】原本無條件印
+        #   「📡 請點擊『🚀 一鍵更新全部數據』載入大盤數據」。
+        #   踩點組把它標為「推導、未實測」,本組實地追過寫入順序,**確認可達**:
+        #     1. `tab_macro.py` 在 `if do_refresh:` **第一時間**就
+        #        `chips_loaded = True` 且 `pop('cl_data')`(先設旗標、先清舊值);
+        #     2. 接著呼叫 `fetch_macro_bundle(...)`,該呼叫**沒有 try/except 包住**;
+        #     3. 它一旦拋例外 → `st.session_state['cl_data']` 這一行永遠跑不到;
+        #     4. 下一次 rerun:`do_refresh` 已是 False,但 `chips_loaded` 還是 True
+        #        → `_load_heavy` 為 True、直接跳過整個抓取區塊 → `cd` 是空的;
+        #     5. `mkt_info` 也在 `_macro_session_reset()` 被 pop 掉 → `_mkt_info` 假。
+        #   → 進到本分支。**使用者按了、炸了,畫面卻叫他「請點擊載入」。**
+        #
+        # 【改成什麼】依 L0 `classify_ui_state` 分兩支;`requested` 由函式開頭的
+        #   gate 旗標帶下來(不從 `cd` 的有無反推 —— 那正是分不出來的成因)。
         with _mkt_placeholder.container():
-            st.info('📡 請點擊「🚀 一鍵更新全部數據」載入大盤數據')
+            _cd_state = classify_ui_state(
+                requested=_requested,
+                has_value=False,
+                # 按過了、卻連 `cl_data` 都沒寫進 session:抓取那一段中途掛了。
+                # 這是**系統真出錯**,不是「沒有資料」。
+                reason=(MISS_FETCH_FAILED if _requested else ''),
+            )
+            if _cd_state == UI_IDLE:
+                st.caption('⬜ 尚未載入 — 按「🚀 一鍵更新全部數據」開始，'
+                           '這裡會顯示大盤指數、均線與拐點訊號。')
+            else:
+                st.error('🔴 大盤資料取得失敗 —— 已經載入過，但這輪的抓取沒有'
+                         '把任何大盤資料寫回來（多半是抓取途中拋了例外）。'
+                         '**重按更新可以再試一次，但若連續失敗請勿當成「還沒載入」**，'
+                         '到「🔎 資料診斷」確認 ^TWII 與 FinMind 的狀態。')
     # ── ③ 資料到位後，回填紅綠燈佔位符（修復「未審先判」Bug）────
     # C1-E v18.291:走 section_inputs SSOT(對齊 C1-D 紅綠燈初次計算路徑)
     #
@@ -505,7 +552,13 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
         _tl2_inp.cl_data or {},
         _tl2_inp.li_latest,
     )
-    _render_traffic_light(_tl_placeholder, _tl_final, _tl2_mkt)
+    # v3 §02:把 gate 旗標顯式往下傳,handlers 端就不必再自己讀 session。
+    # ⚠️ 下一行**必須維持單行**:`tests/test_macro_classroom.py` 的
+    #    `test_explainer_after_traffic_light_render` 要求 explainer 的呼叫距離本行
+    #    開頭 < 500 字元(它守的是「explainer 必須緊跟燈號卡」這條版面順序)。
+    #    HEAD 基線 471,加上 ` requested=_requested` 後為 492 —— **只剩 8 字元餘裕**。
+    #    在本行與 explainer 之間再插任何東西,那條測試就會紅。
+    _render_traffic_light(_tl_placeholder, _tl_final, _tl2_mkt, requested=_requested)
     # v19.62 — 建議持股油門(姿態非開關):總經健康分 → 建議持股區間
     try:
         from src.ui.tabs.macro.section_traffic_light import render_position_throttle

@@ -10,6 +10,7 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.ui_state import UI_FAILED, classify_ui_state
 
 
 def _macro_session_reset():
@@ -58,14 +59,37 @@ def _on_force_clear_click():
     print('[Cache] 🗑️ 強制重抓：全快取清除完成')
 
 
-def _render_traffic_light(placeholder, tl, mkt_info=None):
+def _render_traffic_light(placeholder, tl, mkt_info=None, *, requested=None):
     """將計算結果回填到 placeholder（或顯示等待狀態）。
     mkt_info: 選填，來自 market_regime() 的原始 dict，用以合併顯示市場評分與信號。
     以較保守信號為主（traffic light 已含 defense/health 降級邏輯）。
 
     擋燈條件（2026-08-19 方案 C 改）：不再用「conf < 70%」這個**數量**門檻，
     改判**獨立故障域**是否還撐得住結論。conf 數字本身照舊顯示、公式一字未改。
+
+    requested（v3 §02，2026-08-27 新增）：使用者有沒有實際按過更新。
+        **這是擋燈分支要標紅還是標灰的唯一依據** —— 見下方 `_blocked` 段的
+        長註解。`None` = 呼叫端沒傳 → 就地讀**按鈕 handler 寫入的 session
+        gate 旗標**（`chips_loaded` / `cl_ts`），沿用
+        `section_chips.py` 既有的 `_attempted3` 寫法。
+
+        ⚠️ 這個 fallback **不是** `shared/ui_state.py` 鐵律所禁止的
+        「由 `if not data:` 推導」—— 那條禁的是**從資料的有無反推有沒有被叫過**；
+        這裡讀的是**按鈕 on_click 寫下的旗標本身**，正是該鐵律要求的
+        「由上游帶下來」。之所以留 fallback 而非改成必填：本函式有兩個
+        呼叫點，其中 `section_traffic_light.py` 不在本次的檔案邊界內，
+        改必填會當場打斷它。
     """
+    # v3 §02:先把「有沒有被叫過」定下來 —— 它決定下方擋燈分支要標灰還是標紅。
+    if requested is None:
+        # 按鈕 handler 寫入的 gate 旗標（`tab_macro.py` 在 do_refresh 時設
+        # `chips_loaded=True`；`cl_ts` 則是抓取成功後寫的時戳）。
+        # 兩者取聯集 = `section_chips.py::_attempted3` 的同一套寫法。
+        _requested = bool(st.session_state.get('chips_loaded')
+                          or st.session_state.get('cl_ts'))
+    else:
+        _requested = bool(requested)
+
     if tl is None:
         placeholder.info(
             '⏳ **系統正在深度解析大盤與籌碼數據，請稍候...**\n\n'
@@ -117,6 +141,44 @@ def _render_traffic_light(placeholder, tl, mkt_info=None):
         _missing_lines = ''.join(
             f'<li style="margin:4px 0;color:{TRAFFIC_RED};">❌ {m}</li>' for m in _missing
         ) if _missing else '<li style="color:#8b949e;">（無法判斷）</li>'
+
+        # ── v3 §02「介面狀態嚴格分離」(2026-08-27) ───────────────────────────
+        # 【修的是什麼】這一格原本**無條件**印藍字
+        #   「👉 請點上方『🚀 一鍵更新全部數據』載入完整資料後，燈號才會顯示。」
+        #
+        # 【為什麼那是錯的】走到這個分支的前提是 `tl is not None` —— 燈號**已經
+        #   算過一輪**了。使用者按過按鈕、抓取跑完、結果是來源全滅，畫面卻叫他
+        #   「請點上方按鈕」。他照做，會得到一模一樣的畫面，**點一百次也一樣**。
+        #   這正是 §-2 規則 6 那次 `MISS_*` 選錯的同一個病：把一個真故障貼上
+        #   「重跑一次就好」的閒置態指引，使用者被指去看錯的地方。
+        #
+        # 【改成什麼】依 L0 `classify_ui_state` 分兩支：
+        #   · 已請求（`requested=True`，正常路徑）→ **紅字**，並明說
+        #     「重按更新對這個原因無效」，把指引反轉到真正該去的地方。
+        #   · 未請求 → 走灰色閒置文案（理論上進不來，因為沒請求就不會有 `tl`；
+        #     留著是為了讓這一格**在任何情況下都不會說謊**，而不是靠上游保證）。
+        #
+        # ⚠️ 本區塊**沒有新增或刪除任何視覺元件**，也沒動卡片邊框與版面 ——
+        #   只換同一行的文字與顏色（紅色本來就已存在於本卡：上方缺項列與
+        #   信心百分比都用 TRAFFIC_RED）。依 §-1.5.4 兩步判定屬「內容值 +
+        #   修正錯誤」→ 內部自決，不需線框。
+        _tl_state = classify_ui_state(
+            requested=_requested,
+            error='blocked:' + _gate_reason if _requested else None,
+            has_value=False,
+        )
+        if _tl_state == UI_FAILED:
+            _cta_color = TRAFFIC_RED
+            _cta_text = (
+                '🔴 上列來源取得失敗，燈號無法計算。'
+                '<b>重按「🚀 一鍵更新全部數據」對這個原因無效</b> —— '
+                '請到「🔎 資料診斷」確認上列來源的狀態。'
+            )
+        else:
+            # 未請求過:這是閒置，不是故障 → 灰色說明（v3 §02 前半句）
+            _cta_color = '#8b949e'
+            _cta_text = ('⬜ 尚未載入 — 按上方「🚀 一鍵更新全部數據」開始，'
+                         '燈號會在資料到齊後亮起。')
         with placeholder.container():
             st.markdown(
                 f'<div style="background:linear-gradient(135deg,#2a1d00,#1a1208);'
@@ -127,8 +189,8 @@ def _render_traffic_light(placeholder, tl, mkt_info=None):
                 f'（{_gate_reason}）</div>'
                 f'<div style="font-size:12px;color:#8b949e;margin-top:10px;">缺少以下資料來源：</div>'
                 f'<ul style="font-size:13px;margin:6px 0 0 4px;padding-left:20px;">{_missing_lines}</ul>'
-                f'<div style="font-size:12px;color:#58a6ff;margin-top:12px;">'
-                f'👉 請點上方「🚀 一鍵更新全部數據」載入完整資料後，燈號才會顯示。'
+                f'<div style="font-size:12px;color:{_cta_color};margin-top:12px;">'
+                f'{_cta_text}'
                 f'</div></div>',
                 unsafe_allow_html=True,
             )

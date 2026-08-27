@@ -34,6 +34,7 @@ from src.services.daily_checklist import (
 from shared.stats_helpers import ewma_vol, signal_with_deadband
 # v19.183 D2:M1B/M2 是否為「^TWII 動能代理」的判定 SSOT(原用從未被寫入的 is_proxy 鍵)。
 from shared.macro_provenance import is_m1b_m2_proxy
+from shared.ui_state import UI_IDLE, classify_ui_state
 # I2(2026-08-10):`bias_240` 估算揭露文案 SSOT(L5 → L2 合法下行)。本檔原本是全 repo
 # 唯一有揭露的地方,但那兩句是 inline 字面 —— 其餘 9 個消費點要一起揭露就得複製,
 # 故收成 L2 一份真相(§3.3),本檔改為引用同一份,顯示內容不變 + 補一句完整說明。
@@ -438,10 +439,32 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     _flow_close = {n: _fe.to_close_list(df) for n, df in (_flow_raw or {}).items()}
     _reg_close = {n: _flow_close[n] for n in _fe.REGIONAL_ETFS if _flow_close.get(n)}
     if not _reg_close:
-        if not _load_heavy:
-            st.info('📡 點擊「🚀 一鍵更新全部數據」載入全球資金流向')
+        # ── v3 §02「介面狀態嚴格分離」(2026-08-27) ───────────────────────────
+        # 分流本來就是對的（`_load_heavy` 就是上游帶下來的 requested 旗標，
+        # 由 `tab_macro.py` 的按鈕決定），**錯的是顏色**：真失敗那一支原本
+        # 用 `st.info`（Streamlit 藍底），使用者掃視頁面時會與上一支的
+        # 「尚未載入」歸成同一類直接跳過 —— 一個真的抓不到的區塊被當成
+        # 「我還沒點」而永遠沒人去查。
+        #
+        # 改用 L0 `classify_ui_state` 判，再依狀態選容器：
+        #   idle   → `st.caption` 灰（v3 §02 前半句：未點擊以灰色說明提示）
+        #   failed → `st.warning` 橘
+        # ⚠️ 為什麼 failed 這裡是**橘不是紅**：`FAILED_REASONS` 之外的失敗
+        #   （這裡是 yfinance 海外來源限流）屬**暫時性**，稍後重試真的會好；
+        #   紅色在本站的語意是「重試無效、要去查」。把可自癒的限流標紅
+        #   等於製造 v3 §02 前半句要杜絕的假性錯誤。
+        _flow_state = classify_ui_state(
+            requested=bool(_load_heavy),
+            has_value=False,
+            error=('regional_etf_close_empty' if _load_heavy else None),
+        )
+        if _flow_state == UI_IDLE:
+            st.caption('⬜ 尚未載入 — 按「🚀 一鍵更新全部數據」開始，'
+                       '這裡會顯示各區域股市的相對強弱與資金流入流出排名。')
         else:
-            st.info('ℹ️ 全球資金流向資料暫時無法取得（yfinance 海外來源可能限流），可稍後重試。')
+            st.warning('🟠 全球資金流向暫時取不到（yfinance 海外來源可能限流）'
+                       ' — 稍後重試；若持續取不到，請看「🔎 資料診斷」的'
+                       ' yfinance 狀態。')
     else:
         # 1. 世界區域股市：標準化走勢 + 流入流出排名
         _reg_df = {n: _flow_raw[n] for n in _reg_close}
