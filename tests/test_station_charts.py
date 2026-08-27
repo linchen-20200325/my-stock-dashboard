@@ -252,9 +252,19 @@ class TestBollZFigure:
         assert C.build_boll_z_figure(p) is None
 
     def test_no_figure_when_flat_prices(self):
-        """整段零波動 → std≈0,z 整條算不出來（L3 標 `MISS_NO_INPUT`）。"""
+        """整段零波動 → std≈0,z 整條算不出來（L3 標 `MISS_NO_VARIATION`）。
+
+        ⚠️ **本條原本斷言 `MISS_NO_INPUT`,那個行為是錯的**（2026-08-27 改）：
+        `MISS_NO_INPUT` 的畫面文案是「上游這輪失敗,**可以重跑一次**」,
+        而零波動重跑一百次 std 還是 0。**是這條測試把錯的指引釘成規格,
+        不是有人為了讓測試過而改測試。**
+        本層（L4）只轉印 L0 文案,改的是 L3 挑哪個常數;本條跟著對齊。
+        """
         p = _payload(60, flat=True)
-        assert p["boll_z_miss"] == SS.MISS_NO_INPUT
+        assert p["boll_z_miss"] == SS.MISS_NO_VARIATION
+        assert C.boll_z_miss_reason(p) == SS.MISS_NO_VARIATION
+        assert "重跑不會改變" in C.miss_text_for(p["boll_z_miss"]), \
+            "畫面印出來的那句話仍在叫使用者重跑"
         assert C.build_boll_z_figure(p) is None
 
     def test_most_fundamental_reason_wins(self):

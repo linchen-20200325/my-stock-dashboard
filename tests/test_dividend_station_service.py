@@ -670,21 +670,80 @@ class TestWeeklySeriesPayload:
         assert _p["ma_miss"] == {T.MA_QUARTER_WEEKS: SS.MISS_NOT_ENOUGH,
                                  T.MA_YEAR_WEEKS: SS.MISS_NOT_ENOUGH}
 
-    def test_flat_price_boll_is_no_input_not_not_enough(self):
-        """週數夠但整段零波動（std≈0）→ 布林 z 無有限值。
+    def _flat_row(self, n: int = 60, value: float = 50.0):
+        def _m(ticker, asset_kind="etf"):
+            d = _good_metrics(ticker)
+            _idx = pd.date_range("2022-01-07", periods=n, freq="W-FRI")
+            d["weekly_close"] = pd.Series([value] * n, index=_idx)
+            return d
+        return svc.build_station_rows([{"ticker": "0056", "asset_class": T.ASSET_CORE}],
+                                      vix=18, metrics_fn=_m)[0][self._KEY]
 
-        原因用 `MISS_NO_INPUT`（沿用 `light_235` 對「布林軸算不出來」的既有標法）,
-        **不是** `MISS_NOT_ENOUGH` —— 筆數是夠的,叫使用者「等時間累積」是錯的指引。
+    def test_flat_price_boll_is_no_variation(self):
+        """週數夠但整段零波動（std≈0）→ 布林 z 無有限值 → `MISS_NO_VARIATION`。
+
+        ⚠️ **本條原本斷言的是 `MISS_NO_INPUT`,那個行為是錯的**（2026-08-27 改）。
+        舊 docstring 的理由是「沿用 `light_235` 對布林軸算不出來的既有標法」——
+        但 `MISS_NO_INPUT` 的**使用者文案**是「上游這輪失敗,**可以重跑一次**」,
+        而零波動重跑一百次 std 還是 0。**是這條測試把錯的指引釘成了規格,
+        不是有人為了讓測試過而改測試。**
+
+        `MISS_NOT_ENOUGH` 同樣不對（筆數是夠的,「等時間累積」也不是該做的事）——
+        這一點舊 docstring 講對了,故保留在測試名字裡的對照斷言。
+        """
+        _p = self._flat_row()
+        assert _p["boll_z_miss"] == SS.MISS_NO_VARIATION
+        assert _p["boll_z_miss"] not in (SS.MISS_NO_INPUT, SS.MISS_NOT_ENOUGH)
+        assert _p["ma_miss"] == {}                        # 均線照畫得出來（平盤也是線）
+
+    def test_no_variation_text_never_tells_the_user_to_rerun(self):
+        """**語意鎖**:使用者看到的是文案不是常數名 —— 文案不得叫人重跑。
+
+        只鎖常數不鎖文案的話,有人把文案改回「可以重跑一次」照樣全綠。
+        """
+        _txt = SS.MISS_TEXT[SS.MISS_NO_VARIATION]
+        assert "重跑不會改變" in _txt
+        assert "可以重跑" not in _txt
+        assert "等時間累積" not in _txt, "那是 MISS_NOT_ENOUGH 的指引,不適用零波動"
+
+    def test_all_nan_weekly_close_is_still_no_input(self):
+        """週收本身全 NaN（不是零波動）→ 仍是 `MISS_NO_INPUT`,新常數不得吃掉它。
+
+        這一條分辨的是「有數字但不動」與「根本沒有數字」—— 兩者該做的事不同。
         """
         def _m(ticker, asset_kind="etf"):
             d = _good_metrics(ticker)
             _idx = pd.date_range("2022-01-07", periods=60, freq="W-FRI")
-            d["weekly_close"] = pd.Series([50.0] * 60, index=_idx)
+            d["weekly_close"] = pd.Series([float("nan")] * 60, index=_idx)
             return d
         _p = svc.build_station_rows([{"ticker": "0056", "asset_class": T.ASSET_CORE}],
                                     vix=18, metrics_fn=_m)[0][self._KEY]
         assert _p["boll_z_miss"] == SS.MISS_NO_INPUT
-        assert _p["ma_miss"] == {}                        # 均線照畫得出來（平盤也是線）
+        # 均線同樣算不出來,且原因一致（都是「沒有輸入」,不是「沒在動」）
+        assert set(_p["ma_miss"].values()) == {SS.MISS_NO_INPUT}
+
+    def test_short_flat_history_is_still_not_enough(self):
+        """10 週且平盤 → 先卡「筆數不夠」,不被新常數吃掉（長度問題優先）。"""
+        _p = self._flat_row(10)
+        assert _p["boll_z_miss"] == SS.MISS_NOT_ENOUGH
+
+    @pytest.mark.parametrize("value", [0.0, 50.0, 1e6])
+    def test_any_constant_series_is_no_variation(self, value):
+        """property 版:任何常數序列（含 0）都該是零波動,與那個常數是多少無關。"""
+        assert self._flat_row(60, value)["boll_z_miss"] == SS.MISS_NO_VARIATION
+
+    def test_one_different_week_is_enough_to_not_be_flat(self):
+        """反向:只要有一週不同 → 布林 z 算得出來,不得標成零波動。"""
+        def _m(ticker, asset_kind="etf"):
+            d = _good_metrics(ticker)
+            _idx = pd.date_range("2022-01-07", periods=60, freq="W-FRI")
+            _vals = [50.0] * 60
+            _vals[30] = 51.0
+            d["weekly_close"] = pd.Series(_vals, index=_idx)
+            return d
+        _p = svc.build_station_rows([{"ticker": "0056", "asset_class": T.ASSET_CORE}],
+                                    vix=18, metrics_fn=_m)[0][self._KEY]
+        assert _p["boll_z_miss"] == ""
 
     def test_stock_row_is_not_applicable(self):
         """個股列**結構上沒有**這張圖 → NOT_APPLICABLE,不是「資料不足 / 重跑就好」。"""

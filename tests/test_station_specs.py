@@ -833,6 +833,32 @@ class TestMissReasonRegistry:
         assert most_fundamental_miss([SS.MISS_NO_INPUT,
                                       SS.MISS_NOT_ENOUGH]) == SS.MISS_NOT_ENOUGH
 
+    def test_no_variation_sits_between_not_enough_and_no_input(self):
+        """零波動的排序位（2026-08-27 新增常數時一併釘住）。
+
+        兩邊各有理由，寫成可執行的規格免得日後被「順手」挪動：
+        - 輸給 `MISS_NOT_ENOUGH`:歷史長度不足時**整條線都不存在**，涵蓋面更大。
+        - 贏過 `MISS_NO_INPUT`:「整段沒動」解釋的是**單一統計量沒有定義**，
+          比「某一項沒抓到」具體;更重要的是若讓 `NO_INPUT` 勝出，畫面會印出
+          「可以重跑一次」—— 那正是本次要修掉的錯誤指引。
+        """
+        assert most_fundamental_miss(
+            [SS.MISS_NO_VARIATION, SS.MISS_NOT_ENOUGH]) == SS.MISS_NOT_ENOUGH
+        assert most_fundamental_miss(
+            [SS.MISS_NO_INPUT, SS.MISS_NO_VARIATION]) == SS.MISS_NO_VARIATION
+
+    def test_no_variation_text_does_not_tell_the_user_to_rerun(self):
+        """文案語意鎖：零波動**不可**給出「重跑一次」或「等時間累積」的指引。
+
+        使用者看到的是文案不是常數名 —— 只鎖常數，文案被改回去仍會全綠。
+        """
+        _txt = MISS_TEXT[SS.MISS_NO_VARIATION]
+        assert "重跑不會改變" in _txt
+        assert "可以重跑" not in _txt
+        assert "等時間累積" not in _txt
+        assert _txt != MISS_TEXT[SS.MISS_NO_INPUT]
+        assert _txt != MISS_TEXT[SS.MISS_NOT_ENOUGH]
+
     def test_unknown_reason_never_outranks_a_known_one(self):
         assert most_fundamental_miss(["某個沒登錄的原因",
                                       SS.MISS_NOT_APPLICABLE]) == SS.MISS_NOT_APPLICABLE

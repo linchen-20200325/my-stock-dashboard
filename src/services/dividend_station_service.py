@@ -199,10 +199,19 @@ def _weekly_series_payload(weekly_close, *, unavailable: str = "") -> dict:
       `boll_z_miss`:
         - 週數 < 該線視窗（例:僅 30 週 → 畫不出 52 週年線）→ `MISS_NOT_ENOUGH`
           （對齊 `dividend_station.health_c` 對「週數不足」用的同一個常數）。
-        - 週數夠、整條卻仍無有限值（實務上就是**整段價格零波動 → std≈0**,
-          布林 z 分母被遮成 NaN）→ `MISS_NO_INPUT`。理由:`light_235` 對「布林軸
-          算不出來」用的就是這條路（軸不進 `axes_used`,全無軸時 `MISS_NO_INPUT`）,
-          這裡沿用同一個標法,不另造新詞。
+        - 週數夠、整條卻仍無有限值 → **看週收本身有沒有在動**:
+            · 整段零波動（std≈0,布林 z 分母被遮成 NaN）→ `MISS_NO_VARIATION`
+            · 否則（週收本身大量缺值,連均線都算不出來）→ `MISS_NO_INPUT`
+          ⚠️ **2026-08-27 改**:原本這兩種情形一律標 `MISS_NO_INPUT`,理由寫的是
+          「沿用 `light_235` 對布林軸算不出來的既有標法,不另造新詞」。
+          **那個理由不成立** —— `MISS_NO_INPUT` 的文案是「上游這輪失敗,**可以重跑
+          一次**」,而零波動重跑一百次 std 還是 0,是**錯的指引**（§1:錯的指引比
+          沒有指引更糟）。故另立 `MISS_NO_VARIATION`（為什麼既有五個都不能用,
+          寫在該常數的 docstring）。
+          ⚠️ `light_235` 的 1-B（三軸全掛才標 `MISS_NO_INPUT`）**本次刻意不動**:
+          三軸同時掛掉時多半真的是 VIX + 週線都沒抓到,那裡的 `MISS_NO_INPUT` 是對的;
+          要逐軸給原因得先把 `Light235.miss_reason` 從單一字串改成 `dict[軸, 原因]`,
+          那是 frozen dataclass 的 signature 變更,另案。
       能畫的線**不列進** miss dict —— 列進去會讓消費端以為它也缺（同 `_health_miss`
       只收「⚪ 且有登記原因」的作法）。
 
@@ -234,11 +243,40 @@ def _weekly_series_payload(weekly_close, *, unavailable: str = "") -> dict:
     _ma = {_w: ds.week_ma_series(_close, _w) for _w in _ma_windows}
     _z = ds.bollinger_z_series(_close, T.BOLL_PERIOD_WEEKS)
 
+    # 週收本身的「有沒有在動」—— 供 `_line_miss` 分辨「整段零波動」與「真的沒值」。
+    # 判準與 `bollinger_z_series` 的 std≈0 遮罩**同一個常數**（`T.FLOAT_ABS_TOL`），
+    # 否則兩邊會出現「圖畫不出來但原因說不是零波動」的縫。
+    # ⚠️ 用全序列 std 而不是逐窗檢查是**可以的**:窗是重疊的,每一個窗都 std≈0
+    # ⇔ 整條常數。z 全 NaN 且週數夠 → 每個窗都不可用,故全序列判準等價。
+    # `abs() < inf` 對 NaN 與 ±inf 皆為 False —— 與 `bollinger_z_series` 的
+    # `usable` 遮罩逐字同一種寫法（那裡是 `s.abs() < math.inf`）。
+    _finite_close = _close[_close.abs() < float("inf")]
+    _flat_close = (len(_finite_close) >= 2
+                   and float(_finite_close.std(ddof=0)) <= T.FLOAT_ABS_TOL)
+
     def _line_miss(series, window: int) -> str:
-        """一條線畫不畫得出來 → 原因（畫得出來回 `""`）。判準:**有沒有任何有限值**。"""
+        """一條線畫不畫得出來 → 原因（畫得出來回 `""`）。判準:**有沒有任何有限值**。
+
+        ## 2026-08-27（§1）：零波動不再標成「可以重跑一次」
+
+        原本這裡只有兩條路:週數不足 → `MISS_NOT_ENOUGH`,否則 → `MISS_NO_INPUT`。
+        但**週數夠、整條卻無有限值**在實務上最常見的成因是「整段價格零波動」——
+        `bollinger_z_series` 會把 std≈0 的分母遮成 NaN（§4.4 避免 ±inf）,於是 z 整條
+        算不出來。對這種情形標 `MISS_NO_INPUT` 等於告訴使用者「上游這輪失敗,
+        **可以重跑一次**」—— **重跑一百次 std 還是 0**,那是錯的指引
+        （與 CLAUDE.md §-2 實證第 3 條同型:`MISS_*` 選錯 → 給出錯誤的下一步）。
+
+        ⚠️ **不能無條件改標 `MISS_NO_VARIATION`** —— 本函式**同時服務均線與布林 z**:
+        均線在「整段平盤」時照樣畫得出來（平盤也是一條線,回 `""`）,它變成全 NaN 的
+        成因是**週收本身大量缺值**（`week_ma_series` 用 `min_periods=1` skipna,
+        要整個窗全 NaN 才會是 NaN）。那種情形是真的沒有輸入,`MISS_NO_INPUT` 才對。
+        故先看週收有沒有在動（`_flat_close`）再決定,不是看是哪一條線。
+        """
         if _n < window:
             return SS.MISS_NOT_ENOUGH
-        return "" if bool(series.notna().any()) else SS.MISS_NO_INPUT
+        if bool(series.notna().any()):
+            return ""
+        return SS.MISS_NO_VARIATION if _flat_close else SS.MISS_NO_INPUT
 
     _ma_miss: dict[int, str] = {}
     for _w in _ma_windows:                    # 只收畫不出來的線（能畫的不列,見 docstring）
