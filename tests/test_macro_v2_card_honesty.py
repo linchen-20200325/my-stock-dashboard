@@ -244,3 +244,143 @@ class TestExistingConsumersSurviveTheNewKey:
 
         ref_keys = {s.key for s in REFERENCE_TREND_SPECS}
         assert not ({r.key for r in build_rows({})} & ref_keys)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 四、缺口 2a —— 沒畫門檻線就不准說「門檻線由 SSOT 畫出」
+# ══════════════════════════════════════════════════════════════════════
+
+class TestThresholdCaptionTellsTheTruth:
+
+    def test_the_premise_no_threshold_spec_really_draws_zero_lines(self):
+        """先把前提測出來:taiex 的圖上**一條門檻線都沒有**。
+
+        這條是整個缺口 2a 的立足點。哪天 spec 被設了門檻、線真的畫出來了,
+        這裡會先紅 —— 而不是讓下面那些「不准說有門檻線」的斷言默默變成
+        錯的要求。
+        """
+        fig = C.build_candlestick_figure(_ohlc(), _TAIEX)
+        assert fig is not None
+        assert len(fig.layout.shapes) == 0
+
+    def test_a_threshold_bearing_spec_really_does_draw_lines(self):
+        """對照組:有門檻就真的有線 —— 證明上一條不是「反正都畫不出來」。"""
+        fig = C.build_candlestick_figure(_ohlc(), _DXY)
+        assert len(fig.layout.shapes) > 0
+
+    def test_candlestick_card_does_not_claim_thresholds_it_never_drew(self,
+                                                                      monkeypatch):
+        fake = _render(monkeypatch, C.render_candlestick_card,
+                       _row(), _TAIEX, _ohlc())
+        assert C._CAP_HAS_THR not in fake.screen()
+        assert C._CAP_NO_THR in fake.screen()
+
+    def test_candlestick_card_still_claims_them_when_they_exist(self, monkeypatch):
+        """零行為變更:有門檻的 spec 照印原句,且腳註其餘部分逐字不變。"""
+        fake = _render(monkeypatch, C.render_candlestick_card,
+                       _row(band="green"), _DXY, _ohlc(), series_note="註")
+        assert fake.captions()[-1] == (
+            "門檻線由 SSOT 畫出　·　不畫成交量（該欄目前恆為 0）　·　註")
+
+    def test_candlestick_caption_without_series_note_is_byte_identical(self,
+                                                                       monkeypatch):
+        fake = _render(monkeypatch, C.render_candlestick_card,
+                       _row(band="green"), _DXY, _ohlc())
+        assert fake.captions()[-1] == "門檻線由 SSOT 畫出　·　不畫成交量（該欄目前恆為 0）"
+
+    def test_chart_card_caption_is_byte_identical_for_a_normal_spec(self,
+                                                                    monkeypatch):
+        """走勢卡走的是同一句 SSOT 文案 —— 有門檻時腳註必須逐字不變。"""
+        fake = _render(monkeypatch, C.render_chart_card,
+                       _row(key="dxy", label="美元指數", band="green",
+                            value=104.0, unit="", decimals=1),
+                       _DXY, ["2026-08-01", "2026-08-02"], [103.0, 104.0],
+                       series_note="近 60 個交易日")
+        assert fake.captions()[-1] == "門檻線由 SSOT 畫出　·　近 60 個交易日"
+
+    @pytest.mark.parametrize(
+        "spec", [s for s in _ALL_SPECS if has_thresholds(s)],
+        ids=[s.key for s in _ALL_SPECS if has_thresholds(s)])
+    def test_every_threshold_bearing_spec_keeps_the_original_sentence(self, spec):
+        assert C.threshold_caption(spec) == "門檻線由 SSOT 畫出"
+
+    def test_the_no_threshold_sentence_does_not_hardcode_any_indicator(self):
+        """L4 不准把業務名稱寫進文案 —— 寫了就是名單,上游多一條不會自己長。"""
+        for name in ("加權指數", "taiex", "TAIEX", "融資"):
+            assert name not in C._CAP_NO_THR
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 五、缺口 2b —— 空序列不等於「取得失敗」
+# ══════════════════════════════════════════════════════════════════════
+
+class TestEmptySeriesNotice:
+
+    _DEFAULT = "歷史序列取得失敗 —— 不以合成資料替代。"
+
+    def test_default_is_unchanged_when_no_notice_is_given(self, monkeypatch):
+        """零行為變更:既有 caller 不傳 notice,輸出必須與改動前逐字相同。"""
+        fake = _render(monkeypatch, C.render_chart_card,
+                       _row(key="margin", label="融資餘額", band="green",
+                            value=3200.0, unit="億", thr_text="黃 3400"),
+                       SPECS_BY_KEY["margin"], [], [])
+        assert fake.captions() == [self._DEFAULT, "門檻帶　黃 3400"]
+
+    def test_a_given_notice_replaces_the_failure_sentence(self, monkeypatch):
+        fake = _render(monkeypatch, C.render_chart_card,
+                       _row(key="margin", label="融資餘額", band="green",
+                            value=3200.0, unit="億", thr_text="黃 3400"),
+                       SPECS_BY_KEY["margin"], [], [],
+                       notice="取到了，但這段資料有疑義，圖暫不繪製。")
+        assert fake.captions() == [
+            "取到了，但這段資料有疑義，圖暫不繪製。", "門檻帶　黃 3400"]
+        assert self._DEFAULT not in fake.screen()
+
+    def test_the_門檻帶_line_is_still_printed_either_way(self, monkeypatch):
+        """notice 只換掉第一句,不准順手吃掉門檻帶那一行。"""
+        fake = _render(monkeypatch, C.render_chart_card,
+                       _row(thr_text="黃 3400"), SPECS_BY_KEY["margin"], [], [],
+                       notice="X")
+        assert "門檻帶　黃 3400" in fake.captions()
+
+    def test_notice_is_keyword_only_so_it_cannot_be_passed_by_accident(self):
+        """位置參數會讓 `notice` 撞到 `kind` —— 用 keyword-only 在語法層擋掉。"""
+        import inspect
+
+        sig = inspect.signature(C.render_chart_card)
+        assert sig.parameters["notice"].kind is inspect.Parameter.KEYWORD_ONLY
+        assert sig.parameters["notice"].default == ""
+
+    def test_l4_hardcodes_no_indicator_name_in_any_caption(self):
+        """L4 不得內建「哪個指標配哪句原因」的表 —— 原因一律由 caller 給。
+
+        測法:把函式裡**所有字串字面值**(docstring 除外)抓出來,對照 L0
+        全部 18 個 spec 的 key 與中文名,一個都不准出現。用 AST 而不是
+        逐字 grep,是因為 `margin=dict(...)` 這種**版面關鍵字**會讓純文字
+        比對誤報 —— 誤報的守衛遲早會被人關掉。
+        """
+        import ast
+        import inspect
+        import textwrap
+
+        fn = ast.parse(textwrap.dedent(
+            inspect.getsource(C.render_chart_card))).body[0]
+        # docstring 整段跳過 —— 它拿融資餘額當例子說明這個參數為何存在,
+        # 那是**說明**,不是「哪個指標配哪句話」的分支。
+        stmts = fn.body[1:] if ast.get_docstring(fn) else fn.body
+        literals = [
+            n.value for stmt in stmts for n in ast.walk(stmt)
+            if isinstance(n, ast.Constant) and isinstance(n.value, str)
+        ]
+        blob = "\n".join(literals)
+        for spec in _ALL_SPECS:
+            assert spec.key not in blob, f"L4 硬編了指標 key {spec.key!r}"
+            assert spec.label not in blob, f"L4 硬編了指標名 {spec.label!r}"
+
+    def test_notice_does_not_leak_into_the_normal_path(self, monkeypatch):
+        """有序列時 notice 不該出現在畫面上(它只管空序列那一格)。"""
+        fake = _render(monkeypatch, C.render_chart_card,
+                       _row(key="dxy", label="美元指數", band="green",
+                            value=104.0, unit="", decimals=1),
+                       _DXY, ["2026-08-01"], [104.0], notice="不該出現")
+        assert "不該出現" not in fake.screen()

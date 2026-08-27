@@ -368,6 +368,27 @@ def render_bucket_cards(summary: list[dict]) -> None:
                 unsafe_allow_html=True)
 
 
+#: 走勢卡腳註裡「門檻線」那一段的兩種說法。**只在這裡定義一次** —— 分兩處寫,
+#: 哪天改了一句沒改另一句,畫面上完全看不出來(§3.3)。
+_CAP_HAS_THR: str = "門檻線由 SSOT 畫出"
+_CAP_NO_THR: str = "本卡沒有門檻線（這個指標未設門檻）"
+
+
+def threshold_caption(spec: DangerSpec) -> str:
+    """腳註該說「門檻線由 SSOT 畫出」還是「沒有門檻線」。
+
+    為什麼需要分支:這句話原本是**無條件**印的,而加權指數的 spec 四個門檻欄
+    全是 None,`_threshold_lines_ssot` 一條線都畫不出來(實測
+    `fig.layout.shapes == 0`)—— 腳註說有、圖上沒有,兩邊都看起來很正常。
+
+    判定走 L0 SSOT `has_thresholds(spec)`,本層不列名單、不寫死任何指標名。
+    ⚠️ 這句話講的是 **L4 自己畫了什麼**(有沒有畫門檻線),不是業務原因 ——
+    業務原因(為什麼這條序列不可用之類)屬 L5,見 `render_chart_card` 的
+    `notice` 參數。
+    """
+    return _CAP_HAS_THR if has_thresholds(spec) else _CAP_NO_THR
+
+
 def _threshold_lines(fig: go.Figure, spec: DangerSpec, *, yref: str = "y") -> None:
     """把 DangerSpec 的門檻畫成虛線 —— 數字來自 SSOT,不在此寫死。
 
@@ -430,10 +451,27 @@ def render_value_card(row: Row, spec: DangerSpec) -> None:
 
 
 def render_chart_card(row: Row, spec: DangerSpec, xs: list, ys: list[float],
-                      *, kind: str = "line", series_note: str = "") -> None:
+                      *, kind: str = "line", series_note: str = "",
+                      notice: str = "") -> None:
     """走勢卡 —— 只給**有真實歷史序列**的指標用。
 
     `xs` / `ys` 由 L5 從真實資料備妥;本函式不生成任何序列。
+
+    Parameters
+    ----------
+    notice : str
+        `ys` 為空時要印的那一句話。**留空 = 沿用預設「歷史序列取得失敗」,
+        既有 caller 一個字都不會變。**
+
+        【為什麼要有這個參數】預設那句話把「空序列」一律說成**取得失敗**,
+        但空序列不只一種成因。融資餘額卡的實情是「**取到了,但資料不可用
+        所以不畫**」—— 印「取得失敗」等於告訴使用者去查一個不存在的連線
+        問題(§1:錯的說明比沒有說明更危險)。
+
+        【為什麼原因字串由 caller 給,不在這裡分支】L4 不知道、也不該知道
+        「融資餘額為什麼不可用」—— 那是 L5 的業務判斷。本層只負責**有一個
+        管道能把它印出來**;真在這裡寫一張「哪個指標配哪句話」的表,就是把
+        業務原因硬編進渲染層,而且必然與 L5 那份分岔(§3.3)。
     """
     zh, color = band_meta(row.band, spec)
     with st.container(border=True):
@@ -450,7 +488,9 @@ def render_chart_card(row: Row, spec: DangerSpec, xs: list, ys: list[float],
                         unsafe_allow_html=True)
 
         if not ys:
-            st.caption("歷史序列取得失敗 —— 不以合成資料替代。")
+            # ↓ 修正點:預設仍是「取得失敗」(零行為變更),但 caller 給了
+            #   `notice` 就講實話 —— 空序列不等於取得失敗。
+            st.caption(notice or "歷史序列取得失敗 —— 不以合成資料替代。")
             st.caption(f"門檻帶　{row.thr_text}")
             return
 
@@ -479,7 +519,7 @@ def render_chart_card(row: Row, spec: DangerSpec, xs: list, ys: list[float],
         )
         st.plotly_chart(fig, width='stretch',
                         config={"displayModeBar": False}, key=f"v2chart_{row.key}")
-        st.caption(f"門檻線由 SSOT 畫出　·　{series_note}")
+        st.caption(f"{threshold_caption(spec)}　·　{series_note}")
 
 
 def render_detail(row: Row, spec: DangerSpec, edu: dict | None = None,
@@ -1026,5 +1066,8 @@ def render_candlestick_card(row: Row, spec: DangerSpec, ohlc: OHLC, *,
         st.plotly_chart(build_candlestick_figure(ohlc, spec, name=row.label),
                         width="stretch", config={"displayModeBar": False},
                         key=key or f"v2kline_{row.key}")
-        st.caption("門檻線由 SSOT 畫出　·　不畫成交量（該欄目前恆為 0）"
+        # ↓ 修正點:原本無條件印「門檻線由 SSOT 畫出」,但本卡的 spec 四個
+        #   門檻欄全 None,實測 `fig.layout.shapes == 0` —— 腳註說有、圖上
+        #   沒有。改由 `threshold_caption(spec)` 依 SSOT 分支。
+        st.caption(f"{threshold_caption(spec)}　·　不畫成交量（該欄目前恆為 0）"
                    + (f"　·　{series_note}" if series_note else ""))
