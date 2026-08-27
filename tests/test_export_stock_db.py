@@ -131,13 +131,21 @@ def test_durable_export_from_real_parquet(tmp_path):
 
 
 def test_health_rows_maps_status_and_schema():
-    df = E._health_rows({"market_index": 100, "monthly_revenue": -1, "empty_ok": 0}, "2026-07-22")
+    # 2026-08-27：as_of 改吃 {field: 該表自己的資料日期 | None}。
+    # 原本是單一匯出日戳記戳滿全表 → 等於宣稱過期資料是今天的（見
+    # tests/test_source_health_as_of.py）。
+    df = E._health_rows(
+        {"market_index": 100, "monthly_revenue": -1, "empty_ok": 0},
+        {"market_index": "2026-07-22", "monthly_revenue": None, "empty_ok": None},
+    )
     m = {r["field"]: (r["status"], int(r["n_rows"])) for _, r in df.iterrows()}
     assert m["market_index"] == ("ok", 100)
     assert m["monthly_revenue"] == ("absent", 0)     # 缺料 → absent、n_rows 記 0（不造假）
     assert m["empty_ok"] == ("ok", 0)                # 0 列但有寫 → ok
     assert set(df.columns) == set(E._HEALTH_COLS)
-    assert (df["as_of"] == "2026-07-22").all()
+    a = {r["field"]: r["as_of"] for _, r in df.iterrows()}
+    assert a["market_index"] == "2026-07-22"
+    assert a["monthly_revenue"] is None and a["empty_ok"] is None
 
 
 def test_revenue_rows_drops_na_and_requires_cols():

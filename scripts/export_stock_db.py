@@ -26,7 +26,9 @@
     - `futures_oi`          台指期外資留倉淨口數（finmind_fut_oi,單位 口;+多/-空）
     - `futures_night`       台指期日盤+夜盤收盤 → 夜盤漲跌（finmind_fut_night;盤前隔日開盤領先）
 * 🩺 健康表（每次 export 依上述各表成敗自動產生,不需外部抓取）
-    - `source_health`       各表 status（ok/absent）+ n_rows + as_of（下游 2026 顯示維度降級/缺料,不再默默消失）
+    - `source_health`       各表 status（ok/absent）+ n_rows + as_of（下游 2026 顯示維度降級/缺料,
+                            不再默默消失）。**as_of = 該表自己的資料日期**（MAX(date)），
+                            取不到留空;2026-08-27 前是每列都戳匯出日 → 等於宣稱過期資料是今天的。
 
 （`stock_health`（財報評級）為下一增量,需財報體檢管線,另接。v19.174 去識別化:原帶稱謂。）
 
@@ -58,11 +60,19 @@ _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 _DATA_CACHE = _ROOT / "data_cache"
 
-# TW 時區（UTC+8）—— source_health as_of 戳記用（對照 CLAUDE.md §4.5：TW 時間一律 std datetime）。
+# TW 時區（UTC+8）——「今天是哪一天」用（對照 CLAUDE.md §4.5：TW 時間一律 std datetime）。
+# ⚠️ 2026-08-27 起**不再**用於 source_health 的 as_of：as_of 是資料歸屬日，不是匯出日。
 _TW_TZ = timezone(timedelta(hours=8))
 
 
 def _now_tw_date() -> str:
+    """今天（TW）的 ISO 日期。
+
+    ⚠️ 2026-08-27 起 production 路徑**不再呼叫**它 —— 它唯一的舊用途是給
+    `source_health.as_of` 蓋匯出日戳記，那正是被修掉的錯誤敘述。保留是因為
+    `tests/test_source_health_as_of.py` 需要一個「今天」當**反例基準**
+    （斷言 as_of 不得等於它）。新增 as_of / 日期欄位前請先讀 `_table_as_of`。
+    """
     return datetime.now(_TW_TZ).date().isoformat()
 
 
@@ -531,26 +541,76 @@ _HEALTH_OK = "ok"
 _HEALTH_ABSENT = "absent"        # 缺 token / 抓不到 → 該表未寫
 
 
-def _health_rows(result: dict[str, int], as_of: str) -> pd.DataFrame:
+def _table_as_of(conn: sqlite3.Connection, table: str) -> str | None:
+    """該表**實際落地資料**的最新日期（`MAX(date)`）；取不到回 None（= unknown）。
+
+    2026-08-27。「取不到」有三種,都回 None,**一律不得 fallback 成匯出日**：
+    (a) 表不存在（被 gate 擋下 / 缺 token 略過）;
+    (b) 表沒有 `date` 欄（現況只有 `stock_fundamentals`,它的期別是
+        `roc_year`+`season` 不是日期 —— 硬湊一個日期就是造假,故誠實留 unknown）;
+    (c) 表是空的 / 日期全 NULL。
+    """
+    try:
+        _cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{table}")')]
+    except sqlite3.Error:
+        return None
+    if not _cols or "date" not in _cols:
+        return None
+    try:
+        _row = conn.execute(f'SELECT MAX("date") FROM "{table}"').fetchone()
+    except sqlite3.Error:
+        return None
+    if not _row or _row[0] is None:
+        return None
+    return str(_row[0])[:10]
+
+
+def _health_rows(
+    result: dict[str, int],
+    as_of_by_field: "dict[str, str | None]",
+) -> pd.DataFrame:
     """export result dict → source_health 落地（純轉換，無 I/O，便於單測）。
 
     status：n < 0（略過 / 缺料）→ absent；否則 ok。n_rows：實際落地列數（absent 記 0）。
+
+    as_of：**每一列帶自己那張表的真實資料日期**，取不到留空（None → SQL NULL）。
+
+    ⚠️ 2026-08-27 修正。本函式原本收單一 `as_of: str`（= 匯出日 `_now_tw_date()`）
+    並戳在**每一列**上 —— 包括那筆 as_of 停在 2026-06 的 PMI。這比不標更糟：
+    不標只是缺資訊，戳匯出日是**主動宣稱「這是今天的資料」**（§1：錯的敘述比
+    沒有敘述更危險；§2.2：provenance 的 `as_of` 是資料歸屬日,不是抓取日）。
+    故簽章改吃 `{field: 資料日期 | None}`，且**刻意不留預設值** ——
+    未登錄的欄位回 None（unknown），不會有任何路徑再把時鐘寫進 as_of。
     """
     rows = [
         {
             "field": field,
             "status": _HEALTH_ABSENT if n < 0 else _HEALTH_OK,
             "n_rows": max(n, 0),
-            "as_of": as_of,
+            "as_of": as_of_by_field.get(field),
         }
         for field, n in result.items()
     ]
-    return pd.DataFrame(rows, columns=_HEALTH_COLS)
+    _df = pd.DataFrame(rows, columns=_HEALTH_COLS)
+    # pandas 會把 dict 裡的 None 轉成 NaN；unknown 要留成貨真價實的 None，
+    # 讓「未知」在 DataFrame 與 SQL NULL 兩端都是同一件事（也讓守衛測得動）。
+    _df["as_of"] = _df["as_of"].astype(object)
+    _df.loc[_df["as_of"].isna(), "as_of"] = None
+    return _df
 
 
-def write_source_health(conn: sqlite3.Connection, result: dict[str, int], as_of: str) -> int:
-    """各表成敗（ok / absent）落地成 source_health，供下游 2026 顯示『維度降級 / 缺料』。"""
-    _health_rows(result, as_of).to_sql("source_health", conn, if_exists="replace", index=False)
+def write_source_health(conn: sqlite3.Connection, result: dict[str, int]) -> int:
+    """各表成敗（ok / absent）落地成 source_health，供下游 2026 顯示『維度降級 / 缺料』。
+
+    `as_of` 逐表向**已落地的資料本身**問（`_table_as_of`），不吃任何時鐘參數 ——
+    「拿不到匯出日」在型別上就成立，避免舊行為被誰不小心接回去。
+    """
+    _as_of = {field: _table_as_of(conn, field) for field in result}
+    _unknown = [f for f, v in _as_of.items() if v is None and result.get(f, -1) >= 0]
+    if _unknown:
+        _log(f"   source_health：{', '.join(_unknown)} 無 date 欄 → as_of 留空（unknown，不填匯出日）")
+    _health_rows(result, _as_of).to_sql(
+        "source_health", conn, if_exists="replace", index=False)
     return len(result)
 
 
@@ -579,7 +639,7 @@ def export_all(db_path: Path, token: str, stock_ids: list[str] | None = None) ->
         result["macro_tw_signal"] = write_macro_tw_signal(conn, token)
         result["futures_oi"] = write_futures_oi(conn, token)
         result["futures_night"] = write_futures_night(conn, token)
-        write_source_health(conn, result, _now_tw_date())
+        write_source_health(conn, result)
         conn.commit()
     finally:
         conn.close()
