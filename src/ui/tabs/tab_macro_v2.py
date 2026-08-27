@@ -762,17 +762,30 @@ def _render_kline_card(card: ChartCard, *, ohlc_raw: dict) -> None:
 def _render_held_card(card: ChartCard, *, by_key: dict) -> None:
     """`hold_reason` 非空的卡:**數字照顯示,圖暫不繪製,原因寫在下面。**
 
-    走既有的 `render_chart_card` 並餵空序列 —— 它會印「歷史序列取得失敗
-    —— 不以合成資料替代。」+ 門檻帶,然後由本函式在卡片下方補上**那句
-    「取得失敗」的實際成因**與復原條件。
+    走既有的 `render_chart_card` 並餵空序列,但**把 `hold_reason` 當
+    `notice` 傳進去** —— 於是空序列那一格印的是本例的實際成因與復原條件,
+    而不是 L4 的預設句「歷史序列取得失敗」。
 
-    ⚠️ 兩個已知的取捨,都不是漏看:
-    1. L4 那句固定文案講的是「取得失敗」,而本例的實情是「取到了但不可用」。
-       L4 目前沒有「卡片層通知」這個管道,而該檔在本次的檔案邊界之外
-       (見交付回報的建議事項:替 `render_chart_card` 加一個 `notice` 參數)。
-       故改以緊接其後的說明句補齊,讀起來是**補述**而不是更正。
-    2. 說明句落在卡片框線**外**(L4 的 `st.container(border=True)` 在函式
-       內就關掉了),但仍在同一欄、緊貼卡片下方,歸屬不會被誤讀。
+    ⚠️ `notice` 是 **keyword-only**:L4 的 `render_chart_card` 在 `xs`/`ys`
+    之後就進 `*`,位置參數會撞到 `kind`。
+
+    ⚠️ **業務原因字串留在這一層**。L4 只提供「有一個管道能印出來」,不知道
+    也不該知道「融資餘額為什麼不可用」;真在 L4 寫一張「哪個指標配哪句話」
+    的表,就是把業務判斷硬編進渲染層,而且必然與本層那份分岔(§3.3)。
+
+    ~~⚠️ 兩個已知的取捨,都不是漏看:~~
+    ~~1. L4 那句固定文案講的是「取得失敗」,而本例的實情是「取到了但不可用」。~~
+    ~~   L4 目前沒有「卡片層通知」這個管道,而該檔在本次的檔案邊界之外~~
+    ~~   (見交付回報的建議事項:替 `render_chart_card` 加一個 `notice` 參數)。~~
+    ~~   故改以緊接其後的說明句補齊,讀起來是**補述**而不是更正。~~
+    ~~2. 說明句落在卡片框線**外**(L4 的 `st.container(border=True)` 在函式~~
+    ~~   內就關掉了),但仍在同一欄、緊貼卡片下方,歸屬不會被誤讀。~~
+    **2026-08-27 兩項取捨同時消滅,非漏刪**:`notice` 管道落地後,原因直接
+    **取代**那句「取得失敗」(取捨 1 從「補述」升級為「更正」),而且它印在
+    `st.container(border=True)` **之內**(取捨 2 一併解掉)。原文保留是為了
+    讓後人知道「為什麼曾經要在卡片外面補一句」,不是這裡從來沒發生過事。
+    ⚠️ 連帶:原本框線外那句 `st.caption(card.hold_reason)` **已移除** ——
+    留著會讓同一段字在同一張卡上印兩次。
 
     標題加上「⚠️ 圖表資料疑義」讓它一眼看得出來。這個字串是**從
     `row.label` 衍生**的,不是另外寫死一個名字(§3.3)。
@@ -781,8 +794,8 @@ def _render_held_card(card: ChartCard, *, by_key: dict) -> None:
 
     row = by_key[card.key]
     render_chart_card(_replace(row, label=f"{row.label}　⚠️ 圖表資料疑義"),
-                      SPECS_BY_KEY[card.key], [], [])
-    st.caption(card.hold_reason)
+                      SPECS_BY_KEY[card.key], [], [],
+                      notice=card.hold_reason)
 
 
 def render_one_card(card: ChartCard, *, by_key: dict, inputs,

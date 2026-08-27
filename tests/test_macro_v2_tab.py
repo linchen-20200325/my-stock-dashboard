@@ -1740,13 +1740,23 @@ class TestMarginCardHoldsTheChartOnly:
         assert "數字" in txt, "沒講清楚『卡片上的數字仍然是對的』"
 
     def test_held_card_still_shows_the_number_and_light(self, monkeypatch):
-        """圖不畫，但**數字與燈照顯示** —— 卡片不會變空白。"""
+        """圖不畫，但**數字與燈照顯示** —— 卡片不會變空白。
+
+        ⚠️ 2026-08-27 收尾改動：原本最後一條斷言是
+        `assert any("資料疑義" in c for c in caps), "原因必須印在卡片下方"`
+        —— 那時原因印在卡片框線**外**（L4 還沒有 `notice` 管道）。
+        管道接上後原因改走 `notice=` 印在**卡片之內**，框線外那句已移除，
+        故這裡改驗 `notice`。**不是把斷言放寬**：印出來的字串一模一樣，
+        只是位置從「卡片外的 st.caption」變成「傳給 L4 的 notice」。
+        「同一段字只印一次」另由 `TestHeldCardNoticeTellsTheTruth` 端到端釘住。
+        """
         import src.ui.tabs.tab_macro_v2 as m
 
         seen = {}
         monkeypatch.setattr(
             m, "render_chart_card",
-            lambda row, spec, xs, ys, **kw: seen.update(row=row, xs=xs, ys=ys))
+            lambda row, spec, xs, ys, **kw: seen.update(row=row, xs=xs, ys=ys,
+                                                        kw=kw))
         caps = []
         monkeypatch.setattr(m.st, "caption", lambda t, *a, **k: caps.append(t))
 
@@ -1758,7 +1768,8 @@ class TestMarginCardHoldsTheChartOnly:
         assert seen["row"].value == 5148.0, "數字必須照顯示"
         assert seen["row"].band != "gray", "燈必須照亮"
         assert "資料疑義" in seen["row"].label, "標題要看得出來"
-        assert any("資料疑義" in c for c in caps), "原因必須印在卡片下方"
+        assert "資料疑義" in seen["kw"].get("notice", ""), "原因必須經 notice 進卡片"
+        assert not caps, "原因已改印在卡片之內，框線外不該再補一次"
 
     def test_held_card_label_is_derived_not_hardcoded(self, monkeypatch):
         """標題徽章是從 `row.label` 衍生的，不是另外寫死一個名字（§3.3）。"""
@@ -1979,3 +1990,185 @@ pathlib.Path({out!r}).write_text(json.dumps(_hits), encoding='utf-8')
                                   parquet_series={}, ohlc_raw={})
             counts[density] = len(drawn)
         assert counts[m.DENSITY_COMPACT] < counts[m.DENSITY_FULL]
+
+
+# ════════════════════════════════════════════════════════════════
+# B-4 收尾 · 融資卡的空序列說明必須講實話（2026-08-27）
+#
+# 【修的是什麼】L4 `render_chart_card` 遇空序列的預設句是「歷史序列取得
+# 失敗 —— 不以合成資料替代。」。融資餘額卡的實情**不是取得失敗** ——
+# 4,912 列都拿到了，是同一欄混用兩種單位所以不可用。印「取得失敗」等於
+# 叫使用者去查一個不存在的連線問題（§1：錯的說明比沒有說明更危險）。
+#
+# 【為什麼要端到端】上一組 `TestMarginCardHoldsTheChartOnly` 把 L4 整支
+# monkeypatch 掉，驗的是「L5 傳了什麼」。傳對了畫面上仍可能是錯的（例如
+# 同一段字印兩次）。本組**放真的 L4 進來跑**，只換掉 streamlit，斷言的是
+# 「螢幕上實際出現了哪些字」。
+#
+# ⚠️ 本組不啟動 Streamlit runtime；`st` 以假物件離線攔截。
+# ════════════════════════════════════════════════════════════════
+
+class _NullCtx:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class _FakeST:
+    """只記錄「畫面上出現過哪些字」，不模擬 Streamlit 任何行為。
+
+    刻意與 `tests/test_macro_v2_card_honesty.py` 的同名類別各留一份：那一份
+    釘的是 L4 單體，這一份跨 L5+L4 兩個模組注入。共用會讓其中一邊改壞時
+    另一邊也跟著紅，反而看不出是誰壞的。
+    """
+
+    def __init__(self):
+        self.calls: list[tuple[str, str]] = []
+        self.figs: list = []
+
+    def markdown(self, body, **kw):
+        self.calls.append(("markdown", str(body)))
+
+    def caption(self, body, **kw):
+        self.calls.append(("caption", str(body)))
+
+    def plotly_chart(self, fig, **kw):
+        self.figs.append(fig)
+        self.calls.append(("plotly_chart", str(kw.get("key", ""))))
+
+    def container(self, **kw):
+        return _NullCtx()
+
+    def columns(self, spec, **kw):
+        n = len(spec) if isinstance(spec, (list, tuple)) else int(spec)
+        return [_NullCtx() for _ in range(n)]
+
+    def screen(self) -> str:
+        return "\n".join(b for _, b in self.calls)
+
+    def captions(self) -> list[str]:
+        return [b for k, b in self.calls if k == "caption"]
+
+
+_DEFAULT_EMPTY_SENTENCE = "歷史序列取得失敗 —— 不以合成資料替代。"
+
+
+def _render_card_for_real(monkeypatch, key: str, **kw) -> _FakeST:
+    """跑真正的 L5→L4，只把 streamlit 換掉。回傳畫面攔截器。"""
+    import src.ui.render.macro_v2_cards as C
+    import src.ui.tabs.tab_macro_v2 as m
+
+    fake = _FakeST()
+    monkeypatch.setattr(m, "st", fake)
+    monkeypatch.setattr(C, "st", fake)
+    rows = m.build_rows(_readiness(cl_data={"margin": 5148.0}))
+    card = next(c for c in m._CHART_SPECS if c.key == key)
+    m.render_one_card(card, by_key={r.key: r for r in rows},
+                      inputs=kw.get("inputs"), parquet_series=kw.get("parquet_series", {}),
+                      ohlc_raw=kw.get("ohlc_raw", {}))
+    return fake
+
+
+class TestHeldCardNoticeTellsTheTruth:
+
+    def test_the_premise_l4_default_sentence_is_still_that_wording(self):
+        """本組的前提。L4 哪天改了預設句，先在這裡紅，而不是默默失效。"""
+        import src.ui.render.macro_v2_cards as C
+        import inspect
+        src = inspect.getsource(C.render_chart_card)
+        assert _DEFAULT_EMPTY_SENTENCE in src
+
+    def test_margin_card_no_longer_claims_a_fetch_failure(self, monkeypatch):
+        """本次收尾的本體：融資卡實際渲染時不准再說「取得失敗」。"""
+        fake = _render_card_for_real(monkeypatch, "margin")
+        assert "歷史序列取得失敗" not in fake.screen()
+
+    def test_margin_card_states_its_real_reason_instead(self, monkeypatch):
+        """反向守衛：不准用「把那句話刪掉」來通過上一條。"""
+        import src.ui.tabs.tab_macro_v2 as m
+        fake = _render_card_for_real(monkeypatch, "margin")
+        card = next(c for c in m._CHART_SPECS if c.key == "margin")
+        assert card.hold_reason in fake.captions(), "疑義原因必須逐字出現在畫面上"
+
+    def test_the_reason_is_printed_exactly_once(self, monkeypatch):
+        """接上 `notice` 後若沒把框線外那句拿掉，同一段 ~150 字會印兩次。"""
+        import src.ui.tabs.tab_macro_v2 as m
+        fake = _render_card_for_real(monkeypatch, "margin")
+        card = next(c for c in m._CHART_SPECS if c.key == "margin")
+        assert fake.screen().count(card.hold_reason) == 1
+
+    def test_the_number_and_the_threshold_band_are_still_there(self, monkeypatch):
+        """把圖拿掉不等於把卡片挖空 —— 數字、燈、門檻帶都要留著。"""
+        fake = _render_card_for_real(monkeypatch, "margin")
+        screen = fake.screen()
+        assert "5,148" in screen, "上方的即時數字是對的，必須照顯示"
+        assert "門檻帶" in screen
+        assert "資料疑義" in screen, "標題徽章要看得出來"
+        assert not fake.figs, "held 卡不得畫出任何 figure"
+
+    def test_notice_is_keyword_only_so_it_cannot_collide_with_kind(self):
+        """A 段刻意把 `notice` 放在 `*` 之後。改成位置參數會撞到 `kind`。"""
+        import inspect
+        import src.ui.render.macro_v2_cards as C
+        sig = inspect.signature(C.render_chart_card)
+        assert sig.parameters["notice"].kind is inspect.Parameter.KEYWORD_ONLY
+        assert sig.parameters["notice"].default == ""
+
+    def test_l5_passes_it_by_keyword(self):
+        """守衛呼叫端寫法：拿掉 `notice=` 這一行會轉紅。"""
+        import ast
+        import pathlib
+        src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
+        fn = next(n for n in ast.walk(ast.parse(src))
+                  if isinstance(n, ast.FunctionDef) and n.name == "_render_held_card")
+        assert "notice=card.hold_reason" in ast.get_source_segment(src, fn)
+
+    def test_the_reason_string_stays_in_l5(self):
+        """業務原因不得下沉 L4 —— L4 只開管道，不寫死任何指標的原因（§3.3）。
+
+        ⚠️ 比對的是 **L4 會印出去的字串常值**，不是整份原始碼：L4 的
+        docstring 拿融資餘額當「為什麼要有這個參數」的說明例子，那是散文
+        不是分支，不算把業務原因硬編進渲染層。用整檔 `in` 比對會把這種
+        合法的說明也判成違規 —— 測錯東西比沒測更糟。
+        """
+        import ast
+        import pathlib
+        tree = ast.parse(pathlib.Path(
+            "src/ui/render/macro_v2_cards.py").read_text(encoding="utf-8"))
+        # docstring 節點先扣掉：它們是說明，不會被 render 出去。
+        docstrings = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef)):
+                body = getattr(node, "body", None) or []
+                if (body and isinstance(body[0], ast.Expr)
+                        and isinstance(body[0].value, ast.Constant)
+                        and isinstance(body[0].value.value, str)):
+                    docstrings.add(id(body[0].value))
+        literals = [n.value for n in ast.walk(tree)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                    and id(n) not in docstrings]
+        for bad in ("融資", "資料疑義", "單位"):
+            offenders = [t for t in literals if bad in t]
+            assert not offenders, f"L4 的字串常值出現業務原因 {bad!r}：{offenders}"
+
+
+class TestOtherEmptySeriesCardsAreUnchanged:
+    """零行為變更：**沒有** `hold_reason` 的卡遇空序列，仍印原本那句。"""
+
+    def test_a_session_card_with_no_series_still_prints_the_default(self, monkeypatch):
+        # us10y 是 KIND_SESSION；inputs=None → `_session_series` 回 (None, None)
+        fake = _render_card_for_real(monkeypatch, "us10y", inputs=None)
+        assert _DEFAULT_EMPTY_SENTENCE in fake.captions()
+
+    def test_a_parquet_card_with_no_series_still_prints_the_default(self, monkeypatch):
+        fake = _render_card_for_real(monkeypatch, "bias_240", parquet_series={})
+        assert _DEFAULT_EMPTY_SENTENCE in fake.captions()
+
+    def test_every_other_chart_card_has_no_hold_reason(self):
+        """上面兩條只抽驗了兩張卡；這條釘住「只有融資卡走 notice 這條路」。"""
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+        held = {c.key for c in _CHART_SPECS if c.hold_reason}
+        assert held == {"margin"}
