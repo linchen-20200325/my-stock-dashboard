@@ -116,6 +116,16 @@ def _ohlc(n: int = 5) -> C.OHLC:
 _TAIEX = REF_SPECS_BY_KEY["taiex"]      # 唯一無門檻的 spec
 _DXY = SPECS_BY_KEY["dxy"]              # 有門檻:黃 105 / 紅 110
 
+#: K 線卡腳註裡「為什麼不畫成交量」那一段的**預期文案,測試端自己持有一份字面**。
+#: 來源端改字 → 下面的逐字斷言仍會轉紅（守衛沒有因為抽成變數而變成恆真）。
+#:
+#: 2026-08-28 更正:原文案為「不畫成交量（該欄目前恆為 0）」,而該句在更正當天
+#: **已經是假的** —— `data_cache/twii_ohlcv.parquet` 2026-08-26 真量 4,026,600
+#: 回來,33 個交易日的 0 streak 已中斷。
+#: ⚠️ **改這兩條斷言不是為了讓 CI 綠,是因為被斷言的那句文案本身是錯的。**
+#: 畫面上掛一句假話,正是本檔開宗明義那條 §1「錯誤的數字比沒有數字更危險」。
+_CAP_VOL_EXPECTED = "不畫成交量（該欄缺值時為 0，與「真的沒成交」無法區分）"
+
 
 # ══════════════════════════════════════════════════════════════════════
 # 一、缺口 1 —— 參考走勢的右上角不得說「無資料」
@@ -282,13 +292,13 @@ class TestThresholdCaptionTellsTheTruth:
         fake = _render(monkeypatch, C.render_candlestick_card,
                        _row(band="green"), _DXY, _ohlc(), series_note="註")
         assert fake.captions()[-1] == (
-            "門檻線由 SSOT 畫出　·　不畫成交量（該欄目前恆為 0）　·　註")
+            "門檻線由 SSOT 畫出　·　" + _CAP_VOL_EXPECTED + "　·　註")
 
     def test_candlestick_caption_without_series_note_is_byte_identical(self,
                                                                        monkeypatch):
         fake = _render(monkeypatch, C.render_candlestick_card,
                        _row(band="green"), _DXY, _ohlc())
-        assert fake.captions()[-1] == "門檻線由 SSOT 畫出　·　不畫成交量（該欄目前恆為 0）"
+        assert fake.captions()[-1] == "門檻線由 SSOT 畫出　·　" + _CAP_VOL_EXPECTED
 
     def test_chart_card_caption_is_byte_identical_for_a_normal_spec(self,
                                                                     monkeypatch):
@@ -310,6 +320,46 @@ class TestThresholdCaptionTellsTheTruth:
         """L4 不准把業務名稱寫進文案 —— 寫了就是名單,上游多一條不會自己長。"""
         for name in ("加權指數", "taiex", "TAIEX", "融資"):
             assert name not in C._CAP_NO_THR
+
+    # ── 2026-08-28 新增:逐字斷言擋不住「文案本身是假的」──────────────────
+    #
+    # 上面兩條逐字斷言守的是「文案有沒有被順手改掉」,**守不到**「這句話是不是
+    # 真的」—— 實證:「該欄目前恆為 0」被逐字釘了一個月,期間 streak 早就中斷,
+    # 兩條斷言全綠,而畫面一直在說假話。逐字守衛與誠實守衛是**兩件事**。
+    #
+    # 這條補的是**可機械檢查的那一半**:腳註不得對一個**會變的資料狀態**下
+    # 絕對化斷言。它抓不到「語意上是不是真的」(那需要人讀),但它抓得到
+    # 這次真正出事的那個形狀 —— 把「當下狀態」寫成「永久事實」。
+
+    #: 對「會變的資料狀態」下絕對化/當下式斷言的字眼。寫進畫面 = 保證會過期。
+    _STALENESS_PRONE = ("恆為", "恆等", "永遠", "已恢復", "全為 0", "至今仍")
+
+    def test_candlestick_caption_makes_no_absolute_claim_about_data_state(
+            self, monkeypatch):
+        """腳註不得宣稱一個會變的資料狀態是永久的。
+
+        §1:錯誤的數字比沒有數字更危險 —— 一句**保證會過期**的斷言,
+        過期之後就是畫面上的假話,而且沒有任何東西會通知你它過期了。
+        正確寫法是陳述該欄位的**永久性質**(「缺值時為 0，與『真的沒成交』
+        無法區分」),那句話無論來源當下有沒有掉量都成立。
+        """
+        for kw in ({}, {"series_note": "註"}):
+            fake = _render(monkeypatch, C.render_candlestick_card,
+                           _row(band="green"), _DXY, _ohlc(), **kw)
+            cap = fake.captions()[-1]
+            for bad in self._STALENESS_PRONE:
+                assert bad not in cap, (
+                    f"腳註出現會過期的絕對化斷言「{bad}」：{cap}　"
+                    f"—— 請改成陳述該欄位的永久性質，不要陳述當下狀態")
+
+    def test_the_guard_above_would_actually_have_caught_the_real_bug(self):
+        """證明上一條不是恆真斷言:拿**真的出過事的那句原文**餵它,必須被抓到。"""
+        historical_false_caption = "門檻線由 SSOT 畫出　·　不畫成交量（該欄目前恆為 0）"
+        assert any(bad in historical_false_caption
+                   for bad in self._STALENESS_PRONE)
+        # 而現行文案必須通過
+        assert not any(bad in _CAP_VOL_EXPECTED
+                       for bad in self._STALENESS_PRONE)
 
 
 # ══════════════════════════════════════════════════════════════════════
