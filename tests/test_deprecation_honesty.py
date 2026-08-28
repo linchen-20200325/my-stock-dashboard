@@ -40,8 +40,15 @@ import pytest
 
 _REPO = pathlib.Path(__file__).resolve().parent.parent
 _SCAN_DIRS = ("src", "shared", "scripts", "infra", "tools", "mcp_server")
-#: 掃描排除:獨立子 app(自成一個 repo,不共用程式碼)、快取、虛擬環境殘骸。
-_SKIP_PARTS = ("stock_etf_dashboard", "__pycache__", ".git", "scratchpad", "wt-")
+#: 掃描排除:快取、虛擬環境殘骸、暫存工作區。
+#: ⚠️ 2026-08-28:原本首項是 `"stock_etf_dashboard"`(獨立子 app)。該目錄已依 user
+#: 裁示整個刪除,字串留著就會變成一個指向不存在目標的排除條件 —— 下一個讀這行的人
+#: 會以為 repo 裡還有那個子 app。故一併移除。
+#: 附帶事實(查證後才敢寫):這一項**在刪除前就已經是空轉的** —— `_SCAN_DIRS` 只走
+#: src / shared / scripts / infra / tools / mcp_server,`stock_etf_dashboard/` 是
+#: 頂層目錄、從來不在任一 scan 根底下,故該字串從加入起就沒有濾掉過任何一個檔案。
+#: 移除它因此**不改變本測試掃描到的檔案集合**(掃描集合的變化全部來自目錄本身被刪)。
+_SKIP_PARTS = ("__pycache__", ".git", "scratchpad", "wt-")
 
 #: 「這東西已經廢棄」的**強標記**。刻意不收「舊版」「legacy」——
 #: 本 repo 有大量「舊版寫錯,已修」的歷史說明句,收進來會全是雜訊。
