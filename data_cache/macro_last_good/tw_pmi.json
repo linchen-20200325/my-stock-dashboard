@@ -1,9 +1,10 @@
 {
-  "value": 60.7,
-  "date": "2026-06-01",
-  "label": "中華經濟研究院 PMI（2026-06 官方公布）",
-  "source": "CIER 官方公布 2026-06",
-  "is_proxy": false,
-  "series_id": "cier-seed-2026-06",
-  "cached_at": "2026-07-01T00:00:00"
+  "value": 61.5,
+  "date": "2026-07-01",
+  "label": "政府資料開放平臺 dataset/6100（國發會 NDC）",
+  "source": "data.gov.tw/6100",
+  "is_proxy": true,
+  "series_id": "dgtw-6100",
+  "fetched_at": "2026-08-28T20:47:51.012851+00:00",
+  "cached_at": "2026-08-28T20:47:56.704411"
 }
