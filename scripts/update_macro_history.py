@@ -172,6 +172,33 @@ def fetch_twii_ohlcv(start: _dt.date, end: _dt.date) -> pd.DataFrame:
             "volume": ind.get("volume", [None] * len(ts)),
         })
         df = df.dropna(subset=["close"]).reset_index(drop=True)
+
+        # ── §1/§3.2 sanity:「價格有波動但 volume == 0」= 物理上不可能的觀測 ──
+        # 上游(Yahoo Chart API)對 ^TWII 會間歇回 volume=0。實測
+        # `data_cache/twii_ohlcv.parquet`(量測日 2026-08-27):41 筆 volume==0,
+        # **41/41 都 high > low** —— 價格有波動就一定有成交,那個 0 不是觀測、
+        # 是缺值。若原樣落地,下游 `market_strategy.volume_window_stats()` 之外
+        # 的任何 rolling 均量都會被稀釋(實測可把量比灌到 20.0x → 假瘋牛)。
+        #
+        # 判準刻意用「價格有動但量為 0」而不是絕對門檻:那才是「物理上不可能」
+        # 的準確表達,且不會誤殺 §4.6 記載的「跌停 0 vol」(整日無成交時
+        # high == low,不命中本條)。
+        #
+        # 處置刻意**不 raise**(對照同檔 `fetch_finmind_margin` 的全批不寫):
+        # 那裡漂的是**採用欄位/口徑**,整批都不可信;這裡 close 本身是好的,
+        # 只有 volume 一欄有問題 —— 全批擋掉會連帶弄丟日 K,損失更大。
+        # 故改為「顯式寫 NaN + log 受影響筆數」(§1:任何填補/剔除必須顯式 + log)。
+        if not df.empty and "volume" in df.columns:
+            df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+            _impossible = (df["volume"] == 0) & (df["high"] > df["low"])
+            _n_bad = int(_impossible.sum())
+            if _n_bad:
+                _dates = list(df.loc[_impossible, "date"].astype(str).head(5))
+                df.loc[_impossible, "volume"] = float("nan")
+                print(f"[twii_ohlcv] ⚠️ {_n_bad}/{len(df)} 列 volume=0 但 high>low"
+                      f"（價格有波動 ⇒ 必有成交）→ 顯式標為 NaN，不寫 0"
+                      f"（樣本日期={_dates}）")
+
         # S-PROV-1 phase 13 v18.259 — provenance(schema-additive)
         if not df.empty:
             df["source"] = "Yahoo:^TWII:chart"

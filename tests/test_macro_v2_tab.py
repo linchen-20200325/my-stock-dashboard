@@ -1596,7 +1596,8 @@ class TestCardBWiring:
             pytest.skip("本機無 twii_ohlcv.parquet")
         assert set(got) == {"xs", "open", "high", "low", "close"}, (
             f"回傳欄位變了：{sorted(got)}　"
-            f"—— 尤其 volume 不得回傳（該欄自 2026-07-09 起恆為 0）")
+            f"—— 尤其 volume 不得回傳（該欄 2026-07-09~08-25 連續 33 個交易日為 0；"
+            f"2026-08-26 起 streak 中斷但零星 0 仍間歇出現，全檔 41 筆，仍不可信）")
         assert len({len(v) for v in got.values()}) == 1, "五個 list 長度不一致"
         assert len(got["xs"]) <= TWII_KLINE_TRADING_DAYS
 
@@ -1632,7 +1633,8 @@ class TestCardBWiring:
     def test_l4_ohlc_type_has_no_volume_field(self):
         """結構層守衛：L4 的 `OHLC` 根本沒有 volume 欄位。
 
-        兩層都不碰，才不會有人「順手」把恆為 0 的成交量接回來畫成一排空白。
+        兩層都不碰，才不會有人「順手」把長期缺值的成交量接回來畫成一排空白。
+        （2026-08-27 更正：2026-08-26 起 streak 中斷（真量回來），但零星單日 0 仍會間歇出現（2019/2022/2024/2025 皆有前例，全檔 41 筆）→ 仍不可信，不畫的理由不變。）
         """
         import dataclasses
         from src.ui.render.macro_v2_cards import OHLC
@@ -1645,7 +1647,8 @@ class TestCardBWiring:
         src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
         hits = [n for n in ast.walk(ast.parse(src))
                 if isinstance(n, ast.Constant) and n.value == "volume"]
-        assert not hits, "L5 出現了 'volume' 字串常數 —— 該欄目前恆為 0，不畫"
+        assert not hits, ("L5 出現了 'volume' 字串常數 —— 該欄長期缺值"
+                          "（2026-07-09~08-25 連續 33 日為 0，之後零星 0 仍間歇出現），不畫")
 
     def test_kline_card_passes_reference_spec_and_no_threshold(self, monkeypatch):
         import src.ui.tabs.tab_macro_v2 as m

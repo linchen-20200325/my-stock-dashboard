@@ -8,10 +8,12 @@ v4.1 [step 3c]：來源切換 — TWSE BFI82U 直連 → tw_macro.fetch_finmind_
 """
 try:
     from src.config import (MARKET_SCORE_BULL, MARKET_SCORE_NEUTRAL,
-                        EXPOSURE_BULL, EXPOSURE_NEUTRAL, EXPOSURE_BEAR)
+                        EXPOSURE_BULL, EXPOSURE_NEUTRAL, EXPOSURE_BEAR,
+                        BULLRUN_VOL_THRESHOLD, BULLRUN_VOL_MIN_VALID_DAYS)
 except ImportError:
     MARKET_SCORE_BULL = 3; MARKET_SCORE_NEUTRAL = 2
     EXPOSURE_BULL = 0.8; EXPOSURE_NEUTRAL = 0.5; EXPOSURE_BEAR = 0.2
+    BULLRUN_VOL_THRESHOLD = 1.3; BULLRUN_VOL_MIN_VALID_DAYS = 15
 
 # v18.449:市場廣度中性門檻 SSOT(原 inline `1.0`，尺度語意錯誤，見下方 market_regime docstring）
 from shared.signal_thresholds import M1B_M2_LEG_ENABLED, MARKET_BREADTH_NEUTRAL_PCT
@@ -162,12 +164,23 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
 
     # ── 瘋牛濾網
     # ── P1 v19.470:`else False` 把「沒有量資料」靜默等同「沒有瘋牛」──────────
-    # 實測 `data_cache/twii_ohlcv.parquet` 自 2026-07-09 起 volume 每日皆為 0
+    # 實測 `data_cache/twii_ohlcv.parquet` 自 2026-07-09 起 volume 連續為 0
     # (Yahoo Chart API 對 ^TWII 停止回傳量),整條濾網已**靜默死亡一個多月**,
     # 不 log、不 raise、不帶旗標 —— 完全符合 §1 所禁的「讓程式不報錯」。
     # 瘋牛本來就不計分(只 append signal),故行為零位移;差別在**畫面說實話**。
+    # ⚠️ **2026-08-26 起該 streak 已中斷**(當日真量 4,026,600 回來),但零星
+    # 單日 0 仍會間歇出現(2019/2022/2024/2025 皆有前例) —— 詳見下方
+    # `volume_window_stats()` 與其處理的「假 0 稀釋均量」失效模式。
+    #
+    # ── 2026-08-27:假 0 混入均量 → **假瘋牛**(本輪在修的真 bug)───────────
+    # streak 中斷那一天,近 20 日 = 19 個假 0 + 1 個真量。上游若直接
+    # `rolling(20).mean()`,均量 = 真量/20 = 201,330,量比 20.0x 遠超門檻 1.3,
+    # 於是畫面把「資料缺失」換成「💹 瘋牛模式：成交量 20.0x 均量」——
+    # **一個會持續約 19 個交易日的假多頭訊號**。上游 `volume_window_stats()`
+    # 已把 0 排除並要求最少有效樣本數,不足時傳 None 進來 → 本分支照樣走
+    # 誠實文案。本行的 `_vol_ok` 三態判斷因此仍是最後一道防線,不放寬。
     _vol_ok  = (avg_vol_20 or 0) > 0 and (vol_today or 0) > 0
-    _bullrun = (vol_today > avg_vol_20 * 1.3) if _vol_ok else False
+    _bullrun = (vol_today > avg_vol_20 * BULLRUN_VOL_THRESHOLD) if _vol_ok else False
     if _bullrun:
         signals.append(f'💹 瘋牛模式：成交量 {vol_today/avg_vol_20:.1f}x 均量')
     elif not _vol_ok:
@@ -292,6 +305,68 @@ def market_score(index_price, ma200, foreign_buy, volume, avg_volume=1000):
             'confidence': confidence, 'signals': signals}
 
 
+VOL_WINDOW_DAYS = 20   # 「月均量」= 20 個交易日(§4.1 交易日 vs 日曆日)
+
+
+def volume_window_stats(df, window=VOL_WINDOW_DAYS,
+                        min_valid=BULLRUN_VOL_MIN_VALID_DAYS, label='MarketStrategy'):
+    """從日 K 算出 `(avg_vol_20, vol_today)`；**算不出誠實的值就回 (None, None)**。
+
+    為什麼不能直接 `rolling(20).mean()`(§1 Fail Loud)
+    ---------------------------------------------------
+    `volume == 0` 在大盤日 K 上**不是一個有效觀測,而是一個缺值** —— 一整個市場
+    不可能在有價格波動的交易日成交 0 張。實測 `data_cache/twii_ohlcv.parquet`
+    (量測日 2026-08-27):全檔 41 筆 `volume == 0`,**41/41 都 `high > low`**
+    (價格有波動 ⇒ 一定有成交);同檔非零列 min=136,500、中位數 2,895,800。
+
+    把那些 0 當成樣本餵進均值,等於「用缺值把分母灌大」:
+      近 20 日 = 19 個假 0 + 1 個真量 4,026,600
+      → mean = 4,026,600 / 20 = 201,330，量比 = 20.0x > 門檻 1.3
+      → 畫面送出「💹 瘋牛模式：成交量 20.0x 均量」這個**假多頭訊號**,
+        而且會持續約 19 個交易日,直到假 0 全部滾出視窗。
+
+    處理方式
+    --------
+    1. `volume <= 0` / NaN 一律視為**沒有觀測**(顯式排除 + log 筆數,§1)。
+       這裡用「<= 0」而不是資料層那條精準的「high > low 但 volume == 0」,
+       是**刻意從嚴**:本層只拿得到量序列,而「大盤某日真的成交 0 張」與
+       「這天的量沒抓到」在下游是同一件事(都不該拿來算均量),從嚴的代價
+       只是多說一次「資料缺失」,反向的代價是再送一次假瘋牛。
+    2. 有效樣本 < `min_valid` → 回 `(None, None)`,由呼叫端走既有的誠實文案
+       「⬜ 成交量資料缺失（瘋牛濾網未評估）」。**不是**靜默跳過、更不是補值。
+    3. 今日本身是假 0 → 同樣回 `(None, None)`(拿缺值當分子毫無意義)。
+
+    Returns:
+        (avg_vol, vol_today):兩者皆 float,或在無法誠實計算時皆為 None。
+    """
+    import pandas as pd
+    if df is None or 'Volume' not in getattr(df, 'columns', []):
+        # §1:沒有 Volume 欄 → 誠實回缺值。**禁止**憑空生一個 1000 當均量
+        # (舊碼 `else 1000` / `else avg_vol` 正是 §1 明禁的「自行估一個合理值」)。
+        print(f'[{label}] ⚠️ 無 Volume 欄 → 量能項不評估（不捏造均量）')
+        return None, None
+
+    _vol = pd.to_numeric(df['Volume'], errors='coerce')
+    _valid = _vol.where(_vol > 0)          # 0 / 負 / NaN 一律「沒有觀測」
+    _win = _valid.iloc[-window:]
+    _n_valid = int(_win.notna().sum())
+    _n_dropped = int(len(_win) - _n_valid)
+    if _n_dropped:
+        # §3.3 / §1:任何顯式剔除都要 log 受影響筆數
+        print(f'[{label}] ⚠️ 近 {len(_win)} 個交易日有 {_n_dropped} 筆 volume<=0'
+              f'（價格有波動時物理上不可能）→ 顯式排除，有效樣本 {_n_valid}'
+              f'（門檻 {min_valid}）')
+    if _n_valid < min_valid:
+        print(f'[{label}] ⚠️ 有效量樣本 {_n_valid} < {min_valid} → 均量不計算，'
+              f'量能項回報「資料缺失」（§1 寧缺勿錯）')
+        return None, None
+    _today = _win.iloc[-1] if len(_win) else float('nan')
+    if pd.isna(_today):
+        print(f'[{label}] ⚠️ 今日 volume 缺值/為 0 → 量比不計算（不拿缺值當分子）')
+        return None, None
+    return float(_win.mean()), float(_today)
+
+
 def get_market_assessment(df_index=None, foreign_net=None,
                           m1b_m2_gap=None, m1b_m2_prev=None, ad_ratio=None):
     """
@@ -339,8 +414,13 @@ def get_market_assessment(df_index=None, foreign_net=None,
 
     ma60  = float(_close.rolling(60).mean().iloc[-1])  if len(df_index) >= 60  else current_price
     ma200 = float(_close.rolling(200).mean().iloc[-1]) if len(df_index) >= 200 else current_price
-    avg_vol   = float(df_index['Volume'].rolling(20).mean().iloc[-1]) if 'Volume' in df_index.columns else 1000
-    vol_today = float(df_index['Volume'].iloc[-1]) if 'Volume' in df_index.columns else avg_vol
+    # P1 2026-08-27:原本是
+    #   avg_vol   = ...rolling(20).mean()... if 'Volume' in cols else 1000
+    #   vol_today = ...Volume.iloc[-1]...   if 'Volume' in cols else avg_vol
+    # 兩個問題各違一條 §1:(a) 把假 0 當有效樣本餵進均量 → 假瘋牛 20.0x;
+    # (b) 沒有 Volume 欄時憑空生 `1000`(「自行估一個合理值當常數」)。
+    # 兩者一併收進 `volume_window_stats()`,算不出來就誠實回 None。
+    avg_vol, vol_today = volume_window_stats(df_index)
     ma5   = float(_close.rolling(5).mean().iloc[-1]) if len(df_index) >= 5 else current_price
 
     # ── MA120：NaN 防呆（資料不足時絕不用 current_price 填補）────────

@@ -314,8 +314,9 @@ def load_extreme_risk_legs(
           "foreign_date":  date  | None,
         }
 
-    ⚠️ `twii_ohlcv.parquet` 的 **volume 欄自 2026-07-09 起每日皆為 0**
+    ⚠️ `twii_ohlcv.parquet` 的 **volume 欄自 2026-07-09 起連續 33 個交易日為 0**
     (Yahoo Chart API 對 ^TWII 停止回傳量,見 services/market_strategy.py 註解)。
+    **2026-08-27 更正**:2026-08-26 起該 streak 已中斷（當日真量 4,026,600 回來），但零星單日 0 仍會間歇出現（2019/2022/2024/2025 皆有前例，全檔 41 筆）。
     本函式**只讀 close**,不碰 volume。
 
     「20 交易日」直接取 parquet 的第 20 列之前 —— parquet 的每一列就是一個交易日,
