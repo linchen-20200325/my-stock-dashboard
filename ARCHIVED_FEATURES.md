@@ -44,7 +44,7 @@ UI 檔 780 LOC 純 Streamlit wrapper,0 unique 邏輯,100% 委派 backend。已�
 | L2 Compute `src/compute/macro/macro_validation_tw.py` | ~~✅ live(crisis event detection 邏輯,157 LOC)~~ → ❌ **已刪**(`9f61437` / PR #623,2026-08-19;刪除當下實測 134 行,原文寫的 157 行不符) |
 | L2 Compute `src/compute/macro/macro_signal_lookback_tw.py` | ~~✅ live(8 fetch_*_series + S-PROV-1 provenance,588 LOC)~~ → ❌ **已刪**(同 `9f61437`;刪除當下實測 581 行,原文寫的 588 行不符) |
 | L2 Compute `src/compute/scoring/multi_factor_optimization.py` | ~~✅ live(weight optimization engine,527 LOC)~~ → ❌ **已刪**(同 `9f61437`;刪除當下實測 521 行,原文寫的 527 行不符) |
-| L0 SSOT `shared/signal_thresholds.py` | ✅ **仍在**(2026-08-28 實測 1,556 行)—— 本列是這張表**唯一沒說謊**的一列。它沒跟著被刪,是因為它另有大量其他 consumer,不專屬本功能 |
+| L0 SSOT `shared/signal_thresholds.py` | ✅ **未隨 `9f61437` 一起移除**(這是歷史事實,不會過期;至於「現在還在不在」請自行 `ls`,2026-08-28 實測為在)。原因:它**不專屬本功能**,另有大量其他 consumer,故不在 PR #623 的刪除範圍內。<br>⚠️ **本列只宣稱上面這一件事,不宣稱「全表只有這一列是對的」** —— 同表的 `app.py` 未掛載、L5 UI 已真刪兩列,2026-08-28 一併實測**亦與現況相符**(`grep -c tab_macro_validation app.py` → 0;`ls src/ui/tabs/tab_macro_validation.py` → No such file) |
 | Tests | ~~✅ 12 backend test 全保留(`test_macro_signal_lookback_tw.py` 30 case /<br>`test_multi_factor_optimization.py` 28 case /<br>`test_macro_validation_tw.py` 9 case)~~ → ❌ **三個測試檔全數已刪**(同 `9f61437`)。<br>另:原文的 case 數也不準,刪除當下實測為 37 / 32 / 9(共 78,非 12)。「7 個 source-string 守衛 test 同步退役」該句未查證,維持原狀不背書 |
 
 > ⚠️ **2026-08-28 逐檔實測更正(原表格內容加刪除線保留,不刪乾淨)**。
