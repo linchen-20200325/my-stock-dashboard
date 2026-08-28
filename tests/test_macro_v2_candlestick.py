@@ -10,7 +10,7 @@
 
 另外兩件客戶已拍板、必須被釘住的事：
   · **不畫成交量** —— `volume` 欄自 2026-07-09 起連續 33 個交易日全為 0，
-    畫出來就是一整排零。
+    畫出來就是一整排零。（2026-08-27 更正：2026-08-26 起 streak 中斷（真量回來），但零星單日 0 仍會間歇出現（2019/2022/2024/2025 皆有前例，全檔 41 筆）→ 仍不可信，不畫的理由不變。）
   · **關掉 rangeslider** —— plotly Candlestick 預設會長縮放條，在 height=210
     的小卡上吃掉近一半。
 
@@ -143,7 +143,10 @@ class TestClientDecisions:
         )
 
     def test_no_volume_trace_is_drawn(self):
-        """`volume` 自 2026-07-09 起連續 33 個交易日全為 0，畫出來是一排零。"""
+        """`volume` 自 2026-07-09 起連續 33 個交易日全為 0，畫出來是一排零。
+
+        2026-08-27 更正：2026-08-26 起 streak 中斷（真量回來），但零星單日 0 仍會間歇出現（2019/2022/2024/2025 皆有前例，全檔 41 筆）→ 仍不可信，不畫的理由不變。
+        """
         fig = C.build_candlestick_figure(_ohlc(), _SPEC)
         assert all(t.type == "candlestick" for t in fig.data)
         assert not any(t.type in ("bar", "scatter") for t in fig.data)

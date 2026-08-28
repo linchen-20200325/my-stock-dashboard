@@ -1007,7 +1007,8 @@ def _render_kline_card(card: ChartCard, *, ohlc_raw: dict) -> None:
     判定並印出缺哪一欄(§1:不挑能畫的欄位硬畫、不 fallback 成折線)。
 
     ⚠️ **不傳 volume**:L4 的 `OHLC` 型別根本沒有這個欄位(該欄自 2026-07-09
-    起連續 33 個交易日全為 0)。這裡順帶記一筆是因為 `get_twii_ohlc()` 也
+    起連續 33 個交易日全為 0;**2026-08-27 更正**:2026-08-26 起該 streak 已中斷（當日真量 4,026,600 回來），但零星單日 0 仍會間歇出現（2019/2022/2024/2025 皆有前例，全檔 41 筆） —— 仍不可信,不畫的理由不變)。
+    這裡順帶記一筆是因為 `get_twii_ohlc()` 也
     刻意沒有回傳它 —— 兩層都不碰,才不會有人「順手」把它接回來。
     """
     row = build_reference_row(card.key, _last_or_none(ohlc_raw.get("close")))

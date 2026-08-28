@@ -151,9 +151,28 @@ def _make_ohlcv_schema():
     - OHLC 4 欄 non-null + >= 0
     - volume non-null + >= 0
     - 不變量:low ≤ min(open, close), high ≥ max(open, close), low ≤ high
+    - **不變量:volume == 0 時 high 必須 == low**(2026-08-27 新增,見下)
+
+    2026-08-27 補一道守衛:`volume >= 0` 這條 column check 對 `0` **恆為 True**,
+    也就是它**由設計上就看不見**「上游把缺值送成 0」這個 case ——
+    而那正是實測真的發生的事(`data_cache/twii_ohlcv.parquet` 41 筆 volume==0,
+    41/41 都 high > low),下游 rolling 均量被稀釋後送出過假的量比 20.0x。
+    "價格有波動但成交量為 0" 是**物理上不可能**的觀測,故升格為 DataFrame 級不變量。
     """
     if not PANDERA_AVAILABLE:
         return None
+
+    def _volume_zero_only_when_flat(df):
+        """volume == 0 只有在當日完全沒成交(high == low)時才可能為真。
+
+        刻意不寫成「volume > 0」:§4.6 明列「跌停 0 vol:有 close 但 vol=0 →
+        視為有效報價(不可丟掉)」—— 那種日子整日無成交,high == low,不命中本條。
+        本條抓的是「價格明明有波動、量卻是 0」,那不是報價、是缺值冒充觀測。
+        """
+        if 'volume' not in df.columns:
+            return True
+        _bad = (df['volume'] == 0) & (df['high'] > df['low'])
+        return not bool(_bad.any())
 
     def _ohlc_invariants(df):
         # low ≤ open / close ≤ high;low ≤ high;volume ≥ 0
@@ -174,6 +193,9 @@ def _make_ohlcv_schema():
         },
         checks=[
             pa.Check(_ohlc_invariants, error='OHLC invariants violated'),
+            pa.Check(_volume_zero_only_when_flat,
+                     error='volume==0 while high>low (impossible observation; '
+                           'missing value disguised as zero)'),
         ],
         strict=False,  # 允許 extra columns(provenance 欄位等)
     )
