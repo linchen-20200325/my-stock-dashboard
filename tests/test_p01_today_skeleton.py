@@ -484,6 +484,38 @@ class TestFourStatesFromTheContract:
         assert _c.state == "failed"
         assert "boom" in _c.note.why
 
+    @pytest.mark.parametrize(
+        "glyph", sorted(T._STATE_GLYPHS),
+        ids=[f"glyph-{_g}" for _g in sorted(T._STATE_GLYPHS)])
+    def test_upstream_error_with_a_glyph_still_paints_a_red_card(self, glyph):
+        """必修-A：**上游訊息帶 glyph 時，紅卡照畫，不得改成拋例外。**
+
+        `Note` 禁收 glyph（必修-2）是對的 —— 它擋的是**人手抄**。
+        但 `failed` 分支把上游例外訊息原樣插進 `why`，於是一個
+        「`🔴 FRED 連線失敗`」會在 `Note.__post_init__` 變成 `ValueError`，
+        一路穿過 `build_today_blocks` → `render_tab_today` 成為**整頁崩潰**，
+        而不是那張紅色「取得失敗」卡。
+        **「紅態要看得見，不是換一種炸法」從另一道門走回來了。**
+        """
+        _c = T.build_status_bar_card(None, error=f"{glyph} 上游掛了")
+        assert _c.state == "failed", "帶 glyph 的錯誤訊息把紅態弄丟了"
+        assert "上游掛了" in _c.note.why, "原始訊息被整段吃掉了"
+        assert glyph not in _c.note.why, "glyph 沒有被移除"
+        assert "已移除" in _c.note.why, (
+            "移除了東西卻沒說 —— §1：修改過的訊息不能假裝自己是原文")
+
+    def test_whole_page_survives_a_glyph_laden_upstream_error(self):
+        """半徑證明：整頁組裝也不能炸（`build_today_blocks` 是真正的路徑）。"""
+        _blocks = T.build_today_blocks(
+            macro_error="🔴 FRED 連線失敗 ▨ 空表 ⬜")
+        _bar = {_c.key: _c for _b in _blocks for _c in _b.cards}["statusbar.macro"]
+        assert _bar.state == "failed"
+
+    def test_scrub_reports_how_many_it_removed(self):
+        _clean, _n = T.scrub_state_glyphs("🔴 a ▨ b 🟢")
+        assert _n == 3 and "a" in _clean and "b" in _clean
+        assert not (set(_clean) & T._STATE_GLYPHS)
+
     def test_live_contract_gives_a_conclusion(self):
         from shared import regime_arbiter as RA
         _c = T.build_status_bar_card(
@@ -580,12 +612,22 @@ def test_page_mounts_clean(tmp_path):
 
 
 @pytest.mark.slow
-def test_pressing_update_does_not_change_any_card_text(tmp_path):
+def test_pressing_update_twice_does_not_change_any_card_text(tmp_path):
     """必修-1 的實跑證明：**按下更新鈕，畫面文字逐字不變。**
 
-    稽核就是這樣抓到那句假指路的。這條把它固定下來 ——
-    只要哪天按鈕真的接上了取數，這條會轉紅，那時**同時**要改
-    `CONTRACT_NO_EXIT_WHERE` 的文案，兩件事被綁在一起。
+    ⚠️ **必須點兩次，點一次結構上什麼都看不到**（稽核必修-B）：
+    Streamlit 的 `form_submit_button` 是在**該次 rerun 的頁面主體渲染完之後**
+    才回 True，而 `render_tab_today` 在最頂端就把 `get_macro_state` 讀完了 ——
+    handler 寫進 session 的東西**要到下一次 rerun 才看得見**。
+    上一版只點一次，於是**任何經由 submit handler 的接線它都看不到**，
+    只是把現況拍照存證；docstring 卻宣稱「接上就會轉紅」。
+    **一條廣告自己有、實際沒有的保護，比沒有保護更危險。**
+
+    修完已實跑驗證：把 handler 接上一份有效契約 → 第 2 次點擊後位階格變成
+    「**🟢 位階 偏多**」→ **本條轉紅**。
+
+    ⚠️ 它仍然**只看得到會浮到 `st.markdown` 上的變化**；
+    不經 markdown 呈現的東西（例如只改了某個 metric 或圖）照樣看不到。
     """
     import textwrap
 
@@ -600,9 +642,16 @@ def test_pressing_update_does_not_change_any_card_text(tmp_path):
     _at = AppTest.from_file(str(_script), default_timeout=60)
     _at.run()
     _before = [_m.value for _m in _at.markdown]
+
     _at.button[0].click().run()
+    assert not _at.exception, f"第 1 次按下 submit 後炸了：{_at.exception}"
+    _at.button[0].click().run()
+    assert not _at.exception, f"第 2 次按下 submit 後炸了：{_at.exception}"
     _after = [_m.value for _m in _at.markdown]
-    assert not _at.exception, f"按下 submit 後炸了：{_at.exception}"
+
+    _diff = [(_b, _a) for _b, _a in zip(_before, _after) if _b != _a]
     assert _before == _after, (
-        "按下更新鈕之後畫面文字變了 —— 本批的 submit 只寫 session、不取數，"
-        "若這裡變了代表有東西被接上了，`CONTRACT_NO_EXIT_WHERE` 的文案要一起改")
+        "按兩次更新鈕之後畫面文字變了 —— 本批的 submit 只寫 session、不取數；"
+        "若這裡變了代表有東西被接上了，`CONTRACT_NO_EXIT_WHERE` 那句"
+        "「按它不會讓這一格離開現在的狀態」就成了假話，必須一起改。\n"
+        f"變動處：{_diff[:3]}")

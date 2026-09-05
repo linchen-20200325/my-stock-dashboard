@@ -59,6 +59,7 @@
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -142,6 +143,48 @@ CONTRACT_NO_EXIT_WHERE: str = (
 # ══════════════════════════════════════════════════════════════════
 # 純資料層（零 streamlit，可單測）
 # ══════════════════════════════════════════════════════════════════
+def scrub_state_glyphs(text: str) -> tuple[str, int]:
+    """把**上游來的字串**裡的狀態 glyph 拿掉，回 `(乾淨字串, 拿掉幾個)`。
+
+    ═══ 為什麼需要這支（稽核必修-A）═══════════════════════════════════
+    `Note` 禁收狀態 glyph（必修-2）。但 `failed` 分支的 `why` 會把**上游的
+    例外訊息原樣插進去** —— 而全 repo `.py` 裡帶 `🔴` 的有數百行。
+    於是一個「FRED 掛了」的紅態，會在 `Note.__post_init__` 變成 `ValueError`，
+    一路穿過 `build_today_blocks` → `render_tab_today` 成為**整頁未捕捉例外**，
+    而不是畫出那張紅色「取得失敗」卡。
+
+    **那正是 `classify_macro_contract` 註解裡寫的那句話從另一道門走回來**：
+    「§1：紅態要看得見，不是換一種炸法。」
+
+    ⚠️ **禁令不放寬**，因為它擋的是**人手抄 glyph**（那是說謊）；
+    本函式處理的是**上游噪音**（那不是說謊，只是不該和卡片自己的狀態燈混在一起）。
+    兩個性質不同，分開處理，兩邊都保住。
+
+    ⚠️ **刻意不靜默吞掉**：呼叫端拿到「拿掉幾個」，就地在文案裡說明有東西被移除。
+    §1 —— 修改過的訊息不能假裝自己是原文。
+    """
+    _n = 0
+    _out = []
+    for _ch in str(text):
+        if _ch in _STATE_GLYPHS:
+            _n += 1
+            continue
+        _out.append(_ch)
+    # 移走 glyph 會留下連續空白（「回 ▨ 空表」→「回  空表」），收成單一空白。
+    return re.sub(r"[ \t]{2,}", " ", "".join(_out)).strip(), _n
+
+
+def upstream_error_why(error: Any) -> str:
+    """把上游例外轉成一句可以放進 `Note.why` 的話（必修-A 的唯一入口）。"""
+    _clean, _n = scrub_state_glyphs(error)
+    _why = f"讀 L3 canonical 契約時拋出例外：{_clean or '（上游沒有給訊息）'}"
+    if _n:
+        _why += ("（上游訊息裡的狀態符號已移除，"
+                 "以免和這張卡自己的狀態燈混成兩個互相矛盾的說法）")
+    return _why
+
+
+
 @dataclass(frozen=True)
 class Note:
     """空狀態引導的三要素（鐵律 4）。三個都不得為空。"""
@@ -305,7 +348,7 @@ def build_status_bar_card(state: Mapping[str, Any] | None,
             key="statusbar.macro", label="總經", state=UI_FAILED,
             note=Note(
                 now="總經位階讀取失敗",
-                why=f"讀 L3 canonical 契約時拋出例外：{error}",
+                why=upstream_error_why(error),
                 where=(f"{NO_EXIT_MARKER} —— 本批沒有可執行的診斷入口；"
                        "接上之後這一格會指向 "
                        f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"),
