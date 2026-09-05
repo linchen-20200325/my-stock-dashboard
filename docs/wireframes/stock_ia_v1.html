@@ -376,14 +376,20 @@ Use `st.form_submit_button()` instead to submit the form.</pre>
   </div>
   <div class="fix">
     <div class="fh"><span class="fid">N1 · N2 · N3 · N4</span><span>本輪：四處自己寫錯的，加一處自己漏畫的</span></div>
-    <p><b>N2 —— 我自己寫了一句全稱句，而它是假的。</b>上一版在 💼 頁的註記結尾寫：「<s>v2 的每個「去哪補」都指向本線框畫得出來的地方</s>」。本輪把全部 30 條 <code>where</code> 逐條比對畫面，<b>五顆被指去的按鈕根本沒畫出來</b>：</p>
+    <p><b>N2 —— 我自己寫了一句全稱句，而它是假的。</b>上一版在 💼 頁的註記結尾寫：「<s>v2 的每個「去哪補」都指向本線框畫得出來的地方</s>」。本輪把全部 <b>35</b> 條 <code>where</code> 逐條比對畫面（<b>量測法</b>：反序列化 <code>PAGES</code> 遞迴走訪 ＋ <code>grep -c "where:"</code> 兩法互證，<b>量測 commit <code>e8bc446</code> 上兩法皆為 35</b>），<b>五顆被指去的按鈕根本沒畫出來</b>：</p>
+    <pre class="out">$ git show 8c0c8d6:…/stock_ia_v1.html | grep -c 'where:'  → 26
+$ git show 29299ac:…/stock_ia_v1.html | grep -c 'where:'  → 31
+$ git show fc1c66d:…/stock_ia_v1.html | grep -c 'where:'  → 31   ← 被上一輪稽核的那一版
+$ git show e8bc446:…/stock_ia_v1.html | grep -c 'where:'  → 35   ← 寫「30」的那一版
+⚠️ 在「本行寫下之後」的版本上再跑同一條指令會得 36 ——
+   多的那一筆就是「這段文字自己引用的那條指令」。以反序列化走訪為準，它不受自我引用干擾。</pre>
     <pre class="out">🎯 開始選股      ← 只出現在「去哪補」文字裡，四大鐵律表的 form 欄沒寫
 🔍 載入完整分析  ← 同上
 🗺️ 載入板塊地圖  ← 同上（它不是 submit，是單顆 button，更該畫）
 🚀 批次分析      ← 同上
 ⚡ 生成 AI 總結   ← ⑦ 區塊只寫「＋ 複製鈕」，按鈕本身沒畫
 （對照組：🚀 跑存股戰情室 有畫 —— 所以「畫得出來」的寫法是存在的，我只是沒對其他五顆做）</pre>
-    <p><b>這正是上一版 F5 在指控 v1 的同一件事，我在修它的那一段裡又犯了一次。</b>五顆已補畫；<b>那句全稱句已刪，不改寫成比較弱的版本 —— 它不需要存在。</b></p>
+    <p><b>這正是上一版 F5 在指控 v1 的同一件事，我在修它的那一段裡又犯了一次。</b>五顆已補畫；<b class="warnmark">⚠️ 而這一段自己也犯了同一個病：上一輪在這裡寫「全部 <s>30</s> 條 where」—— <b>30 在任何一個 commit 上都不成立</b>（<code>8c0c8d6</code>=26、<code>29299ac</code>／<code>fc1c66d</code>=31、<code>e8bc446</code>=35）。<b>一句自白「我寫了沒量過的全稱句」的話裡，又放了一個沒量過的數字。</b></b><b>那句全稱句已加刪除線退場（<u>原文保留</u>，依本 repo 慣例：舊表述保留不刪 ＋ 劃線 ＋ 兩邊理由並陳），不改寫成比較弱的版本 —— 它不需要存在。</b></p>
     <p><b>N1 —— 兩處欄數歸屬張冠李戴。</b>上一版寫 💼「燈牆 3 欄（原 <code>columns(5)</code>）」、📖「資料源燈號（原 <code>columns(7)</code> 降階）」，<b>兩個出處都不在那兩頁</b>：</p>
     <pre class="out">$ grep -rcE '[A-Za-z_]+\.columns\(([4-9]|1[0-9])\)' \
     src/ui/etf/etf_tab_dividend_station.py src/ui/render/station_cards.py src/ui/render/station_charts.py
@@ -420,10 +426,10 @@ $ 📖 憑什麼 的實際 ≥4 欄：src/ui/pages/calibration_ui.py:158  st.col
     </div>
     <div class="stat alarm">
       <div class="k">23</div>
-      <div class="l">≥4 欄的 columns 呼叫</div>
+      <div class="l">≥4 欄的 columns 呼叫<b>（src/ui）</b></div>
       <div class="d"><code>columns(4)</code>×16、<code>(5)</code>×4、<code>(6)</code>×2、<code>(7)</code>×1。
       <b>v1 寫 21，因為對這一項寫死了 <code>st.</code></b> —— 漏掉 <code>tab_stock_grp.py</code> 的
-      <code>st_mod.columns(6)</code> 與 <code>columns(7)</code>，<b>而那個 7 欄是全 repo 最寬的一處</b>。</div>
+      <code>st_mod.columns(6)</code> 與 <code>columns(7)</code>，<b>而那個 7 欄是全 repo 最寬的一處</b>。<br><b>N7 補（本輪）：把射程寫出來</b> —— <b>23 是 <code>src/ui</code> 範圍</b>（姊妹指標 <code>st.form</code> 那格已寫「（src/ui + app.py）」，這格上一輪漏寫）。全 repo 是 <b>24</b>，多的一處在 <code>src/compute/etf/etf_quality.py:230</code> —— <b>本 IA 射程外，不在此處置</b>。</div>
     </div>
     <div class="stat">
       <div class="k">4<span style="font-size:17px;color:var(--ink-3)"> / 8 / 6</span></div>
@@ -788,7 +794,8 @@ const PAGES = [
     {t:'葉2 板塊地圖', n:'熱力圖 ＋ 資金泡泡並列 · 3 欄圖例', laws:['g','s','e'],
       live:'<b>［ 🗺️ 載入板塊地圖 ］</b>（單顆 <code>st.button</code>，不在 form 內）　→　左：產業漲跌熱力圖　右：三大法人資金流向泡泡圖',
       grey:{now:'⬜ 板塊資料尚未載入',why:'熱力圖要批次抓數十檔類股代表；泡泡圖讀每交易日盤後凍結的快照',where:'點「🗺️ 載入板塊地圖」；泡泡圖若顯示無快照，代表當日盤後任務尚未產生資料'},
-      err:{now:'🔴 熱力圖無法取得任何類股資料',why:'批次抓取全數失敗',where:'先確認網路／proxy；細節在「📖 憑什麼 › 資料體檢」'}},
+      err:{now:'🔴 熱力圖無法取得任何類股資料',why:'批次抓取全數失敗',where:'先確認網路／proxy；細節在「📖 憑什麼 › 資料體檢」'},
+      note:'⚠️ <b>N6 補（本輪）：改名風險，與 ④ 今日關鍵橫幅那處同型。</b>線框畫的「🗺️ <b>載入板塊地圖</b>」<b>是新名字</b>；production 現行是 「🗺️ <b>載入產業熱力圖</b>」（<code>etf_render.py:836</code>，<code>key=\'heatmap_load\'</code>）。<b>而本 IA 要把「產業熱力圖 ＋ 板塊資金潮汐」併成一葉，那顆現有 gate 會被吸收掉</b> —— 屆時新按鈕要涵蓋兩張圖（泡泡圖讀盤後凍結快照，不需重抓，但熱力圖需要），<b>而且任何指去舊名字的文案都要跟著改</b>。<b>本批只畫、不改 <code>.py</code>；這是給實作批次的交接註記。</b>'},
     {t:'葉2 口徑揭露', n:'caption · 常駐', laws:['e'],
       live:'X＝近 5 日累計淨流入（億）· Y＝動能變化 · 泡泡＝近 20 日淨額規模。<b>面積不等於權重。</b>',
       grey:'口徑說明常駐，不隨狀態消失 —— 使用者看圖之前就該知道這張圖在量什麼'}
@@ -873,7 +880,7 @@ const PAGES = [
       live:'Google 登入狀態 · Sheet 選擇 · 持股列預覽 · 觀察清單管理',
       grey:{now:'⬜ 尚未綁定持股 Sheet',why:'戰情室的每一盞燈都以「你實際持有什麼」為輸入，沒有清單就沒有東西可判',where:'在本頁用 Google 登入後選一本 Sheet —— <b>就地完成，不必去別頁</b>'},
       err:{now:'🔴 已綁定，但讀不到任何持股列',why:'可能是空表，或欄位名稱與預期不符',where:'本頁下方有欄位規格說明；照著改 Sheet 第一列即可'},
-      note:'<b>F5 更正</b>：v1 有 3 個灰／紅態把使用者指去一顆<b>當時沒畫出來的</b>「🚀 跑存股戰情室」，另有 1 個指去改 <code>.streamlit/secrets.toml</code>（客戶不碰那個檔）。<br><b>N2 更正（本輪）</b>：v2 這裡原本寫「<s>v2 的每個「去哪補」都指向本線框畫得出來的地方</s>」——<b>那是全稱句，而且是假的</b>。本輪逐一比對全部 30 條 <code>where</code>，發現<b>五顆被指去的按鈕當時沒畫出來</b>：「🎯 開始選股」「🔍 載入完整分析」「🗺️ 載入板塊地圖」「🚀 批次分析」「⚡ 生成 AI 總結」。五顆已於本輪補畫（前四顆寫進四大鐵律表的 form 欄與各自區塊，第五顆畫在 ⑦）。<b>本文不再宣稱「每一個都指得到」—— 那句話正是它自己在修的那種錯。</b>'}
+      note:'<b>F5 更正</b>：v1 有 3 個灰／紅態把使用者指去一顆<b>當時沒畫出來的</b>「🚀 跑存股戰情室」，另有 1 個指去改 <code>.streamlit/secrets.toml</code>（客戶不碰那個檔）。<br><b>N2 更正（本輪）</b>：v2 這裡原本寫「<s>v2 的每個「去哪補」都指向本線框畫得出來的地方</s>」——<b>那是全稱句，而且是假的</b>。本輪逐一比對全部 <b>35</b> 條 <code>where</code>（量測法與量測 commit 見 §00 的 N2 段），發現<b>五顆被指去的按鈕當時沒畫出來</b>：「🎯 開始選股」「🔍 載入完整分析」「🗺️ 載入板塊地圖」「🚀 批次分析」「⚡ 生成 AI 總結」。五顆已於本輪補畫（前四顆寫進四大鐵律表的 form 欄與各自區塊，第五顆畫在 ⑦）。<b>本文不再宣稱「每一個都指得到」—— 那句話正是它自己在修的那種錯。</b>'}
   ]
 },
 {
@@ -891,10 +898,10 @@ const PAGES = [
       degradedCells:[['FRED','🟢 09/05'],['某門檻','⚠️ 已失準'],['TWSE','🟢 14:30']],
       errCells:[['FRED','🟢 09/05'],['FinMind','🔴 額度用罄'],['TWSE','🟢 14:30']],
       note:'<b>這頁的紅燈是主角，不是意外。</b>其他頁出現非綠色時，這裡要能說出是哪一源、以及<b>這一盞為什麼不能信</b>（<code>unwired_reason</code> / <code>degraded_reason</code> 直接讀自 SSOT）。<br>⚠️ <b>F5 更正</b>：v1 有 3 個「去哪補」指望一個 repo 裡<b>不存在</b>的「備援鏈跑到第幾層」揭露。<b>v2 不承諾尚未存在的東西</b> —— 這裡只顯示各源自己的燈號與最後成功時間。'},
-    {t:'葉2 工程師版（維持現行單一 gate）', n:'1 個 checkbox 全有全無 · 不加 form', laws:['e'],
-      live:'資料源清單 · Fetcher 監控 · 雙演算法對帳 · API 根因 · 原始資料表 · 門檻校準',
-      grey:{now:'⬜ 進階診斷未載入',why:'六個面板各自會組大量表格，預設不跑',where:'勾選「🔧 進階診斷（工程師用）」'},
-      note:'<b>F7 更正 —— v1 這一格整個建立在錯的量測上。</b>v1 說「6 個獨立 checkbox 各自觸發 rerun，包成 form 後勾三個只跑一次」；實測 <code>app.py</code> 是<b>1 個</b> checkbox（<code>_diag_adv_on</code>）全有全無，六個 panel 檔內 <code>st.checkbox</code> <b>各為 0</b>。<b>沒有要解的問題 → 撤掉 <code>form_diag</code>，維持現況。</b>'},
+    {t:'葉2 工程師版（維持現行單一 gate）', n:'摺疊 ［ 🔧 進階診斷（工程師用；一般使用者不需要打開） ］ → 內含 1 個 checkbox 全有全無 · 不加 form', laws:['e'],
+      live:'▸ <b>［ 🔧 進階診斷（工程師用；一般使用者不需要打開） ］</b>（摺疊，預設收合）<br>　　└ <b>☑ 載入進階診斷（較耗時，部分項目會實際打外部 API）</b>　→　資料源清單 · Fetcher 監控 · 雙演算法對帳 · API 根因 · 原始資料表 · 門檻校準',
+      grey:{now:'⬜ 進階診斷未載入',why:'六個面板各自會組大量表格，預設不跑',where:'展開「🔧 進階診斷（工程師用；一般使用者不需要打開）」→ 勾選裡面的「載入進階診斷（較耗時，部分項目會實際打外部 API）」'},
+      note:'<b>F7 更正 —— v1 這一格整個建立在錯的量測上。</b>v1 說「6 個獨立 checkbox 各自觸發 rerun，包成 form 後勾三個只跑一次」；實測 <code>app.py</code> 是<b>1 個</b> checkbox（<code>_diag_adv_on</code>）全有全無，六個 panel 檔內 <code>st.checkbox</code> <b>各為 0</b>。<b>沒有要解的問題 → 撤掉 <code>form_diag</code>，維持現況。</b><br><b>N5 補（本輪，第 36 條指路）</b>：這個 gate 上一輪<b>只寫在「去哪補」裡、沒有畫出來</b> —— 而上一輪的補畫清單<b>五項全是按鈕</b>，對照組也是按鈕。<b>一個按鈕形狀的搜尋，看不到一顆 checkbox。</b>（同型於本檔反覆記載的失效模式：<b>字表選錯 → 結構上就掃不到，再跑一百次也一樣。</b>）<br>⚠️ <b>順帶查出兩個 label 是兩個東西，上一輪把它們混成一個</b>：<code>app.py:899</code> 的 <b>摺疊標題</b>是「🔧 進階診斷（工程師用；<u>一般使用者不需要打開</u>）」（線框上一輪<b>截短了後半句</b>），而真正要<b>勾</b>的是 <code>app.py:906</code> 的 checkbox 「載入進階診斷（較耗時，部分項目會實際打外部 API）」（<code>key=\'_diag_adv_on\'</code>）。<b>production 是兩步，上一輪的指路只寫了一步、而且寫的是另一個控制項的名字。</b>'},
     {t:'葉3 AI 問答', n:'chat_input · 天然 gate', laws:['s','e'],
       live:'問：「2330 現在健康度多少？」→ 引用本站已載入的數字作答',
       grey:{now:'⬜ 尚未提問',why:'AI 只根據本站已載入的資料作答，不自行上網查',where:'直接在下方輸入問題；若某頁尚未載入，AI 會說「那一頁還沒有資料」而不是猜'},
