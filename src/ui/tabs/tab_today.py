@@ -23,8 +23,10 @@
   舊分頁不動、不接線、不下架。
 
 ═══ 四大鐵律在本檔的落點 ═════════════════════════════════════════════
-1. **3 欄自適應網格**：`_grid()` 一律 `st.columns(3)`，格子多於 3 個就
+1. **3 欄自適應網格**：`_grid()` 一律 `MAX_COLS`（＝3）欄，格子多於 3 個就
    **換行排第二排，不是加欄**（線框 §04 原文）。天然不足 3 的不硬湊。
+   ⚠️ `_grid` **沒有**欄數覆寫參數 —— 原本有 `per_row=3`，稽核一行
+   `_grid(cards, 7)` 就開出 7 欄而守衛全綠。
 2. **Form 封裝防重繪**：**不是包了 `st.form` 就算**。widget 的**當下值**
    （`_SS_MODE_WIDGET`）與**已套用值**（`_SS_APPLIED`）是兩個東西，
    下游一律只讀後者 —— 只包 form 只擋得住互動 rerun，重運算一分沒省。
@@ -37,6 +39,15 @@
 4. **空狀態引導**：每一個非 `live` 的卡片都帶三要素
    `Note(now/why/where)`，且 `where` 裡的分頁名／按鈕名一律走
    `shared.ia_nav` 的 SSOT 函式，**不手抄字串**。
+   ⚠️ **本批按下更新鈕不會改變任何一張卡**（submit handler 只寫 session、
+   不觸發取數），所以**每一張卡**的 `where` 都帶 `NO_EXIT_MARKER` ——
+   包含已接線但契約無值的 `idle`／`degraded`。寫成「按一下就會有」是假指路。
+
+═══ 一個結構化的防線：`Note` 自己拒收狀態 glyph ═══════════════════════
+`shared/ui_state.py` 明文「灰的四個狀態**必須靠 glyph 分辨**」，而 glyph
+由 `state_meta()` 供給、由 `_render_card` 印在 chip 上。文案若自己再帶一個
+（例如 `now="⬜ …尚未接線"` 配上 chip 的 `⛔ 未接線`），同一張卡就同時說了
+兩件相反的話。`Note.__post_init__` 直接 raise，**不是只靠測試掃**。
 
 ═══ 一個已知的連帶事項（本批刻意不動，登記在此）═══════════════════════
 `src/ui/render/macro_ui_components.py::key_alerts_banner` 的灰態文案
@@ -58,10 +69,20 @@ from shared.ui_state import (
     UI_DEGRADED,
     UI_FAILED,
     UI_LIVE,
+    UI_STATE_META,
     UI_UNWIRED,
     classify_ui_state,
     state_meta,
 )
+
+#: L0 SSOT 裡每個狀態的 glyph。**畫面上一張卡只准出現其中一個。**
+_STATE_GLYPHS: frozenset[str] = frozenset(_g for _n, _g, _h in UI_STATE_META.values())
+
+# ══════════════════════════════════════════════════════════════════
+# 版面
+# ══════════════════════════════════════════════════════════════════
+#: 鐵律 1 的欄數上限。**一個數字只准定義一次**，`_grid` 讀它、守衛也讀它。
+MAX_COLS: int = 3
 
 # ══════════════════════════════════════════════════════════════════
 # session key（本頁自有前綴，不與任何既有 key 相撞）
@@ -92,11 +113,29 @@ STAGED_ROLLOUT_WHY: str = (
     "五頁 IA 分批落地：本頁目前只有骨架，這一塊的取數尚未接上 —— "
     "**本頁沒有它的程式碼**，不是這次沒抓到"
 )
-#: 未接線態**沒有使用者可執行的出口**（線框葉2 unwired 原文）。
-#: 誠實寫明「這是待接線項，不是你操作的問題」，不要給一個按了也沒用的指路。
+#: 「這一格現在沒有你可以執行的出口」的**唯一寫法**。
+#:
+#: 為什麼要抽成常數而不是各處自己寫：守衛（`test_..._no_user_exit`）就是靠
+#: 這個標記在**每一張卡**上確認「本批沒有給出一個按了也沒用的指路」。
+#: 各處自己造句 = 守衛只能改用模糊比對，而模糊比對擋不住「按上方更新就會有了」。
+NO_EXIT_MARKER: str = "沒有你可以執行的出口"
+
+#: 未接線態的指路（線框葉2 unwired 原文：**沒有使用者可執行的出口**）。
 STAGED_ROLLOUT_WHERE: str = (
-    "這一態沒有你可以執行的出口 —— 這是待接線項，不是你操作的問題；"
+    f"這一態{NO_EXIT_MARKER} —— 這是待接線項，不是你操作的問題；"
     f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}也不會改變它"
+)
+
+#: 已接線、但**本批的更新鈕還沒接上取數**時的指路。
+#:
+#: ⚠️ 這一條是稽核抓到的必修-1：原本寫「到「🚦 今天」按「🚀 更新今日戰情」」，
+#: 而 (a) 使用者當下就在這一頁，指路指向自己；(b) 更重要的是 —— 本批的 submit
+#: handler **只寫 session、不觸發任何取數**，AppTest 連按兩次文字逐字不變。
+#: **那是一句假的指路**：它承諾了一個這一批交付不出來的結果。
+CONTRACT_NO_EXIT_WHERE: str = (
+    f"{NO_EXIT_MARKER} —— 這一格已經接上 L3 契約，但本批的"
+    f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}**還沒接上取數**，"
+    "在這一頁按它不會讓這一格離開現在的狀態"
 )
 
 
@@ -113,10 +152,21 @@ class Note:
 
     def __post_init__(self) -> None:
         for _f in ("now", "why", "where"):
-            if not str(getattr(self, _f)).strip():
+            _v = str(getattr(self, _f))
+            if not _v.strip():
                 raise ValueError(
                     f"Note.{_f} 不得為空 —— 鐵律 4 要求三要素齊備"
                     "（現在怎樣 / 為什麼 / 去哪補）")
+            # 必修-2：狀態 glyph 只准由 `_render_card` 從 L0 SSOT 取一次。
+            # 文案自己再帶一個 = 同一張卡同時說兩件相反的話
+            # （稽核實測：chip 印「⛔ 未接線」、body 印「⬜ … 尚未接線」）。
+            _bad = sorted(_g for _g in _STATE_GLYPHS if _g in _v)
+            if _bad:
+                raise ValueError(
+                    f"Note.{_f} 含狀態 glyph {_bad} —— "
+                    "glyph 只由 `state_meta()` 供給一次，文案不得自己再帶；"
+                    "`shared/ui_state.py` 明文『灰的四個狀態必須靠 glyph 分辨』，"
+                    "兩個 glyph 就是兩個互相矛盾的說法")
 
 
 @dataclass(frozen=True)
@@ -243,32 +293,61 @@ def build_status_bar_card(state: Mapping[str, Any] | None,
         return Card(
             key="statusbar.macro", label="總經", state=UI_DEGRADED,
             note=Note(
-                now="⚠️ 總經位階**來自快照，時間不明**",
+                now="總經位階**來自快照，時間不明**",
                 why=("本輪生效的是來源優先序第 3 條（`macro_state.json` 的 "
                      "AI 鎖定快照）—— 它是**上一次**鎖的結論，不是這一輪算的；"
                      "契約沒有把時間帶出來，所以這裡不編一個時間"),
-                where=(f"到{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}"
-                       f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}重算"),
+                where=CONTRACT_NO_EXIT_WHERE,
             ),
         )
     if _st == UI_FAILED:
         return Card(
             key="statusbar.macro", label="總經", state=UI_FAILED,
             note=Note(
-                now="🔴 總經位階讀取失敗",
+                now="總經位階讀取失敗",
                 why=f"讀 L3 canonical 契約時拋出例外：{error}",
-                where=(f"到{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
-                       "看該源狀態"),
+                where=(f"{NO_EXIT_MARKER} —— 本批沒有可執行的診斷入口；"
+                       "接上之後這一格會指向 "
+                       f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"),
             ),
         )
     return Card(
         key="statusbar.macro", label="總經", state=_st,
         note=Note(
-            now="⬜ 總經未評估",
+            now="總經未評估",
             why=("L3 canonical 契約四條來源本輪皆無值 → 回 `unknown`，"
                  "**不是** `neutral`；本站不以缺值推導「中性」"),
-            where=(f"到{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}"
-                   f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}"),
+            where=CONTRACT_NO_EXIT_WHERE,
+        ),
+    )
+
+
+def build_status_bar_cards(state: Mapping[str, Any] | None,
+                           *, error: Any = None) -> tuple[Card, ...]:
+    """（跨頁）頂部狀態列的**三個元素** —— 線框 `PAGES[0].blocks[6]`。
+
+    線框 live 原文是「`09/05 週五 ✅ 交易日 | 🟢 總經 偏多 · 建議 70% |
+    🔗 已綁 Sheet「我的持股」| 更新於 14:32`」，grey 原文是
+    「`⬜ 總經未評估 | 🔗 尚未綁定 Sheet`」——
+    **交易日**與 **Sheet 綁定**是兩個獨立元素，不是總經那一格的附屬。
+
+    ⚠️ 稽核抓到的必修-3：上一版只做了「總經」一格，另外兩個元素
+    **連「未接線」都沒有標** —— 那不是骨架，是掉東西。
+    骨架階段的正解是**把格子做出來、誠實標未接線**，不是不畫。
+    """
+    return (
+        _staged_card("statusbar.trading_day", "交易日",
+                     now="今天是不是交易日，尚未接線"),
+        build_status_bar_card(state, error=error),
+        Card(
+            key="statusbar.sheet", label="Sheet 綁定", state=UI_UNWIRED,
+            note=Note(
+                now="Sheet 綁定狀態尚未接線",
+                why=STAGED_ROLLOUT_WHY,
+                where=(f"這一態{NO_EXIT_MARKER} —— 這是待接線項，"
+                       "不是你操作的問題；接上之後它會指向 "
+                       f"{ia_nav.where_to_find(ia_nav.SECTION_HOLD_PORTFOLIO_SETUP)}"),
+            ),
         ),
     )
 
@@ -280,7 +359,8 @@ def build_today_blocks(*, macro_state: Mapping[str, Any] | None = None,
     純函式：不碰 session、不 import streamlit。渲染端把 session 讀出來
     再傳進來，這樣整張畫面的狀態可以在沒有 streamlit 的情況下驗。
     """
-    _bar = build_status_bar_card(macro_state, error=macro_error)
+    _bars = build_status_bar_cards(macro_state, error=macro_error)
+    _bar = next(_c for _c in _bars if _c.key == "statusbar.macro")
     _regime_card = Card(
         key="summary.regime", label="位階", state=_bar.state,
         note=_bar.note,
@@ -291,14 +371,14 @@ def build_today_blocks(*, macro_state: Mapping[str, Any] | None = None,
         Block(
             key="today.statusbar", leaf=LEAF_CONCLUSION,
             title="（跨頁）頂部狀態列",
-            cards=(_bar,),
+            cards=_bars,
         ),
         Block(
             key="today.verdict", leaf=LEAF_CONCLUSION,
             title="① 結論燈 — 建議持股 %",
             cards=(_staged_card(
                 "verdict.exposure", "建議持股 %",
-                now="⬜ 建議持股 % 尚未接線"),),
+                now="建議持股 % 尚未接線"),),
         ),
         Block(
             key="today.actions", leaf=LEAF_CONCLUSION,
@@ -310,9 +390,9 @@ def build_today_blocks(*, macro_state: Mapping[str, Any] | None = None,
             cards=(
                 _regime_card,
                 _staged_card("summary.momentum", "動能",
-                             now="⬜ 動能尚未接線"),
+                             now="動能尚未接線"),
                 _staged_card("summary.risk", "風險",
-                             now="⬜ 風險尚未接線"),
+                             now="風險尚未接線"),
             ),
         ),
         Block(
@@ -320,16 +400,16 @@ def build_today_blocks(*, macro_state: Mapping[str, Any] | None = None,
             title="④ 今日關鍵橫幅",
             cards=(_staged_card(
                 "key_banner.alerts", "今日關鍵",
-                now="⬜ 今日關鍵尚未接線 —— **未評估 ≠ 無異常**"),),
+                now="今日關鍵尚未接線 —— **未評估 ≠ 無異常**"),),
         ),
         Block(
             key="today.warroom", leaf=LEAF_CONCLUSION,
             title="⑤ 今日作戰室　⑥ AI 摘要（摺疊）",
             cards=(
                 _staged_card("warroom.todo", "今天該做的事",
-                             now="⬜ 尚無作戰項目"),
+                             now="尚無作戰項目"),
                 _staged_card("warroom.ai", "AI 摘要",
-                             now="⬜ AI 摘要尚未接線"),
+                             now="AI 摘要尚未接線"),
             ),
         ),
         Block(
@@ -337,7 +417,7 @@ def build_today_blocks(*, macro_state: Mapping[str, Any] | None = None,
             title="指標明細 — 七段",
             cards=tuple(
                 _staged_card(f"detail.{_k}", _label,
-                             now=f"⬜ {_label} 尚未接線")
+                             now=f"{_label} 尚未接線")
                 for _k, _label in DETAIL_SEGMENTS
             ),
         ),
@@ -359,13 +439,18 @@ def applied_update_mode(session: Mapping[str, Any]) -> str | None:
 # ══════════════════════════════════════════════════════════════════
 # 渲染層（薄；所有判斷都在上面的純函式裡）
 # ══════════════════════════════════════════════════════════════════
-def _grid(items: Sequence[Any], per_row: int = 3):
-    """鐵律 1：一律 3 欄，**多於 3 個換行排第二排，不是加欄**。
+def _grid(items: Sequence[Any]):
+    """鐵律 1：一律 `MAX_COLS` 欄，**多於 3 個換行排第二排，不是加欄**。
 
     天然不足 3 的保持原欄數（線框 §04：硬湊三欄跟擠七欄一樣是排版失敗）。
+
+    ⚠️ **刻意沒有 `per_row` 參數。** 原本有一個 `per_row: int = 3` 的預設值 ——
+    稽核實測 `_grid(cards, 7)` 一行就開出 7 欄而**全部守衛照樣綠**：
+    「繞過 `_grid`」根本不必繞，它自己就開著一個門。欄數改由 `MAX_COLS`
+    這個常數決定，呼叫端沒有覆寫它的語法。
     """
-    for _i in range(0, len(items), per_row):
-        _chunk = items[_i:_i + per_row]
+    for _i in range(0, len(items), MAX_COLS):
+        _chunk = items[_i:_i + MAX_COLS]
         yield _chunk, st.columns(len(_chunk))
 
 

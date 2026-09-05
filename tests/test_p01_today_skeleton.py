@@ -12,7 +12,8 @@
 ═══ 本檔**守不到**什麼（據實揭露，不要當成「已經守住了」）═══════════
 下列各項都擋不住。**其中第 1、2 項**已登記在姊妹 repo `my-Fund-dashboard`
 的憲法（`P-GREYSCENARIO-1` / `P-WHERECONTENT-1`），**台股端同樣適用**；
-**第 3、4 項是本檔自己的缺口**，不在那兩條登記裡。
+**第 3~8 項是本批自己的缺口**，不在那兩條登記裡，由總管裁定排到下一批
+（需要在**渲染層**攔截，不是檢查資料層物件；下一批填真內容時本來就要重寫）。
 
 1. **情境維**：斷言只覆蓋「契約全有」「契約全無」兩個 session 端點，
    中間那些半有半無的組合沒有窮舉。
@@ -21,10 +22,21 @@
    存在於畫面上、`why` 說的原因是否真的是那個原因，本檔一概驗不到。
 3. **欄數只擋字面值**：`test_no_literal_columns_above_three` 掃的是
    `st.columns(4)` 這種寫法；`st.columns(n)` 以變數傳欄數的**掃不到**。
-   本檔改守 `_grid` 的 `per_row` 預設值當第二道，但那只覆蓋走 `_grid` 的
-   路徑 —— 有人繞過 `_grid` 直接開欄，兩道都攔不住。
+   `_grid` 已拿掉覆寫參數、呼叫點也有 AST 守衛，但**繞過 `_grid` 直接
+   `st.columns(n)`（n 為變數）仍然攔不住**。
 4. **docstring 放行**：SSOT 手抄守衛刻意跳過 docstring（它不渲染），
    所以 docstring 裡引用的分頁名／按鈕名一樣會過期，本檔驗不到。
+5. **手抄守衛的射程只有 `tab_today.py` 一個檔。** 稽核逐項實測：直接寫字串
+   ✅ 轉紅、放進 dict ✅ 轉紅；**字串拼接／f-string 夾空插值／`"".join()`／
+   bytes 字面值 decode／把字串搬到隔壁新模組 ❌ 全部繞得過**。
+   最後一項最實際 —— `shared/ia_nav.py` 自己都不在掃描範圍內。
+6. **文案內容完全不設防**：假結論寫進 `now`、假承諾與全形數字寫進 `why`／
+   `where`，全部驗不到 —— `Card` 的檢查只看 `value` 欄，而 `_render_card`
+   把三要素原樣渲染出去。
+7. **手刻 `st.markdown()` 完全在守衛視野外**：所有守衛的輸入都是
+   `build_today_blocks()` 的回傳值，繞過那個函式直接畫東西一條都攔不到。
+8. **四態只有兩態被真的渲染過**：冷啟動畫的是 `idle` 與 `unwired`；
+   `degraded` / `failed` / `live` 只在單元測試裡構造過，**沒有經過 AppTest**。
 
 **不宣稱本頁的誠實呈現已經被守住。**
 """
@@ -36,7 +48,7 @@ import pathlib
 import pytest
 
 from shared import ia_nav
-from shared.ui_state import UI_LIVE, UI_STATES, UI_UNWIRED
+from shared.ui_state import UI_LIVE, UI_STATES, UI_UNWIRED, state_meta
 from src.ui.tabs import tab_today as T
 
 _REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -60,37 +72,72 @@ _CARD_IDS = [f"{_b.key}::{_c.key}" for _b, _c in _CARDS]
 # ══════════════════════════════════════════════════════════════════
 @pytest.mark.parametrize("block,card", _CARDS, ids=_CARD_IDS)
 class TestEachCardIsHonest:
+    """⚠️ **本類刻意不使用 `pytest.skip` 做狀態過濾。**
+
+    稽核實測（必修-4）：上一版把葉2 七段的 `state` 從 `UI_UNWIRED` 改成
+    `"idle"`、`where` 一字不動 → **74 passed, 9 skipped, 0 failed**。
+    七條守衛**靜默地從「執行」變成「跳過」**，畫面上卻會出現
+    「尚未載入」配「沒有你可以執行的出口」這種自相矛盾的卡，零紅燈。
+
+    **`skip` 讓「改掉狀態」等於「關掉守衛」。** 現在每一條都對所有狀態成立，
+    分支寫在斷言裡、不寫在 `skip` 裡。
+    """
 
     def test_state_is_a_known_ui_state(self, block, card):
         assert card.state in UI_STATES, (
             f"{card.key} 的狀態 {card.state!r} 不在 L0 SSOT 的七態裡 —— "
             "本頁不得自創狀態名")
 
-    def test_non_live_card_carries_all_three_elements(self, block, card):
+    def test_card_shape_matches_its_state(self, block, card):
+        """正常態 ⇒ 有結論、無 Note；非正常態 ⇒ 三要素齊備、無結論。
+
+        兩個分支都斷言，**沒有一個狀態會讓這條測試變成不執行**。
+        """
         if card.state == UI_LIVE:
-            pytest.skip("正常態給結論，不需要三要素")
+            assert card.value, f"{card.key} 是正常態卻沒有結論文字"
+            assert card.note is None, (
+                f"{card.key} 是正常態卻還帶著空狀態引導的三要素")
+            return
+        assert not card.value, (
+            f"{card.key} 不是正常態卻帶了結論文字 {card.value!r} —— "
+            "線框 §02：只有正常態能給結論文字")
         assert card.note is not None, f"{card.key} 非正常態卻沒有 Note"
         for _f in ("now", "why", "where"):
             assert str(getattr(card.note, _f)).strip(), (
                 f"{card.key} 的 Note.{_f} 是空的 —— 鐵律 4 三要素缺一不可")
 
-    def test_only_live_card_may_state_a_conclusion(self, block, card):
+    def test_card_does_not_promise_an_action_this_batch_cannot_deliver(
+            self, block, card):
+        """**本批按下更新鈕不會改變任何一張卡**，所以每張卡都要照實說。
+
+        必修-1：上一版只約束 `unwired`，於是狀態列的 `idle` 卡寫著
+        「到「🚦 今天」按「🚀 更新今日戰情」」—— 稽核用 AppTest 連按兩次，
+        **文字逐字不變**：submit handler 只寫 session、不觸發任何取數，
+        而本頁沒有任何程式碼會填 `warroom_summary`。那是一句假指路。
+        （順帶：它還寫「**到**「🚦 今天」」，而使用者當下就在這一頁。）
+        """
         if card.state == UI_LIVE:
             return
-        assert not card.value, (
-            f"{card.key} 不是正常態卻帶了結論文字 {card.value!r} —— "
-            "線框 §02：只有正常態能給結論文字")
+        assert T.NO_EXIT_MARKER in card.note.where, (
+            f"{card.key}（{card.state}）的 `where` 沒有 "
+            f"{T.NO_EXIT_MARKER!r} —— 本批交付不出任何「按了就會變」的出口，"
+            "寫成好像可以就是假指路")
 
-    def test_unwired_card_does_not_promise_a_user_action(self, block, card):
-        """未接線態**沒有使用者可執行的出口**（線框葉2 unwired 原文）。
+    def test_no_state_glyph_is_hand_written_into_the_text(self, block, card):
+        """必修-2：一個狀態只准有一個 glyph，而它由 L0 SSOT 供給。
 
-        給一句「按更新就好」是說謊：本頁根本沒有那塊的取數程式碼，
-        按一百次也不會變。
+        稽核實測：chip 印「⛔ 未接線」、body 同時印「⬜ … 尚未接線」——
+        同一張卡上兩個互相矛盾的灰態 glyph。
         """
-        if card.state != UI_UNWIRED:
-            pytest.skip("只約束未接線態")
-        assert "沒有你可以執行的出口" in card.note.where, (
-            f"{card.key} 是未接線態，`where` 卻沒有寫明「沒有可執行的出口」")
+        if card.note is None:
+            return
+        for _f in ("now", "why", "where"):
+            _v = str(getattr(card.note, _f))
+            _bad = sorted(_g for _g in T._STATE_GLYPHS if _g in _v)
+            assert not _bad, (
+                f"{card.key} 的 Note.{_f} 手寫了狀態 glyph {_bad}；"
+                f"這張卡的狀態是 {card.state}，SSOT 給的 glyph 是 "
+                f"{state_meta(card.state)[1]!r}")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -110,13 +157,27 @@ class TestBlocksMatchWireframe:
         assert {_b.leaf for _b in _bs} == {T.LEAF_CONCLUSION, T.LEAF_DETAIL}, (
             "線框 leaves 是 2 葉（今日結論 / 指標明細）")
 
+    def test_detail_has_exactly_seven_segments(self):
+        """**必修-5：一個名字裡寫著「七」的測試，必須真的數過七。**
+
+        稽核實測：把 `DETAIL_SEGMENTS` **整個清空** → 53 passed、0 failed。
+        下面那條逐段比對是 `for ... in DETAIL_SEGMENTS`，清空就變成迴圈空轉、
+        **vacuous pass** —— 整個葉2 從畫面上消失而測試全綠。
+        """
+        assert len(T.DETAIL_SEGMENTS) == 7, (
+            f"葉2 應為七段，實際 {len(T.DETAIL_SEGMENTS)} 段：線框原文是 "
+            "「A 市場狀態 / B 長期 / C 中期 / D 短線 / E 籌碼 / F 全球風險 / G 跨桶裁決」")
+        assert len({_k for _k, _ in T.DETAIL_SEGMENTS}) == 7, "段 key 有重複"
+
     def test_seven_detail_segments_are_quoted_from_the_wireframe(self):
         """葉2 七段的段名必須逐字出現在線框裡。
 
-        線框改段名 → 這條轉紅。這是本檔唯一一條真的把規格與實作綁在一起的
-        斷言（其餘都只驗結構）。
+        線框改段名 → 這條轉紅。⚠️ 它**只驗內容、不驗數量** ——
+        數量由上面那條 `test_detail_has_exactly_seven_segments` 負責。
+        兩條缺一，刪一段就沒人會發現。
         """
         _text = _WIREFRAME.read_text(encoding="utf-8")
+        assert T.DETAIL_SEGMENTS, "葉2 一段都沒有 —— 這條會空轉，先看上一條"
         for _k, _label in T.DETAIL_SEGMENTS:
             assert _label in _text, (
                 f"葉2 段名 {_label!r} 在線框裡找不到 —— "
@@ -129,15 +190,106 @@ class TestBlocksMatchWireframe:
             f"submit 名稱 {_label!r} 在線框裡找不到")
 
 
+#: 冷啟動（契約全無）下**每一張卡的 key → 狀態**，逐格釘死。
+#:
+#: 為什麼要有這張表（必修-4 ＋ 必修-5，兩個稽核發現的共同解藥）：
+#:   · 稽核把七段的 `state` 由 `unwired` 改成 `"idle"` → 舊守衛靜默 skip、零紅燈；
+#:   · 稽核刪掉 `summary.risk` 整段（三欄變兩欄）→ 77 passed、零紅燈；
+#:   · 稽核從 `DETAIL_SEGMENTS` 刪掉一段 → 77 passed、零紅燈。
+#: 逐項參數化只驗「存在的卡是不是誠實的」，**驗不到「有沒有卡不見了」**。
+#: 這張表把「有哪些卡、各自什麼狀態」變成一個會被比對的事實。
+#: ⚠️ 下一批接線時**本表會變**，那是刻意的：改它要顯式改，不能默默漂。
+EXPECTED_COLD_START_STATES: dict[str, str] = {
+    "statusbar.trading_day": UI_UNWIRED,
+    "statusbar.macro": "idle",
+    "statusbar.sheet": UI_UNWIRED,
+    "verdict.exposure": UI_UNWIRED,
+    "summary.regime": "idle",
+    "summary.momentum": UI_UNWIRED,
+    "summary.risk": UI_UNWIRED,
+    "key_banner.alerts": UI_UNWIRED,
+    "warroom.todo": UI_UNWIRED,
+    "warroom.ai": UI_UNWIRED,
+    "detail.a_state": UI_UNWIRED,
+    "detail.b_long": UI_UNWIRED,
+    "detail.c_mid": UI_UNWIRED,
+    "detail.d_short": UI_UNWIRED,
+    "detail.e_chips": UI_UNWIRED,
+    "detail.f_global_risk": UI_UNWIRED,
+    "detail.g_cross": UI_UNWIRED,
+}
+
+
+class TestStructureCannotBeDeletedSilently:
+    """必修-5：整塊結構被刪掉時，必須有東西轉紅。"""
+
+    def test_cold_start_card_set_and_states_are_pinned(self):
+        _actual = {_c.key: _c.state for _b, _c in _all_cards()}
+        assert _actual == EXPECTED_COLD_START_STATES, (
+            "冷啟動的卡片組成或狀態變了。\n"
+            f"少了：{sorted(set(EXPECTED_COLD_START_STATES) - set(_actual))}\n"
+            f"多了：{sorted(set(_actual) - set(EXPECTED_COLD_START_STATES))}\n"
+            "狀態不同："
+            f"{ {k: (EXPECTED_COLD_START_STATES[k], _actual[k]) for k in _actual.keys() & EXPECTED_COLD_START_STATES.keys() if _actual[k] != EXPECTED_COLD_START_STATES[k]} }\n"
+            "接線改變它是正常的 —— 但要**顯式**改這張表，不能默默漂。")
+
+    def test_summary_block_is_three_columns_worth(self):
+        """線框 ③ 是「三欄摘要」。刪掉一格 → 這條轉紅。"""
+        _b = {_x.key: _x for _x in T.build_today_blocks()}["today.summary"]
+        assert len(_b.cards) == 3, (
+            f"三欄摘要應有 3 格（位階／動能／風險），實際 {len(_b.cards)} 格")
+
+    def test_status_bar_has_all_three_elements(self):
+        """線框 ⑦ 的 grey 原文是「⬜ 總經未評估　|　🔗 尚未綁定 Sheet」，
+        live 還有交易日 —— **三個元素**，不是一個。
+
+        必修-3：上一版只做了「總經」一格，另外兩個**連未接線都沒標**。
+        """
+        _b = {_x.key: _x for _x in T.build_today_blocks()}["today.statusbar"]
+        assert {_c.key for _c in _b.cards} == {
+            "statusbar.trading_day", "statusbar.macro", "statusbar.sheet"}, (
+            f"頂部狀態列元素不齊：{[_c.key for _c in _b.cards]}")
+
+    def test_sheet_element_points_at_the_ssot_destination(self):
+        """`ia_nav.SECTION_HOLD_PORTFOLIO_SETUP` 必須真的被用到。
+
+        它上一版定義了卻**零引用** —— 那正是「線框元素沒做」的旁證。
+        """
+        _cards = {_c.key: _c for _b, _c in _all_cards()}
+        _where = _cards["statusbar.sheet"].note.where
+        assert ia_nav.where_to_find(
+            ia_nav.SECTION_HOLD_PORTFOLIO_SETUP) in _where
+
+
 # ══════════════════════════════════════════════════════════════════
 # C. 鐵律 1：3 欄自適應網格
 # ══════════════════════════════════════════════════════════════════
 class TestThreeColumnGrid:
 
-    def test_grid_default_is_three(self):
+    def test_grid_takes_no_column_override(self):
+        """必修-6：`_grid` 原本有 `per_row: int = 3`，`_grid(cards, 7)`
+        一行就開出 7 欄而**全部守衛照樣綠** —— 「繞過 `_grid`」根本不必繞。
+        現在欄數只由 `MAX_COLS` 決定，呼叫端沒有覆寫它的語法。
+        """
         import inspect
-        _p = inspect.signature(T._grid).parameters["per_row"]
-        assert _p.default == 3, "鐵律 1：一列上限 3 欄"
+        assert list(inspect.signature(T._grid).parameters) == ["items"], (
+            "`_grid` 多了一個參數 —— 只要它能被呼叫端覆寫，鐵律 1 就是可選的")
+        assert T.MAX_COLS == 3, "鐵律 1：一列上限 3 欄"
+
+    def test_every_grid_call_passes_only_the_items(self):
+        """AST 掃本檔的每一個 `_grid(...)` 呼叫點：恰好 1 個位置引數、0 個關鍵字。
+
+        簽名守衛擋掉「加回參數」，這一條擋掉「用位置引數硬塞第二個值」。
+        """
+        _tree = ast.parse(_VIEW.read_text(encoding="utf-8"))
+        _calls = [_n for _n in ast.walk(_tree)
+                  if isinstance(_n, ast.Call)
+                  and isinstance(_n.func, ast.Name) and _n.func.id == "_grid"]
+        assert _calls, "view 裡找不到任何 `_grid(...)` 呼叫 —— 版面是誰排的？"
+        for _c in _calls:
+            assert len(_c.args) == 1 and not _c.keywords, (
+                f"{_VIEW.name}:{_c.lineno} `_grid` 被傳了額外的引數 —— "
+                "欄數只能由 MAX_COLS 決定")
 
     def test_no_literal_columns_above_three(self):
         """AST 掃本檔：不得出現 `st.columns(n)` 且 n > 3 的字面寫法。"""
@@ -379,6 +531,17 @@ class TestFailLoud:
         with pytest.raises(ValueError):
             T.Card(key="k", label="l", state=UI_UNWIRED)
 
+    def test_note_rejects_a_hand_written_state_glyph(self):
+        """必修-2 的結構化版本：文案自己帶 glyph 一律當場炸。
+
+        不是只靠測試掃 —— `Note` 自己拒收，所以任何路徑造出來的卡都擋得到。
+        """
+        for _kw in ({"now": "⬜ 尚未載入"}, {"why": "⛔ 未接線"},
+                    {"where": "🟢 好了"}):
+            _args = {"now": "a", "why": "b", "where": "c"} | _kw
+            with pytest.raises(ValueError, match="glyph"):
+                T.Note(**_args)
+
     def test_card_rejects_conclusion_on_non_live(self):
         with pytest.raises(ValueError):
             T.Card(key="k", label="l", state=UI_UNWIRED,
@@ -410,4 +573,36 @@ def test_page_mounts_clean(tmp_path):
     assert ia_nav.action_label(ia_nav.ACTION_UPDATE_TODAY) in _labels, (
         f"submit 沒畫出來；實際按鈕：{_labels}")
     _md = "\n".join(_m.value for _m in _at.markdown)
-    assert "沒有你可以執行的出口" in _md, "未接線態的誠實揭露沒有畫出來"
+    assert T.NO_EXIT_MARKER in _md, "誠實揭露（沒有可執行出口）沒有畫出來"
+    for _label in ("交易日", "Sheet 綁定"):
+        assert _label in _md, (
+            f"頂部狀態列的「{_label}」元素沒有畫出來（必修-3）")
+
+
+@pytest.mark.slow
+def test_pressing_update_does_not_change_any_card_text(tmp_path):
+    """必修-1 的實跑證明：**按下更新鈕，畫面文字逐字不變。**
+
+    稽核就是這樣抓到那句假指路的。這條把它固定下來 ——
+    只要哪天按鈕真的接上了取數，這條會轉紅，那時**同時**要改
+    `CONTRACT_NO_EXIT_WHERE` 的文案，兩件事被綁在一起。
+    """
+    import textwrap
+
+    from streamlit.testing.v1 import AppTest
+
+    _script = tmp_path / "_p01_press.py"
+    _script.write_text(textwrap.dedent("""
+        from src.ui.tabs.tab_today import render_tab_today
+        render_tab_today()
+    """), encoding="utf-8")
+
+    _at = AppTest.from_file(str(_script), default_timeout=60)
+    _at.run()
+    _before = [_m.value for _m in _at.markdown]
+    _at.button[0].click().run()
+    _after = [_m.value for _m in _at.markdown]
+    assert not _at.exception, f"按下 submit 後炸了：{_at.exception}"
+    assert _before == _after, (
+        "按下更新鈕之後畫面文字變了 —— 本批的 submit 只寫 session、不取數，"
+        "若這裡變了代表有東西被接上了，`CONTRACT_NO_EXIT_WHERE` 的文案要一起改")
