@@ -178,6 +178,7 @@ def test_seed_file_honest_and_valid():
     #     ⚠️ 比對規則是「**有邊界的前綴**」：`_src == n` 或 `_src.startswith(n + '/')`,
     #     **不是**裸的 `startswith(n)`,也不是 `in`。三者的差別是這條斷言的全部價值:
     #
+    #     （下表為實跑產生,不是推論）
     #       source                      `in`   裸 startswith   有邊界前綴（現行）
     #       ─────────────────────────── ────── ────────────── ──────────────────
     #       data.gov.tw/6100（真來源）   PASS       PASS             PASS
@@ -185,7 +186,8 @@ def test_seed_file_honest_and_valid():
     #       stale-cache(CIER)           PASS        red              red
     #       CIER 官方公布 2026-06        PASS       PASS             red   ←★
     #       NDC 我自己編的               PASS       PASS             red
-    #       data.gov.tw-FABRICATED       red       PASS             red
+    #       data.gov.tw-FABRICATED      PASS       PASS             red
+    #       CIER-鬼扯                    PASS       PASS             red
     #
     #     ★ 那一列**就是本檔要防的原始事故**:`test_export_pmi_freshness_gate.py`
     #       檔頭記載的那筆人工 seed,source 正是 `"CIER 官方公布 2026-06"`。
