@@ -103,6 +103,7 @@ h3{font-size:16px;font-weight:700;margin:30px 0 10px}
 .call b{color:var(--accent-ink)}
 .warn{border-left-color:var(--sig-amber);background:var(--sig-amber-bg)}
 .warn b{color:var(--sig-amber)}
+.warnmark{color:var(--sig-amber);font-weight:600;font-size:12.5px;display:block;margin-top:4px}
 
 /* ── IA explorer ── */
 .explorer{margin-top:24px;border:1px solid var(--rule);border-radius:14px;overflow:hidden;background:var(--panel)}
@@ -373,6 +374,27 @@ Use `st.form_submit_button()` instead to submit the form.</pre>
     <p><b>F17</b>：v1 的「冷啟動<b>實測</b> 40–75 秒」是抄 <code>tab_macro.py</code> 的 spinner 文案，<b>不是本組量的</b>。
     <b>v2 拿掉「實測」二字，改標出處。</b></p>
   </div>
+  <div class="fix">
+    <div class="fh"><span class="fid">N1 · N2 · N3 · N4</span><span>本輪：四處自己寫錯的，加一處自己漏畫的</span></div>
+    <p><b>N2 —— 我自己寫了一句全稱句，而它是假的。</b>上一版在 💼 頁的註記結尾寫：「<s>v2 的每個「去哪補」都指向本線框畫得出來的地方</s>」。本輪把全部 30 條 <code>where</code> 逐條比對畫面，<b>五顆被指去的按鈕根本沒畫出來</b>：</p>
+    <pre class="out">🎯 開始選股      ← 只出現在「去哪補」文字裡，四大鐵律表的 form 欄沒寫
+🔍 載入完整分析  ← 同上
+🗺️ 載入板塊地圖  ← 同上（它不是 submit，是單顆 button，更該畫）
+🚀 批次分析      ← 同上
+⚡ 生成 AI 總結   ← ⑦ 區塊只寫「＋ 複製鈕」，按鈕本身沒畫
+（對照組：🚀 跑存股戰情室 有畫 —— 所以「畫得出來」的寫法是存在的，我只是沒對其他五顆做）</pre>
+    <p><b>這正是上一版 F5 在指控 v1 的同一件事，我在修它的那一段裡又犯了一次。</b>五顆已補畫；<b>那句全稱句已刪，不改寫成比較弱的版本 —— 它不需要存在。</b></p>
+    <p><b>N1 —— 兩處欄數歸屬張冠李戴。</b>上一版寫 💼「燈牆 3 欄（原 <code>columns(5)</code>）」、📖「資料源燈號（原 <code>columns(7)</code> 降階）」，<b>兩個出處都不在那兩頁</b>：</p>
+    <pre class="out">$ grep -rcE '[A-Za-z_]+\.columns\(([4-9]|1[0-9])\)' \
+    src/ui/etf/etf_tab_dividend_station.py src/ui/render/station_cards.py src/ui/render/station_charts.py
+    → 0 / 0 / 0        ← 💼 戰情室的 render path 一處 ≥4 欄都沒有
+$ grep -rnE '[A-Za-z_]+\.columns\(7\)' src/ui
+    src/ui/tabs/tab_stock_grp.py:463:    mcols = st_mod.columns(7)   ← 全 repo 唯一，屬 🔬 查一檔 › 多檔比較
+$ 📖 憑什麼 的實際 ≥4 欄：src/ui/pages/calibration_ui.py:158  st.columns(4)   ← 就這一處</pre>
+    <p><b>總數 23 沒有變，錯的是把它們掛到哪一頁。</b>這種錯在線框裡特別貴：實作者會照著去找一個不存在的東西，找不到就自己發明一個。已就地標更正。</p>
+    <p><b>N3 —— 效能論證整條撤掉。</b>上一版寫「葉節點 14 → 11，<s>少 3 份無條件執行的 body</s>」。實測四組被合併的分頁裡<b>三組本來就有 gate</b>（ETF 單檔 <code>:103/108</code>、ETF 多檔 <code>:126/129</code>、總經 <code>:200/208</code>），只有板塊資金潮汐沒有；而 🚦今天 依 F2 拆成 2 葉又加回一份 —— <b>淨變化約 −1。</b><b>合併分頁的理由從頭到尾就不是省 body，是「找得到」</b>；省重繪的是 <code>st.form</code> 那一半，兩者不該混為一談。</p>
+    <p><b>N4 —— F2／F13 各有一處殘留，本輪補上。</b><b>F2 殘留</b>：<b>④ 今日關鍵橫幅</b>沒畫（上一版葉1 編號從 ③ 直接跳到 ⑤）。它<b>不住在任何 <code>section_*</code> 裡</b> —— 是 <code>tab_macro.py:241</code> 開的 <code>st.empty()</code> slot、<code>:255</code> 回填，所以按 <code>section_*</code> 掃的落點表<b>結構上就看不到它</b>。<b>而它是本站第二個已經做對的樣板</b>（<code>macro_ui_components.py:204</code> 的 <code>threshold_scanned</code>：空 items 拆成 <code>None</code>／<code>[]</code>／真的沒事三種，只有第三種准顯示綠燈）。「十二個區塊沒有一個沒落點」已改為「這十二個 <code>section_*</code>…」並註明落點表本身非窮舉。<br><b>F13 殘留</b>：頂部狀態列只畫了「有值 / 沒值」，漏掉 <code>get_macro_state</code> 來源優先序的<b>第 3 條</b>（<code>macro_state.json</code> AI 鎖定快照）—— 走它時 <code>is_loaded=True</code>，畫面會長得像正常綠燈。已補為<b>已失準態「⚠️ 來自快照，時間不明」</b>。<b>不顯示時間是因為契約沒帶</b>：檔內有 <code>timestamp</code>，但回傳 dict 只有 9 個 key、不含它；要顯示就得改回傳契約＝改 <code>.py</code>，本批不做。<b>寧可寫「時間不明」，也不編一個時間。</b></p>
+  </div>
 </section>
 
 <section>
@@ -406,7 +428,7 @@ Use `st.form_submit_button()` instead to submit the form.</pre>
     <div class="stat">
       <div class="k">4<span style="font-size:17px;color:var(--ink-3)"> / 8 / 6</span></div>
       <div class="l">gate 數 —— 取決於你怎麼定義</div>
-      <div class="d"><b>4</b>＝以 <code>return</code> 提前結束。<b>8</b>＝本體實際不執行，含用
+      <div class="d"><b>4</b>＝以 <code>return</code> 提前結束（<code>tab_macro.py:200/208</code>、<code>etf_render.py:836/841</code> 熱力圖、<code>etf_tab_single.py:103/108</code>、<code>etf_tab_grp_compare.py:126/129</code>）。<b>8</b>＝本體實際不執行，含用
       <code>if/else</code> 包住整份本體者。<b>6</b>＝任何定義下都沒有 gate。
       <b>四種不同寫法，這才是要修的東西。</b></div>
     </div>
@@ -429,12 +451,12 @@ Use `st.form_submit_button()` instead to submit the form.</pre>
     因為 <code>st.tabs</code> 是 eager render，14 個葉節點每次 rerun 全部執行，
     所以每一頁都必須自己長出一顆按鈕擋住自己 —— 擋住的是<b>抓資料</b>，擋不住的是<b>重繪</b>。
     而重繪成本由「0 個 form」放到最大。</p>
-    <p style="margin:8px 0 0"><b>新 IA 同時做兩件事</b>：葉節點 14 → 11（少 3 份無條件執行的 body），
-    並讓每頁的控制項進 <code>st.form</code>。分頁怎麼分是客戶要審的；form 怎麼包是內部自決 —— 但兩者要一起設計。</p>
+    <p style="margin:8px 0 0"><b>新 IA 做的是兩件事，但只有第二件跟效能有關</b>：分頁重切是為了<b>找得到</b>；<code>st.form</code> 才是省重繪的那一半。分頁怎麼分是客戶要審的；form 怎麼包是內部自決 —— 但兩者要一起設計。</p>
   </div>
 
   <div class="call warn">
-    <p style="margin:0"><b>另一個只有實測才看得到的事：現在的分頁是照「資產類型」切的。</b>
+    <p style="margin:0"><b>N3 更正（本輪）：<s>「葉節點 14 → 11，少 3 份無條件執行的 body」這個效能論證整條撤掉。</s></b>本輪實測，四組被合併的分頁裡有<b>三組本來就有 gate</b> —— ETF 單檔（<code>etf_tab_single.py:103/108</code>）、ETF 多檔（<code>:126/129</code>）、總經（<code>tab_macro.py:200/208</code>）；<b>只有板塊資金潮汐沒有</b>（<code>tab_sector_flow.py::render_tab_sector_flow</code> 每次 rerun 直接呼叫 <code>get_sector_flow_view()</code>，沒有任何使用者 gate）。而 🚦今天 依 F2 拆成 2 葉又<b>加回一份</b> —— <b>淨變化約 −1，不是 −3。</b><b>合併的理由從頭到尾就不是省 body，是下面這件事。</b></p>
+    <p style="margin:8px 0 0"><b>另一個只有實測才看得到的事：現在的分頁是照「資產類型」切的。</b>
     「🔬 個股」與「ETF 單檔」都在回答「這一檔行不行」，卻分屬兩個頂層分頁；
     這逼使用者先回答一個他不該被問的問題：<b>「00878 算股票還是 ETF？」</b></p>
     <p style="margin:8px 0 0">⚠️ <b>但紅隊 F4 打掉了「它們是同一頁」這個簡化</b>：兩者的<b>內容重疊度接近零</b>
@@ -518,22 +540,22 @@ Use `st.form_submit_button()` instead to submit the form.</pre>
       <thead><tr><th>頁</th><th>3 欄自適應網格</th><th>Form 封裝防重繪</th><th>狀態分離（四態）</th><th>空狀態引導</th></tr></thead>
       <tbody>
         <tr><td><b>🚦 今天</b></td><td>位階／動能／風險 三欄；五桶 3×2</td>
-          <td><code>form_today</code>：<b>單一 submit</b> ＋ 更新模式 radio（暖快取／強制重抓）。<b>不放 st.button</b>（F11）</td>
+          <td><code>form_today</code>：<b>單一 submit ＝「🚀 更新今日戰情」</b> ＋ 更新模式 radio（暖快取／強制重抓）。<b>不放 st.button</b>（F11）</td>
           <td>四態齊全 —— 沿用 v2 冷啟動樣板（含 0／16 分母與未接線拆解）</td>
           <td>「點上方更新」＋ 冷啟動時間預期（出處：spinner 文案）</td></tr>
         <tr><td><b>🔍 找標的</b></td><td>因子卡 3 欄；板塊圖 3 欄圖例</td>
-          <td><code>form_screen</code>：4 因子 ＋ top_n ＋ 排序一次送出。CSV <code>download_button</code> 留在 form 外</td>
+          <td><code>form_screen</code>：4 因子 ＋ top_n ＋ 排序一次送出，<b>submit ＝「🎯 開始選股」</b>。CSV <code>download_button</code> 與葉2 的「🗺️ 載入板塊地圖」都<b>留在 form 外</b>（form 內只能有 submit，F11；後者是單顆按鈕，沒有 widget 要批次）</td>
           <td>未選股＝灰；FinMind 額度用罄＝紅</td>
           <td>「勾條件 → 開始選股」＋ 缺貨／RS 會自動掃</td></tr>
         <tr><td><b>🔬 查一檔</b></td><td>判決卡 3 欄；MA 設定 3×2（原 <code>columns(6)</code>）</td>
-          <td><code>form_ticker</code>：代碼 ＋ 天數 ＋ K 線 ＋ 6 個 MA。<b>全站最大受益點</b></td>
+          <td><code>form_ticker</code>：代碼 ＋ 天數 ＋ K 線 ＋ 6 個 MA，<b>submit ＝「🔍 載入完整分析」</b>；葉2 另有 <code>form_batch</code>（貼代碼 ＋ 篩選），<b>submit ＝「🚀 批次分析」</b>。<b>全站最大受益點</b></td>
           <td>未輸入／判型 unknown／停牌／新上市＝灰；抓取失敗＝紅</td>
           <td>「輸入代碼 → 載入」＋ 判型結果就地顯示、可手動覆寫</td></tr>
-        <tr><td><b>💼 我的持股</b></td><td>結論／待辦／可信度 三欄；燈牆 3 欄（原 <code>columns(5)</code>）</td>
+        <tr><td><b>💼 我的持股</b></td><td>結論／待辦／可信度 三欄；燈牆 3 欄<b class="warnmark">（N1 更正：本頁<u>沒有</u> <code>columns(5)</code>）</b></td>
           <td><code>form_holdings</code>：Sheet 選擇 ＋ 篩選。<b>「🚀 跑存股戰情室」是 form 的 submit</b></td>
           <td>未綁 Sheet＝灰；Sheet 讀不到＝紅；兩套刻度不一致＝已失準</td>
           <td>「去『組合設定』綁一次 Sheet」＋ 就地給入口</td></tr>
-        <tr><td><b>📖 憑什麼</b></td><td>資料源燈號 3 欄卡牆（原 <code>columns(7)</code> 降階）</td>
+        <tr><td><b>📖 憑什麼</b></td><td>資料源燈號 3 欄卡牆<b class="warnmark">（N1 更正：本頁唯一 ≥4 欄是 <code>calibration_ui.py</code> 的 <code>columns(4)</code>，<u>不是</u> <code>columns(7)</code>）</b></td>
           <td><b>本頁無 form</b> —— F7：現況是 1 個 checkbox 全有全無，不是 6 個，<b>沒有要解的問題</b></td>
           <td>這頁的紅是主角；未接線與已失準在此有專屬列</td>
           <td>每個非綠燈都附「這一盞為什麼不能信」（讀自 SSOT）</td></tr>
@@ -571,6 +593,7 @@ Use `st.form_submit_button()` instead to submit the form.</pre>
         <tr><td><code>_render_china_drag_panel</code> 中國拖累</td><td><span class="pill keep">保留</span></td><td>葉2 · C 中期（併入同段）</td><td>它是中期桶的一個輸入，不是獨立桶</td></tr>
         <tr><td><code>section_cross_ai</code> 跨桶規則決策</td><td><span class="pill keep">保留</span></td><td>葉2 · G 跨桶裁決</td><td>五桶之後的綜合，位置在最後才合理</td></tr>
         <tr><td><code>section_news_ai</code> News AI 總裁決</td><td><span class="pill merge">移位</span></td><td>葉1 · ⑥ AI 摘要（摺疊，預設收合）</td><td>它現在就是「置頂 AI 卡讀底部生成結果」的兩地結構；收在結論頁尾比較直覺</td></tr>
+        <tr><td><code>key_alerts_banner</code> 今日關鍵橫幅<b class="warnmark">不在任何 <code>section_*</code> 內 —— <code>tab_macro.py:241/255</code> 的 <code>st.empty()</code> slot</b></td><td><span class="pill keep">補回</span></td><td>葉1 · ④ 今日關鍵橫幅</td><td><b>上一版漏畫。</b>落點表按 <code>section_*</code> 掃，結構上掃不到它。它自帶三態（<code>threshold_scanned</code>），是本站第二個做對的樣板</td></tr>
         <tr><td><code>_render_macro_indicator_card</code> 指標卡</td><td><span class="pill keep">保留</span></td><td>葉2 全段共用元件</td><td>不是區塊，是元件</td></tr>
       </tbody>
     </table>
@@ -716,7 +739,7 @@ const PAGES = [
       err:{now:'🔴 建議持股無法計算',why:'FRED 與備援源本輪皆未回應，不是程式錯誤',where:'到「📖 憑什麼 › 資料體檢」看該源狀態；或稍後重試'},
       note:'<b>這一格的規格＝照抄現行總經 v2 的冷啟動。</b>F1 實測它已經做到「分母 ＋ 未接線拆解 ＋ 去哪補」，是全站最完整的一處誠實揭露 —— v1 原本要把它改掉，v2 改成把它當樣板。'},
     {t:'葉1 ② 操作列', n:'st.form(form_today) · 單一 submit', laws:['f'],
-      live:'表單內：<code>◉ 正常更新（吃暖快取）／○ 強制重抓（清快取）</code> radio　→　<b>一顆 <code>form_submit_button</code></b>',
+      live:'表單內：<code>◉ 正常更新（吃暖快取）／○ 強制重抓（清快取）</code> radio　→　<b>一顆 <code>form_submit_button</code>：「🚀 更新今日戰情」</b>',
       grey:'表單永遠可見（它就是灰態的出口），不隨狀態變化',
       note:'<b>F11 更正</b>：v1 寫「兩顆具名動作鈕 ＋ 一顆 submit」—— 實跑即拋 <code>StreamlitAPIException: st.button() can\'t be used in an st.form()</code>。改為 radio 選模式、單一 submit，兩個動作收斂成一次送出。'},
     {t:'葉1 ③ 三欄摘要', n:'st.columns(3)', laws:['g','s'], cols:3,
@@ -726,6 +749,12 @@ const PAGES = [
       degradedCells:[['位階','偏多'],['動能','⚠️ 門檻已失準'],['風險','🟢 VIX 16.4']],
       errCells:[['位階','🔴 取數失敗'],['動能','⬜ 尚未評估'],['風險','🟢 VIX 16.4']],
       note:'<b>逐格獨立判態</b> —— 一格壞不把另外兩格一起染色。切「未接線」與「已失準」看差別：前者永遠不會變，後者有值但不能拿來下判斷。'},
+    {t:'葉1 ④ 今日關鍵橫幅', n:'常駐一條 · 位在結論與明細之間', laws:['s','e'],
+      live:'🔴 <b>今日關鍵</b>：3 紅 1 黃 —— HY OAS 急擴 · VIX 跳升 · 10Y-2Y 轉負（chip 併排，滑過看白話說明）',
+      grey:{now:'⬜ <b>今日關鍵：門檻掃描尚未完成</b>（總經指標尚未載入）—— <b>未評估 ≠ 無異常</b>',why:'<code>macro_alerts</code> 為 <code>None</code>（門檻層這輪沒跑到）或 <code>[]</code>（跑了但 snapshot 全 <code>None</code>）—— 兩者都不是「沒事」',where:'按上方「🚀 更新今日戰情」'},
+      degraded:{now:'⚠️ 已列出異常，但<b>本列僅含急變層</b>',why:'門檻層本輪未評估（<code>threshold_scanned=False</code>），紅/黃條照顯示，但就地加一行揭露「這條沒有涵蓋門檻層」',where:'更新總經後本列才會是雙層結果'},
+      err:{now:'🔴 橫幅本身無法產生',why:'上游 <code>collect_key_alerts()</code> 例外',where:'「📖 憑什麼 › 資料體檢」看急變層來源'},
+      note:'<b>F2 殘留補畫。</b>它<b>不住在任何 <code>section_*</code> 裡</b> —— 是 <code>tab_macro.py</code> 直接開的一個 <code>st.empty()</code> slot（<code>:241</code> 佔位、<code>:255</code> 回填），所以上一版的十二個 <code>section_*</code> 落點表<b>結構上就掃不到它</b>。<br><b>它是本站第二個「已經做對」的樣板</b>（第一個是 v2 冷啟動）：<code>macro_ui_components.py:204</code> 的 <code>key_alerts_banner(..., threshold_scanned=)</code> 已經把「空 items」拆成三種狀態 —— <code>None</code>（沒跑到）／<code>[]</code>（跑了但無資料）／有值全綠（真的沒事），<b>而且只有第三種才准顯示綠燈</b>。docstring 原話：「拿它冒充『沒有問題』就是 §1 明令禁止的『讓流程看起來成功』」。<br>⚠️ <b>連帶事項</b>：灰態文案<b>寫死了現行按鈕名「🚀 一鍵更新全部數據」</b>。本 IA 把 submit 改名為「🚀 更新今日戰情」時，<b>這個字串必須跟著改</b>，否則畫面會指去一顆不存在的按鈕 —— 與本文剛修掉的 N2 是同一種錯。'},
     {t:'葉1 ⑤ 今日作戰室　⑥ AI 摘要（摺疊）', n:'清單 · 非表格', laws:['e'],
       live:'今天該做的 3 件事（含理由與對應分頁連結）；AI 摘要預設收合',
       grey:{now:'⬜ 尚無作戰項目',why:'作戰室由五桶結論推導，五桶未算就沒有可推的東西',where:'先完成上方更新'},
@@ -735,11 +764,12 @@ const PAGES = [
       grey:{now:'⬜ 七段全部標「全部無資料」',why:'與葉1 同一份 session 輸入；五桶未算，明細沒有可展開的東西',where:'到「今日結論」按「🚀 更新今日戰情」'},
       unwired:{now:'⬜ 該盞燈標 🔌 未接線，並就地顯示原因',why:'<code>wired=False</code>，這盞燈根本沒有資料源',where:'這一態<b>沒有使用者可執行的出口</b> —— 誠實寫明「這是待接線項，不是你操作的問題」'},
       err:{now:'🔴 中期段計算中止；其餘六段維持各自狀態',why:'其輸入指標（CPI / PMI）本輪缺值，依規則不以估計值代替',where:'「📖 憑什麼 › 資料體檢」查 CPI / PMI 兩列'},
-      note:'<b>F2 的落點表</b>：<code>section_state</code>／<code>section_long</code>＋<code>section_long_term</code>／<code>section_mid</code>＋<code>_render_china_drag_panel</code>／<code>section_short</code>／<code>section_chips</code>／<code>_render_global_risk_bucket</code>／<code>section_cross_ai</code> 逐一對應七段，<b>十二個區塊沒有一個沒落點</b>。'},
+      note:'<b>F2 的落點表</b>：<code>section_state</code>／<code>section_long</code>＋<code>section_long_term</code>／<code>section_mid</code>＋<code>_render_china_drag_panel</code>／<code>section_short</code>／<code>section_chips</code>／<code>_render_global_risk_bucket</code>／<code>section_cross_ai</code> 逐一對應七段，<b>這十二個 <code>section_*</code> 沒有一個沒落點</b>（⚠️ 但<b>落點表本身不是窮舉</b> —— ④ 關鍵警示橫幅就不住在任何 <code>section_*</code> 裡，是本輪才補上的）。'},
     {t:'（跨頁）頂部狀態列', n:'常駐一條 · 取代現行四條', laws:['s','e'],
       live:'09/05 週五 ✅ 交易日　|　🟢 總經 偏多 · 建議 70%　|　🔗 已綁 Sheet「我的持股」　|　更新於 14:32',
-      grey:{now:'⬜ 總經未評估　|　🔗 尚未綁定 Sheet',why:'讀 L3 canonical 契約，該契約本輪沒有值',where:'到「🚦 今天」更新；Sheet 到「💼 我的持股 › 組合設定」綁'},
-      note:'<b>F13 更正</b>：v1 說四條常駐條「各算一次」所以要收成一條。實測那個已修 bug 的根因<b>不是算兩次</b>，是 <code>warroom_summary</code> 的寫入端（<code>macro/section_state.py</code>、<code>macro/section_traffic_light.py</code>）<b>在 render 路徑裡</b> —— 而 v1 又要在頁首早退，早退之後寫入端不執行，狀態列會<b>永遠拿不到 regime</b>，等於把那個 bug 換一條路請回來。<b>v2：狀態列改讀 L3 <code>macro_state_locker.get_macro_state</code>，不依賴任何 render 副作用；讀不到就顯示灰態。</b>'}
+      grey:{now:'⬜ 總經未評估　|　🔗 尚未綁定 Sheet',why:'讀 L3 canonical 契約，該契約本輪沒有值（<code>get_macro_state</code> 四條來源皆無 → 回 <code>unknown</code>，<b>不是</b> <code>neutral</code>）',where:'到「🚦 今天」更新；Sheet 到「💼 我的持股 › 組合設定」綁'},
+      degraded:{now:'⚠️ 🟡 總經 偏多 —— <b>來自快照，時間不明</b>',why:'本輪生效的是來源優先序<b>第 3 條</b>：<code>macro_state.json[\'market_regime\']</code>（AI 鎖定快照）。它是<b>上一次</b>鎖的結論，不是這一輪算的',where:'到「🚦 今天」按「🚀 更新今日戰情」重算；重算後狀態列會回到 🟢 並帶真實時間'},
+      note:'<b>F13 更正</b>：v1 說四條常駐條「各算一次」所以要收成一條。實測那個已修 bug 的根因<b>不是算兩次</b>，是 <code>warroom_summary</code> 的寫入端（<code>macro/section_state.py</code>、<code>macro/section_traffic_light.py</code>）<b>在 render 路徑裡</b> —— 而 v1 又要在頁首早退，早退之後寫入端不執行，狀態列會<b>永遠拿不到 regime</b>，等於把那個 bug 換一條路請回來。<b>v2：狀態列改讀 L3 <code>macro_state_locker.get_macro_state</code>，不依賴任何 render 副作用；讀不到就顯示灰態。</b><br><b>N4 補（本輪，F13 殘留）</b>：該契約的來源優先序有<b>四條</b>，上一版只畫了「有值」與「沒值」兩端，<b>漏掉第 3 條</b> —— <code>macro_state.json[\'market_regime\']</code>（AI 鎖定快照）。走這條時 <code>is_loaded=True</code>，畫面會像正常的 🟢，<b>但它是上一次鎖的結論，不是這一輪算的</b>。已補為<b>已失準態</b>：「⚠️ 來自快照，時間不明」。<br>⚠️ <b>為什麼是「時間不明」而不是顯示時間</b>：<code>macro_state.json</code> 檔內<b>確實有</b> <code>timestamp</code> 欄（<code>lock_system_state()</code> 寫的），但 <code>get_macro_state()</code> 的回傳 dict <b>只有 9 個 key</b>（<code>regime / light / source / trend_regime / health / defense / exposure_limit_pct / traffic_light / is_loaded</code>），<b>沒有把它帶出來</b>。要顯示真實時間就得改回傳契約 —— <b>那是 <code>.py</code> 變更，本批不做</b>。<b>在那之前寧可寫「時間不明」，也不編一個時間出來。</b><br>另補：四條全落空時契約回 <code>\'unknown\'</code> 而<b>不是</b> <code>\'neutral\'</code> —— 與本文的缺值第一律同向，<b>這是既有實作已經做對的地方，照抄即可。</b>'}
   ]
 },
 {
@@ -747,7 +777,7 @@ const PAGES = [
   job:'一句話：從全市場縮到一張候選清單。',
   leaves:['選股網','板塊地圖（＝產業熱力圖＋板塊資金潮汐）'],
   blocks:[
-    {t:'葉1 選股網 · 條件表單', n:'st.form(form_screen)', laws:['f','g'], cols:3,
+    {t:'葉1 選股網 · 條件表單', n:'st.form(form_screen) · submit ［ 🎯 開始選股 ］', laws:['f','g'], cols:3,
       cells:[['① 基本面優選','四項全過（自動）'],['② 勾條件','估值／EPS／缺貨／抗跌RS／跨季轉強'],['③ 排序與筆數','綜合評分 · top 50']],
       greyCells:[['① 基本面優選','四項全過（自動）'],['② 勾條件','估值／EPS／缺貨／RS／跨季'],['③ 排序與筆數','綜合評分 · top 50']],
       note:'現在這 5 個 multiselect／checkbox 每動一次就整站 rerun。包進一個 form：勾幾個都只送一次。<b>CSV <code>download_button</code> 留在 form 外</b>（F11 連帶：form 內只能有 submit）。'},
@@ -756,7 +786,7 @@ const PAGES = [
       grey:{now:'⬜ 尚未選股',why:'選股要跑缺貨掃描與 RS 分位，首次約需數十秒',where:'勾好條件後點表單裡的「🎯 開始選股」'},
       err:{now:'🔴 選股中止：FinMind 額度用罄',why:'今日 API 呼叫已達上限，非程式錯誤；本站不以殘缺資料湊出名單',where:'額度每日 00:00 重置；或到「📖 憑什麼 › 資料體檢」看 MOPS／Goodinfo 備援鏈是否可用'}},
     {t:'葉2 板塊地圖', n:'熱力圖 ＋ 資金泡泡並列 · 3 欄圖例', laws:['g','s','e'],
-      live:'左：產業漲跌熱力圖　右：三大法人資金流向泡泡圖',
+      live:'<b>［ 🗺️ 載入板塊地圖 ］</b>（單顆 <code>st.button</code>，不在 form 內）　→　左：產業漲跌熱力圖　右：三大法人資金流向泡泡圖',
       grey:{now:'⬜ 板塊資料尚未載入',why:'熱力圖要批次抓數十檔類股代表；泡泡圖讀每交易日盤後凍結的快照',where:'點「🗺️ 載入板塊地圖」；泡泡圖若顯示無快照，代表當日盤後任務尚未產生資料'},
       err:{now:'🔴 熱力圖無法取得任何類股資料',why:'批次抓取全數失敗',where:'先確認網路／proxy；細節在「📖 憑什麼 › 資料體檢」'}},
     {t:'葉2 口徑揭露', n:'caption · 常駐', laws:['e'],
@@ -769,7 +799,7 @@ const PAGES = [
   job:'一句話：一個代碼進去，一份判決出來 —— 系統判型，然後走兩套完全不同的明細。',
   leaves:['單檔診斷（個股／ETF/unknown 三分支）','多檔比較（可混貼）'],
   blocks:[
-    {t:'葉1 輸入表單 ＋ 判型結果', n:'st.form(form_ticker) · 全站最大 form 受益點', laws:['f','g','s'], cols:3,
+    {t:'葉1 輸入表單 ＋ 判型結果', n:'st.form(form_ticker) · submit ［ 🔍 載入完整分析 ］ · 全站最大 form 受益點', laws:['f','g','s'], cols:3,
       cells:[['代碼','2330 → 判型：<b>個股</b>（可手動覆寫）'],['期間 / K 線','250 日 · 還原 K'],['均線','MA20 · MA100 已勾']],
       greyCells:[['代碼','（輸入代碼，例：2330 或 00878）'],['期間 / K 線','250 日 · 還原 K'],['均線','MA20 · MA100 預設']],
       unwiredCells:[['代碼','<b>1234 → ⬜ 判型 unknown</b>'],['期間 / K 線','（維持預設）'],['均線','（維持預設）']],
@@ -783,7 +813,7 @@ const PAGES = [
       live:'K 線＋均線 → 💰 獲利能力診斷 → 357 評價河流圖 → 財報領先指標 → VCP／布林 → 月營收 → 什麼時候買賣 → 心理檢查',
       grey:{now:'⬜ 尚未載入任何明細',why:'明細需要 K 線、三大法人、月／季營收等六類資料',where:'在上方表單輸入代碼後按「🔍 載入完整分析」'},
       err:{now:'🔴 月營收區塊無法顯示',why:'該股本月營收尚未公布 —— 這是三態之一「等公布」，<b>不是</b>抓取失敗',where:'月營收約於次月 10 日前公布；其餘區塊不受影響，已照常顯示'}},
-    {t:'葉1-A 💰 獲利能力診斷（缺值三律樣板）', n:'原 st.columns(5) → 3 欄 × 2 排', laws:['g','s','e'], cols:3,
+    {t:'葉1-A 💰 獲利能力診斷（缺值三律樣板）', n:'原 tab_stock.py:1230 st.columns(5) → 3 欄 × 2 排', laws:['g','s','e'], cols:3,
       cells:[['毛利率','58.2% · 🟢 好生意'],['營業利益率','42.1% · 🟢 本業獲利'],['安全邊際','🟢 抗震極強']],
       greyCells:[['毛利率','⚪ 資料缺漏'],['營業利益率','⚪ 資料缺漏'],['安全邊際','⚪ 資料缺漏']],
       errCells:[['毛利率','⚪ 資料缺漏'],['營業利益率','42.1% · 🟢 本業獲利'],['安全邊際','⚪ 資料缺漏']],
@@ -797,8 +827,8 @@ const PAGES = [
       live:'（代碼可判型時不顯示此區）',
       grey:{now:'⬜ <b>無法判定這是個股還是 ETF</b> —— 已停在這裡，沒有替你猜',why:'<code>classify_asset_kind</code> 對非台股代號回 <code>unknown</code>（美股／指數／興櫃／輸入錯誤都會落在這）。<b>依 §4.6「不猜」，本站不替你選一邊</b>',where:'確認代碼；若確定它是台股，可在上方表單<b>手動指定型別</b>後重新載入'},
       note:'<b>依本文自己訂的缺值三律：判型失敗是「沒有值」，走灰態，不是紅態。</b>v1 的查一檔只有「未輸入」灰態與「抓取失敗」紅態，<code>unknown</code> 無處可去 —— 那會逼實作把它塞進其中一個，兩個都是說謊。'},
-    {t:'葉2 多檔比較', n:'表單 ＋ 批次表 ＋ 下鑽', laws:['f','g','e'],
-      live:'貼一串代碼（可混 個股／ETF）→ 批次評分表 → 點任一列就地展開該檔明細（依型別走 A 或 B）',
+    {t:'葉2 多檔比較', n:'st.form(form_batch) ＋ 批次表 ＋ 下鑽', laws:['f','g','e'],
+      live:'表單：貼一串代碼（可混 個股／ETF）＋ 篩選　→　<b>submit ［ 🚀 批次分析 ］</b>　→　批次評分表 → 點任一列就地展開該檔明細（依型別走 A 或 B）',
       grey:{now:'⬜ 尚未批次分析',why:'批次會對每檔抓六類資料，檔數 × 時間',where:'在表單貼上代碼後按「🚀 批次分析」'},
       err:{now:'🔴 3 檔中 1 檔失敗（2317）',why:'該檔資料源逾時；<b>其餘 2 檔照常顯示，不整批作廢</b>',where:'單獨重試 2317，或到資料體檢看該源狀態'}}
   ]
@@ -818,7 +848,7 @@ const PAGES = [
       grey:'揭露常駐，不隨載入狀態消失',
       degraded:{now:'⚠️ 兩套刻度目前不一致，已停止跨頁比較功能',why:'某一側的門檻來源已標 <code>discriminative=False</code>',where:'到「📖 憑什麼 › 教學」看兩套刻度各自的出處'},
       note:'<b>v1 漏畫。</b>它是防「同名不同義」誤讀的唯一揭露 —— 拿掉之後就會有人拿兩套刻度互比，而畫面不會攔他。'},
-    {t:'葉1 ③ 戰情表（燈牆 ＋ VIX）', n:'3 欄燈格（原 columns(5)） · 點左表右側就地展開', laws:['g','e'],
+    {t:'葉1 ③ 戰情表（燈牆 ＋ VIX）', n:'3 欄燈格 · 點左表右側就地展開', laws:['g','e'],
       live:'12 檔 × 235 加碼燈 / 3-3-3 判定 —— 點任一檔，右側展開週線與布林 z',
       grey:{now:'⬜ 燈牆尚未點亮',why:'需要先讀取持股清單並逐檔抓週線',where:'點表單裡的「🚀 跑存股戰情室」'},
       err:{now:'🔴 無法讀取持股清單',why:'已綁定的 Google Sheet 讀取失敗（權限或表被刪）',where:'到本頁「組合設定」重新綁定，或確認該 Sheet 仍有分享權限'}},
@@ -836,14 +866,14 @@ const PAGES = [
       grey:{now:'⬜ 深度分析尚未執行',why:'這幾項吃的是上方燈牆的同一份持股資料',where:'完成「🚀 跑存股戰情室」後即可展開'},
       note:'現況埋在「5️⃣ 組合深度分析」expander 第五層。<b>expander 收合只是視覺收合、body 每次 rerun 照跑</b> —— 埋起來沒省效能，只是讓人找不到。改並列 ＋ 各自 gate。'},
     {t:'葉1 ⑦ AI 戰情總結（F3 補回）', n:'唯一推播出口', laws:['e'],
-      live:'一段可直接推播的文字總結（含當日建議與理由）＋ 複製鈕',
+      live:'<b>［ ⚡ 生成 AI 總結 ］</b>（單顆 <code>st.button</code>，本區塊內）　→　一段可直接推播的文字總結（含當日建議與理由）＋ 複製鈕',
       grey:{now:'⬜ 尚未生成',why:'AI 總結以上方六段的結論為輸入，避免無中生有',where:'完成戰情室後點「⚡ 生成 AI 總結」'},
       note:'<b>v1 漏畫 —— 而它是本頁唯一的推播出口。</b>拿掉之後這頁就只能看、不能送出去。'},
-    {t:'葉2 組合設定', n:'st.form(form_holdings)', laws:['f','e'],
+    {t:'葉2 組合設定', n:'st.form(form_holdings) · submit ［ 🚀 跑存股戰情室 ］', laws:['f','e'],
       live:'Google 登入狀態 · Sheet 選擇 · 持股列預覽 · 觀察清單管理',
       grey:{now:'⬜ 尚未綁定持股 Sheet',why:'戰情室的每一盞燈都以「你實際持有什麼」為輸入，沒有清單就沒有東西可判',where:'在本頁用 Google 登入後選一本 Sheet —— <b>就地完成，不必去別頁</b>'},
       err:{now:'🔴 已綁定，但讀不到任何持股列',why:'可能是空表，或欄位名稱與預期不符',where:'本頁下方有欄位規格說明；照著改 Sheet 第一列即可'},
-      note:'<b>F5 更正</b>：v1 有 3 個灰／紅態把使用者指去一顆<b>當時沒畫出來的</b>「🚀 跑存股戰情室」，另有 1 個指去改 <code>.streamlit/secrets.toml</code>（客戶不碰那個檔）。<b>v2 的每個「去哪補」都指向本線框畫得出來的地方。</b>'}
+      note:'<b>F5 更正</b>：v1 有 3 個灰／紅態把使用者指去一顆<b>當時沒畫出來的</b>「🚀 跑存股戰情室」，另有 1 個指去改 <code>.streamlit/secrets.toml</code>（客戶不碰那個檔）。<br><b>N2 更正（本輪）</b>：v2 這裡原本寫「<s>v2 的每個「去哪補」都指向本線框畫得出來的地方</s>」——<b>那是全稱句，而且是假的</b>。本輪逐一比對全部 30 條 <code>where</code>，發現<b>五顆被指去的按鈕當時沒畫出來</b>：「🎯 開始選股」「🔍 載入完整分析」「🗺️ 載入板塊地圖」「🚀 批次分析」「⚡ 生成 AI 總結」。五顆已於本輪補畫（前四顆寫進四大鐵律表的 form 欄與各自區塊，第五顆畫在 ⑦）。<b>本文不再宣稱「每一個都指得到」—— 那句話正是它自己在修的那種錯。</b>'}
   ]
 },
 {
