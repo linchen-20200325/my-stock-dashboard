@@ -247,7 +247,7 @@ def build_status_bar_card(state: Mapping[str, Any] | None,
                 why=("本輪生效的是來源優先序第 3 條（`macro_state.json` 的 "
                      "AI 鎖定快照）—— 它是**上一次**鎖的結論，不是這一輪算的；"
                      "契約沒有把時間帶出來，所以這裡不編一個時間"),
-                where=(f"到 {ia_nav.where_to_find(ia_nav.PAGE_TODAY)}"
+                where=(f"到{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}"
                        f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}重算"),
             ),
         )
@@ -257,7 +257,7 @@ def build_status_bar_card(state: Mapping[str, Any] | None,
             note=Note(
                 now="🔴 總經位階讀取失敗",
                 why=f"讀 L3 canonical 契約時拋出例外：{error}",
-                where=(f"到 {ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
+                where=(f"到{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
                        "看該源狀態"),
             ),
         )
@@ -267,7 +267,7 @@ def build_status_bar_card(state: Mapping[str, Any] | None,
             now="⬜ 總經未評估",
             why=("L3 canonical 契約四條來源本輪皆無值 → 回 `unknown`，"
                  "**不是** `neutral`；本站不以缺值推導「中性」"),
-            where=(f"到 {ia_nav.where_to_find(ia_nav.PAGE_TODAY)}"
+            where=(f"到{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}"
                    f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}"),
         ),
     )
