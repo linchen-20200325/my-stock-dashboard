@@ -118,12 +118,75 @@ class TestFetchAllFailFallback:
         assert get_monitor_registry()['fetch_tw_pmi']['last_status'] == 'failed'
 
 
+# ══════════════════════════════════════════════════════════════════════
+# committed seed 檔本體的守衛（2026-09-05 去凍結值重寫）
+# ══════════════════════════════════════════════════════════════════════
+#
+# 【為什麼這裡不能釘死一個值】
+# `data_cache/macro_last_good/tw_pmi.json` 是 **cron 每天在寫的活檔案**
+# （`.github/workflows/update_macro_history.yml` cron `0 9 * * *`
+#   → `scripts/update_macro_history.py` → `macro_core._macro_durable_save`）。
+# 實測 2026-08-28 ~ 2026-09-04 逐日都有 commit 覆寫它。
+# 原本這裡寫死 `value == 60.7` / `date == '2026-06-01'`，是 2026-06 那筆人工
+# seed 的字面快照；上游一旦真的抓回來（現況：2026-08 的 62.5，
+# source=data.gov.tw/6100），CI 就轉紅 —— 紅的不是機制壞了，是**測試把一個
+# 會被刷新的值當常數**。
+#
+# ⛔ 因此**不得**把它改成 `== 62.5`：那只是把同一顆地雷重新埋好，
+#    下一次 cron 刷新（最慢一個月，PMI 是月頻）就再炸一次。
+# ✅ 這裡要守的是「**這個檔誠不誠實**」這個性質，不是它今天剛好等於多少：
+#    值域合理、資料日可解析且不在未來、provenance 在既有來源 SSOT 內、帶 cached_at。
+#    這四條**不隨時間腐爛** —— 它們對 cron 明天寫進來的任何一筆合法資料都成立。
+#
+# 【刻意不加的一條】這裡**不驗**「seed 有多新」。
+# 那屬於新鮮度，已由兩個鄰居各自守著，重複驗只會製造第三顆時間炸彈：
+#   - `tests/test_macro_last_good_expiry.py` —— TTL 到期前 21 天預警（含 cached_at 可解析性）
+#   - `tests/test_export_pmi_freshness_gate.py` —— 過期良值不得外送下游
+def _pmi_source_whitelist() -> list[str]:
+    """來源白名單一律取自 production SSOT `macro_core.PMI_SOURCE_REGISTRY`（§3.3 反捏造）。
+
+    不在本檔另寫一份名單:新增/移除來源時 registry 改一處,本測試自動跟上。
+    """
+    from src.data.macro.macro_core import PMI_SOURCE_REGISTRY
+    return [_name for _name, _fn in PMI_SOURCE_REGISTRY]
+
+
 def test_seed_file_honest_and_valid():
-    """committed seed 檔:值域合理 + 誠實 provenance（CIER 官方，非捏造）。"""
+    """committed seed 檔:值域 + 資料日 + 誠實 provenance（**不驗字面值**,理由見上方區塊註）。"""
     seed = json.loads(
         (REPO / 'data_cache/macro_last_good/tw_pmi.json').read_text(encoding='utf-8'))
-    assert 30 <= seed['value'] <= 70, 'PMI 須 ∈ [30,70]（§3.2）'
-    assert seed['value'] == 60.7, 'CIER 2026-06 官方公布值'
-    assert seed['date'] == '2026-06-01'
-    assert 'CIER' in seed['source'], 'provenance 須標官方來源（§2.2）'
-    assert 'cached_at' in seed
+
+    # (1) 值域 —— §3.2 PMI ∈ [30,70]
+    assert seed.get('value') is not None, 'seed 無值 → 等於沒有 last-good（§1 不寫空值）'
+    assert 30 <= seed['value'] <= 70, f"PMI 須 ∈ [30,70]（§3.2）,實得 {seed['value']!r}"
+
+    # (2) 資料日可解析,且**不得晚於今天** —— 未來日期是捏造（§1）
+    #     這條不會腐爛:時間往前走只會讓「不在未來」更容易成立。
+    #     且它真的守得到東西 —— 各 handler 的年齡檢查寫成
+    #     `(today - last_date).days <= max_age_days`,資料日若在未來,天數為負仍會通過。
+    _raw_date = seed.get('date')
+    assert _raw_date, 'seed 缺 date 欄 → 下游無從判定它是哪一期（§1）'
+    try:
+        _as_of = datetime.date.fromisoformat(str(_raw_date))
+    except ValueError:
+        raise AssertionError(f'seed date={_raw_date!r} 無法解析為日期')
+    assert _as_of <= datetime.date.today(), (
+        f'seed date={_as_of} 晚於今天 → 未來日期的觀測值不存在,是捏造（§1）')
+
+    # (3) provenance 必須存在、非空,且落在既有來源 SSOT 內（§2.2）
+    #     用 startswith 而非 in:`stale-cache(CIER)` 這種**回存 stale** 的來源
+    #     必須擋下 —— cron 明文只回存 live hit,回存 stale 會讓 cached_at 天天重刷、
+    #     過期值假裝永遠新鮮（見 update_macro_history.py 該段註解 + §1）。
+    _src = str(seed.get('source', '')).strip()
+    assert _src, 'seed 缺 source → 無 provenance（§2.2）'
+    _allowed = _pmi_source_whitelist()
+    assert any(_src.startswith(_n) for _n in _allowed), (
+        f'seed source={_src!r} 不在 PMI_SOURCE_REGISTRY 的來源清單內 {_allowed}。\n'
+        '兩種可能,都不該靠改本測試放行:\n'
+        '  (a) 它是 stale/人工來源被回存進 durable → 那是 §1 造假,修寫入端;\n'
+        '  (b) 真的新增了來源 → 請確認該 handler 回傳的 source 以其 registry 名稱開頭。'
+    )
+
+    # (4) cached_at 必須在 —— `_macro_cache_load` 靠它算 TTL,缺了整筆會被靜默跳過。
+    #     （可解析性由 tests/test_macro_last_good_expiry.py 守,此處不重複。）
+    assert 'cached_at' in seed, 'seed 缺 cached_at → _macro_cache_load 會當壞檔跳過'
