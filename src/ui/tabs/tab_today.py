@@ -230,9 +230,14 @@ def build_status_bar_card(state: Mapping[str, Any] | None,
     _st = classify_macro_contract(state, error=error)
     _s = dict(state or {})
     if _st == UI_LIVE:
+        # 位階的中文說法**讀契約自己的 `traffic_light`**（它的 docstring 寫明
+        # 那是「燈號卡的中文 label」），契約沒帶時才退回 canonical 的
+        # `regime`。**不在本檔另立一份 regime→中文對照** —— 那會是第二份
+        # 真相源，而且一定會跟燈號卡漂開（§2.1 SSOT）。
+        _say = _s.get("traffic_light") or _s.get("regime", "")
         return Card(
             key="statusbar.macro", label="總經", state=UI_LIVE,
-            value=f"{_s.get('light', '')} 位階 {_s.get('regime', '')}".strip(),
+            value=f"{_s.get('light', '')} 位階 {_say}".strip(),
         )
     if _st == UI_DEGRADED:
         return Card(

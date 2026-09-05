@@ -339,6 +339,18 @@ class TestFourStatesFromTheContract:
         assert _c.state == UI_LIVE
         assert _c.value
 
+    def test_live_prefers_the_contracts_own_chinese_label(self):
+        """位階的中文說法讀契約的 `traffic_light`，本檔不自建對照表。
+
+        自建 regime→中文 對照 = 第二份真相源，一定會跟燈號卡漂開。
+        """
+        from shared import regime_arbiter as RA
+        _c = T.build_status_bar_card(
+            {"source": RA.SOURCE_BULL_SCORE, "is_loaded": True,
+             "regime": "bull", "light": "🟢", "traffic_light": "偏多"})
+        assert "偏多" in _c.value
+        assert "bull" not in _c.value
+
     def test_summary_cells_are_judged_independently(self):
         """線框 ③ note：**逐格獨立判態** —— 一格壞不把另外兩格一起染色。"""
         from shared import regime_arbiter as RA
