@@ -234,168 +234,256 @@ p{margin:12px 0 0}
 footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);font-size:12.5px;color:var(--ink-3)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
+<style>
+/* 四態擴充（v2 修訂：紅隊 F16 —— repo 已有 unwired / degraded 兩態） */
+:root{ --sig-wire:#7a5ea8; --sig-wire-bg:#f1ecf9; --sig-deg:#8a6b1f; --sig-deg-bg:#f9f1dd; }
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --sig-wire:#a98ede; --sig-wire-bg:#221b2e; --sig-deg:#cfa63f; --sig-deg-bg:#2a2211; }}
+:root[data-theme="dark"]{ --sig-wire:#a98ede; --sig-wire-bg:#221b2e; --sig-deg:#cfa63f; --sig-deg-bg:#2a2211; }
+.states button[aria-pressed="true"][data-s="unwired"]{background:var(--sig-wire-bg);border-color:var(--sig-wire);color:var(--sig-wire)}
+.states button[aria-pressed="true"][data-s="degraded"]{background:var(--sig-deg-bg);border-color:var(--sig-deg);color:var(--sig-deg)}
+.es.unwired{background:var(--sig-wire-bg);border:1px solid var(--sig-wire)}
+.es.unwired .tag{border-color:var(--sig-wire);color:var(--sig-wire)}
+.es.degraded{background:var(--sig-deg-bg);border:1px solid var(--sig-deg)}
+.es.degraded .tag{border-color:var(--sig-deg);color:var(--sig-deg)}
+.fix{border-left:3px solid var(--sig-red);background:var(--sig-red-bg);border-radius:0 10px 10px 0;padding:15px 19px;margin-top:16px}
+.fix .fh{font-weight:800;font-size:14.5px;color:var(--sig-red);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.fix .fid{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;background:var(--panel);border:1px solid var(--sig-red);border-radius:5px;padding:1px 6px}
+.fix p{font-size:13.5px;color:var(--ink);line-height:1.65}
+pre.out{background:var(--panel-2);border:1px solid var(--rule);border-radius:8px;padding:12px 14px;overflow-x:auto;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;line-height:1.6;color:var(--ink-2);margin-top:10px}
+.law.u{background:var(--sig-wire-bg);color:var(--sig-wire);border-color:var(--sig-wire)}
+</style>
 
 <div class="wrap">
 
 <header>
-  <div class="eyebrow">Wireframe · 待客戶拍板</div>
+  <div class="eyebrow">Wireframe v2 · 紅隊回修後 · 待客戶拍板</div>
   <h1>五頁戰情室</h1>
-  <p class="sub">台股 AI 戰情室的分頁重組草案：把現在的 <b>7 頂層 / 14 葉</b> 收成 <b>5 頂層 / 10 葉</b>，
+  <p class="sub">台股 AI 戰情室的分頁重組草案：把現在的 <b>7 頂層 / 14 葉</b> 收成 <b>5 頂層 / 11 葉</b>，
   改以「一次交易決策的五個步驟」分頁，而不是以「這是股票還是 ETF」分頁。</p>
   <div class="meta">
     <span>基準 origin/main <b>72a5003</b></span>
     <span>量測日 2026-09-05</span>
     <span>本批不動任何 .py</span>
-    <span>射程僅 src/ui/** 與 app.py</span>
+    <span>v2：紅隊四條阻斷級已回修</span>
   </div>
 </header>
 
 <section>
+  <div class="snum">00 — 修訂紀錄</div>
+  <h2>v1 被紅隊擋下，這四條是怎麼改的</h2>
+  <p class="lede">v1 有四條阻斷級錯誤。每一條的更正依據都是<b>本組自己重跑的實測</b>，指令與輸出附在下面，可複跑。</p>
+
+  <div class="fix">
+    <div class="fh"><span class="fid">F1</span><span>v1 最承重的那句話是假的 —— 而且方向完全相反</span></div>
+    <p>v1 寫「總經 v2 沒有 gate，冷啟動時會拿一整排 <code>None</code> 跑五桶並把五個桶畫出來，看起來像已評估、結論中性」。
+    <b>本組用 <code>AppTest</code> 在完全空的 session 上實跑 <code>render_tab_macro_v2()</code>，這句話每一半都不成立。</b></p>
+    <pre class="out">$ python3 -c "from streamlit.testing.v1 import AppTest; ..."   # 空 session 冷啟動
+exceptions : 0
+'中性'      : 0     ← v1 宣稱會出現，實際一次都沒有
+'已評估'    : 0
+'尚未載入'  : 1
+'尚未評估'  : 2
+'全部無資料': 5     ← 五個桶各一次
+'無資料'    : 71
+'正常運作中': 1     ← 「訊號可信度 0／16 個指標正常運作中」
+'未接線'    : 3     ← 「無資料 15 · 未接線 1」的拆解
+
+實際渲染出的字串（節錄）：
+  市場位階 · 全站唯一出處   ⬜ 尚未評估
+  訊號可信度  0 ／16 個指標正常運作中   無資料 15   未接線 1
+  最差項:全部無資料 —   （× 5 桶）
+  **位階尚未評估** —— 請先到「🌍 總經」按「🚀 一鍵更新全部數據」</pre>
+    <p><b>冷啟動的 v2 已經是全灰、每桶標「全部無資料」，還多給一個 0／16 的可信度分母、
+    「無資料 15 · 未接線 1」的拆解，以及一句完整的「去哪補」。</b>
+    也就是說：<b>它不是本 repo 最不誠實的一頁，是最誠實的一頁。</b></p>
+    <p>⚠️ <b>更嚴重的後果</b>：v1 提的替代規格（五桶全顯示「尚未評估」、不畫燈）
+    <b>比現況少了那個 0／16 分母與未接線拆解 —— 是降級。</b>
+    若照 v1 送審，客戶會核准一項「修一個不存在的缺陷、順手把現有的誠實揭露換掉」的變更。
+    <b>v2 的處置：撤掉那半段裁決，改成把 v2 的冷啟動當成全站樣板。</b></p>
+  </div>
+
+  <div class="fix">
+    <div class="fh"><span class="fid">F16</span><span>連帶：本 repo 的狀態不是三態，是四態</span></div>
+    <p>上面那次實測撞出一個 v1 沒有位置的東西：<b>「🔌 未接線」</b>。
+    追進 <code>shared/macro_buckets.py</code> 的 <code>DangerSpec</code>，它有<b>兩組</b>獨立旗標：
+    <code>wired</code> ＋ <code>unwired_reason</code>（這盞燈根本沒接上資料源）、
+    <code>discriminative</code> ＋ <code>degraded_reason</code>（<b>有值、燈也會亮，但門檻本身已失去判別力</b>）。
+    兩者都有測試守衛，且檔內註解明寫「等 production 卡片接上後再收斂（<b>屬畫面變更，§8.4 另案</b>）」——
+    <b>repo 裡有一個正在等這種線框批次的狀態，v1 沒有它的位置。</b></p>
+    <p><b>v2 的處置：狀態模型由三態改為四態</b>（灰／未接線／已失準／紅），下方線框的切換器同步改成四個異常態 ＋ 正常態。</p>
+  </div>
+
+  <div class="fix">
+    <div class="fh"><span class="fid">F2 · F3 · F4</span><span>三頁畫得比實際少</span></div>
+    <p><b>F2</b>：v1 說舊版總經只有兩個獨有區塊。實測 <code>tab_macro.py</code> 有 <b>12 個 render 呼叫</b>、
+    <code>src/ui/tabs/macro/</code> 有 <b>15 檔</b> —— 至少十項在 v1 裡沒有落點，而 🚦今天 又被訂為單頁。
+    <b>v2：🚦今天 改為 2 葉（今日結論 / 指標明細），十二項逐一給落點，見對照表。</b></p>
+    <p><b>F3</b>：戰情室實際有 <code>1️⃣</code>~<code>6️⃣</code> ＋ 一個具名區塊，v1 只畫 4 塊。
+    缺的 <code>4️⃣ 換股建議</code> 正是該頁職責「該加、<b>該換</b>、該減」的那個「該換」；
+    <code>6️⃣ AI 戰情總結</code> 是唯一的推播出口。而 v1 同時寫「不動它的結構」—— 與只畫四塊自相矛盾。<b>v2 補齊七塊。</b></p>
+    <p><b>F4</b>：紅隊逐關鍵詞比對，13 個個股概念在 ETF 頁全部 0、6 個 ETF 概念在個股頁全部 0 ——
+    <b>重疊度接近零</b>，而 v1 的「明細區塊」七項全是個股專屬。
+    <b>合併方向不撤</b>（同一個問題、同一個入口仍然成立），但 v2 必須畫出 ETF 分支，
+    並處理 <code>classify_asset_kind</code> 的<b>第三個回傳值</b>。</p>
+    <pre class="out">$ grep -n "classify_asset_kind" src/compute/etf/asset_lag.py
+src/compute/etf/asset_lag.py:4:  - classify_asset_kind(ticker) : 代號 → 'etf' | 'stock' | 'unknown'
+                                  (§4.6 不猜:非台股代號回 unknown)</pre>
+    <p><b>v2：新增 <code>unknown</code> 分支（美股／指數／興櫃／誤判），且依本文自己訂的缺值三律，
+    判型失敗走灰態、不是紅態。</b>並就地引用 repo 已記錄的同型事故：
+    <code>station_cards.py</code> 記著「型別大小寫打錯一個字母 → 可信度虛高到 100% 並打開巡航 gate」——
+    <b>型別分支推到流量最高的頁，這個失效模式必須寫進線框。</b></p>
+  </div>
+
+  <div class="fix">
+    <div class="fh"><span class="fid">F6 · F7 · F11</span><span>三個提案建立在錯的量測上</span></div>
+    <p><b>F6 —— 我在同一份文件裡用了兩把尺。</b>對 <code>form(</code> 我用別名不敏感樣式（對的），
+    對 <code>columns(</code> 卻寫死 <code>st.</code>（錯的）。</p>
+    <pre class="out">$ grep -rhoE 'st\.columns\((4|5|6|7|8)\)'          src/ui | wc -l   → 21   ← v1 寫的
+$ grep -rhoE '[A-Za-z_]+\.columns\((4|5|6|7|8)\)'  src/ui | wc -l   → 23   ← 實際
+$ 差的兩處：
+src/ui/tabs/tab_stock_grp.py:441:    cols  = st_mod.columns(6)
+src/ui/tabs/tab_stock_grp.py:463:    mcols = st_mod.columns(7)   ← 全 repo 唯一的 7 欄</pre>
+    <p>漏掉的正好是<b>最該降階的那一處</b>。<b>v2 改為 23，並把「同一份文件只能用同一把尺」寫進未查證清單的方法教訓。</b></p>
+    <p><b>F7 —— <code>form_diag</code> 要解的問題不存在。</b>實測 <code>app.py</code> 的進階診斷是
+    <b>1 個</b> checkbox（<code>_diag_adv_on</code>）全有全無；六個 panel 檔內 <code>st.checkbox</code> <b>各為 0</b>。
+    v1 寫的「6 個獨立 checkbox 各自觸發 rerun、包成 form 後勾三個只跑一次」<b>在現況下不可能發生</b>。
+    <b>v2：撤掉 <code>form_diag</code>，該頁改為維持現行單一 gate。</b></p>
+    <p><b>F11 —— <code>st.button</code> 放不進 <code>st.form</code>。</b>實跑即拋例外：</p>
+    <pre class="out">$ AppTest: with st.form('f'): st.button('x'); st.form_submit_button('go')
+StreamlitAPIException: `st.button()` can't be used in an `st.form()`.
+Use `st.form_submit_button()` instead to submit the form.</pre>
+    <p>v1 的 <code>form_today</code> 內容清單寫「兩顆具名動作鈕 ＋ 一顆 submit」——<b>API 上不可能</b>。
+    <b>v2：改為單一 submit ＋ 一個「更新模式」radio（正常暖快取 / 強制重抓），
+    兩個動作收斂成一個表單一次送出；<code>download_button</code> 一律留在 form 外。</b></p>
+  </div>
+
+  <div class="fix">
+    <div class="fh"><span class="fid">F8 · F13 · F17</span><span>三處範圍與因果講錯</span></div>
+    <p><b>F8</b>：v1 說「缺值→紅燈的卡片 5 張」，那是<b>單檔</b>範圍。實測同一組卡在
+    <code>tab_stock.py</code>（8 處）與 <code>stock_grp_sections/section_financial_health.py</code>（8 處）<b>各有一份</b>。
+    <b>缺值三律方向不變，但不得用單頁計數替全站規則定價 —— v2 改述為「至少 2 檔、16 處同型判定」，並註明未窮舉。</b></p>
+    <p><b>F13</b>：v1 裁決 #5 說四條常駐條「各算一次」所以要收成一條。實測那個已修 bug 的根因<b>不是算了兩次</b>，
+    是 <code>warroom_summary</code> <b>要等總經 tab 跑完才存在</b>（寫入端在
+    <code>macro/section_state.py</code> 與 <code>macro/section_traffic_light.py</code>，都在 render 路徑裡）。
+    而 v1 又要在 🚦今天 頁首加 <code>if not ready: return</code> —— <b>早退之後寫入端不會執行，頂部狀態列將永遠拿不到 regime</b>，
+    正是那個已修 bug 換一條路回來。<b>v2：狀態列改讀 L3 canonical 契約
+    （<code>macro_state_locker.get_macro_state</code>），不依賴任何 render 副作用；讀不到就顯示灰態。</b></p>
+    <p><b>F17</b>：v1 的「冷啟動<b>實測</b> 40–75 秒」是抄 <code>tab_macro.py</code> 的 spinner 文案，<b>不是本組量的</b>。
+    <b>v2 拿掉「實測」二字，改標出處。</b></p>
+  </div>
+</section>
+
+<section>
   <div class="snum">01 — 現況實測</div>
   <h2>先量，再畫</h2>
-  <p class="lede">以下數字全部是本組在 <span class="mono">72a5003</span> 上自己跑出來的，不是引用既有文件。
-  每一格下面都寫了指令能推出它的東西。</p>
+  <p class="lede">以下數字全部是本組在 <span class="mono">72a5003</span> 上自己跑出來的。
+  凡經紅隊或查核組更正過的，一律標明原值與更正依據。</p>
 
   <div class="grid3">
     <div class="stat alarm">
       <div class="k">0</div>
       <div class="l">st.form 使用次數（src/ui + app.py）</div>
       <div class="d">四大鐵律的「Form 封裝防重繪」目前<b>完全沒有落地</b>。已用別名不敏感的
-      <code>[A-Za-z_]+\.form(</code> 掃過，涵蓋 <code>_st.</code> / <code>_st_v.</code> 兩個別名；
-      <code>form_submit_button</code> 同樣 0。</div>
+      <code>[A-Za-z_]+\.form(</code> 掃過三種 streamlit 別名；<code>form_submit_button</code> 同樣 0。</div>
     </div>
     <div class="stat alarm">
       <div class="k">全部</div>
       <div class="l">tab body 無條件執行</div>
       <div class="d">app.py 的 <code>with tab_*:</code> 區塊<b>沒有一個帶 if 守衛</b> —— 這句不繫於任何計數。
-      Streamlit 的 <code>st.tabs</code> 切頁只是前端 CSS，每次 rerun，14 個葉節點的 Python 全跑一遍。
-      <br><span style="color:var(--ink-3)">計數為 <b>18</b> 個 <code>with</code> 區塊（7 頂層 ＋ 11 子層）＝ <b>14 葉</b> ＋ 4 個群組外殼。
+      <br><span style="color:var(--ink-3)">計數 <b>18</b>（7 頂層 ＋ 11 子層）＝ <b>14 葉</b> ＋ 4 個群組外殼。
       指令：<code>grep -cE "^\s*with tab_[A-Za-z0-9_]*:" app.py</code>
       —— <b>字元類必須含數字</b>，寫成 <code>[a-z_]*</code> 會漏掉 <code>tab_macro_v2</code> 而得到 17。</span></div>
     </div>
-    <div class="stat">
-      <div class="k">14</div>
-      <div class="l">個股頁的互動元件數</div>
-      <div class="d">其中 6 個是 MA 均線 checkbox。在沒有 form 的情況下，勾一下 MA5
-      就整頁 1,899 行重跑一次：健康評分、357 評價、領先指標、VCP、布林、K 線、AI 五維全部重算。</div>
-    </div>
-    <div class="stat">
-      <div class="k">21</div>
-      <div class="l">≥4 欄的 st.columns 呼叫</div>
-      <div class="d"><code>columns(4)</code>×16、<code>columns(5)</code>×4、<code>columns(6)</code>×1。
-      Streamlit 的欄不會自動換行，窄螢幕只會被擠扁 —— 這是「3 欄自適應網格」鐵律的直接缺口。</div>
+    <div class="stat alarm">
+      <div class="k">23</div>
+      <div class="l">≥4 欄的 columns 呼叫</div>
+      <div class="d"><code>columns(4)</code>×16、<code>(5)</code>×4、<code>(6)</code>×2、<code>(7)</code>×1。
+      <b>v1 寫 21，因為對這一項寫死了 <code>st.</code></b> —— 漏掉 <code>tab_stock_grp.py</code> 的
+      <code>st_mod.columns(6)</code> 與 <code>columns(7)</code>，<b>而那個 7 欄是全 repo 最寬的一處</b>。</div>
     </div>
     <div class="stat">
       <div class="k">4<span style="font-size:17px;color:var(--ink-3)"> / 8 / 6</span></div>
       <div class="l">gate 數 —— 取決於你怎麼定義</div>
-      <div class="d"><b>4</b>＝以 <code>return</code> 提前結束（總經、熱力圖、ETF 單檔、ETF 多檔）。
-      <b>8</b>＝本體實際不執行，含用 <code>if/else</code> 包住整份本體者。
-      <b>6</b>＝任何定義下都沒有 gate。<b>四種不同寫法，這才是要修的東西。</b></div>
+      <div class="d"><b>4</b>＝以 <code>return</code> 提前結束。<b>8</b>＝本體實際不執行，含用
+      <code>if/else</code> 包住整份本體者。<b>6</b>＝任何定義下都沒有 gate。
+      <b>四種不同寫法，這才是要修的東西。</b></div>
     </div>
     <div class="stat alarm">
-      <div class="k">5</div>
-      <div class="l">「缺值 → 紅燈 ＋ 負面結論」的卡片</div>
-      <div class="d">個股頁「💰 獲利能力診斷」5 張卡全用 <code>== 'Good'</code> 這類布林判定：
-      欄位取不到時落進 else，畫面出現<b>紅底 ＋ N/A ＋「辛苦生意」</b>。
-      這是把「沒有資料」講成「這是爛生意」。</div>
-    </div>
-  </div>
-
-  <div class="call warn">
-    <p style="margin:0"><b>gate 的 4 / 8 / 6 之差在哪：寫法不統一。</b>
-    「個股」頁不是用 <code>return</code>，而是
-    <code>if not t2d: st.info(…) else: &lt;整份本體&gt;</code> —— 本體確實沒執行，
-    但機制與另外四頁不同。再加上 <code>chat_input</code> 天然 gate、
-    <code>if st.button(…):</code> 把工作放在 true 分支……<b>14 個葉子頁至少有四種 gate 寫法，還有 6 頁完全沒有。</b></p>
-    <p style="margin:8px 0 0"><b>所以新 IA 訂一種寫法就好</b>：每頁開頭一個
-    <code>if not ready: render_empty(三要素); return</code>。
-    ⚠️ 我不宣稱 4 或 8 哪個才是「正確答案」—— 這個數字完全由定義決定，
-    重點從來不是數字，是<b>沒有一頁跟另一頁用同一種寫法</b>。</p>
-  </div>
-
-  <div class="call" style="border-left-color:var(--sig-red);background:var(--sig-red-bg)">
-    <p style="margin:0"><b style="color:var(--sig-red)">最嚴重的一條：缺值被推導成負面結論。</b>
-    個股頁「💰 獲利能力診斷」的毛利率卡寫的是
-    <code>_gm2.get('Status','') == 'Good'</code>，色碼與文案都掛在這個布林上。
-    欄位抓不到 → 空字串 → 不等於 <code>'Good'</code> → 走 else →
-    使用者看到的是<b>紅色卡片、大字 N/A、下面寫「辛苦生意」</b>。
-    營業利益率卡同型（缺值 →「本業虧損❌」）、安全邊際、稅後淨利率、ROE 亦然，<b>同一區塊 5 張全中</b>。</p>
-    <p style="margin:8px 0 0"><b>而正確寫法就在同一個檔案、往下 80 行。</b>
-    「負債佔資產比率」卡用的是查表加灰色預設：
-    <code>{'Pass':綠,'Warning':黃,'Fail':紅,'N/A':灰}.get(status, 灰)</code>
-    → 缺值落到<b>灰色「⚪ 資料缺漏」</b>，不推論好壞。
-    <b>本 repo 同時擁有錯的寫法與對的寫法，相距 80 行。</b></p>
-    <p style="margin:8px 0 0">→ 新 IA 把它訂成硬規則，見下方「缺值三律」。
-    ⚠️ <b>本批只在線框訂規則，不改任何 .py</b>；該 5 張卡的修法屬另一批。</p>
-  </div>
-
-  <h3>缺值三律（新 IA 全頁適用）</h3>
-  <div class="grid3">
-    <div class="card">
-      <b style="color:var(--sig-grey)">① 缺值一律走灰態</b>
-      <p style="font-size:13.5px;margin-top:6px">沒有資料就顯示灰色與「⚪ 資料缺漏」，
-      <b>不得</b>由缺值推導出紅燈、負面文案或任何評價。</p>
-    </div>
-    <div class="card">
-      <b style="color:var(--accent-ink)">② 用查表，不用布林</b>
-      <p style="font-size:13.5px;margin-top:6px">狀態色一律
-      <code>dict.get(status, 灰)</code>；<b>禁止</b> <code>X if s=='Good' else Y</code>
-      —— 那種寫法在結構上只有兩個出口，缺值必然被歸進負面那一個。</p>
-    </div>
-    <div class="card">
-      <b style="color:var(--sig-red)">③ 紅色留給真故障</b>
-      <p style="font-size:13.5px;margin-top:6px">紅＝資料源真的壞了或指標真的觸警。
-      「還沒載入」「還沒公布」「歷史不足」全是灰，各自附自己的三要素。</p>
-    </div>
-  </div>
-
-  <div class="grid3" style="margin-top:20px">
-    <div class="stat">
-      <div class="k">89</div>
-      <div class="l">src/ui 底下的 .py</div>
-      <div class="d">tabs/ 21 · tabs/macro/ 15 · tabs/stock_sections/ 14 · render/ 14 ·
-      stock_grp_sections/ 8 · pages/ 8 · etf/ 8 · 根 1。</div>
+      <div class="k">16+</div>
+      <div class="l">「缺值 → 紅燈 ＋ 負面結論」的判定</div>
+      <div class="d"><code>tab_stock.py</code> 8 處 ＋ <code>section_financial_health.py</code> 8 處，
+      同一組卡的兩份複本。<b>v1 寫「5 張」是單檔範圍。</b>另有數檔含同型三元式，<b>未窮舉</b>。</div>
     </div>
     <div class="stat">
       <div class="k">4</div>
       <div class="l">選股網 UI 直呼外網的處數</div>
-      <div class="d"><code>tab_stock_picker.py</code> 有 4 處 <code>import requests</code>
-      直打 FinMind，該檔 <code>@st.cache</code> <b>0 命中</b>。
-      屬既有現況，<b>本批不動</b>（客戶明令不碰後端），僅登記於新舊對照表。</div>
-    </div>
-    <div class="stat">
-      <div class="k">7 → 5</div>
-      <div class="l">頂層分頁 · 葉節點 14 → 10</div>
-      <div class="d">app.py 有 5 個 <code>st.tabs()</code>：頂層 7、子層 4+3+2+2，
-      另 3 個頂層無子層 → 14 葉。<code>src/ui/</code> 底下無巢狀 tabs。</div>
+      <div class="d"><code>tab_stock_picker.py</code> 4 處 <code>import requests</code> 直打 FinMind，
+      該檔 <code>@st.cache</code> <b>0 命中</b>。既有現況，<b>本批不動</b>（客戶明令不碰後端），僅登記。</div>
     </div>
   </div>
 
   <div class="call">
-    <p style="margin:0"><b>主線判斷：問題不在「有沒有 gate」，在「gate 是每一頁各自手刻的」。</b>
+    <p style="margin:0"><b>主線判斷（v1 提出、紅隊未推翻）：問題不在「有沒有 gate」，在「每一頁各自手刻」。</b>
     因為 <code>st.tabs</code> 是 eager render，14 個葉節點每次 rerun 全部執行，
-    所以每一頁都必須自己長出一顆按鈕來擋住自己 —— 擋住的是<b>抓資料</b>，
-    擋不住的是<b>重繪</b>。而重繪的成本，正好由「0 個 form」放到最大：
-    使用者每動一個 widget，14 頁一起重跑。</p>
-    <p style="margin:8px 0 0"><b>所以新 IA 要同時做兩件事：</b>把葉節點從 14 收到 10（少 4 份無條件執行的 body），
-    並讓每一頁的控制項進 <code>st.form</code>（N 次互動 → 1 次 rerun）。
-    分頁怎麼分是客戶要審的；form 怎麼包是內部自決 —— 但兩者要一起設計，否則只做一半。</p>
+    所以每一頁都必須自己長出一顆按鈕擋住自己 —— 擋住的是<b>抓資料</b>，擋不住的是<b>重繪</b>。
+    而重繪成本由「0 個 form」放到最大。</p>
+    <p style="margin:8px 0 0"><b>新 IA 同時做兩件事</b>：葉節點 14 → 11（少 3 份無條件執行的 body），
+    並讓每頁的控制項進 <code>st.form</code>。分頁怎麼分是客戶要審的；form 怎麼包是內部自決 —— 但兩者要一起設計。</p>
   </div>
 
   <div class="call warn">
     <p style="margin:0"><b>另一個只有實測才看得到的事：現在的分頁是照「資產類型」切的。</b>
-    「🔬 個股」與「ETF 單檔」做的是<b>同一件事</b>（一個代碼進去、一份診斷出來），
-    卻分屬兩個不同的頂層分頁；「多檔個股比較」與「ETF 多檔比較」同理。
-    這逼使用者在找頁面之前，先回答一個他不該被問的問題：<b>「00878 算股票還是 ETF？」</b>
-    新 IA 把這道題收回系統自己判。</p>
+    「🔬 個股」與「ETF 單檔」都在回答「這一檔行不行」，卻分屬兩個頂層分頁；
+    這逼使用者先回答一個他不該被問的問題：<b>「00878 算股票還是 ETF？」</b></p>
+    <p style="margin:8px 0 0">⚠️ <b>但紅隊 F4 打掉了「它們是同一頁」這個簡化</b>：兩者的<b>內容重疊度接近零</b>
+    （13 個個股概念在 ETF 頁 0 命中，6 個 ETF 概念在個股頁 0 命中）。
+    <b>合併的是「入口與骨架」，不是「內容」</b> —— 一個代碼進去，系統判型，然後走兩套完全不同的明細。線框必須把兩套都畫出來。</p>
   </div>
 </section>
 
 <section>
-  <div class="snum">02 — 新資訊架構</div>
+  <div class="snum">02 — 狀態模型</div>
+  <h2>四態，不是三態</h2>
+  <p class="lede">v1 訂了三態（灰／正常／紅）。F1 的實測撞出第四態，追進 <code>DangerSpec</code> 又找到第五態 ——
+  <b>兩者都已經有欄位、有文案、有測試守衛，只差畫面沒接上。</b></p>
+  <div class="grid3">
+    <div class="card"><b style="color:var(--sig-grey)">⬜ 灰 — 沒有值</b>
+      <p style="font-size:13.5px;margin-top:6px">還沒載入／還沒公布／歷史不足／判型失敗。
+      <b>一律附三要素</b>：現況一句話 ／ 為什麼沒有 ／ 去哪補。</p></div>
+    <div class="card"><b style="color:var(--sig-wire)">🔌 未接線 — 這盞燈沒有來源</b>
+      <p style="font-size:13.5px;margin-top:6px"><code>DangerSpec.wired=False</code> ＋ 必填
+      <code>unwired_reason</code>。與「灰」的差別：<b>灰是這次沒拿到，未接線是根本沒接</b> ——
+      重按一百次更新也不會變。冷啟動實測已有 1 個。</p></div>
+    <div class="card"><b style="color:var(--sig-deg)">⚠️ 已失準 — 有值但不能信</b>
+      <p style="font-size:13.5px;margin-top:6px"><code>discriminative=False</code> ＋ 必填
+      <code>degraded_reason</code>。<b>最危險的一態</b>：燈會亮、數字看起來正常，但門檻已失去判別力。
+      畫成綠或紅都是說謊，必須有自己的樣子。</p></div>
+    <div class="card"><b style="color:var(--sig-red)">🔴 紅 — 真的壞了</b>
+      <p style="font-size:13.5px;margin-top:6px">資料源真故障，或指標真的觸警。
+      <b>「還沒點」「還沒公布」「判型失敗」一律不得畫紅。</b></p></div>
+    <div class="card"><b style="color:var(--accent-ink)">缺值三律（不變）</b>
+      <p style="font-size:13.5px;margin-top:6px">① 缺值走灰、不得推導負面結論；
+      ② 狀態色用 <code>dict.get(status, 灰)</code> 查表，禁用 <code>X if s=='Good' else Y</code>；
+      ③ 紅色留給真故障。<b>四態是它的擴充，不是取代。</b></p></div>
+    <div class="card"><b style="color:var(--sig-green)">🟢 正常</b>
+      <p style="font-size:13.5px;margin-top:6px">有值、可信、在門檻內。<b>只有這一態能給結論文字。</b></p></div>
+  </div>
+  <div class="call">
+    <p style="margin:0"><b>樣板不必新發明 —— 總經 v2 的冷啟動就是。</b>
+    它同時做到：每桶標「全部無資料」（灰）、給出
+    「訊號可信度 <b>0／16</b> 個指標正常運作中」的<b>分母</b>、
+    拆出「無資料 15 · <b>未接線 1</b>」、並附一句「請先到『🌍 總經』按『🚀 一鍵更新全部數據』」（去哪補）。
+    <b>v1 原本要把它改掉；v2 改成把它抄到全站。</b></p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">03 — 新資訊架構</div>
   <h2>照「一次決策的五個步驟」分頁</h2>
   <p class="lede">五個頂層分頁對應五個問題，順序就是使用者實際的動線。
-  每頁一句話講完它的單一職責 —— 講不完的，就是分錯了。</p>
+  🚦今天 依 F2 改為 2 葉 —— 舊版總經的十二個區塊放不進單頁，而<b>硬塞進單頁就會有區塊沒有落點</b>。</p>
 
   <div class="explorer">
     <div class="railbar" role="tablist" aria-label="五個頂層分頁"></div>
@@ -406,224 +494,252 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);font-si
     </div>
     <div class="states">
       <span class="lbl">切換畫面狀態：</span>
-      <button data-s="grey" aria-pressed="true">⬜ 灰態（未載入）</button>
-      <button data-s="live" aria-pressed="false">🟢 正常態（有資料）</button>
-      <button data-s="err" aria-pressed="false">🔴 紅態（真出錯）</button>
+      <button data-s="grey" aria-pressed="true">⬜ 灰（沒有值）</button>
+      <button data-s="unwired" aria-pressed="false">🔌 未接線</button>
+      <button data-s="degraded" aria-pressed="false">⚠️ 已失準</button>
+      <button data-s="live" aria-pressed="false">🟢 正常</button>
+      <button data-s="err" aria-pressed="false">🔴 真故障</button>
     </div>
     <div class="canvas" id="canvas"></div>
   </div>
 
   <div class="call">
-    <p style="margin:0"><b>上面那三顆按鈕就是「三態顏色分離」鐵律本身。</b>
-    切到灰態 → 每一個還沒載入的區塊都給你<b>三要素</b>：現況一句話／為什麼沒有／去哪補。
-    切到紅態 → 只有<b>真的壞掉</b>的區塊變紅，其餘維持灰。
-    現況最容易出的錯是把「還沒點」畫成紅色，滿版假紅字會讓真正的錯誤沒人看得見。</p>
-    <p style="margin:8px 0 0">灰態與紅態<b>都不留白、也都不編數字</b>。
-    資料拿不到時，畫面說出「拿不到」跟「去哪補」，不猜一個值填進去。</p>
+    <p style="margin:0"><b>那五顆按鈕就是狀態模型本身。</b>
+    每個區塊都自己判態、<b>逐格獨立</b> —— 一格壞不把旁邊兩格一起染色。
+    未定義某一態的區塊會退回灰態，那本身也是規格：<b>不確定要畫什麼的時候，畫灰的。</b></p>
   </div>
 </section>
 
 <section>
-  <div class="snum">03 — 四大鐵律</div>
+  <div class="snum">04 — 四大鐵律</div>
   <h2>逐頁落點</h2>
-  <p class="lede">每一頁都要指得出這四條分別落在哪。指不出來的那一格，就是這次要補的洞。</p>
   <div class="tw">
     <table>
-      <thead><tr>
-        <th>頁</th><th>3 欄自適應網格</th><th>Form 封裝防重繪</th><th>三態顏色分離</th><th>空狀態引導</th>
-      </tr></thead>
+      <thead><tr><th>頁</th><th>3 欄自適應網格</th><th>Form 封裝防重繪</th><th>狀態分離（四態）</th><th>空狀態引導</th></tr></thead>
       <tbody>
-        <tr>
-          <td><b>🚦 今天</b></td>
-          <td>位階／動能／風險 三欄卡；五桶明細 3×2</td>
-          <td><code>form_today</code>：更新鈕 ＋ 顯示明細 ＋ 期間</td>
-          <td>結論燈未評估＝灰；來源全敗＝紅</td>
-          <td>「點上方更新」＋ 冷啟動 40–75 秒的預期</td>
-        </tr>
-        <tr>
-          <td><b>🔍 找標的</b></td>
-          <td>因子卡 3 欄；板塊圖 3 欄圖例</td>
-          <td><code>form_screen</code>：4 因子 ＋ top_n ＋ 排序，一次送出</td>
+        <tr><td><b>🚦 今天</b></td><td>位階／動能／風險 三欄；五桶 3×2</td>
+          <td><code>form_today</code>：<b>單一 submit</b> ＋ 更新模式 radio（暖快取／強制重抓）。<b>不放 st.button</b>（F11）</td>
+          <td>四態齊全 —— 沿用 v2 冷啟動樣板（含 0／16 分母與未接線拆解）</td>
+          <td>「點上方更新」＋ 冷啟動時間預期（出處：spinner 文案）</td></tr>
+        <tr><td><b>🔍 找標的</b></td><td>因子卡 3 欄；板塊圖 3 欄圖例</td>
+          <td><code>form_screen</code>：4 因子 ＋ top_n ＋ 排序一次送出。CSV <code>download_button</code> 留在 form 外</td>
           <td>未選股＝灰；FinMind 額度用罄＝紅</td>
-          <td>「勾條件 → 開始選股」＋ 缺貨/RS 會自動掃</td>
-        </tr>
-        <tr>
-          <td><b>🔬 查一檔</b></td>
-          <td>健康／估值／籌碼 三欄；MA 設定 3×2</td>
-          <td><code>form_ticker</code>：代碼 ＋ 天數 ＋ K 線 ＋ 6 個 MA</td>
-          <td>未輸入＝灰；停牌／新上市＝灰並標明；抓取失敗＝紅</td>
-          <td>「輸入代碼 → 載入」＋ 歷史不足時說明為何降可信度</td>
-        </tr>
-        <tr>
-          <td><b>💼 我的持股</b></td>
-          <td>結論／待辦／曝險 三欄；燈牆 3 欄</td>
-          <td><code>form_holdings</code>：Sheet 選擇 ＋ 重載 ＋ 篩選</td>
-          <td>未綁 Sheet＝灰；Sheet 讀不到＝紅</td>
-          <td>「去『組合設定』綁一次 Sheet」＋ 直接給連結</td>
-        </tr>
-        <tr>
-          <td><b>📖 憑什麼</b></td>
-          <td>資料源燈號 3 欄卡牆</td>
-          <td><code>form_diag</code>：進階診斷的 6 個 checkbox 一次送出</td>
-          <td>未展開＝灰；源真的掛了＝紅（這頁的紅是主角）</td>
-          <td>每個紅燈都附「備援鏈跑到第幾層／何時重試」</td>
-        </tr>
+          <td>「勾條件 → 開始選股」＋ 缺貨／RS 會自動掃</td></tr>
+        <tr><td><b>🔬 查一檔</b></td><td>判決卡 3 欄；MA 設定 3×2（原 <code>columns(6)</code>）</td>
+          <td><code>form_ticker</code>：代碼 ＋ 天數 ＋ K 線 ＋ 6 個 MA。<b>全站最大受益點</b></td>
+          <td>未輸入／判型 unknown／停牌／新上市＝灰；抓取失敗＝紅</td>
+          <td>「輸入代碼 → 載入」＋ 判型結果就地顯示、可手動覆寫</td></tr>
+        <tr><td><b>💼 我的持股</b></td><td>結論／待辦／可信度 三欄；燈牆 3 欄（原 <code>columns(5)</code>）</td>
+          <td><code>form_holdings</code>：Sheet 選擇 ＋ 篩選。<b>「🚀 跑存股戰情室」是 form 的 submit</b></td>
+          <td>未綁 Sheet＝灰；Sheet 讀不到＝紅；兩套刻度不一致＝已失準</td>
+          <td>「去『組合設定』綁一次 Sheet」＋ 就地給入口</td></tr>
+        <tr><td><b>📖 憑什麼</b></td><td>資料源燈號 3 欄卡牆（原 <code>columns(7)</code> 降階）</td>
+          <td><b>本頁無 form</b> —— F7：現況是 1 個 checkbox 全有全無，不是 6 個，<b>沒有要解的問題</b></td>
+          <td>這頁的紅是主角；未接線與已失準在此有專屬列</td>
+          <td>每個非綠燈都附「這一盞為什麼不能信」（讀自 SSOT）</td></tr>
       </tbody>
     </table>
   </div>
   <div class="call warn">
-    <p style="margin:0"><b>「3 欄」是上限不是硬性排版。</b>
-    鐵律要的是<b>窄螢幕自適應</b>，不是每個區塊都切成三塊。
-    現行 21 處 ≥4 欄一律降到 3 欄以內；欄數不足 3 的（例如兩欄對比）保持兩欄，不硬湊。
-    做法上以 <code>st.columns(3)</code> 為主，需要更多格子時<b>換行成第二排</b>，不是加欄。</p>
+    <p style="margin:0"><b>「3 欄」是上限不是硬性排版。</b>鐵律要的是<b>窄螢幕自適應</b>，不是每個區塊都切三塊。
+    現行 <b>23</b> 處 ≥4 欄一律降到 3 欄以內；格子超過 3 個就<b>換行排第二排</b>，不是加欄。
+    欄數天然不足 3 的（兩欄對比）保持兩欄，<b>硬湊三欄跟擠七欄一樣是排版失敗</b>。</p>
   </div>
 </section>
 
 <section>
-  <div class="snum">04 — 新舊對照</div>
+  <div class="snum">05 — 新舊對照</div>
   <h2>每一塊搬去哪，以及哪些刻意不搬</h2>
+  <p class="lede">F2／F3 之後補齊：<b>舊版總經十二個區塊、戰情室七個區塊，逐一給落點，不留空白。</b></p>
+
+  <h3>🚦 今天 — 舊版總經的十二個區塊（F2 補齊）</h3>
   <div class="tw">
     <table>
-      <thead><tr><th>現況（檔／區塊）</th><th></th><th>新 IA 落點</th><th>理由</th></tr></thead>
+      <thead><tr><th>現況區塊</th><th></th><th>新落點</th><th>理由</th></tr></thead>
       <tbody>
-        <tr><td><code>tab_macro.py</code> 總經</td><td><span class="pill merge">合併</span></td><td>🚦 今天</td><td>它就是「今天能不能出手」的答案本體</td></tr>
-        <tr><td><code>tab_macro_v2.py</code> 總經 v2</td><td><span class="pill merge">合併</span></td><td>🚦 今天（成為預設版面）</td><td>實測它<b>只讀 session_state、自己不取數</b>，是同一份資料的第二種畫法。見裁決 #1</td></tr>
-        <tr><td><code>app_render.render_macro_compass</code> 指南針</td><td><span class="pill merge">合併</span></td><td>🚦 今天 頁首</td><td>目前漂在所有 tab 之上，每次 rerun 都算</td></tr>
-        <tr><td>置底全域紅綠燈 <code>_gl_slot</code></td><td><span class="pill merge">合併</span></td><td>🚦 今天 結論燈</td><td>與指南針講同一件事，兩處各算一次</td></tr>
-        <tr><td><code>etf_render.render_sector_heatmap</code></td><td><span class="pill merge">合併</span></td><td>🔍 找標的 › 板塊地圖</td><td>與資金潮汐同一個問題：錢往哪個產業流</td></tr>
-        <tr><td><code>tab_sector_flow.py</code> 資金潮汐</td><td><span class="pill merge">合併</span></td><td>🔍 找標的 › 板塊地圖</td><td>同上；兩者並排比拆兩頁好讀</td></tr>
-        <tr><td>選股網（<b>內嵌在 app.py</b>）</td><td><span class="pill keep">搬出</span></td><td>🔍 找標的 › 選股網</td><td>目前整段 UI ＋ 編排長在 L6 app.py 裡</td></tr>
-        <tr><td><code>tab_stock.py</code> 個股</td><td><span class="pill merge">合併</span></td><td>🔬 查一檔 › 單檔診斷</td><td>與 ETF 單檔做同一件事，見裁決 #2</td></tr>
-        <tr><td><code>etf_tab_single.py</code> ETF 單檔</td><td><span class="pill merge">合併</span></td><td>🔬 查一檔 › 單檔診斷</td><td>同上；代碼判型由系統做</td></tr>
-        <tr><td><code>tab_stock_grp.py</code> 多檔比較</td><td><span class="pill merge">合併</span></td><td>🔬 查一檔 › 多檔比較</td><td>與 ETF 多檔比較同一件事</td></tr>
-        <tr><td><code>etf_tab_grp_compare.py</code></td><td><span class="pill merge">合併</span></td><td>🔬 查一檔 › 多檔比較</td><td>同上</td></tr>
-        <tr><td><code>etf_tab_dividend_station.py</code> 戰情室</td><td><span class="pill keep">保留</span></td><td>💼 我的持股 › 戰情室</td><td>現行最好的一頁（結論→待辦→燈牆→明細），當成全站範本</td></tr>
-        <tr><td><code>etf_tab_portfolio.py</code> ETF 組合</td><td><span class="pill keep">提升</span></td><td>💼 我的持股 › 戰情室（並列區塊）</td><td>現在埋在 expander「5️⃣ 組合深度分析」裡，見裁決 #6</td></tr>
-        <tr><td><code>grape_ladder.py</code> 葡萄串領息</td><td><span class="pill keep">提升</span></td><td>💼 我的持股 › 戰情室（並列區塊）</td><td>同上，同一個 expander 內</td></tr>
-        <tr><td><code>portfolio_manager.py</code> 組合管理</td><td><span class="pill merge">合併</span></td><td>💼 我的持股 › 組合設定</td><td>與全域綁定狀態列講同一件事</td></tr>
-        <tr><td><code>portfolio_status_bar.py</code> 全域狀態列</td><td><span class="pill merge">收斂</span></td><td>頂部單一狀態列</td><td>見裁決 #5</td></tr>
-        <tr><td><code>tab_edu.py</code> 教學（1,582 行靜態）</td><td><span class="pill keep">保留</span></td><td>📖 憑什麼 › 教學</td><td>靜態內容，位置換掉即可</td></tr>
-        <tr><td><code>data_coverage.py</code> ＋ 6 個進階 panel</td><td><span class="pill keep">保留</span></td><td>📖 憑什麼 › 資料體檢</td><td>使用者版常駐、工程師版維持 gate</td></tr>
-        <tr><td><code>tab_ai_chat.py</code> AI 問答</td><td><span class="pill merge">降級</span></td><td>📖 憑什麼 › AI 問答</td><td>從頂層降為葉，見裁決 #8</td></tr>
-        <tr><td><code>etf_tab_smart.py</code> 標準差買賣帶</td><td><span class="pill hold">原樣搬</span></td><td>🔬 查一檔 › 單檔診斷（ETF 型）</td><td>它自建了 5 個 UI 層快取（憲法登記 V-SMART-CACHE-1）。<b>本次只搬位置，不碰快取</b> —— 那是後端事項，不在本批射程</td></tr>
-        <tr><td><code>chip_radar</code> / <code>pattern_targets_ui</code> / <code>macro_stock_link</code> / <code>portfolio_linkage</code></td><td><span class="pill hold">不動</span></td><td>維持為內嵌 section</td><td>實測它們<b>不是孤兒</b>，是被 tab_stock / 戰情室 內嵌呼叫的區塊，不是分頁</td></tr>
-        <tr><td><code>tab_stock_picker.py</code> 4 處 <code>import requests</code> 直呼 FinMind</td><td><span class="pill hold">刻意不修</span></td><td>🔍 找標的 › 選股網（原樣搬位置）</td><td>UI 層直接打外網且該檔 <code>@st.cache</code> 0 命中 —— 這是<b>後端/分層問題，不是版面問題</b>。客戶明令本批不碰後端，故只登記、只搬位置，<b>一行不改</b></td></tr>
-        <tr><td><code>tab_stock.py</code>「💰 獲利能力診斷」5 張卡</td><td><span class="pill hold">規則先訂</span></td><td>🔬 查一檔 › 單檔診斷</td><td>缺值被推導成紅燈＋負面文案。<b>本批在線框訂下「缺值三律」並畫出正確樣板</b>，但<b>不改 .py</b> —— 修法（把布林改查表）屬實作批次</td></tr>
-        <tr><td><code>tab_stock.py</code> 均線 <code>st.columns(6)</code> 等 21 處 ≥4 欄</td><td><span class="pill merge">降階</span></td><td>各頁 3 欄 × N 排</td><td>版面問題，在本批射程內，見裁決 #10</td></tr>
-        <tr><td><code>macro_classroom.py</code></td><td><span class="pill drop">不搬</span></td><td>—</td><td>內容已於 v18.281 併入 <code>tab_edu.py</code>。<b>但檔案是否該刪屬後端清理，不在本批射程</b>，僅登記</td></tr>
-        <tr><td><code>hot_money.py</code> / <code>yield_screener.py</code></td><td><span class="pill drop">不搬</span></td><td>—</td><td>非分頁：前者是熱錢監測 section、後者實測只剩 <code>fetch_pe_name_maps</code> 被選股網用。<b>維持現狀</b></td></tr>
+        <tr><td><code>section_overview</code> 戰情概覽</td><td><span class="pill merge">合併</span></td><td>葉1 · ① 結論燈</td><td>與 v2 的「第 1 層 · 結論」同一件事</td></tr>
+        <tr><td><code>section_traffic_light</code> 紅綠燈決策儀表板</td><td><span class="pill merge">合併</span></td><td>葉1 · ① 結論燈</td><td>建議持股 % 的本體；同時是置底常駐條的來源</td></tr>
+        <tr><td><code>section_summary_bar</code> 總結儀表板 + 五桶 bar</td><td><span class="pill merge">合併</span></td><td>葉1 · ③ 三欄摘要</td><td>與 v2 的位階並列合一，不並存兩份</td></tr>
+        <tr><td><code>section_warroom</code> 今日作戰室</td><td><span class="pill keep">保留</span></td><td>葉1 · ⑤ 今日作戰室</td><td>唯一的「所以我今天要做什麼」出口</td></tr>
+        <tr><td><code>section_state</code> 拐點偵測 + 市場狀態卡</td><td><span class="pill keep">保留</span></td><td>葉2 · A 市場狀態</td><td>⚠️ 它同時是 <code>warroom_summary</code> 的寫入端之一，見 F13</td></tr>
+        <tr><td><code>section_long</code> 長期桶明細</td><td><span class="pill keep">保留</span></td><td>葉2 · B 長期</td><td>五桶明細，逐桶一段</td></tr>
+        <tr><td><code>section_mid</code> 中期／總經拼圖</td><td><span class="pill keep">保留</span></td><td>葉2 · C 中期</td><td>同上</td></tr>
+        <tr><td><code>section_short</code> 短線急殺桶</td><td><span class="pill keep">保留</span></td><td>葉2 · D 短線</td><td>同上</td></tr>
+        <tr><td><code>section_long_term</code> 長期 regime + 雷達</td><td><span class="pill keep">保留</span></td><td>葉2 · B 長期（併入同段）</td><td>與長期桶同一時間尺度，分兩處只會讓人來回捲</td></tr>
+        <tr><td><code>section_chips</code> 大戶籌碼全貌</td><td><span class="pill keep">保留</span></td><td>葉2 · E 籌碼</td><td>五桶之一，篇幅最大（871 行）故獨立一段</td></tr>
+        <tr><td><code>_render_global_risk_bucket</code> 全球風險桶</td><td><span class="pill keep">保留</span></td><td>葉2 · F 全球風險</td><td>五桶之一</td></tr>
+        <tr><td><code>_render_china_drag_panel</code> 中國拖累</td><td><span class="pill keep">保留</span></td><td>葉2 · C 中期（併入同段）</td><td>它是中期桶的一個輸入，不是獨立桶</td></tr>
+        <tr><td><code>section_cross_ai</code> 跨桶規則決策</td><td><span class="pill keep">保留</span></td><td>葉2 · G 跨桶裁決</td><td>五桶之後的綜合，位置在最後才合理</td></tr>
+        <tr><td><code>section_news_ai</code> News AI 總裁決</td><td><span class="pill merge">移位</span></td><td>葉1 · ⑥ AI 摘要（摺疊，預設收合）</td><td>它現在就是「置頂 AI 卡讀底部生成結果」的兩地結構；收在結論頁尾比較直覺</td></tr>
+        <tr><td><code>_render_macro_indicator_card</code> 指標卡</td><td><span class="pill keep">保留</span></td><td>葉2 全段共用元件</td><td>不是區塊，是元件</td></tr>
       </tbody>
     </table>
   </div>
-  <div class="call warn">
-    <p style="margin:0"><b>「不搬」不等於「刪掉」。</b>
-    本批只畫線框、不動任何 .py，也不對「這個檔要不要刪」下結論 ——
-    那需要先確認 caller 還在不在，屬另一批的事。上表的「不搬」只表示<b>它不會成為新 IA 的一個分頁</b>。</p>
+
+  <h3>💼 我的持股 — 戰情室七個區塊（F3 補齊）</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>現況區塊</th><th></th><th>新落點</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td><code>1️⃣ 結論</code>（三張卡）</td><td><span class="pill keep">保留</span></td><td>葉1 · ①</td><td>v1 已畫</td></tr>
+        <tr><td><code>2️⃣ 同一個名詞，兩套刻度</code></td><td><span class="pill keep">補回</span></td><td>葉1 · ② 刻度揭露</td><td><b>v1 漏畫。</b>它是防「同名不同義」誤讀的唯一揭露，拿掉就會有人拿兩套刻度互比</td></tr>
+        <tr><td><code>3️⃣ 戰情表</code>（燈牆 ＋ VIX）</td><td><span class="pill keep">保留</span></td><td>葉1 · ③</td><td>v1 已畫</td></tr>
+        <tr><td><code>4️⃣ 換股建議</code>（搭配總經位階）</td><td><span class="pill keep">補回</span></td><td>葉1 · ④</td><td><b>v1 漏畫，而它正是本頁職責「該加、該換、該減」的「該換」</b></td></tr>
+        <tr><td><code>5️⃣ 組合深度分析</code>（expander）</td><td><span class="pill keep">提升</span></td><td>葉1 · ⑥ 並列區塊</td><td>expander 收合只是視覺收合、body 照跑 —— 埋起來沒省效能，只是讓人找不到</td></tr>
+        <tr><td><code>6️⃣ AI 戰情總結</code>（可作推播內容）</td><td><span class="pill keep">補回</span></td><td>葉1 · ⑦</td><td><b>v1 漏畫，而它是唯一的推播出口</b></td></tr>
+        <tr><td><code>_render_allocation_take_profit</code> 80/20 配置偏離 ＋ 衛星停利</td><td><span class="pill keep">補回</span></td><td>葉1 · ⑤</td><td><b>v1 漏畫。</b>它回答「該減」，與 ④ 的「該換」互補</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>其餘分頁</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>現況</th><th></th><th>新落點</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td><code>tab_macro_v2.py</code> 總經 v2</td><td><span class="pill merge">升為主體</span></td><td>🚦 今天 葉1</td><td><b>F1 更正</b>：它的冷啟動是全站最誠實的揭露（0／16 分母 ＋ 未接線拆解），<b>當樣板不當待修項</b></td></tr>
+        <tr><td>指南針 ＋ 置底紅綠燈 ＋ Sheet 狀態列 ＋ sidebar 健康</td><td><span class="pill merge">收成一條</span></td><td>頂部狀態列</td><td><b>F13 更正</b>：改讀 L3 <code>macro_state_locker.get_macro_state</code>，<b>不依賴 render 副作用</b></td></tr>
+        <tr><td>熱力圖 ＋ 板塊資金潮汐</td><td><span class="pill merge">合併</span></td><td>🔍 找標的 › 板塊地圖</td><td>同一個問題：錢往哪個產業流</td></tr>
+        <tr><td>選股網（<b>內嵌在 app.py</b>）</td><td><span class="pill keep">搬出</span></td><td>🔍 找標的 › 選股網</td><td>整段 UI ＋ 編排目前長在 L6</td></tr>
+        <tr><td>個股 ＋ ETF 單檔</td><td><span class="pill merge">合併入口</span></td><td>🔬 查一檔 › 單檔診斷</td><td><b>F4 更正</b>：合併的是<b>入口與骨架</b>；內容重疊近零，兩套明細都要畫</td></tr>
+        <tr><td>多檔比較 ＋ ETF 多檔比較</td><td><span class="pill merge">合併入口</span></td><td>🔬 查一檔 › 多檔比較</td><td>同上，允許混貼</td></tr>
+        <tr><td><code>portfolio_manager.py</code></td><td><span class="pill merge">合併</span></td><td>💼 我的持股 › 組合設定</td><td>與全域綁定狀態列講同一件事</td></tr>
+        <tr><td><code>tab_edu.py</code>（1,582 行靜態）</td><td><span class="pill keep">保留</span></td><td>📖 憑什麼 › 教學</td><td>原樣搬，不刪不拆</td></tr>
+        <tr><td>資料診斷（使用者版 ＋ 進階 gate）</td><td><span class="pill keep">保留</span></td><td>📖 憑什麼 › 資料體檢</td><td><b>F7 更正</b>：維持現行<b>單一</b> gate，<b>不加 form</b></td></tr>
+        <tr><td><code>tab_ai_chat.py</code></td><td><span class="pill merge">降級</span></td><td>📖 憑什麼 › AI 問答</td><td>不是決策動線上的一步</td></tr>
+        <tr><td><code>etf_tab_smart.py</code> 標準差買賣帶</td><td><span class="pill hold">原樣搬</span></td><td>🔬 查一檔 › ETF 分支</td><td>它自建 5 個 UI 層快取（憲法 V-SMART-CACHE-1）。<b>本次只搬位置，不碰快取</b></td></tr>
+        <tr><td><code>tab_stock_picker.py</code> 4 處 requests 直呼</td><td><span class="pill hold">刻意不修</span></td><td>🔍 找標的 › 選股網</td><td>UI 層直接打外網、該檔 cache 0 —— <b>後端/分層問題，客戶明令本批不碰</b></td></tr>
+        <tr><td>獲利能力 5 卡 ×2 檔（16+ 處）</td><td><span class="pill hold">規則先訂</span></td><td>🔬 查一檔</td><td><b>F8 更正</b>：本批訂缺值三律並畫正確樣板，<b>不改 .py</b></td></tr>
+        <tr><td><code>chip_radar</code>／<code>pattern_targets_ui</code>／<code>macro_stock_link</code>／<code>portfolio_linkage</code></td><td><span class="pill hold">不動</span></td><td>維持為內嵌 section</td><td>實測<b>不是孤兒</b>，是被其他頁內嵌的區塊，不是分頁（紅隊複驗四個都有 caller）</td></tr>
+        <tr><td><code>macro_classroom.py</code>／<code>hot_money.py</code>／<code>yield_screener.py</code></td><td><span class="pill drop">不搬</span></td><td>—</td><td>非分頁。<b>「不搬」≠「刪掉」</b>；是否該刪要先確認 caller，屬另一批</td></tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
 <section>
-  <div class="snum">05 — 裁決</div>
+  <div class="snum">06 — 裁決</div>
   <h2>13 項全部直接決定，不留待拍板欄位</h2>
-  <p class="lede">客戶本次已把「功能分類與版面設計」全權授權給總管，所以草稿裡<b>不留待拍板欄位</b>。
-  以下逐項寫「決定 ＋ 理由」。</p>
+  <p class="lede">客戶已把「功能分類與版面設計」全權授權給總管，所以草稿<b>不留待拍板欄位</b>。
+  <b>紅隊回修後有 3 項改判、1 項撤回</b>，各自標明。</p>
   <div class="call warn" style="margin-top:14px">
     <p style="margin:0"><b>誠實揭露：這 13 項不是 2026-08 那份清單的原文。</b>
-    那份清單存在一個已發布的 artifact 裡、<b>不在 repo 內</b>，本組沒有拿到它，
-    因此無法逐條對號。下列 1–12 項是<b>本組自己的實測過程中真正碰到、且非決定不可</b>的開放問題；
-    <b>第 13 項是獨立查核組交件後新增的</b>（缺值顯示規則）。
-    若客戶手上有原始清單而某一項沒被涵蓋，請點出來，本組補判。</p>
+    那份清單在一個已發布的 artifact 裡、<b>不在 repo 內</b>，本組沒有拿到，因此無法逐條對號。
+    1–12 項是本組實測過程中真正碰到、非決定不可的開放問題；第 13 項是查核組交件後新增的。</p>
   </div>
-
   <div id="decisions"></div>
 </section>
 
 <section>
-  <div class="snum">06 — 誠實欄</div>
+  <div class="snum">07 — 誠實欄</div>
   <h2>本組沒有查證的部分</h2>
   <p class="lede">依專案規範，這裡列出的每一項都<b>只能當待驗事項</b>，不得被當成已查證的事實引用。</p>
-  <h3 style="margin-top:20px">先分清楚：哪些是我自己測的，哪些是別組給的</h3>
-  <div class="tw" style="margin-top:12px">
+
+  <div class="call" style="border-left-color:var(--sig-red);background:var(--sig-red-bg)">
+    <p style="margin:0"><b style="color:var(--sig-red)">先更正 v1 誠實欄自己的一句假話。</b>
+    v1 寫「<s>沒有實際跑起這個 app（沙箱不裝套件、不連外網）</s>」——<b>那句是假的，而且是本組沒查就寫的</b>。
+    實測 <code>streamlit 1.59.2</code> 已安裝、<code>streamlit.testing.v1.AppTest</code> 可用；
+    <code>requirements.txt</code> 檔頭自己就寫著本專案用 <code>AppTest</code> 就地實跑過三個版本二分。</p>
+    <p style="margin:8px 0 0"><b>後果</b>：v1 最承重的那條未查證項（F1 的五桶），
+    <b>用現有工具五分鐘就能驗</b>，而本組卻把它標成「驗不到」然後照樣拿去當裁決前提。
+    <b>方法教訓：「我驗不到」這句話本身要先驗一次。</b></p>
+  </div>
+
+  <h3>來源分標 —— 哪些我自己測、哪些別組給</h3>
+  <div class="tw">
     <table>
       <thead><tr><th>結論</th><th>來源</th><th>我做了什麼</th></tr></thead>
       <tbody>
-        <tr><td>st.form ＝ 0</td><td>本組 ＋ 獨立查核組（各自獨立測，結論一致）</td><td>我用別名不敏感樣式掃過三種 streamlit 別名</td></tr>
-        <tr><td><code>with tab_*:</code> 全無守衛（計數 18）</td><td><b>本組</b>；計數經獨立查核組交叉核對</td><td>逐行列出所有 tab 區塊確認無 if 包覆。查核組先數到 17，複核後確認其字元類 <code>[a-z_]*</code> 不含數字、漏掉 <code>tab_macro_v2</code> → <b>18 成立</b>。主張本身已改寫成不繫於計數的說法</td></tr>
-        <tr><td>21 處 ≥4 欄 columns</td><td><b>本組</b></td><td>分佈統計 ＋ 逐處列出</td></tr>
-        <tr><td>個股頁 14 個 widget、其中 6 個 MA checkbox</td><td><b>本組</b></td><td>逐檔計數 ＋ 讀出該版面區塊</td></tr>
-        <tr><td>gate ＝ 嚴格 4 / 寬鬆 8 / 無 gate 6</td><td><b>獨立查核組</b>提出並更正本組原本的「8」</td><td>我複驗了<b>差異的成因</b>（個股頁用 if/else 不用 return），但<b>沒有</b>逐頁重跑那三個定義的完整清單</td></tr>
-        <tr><td>獲利能力 5 卡缺值 → 紅燈＋負面文案</td><td><b>獨立查核組</b></td><td>我讀了該區塊原始碼，確認 5 張卡全中，並自己找出同檔 80 行後的正確樣板（負債比卡）</td></tr>
-        <tr><td>picker 4 處 requests、該檔 cache 0</td><td><b>獨立查核組</b></td><td>我複跑了那兩條計數，數字相符</td></tr>
-        <tr><td>總經 v2 純讀 session、不取數</td><td>本組先測，<b>獨立查核組推翻了另一組的相反說法</b></td><td>我確認 <code>section_inputs.py</code> 只 import dataclasses/typing</td></tr>
-        <tr><td>總經 v2 冷啟動會拿 None 畫五桶</td><td><b>獨立查核組</b></td><td><b>我沒有驗這一條。</b>它是我裁決 #1 後半段的前提 —— 見下方未查證清單</td></tr>
+        <tr><td>總經 v2 冷啟動已是全灰 ＋ 0／16 分母 ＋ 未接線拆解</td><td>紅隊指出、<b>本組自己重跑 AppTest 複驗</b></td><td>空 session 實跑 <code>render_tab_macro_v2()</code>，輸出見 §00 F1（可複跑）</td></tr>
+        <tr><td>四態（unwired／degraded）已有欄位與守衛</td><td><b>本組</b>（追 F1 的「未接線」而發現）</td><td>讀 <code>shared/macro_buckets.py</code> 的 <code>DangerSpec</code></td></tr>
+        <tr><td>≥4 欄 columns ＝ 23（非 21）</td><td>紅隊指出、<b>本組複跑</b></td><td>兩把尺各跑一次，定位到 <code>st_mod.columns(6/7)</code></td></tr>
+        <tr><td><code>st.button</code> 不能放進 <code>st.form</code></td><td>紅隊指出、<b>本組實跑複驗</b></td><td>AppTest 實跑取得 <code>StreamlitAPIException</code> 原文</td></tr>
+        <tr><td>進階診斷是 1 個 checkbox（非 6 個）</td><td>紅隊指出、<b>本組複跑</b></td><td>逐檔數六個 panel 的 checkbox，皆為 0</td></tr>
+        <tr><td><code>classify_asset_kind</code> 有第三個回傳值 <code>unknown</code></td><td>紅隊指出、<b>本組複跑</b></td><td>讀 <code>asset_lag.py</code> docstring 與簽名</td></tr>
+        <tr><td><code>warroom_summary</code> 寫入端在 render 路徑內</td><td>紅隊指出、<b>本組複跑</b></td><td>grep 寫入端 → <code>section_state</code> / <code>section_traffic_light</code></td></tr>
+        <tr><td>缺值→紅燈判定跨 2 檔 16+ 處</td><td>紅隊指出、<b>本組複跑</b></td><td>逐檔計數；<b>未窮舉</b></td></tr>
+        <tr><td>st.form ＝ 0／tab body 全無守衛／89 檔分區</td><td><b>本組</b></td><td>v1 即為本組實測，紅隊未推翻</td></tr>
+        <tr><td>ETF 與個股概念重疊近零（13:0 / 6:0）</td><td><b>紅隊</b></td><td><b>本組未複跑那 19 個關鍵詞</b> —— 見下方未查證清單</td></tr>
       </tbody>
     </table>
   </div>
 
-  <h3 style="margin-top:26px">未查證清單</h3>
+  <h3>未查證清單</h3>
   <ul>
-    <li><b>沒有實際跑起這個 app。</b> 沙箱不裝套件、不連外網。所有「第一步互動是什麼」都是<b>讀原始碼</b>判定的，不是點過畫面。
-    button gate、輸入框、early return 的位置我讀得到；實際跑起來長什麼樣、多久、會不會閃錯，<b>沒驗過</b>。</li>
-    <li><b>「總經 v2 冷啟動會把五個桶畫出來」我沒有實測。</b> 這是獨立查核組的觀察，我只驗到「它沒有 gate」與「它不取數」。
-    <b>五桶在全 None 輸入下實際會畫成什麼樣，我沒有跑過</b> —— 裁決 #1 後半段建立在這條之上，請照此打折。</li>
-    <li><b>查核組提到的 <code>readiness_out</code> 與 <code>band_meta</code> 的 <code>reference</code>／<code>gray</code> 兩種灰，我沒有去確認它們是否真的被接上。</b>
-    所以線框裡的灰態<b>沒有</b>引用它們，是重新訂的規格。要沿用既有素材的話，得先有人驗過接線。</li>
-    <li><b>gate 的 4 / 8 / 6 三個數字，我只複驗了「為什麼會有三個數字」，沒有逐頁重跑三份清單。</b>
-    我在線框裡刻意不主張哪個數字才對 —— 論點只用到「寫法不統一」，那一點我自己讀得出來。</li>
-    <li><b>「0 個 st.form」限於 <code>src/ui/**</code> 與 <code>app.py</code>。</b>
-    我用了別名不敏感的樣式並檢查了三種 streamlit 別名，但<b>沒有</b>掃 <code>scripts/</code>、<code>tests/</code> 或其他目錄。</li>
-    <li><b>總經 v2 與總經「是否重複」，我只驗到一半。</b> 實測到的是：v2 呼叫 <code>load_section_inputs(st.session_state)</code>、
-    自己不取數。我<b>沒有</b>逐指標比對兩頁的呈現內容是否等價 —— 裁決 #1 建立在「同一份資料的第二種畫法」上，
-    這句話的前半（同一份資料）驗過，後半（畫法是否更好）是我的判斷。</li>
-    <li><b>沒有查證任何後端。</b> 依硬邊界，我沒看 cron、沒看 GitHub Actions、沒做資料庫考古。
-    線框裡凡是寫「資料源」「備援鏈」的地方，都只是<b>畫面該怎麼說</b>，不是我對後端現況的宣稱。</li>
-    <li><b>2026-08 前次線框的內容，我完全沒讀到。</b> 它不在 repo 裡。派工單轉述的「7→5 / 14→10 / 12 項待拍板」
-    我當線索用 —— 有意思的是我獨立判完也落在 5 頂層 / 10 葉，但那是<b>巧合或收斂，不是我核對過</b>。</li>
-    <li><b>repo 內 <code>docs/audit-2026-08/REFACTOR_PROPOSAL.md</code> 我只讀了開頭與少數命中行。</b>
-    那是一份 153KB 的資料／邏輯稽核，不是 UI 線框；我引用它<b>一句</b>（st.tabs eager render），
-    而那一句我自己用「18 個 <code>with tab_*:</code> 全無 if 守衛」重新驗過才寫進來。其餘內容未讀、未驗。</li>
-    <li><b>本線框未經第二組獨立複驗。</b> 這是單組產出。</li>
+    <li><b>紅隊的「13 個個股概念 / 6 個 ETF 概念 0 命中」本組沒有複跑。</b>
+    F4 的合併設計建立在它之上；我接受了這個結論但沒有自己數過那 19 個關鍵詞。</li>
+    <li><b>四態的 <code>degraded</code> 在畫面上實際長什麼樣，本組沒有實測。</b>
+    我只讀到 <code>DangerSpec</code> 有欄位、有必填的 <code>degraded_reason</code>、有測試守衛，
+    以及註解自陳「等 production 卡片接上後再收斂」。<b>它現在有沒有任何卡片接上，我沒查。</b></li>
+    <li><b>「23 處 ≥4 欄」只涵蓋 <code>src/ui</code>，且只掃 <code>.columns(4..8)</code> 的字面寫法。</b>
+    以變數傳欄數（<code>st.columns(n)</code>）的寫法掃不到，<b>沒有窮舉</b>。</li>
+    <li><b>缺值→紅燈的 16+ 處是逐檔計數，不是窮舉。</b>另有數檔含同型三元式未逐一判讀。</li>
+    <li><b>沒有跑起完整的 <code>app.py</code>。</b>本輪只用 AppTest 跑了 <code>render_tab_macro_v2()</code> 單一函式；
+    其餘頁面的第一步互動仍是<b>讀原始碼</b>判定的。<b>這一項現在是「可以驗但還沒驗」，不是「驗不到」。</b></li>
+    <li><b>gate 的 4／8／6 三個數字只複驗了成因</b>（個股頁用 <code>if/else</code> 不用 <code>return</code>），
+    未逐頁重跑三份清單。文件刻意不主張哪個數字為準。</li>
+    <li><b>2026-08 前次線框完全沒讀到</b>（不在 repo）。本組獨立判完落在 5 頂層，但那不是核對過的結果。</li>
+    <li><b>本線框未經第二組獨立複驗。</b>紅隊看的是 v1；<b>v2 的這批修正還沒有人查過。</b></li>
+  </ul>
+
+  <h3>方法教訓（寫下來防重犯）</h3>
+  <ul>
+    <li><b>同一份文件裡不能有兩把尺。</b>我對 <code>form(</code> 用別名不敏感、對 <code>columns(</code> 寫死 <code>st.</code>，
+    結果漏掉全 repo 最寬的那個 7 欄 —— <b>而它正好是這條鐵律最該修的一處</b>。</li>
+    <li><b>「我驗不到」要先驗一次。</b>見上方紅框。</li>
+    <li><b>轉述來的肯定句，要當待驗事項處理。</b>F1 那句話是上游給的，我照抄成線框裡最承重的一段；
+    它錯的方向剛好會讓客戶核准一項降級。</li>
   </ul>
 </section>
 
 <footer>
-  五頁戰情室 · 股票端 UI 線框草案 · 基準 <span class="mono">72a5003</span> · 量測日 2026-09-05 ·
+  五頁戰情室 v2（紅隊回修後） · 股票端 UI 線框草案 · 基準 <span class="mono">72a5003</span> · 量測日 2026-09-05 ·
   本批不含任何 production code 變更
 </footer>
 
 </div>
-
 <script>
-const L = {g:'3 欄網格', f:'Form 封裝', s:'三態分離', e:'空狀態引導'};
+const L = {g:'3 欄網格', f:'Form 封裝', s:'四態分離', e:'空狀態引導', u:'未接線/已失準'};
+const CLS = {g:'g', f:'f', s:'s', e:'e', u:'u'};
 
 const PAGES = [
 {
   id:'today', tab:'🚦 今天', name:'🚦 今天',
-  job:'一句話：回答「今天能不能出手、出手到幾成」。這是唯一每次開 app 都要看的頁，所以不設子分頁。',
-  leaves:['單頁 · 無子分頁','吸收：總經＋總經 v2＋指南針＋置底紅綠燈＋今日作戰室'],
+  job:'一句話：回答「今天能不能出手、出手到幾成」。依 F2 改為 2 葉 —— 舊版總經的十二個區塊塞不進單頁。',
+  leaves:['葉1 今日結論','葉2 指標明細（五桶逐段）','吸收：總經＋總經 v2＋指南針＋置底紅綠燈＋今日作戰室'],
   blocks:[
-    {t:'① 結論燈 — 建議持股 %', n:'full-width', laws:['s','e'],
-      live:'🟢 <b>建議持股 70%</b>　位階：偏多　·　資料時間 09/05 14:32　·　三項風險上限均未觸發',
-      grey:{now:'⬜ 總經尚未評估，建議持股顯示 --',why:'總經指標需抓 FRED 序列＋三大法人＋先行指標，冷啟動實測 40–75 秒（逾時上限 300 秒）',where:'點下方「🚀 更新今日戰情」'},
-      err:{now:'🔴 建議持股無法計算',why:'FRED 與備援源本輪皆未回應，不是程式錯誤',where:'到「📖 憑什麼 › 資料體檢」看備援鏈跑到第幾層；或稍後重試'}},
-    {t:'② 操作列', n:'st.form(form_today)', laws:['f'],
-      live:'表單內：<code>🚀 更新今日戰情</code>　<code>🆕 強制重抓（清快取）</code>　<code>☑ 顯示指標明細</code>　→ 一顆 submit',
+    {t:'葉1 ① 結論燈 — 建議持股 %', n:'full-width · 沿用 v2「第 1 層 · 結論」', laws:['s','e'],
+      live:'🟢 <b>建議持股 70%</b>　位階：偏多　·　訊號可信度 <b>14／16</b>　·　三項風險上限均未觸發',
+      grey:{now:'⬜ <b>市場位階 · 尚未評估</b>　訊號可信度 <b>0／16</b> 個指標正常運作中（無資料 15 · 未接線 1）',why:'冷啟動 session 為空，五桶的輸入尚未取得；本站不以 None 推導「中性」',where:'點下方「🚀 更新今日戰情」'},
+      unwired:{now:'⬜ 位階已評估，但可信度分母標明 <b>14／16</b>（未接線 2）',why:'旌旗指數等 2 盞燈在 <code>DangerSpec</code> 標 <code>wired=False</code>，尚未接上資料源',where:'點該盞燈可就地展開 <code>unwired_reason</code>；重按更新不會改變它'},
+      degraded:{now:'⚠️ 位階 <b>偏多</b>，但其中 1 盞燈標「門檻已失準」，不計入分子',why:'該指標 <code>discriminative=False</code> —— 有值、燈也會亮，但門檻本身已失去判別力',where:'點該盞燈展開 <code>degraded_reason</code>（讀自 SSOT，不是抄的）'},
+      err:{now:'🔴 建議持股無法計算',why:'FRED 與備援源本輪皆未回應，不是程式錯誤',where:'到「📖 憑什麼 › 資料體檢」看該源狀態；或稍後重試'},
+      note:'<b>這一格的規格＝照抄現行總經 v2 的冷啟動。</b>F1 實測它已經做到「分母 ＋ 未接線拆解 ＋ 去哪補」，是全站最完整的一處誠實揭露 —— v1 原本要把它改掉，v2 改成把它當樣板。'},
+    {t:'葉1 ② 操作列', n:'st.form(form_today) · 單一 submit', laws:['f'],
+      live:'表單內：<code>◉ 正常更新（吃暖快取）／○ 強制重抓（清快取）</code> radio　→　<b>一顆 <code>form_submit_button</code></b>',
       grey:'表單永遠可見（它就是灰態的出口），不隨狀態變化',
-      err:'表單永遠可見'},
-    {t:'③ 三欄摘要', n:'st.columns(3)', laws:['g','s'], cols:3,
+      note:'<b>F11 更正</b>：v1 寫「兩顆具名動作鈕 ＋ 一顆 submit」—— 實跑即拋 <code>StreamlitAPIException: st.button() can\'t be used in an st.form()</code>。改為 radio 選模式、單一 submit，兩個動作收斂成一次送出。'},
+    {t:'葉1 ③ 三欄摘要', n:'st.columns(3)', laws:['g','s'], cols:3,
       cells:[['位階','偏多 · 五桶 3 紅 2 綠'],['動能','轉強 · M1B-M2 gap +1.2'],['風險','VIX 16.4 · 未觸發否決權']],
-      greyCells:[['位階','⬜ 未評估'],['動能','⬜ 未評估'],['風險','⬜ 未評估']],
-      errCells:[['位階','🔴 取數失敗'],['動能','⬜ 未評估'],['風險','🟢 VIX 16.4']],
-      note:'三格獨立判態 —— 一格壞不把另外兩格一起染紅。'},
-    {t:'④ 五桶明細', n:'3 欄 × 2 排（原 columns(4/5) 全部降階）', laws:['g','e','s'],
-      live:'長期 / 中期 / 短期 / 籌碼 / 跨桶裁決 —— 每桶一張卡，3 欄排兩排',
-      grey:{now:'⬜ 五個桶全部顯示「尚未評估」，<b>不畫燈、不給文字結論</b>',why:'冷啟動時 session 是空的，五桶的輸入全是 None —— 拿 None 算出來的桶不是「中性」，是「沒算過」',where:'點「🚀 更新今日戰情」'},
-      err:{now:'🔴 中期桶計算中止；其餘四桶維持各自狀態',why:'其輸入指標（CPI / PMI）本輪缺值，依規則不以估計值代替',where:'「📖 憑什麼 › 資料體檢」查 CPI / PMI 兩列'},
-      note:'<b>這一格是本次線框要正面回答的問題。</b>現行「總經 v2」沒有 gate —— 冷啟動時它照樣拿一整排 <code>None</code> 去跑五桶並把五個桶畫出來。那不是效能問題，是<b>誠實性</b>問題：畫面看起來像「已經評估過、結論中性」，實際上是「什麼都還沒算」。新版在頁面開頭就 <code>if not ready: render_empty(); return</code>，五個桶要嘛全有值、要嘛全灰，<b>不存在半套</b>。'},
-    {t:'⑤ 今日作戰室', n:'清單 · 非表格', laws:['e'],
-      live:'今天該做的 3 件事（含理由與對應分頁連結）',
+      greyCells:[['位階','⬜ 尚未評估'],['動能','⬜ 尚未評估'],['風險','⬜ 尚未評估']],
+      unwiredCells:[['位階','偏多'],['動能','🔌 未接線'],['風險','🟢 VIX 16.4']],
+      degradedCells:[['位階','偏多'],['動能','⚠️ 門檻已失準'],['風險','🟢 VIX 16.4']],
+      errCells:[['位階','🔴 取數失敗'],['動能','⬜ 尚未評估'],['風險','🟢 VIX 16.4']],
+      note:'<b>逐格獨立判態</b> —— 一格壞不把另外兩格一起染色。切「未接線」與「已失準」看差別：前者永遠不會變，後者有值但不能拿來下判斷。'},
+    {t:'葉1 ⑤ 今日作戰室　⑥ AI 摘要（摺疊）', n:'清單 · 非表格', laws:['e'],
+      live:'今天該做的 3 件事（含理由與對應分頁連結）；AI 摘要預設收合',
       grey:{now:'⬜ 尚無作戰項目',why:'作戰室由五桶結論推導，五桶未算就沒有可推的東西',where:'先完成上方更新'},
-      err:{now:'⬜ 尚無作戰項目',why:'五桶部分中止，作戰項目不完整時不顯示半套建議',where:'先解決上方紅燈'}}
+      note:'<b>F2</b>：<code>section_warroom</code> ＋ <code>section_news_ai</code> 的落點。News AI 現行就是「置頂卡讀底部生成結果」的兩地結構，收在結論頁尾比較直覺。'},
+    {t:'葉2 指標明細 — 七段', n:'A 市場狀態 / B 長期 / C 中期 / D 短線 / E 籌碼 / F 全球風險 / G 跨桶裁決', laws:['g','s','e'],
+      live:'每段一張 3 欄卡牆 ＋ 可下鑽的逐盞燈明細（點左表右側就地展開）',
+      grey:{now:'⬜ 七段全部標「全部無資料」',why:'與葉1 同一份 session 輸入；五桶未算，明細沒有可展開的東西',where:'到「今日結論」按「🚀 更新今日戰情」'},
+      unwired:{now:'⬜ 該盞燈標 🔌 未接線，並就地顯示原因',why:'<code>wired=False</code>，這盞燈根本沒有資料源',where:'這一態<b>沒有使用者可執行的出口</b> —— 誠實寫明「這是待接線項，不是你操作的問題」'},
+      err:{now:'🔴 中期段計算中止；其餘六段維持各自狀態',why:'其輸入指標（CPI / PMI）本輪缺值，依規則不以估計值代替',where:'「📖 憑什麼 › 資料體檢」查 CPI / PMI 兩列'},
+      note:'<b>F2 的落點表</b>：<code>section_state</code>／<code>section_long</code>＋<code>section_long_term</code>／<code>section_mid</code>＋<code>_render_china_drag_panel</code>／<code>section_short</code>／<code>section_chips</code>／<code>_render_global_risk_bucket</code>／<code>section_cross_ai</code> 逐一對應七段，<b>十二個區塊沒有一個沒落點</b>。'},
+    {t:'（跨頁）頂部狀態列', n:'常駐一條 · 取代現行四條', laws:['s','e'],
+      live:'09/05 週五 ✅ 交易日　|　🟢 總經 偏多 · 建議 70%　|　🔗 已綁 Sheet「我的持股」　|　更新於 14:32',
+      grey:{now:'⬜ 總經未評估　|　🔗 尚未綁定 Sheet',why:'讀 L3 canonical 契約，該契約本輪沒有值',where:'到「🚦 今天」更新；Sheet 到「💼 我的持股 › 組合設定」綁'},
+      note:'<b>F13 更正</b>：v1 說四條常駐條「各算一次」所以要收成一條。實測那個已修 bug 的根因<b>不是算兩次</b>，是 <code>warroom_summary</code> 的寫入端（<code>macro/section_state.py</code>、<code>macro/section_traffic_light.py</code>）<b>在 render 路徑裡</b> —— 而 v1 又要在頁首早退，早退之後寫入端不執行，狀態列會<b>永遠拿不到 regime</b>，等於把那個 bug 換一條路請回來。<b>v2：狀態列改讀 L3 <code>macro_state_locker.get_macro_state</code>，不依賴任何 render 副作用；讀不到就顯示灰態。</b>'}
   ]
 },
 {
@@ -631,82 +747,103 @@ const PAGES = [
   job:'一句話：從全市場縮到一張候選清單。',
   leaves:['選股網','板塊地圖（＝產業熱力圖＋板塊資金潮汐）'],
   blocks:[
-    {t:'葉 1 — 選股網 · 條件表單', n:'st.form(form_screen)', laws:['f','g'], cols:3,
-      cells:[['① 基本面優選','四項全過（自動）'],['② 勾條件','估值／EPS／缺貨動能／抗跌 RS／跨季轉強'],['③ 排序與筆數','綜合評分 · top 50']],
+    {t:'葉1 選股網 · 條件表單', n:'st.form(form_screen)', laws:['f','g'], cols:3,
+      cells:[['① 基本面優選','四項全過（自動）'],['② 勾條件','估值／EPS／缺貨／抗跌RS／跨季轉強'],['③ 排序與筆數','綜合評分 · top 50']],
       greyCells:[['① 基本面優選','四項全過（自動）'],['② 勾條件','估值／EPS／缺貨／RS／跨季'],['③ 排序與筆數','綜合評分 · top 50']],
-      errCells:[['① 基本面優選','四項全過（自動）'],['② 勾條件','估值／EPS／缺貨／RS／跨季'],['③ 排序與筆數','綜合評分 · top 50']],
-      note:'現在這 5 個 multiselect / checkbox 每動一次就整站 rerun。包進一個 form 後：勾幾個都只送一次。'},
-    {t:'葉 1 — 選股結果', n:'總覽卡 ＋ dataframe ＋ CSV', laws:['s','e'],
+      note:'現在這 5 個 multiselect／checkbox 每動一次就整站 rerun。包進一個 form：勾幾個都只送一次。<b>CSV <code>download_button</code> 留在 form 外</b>（F11 連帶：form 內只能有 submit）。'},
+    {t:'葉1 選股結果', n:'總覽卡 ＋ dataframe ＋ CSV', laws:['s','e'],
       live:'🔭 存活池 274 檔 → 綜合入選前 50 名　·　本次因子：缺貨 12/89 · 抗跌RS 31/274',
       grey:{now:'⬜ 尚未選股',why:'選股要跑缺貨掃描與 RS 分位，首次約需數十秒',where:'勾好條件後點表單裡的「🎯 開始選股」'},
       err:{now:'🔴 選股中止：FinMind 額度用罄',why:'今日 API 呼叫已達上限，非程式錯誤；本站不以殘缺資料湊出名單',where:'額度每日 00:00 重置；或到「📖 憑什麼 › 資料體檢」看 MOPS／Goodinfo 備援鏈是否可用'}},
-    {t:'葉 2 — 板塊地圖', n:'熱力圖 ＋ 資金泡泡並列', laws:['g','s','e'],
-      live:'左：產業漲跌熱力圖（3 欄圖例）　右：三大法人資金流向泡泡圖',
+    {t:'葉2 板塊地圖', n:'熱力圖 ＋ 資金泡泡並列 · 3 欄圖例', laws:['g','s','e'],
+      live:'左：產業漲跌熱力圖　右：三大法人資金流向泡泡圖',
       grey:{now:'⬜ 板塊資料尚未載入',why:'熱力圖要批次抓數十檔類股代表；泡泡圖讀每交易日盤後凍結的快照',where:'點「🗺️ 載入板塊地圖」；泡泡圖若顯示無快照，代表當日盤後任務尚未產生資料'},
       err:{now:'🔴 熱力圖無法取得任何類股資料',why:'批次抓取全數失敗',where:'先確認網路／proxy；細節在「📖 憑什麼 › 資料體檢」'}},
-    {t:'葉 2 — 口徑揭露', n:'caption · 常駐', laws:['e'],
+    {t:'葉2 口徑揭露', n:'caption · 常駐', laws:['e'],
       live:'X＝近 5 日累計淨流入（億）· Y＝動能變化 · 泡泡＝近 20 日淨額規模。<b>面積不等於權重。</b>',
-      grey:'口徑說明常駐，不隨狀態消失 —— 使用者看圖之前就該知道這張圖在量什麼',
-      err:'口徑說明常駐'}
+      grey:'口徑說明常駐，不隨狀態消失 —— 使用者看圖之前就該知道這張圖在量什麼'}
   ]
 },
 {
   id:'inspect', tab:'🔬 查一檔', name:'🔬 查一檔',
-  job:'一句話：一個代碼進去，一份判決出來 —— 系統自己判它是個股還是 ETF。',
-  leaves:['單檔診斷（個股 ＋ ETF 合併）','多檔比較（個股 ＋ ETF 合併）'],
+  job:'一句話：一個代碼進去，一份判決出來 —— 系統判型，然後走兩套完全不同的明細。',
+  leaves:['單檔診斷（個股／ETF/unknown 三分支）','多檔比較（可混貼）'],
   blocks:[
-    {t:'葉 1 — 輸入表單', n:'st.form(form_ticker)', laws:['f','g'], cols:3,
-      cells:[['代碼','2330（自動判型：個股）'],['期間 / K 線','250 日 · 還原 K'],['均線','MA20 · MA100 已勾']],
+    {t:'葉1 輸入表單 ＋ 判型結果', n:'st.form(form_ticker) · 全站最大 form 受益點', laws:['f','g','s'], cols:3,
+      cells:[['代碼','2330 → 判型：<b>個股</b>（可手動覆寫）'],['期間 / K 線','250 日 · 還原 K'],['均線','MA20 · MA100 已勾']],
       greyCells:[['代碼','（輸入代碼，例：2330 或 00878）'],['期間 / K 線','250 日 · 還原 K'],['均線','MA20 · MA100 預設']],
-      errCells:[['代碼','2330'],['期間 / K 線','250 日 · 還原 K'],['均線','MA20 · MA100']],
-      note:'<b>這是全站最大的 form 受益點。</b>目前 6 個 MA checkbox 排成 st.columns(6)，勾一下就整頁 1,899 行重跑。改成 3 欄 × 2 排並包進 form 後：調完所有均線再送出一次。'},
-    {t:'葉 1 — 判決卡（三欄）', n:'st.columns(3)', laws:['g','s'], cols:3,
+      unwiredCells:[['代碼','<b>1234 → ⬜ 判型 unknown</b>'],['期間 / K 線','（維持預設）'],['均線','（維持預設）']],
+      note:'<b>F11</b>：6 個 MA checkbox 原為 <code>st.columns(6)</code>，改 3 欄 × 2 排並包進 form —— 調完所有均線再送出一次。<br><b>F4</b>：判型結果<b>就地顯示且可手動覆寫</b>。理由是 repo 已記錄的同型事故：<code>station_cards.py</code> 記著「型別大小寫打錯一個字母 → 可信度<b>虛高到 100% 並打開巡航 gate</b>」—— 型別分支推到流量最高的頁，<b>必須讓使用者看得到系統判成什麼、並且改得動</b>。'},
+    {t:'葉1-A 個股分支 · 判決卡', n:'st.columns(3)', laws:['g','s'], cols:3,
       cells:[['健康度','78 / 100 · B 級'],['估值','357 評價：中性偏低'],['籌碼','近 20 日主力連買']],
       greyCells:[['健康度','⬜ 未載入'],['估值','⬜ 未載入'],['籌碼','⬜ 未載入']],
-      errCells:[['健康度','⬜ 資料不足'],['估值','🔴 財報抓取失敗'],['籌碼','🟢 主力連買']],
-      note:'ETF 代碼進來時，這三格換成「折溢價 / 配息 / 追蹤誤差」—— 版面骨架相同，內容依型別換。'},
-    {t:'葉 1 — 💰 獲利能力診斷（缺值三律的樣板）', n:'原 st.columns(5) → 3 欄 × 2 排', laws:['g','s','e'], cols:3,
+      degradedCells:[['健康度','⚠️ 78 分（趨勢因子無 MA，不計入）'],['估值','🟢 中性偏低'],['籌碼','🟢 主力連買']],
+      errCells:[['健康度','⬜ 資料不足'],['估值','🔴 財報抓取失敗'],['籌碼','🟢 主力連買']]},
+    {t:'葉1-A 個股分支 · 明細（依序）', n:'單欄堆疊 · 不用 expander', laws:['e'],
+      live:'K 線＋均線 → 💰 獲利能力診斷 → 357 評價河流圖 → 財報領先指標 → VCP／布林 → 月營收 → 什麼時候買賣 → 心理檢查',
+      grey:{now:'⬜ 尚未載入任何明細',why:'明細需要 K 線、三大法人、月／季營收等六類資料',where:'在上方表單輸入代碼後按「🔍 載入完整分析」'},
+      err:{now:'🔴 月營收區塊無法顯示',why:'該股本月營收尚未公布 —— 這是三態之一「等公布」，<b>不是</b>抓取失敗',where:'月營收約於次月 10 日前公布；其餘區塊不受影響，已照常顯示'}},
+    {t:'葉1-A 💰 獲利能力診斷（缺值三律樣板）', n:'原 st.columns(5) → 3 欄 × 2 排', laws:['g','s','e'], cols:3,
       cells:[['毛利率','58.2% · 🟢 好生意'],['營業利益率','42.1% · 🟢 本業獲利'],['安全邊際','🟢 抗震極強']],
       greyCells:[['毛利率','⚪ 資料缺漏'],['營業利益率','⚪ 資料缺漏'],['安全邊際','⚪ 資料缺漏']],
       errCells:[['毛利率','⚪ 資料缺漏'],['營業利益率','42.1% · 🟢 本業獲利'],['安全邊際','⚪ 資料缺漏']],
-      note:'<b>切到灰態與紅態看這一格：缺值是灰的「⚪ 資料缺漏」，不是紅的「辛苦生意」。</b>現行這 5 張卡用 <code>== \'Good\'</code> 布林判定，欄位取不到就落進 else，畫面直接給紅底 ＋ N/A ＋「辛苦生意」——<b>把「沒有資料」講成「這是爛生意」</b>。新版一律照缺值三律：查表 ＋ 灰色預設。紅態那一列刻意示範<b>逐格獨立判態</b>：毛利率缺值不會把旁邊兩格一起染色。'},
-    {t:'葉 1 — 明細區塊（依序）', n:'單欄堆疊 · 不用 expander', laws:['e'],
-      live:'K 線＋均線 → 357 評價河流圖 → 財報領先指標 → VCP／布林 → 月營收 → 什麼時候買賣 → 心理檢查',
-      grey:{now:'⬜ 尚未載入任何明細',why:'明細需要 K 線、三大法人、月／季營收等六類資料',where:'在上方表單輸入代碼後按「🔍 載入完整分析」'},
-      err:{now:'🔴 月營收區塊無法顯示',why:'該股本月營收尚未公布 —— 這是三態之一「等公布」，不是抓取失敗',where:'月營收約於次月 10 日前公布；其餘區塊不受影響，已照常顯示'}},
-    {t:'葉 1 — 新上市／停牌的誠實處理', n:'旗標 · 非留白', laws:['s','e'],
-      live:'（一般標的不顯示此區）',
-      grey:{now:'⬜ 歷史不足 60 個交易日，健康評分標為「低可信度」',why:'趨勢因子需要 MA100 成形；本站不以「無資料」當滿分計入',where:'等歷史長度足夠後自動恢復 —— 重跑不會改變結果'},
-      err:{now:'⬜ 連續 12 個交易日無報價，已標記為停牌',why:'停牌期間不以前值填補價格序列',where:'復牌後自動恢復；期間所有衍生指標一併標為不可用'}},
-    {t:'葉 2 — 多檔比較', n:'表單 ＋ 批次表 ＋ 下鑽', laws:['f','g','e'],
-      live:'貼一串代碼（可混 個股／ETF）→ 批次評分表 → 點任一列就地展開該檔明細',
+      note:'<b>切到灰態看這一格：缺值是灰的「⚪ 資料缺漏」，不是紅的「辛苦生意」。</b>現行這組卡用 <code>== \'Good\'</code> 布林判定，欄位取不到就落 else → 紅底 ＋ N/A ＋「辛苦生意」，<b>把「沒有資料」講成「這是爛生意」</b>。<br><b>F8 更正</b>：這組卡<b>有兩份複本</b>（<code>tab_stock.py</code> 8 處 ＋ <code>stock_grp_sections/section_financial_health.py</code> 8 處，共 16+），<b>不是 v1 說的單頁 5 張</b>。正確樣板就在同檔 80 行後的負債比卡：<code>{\'Pass\':綠,\'Warning\':黃,\'Fail\':紅,\'N/A\':灰}.get(status, 灰)</code>。'},
+    {t:'葉1-B ETF 分支 · 判決卡 ＋ 明細（F4 補畫）', n:'骨架同 A，內容全換', laws:['g','s','e'], cols:3,
+      cells:[['折溢價','+0.12% · 🟢 貼近淨值'],['配息','年化 5.8% · 近 4 季未縮水'],['追蹤／同儕','同類 12 檔中排 3']],
+      greyCells:[['折溢價','⬜ 未載入'],['配息','⬜ 未載入'],['追蹤／同儕','⬜ 未載入']],
+      errCells:[['折溢價','🔴 淨值來源無回應'],['配息','🟢 年化 5.8%'],['追蹤／同儕','⬜ 未載入']],
+      note:'<b>F4 補畫。</b>明細依序：淨值 vs 市價走勢 → 折溢價帶 → 配息紀錄與以息養股試算 → 成分股與集中度 → 同儕 7 維評分 → 標準差買賣帶（<code>etf_tab_smart</code> 原樣搬）→ 破發檢查。<br>⚠️ <b>與個股分支重疊近零</b>（紅隊逐關鍵詞比對：13 個個股概念在 ETF 頁 0 命中、6 個 ETF 概念在個股頁 0 命中）—— <b>合併的是入口與骨架，不是內容</b>。'},
+    {t:'葉1-C unknown 分支（F4 補畫）', n:'第三條路 · 不是紅態', laws:['s','e'],
+      live:'（代碼可判型時不顯示此區）',
+      grey:{now:'⬜ <b>無法判定這是個股還是 ETF</b> —— 已停在這裡，沒有替你猜',why:'<code>classify_asset_kind</code> 對非台股代號回 <code>unknown</code>（美股／指數／興櫃／輸入錯誤都會落在這）。<b>依 §4.6「不猜」，本站不替你選一邊</b>',where:'確認代碼；若確定它是台股，可在上方表單<b>手動指定型別</b>後重新載入'},
+      note:'<b>依本文自己訂的缺值三律：判型失敗是「沒有值」，走灰態，不是紅態。</b>v1 的查一檔只有「未輸入」灰態與「抓取失敗」紅態，<code>unknown</code> 無處可去 —— 那會逼實作把它塞進其中一個，兩個都是說謊。'},
+    {t:'葉2 多檔比較', n:'表單 ＋ 批次表 ＋ 下鑽', laws:['f','g','e'],
+      live:'貼一串代碼（可混 個股／ETF）→ 批次評分表 → 點任一列就地展開該檔明細（依型別走 A 或 B）',
       grey:{now:'⬜ 尚未批次分析',why:'批次會對每檔抓六類資料，檔數 × 時間',where:'在表單貼上代碼後按「🚀 批次分析」'},
       err:{now:'🔴 3 檔中 1 檔失敗（2317）',why:'該檔資料源逾時；<b>其餘 2 檔照常顯示，不整批作廢</b>',where:'單獨重試 2317，或到資料體檢看該源狀態'}}
   ]
 },
 {
   id:'hold', tab:'💼 我的持股', name:'💼 我的持股',
-  job:'一句話：我已經持有的，該加、該減、該換。',
-  leaves:['戰情室（沿用現行版面，它是全站最好的一頁）','組合設定（＝組合管理＋Sheet 綁定）'],
+  job:'一句話：我已經持有的，該加、該換、該減。（F3：七個區塊全部補齊）',
+  leaves:['戰情室（1️⃣~6️⃣ ＋ 80/20 配置偏離）','組合設定（＝組合管理＋Sheet 綁定）'],
   blocks:[
-    {t:'葉 1 — ① 結論 ② 待辦 ③ 可信度', n:'st.columns(3)', laws:['g','s'], cols:3,
-      cells:[['結論','12 檔 · 3 加碼 · 1 汰換'],['待辦','加碼 3 · 減碼 1 · 未判 0'],['可信度','12/12 已判定']],
-      greyCells:[['結論','⬜ 尚未執行'],['待辦','⬜ 尚未執行'],['可信度','⬜ 尚未執行']],
-      errCells:[['結論','⬜ 尚未執行'],['待辦','⬜ 尚未執行'],['可信度','🔴 讀不到持股清單']],
-      note:'現行戰情室已經是「結論在前、明細在後」，這次<b>不動它的結構</b>，只把它從 ETF 分頁移出來當本頁主體。'},
-    {t:'葉 1 — 燈牆（逐檔燈號）', n:'3 欄燈格 · 點左表右側就地展開', laws:['g','e'],
+    {t:'葉1 ① 結論（三張卡）', n:'st.columns(3)', laws:['g','s'], cols:3,
+      cells:[['該做什麼','12 檔 · 3 加碼 · 1 汰換'],['訊號可信度','12/12 已判定'],['需要處理','加碼 3 · 減碼 1 · 未判 0']],
+      greyCells:[['該做什麼','⬜ 尚未執行'],['訊號可信度','⬜ 尚未執行'],['需要處理','⬜ 尚未執行']],
+      errCells:[['該做什麼','⬜ 尚未執行'],['訊號可信度','⬜ 尚未執行'],['需要處理','🔴 讀不到持股清單']],
+      note:'現行戰情室已是「結論在前、明細在後」，<b>結構不動</b>，只把它從 ETF 分頁移出來當本頁主體。'},
+    {t:'葉1 ② 同一個名詞，兩套刻度（F3 補回）', n:'常駐揭露 · 非摺疊', laws:['s','e'],
+      live:'⚠️ 「健康度」在本頁與「🔬 查一檔」是<b>兩套不同刻度</b>，不可互比 —— 就地列出兩者的定義與門檻',
+      grey:'揭露常駐，不隨載入狀態消失',
+      degraded:{now:'⚠️ 兩套刻度目前不一致，已停止跨頁比較功能',why:'某一側的門檻來源已標 <code>discriminative=False</code>',where:'到「📖 憑什麼 › 教學」看兩套刻度各自的出處'},
+      note:'<b>v1 漏畫。</b>它是防「同名不同義」誤讀的唯一揭露 —— 拿掉之後就會有人拿兩套刻度互比，而畫面不會攔他。'},
+    {t:'葉1 ③ 戰情表（燈牆 ＋ VIX）', n:'3 欄燈格（原 columns(5)） · 點左表右側就地展開', laws:['g','e'],
       live:'12 檔 × 235 加碼燈 / 3-3-3 判定 —— 點任一檔，右側展開週線與布林 z',
-      grey:{now:'⬜ 燈牆尚未點亮',why:'需要先讀取持股清單並逐檔抓週線',where:'點「🚀 跑存股戰情室」'},
-      err:{now:'🔴 無法讀取持股清單',why:'已綁定的 Google Sheet 讀取失敗（權限或表被刪）',where:'到「組合設定」重新綁定，或確認該 Sheet 仍有分享權限'}},
-    {t:'葉 1 — 組合深度分析（並列，不再埋 expander）', n:'區塊並列', laws:['e'],
+      grey:{now:'⬜ 燈牆尚未點亮',why:'需要先讀取持股清單並逐檔抓週線',where:'點表單裡的「🚀 跑存股戰情室」'},
+      err:{now:'🔴 無法讀取持股清單',why:'已綁定的 Google Sheet 讀取失敗（權限或表被刪）',where:'到本頁「組合設定」重新綁定，或確認該 Sheet 仍有分享權限'}},
+    {t:'葉1 ④ 換股建議（F3 補回）', n:'搭配總經位階', laws:['s','e'],
+      live:'換出 2 檔（體質轉弱）→ 換入 2 檔（來自你的觀察清單）　·　<b>已套用總經位階：偏多</b>',
+      grey:{now:'⬜ 尚無換股建議',why:'需要燈牆結果 ＋ 觀察清單兩份輸入',where:'先跑戰情室；觀察清單到「🔍 找標的 › 選股網」勾選加入'},
+      degraded:{now:'⚠️ 已產生建議，但<b>未套用總經位階</b>',why:'總經本輪未評估，依規則不以「中性」代替 —— 不猜多空',where:'到「🚦 今天」更新總經後重跑，建議會重新排序'},
+      note:'<b>v1 漏畫 —— 而它正是本頁職責「該加、<b>該換</b>、該減」的那個「該換」。</b>「未套用位階」刻意設計成<b>已失準態而非灰態</b>：建議還是有值、還是能看，但少了一個輸入，必須講出來。'},
+    {t:'葉1 ⑤ 80/20 配置偏離 ＋ 衛星停利（F3 補回）', n:'core/satellite 偏離 ＋ 停利觸發', laws:['g','s'],
+      live:'核心 76% / 衛星 24%（目標 80/20，偏離 −4pp）　·　衛星 2 檔達停利門檻',
+      grey:{now:'⬜ 尚未計算配置偏離',why:'需要持股清單與現價',where:'先跑戰情室'},
+      note:'<b>v1 漏畫。</b>它回答「該減」，與 ④ 的「該換」互補 —— 兩個都缺，本頁的職責就只剩三分之一。'},
+    {t:'葉1 ⑥ 組合深度分析（提升，不再埋 expander）', n:'區塊並列 · 各自 gate', laws:['e'],
       live:'再平衡 · 核心／衛星 · 壓力測試 · VaR · 配息現金流 · 葡萄串領息',
-      grey:{now:'⬜ 深度分析尚未執行',why:'這幾項吃的是上方燈牆的同一份持股資料',where:'完成上方「跑存股戰情室」後即可展開'},
-      err:{now:'⬜ 深度分析尚未執行',why:'持股清單未讀到，深度分析沒有輸入',where:'先解決上方紅燈'},
-      note:'<b>現況是埋在「5️⃣ 組合深度分析」expander 裡的第五層。</b>expander 收合只是視覺收合、body 每次 rerun 照跑 —— 埋起來沒有省到效能，只是讓人找不到。改成並列 ＋ 各自 gate。'},
-    {t:'葉 2 — 組合設定', n:'st.form(form_holdings)', laws:['f','e'],
+      grey:{now:'⬜ 深度分析尚未執行',why:'這幾項吃的是上方燈牆的同一份持股資料',where:'完成「🚀 跑存股戰情室」後即可展開'},
+      note:'現況埋在「5️⃣ 組合深度分析」expander 第五層。<b>expander 收合只是視覺收合、body 每次 rerun 照跑</b> —— 埋起來沒省效能，只是讓人找不到。改並列 ＋ 各自 gate。'},
+    {t:'葉1 ⑦ AI 戰情總結（F3 補回）', n:'唯一推播出口', laws:['e'],
+      live:'一段可直接推播的文字總結（含當日建議與理由）＋ 複製鈕',
+      grey:{now:'⬜ 尚未生成',why:'AI 總結以上方六段的結論為輸入，避免無中生有',where:'完成戰情室後點「⚡ 生成 AI 總結」'},
+      note:'<b>v1 漏畫 —— 而它是本頁唯一的推播出口。</b>拿掉之後這頁就只能看、不能送出去。'},
+    {t:'葉2 組合設定', n:'st.form(form_holdings)', laws:['f','e'],
       live:'Google 登入狀態 · Sheet 選擇 · 持股列預覽 · 觀察清單管理',
-      grey:{now:'⬜ 尚未綁定持股 Sheet',why:'戰情室的每一盞燈都以「你實際持有什麼」為輸入，沒有清單就沒有東西可判',where:'左側 sidebar「🔐 Google 帳號」登入後，在此選一本 Sheet'},
-      err:{now:'🔴 已綁定，但讀不到任何持股列',why:'可能是空表，或欄位名稱與預期不符',where:'到該 Sheet 確認第一列欄名；本頁下方有欄位規格說明'}}
+      grey:{now:'⬜ 尚未綁定持股 Sheet',why:'戰情室的每一盞燈都以「你實際持有什麼」為輸入，沒有清單就沒有東西可判',where:'在本頁用 Google 登入後選一本 Sheet —— <b>就地完成，不必去別頁</b>'},
+      err:{now:'🔴 已綁定，但讀不到任何持股列',why:'可能是空表，或欄位名稱與預期不符',where:'本頁下方有欄位規格說明；照著改 Sheet 第一列即可'},
+      note:'<b>F5 更正</b>：v1 有 3 個灰／紅態把使用者指去一顆<b>當時沒畫出來的</b>「🚀 跑存股戰情室」，另有 1 個指去改 <code>.streamlit/secrets.toml</code>（客戶不碰那個檔）。<b>v2 的每個「去哪補」都指向本線框畫得出來的地方。</b>'}
   ]
 },
 {
@@ -714,72 +851,72 @@ const PAGES = [
   job:'一句話：解釋數字怎麼來、資料新不新鮮、以及直接問。',
   leaves:['教學','資料體檢','AI 問答'],
   blocks:[
-    {t:'葉 1 — 教學', n:'靜態 · 無 gate', laws:['e'],
-      live:'策略邏輯說明書：紅綠燈怎麼判 · 健康評分六因子 · 各門檻的出處',
-      grey:'靜態內容，永遠可讀 —— 這頁沒有灰態',
-      err:'靜態內容，不會出錯'},
-    {t:'葉 2 — 資料體檢 · 使用者版（常駐）', n:'3 欄燈號卡牆', laws:['g','s','e'], cols:3,
-      cells:[['FRED','🟢 09/05 更新'],['FinMind','🟡 額度剩 12%'],['TWSE','🟢 09/05 14:30']],
+    {t:'葉1 教學', n:'靜態 · 無 gate', laws:['e'],
+      live:'策略邏輯說明書：紅綠燈怎麼判 · 健康評分六因子 · 各門檻的出處 · <b>兩套「健康度」刻度的差別</b>',
+      grey:'靜態內容，永遠可讀 —— 這頁沒有灰態'},
+    {t:'葉2 資料體檢 · 使用者版（常駐）', n:'3 欄燈號卡牆（原 columns(7) 降階）', laws:['g','s','e'], cols:3,
+      cells:[['FRED','🟢 09/05 更新'],['FinMind','🟢 額度剩 62%'],['TWSE','🟢 09/05 14:30']],
       greyCells:[['FRED','⬜ 未檢查'],['FinMind','⬜ 未檢查'],['TWSE','⬜ 未檢查']],
+      unwiredCells:[['FRED','🟢 09/05'],['旌旗指數','🔌 未接線'],['TWSE','🟢 14:30']],
+      degradedCells:[['FRED','🟢 09/05'],['某門檻','⚠️ 已失準'],['TWSE','🟢 14:30']],
       errCells:[['FRED','🟢 09/05'],['FinMind','🔴 額度用罄'],['TWSE','🟢 14:30']],
-      note:'<b>這頁的紅燈是主角，不是意外。</b>其他頁出現紅色時，這裡要能說出是哪一源、跑到備援鏈第幾層。'},
-    {t:'葉 2 — 工程師版（維持 gate）', n:'st.form(form_diag) · 6 個 checkbox 一次送出', laws:['f'],
+      note:'<b>這頁的紅燈是主角，不是意外。</b>其他頁出現非綠色時，這裡要能說出是哪一源、以及<b>這一盞為什麼不能信</b>（<code>unwired_reason</code> / <code>degraded_reason</code> 直接讀自 SSOT）。<br>⚠️ <b>F5 更正</b>：v1 有 3 個「去哪補」指望一個 repo 裡<b>不存在</b>的「備援鏈跑到第幾層」揭露。<b>v2 不承諾尚未存在的東西</b> —— 這裡只顯示各源自己的燈號與最後成功時間。'},
+    {t:'葉2 工程師版（維持現行單一 gate）', n:'1 個 checkbox 全有全無 · 不加 form', laws:['e'],
       live:'資料源清單 · Fetcher 監控 · 雙演算法對帳 · API 根因 · 原始資料表 · 門檻校準',
-      grey:{now:'⬜ 進階診斷未執行',why:'這六個面板各自會組大量表格，預設不跑',where:'勾選要看的項目後送出'},
-      err:{now:'⬜ 進階診斷未執行',why:'預設不跑',where:'勾選要看的項目後送出'},
-      note:'現況是 6 個獨立 checkbox，各自觸發一次 rerun。包進同一個 form ＝ 勾三個也只跑一次。'},
-    {t:'葉 3 — AI 問答', n:'chat_input · 天然 gate', laws:['s','e'],
+      grey:{now:'⬜ 進階診斷未載入',why:'六個面板各自會組大量表格，預設不跑',where:'勾選「🔧 進階診斷（工程師用）」'},
+      note:'<b>F7 更正 —— v1 這一格整個建立在錯的量測上。</b>v1 說「6 個獨立 checkbox 各自觸發 rerun，包成 form 後勾三個只跑一次」；實測 <code>app.py</code> 是<b>1 個</b> checkbox（<code>_diag_adv_on</code>）全有全無，六個 panel 檔內 <code>st.checkbox</code> <b>各為 0</b>。<b>沒有要解的問題 → 撤掉 <code>form_diag</code>，維持現況。</b>'},
+    {t:'葉3 AI 問答', n:'chat_input · 天然 gate', laws:['s','e'],
       live:'問：「2330 現在健康度多少？」→ 引用本站已載入的數字作答',
       grey:{now:'⬜ 尚未提問',why:'AI 只根據本站已載入的資料作答，不自行上網查',where:'直接在下方輸入問題；若某頁尚未載入，AI 會說「那一頁還沒有資料」而不是猜'},
-      err:{now:'🔴 AI 問答未啟用',why:'未偵測到 GEMINI_API_KEY',where:'設定於 .streamlit/secrets.toml；<b>其他分頁功能完全不受影響</b>'}}
+      err:{now:'🔴 AI 問答未啟用',why:'未偵測到 API 金鑰',where:'本頁就地顯示設定入口與步驟；<b>其他分頁功能完全不受影響</b>'},
+      note:'<b>F5 更正</b>：v1 把使用者指去改 <code>.streamlit/secrets.toml</code> —— 客戶不碰那個檔。改為就地給設定入口。'}
   ]
 }
 ];
 
 const DECISIONS = [
- {q:'「總經」與「總經 v2」兩個分頁要怎麼收？',
-  a:'合併成單一的「🚦 今天」，<b>採用 v2 的版面</b>（位階＋五桶三層），舊版總經的區塊逐一併入。',
-  r:'app.py 自己的註解寫著兩者「讀同一份資料、不重複取數、並排讓 user 對照確認後再決定去留」—— 這個並排本來就是<b>暫時</b>的。我實測 v2 呼叫 <code>load_section_inputs(st.session_state)</code>，該檔只 import <code>dataclasses</code> / <code>typing</code>、無任何 fetcher，<b>確認它純讀 session、不取數</b>。選 v2 是因為它已是「結論 → 明細」三層結構，舊版是平鋪；舊版獨有的區塊（今日作戰室、關鍵警示橫幅）併進來，不丟。<br><b>⚠️ 但合併時必須順手補掉 v2 的一個誠實性缺口</b>：它<b>沒有 gate</b>，冷啟動時會拿一整排 <code>None</code> 跑完五桶並把五個桶畫出來 —— 畫面看起來像「已評估、結論中性」，實際是「什麼都沒算」。新版在頁首 <code>if not ready: render_empty(); return</code>，五桶要嘛全有值、要嘛全灰。'},
- {q:'「個股」與「ETF 單檔」要不要合併？',
-  a:'<b>合併</b>為「🔬 查一檔 › 單檔診斷」，代碼輸入後由系統判型，版面骨架相同、三欄判決卡的內容依型別替換。',
-  r:'兩頁回答的是同一個問題：「這一檔行不行」。目前的切法要求使用者先知道 00878 是 ETF、2330 是個股，才找得到頁 —— 那是<b>系統該自己知道的事</b>。合併後也少一份無條件執行的 tab body。'},
+ {q:'「總經」與「總經 v2」兩個分頁要怎麼收？', tag:'改判',
+  a:'合併成「🚦 今天」，<b>採用 v2 的版面</b>，舊版總經十二個區塊逐一併入（落點見對照表）。<b>v2 的冷啟動揭露一字不動地保留，並升格為全站樣板。</b>',
+  r:'app.py 自己的註解寫著兩者「讀同一份資料、不重複取數、並排讓 user 對照確認後再決定去留」—— 這個並排本來就是暫時的。<br><b>⚠️ v1 的後半段已撤回。</b>v1 說「v2 沒有 gate，冷啟動會拿 None 畫五桶、看起來像已評估」——<b>本組用 AppTest 實跑推翻</b>（輸出見 §00 F1）：冷啟動的 v2 已經全灰，還多給 0／16 分母、「無資料 15 · 未接線 1」拆解，以及一句完整的去哪補。<b>v1 提的替代規格比現況少了那些東西 —— 是降級。</b>現在的裁決是：<b>沒有東西要修，改成抄它。</b>'},
+ {q:'「個股」與「ETF 單檔」要不要合併？', tag:'改判',
+  a:'<b>合併入口與骨架，但明畫三條分支</b>（個股／ETF／unknown），內容各走各的。',
+  r:'兩頁回答同一個問題「這一檔行不行」，現行切法要求使用者先知道 00878 是 ETF 才找得到頁 —— 那是系統該自己判的。<br><b>⚠️ 但紅隊 F4 打掉了「它們是同一頁」的簡化</b>：13 個個股概念在 ETF 頁 0 命中、6 個 ETF 概念在個股頁 0 命中，<b>重疊近零</b>。<b>合併的是入口，不是內容</b>；v2 已把 ETF 分支與 <code>unknown</code> 分支都畫出來。判型結果就地顯示且可手動覆寫，理由是 repo 已記錄的事故：型別打錯一個字母 → 可信度虛高到 100% 並打開巡航 gate。'},
  {q:'「多檔比較」與「ETF 多檔比較」要不要合併？',
-  a:'<b>合併</b>為「🔬 查一檔 › 多檔比較」，允許同一批代碼混含個股與 ETF。',
+  a:'<b>合併</b>為「🔬 查一檔 › 多檔比較」，允許同一批代碼混含個股與 ETF，下鑽時依型別走對應分支。',
   r:'與 #2 同一個理由，而且混合持股本來就是常態 —— 現在使用者手上一張清單要拆成兩頁貼兩次。'},
  {q:'「產業熱力圖」與「板塊資金潮汐」要不要合併？',
   a:'<b>合併</b>為「🔍 找標的 › 板塊地圖」，左右並列。',
-  r:'兩者回答同一個問題：錢往哪個產業流。一個看漲跌、一個看法人淨額，並排才有互相佐證的價值；拆兩頁反而要來回切。'},
- {q:'四條全域常駐條（Sheet 狀態列／總經指南針／置底紅綠燈／sidebar 健康總覽）怎麼辦？',
-  a:'<b>收成一條頂部狀態列</b>：日期與是否交易日 · 總經燈 · 組合綁定狀態 · 最後更新時間。指南針與置底紅綠燈的完整內容併入「🚦 今天」。',
-  r:'這四條講的其實是同一件事（今天的市場狀態＋我綁了什麼），卻在四個地方各算一次，而且在 eager render 下每次 rerun 全部重算。更關鍵的是<b>置底紅綠燈與頁內結論曾經互相矛盾</b>（app.py 的註解記著這個已修的 bug）—— 同一個結論出現在兩個地方，就會有兩個地方不同步。收成一條、只算一次。'},
+  r:'兩者回答同一個問題：錢往哪個產業流。一個看漲跌、一個看法人淨額，並排才有互相佐證的價值。'},
+ {q:'四條全域常駐條怎麼辦？', tag:'改判',
+  a:'<b>收成一條頂部狀態列</b>，且該狀態列<b>改讀 L3 canonical 契約（<code>macro_state_locker.get_macro_state</code>），不依賴任何 render 副作用</b>。',
+  r:'<b>⚠️ v1 的理由講錯了因果。</b>v1 說四條「各算一次」所以要收斂；實測那個已修 bug（app.py v19.171 註解）的根因<b>不是算兩次</b>，是 <code>warroom_summary</code> 要等總經 tab 跑完才存在（寫入端在 <code>macro/section_state.py</code> 與 <code>macro/section_traffic_light.py</code>，都在 render 路徑裡）。<br><b>而 v1 同時要在 🚦今天 頁首加早退</b> —— 早退之後寫入端不執行，狀態列<b>永遠拿不到 regime</b>，正是那個 bug 換一條路回來。收斂成一條仍然對（同一個結論出現在四個地方就會有四處不同步），但<b>資料來源必須換</b>。'},
  {q:'ETF 組合分析與葡萄串領息，該留在 expander 第五層嗎？',
-  a:'<b>提到「💼 我的持股 › 戰情室」的並列區塊</b>，與燈牆同層，各自帶自己的 gate。',
-  r:'它們現在埋在「5️⃣ 組合深度分析」的 expander 裡。<b>expander 收合只是視覺收合，body 每次 rerun 照樣執行</b> —— 也就是埋起來沒省到任何效能，只是讓人找不到。既然成本一樣，就放到看得見的地方，並改用 gate 真正省下執行。'},
- {q:'「資料診斷」的使用者版與工程師版要不要拆成兩頁？',
-  a:'<b>不拆</b>，同一葉內：使用者版（3 欄燈號卡牆）常駐、工程師版維持 gate 收在下方。',
-  r:'拆成兩頁會讓「我的數字是不是舊的？」這個高頻問題多一次點擊，而工程師版一年用不到幾次。現行的 checkbox gate 判斷是對的，這次只把 6 個獨立 checkbox 包成一個 form。'},
+  a:'<b>提到「💼 我的持股 › 戰情室」的並列區塊</b>（⑥），與燈牆同層，各自帶 gate。',
+  r:'expander 收合只是視覺收合，<b>body 每次 rerun 照樣執行</b> —— 埋起來沒省到效能，只是讓人找不到。既然成本一樣，就放到看得見的地方，並改用 gate 真正省下執行。'},
+ {q:'「資料診斷」的使用者版與工程師版要不要拆頁？要不要包 form？', tag:'撤回',
+  a:'<b>不拆頁</b>，同一葉內：使用者版常駐、工程師版維持<b>現行單一 gate</b>。<b>撤回 v1 的 <code>form_diag</code> 提案。</b>',
+  r:'不拆頁的理由不變（「我的數字是不是舊的」是高頻問題，不該多一次點擊）。<br><b>⚠️ <code>form_diag</code> 撤回</b>：v1 說「6 個獨立 checkbox 包成一個 form」，實測 <code>app.py</code> 是<b>1 個</b> checkbox 全有全無、六個 panel 檔內 checkbox <b>各為 0</b> —— <b>要解的問題不存在</b>。五個 form 裡有一個是憑空想像出來的，撤掉。'},
  {q:'「AI 問答」要不要保留頂層分頁？',
   a:'<b>降為「📖 憑什麼」底下的葉。</b>',
-  r:'它不是決策動線上的一步，是「我對某個結論有疑問」時的旁支 —— 跟教學、資料體檢是同一類需求（解釋與查驗），放在一起才成一頁。而且它每次 rerun 都佔一份 tab body，降級同時也少一個頂層。'},
+  r:'它不是決策動線上的一步，是「我對某個結論有疑問」時的旁支 —— 跟教學、資料體檢同屬「解釋與查驗」。降級同時也少一份 tab body。'},
  {q:'1,582 行的靜態教學頁要留嗎？',
-  a:'<b>留，原樣搬到「📖 憑什麼 › 教學」。</b>不刪、不拆、不改寫。',
-  r:'它是靜態 Markdown，執行成本近乎零，而且是所有門檻數字的出處說明 —— 有它，其他頁的燈號才有得對照。內容品質不在本批射程。'},
- {q:'21 處 ≥4 欄的 st.columns 怎麼處理？',
-  a:'<b>一律降到 3 欄以內</b>；格子超過 3 個就換行排第二排，不是加欄。欄數天然不足 3 的（兩欄對比）保持兩欄。',
-  r:'Streamlit 的 columns 不會自動換行，只會把每欄擠窄，窄螢幕上 6 欄的 MA 設定會變成六條看不清的字。「3 欄自適應」要的是<b>上限</b>與<b>換行</b>，不是強迫每個區塊都切三塊 —— 硬湊三欄跟擠六欄一樣是排版失敗。'},
- {q:'st.form 要包到什麼程度？',
-  a:'<b>每頁的控制項各包一個 form</b>（今天／選股／單檔／持股／進階診斷共 5 個），<b>展示區不包</b>。',
-  r:'form 的價值是「N 個 widget 只送一次」，所以邊界應該畫在<b>一組會一起調整的參數</b>上。最大受益是單檔診斷的 6 個 MA checkbox。反過來，展示區的下鑽、CSV 下載這種單一動作不該進 form —— 那會多一次「還要按送出」的摩擦。目前全站 0 個 form，這是新增，不是改寫。'},
- {q:'那些看起來沒被掛上分頁的 tabs 檔（chip_radar、pattern_targets_ui、hot_money、yield_screener…）要不要處理？',
-  a:'<b>本批一律不動，也不宣稱它們是孤兒。</b>線框只登記它們的角色：多數是被其他頁內嵌呼叫的 section，不是分頁。',
-  r:'實測 <code>chip_radar</code> 被 tab_stock 內嵌、<code>pattern_targets_ui</code> 被 tab_stock 與組合摘要內嵌、<code>portfolio_status_bar</code> 直接掛在 app.py、<code>grape_ladder</code> 被戰情室呼叫。「還有沒有 caller」這種問題的正確與否取決於我有沒有漏看，<b>不該由畫線框的這一組單方認定</b>，更不該在一份 UI 草案裡順手判死。'},
- {q:'缺值該怎麼顯示？（獨立查核組交件後新增的第 13 項）',
-  a:'訂立「<b>缺值三律</b>」，新 IA 全頁適用：① 缺值一律走灰態，不得由缺值推導負面結論；② 狀態色用 <code>dict.get(status, 灰)</code> 查表，禁用 <code>X if s==\'Good\' else Y</code> 布林；③ 紅色只留給真故障與真觸警。',
-  r:'獨立查核組抓到、我複驗屬實：個股頁「💰 獲利能力診斷」5 張卡全用布林判定，欄位取不到就落 else，畫面給出<b>紅底 ＋ N/A ＋「辛苦生意」／「本業虧損❌」</b>。這正好踩到客戶明示的「不接受假資料、不接受會影響判斷的缺資料」—— 而且它比假資料更難察覺，因為它<b>看起來像一個判斷</b>。<br><b>之所以能訂成規則而不是個案</b>：同一個檔案往下 80 行的「負債佔資產比率」卡<b>已經做對了</b>（查表 ＋ 灰色預設 ＋「⚪ 資料缺漏」）。本 repo 同時有錯的與對的寫法，規則只是把對的那個變成唯一寫法。<br>⚠️ <b>本批只訂規則、只畫樣板，不改任何 .py。</b>'}
+  a:'<b>留，原樣搬到「📖 憑什麼 › 教學」</b>，並新增一段「兩套健康度刻度的差別」對照 💼 那頁的 ② 揭露。',
+  r:'靜態 Markdown，執行成本近乎零，而且是所有門檻數字的出處說明 —— 有它，其他頁的燈號才有得對照。'},
+ {q:'≥4 欄的 st.columns 怎麼處理？', tag:'數字更正',
+  a:'<b>全部 23 處降到 3 欄以內</b>；格子超過 3 個就換行排第二排，不是加欄。天然不足 3 的保持兩欄。',
+  r:'<b>⚠️ v1 寫「21 處」是錯的</b> —— 我對 <code>form(</code> 用別名不敏感樣式、對 <code>columns(</code> 卻寫死 <code>st.</code>，<b>同一份文件裡兩把尺</b>。漏掉的是 <code>tab_stock_grp.py</code> 的 <code>st_mod.columns(6)</code> 與 <code>columns(7)</code> —— <b>而那個 7 欄是全 repo 最寬的一處，正是這條鐵律最該修的地方。</b><br>Streamlit 的 columns 不會自動換行，只會把每欄擠窄。「3 欄自適應」要的是<b>上限</b>與<b>換行</b>，硬湊三欄跟擠七欄一樣是排版失敗。'},
+ {q:'st.form 要包到什麼程度？', tag:'改判',
+  a:'<b>四個 form</b>（今天／選股／單檔／持股），<b>展示區與 <code>download_button</code> 一律不包</b>。',
+  r:'form 的價值是「N 個 widget 只送一次」，邊界畫在<b>一組會一起調整的參數</b>上。最大受益是單檔診斷的 6 個 MA checkbox。<br><b>⚠️ 兩處改判</b>：(a) 資料診斷那個 form <b>撤回</b>（見 #7），五個變四個；(b) <b><code>st.button</code> 放不進 <code>st.form</code></b>（實跑 <code>StreamlitAPIException</code>）—— v1 的 <code>form_today</code> 寫「兩顆具名動作鈕 ＋ 一顆 submit」<b>在 API 上不可能</b>，改為 radio 選模式 ＋ 單一 submit。'},
+ {q:'那些看起來沒被掛上分頁的 tabs 檔要不要處理？',
+  a:'<b>本批一律不動，也不宣稱它們是孤兒。</b>線框只登記角色：多數是被其他頁內嵌呼叫的 section，不是分頁。',
+  r:'實測 <code>chip_radar</code> 被 tab_stock 內嵌、<code>pattern_targets_ui</code> 被 tab_stock 與組合摘要內嵌、<code>portfolio_status_bar</code> 直接掛在 app.py、<code>grape_ladder</code> 被戰情室呼叫。「還有沒有 caller」取決於我有沒有漏看，<b>不該由畫線框的這組單方認定</b>，更不該在 UI 草案裡順手判死。<b>（紅隊複驗四個都有 caller，並把這條列為本文做對的地方。）</b>'},
+ {q:'缺值該怎麼顯示？', tag:'擴充為四態',
+  a:'「<b>缺值三律</b>」全頁適用，並<b>擴充為四態</b>（灰／未接線／已失準／紅）：① 缺值走灰、不得推導負面結論；② 狀態色用 <code>dict.get(status, 灰)</code> 查表，禁用布林；③ 紅只留給真故障；④ <code>unwired</code> 與 <code>degraded</code> 各有自己的樣子。',
+  r:'查核組抓到、本組複驗屬實：個股頁「💰 獲利能力診斷」用布林判定，欄位取不到就落 else → <b>紅底 ＋ N/A ＋「辛苦生意」</b>。這踩到客戶明示的「不接受會影響判斷的缺資料」，而且比假資料更難察覺，因為它<b>看起來像一個判斷</b>。<br><b>⚠️ 兩處更正</b>：(a) <b>範圍</b> —— 不是 v1 說的單頁 5 張，實測 <code>tab_stock.py</code> 8 處 ＋ <code>section_financial_health.py</code> 8 處，<b>16+ 處跨 2 檔，且未窮舉</b>；(b) <b>態數</b> —— F1 追出 <code>DangerSpec</code> 已有 <code>wired</code>／<code>discriminative</code> 兩組旗標、有必填原因欄、有測試守衛，檔內註解自陳「等 production 卡片接上後再收斂（<b>屬畫面變更，§8.4 另案</b>）」—— <b>repo 裡有一個正在等這種線框批次的狀態，三態放不下它。</b>'}
 ];
 
 let cur = 0, state = 'grey';
-
 const rail = document.querySelector('.railbar');
 PAGES.forEach((p,i)=>{
   const b=document.createElement('button');
@@ -806,7 +943,6 @@ function draw(){
   rail.querySelectorAll('button').forEach((b,i)=>b.setAttribute('aria-selected', i===cur?'true':'false'));
   document.querySelectorAll('.states button').forEach(b=>
     b.setAttribute('aria-pressed', b.dataset.s===state?'true':'false'));
-
   document.getElementById('pgname').textContent = p.name;
   document.getElementById('pgjob').textContent = p.job;
   document.getElementById('pgleaves').innerHTML = p.leaves.map(l=>`<i>${l}</i>`).join('');
@@ -814,19 +950,18 @@ function draw(){
   document.getElementById('canvas').innerHTML = p.blocks.map(b=>{
     let body = '';
     if(b.cols){
-      const src = state==='grey' ? b.greyCells : state==='err' ? b.errCells : b.cells;
+      const map = {grey:b.greyCells, unwired:b.unwiredCells, degraded:b.degradedCells, err:b.errCells, live:b.cells};
+      const src = map[state] || b.greyCells || b.cells;
       body = `<div class="cols" data-c="${b.cols}">` +
         src.map(c=>`<div class="cell"><b>${c[0]}</b>${c[1]}</div>`).join('') + `</div>`;
     } else {
-      const src = state==='grey' ? b.grey : state==='err' ? b.err : b.live;
-      body = (state==='grey') ? esBox(src,'grey')
-           : (state==='err') ? esBox(src,'err')
-           : `<div class="blk-body">${src}</div>`;
+      const map = {grey:b.grey, unwired:b.unwired, degraded:b.degraded, err:b.err, live:b.live};
+      let src = map[state];
+      let cls = state;
+      if(src === undefined){ src = b.grey; cls = 'grey'; }
+      body = (cls==='live') ? `<div class="blk-body">${src}</div>` : esBox(src, cls);
     }
-    const laws = (b.laws||[]).map(k=>{
-      const cls = k;
-      return `<span class="law ${cls}">${L[k]}</span>`;
-    }).join('');
+    const laws = (b.laws||[]).map(k=>`<span class="law ${CLS[k]}">${L[k]}</span>`).join('');
     const note = b.note ? `<div class="blk-body" style="margin-top:10px;padding-top:9px;border-top:1px dashed var(--rule-2);font-size:12.5px">${b.note}</div>` : '';
     return `<div class="blk">
       <div class="blk-h"><span class="blk-t">${b.t}</span><span class="blk-n">${b.n}</span></div>
@@ -836,12 +971,14 @@ function draw(){
   }).join('');
 }
 
-document.getElementById('decisions').innerHTML = DECISIONS.map((d,i)=>`
-  <div class="dec">
-    <div class="dec-h"><span class="dec-n">#${i+1}</span><span class="dec-q">${d.q}</span></div>
+document.getElementById('decisions').innerHTML = DECISIONS.map((d,i)=>{
+  const tag = d.tag ? `<span class="pill ${d.tag==='撤回'?'drop':(d.tag==='改判'?'hold':'merge')}">${d.tag}</span>` : '';
+  return `<div class="dec">
+    <div class="dec-h"><span class="dec-n">#${i+1}</span><span class="dec-q">${d.q}</span>${tag}</div>
     <div class="dec-a"><span class="verdict">決定：</span>${d.a}</div>
     <div class="dec-r"><b>理由：</b>${d.r}</div>
-  </div>`).join('');
+  </div>`;
+}).join('');
 
 draw();
 </script>
