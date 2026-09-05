@@ -174,17 +174,42 @@ def test_seed_file_honest_and_valid():
         f'seed date={_as_of} 晚於今天 → 未來日期的觀測值不存在,是捏造（§1）')
 
     # (3) provenance 必須存在、非空,且落在既有來源 SSOT 內（§2.2）
-    #     用 startswith 而非 in:`stale-cache(CIER)` 這種**回存 stale** 的來源
-    #     必須擋下 —— cron 明文只回存 live hit,回存 stale 會讓 cached_at 天天重刷、
-    #     過期值假裝永遠新鮮（見 update_macro_history.py 該段註解 + §1）。
+    #
+    #     ⚠️ 比對規則是「**有邊界的前綴**」：`_src == n` 或 `_src.startswith(n + '/')`,
+    #     **不是**裸的 `startswith(n)`,也不是 `in`。三者的差別是這條斷言的全部價值:
+    #
+    #       source                      `in`   裸 startswith   有邊界前綴（現行）
+    #       ─────────────────────────── ────── ────────────── ──────────────────
+    #       data.gov.tw/6100（真來源）   PASS       PASS             PASS
+    #       CIER / NDC / MoneyDJ …      PASS       PASS             PASS
+    #       stale-cache(CIER)           PASS        red              red
+    #       CIER 官方公布 2026-06        PASS       PASS             red   ←★
+    #       NDC 我自己編的               PASS       PASS             red
+    #       data.gov.tw-FABRICATED       red       PASS             red
+    #
+    #     ★ 那一列**就是本檔要防的原始事故**:`test_export_pmi_freshness_gate.py`
+    #       檔頭記載的那筆人工 seed,source 正是 `"CIER 官方公布 2026-06"`。
+    #       裸 startswith 會**原封放行它** —— 一個宣稱在擋假來源、卻放行事故本尊的
+    #       守衛，比沒有守衛更危險（§1）。故加上邊界。
+    #
+    #     真實來源不受影響:8 個 registry handler 實際吐出的 7 個相異字面值
+    #     （`CIER-EN` / `data.gov.tw/6100` / `NDC` / `CIER` / `StockFeel` /
+    #       `Cnyes` / `MoneyDJ`）在新規則下全綠 —— `/` 是唯一被允許的延伸邊界,
+    #     因為 `data.gov.tw/6100` 這種「來源/資料集編號」是既有寫法。
     _src = str(seed.get('source', '')).strip()
     assert _src, 'seed 缺 source → 無 provenance（§2.2）'
     _allowed = _pmi_source_whitelist()
-    assert any(_src.startswith(_n) for _n in _allowed), (
-        f'seed source={_src!r} 不在 PMI_SOURCE_REGISTRY 的來源清單內 {_allowed}。\n'
-        '兩種可能,都不該靠改本測試放行:\n'
-        '  (a) 它是 stale/人工來源被回存進 durable → 那是 §1 造假,修寫入端;\n'
-        '  (b) 真的新增了來源 → 請確認該 handler 回傳的 source 以其 registry 名稱開頭。'
+    assert any(_src == _n or _src.startswith(_n + '/') for _n in _allowed), (
+        f'seed source={_src!r} 不是 PMI_SOURCE_REGISTRY 任一來源名'
+        f'（或其 `<來源名>/<資料集>` 形式）:{_allowed}\n'
+        '三種可能,都不該靠放寬本斷言來放行:\n'
+        '  (a) 它是**人工 seed 或自由文字**（如 "CIER 官方公布 2026-06"）→ 正是本條要擋的,\n'
+        '      修的是寫入端,不是這裡;\n'
+        '  (b) 它是 **stale 被回存**（如 "stale-cache(CIER)"）→ §1 造假,cron 明文只回存 live hit;\n'
+        '  (c) 真的新增了來源 → 該 handler 回傳的 source 必須**等於**它的 registry 名稱,\n'
+        '      或為 `<registry 名稱>/<資料集>`。\n'
+        '⚠️ 已知既有耦合:registry 第 7 項登記 `CIER-cid8`,但 `_pmi_src_cier8` 實際回傳 `CIER`,\n'
+        '   靠兄弟項 `CIER` 通過本條（另案處理,本測試不因此放寬）。'
     )
 
     # (4) cached_at 必須在 —— `_macro_cache_load` 靠它算 TTL,缺了整筆會被靜默跳過。
