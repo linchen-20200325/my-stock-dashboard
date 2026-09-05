@@ -1,0 +1,847 @@
+<title>五頁戰情室</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+:root{
+  --ground:#fbfaf9; --panel:#ffffff; --panel-2:#f4f3f1; --rule:#dedbd6; --rule-2:#c9c5be;
+  --ink:#1b1d22; --ink-2:#4d5158; --ink-3:#7c8189;
+  --accent:#5a45d6; --accent-soft:#ece9fc; --accent-ink:#4634b8;
+  --sig-red:#c8322f; --sig-red-bg:#fbe9e8;
+  --sig-green:#1d7a48; --sig-green-bg:#e6f4ec;
+  --sig-amber:#9a6b00; --sig-amber-bg:#fbf1da;
+  --sig-grey:#7c8189; --sig-grey-bg:#f0efed;
+  --wire:#b6b2ab; --wire-fill:#faf9f7;
+  --shadow:0 1px 2px rgba(20,18,30,.05),0 8px 24px -12px rgba(20,18,30,.12);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0f1115; --panel:#161920; --panel-2:#1d2129; --rule:#272c36; --rule-2:#39404d;
+    --ink:#e9eaef; --ink-2:#a8aeba; --ink-3:#787f8c;
+    --accent:#8f7dfa; --accent-soft:#221d40; --accent-ink:#a596ff;
+    --sig-red:#f0645f; --sig-red-bg:#2c1614;
+    --sig-green:#4bbf7d; --sig-green-bg:#10251a;
+    --sig-amber:#d9a520; --sig-amber-bg:#2a2110;
+    --sig-grey:#828a97; --sig-grey-bg:#1c2028;
+    --wire:#4a515e; --wire-fill:#12151b;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0f1115; --panel:#161920; --panel-2:#1d2129; --rule:#272c36; --rule-2:#39404d;
+  --ink:#e9eaef; --ink-2:#a8aeba; --ink-3:#787f8c;
+  --accent:#8f7dfa; --accent-soft:#221d40; --accent-ink:#a596ff;
+  --sig-red:#f0645f; --sig-red-bg:#2c1614;
+  --sig-green:#4bbf7d; --sig-green-bg:#10251a;
+  --sig-amber:#d9a520; --sig-amber-bg:#2a2110;
+  --sig-grey:#828a97; --sig-grey-bg:#1c2028;
+  --wire:#4a515e; --wire-fill:#12151b;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{
+  background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans","Noto Sans TC",system-ui,-apple-system,"Microsoft JhengHei",sans-serif;
+  font-size:15px; line-height:1.72; margin:0;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px 96px}
+h1,h2,h3{text-wrap:balance;margin:0}
+a{color:var(--accent-ink)}
+
+/* ── header ── */
+header{padding:52px 0 34px;border-bottom:1px solid var(--rule)}
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent-ink);font-weight:600;
+}
+h1{font-size:clamp(34px,5.6vw,52px);font-weight:900;letter-spacing:-.02em;line-height:1.1;margin:12px 0 0}
+.sub{font-size:17px;color:var(--ink-2);max-width:60ch;margin:16px 0 0}
+.meta{
+  display:flex;flex-wrap:wrap;gap:8px;margin-top:22px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+}
+.meta span{
+  border:1px solid var(--rule);background:var(--panel);border-radius:999px;
+  padding:4px 11px;color:var(--ink-2);
+}
+
+/* ── section ── */
+section{padding-top:52px}
+.snum{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-weight:600;
+  letter-spacing:.14em;color:var(--ink-3);text-transform:uppercase;
+}
+h2{font-size:26px;font-weight:800;letter-spacing:-.015em;margin:6px 0 0}
+.lede{color:var(--ink-2);margin:12px 0 0;max-width:66ch}
+h3{font-size:16px;font-weight:700;margin:30px 0 10px}
+
+/* ── generic panels ── */
+.card{
+  background:var(--panel);border:1px solid var(--rule);border-radius:12px;
+  padding:18px 20px;
+}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:18px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:18px}
+
+/* measured stat */
+.stat{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:16px 18px}
+.stat .k{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:30px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;
+  line-height:1.1;
+}
+.stat .l{font-size:12.5px;color:var(--ink-3);margin-top:6px;font-weight:500}
+.stat .d{font-size:13px;color:var(--ink-2);margin-top:8px;line-height:1.55}
+.stat.alarm .k{color:var(--sig-red)}
+.stat.ok .k{color:var(--sig-green)}
+
+/* callout */
+.call{
+  border-left:3px solid var(--accent);background:var(--accent-soft);
+  border-radius:0 10px 10px 0;padding:16px 20px;margin-top:20px;
+}
+.call b{color:var(--accent-ink)}
+.warn{border-left-color:var(--sig-amber);background:var(--sig-amber-bg)}
+.warn b{color:var(--sig-amber)}
+
+/* ── IA explorer ── */
+.explorer{margin-top:24px;border:1px solid var(--rule);border-radius:14px;overflow:hidden;background:var(--panel)}
+.railbar{display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--rule);background:var(--panel-2)}
+.railbar button{
+  flex:1 1 150px;appearance:none;border:0;border-right:1px solid var(--rule);
+  background:transparent;color:var(--ink-2);cursor:pointer;
+  font-family:inherit;font-size:13.5px;font-weight:600;padding:13px 10px;
+  border-bottom:2px solid transparent;transition:background .14s,color .14s;
+  text-align:center;
+}
+.railbar button:last-child{border-right:0}
+.railbar button:hover{background:var(--panel);color:var(--ink)}
+.railbar button[aria-selected="true"]{
+  background:var(--panel);color:var(--accent-ink);border-bottom-color:var(--accent);
+}
+.railbar button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+.pghead{padding:20px 22px 0}
+.pgname{font-size:21px;font-weight:800;letter-spacing:-.01em}
+.pgjob{color:var(--ink-2);font-size:14px;margin-top:6px}
+.pgleaves{
+  display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+}
+.pgleaves i{
+  font-style:normal;border:1px dashed var(--rule-2);border-radius:6px;
+  padding:3px 9px;color:var(--ink-2);
+}
+
+/* state switch */
+.states{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:18px 22px 4px}
+.states .lbl{font-size:12px;color:var(--ink-3);font-weight:600;margin-right:2px}
+.states button{
+  appearance:none;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;
+  border-radius:999px;padding:5px 13px;border:1px solid var(--rule-2);
+  background:var(--panel);color:var(--ink-2);transition:.14s;
+}
+.states button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.states button[aria-pressed="true"][data-s="grey"]{background:var(--sig-grey-bg);border-color:var(--sig-grey);color:var(--sig-grey)}
+.states button[aria-pressed="true"][data-s="live"]{background:var(--sig-green-bg);border-color:var(--sig-green);color:var(--sig-green)}
+.states button[aria-pressed="true"][data-s="err"]{background:var(--sig-red-bg);border-color:var(--sig-red);color:var(--sig-red)}
+
+/* wireframe canvas */
+.canvas{padding:14px 22px 26px}
+.blk{
+  border:1.5px dashed var(--wire);border-radius:10px;background:var(--wire-fill);
+  padding:13px 15px;margin-top:12px;
+}
+.blk-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px}
+.blk-t{font-weight:700;font-size:14.5px}
+.blk-n{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;
+  color:var(--ink-3);border:1px solid var(--rule);border-radius:5px;padding:1px 6px;
+}
+.blk-body{margin-top:9px;font-size:13.5px;color:var(--ink-2);line-height:1.65}
+.cols{display:grid;gap:9px;margin-top:10px}
+.cols[data-c="3"]{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.cols[data-c="2"]{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.cell{
+  border:1px solid var(--rule);border-radius:7px;background:var(--panel);
+  padding:9px 11px;font-size:12.5px;color:var(--ink-2);
+}
+.cell b{display:block;color:var(--ink);font-size:13px;font-weight:600;margin-bottom:2px}
+
+/* law chips */
+.laws{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.law{
+  font-size:10.5px;font-weight:700;border-radius:5px;padding:2px 7px;
+  border:1px solid transparent;font-family:"IBM Plex Mono",ui-monospace,monospace;
+}
+.law.g{background:var(--accent-soft);color:var(--accent-ink);border-color:var(--accent)}
+.law.f{background:var(--sig-amber-bg);color:var(--sig-amber);border-color:var(--sig-amber)}
+.law.s{background:var(--sig-grey-bg);color:var(--sig-grey);border-color:var(--sig-grey)}
+.law.e{background:var(--sig-green-bg);color:var(--sig-green);border-color:var(--sig-green)}
+
+/* empty-state 3 elements */
+.es{border-radius:8px;padding:11px 13px;margin-top:10px;font-size:13px;line-height:1.6}
+.es.grey{background:var(--sig-grey-bg);border:1px solid var(--rule-2)}
+.es.err{background:var(--sig-red-bg);border:1px solid var(--sig-red)}
+.es .row{display:flex;gap:9px;align-items:flex-start;margin-top:5px}
+.es .row:first-child{margin-top:0}
+.es .tag{
+  flex:0 0 auto;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;
+  font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;margin-top:2px;
+  background:var(--panel);border:1px solid var(--rule-2);color:var(--ink-3);
+}
+.es.err .tag{border-color:var(--sig-red);color:var(--sig-red)}
+.es .tx{color:var(--ink-2)}
+.es.err .tx{color:var(--ink)}
+.es .tx b{color:var(--ink)}
+
+/* tables */
+.tw{overflow-x:auto;margin-top:16px;border:1px solid var(--rule);border-radius:11px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:13.5px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{
+  font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:700;background:var(--panel-2);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+td code{background:var(--panel-2);padding:1px 5px;border-radius:4px;color:var(--ink-2)}
+.pill{
+  display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;white-space:nowrap;
+}
+.pill.keep{background:var(--sig-green-bg);color:var(--sig-green)}
+.pill.merge{background:var(--accent-soft);color:var(--accent-ink)}
+.pill.drop{background:var(--sig-red-bg);color:var(--sig-red)}
+.pill.hold{background:var(--sig-amber-bg);color:var(--sig-amber)}
+
+/* decisions */
+.dec{border:1px solid var(--rule);border-radius:11px;background:var(--panel);padding:16px 18px;margin-top:12px}
+.dec-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.dec-n{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-weight:700;
+  color:var(--accent-ink);background:var(--accent-soft);border-radius:5px;padding:2px 7px;
+}
+.dec-q{font-weight:700;font-size:14.5px}
+.dec-a{margin-top:9px;font-size:13.5px;color:var(--ink);line-height:1.65}
+.dec-a .verdict{font-weight:700;color:var(--accent-ink)}
+.dec-r{margin-top:6px;font-size:13px;color:var(--ink-2);line-height:1.65}
+
+ul{margin:10px 0 0;padding-left:20px;color:var(--ink-2)}
+li{margin-top:5px}
+li b,li strong{color:var(--ink)}
+p{margin:12px 0 0}
+footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);font-size:12.5px;color:var(--ink-3)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Wireframe · 待客戶拍板</div>
+  <h1>五頁戰情室</h1>
+  <p class="sub">台股 AI 戰情室的分頁重組草案：把現在的 <b>7 頂層 / 14 葉</b> 收成 <b>5 頂層 / 10 葉</b>，
+  改以「一次交易決策的五個步驟」分頁，而不是以「這是股票還是 ETF」分頁。</p>
+  <div class="meta">
+    <span>基準 origin/main <b>72a5003</b></span>
+    <span>量測日 2026-09-05</span>
+    <span>本批不動任何 .py</span>
+    <span>射程僅 src/ui/** 與 app.py</span>
+  </div>
+</header>
+
+<section>
+  <div class="snum">01 — 現況實測</div>
+  <h2>先量，再畫</h2>
+  <p class="lede">以下數字全部是本組在 <span class="mono">72a5003</span> 上自己跑出來的，不是引用既有文件。
+  每一格下面都寫了指令能推出它的東西。</p>
+
+  <div class="grid3">
+    <div class="stat alarm">
+      <div class="k">0</div>
+      <div class="l">st.form 使用次數（src/ui + app.py）</div>
+      <div class="d">四大鐵律的「Form 封裝防重繪」目前<b>完全沒有落地</b>。已用別名不敏感的
+      <code>[A-Za-z_]+\.form(</code> 掃過，涵蓋 <code>_st.</code> / <code>_st_v.</code> 兩個別名；
+      <code>form_submit_button</code> 同樣 0。</div>
+    </div>
+    <div class="stat alarm">
+      <div class="k">全部</div>
+      <div class="l">tab body 無條件執行</div>
+      <div class="d">app.py 的 <code>with tab_*:</code> 區塊<b>沒有一個帶 if 守衛</b> —— 這句不繫於任何計數。
+      Streamlit 的 <code>st.tabs</code> 切頁只是前端 CSS，每次 rerun，14 個葉節點的 Python 全跑一遍。
+      <br><span style="color:var(--ink-3)">計數為 <b>18</b> 個 <code>with</code> 區塊（7 頂層 ＋ 11 子層）＝ <b>14 葉</b> ＋ 4 個群組外殼。
+      指令：<code>grep -cE "^\s*with tab_[A-Za-z0-9_]*:" app.py</code>
+      —— <b>字元類必須含數字</b>，寫成 <code>[a-z_]*</code> 會漏掉 <code>tab_macro_v2</code> 而得到 17。</span></div>
+    </div>
+    <div class="stat">
+      <div class="k">14</div>
+      <div class="l">個股頁的互動元件數</div>
+      <div class="d">其中 6 個是 MA 均線 checkbox。在沒有 form 的情況下，勾一下 MA5
+      就整頁 1,899 行重跑一次：健康評分、357 評價、領先指標、VCP、布林、K 線、AI 五維全部重算。</div>
+    </div>
+    <div class="stat">
+      <div class="k">21</div>
+      <div class="l">≥4 欄的 st.columns 呼叫</div>
+      <div class="d"><code>columns(4)</code>×16、<code>columns(5)</code>×4、<code>columns(6)</code>×1。
+      Streamlit 的欄不會自動換行，窄螢幕只會被擠扁 —— 這是「3 欄自適應網格」鐵律的直接缺口。</div>
+    </div>
+    <div class="stat">
+      <div class="k">4<span style="font-size:17px;color:var(--ink-3)"> / 8 / 6</span></div>
+      <div class="l">gate 數 —— 取決於你怎麼定義</div>
+      <div class="d"><b>4</b>＝以 <code>return</code> 提前結束（總經、熱力圖、ETF 單檔、ETF 多檔）。
+      <b>8</b>＝本體實際不執行，含用 <code>if/else</code> 包住整份本體者。
+      <b>6</b>＝任何定義下都沒有 gate。<b>四種不同寫法，這才是要修的東西。</b></div>
+    </div>
+    <div class="stat alarm">
+      <div class="k">5</div>
+      <div class="l">「缺值 → 紅燈 ＋ 負面結論」的卡片</div>
+      <div class="d">個股頁「💰 獲利能力診斷」5 張卡全用 <code>== 'Good'</code> 這類布林判定：
+      欄位取不到時落進 else，畫面出現<b>紅底 ＋ N/A ＋「辛苦生意」</b>。
+      這是把「沒有資料」講成「這是爛生意」。</div>
+    </div>
+  </div>
+
+  <div class="call warn">
+    <p style="margin:0"><b>gate 的 4 / 8 / 6 之差在哪：寫法不統一。</b>
+    「個股」頁不是用 <code>return</code>，而是
+    <code>if not t2d: st.info(…) else: &lt;整份本體&gt;</code> —— 本體確實沒執行，
+    但機制與另外四頁不同。再加上 <code>chat_input</code> 天然 gate、
+    <code>if st.button(…):</code> 把工作放在 true 分支……<b>14 個葉子頁至少有四種 gate 寫法，還有 6 頁完全沒有。</b></p>
+    <p style="margin:8px 0 0"><b>所以新 IA 訂一種寫法就好</b>：每頁開頭一個
+    <code>if not ready: render_empty(三要素); return</code>。
+    ⚠️ 我不宣稱 4 或 8 哪個才是「正確答案」—— 這個數字完全由定義決定，
+    重點從來不是數字，是<b>沒有一頁跟另一頁用同一種寫法</b>。</p>
+  </div>
+
+  <div class="call" style="border-left-color:var(--sig-red);background:var(--sig-red-bg)">
+    <p style="margin:0"><b style="color:var(--sig-red)">最嚴重的一條：缺值被推導成負面結論。</b>
+    個股頁「💰 獲利能力診斷」的毛利率卡寫的是
+    <code>_gm2.get('Status','') == 'Good'</code>，色碼與文案都掛在這個布林上。
+    欄位抓不到 → 空字串 → 不等於 <code>'Good'</code> → 走 else →
+    使用者看到的是<b>紅色卡片、大字 N/A、下面寫「辛苦生意」</b>。
+    營業利益率卡同型（缺值 →「本業虧損❌」）、安全邊際、稅後淨利率、ROE 亦然，<b>同一區塊 5 張全中</b>。</p>
+    <p style="margin:8px 0 0"><b>而正確寫法就在同一個檔案、往下 80 行。</b>
+    「負債佔資產比率」卡用的是查表加灰色預設：
+    <code>{'Pass':綠,'Warning':黃,'Fail':紅,'N/A':灰}.get(status, 灰)</code>
+    → 缺值落到<b>灰色「⚪ 資料缺漏」</b>，不推論好壞。
+    <b>本 repo 同時擁有錯的寫法與對的寫法，相距 80 行。</b></p>
+    <p style="margin:8px 0 0">→ 新 IA 把它訂成硬規則，見下方「缺值三律」。
+    ⚠️ <b>本批只在線框訂規則，不改任何 .py</b>；該 5 張卡的修法屬另一批。</p>
+  </div>
+
+  <h3>缺值三律（新 IA 全頁適用）</h3>
+  <div class="grid3">
+    <div class="card">
+      <b style="color:var(--sig-grey)">① 缺值一律走灰態</b>
+      <p style="font-size:13.5px;margin-top:6px">沒有資料就顯示灰色與「⚪ 資料缺漏」，
+      <b>不得</b>由缺值推導出紅燈、負面文案或任何評價。</p>
+    </div>
+    <div class="card">
+      <b style="color:var(--accent-ink)">② 用查表，不用布林</b>
+      <p style="font-size:13.5px;margin-top:6px">狀態色一律
+      <code>dict.get(status, 灰)</code>；<b>禁止</b> <code>X if s=='Good' else Y</code>
+      —— 那種寫法在結構上只有兩個出口，缺值必然被歸進負面那一個。</p>
+    </div>
+    <div class="card">
+      <b style="color:var(--sig-red)">③ 紅色留給真故障</b>
+      <p style="font-size:13.5px;margin-top:6px">紅＝資料源真的壞了或指標真的觸警。
+      「還沒載入」「還沒公布」「歷史不足」全是灰，各自附自己的三要素。</p>
+    </div>
+  </div>
+
+  <div class="grid3" style="margin-top:20px">
+    <div class="stat">
+      <div class="k">89</div>
+      <div class="l">src/ui 底下的 .py</div>
+      <div class="d">tabs/ 21 · tabs/macro/ 15 · tabs/stock_sections/ 14 · render/ 14 ·
+      stock_grp_sections/ 8 · pages/ 8 · etf/ 8 · 根 1。</div>
+    </div>
+    <div class="stat">
+      <div class="k">4</div>
+      <div class="l">選股網 UI 直呼外網的處數</div>
+      <div class="d"><code>tab_stock_picker.py</code> 有 4 處 <code>import requests</code>
+      直打 FinMind，該檔 <code>@st.cache</code> <b>0 命中</b>。
+      屬既有現況，<b>本批不動</b>（客戶明令不碰後端），僅登記於新舊對照表。</div>
+    </div>
+    <div class="stat">
+      <div class="k">7 → 5</div>
+      <div class="l">頂層分頁 · 葉節點 14 → 10</div>
+      <div class="d">app.py 有 5 個 <code>st.tabs()</code>：頂層 7、子層 4+3+2+2，
+      另 3 個頂層無子層 → 14 葉。<code>src/ui/</code> 底下無巢狀 tabs。</div>
+    </div>
+  </div>
+
+  <div class="call">
+    <p style="margin:0"><b>主線判斷：問題不在「有沒有 gate」，在「gate 是每一頁各自手刻的」。</b>
+    因為 <code>st.tabs</code> 是 eager render，14 個葉節點每次 rerun 全部執行，
+    所以每一頁都必須自己長出一顆按鈕來擋住自己 —— 擋住的是<b>抓資料</b>，
+    擋不住的是<b>重繪</b>。而重繪的成本，正好由「0 個 form」放到最大：
+    使用者每動一個 widget，14 頁一起重跑。</p>
+    <p style="margin:8px 0 0"><b>所以新 IA 要同時做兩件事：</b>把葉節點從 14 收到 10（少 4 份無條件執行的 body），
+    並讓每一頁的控制項進 <code>st.form</code>（N 次互動 → 1 次 rerun）。
+    分頁怎麼分是客戶要審的；form 怎麼包是內部自決 —— 但兩者要一起設計，否則只做一半。</p>
+  </div>
+
+  <div class="call warn">
+    <p style="margin:0"><b>另一個只有實測才看得到的事：現在的分頁是照「資產類型」切的。</b>
+    「🔬 個股」與「ETF 單檔」做的是<b>同一件事</b>（一個代碼進去、一份診斷出來），
+    卻分屬兩個不同的頂層分頁；「多檔個股比較」與「ETF 多檔比較」同理。
+    這逼使用者在找頁面之前，先回答一個他不該被問的問題：<b>「00878 算股票還是 ETF？」</b>
+    新 IA 把這道題收回系統自己判。</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">02 — 新資訊架構</div>
+  <h2>照「一次決策的五個步驟」分頁</h2>
+  <p class="lede">五個頂層分頁對應五個問題，順序就是使用者實際的動線。
+  每頁一句話講完它的單一職責 —— 講不完的，就是分錯了。</p>
+
+  <div class="explorer">
+    <div class="railbar" role="tablist" aria-label="五個頂層分頁"></div>
+    <div class="pghead">
+      <div class="pgname" id="pgname"></div>
+      <div class="pgjob" id="pgjob"></div>
+      <div class="pgleaves" id="pgleaves"></div>
+    </div>
+    <div class="states">
+      <span class="lbl">切換畫面狀態：</span>
+      <button data-s="grey" aria-pressed="true">⬜ 灰態（未載入）</button>
+      <button data-s="live" aria-pressed="false">🟢 正常態（有資料）</button>
+      <button data-s="err" aria-pressed="false">🔴 紅態（真出錯）</button>
+    </div>
+    <div class="canvas" id="canvas"></div>
+  </div>
+
+  <div class="call">
+    <p style="margin:0"><b>上面那三顆按鈕就是「三態顏色分離」鐵律本身。</b>
+    切到灰態 → 每一個還沒載入的區塊都給你<b>三要素</b>：現況一句話／為什麼沒有／去哪補。
+    切到紅態 → 只有<b>真的壞掉</b>的區塊變紅，其餘維持灰。
+    現況最容易出的錯是把「還沒點」畫成紅色，滿版假紅字會讓真正的錯誤沒人看得見。</p>
+    <p style="margin:8px 0 0">灰態與紅態<b>都不留白、也都不編數字</b>。
+    資料拿不到時，畫面說出「拿不到」跟「去哪補」，不猜一個值填進去。</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">03 — 四大鐵律</div>
+  <h2>逐頁落點</h2>
+  <p class="lede">每一頁都要指得出這四條分別落在哪。指不出來的那一格，就是這次要補的洞。</p>
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th>頁</th><th>3 欄自適應網格</th><th>Form 封裝防重繪</th><th>三態顏色分離</th><th>空狀態引導</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><b>🚦 今天</b></td>
+          <td>位階／動能／風險 三欄卡；五桶明細 3×2</td>
+          <td><code>form_today</code>：更新鈕 ＋ 顯示明細 ＋ 期間</td>
+          <td>結論燈未評估＝灰；來源全敗＝紅</td>
+          <td>「點上方更新」＋ 冷啟動 40–75 秒的預期</td>
+        </tr>
+        <tr>
+          <td><b>🔍 找標的</b></td>
+          <td>因子卡 3 欄；板塊圖 3 欄圖例</td>
+          <td><code>form_screen</code>：4 因子 ＋ top_n ＋ 排序，一次送出</td>
+          <td>未選股＝灰；FinMind 額度用罄＝紅</td>
+          <td>「勾條件 → 開始選股」＋ 缺貨/RS 會自動掃</td>
+        </tr>
+        <tr>
+          <td><b>🔬 查一檔</b></td>
+          <td>健康／估值／籌碼 三欄；MA 設定 3×2</td>
+          <td><code>form_ticker</code>：代碼 ＋ 天數 ＋ K 線 ＋ 6 個 MA</td>
+          <td>未輸入＝灰；停牌／新上市＝灰並標明；抓取失敗＝紅</td>
+          <td>「輸入代碼 → 載入」＋ 歷史不足時說明為何降可信度</td>
+        </tr>
+        <tr>
+          <td><b>💼 我的持股</b></td>
+          <td>結論／待辦／曝險 三欄；燈牆 3 欄</td>
+          <td><code>form_holdings</code>：Sheet 選擇 ＋ 重載 ＋ 篩選</td>
+          <td>未綁 Sheet＝灰；Sheet 讀不到＝紅</td>
+          <td>「去『組合設定』綁一次 Sheet」＋ 直接給連結</td>
+        </tr>
+        <tr>
+          <td><b>📖 憑什麼</b></td>
+          <td>資料源燈號 3 欄卡牆</td>
+          <td><code>form_diag</code>：進階診斷的 6 個 checkbox 一次送出</td>
+          <td>未展開＝灰；源真的掛了＝紅（這頁的紅是主角）</td>
+          <td>每個紅燈都附「備援鏈跑到第幾層／何時重試」</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="call warn">
+    <p style="margin:0"><b>「3 欄」是上限不是硬性排版。</b>
+    鐵律要的是<b>窄螢幕自適應</b>，不是每個區塊都切成三塊。
+    現行 21 處 ≥4 欄一律降到 3 欄以內；欄數不足 3 的（例如兩欄對比）保持兩欄，不硬湊。
+    做法上以 <code>st.columns(3)</code> 為主，需要更多格子時<b>換行成第二排</b>，不是加欄。</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">04 — 新舊對照</div>
+  <h2>每一塊搬去哪，以及哪些刻意不搬</h2>
+  <div class="tw">
+    <table>
+      <thead><tr><th>現況（檔／區塊）</th><th></th><th>新 IA 落點</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td><code>tab_macro.py</code> 總經</td><td><span class="pill merge">合併</span></td><td>🚦 今天</td><td>它就是「今天能不能出手」的答案本體</td></tr>
+        <tr><td><code>tab_macro_v2.py</code> 總經 v2</td><td><span class="pill merge">合併</span></td><td>🚦 今天（成為預設版面）</td><td>實測它<b>只讀 session_state、自己不取數</b>，是同一份資料的第二種畫法。見裁決 #1</td></tr>
+        <tr><td><code>app_render.render_macro_compass</code> 指南針</td><td><span class="pill merge">合併</span></td><td>🚦 今天 頁首</td><td>目前漂在所有 tab 之上，每次 rerun 都算</td></tr>
+        <tr><td>置底全域紅綠燈 <code>_gl_slot</code></td><td><span class="pill merge">合併</span></td><td>🚦 今天 結論燈</td><td>與指南針講同一件事，兩處各算一次</td></tr>
+        <tr><td><code>etf_render.render_sector_heatmap</code></td><td><span class="pill merge">合併</span></td><td>🔍 找標的 › 板塊地圖</td><td>與資金潮汐同一個問題：錢往哪個產業流</td></tr>
+        <tr><td><code>tab_sector_flow.py</code> 資金潮汐</td><td><span class="pill merge">合併</span></td><td>🔍 找標的 › 板塊地圖</td><td>同上；兩者並排比拆兩頁好讀</td></tr>
+        <tr><td>選股網（<b>內嵌在 app.py</b>）</td><td><span class="pill keep">搬出</span></td><td>🔍 找標的 › 選股網</td><td>目前整段 UI ＋ 編排長在 L6 app.py 裡</td></tr>
+        <tr><td><code>tab_stock.py</code> 個股</td><td><span class="pill merge">合併</span></td><td>🔬 查一檔 › 單檔診斷</td><td>與 ETF 單檔做同一件事，見裁決 #2</td></tr>
+        <tr><td><code>etf_tab_single.py</code> ETF 單檔</td><td><span class="pill merge">合併</span></td><td>🔬 查一檔 › 單檔診斷</td><td>同上；代碼判型由系統做</td></tr>
+        <tr><td><code>tab_stock_grp.py</code> 多檔比較</td><td><span class="pill merge">合併</span></td><td>🔬 查一檔 › 多檔比較</td><td>與 ETF 多檔比較同一件事</td></tr>
+        <tr><td><code>etf_tab_grp_compare.py</code></td><td><span class="pill merge">合併</span></td><td>🔬 查一檔 › 多檔比較</td><td>同上</td></tr>
+        <tr><td><code>etf_tab_dividend_station.py</code> 戰情室</td><td><span class="pill keep">保留</span></td><td>💼 我的持股 › 戰情室</td><td>現行最好的一頁（結論→待辦→燈牆→明細），當成全站範本</td></tr>
+        <tr><td><code>etf_tab_portfolio.py</code> ETF 組合</td><td><span class="pill keep">提升</span></td><td>💼 我的持股 › 戰情室（並列區塊）</td><td>現在埋在 expander「5️⃣ 組合深度分析」裡，見裁決 #6</td></tr>
+        <tr><td><code>grape_ladder.py</code> 葡萄串領息</td><td><span class="pill keep">提升</span></td><td>💼 我的持股 › 戰情室（並列區塊）</td><td>同上，同一個 expander 內</td></tr>
+        <tr><td><code>portfolio_manager.py</code> 組合管理</td><td><span class="pill merge">合併</span></td><td>💼 我的持股 › 組合設定</td><td>與全域綁定狀態列講同一件事</td></tr>
+        <tr><td><code>portfolio_status_bar.py</code> 全域狀態列</td><td><span class="pill merge">收斂</span></td><td>頂部單一狀態列</td><td>見裁決 #5</td></tr>
+        <tr><td><code>tab_edu.py</code> 教學（1,582 行靜態）</td><td><span class="pill keep">保留</span></td><td>📖 憑什麼 › 教學</td><td>靜態內容，位置換掉即可</td></tr>
+        <tr><td><code>data_coverage.py</code> ＋ 6 個進階 panel</td><td><span class="pill keep">保留</span></td><td>📖 憑什麼 › 資料體檢</td><td>使用者版常駐、工程師版維持 gate</td></tr>
+        <tr><td><code>tab_ai_chat.py</code> AI 問答</td><td><span class="pill merge">降級</span></td><td>📖 憑什麼 › AI 問答</td><td>從頂層降為葉，見裁決 #8</td></tr>
+        <tr><td><code>etf_tab_smart.py</code> 標準差買賣帶</td><td><span class="pill hold">原樣搬</span></td><td>🔬 查一檔 › 單檔診斷（ETF 型）</td><td>它自建了 5 個 UI 層快取（憲法登記 V-SMART-CACHE-1）。<b>本次只搬位置，不碰快取</b> —— 那是後端事項，不在本批射程</td></tr>
+        <tr><td><code>chip_radar</code> / <code>pattern_targets_ui</code> / <code>macro_stock_link</code> / <code>portfolio_linkage</code></td><td><span class="pill hold">不動</span></td><td>維持為內嵌 section</td><td>實測它們<b>不是孤兒</b>，是被 tab_stock / 戰情室 內嵌呼叫的區塊，不是分頁</td></tr>
+        <tr><td><code>tab_stock_picker.py</code> 4 處 <code>import requests</code> 直呼 FinMind</td><td><span class="pill hold">刻意不修</span></td><td>🔍 找標的 › 選股網（原樣搬位置）</td><td>UI 層直接打外網且該檔 <code>@st.cache</code> 0 命中 —— 這是<b>後端/分層問題，不是版面問題</b>。客戶明令本批不碰後端，故只登記、只搬位置，<b>一行不改</b></td></tr>
+        <tr><td><code>tab_stock.py</code>「💰 獲利能力診斷」5 張卡</td><td><span class="pill hold">規則先訂</span></td><td>🔬 查一檔 › 單檔診斷</td><td>缺值被推導成紅燈＋負面文案。<b>本批在線框訂下「缺值三律」並畫出正確樣板</b>，但<b>不改 .py</b> —— 修法（把布林改查表）屬實作批次</td></tr>
+        <tr><td><code>tab_stock.py</code> 均線 <code>st.columns(6)</code> 等 21 處 ≥4 欄</td><td><span class="pill merge">降階</span></td><td>各頁 3 欄 × N 排</td><td>版面問題，在本批射程內，見裁決 #10</td></tr>
+        <tr><td><code>macro_classroom.py</code></td><td><span class="pill drop">不搬</span></td><td>—</td><td>內容已於 v18.281 併入 <code>tab_edu.py</code>。<b>但檔案是否該刪屬後端清理，不在本批射程</b>，僅登記</td></tr>
+        <tr><td><code>hot_money.py</code> / <code>yield_screener.py</code></td><td><span class="pill drop">不搬</span></td><td>—</td><td>非分頁：前者是熱錢監測 section、後者實測只剩 <code>fetch_pe_name_maps</code> 被選股網用。<b>維持現狀</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="call warn">
+    <p style="margin:0"><b>「不搬」不等於「刪掉」。</b>
+    本批只畫線框、不動任何 .py，也不對「這個檔要不要刪」下結論 ——
+    那需要先確認 caller 還在不在，屬另一批的事。上表的「不搬」只表示<b>它不會成為新 IA 的一個分頁</b>。</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">05 — 裁決</div>
+  <h2>13 項全部直接決定，不留待拍板欄位</h2>
+  <p class="lede">客戶本次已把「功能分類與版面設計」全權授權給總管，所以草稿裡<b>不留待拍板欄位</b>。
+  以下逐項寫「決定 ＋ 理由」。</p>
+  <div class="call warn" style="margin-top:14px">
+    <p style="margin:0"><b>誠實揭露：這 13 項不是 2026-08 那份清單的原文。</b>
+    那份清單存在一個已發布的 artifact 裡、<b>不在 repo 內</b>，本組沒有拿到它，
+    因此無法逐條對號。下列 1–12 項是<b>本組自己的實測過程中真正碰到、且非決定不可</b>的開放問題；
+    <b>第 13 項是獨立查核組交件後新增的</b>（缺值顯示規則）。
+    若客戶手上有原始清單而某一項沒被涵蓋，請點出來，本組補判。</p>
+  </div>
+
+  <div id="decisions"></div>
+</section>
+
+<section>
+  <div class="snum">06 — 誠實欄</div>
+  <h2>本組沒有查證的部分</h2>
+  <p class="lede">依專案規範，這裡列出的每一項都<b>只能當待驗事項</b>，不得被當成已查證的事實引用。</p>
+  <h3 style="margin-top:20px">先分清楚：哪些是我自己測的，哪些是別組給的</h3>
+  <div class="tw" style="margin-top:12px">
+    <table>
+      <thead><tr><th>結論</th><th>來源</th><th>我做了什麼</th></tr></thead>
+      <tbody>
+        <tr><td>st.form ＝ 0</td><td>本組 ＋ 獨立查核組（各自獨立測，結論一致）</td><td>我用別名不敏感樣式掃過三種 streamlit 別名</td></tr>
+        <tr><td><code>with tab_*:</code> 全無守衛（計數 18）</td><td><b>本組</b>；計數經獨立查核組交叉核對</td><td>逐行列出所有 tab 區塊確認無 if 包覆。查核組先數到 17，複核後確認其字元類 <code>[a-z_]*</code> 不含數字、漏掉 <code>tab_macro_v2</code> → <b>18 成立</b>。主張本身已改寫成不繫於計數的說法</td></tr>
+        <tr><td>21 處 ≥4 欄 columns</td><td><b>本組</b></td><td>分佈統計 ＋ 逐處列出</td></tr>
+        <tr><td>個股頁 14 個 widget、其中 6 個 MA checkbox</td><td><b>本組</b></td><td>逐檔計數 ＋ 讀出該版面區塊</td></tr>
+        <tr><td>gate ＝ 嚴格 4 / 寬鬆 8 / 無 gate 6</td><td><b>獨立查核組</b>提出並更正本組原本的「8」</td><td>我複驗了<b>差異的成因</b>（個股頁用 if/else 不用 return），但<b>沒有</b>逐頁重跑那三個定義的完整清單</td></tr>
+        <tr><td>獲利能力 5 卡缺值 → 紅燈＋負面文案</td><td><b>獨立查核組</b></td><td>我讀了該區塊原始碼，確認 5 張卡全中，並自己找出同檔 80 行後的正確樣板（負債比卡）</td></tr>
+        <tr><td>picker 4 處 requests、該檔 cache 0</td><td><b>獨立查核組</b></td><td>我複跑了那兩條計數，數字相符</td></tr>
+        <tr><td>總經 v2 純讀 session、不取數</td><td>本組先測，<b>獨立查核組推翻了另一組的相反說法</b></td><td>我確認 <code>section_inputs.py</code> 只 import dataclasses/typing</td></tr>
+        <tr><td>總經 v2 冷啟動會拿 None 畫五桶</td><td><b>獨立查核組</b></td><td><b>我沒有驗這一條。</b>它是我裁決 #1 後半段的前提 —— 見下方未查證清單</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:26px">未查證清單</h3>
+  <ul>
+    <li><b>沒有實際跑起這個 app。</b> 沙箱不裝套件、不連外網。所有「第一步互動是什麼」都是<b>讀原始碼</b>判定的，不是點過畫面。
+    button gate、輸入框、early return 的位置我讀得到；實際跑起來長什麼樣、多久、會不會閃錯，<b>沒驗過</b>。</li>
+    <li><b>「總經 v2 冷啟動會把五個桶畫出來」我沒有實測。</b> 這是獨立查核組的觀察，我只驗到「它沒有 gate」與「它不取數」。
+    <b>五桶在全 None 輸入下實際會畫成什麼樣，我沒有跑過</b> —— 裁決 #1 後半段建立在這條之上，請照此打折。</li>
+    <li><b>查核組提到的 <code>readiness_out</code> 與 <code>band_meta</code> 的 <code>reference</code>／<code>gray</code> 兩種灰，我沒有去確認它們是否真的被接上。</b>
+    所以線框裡的灰態<b>沒有</b>引用它們，是重新訂的規格。要沿用既有素材的話，得先有人驗過接線。</li>
+    <li><b>gate 的 4 / 8 / 6 三個數字，我只複驗了「為什麼會有三個數字」，沒有逐頁重跑三份清單。</b>
+    我在線框裡刻意不主張哪個數字才對 —— 論點只用到「寫法不統一」，那一點我自己讀得出來。</li>
+    <li><b>「0 個 st.form」限於 <code>src/ui/**</code> 與 <code>app.py</code>。</b>
+    我用了別名不敏感的樣式並檢查了三種 streamlit 別名，但<b>沒有</b>掃 <code>scripts/</code>、<code>tests/</code> 或其他目錄。</li>
+    <li><b>總經 v2 與總經「是否重複」，我只驗到一半。</b> 實測到的是：v2 呼叫 <code>load_section_inputs(st.session_state)</code>、
+    自己不取數。我<b>沒有</b>逐指標比對兩頁的呈現內容是否等價 —— 裁決 #1 建立在「同一份資料的第二種畫法」上，
+    這句話的前半（同一份資料）驗過，後半（畫法是否更好）是我的判斷。</li>
+    <li><b>沒有查證任何後端。</b> 依硬邊界，我沒看 cron、沒看 GitHub Actions、沒做資料庫考古。
+    線框裡凡是寫「資料源」「備援鏈」的地方，都只是<b>畫面該怎麼說</b>，不是我對後端現況的宣稱。</li>
+    <li><b>2026-08 前次線框的內容，我完全沒讀到。</b> 它不在 repo 裡。派工單轉述的「7→5 / 14→10 / 12 項待拍板」
+    我當線索用 —— 有意思的是我獨立判完也落在 5 頂層 / 10 葉，但那是<b>巧合或收斂，不是我核對過</b>。</li>
+    <li><b>repo 內 <code>docs/audit-2026-08/REFACTOR_PROPOSAL.md</code> 我只讀了開頭與少數命中行。</b>
+    那是一份 153KB 的資料／邏輯稽核，不是 UI 線框；我引用它<b>一句</b>（st.tabs eager render），
+    而那一句我自己用「18 個 <code>with tab_*:</code> 全無 if 守衛」重新驗過才寫進來。其餘內容未讀、未驗。</li>
+    <li><b>本線框未經第二組獨立複驗。</b> 這是單組產出。</li>
+  </ul>
+</section>
+
+<footer>
+  五頁戰情室 · 股票端 UI 線框草案 · 基準 <span class="mono">72a5003</span> · 量測日 2026-09-05 ·
+  本批不含任何 production code 變更
+</footer>
+
+</div>
+
+<script>
+const L = {g:'3 欄網格', f:'Form 封裝', s:'三態分離', e:'空狀態引導'};
+
+const PAGES = [
+{
+  id:'today', tab:'🚦 今天', name:'🚦 今天',
+  job:'一句話：回答「今天能不能出手、出手到幾成」。這是唯一每次開 app 都要看的頁，所以不設子分頁。',
+  leaves:['單頁 · 無子分頁','吸收：總經＋總經 v2＋指南針＋置底紅綠燈＋今日作戰室'],
+  blocks:[
+    {t:'① 結論燈 — 建議持股 %', n:'full-width', laws:['s','e'],
+      live:'🟢 <b>建議持股 70%</b>　位階：偏多　·　資料時間 09/05 14:32　·　三項風險上限均未觸發',
+      grey:{now:'⬜ 總經尚未評估，建議持股顯示 --',why:'總經指標需抓 FRED 序列＋三大法人＋先行指標，冷啟動實測 40–75 秒（逾時上限 300 秒）',where:'點下方「🚀 更新今日戰情」'},
+      err:{now:'🔴 建議持股無法計算',why:'FRED 與備援源本輪皆未回應，不是程式錯誤',where:'到「📖 憑什麼 › 資料體檢」看備援鏈跑到第幾層；或稍後重試'}},
+    {t:'② 操作列', n:'st.form(form_today)', laws:['f'],
+      live:'表單內：<code>🚀 更新今日戰情</code>　<code>🆕 強制重抓（清快取）</code>　<code>☑ 顯示指標明細</code>　→ 一顆 submit',
+      grey:'表單永遠可見（它就是灰態的出口），不隨狀態變化',
+      err:'表單永遠可見'},
+    {t:'③ 三欄摘要', n:'st.columns(3)', laws:['g','s'], cols:3,
+      cells:[['位階','偏多 · 五桶 3 紅 2 綠'],['動能','轉強 · M1B-M2 gap +1.2'],['風險','VIX 16.4 · 未觸發否決權']],
+      greyCells:[['位階','⬜ 未評估'],['動能','⬜ 未評估'],['風險','⬜ 未評估']],
+      errCells:[['位階','🔴 取數失敗'],['動能','⬜ 未評估'],['風險','🟢 VIX 16.4']],
+      note:'三格獨立判態 —— 一格壞不把另外兩格一起染紅。'},
+    {t:'④ 五桶明細', n:'3 欄 × 2 排（原 columns(4/5) 全部降階）', laws:['g','e','s'],
+      live:'長期 / 中期 / 短期 / 籌碼 / 跨桶裁決 —— 每桶一張卡，3 欄排兩排',
+      grey:{now:'⬜ 五個桶全部顯示「尚未評估」，<b>不畫燈、不給文字結論</b>',why:'冷啟動時 session 是空的，五桶的輸入全是 None —— 拿 None 算出來的桶不是「中性」，是「沒算過」',where:'點「🚀 更新今日戰情」'},
+      err:{now:'🔴 中期桶計算中止；其餘四桶維持各自狀態',why:'其輸入指標（CPI / PMI）本輪缺值，依規則不以估計值代替',where:'「📖 憑什麼 › 資料體檢」查 CPI / PMI 兩列'},
+      note:'<b>這一格是本次線框要正面回答的問題。</b>現行「總經 v2」沒有 gate —— 冷啟動時它照樣拿一整排 <code>None</code> 去跑五桶並把五個桶畫出來。那不是效能問題，是<b>誠實性</b>問題：畫面看起來像「已經評估過、結論中性」，實際上是「什麼都還沒算」。新版在頁面開頭就 <code>if not ready: render_empty(); return</code>，五個桶要嘛全有值、要嘛全灰，<b>不存在半套</b>。'},
+    {t:'⑤ 今日作戰室', n:'清單 · 非表格', laws:['e'],
+      live:'今天該做的 3 件事（含理由與對應分頁連結）',
+      grey:{now:'⬜ 尚無作戰項目',why:'作戰室由五桶結論推導，五桶未算就沒有可推的東西',where:'先完成上方更新'},
+      err:{now:'⬜ 尚無作戰項目',why:'五桶部分中止，作戰項目不完整時不顯示半套建議',where:'先解決上方紅燈'}}
+  ]
+},
+{
+  id:'find', tab:'🔍 找標的', name:'🔍 找標的',
+  job:'一句話：從全市場縮到一張候選清單。',
+  leaves:['選股網','板塊地圖（＝產業熱力圖＋板塊資金潮汐）'],
+  blocks:[
+    {t:'葉 1 — 選股網 · 條件表單', n:'st.form(form_screen)', laws:['f','g'], cols:3,
+      cells:[['① 基本面優選','四項全過（自動）'],['② 勾條件','估值／EPS／缺貨動能／抗跌 RS／跨季轉強'],['③ 排序與筆數','綜合評分 · top 50']],
+      greyCells:[['① 基本面優選','四項全過（自動）'],['② 勾條件','估值／EPS／缺貨／RS／跨季'],['③ 排序與筆數','綜合評分 · top 50']],
+      errCells:[['① 基本面優選','四項全過（自動）'],['② 勾條件','估值／EPS／缺貨／RS／跨季'],['③ 排序與筆數','綜合評分 · top 50']],
+      note:'現在這 5 個 multiselect / checkbox 每動一次就整站 rerun。包進一個 form 後：勾幾個都只送一次。'},
+    {t:'葉 1 — 選股結果', n:'總覽卡 ＋ dataframe ＋ CSV', laws:['s','e'],
+      live:'🔭 存活池 274 檔 → 綜合入選前 50 名　·　本次因子：缺貨 12/89 · 抗跌RS 31/274',
+      grey:{now:'⬜ 尚未選股',why:'選股要跑缺貨掃描與 RS 分位，首次約需數十秒',where:'勾好條件後點表單裡的「🎯 開始選股」'},
+      err:{now:'🔴 選股中止：FinMind 額度用罄',why:'今日 API 呼叫已達上限，非程式錯誤；本站不以殘缺資料湊出名單',where:'額度每日 00:00 重置；或到「📖 憑什麼 › 資料體檢」看 MOPS／Goodinfo 備援鏈是否可用'}},
+    {t:'葉 2 — 板塊地圖', n:'熱力圖 ＋ 資金泡泡並列', laws:['g','s','e'],
+      live:'左：產業漲跌熱力圖（3 欄圖例）　右：三大法人資金流向泡泡圖',
+      grey:{now:'⬜ 板塊資料尚未載入',why:'熱力圖要批次抓數十檔類股代表；泡泡圖讀每交易日盤後凍結的快照',where:'點「🗺️ 載入板塊地圖」；泡泡圖若顯示無快照，代表當日盤後任務尚未產生資料'},
+      err:{now:'🔴 熱力圖無法取得任何類股資料',why:'批次抓取全數失敗',where:'先確認網路／proxy；細節在「📖 憑什麼 › 資料體檢」'}},
+    {t:'葉 2 — 口徑揭露', n:'caption · 常駐', laws:['e'],
+      live:'X＝近 5 日累計淨流入（億）· Y＝動能變化 · 泡泡＝近 20 日淨額規模。<b>面積不等於權重。</b>',
+      grey:'口徑說明常駐，不隨狀態消失 —— 使用者看圖之前就該知道這張圖在量什麼',
+      err:'口徑說明常駐'}
+  ]
+},
+{
+  id:'inspect', tab:'🔬 查一檔', name:'🔬 查一檔',
+  job:'一句話：一個代碼進去，一份判決出來 —— 系統自己判它是個股還是 ETF。',
+  leaves:['單檔診斷（個股 ＋ ETF 合併）','多檔比較（個股 ＋ ETF 合併）'],
+  blocks:[
+    {t:'葉 1 — 輸入表單', n:'st.form(form_ticker)', laws:['f','g'], cols:3,
+      cells:[['代碼','2330（自動判型：個股）'],['期間 / K 線','250 日 · 還原 K'],['均線','MA20 · MA100 已勾']],
+      greyCells:[['代碼','（輸入代碼，例：2330 或 00878）'],['期間 / K 線','250 日 · 還原 K'],['均線','MA20 · MA100 預設']],
+      errCells:[['代碼','2330'],['期間 / K 線','250 日 · 還原 K'],['均線','MA20 · MA100']],
+      note:'<b>這是全站最大的 form 受益點。</b>目前 6 個 MA checkbox 排成 st.columns(6)，勾一下就整頁 1,899 行重跑。改成 3 欄 × 2 排並包進 form 後：調完所有均線再送出一次。'},
+    {t:'葉 1 — 判決卡（三欄）', n:'st.columns(3)', laws:['g','s'], cols:3,
+      cells:[['健康度','78 / 100 · B 級'],['估值','357 評價：中性偏低'],['籌碼','近 20 日主力連買']],
+      greyCells:[['健康度','⬜ 未載入'],['估值','⬜ 未載入'],['籌碼','⬜ 未載入']],
+      errCells:[['健康度','⬜ 資料不足'],['估值','🔴 財報抓取失敗'],['籌碼','🟢 主力連買']],
+      note:'ETF 代碼進來時，這三格換成「折溢價 / 配息 / 追蹤誤差」—— 版面骨架相同，內容依型別換。'},
+    {t:'葉 1 — 💰 獲利能力診斷（缺值三律的樣板）', n:'原 st.columns(5) → 3 欄 × 2 排', laws:['g','s','e'], cols:3,
+      cells:[['毛利率','58.2% · 🟢 好生意'],['營業利益率','42.1% · 🟢 本業獲利'],['安全邊際','🟢 抗震極強']],
+      greyCells:[['毛利率','⚪ 資料缺漏'],['營業利益率','⚪ 資料缺漏'],['安全邊際','⚪ 資料缺漏']],
+      errCells:[['毛利率','⚪ 資料缺漏'],['營業利益率','42.1% · 🟢 本業獲利'],['安全邊際','⚪ 資料缺漏']],
+      note:'<b>切到灰態與紅態看這一格：缺值是灰的「⚪ 資料缺漏」，不是紅的「辛苦生意」。</b>現行這 5 張卡用 <code>== \'Good\'</code> 布林判定，欄位取不到就落進 else，畫面直接給紅底 ＋ N/A ＋「辛苦生意」——<b>把「沒有資料」講成「這是爛生意」</b>。新版一律照缺值三律：查表 ＋ 灰色預設。紅態那一列刻意示範<b>逐格獨立判態</b>：毛利率缺值不會把旁邊兩格一起染色。'},
+    {t:'葉 1 — 明細區塊（依序）', n:'單欄堆疊 · 不用 expander', laws:['e'],
+      live:'K 線＋均線 → 357 評價河流圖 → 財報領先指標 → VCP／布林 → 月營收 → 什麼時候買賣 → 心理檢查',
+      grey:{now:'⬜ 尚未載入任何明細',why:'明細需要 K 線、三大法人、月／季營收等六類資料',where:'在上方表單輸入代碼後按「🔍 載入完整分析」'},
+      err:{now:'🔴 月營收區塊無法顯示',why:'該股本月營收尚未公布 —— 這是三態之一「等公布」，不是抓取失敗',where:'月營收約於次月 10 日前公布；其餘區塊不受影響，已照常顯示'}},
+    {t:'葉 1 — 新上市／停牌的誠實處理', n:'旗標 · 非留白', laws:['s','e'],
+      live:'（一般標的不顯示此區）',
+      grey:{now:'⬜ 歷史不足 60 個交易日，健康評分標為「低可信度」',why:'趨勢因子需要 MA100 成形；本站不以「無資料」當滿分計入',where:'等歷史長度足夠後自動恢復 —— 重跑不會改變結果'},
+      err:{now:'⬜ 連續 12 個交易日無報價，已標記為停牌',why:'停牌期間不以前值填補價格序列',where:'復牌後自動恢復；期間所有衍生指標一併標為不可用'}},
+    {t:'葉 2 — 多檔比較', n:'表單 ＋ 批次表 ＋ 下鑽', laws:['f','g','e'],
+      live:'貼一串代碼（可混 個股／ETF）→ 批次評分表 → 點任一列就地展開該檔明細',
+      grey:{now:'⬜ 尚未批次分析',why:'批次會對每檔抓六類資料，檔數 × 時間',where:'在表單貼上代碼後按「🚀 批次分析」'},
+      err:{now:'🔴 3 檔中 1 檔失敗（2317）',why:'該檔資料源逾時；<b>其餘 2 檔照常顯示，不整批作廢</b>',where:'單獨重試 2317，或到資料體檢看該源狀態'}}
+  ]
+},
+{
+  id:'hold', tab:'💼 我的持股', name:'💼 我的持股',
+  job:'一句話：我已經持有的，該加、該減、該換。',
+  leaves:['戰情室（沿用現行版面，它是全站最好的一頁）','組合設定（＝組合管理＋Sheet 綁定）'],
+  blocks:[
+    {t:'葉 1 — ① 結論 ② 待辦 ③ 可信度', n:'st.columns(3)', laws:['g','s'], cols:3,
+      cells:[['結論','12 檔 · 3 加碼 · 1 汰換'],['待辦','加碼 3 · 減碼 1 · 未判 0'],['可信度','12/12 已判定']],
+      greyCells:[['結論','⬜ 尚未執行'],['待辦','⬜ 尚未執行'],['可信度','⬜ 尚未執行']],
+      errCells:[['結論','⬜ 尚未執行'],['待辦','⬜ 尚未執行'],['可信度','🔴 讀不到持股清單']],
+      note:'現行戰情室已經是「結論在前、明細在後」，這次<b>不動它的結構</b>，只把它從 ETF 分頁移出來當本頁主體。'},
+    {t:'葉 1 — 燈牆（逐檔燈號）', n:'3 欄燈格 · 點左表右側就地展開', laws:['g','e'],
+      live:'12 檔 × 235 加碼燈 / 3-3-3 判定 —— 點任一檔，右側展開週線與布林 z',
+      grey:{now:'⬜ 燈牆尚未點亮',why:'需要先讀取持股清單並逐檔抓週線',where:'點「🚀 跑存股戰情室」'},
+      err:{now:'🔴 無法讀取持股清單',why:'已綁定的 Google Sheet 讀取失敗（權限或表被刪）',where:'到「組合設定」重新綁定，或確認該 Sheet 仍有分享權限'}},
+    {t:'葉 1 — 組合深度分析（並列，不再埋 expander）', n:'區塊並列', laws:['e'],
+      live:'再平衡 · 核心／衛星 · 壓力測試 · VaR · 配息現金流 · 葡萄串領息',
+      grey:{now:'⬜ 深度分析尚未執行',why:'這幾項吃的是上方燈牆的同一份持股資料',where:'完成上方「跑存股戰情室」後即可展開'},
+      err:{now:'⬜ 深度分析尚未執行',why:'持股清單未讀到，深度分析沒有輸入',where:'先解決上方紅燈'},
+      note:'<b>現況是埋在「5️⃣ 組合深度分析」expander 裡的第五層。</b>expander 收合只是視覺收合、body 每次 rerun 照跑 —— 埋起來沒有省到效能，只是讓人找不到。改成並列 ＋ 各自 gate。'},
+    {t:'葉 2 — 組合設定', n:'st.form(form_holdings)', laws:['f','e'],
+      live:'Google 登入狀態 · Sheet 選擇 · 持股列預覽 · 觀察清單管理',
+      grey:{now:'⬜ 尚未綁定持股 Sheet',why:'戰情室的每一盞燈都以「你實際持有什麼」為輸入，沒有清單就沒有東西可判',where:'左側 sidebar「🔐 Google 帳號」登入後，在此選一本 Sheet'},
+      err:{now:'🔴 已綁定，但讀不到任何持股列',why:'可能是空表，或欄位名稱與預期不符',where:'到該 Sheet 確認第一列欄名；本頁下方有欄位規格說明'}}
+  ]
+},
+{
+  id:'why', tab:'📖 憑什麼', name:'📖 憑什麼',
+  job:'一句話：解釋數字怎麼來、資料新不新鮮、以及直接問。',
+  leaves:['教學','資料體檢','AI 問答'],
+  blocks:[
+    {t:'葉 1 — 教學', n:'靜態 · 無 gate', laws:['e'],
+      live:'策略邏輯說明書：紅綠燈怎麼判 · 健康評分六因子 · 各門檻的出處',
+      grey:'靜態內容，永遠可讀 —— 這頁沒有灰態',
+      err:'靜態內容，不會出錯'},
+    {t:'葉 2 — 資料體檢 · 使用者版（常駐）', n:'3 欄燈號卡牆', laws:['g','s','e'], cols:3,
+      cells:[['FRED','🟢 09/05 更新'],['FinMind','🟡 額度剩 12%'],['TWSE','🟢 09/05 14:30']],
+      greyCells:[['FRED','⬜ 未檢查'],['FinMind','⬜ 未檢查'],['TWSE','⬜ 未檢查']],
+      errCells:[['FRED','🟢 09/05'],['FinMind','🔴 額度用罄'],['TWSE','🟢 14:30']],
+      note:'<b>這頁的紅燈是主角，不是意外。</b>其他頁出現紅色時，這裡要能說出是哪一源、跑到備援鏈第幾層。'},
+    {t:'葉 2 — 工程師版（維持 gate）', n:'st.form(form_diag) · 6 個 checkbox 一次送出', laws:['f'],
+      live:'資料源清單 · Fetcher 監控 · 雙演算法對帳 · API 根因 · 原始資料表 · 門檻校準',
+      grey:{now:'⬜ 進階診斷未執行',why:'這六個面板各自會組大量表格，預設不跑',where:'勾選要看的項目後送出'},
+      err:{now:'⬜ 進階診斷未執行',why:'預設不跑',where:'勾選要看的項目後送出'},
+      note:'現況是 6 個獨立 checkbox，各自觸發一次 rerun。包進同一個 form ＝ 勾三個也只跑一次。'},
+    {t:'葉 3 — AI 問答', n:'chat_input · 天然 gate', laws:['s','e'],
+      live:'問：「2330 現在健康度多少？」→ 引用本站已載入的數字作答',
+      grey:{now:'⬜ 尚未提問',why:'AI 只根據本站已載入的資料作答，不自行上網查',where:'直接在下方輸入問題；若某頁尚未載入，AI 會說「那一頁還沒有資料」而不是猜'},
+      err:{now:'🔴 AI 問答未啟用',why:'未偵測到 GEMINI_API_KEY',where:'設定於 .streamlit/secrets.toml；<b>其他分頁功能完全不受影響</b>'}}
+  ]
+}
+];
+
+const DECISIONS = [
+ {q:'「總經」與「總經 v2」兩個分頁要怎麼收？',
+  a:'合併成單一的「🚦 今天」，<b>採用 v2 的版面</b>（位階＋五桶三層），舊版總經的區塊逐一併入。',
+  r:'app.py 自己的註解寫著兩者「讀同一份資料、不重複取數、並排讓 user 對照確認後再決定去留」—— 這個並排本來就是<b>暫時</b>的。我實測 v2 呼叫 <code>load_section_inputs(st.session_state)</code>，該檔只 import <code>dataclasses</code> / <code>typing</code>、無任何 fetcher，<b>確認它純讀 session、不取數</b>。選 v2 是因為它已是「結論 → 明細」三層結構，舊版是平鋪；舊版獨有的區塊（今日作戰室、關鍵警示橫幅）併進來，不丟。<br><b>⚠️ 但合併時必須順手補掉 v2 的一個誠實性缺口</b>：它<b>沒有 gate</b>，冷啟動時會拿一整排 <code>None</code> 跑完五桶並把五個桶畫出來 —— 畫面看起來像「已評估、結論中性」，實際是「什麼都沒算」。新版在頁首 <code>if not ready: render_empty(); return</code>，五桶要嘛全有值、要嘛全灰。'},
+ {q:'「個股」與「ETF 單檔」要不要合併？',
+  a:'<b>合併</b>為「🔬 查一檔 › 單檔診斷」，代碼輸入後由系統判型，版面骨架相同、三欄判決卡的內容依型別替換。',
+  r:'兩頁回答的是同一個問題：「這一檔行不行」。目前的切法要求使用者先知道 00878 是 ETF、2330 是個股，才找得到頁 —— 那是<b>系統該自己知道的事</b>。合併後也少一份無條件執行的 tab body。'},
+ {q:'「多檔比較」與「ETF 多檔比較」要不要合併？',
+  a:'<b>合併</b>為「🔬 查一檔 › 多檔比較」，允許同一批代碼混含個股與 ETF。',
+  r:'與 #2 同一個理由，而且混合持股本來就是常態 —— 現在使用者手上一張清單要拆成兩頁貼兩次。'},
+ {q:'「產業熱力圖」與「板塊資金潮汐」要不要合併？',
+  a:'<b>合併</b>為「🔍 找標的 › 板塊地圖」，左右並列。',
+  r:'兩者回答同一個問題：錢往哪個產業流。一個看漲跌、一個看法人淨額，並排才有互相佐證的價值；拆兩頁反而要來回切。'},
+ {q:'四條全域常駐條（Sheet 狀態列／總經指南針／置底紅綠燈／sidebar 健康總覽）怎麼辦？',
+  a:'<b>收成一條頂部狀態列</b>：日期與是否交易日 · 總經燈 · 組合綁定狀態 · 最後更新時間。指南針與置底紅綠燈的完整內容併入「🚦 今天」。',
+  r:'這四條講的其實是同一件事（今天的市場狀態＋我綁了什麼），卻在四個地方各算一次，而且在 eager render 下每次 rerun 全部重算。更關鍵的是<b>置底紅綠燈與頁內結論曾經互相矛盾</b>（app.py 的註解記著這個已修的 bug）—— 同一個結論出現在兩個地方，就會有兩個地方不同步。收成一條、只算一次。'},
+ {q:'ETF 組合分析與葡萄串領息，該留在 expander 第五層嗎？',
+  a:'<b>提到「💼 我的持股 › 戰情室」的並列區塊</b>，與燈牆同層，各自帶自己的 gate。',
+  r:'它們現在埋在「5️⃣ 組合深度分析」的 expander 裡。<b>expander 收合只是視覺收合，body 每次 rerun 照樣執行</b> —— 也就是埋起來沒省到任何效能，只是讓人找不到。既然成本一樣，就放到看得見的地方，並改用 gate 真正省下執行。'},
+ {q:'「資料診斷」的使用者版與工程師版要不要拆成兩頁？',
+  a:'<b>不拆</b>，同一葉內：使用者版（3 欄燈號卡牆）常駐、工程師版維持 gate 收在下方。',
+  r:'拆成兩頁會讓「我的數字是不是舊的？」這個高頻問題多一次點擊，而工程師版一年用不到幾次。現行的 checkbox gate 判斷是對的，這次只把 6 個獨立 checkbox 包成一個 form。'},
+ {q:'「AI 問答」要不要保留頂層分頁？',
+  a:'<b>降為「📖 憑什麼」底下的葉。</b>',
+  r:'它不是決策動線上的一步，是「我對某個結論有疑問」時的旁支 —— 跟教學、資料體檢是同一類需求（解釋與查驗），放在一起才成一頁。而且它每次 rerun 都佔一份 tab body，降級同時也少一個頂層。'},
+ {q:'1,582 行的靜態教學頁要留嗎？',
+  a:'<b>留，原樣搬到「📖 憑什麼 › 教學」。</b>不刪、不拆、不改寫。',
+  r:'它是靜態 Markdown，執行成本近乎零，而且是所有門檻數字的出處說明 —— 有它，其他頁的燈號才有得對照。內容品質不在本批射程。'},
+ {q:'21 處 ≥4 欄的 st.columns 怎麼處理？',
+  a:'<b>一律降到 3 欄以內</b>；格子超過 3 個就換行排第二排，不是加欄。欄數天然不足 3 的（兩欄對比）保持兩欄。',
+  r:'Streamlit 的 columns 不會自動換行，只會把每欄擠窄，窄螢幕上 6 欄的 MA 設定會變成六條看不清的字。「3 欄自適應」要的是<b>上限</b>與<b>換行</b>，不是強迫每個區塊都切三塊 —— 硬湊三欄跟擠六欄一樣是排版失敗。'},
+ {q:'st.form 要包到什麼程度？',
+  a:'<b>每頁的控制項各包一個 form</b>（今天／選股／單檔／持股／進階診斷共 5 個），<b>展示區不包</b>。',
+  r:'form 的價值是「N 個 widget 只送一次」，所以邊界應該畫在<b>一組會一起調整的參數</b>上。最大受益是單檔診斷的 6 個 MA checkbox。反過來，展示區的下鑽、CSV 下載這種單一動作不該進 form —— 那會多一次「還要按送出」的摩擦。目前全站 0 個 form，這是新增，不是改寫。'},
+ {q:'那些看起來沒被掛上分頁的 tabs 檔（chip_radar、pattern_targets_ui、hot_money、yield_screener…）要不要處理？',
+  a:'<b>本批一律不動，也不宣稱它們是孤兒。</b>線框只登記它們的角色：多數是被其他頁內嵌呼叫的 section，不是分頁。',
+  r:'實測 <code>chip_radar</code> 被 tab_stock 內嵌、<code>pattern_targets_ui</code> 被 tab_stock 與組合摘要內嵌、<code>portfolio_status_bar</code> 直接掛在 app.py、<code>grape_ladder</code> 被戰情室呼叫。「還有沒有 caller」這種問題的正確與否取決於我有沒有漏看，<b>不該由畫線框的這一組單方認定</b>，更不該在一份 UI 草案裡順手判死。'},
+ {q:'缺值該怎麼顯示？（獨立查核組交件後新增的第 13 項）',
+  a:'訂立「<b>缺值三律</b>」，新 IA 全頁適用：① 缺值一律走灰態，不得由缺值推導負面結論；② 狀態色用 <code>dict.get(status, 灰)</code> 查表，禁用 <code>X if s==\'Good\' else Y</code> 布林；③ 紅色只留給真故障與真觸警。',
+  r:'獨立查核組抓到、我複驗屬實：個股頁「💰 獲利能力診斷」5 張卡全用布林判定，欄位取不到就落 else，畫面給出<b>紅底 ＋ N/A ＋「辛苦生意」／「本業虧損❌」</b>。這正好踩到客戶明示的「不接受假資料、不接受會影響判斷的缺資料」—— 而且它比假資料更難察覺，因為它<b>看起來像一個判斷</b>。<br><b>之所以能訂成規則而不是個案</b>：同一個檔案往下 80 行的「負債佔資產比率」卡<b>已經做對了</b>（查表 ＋ 灰色預設 ＋「⚪ 資料缺漏」）。本 repo 同時有錯的與對的寫法，規則只是把對的那個變成唯一寫法。<br>⚠️ <b>本批只訂規則、只畫樣板，不改任何 .py。</b>'}
+];
+
+let cur = 0, state = 'grey';
+
+const rail = document.querySelector('.railbar');
+PAGES.forEach((p,i)=>{
+  const b=document.createElement('button');
+  b.textContent=p.tab; b.setAttribute('role','tab');
+  b.setAttribute('aria-selected', i===0?'true':'false');
+  b.addEventListener('click',()=>{cur=i;draw();});
+  rail.appendChild(b);
+});
+document.querySelectorAll('.states button').forEach(b=>{
+  b.addEventListener('click',()=>{state=b.dataset.s;draw();});
+});
+
+function esBox(o, cls){
+  if(typeof o === 'string') return `<div class="blk-body">${o}</div>`;
+  return `<div class="es ${cls}">
+    <div class="row"><span class="tag">現況</span><span class="tx">${o.now}</span></div>
+    <div class="row"><span class="tag">為什麼</span><span class="tx">${o.why}</span></div>
+    <div class="row"><span class="tag">去哪補</span><span class="tx"><b>${o.where}</b></span></div>
+  </div>`;
+}
+
+function draw(){
+  const p = PAGES[cur];
+  rail.querySelectorAll('button').forEach((b,i)=>b.setAttribute('aria-selected', i===cur?'true':'false'));
+  document.querySelectorAll('.states button').forEach(b=>
+    b.setAttribute('aria-pressed', b.dataset.s===state?'true':'false'));
+
+  document.getElementById('pgname').textContent = p.name;
+  document.getElementById('pgjob').textContent = p.job;
+  document.getElementById('pgleaves').innerHTML = p.leaves.map(l=>`<i>${l}</i>`).join('');
+
+  document.getElementById('canvas').innerHTML = p.blocks.map(b=>{
+    let body = '';
+    if(b.cols){
+      const src = state==='grey' ? b.greyCells : state==='err' ? b.errCells : b.cells;
+      body = `<div class="cols" data-c="${b.cols}">` +
+        src.map(c=>`<div class="cell"><b>${c[0]}</b>${c[1]}</div>`).join('') + `</div>`;
+    } else {
+      const src = state==='grey' ? b.grey : state==='err' ? b.err : b.live;
+      body = (state==='grey') ? esBox(src,'grey')
+           : (state==='err') ? esBox(src,'err')
+           : `<div class="blk-body">${src}</div>`;
+    }
+    const laws = (b.laws||[]).map(k=>{
+      const cls = k;
+      return `<span class="law ${cls}">${L[k]}</span>`;
+    }).join('');
+    const note = b.note ? `<div class="blk-body" style="margin-top:10px;padding-top:9px;border-top:1px dashed var(--rule-2);font-size:12.5px">${b.note}</div>` : '';
+    return `<div class="blk">
+      <div class="blk-h"><span class="blk-t">${b.t}</span><span class="blk-n">${b.n}</span></div>
+      ${body}${note}
+      <div class="laws">${laws}</div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('decisions').innerHTML = DECISIONS.map((d,i)=>`
+  <div class="dec">
+    <div class="dec-h"><span class="dec-n">#${i+1}</span><span class="dec-q">${d.q}</span></div>
+    <div class="dec-a"><span class="verdict">決定：</span>${d.a}</div>
+    <div class="dec-r"><b>理由：</b>${d.r}</div>
+  </div>`).join('');
+
+draw();
+</script>
