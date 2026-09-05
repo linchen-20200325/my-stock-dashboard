@@ -414,7 +414,7 @@ Use `st.form_submit_button()` instead to submit the form.</pre>
       <div class="k">16+</div>
       <div class="l">「缺值 → 紅燈 ＋ 負面結論」的判定</div>
       <div class="d"><code>tab_stock.py</code> 8 處 ＋ <code>section_financial_health.py</code> 8 處，
-      同一組卡的兩份複本。<b>v1 寫「5 張」是單檔範圍。</b>另有數檔含同型三元式，<b>未窮舉</b>。</div>
+      同一組卡的兩份複本。<b>v1 寫「5 張」是單檔範圍。</b>換更寬的引號樣式會各多 2 處，但那 2 處逐一讀過是<b>寫對的</b>（三分支 ＋ 灰色預設），已排除。<b>未窮舉</b>。</div>
     </div>
     <div class="stat">
       <div class="k">4</div>
@@ -787,7 +787,7 @@ const PAGES = [
       cells:[['毛利率','58.2% · 🟢 好生意'],['營業利益率','42.1% · 🟢 本業獲利'],['安全邊際','🟢 抗震極強']],
       greyCells:[['毛利率','⚪ 資料缺漏'],['營業利益率','⚪ 資料缺漏'],['安全邊際','⚪ 資料缺漏']],
       errCells:[['毛利率','⚪ 資料缺漏'],['營業利益率','42.1% · 🟢 本業獲利'],['安全邊際','⚪ 資料缺漏']],
-      note:'<b>切到灰態看這一格：缺值是灰的「⚪ 資料缺漏」，不是紅的「辛苦生意」。</b>現行這組卡用 <code>== \'Good\'</code> 布林判定，欄位取不到就落 else → 紅底 ＋ N/A ＋「辛苦生意」，<b>把「沒有資料」講成「這是爛生意」</b>。<br><b>F8 更正</b>：這組卡<b>有兩份複本</b>（<code>tab_stock.py</code> 8 處 ＋ <code>stock_grp_sections/section_financial_health.py</code> 8 處，共 16+），<b>不是 v1 說的單頁 5 張</b>。正確樣板就在同檔 80 行後的負債比卡：<code>{\'Pass\':綠,\'Warning\':黃,\'Fail\':紅,\'N/A\':灰}.get(status, 灰)</code>。'},
+      note:'<b>切到灰態看這一格：缺值是灰的「⚪ 資料缺漏」，不是紅的「辛苦生意」。</b>現行這組卡用 <code>== \'Good\'</code> 布林判定，欄位取不到就落 else → 紅底 ＋ N/A ＋「辛苦生意」，<b>把「沒有資料」講成「這是爛生意」</b>。<br><b>F8 更正</b>：這組卡<b>有兩份複本</b>（<code>tab_stock.py</code> ＋ <code>stock_grp_sections/section_financial_health.py</code>），<b>不是 v1 說的單頁 5 張</b>。本組以單引號樣式 <code>== \'(Good|Yes|Strong|Pass)\'</code> 數到<b>各 8 處、共 16</b>；改用任意引號樣式會變成各 10 處 —— <b>但多出來的那 2 處經逐一判讀是<u>寫對的</u></b>（三分支 ＋ 灰色預設，其中一處正是下面要引用的負債比卡），<b>不是違規</b>。⚠️ <b>換一把更寬的尺，命中不會自動都是違規 —— 得逐一讀。</b>此數<b>未窮舉</b>。正確樣板就在同檔 80 行後的負債比卡：<code>{\'Pass\':綠,\'Warning\':黃,\'Fail\':紅,\'N/A\':灰}.get(status, 灰)</code>。'},
     {t:'葉1-B ETF 分支 · 判決卡 ＋ 明細（F4 補畫）', n:'骨架同 A，內容全換', laws:['g','s','e'], cols:3,
       cells:[['折溢價','+0.12% · 🟢 貼近淨值'],['配息','年化 5.8% · 近 4 季未縮水'],['追蹤／同儕','同類 12 檔中排 3']],
       greyCells:[['折溢價','⬜ 未載入'],['配息','⬜ 未載入'],['追蹤／同儕','⬜ 未載入']],
@@ -913,7 +913,7 @@ const DECISIONS = [
   r:'實測 <code>chip_radar</code> 被 tab_stock 內嵌、<code>pattern_targets_ui</code> 被 tab_stock 與組合摘要內嵌、<code>portfolio_status_bar</code> 直接掛在 app.py、<code>grape_ladder</code> 被戰情室呼叫。「還有沒有 caller」取決於我有沒有漏看，<b>不該由畫線框的這組單方認定</b>，更不該在 UI 草案裡順手判死。<b>（紅隊複驗四個都有 caller，並把這條列為本文做對的地方。）</b>'},
  {q:'缺值該怎麼顯示？', tag:'擴充為四態',
   a:'「<b>缺值三律</b>」全頁適用，並<b>擴充為四態</b>（灰／未接線／已失準／紅）：① 缺值走灰、不得推導負面結論；② 狀態色用 <code>dict.get(status, 灰)</code> 查表，禁用布林；③ 紅只留給真故障；④ <code>unwired</code> 與 <code>degraded</code> 各有自己的樣子。',
-  r:'查核組抓到、本組複驗屬實：個股頁「💰 獲利能力診斷」用布林判定，欄位取不到就落 else → <b>紅底 ＋ N/A ＋「辛苦生意」</b>。這踩到客戶明示的「不接受會影響判斷的缺資料」，而且比假資料更難察覺，因為它<b>看起來像一個判斷</b>。<br><b>⚠️ 兩處更正</b>：(a) <b>範圍</b> —— 不是 v1 說的單頁 5 張，實測 <code>tab_stock.py</code> 8 處 ＋ <code>section_financial_health.py</code> 8 處，<b>16+ 處跨 2 檔，且未窮舉</b>；(b) <b>態數</b> —— F1 追出 <code>DangerSpec</code> 已有 <code>wired</code>／<code>discriminative</code> 兩組旗標、有必填原因欄、有測試守衛，檔內註解自陳「等 production 卡片接上後再收斂（<b>屬畫面變更，§8.4 另案</b>）」—— <b>repo 裡有一個正在等這種線框批次的狀態，三態放不下它。</b>'}
+  r:'查核組抓到、本組複驗屬實：個股頁「💰 獲利能力診斷」用布林判定，欄位取不到就落 else → <b>紅底 ＋ N/A ＋「辛苦生意」</b>。這踩到客戶明示的「不接受會影響判斷的缺資料」，而且比假資料更難察覺，因為它<b>看起來像一個判斷</b>。<br><b>⚠️ 兩處更正</b>：(a) <b>範圍</b> —— 不是 v1 說的單頁 5 張，實測 <code>tab_stock.py</code> 8 處 ＋ <code>section_financial_health.py</code> 8 處，<b>16 處跨 2 檔，未窮舉</b>（更寬的引號樣式各多 2 處，但逐一讀過是寫對的三分支，已排除 —— <b>換寬的尺不等於命中都是違規</b>）；(b) <b>態數</b> —— F1 追出 <code>DangerSpec</code> 已有 <code>wired</code>／<code>discriminative</code> 兩組旗標、有必填原因欄、有測試守衛，檔內註解自陳「等 production 卡片接上後再收斂（<b>屬畫面變更，§8.4 另案</b>）」—— <b>repo 裡有一個正在等這種線框批次的狀態，三態放不下它。</b>'}
 ];
 
 let cur = 0, state = 'grey';
