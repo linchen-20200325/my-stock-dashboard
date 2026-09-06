@@ -118,18 +118,27 @@ def grid(items: Sequence[Any],
 
     多出來的格子**換行排下一列**；天然不足一列的**保持原欄數、不硬湊三欄**
     （線框 §04：硬湊三欄跟擠七欄一樣是排版失敗）。
+
+    ⚠️ **驗證與 yield 刻意分成兩層**（實測抓到的：整支寫成 generator 時，
+    `grid(x, cols=0)` **不會當場炸** —— 例外要等到第一次 `next()` 才丟出來，
+    而呼叫端很可能在那之前就已經照著錯的欄數排好版了）。
+    參數檢查跑在**呼叫的當下**，逐列 yield 留給內層的 `_rows()`。
     """
     if isinstance(cols, bool) or not isinstance(cols, int) or cols < 1:
-        raise ValueError(f"grid(cols=) 必須是 ≥1 的整數，收到 {cols!r}")
+        raise ValueError(f"grid(cols=) 必須是 >=1 的整數，收到 {cols!r}")
     _n = min(cols, MAX_COLS)
     if cols > MAX_COLS:
         # §1 不靜默：夾住是對的，但**不能讓呼叫端以為它拿到了 7 欄**。
         print(f"[views/_ui_kit.grid] ⚠️ 要求 {cols} 欄，超過全站上限 "
               f"MAX_COLS={MAX_COLS} → 已夾到 {_n} 欄並換行排列。"
               "欄數上限是視覺規格，不是呼叫端可以覆寫的東西。")
-    for _i in range(0, len(items), _n):
-        _chunk = items[_i:_i + _n]
-        yield _chunk, st.columns(len(_chunk))
+
+    def _rows() -> Iterator[tuple[Sequence[Any], list]]:
+        for _i in range(0, len(items), _n):
+            _chunk = items[_i:_i + _n]
+            yield _chunk, st.columns(len(_chunk))
+
+    return _rows()
 
 
 # ══════════════════════════════════════════════════════════════════
