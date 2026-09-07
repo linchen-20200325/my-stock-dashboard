@@ -762,8 +762,8 @@ class AllocationReadout:
     最後那一項是**同一頁的自我矛盾**，不是別人家的事：④ 與 ⑤ 同時印兩個持股
     區間、口徑不同，使用者不會知道。故 ④ 那格必須自己標明「未套天花板」。
     守衛：`tests/test_p04_hold_allocation_ssot_claim.py`（同時**反向**驗這四支
-    現在真的還在；哪天被收斂掉，測試轉紅提醒改文案 —— 假的「未納管清單」
-    跟假的「全站唯一」一樣糟）。
+    現在真的還在；哪天被收斂掉，測試轉紅提醒改文案 —— 一份假的「未納管清單」
+    跟一句沒查證的全稱宣稱一樣糟）。
 
     ⚠️ **本頁一個百分比都不寫死。** `range_text` / `posture` 全部由 L3 的
     `AllocationDecision` 供給（`tests/test_no_hardcoded_position_pct.py`
