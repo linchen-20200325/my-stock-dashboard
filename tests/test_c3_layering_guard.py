@@ -279,12 +279,27 @@ def _toplevel_names(module: str) -> list[str]:
 def _barrel_exports(pkg: str) -> dict[str, str]:
     """package 的「符號 → 定義它的 submodule」映射。
 
-    處理本專案實際存在的三種 barrel 寫法:
+    處理本專案實際存在的四種 barrel 寫法:
       (a) PEP 562:`from . import a, b` + `_SUBMODULES = (a, b)` + `__getattr__`
           → a、b 的 top-level 名字全部轉發,依 `_SUBMODULES` 順序 first-match-wins
             (與 runtime `for sub in _SUBMODULES: if name in vars(sub)` 一致)
       (b) 顯式 re-export:`from .sub import x`
       (c) star:`from .sub import *`
+      (d) PEP 562 **延遲載入**:`_SUBMODULE_NAMES = ("a", "b")`(字串 tuple)
+          + `__getattr__` 內用 `importlib.import_module` 按需載入
+          → 同樣依宣告順序 first-match-wins,與 (a) 的 runtime 語意一致,
+            差別只在「沒被問到的 submodule 不會被 import」。
+
+    ⚠️ **(d) 是 2026-09-07 補的,補之前這裡是一個靜默假綠燈**(實測,非推論):
+       `src/ui/tabs/__init__.py` 改成 (d) 形狀後,本函式**兩種形狀都不符**
+       → 回傳 `{}` → `src.ui.tabs` 的 barrel 展開完全失效,規則 2 掃不到任何
+       經該 barrel 轉發的符號,而**沒有任何測試會因此轉紅**
+       (`test_rule2_barrel_forwarding_is_expanded` 當時只驗 `src.data.proxy`)。
+       實測落差:eager 版展開 **397** 個符號,改形狀後 **0** 個。
+       本檔開頭「守衛綠燈不等於合規」講的就是這種事 —— 故同時把該測試
+       擴到也驗 `src.ui.tabs`,下次再有人改形狀會**立刻**紅燈而不是靜默失效。
+       (本次**不是**新增 `_WHITELIST` 例外,是修解析器,故檔頭那條
+        「新增例外必須同時做三件事」不適用。)
     """
     f = _module_file(pkg)
     if f is None or f.name != "__init__.py":
@@ -308,6 +323,15 @@ def _barrel_exports(pkg: str) -> dict[str, str]:
                         and isinstance(node.value, (ast.Tuple, ast.List))):
                     declared_order = [e.id for e in node.value.elts
                                       if isinstance(e, ast.Name)]
+                # (d) lazy barrel:`_SUBMODULE_NAMES = ("a", "b")` 是**字串** tuple
+                # (submodule 沒有被 `from . import` 進來,所以只能是字面字串)。
+                # `_SUBMODULES` 若同時存在則以它優先 — 既有兩種形狀的處理不動。
+                elif (isinstance(tgt, ast.Name) and tgt.id == "_SUBMODULE_NAMES"
+                        and isinstance(node.value, (ast.Tuple, ast.List))
+                        and declared_order is None):
+                    declared_order = [e.value for e in node.value.elts
+                                      if isinstance(e, ast.Constant)
+                                      and isinstance(e.value, str)]
         elif isinstance(node, ast.ImportFrom) and node.level == 1:
             if node.module is None:
                 # `from . import a, b` — submodule 本身也是 package 的公開名字
@@ -325,6 +349,15 @@ def _barrel_exports(pkg: str) -> dict[str, str]:
 
     if has_getattr:
         order = declared_order or plain_submods
+        # (d) lazy barrel 沒有 `from . import a, b`,所以上面那個分支不會把
+        # **submodule 名字本身**登記成 export。但 runtime 是登記得到的
+        # (lazy `__getattr__` 先判「name 是不是子模組」才進符號迴圈),
+        # 不補這一段,`from src.ui.tabs import tab_macro` 在 AST 端會解析不到,
+        # 與 eager 版產生 15 個符號的落差(實測 eager 397 / 未補 382)。
+        # 順序語意同 eager:submodule 名字優先於被轉發的符號。
+        if declared_order is not None and not plain_submods:
+            for sub_name in order:
+                exports.setdefault(sub_name, f"{pkg}.{sub_name}")
         for sub_name in order:
             sub = f"{pkg}.{sub_name}"
             for n in _toplevel_names(sub):
@@ -920,6 +953,34 @@ def test_rule2_barrel_forwarding_is_expanded():
     fake = ImportRecord("src/compute/x.py", 1, "from src.data.proxy import fetch_url",
                         "src.data.proxy", ("fetch_url",), None)
     assert _touches_banned_module(fake) == "proxy_helper"
+
+
+def test_rule2_lazy_barrel_forwarding_is_expanded():
+    """守衛的守衛(第二種形狀)—— 2026-09-07 新增,因為它**真的靜默失效過**。
+
+    `src/ui/tabs/__init__.py` 於 2026-09-07 從 eager(`from . import a, b` +
+    `_SUBMODULES`)改成延遲載入(`_SUBMODULE_NAMES` 字串 tuple + `importlib`),
+    當時 `_barrel_exports` 兩種形狀都不認 → 該 barrel 展開由 **397 個符號變成 0 個**,
+    規則 2 對經它轉發的符號全面失效,而**全套測試依然全綠**
+    (上面那條 `test_rule2_barrel_forwarding_is_expanded` 只驗 `src.data.proxy`,
+    看不到隔壁 barrel 換了形狀)。
+
+    本條把 (d) 形狀也釘住:任何人日後再改 `src/ui/tabs/__init__.py` 的形狀,
+    這裡會**立刻**紅燈,而不是靜默變成假綠燈。
+    """
+    exports = _barrel_exports("src.ui.tabs")
+    assert exports, (
+        "src.ui.tabs barrel 展開結果為空 — _barrel_exports 不認得它現在的寫法。"
+        "規則 2 會對所有經此 barrel 轉發的符號靜默失效(假綠燈)。")
+    # 抽一個確實由子模組定義、且經 barrel 轉發的符號當錨點
+    assert exports.get("render_tab_macro") == "src.ui.tabs.tab_macro", (
+        "render_tab_macro 應解析到 tab_macro,"
+        f"實際得到 {exports.get('render_tab_macro')!r}。barrel 展開邏輯需要修。")
+    # first-match-wins 的順序語意要和 runtime 一致(lazy 版依 _SUBMODULE_NAMES 順序)
+    import src.ui.tabs as _t
+    assert getattr(_t, "render_tab_macro").__module__ == exports["render_tab_macro"], (
+        "AST 解析出的定義位置與 runtime 實際解析結果不一致 —— "
+        "兩者一旦分岔,守衛就是在驗一個不存在的世界")
 
 
 # ════════════════════════════════════════════════════════════════════

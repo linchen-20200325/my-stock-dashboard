@@ -129,22 +129,33 @@ render path 上**沒有 idle 態**，冷啟動會顯示「叫了沒回」而不�
 `compute_five_bucket_summary` 拋例外時，`故障 15` 與 `repr(e)` 會上畫面 20 處。
 
 ⛔ **它擋不住 module-level 的 import 失敗，那會是整頁空白。**
-本檔 module level 就 `from src.ui.tabs.tab_today import ...`，而
-`src/ui/tabs/__init__.py` 是一個 **eager barrel**（檔頭自陳「即時轉發，
+本檔 module level 就 `from src.ui.tabs.tab_today import ...`，會連帶執行
+`src/ui/tabs/__init__.py`。那條 import chain 上的模組**若在 import 階段就壞掉**，
+`import page_today` 自己會先 `ImportError`，`render_page_today()` 根本不會被
+呼叫到，畫面上**一個 markdown 都不會有**。
+
+~~`src/ui/tabs/__init__.py` 是一個 **eager barrel**（檔頭自陳「即時轉發，
 不是延遲載入」），一路把 152 個 `src.*` 模組 ＋ pandas ＋ plotly 全拉進來
 （實測值，量測日 2026-09-07）—— 其中就包含
-`src.services.section_inputs` 與 `src.compute.macro.macro_helpers`。
-所以那兩個模組**若在 import 階段就壞掉**，`import page_today` 自己會先
-`ImportError`，`render_page_today()` 根本不會被呼叫到，畫面上
-**一個 markdown 都不會有**（紅隊實測 `n_markdown=0`）。
+`src.services.section_inputs` 與 `src.compute.macro.macro_helpers`。~~
+~~**為什麼不改成 lazy 而是把宣稱改誠實**（§-2）：真正的根因是那個 eager
+barrel，而它在 `src/ui/tabs/`，**不在本批的檔案邊界內**。~~
 
-**為什麼不改成 lazy 而是把宣稱改誠實**（§-2：沒查證的宣稱比沒有宣稱更危險）：
-真正的根因是那個 eager barrel，而它在 `src/ui/tabs/`，**不在本批的檔案邊界內**。
-在邊界內能做的只有「把 `tab_today` 的每一個符號都推進函式體」——
-但第一次呼叫時 barrel 照樣會被執行，失敗只是**換個時間點**發生，
-而且 module-level 的契約自檢（`_assert_applied_key_matches_reader()`，
-一道刻意的 fail loud）會被迫拿掉或延後，**淨值是負的**。
-故此處只把宣稱改成可驗證的版本，不假裝擋得住。
+⚠️ **2026-09-07 更新（同日稍晚，FE-7）：上面兩段刪除線是事實更正，不是漏刪。**
+**決策者:AI 總管。** 那個 barrel **已經改成延遲載入了**，所以「拉進 152 個模組」
+與「不在檔案邊界內」兩個前提都已不成立：
+  · 實測 `import src.ui.views.page_today` 的 `src.*` 由 **152 → 6**
+    （`src.ui` / `src.ui.tabs` / `src.ui.tabs.tab_today` / `src.ui.views` /
+     `src.ui.views._ui_kit` / 本檔），`section_inputs` 與 `macro_helpers`
+    **不再**出現在本檔的 import chain 上。
+  · 紅隊實測（讓 `macro_helpers` 在 import 期拋 `ImportError`）：
+    改前 `n_markdown=0`＋未捕捉例外；改後 `n_markdown=79`、例外為 `None`，
+    錯誤轉成畫面上的紅態並進 stderr。
+
+⚠️ **但上面那條 ⛔ 仍然完全有效，不要讀成「現在擋得住了」**：
+本檔 module level 真正需要的模組（`tab_today` / `_ui_kit` / `shared.*`）
+**若壞掉，整頁一樣空白**。延遲載入消掉的是**不相干模組的連坐**，
+**不是**本檔自己的必要相依。故障半徑縮小，不等於故障消失。
 
 ═══ 分層（CLAUDE.md §8.2）═════════════════════════════════════════════
 L5。取數走 L3（`section_inputs` / `allocation_service`），計算走 L2
@@ -542,13 +553,21 @@ def load_macro_readout(session: Mapping[str, Any]) -> MacroReadout:
           `compute_five_bucket_summary` 自己炸了）→ 進 `except`，
           `repr(e)` 原樣帶回 → 全部格子轉**紅態**並把訊息印在畫面上。
           **不是 `except: pass`** —— 例外被轉成一個看得見的狀態，不是被吞掉。
-          ⛔ **擋不住的是 module-level 的 import 失敗**：本檔 module level
+          ~~⛔ **擋不住的是 module-level 的 import 失敗**：本檔 module level
           經 `tab_today` → `src/ui/tabs/__init__.py`（eager barrel）就已經把
           這兩個模組拉進來了，它們若在 import 階段壞掉，`page_today` 自己
           會先 `ImportError`，**整頁空白**（實測 `n_markdown=0`）。
           下面這個 `try` 只是**同一個模組的第二次 import**（已在
-          `sys.modules` 裡），因此它**只保護呼叫期**。完整說明見檔頭
-          「這個檔擋得住什麼、擋不住什麼」。
+          `sys.modules` 裡），因此它**只保護呼叫期**。~~
+          ⚠️ **2026-09-07 事實更正（FE-7），不是漏刪；決策者:AI 總管。**
+          `src/ui/tabs/__init__.py` 已改為**延遲載入**，這兩個模組
+          **不再**被本檔的 module-level import chain 拉進來
+          （實測 `src.*` 由 152 → 6）。因此下面這個 `try` **是它們的第一次
+          import**，import 期的失敗現在**真的會被這裡接住**並轉成紅態
+          （紅隊實測：改前 `n_markdown=0`＋未捕捉例外，改後 `n_markdown=79`）。
+          ⚠️ 但本函式仍**只保護這兩個模組** —— 本檔 module level 真正
+          相依的 `tab_today` / `_ui_kit` / `shared.*` 若壞掉，整頁一樣空白。
+          完整說明見檔頭「這個檔擋得住什麼、擋不住什麼」。
       (c) **某指標回空 DataFrame / None**：側車自己會記成
           `state="missing"` + `reason`，逐格轉灰或升紅，**不影響其他格**。
     """
