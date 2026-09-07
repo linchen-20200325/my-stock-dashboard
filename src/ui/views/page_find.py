@@ -23,8 +23,16 @@
   （它的 docstring 明寫「`None` = 沒掃 / 掃失敗 → 不產生片語」，正是 §1 要的
   「掃失敗不假報 0」）。本檔不自己數 tier。
 
-**本檔沒有 production caller**（`app.py` 本批不接線；且 FE-7 同時在改該檔，
-本批一個字都沒有碰 `app.py` 與 `src/ui/tabs/__init__.py`）。舊分頁不動、不下架。
+~~**本檔沒有 production caller**（`app.py` 本批不接線；且 FE-7 同時在改該檔，
+本批一個字都沒有碰 `app.py` 與 `src/ui/tabs/__init__.py`）。~~舊分頁不動、不下架。
+
+⚠️ **2026-09-07 FE-32 事實更正 —— 上面那句已經不成立，不是漏刪。**
+`app.py` 現在**確實掛著本頁**（`with tab_find: render_page_find`，
+`_render_tab_isolated` 包著）。那句話是本檔剛落地那一批寫的，當時為真；
+之後接線的批次沒有回頭改它。**留著它很危險**：它會讓下一個人以為
+「本頁改壞了也不影響線上」，而事實是**本頁每一次 app run 都會被執行**
+（Streamlit 全 tab body 都跑）—— 本批那一整段「不准重用舊 widget key」
+的理由，前提正是**本頁是活的**。舊分頁仍然不動、不下架（雙軌並存）。
 
 ═══ 四大鐵律的落點 ═══════════════════════════════════════════════════
 1. **3 欄上限** —— 一律 `_ui_kit.grid()`（內部硬夾 `MAX_COLS`）。
@@ -93,6 +101,9 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
     空頭濾網   L3 `services.allocation_service.get_macro_regime`
     板塊資金   L3 `services.sector_flow_service.get_sector_flow_view`
                  → L4 `ui.render.sector_flow_render.build_sector_flow_figure`（純繪圖）
+    產業熱力圖 L3 `services.sector_heatmap_service.get_sector_heatmap_view`（本批新增）
+                 → L4 `ui.render.sector_heatmap_render.build_sector_treemap`（純繪圖）
+                 類股宇宙與口徑常數走 L0 `shared.sector_heatmap`
 
 **零 L1 import、零 `requests` / `yfinance` / FinMind、零 `pd.read_csv(url)`、
 零 SQL / parquet 讀寫、零 `@st.cache_data` / `@st.cache_resource`、
@@ -102,9 +113,9 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
 ⚠️ 本頁**受 `tests/test_c3_layering_guard.py` 管**（`_PATH_LAYERS` 已含
 `src/ui/views/` → L5），違反 R4／R5 是 CI 紅燈，不是假綠燈。
 
-═══ 本批**沒有接上**的一項（誠實揭露，不是漏寫）═══════════════════════
-1. ⛔ **產業熱力圖** —— 線框葉2 的左半。
-   **卡在哪**：唯一的 public 入口是 L4 `ui.render.etf_render.render_sector_heatmap()`，
+═══ 產業熱力圖：**2026-09-07 已接上**（前一批標 unwired，以下是舊登記）═══
+~~1. ⛔ **產業熱力圖** —— 線框葉2 的左半。~~
+   ~~**卡在哪**：唯一的 public 入口是 L4 `ui.render.etf_render.render_sector_heatmap()`，
    而它**自帶 5 個寫死的 widget key**（`heatmap_market` / `heatmap_period` /
    `heatmap_refresh` / `heatmap_load` / `heatmap_loaded`）與**自己那顆 gate 按鈕**。
    在本頁再呼叫一次 → 與既有 🏦 ETF 分頁**撞 `DuplicateWidgetID`**，
@@ -113,7 +124,52 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
    類股代表清單（`_US_SECTORS` / `_TW_SECTORS`）與 treemap 組裝
    （`_build_treemap_data`）**都是 L4 的私有符號**，跨檔直取正是
    V-PICKER-PRIV-1 的前車之鑑；自己抄一份類股表則是第二個 SSOT（§2.1）。
-   → **本頁標 `unwired`，並在卡上寫明要補在哪**（見 `HEATMAP_WHERE`）。
+   → **本頁標 `unwired`，並在卡上寫明要補在哪**。~~
+
+⚠️ **上面整段加刪除線保留、不刪**（repo 慣例：有意識的政策/狀態變更要留得下
+病史）。**它當時的診斷是對的**，本批補的正是它指名要補的三件事；
+但其中**有一句是錯的，一併更正**：
+
+  ❌ **舊文寫「與既有 🏦 ETF 分頁撞」—— 分頁指錯了。**
+     `render_sector_heatmap()` **不掛在 🏦 ETF 分頁**，它掛在 **🌍 市場環境**
+     群組的 `st.tabs(['🌍 總經','🚦 總經 v2','🗺️ 產業熱力圖','🌊 板塊資金潮汐'])`
+     第 3 格（`app.py` 的市場環境區塊）。ETF 分頁那邊只有
+     `src/ui/etf/etf_dashboard.py` 的 `# noqa: F401` re-export shim
+     （`app.py` 解析 `render_sector_heatmap` 的路徑），**它不畫熱力圖**。
+     指錯分頁會讓下一個人跑去 ETF 分頁找那顆按鈕、找不到，然後以為這段是舊的。
+
+✅ **本批怎麼接的**（三件事各有落點，一件都不是繞道）：
+  1. **類股宇宙上移 L0** —— `shared/sector_heatmap.py` 新增 `US_SECTORS` /
+     `TW_SECTORS` / 兩個 `*_SINGLE_STOCK_PROXY` 與 `sector_universe()` /
+     `flatten_tickers()` / `coverage_counts()`；`etf_render` 端改為
+     `_US_SECTORS = US_SECTORS` 這種**別名轉發**（舊分頁讀到的是同一個物件）。
+  2. **treemap 組裝抽成 public L4** —— `ui.render.sector_heatmap_render.`
+     `build_sector_treemap()`（`_build_treemap_data` 的本體，邏輯一行未改）。
+     它 `return go.Figure`，**留在 L4**；下沉 L2 是 V-LEAD-RENDER-1 的反方向，
+     而且 c3 guard 的 `_BANNED_IN_L2` 不含 plotly → 下沉了 CI 也抓不到。
+  3. **取數走新的 L3** —— `services.sector_heatmap_service.get_sector_heatmap_view()`
+     （內部呼叫**既有** L3 `etf_sector_service.get_sector_returns`）。
+     本頁**沒有**、也不需要新增 `EX-PASSTHRU-1` 白名單條目。
+
+⛔ **本頁一個舊 widget key 都沒有重用**（`heatmap_market` / `heatmap_period` /
+`heatmap_refresh` / `heatmap_load` / `heatmap_loaded` 五個）。**為什麼這條是硬的**：
+Streamlit 每次 app run 會跑**全部** tab body，而本頁的渲染順序在
+🌍 市場環境的熱力圖**之前**。共用 `heatmap_loaded` 的話 ——
+  · 使用者在舊分頁按過載入 → **本頁會在從未被造訪的情況下發出整批冷抓**
+    （本頁台股 42 檔、舊分頁預設美股 66 檔；量測日 2026-09-07，數字會隨
+    L0 類股表增刪而變，需要時請現場量 `flatten_tickers()`，不要引用本行）；
+  · 反過來，本頁按了載入 → 舊分頁的 opt-in 效能保證當場失效
+    （`tests/test_etf_render_heatmap_gate.py` 守的就是那件事）。
+共用 **widget** key 更會讓**先執行的那一邊**佔住 ID、**另一邊**拋
+`DuplicateWidgetID` —— 也就是會**弄壞舊分頁**。
+守衛：`tests/test_p02_find_view.py::TestHeatmapKeysNeverCollideWithTheOldTab`。
+
+⚠️ **本頁的熱力圖沒有市場／區間選擇器**（誠實揭露，不是漏做）：
+線框葉2 的 live 原文只有**一顆**「🗺️ 載入板塊地圖」按鈕 ＋ 左右兩張圖，
+**沒有畫任何下拉**。加兩個 selectbox ＝ 版面元件增減，依 `CLAUDE.md §-1.5`
+v3 §03-2 ① 屬「要先出線框給客戶拍板」的那一類，**不是**內部自決 ——
+故本頁固定畫 `HEATMAP_IS_US` / `HEATMAP_PERIOD_LABEL` 這一組，並在卡上寫明
+「要切換市場或區間請到 🌍 市場環境 › 🗺️ 產業熱力圖」（兩邊仍並存）。
 
 ═══ 本批**新接上**的一項：估值（本益比）因子與「名稱」欄 ═══════════════
 ✅ **已接線**（2026-09-07 FE-18）。前一批標它 `unwired`，理由是
@@ -206,7 +262,13 @@ from shared.fundamental_prescreen_thresholds import (
 # **不手抄數字**（§3.3；線框葉2 ④ 的 live 文案就是這三個數字組出來的）。
 from shared.station_specs import (
     MISS_CONTRACT_DRIFT,
+    MISS_FETCH_FAILED,
     MISS_TEXT,
+)
+# L0 SSOT：熱力圖的區間標籤與「台股是單一代表股不是類股平均」那段揭露。
+# **本頁不手抄任何一個** —— 區間標籤打錯字時要當場 ValueError，不是靜默畫錯圖。
+from shared.sector_heatmap import (
+    SECTOR_PERIOD_LABELS,
 )
 from shared.sector_flow_thresholds import (
     WINDOW_SIZE,
@@ -260,6 +322,39 @@ SS_MAP_REQUESTED: str = "_p02_map_requested"
 
 #: 板塊地圖按鈕的 widget key。
 SS_MAP_BUTTON: str = "p02v_load_sector_map"
+
+# ══════════════════════════════════════════════════════════════════
+# 產業熱力圖：固定的市場與區間（線框沒有畫下拉，見檔頭「沒有選擇器」那段）
+# ══════════════════════════════════════════════════════════════════
+#: 本頁熱力圖畫哪個市場。**台股**，理由是這一葉的另一半是「三大法人資金流向」
+#: —— 三大法人是 **TWSE** 的東西；同一葉左邊放美股 GICS、右邊放台股法人，
+#: 使用者會把兩張圖讀成同一個市場的故事，那是版面造成的誤導。
+#: ⚠️ 這是**視覺／業務取捨**，不是技術細節：線框沒指定要哪個市場，
+#: 由本批依「同一葉不混市場」判定。**與既有 🌍 市場環境 › 🗺️ 產業熱力圖
+#: 的預設（美股）不同** —— 那邊仍可切換，兩邊並存期間不互相覆蓋。
+HEATMAP_IS_US: bool = False
+
+#: 本頁熱力圖的區間。取 L0 標籤表的**第一個**（`'1日'`），與既有分頁的
+#: `index=0` 同一個值 —— **不手抄字串**，改表時本頁跟著動。
+HEATMAP_PERIOD_LABEL: str = SECTOR_PERIOD_LABELS[0]
+
+#: **還沒載入時**要先告訴使用者「等一下會畫哪個市場」的顯示名。
+#: ⚠️ 為什麼不直接讀 L3 的 `MARKET_LABEL_TW`：那會變成一個 module-level 的
+#: L3 import，本頁對 L3 一律是**函式體內的 late import**（檔頭「擋得住什麼」
+#: 那段的前提就是這個）。代價是這個字串在本頁有一份、L3 有一份 ——
+#: 兩者**必須一致**，由 `tests/test_p02_find_view.py::
+#: TestHeatmapIsWiredAndTellsTheTruth::test_the_idle_market_label_matches_l3`
+#: 釘住（不一致就紅燈，不靠自律）。
+HEATMAP_MARKET_LABEL_IDLE: str = "台股類股"
+
+#: 既有 🌍 市場環境 ›「🗺️ 產業熱力圖」那支 `render_sector_heatmap()` 寫死的
+#: 五個 key。**本頁一個都不准用**（理由見檔頭；守衛在
+#: `tests/test_p02_find_view.py::TestHeatmapKeysNeverCollideWithTheOldTab`）。
+#: ⚠️ 放在這裡是**為了讓守衛有一份可比對的名單**，本頁的程式碼一行都不會讀它。
+LEGACY_HEATMAP_KEYS: tuple[str, ...] = (
+    "heatmap_market", "heatmap_period", "heatmap_refresh",
+    "heatmap_load", "heatmap_loaded",
+)
 
 # ── 上游（既有分頁）寫進 session 的 UI 狀態 key ─────────────────────
 #: ETF 組合按「計算組合」後寫入的持股列。
@@ -344,15 +439,50 @@ SRC_SURVIVORS: str = (
 SRC_SECTOR_FLOW: str = "L3 板塊資金（`services.sector_flow_service.get_sector_flow_view`）"
 SRC_RENDER: str = "本頁的渲染層（`views/_ui_kit.render_card`）"
 
-#: 熱力圖未接線的「去哪補」。**沒有使用者可執行的出口** ——
-#: 線框葉2 的 unwired 原文就是這句：「這是待接線項，不是你操作的問題」。
-HEATMAP_WHERE: str = (
-    f"{NO_EXIT_MARKER} —— 這是待接線項，不是你操作的問題；"
-    f"{press(ACTION_LOAD_MAP_LABEL)}也不會改變它。"
-    "要接上需先讓 L4 `ui/render/etf_render.render_sector_heatmap()` 能被外部"
-    "重複掛載（widget key 加前綴參數、載入 gate 由 caller 提供），"
-    "或把類股代表清單上移到 L0 並讓 treemap 組裝成為 public"
+#: 熱力圖的**出處**（`_error_why()` 用）。本批新增的那一支 L3。
+SRC_HEATMAP: str = "L3 產業熱力圖（`services.sector_heatmap_service.get_sector_heatmap_view`）"
+
+#: 熱力圖 idle 態（線框葉2 grey 的**熱力圖那半句**逐字：
+#: 「熱力圖要批次抓數十檔類股代表」）。與泡泡圖的 idle 理由**分開寫** ——
+#: 兩張圖沒有載入的原因根本不同（一個要批次冷抓、一個只是讀盤後快照），
+#: 合成一句會讓使用者以為按下去的代價是一樣的。
+HEATMAP_IDLE_NOW: str = "**板塊資料尚未載入**"
+HEATMAP_IDLE_WHY: str = (
+    "熱力圖要**批次抓數十檔**類股代表與子成分的日線收盤（首次較久，"
+    "之後 30 分鐘內走快取）；在你按下去之前，本頁**一次取數都不會發**"
 )
+HEATMAP_IDLE_WHERE: str = press(ACTION_LOAD_MAP_LABEL)
+
+#: 批次抓取**全數失敗** → 紅態（線框葉2 `err` 原文：
+#: 「🔴 熱力圖無法取得任何類股資料 / 批次抓取全數失敗」）。
+#: ⚠️ **這一種刻意是紅的，不是灰的**：使用者已經按過按鈕、上游一檔都沒回來
+#: ＝ 真故障，不是「還沒載入」。把它畫成灰的會讓真正的斷線被讀成「我還沒按」。
+HEATMAP_FAILED_NOW: str = "**熱力圖無法取得任何類股資料**"
+HEATMAP_FAILED_WHY: str = (
+    "批次抓取全數失敗 —— 送出去的每一檔都沒有回來（yfinance 批次下載回空，"
+    "或整批被限速／擋掉）。**畫面上不會出現任何一格**，"
+    "本頁也**不會**拿 0% 把格子填滿冒充「全部持平」"
+)
+HEATMAP_FAILED_WHERE: str = (
+    "先確認網路／NAS proxy；細節在"
+    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}。"
+    f"稍後重新{press(ACTION_LOAD_MAP_LABEL)}可再試一次"
+)
+
+#: 部分覆蓋 → degraded（橘）。缺的格子在圖上**留白**，不填 0。
+HEATMAP_DEGRADED_NOW: str = "**有幾格沒有資料，圖照畫但缺格是留白的**"
+HEATMAP_DEGRADED_WHERE: str = (
+    "常見原因是 yfinance 限速、該市場休市、標的停牌或已下市、"
+    f"或上市未滿回看天數；稍後重新{press(ACTION_LOAD_MAP_LABEL)}多半會補齊。"
+    "**缺格不會被填 0**，所以你看到的顏色都是真的有抓到的"
+)
+
+#: 「要換市場／區間去哪裡」——本頁沒有下拉（線框沒畫），據實指路。
+#: ⚠️ 分頁名是 **🌍 市場環境 › 🗺️ 產業熱力圖**，不是 🏦 ETF 分頁
+#: （舊登記把它寫成 ETF 分頁，那是錯的，見檔頭更正）。
+HEATMAP_SWITCH_HINT: str = (
+    "本頁固定畫這一組；要切換市場或區間，"
+    "到 🌍 市場環境 ›「🗺️ 產業熱力圖」（兩邊並存期間各自獨立，互不影響）")
 
 #: 估值取數的**出處**（`_error_why()` 用）。本批新增的那一支 L3。
 SRC_PE: str = "L3 估值輸入（`services.valuation_service.get_pe_name_maps`）"
@@ -892,6 +1022,97 @@ def load_sector_flow(session: Mapping[str, Any], *,
     )
 
 
+@dataclass(frozen=True)
+class HeatmapReadout:
+    """L3 `get_sector_heatmap_view()` 的回傳，攤成本頁要用的欄位。
+
+    Attributes:
+        requested: 由「🗺️ 載入板塊地圖」那顆按鈕的 gate 旗標帶下來
+            （**與泡泡圖同一顆**，線框 N6：舊分頁那顆 gate 被本頁這顆吸收）。
+            **不是**從 `returns` 反推 —— 那分不出「還沒按」與「按了全數失敗」。
+        figure: L4 組好的 treemap（`go.Figure`）。`None` = 這一輪沒有圖可畫。
+        sectors_n / fetched_n: 母層類股共幾個 / 這一輪抓到幾個。
+        sub_fetched_n / sub_total_n: 子成分同上。
+        complete: 母層＋子成分**全部**抓到。缺一個就是 False。
+        any_data: 這一輪**有沒有抓到任何一檔**。
+            ⚠️ `False` 是**紅態**（線框葉2 `err`），不是灰的 empty ——
+            使用者已經按過、上游一檔都沒回來，那是真故障。
+        market_label / period_label / n_bars: 口徑揭露用（畫面要講清楚
+            「1日」是 1 個**交易日**，不是 1 個日曆日）。
+        single_stock_proxy / disclosure: 台股側「每個類股其實是一檔代表股」
+            的揭露開關與原文（L0 SSOT，本頁**原樣印出、不改寫**）。
+        error: 取數或組圖拋出的例外 `repr(e)`；空字串 = 沒有錯誤。
+    """
+
+    requested: bool
+    figure: Any = None
+    sectors_n: int = 0
+    fetched_n: int = 0
+    sub_fetched_n: int = 0
+    sub_total_n: int = 0
+    complete: bool = False
+    any_data: bool = False
+    market_label: str = ""
+    period_label: str = ""
+    n_bars: int = 0
+    single_stock_proxy: bool = False
+    disclosure: str = ""
+    error: str = ""
+
+
+def load_heatmap(*, requested: bool) -> HeatmapReadout:
+    """L3 產業熱力圖 view → 本頁要用的欄位。**未請求 → 一行 L3 都不呼叫。**
+
+    邊界（四種，各自一態）：
+      (a) **未按載入鈕** → `requested=False`（idle。**整批冷抓不會發**）。
+      (b) **L3 / L4 拋例外**（含 late import 失敗、區間標籤打錯）→ `repr(e)` → 紅態。
+      (c) **一檔都沒抓到** → `any_data=False` → **紅態**（線框葉2 `err` 原文）。
+          ⚠️ 這一種**不是** `empty`：泡泡圖的 `ok=False` 是「盤後任務還沒產生
+          快取」（沒有人壞掉，灰），而這裡是「送出去了、一檔都沒回來」（真故障）。
+          **兩者長得像、語意相反，不可以共用一態。**
+      (d) **只抓到一部分** → `degraded`（橘）。圖照畫，缺格留白，**不填 0**。
+
+    ⚠️ **組圖也包在同一個 `try` 裡**：treemap 組裝若炸掉（例如上游回了奇形怪狀
+    的 dict），裸寫會讓整張葉子從這一行以下全部消失（半截死頁），
+    而使用者連一句解釋都看不到。轉成一張紅卡，泡泡圖那半照畫。
+    """
+    if not requested:
+        return HeatmapReadout(requested=False)
+    try:
+        from src.services.sector_heatmap_service import get_sector_heatmap_view
+        _view = get_sector_heatmap_view(HEATMAP_IS_US, HEATMAP_PERIOD_LABEL)
+        _view = _view if isinstance(_view, Mapping) else {}
+        _returns = dict(_view.get("returns") or {})
+        _sectors = dict(_view.get("sectors") or {})
+        _cov = _view.get("coverage")
+        _fig = None
+        if _returns:
+            from src.ui.render.sector_heatmap_render import build_sector_treemap
+            _fig = build_sector_treemap(
+                _sectors, _returns, str(_view.get("market_label") or ""),
+                single_stock_proxy=bool(_view.get("single_stock_proxy")),
+                period_label=str(_view.get("period_label") or ""))
+    except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
+        print(f"[views/page_find] 產業熱力圖取數／組圖失敗 → 轉紅態：{_e!r}")
+        return HeatmapReadout(requested=True, error=repr(_e))
+
+    return HeatmapReadout(
+        requested=True,
+        figure=_fig,
+        sectors_n=getattr(_cov, "parent_total", len(_sectors)),
+        fetched_n=getattr(_cov, "parent_fetched", 0),
+        sub_fetched_n=getattr(_cov, "sub_fetched", 0),
+        sub_total_n=getattr(_cov, "sub_total", 0),
+        complete=bool(getattr(_cov, "complete", False)),
+        any_data=bool(_returns),
+        market_label=str(_view.get("market_label") or ""),
+        period_label=str(_view.get("period_label") or ""),
+        n_bars=int(_view.get("n_bars") or 0),
+        single_stock_proxy=bool(_view.get("single_stock_proxy")),
+        disclosure=str(_view.get("disclosure") or ""),
+    )
+
+
 # ══════════════════════════════════════════════════════════════════
 # 卡片建構（純函式；`Card` / `Note` 的驗證在對面，本檔不重複）
 # ══════════════════════════════════════════════════════════════════
@@ -1042,30 +1263,73 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
                 state=_state, note=_note), tuple(_facts)
 
 
-def build_heatmap_card(requested: bool) -> tuple[Card, tuple[tuple[str, str], ...]]:
-    """線框葉2 左半「產業漲跌熱力圖」—— **本批未接線**（見檔頭）。
+def build_heatmap_card(hm: HeatmapReadout
+                       ) -> tuple[Card, tuple[tuple[str, str], ...]]:
+    """線框葉2 左半「產業漲跌熱力圖」的狀態卡。**2026-09-07 已接線。**
 
-    `wired=False` → `classify_ui_state` 第 1 條規則直接判 `unwired`，
-    **與請求與否無關**：未接線的東西不會因為多按一次而改變，
-    這正是它與「尚未載入」必須分成兩態的原因。
+    四態對映（逐條理由見 `load_heatmap` 的 docstring）：
+      未按載入鈕 → idle ／ L3 或組圖例外 → failed ／ **一檔都沒抓到 → failed
+      （紅，線框葉2 `err` 原文）** ／ 只抓到一部分 → degraded ／ 全抓到 → live
+
+    ⚠️ **`wired=` 不再傳 False。** 前一批這張卡恆為 `unwired`，理由是
+    「唯一的 public 入口自帶 5 個寫死的 widget key」—— 那個理由**本批已經
+    不成立**（類股宇宙上移 L0、treemap 組裝抽成 public L4、取數走新的 L3）。
+    接上之後還畫 `unwired`，等於對使用者說「這裡沒有出口」，而其實有一顆按鈕
+    就在上面 —— 那是反方向的說謊（同 FE-18 對估值那一項的處置）。
     """
-    _state = classify_ui_state(requested=requested, has_value=False,
-                               wired=False)
-    return Card(
-        key="find.heatmap", label="產業漲跌熱力圖",
-        state=_state,
-        note=Note(
-            now="**本頁還沒有產業熱力圖**",
-            why=("唯一的 public 入口 `etf_render.render_sector_heatmap()` "
-                 "自帶 5 個寫死的 widget key 與**自己那顆載入鈕**，"
-                 "在本頁再掛一次會與既有 ETF 分頁撞 DuplicateWidgetID、"
-                 "並讓畫面出現兩顆載入鈕；類股代表清單與 treemap 組裝"
-                 "都是該檔的私有符號，跨檔直取是分層違憲，"
-                 "自己抄一份類股表則會變成第二個真相源"),
-            where=HEATMAP_WHERE)), (
-        ("現行入口", "🏦 ETF 分頁的「🗺️ 產業熱力圖」（本頁不重複掛載）"),
-        ("接線後的樣子", "與右側泡泡圖並列，共用本頁這一顆載入鈕"),
-    )
+    _state = classify_ui_state(
+        requested=hm.requested,
+        error=hm.error or None,
+        has_value=hm.any_data,
+        # 一檔都沒抓到 → 升紅（`MISS_FETCH_FAILED` 在 L0 的 `FAILED_REASONS` 裡）。
+        # **不自己寫 `state = UI_FAILED`** —— 那會是本頁自建的第二套判定。
+        reason=MISS_FETCH_FAILED,
+        discriminative=hm.complete)
+    _facts: list[tuple[str, str]] = [
+        ("市場 / 區間", f"{hm.market_label or HEATMAP_MARKET_LABEL_IDLE}　·　"
+                       f"{hm.period_label or HEATMAP_PERIOD_LABEL}"
+         + (f"（＝ {hm.n_bars} 個**交易日**，不是日曆日）" if hm.n_bars else "")),
+        ("顏色怎麼讀", "紅＝漲、綠＝跌（**台灣慣例**，與美股配色相反）；"
+                        "抓不到的格子**留白**，不是綠色也不是 0%"),
+        ("切換市場或區間", HEATMAP_SWITCH_HINT),
+    ]
+    if hm.requested:
+        _facts.append((
+            "資料覆蓋率",
+            f"類股層 {hm.fetched_n}/{hm.sectors_n}"
+            + (f"、子成分 {hm.sub_fetched_n}/{hm.sub_total_n}"
+               if hm.sub_total_n else "")))
+    if hm.single_stock_proxy and hm.disclosure:
+        # H-2 揭露：台股側每個「類股」其實是一檔代表股。**L0 原文，不改寫。**
+        _facts.append(("⚠️ 台股口徑", hm.disclosure))
+
+    if _state == UI_LIVE:
+        return Card(key="find.heatmap", label="產業漲跌熱力圖",
+                    state=UI_LIVE,
+                    value=f"{hm.fetched_n} 個類股"), tuple(_facts)
+
+    if _state == UI_IDLE:
+        _note = Note(now=HEATMAP_IDLE_NOW, why=HEATMAP_IDLE_WHY,
+                     where=HEATMAP_IDLE_WHERE)
+    elif _state == UI_FAILED and hm.error:
+        _note = Note(now="**熱力圖畫不出來**",
+                     why=_error_why(SRC_HEATMAP, hm.error),
+                     where=HEATMAP_FAILED_WHERE)
+    elif _state == UI_FAILED:
+        # 按過了、一檔都沒回來 —— 線框葉2 `err` 就是這一格。
+        _note = Note(now=HEATMAP_FAILED_NOW, why=HEATMAP_FAILED_WHY,
+                     where=HEATMAP_FAILED_WHERE)
+    else:   # UI_DEGRADED —— 有值、圖照畫，只是缺了幾格（留白，不填 0）。
+        _note = Note(
+            now=HEATMAP_DEGRADED_NOW,
+            why=(f"這一輪只抓到 類股層 {hm.fetched_n}/{hm.sectors_n}"
+                 + (f"、子成分 {hm.sub_fetched_n}/{hm.sub_total_n}"
+                    if hm.sub_total_n else "")
+                 + " —— 缺的格子在圖上**留白**、hover 顯示「無資料」，"
+                   "**不會**填 0 冒充持平"),
+            where=HEATMAP_DEGRADED_WHERE)
+    return Card(key="find.heatmap", label="產業漲跌熱力圖",
+                state=_state, note=_note), tuple(_facts)
 
 
 def build_sector_flow_card(flow: SectorFlowReadout
@@ -1300,7 +1564,12 @@ def _render_screen_leaf(session: Mapping[str, Any]) -> None:
 
 
 def _render_map_leaf(session: Mapping[str, Any]) -> None:
-    """葉2 板塊地圖：熱力圖（未接線）＋ 資金泡泡並列 · 3 欄圖例 ＋ 口徑揭露。"""
+    """葉2 板塊地圖：熱力圖 ＋ 資金泡泡並列 · 3 欄圖例 ＋ 口徑揭露。
+
+    ⚠️ **2026-09-07 FE-32：docstring 的「（未接線）」三個字已移除** ——
+    熱力圖本批接上了，留著那三個字就是一句過期的自述（下一個人會照著它
+    以為這裡還沒接，然後又去做一次）。
+    """
     section_header(f"葉2 · {LEAF_MAP_TITLE}",
                    "產業熱力圖與板塊資金泡泡在同一葉並列 —— "
                    "客戶已核准的入口整併，兩者不再是兩個分頁。")
@@ -1311,14 +1580,39 @@ def _render_map_leaf(session: Mapping[str, Any]) -> None:
         st.session_state[SS_MAP_REQUESTED] = True
 
     _requested = map_requested(session)
+    # 熱力圖是**批次冷抓數十檔**，spinner 只包這一段（泡泡圖讀本地快照，很快）。
+    # ⚠️ `requested=False` 時 `load_heatmap` 直接回空 readout，一行 L3 都不呼叫。
+    if _requested:
+        with st.spinner("批次抓取類股代表的日線收盤…"):
+            _heatmap = load_heatmap(requested=True)
+    else:
+        _heatmap = load_heatmap(requested=False)
     _flow = load_sector_flow(session, requested=_requested)
 
-    _cards = (build_heatmap_card(_requested), build_sector_flow_card(_flow))
+    _cards = (build_heatmap_card(_heatmap), build_sector_flow_card(_flow))
     # 兩張並列（鐵律 1：`grid` 內部硬夾 MAX_COLS，這裡要的是 2 欄）。
     for _chunk, _columns in grid(_cards, 2):
         for (_card, _facts), _col in zip(_chunk, _columns):
             with _col:
                 _render_one(_card, _facts)
+
+    # ── 左半：產業熱力圖 ─────────────────────────────────────────
+    # ⚠️ **版面上的誠實揭露**：線框寫「左：熱力圖　右：泡泡圖」，而本頁的
+    #    左右並列目前只落在**兩張狀態卡**上，兩張**圖**仍是上下堆疊
+    #    （熱力圖在上、泡泡圖在下）。泡泡圖的版面是前一批已交付的，
+    #    把它塞進半寬欄位屬版面異動（v3 §03-2 ①：要先出線框給客戶拍板），
+    #    **不在本批的授權範圍內** —— 故本批只把熱力圖補在它自己那張卡下面。
+    # ⚠️ 組圖已經在 `load_heatmap()` 裡包過 try 了（失敗 → 紅卡），
+    #    這裡只剩 `st.plotly_chart` 本身；它若炸掉一樣不該吃掉下半頁。
+    if _heatmap.figure is not None:
+        try:
+            st.plotly_chart(_heatmap.figure, width="stretch")
+        except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅字，不吞
+            print(f"[views/page_find] 熱力圖繪製失敗：{_e!r}")
+            st.error(
+                "🔴 熱力圖畫不出來（資料讀到了，是繪圖層的問題）："
+                f"{scrub_state_glyphs(repr(_e))[0] or UNKNOWN_ERROR_TEXT}",
+                icon="🔴")
 
     if _flow.sectors:
         # ⚠️ L4 純繪圖層的 late import 也要包 —— 它若 import / 繪圖失敗，

@@ -221,6 +221,12 @@ _ALLOWED_L3: frozenset[tuple[str, str]] = frozenset({
     ("src.services.portfolio_deep_service", "get_portfolio_stress"),
     ("src.services.portfolio_deep_service", "get_portfolio_var"),
     ("src.services.portfolio_deep_service", "get_dividend_cash_flow"),
+    # ⑦ AI 戰情總結（FE-31 新增）。
+    # ⚠️ `build_ai_summary` 是**純組裝 + 轉呼叫**（AI transport 由 caller 注入），
+    #    `gemini_call` 是**唯一會花錢**的那一支 —— 它進白名單的同時，
+    #    `_DOWNSTREAM` 也必須收 `app_ai_service`，否則「沒按鈕就不發 AI」沒人驗。
+    ("src.services.dividend_station_service", "build_ai_summary"),
+    ("src.services.app_ai_service", "gemini_call"),
     ("src.services.allocation_service", "get_allocation"),
     ("src.services.portfolio_binding_service", "get_binding_state"),
     ("src.services.portfolio_binding_service", "STATUS_BOUND"),
@@ -721,12 +727,16 @@ class _PoisonModule:
 #: ⚠️ `portfolio_deep_service` 是 FE-19 新接線的那一支：它逐檔會打
 #:    `fetch_etf_info` / `fetch_etf_price` / `fetch_etf_dividends`，
 #:    **在按鈕之前跑一次就是白打幾十次網路** —— 同樣一定要在這張表裡。
+#: ⚠️ `app_ai_service` 是 FE-31 新接線的那一支，而且是本頁**唯一會產生帳單**的
+#:    下游（`gemini_call` 打的是付費 Gemini API）。**它一定要在這張表裡** ——
+#:    「沒按那顆鈕就一個 AI token 都不花」這句話，沒有它就沒有人在驗。
 _DOWNSTREAM = (
     "src.services.holdings_service",
     "src.services.dividend_station_service",
     "src.services.portfolio_deep_service",
     "src.services.allocation_service",
     "src.services.portfolio_binding_service",
+    "src.services.app_ai_service",
 )
 
 
@@ -840,16 +850,23 @@ class TestNothingIsCalledBeforeYouAsk:
 # 【5】仍然未接線的八張卡
 # ══════════════════════════════════════════════════════════════════
 #: ⚠️ **FE-15 從 17 張降到 8 張**（根因是 `src/services/` 沒有持股清單）；
-#: **FE-19 再降到 5 張** —— ⑥ 的壓力測試 / VaR / 配息現金流補上了 L3
-#: `portfolio_deep_service` 之後就活了。
-#: 剩下這 5 張**卡在完全不同的地方**，各自的 `where` 不可共用：
+#: **FE-19 再降到 5 張**（⑥ 的壓力測試 / VaR / 配息現金流補上了 L3
+#: `portfolio_deep_service` 之後就活了）；
+#: **FE-31 再降到 4 張** —— `hold.ai_summary` 已接線，見下面那條註記。
+#: 剩下這 4 張**卡在完全不同的地方**，各自的 `where` 不可共用：
 #:   · `hold.deep.rebalance`  帳本沒有「目標比例」欄（**不是**缺 L3 wrapper）
 #:   · `hold.deep.grape`      實作在 L5、widget key 寫死
-#:   · `hold.ai_summary`      缺一顆要先出線框拍板的按鈕（資料已經有了）
 #:   · `hold.setup.*`         **不是缺 L3，是缺授權**（本頁唯讀）
+#:
+#: ⚠️ ~~`hold.ai_summary` 缺一顆要先出線框拍板的按鈕（資料已經有了）~~
+#:   **2026-09-07 FE-31 事實更正，不是漏刪**：那顆鈕**客戶早就拍板過了** ——
+#:   實查 `docs/wireframes/stock_ia_v1.html`：`:877` 逐字畫著
+#:   `［ ⚡ 生成 AI 總結 ］`、`:878` 連灰態文案都給了、`:884` 記載它是該輪
+#:   補畫的第五顆鈕。舊註記記錄的是「當時憑什麼判定不能做」，保留供追溯；
+#:   **不成立的只有「還沒拍板」這個事實**，A-8 這條規則本身沒有被放寬。
 _UNWIRED_KEYS: frozenset[str] = frozenset({
     "hold.deep.rebalance", "hold.deep.grape",
-    "hold.ai_summary", "hold.setup.pick_sheet", "hold.setup.watchlist",
+    "hold.setup.pick_sheet", "hold.setup.watchlist",
 })
 
 
@@ -866,8 +883,7 @@ def _all_unwired_builts(requested: bool):
                                                      submitted=requested),
                                      _station),
                  P.build_allocation_split_card(_station),
-                 P.build_take_profit_card(_station),
-                 P.build_ai_summary_card(requested))
+                 P.build_take_profit_card(_station))
               + P.build_deep_cards(_station, P.load_deep(_station))
               + (P.build_holdings_preview_card(
                   P.HoldingsReadout(requested=requested, submitted=requested)),)
@@ -935,7 +951,7 @@ class TestUnwiredStaysUnwired:
                 f"{_card.key} 的「去哪補」給了一個使用者其實按不到的出口")
 
     def test_the_wheres_are_not_copy_pasted(self):
-        """八張卡卡在**不同的層**，共用一句話會讓「補哪一層才會好」消失。
+        """剩下的卡卡在**不同的層**，共用一句話會讓「補哪一層才會好」消失。
 
         ⚠️ 本批把門檻**收緊成「全部互異」**（原本是 17 張裡至少 14 種）——
         張數變少之後，「至少 N 種」會鬆到形同虛設。
@@ -1015,14 +1031,18 @@ class TestUnwiredStaysUnwired:
         for _card, _facts, _signal in _all_unwired_builts(False):
             assert _card.value == "" and _signal == "", _card.key
 
-    def test_the_ai_button_is_deliberately_not_drawn(self):
-        """線框 ⑦ 畫了一顆 `st.button`，本頁刻意沒畫 —— 那會是假出口。
+    def test_the_ai_card_is_no_longer_in_this_batch(self):
+        """⑦ **已接線**（FE-31）—— 它不該再出現在未接線那一批裡。
 
-        這一條同時保證：接線的人會先看到這段說明，而不是「順手」補一顆鈕。
+        ⚠️ 這一條是 `_UNWIRED_KEYS` 的反向守衛：名單改了、卡卻還是 `unwired`
+        （或反過來）都會在 `test_the_count_is_what_the_docstring_claims` 紅，
+        本條再從卡本身確認一次，免得兩邊一起被改成錯的。
         """
-        _facts = dict(P.build_ai_summary_card(False)[1])
-        assert any("假出口" in _v for _v in _facts.values()), (
-            "⑦ 沒有說明為什麼線框那顆鈕不在畫面上")
+        _card, _facts, _signal = P.build_ai_summary_card(
+            P.AiSummaryReadout(requested=False), P.StationReadout(requested=False))
+        assert _card.state == UI_IDLE, (
+            f"⑦ 冷啟動應是 idle（沒人按過那顆鈕），實際 {_card.state}")
+        assert "hold.ai_summary" not in _UNWIRED_KEYS
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1133,12 +1153,60 @@ class TestFormStructure:
                 if _c.func.attr == "form_submit_button"]
         assert not _bad, f"submit 應由共用層產生，本頁不該有（第 {_bad} 行）"
 
-    def test_the_page_has_no_stray_button(self):
-        """本頁**刻意一顆 `st.button` 都沒有**（含線框 ⑦ 那顆 —— 見 ⑦ 的說明）。"""
-        _bad = [f"st.{_c.func.attr} @line {_c.lineno}"
-                for _c in _attr_calls([_tree()])
-                if _c.func.attr in ("button", "download_button")]
-        assert not _bad, f"本頁多了裸按鈕 {_bad} —— 請確認它的 gate 與位置"
+    def test_the_only_button_is_the_ai_one(self):
+        """本頁**只有一顆 `st.button`：⑦ 的［ ⚡ 生成 AI 總結 ］**，且零下載鈕。
+
+        ⚠️ ~~本頁刻意一顆 `st.button` 都沒有~~ —— **2026-09-07 FE-31 更正**：
+        線框 `docs/wireframes/stock_ia_v1.html:877` 逐字畫了那顆鈕（`:884`
+        記載它是該輪補畫的第五顆），客戶已拍板，本批照畫。
+        **舊斷言的意圖沒有被放寬** ——「不准有來路不明的裸按鈕」仍然成立，
+        只是從「一顆都不准」收成「**只准這一顆，而且只准在這一支函式裡**」。
+
+        ⚠️ 為什麼要釘住**它在哪一支函式**：`st.button` 放進 form 會讓
+        Streamlit 直接拋錯，而本頁的 form 走共用層 —— 只要它出現在
+        `_render_ai_button()` 以外的地方，就代表有人在別處又開了第二個入口
+        （多一個入口 = 多一條讓人不小心多打一次**付費** API 的路）。
+        """
+        _dl = [f"st.{_c.func.attr} @line {_c.lineno}"
+               for _c in _attr_calls([_tree()])
+               if _c.func.attr == "download_button"]
+        assert not _dl, f"本頁多了下載鈕 {_dl}（線框沒畫，而且它會落進 form 陷阱）"
+
+        _owners: list[str] = []
+        for _fn in ast.walk(_tree()):
+            if not isinstance(_fn, ast.FunctionDef):
+                continue
+            for _c in ast.walk(_fn):
+                if (isinstance(_c, ast.Call) and isinstance(_c.func, ast.Attribute)
+                        and _c.func.attr == "button"):
+                    _owners.append(_fn.name)
+        assert _owners == ["_render_ai_button"], (
+            f"`st.button` 出現在 {_owners} —— 本頁只准 `_render_ai_button()` "
+            "畫那一顆（線框 :877 的［ ⚡ 生成 AI 總結 ］）")
+
+    def test_the_ai_button_is_structurally_outside_any_form(self):
+        """那顆鈕在 form **外** —— 而且是結構保證，不是「我記得放對了」。
+
+        本頁自己不開 `st.form`（見 `test_the_page_owns_no_local_form`），
+        表單一律走共用層的 `single_submit_form()`；`_render_ai_button()` 也
+        **不是**被表單那一支呼叫的。兩件事合起來，本檔的 `st.button` 就不可能
+        落進任何 form context 裡。
+        """
+        import inspect
+
+        # ⚠️ 走 AST 不走字串：本檔的 docstring 大量提到 `st.form`（在解釋
+        #    「為什麼用共用層」），字串比對會被自己的說明文字誤判。
+        _forms = [_c.lineno for _c in _attr_calls([_tree()])
+                  if _c.func.attr == "form"]
+        assert not _forms, (
+            f"本頁自己開了 form（第 {_forms} 行）—— "
+            "那顆按鈕就有機會落進去（Streamlit 會直接拋錯）")
+        _form_src = inspect.getsource(P._render_holdings_form)
+        assert "_render_ai_button" not in _form_src, (
+            "表單那一支呼叫了 AI 按鈕 —— 它會被畫進 form 裡")
+        _leaf_src = inspect.getsource(P._render_warroom_leaf)
+        assert "_render_ai_button()" in _leaf_src, (
+            "⑦ 的按鈕沒有被戰情室那一葉畫出來 —— 線框 :877 要求它在該區塊內")
 
     def test_widget_value_is_only_read_by_the_shared_form(self):
         """**鐵律 2 的本體**：下游只准讀已套用值，不准讀 widget 當下值。"""
@@ -2997,6 +3065,554 @@ class TestContractDriftIsNeverSilent:
 # 冒煙（slow lane）：這一頁真的畫得出來
 # ══════════════════════════════════════════════════════════════════
 @pytest.mark.slow
+# ══════════════════════════════════════════════════════════════════
+# 【20】⑦ AI 戰情總結（FE-31 接線）
+#
+# ⚠️ **這一整組裡最重要的是 `TestTheAiCostsNothingUntilYouPress`。**
+# 其餘幾組錯了是畫面不好看；那一組錯了是**每一次頁面互動都產生一筆帳單**。
+# ══════════════════════════════════════════════════════════════════
+def _rows_with_lights() -> tuple[dict, ...]:
+    """一份「長得像 L3 回傳」的戰情表列。
+
+    ⚠️ `_lights` 用**真的 `LightCell`**，不用字串或 `SimpleNamespace`（同本檔
+    ⑥ 假 readout 的理由）：L4 `station_cards` 讀的是 `cell.miss_reason` /
+    `cell.key` 這些欄位，手捏一個假物件會把「L4 契約改了、UI 沒跟上」測不出來，
+    而 `TestTheAiCostsNothingUntilYouPress` 那條行為測試是**真的把整葉畫一遍**。
+    """
+    from src.compute.etf.dividend_station import LightCell
+    from shared.station_specs import KEY_HEALTH_A
+
+    _cell = LightCell(key=KEY_HEALTH_A, level="🟢", state="live")
+    return ({"代號": "0056", "名稱": "高股息", "種類": "ETF", "健檢": "🟢",
+             "235 燈號": "", "加碼金": "", "_lights": (_cell,), "_detail": {}},)
+
+
+def _station_with_digest(**kw) -> P.StationReadout:
+    """⑦ 的 happy path 上游：**有 digest**（＝戰情表這一輪真的算出來了）。"""
+    kw.setdefault("requested", True)
+    kw.setdefault("submitted", True)
+    kw.setdefault("bound", True)
+    kw.setdefault("holdings_n", 1)
+    kw.setdefault("rows", _rows_with_lights())
+    kw.setdefault("digest", {"total": 1, "vix": 17.5, "reds": [], "adds": [],
+                             "errors": [], "allocation": None,
+                             "take_profit": []})
+    return P.StationReadout(**kw)
+
+
+def _switch_ro(**kw) -> P.SwitchReadout:
+    kw.setdefault("requested", True)
+    kw.setdefault("submitted", True)
+    return P.SwitchReadout(**kw)
+
+
+class TestTheAiCostsNothingUntilYouPress:
+    """**本頁唯一會產生帳單的呼叫。** 沒按那顆鈕 → 一個 AI token 都不准花。
+
+    ⚠️ 這一類用的是 `poisoned` 那組**不繼承 `Exception`** 的毒藥（見
+    `_L3Touched`），所以它穿得過 `load_ai_summary()` 的 `except Exception` ——
+    不會出現「其實打了、但被吞成一則錯誤字串，測試照樣綠」這種假綠燈。
+    """
+
+    def test_not_pressing_touches_no_ai_at_all(self, poisoned):
+        """沒按 → 連 late import 都不做（`_PoisonModule` 一被取屬性就爆）。"""
+        _ai = P.load_ai_summary(False, _station_with_digest(), _switch_ro())
+        assert _ai.requested is False
+        assert _ai.text == "" and _ai.error == "" and _ai.error_kind == ""
+
+    def test_running_the_warroom_alone_never_generates(self, poisoned):
+        """**送出表單 ≠ 要 AI 總結。** 兩者若共用同一個 gate，跑一次戰情室就是一筆帳單。
+
+        這一條是「gate 不是 `HoldRequest.submitted`」的直接反證：
+        上游全是 `submitted=True / requested=True`，AI 照樣一次都不發。
+        """
+        _st = _station_with_digest()
+        assert _st.requested is True and _st.submitted is True
+        assert P.load_ai_summary(False, _st, _switch_ro()).requested is False
+
+    def test_the_ai_poison_really_would_have_fired(self, poisoned):
+        """**反證**：同一組毒藥下，按了就一定炸 —— 上面幾條不是因為毒藥沒裝上去。"""
+        with pytest.raises(_L3Touched):
+            P.load_ai_summary(True, _station_with_digest(), _switch_ro())
+
+    def test_only_the_paid_module_poisoned_still_fires(self, monkeypatch):
+        """**把毒藥收窄到只剩付費那一支**，證明真的走到 `gemini_call`。
+
+        上一條的毒藥是全下游都下，所以它其實分不出爆在 `build_ai_summary`
+        還是 `gemini_call`。本條只毒 `app_ai_service` —— 炸了就代表
+        **付費 transport 真的被取用了**，而不是停在組 prompt 那一層。
+        """
+        monkeypatch.setitem(sys.modules, "src.services.app_ai_service",
+                            _PoisonModule("src.services.app_ai_service"))
+        with pytest.raises(_L3Touched):
+            P.load_ai_summary(True, _station_with_digest(), _switch_ro())
+        # 沒按的那一半，在同一組毒藥下仍然安靜。
+        assert P.load_ai_summary(
+            False, _station_with_digest(), _switch_ro()).requested is False
+
+    def test_pressing_without_a_warroom_result_costs_nothing(self, poisoned):
+        """**按了、但沒有東西可以摘要 → 也不打 AI**（對空輸入潤稿要付費且無意義）。
+
+        ⚠️ 但 `requested` 仍然是 `True`（使用者確實按了）—— 把它寫回 `False`
+        就是從資料反推 gate，畫面會說「尚未生成」而其實已經按過了。
+        """
+        for _st in (P.StationReadout(requested=False),
+                    P.StationReadout(requested=True, submitted=True),
+                    _station_with_digest(digest=None)):
+            _ai = P.load_ai_summary(True, _st, _switch_ro())
+            assert _ai.requested is True, "按了就是按了，不准反推成 idle"
+            assert _ai.text == "" and _ai.error_kind == ""
+
+    def test_the_button_gate_is_the_button_return_value(self):
+        """程式碼層面：⑦ 的 gate 是 `st.button()` 的回傳值，不是 session、不是資料。"""
+        import inspect
+
+        _leaf = inspect.getsource(P._render_warroom_leaf)
+        assert "load_ai_summary(_render_ai_button()" in _leaf, (
+            "⑦ 的 gate 不再是那顆鈕的當次回傳值 —— "
+            "改成 session 或 `req.submitted` 都會讓它自動生成")
+        assert "st.button" in inspect.getsource(P._render_ai_button)
+
+    def test_the_wired_page_really_sends_nothing_on_a_plain_rerun(
+            self, monkeypatch, poisoned):
+        """**行為層的那一條**（上一條是讀原始碼，這一條是真的跑一遍）。
+
+        場景 = 最貴的那一個：使用者**已經跑過戰情室**（`station` 有 digest），
+        然後只是點了頁面上別的東西 → Streamlit 重跑整頁。
+        這一輪 `st.button()` 回 `False`，⑦ 就**不准**碰付費 transport。
+
+        ⚠️ 毒藥是 `_L3Touched`（**不繼承 `Exception`**），所以它穿得過
+        `load_ai_summary()` 的 `except Exception` —— 真的打了就是這裡當場炸，
+        不會被吞成一則紅態訊息然後測試照樣綠。
+        ⚠️ 上游四支被換成不碰 L3 的 stub：本條要量的是 ⑦，
+        不是重測一次別的區塊有沒有 gate（那些各自有自己的守衛）。
+        """
+        monkeypatch.setattr(P, "load_station",
+                            lambda _h: _station_with_digest())
+        monkeypatch.setattr(P, "load_vix",
+                            lambda _r: P.VixReadout(requested=False))
+        monkeypatch.setattr(P, "load_macro",
+                            lambda _r: P.MacroReadout(requested=False))
+        monkeypatch.setattr(P, "load_allocation",
+                            lambda _r: P.AllocationReadout(requested=False))
+        monkeypatch.setattr(P, "load_switch",
+                            lambda *_a, **_k: P.SwitchReadout(requested=False))
+        monkeypatch.setattr(P, "load_deep",
+                            lambda _s: P.DeepReadout(requested=False))
+        # 沒有人按那顆鈕（bare mode 的 `st.button` 回 False）→ 整葉畫完，零帳單。
+        P._render_warroom_leaf(_req(), P.HoldingsReadout(requested=True,
+                                                         submitted=True))
+
+    def test_no_second_widget_sneaked_into_block_seven(self):
+        """⑦ **只准那一顆鈕**：沒有模型選單、沒有重新生成鈕、沒有參數。
+
+        多一個 widget 就多一條讓人不小心多打一次帳單的路（而且線框只畫了一顆）。
+        """
+        import inspect
+
+        _src_seven = (inspect.getsource(P._render_ai_button)
+                      + inspect.getsource(P._render_ai_summary))
+        for _w in ("selectbox", "radio", "slider", "number_input",
+                   "text_input", "multiselect", "checkbox", "toggle"):
+            assert f"st.{_w}" not in _src_seven, (
+                f"⑦ 多了一個 `st.{_w}` —— 線框 :877 只畫了一顆按鈕")
+
+
+class TestTheAiSummaryStates:
+    """⑦ 的每一態：灰（沒按）／灰（沒輸入）／紅（各種失敗）／綠（有文字）。"""
+
+    def _card(self, ai: P.AiSummaryReadout, station=None):
+        return P.build_ai_summary_card(
+            ai, station if station is not None else _station_with_digest())
+
+    def test_cold_start_is_idle_and_uses_the_wireframe_copy(self):
+        """沒按 → 灰，而且文案來自線框 `:878` 的 `grey`（`why` / `where`）。"""
+        _card, _facts, _signal = self._card(
+            P.AiSummaryReadout(requested=False), P.StationReadout(requested=False))
+        assert _card.state == UI_IDLE
+        assert _card.value == "", "灰態不准帶結論文字"
+        _now, _why, _where = _note_triple(_card.note)
+        assert "無中生有" in _why, (
+            "灰態的 why 沒有沿用線框 :878 的「避免無中生有」")
+        assert P.AI_SUMMARY_LABEL in _where and P.ACTION_RUN_WARROOM_LABEL in _where, (
+            "灰態的 where 沒有照線框 :878「完成戰情室後點『⚡ 生成 AI 總結』」")
+
+    def test_pressed_but_no_input_is_grey_not_red(self):
+        """按了、戰情表還沒跑 → `empty`（灰）。**這不是故障。**"""
+        _card, _f, _s = self._card(
+            P.AiSummaryReadout(requested=True),
+            P.StationReadout(requested=True, submitted=True, bound=True))
+        assert _card.state == UI_EMPTY, "把「還沒有輸入」畫成紅色 = 假性錯誤"
+        assert _card.value == ""
+
+    def test_a_live_summary_is_green_and_keeps_the_text_out_of_value(self):
+        """綠態：`value` 只放一句短的，整段文字由 `_render_ai_summary()` 畫。"""
+        _long = "今天沒有紅燈也沒有加碼，續抱、定期定額即可。" * 5
+        _card, _facts, _signal = self._card(
+            P.AiSummaryReadout(requested=True, text=_long))
+        assert _card.state == UI_LIVE
+        assert _long not in _card.value, (
+            "整段推播文字被塞進 `Card.value` —— 它會被畫成 24px 粗體")
+        assert _signal == "", (
+            "⑦ 出了燈號 —— 這一格沒有任何 band / level 觀測，"
+            "給一個 chip 等於對一段沒人驗過的 AI 文字蓋「過關」章")
+
+    @pytest.mark.parametrize("kind,err", [
+        (P.AI_ERR_EXCEPTION, "RuntimeError('boom')"),
+        (P.AI_ERR_UNAVAILABLE, "⚠️ AI 服務暫時無法使用（所有 key 與模型都試過了）"),
+        (P.AI_ERR_EMPTY, P.AI_EMPTY_ERROR),
+        (P.AI_ERR_UPSTREAM, "ValueError('戰情表掛了')"),
+        (P.AI_ERR_DRIFT, "L3 `build_ai_summary()` 回的不是字串（型別：tuple）"),
+    ])
+    def test_every_failure_is_red_and_carries_its_own_message(self, kind, err):
+        _card, _f, _s = self._card(
+            P.AiSummaryReadout(requested=True, error=err, error_kind=kind))
+        assert _card.state == UI_FAILED, f"{kind} 沒有走紅態"
+        _now, _why, _where = _note_triple(_card.note)
+        assert _now.strip() and _why.strip() and _where.strip()
+        assert P.UNKNOWN_ERROR_TEXT not in _why, (
+            f"{kind} 的紅態把上游訊息吞掉了，只剩一句「沒有給訊息」")
+
+    def test_the_failures_do_not_share_a_single_sentence(self):
+        """每一種失敗一套指路句 —— 共用一句會對其他幾種人指錯路。"""
+        _kinds = (P.AI_ERR_EXCEPTION, P.AI_ERR_UNAVAILABLE,
+                  P.AI_ERR_EMPTY, P.AI_ERR_UPSTREAM, P.AI_ERR_DRIFT)
+        _notes = [self._card(P.AiSummaryReadout(
+            requested=True, error="RuntimeError('x')", error_kind=_k))[0].note
+            for _k in _kinds]
+        assert len({_n.now for _n in _notes}) == len(_kinds)
+        assert len({_n.where for _n in _notes}) == len(_kinds)
+
+    def test_a_missing_key_never_tells_you_to_press_again(self):
+        """金鑰／額度問題 → **不要**叫使用者再按一次（再按一百次也一樣，還多跑重試）。"""
+        _card, _f, _s = self._card(P.AiSummaryReadout(
+            requested=True, error="⚠️ 請設定 GEMINI_API_KEY",
+            error_kind=P.AI_ERR_UNAVAILABLE))
+        _where = _card.note.where
+        assert P.NO_EXIT_MARKER in _where, (
+            "服務不可用時給了一個使用者按不到的假出口")
+        assert P.AI_SUMMARY_LABEL not in _where, (
+            "叫使用者再按一次 —— 金鑰沒設，按幾次都一樣")
+
+    def test_a_pressed_gate_never_contradicts_itself(self):
+        """`requested=False` 卻帶著文字／錯誤 → L0 當場 `ValueError`（§1）。"""
+        with pytest.raises(ValueError, match="requested=False"):
+            P.build_ai_summary_card(
+                P.AiSummaryReadout(requested=False, text="偷渡的舊結果"),
+                _station_with_digest())
+
+    def test_the_loader_never_produces_that_contradiction(self):
+        _ai = P.load_ai_summary(False, _station_with_digest(error="boom"),
+                                _switch_ro())
+        assert (_ai.requested, _ai.text, _ai.error) == (False, "", "")
+
+
+class TestTheAiIsAlwaysDisclosedAsAi:
+    """**每一態都要講「這是 AI 生成」** —— 綠態尤其不能只印一段像人寫的話。"""
+
+    @pytest.mark.parametrize("ai", [
+        P.AiSummaryReadout(requested=False),
+        P.AiSummaryReadout(requested=True),
+        P.AiSummaryReadout(requested=True, text="續抱、定期定額即可。"),
+        P.AiSummaryReadout(requested=True, error="RuntimeError('x')",
+                           error_kind=P.AI_ERR_EXCEPTION),
+    ])
+    def test_the_disclosure_is_on_the_card_in_every_state(self, ai):
+        _card, _facts, _signal = P.build_ai_summary_card(
+            ai, _station_with_digest())
+        _blob = "\n".join(f"{_k}{_v}" for _k, _v in _facts)
+        assert P.AI_DISCLOSURE in _blob, f"{_card.state} 這一態沒有印 AI 生成揭露"
+        assert "不是投資建議" in _blob and "AI 生成" in _blob
+
+    def test_the_disclosure_is_also_printed_next_to_the_text(self):
+        """揭露也要貼在正文下面 —— 只放在 facts，轉貼的人不會看到。"""
+        import inspect
+
+        _s = inspect.getsource(P._render_ai_summary)
+        assert "AI_DISCLOSURE" in _s and "st.markdown(ai.text)" in _s
+
+    def test_the_input_scope_is_stated_honestly_not_as_six_blocks(self):
+        """線框 `:878` 的 `why` 寫「上方六段」—— **那個數字是假的，本頁不照抄。**
+
+        `build_station_digest()` 吃的是戰情表 rows ＋ VIX，`build_summary_prompt()`
+        另可收換股建議；② 兩套刻度與 ⑥ 深度分析**一個欄位都沒有進去**。
+        印一個當場數得出來是假的數字，就是 §1 講的「錯誤的數字比沒有數字更危險」。
+        """
+        _blob = "\n".join(
+            f"{_k}{_v}" for _k, _v in P.build_ai_summary_card(
+                P.AiSummaryReadout(requested=False),
+                P.StationReadout(requested=False))[1])
+        assert "六段" not in P.AI_IDLE_WHY, "灰態文案照抄了線框那個假數字"
+        assert "沒有進去" in _blob, "沒有講出「哪幾段其實沒餵進去」"
+
+    def test_the_input_list_matches_what_l3_actually_returns(self):
+        """畫面上逐項列的那串，必須真的等於 L3 digest 的**全部**欄位。
+
+        ⚠️ 這是「不要寫『幾段』」那個決定的另一半：不寫數字還不夠，
+        **列出來的那一串也會過期**。L3 哪天多回一個欄位 → 這裡當場紅，
+        而不是畫面上那句「以上＝全部欄位」悄悄變成假的
+        （`CLAUDE.md §8.2.A.0` 規則 3：清單由測試強制，漏改＝CI 紅燈）。
+        """
+        from src.services.dividend_station_service import build_station_digest
+
+        _keys = set(build_station_digest(list(_rows_with_lights()), 17.5))
+        #: L3 欄位 → 畫面上用的中文說法（本測試是這兩者之間唯一的對照表）。
+        _said = {
+            "reds": "健檢紅燈汰弱",
+            "adds": "235 加碼觸發",
+            "errors": "整批抓取失敗",
+            "total": "有效判斷檔數",
+            "vix": "VIX",
+            "allocation": "80/20 實際配置偏離",
+            "take_profit": "衛星停利",
+        }
+        assert _keys == set(_said), (
+            f"L3 digest 的欄位變了：多出 {sorted(_keys - set(_said))} / "
+            f"少了 {sorted(set(_said) - _keys)} —— "
+            "`AI_INPUT_BLOCKS` 那句「以上＝回的全部欄位」已經不成立，請一起改")
+        for _k, _zh in _said.items():
+            assert _zh in P.AI_INPUT_BLOCKS, (
+                f"digest 的 `{_k}` 沒有出現在畫面上那串輸入清單裡")
+
+    def test_the_no_memory_tradeoff_is_written_on_the_card(self):
+        """「按一次生成一次、本頁不記住」必須寫在卡上，不能只寫在 docstring。"""
+        _blob = "\n".join(
+            f"{_k}{_v}" for _k, _v in P.build_ai_summary_card(
+                P.AiSummaryReadout(requested=True, text="x"),
+                _station_with_digest())[1])
+        assert P.AI_KEEPS_NOTHING in _blob
+        assert "消失" in _blob, "沒有講出「下一次互動它就不見了」"
+
+    def test_the_missing_copy_button_is_admitted(self):
+        """線框 ⑦ 還畫了一顆「複製鈕」，本批沒做 —— 據實揭露，不裝作已完成。"""
+        _blob = "\n".join(
+            f"{_k}{_v}" for _k, _v in P.build_ai_summary_card(
+                P.AiSummaryReadout(requested=True, text="x"),
+                _station_with_digest())[1])
+        assert P.AI_NO_COPY_BUTTON in _blob
+
+
+def gemini_call_for_guard():
+    """取得 L3 的付費 transport 本體（給上面兩支字面耦合守衛用）。
+
+    **刻意不在 module level import** —— 本測試檔其餘部分靠 `poisoned` fixture
+    把 `src.services.app_ai_service` 換成毒藥模組，module level 抓一份實體
+    會讓「誰先 import」變成測試順序的隱性相依。
+    """
+    from src.services.app_ai_service import gemini_call
+
+    return gemini_call
+
+
+class TestTheAiFailureIsNeverShownAsASummary:
+    """`gemini_call` **不丟例外** —— 它 `return` 一句「服務不可用」的字串。
+
+    那句字串若被當成今天的 AI 總結畫成**綠卡**，使用者會把一則故障訊息讀成
+    操作建議（§1 的文字版）。本類別釘住兩件事：本頁認得出那兩句、
+    而且**那兩句在 L3 還在**（L3 改字 → CI 紅燈，不是靜靜退化）。
+    """
+
+    @pytest.mark.parametrize("sentinel", [
+        "⚠️ 請設定 GEMINI_API_KEY（可另加 GEMINI_API_KEY_2 ~ _6 分散額度）",
+        "⚠️ AI 服務暫時無法使用（所有 key 與模型都試過了）—— 請確認各把金鑰額度，或稍後再試",
+    ])
+    def test_a_service_notice_becomes_red_not_a_green_summary(
+            self, monkeypatch, sentinel):
+        import src.services.dividend_station_service as _svc
+
+        monkeypatch.setattr(_svc, "build_ai_summary",
+                            lambda *_a, **_k: sentinel)
+        _ai = P.load_ai_summary(True, _station_with_digest(), _switch_ro())
+        assert _ai.error_kind == P.AI_ERR_UNAVAILABLE, (
+            "L3 回的『服務不可用』被當成 AI 總結了")
+        assert _ai.text == ""
+        _card, _f, _s = P.build_ai_summary_card(_ai, _station_with_digest())
+        assert _card.state == UI_FAILED
+        assert sentinel.strip("⚠️ ")[:8] in _card.note.why, (
+            "紅態沒有把 L3 那句原話帶給使用者")
+
+    def test_the_sentinels_still_exist_in_l3(self):
+        """**字面耦合的守衛。** L3 改了字 → 這裡紅，而不是悄悄退化回「故障當摘要」。"""
+        import inspect
+
+        _src_l3 = inspect.getsource(gemini_call_for_guard())
+        for _m in P.AI_UNAVAILABLE_MARKERS:
+            assert _m in _src_l3, (
+                f"`gemini_call` 已經不再回 {_m!r} 這句話了 —— "
+                "`AI_UNAVAILABLE_MARKERS` 要跟著改，否則本頁會把新的故障訊息"
+                "當成 AI 總結畫成綠卡")
+
+    def test_the_l3_transport_really_returns_instead_of_raising(self):
+        """本頁那道字面比對**存在的前提**：`gemini_call` 全敗時是 `return` 不是 `raise`。
+
+        若哪天它改成丟例外，`AI_ERR_EXCEPTION` 那條路就會接手，
+        而這一整套字面耦合就該退場（留著只會是一段沒人走的死碼）。
+        """
+        import inspect
+
+        _src_l3 = inspect.getsource(gemini_call_for_guard())
+        _tail = _src_l3.rstrip().splitlines()[-2:]
+        assert any("return" in _l for _l in _tail), (
+            "`gemini_call` 的收尾不再是 `return` —— "
+            "本頁的 `AI_UNAVAILABLE_MARKERS` 比對可能已經是死碼，請重新判讀")
+
+    def test_a_scrubbed_notice_says_it_was_scrubbed(self, monkeypatch):
+        """上游訊息被洗掉狀態 glyph 時，**要說出來** —— 改過的訊息不准假裝是原文。
+
+        §1：`Note` 拒收狀態 glyph（不洗會讓紅卡變成整頁未捕捉例外），
+        但洗完不講，使用者拿到的是一句**被動過手腳而不自知**的原文。
+        """
+        import src.services.dividend_station_service as _svc
+
+        monkeypatch.setattr(
+            _svc, "build_ai_summary",
+            lambda *_a, **_k: "🔴 AI 服務暫時無法使用（所有 key 與模型都試過了）")
+        _ai = P.load_ai_summary(True, _station_with_digest(), _switch_ro())
+        assert _ai.error_kind == P.AI_ERR_UNAVAILABLE
+        _card, _f, _s = P.build_ai_summary_card(_ai, _station_with_digest())
+        assert _card.state == UI_FAILED, "洗 glyph 那一步把紅卡炸成了例外"
+        assert "狀態符號已移除" in _card.note.why, (
+            "訊息被改過卻沒有講出來")
+
+    def test_an_empty_answer_is_red_not_a_blank_green_card(self, monkeypatch):
+        import src.services.dividend_station_service as _svc
+
+        monkeypatch.setattr(_svc, "build_ai_summary", lambda *_a, **_k: "   ")
+        _ai = P.load_ai_summary(True, _station_with_digest(), _switch_ro())
+        assert _ai.error_kind == P.AI_ERR_EMPTY and _ai.text == ""
+        assert P.build_ai_summary_card(
+            _ai, _station_with_digest())[0].state == UI_FAILED
+
+    def test_an_exception_is_reported_not_swallowed(self, monkeypatch):
+        """§1：例外一律轉成看得見的紅卡 ＋ `repr(e)`，**不吞、不回 dummy 文字**。"""
+        import src.services.dividend_station_service as _svc
+
+        def _boom(*_a, **_k):
+            raise RuntimeError("prompt 建不起來")
+
+        monkeypatch.setattr(_svc, "build_ai_summary", _boom)
+        _ai = P.load_ai_summary(True, _station_with_digest(), _switch_ro())
+        assert _ai.error_kind == P.AI_ERR_EXCEPTION
+        assert "prompt 建不起來" in _ai.error and _ai.text == ""
+
+    @pytest.mark.parametrize("bad", [
+        ("文字", {"meta": 1}),          # 有人把回傳改成 (text, meta)
+        {"text": "文字"},               # 有人改成回 dict
+        123,                            # 有人回了別的東西
+    ])
+    def test_a_non_string_answer_is_never_str_ed_and_shown(
+            self, monkeypatch, bad):
+        """**§6「最容易讓這段出錯的三個輸入」之一：L3 改了回傳型別。**
+
+        `str(("文字", {...}))` 會得到一段**看起來像資料**的東西，
+        照畫就是把一個 tuple 印成今天的操作建議（§1：資料長得不對 ≠ 沒資料）。
+        """
+        import src.services.dividend_station_service as _svc
+
+        monkeypatch.setattr(_svc, "build_ai_summary", lambda *_a, **_k: bad)
+        _ai = P.load_ai_summary(True, _station_with_digest(), _switch_ro())
+        assert _ai.error_kind == P.AI_ERR_DRIFT and _ai.text == ""
+        assert type(bad).__name__ in _ai.error, "沒有講出回來的是什麼型別"
+        assert P.build_ai_summary_card(
+            _ai, _station_with_digest())[0].state == UI_FAILED
+
+    def test_a_none_answer_is_treated_as_empty_not_as_drift(self, monkeypatch):
+        """`None` 走**回空**那一條，不走契約漂移 —— 兩者的指路句不同。
+
+        `None` 是「這一次沒產出」（再按一次可能就好）；
+        回一個 `dict` 是「上下游對不上」（再按一百次也一樣）。
+        """
+        import src.services.dividend_station_service as _svc
+
+        monkeypatch.setattr(_svc, "build_ai_summary", lambda *_a, **_k: None)
+        _ai = P.load_ai_summary(True, _station_with_digest(), _switch_ro())
+        assert _ai.error_kind == P.AI_ERR_EMPTY
+
+    def test_a_very_long_answer_is_not_truncated_silently(self, monkeypatch):
+        """**三個輸入之三**：AI 回了很長一段 —— 本層不偷偷截斷。
+
+        截斷等於改寫上游訊息卻不說（§1）；要截也該由畫面層明講。
+        """
+        import src.services.dividend_station_service as _svc
+
+        _long = "續抱、定期定額即可。" * 500
+        monkeypatch.setattr(_svc, "build_ai_summary", lambda *_a, **_k: _long)
+        _ai = P.load_ai_summary(True, _station_with_digest(), _switch_ro())
+        assert _ai.text == _long, "本層偷偷截斷了 AI 的輸出"
+
+    def test_a_good_answer_still_comes_through(self, monkeypatch):
+        """**反證**：上面幾條不是因為這條路根本走不通。"""
+        import src.services.dividend_station_service as _svc
+
+        monkeypatch.setattr(_svc, "build_ai_summary",
+                            lambda *_a, **_k: " 續抱、定期定額即可。 ")
+        _ai = P.load_ai_summary(True, _station_with_digest(), _switch_ro())
+        assert _ai.text == "續抱、定期定額即可。" and _ai.error == ""
+        assert P.build_ai_summary_card(
+            _ai, _station_with_digest())[0].state == UI_LIVE
+
+
+class TestTheDigestIsSharedNotRecomputed:
+    """⑦ 吃的必須是 ①③⑤ 用的**同一份** digest（§2.1：同一頁不出現兩份）。"""
+
+    def test_the_station_carries_the_digest_it_computed(self):
+        assert "digest" in P.StationReadout.__dataclass_fields__
+        assert P.StationReadout(requested=False).digest is None, (
+            "沒跑就沒有 digest —— 不腦補一個空的")
+
+    def test_the_loader_never_recomputes_the_digest(self):
+        """`load_ai_summary()` 不得自己再呼叫一次 `build_station_digest()`。
+
+        重算一次會拿到第二份可能不一致的摘要，而且它的 VIX 要重抓。
+        """
+        import inspect
+
+        _s = inspect.getsource(P.load_ai_summary)
+        assert "build_station_digest" not in _s, (
+            "⑦ 自己重算了一次 digest —— 應該吃 `station.digest`")
+        assert "station.digest" in _s
+
+    def test_the_switch_is_reused_not_reloaded(self):
+        """④ 那一份換股建議也是共用的，⑦ 不再載一次。
+
+        ⚠️ 用 AST 數**呼叫**，不數原始碼裡的字樣 —— 註解裡解釋「為什麼不再載一次」
+        本身就會出現那個名字，字串比對會把說明文字算成第二次呼叫。
+        """
+        _fn = next(_n for _n in ast.walk(_tree())
+                   if isinstance(_n, ast.FunctionDef)
+                   and _n.name == "_render_warroom_leaf")
+        _calls = [_c for _c in ast.walk(_fn)
+                  if isinstance(_c, ast.Call) and isinstance(_c.func, ast.Name)
+                  and _c.func.id == "load_switch"]
+        assert len(_calls) == 1, (
+            f"`load_switch()` 在戰情室這一葉被呼叫了 {len(_calls)} 次 —— "
+            "畫面上那張卡與推播文字有機會講出不一樣的換股建議")
+        _ai_calls = [_c for _c in ast.walk(_fn)
+                     if isinstance(_c, ast.Call) and isinstance(_c.func, ast.Name)
+                     and _c.func.id == "load_ai_summary"]
+        assert len(_ai_calls) == 1
+        assert any(isinstance(_a, ast.Name) and _a.id == "_switch"
+                   for _a in _ai_calls[0].args), (
+            "⑦ 沒有吃 ④ 那一份 switch")
+
+    def test_a_broken_switch_is_left_out_rather_than_faked_empty(self):
+        """④ 算不出來 → `switch=None`（摘要不含換股段），**不送一個空的進去**。
+
+        送 `{"switch_out": []}` 會讓 AI 寫出「建議換出：無」，
+        而那一輪其實是**沒算出來** —— 兩者在推播文字裡不可合成同一句（§1）。
+        """
+        assert P._switch_payload(_switch_ro(error="boom")) is None
+        assert P._switch_payload(_switch_ro()) is None, (
+            "沒有任何建議時應回 None，而不是一個空殼")
+        _real = P._switch_payload(_switch_ro(
+            switch_out=({"代號": "2412", "建議動作": "汰弱"},),
+            switch_in=({"代號": "0056", "名稱": "高股息"},),
+            switch_in_src="watchlist"))
+        assert _real is not None
+        assert set(_real) == {"switch_out", "switch_in", "switch_in_src"}, (
+            "換股 payload 的欄位與 L3 `build_summary_prompt()` 讀的不一致")
+
+
 def test_page_mounts_clean(tmp_path):
     """冷啟動整頁 mount：**沒有 uncaught exception、不是半截頁面**。
 
@@ -3022,9 +3638,17 @@ def test_page_mounts_clean(tmp_path):
     _all = ("\n".join(_m.value for _m in _at.markdown)
             + "\n" + "\n".join(_c.value for _c in _at.caption))
 
-    # 一顆 submit，而且是唯一一顆按鈕（form 外沒有任何裸按鈕）。
+    # 一顆 submit ＋ ⑦ 那一顆 AI 鈕（線框 :877），**沒有第三顆**。
+    # ⚠️ 這裡的順序是**顯示順序**（葉1 戰情室在葉2 組合設定之前），
+    #    **不是執行順序** —— 執行上表單先跑（見 `TestFormRunsBeforeItsConsumers`
+    #    的理由：gate 要先寫進去），兩者刻意不同，實測如下。
     _labels = [_b.label for _b in _at.button]
-    assert _labels == [P.ACTION_RUN_WARROOM_LABEL], f"按鈕變成 {_labels}"
+    assert _labels == [P.AI_SUMMARY_LABEL, P.ACTION_RUN_WARROOM_LABEL], (
+        f"按鈕變成 {_labels}")
+
+    # ⑦ 冷啟動是灰的，而且**沒有**畫出任何 AI 文字（一個 token 都沒花）。
+    assert P.AI_IDLE_NOW.strip("*") in _all, "⑦ 冷啟動不是 idle 態"
+    assert "AI 生成聲明" in _all, "⑦ 的 AI 生成揭露沒有畫出來"
 
     # 兩套刻度的逐盞對照表真的畫出來了（線框 ②：「就地列出兩者的定義與門檻」）。
     assert len(_at.dataframe) == 2, (
