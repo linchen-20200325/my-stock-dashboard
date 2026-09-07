@@ -35,6 +35,7 @@ FE-8 自陳那是它最大的缺口：整頁的誠實性（三態不混、gate �
 from __future__ import annotations
 
 import ast
+import inspect
 import pathlib
 import sys
 
@@ -57,6 +58,10 @@ _VIEW = pathlib.Path(P.__file__)
 
 def _tree() -> ast.Module:
     return ast.parse(_VIEW.read_text(encoding="utf-8"))
+
+
+#: 別名 —— 給類別內部用，避免與該類的區域變數 `_tree` 撞名。
+_tree_of_view = _tree
 
 
 class _Frame:
@@ -417,6 +422,11 @@ _DOWNSTREAM = (
     "src.services.sector_flow_service",
     "src.ui.render.sector_flow_render",
     "src.ui.tabs.tab_stock_picker",
+    # 2026-09-07 FE-32 接線的熱力圖兩支（L3 取數 ＋ L4 組圖）。
+    # ⚠️ **漏補的話它們就沒有被下毒**，「沒按之前一行 L3 都不呼叫」對它們
+    # 形同虛設 —— 測試照樣綠，而那一整批冷抓其實已經發出去了。
+    "src.services.sector_heatmap_service",
+    "src.ui.render.sector_heatmap_render",
 )
 
 
@@ -526,34 +536,122 @@ class TestContractDriftIsNotZeroRows:
 # ══════════════════════════════════════════════════════════════════
 # 【5】未接線的兩項恆為未接線
 # ══════════════════════════════════════════════════════════════════
-class TestUnwiredStaysUnwired:
-    """未接線的東西**不會因為多按一次而改變** —— 這正是它與「尚未載入」
+class TestHeatmapIsWiredAndTellsTheTruth:
+    """產業熱力圖 —— **2026-09-07 FE-32 接線後改寫**（原 `TestUnwiredStaysUnwired`）。
 
-    必須分成兩態的原因。若它可以被按成 live，使用者會一直按。
+    ⚠️ **這不是放寬斷言。** 原本這裡釘的是「熱力圖恆為 `UI_UNWIRED`、
+    `_why` 必須含 `DuplicateWidgetID`」。那兩條在接線之前**是對的**：
+    當時本頁真的畫不出熱力圖，而畫不出來的原因真的是那五個寫死的 widget key。
 
-    ⚠️ **2026-09-07 FE-18：估值 PE 因子已接線，從本類移走。**
-    本類現在只剩「產業熱力圖」一項（一張 `wired=False` 的卡）。
-    這**不是**放寬斷言 —— PE 接上之後就不該再被當成未接線的東西驗。
-    原本掛在它身上的兩條守衛各有等效替身，見
-    `TestValuationGoesThroughL3`（AST：接線走 L3、不走 re-export 繞道）
-    與 `TestCheckedFactorIsNeverSilentlyDropped`（行為：什麼時候該講、
-    什麼時候**不准**講）。
+    **接上之後照原樣留著它們，反而會變成本頁最大的謊**：卡片對使用者說
+    「這裡沒有出口、按了也不會變」，而其實上面那顆「🗺️ 載入板塊地圖」按下去
+    就會出圖。那正是 `CLAUDE.md §1.A` 第 4 點要防的方向——把**有**的東西
+    講成**沒有**，跟把沒有的講成有一樣是造假。
+    （同一個處置在 FE-18 對「估值（本益比）」已經走過一次。）
+
+    改成**正向守衛**：釘住四態各自正確、且**沒有一態是靠猜的**。
+    另外兩條「接線前的保護」各有替身，不是被刪掉：
+      · 「不得跨檔直取 L4 私有符號 / 不得自己抄一份類股表」
+        → `tests/test_sector_heatmap_universe_single_source.py`
+      · 「不得與舊分頁撞 widget key」
+        → 下方 `TestHeatmapKeysNeverCollideWithTheOldTab`（**新的、更硬**：
+          原本只是卡片文字裡的一句宣稱，現在是 AST 實測）。
     """
 
-    @pytest.mark.parametrize("requested", [False, True])
-    def test_heatmap_is_unwired_whatever_you_press(self, requested):
-        _card, _facts = P.build_heatmap_card(requested)
-        assert _card.state == UI_UNWIRED, (
-            "熱力圖被按成了別的狀態 —— 未接線與請求與否無關")
-        assert _card.value == ""
+    def _hm(self, **kw):
+        return P.HeatmapReadout(**kw)
 
-    def test_heatmap_note_has_all_three_elements(self):
-        _now, _why, _where = _note_triple(P.build_heatmap_card(True)[0].note)
-        assert _now.strip() and _why.strip() and _where.strip(), (
-            "鐵律 4：三要素都不得為空")
-        assert P.NO_EXIT_MARKER in _where, "沒有使用者出口就要明講沒有"
-        assert "DuplicateWidgetID" in _why, "『為什麼沒有』要講真正的原因"
-        assert _facts_nonempty(P.build_heatmap_card(True)[1])
+    def test_not_pressed_is_idle_not_empty_and_not_red(self):
+        """沒按 → 灰的 idle。**不是紅**（線框葉2 grey 原文）。"""
+        _card, _facts = P.build_heatmap_card(self._hm(requested=False))
+        assert _card.state == UI_IDLE
+        assert _card.value == "", "idle 不准帶結論文字"
+        _now, _why, _where = _note_triple(_card.note)
+        assert all((_now.strip(), _why.strip(), _where.strip())), "鐵律 4"
+        assert P.ACTION_LOAD_MAP_LABEL in _where, "灰態要指去那顆按鈕"
+        assert _facts_nonempty(_facts)
+
+    def test_pressed_and_nothing_came_back_is_red_not_grey(self):
+        """按了、**一檔都沒抓到** → 🔴（線框葉2 `err` 原文）。
+
+        ⚠️ 這一條是本類最重要的一條，而且**規劃組原本提的是灰態**。
+        灰（`UI_EMPTY`）的語意是「還沒有人叫過 / 東西還沒生出來」——
+        使用者已經按下去、上游一檔都沒回來，那是**真故障**。
+        畫成灰的話，真正的斷線會被讀成「我還沒按」，於是沒有人去看網路／proxy。
+        對照泡泡圖那半：它的 `ok=False` 是「盤後任務還沒產生快取」，**那才是灰的**。
+        **兩者長得像、語意相反，這一條就是釘住它們不准合流。**
+        """
+        _card, _ = P.build_heatmap_card(
+            self._hm(requested=True, any_data=False, sectors_n=10, sub_total_n=32))
+        assert _card.state == UI_FAILED, (
+            "「按了但一檔都沒抓到」被畫成了灰態 —— 那會讓真正的斷線沒人看見")
+        assert _card.state != UI_EMPTY
+        _now, _why, _where = _note_triple(_card.note)
+        assert "0" not in _now, "紅態的標題不該出現 0，避免讀成「0% 持平」"
+        assert "填 0" in _why or "冒充" in _why, "要講明沒有拿 0 把格子填滿"
+
+    def test_partial_coverage_is_degraded_and_says_blanks_are_blank(self):
+        """只抓到一部分 → 橘。缺格**留白**，不是 0%。"""
+        _card, _facts = P.build_heatmap_card(self._hm(
+            requested=True, any_data=True, complete=False,
+            fetched_n=8, sectors_n=10, sub_fetched_n=20, sub_total_n=32))
+        assert _card.state == UI_DEGRADED
+        _now, _why, _where = _note_triple(_card.note)
+        assert "8/10" in _why and "20/32" in _why, "覆蓋率要講出實際數字"
+        assert "留白" in _why, "缺格是留白，不是 0"
+        assert dict(_facts)["資料覆蓋率"].strip()
+
+    def test_full_coverage_is_live_with_a_real_number(self):
+        _card, _facts = P.build_heatmap_card(self._hm(
+            requested=True, any_data=True, complete=True,
+            fetched_n=10, sectors_n=10, sub_fetched_n=32, sub_total_n=32))
+        assert _card.state == UI_LIVE
+        assert _card.value == "10 個類股"
+        assert _card.note is None, "live 不需要空狀態三要素"
+
+    def test_the_idle_market_label_matches_l3(self):
+        """本頁「還沒載入」時顯示的市場名，必須與 L3 之後真的回的那個一致。
+
+        本頁刻意不 module-level import L3（見該常數的註解），代價是同一個
+        字串有兩份。**兩份就會漂移**，除非有人在比 —— 這一條就是那個人。
+        """
+        from src.services import sector_heatmap_service as S
+
+        _expect = (S.MARKET_LABEL_US if P.HEATMAP_IS_US else S.MARKET_LABEL_TW)
+        assert P.HEATMAP_MARKET_LABEL_IDLE == _expect, (
+            f"本頁 idle 顯示 {P.HEATMAP_MARKET_LABEL_IDLE!r}，"
+            f"但 L3 之後會回 {_expect!r} —— 使用者按下去會看到市場名突然變了")
+        _card, _facts = P.build_heatmap_card(P.HeatmapReadout(requested=False))
+        assert _expect in dict(_facts)["市場 / 區間"]
+
+    def test_an_exception_is_red_and_carries_the_message(self):
+        _card, _ = P.build_heatmap_card(self._hm(
+            requested=True, error="RuntimeError('yfinance 掛了')"))
+        assert _card.state == UI_FAILED
+        _now, _why, _where = _note_triple(_card.note)
+        assert "yfinance 掛了" in _why, "§1：原始例外訊息必須看得見"
+        assert "sector_heatmap_service" in _why, "出處要講對是哪一層"
+
+    def test_the_state_is_never_decided_by_the_page_itself(self):
+        """四態一律走 L0 `classify_ui_state`，本頁不得自己寫 `state=UI_FAILED`。
+
+        自己寫一套 = 第二把尺；L0 那道「`requested=False` 卻帶著值就 raise」
+        的保護會被繞過去。
+        """
+        _src = inspect.getsource(P.build_heatmap_card)
+        assert "classify_ui_state(" in _src
+        for _bad in ("state=UI_FAILED", "state=UI_DEGRADED", "state=UI_EMPTY"):
+            assert _bad not in _src, f"本頁自己決定了 {_bad} —— 那是第二把尺"
+
+    def test_the_loader_calls_nothing_before_you_press(self, poisoned):
+        """沒按 → **整批冷抓不會發**（毒藥穿得過所有 try/except）。"""
+        _hm = P.load_heatmap(requested=False)
+        assert (_hm.requested, _hm.figure, _hm.any_data) == (False, None, False)
+
+    def test_the_poison_really_would_have_fired_on_the_heatmap(self, poisoned):
+        """反證：同一組毒藥下 `requested=True` 一定炸 —— 證明它真的在射程內。"""
+        with pytest.raises(_L3Touched):
+            P.load_heatmap(requested=True)
 
     def test_the_default_factor_is_still_the_cheap_one(self):
         """預設因子仍不是 PE —— **理由換了，結論沒換**（有意識的保留）。
@@ -562,9 +660,107 @@ class TestUnwiredStaysUnwired:
         **那個理由已經不成立**（接上了），但預設值不改，新理由是成本：
         `eps_high` 走存活池自己的 `eps` 欄、**零額外取數**，
         而 `pe_low` 每一次都要打 TWSE ＋ TPEX 兩支 OpenAPI。
+
+        ⚠️ 本條原本掛在 `TestUnwiredStaysUnwired` 底下，與未接線無關，
+        隨該類改寫一起搬過來，**內容一字未改**。
         """
         assert P.DEFAULT_FACTOR_KEY != P.PE_FACTOR_KEY
         assert P.DEFAULT_FACTOR_KEY == "eps_high"
+
+
+class TestHeatmapKeysNeverCollideWithTheOldTab:
+    """本頁**一個舊 widget key 都不准重用** —— 重用會**弄壞既有分頁**。
+
+    這不是潔癖，是兩個實際會發生的故障（Streamlit 每次 app run 會跑
+    **全部** tab body，而本頁的渲染順序在 🌍 市場環境的熱力圖**之前**）：
+
+      1. **共用 `heatmap_loaded`（session 旗標）** → 使用者在舊分頁按過載入之後，
+         本頁會在**從未被造訪的情況下**發出整批冷抓；反過來，本頁按了載入
+         會讓舊分頁的 opt-in 效能保證當場失效
+         （`tests/test_etf_render_heatmap_gate.py` 守的就是那件事）。
+      2. **共用 `heatmap_market` / `heatmap_period` / `heatmap_refresh` /
+         `heatmap_load`（widget key）** → 先執行的那一邊佔住 ID，
+         **另一邊拋 `DuplicateWidgetID`**。先執行的是本頁 → 壞的是舊分頁。
+
+    ⚠️ **用 AST 不用字串搜尋**：本頁檔頭的病史說明**必須**寫出那五個 key 才
+    講得清楚「為什麼不能共用」，字串搜尋會把**誠實的揭露**判成違規
+    （同 `TestValuationGoesThroughL3::test_no_l1_import_and_no_reexport_detour`
+    的理由）。
+    """
+
+    #: 本頁「真的會進 Streamlit 命名空間」的字串只有兩種來源：
+    #:   (a) `st.<widget>(..., key=...)` 的 key；
+    #:   (b) `session_state` / 本頁傳進來的 session mapping 的下標。
+    #: ⚠️ **刻意不收 `Card(key=...)`**：那是卡片自己的識別碼（`find.heatmap`
+    #: 這種），不會進 Streamlit 的 widget 命名空間，收進來只會製造假紅燈。
+    def _keys_actually_used(self) -> set[str]:
+        _used: set[str] = set()
+
+        def _add(_node) -> None:
+            if isinstance(_node, ast.Constant) and isinstance(_node.value, str):
+                _used.add(_node.value)
+            elif isinstance(_node, ast.Name):
+                _v = getattr(P, _node.id, None)
+                if isinstance(_v, str):
+                    _used.add(_v)
+
+        for _n in ast.walk(_tree_of_view()):
+            if isinstance(_n, ast.Call) and isinstance(_n.func, ast.Attribute):
+                # `st.button(...)` / `st.download_button(...)` / `col.selectbox(...)`
+                for _kw in _n.keywords:
+                    if _kw.arg == "key":
+                        _add(_kw.value)
+            elif isinstance(_n, ast.Subscript):
+                _tgt = _n.value
+                _is_session = (
+                    (isinstance(_tgt, ast.Attribute)
+                     and _tgt.attr == "session_state")
+                    or (isinstance(_tgt, ast.Name)
+                        and "session" in _tgt.id.lower()))
+                if _is_session:
+                    _add(_n.slice)
+        return _used
+
+    def test_the_five_legacy_keys_are_a_real_list_not_a_guess(self):
+        """名單本身要對得上舊分頁 —— 名單抄錯的話下面兩條就是空轉。"""
+        import src.ui.render.etf_render as R
+
+        _src = inspect.getsource(R.render_sector_heatmap)
+        for _k in P.LEGACY_HEATMAP_KEYS:
+            assert f"'{_k}'" in _src or f'"{_k}"' in _src, (
+                f"{_k!r} 已經不在 `render_sector_heatmap()` 裡了 —— "
+                "請更新 `LEGACY_HEATMAP_KEYS`，別讓這張名單變成過期的擺設")
+
+    def test_the_collector_actually_finds_this_pages_keys(self):
+        """**反證**：沒有這一條，上面兩條可能只是因為收集器什麼都沒收到而綠。"""
+        _used = self._keys_actually_used()
+        for _k in (P.SS_MAP_BUTTON, P.SS_MAP_REQUESTED, P.SS_APPLIED_SCREEN,
+                   P.SS_FACTORS_WIDGET, P.SS_TOPN_WIDGET):
+            assert _k in _used, (
+                f"收集器沒有看到本頁自己的 {_k!r} —— "
+                "它壞了，下面兩條的綠燈不算數")
+
+    def test_this_page_uses_none_of_them(self):
+        _used = self._keys_actually_used()
+        _clash = sorted(_used & set(P.LEGACY_HEATMAP_KEYS))
+        assert not _clash, (
+            f"本頁用了舊分頁的 key {_clash} —— "
+            "session 旗標共用會讓另一邊在沒被造訪時發出整批冷抓；"
+            "widget key 共用會讓先執行者佔住 ID、另一邊拋 DuplicateWidgetID。"
+            "本頁的 key 一律用 `p02v_` / `_p02_` 前綴")
+
+    def test_every_key_this_page_uses_carries_the_page_prefix(self):
+        """不是只避開那五個，而是**全部**都要帶前綴。
+
+        只避開已知的五個，等於等下一個同名衝突自己撞上來；
+        帶前綴則讓衝突在結構上不可能發生。
+        ⚠️ 兩個上游 session key（ETF 組合持股 / 個股 sheet_id）是**讀別人寫的**，
+        不是本頁自有的 widget，故排除。
+        """
+        _upstream = {P.SS_ETF_PORTFOLIO_ROWS, P.SS_STOCK_SHEET_ID, P.FORM_KEY}
+        _bad = sorted(_k for _k in self._keys_actually_used() - _upstream
+                      if not _k.startswith(("p02v_", "_p02_")))
+        assert not _bad, f"這些 key 沒有本頁前綴：{_bad}"
 
 
 class TestValuationGoesThroughL3:
@@ -902,7 +1098,8 @@ class TestRenderBoundaryIsShared:
             return _real(card, **kw)
 
         monkeypatch.setattr(K, "render_card", _boom)
-        P._render_one(P.build_heatmap_card(False)[0])
+        P._render_one(P.build_heatmap_card(
+            P.HeatmapReadout(requested=False))[0])
         _all = "\n".join(_fake.markdown)
         assert "這一格畫不出來" in _all, "半截死頁：例外沒有被轉成看得見的紅卡"
         assert "render exploded" in _all, "原始例外必須看得見（§1）"

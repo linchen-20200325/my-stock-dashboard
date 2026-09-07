@@ -16,10 +16,13 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 # B4-b:產業熱力圖區間口徑 / 缺值呈現 / 台股代表股揭露 SSOT(L4 → L0)。
 from shared.sector_heatmap import (
     HEATMAP_MISSING_TEXT, SECTOR_LOOKBACK_TRADING_DAYS, SECTOR_PERIOD_LABELS,
-    SECTOR_YF_DOWNLOAD_WINDOW, TW_SINGLE_STOCK_PROXY_DISCLOSURE,
+    SECTOR_YF_DOWNLOAD_WINDOW, TW_SECTOR_SINGLE_STOCK_PROXY, TW_SECTORS,
+    TW_SINGLE_STOCK_PROXY_DISCLOSURE, US_SECTOR_SINGLE_STOCK_PROXY, US_SECTORS,
     color_span_pct, direction_label, hover_value_text, node_area,
     sector_display_name, sort_key_desc,
 )
+# 2026-09-07:treemap 組裝抽至同層新檔(L4→L4),本檔保留私有別名見下方。
+from src.ui.render.sector_heatmap_render import build_sector_treemap
 
 
 # ── 總經連動配置建議表 ────────────────────────────────────────
@@ -621,63 +624,19 @@ def _check_sector_exposure(rows: list, total_value: float) -> None:
         _colored_box(_msg, 'green')
 
 
-# ── 美股 11 大 GICS 類股 ETF ─────────────────────────────────
-_US_SECTORS = {
-    'XLK':  {'name': '科技',        'sub': ['AAPL','MSFT','NVDA','AVGO','AMD']},
-    'XLF':  {'name': '金融',        'sub': ['JPM','BAC','WFC','GS','MS']},
-    'XLE':  {'name': '能源',        'sub': ['XOM','CVX','COP','SLB','MPC']},
-    'XLV':  {'name': '醫療',        'sub': ['LLY','UNH','JNJ','ABBV','MRK']},
-    'XLI':  {'name': '工業',        'sub': ['GE','CAT','HON','UPS','BA']},
-    'XLP':  {'name': '必需消費',    'sub': ['PG','KO','PEP','COST','WMT']},
-    'XLU':  {'name': '公用事業',    'sub': ['NEE','SO','DUK','AEP','D']},
-    'XLB':  {'name': '原物料',      'sub': ['LIN','APD','ECL','NEM','FCX']},
-    'XLRE': {'name': '房地產',      'sub': ['PLD','AMT','EQIX','CCI','SPG']},
-    'XLY':  {'name': '非必需消費',  'sub': ['AMZN','TSLA','HD','MCD','NKE']},
-    'XLC':  {'name': '通訊服務',    'sub': ['META','GOOGL','NFLX','DIS','T']},
-}
-
-# ── 台股「類股」代表股 ────────────────────────────────────────
-# ⚠️ B4-b H-2 揭露:以下 key **全部是個股**,不是類股指數、也不是成分股平均。
-# 台股側沒有可用的類股指數日線資料源(查證結果見下),因此走「單一代表權值股近似」,
-# 並在 UI 標籤 / caption / AI prompt 三處**明確揭露**(§1 寧可誠實標示,
-# 不可讓使用者以為那是類股平均)。渲染時一律經
-# `shared.sector_heatmap.sector_display_name(..., single_stock_proxy=True)`
-# 產生「半導體（代表股 2330）」這種標籤。
-#
-# 【資料源查證】為什麼不改用真類股指數:
-# - yfinance:無 TWSE 類股指數 ticker(僅 ^TWII 大盤 / ^TWOII 櫃買),拿不到日線序列。
-# - TWSE `MI_INDEX`:確實含 29 檔類股指數,但**一次只回一個交易日**;要湊 63 根
-#   bar 需 63 次 request,且本專案已在 `daily_data_fetchers.py:324` 標記
-#   「🚫 TWSE MI_INDEX 已永久停用」(穩定性不足)。
-# - FinMind:無類股指數 dataset(`TaiwanStockInfo.industry_category` 只有分類欄位,
-#   要自行對數百檔成分股加權 → 屬新 L1 模組 + 新資料流,依 §8.1 需先送架構審。
-# - 台股類股 ETF:僅科技(0052)/ 金融(0055)/ 電子(0053)等 3~4 個產業有,
-#   塑化 / 鋼鐵 / 食品 / 航運 / 觀光 / 光電**沒有**對應 ETF,無法覆蓋整張圖。
-# → 結論:走揭露路線。升級觸發條件:若日後接上可用的類股指數日線源,
-#   把本表換成指數代號並將 `_TW_SECTOR_SINGLE_STOCK_PROXY` 改 False 即可。
-#
-# 【B4-b 一併修掉的重複計數 / 錯分類 / 已下市】
-# - `3008.TW`(大立光)原同時是「光電」母層 + 「電子製造」子成分 → 自電子製造移除。
-# - `2409.TW`(友達,面板廠)原同時掛「電信」與「光電」→ 自電信移除(本就非電信股)。
-# - `2475.TW`(華映)2019 已下市,永遠抓不到 → 移除(不猜替代標的)。
-# - `9910.TW`(豐泰)是製鞋廠卻掛在「觀光」→ 母層改 `2707.TW`(晶華酒店)。
-_TW_SECTORS = {
-    '2330.TW': {'name': '半導體',    'sub': ['2303.TW','2308.TW','2454.TW','3711.TW','2379.TW']},
-    '2317.TW': {'name': '電子製造',  'sub': ['2354.TW','2356.TW','2382.TW','3034.TW']},
-    '2412.TW': {'name': '電信',      'sub': ['3045.TW','4904.TW']},
-    '2882.TW': {'name': '金融',      'sub': ['2881.TW','2883.TW','2884.TW','2886.TW','2891.TW']},
-    '1301.TW': {'name': '塑化',      'sub': ['1303.TW','1326.TW','1402.TW']},
-    '2002.TW': {'name': '鋼鐵',      'sub': ['2006.TW','2007.TW','2010.TW']},
-    '1216.TW': {'name': '食品',      'sub': ['1201.TW','1210.TW','1225.TW']},
-    '2603.TW': {'name': '航運',      'sub': ['2609.TW','2615.TW','2617.TW']},
-    '2707.TW': {'name': '觀光',      'sub': ['2731.TW','2727.TW']},
-    '3008.TW': {'name': '光電',      'sub': ['2409.TW','3481.TW']},
-}
-
-#: 該市場的「類股」是否為單一代表股近似(H-2 揭露開關)。
-#: 美股走真 GICS 類股 ETF(XLK/XLF…)→ False;台股走代表股 → True。
-_US_SECTOR_SINGLE_STOCK_PROXY = False
-_TW_SECTOR_SINGLE_STOCK_PROXY = True
+# ── 熱力圖類股宇宙:2026-09-07 上移 L0,本檔改為別名轉發 ──────────
+# 這四個名字**只是指向** `shared/sector_heatmap.py` 的同一個物件 ——
+# IA v2 頁2「🔍 找標的 › 板塊地圖」要畫同一份宇宙,留在本檔當私有名的話,
+# 新頁只能跨檔直取底線私有符號(§8.2.A.2 V-PICKER-PRIV-1 的前車之鑑)
+# 或自己抄一份(第二個真相源)。**表的內容與註記一字未改**,連同「台股是單一
+# 代表股不是類股平均」的完整查證說明一併搬到 L0(見該檔 module docstring)。
+# ⚠️ 私有名保留是必要的,不是懶得改:`src/ui/etf/etf_dashboard.py` 的
+# re-export shim、`app.py` 解析 `render_sector_heatmap` 的路徑、以及
+# `tests/test_b4b_heatmap.py` 都是讀這幾個名字。
+_US_SECTORS = US_SECTORS
+_TW_SECTORS = TW_SECTORS
+_US_SECTOR_SINGLE_STOCK_PROXY = US_SECTOR_SINGLE_STOCK_PROXY
+_TW_SECTOR_SINGLE_STOCK_PROXY = TW_SECTOR_SINGLE_STOCK_PROXY
 
 # ⚠️ B4-b DEPRECATED:原 `_PERIOD_MAP = {'1日':'5d','5日':'1mo','1月':'3mo','3月':'6mo'}`
 # 正是 H-1 缺陷的根源 —— 它只是 yfinance **下載窗**,卻被 `_fetch_sector_returns`
@@ -688,92 +647,12 @@ _TW_SECTOR_SINGLE_STOCK_PROXY = True
 _PERIOD_MAP = dict(SECTOR_YF_DOWNLOAD_WINDOW)
 
 
-def _build_treemap_data(sectors: dict, returns: dict, market: str,
-                        *, single_stock_proxy: bool = False,
-                        period_label: str = '') -> go.Figure:
-    """建立 Plotly Treemap 熱力圖。
-
-    B4-b 修正:
-    - **H-3 缺值不再填 0**:`colors` 缺值傳 `None`(Plotly 留白),hover 文字改走
-      `customdata` 顯示「無資料」;原本 `colors.append(0)` + `%{marker.color:+.2f}%`
-      會讓「從未抓到的標的」顯示成「+0.00%」,與真實持平長得一模一樣(§1 造假)。
-    - **H-3 缺值面積縮小**:原缺值母層給 1.0 / 子層給 0.5,比一檔真實 ±0.5% 的
-      類股還大。改走 `node_area()`,缺值面積嚴格小於任何有資料節點。
-    - **H-9 空序列**:原 `max(abs(c) for c in colors if c != 0) or 5` 在「全部為 0」
-      時炸 `ValueError: max() arg is an empty sequence`(整頁白掉)。改 `color_span_pct()`。
-    - **H-2 揭露**:`single_stock_proxy=True` 時類股名帶上代表股代號。
-
-    Args:
-        sectors: `{ticker: {'name': str, 'sub': [ticker, ...]}}`。
-        returns: `{ticker: rate_pct}`;取不到的 ticker **不在** dict 內。
-        market: root 節點標籤。
-        single_stock_proxy: 該市場的「類股」是否為單一代表股近似(台股 True)。
-        period_label: 區間標籤,只用於 hover 文案(如 '1日')。
-    """
-    ids, labels, parents, values, texts, colors, hovers = [], [], [], [], [], [], []
-
-    # root
-    ids.append(market)
-    labels.append(market)
-    parents.append('')
-    values.append(0)
-    texts.append(market)
-    colors.append(None)      # root 不參與色階(H-9:也不會被 color_span_pct 誤算)
-    hovers.append('—')
-
-    for ticker, meta in sectors.items():
-        sec_ret = returns.get(ticker)
-        _disp = sector_display_name(meta['name'], ticker,
-                                    single_stock_proxy=single_stock_proxy)
-        sec_label = (f"{_disp}<br>{sec_ret:+.1f}%" if sec_ret is not None
-                     else f"{_disp}<br>{HEATMAP_MISSING_TEXT}")
-        ids.append(ticker)
-        labels.append(sec_label)
-        parents.append(market)
-        values.append(node_area(sec_ret, is_parent=True))
-        texts.append(f'{_disp} [{ticker}]')
-        colors.append(sec_ret)          # ← None 保留成 None,Plotly 留白
-        hovers.append(hover_value_text(sec_ret))
-
-        # sub-items
-        for sub in meta.get('sub', []):
-            sub_ret = returns.get(sub)
-            _sub_disp = sub.replace('.TW', '').replace('.TWO', '')
-            sub_label = (f"{_sub_disp}<br>{sub_ret:+.1f}%" if sub_ret is not None
-                         else f"{_sub_disp}<br>{HEATMAP_MISSING_TEXT}")
-            ids.append(f'{ticker}/{sub}')
-            labels.append(sub_label)
-            parents.append(ticker)
-            values.append(node_area(sub_ret, is_parent=False))
-            texts.append(sub)
-            colors.append(sub_ret)      # ← 同上,不填 0
-            hovers.append(hover_value_text(sub_ret))
-
-    # 顏色：最大值對稱(H-9:全缺 / 全 0 時回預設跨度,不炸 max() 空序列)
-    max_abs = color_span_pct(colors)
-    _hover_prefix = f'{period_label}漲跌' if period_label else '漲跌'
-    fig = go.Figure(go.Treemap(
-        ids=ids, labels=labels, parents=parents,
-        values=values, text=texts, customdata=hovers,
-        textinfo='label',
-        marker=dict(
-            colors=colors,
-            colorscale=[[0, '#0f5132'], [0.35, '#1a6e36'], [0.5, '#1e2530'],
-                        [0.65, '#c0392b'], [1, '#7b1212']],  # 台灣慣例：漲=紅 跌=綠
-            cmid=0, cmin=-max_abs, cmax=max_abs,
-            colorbar=dict(title='漲跌%', thickness=12),
-            line=dict(width=1, color='#0d1117'),
-        ),
-        # H-3:hover 走 customdata 字串,缺值吐「無資料」而非 %{marker.color} 的 +0.00%
-        hovertemplate=f'<b>%{{text}}</b><br>{_hover_prefix}：%{{customdata}}<extra></extra>',
-    ))
-    fig.update_layout(
-        template='plotly_dark',
-        height=600,
-        margin=dict(l=0, r=0, t=30, b=0),
-        paper_bgcolor='#0d1117',
-    )
-    return fig
+# treemap 組裝本體 2026-09-07 搬到 `src/ui/render/sector_heatmap_render.py`
+# (同為 L4,**邏輯一行未改**,只改名為 public `build_sector_treemap`)。
+# 搬家理由:頁2 要畫同一張圖;它 `return go.Figure` 故落在 L4,**不是** L2 ——
+# 下沉 L2 會讓純函式層住進一個畫圖函式(V-LEAD-RENDER-1 的反方向),
+# 而 c3 guard 的 `_BANNED_IN_L2` 不含 plotly → CI 抓不到,會是假綠。
+_build_treemap_data = build_sector_treemap
 
 
 def render_sector_heatmap(gemini_fn=None):
