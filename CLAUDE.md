@@ -678,7 +678,7 @@ AI 總管不寫死硬編碼目錄，但必須嚴格遵循 「依題目動態歸�
 |---|---|---|
 | **Data Provider (`src/data/`)** | **L0 Infra + L1 Data** | `src/data/{core,daily,etf,macro,news,notify,portfolio,proxy,sector_flow,stock}` ＋ `shared/` ＋ `src/config/` |
 | **Services (`src/services/`)** | **L2 Compute + L3 Service** | `src/compute/{etf,health,macro,notify,risk,scoring,screener,strategy}` ＋ `src/services/` |
-| **UI (`src/ui/views/`)** | **L4 Render + L5 UI Tabs + L6 App** | `src/ui/{render,tabs,etf,pages}` ＋ `app.py`（⚠️ **本 repo 無 `src/ui/views/`**，實測 `ls src/ui/views` → No such file） |
+| **UI (`src/ui/views/`)** | **L4 Render + L5 UI Tabs + L6 App** | `src/ui/{render,tabs,etf,pages,views}` ＋ `app.py`（📌 **2026-09-07 事實更正**：`src/ui/views/` **已落地**〔IA v2 戰情室 View 層，逐頁落地中〕，原文「本 repo 無 `src/ui/views/`」自本日起不成立。⚠️ **變的只有事實，規則沒變** —— 下方「禁止 `src/ui/tabs/` → `src/ui/views/` 全域改名」仍然完全有效） |
 
 **判定理由（五條）**：
 
@@ -709,9 +709,22 @@ AI 總管不寫死硬編碼目錄，但必須嚴格遵循 「依題目動態歸�
   它們之間的方向仍受 §8.2「L0 不得依賴任何 L1+」拘束。
 - ✅ **v3 有一句是加嚴的，要照吃**：三層圖 UI 框內「**嚴禁在 UI 層私自存放或抓取原始資料**」——
   與 §8.2 硬規則第 4 條「L5/L6 不得直呼 L1」**同向且更強**（v3 連「**存放**」都禁）。見判定 2。
-- ⚠️ **`src/ui/views/` 這個路徑名不在本 repo 落地**：依 v3 §01 首句「不寫死硬編碼目錄」，
+- ⚠️ ~~**`src/ui/views/` 這個路徑名不在本 repo 落地**~~（**2026-09-07 事實更正，見下方 📌**）：依 v3 §01 首句「不寫死硬編碼目錄」，
   **不得**據 v3 發動一次 `src/ui/tabs/` → `src/ui/views/` 的全域改名 ——
   那是**純 cosmetic、動到數十個 caller** 的改動，正是 §8.1 step 6 的反例，且未經 §8.4 step 4 的 scope gate。
+  📌 **2026-09-07 事實更正 —— 有意識的更正，不是漏刪；決策者 user，執行 AI 總管。**
+  `src/ui/views/` **已於本批落地**（IA v2 戰情室 View 層，user 拍板路線 A「UI 全新重寫」，逐頁落地中）。
+  ⚠️ **這是事實更正，不是政策變更** —— 上面畫掉的只有「**該路徑不存在**」這個前提，
+  **禁令本身一個字都沒有被弱化，仍然完全有效。**
+  - **舊事實的理由（在它寫下的當天是對的）**：2026-08-27 量測時 `ls src/ui/views` 確實 No such file，
+    當時就用「這個路徑根本不存在」當最省事的擋箭牌。**該量測值已過期**（§8.2.A.0 規則 4）。
+  - **為什麼禁令不跟著事實一起失效**：禁令的理由從來就**不是**「那個目錄不存在」，而是
+    **「純 cosmetic、動到數十個 caller、§8.1 step 6 的反例、未經 §8.4 step 4 的 scope gate」**
+    —— 這四條**一條都沒有變**。拿「目錄現在存在了」去推「所以可以改名了」是**把擋箭牌當成理由**。
+  - ⚠️ **而且它現在更需要被看見**：目錄真的存在了，「順手把 `tabs/` 也搬過去統一一下」的**誘惑變大了**。
+    **新頁開在新目錄**（本批做的事，不動任何既有 caller）與**把既有 `tabs/` 改名搬過去**
+    （本條禁止的事，要動數十個 caller）是**兩件完全不同的事**。
+    **分不清時一律當後者處理：停手，走 §8.4 step 4 把範圍問題交給客戶（附推薦方案）。**
 
 #### 判定 2｜⭐ **主動搬遷 → 不推翻 EX-PASSTHRU-1，但收窄它並新增三條明文排除**
 
@@ -1604,7 +1617,7 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 > |---|---|---|
 > | **Data Provider** | **L0 + L1** | `src/data/{core,daily,etf,macro,news,notify,portfolio,proxy,sector_flow,stock}` ＋ `shared/` ＋ `src/config/` |
 > | **Services** | **L2 + L3** | `src/compute/{etf,health,macro,notify,risk,scoring,screener,strategy}` ＋ `src/services/` |
-> | **UI** | **L4 + L5 + L6** | `src/ui/{render,tabs,etf,pages}` ＋ `app.py` |
+> | **UI** | **L4 + L5 + L6** | `src/ui/{render,tabs,etf,pages}` ＋ `app.py`（**2026-09-07 增**：`src/ui/views/`，見本表下方 📌 事實更正） |
 >
 > **判定的三個直接後果（寫死，防誤用）**：
 > - ✅ **本表與下方五條硬規則全部保留**。三層講「**東西住哪個大區**」，五條硬規則講
@@ -1615,10 +1628,18 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 > - ✅ **v3 有一句是加嚴的，要照吃**：三層圖 UI 框內寫「**嚴禁在 UI 層私自存放或抓取原始資料**」——
 >   與下方第 4 條「L5 UI / L6 App 不得直呼 L1 Data fetcher」**同向且更強**（v3 連「**存放**」都禁，
 >   直接命中 §8.2.A.2 **V-SMART-CACHE-1** 的 L5 自建 cache）。見 §-1.5.F 判定 2。
-> - ⚠️ **`src/ui/views/` 這個路徑名不在本 repo 落地**（實測 `ls src/ui/views` → No such file；
->   本 repo 為 `tabs/` `render/` `pages/` `etf/`）。依 v3 §01 首句「**AI 總管不寫死硬編碼目錄**」，
+> - ⚠️ ~~**`src/ui/views/` 這個路徑名不在本 repo 落地**（實測 `ls src/ui/views` → No such file；
+>   本 repo 為 `tabs/` `render/` `pages/` `etf/`）~~（**2026-09-07 事實更正，見下方 📌**）。依 v3 §01 首句「**AI 總管不寫死硬編碼目錄**」，
 >   **不得**據 v3 發動一次全域改名 —— 那是純 cosmetic、動到數十個 caller 的改動，
 >   正是 §8.1 step 6 的反例，且未經 §8.4 step 4 的 scope gate。
+>   📌 **2026-09-07 事實更正 —— 有意識的更正，不是漏刪；決策者 user，執行 AI 總管。**
+>   `src/ui/views/` **已於本批落地**（IA v2 戰情室 View 層，user 拍板路線 A「UI 全新重寫」，逐頁落地中），
+>   本 repo 現為 `tabs/` `render/` `pages/` `etf/` `views/`。
+>   ⚠️ **這是事實更正，不是政策變更**：畫掉的只有「該路徑不存在」這個**前提**，
+>   **上面那條禁令一個字都沒有被弱化，仍然完全有效** —— 它的理由是
+>   「純 cosmetic、動到數十個 caller、§8.1 step 6 反例、未過 §8.4 step 4 scope gate」，**四條都沒變**。
+>   **新頁開在新目錄 ≠ 把既有 `tabs/` 改名搬過去**；目錄存在了只讓改名的**誘惑變大**，不讓它變合法。
+>   兩邊理由並陳與完整判準見 **§-1.5.F 判定 1**。
 > - ⚠️ **v3 §01 舉例的 `src/data/fund/` 與 `/user` 本 repo 不適用**（無基金題目）；
 >   舉例的 `tab1_macro.py` / `tab3_portfolio.py` **是姊妹 repo 的檔名**，本 repo 無此檔。
 >   詳見 §-1.5.D「三處事實更正」。
@@ -1636,7 +1657,7 @@ np.isclose(a, b, rtol=1e-9, atol=1e-12)
 | **L2 Compute** | 純函式運算 / 評分 / 策略 / 風控 | `scoring_engine.py`、`v4_strategy_engine.py`、`v5_modules.py`、`macro_helpers.py`、`etf_calc.py`、`etf_quality.py`、`risk_control.py`、`exit_signals.py`(含 `compute_macd` + `weekly_macd_hist` MACD SSOT kernel,B6 v19.153)、`compute/screener/{fundamental_prescreen,shortage_screener,rs_leader_screener,cross_quarter_trends,forward_test}.py`、`compute/risk/{risk_contribution,risk_radar,concentration}.py`(⚠️ `risk_radar` 見 §8.2.A.2 **V-RADAR-1**)(~~`merrill_clock.py`~~ v18.359 F-4 已刪;~~`macro_signal_lookback_tw.py`~~ v19.181 detox 已刪（連同 `macro_validation_tw` / `signal_threshold_optimization` / `multi_factor_optimization` / `tw_backtest` 封閉死簇一併移除）) |
 | **L3 Service** | 業務邏輯編排 / AI 整合 / 摘要 | `market_strategy.py`、`ai_structured_summary.py`、`daily_checklist.py`、`macro_state_locker.py`(① 接線 v19.148:`get_macro_state` canonical 總經契約 + `normalize_regime` 中→英)、`services/{fundamental_screener_service,rs_leader_service,shortage_screener_service,forward_test_service}.py`(選股網編排,v19.14x;`fundamental_screener_service.get_ranked_picks` = 畫面/cron 同源排名,v19.147)(~~`ai_engine.py`~~ P5-DEAD-δ 已刪、~~`unified_decision.py`~~ F-4 已刪) |
 | **L4 Render** | 圖表生成 / 通用 UI 元件（無 Streamlit container） | `chart_plotter.py`、`etf_render.py`、`ui_widgets.py`、`render/risk_contribution_render.py`(v19.138) |
-| **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`pattern_targets_ui.py`(型態目標價,`render_pattern_targets_for_ticker` 內嵌 🔬 個股 + 🏆 個股組合;v19.164 組合改**批次表 + 下鑽共用批次 df**,無獨立分頁;v19.174 去識別化改名,舊檔名/函式名為人名羅馬拼音,舊名 alias 過渡中)、`etf_dashboard.py`、`etf_tab_*.py`(含 `etf_tab_smart.py` — ⚠️ L5 自建 cache 層,見 §8.2.A.2 **V-SMART-CACHE-1**)(**~~體檢轉機獨立分頁~~(舊檔名帶人名縮寫,v19.174 不再列出) v19.164 退役真刪**:「找體質差→變好」轉機能力已合併進 🏆 個股組合「📊 財報趨勢×轉機」區塊 — `compute_one_stock_trend` 用同一份季快照附帶算 `diff_verdict`,零額外抓取、去第二輸入框 + 去重複第二張表) |
+| **L5 UI Tabs** | Streamlit Tab 級組裝 | `tab_macro.py`、`tab_stock.py`、`tab_stock_grp.py`、`tab_stock_picker.py`、`pattern_targets_ui.py`(型態目標價,`render_pattern_targets_for_ticker` 內嵌 🔬 個股 + 🏆 個股組合;v19.164 組合改**批次表 + 下鑽共用批次 df**,無獨立分頁;v19.174 去識別化改名,舊檔名/函式名為人名羅馬拼音,舊名 alias 過渡中)、`etf_dashboard.py`、`etf_tab_*.py`(含 `etf_tab_smart.py` — ⚠️ L5 自建 cache 層,見 §8.2.A.2 **V-SMART-CACHE-1**)(**~~體檢轉機獨立分頁~~(舊檔名帶人名縮寫,v19.174 不再列出) v19.164 退役真刪**:「找體質差→變好」轉機能力已合併進 🏆 個股組合「📊 財報趨勢×轉機」區塊 — `compute_one_stock_trend` 用同一份季快照附帶算 `diff_verdict`,零額外抓取、去第二輸入框 + 去重複第二張表)、`src/ui/views/`(IA v2 五頁戰情室 View 層,逐頁落地中;與 tabs/etf/pages 同為 L5) |
 | **L6 App** | session_state 路由 + 全域編排 | `app.py` — ⚠️ **仍不是純 orchestrator,但 F2(2026-08)已收掉三項**:`_bps()`(→ L1 `proxy_helper.build_unverified_proxy_session`)、`gemini_call()` + 金鑰池(→ L3 `services/app_ai_service.py`)、`_build_llm_context()`(→ 同上)皆已下沉,`_AppProxy` / `sys.modules['app']` 劫持一併刪除。**剩「選股網整段內嵌 UI+編排邏輯(L5)」未修** → 見 §8.2.A.2 **V-APP-1** |
 
 **硬規則（violation = 違憲）**：

@@ -623,3 +623,164 @@ PR-D 過程發現 3 組同概念門檻在不同卡片用不同值（會讓使用
 `macro_compass` TNX 紅線 4.5（`TNX_VALUATION_PRESSURE_PCT`）與 `MACRO_THRESHOLDS['US10Y']`
 red_above 5.0 **刻意不同**：compass 快訊用較嚴 4.5，US10Y 桶 regime 用 5.0，屬不同用途
 （類比 §13.3 負債槓桿 60/65 名稱分離），非分歧旗標。
+
+---
+
+## §16 IA v2 第 1 頁「🚦 今天（能不能出手）」畫面規格（`src/ui/views/page_today.py`，2026-09-07）
+
+> **規格出處**：`docs/wireframes/stock_ia_v1.html` 的 `PAGES[0]`（`id='today'`），客戶 2026-09-05 拍板。
+> 落地檔案與分層見 `ARCHITECTURE.md §0.13`；本批過程紀錄見 `STATE.md` 最新一筆。
+> **單一職責**（線框 `job` 原文）：**回答「今天能不能出手、出手到幾成」。**
+>
+> ⚠️ **本頁尚無 production caller**（本批未掛 `app.py`）；舊分頁**不動、不下架**。
+> 本節記的是**已落地的畫面契約**，不是「使用者現在看得到的東西」。
+>
+> ⚠️ 本節**不重述**分層規則（權威在 `CLAUDE.md §8.2`）與五桶門檻值（權威在
+> `shared/macro_buckets.py`，本檔 §11 為其一覽）。
+
+### §16.1 兩葉結構
+
+分頁名 / 分區名 / 按鈕名一律讀 L0 `shared/ia_nav.py`，**畫面上不手抄字面值**：
+
+| 葉 | `ia_nav` key | `SECTION_LABELS` 標題 | 內容 |
+|---|---|---|---|
+| 葉1 | `today.conclusion` | 今日結論 | ① 三張並排判決卡 · ② 操作列 · ③ 三欄摘要 · ④ 今日關鍵橫幅 · ⑤⑥ 今日作戰室＋AI 摘要 |
+| 葉2 | `today.detail` | 指標明細（五桶逐段） | 頁首五桶摘要 ＋ 五桶逐段的 16 盞燈明細 |
+
+**（跨頁）頂部狀態列**常駐一條、位在兩葉之上（交易日 / 總經 / Sheet 綁定），
+整段復用 `tab_today.build_status_bar_cards()`，本頁**一個字都不重寫**。
+
+**葉1 各區的資料出處**（全部唯讀，零 L1 直呼、零新 fetcher）：
+
+| 區 | 內容 | 出處 |
+|---|---|---|
+| ① | 建議持股 % / 指標危險度 / 市場位階（**三張並排，見 §16.5**） | L3 `allocation_service.get_allocation` / `get_macro_regime`；危險度吃 L2 算好的 readiness 側車 |
+| ② | 操作列：`st.form` 內 **radio 選模式 ＋ 單一 `form_submit_button`** | `_ui_kit.single_submit_form()`；已套用值由 `tab_today.applied_update_mode()` 讀（**widget 當下值與 applied 值分家**） |
+| ③ | 三欄摘要（位階 / 動能 / 風險） | `tab_today.build_today_blocks()` 的 `today.summary` block，**零新增取數**；動能與風險**誠實標未接線** |
+| ④ | 今日關鍵橫幅 | L2 `compute.macro.daily_key_alerts.collect_key_alerts` |
+| ⑤⑥ | 今日作戰室 ＋ AI 摘要（尚未接線） | `tab_today.build_today_blocks()` 的 `today.warroom` block，連「為什麼未接線」的文案都走對面 SSOT |
+
+**葉2 的取數路徑（唯一一條）**：
+L3 `services.section_inputs.load_section_inputs(st.session_state)`
+→ L2 `compute.macro.macro_helpers.compute_five_bucket_summary(..., readiness_out=rd)`
+→ 側車 `rd`（**恆 16 筆，缺席也有紀錄**）→ 門檻與燈號一律走 L0 `shared/macro_buckets.py`。
+⚠️ **任何從 `st.session_state` 直抽 `macro_info['vix']` 之類的寫法都是第二條取數路徑**，本頁一處都沒有。
+
+### §16.2 四態模型 —— 一律走 L0 `shared/ui_state.py` 七態，**本頁不自建狀態**
+
+線框畫的四態是 L0 七態的子集；本頁**只 import、不鏡像、不加第八態**：
+
+| 線框態 | `shared/ui_state.py` | 判定來源 |
+|---|---|---|
+| 灰態（無資料） | `UI_IDLE`（**還沒有人叫過**）／ `UI_EMPTY`（已請求但沒回值） | **兩者不准合併**（`CLAUDE.md §1.A` 第 4 點：未點擊載入＝灰色說明，系統真出錯＝紅色警示） |
+| 未接線 | `UI_UNWIRED` | `DangerSpec.wired=False`，理由讀 `spec.unwired_reason`（**不自寫理由**） |
+| 已失準 | `UI_DEGRADED` | `DangerSpec.discriminative=False`，理由讀 `spec.degraded_reason` |
+| 紅態（真故障） | `UI_FAILED` | 呼叫拋例外 / 來源回錯，畫面保留 `repr(e)` |
+| （正常） | `UI_LIVE` | — |
+
+**`requested=` 的三個 gate 旗標來源**（每一個都是「上游自己標的事實」，
+**禁止由 `bool(data)` 反推**）：
+
+1. 五桶 / 16 盞燈 / 今日關鍵 ← `upstream_requested(session)`：讀上游 session key 的**存在性**；
+2. 市場位階 ← `classify_macro_contract()`：讀契約自己的 `source` 分支標記；
+3. 建議持股（卡①）← `contract_attempted()`：沿用第 2 條（`get_allocation()` 的 `is_loaded`
+   就是從同一次 `get_macro_state()` 帶下來的）。
+
+⚠️ **狀態頻道與訊號頻道正交**：狀態 glyph（`UI_STATE_META`）與燈號 emoji
+（`macro_buckets.LEVEL_EMOJI`）**兩邊都有 `🔴`**，同一張卡若兩個頻道都出 emoji，
+使用者無從分辨「VIX 真的很高」與「VIX 抓不到」。故**狀態頻道出 glyph ＋ 中文、
+訊號頻道只出中文標籤**，由 `_ui_kit.assert_signal_text_clean()` 在**建構期**先驗一次
+（`render_card()` 內那一道保留，作為最後一道防線）。
+
+### §16.3 訊號可信度分母 **恆 16**
+
+- **分母來源**：`len(shared.macro_buckets.BUCKET_DANGER_SPECS)`（量測日 2026-09-07 為 **16**）。
+- **`wired=False` 與 `discriminative=False` 刻意不排除出分母** ——
+  把未接線的燈藏起來，等於製造一個永遠 100% 的假可信度。
+  現況（量測日 2026-09-07）：`foreign_net`（外資現貨淨買賣）`wired=False` 1 盞、
+  `margin`（融資餘額）`discriminative=False` 1 盞。
+- **參考走勢**（`usdtwd` / `taiex`）住 `REFERENCE_TREND_SPECS`，**不進分母**。
+- **畫面字串格式**（線框原文）：
+  `訊號可信度 {live}／{total} 個指標正常運作中（無資料 N · 已失準 N · 未接線 N · 故障 N）`，
+  由 `Coverage.text()` 產生；`coverage()` **只數已經判好態的卡，不重判態**（重判就是第二把尺）。
+
+### §16.4 葉2 分段：**維持五桶**（**總管解讀 ＋ user 未反對**，非 user 逐字明示）
+
+**線框自身矛盾**：`PAGES[0].leaves` 寫「葉2 指標明細（**五桶逐段**）」，
+而 `PAGES[0].blocks` 最後一塊寫「葉2 指標明細 — **七段**（A 市場狀態 / B 長期 / C 中期 /
+D 短線 / E 籌碼 / F 全球風險 / G 跨桶裁決）」。**同一份線框的兩處對不上。**
+
+**現行裁定：以五桶為準 —— 這是有效的裁定，照做。**
+但依 `CLAUDE.md §-2` 規則 6（承重宣稱要嘛有第二組驗過、要嘛明說來源），
+**本項的來源強度必須據實標明，不得寫成「user 明示拍板」**。
+
+**來源鏈（2026-09-07，逐步照實記錄）**
+
+1. 總管以 `AskUserQuestion` 呈報三個選項（**維持五桶** / 補成七段 /
+   五桶＋另補 A 與 G 兩段），並附推薦方案「維持五桶」。
+2. **user 當時沒有作答。**
+3. 總管宣告「暫以推薦案（維持五桶）續行，**此項保持開放**」。
+4. 稍後 user 回覆**單一詞「五通」**。
+5. 總管**明文宣告自己的解讀**：「理解為『五桶』……若你其實是別的意思，請直接說」，
+   並說明會寫入紀錄。
+6. user 後續繼續指派下一步工作（「FE-4 好了就複驗提交」），**未提出異議**。
+
+⚠️ **強度定位**：這是「**總管解讀 ＋ user 未反對**」——
+**高於**「總管自行決定」（user 確實回覆了，且在被告知解讀後沒有反對），
+**低於**「user 明示裁定」（「五通」兩字的意思是總管解讀出來的，不是逐字的規格）。
+**若 user 本意不同，此裁定即刻可推翻** —— 屆時本節與落地碼一併改，不需要另找理由。
+
+**支撐這個裁定的技術理由（獨立於上述來源鏈；來源鏈就算作廢，這兩條仍然成立）**：
+
+- 16 盞燈涵蓋的是 B / C / D / E；**A 與 G 沒有對應的燈，F 只被 `us10y` / `dxy` / `vix`
+  三盞部分涵蓋** —— 硬套七段會留下三段空殼、假裝有結構，
+  正是 §1「**嚴禁用空值冒充**」所禁的那種造假。
+- ⭐ **第二個佐證，且獨立於 user**：L0 `ia_nav.SECTION_LABELS['today.detail']`
+  **實測就是**「指標明細（五桶逐段）」（`shared/ia_nav.py`，量測日 2026-09-07）——
+  **SSOT 本身就站在五桶那一邊**，線框那句「七段」才是與 SSOT 對不上的一方。
+
+**落地**：
+
+- 分段順序走 L0 `BUCKET_ORDER`（`long` / `mid` / `short` / `chips` / `news`），
+  段標題與副標走 `BUCKET_META`。
+- 差異**就地揭露**，不靠讀者自己發現：常數 `SEGMENT_COVERAGE_NOTE` 在葉2 頁首講明
+  「線框寫七段、本葉照 16 盞燈真正的歸屬分五桶」。
+- 線框的七段名 `tab_today.DETAIL_SEGMENTS` **未刪**，仍在 L5 契約檔內
+  ——「來源鏈被推翻就改回七段」這條路留著，不必先把契約撿回來。
+
+### §16.5 葉1 ①：三張並排判決卡，**危險度與位階不得調和**
+
+- 三張卡＝**建議持股 %** / **指標危險度** / **市場位階**。
+- **不平均、不取 worst、不合成第三顆燈**（客戶 2026-08-27 裁示並列揭露）：
+  「指標危險度」問的是 16 盞燈有沒有踩到危險門檻（**不含多空方向**）；
+  「市場位階」問的是多空（看不到 VIX / PMI / CPI / 融資）。
+  實跑比對兩者燈色不一致約四成、方向相反 18 組 —— **併成一顆會毀掉這個資訊**。
+  固定說明字串為 `PARALLEL_DISCLOSURE`。
+- **三張卡的取數與失敗完全獨立**：危險度（`_load_danger`）與位階（`_load_regime`）
+  各自一支 loader，**誰失敗只影響誰那一張卡**。
+  ⚠️ 這是 2026-09-07 修掉的缺陷：修前危險度那一半（完全不依賴 regime）會被 regime
+  的失敗連坐，並印出「16 盞燈本輪一盞都沒有落在綠 / 黃 / 紅」—— 而那 16 盞燈
+  **本輪根本沒被算過**（§1 造假）。
+- 兩張卡的字面各走各的 SSOT（危險度：L4 `macro_v2_cards.BAND_META`；位階：L0
+  `allocation_decision.REGIME_LABEL`），與 `tab_macro_v2.parallel_verdict()` 內部讀的是同一份。
+
+### §16.6 三個會讓畫面說謊的契約陷阱（實測結論，逐條處置）
+
+| # | 陷阱 | 處置 |
+|---|---|---|
+| 1 | `get_macro_state()` 只有 9 個 key，**沒有 `as_of` / `timestamp`** | 本頁**不顯示任何「資料時間」欄位**；改以 `AS_OF_NOT_IN_CONTRACT` 一句話講明「契約無此欄位、要顯示得先擴充 L3」。**寧可說沒有，也不編一個時間。** 可顯示的是側車真的有的 `hit_source`（命中來源） |
+| 2 | `normalize_regime()` 不認得 `'unknown'`，會洗成 `'neutral'`（把「未評估」偽裝成「震盪」） | 本頁**一次都沒有** import 或呼叫 `normalize_regime`；位階一律用 `get_macro_regime()` 回來的原值，不做二次正規化 |
+| 3 | 危險度燈與位階燈實測不一致 | 見 §16.5：**並列揭露，不合成第三顆** |
+
+### §16.7 已知未解（**不得當成已完成**）
+
+1. **module-level import 失敗仍會整頁空白** —— 本批只把檔頭宣稱改成誠實
+   （明列擋得住什麼、擋不住什麼），**沒有修好**。根因是 `src/ui/tabs/__init__.py`
+   的 eager barrel，不在本批檔案邊界內，**另案**。
+2. **`_ui_kit.render_cards()` 路徑無渲染邊界**（頂部狀態列 / 葉1 ③ / ⑤⑥）；
+   殘餘風險經分析為低，但**未實測窮舉**。
+3. **`tests/test_p01_today_view.py` 自陳「是護欄不是證明」** ——
+   釘住的是已知那幾種說謊方式不會回來，不是「這一頁不會再說謊」。
+4. **本頁無 production caller**，實機僅以 Streamlit AppTest 冒煙驗過；
+   沙箱 streamlit 實測 **1.63.0**（量測日 2026-09-07），而 `requirements.txt` 宣告
+   `streamlit>=1.56.0,<1.60.0` —— **cap 之內的版本本批未驗**。

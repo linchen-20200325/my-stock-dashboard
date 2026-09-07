@@ -97,6 +97,12 @@ my-stock-dashboard/
 │       ├── render/    (7)     # chart_plotter / tab_sections SSOT / app_render
 │       ├── pages/     (8)     # health_inspector / api_diagnostic / data_coverage
 │       ├── etf/       (6)     # etf_dashboard / etf_tab_{single,portfolio,grp_compare}
+│       ├── views/     (3 檔 @2026-09-07)
+│       │                      # L5 — IA v2 五頁戰情室 View 層(2026-09-07 新增目錄,
+│       │                      #   逐頁落地中,目前只落地第 1 頁)。與 tabs/etf/pages 同層。
+│       │                      #   __init__(不 re-export) / _ui_kit(共用渲染) /
+│       │                      #   page_today(🚦 今天)。⚠️ 上面的「68 檔」是
+│       │                      #   2026-06-30 快照,早於本目錄,未含這 3 檔。詳見 §0.13
 │       └── tabs/      (38)
 │           ├── stock_sections/ (14) # 個股 Tab 已抽 13 section + __init__
 │           ├── macro/          (15) # 總經 Tab 已抽 10+ section + handlers + helpers
@@ -314,6 +320,65 @@ LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 **為何要立這個約定**：分層記載一旦分散在兩份 .md 各寫一份,就必然出現「一邊改、一邊沒改」,
 而**兩份都自稱是規範**時,讀者無從判斷該信哪份。本次 `render_leading_table` 與 `daily_checklist`
 兩處理由倒置,正是雙份記載各自漂移的結果。
+
+---
+
+### 0.13 `src/ui/views/` — IA v2 戰情室 View 層落地(2026-09-07,逐頁落地中)
+
+> **依 §0.12 的 SSOT 約定**:七層定義與 5 條硬規則、例外(EX-\*)與待修違憲(V-\*)的權威來源
+> 一律是 `CLAUDE.md §8.2 / §8.2.A`,**本節只做敘述性補充,不另立規則、不重複列舉**。
+> 畫面規格見 `SPEC.md §16`;本批的過程紀錄與派工見 `STATE.md` 最新一筆。
+
+**這是什麼**:`src/ui/views/` 是 IA v2 五頁戰情室(線框 `docs/wireframes/stock_ia_v1.html`,
+客戶 2026-09-05 拍板)的 View 層新家,**分層為 L5**,與 `src/ui/tabs/` / `src/ui/etf/` /
+`src/ui/pages/` **同層**。**目前只落地第 1 頁**(`page_today`),其餘**逐頁落地中** ——
+依 `CLAUDE.md §8.2.A.0` 規則 4,此處**不寫死頁數**,要數字請現場量測。
+
+| 檔案 | 角色 | 層 |
+|---|---|---|
+| `src/ui/views/__init__.py` | 套件宣告。**刻意不 re-export 任何 view**:re-export 會讓 `from src.ui import views` 把 streamlit 與該頁整條依賴鏈拉起;且五頁逐批落地時,barrel 會變成每批都要動一次的共用檔(與 File Boundary 隔離相衝)。呼叫端直接寫 `from src.ui.views.page_today import render_page_today` | L5 |
+| `src/ui/views/_ui_kit.py` | 五頁共用的**渲染**層:`grid()`(3 欄上限,夾住 + 出聲)/ `single_submit_form()`(單一 submit)/ `render_card` `render_cards` `render_note` `section_header` / `assert_signal_text_clean()`(訊號頻道不得帶狀態 glyph 或燈號 emoji)。**不定義狀態、不定義資料結構、不判燈、不取數、不建快取** | L5 |
+| `src/ui/views/page_today.py` | 第 1 頁「🚦 今天」的**版面呈現與互動排版**(規格見 `SPEC.md §16`)。型別 / 四態判定 / 狀態列 / 上游例外洗字 / 版面上限一律 import 復用 `src/ui/tabs/tab_today.py`,本檔一個都不複寫 | L5 |
+
+**依賴方向**(讀本批三檔的 import 清單得出):取數走 **L3**(`services.section_inputs` /
+`services.allocation_service`)、計算走 **L2**(`compute.macro.macro_helpers` /
+`compute.macro.daily_key_alerts`)、狀態與門檻與導覽字串走 **L0**(`shared/ui_state.py` /
+`shared/macro_buckets.py` / `shared/ia_nav.py` / `shared/allocation_decision.py` /
+`shared/station_specs.py`)、燈號中文標籤與門檻帶走 **L4**(`src/ui/render/macro_v2_cards.py`)、
+資料結構與純函式走**同層** `src/ui/tabs/tab_today.py`(L5→L5)。
+**零 L1 import、零 `@st.cache_data` / `@st.cache_resource`、零 `requests` / `yfinance` /
+FinMind、零檔案讀寫、零 private symbol 直取、零 `from app import`。**
+
+**C3 分層守衛(`tests/test_c3_layering_guard.py`)**:該檔的 `_PATH_LAYERS` 原本沒有
+`src/ui/views/` 前綴,`_layer_of_file()` 對本目錄回 `None`,而 R4 / R5 的實作對
+「層是 `None`」一律 `continue` → 本目錄的**主動 import 側**是**假綠燈**。
+本批補上一條具名前綴 `("src/ui/views/", L5)`。
+⚠️ **刻意不補 `("src/ui/", L5)` 兜底** —— 那有把 `src/ui/render/`(**L4**)誤標成 L5 的風險,
+會讓 R4 / R5 對 `render/` 整個失效。
+⚠️ **補登記拿回來的只有兩條規則**:**R4**(L4/L5/L6 不得直呼 L1)+ **R5**(跨層上行);
+R1 / R1-L0 / R2 / R3 本來就只掃 L0 / L1 / L2 檔案,補了也不會命中 L5 檔。
+
+**⚠️ 已知未解(本批未修,不得當成已完成)**
+
+1. **module-level import 失敗仍會整頁空白。** `page_today` 在 module level import
+   `src/ui/tabs/tab_today`,而 `src/ui/tabs/__init__.py` 是 **eager barrel**
+   (檔頭自陳「即時轉發,不是延遲載入」),import 期就把整條 `src.*` 依賴鏈拉起 ——
+   其中含 `src.services.section_inputs` 與 `src.compute.macro.macro_helpers`。
+   那兩者若在 **import 階段**壞掉,`render_page_today()` 根本不會被呼叫到。
+   本批**只把該檔的檔頭宣稱改成誠實**(明列擋得住什麼、擋不住什麼),**沒有修好**;
+   根因在 `src/ui/tabs/`,不在本批檔案邊界內,**另案**。
+2. **`_ui_kit.render_cards()` 路徑無渲染邊界**(頂部狀態列 / 葉1 ③ / ⑤⑥)。
+   殘餘風險經分析為低,但**未實測窮舉**。
+3. **新增的 `tests/test_p01_today_view.py` 自陳「是護欄不是證明」** ——
+   它釘住的是已知那幾種說謊方式不會回來,**不是**「這一頁不會再說謊」。
+4. **本頁無 production caller**(本批未掛 `app.py`),實機路徑僅以 Streamlit AppTest
+   冒煙驗過;沙箱 streamlit 實測為 **1.63.0**(量測日 2026-09-07),而 `requirements.txt`
+   宣告 `streamlit>=1.56.0,<1.60.0` —— **cap 之內的版本本批未驗**。
+
+⚠️ **本節未動 §1「目錄結構」與 §2「分層架構」**:那兩節是**歷史 v7.1 結構**
+(該處自陳「保留供追溯」),其編號體系裡 L5 指的是「**AI 層**」、L4 指「視覺化層」,
+與現行七層(`CLAUDE.md §8.2`,L5＝UI Tabs)**不是同一套編號**。
+在那兩節裡加一列「views/ 是 L5」只會製造第二個互相打架的分層定義(正是 §0.12 立約定要防的事)。
 
 ---
 
