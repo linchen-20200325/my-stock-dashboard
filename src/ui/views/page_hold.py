@@ -206,7 +206,7 @@ TestNothingIsCalledBeforeYouAsk` 用不繼承 `Exception` 的毒藥實測，不�
 但逐檔的純運算會重算。既有 🏦 ETF ›存股戰情室 是靠自己存 session 避開這件事的。
 **這是已知代價，不是沒想到；沙箱測不到它的實際延遲。**
 
-⚠️ **本頁會判 `UI_DEGRADED` 的有兩處，兩處都不是硬湊的。**
+⚠️ **本頁會判 `UI_DEGRADED` 的有三處，三處都不是硬湊的。**
 
 **其一：② 兩套刻度。**
 它直接讀 L0 `station_specs` 的 `discriminative` 旗標。實測（量測日 2026-09-07）
@@ -230,6 +230,19 @@ TestNothingIsCalledBeforeYouAsk` 用不繼承 `Exception` 的毒藥實測，不�
 ⚠️ 降級後 `Card` 規定非 live 不得帶結論文字 → **現值改掛 facts 的「現值」列**
 （與 `page_today` 的 degraded 同一種做法，不另立第二套寫法），
 **數字不藏起來**，只是不再當成結論、也不再出燈號（門檻已失準就別照門檻讀）。
+
+**其三：⑥ 的配息現金流**（`_cash_degraded_bits()`）。失準因子**只有一個**：
+L3 的 `full_coverage=False` —— 有張數的持股沒有全部進到 `gross_twd`
+（海外標的刻意排除、或上游整筆略過）。L3 那支 property 的 docstring 自己寫著
+「**不得只寫「你的組合近一年配息 X 元」**」，而本卡的 `value` 正是那一句；
+`UI_DEGRADED` 把它從結論位移到 facts 的「現值」列，是本頁唯一能滿足它的機制。
+⛔ **`no_payout_tickers` 刻意不算失準因子**：那幾檔**有**進總額、貢獻 0 元，
+而 L3 明說上游把「真的沒除息」與「抓不到配息」回成同一個空序列、本層分不出來。
+拿一個分不出來的東西翻成橘燈，會讓「手上有一檔本來就不配息的股票」這種
+正常組合永遠掛著失準標記 ＝ 假警報（`CLAUDE.md §1.A-4`）。**改成照實揭露在 facts。**
+⚠️ 這一格降級時**燈號頻道留白**：`不含綜所稅` 不是 band 觀測，是一句
+**完整性宣告**，覆蓋率不足時它就變成假的（少的不只綜所稅）——
+判準見 `_ui_kit.render_card()` 的 `signal_text` docstring。
 
 ═══ 這個檔擋得住什麼、擋不住什麼（誠實邊界）═══════════════════════════
 `load_vix()` / `load_macro()` / `load_allocation()` / `load_binding()` 的
@@ -2317,6 +2330,12 @@ def _degraded_bits(result: Any) -> list[tuple[str, str]]:
     `total_value_twd` / `no_price` / `held_n`），一律 `getattr` 帶預設 ——
     沒有這些欄位的結果型別（實測 2026-09-07：`DividendCashResult` 兩個都沒有）
     自然回空 list，行為不變。
+
+    ⚠️ **配息那一格不走這一支，走 `_cash_degraded_bits()`。** 它的失準因子是
+    **覆蓋率不足**（有張數的持股沒進到總額），與這裡的兩種不同。
+    **刻意分成兩支**：`coverage_pct` 在壓測是「Beta 用 1.0 估過幾檔」、
+    在 VaR 是「幾檔沒價格」，併進本函式會讓那兩張卡跟著改判 ——
+    那是本批沒有被交辦、也沒有第二組複驗過的行為變更（`CLAUDE.md §8.5`）。
     """
     _bits: list[tuple[str, str]] = []
     if getattr(result, "reconciled", True) is False:
@@ -2365,6 +2384,83 @@ def _degraded_note(label: str, bits: Sequence[tuple[str, str]]) -> Note:
         now=f"{label}　**算得出來，但這個數字已經失準** —— 現值見上方「現值」列",
         why="；又，".join(_why for _why, _ in bits),
         where="；".join(_wheres))
+
+
+def _cash_degraded_bits(result: Any) -> list[tuple[str, str]]:
+    """讓**配息總額**失去判別力的原因 → `(為什麼失準, 去哪補)`。
+
+    形狀同 `_degraded_bits()`（同一個 `_degraded_note()` 消費）。
+
+    空 list ＝ 這個總額涵蓋了每一檔有張數的持股（→ `UI_LIVE`）。
+    非空 ＝ `UI_DEGRADED`（橘）：**算得出來、但只涵蓋一部分持股**。
+
+    ⚠️ **判準只有一條：L3 的 `full_coverage`**（＝ `coverage_pct` 用容差比 100%，
+    L3 `_is_full()`；§4.3 浮點不用 `==`）。理由直接引 L3
+    `DividendCashResult.full_coverage` 的 docstring：「`False` → 這是**一部分持股**
+    的配息，畫面必須把 `coverage_pct` ／ `excluded_tickers` 講出來，**不得只寫
+    「你的組合近一年配息 X 元」**」—— 而這張卡的 `value` 正是那一句。
+    `UI_DEGRADED` 把它從結論位移到 facts 的「現值」列，那是本頁唯一能滿足
+    那個「不得」的機制（綠燈配一行小字改不了使用者已經把它當結論讀）。
+
+    ⛔ **`no_payout_tickers` 不列為失準因子**，只掛 facts 揭露。那幾檔**有**進到
+    總額、貢獻 0 元；而 L3 明說上游 `_recent_payments_twd()` 把「近一年真的沒除息」
+    與「配息紀錄抓不到」回成同一個空序列，**本層分不出來**。把一個分不出來的
+    東西翻成橘燈，會讓「手上有一檔本來就不配息的股票」這種正常又常見的組合
+    永遠掛著失準標記 ＝ 假警報，而滿版假警報會讓**真的**失準沒人看得見
+    （`CLAUDE.md §1.A-4`「介面狀態嚴格分離」）。**分不出來就照實講，不改判。**
+
+    ⚠️ 進入判定的兩個欄位（`computed` / `full_coverage`）用 `getattr` 帶預設
+    （同 `_degraded_bits()`）—— 沒有這些欄位的結果型別自然回空 list，行為不變；
+    L3 契約真的漂掉時由測試抓（`test_the_dividend_card_degrades_when_coverage_is_short`
+    直接斷言那幾個欄位存在），不是靠這裡靜靜地不降級。
+    **但判定成立之後讀的 `coverage_pct` 刻意不帶預設** —— 理由見下方註解。
+    """
+    # 算不出來是灰的 `UI_EMPTY`（沒有值），不是「算得出來但打了折」。
+    if not getattr(result, "computed", False):
+        return []
+    if getattr(result, "full_coverage", True):
+        return []
+    _excluded = tuple(getattr(result, "excluded_tickers", ()) or ())
+    _overseas = set(getattr(result, "overseas", ()) or ())
+    _lots = getattr(result, "lots_n", None)
+    # ⚠️ **這裡不替 `coverage_pct` 寫「不是數字就印算不出來」的防呆**：走到這一行
+    # 代表 `full_coverage` 已經回了 `False`，而它內部的 L3 `_is_full()` 早就拿
+    # 這個值跟 100.0 比較過 —— 非數值在**那一步**就已經 `TypeError`。
+    # 補一段永遠跑不到的防禦，就是 `CLAUDE.md §-2` 規則 6 點名的那種死碼
+    # （宣稱「順帶修掉」、實際 production 恆不觸發）。
+    # L3 真的回了非數值時**照樣炸**，由 `render_card_isolated()` 轉成看得見的
+    # 紅卡（那是「系統真出錯」，本來就該紅）—— §1：不吞、不掩蓋。
+    _cov = float(getattr(result, "coverage_pct"))
+    # §1：L3 說覆蓋率不足、卻沒回是哪幾檔時，**照實說「沒回報」**，
+    # 不寫一句「有 0 檔沒進來」——那會把失準說成沒事。
+    _scale = (
+        f"有張數的 {_lots} 檔裡，有 {len(_excluded)} 檔沒有進到這個金額"
+        if _excluded and isinstance(_lots, int) and _lots
+        else (f"有 {len(_excluded)} 檔沒有進到這個金額" if _excluded
+              else "有持股沒有進到這個金額（L3 這次沒有回報是哪幾檔）"))
+    _why = ("**這個總額只涵蓋一部分持股** —— " + _scale
+            + ("：" + "、".join(_excluded) if _excluded else "")
+            + f"（覆蓋率 {_cov:.1f}%，**是「檔數」口徑、不是金額口徑** —— "
+              "配息這條路不需要均價／現價，本站手上沒有每一檔的市值，"
+              "**不假裝有金額權重**）")
+    _os_hit = tuple(_t for _t in _excluded if _t in _overseas)
+    _skipped = tuple(_t for _t in _excluded if _t not in _overseas)
+    if _os_hit:
+        _why += ("；其中 " + "、".join(_os_hit)
+                 + " 是外幣／海外標的，**刻意排除**"
+                   "（海外所得走最低稅負制，與國內二代健保不混算）")
+    if _skipped:
+        _why += ("；" + "、".join(_skipped)
+                 + " 則是上游整筆略過的（L3 舉的例：四捨五入後股數為 0）")
+    _why += ("。沒算到的那幾檔只會表現成**總額偏小**，"
+             "而偏小的總額看起來跟正確的總額一模一樣")
+    _where = ("到既有的 📁 組合管理分頁確認上面那幾檔的**代號與張數**"
+              "（張數太小、四捨五入後股數為 0 的會被上游整筆略過），"
+              f"再回本頁{press(ACTION_RUN_WARROOM_LABEL)}")
+    if _os_hit:
+        _where += ("；海外那幾檔請另按最低稅負制自行計算 —— "
+                   "本頁不混算，**補資料也不會把它們加進這個金額**")
+    return [(_why, _where)]
 
 
 def build_stress_card(deep: DeepReadout) -> _Built:
@@ -2546,12 +2642,27 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
     **不是全站唯一**（實測：`dividend_station_service` 與 `compute.sector_flow`
     也各有一處）。本頁一個乘法都沒有；漏乘就是 1000 倍低估（§4.1）。
     卡面同時印出「該檔唯一 ≠ 全站唯一」那一列，理由見檔頭。
+
+    ⚠️ **覆蓋率不足（`full_coverage=False`）→ 橘的 `UI_DEGRADED`，不是綠的。**
+    判準與「為什麼不是 `no_payout_tickers`」寫在 `_cash_degraded_bits()`。
+    金額照給（改掛 facts 的「現值」列），只是不再當結論。
+
+    ⚠️ **降級時燈號頻道留白。** 依 `_ui_kit.render_card()` 的 `signal_text` 判準
+    （2026-09-07 獨立稽核裁定）：載 **band / level 觀測**的照出、載**判決語**的留白。
+    本格的 `不含綜所稅` **不是 band**（這張卡根本沒有門檻帶），它是一句
+    **完整性宣告**——「這個數字只少了綜所稅」。覆蓋率不足時那句話**變成假的**
+    （還少了整整幾檔持股），一邊掛「門檻已失準」一邊說「只少了綜所稅」
+    是同一張卡說兩句相反的話。
+    ⚠️ **但那個但書不會消失**：`不含綜所稅` 在 facts 第一列（「⚠️ 這不是「稅後」」）
+    照樣印 —— 降級拿掉的是它的**結論地位**，不是它本身。
     """
     _res = deep.cash
+    _degraded = _cash_degraded_bits(_res) if _res is not None else []
     _state = classify_ui_state(
         requested=deep.requested,
         error=deep.cash_error or deep.error or None,
-        has_value=bool(_res is not None and _res.computed and _res.has_payouts))
+        has_value=bool(_res is not None and _res.computed and _res.has_payouts),
+        discriminative=not _degraded)
     _facts: list[tuple[str, str]] = [
         ("⚠️ 這不是「稅後」",
          "只算到扣掉**二代健保補充保費**為止，**不含綜所稅** —— "
@@ -2580,16 +2691,48 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
             "涵蓋範圍",
             f"{_held} 檔持有列裡納入了 {_lots} 檔 —— "
             "沒有張數的列不算（觀察清單那幾列本來就沒有張數，**不是 0 張**）"))
-    if _state == UI_LIVE and _res is not None:
+    # ⚠️ 覆蓋率**在灰態（一筆配息都查不到）也要印**：`discriminative` 只有在
+    # 有值時才輪得到（`classify_ui_state` 判定順序 5 在 6 之前），
+    # 但「有幾檔根本沒被算進來」這件事在灰態一樣成立。只掛在橘卡上等於
+    # 讓那句「近一年查不到任何一筆配息」看起來涵蓋了全部持股（§1）。
+    # ⚠️ 條件**直接用 `_degraded`**，不另寫一份 `not full_coverage` ——
+    # 同一個判定寫兩次，改一次就會漂成「橘卡講、灰卡不講」。
+    if _degraded:
+        _out = tuple(getattr(_res, "excluded_tickers", ()) or ())
+        _facts.append((
+            "⚠️ 這個總額只涵蓋一部分持股",
+            f"覆蓋率 {float(_res.coverage_pct):.1f}%"
+            "（**是「檔數」口徑、不是金額口徑** —— 配息不需要均價／現價，"
+            "本站沒有每一檔的市值，**不假裝有金額權重**）"
+            + ("；沒有納入：" + "、".join(_out) if _out else "")))
+    # ⚠️ **「貢獻 0 元」不等於「沒有配息」。** L3 明文：上游把「真的沒除息」與
+    # 「抓不到配息」回成同一個空序列，本層分不出來 —— 所以這裡只講那件確定的事。
+    if _res is not None and getattr(_res, "no_payout_tickers", ()):
+        _facts.append((
+            "這幾檔在這一年貢獻 0 元",
+            "、".join(_res.no_payout_tickers)
+            + " —— **不等於「這幾檔沒有配息」**：上游把「近一年真的沒除息」與"
+              "「配息紀錄抓不到」回成同一個空序列，本站分不出來，"
+              "所以只講「貢獻 0 元」這件確定的事（§1：分不出來的兩件事，"
+              "不寫成一句斷言）"))
+    if _state in (UI_LIVE, UI_DEGRADED) and _res is not None:
         _facts.insert(1, ("扣二代健保後", f"約 {_res.net_after_nhi_twd:,.0f} 元"))
         _facts.insert(2, ("二代健保補充保費", f"約 {_res.nhi_twd:,.0f} 元"
                                               f"（{_res.payouts_n} 筆逐筆判門檻）"))
         _facts.insert(3, ("納入計算的股數",
                           f"{_res.shares_total:,.0f} 股（＝帳本張數 × 每張股數）"))
+        _shown = f"近一年稅前約 {_res.gross_twd:,.0f} 元"
+        if _state == UI_LIVE:
+            return (Card(key="hold.deep.dividend_cash", label="配息現金流",
+                         state=UI_LIVE, value=_shown),
+                    tuple(_facts), "不含綜所稅")
+        # `Card` 規定非 live 不得帶結論文字 → 現值改掛 facts（同壓測／VaR 的做法）。
+        # **數字不藏起來**，只是不再當結論；燈號頻道一併留白（理由見上方 docstring）。
+        _facts.insert(0, ("現值（已失準，只涵蓋一部分持股）", _shown))
         return (Card(key="hold.deep.dividend_cash", label="配息現金流",
-                     state=UI_LIVE,
-                     value=f"近一年稅前約 {_res.gross_twd:,.0f} 元"),
-                tuple(_facts), "不含綜所稅")
+                     state=UI_DEGRADED,
+                     note=_degraded_note("配息現金流", _degraded)),
+                tuple(_facts), "")
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
     elif _state == UI_FAILED:

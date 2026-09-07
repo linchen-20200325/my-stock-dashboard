@@ -126,6 +126,8 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
 `src/ui/views/` → L5），違反 R4／R5 是 CI 紅燈，不是假綠燈。
 
 ═══ 本批**新接上**的兩項（2026-09-07 FE-18）═══════════════════════════
+（**後續 2026-09-07 FE-28 再接上第三項：籌碼卡的異常值徽章** ——
+原本登記在下面「沒有接上」的第 5 項，該項已改寫，見那裡。）
 1. ✅ **個股「估值（357 評價）」判決卡。**
    前一批卡在「357 位階要 `calc_dividend_yield_357(price, avg_div_twd=,
    div_years=)`，而全 repo 沒有任何 L3 介面回傳個股的配息歷史」。
@@ -153,9 +155,15 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
    **`外資` / `投信` / `volume`**，`主力合計` 一次都沒用到 ——
    那是另一支（L2 `inst_sanity.flag_latest_inst_outlier_from_df` 的異常值
    徽章）吃的欄位，被混為一談了。**本批照實際欄位接線**，
-   而那個異常值徽章**本批沒有接**（見下面「沒有接上」的第 3 項）。
+   ~~而那個異常值徽章**本批沒有接**（見下面「沒有接上」的第 3 項）。~~
+   ⚠️ **2026-09-07 FE-28 更正：徽章已接上，上面那句刪除線是事實更正、不是漏刪。**
+   「兩支不同的函式、兩組不同的欄位」那半句**仍然成立**（也正是徽章要與集中度
+   **分別判、分別報**的理由）；不成立的只有「沒有接」。現行做法見下面第 5 項。
 
-═══ 本批**沒有接上**的三項（誠實揭露，不是漏寫）═══════════════════════
+═══ 本批**沒有接上**的~~三~~兩項（誠實揭露，不是漏寫）═══════════════════
+（**2026-09-07 FE-28 事實更正**：第 5 項〔籌碼卡的異常值徽章〕**已接上**，
+故本節由三項降為兩項。刪除線是有意識的更正，不是漏刪 —— 第 5 項原文保留在
+下面並就地改寫，**不刪掉**，因為它記錄的「為什麼當時接不了」在當時是真的。）
 3. ⛔ **葉1-A 明細的其餘七段**（K 線＋均線 / 357 河流圖 / 財報領先指標 /
    VCP・布林 / 月營收 / 什麼時候買賣 / 心理檢查）。**只有 💰 獲利能力診斷
    這一段接上了。** 其餘七段的現行實作是 `src/ui/tabs/stock_sections/section_*.py`，
@@ -167,14 +175,35 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
    0 命中、6 個 ETF 概念在個股頁 0 命中）—— **合併的是入口與骨架，不是內容**」。
    本檔照這句寫：骨架（form / 判型 / 3 欄判決卡 / 單欄堆疊明細）兩支共用，
    **每一張卡的 label 與 facts 全部換掉**，沒有一個欄位是兩邊共用的。
-5. ⛔ **籌碼卡的「異常值徽章」**（線框對這一格寫的是「近 20 日主力買賣超與
-   集中度，**含異常值徽章**」）。徽章那一半走的是 L2
-   `compute.risk.inst_sanity.flag_latest_inst_outlier_from_df`，它吃的是
-   **`主力合計` ＋ 30 日均量**，與本批接上的近 20 日籌碼判讀（吃
+5. ✅ **籌碼卡的「異常值徽章」—— 2026-09-07 FE-28 已接上**（線框對這一格
+   寫的是「近 20 日主力買賣超與集中度，**含異常值徽章**」）。
+   ⚠️ **本項原文（下面刪除線那段）一字未刪，只加註** —— 它記錄的是
+   「當時為什麼接不了」，那在**當時是真的**（前一批的檔案邊界不含 L3 那一支）。
+   把它整段刪掉，下一個人會看不出這一格是**接上的**、還是**一開始就沒人想過**。
+   ~~徽章那一半走的是 L2 `inst_sanity.flag_latest_inst_outlier_from_df`，
+   它吃的是 `主力合計` ＋ 30 日均量，與本批接上的近 20 日籌碼判讀（吃
    `外資` / `投信` / `volume`）**是兩支不同的函式、兩組不同的欄位**。
    接它需要把 df 交給 L5 或在 L3 再做一次判讀，兩者都超出本批的檔案邊界。
    → **本批只接判讀、不接徽章**，卡上的「接線後的樣子」已據實改寫，
-   不再宣稱有徽章。
+   不再宣稱有徽章。~~
+
+   **現行（FE-28）**：
+   · **「兩支不同的函式、兩組不同的欄位」仍然成立**，而且正是現行做法的理由 ——
+     徽章與集中度**分別判、分別報**，不互相背書。
+   · **判在 L3**（`stock_chips_service._outlier_fields`）：徽章與判讀吃的是
+     **同一份 df**，在那一層算等於零額外取數；`ChipsReadout` 新增
+     `outlier_*` 五個欄位帶上來（**只增不改**既有欄位）。
+     於是**本檔不必 import L2、也不必接手 `DataFrame`** —— 原文寫的那兩條路
+     （把 df 交給 L5／在 L3 再做一次判讀）都不是現行做法。
+   · **實測查證（2026-09-07）**：`fetch_price_data` → `get_combined_data` 回的
+     df **確實同時持有 `主力合計` 與 `volume`**（前者由 L1
+     `data_loader_inst_fetchers._normalize_inst_pivot` 產出並 merge 進來，
+     後者來自日線）—— 亦即前一批說的「要多取一份 df」並不成立，
+     **本來就在同一張表裡**。
+   · **畫面**：徽章走 `facts` 的一列（`CHIPS_OUTLIER_LABEL`），
+     **三態各出一句話**（有異常／判過了沒有異常／**判不出來**），
+     **不佔訊號頻道、不改變卡的狀態**。理由三條寫在 `build_chips_card`
+     的 docstring 裡，此處不重複。
 
 ⚠️ **本頁沒有任何一格會判 `UI_DEGRADED`**，這是刻意的：上游沒有回傳任何
 「門檻已失準」的訊號（`discriminative=False` 的來源），硬湊一個等於捏造一種
@@ -184,6 +213,16 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
 ⚠️ 本批接上的兩格**也沒有**引入 degraded：籌碼判不出來（法人欄缺／全為 0）
 與 357 算不出來（無股價／無配息紀錄）都是**缺值**，走 `empty`（灰）——
 `degraded` 的語意是「**有值**、只是別照門檻讀」，缺值套上去是第三種說謊。
+⚠️ **FE-28 的異常值徽章同樣沒有引入 degraded，理由同上**：它判不出來時是
+**沒有值**（缺 `主力合計` 欄／均量窗內有天數沒有量／最新一日分不出 0 的意思），
+不是「有值但門檻失準」。上游 L2 `inst_sanity` 也**沒有**回傳任何
+`discriminative=False` 的訊號可以據以判 degraded ——
+硬湊一個就是本節開頭那句「捏造一種使用者無從查證的狀態」。
+✅ **附帶：徽章也不佔訊號頻道**（`signal_text` 留白）。依
+`_ui_kit.render_card` 對 `signal_text` 的判準，它載的是**判決語**
+（有異常／沒有異常），不是 band 觀測；而且這張卡的訊號頻道已經被 L0 的
+籌碼訊號佔住，塞第二個進去就是同一張卡兩盞燈。完整三條理由寫在
+`build_chips_card` 的 docstring。
 
 ═══ 這個檔擋得住什麼、擋不住什麼（誠實邊界）═══════════════════════════
 `classify_kind()` / `load_stock_readout()` / `load_etf_readout()` /
@@ -464,6 +503,93 @@ CHIPS_MISS_WHY_TAIL: str = (
     "缺一組就算不出來 —— **這是資料缺漏，不是這一檔籌碼不好**；"
     "本站不拿 0% 集中度頂替（0% 是「買賣超剛好抵銷」這個結論，不是缺值）"
 )
+
+# ── 異常值徽章（線框對這一格寫的「含異常值徽章」，2026-09-07 FE-28 接線）──
+#: 徽章那一列在 `facts` 裡的欄位名。**它是與集中度並列的第二個檢查**，
+#: 不是集中度的附註 —— 兩支吃的欄位不同，會出現「一支判得出、一支判不出」。
+CHIPS_OUTLIER_LABEL: str = "單日爆量檢查"
+#: 「判不出來」的開頭。**這一句是本格存在的理由**：
+#: 既有 🔬 個股分頁的寫法是 `if _inst_flag.is_outlier:` 才畫徽章 ——
+#: 於是「判不出來」與「判過了沒有異常」在畫面上長得**一模一樣**（都是沒有徽章），
+#: 而使用者只會讀到後者。§1：把「沒量到」講成「量到了沒事」就是捏造一個觀測。
+CHIPS_OUTLIER_UNKNOWN_HEAD: str = (
+    "**判不出來** —— 這**不等於**「沒有異常」。（上游原因：`{reason}`）　")
+#: `vol_unavailable`：L2 把三種情形收斂成同一個 token，**分不出是哪一種**。
+CHIPS_OUTLIER_UNKNOWN_VOL: str = (
+    "這一項要「最新一日的主力買賣超」與「均量窗**每一天都有量**」兩件事。"
+    "缺欄位、剛上市／長期停牌而歷史短於窗長度、或本輪載入的天數不夠，"
+    "都會落在這同一個原因裡 —— **上游的回傳值分不出是哪一種，本站也不猜**")
+#: `inst_net_zero`：上游對這一欄補過 0，於是「0」有兩種意思。
+CHIPS_OUTLIER_UNKNOWN_ZERO: str = (
+    "最新一日的主力買賣超是 0，而上游對這一欄做過**缺值補 0**，"
+    "所以這個 0 分不出「今天法人真的沒有買賣超」與「今天的法人資料還沒到」"
+    "（三大法人常態性地比日線晚到）—— 分不出來就不判，"
+    "**不拿 0 倍當「沒有異常」**")
+#: 上游改了 `reason` 的字彙時走這一條。**不假裝看得懂**（§1）。
+CHIPS_OUTLIER_UNKNOWN_OTHER: str = (
+    "本站沒有對應這個原因的說法 —— 上游的回傳字彙可能改了。"
+    "**不替它猜一個意思**；請照上面那個原文去對上游的程式碼")
+#: 判出來了的兩句。`{}` 全部由 L3 帶上來，**本檔不寫門檻、也不寫窗長度**（§3.3）。
+CHIPS_OUTLIER_ANOMALY_TEXT: str = (
+    "**有異常**：最新一日主力買賣超達均量的 {ratio} 倍，"
+    "超過門檻 {threshold} 倍{window}。單日淨買賣超遠離常量，"
+    "上面那個近 20 日的集中度會被這一天拉動")
+CHIPS_OUTLIER_NORMAL_TEXT: str = (
+    "**判過了，沒有異常**：最新一日主力買賣超是均量的 {ratio} 倍，"
+    "未達門檻 {threshold} 倍{window}")
+#: 均量窗那個括號。**數字由 L3 帶上來**（L2 的簽章預設值），本檔不寫。
+CHIPS_OUTLIER_WINDOW_TEXT: str = "（均量窗 {window} 個交易日）"
+#: 窗長度讀不到時（L3 的 `outlier_window is None`）的替代講法 —— **不填數字**。
+CHIPS_OUTLIER_WINDOW_UNKNOWN: str = "（均量窗長度由上游決定，本站這一輪讀不到）"
+
+
+def _outlier_fact(chips: "ChipsView") -> tuple[str, str] | None:
+    """徽章那一列 `(欄位名, 值)`；**這一輪沒跑到 → `None`（不出這一列）**。
+
+    ⚠️ **三態一律出一列**（有異常 / 沒有異常 / 判不出來）。
+    「不出這一列」只保留給 `outlier_verdict == ""`，而那只發生在**連 df 都
+    沒拿到**（取數失敗、或冷啟動根本沒呼叫）—— 那時整張卡已經是紅／灰態，
+    卡自己會講。**其餘任何情形都必須出這一列**，理由見
+    `CHIPS_OUTLIER_UNKNOWN_HEAD` 的註解。
+
+    ⚠️ **門檻與均量窗一個數字都不在本檔** —— 兩者都由 L3 從上游讀來
+    （門檻 → L0 `shared.signal_thresholds.INST_NET_OUTLIER_VOLUME_RATIO`；
+    窗長度 → L2 那支的簽章預設值）。在畫面上抄一個 `5` 或 `30`，
+    上游改的時候這裡不會跟著動，而且沒有任何測試會紅（§3.3）。
+    窗長度讀不到 → 講「上游設定的窗長度」，**不填一個猜的數字**（§1）。
+    """
+    _v = chips.outlier_verdict
+    if not _v:
+        return None
+    # ⚠️ **late import 且刻意排在早退之後**：三個字面的 SSOT 在 L3
+    # （抄一份到本檔就是第二把尺），但 module level import 會把
+    # `src.services` 的 eager barrel 拉進「打開這一頁」的故障半徑，
+    # 也會讓「還沒有人叫過就不准碰 L3」那道守衛失效（`ChipsView` 未接線 /
+    # 冷啟動時 `outlier_verdict` 是空的 → 上面那行就回去了，一行都不 import）。
+    from src.services.stock_chips_service import (
+        OUTLIER_ANOMALY,
+        OUTLIER_NORMAL,
+    )
+
+    _win = (CHIPS_OUTLIER_WINDOW_TEXT.format(window=chips.outlier_window)
+            if chips.outlier_window is not None
+            else CHIPS_OUTLIER_WINDOW_UNKNOWN)
+
+    if _v in (OUTLIER_ANOMALY, OUTLIER_NORMAL):
+        _tpl = (CHIPS_OUTLIER_ANOMALY_TEXT if _v == OUTLIER_ANOMALY
+                else CHIPS_OUTLIER_NORMAL_TEXT)
+        return (CHIPS_OUTLIER_LABEL,
+                _tpl.format(ratio=_fmt_num(chips.outlier_ratio, digits=1),
+                            window=_win,
+                            threshold=_fmt_num(chips.outlier_threshold,
+                                               digits=1)))
+
+    _tail = {"vol_unavailable": CHIPS_OUTLIER_UNKNOWN_VOL,
+             "inst_net_zero": CHIPS_OUTLIER_UNKNOWN_ZERO}.get(
+                 chips.outlier_reason, CHIPS_OUTLIER_UNKNOWN_OTHER)
+    return (CHIPS_OUTLIER_LABEL,
+            CHIPS_OUTLIER_UNKNOWN_HEAD.format(
+                reason=chips.outlier_reason or "上游沒有說") + _tail)
 
 DETAIL_WHERE: str = (
     f"{NO_EXIT_MARKER} —— 這是待接線項，不是你操作的問題；"
@@ -1157,6 +1283,18 @@ class ChipsView:
         error: 取數失敗（L1 給的錯誤字串或例外）→ `failed`（紅）。
         days_loaded: 這一輪載入了幾個交易日的日線（＝表單的「期間」）。
             **它不是判讀窗** —— 近 20 日那個窗由 L0 決定，改期間不會改結論。
+        outlier_verdict / outlier_ratio / outlier_threshold / outlier_window
+            / outlier_reason: 線框那句「含異常值徽章」的那一半，**攤平 L3 的
+            同名欄位，零再計算**（2026-09-07 FE-28 接線）。
+            ⚠️ 它是**第二個獨立的檢查**，不是集中度的附註：吃的是
+            `主力合計` ＋ 均量窗，與集中度吃的 `外資` / `投信` 不同，
+            所以「集中度判得出來、徽章判不出來」是**正常組合**。
+            ⚠️ `outlier_verdict` 三態：有異常 / **判過了沒有異常** /
+            **判不出來**。中間與後面那兩個是兩件事 —— 混為一談就是把
+            「沒量到」講成「量到了沒事」。空字串 = 這一輪根本沒跑到
+            （必然伴隨 `error`，卡自己已經是紅態）。
+            ⚠️ **本檔不重判、也不寫門檻與窗長度**：`outlier_threshold` 來自
+            L0 SSOT、`outlier_window` 來自 L2 簽章，都由 L3 讀好帶上來（§3.3）。
     """
 
     requested: bool
@@ -1169,10 +1307,19 @@ class ChipsView:
     days_loaded: int | None = None
     miss_reason: str = ""
     error: str = ""
+    outlier_verdict: str = ""
+    outlier_ratio: float | None = None
+    outlier_threshold: float | None = None
+    outlier_window: int | None = None
+    outlier_reason: str = ""
 
     @property
     def has_verdict(self) -> bool:
-        """判出結論了沒有。**缺原因或取數失敗都不算。**"""
+        """判出結論了沒有。**缺原因或取數失敗都不算。**
+
+        ⚠️ **不看徽章**（同 L3 `ChipsReadout.has_verdict`）：徽章判不出來
+        不該把一個判得出來的集中度連坐成灰態，反之亦然。
+        """
         return bool(self.signal) and not self.miss_reason and not self.error
 
 
@@ -1193,6 +1340,11 @@ def load_chips(verdict: KindVerdict, req: InspectRequest) -> ChipsView:
       (c) **日線回來了但法人欄缺／全為 0／成交量 0／筆數不足** → **灰態**
           ＋ L0 給的原因原文。**沒有人壞掉，是資料缺漏。**
       (d) **判出來了** → live，數字與訊號都是 L0 的。
+
+    ⚠️ **異常值徽章走 (b) 以外的每一條路**：只要 df 回得來（(c) 與 (d) 都是），
+    L3 就一定判過一次，所以兩條路都要把 `outlier_*` 帶上來。
+    只有 (a)(b) 沒有徽章可帶 —— **那時 `outlier_verdict` 留空**，
+    畫面就不出那一列（卡本身已經是灰／紅態，會自己講）。
     """
     _requested = bool(verdict.requested and verdict.is_stock)
     if not _requested:
@@ -1220,7 +1372,12 @@ def load_chips(verdict: KindVerdict, req: InspectRequest) -> ChipsView:
         requested=True, signal=_c.signal, concentration=_c.concentration,
         continuity=_c.continuity, days=_c.days, pos_days=_c.pos_days,
         rows=_c.rows, days_loaded=req.period_days,
-        miss_reason=_c.miss_reason)
+        miss_reason=_c.miss_reason,
+        # 徽章：**與 `miss_reason` 無關地照搬**。df 回得來就一定判過一次，
+        # 集中度判不判得出來都一樣（兩支吃的欄位不同，見 L3 檔頭）。
+        outlier_verdict=_c.outlier_verdict, outlier_ratio=_c.outlier_ratio,
+        outlier_threshold=_c.outlier_threshold,
+        outlier_window=_c.outlier_window, outlier_reason=_c.outlier_reason)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1713,6 +1870,27 @@ def build_chips_card(chips: ChipsView) -> _Built:
 
     ⚠️ **本檔不重判吸籌／倒貨／發散**：那三個字面與門檻住在 L0，
     由 L3 呼叫一次（見 `ChipsView` 的 docstring）。
+
+    ═══ 異常值徽章（2026-09-07 FE-28 接線）═══════════════════════════
+    線框對這一格的原文是「近 20 日主力買賣超與集中度，**含異常值徽章**」。
+    徽章走 `facts` 的一列（`CHIPS_OUTLIER_LABEL`），**不佔訊號頻道**，
+    也**不改變這張卡的狀態**。三個理由：
+
+      1. **訊號頻道一張卡只有一個**，而它已經被 L0 的籌碼訊號
+         （吸籌／倒貨／發散）佔住了。塞第二個進去就是同一張卡兩盞燈打架
+         —— `_ui_kit` 檔頭鐵律 3 要防的正是這件事。
+      2. **徽章載的是判決語（有異常／沒有異常），不是 band 觀測。**
+         依 `_ui_kit.render_card` 對 `signal_text` 的判準（2026-09-07 獨立
+         稽核裁定）：載 band／level 觀測 → 照出；**載判決語 → 留白**。
+      3. **不改卡的狀態**，因為徽章與集中度是**兩個獨立的檢查**：徽章判不
+         出來時把整張卡打成灰的，會把一個**判得出來的集中度**一起藏掉；
+         反過來把卡打成綠的，又會替判不出來的那一半背書。狀態頻道跟著
+         **集中度**走，徽章在自己那一列把話講完。
+
+    ⚠️ **「判不出來」與「判過了沒有異常」在畫面上必須看得出差別。**
+    既有 🔬 個股分頁的寫法是 `if _inst_flag.is_outlier:` 才畫徽章 ——
+    於是兩者長得一模一樣（都是沒有徽章），而使用者只會讀成後者。
+    本檔三態各出一句話，**判不出來那一句還明說「這不等於沒有異常」**。
     """
     _state = classify_ui_state(
         requested=chips.requested,
@@ -1735,6 +1913,11 @@ def build_chips_card(chips: ChipsView) -> _Built:
                        + (f"（{chips.pos_days} / {chips.days} 日）"
                           if chips.pos_days is not None
                           and chips.days is not None else "")))
+    # 線框那句「含異常值徽章」的那一半。**三態一律出這一列**（含「判不出來」）
+    # —— 只在「這一輪根本沒跑到」時回 `None`，見 `_outlier_fact` 的 docstring。
+    _badge = _outlier_fact(chips)
+    if _badge is not None:
+        _facts.append(_badge)
     if chips.miss_reason:
         # L0 自己給的原因原文（`'df缺法人/量欄'` …）。**不改寫**（§2.1）。
         _facts.append(("上游說明", chips.miss_reason))
