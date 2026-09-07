@@ -33,6 +33,15 @@
     —— 對一個新使用者，「你沒有持股」是**每天都會看到**的正常狀態。
     含本批最重要的一條：**換入候選一定帶 `exclude=你已持有的代號`**，
     少了它畫面會叫你買你已經有的東西。
+  · `TestTheDeepAnalysisIsWiredNow` ← **FE-19 新增。** ⑥ 的壓力測試 / VaR /
+    配息現金流接線之後才可能出現的說謊方式：一格掛掉把另外兩格一起染紅、
+    「近一年真的沒配息」與「算不出來」被畫成同一句、樣本三天的 VaR 被當成結果、
+    Beta 是估的卻不說、**張→股的乘法跑到畫面層**（§4.1 漏乘 = 1000 倍低估）。
+    以及本批最容易吞掉的但書：**配息現金流不含綜所稅**。
+  · `TestPortfolioDeepServiceIsReadOnly` ← **FE-19 新增。** 那一支新 L3 自己的
+    唯讀守衛：寫入面識別字為零、**連讀都不准碰 gsheet**（持股由呼叫端餵）、
+    不自建快取、張→股的 1000 一律取 L0 SSOT 且**只准有一個乘法點**、
+    配息一律 `marginal_rate=None`、三支入口對垃圾輸入都不 raise。
   · `TestHoldingsServiceIsReadOnly` ← 新增的那一支 L3 自己的唯讀守衛：
     寫入面識別字為零、只准碰 gsheet 讀取面的白名單、**每一次讀都顯式帶
     `sheet_id=`**（傳 `None` 會讓快取鍵恆為空 → 換 Sheet 後拿到上一本的資料）、
@@ -101,6 +110,74 @@ def _binding(**kw) -> P.BindingReadout:
     return P.BindingReadout(**kw)
 
 
+# ── ⑥ 組合深度分析的假 readout（FE-19）───────────────────────────────
+#: ⚠️ **用真的 dataclass，不用 `SimpleNamespace`**：卡片讀的是
+#: `computed` / `partial` / `window_squeezed` / `has_payouts` 這些**衍生屬性**，
+#: 手捏一個假物件會把「L3 契約改了、UI 沒跟上」這一整類 bug 測不出來。
+def _stress_res(**kw):
+    from src.services.portfolio_deep_service import StressResult
+
+    kw.setdefault("computed", True)
+    kw.setdefault("drop_pct", -20.0)
+    kw.setdefault("loss_twd", -224000.0)
+    kw.setdefault("loss_pct", 20.4)
+    kw.setdefault("warn_pct", 20.0)
+    kw.setdefault("total_value_twd", 1_100_000.0)
+    kw.setdefault("valued_n", 2)
+    kw.setdefault("held_n", 2)
+    return StressResult(**kw)
+
+
+def _var_res(**kw):
+    from src.services.portfolio_deep_service import VarResult
+
+    kw.setdefault("computed", True)
+    kw.setdefault("hist_95_twd", 16817.0)
+    kw.setdefault("hist_99_twd", 25000.0)
+    kw.setdefault("param_95_twd", 16000.0)
+    kw.setdefault("param_99_twd", 24000.0)
+    kw.setdefault("monthly_99_twd", 95000.0)
+    kw.setdefault("monthly_99_pct", 8.63)
+    kw.setdefault("warn_pct", 10.0)
+    kw.setdefault("total_value_twd", 1_100_000.0)
+    kw.setdefault("n_common", 119)
+    kw.setdefault("n_union", 120)
+    kw.setdefault("first_day", "2025-01-02")
+    kw.setdefault("last_day", "2025-06-17")
+    kw.setdefault("valued_n", 2)
+    kw.setdefault("held_n", 2)
+    return VarResult(**kw)
+
+
+def _cash_res(**kw):
+    from src.services.portfolio_deep_service import DividendCashResult
+
+    kw.setdefault("computed", True)
+    kw.setdefault("gross_twd", 30000.0)
+    kw.setdefault("nhi_twd", 0.0)
+    kw.setdefault("net_after_nhi_twd", 30000.0)
+    kw.setdefault("payouts_n", 8)
+    kw.setdefault("tw_n", 2)
+    kw.setdefault("lots_n", 2)
+    kw.setdefault("held_n", 2)
+    kw.setdefault("shares_total", 3000.0)
+    return DividendCashResult(**kw)
+
+
+def _deep(**kw) -> P.DeepReadout:
+    """`requested=True` ＋ 戰情表有列的 ⑥ readout（預設三格都算得出來）。"""
+    kw.setdefault("requested", True)
+    kw.setdefault("submitted", True)
+    kw.setdefault("bound", True)
+    kw.setdefault("holdings_n", 2)
+    kw.setdefault("has_station_rows", True)
+    return P.DeepReadout(**kw)
+
+
+def _live_deep() -> P.DeepReadout:
+    return _deep(stress=_stress_res(), var=_var_res(), cash=_cash_res())
+
+
 # ══════════════════════════════════════════════════════════════════
 # 【1】唯讀 —— 本頁碰的是使用者資產，這一類排在最前面
 # ══════════════════════════════════════════════════════════════════
@@ -118,6 +195,11 @@ _ALLOWED_L3: frozenset[tuple[str, str]] = frozenset({
     ("src.services.dividend_station_service", "build_switch_advice"),
     ("src.services.dividend_station_service", "fetch_vix"),
     ("src.services.dividend_station_service", "get_station_macro"),
+    # ⑥ 組合深度分析（FE-19 新增）—— 它自己也受
+    # `TestPortfolioDeepServiceIsReadOnly` 管（同 `holdings_service` 的待遇）。
+    ("src.services.portfolio_deep_service", "get_portfolio_stress"),
+    ("src.services.portfolio_deep_service", "get_portfolio_var"),
+    ("src.services.portfolio_deep_service", "get_dividend_cash_flow"),
     ("src.services.allocation_service", "get_allocation"),
     ("src.services.portfolio_binding_service", "get_binding_state"),
     ("src.services.portfolio_binding_service", "STATUS_BOUND"),
@@ -190,6 +272,28 @@ class TestReadOnly:
         assert len(_imports) >= 10, f"實際只 import 了 {sorted(_imports)}"
         assert ("src.services.holdings_service", "get_holdings") in _imports, (
             "持股清單沒有走 L3 —— 這一頁唯一合法的取得方式就是那一支")
+        assert {("src.services.portfolio_deep_service", _n)
+                for _n in ("get_portfolio_stress", "get_portfolio_var",
+                           "get_dividend_cash_flow")} <= _imports, (
+            "⑥ 的壓測 / VaR / 配息現金流沒有走 L3 —— "
+            "它們的運算在 L2／L3，本頁不得跨層直呼，也不得自己乘 1000")
+
+    def test_no_plain_module_import_can_slip_past_the_whitelist(self):
+        """**白名單的漏洞**：`import src.services.x` 拿得到整個模組。
+
+        `_service_imports()` 掃的是 `ast.ImportFrom`；一句 `import
+        src.services.portfolio_deep_service` 是 `ast.Import`，**掃不到** ——
+        接著 `mod.任何符號` 就完全繞過白名單（`from src.services import x`
+        這一種倒是掃得到，它會以 `("src.services", "x")` 落在白名單外）。
+        本條把 `ast.Import` 那條路也釘死。
+        """
+        _bad = [f"{_a.name} @line {_n.lineno}"
+                for _n in ast.walk(_tree()) if isinstance(_n, ast.Import)
+                for _a in _n.names
+                if _a.name.split(".")[0] in ("src", "app", "scripts")]
+        assert not _bad, (
+            f"本頁用 `import <module>` 拉進了下游模組：{_bad} —— "
+            "符號白名單掃不到它，一律改成 `from … import <符號>`")
 
     def test_no_write_surface_identifier_anywhere(self):
         _hit = sorted(_identifiers(_tree()) & _WRITE_SURFACE)
@@ -591,11 +695,15 @@ class _PoisonModule:
 
 
 #: 頁 4 檔頭「取數接線表」列出的全部下游 L3 模組。
-#: ⚠️ `holdings_service` 是本批新接線的那一支 —— **它一定要在這張表裡**，
+#: ⚠️ `holdings_service` 是 FE-15 新接線的那一支 —— **它一定要在這張表裡**，
 #:    否則「沒按之前不碰你的 Google Sheet」這句話就沒有人在驗。
+#: ⚠️ `portfolio_deep_service` 是 FE-19 新接線的那一支：它逐檔會打
+#:    `fetch_etf_info` / `fetch_etf_price` / `fetch_etf_dividends`，
+#:    **在按鈕之前跑一次就是白打幾十次網路** —— 同樣一定要在這張表裡。
 _DOWNSTREAM = (
     "src.services.holdings_service",
     "src.services.dividend_station_service",
+    "src.services.portfolio_deep_service",
     "src.services.allocation_service",
     "src.services.portfolio_binding_service",
 )
@@ -627,6 +735,7 @@ class TestNothingIsCalledBeforeYouAsk:
         _st = P.load_station(_h)
         assert _st.requested is False
         assert P.load_switch(_st, P.load_macro(_r), _h).requested is False
+        assert P.load_deep(_st).requested is False
 
     def test_market_only_scope_really_skips_google(self, poisoned):
         """**本頁獨有的第二個 gate**：選「只讀市場端」時 Google 那邊一次都不准被碰。
@@ -644,6 +753,8 @@ class TestNothingIsCalledBeforeYouAsk:
         assert _st.requested is False and _st.error == "" and _st.rows == ()
         _sw = P.load_switch(_st, P.MacroReadout(requested=False), _h)
         assert _sw.requested is False and _sw.error == ""
+        _dp = P.load_deep(_st)
+        assert _dp.requested is False and _dp.error == "" and _dp.stress is None
 
     def test_a_holdings_read_never_happens_for_an_empty_list(self, poisoned):
         """讀到空清單時**不再往下打第二次網路** —— 但 `requested` 仍然是 True。
@@ -658,6 +769,10 @@ class TestNothingIsCalledBeforeYouAsk:
         assert _st.requested is True and _st.rows == () and _st.error == ""
         _sw = P.load_switch(_st, P.MacroReadout(requested=True), _h)
         assert _sw.requested is True and _sw.error == ""
+        _dp = P.load_deep(_st)          # 毒藥全上，⑥ 這一行也不准碰任何 L3
+        assert _dp.requested is True and _dp.error == ""
+        assert (_dp.stress, _dp.var, _dp.cash) == (None, None, None)
+        assert _dp.has_station_rows is False
 
     def test_the_poison_really_would_have_fired(self, poisoned):
         """**反證**：同一組毒藥下，`requested=True` 一定炸。
@@ -684,6 +799,8 @@ class TestNothingIsCalledBeforeYouAsk:
                                holdings_n=1, rows=({"代號": "0056"},))
         with pytest.raises(_L3Touched):
             P.load_switch(_st, P.MacroReadout(requested=True), _h)
+        with pytest.raises(_L3Touched):
+            P.load_deep(_st)
 
     def test_the_disclosure_needs_no_l3_at_all(self, poisoned):
         """② 是 L0-only —— 毒藥全上，它照樣算得出來。"""
@@ -701,12 +818,16 @@ class TestNothingIsCalledBeforeYouAsk:
 # ══════════════════════════════════════════════════════════════════
 # 【5】仍然未接線的八張卡
 # ══════════════════════════════════════════════════════════════════
-#: ⚠️ **本批（FE-15）從 17 張降到 8 張。** 降下來的那 9 張全部是同一個根因
-#: （`src/services/` 沒有持股清單）—— 補上 `holdings_service` 之後它們就活了。
-#: 剩下這 8 張**與持股清單無關**，各自卡在別的層（見每一張自己的 `where`）。
+#: ⚠️ **FE-15 從 17 張降到 8 張**（根因是 `src/services/` 沒有持股清單）；
+#: **FE-19 再降到 5 張** —— ⑥ 的壓力測試 / VaR / 配息現金流補上了 L3
+#: `portfolio_deep_service` 之後就活了。
+#: 剩下這 5 張**卡在完全不同的地方**，各自的 `where` 不可共用：
+#:   · `hold.deep.rebalance`  帳本沒有「目標比例」欄（**不是**缺 L3 wrapper）
+#:   · `hold.deep.grape`      實作在 L5、widget key 寫死
+#:   · `hold.ai_summary`      缺一顆要先出線框拍板的按鈕（資料已經有了）
+#:   · `hold.setup.*`         **不是缺 L3，是缺授權**（本頁唯讀）
 _UNWIRED_KEYS: frozenset[str] = frozenset({
-    "hold.deep.rebalance", "hold.deep.stress", "hold.deep.var",
-    "hold.deep.dividend_cash", "hold.deep.grape",
+    "hold.deep.rebalance", "hold.deep.grape",
     "hold.ai_summary", "hold.setup.pick_sheet", "hold.setup.watchlist",
 })
 
@@ -726,7 +847,7 @@ def _all_unwired_builts(requested: bool):
                  P.build_allocation_split_card(_station),
                  P.build_take_profit_card(_station),
                  P.build_ai_summary_card(requested))
-              + P.build_deep_cards(_station)
+              + P.build_deep_cards(_station, P.load_deep(_station))
               + (P.build_holdings_preview_card(
                   P.HoldingsReadout(requested=requested, submitted=requested)),)
               + P.build_setup_unwired_cards(requested))
@@ -758,6 +879,23 @@ class TestUnwiredStaysUnwired:
         assert not hasattr(P, "HOLDINGS_WHY"), (
             "`HOLDINGS_WHY`（「沒有 L3 holdings loader」）還在 —— "
             "那句話本批之後是假的，常數留著遲早有人再用它")
+
+    def test_no_card_still_blames_a_missing_l3_wrapper(self):
+        """**FE-19 最容易留下的假話**：`portfolio_deep_service` 已經補上了。
+
+        原本 ⑥ 的再平衡 / 壓力測試 / VaR 三張卡共用一句「L3 沒有 wrapper」。
+        本批之後那句話**對三張都是假的**：壓測與 VaR 已接線，
+        而再平衡缺的從來就不是 wrapper（是帳本沒有目標比例那一欄）。
+        """
+        _bad = [_c.key for _c, _f, _s in _all_unwired_builts(False)
+                if ("L3 沒有 wrapper" in _c.note.why
+                    or "還沒有 wrapper" in _c.note.why
+                    or "連 L3 wrapper 都還沒有" in _c.note.why)]
+        assert not _bad, f"這幾張卡還在怪一支已經補好的 L3 wrapper：{_bad}"
+        assert not hasattr(P, "MISSING_L3_WRAPPER_WHY"), (
+            "`MISSING_L3_WRAPPER_WHY`（「L3 沒有 wrapper」）還在 —— "
+            "本批補上 `portfolio_deep_service` 之後那句話是假的，"
+            "常數留著遲早有人再用它去叫下一個人補一支已經在那裡的東西")
 
     @pytest.mark.parametrize("requested", [False, True])
     def test_all_stay_unwired_whatever_you_press(self, requested):
@@ -812,16 +950,40 @@ class TestUnwiredStaysUnwired:
             assert "寫入" in _why
             assert "L3" not in _why, f"{_k} 把「不准寫」講成了「缺 L3」"
 
-    def test_the_l3_wrapper_cards_say_the_holdings_are_already_there(self):
-        """⑥ 那三張缺 L3 wrapper 的卡**必須講清楚持股不是問題**。
+    def test_the_rebalance_card_names_the_real_blocker(self):
+        """⑥ 再平衡卡在**帳本沒有目標比例那一欄**，不是缺 L3、不是缺持股。
 
-        不講的話，下一個人會先去補一支已經存在的 holdings loader。
+        講錯的話，下一個人會去補一支已經存在的 L3 wrapper（或一份已經存在的
+        持股清單），而真正的缺口 —— 一個還沒拍板的「目標比例%」輸入元件 ——
+        沒有人會去處理。
         """
+        _station = P.StationReadout(requested=False)
+        _by_key = {_c.key: (_c, dict(_f)) for _c, _f, _s in P.build_deep_cards(
+            _station, P.load_deep(_station))}
+        _card, _facts = _by_key["hold.deep.rebalance"]
+        assert _card.state == UI_UNWIRED
+        assert "目標" in _card.note.why, "沒有講出真正缺的東西（目標權重）"
+        assert "不是 L3 wrapper" in _card.note.why, (
+            "沒有明講「缺的不是 wrapper」—— 那正是上一版寫錯的地方")
+        assert "0.0%" in _card.note.why, (
+            "沒有解釋「拿現況當目標會恆等於 0.0%」—— "
+            "少了這句，下一個人會覺得『那就拿現況當目標啊』")
+        assert "CoreSatelliteManager" in _card.note.where, (
+            "沒有擋掉「改用 portfolio_manager 頂替」那條路 —— "
+            "它的核心比例是另一套，會讓同一頁出現兩個矛盾的核心比例")
+        assert any("已接線" in _v for _v in _facts.values()), (
+            "沒有把「持股清單與 L3 wrapper 都已經在了」講出來")
+
+    def test_the_two_remaining_deep_cards_are_stuck_on_different_things(self):
+        """再平衡與葡萄串**不是同一個原因** —— 共用一句話會讓資訊消失。"""
+        _station = P.StationReadout(requested=False)
         _by_key = {_c.key: _c for _c, _f, _s in P.build_deep_cards(
-            P.StationReadout(requested=False))}
-        for _k in ("hold.deep.rebalance", "hold.deep.stress", "hold.deep.var"):
-            assert _by_key[_k].note.why == P.MISSING_L3_WRAPPER_WHY, _k
-            assert "wrapper" in _by_key[_k].note.where, _k
+            _station, P.load_deep(_station))}
+        _reb, _grape = (_by_key["hold.deep.rebalance"],
+                        _by_key["hold.deep.grape"])
+        assert _reb.note.why != _grape.note.why
+        assert _reb.note.where != _grape.note.where
+        assert "widget" in _grape.note.why, "葡萄串卡的是 widget key，不是資料"
 
     def test_every_unwired_card_carries_facts(self):
         """未接線也要讓人看到「這一格本來會有什麼」，否則使用者不知道少看了什麼。"""
@@ -1019,16 +1181,21 @@ class TestThreeColumnGrid:
     def test_the_six_deep_blocks_go_through_the_grid(self):
         """線框 ⑥ 是**並列**六個區塊 —— 3 欄 × 2 排，不是一排六欄。
 
-        ⚠️ 本批把「核心／衛星」接線了，`DEEP_SPECS` 因此只剩 5 張未接線卡；
-        但**畫面上仍然是六格**（接線的那一張留在它原本的位置，不因為先做好
-        就被搬到第一格）。所以這裡數的是 `build_deep_cards()` 的產出，不是規格表。
+        ⚠️ FE-15 接線了「核心／衛星」、FE-19 再接線壓測 / VaR / 配息現金流，
+        `DEEP_SPECS` 因此只剩 2 張未接線卡；但**畫面上仍然是六格**
+        （接線的那幾張留在原本的位置，不因為先做好就被搬到前面）。
+        所以這裡數的是 `build_deep_cards()` 的產出，不是規格表。
         """
-        assert len(P.DEEP_SPECS) == 5, "未接線的深度分析卡不是 5 張了"
+        assert len(P.DEEP_SPECS) == 2, "未接線的深度分析卡不是 2 張了"
         assert P.MAX_COLS == 3
-        _built = P.build_deep_cards(P.StationReadout(requested=False))
+        _station = P.StationReadout(requested=False)
+        _built = P.build_deep_cards(_station, P.load_deep(_station))
         assert len(_built) == 6, "線框 ⑥ 是六格，接線與否都不改變格數"
-        assert [_c.key for _c, _f, _s in _built][1] == "hold.deep.core_satellite", (
-            "接線的那一張被搬位置了 —— 順序照線框，不照完成度")
+        assert [_c.key for _c, _f, _s in _built] == [
+            "hold.deep.rebalance", "hold.deep.core_satellite",
+            "hold.deep.stress", "hold.deep.var",
+            "hold.deep.dividend_cash", "hold.deep.grape"], (
+            "⑥ 的順序不是線框那六項 —— 順序照線框，不照完成度")
         _rows = list(P.grid(_built, P.MAX_COLS))
         assert [len(_c) for _c, _cols in _rows] == [3, 3]
 
@@ -1107,7 +1274,7 @@ class TestSignalChannelAndRenderBoundary:
             P.build_lightwall_card(_live_station),
             P.build_allocation_split_card(_live_station),
             P.build_take_profit_card(_live_station),
-            *P.build_deep_cards(_live_station),
+            *P.build_deep_cards(_live_station, _live_deep()),
             P.build_switch_card(P.SwitchReadout(
                 requested=True, submitted=True, stance="defensive",
                 switch_out=({"代號": "2330", "建議動作": "汰弱"},),
@@ -1500,6 +1667,367 @@ class TestHoldingsServiceIsReadOnly:
         _watch = H._row("2412", held=False)
         assert _watch["lots"] is None and _watch["avg_price"] is None, (
             "觀察清單列被填了 0 —— 那份分頁根本沒有張數與均價（§1 不猜）")
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【13】⑥ 組合深度分析接線之後才可能出現的說謊方式（FE-19）
+# ══════════════════════════════════════════════════════════════════
+class TestTheDeepAnalysisIsWiredNow:
+    """⑥ 的壓力測試 / VaR / 配息現金流**已接線**（L3 `portfolio_deep_service`）。
+
+    ⚠️ 這一類守的是**接線之後**才可能出現的錯：
+      · 「還沒按」／「你沒有持股」／「算不出來」／「上游掛了」被畫成同一種；
+      · 一格掛掉把另外兩格一起染紅（線框 ⑥：區塊並列 · 逐格獨立判態）；
+      · 「不含綜所稅」被吞掉（那會讓「配息」兩個字變成一個假的可支配金額）；
+      · **張 → 股 的乘法跑到畫面層**（§4.1 漏乘 = 1000 倍低估）。
+    """
+
+    _BUILDERS = ("build_stress_card", "build_var_card",
+                 "build_dividend_cash_card")
+
+    @pytest.mark.parametrize("builder", _BUILDERS)
+    def test_cold_start_is_idle(self, builder):
+        _card = getattr(P, builder)(P.DeepReadout(requested=False))[0]
+        assert _card.state == UI_IDLE
+        assert _card.note.now == P.IDLE_NOW
+
+    @pytest.mark.parametrize("builder", _BUILDERS)
+    def test_market_only_scope_says_it_was_your_choice(self, builder):
+        _card = getattr(P, builder)(
+            P.DeepReadout(requested=False, submitted=True))[0]
+        assert _card.state == UI_IDLE
+        assert "沒有發那一次網路呼叫" in _card.note.why
+
+    @pytest.mark.parametrize("builder", _BUILDERS)
+    def test_no_holdings_is_grey_not_red(self, builder):
+        """新使用者**每天都會看到**這個狀態 —— 它不是故障。"""
+        _card = getattr(P, builder)(
+            _deep(has_station_rows=False, bound=False, holdings_n=0))[0]
+        assert _card.state == UI_EMPTY and _card.state != UI_FAILED
+        assert _card.note.now == P.NOT_BOUND_NOW
+
+    @pytest.mark.parametrize("builder", _BUILDERS)
+    def test_bound_but_empty_is_a_different_sentence_from_unbound(self, builder):
+        _unbound = getattr(P, builder)(
+            _deep(has_station_rows=False, bound=False, holdings_n=0))[0]
+        _empty = getattr(P, builder)(
+            _deep(has_station_rows=False, bound=True, holdings_n=0))[0]
+        assert _unbound.state == _empty.state == UI_EMPTY
+        assert _unbound.note.now != _empty.note.now, (
+            "「還沒綁」與「綁了但空」畫成同一句 —— 指路句完全不同")
+
+    @pytest.mark.parametrize("builder,err_field", list(zip(
+        _BUILDERS, ("stress_error", "var_error", "cash_error"))))
+    def test_its_own_error_reds_only_itself(self, builder, err_field):
+        """**一格掛掉不准染色鄰格。** 三條上游是分開的，狀態也必須分開。"""
+        _readout = _live_deep()
+        _broken = P.DeepReadout(**{**_readout.__dict__,
+                                   err_field: "RuntimeError('boom')"})
+        _states = {_b: getattr(P, _b)(_broken)[0].state for _b in self._BUILDERS}
+        assert _states[builder] == UI_FAILED
+        assert [_s for _b, _s in _states.items() if _b != builder] \
+            == [UI_LIVE, UI_LIVE], (
+            f"{builder} 掛掉把另外兩格一起染紅了：{_states}")
+
+    @pytest.mark.parametrize("builder", _BUILDERS)
+    def test_an_upstream_error_reds_all_three(self, builder):
+        """上游（持股／戰情表）掛掉是**另一回事** —— 三格的輸入都沒有了。"""
+        _card = getattr(P, builder)(
+            P.DeepReadout(requested=True, submitted=True,
+                          error="RuntimeError('boom')"))[0]
+        assert _card.state == UI_FAILED
+
+    def test_a_computed_zero_is_not_the_same_as_cannot_compute(self):
+        """§1：「近一年真的沒配息」與「算不出來」**不是同一件事**。"""
+        from src.services.portfolio_deep_service import REASON_NO_LOTS_ROWS
+
+        _no_payout = P.build_dividend_cash_card(
+            _deep(cash=_cash_res(gross_twd=0.0, net_after_nhi_twd=0.0,
+                                 payouts_n=0)))[0]
+        _cannot = P.build_dividend_cash_card(
+            _deep(cash=_cash_res(computed=False, gross_twd=0.0, payouts_n=0,
+                                 lots_n=0, reason=REASON_NO_LOTS_ROWS)))[0]
+        assert REASON_NO_LOTS_ROWS in _cannot.note.why, (
+            "算不出來卻沒有把 L3 給的原因印出來 —— 使用者不知道要補什麼")
+        assert _no_payout.state == _cannot.state == UI_EMPTY
+        assert _no_payout.note.now != _cannot.note.now, (
+            "「查過了、真的沒有」與「算不出來」被畫成同一句")
+        assert "已經逐檔查過" in _no_payout.note.why
+        assert "殖利率回推" in _no_payout.note.why, (
+            "沒有講「不用殖利率回推一個數字頂替」—— 那正是這一格最容易造假的地方")
+
+    def test_the_dividend_card_always_says_it_excludes_income_tax(self):
+        """**不講就是說謊。** 綜所稅沒算，卻讓人以為那是可支配的錢。"""
+        for _readout in (_live_deep(), _deep(cash=_cash_res(payouts_n=0))):
+            _card, _facts, _signal = P.build_dividend_cash_card(_readout)
+            _text = " ".join(_v for _k, _v in _facts) + " " + " ".join(
+                _k for _k, _v in _facts)
+            assert "不含綜所稅" in _text, "卡面沒有講「不含綜所稅」"
+        assert "不含綜所稅" in P.build_dividend_cash_card(_live_deep())[2], (
+            "訊號頻道沒有帶「不含綜所稅」—— 那是這張卡最重要的但書")
+        assert "不含綜所稅" in P.WIRING_DISCLOSURE, (
+            "常駐的接線揭露也要講 —— 使用者不一定會展開那張卡")
+
+    def test_the_var_card_never_pretends_a_short_sample_is_a_result(self):
+        """樣本不足一個月 → 灰的「算不出來」，**不是**一個看起來很小的 VaR。"""
+        from src.services.portfolio_deep_service import REASON_SHORT_SAMPLE
+
+        _card = P.build_var_card(_deep(var=_var_res(
+            computed=False, reason=REASON_SHORT_SAMPLE, n_common=4,
+            hist_95_twd=0.0, hist_99_twd=0.0, monthly_99_twd=0.0,
+            monthly_99_pct=0.0)))[0]
+        assert _card.state == UI_EMPTY and _card.state != UI_FAILED
+        assert _card.value == "", "算不出來卻給了結論文字"
+        assert REASON_SHORT_SAMPLE in _card.note.why
+        assert "0" not in _card.value
+
+    def test_a_dead_price_source_is_red_but_a_missing_history_is_grey(self):
+        """v3 §02：**「還沒有資料」是灰，「上游掛了」是紅** —— 不可混成一種。
+
+        混了的話，Yahoo 掛掉的那一天使用者會以為「我的股票太新」，
+        而**真的**壞掉那一次沒有人看得見（假性錯誤的反面：假性正常）。
+        """
+        from src.services.portfolio_deep_service import REASON_NO_RETURNS
+
+        _grey = P.build_var_card(_deep(var=_var_res(
+            computed=False, reason=REASON_NO_RETURNS, hist_95_twd=0.0,
+            hist_99_twd=0.0, monthly_99_twd=0.0, monthly_99_pct=0.0,
+            no_price=("0056.TW",))))[0]
+        assert _grey.state == UI_EMPTY, "「這一檔沒有那段歷史」被畫成紅色了"
+
+        _dead = _var_res(computed=False, reason=REASON_NO_RETURNS,
+                         hist_95_twd=0.0, hist_99_twd=0.0, monthly_99_twd=0.0,
+                         monthly_99_pct=0.0,
+                         fetch_errors=("0056.TW：RuntimeError: yahoo 掛了",))
+        assert _dead.upstream_down is True
+        assert P.build_var_card(_deep(var=_dead))[0].state == UI_FAILED, (
+            "取價那一層整個掛掉卻畫成灰的 —— 真的壞掉那一次就沒有人看得見")
+
+    def test_a_partial_fetch_failure_is_not_called_a_dead_source(self):
+        """有一部分抓成功 → **不算掛掉**，只是部分缺料（由 facts 揭露）。"""
+        _partial = _var_res(fetch_errors=("2330.TW：RuntimeError: boom",),
+                            tickers_used=("0056.TW",))
+        assert _partial.upstream_down is False
+        assert P.build_var_card(_deep(var=_partial))[0].state == UI_LIVE
+
+    def test_imputed_beta_is_disclosed(self):
+        """§1：Beta 是估的就要說 —— 不說的話那個虧損看起來是實測值。"""
+        _facts = dict(P.build_stress_card(
+            _deep(stress=_stress_res(beta_imputed=("2330.TW",))))[1])
+        assert any("2330.TW" in _v and "估" in _v for _v in _facts.values()), (
+            "查無 Beta 以 1.0 估算的那幾檔沒有揭示出來")
+
+    def test_partial_coverage_is_disclosed(self):
+        """三檔裡只算了一檔的風險數字，不能講得像整個組合的風險。"""
+        _facts = dict(P.build_var_card(
+            _deep(var=_var_res(valued_n=1, held_n=3)))[1])
+        assert any("3 檔持有列裡納入了 1 檔" in _v for _v in _facts.values())
+
+    def test_the_reconciliation_failure_is_surfaced(self):
+        """§4.3 對帳：兩套算法對不起來時**畫面要講**，不得靜默採信一邊。"""
+        _facts = dict(P.build_stress_card(
+            _deep(stress=_stress_res(reconciled=False,
+                                     reference_value_twd=999.0)))[1])
+        assert any("對不起來" in _k or "對不起來" in _v
+                   for _k, _v in _facts.items()), (
+            "總市值與 ① 那張卡對不上卻沒有講出來")
+
+    def test_the_page_does_no_lot_to_share_arithmetic_itself(self):
+        """**§4.1 的主戰場**：張 → 股的乘法一律住 L3，本頁一個都不准有。
+
+        漏乘 = 1000 倍低估；散在畫面層的乘法遲早會有一處漏掉。
+        """
+        _lits = [_n.lineno for _n in ast.walk(_tree())
+                 if isinstance(_n, ast.Constant)
+                 and isinstance(_n.value, (int, float))
+                 and not isinstance(_n.value, bool)
+                 and float(_n.value) == 1000.0]
+        assert not _lits, (
+            f"本頁出現了字面 1000（第 {_lits} 行）—— 張→股的換算必須住 L3 "
+            "`portfolio_deep_service`（那裡取 L0 `SHARES_PER_LOT`）")
+        # 常數名出現在**說明文字**裡是好事（讀者要知道它住哪）；
+        # 出現在**程式碼**裡才是問題 —— 引進來就會有人在這裡乘一次。
+        assert "SHARES_PER_LOT" not in _identifiers(_tree()), (
+            "本頁把張→股的常數當識別字用了 —— 那個乘法只准在 L3 發生")
+
+    def test_an_idle_card_never_claims_a_zero_percent_scenario(self):
+        """沒有結果時**不准**印「假設大盤下跌 0 個百分點」——
+
+        那是一個假的情境設定（`getattr(None, 'drop_pct', 0.0)` 的典型後果），
+        而且它看起來完全像一個真的設定值。本頁不持有這個門檻，
+        它只能由 L0 經 L3 帶下來；帶不下來就不印。
+        """
+        for _readout in (P.DeepReadout(requested=False),
+                         _deep(has_station_rows=False)):
+            _facts = dict(P.build_stress_card(_readout)[1])
+            assert not any("下跌 0" in _v for _v in _facts.values()), _facts
+        _live = dict(P.build_stress_card(_deep(stress=_stress_res()))[1])
+        assert any("下跌 20" in _v for _v in _live.values()), (
+            "有結果時反而不印情境了 —— 那個跌幅是讀懂這個數字的必要條件")
+
+    def test_a_missing_reason_is_said_out_loud_not_left_blank(self):
+        """L3 沒給原因時**要講「上游沒有給訊息」**，不是留一個空句。"""
+        _card = P.build_var_card(_deep(var=_var_res(
+            computed=False, reason="", hist_95_twd=0.0, hist_99_twd=0.0,
+            monthly_99_twd=0.0, monthly_99_pct=0.0)))[0]
+        assert _card.state == UI_EMPTY
+        assert P.UNKNOWN_ERROR_TEXT in _card.note.why
+        assert "—— 。" not in _card.note.why, "留了一個空句"
+
+    def test_the_deep_readout_carries_no_sheet_id(self):
+        """同 `BindingReadout`：**結構上**不讓憑證進到這一層。"""
+        assert "sheet_id" not in P.DeepReadout.__dataclass_fields__
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【14】⑥ 那一支新 L3 也要唯讀（FE-19，比照 `TestHoldingsServiceIsReadOnly`）
+# ══════════════════════════════════════════════════════════════════
+class TestPortfolioDeepServiceIsReadOnly:
+    """`src/services/portfolio_deep_service.py` —— 頁面那一類管不到它。
+
+    ⚠️ 同 `TestHoldingsServiceIsReadOnly` 的自陳：這只證明「**靜態文字裡沒有
+    寫入呼叫**」，不證明執行時絕不寫 —— 後者取決於它呼叫的 L1／L2／L3 的行為。
+    """
+
+    def _mod(self):
+        import src.services.portfolio_deep_service as D
+
+        return D
+
+    def _tree(self):
+        return ast.parse(
+            pathlib.Path(self._mod().__file__).read_text(encoding="utf-8"))
+
+    def test_no_write_surface_identifier_anywhere(self):
+        _hit = sorted(_identifiers(self._tree()) & _WRITE_SURFACE)
+        assert not _hit, f"⑥ 的 L3 出現了寫入面的識別字 {_hit}"
+
+    def test_it_never_touches_the_users_google_sheet_at_all(self):
+        """它連**讀**都不該碰 gsheet —— 持股是呼叫端餵進來的。
+
+        碰了就代表同一份持股被讀了兩次（兩次之間可能不一致），
+        而且會多打一次 Google（§2.4 快取集中在 L1 的理由）。
+        """
+        _mods = {(_n.module or "") for _n in ast.walk(self._tree())
+                 if isinstance(_n, ast.ImportFrom)}
+        _bad = sorted(_m for _m in _mods
+                      if "gsheet" in _m or "portfolio_binding" in _m
+                      or "oauth" in _m)
+        assert not _bad, f"⑥ 的 L3 碰了使用者帳本／授權那一層：{_bad}"
+
+    def test_it_has_no_cache_layer_of_its_own(self):
+        """快取集中在 L1（`CLAUDE.md §8.2.A.2` V-SMART-CACHE-1 的同一條理由）。
+
+        ⚠️ 比對的是 **AST**，不是字串：檔頭寫「`@st.cache_data` 集中在 L1」
+        是**應該**寫的說明，用字串比對會把說明本身罰掉。
+        """
+        _decor = [f"line {_d.lineno}"
+                  for _fn in ast.walk(self._tree())
+                  if isinstance(_fn, (ast.FunctionDef, ast.AsyncFunctionDef))
+                  for _d in _fn.decorator_list
+                  for _a in ([_d.func] if isinstance(_d, ast.Call) else [_d])
+                  if isinstance(_a, ast.Attribute)
+                  and _a.attr in ("cache_data", "cache_resource")]
+        assert not _decor, f"⑥ 的 L3 自建了快取層：{_decor}"
+        _st_imports = [_n.lineno for _n in ast.walk(self._tree())
+                       if (isinstance(_n, ast.Import)
+                           and any(_a.name.split(".")[0] == "streamlit"
+                                   for _a in _n.names))
+                       or (isinstance(_n, ast.ImportFrom)
+                           and (_n.module or "").split(".")[0] == "streamlit")]
+        assert not _st_imports, (
+            f"⑥ 的 L3 import 了 streamlit（第 {_st_imports} 行）—— L3 不需要它")
+
+    def test_the_lot_to_share_constant_comes_from_l0(self):
+        """§3.3：張→股的 1000 **不得寫死**，一律取自 L0 SSOT。"""
+        _src_txt = pathlib.Path(
+            self._mod().__file__).read_text(encoding="utf-8")
+        assert "SHARES_PER_LOT" in _src_txt
+        _lits = [_n.lineno for _n in ast.walk(self._tree())
+                 if isinstance(_n, ast.Constant)
+                 and isinstance(_n.value, (int, float))
+                 and not isinstance(_n.value, bool)
+                 and float(_n.value) == 1000.0]
+        assert not _lits, (
+            f"⑥ 的 L3 出現了字面 1000（第 {_lits} 行）—— 取 L0 `SHARES_PER_LOT`")
+
+    def test_there_is_exactly_one_multiplication_site(self):
+        """**單一乘法點**：`SHARES_PER_LOT` 只准出現在 `_lot_to_shares()` 裡。
+
+        散成兩處之後，日後只改一處就是 1000 倍的沉默錯誤。
+        """
+        _uses = [_n.lineno for _n in ast.walk(self._tree())
+                 if isinstance(_n, ast.Name) and _n.id == "SHARES_PER_LOT"]
+        assert len(_uses) == 1, (
+            f"`SHARES_PER_LOT` 被用在 {len(_uses)} 處（第 {_uses} 行）—— "
+            "張→股 只准有一個乘法點")
+        import inspect
+
+        _fn = inspect.getsource(self._mod()._lot_to_shares)
+        assert "SHARES_PER_LOT" in _fn, "那一處不在 `_lot_to_shares()` 裡"
+
+    def test_the_lot_to_share_math_is_actually_right(self):
+        """**數值反證**：2 張 × 50 元 = 100,000 元，不是 100 元。"""
+        D = self._mod()
+        _rows = [{"代號": "0056", "held": True, "張數": 2.0,
+                  "均價": 30.0, "現價": 50.0, "_detail": {}}]
+        _priced = D.priced_rows(_rows)
+        assert len(_priced) == 1
+        assert D._total_value_twd(_priced) == 100_000.0, (
+            "漏乘了每張股數 —— 這就是 §4.1 的 1000 倍低估")
+        assert D._shares_of(_rows) == [{"ticker": "0056.TW", "shares": 2000.0}]
+
+    def test_it_reconciles_against_the_existing_l3_total(self):
+        """§4.3：本檔的總市值與 `compute_portfolio_totals()` 必須對得起來。"""
+        D = self._mod()
+        _rows = [{"代號": "0056", "held": True, "張數": 2.0,
+                  "均價": 30.0, "現價": 50.0, "_detail": {}},
+                 {"代號": "2330", "held": True, "張數": 1.0,
+                  "均價": 500.0, "現價": 1000.0, "_detail": {}}]
+        _ok, _ref = D._reconcile(_rows, D._total_value_twd(D.priced_rows(_rows)))
+        assert _ok is True and _ref == 1_100_000.0
+
+    def test_watchlist_rows_are_never_counted_as_zero_lots(self):
+        """§1：觀察清單那些列沒有張數 —— **不是持有 0 張、成本 0 元**。"""
+        D = self._mod()
+        _rows = [{"代號": "2412", "held": False, "張數": None,
+                  "均價": None, "現價": None, "_detail": {}},
+                 {"代號": "9999", "held": True, "張數": None,
+                  "均價": None, "現價": None, "_detail": {}}]
+        assert D.priced_rows(_rows) == []
+        assert D._shares_of(_rows) == []
+        assert D.get_portfolio_stress(_rows).computed is False
+        assert D.get_dividend_cash_flow(_rows).computed is False
+        assert D.get_portfolio_stress(_rows).loss_twd == 0.0
+        assert D.get_portfolio_stress(_rows).reason, "算不出來卻沒有給原因"
+
+    def test_a_failed_row_is_never_valued(self):
+        """逐檔抓取失敗的那一列（`_detail.error`）不得進分子也不得進分母。"""
+        D = self._mod()
+        _rows = [{"代號": "0056", "held": True, "張數": 2.0, "均價": 30.0,
+                  "現價": 50.0, "_detail": {"error": "boom"}}]
+        assert D.priced_rows(_rows) == [] and D._shares_of(_rows) == []
+
+    def test_the_dividend_call_always_passes_marginal_rate_none(self):
+        """**綜所稅刻意不算** —— 傳一個猜的稅率就是替使用者編一筆稅。"""
+        _calls = [_n for _n in ast.walk(self._tree())
+                  if isinstance(_n, ast.Call) and isinstance(_n.func, ast.Name)
+                  and _n.func.id == "get_dividend_tax_view"]
+        assert len(_calls) == 1, "配息稅後試算被呼叫了 0 次或多次"
+        _kw = {_k.arg: _k.value for _k in _calls[0].keywords if _k.arg}
+        assert "marginal_rate" in _kw, "沒有顯式傳 marginal_rate="
+        assert isinstance(_kw["marginal_rate"], ast.Constant)
+        assert _kw["marginal_rate"].value is None, (
+            "傳了一個稅率 —— 那是使用者輸入，本批沒有那個元件（A-8）")
+        assert self._mod().DividendCashResult().income_tax_included is False
+
+    def test_none_of_the_three_entry_points_raises_on_junk(self):
+        """三支都**不 raise** —— ⑥ 是六個並列格，一格算不出來不該炸整頁。"""
+        D = self._mod()
+        for _bad in ([], None, [{}], [{"代號": None, "held": True}]):
+            assert D.get_portfolio_stress(_bad).computed is False
+            assert D.get_portfolio_var(_bad).computed is False
+            assert D.get_dividend_cash_flow(_bad).computed is False
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -13,7 +13,14 @@
     兩種都各有守衛：未知狀態一律紅、非 Mapping 的列照樣畫成紅、
     `live` 只可能來自 `last_status == 'ok'`。
   · `TestUnmeasuredSourcesAreVisible` ← 第二種假綠燈（**更隱形**）：
-    FRED / FinMind / TWSE 沒被量到，若不畫出來，畫面會是滿版綠。
+    量不到的來源若不畫出來，畫面會是滿版綠。⚠️ FE-20 已把 FRED 與 TWSE
+    在 L1 掛上 `@monitored`（清單裡只剩 FinMind 額度）——
+    這一類**沒有因此放寬**，改守「機制沒被拆掉」＋「三個具名來源仍然
+    都交代得出來」＋「接上的不准還留著假的未接線宣告」。
+  · `TestNamedSourcesAreReallyWired`（FE-20 新增）← 本頁對「已接線」的宣稱
+    必須可被機器查核：**直接掃 L1 原始碼**，`@monitored` 或 `success_check`
+    被拔掉就當場紅燈（做法同下面 `TestStatusLiteralsMatchL0` 掃 L0）；
+    並就地實測「裝飾器只准記錄」—— 不吞例外、不換型別、不動回傳值。
   · `TestRequestedIsNotDerivedFromData` ← gate 從資料反推（頁 1 的恆真式事故）。
     做法與頁 2／3／4 相同：**白名單 AST 斷言**，不是一條越加越長的黑名單。
   · `TestLeafOneHasNoGate`       ← 葉1 教學**沒有 gate**：全檔**字面 `requested=`
@@ -353,13 +360,51 @@ class TestNoFakeGreenLight:
 # ══════════════════════════════════════════════════════════════════
 # 【3】量不到的來源必須看得見（第二種假綠燈的專屬守衛）
 # ══════════════════════════════════════════════════════════════════
-class TestUnmeasuredSourcesAreVisible:
-    """FRED / FinMind / TWSE 沒被量到 —— **不畫，畫面就會是滿版綠**。"""
+#: 線框葉2 `cells` 具名的三個來源。**這個清單不隨接線進度變動** ——
+#: 變的是它們各自 `wired` 與否，而三個名字都必須一直在畫面上說得出來。
+_WIREFRAME_NAMED: tuple[str, ...] = ("FRED", "FinMind", "TWSE")
 
-    def test_all_three_named_sources_are_drawn(self):
+
+class TestUnmeasuredSourcesAreVisible:
+    """量不到的來源沒被畫出來 —— **不畫，畫面就會是滿版綠**。
+
+    ⚠️ **FE-20 之後這一類守的是什麼、不守什麼（重要）**：
+    FRED 與 TWSE 已在 L1 掛上 `@monitored`，所以它們**離開了**這張未接線清單
+    （現在只剩 FinMind 額度）。這一類**沒有因此放寬** —— 它改守兩件事：
+      (a) **機制還在**：`UNMEASURED_SOURCES` ／ `build_unmeasured_cards()` 沒被拆掉，
+          清單裡剩下的那些仍然被具名畫出來、仍然是未接線態；
+      (b) **三個具名來源在畫面上仍然都交代得出來** —— 已接線的那兩支由
+          `named_sources_text()` 具名說明（含「牆上看不到 ≠ 沒接線」），
+          量不到的那一個仍是灰卡。
+    「接上了就不用交代了」正是本頁第二種假綠燈換一種穿法。
+    ⚠️ 「那兩支真的掛了嗎」不由本類負責 → `TestNamedSourcesAreReallyWired` 掃 L1 原始碼。
+    """
+
+    def test_the_mechanism_still_exists(self):
+        """⚠️ 接上兩支之後最容易發生的事：順手把整個「具名畫灰卡」機制刪掉。"""
+        assert P.UNMEASURED_SOURCES, (
+            "`UNMEASURED_SOURCES` 空了 —— 量不到的來源會變成畫面上不存在")
+        assert P.build_unmeasured_cards(), "未接線卡一張都沒畫"
+
+    def test_finmind_quota_is_still_drawn_as_unmeasured(self):
+        _keys = {_c.key for _c, _f, _s in P.build_unmeasured_cards()}
+        assert "why.source.unmeasured.finmind_quota" in _keys, (
+            "FinMind 額度仍然量不到，卻沒有被具名畫出來")
+
+    def test_all_three_wireframe_names_are_still_accounted_for(self):
+        """三個具名來源**每一個**都要在畫面上交代得出來（接線與否都算）。"""
+        _screen = (P.named_sources_text() + P.COVERAGE_DISCLOSURE + " "
+                   + " ".join(_c.label for _c, _f, _s in P.build_unmeasured_cards()))
+        for _name in _WIREFRAME_NAMED:
+            assert _name in _screen, f"線框具名的 {_name} 在畫面上沒有任何交代"
+
+    def test_the_wired_two_are_no_longer_claimed_unwired(self):
+        """⚠️ 反向：接上了卻還留著「未接線」灰卡 = **假的未接線宣告**。"""
         _labels = " ".join(_c.label for _c, _f, _s in P.build_unmeasured_cards())
-        for _name in ("FRED", "FinMind", "TWSE"):
-            assert _name in _labels, f"線框具名的 {_name} 沒有被畫出來"
+        for _s in P.NAMED_SOURCES:
+            if _s.wired:
+                assert _s.label not in _labels, (
+                    f"{_s.label} 已在 L1 接上監控，卻還被畫成未接線灰卡")
 
     def test_they_are_unwired_whatever_you_press(self):
         for _card, _facts, _sig in P.build_unmeasured_cards():
@@ -367,30 +412,87 @@ class TestUnmeasuredSourcesAreVisible:
             assert not _card.value, "未接線卡不得帶結論文字"
 
     def test_each_has_its_own_where(self):
-        """三顆卡住的位置不同 —— 共用一句「去哪補」會讓那個資訊消失。"""
+        """卡住的位置不同 —— 共用一句「去哪補」會讓那個資訊消失。"""
         _wheres = [_c.note.where for _c, _f, _s in P.build_unmeasured_cards()]
         assert len(set(_wheres)) == len(_wheres), f"「去哪補」被複製貼上了：{_wheres}"
 
     def test_finmind_quota_says_it_is_stuck_one_step_deeper(self):
-        """額度**比另外兩個更卡一層**（連 fetcher 都還沒有），文案要說得出來。"""
-        _by_key = {_c.key: _c for _c, _f, _s in P.build_unmeasured_cards()}
-        _quota = _by_key["why.source.unmeasured.finmind_quota"]
-        assert "連 fetcher 都還沒有" in dict(
-            P.build_unmeasured_cards()[1][1]).get("卡住的那一步", "")
-        assert "帳號層級" in _quota.note.why
+        """額度**比另外兩個更卡一層**（連 fetcher 都還沒有），文案要說得出來。
 
-    def test_no_made_up_number_anywhere_in_the_three_cards(self):
-        """⚠️ 額度那一格最容易被塞一個猜出來的百分比。"""
+        ⚠️ 接上 FRED / TWSE 之後這句更重要，不是更不重要：使用者現在會看到
+        兩盞真的燈，很容易以為「那第三個大概也差不多」。
+        """
+        _built = {_c.key: (_c, dict(_f))
+                  for _c, _f, _s in P.build_unmeasured_cards()}
+        _quota, _facts = _built["why.source.unmeasured.finmind_quota"]
+        assert "連 fetcher 都還沒有" in _facts.get("卡住的那一步", "")
+        assert "帳號層級" in _quota.note.why
+        assert "掛上去只會知道" in _quota.note.why, (
+            "要說得出「幫現有 fetcher 掛監控」為什麼補不到額度")
+
+    def test_the_quota_card_admits_it_was_not_actually_probed(self):
+        """⚠️ 本批**沒有實測**到 FinMind 有沒有額度 API（沙箱對外連線被擋）。
+
+        §-2 規則 6：沒查證的宣稱比沒有宣稱更危險 —— 那張卡不得寫成
+        「去補一支 fetcher 就好」，那是一句做不到的指引。
+        """
+        _built = {_c.key: (_c, dict(_f))
+                  for _c, _f, _s in P.build_unmeasured_cards()}
+        _quota, _facts = _built["why.source.unmeasured.finmind_quota"]
+        assert "無法實測" in _facts.get("本批查到哪裡", ""), (
+            "沒有把「這一步本批沒查證到」寫進 facts")
+        assert "本批沒有做到" in _quota.note.where
+        assert "不宣稱它做得到、也不宣稱它做不到" in _quota.note.where
+
+    def test_no_made_up_number_and_no_used_count_stand_in(self):
+        """⚠️ 額度那一格最容易被塞一個猜出來的百分比，或拿「已用次數」充數。"""
         for _card, _facts, _sig in P.build_unmeasured_cards():
             assert "62%" not in (_card.note.now + _card.note.why), (
                 "線框示意圖上的 62% 是**示意**，不是資料 —— 不得出現在真畫面上")
+        _facts = dict(P.build_unmeasured_cards()[0][1])
+        assert "硬換算就是造假" in _facts.get("⚠️ 為什麼不拿「已用次數」充數", ""), (
+            "「已用次數 ≠ 剩餘額度」這條紅線沒有寫在卡上")
 
     def test_the_coverage_disclosure_says_green_is_not_proof(self):
-        """本頁最重要的一句話：**沒有紅燈不等於全站都好。**"""
+        """本頁最重要的一句話：**沒有紅燈不等於全站都好。**
+
+        ⚠️ 接上兩支之後這句話**不准被弱化** —— 掛了 9 支不等於全站被量到。
+        """
         _d = P.COVERAGE_DISCLOSURE
         assert "不等於全站都好" in _d
-        assert "FRED" in _d and "FinMind" in _d and "TWSE" in _d
+        for _name in _WIREFRAME_NAMED:
+            assert _name in _d
         assert "data_registry" in _d, "要說得出全站清單的 SSOT 在哪一層"
+        assert "一個字都沒有變弱" in _d, (
+            "接線之後這段揭露被縮水了 —— 它防的東西沒有變少")
+        assert "不是**來源**" in _d, (
+            "沒有講出「量到的單位是 fetcher 不是來源」—— "
+            "那正是『一支綠燈就以為整個來源都好』的入口")
+
+    def test_the_named_source_rundown_is_rendered_unconditionally(self):
+        """具名來源狀態一覽也是**常駐**的 —— 不得躲在任何 if 裡。"""
+        _fn = [_n for _n in ast.walk(_tree())
+               if isinstance(_n, ast.FunctionDef)
+               and _n.name == "_render_user_health_wall"][0]
+        _guarded = {id(_c) for _if in ast.walk(_fn)
+                    if isinstance(_if, ast.If)
+                    for _c in ast.walk(_if) if isinstance(_c, ast.Name)}
+        for _sym in ("named_sources_text", "CACHE_SEMANTICS"):
+            _hits = [_n for _n in ast.walk(_fn) if isinstance(_n, ast.Name)
+                     and _n.id == _sym]
+            assert _hits, f"{_sym} 沒有被畫出來"
+            assert all(id(_h) not in _guarded for _h in _hits), (
+                f"{_sym} 被包進 if 裡了 —— 它必須常駐")
+
+    def test_the_rundown_warns_that_absence_is_not_failure(self):
+        """接線 ≠ 牆上一定看得到（要那個 L1 模組被載入過）。
+
+        不講這句，使用者會把「牆上沒有 FRED」讀成「FRED 沒接線」或「FRED 壞了」。
+        """
+        _t = P.named_sources_text()
+        assert "還沒有人載入過" in _t and "不是它壞了" in _t
+        assert "fetch_fred" in _t and "twse_volume" in _t, (
+            "沒有寫出牆上要找的 fetcher 名字，使用者無從對照")
 
     def test_the_disclosure_is_rendered_unconditionally(self):
         """它是**常駐**的 —— 不得躲在任何 if 裡。"""
@@ -405,6 +507,102 @@ class TestUnmeasuredSourcesAreVisible:
         assert _hits, "涵蓋率揭露沒有被畫出來"
         assert all(id(_h) not in _guarded for _h in _hits), (
             "涵蓋率揭露被包進 if 裡了 —— 它必須常駐")
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【3b】本頁宣稱「已接線」的那幾支，L1 真的掛了嗎（FE-20）
+# ══════════════════════════════════════════════════════════════════
+_REPO = pathlib.Path(P.__file__).resolve().parents[3]
+
+
+class TestNamedSourcesAreReallyWired:
+    """⚠️ **本頁對 `wired=True` 的宣稱，必須可被機器查核。**
+
+    `NAMED_SOURCES` 是一段**對使用者的宣稱**（「FRED 已接線，去牆上找
+    `fetch_fred`」）。如果 L1 那一行 `@monitored` 被拔掉，畫面不會報錯 ——
+    那一盞只會**默默消失**，而使用者仍讀到「已接線」。那正是本頁第二種假綠燈
+    （把量不到的整個不畫）從另一道門走回來。
+
+    所以這一類**直接掃 L1 原始碼**（做法沿用 `TestStatusLiteralsMatchL0`
+    掃 L0 的同一招）：裝飾器不在了就當場 CI 紅燈，逼人把那一筆改回
+    `wired=False` 並加回未接線灰卡 —— 而不是靠自律。
+
+    ⚠️ **這一類證明的是「那一行存在」，不是「那支 fetcher 現在抓得到資料」。**
+    後者要打外部 API，本頁與本測試都不做。
+    """
+
+    def test_the_page_claims_something(self):
+        """反證：真的有宣稱已接線的來源，否則下面幾條會空轉而假綠。"""
+        assert [_s for _s in P.NAMED_SOURCES if _s.wired], (
+            "一個 wired=True 都沒有？那 FE-20 什麼都沒接上")
+
+    def test_every_wired_claim_has_a_real_decorator_in_l1(self):
+        for _s in P.NAMED_SOURCES:
+            if not _s.wired:
+                continue
+            _f = _REPO / _s.module
+            assert _f.is_file(), f"{_s.label} 宣稱的 L1 檔不存在：{_s.module}"
+            _txt = _f.read_text(encoding="utf-8")
+            assert f"@monitored('{_s.fetcher}'" in _txt, (
+                f"{_s.label} 宣稱已接線，但 {_s.module} 裡找不到 "
+                f"`@monitored('{_s.fetcher}'` —— 裝飾器被拔掉了？"
+                "請把 NAMED_SOURCES 那一筆改回 wired=False 並加回未接線灰卡")
+            assert f"def {_s.fetcher}(" in _txt, (
+                f"{_s.module} 裡沒有 `def {_s.fetcher}(` —— 名字對不上")
+
+    def test_unwired_claims_carry_no_fetcher_name(self):
+        """⚠️ 反向：沒接線就不准在表上留一個 fetcher 名字（那是暗示它量得到）。"""
+        for _s in P.NAMED_SOURCES:
+            if not _s.wired:
+                assert not _s.fetcher and not _s.module, (
+                    f"{_s.label} 宣稱未接線，卻填了 fetcher／module")
+
+    def test_the_wired_ones_guard_against_a_silent_green(self):
+        """⚠️ 兩支都會「失敗卻不拋例外」（回空 DataFrame／空 dict）。
+
+        沒有 `success_check` 的話 `@monitored` 只看「有沒有拋例外」→ **恆綠**
+        （`fetch_tw_pmi` v19.118 已經踩過同一個坑）。這條釘住那個參數還在。
+        """
+        for _s in P.NAMED_SOURCES:
+            if not _s.wired:
+                continue
+            _txt = (_REPO / _s.module).read_text(encoding="utf-8")
+            _deco = _txt.split(f"@monitored('{_s.fetcher}'", 1)[1].split(
+                f"def {_s.fetcher}(", 1)[0]
+            assert "success_check" in _deco, (
+                f"{_s.fetcher} 的 @monitored 沒有 success_check —— "
+                "它失敗時不拋例外，會被記成 ok（假綠燈）")
+
+    def test_the_decorator_only_records_it_does_not_swallow(self):
+        """⚠️ **裝飾器只准記錄。** 掛在 production 取數路徑上，若它吞掉例外
+        或換掉例外型別，壞掉的來源會在**上游**就變成「看起來正常」——
+        那比這面牆畫錯還糟。這裡就地實測，不讀 docstring。
+        """
+        from shared.fetch_monitor import get_monitor_registry, monitored
+
+        class _Boom(Exception):
+            pass
+
+        @monitored("__p05_probe_raise__")
+        def _raises():
+            raise _Boom("payload", 7)
+
+        with pytest.raises(_Boom) as _ei:
+            _raises()
+        assert _ei.value.args == ("payload", 7), "例外 args 被動過"
+        assert get_monitor_registry()["__p05_probe_raise__"][
+            "last_status"] == "failed", "記了但沒記成 failed"
+
+        _sentinel = object()
+
+        @monitored("__p05_probe_return__", success_check=lambda _r: False)
+        def _returns():
+            return _sentinel
+
+        assert _returns() is _sentinel, (
+            "裝飾器改動了回傳值 —— success_check 只准影響**記錄**")
+        assert get_monitor_registry()["__p05_probe_return__"][
+            "last_status"] == "failed"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -758,8 +956,17 @@ class TestThreeStatesNeverMix:
             P.probe_from_entry("f", _entry(P.STATUS_FAILED, last_error="e")))[0]
         assert _idle.state == UI_IDLE and _fail.state == UI_FAILED
         assert _idle.note.now != _fail.note.now
-        assert "快取命中不算" in _idle.note.why, (
-            "「未執行」的語意（快取命中不計）沒有講給使用者聽")
+        assert "快取命中點不亮這一盞" in _idle.note.why, (
+            "「未執行」的語意（快取命中點不亮它）沒有講給使用者聽")
+        # ⚠️ FE-20:這句話**只對 idle 成立**。綠燈上的時間是不是「最後一次真實
+        #    外抓」，取決於那一支的快取寫在哪一層（`fetch_fred` 的 TTL 寫在函式
+        #    體內 → 命中會刷新時間）。所以本頁不得再統一宣稱「快取命中一律不計」,
+        #    而要把差別講出來 —— 這條釘住那段揭露沒被刪。
+        assert "另一回事" in _idle.note.why, (
+            "沒有把「綠燈上的時間」與「未檢查會不會被快取點亮」分開講")
+        assert "快取點不亮一盞還沒亮過的燈" in P.CACHE_SEMANTICS
+        assert "可能新於" in P.CACHE_SEMANTICS, (
+            "沒有誠實說出「有些支的時間可能新於最後一次真實外抓」")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1237,6 +1444,12 @@ def test_page_mounts_clean(tmp_path):
     assert "不等於全站都好" in _all, "涵蓋率揭露沒畫出來"
     for _name in ("FRED", "FinMind", "TWSE"):
         assert _name in _all, f"線框具名的 {_name} 沒被畫出來（會變成滿版綠）"
+    # FE-20：接線之後新增的兩段常駐揭露也必須真的**到得了畫面**
+    #        （單元測試只證明常數存在、AST 證明沒被包進 if；這裡證明它畫得出來）。
+    assert "還沒有人載入過" in _all, (
+        "「牆上看不到 ≠ 沒接線」這句沒畫出來 —— "
+        "使用者會把冷啟動的空牆讀成「FRED 壞了」")
+    assert "快取點不亮一盞還沒亮過的燈" in _all, "快取語意揭露沒畫出來"
 
     # 葉1 的三塊教學內容。
     assert "逐盞門檻對照表" in _all

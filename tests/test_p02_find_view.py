@@ -404,9 +404,13 @@ class _PoisonModule:
         raise _L3Touched(f"{self.__name__}.{item} 在 requested=False 時被碰到了")
 
 
-#: 頁 2 檔頭「取數」表列出的全部下游（L3 五支 ＋ L4 繪圖 ＋ L5 純函式）。
+#: 頁 2 檔頭「取數」表列出的全部下游（L3 六支 ＋ L4 繪圖 ＋ L5 純函式）。
+#: ⚠️ 2026-09-07 FE-18 補上本批接線的 `valuation_service` —— **漏補的話它就
+#: 沒有被下毒**，「沒按之前一行 L3 都不呼叫」對它形同虛設（測試照樣綠、
+#: 而它其實已經被呼叫過了）。
 _DOWNSTREAM = (
     "src.services.fundamental_screener_service",
+    "src.services.valuation_service",
     "src.services.shortage_screener_service",
     "src.services.rs_leader_service",
     "src.services.allocation_service",
@@ -436,6 +440,8 @@ class TestNothingIsCalledBeforeYouAsk:
         _res = P.load_screen_result(P.ScreenRequest(submitted=False))
         assert _res.requested is False
         assert (_res.df, _res.rows, _res.survivors_n) == (None, None, None)
+        assert (_res.pe_n, _res.name_n) == (None, None), (
+            "沒叫過卻有估值檔數 —— 那一輪取數被提前發出去了")
         assert _res.aux_errors == (), "沒叫過就不該有任何週邊錯誤"
 
     def test_sector_flow_loader_touches_nothing(self, poisoned):
@@ -452,6 +458,16 @@ class TestNothingIsCalledBeforeYouAsk:
                                                  factors=("eps_high",)))
         with pytest.raises(_L3Touched):
             P.load_sector_flow({}, requested=True)
+
+    def test_the_pe_loader_is_really_inside_the_poison(self, poisoned):
+        """**針對性反證**（本批新增）：估值那一支真的在毒藥的射程內。
+
+        上一條是整支 `load_screen_result()`，它可能在**碰到估值之前**就先被
+        存活池那一支引爆而綠 —— 那樣的話「估值沒被提前呼叫」其實沒有被驗到。
+        本條直接叫估值那一支，把射程釘死。
+        """
+        with pytest.raises(_L3Touched):
+            P._load_pe_name_maps()
 
     def test_idle_note_promise_matches_the_code(self):
         """畫給使用者看的那句承諾，與上面實測到的行為必須是同一件事。"""
@@ -515,11 +531,13 @@ class TestUnwiredStaysUnwired:
 
     必須分成兩態的原因。若它可以被按成 live，使用者會一直按。
 
-    ⚠️ **兩項的形態不同，這裡據實分開驗**（不含糊帶過）：
-    「產業熱力圖」是一張 `wired=False` 的**卡**（真的 `UI_UNWIRED`）；
-    「估值 PE 因子」**不是一張卡**（它是選股結果卡上的一個因子），
-    所以它的「恆為未接線」表現為：`pe_map` 恆為 `None`
-    ＋ 勾了就一定看得見揭露（見 `TestCheckedFactorIsNeverSilentlyDropped`）。
+    ⚠️ **2026-09-07 FE-18：估值 PE 因子已接線，從本類移走。**
+    本類現在只剩「產業熱力圖」一項（一張 `wired=False` 的卡）。
+    這**不是**放寬斷言 —— PE 接上之後就不該再被當成未接線的東西驗。
+    原本掛在它身上的兩條守衛各有等效替身，見
+    `TestValuationGoesThroughL3`（AST：接線走 L3、不走 re-export 繞道）
+    與 `TestCheckedFactorIsNeverSilentlyDropped`（行為：什麼時候該講、
+    什麼時候**不准**講）。
     """
 
     @pytest.mark.parametrize("requested", [False, True])
@@ -537,20 +555,38 @@ class TestUnwiredStaysUnwired:
         assert "DuplicateWidgetID" in _why, "『為什麼沒有』要講真正的原因"
         assert _facts_nonempty(P.build_heatmap_card(True)[1])
 
-    def test_pe_factor_note_has_all_three_elements(self):
-        """PE 那一則 Note 的三要素同樣不得留空。"""
-        _card, _ = _screen(df=_Frame(3), rows=3,
-                           factors=(P.UNWIRED_FACTOR_KEY,))
-        _now, _why, _where = _note_triple(_card.note)
-        assert _now.strip() and _why.strip() and _where.strip()
-        assert P.NO_EXIT_MARKER in _where
+    def test_the_default_factor_is_still_the_cheap_one(self):
+        """預設因子仍不是 PE —— **理由換了，結論沒換**（有意識的保留）。
 
-    def test_pe_map_is_never_wired_by_accident(self):
-        """AST：`get_ranked_picks(...)` 的 `pe_map=` / `name_map=` 恆為 `None`。
-
-        哪天有人把它接上，本條轉紅 —— 提醒他**同時**要把卡上那句
-        「本頁未接線、不計入綜合分」拿掉，否則畫面會開始說謊。
+        舊理由：PE 未接線，拿它當預設等於讓每個人都拿到少算一個因子的名單。
+        **那個理由已經不成立**（接上了），但預設值不改，新理由是成本：
+        `eps_high` 走存活池自己的 `eps` 欄、**零額外取數**，
+        而 `pe_low` 每一次都要打 TWSE ＋ TPEX 兩支 OpenAPI。
         """
+        assert P.DEFAULT_FACTOR_KEY != P.PE_FACTOR_KEY
+        assert P.DEFAULT_FACTOR_KEY == "eps_high"
+
+
+class TestValuationGoesThroughL3:
+    """估值接線**只准走 L3** —— 這是 `test_pe_map_is_never_wired_by_accident`
+
+    的等效替身（2026-09-07 FE-18）。
+
+    ⚠️ **舊那條不是被放寬，是被取代。** 它釘的是「`pe_map=` 恆為 `None`」，
+    而它真正要防的**不是**「接上」這件事本身 —— 它的訊息原文寫得很清楚：
+    「哪天有人把它接上，本條轉紅，提醒他**同時**要把卡上那句『本頁未接線』
+    拿掉，否則畫面會開始說謊」。也就是說它防的是**接上卻沒改文案**。
+    那個提醒已經照做了，於是這一組接手，改釘兩件**接上之後**才有意義的事：
+
+      1. `pe_map=` / `name_map=` **仍然顯式傳**（預設值會無聲改變行為），
+         而且**不再是常數 `None`** —— 傳回常數就是偷偷退回未接線；
+      2. 接線走的是**新的 L3**，不是 `src.data.*` 直呼、也不是
+         `src.ui.tabs.yield_screener` 的 re-export 繞道
+         （**那條繞道只是騙過 AST、不改變性質** —— 前一組明文拒絕過，
+         這條禁令**沒有**因為接線而放寬）。
+    """
+
+    def test_the_two_kwargs_are_still_explicit_and_no_longer_none(self):
         _calls = [_n for _n in ast.walk(_tree())
                   if isinstance(_n, ast.Call) and isinstance(_n.func, ast.Name)
                   and _n.func.id == "get_ranked_picks"]
@@ -559,14 +595,57 @@ class TestUnwiredStaysUnwired:
             _kw = {_k.arg: _k.value for _k in _c.keywords if _k.arg}
             for _name in ("pe_map", "name_map"):
                 assert _name in _kw, f"{_name}= 沒有顯式傳 —— 預設值會無聲改變行為"
-                assert isinstance(_kw[_name], ast.Constant) \
-                    and _kw[_name].value is None, (
-                    f"{_name}= 被接上了（line {_c.lineno}）—— "
-                    "同時要移除卡上「本頁未接線」那句話，否則畫面開始說謊")
+                _v = _kw[_name]
+                assert not (isinstance(_v, ast.Constant) and _v.value is None), (
+                    f"{_name}= 又被寫死成 None（line {_c.lineno}）—— "
+                    "那是偷偷退回未接線，而畫面上的揭露已經說它接上了")
 
-    def test_the_default_factor_is_not_the_unwired_one(self):
-        """預設值若是未接線的因子，每個第一次進來的人都拿到少算一個因子的名單。"""
-        assert P.DEFAULT_FACTOR_KEY != P.UNWIRED_FACTOR_KEY
+    def test_no_l1_import_and_no_reexport_detour(self):
+        """AST：零 `src.data.*`、零 `src.ui.tabs.yield_screener`。
+
+        ⚠️ 用 AST 而不是字串搜尋 —— 檔頭的「為什麼不走那條路」本來就必須
+        寫出那兩個模組名才說得清楚，字串搜尋會把**誠實的揭露**判成違規。
+        """
+        _mods: set[str] = set()
+        for _n in ast.walk(_tree()):
+            if isinstance(_n, ast.ImportFrom) and _n.module:
+                _mods.add(_n.module)
+            elif isinstance(_n, ast.Import):
+                _mods |= {_a.name for _a in _n.names}
+        _bad = {_m for _m in _mods
+                if _m.startswith("src.data")
+                or _m.startswith("src.ui.tabs.yield_screener")}
+        assert not _bad, (
+            f"本頁直接 import 了 {sorted(_bad)} —— L5→L1 是分層違憲；"
+            "經其他 L5 檔 re-export 繞道只是騙過靜態檢查、不改變性質")
+        assert "src.services.valuation_service" in _mods, (
+            "估值輸入沒有走本批新增的 L3")
+
+    def test_the_l3_is_a_pass_through_of_the_l1_ssot(self, monkeypatch):
+        """L3 真的轉發 L1 的 SSOT `fetch_pe_name_maps`，沒有自己合併一份。
+
+        自己拆開兩支 fetcher 再合併 = 複製 L1 的合併規則（上市先填、
+        代碼空間互斥、不平均）＝ 第二個 SSOT（§2.1）。
+        """
+        from src.data.stock import yield_pe_fetcher as Y
+        from src.services import valuation_service as V
+
+        monkeypatch.setattr(Y, "fetch_pe_name_maps",
+                            lambda: ({"2330": 21.5}, {"2330": "台積電"}),
+                            raising=True)
+        assert V.get_pe_name_maps() == ({"2330": 21.5}, {"2330": "台積電"})
+
+    def test_the_l3_does_not_swallow_failures(self, monkeypatch):
+        """§1：L1 炸了就往上拋，**不回一份看起來很合理的空 map**。"""
+        from src.data.stock import yield_pe_fetcher as Y
+        from src.services import valuation_service as V
+
+        def _boom():
+            raise RuntimeError("twse down")
+
+        monkeypatch.setattr(Y, "fetch_pe_name_maps", _boom, raising=True)
+        with pytest.raises(RuntimeError, match="twse down"):
+            V.get_pe_name_maps()
 
 
 def _facts_nonempty(facts) -> bool:
@@ -578,37 +657,106 @@ def _facts_nonempty(facts) -> bool:
 # 【6】勾了估值因子 → 一定要看得見「少算了一個你勾的因子」
 # ══════════════════════════════════════════════════════════════════
 class TestCheckedFactorIsNeverSilentlyDropped:
-    """L3 `composite_rank_candidates` 的 note **只**揭露缺貨 / RS 兩個因子，
+    """L3 `composite_rank_candidates` 的 note **看不見**「估值整個因子全空」
 
-    pe 缺料**不會**出現在它的 note 裡 —— 所以這句話只能本頁自己講。
-    講不出來 = 使用者拿到一份「悄悄少算一個因子」的名單，
-    卻看到一張綠燈卡片，那正是 §1 禁止的掩蓋問題。
+    這一種（`_missing` 只收缺貨 / RS，而「因子實際覆蓋」那句有
+    `if _col_scores[_f]` 的前提，全空時不印）—— 所以這句話只能本頁自己講。
+    講不出來 = 使用者拿到一份「悄悄少算一個因子」的名單卻看到綠燈卡片，
+    那正是 §1 禁止的掩蓋問題。
+
+    ⚠️ **2026-09-07 FE-18：接線後這一類的射程從「一種」變成「三種」。**
+    接線前 `pe_map` 恆為 `None`，所以「勾了就一定要講」是無條件的；
+    接線後**多了兩種必須分開的情形**，而且其中一種是**不准講**：
+      · 取數失敗 → 要講（有出口：重按）
+      · 拿到空 map → 要講（沒有出口可按，但要說清楚是上游沒給）
+      · 拿到 N 檔 → **不准講** ←← 這一條是新的，也是最容易寫錯的：
+        照抄接線前那句無條件的 Note，畫面就會對一份**明明算了估值**的名單
+        說「這份名單少算了一個你勾的因子」= 假警告（`CLAUDE.md §1.A` 第 4 點）。
     """
 
-    def test_live_card_carries_the_note_when_the_factor_is_checked(self):
-        _card, _ = _screen(df=_Frame(12), rows=12, survivors_n=274,
-                           factors=("eps_high", P.UNWIRED_FACTOR_KEY))
+    def test_live_card_carries_the_note_when_the_fetch_failed(self):
+        """勾了、而且取數失敗 → 一定要看得見。"""
+        _card, _facts = _screen(
+            df=_Frame(12), rows=12, survivors_n=274, pe_n=None, name_n=None,
+            factors=("eps_high", P.PE_FACTOR_KEY),
+            aux_errors=(("估值（本益比）", "取不到：RuntimeError('boom')"),))
         assert _card.state == UI_LIVE
         assert _card.note is not None, (
             "live 卡沒有帶 Note —— 「少算了一個你勾的因子」被靜默丟棄了")
         assert "少算了一個你勾的因子" in _card.note.now
+        assert _facts["估值（本益比）"].startswith("取不到")
 
-    def test_the_disclosure_also_shows_up_as_a_fact(self):
-        _card, _facts = _screen(df=_Frame(12), rows=12,
-                               factors=(P.UNWIRED_FACTOR_KEY,))
-        assert "估值（本益比）" in _facts
-        assert "不計入綜合分" in _facts["估值（本益比）"]
-        assert "名稱欄" in _facts, "名稱欄與 PE 同源，一起未接線，也要講"
+    def test_the_pe_note_still_has_all_three_elements(self):
+        """鐵律 4 的**等效替身**：原 `test_pe_factor_note_has_all_three_elements`
+
+        驗的是「未接線的那則 PE Note 三要素齊備」。接線後那則 Note 換成了
+        **兩種缺料版本**，射程不能跟著消失 —— 這裡對兩種各驗一次。
+        （`Note.__post_init__` 本來就會擋空欄位，但那是結構保證；
+        寫出來是為了讓「PE 這則 Note 有沒有被驗過」在檔案裡看得見。）
+        """
+        for _pe_n, _tag in ((0, "空 map"), (None, "取不到")):
+            _card, _ = _screen(df=_Frame(3), rows=3, pe_n=_pe_n, name_n=_pe_n,
+                               factors=(P.PE_FACTOR_KEY,))
+            _now, _why, _where = _note_triple(_card.note)
+            assert _now.strip() and _why.strip() and _where.strip(), _tag
+            assert P.NO_EXIT_MARKER not in _where, (
+                f"{_tag}：接線後仍宣稱沒有出口 —— 重按其實有機會好")
+
+    def test_live_card_carries_the_note_when_the_map_is_empty(self):
+        """勾了、拿到了、但**是空的** → 同樣要看得見，而且要說是上游沒給。"""
+        _card, _ = _screen(df=_Frame(12), rows=12, survivors_n=274,
+                           pe_n=0, name_n=0,
+                           factors=("eps_high", P.PE_FACTOR_KEY))
+        assert _card.state == UI_LIVE and _card.note is not None
+        assert "少算了一個你勾的因子" in _card.note.now
+        assert "都沒有給資料" in _card.note.why, _card.note.why
+
+    def test_a_successful_fetch_produces_no_false_alarm(self):
+        """⭐ **接上之後最容易寫錯的一條**：算到了就**不准**再喊少算。
+
+        照抄接線前那句無條件的 Note = 對一份明明算了估值的名單說謊；
+        假警報與假數字是同一種說謊（滿版假警告會讓真的警告沒人看）。
+        """
+        _card, _facts = _screen(df=_Frame(12), rows=12, survivors_n=274,
+                                pe_n=931, name_n=1042,
+                                factors=("eps_high", P.PE_FACTOR_KEY))
+        assert _card.state == UI_LIVE
+        assert _card.note is None, (
+            "估值明明算出來了，卡上還在說「這份名單少算了一個你勾的因子」")
+        assert "931" in _facts["估值（本益比）"], _facts["估值（本益比）"]
+
+    def test_the_name_column_tells_the_truth_four_ways(self):
+        """名稱欄跟勾不勾估值無關 → **永遠講一次**，而且四種情形四句話。
+
+        ⚠️ 第四種（**冷啟動**）最容易被漏掉：那時 `name_n` 也是 `None`，
+        但那是因為**這一輪根本沒有發過取數**。對它說「這一輪取不到」＝
+        替一輪沒發生的取數宣稱它的結果（`CLAUDE.md §1.A` 第 4 點）。
+        """
+        _, _f_ok = _screen(df=_Frame(3), rows=3, pe_n=931, name_n=1042)
+        _, _f_empty = _screen(df=_Frame(3), rows=3, pe_n=0, name_n=0)
+        _, _f_fail = _screen(df=_Frame(3), rows=3, pe_n=None, name_n=None)
+        _, _f_idle = _screen(submitted=False)
+        assert "1042" in _f_ok["名稱欄"]
+        assert "空的" in _f_empty["名稱欄"] and "不是本頁沒接" in _f_empty["名稱欄"]
+        assert "取不到" in _f_fail["名稱欄"]
+        assert "送出後才會取" in _f_idle["名稱欄"], (
+            f"冷啟動被說成取不到：{_f_idle['名稱欄']}")
+        assert "取不到" not in _f_idle["名稱欄"]
+        assert len({_f_ok["名稱欄"], _f_empty["名稱欄"], _f_fail["名稱欄"],
+                    _f_idle["名稱欄"]}) == 4, "四種情形被講成同一句話"
 
     def test_not_checking_it_produces_no_such_note(self):
         """沒勾就不要嚇人 —— 假警報一樣是說謊（`CLAUDE.md §1.A` 第 4 點）。"""
-        _card, _facts = _screen(df=_Frame(12), rows=12, factors=("eps_high",))
+        _card, _facts = _screen(df=_Frame(12), rows=12, pe_n=931, name_n=1042,
+                                factors=("eps_high",))
         assert _card.state == UI_LIVE and _card.note is None
         assert "估值（本益比）" not in _facts
 
     def test_the_disclosure_is_also_permanent_under_the_form(self):
-        """常駐揭露（不隨狀態消失）：勾之前就該看得到。"""
-        assert "估值（本益比）在本頁未接線" in P.WIRING_DISCLOSURE
+        """常駐揭露（不隨狀態消失）：勾之前就該看得到，且**內容要是真的**。"""
+        assert "已全部接線" in P.WIRING_DISCLOSURE
+        assert "未接線" not in P.WIRING_DISCLOSURE, (
+            "估值已經接上了，常駐揭露還說它沒接 —— 那是說謊")
         assert "st.caption(WIRING_DISCLOSURE)" in \
             _VIEW.read_text(encoding="utf-8")
 
@@ -826,7 +974,10 @@ def test_page_mounts_clean(tmp_path):
         "冷啟動被畫成「0 檔」—— 還沒選 ≠ 選了 0 檔")
 
     # 常駐揭露（不隨狀態消失）—— 尾端這兩句畫不出來就是半截死頁。
-    assert "估值（本益比）在本頁未接線" in _all, "接線揭露沒畫出來"
+    # ⚠️ 2026-09-07 FE-18：原本 grep 的是「估值（本益比）在本頁未接線」，
+    # 接線後那句話已改寫。**改成直接比對常數本身**，這比原本的字串片段
+    # **更嚴** —— 以後改文案不必再改測試，揭露被整段刪掉時一樣會紅。
+    assert P.WIRING_DISCLOSURE in _all, "接線揭露沒畫出來"
     assert "面積不等於權重" in _all, (
         "葉2 尾端的口徑揭露沒畫出來（可能是半截頁面）")
 

@@ -107,6 +107,10 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
 ═══ 取數：**唯一**的規則是「一律走 L3」═══════════════════════════════
     判型            L2 `compute.etf.asset_lag.classify_asset_kind` / `pick_benchmark`
                       （純函式、零 I/O；L5→L2 下行 import，C3 規則 5 合規）
+    357 位階        L2 `compute.strategy.v5_modules.calc_dividend_yield_357`
+                      （同上，純函式；**輸入**走下一行那支 L3）
+    個股配息        L3 `services.valuation_service.get_stock_dividends`（本批新增）
+    近 20 日籌碼    L3 `services.stock_chips_service.get_chips_readout`（本批新增）
     個股指標        L3 `services.dividend_station_service.fetch_metrics(t, 'stock')`
     ETF 指標        L3 `services.dividend_station_service.fetch_metrics(t, 'etf')`
     獲利能力三格    L3 `services.stock_grp_service.get_financial_statements`
@@ -121,21 +125,37 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
 ⚠️ 本頁**受 `tests/test_c3_layering_guard.py` 管**（`_PATH_LAYERS` 已含
 `src/ui/views/` → L5），違反 R4／R5 是 CI 紅燈，不是假綠燈。
 
-═══ 本批**沒有接上**的四項（誠實揭露，不是漏寫）═══════════════════════
-1. ⛔ **個股「估值（357 評價）」判決卡。**
-   **卡在哪**：357 位階要 `calc_dividend_yield_357(price, avg_div_twd=, div_years=)`
-   —— 需要**近 N 年平均年現金股利（元／股）**。全 repo 沒有任何 L3 介面回傳
-   個股的配息歷史：`etf_grp_compare_service.get_etf_dividends()` 是 ETF 用的
-   pass-through，拿它去餵個股是**替上游宣稱一件它沒說的事**；
-   L1 `src.data.etf.etf_fetch.fetch_etf_dividends` 直呼是 R4 違憲，
-   經其他 L5 檔 re-export 繞道**只是騙過 AST、不改性質**（頁 2 對估值 PE 因子
-   就是這樣拒絕的，本頁照辦）。→ **標 `unwired`**，見 `VALUATION_WHERE`。
-2. ⛔ **個股「籌碼」判決卡。**
-   **卡在哪**：`shared.macro_compute.analyze_20d_chips_from_df()` 是 L0 純函式
-   （**吃 df、免 I/O**），但那份 df（同時要有 `主力合計` 與 `volume`）只有
-   L1 `StockDataLoader.get_combined_data()` 產得出來，而它**沒有 L3 介面**
-   （`ai_qa_service` 是在自己函式體內呼叫，沒有把 df 回傳給任何人）。
-   → **標 `unwired`**，見 `CHIPS_WHERE`。
+═══ 本批**新接上**的兩項（2026-09-07 FE-18）═══════════════════════════
+1. ✅ **個股「估值（357 評價）」判決卡。**
+   前一批卡在「357 位階要 `calc_dividend_yield_357(price, avg_div_twd=,
+   div_years=)`，而全 repo 沒有任何 L3 介面回傳個股的配息歷史」。
+   **拒絕拿 ETF 配息去頂替的那個判斷是對的，本批沒有推翻它** ——
+   `etf_grp_compare_service.get_etf_dividends()` 是 ETF 用的 pass-through，
+   拿它餵個股是替上游宣稱一件它沒說的事；`tests/test_p03_inspect_view.py`
+   的 `test_valuation_never_eats_etf_dividends` 仍以 AST 釘住那條禁令。
+   本批補的是**正確的來源**：新增 L3
+   `services.valuation_service.get_stock_dividends()` → L1
+   `app_stock_fetchers.fetch_dividend_data`（FinMind → yfinance → TWSE，
+   **與既有 🔬 個股分頁那張 357 卡同一份數字**，兩張卡不會打架）。
+   ⚠️ 前一批那句「**全 repo 沒有任何 L3 介面回傳個股配息歷史**」**不精確**：
+   `yield_screener_service.get_annual_dividends()` 是存在的，只是它回一個
+   yfinance 單源的逐年 Series，**沒有**「近 5 年平均」與「有配息年數」——
+   拿它就得在本頁自己算那兩個數，那是第二把尺（§2.1）。**是「餵不了」，
+   不是「不存在」**，據實更正。
+2. ✅ **個股「籌碼」判決卡。**
+   判讀那一半本來就有（L0 純函式 `shared.macro_compute.
+   analyze_20d_chips_from_df`，吃 df、免 I/O）；本批補的是餵它的那份 df ——
+   新增 L3 `services.stock_chips_service.get_chips_readout()` → L1
+   `app_stock_fetchers.fetch_price_data`（`StockDataLoader.get_combined_data`
+   的 public 包裝，**與既有 🔬 個股分頁同一條抓取線**）。
+   ⚠️ 前一批那句「那份 df 同時要有 `主力合計` 與 `volume`」是**錯的**
+   （實測 2026-09-07 讀 `macro_compute.py` 原始碼）：該函式檢查的是
+   **`外資` / `投信` / `volume`**，`主力合計` 一次都沒用到 ——
+   那是另一支（L2 `inst_sanity.flag_latest_inst_outlier_from_df` 的異常值
+   徽章）吃的欄位，被混為一談了。**本批照實際欄位接線**，
+   而那個異常值徽章**本批沒有接**（見下面「沒有接上」的第 3 項）。
+
+═══ 本批**沒有接上**的三項（誠實揭露，不是漏寫）═══════════════════════
 3. ⛔ **葉1-A 明細的其餘七段**（K 線＋均線 / 357 河流圖 / 財報領先指標 /
    VCP・布林 / 月營收 / 什麼時候買賣 / 心理檢查）。**只有 💰 獲利能力診斷
    這一段接上了。** 其餘七段的現行實作是 `src/ui/tabs/stock_sections/section_*.py`，
@@ -147,12 +167,23 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
    0 命中、6 個 ETF 概念在個股頁 0 命中）—— **合併的是入口與骨架，不是內容**」。
    本檔照這句寫：骨架（form / 判型 / 3 欄判決卡 / 單欄堆疊明細）兩支共用，
    **每一張卡的 label 與 facts 全部換掉**，沒有一個欄位是兩邊共用的。
+5. ⛔ **籌碼卡的「異常值徽章」**（線框對這一格寫的是「近 20 日主力買賣超與
+   集中度，**含異常值徽章**」）。徽章那一半走的是 L2
+   `compute.risk.inst_sanity.flag_latest_inst_outlier_from_df`，它吃的是
+   **`主力合計` ＋ 30 日均量**，與本批接上的近 20 日籌碼判讀（吃
+   `外資` / `投信` / `volume`）**是兩支不同的函式、兩組不同的欄位**。
+   接它需要把 df 交給 L5 或在 L3 再做一次判讀，兩者都超出本批的檔案邊界。
+   → **本批只接判讀、不接徽章**，卡上的「接線後的樣子」已據實改寫，
+   不再宣稱有徽章。
 
 ⚠️ **本頁沒有任何一格會判 `UI_DEGRADED`**，這是刻意的：上游沒有回傳任何
 「門檻已失準」的訊號（`discriminative=False` 的來源），硬湊一個等於捏造一種
 使用者無從查證的狀態。線框葉1-A 的 `degradedCells`（「趨勢因子無 MA，不計入」）
 描述的是**接線後**的樣子 —— 那一格（K 線＋均線）在本頁是 `unwired`，
 **沒有 MA 可以「不計入」**。接上之後才會有真的 degraded 可判。
+⚠️ 本批接上的兩格**也沒有**引入 degraded：籌碼判不出來（法人欄缺／全為 0）
+與 357 算不出來（無股價／無配息紀錄）都是**缺值**，走 `empty`（灰）——
+`degraded` 的語意是「**有值**、只是別照門檻讀」，缺值套上去是第三種說謊。
 
 ═══ 這個檔擋得住什麼、擋不住什麼（誠實邊界）═══════════════════════════
 `classify_kind()` / `load_stock_readout()` / `load_etf_readout()` /
@@ -184,6 +215,7 @@ from shared import ia_nav
 # L0 SSOT：均線週期。**禁止在 UI 端寫死 20 / 60 / 120 / 240**（§3.3）。
 from shared.station_specs import MISS_NOT_APPLICABLE, MISS_TEXT
 from shared.ui_state import (
+    UI_EMPTY,
     UI_FAILED,
     UI_IDLE,
     UI_LIVE,
@@ -198,6 +230,7 @@ from src.ui.tabs.tab_today import (
 )
 from src.ui.views._ui_kit import (
     MAX_COLS,
+    banned_signal_glyphs,
     grid,
     render_card_isolated,
     section_header,
@@ -345,6 +378,12 @@ SRC_STATEMENTS: str = (
     "L3 財報取數（`services.stock_grp_service.get_financial_statements`）")
 SRC_HEALTH: str = (
     "L3 財報體檢（`services.financial_health_engine.analyze_financial_health`）")
+SRC_DIVIDENDS: str = (
+    "L3 個股配息（`services.valuation_service.get_stock_dividends`）")
+SRC_357: str = (
+    "L2 357 位階（`compute.strategy.v5_modules.calc_dividend_yield_357`）")
+SRC_CHIPS: str = (
+    "L3 近 20 日籌碼（`services.stock_chips_service.get_chips_readout`）")
 SRC_RENDER: str = "本頁的渲染層（`views/_ui_kit.render_card`）"
 
 UNKNOWN_ERROR_TEXT: str = "（上游沒有給訊息）"
@@ -380,30 +419,51 @@ UNKNOWN_WHERE: str = (
     f"「{KIND_CHOICE_LABELS[KIND_CHOICE_STOCK]}」或"
     f"「{KIND_CHOICE_LABELS[KIND_CHOICE_ETF]}」後重新載入")
 
-#: 未接線三項的「去哪補」。**沒有使用者可執行的出口** ——
+#: 未接線那一項（明細）的「去哪補」。**沒有使用者可執行的出口** ——
 #: 線框對這類的原文就是「這是待接線項，不是你操作的問題」。
-VALUATION_WHERE: str = (
-    f"{NO_EXIT_MARKER} —— 這是待接線項，不是你操作的問題；"
-    f"{press(ACTION_LOAD_INSPECT_LABEL)}也不會改變它。"
-    "要接上需先在 `src/services/` 補一支 L3 wrapper，回傳個股的"
-    "**近 N 年平均年現金股利（元／股）**與有配息年數，"
-    "再餵 L2 `compute.strategy.v5_modules.calc_dividend_yield_357`")
-VALUATION_WHY: str = (
-    "357 位階要的是「平均年現金股利」，而全 repo 沒有任何 L3 介面回傳個股配息歷史；"
-    "ETF 用的 `get_etf_dividends` 拿來餵個股是替上游宣稱一件它沒說的事，"
-    "直呼 L1 是分層違憲（`CLAUDE.md §8.2` 硬規則第 4 條），"
-    "經其他 L5 檔 re-export 繞道只是騙過靜態檢查、不改變性質")
+#:
+#: ⚠️ **估值（357）與籌碼的 `*_WHERE` 已改寫，這是有意識的改寫不是漏刪**
+#: （2026-09-07 FE-18）：那兩格**已經接線**，再用 `NO_EXIT_MARKER`
+#: （「沒有使用者出口」）就是說謊 —— 接上之後「算不出來」是**這一輪**的事，
+#: 重按有機會好。舊句被權衡掉的只有「沒有出口」這半句，
+#: 「不拿缺值湊結論」那半句原封不動搬進了下面的新文案。
 
+#: 357 **算不出來**時的「去哪補」（**有出口**：重按 / 換代碼 / 等資料補齊）。
+VALUATION_WHERE: str = (
+    f"若是暫時抓不到，{press(ACTION_LOAD_INSPECT_LABEL)}重跑一次；"
+    "若這一檔近 5 年真的沒有配息，357 這套殖利率法則**本來就不適用它**，"
+    "重按幾次都一樣 —— 那不是故障，改看健康度與獲利能力那幾格。"
+    "配息資料持續抓不到時，到"
+    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
+    "看 FinMind／yfinance／TWSE 三段備援鏈是否可用")
+#: 357 算不出來的「為什麼」**由 L2 自己說**（它回的 `msg` 已經寫明是無股價
+#: 還是無配息紀錄），本檔只補「本站的處置」。**不自己判是哪一種**（§2.1）。
+VALUATION_WHY_TAIL: str = (
+    "　本站**不以 0% 殖利率頂替** —— 0% 會被同一套門檻判成「超貴」，"
+    "那是拿缺資料當看空結論（`CLAUDE.md §1`）")
+#: 三段備援鏈跑完、一段都沒有給配息紀錄時，**兩種可能都要講**（§1 不猜）。
+VALUATION_NO_SOURCE_WHY: str = (
+    "配息備援鏈（FinMind → yfinance → TWSE）跑完了，**沒有一段給出紀錄**。"
+    "那可能是這一檔近 5 年真的沒有配息，也可能是三段這一輪都沒拿到 —— "
+    "**上游的回傳值分不出這兩者，本站也不猜**")
+
+#: 籌碼**判不出來**時的「去哪補」（**有出口**：重按 / 等三大法人資料補齊）。
 CHIPS_WHERE: str = (
-    f"{NO_EXIT_MARKER} —— 這是待接線項，不是你操作的問題。"
-    "要接上需先在 `src/services/` 補一支 L3 wrapper 轉發 "
-    "`StockDataLoader.get_combined_data()`（回含 `主力合計` ＋ `volume` 的 df），"
-    "判讀那一步已經有 L0 純函式 `shared.macro_compute.analyze_20d_chips_from_df` "
-    "可以直接用，不必新寫")
-CHIPS_WHY: str = (
-    "近 20 日籌碼的**判讀**是 L0 純函式（吃 df、免 I/O），但那份 df 只有 "
-    "L1 `StockDataLoader` 產得出來，而它沒有 L3 介面 —— "
-    "唯一呼叫它的 L3（`ai_qa_service`）是在自己函式體內用掉，不回傳 df")
+    f"{press(ACTION_LOAD_INSPECT_LABEL)}重跑一次；"
+    "三大法人那一腿常態性地比日線晚到（TWSE 盤後 ~14:30、完整要等 17:00 後），"
+    "新上市或長期停牌的標的也可能整段沒有法人資料。"
+    "持續如此請到"
+    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
+    "看 TWSE／TPEX／FinMind 的法人備援鏈是否可用")
+#: 籌碼判不出來的「為什麼」前綴 —— 後面接 L0 自己給的原因原文。
+CHIPS_MISS_WHY_HEAD: str = (
+    "日線抓回來了，但**判不出籌碼**（上游給的原因："
+)
+CHIPS_MISS_WHY_TAIL: str = (
+    "）。近 20 日集中度要「外資 ＋ 投信淨買賣超」與「成交量」兩組數字，"
+    "缺一組就算不出來 —— **這是資料缺漏，不是這一檔籌碼不好**；"
+    "本站不拿 0% 集中度頂替（0% 是「買賣超剛好抵銷」這個結論，不是缺值）"
+)
 
 DETAIL_WHERE: str = (
     f"{NO_EXIT_MARKER} —— 這是待接線項，不是你操作的問題；"
@@ -418,17 +478,21 @@ DETAIL_WHY: str = (
 
 #: 表單下方常駐的接線揭露（**不隨狀態消失**）。
 WIRING_DISCLOSURE_SINGLE: str = (
-    "**取數接線揭露**：判型、個股健康度、💰 獲利能力三格、"
-    "ETF 折溢價／配息／同儕 —— 這幾項走 L3，已接線；"
-    "**估值（357）、籌碼、以及 K 線與其餘明細在本頁未接線** —— "
+    "**取數接線揭露**：判型、個股健康度、**估值（357）**、**籌碼**、"
+    "💰 獲利能力三格、ETF 折溢價／配息／同儕 —— 這幾項走 L3，已接線；"
+    "**K 線與其餘明細在本頁仍未接線** —— "
     "它們的卡會標「未接線」並寫明要補在哪，不會拿空白冒充結果。"
-    "期間與均線的選擇**會被記錄，但目前沒有東西會用到它**"
-    "（K 線那一段未接線）—— 這一句寫在這裡，是為了不讓你以為調了有效。")
+    "期間的選擇**只決定籌碼那一格載入多長的日線**；"
+    "近 20 日的判讀窗由上游決定，**改期間不會改變籌碼結論**。"
+    "均線的選擇目前**沒有東西會用到**（K 線那一段未接線）—— "
+    "這兩句寫在這裡，是為了不讓你以為調了有效。")
 WIRING_DISCLOSURE_BATCH: str = (
     "**取數接線揭露**：批次表的每一列走的是與葉1 **同一支** L3 "
     "（`fetch_metrics`），所以欄位也一樣 —— 個股給財報體檢分數，"
-    "ETF 給折溢價／配息／同儕。**未接線的估值與籌碼在批次表裡同樣不會出現**，"
-    "不會因為換成表格就冒出一個看起來有值的欄位。")
+    "ETF 給折溢價／配息／同儕。**葉1 新接上的估值（357）與籌碼，"
+    "批次表裡仍然不會出現** —— 它們各自要再發一輪取數（配息鏈 / 日線 ＋"
+    "三大法人），一次 20 檔會把等待時間變成好幾倍。這是**刻意不做**，"
+    "不是漏做；要看那兩格請到葉1 用同一個代碼載入。")
 
 #: 葉2 idle / 空 三要素（線框葉2 grey 原文）。
 BATCH_IDLE_NOW: str = "**尚未批次分析**"
@@ -439,15 +503,46 @@ BATCH_IDLE_WHERE: str = f"在表單貼上代碼後，{press(ACTION_RUN_BATCH_LAB
 BATCH_EMPTY_NOW: str = "**你按了批次分析，但沒有解析出任何代碼**"
 
 
-def _error_why(source: str, error: Any) -> str:
-    """把上游例外轉成一句可以放進 `Note.why` 的話，**出處講對**。
+def _signal_label(raw: Any) -> str:
+    """上游的訊號字面（`'🔥 大戶吸籌'` / `'🟡 合理（5~7%）'`）→ **純中文標籤**。
+
+    鐵律 3：訊號頻道只准出中文，帶了狀態 glyph／燈號 emoji 會被
+    `_ui_kit.assert_signal_text_clean()` 當場 raise（`🔴` 與 `🟡` 都在禁用集）。
+
+    ⚠️ **本函式不重寫判讀**，只把上游自己帶的圖示拿掉 —— 吸籌／倒貨／發散、
+    便宜／合理／昂貴這些字面仍然是 L0／L2 的（§2.1：本檔不維護第二份對照表）。
+    切法是「取第一個空白之後」，因為兩支上游的格式一律是 `<圖示> <中文>`。
+
+    ⚠️ **上游若改了格式** 導致仍有禁用符號殘留 → **回空字串，不出訊號頻道**。
+    少一個頻道好過畫出兩個互相矛盾的燈，也好過在 `render_card()` 裡才炸
+    （那會變成半截死頁；理由見 `assert_signal_text_clean` 的 docstring）。
+    ⚠️ 這**不是**第二把尺：「哪些符號被禁」讀的是 `_ui_kit` 的同一份 SSOT
+    （`banned_signal_glyphs()`），本檔沒有自己列一份符號表。
+    """
+    _txt = str(raw or "").strip()
+    if not _txt:
+        return ""
+    _parts = _txt.split(maxsplit=1)
+    _label = _parts[1].strip() if len(_parts) > 1 else _txt
+    return "" if banned_signal_glyphs(_label) else _label
+
+
+def _error_why(source: str, error: Any, *, verb: str = "拋出例外") -> str:
+    """把上游的失敗轉成一句可以放進 `Note.why` 的話，**出處與動詞都講對**。
 
     洗 glyph 一律走 `tab_today.scrub_state_glyphs()`（SSOT，唯一入口）——
     `Note.__post_init__` 拒收狀態 glyph，不洗就會把一張**該畫出來的紅卡**
     變成**整頁未捕捉例外**（§1：紅態要看得見，不是換一種炸法）。
+
+    Args:
+        verb: **上游是怎麼失敗的。** 預設「拋出例外」；有些上游是
+            **回傳一個錯誤字串**而不是拋例外（L1 `fetch_price_data` 就刻意
+            這麼做，讓暫時性失敗不進 `st.cache_data`）—— 對那一種寫
+            「拋出例外」是**替上游宣稱一件它沒做的事**，下一個人會照著去
+            traceback 裡找一個根本不存在的例外。傳 `verb="回報失敗"`。
     """
     _clean, _n = scrub_state_glyphs(error)
-    _why = f"{source}拋出例外：{_clean or UNKNOWN_ERROR_TEXT}"
+    _why = f"{source}{verb}：{_clean or UNKNOWN_ERROR_TEXT}"
     if _n:
         _why += ("（上游訊息裡的狀態符號已移除，"
                  "以免和這張卡自己的狀態燈混成兩個互相矛盾的說法）")
@@ -932,6 +1027,203 @@ def load_profitability(verdict: KindVerdict) -> ProfitabilityReadout:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 葉1-A 判決卡②「估值（357 評價）」—— **本批接線**
+# ══════════════════════════════════════════════════════════════════
+@dataclass(frozen=True)
+class ValuationReadout:
+    """357 存股評價那一輪的產出。**判定由 L2 做，本檔只搬運。**
+
+    Attributes:
+        requested: 同 `StockReadout.requested`（有人叫過 ＋ 判型是個股）。
+        est_yield_pct: 估計殖利率（%）。`None` ＝ **未評估**（無股價或無配息
+            紀錄）。⚠️ **不是 0** —— 0% 會被同一套門檻判成「超貴」，
+            那是拿缺資料當看空結論（L2 那支的 docstring 明文警告）。
+        zone_code: L2 的位階 code（`cheap` / `fair` / `dear` / `overpriced`
+            / `na`）。**字面由 L2 決定，本檔不寫死對照表** —— 只拿它判
+            「是不是 `na`」，中文說法一律讀 L2 給的 `signal` / `msg`。
+        signal: L2 給的訊號字面（帶圖示，例：`'🟡 合理（5~7%）'`）。
+            **原樣收下**；要進訊號頻道時由 `_signal_label()` 去圖示（鐵律 3）。
+        msg: L2 自己寫的一句話。**原樣透傳，本檔不改寫**（§2.1）。
+        avg_div_twd / paying_years / source / years_n: L3 給的**輸入**與來歷。
+            `avg_div_twd is None` ＝ 三段備援都沒有給配息紀錄（**不是 0 元**）；
+            `paying_years is None` ＝ 未知（**不是 0 年**）。
+        price: 這一輪用的現價（沿用個股那一輪 `fetch_metrics` 的
+            `current_price`，**不另外再抓一次**）。
+        error: 取數或計算拋出的例外 `repr(e)`；空字串 = 沒有錯誤。
+    """
+
+    requested: bool
+    est_yield_pct: float | None = None
+    zone_code: str = ""
+    signal: str = ""
+    msg: str = ""
+    avg_div_twd: float | None = None
+    paying_years: int | None = None
+    source: str = ""
+    years_n: int = 0
+    price: float | None = None
+    error: str = ""
+
+    @property
+    def has_zone(self) -> bool:
+        """L2 判出一個**位階**了沒有。`na`（未評估）不算有值。"""
+        return bool(self.est_yield_pct is not None and self.zone_code
+                    and self.zone_code != "na")
+
+
+def load_valuation(verdict: KindVerdict, stock: StockReadout
+                   ) -> ValuationReadout:
+    """357 存股評價。**判型不是個股、或還沒有人叫過 → 一行 L3 都不呼叫。**
+
+    路徑：L3 `valuation_service.get_stock_dividends(code)`（配息鏈）
+    → L2 `v5_modules.calc_dividend_yield_357(price, avg_div_twd=, div_years=)`。
+
+    ⚠️ **現價不另外抓**：用 `stock.price`（個股那一輪 `fetch_metrics` 已經拿
+    到的 `current_price`）。再抓一次會有兩個可能不一致的價格，而畫面上沒有
+    任何地方講得清楚哪一格用的是哪一個（§2.1）。
+    ⚠️ **`price=None` 照樣往下送**：L2 對它有明確處置（回 `zone_code='na'`
+    ＋ 訊息「無股價」），本檔**不自己先攔一次**——攔了就變成第二把尺。
+
+    ⚠️ **L5→L2 的 late import 與判型那一支同一個理由**（見檔頭）：
+    `src.compute.strategy` 是 eager barrel，實測（量測日 2026-09-07）
+    `import src.compute.strategy.v5_modules` 會連帶拉進 pandas ＋ streamlit
+    ＋ 12 個 `src.*`。放 module level 會擴大「打開這一頁」的故障半徑。
+
+    邊界（四個都真的走得到）：
+      (a) **冷啟動 / 判型是 ETF 或 unknown** → `requested=False` → idle。
+      (b) **L3 / L2 拋例外**（含 late import 失敗）→ `repr(e)` → 紅態。
+      (c) **三段備援都沒有配息紀錄** → `avg_div_twd=None` → L2 回 `na` →
+          **`empty`（灰）**。**這是一個有效結果**：可能真的沒配息、也可能
+          三段都沒拿到，兩種可能都寫在卡上（§1 不猜）。
+      (d) **有配息但沒有現價** → 同樣 `na`，L2 的 `msg` 會說是「無股價」——
+          本檔把它原樣顯示，**不自己判是哪一種**。
+    """
+    _requested = bool(verdict.requested and verdict.is_stock)
+    if not _requested:
+        return ValuationReadout(requested=False)
+
+    try:
+        from src.services.valuation_service import get_stock_dividends
+        _div = get_stock_dividends(verdict.code)
+    except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
+        print(f"[views/page_inspect] 配息取數失敗 → 估值轉紅態：{_e!r}")
+        return ValuationReadout(
+            requested=True, price=stock.price,
+            error=_error_why(SRC_DIVIDENDS, repr(_e)))
+
+    try:
+        from src.compute.strategy.v5_modules import calc_dividend_yield_357
+        _z = calc_dividend_yield_357(
+            stock.price,
+            avg_div_twd=_div.avg_div_twd,
+            div_years=_div.paying_years)
+    except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
+        print(f"[views/page_inspect] 357 位階計算失敗 → 估值轉紅態：{_e!r}")
+        return ValuationReadout(
+            requested=True, price=stock.price,
+            avg_div_twd=_div.avg_div_twd, paying_years=_div.paying_years,
+            source=_div.source, years_n=len(_div.years),
+            error=_error_why(SRC_357, repr(_e)))
+
+    _z = _z if isinstance(_z, Mapping) else {}
+    return ValuationReadout(
+        requested=True,
+        est_yield_pct=_num(_z.get("est_yield")),
+        zone_code=str(_z.get("zone_code") or ""),
+        signal=str(_z.get("signal") or ""),
+        msg=str(_z.get("msg") or ""),
+        avg_div_twd=_div.avg_div_twd, paying_years=_div.paying_years,
+        source=_div.source, years_n=len(_div.years), price=stock.price)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 葉1-A 判決卡③「籌碼」—— **本批接線**
+# ══════════════════════════════════════════════════════════════════
+@dataclass(frozen=True)
+class ChipsView:
+    """近 20 日籌碼那一輪的產出。**攤平 L3 的 `ChipsReadout`，零再計算。**
+
+    ⚠️ **本檔不重新判一次吸籌／倒貨／發散**：那三個字面與門檻住在 L0
+    `shared.macro_compute.analyze_20d_chips_from_df`，由 L3 呼叫一次。
+    在畫面上再比一次 `concentration > 5` 就是第二把尺（§2.1），
+    而且它會在對面改門檻時無聲漂移。
+
+    Attributes:
+        requested: 同 `StockReadout.requested`（有人叫過 ＋ 判型是個股）。
+        signal / concentration / continuity / days / pos_days: L0 的產出，
+            缺值一律 `None`（**不寫 0**）。
+        miss_reason: L0 說「判不出來」的原因原文。空 = 判得出來。
+            ⚠️ **這不是故障** → `empty`（灰），不是 `failed`（紅）。
+        error: 取數失敗（L1 給的錯誤字串或例外）→ `failed`（紅）。
+        days_loaded: 這一輪載入了幾個交易日的日線（＝表單的「期間」）。
+            **它不是判讀窗** —— 近 20 日那個窗由 L0 決定，改期間不會改結論。
+    """
+
+    requested: bool
+    signal: str = ""
+    concentration: float | None = None
+    continuity: float | None = None
+    days: int | None = None
+    pos_days: int | None = None
+    rows: int | None = None
+    days_loaded: int | None = None
+    miss_reason: str = ""
+    error: str = ""
+
+    @property
+    def has_verdict(self) -> bool:
+        """判出結論了沒有。**缺原因或取數失敗都不算。**"""
+        return bool(self.signal) and not self.miss_reason and not self.error
+
+
+def load_chips(verdict: KindVerdict, req: InspectRequest) -> ChipsView:
+    """近 20 日籌碼。**判型不是個股、或還沒有人叫過 → 一行 L3 都不呼叫。**
+
+    路徑：L3 `stock_chips_service.get_chips_readout(code, days=)`
+    （內部：L1 `fetch_price_data` → L0 `analyze_20d_chips_from_df`）。
+
+    ⚠️ **`days=req.period_days`**：表單那個「期間」決定**載入多長的日線**。
+    它**不是**判讀窗 —— 近 20 日那個窗長度住在 L0（`df.tail(20)`），
+    所以把期間從 120 改成 500 **不會**改變籌碼結論。這一句已寫進
+    `WIRING_DISCLOSURE_SINGLE`，避免使用者以為調期間就能看「近 60 日籌碼」。
+
+    邊界（四個都真的走得到）：
+      (a) **冷啟動 / 判型是 ETF 或 unknown** → `requested=False` → idle。
+      (b) **L3 拋例外，或 L1 回錯誤字串** → 紅態。
+      (c) **日線回來了但法人欄缺／全為 0／成交量 0／筆數不足** → **灰態**
+          ＋ L0 給的原因原文。**沒有人壞掉，是資料缺漏。**
+      (d) **判出來了** → live，數字與訊號都是 L0 的。
+    """
+    _requested = bool(verdict.requested and verdict.is_stock)
+    if not _requested:
+        return ChipsView(requested=False)
+
+    try:
+        from src.services.stock_chips_service import get_chips_readout
+        _c = get_chips_readout(verdict.code, days=req.period_days)
+    except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
+        print(f"[views/page_inspect] 籌碼取數失敗 → 轉紅態：{_e!r}")
+        return ChipsView(requested=True, days_loaded=req.period_days,
+                         error=_error_why(SRC_CHIPS, repr(_e)))
+
+    if _c.error:
+        # L1 的「暫時性失敗」走的是回傳值不是例外（它刻意不讓失敗進 cache）。
+        # 那仍然是**取數失敗** → 紅態，訊息原樣透傳。
+        # ⚠️ 動詞用「回報失敗」不是「拋出例外」—— 這一條路上真的沒有例外，
+        # 寫成例外會讓下一個人去 traceback 裡找一個不存在的東西（§1）。
+        return ChipsView(requested=True, days_loaded=req.period_days,
+                         rows=_c.rows,
+                         error=_error_why(SRC_CHIPS, _c.error,
+                                          verb="回報失敗"))
+
+    return ChipsView(
+        requested=True, signal=_c.signal, concentration=_c.concentration,
+        continuity=_c.continuity, days=_c.days, pos_days=_c.pos_days,
+        rows=_c.rows, days_loaded=req.period_days,
+        miss_reason=_c.miss_reason)
+
+
+# ══════════════════════════════════════════════════════════════════
 # 葉1-B：ETF 分支的取數（同一支 L3，`asset_kind='etf'`）
 # ══════════════════════════════════════════════════════════════════
 @dataclass(frozen=True)
@@ -1322,35 +1614,155 @@ def build_health_card(stock: StockReadout) -> _Built:
                 note=_note), tuple(_facts), ""
 
 
-def build_valuation_card(requested: bool) -> _Built:
-    """線框葉1-A 判決卡②「估值（357 評價）」—— **本批未接線**（見檔頭 ①）。
+def _fmt_div(value: float | None) -> str:
+    """股利／殖利率 → 顯示字串。`None` → `'—'`，**不寫 0**（§1 不假報）。"""
+    return "—" if value is None else _fmt_num(value, digits=2)
 
-    `wired=False` → `classify_ui_state` 第 1 條規則直接判 `unwired`，
-    **與請求與否無關**：未接線的東西不會因為多按一次而改變，
-    這正是它與「查不到」必須分成兩態的原因。
+
+def build_valuation_card(val: ValuationReadout) -> _Built:
+    """線框葉1-A 判決卡②「估值（357 評價）」—— **本批已接線**（見檔頭 1）。
+
+    ⚠️ **簽章從 `(requested: bool)` 改成吃一份 readout，這是接線的一部分**：
+    前一批它是 `wired=False` 的死卡，不需要任何資料；接上之後它必須能講出
+    「這一輪算出什麼 / 為什麼算不出來」，`bool` 帶不動那些事實。
+
+    ⚠️ **`na` 是 `empty`（灰），不是 `failed`（紅）**：L2 對「無股價」與
+    「無配息紀錄」都回 `zone_code='na'` ＋ `est_yield=None`，那是**這套法則
+    不適用這一檔**，不是系統壞掉。把它畫成紅色就是捏造一個不存在的故障
+    （`CLAUDE.md §1.A` 第 4 點）。
+    ⚠️ **也不寫 0%**：0% 會被同一套門檻判成「超貴」——
+    那是拿缺資料當看空結論（L2 那支的 docstring 明文警告）。
+
+    ⚠️ **中文說法一律讀 L2 的 `signal` / `msg`**，本檔不寫第二份
+    便宜／合理／昂貴對照表（§2.1；判型那一格立的是同一個判例）。
     """
-    _state = classify_ui_state(requested=requested, has_value=False,
-                               wired=False)
+    _state = classify_ui_state(
+        requested=val.requested,
+        error=val.error or None,
+        has_value=val.has_zone)
+
+    # ⚠️ **缺值的括號說明只在 `empty` 時給**（自審實測後改）：
+    # `idle`（還沒有人叫過）與 `failed`（上游炸了）這兩態根本沒跑到取數，
+    # 卻印「沒有拿到配息紀錄」「三段都沒有給」，等於**替一輪沒發生的取數
+    # 宣稱它的結果**（§1：錯誤的數字比沒有數字更危險，錯誤的敘述亦然）。
+    # 那兩態的原因由 Note 講（它才知道是「還沒叫」還是「炸了」）。
+    _ran = (_state == UI_EMPTY)
+    _facts: list[tuple[str, str]] = [
+        ("近 5 年平均年現金股利",
+         ("—（備援鏈跑完，沒有一段給出紀錄）" if _ran else "—")
+         if val.avg_div_twd is None else f"{_fmt_div(val.avg_div_twd)} 元／股"),
+        ("近 5 年有配息年數",
+         ("—（未知，不是 0 年）" if _ran else "—")
+         if val.paying_years is None else f"{val.paying_years} 年"),
+        ("配息資料來源",
+         val.source or ("—（FinMind／yfinance／TWSE 三段都沒有給）"
+                        if _ran else "—")),
+        ("這一輪用的現價",
+         ("—（日線那一腿沒抓到）" if _ran else "—")
+         if val.price is None else _fmt_num(val.price, digits=2)),
+    ]
+    if val.msg:
+        # L2 自己寫的一句話（含三檔目標價或「不適用」的理由）。
+        # **原樣透傳**：那是 L2 的話，本檔不改寫、不摘要（§2.1）。
+        _facts.append(("L2 說明", val.msg))
+
+    if _state == UI_LIVE:
+        return (Card(key="inspect.stock.valuation", label="估值（357 評價）",
+                     state=UI_LIVE,
+                     value=f"殖利率 {_fmt_div(val.est_yield_pct)}%"),
+                tuple(_facts), _signal_label(val.signal))
+
+    if _state == UI_IDLE:
+        _note = Note(now=SINGLE_IDLE_NOW, why=SINGLE_IDLE_WHY,
+                     where=SINGLE_IDLE_WHERE)
+    elif _state == UI_FAILED:
+        _note = Note(now="**357 估值算不出來**", why=val.error,
+                     where=("先確認代碼與網路／proxy；細節在"
+                            f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+    else:   # UI_EMPTY —— **有效結果**：這套法則不適用這一檔，或缺一半輸入。
+        # 「是缺股價還是缺配息」由 L2 的 `msg` 說（它已經寫明），本檔不再判一次；
+        # 只有「三段備援都沒給」這一種 L2 講不出來（它看不到來源），本檔補。
+        #
+        # ⚠️ **`msg` 進 `Note` 前一定要洗 glyph**（自審實測後補）：
+        # `Note.__post_init__` 拒收狀態 glyph，而本函式是在 `_render_one()`
+        # 的**保護圈外**被呼叫的（`_render_stock_branch` 先建好三張卡才畫）——
+        # 上游哪天在 `msg` 裡放一個 `🔴`，這裡就會拋 `ValueError` 並炸掉**整頁**，
+        # 而不是畫出那張灰卡。§1 要的是「狀態看得見」，不是換一種炸法。
+        # 洗的動作走 `tab_today.scrub_state_glyphs()` SSOT，不自己列符號表。
+        _why = (VALUATION_NO_SOURCE_WHY if not val.source and not val.years_n
+                else (scrub_state_glyphs(val.msg)[0]
+                      or "357 殖利率法則在這一檔上不適用"))
+        _note = Note(now="**這一檔算不出 357 位階**",
+                     why=f"{_why}{VALUATION_WHY_TAIL}",
+                     where=VALUATION_WHERE)
     return (Card(key="inspect.stock.valuation", label="估值（357 評價）",
-                 state=_state,
-                 note=Note(now="**本頁還沒有 357 估值**", why=VALUATION_WHY,
-                           where=VALUATION_WHERE)),
-            (("現行入口", "🔬 個股分頁的「357 股利評價」（本頁不重複掛載）"),
-             ("接線後的樣子", "便宜／合理／昂貴三區 ＋ 三檔目標價")),
-            "")
+                 state=_state, note=_note), tuple(_facts), "")
 
 
-def build_chips_card(requested: bool) -> _Built:
-    """線框葉1-A 判決卡③「籌碼」—— **本批未接線**（見檔頭 ②）。"""
-    _state = classify_ui_state(requested=requested, has_value=False,
-                               wired=False)
-    return (Card(key="inspect.stock.chips", label="籌碼",
-                 state=_state,
-                 note=Note(now="**本頁還沒有籌碼判讀**", why=CHIPS_WHY,
-                           where=CHIPS_WHERE)),
-            (("現行入口", "🔬 個股分頁的「近 20 日籌碼」（本頁不重複掛載）"),
-             ("接線後的樣子", "近 20 日主力買賣超與集中度，含異常值徽章")),
-            "")
+def build_chips_card(chips: ChipsView) -> _Built:
+    """線框葉1-A 判決卡③「籌碼」—— **本批已接線**（見檔頭 2）。
+
+    ⚠️ **簽章從 `(requested: bool)` 改成吃一份 readout**，理由同上一支。
+
+    ⚠️ **三種「沒有籌碼結論」對到三個不同的狀態**：
+      · 還沒載入 → `idle`（灰）；
+      · 日線抓不到 → `failed`（紅，L1 說了原因）；
+      · 日線有了但法人欄缺／全為 0／成交量 0 → `empty`（灰，**資料缺漏**）。
+    把第三種畫成紅色就是把「沒有資料」講成「系統壞了」；
+    畫成綠色 ＋ 0% 集中度則是把缺值講成「買賣超剛好抵銷」這個結論。兩個都是說謊。
+
+    ⚠️ **本檔不重判吸籌／倒貨／發散**：那三個字面與門檻住在 L0，
+    由 L3 呼叫一次（見 `ChipsView` 的 docstring）。
+    """
+    _state = classify_ui_state(
+        requested=chips.requested,
+        error=chips.error or None,
+        has_value=chips.has_verdict)
+
+    _facts: list[tuple[str, str]] = [
+        ("判讀窗",
+         ("—" if chips.days is None else f"最近 {chips.days} 個交易日")
+         + "（窗長度由上游決定，**不隨表單的「期間」改變**）"),
+        ("本輪載入",
+         "—" if chips.days_loaded is None
+         else f"{chips.days_loaded} 個交易日的日線"
+              + (f"（實得 {chips.rows} 列）" if chips.rows is not None else "")),
+    ]
+    if chips.continuity is not None:
+        _facts.append(("連續性",
+                       f"{_fmt_num(chips.continuity, digits=1)}% 的交易日是"
+                       "法人淨買超"
+                       + (f"（{chips.pos_days} / {chips.days} 日）"
+                          if chips.pos_days is not None
+                          and chips.days is not None else "")))
+    if chips.miss_reason:
+        # L0 自己給的原因原文（`'df缺法人/量欄'` …）。**不改寫**（§2.1）。
+        _facts.append(("上游說明", chips.miss_reason))
+
+    if _state == UI_LIVE:
+        return (Card(key="inspect.stock.chips", label="籌碼", state=UI_LIVE,
+                     value=(f"集中度 {_fmt_num(chips.concentration, digits=2)}%")),
+                tuple(_facts), _signal_label(chips.signal))
+
+    if _state == UI_IDLE:
+        _note = Note(now=SINGLE_IDLE_NOW, why=SINGLE_IDLE_WHY,
+                     where=SINGLE_IDLE_WHERE)
+    elif _state == UI_FAILED:
+        _note = Note(now="**籌碼算不出來**", why=chips.error,
+                     where=("先確認代碼與網路／proxy；細節在"
+                            f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+    else:   # UI_EMPTY —— 日線回來了，但判不出籌碼。**資料缺漏，不是故障。**
+        # ⚠️ 洗 glyph 的理由同 `build_valuation_card` 的 empty 分支：
+        # 這句話會把**上游的原文**插進 `Note`，而本函式在 `_render_one()` 的
+        # 保護圈外執行 —— 不洗就會把一張該畫出來的灰卡變成整頁未捕捉例外。
+        _note = Note(
+            now="**這一檔判不出近 20 日籌碼**",
+            why=(f"{CHIPS_MISS_WHY_HEAD}"
+                 f"{scrub_state_glyphs(chips.miss_reason)[0] or '上游沒有說'}"
+                 f"{CHIPS_MISS_WHY_TAIL}"),
+            where=CHIPS_WHERE)
+    return (Card(key="inspect.stock.chips", label="籌碼", state=_state,
+                 note=_note), tuple(_facts), "")
 
 
 def build_profit_cards(prof: ProfitabilityReadout) -> tuple[_Built, ...]:
@@ -1725,9 +2137,11 @@ def _render_stock_branch(verdict: KindVerdict, req: InspectRequest) -> None:
     _stock = load_stock_readout(verdict)
     section_header("葉1-A 個股分支 · 判決卡",
                    "健康度／估值／籌碼 —— 三格各自判態，一格缺不把另外兩格染色。")
+    # ⚠️ **估值那一格吃 `_stock`**：357 要的現價就是健康度那一輪已經拿到的
+    # `current_price`，再抓一次會有兩個可能不一致的價格（見 `load_valuation`）。
     _render_row((build_health_card(_stock),
-                 build_valuation_card(req.submitted),
-                 build_chips_card(req.submitted)))
+                 build_valuation_card(load_valuation(verdict, _stock)),
+                 build_chips_card(load_chips(verdict, req))))
 
     section_header("葉1-A 個股分支 · 明細（依序）",
                    "線框：**單欄堆疊、不用 expander** —— "
@@ -1791,9 +2205,14 @@ def _render_single_leaf(session: Mapping[str, Any]) -> None:
             section_header("等一下會拿到什麼（尚未載入）",
                            "以**個股**分支的三格預覽；輸入 ETF 代碼時"
                            "整組會換成折溢價／配息／追蹤·同儕。")
-            _render_row((build_health_card(load_stock_readout(_verdict)),
-                         build_valuation_card(_req.submitted),
-                         build_chips_card(_req.submitted)))
+            # 這一支走到時 `_verdict.is_stock` 必為 False（冷啟動／代碼空白），
+            # 三支 loader 都會回 `requested=False` → 三格 idle，
+            # **一行 L3 都不會發**（`TestNothingIsCalledBeforeYouAsk` 實測）。
+            _stock_idle = load_stock_readout(_verdict)
+            _render_row((build_health_card(_stock_idle),
+                         build_valuation_card(
+                             load_valuation(_verdict, _stock_idle)),
+                         build_chips_card(load_chips(_verdict, _req))))
 
 
 def _render_batch_leaf(session: Mapping[str, Any]) -> None:
