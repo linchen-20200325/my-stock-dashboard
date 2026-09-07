@@ -53,6 +53,7 @@ from shared.signal_thresholds import (  # v18.242 W3b SSOT consume
     TNX_VALUATION_PRESSURE_PCT,  # v18.326 PR-D: macro_compass TNX 門檻
     TNX_NEUTRAL_PCT,
 )
+from shared.data_categories import CAT_US_MACRO  # FE-20:@monitored category SSOT
 from shared.fetch_monitor import monitored  # v19.96 批次4 Item1:fetcher 自我登錄
 
 __version__ = "1.0.0"
@@ -320,6 +321,20 @@ _FRED_CACHE_LOCK = _th_mc.Lock()
 _YF_CLOSE_CACHE_LOCK = _th_mc.Lock()
 
 
+# FE-20(頁5 資料體檢燈牆):掛 @monitored 讓 FRED 這一盞在燈牆上量得到。
+# ⚠️ 放置位置說明 —— 本檔規定不依賴 streamlit,故 fetch_fred 的 30min TTL
+#    **寫在函式體內**(`_FRED_CACHE`),不是 cache decorator。也就是說這一支的
+#    `last_called_at` 代表「最後一次**呼叫**」,不保證是「最後一次真實外抓」
+#    (TTL 內的命中會刷新時間)。此差異已在 `src/ui/views/page_why.py` 的
+#    `CACHE_SEMANTICS` 誠實揭露,**不在此處假裝它等同真實外抓**。
+# ⚠️ success_check 治假綠燈(同 fetch_tw_pmi v19.118):本函式四條失敗路徑
+#    (無 api_key / fetch_url 回 None / JSON 壞 / observations 空)一律回**空
+#    DataFrame 且不拋例外** → 沒有 success_check 會恆綠。
+@monitored('fetch_fred', category=CAT_US_MACRO, frequency='daily',
+           # 一支 fetcher 服務多個 series(DGS10 / CPI / NAPM …),落點動態 per
+           # series_id;固定填一個 registry key 必然孤兒誤報 → 誠實 None。
+           registry_key=None,
+           success_check=lambda _r: getattr(_r, 'empty', True) is False)
 def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     """
     抓取 FRED 經濟序列(透過 NAS proxy)。

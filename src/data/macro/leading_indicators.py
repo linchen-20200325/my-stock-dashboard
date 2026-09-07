@@ -37,6 +37,8 @@ from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from src.config import FINMIND_API_URL, TWSE_BFI82U_URL  # Batch 10b v18.412 + Batch 8.1 v18.420 SSOT
 from shared.ttls import TTL_30MIN
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
+from shared.data_categories import CAT_TW_MARKET  # FE-20:@monitored category SSOT
+from shared.fetch_monitor import monitored  # FE-20:TWSE 收盤行情自我登錄(L1→L0)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # F2(2026-08)§2.1 SSOT:原本這裡有一份逐字複製的 `_bps()`(全 repo 共 4 份)。
@@ -727,7 +729,15 @@ def taifex_mtx_data(date_ymd):
 # ════════════════════════════════════════════════════════
 # TWSE 成交量
 # ════════════════════════════════════════════════════════
+# FE-20(頁5 資料體檢燈牆):TWSE 盤後「每日市場成交資訊」(FMTQIK)的健康燈。
+# @monitored 掛在 @_safe_cache **之內**(最貼函式)→ 快取命中不觸發,
+#   last_* 代表最後一次真實外抓(對齊 fetch_margin_balance 等既有 7 支的寫法)。
+# success_check:本函式三個 TWSE URL + ^TWII 備援全敗時回**空 dict 不拋例外**,
+#   沒有 success_check 會恆綠(同 fetch_tw_pmi v19.118 的假綠燈)。
 @_safe_cache(ttl=TTL_30MIN, show_spinner=False)
+@monitored('twse_volume', category=CAT_TW_MARKET, frequency='daily',
+           registry_key='[先行指標] 成交量（TWSE）',
+           success_check=lambda _r: bool(_r))
 def twse_volume(yyyymm):
     """
     成交量（億元）from TWSE FMTQIK，多 URL 備援。

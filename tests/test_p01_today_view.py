@@ -24,9 +24,18 @@
 """
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
+from shared.allocation_decision import REGIME_LABEL
 from shared.macro_buckets import BUCKET_DANGER_SPECS, SPECS_BY_KEY
+from shared.signal_thresholds import (
+    KEY_ALERT_FED_FUNDS_MOVE_PCTPT as _KEY_ALERT_FED_FUNDS_MOVE_PCTPT,
+)
+from shared.signal_thresholds import (
+    KEY_ALERT_VIX_DAY_SPIKE_PCT as _KEY_ALERT_VIX_DAY_SPIKE_PCT,
+)
 from shared.regime_arbiter import SOURCE_FILE_RULE_ENGINE, SOURCE_UNLOADED
 from shared.ui_state import (
     UI_DEGRADED,
@@ -38,6 +47,9 @@ from shared.ui_state import (
 from src.ui.tabs.tab_today import Card, Note
 from src.ui.views import _ui_kit as K
 from src.ui.views import page_today as P
+
+#: repo 根目錄（`tests/` 的上一層）。反向驗「文案點名 / 引述的東西還在不在」用。
+_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 # ── 測試用的最小替身 ──────────────────────────────────────────────
 #: L4 `macro_v2_cards.BAND_META` 的形狀（band → (中文, 色碼)）。
@@ -525,6 +537,293 @@ class TestLeaf1ThirdBlockIsTheWireframeSummary:
         assert "葉1 ③" in P.BUCKET_SUMMARY_MOVED_NOTE
         assert "三欄摘要" in P.BUCKET_SUMMARY_MOVED_NOTE
         assert "沒有刪" in P.BUCKET_SUMMARY_MOVED_NOTE
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【FIX-1】degraded 的位階卡：**有值的契約不得被說成「尚未評估」**
+# ══════════════════════════════════════════════════════════════════
+#: L3 `get_macro_state()` 走 `macro_state.json` 快照那一條分支的形狀。
+#: （`macro_state_locker.get_macro_state` 實測：`_file_ok` ⇒ `_is_loaded=True`
+#:  且 `source=SOURCE_FILE_RULE_ENGINE` ⇒ `discriminative=False` ⇒ degraded。
+#:  也就是**這一態在 production 真的走得到**，不是為了測試捏出來的組合。）
+DEGRADED_REGIME = {"regime": "bull", "light": "🟢", "traffic_light": "多頭",
+                   "source": SOURCE_FILE_RULE_ENGINE, "is_loaded": True}
+
+
+class TestDegradedRegimeIsNotCalledUnevaluated:
+    """修前是 `if _regime_state == UI_LIVE: ... else: ...` ——
+    **所有非 live（含 degraded）一起掉進 else**，於是對一個 `is_loaded=True`、
+    有值的契約印出「市場位階：尚未評估」＋「四條來源本輪皆無值」。
+
+    **那是假敘述**：degraded 的前提就是有值（L0 `shared/station_specs.py:139`
+    「燈會亮、也有等級，只是門檻已失去判別力」／`:527`「有值、燈照亮，
+    只是別照門檻讀」）。§1：錯誤的敘述比沒有敘述更危險。
+    """
+
+    def test_the_premise_of_this_test_still_holds(self):
+        """前提自證：這份契約在 L0 判態下**真的**是 degraded。"""
+        assert P.classify_macro_contract(DEGRADED_REGIME) == UI_DEGRADED
+
+    def test_it_never_says_unevaluated(self):
+        _n = _tiles(regime=DEGRADED_REGIME)["verdict.regime"].card.note
+        _all = f"{_n.now}\n{_n.why}\n{_n.where}"
+        assert "尚未評估" not in _all, "有值的契約不得被說成沒評估"
+        assert "皆無值" not in _all, "degraded 的前提就是有值"
+
+    def test_it_still_brings_out_the_level(self):
+        """**位階是觀測不是判決 → 照印。** 留白會把本來看得到的資訊藏起來。"""
+        _t = _tiles(regime=DEGRADED_REGIME)["verdict.regime"]
+        _label = REGIME_LABEL["bull"]
+        assert _t.signal_text == _label, "degraded 載的是 band 觀測 → 燈要照出"
+        assert ("現值", _label) in _t.facts, (
+            "非 live 不得帶 `value` ⇒ 現值改掛 facts，不是整個消失")
+
+    def test_the_disclaimer_rides_on_the_state_channel(self):
+        _t = _tiles(regime=DEGRADED_REGIME)["verdict.regime"]
+        assert _t.card.state == UI_DEGRADED, "免責聲明＝狀態頻道那顆 chip"
+        assert _t.card.value == "", "非 live 不得帶結論文字（`Card` 的鐵律）"
+        assert ("生效分支", SOURCE_FILE_RULE_ENGINE) in _t.facts, (
+            "「來自快照」要有證據可看，不能只是一句話")
+
+    def test_the_wording_is_the_status_bar_ssot_not_a_second_copy(self):
+        """文案**不得另寫一份** —— 對面對同一個狀態已經有推敲過的說法。"""
+        from src.ui.tabs.tab_today import build_status_bar_card
+
+        _mine = _tiles(regime=DEGRADED_REGIME)["verdict.regime"].card.note
+        _ssot = build_status_bar_card(DEGRADED_REGIME).note
+        assert (_mine.now, _mine.why, _mine.where) == (
+            _ssot.now, _ssot.why, _ssot.where), "兩份文案漂開了＝兩種解釋"
+        assert "快照" in _mine.now, "前提變了：對面的 degraded 文案被改過"
+
+    def test_cold_start_still_says_unevaluated(self):
+        """反向釘子：**真的**沒值那一態的文案沒有被這次改動弄丟。"""
+        _t = _tiles(regime=COLD_REGIME)["verdict.regime"]
+        assert "尚未評估" in _t.card.note.now
+        assert "皆無值" in _t.card.note.why
+        assert _t.signal_text == "", "灰態不給燈（未評估 ≠ 有位階）"
+
+    def test_a_drifted_contract_neither_crashes_nor_invents_a_level(self):
+        """契約漂移（degraded 卻沒帶 `regime`）→ 不炸，也不編一個位階出來。
+
+        ⚠️ production 走不到（`macro_state_locker` 的 `_file_ok` 分支一律經
+        `normalize_regime()`，實測 `None` / `''` / `'系統異常'` 全部落到
+        `'neutral'`，**不會**回 `'unknown'`）—— 這條釘的是**漂移**那一天。
+        """
+        _t = _tiles(regime={"source": SOURCE_FILE_RULE_ENGINE,
+                            "is_loaded": True})["verdict.regime"]
+        assert _t.card.state == UI_DEGRADED
+        assert _t.signal_text == REGIME_LABEL["unknown"], (
+            "缺值時只准說「未評估」，不得挑一個位階填上去")
+
+    def test_a_broken_contract_is_still_red(self):
+        """`error` 在 `classify_ui_state` 排在 `discriminative` 前面 ——
+        新增的 degraded 分支不得把紅態吃掉。"""
+        _t = _tiles(regime=DEGRADED_REGIME,
+                    regime_error='RuntimeError("boom")')["verdict.regime"]
+        assert _t.card.state == UI_FAILED
+        assert _t.signal_text == "", "紅態不給燈"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【FIX-2】今日關鍵：degraded 下的「綠」在上游契約下不可達 —— 釘住那個前提
+# ══════════════════════════════════════════════════════════════════
+class TestDegradedGreenIsUnreachableUpstream:
+    """degraded 下的綠只代表「**急變層** 0 紅 0 黃」，而門檻層
+    （`threshold_scanned=False`）根本沒掃 —— 真的出得來就是一顆誤導性的
+    all-clear。**查證結論：`collect_key_alerts` 的契約下走不到。**
+
+    推導：degraded ⇒ `threshold_scanned=False` ⇒ `has_value=bool(items)`
+    ⇒ items 非空；而 `collect_key_alerts` 只產 severity 0（紅）/ 1（黃）
+    item，`n_red` / `n_yellow` 又是對 items 數出來的 ⇒ items 非空 ⇒ 至少一
+    紅或一黃 ⇒ `_level` 不可能是 green。
+
+    ⚠️ 所以本組釘的是**那個前提**，不是行為：哪天有人替
+    `collect_key_alerts` 加一種「綠 / 提示」item，前提就破、綠燈就真的出得來
+    —— 這裡會當場轉紅，逼下一個人回去改 `build_key_alert_tile`。
+    """
+
+    #: 急變層的兩個門檻**一律從 L0 SSOT 取**（`shared/signal_thresholds`）——
+    #: 測試裡寫死一個「剛好超過」的數字，等於在測試檔裡複寫了一份門檻，
+    #: 門檻一調整這裡就靜靜地不再觸發（§3.3 反捏造）。
+    _VIX_HIT = [20.0, 20.0 * (1 + (_KEY_ALERT_VIX_DAY_SPIKE_PCT + 5) / 100)]
+    _VIX_MISS = [20.0, 20.0 * (1 + (_KEY_ALERT_VIX_DAY_SPIKE_PCT - 5) / 100)]
+    _FF_HIT = {"current": 5.0, "prev": 5.0 - (_KEY_ALERT_FED_FUNDS_MOVE_PCTPT + 0.05)}
+
+    #: `(threshold_alerts, macro_info)`：兩層都涵蓋，含 None / 空 / 垃圾值。
+    CASES = [
+        (None, None),
+        (None, {}),
+        ([], {"vix": {"values": _VIX_HIT}}),                   # 急變層紅
+        (None, {"fed_funds": _FF_HIT}),                        # 急變層黃
+        (None, {"vix": {"values": _VIX_HIT}, "fed_funds": _FF_HIT}),
+        (None, {"vix": {"values": _VIX_MISS}}),                # 沒踩到門檻
+        (None, {"vix": {"values": ["bad", None]}}),            # 垃圾值
+        ([{"level": "green", "label": "x", "value": 1}], None),
+        ([{"level": "red", "label": "VIX", "value": 35, "unit": "",
+           "message": "m"}], None),
+        ([{"level": "yellow", "label": "CPI", "value": 3, "unit": "%",
+           "message": "m"}], {"vix": {"values": _VIX_HIT}}),
+    ]
+
+    def _collect(self, ta, mi):
+        from src.compute.macro.daily_key_alerts import collect_key_alerts
+
+        return collect_key_alerts(ta, mi)
+
+    def test_collect_key_alerts_only_ever_emits_red_or_yellow(self):
+        for _ta, _mi in self.CASES:
+            _r = self._collect(_ta, _mi)
+            assert all(_i["severity"] in (0, 1) for _i in _r["items"]), _r
+            assert _r["n_red"] + _r["n_yellow"] == len(_r["items"]), (
+                f"items 非空卻數不出紅 / 黃 ⇒ degraded 會亮出綠燈：{_ta} / {_mi}")
+
+    def test_no_real_contract_output_lights_a_green_chip_while_degraded(self):
+        """走**真的** `collect_key_alerts` 輸出（不手捏 mapping）。"""
+        _seen = 0
+        for _ta, _mi in self.CASES:
+            _t = P.build_key_alert_tile(
+                self._collect(_ta, _mi), requested=True,
+                threshold_scanned=bool(_ta), error="", band_zh_color=BANDS)
+            if _t.card.state != UI_DEGRADED:
+                continue
+            _seen += 1
+            assert _t.signal_text != BANDS["green"][0], (
+                f"degraded 亮綠燈＝門檻層沒掃卻讀起來像 all-clear：{_ta} / {_mi}")
+            assert _t.signal_text in (BANDS["red"][0], BANDS["yellow"][0])
+        assert _seen, "一個 degraded 都沒走到 —— 這條測試沒有在測東西"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【FIX-3】判準要寫在 kit 的 docstring 裡（兩頁分歧的根因就是它沒寫）
+# ══════════════════════════════════════════════════════════════════
+class TestSignalChannelDocumentsTheDegradedRule:
+    """`_ui_kit.render_card` 的 `signal_text` 修前只寫「空字串 = 沒有燈號
+    頻道」，**對 degraded 一個字都沒有** —— 於是頁1 照出、頁4 留白，
+    兩頁對同一個狀態做出相反處理。這條防它日後被刪掉又分歧。
+    """
+
+    def test_the_criterion_is_written_down(self):
+        _doc = K.render_card.__doc__ or ""
+        assert "degraded" in _doc, "判準不見了"
+        for _k in ("觀測", "判決", "留白"):
+            assert _k in _doc, f"判準少了「{_k}」那一半"
+
+    def test_it_points_back_at_the_l0_evidence(self):
+        """依據要指得回去 —— 不然下一個人只會看到一個沒有出處的規定。"""
+        _doc = K.render_card.__doc__ or ""
+        assert "station_specs.py:139" in _doc
+        assert ":527" in _doc
+
+    def test_the_l0_sentences_it_quotes_are_really_there(self):
+        """**行號會過期**（`CLAUDE.md §8.2.A.0` 規則 1）—— 所以連 docstring
+        **引述的那兩句 L0 原文**一起驗：句子還在就找得回去，行號漂掉也不會
+        變成一個指不到東西的假出處。
+        """
+        _t = (_ROOT / "shared/station_specs.py").read_text(encoding="utf-8")
+        for _q in ("燈會亮、也有等級，只是門檻已失去判別力", "有值、燈照亮"):
+            assert _q in _t, (
+                f"`station_specs.py` 已經沒有 {_q!r} —— "
+                "`render_card` docstring 引的出處過期了，回來改它")
+
+    def test_grey_and_red_are_still_documented_as_blank(self):
+        """**未評估 ≠ 綠**：灰態 / 紅態留白那一半不得被這次補寫沖掉。"""
+        _doc = K.render_card.__doc__ or ""
+        assert "未評估 ≠ 綠" in _doc
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【FIX-4】位階卡不得宣稱自己是全站唯一出處（實測為假）
+# ══════════════════════════════════════════════════════════════════
+#: 揭露裡點名的**平行判讀**：`(相對路徑, 這一支的識別特徵…)`。
+#: ⚠️ 依 `CLAUDE.md §8.2.A.0` 規則 1，**一律不寫行號**（行號保證會過期），
+#: 改以「檔案 + 符號 / 字串」定位。
+_PARALLEL_REGIME_CALLS = (
+    ("src/ui/tabs/macro/section_cross_ai.py",
+     ("① 目前總經位階", "_bull_score", "_bear_score")),
+    ("src/compute/macro/macro_helpers.py",
+     ("def classify_long_term_regime",)),
+    ("src/ui/tabs/macro/section_news_ai.py",
+     ("market_regime", "市場體制")),
+)
+
+#: canonical 那一側（揭露句自己也點名了它們，同樣要能被驗）。
+_CANONICAL_REGIME = (
+    ("shared/regime_arbiter.py", ("def arbitrate_regime",)),
+    ("src/services/macro_state_locker.py", ("def get_macro_state",)),
+)
+
+
+class TestNoGlobalUniquenessClaim:
+    """2026-09-07 獨立稽核：本卡標題原本宣稱自己是本站位階的**唯一**出處，
+    **實測為假** —— 舊版「🌍 市場環境」分頁至少有三處未經 L0
+    `arbitrate_regime()` 仲裁的平行判讀，新聞頁還直讀 `macro_state.json`
+    快照。那幾支住在客戶明令不得修改的舊版 Tab ⇒ **能改的只有本頁的宣稱**。
+
+    ⚠️ 本組同時釘**兩個方向**，缺一不可：
+      · 正向：本頁不准再出現那句全稱宣稱（label 改回去 → 轉紅）。
+      · 反向：揭露裡點名的那幾支現在**真的還在**。一份過期的「未納管清單」
+        跟一句假的唯一性宣稱一樣糟 —— 收斂掉了就該回來改文案，
+        而不是留一段沒人再驗的話。
+    """
+
+    def _text(self, rel: str) -> str:
+        _p = _ROOT / rel
+        assert _p.exists(), f"{rel} 不見了 —— 揭露文案點名的檔案已不存在"
+        return _p.read_text(encoding="utf-8")
+
+    def test_the_page_makes_no_repo_wide_uniqueness_claim(self):
+        """**突變守衛**：label 改回「全站唯一…」那句 → 本條當場轉紅。
+
+        （若日後真的需要寫一句**明示否認**式的句子，請照
+        `tests/test_p04_hold_view.py` 的 `_UNIQUENESS_DENIALS` 先例改成
+        上下文判斷 —— **不要**直接放寬成不檢查。）
+        """
+        _src = self._text("src/ui/views/page_today.py")
+        assert "全站唯一" not in _src, (
+            "本頁不得出現需要窮舉全 repo 才成立的唯一性全稱句 —— "
+            "2026-09-07 實測那句是假的")
+
+    def test_the_label_is_the_single_constant_used_by_every_branch(self):
+        """標題只准定義一次：改了一處、另外兩處還在說舊話是最常見的漏改。"""
+        assert P.REGIME_CARD_LABEL == "市場位階（總經契約）"
+        for _kw in ({"regime": dict(LIVE_REGIME)},
+                    {"regime": DEGRADED_REGIME},
+                    {"regime": COLD_REGIME}):
+            assert _tiles(**_kw)["verdict.regime"].card.label == (
+                P.REGIME_CARD_LABEL)
+
+    def test_every_state_carries_the_disclosure(self):
+        """揭露掛 `facts` ⇒ **每一態都出**（`render_card` 任何狀態都畫 facts）。"""
+        for _kw in ({"regime": dict(LIVE_REGIME)},
+                    {"regime": DEGRADED_REGIME},
+                    {"regime": COLD_REGIME},
+                    {"regime": None, "regime_error": 'RuntimeError("x")'}):
+            _f = dict(_tiles(**_kw)["verdict.regime"].facts)
+            assert _f.get("位階的出處") == P.REGIME_SCOPE_NOTE, _kw
+
+    def test_the_disclosure_says_what_it_takes_and_what_it_does_not_cover(self):
+        _n = P.REGIME_SCOPE_NOTE
+        assert "get_macro_state" in _n and "arbitrate_regime" in _n
+        assert "本頁" in _n, "要寫成單點可驗的「本頁取自 X」，不是「全站只有 X」"
+        assert "以這張卡為準" in _n, "不一致時該看哪一邊，要講清楚"
+
+    def test_the_parallel_readings_it_names_still_exist(self):
+        """反向釘子：點名的四處**現在真的還在**（收斂掉了 → 轉紅改文案）。"""
+        for _rel, _marks in _PARALLEL_REGIME_CALLS:
+            _t = self._text(_rel)
+            for _m in _marks:
+                assert _m in _t, (
+                    f"{_rel} 已經沒有 {_m!r} —— 揭露文案過期了，回來改它")
+
+    def test_the_canonical_side_is_also_real(self):
+        for _rel, _marks in _CANONICAL_REGIME:
+            _t = self._text(_rel)
+            for _m in _marks:
+                assert _m in _t, f"{_rel} 找不到 {_m!r} —— canonical 側變了"
+
+    def test_the_old_tab_the_disclosure_names_is_still_mounted(self):
+        """揭露句寫「舊版『🌍 市場環境』分頁」—— 那個分頁名要真的還掛著。"""
+        assert "🌍 市場環境" in self._text("app.py")
 
 
 # ══════════════════════════════════════════════════════════════════

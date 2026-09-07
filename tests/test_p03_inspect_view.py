@@ -331,6 +331,10 @@ class TestRequestedIsNotDerivedFromData:
         assert P.load_etf_readout(_v).premium_pct is None
         assert P.load_profitability(_v).cells == ()
         assert P.load_batch_rows(P.BatchRequest(submitted=False)).rows == ()
+        _val = P.load_valuation(_v, P.load_stock_readout(_v))
+        assert (_val.requested, _val.est_yield_pct) == (False, None)
+        _chips = P.load_chips(_v, P.InspectRequest(submitted=False))
+        assert (_chips.requested, _chips.concentration) == (False, None)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -354,12 +358,18 @@ class _PoisonModule:
         raise _L3Touched(f"{self.__name__}.{item} 在 requested=False 時被碰到了")
 
 
-#: 頁 3 檔頭「取數」表列出的全部下游（L2 判型 ＋ L3 三支）。
+#: 頁 3 檔頭「取數」表列出的全部下游（L2 兩支 ＋ L3 五支）。
+#: ⚠️ 2026-09-07 FE-18 補上本批接線的三支（357 的 L2、配息的 L3、籌碼的 L3）——
+#: **漏補的話那三支就沒有被下毒**，「沒按之前一行 L3 都不呼叫」這條守衛
+#: 對它們形同虛設（測試照樣綠、而它們其實已經被呼叫過了）。
 _DOWNSTREAM = (
     "src.compute.etf.asset_lag",
+    "src.compute.strategy.v5_modules",
     "src.services.dividend_station_service",
     "src.services.stock_grp_service",
     "src.services.financial_health_engine",
+    "src.services.valuation_service",
+    "src.services.stock_chips_service",
 )
 
 
@@ -384,9 +394,14 @@ class TestNothingIsCalledBeforeYouAsk:
 
     def test_every_leaf1_loader_touches_nothing(self, poisoned):
         _v = P.KindVerdict(requested=False)
+        _req = P.InspectRequest(submitted=False)
         assert P.load_stock_readout(_v).requested is False
         assert P.load_etf_readout(_v).requested is False
         assert P.load_profitability(_v).requested is False
+        # 本批接上的兩支同樣受這一條管（FE-18）。
+        assert P.load_valuation(_v, P.StockReadout(requested=False)
+                                ).requested is False
+        assert P.load_chips(_v, _req).requested is False
 
     def test_batch_loader_touches_nothing(self, poisoned):
         assert P.load_batch_rows(P.BatchRequest(submitted=False)).rows == ()
@@ -401,6 +416,14 @@ class TestNothingIsCalledBeforeYouAsk:
         with pytest.raises(_L3Touched):
             P.load_batch_rows(P.BatchRequest(submitted=True,
                                              tickers=("2330",)))
+        # 反證也要涵蓋本批新接的兩支，否則上面那兩行可能只是「毒藥沒裝上」而綠。
+        _stock_v = P.KindVerdict(requested=True, code="2330", kind="stock",
+                                 is_stock=True)
+        with pytest.raises(_L3Touched):
+            P.load_valuation(_stock_v, P.StockReadout(requested=True,
+                                                      price=100.0))
+        with pytest.raises(_L3Touched):
+            P.load_chips(_stock_v, _req(ticker="2330"))
 
     def test_idle_note_promise_matches_the_code(self):
         """畫給使用者看的那句承諾，與上面實測到的行為必須是同一件事。"""
@@ -496,15 +519,26 @@ def _facts_nonempty(facts) -> bool:
 
 
 class TestUnwiredStaysUnwired:
-    """檔頭誠實揭露的四項：估值（357）／籌碼／個股明細／ETF 明細。
+    """檔頭誠實揭露的**兩項**：個股明細／ETF 明細。
 
-    ⚠️ **它們與「查不到」必須分成兩態**：未接線的東西不會因為多按一次而改變，
-    而「查不到」重按有機會好。畫成同一種灰＝把一個沒有出口的狀態說成有出口。
+    ⚠️ **2026-09-07 FE-18：估值（357）與籌碼已接線，從本類移走。**
+    這**不是**放寬斷言 —— 它們接上之後就**不該**再是 `unwired`
+    （`unwired` 的語意是「這個功能沒接」，接了還標它才是說謊）。
+    原本掛在它們身上的三條守衛各自有等效替身，不留缺口：
+      · 「按幾次都一樣」→ `TestWiredCellsAreNotUnwiredAnyMore`
+        改釘「它們**永遠不是** `unwired`」（反向，射程同樣涵蓋誤標）；
+      · 「三要素齊備」→ 同上類，對**每一種非 live 狀態**都驗一次
+        （比原本只驗 `unwired` 一種**更寬**）；
+      · 「沒有使用者出口」→ 改釘**相反的事實**：接上之後那兩格的
+        `where` **不得**再帶 `NO_EXIT_MARKER`（留著就是說「沒有出口」，
+        而其實重按有機會好）。
+      · 「四項說法不得複製貼上」→ 仍在本類（明細兩張）＋ 新類（估值/籌碼）。
+
+    ⚠️ 未接線的東西不會因為多按一次而改變，而「查不到」重按有機會好。
+    畫成同一種灰＝把一個沒有出口的狀態說成有出口。
     """
 
     _BUILDERS = (
-        ("估值", lambda r: P.build_valuation_card(r)),
-        ("籌碼", lambda r: P.build_chips_card(r)),
         ("個股明細", lambda r: P.build_detail_card(
             r, key="k", label="個股明細",
             sections=P.STOCK_DETAIL_SECTIONS, entry="🔬 個股分頁")),
@@ -514,7 +548,7 @@ class TestUnwiredStaysUnwired:
     )
 
     @pytest.mark.parametrize("requested", [False, True])
-    def test_all_four_stay_unwired_whatever_you_press(self, requested):
+    def test_all_stay_unwired_whatever_you_press(self, requested):
         for _name, _build in self._BUILDERS:
             _card, _, _ = _build(requested)
             assert _card.state == UI_UNWIRED, (
@@ -538,18 +572,29 @@ class TestUnwiredStaysUnwired:
             assert NO_EXIT_MARKER in _card.note.where, _name
 
     def test_the_wheres_are_not_copy_pasted(self):
-        """四項的「去哪補」不得是同一句話 —— 補法真的不一樣。"""
-        _wheres = {_n: _b(True)[0].note.where for _n, _b in self._BUILDERS}
-        # 個股／ETF 明細共用同一段補法（兩者卡在同一件事：section 不能重複掛載），
-        # 那是**事實**，故只要求估值 / 籌碼 / 明細三種說法互不相同。
-        assert len({_wheres["估值"], _wheres["籌碼"],
-                    _wheres["個股明細"]}) == 3, _wheres
+        """未接線與**已接線但缺料**的「去哪補」不得是同一句話。
 
-    def test_valuation_never_gets_wired_by_accident(self):
-        """擋住「拿 ETF 配息去餵個股 357」那條路。
+        個股／ETF 明細共用同一段補法（兩者卡在同一件事：section 不能重複
+        掛載），那是**事實**；但它們與估值／籌碼那兩種**必須**不同 ——
+        一種沒有出口、另一種有。抄同一句話就是把兩件事講成一件。
+        """
+        _detail = self._BUILDERS[0][1](True)[0].note.where
+        _val = P.build_valuation_card(_empty_valuation())[0].note.where
+        _chips = P.build_chips_card(_missing_chips())[0].note.where
+        assert len({_detail, _val, _chips}) == 3, (_detail, _val, _chips)
+
+    def test_valuation_never_eats_etf_dividends(self):
+        """擋住「拿 ETF 配息去餵個股 357」那條路。**接線之後這條更重要。**
+
+        ⚠️ **原名 `test_valuation_never_gets_wired_by_accident` 已改名**
+        （2026-09-07 FE-18）：357 這一格**已經接線**，「不得被接上」那個名字
+        本身變成假的。**禁令一個字都沒有放寬** —— 改的只有名字，
+        斷言與射程完全相同：本頁不得用那兩個 ETF 專用符號。
+        接上的是**正確的來源**（L3 `valuation_service.get_stock_dividends`
+        → L1 個股配息鏈），不是這條禁令的例外。
 
         ⚠️ 用 **AST**（真的被 import / 被呼叫的識別字）而不是**字串搜尋** ——
-        檔頭的「為什麼不接」本來就必須寫出那兩個函式名才說得清楚，
+        檔頭的「為什麼不拿 ETF 配息」本來就必須寫出那兩個函式名才說得清楚，
         字串搜尋會把**誠實的揭露**判成違規，逼下一個人把理由刪掉。
         （頁 2 對估值 PE 因子是同一種拒絕；那裡的理由也寫在 docstring 裡。）
         """
@@ -580,6 +625,391 @@ class TestUnwiredStaysUnwired:
         assert not (set(P.STOCK_DETAIL_SECTIONS)
                     & set(P.ETF_DETAIL_SECTIONS)), (
             "兩支明細列出現共用項目 —— 線框實測是 0 命中")
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【5b】本批接上的兩格（估值 357 / 籌碼）—— 它們**不再**是 unwired
+# ══════════════════════════════════════════════════════════════════
+def _empty_valuation() -> P.ValuationReadout:
+    """「查得到、但三段備援都沒有配息紀錄」—— **有效結果**，不是故障。"""
+    return P.ValuationReadout(requested=True, zone_code="na",
+                              est_yield_pct=None, avg_div_twd=None,
+                              paying_years=None, source="", years_n=0,
+                              price=100.0,
+                              msg="無配息記錄，357 殖利率法則不適用")
+
+
+def _live_valuation() -> P.ValuationReadout:
+    """真的算出一個位階（走 L2 的字面，本測試不自己編中文）。"""
+    return P.ValuationReadout(
+        requested=True, est_yield_pct=6.85, zone_code="fair",
+        signal="🟡 合理（5~7%）", msg="殖利率 6.85%，位於合理區間（97.9~137.0）",
+        avg_div_twd=6.85, paying_years=5, source="FinMind", years_n=5,
+        price=100.0)
+
+
+def _missing_chips() -> P.ChipsView:
+    """「日線回來了，但法人欄全為 0」—— **資料缺漏**，不是故障。"""
+    return P.ChipsView(requested=True, signal="⚫ 資料不足",
+                       miss_reason="df法人欄全為0", rows=250, days_loaded=250)
+
+
+def _live_chips() -> P.ChipsView:
+    return P.ChipsView(requested=True, signal="🔥 大戶吸籌", concentration=6.32,
+                       continuity=60.0, days=20, pos_days=12, rows=250,
+                       days_loaded=250)
+
+
+class TestWiredCellsAreNotUnwiredAnyMore:
+    """估值（357）與籌碼**已接線** —— 它們**永遠不該**再判成 `unwired`。
+
+    ⚠️ 這一類是 `TestUnwiredStaysUnwired` 對這兩格的**反向替身**，不是刪掉
+    守衛：原本釘「它們恆為 unwired」，現在釘「它們**恆不是** unwired」。
+    射程同樣涵蓋「有人把它標錯」這個失效模式，只是方向掉過來 ——
+    接上之後還標 unwired，等於告訴使用者「這個功能沒接」，那是說謊。
+    """
+
+    _CASES = (
+        ("估值·冷啟動", lambda: P.build_valuation_card(
+            P.ValuationReadout(requested=False)), UI_IDLE),
+        ("估值·沒有配息紀錄", lambda: P.build_valuation_card(
+            _empty_valuation()), UI_EMPTY),
+        ("估值·取數失敗", lambda: P.build_valuation_card(
+            P.ValuationReadout(requested=True, error="RuntimeError('boom')")),
+         UI_FAILED),
+        ("估值·算出位階", lambda: P.build_valuation_card(_live_valuation()),
+         UI_LIVE),
+        ("籌碼·冷啟動", lambda: P.build_chips_card(
+            P.ChipsView(requested=False)), UI_IDLE),
+        ("籌碼·判不出來", lambda: P.build_chips_card(_missing_chips()),
+         UI_EMPTY),
+        ("籌碼·取數失敗", lambda: P.build_chips_card(
+            P.ChipsView(requested=True, error="RuntimeError('boom')")),
+         UI_FAILED),
+        ("籌碼·判出來了", lambda: P.build_chips_card(_live_chips()), UI_LIVE),
+    )
+
+    @pytest.mark.parametrize("name,build,expect", _CASES)
+    def test_state_is_what_it_should_be_and_never_unwired(self, name, build,
+                                                          expect):
+        _card, _, _ = build()
+        assert _card.state != UI_UNWIRED, (
+            f"{name} 仍被標成未接線 —— 它已經接上了，標 unwired 是說謊")
+        assert _card.state == expect, f"{name} 判成 {_card.state!r}"
+
+    @pytest.mark.parametrize("name,build,expect", _CASES)
+    def test_every_non_live_state_has_all_three_elements(self, name, build,
+                                                         expect):
+        """鐵律 4 的射程**變寬了**：原本只驗 `unwired` 一種，現在四種都驗。"""
+        _card, _facts, _ = build()
+        if _card.state == UI_LIVE:
+            return
+        _now, _why, _where = _note_triple(_card.note)
+        assert _now.strip() and _why.strip() and _where.strip(), name
+        assert _facts_nonempty(_facts), f"{name} 的 facts 有空格子"
+
+    def test_no_exit_marker_is_gone_from_the_wired_cells(self):
+        """接上之後**不得**再說「沒有使用者出口」——重按真的有機會好。
+
+        留著那句話，使用者會以為這一格永遠不會變而放棄；
+        那與接線前把它標成「重試看看」是**同一種**說謊，只是方向相反。
+        """
+        from src.ui.tabs.tab_today import NO_EXIT_MARKER
+        for _name, _build, _ in self._CASES:
+            _card, _, _ = _build()
+            if _card.note is None:
+                continue
+            assert NO_EXIT_MARKER not in _card.note.where, (
+                f"{_name} 的「去哪補」仍宣稱沒有出口")
+
+    def test_they_go_through_l3_only(self):
+        """AST：本頁**沒有**任何 `src.data.*` import，也沒有走 L5 re-export 繞道。
+
+        接線的正解是補 L3；經另一個 L5 檔 re-export **只是騙過靜態檢查、
+        不改變性質**。這一條就是釘住「不准走那條捷徑」。
+        """
+        _mods: set[str] = set()
+        for _n in ast.walk(_tree()):
+            if isinstance(_n, ast.ImportFrom) and _n.module:
+                _mods.add(_n.module)
+            elif isinstance(_n, ast.Import):
+                _mods |= {_a.name for _a in _n.names}
+        _bad = {_m for _m in _mods
+                if _m.startswith("src.data")
+                or _m.startswith("src.ui.tabs.yield_screener")}
+        assert not _bad, f"本頁直接 import 了 {sorted(_bad)} —— L5→L1 是分層違憲"
+        assert "src.services.valuation_service" in _mods, (
+            "357 的輸入沒有走本批新增的 L3")
+        assert "src.services.stock_chips_service" in _mods, (
+            "籌碼的 df 沒有走本批新增的 L3")
+
+
+class TestValuation357IsHonest:
+    """357 這一格最容易說的三種謊：0%、假紅燈、把「沒有配息」講成故障。"""
+
+    def test_no_dividend_record_is_empty_not_failed(self):
+        """**「查得到但沒有配息紀錄」是有效結果**，不是故障（灰，不是紅）。"""
+        _card, _, _ = P.build_valuation_card(_empty_valuation())
+        assert _card.state == UI_EMPTY
+
+    def test_no_source_says_both_possibilities(self):
+        """三段備援都沒給時，**兩種可能都要講** —— 上游分不出，本站不猜。"""
+        _card, _, _ = P.build_valuation_card(_empty_valuation())
+        _why = _card.note.why
+        assert "真的沒有配息" in _why and "都沒拿到" in _why, _why
+
+    def test_it_never_shows_zero_percent(self):
+        """0% 會被同一套門檻判成「超貴」＝ 拿缺資料當看空結論。"""
+        _card, _facts, _signal = P.build_valuation_card(_empty_valuation())
+        assert _card.value == "", "非 live 不得帶結論文字"
+        assert "0.00%" not in str(dict(_facts)), dict(_facts)
+        assert _signal == "", "沒算出來就不該有訊號燈"
+
+    def test_missing_inputs_show_a_dash_not_zero(self):
+        """缺值顯示 `—`，**不是** 0 元 / 0 年（§1 不假報）。"""
+        _, _facts, _ = P.build_valuation_card(_empty_valuation())
+        _f = dict(_facts)
+        assert _f["近 5 年平均年現金股利"].startswith("—")
+        assert _f["近 5 年有配息年數"].startswith("—")
+        # ⚠️ 不能只 grep `"0 年"`：正確的文案本來就會寫「不是 0 年」——
+        # 那樣的 grep 會把**誠實的揭露**判成違規（同 AST 那條的教訓）。
+        # 要釘的是「這一格沒有宣稱一個年數」，故改驗它明說「未知」。
+        assert "未知" in _f["近 5 年有配息年數"]
+        assert not _f["近 5 年有配息年數"].startswith("0")
+
+    def test_live_shows_the_yield_and_a_chinese_only_signal(self):
+        """鐵律 3：訊號頻道只出中文（帶 `🟡` 會被共用層當場 raise）。"""
+        from src.ui.views._ui_kit import assert_signal_text_clean
+
+        _card, _facts, _signal = P.build_valuation_card(_live_valuation())
+        assert _card.state == UI_LIVE and "6.85" in _card.value
+        assert _signal == "合理（5~7%）", _signal
+        assert_signal_text_clean("valuation signal", _signal)
+
+    def test_l2_message_is_passed_through_verbatim(self):
+        """「是缺股價還是缺配息」由 L2 的 `msg` 說，本頁不改寫（§2.1）。"""
+        _, _facts, _ = P.build_valuation_card(_live_valuation())
+        assert dict(_facts)["L2 說明"] == _live_valuation().msg
+
+    def test_failure_names_the_layer(self):
+        """紅態要講出**是哪一層**出事，否則等於對使用者謊報出事的層。"""
+        _card, _, _ = P.build_valuation_card(P.ValuationReadout(
+            requested=True,
+            error=P._error_why(P.SRC_DIVIDENDS, "RuntimeError('boom')")))
+        assert _card.state == UI_FAILED
+        assert "valuation_service" in _card.note.why
+        assert "boom" in _card.note.why
+
+    def test_a_value_without_a_gate_cannot_even_be_built(self):
+        """恆真式的直接反證：沒被叫過卻有值 → L0 當場 `ValueError`。"""
+        with pytest.raises(ValueError, match="requested=False"):
+            P.build_valuation_card(P.ValuationReadout(
+                requested=False, est_yield_pct=6.0, zone_code="fair"))
+
+    def test_upstream_glyphs_do_not_blow_up_the_whole_page(self):
+        """⭐ 上游訊息帶狀態 glyph → 要畫出**灰卡**，不是炸掉整頁。
+
+        `Note.__post_init__` 拒收狀態 glyph，而卡片是在 `_render_one()` 的
+        **保護圈外**建好的（`_render_stock_branch` 先組三張卡才畫）——
+        不洗 glyph 就會是整頁未捕捉例外，而畫面上沒有任何一句話解釋。
+        §1 要的是「狀態看得見」，**不是換一種炸法**。
+        """
+        # ⚠️ 這一組**刻意有 `source` 與配息紀錄**：沒有的話會走
+        # `VALUATION_NO_SOURCE_WHY` 那條固定文案，`msg` 根本沒被用到，
+        # 這條測試就會**在沒有驗到東西的情況下綠**（假綠燈）。
+        # 這裡的情境是「配息查得到、但沒有現價」—— 那條路才會用 L2 的 `msg`。
+        _card, _, _ = P.build_valuation_card(P.ValuationReadout(
+            requested=True, zone_code="na", price=None,
+            avg_div_twd=6.85, paying_years=5, source="FinMind", years_n=5,
+            msg="🔴 無股價，357 殖利率法則不適用"))
+        assert _card.state == UI_EMPTY
+        assert "🔴" not in _card.note.why
+        assert "無股價" in _card.note.why, "洗 glyph 不該把整句話洗掉"
+
+
+class TestChipsIsHonest:
+    """籌碼這一格最容易說的兩種謊：把缺漏畫成紅色、把缺值寫成 0% 集中度。"""
+
+    def test_missing_inst_columns_is_grey_not_red(self):
+        """日線回來了、法人欄沒有 → **資料缺漏**（灰），不是故障（紅）。"""
+        _card, _, _ = P.build_chips_card(_missing_chips())
+        assert _card.state == UI_EMPTY
+        assert "資料缺漏" in _card.note.why or "不是這一檔籌碼不好" in _card.note.why
+
+    def test_the_upstream_reason_is_shown_verbatim(self):
+        """L0 給的原因原文要看得見，否則使用者不知道缺的是哪一腿。"""
+        _card, _facts, _ = P.build_chips_card(_missing_chips())
+        assert dict(_facts)["上游說明"] == "df法人欄全為0"
+        assert "df法人欄全為0" in _card.note.why
+
+    def test_it_never_shows_zero_concentration(self):
+        """0% 集中度是「買賣超剛好抵銷」這個**結論**，不是缺值。"""
+        _card, _facts, _signal = P.build_chips_card(_missing_chips())
+        assert _card.value == ""
+        assert "0%" not in str(dict(_facts))
+        assert _signal == "", "判不出來就不該有訊號燈"
+
+    def test_live_shows_concentration_and_a_chinese_only_signal(self):
+        from src.ui.views._ui_kit import assert_signal_text_clean
+
+        _card, _facts, _signal = P.build_chips_card(_live_chips())
+        assert _card.state == UI_LIVE and "6.32" in _card.value
+        assert _signal == "大戶吸籌", _signal
+        assert_signal_text_clean("chips signal", _signal)
+        assert "12 / 20 日" in dict(_facts)["連續性"]
+
+    def test_a_red_signal_never_leaks_into_the_signal_channel(self):
+        """L0 的「大戶倒貨」帶 `🔴` —— 那是**狀態 glyph**，混進來就是兩盞燈。"""
+        from src.ui.views._ui_kit import assert_signal_text_clean
+
+        _, _, _signal = P.build_chips_card(P.ChipsView(
+            requested=True, signal="🔴 大戶倒貨", concentration=-8.1,
+            continuity=20.0, days=20, pos_days=4, rows=250, days_loaded=250))
+        assert _signal == "大戶倒貨"
+        assert_signal_text_clean("chips signal", _signal)
+
+    def test_the_judgement_window_is_not_the_form_period(self):
+        """期間改了**不會**改變近 20 日的判讀窗 —— 卡上必須講清楚。
+
+        講不清楚，使用者會以為把期間調成 500 就能看「近 500 日籌碼」。
+        """
+        _, _facts, _ = P.build_chips_card(_live_chips())
+        _f = dict(_facts)
+        assert "最近 20 個交易日" in _f["判讀窗"]
+        assert "不隨表單的「期間」改變" in _f["判讀窗"]
+        assert "250 個交易日的日線" in _f["本輪載入"]
+
+    def test_failure_names_the_layer(self):
+        _card, _, _ = P.build_chips_card(P.ChipsView(
+            requested=True,
+            error=P._error_why(P.SRC_CHIPS, "RuntimeError('boom')")))
+        assert _card.state == UI_FAILED
+        assert "stock_chips_service" in _card.note.why
+        assert "boom" in _card.note.why
+
+    def test_a_returned_error_string_is_not_called_an_exception(self, monkeypatch):
+        """L1 的暫時性失敗是**回傳字串**，不是拋例外 —— 動詞要講對。
+
+        寫「拋出例外」會讓下一個人去 traceback 裡找一個根本不存在的東西；
+        那與把「還沒載入」畫成紅色是同一族的問題：敘述與事實不符。
+        """
+        from src.data.stock import app_stock_fetchers as A
+
+        monkeypatch.setattr(A, "fetch_price_data",
+                            lambda _s, _d: (None, None, "查無資料"),
+                            raising=True)
+        _v = _verdict("2330")
+        _view = P.load_chips(_v, _req(ticker="2330"))
+        assert "回報失敗" in _view.error and "拋出例外" not in _view.error, (
+            _view.error)
+        assert "查無資料" in _view.error
+
+    def test_a_value_without_a_gate_cannot_even_be_built(self):
+        with pytest.raises(ValueError, match="requested=False"):
+            P.build_chips_card(P.ChipsView(requested=False,
+                                           signal="🔥 大戶吸籌",
+                                           concentration=6.3))
+
+    def test_upstream_glyphs_do_not_blow_up_the_whole_page(self):
+        """理由同估值那一條：灰卡要畫得出來，不是換一種炸法。"""
+        _card, _, _ = P.build_chips_card(P.ChipsView(
+            requested=True, signal="⚫ 資料不足",
+            miss_reason="🔴 df法人欄全為0", rows=250, days_loaded=250))
+        assert _card.state == UI_EMPTY
+        assert "🔴" not in _card.note.why
+        assert "df法人欄全為0" in _card.note.why
+
+
+class TestTheTwoNewServicesKeepTheirPromises:
+    """兩支新 L3 的契約 —— **不打網路**，把 L1 換成假的再驗形狀。
+
+    ⚠️ 守的是「L1 的哨兵值有沒有被誠實翻譯」這一件事，不是覆蓋率：
+    `fetch_dividend_data` 用 `0.0` 表示「什麼都沒找到」，原樣往上送就會
+    變成「平均股利 0 元」這個**結論**。
+    """
+
+    @staticmethod
+    def _patch_dividends(monkeypatch, avg, yearly, source):
+        from src.data.stock import app_stock_fetchers as A
+
+        monkeypatch.setattr(A, "fetch_dividend_data",
+                            lambda _sid: (avg, yearly, source), raising=True)
+
+    def test_zero_average_becomes_none_not_zero(self, monkeypatch):
+        from src.services import valuation_service as V
+
+        self._patch_dividends(monkeypatch, 0.0, [], "")
+        _d = V.get_stock_dividends("2330")
+        assert _d.avg_div_twd is None, "0.0 是哨兵值，不是「平均股利 0 元」"
+        assert _d.paying_years is None, "沒有明細就是未知，不是 0 年"
+        assert _d.source == "" and _d.has_record is False
+
+    def test_real_record_is_carried_through(self, monkeypatch):
+        from src.services import valuation_service as V
+
+        self._patch_dividends(
+            monkeypatch, 6.85,
+            [{"year": 2021 + _i, "cash": 6.0 + _i} for _i in range(5)],
+            "FinMind")
+        _d = V.get_stock_dividends("2330")
+        assert _d.avg_div_twd == 6.85 and _d.paying_years == 5
+        assert _d.source == "FinMind" and len(_d.years) == 5
+
+    def test_dividend_failure_is_not_swallowed(self, monkeypatch):
+        """§1：L1 炸了就往上拋，**不回一份看起來很合理的空資料**。"""
+        from src.data.stock import app_stock_fetchers as A
+        from src.services import valuation_service as V
+
+        def _boom(_sid):
+            raise RuntimeError("finmind down")
+
+        monkeypatch.setattr(A, "fetch_dividend_data", _boom, raising=True)
+        with pytest.raises(RuntimeError, match="finmind down"):
+            V.get_stock_dividends("2330")
+
+    def test_chips_fetch_error_becomes_error_not_a_miss(self, monkeypatch):
+        """L1 的 `err` 字串是**取數失敗**（紅），不得退化成「判不出來」（灰）。"""
+        from src.data.stock import app_stock_fetchers as A
+        from src.services import stock_chips_service as C
+
+        monkeypatch.setattr(A, "fetch_price_data",
+                            lambda _s, _d: (None, None, "查無資料"),
+                            raising=True)
+        _r = C.get_chips_readout("2330", days=250)
+        assert _r.error == "查無資料" and _r.miss_reason == ""
+
+    def test_chips_missing_columns_becomes_miss_not_error(self, monkeypatch):
+        """反過來：df 回來了但欄位不足 ＝ **缺漏**（灰），不得升成紅。"""
+        import pandas as pd
+
+        from src.data.stock import app_stock_fetchers as A
+        from src.services import stock_chips_service as C
+
+        _df = pd.DataFrame({"close": [1.0] * 30, "volume": [10] * 30})
+        monkeypatch.setattr(A, "fetch_price_data",
+                            lambda _s, _d: (_df, "台積電", None), raising=True)
+        _r = C.get_chips_readout("2330", days=250)
+        assert _r.error == "" and _r.miss_reason, _r
+        assert _r.concentration is None, "算不出來就是 None，不是 0"
+        assert _r.rows == 30 and _r.name == "台積電"
+
+    def test_chips_happy_path_uses_the_l0_verdict(self, monkeypatch):
+        """判讀字面與門檻**由 L0 決定**，L3 只搬運（不重算、不改字）。"""
+        import pandas as pd
+
+        from shared.macro_compute import analyze_20d_chips_from_df
+        from src.data.stock import app_stock_fetchers as A
+        from src.services import stock_chips_service as C
+
+        _df = pd.DataFrame({
+            "外資": [500] * 30, "投信": [100] * 30, "volume": [5000] * 30})
+        monkeypatch.setattr(A, "fetch_price_data",
+                            lambda _s, _d: (_df, "X", None), raising=True)
+        _r = C.get_chips_readout("2330", days=250)
+        _expected = analyze_20d_chips_from_df(_df)
+        assert _r.miss_reason == "" and _r.error == ""
+        assert _r.signal == _expected["signal"]
+        assert _r.concentration == _expected["concentration"]
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -738,8 +1168,8 @@ class TestEtfCellsAreIndependent:
         """線框：**與個股分支重疊近零** —— 合併的是骨架，不是內容。"""
         _stock_labels = {
             P.build_health_card(P.StockReadout(requested=False))[0].label,
-            P.build_valuation_card(False)[0].label,
-            P.build_chips_card(False)[0].label,
+            P.build_valuation_card(P.ValuationReadout(requested=False))[0].label,
+            P.build_chips_card(P.ChipsView(requested=False))[0].label,
         }
         _etf_labels = {
             P.build_premium_card(P.EtfReadout(requested=False))[0].label,
@@ -998,7 +1428,7 @@ class TestRenderBoundaryIsShared:
             return _real(card, **kw)
 
         monkeypatch.setattr(K, "render_card", _boom)
-        P._render_one(P.build_chips_card(False))
+        P._render_one(P.build_chips_card(P.ChipsView(requested=False)))
         _all = "\n".join(_md)
         assert "這一格畫不出來" in _all, "半截死頁：例外沒有被轉成看得見的紅卡"
         assert "render exploded" in _all, "原始例外必須看得見（§1）"
@@ -1049,7 +1479,11 @@ def test_page_mounts_clean(tmp_path):
         "冷啟動就跑出 unknown 分支了")
 
     # 常駐揭露（不隨狀態消失）—— 這一句畫不出來就是半截死頁。
-    assert "在本頁未接線" in _all, "葉1 的接線揭露沒畫出來"
+    # ⚠️ 2026-09-07 FE-18：原本 grep 的是「在本頁未接線」；估值與籌碼接線後
+    # 那句話已經改寫（仍留「K 線與其餘明細**仍**未接線」）。**改成直接比對
+    # 常數本身**，這比原本的字串片段**更嚴** —— 以後改文案不必再改測試，
+    # 而且揭露被整段刪掉時一樣會紅。
+    assert P.WIRING_DISCLOSURE_SINGLE in _all, "葉1 的接線揭露沒畫出來"
 
 
 if __name__ == "__main__":

@@ -23,14 +23,23 @@
      的呼叫紀錄明確等於 `ok` 時才會有 `has_value=True`；**任何**其他狀態
      （含 L0 給了本檔沒見過的字面值）一律帶著 `error` 進 `classify_ui_state()`
      → 紅。守衛：`tests/test_p05_why_view.py::TestNoFakeGreenLight`。
-  2. ⭐ **把壞的整個不畫。** 這面牆只看得到掛了 `@monitored` 的 fetcher；
-     **FRED / FinMind / TWSE 一支都沒掛**（實測見下方「取數接線表」）。
-     若只畫得出來的那幾盞，畫面會是**滿版綠**，而使用者完全不知道
-     最重要的三個來源根本沒被量到。
-     → 本檔的處置：**把那三個來源具名畫成「未接線」灰卡**，
-     並在牆下方放一段**常駐**的涵蓋率揭露（`COVERAGE_DISCLOSURE`），
-     明說「這面牆沒有紅燈**不等於**全站都好」。
-     守衛：`tests/test_p05_why_view.py::TestUnmeasuredSourcesAreVisible`。
+  2. ⭐ **把壞的整個不畫。** 這面牆只看得到掛了 `@monitored` 的 fetcher。
+     線框具名的三個來源（FRED / FinMind 額度 / TWSE）原本**一支都沒掛**；
+     FE-20 這一批在 L1 補上了 **FRED**（`fetch_fred`）與
+     **TWSE 盤後市場成交資訊**（`twse_volume`）兩支，
+     **FinMind 額度仍然量不到**（它卡在更前面一層，見下方「取數接線表」①）。
+     → ⚠️ **接上兩支之後，本檔的處置一個字都沒有拆掉**：
+     「把量不到的來源**具名**畫成未接線灰卡」這個機制（`UNMEASURED_SOURCES`
+     ＋ `build_unmeasured_cards()`）**原封保留** —— 現在裡面剩 FinMind 額度一張，
+     未來任何一個量不到的源都往這裡加；牆下方那段**常駐**的涵蓋率揭露
+     （`COVERAGE_DISCLOSURE`）同樣保留，仍然明說
+     「這面牆沒有紅燈**不等於**全站都好」。
+     ⚠️ **接上 2 支 ≠ 全站被量到**：實測（量測日 2026-09-07）全 repo 共
+     **9 支**掛了 `@monitored`，而全站來源清單（L1 `data_registry`）有數十個。
+     守衛：`tests/test_p05_why_view.py::TestUnmeasuredSourcesAreVisible`
+     ＋ `TestNamedSourcesAreReallyWired` —— 後者**直接掃 L1 原始碼**：
+     本頁宣稱已接線的那兩支若在 L1 被拔掉裝飾器，**當場 CI 紅燈**，
+     不會靜靜地變回「牆上少一盞、畫面看起來一切正常」。
 
 ═══ 這個檔**不是**什麼 ═══════════════════════════════════════════════
 - **不是**第二份門檻表：紅綠燈怎麼判、每一盞的門檻與出處，全部逐欄讀 L0
@@ -54,6 +63,12 @@
         L0 `shared.fetch_monitor.get_monitor_registry()`
         —— 純 in-process dict，**零 I/O、零網路**。它記的是
            「哪一支 fetcher 被真的呼叫過、結果是什麼」。
+        ⚠️ **這面牆量到的單位是「fetcher」，不是「來源」。**
+           FE-20 在 L1 補掛的 `fetch_fred` / `twse_volume` 各自只代表
+           **那一支**最後一次呼叫的結果，**不代表** FRED / TWSE 這兩個來源
+           整體都好 —— 同一個來源可以有很多支 fetcher（本頁 `NAMED_SOURCES`
+           的 `covers` 欄逐支寫明它到底量到了哪一段）。
+        ⚠️ 「呼叫」在各支之間**不是同一件事**（`CACHE_SEMANTICS` 誠實揭露）。
     燈號規格（葉1 教學的門檻表 ＋ 葉2 的「未接線／已失準」卡）
         L0 `shared/macro_buckets.py`（`BUCKET_DANGER_SPECS` / `REFERENCE_TREND_SPECS`）
         L0 `shared/station_specs.py`（`STATION_SPECS`）
@@ -72,9 +87,16 @@
 
 **未接線（五項，各自的「去哪補」都不同 —— 它們卡住的位置不一樣）**::
 
-    ① FRED / FinMind 額度 / TWSE 三個具名來源的健康燈
-       → L1 的那幾支 fetcher **沒有掛 `@monitored`**；FinMind 額度更是
-         連 fetcher 都還沒有（額度是帳號層級資訊，不在任何回傳裡）。
+    ① FinMind **額度**的健康燈
+       （原本這一項還包含 FRED 與 TWSE —— FE-20 已在 L1 補上 `@monitored`，
+         改列到上面的「已接線」；額度**沒有**跟著補上，原因在下面。）
+       → 額度卡在**比另外兩個更前面一層**：它是 FinMind **帳號層級**的資訊，
+         不在任何一支 fetcher 的回傳裡 —— 「幫現有 fetcher 掛監控」補不到它。
+       → ⚠️ **本批沒有實測到 FinMind 有沒有可查額度的 API**（誠實揭露）：
+         沙箱對外連線被政策擋掉（實測 `api.finmindtrade.com` 的 CONNECT
+         回 403），而本 repo 早已移除 FinMind SDK（`requirements.txt` v19.79
+         的註記），沒有本地介面可以反查。**在確認之前不猜、不接**；
+         尤其**不得**拿「已用次數」冒充「剩餘額度」（那是兩個不同的數）。
     ② 健康評分六因子的「因子名 ＋ 配分」
        → 權重是 L2 `compute/scoring/scoring_helpers.calc_health_score` 內的
          **inline 數字**，L0 `shared/position_throttle.py` 的註解另抄了一份
@@ -372,35 +394,112 @@ L0_REASON_FACT_TEXT: str = (
     "L0 燈號規格表自己寫的（`unwired_reason` / `degraded_reason`）—— "
     "本頁**沒有改寫**，只在放進三要素時移除了會和狀態燈打架的符號")
 
+#: ⚠️ **「一次呼叫」在各支之間不是同一件事 —— 這是誠實揭露，不是免責聲明。**
+#:
+#: `@monitored` 的慣例是掛在 cache 裝飾器**之內**（最貼函式），這樣快取命中就不會
+#: 觸發它，`last_called_at` 才真的等於「最後一次真實外抓」。但**不是每一支的快取
+#: 都寫成裝飾器**：實測（量測日 2026-09-07）L1 `fetch_fred` 的 30 分鐘 TTL 是
+#: **寫在函式體內**的 module-level dict（因為那個模組規定不依賴 streamlit，
+#: 沒有 `@st.cache_data` 可用），所以那一支在 TTL 內的命中**仍會被記成一次呼叫**。
+#:
+#: ⚠️ 本頁讀的是 L0 登錄表，**結構上分不出**哪一支是哪一種 —— 所以這裡把差別說出來，
+#: 而不是統一宣稱「快取命中一律不計」（那句對掛在 cache 之內的那幾支是對的，
+#: 對 `fetch_fred` 就是**假的**）。
+#: ✅ **但「未檢查 → 綠燈」那一次翻轉不受影響**：函式體內的快取與 L0 登錄表同屬
+#: 這一個 process，第一次呼叫必然是 cache miss，**快取點不亮一盞還沒亮過的燈**。
+CACHE_SEMANTICS: str = (
+    "**這面牆上的時間是什麼**：`@monitored` 多數掛在 cache 裝飾器之內，"
+    "所以快取命中不會刷新它 —— 那個時間就是最後一次真實外抓。"
+    "但有些 fetcher 的快取是寫在函式體內的（例如 FRED 那一支，"
+    "因為它所在的模組刻意不依賴 Streamlit，用不了 Streamlit 的快取裝飾器），"
+    "那一類的時間代表「最後一次**呼叫**」，**可能新於**最後一次真實外抓。"
+    "⚠️ 本頁讀的是登錄表，分不出哪一支是哪一種，所以這裡把差別說出來，"
+    "不統一宣稱「快取命中一律不計」。"
+    "✅ 不受影響的是「未檢查」這一態：快取與登錄表同屬一個 process，"
+    "第一次呼叫必然沒有快取可用 —— **快取點不亮一盞還沒亮過的燈**。")
+
 #: 「未執行」到底是什麼意思。這一句會出現在每一盞 idle 的來源燈上。
 NEVER_RUN_WHY: str = (
     "這一支 fetcher **這個 session 還沒有真的對外抓過** —— "
     "它在被 import 時就先登錄了自己（所以你現在看得到它），"
-    "但還沒有任何一次真實請求。⚠️ **快取命中不算**："
-    "如果別的頁是拿快取回答你的，這一盞仍然會停在「未檢查」")
+    "但還沒有任何一次真實請求。⚠️ **快取命中點不亮這一盞**："
+    "如果別的頁是拿快取回答你的，這一盞仍然會停在「未檢查」"
+    "（綠燈**上顯示的時間**是另一回事，見下方那段「這面牆上的時間是什麼」）")
 NEVER_RUN_WHERE: str = (
     "到會用到它的那一頁按更新／載入，讓它真的跑一次；"
     f"跑完回到{DATA_HEALTH_WHERE}就會看到時間")
 
-# ── 三個具名但**沒有被量到**的來源（線框葉2 `cells` 點名的那三個）──────
-#: 共同根因。⚠️ 「只有 7 支」是**單組實測值**，依 §8.2.A.0 規則 4 標日期。
+
+# ── 線框葉2 `cells` 具名的三個來源：兩個已接線、一個仍量不到 ─────────────
+@dataclass(frozen=True)
+class NamedSource:
+    """線框具名的一個來源，**接線後的現況**。
+
+    ⚠️ **這張表是本頁對外的宣稱，所以它必須可被機器查核。**
+    `fetcher` / `module` 兩欄不是裝飾用的 —— `tests/test_p05_why_view.py::
+    TestNamedSourcesAreReallyWired` 拿它們**直接掃 L1 原始碼**：
+    宣稱 `wired=True` 的那一支若在 L1 被拔掉 `@monitored`，**當場 CI 紅燈**。
+    否則這面牆會靜靜地少一盞，而畫面看起來一切正常（本頁第二種假綠燈）。
+
+    Attributes:
+        label: 線框上的名字。
+        fetcher: L0 登錄名（＝ `@monitored()` 的第一個引數）；未接線者為空字串。
+        module: 那支 fetcher 住的 L1 檔（**字串，不是 import** —— L5 不碰 L1）。
+        covers: 這一支到底量到了**哪一段**。⚠️ 一支綠燈不代表整個來源都好。
+    """
+
+    label: str
+    wired: bool
+    covers: str
+    fetcher: str = ""
+    module: str = ""
+
+
+#: 線框葉2 `cells` 點名的三個來源。**兩個已接線、一個仍量不到。**
+NAMED_SOURCES: tuple[NamedSource, ...] = (
+    NamedSource(
+        label="FRED（美國總經）", wired=True, fetcher="fetch_fred",
+        module="src/data/macro/macro_core.py",
+        covers="FRED 序列取數這一支（DGS10 / CPI / NAPM … 共用同一支）"),
+    NamedSource(
+        label="TWSE（台股收盤）", wired=True, fetcher="twse_volume",
+        module="src/data/macro/leading_indicators.py",
+        covers="TWSE 盤後「每日市場成交資訊」（FMTQIK）這一支"),
+    NamedSource(
+        label="FinMind（API 額度）", wired=False, fetcher="", module="",
+        covers="額度是帳號層級資訊，不在任何一支 fetcher 的回傳裡"),
+)
+
+#: 共同根因。⚠️ 「9 支」是**單組實測值**，依 §8.2.A.0 規則 4 標日期。
 UNMEASURED_WHY: str = (
     "這面牆讀的是 L0 fetcher 登錄表，而登錄表只看得到掛了 `@monitored` 的 "
     "fetcher —— 實測（量測日 2026-09-07，`grep -rn '@monitored' src/`）"
-    "**全 repo 只有 7 支掛了**，這一個不在裡面。"
+    "**全 repo 共 9 支掛了**，這一個不在裡面。"
     "本頁是 L5，既不直接讀 L1 的來源清單、也不自己打 API，"
     "所以這一盞**現在沒有東西可以點亮**")
 
 #: 涵蓋率揭露（**常駐，不隨狀態消失**）—— 本頁最重要的一段話。
+#:
+#: ⚠️ **FE-20 把 FRED 與 TWSE 接上之後，這段話沒有被縮短，只有被改準。**
+#: 「掛了 3 支就以為全站都掛了」正是這段話要防的那種樂觀 —— 接上兩支之後，
+#: 它要防的東西**沒有變少**，只是名單換了幾個名字。
 COVERAGE_DISCLOSURE: str = (
     "**這面牆涵蓋什麼**：只涵蓋掛了 `@monitored`（L0 `shared/fetch_monitor.py`）"
     "**而且本 session 已經被載入過**的 fetcher，再加上 L0 燈號規格表**自己標記**的"
     "「未接線／已失準」。兩者都是零 I/O 的常數與紀錄，本頁不會為了畫這面牆去打任何 API。\n\n"
+    "**線框具名的那三個來源**：**FRED** 與 **TWSE** 已在 L1 各掛上一支監控，"
+    "所以它們**有資格**出現在上面那面牆上（真的出現還要那個模組被載入過，"
+    "逐項見上方那段狀態一覽）；**FinMind 的 API 額度仍然量不到**，"
+    "所以它仍是下面那張具名的灰卡。\n\n"
+    "⚠️ **「那一支綠」不等於「那個來源好」**：同一個來源可以有很多支 fetcher，"
+    "這面牆量到的單位是 **fetcher**，不是**來源**。\n\n"
     "**不涵蓋什麼**：全站來源清單的 SSOT 住在 L1 `src/data/core/data_registry.py`，"
     "本頁是 L5、依 `CLAUDE.md §8.2` 不得直接讀它，而 `src/services/` 也沒有把它轉出來 → "
-    "**大多數來源不在這面牆上，包含 FRED / FinMind / TWSE 這三個最常被引用的。**\n\n"
-    "⚠️ **所以：這面牆上沒有紅燈，不等於全站都好。** 它只說得出它看得到的那幾盞。"
-    "上面那三張具名的灰卡就是為了不讓那三個來源「因為沒被畫出來而看起來沒事」。")
+    "**大多數來源仍然不在這面牆上**。實測（量測日 2026-09-07）全 repo 只有 **9 支** "
+    "fetcher 掛了監控，而全站來源清單有數十個。\n\n"
+    "⚠️ **所以：這面牆上沒有紅燈，不等於全站都好。** 它只說得出它看得到的那幾盞 —— "
+    "接上兩支之後這句話**一個字都沒有變弱**。"
+    "下面那張具名的灰卡就是為了不讓量不到的來源「因為沒被畫出來而看起來沒事」。")
 
 #: 工程師版的常駐說明（摺疊起來也看得到的那一句在外面）。
 ENGINEER_CAPTION: str = (
@@ -739,63 +838,88 @@ def build_empty_registry_card() -> _Built:
                 "「讀到了、裡面沒有東西」與「讀不到」是兩件事，必須分得出來"))))
 
 
-# ── 三個具名、但這面牆量不到的來源（線框 `cells` 點名的那三個）──────────
-#: ⚠️ **每一顆的「去哪補」都不同** —— 共用一句「未接線」會讓
+# ── 具名、但這面牆量不到的來源 ────────────────────────────────────────
+#: ⚠️ **這個清單是機制，不是名單。**
+#: 線框原本點名三個（FRED / FinMind 額度 / TWSE）；FE-20 把其中兩個在 L1 接上了，
+#: 所以現在只剩一張。**清單縮短不等於機制可以拆掉** —— 它存在的理由是
+#: 「量不到的來源必須被**具名畫出來**，否則畫面會是滿版綠」，
+#: 而那個理由與清單裡有幾筆無關。未來任何一個量不到的源都往這裡加。
+#:
+#: ⚠️ **每一筆的「去哪補」都必須不同** —— 共用一句「未接線」會讓
 #: 「補哪一步就會好」這個資訊消失（前四頁反覆踩過的同一個坑）。
 UNMEASURED_SOURCES: tuple[L0CardSpec, ...] = (
-    L0CardSpec(
-        key="why.source.unmeasured.fred", label="FRED（美國總經）",
-        wired=False,
-        now="**這一盞沒有被量到**",
-        why=UNMEASURED_WHY,
-        where=(f"{NO_EXIT_PREFIX}"
-               "在 L1 的 FRED fetcher 上加一行 `@monitored('fetch_fred', …)`"
-               "（與既有那 7 支同一種寫法），**本頁一行都不用改**，"
-               "這一格會自己從灰卡變成有時間的綠卡"),
-        facts=(("線框對這一格的期待", "🟢 ＋ 最後更新日"),
-               ("卡住的那一步", "L1 fetcher 沒掛 `@monitored`"),
-               ("要動的檔案", "L1（`src/data/macro/`），不是本頁"))),
     L0CardSpec(
         key="why.source.unmeasured.finmind_quota", label="FinMind（API 額度）",
         wired=False,
         now="**額度這件事本頁看不到**",
         why=(UNMEASURED_WHY +
-             "。而且額度**比另外兩個更卡一層**：它是 FinMind **帳號層級**的資訊，"
-             "不在任何一支 fetcher 的回傳裡 —— 就算幫現有 fetcher 掛上 "
-             "`@monitored`，也只會知道「這次抓成功了」，不會知道「還剩多少」"),
+             "。而且額度**比另外兩個具名來源更卡一層**：它是 FinMind **帳號層級**"
+             "的資訊，不在任何一支 fetcher 的回傳裡 —— FE-20 已經幫 FRED 與 TWSE "
+             "掛上了 `@monitored`，但同一招對額度**沒有用**："
+             "掛上去只會知道「這次抓成功了」，不會知道「還剩多少」"),
         where=(f"{NO_EXIT_PREFIX}"
-               "要先在 L1 新增一支**查額度**的 fetcher，再由 `src/services/` "
-               "轉出成 L3。⚠️ 本頁**不會**自己去打那支 API —— "
-               "L5 直接對外抓取正是 `CLAUDE.md §8.2` 明文禁止的"),
+               "下一步是**先查證 FinMind 到底有沒有可查額度的介面**，再決定要不要"
+               "在 L1 新增一支查額度的 fetcher、由 `src/services/` 轉出成 L3。"
+               "⚠️ 這一步**本批沒有做到**：沙箱的對外連線被政策擋掉"
+               "（實測 `api.finmindtrade.com` 的 CONNECT 回 403），"
+               "而本 repo 早已移除 FinMind SDK，沒有本地介面可以反查 —— "
+               "所以本頁**不宣稱它做得到、也不宣稱它做不到**。"
+               "另外，查帳號額度要帶帳號 token，屬**憑證**範圍（同葉3 的第 ⑤ 項），"
+               "需要先拍板「這一頁可以動用帳號憑證」"),
         facts=(("線框對這一格的期待", "🟢 額度剩 62%"),
                ("卡住的那一步", "連 fetcher 都還沒有，不只是沒掛監控"),
+               ("本批查到哪裡",
+                "沙箱對外連線被擋（CONNECT 403）→ **無法實測** FinMind "
+                "有沒有額度查詢 API；本 repo 也沒有 FinMind SDK 可以反查"),
                ("⚠️ 為什麼不畫一個估計值",
                 "額度用罄是「其他頁整片變紅」最常見的單一原因；"
-                "在這裡放一個猜出來的百分比，等於把最需要準確的那一格變成假的"))),
-    L0CardSpec(
-        key="why.source.unmeasured.twse", label="TWSE（台股收盤）",
-        wired=False,
-        now="**這一盞沒有被量到**",
-        why=UNMEASURED_WHY,
-        where=(f"{NO_EXIT_PREFIX}"
-               "同 FRED —— 在 L1 的 TWSE 收盤 fetcher 上加 `@monitored`。"
-               "⚠️ 注意 TWSE 這一側**已經有一支掛上了**（融資餘額），"
-               "所以牆上可能已經有一盞 TWSE 系的燈；"
-               "那一盞**不代表**收盤行情也被量到了"),
-        facts=(("線框對這一格的期待", "🟢 09/05 14:30"),
-               ("卡住的那一步", "收盤行情的 fetcher 沒掛 `@monitored`"),
-               ("⚠️ 別誤讀",
-                "同一個來源可以有很多支 fetcher；"
-                "其中一支綠燈**不代表**這個來源整體都好"))),
+                "在這裡放一個猜出來的百分比，等於把最需要準確的那一格變成假的"),
+               ("⚠️ 為什麼不拿「已用次數」充數",
+                "就算查得到用量，「已用 N 次」與「還剩多少」是兩個不同的數 —— "
+                "沒有分母就換算不出剩餘額度，硬換算就是造假")),
+    ),
 )
 
 
-def build_unmeasured_cards() -> tuple[_Built, ...]:
-    """線框 `cells` 具名的三個來源 —— **本批全部未接線，而且必須畫出來**。
+def named_sources_text() -> str:
+    """線框具名的三個來源，**現在各自在這面牆上的處境**（純函式，零 streamlit）。
 
-    ⚠️ **這三張卡存在的唯一理由**：不畫，畫面就會是滿版綠，
-    而使用者不會知道最常被引用的三個來源根本沒被量到。
+    ⚠️ **為什麼這一段必須常駐、而且必須在「牆上有沒有那一格」之外另外講**：
+    接上 `@monitored` 只讓那一支**有資格**出現在牆上；它真的出現，還要
+    「那個 L1 模組在這個 session 被 import 過」。所以使用者可能會看到一面
+    **沒有 FRED 的牆**，而那不代表 FRED 沒接線 —— 代表**還沒有人載入過它**。
+    這一段就是把「應該看得到什麼」講出來，不讓「牆上沒有」被讀成「沒問題」。
+    """
+    _lines: list[str] = ["**線框具名的三個來源，現在各自的狀態**："]
+    for _s in NAMED_SOURCES:
+        if _s.wired:
+            _lines.append(
+                f"　· **{_s.label}｜已接線** —— 牆上的名字是 `{_s.fetcher}`，"
+                f"量到的是：{_s.covers}。")
+        else:
+            _lines.append(
+                f"　· **{_s.label}｜仍然量不到** —— {_s.covers}；"
+                "它在下面被**具名畫成一張灰卡**，理由與下一步寫在卡上。")
+    _lines.append(
+        "⚠️ **「已接線」不保證你現在就看得到那一格**：接線只讓它**有資格**"
+        "出現在牆上，真的出現還要「那個 L1 模組在這個 session 被載入過」。"
+        "牆上找不到它 → 代表**還沒有人載入過**，不是它壞了。")
+    _lines.append(
+        "⚠️ **一支綠燈不等於那個來源整體都好** —— 同一個來源可以有很多支 fetcher，"
+        "這面牆量到的單位是 **fetcher**，不是**來源**。")
+    return "\n\n".join(_lines)
+
+
+def build_unmeasured_cards() -> tuple[_Built, ...]:
+    """量不到的來源 —— **具名畫出來，一張都不准跳過**。
+
+    ⚠️ **這些卡存在的唯一理由**：不畫，畫面就會是滿版綠，
+    而使用者不會知道某個常被引用的來源根本沒被量到。
     「跳過不畫」是本頁最隱形的一種假綠燈（見檔頭第二段）。
+
+    ⚠️ **FE-20 把 FRED 與 TWSE 接上之後，這支函式與 `UNMEASURED_SOURCES`
+    都沒有被拆掉** —— 少的只是清單裡的兩筆。接線讓某一筆離開清單是正常的；
+    **把機制拿掉**才是把第二種假綠燈放回來（那時「量不到」會變成「畫面上不存在」）。
     """
     return tuple(build_l0_card(_s) for _s in UNMEASURED_SOURCES)
 
@@ -1606,7 +1730,12 @@ def _render_user_health_wall() -> None:
     else:
         _render_one(build_empty_registry_card())
 
-    st.caption("**線框具名、但這面牆量不到的三個來源** —— "
+    # ⚠️ 下面這三段 caption 全部**常駐**（不得包進任何 if）——
+    #    它們是本頁對「這面牆說得出什麼」的揭露，不是隨狀態出現的補充說明。
+    st.caption(named_sources_text())
+    st.caption(CACHE_SEMANTICS)
+
+    st.caption("**具名、但這面牆量不到的來源** —— "
                "刻意畫出來，不是漏了：不畫，畫面會是滿版綠。")
     _render_row(build_unmeasured_cards())
 
@@ -1643,8 +1772,10 @@ def _render_engineer_block() -> None:
         _render_row(build_engineer_panel_cards())
 
         st.caption("**🛰️ Fetcher 監控（`@monitored` 自我登錄）** —— "
-                   "「未執行」＝ 本 session 尚無真實外抓（**快取命中不計**，"
-                   "狀態代表最後一次真實請求）。")
+                   "「未執行」＝ 本 session 尚無真實外抓"
+                   "（**快取命中點不亮它**：第一次呼叫必然沒有快取可用）。"
+                   "⚠️ 綠燈上那個**時間**是另一回事，見使用者版牆下的"
+                   "「這面牆上的時間是什麼」。")
         if _scan.probes:
             st.dataframe(
                 [{"fetcher": _p.name,
