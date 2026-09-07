@@ -163,9 +163,17 @@ def _var_res(**kw):
 
 
 def _cash_res(**kw):
+    """預設是**全員都算到**的配息結果（`coverage_pct=100.0` → `full_coverage`）。
+
+    ⚠️ **`coverage_pct` 必須顯式給 100**：dataclass 的預設是 `0.0`，
+    照著預設走出來的是一個「覆蓋率 0%」的結果 —— 那會讓每一條拿
+    `_cash_res()` 當「正常狀態」的既有測試變成在測橘卡，
+    而「反證：乾淨的結果還是綠的」那條會**永遠測不到綠**。
+    """
     from src.services.portfolio_deep_service import DividendCashResult
 
     kw.setdefault("computed", True)
+    kw.setdefault("coverage_pct", 100.0)
     kw.setdefault("gross_twd", 30000.0)
     kw.setdefault("nhi_twd", 0.0)
     kw.setdefault("net_after_nhi_twd", 30000.0)
@@ -2347,19 +2355,157 @@ class TestDegradedWhenTheNumberLostItsEdge:
         with pytest.raises(ValueError):
             P._degraded_note("壓力測試", [])
 
-    def test_the_dividend_card_is_untouched(self):
-        """L3 的 `DividendCashResult` **沒有**這兩個欄位（實測 2026-09-07）——
+    def test_the_dividend_card_degrades_when_coverage_is_short(self):
+        """**哨兵已到期，改成正向守衛。**
 
-        用 `getattr` 帶預設值讀，所以這張卡的行為一個字都沒有變。
-        寫成一條測試是為了讓「哪天它長出 `reconciled` 了」這件事被看見。
+        修前這裡是 `test_the_dividend_card_is_untouched`：它斷言 L3 的
+        `DividendCashResult` **沒有** `reconciled` / `no_price`，所以配息卡
+        「行為一個字都沒有變」是合理的 —— 那條哨兵的用途是
+        「**哪天它長出可判覆蓋率的欄位就提醒一聲**」。
+        L3 後來補了 `coverage_pct` / `excluded_tickers` / `full_coverage`，
+        哨兵到期 → 這裡換成它當初要求的那件事：**真的接上降級**。
+
+        ⚠️ 這張卡的失準因子與壓測／VaR **不同**（那兩張是 `reconciled` /
+        `no_price`），所以它走自己的 `_cash_degraded_bits()`，不共用
+        `_degraded_bits()` —— 共用會讓壓測「Beta 估過幾檔」也跟著改判。
         """
         from src.services.portfolio_deep_service import DividendCashResult
 
         _fields = set(DividendCashResult.__dataclass_fields__)
-        assert not ({"reconciled", "no_price"} & _fields), (
-            "L3 的配息結果長出了失準欄位 —— 那張卡也該一起降級了，"
+        assert {"coverage_pct", "excluded_tickers"} <= _fields, (
+            "L3 的配息結果少了可判覆蓋率的欄位，這張卡的降級判定就落空了 —— "
             f"現有欄位：{sorted(_fields)}")
-        assert P.build_dividend_cash_card(_live_deep())[0].state == UI_LIVE
+        _card = P.build_dividend_cash_card(_deep(cash=_cash_res(
+            coverage_pct=50.0, excluded_tickers=("VT",), overseas=("VT",))))[0]
+        assert _card.state == UI_DEGRADED, (
+            f"覆蓋率只有一半卻還是 {_card.state!r} —— "
+            "綠燈就是結論，而這個總額只涵蓋一部分持股")
+        assert _card.state != UI_FAILED, "少算幾檔不是故障，別畫成紅的"
+        assert _card.value == "", "非 live 不得帶結論文字（`Card` 鐵律）"
+
+    def test_the_dividend_degraded_note_says_how_badly_and_where(self):
+        """**失準到什麼程度**要講：哪幾檔沒納入、覆蓋率多少、**是檔數口徑**。"""
+        _now, _why, _where = _note_triple(P.build_dividend_cash_card(_deep(
+            cash=_cash_res(coverage_pct=66.7, lots_n=3, held_n=3,
+                           excluded_tickers=("VT",), overseas=("VT",))))[0].note)
+        assert "VT" in _why, f"沒有講是哪一檔沒納入：{_why}"
+        assert "66.7%" in _why, f"沒有講覆蓋率是多少：{_why}"
+        assert "1 檔" in _why and "3 檔" in _why, (
+            f"沒有講失準的規模（幾檔／共幾檔）：{_why}")
+        assert "檔數" in _why and "金額" in _why, (
+            "沒有講覆蓋率是**檔數**口徑 —— L3 明說它不是金額口徑，"
+            f"讀成金額會以為「只少了 33% 的錢」：{_why}")
+        assert "最低稅負制" in _where, (
+            f"沒有講海外那幾檔補資料也不會被加進來，等於叫人做白工：{_where}")
+        assert all(_s.strip() for _s in (_now, _why, _where)), "三要素有一格是空的"
+        # 與另外兩張卡的「去哪補」**必須不同**：補張數／等歷史／確認代號是三件事。
+        _stress_where = _note_triple(P.build_stress_card(_deep(
+            stress=_stress_res(reconciled=False,
+                               reference_value_twd=999_000.0)))[0].note)[2]
+        _var_where = _note_triple(P.build_var_card(_deep(
+            var=_var_res(no_price=("6666.TW",))))[0].note)[2]
+        assert _where not in (_stress_where, _var_where), (
+            "配息與壓測／VaR 給了同一句「去哪補」—— "
+            "把「補哪一層才會好」這個資訊丟掉了")
+
+    def test_the_dividend_number_is_shown_but_stops_being_a_verdict(self):
+        """**數字不藏起來**（改掛 facts）＋ **燈號頻道留白**。"""
+        _card, _facts, _signal = P.build_dividend_cash_card(_deep(
+            cash=_cash_res(coverage_pct=50.0, excluded_tickers=("VT",),
+                           overseas=("VT",))))
+        _joined = "　".join(f"{_k}　{_v}" for _k, _v in _facts)
+        assert "30,000" in _joined, (
+            "降級之後把金額整個藏起來了 —— 那是另一種說謊（有算卻不給）")
+        assert any("現值" in _k for _k, _ in _facts), (
+            "現值沒有明確標成「現值」，讀者分不出哪一個才是那張卡的數字")
+        assert _signal == "", (
+            f"已失準卻還出燈號 {_signal!r} —— 「不含綜所稅」是一句**完整性宣告**"
+            "（「只少了綜所稅」），覆蓋率不足時它就變成假的：少的不只綜所稅")
+        assert "不含綜所稅" in _joined, (
+            "燈號留白之後連 facts 都沒講「不含綜所稅」—— "
+            "拿掉的應該只是它的結論地位，不是它本身")
+
+    def test_a_fully_covered_dividend_card_is_still_green(self):
+        """**反證**：不是把這張卡寫死成橘的 —— 全員都算到就回 live。"""
+        _card, _facts, _signal = P.build_dividend_cash_card(_live_deep())
+        assert _card.state == UI_LIVE
+        assert _signal == "不含綜所稅"
+        assert not any("只涵蓋一部分持股" in _k for _k, _ in _facts), (
+            "覆蓋率 100% 卻掛了一句「只涵蓋一部分持股」—— "
+            "那是反方向的造假（捏一個不存在的缺料）")
+
+    def test_zero_payout_tickers_are_disclosed_but_do_not_degrade(self):
+        """L3 的明文警告：「貢獻 0 元」與「沒有配息」**不是同一件事**。
+
+        上游 `_recent_payments_twd()` 把「真的沒除息」與「抓不到」回成同一個
+        空序列，本層分不出來 → **照實揭露，不改判**。翻成橘燈的話，
+        「手上有一檔本來就不配息的股票」這種正常組合會永遠掛著失準標記，
+        而滿版假警報會讓真的失準沒人看得見（`CLAUDE.md §1.A-4`）。
+        """
+        _card, _facts, _signal = P.build_dividend_cash_card(_deep(
+            cash=_cash_res(no_payout_tickers=("2330",))))
+        assert _card.state == UI_LIVE, (
+            f"有一檔貢獻 0 元就把整張卡判成 {_card.state!r} —— "
+            "那是拿一個分不出來的東西當失準證據，等於製造假警報")
+        _joined = "　".join(f"{_k}　{_v}" for _k, _v in _facts)
+        assert "2330" in _joined, "「這幾檔貢獻 0 元」連提都沒提，等於吞掉揭露"
+        assert "不等於" in _joined and "沒有配息" in _joined, (
+            f"沒有把「貢獻 0 元 ≠ 沒有配息」講清楚：{_joined}")
+
+    def test_dividends_that_cannot_be_computed_stay_empty_not_degraded(self):
+        """灰 > 橘：`computed=False` 時 `coverage_pct` 本來就是 0，**不准判橘**。"""
+        from src.services.portfolio_deep_service import REASON_NO_LOTS_ROWS
+
+        _card = P.build_dividend_cash_card(_deep(cash=_cash_res(
+            computed=False, coverage_pct=0.0, gross_twd=0.0, payouts_n=0,
+            lots_n=0, reason=REASON_NO_LOTS_ROWS)))[0]
+        assert _card.state == UI_EMPTY, (
+            f"一個字都算不出來卻標成 {_card.state!r} —— "
+            "「有值但打折」與「沒有值」是兩件事")
+
+    def test_partial_coverage_is_disclosed_even_when_nothing_paid_out(self):
+        """灰態也要講覆蓋率：`payouts_n=0` 時狀態是灰的（`discriminative` 輪不到），
+
+        但「有幾檔根本沒被查」照樣成立 —— 只掛在橘卡上，會讓那句
+        「近一年查不到任何一筆配息」看起來涵蓋了全部持股。
+        """
+        _card, _facts, _ = P.build_dividend_cash_card(_deep(
+            cash=_cash_res(payouts_n=0, gross_twd=0.0, net_after_nhi_twd=0.0,
+                           coverage_pct=50.0, lots_n=2,
+                           excluded_tickers=("VT",), overseas=("VT",))))
+        assert _card.state == UI_EMPTY
+        _joined = "　".join(f"{_k}　{_v}" for _k, _v in _facts)
+        assert "只涵蓋一部分持股" in _joined and "VT" in _joined, (
+            f"灰態把覆蓋率不足吞掉了：{_joined}")
+
+    def test_the_three_inputs_most_likely_to_break_the_dividend_degrade(self):
+        """§6 收尾：最容易讓這段程式印出假話／炸掉的三種輸入。
+
+        1. `coverage_pct=None`（L3 契約破掉）→ **照樣炸，本頁不吞**。
+           在 L3 的 `full_coverage` → `_is_full()` 那一步就 `TypeError` 了；
+           `render_card_isolated()` 會把它轉成看得見的紅卡（「系統真出錯」本來就該紅）。
+           ⚠️ **刻意不在本頁補一段「不是數字就印算不出來」** —— 那段永遠跑不到，
+           正是 `CLAUDE.md §-2` 規則 6 點名的死碼（宣稱修好、production 恆不觸發）。
+        2. 覆蓋率不足、但 `excluded_tickers` 是空的（L3 沒回是哪幾檔）→
+           不准印「有 0 檔沒進到這個金額」那種把失準說成沒事的句子。
+        3. `coverage_pct=99.999999999999`（浮點尾巴）→ **仍然是 live**，
+           不准把一個完全沒缺料的組合標成「只涵蓋一部分持股」（§4.3 用容差）。
+        """
+        with pytest.raises(TypeError):
+            P.build_dividend_cash_card(_deep(
+                cash=_cash_res(coverage_pct=None, excluded_tickers=("VT",))))
+
+        _why2 = _note_triple(P.build_dividend_cash_card(_deep(
+            cash=_cash_res(coverage_pct=50.0)))[0].note)[1]
+        assert "0 檔" not in _why2, f"把失準寫成「有 0 檔沒進來」：{_why2}"
+        assert "沒有回報" in _why2, (
+            f"L3 沒回是哪幾檔，卻沒有據實說出來：{_why2}")
+
+        _card3 = P.build_dividend_cash_card(_deep(
+            cash=_cash_res(coverage_pct=99.999999999999)))[0]
+        assert _card3.state == UI_LIVE, (
+            "浮點尾巴被判成「只涵蓋一部分持股」—— "
+            "捏造一個不存在的缺料，和捏造數字是同一種錯（反方向）")
 
 
 # ══════════════════════════════════════════════════════════════════

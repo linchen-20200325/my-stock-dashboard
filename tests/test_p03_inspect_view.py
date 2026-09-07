@@ -1435,6 +1435,290 @@ class TestRenderBoundaryIsShared:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 【FE-28】籌碼卡的異常值徽章：「判不出來」不得長得像「沒有異常」
+# ══════════════════════════════════════════════════════════════════
+def _ssot_threshold() -> float:
+    """判定門檻的 **L0 SSOT**。測試自己也不准抄這個數字。"""
+    from shared.signal_thresholds import INST_NET_OUTLIER_VOLUME_RATIO
+
+    return float(INST_NET_OUTLIER_VOLUME_RATIO)
+
+
+def _ssot_window() -> int:
+    """均量窗長度 —— 讀 L2 那支的簽章預設值（同樣不抄數字）。"""
+    import inspect as _i
+
+    from src.compute.risk.inst_sanity import flag_latest_inst_outlier_from_df
+
+    return int(_i.signature(
+        flag_latest_inst_outlier_from_df).parameters["window"].default)
+
+
+def _chips_df(*, latest_main: float, rows: int | None = None,
+              inst: float = 500.0, vol: float = 5000.0):
+    """一份「日線 ＋ 三大法人」的假 df —— 欄位照 L1 `get_combined_data` 的實況。
+
+    ⚠️ 欄名**刻意不從測試自己的常數來**：`主力合計` / `volume` 是 L1 產出的
+    欄名，測試在這裡就是要驗「L3 吃得到 L1 真的會給的那兩欄」。
+    """
+    import pandas as pd
+
+    _n = rows if rows is not None else _ssot_window() + 10
+    _main = [inst] * _n
+    _main[-1] = latest_main
+    return pd.DataFrame({"外資": [inst] * _n, "投信": [inst * 0.2] * _n,
+                         "volume": [vol] * _n, "主力合計": _main})
+
+
+def _patch_price(monkeypatch, df):
+    from src.data.stock import app_stock_fetchers as A
+
+    monkeypatch.setattr(A, "fetch_price_data",
+                        lambda _s, _d: (df, "X", None), raising=True)
+
+
+def _badge_text(view: P.ChipsView) -> str | None:
+    """卡上徽章那一列的值；**沒有那一列 → `None`**（要能分辨「沒畫」）。"""
+    return dict(P.build_chips_card(view)[1]).get(P.CHIPS_OUTLIER_LABEL)
+
+
+class TestOutlierBadgeIsHonest:
+    """線框那句「含異常值徽章」的守衛。**釘的是一個具體的失效模式**：
+
+    既有 🔬 個股分頁的寫法是 `if _inst_flag.is_outlier:` 才畫徽章 ——
+    於是「**判不出來**」與「**判過了、沒有異常**」在畫面上長得**一模一樣**
+    （兩者都是沒有徽章），而使用者只會讀成後者。
+    §1：把「沒量到」講成「量到了沒事」，就是捏造一個不存在的觀測。
+    """
+
+    # ── 真異常：要出現，而且要講得出倍數 ──────────────────────────
+    def test_a_real_outlier_reaches_the_card(self, monkeypatch):
+        """L1 → L3 → L5 走完整條：最新一日爆量 → 卡上真的看得到。"""
+        _spike = _ssot_threshold() * 5000.0 * 2      # 遠超門檻，不卡在邊界
+        _patch_price(monkeypatch, _chips_df(latest_main=_spike))
+        _view = P.load_chips(_verdict("2330"), _req(ticker="2330"))
+        assert _view.outlier_verdict == "anomaly", _view.outlier_verdict
+        _txt = _badge_text(_view)
+        assert _txt is not None, "真異常卻沒有畫出徽章那一列"
+        assert "有異常" in _txt and "判不出來" not in _txt, _txt
+        assert f"{_view.outlier_ratio:.1f}" in _txt, "倍數沒有出現在卡上"
+
+    # ── 判不出來：**要出現**，不是靜默消失 ────────────────────────
+    @pytest.mark.parametrize("name,df_kw", [
+        ("均量窗不足", dict(latest_main=1.0, rows=3)),
+        ("最新一日為 0", dict(latest_main=0.0)),
+    ])
+    def test_unknown_is_shown_not_silently_dropped(self, monkeypatch,
+                                                   name, df_kw):
+        _patch_price(monkeypatch, _chips_df(**df_kw))
+        _view = P.load_chips(_verdict("2330"), _req(ticker="2330"))
+        assert _view.outlier_verdict == "unknown", f"{name}：{_view!r}"
+        _txt = _badge_text(_view)
+        assert _txt is not None, f"{name}：判不出來被靜默拿掉了那一列"
+        assert "判不出來" in _txt, f"{name}：{_txt}"
+        assert "不等於" in _txt and "沒有異常" in _txt, (
+            f"{name}：沒有明說「判不出來 ≠ 沒有異常」—— {_txt}")
+
+    def test_missing_column_is_unknown_not_normal(self, monkeypatch):
+        """連 `主力合計` 欄都沒有 → 判不出來，**不是**「沒有異常」。"""
+        import pandas as pd
+
+        _n = _ssot_window() + 10
+        _patch_price(monkeypatch, pd.DataFrame({
+            "外資": [500] * _n, "投信": [100] * _n, "volume": [5000] * _n}))
+        _view = P.load_chips(_verdict("2330"), _req(ticker="2330"))
+        assert _view.outlier_verdict == "unknown"
+        assert _view.outlier_ratio is None, "判不出來就不該有倍數"
+        assert "判不出來" in (_badge_text(_view) or "")
+
+    def test_a_latest_zero_is_not_called_normal(self, monkeypatch):
+        """最新一日 0 → **判不出來**（上游對這一欄補過 0，兩種意思分不出）。
+
+        這一條是刻意的取捨，理由寫在 L3 檔頭：`data_loader` 的 `fill_cols`
+        對 `主力合計` 做 `fillna(0)`，所以「0」可能是「今天沒有法人買賣超」，
+        也可能是「今天的法人資料還沒到」（三大法人常態比日線晚到）。
+        判成 `normal` 等於替後者背書。
+        """
+        _patch_price(monkeypatch, _chips_df(latest_main=0.0))
+        _view = P.load_chips(_verdict("2330"), _req(ticker="2330"))
+        assert _view.outlier_verdict == "unknown"
+        assert _view.outlier_reason == "inst_net_zero", _view.outlier_reason
+        assert "補 0" in (_badge_text(_view) or ""), "沒有交代 0 為什麼不算數"
+
+    # ── 三態的字面必須真的不一樣 ──────────────────────────────────
+    def test_the_three_verdicts_do_not_share_a_sentence(self):
+        _mk = lambda **kw: P.ChipsView(                       # noqa: E731
+            requested=True, signal="🔥 大戶吸籌", concentration=6.3,
+            days=20, rows=250, days_loaded=250,
+            outlier_threshold=_ssot_threshold(),
+            outlier_window=_ssot_window(), **kw)
+        _a = _badge_text(_mk(outlier_verdict="anomaly", outlier_ratio=12.0,
+                             outlier_reason="outlier"))
+        _n = _badge_text(_mk(outlier_verdict="normal", outlier_ratio=0.1,
+                             outlier_reason="ok"))
+        _u = _badge_text(_mk(outlier_verdict="unknown",
+                             outlier_reason="vol_unavailable"))
+        assert len({_a, _n, _u}) == 3, "三態共用了同一句話"
+        assert "判過了" in _n and "判不出來" not in _n
+        assert "判不出來" in _u and "判過了" not in _u, (
+            "「判不出來」被寫成「判過了」—— 那正是本類要擋的那句謊")
+
+    def test_no_verdict_at_all_draws_no_row(self):
+        """取數失敗 / 冷啟動 → 連 df 都沒有，**不畫這一列**（卡自己已在紅／灰態）。"""
+        assert _badge_text(P.ChipsView(requested=False)) is None
+        assert _badge_text(P.ChipsView(
+            requested=True, error="RuntimeError('boom')")) is None
+
+    # ── 徽章不得越權：不佔訊號頻道、不改卡的狀態 ──────────────────
+    def test_the_badge_never_takes_the_signal_channel(self):
+        """訊號頻道已被 L0 的籌碼訊號佔住；徽章載的是判決語 → 一律留白。"""
+        _, _, _sig = P.build_chips_card(P.ChipsView(
+            requested=True, signal="🔥 大戶吸籌", concentration=6.3, days=20,
+            rows=250, days_loaded=250, outlier_verdict="anomaly",
+            outlier_ratio=12.0, outlier_threshold=_ssot_threshold(),
+            outlier_window=_ssot_window(), outlier_reason="outlier"))
+        assert _sig == "大戶吸籌", f"徽章擠掉／污染了訊號頻道：{_sig!r}"
+
+        _card, _, _sig2 = P.build_chips_card(P.ChipsView(
+            requested=True, signal="⚫ 資料不足", miss_reason="df法人欄全為0",
+            rows=250, days_loaded=250, outlier_verdict="anomaly",
+            outlier_ratio=12.0, outlier_threshold=_ssot_threshold(),
+            outlier_window=_ssot_window(), outlier_reason="outlier"))
+        assert _sig2 == "", "灰態不得因為徽章有話說就點亮訊號頻道"
+        assert _card.state == UI_EMPTY, "徽章不得把集中度的灰態改掉"
+
+    def test_the_badge_does_not_change_the_card_state(self):
+        """集中度判得出來 + 徽章判不出來 → 卡仍是 live（別把好的一半藏掉）。"""
+        _card, _facts, _ = P.build_chips_card(P.ChipsView(
+            requested=True, signal="🔥 大戶吸籌", concentration=6.3,
+            continuity=60.0, days=20, pos_days=12, rows=250, days_loaded=250,
+            outlier_verdict="unknown", outlier_threshold=_ssot_threshold(),
+            outlier_window=_ssot_window(), outlier_reason="vol_unavailable"))
+        assert _card.state == UI_LIVE
+        assert "判不出來" in dict(_facts)[P.CHIPS_OUTLIER_LABEL]
+
+    def test_the_badge_is_judged_even_when_chips_is_not(self, monkeypatch):
+        """兩支吃的欄位不同 → 一支判不出來**不得**連坐另一支。"""
+        import pandas as pd
+
+        _n = _ssot_window() + 10
+        _main = [500.0] * _n
+        _main[-1] = _ssot_threshold() * 5000.0 * 2
+        # 外資 / 投信 全 0 → L0 判「df法人欄全為0」；主力合計 仍有爆量
+        _patch_price(monkeypatch, pd.DataFrame({
+            "外資": [0] * _n, "投信": [0] * _n, "volume": [5000] * _n,
+            "主力合計": _main}))
+        _view = P.load_chips(_verdict("2330"), _req(ticker="2330"))
+        assert _view.miss_reason, "前提沒成立：集中度應該判不出來"
+        assert _view.outlier_verdict == "anomaly", (
+            "集中度判不出來就把徽章一起丟掉了 —— 兩支是獨立的檢查")
+        assert "有異常" in (_badge_text(_view) or "")
+
+
+class TestOutlierThresholdStaysInTheSSOT:
+    """門檻與均量窗**一個數字都不准出現在本批改的兩個檔裡**（§3.3）。
+
+    ⚠️ 這一類**不是**覆蓋率填充：門檻抄一份到畫面上，上游改的時候它不會跟著
+    動、也沒有任何測試會紅 —— 畫面就會長期對使用者講一個**不是實際判定用的**
+    數字。那是 §1「錯誤的數字比沒有數字更危險」的標準形狀。
+    """
+
+    @staticmethod
+    def _badge_funcs() -> tuple[tuple[pathlib.Path, tuple[str, ...]], ...]:
+        """(檔案, 要掃的函式名)。**在測試裡才 import L3** —— class body 會在
+        collection 期跑，那時 L3 還沒載進來，`sys.modules` 查回 `None`
+        會讓這條守衛變成永遠綠的假守衛。
+        """
+        from src.services import stock_chips_service as _C
+
+        return ((pathlib.Path(_C.__file__),
+                 ("_outlier_fields", "_outlier_window")),
+                (_VIEW, ("_outlier_fact",)))
+
+    def test_l2_default_threshold_is_the_l0_ssot(self):
+        """對帳（§4.3）：L2 拿來判的那個門檻，就是 L0 那個常數。
+
+        L3 報給畫面的是 L0 常數，L2 判定用的是它自己的簽章預設值 ——
+        **兩條路必須是同一個數字**，否則畫面會講一個沒有在判定的門檻。
+        """
+        import inspect as _i
+
+        from src.compute.risk.inst_sanity import (
+            flag_latest_inst_outlier_from_df,
+            is_inst_net_outlier,
+        )
+
+        for _fn in (flag_latest_inst_outlier_from_df, is_inst_net_outlier):
+            _d = _i.signature(_fn).parameters["threshold_ratio"].default
+            assert float(_d) == _ssot_threshold(), (
+                f"{_fn.__name__} 的門檻預設值與 L0 SSOT 不一致：{_d}")
+
+    def test_l3_reports_exactly_the_ssot_numbers(self, monkeypatch):
+        from src.services import stock_chips_service as C
+
+        _patch_price(monkeypatch, _chips_df(latest_main=1.0))
+        _r = C.get_chips_readout("2330", days=250)
+        assert _r.outlier_threshold == _ssot_threshold()
+        assert _r.outlier_window == _ssot_window()
+
+    def test_the_number_is_never_written_into_the_badge_code(self):
+        """AST：徽章那幾支函式體內**不得**有等於門檻／窗長度的數字字面。"""
+        for _path, _names in self._badge_funcs():
+            _tree_ = ast.parse(_path.read_text(encoding="utf-8"))
+            _seen = {_n.name for _n in ast.walk(_tree_)
+                     if isinstance(_n, ast.FunctionDef)}
+            assert set(_names) <= _seen, (
+                f"{_path.name} 找不到 {sorted(set(_names) - _seen)} —— "
+                "函式改名了，這條守衛會變成永遠綠的假守衛")
+            _wanted = {_ssot_threshold(), float(_ssot_window())}
+            for _node in ast.walk(_tree_):
+                if not isinstance(_node, ast.FunctionDef):
+                    continue
+                if _node.name not in _names:
+                    continue
+                for _c in ast.walk(_node):
+                    if (isinstance(_c, ast.Constant)
+                            and isinstance(_c.value, (int, float))
+                            and not isinstance(_c.value, bool)):
+                        assert float(_c.value) not in _wanted, (
+                            f"{_path.name}::{_node.name} 把 {_c.value} 寫死了 "
+                            f"—— 門檻與均量窗只准從上游讀（§3.3）")
+
+    def test_the_number_is_never_written_into_the_card_copy(self):
+        """文案常數裡也不准出現那兩個數字（寫進去就繞過了上面那條 AST）。"""
+        _bad = {f"{_ssot_threshold():.1f}", str(_ssot_window())}
+        for _name in dir(P):
+            if not _name.startswith("CHIPS_OUTLIER_"):
+                continue
+            _val = getattr(P, _name)
+            if not isinstance(_val, str):
+                continue
+            for _b in _bad:
+                assert _b not in _val, (
+                    f"{_name} 把 {_b} 寫進文案了 —— 那個數字必須由 L3 帶上來")
+
+    @pytest.mark.parametrize("field,given,ssot", [
+        ("outlier_threshold", 99.0, None),
+        ("outlier_window", 7, None),
+    ])
+    def test_the_copy_tracks_what_it_was_given(self, field, given, ssot):
+        """給它一個**不是** SSOT 的值 → 卡上必須跟著變。
+
+        這是上面兩條 AST／字面守衛的**行為版替身**：有人若把數字硬編進
+        f-string 的組裝過程（AST 掃得到、但寫法千變萬化），這一條照樣會紅。
+        """
+        _kw = {"outlier_verdict": "normal", "outlier_ratio": 0.1,
+               "outlier_reason": "ok", "outlier_threshold": _ssot_threshold(),
+               "outlier_window": _ssot_window()}
+        _kw[field] = given
+        _txt = _badge_text(P.ChipsView(
+            requested=True, signal="🔥 大戶吸籌", concentration=6.3, days=20,
+            rows=250, days_loaded=250, **_kw))
+        assert str(given) in (_txt or ""), (
+            f"{field} 換成 {given} 之後卡上沒跟著變 —— 數字被寫死了：{_txt}")
+
+
+# ══════════════════════════════════════════════════════════════════
 # 冒煙（slow lane）：這一頁真的畫得出來
 # ══════════════════════════════════════════════════════════════════
 @pytest.mark.slow
