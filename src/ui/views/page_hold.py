@@ -188,13 +188,28 @@ TestNothingIsCalledBeforeYouAsk` 用不繼承 `Exception` 的毒藥實測，不�
      卡面**必須把「不含綜所稅」講出來**，否則「稅後」兩個字就是在說謊。
   3. ⛔ **⑥ 葡萄串領息**。實作在 L5 `tabs.grape_ladder`、自帶寫死的 widget key，
      在本頁再掛一次會撞 `DuplicateWidgetID`。
-  4. ⛔ **⑦ AI 戰情總結**。四支 L3 都在（`build_station_digest` →
-     `build_summary_prompt` → `build_ai_summary`，`gemini_fn` 由
-     `app_ai_service.gemini_call` 注入），digest 現在也**真的算得出來了**；
-     卡住的是**畫面**：線框在這一區畫了一顆單獨的 `st.button`［ ⚡ 生成 AI 總結 ］，
-     而「新增一個視覺元件」要先出線框草稿給客戶拍板（`CLAUDE.md §-1.5` A-8）。
-     ⚠️ **不會用「自動生成」繞過那顆鈕** —— 每次 rerun 都打一次付費 AI，
-     比少一顆鈕嚴重得多。
+  4. ✅ **⑦ AI 戰情總結 —— 2026-09-07 FE-31 已接線。**
+     四支 L3 都在（`build_station_digest` → `build_summary_prompt` →
+     `build_ai_summary`，`gemini_fn` 由 `app_ai_service.gemini_call` 注入），
+     digest 現在也**真的算得出來了**；
+     ~~卡住的是**畫面**：線框在這一區畫了一顆單獨的 `st.button`［ ⚡ 生成 AI 總結 ］，
+     而「新增一個視覺元件」要先出線框草稿給客戶拍板（`CLAUDE.md §-1.5` A-8）。~~
+     ⚠️ **上面那條刪除線是事實更正，不是漏刪（2026-09-07）** ——
+     **那顆鈕客戶早就拍板過了，本頁當初沒去查線框就自己判定它「還沒拍板」。**
+     實查客戶核可的線框 `docs/wireframes/stock_ia_v1.html`：
+       · `:877` 逐字畫著 `［ ⚡ 生成 AI 總結 ］`（單顆 `st.button`，本區塊內）；
+       · `:878` 連它的灰態文案都給了（`why` / `where`，本檔照用，見 `AI_IDLE_*`）；
+       · `:884` 記載該輪稽核發現**五顆**被灰／紅態的 `where` 指過去、卻沒畫出來的鈕，
+         **當輪補畫，第五顆就畫在 ⑦**。
+     → 「要先出線框草稿給客戶拍板」這個理由**在事實上不成立**（草稿已經存在且已拍板），
+     故本項改為已接線。⚠️ **A-8 本身沒有被放寬** —— 變的是「這顆鈕有沒有線框」這個
+     **事實**，不是「新增視覺元件要不要拍板」這條**規則**。
+     ⚠️ **原文保留不刪**：它記錄的是「當時憑什麼判定不能做」，
+     整段刪掉的話，下一個人看不出這一格是**查證後接上的**、還是**一開始就沒人想過**。
+     ⚠️ **「不會用自動生成繞過那顆鈕」這半句不但仍然成立，而且現在是實作的核心**：
+     每次 rerun 都打一次**付費** AI，比少一顆鈕嚴重得多 —— 故 ⑦ 的 gate 是
+     `st.button()` 的**當次回傳值**，不是 `HoldRequest.submitted`。
+     守衛：`tests/test_p04_hold_view.py::TestTheAiCostsNothingUntilYouPress`。
   5. ⛔ **葉2 的「Sheet 選擇」與「觀察清單管理」**。這兩項**不是缺 L3，是缺授權** ——
      它們本質上是**寫入**，而本頁一律唯讀（見檔頭第二段）。
 
@@ -205,6 +220,16 @@ TestNothingIsCalledBeforeYouAsk` 用不繼承 `Exception` 的毒藥實測，不�
 `@st.cache_data` 擋住（本頁不自建快取，`CLAUDE.md §8.2.A.2` V-SMART-CACHE-1），
 但逐檔的純運算會重算。既有 🏦 ETF ›存股戰情室 是靠自己存 session 避開這件事的。
 **這是已知代價，不是沒想到；沙箱測不到它的實際延遲。**
+
+⚠️ **同一條禁令在 ⑦ 身上的代價更直接：AI 總結「按一次生成一次，本頁不記住」。**
+`st.button()` 只在**被按下的那一次 rerun** 回 `True`；本頁不得把結果寫進
+`st.session_state`（同上，那是 gate 之外的第二個寫入點），所以**下一次任何互動
+都會讓那段文字消失**，要再看就要再按一次、再打一次付費 API。
+**這是取捨，不是 bug，而且畫面上必須講出來**（`AI_KEEPS_NOTHING` 那一列 facts，
+以及 ⑦ 的區塊說明）—— 假裝它會記住，使用者會以為自己弄丟了東西。
+⛔ **不得**為了「讓它留著」而在本頁開一個 session key：那會同時打破
+「gate 只有一個寫入點」與「本頁不自建狀態」兩條，換來的只是省一次按鈕。
+要留存的正確做法是**推播出去**（線框把 ⑦ 稱為推播出口），不是靠頁面記憶。
 
 ⚠️ **本頁會判 `UI_DEGRADED` 的有三處，三處都不是硬湊的。**
 
@@ -481,9 +506,11 @@ WIRING_DISCLOSURE: str = (
     "都由它餵進 `dividend_station_service` 的既有 L3 算出來。"
     "⑥ 的**壓力測試 · VaR · 配息現金流**走 L3 `portfolio_deep_service`（**唯讀**）—— "
     "張→股→元 的換算住在那一支 L3，本頁一個乘法都沒有。"
+    "⑦ 的 **AI 戰情總結**走 L3 `dividend_station_service.build_ai_summary()`，"
+    "AI transport 由 L3 `app_ai_service.gemini_call` 注入 —— "
+    "**要按一次那顆鈕才會發，而且本頁不把結果存起來**（下一次互動就會消失）。"
     "**仍未接線的是**：⑥ 的再平衡（帳本沒有「目標比例」這一欄，"
     "沒有目標就沒有偏離）、⑥ 的葡萄串領息（實作在 L5）、"
-    "⑦ AI 總結（要一顆線框畫了、但尚未拍板的按鈕）、"
     "以及葉2 的 Sheet 選擇與觀察清單管理（那兩項是**寫入**，本頁唯讀）。"
     "⚠️ **配息現金流只算到扣二代健保為止，不含綜所稅** —— "
     "稅率要你自己填，而那是一個還沒拍板的輸入元件。"
@@ -1062,6 +1089,15 @@ class StationReadout:
             （選「只讀市場端」時也要看得到 VIX，那一輪根本不會跑戰情表）。
             兩邊打到的是 L1 同一個 module-level 快取，不是兩次網路。
             存一份沒有人讀的副本，只會多一個將來可能與畫面不一致的數字。
+        digest: L3 `build_station_digest()` 的**原件**（這一輪算的那一份）。
+            ⚠️ **存這一份的唯一理由是 ⑦**：AI 總結必須吃**與 ①③⑤ 完全同一份**
+            digest —— 到 ⑦ 才重算一次，會得到第二份可能不一致的摘要，
+            而且要為了它的 `vix` 再抓一次。`None` = 這一輪沒算出來
+            （沒按 / 上游炸了 / 沒有持股），**不是 `{}`**（§1：分不出「沒有結論」
+            與「結論是空的」）。
+            ⚠️ 上面那句「這裡刻意沒有 `vix` 欄位」**仍然成立**（本類別沒有那個
+            欄位），但 **`digest` 裡面帶著 `get_station_rows()` 當時用的那個
+            VIX** —— 它是 digest 的一部分，不是另存一份給畫面用的副本。
         totals: L3 `compute_portfolio_totals()`；`None` = 算不出來（**不填 0**）。
         split: 80/20 實際配置；`None` = 沒有可計價持股。
         take_profit: 達停利門檻的衛星列（可以是空的 —— 那是**有效結果**）。
@@ -1086,6 +1122,7 @@ class StationReadout:
     bound: bool = False
     holdings_n: int = 0
     rows: tuple[dict, ...] = ()
+    digest: Mapping[str, Any] | None = None
     totals: Mapping[str, Any] | None = None
     split: Mapping[str, Any] | None = None
     take_profit: tuple[Mapping[str, Any], ...] = ()
@@ -1165,6 +1202,7 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
         requested=True, submitted=holdings.submitted,
         bound=holdings.bound, holdings_n=len(holdings.holdings),
         rows=tuple(_rows),
+        digest=_digest_map(_digest),
         totals=_digest_map(_totals),
         split=_digest_map(_digest.get("allocation")),
         take_profit=tuple(dict(_t) for _t in (_digest.get("take_profit") or ())),
@@ -1336,14 +1374,18 @@ _Built = tuple[Card, tuple[tuple[str, str], ...], str]
 class UnwiredSpec:
     """一張未接線卡的全部文案。**每一張都必須有自己的 `why` 與 `where`。**
 
-    ⚠️ 為什麼要一個 dataclass 而不是幾組 if：本批接線之後仍未接線的卡有
-    **8 張**，共用一句「未接線」會讓使用者以為它們卡在同一步 —— 實際上不是：
-    ⑥ 的再平衡 / 壓力測試 / VaR 缺的是 **L3 wrapper**、
-    ⑥ 的配息現金流缺的是 **單位換算的落點 ＋ 一個要先拍板的輸入元件**、
+    ⚠️ 為什麼要一個 dataclass 而不是幾組 if：剩下的未接線卡共用一句「未接線」
+    會讓使用者以為它們卡在同一步 —— 實際上不是：
+    ⑥ 的再平衡缺的是 **帳本裡的「目標比例」欄**（**不是** L3 wrapper）、
     ⑥ 的葡萄串卡在 **L5 寫死的 widget key**、
-    ⑦ 的 AI 總結缺的是 **一顆要先出線框拍板的按鈕**（資料已經有了）、
     葉2 的 Sheet 選擇根本不是缺 L3 而是**缺授權**（本頁唯讀）。
     「去哪補」寫錯，比不寫更糟。
+
+    ⚠️ **不寫「還有幾張」這個數字**（`CLAUDE.md §8.2.A.0` 規則 2/4）：
+    這一批（FE-31）接上 ⑦ 之後又少一張，而每接一張就要回頭改這裡的數字 ——
+    改漏一次，這段 docstring 就開始說謊。**窮舉交給測試**
+    （`tests/test_p04_hold_view.py::TestUnwiredStaysUnwired` 的 `_UNWIRED_KEYS`
+    是機器讀的那一份名單，漏改就是 CI 紅燈）。
 
     ⚠️ **「持股清單沒有 L3」這個理由本批已經不成立**（`holdings_service` 已補），
     任何一張卡都不得再拿它當 `why` —— 那會叫人去補一支已經在那裡的東西。
@@ -1441,6 +1483,13 @@ SRC_STRESS: str = (
 SRC_VAR: str = "L3 VaR（`services.portfolio_deep_service.get_portfolio_var`）"
 SRC_DIV_CASH: str = (
     "L3 配息現金流（`services.portfolio_deep_service.get_dividend_cash_flow`）")
+#: ⑦ 的出處。**兩支寫在同一句是刻意的** —— 這一格的失敗可能來自組 prompt 的
+#: L3，也可能來自被注入的 AI transport，而使用者拿到的訊息分不出是哪一支；
+#: 硬拆成兩個出處字串會讓卡面**看起來**比實際更精確（§1）。真正把兩者分開的是
+#: `AiSummaryReadout.error_kind`（服務不可用 / 例外 / 回空，三種指路句不同）。
+SRC_AI: str = (
+    "L3 AI 戰情總結（`services.dividend_station_service.build_ai_summary` ＋ "
+    "注入的 `services.app_ai_service.gemini_call`）")
 
 
 def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
@@ -2832,37 +2881,315 @@ def build_deep_cards(station: StationReadout,
             _unwired["hold.deep.grape"])
 
 
-# ── ⑦ AI 戰情總結（唯一推播出口）──────────────────────────────────
-AI_SUMMARY_SPEC: UnwiredSpec = UnwiredSpec(
-    key="hold.ai_summary", label="AI 戰情總結（唯一推播出口）",
-    now="**本頁還生不出 AI 戰情總結**",
-    why=("**這一格缺的已經不是資料了。** 四支 L3 都在（`build_station_digest` → "
-         "`build_summary_prompt` → `build_ai_summary`，`gemini_fn` 由 "
-         "`app_ai_service.gemini_call` 注入），而 digest 的輸入（戰情表）"
-         "在本批**已經算得出來**。卡住的是**畫面**：線框在這一區畫了一顆單獨的"
-         "按鈕［ ⚡ 生成 AI 總結 ］，而**新增一個視覺元件要先出線框草稿"
-         "給客戶拍板**（`CLAUDE.md §-1.5` A-8），本批不自己加"),
-    where=_unwired_where(
-        "要接上需先讓客戶拍板那顆按鈕（位置必須在表單**外**），"
-        "再把 `build_ai_summary(digest, gemini_fn)` 接上去"),
-    facts=(
-        ("接線後的樣子", "一段可直接推播的文字總結（含當日建議與理由）＋ 複製鈕"),
-        ("⚠️ 為什麼不乾脆自動生成",
-         "那會讓**每一次頁面互動**都打一次付費 AI —— 比少一顆鈕嚴重得多。"
-         "AI 總結必須由使用者明確按一次才發，這正是線框把它畫成按鈕的原因"),
-        ("⚠️ 也不會畫一顆按了沒反應的鈕",
-         "線框 F5／N2 兩次點名要修的**假出口**就是那個 —— "
-         "本頁寧可誠實標未接線"),
-        ("AI 的角色", "只潤稿。數字全部來自 digest，L3 明文禁止它自行杜撰代號或數字")))
+# ── ⑦ AI 戰情總結（唯一推播出口）── **2026-09-07 FE-31 接線** ────────
+#: 線框 `docs/wireframes/stock_ia_v1.html:877` 逐字畫的那顆鈕。
+#: **鈕面與指路句讀同一個常數**（同 `ACTION_RUN_WARROOM_LABEL` 的理由：
+#: 手抄兩份，改的時候一定會漏改一份，於是鈕上寫一句、指路句寫另一句）。
+AI_SUMMARY_LABEL: str = "⚡ 生成 AI 總結"
+
+#: 按鈕的 widget key。`p04v` 前綴同 `FORM_HOLDINGS_KEY` —— 與既有
+#: 🏦 ETF ›存股戰情室 同時掛上時不撞 Streamlit 的 `DuplicateWidgetID`。
+AI_BUTTON_KEY: str = "p04v_ai_summary_btn"
+
+#: **必須印在畫面上的揭露**（線框 ⑦ 的 `why` 已強調「避免無中生有」）。
+#: 它同時出現在卡的 facts 與正文下方 —— 兩處讀同一個常數，不會漂移。
+AI_DISCLOSURE: str = (
+    "⚠️ **這是 AI 生成，不是投資建議，數字以上面各格為準。** "
+    "AI 只做**潤稿**：它拿到的是上面已經算好的結論，"
+    "L3 `build_summary_prompt()` 的 prompt 明文禁止它自行杜撰代號或數字；"
+    "但**潤稿本身仍可能改寫語氣、或漏掉某一格上的限制條件**。"
+    "有出入時以各格卡面的數字與門檻為準。")
+
+#: ⑦ 真正吃到的輸入。**線框 `:878` 的 `why` 原文寫「上方六段」，那個數字不對** ——
+#: `build_station_digest()` 收的是戰情表 rows ＋ VIX，`build_summary_prompt()`
+#: 另外可收換股建議；② 兩套刻度與 ⑥ 深度分析（壓測／VaR／配息現金流）
+#: **一個欄位都沒有進去**。照抄「六段」等於在畫面上印一個可以當場數出來是假的數字
+#: （§1：錯誤的數字比沒有數字更危險），故本檔照實寫四段並逐段點名。
+AI_INPUT_BLOCKS: str = (
+    "**逐項列，不寫「幾段」**（寫幾段就要有人去數，而且一定會漂）："
+    "健檢紅燈汰弱清單 · 235 加碼觸發清單 · 整批抓取失敗未納入的代號 · "
+    "有效判斷檔數 · VIX · 80/20 實際配置偏離 · 衛星停利清單"
+    "（以上＝`build_station_digest()` 回的全部欄位），"
+    "再加上 ④ 的換出／換入（`build_switch_advice()` 算得出來時才帶進去）。"
+    "**沒有進去的**：② 兩套刻度 · ⑥ 壓力測試／VaR／配息現金流 · "
+    "① 的「訊號可信度 N/M」與未實現損益／總市值 —— "
+    "所以線框那句「以上方**六段**的結論為輸入」在本頁不成立，本站不照抄")
+
+#: 「按一次生成一次」的取捨。**畫面上必須講，不能讓使用者以為它會記住。**
+AI_KEEPS_NOTHING: str = (
+    "本頁**不把結果存進 session**（那是 gate 之外的第二個寫入點，"
+    "`tests/test_p04_hold_view.py` 直接禁止本檔出現任何 session 下標指派）。"
+    "所以**下一次任何互動都會讓這段文字消失**，要再看就要再按一次、"
+    "再打一次付費 API。**這是取捨，不是壞掉** —— 要留存請直接把文字複製出去")
+
+#: 線框 ⑦ 的 `live` 還畫了「＋ 複製鈕」。**本批沒有做**，據實揭露。
+AI_NO_COPY_BUTTON: str = (
+    "線框 ⑦ 的 `live` 還畫了一顆「複製鈕」，**本批沒有做** —— "
+    "那是第二顆 widget，而本批只接線框 `:877` 明文畫出來的那一顆。"
+    "請直接選取上面的文字複製")
+
+#: L3 `app_ai_service.gemini_call` **不丟例外**：沒有金鑰、或所有金鑰與模型
+#: 都試過仍失敗時，它 `return` 一句 `⚠️ …` 的說明字串。
+#: 那句字串若被當成「今天的 AI 總結」畫成綠卡，就是 §1 的文字版 ——
+#: 使用者會把一則**故障訊息**讀成今天的操作建議。
+#:
+#: ⚠️ **這是一段刻意留下的字面耦合，不是偷懶。** L3 那兩句是 inline literal，
+#: 沒有常數可以 import，而本頁不得跨檔取私有符號。故本頁比對它的**特徵子字串**，
+#: 並由 `tests/test_p04_hold_view.py::TestTheAiFailureIsNeverShownAsASummary`
+#: **直接讀 L3 原始碼**確認這兩句還在 —— L3 哪天改了字，**CI 當場紅燈**，
+#: 而不是這裡靜靜地退化回「把故障當摘要」（`CLAUDE.md §8.2.A.0` 規則 3）。
+AI_UNAVAILABLE_MARKERS: tuple[str, ...] = (
+    "請設定 GEMINI_API_KEY",
+    "AI 服務暫時無法使用",
+)
+
+#: 失敗的**種類**。每一種的指路句都不同，共用一句會對其他幾種人指錯路。
+AI_ERR_UPSTREAM: str = "upstream"        #: 上游戰情表這一輪就壞了
+AI_ERR_EXCEPTION: str = "exception"      #: 呼叫期例外（含 late import 失敗）
+AI_ERR_UNAVAILABLE: str = "unavailable"  #: L3 回了「服務不可用」說明字串
+AI_ERR_EMPTY: str = "empty"              #: 呼叫成功但回來是空白
+AI_ERR_DRIFT: str = "drift"              #: L3 回的不是字串（契約漂移）
+
+#: 回空時放進 `error` 的字串（**不是**例外的 `repr`，所以另立一句）。
+AI_EMPTY_ERROR: str = "AI 呼叫成功，但回來的文字是空的"
+
+#: 契約漂移：L3 `build_ai_summary()` 宣告 `-> str`，回了別的型別。
+#: ⚠️ **不准 `str()` 它然後照畫** —— 那會把 `('文字', {...})` 這種東西
+#: 原樣印成「今天的 AI 總結」。§1：資料長得不對 ≠ 沒資料，兩者都不准靜默通過。
+AI_DRIFT_ERROR: str = "L3 `build_ai_summary()` 回的不是字串（型別：{kind}）"
+
+#: 灰態三要素 —— **線框 `:878` 的 `grey` 原文**（`now` 的 `⬜` 已拿掉：
+#: 狀態 glyph 只准由 `state_meta()` 供給一次，`Note.__post_init__` 會拒收）。
+AI_IDLE_NOW: str = "**尚未生成**"
+AI_IDLE_WHY: str = (
+    "AI 總結以**上方各段已經算好的結論**為輸入，避免無中生有；"
+    "而它每按一次就打一次**付費** API，所以**不會自動生成** —— "
+    "沒按之前，本頁一個 AI token 都不花")
+AI_IDLE_WHERE: str = (
+    f"先{press(ACTION_RUN_WARROOM_LABEL)}把戰情室跑出來，"
+    f"再{press(AI_SUMMARY_LABEL)}")
 
 
-def build_ai_summary_card(requested: bool) -> _Built:
-    """線框葉1 ⑦「AI 戰情總結」—— **本批仍未接線（缺的是一顆要先拍板的鈕）**。
+@dataclass(frozen=True)
+class AiSummaryReadout:
+    """⑦ 那一輪的產出。**`requested` 是「那顆鈕這一次 rerun 有沒有被按下」。**
+
+    Attributes:
+        requested: `st.button()` 的**當次回傳值**。
+            ⚠️ **不是** `HoldRequest.submitted`（跑戰情室 ≠ 要生成 AI 總結；
+            混成同一個 gate，等於每跑一次戰情室就順便打一次付費 AI），
+            也**不是**從任何資料反推。
+        text: AI 潤稿後的推播文字。空字串 = 這一輪沒有產出。
+        error: 失敗訊息（例外的 `repr(e)` / L3 回的服務不可用字串 /
+            `AI_EMPTY_ERROR` / 上游帶下來的戰情表例外）。
+        error_kind: `AI_ERR_*` 其中之一。**每一種失敗的「去哪補」都不同** ——
+            金鑰沒設的人再按一百次也一樣、上游戰情表壞掉的人該去看戰情表、
+            例外的人手上那行訊息才是唯一線索、回空的人再按一次就可能好、
+            契約漂移的人要的是回報而不是重試。
+            ⚠️ **這裡不寫「共 N 種」**（`CLAUDE.md §8.2.A.0` 規則 2）：
+            每加一種就要回頭改這個數字，改漏一次這段就開始說謊。
+            窮舉交給 `tests/test_p04_hold_view.py::TestTheAiSummaryStates
+            ::test_the_failures_do_not_share_a_single_sentence`
+            （它從 `AI_ERR_*` 逐一建卡、比對 `now` / `where` 全部互異）。
+    """
+
+    requested: bool
+    text: str = ""
+    error: str = ""
+    error_kind: str = ""
+
+
+def _switch_payload(switch: SwitchReadout) -> dict | None:
+    """`SwitchReadout` → L3 `build_summary_prompt()` 吃的那個 dict。**純轉換。**
+
+    ⚠️ **④ 出錯、或這一輪沒有建議時回 `None`。** L3 對 `switch=None` 的契約是
+    「摘要不含換股段」—— 那是誠實的少講；塞一個 `{"switch_out": []}` 進去，
+    AI 會照著寫出「建議換出：無」，而那一輪其實是**沒算出來**（§1：
+    「沒有要換」與「算不出來」是兩件事，不可在推播文字裡合成同一句）。
+
+    ⚠️ 為什麼不直接把 L3 回的原 dict 存進 `SwitchReadout`：本頁的既有做法是
+    把 L3 的 dict 拆成具名欄位（見該類別），這裡照 `_macro_payload()` 的先例
+    再包回去。**只重組已經拿到的欄位，不新增任何一個數字。**
+    """
+    if switch.error or not switch.has_advice:
+        return None
+    return {"switch_out": [dict(_d) for _d in switch.switch_out],
+            "switch_in": [dict(_d) for _d in switch.switch_in],
+            "switch_in_src": switch.switch_in_src}
+
+
+def load_ai_summary(pressed: bool, station: StationReadout,
+                    switch: SwitchReadout) -> AiSummaryReadout:
+    """⑦。**`pressed` 為 False 時一行 L3 都不呼叫，一個 AI token 都不花。**
+
+    ⚠️ **這是本頁唯一會花錢的呼叫，所以它的 gate 比別的都嚴：**
+    別的區塊吃的是 `HoldRequest.submitted`（送出過表單就算），
+    這一支吃的是**那顆鈕這一次 rerun 的回傳值** —— 送出表單**不會**觸發它。
+    守衛：`tests/test_p04_hold_view.py::TestTheAiCostsNothingUntilYouPress`
+    （用不繼承 `Exception` 的毒藥實測，不是讀這段 docstring）。
+
+    ⚠️ **按了、但沒有東西可以摘要時，一樣不呼叫 AI**（`station.digest` 是
+    `None`）。那不是把 gate 從資料反推 —— `requested` 照樣是 `True`
+    （使用者確實按了），只是**對一份不存在的戰情表潤稿**沒有意義，而且要付費。
+    回傳落在 `empty`（灰），文案由 `_station_note()` 分流成四種上游狀況。
+
+    ⚠️ **上游的例外原樣往下帶**：戰情表這一輪紅了，⑦ 也該是紅的 ——
+    這一頁沒有「戰情表壞掉但 AI 照樣講得出今天該做什麼」這種狀態（§1）。
+
+    §1 的失敗出口，**各自據實報，一個都不吞**：
+      · L3 回的不是字串（契約漂移）→ `AI_ERR_DRIFT`（**不 `str()` 一下照畫**）；
+      · 例外（含 late import 失敗）→ `repr(e)` ＋ `AI_ERR_EXCEPTION`；
+      · L3 回「服務不可用」說明字串 → 原句 ＋ `AI_ERR_UNAVAILABLE`
+        （**不當成摘要畫成綠卡**，見 `AI_UNAVAILABLE_MARKERS`）；
+      · 回空白 → `AI_EMPTY_ERROR` ＋ `AI_ERR_EMPTY`（**不拿殘留頂替、
+        不自己寫一段假的總結**）。
+    """
+    if not pressed:
+        return AiSummaryReadout(requested=False)
+    if station.error:
+        return AiSummaryReadout(requested=True, error=station.error,
+                                error_kind=AI_ERR_UPSTREAM)
+    if not station.digest:
+        # 按了、沒有錯、就是沒有輸入 → `empty`（灰）。**這一步不花錢。**
+        return AiSummaryReadout(requested=True)
+    try:
+        from src.services.dividend_station_service import build_ai_summary
+        from src.services.app_ai_service import gemini_call
+        _text = build_ai_summary(dict(station.digest), gemini_call,
+                                 switch=_switch_payload(switch))
+    except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
+        print(f"[views/page_hold] AI 戰情總結失敗 → 轉紅態：{_e!r}")
+        return AiSummaryReadout(requested=True, error=repr(_e),
+                                error_kind=AI_ERR_EXCEPTION)
+    if _text is not None and not isinstance(_text, str):
+        # 契約漂移。**不 `str()` 它然後照畫** —— 那是「資料長得不對」，
+        # 不是「沒資料」，靜默通過等於把一個 tuple／dict 印成今天的操作建議。
+        print(f"[views/page_hold] AI 總結契約漂移 → 轉紅態：{type(_text).__name__}")
+        return AiSummaryReadout(
+            requested=True, error_kind=AI_ERR_DRIFT,
+            error=AI_DRIFT_ERROR.format(kind=type(_text).__name__))
+    _clean = str(_text or "").strip()
+    if any(_m in _clean for _m in AI_UNAVAILABLE_MARKERS):
+        print(f"[views/page_hold] AI 服務不可用 → 轉紅態：{_clean[:120]}")
+        return AiSummaryReadout(requested=True, error=_clean,
+                                error_kind=AI_ERR_UNAVAILABLE)
+    if not _clean:
+        print("[views/page_hold] AI 回了空白 → 轉紅態")
+        return AiSummaryReadout(requested=True, error=AI_EMPTY_ERROR,
+                                error_kind=AI_ERR_EMPTY)
+    return AiSummaryReadout(requested=True, text=_clean)
+
+
+def _ai_failed_note(ai: AiSummaryReadout) -> Note:
+    """⑦ 的紅態三要素 —— **一種失敗一套指路句，一句都不共用。**
+
+    共用一句「AI 生成失敗，請再試一次」會對其他幾種人指錯路：
+    金鑰沒設的人再按一百次也一樣（而且每按一次都白跑一輪重試）、
+    上游戰情表壞掉的人該去看戰情表、例外的人手上那行訊息才是唯一線索。
+    """
+    if ai.error_kind == AI_ERR_UPSTREAM:
+        return Note(
+            now="**沒有生成 —— 上游的戰情表這一輪就壞了**",
+            why=_error_why(SRC_STATION, ai.error),
+            where=("AI 總結吃的是戰情表已經算好的結論；"
+                   "**上面那幾張卡這一輪也會是紅的** —— "
+                   f"先讓戰情表跑起來（到{SETUP_WHERE}"
+                   f"{press(ACTION_RUN_WARROOM_LABEL)}），這一格才有東西可以摘要"))
+    if ai.error_kind == AI_ERR_UNAVAILABLE:
+        # 洗 glyph 走同一個 SSOT（`Note.__post_init__` 拒收狀態 glyph）。
+        # ⚠️ **`_n` 不准丟掉**：訊息被改過就要說（§1「修改過的訊息不能假裝
+        #    自己是原文」）。現況 L3 那兩句只帶 `⚠️`（不是狀態 glyph），
+        #    所以 `_n` 通常是 0；哪天上游長出 `🔴`，這裡就會照實揭露。
+        _clean, _n = scrub_state_glyphs(ai.error)
+        _stripped = ("（上游訊息裡的狀態符號已移除，"
+                     "以免和這張卡自己的狀態燈混成兩個互相矛盾的說法）"
+                     if _n else "")
+        return Note(
+            now="**AI 服務這一輪不可用**",
+            why=(f"{SRC_AI}**沒有丟例外**，而是回了一句服務說明："
+                 f"{_clean or UNKNOWN_ERROR_TEXT}{_stripped}。"
+                 "本站**不把這句話當成今天的總結畫成綠卡** —— "
+                 "那會讓一則故障訊息被讀成操作建議"),
+            where=("這是部署端的金鑰或額度問題，不是你操作的問題："
+                   f"{NO_EXIT_MARKER}；請把上面那行訊息回報給維護者"))
+    if ai.error_kind == AI_ERR_DRIFT:
+        return Note(
+            now="**上游回來的東西不是一段文字**",
+            why=(f"{SRC_AI}的契約是回一段字串，這一輪回的是別的型別："
+                 f"{ai.error}。**本站不把它 `str()` 一下照畫** —— "
+                 "那會讓一個資料結構被印成今天的操作建議（§1：資料長得不對，"
+                 "與沒資料是兩件事，兩件都不准靜默通過）"),
+            where=("這是上下游契約漂移，不是你操作的問題："
+                   f"{NO_EXIT_MARKER}；請把上面那一行回報給維護者"))
+    if ai.error_kind == AI_ERR_EMPTY:
+        return Note(
+            now="**AI 回了空白**",
+            why=(f"{SRC_AI}呼叫成功、但回來的文字是空的（不是抓不到資料，"
+                 "是這一次潤稿沒有產出）。**本站不拿上一輪的殘留頂替**，"
+                 "也不自己寫一段假的總結"),
+            where=(f"可以再{press(AI_SUMMARY_LABEL)}一次；"
+                   "連續空白請把這一句回報給維護者"))
+    return Note(
+        now="**AI 總結生成失敗**",
+        why=_error_why(SRC_AI, ai.error),
+        where=(f"可以再{press(AI_SUMMARY_LABEL)}一次；"
+               "持續失敗請把上面那行訊息回報給維護者"))
+
+
+def build_ai_summary_card(ai: AiSummaryReadout,
+                          station: StationReadout) -> _Built:
+    """線框葉1 ⑦「AI 戰情總結」—— **2026-09-07 FE-31 已接線**。
 
     線框 note 原文：「**v1 漏畫 —— 而它是本頁唯一的推播出口。**
     拿掉之後這頁就只能看、不能送出去。」
+
+    Args:
+        ai: 這一次 rerun 的產出（`requested` = 那顆鈕有沒有被按）。
+        station: **只為了 `empty` 那一態的文案**（按了、但戰情表還沒跑 /
+            沒有持股 / 沒綁 —— 四種上游狀況的指路句完全不同，
+            由既有的 `_station_note()` 分流，本卡不另寫第五套「沒有持股」）。
+
+    ⚠️ **訊號頻道一律留白。** 判準見 `_ui_kit.render_card()` 的 `signal_text`
+    docstring：那個頻道載的是「**band / level 觀測**」（這個值落在哪一段）。
+    這一格**沒有任何 band 觀測** —— 它的產出是一段文字，不是一個落在某區間的值，
+    連 `degraded` 都談不上。硬給一個「已生成」的 chip 會變成**判決語**
+    （對一段沒有人驗過的 AI 文字蓋一個「過關」章），那正是該 docstring
+    要擋的東西。故：留白。
+
+    ⚠️ **`Card.value` 刻意只放一句短的**（`render_card()` 把它畫成 24px 粗體）——
+    整段推播文字由 `_render_ai_summary()` 畫在卡下面，同
+    `_render_light_wall()` / `_render_scale_tables()` 的分工：
+    **卡負責狀態，正文另外畫**。
     """
-    return build_unwired_card(requested, AI_SUMMARY_SPEC)
+    _state = classify_ui_state(
+        requested=ai.requested,
+        error=ai.error or None,
+        has_value=bool(ai.text))
+    _facts: list[tuple[str, str]] = [
+        ("AI 生成聲明（每一態都印）", AI_DISCLOSURE),
+        ("哪幾段真的餵進去了", AI_INPUT_BLOCKS),
+        ("按一次生成一次（本頁不記住）", AI_KEEPS_NOTHING),
+        ("為什麼不自動生成",
+         "`gemini_call` 是**付費** API，而 Streamlit 每一次互動都重跑整頁 —— "
+         "自動生成等於每按一次任何東西就打一次帳單。"
+         "線框 `:877` 把它畫成一顆單獨的按鈕，正是為了這個"),
+        ("AI 的角色", "只潤稿。數字全部來自 digest，"
+                      "L3 的 prompt 明文禁止它自行杜撰代號或數字"),
+    ]
+    if _state == UI_LIVE:
+        _facts.insert(3, ("複製鈕", AI_NO_COPY_BUTTON))
+        return (Card(key="hold.ai_summary", label="AI 戰情總結（唯一推播出口）",
+                     state=UI_LIVE, value="已生成一段推播文字（見下方）"),
+                tuple(_facts), "")
+    if _state == UI_IDLE:
+        _note = Note(now=AI_IDLE_NOW, why=AI_IDLE_WHY, where=AI_IDLE_WHERE)
+    elif _state == UI_FAILED:
+        _note = _ai_failed_note(ai)
+    else:   # UI_EMPTY —— 按了、沒有錯、但沒有戰情表可以當輸入。**沒有花錢。**
+        _note = _station_note(
+            station, now="**沒有可以當輸入的戰情表**", source=SRC_STATION)
+    return Card(key="hold.ai_summary", label="AI 戰情總結（唯一推播出口）",
+                state=_state, note=_note), tuple(_facts), ""
 
 
 # ── 葉2 組合設定 ──────────────────────────────────────────────────
@@ -3176,8 +3503,11 @@ def _render_warroom_leaf(req: HoldRequest, holdings: HoldingsReadout) -> None:
     _macro = load_macro(req)
     section_header("④ 換股建議（搭配總經位階）",
                    "線框：本頁職責「該加、**該換**、該減」的那個「該換」。")
-    _render_row((build_switch_card(load_switch(_station, _macro, holdings),
-                                   _station),
+    # ⚠️ **`_switch` 抽成變數是因為 ⑦ 要用同一份**（`_switch_payload()`）——
+    #    在 ⑦ 再 `load_switch()` 一次會多打一次選股池取數，而且畫面上那張卡
+    #    與推播文字有機會講出不一樣的換股建議（§2.1：同一頁不出現兩份）。
+    _switch = load_switch(_station, _macro, holdings)
+    _render_row((build_switch_card(_switch, _station),
                  build_macro_stage_card(_macro)))
 
     section_header("⑤ 80/20 配置偏離 ＋ 衛星停利",
@@ -3191,8 +3521,56 @@ def _render_warroom_leaf(req: HoldRequest, holdings: HoldingsReadout) -> None:
     _render_row(build_deep_cards(_station, load_deep(_station)))
 
     section_header("⑦ AI 戰情總結（唯一推播出口）",
-                   "線框：拿掉之後這頁就只能看、不能送出去。")
-    _render_one(build_ai_summary_card(req.submitted))
+                   "線框：拿掉之後這頁就只能看、不能送出去。"
+                   "**按一次生成一次** —— 這一顆會打**付費** AI，"
+                   "所以不會自動跑；而且本頁不把結果存起來，"
+                   "下一次互動它就會消失（要留請直接複製出去）。")
+    _ai = load_ai_summary(_render_ai_button(), _station, _switch)
+    _render_one(build_ai_summary_card(_ai, _station))
+    _render_ai_summary(_ai)
+
+
+def _render_ai_button() -> bool:
+    """⑦ 的那顆鈕 —— 線框 `docs/wireframes/stock_ia_v1.html:877` 逐字：
+    「單顆 `st.button`，本區塊內」。
+
+    Returns:
+        這一次 rerun 是不是由**這顆鈕**觸發的。
+
+    ⚠️ **它一定在 form 外，而且是結構性的保證，不是自律**：本頁自己**不開**
+    `st.form`（表單一律走 `_ui_kit.single_submit_form()`，見
+    `_render_holdings_form()`），所以本檔裡的 `st.button` 不可能落進 form 裡。
+    守衛：`TestFormStructure::test_the_page_owns_no_local_form` ＋
+    `::test_the_only_button_is_the_ai_one`。
+
+    ⚠️ **為什麼是按鈕而不是自動生成**：`gemini_call` 是**付費** API，
+    而 Streamlit 每一次互動都重跑整頁 —— 自動生成等於每按一次任何東西就打一次
+    帳單。線框把它畫成按鈕正是為了這個。
+    守衛：`TestTheAiCostsNothingUntilYouPress`（毒藥實測）。
+
+    ⚠️ **這顆鈕之外，⑦ 沒有第二個 widget**：沒有模型選單、沒有重新生成鈕、
+    沒有任何參數。多一個 widget 就多一條讓人不小心多打一次帳單的路。
+    """
+    return bool(st.button(AI_SUMMARY_LABEL, key=AI_BUTTON_KEY))
+
+
+def _render_ai_summary(ai: AiSummaryReadout) -> None:
+    """把 AI 潤稿出來的那段文字畫在卡下面（同 `_render_light_wall()` 的分工）。
+
+    ⚠️ 這一段**不判態、不取數**：狀態在 `build_ai_summary_card()` 那張卡上，
+    這裡多判一次就會有兩個可能互相矛盾的說法。
+
+    ⚠️ **揭露印兩次是刻意的**：卡上的 facts 是給「掃過去」的人看的；
+    這一行貼在文字正下方，是給**真的把那段讀完、正要轉貼出去**的人看的。
+    兩處讀的是同一個常數（`AI_DISCLOSURE`），不會漂移。
+
+    ⚠️ **不用 `unsafe_allow_html`**：這段文字是 LLM 產出的，
+    `st.markdown()` 預設會把 HTML escape 掉，不要為了排版好看去打開它。
+    """
+    if not ai.text:
+        return
+    st.markdown(ai.text)
+    st.caption(AI_DISCLOSURE)
 
 
 def _render_light_wall(station: StationReadout) -> None:
