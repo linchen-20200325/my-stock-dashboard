@@ -53,11 +53,26 @@ radio 綁 `widget_key`，下游一律只讀 submit handler 寫進去的 `applied
 的裁示：**狀態頻道出 glyph ＋ 中文，訊號頻道只出中文標籤**。
 `render_card()` 直接拒收帶 glyph 的 `signal_text`（fail loud，不是只靠測試掃）。
 
+⚠️ **2026-09-07（紅隊實測後修）：那道拒收改由 public 的
+`assert_signal_text_clean()` 供給，呼叫端請在「建構期」先驗一次。**
+只留在 `render_card()` 裡的話，一個含 `🔴` 的 SSOT 標籤會讓
+`page_today` 畫到第 27 個 markdown **之後**才拋 `ValueError` ——
+上半頁已經渲染、下半頁全部消失，而畫面上一句解釋都沒有（**半截死頁**）。
+`render_card()` 那一道**沒有拿掉**，它現在是最後一道防線（同一支函式，
+不是第二把尺）。
+
 ═══ 鐵律 4：空狀態引導三要素 ═══════════════════════════════════════════
 資料型別是 `tab_today.Note(now, why, where)`（三個都不得為空、都不得自帶
 狀態 glyph，`__post_init__` 會 raise）。本檔**只包一層渲染** `render_note()`，
 **刻意不另做 `empty_state(now, why, where)`** —— 再開一支收三個 str 的入口
 等於旁邊多一條繞過 `Note` 驗證的路。
+
+⚠️ **2026-09-07（紅隊實測後修）：`render_card()` 只要卡上有 `Note` 就畫，
+不再只在非 `live` 時畫。** `Card.__post_init__` 擋的是「非 live 沒 Note」與
+「非 live 帶 value」，**沒有**擋「live 帶 Note」；於是一張
+`state=live` / `value=''` / 帶 `Note` 的卡會被畫成標著「🟢 運作中」的
+**空白框**，而那段 Note（往往正是「另一半算不出來」的原因）被**靜默丟棄**。
+靜默丟棄上游明明附上的說明，就是 §1 禁止的「掩蓋問題」。
 
 ⚠️ 上游例外訊息請先過 `tab_today.scrub_state_glyphs()` / `upstream_error_why()`
 再放進 `Note.why`：全 repo 帶 `🔴` 的字串有數百處，一個「FRED 連線失敗 🔴」
@@ -79,13 +94,14 @@ from typing import Any, Iterator, Sequence
 import streamlit as st
 
 from shared.macro_buckets import LEVEL_EMOJI
-from shared.ui_state import UI_LIVE, UI_STATE_META, is_alarming, state_meta
+from shared.ui_state import UI_STATE_META, is_alarming, state_meta
 # L5 → L5 同層 import（C3 分層守衛合規）。資料結構與版面上限的唯一來源。
 from src.ui.tabs.tab_today import MAX_COLS, Card, Note
 
 __all__ = [
     "MAX_COLS", "Card", "Note",
     "is_alarming", "state_meta",
+    "banned_signal_glyphs", "assert_signal_text_clean",
     "grid", "render_note", "render_card", "render_cards",
     "section_header", "single_submit_form",
 ]
@@ -160,6 +176,45 @@ def render_note(note: Note) -> None:
 # ══════════════════════════════════════════════════════════════════
 # 鐵律 3 — 四態視覺
 # ══════════════════════════════════════════════════════════════════
+def banned_signal_glyphs(text: str) -> list[str]:
+    """`text` 裡出現的**禁用符號**（狀態 glyph ∪ 燈號 emoji），排序後回傳。
+
+    空 list = 乾淨。字面集合是 L0 兩個 SSOT 的聯集，本檔不新增任何符號。
+    """
+    return sorted(_g for _g in _BANNED_SIGNAL_GLYPHS if _g in str(text))
+
+
+def assert_signal_text_clean(owner: str, signal_text: str) -> None:
+    """訊號頻道**只准出中文標籤** —— 帶了狀態 glyph／燈號 emoji 就地 raise。
+
+    Args:
+        owner: 出問題的東西是誰（卡的 key、或建構中的 Tile）。只用在錯誤訊息。
+        signal_text: 要檢查的訊號文字。
+
+    Raises:
+        ValueError: `signal_text` 含 `_BANNED_SIGNAL_GLYPHS` 裡的任一符號。
+
+    ⚠️ **為什麼 2026-09-07 把它從 `render_card()` 裡抽成 public**（紅隊實測，
+    不是理論）：這道檢查原本只長在 `render_card()` 內，也就是**畫到那一張卡
+    的當下**才炸。只要任何一個 SSOT 標籤含 `🔴`，`page_today` 會在畫出
+    第 27 個 markdown **之後**拋 `ValueError` → **半截死頁**：上半頁已經
+    渲染、下半頁全部消失，而畫面上沒有任何一句話說發生了什麼事。
+    §1 要的是「紅態看得見」，**不是「畫一半才炸」**。
+
+    抽出來之後，呼叫端（`page_today.Tile.__post_init__`）可以在**建構期**、
+    也就是**任何一個 `st.*` 被呼叫之前**就驗完整批 —— 要嘛整頁是對的，
+    要嘛在還沒畫任何東西時就當場說明。`render_card()` 仍保留同一道檢查
+    當最後一道防線；那**不是第二把尺** —— 兩邊呼叫的是同一支函式。
+    """
+    _bad = banned_signal_glyphs(signal_text)
+    if _bad:
+        raise ValueError(
+            f"{owner} 的 signal_text 含符號 {_bad} —— "
+            "訊號頻道**只出中文標籤**。狀態頻道的『取得失敗』與燈號的『紅』"
+            "在 SSOT 裡用的是同一顆 🔴，同一張卡出兩個等於沒有資訊。"
+            "（user 2026-08-26 對 `macro_v2_cards.STATE_META` 的同一裁示。）")
+
+
 def _chip(text: str, color: str) -> str:
     """一顆小標籤的 HTML。內容一律 `html.escape`。"""
     return (f'<span style="display:inline-block;padding:1px 8px;'
@@ -194,13 +249,9 @@ def render_card(card: Card, *,
     「只有其中一格壞掉」會被同區塊其他格子替它通過（線框：**逐格獨立判態**，
     一格壞不把另外兩格一起染色）。
     """
-    _bad = sorted(_g for _g in _BANNED_SIGNAL_GLYPHS if _g in str(signal_text))
-    if _bad:
-        raise ValueError(
-            f"卡 {card.key!r} 的 signal_text 含符號 {_bad} —— "
-            "訊號頻道**只出中文標籤**。狀態頻道的『取得失敗』與燈號的『紅』"
-            "在 SSOT 裡用的是同一顆 🔴，同一張卡出兩個等於沒有資訊。"
-            "（user 2026-08-26 對 `macro_v2_cards.STATE_META` 的同一裁示。）")
+    # 最後一道防線。呼叫端應已在**建構期**驗過（見 `assert_signal_text_clean`
+    # 的 docstring：只靠這裡會變成「畫一半才炸」的半截死頁）。
+    assert_signal_text_clean(f"卡 {card.key!r}", signal_text)
     _name, _glyph, _hex = state_meta(card.state)
     _head = _chip(f"{_glyph} {_name}", _hex)
     if signal_text:
@@ -219,7 +270,14 @@ def render_card(card: Card, *,
     )
     for _k, _v in facts:
         st.caption(f"{_k}　{_v}")
-    if card.state != UI_LIVE and card.note is not None:
+    # 【6】2026-09-07 修：**只要有 Note 就畫，不再只在非 live 時畫。**
+    # 修前是 `if card.state != UI_LIVE and card.note is not None:` ——
+    # `Card.__post_init__` 擋的是「非 live 沒 Note」與「非 live 帶 value」，
+    # **沒有**擋「live 帶 Note」。於是一張 `state=live` / `value=''` / 帶 Note
+    # 的卡，會被畫成一個標著「🟢 運作中」的**空白框**，而那段 Note 裡的
+    # 說明（往往正是「另一半算不出來」的原因）**被靜默丟棄**。
+    # 靜默丟棄上游明明附上的說明 = §1 禁止的「掩蓋問題」。
+    if card.note is not None:
         render_note(card.note)
 
 
