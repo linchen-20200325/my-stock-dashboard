@@ -89,21 +89,21 @@ radio 綁 `widget_key`，下游一律只讀 submit handler 寫進去的 `applied
 from __future__ import annotations
 
 import html as _html
-from typing import Any, Iterator, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 import streamlit as st
 
 from shared.macro_buckets import LEVEL_EMOJI
-from shared.ui_state import UI_STATE_META, is_alarming, state_meta
+from shared.ui_state import UI_FAILED, UI_STATE_META, is_alarming, state_meta
 # L5 → L5 同層 import（C3 分層守衛合規）。資料結構與版面上限的唯一來源。
-from src.ui.tabs.tab_today import MAX_COLS, Card, Note
+from src.ui.tabs.tab_today import MAX_COLS, Card, Note, scrub_state_glyphs
 
 __all__ = [
     "MAX_COLS", "Card", "Note",
     "is_alarming", "state_meta",
     "banned_signal_glyphs", "assert_signal_text_clean",
-    "grid", "render_note", "render_card", "render_cards",
-    "section_header", "single_submit_form",
+    "grid", "render_note", "render_card", "render_card_isolated",
+    "render_cards", "section_header", "single_submit_form",
 ]
 
 #: 訊號頻道**禁止出現**的符號 = 狀態 glyph ∪ 燈號 emoji。
@@ -279,6 +279,59 @@ def render_card(card: Card, *,
     # 靜默丟棄上游明明附上的說明 = §1 禁止的「掩蓋問題」。
     if card.note is not None:
         render_note(card.note)
+
+
+def render_card_isolated(card: Card, *,
+                         signal_text: str = "",
+                         signal_color: str = "",
+                         facts: Sequence[tuple[str, str]] = (),
+                         owner: str,
+                         error_why: Callable[[str], str],
+                         where: str) -> None:
+    """畫一張卡，**並且不讓它把整頁畫到一半就死掉**。
+
+    渲染期若仍有東西炸（例如 L0 給了一個未知狀態名 → `state_meta()` fail loud），
+    把它**就地轉成一張紅卡 ＋ `repr(e)`**，其餘的卡照畫。
+
+    ⚠️ **不是 `except: pass`**：例外被轉成一個看得見的紅態並附原文，
+    log 也留一份。§1 要的是「紅態看得見」——
+    半截死頁（上半頁在、下半頁全沒了、畫面上沒有任何一句解釋）
+    比一張紅卡危險得多，因為使用者根本不知道有東西不見了。
+
+    Args:
+        card / signal_text / signal_color / facts: 原樣轉給 `render_card()`。
+        owner: log 前綴（呼叫端的頁名，如 `"views/page_today"`）。
+            **只影響 stderr/stdout 的那一行**，不影響畫面。
+        error_why: `repr(e)` → `Note.why` 的那一句話。由呼叫端提供，
+            因為「出事的是哪一層」是**頁面自己**才知道的事
+            （頁 1 的【8b】就是拿共用文案去包別的層，對使用者謊報出事的層）。
+            洗 glyph 一律在該函式內走 `tab_today.scrub_state_glyphs()` SSOT。
+        where: 這張補救卡的「去哪補」。各頁不同（頁 1 指回它的唯讀說明，
+            頁 2 指回維護者），故由呼叫端給。
+
+    ⚠️ **這是搬家不是重寫**（2026-09-07 FE-9）：`page_today` 與 `page_find`
+    原本**各有一份逐行同構的 `_render_one()`** —— 兩把尺遲早會漂移
+    （一邊修了「`except ... as _e` 的 `_e` 會被 `del`」這個坑、另一邊沒修，
+    就是最典型的漂移）。本函式的內文與那兩份**逐行相同**，
+    差異只有上面三個參數化掉的東西（log 前綴 / 出處文案 / 去哪補）。
+    """
+    try:
+        render_card(card, signal_text=signal_text, signal_color=signal_color,
+                    facts=tuple(facts))
+        return
+    except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
+        # ⚠️ `except ... as _e` 的 `_e` 在區塊結束時會被 `del` 掉，
+        #    所以在區塊內就把字串取出來（不然下面會是 NameError）。
+        _err = repr(_e)
+        print(f"[{owner}] 卡 {card.key!r} 渲染失敗 → 轉紅卡：{_err}")
+    # 卡的 label 本身不受 `Note` 那道 glyph 驗證管，先洗過再放進 `Note.now`，
+    # 否則這張補救卡自己會再炸一次（§1：紅態要看得見，不是換一種炸法）。
+    _label = scrub_state_glyphs(card.label)[0] or card.key
+    render_card(Card(
+        key=f"{card.key}.render_failed", label=_label, state=UI_FAILED,
+        note=Note(now=f"{_label}　**這一格畫不出來**",
+                  why=error_why(_err),
+                  where=where)))
 
 
 def render_cards(cards: Sequence[Card], cols: int = MAX_COLS) -> None:

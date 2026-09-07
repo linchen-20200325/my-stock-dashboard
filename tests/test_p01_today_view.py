@@ -317,7 +317,16 @@ class TestSignalChannelFailsAtBuildTime:
 
     def test_render_boundary_turns_a_broken_tile_into_a_red_card(
             self, monkeypatch):
-        """渲染期若仍有東西炸，轉紅卡 ＋ `repr(e)`，**不留半截頁面**。"""
+        """渲染期若仍有東西炸，轉紅卡 ＋ `repr(e)`，**不留半截頁面**。
+
+        ⚠️ **2026-09-07 FE-9：patch 的對象從 `P.render_card` 改成
+        `K.render_card`** —— 這是**接縫搬家**，不是把守衛放寬。
+        該邊界的本體已上移共用層 `_ui_kit.render_card_isolated()`
+        （頁 1 與頁 2 原本各有一份逐行同構的 `_render_one()`），
+        `page_today` 因此不再持有 `render_card` 這個名字。
+        本條驗的東西**一個字都沒變**（炸了要轉紅卡、原始例外要看得見），
+        只是注入點跟著實作移到它真正的所在地。
+        """
         _fake = _FakeST()
         monkeypatch.setattr(K, "st", _record(_fake))
         monkeypatch.setattr(P, "st", _record(_FakeST()))
@@ -331,7 +340,7 @@ class TestSignalChannelFailsAtBuildTime:
                 raise RuntimeError("render exploded")
             return _real(card, **kw)
 
-        monkeypatch.setattr(P, "render_card", _boom)
+        monkeypatch.setattr(K, "render_card", _boom)
         P._render_one(P.Tile(Card(key="k", label="測試卡", state=UI_LIVE,
                                   value="v")))
         _all = "\n".join(_fake.markdown)

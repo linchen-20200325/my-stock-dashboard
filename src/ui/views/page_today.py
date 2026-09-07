@@ -224,7 +224,7 @@ from src.ui.views._ui_kit import (
     MAX_COLS,
     assert_signal_text_clean,
     grid,
-    render_card,
+    render_card_isolated,
     render_cards,
     render_note,
     section_header,
@@ -1216,32 +1216,19 @@ def _load_key_alerts(session: Mapping[str, Any]) -> tuple[Any, bool, str]:
 def _render_one(tile: Tile) -> None:
     """畫一張卡，**並且不讓它把整頁畫到一半就死掉**（【7】2026-09-07）。
 
-    第一道防線在建構期（`Tile.__post_init__`），這裡是第二道：
-    渲染期若仍有東西炸（例如 L0 給了一個未知狀態名 → `state_meta()`
-    fail loud），把它**就地轉成一張紅卡 ＋ `repr(e)`**，其餘的卡照畫。
-
-    ⚠️ **不是 `except: pass`**：例外被轉成一個看得見的紅態並附原文，
-    log 也留一份。§1 要的是「紅態看得見」——
-    半截死頁（上半頁在、下半頁全沒了、畫面上沒有任何一句解釋）
-    比一張紅卡危險得多，因為使用者根本不知道有東西不見了。
+    第一道防線在建構期（`Tile.__post_init__`），這裡是第二道。
+    ⚠️ **2026-09-07 FE-9：第二道的本體已上移至共用層**
+    `_ui_kit.render_card_isolated()` —— 頁 1 與頁 2 原本各有一份逐行同構的
+    `_render_one()`（**兩把尺**，遲早漂移）。**邏輯一字未改**，
+    本函式只剩「把本頁專屬的三樣東西綁上去」：
+    log 前綴 / 出處文案（【8b】：出事的是哪一層只有本頁知道）/ 去哪補。
     """
-    try:
-        render_card(tile.card, signal_text=tile.signal_text,
-                    signal_color=tile.signal_color, facts=tile.facts)
-        return
-    except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
-        # ⚠️ `except ... as _e` 的 `_e` 在區塊結束時會被 `del` 掉，
-        #    所以在區塊內就把字串取出來（不然下面會是 NameError）。
-        _err = repr(_e)
-        print(f"[views/page_today] 卡 {tile.card.key!r} 渲染失敗 → 轉紅卡：{_err}")
-    # 卡的 label 本身不受 `Note` 那道 glyph 驗證管，先洗過再放進 `Note.now`，
-    # 否則這張補救卡自己會再炸一次（§1：紅態要看得見，不是換一種炸法）。
-    _label = scrub_state_glyphs(tile.card.label)[0] or tile.card.key
-    render_card(Card(
-        key=f"{tile.card.key}.render_failed", label=_label, state=UI_FAILED,
-        note=Note(now=f"{_label}　**這一格畫不出來**",
-                  why=_error_why(SRC_RENDER, _err),
-                  where=NO_LOAD_EXIT_WHERE)))
+    render_card_isolated(
+        tile.card, signal_text=tile.signal_text,
+        signal_color=tile.signal_color, facts=tile.facts,
+        owner="views/page_today",
+        error_why=lambda _err: _error_why(SRC_RENDER, _err),
+        where=NO_LOAD_EXIT_WHERE)
 
 
 def _render_tiles(tiles: Sequence[Tile], cols: int = MAX_COLS) -> None:

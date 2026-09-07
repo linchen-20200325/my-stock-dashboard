@@ -190,7 +190,7 @@ from src.ui.tabs.tab_today import (
 from src.ui.views._ui_kit import (
     MAX_COLS,
     grid,
-    render_card,
+    render_card_isolated,
     section_header,
 )
 
@@ -963,26 +963,18 @@ def build_sector_flow_card(flow: SectorFlowReadout
 def _render_one(card: Card, facts: Sequence[tuple[str, str]] = ()) -> None:
     """畫一張卡，**並且不讓它把整頁畫到一半就死掉**。
 
-    做法沿用頁 1：渲染期若仍有東西炸（例如 L0 給了未知狀態名 →
-    `state_meta()` fail loud），把它**就地轉成一張紅卡 ＋ `repr(e)`**，
-    其餘的卡照畫。**不是 `except: pass`** —— 例外被轉成看得見的紅態並附原文，
-    log 也留一份。半截死頁（上半頁在、下半頁全沒了、畫面上沒有任何一句解釋）
-    比一張紅卡危險得多，因為使用者根本不知道有東西不見了。
+    ⚠️ **2026-09-07 FE-9：本體已上移至共用層** `_ui_kit.render_card_isolated()`
+    —— 本頁與頁 1 原本各有一份逐行同構的 `_render_one()`（**兩把尺**：
+    一邊修了「`except ... as _e` 的 `_e` 會被 `del`」那個坑、另一邊沒修，
+    就是最典型的漂移）。**邏輯一字未改**，本函式只剩「把本頁專屬的三樣東西
+    綁上去」：log 前綴 / 出處文案（出事的是哪一層只有本頁知道）/ 去哪補。
     """
-    try:
-        render_card(card, facts=tuple(facts))
-        return
-    except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
-        # `except ... as _e` 的 `_e` 在區塊結束時會被 `del`，先取出字串。
-        _err = repr(_e)
-        print(f"[views/page_find] 卡 {card.key!r} 渲染失敗 → 轉紅卡：{_err}")
-    _label = scrub_state_glyphs(card.label)[0] or card.key
-    render_card(Card(
-        key=f"{card.key}.render_failed", label=_label, state=UI_FAILED,
-        note=Note(now=f"{_label}　**這一格畫不出來**",
-                  why=_error_why(SRC_RENDER, _err),
-                  where=("這是渲染層的問題，不是你操作的問題 —— "
-                         f"{NO_EXIT_MARKER}；請把上面那行訊息回報給維護者"))))
+    render_card_isolated(
+        card, facts=facts,
+        owner="views/page_find",
+        error_why=lambda _err: _error_why(SRC_RENDER, _err),
+        where=("這是渲染層的問題，不是你操作的問題 —— "
+               f"{NO_EXIT_MARKER}；請把上面那行訊息回報給維護者"))
 
 
 def load_factor_labels() -> tuple[dict[str, str] | None, str]:
