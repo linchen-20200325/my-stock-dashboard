@@ -461,7 +461,16 @@ render_macro_compass()
 # v18.182 ARCHIVED: 🧪 回測找參數 / v18.187 ARCHIVED: 📈 月營收進退 / v18.189 ARCHIVED: 📊 財報體檢變化
 # 各暫封存模組保留磁碟，啟用方式見各 ARCHIVED 原始注解。
 # v18.463: UI 重構 — 10 平鋪 Tab → 4 大群組 + Sub-tabs（sub-tab 變數名稱維持不變，測試仍通過）
-tab_market, tab_stocks, tab_etf_main, tab_tools, tab_warroom, tab_mgmt, tab_ai = st.tabs([
+# 2026-09-07 FE-7:最前面**純新增**「🚦 今天」= IA v2 五頁戰情室的第 1 頁
+# （`src/ui/views/page_today.py`，PR #663 落地但當時無 production caller）。
+# 2026-09-07 FE-9:其後**純新增**「🔍 找標的」= IA v2 第 2 頁
+# （`src/ui/views/page_find.py`，PR #664 落地時同樣無 production caller）。
+# ⚠️ 既有 7 個群組**一個都沒刪、沒改名、沒換順序** —— IA v2 的完整切換
+#    （7 群組 → 5 頁，會移除既有分頁）屬客戶畫面訂版，不在本批；
+#    本批只讓新頁「被看得見、可驗收」。客戶已定版**雙軌並存**:新頁陸續
+#    掛成新頁籤,既有頁籤一個都不動,兩邊同時在線由客戶自行比對驗收。
+tab_today, tab_find, tab_market, tab_stocks, tab_etf_main, tab_tools, tab_warroom, tab_mgmt, tab_ai = st.tabs([
+    '🚦 今天', '🔍 找標的',
     '🌍 市場環境', '🔬 選股', '🏦 ETF', '🔧 工具箱', '💼 我的持股戰情室', '📁 組合管理', '🧬 AI 問答',
 ])
 
@@ -514,6 +523,31 @@ def _render_tab_isolated(_render, _label):
         st.error(f'⚠️ 「{_label}」分頁渲染異常,已隔離(其他分頁不受影響):'
                  f'{type(_e_tab).__name__}: {str(_e_tab)[:300]}')
         print(f'[tab:{_label}] render error:\n{_tb_t.format_exc()}', file=_sys_t.stderr)
+
+
+# ══════════════════════════════════════════════════════════════
+# GROUP 0: 🚦 今天（IA v2 第 1 頁）— 2026-09-07 FE-7 純新增
+# ══════════════════════════════════════════════════════════════
+# 分層(CLAUDE.md §8.2):L6 app.py → L5 `src/ui/views/`,**向下呼叫,合規**。
+# 本區塊不新增任何 `src.data.*` 直呼(§8.2 硬規則第 4 條)。
+# late import 照本檔既有慣例寫在 `with` 區塊內(與「總經 v2」「板塊資金潮汐」同形)。
+with tab_today:
+    from src.ui.views.page_today import render_page_today
+    _render_tab_isolated(render_page_today, '今天')
+
+
+# ══════════════════════════════════════════════════════════════
+# GROUP 0b: 🔍 找標的（IA v2 第 2 頁）— 2026-09-07 FE-9 純新增
+# ══════════════════════════════════════════════════════════════
+# 分層(CLAUDE.md §8.2):L6 app.py → L5 `src/ui/views/`,**向下呼叫,合規**。
+# 本區塊不新增任何 `src.data.*` 直呼(§8.2 硬規則第 4 條)。
+# late import 照本檔既有慣例寫在 `with` 區塊內(與「🚦 今天」同形)。
+# ⚠️ 既有「🔬 選股 → 🔭 選股網」**未動**:本頁是它的 IA v2 新殼,
+#    雙軌並存期間兩邊同時在線,session key 互不相撞
+#    (本頁前綴 `p02v_` / `_p02_`,既有選股網為 `screener_*`)。
+with tab_find:
+    from src.ui.views.page_find import render_page_find
+    _render_tab_isolated(render_page_find, '找標的')
 
 
 # ══════════════════════════════════════════════════════════════
