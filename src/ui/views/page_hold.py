@@ -74,7 +74,8 @@
 
 ⚠️ **`services/holdings_service.py` 是本批補上的那一步。** 在它之前，
 `src/services/` 底下沒有任何一支回傳「你持有哪幾檔、各幾張、均價多少」
-（AUD-5 稽核組窮舉 `src/services/` 全部 public 函式後證實），唯一產得出那份 list 的是
+（**這句全稱句出自另一組（AUD-5）的窮舉，本頁作者沒有自己重跑** —— §-2 規則 6），
+唯一產得出那份 list 的是
 L5 私有函式 `etf_tab_dividend_station._load_holdings_from_portfolio()` ——
 本頁**不會**去 import 它（跨檔取用底線開頭的私有符號＝`CLAUDE.md §8.2.A.2`
 **V-PICKER-PRIV-1** 登記的違憲；經別的 L5 檔 re-export 繞道只是騙過靜態檢查）。
