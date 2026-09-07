@@ -1,4 +1,11 @@
-"""tests/test_p04_hold_view.py — FE-12 的頁 4 守衛（IA v2「💼 我的持股」）。
+"""tests/test_p04_hold_view.py — 頁 4 守衛（IA v2「💼 我的持股」）。
+
+⚠️ **2026-09-07 FE-15 更新**：戰情室 ①③④⑤ ＋ ⑥ 的核心／衛星 ＋ 葉2 的持股列預覽
+**已接線**（新增 L3 `services/holdings_service.py`）。原本「這幾張卡恆為 unwired」
+那幾條斷言**不是被放寬，是換成了新的事實**：接線的改成驗 live / empty / failed
+三態（`TestTheWarroomIsWiredNow`），仍未接線的維持 unwired 但驗**新的**「去哪補」。
+另補一整類 `TestHoldingsServiceIsReadOnly` —— 頁面那一類只證明「這一頁沒有寫入的路」，
+**它呼叫的 L3 自己會不會寫不在射程內**，那個洞由新的一類補。
 
 守的是 `src/ui/views/page_hold.py`。風格與粒度沿用
 `tests/test_p03_inspect_view.py`：**一條測試對應一個具體的說謊方式**，
@@ -16,8 +23,20 @@
     把全部下游 L3 下毒（毒藥**不繼承 `Exception`**，本頁的 try/except 吞不掉），
     再跑一次每一支 loader —— 碰到就當場紅。**含本頁獨有的第二個 gate**：
     按了、但選了「只讀市場端」時，Google 那一支**一次都不准被碰到**。
-  · `TestUnwiredStaysUnwired`     ← 十七張未接線卡被「按一次就變好」、三要素留空、
-    或十七張共用同一句「去哪補」（那會讓「補哪一層才會好」這個資訊消失）。
+  · `TestUnwiredStaysUnwired`     ← **剩下八張**未接線卡被「按一次就變好」、三要素
+    留空、或共用同一句「去哪補」（那會讓「補哪一層才會好」這個資訊消失）。
+    名單改成**從真正畫出來的卡裡挑 unwired**，不再手抄 —— 手抄的名單在
+    「某張卡不小心變回 unwired」時不會有人發現。另加一條：**沒有任何一張卡
+    可以再怪「缺 L3 holdings loader」**（那句話本批之後是假的）。
+  · `TestTheWarroomIsWiredNow`    ← 接線之後才可能出現的說謊方式：
+    「你沒有持股」／「還沒按」／「你選了不讀 Google」／「Google 掛了」被畫成同一種
+    —— 對一個新使用者，「你沒有持股」是**每天都會看到**的正常狀態。
+    含本批最重要的一條：**換入候選一定帶 `exclude=你已持有的代號`**，
+    少了它畫面會叫你買你已經有的東西。
+  · `TestHoldingsServiceIsReadOnly` ← 新增的那一支 L3 自己的唯讀守衛：
+    寫入面識別字為零、只准碰 gsheet 讀取面的白名單、**每一次讀都顯式帶
+    `sheet_id=`**（傳 `None` 會讓快取鍵恆為空 → 換 Sheet 後拿到上一本的資料）、
+    投資組合那半 fail loud / 觀察清單那半不得靜默吞掉。
   · `TestScaleDisclosureComesFromL0` ← 線框 ② 的 degraded **不是寫死的**：
     它讀 L0 `station_specs` 的 `discriminative` 旗標，旗標翻面它就跟著翻面。
   · `TestFormStructure`           ← 線框 F11 ＋ 鐵律 2：本頁**沒有自己的 form**，
@@ -89,6 +108,14 @@ def _binding(**kw) -> P.BindingReadout:
 #: 任何沒被列在這裡的 `from src.services...import X` 就是紅燈，
 #: 不必先想得到那個寫入函式叫什麼名字。
 _ALLOWED_L3: frozenset[tuple[str, str]] = frozenset({
+    # 持股清單（本批新增）—— 它自己也受 `TestHoldingsServiceIsReadOnly` 管。
+    ("src.services.holdings_service", "get_holdings"),
+    # 戰情表與它的純函式彙總（**全部唯讀**，逐支讀過 docstring）。
+    ("src.services.dividend_station_service", "get_station_rows"),
+    ("src.services.dividend_station_service", "build_station_digest"),
+    ("src.services.dividend_station_service", "compute_portfolio_totals"),
+    ("src.services.dividend_station_service", "get_switch_in_candidates"),
+    ("src.services.dividend_station_service", "build_switch_advice"),
     ("src.services.dividend_station_service", "fetch_vix"),
     ("src.services.dividend_station_service", "get_station_macro"),
     ("src.services.allocation_service", "get_allocation"),
@@ -160,7 +187,9 @@ class TestReadOnly:
         _imports = {(m, n) for m, n, _ in _service_imports(_tree())}
         assert _imports, "本頁一支 L3 都沒有 import —— 白名單形同虛設"
         assert _imports <= _ALLOWED_L3
-        assert len(_imports) >= 4, f"實際只 import 了 {sorted(_imports)}"
+        assert len(_imports) >= 10, f"實際只 import 了 {sorted(_imports)}"
+        assert ("src.services.holdings_service", "get_holdings") in _imports, (
+            "持股清單沒有走 L3 —— 這一頁唯一合法的取得方式就是那一支")
 
     def test_no_write_surface_identifier_anywhere(self):
         _hit = sorted(_identifiers(_tree()) & _WRITE_SURFACE)
@@ -561,8 +590,11 @@ class _PoisonModule:
         raise _L3Touched(f"{self.__name__}.{item} 在 requested=False 時被碰到了")
 
 
-#: 頁 4 檔頭「取數接線表」列出的全部下游（三支 L3 模組）。
+#: 頁 4 檔頭「取數接線表」列出的全部下游 L3 模組。
+#: ⚠️ `holdings_service` 是本批新接線的那一支 —— **它一定要在這張表裡**，
+#:    否則「沒按之前不碰你的 Google Sheet」這句話就沒有人在驗。
 _DOWNSTREAM = (
+    "src.services.holdings_service",
     "src.services.dividend_station_service",
     "src.services.allocation_service",
     "src.services.portfolio_binding_service",
@@ -590,21 +622,47 @@ class TestNothingIsCalledBeforeYouAsk:
         assert P.load_macro(_r).requested is False
         assert P.load_allocation(_r).requested is False
         assert P.load_binding(_r).requested is False
+        _h = P.load_holdings(_r)
+        assert _h.requested is False
+        _st = P.load_station(_h)
+        assert _st.requested is False
+        assert P.load_switch(_st, P.load_macro(_r), _h).requested is False
 
     def test_market_only_scope_really_skips_google(self, poisoned):
-        """**本頁獨有的第二個 gate**：選「只讀市場端」時 Google 那支一次都不准被碰。
+        """**本頁獨有的第二個 gate**：選「只讀市場端」時 Google 那邊一次都不准被碰。
 
-        ⚠️ 其他三支 L3 這時**應該**被呼叫（毒藥會炸），所以本條只跑 Google 那支 ——
-        它是唯一一支會連到使用者資產的。
+        ⚠️ 本批之後這個 gate 擋掉的**不只是綁定狀態，還有整份持股清單**（以及
+        以它為輸入的戰情表與換股建議）—— 那才是真正會連到使用者資產的那幾支。
+        VIX / 總經 / 建議水位這時**應該**被呼叫（毒藥會炸），所以本條不跑它們。
         """
         _r = P.HoldRequest(submitted=True, mode=P.SCOPE_MARKET)
         _b = P.load_binding(_r)
         assert _b.requested is False and _b.error == ""
+        _h = P.load_holdings(_r)
+        assert _h.requested is False and _h.error == "" and _h.holdings == ()
+        _st = P.load_station(_h)
+        assert _st.requested is False and _st.error == "" and _st.rows == ()
+        _sw = P.load_switch(_st, P.MacroReadout(requested=False), _h)
+        assert _sw.requested is False and _sw.error == ""
+
+    def test_a_holdings_read_never_happens_for_an_empty_list(self, poisoned):
+        """讀到空清單時**不再往下打第二次網路** —— 但 `requested` 仍然是 True。
+
+        ⚠️ 這一條同時擋兩個方向的錯：
+          · 對空清單還去跑一次逐檔抓取（白打一次網路）；
+          · 把「清單是空的」當成 gate 寫回 `requested=False`（那就是從資料反推，
+            使用者會看到「尚未執行」而其實已經執行過了）。
+        """
+        _h = P.HoldingsReadout(requested=True, submitted=True, bound=True)
+        _st = P.load_station(_h)          # 毒藥全上，這一行不准碰任何 L3
+        assert _st.requested is True and _st.rows == () and _st.error == ""
+        _sw = P.load_switch(_st, P.MacroReadout(requested=True), _h)
+        assert _sw.requested is True and _sw.error == ""
 
     def test_the_poison_really_would_have_fired(self, poisoned):
         """**反證**：同一組毒藥下，`requested=True` 一定炸。
 
-        沒有這一條，上面兩條可能只是因為毒藥根本沒裝上去而綠。
+        沒有這一條，上面幾條可能只是因為毒藥根本沒裝上去而綠。
         """
         _r = _req()
         with pytest.raises(_L3Touched):
@@ -615,6 +673,17 @@ class TestNothingIsCalledBeforeYouAsk:
             P.load_allocation(_r)
         with pytest.raises(_L3Touched):
             P.load_binding(_r)
+        with pytest.raises(_L3Touched):
+            P.load_holdings(_r)
+        # 有持股 → 戰情表與換股建議都會往下打，毒藥同樣要炸。
+        _h = P.HoldingsReadout(requested=True, submitted=True, bound=True,
+                               holdings=({"ticker": "0056", "held": True},))
+        with pytest.raises(_L3Touched):
+            P.load_station(_h)
+        _st = P.StationReadout(requested=True, submitted=True, bound=True,
+                               holdings_n=1, rows=({"代號": "0056"},))
+        with pytest.raises(_L3Touched):
+            P.load_switch(_st, P.MacroReadout(requested=True), _h)
 
     def test_the_disclosure_needs_no_l3_at_all(self, poisoned):
         """② 是 L0-only —— 毒藥全上，它照樣算得出來。"""
@@ -624,30 +693,71 @@ class TestNothingIsCalledBeforeYouAsk:
     def test_idle_note_promise_matches_the_code(self):
         """畫給使用者看的那句承諾，與上面實測到的行為必須是同一件事。"""
         assert "一次 L3 取數都不會發" in P.IDLE_WHY
-        assert "沒有發那一次網路呼叫" in P.BINDING_NOT_ASKED_WHY
+        assert "沒有發那一次網路呼叫" in P.GOOGLE_NOT_ASKED_WHY
+        assert "持股清單也在這一次呼叫裡" in P.GOOGLE_NOT_ASKED_WHY, (
+            "這個選項現在擋掉的不只是綁定狀態 —— 文案沒講出來就是漏講")
 
 
 # ══════════════════════════════════════════════════════════════════
-# 【5】未接線的十七張卡
+# 【5】仍然未接線的八張卡
 # ══════════════════════════════════════════════════════════════════
+#: ⚠️ **本批（FE-15）從 17 張降到 8 張。** 降下來的那 9 張全部是同一個根因
+#: （`src/services/` 沒有持股清單）—— 補上 `holdings_service` 之後它們就活了。
+#: 剩下這 8 張**與持股清單無關**，各自卡在別的層（見每一張自己的 `where`）。
+_UNWIRED_KEYS: frozenset[str] = frozenset({
+    "hold.deep.rebalance", "hold.deep.stress", "hold.deep.var",
+    "hold.deep.dividend_cash", "hold.deep.grape",
+    "hold.ai_summary", "hold.setup.pick_sheet", "hold.setup.watchlist",
+})
+
+
 def _all_unwired_builts(requested: bool):
-    return (P.build_conclusion_cards(requested)
-            + (P.build_lightwall_card(requested),
-               P.build_switch_card(requested),
-               P.build_allocation_split_card(requested),
-               P.build_take_profit_card(requested),
-               P.build_ai_summary_card(requested))
-            + P.build_deep_cards(requested)
-            + P.build_setup_unwired_cards(requested))
+    """**從真正畫出來的那幾批裡挑出未接線的**，不是另外手抄一份名單。
+
+    手抄一份的話，某一張卡哪天不小心變回 unwired（或被接線卻忘了從名單移除）
+    都不會有人發現 —— 那正是這一整類測試要防的事。
+    """
+    _station = P.StationReadout(requested=requested, submitted=requested)
+    _built = (P.build_conclusion_cards(_station)
+              + (P.build_lightwall_card(_station),
+                 P.build_switch_card(P.SwitchReadout(requested=requested,
+                                                     submitted=requested),
+                                     _station),
+                 P.build_allocation_split_card(_station),
+                 P.build_take_profit_card(_station),
+                 P.build_ai_summary_card(requested))
+              + P.build_deep_cards(_station)
+              + (P.build_holdings_preview_card(
+                  P.HoldingsReadout(requested=requested, submitted=requested)),)
+              + P.build_setup_unwired_cards(requested))
+    return tuple(_b for _b in _built if _b[0].state == UI_UNWIRED)
 
 
 class TestUnwiredStaysUnwired:
     """未接線 ≠ 查不到。**按幾次都一樣** —— 這正是它與 `empty` 必須分兩態的原因。"""
 
     def test_the_count_is_what_the_docstring_claims(self):
-        assert len(_all_unwired_builts(False)) == 17, (
-            "未接線卡的張數與檔頭／本測試的敘述不一致 —— "
-            "接線或新增時兩邊要一起改")
+        _keys = {_c.key for _c, _f, _s in _all_unwired_builts(False)}
+        assert _keys == _UNWIRED_KEYS, (
+            f"未接線卡的名單與本測試的敘述不一致：\n"
+            f"  多出來（該接線卻還是 unwired？）：{sorted(_keys - _UNWIRED_KEYS)}\n"
+            f"  不見了（接線了？）：{sorted(_UNWIRED_KEYS - _keys)}\n"
+            "接線或新增時，本名單與檔頭的「仍然沒有接上的項目」要一起改")
+
+    def test_no_card_still_blames_the_missing_holdings_loader(self):
+        """**本批最容易留下的假話**：`holdings_service` 已經補上了。
+
+        任何一張卡若還寫「`src/services/` 沒有回傳持股清單的 L3」，
+        就是叫下一個人去補一支已經在那裡的東西 —— 比不寫更糟（§-2）。
+        """
+        _bad = [_c.key for _c, _f, _s in _all_unwired_builts(False)
+                if ("沒有任何一支" in _c.note.why
+                    or "holdings loader" in _c.note.where
+                    or "沒有 L3 介面" in _c.note.why)]
+        assert not _bad, f"這幾張卡還在怪一個已經補好的東西：{_bad}"
+        assert not hasattr(P, "HOLDINGS_WHY"), (
+            "`HOLDINGS_WHY`（「沒有 L3 holdings loader」）還在 —— "
+            "那句話本批之後是假的，常數留著遲早有人再用它")
 
     @pytest.mark.parametrize("requested", [False, True])
     def test_all_stay_unwired_whatever_you_press(self, requested):
@@ -666,12 +776,26 @@ class TestUnwiredStaysUnwired:
                 f"{_card.key} 的「去哪補」給了一個使用者其實按不到的出口")
 
     def test_the_wheres_are_not_copy_pasted(self):
-        """十七張卡卡在**不同的層**，共用一句話會讓「補哪一層才會好」消失。"""
-        _wheres = [_c.note.where for _c, _f, _s in _all_unwired_builts(False)]
-        assert len(set(_wheres)) >= 14, (
-            f"十七張未接線卡只有 {len(set(_wheres))} 種「去哪補」—— "
-            "它們卡住的位置不同（有的只差清單、有的連 L3 都沒有、"
-            "有的是本頁唯讀不准寫）")
+        """八張卡卡在**不同的層**，共用一句話會讓「補哪一層才會好」消失。
+
+        ⚠️ 本批把門檻**收緊成「全部互異」**（原本是 17 張裡至少 14 種）——
+        張數變少之後，「至少 N 種」會鬆到形同虛設。
+        唯一的例外是 Sheet 選擇／觀察清單管理：它們是**同一個理由**
+        （本頁不准寫），共用 `READONLY_WHERE` 是對的，故分開數。
+        """
+        _builts = _all_unwired_builts(False)
+        _readonly = {"hold.setup.pick_sheet", "hold.setup.watchlist"}
+        _wheres = [_c.note.where for _c, _f, _s in _builts
+                   if _c.key not in _readonly]
+        assert len(set(_wheres)) == len(_wheres), (
+            f"未接線卡出現重複的「去哪補」：{len(_wheres)} 張只有 "
+            f"{len(set(_wheres))} 種說法 —— 它們卡住的位置不同"
+            "（缺 L3 wrapper／缺一個要先拍板的畫面元件／L5 widget key）")
+        _ro_wheres = {_c.note.where for _c, _f, _s in _builts
+                      if _c.key in _readonly}
+        assert _ro_wheres == {P.READONLY_WHERE}, (
+            "唯讀那兩張卡的「去哪補」不再是同一句 —— 它們是同一個理由，"
+            "分頭寫只會漂移")
 
     def test_write_blocked_cards_do_not_blame_the_missing_l3(self):
         """Sheet 選擇／觀察清單管理**不是缺 L3，是缺授權** —— 不可寫成同一句。
@@ -679,12 +803,25 @@ class TestUnwiredStaysUnwired:
         寫成「補一支 L3 就會有」是假的：就算補了，本頁也不會做那件事。
         """
         _by_key = {_c.key: _c for _c, _f, _s in P.build_setup_unwired_cards(False)}
-        for _k in ("hold.setup.pick_sheet", "hold.setup.watchlist"):
-            _why = _by_key[_k].note.why
+        assert set(_by_key) == {"hold.setup.pick_sheet", "hold.setup.watchlist"}, (
+            "葉2 的未接線卡名單變了 —— 持股列預覽本批已接線，"
+            "它不該再回到這一批")
+        for _k, _card in _by_key.items():
+            _why = _card.note.why
             assert _why == P.READONLY_WHY, f"{_k} 的理由寫成了缺 L3"
             assert "寫入" in _why
-            assert P.HOLDINGS_WHY not in _why
-        assert _by_key["hold.setup.preview"].note.why == P.HOLDINGS_WHY
+            assert "L3" not in _why, f"{_k} 把「不准寫」講成了「缺 L3」"
+
+    def test_the_l3_wrapper_cards_say_the_holdings_are_already_there(self):
+        """⑥ 那三張缺 L3 wrapper 的卡**必須講清楚持股不是問題**。
+
+        不講的話，下一個人會先去補一支已經存在的 holdings loader。
+        """
+        _by_key = {_c.key: _c for _c, _f, _s in P.build_deep_cards(
+            P.StationReadout(requested=False))}
+        for _k in ("hold.deep.rebalance", "hold.deep.stress", "hold.deep.var"):
+            assert _by_key[_k].note.why == P.MISSING_L3_WRAPPER_WHY, _k
+            assert "wrapper" in _by_key[_k].note.where, _k
 
     def test_every_unwired_card_carries_facts(self):
         """未接線也要讓人看到「這一格本來會有什麼」，否則使用者不知道少看了什麼。"""
@@ -880,14 +1017,23 @@ class TestThreeColumnGrid:
             f"本頁出現裸 `st.columns`（第 {_bad} 行）—— 一律走 `_ui_kit.grid()`")
 
     def test_the_six_deep_blocks_go_through_the_grid(self):
-        """線框 ⑥ 是**並列**六個區塊 —— 3 欄 × 2 排，不是一排六欄。"""
-        assert len(P.DEEP_SPECS) == 6
+        """線框 ⑥ 是**並列**六個區塊 —— 3 欄 × 2 排，不是一排六欄。
+
+        ⚠️ 本批把「核心／衛星」接線了，`DEEP_SPECS` 因此只剩 5 張未接線卡；
+        但**畫面上仍然是六格**（接線的那一張留在它原本的位置，不因為先做好
+        就被搬到第一格）。所以這裡數的是 `build_deep_cards()` 的產出，不是規格表。
+        """
+        assert len(P.DEEP_SPECS) == 5, "未接線的深度分析卡不是 5 張了"
         assert P.MAX_COLS == 3
-        _rows = list(P.grid(P.build_deep_cards(False), P.MAX_COLS))
+        _built = P.build_deep_cards(P.StationReadout(requested=False))
+        assert len(_built) == 6, "線框 ⑥ 是六格，接線與否都不改變格數"
+        assert [_c.key for _c, _f, _s in _built][1] == "hold.deep.core_satellite", (
+            "接線的那一張被搬位置了 —— 順序照線框，不照完成度")
+        _rows = list(P.grid(_built, P.MAX_COLS))
         assert [len(_c) for _c, _cols in _rows] == [3, 3]
 
     def test_the_conclusion_row_is_three_cards(self):
-        assert len(P.build_conclusion_cards(False)) == 3
+        assert len(P.build_conclusion_cards(P.StationReadout(requested=False))) == 3
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -944,8 +1090,33 @@ class TestSignalChannelAndRenderBoundary:
         """鐵律 3：訊號頻道**只出中文標籤**（狀態的 🔴 與燈號的 🔴 是同一顆）。"""
         from src.ui.views._ui_kit import banned_signal_glyphs
 
+        _live_station = P.StationReadout(
+            requested=True, submitted=True, bound=True, holdings_n=2,
+            rows=({"代號": "0056", "名稱": "高股息"}, {"代號": "2330", "名稱": "台積電"}),
+            split={"core_pct": 70.0, "sat_pct": 30.0, "core_dev": -10.0,
+                   "total_value": 123456.0, "partial": False,
+                   "held_n": 2, "valued_n": 2},
+            take_profit=({"代號": "2330", "損益%": 22.0},),
+            totals={"pnl_twd": 12345.0, "pnl_pct": 8.1, "value_twd": 234567.0,
+                    "held_n": 2, "valued_n": 2, "partial": False},
+            add_n=1, cut_n=1, judged=9, total_lights=11, unjudged_rows=1,
+            cruise_text="9/11 個依據可用")
         _builts = list(_all_unwired_builts(True)) + [
             P.build_scale_card(P.build_scale_disclosure()),
+            *P.build_conclusion_cards(_live_station),
+            P.build_lightwall_card(_live_station),
+            P.build_allocation_split_card(_live_station),
+            P.build_take_profit_card(_live_station),
+            *P.build_deep_cards(_live_station),
+            P.build_switch_card(P.SwitchReadout(
+                requested=True, submitted=True, stance="defensive",
+                switch_out=({"代號": "2330", "建議動作": "汰弱"},),
+                switch_in=({"代號": "0056", "名稱": "高股息"},),
+                switch_in_src="watchlist", excluded_n=2), _live_station),
+            P.build_holdings_preview_card(P.HoldingsReadout(
+                requested=True, submitted=True, bound=True,
+                holdings=({"ticker": "0056", "held": True, "lots": 3,
+                           "avg_price": 35.0, "asset_kind": "etf"},))),
             P.build_vix_card(P.VixReadout(requested=True, vix=18.2)),
             P.build_macro_stage_card(P.MacroReadout(
                 requested=True, loaded=True, regime="bull",
@@ -1003,7 +1174,7 @@ class TestSignalChannelAndRenderBoundary:
             return _real(card, **kw)
 
         monkeypatch.setattr(K, "render_card", _boom)
-        P._render_one(P.build_lightwall_card(False))
+        P._render_one(P.build_lightwall_card(P.StationReadout(requested=False)))
         _all = "\n".join(_md)
         assert "這一格畫不出來" in _all, "半截死頁：例外沒有被轉成看得見的紅卡"
         assert "render exploded" in _all, "原始例外必須看得見（§1）"
@@ -1014,6 +1185,321 @@ class TestSignalChannelAndRenderBoundary:
             requested=True, error="RuntimeError('FRED 連線失敗 🔴')"))[0]
         assert _card.state == UI_FAILED
         assert "🔴" not in _card.note.why
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【11】本批接線的那幾張卡：四態不得混（FE-15）
+# ══════════════════════════════════════════════════════════════════
+def _holdings(**kw) -> P.HoldingsReadout:
+    kw.setdefault("requested", True)
+    kw.setdefault("submitted", True)
+    return P.HoldingsReadout(**kw)
+
+
+def _station(**kw) -> P.StationReadout:
+    kw.setdefault("requested", True)
+    kw.setdefault("submitted", True)
+    return P.StationReadout(**kw)
+
+
+#: 本批接線的卡 → 建構它的那一支（給「四態逐一走過」用）。
+def _wired_builts(station: P.StationReadout, *, switch=None, holdings=None):
+    _sw = switch if switch is not None else P.SwitchReadout(
+        requested=station.requested, submitted=station.submitted,
+        error=station.error)
+    _h = holdings if holdings is not None else P.HoldingsReadout(
+        requested=station.requested, submitted=station.submitted,
+        bound=station.bound, error=station.error)
+    return (P.build_conclusion_cards(station)
+            + (P.build_lightwall_card(station),
+               P.build_switch_card(_sw, station),
+               P.build_allocation_split_card(station),
+               P.build_take_profit_card(station),
+               P.build_core_satellite_card(station),
+               P.build_holdings_preview_card(_h)))
+
+
+class TestTheWarroomIsWiredNow:
+    """FE-15：戰情室 ①③④⑤ ＋ ⑥ 核心衛星 ＋ 葉2 預覽**已接線**。
+
+    ⚠️ 這一類守的是**接線之後才可能出現的說謊方式**：
+    「你沒有持股」與「還沒按」與「Google 掛了」被畫成同一種
+    —— 而前者對一個新使用者是**每天都會看到**的正常狀態。
+    """
+
+    def test_cold_start_every_wired_card_is_idle_not_empty(self):
+        """冷啟動：**還沒有人叫過** → 全部灰的 idle，一張都不准是 empty。"""
+        for _card, _f, _s in _wired_builts(_station(requested=False,
+                                                    submitted=False)):
+            assert _card.state == UI_IDLE, f"{_card.key} 冷啟動就是 {_card.state}"
+            assert _card.note.now == P.IDLE_NOW, _card.key
+
+    def test_market_only_says_you_chose_not_to_read_google(self):
+        """按了、但選「只讀市場端」→ 仍是 idle，**但指路句完全不同**。
+
+        對這種人說「請按下那顆鈕」，他會按了又按 —— 他已經按過了。
+        """
+        for _card, _f, _s in _wired_builts(_station(requested=False,
+                                                    submitted=True)):
+            assert _card.state == UI_IDLE, _card.key
+            assert _card.note.now == P.GOOGLE_NOT_ASKED_NOW, _card.key
+            assert _card.note.now != P.IDLE_NOW
+            assert "改成" in _card.note.where, (
+                f"{_card.key} 叫使用者去按一顆他已經按過的鈕")
+
+    def test_not_bound_and_empty_sheet_are_two_different_sentences(self):
+        """「還沒綁」要你去**綁**、「綁了但空」要你去**填** —— 一句都不可共用。"""
+        _unbound = _wired_builts(_station(bound=False))
+        _empty = _wired_builts(_station(bound=True))
+        for (_c1, _, _), (_c2, _, _) in zip(_unbound, _empty):
+            assert _c1.state == _c2.state == UI_EMPTY, _c1.key
+            assert _c1.note.now != _c2.note.now, (
+                f"{_c1.key}：還沒綁與綁了但空講了同一句話")
+            assert _c1.note.where != _c2.note.where, _c1.key
+        assert P.NOT_BOUND_NOW in {_c.note.now for _c, _, _ in _unbound}
+        assert P.EMPTY_SHEET_NOW in {_c.note.now for _c, _, _ in _empty}
+
+    def test_an_empty_portfolio_is_never_red(self):
+        """**一個剛註冊、還沒填任何一列的使用者不該看到紅色。**"""
+        for _card, _f, _s in _wired_builts(_station(bound=True)):
+            assert _card.state != UI_FAILED, f"{_card.key} 把「空的」畫成了故障"
+            assert _card.value == "", f"{_card.key} 沒有值卻給了結論文字"
+
+    def test_an_upstream_failure_is_the_only_red(self):
+        """L3 拋例外 → 紅，而且**原始例外看得見**（§1）。"""
+        _err = "RuntimeError('Google 502')"
+        for _card, _f, _s in _wired_builts(_station(bound=True, error=_err)):
+            assert _card.state == UI_FAILED, f"{_card.key} 吞掉了上游的例外"
+            assert "Google 502" in _card.note.why, _card.key
+
+    def test_a_holdings_failure_never_shows_half_a_portfolio(self):
+        """讀失敗時**整份都不給** —— 半份算出來的比例看起來完全正常。"""
+        _h = _holdings(error="RuntimeError('boom')")
+        _st = P.load_station(_h)
+        assert _st.error and _st.rows == ()
+        assert P.build_allocation_split_card(_st)[0].state == UI_FAILED
+        assert "半份清單" in P.build_holdings_preview_card(_h)[0].note.where
+
+    def test_take_profit_none_is_grey_and_says_it_is_a_result(self):
+        """沒有一檔達停利門檻是**好消息**，不是故障、也不是「還沒算」。"""
+        _card = P.build_take_profit_card(_station(
+            bound=True, holdings_n=1, rows=({"代號": "2330"},)))[0]
+        assert _card.state == UI_EMPTY
+        assert "有效的結果" in _card.note.why
+        assert "判不了" in _card.note.why, "沒把「沒達標」與「判不了」分開講"
+
+    def test_split_partial_is_disclosed_not_swallowed(self):
+        """部分持股缺金額 → **必須把「N 檔裡只算了 M 檔」講出來**。"""
+        _facts = dict(P.build_allocation_split_card(_station(
+            bound=True, holdings_n=3,
+            rows=({"代號": "0056"},),
+            split={"core_pct": 60.0, "sat_pct": 40.0, "core_dev": -20.0,
+                   "total_value": 1000.0, "partial": True,
+                   "held_n": 3, "valued_n": 1}))[1])
+        assert any("只算了" in _v for _v in _facts.values()), (
+            "部分持股缺金額卻沒有揭露 —— 使用者會把一檔的比例當成整個組合的")
+
+    def test_core_satellite_reuses_the_same_numbers_as_block_five(self):
+        """⑥ 的核心／衛星與 ⑤ **同一支 L3、同一份數字**，不得各算一次。"""
+        _st = _station(bound=True, holdings_n=2, rows=({"代號": "0056"},),
+                       split={"core_pct": 70.0, "sat_pct": 30.0,
+                              "core_dev": -10.0, "total_value": 100.0,
+                              "partial": False, "held_n": 2, "valued_n": 2})
+        _five = P.build_allocation_split_card(_st)[0]
+        _six = P.build_core_satellite_card(_st)[0]
+        assert _five.state == _six.state == UI_LIVE
+        assert "70.0" in _five.value and "70.0" in _six.value
+        # 非 live 時兩張卡連文案都必須一致（同一份輸入不得給兩種說法）。
+        _empty_five = P.build_allocation_split_card(_station(bound=True))[0]
+        _empty_six = P.build_core_satellite_card(_station(bound=True))[0]
+        assert _note_triple(_empty_five.note) == _note_triple(_empty_six.note)
+
+    def test_switch_in_candidates_always_exclude_what_you_hold(self, monkeypatch):
+        """**本批最重要的一條**：少了 `exclude`，畫面會叫你買你已經有的東西。"""
+        import src.services.dividend_station_service as DSS
+
+        _seen: dict = {}
+
+        def _fake_candidates(*, regime=None, exclude=None, top_n=5):
+            _seen["regime"] = regime
+            _seen["exclude"] = list(exclude or [])
+            return [{"代碼": "2412", "名稱": "中華電", "綜合分": 80}]
+
+        monkeypatch.setattr(DSS, "get_switch_in_candidates", _fake_candidates)
+        monkeypatch.setattr(DSS, "build_switch_advice",
+                            lambda rows, macro, cands: {
+                                "switch_out": [], "switch_in": list(cands or []),
+                                "switch_in_src": "screener", "stance": "neutral"})
+        _h = _holdings(bound=True, holdings=(
+            {"ticker": "0056", "held": True, "lots": 1, "avg_price": 30.0},
+            {"ticker": "2330.TW", "held": True, "lots": 1, "avg_price": 900.0},
+            {"ticker": "2412", "held": False, "lots": None, "avg_price": None}))
+        _st = _station(bound=True, holdings_n=3, rows=({"代號": "0056"},))
+        _sw = P.load_switch(_st, P.MacroReadout(requested=True, loaded=True,
+                                                regime="bull"), _h)
+        assert _seen["exclude"] == ["0056", "2330.TW"], (
+            "傳給選股池的 exclude 不是「你已持有的代號」 —— "
+            f"實際傳了 {_seen.get('exclude')}")
+        assert "2412" not in _seen["exclude"], (
+            "觀察清單（未持有）被當成已持有排除掉了 —— 那正好把候選也弄丟")
+        assert _seen["regime"] == "bull"
+        assert _sw.excluded_n == 2
+        _facts = dict(P.build_switch_card(_sw, _st)[1])
+        assert any("2 檔" in _v for _v in _facts.values()), (
+            "卡面沒有把「排除了幾檔」講出來 —— 那就只剩一句沒人能驗證的宣稱")
+
+    def test_switch_does_not_invent_a_stance_when_macro_is_unknown(self):
+        """總經未評估 → `stance=unknown`，**不以「中性」代替**（不猜多空）。"""
+        _payload = P._macro_payload(P.MacroReadout(requested=True, loaded=False))
+        assert _payload["loaded"] is False
+        assert _payload["defense"] is None
+        _facts = dict(P.build_switch_card(P.SwitchReadout(
+            requested=True, submitted=True, stance="unknown",
+            switch_out=({"代號": "2330", "建議動作": "汰弱"},)),
+            _station(bound=True, holdings_n=1, rows=({"代號": "2330"},)))[1])
+        assert any("不猜多空" in _v for _v in _facts.values())
+
+    def test_preview_shows_a_dash_not_zero_for_watchlist_rows(self):
+        """觀察清單那些列**沒有**張數／均價 —— 顯示「—」，**不是 0**（§1）。"""
+        assert P._fmt_lots(None) == "—"
+        assert P._fmt_lots(0) == "0", "真的填 0 時不該被改寫成「—」"
+        assert P._fmt_num(None, digits=2) == "—"
+        _facts = dict(P.build_holdings_preview_card(_holdings(
+            bound=True, holdings=({"ticker": "2412", "held": False,
+                                   "lots": None, "avg_price": None},)))[1])
+        assert any("本來就沒有" in _v for _v in _facts.values()), (
+            "沒有說明觀察清單為什麼沒有張數／均價 —— "
+            "使用者會以為是資料掉了")
+
+    def test_the_preview_never_shows_a_sheet_id(self):
+        """葉2 的預覽卡與綁定卡同一條線：**一個字元的識別碼都不印。**"""
+        _h = _holdings(bound=True, portfolio_name="主組合",
+                       holdings=({"ticker": "0056", "held": True,
+                                  "lots": 1, "avg_price": 30.0},))
+        _card, _facts, _sig = P.build_holdings_preview_card(_h)
+        _all = _card.value + " ".join(f"{_k}{_v}" for _k, _v in _facts)
+        assert "sheet_id" not in _all.lower()
+        assert "sheet_id" not in P.HoldingsReadout.__dataclass_fields__
+
+    def test_a_partial_read_of_the_watchlist_is_never_silent(self):
+        """觀察清單那半失敗 → **要講出來**（它會改變換入建議的來源）。"""
+        _facts = dict(P.build_holdings_preview_card(_holdings(
+            bound=True, watchlist_error="RuntimeError('watchlist gone')",
+            holdings=({"ticker": "0056", "held": True, "lots": 1,
+                       "avg_price": 30.0},)))[1])
+        _txt = " ".join(_facts.values())
+        assert "watchlist gone" in _txt and "換入" in _txt
+
+    def test_rows_without_lights_never_claim_the_table_came_back_empty(self):
+        """**實跑抓到的假話**：有 3 列回來，畫面卻說「一列都沒有回來」。
+
+        「戰情表沒回來」與「回來了但沒有逐盞燈資料」是兩件事 ——
+        後者是舊版結果／上游換形狀，前者才是真的空。
+        講錯的那一句**使用者當場就能否證**（他看得到燈牆上有幾列）。
+        """
+        _st = _station(bound=True, holdings_n=3,
+                       rows=({"代號": "0056"}, {"代號": "2330"}),
+                       judged=0, total_lights=0)
+        _card = P.build_confidence_card(_st)[0]
+        assert _card.state == UI_EMPTY
+        assert "一列都沒有回來" not in _card.note.now
+        assert "重跑" in _card.note.where
+        # 燈牆同一輪也不准印一個沒有意義的 0/0。
+        assert "0/0" not in P.build_lightwall_card(_st)[0].value
+
+    def test_more_portfolios_are_disclosed(self):
+        """只讀第一本 → **必須講**，否則使用者以為畫面上就是他的全部部位。"""
+        _facts = dict(P.build_holdings_preview_card(_holdings(
+            bound=True, more_portfolios=True, portfolio_name="主組合",
+            holdings=({"ticker": "0056", "held": True, "lots": 1,
+                       "avg_price": 30.0},)))[1])
+        assert any("不是你的全部" in _v for _v in _facts.values())
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【12】新增的那一支 L3 也要唯讀（FE-15）
+# ══════════════════════════════════════════════════════════════════
+class TestHoldingsServiceIsReadOnly:
+    """`src/services/holdings_service.py` —— 它才是真正碰到使用者帳本的那一層。
+
+    ⚠️ 頁面那一類（`TestReadOnly`）證明的是**這一頁沒有寫入的路**；
+    但頁面呼叫的 L3 自己會不會寫，**不在它的射程內**。這一類補那個洞。
+    ⚠️ 它同樣只證明「靜態文字裡沒有寫入呼叫」，不證明執行時絕不寫 ——
+    後者取決於 L1 `gsheet_portfolio` 讀取面的行為（那幾支自陳唯讀 + 讀取快取）。
+    """
+
+    def _tree(self):
+        import src.services.holdings_service as H
+
+        return ast.parse(pathlib.Path(H.__file__).read_text(encoding="utf-8"))
+
+    def test_no_write_surface_identifier_anywhere(self):
+        _hit = sorted(_identifiers(self._tree()) & _WRITE_SURFACE)
+        assert not _hit, f"L3 持股 loader 出現了寫入面的識別字 {_hit}"
+
+    def test_only_reader_functions_of_the_gsheet_layer_are_called(self):
+        """**白名單**：它只准碰 gsheet 的這幾支讀取函式。"""
+        _allowed = {"list_portfolios", "load_portfolio",
+                    "list_stock_watchlists", "load_stock_watchlist",
+                    "_get_active_stock_sheet_id"}
+        _called = {_n.func.attr for _n in ast.walk(self._tree())
+                   if isinstance(_n, ast.Call)
+                   and isinstance(_n.func, ast.Attribute)
+                   and isinstance(_n.func.value, ast.Name)
+                   and _n.func.value.id == "_gsp"}
+        assert _called <= _allowed, (
+            f"L3 持股 loader 碰了讀取面以外的 gsheet 函式：{sorted(_called - _allowed)}")
+        assert _called, "一支 gsheet 函式都沒呼叫 —— 白名單形同虛設"
+
+    def test_every_gsheet_read_passes_an_explicit_sheet_id(self):
+        """**踩過的坑**：`sheet_id=None` 會讓 `@st.cache_data` 的鍵恆為空 ——
+
+        換一本 Sheet 之後 15 分鐘內會拿到**上一本**的資料（張冠李戴）。
+        `portfolio_binding_service` 的註解已經把這個坑寫明白，本檔照辦。
+        """
+        _need = {"list_portfolios", "load_portfolio",
+                 "list_stock_watchlists", "load_stock_watchlist"}
+        _bad = [f"{_n.func.attr} @line {_n.lineno}"
+                for _n in ast.walk(self._tree())
+                if isinstance(_n, ast.Call)
+                and isinstance(_n.func, ast.Attribute)
+                and _n.func.attr in _need
+                and not any(_k.arg == "sheet_id" for _k in _n.keywords)]
+        assert not _bad, f"這幾支讀取沒有顯式帶 sheet_id=：{_bad}"
+
+    def test_the_portfolio_half_fails_loud(self):
+        """投資組合讀失敗 → **往上拋**，不 best-effort 回半份。
+
+        半份清單算出來的 80/20 與損益看起來完全正常、實際是錯的（§1）。
+        """
+        import inspect
+
+        import src.services.holdings_service as H
+
+        _src = inspect.getsource(H.get_holdings)
+        _head, _sep, _tail = _src.partition("# ── 觀察清單")
+        assert _sep, "get_holdings 的兩半結構變了 —— 本條的定位假設要重寫"
+        assert "try:" not in _head.split("_state = get_binding_state()")[-1], (
+            "投資組合那半被包進 try/except 了 —— 它必須 fail loud")
+        assert "except Exception" in _tail, (
+            "觀察清單那半不再 best-effort 了 —— 它失敗不該擋住整個戰情室")
+
+    def test_the_watchlist_half_is_never_silently_swallowed(self):
+        """觀察清單失敗要**回報**（它會改變換入建議的來源），不是只印 log。"""
+        import src.services.holdings_service as H
+
+        assert "watchlist_error" in H.HoldingsResult.__dataclass_fields__
+
+    def test_the_contract_matches_what_the_consumers_expect(self):
+        """回傳欄位必須與既有消費端（`dividend_station_service`）同構。"""
+        import src.services.holdings_service as H
+
+        _row = H._row("0056", held=True, lots=3, avg_price=35.0)
+        assert set(_row) == {"ticker", "name", "held", "asset_kind",
+                             "asset_class", "lots", "avg_price"}
+        _watch = H._row("2412", held=False)
+        assert _watch["lots"] is None and _watch["avg_price"] is None, (
+            "觀察清單列被填了 0 —— 那份分頁根本沒有張數與均價（§1 不猜）")
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -44,38 +44,45 @@
 - **不是**新的卡片型別：`Card` / `Note` / `MAX_COLS` 一律 import
   `src/ui/tabs/tab_today.py` 與 `src/ui/views/_ui_kit.py`。
 
-**本檔沒有 production caller**（`app.py` 掛載另案；本批一個字都沒有碰 `app.py`、
-`page_today.py`、`page_find.py`、`page_inspect.py`、`_ui_kit.py`、
-`src/ui/tabs/**`、`shared/**`）。舊分頁（`etf_tab_dividend_station` 等）不動、不下架。
+⚠️ **「本檔沒有 production caller」這句話已經過期**（2026-09-07 更正）：
+`app.py` **已經掛上本頁**（`render_page_hold` 於 `app.py` 的分頁列，量測日 2026-09-07；
+掛載由另一組完成，本批一個字都沒有碰 `app.py`）。**這是事實更正，不是政策變更** ——
+本批同樣沒有碰 `page_today.py`、`page_find.py`、`page_inspect.py`、`page_why.py`、
+`_ui_kit.py`、`src/ui/tabs/**`、`shared/**`。
+舊分頁（`etf_tab_dividend_station` 等）不動、不下架。
+⚠️ **有 caller 之後，這一頁的每一個 bug 都是使用者看得到的** ——
+下一個人不得再拿「反正沒有人在用」當放寬任何守衛的理由。
 
 ═══ 取數接線表（**唯一的規則是「一律走 L3」**）═════════════════════════
-**已接線（四支，全部唯讀）**::
+**已接線（全部唯讀）**::
 
+    持股清單      L3 `services.holdings_service.get_holdings`      ← **本批新增**
+    戰情表 ＋ VIX L3 `services.dividend_station_service.get_station_rows`
+    規則式彙總    L3 `services.dividend_station_service.build_station_digest`
+                  （內含 80/20 `compute_allocation_split` ＋ 停利 `flag_take_profit`）
+    組合層金額    L3 `services.dividend_station_service.compute_portfolio_totals`
+    換入候選      L3 `services.dividend_station_service.get_switch_in_candidates`
+    換股建議      L3 `services.dividend_station_service.build_switch_advice`
     綁定狀態      L3 `services.portfolio_binding_service.get_binding_state`
-    VIX           L3 `services.dividend_station_service.fetch_vix`
+    VIX（單獨）   L3 `services.dividend_station_service.fetch_vix`
     總經位階      L3 `services.dividend_station_service.get_station_macro`
     建議持股水位  L3 `services.allocation_service.get_allocation`
+    N/M 盞可信度  L4 `ui.render.station_cards.aggregate_judged` / `tally_states` /
+                  `is_fully_judged` / `cruise_or_gap`（**與既有戰情室同一把尺**）
+    燈格牆渲染    L4 `ui.render.station_cards.render_light_wall` / `render_legend`
     兩套刻度揭露  L0 `shared/station_specs.py`（純常數，零 I/O）
 
-**未接線（全部指向同一個根因）**::
+⚠️ **`services/holdings_service.py` 是本批補上的那一步。** 在它之前，
+`src/services/` 底下沒有任何一支回傳「你持有哪幾檔、各幾張、均價多少」
+（AUD-5 稽核組窮舉 `src/services/` 全部 public 函式後證實），唯一產得出那份 list 的是
+L5 私有函式 `etf_tab_dividend_station._load_holdings_from_portfolio()` ——
+本頁**不會**去 import 它（跨檔取用底線開頭的私有符號＝`CLAUDE.md §8.2.A.2`
+**V-PICKER-PRIV-1** 登記的違憲；經別的 L5 檔 re-export 繞道只是騙過靜態檢查）。
+補的是一支**住在 L3 的公開唯讀介面**，而 L3 → L1 是正常方向
+（既成範式：`watchlist_service` / `portfolio_binding_service`）。
 
-    ⛔ **持股清單本身沒有 L3 介面。**
-       實測（量測日 2026-09-07）：`src/services/` 底下沒有任何一支回傳
-       「你持有哪幾檔、各幾張、均價多少」。唯一產得出那份 list 的是 L5 私有函式
-       `src/ui/etf/etf_tab_dividend_station._load_holdings_from_portfolio()`，
-       而它直接呼叫 L1 `gsheet_portfolio` 的**私有** accessor
-       （`_get_active_sheet_id` / `_get_active_stock_sheet_id`）。
-       跨檔取用底線開頭的私有符號正是 `CLAUDE.md §8.2.A.2` **V-PICKER-PRIV-1**
-       登記的那種違憲；經別的 L5 檔 re-export 繞道**只是騙過靜態檢查、不改變性質**
-       （頁 2 對估值 PE、頁 3 對估值 357 都是這樣拒絕的，本頁照辦）。
-       → 因此**戰情室七個區塊裡有六個的主體是 `unwired`**，見下方「本批沒有接上的項目」。
-
-⚠️ 戰情室的**運算**其實幾乎全都已經有 L3 了（`dividend_station_service` 的
-`get_station_rows` / `build_switch_advice` / `compute_portfolio_totals` /
-`compute_allocation_split` / `flag_take_profit` / `build_station_digest` /
-`build_ai_summary`）—— **缺的只有第一步：把持股清單交給它們。**
-這是本頁最重要的一句話：**不是「算不出來」，是「沒有東西可以餵進去」。**
-補一支 L3 holdings loader，上面七支全部立刻可用。
+⚠️ **讀持股要連 Google，所以它綁在表單的第二個選項上。** 選「只讀市場端」時本頁
+**真的不會**去讀你的 Sheet —— 戰情室會是灰的 `idle`（沒有人叫過），不是空白、不是紅色。
 
 **零 L1 import、零 `requests` / `yfinance` / FinMind / `pd.read_csv(url)`、
 零 SQL / parquet 讀寫、零 `@st.cache_data` / `@st.cache_resource`、
@@ -139,34 +146,38 @@ TestNothingIsCalledBeforeYouAsk` 用不繼承 `Exception` 的毒藥實測，不�
 這一步剛好與 L3 的契約對齊：`BindingState.portfolio_count=None` 的註解寫著
 「未知（未綁 or 讀取失敗）；**不腦補 0**」。
 
-═══ 本批**沒有接上**的項目（誠實揭露，不是漏寫）═══════════════════════
-全部指向同一個根因（**持股清單沒有 L3 介面**），但「去哪補」各自不同，
-因為它們卡住的**位置**不同 —— 有的只差第一步，有的連運算都還沒有 L3：
+═══ 這一批**仍然沒有接上**的項目（誠實揭露，不是漏寫）═══════════════════
+持股清單接上之後，戰情室 ①③④⑤ ＋ ⑥ 的核心／衛星 ＋ 葉2 的持股列預覽都活了。
+**剩下這幾項卡在別的地方，與持股清單無關** —— 「去哪補」各自不同：
 
-  1. ⛔ **① 結論三張卡**（該做什麼 / 訊號可信度 / 需要處理）。
-     運算面 **L3 已備齊**（`compute_portfolio_totals` ＋ `build_station_digest`），
-     只差持股清單。
-  2. ⛔ **③ 燈牆**（235 加碼燈 / 3-3-3 / 健檢四盞）。同上（`get_station_rows`）。
-  3. ⛔ **④ 換股建議**。`build_switch_advice()` 與 `get_switch_in_candidates()`
-     兩支 L3 都在，但**兩半都需要持股清單**：換出要「你持有的紅燈」，
-     換入要 `exclude=已持有代號`。⚠️ **刻意不出半個建議** —— 少了 `exclude`
-     的「換入候選」會叫你買你已經有的東西，那不是降級，那是錯的建議。
-  4. ⛔ **⑤ 80/20 配置偏離 ＋ 衛星停利**。`compute_allocation_split` /
-     `flag_take_profit` 都在，只差持股清單（兩支都要張數與均價）。
-  5. ⛔ **⑥ 組合深度分析六項**。這一項**卡得比別項深**：再平衡 / 壓力測試 /
-     VaR 的純函式在 L2（`compute.etf.etf_calc`），但**連 L3 wrapper 都還沒有**；
-     配息現金流有 L3（`dividend_tax_service.get_dividend_tax_view`）但要
-     `[{ticker, shares}]`；葡萄串領息的實作是 L5（`tabs.grape_ladder`）、
-     自帶寫死的 widget key，在本頁再掛一次會撞 `DuplicateWidgetID`。
-  6. ⛔ **⑦ AI 戰情總結**。`build_station_digest` → `build_summary_prompt` →
-     `build_ai_summary(digest, gemini_fn)` 三支 L3 都在，`gemini_fn` 也有
-     （L3 `app_ai_service.gemini_call`），**只差 digest 的輸入是持股**。
-     ⚠️ 線框在這一區畫了一顆單獨的 `st.button`［ ⚡ 生成 AI 總結 ］，
-     **本頁刻意沒有把它畫出來**：它的輸入（上方六段的結論）全部未接線，
-     畫一顆按了不會發生任何事的鈕，就是線框 F5／N2 兩次點名要修的那種**假出口**。
-     接線後再補那顆鈕（它必須在 form **外**）。
-  7. ⛔ **葉2 的「Sheet 選擇」與「觀察清單管理」**。這兩項**不是缺 L3，是缺授權** ——
+  1. ⛔ **⑥ 再平衡 / 壓力測試 / VaR**。純函式在 L2（`compute.etf.etf_calc`），
+     但 `src/services/` **連 L3 wrapper 都還沒有**。本頁一律走 L3，
+     不會為了畫一格就直呼 L2。
+  2. ⛔ **⑥ 配息現金流**。L3 `dividend_tax_service.get_dividend_tax_view()` 在，
+     但它吃的是 `[{'ticker', 'shares'}]`（**股**），而持股帳本記的是**張**。
+     那個 `張 × 1000 股` 的換算**不可以寫在本頁** —— L3 `compute_portfolio_totals()`
+     的 docstring 已經點名這件事（「留在畫面層等於讓同一個乘法散在 UI 各處」，
+     §4.1 漏乘 = 1000 倍低估）。而且它還要一個「綜所稅邊際稅率」輸入，
+     那是**新增一個畫面元件** → 落在 UI 草稿先行（`CLAUDE.md §-1.5` A-8）。
+  3. ⛔ **⑥ 葡萄串領息**。實作在 L5 `tabs.grape_ladder`、自帶寫死的 widget key，
+     在本頁再掛一次會撞 `DuplicateWidgetID`。
+  4. ⛔ **⑦ AI 戰情總結**。四支 L3 都在（`build_station_digest` →
+     `build_summary_prompt` → `build_ai_summary`，`gemini_fn` 由
+     `app_ai_service.gemini_call` 注入），digest 現在也**真的算得出來了**；
+     卡住的是**畫面**：線框在這一區畫了一顆單獨的 `st.button`［ ⚡ 生成 AI 總結 ］，
+     而「新增一個視覺元件」要先出線框草稿給客戶拍板（`CLAUDE.md §-1.5` A-8）。
+     ⚠️ **不會用「自動生成」繞過那顆鈕** —— 每次 rerun 都打一次付費 AI，
+     比少一顆鈕嚴重得多。
+  5. ⛔ **葉2 的「Sheet 選擇」與「觀察清單管理」**。這兩項**不是缺 L3，是缺授權** ——
      它們本質上是**寫入**，而本頁一律唯讀（見檔頭第二段）。
+
+⚠️ **一個沒有做、而且要講出來的取捨**：本頁**不能**把 `get_station_rows()` 的結果
+存進 `st.session_state`（那會是 gate 之外的第二個 session 寫入點，
+`tests/test_p04_hold_view.py` 直接禁止本檔出現任何 session 下標指派）。
+於是**送出之後的每一次 rerun 都會重跑一次整段編排** —— 網路那一層由 L1 的
+`@st.cache_data` 擋住（本頁不自建快取，`CLAUDE.md §8.2.A.2` V-SMART-CACHE-1），
+但逐檔的純運算會重算。既有 🏦 ETF ›存股戰情室 是靠自己存 session 避開這件事的。
+**這是已知代價，不是沒想到；沙箱測不到它的實際延遲。**
 
 ⚠️ **本頁唯一會判 `UI_DEGRADED` 的是 ② 兩套刻度**，而且**不是硬湊的**：
 它直接讀 L0 `station_specs` 的 `discriminative` 旗標。實測（量測日 2026-09-07）
@@ -219,6 +230,7 @@ from shared.station_specs import (
 # L0 SSOT：80/20 目標、衛星停利門檻、VIX 三段門檻。**本檔不寫死任何一個數字。**
 from shared.dividend_station_thresholds import (
     CORE_TARGET_PCT,
+    KIND_ETF,
     SATELLITE_TAKE_PROFIT_PCT,
     SATELLITE_TARGET_PCT,
     VIX_LIGHT1,
@@ -281,6 +293,13 @@ LEAF_SETUP_TITLE: str = "組合設定（＝組合管理＋Sheet 綁定）"
 
 _OPEN, _CLOSE = "「", "」"
 
+#: 持股列預覽的「種類」欄顯示字。**判型本身在 L0**（`classify_asset_kind`），
+#: 這裡只是把 L0 的 `KIND_*` 換成中文；本檔**不判**任何一檔是 ETF 還是個股。
+#: ⚠️ 為什麼不共用 L3 戰情表那一欄：那一欄是 `get_station_rows()` **算完之後**
+#: 才有的，而預覽表要在算之前就顯示（它是「我讀到了什麼」，不是「算出了什麼」）。
+KIND_LABELS: dict[str, str] = {KIND_ETF: "ETF"}
+KIND_FALLBACK_LABEL: str = "個股"
+
 
 def press(label: str) -> str:
     """`'按「🚀 跑存股戰情室」'` —— 指路句的唯一組法。"""
@@ -295,11 +314,17 @@ SETUP_WHERE: str = ia_nav.where_to_find(ia_nav.SECTION_HOLD_PORTFOLIO_SETUP)
 # ══════════════════════════════════════════════════════════════════
 #: 只讀不需要 Google 授權的市場端資料（VIX / 總經位階 / 建議持股水位）。
 SCOPE_MARKET: str = "market"
-#: 額外向 Google Sheets **讀一次**綁定狀態（唯讀：有沒有登入、有沒有綁、有幾本組合）。
+#: 額外向 Google Sheets **讀**綁定狀態 ＋ 持股清單（唯讀）。
+#:
+#: ⚠️ **常數名沿用 `with_binding`，但它現在讀的不只綁定狀態。** 名字沒有跟著改，
+#: 是因為它是**已套用值寫進 session 的字面字串**：改掉會讓使用者上一輪的選擇在
+#: 下一次部署後解析失敗（`applied_hold_request()` 會把不認得的值退回
+#: `SCOPE_MARKET`）。**畫面上的標籤照實改**（下面那一行）—— 使用者讀的是標籤，
+#: 不是常數名。標籤沒改才是說謊。
 SCOPE_WITH_BINDING: str = "with_binding"
 SCOPE_LABELS: dict[str, str] = {
-    SCOPE_MARKET: "只讀市場端（不連 Google）",
-    SCOPE_WITH_BINDING: "加讀 Google Sheet 綁定狀態（唯讀，不寫入）",
+    SCOPE_MARKET: "只讀市場端（不連 Google，也不讀你的持股）",
+    SCOPE_WITH_BINDING: "加讀 Google Sheet：綁定狀態 ＋ 你的持股清單（唯讀，不寫入）",
 }
 SCOPE_OPTIONS: tuple[str, ...] = (SCOPE_MARKET, SCOPE_WITH_BINDING)
 
@@ -351,31 +376,36 @@ IDLE_WHY: str = (
     "在你送出之前，本頁**一次 L3 取數都不會發**（沒有人叫過它）")
 IDLE_WHERE: str = f"到{SETUP_WHERE}，{press(ACTION_RUN_WARROOM_LABEL)}"
 
-#: 選了「只讀市場端」時，Google 那兩張卡的三要素。**這不是故障，是你選的。**
-BINDING_NOT_ASKED_NOW: str = "**這一輪沒有讀 Google Sheet 綁定狀態**"
-BINDING_NOT_ASKED_WHY: str = (
+#: 選了「只讀市場端」時的三要素。**這不是故障，是你選的。**
+#:
+#: ⚠️ 名字從 `BINDING_NOT_ASKED_*` 改成 `GOOGLE_NOT_ASKED_*`（2026-09-07）：
+#: 這一輪之後，同一個選項擋掉的**不只是綁定狀態，還有整份持股清單** ——
+#: 名字沒跟著改，下一個人會以為戰情室那一片灰是別的原因。
+GOOGLE_NOT_ASKED_NOW: str = "**這一輪沒有讀 Google Sheet**"
+GOOGLE_NOT_ASKED_WHY: str = (
     "你這一輪選的是"
     f"「{SCOPE_LABELS[SCOPE_MARKET]}」—— 本頁因此**真的沒有發那一次網路呼叫**，"
-    "不是發了失敗，也不是拿上一輪的殘留頂替")
-BINDING_NOT_ASKED_WHERE: str = (
+    "不是發了失敗，也不是拿上一輪的殘留頂替。"
+    "**你的持股清單也在這一次呼叫裡**，所以戰情室整片都是灰的（沒有人叫過），"
+    "不是「你沒有持股」")
+GOOGLE_NOT_ASKED_WHERE: str = (
     f"到{SETUP_WHERE}把選項改成"
     f"「{SCOPE_LABELS[SCOPE_WITH_BINDING]}」，再{press(ACTION_RUN_WARROOM_LABEL)}")
 
-#: **持股清單未接線** —— 本頁六個區塊的共同根因。
-#: 每一張卡的 `where` 都**在這一句之外再加自己那一段**（見各 builder），
-#: 因為它們卡住的位置不同：有的只差第一步，有的連運算的 L3 都還沒有。
-HOLDINGS_WHY: str = (
-    "本頁一律走 L3，而 `src/services/` 底下**沒有任何一支**回傳"
-    "「你持有哪幾檔、各幾張、均價多少」（實測量測日 2026-09-07）。"
-    "唯一產得出那份清單的是既有 🏦 ETF 分頁裡的 L5 私有函式，"
-    "它直接取用 L1 gsheet 的私有 accessor —— 跨層直取私有符號是分層違憲"
-    "（`CLAUDE.md §8.2.A.2` V-PICKER-PRIV-1），"
-    "經別的 UI 檔 re-export 繞道只是騙過靜態檢查、不改變性質")
-HOLDINGS_WHERE_PREFIX: str = (
+#: 未接線卡的共同開頭。**每一張卡的 `where` 都必須在這之後接自己那一段**
+#: —— 剩下的幾張卡不是卡在同一個地方（有的缺 L3 wrapper、有的缺一個畫面元件、
+#: 有的根本是本頁不准寫），共用一句話會讓「補哪一層才會好」這個資訊消失。
+UNWIRED_WHERE_PREFIX: str = (
     f"{NO_EXIT_MARKER} —— 這是待接線項，不是你操作的問題；"
-    f"{press(ACTION_RUN_WARROOM_LABEL)}也不會改變它。要接上需先在 `src/services/` "
-    "補一支**唯讀**的 L3 holdings loader（回 "
-    "`[{'ticker','name','held','asset_kind','asset_class','lots','avg_price'}, …]`），")
+    f"{press(ACTION_RUN_WARROOM_LABEL)}也不會改變它。")
+
+#: ⑥ 再平衡 / 壓力測試 / VaR 的共同理由：**運算在 L2，但 L3 沒有 wrapper。**
+#: ⚠️ 持股清單本身**已經接上了**（`services.holdings_service`），這三項與它無關。
+MISSING_L3_WRAPPER_WHY: str = (
+    "這一格的運算是有的 —— 純函式住在 L2 `compute.etf.etf_calc`。"
+    "缺的是 **`src/services/` 裡對應的 L3 wrapper**：本頁一律走 L3，"
+    "**不會**為了畫一格就跨層直呼 L2（那是 `CLAUDE.md §8.2` 的分層違憲，"
+    "而且會讓同一份運算在畫面層長出第二個入口）")
 
 #: 唯讀邊界：需要**寫入**才做得到的功能。**不是缺 L3，是缺授權。**
 READONLY_WHY: str = (
@@ -390,12 +420,13 @@ READONLY_WHERE: str = (
 
 #: 表單下方常駐的接線揭露（**不隨狀態消失**）。
 WIRING_DISCLOSURE: str = (
-    "**取數接線揭露**：本頁已接線的只有四項 —— Google Sheet **綁定狀態**、"
-    "**VIX**、**總經位階**、**建議持股水位**，四項全部唯讀。"
-    "**戰情室的七個區塊主體全部未接線**，根因只有一個："
-    "`src/services/` 沒有回傳持股清單的 L3 介面。"
-    "運算那一端其實已經齊了（燈牆、換股、80/20、停利、AI 摘要都有 L3）——"
-    "**缺的是把清單餵進去的那第一步**。"
+    "**取數接線揭露**：本頁的持股清單走 L3 `holdings_service.get_holdings()`"
+    "（**唯讀**），戰情表 / 燈牆 / 換股建議 / 80-20 偏離 / 衛星停利 / 結論三張卡"
+    "都由它餵進 `dividend_station_service` 的既有 L3 算出來。"
+    "**仍未接線的是**：⑥ 的再平衡 · 壓力測試 · VaR（L2 有純函式、L3 還沒有 wrapper）、"
+    "⑥ 的配息現金流（要張→股換算與稅率輸入）、⑥ 的葡萄串領息（實作在 L5）、"
+    "⑦ AI 總結（要一顆線框畫了、但尚未拍板的按鈕）、"
+    "以及葉2 的 Sheet 選擇與觀察清單管理（那兩項是**寫入**，本頁唯讀）。"
     "未接線的卡會標「未接線」並各自寫明要補在哪，不會拿空白冒充結果。")
 
 #: 唯讀宣告（常駐，與接線揭露並列）。
@@ -404,6 +435,24 @@ READONLY_DISCLOSURE: str = (
     "任何一列持股，也不會在畫面上顯示 Sheet 識別碼或任何憑證"
     "（只顯示「有沒有綁」這件事）。"
     "需要寫入才做得到的功能（選 Sheet、管理觀察清單）在本頁一律標「未接線」。")
+
+
+def _idle_note(scope_idle: bool) -> Note:
+    """`idle` 的三要素。**兩種來源、兩套指路句，這裡是唯一的分流點。**
+
+    Args:
+        scope_idle: `True` = 使用者按了鈕但這一輪選「只讀市場端」；
+            `False` = 冷啟動（還沒有人按過）。
+
+    ⚠️ 兩者都是 `idle`，共用一句話會對其中一半的人指錯路：冷啟動要你去按鈕，
+    「選了不讀」要你去改選項 —— 對後者說「請按下那顆鈕」，他會按了又按。
+    ⚠️ 這一支**只挑文案**，不參與任何 `classify_ui_state()` 的判定
+    （狀態仍然只由 L0 決定，而 `scope_idle` 讀的是使用者的選擇、不是資料）。
+    """
+    if scope_idle:
+        return Note(now=GOOGLE_NOT_ASKED_NOW, why=GOOGLE_NOT_ASKED_WHY,
+                    where=GOOGLE_NOT_ASKED_WHERE)
+    return Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
 
 
 def _error_why(source: str, error: Any) -> str:
@@ -821,6 +870,339 @@ def load_binding(req: HoldRequest) -> BindingReadout:
         count_missing_reason=_reason)
 
 
+# ══════════════════════════════════════════════════════════════════
+# 持股清單（本頁的第一輸入）—— **本批新接線，唯讀**
+# ══════════════════════════════════════════════════════════════════
+@dataclass(frozen=True)
+class HoldingsReadout:
+    """你持有哪幾檔。**本頁其餘七個區塊全部以它為輸入。**
+
+    Attributes:
+        requested: 由 `HoldRequest.wants_binding` 帶下來 —— 讀持股要連 Google，
+            所以它與綁定狀態共用同一個使用者選擇（**不是**從資料反推）。
+        holdings: L3 的清單原樣搬運（`ticker` / `name` / `held` / `asset_kind` /
+            `asset_class` / `lots` / `avg_price`）。
+            ⚠️ 觀察清單那些列的 `lots` / `avg_price` 是 `None` —— 那份分頁的
+            schema **只有三欄**，本來就沒有張數與均價。**它們不是 0。**
+        bound: 有沒有綁到投資組合 Sheet。`False` ＋ 空清單 = 你還沒綁（**有效結果**）。
+        portfolio_name / watchlist_name: 實際讀到的那一本／那一份的名字。
+        more_portfolios / more_watchlists: 那本 Sheet 裡**還有別本沒讀**
+            （L3 只取第一本，沿用既有行為）。不講出來，使用者會以為畫面上就是全部。
+        watchlist_error: 觀察清單那半讀取失敗。**持股本身不受影響，但不得吞掉。**
+        error: 持股清單整份讀取失敗（L3 對投資組合那半是 fail loud）。
+    """
+
+    requested: bool
+    submitted: bool = False
+    holdings: tuple[dict, ...] = ()
+    bound: bool = False
+    portfolio_name: str = ""
+    watchlist_name: str = ""
+    more_portfolios: bool = False
+    more_watchlists: bool = False
+    watchlist_error: str = ""
+    error: str = ""
+
+    @property
+    def has_holdings(self) -> bool:
+        """**空清單不算有值。** 「你還沒有任何持股」是 `empty`，不是 `live`。"""
+        return bool(self.holdings)
+
+    @property
+    def scope_idle(self) -> bool:
+        """這一輪的 idle 是不是「使用者選了不讀 Google」造成的（而非冷啟動）。
+
+        ⚠️ 兩者**都是 `idle`**，但指路句完全不同：冷啟動要你去按那顆鈕，
+        「選了不讀」要你去改選項。用同一句會對其中一半的人指錯路。
+        同 `binding_scope_idle()`，只做文案分流，不參與任何狀態判定。
+        """
+        return bool(self.submitted and not self.requested)
+
+    @property
+    def held_tickers(self) -> tuple[str, ...]:
+        """已持有代號 —— 給 `get_switch_in_candidates(exclude=…)`。
+
+        ⚠️ **刻意不在這裡去 `.TW` / `.TWO` 後綴**：L3 那一支自己會用 L0
+        `normalize_ticker()` 把 exclude 與候選兩邊都正規化再比對。
+        在這裡先去一次，等於把同一條規則寫成兩份（§2.1 SSOT）。
+        """
+        return tuple(str(_h.get("ticker") or "")
+                     for _h in self.holdings if _h.get("held"))
+
+
+def load_holdings(req: HoldRequest) -> HoldingsReadout:
+    """持股清單。**`req.wants_binding` 為 False 時一行 L3 都不呼叫。**
+
+    路徑：L3 `services.holdings_service.get_holdings()` —— 它的 docstring
+    自陳「純讀不寫」，且**只呼叫 L1 gsheet 的讀取面**。
+
+    邊界（四種，一種都不可以混）：
+      (a) 沒按 / 這一輪選了不讀 Google → `requested=False` → 全頁 idle。
+      (b) 讀了、沒綁 Sheet             → `bound=False` ＋ 空清單 → `empty`（灰）。
+      (c) 讀了、綁了、但一列都沒有     → `bound=True` ＋ 空清單 → `empty`（灰）——
+          **與 (b) 不是同一件事**，指路句不同（去綁 vs 去填）。
+      (d) L3 拋例外                    → `failed`（紅）。L3 對「投資組合」那半
+          **刻意 fail loud**：半份清單算出來的 80/20 與損益看起來正常、實際是錯的。
+    """
+    if not req.wants_binding:
+        return HoldingsReadout(requested=False, submitted=req.submitted)
+    try:
+        from src.services.holdings_service import get_holdings
+        _h = get_holdings()
+    except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
+        print(f"[views/page_hold] 持股清單讀取失敗 → 轉紅態：{_e!r}")
+        return HoldingsReadout(requested=True, submitted=req.submitted,
+                               error=repr(_e))
+    return HoldingsReadout(
+        requested=True, submitted=req.submitted,
+        holdings=tuple(dict(_r) for _r in (getattr(_h, "holdings", ()) or ())),
+        bound=bool(getattr(_h, "bound", False)),
+        portfolio_name=str(getattr(_h, "portfolio_name", "") or ""),
+        watchlist_name=str(getattr(_h, "watchlist_name", "") or ""),
+        more_portfolios=bool(getattr(_h, "more_portfolios", False)),
+        more_watchlists=bool(getattr(_h, "more_watchlists", False)),
+        watchlist_error=str(getattr(_h, "watchlist_error", "") or ""))
+
+
+# ══════════════════════════════════════════════════════════════════
+# 戰情表（燈牆 ＋ 規則式彙總）—— **本批新接線**
+# ══════════════════════════════════════════════════════════════════
+@dataclass(frozen=True)
+class StationReadout:
+    """一次戰情室運算的全部產出。**本頁不判任何一盞燈，只搬運。**
+
+    Attributes:
+        requested: 由 `HoldingsReadout.requested` 帶下來。
+        rows: L3 `get_station_rows()` 的逐檔列（含非顯示欄 `_lights` / `_detail`）。
+            ⚠️ **這裡刻意沒有 `vix` 欄位**：`get_station_rows()` 內部確實抓了一次
+            （digest 需要它），但畫面上那張 VIX 卡走的是**另一個 gate**
+            （選「只讀市場端」時也要看得到 VIX，那一輪根本不會跑戰情表）。
+            兩邊打到的是 L1 同一個 module-level 快取，不是兩次網路。
+            存一份沒有人讀的副本，只會多一個將來可能與畫面不一致的數字。
+        totals: L3 `compute_portfolio_totals()`；`None` = 算不出來（**不填 0**）。
+        split: 80/20 實際配置；`None` = 沒有可計價持股。
+        take_profit: 達停利門檻的衛星列（可以是空的 —— 那是**有效結果**）。
+        add_n / cut_n / err_n: digest 的加碼 / 汰弱 / 整批抓取失敗檔數。
+        judged / total_lights: 「N/M 盞給得出判定」。**分母是動態的**
+            （ETF 8 盞、個股 3 盞），本檔一個總數都不寫死。
+        unjudged_rows: 有幾列不是「每盞適用燈都判得出來」。
+            （「每一列都判得出來嗎」這個布林只在算 `cruise_text` 時用到一次，
+            不另存一份 —— 存了就會有人拿它去重寫巡航那句話，而那句話的 SSOT
+            在 L4 `cruise_or_gap()`。）
+        tally: 四態各有幾格（分母口徑與 `judged` 同一把尺）。
+        cruise_text: L4 巡航 gate 的那一句（**顯示層 SSOT，本檔不自己寫**）。
+        error: 呼叫期例外，或持股那一層帶下來的例外。
+    """
+
+    requested: bool
+    submitted: bool = False
+    #: 有沒有綁到持股 Sheet / 這一輪讀到幾列持股。
+    #: ⚠️ **這兩個欄位存在的唯一理由是「三種沒有不可混」**（見檔頭）：
+    #: 「還沒綁」要你去綁、「綁了但空」要你去填 —— 指路句完全不同。
+    #: 沒有它們，戰情室每一張空卡就只能寫一句「沒有持股（可能是 A 也可能是 B）」。
+    bound: bool = False
+    holdings_n: int = 0
+    rows: tuple[dict, ...] = ()
+    totals: Mapping[str, Any] | None = None
+    split: Mapping[str, Any] | None = None
+    take_profit: tuple[Mapping[str, Any], ...] = ()
+    add_n: int = 0
+    cut_n: int = 0
+    err_n: int = 0
+    judged: int = 0
+    total_lights: int = 0
+    unjudged_rows: int = 0
+    tally: Mapping[str, int] = field(default_factory=dict)
+    cruise_text: str = ""
+    error: str = ""
+
+    @property
+    def has_rows(self) -> bool:
+        return bool(self.rows)
+
+    @property
+    def scope_idle(self) -> bool:
+        """同 `HoldingsReadout.scope_idle` —— 只做 idle 的**文案**分流。"""
+        return bool(self.submitted and not self.requested)
+
+    @property
+    def has_lights(self) -> bool:
+        """分母 > 0 才算「算得出可信度」。**0/0 不是可信度，是沒東西可以算。**"""
+        return self.total_lights > 0
+
+
+def load_station(holdings: HoldingsReadout) -> StationReadout:
+    """戰情表。**`holdings.requested` 為 False 時一行 L3 都不呼叫。**
+
+    ⚠️ **持股是空的時候，本函式也不呼叫 L3。** 那不是把 gate 從資料反推 ——
+    `requested` 照樣是 `True`（使用者確實叫過），只是「對空清單跑一次逐檔抓取」
+    沒有任何意義。回傳的 `rows=()` 讓卡片落在 `empty`（灰），這正確：
+    **叫過了、沒有錯、就是沒有東西可以判。**
+
+    ⚠️ **上游的例外原樣往下帶**：持股讀不到時，戰情室的每一格都該是紅的 ——
+    這一頁沒有「持股讀不到但燈牆還亮著」這種狀態。
+    """
+    if not holdings.requested:
+        return StationReadout(requested=False, submitted=holdings.submitted)
+    if holdings.error:
+        return StationReadout(requested=True, submitted=holdings.submitted,
+                              bound=holdings.bound, error=holdings.error)
+    if not holdings.has_holdings:
+        return StationReadout(requested=True, submitted=holdings.submitted,
+                              bound=holdings.bound)
+    try:
+        from src.services.dividend_station_service import (
+            build_station_digest,
+            compute_portfolio_totals,
+            get_station_rows,
+        )
+        # L4（顯示層）：N/M 的分母口徑與既有戰情室**同一把尺**，本檔不自己數。
+        from src.ui.render.station_cards import (
+            aggregate_judged,
+            cruise_or_gap,
+            is_fully_judged,
+            tally_states,
+        )
+        _rows, _vix = get_station_rows([dict(_h) for _h in holdings.holdings])
+        _rows = list(_rows or ())
+        _digest = build_station_digest(_rows, _vix)
+        _totals = compute_portfolio_totals(_rows)
+        _cells = [(_r.get("_lights") or ()) for _r in _rows]
+        _judged, _total = aggregate_judged(_cells)
+        _unjudged = sum(1 for _c in _cells if not is_fully_judged(_c))
+        _all_judged = bool(_cells) and _unjudged == 0
+        _tally = tally_states(_cells)
+        _cruise = cruise_or_gap(_judged, _total, all_rows_judged=_all_judged)
+    except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
+        print(f"[views/page_hold] 戰情表運算失敗 → 轉紅態：{_e!r}")
+        return StationReadout(requested=True, submitted=holdings.submitted,
+                              bound=holdings.bound,
+                              holdings_n=len(holdings.holdings), error=repr(_e))
+    return StationReadout(
+        requested=True, submitted=holdings.submitted,
+        bound=holdings.bound, holdings_n=len(holdings.holdings),
+        rows=tuple(_rows),
+        totals=_digest_map(_totals),
+        split=_digest_map(_digest.get("allocation")),
+        take_profit=tuple(dict(_t) for _t in (_digest.get("take_profit") or ())),
+        add_n=len(_digest.get("adds") or ()),
+        cut_n=len(_digest.get("reds") or ()),
+        err_n=len(_digest.get("errors") or ()),
+        judged=int(_judged), total_lights=int(_total),
+        unjudged_rows=int(_unjudged),
+        tally=dict(_tally or {}),
+        cruise_text=_clean_signal(_cruise))
+
+
+def _digest_map(value: Any) -> Mapping[str, Any] | None:
+    """L3 回的 dict → 唯讀複本；不是 Mapping（含 `None`）就原樣回 `None`。
+
+    §1：`None` 在這幾支 L3 的契約裡是「**算不出來**」（不是 0、不是空）——
+    本層不把它改寫成 `{}`，否則下游分不出「沒有這個結論」與「結論是空的」。
+    """
+    return dict(value) if isinstance(value, Mapping) else None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 換股建議（換出 ＋ 換入）—— **本批新接線**
+# ══════════════════════════════════════════════════════════════════
+@dataclass(frozen=True)
+class SwitchReadout:
+    """線框 ④ 的「該換」。**換出與換入必須同時有輸入才產得出來。**
+
+    Attributes:
+        requested: 由 `StationReadout.requested` 帶下來。
+        switch_out: 你**持有**且健檢 🔴 的那幾檔（觀察清單的紅燈不算換出）。
+        switch_in: 換入候選。優先來自**你自己的觀察清單**綠燈；沒有才 fallback 選股池。
+        switch_in_src: `watchlist`（你選的）/ `screener`（全自動排名）。
+        stance: 總經攻守（`unknown` = 未評估 → 只做汰弱，**不套攻守、不猜多空**）。
+        excluded_n: 傳給 `get_switch_in_candidates(exclude=…)` 的已持有檔數。
+            ⚠️ 這個數字要顯示出來 —— 少了 exclude，換入候選會**叫你買你已經有的東西**。
+        error: 呼叫期例外，或上游帶下來的例外。
+    """
+
+    requested: bool
+    submitted: bool = False
+    switch_out: tuple[Mapping[str, Any], ...] = ()
+    switch_in: tuple[Mapping[str, Any], ...] = ()
+    switch_in_src: str = ""
+    stance: str = ""
+    excluded_n: int = 0
+    error: str = ""
+
+    @property
+    def scope_idle(self) -> bool:
+        """同 `HoldingsReadout.scope_idle` —— 只做 idle 的**文案**分流。"""
+        return bool(self.submitted and not self.requested)
+
+    @property
+    def has_advice(self) -> bool:
+        """**兩半都沒有東西才算沒有建議。** 「沒有一檔要換」也是一個結論 ——
+
+        但它需要**有列可以判**才成立，而那由 `StationReadout.has_rows` 決定；
+        本屬性只回答「這一輪產出了幾個具體標的」。
+        """
+        return bool(self.switch_out or self.switch_in)
+
+
+def load_switch(station: StationReadout, macro: MacroReadout,
+                holdings: HoldingsReadout) -> SwitchReadout:
+    """換股建議。**`station.requested` 為 False 時一行 L3 都不呼叫。**
+
+    ⚠️ **`exclude=已持有代號` 是必要參數，不是可選的優化。** 少了它，
+    「換入候選」會從全市場排名裡挑出你**已經持有**的那幾檔叫你買 ——
+    那不是降級的建議，是**錯的**建議（§1）。故本函式一定先取
+    `holdings.held_tickers` 再呼叫 L3。
+
+    ⚠️ **總經未評估時仍然出建議**，但 `stance` 是 `unknown`：L3 的契約是
+    「只做汰弱、不套攻守」——**不以「中性」代替未評估**（線框 ④ 原文：不猜多空）。
+    """
+    if not station.requested:
+        return SwitchReadout(requested=False, submitted=station.submitted)
+    if station.error:
+        return SwitchReadout(requested=True, submitted=station.submitted,
+                             error=station.error)
+    if not station.has_rows:
+        return SwitchReadout(requested=True, submitted=station.submitted)
+    _exclude = list(holdings.held_tickers)
+    try:
+        from src.services.dividend_station_service import (
+            build_switch_advice,
+            get_switch_in_candidates,
+        )
+        _cands = get_switch_in_candidates(
+            regime=(macro.regime or None) if macro.loaded else None,
+            exclude=_exclude)
+        _adv = build_switch_advice(list(station.rows), _macro_payload(macro), _cands)
+    except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
+        print(f"[views/page_hold] 換股建議失敗 → 轉紅態：{_e!r}")
+        return SwitchReadout(requested=True, submitted=station.submitted,
+                             error=repr(_e))
+    _adv = _adv if isinstance(_adv, Mapping) else {}
+    return SwitchReadout(
+        requested=True, submitted=station.submitted,
+        switch_out=tuple(dict(_d) for _d in (_adv.get("switch_out") or ())),
+        switch_in=tuple(dict(_d) for _d in (_adv.get("switch_in") or ())),
+        switch_in_src=str(_adv.get("switch_in_src") or ""),
+        stance=str(_adv.get("stance") or ""),
+        excluded_n=len(_exclude))
+
+
+def _macro_payload(macro: MacroReadout) -> dict:
+    """`MacroReadout` → L3 `build_switch_advice()` 吃的那個 dict。**純轉換。**
+
+    ⚠️ `loaded=False` 時**不填任何攻守值** —— L3 自己會判 `stance="unknown"`。
+    在這裡補一個「中性」等於替總經下了一個它沒下的結論（§1）。
+    """
+    return {
+        "loaded": macro.loaded,
+        "defense": macro.defense,
+        "regime": macro.regime,
+        "posture_label": macro.posture_label,
+        "posture_range": macro.posture_range,
+    }
+
+
 def _num(value: Any) -> float | None:
     """任何東西 → float，或 `None`。**不猜 0**（§1：0 是一個結論，不是缺值）。"""
     if value is None or isinstance(value, bool):
@@ -871,12 +1253,17 @@ _Built = tuple[Card, tuple[tuple[str, str], ...], str]
 class UnwiredSpec:
     """一張未接線卡的全部文案。**每一張都必須有自己的 `why` 與 `where`。**
 
-    ⚠️ 為什麼要一個 dataclass 而不是六組 if：本頁未接線的卡有 **17 張**，
-    共用一句「未接線」會讓使用者以為它們卡在同一步 —— 實際上不是：
-    ① 只差把清單餵進去（運算的 L3 已經在了）、
-    ⑥ 的再平衡連運算的 L3 都還沒有、
+    ⚠️ 為什麼要一個 dataclass 而不是幾組 if：本批接線之後仍未接線的卡有
+    **8 張**，共用一句「未接線」會讓使用者以為它們卡在同一步 —— 實際上不是：
+    ⑥ 的再平衡 / 壓力測試 / VaR 缺的是 **L3 wrapper**、
+    ⑥ 的配息現金流缺的是 **單位換算的落點 ＋ 一個要先拍板的輸入元件**、
+    ⑥ 的葡萄串卡在 **L5 寫死的 widget key**、
+    ⑦ 的 AI 總結缺的是 **一顆要先出線框拍板的按鈕**（資料已經有了）、
     葉2 的 Sheet 選擇根本不是缺 L3 而是**缺授權**（本頁唯讀）。
     「去哪補」寫錯，比不寫更糟。
+
+    ⚠️ **「持股清單沒有 L3」這個理由本批已經不成立**（`holdings_service` 已補），
+    任何一張卡都不得再拿它當 `why` —— 那會叫人去補一支已經在那裡的東西。
     """
 
     key: str
@@ -901,59 +1288,232 @@ def build_unwired_card(requested: bool, spec: UnwiredSpec) -> _Built:
             tuple(spec.facts), "")
 
 
-def _holdings_where(tail: str) -> str:
-    """未接線卡的「去哪補」＝ 共同前綴 ＋ **這一張自己**卡在哪。"""
-    return HOLDINGS_WHERE_PREFIX + tail
+def _unwired_where(tail: str) -> str:
+    """未接線卡的「去哪補」＝ 共同前綴 ＋ **這一張自己**卡在哪。
+
+    ⚠️ `tail` **不得留空、不得兩張卡共用** —— 剩下的未接線卡卡在不同的層
+    （缺 L3 wrapper / 缺一個要先拍板的畫面元件 / 本頁不准寫），
+    共用一句話會讓「補哪一層才會好」這個唯一有價值的資訊消失。
+    守衛：`tests/test_p04_hold_view.py::TestUnwiredStaysUnwired`。
+    """
+    return UNWIRED_WHERE_PREFIX + tail
 
 
 # ── ① 結論（三張卡）───────────────────────────────────────────────
 #: 線框 ① 的 `cells` 逐字：該做什麼 / 訊號可信度 / 需要處理。
-CONCLUSION_SPECS: tuple[UnwiredSpec, ...] = (
-    UnwiredSpec(
-        key="hold.conclusion.action", label="該做什麼",
-        now="**本頁還算不出「今天該做什麼」**",
-        why=HOLDINGS_WHY,
-        where=_holdings_where(
-            "接上之後這一格走 L3 `compute_portfolio_totals()` ＋ "
-            "`build_station_digest()` —— **兩支都已經在 `src/services/` 裡了**，"
-            "只差把清單交給它們"),
-        facts=(("接線後的樣子", "檔數 · 幾檔建議加碼 · 幾檔建議汰換"),
-               ("運算的 L3", "已就緒（`dividend_station_service`）"),
-               ("卡住的那一步", "持股清單沒有 L3 介面"))),
-    UnwiredSpec(
-        key="hold.conclusion.confidence", label="訊號可信度",
-        now="**本頁還算不出「幾盞燈判得出來」**",
-        why=HOLDINGS_WHY,
-        where=_holdings_where(
-            "接上之後這一格數的是 L3 每一列的 `_lights`（ETF 8 盞 / 個股 4 盞）"
-            "裡**有判定**的比例 —— 逐盞燈的四態 L2 早就算好了"),
-        facts=(("接線後的樣子", "N / M 盞已判定（分母隨持股檔數與成分變動）"),
-               ("為什麼分母不寫死",
-                "抓取失敗的列若整個不出現，分母會悄悄變小、可信度虛高 —— "
-                "L2 `missing_light_cells()` 就是為了防這件事"))),
-    UnwiredSpec(
-        key="hold.conclusion.todo", label="需要處理",
-        now="**本頁還列不出「有幾檔需要你處理」**",
-        why=HOLDINGS_WHY,
-        where=_holdings_where(
-            "接上之後這一格讀 L3 `build_station_digest()` 的 `adds`（235 加碼觸發）"
-            "與 `reds`（健檢紅燈需汰弱），兩者都已經是算好的欄位"),
-        facts=(("接線後的樣子", "加碼 N · 減碼 N · 未判 N"),
-               ("⚠️ 線框的紅態是另一件事",
-                "線框這一格的 `errCells` 是「讀不到持股清單」的**紅**態 —— "
-                "那要等接線之後才會出現（讀得到才有得失敗）；"
-                "現在是**未接線**，兩者不同"))),
-)
+#: **三張卡讀的是三種不同的產出**，所以拆成三支 builder、各自判態：
+#:   · 該做什麼   ← digest 的 `reds`/`adds` ＋ `compute_portfolio_totals()`
+#:   · 訊號可信度 ← L4 `aggregate_judged()` / `tally_states()`（**分母動態**）
+#:   · 需要處理   ← digest 的 `adds`/`reds` ＋ 「有幾列判不全」
+#: 一張壞掉不把另外兩張染色（線框：逐格獨立判態）。
+CONCLUSION_ACTION_KEY: str = "hold.conclusion.action"
+CONCLUSION_CONFIDENCE_KEY: str = "hold.conclusion.confidence"
+CONCLUSION_TODO_KEY: str = "hold.conclusion.todo"
+
+#: 「沒有持股」的**三種來源，三套文案，一句都不共用**（檔頭鐵律的落點）。
+#:   · 還沒綁 Sheet        → 要你去**綁**
+#:   · 綁了但一列都沒有    → 要你去**填**
+#:   · 讀到列了但戰情表空  → 那是**上游形狀變了**，要回報
+#: 共用一句「沒有持股」等於對其中兩種人指錯路。
+NOT_BOUND_NOW: str = "**你還沒有綁定持股 Sheet**"
+NOT_BOUND_WHY: str = (
+    "**這是一個有效的結果**（已經去讀過，不是還沒讀、也不是故障）—— "
+    "戰情室的每一盞燈都以「你實際持有什麼」為輸入，沒有綁定就沒有清單可讀。"
+    "本站**不拿範例持股頂替** —— 那會讓你以為畫面上那幾檔是你的。"
+    "新使用者在這裡看到灰色是正常的")
+NOT_BOUND_WHERE: str = (
+    "用 Google 登入後選一本持股 Sheet —— **現行入口在既有的 📁 組合管理分頁**"
+    "（本頁只讀不寫，所以不在這裡放選 Sheet 的控制項）；"
+    "綁定狀態在下面的**葉2 組合設定**看得到")
+
+EMPTY_SHEET_NOW: str = "**Sheet 綁好了，但裡面還沒有任何一列持股**"
+EMPTY_SHEET_WHY: str = (
+    "**這是一個有效的結果**（已經讀完，不是還沒讀、也不是故障）—— "
+    "空的組合就是空的，本站不把它畫成紅色錯誤。"
+    "⚠️ 這與上一種**不是同一件事**：你已經綁好了，缺的是內容")
+EMPTY_SHEET_WHERE: str = (
+    "到既有的 📁 組合管理分頁新增一本組合並填入持股列（代號／張數／均價），"
+    f"填完回本頁{press(ACTION_RUN_WARROOM_LABEL)}")
+
+NO_ROWS_NOW: str = "**讀到了持股，但戰情表一列都沒有回來**"
+NO_ROWS_WHY: str = (
+    "持股清單讀到了，但 L3 戰情表對它回了空的一批 —— "
+    "**這不該發生**（正常情況下一檔持股就對應一列，抓不到的那些會標成錯誤列）。"
+    "本站不在這裡自己補一張表：那會讓一個上游的形狀變化看起來像「你沒有持股」")
+NO_ROWS_WHERE: str = (
+    f"{NO_EXIT_MARKER} —— 這不是你操作的問題；請把這一句連同你的持股檔數"
+    "回報給維護者")
+
+#: 上游（持股／戰情表）出事時的出處字串。
+SRC_HOLDINGS: str = "L3 持股清單（`services.holdings_service.get_holdings`）"
+SRC_STATION: str = (
+    "L3 戰情表（`services.dividend_station_service.get_station_rows`）")
+SRC_SWITCH: str = (
+    "L3 換股建議（`services.dividend_station_service.build_switch_advice` ＋ "
+    "`get_switch_in_candidates`）")
 
 
-def build_conclusion_cards(requested: bool) -> tuple[_Built, ...]:
-    """線框葉1 ①「結論（三張卡）」—— 本批**三張全部未接線**。
+def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
+    """戰情表系列卡片的**非 live** 三要素。四態各自一段，**一段都不共用**。
 
-    ⚠️ **三張各有自己的 `where`**：它們接線後讀的是不同的 L3 產出
-    （組合彙總 / 逐盞燈四態 / digest 的 adds+reds）。共用一句話會讓
-    「補哪一支就會好」這個資訊消失。
+    ⚠️ `empty` 那一段刻意與 `failed` 分得很開：讀到一份空的持股清單是
+    **完全正常**的（新使用者），畫成紅色就是 v3 §02 要杜絕的假性錯誤。
     """
-    return tuple(build_unwired_card(requested, _s) for _s in CONCLUSION_SPECS)
+    if not station.requested:
+        return _idle_note(station.scope_idle)
+    if station.error:
+        return Note(now=now, why=_error_why(source, station.error),
+                    where=("先確認網路與 Google 授權是否仍有效；"
+                           "持續失敗請把上面那行訊息回報給維護者，"
+                           f"來源狀態在"
+                           f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+    if station.holdings_n:
+        return Note(now=NO_ROWS_NOW, why=NO_ROWS_WHY, where=NO_ROWS_WHERE)
+    if station.bound:
+        return Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY, where=EMPTY_SHEET_WHERE)
+    return Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
+
+
+def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
+    """金額那幾列。**算不出來就不放這個數字，不填 0**（§1）。"""
+    _t = station.totals
+    if not _t:
+        return [("未實現損益／總市值",
+                 "**算不出來** —— 持股缺張數／均價／現價。"
+                 "本站在這裡**不填 0**：0 元損益是一個結論，缺值不是")]
+    _out = [("未實現損益（元）",
+             f"{_t.get('pnl_twd', 0):+,.0f}　（{_t.get('pnl_pct', 0):+.1f}%）"),
+            ("總市值（元）", f"{_t.get('value_twd', 0):,.0f}")]
+    if _t.get("partial"):
+        _held_n, _valued_n = int(_t.get("held_n", 0)), int(_t.get("valued_n", 0))
+        _out.append((
+            "⚠️ 上面兩個金額只涵蓋一部分",
+            f"{_held_n - _valued_n}/{_held_n} 檔持股缺張數或均價，**沒有**納入 —— "
+            f"上面兩個數字只涵蓋其餘 {_valued_n} 檔。到 📁 組合管理補齊即可"))
+    return _out
+
+
+def build_action_card(station: StationReadout) -> _Built:
+    """線框 ① 第一張：**今天該做什麼** —— 已接線。
+
+    ⚠️ **「沒事」這句話有 gate。** 一句「今天沒有需要動作的部位」與
+    「有 3 盞燈根本判不出來」在畫面上長得一模一樣，而處置完全相反（§1）。
+    本檔**不自己判**那個 gate —— 巡航那句話由 L4 `cruise_or_gap()` 產生
+    （與既有戰情室**同一把尺**），本檔只負責把它顯示出來。
+    """
+    _state = classify_ui_state(
+        requested=station.requested,
+        error=station.error or None,
+        has_value=station.has_rows)
+    _facts: list[tuple[str, str]] = [("檔數", f"{len(station.rows)} 檔")]
+    _facts += _totals_facts(station)
+    if station.err_n:
+        _facts.append(("⚠️ 未納入任何判斷",
+                       f"另有 {station.err_n} 檔整批抓取失敗 —— "
+                       "它們**沒有**被當成「沒事」，只是這一輪抓不到"))
+    _facts.append(("這一句是怎麼來的",
+                   "有紅燈／加碼燈就直接列出來（**不排優先序**，兩件事同時成立時"
+                   "兩個都講）；都沒有才輪到巡航 gate，而巡航要「每一列的每一盞"
+                   "適用燈都判得出來」才准說"))
+    if _state != UI_LIVE:
+        return (Card(key=CONCLUSION_ACTION_KEY, label="該做什麼", state=_state,
+                     note=_station_note(station, now="**本頁還算不出「今天該做什麼」**",
+                                        source=SRC_STATION)),
+                tuple(_facts), "")
+    _parts = ([f"{station.cut_n} 檔亮汰弱紅燈"] if station.cut_n else []) + \
+             ([f"{station.add_n} 檔亮加碼燈"] if station.add_n else [])
+    _headline = ("今天要看的：" + "、".join(_parts) if _parts
+                 else station.cruise_text or "—")
+    return (Card(key=CONCLUSION_ACTION_KEY, label="該做什麼", state=UI_LIVE,
+                 value=_headline),
+            tuple(_facts), "有動作" if _parts else "")
+
+
+def build_confidence_card(station: StationReadout) -> _Built:
+    """線框 ① 第二張：**訊號可信度（N/M 盞給得出判定）** —— 已接線。
+
+    ⚠️ **分母是動態的，本檔一個總數都不寫死。** ETF 8 盞、個股 3 盞
+    （4 盞扣掉「依規格就不出等級」的 KD），混合持股的總格數隨組合成分改變。
+    分母口徑走 L4 `aggregate_judged()`，與燈牆上每一列的 N/M **同一把尺** ——
+    同一頁上兩個不同的分母，使用者只會讀成「有一邊算錯了」。
+
+    ⚠️ **抓取失敗的列留在分母裡**。L2 `missing_light_cells()` 的 docstring
+    把理由寫得很清楚：把算不出來的移出分母，畫面會在資料最爛的時候顯示
+    可信度最高（§1）。本檔不去動它。
+    """
+    _state = classify_ui_state(
+        requested=station.requested,
+        error=station.error or None,
+        has_value=station.has_lights)
+    _facts: list[tuple[str, str]] = [
+        ("分母為什麼不寫死",
+         "ETF 8 盞、個股 3 盞（KD 依規格就不出等級，不進分母）—— "
+         "總格數隨你的持股檔數與成分改變，寫死就會在下一次變動時變成假話"),
+        ("與燈牆的關係", "燈牆每一列的 N/M 與這裡是**同一把尺**（L4 `judged_count`）"),
+    ]
+    if station.tally:
+        _facts.append((
+            "四態各有幾格",
+            "、".join(f"{_k}：{_v}" for _k, _v in station.tally.items() if _v)
+            or "（這一輪一格都沒有）"))
+    if station.unjudged_rows:
+        _facts.append(("判不全的列",
+                       f"{station.unjudged_rows} 列不是「每一盞適用燈都判得出來」—— "
+                       "只要有一列不滿足，就不准說「今天沒事」"))
+    if _state != UI_LIVE:
+        # ⚠️ **「有列、但沒有逐盞燈資料」是另一種空，不可以借用上面那三句。**
+        #    （實跑抓到的：借用之後畫面會說「戰情表一列都沒有回來」，
+        #    而其實回來了 N 列 —— 那是一句**當場可以被使用者否證的假話**。）
+        _note = (Note(now="**有持股，但這一輪算不出訊號可信度**",
+                      why=("戰情表回來了，但每一列都沒有帶逐盞燈的判定資料 —— "
+                           "**這通常代表這份結果是舊版執行留下的**，"
+                           "或上游換了形狀。本站不畫一個 0/0 假裝算過"),
+                      where=(f"{press(ACTION_RUN_WARROOM_LABEL)}重跑一次；"
+                             "仍然沒有請把這一句回報給維護者"))
+                 if (station.has_rows and not station.error)
+                 else _station_note(station,
+                                    now="**本頁還算不出「幾盞燈判得出來」**",
+                                    source=SRC_STATION))
+        return (Card(key=CONCLUSION_CONFIDENCE_KEY, label="訊號可信度", state=_state,
+                     note=_note),
+                tuple(_facts), "")
+    return (Card(key=CONCLUSION_CONFIDENCE_KEY, label="訊號可信度", state=UI_LIVE,
+                 value=f"{station.judged}/{station.total_lights} 盞給得出判定"),
+            tuple(_facts), "")
+
+
+def build_todo_card(station: StationReadout) -> _Built:
+    """線框 ① 第三張：**需要處理** —— 已接線。
+
+    ⚠️ 「未判」與「沒事」不可以合成一個數字：前者是「還不知道」，
+    後者是「知道且沒事」。三個數字**各自列出**。
+    """
+    _state = classify_ui_state(
+        requested=station.requested,
+        error=station.error or None,
+        has_value=station.has_rows)
+    _facts: list[tuple[str, str]] = [
+        ("加碼 N", "235 加碼燈觸發（digest 的 `adds`）"),
+        ("汰弱 N", "健檢紅燈（digest 的 `reds`，與 LINE 每日推播同一組定義）"),
+        ("未判 N", "**有幾列判不全** —— 不是「沒事」，是還不知道"),
+    ]
+    if _state != UI_LIVE:
+        return (Card(key=CONCLUSION_TODO_KEY, label="需要處理", state=_state,
+                     note=_station_note(
+                         station, now="**本頁還列不出「有幾檔需要你處理」**",
+                         source=SRC_STATION)),
+                tuple(_facts), "")
+    return (Card(key=CONCLUSION_TODO_KEY, label="需要處理", state=UI_LIVE,
+                 value=(f"加碼 {station.add_n} · 汰弱 {station.cut_n} · "
+                        f"未判 {station.unjudged_rows}")),
+            tuple(_facts),
+            "待處理" if (station.add_n or station.cut_n) else "")
+
+
+def build_conclusion_cards(station: StationReadout) -> tuple[_Built, ...]:
+    """線框葉1 ①「結論（三張卡）」—— **本批三張全部接線**。"""
+    return (build_action_card(station), build_confidence_card(station),
+            build_todo_card(station))
 
 
 # ── ② 同一個名詞，兩套刻度 ────────────────────────────────────────
@@ -1021,25 +1581,49 @@ def build_scale_card(disclosure: ScaleDisclosure) -> _Built:
 
 
 # ── ③ 戰情表（燈牆 ＋ VIX）────────────────────────────────────────
-LIGHTWALL_SPEC: UnwiredSpec = UnwiredSpec(
-    key="hold.lightwall", label="燈牆（235 加碼燈 · 3-3-3 · 健檢四盞）",
-    now="**燈牆點不亮**",
-    why=HOLDINGS_WHY,
-    where=_holdings_where(
-        "接上之後這一格走 L3 `get_station_rows(holdings)` —— "
-        "它會抓一次 VIX ＋ 逐檔指標並回一張表；"
-        "點左表右側就地展開的那份週線與布林 z，也已經在每一列的 "
-        "`_weekly_series` 鍵裡了"),
-    facts=(("接線後的樣子", "逐檔 235 加碼燈 / 3-3-3 判定；點任一檔右側展開週線與布林 z"),
-           ("⚠️ 線框的紅態是另一件事",
-            "線框 ③ 的 err 是「已綁定的 Google Sheet 讀取失敗」—— "
-            "那要等接線之後才會出現；現在是**未接線**"),
-           ("運算的 L3", "已就緒（`dividend_station_service.get_station_rows`）")))
+def build_lightwall_card(station: StationReadout) -> _Built:
+    """線框葉1 ③ 的「燈牆」那一半 —— **已接線**。
 
+    這張卡只給**整面牆的摘要**；逐檔的燈條由 `_render_light_wall_block()`
+    畫在卡下面，走 L4 `render_light_wall()`（**與既有戰情室同一支渲染器**，
+    本頁不畫第二種燈格）。
 
-def build_lightwall_card(requested: bool) -> _Built:
-    """線框葉1 ③ 的「燈牆」那一半 —— **本批未接線**。"""
-    return build_unwired_card(requested, LIGHTWALL_SPEC)
+    ⚠️ **本頁一盞燈都不判。** 每一盞燈的等級與四態都在 L2
+    `compute.etf.dividend_station`，本檔連「哪一盞算綠」都沒有寫。
+    """
+    _state = classify_ui_state(
+        requested=station.requested,
+        error=station.error or None,
+        has_value=station.has_rows)
+    _facts: list[tuple[str, str]] = [
+        ("兩個頻道分開看",
+         "**填色＝這盞燈自己的判定**、**外框／紋理＝這盞燈可不可信**（四態）—— "
+         "一盞「亮著綠燈但其實沒有資料」的燈，填色會是灰的而且帶斜紋"),
+        ("235 加碼燈的紅不是體質差",
+         "它的 🔴 是「跌得夠深、該加多少碼」的訊號，不是健康度"),
+        ("燈的判定在哪裡",
+         "全部在 L2 `compute.etf.dividend_station`；本頁一盞都不判，只顯示"),
+    ]
+    if station.err_n:
+        _facts.append(("⚠️ 抓取失敗的列沒有消失",
+                       f"{station.err_n} 檔整批抓取失敗 —— 它們照樣出現在牆上、"
+                       "而且**留在分母裡**把可信度拉低（移走分母會讓資料最爛的時候"
+                       "顯示可信度最高）"))
+    if _state != UI_LIVE:
+        return (Card(key="hold.lightwall",
+                     label="燈牆（235 加碼燈 · 3-3-3 · 健檢四盞）", state=_state,
+                     note=_station_note(station, now="**燈牆點不亮**",
+                                        source=SRC_STATION)),
+                tuple(_facts), "")
+    # ⚠️ **`0/0 盞有判定` 是一句沒有意義的話**（分母 0 不是「都判不出來」，
+    #    是「這一輪根本沒有燈可以數」）—— 兩者要用不同的句子講。
+    return (Card(key="hold.lightwall",
+                 label="燈牆（235 加碼燈 · 3-3-3 · 健檢四盞）", state=UI_LIVE,
+                 value=(f"{len(station.rows)} 檔 · "
+                        f"{station.judged}/{station.total_lights} 盞有判定"
+                        if station.has_lights
+                        else f"{len(station.rows)} 檔（這一輪沒有逐盞燈資料）")),
+            tuple(_facts), "")
 
 
 def build_vix_card(vix: VixReadout) -> _Built:
@@ -1091,35 +1675,90 @@ def build_vix_card(vix: VixReadout) -> _Built:
 
 
 # ── ④ 換股建議（搭配總經位階）─────────────────────────────────────
-SWITCH_SPEC: UnwiredSpec = UnwiredSpec(
-    key="hold.switch", label="換股建議（該換）",
-    now="**本頁還給不出換股建議**",
-    why=HOLDINGS_WHY,
-    where=_holdings_where(
-        "接上之後這一格走 L3 `build_switch_advice(rows, macro, candidates)` ＋ "
-        "`get_switch_in_candidates(regime=…, exclude=已持有代號)` —— **兩支都已經在了**"),
-    facts=(
-        ("接線後的樣子", "換出 N 檔（體質轉弱）→ 換入 N 檔（優先來自你的觀察清單）"),
-        ("⚠️ 為什麼不先出「換入」那一半",
-         "換入候選的 L3 已經可用，但它要 `exclude=你已持有的代號`；"
-         "**少了那個輸入，它會叫你買你已經有的東西** —— "
-         "那不是降級的建議，是錯的建議，所以本頁一半都不出"),
-        ("與這一格互補的另一半", "⑤ 的 80/20 偏離回答「該減」，本格回答「該換」")))
-
-
-def build_switch_card(requested: bool) -> _Built:
-    """線框葉1 ④「換股建議」—— **本批未接線**（兩半都缺同一個輸入）。
+def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
+    """線框葉1 ④「換股建議」—— **已接線（換出 ＋ 換入兩半都在）**。
 
     線框 note 原文：「**v1 漏畫 —— 而它正是本頁職責「該加、該換、該減」的
     那個「該換」。**」
 
-    ⚠️ **刻意不出半個建議。** 線框把「未套用總經位階」設計成 `degraded`
-    （有值、能看，只是少一個輸入，必須講出來）—— 那個設計的前提是
-    **建議本身存在**。本頁連建議都產不出來（換出要持股、換入要 `exclude` 持股），
-    所以是 `unwired` 而不是 `degraded`。**把 unwired 畫成 degraded 會讓使用者
-    以為畫面上有一份「打了折的建議」可以看，實際上一個字都沒有。**
+    ⚠️ **換入候選一定帶 `exclude=你已持有的代號`。** 少了它，L3 會從全市場
+    排名裡挑出你**已經持有**的那幾檔叫你買 —— 那不是降級的建議，是錯的建議。
+    本卡把 `excluded_n` 顯示出來，讓「有沒有真的排除」看得見，
+    而不是一句沒有人能驗證的宣稱。
+
+    ⚠️ **總經未評估 → `stance=unknown`，只做汰弱、不套攻守。**
+    線框 ④ 原文：「依規則不以「中性」代替 —— 不猜多空」。
+
+    ⚠️ **為什麼要多收一個 `station`**（實測抓到的，不是理論）：空態有**兩種**，
+    而它們只有 `station` 分得出來 ——
+      · 「你根本沒有持股」（沒綁 / 綁了但空）→ 要你去綁、去填；
+      · 「有持股，但這一輪沒有一檔要換」→ 那是**好消息**，要你去看可信度。
+    只看 `switch` 的話兩者都是「沒有建議換股」，等於對其中一半的人指錯路。
     """
-    return build_unwired_card(requested, SWITCH_SPEC)
+    _state = classify_ui_state(
+        requested=switch.requested,
+        error=switch.error or None,
+        has_value=switch.has_advice)
+    _STANCE = {"defensive": "轉守 → 換入從嚴（少給候選）",
+               "aggressive": "偏多 → 換入給滿",
+               "neutral": "中性 → 換入給滿",
+               "unknown": "**總經未評估 → 只做汰弱，不套攻守**（不猜多空）"}
+    # ⚠️ **沒問過的時候不印那個 0。** 「已排除 0 檔」讀起來像「你一檔都沒有持有」，
+    #    而冷啟動時本頁根本還沒去看過你持有什麼（§1：0 是一個結論，不是缺值）。
+    _facts: list[tuple[str, str]] = [
+        ("換入候選已排除的檔數",
+         (f"{switch.excluded_n} 檔（你已持有的）—— "
+          "少了這個排除，畫面會叫你買你已經有的東西")
+         if switch.requested else
+         ("接線後這裡會顯示**排除了你已持有的幾檔** —— "
+          "少了這個排除，畫面會叫你買你已經有的東西")),
+        ("換入的優先序",
+         "先看**你自己的觀察清單**裡健檢綠燈的；沒有才 fallback 選股池全自動排名"),
+        ("與 ⑤ 的關係", "⑤ 的 80/20 偏離回答「該減」，本格回答「該換」"),
+    ]
+    if switch.stance:
+        _facts.append(("總經攻守閘門", _STANCE.get(switch.stance, switch.stance)))
+    if switch.switch_out:
+        _facts.append(("建議換出（你持有的紅燈）",
+                       "、".join(f"{_d.get('代號', '')}"
+                                 f"（{_d.get('建議動作', '')}）"
+                                 for _d in switch.switch_out)))
+    if switch.switch_in:
+        _src = ("你的觀察清單" if switch.switch_in_src == "watchlist"
+                else "選股池全自動排名")
+        _facts.append((f"建議換入（來源：{_src}）",
+                       "、".join(f"{_d.get('代號', '')} {_d.get('名稱', '')}".strip()
+                                 for _d in switch.switch_in)))
+    if _state == UI_LIVE:
+        return (Card(key="hold.switch", label="換股建議（該換）", state=UI_LIVE,
+                     value=(f"換出 {len(switch.switch_out)} 檔 → "
+                            f"換入 {len(switch.switch_in)} 檔")),
+                tuple(_facts),
+                "有換股" if switch.switch_out else "")
+    if _state == UI_IDLE:
+        _note = _idle_note(switch.scope_idle)
+    elif _state == UI_FAILED:
+        _note = Note(now="**換股建議算不出來**",
+                     why=_error_why(SRC_SWITCH, switch.error),
+                     where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者；"
+                            "換出那一半只需要你的持股，換入那一半還要選股池，"
+                            "兩者任一失敗都會走到這裡"))
+    elif not station.has_rows:
+        # 沒有持股 ≠ 沒有一檔要換。三種「沒有」在這裡照樣不可以混。
+        _note = _station_note(station, now="**還沒有可以換的持股**",
+                              source=SRC_STATION)
+    else:   # UI_EMPTY —— **有持股，但沒有一檔要換，也是一個結論。**
+        _note = Note(
+            now="**這一輪沒有建議換股**",
+            why=("**這是一個有效的結果**（已經算過，不是還沒算）—— "
+                 "你持有的部位裡沒有健檢紅燈可換出，而且觀察清單與選股池"
+                 "這一輪也沒有給出可換入的標的。"
+                 "本站**不硬湊一檔給你換** —— 那會變成憑空生出來的建議"),
+            where=("若你預期應該要有：先看上面 ① 的「訊號可信度」——"
+                   "判不出來的燈不會變成紅燈，也就不會被列為換出；"
+                   f"補齊資料後{press(ACTION_RUN_WARROOM_LABEL)}再看一次"))
+    return Card(key="hold.switch", label="換股建議（該換）",
+                state=_state, note=_note), tuple(_facts), ""
 
 
 def build_macro_stage_card(macro: MacroReadout) -> _Built:
@@ -1176,43 +1815,117 @@ def build_macro_stage_card(macro: MacroReadout) -> _Built:
 #: ⚠️ 目標配置與停利門檻**一律讀 L0**（`CORE_TARGET_PCT` / `SATELLITE_TARGET_PCT` /
 #: `SATELLITE_TAKE_PROFIT_PCT`），本檔一個數字都不寫死（§3.3 ＋
 #: `tests/test_no_hardcoded_position_pct.py`）。
-ALLOCATION_SPLIT_SPEC: UnwiredSpec = UnwiredSpec(
-    key="hold.alloc_split", label="80/20 配置偏離（該減）",
-    now="**本頁還算不出核心／衛星的實際配置**",
-    why=HOLDINGS_WHY,
-    where=_holdings_where(
-        "接上之後這一格走 L3 `compute_allocation_split(rows)` —— "
-        "它只納入**有市值**的持有列，缺張數／均價的會被排除並回 `partial=True`，"
-        "呼叫端必須把「N 檔裡只算了 M 檔」講出來"),
-    facts=(
-        ("接線後的樣子", "核心 x% / 衛星 y%（目標見下一列），以及偏離幾個百分點"),
+def _split_facts(station: StationReadout) -> list[tuple[str, str]]:
+    """核心／衛星那兩張卡共用的中繼資料列（**同一支 L3、同一份數字**）。"""
+    _facts: list[tuple[str, str]] = [
         ("目標（L0 SSOT）",
          f"核心 {CORE_TARGET_PCT:g}／衛星 {SATELLITE_TARGET_PCT:g}"),
         ("近似法的已知限制",
-         "核心＝ETF、衛星＝個股是以代號型別近似；主題型 ETF 會被算成核心")))
+         "核心＝ETF、衛星＝個股是以**代號型別**近似；主題型 ETF 會被算成核心"),
+        ("只納入有市值的持有列",
+         "缺張數／均價的持有列**不進分子也不進分母** —— 硬算等於替你編一個比例"),
+    ]
+    _sp = station.split
+    if _sp and _sp.get("partial"):
+        _facts.append((
+            "⚠️ 這個比例只涵蓋一部分",
+            f"{int(_sp.get('held_n', 0))} 檔持有列裡只算了 "
+            f"{int(_sp.get('valued_n', 0))} 檔（其餘缺金額）—— **僅供參考**"))
+    return _facts
 
-TAKE_PROFIT_SPEC: UnwiredSpec = UnwiredSpec(
-    key="hold.take_profit", label="衛星停利",
-    now="**本頁還判不出哪幾檔達停利門檻**",
-    why=HOLDINGS_WHY,
-    where=_holdings_where(
-        "接上之後這一格走 L3 `flag_take_profit(rows)` —— "
-        "它只對**有損益%**的持有衛星列判；沒有成本就不判、不捏造"),
-    facts=(
-        ("接線後的樣子", "達門檻的衛星代號 ＋ 各自的損益%"),
+
+def build_allocation_split_card(station: StationReadout) -> _Built:
+    """線框葉1 ⑤ 的「80/20 配置偏離」那一半 —— **已接線**。
+
+    ⚠️ 它與 `build_position_cap_card()`（建議持股水位）**不是同一件事**：
+    本格問的是「你手上那一堆，核心與衛星各佔多少」（**組合內部**的比例），
+    那一格問的是「整體該擺多少在股票上」（**市場端**的上限）。**分母不同。**
+    """
+    _state = classify_ui_state(
+        requested=station.requested,
+        error=station.error or None,
+        has_value=station.split is not None)
+    _facts = _split_facts(station)
+    _sp = station.split
+    if _state == UI_LIVE and _sp:
+        _dev = float(_sp.get("core_dev", 0.0))
+        _facts.insert(0, ("核心偏離目標", f"{_dev:+.1f} 個百分點"))
+        return (Card(key="hold.alloc_split", label="80/20 配置偏離（該減）",
+                     state=UI_LIVE,
+                     # §4.1：單位要寫出來 —— 「核心 100.0」看不出是百分比還是檔數。
+                     # ⚠️ 這兩個數字**來自 L3**，不是本檔寫死的持股百分比
+                     # （`tests/test_no_hardcoded_position_pct.py` 掃的是字面常數）。
+                     value=(f"核心 {float(_sp.get('core_pct', 0)):.1f}%"
+                            f" ／ 衛星 {float(_sp.get('sat_pct', 0)):.1f}%")),
+                tuple(_facts),
+                "偏離" if abs(_dev) >= 1 else "接近目標")
+    if _state == UI_IDLE:
+        _note = _idle_note(station.scope_idle)
+    elif _state == UI_FAILED:
+        _note = Note(now="**核心／衛星的實際配置算不出來**",
+                     why=_error_why(SRC_STATION, station.error),
+                     where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
+    elif not station.has_rows:
+        _note = _station_note(station, now="**還沒有可以拆的持股**",
+                              source=SRC_STATION)
+    else:   # 有列、但一列都沒有市值
+        _note = Note(
+            now="**有持股，但算不出核心／衛星的比例**",
+            why=("**這是一個有效的結果**（已經算過，不是還沒算）—— "
+                 "你的持有列裡沒有任何一列同時有張數與現價，"
+                 "沒有市值就沒有比例。本站**不用檔數當比例頂替** —— "
+                 "三檔各一張與三檔各一百張，配置完全不同"),
+            where=("到既有的 📁 組合管理分頁把持股的**張數**與**均價**補齊，"
+                   f"回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+    return Card(key="hold.alloc_split", label="80/20 配置偏離（該減）",
+                state=_state, note=_note), tuple(_facts), ""
+
+
+def build_take_profit_card(station: StationReadout) -> _Built:
+    """線框葉1 ⑤ 的「衛星停利」那一半 —— **已接線**。
+
+    ⚠️ **「沒有一檔達門檻」是 `empty`（灰），而且是好消息，不是故障。**
+    ⚠️ **沒有成本就不判**：L3 只對有損益% 的持有衛星列判定 ——
+    硬判等於替你編一個報酬率（§1）。
+    """
+    _state = classify_ui_state(
+        requested=station.requested,
+        error=station.error or None,
+        has_value=bool(station.take_profit))
+    _facts: list[tuple[str, str]] = [
         ("門檻（L0 SSOT）",
          f"衛星獲利達 {SATELLITE_TAKE_PROFIT_PCT:g} 個百分點即嚴格停利滾回核心"),
-        ("為什麼缺成本就不判", "沒有均價就沒有損益%，硬判等於替你編一個報酬率")))
-
-
-def build_allocation_split_card(requested: bool) -> _Built:
-    """線框葉1 ⑤ 的「80/20 配置偏離」那一半 —— **本批未接線**。"""
-    return build_unwired_card(requested, ALLOCATION_SPLIT_SPEC)
-
-
-def build_take_profit_card(requested: bool) -> _Built:
-    """線框葉1 ⑤ 的「衛星停利」那一半 —— **本批未接線**。"""
-    return build_unwired_card(requested, TAKE_PROFIT_SPEC)
+        ("為什麼缺成本就不判", "沒有均價就沒有損益%，硬判等於替你編一個報酬率"),
+        ("只判衛星（個股）", "核心（ETF）走定期定額，不套這條停利規則"),
+    ]
+    if _state == UI_LIVE:
+        _facts.insert(0, ("達門檻的衛星",
+                          "、".join(f"{_d.get('代號', '')}"
+                                    f"（{_d.get('損益%', '')}%）"
+                                    for _d in station.take_profit)))
+        return (Card(key="hold.take_profit", label="衛星停利", state=UI_LIVE,
+                     value=f"{len(station.take_profit)} 檔達停利門檻"),
+                tuple(_facts), "可停利")
+    if _state == UI_IDLE:
+        _note = _idle_note(station.scope_idle)
+    elif _state == UI_FAILED:
+        _note = Note(now="**停利判不出來**",
+                     why=_error_why(SRC_STATION, station.error),
+                     where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
+    elif not station.has_rows:
+        _note = _station_note(station, now="**還沒有可以判停利的持股**",
+                              source=SRC_STATION)
+    else:
+        _note = Note(
+            now="**沒有任何一檔衛星達停利門檻**",
+            why=("**這是一個有效的結果**（已經逐檔判過，不是還沒判）—— "
+                 "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此**判不了**。"
+                 "本站不把「判不了」講成「沒達標」：兩者在這張卡上都是灰的，"
+                 "但下面那一列會告訴你缺的是什麼"),
+            where=("若你預期應該要有：到 📁 組合管理確認那幾檔**個股**的均價有填；"
+                   f"補齊後回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+    return Card(key="hold.take_profit", label="衛星停利",
+                state=_state, note=_note), tuple(_facts), ""
 
 
 def build_position_cap_card(alloc: AllocationReadout) -> _Built:
@@ -1267,57 +1980,64 @@ def build_position_cap_card(alloc: AllocationReadout) -> _Built:
 
 
 # ── ⑥ 組合深度分析（提升，不再埋 expander；區塊並列，各自 gate）──────
-#: 線框 ⑥ `live` 原文逐字的六項。
-#: ⚠️ **六項卡住的位置不同**（三種），所以 `where` 分成三類寫，不是六份複製：
-#:   (a) 純函式在 L2、**連 L3 wrapper 都還沒有** → 再平衡 / 壓力測試 / VaR；
-#:   (b) **L3 已經有**，只差持股 → 核心／衛星、配息現金流；
+#: 線框 ⑥ `live` 原文逐字的六項。**本批接線的只有「核心／衛星」一項**，
+#: 其餘五項**與持股清單無關**（持股已經接上了），各自卡在別的地方：
+#:   (a) 純函式在 L2、**`src/services/` 還沒有 L3 wrapper** → 再平衡 / 壓力測試 / VaR；
+#:   (b) L3 有，但**輸入單位不同 ＋ 要多一個畫面元件** → 配息現金流；
 #:   (c) **實作在 L5**、自帶寫死的 widget key → 葡萄串領息。
 DEEP_SPECS: tuple[UnwiredSpec, ...] = (
     UnwiredSpec(
         key="hold.deep.rebalance", label="再平衡",
-        now="**再平衡未接線**", why=HOLDINGS_WHY,
-        where=_holdings_where(
-            "**並且**再補一支 L3 wrapper 轉發 L2 `compute.etf.etf_calc` 的再平衡計算"
-            "（這一項與 ① / ③ 不同：連運算的 L3 都還沒有，不只是缺清單）"),
-        facts=(("卡住的層", "L2 有純函式，**L3 沒有 wrapper**，L1 沒有清單"),)),
-    UnwiredSpec(
-        key="hold.deep.core_satellite", label="核心／衛星",
-        now="**核心／衛星拆解未接線**", why=HOLDINGS_WHY,
-        where=_holdings_where(
-            "接上之後這一格與 ⑤ 共用同一支 L3 `compute_allocation_split(rows)`"),
-        facts=(("卡住的層", "只差持股清單（L3 已就緒）"),
-               ("與 ⑤ 的關係", "同一支 L3、不同呈現：⑤ 講偏離，這裡講組成"))),
+        now="**再平衡未接線**", why=MISSING_L3_WRAPPER_WHY,
+        where=_unwired_where(
+            "要接上需在 `src/services/` 補一支 L3 wrapper 轉發 L2 "
+            "`compute.etf.etf_calc` 的再平衡計算（**持股清單已經有了**，"
+            "缺的只有這一層）"),
+        facts=(("卡住的層", "L2 有純函式，**L3 沒有 wrapper**"),
+               ("持股清單", "✅ 已接線（`holdings_service`）—— 不是卡在這裡"))),
     UnwiredSpec(
         key="hold.deep.stress", label="壓力測試",
-        now="**壓力測試未接線**", why=HOLDINGS_WHY,
-        where=_holdings_where(
-            "**並且**再補一支 L3 wrapper 轉發 L2 "
+        now="**壓力測試未接線**", why=MISSING_L3_WRAPPER_WHY,
+        where=_unwired_where(
+            "要接上需在 `src/services/` 補一支 L3 wrapper 轉發 L2 "
             "`compute.etf.etf_calc.calc_portfolio_stress_test`"),
-        facts=(("卡住的層", "L2 有純函式，**L3 沒有 wrapper**，L1 沒有清單"),)),
+        facts=(("卡住的層", "L2 有純函式，**L3 沒有 wrapper**"),
+               ("接線後的樣子", "指定跌幅情境下，這個組合大約會回撤多少"))),
     UnwiredSpec(
         key="hold.deep.var", label="VaR",
-        now="**VaR 未接線**", why=HOLDINGS_WHY,
-        where=_holdings_where(
-            "**並且**再補一支 L3 wrapper 轉發 L2 "
+        now="**VaR 未接線**", why=MISSING_L3_WRAPPER_WHY,
+        where=_unwired_where(
+            "要接上需在 `src/services/` 補一支 L3 wrapper 轉發 L2 "
             "`compute.etf.etf_calc.compute_portfolio_vs_benchmark`（含權重對齊）"),
-        facts=(("卡住的層", "L2 有純函式，**L3 沒有 wrapper**，L1 沒有清單"),)),
+        facts=(("卡住的層", "L2 有純函式，**L3 沒有 wrapper**"),
+               ("為什麼權重對齊要一起搬",
+                "權重沒對齊的 VaR 會安靜地算出一個小很多的數字"))),
     UnwiredSpec(
         key="hold.deep.dividend_cash", label="配息現金流",
-        now="**配息現金流未接線**", why=HOLDINGS_WHY,
-        where=_holdings_where(
-            "接上之後這一格走 L3 "
-            "`dividend_tax_service.get_dividend_tax_view(holdings, marginal_rate=…)`"
-            "—— **那一支已經在了**，它要的是 `[{'ticker', 'shares'}]`"),
-        facts=(("卡住的層", "只差持股清單（L3 已就緒）"),
-               ("接線後還要問你一件事",
-                "綜所稅邊際稅率（不填 → 只算二代健保，不算綜所稅）"))),
+        now="**配息現金流未接線**",
+        why=("L3 `dividend_tax_service.get_dividend_tax_view()` 已經在了，"
+             "但它吃的是**股數**（`[{'ticker', 'shares'}]`），而你的持股帳本記的是"
+             "**張**。那個「1 張 = 1000 股」的換算**不可以寫在本頁** —— "
+             "L3 `compute_portfolio_totals()` 已經點名這件事（留在畫面層等於"
+             "讓同一個乘法散在 UI 各處，§4.1 漏乘就是 1000 倍低估）"),
+        where=_unwired_where(
+            "要接上需 (1) 在 L3 補一支把持股列轉成 `{'ticker','shares'}` 的轉接"
+            "（張→股換算住 L3，不住本頁），(2) 再加一個「綜所稅邊際稅率」的輸入元件 "
+            "—— 而**新增畫面元件要先出線框草稿給客戶拍板**"
+            "（`CLAUDE.md §-1.5` A-8），不在本批"),
+        facts=(("卡住的層", "單位換算要住 L3；稅率輸入是新的畫面元件"),
+               ("不填稅率也算得出什麼",
+                "只算二代健保、不算綜所稅（L3 明文支援 `marginal_rate=None`）"))),
     UnwiredSpec(
         key="hold.deep.grape", label="葡萄串領息",
-        now="**葡萄串領息未接線**", why=HOLDINGS_WHY,
-        where=_holdings_where(
-            "**並且**先讓現行實作（L5 `tabs.grape_ladder`）能被外部重複掛載"
-            "（widget key 加前綴參數、取數改走 L3、gate 由 caller 提供）——"
-            "現在直接在本頁再掛一次會撞 `DuplicateWidgetID`"),
+        now="**葡萄串領息未接線**",
+        why=("這一格的實作**住在 L5**（`tabs.grape_ladder`）而不是 L3，"
+             "而且它自帶寫死的 widget key —— 在本頁再掛一次會撞 "
+             "`DuplicateWidgetID`，那不是「畫得醜」，是**整頁當場拋例外**"),
+        where=_unwired_where(
+            "要接上需先讓現行實作能被外部重複掛載（widget key 加前綴參數、"
+            "取數改走 L3、gate 由 caller 提供）—— 那是改既有分頁，"
+            "落在 §8.4 step 4 的範圍閘門，不在本批"),
         facts=(("卡住的層", "實作在 L5、自帶寫死的 widget key"),
                ("現行入口", "既有的 🏦 ETF 分頁（本頁不重複掛載）"))),
 )
@@ -1329,36 +2049,84 @@ DEEP_CAPTION: str = (
     "只是讓人找不到。改**並列 ＋ 各自 gate**（3 欄 × 2 排，不是一排六欄）。")
 
 
-def build_deep_cards(requested: bool) -> tuple[_Built, ...]:
-    """線框葉1 ⑥「組合深度分析」六項 —— 本批**六項全部未接線**。
+def build_core_satellite_card(station: StationReadout) -> _Built:
+    """線框 ⑥ 的「核心／衛星」—— **已接線**（與 ⑤ 共用同一支 L3）。
 
-    ⚠️ **六張的 `where` 分成三類、不是六份複製** —— 見 `DEEP_SPECS` 的註解。
-    寫成同一句會讓「補哪一層才會好」這個資訊消失，而那正是這幾張卡唯一的價值。
+    ⚠️ **與 ⑤ 是同一份數字、不同呈現**：⑤ 講**偏離**（離目標多遠），
+    這裡講**組成**（實際各佔多少、各幾檔）。**刻意不重算** ——
+    同一頁上兩個由不同算式得出的核心比例，使用者只會讀成「有一邊錯了」。
     """
-    return tuple(build_unwired_card(requested, _s) for _s in DEEP_SPECS)
+    _state = classify_ui_state(
+        requested=station.requested,
+        error=station.error or None,
+        has_value=station.split is not None)
+    _facts = _split_facts(station)
+    _facts.insert(0, ("與 ⑤ 的關係",
+                      "**同一支 L3 `compute_allocation_split()`、同一份數字** —— "
+                      "⑤ 講偏離，這裡講組成。本頁不重算第二遍"))
+    _sp = station.split
+    if _state == UI_LIVE and _sp:
+        _facts.insert(1, ("納入計算的市值（元·張價）",
+                          f"{float(_sp.get('total_value', 0)):,.0f}"))
+        return (Card(key="hold.deep.core_satellite", label="核心／衛星",
+                     state=UI_LIVE,
+                     # §4.1：單位要寫出來 —— 「核心 100.0」看不出是百分比還是檔數。
+                     # ⚠️ 這兩個數字**來自 L3**，不是本檔寫死的持股百分比
+                     # （`tests/test_no_hardcoded_position_pct.py` 掃的是字面常數）。
+                     value=(f"核心 {float(_sp.get('core_pct', 0)):.1f}%"
+                            f" ／ 衛星 {float(_sp.get('sat_pct', 0)):.1f}%")),
+                tuple(_facts), "")
+    _split_card = build_allocation_split_card(station)[0]
+    # 狀態與文案**與 ⑤ 完全一致**（同一份輸入、同一個判定）——
+    # 兩張卡對同一件事給兩種說法，比少一張卡糟糕得多。
+    return Card(key="hold.deep.core_satellite", label="核心／衛星",
+                state=_state, note=_split_card.note), tuple(_facts), ""
+
+
+def build_deep_cards(station: StationReadout) -> tuple[_Built, ...]:
+    """線框葉1 ⑥「組合深度分析」六項 —— **本批接線 1 項、其餘 5 項未接線**。
+
+    ⚠️ **順序照線框**（再平衡 / 核心衛星 / 壓力測試 / VaR / 配息現金流 / 葡萄串），
+    接線的那一項**留在它原本的位置**，不因為它先做好就被搬到第一格。
+
+    ⚠️ **五張未接線卡的 `where` 分成三類、不是五份複製** —— 見 `DEEP_SPECS`。
+    """
+    _unwired = {_s.key: build_unwired_card(station.requested, _s)
+                for _s in DEEP_SPECS}
+    return (_unwired["hold.deep.rebalance"],
+            build_core_satellite_card(station),
+            _unwired["hold.deep.stress"],
+            _unwired["hold.deep.var"],
+            _unwired["hold.deep.dividend_cash"],
+            _unwired["hold.deep.grape"])
 
 
 # ── ⑦ AI 戰情總結（唯一推播出口）──────────────────────────────────
 AI_SUMMARY_SPEC: UnwiredSpec = UnwiredSpec(
     key="hold.ai_summary", label="AI 戰情總結（唯一推播出口）",
     now="**本頁還生不出 AI 戰情總結**",
-    why=HOLDINGS_WHY,
-    where=_holdings_where(
-        "接上之後這一格走 L3 `build_station_digest(rows, vix)` → "
-        "`build_summary_prompt(digest, switch)` → "
-        "`build_ai_summary(digest, gemini_fn)`，`gemini_fn` 由 L3 "
-        "`app_ai_service.gemini_call` 注入 —— **四支全部都已經在了**"),
+    why=("**這一格缺的已經不是資料了。** 四支 L3 都在（`build_station_digest` → "
+         "`build_summary_prompt` → `build_ai_summary`，`gemini_fn` 由 "
+         "`app_ai_service.gemini_call` 注入），而 digest 的輸入（戰情表）"
+         "在本批**已經算得出來**。卡住的是**畫面**：線框在這一區畫了一顆單獨的"
+         "按鈕［ ⚡ 生成 AI 總結 ］，而**新增一個視覺元件要先出線框草稿"
+         "給客戶拍板**（`CLAUDE.md §-1.5` A-8），本批不自己加"),
+    where=_unwired_where(
+        "要接上需先讓客戶拍板那顆按鈕（位置必須在表單**外**），"
+        "再把 `build_ai_summary(digest, gemini_fn)` 接上去"),
     facts=(
         ("接線後的樣子", "一段可直接推播的文字總結（含當日建議與理由）＋ 複製鈕"),
-        ("⚠️ 線框畫了一顆鈕，本頁刻意沒有畫",
-         "線框在這一區畫了單獨一顆［ ⚡ 生成 AI 總結 ］。它的輸入是上方六段的結論，"
-         "而那六段全部未接線 —— 畫一顆按了不會發生任何事的鈕，"
-         "就是線框 F5／N2 兩次點名要修的**假出口**。接線後再補，且它必須在表單**外**"),
+        ("⚠️ 為什麼不乾脆自動生成",
+         "那會讓**每一次頁面互動**都打一次付費 AI —— 比少一顆鈕嚴重得多。"
+         "AI 總結必須由使用者明確按一次才發，這正是線框把它畫成按鈕的原因"),
+        ("⚠️ 也不會畫一顆按了沒反應的鈕",
+         "線框 F5／N2 兩次點名要修的**假出口**就是那個 —— "
+         "本頁寧可誠實標未接線"),
         ("AI 的角色", "只潤稿。數字全部來自 digest，L3 明文禁止它自行杜撰代號或數字")))
 
 
 def build_ai_summary_card(requested: bool) -> _Built:
-    """線框葉1 ⑦「AI 戰情總結」—— **本批未接線**。
+    """線框葉1 ⑦「AI 戰情總結」—— **本批仍未接線（缺的是一顆要先拍板的鈕）**。
 
     線框 note 原文：「**v1 漏畫 —— 而它是本頁唯一的推播出口。**
     拿掉之後這頁就只能看、不能送出去。」
@@ -1398,8 +2166,8 @@ def build_binding_card(binding: BindingReadout) -> _Built:
     if _state == UI_IDLE:
         # 兩種 idle 的文案不同（見 `binding_scope_idle`）：冷啟動 vs 選了不讀。
         if binding_scope_idle(binding):
-            _note = Note(now=BINDING_NOT_ASKED_NOW, why=BINDING_NOT_ASKED_WHY,
-                         where=BINDING_NOT_ASKED_WHERE)
+            _note = Note(now=GOOGLE_NOT_ASKED_NOW, why=GOOGLE_NOT_ASKED_WHY,
+                         where=GOOGLE_NOT_ASKED_WHERE)
         else:
             _note = Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
     elif _state == UI_FAILED:
@@ -1409,14 +2177,9 @@ def build_binding_card(binding: BindingReadout) -> _Built:
             where=("先確認網路與 Google 授權是否仍有效；"
                    f"細節在{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
     else:   # UI_EMPTY —— **還沒綁。這是有效結果，不是故障。**
-        _note = Note(
-            now="**你還沒有綁定持股 Sheet**",
-            why=("**這是一個有效的結果**（已經去讀過，不是還沒讀、也不是故障）—— "
-                 "戰情室的每一盞燈都以「你實際持有什麼」為輸入，沒有清單就沒有東西可判。"
-                 "新使用者在這裡看到灰色是正常的"),
-            where=("用 Google 登入後選一本 Sheet —— "
-                   "**現行入口在既有的 📁 組合管理分頁**；"
-                   "本頁只讀不寫，所以不在這裡放選 Sheet 的控制項"))
+        # ⚠️ 與戰情室那幾張空卡**共用同一組常數**：同一件事在同一頁上寫兩份，
+        #    改的時候一定會漏改一份，於是兩張卡對同一個狀況給出兩種說法。
+        _note = Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
     return Card(key="hold.binding", label="Google Sheet 綁定",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -1472,8 +2235,8 @@ def build_portfolio_count_card(binding: BindingReadout) -> _Built:
     #    共用一句就會出現「上一張卡顯示你還沒有綁定」這種**假敘述** ——
     #    冷啟動時上一張卡寫的是「尚未執行」，根本沒說過那句話。
     if _state == UI_IDLE and binding_scope_idle(binding):
-        _note = Note(now=BINDING_NOT_ASKED_NOW, why=BINDING_NOT_ASKED_WHY,
-                     where=BINDING_NOT_ASKED_WHERE)
+        _note = Note(now=GOOGLE_NOT_ASKED_NOW, why=GOOGLE_NOT_ASKED_WHY,
+                     where=GOOGLE_NOT_ASKED_WHERE)
     elif _state == UI_IDLE and not binding.submitted:
         _note = Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
     elif _state == UI_IDLE:
@@ -1509,16 +2272,8 @@ def build_portfolio_count_card(binding: BindingReadout) -> _Built:
 
 #: 葉2 剩下兩項：線框 live 原文列的「Sheet 選擇」與「觀察清單管理」。
 #: **這兩項不是缺 L3，是缺授權** —— 它們本質上是寫入，而本頁一律唯讀。
+#: （原本第三項「持股列預覽」本批**已接線**，見 `build_holdings_preview_card()`。）
 SETUP_UNWIRED_SPECS: tuple[UnwiredSpec, ...] = (
-    UnwiredSpec(
-        key="hold.setup.preview", label="持股列預覽",
-        now="**本頁不顯示你的持股列**",
-        why=HOLDINGS_WHY,
-        where=_holdings_where(
-            "接上之後這一格顯示每一列的代號／張數／均價 —— "
-            "**仍然唯讀**（能看不能改）"),
-        facts=(("卡住的層", "只差持股清單（唯讀就夠）"),
-               ("接線後仍不會顯示的東西", "Sheet 識別碼與任何憑證"))),
     UnwiredSpec(
         key="hold.setup.pick_sheet", label="Sheet 選擇",
         now="**本頁不提供選 Sheet 的控制項**",
@@ -1534,12 +2289,70 @@ SETUP_UNWIRED_SPECS: tuple[UnwiredSpec, ...] = (
 )
 
 
-def build_setup_unwired_cards(requested: bool) -> tuple[_Built, ...]:
-    """葉2 的三張未接線卡（持股列預覽 / Sheet 選擇 / 觀察清單管理）。
+def build_holdings_preview_card(holdings: HoldingsReadout) -> _Built:
+    """葉2 第三張卡：**持股列預覽** —— 已接線、**能看不能改**。
 
-    ⚠️ 後兩張的 `why` 走 `READONLY_WHY` 而**不是** `HOLDINGS_WHY` ——
-    它們卡住的原因根本不同：前者是「沒有 L3」，後者是「本頁不准寫」。
-    寫成同一句就等於告訴使用者「補一支 L3 就會有」，而那是假的。
+    ⚠️ **這張卡不顯示 Sheet 識別碼**，也不顯示任何憑證 —— 與綁定那兩張卡同一條線。
+    ⚠️ **觀察清單那些列的張數／均價是 `None`，畫面顯示「—」而不是 0**：
+    `stock_watchlist` 分頁的 schema 只有三欄，本來就沒有張數與均價。
+    寫 0 會讓人以為「持有 0 張、成本 0 元」，那是一個結論，不是缺值（§1）。
+    """
+    _state = classify_ui_state(
+        requested=holdings.requested,
+        error=holdings.error or None,
+        has_value=holdings.has_holdings)
+    _held_n = len(holdings.held_tickers)
+    _facts: list[tuple[str, str]] = [
+        ("本頁對這份清單的權限", "**唯讀** —— 不新增、不修改、不刪除任何一列"),
+        ("畫面不顯示的東西", "Sheet 識別碼與任何憑證（結構上就沒有帶進本層）"),
+        ("觀察清單為什麼沒有張數／均價",
+         "那份分頁的 schema 只有「清單名／代號／更新時間」三欄，"
+         "**本來就沒有**張數與均價 —— 顯示「—」而不是 0"),
+    ]
+    if holdings.portfolio_name:
+        _facts.append(("讀到的投資組合", holdings.portfolio_name))
+    if holdings.watchlist_name:
+        _facts.append(("讀到的觀察清單", holdings.watchlist_name))
+    if holdings.more_portfolios or holdings.more_watchlists:
+        _facts.append((
+            "⚠️ 這本 Sheet 裡還有別的沒讀",
+            "本頁只取**第一本**組合／**第一份**觀察清單（沿用既有行為）—— "
+            "畫面上這幾檔**不是你的全部**"))
+    if holdings.watchlist_error:
+        # §1：觀察清單那半失敗**不得靜默** —— 它會影響換股建議的「換入」來源。
+        _facts.append((
+            "⚠️ 觀察清單這一輪讀不到",
+            f"{holdings.watchlist_error} —— 持股本身不受影響，"
+            "但④ 換股建議的「換入」會退回選股池全自動排名"))
+    if _state == UI_LIVE:
+        return (Card(key="hold.setup.preview", label="持股列預覽", state=UI_LIVE,
+                     value=(f"{len(holdings.holdings)} 列"
+                            f"（持有 {_held_n} · 觀察 "
+                            f"{len(holdings.holdings) - _held_n}）")),
+                tuple(_facts), "唯讀")
+    if _state == UI_IDLE:
+        _note = _idle_note(holdings.scope_idle)
+    elif _state == UI_FAILED:
+        _note = Note(
+            now="**持股清單讀不出來**",
+            why=_error_why(SRC_HOLDINGS, holdings.error),
+            where=("先確認網路與 Google 授權是否仍有效；"
+                   "**本站不顯示半份清單** —— 少一半算出來的配置比例與損益"
+                   "看起來完全正常、實際上是錯的，所以整份都不給"))
+    elif holdings.bound:
+        _note = Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY,
+                     where=EMPTY_SHEET_WHERE)
+    else:
+        _note = Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
+    return Card(key="hold.setup.preview", label="持股列預覽",
+                state=_state, note=_note), tuple(_facts), ""
+
+
+def build_setup_unwired_cards(requested: bool) -> tuple[_Built, ...]:
+    """葉2 的兩張未接線卡（Sheet 選擇 / 觀察清單管理）。
+
+    ⚠️ 這兩張的 `why` 走 `READONLY_WHY` —— 它們卡住的原因**不是缺 L3**，
+    是本頁不准寫。寫成「補一支 L3 就會有」是假的：就算補了，本頁也不會做那件事。
     """
     return tuple(build_unwired_card(requested, _s) for _s in SETUP_UNWIRED_SPECS)
 
@@ -1602,13 +2415,18 @@ def _render_holdings_form() -> bool:
         applied_key=SS_APPLIED_HOLD)
 
 
-def _render_warroom_leaf(session: Mapping[str, Any]) -> None:
-    """葉1 戰情室：線框的七個區塊，**依線框順序**。"""
-    _req = applied_hold_request(session)
+def _render_warroom_leaf(req: HoldRequest, holdings: HoldingsReadout) -> None:
+    """葉1 戰情室：線框的七個區塊，**依線框順序**。
+
+    ⚠️ **`load_station()` 在這裡只跑一次**，六個區塊共用同一份 rows ——
+    每個區塊各自呼叫一次會讓同一頁上出現六份可能不一致的戰情表
+    （而且要打六次網路）。
+    """
+    _station = load_station(holdings)
 
     section_header("① 結論（三張卡）",
                    "線框：現行戰情室已是「結論在前、明細在後」，**結構不動**。")
-    _render_row(build_conclusion_cards(_req.submitted))
+    _render_row(build_conclusion_cards(_station))
 
     section_header("② 同一個名詞，兩套刻度",
                    "**常駐揭露 · 非摺疊** —— 它是防「同名不同義」誤讀的唯一揭露；"
@@ -1620,27 +2438,67 @@ def _render_warroom_leaf(session: Mapping[str, Any]) -> None:
     section_header("③ 戰情表（燈牆 ＋ VIX）",
                    "線框：3 欄燈格 · 點左表右側就地展開。"
                    "燈牆與 VIX **各自判態** —— 一邊沒有不把另一邊染色。")
-    _render_row((build_lightwall_card(_req.submitted),
-                 build_vix_card(load_vix(_req))))
+    _render_row((build_lightwall_card(_station),
+                 build_vix_card(load_vix(req))))
+    _render_light_wall(_station)
 
+    _macro = load_macro(req)
     section_header("④ 換股建議（搭配總經位階）",
                    "線框：本頁職責「該加、**該換**、該減」的那個「該換」。")
-    _render_row((build_switch_card(_req.submitted),
-                 build_macro_stage_card(load_macro(_req))))
+    _render_row((build_switch_card(load_switch(_station, _macro, holdings),
+                                   _station),
+                 build_macro_stage_card(_macro)))
 
     section_header("⑤ 80/20 配置偏離 ＋ 衛星停利",
                    "線框：它回答「該減」，與 ④ 的「該換」互補 —— "
                    "兩個都缺，本頁的職責就只剩三分之一。")
-    _render_row((build_allocation_split_card(_req.submitted),
-                 build_take_profit_card(_req.submitted),
-                 build_position_cap_card(load_allocation(_req))))
+    _render_row((build_allocation_split_card(_station),
+                 build_take_profit_card(_station),
+                 build_position_cap_card(load_allocation(req))))
 
     section_header("⑥ 組合深度分析（提升，不再埋 expander）", DEEP_CAPTION)
-    _render_row(build_deep_cards(_req.submitted))
+    _render_row(build_deep_cards(_station))
 
     section_header("⑦ AI 戰情總結（唯一推播出口）",
                    "線框：拿掉之後這頁就只能看、不能送出去。")
-    _render_one(build_ai_summary_card(_req.submitted))
+    _render_one(build_ai_summary_card(req.submitted))
+
+
+def _render_light_wall(station: StationReadout) -> None:
+    """③ 的逐檔燈條 —— **走 L4 `render_light_wall()`，本頁不畫第二種燈格**。
+
+    ⚠️ 這一段**不判態、不取數**：狀態由 `build_lightwall_card()` 那張卡負責，
+    這裡多判一次就會有兩個可能互相矛盾的說法（同 `_render_scale_tables()`）。
+
+    ⚠️ **沒有 `_lights` 就整段不畫。** 那代表這份結果不是本輪算出來的
+    （或 L3 換了形狀）—— 畫一排空格子假裝有燈，比不畫糟糕得多（§1）。
+
+    ⚠️ **刻意不做「點一列就地展開」**（線框 ③ 的下半句）：既有戰情室是用
+    `st.dataframe(on_select="rerun")` ＋ L4 `render_holding_detail()` 做的，
+    在本頁那是**新增一個互動元件**，落在 UI 草稿先行（`CLAUDE.md §-1.5` A-8）。
+    燈牆本身是一次 `st.markdown` 的純 HTML、零 widget，故先出這一半。
+    """
+    if not station.has_rows:
+        return
+    _items = [(str(_r.get("代號", "") or ""), str(_r.get("名稱", "") or ""),
+               (_r.get("_lights") or ()))
+              for _r in station.rows]
+    if not any(_it[2] for _it in _items):
+        print("[views/page_hold] 戰情表沒有 `_lights` —— 燈牆整段不畫（不畫空格子）")
+        return
+    from src.ui.render.station_cards import (
+        CSS as _WALL_CSS,
+        render_legend,
+        render_light_wall,
+    )
+    st.markdown(_WALL_CSS, unsafe_allow_html=True)
+    st.caption(
+        "**填色＝這盞燈自己的判定**、**外框／紋理＝這盞燈可不可信**（四態）—— "
+        "一盞「亮著綠燈但其實沒有資料」的燈，填色會是灰的而且帶斜紋。"
+        "每一列右邊的 N/M 與上面 ① 的可信度是**同一把尺**；"
+        "分母比格子數少是正常的（還沒有判燈規則的燈不進分母）。")
+    render_legend()
+    render_light_wall(_items)
 
 
 def _render_scale_tables(disclosure: ScaleDisclosure) -> None:
@@ -1683,10 +2541,10 @@ def _render_setup_form_block() -> bool:
     return _submitted
 
 
-def _render_setup_result_block(session: Mapping[str, Any]) -> None:
-    """葉2 的**下半**：綁定兩張卡 → 三張未接線卡。"""
-    _req = applied_hold_request(session)
-    _binding = load_binding(_req)
+def _render_setup_result_block(req: HoldRequest,
+                               holdings: HoldingsReadout) -> None:
+    """葉2 的**下半**：綁定兩張卡 → 持股列預覽 → 兩張未接線卡。"""
+    _binding = load_binding(req)
 
     section_header("Google 登入與 Sheet 綁定（唯讀）",
                    "「還沒綁」與「綁了但裡面是空的」是**兩件事**，"
@@ -1695,13 +2553,46 @@ def _render_setup_result_block(session: Mapping[str, Any]) -> None:
                  build_portfolio_count_card(_binding)))
 
     section_header("持股列預覽 · Sheet 選擇 · 觀察清單管理",
-                   "第一張卡缺的是 L3；後兩張卡**不是缺 L3，是缺授權** —— "
-                   "它們本質上是寫入，而本頁唯讀。")
-    _render_row(build_setup_unwired_cards(_req.submitted))
+                   "第一張卡**已接線但唯讀**（能看不能改）；"
+                   "後兩張卡**不是缺 L3，是缺授權** —— 它們本質上是寫入。")
+    _render_row((build_holdings_preview_card(holdings),)
+                + build_setup_unwired_cards(req.submitted))
+    _render_holdings_preview(holdings)
+
+
+def _render_holdings_preview(holdings: HoldingsReadout) -> None:
+    """持股列的逐列預覽表 —— **唯讀，而且不顯示 Sheet 識別碼**。
+
+    ⚠️ **張數／均價缺的時候顯示「—」，不顯示 0。** 觀察清單那些列本來就沒有
+    這兩欄（那份分頁的 schema 只有三欄）；寫 0 會讀成「持有 0 張、成本 0 元」，
+    那是一個結論，不是缺值（§1）。
+
+    ⚠️ 這一段不判態（同 `_render_light_wall()`）—— 狀態在
+    `build_holdings_preview_card()` 那張卡上。
+    """
+    if not holdings.has_holdings:
+        return
+    st.caption("**唯讀** —— 要新增／修改／刪除請到既有的 📁 組合管理分頁。")
+    st.dataframe(
+        [{"代號": str(_h.get("ticker", "") or ""),
+          "名稱": str(_h.get("name", "") or "—"),
+          "種類": KIND_LABELS.get(str(_h.get("asset_kind", "")),
+                                  KIND_FALLBACK_LABEL),
+          "張數": _fmt_lots(_h.get("lots")),
+          "均價": _fmt_num(_num(_h.get("avg_price")), digits=2),
+          "來源": "持有（投資組合）" if _h.get("held") else "觀察清單（未持有）"}
+         for _h in holdings.holdings],
+        hide_index=True, width="stretch")
+
+
+def _fmt_lots(value: Any) -> str:
+    """張數 → 顯示字串。`None` → `'—'`（**不是 0**）；零股不被四捨五入掉。"""
+    _v = _num(value)
+    return "—" if _v is None else f"{_v:g}"
 
 
 def render_page_hold() -> None:
-    """💼 我的持股（IA v2 第 4 頁）。**本批無 production caller，刻意如此。**"""
+    """💼 我的持股（IA v2 第 4 頁）。**已由 `app.py` 掛載**（量測日 2026-09-07）。"""
     _session = st.session_state
 
     st.markdown(f"## {ia_nav.page_label(ia_nav.PAGE_HOLD)}")
@@ -1721,7 +2612,12 @@ def render_page_hold() -> None:
     # 守衛：`tests/test_p04_hold_view.py::TestFormRunsBeforeItsConsumers`。
     with _leaf2:
         _render_setup_form_block()
+    # 表單跑完才讀 gate（上面那段註解的理由），而且**持股清單只讀一次** ——
+    # 葉1 的戰情室與葉2 的預覽表吃的必須是同一份清單，分別讀兩次會多打一次
+    # Google，而且兩葉有機會顯示不一樣的內容。
+    _req = applied_hold_request(_session)
+    _holdings = load_holdings(_req)
     with _leaf1:
-        _render_warroom_leaf(_session)
+        _render_warroom_leaf(_req, _holdings)
     with _leaf2:
-        _render_setup_result_block(_session)
+        _render_setup_result_block(_req, _holdings)
