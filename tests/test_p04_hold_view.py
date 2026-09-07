@@ -48,6 +48,19 @@
     投資組合那半 fail loud / 觀察清單那半不得靜默吞掉。
   · `TestScaleDisclosureComesFromL0` ← 線框 ② 的 degraded **不是寫死的**：
     它讀 L0 `station_specs` 的 `discriminative` 旗標，旗標翻面它就跟著翻面。
+  · `TestTheLotToShareClaimIsMeasurable` ← **FE-23 新增（FIX-A）。**
+    卡面曾對使用者宣稱 L3 `portfolio_deep_service` 是「**全站唯一**乘法點」——
+    實測全站有三處（另有 `dividend_station_service` 與 `compute.sector_flow`），
+    那是一句**可實測為假的全稱句**印在畫面上。既有的
+    `test_there_is_exactly_one_multiplication_site` **結構上抓不到**它
+    （只掃單檔，不可能否證全站宣稱）→ 本類**現場掃整個 repo**，
+    數量 > 1 就不准畫面出現「全站唯一」，並反過來驗揭露列點名的另外兩支真的存在。
+  · `TestDegradedWhenTheNumberLostItsEdge` ← **FE-23 新增（FIX-B）。**
+    `reconciled=False`（兩套算法對不起來）／`no_price` 非空（部分持股沒有
+    價格序列）時，⑥ 那兩格曾是**綠燈配一行小字**。§1：值已失去判別力就該是
+    橘的 `UI_DEGRADED`。**但不准降成紅的** —— 那是「系統真出錯」，
+    混淆會製造假警報（`CLAUDE.md §1.A-4`）。含反證（乾淨結果仍是綠）、
+    優先序（紅 > 橘 > 灰）、以及「數字不藏起來，只是不再當結論」。
   · `TestFormStructure`           ← 線框 F11 ＋ 鐵律 2：本頁**沒有自己的 form**，
     直接用共用層 `_ui_kit.single_submit_form()`；全頁 0 顆裸 `st.button`。
   · `TestFormRunsBeforeItsConsumers` ← 表單在**葉2**、gate 被**葉1**消費。
@@ -1011,8 +1024,12 @@ class TestScaleDisclosureComesFromL0:
     """線框 ②：「⚠️ 兩套刻度目前不一致 … 某一側的門檻來源已標
     `discriminative=False`」。
 
-    ⚠️ 這張卡是本頁**唯一**會判 `degraded` 的地方，而且**不是硬湊的**：
-    它直接讀 L0 `station_specs` 的旗標。旗標翻面，卡就跟著翻面。
+    ⚠️ 這張卡的 `degraded` **不是硬湊的**：它直接讀 L0 `station_specs` 的旗標。
+    旗標翻面，卡就跟著翻面。
+    ⚠️ **2026-09-07 FE-23 更正**：原文寫「這張卡是本頁**唯一**會判 `degraded`
+    的地方」—— 那句話自 FIX-B 起是假的（⑥ 的壓力測試 / VaR 在對不上帳或
+    部分沒價格時也會判 degraded，見 `TestDegradedWhenTheNumberLostItsEdge`）。
+    **事實更正，不是政策變更**：本類守的東西一條都沒有變。
     """
 
     def test_it_needs_no_gate_and_is_always_on(self):
@@ -2028,6 +2045,806 @@ class TestPortfolioDeepServiceIsReadOnly:
             assert D.get_portfolio_stress(_bad).computed is False
             assert D.get_portfolio_var(_bad).computed is False
             assert D.get_dividend_cash_flow(_bad).computed is False
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【FIX-A】畫面上的「唯一乘法點」宣稱必須經得起 grep（FE-23）
+# ══════════════════════════════════════════════════════════════════
+#: 掃 repo 時要跳過的目錄。`tests` 也跳 —— 測試檔裡的假資料與斷言
+#: 不是「production 的乘法點」，混進來會讓計數失真。
+_SCAN_SKIP: frozenset[str] = frozenset({
+    "__pycache__", ".git", "tests", "node_modules", ".venv", "venv", "build",
+})
+
+#: 「這句話在講張→股的換算」的關鍵字。命中才進入本守衛的射程 ——
+#: 本頁另有「全站唯一的建議持股 SSOT」之類的句子，那是**另一個** SSOT 宣稱，
+#: 與乘法點無關，不該被這條測試連坐。
+_LOT_TOPIC: tuple[str, ...] = (
+    "乘法點", "SHARES_PER_LOT", "乘每張股數", "張 → 股", "張→股", "每張股數")
+
+#: 明示否認 —— 「**不是**全站唯一」這種寫法是誠實揭露，不是假宣稱。
+_UNIQUENESS_DENIALS: tuple[str, ...] = (
+    "不是全站唯一", "不是「全站唯一」", "不等於全站唯一", "不等於「全站唯一」",
+    "≠ 全站唯一", "≠全站唯一", "≠ 「全站唯一」",
+)
+
+
+def _mentions_lot_const(node: ast.AST) -> bool:
+    """這個 AST 節點底下有沒有出現識別字 `SHARES_PER_LOT`（含 `x.SHARES_PER_LOT`）。"""
+    return any((isinstance(_c, ast.Name) and _c.id == "SHARES_PER_LOT")
+               or (isinstance(_c, ast.Attribute) and _c.attr == "SHARES_PER_LOT")
+               for _c in ast.walk(node))
+
+
+def _lot_multiplication_sites() -> dict[str, list[int]]:
+    """全站**實際**拿每張股數做算術的地方 → `{相對路徑: [行號]}`。**現場量測。**
+
+    ⚠️ **真的去掃 repo，不抄名單。** 抄一份名單就會變成 `CLAUDE.md §8.2.A.0`
+    規則 2 點名的那種窮舉清單：漏一筆，清單自己就變成假話。
+
+    判定：任何 `ast.BinOp`，其運算元（含巢狀）出現 `SHARES_PER_LOT`。
+    **`Mult` 與 `Div` 都算** —— `compute/sector_flow.py` 先算
+    `SHARES_PER_LOT / YUAN_PER_YI` 的合併係數再乘上去，只掃 `Mult` 會漏掉它，
+    而「漏掉一處」正是本守衛存在的理由。
+    常數定義本身（`SHARES_PER_LOT: int = 1000`）不是 `BinOp`，不會被算進來。
+    """
+    _repo = _VIEW.parents[3]
+    _out: dict[str, list[int]] = {}
+    _unparsed: list[str] = []
+    for _p in sorted(_repo.rglob("*.py")):
+        _rel = _p.relative_to(_repo)
+        if any(_part in _SCAN_SKIP for _part in _rel.parts):
+            continue
+        try:
+            _txt = _p.read_text(encoding="utf-8")
+            _t = ast.parse(_txt)
+        except (SyntaxError, UnicodeDecodeError, OSError):
+            # §1：**不靜默跳過。** 掃不動的檔若提到那個常數，它可能就是
+            # 一個沒被算進來的乘法點 —— 那會讓計數變成一句安靜的假話。
+            try:
+                if "SHARES_PER_LOT" in _p.read_bytes().decode("utf-8", "replace"):
+                    _unparsed.append(_rel.as_posix())
+            except OSError:
+                _unparsed.append(_rel.as_posix())
+            continue
+        _hits = sorted({_n.lineno for _n in ast.walk(_t)
+                        if isinstance(_n, ast.BinOp) and _mentions_lot_const(_n)})
+        if _hits:
+            _out[_rel.as_posix()] = _hits
+    if _unparsed:
+        raise AssertionError(
+            f"這些檔案掃不動、卻提到 `SHARES_PER_LOT`：{_unparsed} —— "
+            "本守衛的計數會因此漏算，請先讓它們能被 `ast.parse`")
+    return _out
+
+
+def _repo_wide_uniqueness_claims(text: str) -> list[str]:
+    """`text` 裡「宣稱某個乘法點是**全站**唯一」的片段。空 list = 沒有這種宣稱。
+
+    逐一檢查每個「全站唯一」出現處的**上下文**（±80 字），而不是整段文字 ——
+    整段判斷的話，同一個大 docstring 裡只要有一句誠實揭露，
+    就會把同段其他的假宣稱一起放行。
+    """
+    _bad: list[str] = []
+    _i = text.find("全站唯一")
+    while _i >= 0:
+        _around = text[max(0, _i - 80): _i + 80]
+        _local = text[max(0, _i - 10): _i + 6]
+        if (any(_k in _around for _k in _LOT_TOPIC)
+                and not any(_d in _local for _d in _UNIQUENESS_DENIALS)):
+            _bad.append(_around)
+        _i = text.find("全站唯一", _i + 1)
+    return _bad
+
+
+def _screen_strings() -> list[str]:
+    """本頁**所有字串常數 ＋ docstring**（＝會被讀到的文案的靜態上界）。"""
+    return [_n.value for _n in ast.walk(_tree())
+            if isinstance(_n, ast.Constant) and isinstance(_n.value, str)]
+
+
+class TestTheLotToShareClaimIsMeasurable:
+    """FIX-A：卡面宣稱的「唯一乘法點」**必須經得起一次 grep**。
+
+    ⚠️ **既有的 `test_there_is_exactly_one_multiplication_site` 擋不住這件事**：
+    它只掃 `portfolio_deep_service.py` **單檔**，結構上不可能否證一句
+    「**全站**唯一」。拿單檔證據支撐全站宣稱，正是 `CLAUDE.md §-2` 規則 6
+    那則實證（commit 宣稱「順帶修掉」、實際是死碼）的同一個病 ——
+    **沒查證的宣稱比沒有宣稱更危險**，而這一句還印在使用者臉上。
+
+    修前的實測：`portfolio_deep_service` / `dividend_station_service` /
+    `compute.sector_flow` **三處**都乘每張股數，「全站唯一」是可實測為假的全稱句。
+    """
+
+    def test_the_repo_really_has_more_than_one_multiplication_site(self):
+        """**先量測，再談宣稱。** 這一條把「全站不只一處」釘成可執行的事實。"""
+        _sites = _lot_multiplication_sites()
+        _flat = [f"{_f}:{_ln}" for _f, _lns in _sites.items() for _ln in _lns]
+        assert any(_f.endswith("services/portfolio_deep_service.py")
+                   for _f in _sites), (
+            f"本頁 ⑥ 依賴的那一支不在量測結果裡：{_flat} —— "
+            "要嘛換了檔名，要嘛乘法被搬走了，兩種都要回頭改卡面文案")
+        assert len(_flat) > 1, (
+            f"全站乘每張股數的地方只剩 {_flat} 一處了。**這不是壞事**，"
+            "但本頁的誠實揭露（「該檔唯一不等於全站唯一」）是建立在「不只一處」"
+            "這個量測值上的 —— 前提變了，那段文案要跟著重寫，不能放著不管")
+
+    def test_no_screen_text_claims_a_site_is_the_only_one_in_the_repo(self):
+        """**靜態**：本頁任何文案都不得把某個乘法點講成全站唯一。
+
+        `不是全站唯一` 這種**明示否認**是誠實揭露，不在射程內。
+        """
+        if len(_lot_multiplication_sites()) <= 1:
+            pytest.skip("全站只剩一處乘法點 —— 由上一條負責提醒改文案")
+        _bad = [_frag for _s in _screen_strings()
+                for _frag in _repo_wide_uniqueness_claims(_s)]
+        assert not _bad, (
+            f"本頁文案宣稱某個乘法點是「全站唯一」：{_bad} —— "
+            f"實測全站有 {sum(len(_v) for _v in _lot_multiplication_sites().values())}"
+            " 處。把「全站」兩個字刪掉還不夠，讀者仍會以為全站只有一處，"
+            "要明說另外還有哪些")
+
+    def test_the_rendered_dividend_card_says_the_measurable_thing(self):
+        """**動態**：真的建出那張卡，看**印出去的字**，不是只看原始碼。"""
+        _card, _facts, _signal = P.build_dividend_cash_card(_live_deep())
+        _text = "　".join(f"{_k}　{_v}" for _k, _v in _facts)
+        assert not _repo_wide_uniqueness_claims(_text), (
+            f"卡面 facts 列仍在宣稱全站唯一：{_text}")
+        assert "_lot_to_shares" in _text, (
+            "卡面沒有指出乘法**具體住在哪一支函式** —— "
+            "只寫模組名的話，讀者無從自己驗證那句「該檔唯一」")
+        assert any("該檔唯一" in _k and "全站唯一" in _k for _k, _ in _facts), (
+            "卡面沒有把「該檔唯一 ≠ 全站唯一」講出來 —— "
+            "§1：讀者會把一個只涵蓋一支模組的保證讀成全站保證")
+
+    def test_the_other_sites_named_on_screen_actually_exist(self):
+        """揭露列點名的另外兩支**必須真的是乘法點** —— 否則揭露自己變成假話。"""
+        _sites = " ".join(_lot_multiplication_sites())
+        _text = "　".join(
+            f"{_k}　{_v}"
+            for _k, _v in P.build_dividend_cash_card(_live_deep())[1])
+        for _named in ("dividend_station_service", "sector_flow"):
+            assert _named in _text, (
+                f"揭露列沒有點名 {_named} —— 「全站另有他處」變成一句空話")
+            assert _named in _sites, (
+                f"揭露列點名了 {_named}，但實測它已經不是乘法點了（現況："
+                f"{sorted(_lot_multiplication_sites())}）—— 文案要跟著改")
+
+    def test_the_page_still_does_no_arithmetic_of_its_own(self):
+        """**反面**：講得再誠實，本頁自己也不准乘。與既有那條互補，不重複。"""
+        assert not any(_f.endswith("src/ui/views/page_hold.py")
+                       for _f in _lot_multiplication_sites()), (
+            "本頁自己出現了張→股的算術 —— 那個乘法只准在 L3 發生")
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【FIX-B】對不上帳 / 部分沒價格 → 橘的「已失準」，不是綠燈配小字（FE-23）
+# ══════════════════════════════════════════════════════════════════
+class TestDegradedWhenTheNumberLostItsEdge:
+    """⑥ 的金額**算得出來、但打了折**時，卡片一律 `UI_DEGRADED`（橘）。
+
+    修前：`reconciled=False`（兩套算法對不起來）與 `no_price` 非空
+    （部分持股抓不到價格序列）**都還是綠燈**，只在 facts 列用小字揭露。
+    §1「錯誤的數字比沒有數字更危險」—— 綠燈就是結論，一行小字改不了
+    使用者已經把那個金額當結論讀了這件事。
+
+    ⛔ **不准降成 `UI_FAILED`（紅）**：紅是「系統真出錯」。把打折畫成故障
+    會製造假警報，而滿版假紅字會讓**真的**故障沒人看得見
+    （`CLAUDE.md §1.A-4` / v3 §02「介面狀態嚴格分離」）。
+    """
+
+    def test_a_reconciliation_failure_turns_the_stress_card_orange(self):
+        _card = P.build_stress_card(_deep(stress=_stress_res(
+            reconciled=False, reference_value_twd=999_000.0)))[0]
+        assert _card.state == UI_DEGRADED, (
+            f"對不上帳卻還是 {_card.state!r} —— 綠燈就是結論")
+        assert _card.state != UI_FAILED, "打折不是故障，別畫成紅的"
+        assert _card.value == "", "非 live 不得帶結論文字（`Card` 鐵律）"
+
+    def test_missing_price_series_turns_the_var_card_orange(self):
+        _card = P.build_var_card(_deep(var=_var_res(
+            no_price=("6666.TW",), valued_n=2, held_n=3)))[0]
+        assert _card.state == UI_DEGRADED, (
+            f"有持股抓不到價格序列卻還是 {_card.state!r} —— "
+            "那個尾部估計涵蓋不到它們，卻被畫成整個組合的風險")
+        assert _card.state != UI_FAILED
+
+    def test_the_degraded_note_says_why_and_how_badly(self):
+        """**失準到什麼程度**要講：差多少、哪幾檔沒價格。不講等於沒揭露。"""
+        _now, _why, _where = _note_triple(P.build_stress_card(_deep(
+            stress=_stress_res(reconciled=False, total_value_twd=1_100_000.0,
+                               reference_value_twd=999_000.0)))[0].note)
+        assert "101,000" in _why, f"沒有講兩邊差多少：{_why}"
+        assert "1,100,000" in _why and "999,000" in _why, (
+            f"沒有把兩邊各自的數字都列出來：{_why}")
+
+        _now2, _why2, _where2 = _note_triple(P.build_var_card(_deep(
+            var=_var_res(no_price=("6666.TW", "7777.TW"), held_n=4)))[0].note)
+        assert "6666.TW" in _why2 and "7777.TW" in _why2, (
+            f"沒有講是哪幾檔沒有價格序列：{_why2}")
+        assert "2 檔" in _why2, f"沒有講失準的規模（幾檔／共幾檔）：{_why2}"
+        for _triple in ((_now, _why, _where), (_now2, _why2, _where2)):
+            assert all(_s.strip() for _s in _triple), "三要素有一格是空的"
+        assert _where != _where2, (
+            "兩種失準給了同一句「去哪補」—— 補張數與等歷史累積是兩件事，"
+            "共用一句等於把「補哪一層才會好」這個資訊丟掉")
+
+    def test_the_number_is_still_shown_just_not_as_a_verdict(self):
+        """**數字不藏起來。** 非 live 不得掛 `value` → 現值改掛 facts。"""
+        _card, _facts, _signal = P.build_stress_card(
+            _deep(stress=_stress_res(reconciled=False,
+                                     reference_value_twd=999_000.0)))
+        _joined = "　".join(f"{_k}　{_v}" for _k, _v in _facts)
+        assert "224,000" in _joined, (
+            "降級之後把金額整個藏起來了 —— 那是另一種說謊（有算卻不給）")
+        assert any("現值" in _k for _k, _ in _facts), (
+            "現值沒有明確標成「現值」，讀者分不出哪一個才是那張卡的數字")
+        assert _signal == "", (
+            f"已失準卻還出燈號 {_signal!r} —— "
+            "一邊掛「門檻已失準」一邊說「門檻內」是同一張卡說兩句相反的話")
+
+    def test_a_clean_result_is_still_green(self):
+        """**反證**：不是把兩張卡寫死成橘的 —— 沒有失準因子就回 live。"""
+        assert P.build_stress_card(_deep(stress=_stress_res()))[0].state == UI_LIVE
+        assert P.build_var_card(_deep(var=_var_res()))[0].state == UI_LIVE
+
+    def test_a_dead_upstream_still_wins_and_stays_red(self):
+        """紅 > 橘：上游整個掛掉時**不得**被降級成「只是打了折」。"""
+        _card = P.build_var_card(_deep(var=_var_res(
+            computed=False, no_price=("6666.TW",),
+            fetch_errors=("0056.TW：RuntimeError: yahoo 掛了",))))[0]
+        assert _card.state == UI_FAILED, (
+            f"取價層整個掛掉卻畫成 {_card.state!r} —— 真的壞掉那次就沒人看得見")
+
+    def test_cannot_compute_stays_empty_not_degraded(self):
+        """灰 > 橘：**算不出來**不是「算得出來但打折」，兩者不可混。"""
+        from src.services.portfolio_deep_service import REASON_NO_RETURNS
+
+        _card = P.build_var_card(_deep(var=_var_res(
+            computed=False, reason=REASON_NO_RETURNS, no_price=("6666.TW",),
+            hist_95_twd=0.0, hist_99_twd=0.0, monthly_99_twd=0.0,
+            monthly_99_pct=0.0)))[0]
+        assert _card.state == UI_EMPTY, (
+            f"一個字都算不出來卻標成「已失準」{_card.state!r} —— "
+            "「有值但打折」與「沒有值」是兩件事")
+
+    def test_both_reasons_at_once_are_both_disclosed(self):
+        """兩個失準因子同時成立時**兩個都要講**，不是只講先命中的那一個。"""
+        _why = _note_triple(P.build_var_card(_deep(var=_var_res(
+            reconciled=False, reference_value_twd=999_000.0,
+            no_price=("6666.TW",))))[0].note)[1]
+        assert "對不起來" in _why and "6666.TW" in _why, (
+            f"兩個原因同時成立卻只講了一個：{_why}")
+
+    def test_the_three_inputs_most_likely_to_break_this(self):
+        """§6 收尾：最容易讓這段程式印出假話／炸掉的三種輸入。
+
+        1. `reference_value_twd=None`（L3 連對照值都算不出來）→
+           **不准印「差 None 元」**，也不准把 `None` 當 0 算出一個差額。
+        2. `reference_value_twd=0.0` → 除以 0。占比要說「算不出來」，
+           不是印一個 `inf` 或 `100%`。
+        3. `no_price` 有值但 `held_n=0`（上游沒給持有檔數）→
+           **不准印「（持有 0 檔）」** —— 那是一句與畫面其他地方矛盾的假話。
+        """
+        _why1 = _note_triple(P.build_stress_card(_deep(stress=_stress_res(
+            reconciled=False, reference_value_twd=None)))[0].note)[1]
+        assert "差 None" not in _why1 and "None 元" not in _why1, _why1
+        assert "算不出來" in _why1, f"對照值缺席卻沒說出來：{_why1}"
+
+        _why2 = _note_triple(P.build_stress_card(_deep(stress=_stress_res(
+            reconciled=False, reference_value_twd=0.0)))[0].note)[1]
+        assert "inf" not in _why2 and "nan" not in _why2, _why2
+        assert "差幾 % 算不出來" in _why2, (
+            f"對照值是 0，卻還是硬給了一個占比：{_why2}")
+
+        _why3 = _note_triple(P.build_var_card(_deep(var=_var_res(
+            no_price=("6666.TW",), valued_n=0, held_n=0)))[0].note)[1]
+        assert "持有 0 檔" not in _why3, f"印出了「持有 0 檔」這種假話：{_why3}"
+        assert "6666.TW" in _why3
+
+    def test_a_degraded_card_without_a_reason_fails_loud(self):
+        """§1：判成橘卻說不出哪裡失準 = 判定與理由脫節 → 當場炸，不畫一張啞卡。"""
+        with pytest.raises(ValueError):
+            P._degraded_note("壓力測試", [])
+
+    def test_the_dividend_card_is_untouched(self):
+        """L3 的 `DividendCashResult` **沒有**這兩個欄位（實測 2026-09-07）——
+
+        用 `getattr` 帶預設值讀，所以這張卡的行為一個字都沒有變。
+        寫成一條測試是為了讓「哪天它長出 `reconciled` 了」這件事被看見。
+        """
+        from src.services.portfolio_deep_service import DividendCashResult
+
+        _fields = set(DividendCashResult.__dataclass_fields__)
+        assert not ({"reconciled", "no_price"} & _fields), (
+            "L3 的配息結果長出了失準欄位 —— 那張卡也該一起降級了，"
+            f"現有欄位：{sorted(_fields)}")
+        assert P.build_dividend_cash_card(_live_deep())[0].state == UI_LIVE
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【15】⑥ 那一支 L3 的三個實質缺陷（FE-22，獨立稽核抓到、總管複驗成立）
+# ══════════════════════════════════════════════════════════════════
+#: 上櫃（TPEx）存股 —— 稽核記錄點名的那兩檔（`dividend_station_service` 的註解
+#: 也寫著「上櫃存股 5314/8069 等 yfinance 用 .TWO，否則整檔 error」）。
+_FE22_OTC: str = "5314"
+_FE22_TWSE: str = "2330"
+
+
+def _fe22_prices(offset: float = 0.0, n: int = 60):
+    """`n` 個交易日的收盤價 —— **確定性**，不用亂數（分位數要能重算）。"""
+    import pandas as pd
+
+    _idx = pd.bdate_range("2025-01-02", periods=n)
+    return pd.DataFrame({"Close": [100.0 + offset + (_i % 5) for _i in range(n)]},
+                        index=_idx)
+
+
+def _fe22_price_stub(available: dict, calls: list):
+    """假的 L1 `fetch_etf_price`：只有 `available` 裡的代號有資料，其餘回空。
+
+    ⚠️ **沙箱沒有外網**（實測 yfinance 一律 403）—— 所以 `.TWO` fallback 只能用
+    monkeypatch 驗**邏輯本身**。這不是為了讓測試變綠而放寬斷言：
+    `calls` 會把「打了誰、打了幾次、順序如何」全部記下來，
+    那正是這條規則的三個要件（先 `.TW`、抓空才試 `.TWO`、最多多打一次）。
+    """
+    import pandas as pd
+
+    def _fake(ticker, period="1y"):
+        calls.append(ticker)
+        _df = available.get(ticker)
+        return pd.DataFrame() if _df is None else _df
+
+    return _fake
+
+
+def _fe22_row(code: str, lots: float, price: float) -> dict:
+    return {"代號": code, "held": True, "張數": lots,
+            "均價": price / 2.0, "現價": price, "_detail": {}}
+
+
+class TestTheOtcSuffixFallback:
+    """FIX-1：上櫃股補 `.TW` 抓不到 —— **格式問題被畫成資料問題**。
+
+    `normalize_etf_ticker` 一律補 `.TW`（上市）；yfinance 的上櫃股要 `.TWO`。
+    少了 fallback，`5314` / `8069` 這些持股在 ⑥ 會同時得到三個假結論：
+    VaR「沒有歷史」、壓測「查無 Beta（以 1.0 估）」、配息「近一年沒配息」——
+    三個都是**看起來完全正常**的答案，沒有一個會報錯。
+    """
+
+    def _mod(self):
+        import src.services.portfolio_deep_service as D
+
+        return D
+
+    def test_listed_first_then_otc_and_the_order_is_not_reversed(self, monkeypatch):
+        """先 `.TW`、抓空**才**試 `.TWO`；命中的是 `.TWO` 就回 `.TWO`。"""
+        D, _calls = self._mod(), []
+        monkeypatch.setattr(
+            "src.data.etf.etf_fetch.fetch_etf_price",
+            _fe22_price_stub({f"{_FE22_OTC}.TWO": _fe22_prices()}, _calls))
+        assert D._resolve_yf_ticker(f"{_FE22_OTC}.TW") == f"{_FE22_OTC}.TWO"
+        assert _calls == [f"{_FE22_OTC}.TW", f"{_FE22_OTC}.TWO"], (
+            "順序不是「先上市、後上櫃」，或多打了一次")
+
+    def test_a_listed_hit_never_touches_the_otc_suffix(self, monkeypatch):
+        """`.TW` 抓到就**不准**再打 `.TWO` —— §1.A-3：不得無條件雙打上游。"""
+        D, _calls = self._mod(), []
+        monkeypatch.setattr(
+            "src.data.etf.etf_fetch.fetch_etf_price",
+            _fe22_price_stub({"0056.TW": _fe22_prices()}, _calls))
+        assert D._resolve_yf_ticker("0056.TW") == "0056.TW"
+        assert _calls == ["0056.TW"], f"上市抓到了還多打一次：{_calls}"
+
+    def test_a_non_tw_ticker_is_never_probed_twice(self, monkeypatch):
+        """美股（沒有 `.TW` 後綴）沒有第二個猜法 —— 一次都不多打。"""
+        D, _calls = self._mod(), []
+        monkeypatch.setattr("src.data.etf.etf_fetch.fetch_etf_price",
+                            _fe22_price_stub({}, _calls))
+        assert D._resolve_yf_ticker("SPY") is None
+        assert _calls == ["SPY"], f"對美股也試了第二個後綴：{_calls}"
+
+    def test_both_suffixes_empty_is_none_and_costs_exactly_two_calls(
+            self, monkeypatch):
+        """兩個都空 → `None`（**不編一個代號**），而且**就是兩次，不會更多**。"""
+        D, _calls = self._mod(), []
+        monkeypatch.setattr("src.data.etf.etf_fetch.fetch_etf_price",
+                            _fe22_price_stub({}, _calls))
+        assert D._resolve_yf_ticker(f"{_FE22_OTC}.TW") is None
+        assert _calls == [f"{_FE22_OTC}.TW", f"{_FE22_OTC}.TWO"]
+
+    def test_an_exception_while_probing_is_logged_not_swallowed_silently(
+            self, monkeypatch, capsys):
+        """判後綴時上游炸了 → 回 `None` ＋ **一定要留下 log**（§3.3）。"""
+        D = self._mod()
+
+        def _boom(ticker, period="1y"):
+            raise RuntimeError("upstream down")
+
+        monkeypatch.setattr("src.data.etf.etf_fetch.fetch_etf_price", _boom)
+        assert D._resolve_yf_ticker("0056.TW") is None
+        assert "後綴判定" in capsys.readouterr().out
+
+    def test_there_is_only_one_place_that_decides_the_suffix(self):
+        """**單一入口**：`.TWO` 這個字串只准出現在 L0 常數那一行。
+
+        散成兩處之後，「VaR 用 `.TWO`、配息用 `.TW`」會讓同一檔股票在同一頁上
+        被當成兩檔（而且不會有任何錯誤訊息）。
+        """
+        import src.services.portfolio_deep_service as D
+
+        _tree = ast.parse(
+            pathlib.Path(D.__file__).read_text(encoding="utf-8"))
+        _lits = [_n.lineno for _n in ast.walk(_tree)
+                 if isinstance(_n, ast.Constant) and _n.value == ".TWO"]
+        assert len(_lits) == 1, (
+            f"`.TWO` 出現在第 {_lits} 行 —— 後綴規則只准有一份實作")
+
+    def test_the_var_really_includes_an_otc_holding(self, monkeypatch):
+        """**端到端**：上櫃持股要真的進得了 VaR 的分布。
+
+        這一條是 FIX-1 的突變偵測器：把 `.TWO` fallback 拔掉，
+        `5314.TW` 會抓回空 → 落進 `no_price`、覆蓋率掉到九成 → 本條轉紅。
+        """
+        D = self._mod()
+        monkeypatch.setattr(
+            "src.data.etf.etf_fetch.fetch_etf_price",
+            _fe22_price_stub({f"{_FE22_TWSE}.TW": _fe22_prices(),
+                              f"{_FE22_OTC}.TWO": _fe22_prices(offset=3.0)}, []))
+        _res = D.get_portfolio_var([_fe22_row(_FE22_TWSE, 1.0, 1000.0),
+                                    _fe22_row(_FE22_OTC, 2.0, 50.0)])
+        assert _res.computed is True, _res.reason
+        assert f"{_FE22_OTC}.TW" in _res.tickers_used, (
+            "上櫃持股沒進到分布 —— 後綴 fallback 沒接上")
+        assert _res.no_price == () and _res.excluded_tickers == ()
+        assert _res.coverage_pct == pytest.approx(100.0)
+        assert _res.full_coverage is True
+
+    def test_the_stress_test_asks_the_upstream_with_the_otc_suffix(
+            self, monkeypatch):
+        """壓測的 Beta 也走同一個後綴判定，**但對外講的是 `.TW` 身分**。"""
+        D, _seen = self._mod(), []
+        monkeypatch.setattr(
+            "src.data.etf.etf_fetch.fetch_etf_price",
+            _fe22_price_stub({f"{_FE22_OTC}.TWO": _fe22_prices()}, []))
+
+        def _fake_stress(rows, total_value, drop_pct=None):
+            _seen.extend(_r["ticker"] for _r in rows)
+            return {"drop_pct": drop_pct, "total_loss": -10.0, "loss_pct": 1.0,
+                    "beta_imputed_tickers": [f"{_FE22_OTC}.TWO"]}
+
+        monkeypatch.setattr(
+            "src.compute.etf.etf_calc.calc_portfolio_stress_test", _fake_stress)
+        _res = D.get_portfolio_stress([_fe22_row(_FE22_OTC, 2.0, 50.0)])
+        assert _seen == [f"{_FE22_OTC}.TWO"], (
+            f"壓測拿去查 Beta 的是 {_seen} —— 上櫃股用 .TW 查不到 Beta")
+        assert _res.beta_imputed == (f"{_FE22_OTC}.TW",), (
+            "Beta 缺值的代號沒有換回 .TW 身分 —— 同一頁會出現兩個名字")
+
+    def test_the_dividend_view_is_asked_with_the_otc_suffix(self, monkeypatch):
+        """配息也走同一個後綴判定（`.TW` 抓回空序列 ＝ 上游眼中的「沒配息」）。"""
+        D, _seen = self._mod(), []
+        monkeypatch.setattr(
+            "src.data.etf.etf_fetch.fetch_etf_price",
+            _fe22_price_stub({f"{_FE22_OTC}.TWO": _fe22_prices()}, []))
+
+        def _fake_view(holdings, *, marginal_rate=None):
+            _seen.extend(_h["ticker"] for _h in holdings)
+            return {"summary": {"gross": 1000, "nhi_premium": 0,
+                                "net_after_nhi": 1000},
+                    "per_etf": [{"代號": f"{_FE22_OTC}.TWO", "幣別": "TWD",
+                                 "近1年稅前配息": 1000, "二代健保": 0,
+                                 "配息筆數": 2}],
+                    "overseas": [], "n_tw": 1}
+
+        monkeypatch.setattr(
+            "src.services.dividend_tax_service.get_dividend_tax_view", _fake_view)
+        _res = D.get_dividend_cash_flow([_fe22_row(_FE22_OTC, 2.0, 50.0)])
+        assert _seen == [f"{_FE22_OTC}.TWO"], f"配息拿去抓的是 {_seen}"
+        assert _res.per_ticker[0]["代號"] == f"{_FE22_OTC}.TW", (
+            "每檔明細的代號沒有換回 .TW 身分")
+
+
+class TestCoverageIsNeverAssumed:
+    """FIX-2：**部分抓不到、卻照樣給總額** —— 一次沒有寫成 `fillna` 的補值。
+
+    分位數是「抓得到報酬的那批」算出來的，乘上**全部**持股的市值，
+    等於默認抓不到的那幾檔「報酬分布跟抓得到的那批一樣」。
+    它不會出現在任何缺值統計裡，只會讓風險數字**看起來剛好**（§1）。
+    """
+
+    def _mod(self):
+        import src.services.portfolio_deep_service as D
+
+        return D
+
+    def _partial(self, monkeypatch):
+        """2330 有價（100 萬）、5314 兩個後綴都沒價（10 萬）→ 覆蓋率 10/11。"""
+        D = self._mod()
+        _px = _fe22_prices()
+        monkeypatch.setattr(
+            "src.data.etf.etf_fetch.fetch_etf_price",
+            _fe22_price_stub({f"{_FE22_TWSE}.TW": _px}, []))
+        _res = D.get_portfolio_var([_fe22_row(_FE22_TWSE, 1.0, 1000.0),
+                                    _fe22_row(_FE22_OTC, 2.0, 50.0)])
+        return _res, _px["Close"].pct_change().dropna()
+
+    def test_the_multiplier_is_the_covered_subset_not_the_whole_portfolio(
+            self, monkeypatch):
+        """**本批最重要的一條**：元金額乘的是子集市值，不是全組合市值。"""
+        _res, _ret = self._partial(monkeypatch)
+        assert _res.computed is True, _res.reason
+        assert _res.total_value_twd == 1_100_000.0
+        assert _res.covered_value_twd == 1_000_000.0, (
+            "分子把抓不到的那 10 萬也算進去了 —— 那是替它假設了一個報酬分布")
+        _q99 = abs(float(_ret.quantile(0.01)))
+        assert _res.hist_99_twd == pytest.approx(_q99 * 1_000_000.0)
+        assert _res.hist_99_twd != pytest.approx(_q99 * 1_100_000.0), (
+            "用的還是全組合市值（修前的口徑）")
+
+    def test_the_percentage_uses_the_same_denominator_as_its_numerator(
+            self, monkeypatch):
+        """月度 99% 的 % 也要對同一批持股 —— 分子子集、分母全體 = 系統性低估。"""
+        _res, _ret = self._partial(monkeypatch)
+        assert _res.monthly_99_pct == pytest.approx(
+            _res.monthly_99_twd / _res.covered_value_twd * 100.0)
+
+    def test_the_shortfall_is_named_not_just_implied(self, monkeypatch):
+        """**缺了誰、缺多少**都要講出來，不能只讓總額默默變小。"""
+        _res, _ = self._partial(monkeypatch)
+        assert _res.coverage_pct == pytest.approx(1_000_000 / 1_100_000 * 100)
+        assert _res.excluded_tickers == (f"{_FE22_OTC}.TW",)
+        assert _res.no_price == (f"{_FE22_OTC}.TW",)
+        assert _res.full_coverage is False, (
+            "覆蓋率不足卻回報 full_coverage —— 畫面就不會揭露了")
+
+    def test_full_coverage_keeps_the_old_numbers_exactly(self, monkeypatch):
+        """覆蓋率 100% 時**與修前完全相同** —— 這個修正不改變正常情況的數字。"""
+        D = self._mod()
+        _px = _fe22_prices()
+        monkeypatch.setattr(
+            "src.data.etf.etf_fetch.fetch_etf_price",
+            _fe22_price_stub({f"{_FE22_TWSE}.TW": _px}, []))
+        _res = D.get_portfolio_var([_fe22_row(_FE22_TWSE, 1.0, 1000.0)])
+        assert _res.computed is True and _res.full_coverage is True
+        assert _res.covered_value_twd == _res.total_value_twd == 1_000_000.0
+        _q95 = abs(float(_px["Close"].pct_change().dropna().quantile(0.05)))
+        assert _res.hist_95_twd == pytest.approx(_q95 * 1_000_000.0)
+
+    def test_full_coverage_is_compared_with_a_tolerance_not_an_equals(self):
+        """§4.3：`total` 與 `covered` 是同一組浮點數**不同順序**加起來的。
+
+        全員都抓到時兩者仍可能差在最後一個 bit → `99.99999999999999`。
+        用 `>= 100.0` 判會讓一個**完全沒有缺料**的組合被掛上「部分覆蓋」警告
+        —— 那是反方向的捏造（§1）。
+        """
+        D = self._mod()
+        assert D._is_full(100.0) is True
+        assert D._is_full(100.0 - 1e-13) is True, "浮點誤差被當成真的缺料"
+        assert D._is_full(99.9) is False, "真的缺 0.1% 卻被當成完整覆蓋"
+
+    def test_a_dead_price_source_reports_zero_coverage_and_names_everyone(
+            self, monkeypatch):
+        """一檔都沒抓到 → `computed=False`，而且**被排除的是全部**，不是空的。"""
+        D = self._mod()
+        monkeypatch.setattr("src.data.etf.etf_fetch.fetch_etf_price",
+                            _fe22_price_stub({}, []))
+        _res = D.get_portfolio_var([_fe22_row(_FE22_TWSE, 1.0, 1000.0)])
+        assert _res.computed is False and _res.coverage_pct == 0.0
+        assert _res.excluded_tickers == (f"{_FE22_TWSE}.TW",)
+
+    def test_the_stress_test_quantifies_its_imputed_betas(self, monkeypatch):
+        """壓測的缺口更隱蔽：**每一檔都在總額裡**，缺的是「Beta 是真的嗎」。"""
+        D = self._mod()
+        monkeypatch.setattr("src.data.etf.etf_fetch.fetch_etf_price",
+                            _fe22_price_stub({}, []))
+
+        def _fake_stress(rows, total_value, drop_pct=None):
+            return {"drop_pct": drop_pct, "total_loss": -220_000.0,
+                    "loss_pct": 20.0,
+                    "beta_imputed_tickers": [f"{_FE22_OTC}.TW"]}
+
+        monkeypatch.setattr(
+            "src.compute.etf.etf_calc.calc_portfolio_stress_test", _fake_stress)
+        _res = D.get_portfolio_stress([_fe22_row(_FE22_TWSE, 1.0, 1000.0),
+                                       _fe22_row(_FE22_OTC, 2.0, 50.0)])
+        assert _res.imputed_value_twd == 100_000.0, (
+            "「幾檔是估的」講不出嚴重度 —— 要講「估掉的是多少錢」")
+        assert _res.coverage_pct == pytest.approx(1_000_000 / 1_100_000 * 100)
+        assert _res.full_coverage is False
+
+    def test_the_dividend_total_says_what_it_left_out(self, monkeypatch):
+        """海外標的**不算進** `gross_twd`（§4.6）→ 少了它，總額偏小卻長得一樣。"""
+        D = self._mod()
+        monkeypatch.setattr("src.data.etf.etf_fetch.fetch_etf_price",
+                            _fe22_price_stub({}, []))
+
+        def _fake_view(holdings, *, marginal_rate=None):
+            return {"summary": {"gross": 1000, "nhi_premium": 0,
+                                "net_after_nhi": 1000},
+                    "per_etf": [{"代號": f"{_FE22_TWSE}.TW", "幣別": "TWD",
+                                 "近1年稅前配息": 1000, "二代健保": 0,
+                                 "配息筆數": 0}],
+                    "overseas": ["VT"], "n_tw": 1}
+
+        monkeypatch.setattr(
+            "src.services.dividend_tax_service.get_dividend_tax_view", _fake_view)
+        _res = D.get_dividend_cash_flow([_fe22_row(_FE22_TWSE, 1.0, 1000.0),
+                                         _fe22_row("VT", 1.0, 100.0)])
+        assert _res.computed is True
+        assert _res.excluded_tickers == ("VT",), (
+            "被排除在總額外的持股沒有被講出來")
+        assert _res.coverage_pct == pytest.approx(50.0)
+        assert _res.full_coverage is False
+        assert _res.no_payout_tickers == (f"{_FE22_TWSE}.TW",), (
+            "「貢獻 0 元」的那幾檔要列出來 —— 上游分不出「真的沒配」與「抓不到」")
+
+
+class TestTheZScoresComeFromL0:
+    """FIX-3：`1.645` / `2.326` 是 inline 常數，且與舊版 Tab 逐字重複（§3.3）。"""
+
+    def test_no_inline_z_score_survives_in_the_service(self):
+        import src.services.portfolio_deep_service as D
+
+        _tree = ast.parse(
+            pathlib.Path(D.__file__).read_text(encoding="utf-8"))
+        _lits = [(_n.lineno, _n.value) for _n in ast.walk(_tree)
+                 if isinstance(_n, ast.Constant)
+                 and isinstance(_n.value, float)
+                 and _n.value in (1.645, 2.326)]
+        assert not _lits, f"參數法 VaR 的 z 值又寫死了：{_lits}"
+
+    def test_they_are_imported_from_the_l0_ssot(self):
+        import src.services.portfolio_deep_service as D
+        from shared.signal_thresholds import VAR_Z_SCORE_95, VAR_Z_SCORE_99
+
+        assert D.VAR_Z_SCORE_95 is VAR_Z_SCORE_95
+        assert D.VAR_Z_SCORE_99 is VAR_Z_SCORE_99
+
+    def test_the_z_and_the_percentile_are_the_same_confidence_level(self):
+        """**耦合守衛**：z 與分位數是同一個信心水準的兩種表示法。
+
+        改一邊沒改另一邊，畫面上「歷史法 95%」與「參數法 95%」
+        講的就不是同一件事了 —— 而兩個數字都還是會印出來。
+        """
+        from statistics import NormalDist
+
+        from shared.signal_thresholds import (
+            PORTFOLIO_VAR_95_PERCENTILE,
+            PORTFOLIO_VAR_99_PERCENTILE,
+            VAR_Z_SCORE_95,
+            VAR_Z_SCORE_99,
+        )
+
+        _nd = NormalDist()
+        assert abs(_nd.inv_cdf(1 - PORTFOLIO_VAR_95_PERCENTILE)
+                   - VAR_Z_SCORE_95) < 1e-3
+        assert abs(_nd.inv_cdf(1 - PORTFOLIO_VAR_99_PERCENTILE)
+                   - VAR_Z_SCORE_99) < 1e-3
+
+    def test_the_unconverged_copy_in_the_old_tab_is_registered(self):
+        """舊版 Tab 的同值複本**未收斂**（客戶明令禁止改舊 Tab）→ 至少要登記。
+
+        ⚠️ 本條**不是**在說 §3.3 已經合規 —— 它只保證「還有一份沒收」這件事
+        寫在 L0 的 docstring 裡，不會在下一次有人改 z 值時被忘記。
+        """
+        import shared.signal_thresholds as T
+
+        _doc = pathlib.Path(T.__file__).read_text(encoding="utf-8")
+        assert "etf_tab_portfolio.py:1123-1124" in _doc, (
+            "舊版 Tab 的 inline 複本沒有登記在 L0 —— 改 z 值時不會有人看到它")
+
+
+def _fe22_arith_fns(path: pathlib.Path) -> dict[str, list[int]]:
+    """`{函式名: [行號]}` —— 該檔**真的**拿 `SHARES_PER_LOT` 做算術的地方。
+
+    判定與 `_lot_multiplication_sites()` 同一把尺（任何運算元含該識別字的
+    `ast.BinOp`），只是縮到單檔並回報**函式名** —— 檔頭要指的就是函式名。
+    """
+    _tree = ast.parse(path.read_text(encoding="utf-8"))
+    _out: dict[str, list[int]] = {}
+    for _fn in ast.walk(_tree):
+        if not isinstance(_fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for _n in ast.walk(_fn):
+            if isinstance(_n, ast.BinOp) and _mentions_lot_const(_n):
+                _out.setdefault(_fn.name, []).append(_n.lineno)
+    return _out
+
+
+class TestTheServiceHeaderPointsAtTheRealCode:
+    """FIX-A（FE-22 追加）：檔頭把乘法點的**函式名寫錯**了。
+
+    修前檔頭寫「本檔全檔只有一處乘 `SHARES_PER_LOT`（`_total_value_twd()`）」，
+    但實測乘法在 `_lot_to_shares()` —— `_total_value_twd()` 只是呼叫它。
+    ⚠️ **這不是筆誤等級的問題**：SSOT 指標指錯函式，下一個要改單位的人
+    會去改一支「其實沒有做那個乘法」的函式，而測試**照樣全綠**
+    （`test_there_is_exactly_one_multiplication_site` 驗的是 `_lot_to_shares`，
+    不是檔頭那句話）。§-2 規則 6：沒查證的宣稱比沒有宣稱更危險。
+    """
+
+    def _path(self) -> pathlib.Path:
+        import src.services.portfolio_deep_service as D
+
+        return pathlib.Path(D.__file__)
+
+    def test_the_header_names_the_function_that_really_multiplies(self):
+        """**先量測、再對文案**：檔頭「只有一處」旁邊要寫出實測到的那支函式名。"""
+        _fns = _fe22_arith_fns(self._path())
+        assert list(_fns) == ["_lot_to_shares"], (
+            f"本檔的張→股算術出現在 {_fns} —— 不只一支，或搬家了")
+        _doc = ast.get_docstring(ast.parse(
+            self._path().read_text(encoding="utf-8"))) or ""
+        _i = _doc.find("只有一處")
+        assert _i >= 0, "檔頭不再宣稱「只有一處」了 —— 這條測試要跟著重寫"
+        assert "_lot_to_shares" in _doc[_i:_i + 240], (
+            "檔頭「只有一處」旁邊指的不是實測到的那支函式")
+
+    def test_the_header_does_not_pass_its_own_guarantee_off_as_repo_wide(self):
+        """檔頭必須點名**另外兩處**，否則「本檔唯一」會被讀成「全站唯一」。"""
+        _doc = ast.get_docstring(ast.parse(
+            self._path().read_text(encoding="utf-8"))) or ""
+        _others = _lot_multiplication_sites()
+        assert len(_others) > 1, "全站只剩一處了 —— 檔頭那段揭露要跟著重寫"
+        for _named in ("dividend_station_service", "sector_flow"):
+            assert _named in _doc, (
+                f"檔頭沒有點名 {_named} —— 「本檔唯一 ≠ 全站唯一」變成空話")
+            assert any(_named in _f for _f in _others), (
+                f"檔頭點名了 {_named}，但實測它已經不是乘法點了：{sorted(_others)}")
+
+
+class TestContractDriftIsNeverSilent:
+    """FIX-4：兩處「安靜地變成 0 / 安靜地留空」的 Fail Loud 邊緣。"""
+
+    def _mod(self):
+        import src.services.portfolio_deep_service as D
+
+        return D
+
+    @pytest.mark.parametrize("summary", [
+        {"nhi_premium": 0, "net_after_nhi": 1000},          # 少了 gross
+        {"gross": None, "nhi_premium": 0, "net_after_nhi": 1},   # 有 key，值不是數
+        {"gross": "1,000", "nhi_premium": 0, "net_after_nhi": 1},  # 型別漂移
+    ])
+    def test_a_missing_summary_key_is_not_quietly_zero(self, monkeypatch,
+                                                       summary):
+        """上游欄名漂移 → **不給數字**。補 0 之後它會長得跟「你真的沒配息」一樣。"""
+        D = self._mod()
+        monkeypatch.setattr("src.data.etf.etf_fetch.fetch_etf_price",
+                            _fe22_price_stub({}, []))
+        monkeypatch.setattr(
+            "src.services.dividend_tax_service.get_dividend_tax_view",
+            lambda holdings, *, marginal_rate=None: {
+                "summary": summary, "per_etf": [], "overseas": [], "n_tw": 0})
+        _res = D.get_dividend_cash_flow([_fe22_row(_FE22_TWSE, 1.0, 1000.0)])
+        assert _res.computed is False, "契約漂移卻照樣把數字帶出去了"
+        assert _res.gross_twd == 0.0 and _res.reason, "算不出來卻沒有給原因"
+        assert "契約" in _res.reason or "欄位" in _res.reason
+
+    def test_a_complete_summary_still_computes(self, monkeypatch):
+        """反面：欄位齊全就照算 —— 這條防的是上一條被寫成「永遠不給數字」。"""
+        D = self._mod()
+        monkeypatch.setattr("src.data.etf.etf_fetch.fetch_etf_price",
+                            _fe22_price_stub({}, []))
+        monkeypatch.setattr(
+            "src.services.dividend_tax_service.get_dividend_tax_view",
+            lambda holdings, *, marginal_rate=None: {
+                "summary": {"gross": 0, "nhi_premium": 0, "net_after_nhi": 0},
+                "per_etf": [{"代號": f"{_FE22_TWSE}.TW", "配息筆數": 0}],
+                "overseas": [], "n_tw": 1})
+        _res = D.get_dividend_cash_flow([_fe22_row(_FE22_TWSE, 1.0, 1000.0)])
+        assert _res.computed is True and _res.gross_twd == 0.0
+        assert _res.has_payouts is False, "0 筆配息是**有效結果**，不是算不出來"
+
+    def test_a_missing_limiter_date_is_not_an_error(self, capsys):
+        """`None`（沒有 limiter）是**正常的** —— 不記 log，否則就是捏造故障。"""
+        assert self._mod()._day_str(None) == ""
+        assert capsys.readouterr().out == ""
+
+    def test_an_unexpected_date_type_is_logged(self, capsys):
+        """轉不出來才是意外 → 回空字串（fail token）**並留下 log**（§3.3）。"""
+        assert self._mod()._day_str(object()) == ""
+        assert "日期格式化失敗" in capsys.readouterr().out
 
 
 # ══════════════════════════════════════════════════════════════════

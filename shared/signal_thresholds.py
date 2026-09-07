@@ -1325,6 +1325,30 @@ PORTFOLIO_VAR_MONTHLY_WARN_PCT: float = 10.0
 """ETF 投組月度 99% VaR 警示門檻(%):月度尾部虧損 > 10%
 → ⚠️ 尾部風險偏高,建議增加防禦部位。原 etf_tab_portfolio.py:689/693/699 inline。"""
 
+VAR_Z_SCORE_95: float = 1.645
+"""參數法 VaR 的 95% **單尾常態分位數** z 值(標準常態 Φ⁻¹(0.95) ≈ 1.6449)。
+
+用於 μ − z·σ 的參數法 VaR(常態假設),與上方 `PORTFOLIO_VAR_95_PERCENTILE = 0.05`
+是**同一個信心水準的兩種表示法**,兩者**數值耦合**:
+    PORTFOLIO_VAR_95_PERCENTILE = 0.05  ←→  VAR_Z_SCORE_95 = Φ⁻¹(1 − 0.05) = 1.645
+歷史模擬法走前者(取樣本分位數),參數法走後者(取常態分位數);同一段程式兩法並陳,
+**改一邊沒改另一邊 = 畫面上兩個「95%」講的不是同一件事**。要改信心水準請兩個一起改。
+
+⚠️ 這是**數學常數不是可調門檻** —— 它由常態分布定義,不是校準出來的業務閾值;
+放在本檔是為了與耦合的 `PORTFOLIO_VAR_*_PERCENTILE` 同處一地(避免拆兩個檔各改一半)。
+
+📌 **未收斂的同值複本(登記,非漏改)**:`src/ui/etf/etf_tab_portfolio.py:1123-1124`
+仍是 inline 的 `1.645` / `2.326`。**客戶明令禁止修改舊版 Tab 代碼**,故本批不動它;
+待客戶驗收、汰除舊 Tab 時一併收斂。在那之前 §3.3 的「唯一 SSOT」在本專案**尚未成立**,
+改本行時**必須連那兩行一起看**。"""
+
+VAR_Z_SCORE_99: float = 2.326
+"""參數法 VaR 的 99% **單尾常態分位數** z 值(標準常態 Φ⁻¹(0.99) ≈ 2.3263)。
+
+與 `PORTFOLIO_VAR_99_PERCENTILE = 0.01` 數值耦合(同 `VAR_Z_SCORE_95` 的說明):
+    PORTFOLIO_VAR_99_PERCENTILE = 0.01  ←→  VAR_Z_SCORE_99 = Φ⁻¹(1 − 0.01) = 2.326
+同值 inline 複本登記見 `VAR_Z_SCORE_95`(`etf_tab_portfolio.py:1123-1124`)。"""
+
 # ── 組合累積報酬 vs 基準(v19.166)──
 PORTFOLIO_BENCHMARK_TICKER: str = "0050.TW"
 """ETF 投組「與 0050 累積報酬比較」的被動基準代號(§3.3 反捏造:禁止 inline '0050.TW')。

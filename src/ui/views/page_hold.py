@@ -170,8 +170,18 @@ TestNothingIsCalledBeforeYouAsk` 用不繼承 `Exception` 的毒藥實測，不�
      用的 L0 80/20 目標不同 —— 同一頁出現兩個互相矛盾的核心比例（§2.1 SSOT）。
   2. ✅ **⑥ 壓力測試 / VaR / 配息現金流 —— 本批已接線**
      （L3 `services/portfolio_deep_service.py`）。三項共同的單位陷阱
-     **張 → 股 → 元** 一律住在那一支 L3（全檔唯一乘 `SHARES_PER_LOT` 的地方），
+     **張 → 股 → 元** 一律住在那一支 L3 的 `_lot_to_shares()`
+     （**該檔唯一**的乘法點 —— 守衛：`tests/test_p04_hold_view.py::
+     TestPortfolioDeepServiceIsReadOnly::test_there_is_exactly_one_multiplication_site`），
      本頁**一個乘法都沒有**（§4.1 漏乘 = 1000 倍低估）。
+     ⚠️ **「該檔唯一」不是「全站唯一」，別把這兩句讀成同一句。**
+     實測（`grep -rn 'SHARES_PER_LOT' --include=*.py`，量測日 2026-09-07）
+     全站另有 `services/dividend_station_service.py`（① 那張卡的總市值，
+     本頁拿它對帳）與 `compute/sector_flow.py`（板塊資金流的張×元→億 合併係數）
+     各自也乘每張股數。**本頁的數字只保證走 `portfolio_deep_service` 這一支**，
+     不對另外兩支的納入口徑背書 —— 「對不起來」正因如此才要在卡面講
+     （見 `_degraded_bits()`：那一態是橘的 `UI_DEGRADED`，不是綠的）。
+     守衛：`TestTheLotToShareClaimIsMeasurable`。
      ⚠️ **配息現金流只接了不需要稅率的那一半**：綜所稅邊際稅率是**使用者輸入**，
      新增輸入元件要先出線框草稿給客戶拍板（A-8），故本批一律傳
      `marginal_rate=None`（L3 明文支援：只算二代健保）。
@@ -196,7 +206,9 @@ TestNothingIsCalledBeforeYouAsk` 用不繼承 `Exception` 的毒藥實測，不�
 但逐檔的純運算會重算。既有 🏦 ETF ›存股戰情室 是靠自己存 session 避開這件事的。
 **這是已知代價，不是沒想到；沙箱測不到它的實際延遲。**
 
-⚠️ **本頁唯一會判 `UI_DEGRADED` 的是 ② 兩套刻度**，而且**不是硬湊的**：
+⚠️ **本頁會判 `UI_DEGRADED` 的有兩處，兩處都不是硬湊的。**
+
+**其一：② 兩套刻度。**
 它直接讀 L0 `station_specs` 的 `discriminative` 旗標。實測（量測日 2026-09-07）
 `KEY_STOCK_TREND`（財報趨勢）標了 `discriminative=False`，
 `degraded_reason` 原文是「這格只比較**最近兩季**，看不出趨勢」——
@@ -205,6 +217,19 @@ TestNothingIsCalledBeforeYouAsk` 用不繼承 `Exception` 的毒藥實測，不�
 **所以本頁這一側的刻度確實有一個已失準的輸入**，線框 ② 的 degraded 文案
 （「某一側的門檻來源已標 `discriminative=False`」）在 repo 現況下是**真的**。
 若哪天那個旗標被改回 `True`，這張卡會自己變回 live —— 本檔沒有寫死任何一邊。
+
+**其二：⑥ 的壓力測試與 VaR**（`_degraded_bits()`）。兩種情形會讓那個金額
+**失去判別力**，兩種都由 L3 的欄位帶下來、本頁不自己判斷：
+  (a) `reconciled=False` —— 本格的總市值與 ① 那張卡的
+      `compute_portfolio_totals()` 對不起來（兩邊納入的持股列不是同一批）；
+  (b) `no_price` 非空 —— 有持股抓不到價格序列，被排除在樣本外。
+兩者都是「**算得出來、但打了折**」：綠燈配一行小字等於讓使用者把一個
+已知失準的金額當成結論讀（§1「錯誤的數字比沒有數字更危險」）。
+⛔ **不降成 `UI_FAILED`（紅）** —— 紅是「系統真出錯」；把打折畫成故障
+就是製造假警報，而滿版假紅字會讓**真的**故障沒人看得見（`CLAUDE.md §1.A-4`）。
+⚠️ 降級後 `Card` 規定非 live 不得帶結論文字 → **現值改掛 facts 的「現值」列**
+（與 `page_today` 的 degraded 同一種做法，不另立第二套寫法），
+**數字不藏起來**，只是不再當成結論、也不再出燈號（門檻已失準就別照門檻讀）。
 
 ═══ 這個檔擋得住什麼、擋不住什麼（誠實邊界）═══════════════════════════
 `load_vix()` / `load_macro()` / `load_allocation()` / `load_binding()` 的
@@ -255,6 +280,7 @@ from shared.dividend_station_thresholds import (
     VIX_LIGHT3,
 )
 from shared.ui_state import (
+    UI_DEGRADED,
     UI_FAILED,
     UI_IDLE,
     UI_LIVE,
@@ -714,7 +740,30 @@ def load_macro(req: HoldRequest) -> MacroReadout:
 
 @dataclass(frozen=True)
 class AllocationReadout:
-    """建議持股水位那一輪的 L3 產出（全站唯一的持股水位 SSOT）。
+    """建議持股水位那一輪的 L3 產出（`get_allocation()` 的仲裁結果）。
+
+    本頁顯示的持股水位一律取自 L3 `get_allocation()`，本頁不自行再算；
+    它仲裁「姿態油門 × macro_state 曝險上限 × VIX／三環天花板」三條輸入，
+    **取最低**。
+
+    ⚠️ **這不是「全站唯一」的持股水位算法**（舊文案這樣寫，實測為假）。
+    全站另有**沒有進到上面那個 min() 裡**的獨立算法，實測至少四支
+    （量測日 2026-09-07，逐支可單點 grep）：
+      · `src/compute/notify/market_alert_banner.py` 的
+        `EXTREME_TARGET_POSITION_PCT` / `LEAD_TARGET_POSITION_PCT`
+        （每日推播 `scripts/push_holdings_daily.py` 在用）；
+      · `src/compute/strategy/v4_strategy_engine.py::check_macro_veto()`
+        回傳的 `max_position`（docstring 自稱「強制持股水位上限」）；
+      · `src/services/market_strategy.py` 的 `exposure_pct`
+        （← `src/compute/risk/risk_control.py::portfolio_exposure`）；
+      · **本頁 ④ 那格自己印的「姿態油門帶」** ——
+        `src/services/dividend_station_service.py::get_station_macro()` 的
+        `posture_range`，直接 `compute_position_throttle()`，**未套任何 cap**。
+    最後那一項是**同一頁的自我矛盾**，不是別人家的事：④ 與 ⑤ 同時印兩個持股
+    區間、口徑不同，使用者不會知道。故 ④ 那格必須自己標明「未套天花板」。
+    守衛：`tests/test_p04_hold_allocation_ssot_claim.py`（同時**反向**驗這四支
+    現在真的還在；哪天被收斂掉，測試轉紅提醒改文案 —— 假的「未納管清單」
+    跟假的「全站唯一」一樣糟）。
 
     ⚠️ **本頁一個百分比都不寫死。** `range_text` / `posture` 全部由 L3 的
     `AllocationDecision` 供給（`tests/test_no_hardcoded_position_pct.py`
@@ -1812,7 +1861,18 @@ def build_macro_stage_card(macro: MacroReadout) -> _Built:
     if macro.health is not None:
         _facts.append(("總經健康分", _fmt_num(macro.health, digits=0)))
     if macro.posture_range:
-        _facts.append(("姿態油門帶", macro.posture_range))
+        # 誠實揭露：這條帶子與 ⑤「建議持股水位（市場端）」**口徑不同** ——
+        # 它是 `get_station_macro()` 直接 `compute_position_throttle()` 的產出，
+        # **沒有**經過 L3 `get_allocation()` 的天花板仲裁（§2.1 SSOT）。
+        # ⚠️ 只加說明：**不改取數來源、不拿掉這一格**（那是版面／功能變更，
+        #    依 `CLAUDE.md §-1.5` A-8「草稿先行」要先送客戶拍板）。
+        _facts.append(
+            ("姿態油門帶（**未套天花板的原始帶**）",
+             f"{macro.posture_range} —— 這是 L3 `get_station_macro()` 直接給的"
+             "姿態帶，**沒套** VIX／三環／`exposure_limit_pct` 任何一條天花板。"
+             "**最終水位請看 ⑤「建議持股水位（市場端）」那一格**"
+             "（走 `get_allocation()`，已套天花板）—— "
+             "同一頁的兩個持股區間口徑不同，別把它們讀成同一個數字"))
 
     if _state == UI_LIVE:
         return (Card(key="hold.macro_stage", label="總經位階（換股的攻守閘門）",
@@ -1975,7 +2035,17 @@ def build_position_cap_card(alloc: AllocationReadout) -> _Built:
     _facts: list[tuple[str, str]] = [
         ("這個數字的分母",
          "**整體資產**（市場端上限），不是核心／衛星那個組合內部的比例"),
-        ("來源", "全站唯一的建議持股 SSOT（L3 `get_allocation()`），本頁不自行再算"),
+        ("來源", "L3 `get_allocation()`，本頁不自行再算 —— 它仲裁"
+                 "「姿態油門 × macro_state 曝險上限 × VIX／三環天花板」"
+                 "三條輸入，**取最低**"),
+        # 誠實揭露：舊文案寫「全站唯一的建議持股 SSOT」，實測為假。
+        # 只把「全站唯一」四個字刪掉不夠 —— 讀者仍會以為全站只有這一處。
+        ("⚠️ 這**不是**全站唯一的持股水位算法",
+         "全站另有**沒進到上面那道仲裁**的獨立算法：每日推播的 "
+         "`market_alert_banner`、v4 否決權的 `max_position`、"
+         "`market_strategy` 的 `exposure_pct`；"
+         "**連本頁 ④ 那格的「姿態油門帶」也是** —— 它走 `get_station_macro()`，"
+         "**沒套任何天花板**。要看最終水位，以本格為準"),
     ]
     if alloc.cap_name:
         _facts.append(("生效的天花板", alloc.cap_name))
@@ -2206,23 +2276,113 @@ def _valued_facts(result: Any) -> list[tuple[str, str]]:
     if getattr(result, "reconciled", True) is False:
         _facts.append((
             "⚠️ 兩套算法對不起來",
-            "本格的總市值與 ① 那張卡的 L3 `compute_portfolio_totals()` "
-            f"對不上（對照值 {getattr(result, 'reference_value_twd', None)}）—— "
-            "代表兩邊納入的持股列不是同一批，這個數字**僅供參考**"))
+            _reconcile_gap_text(result)
+            + " —— 代表兩邊納入的持股列不是同一批。"
+              "**這一格因此判「已失準」（橘），不是「運作中」（綠）**"))
     return _facts
+
+
+def _reconcile_gap_text(result: Any) -> str:
+    """§4.3 對帳差多少。**差額算不出來就說算不出來**，不寫一個看起來像 0 的數字。
+
+    ⚠️ 只用 `getattr` 讀**現有**欄位，不依賴任何尚未落地的 L3 新欄位。
+    ⚠️ 除法前用容差擋 0（§6：浮點不用 `==`）—— 對照值真的是 0 時，
+    「差 100%」是個沒有意義的數字，寧可說「占比算不出來」。
+    """
+    _own_raw = getattr(result, "total_value_twd", None)
+    _ref_raw = getattr(result, "reference_value_twd", None)
+    try:
+        _own, _ref = float(_own_raw), float(_ref_raw)
+    except (TypeError, ValueError):
+        return ("本格的總市值與 ① 那張卡的 L3 `compute_portfolio_totals()` 對不上"
+                f"（本格 {_own_raw!r}／對照 {_ref_raw!r} —— "
+                "其中一邊不是數字，差額算不出來）")
+    _gap = abs(_own - _ref)
+    return ("本格的總市值與 ① 那張卡的 L3 `compute_portfolio_totals()` 對不上："
+            f"本格納入 {_own:,.0f} 元、對照 {_ref:,.0f} 元，差 {_gap:,.0f} 元"
+            + (f"（差 {_gap / abs(_ref) * 100.0:.1f}%）" if abs(_ref) > 1e-9
+               else "（對照值為 0，差幾 % 算不出來）"))
+
+
+def _degraded_bits(result: Any) -> list[tuple[str, str]]:
+    """讓 ⑥ 這個金額**失去判別力**的原因 → `(為什麼失準, 去哪補)`。
+
+    空 list ＝ 這個數字還有判別力（→ `UI_LIVE`）。非空 ＝ `UI_DEGRADED`（橘）。
+
+    ⚠️ **兩種情形都不是「系統壞了」**（那是 `UI_FAILED` / 紅，走 `error` 那條）——
+    是「**算得出來、但打了折**」。混成紅色就是製造假警報，而滿版假紅字會讓
+    真的故障沒人看得見（`CLAUDE.md §1.A-4`「介面狀態嚴格分離」）。
+
+    ⚠️ **只讀 L3 現有欄位**（`reconciled` / `reference_value_twd` /
+    `total_value_twd` / `no_price` / `held_n`），一律 `getattr` 帶預設 ——
+    沒有這些欄位的結果型別（實測 2026-09-07：`DividendCashResult` 兩個都沒有）
+    自然回空 list，行為不變。
+    """
+    _bits: list[tuple[str, str]] = []
+    if getattr(result, "reconciled", True) is False:
+        _bits.append((
+            "**兩套算法對不起來** —— " + _reconcile_gap_text(result)
+            + "。兩邊的納入條件是各寫各的（這正是對帳的意義），"
+              "對不上就代表其中一邊漏了列或多算了列，"
+              "**本頁不替任何一邊背書**",
+            "到既有的 📁 組合管理分頁把持股的**張數／均價**補齊"
+            "（兩套算法差的多半就是那幾列），"
+            f"再回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+    _no_price = tuple(getattr(result, "no_price", ()) or ())
+    if _no_price:
+        _held = getattr(result, "held_n", None)
+        _bits.append((
+            f"**有 {len(_no_price)} 檔抓不到價格序列**"
+            + (f"（持有 {_held} 檔）" if isinstance(_held, int) and _held else "")
+            + "：" + "、".join(_no_price)
+            + " —— 抓不到就**不納入**（不是當成 0% 報酬），"
+              "所以這個尾部估計**涵蓋不到這幾檔的風險**，"
+              "缺的那幾檔真的大跌時不會反映在這個數字裡",
+            "先確認這幾檔的代號是否正確（本頁顯示的是正規化後的代號）；"
+            "若是新上市／剛買進的標的，等歷史累積起來才會有價格序列，"
+            f"再回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+    return _bits
+
+
+def _degraded_note(label: str, bits: Sequence[tuple[str, str]]) -> Note:
+    """⑥ 的「有值但失準」三要素。**橘，不是紅**；現值由呼叫端掛在 facts。
+
+    Raises:
+        ValueError: `bits` 為空（§1 Fail Loud）。判成 degraded 卻說不出哪裡失準，
+            代表判定與理由脫節 —— 那時畫面會出現一張說不清自己為什麼是橘的卡，
+            比直接炸掉危險。
+    """
+    if not bits:
+        raise ValueError(
+            f"{label} 判成 {UI_DEGRADED!r} 卻沒有給任何失準原因 —— "
+            "`_degraded_bits()` 與 `classify_ui_state(discriminative=...)` "
+            "必須由同一份判定供給")
+    _wheres: list[str] = []
+    for _, _where in bits:
+        if _where not in _wheres:      # 兩個原因同時成立時不重複同一句出口
+            _wheres.append(_where)
+    return Note(
+        now=f"{label}　**算得出來，但這個數字已經失準** —— 現值見上方「現值」列",
+        why="；又，".join(_why for _why, _ in bits),
+        where="；".join(_wheres))
 
 
 def build_stress_card(deep: DeepReadout) -> _Built:
     """線框 ⑥ 的「壓力測試」—— **本批新接線**。
 
     ⚠️ **Beta 缺值會被 L2 以 1.0 估算** —— 那一列必須揭示出來（§1 帶旗標）。
-    ⚠️ 金額是**元**（L3 已乘 `SHARES_PER_LOT`），本頁不做任何換算。
+    ⚠️ 金額是**元**（L3 已在 `_lot_to_shares()` 乘過每張股數），本頁不做任何換算。
+    ⚠️ **對帳失敗（`reconciled=False`）→ 橘的 `UI_DEGRADED`，不是綠的。**
+    金額照給（掛在 facts 的「現值」列），但不再當結論、不再出燈號 ——
+    綠燈配一行小字等於讓人把一個已知失準的數字讀成結論（§1）。
     """
     _res = deep.stress
+    _degraded = _degraded_bits(_res) if _res is not None else []
     _state = classify_ui_state(
         requested=deep.requested,
         error=deep.stress_error or deep.error or None,
-        has_value=bool(_res is not None and _res.computed))
+        has_value=bool(_res is not None and _res.computed),
+        discriminative=not _degraded)
     _facts: list[tuple[str, str]] = [
         ("這不是預測", "它回答的是「同樣的跌幅打在**你這個組合**上會是多少」，"
                        "不是「大盤會不會跌」"),
@@ -2240,17 +2400,26 @@ def build_stress_card(deep: DeepReadout) -> _Built:
             "⚠️ 這幾檔的 Beta 是估的",
             "、".join(_res.beta_imputed)
             + " —— 查無 Beta，L2 以 1.0 估算後納入（**不是真實 Beta**）"))
-    if _state == UI_LIVE and _res is not None:
+    if _state in (UI_LIVE, UI_DEGRADED) and _res is not None:
         _facts.insert(1, ("納入計算的組合總市值（元）",
                           f"{_res.total_value_twd:,.0f}"))
         _facts.insert(2, ("警示門檻（L0 SSOT）",
                           f"回撤大於總市值的 {_res.warn_pct:g} 個百分點就示警"))
-        return (Card(key="hold.deep.stress", label="壓力測試", state=UI_LIVE,
-                     # §4.1：單位寫出來 —— 「-224,000」看不出是元還是張。
-                     value=(f"約 {abs(_res.loss_twd):,.0f} 元"
-                            f"（{_res.loss_pct:.1f}%）")),
-                tuple(_facts),
-                "超過門檻" if _res.warn else "門檻內")
+        # §4.1：單位寫出來 —— 「-224,000」看不出是元還是張。
+        _shown = f"約 {abs(_res.loss_twd):,.0f} 元（{_res.loss_pct:.1f}%）"
+        if _state == UI_LIVE:
+            return (Card(key="hold.deep.stress", label="壓力測試", state=UI_LIVE,
+                         value=_shown),
+                    tuple(_facts),
+                    "超過門檻" if _res.warn else "門檻內")
+        # `Card` 規定非 live 不得帶結論文字 → 現值改掛 facts（`page_today` 同款做法）。
+        # **數字不藏起來**，只是不再當結論；燈號頻道一併留白 ——
+        # 一邊掛「🟠 門檻已失準」一邊出「門檻內」是同一張卡說兩句相反的話。
+        _facts.insert(0, ("現值（已失準，別照門檻讀）", _shown))
+        return (Card(key="hold.deep.stress", label="壓力測試",
+                     state=UI_DEGRADED,
+                     note=_degraded_note("壓力測試", _degraded)),
+                tuple(_facts), "")
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
     elif _state == UI_FAILED:
@@ -2288,10 +2457,15 @@ def build_var_card(deep: DeepReadout) -> _Built:
     # 沒有人看得見 —— 那是「假性錯誤滿版」的反面：**假性正常**。
     _dead_src = ("；".join(_res.fetch_errors)
                  if _res is not None and _res.upstream_down else "")
+    # ⚠️ **「部分沒價格」與「上游整個掛掉」是兩件事，兩件都不吞。**
+    # 上一段的 `_dead_src` 走 error → 紅；這裡的 `no_price` 走 discriminative
+    # → 橘（有值、但涵蓋不到那幾檔）。混成同一種，其中一件必然被另一件蓋掉。
+    _degraded = _degraded_bits(_res) if _res is not None else []
     _state = classify_ui_state(
         requested=deep.requested,
         error=deep.var_error or deep.error or _dead_src or None,
-        has_value=bool(_res is not None and _res.computed))
+        has_value=bool(_res is not None and _res.computed),
+        discriminative=not _degraded)
     _facts: list[tuple[str, str]] = [
         ("這個數字的意思",
          "在正常市況下，單日虧損**不超過**這個金額的機率約 95%（另一個是 99%）"),
@@ -2304,7 +2478,7 @@ def build_var_card(deep: DeepReadout) -> _Built:
         _facts.append(("⚠️ 這幾檔沒有價格序列",
                        "、".join(_res.no_price)
                        + " —— 抓不到就**不納入**（不是當成 0% 報酬）"))
-    if _state == UI_LIVE and _res is not None:
+    if _state in (UI_LIVE, UI_DEGRADED) and _res is not None:
         _facts.insert(1, ("樣本",
                           f"{_res.n_common} 個共同交易日"
                           + (f"（{_res.first_day} ~ {_res.last_day}）"
@@ -2325,10 +2499,19 @@ def build_var_card(deep: DeepReadout) -> _Built:
                 f"最晚有資料的是 {_res.limiter}"
                 + (f"（{_res.limiter_start} 才開始）" if _res.limiter_start else "")
                 + " —— 視窗越短，尾部估計越樂觀"))
-        return (Card(key="hold.deep.var", label="VaR（風險值）", state=UI_LIVE,
-                     value=f"單日 95%：約 {_res.hist_95_twd:,.0f} 元"),
-                tuple(_facts),
-                "月度尾部偏高" if _res.warn else "月度尾部可控")
+        _shown = f"單日 95%：約 {_res.hist_95_twd:,.0f} 元"
+        if _state == UI_LIVE:
+            return (Card(key="hold.deep.var", label="VaR（風險值）",
+                         state=UI_LIVE, value=_shown),
+                    tuple(_facts),
+                    "月度尾部偏高" if _res.warn else "月度尾部可控")
+        # `Card` 規定非 live 不得帶結論文字 → 現值改掛 facts（`page_today` 同款做法）。
+        # 燈號頻道留白：門檻已失準卻還出「月度尾部可控」，是同一張卡說兩句相反的話。
+        _facts.insert(0, ("現值（已失準，別照門檻讀）", _shown))
+        return (Card(key="hold.deep.var", label="VaR（風險值）",
+                     state=UI_DEGRADED,
+                     note=_degraded_note("VaR（風險值）", _degraded)),
+                tuple(_facts), "")
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
     elif _state == UI_FAILED:
@@ -2358,8 +2541,11 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
     線框草稿給客戶拍板（`CLAUDE.md §-1.5` A-8）。L3 一律傳 `marginal_rate=None`
     （它明文支援：只算二代健保）。**寫「稅後」而不講這件事就是說謊。**
 
-    ⚠️ **張 → 股 的換算在 L3**（`portfolio_deep_service`，全檔唯一乘法點）——
-    本頁一個乘法都沒有。漏乘就是 1000 倍低估（§4.1）。
+    ⚠️ **張 → 股 的換算在 L3** `portfolio_deep_service._lot_to_shares()`
+    —— **該檔唯一**的乘法點（守衛：`test_there_is_exactly_one_multiplication_site`），
+    **不是全站唯一**（實測：`dividend_station_service` 與 `compute.sector_flow`
+    也各有一處）。本頁一個乘法都沒有；漏乘就是 1000 倍低估（§4.1）。
+    卡面同時印出「該檔唯一 ≠ 全站唯一」那一列，理由見檔頭。
     """
     _res = deep.cash
     _state = classify_ui_state(
@@ -2373,7 +2559,15 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
         ("統計區間", "近一年**實際除息**的逐筆金額（每股配息 × 你的股數），"
                      "不是用殖利率回推的估計值"),
         ("張 → 股 的換算住哪裡",
-         "L3 `portfolio_deep_service`（全站唯一乘法點）—— 本頁不做這個乘法"),
+         "L3 `portfolio_deep_service._lot_to_shares()` —— **該檔唯一**的乘法點，"
+         "**本頁一個乘法都沒有**"),
+        # 誠實揭露：舊文案寫「全站唯一乘法點」，實測為假（全站至少三處）。
+        # 只把「全站」兩個字刪掉不夠 —— 讀者仍會以為全站只有這一處。
+        ("⚠️ 「該檔唯一」不等於「全站唯一」",
+         "全站不只這一處：`dividend_station_service` 的總市值（① 那張卡，"
+         "本頁拿它對帳）與 `compute.sector_flow` 的板塊資金流各自也乘每張股數。"
+         "**本格的數字只保證走 `portfolio_deep_service` 這一支**，"
+         "不對另外兩支的納入口徑背書 —— 對不上時 ⑥ 那兩格會轉「已失準」"),
     ]
     if _res is not None and getattr(_res, "overseas", ()):
         _facts.append(("外幣／海外標的（已排除，僅標記）",
