@@ -467,17 +467,25 @@ render_macro_compass()
 # （`src/ui/views/page_find.py`，PR #664 落地時同樣無 production caller）。
 # 2026-09-07 FE-11:其後**純新增**「🔬 查一檔」= IA v2 第 3 頁
 # （`src/ui/views/page_inspect.py`，落地時同樣無 production caller）。
-# ⚠️ **「🔬 查一檔」(新,第 3 個) 與既有「🔬 選股」(舊,第 5 個) emoji 相同、
+# 2026-09-07 FE-13:其後**純新增**「💼 我的持股」= IA v2 第 4 頁
+# （`src/ui/views/page_hold.py`，落地時同樣無 production caller）。
+# ⚠️ **「🔬 查一檔」(新,第 3 個) 與既有「🔬 選股」(舊,第 6 個) emoji 相同、
 #    名稱不同 —— 兩個都保留,這是雙軌並存期的「刻意並存」,不是漏改。**
 #    新頁是「一個代碼進去,一份判決出來」(單檔判型 + 明細);舊群組是
 #    「篩一批出來」(個股 / 多檔比較 / 選股網)。兩件事,不得合併;也不得為了
 #    「看起來不重複」而改名 —— 改名會動到既有頁籤,違反客戶定版的雙軌並存。
+# ⚠️ **「💼 我的持股」(新,第 4 個) 與既有「💼 我的持股戰情室」(舊,第 9 個)
+#    emoji 相同、名稱高度相似 —— 兩個都保留,同樣是雙軌並存期的「刻意並存」,
+#    不是漏改。** 新頁是 IA v2 的**殼**(`src/ui/views/page_hold.py`,葉1 戰情室
+#    ＋ 葉2 組合設定,多數區塊仍標 unwired);舊頁是**既有實作**
+#    (`src/ui/etf/etf_tab_dividend_station.py`,線上已在跑的完整功能)。
+#    **不得合併、不得改名** —— 改名會動到既有頁籤,違反客戶定版的雙軌並存。
 # ⚠️ 既有 7 個群組**一個都沒刪、沒改名、沒換順序** —— IA v2 的完整切換
 #    （7 群組 → 5 頁，會移除既有分頁）屬客戶畫面訂版，不在本批；
 #    本批只讓新頁「被看得見、可驗收」。客戶已定版**雙軌並存**:新頁陸續
 #    掛成新頁籤,既有頁籤一個都不動,兩邊同時在線由客戶自行比對驗收。
-tab_today, tab_find, tab_inspect, tab_market, tab_stocks, tab_etf_main, tab_tools, tab_warroom, tab_mgmt, tab_ai = st.tabs([
-    '🚦 今天', '🔍 找標的', '🔬 查一檔',
+tab_today, tab_find, tab_inspect, tab_hold, tab_market, tab_stocks, tab_etf_main, tab_tools, tab_warroom, tab_mgmt, tab_ai = st.tabs([
+    '🚦 今天', '🔍 找標的', '🔬 查一檔', '💼 我的持股',
     '🌍 市場環境', '🔬 選股', '🏦 ETF', '🔧 工具箱', '💼 我的持股戰情室', '📁 組合管理', '🧬 AI 問答',
 ])
 
@@ -572,6 +580,30 @@ with tab_find:
 with tab_inspect:
     from src.ui.views.page_inspect import render_page_inspect
     _render_tab_isolated(render_page_inspect, '查一檔')
+
+
+# ══════════════════════════════════════════════════════════════
+# GROUP 0d: 💼 我的持股（IA v2 第 4 頁）— 2026-09-07 FE-13 純新增
+# ══════════════════════════════════════════════════════════════
+# 分層(CLAUDE.md §8.2):L6 app.py → L5 `src/ui/views/`,**向下呼叫,合規**。
+# 本區塊不新增任何 `src.data.*` 直呼(§8.2 硬規則第 4 條)。
+# late import 照本檔既有慣例寫在 `with` 區塊內(與「🚦 今天」「🔍 找標的」
+# 「🔬 查一檔」同形)。
+# ⚠️ 既有「💼 我的持股戰情室」(tab_warroom,第 9 個)**未動**:
+#    **新頁是 IA v2 的殼**(`src/ui/views/page_hold.py` —— 葉1 戰情室 ＋
+#    葉2 組合設定,四支唯讀 L3 已接線,其餘區塊仍標 unwired);
+#    **舊頁是既有實作**(`src/ui/etf/etf_tab_dividend_station.py` —— 線上已在
+#    跑的完整功能)。**不得合併、不得改名** —— 改名會動到既有頁籤,
+#    違反客戶定版的雙軌並存。兩邊同時在線,由客戶自行比對驗收。
+# ⚠️ session key 互不相撞:本頁前綴 `p04`,既有戰情室為 `_station_*`、
+#    組合管理為 `portfolio_manager` 自有 key。
+# ⚠️ 本頁碰的是**使用者資產**(Google Sheets 持股帳本),page_hold 自陳
+#    **一律唯讀**(不寫入、不刪除、不改動任何一列持股),並由
+#    `tests/test_p04_hold_view.py::TestReadOnly` 以 AST 白/黑名單釘死。
+#    本區塊只做掛載,不改變該保證。
+with tab_hold:
+    from src.ui.views.page_hold import render_page_hold
+    _render_tab_isolated(render_page_hold, '我的持股')
 
 
 # ══════════════════════════════════════════════════════════════
