@@ -88,6 +88,11 @@ my-stock-dashboard/
 │   │   │                      #   (macro_signal_lookback_tw = 死碼,零 production caller)
 │   │   └── screener/  (2)     # monthly_revenue_screener / yield_screener
 │   ├── services/              # 19 檔(L3 業務編排)
+│   │   ├── holdings_service   # 「你持有哪幾檔/幾張/均價」唯讀 loader(2026-09-07 新增,
+│   │   │                      #   IA v2 頁 4 用;L3 → L1 gsheet_portfolio 讀取面,
+│   │   │                      #   只呼叫 list_/load_,零 save_/delete_/create_/rename_。
+│   │   │                      #   ⚠️ 上面的「19 檔」是 2026-06-30 快照,未含本檔;
+│   │   │                      #   檔數會漂移,要數字請現場量測 §8.2.A.0 規則 4)
 │   │   ├── ai_*               # ai_structured_summary / app_ai_service / market_strategy
 │   │   ├── etf_*              # etf_grp_compare_service / etf_sector_service
 │   │   ├── stock_grp_service  # tab_stock_grp 共用
@@ -97,12 +102,19 @@ my-stock-dashboard/
 │       ├── render/    (7)     # chart_plotter / tab_sections SSOT / app_render
 │       ├── pages/     (8)     # health_inspector / api_diagnostic / data_coverage
 │       ├── etf/       (6)     # etf_dashboard / etf_tab_{single,portfolio,grp_compare}
-│       ├── views/     (3 檔 @2026-09-07)
-│       │                      # L5 — IA v2 五頁戰情室 View 層(2026-09-07 新增目錄,
-│       │                      #   逐頁落地中,目前只落地第 1 頁)。與 tabs/etf/pages 同層。
+│       ├── views/     (7 檔 @2026-09-07 晚)
+│       │                      # L5 — IA v2 五頁戰情室 View 層(2026-09-07 新增目錄)。
+│       │                      #   與 tabs/etf/pages 同層。
 │       │                      #   __init__(不 re-export) / _ui_kit(共用渲染) /
 │       │                      #   page_today(🚦 今天)。⚠️ 上面的「68 檔」是
-│       │                      #   2026-06-30 快照,早於本目錄,未含這 3 檔。詳見 §0.13
+│       │                      #   2026-06-30 快照,早於本目錄,未含這幾檔。詳見 §0.13
+│       │                      # 📌 2026-09-07 晚(本批)事實更正:本行同日稍早記
+│       │                      #   「3 檔 @2026-09-07 / 逐頁落地中,目前只落地第 1 頁」——
+│       │                      #   那是當時的事實,現已過期。五頁全部落地,且五頁
+│       │                      #   全部已掛上 app.py(頂層 7 → 12 個頁籤)。新增:
+│       │                      #   page_find(🔍 找標的) / page_inspect(🔬 查一檔) /
+│       │                      #   page_hold(💼 我的持股) / page_why(📖 憑什麼)。
+│       │                      #   ⚠️ 檔數會漂移,引用前現場量測(§8.2.A.0 規則 4)
 │       └── tabs/      (38)
 │           ├── stock_sections/ (14) # 個股 Tab 已抽 13 section + __init__
 │           ├── macro/          (15) # 總經 Tab 已抽 10+ section + handlers + helpers
@@ -323,22 +335,35 @@ LOC 增加主因:test 覆蓋率 + SSOT 抽出時函式 docstring 補充。
 
 ---
 
-### 0.13 `src/ui/views/` — IA v2 戰情室 View 層落地(2026-09-07,逐頁落地中)
+### 0.13 `src/ui/views/` — IA v2 戰情室 View 層落地(2026-09-07,五頁全部落地並掛載)
 
 > **依 §0.12 的 SSOT 約定**:七層定義與 5 條硬規則、例外(EX-\*)與待修違憲(V-\*)的權威來源
 > 一律是 `CLAUDE.md §8.2 / §8.2.A`,**本節只做敘述性補充,不另立規則、不重複列舉**。
-> 畫面規格見 `SPEC.md §16`;本批的過程紀錄與派工見 `STATE.md` 最新一筆。
+> 畫面規格見 `SPEC.md §16`(頁 1)／**`§17`(頁 2)／`§18`(頁 3)／`§19`(頁 4)／`§20`(頁 5)**;
+> 本批的過程紀錄與派工見 `STATE.md` 最新一筆。
 
 **這是什麼**:`src/ui/views/` 是 IA v2 五頁戰情室(線框 `docs/wireframes/stock_ia_v1.html`,
 客戶 2026-09-05 拍板)的 View 層新家,**分層為 L5**,與 `src/ui/tabs/` / `src/ui/etf/` /
-`src/ui/pages/` **同層**。**目前只落地第 1 頁**(`page_today`),其餘**逐頁落地中** ——
-依 `CLAUDE.md §8.2.A.0` 規則 4,此處**不寫死頁數**,要數字請現場量測。
+`src/ui/pages/` **同層**。
+
+📌 **2026-09-07 晚(本批)事實更正 —— 有意識的更正,不是漏刪。**
+本段同日稍早寫的是「**目前只落地第 1 頁**(`page_today`),其餘**逐頁落地中**」——
+**那在它寫下的當天是對的,現已過期**。現行事實:**五頁全部落地,而且五頁全部已掛上
+`app.py`**(頂層由 7 → **12** 個頁籤;前 5 個是 IA v2 新頁,既有 7 個群組**原順序不動**)。
+⚠️ **雙軌並存**:新頁與功能重疊的既有分頁**兩邊同時在線,一個都沒有下架、沒有改名** ——
+IA v2 的完整切換(移除舊分頁)屬**客戶畫面訂版**,待逐頁實機驗收後由客戶統一指示。
+⚠️ 依 `CLAUDE.md §8.2.A.0` 規則 4,此處**不把頁籤數當長期事實**,要數字請現場量測。
 
 | 檔案 | 角色 | 層 |
 |---|---|---|
 | `src/ui/views/__init__.py` | 套件宣告。**刻意不 re-export 任何 view**:re-export 會讓 `from src.ui import views` 把 streamlit 與該頁整條依賴鏈拉起;且五頁逐批落地時,barrel 會變成每批都要動一次的共用檔(與 File Boundary 隔離相衝)。呼叫端直接寫 `from src.ui.views.page_today import render_page_today` | L5 |
 | `src/ui/views/_ui_kit.py` | 五頁共用的**渲染**層:`grid()`(3 欄上限,夾住 + 出聲)/ `single_submit_form()`(單一 submit)/ `render_card` `render_cards` `render_note` `section_header` / `assert_signal_text_clean()`(訊號頻道不得帶狀態 glyph 或燈號 emoji)。**不定義狀態、不定義資料結構、不判燈、不取數、不建快取** | L5 |
 | `src/ui/views/page_today.py` | 第 1 頁「🚦 今天」的**版面呈現與互動排版**(規格見 `SPEC.md §16`)。型別 / 四態判定 / 狀態列 / 上游例外洗字 / 版面上限一律 import 復用 `src/ui/tabs/tab_today.py`,本檔一個都不複寫 | L5 |
+| `src/ui/views/page_find.py` | 第 2 頁「🔍 找標的」——「從全市場縮到一張候選清單」。葉1 選股網(條件 form ＋ 結果表 ＋ CSV)、葉2 板塊地圖(產業熱力圖**未接線** ＋ 三大法人資金泡泡圖)。規格見 `SPEC.md §17` | L5 |
+| `src/ui/views/page_inspect.py` | 第 3 頁「🔬 查一檔」——「一個代碼進去,一份判決出來」。葉1 單檔診斷(個股 / ETF / **unknown 三分支**)、葉2 多檔比較(可混貼,下鑽零額外 L3 呼叫)。規格見 `SPEC.md §18` | L5 |
+| `src/ui/views/page_hold.py` | 第 4 頁「💼 我的持股」——「該加、該換、該減」。葉1 戰情室(①~⑦ ＋ 80/20 配置偏離)、葉2 組合設定。**五頁裡唯一碰使用者資產(Google Sheets 持股帳本)的頁,一律唯讀,四道機械擋**。規格見 `SPEC.md §19` | L5 |
+| `src/ui/views/page_why.py` | 第 5 頁「📖 憑什麼」——「解釋數字怎麼來、資料新不新鮮、以及直接問」。**五頁裡唯一的三葉頁**(教學 / 資料體檢 / AI 問答)。**全站四態紀律的示範頁,四道防假綠燈**。規格見 `SPEC.md §20` | L5 |
+| `src/services/holdings_service.py` | **不在本目錄,但屬本批**:L3 唯讀 holdings loader(「你持有哪幾檔、各幾張、均價多少」)。頁 4 ①③④⑤ 與葉2 持股列預覽的共同輸入;它到位之前那幾格全是 `unwired`。L3 → L1 `gsheet_portfolio` **讀取面**,零 `save_*` / `delete_*` / `create_*` / `rename_*` | **L3** |
 
 **依賴方向**(讀本批三檔的 import 清單得出):取數走 **L3**(`services.section_inputs` /
 `services.allocation_service`)、計算走 **L2**(`compute.macro.macro_helpers` /
@@ -374,6 +399,57 @@ R1 / R1-L0 / R2 / R3 本來就只掃 L0 / L1 / L2 檔案,補了也不會命中 L
 4. **本頁無 production caller**(本批未掛 `app.py`),實機路徑僅以 Streamlit AppTest
    冒煙驗過;沙箱 streamlit 實測為 **1.63.0**(量測日 2026-09-07),而 `requirements.txt`
    宣告 `streamlit>=1.56.0,<1.60.0` —— **cap 之內的版本本批未驗**。
+
+📌 **上列 1~4 是前一批(頁 1)寫的,原文一字未動。** 其中**第 4 項的前半句
+「本頁無 production caller」已因掛載而不成立**(頁 1 由 PR #664 掛上,頁 3~5 由本批掛上);
+後半句(streamlit 版本 cap 之內未驗)**仍然成立**,而且**五頁全部適用**。
+第 1 項的根因描述(`src/ui/tabs/__init__.py` eager barrel)**也已被 PR #664 改成 PEP 562 lazy**
+—— 但「module-level import 失敗仍會整頁空白」這個**性質**沒變,變的是故障半徑的數量級。
+⚠️ 上面兩句是**本組據實標明,不是改寫前一批的原文**;那兩件事都發生在前一批的檔案邊界內,
+依 `CLAUDE.md §-1` 不由本組回頭改寫。
+
+**⚠️ 本批(2026-09-07 晚)新增的已知未解 —— 五頁共同,不得當成已完成**
+
+5. ⭐ **五頁的 `live` 態全部只在沙箱驗過。** 沙箱**無外網、無 Google 憑證、
+   無 Gemini 金鑰、FinMind SDK 未安裝**;所有 `live` 畫面都是**用替身(假 L3 / 注入)**
+   驗出來的。**真實部署的取數行為未實測** —— 請於部署後逐頁自行比對新舊分頁。
+6. **頁 4 送出後每次 rerun 會重跑整段編排。** 本頁**不得**把結果存 `st.session_state`
+   (那會是 gate 之外的第二個 session 寫入點,測試直接禁止本檔出現任何 session 下標指派),
+   於是網路層由 L1 的 `@st.cache_data` 擋住、**逐檔的純運算會重算**。
+   既有 🏦 ETF ›存股戰情室 是靠自己存 session 避開這件事的。
+   **這是已知代價,不是沒想到;沙箱量不到它的實際延遲。**
+7. **頁 5 重抄了 L0 的三個狀態字面值**(`'未執行'` / `'ok'` / `'failed'`)——
+   L0 `shared/fetch_monitor.py` **沒有匯出常數**,只能抄。**這是第二真相源。**
+   守衛 `tests/test_p05_why_view.py::TestStatusLiteralsMatchL0` 直接掃 L0 原始碼,
+   漂移即紅燈;另有一條在 L0 真的匯出常數時會轉紅提醒改成 import。
+8. **「兩套健康度刻度」的兩句 prose 在頁 4 與頁 5 各有一份**(頁 5 刻意不 import 頁 4,
+   因當時頁 4 正被另一組改)。**確實是漂移風險**;正解是 L0 `shared/station_specs.py`
+   補一個 `scale_shape` 欄位,兩頁都改讀它。**本批不動 `shared/**`。**
+9. ⭐ **頁籤字串在 `app.py` 硬編碼,而 `shared/ia_nav.py::PAGE_LABELS` 已經是 SSOT ——
+   兩份不一致不會 CI 紅燈。** 五頁皆如此(跟隨鄰居的既有寫法,只改一個會讓同一行出現
+   兩種寫法)。**列為五頁一起收斂的獨立工作**,刻意不夾帶在掛載裡。
+10. **`shared/ia_nav.py` 缺頁 2~5 的 `ACTION_*` / `LEAF_*` 登錄**(實測 2026-09-07:
+    `ACTION_LABELS` 只有 `ACTION_UPDATE_TODAY`,`SECTION_LABELS` 只有 `today.*` 兩筆)。
+    四頁各自在檔內就地定義葉名常數並登記缺口 → **跨頁 SSOT 仍缺**。
+11. **`_ui_kit.single_submit_form()` 只吃一組 `st.radio`** —— 頁 2 / 頁 3 因此**各自
+    就地實作了表單入口**(頁 4 剛好只有一組 radio,直接用共用層)。**三支會漂移**;
+    正解是把它泛化成「form 內容由 caller 的 callback 畫、本函式只保證單一 submit 與
+    已套用值寫入」,屆時那三支一起刪。
+12. **兩支 `st.chat_input` 可能同頁共存**(既有頂層「🧬 AI 問答」`tab_ai_chat` 與頁 5 葉3)。
+    既有那支**未帶 key**(走自動 ID),故 widget ID 不同、不會 `DuplicateWidgetID`;
+    總管實測冷啟動渲染樹**只有 1 支**、互動 0 例外 —— 但**「兩支同時渲染」的狀態沒有測到**。
+13. **「`src/services/` 原本沒有任何一支回傳持股清單」是單組窮舉**(AUD-5 稽核組),
+    **未經第二組複驗**。`holdings_service.py` 的存在**不依賴它成立**:就算真的漏了一支
+    同義的舊介面,那也是「重複取數實作要合併」(v3 §01-2)的問題,**不會讓本檔的唯讀契約
+    或呼叫端的四態判定變錯**。
+
+**掛載後的依賴方向(本批新增的部分)**:`app.py`(L6) → `src/ui/views/`(L5) **向下呼叫,合規**;
+五處掛載點的 `from src.ui.views.page_* import render_page_*` 一律是 **`with tab_*:` 區塊內的
+late import**,並走既有的 `_render_tab_isolated()` 隔離器。**零新增 `src.data.*` 直呼。**
+頁 4 的取數多一條 **L5 → L3 `services.holdings_service` → L1 `gsheet_portfolio`(讀取面)**;
+頁 5 的葉1 / 葉2 **刻意直讀 L0**(`shared.fetch_monitor` / `shared.macro_buckets` /
+`shared.station_specs`)—— 那些東西本來就住 L0、中間零取數,**加一層 L3 pass-through 正是
+`CLAUDE.md §8.1` step 6 點名的「用不到的抽象」**,且 L5 → L0 不受 §8.2 五條硬規則任何一條限制。
 
 ⚠️ **本節未動 §1「目錄結構」與 §2「分層架構」**:那兩節是**歷史 v7.1 結構**
 (該處自陳「保留供追溯」),其編號體系裡 L5 指的是「**AI 層**」、L4 指「視覺化層」,

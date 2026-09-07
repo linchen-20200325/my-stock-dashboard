@@ -784,3 +784,529 @@ D 短線 / E 籌碼 / F 全球風險 / G 跨桶裁決）」。**同一份線框�
 4. **本頁無 production caller**，實機僅以 Streamlit AppTest 冒煙驗過；
    沙箱 streamlit 實測 **1.63.0**（量測日 2026-09-07），而 `requirements.txt` 宣告
    `streamlit>=1.56.0,<1.60.0` —— **cap 之內的版本本批未驗**。
+
+---
+
+## §17 IA v2 第 2 頁「🔍 找標的」畫面規格（`src/ui/views/page_find.py`，2026-09-07）
+
+> **規格出處**：`docs/wireframes/stock_ia_v1.html` 的 `PAGES[1]`（`id='find'`），客戶 2026-09-05 拍板、
+> 2026-09-07 明示動工。落地檔案與分層見 `ARCHITECTURE.md §0.13`；過程紀錄見 `STATE.md` 最新一筆。
+> **單一職責**（線框 `job` 原文）：**從全市場縮到一張候選清單。**
+>
+> ✅ **本頁已掛上 `app.py`**（第 2 個頁籤，PR #664）；**舊分頁不動、不下架**（雙軌並存，客戶定版）。
+>
+> ⚠️ 本節**不重述**分層規則（權威在 `CLAUDE.md §8.2`）與選股門檻（權威在 L3
+> `services/fundamental_screener_service.py` 與 `shared/*`）。
+
+### §17.1 兩葉結構與各區出處
+
+⚠️ **葉名是本檔就地定義的常數，不是讀 L0** —— `shared/ia_nav.py` 目前**沒有**
+`LEAF_FIND_*` 與本頁的 `ACTION_*` 登錄（實測 2026-09-07：`SECTION_LABELS` 只有
+`today.*` 兩筆）。**這是已知缺口**，見 §17.5；L0 補上之後本檔應改為讀它。
+
+| 葉 | 葉名常數 | 內容 |
+|---|---|---|
+| 葉1 | `LEAF_SCREEN_TITLE`＝「選股網」 | 條件表單（`st.form`）＋ 選股結果卡 ＋ CSV |
+| 葉2 | `LEAF_MAP_TITLE`＝「板塊地圖（＝產業熱力圖＋板塊資金潮汐）」 | 熱力圖（**未接線**）＋ 三大法人資金泡泡圖 ＋ **常駐口徑揭露** |
+
+| 區 | 內容 | 出處 |
+|---|---|---|
+| 葉1 條件表單 | ① 基本面優選（自動四項全過）· ② 勾因子（估值／EPS／缺貨／抗跌 RS／跨季轉強）· ③ 排序與筆數 | 本檔 `_render_screen_form()`；因子標籤走 L3 `load_factor_labels()` |
+| 葉1 選股結果 | 存活池 → 綜合入選；本次因子命中數 | L3 `fundamental_screener_service.get_ranked_picks` / `get_fundamental_survivors` / `build_trend_map`、L3 `shortage_screener_service.run_shortage_scan`、L3 `rs_leader_service.run_rs_leader_scan`、L3 `allocation_service.get_macro_regime`（空頭濾網）；因子命中片語走 L5 純函式 `tab_stock_picker.summarize_factor_hits()` |
+| 葉2 熱力圖 | 產業漲跌熱力圖 | **未接線**（見 §17.3） |
+| 葉2 泡泡圖 | 三大法人資金流向泡泡圖 | L3 `sector_flow_service.get_sector_flow_view` → L4 `ui.render.sector_flow_render.build_sector_flow_figure`（純繪圖） |
+| 葉2 口徑揭露 | 三軸口徑 caption | **常駐，不隨狀態消失**；視窗長度（X／Y／泡泡）一律讀 L0 常數 `WINDOW_X` / `WINDOW_Y_RECENT` / `WINDOW_Y_PRIOR` / `WINDOW_SIZE` / `WINDOW_Y_MIN_DAYS`，**畫面上不寫死 5／5／20** |
+
+**排名邏輯不在本頁**：一律走 L3 `get_ranked_picks()`——那是「畫面 / 每月凍結 / MCP / 推播」
+四處的**同源入口**（該函式 docstring 明文）。本檔**不自己排序、不自己算百分位、
+不自己決定哪些檔進榜**。
+
+### §17.2 四態對映 —— 一律走 L0 `shared/ui_state.py`，**本頁不自建狀態**
+
+| 線框態 | `shared/ui_state.py` | 判定來源 |
+|---|---|---|
+| 灰態（還沒選） | `UI_IDLE` | gate 旗標為 False（見下） |
+| 灰態（選了、跑完、**0 檔**） | `UI_EMPTY` | **這是一個有效的結果**，不是故障、也不是還沒跑 |
+| 未接線 | `UI_UNWIRED` | `wired=False`（第 1 條規則先判，**與請求與否無關**） |
+| 紅態（真故障） | `UI_FAILED` | 呼叫拋例外／來源回錯，畫面保留 `repr(e)` |
+| （正常） | `UI_LIVE` | — |
+
+**`requested=` 的三個 gate（一個都不是從資料反推）**：
+
+1. **選股結果** ← `SS_APPLIED_SCREEN in session_state`（`"_p02_applied_screen"`）。
+   那個 key **只有** `_render_screen_form()` 的 submit 分支會寫。
+   ⚠️ **不是** `bool(cands_df)`、**不是** `not df.empty`、**不是** `len(rows) > 0` ——
+   那三種都分不出「還沒選」與「選了但 0 檔」。
+2. **板塊地圖** ← `session_state[SS_MAP_REQUESTED]`（`"_p02_map_requested"`），
+   只有「🗺️ 載入板塊地圖」那顆 `st.button` 的分支會寫。
+3. **未接線的兩項** ← 同上兩個旗標；`wired=False` 讓 `classify_ui_state` 先判 `unwired`
+   ——**未接線永遠不會因為多按一次而改變**。
+
+⚠️ **`requested=False` 時本頁一行 L3 都不呼叫。**
+
+### §17.3 未接線兩項與「去哪補」（誠實揭露，不是漏寫）
+
+1. ⛔ **產業熱力圖**（線框葉2 左半）。
+   **卡在哪**：唯一的 public 入口是 L4 `ui.render.etf_render.render_sector_heatmap()`，
+   它**自帶 5 個寫死的 widget key**（`heatmap_market` / `heatmap_period` / `heatmap_refresh` /
+   `heatmap_load` / `heatmap_loaded`）與**自己那顆 gate 按鈕** → 在本頁再呼叫一次會與既有
+   🏦 ETF 分頁**撞 `DuplicateWidgetID`**，且畫面會出現**兩顆**載入鈕（線框 N6 明文要求
+   舊 gate 被本頁的「🗺️ 載入板塊地圖」**吸收**）。類股代表清單與 treemap 組裝**都是 L4 私有符號**，
+   跨檔直取＝ `CLAUDE.md §8.2.A.2` **V-PICKER-PRIV-1** 的前車之鑑；自己抄一份類股表則是第二個 SSOT（§2.1）。
+2. ⛔ **估值（本益比）因子與「名稱」欄**。`get_ranked_picks(pe_map=, name_map=)` 的 SSOT 是
+   **L1** `src/data/stock/yield_pe_fetcher.fetch_pe_name_maps`，**全 repo 沒有 L3 wrapper**。
+   L5 直呼 L1 是 R4 違憲；經 `src/ui/tabs/yield_screener.py` 的 re-export 繞道
+   **只是騙過 AST、不改性質**。
+
+**⭐ 本頁特有判準：勾了「估值」不靜默降級。** 使用者勾了估值因子時，本頁在**卡上與表單下方
+都**寫明「這個因子在本頁沒有資料、**不計入綜合分**」。理由是 L2 `composite_rank_candidates`
+的 note **只**揭露缺貨／RS 兩個因子，**pe 缺料不會出現在它的 note 裡** ——
+那正是本頁必須自己講的原因。**靜默降級＝讓使用者以為他勾的條件生效了。**
+
+### §17.4 該頁特有的三個判準
+
+1. **`st.download_button`（CSV）與 `st.button`（🗺️ 載入板塊地圖）一律在 `st.form` 外。**
+   線框 F11：form 內放 `st.button` 實跑即拋 `StreamlitAPIException`（不是風格問題，是會炸）。
+2. **空結果不得冒充綠燈，反方向也擋。** 本檔**沒有任何一處**把「0 檔」寫成 live
+   （`Card.__post_init__` 也擋著：非 live 不准帶結論文字）；把「還沒選」畫成紅色錯誤則是
+   捏造一個不存在的故障（`CLAUDE.md §1.A` 第 4 點）。
+3. **口徑揭露常駐。** 「X＝近 N 日累計淨流入／Y＝動能變化／泡泡＝近 M 日淨額規模、
+   **面積不等於權重**」不隨狀態消失 —— 使用者看圖之前就該知道這張圖在量什麼；
+   交易日不足的板塊**不硬塞象限位置**，另行列名。
+
+### §17.5 已知未解（**不得當成已完成**）
+
+1. **`live` 態只在沙箱用替身驗過**（無外網、FinMind SDK 未安裝）；**真實部署未實測**。
+2. **`shared/ia_nav.py` 缺本頁的 `ACTION_*` / `LEAF_*` 登錄** → 葉名與按鈕字串就地定義，
+   **跨頁 SSOT 仍缺**（頁 2~5 同一項）。
+3. **`_ui_kit.single_submit_form()` 只吃一組 `st.radio`** → 本頁就地實作 `_render_screen_form()`，
+   **未改共用層**（頁 3 同病，兩支會漂移）。
+4. **頁籤字串在 `app.py` 硬編碼**，而 `ia_nav.PAGE_LABELS[PAGE_FIND]` 已是 SSOT ——
+   **兩份不一致不會 CI 紅燈**。
+5. **線框 N6 的改名風險未處理**：線框畫的「🗺️ 載入板塊地圖」**是新名字**，production 現行
+   是「🗺️ 載入產業熱力圖」；熱力圖未接線期間，**任何指去舊名字的文案都還沒有跟著改**。
+
+---
+
+## §18 IA v2 第 3 頁「🔬 查一檔」畫面規格（`src/ui/views/page_inspect.py`，2026-09-07）
+
+> **規格出處**：`docs/wireframes/stock_ia_v1.html` 的 `PAGES[2]`（`id='inspect'`）。
+> 落地檔案與分層見 `ARCHITECTURE.md §0.13`；過程紀錄見 `STATE.md` 最新一筆。
+> **單一職責**（線框 `job` 原文）：**一個代碼進去，一份判決出來 —— 系統判型，
+> 然後走兩套完全不同的明細。**
+>
+> ✅ **本頁已掛上 `app.py`**（第 3 個頁籤）。⚠️ **「🔬 查一檔」與既有「🔬 選股」emoji 相同、
+> 名稱不同 —— 兩個都保留，是雙軌並存期的刻意並存，不是漏改。** 新頁是「一個代碼進去，
+> 一份判決出來」；舊群組是「篩一批出來」。**不得合併、也不得為了看起來不重複而改名**
+> （改名會動到既有頁籤，違反客戶定版）。
+
+### §18.1 兩葉結構與各區出處
+
+| 葉 | 葉名常數 | 內容 |
+|---|---|---|
+| 葉1 | `LEAF_SINGLE_TITLE`＝「單檔診斷（個股／ETF/unknown 三分支）」 | 輸入表單＋判型 → **三條分支** → 判決卡 ＋ 明細 |
+| 葉2 | `LEAF_BATCH_TITLE`＝「多檔比較（可混貼）」 | 批次表單 → 批次評分表 → 下鑽 |
+
+| 區（對應線框 7 個 block） | 落點 | 出處 |
+|---|---|---|
+| 輸入表單 ＋ 判型結果 | `_render_ticker_form()` ＋ `build_kind_card()` | L2 純函式 `compute.etf.asset_lag.classify_asset_kind` / `pick_benchmark`（零 I/O） |
+| 葉1-A 個股判決卡（3 欄） | 健康度／估值／籌碼 | 健康度：L3 `dividend_station_service.fetch_metrics(t, 'stock')`；**估值與籌碼未接線**（§18.3） |
+| 葉1-A 個股明細（七段） | `build_detail_card()` | **未接線**，七段名逐一列出（§18.3） |
+| 葉1-A 💰 獲利能力診斷 | `build_profit_cards()`，線框 `st.columns(5)` → **3 欄 × 2 排** | L3 `stock_grp_service.get_financial_statements` → L3 `financial_health_engine.analyze_financial_health` 的 `profitability_module`；門檻住 L0 `shared/financial_health_thresholds.py`，**本頁只讀 Status 字串** |
+| 葉1-B ETF 判決卡 ＋ 明細 | 折溢價／配息／追蹤・同儕 ＋ 明細卡 | L3 `fetch_metrics(t, 'etf')`；**ETF 明細七段未接線** |
+| 葉1-C unknown | `build_unknown_card()` | 見 §18.4（**本頁最重要的判準**） |
+| 葉2 多檔比較 | `_render_batch_form()` ＋ `build_batch_card()` | 同上 L3；**下鑽零額外 L3 呼叫**（讀已算完的那一份） |
+
+**取數唯一規則是「一律走 L3」**（判型例外走 L2 純函式）。
+⚠️ **判型的 L2 late import 是刻意的、不是懶惰**：實測（量測日 2026-09-07）
+`import src.compute.etf.asset_lag` 會連帶拉進 **pandas / requests / yfinance / streamlit
+＋ 33 個 `src.*` 模組**（含 `src.data.core.data_loader`）——
+放在 module level 會讓「打開這一頁」的故障半徑等於整條資料層。
+
+### §18.2 四態對映 —— **四種「沒有結果」絕不可混**
+
+```
+還沒輸入代碼         → UI_IDLE    （灰。還沒有人叫過）
+輸入了、查無此代碼   → UI_EMPTY   （灰。這是一個有效的結果）
+判不出是個股還是 ETF → UI_EMPTY + MISS_NOT_APPLICABLE （灰。見 §18.4）
+上游掛了             → UI_FAILED  （紅。唯一准用紅色的狀態）
+```
+
+**`requested=` 的兩個 gate**：葉1 全部區塊 ← `SS_APPLIED_TICKER`（`"_p03_applied_ticker"`）；
+葉2 批次表 ← `SS_APPLIED_BATCH`。兩個 key **各自只有對應 form 的 submit 分支會寫**。
+
+⚠️ **下游 gate 多帶一個條件：「判型判成這一支才算有人叫過它」。**
+使用者輸入 `00878` 時，**沒有任何人要求過個股財報** —— 個股那三格的正確狀態是
+**`idle` 不是 `empty`**。
+
+⚠️ **本頁沒有任何一格會判 `UI_DEGRADED`**，這是刻意的：上游沒有回傳任何「門檻已失準」的
+訊號，硬湊一個等於捏造一種使用者無從查證的狀態。線框葉1-A 的 `degradedCells`
+（「趨勢因子無 MA，不計入」）描述的是**接線後**的樣子 —— 那一格（K 線＋均線）在本頁是
+`unwired`，**沒有 MA 可以「不計入」**。
+
+### §18.3 未接線四項與「去哪補」
+
+1. ⛔ **個股「估值（357 評價）」**。357 位階要**近 N 年平均年現金股利（元／股）**與有配息年數；
+   全 repo 沒有任何 L3 介面回傳**個股**配息歷史。`etf_grp_compare_service.get_etf_dividends()`
+   是 ETF 用的 pass-through，**拿它去餵個股＝替上游宣稱一件它沒說的事**；
+   L1 `etf_fetch.fetch_etf_dividends` 直呼是 R4 違憲，經其他 L5 檔 re-export 繞道
+   **只是騙過 AST、不改性質**（測試以 AST 釘死此拒絕）。
+2. ⛔ **個股「籌碼」**。`shared.macro_compute.analyze_20d_chips_from_df()` 是 L0 純函式
+   （吃 df、免 I/O），但那份**同時要有 `主力合計` 與 `volume`** 的 df 只有 L1
+   `StockDataLoader.get_combined_data()` 產得出來，而它**沒有 L3 介面**。
+3. ⛔ **葉1-A 明細其餘七段**（K 線＋均線／357 河流圖／財報領先指標／VCP・布林／月營收／
+   什麼時候買賣／心理檢查）。**只有 💰 獲利能力診斷這一段接上了。** 其餘七段的現行實作是
+   `src/ui/tabs/stock_sections/section_*.py`，每一支都直接 import L1 並自帶 widget key，
+   在本頁再掛一次會撞 `DuplicateWidgetID`。
+4. ⛔ **葉1-B ETF 明細七段**（淨值 vs 市價／折溢價帶／配息紀錄與以息養股／成分股與集中度／
+   同儕 7 維／標準差買賣帶／破發檢查）。同 3。
+
+⚠️ **線框對葉1-B 的紅隊註記**：「與個股分支**重疊近零**（13 個個股概念在 ETF 頁 0 命中、
+6 個 ETF 概念在個股頁 0 命中）—— **合併的是入口與骨架，不是內容**。」
+本頁照這句寫：骨架（form／判型／3 欄判決卡／單欄堆疊明細）兩支共用，
+**每一張卡的 label 與 facts 全部換掉，沒有一個欄位是兩邊共用的**。
+
+### §18.4 ⭐ **unknown 是灰態，不是紅態**（本頁最容易寫錯、而且錯了最像對的地方）
+
+線框葉1-C 的 `n` 欄原文就是「**第三條路 · 不是紅態**」。落地為
+**`UI_EMPTY` + `MISS_NOT_APPLICABLE`（灰）**：
+
+- **不是 `failed`** —— 判型本身是好的，只是誠實說判不出來。`classify_asset_kind` 對
+  美股／指數／興櫃／打錯的代碼一律回 `unknown`，那是**這個輸入不在本站的射程內**，
+  不是「本站壞了」。
+- **不是 `unwired`** —— 它接了，而且正常運作。
+- **不是 `idle`** —— 使用者確實叫過了。
+
+**文案**（線框原文落地）：「**無法判定這是個股還是 ETF** —— 已停在這裡，沒有替你猜」／
+「非台股代號…依 §4.6 不猜，**這不是故障，重按一百次也是同一個答案**」／
+「確認代碼；或在表單把判型改成強制個股／ETF」。
+
+⭐ **並且釘住：`is_resolved` 不得寫成 `bool(kind)`。**
+`unknown` 是一個**非空字串**（L2 的 `ASSET_UNKNOWN`），拿它當「有值」會把
+**「判不出來」畫成綠燈** —— 那正是線框葉1-C 要防的「把 unknown 塞進另外兩態」。
+落地為 `is_resolved = self.is_stock or self.is_etf`，守衛
+`tests/test_p03_inspect_view.py::TestThreeBranchesOfClassification`。
+
+**判型可手動覆寫（線框 F4，不是裝飾）**：理由是 repo 已記錄的同型事故 ——
+`station_cards.py` 記著「型別大小寫打錯一個字母 → **可信度虛高到 100% 並打開巡航 gate**」。
+故表單有一個「判型」下拉（自動／個股／ETF），判決卡的 facts **永遠**顯示
+「系統判的是什麼」與「這一輪實際用的是什麼」兩列，覆寫時兩列會不同。
+
+### §18.5 已知未解（**不得當成已完成**）
+
+1. **線框那 14 段明細，本頁一段都沒畫**（§18.3 的 4 項）。
+2. **期間與 6 個 MA 是「記錄了但沒人用」** —— K 線未接線；已在常駐 caption 明講
+   「調了不會有效」，但這仍是一組目前無下游的控制項。
+3. **`fetch_metrics` 的個股／ETF 不對稱未抹平**：ETF 拿不到日線 → L3 raise → 三格同時紅；
+   個股是 best-effort → 灰。**照實透傳**（抹平＝替其中一邊宣稱它沒說的話），
+   但與線框 `errCells` 畫的「折溢價🔴／配息🟢」形狀不同，要等 L3 把三腿拆開才做得到。
+4. **未在真部署驗過**：沙箱無外網，`live` 路徑用假 L3 注入驗。真實 FinMind／yfinance
+   回來的欄位形狀（尤其 `mj_grade` 字面、`etf_quality["stars"]` 型別）**沒有實測過**。
+5. **`_cell()` 缺值判定依 `_no_ai_profitability` 原始碼推得，未窮舉 L3 所有可能的 Status 字面**；
+   對面新增詞彙時本頁會畫成「有數字、無結論標籤」（已為此加測試），不會變紅也不會冒充綠。
+6. **冷啟動預覽用個股欄位**（未判型前顯示個股三格 idle）是實作組的判斷，**非線框明文指定**。
+7. **MA 5 與 100 在 L0 無 SSOT**（`config.py` 只有 20／60／120／240），寫成具名常數並就地標明，
+   **沒有假裝它們有出處**。
+8. **批次每次 rerun 會重跑 L3**（同頁 2 既有模式，靠 L1 內部 cache）。
+9. **`_ui_kit.single_submit_form()` 只吃 radio** → 本頁就地實作兩支表單，未改共用層。
+10. **`shared/ia_nav.py` 缺本頁 `ACTION_*` / `LEAF_*`**；**頁籤字串在 `app.py` 硬編碼**。
+11. **測試是護欄不是證明。**
+
+---
+
+## §19 IA v2 第 4 頁「💼 我的持股」畫面規格（`src/ui/views/page_hold.py`，2026-09-07）
+
+> **規格出處**：`docs/wireframes/stock_ia_v1.html` 的 `PAGES[3]`（`id='hold'`）。
+> 落地檔案與分層見 `ARCHITECTURE.md §0.13`；過程紀錄見 `STATE.md` 最新一筆。
+> **單一職責**（線框 `job` 原文）：**我已經持有的，該加、該換、該減。**
+>
+> ✅ **本頁已掛上 `app.py`**（第 4 個頁籤）。⚠️ **「💼 我的持股」（新，第 4）與既有
+> 「💼 我的持股戰情室」（舊，第 10）emoji 相同、名稱高度相似 —— 兩個都保留，
+> 是雙軌並存期的刻意並存，不是漏改。** 新頁是 IA v2 的**殼**；舊頁是**既有實作**
+> （`etf_tab_dividend_station.py`，線上已在跑的完整功能）。**不得合併、不得改名。**
+>
+> ⚠️ **這是五頁裡唯一碰使用者資產（Google Sheets 持股帳本）的頁。**
+
+### §19.0 ⭐ 唯讀四道保證（**不是宣告，是機械擋**）
+
+本頁多一條前三頁沒有的鐵律：**一律唯讀。不寫入、不刪除、不改動任何一列持股。**
+落實方式四道，**缺一道就只剩自律**：
+
+| # | 保證 | 落地方式 |
+|---|---|---|
+| 1 | **AST 白名單** | 本頁可以呼叫的 L3 符號是一張白名單，**名單外的 `from src.services… import` 即 CI 紅燈**。全部都以 `get_` / `fetch_` 開頭且在各自 docstring 自陳唯讀 |
+| 2 | **AST 黑名單** | `save_portfolio` / `delete_portfolio` / `save_stock_watchlist` / `add_to_stock_watchlist` / `create_new_sheet` / `rename_sheet` / `append_forward_test_picks` / `register_cap` / `apply_vix_veto`…**一個識別字都不准出現**（實碼零命中；docstring 內的提及不算） |
+| 3 | **憑證結構性隔離** | `BindingReadout` **沒有 `sheet_id` 欄位**（測試斷言），`load_binding()` 實碼裡連這個字都不出現 —— **讀了就有機會漏出去**。畫面只回答「有沒有綁」這個布林 |
+| 4 | **寫入型功能一律 `unwired`** | 且 `why` 用 `READONLY_WHY`（「本質是寫入，本頁不做」）而**不是** `HOLDINGS_WHY`（「缺 L3」）。測試釘住兩者不得混 —— 混了等於**騙人說「補一支 L3 就會有」** |
+
+守衛：`tests/test_p04_hold_view.py::TestReadOnly` ＋ `::TestHoldingsServiceIsReadOnly`。
+
+⚠️ **一個已揭露的例外**（「唯讀」這種全稱句不該有沒講出來的例外，`CLAUDE.md §-2` 規則 6）：
+`allocation_service.get_allocation()` 會寫 `st.session_state` 的**兩個記憶化快取鍵**。
+那是 session 內的計算快取，**不碰 Google Sheets、不碰任何使用者資產**，且寫入發生在 L3 內部。
+
+### §19.1 兩葉結構與各區出處
+
+| 葉 | 葉名常數 | 內容 |
+|---|---|---|
+| 葉1 | `LEAF_WARROOM_TITLE`＝「戰情室（1️⃣~6️⃣ ＋ 80/20 配置偏離）」 | ①~⑦ |
+| 葉2 | `LEAF_SETUP_TITLE`＝「組合設定（＝組合管理＋Sheet 綁定）」 | 表單（唯一的 `st.form`）＋ 綁定兩張卡 ＋ 持股列預覽 ＋ 未接線兩項 |
+
+| 區 | 內容 | 出處 |
+|---|---|---|
+| ① 結論三張卡 | 該做什麼／訊號可信度／需要處理 | L3 `dividend_station_service.build_station_digest` ＋ `compute_portfolio_totals`；可信度分母走 L4 `station_cards.aggregate_judged` / `tally_states`（**與既有戰情室同一把尺**） |
+| ② 同一個名詞，兩套刻度 | **常駐揭露、非摺疊** | L0 `shared/station_specs.py`（純常數，零 I/O） |
+| ③ 戰情表（燈牆 ＋ VIX） | 235 加碼燈 / 3-3-3 / 健檢四盞 | L3 `get_station_rows` / `fetch_vix`；燈牆渲染走 L4 `station_cards.render_light_wall` / `render_legend` |
+| ④ 換股建議 | 換出（體質轉弱）→ 換入（來自觀察清單）＋ 已套用總經位階 | L3 `get_switch_in_candidates` ＋ `build_switch_advice` ＋ `get_station_macro` |
+| ⑤ 80/20 配置偏離 ＋ 衛星停利 | 核心／衛星偏離、停利觸發 | L3 `build_station_digest`（內含 `compute_allocation_split` ＋ `flag_take_profit`）；目標與門檻讀 L0 `shared/dividend_station_thresholds.py`，**本頁不寫死任何一個數字** |
+| ⑥ 組合深度分析 | 再平衡・核心／衛星・壓力測試・VaR・配息現金流・葡萄串領息（**3 欄 × 2 排，不是 `columns(6)`**） | 僅「核心／衛星」接線，其餘五項未接線（§19.3） |
+| ⑦ AI 戰情總結 | 唯一推播出口 | **未接線**（§19.3） |
+| 葉2 | 表單／綁定／持股列預覽／Sheet 選擇／觀察清單管理 | L3 `portfolio_binding_service.get_binding_state`；**持股清單走本批新增的 L3 `holdings_service.get_holdings`** |
+
+**建議持股水位一律走 L3 `allocation_service.get_allocation()` 動態取**
+（守衛 `TestNoHardcodedPositionPct`：畫面上不得寫死任何一個 % 數字）。
+
+### §19.2 四態對映 —— ⭐ **三種「沒有持股」絕不可混**
+
+```
+還沒按 🚀（或選了「只讀市場端」）        → UI_IDLE    灰。還沒有人叫過。
+讀了，發現你還沒綁 Sheet                → UI_EMPTY   灰。有效結果，不是故障。
+讀了，綁到了，但那本 Sheet 一本組合都沒有 → UI_EMPTY   灰。與上一條**不是同一件事**。
+讀了，Google 那端掛了                   → UI_FAILED  紅。唯一准用紅色的狀態。
+```
+
+⭐ **「空的組合」是有效結果，不是故障。** 一個剛註冊、還沒填任何一列的使用者，
+看到的應該是「你的 Sheet 綁好了，只是還沒有內容」，**不是一片紅色的錯誤**。
+把它畫成紅色＝ v3 §02 前半句要杜絕的「假性錯誤滿版」，而且會讓**真的**壞掉那一次沒有人看得見。
+
+⚠️ **這裡有意識地偏離線框**：線框葉2 的 `err` 把「已綁定但讀不到任何持股列」整塊畫成 🔴
+並把「可能是空表」列為原因；**本實作把空表拆出來走灰**，只有真讀不到走紅。
+
+⭐ **「還沒綁」與「綁了但空」也不可混** —— 前者要你去綁，後者要你去填，**指路句完全不同**。
+結構性解法：**拆成兩張卡**（`build_binding_card` 判「有沒有綁」、`build_portfolio_count_card`
+判「綁到的那本裡有幾本組合」），**沒有任何一格需要同時代表兩件事**。沒綁時第二張卡是 `idle`
+—— 這與 L3 契約對齊：`BindingState.portfolio_count=None` 的註解寫著「未知；**不腦補 0**」。
+
+**`requested=` 的兩個 gate ＋ 一個「不需要 gate」**：
+
+1. **戰情室全部區塊 ＋ 葉2 持股列預覽** ← `SS_APPLIED_HOLD in session_state`
+   （`"_p04_applied_hold"`，只有 `_ui_kit.single_submit_form()` 的 submit 分支會寫）。
+2. **綁定狀態那兩張卡** ← 上面那個 gate **並且**使用者這一輪選了「連 Google Sheet 綁定狀態
+   一起讀」。**選「只讀市場端」時本頁真的不會發那一次網路呼叫。**
+3. **② 兩套刻度是常駐的**，輸入是 L0 的 `@dataclass(frozen=True)` 常數表、**零取數**，
+   故傳**字面 `True`** —— 那是**陳述**「這個揭露永遠開著」，不是恆真式。
+   （恆真式的問題不在於它恆真，而在於它**假裝自己在判斷**。）
+
+⚠️ **本頁唯一會判 `UI_DEGRADED` 的是 ② 兩套刻度，而且不是硬湊的**：它直接讀 L0
+`station_specs` 的 `discriminative` 旗標。實測（量測日 2026-09-07）`KEY_STOCK_TREND`
+（財報趨勢）標了 `discriminative=False`，而那盞燈正是本頁個股「健檢」欄的輸入之一 ——
+**所以本頁這一側的刻度確實有一個已失準的輸入**。旗標若被改回 `True`，這張卡會**自己**變回 live。
+
+### §19.3 未接線八項與「去哪補」（**四類，不共用同一句**）
+
+**(a) 缺 L3 wrapper**（純函式在 L2 `compute.etf.etf_calc`，`src/services/` 連 wrapper 都沒有）：
+**再平衡 · 壓力測試 · VaR**。本頁一律走 L3，**不會為了畫一格就直呼 L2**。
+
+**(b) 單位不同 ＋ 要新增畫面元件**：**配息現金流**。L3 `dividend_tax_service.get_dividend_tax_view()`
+在，但它吃**股數**，而持股帳本記的是**張**。那個「1 張＝1000 股」的換算**不可以寫在本頁** ——
+L3 `compute_portfolio_totals()` 已點名（留在畫面層等於讓同一個乘法散在 UI 各處，
+`CLAUDE.md §4.1` 漏乘＝**1000 倍低估**）。它還要一個「綜所稅邊際稅率」輸入，
+**新增畫面元件要先出線框草稿給客戶拍板**（`CLAUDE.md §-1.5` A-8）。
+
+**(c) 實作在 L5 且寫死 widget key**：**葡萄串領息**（`tabs.grape_ladder`）——
+在本頁再掛一次會撞 `DuplicateWidgetID`，那不是「畫得醜」，是**整頁當場拋例外**。
+
+**(d) 不是缺 L3，是缺授權**（本質是寫入，本頁一律唯讀）：**Sheet 選擇 · 觀察清單管理**。
+
+**⑦ AI 戰情總結**另成一類：四支 L3 都在、digest 也真的算得出來，**卡住的是畫面** ——
+線框在這一區畫了一顆單獨的 `st.button`［⚡ 生成 AI 總結］，而新增視覺元件要先出草稿拍板。
+⚠️ **不會用「自動生成」繞過那顆鈕** —— 每次 rerun 都打一次付費 AI，比少一顆鈕嚴重得多。
+**這是刻意偏離線框，請客戶覆核是否接受。**
+
+### §19.4 ⭐ ④ 換入候選**必須**帶 `exclude=已持有代號`
+
+`get_switch_in_candidates()` 需要 `exclude=`。**少了它，L3 會從全市場挑，
+於是畫面會叫使用者買他已經持有的股票** —— 那不是「降級的建議」，是**錯的建議**。
+故在持股清單接上之前，④ **刻意整塊不出，一半都不出**；接上之後才解禁並傳入 `exclude`。
+
+配套：L3 `holdings_service` **會去重** —— 同一檔同時出現在 Portfolio（held）與 Watchlist（觀察）時
+**只留 held 那一列**，比對走 L0 `normalize_ticker()`（去 `.TW` / `.TWO` 再比），
+否則 `2330` 與 `2330.TW` 會被當兩檔、`exclude` 就會漏掉一個。
+
+**`holdings_service` 的 §1 Fail Loud 切法**（兩半不同待遇，理由不是潔癖）：
+
+- **投資組合（真正持有的部位）讀取失敗 → `raise`。** 80/20 偏離、未實現損益、停利判定的
+  **分母都是整份清單**，少一半算出來的百分比**看起來完全正常、實際上是錯的**。
+- **觀察清單（還沒買的候選）讀取失敗 → 不 raise，記在 `watchlist_error`。**
+  它不進任何金額計算，只影響「換入優先從觀察清單挑」；為它把整頁變紅＝把「一格壞」放大成
+  「整頁壞」。⚠️ **但不可被靜默吞掉** —— 呼叫端拿得到 `watchlist_error`，**必須顯示**。
+- **沒有綁 Sheet ≠ 失敗** → 回 `bound=False` ＋ 空清單，由呼叫端畫成灰的「你還沒綁」。
+
+⚠️ **顯式傳 `sheet_id=`**（踩過的坑）：L1 四支讀取函式都是 `@st.cache_data(ttl=TTL_15MIN)`，
+`sheet_id` 是**參數＝快取鍵的一部分**。傳 `None` 時鍵**恆為空** →
+**換一本 Sheet 之後 15 分鐘內會拿到上一本的資料（張冠李戴）**。
+
+### §19.5 實作期抓到並修掉的兩個真 bug（寫下來防重犯）
+
+1. **`count_gate`**：整支 L3 拋例外時，第二張卡若拿到 `requested=False` ＋ `error`，
+   L0 會當場 `ValueError` → **一張該畫的紅卡變成整頁未捕捉例外**。
+   已改 `count_gate = count_requested or (requested and error)` ＋ 回歸測試。
+2. **渲染順序**：表單在葉2、gate 被葉1 消費，而 `st.tabs` 兩葉**同輪都跑** →
+   葉1 先跑會讀到寫入**前**的 session，按了鈕戰情室仍顯示「尚未執行」且不會自動 rerun。
+   已改為「先把表單畫進葉2 容器 → 再畫葉1 → 回葉2 畫下半」，AST 測試釘住此順序
+   （`TestFormRunsBeforeItsConsumers`），AppTest 實跑驗證 submit 後「尚未執行」確實消失。
+
+### §19.6 已知未解（**不得當成已完成**）
+
+1. ⭐ **`live` 態沒有實機驗過** —— 沙箱無 Google 憑證、proxy 對 Yahoo 回 403。
+   實跑到的只有 idle／empty／failed／unwired／degraded；「真的綁到一本 Sheet」
+   「真的拿到 VIX 數字」「真的拿到總經位階」三種 `live` 畫面**未實測**。
+2. ⭐ **送出後每次 rerun 會重跑整段編排** —— 本頁**不得**存 session（測試禁止），
+   網路層由 L1 `@st.cache_data` 擋住，**逐檔純運算會重算**。既有 🏦 ETF ›存股戰情室 是靠
+   自己存 session 避開的。**這是已知代價，不是沒想到；沙箱量不到實際延遲。**
+3. **唯讀保證只證到本檔的靜態文字** —— AST 白／黑名單證明「本檔沒有任何一條通往寫入面的路」，
+   **不能**證明那幾支 L3 執行時絕不寫東西。讀過其 docstring 自陳「純讀不寫」，
+   但**沒有逐行追進 L1 驗證**。
+4. **「`src/services/` 原本沒有任何一支回傳持股清單」是單組窮舉**（AUD-5 稽核組），
+   **未經第二組複驗**。`holdings_service` 的存在**不依賴它成立**。
+5. **「單一持股」邊界跑不到**（跑的是最接近的 `portfolio_count == 1`）。
+6. **② 判 degraded 的推導鏈是單組讀碼得到的**（`KEY_STOCK_TREND.discriminative=False`
+   是實測，但「它影響本頁健檢欄」那條鏈**未經第二組複驗**）。旗標翻面時卡會自己變回 live，
+   故錯了也不會寫死一個假 degraded。
+7. **`st.tabs` 容器重複進入只在 AppTest 驗過，未在真瀏覽器驗。**
+8. **「兩套刻度」的兩句 prose 在本頁與頁 5 各有一份**（漂移風險；正解是 L0
+   `station_specs` 補 `scale_shape` 欄位）。
+9. **`shared/ia_nav.py` 缺本頁 `ACTION_*` / `LEAF_*`**；**頁籤字串在 `app.py` 硬編碼**。
+
+---
+
+## §20 IA v2 第 5 頁「📖 憑什麼」畫面規格（`src/ui/views/page_why.py`，2026-09-07）
+
+> **規格出處**：`docs/wireframes/stock_ia_v1.html` 的 `PAGES[4]`（`id='why'`）。
+> 落地檔案與分層見 `ARCHITECTURE.md §0.13`；過程紀錄見 `STATE.md` 最新一筆。
+> **單一職責**（線框 `job` 原文）：**解釋數字怎麼來、資料新不新鮮、以及直接問。**
+>
+> ✅ **本頁已掛上 `app.py`**（第 5 個頁籤）。⚠️ **本頁與三個既有頁籤功能重疊，
+> 全部刻意並存、不合併不改名**：既有「🔧 工具箱」底下的 **🔎 資料診斷** 與 **📚 教學**、
+> 以及頂層最後的 **🧬 AI 問答**。新頁把這三塊收成一頁三葉。
+> ⚠️ 葉3 與既有 🧬 AI 問答**走同一支 L3**（`services/ai_qa_service.run_agent`），
+> 差別在**動線與 session key，不是取數來源不同**；葉2 與既有 🔎 資料診斷是
+> **兩套不同實作、讀的來源部分重疊，誰也不是誰的 wrapper**。
+>
+> ⭐ **這頁是全站四態紀律的示範頁。**
+
+### §20.0 ⭐ 四道防假綠燈（本頁的存在理由）
+
+本頁的職責就是「**誠實報告哪些源是壞的**」。也就是說：
+**一個源取不到，那張卡必須顯示它取不到 —— 不是跳過不畫、也不是畫成綠色。**
+
+| # | 防線 | 落地方式 |
+|---|---|---|
+| 1 | **只有 `last_status == 'ok'` 能變 live** | 認不得的字面值一律走**紅**，**不 fallback 成綠、也不成灰**。守衛跑 8 種輸入（含 `'OK'` / `'success'` / 空字串）：`TestNoFakeGreenLight` |
+| 2 | ⭐ **形狀怪的那一列照畫成紅，不跳過** | 實作組自審時從「跳過並 log」改掉 —— **跳過就是本頁最隱形的那種假綠燈** |
+| 3 | ⭐ **量不到的來源具名畫出來** | 這面牆只看得到掛了 `@monitored` 的 fetcher，而 **FRED / FinMind 額度 / TWSE 收盤一支都沒掛** —— 不畫的話畫面會是**滿版綠**。故把那三個來源**具名畫成「未接線」灰卡**。守衛 `TestUnmeasuredSourcesAreVisible`；線框示意的 `62%` **明文禁止出現在真畫面**（有守衛） |
+| 4 | **常駐涵蓋率揭露** | 牆下方一段**常駐** `COVERAGE_DISCLOSURE`，明說「**這面牆上沒有紅燈，不等於全站都好**」。AST 確認它**沒有被包進任何 `if`** |
+
+### §20.1 **三葉**結構與各區出處（五頁裡唯一的三葉頁）
+
+| 葉 | 葉名常數 | 內容 | gate |
+|---|---|---|---|
+| 葉1 | `LEAF_EDU_TITLE`＝「教學」 | 紅綠燈怎麼判・門檻出處・健康評分六因子・**兩套「健康度」刻度的差別** | **靜態·無 gate**（線框：「這頁沒有灰態」） |
+| 葉2 | `LEAF_DATA_HEALTH_TITLE`＝「資料體檢」 | 使用者版**常駐 3 欄燈牆** ＋ 工程師版摺疊 | 工程師版＝**1 個 checkbox 全有全無、不加 form** |
+| 葉3 | `LEAF_QA_TITLE`＝「AI 問答」 | `st.chat_input` | **天然 gate**（送出即 submit） |
+
+| 區 | 出處 |
+|---|---|
+| 來源健康（葉2 使用者版 ＋ 工程師版 Fetcher 監控） | **L0** `shared.fetch_monitor.get_monitor_registry()` —— 純 in-process dict，**零 I/O、零網路** |
+| 燈號規格（葉1 門檻表 ＋ 葉2 未接線／已失準卡） | **L0** `shared/macro_buckets.py`（`BUCKET_DANGER_SPECS` / `REFERENCE_TREND_SPECS`）＋ `shared/station_specs.py`（`STATION_SPECS`）。`unwired_reason` / `degraded_reason` / `no_level_reason` **原文透傳**（線框 note 明文要求「直接讀自 SSOT」） |
+| 葉3 AI 問答 | **L3** `services.app_ai_service.get_gemini_api_key` ＋ `services.ai_qa_service.run_agent` |
+
+⚠️ **為什麼葉1／葉2 走 L0 而不是 L3**：它們要的東西**本來就住在 L0**（規格常數表、
+in-process 呼叫紀錄），**中間沒有任何取數**。硬加一層 L3 pass-through 正是
+`CLAUDE.md §8.1` step 6 點名的「用不到的抽象」；**L5 → L0 不受 §8.2 五條硬規則任何一條限制**。
+**「一律走 L3」規範的是「取數」，不是「讀常數」。**
+
+⚠️ **本頁一支診斷面板都沒有 import**（`src/ui/pages/{data_coverage,api_diagnostic,
+health_inspector,data_registry_panel,reconcile_panel,calibration_ui}.py`）——
+它們自己直接讀 `st.session_state` 或直呼 L1，**把它們拉進來等於把違憲一起繼承**。
+
+### §20.2 四態對映 —— 三種狀態絕不可混
+
+```
+還沒打開進階診斷            → UI_IDLE   ⬜ 還沒有人叫過。
+打開了，但某個源這輪沒回    → **有效結果**：那一盞自己 idle／empty，
+                              **整段診斷仍然是 live**（一格沒回不把整段染色）。
+診斷本身掛了（L0 登錄表讀不出來）→ UI_FAILED 🔴 唯一准用紅色的狀態。
+```
+
+⛔ **把「還沒打開」畫成紅色**＝ v3 §02 前半句要杜絕的「假性錯誤滿版」，
+而滿版假紅字會讓**真的**壞掉那一次沒有人看得見。
+⛔ **把「某一源沒回」升級成「整段診斷壞了」**＝ 用一格的狀態去代表一整段。
+結構性解法：**狀態掛在卡上，不掛在區塊上**；整段的狀態由 `build_engineer_card()`
+**只看「L0 登錄表讀不讀得出來」**，不看任何一盞燈的死活。
+
+**`requested=` 的三個 gate ＋ 一個「不需要 gate」**：
+
+1. **葉2 每一盞來源燈** ← `SourceProbe.called`，來自 L0 `fetch_monitor` 的 `last_status`。
+   ⚠️ **這不是從資料反推**：`last_status` 是**呼叫紀錄**（`@monitored` 在 import 時寫
+   `'未執行'`、真被呼叫時改寫），**不是那支 fetcher 抓回來的東西**（那是 `last_rows`，
+   本頁**沒有**拿它當 gate）。守衛 `TestCallRecordIsTheGateNotTheRows`。
+2. **葉2 工程師版整段** ← `EngineerRequest.opened`，即那**一顆** `st.checkbox` 的回傳值。
+   沒勾 → 六個面板**一個都不建構**。
+3. **葉3** ← `QaRequest.asked`，即 `st.chat_input` 這一輪有沒有回傳字串。
+4. **葉1 與所有 L0-only 的卡** 走 `build_l0_card()`，傳**字面 `True`**，
+   而且**全檔的字面 `requested=` 只有那一處**（守衛 `TestLeafOneHasNoGate`）。
+
+**兩個本頁特有的狀態判準**：
+
+- **一盞紅不把整段診斷染色**（見上）。
+- **`emits_level=False`（KD）不給狀態燈，走獨立 caption** —— 七態裡**沒有一態講得對它**。
+  ⚠️ **這是實作組的判斷，非線框明文。**
+
+**⚠️ 本頁刻意一個 `st.form` 都沒有。** 線框葉2 原文「內含 **1 個 checkbox 全有全無** ·
+**不加 form**」，且線框 DECISIONS #7 明文**撤回**了 v1 的 `form_diag` 提案 ——
+實測 `app.py` 是 **1 個** checkbox、六個 panel 檔內 checkbox **各為 0**，
+**要解的問題不存在**。一個 widget 包 form **省不到任何一次 rerun**，只是多一次點擊。
+守衛 `TestEngineerGateHasNoForm`。（`st.chat_input` 同理是天然 gate，
+而且 Streamlit 明文禁止把它放進 `st.form`。）
+
+### §20.3 未接線五項與「去哪補」（**各自卡在不同地方**）
+
+1. ⛔ **FRED / FinMind 額度 / TWSE 三個具名來源的健康燈** → 那幾支 L1 fetcher
+   **沒有掛 `@monitored`**；FinMind 額度更是**連 fetcher 都還沒有**（額度是帳號層級資訊，
+   不在任何回傳裡）。**它們仍被具名畫出來**（防線 3）。
+2. ⛔ **健康評分六因子的「因子名 ＋ 配分」** → 權重是 L2
+   `compute/scoring/scoring_helpers.calc_health_score` 內的 **inline 數字**，
+   L0 `shared/position_throttle.py` 的註解另抄了一份（**兩份會漂移**）。
+   **沒有任何一份是可讀的資料結構。**
+3. ⛔ **既有 1,582 行靜態教學內容的搬遷** → 線框 DECISIONS #9 裁決「原樣搬過來」，
+   但那是**跨檔搬遷**，屬 `CLAUDE.md §8.4` step 4 的範圍問題，**本批不夾帶**。
+4. ⛔ **工程師版六個面板裡的五個**（資料源清單／雙演算法對帳／API 根因／原始資料表／門檻校準）
+   → 現行實作都在 L5，且各自直接讀 `st.session_state` 或直呼 L1 / `scripts/`。
+5. ⛔ **AI 問答的「就地設定金鑰入口」** → 那是**收憑證**，需要客戶先拍板
+   「這一頁可以收金鑰」，**本批不做**。
+
+### §20.4 已知未解（**不得當成已完成**）
+
+1. ⭐ **本頁重抄了 L0 的三個狀態字面值**（`'未執行'` / `'ok'` / `'failed'`）——
+   L0 `shared/fetch_monitor.py` **沒有匯出常數**。**這是第二真相源**，已標為交接事項；
+   守衛 `TestStatusLiteralsMatchL0` 直接掃 L0 原始碼，漂移即紅燈，
+   另有一條在 L0 真的匯出常數時會轉紅提醒改成 import。
+2. **「全 repo 只有 7 支掛 `@monitored`」是單組 grep**（量測日 2026-09-07）；
+   「FRED / TWSE 收盤沒掛」是同一次 grep 推出的。**未經第二組複驗。**
+3. **「兩套刻度」的兩句 prose 在本頁與頁 4 各有一份**（本頁刻意不 import 頁 4，因當時頁 4
+   正被另一組改）。**確實是漂移風險**，正解是 L0 `station_specs` 補 `scale_shape` 欄位。
+4. **`DIRECTION_LABELS` 中文對映是實作組寫的**，L0 無此表；認不得的方向字面值**原樣顯示、
+   不編說法**，但這幾句理想上仍該住 L0。
+5. **AI 問答只驗到假物件與無金鑰路徑** —— 沙箱無 `GEMINI_API_KEY`，`run_agent` 的真實往返
+   （多輪工具呼叫、history 接續）**沒有實測到**。
+6. **`emits_level=False` 不給狀態燈是實作組的判斷，非線框明文。**
+7. **工程師版 5 個面板未接線的成因是單組逐檔閱讀**，**未窮舉**確認「沒有任何其他 L3 能供給它們」。
+8. **`_scale_rows()` 查無 spec key 時跳過並 log**，與防線 2 的「不跳過」**方向相反**；
+   差別在「規格表沒有這盞燈」（畫出來會憑空生出不存在的燈）vs「這盞燈存在但狀態壞了」。
+   **這個區分是實作組的判斷，值得複驗。**
+9. **部署環境沒實測到**：Streamlit Cloud 的 `st.secrets`、真實多頁交互只在單一 process 內模擬過。
+10. **兩支 `st.chat_input` 可能同頁共存**（既有 `tab_ai_chat` 與本頁葉3）。既有那支**未帶 key**
+    （走自動 ID），故 widget ID 不同、不會 `DuplicateWidgetID`；總管實測冷啟動渲染樹**只有 1 支**、
+    互動 0 例外 —— 但**「兩支同時渲染」的狀態沒有測到**。
+11. **`shared/ia_nav.py` 缺本頁 `ACTION_*` / `LEAF_*`**；**頁籤字串在 `app.py` 硬編碼**。
