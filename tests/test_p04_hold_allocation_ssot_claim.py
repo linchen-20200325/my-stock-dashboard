@@ -170,7 +170,8 @@ def _parallel_position_sites() -> dict[str, list[str]]:
 
 def _screen_strings() -> list[str]:
     """頁 4 的所有字串常數 ＋ docstring（＝會被讀到的文案的靜態上界）。"""
-    return [_n.value for _n in ast.walk(ast.parse(_VIEW.read_text("utf-8")))
+    _src = _VIEW.read_text(encoding="utf-8")
+    return [_n.value for _n in ast.walk(ast.parse(_src))
             if isinstance(_n, ast.Constant) and isinstance(_n.value, str)]
 
 

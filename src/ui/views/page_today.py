@@ -214,6 +214,7 @@ from src.ui.tabs.tab_today import (
     Card,
     Note,
     applied_update_mode,
+    build_status_bar_card,
     build_status_bar_cards,
     build_today_blocks,
     classify_macro_contract,
@@ -953,10 +954,73 @@ def build_key_alert_tile(alerts: Mapping[str, Any] | None, *,
             where=NO_LOAD_EXIT_WHERE)
     # degraded 是「**有值**、燈也亮，只是判讀不完整」 → 燈要照出。
     # 其餘灰態 / 紅態沒有評估結果，燈號頻道一律留白（未評估 ≠ 綠）。
+    #
+    # ⚠️ **【FIX-2】2026-09-07 稽核提問：degraded 會不會亮出一顆「綠」？**
+    # （那會是災難：degraded 下的綠只代表「急變層 0 紅 0 黃」，而門檻層
+    #  `threshold_scanned=False` **根本沒掃**，讀起來卻像 all-clear。）
+    # **查證結論：在上游契約下不可達 → 本輪不改行為，只把前提釘住。**
+    # 推導（三步，每一步都可查）：
+    #   1. degraded ⟸ `discriminative=False` ⟸ `threshold_scanned=False`；
+    #      而 `has_value=bool(_items) or threshold_scanned` ⇒ 此時
+    #      **`_items` 必為非空**（空的話是 `empty` 灰態，走不到這裡）。
+    #   2. `_items` 的唯一生產者是 L2 `daily_key_alerts.collect_key_alerts()`
+    #      （見 `_load_key_alerts()`，本頁沒有第二個來源）。該函式的兩個
+    #      appender **只產 `severity` 0（紅）/ 1（黃）**：`_threshold_items()`
+    #      先 `if lvl not in ('red','yellow'): continue`，`_delta_items()`
+    #      兩處 append 寫死 0 / 1。**它沒有「綠 item」這種東西。**
+    #   3. 同一支函式的 `n_red` / `n_yellow` 是**對 `items` 數出來的**
+    #      ⇒ `n_red + n_yellow == len(_items)` ⇒ `_items` 非空 ⇒ 至少一紅或
+    #      一黃 ⇒ `_level` 只會是 `red` / `yellow`，**不可能是 `green`**。
+    # ⇒ 「degraded + 綠」只有在**呼叫端手捏一個 `collect_key_alerts` 產不出
+    #    的 mapping**（有 items 卻 0 紅 0 黃）時才拼得出來 —— 那是稽核組說的
+    #    「程式上可達」，不是上游契約可達。
+    # ⚠️ 這個結論**建立在第 2、3 步那個前提上**（每個 item 都是紅或黃）。
+    #    哪天有人替 `collect_key_alerts` 加一種「綠 / 提示」item，前提就破了，
+    #    這裡就會真的亮出誤導性的綠燈 →
+    #    `tests/test_p01_today_view.py::TestDegradedGreenIsUnreachableUpstream`
+    #    **會當場轉紅**，逼下一個人回來改這一段（而不是靜靜地錯下去）。
     _sig = (_sig_zh, _sig_hex) if _state == UI_DEGRADED else ("", "")
     return Tile(Card(key="key_banner.alerts", label=_label, state=_state,
                      note=_note),
                 signal_text=_sig[0], signal_color=_sig[1], facts=_facts)
+
+
+#: 位階卡的標題。**刻意不再宣稱本卡是本站位階的唯一出處**（2026-09-07
+#: FIX-4）—— 那是一句要窮舉全 repo 才成立的全稱句，而獨立稽核當天實測
+#: 它是**假的**（點名的四處平行判讀見 `REGIME_SCOPE_NOTE`）。
+#: 現行寫法是**單點可驗**的：
+#: 這張卡的值取自哪一個契約，讀一行 code 就能驗，不必相信任何全稱宣稱。
+#: 三個分支（live / degraded / 其餘）共用這一個常數 —— 標題只准定義一次，
+#: 不然改了一處、另外兩處還在對使用者說舊話。
+REGIME_CARD_LABEL: str = "市場位階（總經契約）"
+
+#: 位階卡的誠實揭露（掛 `facts`，**每一態都出**）。
+#:
+#: 2026-09-07 獨立稽核實測：本卡原標題那句「唯一出處」的宣稱是**假的**。
+#: canonical 確實是 L3 `macro_state_locker.get_macro_state()`（仲裁邏輯在
+#: L0 `shared/regime_arbiter.arbitrate_regime()`），但**全站另有未經這個
+#: 仲裁的平行判讀，而且都是活線**：
+#:   · `src/ui/tabs/macro/section_cross_ai.py` 的「① 目前總經位階」
+#:     （自己用 OECD CLI / PMI × 台灣出口 YoY 判 6 態，**與本卡正面撞名**）
+#:     與「⑤ 結論」（自建 `_bull_score` / `_bear_score` 投票 → 整體偏多 /
+#:     偏空 / 溫和偏多 / 中性觀望）
+#:   · `src/compute/macro/macro_helpers.classify_long_term_regime()`
+#:     （docstring 自稱「長期總經位階判讀」，4 態，接到「雙速合議」）
+#:   · `src/ui/tabs/macro/section_news_ai.py` 直讀
+#:     `macro_state.json['market_regime']` 印成「市場體制」（繞過來源優先序）
+#: 那四處住在**舊版分頁**，客戶明令本批不得修改 → 能改的只有**本頁的宣稱**。
+#: ⚠️ 本揭露點名的四處**本身也是一種宣稱** —— 一份假的「未納管清單」跟
+#: 一句假的唯一性宣稱一樣糟，所以它由 `tests/test_p01_today_view.py::
+#: TestNoGlobalUniquenessClaim` **反向釘住**（哪天真的被收斂掉 → 轉紅，
+#: 回來改這段文案，而不是留一份過期的點名）。
+REGIME_SCOPE_NOTE: str = (
+    "本頁一律取自 L3 總經契約 `get_macro_state()`"
+    "（仲裁在 L0 `regime_arbiter.arbitrate_regime()`）。"
+    "舊版「🌍 市場環境」分頁另有**未經這個仲裁**的平行判讀"
+    "（「① 目前總經位階」/「⑤ 結論」的多空計分 / 雙速合議的長期位階），"
+    "新聞頁另有直讀 `macro_state.json` 快照印出的「市場體制」。"
+    "**兩邊不一致是預期的；本頁以這張卡為準。**"
+)
 
 
 def build_verdict_tiles(*, alloc: Any, alloc_error: str,
@@ -999,7 +1063,10 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
     #  帶下來的 —— 同一次仲裁的兩個出口，不會一個叫過一個沒叫過）。
     _regime_state = classify_macro_contract(regime, error=regime_error or None)
 
-    # ① 能不能出手 / 出手到幾成 —— 全站唯一出處 `get_allocation()`。
+    # ① 能不能出手 / 出手到幾成 —— **本頁一律取自** L3 `get_allocation()`。
+    #    （2026-09-07 FIX-4：原文宣稱這是本站的唯一出處，改成單點可驗的
+    #     說法 ——「整個 repo 只有這一處」要窮舉才成立，本組沒有驗過它，
+    #     依 §-2 規則 6 就不寫；「本頁取自哪裡」讀一行 code 就能驗。）
     #    本檔**不寫任何水位數字**，一律取 `range_text` / `posture`（動態）。
     #    ⚠️ `requested=` **不得**寫成 `alloc is not None`（恆真式，見
     #    `contract_attempted()` 的 docstring）。
@@ -1075,26 +1142,66 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             note=Note(now="**指標危險度：尚未載入**", why=_why,
                       where=NO_LOAD_EXIT_WHERE))))
 
-    # ③ 市場位階（全站唯一出處 `get_macro_regime()`）。
+    # ③ 市場位階 —— 本頁取自 L3 契約（見 `REGIME_CARD_LABEL` /
+    #    `REGIME_SCOPE_NOTE`：原標題的唯一性宣稱實測為假，已改）。
     #    狀態沿用 `tab_today.classify_macro_contract()` —— 那支函式讀的是契約
     #    自己的 `source` 分支標記（上游帶下來的旗標），不是拿資料反推。
     #    ⚠️ 這一張**完全不看 16 盞燈**（修前寫 `and parallel is not None`，
     #       危險度那半組不出來就會把一個 live 的位階畫成「尚未評估」）。
     _reg = dict(regime or {})
+    # `REGIME_LABEL` 是 L0 SSOT（`parallel_verdict()` 讀的也是這一份）。
+    # **本檔不另立一份 regime→中文對照**（§2.1 SSOT）。
+    _rk = str(_reg.get("regime") or "unknown").strip().lower()
+    _rlabel = REGIME_LABEL.get(_rk, REGIME_LABEL["unknown"])
+    _rsource = str(_reg.get("source") or "—")
     if _regime_state == UI_LIVE:
-        # `REGIME_LABEL` 是 L0 SSOT（`parallel_verdict()` 讀的也是這一份）。
         # live ⇒ `is_loaded=True`，所以這裡不可能對一個未評估的契約印出方向
         # （`get_macro_state` 實測：`source == 'unloaded'` ⟺ `is_loaded=False`）。
-        _rk = str(_reg.get("regime") or "unknown").strip().lower()
         _tiles.append(Tile(
-            Card(key="verdict.regime", label="市場位階（全站唯一出處）",
+            Card(key="verdict.regime", label=REGIME_CARD_LABEL,
+                 state=_regime_state, value=_rlabel),
+            signal_text=_rlabel,
+            facts=(("生效分支", _rsource), ("位階的出處", REGIME_SCOPE_NOTE))))
+    elif _regime_state == UI_DEGRADED:
+        # ⚠️ **【FIX-1】2026-09-07：degraded 修前掉進下面那個 `else`。**
+        # 修前的判斷是 `if _regime_state == UI_LIVE: ... else: ...` ——
+        # **所有非 live 的狀態（含 `UI_DEGRADED`）都走 else**，於是對一個
+        # `is_loaded=True`、**有值**的契約印出「市場位階：尚未評估」＋
+        # 「L3 canonical 契約四條來源本輪皆無值」。**那是假敘述**：
+        # degraded 的前提就是有值 —— L0 `shared/station_specs.py:139`
+        # 「`discriminative=False` → 燈會亮、也有等級，只是門檻已失去判別力」、
+        # 同檔 `:527`「degraded（**有值、燈照亮**，只是別照門檻讀）」。
+        # （實測可達：`macro_state_locker.get_macro_state()` 走 `_file_ok`
+        #  分支時 `source=SOURCE_FILE_RULE_ENGINE` ⇒ `discriminative=False`，
+        #  而同一個分支 `_is_loaded=True`、`regime` 是真的位階值。）
+        #
+        # **位階本身照印**：它是「這個值落在哪一段」的**觀測**，不是 pass/fail
+        # 的**判決**；留白會把使用者本來看得到的東西藏起來。免責聲明由狀態
+        # 頻道的「🟠 門檻已失準」chip ＋ 下面的三要素負責。
+        #
+        # ⚠️ 文案**不自己另寫一份**：`tab_today.build_status_bar_card()` 對
+        # **同一個契約的同一個狀態**已經有經過推敲的說法（快照 / 時間不明 /
+        # 不編一個時間），這裡直接取用**它產出的 `Note`** —— 同一支純函式、
+        # 同一組輸入 ⇒ 同一段話，不是一份會漂開的複本（§2.1 SSOT）。
+        # 兩處的態一定一致：`error` 在 `classify_ui_state` 的順序（4）排在
+        # `discriminative`（6）之前 ⇒ 走到這裡就代表 `regime_error` 是空的，
+        # 對面拿同樣的輸入只會得到同一個 `UI_DEGRADED`。
+        # `Card.__post_init__` 保證非 live 必附 `Note`；真的取不到就讓
+        # `Card(...)` 當場 fail loud，**不吞**（§1）。
+        _tiles.append(Tile(
+            Card(key="verdict.regime", label=REGIME_CARD_LABEL,
                  state=_regime_state,
-                 value=REGIME_LABEL.get(_rk, REGIME_LABEL["unknown"])),
-            signal_text=REGIME_LABEL.get(_rk, REGIME_LABEL["unknown"]),
-            facts=(("生效分支", str(_reg.get("source") or "—")),)))
+                 note=build_status_bar_card(regime,
+                                            error=regime_error or None).note),
+            # 非 live 不得帶 `value`（`Card.__post_init__`）→ 現值改掛 facts，
+            # 與 `build_indicator_tile()` 的 degraded 同一個走法（那裡也是
+            # `_facts.insert(0, ("現值", ...))`），不是第二種做法。
+            signal_text=_rlabel,
+            facts=(("現值", _rlabel), ("生效分支", _rsource),
+                   ("位階的出處", REGIME_SCOPE_NOTE))))
     else:
         _tiles.append(Tile(Card(
-            key="verdict.regime", label="市場位階（全站唯一出處）",
+            key="verdict.regime", label=REGIME_CARD_LABEL,
             state=_regime_state,
             note=Note(
                 now="**市場位階：尚未評估**",
@@ -1104,7 +1211,8 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                      "L3 canonical 契約四條來源本輪皆無值 → 回 `unknown`，"
                      "**不是** `neutral`；本站不以缺值推導「中性」"),
                 where=(CONTRACT_NO_EXIT_WHERE if not regime_error
-                       else NO_LOAD_EXIT_WHERE)))))
+                       else NO_LOAD_EXIT_WHERE))),
+            facts=(("位階的出處", REGIME_SCOPE_NOTE),)))
     return tuple(_tiles)
 
 
