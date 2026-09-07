@@ -34,8 +34,12 @@
      未來任何一個量不到的源都往這裡加；牆下方那段**常駐**的涵蓋率揭露
      （`COVERAGE_DISCLOSURE`）同樣保留，仍然明說
      「這面牆沒有紅燈**不等於**全站都好」。
-     ⚠️ **接上 2 支 ≠ 全站被量到**：實測（量測日 2026-09-07）全 repo 共
-     **9 支**掛了 `@monitored`，而全站來源清單（L1 `data_registry`）有數十個。
+     ⚠️ **接上 2 支 ≠ 全站被量到**：`src/` 底下掛了 `@monitored` 的**支數**
+     由本檔模組常數 `MONITORED_FETCHER_COUNT` 單一持有（畫面文案共用它，
+     不再各寫一份寫死值），而全站來源清單（L1 `data_registry`）有數十個。
+     ⚠️ 那個數字**會漂**，所以不靠自律維護：
+     `tests/test_p05_why_view.py::TestMonitoredCountIsNotStale` 每次 CI
+     用 **AST 重數一次** `src/`，數字對不上就當場紅燈。
      守衛：`tests/test_p05_why_view.py::TestUnmeasuredSourcesAreVisible`
      ＋ `TestNamedSourcesAreReallyWired` —— 後者**直接掃 L1 原始碼**：
      本頁宣稱已接線的那兩支若在 L1 被拔掉裝飾器，**當場 CI 紅燈**，
@@ -470,11 +474,54 @@ NAMED_SOURCES: tuple[NamedSource, ...] = (
         covers="額度是帳號層級資訊，不在任何一支 fetcher 的回傳裡"),
 )
 
-#: 共同根因。⚠️ 「9 支」是**單組實測值**，依 §8.2.A.0 規則 4 標日期。
+#: 🔒 **`src/` 底下掛了 `@monitored` 的 fetcher 支數 —— 本頁這個數字的單一出處。**
+#:
+#: ⚠️ **這個常數存在的理由是「四份會各自漂」，不是為了少打幾個字。**
+#: 本檔原本把同一個數字**寫死四份**（檔頭 docstring、本節註解、`UNMEASURED_WHY`、
+#: `COVERAGE_DISCLOSURE`），而**沒有任何一條測試在守那個總數** —— 任何人在 L1
+#: 多掛一支，畫面就靜靜地少報一支，**CI 全綠**。那正是本頁第二種假綠燈
+#: （把量不到的整個不畫）從**文案**這道門走回來：牆上不會出現紅燈，
+#: 只會出現一句**過時而且看起來很篤定**的數字。
+#: 現在全檔只有這一個字面值，畫面文案一律內插它。
+#:
+#: ⚠️ **它是單組實測值，會漂**（依 `CLAUDE.md §8.2.A.0` 規則 4 標量測日：
+#: **2026-09-07**）—— 所以**不靠自律維護**：
+#: `tests/test_p05_why_view.py::TestMonitoredCountIsNotStale` 每次 CI 用
+#: **AST 重數一次** `src/**/*.py`，對不上就紅，並直接指名要改哪裡。
+#:
+#: **計數規則（AST，不是 grep）**：數的是「函式定義上實際掛著名為 `monitored`
+#: 的裝飾器」的**次數**（同一個登錄名重複掛也各算一次）。用 AST 而不用 grep，
+#: 是因為 AST 天生不受下列三件事影響：
+#:   · **縮排**（寫在 class 裡的 method）—— 實測（量測日 2026-09-07）`src/`
+#:     現況**縮排寫法 0 處**，全部貼在行首；但 `grep -rn "^@monitored"` 只抓行首，
+#:     **日後只要有人把它寫進 class，那道 grep 就會低估**（AST 不會）。
+#:     這件事本身也有守衛：`TestMonitoredCountIsNotStale` 會比對
+#:     「行首 grep 的結果」與「AST 的結果」，一旦分岔就紅，
+#:     逼人去改**畫面上印給使用者的那道指令**，而不是去改 AST。
+#:   · **換行寫法**（`@monitored(` 之後才換行接參數）—— `src/` 現況幾乎全是
+#:     這種多行寫法，AST 照樣數對。
+#:   · **註解與字串裡的 `@monitored` 字樣** —— 本檔文案裡就有一大堆，
+#:     所以 `grep -rn '@monitored' src/`（不帶 `^`）數出來的是**字樣數**，
+#:     **不是支數**，兩者差很多。
+#:
+#: ⚠️ **範圍是 `src/`，不是整個 repo**：`tests/` 底下另有若干個 `@monitored`，
+#: 那些是測試自己造的探針函式（`__p05_probe_raise__` 之類），
+#: 不是 production fetcher，也不會出現在這面牆上。
+MONITORED_FETCHER_COUNT: int = 9
+
+#: 畫面上印給使用者的「你自己去重現一次」指令。
+#: ⚠️ 它必須**真的重現得出** `MONITORED_FETCHER_COUNT` —— 原文印的是
+#: `grep -rn '@monitored' src/`（不帶 `^`），那道指令數到的是**字樣數**、
+#: 不是支數，讀者照著跑會得到一個對不上的數字，然後合理地認為這面牆在說謊。
+#: 這是**修正錯誤**（讓它回到它本來就該做到的事），不是改設計。
+#: 守衛：`TestMonitoredCountIsNotStale::test_the_recipe_printed_to_users_still_works`。
+MONITORED_COUNT_RECIPE: str = 'grep -rn "^@monitored" src/ --include=*.py'
+
+#: 共同根因。⚠️ 支數一律內插 `MONITORED_FETCHER_COUNT`，**不准在這裡寫死**。
 UNMEASURED_WHY: str = (
     "這面牆讀的是 L0 fetcher 登錄表，而登錄表只看得到掛了 `@monitored` 的 "
-    "fetcher —— 實測（量測日 2026-09-07，`grep -rn '@monitored' src/`）"
-    "**全 repo 共 9 支掛了**，這一個不在裡面。"
+    f"fetcher —— 實測（量測日 2026-09-07，`{MONITORED_COUNT_RECIPE}`）"
+    f"**`src/` 底下共 {MONITORED_FETCHER_COUNT} 支掛了**，這一個不在裡面。"
     "本頁是 L5，既不直接讀 L1 的來源清單、也不自己打 API，"
     "所以這一盞**現在沒有東西可以點亮**")
 
@@ -495,7 +542,8 @@ COVERAGE_DISCLOSURE: str = (
     "這面牆量到的單位是 **fetcher**，不是**來源**。\n\n"
     "**不涵蓋什麼**：全站來源清單的 SSOT 住在 L1 `src/data/core/data_registry.py`，"
     "本頁是 L5、依 `CLAUDE.md §8.2` 不得直接讀它，而 `src/services/` 也沒有把它轉出來 → "
-    "**大多數來源仍然不在這面牆上**。實測（量測日 2026-09-07）全 repo 只有 **9 支** "
+    "**大多數來源仍然不在這面牆上**。實測（量測日 2026-09-07）"
+    f"`src/` 底下只有 **{MONITORED_FETCHER_COUNT} 支** "
     "fetcher 掛了監控，而全站來源清單有數十個。\n\n"
     "⚠️ **所以：這面牆上沒有紅燈，不等於全站都好。** 它只說得出它看得到的那幾盞 —— "
     "接上兩支之後這句話**一個字都沒有變弱**。"

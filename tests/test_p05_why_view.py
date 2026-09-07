@@ -58,7 +58,9 @@
 from __future__ import annotations
 
 import ast
+import functools
 import pathlib
+import re
 import sys
 
 import pytest
@@ -603,6 +605,239 @@ class TestNamedSourcesAreReallyWired:
             "裝飾器改動了回傳值 —— success_check 只准影響**記錄**")
         assert get_monitor_registry()["__p05_probe_return__"][
             "last_status"] == "failed"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【3c】畫面印出來的「支數」不准漂（FE-29）
+# ══════════════════════════════════════════════════════════════════
+#: ⚠️ **這一節防的不是「數字寫錯」，是「數字後來變成錯的」。**
+#:
+#: `page_why.py` 印給使用者看「`src/` 底下共 N 支掛了 `@monitored`」。
+#: 這句話**現在是真的**（實測 9，量測日 2026-09-07），而且依 §8.2.A.0 規則 4
+#: 標了量測日 —— 那都做對了。**錯的是它沒有守衛**：在 FE-29 之前，本檔只驗
+#: 「具名的那兩支真的掛著裝飾器」（`TestNamedSourcesAreReallyWired`），
+#: **沒有任何一條在驗那個總數**。任何人在 L1 多掛第 10 支，畫面就繼續說 9，
+#: 而 CI 全綠 —— 那是本頁第二種假綠燈（把量不到的整個不畫）從**文案**這道門
+#: 走回來：牆上不會亮紅燈，只會留下一句過時、而且看起來很篤定的數字。
+#: 對照 `CLAUDE.md §-2`「**沒查證的宣稱比沒有宣稱更危險**」。
+#:
+#: ⚠️ **兩邊必須各自獨立求值，否則這一節會退化成恆真式。**
+#:   · **真值側** `_ast_monitored_fetchers()` —— 只掃 `src/**/*.py` 的 AST，
+#:     **完全不讀 `page_why.py` 的文案，也不讀 `MONITORED_FETCHER_COUNT`**。
+#:   · **宣稱側** `_claimed_counts()` —— 只讀**已經內插完成**的畫面字串
+#:     （使用者眼睛真的會看到的那幾段），**完全不數任何裝飾器**。
+#: 兩邊都拿去和對方比，比的錨點永遠是**真值側**。
+#: 「把常數讀出來跟它自己比」那種寫法（`CONST == int(re.search(..., TEXT))`）
+#: 在 SSOT 化之後**恆真**，等於沒測 —— 本節刻意不那樣寫，
+#: 並用 `test_the_page_really_prints_a_number` 反證宣稱側不是空轉。
+#:
+#: **計數規則見 `page_why.MONITORED_FETCHER_COUNT` 的註解**（AST 而非 grep 的
+#: 三個理由：縮排 / 換行寫法 / 註解與字串裡的字樣）。這裡只補一句：
+#: 掃描範圍是 `src/`，`tests/` 底下那些是測試自造的探針，不是 production fetcher。
+
+#: 掃描範圍。⚠️ 與 `page_why.MONITORED_FETCHER_COUNT` 註解宣告的範圍必須一致。
+_SRC = _REPO / "src"
+
+#: 裝飾器名。`shared.fetch_monitor.monitored`，全 `src/` 沒有人 alias 它
+#: （量測日 2026-09-07：6 個 importer 全部寫 `from shared.fetch_monitor import
+#: monitored`）。若日後有人 `import monitored as m`，AST 這裡會**漏數**，
+#: 而漏數會讓真值變小、畫面數字變大 → `test_the_constant_matches_the_real_count`
+#: 仍然會紅（方向是安全的：不會靜靜放過）。
+_DECORATOR_NAME = "monitored"
+
+
+@functools.cache
+def _ast_monitored_fetchers() -> tuple[tuple[str, str, int], ...]:
+    """**真值側**：用 AST 數 `src/**/*.py` 上真正掛著的 `@monitored`。
+
+    回傳 `(登錄名, 檔案相對路徑, 行號)`，**一個裝飾器一筆**（同一個登錄名
+    重複掛也各算一筆 —— 那種情況本身就是 bug，不該被計數規則吸收掉）。
+
+    ⚠️ **本函式不讀 `page_why.py` 的任何東西。** 它是這一節的真值錨點。
+    ⚠️ 解析失敗一律 `raise`（`CLAUDE.md §1`）—— 靜靜跳過一個檔會讓真值變小，
+    那正是「用 fail-safe 掩蓋問題」。
+    ⚠️ `@functools.cache` 純粹是效能（262 檔 × 0.5s／趟，本節會問 4 次）。
+    一次 pytest 就是一個 process、原始碼不會在中途變 —— 快取不會遮住任何東西。
+    """
+    _out: list[tuple[str, str, int]] = []
+    for _f in sorted(_SRC.rglob("*.py")):
+        if "__pycache__" in _f.parts:
+            continue
+        _tree = ast.parse(_f.read_text(encoding="utf-8"), filename=str(_f))
+        for _node in ast.walk(_tree):
+            if not isinstance(_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for _d in _node.decorator_list:
+                _target = _d.func if isinstance(_d, ast.Call) else _d
+                _name = (_target.attr if isinstance(_target, ast.Attribute)
+                         else getattr(_target, "id", None))
+                if _name != _DECORATOR_NAME:
+                    continue
+                _reg = "<動態>"
+                if (isinstance(_d, ast.Call) and _d.args
+                        and isinstance(_d.args[0], ast.Constant)
+                        and isinstance(_d.args[0].value, str)):
+                    _reg = _d.args[0].value
+                _out.append((_reg, str(_f.relative_to(_REPO)), _node.lineno))
+    return tuple(_out)
+
+
+@functools.cache
+def _line_start_grep_count() -> int:
+    """畫面上印給使用者那道指令的**等價運算**（`grep -rn "^@monitored" src/
+    --include=*.py`）—— 只抓**行首**，所以縮排寫法會漏。
+
+    存在的理由只有一個：拿它跟 AST 比，確認**畫面印出去的重現指令還有效**。
+    ⚠️ 它**不是**真值；分岔時 AST 才對。
+    """
+    _n = 0
+    for _f in sorted(_SRC.rglob("*.py")):
+        if "__pycache__" in _f.parts:
+            continue
+        _n += sum(1 for _ln in _f.read_text(encoding="utf-8").splitlines()
+                  if _ln.startswith("@" + _DECORATOR_NAME))
+    return _n
+
+
+#: 文案正規化：只去空白與 Markdown 強調，**不去真標點**
+#: （沿用 `tests/test_views_no_unverified_universal_claims.py` 的同一個理由：
+#: `共 **9 支**` 與 `共9支` 使用者看到的是同一句，字面 grep 卻掃不到）。
+_CLAIM_NOISE = re.compile(r"[\s*`「」『』【】]+")
+
+#: 支數宣稱的形狀：**量詞 + 數字 + 支**（`共 9 支` / `只有 9 支`）。
+#: ⚠️ 刻意**要求量詞**，不用裸 `\d+支` —— 本頁另有「接上 **2 支**」
+#: （新接線的支數）與「掛了 **3 支**」（線框具名的三個來源）兩句**不同的**數字，
+#: 它們前面沒有量詞，抓進來會變成假紅燈。實測（量測日 2026-09-07）本規則在
+#: 全檔只命中支數宣稱，不命中那兩句。
+_CLAIM_RE = re.compile(r"(?:共|只有|僅)(\d+)支")
+
+
+def _claimed_counts() -> list[tuple[str, int]]:
+    """**宣稱側**：從**已內插完成的畫面字串**剖析出支數宣稱。
+
+    回傳 `(出處名, 宣稱值)`。掃的是 `__doc__` ＋ 全部模組級大寫 `str` 常數 ——
+    **不是掃原始碼**，所以讀到的就是使用者眼睛會看到的那個數字。
+    掃全部常數（而不是只掃已知那兩個）是為了讓**日後新增的第五處**自動被涵蓋。
+
+    ⚠️ **本函式不數任何裝飾器，也不讀 `MONITORED_FETCHER_COUNT`。**
+    """
+    _texts: list[tuple[str, str]] = [("__doc__（檔頭）", P.__doc__ or "")]
+    for _name in sorted(dir(P)):
+        if not _name.isupper():
+            continue
+        _v = getattr(P, _name)
+        if isinstance(_v, str):
+            _texts.append((_name, _v))
+    _out: list[tuple[str, int]] = []
+    for _where, _t in _texts:
+        for _m in _CLAIM_RE.finditer(_CLAIM_NOISE.sub("", _t)):
+            _out.append((_where, int(_m.group(1))))
+    return _out
+
+
+class TestMonitoredCountIsNotStale:
+    """⚠️ **畫面說「共 N 支」，就必須真的有 N 支。**
+
+    這一類**不是**在驗「9 是對的」（那是量測，會過期）；它驗的是
+    「**畫面上的數字與 `src/` 現況一致**」—— 一個每次 CI 都重新求值的關係。
+    """
+
+    def test_the_counter_really_finds_the_decorators(self):
+        """反證①：真值側不是空轉。
+
+        若 AST 走法寫壞而回傳空 list，下面每一條都會拿 0 去比，
+        錯誤訊息會指向完全錯的方向。這裡用**本頁自己宣稱已接線的那幾支**
+        當定錨 —— 它們必須在真值側被數到。
+        """
+        _found = _ast_monitored_fetchers()
+        assert _found, (
+            "AST 一支 @monitored 都沒數到 —— 是走法寫壞了，不是 repo 真的沒有")
+        _names = {_n for _n, _, _ in _found}
+        for _s in P.NAMED_SOURCES:
+            if _s.wired:
+                assert _s.fetcher in _names, (
+                    f"本頁宣稱 {_s.label}（{_s.fetcher}）已接線，"
+                    f"AST 卻沒在 src/ 數到它 —— 計數器漏數，或裝飾器真的被拔了")
+
+    def test_the_page_really_prints_a_number(self):
+        """反證②：宣稱側不是空轉。
+
+        ⚠️ 沒有這一條，`test_every_number_on_screen_matches_the_real_count`
+        會在「一句都沒剖析到」時**空轉通過** —— 那是最惡劣的假綠燈：
+        測試在，但什麼都沒守。
+        """
+        _claims = _claimed_counts()
+        assert len(_claims) >= 2, (
+            "畫面文案裡剖析不到兩句以上的支數宣稱。"
+            f"實際剖到：{_claims}。要嘛文案被改寫了（那請同步改 _CLAIM_RE，"
+            "並確認新寫法真的被剖得到），要嘛剖析器壞了 —— "
+            "**不要**因為它現在綠就放著")
+
+    def test_the_constant_matches_the_real_count(self):
+        """⭐ 本節的主守衛：SSOT 常數 vs `src/` 現況。"""
+        _real = _ast_monitored_fetchers()
+        assert P.MONITORED_FETCHER_COUNT == len(_real), (
+            f"\n畫面寫 {P.MONITORED_FETCHER_COUNT} 支，實測 {len(_real)} 支 —— 對不上。\n"
+            f"實測到的是這 {len(_real)} 支：\n"
+            + "\n".join(f"  · {_n}  ({_f}:{_l})" for _n, _f, _l in _real)
+            + "\n\n請改 `src/ui/views/page_why.py` 的模組常數 "
+              "`MONITORED_FETCHER_COUNT`（**全檔唯一的字面值**，改它一處即可，"
+              "`UNMEASURED_WHY` 與 `COVERAGE_DISCLOSURE` 會自動跟著內插）；"
+              "順手把該常數註解上的量測日改成今天（§8.2.A.0 規則 4）。\n"
+              "⚠️ 若這次是**新掛**了一支監控，別忘了另一件事："
+              "它要出現在牆上還得那個模組被載入過，"
+              "而 `NAMED_SOURCES` 裡對應的那一筆可能該從 wired=False 翻過來。")
+
+    def test_every_number_on_screen_matches_the_real_count(self):
+        """⭐ 使用者眼睛看到的每一個支數，都要等於實測值。
+
+        ⚠️ 與上一條**不是**同一件事：上一條驗常數，這一條驗**渲染結果**。
+        有人繞過常數、直接在文案裡寫死一個數字時，只有這一條會紅。
+        """
+        _real = len(_ast_monitored_fetchers())
+        _bad = [(_w, _n) for _w, _n in _claimed_counts() if _n != _real]
+        assert not _bad, (
+            f"\n實測 src/ 有 {_real} 支 @monitored，但畫面文案這幾處寫的是別的數字：\n"
+            + "\n".join(f"  · {_w}：寫 {_n} 支" for _w, _n in _bad)
+            + "\n\n這幾段的數字應該內插 `MONITORED_FETCHER_COUNT`，不要寫死。")
+
+    def test_the_count_is_not_hardcoded_anywhere_in_the_source(self):
+        """⚠️ **SSOT：原始碼裡不准再出現寫死的支數。**
+
+        這一條守的是「四份各自漂」那個**根因**本身。上面兩條只保證
+        「現在數字是對的」；這一條保證「**下次也只需要改一個地方**」——
+        少了它，有人貼一句寫死的 `共 9 支` 進來時，測試當下全綠
+        （因為 9 現在是對的），等到真值變成 10 才一起爆，
+        而那時要改的地方又變回兩處以上。
+        """
+        _raw = pathlib.Path(P.__file__).read_text(encoding="utf-8")
+        _hits = _CLAIM_RE.findall(_CLAIM_NOISE.sub("", _raw))
+        assert not _hits, (
+            f"`page_why.py` 原始碼裡有寫死的支數字面值：{_hits}。\n"
+            "支數只准有一個字面值 —— 模組常數 `MONITORED_FETCHER_COUNT`；"
+            "文案請用 f-string 內插它。")
+
+    def test_the_recipe_printed_to_users_still_works(self):
+        """⚠️ **畫面叫使用者自己跑一次的那道指令，必須真的重現得出這個數字。**
+
+        原文印的是 `grep -rn '@monitored' src/`（不帶 `^`）—— 那道指令
+        數到的是**字樣數**（連註解和文案裡的 `@monitored` 都算），
+        跟支數差很多。讀者照著跑會得到一個對不上的數字，
+        然後合理地認為這面牆在說謊。FE-29 已把它改成行首版。
+
+        本條同時是**計數規則的守衛**：行首 grep 抓不到縮排（class 內）寫法，
+        一旦有人那樣寫，grep 會低估而 AST 不會 —— 兩邊分岔就在這裡當場紅。
+        """
+        assert P.MONITORED_COUNT_RECIPE in P.UNMEASURED_WHY, (
+            "畫面沒有把重現指令印出去了？`UNMEASURED_WHY` 應該內插 "
+            "`MONITORED_COUNT_RECIPE`")
+        _grep, _ast_n = _line_start_grep_count(), len(_ast_monitored_fetchers())
+        assert _grep == _ast_n, (
+            f"\n行首 grep 數到 {_grep}，AST 數到 {_ast_n} —— 兩邊分岔了。\n"
+            "多半是有人把 `@monitored` 寫成縮排（class 內的 method）或其他"
+            "非行首寫法。**AST 是對的，grep 低估。**\n"
+            "請改 `page_why.MONITORED_COUNT_RECIPE`（畫面印給使用者的重現指令），"
+            "換成一道真的數得對的指令 —— **不要**改 AST 去遷就 grep。")
 
 
 # ══════════════════════════════════════════════════════════════════
