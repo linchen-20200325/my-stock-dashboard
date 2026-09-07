@@ -70,6 +70,10 @@ _PATH_LAYERS: tuple[tuple[str, int], ...] = (
     ("src/ui/tabs/", L5),
     ("src/ui/etf/", L5),
     ("src/ui/pages/", L5),
+    # IA v2 五頁戰情室 View 層(2026-09 新增目錄),與 tabs/etf/pages 同為 L5。
+    # ⚠️ 只加這一條具名前綴,不要補 ("src/ui/", L5) 兜底 —— 那會有把
+    #    src/ui/render/(L4)誤標成 L5 的風險,使 R4/R5 對 render/ 失效。
+    ("src/ui/views/", L5),
 )
 
 # 被 import 的模組路徑 → 層(most-specific-first;順序有意義)
