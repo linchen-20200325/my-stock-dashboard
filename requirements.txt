@@ -2,6 +2,45 @@
 # 策略:floor 維持寬鬆(舊環境相容)+ 主版本 upper bound 阻擋未經測試的破壞性更新。
 # 注意:不降級 production — upper bound 高於目前實際 deploy 的主版本即可。
 
+# ══════════════════════════════════════════════════════════════════
+# 2026-09-08 倒站事故紀錄 —— ⚠️ 真因不在本檔,在 `packages.txt`(已刪)
+# ══════════════════════════════════════════════════════════════════
+# 現象:Streamlit Cloud 01:27 UTC 起「Error installing requirements.」,部署倒站。
+# 真因(使用者取得的雲端日誌實錘,不是推論):
+#   [02:15:14] 📦 Apt dependencies were installed from .../packages.txt using apt-get.
+#   E: Release file for http://deb.debian.org/debian-security/dists/bullseye-security/InRelease
+#      is expired (invalid since 5h 2min 11s).
+#   [02:15:17] ❗️ installer returned a non-zero exit code
+#   [02:15:17] ❗️ Error during processing dependencies!
+#   → 倒在 **apt 階段**;`pip` 從頭到尾**一次都沒有執行**。
+#     Streamlit Cloud 只要 repo 根目錄有 `packages.txt` 就會先跑 `apt-get`,
+#     而 base image 的 Debian **bullseye-security** 源已終止支援、Release 檔過期,
+#     `apt-get` 回非零 → 整個相依安裝流程中止,連 pip 都沒輪到。
+#
+# ⚠️ 誠實記錄:本次事故中,先前在本檔寫下的兩個假設**都是錯的**。
+#   • `peewee<4.5.1`(2026-09-08 首版 hotfix)—— 錯。它是「時窗內唯一新版本」的
+#     時序推論,而 pip 根本沒跑,任何 pip 端的版本都不可能是原因。cap 已撤除,
+#     依它自己寫的解禁條件(「若確認與 peewee 無關,直接刪掉本行」)。
+#   • 次要嫌疑 numpy 2.5.3 —— 同理,清白。
+#   教訓:在拿到日誌之前,「時窗內唯一的變數」只證明它可疑,不證明它有罪;
+#   而「錯的 pin 比沒有 pin 更危險」——它會讓下一個人以為根因已經找到了。
+#
+# 處置:刪除 `packages.txt`(內容只有 libxml2-dev / libxslt1-dev)。實測證據:
+#   lxml 6.1.3 在 PyPI 有 cp314 manylinux/musllinux x86_64 wheel;其
+#   `etree.cpython-314-x86_64-linux-gnu.so` 的 DT_NEEDED **只有** librt/libm/
+#   libpthread/libc(libxml2 與 libxslt 是靜態連進去的)→ 那兩個 dev 標頭檔
+#   **編譯期用不到、執行期也用不到**,純粹每次部署白白逼雲端跑一次 apt-get。
+#   本檔全套相依以 `pip install --only-binary=:all: --python-version 3.14
+#   --platform manylinux_2_28_x86_64`(及更舊的 manylinux 標,均 ≤ bullseye 的
+#   glibc 2.31)實跑 dry-run 全數解出 wheel,零編譯;把那 86 個 wheel 全部下載
+#   解開、對其中 150 個 .so 逐一 `readelf -d` 掃 DT_NEEDED,**0 個**連到
+#   libxml2 / libxslt / libexslt。repo 內也沒有任何 xmllint / xsltproc 呼叫。
+#
+# ⛔ **不要再把 `packages.txt` 加回來。** 它會讓每一次部署都綁上一個我們無法控制、
+#    且已經倒過一次站的外部相依(Debian 源的健康狀況)。真的非加不可時,必須在
+#    檔內註明每個 apt 套件「為什麼無法用 wheel 取代」——
+#    守衛:tests/test_deploy_no_apt_packages.py
+
 # ── Streamlit / UI 核心 ────────────────────────────────────────
 # 2026-08-27:floor 1.36.0 → 1.56.0。**這是把宣告改成誠實,不是升級。**
 # 原本宣告的 1.36 是假的 —— 現有程式碼在 1.36 上根本跑不起來,只是因為沒有 lock 檔、
@@ -46,30 +85,6 @@ pyarrow>=14,<25
 # 與上方核心 pin 硬衝突,雲端/CI 從未真正裝上(app 一直走 DataLoader=None 的
 # raw HTTP 備援)。移除以消滅 resolver 回溯不確定性;REST 路徑(finmind_get)不受影響。
 yfinance>=0.2.36,<2.0
-# ── transitive pin(非本專案直接 import,為擋住上游的無上限相依)──
-# 2026-09-08 hotfix(倒站):Streamlit Cloud 於 01:27 UTC 顯示
-# 「Error installing requirements.」(pip 裝不起來,不是程式碼錯誤)。
-# peewee 是 **yfinance 的相依**,不是我們直接用的套件 —— yfinance 1.7.0 宣告
-# `peewee>=3.16.2`,**無上限**,resolver 因此會抓到當日剛發布的新版。
-# peewee 4.5.1 發布於 01:20:09 UTC = 事故前 7 分鐘;且它是「上一次 rebuild
-# (PR #668,2026-09-07 23:09:01 UTC)之後、事故發生之前」整個相依閉包裡
-# **唯一**出現的新版本(83 個套件、含 resolver 回溯候選,以 py3.14 marker 全掃)。
-# cap 回 4.5.0 = 精確回到上一次 rebuild 當下的相依狀態,不多也不少。
-#
-# ⚠️ 這是「時序上唯一的變數」,**不是已確證的根因**。三件事據實標明:
-#  (1) 沒有任何人看過雲端實際的 pip 錯誤日誌(它在 Streamlit「Manage app」終端機裡)。
-#  (2) **失效機制不明,而且「peewee 沒有 cp314 wheel」這個說法經實測為假**:
-#      peewee 4.5.1 是純 Python wheel(`peewee-4.5.1-py3-none-any.whl`,WHEEL 標
-#      `Root-Is-Purelib: true`,零強制相依),cp314 可直接安裝、不需編譯;其 METADATA
-#      與 4.5.0 逐行相同(只差版本字串)。近六版(4.2.3~4.5.1)也全是同一種純 Python wheel。
-#      → 它有嫌疑(唯一變數),但**目前找不到已知的致炸機制**。
-#  (3)「上一次 rebuild 是成功的」是**推定,無證據**。若 #668 那次其實也失敗了,
-#      次要嫌疑是 numpy 2.5.3(2026-09-06 16:24 UTC 發布)—— 它 `requires_python>=3.12`,
-#      Python 3.11 沙箱**結構上看不到它**,只有雲端的 3.14 會解到。
-# 解禁條件:取得雲端 pip 日誌、確認真因之後 —— 若確認與 peewee 無關,直接刪掉本行
-#          (連同本註解);若確認有關,等 peewee 釋出修正版並在 3.14 實測通過後再放寬。
-# 守衛:tests/test_hotfix_peewee_cap_2026_09_08.py
-peewee>=3.16.2,<4.5.1
 google-generativeai>=0.5.0,<2.0
 curl-cffi>=0.6.0,<1.0
 
