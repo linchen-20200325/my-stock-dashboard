@@ -16,7 +16,18 @@
 `upstream_error_why`）、更新模式讀取（`applied_update_mode`）、版面上限
 （`MAX_COLS`）**一律 import 復用**，本檔**一個都不複寫**。
 
-**本檔沒有 production caller**（`app.py` 本批不接線）。舊分頁不動、不下架。
+~~**本檔沒有 production caller**（`app.py` 本批不接線）。~~舊分頁不動、不下架。
+
+⚠️ **2026-09-08 FE-36 事實更正 —— 刪除線是有意識保留，不是漏刪。**
+那句在本檔剛落地那一批為真；**之後接線的批次沒有回頭改它** ——
+也就是說 **這是 `b5bdb36`（側欄 radio 改動）之前就已經存在的漂移**，
+不是這次弄壞的（一併收掉，但據實區分責任）。
+**現行**：`app.py::_ia_view_today()` 在側欄「🆕 新版戰情室（試用中）」radio
+選到本頁時 late import 並呼叫 `render_page_today()`；**沒被選到時本檔連 import 都不發生**
+（`tests/test_ia_v2_sidebar_nav.py::TestNothingRunsUntilYouPick`）。
+⚠️ **有 caller 之後，這一頁的每一個 bug 都是使用者看得到的** ——
+不得再拿「反正沒有人在用」當放寬任何守衛的理由。
+掛載形態由 `tests/test_p0x_view_mount_claims.py` 釘住：再改一次就轉紅。
 
 ═══ 四態的唯一真相源 ═══════════════════════════════════════════════════
 L0 `shared/ui_state.py` 七態，是線框四態 ＋ 正常態的超集：
@@ -245,6 +256,15 @@ from src.ui.views._ui_kit import (
 #: 對面改名時本模組會**當場 raise**，不會靜默變成「模式永遠讀不到」。
 SS_APPLIED_MODE: str = "_p01_applied"
 
+# ⚠️ **2026-09-08 FE-36 語彙更正（本區塊各行原文一字未改）**：以下若干行寫
+#    「與既有 `tab_today` / 舊分頁**同時掛上**時不撞 `DuplicateWidgetID`」。`b5bdb36` 把五頁
+#    改成側欄 radio ＋ `st.stop()` 之後，**新頁與舊頁籤不再進到同一個 script
+#    run**，「同時掛上 → 同輪撞 ID」這個機制對舊分頁**已不成立**。
+#    ✅ **前綴照留，理由換成兩條仍然成立的**：(a) `st.session_state` 跨 rerun、
+#    跨頁存活，切一下側欄 radio 就是同 session 的一次 rerun ⇒ 同名 key 照樣
+#    互相污染；(b) `st.stop()` 之前跑完的**整個側欄** widget（導覽 radio 自己、
+#    連線測試鈕、強制刷新鈕、Sheet ID 輸入框…）**與本頁同輪**，那才是現在真正
+#    會撞 ID 的對手。掛載形態由 `tests/test_p0x_view_mount_claims.py` 釘住。
 #: 本頁 radio 的 widget key —— **當下值**，下游禁止讀（鐵律 2）。
 #: 刻意與 `tab_today` 的 widget key **不同**：兩頁若同時掛上，
 #: 相同的 widget key 會直接撞成 Streamlit 的 DuplicateWidgetID。
@@ -1368,7 +1388,14 @@ def _render_update_form(session: Mapping[str, Any]) -> None:
 
 
 def render_page_today() -> None:
-    """🚦 今天（IA v2 第 1 頁）。**本批無 production caller，刻意如此。**"""
+    """🚦 今天（IA v2 第 1 頁）。~~**本批無 production caller，刻意如此。**~~
+
+    ⚠️ **2026-09-08 FE-36 事實更正（刪除線有意識保留，不是漏刪）**：
+    那句在本檔剛落地那一批為真，之後接線的批次沒有回頭改它 ——
+    **是 `b5bdb36`（側欄 radio 改動）之前就存在的漂移，不是這次弄壞的。**
+    **現行**：`app.py::_ia_view_today()` 於側欄「🆕 新版戰情室（試用中）」radio
+    選到本頁時 late import 並呼叫本函式。理由與守衛見檔頭 FE-36 那段。
+    """
     _session = st.session_state
     _readout = load_macro_readout(_session)
     _band_label, _thr_text, _band_zh, _l4_err = _load_l4_labels()

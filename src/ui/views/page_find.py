@@ -27,12 +27,30 @@
 本批一個字都沒有碰 `app.py` 與 `src/ui/tabs/__init__.py`）。~~舊分頁不動、不下架。
 
 ⚠️ **2026-09-07 FE-32 事實更正 —— 上面那句已經不成立，不是漏刪。**
-`app.py` 現在**確實掛著本頁**（`with tab_find: render_page_find`，
+`app.py` 現在**確實掛著本頁**（~~`with tab_find: render_page_find`~~，
 `_render_tab_isolated` 包著）。那句話是本檔剛落地那一批寫的，當時為真；
 之後接線的批次沒有回頭改它。**留著它很危險**：它會讓下一個人以為
-「本頁改壞了也不影響線上」，而事實是**本頁每一次 app run 都會被執行**
-（Streamlit 全 tab body 都跑）—— 本批那一整段「不准重用舊 widget key」
+「本頁改壞了也不影響線上」，而事實是~~**本頁每一次 app run 都會被執行**
+（Streamlit 全 tab body 都跑）~~—— 本批那一整段「不准重用舊 widget key」
 的理由，前提正是**本頁是活的**。舊分頁仍然不動、不下架（雙軌並存）。
+
+⚠️ **2026-09-08 FE-36 事實更正 —— 上面兩處刪除線是「掛載方式變了」，不是 FE-32 寫錯。**
+FE-32 落筆那天，五頁確實是第 1~5 個**頂層頁籤**，那兩句當時都為真。
+`b5bdb36`（客戶拍板方案 A）把掛載改成**側欄 radio ＋ lazy 渲染**之後：
+  · `app.py` 已**沒有** `tab_find` 這個變數、也沒有那個 `with` 區塊。現行入口是
+    `app.py::_ia_view_find()`（函式體內 late import 本檔），掛在側欄
+    「🆕 新版戰情室（試用中）」radio 的 `_IA_VIEWS[_IA_PAGE]` 分派表上，
+    仍由 `_render_tab_isolated` 包著；選到新頁那一輪以 `st.stop()` 結束，
+    **舊 7 個頁籤在那一輪一個都不會被建立**。
+  · **「每一次 app run 都會被執行」現在是假的**：沒被選到時本檔**連 import 都不發生**
+    （`app.py` 端的守衛 `tests/test_ia_v2_sidebar_nav.py::TestNothingRunsUntilYouPick`
+    用毒藥模組釘死這件事）。
+✅ **但「本頁是活的」這個結論沒有變**：使用者選到這一頁時它就是線上畫面，
+下一個人**仍然不得**拿「反正沒有人在用」當放寬任何守衛的理由。
+⚠️ 「不准重用舊 widget key」那一段的**理由**確實變了（同輪撞 ID 的機制沒了，
+換成 session 旗標跨頁污染 ＋ 側欄 widget 仍同輪）——
+**逐條改寫在下方「產業熱力圖」段落末尾，不要沿用舊理由**。
+掛載形態本身由 `tests/test_p0x_view_mount_claims.py` 釘住：再改一次就轉紅。
 
 ═══ 四大鐵律的落點 ═══════════════════════════════════════════════════
 1. **3 欄上限** —— 一律 `_ui_kit.grid()`（內部硬夾 `MAX_COLS`）。
@@ -153,16 +171,31 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
 
 ⛔ **本頁一個舊 widget key 都沒有重用**（`heatmap_market` / `heatmap_period` /
 `heatmap_refresh` / `heatmap_load` / `heatmap_loaded` 五個）。**為什麼這條是硬的**：
-Streamlit 每次 app run 會跑**全部** tab body，而本頁的渲染順序在
-🌍 市場環境的熱力圖**之前**。共用 `heatmap_loaded` 的話 ——
+~~Streamlit 每次 app run 會跑**全部** tab body，而本頁的渲染順序在
+🌍 市場環境的熱力圖**之前**。~~共用 `heatmap_loaded` 的話 ——
   · 使用者在舊分頁按過載入 → **本頁會在從未被造訪的情況下發出整批冷抓**
     （本頁台股 42 檔、舊分頁預設美股 66 檔；量測日 2026-09-07，數字會隨
     L0 類股表增刪而變，需要時請現場量 `flatten_tickers()`，不要引用本行）；
   · 反過來，本頁按了載入 → 舊分頁的 opt-in 效能保證當場失效
     （`tests/test_etf_render_heatmap_gate.py` 守的就是那件事）。
-共用 **widget** key 更會讓**先執行的那一邊**佔住 ID、**另一邊**拋
-`DuplicateWidgetID` —— 也就是會**弄壞舊分頁**。
+~~共用 **widget** key 更會讓**先執行的那一邊**佔住 ID、**另一邊**拋
+`DuplicateWidgetID` —— 也就是會**弄壞舊分頁**。~~
 守衛：`tests/test_p02_find_view.py::TestHeatmapKeysNeverCollideWithTheOldTab`。
+
+⚠️ **2026-09-08 FE-36 事實更正 —— 結論不變，理由換了；刪除線是掛載變了，不是原文寫錯。**
+`b5bdb36` 之後五頁與舊 7 個頁籤**不再同輪渲染**（選到新頁那一輪 `st.stop()`，
+舊頁籤一個都不建立；選「不使用」那一輪本檔連 import 都不發生）。因此：
+  · ❌ **「先執行的那一邊佔住 ID、另一邊拋 `DuplicateWidgetID`」對舊分頁已不成立** ——
+    兩邊進不到同一個 script run 裡，撞不起來。**寫在這裡的舊理由不要再引用。**
+  · ✅ **上面那兩條 bullet 完全沒有失效，而且現在是這條紀律唯一的承重理由**：
+    `heatmap_loaded` 是 `etf_render.py` 用 `st.session_state[...]` 存的**普通旗標**
+    （不是 widget key），它**跨 rerun、跨頁存活**；使用者切一下側欄 radio 就是一次
+    同 session 的 rerun ⇒ 兩邊照樣互相污染，故障形態與原文描述的一模一樣。
+  · ✅ **同輪撞 ID 這件事本身沒有消失，只是對手換人**：`st.stop()` 之前跑完的是
+    **整個側欄**（導覽 radio 自己、連線測試鈕、強制刷新鈕、Sheet ID 輸入框
+    等等），那些 widget **與本頁同輪**。本頁 key 一律帶 `p02v_` / `_p02_`
+    前綴，同時擋掉這兩類。
+⚠️ 也就是說：**這條紀律仍然必要，但不能再用「同輪跑全部 tab body」去解釋它。**
 
 ⚠️ **本頁的熱力圖沒有市場／區間選擇器**（誠實揭露，不是漏做）：
 線框葉2 的 live 原文只有**一顆**「🗺️ 載入板塊地圖」按鈕 ＋ 左右兩張圖，
@@ -301,6 +334,15 @@ from src.ui.views._ui_kit import (
 # session key（本頁自有前綴 `p02`，不與 `app.py` 選股網的 `screener_*`
 # 或 `tab_sector_flow` / `etf_render` 的 `heatmap_*` 相撞）
 # ══════════════════════════════════════════════════════════════════
+# ⚠️ **2026-09-08 FE-36 語彙更正（本區塊各行原文一字未改）**：以下若干行寫
+#    「與既有選股網 / 舊分頁**同時掛上**時不撞 `DuplicateWidgetID`」。`b5bdb36` 把五頁
+#    改成側欄 radio ＋ `st.stop()` 之後，**新頁與舊頁籤不再進到同一個 script
+#    run**，「同時掛上 → 同輪撞 ID」這個機制對舊分頁**已不成立**。
+#    ✅ **前綴照留，理由換成兩條仍然成立的**：(a) `st.session_state` 跨 rerun、
+#    跨頁存活，切一下側欄 radio 就是同 session 的一次 rerun ⇒ 同名 key 照樣
+#    互相污染；(b) `st.stop()` 之前跑完的**整個側欄** widget（導覽 radio 自己、
+#    連線測試鈕、強制刷新鈕、Sheet ID 輸入框…）**與本頁同輪**，那才是現在真正
+#    會撞 ID 的對手。掛載形態由 `tests/test_p0x_view_mount_claims.py` 釘住。
 #: 條件表單的 key。線框寫 `st.form(form_screen)`；加 `_view` 後綴是為了
 #: 與既有選股網（`app.py`）同時掛上時不撞 Streamlit 的 DuplicateWidgetID。
 FORM_KEY: str = "form_screen_view"
@@ -1647,7 +1689,14 @@ def _render_map_leaf(session: Mapping[str, Any]) -> None:
 
 
 def render_page_find() -> None:
-    """🔍 找標的（IA v2 第 2 頁）。**本批無 production caller，刻意如此。**"""
+    """🔍 找標的（IA v2 第 2 頁）。~~**本批無 production caller，刻意如此。**~~
+
+    ⚠️ **2026-09-08 FE-36 事實更正（刪除線有意識保留，不是漏刪）**：
+    那句在本檔剛落地那一批為真，而 FE-32 只改了檔頭那一句、**漏掉這一句** ——
+    **是 `b5bdb36`（側欄 radio 改動）之前就存在的漂移，不是這次弄壞的。**
+    **現行**：`app.py::_ia_view_find()` 於側欄「🆕 新版戰情室（試用中）」radio
+    選到本頁時 late import 並呼叫本函式。理由與守衛見檔頭 FE-36 那段。
+    """
     _session = st.session_state
 
     st.markdown(f"## {ia_nav.page_label(ia_nav.PAGE_FIND)}")

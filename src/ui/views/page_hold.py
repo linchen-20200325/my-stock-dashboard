@@ -44,14 +44,24 @@
 - **不是**新的卡片型別：`Card` / `Note` / `MAX_COLS` 一律 import
   `src/ui/tabs/tab_today.py` 與 `src/ui/views/_ui_kit.py`。
 
-⚠️ **「本檔沒有 production caller」這句話已經過期**（2026-09-07 更正）：
-`app.py` **已經掛上本頁**（`render_page_hold` 於 `app.py` 的分頁列，量測日 2026-09-07；
+⚠️ **~~「本檔沒有 production caller」~~這句話已經過期**（2026-09-07 更正）：
+`app.py` **已經掛上本頁**（~~`render_page_hold` 於 `app.py` 的分頁列，量測日 2026-09-07~~；
 掛載由另一組完成，本批一個字都沒有碰 `app.py`）。**這是事實更正，不是政策變更** ——
 本批同樣沒有碰 `page_today.py`、`page_find.py`、`page_inspect.py`、`page_why.py`、
 `_ui_kit.py`、`src/ui/tabs/**`、`shared/**`。
 舊分頁（`etf_tab_dividend_station` 等）不動、不下架。
 ⚠️ **有 caller 之後，這一頁的每一個 bug 都是使用者看得到的** ——
 下一個人不得再拿「反正沒有人在用」當放寬任何守衛的理由。
+
+⚠️ **2026-09-08 FE-36 事實更正 —— 上面「分頁列」三個字已被畫掉，不是漏刪。**
+2026-09-07 寫下時本頁確實掛在**頂層頁籤列**（第 4 個），該句當天為真。
+`b5bdb36`（客戶拍板方案 A）改成**側欄 radio ＋ lazy 渲染**之後，
+現行入口是 `app.py::_ia_view_hold()`：側欄「🆕 新版戰情室（試用中）」radio
+選到本頁時才 late import 並呼叫 `render_page_hold()`，該輪以 `st.stop()` 結束
+（**舊 7 個頁籤一個都不會被建立**）；沒被選到時本檔**連 import 都不發生**
+（`tests/test_ia_v2_sidebar_nav.py::TestNothingRunsUntilYouPick`）。
+✅ **「已經掛上本頁、有 caller」這個結論沒有變**，上面那句警語照樣成立。
+掛載形態由 `tests/test_p0x_view_mount_claims.py` 釘住：再改一次就轉紅。
 
 ═══ 取數接線表（**唯一的規則是「一律走 L3」**）═════════════════════════
 **已接線（全部唯讀）**::
@@ -343,6 +353,15 @@ from src.ui.views._ui_kit import (
 # session key（本頁自有前綴 `p04`，不與既有 `etf_tab_dividend_station` 的
 # `_station_*`、`portfolio_manager` 的 key 相撞）
 # ══════════════════════════════════════════════════════════════════
+# ⚠️ **2026-09-08 FE-36 語彙更正（本區塊各行原文一字未改）**：以下若干行寫
+#    「與既有 🏦 ETF ›存股戰情室 / 舊分頁**同時掛上**時不撞 `DuplicateWidgetID`」。`b5bdb36` 把五頁
+#    改成側欄 radio ＋ `st.stop()` 之後，**新頁與舊頁籤不再進到同一個 script
+#    run**，「同時掛上 → 同輪撞 ID」這個機制對舊分頁**已不成立**。
+#    ✅ **前綴照留，理由換成兩條仍然成立的**：(a) `st.session_state` 跨 rerun、
+#    跨頁存活，切一下側欄 radio 就是同 session 的一次 rerun ⇒ 同名 key 照樣
+#    互相污染；(b) `st.stop()` 之前跑完的**整個側欄** widget（導覽 radio 自己、
+#    連線測試鈕、強制刷新鈕、Sheet ID 輸入框…）**與本頁同輪**，那才是現在真正
+#    會撞 ID 的對手。掛載形態由 `tests/test_p0x_view_mount_claims.py` 釘住。
 #: 葉2 表單的 key。線框寫 `st.form(form_holdings)`；加 `_view` 後綴是為了
 #: 與既有 🏦 ETF ›存股戰情室 同時掛上時不撞 Streamlit 的 DuplicateWidgetID。
 FORM_HOLDINGS_KEY: str = "form_holdings_view"
