@@ -46,6 +46,30 @@ pyarrow>=14,<25
 # 與上方核心 pin 硬衝突,雲端/CI 從未真正裝上(app 一直走 DataLoader=None 的
 # raw HTTP 備援)。移除以消滅 resolver 回溯不確定性;REST 路徑(finmind_get)不受影響。
 yfinance>=0.2.36,<2.0
+# ── transitive pin(非本專案直接 import,為擋住上游的無上限相依)──
+# 2026-09-08 hotfix(倒站):Streamlit Cloud 於 01:27 UTC 顯示
+# 「Error installing requirements.」(pip 裝不起來,不是程式碼錯誤)。
+# peewee 是 **yfinance 的相依**,不是我們直接用的套件 —— yfinance 1.7.0 宣告
+# `peewee>=3.16.2`,**無上限**,resolver 因此會抓到當日剛發布的新版。
+# peewee 4.5.1 發布於 01:20:09 UTC = 事故前 7 分鐘;且它是「上一次 rebuild
+# (PR #668,2026-09-07 23:09:01 UTC)之後、事故發生之前」整個相依閉包裡
+# **唯一**出現的新版本(83 個套件、含 resolver 回溯候選,以 py3.14 marker 全掃)。
+# cap 回 4.5.0 = 精確回到上一次 rebuild 當下的相依狀態,不多也不少。
+#
+# ⚠️ 這是「時序上唯一的變數」,**不是已確證的根因**。三件事據實標明:
+#  (1) 沒有任何人看過雲端實際的 pip 錯誤日誌(它在 Streamlit「Manage app」終端機裡)。
+#  (2) **失效機制不明,而且「peewee 沒有 cp314 wheel」這個說法經實測為假**:
+#      peewee 4.5.1 是純 Python wheel(`peewee-4.5.1-py3-none-any.whl`,WHEEL 標
+#      `Root-Is-Purelib: true`,零強制相依),cp314 可直接安裝、不需編譯;其 METADATA
+#      與 4.5.0 逐行相同(只差版本字串)。近六版(4.2.3~4.5.1)也全是同一種純 Python wheel。
+#      → 它有嫌疑(唯一變數),但**目前找不到已知的致炸機制**。
+#  (3)「上一次 rebuild 是成功的」是**推定,無證據**。若 #668 那次其實也失敗了,
+#      次要嫌疑是 numpy 2.5.3(2026-09-06 16:24 UTC 發布)—— 它 `requires_python>=3.12`,
+#      Python 3.11 沙箱**結構上看不到它**,只有雲端的 3.14 會解到。
+# 解禁條件:取得雲端 pip 日誌、確認真因之後 —— 若確認與 peewee 無關,直接刪掉本行
+#          (連同本註解);若確認有關,等 peewee 釋出修正版並在 3.14 實測通過後再放寬。
+# 守衛:tests/test_hotfix_peewee_cap_2026_09_08.py
+peewee>=3.16.2,<4.5.1
 google-generativeai>=0.5.0,<2.0
 curl-cffi>=0.6.0,<1.0
 
