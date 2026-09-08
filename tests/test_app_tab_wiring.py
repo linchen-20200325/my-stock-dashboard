@@ -9,6 +9,13 @@ v18.464：移除 tab_etf_margin（質借模擬），ETF 群組改為 3 個 sub-t
 sub-tab 變數名稱維持不變（tab_macro / tab_heatmap / tab_stock 等），本守衛無需修改。
 
 本守衛:app.py 必須綁定全部 9 個 tab（現為 sub-tabs）,且 4 個 render entrypoint 確實被呼叫。
+
+⚠️ **本檔看的是 sub-tab,不是頂層頁籤列** —— 這個射程限制在 2026-09-07 出過事:
+FE-7~FE-16 把 IA v2 五頁掛成頂層頁籤(7→12 個),手機上舊的 7 個被擠出畫面、
+客戶回報「很多 Tab 不見了」,而本檔**全程綠燈**(它根本沒在看那一列)。
+**頂層 7 個頁籤的名稱與順序**現由
+`tests/test_ia_v2_sidebar_nav.py::TestTheSevenTabsAreExactlyTheClientsOnes` 釘住
+(期望值寫死在該檔當第二來源)。兩支互補,**不要**把任一支的斷言放寬去遷就另一支。
 """
 from __future__ import annotations
 

@@ -260,6 +260,40 @@ from src.ui.render import traffic_light  # noqa: E402
 #   （只有本行賦值）。個股預設代號真正的來源是 `?sid=` query param 還原
 #   （見上方開機閘門的 `_qp_sid`）與各 Tab 自己的 `st.text_input` 預設值。
 
+# ══════════════════════════════════════════════════════════════
+# 🆕 新版戰情室（試用中）— IA v2 五頁的導覽常數（2026-09-08 FE-35）
+# ══════════════════════════════════════════════════════════════
+# 客戶 2026-09-08 拍板「方案 A」的**背景**（寫下來,免得下一個人又走回去）:
+#   FE-7~FE-16 期間五頁是**掛成第 1~5 個頂層頁籤**與舊 7 個並存 —— 手機上頁籤列
+#   7→12,舊的 7 個被擠出可視範圍,客戶回報「很多 Tab 不見了」。
+#   **程式碼一行都沒刪(12 個都在),壞掉的是使用經驗** —— 雙軌並行保住了程式碼,
+#   沒保住畫面。現行:頂層頁籤列還原成客戶原本的 7 個(名稱 / 順序 / 變數名照舊),
+#   五頁改由側欄 radio 導覽,預設「不使用」。
+# ⚠️ 「不使用 ＝ 完全等同 FE-7 之前」是**本次改動的目標**,不是已逐項實測的全稱句
+#    (§-2 規則 6)。**實際被測到的是三件**:7 個頁籤的名稱與順序、置底條在該路徑
+#    仍畫得出來、五頁在該路徑一行都沒執行 —— 見 tests/test_ia_v2_sidebar_nav.py。
+#    本區塊之外的既有 tab 內容一行未動(diff 可查),但「一行未動」本身沒有第二組驗過。
+# ⚠️ 五頁的**顯示名 SSOT 在 L0 `shared/ia_nav.PAGE_LABELS`**,本檔不另抄一份
+#    (抄了就是第二份真相源,§2.1)。舊 7 個頁籤名反過來由本檔持有 ——
+#    `shared/ia_nav.py` 檔頭明文寫它「不收舊 IA 的分頁名」。
+from shared.ia_nav import (  # noqa: E402
+    PAGE_LABELS as _IA_PAGE_LABELS,
+    PAGE_TODAY as _IA_TODAY, PAGE_FIND as _IA_FIND, PAGE_INSPECT as _IA_INSPECT,
+    PAGE_HOLD as _IA_HOLD, PAGE_WHY as _IA_WHY,
+)
+
+#: 側欄 radio 的 session / widget key。`_sb_` 前綴照本檔既有慣例
+#: (`_sb_force_refresh` / `_sb_conn_results` / `sb_conn_test`);
+#: 2026-09-08 全 repo grep `_sb_ia` 0 命中 ⇒ 不與任何既有 key 相撞。
+_IA_NAV_KEY = '_sb_ia_page'
+#: 第一個選項 ＝ 預設 ＝「不使用」。它**不是**一個頁 id,故不進 `PAGE_LABELS`。
+_IA_NAV_OFF = '不使用（用下方原功能）'
+_IA_NAV_OPTIONS = (_IA_NAV_OFF, *_IA_PAGE_LABELS.values())
+#: 顯示名 → 頁 id 反查表(值域 = `PAGE_LABELS` 的 key)。查不到 ⇒ 就是「不使用」。
+_IA_LABEL_TO_PAGE = {_v: _k for _k, _v in _IA_PAGE_LABELS.items()}
+#: 本輪選到的頁 id;`None` ＝ 不使用(走下方原本的 7 個頁籤)。側欄區塊內賦值。
+_IA_PAGE = None
+
 # ── Sidebar: 整合 AI 分析 ───────────────────────────────────────
 with st.sidebar:
     st.markdown('<div style="text-align:center;padding:8px 0;font-size:15px;font-weight:900;color:#e6edf3;">&#128202; 台股AI戰情室 v3.0</div>', unsafe_allow_html=True)
@@ -272,6 +306,17 @@ with st.sidebar:
     _wd_sb = {0:'一',1:'二',2:'三',3:'四',4:'五',5:'六',6:'日'}[_today_sb.weekday()]
     _trade_sb = '✅ 交易日' if _today_sb.weekday() < 5 else '❌ 非交易日'
     st.caption(f'{_today_sb.strftime("%Y/%m/%d")} 週{_wd_sb}  {_trade_sb}')
+
+    # ── 🆕 新版戰情室（試用中）— IA v2 五頁的導覽入口（2026-09-08 FE-35）──
+    # ⚠️ 這裡**只讀不畫**:被選到的那一頁要到主畫面區(下方 `_IA_PAGE is not None`)
+    #    才 late import + render ⇒ **沒選就一行都不跑**(§8.1 step 6 的成本前提)。
+    #    守衛:tests/test_ia_v2_sidebar_nav.py::TestNothingRunsUntilYouPick
+    #    (五頁模組全換成毒藥,預設態跑完整頁 app.py 也不得碰到任何一支)。
+    _IA_NAV_CHOICE = st.radio(
+        '🆕 新版戰情室（試用中）', _IA_NAV_OPTIONS, index=0, key=_IA_NAV_KEY,
+        help='選任一頁 → 主畫面整片換成新版那一頁；選「不使用」→ 回到原本的 7 個頁籤')
+    _IA_PAGE = _IA_LABEL_TO_PAGE.get(_IA_NAV_CHOICE)
+    st.caption('ⓘ 驗收完成後，這區會取代上方頁籤')
     # FIX(誠實性): 移除兩段與實際狀態無關的側欄顯示 ——
     #   (1)「### 🤖 AI 分析 / 頁面底部有 AI 整合報告面板」:該面板已不存在。
     #       AI 現在住在「🧬 AI 問答」主頁籤,原指路會把使用者送到頁尾免責聲明。
@@ -443,6 +488,126 @@ st.markdown(
     '<div style="display:flex;align-items:center;gap:10px;padding:4px 0 8px;">'    '<span style="font-size:22px;font-weight:900;color:#e6edf3;">&#128202; 台股 AI 戰情室</span>'    '<span style="font-size:10px;color:#484f58;background:#161b22;border-radius:10px;padding:2px 8px;">v3.0</span>'    '</div>',
     unsafe_allow_html=True)
 
+
+# ══════════════════════════════════════════════════════════════
+# render 隔離器 — v18.439/v18.440 修復：單 tab 出錯不拖垮全頁
+# ⚠️ 2026-09-08 FE-35：定義位置從 `st.tabs(...)` 之後**上移到此處，本體一字未改**。
+#    理由見下方「🆕 新版戰情室」分支 —— 那個分支在建立頁籤**之前**就要用它。
+# ══════════════════════════════════════════════════════════════
+def _render_tab_isolated(_render, _label):
+    """單一 tab render 隔離:例外不拖垮全頁,改在該 tab st.error + stderr full traceback。"""
+    try:
+        _render()
+    except Exception as _e_tab:
+        import sys as _sys_t, traceback as _tb_t
+        st.error(f'⚠️ 「{_label}」分頁渲染異常,已隔離(其他分頁不受影響):'
+                 f'{type(_e_tab).__name__}: {str(_e_tab)[:300]}')
+        print(f'[tab:{_label}] render error:\n{_tb_t.format_exc()}', file=_sys_t.stderr)
+
+
+# ══════════════════════════════════════════════════════════════
+# 頁尾免責聲明 — 兩條路徑（原 7 頁籤 / 新版戰情室）共用同一份（§2.1 SSOT）
+# ══════════════════════════════════════════════════════════════
+# 抽成函式的唯一理由:新版戰情室分支以 `st.stop()` 結束整支 script,
+# 走不到檔尾那一行。**免責聲明不分頁面都必須出現** ⇒ 兩條路徑各呼叫一次,
+# 但文字只有這一份(複製第二份 = 兩邊會漂移)。
+def _render_footer() -> None:
+    st.markdown('<div style="text-align:center;font-size:10px;color:#484f58;padding:8px 0;">'
+                '⚠️ 台股AI戰情室 v3.0 · 僅供學術研究，非投資建議，盈虧自負</div>',
+                unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════
+# 🆕 新版戰情室（試用中）— 選到任一新頁就「整片換頁」（2026-09-08 FE-35）
+# ══════════════════════════════════════════════════════════════
+# 每一頁一支 late-import wrapper（**不用 importlib 動態字串**：那會讓
+# `tests/test_c3_layering_guard.py` 的 AST 掃描看不見 L6→L5 這條依賴，
+# 等於把分層依賴藏起來）。分層:L6 app.py → L5 `src/ui/views/`,**向下,合規**。
+# 本區塊不新增任何 `src.data.*` 直呼(§8.2 硬規則第 4 條)。
+#
+# ⚠️ **五頁與舊 7 個頁籤仍是「刻意並存」,不得合併、不得改名**（客戶定版的雙軌
+#    並存,FE-7~FE-16 的理由原封不動,只是掛載點從頂層頁籤改成側欄 radio）:
+#      · 「🔬 查一檔」(新) vs「🔬 選股」(舊)：新頁是「一個代碼進去、一份判決出來」,
+#        舊群組是「篩一批出來」—— 兩件事。
+#      · 「💼 我的持股」(新) vs「💼 我的持股戰情室」(舊)：新頁是 IA v2 的**殼**
+#        (`page_hold.py`,多數區塊仍標 unwired);舊頁是**線上已在跑的既有實作**
+#        (`etf_tab_dividend_station.py`)。
+#      · 「📖 憑什麼」(新) 與既有「🔧 工具箱 → 🔎 資料診斷 / 📚 教學」+ 頂層
+#        「🧬 AI 問答」三處功能重疊 —— **三處都保留、都沒動**。
+# ⚠️ session / widget key 互不相撞（各頁自帶前綴:`p01v_` / `p02v_` / `p03v_` /
+#    `p04` / `p05v_`），本區塊只做掛載,不改變任何一頁的內部保證
+#    （含 `page_hold` 對使用者持股帳本的**唯讀**保證,由
+#     `tests/test_p04_hold_view.py::TestReadOnly` 釘死）。
+def _ia_view_today() -> None:
+    from src.ui.views.page_today import render_page_today
+    render_page_today()
+
+
+def _ia_view_find() -> None:
+    from src.ui.views.page_find import render_page_find
+    render_page_find()
+
+
+def _ia_view_inspect() -> None:
+    from src.ui.views.page_inspect import render_page_inspect
+    render_page_inspect()
+
+
+def _ia_view_hold() -> None:
+    from src.ui.views.page_hold import render_page_hold
+    render_page_hold()
+
+
+def _ia_view_why() -> None:
+    from src.ui.views.page_why import render_page_why
+    render_page_why()
+
+
+#: 頁 id → 該頁的 late-import renderer。**只有被選到的那一支會被呼叫** ⇒
+#: 沒選就連 import 都不做(五頁的 module import 本身就會跑掉一堆東西)。
+# ⚠️ key 一律用 L0 的頁 id 常數,**不寫字面字串**(§3.3 反捏造:id 的 SSOT 在
+#    `shared/ia_nav.py`,這裡手打 'today' 就是第二份)。
+_IA_VIEWS = {
+    _IA_TODAY: _ia_view_today,
+    _IA_FIND: _ia_view_find,
+    _IA_INSPECT: _ia_view_inspect,
+    _IA_HOLD: _ia_view_hold,
+    _IA_WHY: _ia_view_why,
+}
+# 對帳:少接一頁 / 多打一個 id 一律當場炸(§1 Fail Loud),不留「靜默少一頁」的洞。
+# **用 raise 不用 assert** —— assert 在 `python -O` 下會被整條拿掉,那等於這道對帳
+# 在某些執行環境裡默默消失,正是 §1 最不能接受的失效模式。
+if set(_IA_VIEWS) != set(_IA_PAGE_LABELS):
+    raise RuntimeError(
+        f'_IA_VIEWS 與 shared/ia_nav.PAGE_LABELS 對不起來:'
+        f'{sorted(_IA_VIEWS)} vs {sorted(_IA_PAGE_LABELS)}')
+
+if _IA_PAGE is not None:
+    # 主畫面整片換成這一頁。以下三件**刻意不渲染**：
+    #   ① 頁籤列(`st.tabs`)與 7 個舊頁的內容 —— 這就是客戶要的「換頁」。
+    #   ② 全域置底常駐條 —— 它讀的 `warroom_summary` 是在 `with tab_market:` 裡的
+    #      `render_traffic_light_top()` 才寫入的。舊頁籤不渲染時那個 key 不存在,
+    #      bar 會**必然**退回「⬜ 總經未評估 / 建議持股 --」= v19.171 🔴-1 那次線上
+    #      實機驗收抓到的事故形態(見下方 `_gl_slot` 處的完整病史)。在新頁上掛一條
+    #      屬於舊 IA、而且必然說假話的 bar,就是 §1 的假訊息 ⇒ **整條不出現**,
+    #      不是畫成灰色、也不是改文案。五頁自己有狀態呈現(頁1「今天」有 key banner)。
+    #      複驗:`_gl_slot` 全 repo 只有 app.py 用,無任何 callback 依賴它
+    #      (2026-09-08 grep `_gl_slot` = app.py 4 處 + tab_macro.py 註解 1 處)。
+    #   ③ 「🔗 我的組合」全域狀態列與「🧭 總經指南針」—— 同屬舊 IA 的全域區塊,
+    #      客戶核定的線框寫的是「主畫面**整片**換成那一頁」。兩者在「不使用」
+    #      路徑上一字未動,綁 Sheet 的入口另有側欄的 Sheet ID 欄與本頁的組合設定葉。
+    # ⚠️ 免責聲明**照樣出**(法遵文字,不分頁面),故 `st.stop()` 前先呼叫 footer。
+    # ⚠️ §1 Fail Loud:import 或 render 失敗一律走既有的 `_render_tab_isolated`
+    #    (紅色 st.error 印出例外型別+訊息、stderr 印完整 traceback),
+    #    **不靜默退回「不使用」** —— 那會讓使用者以為自己沒選到。
+    _render_tab_isolated(_IA_VIEWS[_IA_PAGE], _IA_PAGE_LABELS[_IA_PAGE])
+    _render_footer()
+    st.stop()
+
+# ══════════════════════════════════════════════════════════════
+# 以下全部只在「不使用（用下方原功能）」時執行 —— 畫面完全等同 FE-7 之前
+# ══════════════════════════════════════════════════════════════
+
 # ══════════════════════════════════════════════════════
 # 🔗 我的組合 — 全域綁定狀態列(P3a v19.207 順暢化):把「選 Sheet」從必經分頁
 # (📁 組合管理)提升為標題下常駐的全域狀態,點開就地綁定,去「先繞組合管理」心智模型。
@@ -461,39 +626,15 @@ render_macro_compass()
 # v18.182 ARCHIVED: 🧪 回測找參數 / v18.187 ARCHIVED: 📈 月營收進退 / v18.189 ARCHIVED: 📊 財報體檢變化
 # 各暫封存模組保留磁碟，啟用方式見各 ARCHIVED 原始注解。
 # v18.463: UI 重構 — 10 平鋪 Tab → 4 大群組 + Sub-tabs（sub-tab 變數名稱維持不變，測試仍通過）
-# 2026-09-07 FE-7:最前面**純新增**「🚦 今天」= IA v2 五頁戰情室的第 1 頁
-# （`src/ui/views/page_today.py`，PR #663 落地但當時無 production caller）。
-# 2026-09-07 FE-9:其後**純新增**「🔍 找標的」= IA v2 第 2 頁
-# （`src/ui/views/page_find.py`，PR #664 落地時同樣無 production caller）。
-# 2026-09-07 FE-11:其後**純新增**「🔬 查一檔」= IA v2 第 3 頁
-# （`src/ui/views/page_inspect.py`，落地時同樣無 production caller）。
-# 2026-09-07 FE-13:其後**純新增**「💼 我的持股」= IA v2 第 4 頁
-# （`src/ui/views/page_hold.py`，落地時同樣無 production caller）。
-# 2026-09-07 FE-16:其後**純新增**「📖 憑什麼」= IA v2 第 5 頁(五頁的最後一頁)
-# （`src/ui/views/page_why.py`，落地時同樣無 production caller）。
-# ⚠️ **「🔬 查一檔」(新,第 3 個) 與既有「🔬 選股」(舊,第 7 個) emoji 相同、
-#    名稱不同 —— 兩個都保留,這是雙軌並存期的「刻意並存」,不是漏改。**
-#    新頁是「一個代碼進去,一份判決出來」(單檔判型 + 明細);舊群組是
-#    「篩一批出來」(個股 / 多檔比較 / 選股網)。兩件事,不得合併;也不得為了
-#    「看起來不重複」而改名 —— 改名會動到既有頁籤,違反客戶定版的雙軌並存。
-# ⚠️ **「💼 我的持股」(新,第 4 個) 與既有「💼 我的持股戰情室」(舊,第 10 個)
-#    emoji 相同、名稱高度相似 —— 兩個都保留,同樣是雙軌並存期的「刻意並存」,
-#    不是漏改。** 新頁是 IA v2 的**殼**(`src/ui/views/page_hold.py`,葉1 戰情室
-#    ＋ 葉2 組合設定,多數區塊仍標 unwired);舊頁是**既有實作**
-#    (`src/ui/etf/etf_tab_dividend_station.py`,線上已在跑的完整功能)。
-#    **不得合併、不得改名** —— 改名會動到既有頁籤,違反客戶定版的雙軌並存。
-# ⚠️ **「📖 憑什麼」(新,第 5 個) 與既有分頁的功能重疊有三處,三處都保留,
-#    同樣是雙軌並存期的「刻意並存」,不是漏改。** 本頁把三件事收成一頁三葉
-#    (教學 / 資料體檢 / AI 問答),而那三塊在既有結構裡分散在**兩個**頂層頁籤
-#    底下:「🔧 工具箱 → 🔎 資料診斷」、「🔧 工具箱 → 📚 教學」、以及頂層
-#    最後一個「🧬 AI 問答」。**三者一個都沒動** —— 逐條理由見下方
-#    `with tab_why:` 區塊,不得合併、不得改名。
-# ⚠️ 既有 7 個群組**一個都沒刪、沒改名、沒換順序** —— IA v2 的完整切換
-#    （7 群組 → 5 頁，會移除既有分頁）屬客戶畫面訂版，不在本批；
-#    本批只讓新頁「被看得見、可驗收」。客戶已定版**雙軌並存**:新頁陸續
-#    掛成新頁籤,既有頁籤一個都不動,兩邊同時在線由客戶自行比對驗收。
-tab_today, tab_find, tab_inspect, tab_hold, tab_why, tab_market, tab_stocks, tab_etf_main, tab_tools, tab_warroom, tab_mgmt, tab_ai = st.tabs([
-    '🚦 今天', '🔍 找標的', '🔬 查一檔', '💼 我的持股', '📖 憑什麼',
+# ⚠️ 2026-09-07 FE-7~FE-16 曾把 IA v2 五頁**掛成第 1~5 個頂層頁籤**（12 個並排）;
+#    **2026-09-08 FE-35 客戶拍板方案 A 撤回該掛法** —— 手機上頁籤列 7→12 會把舊的
+#    7 個擠出可視範圍,客戶回報「很多 Tab 不見了」。程式碼一行沒刪,壞掉的是使用經驗。
+#    **五頁一個都沒退場**,只是改由側欄「🆕 新版戰情室（試用中）」radio 導覽
+#    （見本檔上方 `_IA_VIEWS` / `_IA_PAGE` 區塊,含各頁不得合併/改名的理由）。
+# ⚠️ 本列 7 個頁籤 = **客戶原本就有的那 7 個**,名稱 / 順序 / 變數名一字未動。
+#    守衛把這 7 個字串**寫死在測試裡當第二來源**（不從本檔讀出來自己比自己）:
+#    `tests/test_ia_v2_sidebar_nav.py::TestTheSevenTabsAreExactlyTheClientsOnes`。
+tab_market, tab_stocks, tab_etf_main, tab_tools, tab_warroom, tab_mgmt, tab_ai = st.tabs([
     '🌍 市場環境', '🔬 選股', '🏦 ETF', '🔧 工具箱', '💼 我的持股戰情室', '📁 組合管理', '🧬 AI 問答',
 ])
 
@@ -535,117 +676,21 @@ _gl_slot = st.empty()
 
 
 # ══════════════════════════════════════════════════════════════
-# render 隔離器 — v18.439/v18.440 修復：單 tab 出錯不拖垮全頁
+# render 隔離器 — 定義已上移至主標題之後（2026-09-08 FE-35）
+# 理由:新版戰情室分支要在**建立頁籤之前**就用它包住「late import + render」,
+# 否則新頁 import 失敗會白屏全站(§1)。函式本體一字未改,搜 `_render_tab_isolated`。
 # ══════════════════════════════════════════════════════════════
-def _render_tab_isolated(_render, _label):
-    """單一 tab render 隔離:例外不拖垮全頁,改在該 tab st.error + stderr full traceback。"""
-    try:
-        _render()
-    except Exception as _e_tab:
-        import sys as _sys_t, traceback as _tb_t
-        st.error(f'⚠️ 「{_label}」分頁渲染異常,已隔離(其他分頁不受影響):'
-                 f'{type(_e_tab).__name__}: {str(_e_tab)[:300]}')
-        print(f'[tab:{_label}] render error:\n{_tb_t.format_exc()}', file=_sys_t.stderr)
 
 
 # ══════════════════════════════════════════════════════════════
-# GROUP 0: 🚦 今天（IA v2 第 1 頁）— 2026-09-07 FE-7 純新增
+# GROUP 0（🚦 今天 / 🔍 找標的 / 🔬 查一檔 / 💼 我的持股 / 📖 憑什麼）
+# —— 2026-09-08 FE-35：五頁**不再掛成頂層頁籤**，改由側欄 radio 導覽。
 # ══════════════════════════════════════════════════════════════
-# 分層(CLAUDE.md §8.2):L6 app.py → L5 `src/ui/views/`,**向下呼叫,合規**。
-# 本區塊不新增任何 `src.data.*` 直呼(§8.2 硬規則第 4 條)。
-# late import 照本檔既有慣例寫在 `with` 區塊內(與「總經 v2」「板塊資金潮汐」同形)。
-with tab_today:
-    from src.ui.views.page_today import render_page_today
-    _render_tab_isolated(render_page_today, '今天')
-
-
-# ══════════════════════════════════════════════════════════════
-# GROUP 0b: 🔍 找標的（IA v2 第 2 頁）— 2026-09-07 FE-9 純新增
-# ══════════════════════════════════════════════════════════════
-# 分層(CLAUDE.md §8.2):L6 app.py → L5 `src/ui/views/`,**向下呼叫,合規**。
-# 本區塊不新增任何 `src.data.*` 直呼(§8.2 硬規則第 4 條)。
-# late import 照本檔既有慣例寫在 `with` 區塊內(與「🚦 今天」同形)。
-# ⚠️ 既有「🔬 選股 → 🔭 選股網」**未動**:本頁是它的 IA v2 新殼,
-#    雙軌並存期間兩邊同時在線,session key 互不相撞
-#    (本頁前綴 `p02v_` / `_p02_`,既有選股網為 `screener_*`)。
-with tab_find:
-    from src.ui.views.page_find import render_page_find
-    _render_tab_isolated(render_page_find, '找標的')
-
-
-# ══════════════════════════════════════════════════════════════
-# GROUP 0c: 🔬 查一檔（IA v2 第 3 頁）— 2026-09-07 FE-11 純新增
-# ══════════════════════════════════════════════════════════════
-# 分層(CLAUDE.md §8.2):L6 app.py → L5 `src/ui/views/`,**向下呼叫,合規**。
-# 本區塊不新增任何 `src.data.*` 直呼(§8.2 硬規則第 4 條)。
-# late import 照本檔既有慣例寫在 `with` 區塊內(與「🚦 今天」「🔍 找標的」同形)。
-# ⚠️ 既有「🔬 選股 → 🔬 個股 / 📊 多檔個股比較」**未動**:本頁是它們的 IA v2
-#    新殼(葉1 單檔 + 葉2 多檔比較),雙軌並存期間兩邊同時在線,session key
-#    互不相撞(本頁前綴 `p03v_` / `_p03_`,既有個股為 `t2_*`、組合為 `grp_*`;
-#    form key 亦加 `_view` 後綴避開 DuplicateWidgetID)。
-# ⚠️ 頁籤名「🔬 查一檔」與既有「🔬 選股」emoji 相同、名稱不同 —— **刻意並存**,
-#    理由見上方 `st.tabs(...)` 處的說明,不得合併、不得改名。
-with tab_inspect:
-    from src.ui.views.page_inspect import render_page_inspect
-    _render_tab_isolated(render_page_inspect, '查一檔')
-
-
-# ══════════════════════════════════════════════════════════════
-# GROUP 0d: 💼 我的持股（IA v2 第 4 頁）— 2026-09-07 FE-13 純新增
-# ══════════════════════════════════════════════════════════════
-# 分層(CLAUDE.md §8.2):L6 app.py → L5 `src/ui/views/`,**向下呼叫,合規**。
-# 本區塊不新增任何 `src.data.*` 直呼(§8.2 硬規則第 4 條)。
-# late import 照本檔既有慣例寫在 `with` 區塊內(與「🚦 今天」「🔍 找標的」
-# 「🔬 查一檔」同形)。
-# ⚠️ 既有「💼 我的持股戰情室」(tab_warroom,第 10 個)**未動**:
-#    **新頁是 IA v2 的殼**(`src/ui/views/page_hold.py` —— 葉1 戰情室 ＋
-#    葉2 組合設定,四支唯讀 L3 已接線,其餘區塊仍標 unwired);
-#    **舊頁是既有實作**(`src/ui/etf/etf_tab_dividend_station.py` —— 線上已在
-#    跑的完整功能)。**不得合併、不得改名** —— 改名會動到既有頁籤,
-#    違反客戶定版的雙軌並存。兩邊同時在線,由客戶自行比對驗收。
-# ⚠️ session key 互不相撞:本頁前綴 `p04`,既有戰情室為 `_station_*`、
-#    組合管理為 `portfolio_manager` 自有 key。
-# ⚠️ 本頁碰的是**使用者資產**(Google Sheets 持股帳本),page_hold 自陳
-#    **一律唯讀**(不寫入、不刪除、不改動任何一列持股),並由
-#    `tests/test_p04_hold_view.py::TestReadOnly` 以 AST 白/黑名單釘死。
-#    本區塊只做掛載,不改變該保證。
-with tab_hold:
-    from src.ui.views.page_hold import render_page_hold
-    _render_tab_isolated(render_page_hold, '我的持股')
-
-
-# ══════════════════════════════════════════════════════════════
-# GROUP 0e: 📖 憑什麼（IA v2 第 5 頁,五頁的最後一頁）— 2026-09-07 FE-16 純新增
-# ══════════════════════════════════════════════════════════════
-# 分層(CLAUDE.md §8.2):L6 app.py → L5 `src/ui/views/`,**向下呼叫,合規**。
-# 本區塊不新增任何 `src.data.*` 直呼(§8.2 硬規則第 4 條)。
-# late import 照本檔既有慣例寫在 `with` 區塊內(與「🚦 今天」「🔍 找標的」
-# 「🔬 查一檔」「💼 我的持股」同形)。
-# ⚠️ **本頁與既有分頁的功能重疊有三處,三處都刻意並存,不得合併、不得改名。**
-#    本頁把三件事收成**一頁三葉**(葉1 教學 / 葉2 資料體檢 / 葉3 AI 問答),
-#    而那三塊在既有結構裡分散在**兩個**頂層頁籤底下:
-#    1. 葉2「資料體檢」↔ 既有「🔧 工具箱 → 🔎 資料診斷」(tab_diag,含
-#       「🔧 進階診斷」摺疊 + `_diag_adv_on` checkbox gate)——**未動**。
-#       新葉自己讀 L0 `fetch_monitor` 登錄表與 L0 燈號規格表(零 I/O)重畫成
-#       卡牆;舊分頁跑的是 `src/ui/pages/` 那組 panel(覆蓋率 / 登錄表 /
-#       §4.3 對帳 / API 根因 / 原始表 / 門檻校準)。
-#       **兩套是不同實作,讀的來源部分重疊,誰也不是誰的 wrapper。**
-#    2. 葉1「教學」↔ 既有「🔧 工具箱 → 📚 教學」(tab_edu)——**未動**。
-#    3. 葉3「AI 問答」↔ 既有頂層「🧬 AI 問答」(tab_ai,第 12 個 = 最後一個)
-#       ——**未動**。兩邊**走同一支 L3**(`services/ai_qa_service.run_agent`),
-#       差別在動線(舊的是獨立頂層分頁;新的是「先解釋、再體檢、最後直接問」
-#       的第三葉)與 session key,不是取數來源不同。
-#    **新頁是 IA v2 的殼**(`src/ui/views/page_why.py`);**舊頁是既有實作**
-#    (線上已在跑的完整功能)。**不得合併、不得改名** —— 改名會動到既有頁籤,
-#    違反客戶定版的雙軌並存。兩邊同時在線,由客戶自行比對驗收。
-# ⚠️ session key / widget key 互不相撞:本頁前綴 `p05v_`
-#    (`p05v_engineer_gate` / `p05v_qa_history` / `p05v_qa_input`);
-#    既有資料診斷的進階 gate 為 `_diag_adv_on`,既有 AI 問答為
-#    `ai_qa_history` 且其 `st.chat_input` **未帶 key**(走自動 ID)——
-#    兩支 chat_input 的 widget ID 因此不同,不會 DuplicateWidgetID。
-with tab_why:
-    from src.ui.views.page_why import render_page_why
-    _render_tab_isolated(render_page_why, '憑什麼')
+# **五頁一個都沒退場、render 函式介面一字未改**，只是換了誰呼叫：
+# 掛載點與各頁「不得合併、不得改名」的完整理由見本檔上方 `_IA_VIEWS` 區塊。
+# ⚠️ 它們現在是 **lazy** 的：`_IA_PAGE is None`（＝預設「不使用」）時
+#    連 `from src.ui.views...` 都不會執行 —— 這是本次改動的成本前提，
+#    守衛 `tests/test_ia_v2_sidebar_nav.py::TestNothingRunsUntilYouPick`。
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1157,4 +1202,4 @@ if (_mkt_top or _jq_top) and not st.session_state.get('_is_refreshing', False):
         f'<span style="font-size:11px;color:#484f58;margin-left:auto;">更新：{_ts_top}</span>'
         f'</div>', unsafe_allow_html=True)
 
-st.markdown('<div style="text-align:center;font-size:10px;color:#484f58;padding:8px 0;">⚠️ 台股AI戰情室 v3.0 · 僅供學術研究，非投資建議，盈虧自負</div>', unsafe_allow_html=True)
+_render_footer()
