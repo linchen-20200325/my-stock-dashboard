@@ -671,16 +671,26 @@ class TestHeatmapIsWiredAndTellsTheTruth:
 class TestHeatmapKeysNeverCollideWithTheOldTab:
     """本頁**一個舊 widget key 都不准重用** —— 重用會**弄壞既有分頁**。
 
-    這不是潔癖，是兩個實際會發生的故障（Streamlit 每次 app run 會跑
-    **全部** tab body，而本頁的渲染順序在 🌍 市場環境的熱力圖**之前**）：
+    這不是潔癖，是兩個實際會發生的故障（~~Streamlit 每次 app run 會跑
+    **全部** tab body，而本頁的渲染順序在 🌍 市場環境的熱力圖**之前**~~）：
 
       1. **共用 `heatmap_loaded`（session 旗標）** → 使用者在舊分頁按過載入之後，
          本頁會在**從未被造訪的情況下**發出整批冷抓；反過來，本頁按了載入
          會讓舊分頁的 opt-in 效能保證當場失效
          （`tests/test_etf_render_heatmap_gate.py` 守的就是那件事）。
-      2. **共用 `heatmap_market` / `heatmap_period` / `heatmap_refresh` /
+      2. ~~**共用 `heatmap_market` / `heatmap_period` / `heatmap_refresh` /
          `heatmap_load`（widget key）** → 先執行的那一邊佔住 ID，
-         **另一邊拋 `DuplicateWidgetID`**。先執行的是本頁 → 壞的是舊分頁。
+         **另一邊拋 `DuplicateWidgetID`**。先執行的是本頁 → 壞的是舊分頁。~~
+
+    ⚠️ **2026-09-08 FE-36 事實更正 —— 結論與斷言一字未改，理由變了。**
+    `b5bdb36` 把五頁改成**側欄 radio ＋ `st.stop()`**：新頁與舊 7 個頁籤
+    **不再進到同一個 script run** ⇒ 上面第 2 點那個「同輪撞 ID」的機制
+    **對舊分頁已不成立**（畫掉的兩處就是這個原因，不是原文寫錯）。
+    **第 1 點完全沒有失效，而且現在是這條紀律的承重理由**：`heatmap_loaded`
+    是普通的 `st.session_state` 旗標，**跨 rerun、跨頁存活**，切一下側欄 radio
+    就是同 session 的一次 rerun。另外 `st.stop()` 之前跑完的**整個側欄**
+    widget 與本頁**同輪** —— 撞 ID 這件事沒消失，只是對手換人。
+    掛載形態本身由 `tests/test_p0x_view_mount_claims.py` 釘住。
 
     ⚠️ **用 AST 不用字串搜尋**：本頁檔頭的病史說明**必須**寫出那五個 key 才
     講得清楚「為什麼不能共用」，字串搜尋會把**誠實的揭露**判成違規
