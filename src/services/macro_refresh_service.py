@@ -863,7 +863,7 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
         #    寫到了幾個，不說「成功」就等於三個都更新了。
         _step(STEP_TRIO, True,
               f"寫入 {len(_writes[STEP_TRIO])}/{len(STEP_WRITES[STEP_TRIO])} 鍵"
-              + (f"（沒寫到："
+              + ("（沒寫到："
                  + "、".join(_k for _k in STEP_WRITES[STEP_TRIO]
                             if _k not in _writes[STEP_TRIO]) + "）"
                  if len(_writes[STEP_TRIO]) < len(STEP_WRITES[STEP_TRIO]) else ""))
