@@ -1038,6 +1038,23 @@ OPERATING_MARGIN_LABELS: dict[str, str] = {"Yes": "本業獲利", "No": "本業�
 SAFETY_MARGIN_LABELS: dict[str, str] = {
     "Strong": "抗震極強", "Acceptable": "抗震尚可", "Weak": "抗震不足"}
 
+#: 💰 三格灰態的**指定文案** —— 損益表整張沒回來時講這一句。
+#: ⚠️ **客戶已核准的線框原文，逐字收錄，不得改寫、不得「優化」。**
+#: 它要同時講完三件事：發生什麼（只拿到一半）、為什麼算不出來（沒有營收
+#: 就沒有任何一個「率」）、以及**本站不拿 0 頂替**——
+#: 因為「0% 毛利」是一個**結論**，跟「沒有資料」是兩回事。
+PROFIT_GAP_WHY: str = (
+    "這一輪只拿到一半的財報 → 三張財報表裡，損益表這一輪沒有回來。"
+    "沒有營收就算不出任何一個「率」，本站不會拿 0 頂替 ——"
+    "「0% 毛利」是一個結論，不是「沒有資料」。")
+
+#: 不是「損益表沒回來」的其他缺值（單一欄位沒抓到、上游標單位異常）走這一句。
+#: **兩句分開** —— 共用一句等於對其中一邊說謊（同 `_etf_card` 的註解）。
+PROFIT_MISS_WHY: str = (
+    "這一格的欄位這一季沒抓到、或上游判定單位異常標了 N/A —— "
+    "**這是「沒有資料」，不是「這門生意不好」**；"
+    "本站不拿缺值去湊一個負面結論")
+
 #: L3 用來表達「這一格算不出來」的字面。`"N/A"` 是 L3 明文寫的
 #: （`Status: "N/A" if _bad_om else ...`）；`""` / `None` 是欄位根本不存在。
 _MISSING_STATUSES: frozenset[str] = frozenset({"", "N/A", "None", "none"})
@@ -1082,12 +1099,21 @@ class ProfitabilityReadout:
         error: 財報取數或體檢**本身**拋出的例外；空字串 = 沒有錯誤。
         upstream_note: L3 回的 `error` 欄（例如「查無此代碼」）——
             **那不是例外，是一個有效的結果**，故不進 `error`。
+        income_statement_missing: L3 的 `Profitability_Module.Data_Gap` 說
+            **整張損益表這一輪沒回來**（sentinel 是營業收入）。
+            ⚠️ 這一格不是「又一個缺值」，它決定灰態要講哪一句：
+            整張表沒回來 → `PROFIT_GAP_WHY`（客戶核准的線框原文）；
+            單一欄位沒抓到 → `PROFIT_MISS_WHY`。
+        gap_why: L3 對上一項寫的原話（`Data_Gap.why`）。**原樣透傳，本檔
+            不改寫**（§2.1）—— 只在事實列出現，不進 `Note`。
     """
 
     requested: bool
     cells: tuple[ProfitCell, ...] = ()
     error: str = ""
     upstream_note: str = ""
+    income_statement_missing: bool = False
+    gap_why: str = ""
 
 
 def _cell(key: str, label: str, slot: Any, *, value_field: str,
@@ -1156,8 +1182,21 @@ def load_profitability(verdict: KindVerdict) -> ProfitabilityReadout:
 
     _prof = (_fh or {}).get("profitability_module")
     _prof = _prof if isinstance(_prof, Mapping) else {}
+    # L3 的缺漏旗標（§1 三律之(3)：輸出帶旗標）。
+    # ⚠️ **「是不是損益表整張缺」由 L3 判，本檔不自己去看營收欄位** ——
+    #    在 UI 端重判一次，等於把 sentinel 的定義複製成第二份（違 §2.1 SSOT）。
+    _gap = _prof.get("Data_Gap")
+    _gap = _gap if isinstance(_gap, Mapping) else {}
+    try:
+        from src.services.financial_health_engine import GAP_INCOME_STATEMENT
+        _is_missing = str(_gap.get("missing") or "") == GAP_INCOME_STATEMENT
+    except Exception as _e:  # noqa: BLE001 — 常數讀不到就退回「不特別講」
+        print(f"[views/page_inspect] Data_Gap 常數讀取失敗：{_e!r}")
+        _is_missing = False
     return ProfitabilityReadout(
         requested=True, upstream_note=_upstream,
+        income_statement_missing=_is_missing,
+        gap_why=str(_gap.get("why") or ""),
         cells=(
             _cell("gross_margin", "毛利率", _prof.get("Gross_Margin"),
                   value_field="Value", status_field="Status",
@@ -1983,11 +2022,18 @@ def build_profit_cards(prof: ProfitabilityReadout) -> tuple[_Built, ...]:
     _labels = ("毛利率", "營業利益率", "安全邊際")
     _keys = ("gross_margin", "operating_margin", "safety_margin")
     _cells = {_c.key: _c for _c in prof.cells}
-    _facts: tuple[tuple[str, str], ...] = ()
+    _facts_list: list[tuple[str, str]] = []
     if prof.upstream_note:
         # L3 回的 `error` 欄（查無此代碼 / 額度用罄）**不是例外**，
         # 是一個有效的結果 —— 原樣給使用者看，本檔不改寫（§2.1）。
-        _facts = (("L3 說明", prof.upstream_note),)
+        _facts_list.append(("L3 說明", prof.upstream_note))
+    if prof.gap_why:
+        # L3 對缺漏寫的原話（哪個欄位、為什麼判成缺漏）。**原樣透傳**，
+        # 但先洗掉狀態 glyph —— 這裡在 `_render_one()` 的保護圈外，
+        # 帶 glyph 的上游字串會讓一張該畫出來的灰卡變成整頁未捕捉例外
+        # （同 `build_chips_card` 的 empty 分支）。
+        _facts_list.append(("缺漏原因", scrub_state_glyphs(prof.gap_why)[0]))
+    _facts: tuple[tuple[str, str], ...] = tuple(_facts_list)
 
     _out: list[_Built] = []
     for _key, _label in zip(_keys, _labels):
@@ -2009,11 +2055,13 @@ def build_profit_cards(prof: ProfitabilityReadout) -> tuple[_Built, ...]:
                          where=("先確認代碼與 FinMind 額度；細節在"
                                 f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
         else:   # UI_EMPTY —— **這一格就是線框點名要修的那一格。**
+            # ⚠️ **兩種缺值，兩句話**：整張損益表沒回來（`PROFIT_GAP_WHY`，
+            #    客戶核准的線框原文）vs 單一欄位沒抓到／單位異常
+            #    （`PROFIT_MISS_WHY`）。共用一句會對其中一邊說謊。
             _note = Note(
                 now=f"**{_label}：資料缺漏**",
-                why=("這一格的欄位這一季沒抓到、或上游判定單位異常標了 N/A —— "
-                     "**這是「沒有資料」，不是「這門生意不好」**；"
-                     "本站不拿缺值去湊一個負面結論"),
+                why=(PROFIT_GAP_WHY if prof.income_statement_missing
+                     else PROFIT_MISS_WHY),
                 where=("其餘兩格若有值就照常顯示，不必重按；"
                        "季報補齊後這一格會自己回來。持續缺漏請到"
                        f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"

@@ -24,13 +24,33 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import streamlit as st
 
-from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.colors import (
+    TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW,
+)
 from src.services import analyze_financial_health
 from src.services.stock_grp_service import (
     get_5_years_cash_flow as fetch_5_years_cash_flow,
     get_financial_statements as fetch_financial_statements,
 )
 from src.ui.tabs.tab_helpers import format_condition_emoji, parse_cash_flow_ratio
+
+#: 缺值標籤。**灰色 ⬜，不是紅色** —— CLAUDE.md §1.A 第 4 點：
+#: 「未載入／沒有資料」＝灰色說明；「系統真出錯」才是紅色警示。
+#: 把缺資料畫成紅的，等於捏造一個不存在的故障；滿版假紅字還會讓
+#: **真正的紅燈沒人看得見**。
+MISSING_LABEL: str = '⚪ 資料缺漏'
+
+
+def _is_missing(text) -> bool:
+    """L3 把「這一格算不出來」寫成 `'N/A…'` 或空字串。
+
+    ⚠️ **這不是「壞掉」，是「沒有資料」。** 本檔原本一律用布林判定
+    （`Status == 'Good'` / `Core_Business_Profitable == 'Yes'`），
+    欄位取不到就落 else → 紅底 ＋「辛苦生意」「本業虧損❌」——
+    **把「這一輪沒抓到損益表」講成「這是一家爛公司」**。
+    """
+    _t = str(text or '').strip()
+    return (not _t) or _t.upper().startswith('N/A')
 
 
 def render_financial_health_section(
@@ -323,13 +343,16 @@ def _render_survival_module(fd: dict) -> None:
         return
     st.markdown('**🏥 存活能力精細診斷(3 大生死指標)**')
     _s_cols = st.columns(3)
+    # ⚠️ 缺值(N/A / 空)一律落 `TRAFFIC_NEUTRAL`。原本 `.get(..., 'Fail')`
+    #    ＋ 預設 `TRAFFIC_RED` 會把 DSO 的既有 `Status='N/A (資料不足)'`
+    #    畫成紅燈 —— 那是「沒有資料」被當成「收現速度很差」（§1.A 第 4 點）。
     _status_color = {'Pass': TRAFFIC_GREEN, 'Acceptable': TRAFFIC_YELLOW, 'Fail': TRAFFIC_RED}
     for _col, (_key, _label) in zip(_s_cols, [
         ('Cash_Ratio', '💰 氣長不長'),
         ('DSO_Speed',  '⚡ 收現速度'),
     ]):
         _si = _surv_f.get(_key, {})
-        _sc = _status_color.get(_si.get('Status', 'Fail'), TRAFFIC_RED)
+        _sc = _status_color.get(_si.get('Status', ''), TRAFFIC_NEUTRAL)
         with _col:
             st.markdown(
                 f'<div style="background:{_sc}18;border:1px solid {_sc}55;'
@@ -340,7 +363,7 @@ def _render_survival_module(fd: dict) -> None:
                 f'<div style="font-size:10px;color:#8b949e;margin-top:4px;">{_si.get("Insight","")}</div>'
                 f'</div>', unsafe_allow_html=True)
     _r110 = _surv_f.get('Rule_100_100_10', {})
-    _r110_sc = _status_color.get(_r110.get('Status', 'Fail'), TRAFFIC_RED)
+    _r110_sc = _status_color.get(_r110.get('Status', ''), TRAFFIC_NEUTRAL)
     # 各分項勾叉(門檻:A>100% / B≥100% / C>10%,與 financial_health_engine:416/423/431 對齊)
     _a_ok = parse_cash_flow_ratio(_r110.get('Cash_Flow_Ratio',''), 100, strict=True)
     _b_ok = parse_cash_flow_ratio(_r110.get('Cash_Flow_Adequacy',''), 100, strict=False)
@@ -385,9 +408,19 @@ def _render_operating_module(fd: dict) -> None:
             f'<div style="font-size:18px;font-weight:900;color:#58a6ff;">{_oper_f.get("Complete_Cycle","N/A")}</div>'
             f'</div>', unsafe_allow_html=True)
     with _o2c[1]:
-        _ccc_f = str(_oper_f.get('Cash_Gap_Days', '0'))
-        _ccc_num_f = float(''.join(c for c in _ccc_f if c in '0123456789.-') or '0')
-        _ccc_color_f = TRAFFIC_GREEN if _ccc_num_f <= 0 else (TRAFFIC_YELLOW if _ccc_num_f <= 30 else TRAFFIC_RED)
+        # ⚠️ 原本把 'N/A (DSO/DIO 皆缺)' 的數字濾成空字串 → 當作 `0` →
+        #    畫成**綠色的「現金缺口 0 天」**，那是拿缺資料頒一張獎狀；
+        #    'N/A (DSO缺失，DIO=12.3天)' 更糟，會濾出 12.3 當成真的缺口天數。
+        _ccc_f = str(_oper_f.get('Cash_Gap_Days', ''))
+        if _is_missing(_ccc_f):
+            _ccc_color_f = TRAFFIC_NEUTRAL
+        else:
+            try:
+                _ccc_num_f = float(''.join(c for c in _ccc_f if c in '0123456789.-') or '0')
+            except ValueError:      # 濾出來不是合法浮點（例 '12.3-'）→ 不猜
+                _ccc_color_f = TRAFFIC_NEUTRAL
+            else:
+                _ccc_color_f = TRAFFIC_GREEN if _ccc_num_f <= 0 else (TRAFFIC_YELLOW if _ccc_num_f <= 30 else TRAFFIC_RED)
         _opm_yes_f = _oper_f.get('OPM_Strategy', 'No') == 'Yes'
         st.markdown(
             f'<div style="text-align:center;padding:8px;background:#161b22;border-radius:6px;">'
@@ -399,72 +432,106 @@ def _render_operating_module(fd: dict) -> None:
 
 
 def _render_profitability_module(fd: dict) -> None:
-    """獲利能力模組(5 大指標)。"""
+    """獲利能力模組(5 大指標)。**缺值畫灰，不畫紅。**
+
+    ⚠️ 2026-09-09 P0：這五張卡原本全是**布林**判定
+    (`Status == 'Good'` / `Core_Business_Profitable == 'Yes'`)，
+    欄位取不到就落 else → 紅底 ＋「辛苦」「本業虧損❌」。
+    財報只抓到一半(損益表沒回來)時，畫面就會對一家公司宣告
+    **本業虧損** —— 那是使用者可能拿去交易的假結論(CLAUDE.md §1)。
+    現在三態：有值照判 / 缺值一律 `MISSING_LABEL` ＋ 灰。
+    """
     _prof_f = fd.get('profitability_module', {})
     if not _prof_f or fd.get('error'):
         return
     st.markdown('**💰 獲利能力診斷(獲利 5 大指標)**')
     _p5f = st.columns(5)
+    # ① 毛利率
     _gm_f = _prof_f.get('Gross_Margin', {})
-    _gm_f_ok = _gm_f.get('Status', '') == 'Good'
+    _gm_f_na = _is_missing(_gm_f.get('Value')) or _is_missing(_gm_f.get('Status'))
+    _gm_f_ok = (not _gm_f_na) and _gm_f.get('Status', '') == 'Good'
+    _gm_f_c = TRAFFIC_NEUTRAL if _gm_f_na else (TRAFFIC_GREEN if _gm_f_ok else TRAFFIC_RED)
+    _gm_f_l = MISSING_LABEL if _gm_f_na else ('好生意' if _gm_f_ok else '辛苦')
     with _p5f[0]:
         st.markdown(
-            f'<div style="background:{f"{TRAFFIC_GREEN}18" if _gm_f_ok else f"{TRAFFIC_RED}18"};border:1px solid {f"{TRAFFIC_GREEN}55" if _gm_f_ok else f"{TRAFFIC_RED}55"};'
+            f'<div style="background:{_gm_f_c}18;border:1px solid {_gm_f_c}55;'
             f'border-radius:8px;padding:8px;text-align:center;">'
             f'<div style="font-size:10px;color:#8b949e;">毛利率</div>'
-            f'<div style="font-size:15px;font-weight:900;color:{TRAFFIC_GREEN if _gm_f_ok else TRAFFIC_RED};">{_gm_f.get("Value","N/A")}</div>'
-            f'<div style="font-size:9px;color:{TRAFFIC_GREEN if _gm_f_ok else TRAFFIC_RED};">{"好生意" if _gm_f_ok else "辛苦"}</div>'
+            f'<div style="font-size:15px;font-weight:900;color:{_gm_f_c};">{_gm_f.get("Value","N/A")}</div>'
+            f'<div style="font-size:9px;color:{_gm_f_c};">{_gm_f_l}</div>'
             f'</div>', unsafe_allow_html=True)
+    # ② 營業利益率 —— P0 點名的那一格
     _om_f = _prof_f.get('Operating_Margin', {})
-    _om_f_ok = _om_f.get('Core_Business_Profitable', 'No') == 'Yes'
+    _om_f_cbp = str(_om_f.get('Core_Business_Profitable', '') or '')
+    _om_f_na = _is_missing(_om_f.get('Value')) or _om_f_cbp not in ('Yes', 'No')
+    _om_f_ok = (not _om_f_na) and _om_f_cbp == 'Yes'
+    _om_f_c = TRAFFIC_NEUTRAL if _om_f_na else (TRAFFIC_GREEN if _om_f_ok else TRAFFIC_RED)
+    _om_f_l = MISSING_LABEL if _om_f_na else ('本業獲利✅' if _om_f_ok else '本業虧損❌')
     with _p5f[1]:
         st.markdown(
-            f'<div style="background:{f"{TRAFFIC_GREEN}18" if _om_f_ok else f"{TRAFFIC_RED}18"};border:1px solid {f"{TRAFFIC_GREEN}55" if _om_f_ok else f"{TRAFFIC_RED}55"};'
+            f'<div style="background:{_om_f_c}18;border:1px solid {_om_f_c}55;'
             f'border-radius:8px;padding:8px;text-align:center;">'
             f'<div style="font-size:10px;color:#8b949e;">營業利益率</div>'
-            f'<div style="font-size:15px;font-weight:900;color:{TRAFFIC_GREEN if _om_f_ok else TRAFFIC_RED};">{_om_f.get("Value","N/A")}</div>'
-            f'<div style="font-size:9px;color:{TRAFFIC_GREEN if _om_f_ok else TRAFFIC_RED};">{"本業獲利✅" if _om_f_ok else "本業虧損❌"}</div>'
+            f'<div style="font-size:15px;font-weight:900;color:{_om_f_c};">{_om_f.get("Value","N/A")}</div>'
+            f'<div style="font-size:9px;color:{_om_f_c};">{_om_f_l}</div>'
             f'</div>', unsafe_allow_html=True)
+    # ③ 安全邊際
     _mos_f = _prof_f.get('Margin_Of_Safety', {})
-    _mos_f_ok = _mos_f.get('Status', '') == 'Strong'
+    _mos_f_na = _is_missing(_mos_f.get('Value')) or _is_missing(_mos_f.get('Status'))
+    _mos_f_ok = (not _mos_f_na) and _mos_f.get('Status', '') == 'Strong'
+    _mos_f_c = TRAFFIC_NEUTRAL if _mos_f_na else (TRAFFIC_GREEN if _mos_f_ok else TRAFFIC_YELLOW)
+    _mos_f_l = MISSING_LABEL if _mos_f_na else ('抗震極強' if _mos_f_ok else '費用偏高')
     with _p5f[2]:
         st.markdown(
-            f'<div style="background:{f"{TRAFFIC_GREEN}18" if _mos_f_ok else f"{TRAFFIC_YELLOW}18"};border:1px solid {f"{TRAFFIC_GREEN}55" if _mos_f_ok else f"{TRAFFIC_YELLOW}55"};'
+            f'<div style="background:{_mos_f_c}18;border:1px solid {_mos_f_c}55;'
             f'border-radius:8px;padding:8px;text-align:center;">'
             f'<div style="font-size:10px;color:#8b949e;">安全邊際</div>'
-            f'<div style="font-size:15px;font-weight:900;color:{TRAFFIC_GREEN if _mos_f_ok else TRAFFIC_YELLOW};">{_mos_f.get("Value","N/A")}</div>'
-            f'<div style="font-size:9px;color:{TRAFFIC_GREEN if _mos_f_ok else TRAFFIC_YELLOW};">{"抗震極強" if _mos_f_ok else "費用偏高"}</div>'
+            f'<div style="font-size:15px;font-weight:900;color:{_mos_f_c};">{_mos_f.get("Value","N/A")}</div>'
+            f'<div style="font-size:9px;color:{_mos_f_c};">{_mos_f_l}</div>'
             f'</div>', unsafe_allow_html=True)
+    # ④ 稅後淨利率
     _nm_f = _prof_f.get('Net_Margin', {})
     _nm_f_s = _nm_f.get('Status', '')
-    _nm_f_c = TRAFFIC_GREEN if _nm_f_s == 'Pass' else (TRAFFIC_YELLOW if _nm_f_s == 'Thin Profit' else TRAFFIC_RED)
+    _nm_f_na = _is_missing(_nm_f.get('Value')) or _is_missing(_nm_f_s)
+    _nm_f_c = (TRAFFIC_NEUTRAL if _nm_f_na else
+               (TRAFFIC_GREEN if _nm_f_s == 'Pass' else
+                (TRAFFIC_YELLOW if _nm_f_s == 'Thin Profit' else TRAFFIC_RED)))
+    _nm_f_l = MISSING_LABEL if _nm_f_na else _nm_f_s
     with _p5f[3]:
         st.markdown(
             f'<div style="background:{_nm_f_c}18;border:1px solid {_nm_f_c}55;'
             f'border-radius:8px;padding:8px;text-align:center;">'
             f'<div style="font-size:10px;color:#8b949e;">稅後淨利率</div>'
             f'<div style="font-size:15px;font-weight:900;color:{_nm_f_c};">{_nm_f.get("Value","N/A")}</div>'
-            f'<div style="font-size:9px;color:{_nm_f_c};">{_nm_f_s}</div>'
+            f'<div style="font-size:9px;color:{_nm_f_c};">{_nm_f_l}</div>'
             f'</div>', unsafe_allow_html=True)
+    # ⑤ ROE
+    # ⚠️ 原本 `float(Value)` 解析失敗 → `_roe_f_num=None` → 落紅底「❌ 本業虧損」。
+    #    引擎缺值時 Value 是 'N/A (…)'，解析必然失敗 → 缺資料被講成虧損。
     _roe_f = _prof_f.get('ROE', {})
-    _roe_f_warn = _roe_f.get('Leverage_Warning', 'None') != 'None'
+    _roe_f_na = _is_missing(_roe_f.get('Value'))
+    _roe_f_warn = (not _roe_f_na) and _roe_f.get('Leverage_Warning', 'None') != 'None'
     try:
-        _roe_f_num = float(_roe_f.get('Value', '0').replace('%', '').strip())
+        _roe_f_num = float(str(_roe_f.get('Value', '0')).replace('%', '').strip())
     except (ValueError, AttributeError):
         _roe_f_num = None
     _roe_f_positive = _roe_f_num is not None and _roe_f_num > 0
-    _roe_f_c = TRAFFIC_YELLOW if _roe_f_warn else (TRAFFIC_GREEN if _roe_f_positive else TRAFFIC_RED)
+    _roe_f_c = (TRAFFIC_NEUTRAL if _roe_f_na else
+                (TRAFFIC_YELLOW if _roe_f_warn else
+                 (TRAFFIC_GREEN if _roe_f_positive else TRAFFIC_RED)))
+    _roe_f_l = (MISSING_LABEL if _roe_f_na else
+                ('⚠️ 高槓桿' if _roe_f_warn else
+                 ('✅ 真實獲利' if _roe_f_positive else '❌ 本業虧損')))
     with _p5f[4]:
         st.markdown(
             f'<div style="background:{_roe_f_c}18;border:1px solid {_roe_f_c}55;'
             f'border-radius:8px;padding:8px;text-align:center;">'
             f'<div style="font-size:10px;color:#8b949e;">ROE</div>'
             f'<div style="font-size:15px;font-weight:900;color:{_roe_f_c};">{_roe_f.get("Value","N/A")}</div>'
-            f'<div style="font-size:9px;color:{_roe_f_c};">{"⚠️ 高槓桿" if _roe_f_warn else ("✅ 真實獲利" if _roe_f_positive else "❌ 本業虧損")}</div>'
+            f'<div style="font-size:9px;color:{_roe_f_c};">{_roe_f_l}</div>'
             f'</div>', unsafe_allow_html=True)
     if _prof_f.get('Final_Insight'):
         st.caption(f'🎯 {_prof_f["Final_Insight"]}')
-
 
 def _render_financial_structure_module(fd: dict) -> None:
     """財務結構模組(那根棒子 + 以長支長)。"""
@@ -511,10 +578,21 @@ def _render_solvency_module(fd: dict) -> None:
         return
     st.markdown('**🛡️ 短期償債能力(300/150 嚴格標準)**')
     _sv_f_v = _solv_f.get('Final_Solvency_Verdict', '')
-    _sv_f_pass = 'Pass' in _sv_f_v
-    _sv_f_exc  = 'Exception' in _sv_f_v
-    _sv_f_bc   = TRAFFIC_GREEN if _sv_f_pass and not _sv_f_exc else (TRAFFIC_YELLOW if _sv_f_exc else TRAFFIC_RED)
-    _sv_f_icon = '✅' if _sv_f_pass and not _sv_f_exc else ('⚡' if _sv_f_exc else '🔴')
+    # ⚠️ 缺值(N/A / 空)一律落 `TRAFFIC_NEUTRAL`。原本的二元判定
+    #    (`Pass` → 綠，**其餘一律紅**) 會把 `3f054bb` 起的
+    #    `Final_Solvency_Verdict='N/A'`（流動資產／流動負債缺漏）畫成
+    #    紅色故障 —— 那是「這一輪沒抓到資產負債表」被講成
+    #    「這家公司還不出錢」（§1.A 第 4 點；同 `c99831b` 對獲利能力的修法）。
+    #    **紅色需要正面證據**：只有引擎真的判 `Fail` 才紅，認不得的一律灰。
+    _sv_f_na   = _is_missing(_sv_f_v)
+    _sv_f_pass = (not _sv_f_na) and 'Pass' in _sv_f_v
+    _sv_f_exc  = (not _sv_f_na) and 'Exception' in _sv_f_v
+    _sv_f_fail = (not _sv_f_na) and _sv_f_v.strip().startswith('Fail')
+    _sv_f_bc   = (TRAFFIC_GREEN if _sv_f_pass and not _sv_f_exc else
+                  (TRAFFIC_YELLOW if _sv_f_exc else
+                   (TRAFFIC_RED if _sv_f_fail else TRAFFIC_NEUTRAL)))
+    _sv_f_icon = ('✅' if _sv_f_pass and not _sv_f_exc else
+                  ('⚡' if _sv_f_exc else ('🔴' if _sv_f_fail else '⬜')))
     st.markdown(
         f'<div style="background:{_sv_f_bc}18;border:1px solid {_sv_f_bc}55;'
         f'border-radius:8px;padding:6px 12px;margin-bottom:6px;">'
@@ -526,6 +604,11 @@ def _render_solvency_module(fd: dict) -> None:
     _cr_thresh_f   = 150 if _is_dso_exc_f else (100 if _is_cash_exc_f else 300)
     _cr_label_f    = (f'流動比率(保命符放寬 >{_cr_thresh_f}%)'
                       if _is_any_exc_f else '流動比率 >300%')
+    # 同存活能力模組的寫法（`c99831b`）：**查表 + 預設 `TRAFFIC_NEUTRAL`**。
+    # 引擎在缺漏時給 `Status='N/A'`，查不到 → 灰；只有真的 `Fail_Initial`
+    # （比率真的不及格）才紅 —— 不可為了不說謊就把真的危險也洗成灰。
+    _sv_status_color_f = {'Pass': TRAFFIC_GREEN,
+                          'Fail_Initial': TRAFFIC_RED, 'Fail': TRAFFIC_RED}
     _svf2c = st.columns(2)
     for _col_s, (_key_s, _label_s) in zip(_svf2c, [
         ('Current_Ratio', _cr_label_f),
@@ -541,9 +624,10 @@ def _render_solvency_module(fd: dict) -> None:
                 else:
                     _si_f_c = TRAFFIC_RED
             except (ValueError, AttributeError):
-                _si_f_c = TRAFFIC_GREEN if 'Pass' in _si_f_s else TRAFFIC_RED
+                # Value 不是數字（例 `'N/A (流動負債缺漏)'`）→ 不猜，走查表
+                _si_f_c = _sv_status_color_f.get(_si_f_s, TRAFFIC_NEUTRAL)
         else:
-            _si_f_c = TRAFFIC_GREEN if 'Pass' in _si_f_s else TRAFFIC_RED
+            _si_f_c = _sv_status_color_f.get(_si_f_s, TRAFFIC_NEUTRAL)
         with _col_s:
             st.markdown(
                 f'<div style="background:{_si_f_c}18;border:1px solid {_si_f_c}55;'

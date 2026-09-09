@@ -46,6 +46,7 @@ def fetch_macro_bundle(
     fetch_institutional,
     fetch_margin_balance,
     fetch_adl,
+    on_job_done=None,
 ) -> dict:
     """並行 fetch 7 個資料源 + FinMind inst rescue,回傳 unified bundle(無 session_state 副作用)。
 
@@ -68,6 +69,19 @@ def fetch_macro_bundle(
                                本批未驗證的時序差異。
         intl_map/tw_map/tech_map: dict  各市場 ticker 對照(name → symbol)
         fetch_single/...:      L1 fetcher callables(由 caller 注入,避 L3→L1 import 循環)
+        on_job_done:           callable | None(T3-1 2026-09-09 新增,**keyword-only、預設 None**)
+                               每個 job 有結論時被呼叫一次:
+                               `on_job_done(name: str, ok: bool, detail: str)`。
+                               `ok` 只代表「這個 job 沒有以例外 / 逾時收場」,
+                               **不代表資料非空**(inst 全敗會回 `{}`,那是 ok=True
+                               + 下游自行判空;判空是 caller 的事,不是本層的)。
+                               ⚠️ 用途是**進度回報**(頁1 的 `st.status` 逐來源顯示),
+                               不是控制流:回呼自己拋例外時本層 print 後繼續,
+                               **不影響任何 job 的結果**(取數不該被 UI 拖累)。
+                               ⚠️ 呼叫執行緒:一律在**呼叫 `fetch_macro_bundle` 的
+                               那條執行緒**(as_completed 迴圈裡),不是 worker ——
+                               所以直接呼叫 streamlit widget 是安全的。
+                               不傳 = 一行行為都不變(既有兩個 caller 皆不傳)。
 
     回傳:
         {
@@ -79,6 +93,16 @@ def fetch_macro_bundle(
         }
     """
     _t_start = _time.time()
+
+    def _notify(_name: str, _ok: bool, _detail: str = '') -> None:
+        """回報單一 job 的結論給 caller(進度用)。**回呼壞掉不得影響取數。**"""
+        if on_job_done is None:
+            return
+        try:
+            on_job_done(_name, bool(_ok), str(_detail))
+        except Exception as _e_cb:   # noqa: BLE001 — §1:出聲但不擋取數
+            print(f'[並發] ⚠️ on_job_done({_name!r}) 回呼失敗,已略過:'
+                  f'{type(_e_cb).__name__}: {_e_cb}')
 
     # F2:caller 未注入 session 時,本層(L3)向 L1 取 SSOT。
     # 時點對齊舊版(caller 端 `bps_session=_bps()`),不延後到 rescue 分支。
@@ -217,9 +241,11 @@ def fetch_macro_bundle(
                 try:
                     _results[name] = _fut.result(timeout=_t_limit)
                     print(f'[並發] ✅ {name} ({_time.time()-_t_start:.1f}s)')
+                    _notify(name, True, f'{_time.time()-_t_start:.1f}s')
                 except Exception as _fe:
                     _results[name] = None
                     print(f'[並發] ❌ {name}: {type(_fe).__name__}: {_fe}')
+                    _notify(name, False, f'{type(_fe).__name__}: {_fe}')
         except _TIMEOUT_EXC:   # v19.170:相容 Python < 3.11(見檔頭 _TIMEOUT_EXC 註解)
             print(f'[並發] ⚠️ as_completed {_AS_COMPLETED_TIMEOUT}s 超時,補救已完成結果')
             for _fut, _name in _futs.items():
@@ -228,11 +254,16 @@ def fetch_macro_bundle(
                         try:
                             _results[_name] = _fut.result(timeout=1)
                             print(f'[並發] ✅ {_name} 補救成功')
-                        except Exception:
+                            _notify(_name, True, '補救成功')
+                        except Exception as _fe2:
                             _results[_name] = None
+                            _notify(_name, False,
+                                    f'{type(_fe2).__name__}: {_fe2}')
                     else:
                         _results[_name] = None
                         print(f'[並發] ⏰ {_name} 確認超時')
+                        _notify(_name, False,
+                                f'逾時({_AS_COMPLETED_TIMEOUT}s 全域上限)')
     finally:
         # 立即取消未開始任務,不等執行中的 thread(避免 with-block wait=True 卡 240s)
         try:
@@ -244,6 +275,7 @@ def fetch_macro_bundle(
         if _name not in _results:
             _results[_name] = None
             print(f'[並發] ⏰ {_name} 超時')
+            _notify(_name, False, '未回報結果(逾時)')
 
     # ── 解包結果 ────────────────────────────────────────
     intl_raw = _results.get('intl') or {}
