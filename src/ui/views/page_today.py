@@ -484,10 +484,46 @@ OUT_OF_REACH_LIGHT_KEYS: frozenset[str] = frozenset({"health", "news_systemic"})
 OUT_OF_REACH_BUCKETS: frozenset[str] = frozenset({"news"})
 
 
-def indicator_exit(key: str) -> str:
-    """一盞燈的灰態該給哪一種出口。**只分「摸得到 / 摸不到」，紅態另判。**"""
-    return (EXIT_OUT_OF_REACH if key in OUT_OF_REACH_LIGHT_KEYS
-            else EXIT_RETRY_HERE)
+#: 冷啟動（側車**根本沒有跑**）那一盞燈的「為什麼沒有」。
+#:
+#: ⚠️ **它與 `UNKNOWN_REASON_WHY` 是兩件不同的事，不得共用**（2026-09-09 修）：
+#: 前者是「還沒有人去取」，處置是**按按鈕**；後者是「取了、側車卻沒交代原因」，
+#: 處置是**改程式**。修前兩者共用同一段文案，於是**每一次冷啟動**、每一盞燈
+#: 都在說「這是程式要修的訊號」—— 叫使用者去修一個不存在的 bug。
+#: 用字沿用 `build_bucket_tiles` 冷啟動那一支（同一件事只講一種說法）。
+IDLE_LIGHT_WHY: str = (
+    "冷啟動 session：上游一個總經 key 都還沒寫進來，本頁因此**連算都沒有算** "
+    "—— 這是「還沒叫」，不是「叫了沒回」，也不是「掃過了沒問題」")
+
+
+def indicator_exit(key: str, rec: Mapping[str, Any] | None = None) -> str:
+    """一盞燈的灰態該給哪一種出口。**三選一，順序有意義；紅態另判。**
+
+    1. **摸不到**（`OUT_OF_REACH_LIGHT_KEYS`）→ `EXIT_OUT_OF_REACH`。
+       **排第一**：它的寫入點在別的地方，這件事與側車有沒有交代原因無關；
+       而且它給的是這一格**唯一可行的下一步**（那份資料要去哪裡才生得出來），
+       比一句「這是程式要修的」有用。
+    2. **側車跑過了、卻沒交代（或交代了沒登記的）原因** → `EXIT_FIX_CODE`。
+       ⚠️ 2026-09-09 ★3：這一格的 `why` 走 `UNKNOWN_REASON_WHY`
+       （「這是**程式要修**的訊號，不是資料問題」），修前 `where` 卻走
+       `EXIT_RETRY_HERE`（「按一次就會**重抓**這一源」）—— **同一張卡上
+       兩句互相打臉**，而且照 `where` 做的人會白按。
+       前提是側車**真的跑過**：`_rec` 的 docstring 自陳「恆為 16 筆 ——
+       缺席也要有紀錄」，且 `macro_helpers` 末段有 `no_extraction` 掃描
+       替沒取值的 spec 補一筆。所以「請求過、卻沒有登記的原因」＝ 程式的洞。
+    3. 其餘 → `EXIT_RETRY_HERE`。
+
+    Args:
+        key: `DangerSpec.key`。
+        rec: 側車那一筆。**`None` ＝ 呼叫端只問「摸得到嗎」** ——
+            冷啟動那一支就是這樣叫的：側車根本沒跑，`reason` 為空是**正常的**，
+            不該因此判成程式 bug（見 `IDLE_LIGHT_WHY`）。
+    """
+    if key in OUT_OF_REACH_LIGHT_KEYS:
+        return EXIT_OUT_OF_REACH
+    if rec is not None and reason_is_unregistered(rec):
+        return EXIT_FIX_CODE
+    return EXIT_RETRY_HERE
 
 
 def bucket_exit(bucket: str) -> str:
@@ -850,6 +886,23 @@ def _miss_why(rec: Mapping[str, Any]) -> str:
     return MISS_TEXT.get(_mapped, UNKNOWN_REASON_WHY)
 
 
+def reason_is_unregistered(rec: Mapping[str, Any]) -> bool:
+    """側車這一筆**有沒有交代一個本頁認得的缺值原因**。
+
+    ⚠️ **刻意用 `_miss_why(...) == UNKNOWN_REASON_WHY` 判，不另寫一條規則**：
+    「要不要說『上游沒交代原因』」與「要給哪一種出口」必須是**同一個判斷**。
+    寫成 `reason not in READINESS_REASON_TO_MISS` 看起來一樣，但它漏掉
+    「原因有登記、`MISS_TEXT` 卻沒有那一句」的情形 —— 那時 `why` 仍會落到
+    `UNKNOWN_REASON_WHY`，而 `where` 會走另一條路。**兩把尺就是本批要修的病。**
+
+    ⚠️ 2026-09-09 獨立 QA 抓到的第三個洞：這種情形的 `why` 走
+    `UNKNOWN_REASON_WHY`（「這是**程式要修**的訊號，不是資料問題」），
+    `where` 卻走 `EXIT_RETRY_HERE`（「按一次就會**重抓**這一源」）——
+    **同一張卡上兩句互相打臉**，而且照 `where` 做的人會白按。
+    """
+    return _miss_why(rec) == UNKNOWN_REASON_WHY
+
+
 @dataclass(frozen=True)
 class Tile:
     """一張卡 ＋ 它的渲染附件。`Card` 本身不帶燈號與中繼資料欄。
@@ -973,12 +1026,25 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
                          "以免和這張卡自己的狀態燈變成兩個矛盾的說法）" if _n else "")
         _note = Note(now=f"{_spec.label}　**這盞燈壞了，不是沒資料**", why=_why,
                      where=EXIT_FIX_CODE)
+    elif _state == UI_IDLE:
+        # 冷啟動：側車**根本沒有跑**（`load_macro_readout` 在 `requested=False`
+        # 時連算都不算，回空側車）—— 於是 `rec` 是空 dict、`reason` 是空字串。
+        # ⚠️ 這一支是 2026-09-09 ★3 一併補的：修前它與下面那一支共用同一段
+        # 文案，於是**每一次冷啟動、每一盞燈**都在說「側車沒有交代缺值原因，
+        # 這是程式要修的訊號」。冷啟動沒有原因是**正常的**，而且處置正好相反
+        # （按鈕就是解法）。只改 `where` 不改這一支的話，冷啟動會變成
+        # 「程式要修 ＋ 按一百次也一樣」—— 把最常見的狀態講成故障。
+        _note = Note(now=f"{_spec.label}　**尚未載入**（還沒有人去取這份資料）",
+                     why=IDLE_LIGHT_WHY, where=indicator_exit(key))
     else:
         _clean, _n = scrub_state_glyphs(_miss_why(rec))
         _why = _clean + ("（原文的狀態符號已移除，"
                          "以免和這張卡自己的狀態燈變成兩個矛盾的說法）" if _n else "")
+        # ★3：`why` 說「程式要修」時，`where` 不准說「按一次就會重抓」。
+        # **`rec` 一定要傳下去** —— 那是分流判得出這件事的唯一依據
+        # （不傳 ＝ 退回修前那條「一律可以重抓」的路）。
         _note = Note(now=f"{_spec.label}　無數值", why=_why,
-                     where=indicator_exit(key))
+                     where=indicator_exit(key, rec))
     # 燈號頻道跟著卡走：**`degraded` 是「有值、燈也亮」**，
     # 把它的燈藏起來等於把它降級成灰態，那是另一種說謊。
     # 其餘非 live 的狀態在上面根本沒有取到 `signal_text`（維持空字串）。

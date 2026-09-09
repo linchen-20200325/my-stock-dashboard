@@ -539,14 +539,18 @@ class TestExitCopyIsRouted:
             assert P.bucket_exit(_b) == P.EXIT_RETRY_HERE
 
     def test_the_grey_indicator_note_actually_uses_the_router(self):
-        """端到端：`health`（摸不到）與 `vix`（摸得到）拿到不同的 `where`。"""
-        _readout = P.MacroReadout(requested=True, readiness={}, summary={})
-        _h = P.build_indicator_tile("health", {}, requested=True, error="")
-        _v = P.build_indicator_tile("vix", {}, requested=True, error="")
+        """端到端：`health`（摸不到）與 `vix`（摸得到）拿到不同的 `where`。
+
+        ⚠️ 兩邊都餵**有登記的**缺值原因：`reason` 空的那一種另有分流
+        （★3 → `EXIT_FIX_CODE`），混在這裡會讓本測試守到別條規則上去。
+        """
+        from shared.macro_buckets import MISSING_NO_VALUE
+        _rec = {"state": "missing", "reason": MISSING_NO_VALUE}
+        _h = P.build_indicator_tile("health", _rec, requested=True, error="")
+        _v = P.build_indicator_tile("vix", _rec, requested=True, error="")
         assert _h.card.note is not None and _v.card.note is not None
         assert _h.card.note.where == P.EXIT_OUT_OF_REACH
         assert _v.card.note.where == P.EXIT_RETRY_HERE
-        assert _readout.requested  # 用掉它，避免 lint 抱怨
 
     def test_contract_drift_never_gets_the_retry_copy(self):
         """量綱漂移 / 沒有取值路徑 → 重抓沒用，必須是 `EXIT_FIX_CODE`。"""
@@ -561,12 +565,126 @@ class TestExitCopyIsRouted:
                 "那是新的假指路：按一百次也一樣")
 
 
+# ══════════════════════════════════════════════════════════════════
+# ★3 同一張卡上的兩句話不得互相打臉
+# ══════════════════════════════════════════════════════════════════
+def _grey_note(key="vix", rec=None, *, requested=True):
+    _t = P.build_indicator_tile(key, rec if rec is not None else {},
+                                requested=requested, error="")
+    assert _t.card.note is not None, "灰態卻沒有三要素"
+    return _t.card.note
+
+
+class TestUnknownReasonDoesNotPromiseARetry:
+    """側車沒交代（或交代了沒登記的）原因 → `why` 與 `where` 必須同一個處置。"""
+
+    @pytest.mark.parametrize("rec", [
+        {},                                              # 側車跑了，這一盞沒紀錄
+        {"state": "missing"},                            # 有紀錄，沒有 reason
+        {"state": "missing", "reason": ""},              # reason 是空字串
+        {"state": "missing", "reason": "_not_a_real_reason"},   # 沒登記的字串
+    ])
+    def test_it_sends_you_to_fix_the_code_not_to_press_again(self, rec):
+        _n = _grey_note(rec=rec)
+        assert _n.why == P.UNKNOWN_REASON_WHY, "本測試的前提：why 走「程式要修」"
+        assert _n.where == P.EXIT_FIX_CODE, (
+            "`why` 說「這是程式要修的訊號」，`where` 卻說「按一次就會重抓」—— "
+            "同一張卡上兩句話互相打臉，而且照 `where` 做的人會白按")
+        assert "按一次就會重抓" not in _n.where
+
+    def test_the_two_halves_come_from_one_judgement(self):
+        """`reason_is_unregistered` 與 `_miss_why` 必須是同一把尺。"""
+        _t = _code_only("src/ui/views/page_today.py",
+                        func="reason_is_unregistered")
+        assert "_miss_why" in _t and "UNKNOWN_REASON_WHY" in _t, (
+            "分流自己另寫了一條判斷式 —— 兩把尺遲早分岔，"
+            "那正是本項要修的病")
+
+    @pytest.mark.parametrize("reason", ["no_value", "not_loaded",
+                                        "out_of_range", "no_extraction"])
+    def test_a_registered_reason_keeps_its_own_routing(self, reason):
+        """反向：**有登記**的原因照原本的分流走，不得被一路吸進「程式要修」。"""
+        _n = _grey_note(rec={"state": "missing", "reason": reason})
+        assert _n.why != P.UNKNOWN_REASON_WHY
+        assert _n.where in (P.EXIT_RETRY_HERE, P.EXIT_FIX_CODE)
+        if reason in ("no_value", "not_loaded"):
+            assert _n.where == P.EXIT_RETRY_HERE, \
+                "這兩種原因重抓真的有用 —— 全部改成「程式要修」是往另一邊說謊"
+
+    def test_out_of_reach_still_wins(self):
+        """摸不到的那兩盞：原因沒登記時仍給「摸不到」，那才是唯一可行的下一步。"""
+        for _k in P.OUT_OF_REACH_LIGHT_KEYS:
+            assert _grey_note(_k, {}).where == P.EXIT_OUT_OF_REACH
+
+
+class TestColdStartIsNotACodeBug:
+    """★3 的必要配套：冷啟動的「沒有原因」是**正常的**，處置正好相反。"""
+
+    def test_idle_lights_do_not_say_the_code_is_broken(self):
+        _n = _grey_note(requested=False)
+        assert _n.why == P.IDLE_LIGHT_WHY
+        assert "程式要修" not in _n.why, (
+            "冷啟動被說成「程式要修」—— 那是叫使用者去修一個不存在的 bug"
+            "（而且他該做的正是按那顆按鈕）")
+
+    def test_idle_lights_point_at_the_button(self):
+        assert _grey_note(requested=False).where == P.EXIT_RETRY_HERE
+
+    def test_idle_says_not_loaded_not_no_value(self):
+        _n = _grey_note(requested=False)
+        assert "尚未載入" in _n.now and "無數值" not in _n.now, \
+            "「還沒叫」與「叫了沒回」是兩種處置，不得共用一句話"
+
+    def test_every_light_survives_a_cold_start(self):
+        """整份冷啟動：16 盞燈沒有一盞說「程式要修」。"""
+        _t = P.build_indicator_tiles(P.MacroReadout(requested=False))
+        for _b, _tiles in _t.items():
+            for _tile in _tiles:
+                _n = _tile.card.note
+                if _n is None or _tile.card.state == P.UI_UNWIRED:
+                    continue
+                assert _n.where != P.EXIT_FIX_CODE, (
+                    f"{_tile.card.key} 在冷啟動被判成程式 bug —— "
+                    "側車根本還沒跑，沒有原因是正常的")
+
+
+class TestMutationUnknownReasonRouting:
+    """突變：把 ★3 的分流拔掉 / 把冷啟動併回去 → 上面那些必須轉紅。"""
+
+    def test_dropping_the_rec_argument_brings_back_the_retry_promise(self):
+        _mutant = _mutated_module(
+            "src/ui/views/page_today.py",
+            ("                     where=indicator_exit(key, rec))",
+             "                     where=indicator_exit(key))"))
+        _n = _mutant.build_indicator_tile("vix", {}, requested=True,
+                                          error="").card.note
+        assert _n.where == P.EXIT_RETRY_HERE, (
+            "突變體（不把側車那一筆傳給分流）居然沒有回到「可以重抓」—— "
+            "表示上面那些測試守的不是這一段，請修測試")
+        assert _grey_note().where == P.EXIT_FIX_CODE
+
+    def test_folding_idle_back_in_would_call_a_cold_start_a_bug(self):
+        _mutant = _mutated_module(
+            "src/ui/views/page_today.py",
+            ("    elif _state == UI_IDLE:", "    elif False:"))
+        _n = _mutant.build_indicator_tile("vix", {}, requested=False,
+                                          error="").card.note
+        assert _n.where == P.EXIT_FIX_CODE and "程式要修" in _n.why, (
+            "突變體（拿掉冷啟動那一支）居然沒有把冷啟動說成程式 bug —— "
+            "表示 `TestColdStartIsNotACodeBug` 守的不是這一段，請修測試")
+        assert _grey_note(requested=False).where == P.EXIT_RETRY_HERE
+
+
 class TestMutationExitCopy:
     """突變：把分流函式改成一律「可以重抓」→ 上面那些必須轉紅。"""
 
     def test_collapsing_the_router_breaks_the_guard(self, monkeypatch):
-        monkeypatch.setattr(P, "indicator_exit", lambda _k: P.EXIT_RETRY_HERE)
-        _h = P.build_indicator_tile("health", {}, requested=True, error="")
+        monkeypatch.setattr(P, "indicator_exit",
+                            lambda _k, _rec=None: P.EXIT_RETRY_HERE)
+        from shared.macro_buckets import MISSING_NO_VALUE
+        _h = P.build_indicator_tile(
+            "health", {"state": "missing", "reason": MISSING_NO_VALUE},
+            requested=True, error="")
         assert _h.card.note.where == P.EXIT_RETRY_HERE, (
             "把分流拔掉之後 `health` 居然還是拿到「摸不到」的文案 —— "
             "表示 `build_indicator_tile` 根本沒在用 `indicator_exit`，請修 code")
