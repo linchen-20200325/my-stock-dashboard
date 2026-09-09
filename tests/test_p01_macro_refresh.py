@@ -1007,6 +1007,51 @@ def _run_refresh_writing(service, monkeypatch, *, trio_keys=(
     return service.refresh_macro_now(mode=service.MODE_WARM)
 
 
+class TestTheWriteProbeSurvivesAZombieThread:
+    """`_run_with_timeout` 逾時後那條 thread 殺不掉，它可能邊寫 session 邊被量。"""
+
+    class _Flaky(dict):
+        """前 `n` 次 `items()` 拋 `RuntimeError`（＝迭代中被改）。"""
+
+        def __init__(self, n, *a, **k):
+            super().__init__(*a, **k)
+            self.left = n
+
+        def items(self):
+            if self.left > 0:
+                self.left -= 1
+                raise RuntimeError("dictionary changed size during iteration")
+            return super().items()
+
+    def _with(self, ss, monkeypatch):
+        _st = _FakeST()
+        _st.session_state = ss
+        monkeypatch.setattr(RS, "st", _st)
+
+    def test_it_retries_instead_of_masking_the_real_error(self, monkeypatch):
+        self._with(self._Flaky(2, {"a": 1}), monkeypatch)
+        assert set(RS._session_fingerprint()) == {"a"}
+
+    def test_it_gives_up_loudly_not_silently(self, monkeypatch):
+        self._with(self._Flaky(99, {"a": 1}), monkeypatch)
+        with pytest.raises(RuntimeError, match="並行寫入"):
+            RS._session_fingerprint()
+
+    def test_a_step_failure_is_not_replaced_by_the_probe_error(self, monkeypatch):
+        """真正要守的東西：原本那個例外**不得**被量測的例外蓋掉。
+
+        ⚠️ 收尾那一次量測（`finally`）才是危險的那一次 —— 所以在區塊**裡面**
+        把 flaky 次數重設，讓它真的發生在 `finally`，不是只發生在進場那次。
+        """
+        _ss = self._Flaky(0, {"a": 1})
+        self._with(_ss, monkeypatch)
+        _sink: list[str] = []
+        with pytest.raises(TimeoutError, match="原本的錯"):
+            with RS._writes_recorded(_sink):
+                _ss.left = 2          # 收尾量測會撞上並行寫入
+                raise TimeoutError("原本的錯")
+
+
 class TestWrittenKeysMatchTheModules:
     """`STEP_WRITES` 的宣告 ＝ 那幾支模組**真的**賦值的 key（AST 比對）。"""
 

@@ -517,8 +517,24 @@ def _session_fingerprint() -> dict[str, int]:
     ⚠️ **量不到的一種寫法要講在明處**：若哪天有人改成**就地修改**
     （`st.session_state['x'].update(...)`），`id` 不變 → 這裡量不到，
     報告會**少講**一個有更新到的 key。那時要改的是這支函式，不是把它拿掉。
+
+    ⚠️ **為什麼要重試**：`_run_with_timeout` 的 docstring 自陳「逾時之後那條
+    thread **無法被殺掉**，它稍後若跑完仍可能把結果寫進 session」。也就是說
+    這裡**真的可能**在迭代到一半時被另一條執行緒改動（`RuntimeError:
+    dictionary changed size during iteration`）。不重試的話，那個例外會從
+    `finally` 竄出去**蓋掉原本的 `TimeoutError`** —— 報告上就會把一次逾時
+    說成一個看不懂的字典錯誤。重試三次仍失敗才拋（§1：不吞）。
     """
-    return {str(_k): id(st.session_state[_k]) for _k in st.session_state}
+    _last: Exception | None = None
+    for _ in range(3):
+        try:
+            return {str(_k): id(_v) for _k, _v in list(st.session_state.items())}
+        except RuntimeError as _e:      # 迭代中被改 —— 逾時的 zombie thread
+            _last = _e
+            print(f"[總經刷新] ⚠️ session 量測撞上並行寫入，重試：{_e!r}")
+    raise RuntimeError(
+        "連續 3 次都在量測 session 時撞上並行寫入 —— "
+        "多半是上一步逾時的 worker thread 還活著且正在寫 session") from _last
 
 
 @contextmanager
