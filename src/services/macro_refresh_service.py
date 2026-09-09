@@ -27,6 +27,8 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
 
 §1 Fail Loud：每一步的成敗**逐步記錄在報告裡**，不吞、不合併、不四捨五入成
 「更新完成」。部分成功**一律**回 `ok=False`（見 `MacroRefreshReport.ok`）。
+報告自己也被稽核一次（`STEP_SOURCE_AUDIT`）—— 收到的來源結論數對不上
+`SOURCE_LABELS` 時據實記成失敗，否則「漏收幾個來源」會表現成「其餘都成功」。
 """
 from __future__ import annotations
 
@@ -74,6 +76,7 @@ STEP_JINGQI: str = "jingqi"
 STEP_TRIO: str = "trio"
 STEP_MARKET: str = "market"
 STEP_REGISTRY: str = "registry"
+STEP_SOURCE_AUDIT: str = "source_audit"
 
 STEP_LABELS: dict[str, str] = {
     STEP_CLEAR: "清除快取（強制重抓模式）",
@@ -83,6 +86,7 @@ STEP_LABELS: dict[str, str] = {
     STEP_TRIO: "M1B-M2 / 年線乖離 / 6 源總經快照",
     STEP_MARKET: "市場評估（mkt_info）",
     STEP_REGISTRY: "資料登錄中心掃描",
+    STEP_SOURCE_AUDIT: "逐來源回報的完整性",
 }
 
 #: `compute_and_apply_market_assessment` 的逾時（秒）。
@@ -459,6 +463,22 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
             on_job_done=_on_job,
         )
         _step(STEP_FETCH, True, f"{_bundle.get('elapsed_s', 0.0):.1f}s")
+        # ── 報告的自我稽核（§-2「沒查證的宣稱比沒有宣稱更危險」）──────────
+        # `sources` 是由 `on_job_done` 一筆一筆長出來的。哪天回呼漏掉幾個 job
+        # （回呼路徑改了、或 orchestrator 換了 job 集合），`failures` 就會
+        # **少算**那幾個 —— 於是一輪其實有來源失敗的更新會被判成 `ok=True`、
+        # `st.status` 收綠燈。畫面不會顯示任何錯，因為**它根本不知道有那一項**。
+        # 這一步就是不讓那件事靜靜發生：對不上就據實記成一個失敗的步驟。
+        _got = {_r.name for _r in _sources}
+        _want = set(SOURCE_LABELS)
+        if _got != _want:
+            _step(STEP_SOURCE_AUDIT, False,
+                  f"這一輪只收到 {len(_got)}/{len(_want)} 個來源的結論"
+                  f"（缺 {sorted(_want - _got) or '無'}；"
+                  f"多出 {sorted(_got - _want) or '無'}）—— "
+                  "**本報告的成敗判定因此不完整**，不要當成「其餘都成功」")
+        else:
+            _step(STEP_SOURCE_AUDIT, True, f"{len(_got)}/{len(_want)}")
     except Exception as _e:  # noqa: BLE001 — 整條抓取鏈掛掉：據實回報，不假裝有資料
         print(f"[總經刷新] ❌ fetch_macro_bundle 整條失敗：{_e!r}")
         _step(STEP_FETCH, False, f"{type(_e).__name__}: {_e}")

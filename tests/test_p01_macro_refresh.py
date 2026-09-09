@@ -340,8 +340,13 @@ def _mutated_module(rel: str, *swaps: tuple[str, str]) -> types.ModuleType:
 # ══════════════════════════════════════════════════════════════════
 # 守衛④：沒有 ADL 就**不准**算旌旗
 # ══════════════════════════════════════════════════════════════════
-def _run_refresh_with_fakes(service, monkeypatch, *, df_adl):
-    """把 `refresh_macro_now` 的每一個外部相依都換成替身，只看它呼叫了誰。"""
+def _run_refresh_with_fakes(service, monkeypatch, *, df_adl,
+                            report_jobs=("intl",)):
+    """把 `refresh_macro_now` 的每一個外部相依都換成替身，只看它呼叫了誰。
+
+    `report_jobs`：假的 `fetch_macro_bundle` 會替哪些 job 回報結論。
+    預設只回報一個 —— 那正是「報告漏收來源」的情境。
+    """
     _calls: list[str] = []
 
     import src.services.jingqi_calc as _JQ
@@ -354,7 +359,8 @@ def _run_refresh_with_fakes(service, monkeypatch, *, df_adl):
     def _fake_bundle(**kw):
         _cb = kw.get("on_job_done")
         if _cb:
-            _cb("intl", True, "1.0s")
+            for _n in report_jobs:
+                _cb(_n, True, "1.0s")
         return _bundle(df_adl_raw=df_adl)
 
     monkeypatch.setattr(_ORCH, "fetch_macro_bundle", _fake_bundle)
@@ -754,6 +760,38 @@ class TestOutOfReachIsMeasured:
         from shared.macro_buckets import BUCKET_ORDER
         for _b in P.OUT_OF_REACH_BUCKETS:
             assert _b in BUCKET_ORDER
+
+
+class TestTheReportAuditsItself:
+    """報告漏收來源結論時**不得**表現成「其餘都成功」。"""
+
+    def test_source_labels_match_the_orchestrator_jobs(self):
+        """`SOURCE_LABELS` 的 key＝orchestrator 真的會跑的 job（實測，不是抄的）。"""
+        _t = _code_only("src/services/macro_fetch_orchestrator.py",
+                        func="fetch_macro_bundle")
+        _jobs = set(re.findall(r"'(\w+)': _job_\w+", _t))
+        assert _jobs == set(RS.SOURCE_LABELS), (
+            f"orchestrator 的 job 集合是 {sorted(_jobs)}，"
+            f"`SOURCE_LABELS` 是 {sorted(RS.SOURCE_LABELS)} —— "
+            "對不上的話畫面會少講（或多講）一個來源")
+
+    def test_a_full_report_passes_the_audit(self, monkeypatch):
+        _report, _ = _run_refresh_with_fakes(
+            RS, monkeypatch, df_adl=_FakeFrame(tag="adl"),
+            report_jobs=tuple(RS.SOURCE_LABELS))
+        _audit = [s for s in _report.steps if s.name == RS.STEP_SOURCE_AUDIT]
+        assert _audit and _audit[0].ok, f"完整回報卻沒過稽核：{_audit}"
+
+    def test_a_partial_report_is_flagged_not_silently_ok(self, monkeypatch):
+        """只回報 1 個來源 → 稽核必須失敗，整份報告不得 `ok`。"""
+        _report, _ = _run_refresh_with_fakes(RS, monkeypatch,
+                                             df_adl=_FakeFrame(tag="adl"))
+        assert not _report.ok, (
+            "只收到 1/7 個來源結論，報告卻說成功 —— "
+            "那就是「不知道有那幾項」被表現成「其餘都成功」")
+        _audit = [s for s in _report.steps if s.name == RS.STEP_SOURCE_AUDIT]
+        assert _audit and not _audit[0].ok
+        assert "不完整" in _audit[0].detail
 
 
 class TestModeMappingMatchesTheService:
