@@ -27,7 +27,7 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
 
 §1 Fail Loud：每一步的成敗**逐步記錄在報告裡**，不吞、不合併、不四捨五入成
 「更新完成」。部分成功**一律**回 `ok=False`（見 `MacroRefreshReport.ok`）。
-報告自己被稽核**兩次**，兩次看的是完全不同的東西，缺一不可：
+報告自己被稽核**三次**，三次看的是完全不同的東西，缺一不可：
   1. `STEP_SOURCE_AUDIT` —— **收到幾個來源結論**對不對得上 `SOURCE_LABELS`。
      它**不看內容**。
   2. `STEP_CONTENT_AUDIT` —— **每一桶真的收到了什麼**（`audit_source_contents`）。
@@ -35,6 +35,10 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
      只代表「這個 job 沒有以例外收場」，它的 docstring 明寫
      「**判空是 caller 的事，不是本層的**」—— 而在此之前這個 caller
      一處判空都沒有，於是「7 個來源全部回空」會走成 `ok=True` ＋ 綠燈。
+  3. `STEP_WRITE_AUDIT` —— **實測寫進 session 的 key** 有沒有超出
+     `WRITES_SESSION_KEYS` 的對外宣告。同一天的第二個洞：那份宣告原本
+     **沒有任何 production code 讀它**（只有測試 import），而畫面的
+     「有更新到 / 摸不到」全部建立在它上面。
 """
 from __future__ import annotations
 
@@ -42,6 +46,7 @@ import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
@@ -84,6 +89,7 @@ STEP_MARKET: str = "market"
 STEP_REGISTRY: str = "registry"
 STEP_SOURCE_AUDIT: str = "source_audit"
 STEP_CONTENT_AUDIT: str = "content_audit"
+STEP_WRITE_AUDIT: str = "write_audit"
 
 STEP_LABELS: dict[str, str] = {
     STEP_CLEAR: "清除快取（強制重抓模式）",
@@ -95,6 +101,7 @@ STEP_LABELS: dict[str, str] = {
     STEP_REGISTRY: "資料登錄中心掃描",
     STEP_SOURCE_AUDIT: "逐來源回報的完整性",
     STEP_CONTENT_AUDIT: "逐來源實際收到的內容（判空）",
+    STEP_WRITE_AUDIT: "寫入的 session key 與對外宣告對帳",
 }
 
 #: `compute_and_apply_market_assessment` 的逾時（秒）。
@@ -108,21 +115,41 @@ _MARKET_ASSESS_TIMEOUT_S: int = 45
 # ══════════════════════════════════════════════════════════════════
 # 這條路徑寫得到什麼 / 摸不到什麼（**畫面誠實標示的唯一來源**）
 # ══════════════════════════════════════════════════════════════════
-#: 本路徑**可能**寫入的 session key 全集（實測，非推測）。
+#: **哪一步**寫得到哪些 session key（本檔的寫入宣告 SSOT）。
 #:
-#: 來源逐項：
-#:   · `MACRO_PATCH_KEYS`（9）—— L2 純函式的契約。
-#:   · `jingqi_info`  ← `services.jingqi_calc`
-#:   · `mkt_info`     ← `services.market_assessment_apply`
-#:   · `m1b_m2_info` / `bias_info` / `macro_info` ← `services.macro_trio_orchestrator`
-#:   · `data_registry` ← `services.data_registry_scanner`
-#: 上列五個模組的 session 寫入點以 AST 掃描逐一確認（2026-09-09）；
-#: `tests/test_p01_macro_refresh.py::TestWrittenKeysMatchTheModules` 把它釘住，
-#: 任何一支多寫一個 key 而這裡沒補 → 紅燈。
-WRITES_SESSION_KEYS: tuple[str, ...] = MACRO_PATCH_KEYS + (
-    "jingqi_info", "mkt_info", "m1b_m2_info", "bias_info", "macro_info",
-    "data_registry",
-)
+#: 來源逐項（五個模組的 session 寫入點以 AST 掃描逐一確認，2026-09-09）：
+#:   · `STEP_APPLY`    ← `MACRO_PATCH_KEYS`（9）—— L2 純函式的契約。
+#:   · `STEP_JINGQI`   ← `services.jingqi_calc`
+#:   · `STEP_TRIO`     ← `services.macro_trio_orchestrator`（**三個** key）
+#:   · `STEP_MARKET`   ← `services.market_assessment_apply`
+#:   · `STEP_REGISTRY` ← `services.data_registry_scanner`
+#: `tests/test_p01_macro_refresh.py::TestWrittenKeysMatchTheModules` 逐模組
+#: AST 比對，任何一支多寫 / 少寫一個 key 而這裡沒跟著改 → 紅燈。
+#:
+#: ⚠️ **它是「寫得到」不是「這一輪寫了」**：`macro_trio_orchestrator` 對三個
+#: 子任務各有 truthy guard（失敗的那個**不覆蓋**舊值），所以一次成功的
+#: `STEP_TRIO` 可能只寫 0~3 個 key。**報告裡的「有更新到」一律以實測為準**
+#: （`refresh_macro_now` 逐步量測 session 的變化），本表只負責對帳。
+STEP_WRITES: dict[str, tuple[str, ...]] = {
+    STEP_APPLY: MACRO_PATCH_KEYS,
+    STEP_JINGQI: ("jingqi_info",),
+    STEP_TRIO: ("m1b_m2_info", "bias_info", "macro_info"),
+    STEP_MARKET: ("mkt_info",),
+    STEP_REGISTRY: ("data_registry",),
+}
+
+#: 本路徑**可能**寫入的 session key 全集。
+#:
+#: ⚠️ **2026-09-09 改為由 `STEP_WRITES` 推導，不再手抄一份。**
+#: 修前它是一份獨立的字面清單，而**沒有任何 production code 讀它**
+#: （只有測試 import）—— 一個沒人用的宣告就是下一個會漂掉的宣告
+#: （§8.2.A.0 規則 2/3 講的正是這件事）。現在它有兩個真實用途：
+#:   1. `refresh_macro_now` 拿它跟**實測寫入**對帳（`STEP_WRITE_AUDIT`）——
+#:      寫到了沒宣告的 key ＝ 這份宣告過期，當場記成失敗；
+#:   2. `MacroRefreshReport.not_written_keys` 用它算出「宣稱寫得到、
+#:      但這一輪沒寫到」，讓每一個宣告的 key 都落在畫面的某一份清單裡。
+WRITES_SESSION_KEYS: tuple[str, ...] = tuple(dict.fromkeys(
+    _k for _ks in STEP_WRITES.values() for _k in _ks))
 
 
 @dataclass(frozen=True)
@@ -427,6 +454,25 @@ class MacroRefreshReport:
         return tuple(f"{_c.label}：{_c.detail}" for _c in self.contents if _c.empty)
 
     @property
+    def not_written_keys(self) -> tuple[str, ...]:
+        """**宣稱寫得到、這一輪卻沒有寫到**的 session key。
+
+        ⚠️ 這個屬性是 2026-09-09 獨立 QA 的第二個洞的另一半：修前
+        `written_keys` 只放 `apply_macro_bundle` 的 patch（≤9 鍵），
+        步驟 3~6 真的寫進去的 `jingqi_info` / `mkt_info` / `m1b_m2_info` /
+        `bias_info` / `macro_info` / `data_registry` **兩份清單都不在** ——
+        使用者想確認「旌旗更新了沒」，畫面上哪裡都找不到答案。
+        修好 `written_keys` 之後還缺這一半：**沒寫到的也要看得見**，
+        否則「不在有更新到的清單裡」會被讀成「這一頁沒有這個東西」。
+
+        扣掉 `popped_keys`：那幾個 key 這一輪是**被刪掉**的，
+        它們在畫面上有自己的一段（「刪除的 key」）。同一個 key 同時出現在
+        「沒寫到」與「刪掉了」會讀成兩件互相矛盾的事。
+        """
+        _got = set(self.written_keys) | set(self.popped_keys)
+        return tuple(_k for _k in WRITES_SESSION_KEYS if _k not in _got)
+
+    @property
     def partials(self) -> tuple[str, ...]:
         """**只拿到一部分**的來源（例：4 檔裡 2 檔有值）。
 
@@ -450,6 +496,44 @@ class MacroRefreshReport:
         —— `ok` ＋ 沒有 `skipped` ＋ 沒有 `partials`，三個條件。
         """
         return not self.failures
+
+
+# ══════════════════════════════════════════════════════════════════
+# 寫入量測（「有更新到」是**量**出來的，不是宣告的）
+# ══════════════════════════════════════════════════════════════════
+def _session_fingerprint() -> dict[str, int]:
+    """`st.session_state` 現在每個 key 指到**哪一個物件**（`id`）。
+
+    為什麼存 `id` 而不是值：session 裡放的是 DataFrame 與大 dict，
+    複製一份來比對又慢又會踩到 `DataFrame.__eq__` 回傳整張表的脾氣。
+    本路徑呼叫的五個模組**一律是整個 key 重新賦值**
+    （`st.session_state['x'] = {...}`，AST 掃描確認，2026-09-09），
+    所以「物件換了」＝「這一步寫了它」。
+
+    ⚠️ **量不到的一種寫法要講在明處**：若哪天有人改成**就地修改**
+    （`st.session_state['x'].update(...)`），`id` 不變 → 這裡量不到，
+    報告會**少講**一個有更新到的 key。那時要改的是這支函式，不是把它拿掉。
+    """
+    return {str(_k): id(st.session_state[_k]) for _k in st.session_state}
+
+
+@contextmanager
+def _writes_recorded(sink: list[str]):
+    """量測這個區塊**真的寫了哪些 session key**，附加到 `sink`（去重、保序）。
+
+    ⚠️ **`finally` 不是裝飾**：一步跑到一半才炸（例如 trio 寫完 `m1b_m2_info`
+    才在 `macro_info` 那一段失敗）時，前面那個 key **已經被寫進去了**。
+    不量它 ＝ 報告說「沒更新到」，而畫面上那一格其實是今天的新值 ——
+    那是往另一個方向說謊。
+    """
+    _before = _session_fingerprint()
+    try:
+        yield
+    finally:
+        _after = _session_fingerprint()
+        for _k, _v in _after.items():
+            if _before.get(_k) != _v and _k not in sink:
+                sink.append(_k)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -694,14 +778,23 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
             sources=tuple(_sources), steps=tuple(_steps), cleared=_cleared)
 
     # ── 2. 寫 session（純函式算 patch，L3 負責寫）─────────────
-    _written: tuple[str, ...] = ()
+    # ⚠️ **步驟 2~6 每一步都量測它真的寫了哪些 session key**（`_writes_recorded`）。
+    #   修前 `written_keys` 只放這一步的 patch（≤9 鍵），步驟 3~6 寫進去的
+    #   `jingqi_info` / `mkt_info` / `m1b_m2_info` / `bias_info` / `macro_info` /
+    #   `data_registry` **六個 key 既不在「有更新到」、也不在「沒更新到」** ——
+    #   使用者想確認「旌旗更新了沒」，兩份清單都找不到（2026-09-09 獨立 QA）。
+    #   **量測而不是照 `STEP_WRITES` 填**：trio 對三個子任務各有 truthy guard，
+    #   一次「成功」可能只寫 0~3 個 key —— 照宣告填就會講一件沒發生的事。
+    _writes: dict[str, list[str]] = {}
     _popped: tuple[str, ...] = ()
     try:
         from src.services.macro_session_apply import apply_macro_bundle
-        _patch, _pops = apply_macro_bundle(
-            _bundle, load_heavy=True, now_str=tw_now_str())
-        _written, _popped = tuple(_patch), _pops
-        _step(STEP_APPLY, True, f"寫入 {len(_written)} 鍵 / 刪除 {len(_popped)} 鍵")
+        with _writes_recorded(_writes.setdefault(STEP_APPLY, [])):
+            _patch, _pops = apply_macro_bundle(
+                _bundle, load_heavy=True, now_str=tw_now_str())
+        _popped = _pops
+        _step(STEP_APPLY, True,
+              f"寫入 {len(_writes[STEP_APPLY])} 鍵 / 刪除 {len(_popped)} 鍵")
     except Exception as _e:  # noqa: BLE001
         print(f"[總經刷新] ❌ apply_macro_bundle 失敗：{_e!r}")
         _step(STEP_APPLY, False, f"{type(_e).__name__}: {_e}")
@@ -719,7 +812,8 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
     if _df_adl is not None:
         try:
             from src.services.jingqi_calc import compute_and_store_jingqi
-            compute_and_store_jingqi(_df_adl)
+            with _writes_recorded(_writes.setdefault(STEP_JINGQI, [])):
+                compute_and_store_jingqi(_df_adl)
             _step(STEP_JINGQI, True, "ADL 主源")
         except Exception as _e:  # noqa: BLE001
             print(f"[總經刷新] ❌ compute_and_store_jingqi 失敗：{_e!r}")
@@ -737,12 +831,22 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
     # 而 `tests/test_p0a_key_alerts_and_spinner.py` 的上界守衛是從**預設值**解析的。
     try:
         from src.services.macro_trio_orchestrator import run_macro_trio_and_persist
-        run_macro_trio_and_persist(
-            tw_raw=_bundle.get("tw_raw") or {},
-            fred_api_key=(os.environ.get("FRED_API_KEY") or _secret("FRED_API_KEY")),
-            fm_token=(os.environ.get("FINMIND_TOKEN") or _secret("FINMIND_TOKEN") or _fm),
-        )
-        _step(STEP_TRIO, True, "")
+        with _writes_recorded(_writes.setdefault(STEP_TRIO, [])):
+            run_macro_trio_and_persist(
+                tw_raw=_bundle.get("tw_raw") or {},
+                fred_api_key=(os.environ.get("FRED_API_KEY")
+                              or _secret("FRED_API_KEY")),
+                fm_token=(os.environ.get("FINMIND_TOKEN")
+                          or _secret("FINMIND_TOKEN") or _fm),
+            )
+        # ⚠️ 三個子任務各有 truthy guard（失敗的那個不覆蓋舊值）→ 這裡照實說
+        #    寫到了幾個，不說「成功」就等於三個都更新了。
+        _step(STEP_TRIO, True,
+              f"寫入 {len(_writes[STEP_TRIO])}/{len(STEP_WRITES[STEP_TRIO])} 鍵"
+              + (f"（沒寫到："
+                 + "、".join(_k for _k in STEP_WRITES[STEP_TRIO]
+                            if _k not in _writes[STEP_TRIO]) + "）"
+                 if len(_writes[STEP_TRIO]) < len(STEP_WRITES[STEP_TRIO]) else ""))
     except Exception as _e:  # noqa: BLE001
         print(f"[總經刷新] ❌ run_macro_trio_and_persist 失敗：{_e!r}")
         _step(STEP_TRIO, False, f"{type(_e).__name__}: {_e}")
@@ -752,14 +856,15 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
         from src.services.market_assessment_apply import (
             compute_and_apply_market_assessment,
         )
-        _run_with_timeout(
-            lambda: compute_and_apply_market_assessment(
-                inst=_bundle.get("inst") or {},
-                tw_raw=_bundle.get("tw_raw") or {},
-                margin=_bundle.get("margin"),
-                df_adl=_df_adl),
-            timeout_s=_MARKET_ASSESS_TIMEOUT_S)
-        _step(STEP_MARKET, True, "")
+        with _writes_recorded(_writes.setdefault(STEP_MARKET, [])):
+            _run_with_timeout(
+                lambda: compute_and_apply_market_assessment(
+                    inst=_bundle.get("inst") or {},
+                    tw_raw=_bundle.get("tw_raw") or {},
+                    margin=_bundle.get("margin"),
+                    df_adl=_df_adl),
+                timeout_s=_MARKET_ASSESS_TIMEOUT_S)
+        _step(STEP_MARKET, True, f"寫入 {len(_writes[STEP_MARKET])} 鍵")
     except Exception as _e:  # noqa: BLE001 — 含 TimeoutError
         print(f"[總經刷新] ❌ 市場評估失敗 / 逾時：{_e!r}")
         _step(STEP_MARKET, False,
@@ -768,12 +873,31 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
     # ── 6. 資料登錄中心（純 session 掃描，無對外請求）───────────
     try:
         from src.services.data_registry_scanner import scan_and_write_data_registry
-        scan_and_write_data_registry(
-            intl_map=INTL_MAP, tw_map=TW_MAP, tech_map=TECH_MAP)
-        _step(STEP_REGISTRY, True, "")
+        with _writes_recorded(_writes.setdefault(STEP_REGISTRY, [])):
+            scan_and_write_data_registry(
+                intl_map=INTL_MAP, tw_map=TW_MAP, tech_map=TECH_MAP)
+        _step(STEP_REGISTRY, True, f"寫入 {len(_writes[STEP_REGISTRY])} 鍵")
     except Exception as _e:  # noqa: BLE001
         print(f"[總經刷新] ❌ scan_and_write_data_registry 失敗：{_e!r}")
         _step(STEP_REGISTRY, False, f"{type(_e).__name__}: {_e}")
+
+    # ── 7. 寫入對帳（`WRITES_SESSION_KEYS` 在這裡真的被用到）─────────
+    # 這一步存在的理由與 `STEP_SOURCE_AUDIT` 同一族：**一份沒人讀的宣告
+    # 就是下一個會漂掉的宣告**（§8.2.A.0 規則 2/3）。畫面上「這一輪碰了哪些
+    # 資料」與 16 盞燈的「摸不到」文案全部建立在 `WRITES_SESSION_KEYS` 上；
+    # 一旦某一步開始寫沒宣告的 key，那些話就默默變成假的，而**沒有人會發現**。
+    # 對帳只問一件事：**寫到的東西有沒有超出宣告**（少寫不是錯，那叫這一輪
+    # 沒寫到，由 `not_written_keys` 列出來）。
+    _written = tuple(dict.fromkeys(_k for _ks in _writes.values() for _k in _ks))
+    _undeclared = tuple(_k for _k in _written if _k not in WRITES_SESSION_KEYS)
+    if _undeclared:
+        _step(STEP_WRITE_AUDIT, False,
+              f"這一輪寫了 `WRITES_SESSION_KEYS` 沒宣告的 key：{list(_undeclared)}"
+              " —— **本檔對外的寫入宣告已經過期**，畫面上「這一輪碰了哪些資料」"
+              "與「摸不到哪幾塊」都會少講一項（請補 `STEP_WRITES`）")
+    else:
+        _step(STEP_WRITE_AUDIT, True,
+              f"{len(_written)}/{len(WRITES_SESSION_KEYS)} 個宣告的 key 這一輪有寫到")
 
     _report = MacroRefreshReport(
         mode=mode, started_at=_started, elapsed_s=time.time() - _t0,

@@ -1680,9 +1680,18 @@ def _render_refresh_report(report: Any) -> None:
 
     with st.expander("這一輪碰了哪些資料？（逐鍵列出）", expanded=False):
         st.markdown(
-            "**有更新到（寫入 session 的 key）**：\n\n"
+            "**有更新到（實測寫進 session 的 key）**：\n\n"
             + ("\n".join(f"- `{_k}`" for _k in report.written_keys)
                or "- （這一輪一個 key 都沒寫成功）"))
+        # ⚠️ 這一段是 2026-09-09 補的另一半：只列「有更新到」的話，
+        #    一個宣告寫得到、這輪卻沒寫到的 key（旌旗 / 市場評估 / 6 源快照 …）
+        #    會**兩份清單都不在** —— 使用者想確認「它更新了沒」，
+        #    在畫面上找不到任何一句話回答他。
+        if report.not_written_keys:
+            st.markdown(
+                "**沒更新到（本頁按鈕寫得到、但這一輪沒有寫進去）**：\n\n"
+                + "\n".join(f"- `{_k}`" for _k in report.not_written_keys)
+                + "\n\n這幾格顯示的是**上一輪的值**；原因見上面的失敗 / 跳過清單。")
         if report.popped_keys:
             st.markdown("**刪除的 key**：\n\n"
                         + "\n".join(f"- `{_k}`" for _k in report.popped_keys))

@@ -782,6 +782,220 @@ class TestOutOfReachIsMeasured:
             assert _b in BUCKET_ORDER
 
 
+# ══════════════════════════════════════════════════════════════════
+# ★2 「有更新到」要涵蓋每一步真的寫進去的 key
+# ══════════════════════════════════════════════════════════════════
+#: 哪一步由哪一支模組寫 session（`STEP_WRITES` 的出處，逐支 AST 比對）。
+_STEP_MODULES = {
+    RS.STEP_JINGQI: "src/services/jingqi_calc.py",
+    RS.STEP_TRIO: "src/services/macro_trio_orchestrator.py",
+    RS.STEP_MARKET: "src/services/market_assessment_apply.py",
+    RS.STEP_REGISTRY: "src/services/data_registry_scanner.py",
+}
+
+
+def _assigned_session_keys(rel: str) -> set[str]:
+    """一支模組**真的賦值**的 session key（AST，不是 grep）。"""
+    _out: set[str] = set()
+    for _n in ast.walk(ast.parse(_src(rel))):
+        _tgts = (_n.targets if isinstance(_n, ast.Assign)
+                 else [_n.target] if isinstance(_n, (ast.AugAssign, ast.AnnAssign))
+                 else [])
+        for _t in _tgts:
+            if (isinstance(_t, ast.Subscript)
+                    and "session_state" in ast.unparse(_t.value)):
+                _out.add(ast.literal_eval(_t.slice))
+    return _out
+
+
+def _run_refresh_writing(service, monkeypatch, *, trio_keys=(
+        "m1b_m2_info", "bias_info", "macro_info"), extra=None, bundle=None):
+    """跑一輪，**替身真的會寫 session** —— 驗「有更新到」是量出來的。
+
+    ⚠️ 與 `_run_refresh_with_fakes` 的差別只有一個：那邊的替身**什麼都不寫**
+    （它守的是「呼叫了誰」），這邊的替身**照真模組的寫法賦值**
+    （`st.session_state['x'] = 新物件`，AST 掃描確認過的同一種寫法）。
+    兩支不合併：一支證明「有沒有叫」，一支證明「叫了之後畫面說了什麼」。
+    """
+    import src.services.jingqi_calc as _JQ
+    import src.services.macro_fetch_orchestrator as _ORCH
+    import src.services.macro_session_apply as _APPLY
+    import src.services.macro_trio_orchestrator as _TRIO
+    import src.services.market_assessment_apply as _MKT
+    import src.services.data_registry_scanner as _REG
+
+    _st = _FakeST({})
+    monkeypatch.setattr(service, "st", _st)
+    _b = bundle if bundle is not None else _content_bundle()
+
+    def _fake_bundle(**kw):
+        _cb = kw.get("on_job_done")
+        if _cb:
+            for _n in RS.SOURCE_LABELS:
+                _cb(_n, True, "1.0s")
+        return _b
+
+    def _write(key, value=None):
+        _st.session_state[key] = {"v": value} if value is None else value
+
+    def _fake_apply(*a, **k):
+        _patch = {"cl_data": {"x": 1}, "cl_ts": "2026-09-09 13:45"}
+        _st.session_state.update(_patch)
+        return _patch, ("adl_debug_msg",)
+
+    def _fake_trio(**k):
+        for _k in trio_keys:
+            _write(_k)
+
+    def _fake_registry(**k):
+        _write("data_registry")
+        for _k in (extra or ()):
+            _write(_k)
+
+    monkeypatch.setattr(_ORCH, "fetch_macro_bundle", _fake_bundle)
+    monkeypatch.setattr(_APPLY, "apply_macro_bundle", _fake_apply)
+    monkeypatch.setattr(_JQ, "compute_and_store_jingqi",
+                        lambda df: _write("jingqi_info"))
+    monkeypatch.setattr(_TRIO, "run_macro_trio_and_persist", _fake_trio)
+    monkeypatch.setattr(_MKT, "compute_and_apply_market_assessment",
+                        lambda **k: _write("mkt_info"))
+    monkeypatch.setattr(_REG, "scan_and_write_data_registry", _fake_registry)
+    return service.refresh_macro_now(mode=service.MODE_WARM)
+
+
+class TestWrittenKeysMatchTheModules:
+    """`STEP_WRITES` 的宣告 ＝ 那幾支模組**真的**賦值的 key（AST 比對）。"""
+
+    @pytest.mark.parametrize("step,rel", sorted(_STEP_MODULES.items()))
+    def test_each_step_declares_exactly_what_its_module_writes(self, step, rel):
+        assert set(RS.STEP_WRITES[step]) == _assigned_session_keys(rel), (
+            f"`STEP_WRITES[{step!r}]` 與 {rel} 實際寫的 key 對不上 —— "
+            "畫面上的「有更新到 / 沒更新到」會少講（或多講）一項")
+
+    def test_the_apply_step_follows_the_l2_contract(self):
+        assert RS.STEP_WRITES[RS.STEP_APPLY] == MACRO_PATCH_KEYS
+
+    def test_the_public_declaration_is_derived_not_retyped(self):
+        _union = {_k for _ks in RS.STEP_WRITES.values() for _k in _ks}
+        assert set(RS.WRITES_SESSION_KEYS) == _union, (
+            "`WRITES_SESSION_KEYS` 又被寫成一份獨立的字面清單了 —— "
+            "那正是它上一次漂掉的原因（§8.2.A.0 規則 2）")
+        assert len(RS.WRITES_SESSION_KEYS) == len(_union), "有重複的 key"
+
+    @pytest.mark.parametrize("key", ["jingqi_info", "mkt_info", "m1b_m2_info",
+                                     "bias_info", "macro_info", "data_registry"])
+    def test_the_six_step_keys_are_declared(self, key):
+        """★2 的那六個 key —— 修前它們兩份清單都不在。"""
+        assert key in RS.WRITES_SESSION_KEYS
+
+    def test_the_declaration_is_read_by_production_code(self):
+        """⚠️ 一份沒人讀的宣告就是下一個會漂掉的宣告。
+
+        修前 `WRITES_SESSION_KEYS` **只有測試 import**；現在它被
+        `refresh_macro_now`（對帳）與 `not_written_keys`（沒寫到的清單）讀。
+        兩處都用**去掉註解與 docstring** 的原始碼比對 —— 註解裡提到不算數。
+        """
+        assert "WRITES_SESSION_KEYS" in _code_only(
+            "src/services/macro_refresh_service.py", func="refresh_macro_now")
+        assert "WRITES_SESSION_KEYS" in _code_only(
+            "src/services/macro_refresh_service.py", func="not_written_keys")
+
+
+class TestWrittenKeysAreMeasured:
+    """★2 正向：每一步真的寫進去的 key 都要進「有更新到」。"""
+
+    def test_the_six_step_keys_show_up(self, monkeypatch):
+        _r = _run_refresh_writing(RS, monkeypatch)
+        for _k in ("jingqi_info", "mkt_info", "m1b_m2_info", "bias_info",
+                   "macro_info", "data_registry"):
+            assert _k in _r.written_keys, (
+                f"步驟真的寫了 `{_k}`，「有更新到」卻沒列 —— "
+                "使用者想確認它更新了沒，兩份清單都找不到")
+
+    def test_the_apply_patch_is_still_there(self, monkeypatch):
+        _r = _run_refresh_writing(RS, monkeypatch)
+        assert "cl_data" in _r.written_keys and "cl_ts" in _r.written_keys
+
+    def test_every_declared_key_lands_in_exactly_one_list(self, monkeypatch):
+        """宣告的 15 鍵**每一個**都要在「有更新到 / 沒寫到 / 刪掉了」其中一份。"""
+        _r = _run_refresh_writing(RS, monkeypatch)
+        _seen = set(_r.written_keys) | set(_r.not_written_keys) | set(_r.popped_keys)
+        assert set(RS.WRITES_SESSION_KEYS) <= _seen
+        assert not (set(_r.written_keys) & set(_r.not_written_keys)), \
+            "同一個 key 同時說「有更新到」與「沒更新到」"
+
+    def test_a_key_the_step_did_not_write_is_reported_as_not_written(
+            self, monkeypatch):
+        """trio 的 truthy guard：3 個子任務只成功 1 個 → 另 2 個要列在「沒寫到」。"""
+        _r = _run_refresh_writing(RS, monkeypatch, trio_keys=("m1b_m2_info",))
+        assert "m1b_m2_info" in _r.written_keys
+        assert "bias_info" in _r.not_written_keys
+        assert "macro_info" in _r.not_written_keys
+        _trio = [_s for _s in _r.steps if _s.name == RS.STEP_TRIO]
+        assert _trio and "1/3" in _trio[0].detail, \
+            "一次只寫到 1 個 key 的 trio 卻沒在進度列上講 —— 那句「成功」會被讀成三個都更新了"
+
+    def test_popped_keys_are_not_called_not_written(self, monkeypatch):
+        _r = _run_refresh_writing(RS, monkeypatch)
+        assert "adl_debug_msg" in _r.popped_keys
+        assert "adl_debug_msg" not in _r.not_written_keys, \
+            "同一個 key 同時說「沒寫到」與「刪掉了」—— 讀起來是兩件矛盾的事"
+
+
+class TestTheWriteDeclarationIsReconciled:
+    """★2 對帳：寫到沒宣告的 key ＝ 宣告過期，當場記成失敗。"""
+
+    def test_an_undeclared_write_fails_the_run(self, monkeypatch):
+        _r = _run_refresh_writing(RS, monkeypatch, extra=("_surprise_key",))
+        _a = [_s for _s in _r.steps if _s.name == RS.STEP_WRITE_AUDIT]
+        assert _a and not _a[0].ok, (
+            "寫了沒宣告的 key 卻沒有被抓到 —— "
+            "那份宣告會默默過期，而畫面上的「摸不到哪幾塊」建立在它上面")
+        assert "_surprise_key" in _a[0].detail
+        assert not _r.ok
+
+    def test_a_clean_run_passes_the_audit(self, monkeypatch):
+        _r = _run_refresh_writing(RS, monkeypatch)
+        _a = [_s for _s in _r.steps if _s.name == RS.STEP_WRITE_AUDIT]
+        assert _a and _a[0].ok, f"正常的一輪卻沒過對帳：{_a}"
+        assert f"/{len(RS.WRITES_SESSION_KEYS)}" in _a[0].detail
+
+    def test_writing_less_than_declared_is_not_a_failure(self, monkeypatch):
+        """少寫不是錯（那叫「這一輪沒寫到」）—— 對帳只抓「超出宣告」。"""
+        _r = _run_refresh_writing(RS, monkeypatch, trio_keys=())
+        _a = [_s for _s in _r.steps if _s.name == RS.STEP_WRITE_AUDIT]
+        assert _a and _a[0].ok
+        assert "m1b_m2_info" in _r.not_written_keys
+
+
+class TestMutationWrittenKeys:
+    """突變：把「有更新到」改回只看 patch → 上面那些必須轉紅。"""
+
+    def test_patch_only_would_hide_the_six_step_keys(self, monkeypatch):
+        _mutant = _mutated_module(
+            "src/services/macro_refresh_service.py",
+            ("    _written = tuple(dict.fromkeys(_k for _ks in _writes.values() "
+             "for _k in _ks))",
+             "    _written = tuple(_writes.get(STEP_APPLY, ()))"))
+        _r = _run_refresh_writing(_mutant, monkeypatch)
+        assert "jingqi_info" not in _r.written_keys, (
+            "突變體（只看 apply 的 patch）居然還是列出了 `jingqi_info` —— "
+            "表示上面那些測試守的不是這一行，請修測試")
+        assert "jingqi_info" in _run_refresh_writing(RS, monkeypatch).written_keys
+
+    def test_dropping_the_reconciliation_lets_the_declaration_rot(
+            self, monkeypatch):
+        _mutant = _mutated_module(
+            "src/services/macro_refresh_service.py",
+            ("    _undeclared = tuple(_k for _k in _written "
+             "if _k not in WRITES_SESSION_KEYS)",
+             "    _undeclared = ()"))
+        _r = _run_refresh_writing(_mutant, monkeypatch, extra=("_surprise_key",))
+        assert _r.ok, "突變沒生效"
+        assert not _run_refresh_writing(
+            RS, monkeypatch, extra=("_surprise_key",)).ok
+
+
 class TestTheReportAuditsItself:
     """報告漏收來源結論時**不得**表現成「其餘都成功」。"""
 
