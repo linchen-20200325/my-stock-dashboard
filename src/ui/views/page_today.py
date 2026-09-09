@@ -1552,6 +1552,23 @@ def _render_tiles(tiles: Sequence[Tile], cols: int = MAX_COLS) -> None:
                 _render_one(_tile)
 
 
+def refresh_is_clean(report: Any) -> bool:
+    """這一輪算不算「乾乾淨淨跑完」。**跳過不算乾淨。**
+
+    抽成獨立純函式的理由（不是為了好看）：這個判準是本頁**唯一**決定
+    `st.status` 收綠燈還是紅燈的地方，而它正是最容易被人「順手放寬」的一行
+    （`ok` 就好了吧？部分成功也算成功吧？）。抽出來之後
+    `tests/test_p01_macro_refresh.py` 的突變測試才拔得動它 ——
+    改成 `return True` 必須當場轉紅。
+    """
+    return bool(report.ok) and not report.skipped
+
+
+def refresh_status_state(report: Any) -> str:
+    """`st.status(state=)` 的收尾值。只有兩種：`complete` / `error`。"""
+    return "complete" if refresh_is_clean(report) else "error"
+
+
 def _event_icon(result: Any) -> str:
     """進度列的圖示。**跳過不是成功** —— 三種結局三個圖示。"""
     if getattr(result, "skipped", False):
@@ -1596,13 +1613,13 @@ def _run_refresh_now(mode: str) -> Any:
                      + (f" — {_detail}" if _detail else ""))
 
         _report = _RS.refresh_macro_now(mode=mode, on_event=_on_event)
-        _clean = _report.ok and not _report.skipped
+        _clean = refresh_is_clean(_report)
         _status.update(
             label=(f"{'✅' if _clean else '⚠️'} 更新結束 ——"
                    f" 實際耗時 {_report.elapsed_s:.1f} 秒、"
                    f"失敗 {len(_report.failures)} 項、"
                    f"本輪沒有條件跑 {len(_report.skipped)} 項"),
-            state=("complete" if _clean else "error"),
+            state=refresh_status_state(_report),
             expanded=True)
     return _report
 
@@ -1614,7 +1631,7 @@ def _render_refresh_report(report: Any) -> None:
     所以它**一定**會列出 `untouched`（本路徑摸不到的區塊），
     即使那一輪一切順利。
     """
-    _clean = report.ok and not report.skipped
+    _clean = refresh_is_clean(report)
     section_header(
         f"{'✅' if _clean else '⚠️'} 上一次更新的結果",
         f"{MODE_LABELS.get(_refresh_mode_label_key(report.mode), report.mode)}"
