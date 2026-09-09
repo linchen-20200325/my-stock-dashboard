@@ -168,12 +168,37 @@ barrel，而它在 `src/ui/tabs/`，**不在本批的檔案邊界內**。~~
 **若壞掉，整頁一樣空白**。延遲載入消掉的是**不相干模組的連坐**，
 **不是**本檔自己的必要相依。故障半徑縮小，不等於故障消失。
 
+═══ 原地重抓（T3-1，2026-09-09 客戶裁決）══════════════════════════════
+~~本頁**只讀** session、**自己不取數**。~~
+⚠️ **2026-09-09 更新：上面那句刪除線是有意識的政策變更，不是漏刪。決策者：客戶。**
+裁決原文是「頁1『🚀 更新今日戰情』要**原地直接觸發台股今日資料重抓並即時刷新本頁**，
+不要跳轉回舊分頁」。**舊句在它寫下的那天為真**（當時 submit 真的只記模式），
+但一句過期的免責聲明比沒有更糟：它會叫使用者跑去別的分頁做他在這裡就能做的事。
+
+**現行**：`_render_update_form()` 的 submit → `_run_refresh_now()` →
+L3 `services.macro_refresh_service.refresh_macro_now()` → 報告落
+`SS_REFRESH_REPORT` → `st.rerun()` → 下一輪 `_render_refresh_report()` 畫在頁首。
+
+⛔ **這是一條「平行路徑」，不是收編舊分頁。** `src/ui/tabs/**` 本階段
+**一個字都沒有動**（客戶明令舊 7 頁籤保留原樣），所以本頁按鈕**碰不到**
+舊分頁其他區塊寫的東西 —— 建議持股（卡①）／市場位階（卡③）／今日關鍵的
+門檻層／新聞桶都在射程外。**摸不到的一律逐條列在畫面上**
+（清單 SSOT：`macro_refresh_service.UNTOUCHED_BLOCKS`），
+不留白讓人以為整頁都是今天的（§1）。
+
 ═══ 分層（CLAUDE.md §8.2）═════════════════════════════════════════════
-L5。取數走 L3（`section_inputs` / `allocation_service`），計算走 L2
-（`macro_helpers` / `daily_key_alerts`），門檻走 L0（`macro_buckets`），
-渲染走 L4（`macro_v2_cards` 的標籤函式）與同層 kit（`_ui_kit`）。
+L5。取數走 L3（`section_inputs` / `allocation_service` /
+**`macro_refresh_service`**），計算走 L2（`macro_helpers` / `daily_key_alerts`），
+門檻走 L0（`macro_buckets`），渲染走 L4（`macro_v2_cards` 的標籤函式）
+與同層 kit（`_ui_kit`）。
 **零 L1 import、零 `requests` / `yfinance` / FinMind、零檔案讀寫、
 零 `@st.cache_data` / `@st.cache_resource`。**
+⚠️ 上面這句**講的是本檔自己**，不是它呼叫的東西：按下更新之後，
+L3 `macro_refresh_service` 當然會去打 L1 fetcher —— 那正是分層要的方向
+（L5 → L3 → L1），本檔一行取數都沒有自己寫（v3 §01「UI 純畫面調用」）。
+⚠️ `macro_refresh_service` 一律在 `_run_refresh_now()` 裡 **late import**：
+它 module-level 會拉 `src.compute.macro` 這個 eager barrel，
+擺在檔頭等於把 FE-7 消掉的「不相干模組 import 失敗 ⇒ 整頁空白」接回來。
 """
 from __future__ import annotations
 
@@ -216,9 +241,15 @@ from shared.ui_state import (
     classify_ui_state,
 )
 from src.ui.tabs.tab_today import (
-    CONTRACT_NO_EXIT_WHERE,
+    # ⚠️ T3-1（2026-09-09）起**不再** import `CONTRACT_NO_EXIT_WHERE`：
+    #    那句話寫死「本批的按鈕**還沒接上取數**」，而頁1 的按鈕當天已經
+    #    接上了 —— 對本頁而言它已成假敘述。位階卡改用本檔的
+    #    `EXIT_OUT_OF_REACH`（**接上了，但這一格不在射程內**，那才是實話）。
+    #    ⛔ `tab_today.py` 本身一個字都沒動（檔案邊界）：那句話在**它自己那一頁**
+    #    仍然為真，`tests/test_p01_today_skeleton.py` 照舊守著它。
     LEAF_CONCLUSION,
     LEAF_DETAIL,
+    MODE_FORCE,
     MODE_LABELS,
     MODE_WARM,
     NO_EXIT_MARKER,
@@ -273,6 +304,13 @@ SS_MODE_WIDGET: str = "p01v_update_mode_widget"
 
 #: 本頁 form 的 key（同上，與 `tab_today` 的 `form_today` 分開）。
 FORM_KEY: str = "form_today_view"
+
+#: **上一次**原地重抓的報告（`macro_refresh_service.MacroRefreshReport`）。
+#:
+#: 為什麼要存進 session 再 rerun（而不是就地印在按鈕下面）：
+#: 這一輪的 16 盞燈是在 submit **之前**就算好的。不 rerun 就會出現
+#: 「新報告 ＋ 舊燈號」的畫面，而使用者沒有辦法分辨哪一半是新的（§1）。
+SS_REFRESH_REPORT: str = "_p01_refresh_report"
 
 
 def _assert_applied_key_matches_reader() -> None:
@@ -370,22 +408,167 @@ UNKNOWN_REASON_WHY: str = (
 # ══════════════════════════════════════════════════════════════════
 # 文案常數（一句話只准寫一次；指路句一律走 `shared/ia_nav`）
 # ══════════════════════════════════════════════════════════════════
-#: 本頁**只讀 session、不取數**這件事的唯一寫法。
+#: 本頁的按鈕**碰得到什麼**。
 #:
-#: 為什麼要反覆強調：本頁的 submit 只記下更新模式，**不觸發任何取數**。
-#: 寫成「按一下就會有」是**假指路** —— 它承諾了這一批交付不出來的結果
-#: （`tab_today` 的紅隊在 `CONTRACT_NO_EXIT_WHERE` 上抓到過同一個病）。
-PAGE_READ_ONLY_WHY: str = (
-    "本頁**只讀** session 裡既有的總經輸入、**自己不取數**："
-    "五桶的原始資料由既有的總經分頁（或每日排程）寫進 session，本頁再讀它")
+#: ⚠️ **2026-09-09 T3-1：本常數改名 ＋ 改義，是有意識的政策變更，不是漏刪。**
+#: 舊名是 `PAGE_READ_ONLY_WHY`，內容是「本頁**只讀** session、**自己不取數**」。
+#: 客戶當日裁決「頁1 的按鈕要原地觸發台股今日資料重抓」之後，
+#: **那句話變成假的** —— 而一句過期的免責聲明比沒有更糟：
+#: 它會叫使用者跑去別的分頁做一件他其實在這裡就能做的事。
+#: · **舊寫法的理由仍然成立**（在它寫下的那天）：當時 submit 真的只記模式，
+#:   寫成「按一下就會有」才是假指路。
+#: · **被權衡掉的是它的前提**，不是它的精神 —— 精神（不承諾交付不出來的結果）
+#:   原封不動搬到下面三條分流：**碰得到的才說碰得到**。
+PAGE_REFRESH_SCOPE_WHY: str = (
+    f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}會**在這一頁原地重抓**"
+    "台股與總經今日資料（大盤 / 法人 / 融資 / 廣度 / 先行指標 / 6 源總經快照），"
+    "抓完直接刷新本頁；**但它碰不到每一格** —— 碰不到的那些，"
+    "本頁會在更新報告裡逐條列出來")
 
-#: 「這一格現在沒有你可以執行的出口」＋ 指到診斷分區。
-#: `NO_EXIT_MARKER` 與分區名都是 SSOT，本檔不手抄任何分頁名或按鈕名。
-NO_LOAD_EXIT_WHERE: str = (
-    f"{NO_EXIT_MARKER} —— {PAGE_READ_ONLY_WHY}；"
-    f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}只會記下你選的更新模式，"
-    f"不會讓這一格離開現在的狀態。要看這一源到底怎麼了，去 "
-    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
+# ── 三種「出口」：這一格現在該往哪走 ─────────────────────────────
+# ⚠️ **為什麼一定要分三種**（T3-1 的動工條件之一）：
+# 舊碼 15 個灰態 / 紅態全部共用同一句 `NO_LOAD_EXIT_WHERE`。按鈕接上取數之後，
+# 若把那 15 處**全部**改成「按本頁按鈕」，就會製造一種新的假指路 ——
+# **契約漂移（`out_of_range` / `no_extraction`）那幾處按一百次也沒用**，
+# 而建議持股 / 市場位階 / 今日關鍵的門檻層**本頁按鈕根本摸不到**。
+# 三句話對應三種**處置**，不是三種語氣。
+
+#: (a) 這一格**可以**靠本頁的按鈕重抓 —— 它就是這條路徑會更新的東西。
+EXIT_RETRY_HERE: str = (
+    f"{PAGE_REFRESH_SCOPE_WHY}。**這一格在它的射程內**：按一次就會重抓這一源。"
+    f"連按幾次都一樣灰的話，就是上游真的給不出來 —— 去 "
+    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}看根因。"
+    "⚠️ 失敗的取數結果會被快取住，**馬上重按多半會拿到同一個失敗**；"
+    "要繞過快取請把更新模式切到「強制重抓」")
+
+#: (b) 重抓沒有用 —— 這是**程式**要修的，不是資料問題。
+EXIT_FIX_CODE: str = (
+    f"{NO_EXIT_MARKER} —— **這一格重抓沒有用**：問題不在「今天有沒有資料」，"
+    "而在取值路徑本身（值不在約定的形態裡、或這盞燈根本沒有取值程式）。"
+    f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}按一百次也一樣。"
+    f"要看它到底怎麼了，去 {ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
+
+#: (c) 本頁按鈕**摸不到**這一格 —— 它的寫入點在別的地方。
+EXIT_OUT_OF_REACH: str = (
+    f"{NO_EXIT_MARKER} —— **這一格不在本頁按鈕的射程內**："
+    "它的資料由舊「🌍 總經」分頁的其他區塊寫進 session，本頁沒有渲染那一段。"
+    f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}不會讓它離開現在的狀態"
+    "（更新報告的「這一輪沒有更新到」會逐條列出它與它的寫入點）")
+
+#: (a)+(c) **複合**：一半可以在本頁重抓、一半摸不到。今日關鍵橫幅專用。
+#:
+#: 為什麼不硬塞進上面三種其中一種：這張卡的兩半各有各的答案 ——
+#: 急變層吃 `macro_info`（本頁按鈕會更新），門檻層吃 `macro_alerts`
+#: （本頁摸不到）。說成「可以重抓」會讓人以為按了就會變綠（不會，最多變成
+#: 「已列出急變層、門檻層未評估」）；說成「摸不到」又把真的會更新的那一半
+#: 也一起否認掉。**兩半都講，才是實話。**
+EXIT_ALERTS_PARTIAL: str = (
+    f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}"
+    "**只更新得到這張卡的一半**：急變層要用的總經快照會重抓，"
+    "**門檻層掃描本頁摸不到**（它掛在舊「🌍 總經」分頁的中期桶裡）。"
+    "也就是說按完之後這張卡最多是「已列出急變層、門檻層未評估」，**不會變綠**。"
+    f"要看門檻層到底怎麼了，去 {ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
+
+#: 16 盞燈裡**本頁按鈕摸不到**的那幾盞（其餘 14 盞都在射程內）。
+#:
+#: 推導（兩步，各自可查，**不是**在這裡另立一份「燈 → 來源」對照）：
+#:   1. L2 `macro_helpers` 的 readiness 取值表寫明 `health` 讀
+#:      `warroom_summary.health_score`、`news_systemic` 讀 `_macro_news_items`；
+#:   2. L3 `macro_refresh_service.WRITES_SESSION_KEYS` 沒有這兩個 key
+#:      （它們的寫入點都在 `src/ui/tabs/**`，本階段不准動）。
+#: 第 2 步由 `tests/test_p01_macro_refresh.py::TestOutOfReachLightsAreReallyOutOfReach`
+#: 現場比對 —— 哪天這兩個 key 被接進本路徑，那支測試會紅，這裡就得跟著改。
+OUT_OF_REACH_LIGHT_KEYS: frozenset[str] = frozenset({"health", "news_systemic"})
+
+#: 五桶裡整桶都摸不到的那一桶（`news` 桶旗下只有 `news_systemic` 一盞燈）。
+OUT_OF_REACH_BUCKETS: frozenset[str] = frozenset({"news"})
+
+
+def indicator_exit(key: str) -> str:
+    """一盞燈的灰態該給哪一種出口。**只分「摸得到 / 摸不到」，紅態另判。**"""
+    return (EXIT_OUT_OF_REACH if key in OUT_OF_REACH_LIGHT_KEYS
+            else EXIT_RETRY_HERE)
+
+
+def bucket_exit(bucket: str) -> str:
+    """一整桶的灰態該給哪一種出口。"""
+    return (EXIT_OUT_OF_REACH if bucket in OUT_OF_REACH_BUCKETS
+            else EXIT_RETRY_HERE)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 原地重抓（T3-1，2026-09-09 客戶裁決）的文案與模式對映
+# ══════════════════════════════════════════════════════════════════
+#: 本頁 radio 的選項 key → L3 `macro_refresh_service` 的模式字串。
+#:
+#: ⚠️ **為什麼右邊是字面而不是 `import macro_refresh_service.MODE_*`**：
+#: 那個 module 會把 `src.compute.macro` 這個 **eager barrel** 一起拉進來
+#: （它 module-level import `macro_helpers` ＋ `flow_engine`）——
+#: 也就是把檔頭 FE-7 好不容易消掉的「不相干模組 import 失敗 ⇒ 整頁空白」
+#: 又接回來。服務本體一律在 `_run_refresh_now()` 裡 late import。
+#:
+#: ⚠️ **代價講在明處**：右邊兩個字面因此是**第二份定義**，會漂。
+#: 兩道守衛把它釘住，缺一不可：
+#:   1. CI —— `tests/test_p01_macro_refresh.py::TestModeMappingMatchesTheService`
+#:      同時 import 兩邊逐值比對（漂了 CI 就紅，不必等到有人按按鈕）；
+#:   2. 執行期 —— `_run_refresh_now()` 拿到服務之後**再驗一次**，
+#:      對不上就 `RuntimeError`，**不 fallback 成正常更新**
+#:      （fallback 等於替使用者改掉他選的模式）。
+UPDATE_MODE_TO_REFRESH_MODE: dict[str, str] = {
+    MODE_WARM: "warm",
+    MODE_FORCE: "force",
+}
+
+
+def _assert_every_update_mode_is_mapped() -> None:
+    """import 時就驗：radio 上的每一個模式都有對應的重抓模式（§1 Fail Loud）。"""
+    _missing = [_m for _m in MODE_LABELS if _m not in UPDATE_MODE_TO_REFRESH_MODE]
+    if _missing:
+        raise RuntimeError(
+            f"`tab_today.MODE_LABELS` 多了 {_missing} 這些更新模式，"
+            "但 `page_today.UPDATE_MODE_TO_REFRESH_MODE` 沒有對應 —— "
+            "按下去會沒有反應。請補對映，**不要**讓它 fallback 成正常更新"
+            "（那等於替使用者改掉他選的模式）。")
+
+
+_assert_every_update_mode_is_mapped()
+
+#: `st.status` 進行中的標題。**刻意不寫秒數上界**（見 `_run_refresh_now`）。
+REFRESH_RUNNING_LABEL: str = (
+    "🚀 正在原地重抓今日資料 —— 逐個來源列在下面，"
+    "**暖快取數秒、冷啟動較久**；每一行出現＝那一源已經有結論")
+
+#: 按鈕下方的速度提示。同上：講體感分級，不講秒數。
+REFRESH_SPEED_HINT: str = (
+    "暖快取時多半數秒內結束；冷啟動（或選「強制重抓」）會久一些，"
+    "**進度會一行一行出現**，沒有停住就是還在跑。"
+    "跑完會自動刷新本頁，並在頁首留下這一輪的結果。")
+
+#: 有失敗時該怎麼辦。⛔ **不得寫「請重試」。**
+#:
+#: 理由（實測，不是保守）：失敗的取數結果會被 `@st.cache_data` 連同失敗一起
+#: 快取住一段時間（TTL 由 `shared/ttls.py` 決定）。在那段時間內**馬上重按會
+#: 拿到同一個失敗**，於是「請重試」就是一句會讓人白按好幾次的假指路。
+#: 真正繞得過快取的動作只有一個：把更新模式切到「強制重抓」。
+REFRESH_FAILED_WHAT_NOW: str = (
+    "**下一步**：失敗的取數結果會連同失敗一起被快取一段時間，"
+    "**馬上再按一次「正常更新」多半會拿到同一個失敗**。"
+    "要真的重打上游，請把更新模式切到「強制重抓（清快取）」再送出一次；"
+    "還是失敗就是上游真的給不出來 —— "
+    f"去 {ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}看根因。"
+    "⚠️ 沒有更新到的那幾格**現在顯示的是上一輪的值**，不是今天的。")
+
+#: 「這一輪沒有更新到」那一段的標題與說明。
+#: ⚠️ 常數自帶 Markdown 粗體，呼叫端**不要再包一層** `**` ——
+#: 巢狀的 `**` 會被 Streamlit 解析成「粗體 + 一段普通字 + 粗體」，
+#: 畫面上會冒出裸露的星號（本批 AppTest 實測踩過）。
+UNTOUCHED_HEADING: str = "**這一輪沒有更新到**（本頁按鈕摸不到的區塊）"
+UNTOUCHED_WHY: str = (
+    "⚠️ 下面這幾塊**不在本頁按鈕的射程內** —— 它們現在顯示的是"
+    "**上一次跑舊「🌍 總經」分頁留下的值**，或根本沒有值。"
+    "留白不寫等於讓整頁看起來都是今天的，所以這裡逐條列出來，"
+    "連「誰才寫得到它」一起講（清單與寫入點的 SSOT 在 L3 "
+    "`services.macro_refresh_service.UNTOUCHED_BLOCKS`，本頁不另抄一份）。")
 
 #: 契約沒有時間欄位這件事（陷阱 1）。**不編一個時間出來。**
 AS_OF_NOT_IN_CONTRACT: str = (
@@ -782,20 +965,20 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
         # 不是 L3 canonical 契約 —— 見【8b】與 `_error_why` 的註解。
         _note = Note(now=f"{_spec.label}　取得失敗",
                      why=_error_why(SRC_FIVE_BUCKET, error),
-                     where=NO_LOAD_EXIT_WHERE)
+                     where=EXIT_FIX_CODE)
     elif _state == UI_FAILED:
         # 側車自己判出的紅（量綱漂移 / spec 沒有取值路徑）—— 不是本頁拋的例外。
         _clean, _n = scrub_state_glyphs(_miss_why(rec))
         _why = _clean + ("（原文的狀態符號已移除，"
                          "以免和這張卡自己的狀態燈變成兩個矛盾的說法）" if _n else "")
         _note = Note(now=f"{_spec.label}　**這盞燈壞了，不是沒資料**", why=_why,
-                     where=NO_LOAD_EXIT_WHERE)
+                     where=EXIT_FIX_CODE)
     else:
         _clean, _n = scrub_state_glyphs(_miss_why(rec))
         _why = _clean + ("（原文的狀態符號已移除，"
                          "以免和這張卡自己的狀態燈變成兩個矛盾的說法）" if _n else "")
         _note = Note(now=f"{_spec.label}　無數值", why=_why,
-                     where=NO_LOAD_EXIT_WHERE)
+                     where=indicator_exit(key))
     # 燈號頻道跟著卡走：**`degraded` 是「有值、燈也亮」**，
     # 把它的燈藏起來等於把它降級成灰態，那是另一種說謊。
     # 其餘非 live 的狀態在上面根本沒有取到 `signal_text`（維持空字串）。
@@ -873,20 +1056,20 @@ def build_bucket_tiles(readout: MacroReadout) -> tuple[Tile, ...]:
         if _state == UI_FAILED:
             _note = Note(now=f"{_name}　這一桶算不出來",
                          why=_error_why(SRC_FIVE_BUCKET, readout.error),
-                         where=NO_LOAD_EXIT_WHERE)
+                         where=EXIT_FIX_CODE)
         elif readout.requested:
             _note = Note(
                 now=f"{_name}　**全部無資料**",
                 why=("這一桶旗下的燈本輪一盞都沒有取到值 —— "
                      "上游 session 裡有容器、但欄位是空的。"
                      "**本站不以缺值推導「中性」**，所以它是灰的不是綠的"),
-                where=NO_LOAD_EXIT_WHERE)
+                where=bucket_exit(_b))
         else:
             _note = Note(
                 now=f"{_name}　**尚未載入**（還沒有人去取這份資料）",
                 why=("冷啟動 session：上游一個總經 key 都還沒寫進來，"
                      "本頁因此連算都沒有算 —— 這是「還沒叫」，不是「叫了沒回」"),
-                where=NO_LOAD_EXIT_WHERE)
+                where=bucket_exit(_b))
         _tiles.append(Tile(Card(key=f"summary.{_b}", label=_name,
                                 state=_state, note=_note),
                            facts=(("這一桶在看什麼", str(_meta["sub"])),)))
@@ -953,25 +1136,25 @@ def build_key_alert_tile(alerts: Mapping[str, Any] | None, *,
     if _state == UI_FAILED:
         _note = Note(now=f"{_label}　橫幅本身無法產生",
                      why=_error_why(SRC_KEY_ALERTS, error),
-                     where=NO_LOAD_EXIT_WHERE)
+                     where=EXIT_FIX_CODE)
     elif _state == UI_DEGRADED:
         _note = Note(
             now=f"{_label}　已列出異常，但**本列僅含急變層**",
             why=("門檻層本輪未評估（`macro_alerts` 為 `None` 或 `[]`）—— "
                  "紅 / 黃條照顯示，但它沒有涵蓋門檻層，"
                  "**不能把它讀成「門檻都沒踩到」**"),
-            where=NO_LOAD_EXIT_WHERE)
+            where=EXIT_ALERTS_PARTIAL)
     elif requested:
         _note = Note(
             now=f"{_label}　**門檻掃描尚未完成** —— **未評估 ≠ 無異常**",
             why=("門檻層這輪沒跑到（`None`），或跑了但 snapshot 全是 `None`（`[]`）"
                  "—— 兩者都不是「沒事」，急變層也沒有東西可比"),
-            where=NO_LOAD_EXIT_WHERE)
+            where=EXIT_ALERTS_PARTIAL)
     else:
         _note = Note(
             now=f"{_label}　尚未載入 —— **未評估 ≠ 無異常**",
             why="冷啟動 session：總經指標一項都還沒寫進來，沒有東西可以掃",
-            where=NO_LOAD_EXIT_WHERE)
+            where=EXIT_ALERTS_PARTIAL)
     # degraded 是「**有值**、燈也亮，只是判讀不完整」 → 燈要照出。
     # 其餘灰態 / 紅態沒有評估結果，燈號頻道一律留白（未評估 ≠ 綠）。
     #
@@ -1123,7 +1306,8 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             key="verdict.exposure", label="能不能出手 · 出手到幾成",
             state=_alloc_state,
             note=Note(now="**今天能不能出手：尚未評估**", why=_why,
-                      where=NO_LOAD_EXIT_WHERE))))
+                      where=(EXIT_FIX_CODE if alloc_error
+                             else EXIT_OUT_OF_REACH)))))
 
     # ② 指標危險度（16 盞燈的 worst-of，**不含多空方向**）。
     #    ⚠️ 這一張**完全不看 regime**；regime 掛掉時它照樣要算得出來。
@@ -1160,7 +1344,8 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             key="verdict.danger", label="指標危險度（不含多空方向）",
             state=_danger_state,
             note=Note(now="**指標危險度：尚未載入**", why=_why,
-                      where=NO_LOAD_EXIT_WHERE))))
+                      where=(EXIT_FIX_CODE if danger_error
+                             else EXIT_RETRY_HERE)))))
 
     # ③ 市場位階 —— 本頁取自 L3 契約（見 `REGIME_CARD_LABEL` /
     #    `REGIME_SCOPE_NOTE`：原標題的唯一性宣稱實測為假，已改）。
@@ -1230,8 +1415,8 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                 why=(upstream_error_why(regime_error) if regime_error else
                      "L3 canonical 契約四條來源本輪皆無值 → 回 `unknown`，"
                      "**不是** `neutral`；本站不以缺值推導「中性」"),
-                where=(CONTRACT_NO_EXIT_WHERE if not regime_error
-                       else NO_LOAD_EXIT_WHERE))),
+                where=(EXIT_OUT_OF_REACH if not regime_error
+                       else EXIT_FIX_CODE))),
             facts=(("位階的出處", REGIME_SCOPE_NOTE),)))
     return tuple(_tiles)
 
@@ -1356,7 +1541,7 @@ def _render_one(tile: Tile) -> None:
         signal_color=tile.signal_color, facts=tile.facts,
         owner="views/page_today",
         error_why=lambda _err: _error_why(SRC_RENDER, _err),
-        where=NO_LOAD_EXIT_WHERE)
+        where=EXIT_FIX_CODE)
 
 
 def _render_tiles(tiles: Sequence[Tile], cols: int = MAX_COLS) -> None:
@@ -1367,9 +1552,139 @@ def _render_tiles(tiles: Sequence[Tile], cols: int = MAX_COLS) -> None:
                 _render_one(_tile)
 
 
+def _event_icon(result: Any) -> str:
+    """進度列的圖示。**跳過不是成功** —— 三種結局三個圖示。"""
+    if getattr(result, "skipped", False):
+        return "⏭"
+    return "✅" if getattr(result, "ok", False) else "❌"
+
+
+def _run_refresh_now(mode: str) -> Any:
+    """原地重抓 —— 逐來源顯示進度，回傳 `MacroRefreshReport`。
+
+    ⚠️ **`st.status` 的收尾狀態只有兩種，判準寫死在這裡（T3-1 動工條件 ⑥）**：
+    `complete` **只在「全部來源與步驟都成功、而且沒有任何一步被跳過」時給**，
+    其餘一律 `error`。理由：部分成功的畫面**混合了新舊資料**，而使用者
+    沒有任何方式分辨哪一格是今天的 —— 把它畫成綠色的「完成」，
+    就是拿混合畫面當今天的結論（§1）。
+    **跳過也算 `error`**：一個「本輪沒有廣度資料所以沒算旌旗」的輪次，
+    畫面上的旌旗那盞燈仍是上一輪的值，這件事必須看得見。
+
+    ⚠️ **不寫任何秒數上界**：`tab_macro` 的 spinner 文案有一個由
+    `tests/test_p0a_key_alerts_and_spinner.py` 反解 code 逾時算出來的上界守衛；
+    本頁的文案**不在那支守衛的射程內**，寫死秒數＝寫一個沒人在守的數字，
+    它會在下一次有人調 timeout 時默默變成謊話。這裡只講**體感分級**
+    （暖快取數秒 / 冷啟動較久）與**真的經過了幾秒**（`time.time()` 實測）。
+    """
+    from src.services import macro_refresh_service as _RS
+
+    # 守衛 2/2（見 `UPDATE_MODE_TO_REFRESH_MODE` 的註解）：字面對不上就當場炸，
+    # **不 fallback**。fallback 會讓使用者選了「強制重抓」卻跑成「正常更新」，
+    # 而畫面上完全看不出來 —— 那比報錯糟得多（§1）。
+    _valid = {_RS.MODE_WARM, _RS.MODE_FORCE}
+    if mode not in _valid:
+        raise RuntimeError(
+            f"`page_today.UPDATE_MODE_TO_REFRESH_MODE` 給出的模式 {mode!r} "
+            f"不在 `macro_refresh_service` 的 {sorted(_valid)} 裡 —— "
+            "兩邊的模式字串漂開了，請同步（不要在這裡挑一個預設值）。")
+
+    with st.status(REFRESH_RUNNING_LABEL, expanded=True) as _status:
+        def _on_event(kind: str, result: Any) -> None:
+            # 顯示名一律取 `result.label`（SSOT 在 L3），本頁不自己翻中文。
+            _detail = getattr(result, "detail", "") or ""
+            st.write(f"{_event_icon(result)} **{result.label}**"
+                     + (f" — {_detail}" if _detail else ""))
+
+        _report = _RS.refresh_macro_now(mode=mode, on_event=_on_event)
+        _clean = _report.ok and not _report.skipped
+        _status.update(
+            label=(f"{'✅' if _clean else '⚠️'} 更新結束 ——"
+                   f" 實際耗時 {_report.elapsed_s:.1f} 秒、"
+                   f"失敗 {len(_report.failures)} 項、"
+                   f"本輪沒有條件跑 {len(_report.skipped)} 項"),
+            state=("complete" if _clean else "error"),
+            expanded=True)
+    return _report
+
+
+def _render_refresh_report(report: Any) -> None:
+    """頁首：**上一次**按下更新的結果。留在畫面上直到下一次更新。
+
+    §1：這一段的存在理由是「沒更新到的東西如果留白，看起來跟更新過一模一樣」。
+    所以它**一定**會列出 `untouched`（本路徑摸不到的區塊），
+    即使那一輪一切順利。
+    """
+    _clean = report.ok and not report.skipped
+    section_header(
+        f"{'✅' if _clean else '⚠️'} 上一次更新的結果",
+        f"{MODE_LABELS.get(_refresh_mode_label_key(report.mode), report.mode)}"
+        f"　·　送出於 {report.started_at}"
+        f"　·　實際耗時 {report.elapsed_s:.1f} 秒")
+
+    if report.failures:
+        st.error(
+            "**這一輪有取不到的來源 / 跑不完的步驟**：\n\n"
+            + "\n".join(f"- ❌ {_f}" for _f in report.failures)
+            + f"\n\n{REFRESH_FAILED_WHAT_NOW}", icon="❌")
+    if report.skipped:
+        st.warning(
+            "**這一輪有步驟沒有條件跑**（跳過 ≠ 成功，也 ≠ 失敗）：\n\n"
+            + "\n".join(f"- ⏭ {_s}" for _s in report.skipped), icon="⏭")
+    if _clean:
+        st.success(
+            f"7 個來源與全部步驟都跑完了（{report.started_at} 送出）。"
+            "⚠️ 這句話**只涵蓋下面「有更新到」那一段列出的 key** —— "
+            "本頁按鈕碰不到的區塊見下一段。", icon="✅")
+
+    with st.expander("這一輪碰了哪些資料？（逐鍵列出）", expanded=False):
+        st.markdown(
+            "**有更新到（寫入 session 的 key）**：\n\n"
+            + ("\n".join(f"- `{_k}`" for _k in report.written_keys)
+               or "- （這一輪一個 key 都沒寫成功）"))
+        if report.popped_keys:
+            st.markdown("**刪除的 key**：\n\n"
+                        + "\n".join(f"- `{_k}`" for _k in report.popped_keys))
+        if report.cleared:
+            st.markdown("**強制重抓清掉的快取**：\n\n"
+                        + "\n".join(f"- {_c}" for _c in report.cleared))
+        st.markdown(
+            "\n**逐來源結果**：\n\n"
+            + "\n".join(
+                f"- {_event_icon(_r)} {_r.label}"
+                + (f" — {_r.detail}" if _r.detail else "")
+                for _r in tuple(report.sources) + tuple(report.steps)))
+
+    st.markdown(UNTOUCHED_HEADING)
+    st.caption(UNTOUCHED_WHY)
+    for _b in report.untouched:
+        st.markdown(
+            f"- **{_b.label}**"
+            + (f"（`{_b.session_key}`）" if _b.session_key else "")
+            + f" —— {_b.why}。**寫得到它的是**：{_b.writer}")
+
+
+def _refresh_mode_label_key(mode: str) -> str:
+    """L3 的模式字串 → 本頁 radio 的選項 key（顯示名走 `MODE_LABELS` SSOT）。"""
+    for _k, _v in UPDATE_MODE_TO_REFRESH_MODE.items():
+        if _v == mode:
+            return _k
+    return mode
+
+
 def _render_update_form(session: Mapping[str, Any]) -> None:
-    """葉1 ② 操作列 —— 鐵律 2 的落點。"""
-    single_submit_form(
+    """葉1 ② 操作列 —— 鐵律 2 的落點，**兼原地重抓的觸發點**。
+
+    ⚠️ **2026-09-09 T3-1：submit 從「只記模式」改成「記模式 ＋ 立刻重抓」。**
+    客戶裁決：頁1 的按鈕要在**本頁原地**觸發台股今日資料重抓並即時刷新，
+    不跳轉回舊分頁。流程：`st.status` 逐來源顯示 → 報告落 session →
+    `st.rerun()` → 下一輪由 `_render_refresh_report()` 在頁首畫出來。
+
+    ⚠️ **為什麼報告要繞一圈 session 再 rerun，而不是就地印**：
+    這一輪的每一張卡都是在 submit **之前**就已經算好的（`render_page_today()`
+    開頭就把 `_readout` / `_alloc` / `_regime` 讀完了）。不 rerun 的話，
+    畫面上會是「新的報告 ＋ 舊的 16 盞燈」—— 那正是本頁最不該做的事。
+    """
+    _submitted = single_submit_form(
         FORM_KEY,
         submit_label=ia_nav.action_label(ia_nav.ACTION_UPDATE_TODAY),
         radio_label="更新模式",
@@ -1379,12 +1694,21 @@ def _render_update_form(session: Mapping[str, Any]) -> None:
         applied_key=SS_APPLIED_MODE,
     )
     # 下游**只讀已套用值**（鐵律 2），且讀取器是對面的 SSOT。
+    # submit 那一輪 `single_submit_form` 已經把值寫進去了，所以這裡讀得到。
     _mode = applied_update_mode(session)
     st.caption(
         f"已套用的更新模式：**{MODE_LABELS[_mode] if _mode else '（尚未送出過）'}**"
-        f"　·　⚠️ {PAGE_READ_ONLY_WHY} —— 按下它會記住你選的模式，"
-        "**但不會去抓資料**；標「未接線」「尚未載入」的區塊不會因此改變。"
-        "這不是故障，是本頁的職責邊界。")
+        f"　·　⚠️ {PAGE_REFRESH_SCOPE_WHY}。{REFRESH_SPEED_HINT}")
+
+    if not _submitted:
+        return
+    if _mode not in UPDATE_MODE_TO_REFRESH_MODE:
+        # §1：對不上就出聲，不要拿一個預設模式假裝使用者選了它。
+        st.error(f"未知的更新模式 `{_mode!r}` —— 本頁不替你挑一個模式跑。", icon="❌")
+        return
+    st.session_state[SS_REFRESH_REPORT] = _run_refresh_now(
+        UPDATE_MODE_TO_REFRESH_MODE[_mode])
+    st.rerun()
 
 
 def render_page_today() -> None:
@@ -1415,6 +1739,13 @@ def render_page_today() -> None:
 
     st.markdown(f"## {ia_nav.page_label(ia_nav.PAGE_TODAY)}")
     st.caption("回答「今天能不能出手、出手到幾成」。")
+
+    # ── 頁首：上一次原地重抓的結果（T3-1）──────────────────────
+    # 它**留在畫面上**直到下一次更新 —— 因為「這一輪沒有更新到哪幾塊」
+    # 描述的正是**現在畫面上這些卡**的狀態，不是一則過眼即忘的通知（§1）。
+    _report = _session.get(SS_REFRESH_REPORT)
+    if _report is not None:
+        _render_refresh_report(_report)
 
     # ── （跨頁）頂部狀態列：常駐一條，位在兩葉之上 ───────────────────
     # 三張卡完全復用 `tab_today.build_status_bar_cards()`（交易日 / 總經 /
@@ -1476,7 +1807,7 @@ def render_page_today() -> None:
                 why=("冷啟動 session：上游一個總經 key 都還沒寫進來 —— "
                      "這是「還沒叫」，不是「叫了沒回」，"
                      "也**不是**「掃過了沒問題」"),
-                where=NO_LOAD_EXIT_WHERE))
+                where=EXIT_RETRY_HERE))
         for _b in BUCKET_ORDER:
             _meta = BUCKET_META[_b]
             section_header(f"{_meta['emoji']} {_meta['title']}",

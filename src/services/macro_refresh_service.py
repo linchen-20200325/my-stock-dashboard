@@ -123,6 +123,8 @@ class UntouchedBlock:
 
     Attributes:
         label: 畫面上那一塊叫什麼（使用者看得懂的名字，不是 session key）。
+            ⚠️ **不要在 label 裡寫 Markdown 粗體**：呼叫端已經整段包 `**`，
+            巢狀的 `**` 會讓畫面冒出裸露的星號（本批 AppTest 實測踩過）。
         session_key: 對應的 session key；`""` = 這一塊沒有單一對應 key。
         why: 為什麼這條路徑碰不到它。
         writer: **誰才寫得到**（2026-09-09 grep 實測結果，逐項可複查）。
@@ -142,7 +144,7 @@ class UntouchedBlock:
 #: 但它列出來的每一項都有 grep 證據。
 UNTOUCHED_BLOCKS: tuple[UntouchedBlock, ...] = (
     UntouchedBlock(
-        label="今日關鍵橫幅的**門檻層**（④）",
+        label="今日關鍵橫幅的門檻層（④）",
         session_key="macro_alerts",
         why=("門檻層掃描（`check_macro_alerts`）掛在舊「🌍 總經」分頁的"
              "中期桶渲染裡，本路徑沒有渲染那一段，所以掃不到。"
@@ -373,7 +375,7 @@ def _secret(key: str) -> str:
 
 
 def refresh_macro_now(*, mode: str = MODE_WARM,
-                      on_event: Callable[[str, str, bool, str], None] | None = None,
+                      on_event: Callable[[str, Any], None] | None = None,
                       ) -> MacroRefreshReport:
     """原地重抓今日台股 / 總經資料，並把結果寫進 `st.session_state`。
 
@@ -381,8 +383,14 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
         mode: `MODE_WARM`（吃暖快取）或 `MODE_FORCE`（先清快取再抓）。
             非這兩者一律當 `MODE_WARM`（**並在報告的 `mode` 欄照實記下傳進來的
             值**，不假裝使用者選了 warm）。
-        on_event: 進度回呼 `on_event(kind, name, ok, detail)`，
-            `kind` ∈ `{"source", "step"}`。**純顯示用**；自己拋例外不影響取數。
+        on_event: 進度回呼 `on_event(kind, result)`，
+            `kind` ∈ `{"source", "step"}`，`result` 是 `SourceResult` /
+            `StepResult` **本體**（不是散開的欄位）。
+            ⚠️ 傳物件不傳欄位是刻意的：呼叫端因此拿得到 `label`（顯示名 SSOT
+            在本檔）與 `skipped`（跳過 ≠ 成功）。散開成 `(name, ok, detail)`
+            會逼呼叫端自己查一次中文名、並且**看不到 `skipped`** ——
+            那會讓「本輪沒有條件跑」在進度列上顯示成一個 ✅。
+            **純顯示用**；自己拋例外不影響取數。
 
     Returns:
         `MacroRefreshReport` —— 逐來源、逐步驟的成敗，加上「這一輪寫了哪些
@@ -398,17 +406,18 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
     _steps: list[StepResult] = []
     _cleared: tuple[str, ...] = ()
 
-    def _emit(kind: str, name: str, ok: bool, detail: str) -> None:
+    def _emit(kind: str, result: Any) -> None:
         if on_event is None:
             return
         try:
-            on_event(kind, name, ok, detail)
+            on_event(kind, result)
         except Exception as _e:  # noqa: BLE001 — 顯示壞掉不得擋取數
             print(f"[總經刷新] ⚠️ on_event 回呼失敗，已略過：{_e!r}")
 
     def _step(name: str, ok: bool, detail: str = "", skipped: bool = False) -> None:
-        _steps.append(StepResult(name=name, ok=ok, detail=detail, skipped=skipped))
-        _emit("step", name, ok, detail)
+        _r = StepResult(name=name, ok=ok, detail=detail, skipped=skipped)
+        _steps.append(_r)
+        _emit("step", _r)
 
     # ── 0. 清快取（force）──────────────────────────────────────
     if mode == MODE_FORCE:
@@ -433,8 +442,9 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
            or os.environ.get("FINMIND_TOKEN", "") or "")
 
     def _on_job(name: str, ok: bool, detail: str) -> None:
-        _sources.append(SourceResult(name=name, ok=ok, detail=detail))
-        _emit("source", name, ok, detail)
+        _r = SourceResult(name=name, ok=ok, detail=detail)
+        _sources.append(_r)
+        _emit("source", _r)
 
     try:
         _bundle = fetch_macro_bundle(
