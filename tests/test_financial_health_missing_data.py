@@ -36,7 +36,9 @@ _st.cache_data = lambda **kw: (lambda f: f)
 _st.secrets = {}
 sys.modules.setdefault("streamlit", _st)
 
-from shared.colors import TRAFFIC_NEUTRAL, TRAFFIC_RED  # noqa: E402
+from shared.colors import (  # noqa: E402
+    TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW,
+)
 from src.services import financial_health_engine as FHE  # noqa: E402
 
 _prof_of = lambda fd: FHE._no_ai_profitability(fd)["Profitability_Module"]  # noqa: E731
@@ -368,6 +370,9 @@ class _FakeSt:
         self.html.append(str(body))
 
     def caption(self, body, **_kw):
+        self.html.append(str(body))
+
+    def info(self, body, **_kw):
         self.html.append(str(body))
 
     def columns(self, n, **_kw):
@@ -703,3 +708,117 @@ class TestRealNumbersStillConclude:
                      _fd({"is_finance": False}, INCOME_OK, BALANCE_ONLY)):
             _fh = FHE.analyze_financial_health("", "T", _fin)
             assert "Pass (無短期債務)" not in str(_fh)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【8】P0-C（2026-09-09）：**本批自己造成的迴歸** —— 缺值被畫成紅色故障
+# ══════════════════════════════════════════════════════════════════
+# 【7】(`3f054bb`) 把 `Final_Solvency_Verdict` 在「流動資產／流動負債缺漏」時
+# 從 `"Pass"` 改成 `"N/A"`（缺資料不該發及格證，那是對的）。但舊分頁的
+# **償債能力卡**是二元上色 —— `TRAFFIC_GREEN if 'Pass' in status else TRAFFIC_RED`
+# —— 於是同一份缺值從「假的及格證」翻成 **假的紅色故障**：
+#
+#     ⬜ 沒有資料  ──(舊)──▶  🔴 這家公司還不出錢
+#
+# ⛔ CLAUDE.md §1.A 第 4 點明文禁止：「把『還沒載入／沒有資料』畫成紅色錯誤，
+#    等於捏造一個不存在的故障」，而且**滿版假紅字會讓真正的紅燈沒人看得見**。
+#
+# ⚠️ **這一組測的是顏色，不是文字。** 這個 bug 的特徵正是「文字誠實
+#    （卡片上寫著 N/A）、顏色說謊（畫成紅的）」—— 只驗文字的測試抓不到它。
+#
+# ⚠️ **兩個方向都要守**：缺值不得畫成紅的；**真的很差的償債比率也不得被洗成灰**。
+
+
+def _solv_html(solv_module: dict, monkeypatch) -> str:
+    """把 `_render_solvency_module` 吐出來的 HTML 撈成一整串。"""
+    from src.ui.tabs.stock_grp_sections import section_financial_health as S
+    _fake = _FakeSt()
+    monkeypatch.setattr(S, "st", _fake, raising=True)
+    S._render_solvency_module({"solvency_module": solv_module})
+    return "\n".join(_fake.html)
+
+
+def _solv_of(fin: dict) -> dict:
+    return FHE._no_ai_solvency(fin)["Solvency_Module"]
+
+
+#: 償債能力**真的**不及格（流動負債 5B ≫ 流動資產）＋ 兩張保命符都不成立
+#: （現金 18% < 25%、DSO 45 天 > 15 天）→ 引擎判 `Fail` / `Fail_Initial`。
+SOLVENCY_GENUINELY_BAD: dict = {**_FULL, "流動負債(千)": 5_000_000}
+
+
+class TestSolvencyMissingIsGreyNotRed:
+    """缺值 → 灰。**這是 P0-C 的本體。**"""
+
+    @pytest.mark.parametrize("fin", BS_MISSING_CASES)
+    def test_no_red_anywhere_when_the_balance_sheet_is_missing(self, fin, monkeypatch):
+        _html = _solv_html(_solv_of(fin), monkeypatch)
+        assert TRAFFIC_RED not in _html, "缺資料被畫成紅色故障（§1.A 第 4 點）"
+        assert TRAFFIC_NEUTRAL in _html, "缺值卡沒有畫成灰態"
+
+    @pytest.mark.parametrize("fin", BS_MISSING_CASES)
+    def test_the_headline_banner_is_not_a_red_light(self, fin, monkeypatch):
+        """總判定橫幅（`Final_Solvency_Verdict='N/A'`）自己也不能是紅的。"""
+        _html = _solv_html(_solv_of(fin), monkeypatch)
+        assert "🔴" not in _html, "總判定橫幅掛了一顆假的紅燈"
+        assert "⬜" in _html, "總判定橫幅沒有改用灰態圖示"
+
+    @pytest.mark.parametrize("fin", BS_MISSING_CASES)
+    def test_the_text_still_says_it_is_unevaluated(self, fin, monkeypatch):
+        """顏色改灰**不得**連帶把誠實的文字吃掉（§1：不可造假，也不可噤聲）。"""
+        _html = _solv_html(_solv_of(fin), monkeypatch)
+        assert "N/A" in _html
+        assert "缺漏" in _html
+
+    def test_an_unparseable_value_under_the_lifeline_branch_is_grey(self, monkeypatch):
+        """保命符分支的 `except` 退路（`float()` 解不開）同樣不得落紅。
+
+        引擎目前走不到這條路（有保命符就一定有數字），所以直接餵 UI 一份
+        手工 dict —— 它守的是**分支**，不是引擎當下的輸出形狀。
+        """
+        _html = _solv_html({
+            "Current_Ratio": {"Value": "N/A (流動負債缺漏)", "Status": "N/A"},
+            "Quick_Ratio": {"Value": "N/A (流動負債缺漏)", "Status": "N/A"},
+            "Final_Solvency_Verdict": "Exception_Pass (條件A：現金充足)",
+        }, monkeypatch)
+        assert TRAFFIC_RED not in _html
+        assert TRAFFIC_NEUTRAL in _html
+
+    def test_an_unknown_status_is_grey_not_red(self, monkeypatch):
+        """認不得的 `Status` → 灰。**紅色需要正面證據**，不是預設值。"""
+        _html = _solv_html({
+            "Current_Ratio": {"Value": "?", "Status": "???"},
+            "Quick_Ratio": {"Value": "?", "Status": ""},
+            "Final_Solvency_Verdict": "",
+        }, monkeypatch)
+        assert TRAFFIC_RED not in _html and "🔴" not in _html
+        assert TRAFFIC_NEUTRAL in _html
+
+
+class TestSolvencyRealNumbersStillColourHonestly:
+    """⚠️ 反向守衛：**不可以為了不說謊就整片洗成灰。**"""
+
+    def test_a_genuinely_bad_ratio_is_still_red(self, monkeypatch):
+        _html = _solv_html(_solv_of(SOLVENCY_GENUINELY_BAD), monkeypatch)
+        assert TRAFFIC_RED in _html, "真的還不出錢的公司被洗成灰 —— 紅燈失效"
+        assert "🔴" in _html
+        assert TRAFFIC_NEUTRAL not in _html, "真實的負結論不該摻灰"
+
+    def test_a_healthy_balance_sheet_is_still_green(self, monkeypatch):
+        _html = _solv_html(_solv_of(_FULL), monkeypatch)
+        assert TRAFFIC_GREEN in _html
+        assert TRAFFIC_RED not in _html and TRAFFIC_NEUTRAL not in _html
+
+    @pytest.mark.parametrize("over,tag", [
+        ({"現金佔總資產(%)": 40.0}, "條件A：現金充足"),
+        ({"應收帳款天數": 10.0}, "條件B：天天收現"),
+    ])
+    def test_the_lifeline_exception_is_still_amber(self, over, tag, monkeypatch):
+        """保命符（比率不到 300% 但有例外）維持黃色，不因本次改動變灰或變紅。"""
+        _fin = {**_FULL, "流動資產(千)": 2_000_000, "現金佔總資產(%)": 3.0,
+                "應收帳款天數": 90.0, **over}
+        _solv = _solv_of(_fin)
+        assert tag in _solv["Final_Solvency_Verdict"], _solv
+        _html = _solv_html(_solv, monkeypatch)
+        assert TRAFFIC_YELLOW in _html and "⚡" in _html
+        assert TRAFFIC_NEUTRAL not in _html

@@ -578,10 +578,21 @@ def _render_solvency_module(fd: dict) -> None:
         return
     st.markdown('**🛡️ 短期償債能力(300/150 嚴格標準)**')
     _sv_f_v = _solv_f.get('Final_Solvency_Verdict', '')
-    _sv_f_pass = 'Pass' in _sv_f_v
-    _sv_f_exc  = 'Exception' in _sv_f_v
-    _sv_f_bc   = TRAFFIC_GREEN if _sv_f_pass and not _sv_f_exc else (TRAFFIC_YELLOW if _sv_f_exc else TRAFFIC_RED)
-    _sv_f_icon = '✅' if _sv_f_pass and not _sv_f_exc else ('⚡' if _sv_f_exc else '🔴')
+    # ⚠️ 缺值(N/A / 空)一律落 `TRAFFIC_NEUTRAL`。原本的二元判定
+    #    (`Pass` → 綠，**其餘一律紅**) 會把 `3f054bb` 起的
+    #    `Final_Solvency_Verdict='N/A'`（流動資產／流動負債缺漏）畫成
+    #    紅色故障 —— 那是「這一輪沒抓到資產負債表」被講成
+    #    「這家公司還不出錢」（§1.A 第 4 點；同 `c99831b` 對獲利能力的修法）。
+    #    **紅色需要正面證據**：只有引擎真的判 `Fail` 才紅，認不得的一律灰。
+    _sv_f_na   = _is_missing(_sv_f_v)
+    _sv_f_pass = (not _sv_f_na) and 'Pass' in _sv_f_v
+    _sv_f_exc  = (not _sv_f_na) and 'Exception' in _sv_f_v
+    _sv_f_fail = (not _sv_f_na) and _sv_f_v.strip().startswith('Fail')
+    _sv_f_bc   = (TRAFFIC_GREEN if _sv_f_pass and not _sv_f_exc else
+                  (TRAFFIC_YELLOW if _sv_f_exc else
+                   (TRAFFIC_RED if _sv_f_fail else TRAFFIC_NEUTRAL)))
+    _sv_f_icon = ('✅' if _sv_f_pass and not _sv_f_exc else
+                  ('⚡' if _sv_f_exc else ('🔴' if _sv_f_fail else '⬜')))
     st.markdown(
         f'<div style="background:{_sv_f_bc}18;border:1px solid {_sv_f_bc}55;'
         f'border-radius:8px;padding:6px 12px;margin-bottom:6px;">'
@@ -593,6 +604,11 @@ def _render_solvency_module(fd: dict) -> None:
     _cr_thresh_f   = 150 if _is_dso_exc_f else (100 if _is_cash_exc_f else 300)
     _cr_label_f    = (f'流動比率(保命符放寬 >{_cr_thresh_f}%)'
                       if _is_any_exc_f else '流動比率 >300%')
+    # 同存活能力模組的寫法（`c99831b`）：**查表 + 預設 `TRAFFIC_NEUTRAL`**。
+    # 引擎在缺漏時給 `Status='N/A'`，查不到 → 灰；只有真的 `Fail_Initial`
+    # （比率真的不及格）才紅 —— 不可為了不說謊就把真的危險也洗成灰。
+    _sv_status_color_f = {'Pass': TRAFFIC_GREEN,
+                          'Fail_Initial': TRAFFIC_RED, 'Fail': TRAFFIC_RED}
     _svf2c = st.columns(2)
     for _col_s, (_key_s, _label_s) in zip(_svf2c, [
         ('Current_Ratio', _cr_label_f),
@@ -608,9 +624,10 @@ def _render_solvency_module(fd: dict) -> None:
                 else:
                     _si_f_c = TRAFFIC_RED
             except (ValueError, AttributeError):
-                _si_f_c = TRAFFIC_GREEN if 'Pass' in _si_f_s else TRAFFIC_RED
+                # Value 不是數字（例 `'N/A (流動負債缺漏)'`）→ 不猜，走查表
+                _si_f_c = _sv_status_color_f.get(_si_f_s, TRAFFIC_NEUTRAL)
         else:
-            _si_f_c = TRAFFIC_GREEN if 'Pass' in _si_f_s else TRAFFIC_RED
+            _si_f_c = _sv_status_color_f.get(_si_f_s, TRAFFIC_NEUTRAL)
         with _col_s:
             st.markdown(
                 f'<div style="background:{_si_f_c}18;border:1px solid {_si_f_c}55;'
