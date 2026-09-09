@@ -896,3 +896,48 @@ class TestLight235Axes:
                     SS.KEY_STOCK_KD, SS.KEY_STOCK_SWAP):
             assert key in SPECS_BY_KEY, f"{key} 不在規格表裡"
         assert len(SPECS_BY_KEY) == len(STATION_SPECS)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 分組畫面名稱（2026-09-09）—— 新增一組忘了命名就 CI 紅燈
+# ══════════════════════════════════════════════════════════════════
+class TestGroupTitles:
+    """`STATION_GROUP_TITLES` 是持股燈「分組」欄的唯一中文出處。
+
+    在它出現之前，📖 憑什麼 那一頁的「分組」欄直接把 `health` / `screen` /
+    `stock` / `timing` **原樣印給使用者看** —— 內部代碼當使用者文案。
+    這一組測試守的是「以後不會再回到那個狀態」：
+    註冊表多一組而這張表沒跟上 → 當場紅，而不是靜靜地又印出一個英文代碼。
+    """
+
+    def test_every_group_in_the_registry_has_a_chinese_name(self):
+        _groups = {s.group for s in STATION_SPECS}
+        _missing = _groups - set(SS.STATION_GROUP_TITLES)
+        assert not _missing, (
+            f"註冊表有 {sorted(_missing)} 這幾組，但 STATION_GROUP_TITLES 沒有命名 —— "
+            "畫面會把英文代碼原樣印給使用者看")
+
+    def test_no_orphan_name(self):
+        """反向：命名了一個註冊表裡根本沒有的組 = 這張表沒跟著刪。"""
+        _groups = {s.group for s in STATION_SPECS}
+        _orphan = set(SS.STATION_GROUP_TITLES) - _groups
+        assert not _orphan, f"{sorted(_orphan)} 已經不在註冊表裡了"
+
+    def test_the_four_names_are_the_ones_user_signed_off(self):
+        """user 2026-09-09 拍板的四個字串，逐字釘住（改字要重新拍板）。"""
+        assert SS.STATION_GROUP_TITLES == {
+            "health": "四燈體檢",
+            "screen": "3-3-3 篩選",
+            "stock": "個股體質",
+            "timing": "進場時機",
+        }
+
+    def test_names_are_not_the_raw_codes(self):
+        """反證：不准有人把 value 填回英文代碼來讓上面那條變綠。"""
+        for _code, _title in SS.STATION_GROUP_TITLES.items():
+            assert _title != _code and not _title.isascii(), (
+                f"{_code} 的畫面名稱還是代碼本身")
+
+    def test_group_constants_match_the_registry_literals(self):
+        assert {SS.GROUP_HEALTH, SS.GROUP_SCREEN, SS.GROUP_STOCK,
+                SS.GROUP_TIMING} == {s.group for s in STATION_SPECS}
