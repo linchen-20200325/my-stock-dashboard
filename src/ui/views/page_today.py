@@ -1762,7 +1762,22 @@ def render_page_today() -> None:
     # 描述的正是**現在畫面上這些卡**的狀態，不是一則過眼即忘的通知（§1）。
     _report = _session.get(SS_REFRESH_REPORT)
     if _report is not None:
-        _render_refresh_report(_report)
+        try:
+            _render_refresh_report(_report)
+        except Exception as _e:  # noqa: BLE001
+            # ⚠️ 這一道**不是**泛用的 try/except（§1 禁止吞例外），它擋的是一個
+            # 具體且真實的情境：Streamlit Cloud 會在檔案變更時**熱重載程式碼但
+            # 不清 session**。上一版存進去的 `MacroRefreshReport` 因此可能少了
+            # 新版讀的欄位 → `AttributeError` 從頁首炸穿 ⇒ **整頁空白**
+            # （檔頭那條 ⛔ 講的正是這種故障半徑）。
+            # 處置是**把它變成看得見的紅字 + 丟掉那份過期報告**，不是靜默略過：
+            # 例外原文照印，下一次按更新就會寫入新格式的報告。
+            print(f"[views/page_today] 舊格式的更新報告畫不出來：{_e!r}")
+            st.session_state.pop(SS_REFRESH_REPORT, None)
+            st.error(
+                "上一次更新的報告畫不出來（多半是程式更新後 session 裡留著舊格式的"
+                f"報告）。**它已經被清掉**，請重新按一次更新。原始例外：`{_e!r}`",
+                icon="⚠️")
 
     # ── （跨頁）頂部狀態列：常駐一條，位在兩葉之上 ───────────────────
     # 三張卡完全復用 `tab_today.build_status_bar_cards()`（交易日 / 總經 /

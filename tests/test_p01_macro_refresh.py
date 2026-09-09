@@ -794,6 +794,44 @@ class TestTheReportAuditsItself:
         assert "不完整" in _audit[0].detail
 
 
+class TestAStaleReportDoesNotBlankThePage:
+    """熱重載後 session 留著舊格式的報告 → 要變成紅字，不是整頁空白。"""
+
+    class _StaleReport:
+        """少了新版會讀的欄位（模擬熱重載後留在 session 的舊物件）。"""
+
+        mode = "warm"
+
+    def test_the_renderer_itself_really_does_blow_up_on_it(self):
+        """假設檢查：這個替身真的會炸 —— 否則下一支測的是一個不存在的病。"""
+        with pytest.raises(AttributeError):
+            P._render_refresh_report(self._StaleReport())
+
+    @pytest.mark.slow
+    def test_the_page_survives_it_end_to_end(self):
+        """端到端：整頁還是畫得出來（不是空白），而且有紅字。"""
+        from streamlit.testing.v1 import AppTest
+        _probe = _ROOT / "tests" / "_p01_stale_report_probe.py"
+        _probe.write_text(
+            "import streamlit as st\n"
+            "from src.ui.views.page_today import render_page_today, SS_REFRESH_REPORT\n"
+            "class _Stale:\n"
+            "    mode = 'warm'\n"
+            "st.session_state[SS_REFRESH_REPORT] = _Stale()\n"
+            "render_page_today()\n", encoding="utf-8")
+        try:
+            _at = AppTest.from_file(str(_probe), default_timeout=120)
+            _at.run()
+            assert not _at.exception, f"整頁炸了（＝空白畫面）：{_at.exception}"
+            assert len(_at.markdown) > 20, "頁面內容大量消失 —— 半截死頁"
+            assert any("畫不出來" in _e.value for _e in _at.error), \
+                "舊格式報告被靜默略過了 —— 使用者不知道剛剛那份報告去哪了"
+            assert "_p01_refresh_report" not in _at.session_state, \
+                "壞掉的報告沒有被清掉 —— 下一輪還會再炸一次"
+        finally:
+            _probe.unlink(missing_ok=True)
+
+
 class TestModeMappingMatchesTheService:
     """頁面那份**字面**模式對映與 L3 常數不得漂開（守衛 1/2）。"""
 
