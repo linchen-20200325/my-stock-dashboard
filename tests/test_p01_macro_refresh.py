@@ -341,11 +341,13 @@ def _mutated_module(rel: str, *swaps: tuple[str, str]) -> types.ModuleType:
 # 守衛④：沒有 ADL 就**不准**算旌旗
 # ══════════════════════════════════════════════════════════════════
 def _run_refresh_with_fakes(service, monkeypatch, *, df_adl,
-                            report_jobs=("intl",)):
+                            report_jobs=("intl",), bundle=None):
     """把 `refresh_macro_now` 的每一個外部相依都換成替身，只看它呼叫了誰。
 
     `report_jobs`：假的 `fetch_macro_bundle` 會替哪些 job 回報結論。
     預設只回報一個 —— 那正是「報告漏收來源」的情境。
+    `bundle`：整份 bundle 的內容（不給就用 `_bundle(df_adl_raw=df_adl)`）。
+    ★1 的判空測試靠它注入「回空 / 只回一半」的桶。
     """
     _calls: list[str] = []
 
@@ -361,7 +363,7 @@ def _run_refresh_with_fakes(service, monkeypatch, *, df_adl,
         if _cb:
             for _n in report_jobs:
                 _cb(_n, True, "1.0s")
-        return _bundle(df_adl_raw=df_adl)
+        return _bundle(df_adl_raw=df_adl) if bundle is None else bundle
 
     monkeypatch.setattr(_ORCH, "fetch_macro_bundle", _fake_bundle)
     monkeypatch.setattr(_APPLY, "apply_macro_bundle",
@@ -463,21 +465,39 @@ class TestStatusStateIsStrict:
                               RS.SourceResult("li", False, "TimeoutError")))
         assert P.refresh_status_state(_r) == "error"
 
+    def test_a_half_filled_source_is_also_error(self):
+        """★1：4 檔只拿到 2 檔 —— `ok` 是 True，但**不准**收綠燈。"""
+        _r = _report(contents=(RS.SourceContent("intl", 2, 4, "檔",
+                                                missing=("c", "d")),))
+        assert _r.ok, "部分空刻意不進 failures（整桶標失敗是往另一邊說謊）"
+        assert P.refresh_status_state(_r) == "error", \
+            "只拿到半桶卻收綠燈 —— 那正是本批要修的那種說謊"
+
+
+#: `refresh_is_clean` 的**三個**條件，一個一個拔掉都必須讓壞的一輪變綠。
+#: 突變點寫成 `(要拔掉的片段, 拔掉後的樣子, 用哪一種壞輪次驗)`。
+_CLEAN_MUTATIONS = [
+    ("    return (bool(report.ok) and not report.skipped and not report.partials)",
+     "    return (bool(report.ok) and not report.partials)", "skipped"),
+    ("    return (bool(report.ok) and not report.skipped and not report.partials)",
+     "    return (bool(report.ok) and not report.skipped)", "partial"),
+    ("    return (bool(report.ok) and not report.skipped and not report.partials)",
+     "    return True", "failed"),
+]
+
 
 class TestMutationStatusState:
-    """突變：把判準放寬成 `report.ok` / 恆真 → 上面那些必須轉紅。"""
+    """突變：把判準放寬（少一個條件 / 恆真）→ 上面那些必須轉紅。"""
 
-    @pytest.mark.parametrize("swap,case", [
-        (("    return bool(report.ok) and not report.skipped",
-          "    return bool(report.ok)"), "skipped"),
-        (("    return bool(report.ok) and not report.skipped",
-          "    return True"), "failed"),
-    ])
-    def test_a_looser_rule_would_paint_a_bad_run_green(self, swap, case):
-        _mutant = _mutated_module("src/ui/views/page_today.py", swap)
-        _r = (_report(steps=(RS.StepResult("jingqi", True, "無 ADL", skipped=True),))
-              if case == "skipped"
-              else _report(sources=(RS.SourceResult("adl", False, "boom"),)))
+    @pytest.mark.parametrize("old,new,case", _CLEAN_MUTATIONS)
+    def test_a_looser_rule_would_paint_a_bad_run_green(self, old, new, case):
+        _mutant = _mutated_module("src/ui/views/page_today.py", (old, new))
+        _r = {
+            "skipped": _report(steps=(RS.StepResult("jingqi", True, "無 ADL",
+                                                    skipped=True),)),
+            "partial": _report(contents=(RS.SourceContent("intl", 2, 4, "檔"),)),
+            "failed": _report(sources=(RS.SourceResult("adl", False, "boom"),)),
+        }[case]
         assert _mutant.refresh_status_state(_r) == "complete", (
             "突變體居然沒有把壞的一輪畫成 complete —— "
             "表示上面那些測試守的不是這一行，請修測試")
@@ -792,6 +812,276 @@ class TestTheReportAuditsItself:
         _audit = [s for s in _report.steps if s.name == RS.STEP_SOURCE_AUDIT]
         assert _audit and not _audit[0].ok
         assert "不完整" in _audit[0].detail
+
+
+# ══════════════════════════════════════════════════════════════════
+# ★1 判空：「來源回空」不得被記成成功
+# ══════════════════════════════════════════════════════════════════
+def _maps():
+    from src.services.daily_checklist import INTL_MAP, TECH_MAP, TW_MAP
+    return INTL_MAP, TW_MAP, TECH_MAP
+
+
+_HEAVY_KEYS = {"inst": "inst", "margin": "margin",
+               "adl": "df_adl_raw", "li": "df_li_a"}
+
+
+def _content_bundle(*, intl=None, tw=None, tech=None, heavy_empty=()):
+    """一份**內容**可控的 bundle。
+
+    Args:
+        intl / tw / tech: 那一桶填幾檔（`None` ＝ 填滿）。沒填到的一律是
+            `None` —— 那是 `_parallel_fetch` 對失敗 / 逾時單檔的**真實寫法**
+            （見 `TestTheOrchestratorReallyReturnsNones`，那支證明這不是稻草人）。
+        heavy_empty: 哪幾個重桶是空的（`inst` / `margin` / `adl` / `li`）。
+
+    ⚠️ 分母取**真正的 `*_MAP`**（服務判空時用的同一份），
+    所以「填滿」在這裡的意思就是「畫面上那一桶真的是完整的」。
+    """
+    _i, _t, _e = _maps()
+
+    def _fill(_m, _n):
+        _n = len(_m) if _n is None else _n
+        return {_k: (_FakeFrame(tag=_k) if _j < _n else None)
+                for _j, _k in enumerate(_m)}
+
+    return {
+        "intl_raw": _fill(_i, intl), "tw_raw": _fill(_t, tw),
+        "tech_raw": _fill(_e, tech),
+        "inst": {} if "inst" in heavy_empty else {"外資及陸資": {"net": 12.3}},
+        "inst_date": "2026-09-09",
+        "margin": None if "margin" in heavy_empty else 3123.4,
+        "df_adl_raw": None if "adl" in heavy_empty else _FakeFrame(tag="adl"),
+        "df_li_a": None if "li" in heavy_empty else _FakeFrame(tag="li"),
+        "adl_debug_msg": None, "elapsed_s": 12.3,
+    }
+
+
+def _content_run(monkeypatch, service=RS, **kw):
+    """跑一輪、**所有來源結論都收得到**（把 `STEP_SOURCE_AUDIT` 排除在外）。
+
+    ⚠️ 這一點很重要：預設的 `report_jobs=("intl",)` 本來就會讓報告失敗，
+    那會讓「判空造成的紅燈」與「漏收結論造成的紅燈」分不開 ——
+    測到最後守的是另一條守衛。
+    """
+    _b = _content_bundle(**kw)
+    return _run_refresh_with_fakes(
+        service, monkeypatch, df_adl=_b["df_adl_raw"],
+        report_jobs=tuple(RS.SOURCE_LABELS), bundle=_b)[0]
+
+
+class TestTheOrchestratorReallyReturnsNones:
+    """**假設檢查**：QA 描述的那個形狀是真的（否則下面測的是不存在的病）。
+
+    跑**真正的** `fetch_macro_bundle`（`load_heavy=False`，只有 3 個 yfinance
+    job），注入一個每次都 raise 的 `fetch_single`。要證明兩件事：
+      1. 它**不拋例外**、照樣回傳整包 dict，值全是 `None`；
+      2. `on_job_done` 對那幾個 job 回報的是 **`ok=True`**。
+    這兩件合起來就是「來源回空卻被記成成功」的成因。
+    """
+
+    def _run(self):
+        from src.services.macro_fetch_orchestrator import fetch_macro_bundle
+        _seen = []
+
+        def _boom(_sym, **_kw):
+            raise RuntimeError(f"injected: {_sym}")
+
+        _b = fetch_macro_bundle(
+            load_heavy=False, prev_cl_data={}, fm_token="", li_token="",
+            bps_session=object(),
+            intl_map={"道瓊工業 DJI": "^DJI", "那斯達克 IXIC": "^IXIC"},
+            tw_map={"台股加權指數": "^TWII"}, tech_map={"台積電 ADR": "TSM"},
+            fetch_single=_boom,
+            fetch_institutional=lambda *a, **k: pytest.fail("不該被呼叫"),
+            fetch_margin_balance=lambda *a, **k: pytest.fail("不該被呼叫"),
+            fetch_adl=lambda *a, **k: pytest.fail("不該被呼叫"),
+            on_job_done=lambda n, ok, d: _seen.append((n, ok)))
+        return _b, _seen
+
+    @pytest.mark.slow
+    def test_every_ticker_comes_back_as_none_without_an_exception(self):
+        _b, _ = self._run()
+        assert _b["intl_raw"] == {"道瓊工業 DJI": None, "那斯達克 IXIC": None}, \
+            "單檔失敗沒有被吞成 None —— QA 描述的形狀變了，請重看本測試"
+        assert _b["tw_raw"] == {"台股加權指數": None}
+
+    @pytest.mark.slow
+    def test_and_the_progress_callback_still_says_ok(self):
+        _, _seen = self._run()
+        assert dict(_seen).get("intl") is True, (
+            "`on_job_done` 沒有回報 ok=True —— 那本批的整個前提就不成立了")
+        assert all(_ok for _n, _ok in _seen), \
+            "全部 job 都該回報成功（它們確實沒有以例外收場）"
+
+
+class TestEmptySourcesAreNotSuccess:
+    """★1 正向：全空 → 紅燈，而且**列得出哪幾桶空**。"""
+
+    def test_all_three_ticker_buckets_empty_is_error(self, monkeypatch):
+        _r = _content_run(monkeypatch, intl=0, tw=0, tech=0)
+        assert not _r.ok, "7 個 job 都回報成功、3 桶卻一筆資料都沒有 —— 不准算成功"
+        assert P.refresh_status_state(_r) == "error", \
+            "`st.status` 收綠燈 ＝ 拿沒有資料的畫面當今天的結論（§1）"
+
+    def test_it_names_which_buckets_are_empty(self, monkeypatch):
+        _r = _content_run(monkeypatch, intl=0, tw=0, tech=0)
+        _blob = " ".join(_r.empties)
+        for _k in ("intl", "tw", "tech"):
+            assert RS.SOURCE_LABELS[_k] in _blob, \
+                f"沒講「{_k} 這一桶是空的」—— 使用者不知道哪一塊是舊值"
+        assert RS.SOURCE_LABELS["inst"] not in _blob, \
+            "把有資料的桶也列成空的 —— 那是往另一個方向說謊"
+        assert "0/5" in _blob and "0/2" in _blob and "0/7" in _blob, \
+            "沒有 `N/M`：看不出來是「全空」還是「少一檔」"
+
+    def test_the_failure_list_also_carries_it(self, monkeypatch):
+        """紅燈的來源要在 `failures` 裡（畫面那段紅字讀的是它）。"""
+        _r = _content_run(monkeypatch, intl=0, tw=0, tech=0)
+        _blob = " ".join(_r.failures)
+        assert RS.STEP_LABELS[RS.STEP_CONTENT_AUDIT] in _blob
+        assert "全空 3 桶" in _blob
+
+    def test_every_bucket_can_be_detected_empty(self, monkeypatch):
+        """七桶都要判得出來 —— 少判一桶就是少一個看得見的洞。"""
+        _r = _content_run(monkeypatch, intl=0, tw=0, tech=0,
+                          heavy_empty=("inst", "margin", "adl", "li"))
+        assert {_c.name for _c in _r.contents if _c.empty} == set(RS.SOURCE_LABELS)
+
+    def test_the_source_result_still_says_ok(self, monkeypatch):
+        """對照組：來源**結論**照樣是 ✅ —— 這正是為什麼要另外判空。"""
+        _r = _content_run(monkeypatch, intl=0, tw=0, tech=0)
+        assert all(_s.ok for _s in _r.sources), \
+            "這一輪的 `on_job_done` 全部回報成功（本測試的前提）"
+        assert not _r.ok, "而報告仍然必須是失敗的"
+
+
+class TestPartialSourcesAreNeitherGreenNorRed:
+    """★1 分寸：4 檔拿到 2 檔 —— 不准標全綠，也不准整桶標失敗。"""
+
+    def test_a_half_filled_bucket_is_not_a_failure(self, monkeypatch):
+        _r = _content_run(monkeypatch, intl=2)
+        assert _r.ok, "兩檔有值卻整桶標失敗 —— 那是把「一半」講成「什麼都沒有」"
+        assert not _r.empties, "部分空不得混進「全空」清單"
+
+    def test_but_it_is_not_clean_either(self, monkeypatch):
+        _r = _content_run(monkeypatch, intl=2)
+        assert _r.partials, "部分空必須自己列得出來"
+        assert P.refresh_status_state(_r) == "error", \
+            "只拿到一半卻收綠燈 —— 使用者無從分辨哪幾格是舊的"
+
+    def test_it_shows_the_n_over_m_shape(self, monkeypatch):
+        _r = _content_run(monkeypatch, intl=2)
+        _i, _, _ = _maps()
+        assert f"2/{len(_i)}" in " ".join(_r.partials), \
+            "沒有「2/5」這種形狀就分不出「拿到一半」與「全拿到」"
+
+    def test_it_names_the_missing_ones(self, monkeypatch):
+        _r = _content_run(monkeypatch, intl=2)
+        _i, _, _ = _maps()
+        _blob = " ".join(_r.partials)
+        assert list(_i)[-1] in _blob, "沒講缺哪幾檔"
+        assert list(_i)[0] not in _blob, "把拿到的那幾檔也講成缺 —— 反了"
+
+
+class TestAGoodRunIsStillGreen:
+    """★1 反向：真的有拿到資料時**必須**仍然是綠燈（不准為了誠實而全標失敗）。"""
+
+    def test_a_full_run_is_complete(self, monkeypatch):
+        _r = _content_run(monkeypatch)
+        assert _r.ok and not _r.empties and not _r.partials
+        assert P.refresh_status_state(_r) == "complete", (
+            "全部拿到了卻不給綠燈 —— 那會讓紅燈失去意義"
+            "（滿版假警報 ＝ 真的出事時沒人看得見，v3 §02）")
+
+    def test_every_bucket_reads_full(self, monkeypatch):
+        _r = _content_run(monkeypatch)
+        assert {_c.name for _c in _r.contents} == set(RS.SOURCE_LABELS)
+        assert all(_c.filled == _c.total for _c in _r.contents)
+
+    def test_the_audit_step_is_a_pass(self, monkeypatch):
+        _r = _content_run(monkeypatch)
+        _a = [_s for _s in _r.steps if _s.name == RS.STEP_CONTENT_AUDIT]
+        assert _a and _a[0].ok and not _a[0].partial
+        assert "7/7 桶完整" in _a[0].detail
+
+
+class TestContentAuditIsPure:
+    """`audit_source_contents` 的邊界（純函式，不必跑整輪）。"""
+
+    def test_a_scalar_zero_is_data_not_a_hole(self):
+        """`0.0` 是一個合法的數值 —— 判成「沒資料」等於自己發明規則。"""
+        _c = {_x.name: _x for _x in RS.audit_source_contents(
+            {"margin": 0.0}, intl_map={}, tw_map={}, tech_map={})}
+        assert _c["margin"].filled == 1
+
+    def test_an_empty_frame_is_a_hole(self):
+        _c = {_x.name: _x for _x in RS.audit_source_contents(
+            {"df_adl_raw": _FakeFrame(empty=True)},
+            intl_map={}, tw_map={}, tech_map={})}
+        assert _c["adl"].empty, "空 DataFrame 是「沒資料」，不是「有一份表」"
+
+    def test_a_missing_bundle_key_is_a_hole(self):
+        _c = RS.audit_source_contents({}, intl_map={"a": 1}, tw_map={},
+                                      tech_map={})
+        assert all(_x.empty for _x in _c)
+
+    def test_the_denominator_comes_from_the_map_not_the_result(self):
+        """整個 job 失敗時回傳是 `{}` —— 拿它當分母會算出「0/0」。"""
+        _c = {_x.name: _x for _x in RS.audit_source_contents(
+            {"intl_raw": {}}, intl_map={"a": 1, "b": 2}, tw_map={},
+            tech_map={})}
+        assert _c["intl"].total == 2 and _c["intl"].text.startswith("0/2")
+
+    def test_it_touches_no_session(self):
+        """純函式：不得碰 streamlit / session（`refresh_macro_now` 才碰）。"""
+        _t = _code_only("src/services/macro_refresh_service.py",
+                        func="audit_source_contents")
+        assert "session_state" not in _t and "st." not in _t
+
+
+class TestMutationContentAudit:
+    """突變：把判空拔掉 / 放寬 → 上面那些必須轉紅。"""
+
+    _SCENARIO = dict(intl=0, tw=0, tech=0)
+
+    @pytest.mark.parametrize("old,new,why", [
+        ("        _contents = audit_source_contents(\n"
+         "            _bundle, intl_map=INTL_MAP, tw_map=TW_MAP, tech_map=TECH_MAP)",
+         "        _contents = ()", "整段判空被拔掉"),
+        ("        _step(STEP_CONTENT_AUDIT,\n              not _empty_c,",
+         "        _step(STEP_CONTENT_AUDIT,\n              True,",
+         "判空還在，但結論永遠是成功"),
+        ("    if value is None:\n        return False",
+         "    if value is None:\n        return True",
+         "`None` 被當成有資料"),
+    ])
+    def test_a_run_with_nothing_in_it_would_go_green(self, monkeypatch,
+                                                     old, new, why):
+        _mutant = _mutated_module("src/services/macro_refresh_service.py",
+                                  (old, new))
+        _r = _content_run(monkeypatch, service=_mutant, **self._SCENARIO)
+        assert P.refresh_status_state(_r) == "complete", (
+            f"突變體（{why}）居然沒有把「全空」畫成 complete —— "
+            "表示上面那些測試守的不是這一段，請修測試")
+        assert P.refresh_status_state(
+            _content_run(monkeypatch, **self._SCENARIO)) == "error"
+
+    def test_dropping_the_partial_flag_would_tick_the_progress_line(
+            self, monkeypatch):
+        """守的是**進度列的圖示**那一條（`st.status` 收尾另有 `partials` 守）。"""
+        _mutant = _mutated_module(
+            "src/services/macro_refresh_service.py",
+            ("              partial=bool(_part_c))", "              partial=False)"))
+        _r = _content_run(monkeypatch, service=_mutant, intl=2)
+        _a = [_s for _s in _r.steps if _s.name == RS.STEP_CONTENT_AUDIT]
+        assert _a and not _a[0].partial, "突變沒生效"
+        assert P._event_icon(_a[0]) == "✅", (
+            "突變體的進度列還是沒給 ✅ —— 表示 `_event_icon` 看的不是 `partial`")
+        _real = [_s for _s in _content_run(monkeypatch, intl=2).steps
+                 if _s.name == RS.STEP_CONTENT_AUDIT]
+        assert P._event_icon(_real[0]) == "⚠️", \
+            "真版的進度列必須看得出「只拿到一部分」"
 
 
 class TestAStaleReportDoesNotBlankThePage:

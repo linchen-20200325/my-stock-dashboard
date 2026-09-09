@@ -27,8 +27,14 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
 
 §1 Fail Loud：每一步的成敗**逐步記錄在報告裡**，不吞、不合併、不四捨五入成
 「更新完成」。部分成功**一律**回 `ok=False`（見 `MacroRefreshReport.ok`）。
-報告自己也被稽核一次（`STEP_SOURCE_AUDIT`）—— 收到的來源結論數對不上
-`SOURCE_LABELS` 時據實記成失敗，否則「漏收幾個來源」會表現成「其餘都成功」。
+報告自己被稽核**兩次**，兩次看的是完全不同的東西，缺一不可：
+  1. `STEP_SOURCE_AUDIT` —— **收到幾個來源結論**對不對得上 `SOURCE_LABELS`。
+     它**不看內容**。
+  2. `STEP_CONTENT_AUDIT` —— **每一桶真的收到了什麼**（`audit_source_contents`）。
+     ⚠️ 這一步是 2026-09-09 獨立 QA 抓到的洞：orchestrator 的 `ok=True`
+     只代表「這個 job 沒有以例外收場」，它的 docstring 明寫
+     「**判空是 caller 的事，不是本層的**」—— 而在此之前這個 caller
+     一處判空都沒有，於是「7 個來源全部回空」會走成 `ok=True` ＋ 綠燈。
 """
 from __future__ import annotations
 
@@ -37,7 +43,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 import streamlit as st
 
@@ -77,6 +83,7 @@ STEP_TRIO: str = "trio"
 STEP_MARKET: str = "market"
 STEP_REGISTRY: str = "registry"
 STEP_SOURCE_AUDIT: str = "source_audit"
+STEP_CONTENT_AUDIT: str = "content_audit"
 
 STEP_LABELS: dict[str, str] = {
     STEP_CLEAR: "清除快取（強制重抓模式）",
@@ -87,6 +94,7 @@ STEP_LABELS: dict[str, str] = {
     STEP_MARKET: "市場評估（mkt_info）",
     STEP_REGISTRY: "資料登錄中心掃描",
     STEP_SOURCE_AUDIT: "逐來源回報的完整性",
+    STEP_CONTENT_AUDIT: "逐來源實際收到的內容（判空）",
 }
 
 #: `compute_and_apply_market_assessment` 的逾時（秒）。
@@ -214,18 +222,165 @@ class SourceResult:
 
 
 @dataclass(frozen=True)
+class SourceContent:
+    """一個來源**真的收到了多少東西**。`SourceResult.ok` 管不到這件事。
+
+    ⚠️ **這個型別存在的理由是一個實測的說謊路徑**（2026-09-09 獨立 QA）：
+    `macro_fetch_orchestrator._parallel_fetch` 把**單檔失敗吞成 `None`**、
+    照樣回傳整包 dict 而不拋例外，`fetch_macro_bundle` 的 `on_job_done`
+    因此回報 `ok=True`。它的 docstring 自己寫著「`ok=True` **不代表資料非空**
+    …**判空是 caller 的事，不是本層的**」—— 而在本型別出現之前，
+    這個 caller **一處判空都沒有**。結果：4 檔全部 raise → `intl_raw` 兩個值
+    都是 `None` → 報告零失敗 → `st.status` **綠燈 complete**，
+    畫面還印「7 個來源與全部步驟都跑完了」。那就是 §1 的造假。
+
+    ⚠️ **不是把 `_parallel_fetch` 改掉**：吞單檔例外是它刻意的設計
+    （一檔壞不該讓整包垮），而且舊分頁與 cron 都吃那個行為。
+    **判空是 caller 的責任，這個型別就是 caller 負起責任的地方。**
+
+    Attributes:
+        name: `SOURCE_LABELS` 的 key（＝ orchestrator 的 job key）。
+        filled: 這一桶**真的有內容**的子項數。
+        total: 這一桶**要抓幾項**（分母取自呼叫端送出去的 `*_map`，
+            **不是**回傳的 dict —— 整個 job 失敗時回傳是 `{}`，
+            拿它當分母會算出「0/0」這種看起來很完整的東西）。
+        unit: 分母的單位（畫面上的「5/5 **檔**」）。
+        missing: 沒拿到的子項名（`total == 1` 的桶不填）。
+    """
+
+    name: str
+    filled: int
+    total: int
+    unit: str = "項"
+    missing: tuple[str, ...] = ()
+
+    @property
+    def label(self) -> str:
+        return SOURCE_LABELS.get(self.name, self.name)
+
+    @property
+    def empty(self) -> bool:
+        """**整桶全空**（含 `total == 0`：連要抓什麼都沒有）。"""
+        return self.filled <= 0
+
+    @property
+    def partial(self) -> bool:
+        """拿到一部分。**這一態既不是成功也不是失敗，要單獨講。**"""
+        return 0 < self.filled < self.total
+
+    @property
+    def ok(self) -> bool:
+        """有沒有拿到東西。⚠️ **部分拿到也是 `True`** —— 別拿它當綠燈判準，
+        綠燈要另外排除 `partial`（見 `MacroRefreshReport.partials`）。"""
+        return not self.empty
+
+    @property
+    def text(self) -> str:
+        """`2/4 檔` —— 「全空」與「部分空」在畫面上分得出來的那個形狀。"""
+        return f"{self.filled}/{self.total} {self.unit}"
+
+    @property
+    def detail(self) -> str:
+        """畫面上那一行。**全空 / 部分 / 完整三種說法，不合併。**"""
+        if self.total <= 0:
+            return (f"{self.text} —— **這一桶連要抓什麼都沒有**"
+                    "（送進來的對照表是空的），不是「抓到 0 筆」")
+        if self.empty:
+            return (f"{self.text} —— **這一源回空**：沒有拋例外，"
+                    "但一筆資料都沒有。畫面上這一塊是**上一輪的值**")
+        if self.partial:
+            return (f"{self.text} —— **只拿到一部分**"
+                    + (f"（缺：{'、'.join(self.missing)}）" if self.missing else "")
+                    + "；缺的那幾檔在畫面上維持上一輪的值")
+        return self.text
+
+
+def _has_content(value: Any) -> bool:
+    """一個取回來的東西**算不算有資料**。
+
+    三種形狀分別判，理由寫在這裡以免下一個人「順手統一成 `bool(value)`」：
+      · **DataFrame / Series**（有 `.empty`）：空表 ＝ 沒資料。
+        `bool(df)` 在 pandas 會直接 `ValueError`，不能用真假值判。
+      · **容器**（dict / list / str …）：長度 0 ＝ 沒資料。
+      · **純量**（例如融資餘額的 `float`）：**只認 `None` 是沒資料**。
+        ⚠️ 刻意**不**用 `bool()` —— `0.0` 是一個合法的數值，把它判成
+        「沒資料」等於本檔自己發明一條 fetcher 沒有宣告的規則（§1）。
+        缺值的界線由 fetcher 決定，而它們缺值時回的是 `None`。
+    """
+    if value is None:
+        return False
+    _empty = getattr(value, "empty", None)
+    if _empty is not None:
+        return not bool(_empty)
+    if isinstance(value, (dict, list, tuple, set, frozenset, str, bytes)):
+        return len(value) > 0
+    return True
+
+
+def audit_source_contents(bundle: Mapping[str, Any], *,
+                          intl_map: Mapping[str, Any],
+                          tw_map: Mapping[str, Any],
+                          tech_map: Mapping[str, Any],
+                          ) -> tuple[SourceContent, ...]:
+    """逐來源判空。**純函式**（不碰 session、不碰 streamlit、不重抓）。
+
+    Args:
+        bundle: `fetch_macro_bundle()` 的回傳。
+        intl_map / tw_map / tech_map: 送出去的標的對照表 —— **分母的出處**。
+
+    Returns:
+        7 個 `SourceContent`，順序同 `SOURCE_LABELS`。
+
+    七個桶的「空」長得不一樣（**依 `fetch_macro_bundle` 的回傳契約逐項判**，
+    不是猜的）：
+      · `intl` / `tw` / `tech` → `{名稱: DataFrame | None}`。
+        `_parallel_fetch` 對失敗 / 逾時的單檔**顯式塞 `None`**，
+        所以 value 全 `None` ＝ 整桶全空、部分 `None` ＝ 部分空。
+      · `inst` → `dict`。orchestrator 在 FinMind rescue 也沒補到時
+        **一律收斂成 `{}`**（它自己的 v19.175 P0 註解），所以 `{}` ＝ 空。
+      · `margin` → `float | None`；`adl` / `li` → `DataFrame | None`。
+
+    ⚠️ **抽成獨立純函式不是為了好看**：它是本檔唯一決定「這一輪算不算
+    有拿到資料」的地方，也就是最容易被人「順手放寬」的一段
+    （空的也算有吧？反正下游會 fallback）。抽出來之後
+    `tests/test_p01_macro_refresh.py` 的突變測試才拔得動它。
+    """
+    _out: list[SourceContent] = []
+    for _name, _map in (("intl", intl_map), ("tw", tw_map), ("tech", tech_map)):
+        _got = bundle.get(f"{_name}_raw") or {}
+        _missing = tuple(str(_k) for _k in _map if not _has_content(_got.get(_k)))
+        _out.append(SourceContent(
+            name=_name, filled=len(_map) - len(_missing), total=len(_map),
+            unit="檔", missing=_missing))
+    for _name, _val, _unit in (
+            ("inst", bundle.get("inst"), "組"),
+            ("margin", bundle.get("margin"), "個值"),
+            ("adl", bundle.get("df_adl_raw"), "份"),
+            ("li", bundle.get("df_li_a"), "份")):
+        _out.append(SourceContent(
+            name=_name, filled=1 if _has_content(_val) else 0, total=1,
+            unit=_unit))
+    return tuple(_out)
+
+
+@dataclass(frozen=True)
 class StepResult:
     """單一步驟（取數之後的計算 / 落地）的結論。
 
     `skipped=True` 的語意是「**這一步這一輪沒有條件跑**」，與 `ok=False`
     （跑了但失敗）是兩件事 —— 混在一起就分不出「沒有廣度資料所以沒算旌旗」
     與「算旌旗的時候炸了」。
+
+    `partial=True` 是**第三種**結局：跑完了、沒失敗，但**只涵蓋一部分**
+    （例：7 個來源裡有 2 個只拿到半桶資料）。它照樣不准被畫成 ✅ ——
+    呼叫端的圖示與 `st.status` 收尾都要看得到它（見 `page_today._event_icon`）。
     """
 
     name: str
     ok: bool
     detail: str = ""
     skipped: bool = False
+    partial: bool = False
 
     @property
     def label(self) -> str:
@@ -241,6 +396,7 @@ class MacroRefreshReport:
     elapsed_s: float
     sources: tuple[SourceResult, ...] = ()
     steps: tuple[StepResult, ...] = ()
+    contents: tuple[SourceContent, ...] = ()
     written_keys: tuple[str, ...] = ()
     popped_keys: tuple[str, ...] = ()
     cleared: tuple[str, ...] = ()
@@ -261,12 +417,37 @@ class MacroRefreshReport:
         return tuple(f"{_t.label}：{_t.detail}" for _t in self.steps if _t.skipped)
 
     @property
+    def empties(self) -> tuple[str, ...]:
+        """**整桶回空**的來源（沒有例外、但一筆資料都沒有）。
+
+        這幾桶由 `STEP_CONTENT_AUDIT` 那一步計入 `failures`（因此 `ok=False`），
+        本屬性只是把它們**單獨列得出來**給畫面用 —— 「哪幾桶空」比
+        「這一輪有失敗」有用得多。
+        """
+        return tuple(f"{_c.label}：{_c.detail}" for _c in self.contents if _c.empty)
+
+    @property
+    def partials(self) -> tuple[str, ...]:
+        """**只拿到一部分**的來源（例：4 檔裡 2 檔有值）。
+
+        ⚠️ **刻意不併進 `failures`**：整桶標失敗會把「兩檔有值」講成
+        「什麼都沒有」，那是往另一個方向說謊。它也**不准算成功** ——
+        呼叫端的綠燈判準必須把它排除（`page_today.refresh_is_clean`）。
+        """
+        return tuple(f"{_c.label}：{_c.detail}" for _c in self.contents if _c.partial)
+
+    @property
     def ok(self) -> bool:
         """**全部來源與步驟都成功**才算成功。
 
         ⚠️ 這裡刻意沒有「大部分成功就算成功」的門檻：
         部分成功的那一輪，畫面上會有幾格是舊的、幾格是新的，而使用者**無從分辨**。
         把它標成成功，就是讓人拿混合新舊的畫面當今天的結論（§1）。
+
+        ⚠️ **`ok=True` 仍然不等於可以畫綠燈**：`partials`（某桶只拿到一部分）
+        刻意**不**進 `failures`，所以它不會把 `ok` 打成 False。
+        綠燈的判準是呼叫端的 `page_today.refresh_is_clean()`
+        —— `ok` ＋ 沒有 `skipped` ＋ 沒有 `partials`，三個條件。
         """
         return not self.failures
 
@@ -408,6 +589,7 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
     _started = tw_now_str()
     _sources: list[SourceResult] = []
     _steps: list[StepResult] = []
+    _contents: tuple[SourceContent, ...] = ()
     _cleared: tuple[str, ...] = ()
 
     def _emit(kind: str, result: Any) -> None:
@@ -418,8 +600,10 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
         except Exception as _e:  # noqa: BLE001 — 顯示壞掉不得擋取數
             print(f"[總經刷新] ⚠️ on_event 回呼失敗，已略過：{_e!r}")
 
-    def _step(name: str, ok: bool, detail: str = "", skipped: bool = False) -> None:
-        _r = StepResult(name=name, ok=ok, detail=detail, skipped=skipped)
+    def _step(name: str, ok: bool, detail: str = "", skipped: bool = False,
+              partial: bool = False) -> None:
+        _r = StepResult(name=name, ok=ok, detail=detail, skipped=skipped,
+                        partial=partial)
         _steps.append(_r)
         _emit("step", _r)
 
@@ -479,6 +663,29 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
                   "**本報告的成敗判定因此不完整**，不要當成「其餘都成功」")
         else:
             _step(STEP_SOURCE_AUDIT, True, f"{len(_got)}/{len(_want)}")
+        # ── 逐來源判空（§1：看起來成功、實際沒資料 ＝ 造假）──────────────
+        # 上面那個稽核比的是「收到幾個**結論**」，**它不看內容**：
+        # 7 個 job 全部回報 ok=True、而 7 桶資料全是 None，它照樣給綠燈
+        # （2026-09-09 獨立 QA 實測的路徑）。判空只能在這裡做 ——
+        # `_parallel_fetch` 吞單檔例外是它刻意的設計，而它的 docstring 明寫
+        # 「判空是 caller 的事」。**這裡就是那個 caller。**
+        _contents = audit_source_contents(
+            _bundle, intl_map=INTL_MAP, tw_map=TW_MAP, tech_map=TECH_MAP)
+        for _c in _contents:
+            _emit("content", _c)
+        _empty_c = [_c for _c in _contents if _c.empty]
+        _part_c = [_c for _c in _contents if _c.partial]
+        _full_n = len(_contents) - len(_empty_c) - len(_part_c)
+        _step(STEP_CONTENT_AUDIT,
+              not _empty_c,
+              (f"{_full_n}/{len(_contents)} 桶完整"
+               + (f"；**全空 {len(_empty_c)} 桶**："
+                  + "、".join(f"{_c.label}（{_c.text}）" for _c in _empty_c)
+                  if _empty_c else "")
+               + (f"；部分空 {len(_part_c)} 桶："
+                  + "、".join(f"{_c.label}（{_c.text}）" for _c in _part_c)
+                  if _part_c else "")),
+              partial=bool(_part_c))
     except Exception as _e:  # noqa: BLE001 — 整條抓取鏈掛掉：據實回報，不假裝有資料
         print(f"[總經刷新] ❌ fetch_macro_bundle 整條失敗：{_e!r}")
         _step(STEP_FETCH, False, f"{type(_e).__name__}: {_e}")
@@ -570,8 +777,9 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
 
     _report = MacroRefreshReport(
         mode=mode, started_at=_started, elapsed_s=time.time() - _t0,
-        sources=tuple(_sources), steps=tuple(_steps),
+        sources=tuple(_sources), steps=tuple(_steps), contents=_contents,
         written_keys=_written, popped_keys=_popped, cleared=_cleared)
     print(f"[總經刷新] {'✅' if _report.ok else '⚠️'} "
-          f"{_report.elapsed_s:.1f}s 失敗 {len(_report.failures)} 項")
+          f"{_report.elapsed_s:.1f}s 失敗 {len(_report.failures)} 項"
+          f"（全空 {len(_report.empties)} 桶 / 部分空 {len(_report.partials)} 桶）")
     return _report

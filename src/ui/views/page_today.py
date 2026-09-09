@@ -1553,15 +1553,20 @@ def _render_tiles(tiles: Sequence[Tile], cols: int = MAX_COLS) -> None:
 
 
 def refresh_is_clean(report: Any) -> bool:
-    """這一輪算不算「乾乾淨淨跑完」。**跳過不算乾淨。**
+    """這一輪算不算「乾乾淨淨跑完」。**跳過不算乾淨，只拿到半桶也不算。**
 
     抽成獨立純函式的理由（不是為了好看）：這個判準是本頁**唯一**決定
     `st.status` 收綠燈還是紅燈的地方，而它正是最容易被人「順手放寬」的一行
     （`ok` 就好了吧？部分成功也算成功吧？）。抽出來之後
     `tests/test_p01_macro_refresh.py` 的突變測試才拔得動它 ——
     改成 `return True` 必須當場轉紅。
+
+    ⚠️ **`report.partials` 是 2026-09-09 加的第三個條件，不是贅字**：
+    L3 刻意讓「某桶 4 檔只拿到 2 檔」**不**計入 `failures`
+    （整桶標失敗會把「兩檔有值」講成「什麼都沒有」）。代價是 `ok` 會是 True
+    —— 少了這一條，一輪只拿到半桶資料的更新會收**綠燈**。
     """
-    return bool(report.ok) and not report.skipped
+    return (bool(report.ok) and not report.skipped and not report.partials)
 
 
 def refresh_status_state(report: Any) -> str:
@@ -1570,9 +1575,16 @@ def refresh_status_state(report: Any) -> str:
 
 
 def _event_icon(result: Any) -> str:
-    """進度列的圖示。**跳過不是成功** —— 三種結局三個圖示。"""
+    """進度列的圖示。**跳過不是成功、只拿到一半也不是** —— 四種結局四個圖示。
+
+    ⚠️ **`partial` 一定要排在 `ok` 前面**：一個「4 檔只拿到 2 檔」的桶
+    `ok` 是 True（它確實拿到東西了），先問 `ok` 就會給它一個 ✅ ——
+    而那正是本批要修的說謊方式（部分成功畫成成功）。
+    """
     if getattr(result, "skipped", False):
         return "⏭"
+    if getattr(result, "partial", False):
+        return "⚠️"
     return "✅" if getattr(result, "ok", False) else "❌"
 
 
@@ -1643,13 +1655,26 @@ def _render_refresh_report(report: Any) -> None:
             "**這一輪有取不到的來源 / 跑不完的步驟**：\n\n"
             + "\n".join(f"- ❌ {_f}" for _f in report.failures)
             + f"\n\n{REFRESH_FAILED_WHAT_NOW}", icon="❌")
+    # ⚠️ 「回空」與「跑失敗」分開講（2026-09-09）：回空的那幾桶**沒有拋例外**，
+    #    它們在上面那段裡只表現成一行稽核結論。使用者要知道的是**哪一塊**
+    #    現在顯示的是上一輪的值 —— 那要逐桶列出來才看得到。
+    if report.empties:
+        st.error(
+            "**這幾個來源這一輪回空**（沒有報錯，但一筆資料都沒有）：\n\n"
+            + "\n".join(f"- ❌ {_e}" for _e in report.empties)
+            + f"\n\n{REFRESH_FAILED_WHAT_NOW}", icon="🕳")
+    if report.partials:
+        st.warning(
+            "**這幾個來源只拿到一部分**（拿到的是今天的，缺的那幾檔"
+            "顯示的是上一輪的值）：\n\n"
+            + "\n".join(f"- ⚠️ {_p}" for _p in report.partials), icon="⚠️")
     if report.skipped:
         st.warning(
             "**這一輪有步驟沒有條件跑**（跳過 ≠ 成功，也 ≠ 失敗）：\n\n"
             + "\n".join(f"- ⏭ {_s}" for _s in report.skipped), icon="⏭")
     if _clean:
         st.success(
-            f"7 個來源與全部步驟都跑完了（{report.started_at} 送出）。"
+            f"7 個來源**都真的拿到資料了**，全部步驟也都跑完（{report.started_at} 送出）。"
             "⚠️ 這句話**只涵蓋下面「有更新到」那一段列出的 key** —— "
             "本頁按鈕碰不到的區塊見下一段。", icon="✅")
 
@@ -1665,11 +1690,18 @@ def _render_refresh_report(report: Any) -> None:
             st.markdown("**強制重抓清掉的快取**：\n\n"
                         + "\n".join(f"- {_c}" for _c in report.cleared))
         st.markdown(
-            "\n**逐來源結果**：\n\n"
+            "\n**逐來源結果**（這一格只說「這個 job 有沒有以例外收場」）：\n\n"
             + "\n".join(
                 f"- {_event_icon(_r)} {_r.label}"
                 + (f" — {_r.detail}" if _r.detail else "")
                 for _r in tuple(report.sources) + tuple(report.steps)))
+        # ⚠️ 上下兩格**不是重複**：上面是「有沒有炸」，下面是「真的收到什麼」。
+        #    一個 job 可以不炸而回空 —— 那正是這一段存在的理由。
+        st.markdown(
+            "\n**逐來源實際收到的內容**（`N/M` ＝ 拿到幾項 / 要抓幾項）：\n\n"
+            + ("\n".join(f"- {_event_icon(_c)} {_c.label} — {_c.detail}"
+                         for _c in report.contents)
+               or "- （這一輪沒有做判空 —— 取數整條失敗，連 bundle 都沒有）"))
 
     st.markdown(UNTOUCHED_HEADING)
     st.caption(UNTOUCHED_WHY)
