@@ -876,6 +876,32 @@ class TestOutOfReachIsMeasured:
             f"`{key}` 在 `src/ui/tabs/**` 之外也有寫入點 {_outside} —— "
             "畫面上「寫得到它的是……」那句話要更新")
 
+    @pytest.mark.parametrize("block", RS.UNTOUCHED_BLOCKS,
+                             ids=[_b.session_key for _b in RS.UNTOUCHED_BLOCKS])
+    def test_the_declared_writer_is_the_measured_writer(self, block):
+        """★4：每一列的 `writer` **逐檔**對得上 AST 量到的寫入點。
+
+        ⚠️ 這一條是 2026-09-09 獨立 QA 抓到的第四個洞的守衛：
+        `chips_loaded` 原本宣稱寫入點是「app.py ＋ tab_macro.py」，
+        實測只有 `tab_macro.py` —— `app.py` 那一處是**註解**
+        （一段講舊 bug 的說明，含一行被註解掉的賦值）。
+        照原文去 `app.py` 找的人會找不到東西，然後開始懷疑整份清單。
+        比對用**後綴**：宣告寫短路徑（`macro/section_mid.py`）是可以的，
+        寫一個根本沒有那個 key 的檔則不行。
+        """
+        _keys = [_k.strip() for _k in block.session_key.split("/") if _k.strip()]
+        _measured = {_p for _k in _keys for _p in _session_writers(_k)}
+        _declared = set(re.findall(r"[\w./]+\.py", block.writer))
+        for _d in _declared:
+            assert any(_m.endswith(_d) for _m in _measured), (
+                f"`{block.session_key}` 宣稱 `{_d}` 寫得到它，"
+                f"但 AST 量到的寫入點只有 {sorted(_measured) or '（無）'} —— "
+                "照這句話去那個檔找的人會找不到東西")
+        for _m in _measured:
+            assert any(_m.endswith(_d) for _d in _declared), (
+                f"`{block.session_key}` 有一個沒被宣告的寫入點 `{_m}` —— "
+                "畫面上「寫得到它的是……」那句話少講了一個地方")
+
     def test_futures_net_still_has_no_writer_anywhere(self):
         """`UNTOUCHED_BLOCKS` 對 `futures_net` 的宣稱：全 repo 0 個寫入點。"""
         assert _session_writers("futures_net") == set(), (

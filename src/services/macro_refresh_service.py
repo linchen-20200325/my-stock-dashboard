@@ -220,7 +220,11 @@ UNTOUCHED_BLOCKS: tuple[UntouchedBlock, ...] = (
         why=("那是舊「🌍 總經」分頁自己的 gate 旗標。本路徑刻意不寫 —— "
              "寫了等於替另一個分頁宣稱「你的重資料已經載入」，"
              "而那頁的區塊有一半本路徑沒跑（見上面幾列）"),
-        writer="app.py ＋ src/ui/tabs/tab_macro.py",
+        # ⚠️ 2026-09-09 更正：原本寫「app.py ＋ src/ui/tabs/tab_macro.py」。
+        #    `app.py` 那一處是**註解**（一段講 `chips_loaded` 舊 bug 的說明，
+        #    含一行被註解掉的賦值），AST 掃描實測 0 個寫入點 ——
+        #    照原文去 `app.py` 找的人會找不到東西，然後開始懷疑這份清單。
+        writer="src/ui/tabs/tab_macro.py（全 repo 唯一寫入點）",
     ),
     UntouchedBlock(
         label="舊分頁的兩份畫圖快照 `intl_snap` / `ma_snap`",
