@@ -1442,6 +1442,57 @@ class TestMutationContentAudit:
             "真版的進度列必須看得出「只拿到一部分」"
 
 
+class TestTheReportReachesTheScreen:
+    """端到端：★1 / ★2 的結論**真的畫得出來**（不是只存在報告物件裡）。
+
+    ⚠️ 為什麼要這一支：上面全部是純函式層的斷言。一個「報告算對了、
+    但畫面那一段忘了印」的版本會**全綠通過** —— 而使用者看到的還是原本
+    那個什麼都沒說的畫面。
+    """
+
+    _PROBE = ("import streamlit as st\n"
+              "from src.services import macro_refresh_service as RS\n"
+              "from src.ui.views.page_today import (render_page_today,\n"
+              "                                     SS_REFRESH_REPORT)\n"
+              "st.session_state[SS_REFRESH_REPORT] = RS.MacroRefreshReport(\n"
+              "    mode=RS.MODE_WARM, started_at='2026-09-09 13:45',\n"
+              "    elapsed_s=3.2,\n"
+              "    sources=tuple(RS.SourceResult(k, True, '1.0s')\n"
+              "                  for k in RS.SOURCE_LABELS),\n"
+              "    steps=(RS.StepResult(RS.STEP_CONTENT_AUDIT, False,\n"
+              "                         '5/7 桶完整', partial=True),),\n"
+              "    contents=(RS.SourceContent('tw', 0, 2, '檔'),\n"
+              "              RS.SourceContent('intl', 2, 5, '檔',\n"
+              "                               missing=('費城半導體 SOX',)),\n"
+              "              RS.SourceContent('inst', 1, 1, '組')),\n"
+              "    written_keys=('cl_data', 'jingqi_info'),\n"
+              "    popped_keys=(), cleared=())\n"
+              "render_page_today()\n")
+
+    @pytest.mark.slow
+    def test_the_page_says_which_bucket_is_empty_and_which_is_half(self):
+        from streamlit.testing.v1 import AppTest
+        _probe = _ROOT / "tests" / "_p01_report_render_probe.py"
+        _probe.write_text(self._PROBE, encoding="utf-8")
+        try:
+            _at = AppTest.from_file(str(_probe), default_timeout=180)
+            _at.run()
+            assert not _at.exception, f"整頁炸了：{_at.exception}"
+            _blob = " ".join(
+                [_m.value for _m in _at.markdown] + [_e.value for _e in _at.error]
+                + [_w.value for _w in _at.warning]
+                + [_s.value for _s in _at.success])
+        finally:
+            _probe.unlink(missing_ok=True)
+        assert "0/2 檔" in _blob, "沒講「哪一桶全空」"
+        assert "2/5 檔" in _blob, "沒講「哪一桶只拿到一半」"
+        assert "費城半導體 SOX" in _blob, "沒講缺哪一檔"
+        assert "jingqi_info" in _blob, "★2：有更新到的 key 沒印出來"
+        assert "mkt_info" in _blob, "★2：沒更新到的 key 也要看得見"
+        assert "都真的拿到資料了" not in _blob, \
+            "一輪有空桶的更新居然還在畫面上說「都拿到了」"
+
+
 class TestAStaleReportDoesNotBlankThePage:
     """熱重載後 session 留著舊格式的報告 → 要變成紅字，不是整頁空白。"""
 
