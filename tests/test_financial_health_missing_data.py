@@ -16,6 +16,12 @@
 ⚠️ **鏡像失效模式也要守**：把「本業虧損」改成 N/A 之後，`fail_items` 會變空，
 同一份半份財報會從「C 級」翻成「🟢 印鈔機！A+ 型企業」——
 **假的正結論跟假的負結論一樣危險，而且更容易讓人買進。**
+
+──────────────────────────────────────────────────────────────────
+**P0-B（2026-09-09，見【7】）**：獨立 QA 抓出同一個病在**另外兩張表**上還活著 ——
+資產負債表缺 → 兩張假的及格證 → A+「印鈔機」；現金流量表缺 → 100-100-10 三個
+「0.0%」→ grade C →「🔴 建議換出」。並確認 `FIELD_ABSENT` 在現行 fetcher 契約下
+恆不觸發（`_v()` 查無回 `0.0`），production 的守衛一律改走領域規則。
 """
 from __future__ import annotations
 
@@ -400,3 +406,300 @@ class TestOldPageGreyNotRed:
             _fd(BALANCE_AND_CASHFLOW, INCOME_OK,
                 {"營業利益(千)": -50_000, "稅後淨利(千)": -60_000}), monkeypatch)
         assert TRAFFIC_RED in _html and "本業虧損❌" in _html
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【7】P0-B（2026-09-09）：同一個病在**另外兩張表**上還活著
+# ══════════════════════════════════════════════════════════════════
+# P0 只修好「損益表沒回來」那一條路。獨立 QA 抓出：
+#   ① 資產負債表整張沒回來 → `cl == 0` 換到「Pass (無短期債務)」、
+#      `ppe == 0` 換到「Pass (輕資產)」 —— **一張沒回來的表換到兩張及格證**，
+#      總評被推到 A+「印鈔機」。**假的正結論比假的負結論更容易讓人買進。**
+#   ② 現金流量表整張沒回來 → 100-100-10 三項算成「0.0%」→ Fail → grade C
+#      →`dividend_station` 據此輸出「🔴 建議換出」。而**同一份輸出**裡
+#      盈餘含金量已經正確地說「N/A (現金流量表缺漏)」—— 自相矛盾。
+#   ③ `FIELD_ABSENT` 在現行 fetcher 契約下恆不觸發（`_v()` 查無回 0.0）。
+#
+# ⚠️ **兩個方向都要守**：缺值不得產出假的**負**結論，也不得產出假的**正**結論。
+
+#: 資產負債表六欄以外的另外兩張表（IS + CF）—— 這兩張**有回來**。
+INCOME_AND_CASHFLOW: dict = {
+    **INCOME_OK,
+    "OCF(千)": 1_200_000, "資本支出(千)": 300_000, "現金股利(千)": 100_000,
+    "OCF符號": "正", "ICF符號": "負", "籌資CF符號": "負", "is_finance": False,
+}
+
+#: 資產負債表本身（對照組）。
+BALANCE_ONLY: dict = {
+    "現金佔總資產(%)": 18.0, "負債比率(%)": 42.0,
+    "總資產(千)": 5_000_000, "總負債(千)": 2_100_000,
+    "流動資產(千)": 3_000_000, "流動負債(千)": 900_000,
+    "股東權益(千)": 2_900_000, "非流動負債(千)": 1_200_000,
+    "存貨(千)": 400_000, "存貨前期(千)": 380_000,
+    "固定資產(千)": 1_500_000, "長期投資(千)": 200_000,
+    "應收帳款天數": 45.0, "應付帳款天數": 60.0,
+}
+
+#: production 真形狀：整張表沒回來 → 該表所有欄位一起變 0（`_v()` 回 0.0）。
+BALANCE_ALL_ZERO: dict = dict.fromkeys(BALANCE_ONLY, 0)
+
+#: 現金流量表三欄（對照組）／整張沒回來。
+CASHFLOW_OK: dict = {"OCF(千)": 1_200_000, "資本支出(千)": 300_000,
+                     "現金股利(千)": 100_000, "OCF符號": "正",
+                     "ICF符號": "負", "籌資CF符號": "負"}
+CASHFLOW_ALL_ZERO: dict = {"OCF(千)": 0, "資本支出(千)": 0, "現金股利(千)": 0,
+                           "OCF符號": "負", "ICF符號": "負", "籌資CF符號": "負"}
+
+#: 三種缺法分開跑（同【2】的理由：`get(k,0) or 0` 的罪狀就是把它們壓成一個 0）。
+BS_MISSING_CASES: list = [
+    pytest.param(_fd(INCOME_AND_CASHFLOW), id="a-key不存在"),
+    pytest.param(_fd(INCOME_AND_CASHFLOW, BALANCE_ALL_ZERO), id="c-值真的是0"),
+]
+CF_MISSING_CASES: list = [
+    pytest.param(_fd({"is_finance": False}, INCOME_OK, BALANCE_ONLY),
+                 id="a-key不存在"),
+    pytest.param(_fd({"is_finance": False}, INCOME_OK, BALANCE_ONLY,
+                     CASHFLOW_ALL_ZERO), id="c-值真的是0"),
+]
+
+_FULL: dict = _fd({"is_finance": False}, INCOME_OK, BALANCE_ONLY, CASHFLOW_OK)
+
+
+def _verdict_of(fin: dict) -> dict:
+    return FHE.no_ai_overall_verdict(
+        fin, FHE.analyze_financial_health("", "T", fin))
+
+
+class TestBalanceSheetMissingNeverEarnsAPass:
+    """① 資產負債表沒回來 → **不得**換到任何一張及格證。"""
+
+    @pytest.mark.parametrize("fin", BS_MISSING_CASES)
+    def test_solvency_is_not_called_debt_free(self, fin):
+        """`流動負債 == 0` 是「這張表沒回來」，不是「這家公司沒有短期負債」。"""
+        _s = FHE._no_ai_solvency(fin)["Solvency_Module"]
+        assert _s["Current_Ratio"]["Status"] == "N/A", _s
+        assert _s["Quick_Ratio"]["Status"] == "N/A", _s
+        assert _s["Final_Solvency_Verdict"] == "N/A"
+        _blob = str(_s)
+        assert "無短期債務" not in _blob
+        assert "資金壓力極低" not in _blob
+
+    @pytest.mark.parametrize("fin", BS_MISSING_CASES)
+    def test_long_term_funding_is_not_called_asset_light(self, fin):
+        """`固定資產 == 0` 是那一格沒解析出來，不是「輕資產的好公司」。"""
+        _f = FHE._no_ai_financial_structure(fin)["Financial_Structure_Module"]
+        assert _f["Long_Term_Funding_Ratio"]["Status"] == "N/A", _f
+        assert "輕資產" not in str(_f)
+
+    @pytest.mark.parametrize("fin", BS_MISSING_CASES)
+    def test_those_two_never_reach_pass_items_or_score(self, fin):
+        """**不得計分、不得進 pass_items**（否則缺值會把等級往上推）。"""
+        _ov = _verdict_of(fin)
+        assert "流動比率" not in _ov["pass_items"]
+        assert "以長支長" not in _ov["pass_items"]
+
+    @pytest.mark.parametrize("fin", BS_MISSING_CASES)
+    def test_no_grade_is_issued_at_all(self, fin):
+        """**方向一：不得產出假的正結論。** 半份財報不得換到 A+「印鈔機」。
+
+        ⚠️ 只把那兩格改成 N/A **不夠**（實測：改完仍是 A+）——
+        因為 `fail_items` 一樣是空的，**少評幾項不會讓等級變差，只會變好**。
+        gate 必須設在「整張表在不在」。
+        """
+        _ov = _verdict_of(fin)
+        assert _ov["grade"] == "N/A", f"缺整張資產負債表卻評成 {_ov['grade']}"
+        assert _ov["score_pct"] is None
+        assert _ov["grade_color"] == TRAFFIC_NEUTRAL
+        assert "印鈔機" not in _ov["headline"]
+        assert "不評等" in _ov["headline"]
+
+    @pytest.mark.parametrize("fin", BS_MISSING_CASES)
+    def test_not_downgraded_either(self, fin):
+        """**方向二：也不得產出假的負結論。** 不得掉成 C / F。"""
+        _ov = _verdict_of(fin)
+        assert _ov["grade"] not in ("C", "F"), _ov["headline"]
+        assert _ov["fail_items"] == [], _ov["fail_items"]
+
+    @pytest.mark.parametrize("fin", BS_MISSING_CASES)
+    def test_says_which_statement_is_missing(self, fin):
+        _ov = _verdict_of(fin)
+        assert "資產負債表" in _ov["comment"]
+        assert "不拿 0 頂替" in _ov["comment"]
+
+    def test_a_missing_numerator_is_not_a_failing_ratio(self):
+        """**分子側也要擋。** `流動資產 == 0`（流動負債在）→ `cr = 0.0%`
+        → `Fail_Initial`，那是**假的負結論**（資產負債表只解析出一半）。
+
+        ⚠️ 這一條是突變測試 M8 補出來的：只擋分母（cl）時全套件仍全綠 ——
+        **沒有測試守住的修復，等於沒有修**（CLAUDE.md §-2 規則 6 / v3 §03-1）。
+        """
+        _s = FHE._no_ai_solvency(
+            {**_FULL, "流動資產(千)": 0})["Solvency_Module"]
+        assert _s["Current_Ratio"]["Status"] == "N/A", _s
+        assert _s["Current_Ratio"]["Status"] != "Fail_Initial"
+        assert _s["Final_Solvency_Verdict"] == "N/A"
+        assert FHE.NA_NO_CURRENT_ASSET in _s["Current_Ratio"]["Value"]
+
+    @pytest.mark.parametrize("fin", BS_MISSING_CASES)
+    def test_carries_machine_readable_flag(self, fin):
+        _f = FHE._no_ai_financial_structure(fin)["Financial_Structure_Module"]
+        assert _f["Data_Gap"]["missing"] == FHE.GAP_BALANCE_SHEET
+        assert _f["Data_Gap"]["field"] == "總資產(千)"
+        assert _f["Data_Gap"]["why"]
+
+
+class TestCashFlowMissingIsNotAFailedRule:
+    """② 現金流量表沒回來 → 100-100-10 未評估，**不是三個 0.0% 的 Fail**。"""
+
+    @staticmethod
+    def _rule(fin: dict) -> dict:
+        return FHE._no_ai_survival(fin)["Survival_Module"]["Rule_100_100_10"]
+
+    @pytest.mark.parametrize("fin", CF_MISSING_CASES)
+    def test_three_cells_are_not_zero_percent(self, fin):
+        _r = self._rule(fin)
+        for _k in ("Cash_Flow_Ratio", "Cash_Flow_Adequacy", "Cash_Reinvestment"):
+            assert "N/A" in _r[_k], f"{_k} = {_r[_k]!r}"
+            assert not str(_r[_k]).startswith("0.0"), f"{_k} 畫成 0.0% 的結論"
+
+    @pytest.mark.parametrize("fin", CF_MISSING_CASES)
+    def test_rule_status_is_unevaluated_not_failed(self, fin):
+        assert self._rule(fin)["Status"] == "N/A"
+
+    @pytest.mark.parametrize("fin", CF_MISSING_CASES)
+    def test_one_output_does_not_contradict_itself(self, fin):
+        """**同一份輸出不得自相矛盾。**
+
+        `_no_ai_advanced_diagnostic` 對同一個 `OCF == 0` 早就正確回
+        「N/A (現金流量表缺漏)」，正上方的 100-100-10 卻說「0.0% Fail」。
+        同一個 0 不能有兩種讀法（§2.1 SSOT）。
+        """
+        _fh = FHE.analyze_financial_health("", "T", fin)
+        _eq = _fh["advanced_diagnostic_module"]["Earnings_Quality"]
+        _rule = _fh["survival_module"]["Rule_100_100_10"]
+        assert _eq["Status"] == "N/A" and _rule["Status"] == "N/A"
+        assert FHE.NA_NO_CASHFLOW in _eq["Value"]
+        assert FHE.NA_NO_CASHFLOW in _rule["Cash_Flow_Ratio"]
+
+    @pytest.mark.parametrize("fin", CF_MISSING_CASES)
+    def test_no_sell_signal_from_a_missing_statement(self, fin):
+        """**方向二：假的負結論。** grade C/F 會變成「🔴 建議換出」。"""
+        _ov = _verdict_of(fin)
+        assert _ov["grade"] not in ("C", "F"), _ov["headline"]
+        assert "100-100-10" not in _ov["fail_items"]
+        assert "盈餘含金量" not in _ov["fail_items"]
+
+    @pytest.mark.parametrize("fin", CF_MISSING_CASES)
+    def test_but_does_not_hand_out_a_pass_either(self, fin):
+        """**方向一：假的正結論。** 未評估的兩項不得進 pass_items。"""
+        _ov = _verdict_of(fin)
+        assert "100-100-10" not in _ov["pass_items"]
+        assert "盈餘含金量" not in _ov["pass_items"]
+        assert "未評估" in _ov["comment"]
+
+    @pytest.mark.parametrize("fin", CF_MISSING_CASES)
+    def test_carries_machine_readable_flag(self, fin):
+        """§1 三律之(3)：輸出帶旗標，UI 才畫得出對的那一句灰態文案。"""
+        _s = FHE._no_ai_survival(fin)["Survival_Module"]
+        assert _s["Data_Gap"]["missing"] == FHE.GAP_CASH_FLOW
+        assert _s["Data_Gap"]["field"] == "OCF(千)"
+        assert _s["Data_Gap"]["why"]
+
+    def test_no_flag_when_the_statement_is_there(self):
+        """反向：現金流量表在 → **不得**掛旗標（否則全站永遠灰）。"""
+        assert "Data_Gap" not in FHE._no_ai_survival(_FULL)["Survival_Module"]
+
+    def test_all_three_na_is_not_a_pass(self):
+        """三項全 N/A ＝ 零筆資料，**不得**開一張 100-100-10 及格證。"""
+        _r = self._rule(_fd({"is_finance": False}, INCOME_OK))
+        assert _r["Status"] == "N/A"
+        assert "單季估算" not in _r["Insight"]
+
+
+class TestImpossibleZerosAreTreatedAsGaps:
+    """③ 領域規則要**真的會觸發** —— `FIELD_ABSENT` 在 production 恆為 False。"""
+
+    @staticmethod
+    def _prof(**over) -> dict:
+        return _prof_of({**_FULL, **over})
+
+    def test_zero_operating_income_is_not_a_loss(self):
+        """`營業利益 == 0`（rev 在手上）＝ 那一列沒解析出來，不是「本業虧損」。
+
+        這正是 P0 修好的那條鏈換一個欄位重演：原式寫
+        `oi_state == FIELD_ABSENT`，而 fetcher 查無回 `0.0` → 恆為 False。
+        """
+        _om = self._prof(**{"營業利益(千)": 0})["Operating_Margin"]
+        assert _om["Core_Business_Profitable"] == "N/A", _om
+        assert _om["Core_Business_Profitable"] != "No"
+        assert not _om["Value"].startswith("0.0")
+
+    def test_zero_net_income_is_not_a_zero_margin(self):
+        _nm = self._prof(**{"稅後淨利(千)": 0})["Net_Margin"]
+        assert _nm["Status"] == "N/A" and not _nm["Value"].startswith("0.0")
+
+    def test_zero_operating_income_blanks_margin_of_safety(self):
+        _mos = self._prof(**{"營業利益(千)": 0})["Margin_Of_Safety"]
+        assert _mos["Status"] == "N/A"
+
+    def test_zero_net_income_blanks_roe_and_dupont(self):
+        _fin = {**_FULL, "稅後淨利(千)": 0}
+        assert "N/A" in _prof_of(_fin)["ROE"]["Value"]
+        _a = FHE._no_ai_advanced_diagnostic(_fin)["Advanced_Diagnostic_Module"]
+        assert "虧損" not in _a["DuPont_Health"]
+        assert "虧損" not in _a["Earnings_Quality"]["Value"]
+
+    # ── 反向守衛：**真的**虧損／真的難看的數字仍要照實下結論 ──────
+    def test_a_real_loss_is_still_a_loss(self):
+        _p = self._prof(**{"營業利益(千)": -50_000, "稅後淨利(千)": -60_000})
+        assert _p["Operating_Margin"]["Core_Business_Profitable"] == "No"
+        assert _p["Operating_Margin"]["Value"] == "-5.0%"
+        assert _p["Net_Margin"]["Status"] == "Loss"
+
+    def test_a_real_zero_inventory_is_still_zero_days(self):
+        """存貨真的是 0（純服務業）是**真實觀測** —— 不可以一起洗成灰。"""
+        _o = FHE._no_ai_operating({**_FULL, "存貨(千)": 0})["Operating_Module"]
+        assert _o["DIO"] == "0.0 天"
+
+
+class TestRealNumbersStillConclude:
+    """⚠️ 反向總守衛：**不可以為了不說謊就變成什麼都不說。**"""
+
+    def test_full_statements_are_unchanged(self):
+        _ov = _verdict_of(_FULL)
+        assert _ov["grade"] == "A+" and _ov["score_pct"] is not None
+        assert "以長支長" in _ov["pass_items"]
+        assert "流動比率" in _ov["pass_items"]
+        assert "100-100-10" in _ov["pass_items"]
+
+    def test_a_genuinely_weak_balance_sheet_still_fails(self):
+        """流動負債**真的**很大 → 流動比率照樣 Fail_Initial，不因本次改動變 N/A。"""
+        _s = FHE._no_ai_solvency({**_FULL, "流動負債(千)": 5_000_000})
+        _m = _s["Solvency_Module"]
+        assert _m["Current_Ratio"]["Status"] == "Fail_Initial"
+        assert _m["Final_Solvency_Verdict"] == "Fail"
+
+    def test_a_genuinely_short_funded_company_still_fails(self):
+        """以長支長**真的**不足 → 照樣 Fail。"""
+        _f = FHE._no_ai_financial_structure(
+            {**_FULL, "固定資產(千)": 90_000_000})["Financial_Structure_Module"]
+        assert _f["Long_Term_Funding_Ratio"]["Status"] == "Fail"
+
+    def test_a_genuinely_bad_cash_flow_still_fails(self):
+        """OCF **真的**很小（非 0）→ 100-100-10 照樣 Fail。"""
+        _r = FHE._no_ai_survival(
+            {**_FULL, "OCF(千)": 1_000})["Survival_Module"]["Rule_100_100_10"]
+        assert _r["Status"] == "Fail"
+
+    def test_a_genuinely_bad_company_is_still_downgraded(self):
+        _ov = _verdict_of({**_FULL, "OCF(千)": 1_000, "固定資產(千)": 90_000_000,
+                           "流動負債(千)": 5_000_000, "負債比率(%)": 85.0})
+        assert _ov["grade"] in ("C", "F"), _ov["headline"]
+        assert _ov["fail_items"]
+
+    def test_the_dead_score_key_is_never_produced(self):
+        """`_pts` 的 `"Pass (無短期債務)"` 已移除 —— 沒有任何路徑再產出它。"""
+        for _fin in (_FULL, _fd(INCOME_AND_CASHFLOW),
+                     _fd({"is_finance": False}, INCOME_OK, BALANCE_ONLY)):
+            _fh = FHE.analyze_financial_health("", "T", _fin)
+            assert "Pass (無短期債務)" not in str(_fh)
