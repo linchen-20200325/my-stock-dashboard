@@ -65,7 +65,18 @@ import sys
 
 import pytest
 
-from shared.station_specs import KEY_STOCK_TREND, SPECS_BY_KEY
+from shared.macro_buckets import (
+    BUCKET_DANGER_SPECS,
+    BUCKET_META,
+    REFERENCE_BUCKET,
+    REFERENCE_TREND_SPECS,
+)
+from shared.station_specs import (
+    KEY_STOCK_TREND,
+    SPECS_BY_KEY,
+    STATION_GROUP_TITLES,
+    STATION_SPECS,
+)
 from shared.ui_state import (
     UI_DEGRADED,
     UI_EMPTY,
@@ -1626,6 +1637,298 @@ class TestSignalChannelIsClean:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 【15】2026-09-09 ①：16 盞燈就是 16 盞 —— 參考走勢不進任何分母
+# ══════════════════════════════════════════════════════════════════
+#
+# 客戶 2026-08-27 的裁示逐字寫在 L0 `shared/macro_buckets.py` 裡，
+# 而且**預言了本頁踩的這個坑**：
+#     「把不算燈的東西放進去再靠旗標排除，等於要求每一個現有與未來的消費端
+#       都記得過濾；漏掉一個，分母就悄悄變成 18，而畫面上完全看不出來。」
+# 本頁曾經就是那個漏掉過濾的消費端（`_macro_rows()` 兩份 list 直接相加）。
+
+
+def _assert_reference_is_not_a_light(scan: "P.SpecScan") -> None:
+    """① 的判準**本體**。正向測試與突變測試共用同一段程式碼。
+
+    ⚠️ 共用是刻意的：兩邊各寫一份，突變測試就可能在「另一份」上轉紅，
+    而真正跑在正向測試裡的那一份其實一個東西都沒守到。
+    """
+    _ref_keys = {_s.key for _s in REFERENCE_TREND_SPECS}
+    assert _ref_keys, "L0 沒有參考走勢了？這組測試會空轉而假綠"
+
+    # (a) 參考走勢不准出現在「算得上一盞燈」的那一袋裡。
+    _leaked = _ref_keys & {_r.key for _r in scan.rows}
+    assert not _leaked, f"參考走勢 {sorted(_leaked)} 混進燈裡了 —— 分母會變大"
+
+    # (b) 總經燈的數量 == L0 那份 list 的長度（**不寫死 16**，L0 加一盞就跟著動）。
+    _macro = tuple(_r for _r in scan.rows if _r.family == P.FAMILY_MACRO)
+    assert len(_macro) == len(BUCKET_DANGER_SPECS), (
+        f"總經燈算成 {len(_macro)} 盞，L0 只有 {len(BUCKET_DANGER_SPECS)} 盞")
+
+    # (c) 畫面上那句「N 盞總經燈」也要是同一個數字（算對了但印錯一樣是錯）。
+    _card, _facts, _sig = P.build_lights_card(scan)
+    assert _card.value.startswith(f"{len(BUCKET_DANGER_SPECS)} 盞總經燈"), _card.value
+
+    # (d) 對照表抬頭的那個 `（N 盞）` 同理。
+    assert f"（{len(_macro)} 盞）"
+
+
+class TestSixteenLightsAreSixteen:
+
+    def test_the_two_l0_lists_are_really_two(self):
+        """反證：L0 真的分成兩份 list，本組測試才有意義。"""
+        assert len(BUCKET_DANGER_SPECS) == 16
+        assert len(REFERENCE_TREND_SPECS) == 2
+        assert not ({_s.key for _s in BUCKET_DANGER_SPECS}
+                    & {_s.key for _s in REFERENCE_TREND_SPECS})
+
+    def test_the_denominator_only_counts_lights(self):
+        _assert_reference_is_not_a_light(P.load_specs())
+
+    def test_reference_rows_live_in_their_own_field(self):
+        _scan = P.load_specs()
+        assert {_r.key for _r in _scan.reference_rows} == {
+            _s.key for _s in REFERENCE_TREND_SPECS}
+        assert len(_scan.rows) == len(BUCKET_DANGER_SPECS) + len(STATION_SPECS)
+
+    def test_the_macro_row_builder_never_touches_the_reference_list(self):
+        assert {_r.key for _r in P._macro_rows()} == {
+            _s.key for _s in BUCKET_DANGER_SPECS}
+
+    def test_the_page_never_adds_the_two_lists_together(self):
+        """AST：本檔不准再出現「把兩份 L0 list 相加」那個運算式。"""
+        _code = _code_only()
+        for _needle in ("BUCKET_DANGER_SPECS) + list(REFERENCE_TREND_SPECS",
+                        "BUCKET_DANGER_SPECS + REFERENCE_TREND_SPECS"):
+            assert _needle not in _code, f"兩份 list 又被相加了：{_needle}"
+
+    def test_all_rows_is_never_used_for_a_count(self):
+        """`all_rows` 只准給旗標掃描用。任何 `len(...all_rows)` 都是新的 18 盞 bug。"""
+        _code = _code_only()
+        assert "len(" + "self.all_rows" not in _code
+        for _line in _code.splitlines():
+            if "all_rows" in _line:
+                assert "len(" not in _line and " 盞" not in _line, (
+                    f"`all_rows` 被拿去計數了：{_line.strip()}")
+
+    # ── 突變測試（v3 §03-1）：把修法拔掉，上面的判準必須轉紅 ──────────
+    def test_mutation_adding_the_lists_back_turns_red(self):
+        """把 2026-09-09 前的寫法**原樣**還原 → `_assert_reference_is_not_a_light`
+        必須當場炸。這條在證明上面那組不是空轉的。"""
+        _old_macro = tuple(
+            P._danger_spec_row(_s, P.FAMILY_MACRO)
+            for _s in list(BUCKET_DANGER_SPECS) + list(REFERENCE_TREND_SPECS))
+        _buggy = P.SpecScan(rows=_old_macro + P._station_rows(),
+                            reference_rows=())
+        # 先確認突變體真的重現了那個 bug（18 盞）。
+        assert sum(1 for _r in _buggy.rows if _r.family == P.FAMILY_MACRO) == (
+            len(BUCKET_DANGER_SPECS) + len(REFERENCE_TREND_SPECS))
+        assert P.build_lights_card(_buggy)[0].value.startswith("18 盞總經燈")
+        with pytest.raises(AssertionError):
+            _assert_reference_is_not_a_light(_buggy)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【16】2026-09-09 ②：失準／未接線的門檻要降級並說原因（**兩個方向**）
+# ══════════════════════════════════════════════════════════════════
+def _assert_flagged_thresholds_are_downgraded(scan: "P.SpecScan") -> None:
+    """② 的判準本體（正向 ＋ 突變共用，理由同 ①）。"""
+    _flagged = tuple(_r for _r in scan.rows if not _r.wired or not _r.discriminative)
+    assert _flagged, "L0 現在沒有被標記的燈？這組測試會空轉而假綠"
+
+    _cells = {_d["這一盞"]: _d["門檻"] for _d in P._spec_table_rows(scan.rows)}
+    _lines = "\n".join(P.threshold_caveat_lines(scan.rows))
+
+    for _r in _flagged:
+        _cell = _cells[_r.label]
+        # (a) 標題降級：一眼看出這條門檻現在不能用。
+        assert _cell.startswith(f"門檻（{_r.threshold_flag}）"), (
+            f"{_r.key} 的門檻沒有降級標題：{_cell[:40]}")
+        # (b) 數字**還在**，但打了刪除線（不隱藏 —— 藏了使用者會去找更舊的）。
+        assert P._STRIKE_MARK in _cell, f"{_r.key} 的門檻沒有刪除線"
+        for _ch in (_r.threshold_text or ""):
+            assert _ch in _cell, f"{_r.key} 的門檻數字被藏起來了"
+        # (c) 明說不要拿去用。
+        assert P.THRESHOLD_DO_NOT_USE in _cell
+        # (d) 原因**原文**要到得了畫面，而且不是空的。
+        _reason = _r.unwired_reason if not _r.wired else _r.degraded_reason
+        assert _reason.strip(), f"{_r.key} 在 L0 標了旗標卻沒有寫原因"
+        assert _reason[:20] in _lines, f"{_r.key} 的 L0 原因沒有印在表格下方"
+
+
+class TestFlaggedThresholdsAreDowngradedNotHidden:
+
+    def test_the_repo_currently_has_both_kinds(self):
+        """反證：現在真的同時有「未接線」與「已失準」兩種，否則下面只測到一半。"""
+        _scan = P.load_specs()
+        assert any(not _r.wired for _r in _scan.rows)
+        assert any(not _r.discriminative for _r in _scan.rows)
+
+    def test_flagged_rows_are_downgraded_and_explained(self):
+        _assert_flagged_thresholds_are_downgraded(P.load_specs())
+
+    def test_a_healthy_light_still_shows_a_usable_threshold(self):
+        """⭐ **反向測試**：正常的燈**照常**顯示可用的門檻數字。
+
+        為了誠實就把全部門檻都標成失效，是另一種說謊（而且更難發現，
+        因為畫面看起來「很謹慎」）。
+        """
+        _scan = P.load_specs()
+        _ok = tuple(_r for _r in _scan.rows if _r.wired and _r.discriminative)
+        assert _ok, "全部的燈都被標記了？那反向測試就空轉了"
+        for _d in P._spec_table_rows(_ok):
+            assert not _d["門檻"].startswith("門檻（")
+            assert P._STRIKE_MARK not in _d["門檻"]
+            assert P.THRESHOLD_DO_NOT_USE not in _d["門檻"]
+        # 而且至少有一盞真的印著它的數字（不是全部都「—」）。
+        assert any(any(_c.isdigit() for _c in _d["門檻"])
+                   for _d in P._spec_table_rows(_ok)), "正常的燈連一個門檻數字都沒印"
+
+    def test_no_caveat_line_for_a_healthy_light(self):
+        _scan = P.load_specs()
+        _ok = tuple(_r for _r in _scan.rows if _r.wired and _r.discriminative)
+        assert P.threshold_caveat_lines(_ok) == ()
+
+    def test_the_reason_is_l0_verbatim_not_rewritten(self):
+        """原因是**原文**：本頁不節錄、不改寫（改寫就等於第二份說法）。"""
+        _scan = P.load_specs()
+        _lines = P.threshold_caveat_lines(_scan.rows)
+        assert _lines
+        for _r in _scan.rows:
+            if not _r.threshold_flag:
+                continue
+            assert any(_r.threshold_caveat in _l for _l in _lines), (
+                f"{_r.key} 的原因被改寫或截斷了")
+
+    def test_the_flag_card_also_downgrades_the_threshold(self):
+        """葉2 的旗標卡同一段門檻也要降級 —— 卡片說「不能信」、
+        旁邊卻印一組乾淨的數字，是當場自打嘴巴。"""
+        _scan = P.load_specs()
+        for _r in _scan.unwired + _scan.degraded:
+            _card, _facts, _sig = P.build_spec_flag_card(_r)
+            assert dict(_facts)["這一盞的門檻"] == _r.threshold_display
+            if _r.threshold_text:
+                assert P._STRIKE_MARK in dict(_facts)["這一盞的門檻"]
+
+    # ── 突變測試（v3 §03-1）──────────────────────────────────────
+    def test_mutation_dropping_the_reason_turns_red(self, monkeypatch):
+        """拿掉「把原因印出來」這一步 → 判準必須當場炸。"""
+        monkeypatch.setattr(P, "threshold_caveat_lines", lambda _rows: ())
+        with pytest.raises(AssertionError):
+            _assert_flagged_thresholds_are_downgraded(P.load_specs())
+
+    def test_mutation_printing_the_raw_threshold_turns_red(self, monkeypatch):
+        """把門檻欄改回 2026-09-09 前的「數字原樣照印」→ 判準必須當場炸。"""
+        def _old_table(rows):
+            return [{"這一盞": _r.label, "分組": _r.group or "—",
+                     "方向": _r.direction_text,
+                     "門檻": _r.threshold_text or "—",
+                     "值從哪來": _r.source or "—", "在防什麼": _r.why or "—",
+                     "已知限制": _r.flag_text} for _r in rows]
+        monkeypatch.setattr(P, "_spec_table_rows", _old_table)
+        with pytest.raises(AssertionError):
+            _assert_flagged_thresholds_are_downgraded(P.load_specs())
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【17】2026-09-09 ③：不判燈的東西不准標「正常」
+# ══════════════════════════════════════════════════════════════════
+class TestReferenceTableHasNoLightColumns:
+
+    def test_the_reference_table_has_neither_threshold_nor_limits_column(self):
+        _scan = P.load_specs()
+        _rows = P._reference_table_rows(_scan.reference_rows)
+        assert _rows
+        for _d in _rows:
+            assert "門檻" not in _d, "參考走勢不判燈，卻有一欄門檻"
+            assert "已知限制" not in _d, (
+                "參考走勢不判燈，卻有一欄已知限制 —— 它只會印「正常」，"
+                "而那會被讀成「這盞燈現在是好的」")
+
+    def test_the_word_normal_never_appears_in_the_reference_table(self):
+        """③ 的原病灶：加權指數門檻空白、卻標著「正常」。"""
+        _scan = P.load_specs()
+        _text = " ".join(str(_v) for _d in
+                         P._reference_table_rows(_scan.reference_rows)
+                         for _v in _d.values())
+        assert "正常" not in _text
+        for _bad in ("已失準", "未接線"):
+            assert _bad not in _text, (
+                f"參考走勢被貼上「{_bad}」—— 沒在判燈的東西，"
+                "標任何一種燈況都是對使用者說錯話")
+
+    def test_taiex_really_has_no_thresholds_in_l0(self):
+        """反證：加權指數在 L0 真的沒有門檻（所以它本來就不該有那兩欄）。"""
+        _taiex = [_s for _s in REFERENCE_TREND_SPECS if _s.key == "taiex"]
+        assert _taiex and _taiex[0].yellow is None and _taiex[0].red is None
+
+    def test_the_reference_caption_says_it_is_not_a_light(self):
+        _cap = P.REFERENCE_TABLE_CAPTION.format(n=2)
+        assert "不是燈" in _cap and "分母" in _cap
+
+    def test_a_reference_row_is_never_called_a_light(self):
+        """旗標卡的標題：參考走勢**不加「燈」字**。"""
+        _row = P._reference_rows()[0]
+        assert _row.family_text == P.REFERENCE_FAMILY
+        assert not _row.family_text.endswith("燈")
+        assert P._macro_rows()[0].family_text.endswith("燈")
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【18】2026-09-09 ④：「分組」欄不准印內部代碼
+# ══════════════════════════════════════════════════════════════════
+class TestGroupNamesComeFromL0:
+
+    def test_no_raw_group_code_reaches_the_table(self):
+        _scan = P.load_specs()
+        _codes = ({_s.bucket for _s in BUCKET_DANGER_SPECS}
+                  | {_s.group for _s in STATION_SPECS})
+        for _d in P._spec_table_rows(_scan.rows):
+            assert _d["分組"] not in _codes, (
+                f"「分組」欄還在印內部代碼 {_d['分組']!r}")
+            assert not _d["分組"].isascii(), (
+                f"「分組」欄印的是 ASCII {_d['分組']!r} —— 那是給程式看的")
+
+    def test_macro_groups_read_the_existing_l0_meta(self):
+        """總經側直接讀既有的 `BUCKET_META`（emoji ＋ 中文名），本頁不另編一份。"""
+        for _r in P._macro_rows():
+            _meta = BUCKET_META[_r.group]
+            assert _r.group_text == f"{_meta['emoji']} {_meta['title']}"
+
+    def test_hold_groups_read_the_new_l0_ssot(self):
+        for _r in P._station_rows():
+            assert _r.group_text == STATION_GROUP_TITLES[_r.group]
+
+    def test_the_four_hold_group_names_are_the_signed_off_ones(self):
+        assert set(STATION_GROUP_TITLES.values()) == {
+            "四燈體檢", "3-3-3 篩選", "個股體質", "進場時機"}
+
+    def test_the_names_are_not_inlined_in_this_page(self):
+        """④ 明文要求：名字放 L0，**不准 inline 在 UI**。"""
+        _code = _code_only()
+        for _name in STATION_GROUP_TITLES.values():
+            assert _name not in _code, (
+                f"{_name!r} 被寫死在本頁了 —— 它的家在 shared/station_specs.py")
+
+    def test_an_unknown_group_is_shown_verbatim(self):
+        """L0 多一組而這裡沒跟上 → **原樣顯示代碼**，不編一個看起來合理的名字。"""
+        _row = P.SpecRow(key="k", label="l", family=P.FAMILY_HOLD,
+                         group="brand_new_bucket", direction="high_bad",
+                         unit="", threshold_text="", source="", why="")
+        assert _row.group_text == "brand_new_bucket"
+
+    def test_the_reference_group_is_not_shown_as_a_code(self):
+        assert P._reference_rows()[0].group == REFERENCE_BUCKET
+        assert P._reference_rows()[0].group_text == P.REFERENCE_FAMILY
+
+    # ── 突變測試：把 L0 SSOT 拔掉，判準必須轉紅 ──────────────────
+    def test_mutation_losing_the_l0_names_turns_red(self, monkeypatch):
+        monkeypatch.setattr(P, "STATION_GROUP_TITLES", {})
+        with pytest.raises(AssertionError):
+            self.test_no_raw_group_code_reaches_the_table()
+
+
+# ══════════════════════════════════════════════════════════════════
 # 冒煙（slow lane）：這一頁真的畫得出來
 # ══════════════════════════════════════════════════════════════════
 @pytest.mark.slow
@@ -1665,9 +1968,9 @@ def test_page_mounts_clean(tmp_path):
     # 葉3：chat_input 是唯一的送出入口（天然 gate）。
     assert len(_at.chat_input) == 1
 
-    # 葉1：兩張門檻對照表（總經 ＋ 持股）真的畫出來了。
-    assert len(_at.dataframe) == 2, (
-        f"逐盞門檻對照表應有兩張，實際 {len(_at.dataframe)} 張")
+    # 葉1：三張表 —— 總經燈 ＋ 持股燈 ＋ **不算燈**的參考走勢（2026-09-09 ①③）。
+    assert len(_at.dataframe) == 3, (
+        f"應有三張表（總經燈／持股燈／參考走勢），實際 {len(_at.dataframe)} 張")
 
     # 冷啟動 = idle，**不是** empty、**不是**紅。
     assert "**進階診斷未載入**".strip("*") in _all
@@ -1690,6 +1993,25 @@ def test_page_mounts_clean(tmp_path):
     assert "逐盞門檻對照表" in _all
     assert "健康評分六因子" in _all
     assert "兩套刻度" in _all
+
+    # ── 2026-09-09 的四件事，逐件證明它**到得了畫面**（單元測試只證明算得對）──
+    # ① 分母：畫面上每一個「N 盞」都只算燈。
+    _n_macro = len(BUCKET_DANGER_SPECS)
+    _n_hold = len(P._station_rows())
+    assert f"{_n_macro} 盞總經燈" in _all, "教學卡的總經燈數不是 16"
+    assert f"（{_n_macro} 盞）" in _all and f"（{_n_hold} 盞）" in _all, (
+        "對照表抬頭的「N 盞」不對")
+    _bad = len(BUCKET_DANGER_SPECS) + len(REFERENCE_TREND_SPECS)
+    assert f"{_bad} 盞" not in _all, (
+        f"畫面上還有「{_bad} 盞」—— 參考走勢又被算進燈的分母了")
+    # ③ 參考走勢自己一張表，而且明說它不是燈。
+    assert "參考走勢 —— 這些不是燈" in _all
+    # ② 降級門檻的原因（L0 原文）真的印在表格下方。
+    assert P.THRESHOLD_DO_NOT_USE in _all, "「不要拿它當操作依據」沒畫出來"
+    for _line in P.threshold_caveat_lines(P.load_specs().rows):
+        # ⚠️ `.strip()`：Streamlit 會把 caption 開頭的全形空格（U+3000，本頁用它
+        #    做縮排）吃掉，比對原字串會得到一條「明明畫出來了卻紅」的假警報。
+        assert _line.strip() in _all, f"降級原因沒畫出來：{_line[:40]}"
 
 
 if __name__ == "__main__":
