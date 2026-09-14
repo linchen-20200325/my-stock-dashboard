@@ -1,23 +1,23 @@
 {
-  "updated_at": "2026-09-13T13:44:57.585125+00:00",
+  "updated_at": "2026-09-14T15:49:18.135610+00:00",
   "datasets": {
     "twii_ohlcv": {
       "name": "twii_ohlcv",
-      "last_updated": "2026-09-11",
-      "row_count": 4932,
+      "last_updated": "2026-09-14",
+      "row_count": 4933,
       "last_error": null
     },
     "finmind_inst": {
       "name": "finmind_inst",
-      "last_updated": "2026-09-11",
-      "row_count": 4957,
-      "last_error": "抓取結果為空"
+      "last_updated": "2026-09-14",
+      "row_count": 4958,
+      "last_error": null
     },
     "finmind_margin": {
       "name": "finmind_margin",
-      "last_updated": "2026-09-11",
-      "row_count": 4957,
-      "last_error": "抓取結果為空"
+      "last_updated": "2026-09-14",
+      "row_count": 4958,
+      "last_error": null
     },
     "finmind_m1m2": {
       "name": "finmind_m1m2",
