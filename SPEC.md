@@ -1310,3 +1310,148 @@ health_inspector,data_registry_panel,reconcile_panel,calibration_ui}.py`）—�
     （走自動 ID），故 widget ID 不同、不會 `DuplicateWidgetID`；總管實測冷啟動渲染樹**只有 1 支**、
     互動 0 例外 —— 但**「兩支同時渲染」的狀態沒有測到**。
 11. **`shared/ia_nav.py` 缺本頁 `ACTION_*` / `LEAF_*`**；**頁籤字串在 `app.py` 硬編碼**。
+
+---
+
+## §21 IA v2 頁1「🚀 更新今日戰情」**原地重抓**的取數契約（2026-09-14，PR #673）
+
+> **規格出處**：客戶 **2026-09-09 裁決** —— 頁1 的按鈕要**原地**觸發台股今日資料重抓並即時
+> 刷新本頁，**不跳轉回舊分頁**。畫面規格見 §16（本節只補**取數這一段**，§16 未改一個字）；
+> 落地檔案與分層見 `ARCHITECTURE.md §0.14`；過程紀錄、驗證數字與未驗到項見 `STATE.md` 最新一筆。
+>
+> ⛔ **v1 已於 2026-09-14 由客戶宣告絕對凍結**（merge commit `5808c03` 為 v1 最後一個功能 commit）。
+> **本節是已落地的契約記載，不是待辦清單** —— 下方「未接線」與「已知未解」**都不構成動工授權**
+> （`CLAUDE.md §-1` ＋ 客戶凍結令，兩道閘門）。
+>
+> ⚠️ 本節**不重述**分層規則（權威在 `CLAUDE.md §8.2`）與五桶門檻值（權威在 `shared/macro_buckets.py`）。
+
+### §21.1 三個新模組的職責分工 —— **一個 L2 純函式 ＋ 兩個 L3**
+
+| 模組 | 層 | 職責 | **不**負責 |
+|---|---|---|---|
+| `src/compute/macro/macro_session_patch.py` | **L2** | 吃一份 `fetch_macro_bundle()` 的回傳，算出**要寫哪些 key（`MACRO_PATCH_KEYS`）、要刪哪些 key（`MACRO_PATCH_POP_KEYS`）**。純函式：零 streamlit、零 I/O、零 pandas import | 不碰 `st.session_state`（它連 streamlit 都沒 import） |
+| `src/services/macro_session_apply.py` | **L3** | **50 行**：讀上一輪的兩個值 → 呼叫上面那支純函式 → `update()` ＋逐個 `pop()` → 把 `(patch, pops)` **原樣回傳**給呼叫端 | **刻意不長任何分支判斷** —— 一旦有判斷，它就跟著 streamlit 一起變成不可測的東西，拆兩半的意義就沒了 |
+| `src/services/macro_refresh_service.py` | **L3** | 取數編排（929 行）＋ `MacroRefreshReport`（逐來源、逐步驟的成敗 ＋ 這一輪寫了哪些 session key ＋ 哪些區塊摸不到） | **零 UI 呼叫** —— 進度一律走 `on_event` 回呼交給呼叫端畫；`st.spinner` / 進度列由頁1 自己畫 |
+
+**`(patch, pops)` 為什麼要原樣回傳**：呼叫端據此在畫面與交付報告上**逐鍵列出這一輪碰了什麼**
+（`CLAUDE.md §-1.5.F` 判定 6：寫入與清理項目是**強制欄位**，不得只寫「更新了一些資料」）。
+
+**`on_event(kind, result)` 傳的是物件本體，不是散開的欄位** —— 這是刻意的：
+呼叫端因此拿得到 `label`（顯示名 SSOT 在 service 端）與 **`skipped`（跳過 ≠ 成功）**。
+散開成 `(name, ok, detail)` 會逼呼叫端自己查一次中文名，而且**看不到 `skipped`** ——
+那會讓「本輪沒有條件跑」在進度列上顯示成一個 ✅。
+
+### §21.2 與既有 `macro_fetch_orchestrator` 的關係 —— **平行路徑，不是取代**
+
+```
+【既有路徑，本批原封不動】
+  tab_macro.py (L5) ──► macro_fetch_orchestrator.fetch_macro_bundle (L3) ──► L1 fetchers
+        └─ spinner 區塊內 in-line 寫 st.session_state
+
+【本批新增的第二條路】
+  page_today.py (L5) ──► macro_refresh_service.refresh_macro_now (L3，新增)
+        ├──► macro_fetch_orchestrator.fetch_macro_bundle (L3，既有) ──► L1 fetchers
+        │        └─ 新增 on_job_done 回呼（進度）
+        ├──► macro_session_apply.apply_macro_bundle (L3，新增)
+        │        └──► macro_session_patch.build_macro_session_patch (L2，新增，純函式)
+        └──► jingqi_calc / macro_trio_orchestrator /
+             market_assessment_apply / data_registry_scanner（皆既有 L3）
+```
+
+**對既有 orchestrator 的改動只有一處**：`fetch_macro_bundle()` 新增
+**keyword-only、預設 `None`** 的 `on_job_done(name, ok, detail)` 回呼。
+**預設 `None` ⇒ 既有 caller（`tab_macro`）完全無感**；回呼自己拋例外會被接住 ＋ print，
+**不影響取數**。
+
+⚠️ **客戶明令舊 7 個頁籤保留原樣** ⇒ `src/ui/tabs/**` 本階段**一個字都沒動**，兩條路並存。
+**收編舊分頁（讓 `tab_macro` 也改走 `macro_refresh_service`）是第二階段，尚未獲准 ——
+而且 v1 已凍結，該階段不會在 v1 發生。**
+
+⚠️ **三處刻意與 `tab_macro` 不同**（`df_adl is not None` 守衛 / 逾時執行緒 / 強制重抓不 pop）
+**逐條理由見 `ARCHITECTURE.md §0.14`，本節不重複**。該檔**刻意不宣稱「與 `tab_macro` 零行為變更」**
+—— 檔頭自陳「**那句話是假的**」。
+
+### §21.3 報告的**三重稽核** —— 三次看的是完全不同的東西，缺一不可
+
+| 稽核步驟 | 看什麼 | 為什麼少了它會說謊 |
+|---|---|---|
+| `STEP_SOURCE_AUDIT` | **收到幾個來源結論**對不對得上 `SOURCE_LABELS`。**它不看內容** | 漏收一個來源的結論，會表現成「其餘都成功」 |
+| `STEP_CONTENT_AUDIT` | **每一桶真的收到了什麼**（`audit_source_contents`） | ⭐ orchestrator 的 `ok=True` 只代表「這個 job 沒有以例外收場」，其 docstring 明寫「**判空是 caller 的事，不是本層的**」—— 而在此之前**這個 caller 一處判空都沒有**，於是「**7 個來源全部回空**」會走成 `ok=True` ＋ **綠燈** |
+| `STEP_WRITE_AUDIT` | **實測寫進 session 的 key** 有沒有超出 `WRITES_SESSION_KEYS` 的對外宣告 | ⭐ 那份宣告原本**沒有任何 production code 讀它**（只有測試 import），而畫面的「有更新到 / 摸不到」**全部建立在它上面** |
+
+⚠️ **上表後兩列是 2026-09-09 獨立 QA 抓到的兩個洞**，不是設計時就想到的。
+**§1 Fail Loud**：每一步的成敗**逐步記錄**，不吞、不合併、不四捨五入成「更新完成」；
+**部分成功一律回 `ok=False`**。
+
+### §21.4 出口文案：**三種處置 ＋ 一個複合**（不是三種語氣）
+
+按鈕接上取數之後，**不能**把舊碼那 15 個共用同一句免責的灰態 / 紅態全部改成「按本頁按鈕」——
+那會製造一種**新的**假指路。實際落地的是四句，**對應四種處置**：
+
+| 常數 | 這一格的處置 |
+|---|---|
+| `EXIT_RETRY_HERE` | **(a)** 在本頁按鈕的射程內：按一次就會重抓這一源。⚠️ 同時揭露「**失敗的取數結果會被快取住，馬上重按多半會拿到同一個失敗**，要繞過請切「強制重抓」」 |
+| `EXIT_FIX_CODE` | **(b)** **重抓沒有用** —— 問題不在「今天有沒有資料」，而在取值路徑本身（值不在約定形態裡、或這盞燈根本沒有取值程式）。**按一百次也一樣**，這是程式要修的 |
+| `EXIT_OUT_OF_REACH` | **(c)** **本頁按鈕摸不到** —— 寫入點在舊「🌍 總經」分頁的其他區塊 |
+| `EXIT_ALERTS_PARTIAL` | **(a)+(c) 複合**，今日關鍵橫幅專用：急變層吃 `macro_info`（**會**更新）、門檻層吃 `macro_alerts`（**摸不到**）。**兩半都講才是實話** —— 只說「可以重抓」會讓人以為按了就變綠（不會），只說「摸不到」又把真的會更新的那一半一起否認掉 |
+
+📌 **據實更正一處**：commit `c0e5054` 的訊息寫「**文案三分流**」，實際落地是
+**三分流 ＋ 一個複合的第四句**（`EXIT_ALERTS_PARTIAL`）。**本節以實碼為準**
+（本組 2026-09-14 實測 `page_today.py` 的 `EXIT_*` 常數共 4 個）。
+**這不是誰寫錯** —— commit message 記的是那個 commit 當下的分流數，複合句是為了今日關鍵那張卡才長出來的。
+
+### §21.5 未接線：**本路徑摸不到的 6 個區塊**（`UNTOUCHED_BLOCKS`，誠實揭露）
+
+`UNTOUCHED_BLOCKS` 實測 **6 列**（本組 2026-09-14 以 AST 清點，非讀 commit message）：
+
+| # | 區塊（`label`） | `session_key` |
+|---|---|---|
+| 1 | 今日關鍵橫幅的**門檻層**（④） | `macro_alerts` |
+| 2 | **建議持股**（卡①）與**市場位階**（卡③） | `warroom_summary` / `macro_state.json` |
+| 3 | 新聞桶（🗞 系統性風險新聞數） | `_macro_news_items` |
+| 4 | 外資期貨淨口的 `futures_net` 旗標 | `futures_net` |
+| 5 | 舊分頁的「已載入」旗標 | `chips_loaded` |
+| 6 | 舊分頁的兩份畫圖快照 | `intl_snap` / `ma_snap` |
+
+📌 **據實更正一處口徑**：交辦與存檔常把這件事簡稱為「**今日關鍵／建議持股／市場位階
+三張卡摸不到**」—— 那是**第 1~2 列**，也就是**使用者在頁1 看得到的那個子集**，
+**不是** `UNTOUCHED_BLOCKS` 的全部。第 3~6 列是**同樣摸不到、但不以卡片形式出現**的東西。
+**引用時請講清楚是哪個口徑**，否則「三張卡」會被下一個人讀成「只有三個地方沒更新到」。
+
+⚠️ **這份清單存在的理由（§1）**：使用者按了「更新今日戰情」之後，**沒有更新到的東西如果留白，
+看起來就跟更新過一模一樣**。那是**最便宜的一種說謊** —— 畫面沒有寫任何假數字，
+卻讓人以為整頁都是今天的。故每一列都帶 `label` / `session_key` / `why` / **`writer`（誰才寫得到）**，
+並在更新報告裡**逐條列出**。
+
+⚠️ **`UNTOUCHED_BLOCKS` 是單組結論**（`CLAUDE.md §-2` 規則 6）：該清單是實作組
+**2026-09-09 一次 grep**（對 `src/` ＋ `app.py` ＋ `scripts/` 掃 `session_state['<key>'] =`）的產物，
+**沒有第二組獨立驗過**。它可能**漏列**（少講一個沒更新到的區塊），
+但**它列出來的每一項都有 grep 證據**。→ 可以拿來當「這幾塊確定摸不到」，
+**不得**拿來當「只有這幾塊摸不到」。
+
+⚠️ **要接上這三張卡必須收編舊分頁（第二階段）—— v1 已凍結 ⇒ 這件事在 v1 不會被修。**
+本節刻意寫成「**不會被修**」而不是「待修」，免得下一個人把它當 backlog 撿起來動 v1。
+
+### §21.6 兩個不得自作聰明省掉的契約
+
+1. **`load_heavy` 必須由呼叫端傳進來**，`macro_session_patch` **不自己推**。
+   `tab_macro` 的冷啟動 fallback 在寫入區間之外、卻決定了下面所有分支；
+   拿 `bundle` 內容反推（例如「inst 是空的就當冷啟動」）會在**「熱啟動但 inst 全敗」**時判錯，
+   把「**抓了沒拿到**」誤寫成「**沒抓**」。
+2. **`refresh_macro_now()` 一律 `load_heavy=True`。** 頁1 按鈕的語意就是「抓今天的」；
+   冷啟動輕量模式（只抓 3 個 yfinance job）是**舊分頁「進頁不自動抓」那個設計的產物**，
+   按鈕路徑用不到它。
+
+### §21.7 已知未解（**不得當成已完成**；且 v1 已凍結 ⇒ 不是待辦）
+
+1. ⭐ **Streamlit 實機畫面完全未驗。** 沙箱**無對外網路**；本批所有「畫面會長成這樣」的結論
+   一律是 **AppTest ／ 替身注入後對 HTML 下斷言**得出的，**不是**看真實部署的畫面。
+   → **原地重抓在真實網路下的行為（逾時、部分失敗、進度列）沒有被實機驗證過。**
+2. **`UNTOUCHED_BLOCKS` 的窮舉性未經第二組複驗**（見 §21.5）。
+3. **`li_latest` 的那個 pop 是 no-op，`macro_session_patch` 刻意不搬。**
+   原碼是 `if 'li_latest' not in session: session.pop('li_latest', None)` —— 條件成立時
+   key 本來就不在。搬過來只會在 `MACRO_PATCH_POP_KEYS` 裡多一個**永遠不生效的鍵**，
+   讓讀的人以為「這條路徑會刪掉 `li_latest`」。**不搬，並在檔內記明它的存在**
+   （`CLAUDE.md §-2` 規則 6：沒說出來的省略，下一個人會當成漏抄）。
+4. **本節的模組職責與依賴方向由本組讀三個檔的 import 清單與檔頭 docstring 得出，未跑 C3 守衛複驗。**
+   `tests/test_c3_layering_guard.py` 對這三檔的實際判定請現場跑，**不要引用本節**。
