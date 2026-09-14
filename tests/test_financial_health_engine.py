@@ -95,8 +95,16 @@ class TestNoAiSurvivalBItem(unittest.TestCase):
         rule = self._get_rule(fd)
         self.assertEqual(rule["Status"], "Fail")
 
-    # ── All items N/A → rule_st="Pass" (no data is not a fail) ───────────
-    def test_all_na_gives_pass(self):
+    # ── All items N/A → rule_st="N/A"（缺資料既不是 Fail，也不是 Pass）──
+    def test_all_na_is_not_evaluated(self):
+        """2026-09-09 P0-B：本例原斷言 `Status == "Pass"`。
+
+        原註解「no data is not a fail」只講對了一半 —— **no data 也不是 pass**。
+        三項全 N/A 時判 Pass ＝ 用零筆資料開一張 100-100-10 及格證，
+        而它會進 `no_ai_overall_verdict` 的 `pass_items` 計 2 分
+        （CLAUDE.md §1：假的正結論比假的負結論更容易讓人買進）。
+        原本的意圖（缺資料不得算 Fail）以第二條斷言保留。
+        """
         fd = {
             "OCF(千)": 0,
             "流動負債(千)": 0,   # a → N/A
@@ -108,7 +116,8 @@ class TestNoAiSurvivalBItem(unittest.TestCase):
             "長期投資(千)": 0,   # c → N/A
         }
         rule = self._get_rule(fd)
-        self.assertEqual(rule["Status"], "Pass")
+        self.assertEqual(rule["Status"], "N/A")
+        self.assertNotEqual(rule["Status"], "Fail")   # 原意圖：缺資料不算 Fail
 
 
 # ─────────────────────────────────────────────────────────────────────────────

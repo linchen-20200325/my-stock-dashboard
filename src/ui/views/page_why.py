@@ -85,11 +85,40 @@
            的 `covers` 欄逐支寫明它到底量到了哪一段）。
         ⚠️ 「呼叫」在各支之間**不是同一件事**（`CACHE_SEMANTICS` 誠實揭露）。
     燈號規格（葉1 教學的門檻表 ＋ 葉2 的「未接線／已失準」卡）
-        L0 `shared/macro_buckets.py`（`BUCKET_DANGER_SPECS` / `REFERENCE_TREND_SPECS`）
-        L0 `shared/station_specs.py`（`STATION_SPECS`）
+        L0 `shared/macro_buckets.py`（`BUCKET_DANGER_SPECS` ＝ **16 盞燈**；
+           `REFERENCE_TREND_SPECS` ＝ **2 條參考走勢，不算燈**）
+        L0 `shared/station_specs.py`（`STATION_SPECS` ＋ `STATION_GROUP_TITLES`）
         —— `@dataclass(frozen=True)` 常數表，**零 I/O**。
            `unwired_reason` / `degraded_reason` / `no_level_reason` **原文透傳**
            （線框 note 明文要求「直接讀自 SSOT」）。
+
+═══ ⚠️ 2026-09-09 修掉的四件事（都屬「把畫面修回它本來就該長的樣子」）═════
+本頁在門檻這一段講了四句與實情不符的話。四件都是**資料誠實度**問題，
+**沒有動任何版面**（欄數、欄名、卡片數、分頁動線全部未變）：
+
+  ① **把 16 盞燈算成 18 盞。** `_macro_rows()` 寫的是
+     `list(BUCKET_DANGER_SPECS) + list(REFERENCE_TREND_SPECS)` —— 兩份 L0 list
+     直接相加。而 L0 那份裁示原文（客戶 2026-08-27）逐字寫著參考走勢
+     「**不進「x/16 有值」的分母**」，並且預言了這個 bug：「漏掉一個，
+     分母就悄悄變成 18，而畫面上完全看不出來」。**本頁就是那個漏掉過濾的消費端。**
+     → 修法見 `_macro_rows()` / `_reference_rows()` / `SpecScan`：**物理隔離**，
+       不是「加一個旗標再過濾」（那正是 L0 否定過的做法）。
+
+  ② **失準／未接線的門檻，數字照印、原因不印。** L0 早就有
+     `unwired_reason` / `degraded_reason`（兩者在 L0 都是**必填**、有測試守衛），
+     而本頁的七欄一欄都沒帶。於是「門檻已失準」的融資餘額、「永遠不會亮」的
+     外資現貨淨買賣，門檻數字仍**乾乾淨淨地照印**在這一頁上 ——
+     而這一頁把每一盞的門檻逐盞列出來，使用者會在這裡**抄數字當操作依據**。
+     → 修法見 `SpecRow.threshold_display` / `threshold_caveat`：
+       **降級但不隱藏** —— 藏起來使用者會去別處找一份更舊的數字。
+
+  ③ **「加權指數」門檻空白、卻標「正常」。** 它根本不判燈（L0 的 `yellow`/`red`
+     就是 `None`）。做完 ① 之後它移進參考走勢區，而那一區**沒有**「門檻」與
+     「已知限制」兩欄（`_reference_table_rows()`），矛盾自動消失。
+
+  ④ **「分組」欄印內部代碼**（`long` / `chips` / `screen` …）。
+     → 總經側讀 L0 既有的 `BUCKET_META`；持股側讀 2026-09-09 新增的 L0
+       `STATION_GROUP_TITLES`（user 拍板的四個名字）。**本頁沒有自己編名字。**
     AI 問答（葉3）
         L3 `services.app_ai_service.get_gemini_api_key`
         L3 `services.ai_qa_service.run_agent`
@@ -225,6 +254,8 @@ from shared.fetch_monitor import get_monitor_registry
 # L0 SSOT：總經燈規格（含 `wired` / `discriminative` 與各自的原因欄）。
 from shared.macro_buckets import (
     BUCKET_DANGER_SPECS,
+    BUCKET_META,
+    REFERENCE_BUCKET,
     REFERENCE_TREND_SPECS,
 )
 # L0 SSOT：持股／個股燈規格 ＋ 缺值原因語彙。
@@ -240,6 +271,7 @@ from shared.station_specs import (
     MISS_FETCH_FAILED,
     MISS_NO_INPUT,
     SPECS_BY_KEY,
+    STATION_GROUP_TITLES,
     STATION_SPECS,
 )
 from shared.ui_state import (
@@ -394,6 +426,60 @@ DIRECTION_LABELS: dict[str, str] = {
     "band": "兩側都危險（區間）",
     "categorical": "分類，不比大小",
 }
+
+# ══════════════════════════════════════════════════════════════════
+# 「一盞燈」與「一條參考走勢」是兩件事（2026-09-09）
+# ══════════════════════════════════════════════════════════════════
+#
+# ⭐ **本頁 2026-09-09 前把 16 盞燈算成 18 盞。** 成因逐字寫在 L0
+# `shared/macro_buckets.py` 的裁示原文裡（客戶 2026-08-27）：
+#
+#     台幣與加權指數要在總經 v2 第 2 層畫走勢，但**不算一盞燈** ——
+#     不進「x/16 有值」的分母、不進五桶 worst-of 彙總、不進訊號可信度卡。
+#     … 把不算燈的東西放進去再靠旗標排除，等於要求**每一個現有與未來的
+#     消費端**都記得過濾；**漏掉一個，分母就悄悄變成 18，而畫面上完全看不出來**。
+#
+# 本頁就是那個漏掉過濾的消費端（`_macro_rows()` 直接把兩份 list 相加）。
+#
+# 【修法為什麼是「物理隔離」而不是「加一個旗標再過濾」】
+# 因為那正是 L0 那段話否定過的做法。`SpecScan.rows` 現在**只裝算得上一盞燈的**，
+# 參考走勢住在 `SpecScan.reference_rows`；於是任何 `len(scan.rows)` 都是對的，
+# 「忘了過濾」這個錯誤在本檔**寫不出來**。要兩者相加必須明講 `all_rows`，
+# 而那支的 docstring 寫死了「只給不是計數的用途」。
+FAMILY_MACRO: str = "總經"
+FAMILY_HOLD: str = "持股"
+
+#: 參考走勢那一區的名字。
+#: ⚠️ **交接事項（誠實揭露）**：L0 有 `REFERENCE_BUCKET`（值 `'reference'`，
+#: 是一個**刻意落在五桶之外**的哨兵值），但**沒有**對應的中文標題常數
+#: （實測 2026-09-09：`macro_buckets.BUCKET_META` 只有五桶，不含 reference）。
+#: 這四個字屬**版面文案**（同 `DIRECTION_LABELS` 的處置），不是門檻、不是分母；
+#: 理想位置仍在 L0 那個哨兵值旁邊，但本批不動 `shared/macro_buckets.py`（授權範圍），故留紀錄。
+REFERENCE_FAMILY: str = "參考走勢"
+
+#: 門檻「現在不能拿來用」的兩種說法。兩者都是 **L0 自己標的旗標**的畫面說法，
+#: 本檔不判定任何一盞燈能不能信。
+THRESHOLD_FLAG_UNWIRED: str = "尚未生效"
+THRESHOLD_FLAG_DEGRADED: str = "已失準"
+
+#: 降級門檻旁邊那一句。**這一句是整個 ② 的重點** ——
+#: 本頁把每一盞的門檻逐盞列出來，使用者會在這裡抄數字當操作依據。
+THRESHOLD_DO_NOT_USE: str = "現在不要拿它當操作依據"
+
+#: 表格下方那段逐列原因的抬頭。
+THRESHOLD_CAVEAT_HEADER: str = (
+    "**上表中被降級的門檻 —— 為什麼現在不能用**　"
+    "⚠️ 數字**沒有藏起來**，是刻意的：藏掉的後果是你去別的地方找一份**更舊**的數字。"
+    "下面每一行都是 L0 規格表自己寫的原因，本頁一個字都沒有改寫。")
+
+#: 參考走勢表的抬頭。**這張表刻意沒有「門檻」與「已知限制」兩欄** ——
+#: 理由寫在文案裡，因為它同時是給使用者看的說明與給後人看的設計註記。
+REFERENCE_TABLE_CAPTION: str = (
+    "**參考走勢 —— 這些不是燈**（{n} 條）　"
+    "客戶 2026-08-27 裁示：這幾條在總經頁**畫走勢**，但**不算一盞燈** —— "
+    "不進上面那個「N 盞」的分母、不進五桶彙總、不判紅綠燈。"
+    "所以這張表**沒有**「門檻」與「已知限制」兩欄："
+    "沒有在判燈的東西，標「正常」或「已失準」都是對你說錯話。")
 
 # ══════════════════════════════════════════════════════════════════
 # 文案常數（一句話只准寫一次 —— 手抄多份，改的時候一定會漏改）
@@ -995,6 +1081,24 @@ def build_unmeasured_cards() -> tuple[_Built, ...]:
 # ══════════════════════════════════════════════════════════════════
 # L0 燈號規格表（葉1 的門檻對照 ＋ 葉2 的「未接線／已失準」卡）
 # ══════════════════════════════════════════════════════════════════
+#: 組合用刪除線（U+0336 COMBINING LONG STROKE OVERLAY）。
+_STRIKE_MARK: str = "\u0336"
+
+
+def _strike(text: str) -> str:
+    """把每個字元後面補一個組合用刪除線。
+
+    ⚠️ **為什麼不用 markdown 的雙波浪號刪除線語法**（本 docstring 刻意不寫出那兩個
+    字元本身 —— 全 repo 用它標示「有意識保留的舊句」，寫在這裡會被
+    `tests/test_p0x_view_mount_claims.py` 的成對掃描當成一個沒關起來的區段）：
+    這段字要進 `st.dataframe` 的儲存格，而 `st.dataframe` **不吃 markdown**，
+    寫了只會在門檻旁邊多印兩個看不懂的符號，反而更像是資料本身的一部分。
+    組合字元是這個容器裡**唯一畫得出刪除線**的做法，而且它同時讓
+    「整段複製走」變得刺眼（② 要消滅的正是照抄的動機）。
+    """
+    return "".join(f"{_c}{_STRIKE_MARK}" for _c in text)
+
+
 @dataclass(frozen=True)
 class SpecRow:
     """一盞燈的規格（給對照表用）。全部欄位**原樣**取自 L0，本檔不改寫。"""
@@ -1020,6 +1124,79 @@ class SpecRow:
         """方向的中文說法。L0 沒有給中文（見 `DIRECTION_LABELS` 的交接註記），
         認不得的字面值**原樣顯示**，不編一個看起來合理的說法。"""
         return DIRECTION_LABELS.get(self.direction, self.direction or "—")
+
+    @property
+    def family_text(self) -> str:
+        """卡片標題用的家族說法。
+
+        ⚠️ **參考走勢不加「燈」字** —— 它不是一盞燈，加了就等於把
+        L0 那條裁示（「不算一盞燈」）在畫面上又講反一次。
+        """
+        return (self.family if self.family == REFERENCE_FAMILY
+                else f"{self.family}燈")
+
+    @property
+    def group_text(self) -> str:
+        """分組的畫面名稱。**兩張 L0 表各自的中文名，本檔一個字都沒有編。**
+
+        - 總經燈 → `macro_buckets.BUCKET_META`（emoji ＋ 中文名，既有資產）
+        - 持股燈 → `station_specs.STATION_GROUP_TITLES`（2026-09-09 user 拍板）
+
+        查不到就**原樣顯示代碼**（同 `direction_text` 的處置）——
+        那代表 L0 多了一組而這裡沒跟上，是要修的 bug，不是要美化的畫面。
+        在 2026-09-09 之前，這一欄印的就是 `long` / `chips` / `screen`
+        這種**內部代碼**：使用者看到 `screen` 不會知道那是 3-3-3 篩選。
+        """
+        if self.group == REFERENCE_BUCKET:
+            return REFERENCE_FAMILY
+        _meta = BUCKET_META.get(self.group)
+        if _meta:
+            return f"{_meta.get('emoji', '')} {_meta.get('title', '')}".strip()
+        return STATION_GROUP_TITLES.get(self.group, self.group or "—")
+
+    @property
+    def threshold_flag(self) -> str:
+        """這個門檻**現在能不能拿來用**。空字串 = 可以照讀。
+
+        兩個旗標都是 **L0 自己標的**，本檔不判：
+        - `wired=False`          → 這盞燈永遠不會亮，門檻等於還沒生效
+        - `discriminative=False` → 燈會亮，但門檻本身已失去判別力
+        """
+        if not self.wired:
+            return THRESHOLD_FLAG_UNWIRED
+        if not self.discriminative:
+            return THRESHOLD_FLAG_DEGRADED
+        return ""
+
+    @property
+    def threshold_display(self) -> str:
+        """表格「門檻」欄的顯示文字。
+
+        ⚠️ **降級，不隱藏**（2026-09-09 裁示）。本頁把每一盞的門檻逐盞列出來，
+        使用者會在這裡抄數字當操作依據；而藏起來的後果是他去**別的地方**
+        找一份更舊的數字。所以照抄的動機要靠「一眼看出它不能用」消滅：
+          1. 前綴改成「門檻（尚未生效／已失準）」
+          2. 數字本身打上刪除線（`_strike`）
+          3. 明說「現在不要拿它當操作依據」
+        原因原文（`unwired_reason` / `degraded_reason`）在表格下方逐列列出。
+
+        ✅ **反向**：沒有被 L0 標記的燈，這裡**原樣回傳門檻**，一個字都不加 ——
+        為了誠實而把全部門檻都標成失效，是另一種說謊。
+        """
+        _raw = self.threshold_text or "—"
+        _flag = self.threshold_flag
+        if not _flag:
+            return _raw
+        return f"門檻（{_flag}）{_strike(_raw)}　⚠️ {THRESHOLD_DO_NOT_USE}"
+
+    @property
+    def threshold_caveat(self) -> str:
+        """這個門檻為什麼現在不能用。**L0 原文，本檔不改寫、不節錄。**"""
+        if not self.wired:
+            return self.unwired_reason
+        if not self.discriminative:
+            return self.degraded_reason
+        return ""
 
     @property
     def flag_text(self) -> str:
@@ -1066,25 +1243,47 @@ def _macro_threshold_text(spec: Any) -> str:
     return " · ".join(_parts)
 
 
+def _danger_spec_row(spec: Any, family: str) -> SpecRow:
+    """`DangerSpec` → `SpecRow`。**兩份 L0 list 共用這一支轉換**（欄位完全相同），
+    差別只在 `family` —— 也就是「這算不算一盞燈」。"""
+    return SpecRow(
+        key=str(getattr(spec, "key", "") or ""),
+        label=str(getattr(spec, "label", "") or ""),
+        family=family,
+        group=str(getattr(spec, "bucket", "") or ""),
+        direction=str(getattr(spec, "direction", "") or ""),
+        unit=str(getattr(spec, "unit", "") or ""),
+        threshold_text=_macro_threshold_text(spec),
+        source=str(getattr(spec, "source", "") or ""),
+        why=str(getattr(spec, "note", "") or ""),
+        wired=bool(getattr(spec, "wired", True)),
+        unwired_reason=str(getattr(spec, "unwired_reason", "") or ""),
+        discriminative=bool(getattr(spec, "discriminative", True)),
+        degraded_reason=str(getattr(spec, "degraded_reason", "") or ""))
+
+
 def _macro_rows() -> tuple[SpecRow, ...]:
-    """總經燈（`shared/macro_buckets.py`）→ `SpecRow`。"""
-    _out: list[SpecRow] = []
-    for _s in list(BUCKET_DANGER_SPECS) + list(REFERENCE_TREND_SPECS):
-        _out.append(SpecRow(
-            key=str(getattr(_s, "key", "") or ""),
-            label=str(getattr(_s, "label", "") or ""),
-            family="總經",
-            group=str(getattr(_s, "bucket", "") or ""),
-            direction=str(getattr(_s, "direction", "") or ""),
-            unit=str(getattr(_s, "unit", "") or ""),
-            threshold_text=_macro_threshold_text(_s),
-            source=str(getattr(_s, "source", "") or ""),
-            why=str(getattr(_s, "note", "") or ""),
-            wired=bool(getattr(_s, "wired", True)),
-            unwired_reason=str(getattr(_s, "unwired_reason", "") or ""),
-            discriminative=bool(getattr(_s, "discriminative", True)),
-            degraded_reason=str(getattr(_s, "degraded_reason", "") or "")))
-    return tuple(_out)
+    """總經**燈**（`shared/macro_buckets.py::BUCKET_DANGER_SPECS`）→ `SpecRow`。
+
+    ⚠️ **只有 `BUCKET_DANGER_SPECS`。** 2026-09-09 之前這裡寫的是
+    `list(BUCKET_DANGER_SPECS) + list(REFERENCE_TREND_SPECS)` —— 兩份 list
+    直接相加，於是本頁把 16 盞燈算成 18 盞（見本檔上方
+    「一盞燈與一條參考走勢是兩件事」那段的裁示原文）。
+    參考走勢改由 `_reference_rows()` 另外取，兩者在型別上是同一種 row，
+    但**住在 `SpecScan` 的兩個不同欄位裡**。
+    """
+    return tuple(_danger_spec_row(_s, FAMILY_MACRO) for _s in BUCKET_DANGER_SPECS)
+
+
+def _reference_rows() -> tuple[SpecRow, ...]:
+    """參考走勢（`REFERENCE_TREND_SPECS`）→ `SpecRow`。**這些不是燈。**
+
+    L0 已經把它們放進**另一份 list**（並附上「另開一份 list 而不是加旗標」
+    的理由）。本檔照著那個結構走：它們不進 `SpecScan.rows`，
+    所以不可能被任何一句 `len(rows)` 算進「N 盞」的分母。
+    """
+    return tuple(_danger_spec_row(_s, REFERENCE_FAMILY)
+                 for _s in REFERENCE_TREND_SPECS)
 
 
 def _station_rows() -> tuple[SpecRow, ...]:
@@ -1112,15 +1311,32 @@ def _station_rows() -> tuple[SpecRow, ...]:
 
 @dataclass(frozen=True)
 class SpecScan:
-    """兩張 L0 規格表讀一次的結果。
+    """L0 規格表讀一次的結果。
+
+    ⚠️ **`rows` 與 `reference_rows` 是兩個欄位，這是刻意的**（2026-09-09）。
+    參考走勢**不是燈**，把它塞進 `rows` 再靠旗標排除，就是 L0 裁示原文
+    點名否定的那個做法：「要求每一個現有與未來的消費端都記得過濾；
+    漏掉一個，分母就悄悄變成 18，而畫面上完全看不出來」。
+    物理隔離之後，**任何 `len(scan.rows)` 都是對的**。
 
     Attributes:
-        rows: 全部燈的規格列（總經 ＋ 持股）。
+        rows: **算得上一盞燈**的規格列（總經 16 ＋ 持股）。
+        reference_rows: 參考走勢（畫走勢、但不算燈、不判燈）。
         error: 讀取期例外。
     """
 
     rows: tuple[SpecRow, ...] = ()
+    reference_rows: tuple[SpecRow, ...] = ()
     error: str = ""
+
+    @property
+    def all_rows(self) -> tuple[SpecRow, ...]:
+        """燈 ＋ 參考走勢。
+
+        ⛔ **只給「不是計數」的用途**（例如逐列掃 L0 旗標）。
+        任何會出現在畫面上的「N 盞」一律用 `rows`，不准用這一支。
+        """
+        return self.rows + self.reference_rows
 
     @property
     def has_rows(self) -> bool:
@@ -1128,25 +1344,28 @@ class SpecScan:
 
     @property
     def unwired(self) -> tuple[SpecRow, ...]:
-        return tuple(_r for _r in self.rows if not _r.wired)
+        # 旗標卡不是計數 → 走 `all_rows`：參考走勢哪天被 L0 標成未接線，
+        # 使用者一樣該看得到，只是它的標題不會被叫成「燈」（`family_text`）。
+        return tuple(_r for _r in self.all_rows if not _r.wired)
 
     @property
     def degraded(self) -> tuple[SpecRow, ...]:
-        return tuple(_r for _r in self.rows if not _r.discriminative)
+        return tuple(_r for _r in self.all_rows if not _r.discriminative)
 
     @property
     def no_level(self) -> tuple[SpecRow, ...]:
-        return tuple(_r for _r in self.rows if not _r.emits_level)
+        return tuple(_r for _r in self.all_rows if not _r.emits_level)
 
 
 def load_specs() -> SpecScan:
     """讀 L0 的兩張燈號規格表。**零 I/O、零 L3**（`@dataclass` 常數表）。"""
     try:
         _rows = _macro_rows() + _station_rows()
+        _refs = _reference_rows()
     except Exception as _e:  # noqa: BLE001 — 轉成紅卡，不吞
         print(f"[views/page_why] L0 規格表讀取失敗 → 轉紅態：{_e!r}")
         return SpecScan(error=repr(_e))
-    return SpecScan(rows=_rows)
+    return SpecScan(rows=_rows, reference_rows=_refs)
 
 
 def build_spec_flag_card(row: SpecRow) -> _Built:
@@ -1163,7 +1382,7 @@ def build_spec_flag_card(row: SpecRow) -> _Built:
     _now = ("**這一盞刻意沒有接**" if not row.wired
             else "**這一盞會亮，但別照門檻讀**")
     return build_l0_card(L0CardSpec(
-        key=f"why.spec.{row.key}", label=f"{row.label}（{row.family}燈）",
+        key=f"why.spec.{row.key}", label=f"{row.label}（{row.family_text}）",
         wired=row.wired, discriminative=row.discriminative,
         has_value=True,
         now=_now,
@@ -1171,8 +1390,10 @@ def build_spec_flag_card(row: SpecRow) -> _Built:
         where=(f"{NO_EXIT_MARKER} —— 這是**規格層面**的已知限制，"
                "不是這一輪抓壞了，重按幾次都一樣；"
                "下方的門檻對照表有這一盞的完整規格"),
+        # ⚠️ 門檻走 `threshold_display` 而不是 `threshold_text`：這張卡的存在理由
+        #    就是「這一盞不能信」，旁邊卻印一組乾乾淨淨的門檻數字，等於當場自打嘴巴。
         facts=((L0_REASON_FACT_LABEL, L0_REASON_FACT_TEXT),
-               ("這一盞的門檻", row.threshold_text or "—"),
+               ("這一盞的門檻", row.threshold_display),
                ("值從哪來", row.source or "—"))))
 
 
@@ -1187,8 +1408,11 @@ def build_spec_flag_cards(scan: SpecScan) -> tuple[_Built, ...]:
 # ══════════════════════════════════════════════════════════════════
 def build_lights_card(scan: SpecScan) -> _Built:
     """線框葉1 的「紅綠燈怎麼判 · 各門檻的出處」。**L0-only，零取數。**"""
-    _n_macro = sum(1 for _r in scan.rows if _r.family == "總經")
-    _n_hold = sum(1 for _r in scan.rows if _r.family == "持股")
+    # ⚠️ 分母一律走 `scan.rows`（＝只有算得上一盞燈的）。
+    #    2026-09-09 前這裡把參考走勢也算進來，總經燈於是從 16 變成 18。
+    _n_macro = sum(1 for _r in scan.rows if _r.family == FAMILY_MACRO)
+    _n_hold = sum(1 for _r in scan.rows if _r.family == FAMILY_HOLD)
+    _n_ref = len(scan.reference_rows)
     return build_l0_card(L0CardSpec(
         key="why.edu.lights", label="紅綠燈怎麼判 · 各門檻的出處",
         error=scan.error,
@@ -1210,7 +1434,13 @@ def build_lights_card(scan: SpecScan) -> _Built:
             ("⚠️ 灰燈有四種，不是一種",
              "「還沒載入」「抓了沒值」「刻意沒接」「不適用」在畫面上都是灰的，"
              "但處置完全相反 —— 逐盞的差別看下方表格的「已知限制」欄"),
-            ("完整清單", "見下方「逐盞門檻對照表」，兩張表分別是總經與持股"))))
+            ("⚠️ 另外還有不算燈的東西",
+             f"總經頁上還畫了 {_n_ref} 條**參考走勢**（客戶 2026-08-27 裁示）—— "
+             "它們**不算一盞燈**：不進上面那個「N 盞」的分母、不進五桶彙總、"
+             "也不判紅綠燈。它們列在下方**自己的一張表**裡，不混在燈裡面"),
+            ("完整清單",
+             "見下方「逐盞門檻對照表」——「總經燈」「持股燈」兩張，"
+             "再加一張**不算燈**的「參考走勢」"))))
 
 
 #: 六因子的**權重**在 repo 裡的實況（實測 2026-09-07）。
@@ -1319,7 +1549,7 @@ def build_scale_card(disclosure: ScaleDisclosure) -> _Built:
          "「健檢 🟢 但健康度只有 62 分」不是矛盾，也不是其中一邊算錯 —— "
          "它們**問的不是同一個問題**：一個問「這檔該不該汰換」，"
          "一個問「這檔財報體質打幾分」。看到不一致時要做的是分別讀，不是取平均"),
-        ("兩套各自的門檻", "見這張卡下面的兩張對照表，逐盞列出門檻與出處"),
+        ("兩套各自的門檻", "見這張卡下面的對照表，逐盞列出門檻與出處"),
     ]
     for _label, _reason in disclosure.degraded_notes:
         # L0 的 `degraded_reason` **原樣透傳**（facts 走 `st.caption`，
@@ -1732,15 +1962,62 @@ def _render_row(builts: Sequence[_Built]) -> None:
 
 
 def _spec_table_rows(rows: Iterable[SpecRow]) -> list[dict]:
-    """規格列 → `st.dataframe` 的 records。**全部原樣透傳，不改寫。**"""
+    """**燈**的規格列 → `st.dataframe` 的 records。
+
+    欄位數與欄名 2026-09-09 **一個都沒有動**（本批不做版面重排）。
+    變的是兩個儲存格的內容，兩者都是「把 L0 已有、但畫面沒帶上的東西接上去」：
+
+    - **分組**：`long` / `screen` 這種**內部代碼** → 兩張 L0 表各自的中文名。
+    - **門檻**：被 L0 標記為 `wired=False` / `discriminative=False` 的燈，
+      門檻**降級但不隱藏**（`threshold_display`）。正常的燈**原樣照印**。
+
+    ⚠️ 參考走勢**不走這一支**（它沒有「門檻」與「已知限制」可言）——
+    見 `_reference_table_rows()`。
+    """
     return [{
         "這一盞": _r.label,
-        "分組": _r.group or "—",
+        "分組": _r.group_text,
         "方向": _r.direction_text,
-        "門檻": _r.threshold_text or "—",
+        "門檻": _r.threshold_display,
         "值從哪來": _r.source or "—",
         "在防什麼": _r.why or "—",
         "已知限制": _r.flag_text,
+    } for _r in rows]
+
+
+def threshold_caveat_lines(rows: Iterable[SpecRow]) -> tuple[str, ...]:
+    """被降級的門檻 → 表格下方那幾行說明。**純函式**（渲染層只負責印出來）。
+
+    ⚠️ 為什麼原因不塞進表格儲存格：`degraded_reason` 是**多段文字**
+    （L0 自己就寫了換行與粗體），塞進 `st.dataframe` 會被壓成一長條沒有斷行、
+    也吃不到粗體的字串 —— 那等於把一段寫給使用者看的話變成噪音。
+    這裡沿用本頁既有的「表格 ＋ 表格下方逐列 caption」寫法（同 `_no_level` 那段）。
+
+    原因**原文透傳**：L0 寫什麼就印什麼，本頁不節錄、不改寫。
+    """
+    return tuple(
+        f"　· **{_r.label}**（{_r.threshold_flag}）：{_r.threshold_caveat}"
+        for _r in rows if _r.threshold_flag)
+
+
+def _reference_table_rows(rows: Iterable[SpecRow]) -> list[dict]:
+    """**參考走勢**的規格列 → `st.dataframe` 的 records。
+
+    ⚠️ **刻意沒有「門檻」與「已知限制」兩欄。** 這不是省略，是本區的定義：
+    這幾條**不判燈**，所以
+
+    - 「門檻」欄：加權指數在 L0 的 `yellow` / `red` 就是 `None`
+      （客戶裁示「K 線卡不畫門檻線」）。印一個「—」會讓人以為它有門檻只是這輪沒讀到。
+    - 「已知限制」欄：`flag_text` 對一條沒有在判燈的走勢一律回「**正常**」——
+      而「正常」在這張表的語境裡會被讀成「這盞燈現在是好的」。
+      2026-09-09 前的實況正是如此：加權指數門檻空白、卻標著「正常」。
+      **不判燈的東西，標「正常」或「已失準」都是對使用者說錯話。**
+    """
+    return [{
+        "這一條": _r.label,
+        "單位": _r.unit or "—",
+        "這條線在說什麼": _r.why or "—",
+        "值從哪來": _r.source or "—",
     } for _r in rows]
 
 
@@ -1761,13 +2038,29 @@ def _render_edu_leaf() -> None:
     section_header("逐盞門檻對照表",
                    "**這就是「各門檻的出處」** —— 每一欄都直接來自 L0 規格表；"
                    "本頁沒有改寫任何一個字，也沒有寫死任何一個數字。")
-    for _family, _hint in (("總經", "五桶紅綠燈（🚦 今天 那一頁在用的）"),
-                           ("持股", "戰情表與判決卡（💼 我的持股 / 🔬 查一檔 在用的）")):
+    for _family, _hint in (
+            (FAMILY_MACRO, "五桶紅綠燈（🚦 今天 那一頁在用的）"),
+            (FAMILY_HOLD, "戰情表與判決卡（💼 我的持股 / 🔬 查一檔 在用的）")):
+        # ⚠️ 這裡篩的是 `_specs.rows`（＝只有燈）。參考走勢住在 `reference_rows`，
+        #    所以下面那個 `{len(_rows)} 盞` 不可能再變成 18。
         _rows = tuple(_r for _r in _specs.rows if _r.family == _family)
         if not _rows:
             continue
         st.caption(f"**{_family}燈** —— {_hint}（{len(_rows)} 盞）")
         st.dataframe(_spec_table_rows(_rows), hide_index=True, width="stretch")
+
+    # ── 被降級的門檻：原因逐列列出（L0 原文，本頁不改寫、不節錄）──────
+    _caveats = threshold_caveat_lines(_specs.rows)
+    if _caveats:
+        st.caption(THRESHOLD_CAVEAT_HEADER)
+        for _line in _caveats:
+            st.caption(_line)
+
+    # ── 參考走勢：**不是燈**，自己一張表 ──────────────────────────
+    if _specs.reference_rows:
+        st.caption(REFERENCE_TABLE_CAPTION.format(n=len(_specs.reference_rows)))
+        st.dataframe(_reference_table_rows(_specs.reference_rows),
+                     hide_index=True, width="stretch")
 
     _no_level = _specs.no_level
     if _no_level:
