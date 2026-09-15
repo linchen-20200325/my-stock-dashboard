@@ -23,11 +23,20 @@
 ⚠️ **「等客戶說繼續」這條同時受 `CLAUDE.md §-1` 拘束**：沒有指派、沒有實際 bug 觸發 → **停手等指令**，
 不得拿本目錄裡任何一份「待辦 / 待修 / 待查」清單當成主動動工的授權。
 
-📌 **一個容易混淆的地方，據實標明**：`audit/wf_fund_archive.md` 記載，客戶**母法**曾指名
-`docs/v2/` 底下要有 `CONSTITUTION.md` / `DATA_DICTIONARY.md` / `UI_SPEC.md` / `ACCEPTANCE.md`
-四份（該組實測當時 **四份全部 0 命中**，`docs/v2/` 目錄本身也不存在 —— 本次入庫是這個目錄的**首次建立**）。
-**那四個名字與上表階段 B 的四份不是同一組名字。** 兩者的關係（是改名？是不同層級？還是兩批不同的東西）
-**本存檔組沒有查證**，⛔ 不得自行推定。
+### 📌 有**兩組「四份文件」**，⛔ 不是同一批改名
+
+這是最容易搞混的一點，先講清楚（決策者：AI 總管，2026-09-15）：
+
+| | 出處 | 四份叫什麼 | 現況 |
+|---|---|---|---|
+| **甲** | **客戶母法**指定的四份**子法** | `CONSTITUTION` / `DATA_DICTIONARY` / `UI_SPEC` / `ACCEPTANCE` | **從未被建立**（`audit/wf_fund_archive.md` 實測：四份全部 0 命中，且 `docs/v2/` 當時整個不存在 —— 本次入庫是這個目錄的**首次建立**） |
+| **乙** | 客戶 **2026-09-15 另一次指派**的**階段 B** | `INDICATOR_SPEC` / `DECISION_RULES` / `DECISION_FLOW` / `TEST_CASES` | **尚未開始**（等客戶說「繼續」） |
+
+⛔ **甲與乙是不同層級、不同時間、不同用途的兩批東西，不是同一批換了名字。**
+看到其中一組的名字時，先確認講的是哪一批再往下讀。
+
+⚠️ `wf_fund_archive.md` 另自標**一個沒查證的點**：既然 `docs/v2/ACCEPTANCE.md` 不存在，
+客戶讀到的那份 ACCEPTANCE **實際來自哪裡，該組沒有查** —— ⛔ 不得當成已查清。
 
 ---
 
@@ -35,7 +44,7 @@
 
 | 目錄 | 是什麼 | 能不能當成「講好的規格」？ |
 |---|---|---|
-| **`stage1/`** | 本輪文件工程的交付（**實際入庫 4 份**）：資料血緣、指標 SSOT、階段一稽核、問題分級 | ⚠️ 是**產出**，但**全部單組、未複驗**（見 §2） |
+| **`stage1/`** | 本輪文件工程的交付（**4 份**）：資料血緣、指標 SSOT、階段一稽核、問題分級 | ⚠️ 是**產出**，但**全部單組、未複驗**（見 §2） |
 | **`spec/`** | **規格與白皮書**：S1 系列（資料白皮書、指標 SSOT、狀態矩陣、持股模型、合規文案、權限 PII）＋ S2 系列（PRD / UI Spec / Eng Spec） | ⚠️ 是**草稿規格**，**客戶尚未逐份拍板** |
 | **`audit/`** | **稽核軌跡**（合規掃描、紅隊、秘密掃描、血緣缺口…）—— **查證紀錄，不是規格** | ⛔ **不是規格**。詳見 `audit/README.md` |
 | **`wireframe/`** | **線框稿的原始碼**（HTML 外殼 ＋ 各頁 `wf_*.js` ＋ 線框說明文件） | ⚠️ 線框＝**要送客戶拍板的草稿**，不是已核准的畫面 |
@@ -125,41 +134,43 @@
 
 ---
 
-## 6. 檔案清單（44 個檔，約 3.27 MB；量測日 2026-09-15）
+## 6. 檔案清單（49 個檔，約 3.30 MB；量測日 2026-09-15）
 
 ### `stage1/` — 本輪文件工程交付（4 檔）
 `DATA_LINEAGE.md` · `INDICATOR_SSOT.md` · `STAGE1_AUDIT.md` · `PROBLEM_TRIAGE.md`
 
-⚠️ **據實標明**：本存檔組收到的派工單把這一區描述為「本輪的**五份**文件工程交付」，
-但**逐檔列出的只有上面 4 份**，本目錄實際入庫的也是 4 份。
-**第 5 份是什麼、在不在本批其他目錄裡，本組沒有查證** —— ⛔ 不得逕自推定「已經全部存到了」。
+📌 **為什麼是 4 份不是 5 份（2026-09-15 總管釐清，已結案）**：
+客戶**最初**要的五份是 `DATA_LINEAGE` / `INDICATOR_SSOT` / **`DECISION_RULES`** /
+**`DECISION_FLOW`** / **`TEST_CASES`** —— **後三份屬階段 B，尚未寫**（見 §0 乙表）。
+本目錄實際的 4 份 ＝ 前兩份 ＋ 後來追加的 `STAGE1_AUDIT`（稽核）與 `PROBLEM_TRIAGE`（分級）。
+⇒ **沒有「漏存的第 5 份」** —— 缺的三份是**還沒產出**，不是**沒存到**。
 
 ### `spec/` — 規格與白皮書（9 檔）
 `S1-1_DATA_WHITEPAPER.md` · `S1-2_METRIC_SSOT.md` · `S1-4_STATE_MATRIX.md` ·
 `S1-5_HOLDINGS_MODEL.md` · `S1-6_COMPLIANCE_COPY_GUIDE.md` · `S1-7_PERMISSIONS_PII.md` ·
 `S2-PRD.md` · `S2-UI_SPEC.md` · `S2-ENG_SPEC.md`
 
-### `audit/` — 稽核軌跡（15 檔 ＋ 本目錄的 `README.md`）
+### `audit/` — 稽核軌跡（16 檔 ＋ 本目錄的 `README.md`）
 `COMPLIANCE_SCAN_A/B/C.md` · `COMPLIANCE_BLAST_D.md` · `COMPLIANCE_CONTROLFLOW_E.md` ·
 `DRAFT_GAP_AUDIT.md` · `PB_LEVEL_TRACE.md` · `SECRET_SCAN_HISTORY.md` ·
 `SECRET_SCAN_CROSSCHECK.md` · `STATE_SEMANTICS_QA2.md` ·
 `S1-3B_REDTEAM.md` · `S1-3B_REDTEAM_B.md` · `S1-3B_REDTEAM_C.md` · `S1-4_REDTEAM.md` ·
 `wf_fund_archive.md`
 
-### `wireframe/` — 線框稿原始碼（16 檔 ＋ 本目錄的 `README.md`）
+### `wireframe/` — 線框稿原始碼（17 檔 ＋ 本目錄的 `README.md`）
 外殼：`warroom_ia_v2.html`｜
 資料：`wf_page_today.js` · `wf_page_find.js` · `wf_page_inspect.js` · `wf_page_hold.js` ·
 `wf_page_why.js` · `wf_page_fund.js` · `wf_global.js` · `wf_questions.js` · `wf_onboarding.js`｜
 組裝：`assemble.js`｜
 說明：`S1-3_IA_WIREFRAME.md` · `S1-3B_FULL_DRAFT_SPEC.md` ·
-`UI-B_wireframe.md` · `UI-C_wireframe.md` · `UI-E_page3_wireframe.md`
+`UI-A_page_today_wireframe.md`（⭐ 只有 7 行，但裝著**文案瘦身的原始量測** —— 見 `wireframe/README.md`） · `UI-B_wireframe.md` · `UI-C_wireframe.md` · `UI-E_page3_wireframe.md`
 
 ---
 
 ## 7. 本存檔組做了什麼 / 沒做什麼（依 `CLAUDE.md §-2` 規則 6 據實揭露）
 
 **做了**：
-- 建 `docs/v2/` 四層目錄、從 scratchpad **原樣複製** 44 個檔（**逐檔 sha256 比對，44/44 相符，0 不符**）；
+- 建 `docs/v2/` 四層目錄、從 scratchpad **原樣複製** 46 個檔（**逐檔 sha256 比對，46/46 相符，0 不符**）；
 - 寫本檔與 `audit/README.md` / `wireframe/README.md` 三份索引；
 - **實測重建**線框稿全檔並與既有組裝產物逐位元比對（結果見 `wireframe/README.md`）;
 - 對入庫檔案跑一次金鑰樣式掃描（`AIza…` / `sk-…` / `ghp_…` / PEM / JWT）——
