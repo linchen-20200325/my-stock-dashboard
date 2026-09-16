@@ -108,10 +108,11 @@
 **`today.verdict` 形狀：✅ 已決（`user 2026-09-16 裁示`），原「1 燈 vs 3 卡」分歧結案**
 裁決逐字：**`today.verdict` 改成兩者並存：第一層＝1 顆結論燈（一句話結論）；第二層＝3 張並排卡（三欄摘要、今日關鍵橫幅、持倉健檢）；線框是對的，實作的 3 卡歸位到第二層。**
 ⇒ 既然「**線框是對的**」，實作現況一律歸類為**實作待修**（⛔ 不是設計變更，⛔ 線框 `cols 1/1/1` 與 `name`「① 結論燈」不動）：現行 `page_today.py:1902 build_verdict_tiles` 在 `today.verdict`（`:1900`）渲染 **3 張並排卡** —— `verdict.exposure`「能不能出手 · 出手到幾成」（`:1357`，大字值＝`alloc.range_text` 持股區間）／`verdict.danger`「指標危險度（不含多空方向）」（`:1393`）／`verdict.regime`「市場位階（總經契約）」（`:1432`，`REGIME_CARD_LABEL` `:1264`）；docstring `:1324` 逐字「**不平均、不取 worst、不合成一顆燈**」（依據＝ 實跑燈色不一致 39.5%、方向相反 18 組、客戶 2026-08-27 裁示並列揭露不得調和 —— **沿用本檔原文，⛔ 本組未複驗該兩數**）。
-⚠️ **「3 卡歸位到第二層的哪一張」＝ 待客戶再裁** —— 總管判讀「三卡內容應歸為 `today.summary` 三欄」本組查證後**不成立**，依指令⛔ 未硬套：
+✅ **已決（`客戶 2026-09-16 裁示`）：「3 卡歸位到第二層的哪一張」結案** —— 原「待客戶再裁」**撤銷**。裁示逐字（⛔ 不得改寫語意）：「**3 卡歸位：不要硬塞。位階 ← summary.regime（既有）／動能 ← 未接線（exposure 不是動能，不搬）／風險 ← danger（對得上，直接對映）**」。⇒ 下列兩行**是客戶據以裁示的依據，⛔ 不得刪**：
 線框 `today.summary` 的 `name` 逐字＝「③ 三欄摘要（**位階／動能／風險**）」（`wf_page_today.js:171`，`src` 指 `page_today.py:1917`）；該三欄在實作中**已存在且非空位**（`tab_today.py:407-440`，經 `page_today.py:1917 render_cards(_summary.cards)` 渲染）：`summary.regime`「位階」**已接線**、`summary.momentum`「動能」／`summary.risk`「風險」為 `_staged_card` 未接線。
 **三條對不上**：(a) `verdict.regime` 與 `summary.regime` **同源重複**（後者取 `statusbar.macro` 位階），搬過去是**撞欄不是填空**；(b) `verdict.exposure` ＝ **配置油門帶**（持股區間），⛔ **不是動能**（線框「動能」欄示意值為 `M1B-M2 +1.2`），三欄無一欄收得下；(c) **只有** `verdict.danger` ↔ `summary.risk` 語意相符。
-⇒ ⛔ 客戶再裁前**不得**把三卡塞進 `today.summary`；`verdict.danger` 是否併入 `summary.risk`、`verdict.exposure` 該歸第二層哪一張卡，**一併送再裁**。
+⇒ **逐欄落地（依裁示逐字）**：(a)「位階」＝ `summary.regime` **既有、維持現接線**，⛔ 不得把 `verdict.regime` 搬過去（客戶明示「位階 ← summary.regime（既有）」）；(b)「動能」**維持未接線**，⛔ 不得拿 `verdict.exposure` 頂替（客戶明示「**exposure 不是動能，不搬**」）—— ⚠️ 本組延伸（⛔ 非客戶裁示）：未接線態依 ② 走 **#5**，⛔ 不得畫成 #1；(c)「風險」← `verdict.danger` **直接對映**。
+⚠️ **`verdict.exposure` 與 `verdict.regime` 兩卡的最終去向＝開放項（⛔ 客戶未裁、⛔ 非本組判定）**：客戶只裁示「**不搬**」進 `today.summary`，**沒有裁示要刪**。⇒ ⛔ 不得自行判定刪除、⛔ 不得自行安排到第二層其他 block（`today.key_banner`／🆕`today.holdings`），**列為開放項待客戶裁示**。
 ⚠️ **「不得調和」未被本次裁決推翻**：第一層那顆燈的一句話結論是**新寫的字串**，⛔ 不得由三卡平均／取 worst／合成而來。
 
 ## ④ 反例自檢
@@ -141,6 +142,7 @@
 
 ---
 ⚠️ **複驗分級**
+**客戶裁示（2026-09-16）＝ 已決，⛔ 非任何一組判定**＝③「3 卡歸位到第二層的哪一張」**已移出待裁**（原標「待客戶再裁」撤銷）：位階＝`summary.regime` 既有／動能維持未接線（`exposure` 不搬）／風險←`danger` 直接對映。⚠️ 下列 WG 實查的**三條事實**（`verdict.regime`↔`summary.regime` 同源、`exposure`＝持股區間非動能、只有 `danger`↔`risk` 相符）**正是客戶據以裁示的依據，⛔ 不得刪**；`exposure`／`regime` 兩卡去向**客戶未裁，為開放項**。
 **總管實查**＝線框 `layers` 結構（4 層／8 block／`states` 10 鍵，node 實際解析）與 `mainCTA` 逐字、`持倉健檢` 全 repo 0 命中、`stock_watchlist` 三欄 schema。
 **WF 本組實查（2026-09-16）**＝`classify_ui_state` 序 3 可產生 `loading`、`in_flight`／`st.spinner`／`emits_level` 在 `page_today.py` 皆 0 命中、`MAX_COLS＝3`、`render_card` 26px／32px chrome。
 **WG 本組實查（2026-09-16，修訂組）**＝③ 段 `today.verdict` 已決段所引的一切落點：線框 `today.summary` 的 `name`／`src`（`wf_page_today.js:171`）、實作 `summary.regime`／`summary.momentum`／`summary.risk` 三欄與其接線狀態（`tab_today.py:407-440` ＋ `page_today.py:1916-1917`）、`verdict.exposure`／`danger`／`regime` 三卡標籤與 docstring（`page_today.py:1324`／`:1357`／`:1393`／`:1432`／`:1264`）。⛔ 39.5%／18 組兩數為沿用原文，不在本組實查內。
