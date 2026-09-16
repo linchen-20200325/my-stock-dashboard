@@ -1,18 +1,18 @@
 {
-  "updated_at": "2026-09-15T14:24:56.814369+00:00",
-  "last_updated": "2026-09-15",
-  "row_count": 1987,
-  "n_days": 47,
+  "updated_at": "2026-09-16T14:17:53.936584+00:00",
+  "last_updated": "2026-09-16",
+  "row_count": 2030,
+  "n_days": 48,
   "fetch_diag": {
     "days_fetched": 1,
     "days_holiday_or_empty": 0,
     "days_missing_price": 0
   },
   "coverage": {
-    "n_stock_days_with_net": 15840,
-    "n_dropped_missing_price": 14507,
-    "n_unclassified_stock_days": 0,
-    "n_sectors": 42,
+    "n_stock_days_with_net": 16893,
+    "n_dropped_missing_price": 15569,
+    "n_unclassified_stock_days": 1,
+    "n_sectors": 43,
     "n_days": 1
   },
   "last_error": null
