@@ -1,6 +1,6 @@
 # DECISION_RULES — 決策規則「應然」規格（階段 B 第 2 份）
 > **這是「應該怎麼判」，不是「哪裡壞了」。** 一個數字進來，系統怎麼判、判成什麼、衝突時聽誰的。症狀清單在 `../stage1/`；缺值根因在 `INDICATOR_SPEC.md` —— 本檔**沿用**其三態（有值／不適用／缺漏），⛔ 不重新定義。已知問題一律**只引編號**（`P1-*`／`N-*`／`D-01`~`D-27`／`A1-*`／`A2-*`）。
-> **免責（全檔只講一次）**：本檔**不對任何標的產生買賣建議**，只定義「系統拿什麼數字去比、比完顯示什麼」；code 內的行動字串一律**原樣引用並標為「現行 code 字串常數」**。⛔ 缺失值不得填 0。 ⚠️ **涵蓋門檻（全檔統一用法）**：`有資料因子個數 > 該指標因子總數 × SCREENER_MIN_FACTOR_COVERAGE_RATIO`（**嚴格 `>`**；`shared/signal_thresholds.py`，實作 `src/services/fundamental_screener_service.py:_effective_n`／`len(_present) > _min_present`）。`INDICATOR_SPEC §4` 的「Σ滿分點數版 ＋ `<`」gate **待修，見 `../audit/INDICATOR_SPEC_REDTEAM.md` A2-1／A2-3**；⛔ 本檔不沿用該點數版、不另立新常數。⚠️ 單組產出（`CLAUDE.md §-2` 規則 6），複驗狀態見檔尾。**⛔ 本輪零程式碼變更。**
+> **免責（全檔只講一次）**：本檔**不對任何標的產生買賣建議**，只定義「系統拿什麼數字去比、比完顯示什麼」；code 內的行動字串一律**原樣引用並標為「現行 code 字串常數」**。⛔ 缺失值不得填 0。 ⚠️ **涵蓋門檻（全檔統一用法）**：`有資料因子個數 > 該指標因子總數 × SCREENER_MIN_FACTOR_COVERAGE_RATIO`（**嚴格 `>`**；`shared/signal_thresholds.py`，實作 `src/services/fundamental_screener_service.py:_effective_n`／`len(_present) > _min_present`）。`INDICATOR_SPEC §4` 同一 gate **已改為因子個數版 ＋ 嚴格 `>`，與本檔逐字同語意（兩份已一致；出處 `../audit/INDICATOR_SPEC_REDTEAM.md` A2-1／A2-3）**；⛔ 不另立新常數。⚠️ 單組產出（`CLAUDE.md §-2` 規則 6），複驗狀態見檔尾。**⛔ 本輪零程式碼變更。**
 ## §1 總經合成
 **R1-1 一盞燈進不進分母：三態 ＋ 三個結構性旗標並存**（本節最重要的產出）
 ```
@@ -59,7 +59,7 @@ else: return round(Σ得分ᵢ ÷ Σ滿分ᵢ × 100, 1), None  (+ partial=True,
 | 恰好 3 個有值（`3 > 6×0.5` = False） | 不出分 → ⚪ 未評估（**邊界案例**；⛔ 不得因分母變小而出高分，`A2-2`／`A2-6`） |
 | 4 個有值、Σ滿分 75、Σ得分 60 | `80.0`、`partial=True`、`missing=[…]`，等第旁**必須**標 partial；MA20／MA100 皆缺時趨勢判**缺漏**（不進分子分母）→ 剩 5 因子 rescale，⛔ 不得 `+15/30`（`D-28`） |
 
-**應然 vs 實然**：權重 30/20/15/15/10/10 為函式體內 inline literal（非 SSOT）＋ `MA 缺 → +15/30` 是全函式唯一憑空給值分支且被測試釘死 → **實作 bug**（`D-28`）；RSI／量比兩處非單調 → **待裁示**（`D-29`）。
+**應然 vs 實然**：權重 30/20/15/15/10/10 為函式體內 inline literal（非 SSOT）＋ `MA 缺 → +15/30` 是全函式唯一憑空給值分支且被測試釘死 → **實作 bug**（`D-28`）；RSI／量比兩處非單調 → **刻意設計，非 bug**（`D-29`，user 2026-09-16 裁示選（甲））；健康分數現遭 7 處跨股票排名／篩選，與同日新增之排名禁令不符 → **設計變更**（`D-35`）。
 ## §3 估值評價：357 ＋ EPS≤0
 **R3-1 357 ＝ 殖利率 7%／5%／3%**（`shared/thresholds.py:classify_stock_357_price`）｜**R3-2 EPS 三分流（虧損 ≠ 無資料）**
 ```
@@ -103,8 +103,7 @@ if 帳本無張數:                 basis='equal_weight'，UI **強制揭露等�
 if 該量測項有門檻:              比對後顯示「狀態 ＋ 門檻數值 ＋ 誰決定的」三件
 else:                          **只印量測值**；⛔ 不得補門檻、⛔ 不得把量測值講成「過高／應降低」
 ```
-⚠️ **本輪任務與 2026-08-14 裁示衝突**：客戶要求本節寫「產業上限、相關性上限」，但該裁示明文個股組合**刻意不設門檻**。
-**處置：照裁示寫「只量測、不設門檻」。總管推薦＝維持裁示、僅顯示量測值；若要加門檻，該門檻必須是「使用者可設定參數」而非系統寫死，且需 user 明文推翻 2026-08-14 裁示。** ⛔ 本檔不自行推翻。
+✅ **已決事項｜個股組合刻意不設門檻，只量測、不出燈號** —— **`user 2026-09-16 拍板：維持 user 2026-08-14 裁示，⛔ 不得自行推翻`**。日後若要加門檻，該門檻必須是「使用者可設定參數」而非系統寫死，且須 user 另行明文推翻 2026-08-14 裁示（⛔ 不得由本檔或任何實作端逕自補上）。
 
 | 輸入 | 預期輸出 |
 |---|---|
@@ -188,13 +187,14 @@ else:                               持續 → streak += 1
 | 編號 | 一句話（**應然**） | 檔案:符號 | 分類 |
 |---|---|---|---|
 | D-28 | 六因子權重應下沉 `shared/` 成可讀資料結構；MA 缺應回缺漏，⛔ 禁 `+15/30` 憑空給值 | `src/compute/scoring/scoring_helpers.py:calc_health_score` | 實作 bug |
-| D-29 | RSI<30→14、量比>3.0→12 兩處非單調。**(甲) 刻意**：各代表「超賣反彈機會」「異常放量」，非單調但有語意，`details` 標籤支持；**(乙) bug**：等第 A/B/C 直接由分數切，非單調會讓「更超賣」高於「中性偏弱」、排序失真。**需 user 裁示「健康分數是單調好壞排序，還是多訊號加總」**（業務語意層，⛔ 本檔不選） | 同上 | **待裁示** |
+| D-29 | **`user 2026-09-16 裁示：選（甲）刻意`**。(a) RSI<30→14、量比>3.0→12 兩處**非單調是刻意的**，各代表「超賣反彈機會」「異常放量」，⛔ 不得當 bug 修、⛔ 不得改回單調；(b) 同日**新增限制：健康分數禁止用於跨股票排名，只能跟自己的歷史比** —— 分數是多訊號加總，跨股票比大小無意義（既有違反見 `D-35`） | 同上 | **設計變更（user 2026-09-16 裁示）** |
 | D-30 | TTM EPS 無資料應回 `(None, MISS_NO_INPUT)`，⛔ 禁 `else 0` 使其顯示為「虧損」 | `src/ui/tabs/stock_sections/section_357_valuation.py:_render_pe_river` | 實作 bug |
-| D-31 | 組合端 inline 門檻應下沉 `shared/`（ETF 產業 30%、相關性 `0.7`×2、配置偏離 `abs(dev)>=1`） | `etf_render.py:_SECTOR_CONCENTRATION_MAX_PCT`；`etf_smart_analysis.py:PRICE_CORR_HIGH_WARN`／`DOWNSIDE_CORR_HIGH_WARN`；`page_hold.py:build_allocation_split_card` | 實作 bug |
+| D-31 | 組合端 inline 門檻應下沉 `shared/`（ETF 產業 30%、相關性 `0.7`×2、配置偏離 `abs(dev)>=1`）。⚠️ 射程**僅限既有門檻搬家**：**`user 2026-09-16 拍板：維持 user 2026-08-14 裁示，⛔ 不得自行推翻`** —— **個股**組合維持無門檻，⛔ 不得藉本條順手補上產業／相關性上限（見 §4 已決事項） | `etf_render.py:_SECTOR_CONCENTRATION_MAX_PCT`；`etf_smart_analysis.py:PRICE_CORR_HIGH_WARN`／`DOWNSIDE_CORR_HIGH_WARN`；`page_hold.py:build_allocation_split_card` | 實作 bug |
 | D-32 | 同一指標只能有一套判燈門檻；現 VIX/CPI/US10Y/DXY 各兩套且都有 caller | `src/config/config.py:MACRO_ALERT_RULES` vs `shared/macro_buckets.py:BUCKET_DANGER_SPECS` | 實作 bug |
 | D-33 | 燈號應帶 `prev_level`／`since`／`streak`／`streak_miss` 四欄（R7-1），歷史源用既有 parquet | `shared/macro_buckets.py:DangerSpec`；`shared/regime_arbiter.py:RegimeVerdict` | 設計變更 |
 | D-34 | 教學字串宣告的「持續 3 月」與實作不符，須二選一對齊 | `src/data/core/data_registry.py:FRED_NAPM['how_to_read']` | 實作 bug |
+| D-35 | `D-29`(b) 排名禁令在**下裁示前已存在 7 處違反**（⛔ 非 bug、⛔ 不得寫成 bug —— 是規則變了，這些寫法在 2026-09-16 前不算錯），全部在「🏆 個股組合」批次管線，產生端唯一 `run_batch_fetch`（寫 `健康度`／`評級`／`_health` 進 `session_state['t3_data']`；其 except／空 df 分支塞 `健康度: 0` 佔位＝`P1-03`／`N-2`，該 0 會被下列②當「體質弱」）：①`sort_values('健康度', ascending=False)` 直接排序（`_render_elimination_detail`）②`健康度 < HEALTH_GRADE_B_MIN(50)` 汰弱成 `eliminated_ids`（`summarize_candidates`）③多股表 `健康度`／`評級` 為可排序欄（`_render_master_table`）④等第加權進第一排序鍵 `_p`（`final_recommendation`）⑤多因子分缺席時改由 `_health` 決定名次再餵 LLM（`_ranked_t3`）⑥等第跨軸融合成「🧭統一裁決」可排序欄（`_render_summary_table`）⑦A 級 gate 進「操作狀態」欄（`classify_stock_status_lamp`）。**合規替代路徑已存在、即裁示允許的比法**：`scripts/update_health_history.py`(cron) → `health_history_service.py:HEALTH_HISTORY_PARQUET` → `load_health_history`／`merge_score_history` → `section_kline_chart.py`「📈 健康度走勢（近5日）」＝**單檔跟自己歷史比**。⚠️ **但該路徑至今零資料**（總管實查）：`health_watchlist.json` 的 `stocks` 為 `[]`（檔內自陳「清單為空 ＝ 功能待命不跑（不會腦補您的持股）」）、`health_history.parquet` 從未被 commit、workflow 自陳上線起跑 **33 次全成功但從未 commit 任何東西** → **7 處跨股排名禁掉後，健康分數剩下的唯一合規用途目前無資料可比**。**啟用條件＝把股票代碼填進該 json 的 `stocks` 並 commit，那是使用者的持股決定，⛔ 系統／本檔／任何實作端不得代填** | `src/ui/tabs/stock_grp_sections/section_batch_fetcher.py:run_batch_fetch`；`section_portfolio_summary.py:_render_elimination_detail`／`_render_master_table`；`src/compute/screener/scorability.py:summarize_candidates`；`src/ui/tabs/tab_helpers.py:final_recommendation`／`classify_stock_status_lamp`；`section_ai_portfolio.py:render_ai_portfolio_section`(`_ranked_t3`)；`section_financial_health.py:_render_summary_table`；啟用側 `data_cache/health_watchlist.json`（`stocks`）／`.github/workflows/update_health_history.yml` | **設計變更（user 2026-09-16 裁示）** |
 ## 複驗狀態（`CLAUDE.md §-2` 規則 6）
-- **✅ 總管親自查證，可當事實**：涵蓋門檻真實語意（因子個數 ＋ 嚴格 `>`）與 `INDICATOR_SPEC §4` 點數版不成立；`BUCKET_DANGER_SPECS` 實測 **16 盞**；`station_specs.py` 的 `emits_level` 為 2026-08-26 user 裁示且三旗標不可互相替代；`regime_arbiter.arbitrate_regime` 六分支存在；`concentration.py` 逐字「本模組不提供任何燈號 / 門檻」（2026-08-14 裁示）；`MAX_POSITION_PER_STOCK = 0.10`；`section_357_valuation.py` 的 `else 0`；`MACRO_ALERT_RULES` 兩套門檻並存且有真 caller。
-- **⚠️ 單組調查結論（B1／B2／B3，未經第二組複驗，引用請打折）**：五套合成法「只有五套」；六因子給分規則逐分支還原與「唯一憑空給值分支是 MA」；時間軸機制「只有 5 處」且「無任何一盞燈帶時間欄」；三個上限「全部寫死」；`_SECTOR_CONCENTRATION_MAX_PCT` 等判定為 inline。
-- **⚠️ 本檔自己的全稱句（待驗，⛔ 不得當前提）**：1) 「§4 表列八項即個股與 ETF 組合的全部門檻」—— 依 B3 單組掃描，未自行窮舉。2) 「§6 矩陣五列即四層級間的全部衝突」—— 只覆核 B1 指出者，未窮舉跨層組合。3) 「再平衡容忍度是全 repo 唯一使用者可改的門檻」—— B3 單組（僅掃 `st.slider`／`st.number_input`），`st.session_state` 直寫路徑掃不到。4) 「`D-28`~`D-34` 未與 `D-01`~`D-27` 重複」—— 本組逐條比對，未經第二組驗。 5) **§7 R7-1 是本組自行設計，不是從 code 讀出來的** —— 四欄契約（`prev_level`／`since`／`streak`／`streak_miss`）與「`ruleset_hash` 變更即中斷 streak」**全站無既有實作可對照**，也未經第二組驗；且「歷史源用既有 parquet」係依 B1 轉述，本組**未實際讀取** `data_cache/macro_forward_test/signals.parquet`（欄位是否逐燈落地、資料密度是否足以回推 streak，**皆未驗**）。⛔ `D-33` 落地前必須先派一組獨立驗該 parquet 的 schema 與密度。
+- **✅ 總管親自查證，可當事實**：涵蓋門檻真實語意（因子個數 ＋ 嚴格 `>`）與 `INDICATOR_SPEC §4` 點數版不成立；`BUCKET_DANGER_SPECS` 實測 **16 盞**；`station_specs.py` 的 `emits_level` 為 2026-08-26 user 裁示且三旗標不可互相替代；`regime_arbiter.arbitrate_regime` 六分支存在；`concentration.py` 逐字「本模組不提供任何燈號 / 門檻」（2026-08-14 裁示）；`MAX_POSITION_PER_STOCK = 0.10`；`section_357_valuation.py` 的 `else 0`；`MACRO_ALERT_RULES` 兩套門檻並存且有真 caller。**`D-35` 之中 2 處為總管實查活碼**：`_render_elimination_detail` 的 `sort_values('健康度', ascending=False)`（檔內註解自陳「④ 汰弱留強改以『純健康度』排序」）、`summarize_candidates` 的 `health_min=HEALTH_GRADE_B_MIN` 汰弱；合規替代路徑三段 code（cron／service／K 線頁走勢圖）＋ 路徑常數 `HEALTH_HISTORY_PARQUET` 均實測存在，**但該路徑從未產生過資料**（四項皆總管實查，⛔ 非單組推測）：`health_watchlist.json` 受 git 追蹤但 `stocks: []`；`git log --all -- data_cache/health_history.parquet` 回空（從未 commit）；`update_health_history.yml` 檔內自陳跑 33 次全成功、0 commit（原因：parquet 被 `.gitignore` 蓋掉使無 `-f` 的 `add` 從未納管＋watchlist 空時 script 依設計 `exit 0`，現已改「存在才 `git add -f`」）；工作區無該 parquet。
+- **⚠️ 單組調查結論（B1／B2／B3，未經第二組複驗，引用請打折）**：五套合成法「只有五套」；六因子給分規則逐分支還原與「唯一憑空給值分支是 MA」；時間軸機制「只有 5 處」且「無任何一盞燈帶時間欄」；三個上限「全部寫死」；`_SECTOR_CONCENTRATION_MAX_PCT` 等判定為 inline。**`D-35` 其餘 5 處 ＋「共 7 處、且全部集中在個股組合那條管線」** —— INV-1 單組窮舉（上列 2 處除外），未經第二組複驗；其中「多股表欄頭可點擊排序」係依 Streamlit 預設行為推導、**未實跑畫面驗證**，`_render_summary_table`／`classify_stock_status_lamp` 兩處屬「等第門檻進多股表」而非直接 `sort`，射程由本檔一併收錄。
+- **⚠️ 本檔自己的全稱句（待驗，⛔ 不得當前提）**：1) 「§4 表列八項即個股與 ETF 組合的全部門檻」—— 依 B3 單組掃描，未自行窮舉。2) 「§6 矩陣五列即四層級間的全部衝突」—— 只覆核 B1 指出者，未窮舉跨層組合。3) 「再平衡容忍度是全 repo 唯一使用者可改的門檻」—— B3 單組（僅掃 `st.slider`／`st.number_input`），`st.session_state` 直寫路徑掃不到。4) 「`D-28`~`D-35` 未與 `D-01`~`D-27` 重複」—— 本組逐條比對，未經第二組驗。 5) **§7 R7-1 是本組自行設計，不是從 code 讀出來的** —— 四欄契約（`prev_level`／`since`／`streak`／`streak_miss`）與「`ruleset_hash` 變更即中斷 streak」**全站無既有實作可對照**，也未經第二組驗；且「歷史源用既有 parquet」係依 B1 轉述，本組**未實際讀取** `data_cache/macro_forward_test/signals.parquet`（欄位是否逐燈落地、資料密度是否足以回推 streak，**皆未驗**）。⛔ `D-33` 落地前必須先派一組獨立驗該 parquet 的 schema 與密度。
