@@ -86,6 +86,9 @@ my-stock-dashboard/
 │   │   ├── etf/       (7)     # etf_calc / etf_quality / etf_helpers / σ 統一層
 │   │   ├── macro/            # macro_helpers
 │   │   │                      #   (macro_signal_lookback_tw = 死碼,零 production caller)
+│   │   │                      # 📌 2026-09-14 增:macro_session_patch —— 頁1 原地重抓的
+│   │   │                      #   session 寫入層**上半**(純函式,零 streamlit / 零 I/O)。
+│   │   │                      #   下半在 L3 services/macro_session_apply。詳見 §0.14
 │   │   └── screener/  (2)     # monthly_revenue_screener / yield_screener
 │   ├── services/              # 19 檔(L3 業務編排)
 │   │   ├── holdings_service   # 「你持有哪幾檔/幾張/均價」唯讀 loader(2026-09-07 新增,
@@ -98,6 +101,10 @@ my-stock-dashboard/
 │   │   ├── stock_grp_service  # tab_stock_grp 共用
 │   │   ├── data_registry_*    # scanner / panel(L3 wrapper)
 │   │   └── macro_*            # macro_fetch_orchestrator / macro_trio_orchestrator
+│   │                          # 📌 2026-09-14 增:macro_session_apply(50 行,只寫不判)
+│   │                          #   / macro_refresh_service(頁1 原地重抓的取數編排
+│   │                          #   ＋ 三重稽核報告)。⚠️ 上面的「19 檔」是 2026-06-30
+│   │                          #   快照,未含這兩檔;要數字請現場量測。詳見 §0.14
 │   └── ui/                    # 68 檔(L4 + L5)
 │       ├── render/    (7)     # chart_plotter / tab_sections SSOT / app_render
 │       ├── pages/     (8)     # health_inspector / api_diagnostic / data_coverage
@@ -455,6 +462,130 @@ late import**,並走既有的 `_render_tab_isolated()` 隔離器。**零新增 `
 (該處自陳「保留供追溯」),其編號體系裡 L5 指的是「**AI 層**」、L4 指「視覺化層」,
 與現行七層(`CLAUDE.md §8.2`,L5＝UI Tabs)**不是同一套編號**。
 在那兩節裡加一列「views/ 是 L5」只會製造第二個互相打架的分層定義(正是 §0.12 立約定要防的事)。
+
+---
+
+### 0.14 頁1「🚀 更新今日戰情」原地重抓 —— 三個新模組的分層位置(2026-09-14,PR #673)
+
+> **依 §0.12 的 SSOT 約定**:七層定義與 5 條硬規則、例外(EX-\*)與待修違憲(V-\*)的權威來源
+> 一律是 `CLAUDE.md §8.2 / §8.2.A`,**本節只做敘述性補充,不另立規則、不重複列舉**。
+> 畫面規格見 `SPEC.md §21`;本批的過程紀錄、驗證數字與未驗到項見 `STATE.md` 最新一筆。
+
+⛔ **v1 已於 2026-09-14 由客戶宣告絕對凍結**(merge commit `5808c03` 為 v1 最後一個功能 commit)。
+**本節是現況記載,不是待辦清單** —— 下方「已知未解」與「刻意差異」**都不構成動工授權**
+(`CLAUDE.md §-1` ＋ 客戶凍結令,兩道閘門)。
+
+**這是什麼**:IA v2 頁1「🚦 今天」的［🚀 更新今日戰情］按鈕,原本只能把人**跳轉**回舊的
+總經分頁去按那邊的按鈕。客戶 2026-09-09 裁決:**要原地觸發重抓並即時刷新本頁**。
+本批為此新增三個模組 —— **一個 L2 純函式 ＋ 兩個 L3**。
+
+| 檔案 | 角色 | 層 |
+|---|---|---|
+| `src/compute/macro/macro_session_patch.py` | 總經 session 寫入層的**上半**:吃一份 `fetch_macro_bundle()` 的回傳,算出**要寫哪些 key(`MACRO_PATCH_KEYS`)、要刪哪些 key(`MACRO_PATCH_POP_KEYS`)**。**純函式:零 streamlit、零 I/O、零 pandas import**(`df.empty` 走 duck typing,與原碼同一個寫法) | **L2** |
+| `src/services/macro_session_apply.py` | 同一個寫入層的**下半**,**50 行**:讀上一輪的兩個值 → 呼叫上面那支純函式 → `st.session_state.update()` ＋逐個 `pop()`,並把 `(patch, pops)` 原樣回傳給呼叫端。**刻意不長任何分支判斷** —— 一旦有判斷,它就跟著 streamlit 一起變成不可測的東西,拆兩半的意義就沒了。`import streamlit` **只為 `st.session_state`**(不是 cache、不是 UI 呼叫),與既有 `jingqi_calc` / `market_assessment_apply` 同形態 | **L3** |
+| `src/services/macro_refresh_service.py` | 頁1 按鈕的**取數編排**(929 行)。編排 L1 `src.data.daily.daily_data_fetchers` ＋ 既有 L3(`macro_fetch_orchestrator` / `macro_session_apply` / `jingqi_calc` / `macro_trio_orchestrator` / `market_assessment_apply` / `data_registry_scanner`),寫 `st.session_state`。**零 L4 / L5 import、零 UI 呼叫** —— 進度一律走 `on_event` 回呼交給呼叫端畫 | **L3** |
+
+**為什麼 `macro_session_patch` 是 L2 而不是 L0 `shared/`**(檔頭自陳的理由,轉錄):
+`shared/` 是常數 / 門檻 / TTL 層,被**全層** import(「L0 不得依賴任何 L1+」的代價就是它必須極薄);
+而本函式帶的是**分支邏輯**(冷啟動 fallback、`li_retain_meta` 的累計與 `reason` 三態)——
+那是「運算」不是「常數」,放進 L0 會讓一個所有人都 import 的層長出業務規則。
+
+**為什麼寫入層要拆成兩半**(不是形式主義):`tests/test_c3_layering_guard.py` 的
+`_KNOWN_VIOLATIONS` 在 `scripts/update_macro_forward_test.py` 那一條裡**自己寫出了正解** ——
+「把那兩支 L3 的 session_state 寫入與計算拆開(**回傳 dict ＋ 另一層負責寫**)」。
+拆開之後拿到兩個**本批真的用到**的能力:
+(a) **可比對** —— 頁1 的新路徑與舊 `tab_macro.py` 的 in-line 寫入,可以對同一份 bundle
+**逐鍵比對**(`tests/test_p01_macro_refresh.py` 的 golden test);沒有這支純函式,
+「兩條路徑寫的東西一樣嗎」就只能靠人眼讀 code。
+(b) **可測** —— 零 streamlit、零 I/O,`li_retain_meta` 的累計邏輯可以直接餵 dict 驗。
+
+#### 與既有 `macro_fetch_orchestrator` 的關係 —— **平行路徑,不是取代**
+
+```
+【既有路徑,原封不動】
+  tab_macro.py (L5) ──► macro_fetch_orchestrator.fetch_macro_bundle (L3) ──► L1 fetchers
+        └─ spinner 區塊內 in-line 寫 st.session_state(本批一個字都沒動)
+
+【本批新增的第二條路】
+  page_today.py (L5)
+        └──► macro_refresh_service.refresh_macro_now (L3)   ← 新增
+                 ├──► macro_fetch_orchestrator.fetch_macro_bundle (L3,既有)  ──► L1 fetchers
+                 │        └─ 新增 on_job_done 回呼(進度)
+                 ├──► macro_session_apply.apply_macro_bundle (L3,新增)
+                 │        └──► macro_session_patch.build_macro_session_patch (L2,新增,純函式)
+                 └──► jingqi_calc / macro_trio_orchestrator /
+                      market_assessment_apply / data_registry_scanner(皆既有 L3)
+```
+
+**對既有 orchestrator 的改動只有一處**:`fetch_macro_bundle()` 新增
+**keyword-only、預設 `None`** 的 `on_job_done(name, ok, detail)` 回呼。
+**預設 `None` ⇒ 既有 caller(`tab_macro`)完全無感**;回呼自己拋例外會被接住 ＋ print,
+**不影響取數**。
+
+⚠️ **客戶明令舊 7 個頁籤保留原樣** ⇒ `src/ui/tabs/**` 本階段**一個字都沒動**,兩條路並存。
+**收編舊分頁(讓 `tab_macro` 也改走 `macro_refresh_service`)是第二階段,尚未獲准 ——
+而且 v1 已凍結,該階段不會在 v1 發生。**
+
+#### ⚠️ 三處**刻意**與 `tab_macro` 不同(不是漏抄;`macro_refresh_service` 檔內各自就地寫明理由)
+
+該檔**刻意不宣稱「與 `tab_macro` 零行為變更」** —— 檔頭自陳「**那句話是假的**」。三處差異:
+
+1. **`compute_and_store_jingqi` 帶 `df_adl is not None` 守衛**(景氣那一步,`STEP_JINGQI`)——
+   `tab_macro` **沒有**這個守衛,cron `scripts/update_macro_forward_test.py` **有**,
+   **本檔站 cron 那一邊**。不帶守衛會把「沒有廣度資料」寫成**估算值**並清掉 `health_partial`,
+   **污染前進式驗證帳本**(`CLAUDE.md §2.3`:那份帳本的價值就在於它是「當下真實決定」)。
+2. **`compute_and_apply_market_assessment` 包在有逾時的執行緒裡**(`_run_with_timeout`)——
+   `tab_macro` 是直接同步呼叫,**可以無限期卡住**。
+3. **強制重抓模式(`MODE_FORCE`)不 pop 任何 session key** ——
+   `tab_macro` 的 `handlers._macro_session_reset()` 會 pop 10 個 key。
+
+#### 報告的**三重稽核**(`MacroRefreshReport`)—— 三次看的是完全不同的東西,缺一不可
+
+- **`STEP_SOURCE_AUDIT`** —— **收到幾個來源結論**對不對得上 `SOURCE_LABELS`。**它不看內容。**
+- **`STEP_CONTENT_AUDIT`** —— **每一桶真的收到了什麼**(`audit_source_contents`)。
+  ⚠️ 這一步是 **2026-09-09 獨立 QA 抓到的洞**:orchestrator 的 `ok=True` 只代表
+  「這個 job 沒有以例外收場」,其 docstring 明寫「**判空是 caller 的事,不是本層的**」——
+  而在此之前**這個 caller 一處判空都沒有**,於是「7 個來源全部回空」會走成 `ok=True` ＋ **綠燈**。
+- **`STEP_WRITE_AUDIT`** —— **實測寫進 session 的 key** 有沒有超出 `WRITES_SESSION_KEYS` 的對外宣告。
+  ⚠️ 同一天的第二個洞:那份宣告原本**沒有任何 production code 讀它**(只有測試 import),
+  而畫面的「有更新到 / 摸不到」全部建立在它上面。
+
+**§1 Fail Loud**:每一步的成敗**逐步記錄在報告裡**,不吞、不合併、不四捨五入成「更新完成」;
+**部分成功一律回 `ok=False`**。
+
+**⚠️ 已知未解(本批未修,不得當成已完成;且 v1 已凍結 ⇒ 不是待辦)**
+
+1. ⭐ **Streamlit 實機畫面完全未驗。** 沙箱**無對外網路**;本批所有「畫面會長成這樣」的結論
+   一律是 **AppTest ／ 替身注入後對 HTML 下斷言**得出的。
+   → **原地重抓在真實網路下的行為(逾時、部分失敗、進度列)沒有被實機驗證過。**
+2. **本路徑摸不到的區塊實測共 6 個**(`UNTOUCHED_BLOCKS`,本組 2026-09-14 以 AST 清點)——
+   常說的「**今日關鍵 / 建議持股 / 市場位階三張卡**」只是**使用者在頁1 看得到的子集**;
+   另外 4 個是新聞桶 `_macro_news_items` / `futures_net` 旗標 / `chips_loaded` /
+   `intl_snap`+`ma_snap`。**逐列見 `SPEC.md §21.5`**,本節不重複。
+   要接上必須**收編舊分頁**(第二階段)—— **v1 已凍結 ⇒ 這件事在 v1 不會被修**,
+   刻意不寫成「待修」以免下一個人撿起來動 v1。
+   ⚠️ 該清單是實作組 2026-09-09 **單組 grep** 的產物,**未經第二組複驗**:
+   可以當「這幾塊確定摸不到」,**不得**當「只有這幾塊摸不到」。
+3. **`li_latest` 的那個 pop 是 no-op,`macro_session_patch` 刻意不搬。**
+   原碼是 `if 'li_latest' not in session: session.pop('li_latest', None)` —— 條件成立時
+   key 本來就不在。搬過來只會在 `MACRO_PATCH_POP_KEYS` 裡多一個**永遠不生效的鍵**,
+   讓讀的人以為「這條路徑會刪掉 `li_latest`」。**不搬,並在檔內記明它的存在**
+   (`CLAUDE.md §-2` 規則 6:沒說出來的省略,下一個人會當成漏抄)。
+4. **`load_heavy` 必須由呼叫端傳進來,`macro_session_patch` 不自己推。**
+   `tab_macro` 的冷啟動 fallback 在寫入區間之外、卻決定了下面所有分支;拿 `bundle` 內容
+   反推(例如「inst 是空的就當冷啟動」)會在**「熱啟動但 inst 全敗」**時判錯,
+   把「抓了沒拿到」誤寫成「沒抓」。**這是契約,不是實作細節** —— 改呼叫端時不要自作聰明省掉它。
+5. **本節的分層歸屬由本組讀三個檔的 import 清單與檔頭 docstring 得出,未跑 C3 守衛複驗。**
+   `tests/test_c3_layering_guard.py` 對這三檔的實際判定請現場跑,不要引用本節。
+6. 📌 **`macro_refresh_service` 檔頭 docstring 指到一個不存在的符號**(本組 2026-09-14 文件同步時
+   實測發現,**登記,未修**):該檔頭把守衛所在處寫成 `_step_jingqi`,但全檔**沒有這個符號**
+   —— 實際存在的是步驟常數 `STEP_JINGQI`。**本節因此不轉錄那個名字**(§8.2.A.0 規則 5:
+   照抄一個查不到的符號,等於把錯資訊再複製一份)。
+   ⚠️ **不修的理由是 v1 已凍結 ＋ 那是 `.py`,不是文件工作的邊界** —— 這是登記,不是待辦。
+
+⚠️ **本節未動 §1「目錄結構」與 §2「分層架構」**:理由同 §0.13 末段 ——
+那兩節是**歷史 v7.1 結構**,其編號體系裡 L5 指「AI 層」、L4 指「視覺化層」,
+與現行七層(`CLAUDE.md §8.2`)**不是同一套編號**;在那裡加一列只會製造第二個互相打架的分層定義。
 
 ---
 

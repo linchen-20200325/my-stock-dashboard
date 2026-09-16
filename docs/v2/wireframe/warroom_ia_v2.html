@@ -1,0 +1,2436 @@
+<title>戰情室線框稿</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<!--
+  ══════════════════════════════════════════════════════════════════════════
+  第二輪改了什麼（徽章分層與狀態總覽組 · 2026-09-14）
+  —— 客戶第二輪審稿回饋；只動這一個檔，⛔ 沒有動 _wf_bundle.js／任何 wf_*.js／repo 任何檔
+  ══════════════════════════════════════════════════════════════════════════
+  客戶第二輪的四項批評 ＋ 一項要求，逐項對應：
+
+  1）徽章瘦身 —— 卡面只剩人話
+     · 客戶：「徽章寫『正常 · 時點未提供 △ · ▶』，這三個符號的意義，**新手不知道**。」
+     · 改法：`setBadge()` 改寫為 `setFace()`。卡面只印**人話**
+       （使用者視角：正常／載入中／還沒載入／資料不完整／出錯了／這項還沒做；
+        工程視角：運作中／載入中／尚未載入／無資料／門檻已失準／未接線／取得失敗）。
+     · **狀態圖示、⚠︎、▸ 三個符號與極短時點全部移進展開明細。**
+       ⛔ 事實沒有被刪：明細第一行的信任句會明說「不知道它是哪一天的 —— 來源沒有給資料歸屬日」，
+       下一行仍是原句「資料時點：來源未提供資料日期 ⚠︎」，一字不差。
+     · ⚠️ **連帶讓 §00 既有的一句話過期**（「① 卡片上的徽章直接寫 時點未提供 ⚠︎」）——
+       依本檔慣例**原文一字未改，就地加 📌 補註**說明它為什麼變了、事實現在在哪裡。
+
+  2）「有標記」只在審稿模式可見
+     · 客戶：「徽章旁再掛一顆『★📌 有標記』，這對使用者是**雜訊**。」
+     · 改法：工具列新增 **產品畫面／審稿模式** 切換（`#modeseg` / `setMode()`）。
+       產品畫面模式下，所有 `[data-review-only]` 節點 ＋ 送審三區 ＋ 區隔橫幅一律 `hidden`，
+       卡片的暖赭色虛線外框也還原成一般外框。
+     · ⛔ **標記本身沒有被刪除**：仍在 DOM、仍由資料檔驅動，切回審稿模式全部回來。
+     · **判斷：分兩個開關而不是併進「視角」**（客戶授權本組判斷）——
+       視角管「狀態講多細」、模式管「治理標記畫不畫」，兩件獨立的事；
+       併了就做不到「產品長相 ＋ 工程視角核狀態」這個組合。理由寫在 §00。
+     · **預設是審稿模式**：這份稿子本來就是送審文件，預設藏起送審三區會害客戶找不到。
+
+  3）展開明細第一行固定是「這張卡現在能不能信」
+     · 新增 `.trust` 節點，**排在明細最前面**（在「狀態明細 ＋ FACTS」那條標頭之前）。
+     · ⛔ **由該區塊當下的實際狀態推出來**，不是寫死一句樂觀的話：
+       ① 規格根本沒列這一種 → 明說「這張卡不會進入這個情況（規格沒有列）」；
+       ② 有值的那三種（正常／涵蓋不全／門檻失準）→ 再接一句**時點事實**；
+       ③ 切狀態、切視角、切分組，這一行都跟著重算（`setTrust()` 由 paintEng／paintGrp 呼叫）。
+
+  4）徽章視覺層級 —— 四種密度，由 `layers[].n` 決定
+     · 客戶：「幾乎每個 block 都是：區塊名 → 展開佐證 → 徽章…整頁會變成**一排排一模一樣的膠囊**。」
+     · `TIERS` ＋ `TIER_BY_N`：n=1 結論卡（字最大、留白最多、徽章最簡）／
+       n=2 核心卡（中等密度，徽章可帶一個數字）／n=3 操作區（密度最高；**表格型不掛徽章**，
+       狀態改由 `.tstat` 表頭狀態列承載）／n=4 佐證（**整層預設收合** ＋ 徽章去背去框最小化）。
+     · ⚠️ **n=0 與 n=5 不在客戶指定的四層內**，本組填法：n=0 比照第三層密度但**保留徽章**
+       （那一層本身就是狀態列）、n=5 比照第二層。**這是本輪的呈現決定，不是規格推導**，
+       要改只要改 `TIER_BY_N` 一行。
+     · ⚠️ 「表格型」是**區塊名稱字串比對的啟發式**（含 表／清單／卡片流／CSV／逐檔／逐列／卡牆／燈牆，
+       且先剔掉「表單」）—— **猜錯只會讓密度不同，⛔ 不會少掉任何一句文案或任何一個狀態**。
+
+  5）狀態總覽圖（§00b，新增一整節）
+     · A 區：十種呈現情況的**卡面並排**，「卡面長相」那一行**逐字取自規格原文第一句**
+       （切在第一個句號，⛔ 未改寫、未補字），完整原文仍只在 §00 印一次。
+     · B 區：**頁面層級**五種版面並排 —— 冷啟動／載入中骨架／部分失敗／整頁錯誤／**離線**。
+     · C 區：**四種密度並排**，從同一份 `TIERS` 生出來，⛔ 不另抄一份。
+     · **離線：本輪新增的提案，不是既有規格**（已在畫面上明標 🆕 並附兩邊理由與推薦）。
+       實測（量測日 2026-09-14）：資料檔十種狀態裡沒有「離線」；字串「離線」在資料檔出現 2 次，
+       但講的是「門檻校準是排程的**離線工作**」＝批次作業，不是網路斷線。
+       **總管推薦：不另立第十一種狀態（單格照樣是 🔴 出錯了），但要給它自己的頁級版面**
+       —— 因為 why／where 不同，把離線寫成「來源掛了」是**錯誤歸因**。
+       反方理由（`navigator.onLine` 本身就可能判錯）一併寫在畫面上，**待客戶拍板**。
+
+  6）圖示表補齊（客戶點名：上一輪引入的 ◧ 沒有列進圖示表）
+     · §00 新增「圖示表」：狀態符號 ＋ 治理／閱讀符號 ＋ 顏色，逐一列名，含 ◧ 的定位
+       （它是**使用者視角「資料不完整」那一類的分組代號**，⛔ 不是第十一種底層狀態）。
+     · ⚠️ 本表是**本組單組整理、未經第二組複驗**（CLAUDE.md §-2 規則 6）——
+       畫面上已寫明「看到不在表內的符號就是漏了，請圈回來」。
+
+  ⛔ 本輪**沒有改動任何一句既有文案的內容**（改的是怎麼呈現）。唯二的字串異動，兩者都是**只加不改**：
+     · `markpill` 的 title：表格型區塊在**原字串後面**接一句限定詞（那裡沒有「左邊的徽章」可點）；
+     · `sbadge` 的 aria-label：原本是「狀態與資料時點：…」，本輪因為卡面不再帶時點，
+       改成「狀態：…。展開可看這張卡能不能信、資料時點與 facts」——
+       ⚠️ **這一句是改寫，不是只加**；它是**無障礙名稱、不是畫面上的字**，
+       而且原句描述的東西（卡面帶時點）本輪已經不成立，留著會對讀屏使用者說謊。據實列在這裡。
+
+  ⚠️ 本輪未複驗事項（CLAUDE.md §-2 規則 6）：
+     · 「資料檔沒有『離線』這種狀態」「離線 2 次都是批次作業的意思」為**本組單次 grep**，未經第二組複驗。
+     · 圖示表的窮舉、「表格型」啟發式在 122 個區塊上的命中結果，同為單組量測（量測日 2026-09-14）。
+     · 本輪**沒有**在真機或真字型下量過任何像素；§00 既有的量測限制原文照舊適用。
+  ══════════════════════════════════════════════════════════════════════════
+
+  ── 以下是**第一輪**（線框外殼改造組）的紀錄，原文保留、一字未改 ────────────
+  本輪改了什麼（線框外殼改造組 · 2026-09-14）—— 只動渲染層，資料檔一個 key 未改
+  ══════════════════════════════════════════════════════════════════════════
+  客戶親審回饋的核心批評：資訊密度與認知負擔過高、狀態模型過度工程化。
+  以下七項全部在「怎麼呈現」這一層解決。
+
+  📌 **既有文案改動：全檔逐句比對後共三處，在此據實列出（⛔ 不宣稱「零改動」）**
+     · 機械比對方法：抓舊檔 JS 內所有含中文的字串字面值（101 個）與 HTML 文字節點
+       （108 段），逐一檢查是否仍原字出現在新檔 —— 結果 **HTML 缺 0；JS 有 2 段不再是同一段**
+       （下面第二、第三處，四個半段全部逐字仍在，已逐段機械複驗）。
+     · ⚠️ **另有一項不是文案改動、但會改變「看不看得到」，一併揭露**：每一種呈現情況的
+       `st.hint`（實作規則）與 `PER_ELEM_NOTE`（逐元件例外說明）**字串本身一字未改**，
+       但改成**只在工程視角印**。使用者視角的卡片看不到它們 —— ⛔ 沒有刪，換地方。
+     · **唯一一處被加字的是一個 aria-label（不是畫面上的字）**：
+       原本 `(blk.name) + ' 呈現情況'` 這個狀態列的無障礙名稱，因為本輪同一個區塊裡
+       **變成兩條狀態列**（使用者視角一條、工程視角一條），兩條不能同名，
+       故分別改成 `' 呈現情況（使用者視角）'` 與 `' 呈現情況（工程視角 · 逐項列名）'`。
+       原字串整段保留在兩者之內，只在尾端加了括號限定詞。
+     · **第二處：資料時點那一段被「拆成兩半」，不是改寫**（客戶 2026-09-14 親自點名）。
+       原字串一段兩件事：
+         `資料時點：來源未提供資料日期 ⚠︎　<span class="tiny">⛔ 不得猜、⛔ 不得填今天、⛔ 不得留白</span>`
+       前半是**這一格的事實**、後半是**講給實作者聽的規則**。本輪：
+         — 前半 `資料時點：來源未提供資料日期 ⚠︎` **逐字留在每個 block 的明細裡**；
+         — 後半 `⛔ 不得猜、⛔ 不得填今天、⛔ 不得留白` **逐字搬到 §00「規格祈使句只講一次」**，整頁一次。
+       **兩個半段都用機械比對確認逐字仍在**（⛔ 沒有改寫、沒有刪字），改的只有「印幾次、印在哪」。
+     · **第三處：佐證面板標頭同樣被「拆成兩半」，不是改寫。** 原字串：
+         `▸ 展開佐證（第四層 · 就地展開，上下內容往下推）`
+       前半是**按鈕／面板的標題**、後半是**規格描述**。本輪：
+         — 前半 `▸ 展開佐證` **逐字留在每一個佐證面板標頭**；
+         — 後半 `（第四層 · 就地展開，上下內容往下推）` **逐字搬到 §00**，整頁一次。
+       兩個半段都機械複驗逐字仍在（⛔ 沒有改寫、沒有刪字）。
+     · 其餘新增的字（視角切換、分組名稱、徽章時點、審稿用橫幅、§00 各節說明）
+       **全部是新加的段落**，沒有覆蓋、改寫或刪除任何既有句子。
+
+  1）呈現情況收成「使用者視角」，底層十種一格不動
+     · 資料檔的 states 十個 key（live/loading/idle/empty/missing/na/partial/
+       degraded/unwired/error）**原樣不動**，渲染器加一層 VIEW_GROUPS 映射。
+     · 預設「使用者視角」只給六顆：正常／載入中／還沒載入／資料不完整／出錯了
+       ＋ **這項還沒做（未接線）**。
+     · ⛔ 未接線**沒有**被併進「資料不完整」，也**不用**任何「暫無／暫時沒有」
+       的說法 ——「暫」字是假的：未接線是刻意沒做，等多久都不會有（CLAUDE.md §1）。
+     · 「資料不完整」是 empty／missing／na／partial／degraded 五個底層態的**分組**；
+       展開後**逐項列出每一個底層態的規格原文**（含 ⑨ 結構上不適用的獨立說法），
+       ⛔ 分組只發生在摘要層，不吃掉任一種的原文。
+     · 工具列新增「使用者視角／工程視角」切換；工程視角＝原本的十種逐項列名。
+     · ⛔ 全程沒有用數字當標題（沒有「六類」「5+1」這種寫法），一律列名。
+  2）狀態列與時點列合併成一顆徽章，點擊才展開
+     ＋【2026-09-14 追加·客戶親自點名】規格祈使句不再逐格複印
+     · 卡片預設只剩：標題列（＋標題右側的〔展開佐證 ▸〕，規格原有）＋ 一顆狀態徽章。
+     · 徽章文字＝狀態圖示 ＋ 卡面說法 ＋ 極短時點。點它才展開：待拍板／偏離標記、
+       完整資料時點揭露句、狀態切換、欄數示意、出處。
+     · 極短時點的來源：blk.asOf。⚠️ 實測 asOf **全部為 null**（量測日 2026-09-14，
+       方法：逐 block 取 asOf 計數 —— 舊 bundle 8 頁 144 塊、現行資料 7 頁 122 塊，兩份都是 0 個有值），
+       故現況一律顯示「時點未提供 ⚠︎」，展開後仍是原本那句一字不差的揭露文案。
+     · **客戶原話**：「『資料時點：來源未提供資料日期 ⚠︎ 不得猜、不得填今天、不得留白』
+       重複數十次：**這是規格，不是 UI**。」→ 已修：
+       **(a)** 每個 block 不再印規則本文，只留**事實**（卡片徽章「時點未提供 ⚠︎」／
+       明細第一行原句「資料時點：來源未提供資料日期 ⚠︎」）；
+       **(b)** 規則本文「⛔ 不得猜、⛔ 不得填今天、⛔ 不得留白」**一字不差搬到 §00
+       「規格祈使句只講一次」**，整頁只出現一次（實測：全部展開後全文計數 = 1 次，
+       修正前 = 每個 block 一次）。
+       **(c)** 同一修法套用在其餘四處逐格重印的規格句（客戶的判準：講給看畫面的人聽 vs 講給寫程式的人聽）：
+           ① 明細標頭的操作提示「（再點一次徽章收合 · Esc 也可以）」；
+           ② 佐證標頭括號內的「（第四層 · 就地展開，上下內容往下推）」；
+           ③ 欄數示意的解釋長句（卡片只留數字 ＋ 容器寬度）；
+           ④ 每一種呈現情況的 st.hint 實作規則 —— **使用者視角不印、工程視角照印**
+              （⛔ 沒有刪字，十種全文在 §00 工程視角與切到工程視角的卡片上都還在）。
+           四處全部只是換地方，⛔ 沒有任何一句被刪掉或改寫。
+       ⚠️ **拿掉的是祈使句，⛔ 不是事實** —— 沒有任何一格變留白、也沒有任何一格被填上今天。
+     · **主 CTA 去重**：資料端已在 📖 憑什麼 的 subtitle 補了白話指路
+       （「這一頁是用來查的，沒有「開始」按鈕 —— …」），故該頁不再印
+       「本頁目前沒有主 CTA」，該句改收進「說明 ▸」。
+       判定為**字串比對啟發式**：subtitle 同時含「沒有」與（「按鈕」或「CTA」）→ 視為已講過。
+       ⚠️ **這是啟發式不是契約**：資料端換個寫法就可能判錯，屆時會變回兩邊都印（⛔ 不會變成都不印，
+       誠實那句不會消失）。🧩 全站共用（無 subtitle）實測仍保留原句。
+  3）首屏瘦身
+     · 層級（.wf）改為可折疊；**第 0 層預設收起**，但若該層含主 CTA 則保持展開
+       （判定方式：該層任一 block.name 含 mainCTA.label 字串 → 不收起，
+       確保「主 CTA 必須在預設葉可見」不被這次折疊破壞）。
+     · 主 CTA 面板收成一行；其說明文字、葉說明、葉列注意事項改為可折疊、預設收起。
+     · 區塊 key（工程識別碼）不占卡面，改在工程視角與展開明細裡顯示。
+     · 手機（≤640px）工具列改為非 sticky，不長期佔用視窗高度，並加一段密度覆寫。
+     · **實測結果（🚦 今天頁，量測日 2026-09-14）**：375×812 與 390×844 →
+       第一層結論 ＋ 3 格核心卡片**完整在首屏內**；375×667（最小）→ 第一層 ＋ **2 張**完整，
+       第 3 張被摺線切到。⛔ 沒有做到「所有手機尺寸都放得下 3~4 張」——
+       卡住的是規格本身（〔展開佐證〕點擊區 ≥ 44×44 → 每張卡標題列至少 44px），
+       本組**不自行放寬該規格**。逐項數字寫在頁面 §00「首屏放得下什麼」。
+  4）響應式改內容優先
+     · .colsdemo／.two／.three 全部改 repeat(auto-fit, minmax(min(100%, 最小欄寬), 1fr))，
+       欄數由內容寬度決定，不再硬套斷點。最小欄寬的推導與量測數字寫在 §00「欄寬怎麼決定的」。
+     · 欄數示意另加一行「實際排出來幾欄」：讀 computed gridTemplateColumns，
+       **只數寬度 > 0 的軌道**（auto-fit 會把排得下卻沒東西放的軌道塌成 0px 又仍列在
+       computed 值裡 —— 數進去會浮報）。由 ResizeObserver 追蹤，並在徽章展開當下補量一次
+       （收合時 display:none 量不到寬度）。
+     · ⚠️ 該行同時回報**示意容器的實際寬度**並註明它比真實頁面窄（線框稿有左側索引欄、
+       又巢在卡片明細裡）—— ⛔ 那個欄數**不是驗收值**。
+  5）可及性
+     · 所有可點元素都是 <button> 或 <a href>（可 Tab 到達）＋ 全站 :focus-visible 外框。
+     · ⚠️ 連帶修掉一個真 bug：UA 預設的 [hidden]{display:none} 會被任何帶 display 的
+       class 蓋掉（本檔 .stbar 是 flex、.two 是 grid）—— 沒有 [hidden]{display:none!important}
+       這一條，el.hidden 會失效、兩個視角會同時畫出來。已補。
+     · 葉列改 role="tablist"/"tab"/"tabpanel" ＋ aria-selected ＋ roving tabindex ＋ 方向鍵。
+     · 所有展開都帶 aria-expanded + aria-controls；Esc 收合並把焦點送回觸發器。
+     · 狀態／視角／斷點／葉切換都經 aria-live="polite" 播報。
+     · 尊重 prefers-reduced-motion。
+  6）「待拍板／偏離表／已知限制」三區明確標為**審稿用，不是產品畫面的一部分**
+     （新增區隔橫幅 ＋ 區塊外框樣式，三個 section 的既有標題與說明文字未動）。
+  7）少一頁不會壞
+     · 渲染路徑不硬編任何頁 id，整份由 WF_PAGES 驅動；**少一頁就是少一節**，
+       側欄索引、頁碼、送審三區都跟著少，其餘頁不受影響。
+     · 逐筆防呆：**非物件**（null／字串／陣列）→ 就地印出「第 N 筆不是一個物件（型別：…）」
+       並繼續畫其餘頁（⛔ **不靜默跳過**）；**無 id** → 退回 `p<N>` 當錨點，照常渲染；
+       **id 重複** → 加序號去重，避免錨點互撞。
+     · 任一頁自己丟例外 → 只有那一頁換成錯誤卡，其餘頁照常畫（⛔ 不以空白版面充數）。
+     · 本輪實測：把 fund 那一頁從資料裡拿掉 → 7 頁 122 區塊全部正常、0 JS 錯誤；
+       另外注入一筆 null ＋ 一筆字串 → 兩張「不是一個物件」提示卡，其餘 7 頁照畫。
+       ⛔ 本組**沒有**動 _wf_bundle.js 或任何 wf_*.js（移除基金站是別組的事）。
+
+  ⚠️ 未複驗事項（CLAUDE.md §-2 規則 6，據實標明）：
+     · 「§00 欄寬推導」的字寬是本組在 Chromium 1194 量的，且量測當下 **Google Fonts
+       沒有載入**（document.fonts 為空），字型落到系統等寬字 —— 真機載入 IBM Plex Mono
+       後寬度會不同，**實作前必須在真機重量一次**。
+     · 「asOf 全部為 null」「本檔渲染路徑無硬編頁 id」為本組單組實測，未經第二組複驗。
+-->
+<style>
+/* ══ 色票 token —— 完整淺色定義在裸 :root ══ */
+:root{
+  --paper:#f6f5f1; --panel:#fffefc; --panel-2:#edece7; --grid:#e5e3dc;
+  --ink:#15293f; --ink-2:#4b5b6d; --ink-3:#7d8b99;
+  --rule:#c6ccd2; --rule-2:#9aa4af;
+  --ochre:#96591f; --ochre-bg:#f6ecdf; --ochre-line:#c08a4e;
+  --sig-green:#1c6f43; --sig-green-bg:#e3f0e9;
+  --sig-amber:#87600a; --sig-amber-bg:#f6efdb;
+  --sig-red:#ae2f2b; --sig-red-bg:#f8e7e5;
+  --sig-grey:#6c7883; --sig-grey-bg:#eae9e4;
+  --focus:#14508f;
+  --review-bg:#eceaf2; --review-line:#6f6790; --review-ink:#4a4270;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  /* 內容優先的最小欄寬（推導見 §00「欄寬怎麼決定的」，⛔ 不是斷點）*/
+  --col-min:308px;      /* 會放金額的卡片：金額＋千分位＋單位不折行 */
+  --col-min-text:260px; /* 純文字面板（兩欄） */
+  --col-min-text-s:210px; /* 純文字面板（三欄） */
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e141b; --panel:#151d26; --panel-2:#1b242f; --grid:#1a242e;
+    --ink:#dbe5ef; --ink-2:#9fb0c1; --ink-3:#73838f;
+    --rule:#2e3b48; --rule-2:#46545f;
+    --ochre:#d59a5e; --ochre-bg:#2a2013; --ochre-line:#8a6234;
+    --sig-green:#57b985; --sig-green-bg:#11241a;
+    --sig-amber:#d3a43c; --sig-amber-bg:#292110;
+    --sig-red:#e8706b; --sig-red-bg:#2b1615;
+    --sig-grey:#8b98a4; --sig-grey-bg:#1b232b;
+    --focus:#8fc0ff;
+    --review-bg:#1d1b28; --review-line:#8b82b4; --review-ink:#c3bbe4;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e141b; --panel:#151d26; --panel-2:#1b242f; --grid:#1a242e;
+  --ink:#dbe5ef; --ink-2:#9fb0c1; --ink-3:#73838f;
+  --rule:#2e3b48; --rule-2:#46545f;
+  --ochre:#d59a5e; --ochre-bg:#2a2013; --ochre-line:#8a6234;
+  --sig-green:#57b985; --sig-green-bg:#11241a;
+  --sig-amber:#d3a43c; --sig-amber-bg:#292110;
+  --sig-red:#e8706b; --sig-red-bg:#2b1615;
+  --sig-grey:#8b98a4; --sig-grey-bg:#1b232b;
+  --focus:#8fc0ff;
+  --review-bg:#1d1b28; --review-line:#8b82b4; --review-ink:#c3bbe4;
+}
+*{box-sizing:border-box}
+/* ⚠️ 必要：UA 預設的 [hidden]{display:none} 會被任何帶 display 的 class 蓋掉
+   （本檔的 .stbar 是 flex、.two 是 grid）—— 沒有這一條，el.hidden 會失效 */
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14.5px;line-height:1.72;-webkit-font-smoothing:antialiased}
+.page{max-width:1240px;margin:0 auto;padding-inline:16px;padding-block:0 72px;overflow-x:clip}
+/* 頁面本體在任何寬度都不得橫向捲動；要捲的只有各自包起來的表格容器 */
+html,body{overflow-x:hidden}
+h1,h2,h3,h4{margin:0;text-wrap:balance;letter-spacing:-.01em}
+p{margin:8px 0}
+ul,ol{margin:8px 0;padding-inline-start:20px}
+li{margin:3px 0}
+/* 數值：等寬 ＋ tabular-nums ＋ nowrap（全站鐵律）*/
+.num,kbd{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* 程式路徑要能折行，否則窄螢幕會把頁面撐出橫向捲動 */
+code{font-family:var(--mono);font-size:.88em;background:var(--panel-2);border:1px solid var(--rule);border-radius:2px;padding:0 4px;overflow-wrap:anywhere;word-break:break-word}
+hr{border:0;border-top:1px solid var(--rule);margin:22px 0}
+a{color:var(--ink)}
+
+/* ══ 可及性：焦點一定看得見（全站唯一一條，⛔ 不准個別 outline:none）══ */
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:3px}
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.skip{position:absolute;inset-inline-start:-9999px;top:0;z-index:99;background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:0 0 3px 0}
+.skip:focus{inset-inline-start:0}
+/* 尊重「減少動態效果」 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important}
+}
+
+/* ══ 工具列 ══ */
+.bar{position:sticky;top:0;z-index:40;background:var(--paper);border-bottom:1px solid var(--rule);
+     display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding-block:9px;margin-bottom:4px}
+/* 手機：工具列不 sticky —— ⛔ 不得長期佔用首屏高度（客戶 2026-09-14 回饋第 3 條）*/
+@media (max-width:640px){
+  .bar{position:static;gap:6px 10px;padding-block:7px}
+  .bar .bpnote,.bar .barend{display:none}
+}
+.bar .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.seg{display:flex;border:1px solid var(--rule-2);border-radius:3px;overflow:hidden;background:var(--panel)}
+.seg button{appearance:none;border:0;border-inline-end:1px solid var(--rule);background:transparent;color:var(--ink-2);
+  font-family:var(--sans);font-size:12.5px;font-weight:500;padding:5px 11px;cursor:pointer;white-space:nowrap}
+.seg button:last-child{border-inline-end:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper);font-weight:700}
+.bpnote{font-size:11.5px;color:var(--ink-3);font-family:var(--mono)}
+
+/* ══ header ══ */
+header.hd{padding-block:30px 22px;border-bottom:2px solid var(--ink)}
+@media (max-width:640px){header.hd{padding-block:18px 16px}}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ochre);font-weight:600}
+h1{font-size:clamp(26px,4.4vw,40px);font-weight:900;line-height:1.15;margin-top:8px}
+.sub{color:var(--ink-2);max-width:66ch;margin-top:12px}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px;font-family:var(--mono);font-size:11px}
+.meta span{border:1px solid var(--rule);background:var(--panel);border-radius:999px;padding:3px 10px;color:var(--ink-2)}
+
+/* ══ 版面骨架 ══ */
+.shell{display:grid;grid-template-columns:232px minmax(0,1fr);gap:26px;align-items:start;margin-top:22px}
+@media (max-width:940px){.shell{grid-template-columns:1fr}}
+nav.idx{position:sticky;top:56px;border:1px solid var(--rule);background:var(--panel);padding:12px;border-radius:3px;max-height:calc(100vh - 74px);overflow:auto}
+@media (max-width:940px){nav.idx{position:static;max-height:none}}
+nav.idx .ih{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:11px 0 4px}
+nav.idx .ih:first-child{margin-top:0}
+nav.idx a{display:block;color:var(--ink-2);text-decoration:none;font-size:13px;padding:3px 6px;border-radius:2px;border-inline-start:2px solid transparent}
+nav.idx a:hover{background:var(--panel-2);color:var(--ink)}
+nav.idx a.on{border-inline-start-color:var(--ochre);color:var(--ink);font-weight:700;background:var(--panel-2)}
+main{min-width:0}
+
+section.sec{padding-top:38px;scroll-margin-top:64px}
+@media (max-width:640px){section.sec{padding-top:26px;scroll-margin-top:8px}}
+.snum{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase}
+h2{font-size:clamp(20px,2.6vw,27px);font-weight:800;margin-top:5px;border-bottom:1px solid var(--rule);padding-bottom:8px}
+h3{font-size:16.5px;font-weight:700;margin:26px 0 8px}
+h4{font-size:13.5px;font-weight:700;margin:16px 0 6px;color:var(--ink-2)}
+.lede{color:var(--ink-2);margin-top:10px;max-width:74ch}
+
+/* ══ 線框畫布（藍圖格線）══ */
+.wf{border:1px solid var(--rule-2);background-color:var(--panel);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:22px 22px;padding:13px;margin-top:12px;border-radius:2px}
+@media (max-width:640px){.wf{padding:9px}}
+.wfcap{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:9px}
+.box{border:1px solid var(--rule-2);background:var(--panel);padding:9px 11px;border-radius:2px}
+.box.dash{border-style:dashed}
+.box.flagged{border-style:dashed;border-color:var(--ochre-line)}
+.tiny{font-size:11.5px;color:var(--ink-3)}
+.pan{border:1px solid var(--rule);background:var(--panel);border-radius:3px;padding:12px 14px}
+.pan.ochre{border-color:var(--ochre-line);background:var(--ochre-bg)}
+/* 內容優先：欄數由內容寬度決定，⛔ 不再硬套斷點 */
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--col-min-text)),1fr));gap:12px;margin-top:12px}
+.three{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--col-min-text-s)),1fr));gap:12px;margin-top:12px}
+
+/* ══ 徽章 / 標記 ══ */
+.bdg{display:inline-flex;align-items:center;gap:4px;border-radius:3px;padding:1px 7px;font-size:11.5px;font-weight:600;white-space:nowrap;border:1px solid transparent}
+.bdg.ok{color:var(--sig-green);background:var(--sig-green-bg);border-color:var(--sig-green)}
+.bdg.warn{color:var(--sig-amber);background:var(--sig-amber-bg);border-color:var(--sig-amber)}
+.bdg.bad{color:var(--sig-red);background:var(--sig-red-bg);border-color:var(--sig-red)}
+.bdg.neu{color:var(--sig-grey);background:var(--sig-grey-bg);border-color:var(--rule-2)}
+.bdg.neu.dsh{border-style:dashed}
+.pill{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.05em;
+  border:1px solid var(--ochre-line);color:var(--ochre);background:var(--ochre-bg);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.pill.g{border-color:var(--rule-2);color:var(--ink-3);background:var(--panel-2)}
+.pill.r{border-color:var(--sig-red);color:var(--sig-red);background:var(--sig-red-bg)}
+.flag{color:var(--ochre);font-weight:700}
+.src{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);overflow-wrap:anywhere;word-break:break-word;margin-top:6px}
+
+/* ══ 註記 ══ */
+.note{border-inline-start:3px solid var(--rule-2);background:var(--panel-2);padding:10px 13px;margin-top:12px;border-radius:0 3px 3px 0;font-size:13.5px}
+.note.star{border-inline-start-color:var(--ochre);background:var(--ochre-bg)}
+.note.star b,.note.star .k{color:var(--ochre)}
+.note.stop{border-inline-start-color:var(--sig-red);background:var(--sig-red-bg)}
+.note.stop b{color:var(--sig-red)}
+
+/* ══ CTA ══ */
+.cta{display:inline-block;border:2px solid var(--ink);background:var(--ink);color:var(--paper);font-weight:700;font-size:13.5px;padding:6px 16px;border-radius:3px}
+.cta.sec{background:transparent;color:var(--ink);border-width:1px}
+.cta.none{background:transparent;color:var(--sig-grey);border:1px dashed var(--rule-2);font-weight:500}
+.ctarow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+.deep{display:inline-block;border:1px solid var(--rule-2);border-radius:3px;padding:2px 9px;font-size:12px;color:var(--ink-2);white-space:nowrap}
+/* 主 CTA 收成一行（首屏瘦身）*/
+.ctapan{border:1px solid var(--rule);background:var(--panel);border-radius:3px;padding:8px 12px;margin-top:10px;
+  display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.ctapan .ctalbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+
+/* ══ 次級展開（說明類，預設收起）══ */
+.mini{appearance:none;background:transparent;border:1px solid var(--rule);color:var(--ink-2);
+  font-family:var(--sans);font-size:11.5px;font-weight:600;cursor:pointer;border-radius:999px;
+  padding:4px 10px;min-height:32px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.mini:hover{background:var(--panel-2);color:var(--ink);border-color:var(--rule-2)}
+.minibody{border:1px dashed var(--rule);background:var(--panel-2);border-radius:3px;padding:9px 12px;margin-top:7px;font-size:12.5px;color:var(--ink-2)}
+
+/* ══ 葉列（tablist）══ */
+.leafbar{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--rule-2);border-radius:3px 3px 0 0;overflow:hidden;background:var(--panel-2);margin-top:14px}
+.leafbar button{appearance:none;border:0;border-inline-end:1px solid var(--rule-2);background:transparent;color:var(--ink-2);
+  font-family:var(--sans);font-size:13px;font-weight:600;padding:8px 14px;cursor:pointer;white-space:nowrap;
+  border-bottom:3px solid transparent;flex:1 1 auto;min-width:120px}
+.leafbar button:last-child{border-inline-end:0}
+.leafbar button[aria-selected="true"]{background:var(--panel);color:var(--ink);border-bottom-color:var(--ink)}
+.leafbar button:focus-visible{outline-offset:-3px}
+.leafnote{border:1px solid var(--rule-2);border-top:0;background:var(--panel);padding:7px 11px;font-size:12px;color:var(--ink-3);border-radius:0 0 3px 3px;
+  display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+
+/* ══ 層（可折疊）══ */
+.lyrhd{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:12px}
+.lyrbtn{appearance:none;flex:1 1 auto;min-width:0;text-align:start;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--panel-2);color:var(--ink-2);border-radius:3px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;padding:8px 10px;min-height:40px;
+  display:flex;align-items:center;gap:8px}
+.lyrbtn:hover{color:var(--ink);border-color:var(--ink-3)}
+.lyrbtn .car{font-size:12px;color:var(--ink-3);flex:0 0 auto}
+.lyrbtn .lyt{min-width:0;overflow-wrap:anywhere}
+.lyrbtn[aria-expanded="true"]{background:var(--panel);border-color:var(--ink-3)}
+/* 收起時壓成一行（首屏瘦身）；⛔ 文案未改 —— 完整字串在 title/aria-label，展開即完整換行顯示 */
+.lyrbtn[aria-expanded="false"] .lyt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lyrbtn[aria-expanded="false"]{min-height:34px;padding:5px 9px}
+.lyrbtn .tail{color:var(--ink-3);flex:0 0 auto;font-size:10px}
+
+/* ══ 區塊卡 ══ */
+.blk{border:1px solid var(--rule-2);background:var(--panel);border-radius:2px;padding:9px 11px;margin-top:9px}
+.blk.flagged{border-color:var(--ochre-line);border-style:dashed}
+.blk .bt{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--rule);padding-bottom:5px;margin-bottom:6px}
+.blk .bt .t{font-weight:700;font-size:14.5px;min-width:0;flex:1 1 140px}
+.blk .bt .tk{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);display:block;font-weight:400}
+.blk .asof{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:2px;overflow-wrap:anywhere}
+.blk .asof.unknown{color:var(--sig-amber)}
+.flagrow{display:flex;flex-wrap:wrap;gap:5px;margin:2px 0 6px}
+.flagrow .pill{white-space:normal;text-align:start;border-radius:8px}
+
+/* 狀態＋時點合併徽章（卡片預設只剩這一顆）*/
+.badgerow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sbadge{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;
+  border:1px solid var(--rule-2);background:var(--panel-2);border-radius:999px;
+  padding:5px 12px;min-height:36px;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--ink-2)}
+.sbadge:hover{border-color:var(--ink-3);color:var(--ink)}
+.sbadge .glyph{font-size:13px}
+.sbadge .when{font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--ink-3);white-space:nowrap}
+.sbadge .when.unknown{color:var(--sig-amber)}
+.sbadge .car{font-size:11px;color:var(--ink-3)}
+.sbadge.tone-ok{border-color:var(--sig-green);background:var(--sig-green-bg);color:var(--sig-green)}
+.sbadge.tone-warn{border-color:var(--sig-amber);background:var(--sig-amber-bg);color:var(--sig-amber)}
+.sbadge.tone-bad{border-color:var(--sig-red);background:var(--sig-red-bg);color:var(--sig-red)}
+.sbadge.tone-neu{border-color:var(--rule-2);background:var(--sig-grey-bg);color:var(--sig-grey)}
+.sbadge.tone-neu.dsh{border-style:dashed}
+.markpill{display:inline-flex;align-items:center;gap:3px;border:1px dashed var(--ochre-line);color:var(--ochre);
+  background:var(--ochre-bg);border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+.detail{border:1px solid var(--rule);border-inline-start:3px solid var(--rule-2);background:var(--panel-2);
+  border-radius:0 3px 3px 0;padding:9px 11px;margin-top:8px}
+.detail .dh{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+
+/* 欄數示意 —— 內容優先 */
+.colsdemo{display:grid;gap:7px;margin:8px 0 2px;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--col-min)),1fr))}
+.colsdemo .cd{border:1px dashed var(--rule-2);background:var(--panel-2);border-radius:2px;min-height:46px;
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
+.colscap{font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
+.colsreal{font-family:var(--mono);font-size:10.5px;color:var(--ochre);margin-top:4px}
+
+/* 狀態切換 */
+.stbar{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 7px}
+.stbar button{appearance:none;border:1px solid var(--rule);background:var(--panel);color:var(--ink-2);
+  font-family:var(--sans);font-size:11.5px;font-weight:500;padding:4px 10px;min-height:32px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.stbar button:hover{border-color:var(--rule-2);color:var(--ink)}
+.stbar button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper);font-weight:700}
+.stbar button.nil{border-style:dashed;color:var(--ink-3)}
+.stbar button.nil[aria-pressed="true"]{background:var(--sig-grey);border-color:var(--sig-grey);color:var(--paper)}
+.stpanel{border:1px dashed var(--rule-2);background:var(--panel);padding:10px 12px;border-radius:2px;font-size:13.5px}
+.stpanel .sh{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
+.stpanel .sname{font-weight:700;font-size:13px}
+.stpanel .body{color:var(--ink-2)}
+.stpanel .body.nil{color:var(--sig-grey);font-style:normal}
+.stpanel .xtra{font-size:11.5px;color:var(--ink-3);border-top:1px dotted var(--rule);margin-top:8px;padding-top:6px}
+.stpanel .sub1{border-top:1px solid var(--rule);margin-top:10px;padding-top:8px}
+.stpanel .sub1:first-child{border-top:0;margin-top:0;padding-top:0}
+.grpwrap .gnote{font-size:11.5px;color:var(--ink-3);margin-bottom:7px}
+
+/* 展開佐證 */
+.ev{margin-top:9px}
+.evbtn{appearance:none;background:transparent;border:1px solid transparent;color:var(--ink-2);
+  font-family:var(--sans);font-size:12.5px;font-weight:600;cursor:pointer;padding:7px 9px;min-height:44px;min-width:44px;
+  display:inline-flex;align-items:center;border-radius:3px;flex:0 0 auto}
+.evbtn:hover{background:var(--panel-2);color:var(--ink);border-color:var(--rule)}
+.evbody{border:1px solid var(--rule);border-inline-start:3px solid var(--ink-3);background:var(--panel-2);
+  padding:10px 13px;margin-top:6px;border-radius:0 3px 3px 0;font-size:13px;color:var(--ink-2)}
+.evbody .eh{font-weight:700;margin-bottom:4px;color:var(--ink)}
+
+/* 待拍板／偏離卡 */
+.star{border:1px solid var(--ochre-line);background:var(--panel);border-radius:3px;padding:12px 14px;margin-top:10px}
+.star .sid{font-family:var(--mono);font-weight:600;font-size:12px;color:var(--ochre)}
+.star .q{font-weight:700;margin-top:3px}
+.star dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:9px 0 0;font-size:13px}
+.star dt{font-family:var(--mono);font-size:11px;color:var(--ink-3);white-space:nowrap;padding-top:3px}
+.star dd{margin:0;color:var(--ink-2);min-width:0}
+.star dd.rec{color:var(--ink)}
+@media (max-width:560px){.star dl{grid-template-columns:1fr}.star dt{padding-top:7px}}
+
+/* 限制清單 */
+.lim{border:1px solid var(--rule);background:var(--panel);border-radius:3px;padding:10px 12px;margin-top:8px;
+  display:flex;flex-wrap:wrap;gap:5px 10px;align-items:baseline}
+.lim.unverified{border-inline-start:3px solid var(--ochre)}
+.lim .lt{flex:1 1 300px;min-width:0}
+.lim .lb{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);overflow-wrap:anywhere}
+
+/* ══ 審稿用區（⛔ 不是產品畫面）══ */
+.reviewband{margin-top:56px;border:2px dashed var(--review-line);background:var(--review-bg);color:var(--review-ink);
+  border-radius:4px;padding:14px 16px}
+.reviewband .rbh{font-weight:900;font-size:clamp(15px,2.2vw,19px);letter-spacing:-.01em}
+.reviewband .rbt{font-size:13px;margin-top:6px;color:var(--review-ink)}
+.reviewband .rbk{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--review-line)}
+section.sec.review{border-inline-start:2px dashed var(--review-line);padding-inline-start:13px;padding-top:26px}
+section.sec.review h2{border-bottom-color:var(--review-line)}
+section.sec.review .snum{color:var(--review-line)}
+.rtag{display:inline-block;border:1px solid var(--review-line);color:var(--review-ink);background:var(--review-bg);
+  border-radius:999px;padding:1px 9px;font-family:var(--mono);font-size:10.5px;font-weight:600;white-space:nowrap;margin-inline-start:6px}
+
+/* ══ 手機密度（≤640px）—— 客戶 2026-09-14：狀態列／時點列／分頁列不得吃掉首屏 ══
+   ⛔ 這一段只壓間距與字級，沒有隱藏或刪掉任何一句文案 */
+@media (max-width:640px){
+  section.sec{padding-top:12px}
+  .snum{font-size:9.5px;line-height:1.35}
+  h2{padding-bottom:4px;font-size:19px}
+  .lede{margin-top:5px}
+  .ctapan{margin-top:7px;padding:5px 10px;gap:5px 10px}
+  .leafbar{margin-top:8px}
+  .leafbar button{padding:5px 10px;font-size:12.5px;min-width:96px}
+  .leafnote{border:0;background:none;padding:4px 0;border-radius:0}
+  .lyrbtn{font-size:10px;line-height:1.45;min-height:32px;padding:4px 9px;gap:6px}
+  .blk{padding:6px 9px}
+  .blk .bt{padding-bottom:4px;margin-bottom:5px;gap:2px 8px}
+  .blk .bt .t{font-size:13.5px;line-height:1.5}
+  .sbadge{min-height:30px;padding:3px 10px;font-size:11.5px}
+  .mini{min-height:28px;padding:2px 9px;font-size:11px}
+  .leafnote{padding:2px 0}
+  .lyrhd{margin-top:8px}
+  .wf{padding:6px;margin-top:6px}
+  .blk{margin-top:6px}
+}
+.empty{border:1px dashed var(--rule-2);background:var(--panel);color:var(--sig-grey);
+  padding:22px 16px;border-radius:3px;margin-top:12px;text-align:center;font-size:13.5px}
+.empty b{color:var(--ink-2)}
+
+footer.ft{margin-top:44px;border-top:2px solid var(--ink);padding-top:16px;color:var(--ink-3);font-size:12.5px}
+.legend-sw{display:inline-block;width:34px;height:14px;vertical-align:-2px;border-radius:2px;margin-inline-end:6px}
+.tw{overflow-x:auto;margin-top:12px;border:1px solid var(--rule);border-radius:3px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:460px}
+th,td{border-bottom:1px solid var(--rule);padding:7px 10px;text-align:start;vertical-align:top}
+thead th{background:var(--panel-2);font-weight:700;font-size:12px;color:var(--ink-2);white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td.n,th.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:end}
+
+/* ══════════════════════════════════════════════════════════════════════
+   第二輪（2026-09-14）新增 —— 徽章視覺層級／模式切換／狀態總覽圖
+   ⛔ 以下全部是新增選擇器，沒有刪除或改寫任何一條既有規則
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 四種密度：依 layers[].n 掛在 .blk 上（客戶第二輪「每張卡長一樣」那一條）── */
+.blk.t1{padding:15px 17px;margin-top:15px;border-width:2px}
+.blk.t1 .bt{padding-bottom:9px;margin-bottom:11px}
+.blk.t1 .bt .t{font-size:17.5px;line-height:1.5}
+.blk.t2{padding:10px 12px;margin-top:10px}
+.blk.t3{padding:6px 9px;margin-top:6px}
+.blk.t3 .bt{padding-bottom:4px;margin-bottom:4px;gap:2px 8px}
+.blk.t3 .bt .t{font-size:13px;line-height:1.5}
+.blk.t4{padding:5px 9px;margin-top:5px;border-style:dashed}
+.blk.t4 .bt{padding-bottom:3px;margin-bottom:3px;border-bottom-style:dotted}
+.blk.t4 .bt .t{font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.blk.t4 .evbtn{font-size:11.5px}
+
+/* ── 徽章四級 —— ⛔ 卡面只剩人話：符號與時點一律收進展開明細 ── */
+.sbadge .bl{font-weight:inherit}
+.sbadge .bmore{font-size:10.5px;font-weight:500;color:var(--ink-3);letter-spacing:.02em}
+.sbadge.tone-ok .bmore,.sbadge.tone-warn .bmore,.sbadge.tone-bad .bmore{color:inherit;opacity:.72}
+.bnum{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11px;font-weight:700;
+  border:1px solid currentColor;border-radius:999px;padding:0 7px;margin-inline-start:3px;white-space:nowrap}
+.sbadge.b1{font-size:14.5px;font-weight:700;padding:10px 22px;min-height:46px;border-width:2px;letter-spacing:.02em}
+.sbadge.b1 .bmore{font-size:11.5px}
+.sbadge.b2{font-size:12.5px;padding:5px 13px;min-height:36px}
+.sbadge.b3{font-size:11px;padding:2px 10px;min-height:28px;border-radius:3px}
+.sbadge.b4{font-size:10.5px;padding:2px 5px;min-height:26px;border:0;background:transparent;border-radius:2px;
+  text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.sbadge.b4 .bmore{font-size:10px}
+.sbadge.demo{cursor:default;pointer-events:none}
+
+/* ── 第三層表格型：不給徽章，狀態由「表頭狀態列」自己承載 ── */
+.tstat{display:flex;flex-wrap:wrap;align-items:center;gap:4px 9px;margin:2px 0 5px;padding:3px 9px;
+  border:1px solid var(--rule);border-inline-start:3px solid var(--rule-2);
+  background:var(--panel-2);border-radius:2px}
+.tstat .tsk{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.tstat .tsv{font-size:11.5px;font-weight:700;color:var(--ink-2);min-width:0;overflow-wrap:anywhere}
+.tstat.tone-ok{border-inline-start-color:var(--sig-green)}   .tstat.tone-ok .tsv{color:var(--sig-green)}
+.tstat.tone-warn{border-inline-start-color:var(--sig-amber)} .tstat.tone-warn .tsv{color:var(--sig-amber)}
+.tstat.tone-bad{border-inline-start-color:var(--sig-red)}    .tstat.tone-bad .tsv{color:var(--sig-red)}
+.tstat.tone-neu{border-inline-start-color:var(--rule-2)}     .tstat.tone-neu .tsv{color:var(--sig-grey)}
+.tstat.dsh{border-inline-start-style:dashed}
+.tsbtn{appearance:none;margin-inline-start:auto;border:1px solid var(--rule-2);background:var(--panel);
+  color:var(--ink-2);font-family:var(--sans);font-size:11px;font-weight:600;border-radius:999px;
+  padding:2px 11px;min-height:28px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
+.tsbtn:hover{color:var(--ink);border-color:var(--ink-3)}
+
+/* ── 展開明細的第一行：這張卡現在能不能信 ── */
+.trust{border:1px solid var(--rule);border-inline-start:4px solid var(--rule-2);background:var(--panel);
+  border-radius:0 3px 3px 0;padding:8px 11px;margin-bottom:9px;font-size:13.5px;color:var(--ink)}
+.trust .tl{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);margin-bottom:3px}
+.trust.tone-ok{border-inline-start-color:var(--sig-green)}
+.trust.tone-warn{border-inline-start-color:var(--sig-amber)}
+.trust.tone-bad{border-inline-start-color:var(--sig-red)}
+.trust.tone-neu{border-inline-start-color:var(--rule-2)}
+.trust.dsh{border-inline-start-style:dashed}
+
+/* ── 產品畫面模式：治理標記不畫（⛔ 不是刪除，切回審稿模式就全部回來）── */
+body[data-mode="product"] .blk.flagged{border-color:var(--rule-2);border-style:solid}
+body[data-mode="product"] .blk.t4.flagged{border-style:dashed}
+.modenote{font-size:11.5px;color:var(--ink-3)}
+
+/* ── 狀態總覽圖 ── */
+.atlas{display:grid;gap:10px;margin-top:12px;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--col-min-text)),1fr))}
+.acard{border:1px solid var(--rule-2);background:var(--panel);border-radius:3px;padding:10px 12px;min-width:0}
+.acard .ahd{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--rule);padding-bottom:5px;margin-bottom:7px}
+.acard .ahd .an{font-weight:700;font-size:13px;min-width:0;flex:1 1 120px}
+.acard .ahd .ae{font-size:11px;color:var(--ink-3);white-space:nowrap}
+.acard .abody{border:1px dashed var(--rule);background:var(--panel-2);border-radius:2px;
+  padding:7px 9px;margin-top:7px;font-size:12px;color:var(--ink-2);overflow-wrap:anywhere}
+.acard .alab{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.skel{height:10px;border-radius:3px;background:var(--grid);margin:6px 0}
+.skel.big{height:26px}
+.skel.w90{width:90%}.skel.w70{width:70%}.skel.w45{width:45%}
+.pmock{border:1px solid var(--rule-2);background:var(--panel);border-radius:3px;padding:9px 10px;min-width:0}
+.pmock .pmh{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;justify-content:space-between;margin-bottom:7px}
+.pmock .pmt{font-weight:700;font-size:13px}
+.pmock .pmbar{border:1px solid var(--rule);background:var(--panel-2);border-radius:2px;padding:3px 8px;
+  font-family:var(--mono);font-size:10px;color:var(--ink-3);margin-bottom:7px;overflow-wrap:anywhere}
+.pmock .pmrow{display:grid;gap:6px;grid-template-columns:repeat(auto-fit,minmax(min(100%,84px),1fr))}
+.pmock .pmc{border:1px dashed var(--rule-2);background:var(--panel-2);border-radius:2px;padding:6px 7px;
+  min-height:56px;font-size:10.5px;color:var(--ink-3);overflow-wrap:anywhere}
+.pmock .pmc.ok{border-style:solid;border-color:var(--sig-green);color:var(--sig-green);background:var(--sig-green-bg)}
+.pmock .pmc.bad{border-style:solid;border-color:var(--sig-red);color:var(--sig-red);background:var(--sig-red-bg)}
+.pmock .pmfull{border:1px solid var(--sig-red);background:var(--sig-red-bg);color:var(--sig-red);
+  border-radius:2px;padding:10px;font-size:12px;overflow-wrap:anywhere}
+.pmock .pmnote{font-size:11.5px;color:var(--ink-3);margin-top:7px}
+.newtag{display:inline-block;border:1px dashed var(--ochre-line);color:var(--ochre);background:var(--ochre-bg);
+  border-radius:999px;padding:1px 9px;font-size:10.5px;font-weight:700;white-space:nowrap}
+/* 圖示表 */
+.glyphs{display:grid;gap:4px 12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));margin-top:8px}
+.glyphs div{font-size:12.5px;color:var(--ink-2);overflow-wrap:anywhere}
+.glyphs b.g{font-size:14px;color:var(--ink);margin-inline-end:5px}
+
+@media (max-width:640px){
+  .blk.t1{padding:11px 12px;margin-top:10px}
+  .blk.t1 .bt .t{font-size:15.5px}
+  .sbadge.b1{font-size:13px;padding:7px 16px;min-height:40px}
+  .acard{padding:8px 10px}
+  .pmock{padding:7px 8px}
+}
+</style>
+
+<div class="page">
+
+<a class="skip" href="#main">跳到主要內容</a>
+<p class="sr" id="liveRegion" aria-live="polite" role="status"></p>
+
+<div class="bar">
+  <span class="lbl">視角</span>
+  <div class="seg" id="viewseg" role="group" aria-label="呈現情況的視角切換">
+    <button type="button" data-view="user" aria-pressed="true">使用者視角</button>
+    <button type="button" data-view="eng" aria-pressed="false">工程視角</button>
+  </div>
+  <span class="lbl">模式</span>
+  <div class="seg" id="modeseg" role="group" aria-label="產品畫面與審稿模式切換">
+    <button type="button" data-mode="product" aria-pressed="false">產品畫面</button>
+    <button type="button" data-mode="review" aria-pressed="true">審稿模式</button>
+  </div>
+  <span class="lbl">斷點</span>
+  <div class="seg" id="bpseg" role="group" aria-label="斷點切換">
+    <button type="button" id="bp-mobile" data-bp="mobile" aria-pressed="false">手機 ≤640</button>
+    <button type="button" id="bp-tablet" data-bp="tablet" aria-pressed="false">平板 641–880</button>
+    <button type="button" id="bp-desktop" data-bp="desktop" aria-pressed="true">桌機 ≥881</button>
+  </div>
+  <span class="bpnote" id="bpnote">3 欄 · 表格維持表格</span>
+  <span class="lbl barend" style="margin-inline-start:auto">低保真線框 · 送客戶拍板</span>
+</div>
+
+<header class="hd">
+  <div class="eyebrow">Wireframe · 方框與標籤 · 非視覺稿</div>
+  <h1>台股／ETF 戰情室 ＋ 基金儀表板<br>資訊架構 v2 線框稿</h1>
+  <p class="sub">這是<b>低保真線框稿</b> —— 只表達「哪裡有什麼、在什麼情況下顯示什麼字」，
+  ⛔ 不是視覺稿、⛔ 不是前端代碼、⛔ 沒有寫進任何 repo。
+  凡規格標為 <b class="flag">★ 待拍板</b>、<b class="flag">⚑ 與 2026-09-05 核准線框不同</b>、<b>⚠️ 單組未複驗</b> 的，
+  本稿<b>照原樣標出來</b>，⛔ 不美化成已定案。</p>
+  <div class="meta" id="metabar">
+    <span>來源 S1-3B_FULL_DRAFT_SPEC.md</span>
+    <span>輔 S1-4_STATE_MATRIX v2</span>
+    <span>輔 DRAFT_GAP_AUDIT</span>
+    <span>輔 S1-6_COMPLIANCE_COPY_GUIDE</span>
+  </div>
+</header>
+
+<div class="shell">
+<nav class="idx" id="idx" aria-label="頁面索引"></nav>
+
+<main id="main">
+
+<section class="sec" id="s-legend">
+  <div class="snum">00 · 讀法</div>
+  <h2>圖例與標記法</h2>
+  <p class="lede">這一區決定你後面每一格該信到什麼程度。標記沿用規格 <code>Part 0.2</code> 的三欄表，本稿一字不改。</p>
+
+  <div class="two">
+    <div class="pan">
+      <h4>證據等級</h4>
+      <ul>
+        <li><b>無標記 ＋ <code>檔名:行號</code></b> ＝ 實測事實，可當前提</li>
+        <li><b>🧠</b> ＝ 本組判斷，⛔ 不得當已查證事實引用</li>
+        <li><b>⚠️ 單組</b> ＝ 未複驗的全稱句，只能當<b>待驗事項</b></li>
+        <li><b class="flag">★</b> ＝ 待客戶拍板，<b>拍板前不得動工</b></li>
+        <li><b class="flag">⚑</b> ＝ 與核准線框不同，逐項列在「偏離表」</li>
+      </ul>
+    </div>
+    <div class="pan">
+      <h4>線框語彙（本稿的畫法約定）</h4>
+      <ul>
+        <li><span class="legend-sw" style="border:1px solid var(--rule-2);background:var(--panel)"></span><b>細實線框</b>＝一般區塊</li>
+        <li><span class="legend-sw" style="border:1px dashed var(--rule-2);background:var(--panel)"></span><b>虛線框</b>＝內容佔位／示意</li>
+        <li><span class="legend-sw" style="border:1px dashed var(--ochre-line);background:var(--ochre-bg)"></span><b class="flag">暖赭色</b>＝<b>這裡待拍板／有偏離</b>（專用標記色，<b>不是裝飾</b>）</li>
+        <li><b>語意色（綠／琥珀／紅／灰）只出現在狀態徽章</b> —— ⛔ 不當版面裝飾色。這是資料誠實的一部分</li>
+        <li>數值一律 <span class="num">等寬字型 · tabular-nums · nowrap</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>圖示表 —— 這份稿子上會出現的每一個符號（第二輪補齊）</h3>
+  <p class="lede">客戶第二輪點名：<b>上一輪引入的 <b class="g">◧</b> 沒有列進圖示表</b>。這次一次補齊，
+  <b>並且立一條規矩：往後新引入任何符號或顏色，就地補進本表</b>。
+  ⚠️ <b>本表由本組逐一整理，單組列舉、未經第二組複驗</b>（<code>CLAUDE.md §-2</code> 規則 6）——
+  若你在畫面上看到<b>不在本表內</b>的符號，那就是漏了，請直接圈回來。</p>
+  <div class="pan">
+    <h4>狀態符號（只出現在展開明細與本區圖例，⛔ 第二輪起不再出現在卡面徽章上）</h4>
+    <div class="glyphs">
+      <div><b class="g">🟢</b>① 正常 —— 值是真的</div>
+      <div><b class="g">🟢*</b>⑥ 部分 · 涵蓋不全 —— 值是真的，但沒蓋全</div>
+      <div><b class="g">⏳</b>② 載入中 —— 正在去取</div>
+      <div><b class="g">⬜</b>③ 未載入 —— 還沒有人去取</div>
+      <div><b class="g">▨</b>④ 查無資料／⑤ 缺漏／⑨ 結構上不適用</div>
+      <div><b class="g">🟠</b>⑦ 部分 · 門檻失準 —— 數字在，判決語留白</div>
+      <div><b class="g">⛔</b>⑧ 未接線 —— 刻意沒接，等多久都不會有</div>
+      <div><b class="g">🔴</b>⑩ 錯誤 —— <b>全站只有這一種准用紅色</b></div>
+      <div><b class="g">◧</b><b>使用者視角</b>「資料不完整」這一類的圖示
+        —— <b>🆕 上一輪引入、本輪才補列（客戶點名的那一個）</b>。
+        它<b>不是</b>底層的第十一種狀態，是 ④⑤⑨⑥⑦ <b>五種的分組代號</b>。</div>
+    </div>
+    <h4>治理／閱讀符號</h4>
+    <div class="glyphs">
+      <div><b class="g">★</b>待客戶拍板（<b>拍板前不得動工</b>）—— <b>產品畫面模式下不畫</b></div>
+      <div><b class="g">⚑</b>與 2026-09-05 核准線框不同 —— <b>產品畫面模式下不畫</b></div>
+      <div><b class="g">⚠︎</b>這一格有疑義（例：來源沒給資料歸屬日）</div>
+      <div><b class="g">⚠️</b>注意／未複驗（散在說明文字裡）</div>
+      <div><b class="g">⛔</b>禁止（用在條文前綴時是「不准這樣做」，與狀態 ⑧ 同形不同用）</div>
+      <div><b class="g">▸</b>就地展開（點了往下長出來，不離開本頁）</div>
+      <div><b class="g">▾</b>已展開，再點一次收合</div>
+      <div><b class="g">↗</b>Deep Link —— <b>會離開本頁</b>（與 ▸ 刻意長得不一樣）</div>
+      <div><b class="g">⭐</b>規格自己標的重點（資料檔原文帶的）</div>
+      <div><b class="g">🆕</b>本輪新增、或規格自己標的新增項</div>
+      <div><b class="g">📌</b>就地補註（原文不動，旁邊加說明）</div>
+    </div>
+    <h4>顏色</h4>
+    <div class="glyphs">
+      <div><span class="legend-sw" style="background:var(--sig-green-bg);border:1px solid var(--sig-green)"></span><b>綠</b>＝正常</div>
+      <div><span class="legend-sw" style="background:var(--sig-amber-bg);border:1px solid var(--sig-amber)"></span><b>琥珀</b>＝門檻已失準</div>
+      <div><span class="legend-sw" style="background:var(--sig-red-bg);border:1px solid var(--sig-red)"></span><b>紅</b>＝只有「錯誤」准用</div>
+      <div><span class="legend-sw" style="background:var(--sig-grey-bg);border:1px solid var(--rule-2)"></span><b>灰</b>＝沒有值的那幾種（載入中／未載入／無資料／未接線）</div>
+      <div><span class="legend-sw" style="background:var(--ochre-bg);border:1px dashed var(--ochre-line)"></span><b>暖赭</b>＝待拍板／偏離的<b>專用標記色</b>（不是裝飾）</div>
+      <div><span class="legend-sw" style="background:var(--review-bg);border:1px dashed var(--review-line)"></span><b>紫</b>＝<b>審稿用、不是產品畫面</b>（送審三區與區隔橫幅）</div>
+    </div>
+  </div>
+
+  <h3>卡片怎麼讀：一顆徽章 ＋ 點開才有明細</h3>
+  <p class="lede">客戶 2026-09-14 回饋：<b>「每張卡都塞 facts 列、狀態列、時點列，首屏會變得非常吵。」</b>
+  本稿因此把<b>狀態列與時點列合併成一顆徽章</b>放在卡片上，<b>點它才展開</b>狀態明細、完整資料時點揭露句、
+  待拍板／偏離標記、欄數示意與出處。<b>一個字都沒有被刪掉，只是改成點開才看</b>。</p>
+  <ul>
+    <li><b>卡片上永遠看得到的</b>：區塊名稱、標題列最右的〔展開佐證 ▸〕、一顆狀態徽章；
+        若本區塊有待拍板／偏離標記，徽章旁再加一顆 <span class="markpill">★⚑ 有標記</span>。</li>
+    <li><b>點徽章才出現的</b>：<b>區塊 key</b>、完整標記文字、<b>資料時點揭露句（原句一字不差）</b>、
+        狀態切換、欄數示意、出處。</li>
+    <li><b>區塊 key</b>（例 <code>today.verdict</code>）是<b>工程識別碼</b>，使用者視角不占卡面；
+        切到<b>工程視角</b>它會回到標題底下，而且<b>不論哪個視角，點開徽章都看得到它</b> ——
+        ⛔ <b>收起來不等於資訊消失</b>。</li>
+    <li><b>〔展開佐證 ▸〕維持原規格</b>：固定在標題列最右側、點擊區 ≥ <span class="num">44×44</span>、就地展開。
+        它<b>與徽章是兩顆不同的按鈕</b>，⛔ 沒有被合併。</li>
+  </ul>
+
+  <div class="note star">
+    <b>📌 2026-09-14 第二輪客戶回饋造成的變更 —— 上面四點<b>原文一字未改</b>，但其中三件事已經不一樣了，
+    在這裡就地補註（⛔ 有意識的變更，不是漏刪）</b>：
+    <ol>
+      <li><b>徽章上不再有符號與時點。</b> 客戶原話：「徽章寫『正常 · 時點未提供 △ · ▶』，
+        <b>這三個符號的意義，新手不知道</b>」→ 現在卡面<b>只剩人話</b>（正常／載入中／還沒載入／資料不完整／出錯了／這項還沒做），
+        <b>符號（狀態圖示、⚠︎、▸）與時點細節全部收進展開明細</b>。
+        ⚠️ <b>連帶讓上面第二段的「① 卡片上的徽章直接寫 時點未提供 ⚠︎」這句話過期了</b> ——
+        <b>那個事實沒有消失，只是退了一層</b>：現在它在<b>展開明細的第一行</b>
+        （「這張卡現在能不能信」那一句會明說「<b>不知道它是哪一天的 —— 來源沒有給資料歸屬日</b>」），
+        下一行仍是原句「資料時點：來源未提供資料日期 ⚠︎」，一字不差。
+        ⚠️ <b>本組據實揭露這個取捨</b>：卡面掃一眼<b>看不出</b>時點缺失了，要點開才知道 ——
+        這是客戶第二輪的明示要求（符號＝新手看不懂），⛔ 不是本組自行決定把事實藏起來。</li>
+      <li><b>「★⚑ 有標記」只在審稿模式出現。</b> 客戶原話：「這對使用者是<b>雜訊</b> ——
+        『有標記』是什麼？誰標的？為什麼我要在意？」→ 工具列新增<b>產品畫面／審稿模式</b>切換，
+        <b>產品畫面模式下卡片上不畫任何治理標記</b>（含卡片的暖赭色虛線外框與明細裡的標記原文）。
+        ⛔ <b>標記沒有被刪除</b>：它們仍在 DOM 裡、仍由資料檔驅動，切回<b>審稿模式</b>全部原樣回來。</li>
+      <li><b>不是每張卡都有徽章了。</b> 第三層的<b>表格型區塊改由「表頭狀態列」自己承載狀態</b>
+        （<span class="tsk">狀態</span> ＋ 人話 ＋〔明細〕），⛔ 不再掛一顆膠囊 ——
+        依據是客戶第二輪「<b>第三層操作區：密度最高，徽章可省略，改由表格本身承載狀態</b>」。
+        四種密度長什麼樣，見下一節<b>狀態總覽圖</b>的 C 區並排。</li>
+    </ol>
+    <p><b>客戶問「新開一個切換、還是併進既有的視角切換？你判斷哪個乾淨」——
+    本組判斷：<b>分成兩個開關</b>。</b> 理由：
+    <b>「視角」管的是「狀態講得多細」</b>（分組六類 vs 底層十種逐項），
+    <b>「模式」管的是「治理標記畫不畫」</b>（★⚑／待拍板／偏離／已知限制）——
+    <b>這是兩件互相獨立的事</b>。併成一顆開關，就做不到「<b>我要看產品長相，但仍想用工程視角核對狀態</b>」
+    這個實際上最常用的組合；而且併了之後，光看開關名字<b>猜不到它同時動了兩件事</b>。
+    ⚠️ 代價據實講：<b>工具列多一組按鈕</b>（手機上會換行）—— 本組認為比「一顆開關偷偷做兩件事」好。</p>
+    <p class="tiny"><b>產品畫面模式到底拿掉什麼</b>：只拿掉<b>治理標記</b>
+    （卡片上的 <span class="markpill">★⚑ 有標記</span>、明細裡的標記原文、卡片的暖赭色虛線外框、
+    以及下方三個<b>審稿用</b>區與它們的索引）。
+    <b>圖例、狀態總覽圖、頁面線框本身照樣都在</b> —— 它們是讀法與畫面，不是治理標記。
+    ⛔ <b>一個字都沒有被刪除</b>：全部只是 <code>hidden</code>，切回審稿模式原樣回來。</p>
+    <p class="tiny"><b>⚠️ 一個據實要講的例外</b>：<b>本節（圖例）裡為了告訴你「這顆標記長什麼樣」，
+    仍然會印出 <span class="markpill">★⚑ 有標記</span> 的樣子</b> —— 上面那一句和「卡片上永遠看得到的」
+    那一條各一處，<b>共 2 處</b>（實測，量測日 2026-09-14）。
+    <b>那是圖例上的舉例，不是任何一張卡片上的標記</b>；切到產品畫面模式後，
+    <b>122 張卡片上一顆都不會出現</b>（實測同日）。⛔ 本組沒有把這 2 處也藏掉 ——
+    藏掉會讓這兩句話中間開一個洞，變成看不懂的殘句。</p>
+  </div>
+
+  <h3>規格祈使句只講一次（本輪修正 · 客戶 2026-09-14 點名）</h3>
+  <p class="lede">客戶原話：<b>「『資料時點：來源未提供資料日期 ⚠︎ …（下略規則本文，見下方橙框）』重複數十次 ——
+  這是規格，不是 UI。」</b> 說得對：那一串是<b>講給寫程式的人聽的祈使句</b>，
+  不是講給看畫面的人聽的事實，⛔ 不該跟著每一張卡片複印。<b>本輪把它抽出來，整頁只講這一次。</b></p>
+  <div class="pan ochre">
+    <h4>資料時點的全站規則（適用本稿每一個區塊，⛔ 以下不再逐格重印）</h4>
+    <p><b>⛔ 不得猜、⛔ 不得填今天、⛔ 不得留白</b></p>
+    <p class="tiny">上面這一行的字，與本輪修正前逐格印的那一串<b>一字不差</b> —— 搬家，不是改寫。</p>
+  </div>
+  <div class="note stop">
+    <b>⚠️ 被拿掉的是祈使句，⛔ 不是事實。</b>
+    「<b>這一格的來源沒有給資料歸屬日</b>」這個<b>事實</b>一定看得見，而且看得到兩層：
+    <b>① 卡片上的徽章</b>直接寫 <span class="num">時點未提供 ⚠︎</span>（最短的事實）；
+    <b>② 點開徽章</b>，明細第一行仍是原句「<b>資料時點：來源未提供資料日期 ⚠︎</b>」。
+    ⛔ 沒有任何一格變成留白，也沒有任何一格被填上今天的日期（憲法 §1：拿不到就說拿不到）。
+  </div>
+  <div class="note">
+    <b>本輪實測（量測日 2026-09-14）</b>：現行資料 <span class="num">7</span> 頁
+    <span class="num">122</span> 個區塊的 <code>asOf</code> <b>全部是 <code>null</code></b>
+    —— 所以客戶看到的才會是同一句話重複上百次。⚠️ <b>根因在取數層拿不到「資料歸屬日」，不在畫面</b>；
+    畫面這一層只能誠實說「沒有」，<b>⛔ 補不出那個日期</b>。
+    <b>要真的顯示時點，得由上游把 as_of 帶出來</b> —— 那是資料層的工作，本稿照實標著。
+  </div>
+  <div class="note">
+    <b>同一個修法套用在其餘四處逐格重印的規格句上（客戶的判準：這句話是講給看畫面的人聽的，
+    還是講給寫程式的人聽的？後者 → 不上卡片）</b>。四處都<b>只是換地方，⛔ 沒有刪字</b>：
+    <ol>
+      <li><b>操作提示</b>：原本每一格印「（再點一次徽章收合 · Esc 也可以）」→ 只講這一次 ——
+        <b>徽章可以再點一次收合，鍵盤按 Esc 也可以，焦點會回到徽章上。</b></li>
+      <li><b>佐證面板標頭</b>：原本每一格印「▸ 展開佐證<b>（第四層 · 就地展開，上下內容往下推）</b>」→
+        括號內的規格描述只講這一次：<b>第四層 · 就地展開，上下內容往下推</b>；卡片上只留「▸ 展開佐證」。</li>
+      <li><b>欄數示意的解釋句</b>：原本每一格印一長段「為什麼這個欄數比實際產品少」→
+        卡片上只留量到的數字（<span class="num">實際排出來：N 欄（示意容器 Wpx ⚠︎）</span>），
+        解釋在這裡講一次：<b>本稿有左側索引欄、欄數示意又巢在卡片明細裡，容器比真實頁面窄，
+        所以示意排出來的欄數會比實際產品少 —— ⛔ 那個數字不是驗收值。</b></li>
+      <li><b>每一種呈現情況的「實作規則」</b>（例：「⚠️ 實作前置：需 <code>st.empty()</code> 佔位機制」）→
+        那是<b>寫給實作者看的</b>，且十種的全文在上面「資料狀態呈現情況」的<b>工程視角</b>已逐項列過一次；
+        <b>使用者視角的卡片不再重印</b>，切到<b>工程視角</b>照樣逐格看得到。⛔ 一個字都沒有刪。</li>
+    </ol>
+  </div>
+
+  <h3>資料狀態呈現情況 —— 逐項列名</h3>
+  <p class="lede">🔴 <b>總管裁定</b>：⛔ <b>不得用數字當標題來概括呈現情況</b>，一律明列每一種；
+  且「<b>未載入</b>」與「<b>未接線</b>」<b>各有獨立且不同的說法</b>（客戶 2026-09-14 拍板第 1 條）。
+  底層 SSOT：<code>shared/ui_state.py</code> <code>UI_STATE_META</code> —— <b>畫面一律從這裡取色與名稱，禁止各處自己配色</b>。</p>
+  <p class="lede"><b>本輪新增的是一層「怎麼呈現」的分組，⛔ 不是把底層改掉</b>：
+  資料檔的十個 key 一格未動；預設的<b>使用者視角</b>只把其中<b>意思相同的幾種收在同一個說法底下</b>，
+  展開後<b>照樣逐項列出每一個底層情況的規格原文</b>。想一次看見全部十種 → 右上角切到<b>工程視角</b>。
+  ⛔ <b>「未接線」沒有被併進「資料不完整」</b>，它有自己的說法：<b>這項還沒做</b> ——
+  ⛔ 不准寫成「暫無資料」「暫時沒有」，「暫」字是假的，<b>它是刻意沒做，等多久都不會有</b>。</p>
+  <div id="legendStates" class="two"></div>
+
+  <div class="note stop">
+    <b>三個灰的，說法必須互不相同</b> ——
+    <b>③ 未載入 ⬜</b>「還沒有人去取這份資料」→ <b>where 指向按鈕</b>；
+    <b>⑧ 未接線 ⛔</b>「這盞燈沒有在運作（決策端刻意未接線）」→ <b>where 明說沒有出口</b>，重按一百次也一樣；
+    <b>⑨ 結構上不適用 ▨</b>「這個概念對這個標的天生不存在」→ <b>明說不用做任何事，這不是壞掉</b>。
+  </div>
+  <div class="note star">
+    <b>上面這三個灰的，在使用者視角裡是這樣落位的</b>：<b>③ 未載入</b> 自己一類（<b>還沒載入</b>）、
+    <b>⑧ 未接線</b> 自己一類（<b>這項還沒做</b>）、<b>⑨ 結構上不適用</b> 收在 <b>資料不完整</b> 這一類底下 ——
+    但<b>點開之後 ⑨ 的原句「這個概念對這個標的天生不存在／不用做任何事，這不是壞掉」照樣逐字出現</b>，
+    ⛔ 分組只發生在徽章那一行，⛔ 沒有任何一種情況的說法被改寫或蓋掉。
+    ⚠️ <b>本段落是本輪新增的呈現決定（客戶 2026-09-14 指定的映射），不是規格原文推導</b> —— 據實標明。
+  </div>
+  <div class="note">
+    <b>本稿的兩條渲染紀律</b>：
+    ① 某一種呈現情況在該區塊<b>規格未列</b>時，畫面顯示「<b>本區塊不會進入這個情況</b>」——
+    <b>不隱藏、也不替它發明內容</b>；
+    ② 處於 <b>⛔ 未接線／🟠 門檻已失準／🔴 錯誤</b> 的元件，依顆粒度兩級制<b>就地另帶一顆〔展開佐證 ▸〕</b>，只講「這一個」為什麼。
+  </div>
+  <div class="note">
+    <b>第四層「展開佐證」觸發器規格</b>：次級<b>文字</b>按鈕，固定在<b>區塊標題列最右側</b>，點擊區 ≥ <span class="num">44×44</span> CSS px。
+    ⛔ <b>卡片本身不可點</b>、整列 <code>&lt;tr&gt;</code> 不可點、標題不可點、hover 不自動展開。
+    <b>Deep Link 必須長得不一樣</b>：Deep Link 帶 <span class="deep">↗</span>（離開本頁），展開佐證帶 <b>▸</b>（就地展開）。
+  </div>
+
+  <h3>首屏放得下什麼（本輪實測，不是估的）</h3>
+  <p class="lede">客戶 2026-09-14 回饋：<b>「狀態列、時點列、分頁列不得吃掉首屏。」</b>
+  本稿因此把<b>狀態列與時點列收進徽章</b>、把<b>葉外全域 chrome 這一層預設收起</b>
+  （⚠️ 但<b>只要那一層裝著主 CTA 就保持展開</b> —— 主 CTA 必須在預設葉可見，⛔ 不因瘦身被折疊掉）、
+  把主 CTA 的說明字與葉說明改成點開才看。以下是量測結果：</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>視窗</th><th>主 CTA 在首屏</th><th class="n">第一層結論</th><th class="n">核心大卡片（完整可見）</th><th>備註</th></tr></thead>
+      <tbody>
+        <tr><td>375 × 667（iPhone SE，最小的那一種）</td><td>✅</td><td class="n">✅ 1 張</td><td class="n">2 張</td>
+            <td>第 3 張「④ 今日關鍵橫幅」<b>看得到開頭、被摺線切到</b></td></tr>
+        <tr><td>375 × 812（iPhone X 以後）</td><td>✅</td><td class="n">✅ 1 張</td><td class="n">3 張</td>
+            <td><b>第一層 ＋ 3 格核心卡片完整看完</b></td></tr>
+        <tr><td>390 × 844（iPhone 14）</td><td>✅</td><td class="n">✅ 1 張</td><td class="n">3 張</td>
+            <td>同上，另有第 4 張露出開頭</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note stop">
+    ⚠️ <b>據實說清楚兩件事，⛔ 不美化成「全部做到了」</b>：
+    ① <b>在 375×667 這個最小尺寸上，只放得下第一層 ＋ 2 張核心卡片</b>，第 3 張被摺線切到 ——
+    剩下的高度被<b>規格本身要求的東西</b>吃掉：〔展開佐證 ▸〕的點擊區<b>規定不得小於
+    <span class="num">44×44</span></b>，光這一條就讓每張卡的標題列至少 <span class="num">44px</span>。
+    要在 667px 裡再多塞一張，只能動到那條規格 —— <b>那是規格問題，不是排版問題，本組不自行放寬</b>。
+    ② 上表是<b>量測值</b>（Chromium 1194，量測日 2026-09-14，量的是「🚦 今天」這一頁），
+    ⚠️ <b>量測當下 Google Fonts 沒有載入</b>，中文落到系統字型；
+    <b>真機字型不同，行高會變，數字會跑</b> —— ⛔ 不得當驗收值，實作前請在真機重量。
+    ⚠️ 表內<b>刻意不寫像素座標</b>：卡片的絕對位置會隨各頁資料（標題長短、一句話幾行）而變，
+    寫死就是製造一個隔天就過期的數字。<b>表內的「幾張」在本組量過的兩份資料上都一樣</b>
+    （7 頁版與 8 頁版：<span class="num">2 / 3 / 3</span>），座標則不同。
+  </div>
+
+  <h3>欄寬怎麼決定的（本輪改成內容優先，不再只看固定斷點）</h3>
+  <p class="lede">客戶 2026-09-14 回饋：<b>平板 641–880px 每欄 197–276px 太窄，金額會折行。</b>
+  本稿因此把所有卡片網格改成 <code>repeat(auto-fit, minmax(min(100%, 最小欄寬), 1fr))</code> ——
+  <b>欄數由內容寬度決定</b>，容器不夠寬就自己收成該收的欄數，⛔ 不再硬套斷點數字。
+  上方「斷點」切換仍在，它現在改成<b>只控制規格宣告的欄數（即要畫幾格）</b>，
+  <b>真正排出來幾欄由瀏覽器依最小欄寬決定</b>，每個欄數示意下方都會即時回報實際欄數。</p>
+  <div class="pan">
+    <h4>最小欄寬 <span class="num">308px</span> 是怎麼算出來的（逐步）</h4>
+    <ol>
+      <li><b>取卡內最長的數值字串</b>：<span class="num">+1,234,567（+12.3%）</span> ——
+          這不是本組發明的，它是本稿資料 <code>global.breakpoints</code> 既有的那個例子。</li>
+      <li><b>量它在大字級的寬度</b>：字級 <span class="num">24px</span>、等寬 ＋ <code>tabular-nums</code> ＋ <code>nowrap</code>
+          → 量到 <span class="num">279.2px</span>。</li>
+      <li><b>加卡片左右內距</b>：<span class="num">13 × 2 = 26px</span>。</li>
+      <li><b>加卡片左右框線</b>：<span class="num">1 × 2 = 2px</span>。</li>
+      <li><b>合計</b> <span class="num">279.2 + 26 + 2 = 307.2</span> → 進位取 <b><span class="num">308px</span></b>，
+          寫成 token <code>--col-min</code>。純文字面板另用較小的
+          <code>--col-min-text: 260px</code> / <code>--col-min-text-s: 210px</code>（不放金額，不受這條底線拘束）。</li>
+    </ol>
+    <p class="tiny"><b>換算成看得到的行為</b>：手機 375px（扣掉頁面左右各 16px）→ <b>1 欄</b>；
+      平板 880px → <b>2 欄</b>（⛔ 不會再擠成 3 欄 × 197–276px）；桌機 1240px → <b>3 欄</b>。
+      規格宣告 <code>cols</code> 為 3 時最多就是 3 格，<b>auto-fit 只會少不會多</b>，
+      所以「⛔ 上限 3，不加到 4」這條規格沒有被本次改動放寬。</p>
+    <div class="note stop">
+      ⚠️ <b>這五步裡只有第 2 步是量出來的，而且量測環境有一個必須講清楚的限制</b>：
+      量測用 Chromium 1194、視窗 1200px，<b>量測當下 Google Fonts 沒有載入</b>
+      （<code>document.fonts</code> 為空集合），字型落到系統等寬字，<b>不是 IBM Plex Mono</b>。
+      ⇒ <b>真機載入 webfont 之後這個數字會變</b>，<span class="num">308px</span> 只能當<b>本稿的線框參數</b>，
+      ⛔ <b>不得直接當成實作驗收值</b>；實作前請在真機重量一次。
+      對照本稿資料既有的兩條硬底線（<span class="num">197px</span> 水平溢出／<span class="num">274px</span> 金額折行），
+      本組量到的 <span class="num">308px</span> 比它們<b>更保守</b>；⚠️ 那兩條也是手算、非實機量（資料自標），
+      <b>本組沒有複驗過那兩個數字</b>。
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-atlas">
+  <div class="snum">00b · 狀態總覽</div>
+  <h2>狀態總覽圖 —— 把各種狀態的卡片外觀並排</h2>
+  <p class="lede">客戶 2026-09-14 第二輪：<b>「9 種狀態寫得很細，但看不到：載入中的骨架長什麼樣／整頁錯誤長什麼樣／
+  部分失敗長什麼樣／離線長什麼樣。低保真可以不畫，但<b>至少要有一張狀態總覽圖，把各種狀態的卡片外觀並排</b>，
+  否則高保真會各做各的。」</b> 這一節就是那張圖。
+  <b>它是讀法，不是產品畫面的一部分</b> —— 但它<b>在兩種模式下都看得見</b>，因為它是給人查的圖例，不是治理標記。</p>
+
+  <h3>A｜每一種呈現情況，卡片長什麼樣</h3>
+  <p class="lede">下面每一格都是<b>同一張卡在不同情況下的樣子</b>：標題列一樣、右邊的〔展開佐證 ▸〕一樣，
+  <b>差在卡面徽章的字</b>與<b>大字數值區怎麼處理</b>。
+  「卡面長相」那一行<b>逐字取自本頁 §00「資料狀態呈現情況」每一種的規格原文第一句</b>（切在第一個句號，⛔ 未改寫、未補字），
+  完整原文仍在上面那一節，<b>這裡不重印第二次</b>。</p>
+  <div id="atlasCards" class="atlas"></div>
+
+  <h3>B｜頁面層級：冷啟動／載入中骨架／部分失敗／整頁錯誤／離線</h3>
+  <p class="lede">上面 A 區是<b>一張卡</b>的樣子；這一區是<b>整頁</b>的樣子。
+  ⚠️ 這五格是<b>示意方塊</b>，<b>不是</b>從資料檔算出來的 —— 資料檔沒有「整頁長怎樣」這種欄位。</p>
+  <div class="atlas">
+    <div class="pmock">
+      <div class="pmh"><span class="pmt">冷啟動（第一次打開，什麼都沒點）</span>
+        <span class="bdg neu">⬜ 尚未載入</span></div>
+      <div class="pmbar">頁首狀態列 ＋ 資料時點列：照畫（⛔ 不因為沒載入就消失）</div>
+      <div class="pmrow">
+        <div class="pmc">卡片 1<br>大字區<b>留空</b></div>
+        <div class="pmc">卡片 2<br>大字區<b>留空</b></div>
+        <div class="pmc">卡片 3<br>大字區<b>留空</b></div>
+      </div>
+      <div class="pmnote"><b>灰色說明</b>指向那顆按鈕（<b>出口一定要畫得出來</b>）。
+        ⛔ 不准用紅色 —— <b>還沒載入不是故障</b>。</div>
+    </div>
+
+    <div class="pmock">
+      <div class="pmh"><span class="pmt">載入中（骨架）</span>
+        <span class="bdg neu">⏳ 載入中</span></div>
+      <div class="pmbar">頁首狀態列 ＋ 資料時點列：照畫</div>
+      <div class="pmrow">
+        <div class="pmc"><div class="skel big"></div><div class="skel w70"></div></div>
+        <div class="pmc"><div class="skel big"></div><div class="skel w90"></div></div>
+        <div class="pmc"><div class="skel big"></div><div class="skel w45"></div></div>
+      </div>
+      <div class="pmnote"><b>固定高骨架</b>（資料檔原文用的詞就是「固定高骨架」）——
+        高度先佔住，資料回來時<b>版面不跳</b>；⛔ <b>不留上一輪的殘值</b>。</div>
+    </div>
+
+    <div class="pmock">
+      <div class="pmh"><span class="pmt">部分失敗（一格壞，其餘照常）</span>
+        <span class="bdg bad">🔴 取得失敗</span></div>
+      <div class="pmbar">頁首狀態列 ＋ 資料時點列：照畫</div>
+      <div class="pmrow">
+        <div class="pmc ok">卡片 1<br>🟢 值是真的</div>
+        <div class="pmc bad">卡片 2<br>🔴 這一格失敗</div>
+        <div class="pmc ok">卡片 3<br>🟢 值是真的</div>
+      </div>
+      <div class="pmnote">⛔ <b>一格壞掉不把整頁染紅</b>，也⛔ 不把好的那兩格一起藏起來。
+        紅色<b>只圈在壞掉的那一格上</b>，並在該格就地講「為什麼、能不能重試」。</div>
+    </div>
+
+    <div class="pmock">
+      <div class="pmh"><span class="pmt">整頁錯誤（分頁隔離）</span>
+        <span class="bdg bad">🔴 取得失敗</span></div>
+      <div class="pmbar">頁首狀態列：照畫（<b>它不屬於壞掉的那一頁</b>）</div>
+      <div class="pmfull"><b>🔴 這一頁沒有畫出來。</b><br>
+        例外訊息就地印出來 ＋ 可回報；⛔ <b>不以空白版面充數</b>。</div>
+      <div class="pmnote"><b>只有這一頁換成錯誤卡，其餘分頁照常</b>（本稿的渲染器就是這樣做的，
+        見 §00 下方「少一頁不會壞」的實測）。</div>
+    </div>
+
+    <div class="pmock" id="pm-offline">
+      <div class="pmh"><span class="pmt">離線（裝置連不上網）</span>
+        <span class="newtag">🆕 本輪新增的提案 · 不是既有規格</span></div>
+      <div class="pmbar">頁首狀態列：照畫</div>
+      <div class="pmfull"><b>🔴 連不上網路。</b><br>
+        每一格仍是 <b>🔴 出錯了</b>（拿不到就是拿不到），<b>但頁級那句話不一樣</b>：<br>
+        <b>「你的裝置連不上網 —— 網路回來以前，重試一百次也一樣。」</b></div>
+      <div class="pmnote">⚠️ <b>這一格是本組提案，客戶尚未拍板</b>；判定理由見下方橙框。</div>
+    </div>
+  </div>
+
+  <div class="note star" data-review-only>
+    <b>★ 待客戶拍板 —— 「離線」要不要獨立成一種？（本輪提案，⛔ 不是既有規格）</b>
+    <p><b>先講事實（實測，量測日 2026-09-14）</b>：本稿資料檔（<code>_wf_bundle.js</code>）裡
+    <b>沒有任何一種呈現情況叫「離線」</b>；十種底層狀態是 live／loading／idle／empty／missing／
+    na／partial／degraded／unwired／error。
+    ⚠️ 據實補一句：字串「離線」在資料檔裡<b>出現過 2 次，但講的是別的意思</b>
+    （「門檻校準是排程的<b>離線工作</b>」＝ 批次作業，不是網路斷線）。
+    ⚠️ <b>這是本組單次 grep 的結果，未經第二組複驗</b>（<code>CLAUDE.md §-2</code> 規則 6）。</p>
+    <p><b>總管推薦：不另立第十一種資料狀態；但要給它一個自己的「頁級版面」。</b></p>
+    <dl class="glyphs" style="display:block">
+      <div><b>① 為什麼不另立一種狀態</b>：對<b>單一一格</b>而言，離線與來源掛掉<b>結果完全一樣</b> ——
+        拿不到值。多一種狀態就要多一套色、多一套文案、多一條判斷，
+        而畫面上那一格<b>該說的話沒有變</b>（§1：拿不到就說拿不到）。</div>
+      <div><b>② 為什麼仍要一個自己的頁級版面</b>：<b>why 與 where 不一樣</b>。
+        「整頁錯誤」＝<b>來源那邊</b>出問題（可回報、稍後再試可能就好了）；
+        「離線」＝<b>你的裝置沒有網路</b>（<b>重試一百次也一樣</b>，直到網路回來）。
+        把離線寫成「來源掛了」是<b>錯誤歸因</b> —— 對照 §1「錯誤的數字比沒有數字更危險」，
+        <b>錯誤的原因同樣會害人做錯事</b>（去查一個根本沒壞的來源）。</div>
+      <div><b>③ 反方的理由（併進「出錯了」就好，不必畫第五格）</b>：瀏覽器的
+        <code>navigator.onLine</code> <b>只能證明「沒連上區域網路」，不能證明「連得到我們的來源」</b>，
+        所以這個判斷<b>本身就可能判錯</b>；判錯時顯示「你沒網路」會變成<b>另一個錯誤歸因</b>。
+        <b>這個風險是真的</b>，本組沒有辦法在線框稿這一層解掉它。</div>
+      <div><b>④ 不決定的後果</b>：高保真會<b>各做各的</b> —— 有人把離線畫成整頁紅、
+        有人畫成空白、有人乾脆不處理。客戶第二輪要這張總覽圖，要的就是防這件事。</div>
+    </dl>
+    <p class="tiny"><b>⚠️ 這一條沒有進「待客戶拍板清單」那一節</b> —— 那一節的內容來自各頁資料組的
+    <code>window.WF_DECISIONS</code>，<b>本組不改資料檔</b>，所以就地登記在這裡。</p>
+  </div>
+
+  <h3>C｜四種密度並排（同一種狀態，不同層級長得不一樣）</h3>
+  <p class="lede">客戶第二輪：<b>「幾乎每個 block 都是：區塊名 → 展開佐證 → 徽章。高保真照這節奏做，
+  整頁會變成一排排一模一樣的膠囊。」</b> 下面是<b>同一個狀態</b>在四個層級的樣子 ——
+  <b>由 <code>layers[].n</code> 決定，不是逐塊手選的</b>。</p>
+  <div id="atlasTiers"></div>
+</section>
+
+<div id="pages"></div>
+
+<div class="reviewband" id="reviewband">
+  <div class="rbk">⬇ 以下三區：審稿用 · Review only</div>
+  <div class="rbh">下面三區<b>不是產品畫面的一部分</b> —— 它們是給你（客戶）拍板用的內部文件</div>
+  <p class="rbt">
+    <b>「待客戶拍板清單」「與核准線框的偏離」「本稿的已知限制」</b>三區，是<b>這份線框稿自己的送審附件</b>，
+    ⛔ <b>不會出現在做出來的戰情室畫面上</b>、⛔ 不是任何一頁的區塊、⛔ 不佔任何使用者的首屏。
+    它們放在這裡，是因為客戶要在同一個地方看完「畫面長怎樣」與「有哪幾件事等你決定」。
+    <b>上面每一個 <span class="rtag">線框</span> 段落才是畫面；下面每一個 <span class="rtag">審稿用</span> 段落都是文件。</b>
+  </p>
+</div>
+
+<section class="sec review" id="stars">
+  <div class="snum">送審 · A<span class="rtag">審稿用 · 非產品畫面</span></div>
+  <h2>待客戶拍板清單 <span class="pill" id="starsCount">—</span></h2>
+  <p class="lede">依 <code>CLAUDE.md §-1.5.D §03-2</code> 請示規範：<b>每一條都必須附總管推薦方案與具體原因，⛔ 不得只丟選項</b>。
+  <b class="flag">★ 拍板前不得動工。</b></p>
+  <div id="starsBody"></div>
+</section>
+
+<section class="sec review" id="devi">
+  <div class="snum">送審 · B<span class="rtag">審稿用 · 非產品畫面</span></div>
+  <h2>與 2026-09-05 核准線框的偏離 <span class="pill" id="deviCount">—</span></h2>
+  <p class="lede">客戶母法：凡偏離核准線框處，<b>必須逐項標示「這裡與核准線框不同 ＋ 為什麼 ＋ 我的建議」</b>，⛔ 不得默默改掉。</p>
+  <div id="deviBody"></div>
+</section>
+
+<section class="sec review" id="limits">
+  <div class="snum">送審 · C<span class="rtag">審稿用 · 非產品畫面</span></div>
+  <h2>本稿的已知限制 <span class="pill" id="limitsCount">—</span></h2>
+  <p class="lede">⚠️ 以下全部只能當<b>待驗事項</b>（<code>CLAUDE.md §-2</code> 規則 6）——
+  <b>⛔ 不得作為後續動作的前提，⛔ 不得寫進 commit message／PR 描述當成已完成的事實。</b>
+  <b>這一節不是免責宣告，是待辦清單。</b></p>
+  <div id="limitsBody"></div>
+</section>
+
+<footer class="ft">
+  <b>⚠️ 台股AI戰情室 v3.0 · 僅供學術研究，非投資建議，盈虧自負</b><br>
+  本頁為低保真線框稿，⛔ 非視覺稿、⛔ 非前端代碼、⛔ 未寫進任何 repo。
+  內容來自 <code>S1-3B_FULL_DRAFT_SPEC.md</code> 與各頁規格組的資料；本稿<b>沒有跑過任何一個實際畫面</b>。
+</footer>
+
+</main>
+</div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   戰情室線框稿 — 渲染器（外殼）
+   各頁組只提供資料：window.WF_PAGES / WF_DECISIONS / WF_DEVIATIONS / WF_LIMITS
+   資料檔接在下面這四行之後、檔尾的 boot() 之前皆可；boot 走 DOMContentLoaded。
+
+   ⚠️ 本檔只改「怎麼呈現」：資料檔的 states 十個 key 一格未動，
+      渲染器另加一層 VIEW_GROUPS 分組（見下）。⛔ 不得在這裡改寫任何一句資料文案。
+   ═══════════════════════════════════════════════════════════════════════ */
+window.WF_PAGES = [];
+window.WF_DECISIONS = [];
+window.WF_DEVIATIONS = [];
+window.WF_LIMITS = [];
+
+(function () {
+  'use strict';
+
+  /* ── 呈現情況：逐項列名（⛔ 全站不得以數字概括）─────────────────────
+     底層 SSOT：shared/ui_state.py UI_STATE_META（glyph／中文／色碼）      */
+  var STATES = [
+    { k:'live',     ord:'①', name:'正常',            glyph:'🟢',  card:'運作中',     tone:'ok',
+      hint:'大字數值區：真值，正常文字色。' },
+    { k:'loading',  ord:'②', name:'載入中',          glyph:'⏳',  card:'載入中',     tone:'neu',
+      hint:'大字數值區留空 —— ⛔ 不留上一輪殘值。⚠️ 實作前置：需 st.empty() 佔位機制，否則 Streamlit 阻塞取數期間留在螢幕上的是上一幀。' },
+    { k:'idle',     ord:'③', name:'未載入',          glyph:'⬜',  card:'尚未載入',   tone:'neu',
+      hint:'大字數值區留空。why＝「還沒叫」（不是「叫了沒回」）；where **必須指向那顆按鈕**，而那顆按鈕必須畫得出來。' },
+    { k:'empty',    ord:'④', name:'查無資料',        glyph:'▨',   card:'無資料',     tone:'neu',
+      hint:'大字區留空；`—` ＋ ⚠︎ 放 facts 中繼列。why 走 MISS_NOT_ENOUGH／MISS_NO_VARIATION；where＝「**等時間累積**」（⛔ 不得寫「可以重跑一次」）。' },
+    { k:'missing',  ord:'⑤', name:'缺漏',            glyph:'▨',   card:'無資料',     tone:'neu',
+      hint:'大字區留空；`—` ＋ ⚠︎ 放 facts 中繼列。why 走 MISS_NO_INPUT；where＝**可以再抓一次**。⛔ 沒有 reason 的 `—` 等於把診斷責任丟給使用者。' },
+    { k:'partial',  ord:'⑥', name:'部分 · 涵蓋不全', glyph:'🟢*', card:'運作中',     tone:'ok',
+      hint:'值照給並帶 `*` 上標。⛔ 不得只寫「部分」——**必須列出缺的是哪幾筆**。⚠️ 分子分母須由上游 L3 顯式提供（三個 L0 模型都沒有涵蓋率欄位）。' },
+    { k:'degraded', ord:'⑦', name:'部分 · 門檻失準', glyph:'🟠',  card:'門檻已失準', tone:'warn',
+      hint:'值照給、**判決語留白**：載 band／level 觀測 → 照出；載 pass／fail 判決語 → 留白。文案讀 SSOT DangerSpec.degraded_reason，⛔ 不自己編。' },
+    { k:'unwired',  ord:'⑧', name:'未接線',          glyph:'⛔',  card:'未接線',     tone:'neu dsh',
+      hint:'大字區留空；`N/A`（⛔ 不加 ⚠︎）放 facts。why 讀 SSOT DangerSpec.unwired_reason；where **明說沒有出口** ——「它永遠不會亮，重按一百次也一樣」。' },
+    { k:'na',       ord:'⑨', name:'結構上不適用',    glyph:'▨',   card:'無資料',     tone:'neu',
+      hint:'大字區留空；`N/A`（⛔ 不加 ⚠︎）放 facts。**明說不用做任何事 —— 這不是壞掉**，這是標的的性質。' },
+    { k:'error',    ord:'⑩', name:'錯誤',            glyph:'🔴',  card:'取得失敗',   tone:'bad',
+      hint:'大字區留空。**只有這一種准用紅色。** 抓取失敗 → 可重試；契約漂移 → **重按不會好，程式要修，請回報**（CTA 停用）。' }
+  ];
+  var PER_ELEM = ['degraded','unwired','error'];
+  var PER_ELEM_NOTE = '⚠️ 本情況適用顆粒度兩級制的**逐元件例外**：該元件就地**另帶一顆〔展開佐證 ▸〕**，內容只講「這一個」為什麼 —— 合併展開就看不出是哪一個壞了。';
+
+  /* ── 使用者視角的分組（本輪新增的**呈現層**映射；⛔ 底層十種一格未動）──
+     客戶 2026-09-14 指定：正常／載入中／還沒載入／資料不完整／出錯了，
+     ＋「未接線」自成一類且**不得**寫成「暫無資料／暫時沒有」——
+     「暫」字是假的，未接線是刻意沒做，等多久都不會有（CLAUDE.md §1 Fail Loud）。
+     ⛔ 分組只發生在徽章那一行；展開後仍**逐項列出每一個底層情況的規格原文**。   */
+  var VIEW_GROUPS = [
+    { g:'ok',      label:'正常',       glyph:'🟢',  tone:'tone-ok',      members:['live'],
+      blurb:'資料取到了，畫面上的數字是真的。' },
+    { g:'load',    label:'載入中',     glyph:'⏳',  tone:'tone-neu',     members:['loading'],
+      blurb:'正在去取，還沒回來。' },
+    { g:'idle',    label:'還沒載入',   glyph:'⬜',  tone:'tone-neu',     members:['idle'],
+      blurb:'還沒有人去取這份資料 —— 出口是畫面上那顆按鈕。' },
+    { g:'part',    label:'資料不完整', glyph:'◧',   tone:'tone-neu',     members:['empty','missing','na','partial','degraded'],
+      blurb:'取到的東西不齊、或齊了但判準不能用。**這一類底下有五種不同的情況，點開逐項都在** —— ⛔ 沒有哪一種被改寫或蓋掉。' },
+    { g:'err',     label:'出錯了',     glyph:'🔴',  tone:'tone-bad',     members:['error'],
+      blurb:'去取的過程失敗了。' },
+    { g:'unwired', label:'這項還沒做', glyph:'⛔',  tone:'tone-neu dsh', members:['unwired'],
+      blurb:'這一項**刻意沒有接上去**，畫面上永遠不會有值 —— ⛔ 不是「暫時沒有」，**等多久都不會有**。' }
+  ];
+
+  /* ── 第二輪新增：徽章視覺層級（客戶 2026-09-14「每張卡長一樣，分不出主次」）──
+     四級**完全由 layers[].n 決定**，⛔ 不逐塊手選：
+       n=1 → 第一層結論卡：字級最大、留白最多、**徽章最簡**（只有人話，沒有數字）
+       n=2 → 第二層核心卡：中等密度、**徽章可帶一個數字**（同一類底下列了幾種情況）
+       n=3 → 第三層操作區：密度最高、**表格型區塊不給徽章**，狀態改由「表頭狀態列」承載
+       n=4 → 第四層佐證：**層預設收合**、徽章最小化（去背去框）
+     ⚠️ **n=0 與 n=5 不在客戶指定的四層內**（n=0＝葉外 chrome／頁級常駐；
+        n=5 在三頁的用途各不相同：find 是葉2 板塊地圖、why 是葉3 AI 問答、rebalance 是附錄）。
+        本組的填法：**n=0 比照第三層密度但保留徽章**（那一層本身就是狀態列，拿掉徽章等於拿掉它的本業）、
+        **n=5 比照第二層（中等）**（三種用途取中間值最不會誤導）。
+        ⚠️ **這是本輪新增的呈現決定，不是規格推導** —— 要改只要改下面這張表一行。 */
+  var TIERS = {
+    t1: { cls:'t1', badge:'b1', num:false, allowTable:false,
+          label:'第一層 · 結論（字級最大、留白最多、徽章最簡）' },
+    t2: { cls:'t2', badge:'b2', num:true,  allowTable:false,
+          label:'第二層 · 核心卡（中等密度；同一類底下有多種情況時，徽章帶一個數字）' },
+    t3: { cls:'t3', badge:'b3', num:false, allowTable:true,
+          label:'第三層 · 操作區（密度最高；表格型區塊不給徽章，狀態由表頭狀態列承載）' },
+    t4: { cls:'t4', badge:'b4', num:false, allowTable:false,
+          label:'第四層 · 佐證（層預設收合、徽章最小化）' },
+    t0: { cls:'t3', badge:'b3', num:false, allowTable:false,
+          label:'第○層 · 葉外 chrome（不在客戶指定的四層內 —— 本輪比照第三層密度，但保留徽章）' },
+    t5: { cls:'t2', badge:'b2', num:true,  allowTable:false,
+          label:'第五層／附錄（不在客戶指定的四層內 —— 本輪比照第二層密度）' },
+    tx: { cls:'t2', badge:'b2', num:true,  allowTable:false,
+          label:'層級不明（資料沒給 n）—— 本輪比照第二層密度' }
+  };
+  var TIER_BY_N = { '0':'t0', '1':'t1', '2':'t2', '3':'t3', '4':'t4', '5':'t5' };
+  function tierOf(n) {
+    var k = TIER_BY_N[String(n)];
+    return TIERS[k] || TIERS.tx;
+  }
+
+  /* 表格型區塊的判定 —— ⚠️ **字串比對的啟發式，不是資料契約**：
+     資料檔沒有「這一塊是不是表格」這個欄位，只能從區塊名稱猜。
+     「表單」先剔掉（它是 form 不是 table），再看有沒有下列字。
+     ⚠️ 判錯的後果是**密度長得不一樣**，⛔ 不會少掉任何一句文案或任何一個狀態。 */
+  var TABLEISH = ['表', '清單', '卡片流', 'CSV', '逐檔', '逐列', '卡牆', '燈牆'];
+  function isTableish(name) {
+    var t = String(name == null ? '' : name).replace(/表單/g, '');
+    for (var i = 0; i < TABLEISH.length; i++) { if (t.indexOf(TABLEISH[i]) !== -1) return true; }
+    return false;
+  }
+
+  /* ── 展開明細的第一行：「這張卡現在能不能信」──
+     ⛔ **由該區塊當下的實際狀態推出來**，不是寫死一句樂觀的話：
+     ① 規格根本沒列這一種 → 明說「不會進入這個情況」；
+     ② 有值的那幾種（正常／涵蓋不全／門檻失準）→ 再接一句**時點事實**（有沒有資料歸屬日）。
+     ⚠️ 下面這些句子是**本輪新寫的**（呈現層），⛔ 沒有覆蓋或改寫任何一句規格原文。 */
+  var TRUST_GRP = {
+    ok:      '**可以看**：這一格的數值是真的。',
+    load:    '**還不能看**：正在去取，還沒回來。',
+    idle:    '**還沒有東西可看**：這份資料還沒有人去取。',
+    part:    '**只能部分相信**：取到的東西不齊，或齊了但判準不能用 —— 下面逐項寫明是哪一種。',
+    err:     '**不能信**：這一格取得失敗，畫面上沒有值。',
+    unwired: '**沒有東西可看，而且不會有**：這一項刻意沒有接上去。'
+  };
+  var TRUST_ST = {
+    live:     '**可以看**：這一格的數值是真的。',
+    loading:  '**還不能看**：正在去取，還沒回來。',
+    idle:     '**還沒有東西可看**：這份資料還沒有人去取。',
+    empty:    '**沒有東西可看**：查不到資料 —— 不是壞掉。',
+    missing:  '**沒有東西可看**：這一段資料缺漏。',
+    partial:  '**可以看，但只有一部分**：值是真的，涵蓋不全。',
+    degraded: '**數字可以看，判決不能信**：門檻已失準。',
+    unwired:  '**沒有東西可看，而且不會有**：這一項刻意沒有接上去。',
+    na:       '**本來就不會有**：這個概念對這個標的不存在 —— 不是壞掉。',
+    error:    '**不能信**：這一格取得失敗。'
+  };
+  var TRUST_HAS_VALUE = ['live', 'partial', 'degraded'];
+  var TRUST_NOT_LISTED = '**這張卡不會進入這個情況**：規格沒有列 —— ⛔ 本稿不替它發明內容。';
+
+  var BP = {
+    mobile:  { key:'phone',   label:'手機 ≤640',     note:'1 欄 · 表格轉卡片流 · 數值仍等寬仍右對齊' },
+    tablet:  { key:'tablet',  label:'平板 641–880',  note:'2 欄 · 3 個一列時降 2＋1 · 表格包進橫向捲動容器' },
+    desktop: { key:'desktop', label:'桌機 ≥881',     note:'3 欄 · 表格維持表格 · ⛔ 上限 3，不加到 4' }
+  };
+  var bpNow = 'desktop';
+  var viewMode = 'user';          /* 'user'（預設）｜'eng'（展開全部十種）*/
+  /* 第二輪新增（客戶：「有標記」是內部治理標記，不該出現在產品畫面）——
+     與「視角」**刻意分成兩個開關**，理由寫在 §00 的模式說明：
+       · 視角 管的是「狀態講得多細」（分組 vs 十種逐項）；
+       · 模式 管的是「治理標記畫不畫」（★⚑／待拍板／偏離／已知限制）。
+     兩件事互相獨立：有人要看產品長相但仍想用工程視角核狀態，合併成一顆開關就做不到。
+     ⚠️ 預設是**審稿模式** —— 這份稿子本來就是送審文件，預設藏起送審三區會害客戶找不到。 */
+  var modeNow = 'review';         /* 'review'（預設）｜'product' */
+  var viewSubs = [];              /* 視角切換時要重畫的區塊 */
+
+  /* ── 小工具 ───────────────────────────────────────────────────── */
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function fmt(s) {
+    return esc(s)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+      .replace(/\n/g, '<br>');
+  }
+  function el(tag, cls, html) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  }
+  function slug(s) {
+    return String(s == null ? '' : s).replace(/[^A-Za-z0-9_-]/g, '-');
+  }
+  function stateOf(k) {
+    for (var i = 0; i < STATES.length; i++) { if (STATES[i].k === k) return STATES[i]; }
+    return null;
+  }
+  function groupOf(k) {
+    for (var i = 0; i < VIEW_GROUPS.length; i++) {
+      if (VIEW_GROUPS[i].members.indexOf(k) !== -1) return VIEW_GROUPS[i];
+    }
+    return VIEW_GROUPS[0];
+  }
+  function groupById(g) {
+    for (var i = 0; i < VIEW_GROUPS.length; i++) { if (VIEW_GROUPS[i].g === g) return VIEW_GROUPS[i]; }
+    return VIEW_GROUPS[0];
+  }
+  function hasVal(v) { return (v != null && String(v).trim() !== ''); }
+  function toneCls(t) {
+    return String(t || 'neu').split(/\s+/).map(function (x) {
+      return (x === 'dsh') ? 'dsh' : ('tone-' + x);
+    }).join(' ');
+  }
+  /* 動態內容通知（aria-live="polite"）*/
+  var liveSeq = 0;
+  function announce(msg) {
+    var n = document.getElementById('liveRegion');
+    if (!n) return;
+    liveSeq = (liveSeq + 1) % 2;
+    n.textContent = String(msg) + (liveSeq ? '' : ' ');
+  }
+  /* 展開／收合：aria-expanded ＋ aria-controls ＋ Esc 收合並把焦點送回觸發器 */
+  function wireDisclosure(btn, body, opts) {
+    opts = opts || {};
+    function set(open) {
+      body.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (opts.onToggle) opts.onToggle(open);
+    }
+    btn.setAttribute('aria-controls', body.id);
+    btn.addEventListener('click', function () {
+      var open = body.hidden;
+      set(open);
+      if (opts.say) announce(opts.say(open));
+    });
+    body.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        e.stopPropagation();
+        set(false);
+        btn.focus();               /* 收合後焦點回到觸發器 */
+        if (opts.say) announce(opts.say(false));
+      }
+    });
+    set(!!opts.open);
+    return set;
+  }
+
+  /* ── 圖例：呈現情況（使用者視角分組 ＋ 工程視角逐項列名）───────── */
+  function renderLegendStates() {
+    var host = document.getElementById('legendStates');
+    if (!host) return;
+    host.className = 'lshost';
+    host.innerHTML = '';
+
+    /* 使用者視角：分組，組內逐項列出底層情況的原文名稱 */
+    var uw = el('div', 'two');
+    uw.id = 'lsUser';
+    var ua = el('div', 'pan'), ub = el('div', 'pan');
+    ua.appendChild(el('h4', null, '使用者視角 · 卡片上會看到的說法'));
+    ub.appendChild(el('h4', null, '使用者視角 · 卡片上會看到的說法（續）'));
+    VIEW_GROUPS.forEach(function (G, i) {
+      var inner = G.members.map(function (k) {
+        var st = stateOf(k);
+        return st ? ('<span class="bdg ' + st.tone + '">' + esc(st.glyph) + ' ' + esc(st.card) + '</span> ' +
+                     esc(st.ord) + ' ' + esc(st.name)) : esc(k);
+      }).join('　');
+      var row = el('div', null,
+        '<span class="bdg ' + (G.tone === 'tone-ok' ? 'ok' : G.tone === 'tone-bad' ? 'bad' : G.tone === 'tone-warn' ? 'warn' : (G.tone.indexOf('dsh') !== -1 ? 'neu dsh' : 'neu')) + '">' +
+          esc(G.glyph) + ' ' + esc(G.label) + '</span>' +
+        '<div class="tiny">' + fmt(G.blurb) + '</div>' +
+        '<div class="tiny">底下對應的底層情況（規格原文名稱，⛔ 未改寫）：' + inner + '</div>');
+      row.style.marginTop = '9px';
+      (i < 3 ? ua : ub).appendChild(row);
+    });
+    uw.appendChild(ua); uw.appendChild(ub);
+
+    /* 工程視角：原本的十種，逐項列名，一字不改 */
+    var ew = el('div', 'two');
+    ew.id = 'lsEng';
+    var a = el('div', 'pan'), b = el('div', 'pan');
+    a.appendChild(el('h4', null, '呈現情況（前半）'));
+    b.appendChild(el('h4', null, '呈現情況（後半）'));
+    STATES.forEach(function (st, i) {
+      var row = el('div', null,
+        '<span class="bdg ' + st.tone + '">' + esc(st.glyph) + ' ' + esc(st.card) + '</span> ' +
+        '<b>' + esc(st.ord) + ' ' + esc(st.name) + '</b>' +
+        '<div class="tiny">' + fmt(st.hint) + '</div>');
+      row.style.marginTop = '9px';
+      (i < 5 ? a : b).appendChild(row);
+    });
+    ew.appendChild(a); ew.appendChild(b);
+
+    host.appendChild(uw);
+    host.appendChild(ew);
+    viewSubs.push(function (mode) {
+      uw.hidden = (mode !== 'user');
+      ew.hidden = (mode !== 'eng');
+    });
+  }
+
+  /* ── 側欄索引（由 WF_PAGES 自動產生）─────────────────────────── */
+  function renderNav(pages) {
+    var nav = document.getElementById('idx');
+    if (!nav) return;
+    nav.innerHTML = '';
+    function group(title) { var g = el('div', 'ih', esc(title)); nav.appendChild(g); return g; }
+    function link(href, text) {
+      var a = el('a', null, esc(text));
+      a.href = href;
+      nav.appendChild(a);
+      return a;
+    }
+    group('讀法');
+    link('#s-legend', '圖例與標記法');
+    link('#s-atlas', '狀態總覽圖');
+    group('線框');
+    var ok = pages.filter(function (p) { return !p.__bad; });
+    if (!ok.length) {
+      var d = el('div', 'tiny', '尚未載入頁面資料');
+      d.style.padding = '3px 6px';
+      nav.appendChild(d);
+    } else {
+      pages.forEach(function (p) {
+        if (p.__bad) return;
+        link('#pg-' + slug(p.__pid), p.tab || p.id || '（未命名頁）');
+      });
+    }
+    group('送審').setAttribute('data-review-only', '1');
+    /* ⛔ 既有標題「送審」原字未動；下面這行是本輪**新增**的標示，
+       用來把這三節與上面的產品畫面切開（客戶 2026-09-14 回饋第 6 點）*/
+    var rn = el('div', 'tiny', '審稿用 · 非產品畫面');
+    rn.style.padding = '0 6px 2px';
+    rn.setAttribute('data-review-only', '1');
+    nav.appendChild(rn);
+    /* 第二輪：產品畫面模式下，送審三區連同它們的索引一起不畫（⛔ 沒有刪除）*/
+    [link('#stars', '待拍板清單'),
+     link('#devi', '與核准線框的偏離'),
+     link('#limits', '本稿的已知限制')].forEach(function (a) {
+      a.setAttribute('data-review-only', '1');
+    });
+  }
+
+  /* ── 區塊 ─────────────────────────────────────────────────────── */
+  function renderBlock(blk, pageIdx, blkIdx, tier) {
+    tier = tier || TIERS.tx;
+    var flags = Array.isArray(blk.flags) ? blk.flags : [];
+    /* 第三層 ＋ 名稱像表格 → 不給徽章，狀態由「表頭狀態列」自己承載（客戶第二輪第 4 條）*/
+    var tableish = !!(tier.allowTable && isTableish(blk.name));
+    var node = el('div', 'blk ' + tier.cls + (flags.length ? ' flagged' : ''));
+    node.setAttribute('data-leaf', blk.leaf == null ? '' : String(blk.leaf));
+
+    var sfx = slug(pageIdx + '-' + blkIdx);
+    var evId = 'ev-' + sfx;
+    var dtId = 'dt-' + sfx;
+
+    /* 標題列 ＋ 標題右側的次級文字按鈕（唯一的佐證展開觸發器）*/
+    var bt = el('div', 'bt');
+    var tEl = el('span', 't',
+      esc(blk.name || '（未命名區塊）') +
+      (blk.key ? '<span class="tk">' + esc(blk.key) + '</span>' : ''));
+    bt.appendChild(tEl);
+    var tkEl = tEl.querySelector('.tk');   /* 區塊 key：工程識別碼，使用者視角不占卡面 */
+    var evBtn = el('button', 'evbtn', '展開佐證 ▸');
+    evBtn.type = 'button';
+    bt.appendChild(evBtn);
+    node.appendChild(bt);
+
+    /* ── 卡片上唯一的一顆徽章：狀態 ＋ 極短時點，點它才展開明細 ──
+       客戶 2026-09-14：「每張卡都塞 facts 列、狀態列、時點列，首屏會變得非常吵。」*/
+    var badge = null, ts = null, tsv = null, tsbtn = null, trigger = null;
+    if (tableish) {
+      /* 表格型：狀態寫在「表頭狀態列」上，⛔ 不掛膠囊徽章 */
+      ts = el('div', 'tstat tone-neu');
+      ts.appendChild(el('span', 'tsk', '狀態'));
+      tsv = el('span', 'tsv', '');
+      ts.appendChild(tsv);
+      tsbtn = el('button', 'tsbtn', '明細');
+      tsbtn.type = 'button';
+      ts.appendChild(tsbtn);
+      trigger = tsbtn;
+      node.appendChild(ts);
+    } else {
+      var brow = el('div', 'badgerow');
+      badge = el('button', 'sbadge ' + tier.badge);
+      badge.type = 'button';
+      brow.appendChild(badge);
+      trigger = badge;
+      node.appendChild(brow);
+    }
+    if (flags.length) {
+      var mp = el('span', 'markpill', '★⚑ 有標記');
+      /* ⛔ 原字串一字未改；表格型多接一句限定詞（那裡沒有「左邊的徽章」可點）*/
+      mp.title = '本區塊有待拍板／偏離標記 —— 點左邊的徽章展開可看全部原文' +
+        (tableish ? '（本區塊是表格型：狀態在上面那條表頭狀態列，按〔明細〕展開）' : '');
+      /* 第二輪：治理標記**只在審稿模式畫出來**。⛔ 沒有刪除，只是不畫 */
+      mp.setAttribute('data-review-only', '1');
+      if (tableish) { ts.insertBefore(mp, tsbtn); }
+      else { node.querySelector('.badgerow').appendChild(mp); }
+    }
+
+    /* ── 明細（預設收合）：標記原文 ＋ 資料時點原句 ＋ 狀態切換 ＋ 欄數 ＋ 出處 ── */
+    var detail = el('div', 'detail');
+    detail.id = dtId;
+    detail.hidden = true;
+    /* 第二輪（客戶明示）：**展開明細第一行永遠是「這張卡現在能不能信」一句話**，再放細節。
+       ⛔ 這句話由該區塊**當下的實際狀態**推出來（含「規格根本沒列這一種」），
+       ⛔ 不是寫死一句樂觀的話。切狀態、切視角都會跟著重算。 */
+    var trust = el('div', 'trust tone-neu');
+    trust.appendChild(el('span', 'tl', '這張卡現在能不能信'));
+    var trustTxt = el('div', null, '');
+    trust.appendChild(trustTxt);
+    detail.appendChild(trust);
+    detail.appendChild(el('div', 'dh', '狀態明細 ＋ FACTS'));
+    /* 區塊 key 一律在明細裡看得到 —— 卡面收起來不等於資訊消失 */
+    if (blk.key) { detail.appendChild(el('div', 'src', '區塊 key ' + esc(blk.key))); }
+
+    /* 待拍板／偏離標記（暖赭色專用標記色）—— 原文一字不改 */
+    if (flags.length) {
+      var fr = el('div', 'flagrow');
+      fr.setAttribute('data-review-only', '1');
+      flags.forEach(function (f) { fr.appendChild(el('span', 'pill', esc(f))); });
+      detail.appendChild(fr);
+    }
+
+    /* 資料時點揭露（⛔ 不得猜、⛔ 不得填今天、⛔ 不得留白）*/
+    var shortWhen, whenUnknown;
+    if (blk.asOf) {
+      detail.appendChild(el('div', 'asof', '資料時點：' + esc(blk.asOf)));
+      shortWhen = shortenAsOf(String(blk.asOf));
+      whenUnknown = false;
+    } else {
+      /* ⛔ 只留「事實」：這一格的來源沒有給資料歸屬日。
+         規則本文（⛔ 不得猜／⛔ 不得填今天／⛔ 不得留白）是**講給實作者聽的祈使句**，
+         本輪移到 §00「規格祈使句只講一次」，⛔ 不再每個 block 印一次
+         （客戶 2026-09-14：「這是規格，不是 UI」）。 */
+      detail.appendChild(el('div', 'asof unknown', '資料時點：來源未提供資料日期 ⚠︎'));
+      shortWhen = '時點未提供 ⚠︎';
+      whenUnknown = true;
+    }
+
+    /* 狀態切換 —— 兩套並存：使用者視角分組列 ／ 工程視角十種逐項列 */
+    var panel = el('div', 'stpanel');
+    var states = blk.states || {};
+    var curEng = 'live';
+    var curGrp = 'ok';
+
+    var gbar = el('div', 'stbar');
+    gbar.setAttribute('role', 'group');
+    gbar.setAttribute('aria-label', (blk.name || '區塊') + ' 呈現情況（使用者視角）');
+    var ebar = el('div', 'stbar');
+    ebar.setAttribute('role', 'group');
+    ebar.setAttribute('aria-label', (blk.name || '區塊') + ' 呈現情況（工程視角 · 逐項列名）');
+
+    /* 第二輪（客戶明示）：**卡面只剩人話**。
+       狀態圖示、⚠︎、▸ 這三個符號與「極短時點」全部收進展開明細 ——
+       客戶原話：「這三個符號的意義，新手不知道。」
+       ⛔ 事實沒有被刪掉：時點缺失會出現在明細第一行的信任句與其下的原句裡。 */
+    function setFace(label, tone, num) {
+      var showNum = !!(tier.num && num > 1);
+      var numHtml = showNum ? ('<span class="bnum">' + num + ' 種</span>') : '';
+      var aria = '狀態：' + label +
+        (showNum ? ('，這一類底下本區塊列了 ' + num + ' 種情況') : '') +
+        '。展開可看這張卡能不能信、資料時點與 facts';
+      if (tableish) {
+        ts.className = 'tstat ' + tone;
+        tsv.innerHTML = esc(label) + numHtml;
+        tsbtn.setAttribute('aria-label', aria);
+      } else {
+        badge.className = 'sbadge ' + tier.badge + ' ' + tone;
+        badge.innerHTML = '<span class="bl">' + esc(label) + '</span>' + numHtml +
+          '<span class="bmore">明細</span>';
+        badge.setAttribute('aria-label', aria);
+      }
+      syncMore();
+    }
+    function syncMore() {
+      var open = !detail.hidden;
+      if (tableish) { tsbtn.textContent = open ? '收合' : '明細'; }
+      else {
+        var m = badge.querySelector('.bmore');
+        if (m) m.textContent = open ? '收合' : '明細';
+      }
+    }
+    /* 明細第一行：由當下狀態推出來（⛔ 不是固定文案）*/
+    function setTrust(txt, tone, withWhen) {
+      trust.className = 'trust ' + tone;
+      var t = txt;
+      if (withWhen) {
+        t += whenUnknown
+          ? '　⚠︎ 但**不知道它是哪一天的** —— 來源沒有給資料歸屬日。'
+          : '　資料時點 ' + shortWhen + '。';
+      }
+      trustTxt.innerHTML = fmt(t);
+    }
+
+    function paintEng(k) {
+      var st = stateOf(k);
+      if (!st) return;
+      curEng = k;
+      curGrp = groupOf(k).g;
+      var val = states[st.k];
+      var has = hasVal(val);
+      panel.innerHTML = '';
+      var sh = el('div', 'sh');
+      sh.appendChild(el('span', 'bdg ' + st.tone, esc(st.glyph) + ' ' + esc(st.card)));
+      sh.appendChild(el('span', 'sname', esc(st.ord) + ' ' + esc(st.name)));
+      panel.appendChild(sh);
+      panel.appendChild(el('div', 'body' + (has ? '' : ' nil'),
+        has ? fmt(val)
+            : '<b>本區塊不會進入這個情況。</b>（規格未列 —— ⛔ 本稿不替它發明內容。）'));
+      /* st.hint 是**講給實作者聽的**（例：「需 st.empty() 佔位機制」），
+         且十種的內容在 §00 圖例已逐項列過一次 —— 使用者視角不上卡片（客戶 2026-09-14 的判準），
+         工程視角照印。⛔ 沒有刪掉，只是換地方。 */
+      if (viewMode === 'eng') {
+        var x = st.hint;
+        if (has && PER_ELEM.indexOf(st.k) !== -1) { x += '\n' + PER_ELEM_NOTE; }
+        panel.appendChild(el('div', 'xtra', fmt(x)));
+      }
+      press(ebar, k);
+      press(gbar, groupOf(k).g);
+      setTrust(has ? (TRUST_ST[st.k] || TRUST_NOT_LISTED) : TRUST_NOT_LISTED,
+               has ? toneCls(st.tone) : 'tone-neu',
+               has && TRUST_HAS_VALUE.indexOf(st.k) !== -1);
+      setFace(st.card, toneCls(st.tone), 0);
+    }
+
+    function paintGrp(g) {
+      var G = groupById(g);
+      curGrp = g;
+      panel.innerHTML = '';
+      var wrap = el('div', 'grpwrap');
+      wrap.appendChild(el('div', 'gnote', fmt(G.blurb)));
+      var shown = 0, absent = [];
+      G.members.forEach(function (k) {
+        var st = stateOf(k);
+        if (!st) return;
+        if (!hasVal(states[k])) { absent.push(st); return; }
+        shown++;
+        var sub = el('div', 'sub1');
+        var sh = el('div', 'sh');
+        sh.appendChild(el('span', 'bdg ' + st.tone, esc(st.glyph) + ' ' + esc(st.card)));
+        sh.appendChild(el('span', 'sname', esc(st.ord) + ' ' + esc(st.name)));
+        sub.appendChild(sh);
+        sub.appendChild(el('div', 'body', fmt(states[k])));
+        /* 同上：實作規則不進使用者視角。分組面板本來就只在使用者視角出現，故一律不印 */
+        wrap.appendChild(sub);
+        if (curEng === k || G.members.indexOf(curEng) === -1) { curEng = k; }
+      });
+      if (!shown) {
+        wrap.appendChild(el('div', 'body nil',
+          '<b>本區塊不會進入這個情況。</b>（規格未列 —— ⛔ 本稿不替它發明內容。）'));
+        curEng = G.members[0];
+      } else if (absent.length) {
+        wrap.appendChild(el('div', 'xtra',
+          '本區塊不會進入：' + absent.map(function (st) {
+            return esc(st.ord) + ' ' + esc(st.name);
+          }).join('　·　') + '（規格未列 —— ⛔ 本稿不替它發明內容。）'));
+      }
+      panel.appendChild(wrap);
+      press(gbar, g);
+      press(ebar, curEng);
+      setTrust(shown ? (TRUST_GRP[G.g] || TRUST_NOT_LISTED) : TRUST_NOT_LISTED,
+               shown ? G.tone : 'tone-neu',
+               shown > 0 && (G.g === 'ok' || G.g === 'part'));
+      setFace(G.label, G.tone, shown);
+    }
+
+    function press(bar, key) {
+      Array.prototype.forEach.call(bar.children, function (b) {
+        b.setAttribute('aria-pressed', b.getAttribute('data-k') === key ? 'true' : 'false');
+      });
+    }
+
+    VIEW_GROUPS.forEach(function (G) {
+      var any = false;
+      G.members.forEach(function (k) { if (hasVal(states[k])) any = true; });
+      var b = el('button', any ? '' : 'nil', esc(G.glyph) + ' ' + esc(G.label));
+      b.type = 'button';
+      b.setAttribute('data-k', G.g);
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', function () {
+        paintGrp(G.g);
+        announce('已切到「' + G.label + '」：' + (blk.name || '區塊'));
+      });
+      gbar.appendChild(b);
+    });
+
+    STATES.forEach(function (st) {
+      var nil = !hasVal(states[st.k]);
+      var b = el('button', nil ? 'nil' : '', esc(st.ord) + ' ' + esc(st.name));
+      b.type = 'button';
+      b.setAttribute('data-k', st.k);
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', function () {
+        paintEng(st.k);
+        announce('已切到「' + st.ord + ' ' + st.name + '」：' + (blk.name || '區塊'));
+      });
+      ebar.appendChild(b);
+    });
+
+    detail.appendChild(gbar);
+    detail.appendChild(ebar);
+    detail.appendChild(panel);
+
+    /* 欄數示意（宣告欄數跟著斷點切換；實際欄數由內容寬度決定）*/
+    var demoEl = null;
+    if (blk.cols && typeof blk.cols === 'object') {
+      var cap = el('div', 'colscap', '');
+      var demo = el('div', 'colsdemo');
+      var real = el('div', 'colsreal', '');
+      demo.setAttribute('data-cols', JSON.stringify(blk.cols));
+      detail.appendChild(cap);
+      detail.appendChild(demo);
+      detail.appendChild(real);
+      demo._cap = cap;
+      demo._real = real;
+      demoEl = demo;
+      paintCols(demo);
+      observeCols(demo);
+    }
+
+    if (blk.src) {
+      detail.appendChild(el('div', 'src', '出處 ' + esc(blk.src)));
+    }
+    /* 第二輪：把「這一塊被判在第幾層、密度怎麼給」寫進明細，讓客戶當場核得到 */
+    detail.appendChild(el('div', 'src', fmt(
+      '呈現層級 ' + tier.label +
+      (tableish ? '　｜　本區塊名稱判為**表格型**：狀態改由表頭狀態列承載，⛔ 不掛徽章' : ''))));
+
+    node.appendChild(detail);
+
+    /* 視角切換：兩套狀態列只顯示一套，並重畫面板 */
+    function applyView(mode) {
+      gbar.hidden = (mode !== 'user');
+      ebar.hidden = (mode !== 'eng');
+      if (tkEl) tkEl.hidden = (mode !== 'eng');
+      if (mode === 'user') { paintGrp(groupOf(curEng).g); }
+      else { paintEng(curEng); }
+    }
+    viewSubs.push(applyView);
+    applyView(viewMode);     /* 零互動可看完：預設就是「① 正常」所屬的那一類 */
+
+    wireDisclosure(trigger, detail, {
+      open: false,
+      /* 收合時量不到寬度（display:none）→ 展開當下補量一次，不倚賴 ResizeObserver */
+      onToggle: function (open) { if (open && demoEl) reportRealCols(demoEl); syncMore(); },
+      say: function (open) { return (open ? '已展開' : '已收合') + (blk.name || '區塊') + '的狀態明細'; }
+    });
+
+    /* 第四層：就地展開佐證（⛔ 不是 modal、不是側欄、不另開頁）*/
+    var evWrap = el('div', 'ev');
+    /* ⛔ 標頭只留標題；規格描述「（第四層 · 就地展開，上下內容往下推）」
+       已逐字搬到 §00「規格祈使句只講一次」，⛔ 不再每個 block 印一次 */
+    var evBody = el('div', 'evbody',
+      '<div class="eh">▸ 展開佐證</div>' +
+      (blk.evidence ? fmt(blk.evidence)
+                    : '<span class="miss">規格未指定本區塊的佐證內容 —— ⛔ 本稿不發明。</span>'));
+    evBody.id = evId;
+    evWrap.appendChild(evBody);
+    node.appendChild(evWrap);
+    wireDisclosure(evBtn, evBody, {
+      open: false,
+      onToggle: function (open) { evBtn.textContent = open ? '收合佐證 ▾' : '展開佐證 ▸'; },
+      say: function (open) { return (open ? '已展開' : '已收合') + (blk.name || '區塊') + '的佐證'; }
+    });
+
+    return node;
+  }
+
+  /* 極短時點：能認出日期就取日期，否則截短；⛔ 完整原句一律仍在明細裡一字不差 */
+  function shortenAsOf(s) {
+    var m = s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+    if (m) { return ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2); }
+    m = s.match(/(\d{1,2})[-\/](\d{1,2})/);
+    if (m) { return ('0' + m[1]).slice(-2) + '-' + ('0' + m[2]).slice(-2); }
+    var t = s.replace(/\s+/g, ' ').trim();
+    return t.length > 14 ? (t.slice(0, 13) + '…') : t;
+  }
+
+  function paintCols(demo) {
+    var cols;
+    try { cols = JSON.parse(demo.getAttribute('data-cols')); } catch (e) { cols = null; }
+    if (!cols) return;
+    var key = BP[bpNow].key;
+    var n = parseInt(cols[key], 10);
+    if (!(n > 0)) n = 1;
+    demo.innerHTML = '';
+    for (var i = 0; i < n; i++) { demo.appendChild(el('div', 'cd', '欄 ' + (i + 1))); }
+    if (demo._cap) {
+      demo._cap.textContent = '欄數（' + BP[bpNow].label + '）：' + n +
+        '　｜　桌機 ' + (cols.desktop != null ? cols.desktop : '—') +
+        ' · 平板 ' + (cols.tablet != null ? cols.tablet : '—') +
+        ' · 手機 ' + (cols.phone != null ? cols.phone : '—');
+    }
+    reportRealCols(demo);
+  }
+  function reportRealCols(demo) {
+    if (!demo._real) return;
+    var k = 0;
+    try {
+      var cs = window.getComputedStyle(demo).gridTemplateColumns;
+      if (cs && cs !== 'none') {
+        /* auto-fit 會把「排得下但沒東西放」的軌道塌成 0px，且仍列在 computed 值裡
+           —— ⛔ 那些不算「實際排出來的欄」，只數寬度 > 0 的軌道 */
+        k = cs.trim().split(/\s+/).filter(function (v) { return parseFloat(v) > 0; }).length;
+      }
+    } catch (e) { k = 0; }
+    var cw = Math.round(demo.getBoundingClientRect().width);
+    /* ⛔ 只留量到的數字；「為什麼這個數字比實際產品少」的解釋在 §00 講一次，不逐格重印 */
+    demo._real.textContent = k > 0
+      ? ('實際排出來：' + k + ' 欄（示意容器 ' + cw + 'px ⚠︎）')
+      : '';
+  }
+  var colsRO = null;
+  function observeCols(demo) {
+    if (typeof window.ResizeObserver !== 'function') return;
+    if (!colsRO) {
+      colsRO = new window.ResizeObserver(function (ents) {
+        ents.forEach(function (en) { reportRealCols(en.target); });
+      });
+    }
+    colsRO.observe(demo);
+  }
+  function repaintAllCols() {
+    Array.prototype.forEach.call(document.querySelectorAll('.colsdemo'), paintCols);
+  }
+
+  /* ── 頁 ───────────────────────────────────────────────────────── */
+  function renderPage(p, idx) {
+    var pid = p.__pid;
+    var sec = el('section', 'sec');
+    sec.id = 'pg-' + slug(pid);
+    sec.appendChild(el('div', 'snum',
+      '線框 · ' + (idx + 1) + '　<span class="pill g">產品畫面</span>'));
+    sec.appendChild(el('h2', null, esc(p.tab || p.id || '（未命名頁）')));
+    if (p.subtitle) sec.appendChild(el('p', 'lede', fmt(p.subtitle)));
+
+    /* 主 CTA —— null 要誠實寫出來，⛔ 不准自己補一顆
+       （首屏瘦身：按鈕留在外面，說明字收進「說明 ▸」）*/
+    var cta = el('div', 'ctapan');
+    cta.appendChild(el('span', 'ctalbl', '主 CTA'));
+    var ctaNoteBtn = el('button', 'mini', '說明 ▸');
+    ctaNoteBtn.type = 'button';
+    var ctaNote = el('div', 'minibody');
+    ctaNote.id = 'ctanote-' + slug(pid);
+    if (p.mainCTA && p.mainCTA.label) {
+      cta.appendChild(el('span', 'cta', esc(p.mainCTA.label)));
+      ctaNote.appendChild(el('div', null,
+        fmt('按鈕文字取自 SSOT 常數，⛔ 禁止手抄。**在所有呈現情況下文字一律不變** —— 變的是它旁邊的說明字與停用狀態。')));
+      if (p.mainCTA.src) ctaNote.appendChild(el('div', 'src', 'SSOT ' + esc(p.mainCTA.src)));
+    } else {
+      /* 去重：若本頁 subtitle 已經用白話講過「這一頁沒有按鈕、要去哪」，
+         ⛔ 不在下面再印一次「本頁目前沒有主 CTA」—— 那句改收進「說明 ▸」。
+         判定：subtitle 同時出現「沒有」與（「按鈕」或「CTA」）。
+         ⚠️ 這是字串比對的**啟發式**，不是資料契約；資料端改寫法就可能判錯。 */
+      var subt = String(p.subtitle == null ? '' : p.subtitle);
+      var saidAlready = (subt.indexOf('沒有') !== -1 &&
+                         (subt.indexOf('按鈕') !== -1 || subt.indexOf('CTA') !== -1));
+      if (!saidAlready) {
+        cta.appendChild(el('span', 'cta none', '本頁目前沒有主 CTA'));
+      } else {
+        ctaNote.appendChild(el('div', 'tiny',
+          '（本頁上方那句「一句話」已經用白話講過這件事，所以這裡不重覆印一次。）'));
+      }
+      ctaNote.appendChild(el('div', null,
+        fmt('⛔ **不准為本頁發明一顆按鈕。** 找不到 SSOT 常數就照實寫「本頁目前沒有主 CTA」。')));
+    }
+    cta.appendChild(ctaNoteBtn);
+    sec.appendChild(cta);
+    sec.appendChild(ctaNote);
+    wireDisclosure(ctaNoteBtn, ctaNote, {
+      open: false,
+      onToggle: function (o) { ctaNoteBtn.textContent = o ? '收合說明 ▾' : '說明 ▸'; }
+    });
+
+    /* 葉（第 0 層：視覺分組，非執行閘門）—— tablist */
+    var leaves = Array.isArray(p.leaves) ? p.leaves : [];
+    var panelId = 'lp-' + slug(pid);
+    var leafBody = null, bar = null, leafIds = [];
+    if (leaves.length) {
+      bar = el('div', 'leafbar');
+      bar.setAttribute('role', 'tablist');
+      bar.setAttribute('aria-label', '葉切換');
+      leafIds = leaves.map(function (x) { return String(x.id); });
+      leaves.forEach(function (lf, i) {
+        var b = el('button', null, esc(lf.name || lf.id || ('葉' + (i + 1))));
+        b.type = 'button';
+        b.id = 'tab-' + slug(pid) + '-' + slug(String(lf.id));
+        b.setAttribute('role', 'tab');
+        b.setAttribute('data-leaf', String(lf.id));
+        b.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+        b.setAttribute('aria-controls', panelId);
+        b.setAttribute('tabindex', i === 0 ? '0' : '-1');
+        b.addEventListener('click', function () { selectLeaf(String(lf.id)); });
+        bar.appendChild(b);
+      });
+      bar.addEventListener('keydown', function (e) {
+        var tabs = Array.prototype.slice.call(bar.querySelectorAll('[role="tab"]'));
+        var i = tabs.indexOf(document.activeElement);
+        if (i === -1) return;
+        var j = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % tabs.length;
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') j = (i - 1 + tabs.length) % tabs.length;
+        else if (e.key === 'Home') j = 0;
+        else if (e.key === 'End') j = tabs.length - 1;
+        if (j >= 0) {
+          e.preventDefault();
+          tabs[j].focus();
+          selectLeaf(tabs[j].getAttribute('data-leaf'));
+        }
+      });
+      sec.appendChild(bar);
+
+      var lnRow = el('div', 'leafnote');
+      var lnBtn = el('button', 'mini', '這一葉的說明 ▸');
+      lnBtn.type = 'button';
+      lnRow.appendChild(lnBtn);
+      sec.appendChild(lnRow);
+      leafBody = el('div', 'minibody');
+      leafBody.id = 'leafnote-' + slug(pid);
+      leafBody._one = el('div', null, '');
+      leafBody.appendChild(leafBody._one);
+      leafBody.appendChild(el('div', 'tiny',
+        fmt('⚠️ **葉 ＝ 第 0 層：視覺分組，不是執行閘門** —— `st.tabs` 這一輪會把每一葉的 body 都跑完，切葉不省重繪。' +
+            ' 四層骨架**在每一葉之內各自完整一次**；主 CTA **必須在預設葉可見**。')));
+      sec.appendChild(leafBody);
+      wireDisclosure(lnBtn, leafBody, {
+        open: false,
+        onToggle: function (o) { lnBtn.textContent = o ? '收合說明 ▾' : '這一葉的說明 ▸'; }
+      });
+    }
+
+    /* 四層 × 區塊 —— 每一層可折疊；第 0 層預設收起（除非它裝著主 CTA）*/
+    var panel = el('div', 'leafpanel');
+    panel.id = panelId;
+    if (leaves.length) {
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', 'tab-' + slug(pid) + '-' + slug(String(leaves[0].id)));
+    }
+    var layers = Array.isArray(p.layers) ? p.layers : [];
+    var groups = [];
+    if (!layers.length) {
+      panel.appendChild(el('div', 'empty', '<b>本頁尚未載入區塊資料。</b><br>（外殼已就緒，等各頁組提供 layers/blocks。）'));
+    }
+    layers.forEach(function (ly, li) {
+      var blocks = Array.isArray(ly.blocks) ? ly.blocks : [];
+      var label = ly.label || ('第 ' + (ly.n != null ? ly.n : '?') + ' 層');
+      /* 第二輪：徽章／卡片密度**由 layers[].n 決定**，⛔ 不逐塊手選 */
+      var tier = tierOf(ly.n);
+      var open = layerDefaultOpen(ly, p);
+      var grp = el('div', 'lyrgrp');
+      var hd = el('div', 'lyrhd');
+      var lbtn = el('button', 'lyrbtn');
+      lbtn.type = 'button';
+      lbtn.innerHTML = '<span class="car" aria-hidden="true">▾</span>' +
+        '<span class="lyt">' + esc(label) + '</span>';
+      /* 收起時 .lyt 會被 ellipsis 截斷 → 無障礙名稱與 tooltip 一律給完整原文 */
+      lbtn.title = label;
+      lbtn.setAttribute('aria-label', label + '（' + blocks.length + ' 個區塊）' +
+        '　密度：' + String(tier.label).split('（')[0]);
+      hd.appendChild(lbtn);
+      grp.appendChild(hd);
+
+      var w = el('div', 'wf');
+      w.id = 'ly-' + slug(pid) + '-' + li;
+      if (!blocks.length) {
+        w.appendChild(el('div', 'tiny', '本層尚未提供區塊。'));
+      }
+      blocks.forEach(function (b, bi) {
+        w.appendChild(renderBlock(b, pid, (ly.n != null ? ly.n : 'x') + '-' + bi, tier));
+      });
+      grp.appendChild(w);
+      panel.appendChild(grp);
+      groups.push({ grp: grp, w: w });
+
+      wireDisclosure(lbtn, w, {
+        open: open,
+        onToggle: function (o) {
+          var car = lbtn.querySelector('.car');
+          if (car) car.textContent = o ? '▾' : '▸';
+          if (o) { repaintAllCols(); }
+        },
+        say: function (o) { return (o ? '已展開' : '已收起') + label; }
+      });
+      if (!open) {
+        lbtn.appendChild(el('span', 'tail',
+          '（' + blocks.length + ' 塊 · 收起）'));
+      }
+    });
+    sec.appendChild(panel);
+
+    function selectLeaf(leafId) {
+      if (bar) {
+        Array.prototype.forEach.call(bar.children, function (b) {
+          var on = (b.getAttribute('data-leaf') === leafId);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+          b.setAttribute('tabindex', on ? '0' : '-1');
+          if (on) panel.setAttribute('aria-labelledby', b.id);
+        });
+      }
+      var lf = null;
+      leaves.forEach(function (x) { if (String(x.id) === leafId) lf = x; });
+      if (leafBody && leafBody._one) {
+        leafBody._one.innerHTML = lf && lf.note
+          ? fmt(lf.note)
+          : '<span class="tiny">（本葉規格未附說明）</span>';
+      }
+      groups.forEach(function (G) {
+        var vis = 0;
+        Array.prototype.forEach.call(G.w.querySelectorAll('.blk'), function (bn) {
+          var lv = bn.getAttribute('data-leaf');
+          /* 葉外共用層（leaf=null）一律可見；**葉 id 對不上任何已宣告的葉也一律可見** ——
+             ⛔ 不得因為資料對不上就把一個區塊靜默藏起來 */
+          var orphan = (lv !== '' && lv !== 'null' && leafIds.indexOf(lv) === -1);
+          var show = (lv === '' || lv === 'null' || orphan || lv === leafId);
+          if (orphan && !bn.getAttribute('data-orphan-marked')) {
+            bn.setAttribute('data-orphan-marked', '1');
+            var warn = el('div', 'tiny');
+            warn.innerHTML = '<span class="pill r">資料對不上</span> 本區塊宣告的葉 <code>' +
+              esc(lv) + '</code> 不在本頁已宣告的葉清單內 —— **本稿照常顯示它，⛔ 不靜默隱藏**。';
+            bn.insertBefore(warn, bn.children[1] || null);
+          }
+          bn.hidden = !show;
+          if (show) vis++;
+        });
+        G.grp.hidden = (vis === 0);
+      });
+      if (lf) announce('已切到葉：' + (lf.name || lf.id));
+    }
+    if (leaves.length) selectLeaf(String(leaves[0].id));
+
+    return sec;
+  }
+
+  /* 第 0 層預設收起；但若該層裝著主 CTA 就保持展開
+     （規格：主 CTA 必須在預設葉可見 —— ⛔ 首屏瘦身不得把它折疊掉）*/
+  function layerDefaultOpen(ly, p) {
+    var n = Number(ly && ly.n);
+    /* 第二輪新增：第四層佐證**整層預設收合**（客戶指定的四種密度裡，第四層那一條）。
+       ⛔ 不影響主 CTA —— 主 CTA 從來不在第四層（它在第一／第三層）。 */
+    if (n === 4) return false;
+    if (n !== 0) return true;
+    var lbl = (p && p.mainCTA && p.mainCTA.label) ? String(p.mainCTA.label) : '';
+    if (!lbl) return false;
+    var blocks = Array.isArray(ly.blocks) ? ly.blocks : [];
+    for (var i = 0; i < blocks.length; i++) {
+      var nm = String((blocks[i] && blocks[i].name) || '');
+      if (nm.indexOf(lbl) !== -1) return true;
+    }
+    return false;
+  }
+
+  /* ── 頁清單：逐筆防呆。少一頁 → 少一節，其餘照畫；
+        資料壞掉 → 就地說出來（⛔ 不靜默跳過、⛔ 不以空白版面充數）── */
+  function pageList() {
+    var raw = Array.isArray(window.WF_PAGES) ? window.WF_PAGES : [];
+    var out = [], seen = {};
+    raw.forEach(function (p, i) {
+      if (!p || typeof p !== 'object' || Array.isArray(p)) {
+        out.push({ __bad: true, __i: i, __why: (p === null ? 'null' : (Array.isArray(p) ? 'array' : typeof p)) });
+        return;
+      }
+      var pid = (p.id != null && String(p.id) !== '') ? String(p.id) : ('p' + (i + 1));
+      if (seen[pid]) { pid = pid + '-' + (i + 1); }
+      seen[pid] = 1;
+      p.__pid = pid;
+      out.push(p);
+    });
+    return out;
+  }
+
+  function renderPages(pages) {
+    var host = document.getElementById('pages');
+    if (!host) return;
+    host.innerHTML = '';
+    if (!pages.length) {
+      var s = el('section', 'sec');
+      s.id = 'pg-none';
+      s.appendChild(el('div', 'snum', '線框'));
+      s.appendChild(el('h2', null, '頁面線框'));
+      s.appendChild(el('div', 'empty',
+        '<b>尚未載入頁面資料。</b><br>外殼（版面／狀態切換／斷點切換／展開佐證）已就緒，' +
+        '等各頁組把 <code>window.WF_PAGES</code> 接上來。<br>' +
+        '<span class="tiny">⛔ 本稿不替尚未送到的頁面發明內容。</span>'));
+      host.appendChild(s);
+      return;
+    }
+    pages.forEach(function (p, i) {
+      if (p.__bad) {
+        var bs = el('section', 'sec');
+        bs.appendChild(el('div', 'snum', '線框 · ' + (i + 1)));
+        bs.appendChild(el('div', 'note stop',
+          '<b>🔴 第 ' + (i + 1) + ' 筆頁面資料不是一個物件（型別：<code>' + esc(p.__why) + '</code>），本稿畫不出來。</b><br>' +
+          '⛔ 不靜默跳過 —— 請把這行回報給該頁資料組。其餘頁面不受影響，照常顯示。'));
+        host.appendChild(bs);
+        return;
+      }
+      try {
+        host.appendChild(renderPage(p, i));
+      } catch (e) {
+        var es = el('section', 'sec');
+        es.id = 'pg-' + slug(p.__pid);
+        es.appendChild(el('div', 'snum', '線框 · ' + (i + 1)));
+        es.appendChild(el('h2', null, esc(p.tab || p.id || '（未命名頁）')));
+        es.appendChild(el('div', 'note stop',
+          '<b>🔴 這一頁沒有畫出來。</b><br>例外：<code>' + esc(e && e.message ? e.message : String(e)) + '</code><br>' +
+          '⛔ 本稿不以空白版面充數 —— 請把這段訊息回報給線框渲染組。**其餘頁面不受影響。**'));
+        host.appendChild(es);
+        if (window.console && console.error) console.error(e);
+      }
+    });
+  }
+
+  /* ── 待拍板 ───────────────────────────────────────────────────── */
+  function renderDecisions() {
+    var host = document.getElementById('starsBody');
+    var cnt = document.getElementById('starsCount');
+    if (!host) return;
+    host.innerHTML = '';
+    if (cnt) cnt.textContent = window.WF_DECISIONS.length ? (window.WF_DECISIONS.length + ' 條') : '尚未送到';
+    if (!window.WF_DECISIONS.length) {
+      host.appendChild(el('div', 'empty', '<b>尚未載入待拍板資料。</b><br><span class="tiny">⛔ 本稿不替它發明條目。</span>'));
+      return;
+    }
+    window.WF_DECISIONS.forEach(function (d) {
+      if (!d || typeof d !== 'object') return;
+      var c = el('div', 'star');
+      c.appendChild(el('div', 'sid', esc(d.id || '★')));
+      c.appendChild(el('div', 'q', fmt(d.q || '（未填問題）')));
+      var dl = el('dl');
+      function row(k, v, cls) {
+        dl.appendChild(el('dt', null, esc(k)));
+        dl.appendChild(el('dd', cls || null, v ? fmt(v) : '<span class="tiny">（未填）</span>'));
+      }
+      row('總管推薦', d.rec, 'rec');
+      row('具體原因', d.why);
+      row('不決定的後果', d.cost);
+      c.appendChild(dl);
+      host.appendChild(c);
+    });
+  }
+
+  /* ── 偏離表 ───────────────────────────────────────────────────── */
+  function renderDeviations() {
+    var host = document.getElementById('deviBody');
+    var cnt = document.getElementById('deviCount');
+    if (!host) return;
+    host.innerHTML = '';
+    if (cnt) cnt.textContent = window.WF_DEVIATIONS.length ? (window.WF_DEVIATIONS.length + ' 項') : '尚未送到';
+    if (!window.WF_DEVIATIONS.length) {
+      host.appendChild(el('div', 'empty', '<b>尚未載入偏離資料。</b><br><span class="tiny">⛔ 本稿不替它發明條目。</span>'));
+      return;
+    }
+    window.WF_DEVIATIONS.forEach(function (d) {
+      if (!d || typeof d !== 'object') return;
+      var c = el('div', 'star');
+      c.appendChild(el('div', 'sid', '⚑ ' + esc(d.id || '')));
+      c.appendChild(el('div', 'q', fmt(d.what || '（未填差異）')));
+      var dl = el('dl');
+      dl.appendChild(el('dt', null, '為什麼'));
+      dl.appendChild(el('dd', null, d.why ? fmt(d.why) : '<span class="tiny">（未填）</span>'));
+      dl.appendChild(el('dt', null, '我的建議'));
+      dl.appendChild(el('dd', 'rec', d.rec ? fmt(d.rec) : '<span class="tiny">（未填）</span>'));
+      c.appendChild(dl);
+      host.appendChild(c);
+    });
+  }
+
+  /* ── 已知限制 ─────────────────────────────────────────────────── */
+  function renderLimits() {
+    var host = document.getElementById('limitsBody');
+    var cnt = document.getElementById('limitsCount');
+    if (!host) return;
+    host.innerHTML = '';
+    if (cnt) cnt.textContent = window.WF_LIMITS.length ? (window.WF_LIMITS.length + ' 條') : '尚未送到';
+    if (!window.WF_LIMITS.length) {
+      host.appendChild(el('div', 'empty', '<b>尚未載入限制清單。</b><br><span class="tiny">⛔ 空著不等於沒有限制 —— 等各組送到。</span>'));
+      return;
+    }
+    window.WF_LIMITS.forEach(function (lm) {
+      if (!lm || typeof lm !== 'object') return;
+      var unver = (lm.verified !== true);
+      var c = el('div', 'lim' + (unver ? ' unverified' : ''));
+      c.appendChild(el('div', 'lt', fmt(lm.text || '（未填）')));
+      c.appendChild(el('span', 'lb', (lm.by ? esc(lm.by) : '來源未標')));
+      c.appendChild(el('span', unver ? 'pill' : 'pill g',
+        unver ? '⚠️ 未複驗 · 只能當待驗事項' : '已複驗'));
+      host.appendChild(c);
+    });
+  }
+
+  /* ── 斷點切換（只控制「規格宣告要畫幾格」；實際欄數由內容寬度決定）── */
+  function setBp(v, quiet) {
+    if (!BP[v]) v = 'desktop';
+    bpNow = v;
+    document.body.setAttribute('data-bp', v);
+    var seg = document.getElementById('bpseg');
+    if (seg) {
+      Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', b.getAttribute('data-bp') === v ? 'true' : 'false');
+      });
+    }
+    var n = document.getElementById('bpnote');
+    if (n) n.textContent = BP[v].note;
+    repaintAllCols();
+    if (!quiet) announce('斷點已切到 ' + BP[v].label + '：' + BP[v].note);
+  }
+  function wireBp() {
+    var seg = document.getElementById('bpseg');
+    if (!seg) return;
+    Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) {
+      b.addEventListener('click', function () { setBp(b.getAttribute('data-bp')); });
+    });
+  }
+
+  /* ── 視角切換：使用者視角（預設）／工程視角（全部十種）── */
+  function setView(v, quiet) {
+    viewMode = (v === 'eng') ? 'eng' : 'user';
+    document.body.setAttribute('data-view', viewMode);
+    var seg = document.getElementById('viewseg');
+    if (seg) {
+      Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', b.getAttribute('data-view') === viewMode ? 'true' : 'false');
+      });
+    }
+    viewSubs.forEach(function (fn) { try { fn(viewMode); } catch (e) { if (window.console) console.error(e); } });
+    if (!quiet) {
+      announce(viewMode === 'user'
+        ? '已切到使用者視角：卡片上只留使用者看得懂的說法，未接線自成一類'
+        : '已切到工程視角：十種呈現情況全部逐項列名');
+    }
+  }
+  function wireView() {
+    var seg = document.getElementById('viewseg');
+    if (!seg) return;
+    Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) {
+      b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
+    });
+  }
+
+  /* ── 模式切換：產品畫面（不畫治理標記）／審稿模式（全部畫出來）── */
+  function setMode(v, quiet) {
+    modeNow = (v === 'product') ? 'product' : 'review';
+    document.body.setAttribute('data-mode', modeNow);
+    var seg = document.getElementById('modeseg');
+    if (seg) {
+      Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', b.getAttribute('data-mode') === modeNow ? 'true' : 'false');
+      });
+    }
+    var hide = (modeNow === 'product');
+    /* ⛔ 標記沒有被刪除：只是 hidden。切回審稿模式，全部原樣回來 */
+    Array.prototype.forEach.call(document.querySelectorAll('[data-review-only]'), function (n) {
+      n.hidden = hide;
+    });
+    ['reviewband', 'stars', 'devi', 'limits'].forEach(function (id) {
+      var n = document.getElementById(id);
+      if (n) n.hidden = hide;
+    });
+    if (!quiet) {
+      announce(hide
+        ? '已切到產品畫面：卡片上的治理標記（★⚑ 有標記）與送審三區不顯示 —— 標記沒有被刪除，切回審稿模式就回來'
+        : '已切到審稿模式：治理標記與送審三區全部顯示');
+    }
+  }
+  function wireMode() {
+    var seg = document.getElementById('modeseg');
+    if (!seg) return;
+    Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) {
+      b.addEventListener('click', function () { setMode(b.getAttribute('data-mode')); });
+    });
+  }
+
+  /* ── 狀態總覽圖（客戶第二輪明示要補）──────────────────────────
+     A 區：十種呈現情況的卡面並排；C 區：四種密度並排。
+     ⛔ 兩區都從 STATES / VIEW_GROUPS / TIERS 生出來，**不另抄一份**，抄了就會漂。
+     B 區（頁級版面）是靜態示意方塊，寫在 HTML 裡 —— 資料檔沒有「整頁長怎樣」這種欄位。 */
+  function firstClause(t) {
+    var x = String(t == null ? '' : t);
+    var i = x.indexOf('。');
+    return (i > 0) ? x.slice(0, i) : x;
+  }
+  function renderAtlas() {
+    var A = document.getElementById('atlasCards');
+    if (A) {
+      A.innerHTML = '';
+      STATES.forEach(function (st) {
+        var G = groupOf(st.k);
+        var c = el('div', 'acard');
+        c.appendChild(el('div', 'ahd',
+          '<span class="an">區塊名稱（示意）</span><span class="ae">展開佐證 ▸</span>'));
+        c.appendChild(el('div', null,
+          '<span class="sbadge b2 ' + toneCls(st.tone) + ' demo">' +
+          '<span class="bl">' + esc(st.card) + '</span><span class="bmore">明細</span></span>'));
+        c.appendChild(el('div', 'alab', '卡面長相（規格原文第一句，逐字）'));
+        c.appendChild(el('div', 'abody', fmt(firstClause(st.hint))));
+        c.appendChild(el('div', 'tiny',
+          '使用者視角的說法：<b>' + esc(G.label) + '</b>　｜　工程視角：<b>' +
+          esc(st.ord) + ' ' + esc(st.name) + '</b>　｜　圖示（只在明細與圖例出現）：' +
+          esc(st.glyph)));
+        A.appendChild(c);
+      });
+    }
+
+    var T = document.getElementById('atlasTiers');
+    if (!T) return;
+    T.innerHTML = '';
+    var rows = [
+      { t:'t1', title:'第一層｜結論卡（示意）', face:'badge', num:0,
+        cap:'徽章最簡：只有人話，⛔ 沒有數字、沒有符號、沒有時點。字最大、留白最多。' },
+      { t:'t2', title:'第二層｜核心大卡片（示意）', face:'badge', num:3,
+        cap:'中等密度；徽章**可帶一個數字** ＝「這一類底下，本區塊的規格列了幾種情況」（只有超過一種才印）。' },
+      { t:'t3', title:'第三層｜操作區 · 非表格（示意）', face:'badge', num:0,
+        cap:'密度最高：卡片內距最小、字最小，徽章縮成一顆小標。' },
+      { t:'t3', title:'第三層｜操作區 · 表格型（示意）', face:'tstat', num:0,
+        cap:'⭐ **表格型不掛徽章**：狀態改由「表頭狀態列」自己承載（客戶第二輪原話：「改由表格本身承載狀態」）。' },
+      { t:'t4', title:'第四層｜佐證（示意）', face:'badge', num:0,
+        cap:'徽章最小化：去背、去框，只剩一行小字；**整層還預設收合**。' }
+    ];
+    rows.forEach(function (r) {
+      var tier = TIERS[r.t];
+      var wrap = el('div', 'acard');
+      wrap.style.marginTop = '10px';
+      var mock = el('div', 'blk ' + tier.cls);
+      mock.appendChild(el('div', 'bt',
+        '<span class="t">' + esc(r.title) + '</span><span class="tiny">展開佐證 ▸</span>'));
+      if (r.face === 'tstat') {
+        mock.appendChild(el('div', 'tstat tone-ok',
+          '<span class="tsk">狀態</span><span class="tsv">正常</span>' +
+          '<span class="tsbtn">明細</span>'));
+      } else {
+        mock.appendChild(el('div', 'badgerow',
+          '<span class="sbadge ' + tier.badge + ' tone-ok demo"><span class="bl">正常</span>' +
+          (tier.num && r.num > 1 ? '<span class="bnum">' + r.num + ' 種</span>' : '') +
+          '<span class="bmore">明細</span></span>'));
+      }
+      wrap.appendChild(mock);
+      wrap.appendChild(el('div', 'tiny', fmt(r.cap)));
+      T.appendChild(wrap);
+    });
+    T.appendChild(el('div', 'note',
+      fmt('**這五格不是手畫的** —— 它們跟真正的卡片走同一份 `TIERS` 設定與同一組 CSS class。' +
+          '要改哪一層長怎樣，改 `TIERS` 那一張表就好，**⛔ 不必逐塊去調**。\n' +
+          '⚠️ 第三層的「表格型」是**用區塊名稱字串猜的啟發式**（含「表／清單／卡片流／CSV／逐檔／逐列／卡牆／燈牆」，' +
+          '且先把「表單」剔掉）—— **猜錯的後果只是密度不同，⛔ 不會少掉任何一句文案或任何一個狀態**。')));
+  }
+
+  /* ── 側欄目前位置標示 ─────────────────────────────────────────── */
+  function wireSpy() {
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.idx a'));
+    if (!links.length) return;
+    var targets = links.map(function (a) {
+      return { a: a, el: document.getElementById(a.getAttribute('href').slice(1)) };
+    }).filter(function (t) { return t.el; });
+    var pending = false;
+    function run() {
+      pending = false;
+      var best = null, bestTop = -Infinity;
+      targets.forEach(function (t) {
+        /* 產品畫面模式會把送審三區 hidden 起來 —— 隱藏的節不該被標成「你在這裡」 */
+        if (t.el.hidden || !t.el.getClientRects().length) return;
+        var top = t.el.getBoundingClientRect().top - 80;
+        if (top <= 0 && top > bestTop) { bestTop = top; best = t; }
+      });
+      links.forEach(function (a) { a.classList.remove('on'); });
+      if (best) best.a.classList.add('on');
+    }
+    window.addEventListener('scroll', function () {
+      if (!pending) { pending = true; window.requestAnimationFrame(run); }
+    }, { passive: true });
+    window.addEventListener('resize', function () {
+      if (!pending) { pending = true; window.requestAnimationFrame(run); }
+    }, { passive: true });
+    run();
+  }
+
+  /* ── 啟動 ─────────────────────────────────────────────────────── */
+  function boot() {
+    try {
+      if (!Array.isArray(window.WF_PAGES)) window.WF_PAGES = [];
+      if (!Array.isArray(window.WF_DECISIONS)) window.WF_DECISIONS = [];
+      if (!Array.isArray(window.WF_DEVIATIONS)) window.WF_DEVIATIONS = [];
+      if (!Array.isArray(window.WF_LIMITS)) window.WF_LIMITS = [];
+      document.body.setAttribute('data-bp', bpNow);
+      viewSubs = [];
+      var pages = pageList();
+      var lg = document.getElementById('legendStates');
+      if (lg) renderLegendStates();
+      renderAtlas();
+      renderNav(pages);
+      renderPages(pages);
+      renderDecisions();
+      renderDeviations();
+      renderLimits();
+      setBp(bpNow, true);
+      setView(viewMode, true);
+      setMode(modeNow, true);
+      wireBp();
+      wireView();
+      wireMode();
+      wireSpy();
+    } catch (e) {
+      var host = document.getElementById('pages');
+      if (host) {
+        host.innerHTML = '';
+        var s = document.createElement('section');
+        s.className = 'sec';
+        s.innerHTML = '<h2>🔴 線框稿渲染失敗</h2>' +
+          '<div class="note stop"><b>這一頁沒有畫出來，不是某一塊壞掉。</b><br>' +
+          '例外：<code>' + esc(e && e.message ? e.message : String(e)) + '</code><br>' +
+          '⛔ 本稿不以空白版面充數 —— 請把這段訊息回報給線框渲染組。</div>';
+        host.appendChild(s);
+      }
+      if (window.console && console.error) console.error(e);
+    }
+  }
+  window.WF_render = boot;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    setTimeout(boot, 0);
+  }
+})();
+</script>
