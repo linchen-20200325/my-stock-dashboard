@@ -19,9 +19,12 @@
 
 **葉外 chrome**（`cols 1/1/1` 三斷點皆滿版）：`today.statusbar` ＝ 3 張狀態卡（交易日／總經／Sheet），實作 `page_today.py:1892` `render_cards(build_status_bar_cards(...))`；`chrome.asof` 見 ③（已撤回）。
 
-**第一層 `today.verdict`**（線框 `cols 1/1/1`）：徽章 #1／#3／#4／#5／#6／#7。⚠️ 線框是 **1 格結論燈**、實作是 **3 張並排卡** —— 兩種形狀的分歧見 ③，本層排列依客戶拍板結果定。
+**第一層 `today.verdict`**（線框 `cols 1/1/1`）：徽章 #1／#3／#4／#5／#6／#7。
+✅ **已決（`user 2026-09-16 裁示`）：第一層＝單一結論燈 ＋ 一句話結論**，線框 `n1`、卡密度 `t1`、一格滿版。
+⛔ 第一層**不再是 3 張並排卡**；實作現行 3 卡依裁示歸位第二層，歸位落點見 ③。
 
 **第二層**（`⛔ 卡片本身不可點`，線框 n2 層標籤逐字）：⛔ 本層不得放任何按鈕、連結、`st.popover`。
+✅ **已決（`user 2026-09-16 裁示`）：第二層＝下列 3 張並排卡** —— `today.summary`／`today.key_banner`／🆕`today.holdings`。
 - `today.summary` 三欄摘要（位階／動能／風險），線框 `cols 3/2/1`，徽章 #1／#3／#4／#5／#6／#7／#8／#9。
 - `today.key_banner` 今日關鍵橫幅，線框 `cols 1/1/1`，實作 `_render_tiles(..., cols=1)`。
 - 🆕 **`today.holdings` 持倉健檢 —— 新訂**（線框 `n2` **未定義**此 block；`持倉健檢` 全 repo 0 命中）。
@@ -102,11 +105,14 @@
 | 頁首「上一次更新的結果」整段 | `_render_refresh_report`（`:1705-1789`），含**全頁唯一** `st.expander("這一輪碰了哪些資料？（逐鍵列出）")` ＋ failures／empties／partials／skipped 四段；線框 8 block 無對應 key | **設計變更**（誠實揭露上一輪結果，方向與 §1 一致）→ 須補進線框，建議掛 `n0` 葉外 chrome |
 | 葉2「五桶摘要」獨立 section | `:1942-1943 build_bucket_tiles`；註解自陳「原葉1 ③ 搬到這裡」，但線框 `today.summary` 仍掛 `leaf:'l1'` | **設計變更**（葉歸屬改變）→ 線框 `leaf` 欄待同步 |
 
-**同一 block 兩種形狀（設計分歧，⛔ 本檔不選邊，待客戶拍板）**
-`today.verdict`：**線框讀法**＝`cols 1/1/1`、`name` 逐字「① 結論燈」，一格一顆燈，`t1` 密度最大化單一結論；**實作讀法**＝**3 張並排卡**（`verdict.exposure`／`verdict.danger`／`verdict.regime`，`:1357/:1393/:1432`），
-docstring 逐字「**不平均、不取 worst、不合成一顆燈**」，依據是 `overall_verdict()`（危險度，不含方向）與 `get_macro_regime()`（市場位階）實跑燈色不一致 39.5%、方向相反 18 組，客戶 2026-08-27 裁示**並列揭露、不得調和**。
-⇒ 兩種讀法**不可兼得**：合成一顆燈會踩到「不得調和」；維持三張卡則線框 `cols 1/1/1` 與 `name` 要改。
-**客戶拍板前，第一層排列與卡數懸而未定。**
+**`today.verdict` 形狀：✅ 已決（`user 2026-09-16 裁示`），原「1 燈 vs 3 卡」分歧結案**
+裁決逐字：**`today.verdict` 改成兩者並存：第一層＝1 顆結論燈（一句話結論）；第二層＝3 張並排卡（三欄摘要、今日關鍵橫幅、持倉健檢）；線框是對的，實作的 3 卡歸位到第二層。**
+⇒ 既然「**線框是對的**」，實作現況一律歸類為**實作待修**（⛔ 不是設計變更，⛔ 線框 `cols 1/1/1` 與 `name`「① 結論燈」不動）：現行 `page_today.py:1902 build_verdict_tiles` 在 `today.verdict`（`:1900`）渲染 **3 張並排卡** —— `verdict.exposure`「能不能出手 · 出手到幾成」（`:1357`，大字值＝`alloc.range_text` 持股區間）／`verdict.danger`「指標危險度（不含多空方向）」（`:1393`）／`verdict.regime`「市場位階（總經契約）」（`:1432`，`REGIME_CARD_LABEL` `:1264`）；docstring `:1324` 逐字「**不平均、不取 worst、不合成一顆燈**」（依據＝ 實跑燈色不一致 39.5%、方向相反 18 組、客戶 2026-08-27 裁示並列揭露不得調和 —— **沿用本檔原文，⛔ 本組未複驗該兩數**）。
+⚠️ **「3 卡歸位到第二層的哪一張」＝ 待客戶再裁** —— 總管判讀「三卡內容應歸為 `today.summary` 三欄」本組查證後**不成立**，依指令⛔ 未硬套：
+線框 `today.summary` 的 `name` 逐字＝「③ 三欄摘要（**位階／動能／風險**）」（`wf_page_today.js:171`，`src` 指 `page_today.py:1917`）；該三欄在實作中**已存在且非空位**（`tab_today.py:407-440`，經 `page_today.py:1917 render_cards(_summary.cards)` 渲染）：`summary.regime`「位階」**已接線**、`summary.momentum`「動能」／`summary.risk`「風險」為 `_staged_card` 未接線。
+**三條對不上**：(a) `verdict.regime` 與 `summary.regime` **同源重複**（後者取 `statusbar.macro` 位階），搬過去是**撞欄不是填空**；(b) `verdict.exposure` ＝ **配置油門帶**（持股區間），⛔ **不是動能**（線框「動能」欄示意值為 `M1B-M2 +1.2`），三欄無一欄收得下；(c) **只有** `verdict.danger` ↔ `summary.risk` 語意相符。
+⇒ ⛔ 客戶再裁前**不得**把三卡塞進 `today.summary`；`verdict.danger` 是否併入 `summary.risk`、`verdict.exposure` 該歸第二層哪一張卡，**一併送再裁**。
+⚠️ **「不得調和」未被本次裁決推翻**：第一層那顆燈的一句話結論是**新寫的字串**，⛔ 不得由三卡平均／取 worst／合成而來。
 
 ## ④ 反例自檢
 
@@ -137,6 +143,7 @@ docstring 逐字「**不平均、不取 worst、不合成一顆燈**」，依據
 ⚠️ **複驗分級**
 **總管實查**＝線框 `layers` 結構（4 層／8 block／`states` 10 鍵，node 實際解析）與 `mainCTA` 逐字、`持倉健檢` 全 repo 0 命中、`stock_watchlist` 三欄 schema。
 **WF 本組實查（2026-09-16）**＝`classify_ui_state` 序 3 可產生 `loading`、`in_flight`／`st.spinner`／`emits_level` 在 `page_today.py` 皆 0 命中、`MAX_COLS＝3`、`render_card` 26px／32px chrome。
+**WG 本組實查（2026-09-16，修訂組）**＝③ 段 `today.verdict` 已決段所引的一切落點：線框 `today.summary` 的 `name`／`src`（`wf_page_today.js:171`）、實作 `summary.regime`／`summary.momentum`／`summary.risk` 三欄與其接線狀態（`tab_today.py:407-440` ＋ `page_today.py:1916-1917`）、`verdict.exposure`／`danger`／`regime` 三卡標籤與 docstring（`page_today.py:1324`／`:1357`／`:1393`／`:1432`／`:1264`）。⛔ 39.5%／18 組兩數為沿用原文，不在本組實查內。
 **WF 本組推導（⛔ 不是量測，⛔ 不得當實測引用）**＝654／532px 應然網格值 —— 其排版模型（CSS auto-fit）不適用本頁（`st.columns`），理由見 ① 「排列（三斷點）」段。
 **INV-5 單組（未複驗，⛔ 不得當前提）**＝其餘盤點與所有「0 命中」類全稱句（皆單次 grep，**未做 AST**）、線框與實作的差異清單、「首屏三斷點算不出來」該項判定。
 **轉錄（非任何一組實測）**＝`CHECKPOINT.md:87` 的 12,075 字。
