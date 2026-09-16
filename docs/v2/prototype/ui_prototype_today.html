@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🚦 今天 · 戰情室 v2 視覺原型</title>
+<!-- 底色用 UI_TOKENS.md A-1 的 --paper dark #0e141b（非客戶指令裡的 #0e1117）：#0e1117 是 .streamlit/config.toml 的現值，客戶 2026-09-16 已裁示該鍵「與第一個 view 落地同批改」為 #0e141b，故原型一律對齊規格值，不對齊尚未改的 config。 -->
+<style>
+/* ══════════════════════════════════════════════════════════════
+   token：全部來自 docs/v2/spec/UI_TOKENS.md（dark 值）
+   ⛔ 規則裡不得出現硬編碼色值，一律 var(--…)
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  color-scheme: dark;
+
+  /* A-1 主色／輔色／面與墨 */
+  --ochre:#d59a5e; --ochre-bg:#2a2013; --ochre-line:#8a6234;
+  --focus:#8fc0ff;
+  --paper:#0e141b; --panel:#151d26; --panel-2:#1b242f;
+  --grid:#1a242e; --rule:#2e3b48; --rule-2:#46545f;
+  --ink:#dbe5ef; --ink-2:#9fb0c1; --ink-3:#7d8d99;
+
+  /* A-2 狀態色（ink / bg）—— 保留色，⛔ 不得挪用為圖表序列 */
+  --sig-green:#57b985; --sig-green-bg:#11241a;
+  --sig-amber:#d3a43c; --sig-amber-bg:#292110;
+  --sig-red:#e8706b;   --sig-red-bg:#2b1615;
+  --sig-blue:#4b8efe;  --sig-blue-bg:#141f2b;
+  --sig-grey:#8b98a4;  --sig-grey-bg:#1b232b;
+
+  /* A-3 圖表序列色 7 槽：本原型⛔不做圖表，僅登記 token 備 view 落地時引用 */
+  --ser-1:#2e64a6; --ser-2:#c7843c; --ser-3:#209993; --ser-4:#c15dde;
+  --ser-5:#6f650d; --ser-6:#934d6b; --ser-7:#7a3ae2;
+
+  /* B 字型（系統字堆疊，⛔ 零 @font-face、零網路請求） */
+  --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+  /* C 間距／圓角／欄寬下限 */
+  --sp-1:4px; --sp-2:6px; --sp-3:8px; --sp-4:10px; --sp-5:12px; --sp-6:16px; --sp-7:22px; --sp-8:26px;
+  --r-card:2px; --r-pan:3px; --r-pill:999px;
+  --col-min:308px; --col-min-text:260px; --col-min-text-s:210px;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--sans); font-size:14.5px; line-height:1.72; font-weight:400;
+}
+.wrap{max-width:1180px; margin:0 auto; padding:var(--sp-7) var(--sp-6) 64px}
+
+/* 焦點環：全站唯一一條（UI_COMPONENTS §3），⛔ 不准個別 outline:none */
+:focus-visible{outline:2px solid var(--focus); outline-offset:2px}
+
+/* 字級 ramp（UI_TOKENS §B） */
+h1{font-size:clamp(26px,4.4vw,40px); line-height:1.15; font-weight:900; margin:var(--sp-5) 0 var(--sp-1)}
+h2{font-size:clamp(20px,2.6vw,27px); line-height:1.3; font-weight:800; margin:var(--sp-8) 0 0}
+.note{font-family:var(--mono); font-size:11.5px; line-height:1.45; font-weight:400; color:var(--ink-3); margin:var(--sp-1) 0 0}
+.num{font-family:var(--mono); font-size:13px; line-height:1.5; font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap}
+.big{font-size:24px; line-height:1.25; font-weight:700; margin-top:2px}  /* render_card 大字區；prose 走 --sans，數值才走 --mono */
+.key{font-family:var(--mono); font-size:9.5px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.14em}
+.lede{margin:var(--sp-2) 0 0}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+.skip{position:absolute; left:-9999px}
+.skip:focus{left:var(--sp-6); top:var(--sp-3); z-index:9; background:var(--panel-2); color:var(--ink); padding:var(--sp-3) var(--sp-5); border-radius:var(--r-pan)}
+
+/* ── 卡片四層密度（UI_COMPONENTS §1）
+   層級只靠 border-width／dashed／padding 三個通道區分，⛔ 無陰影 ── */
+.blk{background:var(--panel); border:1px solid var(--rule-2); border-radius:var(--r-card)}
+.blk.t1{padding:15px 17px; border-width:2px; margin-top:15px}
+.blk.t2{padding:var(--sp-4) var(--sp-5); margin-top:var(--sp-4)}
+.blk.t3{padding:var(--sp-2) 9px; margin-top:var(--sp-2)}
+.blk.t4{padding:5px 9px; border-style:dashed; margin-top:5px}
+.blk.flagged{border-color:var(--ochre-line); border-style:dashed}
+.pan{padding:var(--sp-5) 14px; border-radius:var(--r-pan); border:1px solid var(--rule); background:var(--panel)}
+
+/* 卡頭：標題＋主徽章 */
+.bt{display:flex; justify-content:space-between; align-items:flex-start; gap:var(--sp-3); flex-wrap:wrap}
+.t1>.bt .t{font-size:17.5px; line-height:1.5; font-weight:700}
+.t2>.bt .t{font-size:14.5px; line-height:1.5; font-weight:700}
+.t3>.bt .t{font-size:13px; line-height:1.5; font-weight:700}
+.t4>.bt .t{font-size:12.5px; line-height:1.5; font-weight:700; color:var(--ink-2)}
+
+/* ── 徽章 10 種（UI_COMPONENTS §2）
+   幾何共用；⛔ 顏色不是唯一載體，一律圖示＋文字 ── */
+.bdg{display:inline-flex; align-items:center; gap:var(--sp-1); border-radius:var(--r-pan);
+     padding:1px 7px; font-size:11.5px; line-height:1.45; font-weight:600; white-space:nowrap; border:1px solid}
+.bdg .ic{font-style:normal}
+.sbadge.b1{font-size:14.5px; padding:var(--sp-4) 22px; min-height:46px; border-width:2px}
+.sbadge.b2{font-size:12.5px; padding:5px 13px; min-height:36px}
+.sbadge.b3{font-size:11px; padding:2px var(--sp-4); min-height:28px; border-radius:var(--r-pan)}
+.sbadge.b4{font-size:10.5px; padding:2px 5px; min-height:26px; border-width:0}
+.s1{background:var(--sig-green-bg); color:var(--sig-green); border-color:var(--sig-green)}
+.s2{background:var(--sig-grey-bg);  color:var(--sig-grey);  border-color:var(--rule-2)}
+.s3{background:var(--sig-grey-bg);  color:var(--sig-grey);  border-color:var(--rule-2)}
+.s4{background:var(--sig-amber-bg); color:var(--sig-amber); border-color:var(--sig-amber)}
+.s5{background:var(--sig-grey-bg);  color:var(--sig-grey);  border-color:var(--rule-2); border-style:dashed}
+.s6{background:var(--sig-red-bg);   color:var(--sig-red);   border-color:var(--sig-red)}
+.s7{background:var(--sig-grey-bg);  color:var(--sig-grey);  border-color:var(--rule-2)}
+.s8{background:var(--sig-grey-bg);  color:var(--sig-grey);  border-color:var(--rule-2)}
+.s9{background:var(--panel-2);      color:var(--sig-blue);  border-color:var(--sig-blue); border-style:dashed}
+.s10{background:var(--sig-blue-bg); color:var(--sig-blue);  border-color:var(--sig-blue)}
+
+/* ── 按鈕 5 類（UI_COMPONENTS §3） ── */
+.cta{min-height:40px; padding:var(--sp-2) var(--sp-6); font-family:var(--sans); font-size:13.5px; line-height:1.3;
+     font-weight:700; border-radius:var(--r-pan); background:var(--ink); color:var(--paper);
+     border:2px solid var(--ink); cursor:pointer}
+.cta:hover{background:var(--ochre); border-color:var(--ochre); color:var(--paper)}
+.cta.sec{background:transparent; color:var(--ink); border:1px solid var(--ink)}
+.cta.sec:hover{background:var(--panel-2); border-color:var(--rule-2); color:var(--ink)}
+.cta.dis{background:transparent; color:var(--sig-grey); font-weight:500; border:1px dashed var(--rule-2); cursor:not-allowed}
+.btn-txt{min-height:28px; padding:2px 11px; font-family:var(--sans); font-size:11px; line-height:1.3; font-weight:600;
+         border-radius:var(--r-pill); background:transparent; color:var(--ink-2); border:1px solid var(--rule); cursor:pointer}
+.btn-txt:hover{color:var(--ink); border-color:var(--rule-2)}
+
+/* 次級（展開佐證）＝ <summary> 觸發器，min 44×44 */
+details.ev{margin-top:var(--sp-5)}
+details.ev>summary{display:inline-flex; align-items:center; gap:var(--sp-2); list-style:none;
+  min-height:44px; min-width:44px; padding:7px 9px; font-size:12.5px; line-height:1.45; font-weight:600;
+  border-radius:var(--r-pan); background:transparent; color:var(--ink-2); border:1px solid transparent; cursor:pointer}
+details.ev>summary::-webkit-details-marker{display:none}
+details.ev>summary:hover{background:var(--panel-2); color:var(--ink); border-color:var(--rule)}
+details.ev>summary .caret{display:inline-block; transition:transform .12s linear}
+@media (prefers-reduced-motion:reduce){details.ev>summary .caret{transition:none}}
+details.ev[open]>summary .caret{transform:rotate(90deg)}
+
+/* ── 網格：第二層 3 卡＝ ≥881 三欄 / 641–880 兩欄 / ≤640 單欄 ── */
+.g3{display:grid; gap:var(--sp-5); grid-template-columns:1fr; margin-top:var(--sp-5)}
+.g3>*{min-width:0; margin-top:0}
+.rowline{display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3);
+         padding:var(--sp-1) 0; border-top:1px solid var(--grid); flex-wrap:wrap}
+.rowline:first-of-type{border-top:0}
+.stack{margin-top:var(--sp-4)}
+
+/* ── 表格（UI_COMPONENTS §4）：容器自己捲，⛔ 頁面本體不橫捲 ── */
+.tw{overflow-x:auto; border:1px solid var(--rule); border-radius:var(--r-pan); background:var(--panel); margin-top:var(--sp-5)}
+.tw table{border-collapse:collapse; width:100%; min-width:460px}
+.tw th{min-height:36px; font-size:12px; line-height:1.5; font-weight:700; color:var(--ink-2);
+       background:var(--panel-2); padding:7px var(--sp-4); white-space:nowrap; text-align:start}
+.tw td{padding:7px var(--sp-4); font-size:13px; line-height:1.72; border-top:1px solid var(--grid); text-align:start}
+.tw th.id,.tw td.id{min-width:132px}
+.tw th.n,.tw td.n{text-align:end; min-width:88px; font-family:var(--mono);
+                  font-variant-numeric:tabular-nums; white-space:nowrap}
+
+/* ── 骨架卡（loading 固定高，UI_PAGE_TODAY ③） ── */
+.skwrap{min-height:78px; display:flex; flex-direction:column; justify-content:center; gap:var(--sp-3); margin-top:var(--sp-3)}
+.sk{height:12px; border-radius:var(--r-card); background:var(--panel-2); animation:pulse 1.6s ease-in-out infinite}
+.sk.w1{width:62%} .sk.w2{width:86%} .sk.w3{width:38%}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.sk{animation:none}}
+
+/* ── 原型專用標記：⛔ 非 v2 元件，沿用規格的 [data-review-only] 慣例，正式頁一律不渲染 ── */
+[data-proto-only].demo{display:inline-flex; align-items:center; margin-inline-start:var(--sp-1);
+  padding:0 5px; border-radius:var(--r-pan); border:1px dashed var(--ochre-line);
+  background:var(--ochre-bg); color:var(--ochre); font-size:10.5px; line-height:1.6; font-weight:600; white-space:nowrap}
+[data-proto-only].banner{margin-top:var(--sp-5); border-color:var(--ochre-line)}
+.legend{display:grid; gap:var(--sp-3); grid-template-columns:1fr; margin-top:var(--sp-4)}
+.legend>*{min-width:0; margin-top:0}
+.ladder>*{margin-top:var(--sp-2)}
+.btnbar{display:flex; flex-wrap:wrap; gap:var(--sp-3); align-items:center; margin-top:var(--sp-4)}
+.fs{border:0; padding:0; margin:0}
+.modes{display:flex; flex-wrap:wrap; gap:var(--sp-5); margin-top:var(--sp-3)}
+.modes label{display:inline-flex; align-items:center; gap:var(--sp-2); font-size:13px; cursor:pointer}
+.modes input{accent-color:var(--ochre); width:16px; height:16px}
+hr.rule{border:0; border-top:1px solid var(--rule); margin:var(--sp-7) 0 0}
+
+/* ══════════════ 斷點三段（UI_COMPONENTS 開頭宣告版）══════════════ */
+/* ① 手機 ≤640 */
+@media (max-width:640px){
+  .wrap{padding:var(--sp-5) var(--sp-6) 48px}
+  .blk.t1{padding:11px var(--sp-5); margin-top:var(--sp-5)}
+  .blk.t2,.blk.t3,.blk.t4{margin-top:var(--sp-2)}
+  .g3{gap:var(--sp-4)}
+  /* 表格 → 卡片流：不畫表頭，一列＝一張 .blk.t3 */
+  .tw{overflow-x:visible; border:0; background:transparent; border-radius:0; margin-top:var(--sp-4)}
+  .tw table,.tw tbody,.tw tr,.tw td{display:block; width:auto}
+  .tw table{min-width:0}
+  .tw thead{display:none}
+  .tw tr{background:var(--panel); border:1px solid var(--rule-2); border-radius:var(--r-card);
+         padding:var(--sp-2) 9px; margin-top:var(--sp-2)}
+  .tw td{display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3);
+         border-top:0; padding:2px 0; min-width:0}
+  .tw td::before{content:attr(data-k); font-family:var(--mono); font-size:9.5px; color:var(--ink-3);
+                 text-transform:uppercase; letter-spacing:.14em}
+  .tw td.id{display:block; font-size:13px; font-weight:700; padding-bottom:var(--sp-1)}
+  .tw td.id::before{content:none}
+  .tw td.n{min-width:0}
+}
+/* ② 平板 641–880 */
+@media (min-width:641px) and (max-width:880px){
+  .g3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .legend{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+/* ③ 桌機 ≥881 */
+@media (min-width:881px){
+  .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .legend{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳到主要內容</a>
+<div class="wrap">
+
+<!-- ═══════ 頁首：常駐示意橫幅 + 標題 + 葉外 chrome ═══════ -->
+<header>
+  <div class="pan banner" data-proto-only role="note">
+    <strong><i class="ic">⚠︎</i> 這是視覺原型，所有數字都是示意，不接任何真實資料。</strong>
+    <p class="note">單一 HTML 檔 · 零外部框架／CDN · 零網路請求 · 系統字堆疊 · 深色模式 <span class="num">--paper #0e141b</span>。
+      畫面上每個數字旁都有「示意」標記；沒有標記的地方就是沒有數字。</p>
+    <p class="note" id="bpout">目前斷點：偵測中…</p>
+  </div>
+
+  <h1>🚦 今天</h1>
+  <p class="lede">一頁看完「今天整體是什麼狀態」。版面依 <span class="num">UI_PAGE_TODAY.md ①</span> 四層結構；
+    元件依 <span class="num">UI_COMPONENTS.md</span>；色票／字級／間距依 <span class="num">UI_TOKENS.md</span>。</p>
+  <p class="note">葉外 chrome（線框 n0）＝ 下面這排狀態卡，五頁共用，⛔ 不計入四層。</p>
+
+  <div class="g3">
+    <div class="blk t3">
+      <div class="bt"><span class="t">交易日</span>
+        <span class="bdg sbadge b3 s1"><i class="ic">🟢</i>運作中</span></div>
+      <div class="num">2026-09-16（週三）<span class="demo" data-proto-only>示意</span></div>
+    </div>
+    <div class="blk t3">
+      <div class="bt"><span class="t">總經</span>
+        <span class="bdg sbadge b3 s3"><i class="ic">⬜</i>尚未載入</span></div>
+      <p class="note">尚未點「更新今日戰情」。灰色＝還沒載入，⛔ 不是故障。</p>
+    </div>
+    <div class="blk t3">
+      <div class="bt"><span class="t">Sheet 持股清單</span>
+        <span class="bdg sbadge b3 s2"><i class="ic">⏳</i>載入中</span></div>
+      <p class="note">連線中…（原型：靜態示意）</p>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ═══════ 第一層：結論燈（today.verdict · t1 · cols 1/1/1）═══════ -->
+<h2>第一層 · 結論燈</h2>
+<p class="note">block <span class="num">today.verdict</span>　卡密度 <span class="num">.blk.t1</span>（border 2px）　主徽章 <span class="num">.sbadge b1</span>　三斷點皆一格滿版</p>
+
+<section class="blk t1" aria-labelledby="v-t">
+  <div class="bt">
+    <span class="t" id="v-t">① 結論燈</span>
+    <span class="bdg sbadge b1 s1"><i class="ic">🟢</i>運作中</span>
+  </div>
+  <div class="big">今天偏防守<span class="demo" data-proto-only>示意</span></div>
+  <p class="lede">本頁今天的整體狀態偏向防守側：短線急殺桶亮警戒、籌碼桶維持安定。
+    本行只描述狀態，⛔ 不含任何買賣或加減碼建議。</p>
+  <p class="note">這句結論是獨立字串，⛔ 不由第二層三張卡平均／取 worst／合成而來（UI_PAGE_TODAY ③ 末行）。</p>
+</section>
+
+<!-- ═══════ 第二層：3 張並排卡（t2 · ⛔ 卡片本身不可點、⛔ 不放按鈕）═══════ -->
+<h2>第二層 · 核心卡</h2>
+<p class="note">blocks <span class="num">today.summary</span>／<span class="num">today.key_banner</span>／<span class="num">today.holdings</span>　卡密度 <span class="num">.blk.t2</span>　主徽章 <span class="num">.sbadge b2</span>　⛔ 本層無按鈕、無連結、卡片不可點</p>
+
+<div class="g3">
+
+  <!-- A. 三欄摘要：逐格獨立判態，一格壞不染色另兩格 -->
+  <section class="blk t2" aria-labelledby="s-t">
+    <div class="bt">
+      <span class="t" id="s-t">③ 三欄摘要</span>
+      <span class="bdg sbadge b2 s9"><i class="ic">◧</i>1／3 計入</span>
+    </div>
+    <p class="note">位階／動能／風險 —— 逐格獨立判態。</p>
+    <div class="stack">
+      <div class="rowline"><span>位階</span>
+        <span><span class="num">🟡 循環轉折</span><span class="demo" data-proto-only>示意</span>
+          <span class="bdg s1"><i class="ic">🟢</i>運作中</span></span></div>
+      <div class="rowline"><span>動能</span>
+        <span class="bdg s5"><i class="ic">⛔</i>未接線</span></div>
+      <div class="rowline"><span>風險</span>
+        <span><span class="num">VIX 18.4</span><span class="demo" data-proto-only>示意</span>
+          <span class="bdg s4"><i class="ic">🟠</i>門檻已失準</span></span></div>
+    </div>
+    <p class="note">「動能」欄客戶裁示維持未接線（exposure 不是動能，不搬）⇒ 畫 #5，⛔ 不得畫成 #1。
+      卡頭 #9 在此僅示意；正式頁 L3 補齊分子分母前，依 §2 fail-safe 一律降級為 #7「缺漏 · 可重跑」，⛔ 不退回 #1。</p>
+  </section>
+
+  <!-- B. 今日關鍵橫幅：載入中 → 固定高骨架卡 -->
+  <section class="blk t2" aria-labelledby="k-t" aria-busy="true">
+    <div class="bt">
+      <span class="t" id="k-t">今日關鍵</span>
+      <span class="bdg sbadge b2 s2"><i class="ic">⏳</i>載入中</span>
+    </div>
+    <p class="note">取數中，固定高骨架卡佔位，⛔ 不用 #3「尚未載入」冒充載入中。</p>
+    <div class="skwrap" aria-hidden="true"><div class="sk w1"></div><div class="sk w2"></div><div class="sk w3"></div></div>
+  </section>
+
+  <!-- C. 持倉健檢：n_classified==0 ⇒ #7，⛔ 不得顯示 0 或「完美分散」 -->
+  <section class="blk t2" aria-labelledby="h-t">
+    <div class="bt">
+      <span class="t" id="h-t">持倉健檢</span>
+      <span class="bdg sbadge b2 s7"><i class="ic">⚠︎ —</i>缺漏 · 可重跑</span>
+    </div>
+    <div class="stack">
+      <div class="rowline"><span class="key">持股檔數</span>
+        <span><span class="num">18 檔</span><span class="demo" data-proto-only>示意</span></span></div>
+      <div class="rowline"><span class="key">已分類檔數</span>
+        <span class="num" title="缺漏 · 可重跑">⚠︎ —</span></div>
+      <div class="rowline"><span class="key">產業數</span>
+        <span class="num" title="缺漏 · 可重跑">⚠︎ —</span></div>
+      <div class="rowline"><span class="key">最大單一產業（檔數等權）</span>
+        <span class="num" title="缺漏 · 可重跑">⚠︎ —</span></div>
+    </div>
+    <p class="note">假設揭露：持股清單只有 name／ticker／updated_at 三欄，無張數與均價
+      ⇒ 一律以「檔數等權」計算，⛔ 不是部位佔比。本卡⛔ 不顯示損益／金額／張數／均價。</p>
+  </section>
+
+</div>
+
+<!-- ═══════ 第三層：操作列（today.actions · t3 · 主 CTA）═══════ -->
+<h2>第三層 · 操作列</h2>
+<p class="note">block <span class="num">today.actions</span>　卡密度 <span class="num">.blk.t3</span>　主 CTA 字串 SSOT ＝ <span class="num">shared/ia_nav.py ACTION_LABELS</span></p>
+
+<section class="blk t3" aria-labelledby="a-t">
+  <div class="bt">
+    <span class="t" id="a-t">④ 操作列</span>
+    <span class="bdg sbadge b3 s1"><i class="ic">🟢</i>可按</span>
+  </div>
+  <fieldset class="fs">
+    <legend class="key">更新模式</legend>
+    <div class="modes">
+      <label><input type="radio" name="mode" checked> 正常更新（吃暖快取）</label>
+      <label><input type="radio" name="mode"> 強制重抓（清快取）</label>
+    </div>
+  </fieldset>
+  <div class="btnbar">
+    <button type="button" class="cta" id="cta" aria-describedby="cta-note">🚀 更新今日戰情</button>
+    <button type="button" class="cta sec">這張卡怎麼讀</button>
+  </div>
+  <p class="note" id="cta-note">全站唯一一顆主 CTA。可以重試 —— 上游這輪失敗，不是程式錯誤。（原型：按鈕不接任何行為）</p>
+</section>
+
+<!-- ═══════ 第四層：展開佐證（t4 · 1px dashed · 可點開可收合）═══════ -->
+<h2>第四層 · 展開佐證</h2>
+<p class="note">blocks <span class="num">today.warroom</span>／<span class="num">today.detail</span>　卡密度 <span class="num">.blk.t4</span>（1px dashed）　主徽章 <span class="num">.sbadge b4</span>（border 0）　觸發器 min 44×44</p>
+
+<!-- 4-a 戰情摘要：取得失敗 -->
+<details class="ev">
+  <summary aria-expanded="false"><span class="caret">▸</span> 展開佐證 · 戰情摘要（3）
+    <span class="bdg s6"><i class="ic">🔴</i>取得失敗</span></summary>
+  <div class="blk t4">
+    <div class="bt"><span class="t">today.warroom · 出處</span>
+      <span class="bdg sbadge b4 s6"><i class="ic">🔴</i>取得失敗</span></div>
+    <div class="rowline"><span class="key">來源</span><span class="num">FRED:DGS10 · 連線逾時</span></div>
+    <div class="rowline"><span class="key">時點</span><span class="num">—</span></div>
+    <div class="rowline"><span class="key">下一步</span><span>可以重試；⛔ 不顯示上一輪殘值、⛔ 不顯示 0</span></div>
+    <p class="note">取得失敗時大字區一律留白（UI_PAGE_TODAY ④A）。若原因是契約漂移，主 CTA 改停用並改寫成「重按不會好，程式要修」。</p>
+  </div>
+</details>
+
+<!-- 4-b 逐盞燈明細：五桶 + 明細表 -->
+<details class="ev">
+  <summary aria-expanded="false"><span class="caret">▸</span> 展開佐證 · 逐盞燈明細（5）</summary>
+
+  <p class="note stack">五桶逐桶判態：一桶失敗，其餘四桶維持原樣，⛔ 不拿估計值頂替。</p>
+  <div class="g3">
+    <div class="blk t4"><div class="bt"><span class="t">🌳 長期</span>
+      <span class="bdg sbadge b4 s1"><i class="ic">🟢</i>結構健康</span></div>
+      <p class="note">結構 / 景氣位階</p></div>
+    <div class="blk t4"><div class="bt"><span class="t">📈 中期</span>
+      <span class="bdg sbadge b4 s4"><i class="ic">🟠</i>門檻已失準</span></div>
+      <p class="note">景氣循環 3-12 月</p></div>
+    <div class="blk t4"><div class="bt"><span class="t">⚡ 短線急殺</span>
+      <span class="bdg sbadge b4 s1"><i class="ic">🟢</i>短線平靜</span></div>
+      <p class="note">即時 risk-off</p></div>
+    <div class="blk t4"><div class="bt"><span class="t">🧩 籌碼</span>
+      <span class="bdg sbadge b4 s7"><i class="ic">⚠︎ —</i>缺漏 · 可重跑</span></div>
+      <p class="note">大戶定位 日線</p></div>
+    <div class="blk t4"><div class="bt"><span class="t">📰 新聞</span>
+      <span class="bdg sbadge b4 s6"><i class="ic">🔴</i>取得失敗</span></div>
+      <p class="note">系統性風險掃描</p></div>
+  </div>
+
+  <div class="bt stack"><span class="key">逐盞燈明細</span>
+    <button type="button" class="btn-txt">看明細</button></div>
+  <div class="tw" tabindex="0" role="region" aria-label="逐盞燈明細（表格，可橫向捲動）">
+    <table>
+      <thead><tr>
+        <th class="id" scope="col">燈名</th><th scope="col">狀態</th>
+        <th class="n" scope="col">觀測值</th><th class="n" scope="col">門檻</th><th scope="col">出處</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="id" data-k="燈名">美債 10Y</td>
+            <td data-k="狀態"><span class="bdg s1"><i class="ic">🟢</i>運作中</span></td>
+            <td class="n" data-k="觀測值">4.12 %<span class="demo" data-proto-only>示意</span></td>
+            <td class="n" data-k="門檻">4.50 / 5.00</td>
+            <td data-k="出處">FRED:DGS10</td></tr>
+        <tr><td class="id" data-k="燈名">VIX</td>
+            <td data-k="狀態"><span class="bdg s4"><i class="ic">🟠</i>門檻已失準</span></td>
+            <td class="n" data-k="觀測值">18.4<span class="demo" data-proto-only>示意</span></td>
+            <td class="n" data-k="門檻">22 / 30</td>
+            <td data-k="出處">Yahoo:^VIX</td></tr>
+        <tr><td class="id" data-k="燈名">台灣 PMI</td>
+            <td data-k="狀態"><span class="bdg s7"><i class="ic">⚠︎ —</i>缺漏 · 可重跑</span></td>
+            <td class="n" data-k="觀測值">⚠︎ —</td>
+            <td class="n" data-k="門檻">50.0</td>
+            <td data-k="出處">CIER（這輪沒拿到）</td></tr>
+        <tr><td class="id" data-k="燈名">個股折溢價</td>
+            <td data-k="狀態"><span class="bdg s8"><i class="ic">N/A</i>不適用 · 重跑無效</span></td>
+            <td class="n" data-k="觀測值">N/A</td>
+            <td class="n" data-k="門檻">N/A</td>
+            <td data-k="出處">個股無此欄位</td></tr>
+        <tr><td class="id" data-k="燈名">M1B − M2</td>
+            <td data-k="狀態"><span class="bdg s6"><i class="ic">🔴</i>取得失敗</span></td>
+            <td class="n" data-k="觀測值">—</td>
+            <td class="n" data-k="門檻">-2.0 pts/月</td>
+            <td data-k="出處">CBC:ms1.json</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">桌機／平板：數值欄靠右 ＋ 等寬 ＋ tabular-nums；容器寬度不足時表格容器自己捲。
+    ≤640px：不畫表頭，一列＝一張 .blk.t3 卡，欄名降為 key（示意欄位共 4 對）。</p>
+</details>
+
+<!-- 4-c 狀態圖鑑 -->
+<details class="ev" open>
+  <summary aria-expanded="true"><span class="caret">▸</span> 狀態圖鑑 · 徽章 10 種／按鈕／卡片四層</summary>
+
+  <p class="note stack">硬規則：狀態色一律「圖示＋文字」，⛔ 顏色不是唯一載體（綠/紅在 deuteranopia 下 ΔE 3.9 無解）。</p>
+  <div class="legend">
+    <div class="blk t4"><span class="bdg s1"><i class="ic">🟢</i>運作中</span>
+      <p class="note">#1 正常 · UI_LIVE　本頁：結論燈、長期桶</p></div>
+    <div class="blk t4"><span class="bdg s2"><i class="ic">⏳</i>載入中</span>
+      <p class="note">#2 載入中 · UI_LOADING　本頁：今日關鍵（骨架卡）</p></div>
+    <div class="blk t4"><span class="bdg s3"><i class="ic">⬜</i>尚未載入</span>
+      <p class="note">#3 還沒載入 · UI_IDLE　本頁：葉外「總經」卡</p></div>
+    <div class="blk t4"><span class="bdg s4"><i class="ic">🟠</i>門檻已失準</span>
+      <p class="note">#4 門檻已失準 · UI_DEGRADED　觀測照出、判決留白</p></div>
+    <div class="blk t4"><span class="bdg s5"><i class="ic">⛔</i>未接線</span>
+      <p class="note">#5 這項還沒做 · UI_UNWIRED　本頁：三欄摘要「動能」</p></div>
+    <div class="blk t4"><span class="bdg s6"><i class="ic">🔴</i>取得失敗</span>
+      <p class="note">#6 出錯了 · UI_FAILED　本頁：戰情摘要、新聞桶</p></div>
+    <div class="blk t4"><span class="bdg s7"><i class="ic">⚠︎ —</i>缺漏 · 可重跑</span>
+      <p class="note">#7 缺漏 · UI_EMPTY＋MISS_NO_INPUT　本頁：持倉健檢、籌碼桶、台灣 PMI</p></div>
+    <div class="blk t4"><span class="bdg s8"><i class="ic">N/A</i>不適用 · 重跑無效</span>
+      <p class="note">#8 結構上不適用 · MISS_NOT_APPLICABLE　⛔ 與 #7 不得只靠顏色分辨</p></div>
+    <div class="blk t4"><span class="bdg s9"><i class="ic">◧</i>N／M 計入</span>
+      <p class="note">#9 資料不完整　本頁 L3 無分子分母 ⇒ fail-safe 恆降級 #7，⛔ 不退回 #1</p></div>
+    <div class="blk t4"><span class="bdg s10"><i class="ic">◆</i>只描述，不判等級</span>
+      <p class="note">#10 emits_level=False　本頁不畫（無此類指標），⛔ 不得併進 #8</p></div>
+  </div>
+
+  <p class="note stack">按鈕 5 類中的 4 類（主 CTA 全站唯一一顆，在第三層，⛔ 此處不重複渲染）：</p>
+  <div class="btnbar">
+    <button type="button" class="cta sec">次級（說明）</button>
+    <span class="note">次級（展開佐證）＝ 上方每個 ▸ 觸發器（min 44×44）</span>
+    <button type="button" class="btn-txt">文字按鈕（表頭明細）</button>
+    <button type="button" class="cta dis" disabled>本頁目前沒有主 CTA</button>
+  </div>
+
+  <p class="note stack">卡片四層密度：只靠 border-width／dashed／padding 三個通道區分，⛔ 無陰影。</p>
+  <div class="ladder">
+    <div class="blk t1"><div class="bt"><span class="t">t1 結論　15px 17px · border 2px solid</span></div></div>
+    <div class="blk t2"><div class="bt"><span class="t">t2 核心　10px 12px · border 1px solid</span></div></div>
+    <div class="blk t3"><div class="bt"><span class="t">t3 操作　6px 9px · border 1px solid</span></div></div>
+    <div class="blk t4"><div class="bt"><span class="t">t4 佐證　5px 9px · border 1px dashed</span></div></div>
+  </div>
+</details>
+
+</main>
+
+<hr class="rule">
+<footer>
+  <p class="note">規格出處：<span class="num">docs/v2/spec/UI_TOKENS.md</span>（色票／字級／間距／序列色）、
+    <span class="num">docs/v2/spec/UI_COMPONENTS.md</span>（卡片 t1–t4／徽章 10 種／按鈕 5 類／表格）、
+    <span class="num">docs/v2/spec/UI_PAGE_TODAY.md</span>（四層結構與各層 block）。</p>
+  <p class="note">底色用規格值 <span class="num">--paper #0e141b</span>；<span class="num">.streamlit/config.toml</span>
+    現值 <span class="num">#0e1117</span> 客戶已裁示「與第一個 view 落地同批改」，故原型不對齊尚未改的 config。</p>
+  <p class="note">序列色 7 槽已在 <span class="num">:root</span> 登記（--ser-1…7），本原型⛔ 不做圖表故未使用；
+    正式頁同時用 ≥4 槽時一律強制直接標籤或紋理，⛔ 不得只靠顏色。</p>
+  <p class="note">原型專用標記（「示意」chip、常駐橫幅、斷點讀數）帶 <span class="num">[data-proto-only]</span>，⛔ 非 v2 元件，正式頁不渲染。</p>
+</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  /* 展開觸發器：原生 details/summary ＋ 同步 aria-expanded */
+  var ds = document.querySelectorAll("details.ev");
+  Array.prototype.forEach.call(ds, function(d){
+    var s = d.querySelector("summary");
+    if (!s) { return; }
+    s.setAttribute("aria-expanded", d.open ? "true" : "false");
+    d.addEventListener("toggle", function(){
+      s.setAttribute("aria-expanded", d.open ? "true" : "false");
+    });
+  });
+
+  /* 原型輔助：顯示目前斷點，方便客戶拉視窗驗 375 / 768 / 1280 */
+  var out = document.getElementById("bpout");
+  function band(w){
+    if (w <= 640) { return "手機（≤640）· 第二層單欄"; }
+    if (w <= 880) { return "平板（641–880）· 第二層兩欄"; }
+    return "桌機（≥881）· 第二層三欄";
+  }
+  function paint(){
+    if (!out) { return; }
+    var w = document.documentElement.clientWidth;
+    out.textContent = "目前斷點：" + band(w) + "　視窗寬 " + w + "px";
+  }
+  paint();
+  window.addEventListener("resize", paint);
+
+  /* 主 CTA：原型不接行為，按下只誠實說明 */
+  var cta = document.getElementById("cta");
+  var note = document.getElementById("cta-note");
+  if (cta && note) {
+    cta.addEventListener("click", function(){
+      note.textContent = "原型不接任何行為；正式頁這顆會送出一次更新（示意）。";
+    });
+  }
+})();
+</script>
+</body>
+</html>
