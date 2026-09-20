@@ -1,10 +1,10 @@
 {
-  "updated_at": "2026-09-19T13:00:30.771380+00:00",
+  "updated_at": "2026-09-20T13:31:58.060209+00:00",
   "datasets": {
     "twii_ohlcv": {
       "name": "twii_ohlcv",
-      "last_updated": "2026-09-18",
-      "row_count": 4937,
+      "last_updated": "2026-09-20",
+      "row_count": 4938,
       "last_error": null
     },
     "finmind_inst": {
