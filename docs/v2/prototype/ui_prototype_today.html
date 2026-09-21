@@ -44,7 +44,7 @@
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{
-  margin:0; background:var(--paper); color:var(--ink);
+  margin:0; position:relative; background:var(--paper); color:var(--ink);
   font-family:var(--sans); font-size:14.5px; line-height:1.72; font-weight:400;
 }
 .wrap{max-width:1180px; margin:0 auto; padding:var(--sp-7) var(--sp-6) 64px}
@@ -54,7 +54,7 @@ body{
 
 /* 字級 ramp（UI_TOKENS §B） */
 h1{font-size:clamp(26px,4.4vw,40px); line-height:1.15; font-weight:900; margin:var(--sp-5) 0 var(--sp-1)}
-h2{font-size:clamp(20px,2.6vw,27px); line-height:1.3; font-weight:800; margin:var(--sp-8) 0 0}
+h2{font-size:clamp(20px,2.6vw,27px); line-height:1.3; font-weight:800; margin:var(--sp-8) 0 0}  /* 標題 L2：砍掉示意小標後本頁未用，僅登記 UI_TOKENS §B 字級 ramp（同 --ser-1…7 的作法） */
 .note{font-family:var(--mono); font-size:11.5px; line-height:1.45; font-weight:400; color:var(--ink-3); margin:var(--sp-1) 0 0}
 .num{font-family:var(--mono); font-size:13px; line-height:1.5; font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap}
 .big{font-size:24px; line-height:1.25; font-weight:700; margin-top:2px}  /* render_card 大字區；prose 走 --sans，數值才走 --mono */
@@ -154,9 +154,13 @@ details.ev[open]>summary .caret{transform:rotate(90deg)}
   padding:0 5px; border-radius:var(--r-pan); border:1px dashed var(--ochre-line);
   background:var(--ochre-bg); color:var(--ochre); font-size:10.5px; line-height:1.6; font-weight:600; white-space:nowrap}
 [data-proto-only].banner{margin-top:var(--sp-5); border-color:var(--ochre-line)}
-.legend{display:grid; gap:var(--sp-3); grid-template-columns:1fr; margin-top:var(--sp-4)}
-.legend>*{min-width:0; margin-top:0}
-.ladder>*{margin-top:var(--sp-2)}
+/* 首屏摺線：位置由 JS 依「本視窗當下的實測高度」定，⛔ 非推導值、⛔ 不代表正式頁（Streamlit 首屏須實機量測） */
+[data-proto-only].fold{position:absolute; left:0; right:0; height:0;
+  border-top:1px dashed var(--ochre-line); pointer-events:none; z-index:8}
+[data-proto-only].fold .lbl{position:absolute; inset-inline-end:var(--sp-6); transform:translateY(-50%);
+  padding:0 5px; border-radius:var(--r-pan); border:1px dashed var(--ochre-line);
+  background:var(--ochre-bg); color:var(--ochre);
+  font-family:var(--mono); font-size:10.5px; line-height:1.6; font-weight:600; white-space:nowrap}
 .btnbar{display:flex; flex-wrap:wrap; gap:var(--sp-3); align-items:center; margin-top:var(--sp-4)}
 .fs{border:0; padding:0; margin:0}
 .modes{display:flex; flex-wrap:wrap; gap:var(--sp-5); margin-top:var(--sp-3)}
@@ -189,12 +193,10 @@ hr.rule{border:0; border-top:1px solid var(--rule); margin:var(--sp-7) 0 0}
 /* ② 平板 641–880 */
 @media (min-width:641px) and (max-width:880px){
   .g3{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .legend{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 /* ③ 桌機 ≥881 */
 @media (min-width:881px){
   .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .legend{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 </style>
 </head>
@@ -207,14 +209,32 @@ hr.rule{border:0; border-top:1px solid var(--rule); margin:var(--sp-7) 0 0}
   <div class="pan banner" data-proto-only role="note">
     <strong><i class="ic">⚠︎</i> 這是視覺原型，所有數字都是示意，不接任何真實資料。</strong>
     <p class="note">單一 HTML 檔 · 零外部框架／CDN · 零網路請求 · 系統字堆疊 · 深色模式 <span class="num">--paper #0e141b</span>。
-      畫面上每個數字旁都有「示意」標記；沒有標記的地方就是沒有數字。</p>
+      畫面上每個數字旁都有「示意」標記；沒有標記的地方就是沒有數字。
+      原型專用標記（「示意」chip、本橫幅、斷點讀數、首屏摺線）帶 <span class="num">[data-proto-only]</span>，⛔ 非 v2 元件，正式頁不渲染。</p>
+    <p class="note">首屏摺線畫的是<strong>本原型在目前這個視窗的實測摺點</strong>（JS 讀 <span class="num">innerHeight</span>）；
+      正式頁（Streamlit）的首屏依五份頁級規格一律「需實機量測」，⛔ 不猜、⛔ 不得拿本線當正式頁依據。</p>
     <p class="note" id="bpout">目前斷點：偵測中…</p>
   </div>
+
+  <!-- 五頁分頁列（葉外 chrome，五頁共用，⛔ 不計入四層） -->
+  <nav class="pan stack" aria-label="戰情室五頁">
+    <span class="key">戰情室五頁</span>
+    <div class="btnbar">
+      <strong aria-current="page">🚦 今天</strong>
+      <button type="button" class="cta dis" disabled><i class="ic">⚪</i> 🔍 找標的 · 未啟用</button>
+      <button type="button" class="cta dis" disabled><i class="ic">⚪</i> 🔬 查一檔 · 未啟用</button>
+      <button type="button" class="cta dis" disabled><i class="ic">⚪</i> 💼 我的持股 · 未啟用</button>
+      <button type="button" class="cta dis" disabled><i class="ic">⚪</i> 📖 憑什麼 · 未啟用</button>
+    </div>
+    <p class="note">頁名逐字取自 <span class="num">shared/ia_nav.py PAGE_LABELS</span>（L0 SSOT），⛔ 不手抄、⛔ 不另取名。
+      本頁為「🚦 今天」；其餘四頁在本原型未啟用 ⇒ 走 <span class="num">UI_COMPONENTS §3 停用態</span>
+      （<span class="num">13.5px/500</span> ＋ 1px dashed <span class="num">--rule-2</span> ＋ 字 <span class="num">--sig-grey</span>），
+      並依 <span class="num">UI_TOKENS A-2</span>「⛔ 一律配圖示＋文字」帶 ⚪。</p>
+  </nav>
 
   <h1>🚦 今天</h1>
   <p class="lede">一頁看完「今天整體是什麼狀態」。版面依 <span class="num">UI_PAGE_TODAY.md ①</span> 四層結構；
     元件依 <span class="num">UI_COMPONENTS.md</span>；色票／字級／間距依 <span class="num">UI_TOKENS.md</span>。</p>
-  <p class="note">葉外 chrome（線框 n0）＝ 下面這排狀態卡，五頁共用，⛔ 不計入四層。</p>
 
   <div class="g3">
     <div class="blk t3">
@@ -233,14 +253,42 @@ hr.rule{border:0; border-top:1px solid var(--rule); margin:var(--sp-7) 0 0}
       <p class="note">連線中…（原型：靜態示意）</p>
     </div>
   </div>
+
+  <!-- 資料時點揭露列（葉外 chrome · chrome.asof）：每個數字都要看得出「它是什麼時候的資料」 -->
+  <section class="blk t3" aria-labelledby="asof-t">
+    <div class="bt">
+      <span class="t" id="asof-t">資料時點</span>
+      <span class="bdg sbadge b3 s9"><i class="ic">◧</i>3／5 有資料日期</span>
+    </div>
+    <div class="stack">
+      <div class="rowline"><span class="key">美債 10Y · FRED:DGS10</span>
+        <span><span class="num">09-15 收盤</span><span class="demo" data-proto-only>示意</span></span></div>
+      <div class="rowline"><span class="key">VIX · Yahoo:^VIX</span>
+        <span><span class="num">09-15 收盤</span><span class="demo" data-proto-only>示意</span></span></div>
+      <div class="rowline"><span class="key">持股清單 · Google Sheet</span>
+        <span><span class="num">09-16 15:20 取得</span><span class="demo" data-proto-only>示意</span></span></div>
+      <div class="rowline"><span class="key">台灣 PMI · CIER</span>
+        <span><span class="num" title="缺漏 · 可重跑">⚠︎ —</span>
+          <span class="bdg s7"><i class="ic">⚠︎ —</i>這一輪沒拿到</span></span></div>
+      <div class="rowline"><span class="key">總經契約 · get_macro_state()</span>
+        <span><span class="num" title="不適用 · 重跑無效">N/A</span>
+          <span class="bdg s8"><i class="ic">N/A</i>來源未提供資料日期</span></span></div>
+    </div>
+    <p class="note">寫法依 <span class="num">S1-3B §2.7</span>：<strong>歸屬日 ＋ 性質</strong>兩段缺一不可 ——
+      日期回答「哪一天」，性質回答「那天的什麼」。「<span class="num">取得</span>」與「<span class="num">收盤／資料</span>」
+      刻意用不同的字：前者是抓取時間、後者才是資料自己的日期，⛔ 不得混寫。
+      ⛔ 禁用「今天／剛剛／最新」這類相對詞（頁面會停在瀏覽器分頁裡好幾個小時）。</p>
+    <p class="note">⛔ 本列<strong>不做新鮮度判斷</strong>（S1-3B ★-05：本 repo 的交易日推算沒有時刻概念，會在每個交易日整個上午對正常資料發假警示）。
+      最後一列是<strong>實測事實不是示意</strong>：L3 canonical 總經契約與 readiness 側車<strong>都沒有</strong>
+      <span class="num">as_of</span>／<span class="num">timestamp</span> 欄位 ⇒ 標 <span class="num">N/A</span>（重跑無效，要顯示得先擴充 L3），
+      ⛔ 不得填今天、⛔ 不得填抓取時間冒充資料日。卡頭 #9 的分子分母在此為示意；
+      正式頁拿不到分子分母時依 <span class="num">UI_COMPONENTS §2</span> fail-safe 一律降級 #7，⛔ 不退回 #1。</p>
+  </section>
 </header>
 
 <main id="main">
 
 <!-- ═══════ 第一層：結論燈（today.verdict · t1 · cols 1/1/1）═══════ -->
-<h2>第一層 · 結論燈</h2>
-<p class="note">block <span class="num">today.verdict</span>　卡密度 <span class="num">.blk.t1</span>（border 2px）　主徽章 <span class="num">.sbadge b1</span>　三斷點皆一格滿版</p>
-
 <section class="blk t1" aria-labelledby="v-t">
   <div class="bt">
     <span class="t" id="v-t">① 結論燈</span>
@@ -248,14 +296,11 @@ hr.rule{border:0; border-top:1px solid var(--rule); margin:var(--sp-7) 0 0}
   </div>
   <div class="big">今天偏防守<span class="demo" data-proto-only>示意</span></div>
   <p class="lede">本頁今天的整體狀態偏向防守側：短線急殺桶亮警戒、籌碼桶維持安定。
-    本行只描述狀態，⛔ 不含任何買賣或加減碼建議。</p>
+    本行只描述狀態，⛔ 不含任何方向或部位建議。</p>
   <p class="note">這句結論是獨立字串，⛔ 不由第二層三張卡平均／取 worst／合成而來（UI_PAGE_TODAY ③ 末行）。</p>
 </section>
 
 <!-- ═══════ 第二層：3 張並排卡（t2 · ⛔ 卡片本身不可點、⛔ 不放按鈕）═══════ -->
-<h2>第二層 · 核心卡</h2>
-<p class="note">blocks <span class="num">today.summary</span>／<span class="num">today.key_banner</span>／<span class="num">today.holdings</span>　卡密度 <span class="num">.blk.t2</span>　主徽章 <span class="num">.sbadge b2</span>　⛔ 本層無按鈕、無連結、卡片不可點</p>
-
 <div class="g3">
 
   <!-- A. 三欄摘要：逐格獨立判態，一格壞不染色另兩格 -->
@@ -312,9 +357,6 @@ hr.rule{border:0; border-top:1px solid var(--rule); margin:var(--sp-7) 0 0}
 </div>
 
 <!-- ═══════ 第三層：操作列（today.actions · t3 · 主 CTA）═══════ -->
-<h2>第三層 · 操作列</h2>
-<p class="note">block <span class="num">today.actions</span>　卡密度 <span class="num">.blk.t3</span>　主 CTA 字串 SSOT ＝ <span class="num">shared/ia_nav.py ACTION_LABELS</span></p>
-
 <section class="blk t3" aria-labelledby="a-t">
   <div class="bt">
     <span class="t" id="a-t">④ 操作列</span>
@@ -335,9 +377,6 @@ hr.rule{border:0; border-top:1px solid var(--rule); margin:var(--sp-7) 0 0}
 </section>
 
 <!-- ═══════ 第四層：展開佐證（t4 · 1px dashed · 可點開可收合）═══════ -->
-<h2>第四層 · 展開佐證</h2>
-<p class="note">blocks <span class="num">today.warroom</span>／<span class="num">today.detail</span>　卡密度 <span class="num">.blk.t4</span>（1px dashed）　主徽章 <span class="num">.sbadge b4</span>（border 0）　觸發器 min 44×44</p>
-
 <!-- 4-a 戰情摘要：取得失敗 -->
 <details class="ev">
   <summary aria-expanded="false"><span class="caret">▸</span> 展開佐證 · 戰情摘要（3）
@@ -416,48 +455,25 @@ hr.rule{border:0; border-top:1px solid var(--rule); margin:var(--sp-7) 0 0}
     ≤640px：不畫表頭，一列＝一張 .blk.t3 卡，欄名降為 key（示意欄位共 4 對）。</p>
 </details>
 
-<!-- 4-c 狀態圖鑑 -->
+<!-- 4-c AI 戰情總結：AI 生成內容，必帶 AI 揭露（S1-6 §3.1 版本 A 潤稿型） -->
 <details class="ev" open>
-  <summary aria-expanded="true"><span class="caret">▸</span> 狀態圖鑑 · 徽章 10 種／按鈕／卡片四層</summary>
-
-  <p class="note stack">硬規則：狀態色一律「圖示＋文字」，⛔ 顏色不是唯一載體（綠/紅在 deuteranopia 下 ΔE 3.9 無解）。</p>
-  <div class="legend">
-    <div class="blk t4"><span class="bdg s1"><i class="ic">🟢</i>運作中</span>
-      <p class="note">#1 正常 · UI_LIVE　本頁：結論燈、長期桶</p></div>
-    <div class="blk t4"><span class="bdg s2"><i class="ic">⏳</i>載入中</span>
-      <p class="note">#2 載入中 · UI_LOADING　本頁：今日關鍵（骨架卡）</p></div>
-    <div class="blk t4"><span class="bdg s3"><i class="ic">⬜</i>尚未載入</span>
-      <p class="note">#3 還沒載入 · UI_IDLE　本頁：葉外「總經」卡</p></div>
-    <div class="blk t4"><span class="bdg s4"><i class="ic">🟠</i>門檻已失準</span>
-      <p class="note">#4 門檻已失準 · UI_DEGRADED　觀測照出、判決留白</p></div>
-    <div class="blk t4"><span class="bdg s5"><i class="ic">⛔</i>未接線</span>
-      <p class="note">#5 這項還沒做 · UI_UNWIRED　本頁：三欄摘要「動能」</p></div>
-    <div class="blk t4"><span class="bdg s6"><i class="ic">🔴</i>取得失敗</span>
-      <p class="note">#6 出錯了 · UI_FAILED　本頁：戰情摘要、新聞桶</p></div>
-    <div class="blk t4"><span class="bdg s7"><i class="ic">⚠︎ —</i>缺漏 · 可重跑</span>
-      <p class="note">#7 缺漏 · UI_EMPTY＋MISS_NO_INPUT　本頁：持倉健檢、籌碼桶、台灣 PMI</p></div>
-    <div class="blk t4"><span class="bdg s8"><i class="ic">N/A</i>不適用 · 重跑無效</span>
-      <p class="note">#8 結構上不適用 · MISS_NOT_APPLICABLE　⛔ 與 #7 不得只靠顏色分辨</p></div>
-    <div class="blk t4"><span class="bdg s9"><i class="ic">◧</i>N／M 計入</span>
-      <p class="note">#9 資料不完整　本頁 L3 無分子分母 ⇒ fail-safe 恆降級 #7，⛔ 不退回 #1</p></div>
-    <div class="blk t4"><span class="bdg s10"><i class="ic">◆</i>只描述，不判等級</span>
-      <p class="note">#10 emits_level=False　本頁不畫（無此類指標），⛔ 不得併進 #8</p></div>
-  </div>
-
-  <p class="note stack">按鈕 5 類中的 4 類（主 CTA 全站唯一一顆，在第三層，⛔ 此處不重複渲染）：</p>
-  <div class="btnbar">
-    <button type="button" class="cta sec">次級（說明）</button>
-    <span class="note">次級（展開佐證）＝ 上方每個 ▸ 觸發器（min 44×44）</span>
-    <button type="button" class="btn-txt">文字按鈕（表頭明細）</button>
-    <button type="button" class="cta dis" disabled>本頁目前沒有主 CTA</button>
-  </div>
-
-  <p class="note stack">卡片四層密度：只靠 border-width／dashed／padding 三個通道區分，⛔ 無陰影。</p>
-  <div class="ladder">
-    <div class="blk t1"><div class="bt"><span class="t">t1 結論　15px 17px · border 2px solid</span></div></div>
-    <div class="blk t2"><div class="bt"><span class="t">t2 核心　10px 12px · border 1px solid</span></div></div>
-    <div class="blk t3"><div class="bt"><span class="t">t3 操作　6px 9px · border 1px solid</span></div></div>
-    <div class="blk t4"><div class="bt"><span class="t">t4 佐證　5px 9px · border 1px dashed</span></div></div>
+  <summary aria-expanded="true"><span class="caret">▸</span> AI 戰情總結
+    <span class="bdg s1"><i class="ic">🟢</i>運作中</span></summary>
+  <div class="blk t4">
+    <div class="bt"><span class="t">AI 戰情總結</span>
+      <span class="bdg sbadge b4 s1"><i class="ic">🟢</i>運作中</span></div>
+    <p class="lede">今天整體偏防守側：五桶裡只有長期與短線急殺維持綠燈；中期桶的門檻帶在本區間已失準，
+      籌碼桶這一輪沒拿到資料，新聞桶取得失敗。
+      逐盞燈那張表上，美債 10Y <span class="num">4.12 %</span><span class="demo" data-proto-only>示意</span> 仍在門檻內，
+      VIX <span class="num">18.4</span><span class="demo" data-proto-only>示意</span> 的門檻帶已失準（觀測照出、判決留白）。
+      五桶有三桶不是綠燈，所以本段只描述狀態，不給方向。</p>
+    <p class="note">⚠️ 這是 AI 生成的文字，不是投資建議；數字一律以上方各卡的數值為準。</p>
+    <p class="note">AI 在這裡只做<strong>潤稿</strong>：它拿到的是上面已經算好的結論，prompt 明文禁止它自行杜撰代號或數字；
+      但<strong>潤稿本身仍可能改寫語氣、或漏掉某一格上的限制條件</strong>。有出入時以卡面的數字與門檻為準。
+      揭露樣板依 <span class="num">S1-6_COMPLIANCE_COPY_GUIDE.md §3.1</span> 版本 A（潤稿型），
+      三件事缺一不可：<strong>這段是 AI 生成的</strong>、<strong>不是投資建議且數字以卡面為準</strong>、<strong>潤稿本身可能改壞</strong>。</p>
+    <p class="note">本段為原型示意文字，不接任何模型；句中每一個數字都帶「示意」標記，
+      且與上方「逐盞燈明細」表的同一筆示意值一致，⛔ 不另編一組數字。</p>
   </div>
 </details>
 
@@ -465,16 +481,12 @@ hr.rule{border:0; border-top:1px solid var(--rule); margin:var(--sp-7) 0 0}
 
 <hr class="rule">
 <footer>
-  <p class="note">規格出處：<span class="num">docs/v2/spec/UI_TOKENS.md</span>（色票／字級／間距／序列色）、
-    <span class="num">docs/v2/spec/UI_COMPONENTS.md</span>（卡片 t1–t4／徽章 10 種／按鈕 5 類／表格）、
-    <span class="num">docs/v2/spec/UI_PAGE_TODAY.md</span>（四層結構與各層 block）。</p>
-  <p class="note">底色用規格值 <span class="num">--paper #0e141b</span>；<span class="num">.streamlit/config.toml</span>
-    現值 <span class="num">#0e1117</span> 客戶已裁示「與第一個 view 落地同批改」，故原型不對齊尚未改的 config。</p>
-  <p class="note">序列色 7 槽已在 <span class="num">:root</span> 登記（--ser-1…7），本原型⛔ 不做圖表故未使用；
-    正式頁同時用 ≥4 槽時一律強制直接標籤或紋理，⛔ 不得只靠顏色。</p>
-  <p class="note">原型專用標記（「示意」chip、常駐橫幅、斷點讀數）帶 <span class="num">[data-proto-only]</span>，⛔ 非 v2 元件，正式頁不渲染。</p>
+  <p class="note">⚠️ 台股AI戰情室 v3.0 · 僅供學術研究，非投資建議，盈虧自負</p>
 </footer>
 </div>
+
+<!-- 首屏摺線（原型專用標記）：位置由 JS 依本視窗當下的實測高度定，⛔ 非推導值、⛔ 不代表正式頁 -->
+<div class="fold" id="fold" data-proto-only aria-hidden="true"><span class="lbl" id="foldlbl"></span></div>
 
 <script>
 (function(){
@@ -497,10 +509,22 @@ hr.rule{border:0; border-top:1px solid var(--rule); margin:var(--sp-7) 0 0}
     if (w <= 880) { return "平板（641–880）· 第二層兩欄"; }
     return "桌機（≥881）· 第二層三欄";
   }
+  /* 首屏摺線：畫在「本視窗實測的首屏結束處」。
+     ⛔ 不寫死任何斷點高度（375／768／1280 是寬度，高度本 repo 無基準），
+     一律讀 innerHeight 現場量測；正式頁（Streamlit）的首屏依五份頁級規格需實機量測。 */
+  var fold = document.getElementById("fold");
+  var foldLbl = document.getElementById("foldlbl");
   function paint(){
-    if (!out) { return; }
     var w = document.documentElement.clientWidth;
-    out.textContent = "目前斷點：" + band(w) + "　視窗寬 " + w + "px";
+    var h = window.innerHeight;
+    if (out) {
+      out.textContent = "目前斷點：" + band(w) + "　視窗寬 " + w + "px";
+    }
+    if (fold && foldLbl) {
+      fold.style.top = h + "px";
+      foldLbl.textContent = "首屏摺線 · " + band(w).split("·")[0].trim()
+        + " · 本視窗實測 " + w + "×" + h + "px";
+    }
   }
   paint();
   window.addEventListener("resize", paint);

@@ -1,5 +1,9 @@
 # Dead Code Audit — T2 25 候選 AST-strict 重 verify(v18.400 自動處理收尾)
 
+> 📌 **2026-09-21 客戶裁示：本檔已被根目錄 `DEAD_CODE.md` 取代。** 死碼登記的**現行唯一入口**是
+> `DEAD_CODE.md`（遇到死碼先查那裡；有登記就引用編號，沒登記先登記再處理）。
+> 本檔降為 **v18.400 歷史稽核紀錄**，內容**保留不刪、不改**。
+
 > 接 PR #406 嚴格雙重條件 audit。T2 25 處 prod-dead-test-live 候選逐個 AST-strict
 > 重 verify,並驗 test 內部對函式的真實使用形式。
 
