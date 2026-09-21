@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🚦 今天 · 戰情室 v2 靜態原型</title>
+<!--
+本檔是**機器產生**的靜態快照，⛔ 不要手改。
+
+(a) 產生來源：my-stock-dashboard 分支 ui-v2，src/ui_v2/ 於 commit b4cb83e297a1e9b0cac0c8f3c1958bf9e4a4e347（2026-09-21）
+    產生當下 HEAD ＝ 9fd8e136e7e14c733cf31b23cf21286fcf8a9c03
+    src/ui_v2/ 工作區乾淨（無未提交變更）
+    src/ui_v2 六檔內容 sha256 ＝ afa5a4205837009f3d000d4acec28b0b5f50f92044507190327d9b9fac7d0597
+(b) 產生日期：2026-09-21
+(c) ⚠️ **這是靜態快照：tokens.py / components.py 改了，這個檔不會自動跟著變。**
+    要它跟上，唯一的方法是重跑產生器（見 d）。
+    畫面上所有數字都是示意值，未接任何資料源。
+
+(d) 怎麼重建（產生器是拋棄式的、刻意不進 repo；此處記錄完整配方）：
+    1. css ＝ markup.page_css('dark') 的輸出，**逐字**內嵌進 style 標籤（第一段）。
+    2. 取 markup.page_css('light') 的第一行（它就是 :root 那一條）。
+       先自驗：兩個模式的輸出去掉第一行後必須逐字相同；且該行必須等於用
+       tokens.get_token(name, mode) ＋ tokens.SPACING ＋ components.FONT_STACKS
+       獨立組出來的字串。兩道都過，才證明「只重新宣告 :root」與「整份重貼」等價。
+    3. 依序補四條規則：
+       R1 dark 的 :root（已在第 1 步內含，為預設）；
+       R2 @media (prefers-color-scheme: light) 內包 light 的 :root；
+       R3 :root[data-theme="dark"] 換選擇器後的 dark 宣告；
+       R4 :root[data-theme="light"] 換選擇器後的 light 宣告。
+       R3 不可省：屬性選擇器權重 (0,2,0) 高於 R2 的 (0,1,0)，
+       少了它，系統淺色下按「切換深色」會沒有反應。
+    4. 外殼樣式（橫幅／頁首／層標籤／按鈕／說明字）另外產：
+       數值全部取自 components.CARD_TIERS / CARD_BASE / CARD_VALUE / BUTTONS /
+       FOCUS_RING 與 page_today.HOLDINGS_EQUAL_WEIGHT_DISCLOSURE，
+       顏色與間距一律 var(…) token。⛔ 本檔不手打色碼、不手打 px。
+    5. 內容依 page_today.LAYERS 逐層產：
+       每個 block 走 markup.card_html() ＋ markup.grid_html()；
+       有登記層網格的層（實測只有第二層）整層走 markup.layer_html()。
+    6. 徽章總覽走 markup.badge_html(n, size=…)。
+
+⚠️ 例外揭露（依 CLAUDE.md §3.3 反捏造，據實記錄）：
+    body 的 font-family 用的是通用系統字堆疊，**沒有契約出處** ——
+    UI_TOKENS.md §B 的字型 token 尚未落地到 tokens.py
+    （components.FONT_STACKS 只有 mono 一條，且自陳是暫時落地點）。
+    因此本頁也**不設**內文字級與行高，讓它退回瀏覽器預設，
+    ⛔ 不自己挑一個看起來合理的數字。
+-->
+<style>
+/* ══ 1. markup.page_css('dark') 的輸出，逐字內嵌 —— dark 是預設模式 ══ */
+:root{--ochre:#d59a5e;--ochre-bg:#2a2013;--ochre-line:#8a6234;--focus:#8fc0ff;--paper:#0e141b;--panel:#151d26;--panel-2:#1b242f;--grid:#1a242e;--rule:#2e3b48;--rule-2:#46545f;--ink:#dbe5ef;--ink-2:#9fb0c1;--ink-3:#7d8d99;--review-bg:#1d1b28;--review-line:#8b82b4;--review-ink:#c3bbe4;--sig-green:#57b985;--sig-green-bg:#11241a;--sig-amber:#d3a43c;--sig-amber-bg:#292110;--sig-red:#e8706b;--sig-red-bg:#2b1615;--sig-blue:#4b8efe;--sig-blue-bg:#141f2b;--sig-grey:#8b98a4;--sig-grey-bg:#1b232b;--sig-neutral:#8fa3b8;--sig-neutral-bg:#26313d;--sp-1:4px;--sp-2:6px;--sp-3:8px;--sp-4:10px;--sp-5:12px;--sp-6:16px;--sp-7:22px;--sp-8:26px;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+/* ── block 網格（卡內一列幾格）── */
+.grd{display:grid;gap:var(--sp-5)}
+.grd>*{min-width:0}
+.grd>.blk{margin-top:0px}
+.grd-t1{margin-top:15px}
+.grd-t2{margin-top:10px}
+.grd-t3{margin-top:6px}
+.grd-t4{margin-top:5px}
+.g-1-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}
+.g-3-2-1{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* ── 層級網格（同一層的 block 彼此怎麼並排）── */
+.lyr{display:grid;gap:var(--sp-5)}
+.lyr>*{min-width:0}
+.lyr>.grd{margin-top:0px}
+.lyr-t2{margin-top:10px}
+.lg-3-2-1{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* ── 卡片基準 ── */
+.blk{box-sizing:border-box;background:var(--panel);border-width:1px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk *{box-sizing:border-box}
+/* ── 四階密度階梯（UI_COMPONENTS §1）── */
+.blk-t1{margin-top:15px;padding-top:15px;padding-bottom:15px;padding-left:17px;padding-right:17px;border-width:2px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk-t2{margin-top:10px;padding-top:10px;padding-bottom:10px;padding-left:12px;padding-right:12px;border-width:1px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk-t3{margin-top:6px;padding-top:6px;padding-bottom:6px;padding-left:9px;padding-right:9px;border-width:1px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk-t4{margin-top:5px;padding-top:5px;padding-bottom:5px;padding-left:9px;padding-right:9px;border-width:1px;border-style:dashed;border-color:var(--rule-2);border-radius:2px}
+/* ── 卡內結構 ── */
+.blk-head{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);flex-wrap:wrap}
+.blk-t1 .blk-title{font-size:17.5px;font-weight:700}
+.blk-t2 .blk-title{font-size:14.5px;font-weight:700}
+.blk-t3 .blk-title{font-size:13px;font-weight:700}
+.blk-t4 .blk-title{font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.blk-val{font-size:24px;font-weight:700;font-family:var(--mono);line-height:1.25;font-variant-numeric:tabular-nums}
+.blk-lvl{color:var(--ink-2)}
+.blk-facts{margin-top:var(--sp-3)}
+.blk-fact{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);padding-top:var(--sp-1);padding-bottom:var(--sp-1);border-top-width:1px;border-top-style:solid;border-top-color:var(--grid)}
+.blk-fact:first-child{border-top-width:0px}
+.blk-fact-k{color:var(--ink-2)}
+.blk-fact-v{font-variant-numeric:tabular-nums}
+/* ── 徽章共用幾何 ── */
+.bdg{display:inline-flex;align-items:center;gap:4px;border-radius:3px;padding-top:1px;padding-bottom:1px;padding-left:7px;padding-right:7px;font-size:11.5px;font-weight:600;white-space:nowrap;border-width:1px;border-style:solid}
+/* ── 徽章編號配色（⛔ #9 與 #1 零共用色 token）── */
+.bdg-1{background:var(--sig-green-bg);color:var(--sig-green);border-width:1px;border-style:solid;border-color:var(--sig-green)}
+.bdg-2{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-3{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-4{background:var(--sig-amber-bg);color:var(--sig-amber);border-width:1px;border-style:solid;border-color:var(--sig-amber)}
+.bdg-5{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:dashed;border-color:var(--rule-2)}
+.bdg-6{background:var(--sig-red-bg);color:var(--sig-red);border-width:1px;border-style:solid;border-color:var(--sig-red)}
+.bdg-7{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-8{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-9{background:var(--sig-neutral-bg);color:var(--sig-neutral);border-width:1px;border-style:dashed;border-color:var(--sig-blue)}
+/* ── 徽章尺寸（依所在卡層 t1→b1 … t4→b4）── */
+.bdg.sb-b1{font-size:14.5px;padding-top:10px;padding-bottom:10px;padding-left:22px;padding-right:22px;min-height:46px;border-width:2px;border-radius:3px}
+.bdg.sb-b2{font-size:12.5px;padding-top:5px;padding-bottom:5px;padding-left:13px;padding-right:13px;min-height:36px;border-width:1px;border-radius:3px}
+.bdg.sb-b3{font-size:11px;padding-top:2px;padding-bottom:2px;padding-left:10px;padding-right:10px;min-height:28px;border-width:1px;border-radius:3px}
+.bdg.sb-b4{font-size:10.5px;padding-top:2px;padding-bottom:2px;padding-left:5px;padding-right:5px;min-height:26px;border-width:0px;border-radius:3px}
+@media (max-width:880px){.g-1-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}.g-3-2-1{grid-template-columns:repeat(2,minmax(0,1fr))}.lg-3-2-1{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.g-1-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}.g-3-2-1{grid-template-columns:repeat(1,minmax(0,1fr))}.lg-3-2-1{grid-template-columns:repeat(1,minmax(0,1fr))}.blk-t1{padding-top:11px;padding-bottom:11px;padding-left:12px;padding-right:12px}}
+/* ══ 2. 淺色：只重新宣告 :root（非 :root 的規則一律沿用上面那份）══ */
+/* ── R2：系統為淺色時的調色盤（內容取自 page_css('light') 的 :root，一字未改）── */
+@media (prefers-color-scheme: light){:root{--ochre:#96591f;--ochre-bg:#f6ecdf;--ochre-line:#c08a4e;--focus:#14508f;--paper:#f6f5f1;--panel:#fffefc;--panel-2:#edece7;--grid:#e5e3dc;--rule:#c6ccd2;--rule-2:#9aa4af;--ink:#15293f;--ink-2:#4b5b6d;--ink-3:#5f6c77;--review-bg:#eceaf2;--review-line:#6f6790;--review-ink:#4a4270;--sig-green:#1c6f43;--sig-green-bg:#e3f0e9;--sig-amber:#87600a;--sig-amber-bg:#f6efdb;--sig-red:#ae2f2b;--sig-red-bg:#f8e7e5;--sig-blue:#044cb6;--sig-blue-bg:#e4ecf3;--sig-grey:#586470;--sig-grey-bg:#eae9e4;--sig-neutral:#1e3b4f;--sig-neutral-bg:#d7dce1;--sp-1:4px;--sp-2:6px;--sp-3:8px;--sp-4:10px;--sp-5:12px;--sp-6:16px;--sp-7:22px;--sp-8:26px;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}}
+/* ── R3／R4：手動切換（權重 0,2,0 ⇒ 兩個方向都壓得過 R1／R2）── */
+:root[data-theme="dark"]{--ochre:#d59a5e;--ochre-bg:#2a2013;--ochre-line:#8a6234;--focus:#8fc0ff;--paper:#0e141b;--panel:#151d26;--panel-2:#1b242f;--grid:#1a242e;--rule:#2e3b48;--rule-2:#46545f;--ink:#dbe5ef;--ink-2:#9fb0c1;--ink-3:#7d8d99;--review-bg:#1d1b28;--review-line:#8b82b4;--review-ink:#c3bbe4;--sig-green:#57b985;--sig-green-bg:#11241a;--sig-amber:#d3a43c;--sig-amber-bg:#292110;--sig-red:#e8706b;--sig-red-bg:#2b1615;--sig-blue:#4b8efe;--sig-blue-bg:#141f2b;--sig-grey:#8b98a4;--sig-grey-bg:#1b232b;--sig-neutral:#8fa3b8;--sig-neutral-bg:#26313d;--sp-1:4px;--sp-2:6px;--sp-3:8px;--sp-4:10px;--sp-5:12px;--sp-6:16px;--sp-7:22px;--sp-8:26px;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+:root[data-theme="light"]{--ochre:#96591f;--ochre-bg:#f6ecdf;--ochre-line:#c08a4e;--focus:#14508f;--paper:#f6f5f1;--panel:#fffefc;--panel-2:#edece7;--grid:#e5e3dc;--rule:#c6ccd2;--rule-2:#9aa4af;--ink:#15293f;--ink-2:#4b5b6d;--ink-3:#5f6c77;--review-bg:#eceaf2;--review-line:#6f6790;--review-ink:#4a4270;--sig-green:#1c6f43;--sig-green-bg:#e3f0e9;--sig-amber:#87600a;--sig-amber-bg:#f6efdb;--sig-red:#ae2f2b;--sig-red-bg:#f8e7e5;--sig-blue:#044cb6;--sig-blue-bg:#e4ecf3;--sig-grey:#586470;--sig-grey-bg:#eae9e4;--sig-neutral:#1e3b4f;--sig-neutral-bg:#d7dce1;--sp-1:4px;--sp-2:6px;--sp-3:8px;--sp-4:10px;--sp-5:12px;--sp-6:16px;--sp-7:22px;--sp-8:26px;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+/* color-scheme 讓捲軸等瀏覽器 UI 跟著切；它不是色碼，是關鍵字 */
+:root{color-scheme:dark}
+@media (prefers-color-scheme: light){:root{color-scheme:light}}
+:root[data-theme="dark"]{color-scheme:dark}
+:root[data-theme="light"]{color-scheme:light}
+/* ══ 3. 原型外殼（page_css 不產這些；數值出處見各條註解）══ */
+/* ── 版面骨架：只用 --sp-* 間距 token，⛔ 無限寬容器 ── */
+/*    ⛔ 刻意不加 max-width：多一個排版限寬會讓「斷點只有兩個」不成立， */
+/*    也會讓 1→2→3 欄的斷點對不上真正的視窗寬（markup._breakpoint_rules 同旨）*/
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);padding-left:var(--sp-6);padding-right:var(--sp-6);padding-top:var(--sp-6);padding-bottom:var(--sp-8);font-family:system-ui,sans-serif}
+p{margin-top:var(--sp-2);margin-bottom:0}
+/* ── 焦點環：components.FOCUS_RING，全站唯一一條，⛔ 不准個別 outline:none ── */
+:focus-visible{outline-width:2px;outline-style:solid;outline-color:var(--focus);outline-offset:2px}
+/* ── 示意橫幅：色走 sig-amber 對（tokens A-2）、框寬取 CARD_TIERS['t1'] 的 2px、 */
+/*    圓角取 CARD_BASE、字級與字重取 t1 卡標 ⇒ 全頁最高視覺層級 ── */
+.pv-banner{background:var(--sig-amber-bg);color:var(--sig-amber);border-width:2px;border-style:solid;border-color:var(--sig-amber);border-radius:2px;padding-top:15px;padding-bottom:15px;padding-left:17px;padding-right:17px;font-size:17.5px;font-weight:700}
+/* ── 頁首 ── */
+.pv-head{display:flex;justify-content:space-between;align-items:flex-end;gap:var(--sp-5);flex-wrap:wrap;margin-top:var(--sp-7)}
+.pv-title{font-size:24px;font-weight:700;line-height:1.25}
+.pv-toggle{display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap}
+/* ── 說明字：色與字級取自 page_today.HOLDINGS_EQUAL_WEIGHT_DISCLOSURE ── */
+/*    （該常數自陳出處為 UI_TOKENS.md §B 字型 token 表「說明」列）      ── */
+.pv-meta{color:var(--ink-3);font-size:11.5px}
+.pv-disclosure{color:var(--ink-3);font-size:11.5px;margin-top:0;margin-bottom:0}
+.pv-mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+/* ── 層標籤：字級／字重取 CARD_TIERS['t3'] 卡標 ── */
+.pv-layer{margin-top:var(--sp-8)}
+.pv-layer-label{font-size:13px;font-weight:700;color:var(--ink-2);border-bottom-width:1px;border-bottom-style:solid;border-bottom-color:var(--grid);padding-bottom:var(--sp-2)}
+.pv-badges{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-3);margin-top:var(--sp-3)}
+.pv-cta{margin-top:var(--sp-4);display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap}
+/* ── 按鈕：components.BUTTONS 逐欄展開 ── */
+.pv-btn-primary{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding-top:6px;padding-bottom:6px;padding-left:16px;padding-right:16px;font-size:13.5px;font-weight:700;border-radius:3px;background:var(--ink);border-width:2px;border-style:solid;border-color:var(--ink);color:var(--paper);cursor:pointer}
+.pv-btn-primary:hover{background:var(--ochre);border-color:var(--ochre);color:var(--paper)}
+.pv-btn-secondary{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding-top:6px;padding-bottom:6px;padding-left:16px;padding-right:16px;font-size:13.5px;font-weight:700;border-radius:3px;background:transparent;border-width:1px;border-style:solid;border-color:var(--ink);color:var(--ink);cursor:pointer}
+.pv-btn-secondary:hover{background:var(--panel-2);border-color:var(--rule-2)}
+</style>
+</head>
+<body>
+<div class="pv-banner">⚠️ 靜態示意原型：所有數字皆為示意，未接任何資料源</div>
+<header class="pv-head">
+<div>
+<div class="pv-title">🚦 今天 · 戰情室 v2 版面原型</div>
+<p class="pv-meta">整頁 CSS 與所有卡片標記都由 src/ui_v2/markup.py 的公開函式產生（page_css / card_html / grid_html / layer_html / badge_html）；本頁沒有任何手抄的色碼或 px。</p>
+</div>
+<div class="pv-toggle">
+<button type="button" class="pv-btn-secondary" id="pv-theme-toggle">◐ 切換深／淺色</button>
+<span class="pv-meta" id="pv-theme-now">目前：跟隨系統（預設深色）</span>
+</div>
+</header>
+<main>
+<section class="pv-layer">
+<div class="pv-layer-label">葉外 chrome · 密度 t3 · block：today.statusbar</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t3</span>]：內距 6px 9px、框線 1px solid、卡標 13px/700、徽章 .sb-b3、卡距 6px</p>
+<p class="pv-meta">三張卡都確實傳了值進去；「總經」是 #4 門檻已失準 ⇒ 觀測照出、判決留白，「Sheet」是 #7 缺漏 ⇒ 值與判決都留白。畫面上看不到的那些值，是 page_today.card_value_text() / card_level_text() 依狀態擦掉的，不是漏畫。</p>
+<div class="grd grd-t3 g-1-1-1"><div class="blk blk-t3"><div class="blk-head"><span class="blk-title">交易日</span><span class="bdg bdg-1 sb-b3"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">最近交易日</span><span class="blk-fact-v">2026-09-18</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div><div class="blk blk-t3"><div class="blk-head"><span class="blk-title">總經</span><span class="bdg bdg-4 sb-b3"><span aria-hidden="true">🟠</span><span>門檻已失準</span></span></div><div class="blk-val">58.0</div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">門檻校準</span><span class="blk-fact-v">已過期</span></div><div class="blk-fact"><span class="blk-fact-k">行為</span><span class="blk-fact-v">觀測照出、判決留白</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div><div class="blk blk-t3"><div class="blk-head"><span class="blk-title">Sheet</span><span class="bdg bdg-7 sb-b3"><span aria-hidden="true">⚠︎ —</span><span>缺漏 · 可重跑</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">狀態</span><span class="blk-fact-v">讀取失敗</span></div><div class="blk-fact"><span class="blk-fact-k">重試</span><span class="blk-fact-v">有用 ⇒ #7 缺漏 · 可重跑</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">第一層 結論燈 · 密度 t1 · block：today.verdict</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t1</span>]：內距 15px 17px、框線 2px solid、卡標 17.5px/700、徽章 .sb-b1、卡距 15px、手機內距 11px 12px</p>
+<p class="pv-meta">t1 是四階裡唯一 2px 框線、內距最大的一階（手機 ≤640 另有一組覆寫內距，四階中也只有 t1 有）。</p>
+<div class="grd grd-t1 g-1-1-1"><div class="blk blk-t1"><div class="blk-head"><span class="blk-title">① 結論燈</span><span class="bdg bdg-1 sb-b1"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-val">62</div><div class="blk-lvl">🟢 偏多 · 可分批出手</div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">觀測</span><span class="blk-fact-v">綜合 62 / 100</span></div><div class="blk-fact"><span class="blk-fact-k">信心</span><span class="blk-fact-v">中</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">第二層 核心卡 · 密度 t2 · block：today.summary、today.key_banner、today.holdings</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t2</span>]：內距 10px 12px、框線 1px solid、卡標 14.5px/700、徽章 .sb-b2、卡距 10px</p>
+<p class="pv-meta">三個 block 由 layer_html(layer=2) 包在同一個 .lyr / .lg-3-2-1 裡 ⇒ ≥881 三欄、641–880 兩欄、≤640 單欄（拉視窗可驗）。⚠️ today.summary 卡內另有一層 3/2/1（BLOCK_COLS，這是另一個網格）—— 兩層網格同時套用在桌機上會把三欄摘要壓在 1/3 寬內。這正是 UI_PAGE_TODAY.md ③ 登記為「未判定」的 U-1 矛盾（線框說卡內三欄、舊原型畫成層網格三卡）；本原型照現行程式碼原樣渲染，⛔ 不代為裁決。</p>
+<div class="lyr lyr-t2 lg-3-2-1"><div class="grd grd-t2 g-3-2-1"><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">位階</span><span class="bdg bdg-1 sb-b2"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-val">4 / 5</div><div class="blk-lvl">🟢 擴張</div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">動能</span><span class="bdg bdg-5 sb-b2"><span aria-hidden="true">⛔</span><span>未接線</span></span></div></div><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">風險</span><span class="bdg bdg-1 sb-b2"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-val">2 / 5</div><div class="blk-lvl">🟡 偏高</div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div><div class="grd grd-t2 g-1-1-1"><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">今日關鍵橫幅</span><span class="bdg bdg-1 sb-b2"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-val">-1.8%</div><div class="blk-lvl">🟠 外資連 3 賣</div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">加權指數</span><span class="blk-fact-v">22,481</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div><div class="grd grd-t2 g-1-1-1"><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">持倉健檢</span><span class="bdg bdg-1 sb-b2"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-val">83.3%</div><div class="blk-lvl">🟢 已分類 10 / 12</div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">n_total</span><span class="blk-fact-v">12</span></div><div class="blk-fact"><span class="blk-fact-k">n_classified</span><span class="blk-fact-v">10</span></div><div class="blk-fact"><span class="blk-fact-k">n_unclassified</span><span class="blk-fact-v">2</span></div><div class="blk-fact"><span class="blk-fact-k">n_industries</span><span class="blk-fact-v">6</span></div><div class="blk-fact"><span class="blk-fact-k">coverage_pct</span><span class="blk-fact-v">83.3%</span></div><div class="blk-fact"><span class="blk-fact-k">最大單一產業（檔數等權）</span><span class="blk-fact-v">30.0%</span></div><div class="blk-fact"><span class="blk-fact-k">top3_pct</span><span class="blk-fact-v">70.0%</span></div><div class="blk-fact"><span class="blk-fact-k">hhi</span><span class="blk-fact-v">0.18</span></div><div class="blk-fact"><span class="blk-fact-k">n_eff</span><span class="blk-fact-v">5.6</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div><p class="pv-disclosure">集中度以「檔數等權」計算 —— 持股來源只有代號與名稱，沒有張數與均價，因此這裡的百分比是檔數佔比，不是部位佔比。</p></div></div>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">第三層 操作列 · 密度 t3 · block：today.actions</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t3</span>]：內距 6px 9px、框線 1px solid、卡標 13px/700、徽章 .sb-b3、卡距 6px</p>
+<p class="pv-meta">主 CTA 全站唯一一顆，標籤逐字取 page_today.MAIN_CTA[&#x27;label&#x27;]；可按性取 main_cta_state()。⚠️ 本頁是靜態原型，按下去不會有任何事發生。</p>
+<div class="grd grd-t3 g-1-1-1"><div class="blk blk-t3"><div class="blk-head"><span class="blk-title">today.actions</span><span class="bdg bdg-1 sb-b3"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">主 CTA</span><span class="blk-fact-v">全站唯一一顆</span></div><div class="blk-fact"><span class="blk-fact-k">停用條件</span><span class="blk-fact-v">MISS_CONTRACT_DRIFT</span></div></div></div></div>
+<div class="pv-cta">
+<button type="button" class="pv-btn-primary">🚀 更新今日戰情</button>
+<span class="pv-meta">靜態原型：這顆鈕不會觸發任何事。</span>
+</div>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">第四層 展開佐證 · 密度 t4 · block：today.warroom、today.detail</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t4</span>]：內距 5px 9px、框線 1px dashed、卡標 12.5px/700、徽章 .sb-b4、卡距 5px</p>
+<p class="pv-meta">t4 是四階裡唯一 dashed 的一階。today.detail 放了 4 張卡、而它的網格是 3 欄 ⇒ 第 4 張換行排下一列（cols ＝ 一列幾格，⛔ 不是加欄）。這 4 張卡的標題直接取自 components.BADGES 的 name —— 規格沒有給 today.detail 的逐卡名稱，⛔ 不發明。</p>
+<div class="grd grd-t4 g-1-1-1"><div class="blk blk-t4"><div class="blk-head"><span class="blk-title">today.warroom</span><span class="bdg bdg-3 sb-b4"><span aria-hidden="true">⬜</span><span>尚未載入</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">狀態</span><span class="blk-fact-v">尚未載入 ⇒ 值與判決一律留白</span></div></div></div></div>
+<div class="grd grd-t4 g-3-2-1"><div class="blk blk-t4"><div class="blk-head"><span class="blk-title">載入中</span><span class="bdg bdg-2 sb-b4"><span aria-hidden="true">⏳</span><span>載入中</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">徽章</span><span class="blk-fact-v">#2 載入中</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div><div class="blk blk-t4"><div class="blk-head"><span class="blk-title">出錯了</span><span class="bdg bdg-6 sb-b4"><span aria-hidden="true">🔴</span><span>取得失敗</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">徽章</span><span class="blk-fact-v">#6 取得失敗</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div><div class="blk blk-t4"><div class="blk-head"><span class="blk-title">結構上不適用</span><span class="bdg bdg-8 sb-b4"><span aria-hidden="true">N/A</span><span>不適用 · 重跑無效</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">徽章</span><span class="blk-fact-v">#8 不適用 · 重跑無效</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div><div class="blk blk-t4"><div class="blk-head"><span class="blk-title">資料不完整</span><span class="bdg bdg-9 sb-b4"><span aria-hidden="true">◧</span><span>N／M 計入</span></span></div><div class="blk-val">7 / 9</div><div class="blk-lvl">🟡 部分計入</div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">徽章</span><span class="blk-fact-v">#9 N／M 計入</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">附錄 · 徽章總覽（元件展示，非本頁版面）</div>
+<p class="pv-meta">components.BADGES 共 10 種；本頁畫 [1, 2, 3, 4, 5, 6, 7, 8, 9]，#10 依 page_today.BADGES_NOT_ON_PAGE 刻意不畫（⛔ 但不得因此把它併進別的徽章）。四個尺寸依所在卡層 t1→b1 … t4→b4；每一顆都是圖示＋文字，⛔ 不只靠顏色。</p>
+<p class="pv-meta">.sb-b1</p>
+<div class="pv-badges">
+<span class="bdg bdg-1 sb-b1"><span aria-hidden="true">🟢</span><span>運作中</span></span>
+<span class="bdg bdg-2 sb-b1"><span aria-hidden="true">⏳</span><span>載入中</span></span>
+<span class="bdg bdg-3 sb-b1"><span aria-hidden="true">⬜</span><span>尚未載入</span></span>
+<span class="bdg bdg-4 sb-b1"><span aria-hidden="true">🟠</span><span>門檻已失準</span></span>
+<span class="bdg bdg-5 sb-b1"><span aria-hidden="true">⛔</span><span>未接線</span></span>
+<span class="bdg bdg-6 sb-b1"><span aria-hidden="true">🔴</span><span>取得失敗</span></span>
+<span class="bdg bdg-7 sb-b1"><span aria-hidden="true">⚠︎ —</span><span>缺漏 · 可重跑</span></span>
+<span class="bdg bdg-8 sb-b1"><span aria-hidden="true">N/A</span><span>不適用 · 重跑無效</span></span>
+<span class="bdg bdg-9 sb-b1"><span aria-hidden="true">◧</span><span>N／M 計入</span></span>
+</div>
+<p class="pv-meta">.sb-b2</p>
+<div class="pv-badges">
+<span class="bdg bdg-1 sb-b2"><span aria-hidden="true">🟢</span><span>運作中</span></span>
+<span class="bdg bdg-2 sb-b2"><span aria-hidden="true">⏳</span><span>載入中</span></span>
+<span class="bdg bdg-3 sb-b2"><span aria-hidden="true">⬜</span><span>尚未載入</span></span>
+<span class="bdg bdg-4 sb-b2"><span aria-hidden="true">🟠</span><span>門檻已失準</span></span>
+<span class="bdg bdg-5 sb-b2"><span aria-hidden="true">⛔</span><span>未接線</span></span>
+<span class="bdg bdg-6 sb-b2"><span aria-hidden="true">🔴</span><span>取得失敗</span></span>
+<span class="bdg bdg-7 sb-b2"><span aria-hidden="true">⚠︎ —</span><span>缺漏 · 可重跑</span></span>
+<span class="bdg bdg-8 sb-b2"><span aria-hidden="true">N/A</span><span>不適用 · 重跑無效</span></span>
+<span class="bdg bdg-9 sb-b2"><span aria-hidden="true">◧</span><span>N／M 計入</span></span>
+</div>
+<p class="pv-meta">.sb-b3</p>
+<div class="pv-badges">
+<span class="bdg bdg-1 sb-b3"><span aria-hidden="true">🟢</span><span>運作中</span></span>
+<span class="bdg bdg-2 sb-b3"><span aria-hidden="true">⏳</span><span>載入中</span></span>
+<span class="bdg bdg-3 sb-b3"><span aria-hidden="true">⬜</span><span>尚未載入</span></span>
+<span class="bdg bdg-4 sb-b3"><span aria-hidden="true">🟠</span><span>門檻已失準</span></span>
+<span class="bdg bdg-5 sb-b3"><span aria-hidden="true">⛔</span><span>未接線</span></span>
+<span class="bdg bdg-6 sb-b3"><span aria-hidden="true">🔴</span><span>取得失敗</span></span>
+<span class="bdg bdg-7 sb-b3"><span aria-hidden="true">⚠︎ —</span><span>缺漏 · 可重跑</span></span>
+<span class="bdg bdg-8 sb-b3"><span aria-hidden="true">N/A</span><span>不適用 · 重跑無效</span></span>
+<span class="bdg bdg-9 sb-b3"><span aria-hidden="true">◧</span><span>N／M 計入</span></span>
+</div>
+<p class="pv-meta">.sb-b4</p>
+<div class="pv-badges">
+<span class="bdg bdg-1 sb-b4"><span aria-hidden="true">🟢</span><span>運作中</span></span>
+<span class="bdg bdg-2 sb-b4"><span aria-hidden="true">⏳</span><span>載入中</span></span>
+<span class="bdg bdg-3 sb-b4"><span aria-hidden="true">⬜</span><span>尚未載入</span></span>
+<span class="bdg bdg-4 sb-b4"><span aria-hidden="true">🟠</span><span>門檻已失準</span></span>
+<span class="bdg bdg-5 sb-b4"><span aria-hidden="true">⛔</span><span>未接線</span></span>
+<span class="bdg bdg-6 sb-b4"><span aria-hidden="true">🔴</span><span>取得失敗</span></span>
+<span class="bdg bdg-7 sb-b4"><span aria-hidden="true">⚠︎ —</span><span>缺漏 · 可重跑</span></span>
+<span class="bdg bdg-8 sb-b4"><span aria-hidden="true">N/A</span><span>不適用 · 重跑無效</span></span>
+<span class="bdg bdg-9 sb-b4"><span aria-hidden="true">◧</span><span>N／M 計入</span></span>
+</div>
+</section>
+</main>
+<footer class="pv-meta">由 src/ui_v2/（commit b4cb83e、sha256 afa5a4205837）於 2026-09-21 產生的靜態快照。CSS 由 markup.page_css() 產出並逐字內嵌，卡片由 markup.card_html() / grid_html() / layer_html() / badge_html() 產出。⚠️ tokens 之後改了，這個檔不會自動跟著變，必須重跑產生器。</footer>
+<script>
+(function () {
+  var root = document.documentElement;
+  var btn = document.getElementById('pv-theme-toggle');
+  var now = document.getElementById('pv-theme-now');
+  function current() {
+    var manual = root.getAttribute('data-theme');
+    if (manual) { return manual; }
+    return (window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: light)').matches)
+           ? 'light' : 'dark';
+  }
+  function label() {
+    var manual = root.getAttribute('data-theme');
+    now.textContent = manual
+      ? ('目前：' + (manual === 'dark' ? '深色' : '淺色') + '（手動）')
+      : '目前：跟隨系統（預設深色）';
+  }
+  btn.addEventListener('click', function () {
+    root.setAttribute('data-theme', current() === 'dark' ? 'light' : 'dark');
+    label();
+  });
+  label();
+})();
+</script>
+</body>
+</html>
