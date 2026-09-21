@@ -8,9 +8,9 @@
 `from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW`。
 
 對外 API：
-- YIELD_HIGH = 7.0  便宜價 / 強烈買進區（殖利率 ≥ 7%）
-- YIELD_MID  = 5.0  合理價 / 中性區（殖利率 5%~7%）
-- YIELD_LOW  = 3.0  昂貴價 / 獲利了結（殖利率 ≤ 3%）
+- YIELD_HIGH = 7.0  殖利率 ≥ 7% 區間下界
+- YIELD_MID  = 5.0  殖利率 5%~7% 區間下界
+- YIELD_LOW  = 3.0  殖利率 ≤ 3% 區間上界
 - YIELD_HIGH_DEC / YIELD_MID_DEC / YIELD_LOW_DEC：上述 / 100，供 `price = avg_div / YIELD_*_DEC` 反推目標價
 
 來源：v18.230 P0 audit 列為 SSOT #5 違規；v5_modules.py:293-310 / tab_stock.py:1581/1637-1639/1657-1659/3066-3068
@@ -19,9 +19,9 @@
 """
 from __future__ import annotations
 
-YIELD_HIGH: float = 7.0  # 便宜價 / 強烈買進（殖利率 ≥ 7%）
-YIELD_MID: float = 5.0   # 合理價（殖利率 5%~7%）
-YIELD_LOW: float = 3.0   # 昂貴價 / 獲利了結（殖利率 ≤ 3%）
+YIELD_HIGH: float = 7.0  # 殖利率 ≥ 7% 區間下界
+YIELD_MID: float = 5.0   # 殖利率 5%~7% 區間下界
+YIELD_LOW: float = 3.0   # 殖利率 ≤ 3% 區間上界
 
 YIELD_HIGH_DEC: float = YIELD_HIGH / 100  # 0.07 — 反推便宜價分母
 YIELD_MID_DEC: float = YIELD_MID / 100    # 0.05 — 反推合理價分母
@@ -40,12 +40,16 @@ def classify_yield_zone(cur_yield: float | None,
         avg_yield: 5y 平均殖利率 %(可選,ETF 估值需此值才有意義 — 若提供且 ≤0 → '—')
 
     Returns:
-        (label, code):
-        - '🟢 強烈買進' / 'strong_buy'  ≥ 7%
-        - '🟡 適度減碼' / 'reduce'      3% < cur ≤ 5%
-        - '⚪ 中性持有' / 'neutral'      5% < cur < 7%
-        - '🔴 獲利了結' / 'sell'        ≤ 3%
-        - '—' / 'na'                    cur 為 None 或 avg_yield <= 0
+        (label, code) — label 的門檻數字由 YIELD_* 常數插值,非寫死:
+        - '🟢 殖利率 ≥ 7%'  / 'strong_buy'  cur ≥ YIELD_HIGH
+        - '🟡 殖利率 3~5%'  / 'reduce'      YIELD_LOW < cur ≤ YIELD_MID
+        - '⚪ 殖利率 5~7%'  / 'neutral'     YIELD_MID < cur < YIELD_HIGH
+        - '🔴 殖利率 ≤ 3%'  / 'sell'        cur ≤ YIELD_LOW
+        - '—' / 'na'                        cur 為 None 或 avg_yield <= 0
+
+    ⚠️ label 開頭的 🟢/🔴/🟡/⚪ 是**下游資料契約**,不是裝飾:
+    src/compute/etf/etf_recommendation.py 以 `'🟢' in val` / `'🔴' in val`
+    子字串比對判 _cheap / _rich。改 emoji(含其後半形空格)會讓該判斷靜默失效。
 
     SSOT 政策:統一全專案殖利率分級判定;若 caller 需要不同 UX 措辭(教師結論等),
     可基於 code 做下游 UX 映射,本函式只負責純判別。
@@ -56,12 +60,12 @@ def classify_yield_zone(cur_yield: float | None,
         # ETF 場景:需要 5y 平均才有估值脈絡
         return '—', 'na'
     if cur_yield >= YIELD_HIGH:
-        return '🟢 強烈買進', 'strong_buy'
+        return f'🟢 殖利率 ≥ {YIELD_HIGH:g}%', 'strong_buy'
     if cur_yield <= YIELD_LOW:
-        return '🔴 獲利了結', 'sell'
+        return f'🔴 殖利率 ≤ {YIELD_LOW:g}%', 'sell'
     if cur_yield <= YIELD_MID:
-        return '🟡 適度減碼', 'reduce'
-    return '⚪ 中性持有', 'neutral'
+        return f'🟡 殖利率 {YIELD_LOW:g}~{YIELD_MID:g}%', 'reduce'
+    return f'⚪ 殖利率 {YIELD_MID:g}~{YIELD_HIGH:g}%', 'neutral'
 
 
 def classify_stock_357_price(price: float | None,

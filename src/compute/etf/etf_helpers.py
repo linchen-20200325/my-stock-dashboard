@@ -109,7 +109,8 @@ def yield_valuation_zone(cur_yield, avg_yield):
         avg_yield: 5y 平均殖利率 %(None 或 ≤0 → 不判定)
 
     Returns:
-        '🟢 強烈買進' / '🔴 獲利了結' / '🟡 適度減碼' / '⚪ 中性持有' / '—'
+        '🟢 殖利率 ≥ 7%' / '🔴 殖利率 ≤ 3%' / '🟡 殖利率 3~5%' / '⚪ 殖利率 5~7%' / '—'
+        (門檻數字由 shared.thresholds 的 YIELD_* 常數插值,非寫死)
 
     SSOT:三 Tab 共用(單檔 / 多檔 / 組合)。內部 delegate to
     shared.thresholds.classify_yield_zone(v18.331 PR-F U-8 統一判別函式)。
