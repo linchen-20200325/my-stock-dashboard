@@ -1,26 +1,26 @@
-# 獨立 HTML 原型 vs Streamlit 實際渲染（量測日 2026-09-21，分支 `ui-v2`）
-比對對象：`docs/v2/prototype/ui_prototype_today.html` ↔ `src/ui_v2/{app_today,render,markup}.py`。實測環境 streamlit 1.59.2（`requirements.txt` 宣告 `>=1.56,<1.60`）；`.streamlit/config.toml` `[theme] base="dark" / backgroundColor="#0e1117" / secondaryBackgroundColor="#161b22" / primaryColor="#1f6feb" / textColor="#e6edf3" / font="sans serif"`。
-⛔ **本文沒有開過瀏覽器**（此環境開不了）：標**實測**＝讀 code／CSS 逐條比對出的事實；標**推論**＝未跑過畫面，請以你眼睛看到的為準。
+# 靜態原型 `today_v2.html` vs Streamlit 實際渲染（量測日 2026-09-21，分支 `ui-v2`）
+比對對象：`docs/v2/prototype/today_v2.html`（本輪**機器產生**的靜態快照，來源 `src/ui_v2/` @ commit `b4cb83e`）↔ `src/ui_v2/{app_today,render,markup}.py`。實測 streamlit 1.59.2（`requirements.txt` 宣告 `>=1.56,<1.60`）;`.streamlit/config.toml` `[theme] base="dark" / backgroundColor="#0e1117" / secondaryBackgroundColor="#161b22" / primaryColor="#1f6feb" / textColor="#e6edf3" / font="sans serif"`。⚠️ 舊的手寫原型 `ui_prototype_today.html` **已不是比對基準**，本文所有「原型」一律指 `today_v2.html`。
+⛔ **本文沒有開過瀏覽器**（此環境開不了）：標**實測**＝讀 code／CSS ＋實際跑 `markup` 函式比對出的事實;標**推論**＝未跑過畫面，請以你眼睛看到的為準。
 
-## 1. 哪些樣式在 Streamlit 會被覆蓋
-- **頁面底色／預設文字色／基準字級／行距（實測）**：原型 `body{background:var(--paper);color:var(--ink);font-size:14.5px;line-height:1.72}`，但 `markup.page_css()` 只產出 `:root` 變數 ＋ `.grd/.lyr/.blk/.bdg/@media` —— **全檔無 `body`、無 `.stApp`、無 `html` 規則** ⇒ 這四項一律由 `config.toml` ＋ Streamlit 基準樣式決定，我們的 token 管不到。
-- **主 CTA（實測）**：`render._render_main_cta` 用真 `st.button(type="primary")` ⇒ 吃 `primaryColor`，⛔ 不吃 `--ink`／`--ochre`。
-- **中文字族（實測）**：`--sans` 在 `src/ui_v2/` **0 命中**（`components.FONT_STACKS` 只落地 `--mono`，`markup._root_rule` docstring 自陳字型 token 尚未落地）⇒ 原型的 `"Noto Sans TC","PingFang TC","Microsoft JhengHei"` 在 Streamlit 端**根本沒被宣告**。
-- **原型獨有、page_css 完全沒有的（實測）**：`.wrap{max-width:1180px}` 限寬、`:focus-visible{outline:2px solid var(--focus)}` 焦點環、`h1/h2` 字級 ramp、`.note` 小字樣式。
+## 1. Streamlit 端「沒有」或「管不到」的東西（先看這段，否則下面每條都會誤讀）
+- 🔴 **卡片張數與內容不同，而且這是預期的（實測）**：原型 15 張卡（t1×1／t2×5／t3×4／t4×5），有中文標題、7 張有大數字、12 張帶「資料來源 ＝ ⚠️ 示意值 · 未接線」;Streamlit 走 `render.unwired_view_model()` ⇒ **每個 block 只畫 1 張卡、全頁共 8 張**，標題就是 block key 本身（`today.verdict`…），徽章全 #5、值／等級／facts **一律留白**。⛔ 不是漏畫。
+- **整層「原型外殼」Streamlit 都沒有（實測）**：示意橫幅、`🚦 今天` 大標＋出處說明、每層的層標籤＋密度數值說明、深／淺色切換鈕、頁尾、附錄徽章總覽（9 種 × 4 尺寸）。它們走原型自己的 `.pv-*` CSS，`markup.page_css()` **不產**、`render.py` **不吐**。
+- **字級／行距／頁面底色（實測）**：`page_css()` 47 條選擇器裡**零 `body`／`html`／`.stApp` 規則**;原型的 `body{…}` 也是外殼自己補的，且**刻意不設字級與行高**（字型 token 尚未落地 `tokens.py`，`components.FONT_STACKS` 只有 `--mono`）⇒ 兩邊都退回各自宿主的預設，我們的 token 管不到。中文字族兩邊**都沒有宣告**（`--sans` 在 `src/ui_v2/` 0 命中），這點反而一致。
+- **主 CTA 配色與焦點環（實測）**：`components.BUTTONS['primary_cta']`（底 `--ink`／字 `--paper`／2px 同色框／hover `--ochre`）與 `components.FOCUS_RING`（2px `--focus`、offset 2px）**都是契約值**，原型逐欄展開套上了;但 `page_css()` 兩者都不輸出，Streamlit 端 CTA 是真 `st.button(type="primary")` ⇒ 吃 `primaryColor`，焦點環吃 Streamlit 預設。
+- **深／淺色切換（實測）**：原型內含四條規則（`:root` dark ＋ `@media (prefers-color-scheme: light)` ＋ `:root[data-theme="dark"]` ＋ `:root[data-theme="light"]`），兩個方向都切得動;Streamlit 端 `render_page_today` 只注入 `page_css(mode)` **單一模式**（`unwired_view_model` 預設 `dark`）⇒ 淺色路徑在 Streamlit **根本沒有被宣告**。
 
-## 2. 哪些在 HTML 對、Streamlit 可能不對（每條附「會看到什麼症狀」）
-1. **主 CTA 顏色差最多（實測）**：原型 `.cta` ＝ `background:var(--ink)`＋`color:var(--paper)` ⇒ **淺灰白底、深色字、2px 同色框**，hover 轉赭色 `--ochre #d59a5e`。Streamlit 會畫成 **`#1f6feb` 藍底白字、圓角、hover 仍是藍**。⚠️ 不是 Streamlit 預設的紅，是 config 指定的藍。
-2. **左右留白比 HTML 寬、卡片更長條（推論）**：原型靠 `.wrap` 置中限寬 1180px；Streamlit 端沒有這條，又設了 `layout="wide"` ⇒ 內容會拉到接近視窗全寬。寬螢幕上第二層 3 欄的每一欄都會比原型寬，卡內文字行長變長。
-3. **頁面沒有大標題（實測）**：原型有 `<h1>🚦 今天</h1>`；`render_page_today()` 只吐 style＋各層網格＋CTA，**不吐任何標題** ⇒ 畫面直接從第一層卡開始，上方只有 Streamlit 自己的 header 留白。
-4. **CTA 下方說明字偏大、不是灰色小字（實測）**：原型走 `.note`（11.5px 等寬、`--ink-3`）；render 走 `st.markdown(note)` ⇒ 一般內文大小的比例字體、顏色是 `textColor`。
-5. **卡內文字略大、行距不同（推論）**：Streamlit 基準約 16px／行距約 1.6，原型是 14.5px／1.72 ⇒ 同一張卡在 Streamlit 會**更鬆、更高**，密度階梯（t1→t4）的落差看起來比原型小。只有大數字 `.blk-val` 明確掛了 `--mono`＋`tabular-nums`，這一項兩邊一致。
-6. **底色其實幾乎對，但那是巧合（實測＋推論）**：`.stApp` 的 `#0e1117` vs `--paper #0e141b` 只差 3/256，**肉眼應該分不出來**。⚠️ 對的原因是 config 剛好也鎖深色，⛔ 不是我們的 CSS 在保證 —— 卡片有自己的 `background:var(--panel)`，所以 config 一旦改成 light，會變成「白底頁面＋深色卡」。
-7. **主文字色（實測）**：`--ink #dbe5ef` 被宣告了但**沒有任何規則套用它**（只有 `--ink-2` 用在 `.blk-lvl`／`.blk-fact-k`），卡內主文字實際吃 `textColor #e6edf3` —— 兩者都近白，**預期看不出差別**，記在這裡是因為它是「靠 config 補上的」而不是「我們畫對的」。
+## 2. 哪些在原型對、Streamlit 可能不對（每條附「會看到什麼症狀」）
+1. **主 CTA 顏色差最多（實測）**：原型 ＝ 淺灰白底（`--ink`）＋深色字＋2px 同色框，hover 轉赭 `--ochre #d59a5e`;Streamlit 會畫成 **`#1f6feb` 藍底白字、圓角、hover 仍藍**。⚠️ 不是 Streamlit 預設的紅，是 config 指定的藍;且這次差掉的是**契約值**（`components.BUTTONS`），不只是原型長相。
+2. 🔴 **`today.summary` / `today.detail` 會出現「一張窄卡＋大片空白」（HTML 結構為實測、畫面為推論）**：兩者的 `BLOCK_COLS` 都是 `(3,2,1)`，而 Streamlit 那格**只有 1 張卡**。`today.summary` 又被層網格 `lg-3-2-1` 包住 ⇒ 桌機上那張卡只佔**整列約 1/9 寬**、右邊空 2/3;`today.detail`（第四層無層網格）約佔 **1/3 寬**、右邊空 2/3。原型因為塞滿了卡（3 張／4 張）看不到這個洞 —— 但原型自己把這層巢狀網格登記為**未判定的 U-1 矛盾**（線框說卡內三欄、舊原型畫成層網格三卡），⛔ 本文不代為裁決。**接線補滿卡後這片空白就該消失;補滿後仍空 → 那才是 bug。**
+3. **頁面直接從第一張卡開始（實測）**：`render_page_today()` 只吐 style ＋各層網格 ＋CTA，**不吐任何標題、層標籤或分隔線** ⇒ 原型上用來分層的那些標籤在 Streamlit 全部消失，四個密度階（t1→t4）少了文字提示，只能靠框線粗細與內距自己看。
+4. **CTA 下方目前「一個字都沒有」（實測）**：`page_today.main_cta_state()` 無參數時回 `{'enabled': True, 'note': None}` ⇒ `render` 裡的 `st.markdown(note)` **整段不執行**。原型的說明小字走 `.pv-meta`（11.5px ＋ `--ink-3`）。⚠️ 連帶問題：`--ink` 與 `--ink-3` 在 `page_css()` 中**各 0 次使用**（只有原型外殼在用）⇒ 之後真要畫說明字時會是**一般內文大小 ＋ `textColor`**，⛔ 不會自動變成灰色小字。
+5. **同一張卡在 Streamlit 更鬆、更高（推論）**：兩邊都沒宣告字級行高，但宿主預設不同（瀏覽器 `line-height:normal` vs Streamlit 自有基準約 1.6）⇒ 卡會變高，**密度階梯 t1→t4 的落差看起來比原型小**。只有大數字 `.blk-val` 明確掛了 `--mono` ＋ `tabular-nums`，這一項兩邊一致。
+6. **底色幾乎對，但那是巧合（實測＋推論）**：`.stApp` `#0e1117` vs `--paper #0e141b` 只差 3/256，**肉眼應分不出**。⚠️ 對的原因是 config 剛好也鎖深色，⛔ 不是我們的 CSS 在保證 —— 卡片自己掛 `background:var(--panel)`，config 一旦改 light 就會變成「白底頁面＋深色卡」。
+7. ~~左右留白比原型寬、卡片更長條~~ **這條已不成立（實測）**：新原型**刻意不加 `max-width` 限寬容器**（理由：多一個限寬會讓「全檔只有 640／880 兩個斷點」不成立，也會讓欄數變化對不上真正的視窗寬）⇒ 兩邊都是滿版，剩下的留白差只來自 Streamlit 自己的 block-container 內距 vs 原型 `body` 的 16px（推論）。
 
 ## 3. 我驗收時要注意什麼
-- **桌機（視窗 ≥881px）**：看第二層 `today.summary / today.key_banner / today.holdings` —— **並排 3 張＝對**；上下堆疊或 2 張＝錯（層級網格沒生效）。
-- **平板（641–880px）**：第二層應變 **2 欄**；**手機（≤640px）**：應變 **1 欄**。從寬拉到窄要看到 3→2→1 兩次變化；若 3 欄直接跳 1 欄、中間沒有 2 欄那一段＝斷點錯。
-- **卡與卡之間**：只該有網格間距，**不該出現整段空白**。看到明顯空行＝Streamlit 在子元素間插了 `<p>`（總管已實測本版應無，看到就是回歸，請回報）。
-- **主 CTA**：藍底白字是**已知差異、不是 bug**（見 2-1）。要決定的是「接受 Streamlit 藍」還是「另想辦法套赭色」—— 驗收時請當「待拍板」記著，⛔ 不要當成畫錯退回。
-- **卡上的數字**：本輪全部卡應為徽章 **#5「這項還沒做」**、大字區**留白**。⛔ 出現任何數字就是違規（本輪沒有接資料，有數字＝假資料）。
-- **未驗證，看到請回報**：若 Streamlit 設定選單能切 Light，`.stApp` 會轉白、而卡片仍是 dark token ⇒ 白底配深卡、徽章顏色全花。本輪沒有驗過這條路徑。
+- **桌機（≥881px）**：第二層 `today.summary / today.key_banner / today.holdings` **並排 3 欄＝對**;上下堆疊或 2 欄＝錯（層級網格沒生效）。**平板（641–880）應 2 欄、手機（≤640）應 1 欄**;從寬拉到窄要看到 3→2→1 兩次變化，中間少了 2 欄那一段＝斷點錯。兩邊斷點值相同（`components.BREAKPOINTS`），原型可以直接拉視窗對照。
+- **卡與卡之間**：只該有網格間距，**不該出現整段空白**。看到明顯空行＝Streamlit 在子元素間插了 `<p>`（總管已實測本版應無，看到就是回歸，請回報）。⚠️ 第二層右半／第四層右半那種大片空白**不算**這一類，見 2-2。
+- **主 CTA**：藍底白字是**已知差異、不是 bug**（見 2-1）。要決定的是「接受 Streamlit 藍」還是「另想辦法套契約指定的赭色」—— 驗收時請當**待拍板**記著，⛔ 不要當成畫錯退回。
+- 🔴 **卡上的數字：兩個產物、兩套規則，⛔ 不要互相對照著抓錯**。在 **Streamlit 頁**上：全卡應為徽章 #5（畫面文字「⛔ 未接線」）、大字區**留白**，**出現任何數字就是違規**（該頁走 `render.unwired_view_model`，全卡未接線，有數字＝假資料）。在 **`today_v2.html`** 上：**有數字才是對的** —— 它是 user 逐字指定的「純靜態、示意數字（標明「示意」）」靜態原型，每張帶數字的卡都有「⚠️ 示意值 · 未接線」那一列，頁首另有示意橫幅、頁尾另有快照聲明。⇒ 同時開兩個檔時，「HTML 有數字、Streamlit 全空」是**兩邊都對**，⛔ 不是其中一邊壞了。
+- **未驗證，看到請回報**：Streamlit 設定選單切 Light 時，`.stApp` 會轉白而卡片仍是 dark token ⇒ 白底配深卡、徽章顏色全花。原型證明 token 層**做得到**淺色（四條規則齊全、切換鈕可當場驗），缺的是 `render` 沒把另一個模式的 `:root` 一起注入。
