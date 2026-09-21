@@ -2,9 +2,9 @@ name: "PR Check（pytest fast + AppTest slow）"
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, v2]
   push:
-    branches: [main]
+    branches: [main, v2]
   workflow_dispatch:
 
 concurrency:
