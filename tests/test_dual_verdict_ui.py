@@ -292,17 +292,17 @@ class TestThirdAxisOverlay:
         """估值極貴 + adopt_slow → action 追加減倉建議，mode 不變."""
         out = self._call(valuation_level="極貴")
         assert out["mode"] == "adopt_slow"  # mode 仍 unchanged
-        assert "估值頂部分位" in out["action"]
-        assert "估值頂部分位（極貴），建議減倉至中性" in out["third_axis_notes"]
+        assert "估值位於頂部分位" in out["action"]
+        assert "估值位於頂部分位（極貴）" in out["third_axis_notes"]
 
     def test_valuation_cheap_appends_in_downgrade(self):
-        """估值便宜 + 雷達警報 downgrade_2 → 追加擇機加碼建議."""
+        """估值便宜 + 雷達警報 downgrade_2 → 追加估值位階附註."""
         out = self._call(
             radar_level="警報", slow_score=-7.0,
             valuation_level="便宜",
         )
         assert out["mode"] == "downgrade_2"
-        assert "估值底部分位" in out["action"]
+        assert "估值位於底部分位" in out["action"]
         assert any("便宜" in n for n in out["third_axis_notes"])
 
     def test_valuation_expensive_no_override_when_extreme_radar(self):
@@ -343,7 +343,7 @@ class TestThirdAxisOverlay:
             event_calendar_level="重大事件",
         )
         assert len(out["third_axis_notes"]) == 2
-        assert "估值頂部" in out["action"]
+        assert "估值位於頂部" in out["action"]
         assert "重大事件" in out["action"]
 
     def test_neutral_levels_are_noop(self):

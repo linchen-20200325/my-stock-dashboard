@@ -540,12 +540,12 @@ def synthesize_dual_verdict(
     v18.179 第三維度（兩個皆 Optional，預設 None 時行為與 v18.173 完全一致）
     ----------------
     - ``valuation_level``：估值分位 "便宜" / "合理" / "偏貴" / "極貴"
-        極貴 + 非 override_defense → 追加「估值頂部分位、建議減倉中性」
-        便宜 + 非 adopt_slow → 追加「估值底部分位、可逐步擇機加碼」
+        極貴 + 非 override_defense → 追加「估值位於頂部分位（極貴）」
+        便宜 + 非 adopt_slow → 追加「估值位於底部分位（便宜）」
     - ``event_calendar_level``：事件曆 "順風" / "中性" / "逆風" / "重大事件"
-        重大事件 + adopt_slow → 追加「重大事件臨近、暫緩單筆加碼」
-        逆風 + adopt_slow → 追加「事件曆逆風」
-        順風 + 降級 mode → 追加「事件曆順風、可酌量擇機」
+        重大事件 + adopt_slow → 追加「重大事件臨近，位階偏高」
+        逆風 + adopt_slow → 追加「事件曆逆風，波動放大風險升高」
+        順風 + 降級 mode → 追加「事件曆順風」
 
     第三維度**只 append 到 action 與 third_axis_notes**，不改 mode/icon/color/level
     （保 backward compat，已寫好的下游 UI 可零變動繼續用）。
@@ -675,17 +675,17 @@ def _apply_third_axis_overlay(
 
     # valuation 疊加
     if valuation_level == "極貴" and mode != "override_defense":
-        notes.append("估值頂部分位（極貴），建議減倉至中性")
+        notes.append("估值位於頂部分位（極貴）")
     elif valuation_level == "便宜" and mode != "adopt_slow":
-        notes.append("估值底部分位（便宜），可逐步擇機加碼")
+        notes.append("估值位於底部分位（便宜）")
 
     # event_calendar 疊加
     if event_calendar_level == "重大事件" and mode == "adopt_slow":
-        notes.append("重大事件臨近，暫緩單筆加碼")
+        notes.append("重大事件臨近，位階偏高")
     elif event_calendar_level == "逆風" and mode == "adopt_slow":
-        notes.append("事件曆逆風，留意波動放大")
+        notes.append("事件曆逆風，波動放大風險升高")
     elif event_calendar_level == "順風" and mode in ("downgrade_1", "downgrade_2"):
-        notes.append("事件曆順風，可酌量擇機")
+        notes.append("事件曆順風")
 
     out = dict(base)
     out["third_axis_notes"] = notes
