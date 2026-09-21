@@ -435,19 +435,19 @@ def get_defensive_allocation(macro_level: str) -> dict:
         return {
             "stock_pct": 20, "bond_pct": 60, "cash_pct": 20,
             "etf_recommendations": ["00679B", "00720B"],
-            "msg": "🚨 總經紅燈：建議股票部位降至 20%，60% 轉入長天期美債 ETF（00679B）停泊，20% 保留現金備戰"
+            "msg": "🚨 命中規則：macro_level == 'High Risk'（總經紅燈，本函式防禦分級表的最高風險級）；該級的股／債／現金對照參數見同組回傳的 stock_pct / bond_pct / cash_pct（靜態查表值，非依個人持倉計算）"
         }
     elif macro_level == "Medium Risk":
         return {
             "stock_pct": 50, "bond_pct": 30, "cash_pct": 20,
             "etf_recommendations": ["00720B", "006208"],
-            "msg": "⚠️ 總經黃燈：股票降至 50%，30% 轉入投資級債 ETF，20% 現金等候回補機會"
+            "msg": "⚠️ 命中規則：macro_level == 'Medium Risk'（總經黃燈，中度風險級）；該級的股／債／現金對照參數見同組回傳的 stock_pct / bond_pct / cash_pct（靜態查表值，非依個人持倉計算）"
         }
     else:
         return {
             "stock_pct": 80, "bond_pct": 10, "cash_pct": 10,
             "etf_recommendations": [],
-            "msg": "✅ 總經安全：可積極佈局，維持 80% 股票部位，10% 債券避險，10% 現金備戰"
+            "msg": "✅ 命中規則：macro_level 不屬 High/Medium Risk（總經綠燈，未觸發防禦級距）；該級的股／債／現金對照參數見同組回傳的 stock_pct / bond_pct / cash_pct（靜態查表值，非依個人持倉計算）"
         }
 
 

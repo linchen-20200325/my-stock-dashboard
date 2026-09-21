@@ -293,7 +293,7 @@ def health_c(weekly_close: pd.Series) -> Flag:
                     miss_reason=SS.MISS_NOT_ENOUGH)
     close = float(weekly_close.iloc[-1])
     if close < ma13 and slope < 0:
-        return Flag("🟡", f"趨勢轉弱：週收 {close:.2f} < 季線 {ma13:.2f} 且季線下彎 → 暫停加碼")
+        return Flag("🟡", f"趨勢轉弱：週收 {close:.2f} < 季線 {ma13:.2f} 且季線下彎")
     return Flag("🟢", f"趨勢守穩：週收 {close:.2f} vs 季線 {ma13:.2f}")
 
 
@@ -302,7 +302,7 @@ def health_d(premium_pct: float | None) -> Flag:
     if premium_pct is None:
         return Flag("⚪", "D 無折溢價資料", miss_reason=SS.MISS_NO_INPUT)
     if premium_pct > T.PREMIUM_ALERT_PCT:
-        return Flag("🟡", f"高溢價 {premium_pct:.2f}% > {T.PREMIUM_ALERT_PCT}% → 不追高")
+        return Flag("🟡", f"高溢價 {premium_pct:.2f}% > {T.PREMIUM_ALERT_PCT}%（門檻）")
     return Flag("🟢", f"折溢價 {premium_pct:.2f}%（正常）")
 
 
@@ -618,18 +618,19 @@ def suggest_action(a: HoldingAssessment) -> str:
     # 1) 吃本金 / 夏普<0 → 汰弱留強（最優先）
     if a.health_a.level == "🔴" or a.health_b.level == "🔴":
         _why = a.health_a.msg if a.health_a.level == "🔴" else a.health_b.msg
-        return f"🔴 汰弱：{_why}"
+        return f"🔴 健檢紅燈：{_why}"
     # 2) 停利（超漲）
     if a.light.take_profit == "force":
-        return "💰 強制停利（>+3σ）：獲利轉回核心資產"
+        return f"💰 布林 z > +{T.Z_TAKE_PROFIT_FORCE:g}σ（超漲，兩級中較嚴重的一級）"
     if a.light.take_profit == "partial":
-        return "💰 分批停利（>+2σ）：部分獲利轉回核心"
+        return f"💰 布林 z > +{T.Z_TAKE_PROFIT_PARTIAL:g}σ（超漲，第一級）"
     # 3) 235 亮加碼燈,但趨勢轉弱 → 暫停加碼（防守優先）
     if a.light.light in (T.LIGHT_1, T.LIGHT_2, T.LIGHT_3):
         if a.health_c.level == "🟡":
-            return f"🟡 {a.light.icon} 訊號亮但季線轉弱 → 暫停加碼、先觀望"
+            return f"🟡 {a.light.icon} 235 條件已觸發，同時健檢 C 成立：{a.health_c.msg}"
         _dw = f"（{a.light.deepwater_note}）" if a.light.deepwater_note else ""
-        return f"{a.light.icon} 加碼 {a.light.deploy_pct:.0f}%：{'、'.join(a.light.reasons)}{_dw}"
+        return (f"{a.light.icon} 235 觸發條件：{'、'.join(a.light.reasons)}"
+                f"（對應投入比例 {a.light.deploy_pct:.0f}%）{_dw}")
     # 4) 高溢價不追高
     if a.health_d.level == "🟡":
         return f"🟡 {a.health_d.msg}"
@@ -723,32 +724,36 @@ def assess_stock(*, ticker: str, name: str, asset_class: str,
         _bd = "，且本業由盈轉虧" if _breakdown else ""
         if bearish_kd:
             level = "🔴"
-            action = (f"🔴 建議換出：財報 {mj_grade}"
-                      + (f"（{_fail_txt}）" if _fail_txt else "")
-                      + f" + KD 轉弱（{kd_label}）賣點確認{_bd}")
+            action = (f"🔴 財報評等 {mj_grade}（落在 {'/'.join(T.STOCK_SWAP_GRADES)} 兩級內）"
+                      + (f"：{_fail_txt}" if _fail_txt else "")
+                      + f"；KD 同時轉弱（{kd_label}）{_bd}")
         elif bullish_kd:
             level = "🟡"
-            action = (f"🟡 財報弱（{mj_grade}）但 KD 轉強（{kd_label}）→ 分批換 / 再觀察{_bd}")
+            action = (f"🟡 財報評等 {mj_grade}（落在 {'/'.join(T.STOCK_SWAP_GRADES)} 兩級內）"
+                      f"，但 KD 轉強（{kd_label}）—— 兩條規則方向相反{_bd}")
         else:
             level = "🔴"
-            action = (f"🔴 建議換出：財報體質 {mj_grade}"
-                      + (f"（{_fail_txt}）" if _fail_txt else "") + _bd)
+            action = (f"🔴 財報評等 {mj_grade}（落在 {'/'.join(T.STOCK_SWAP_GRADES)} 兩級內）"
+                      + (f"：{_fail_txt}" if _fail_txt else "") + _bd)
     elif _breakdown:                                 # B3:基本面 OK 但本業由盈轉虧 → 提前預警
         level = "🟡"
-        action = (f"🟡 財報 {mj_grade} 但本業由盈轉虧 → "
-                  f"減碼觀察、勿加碼（趁 grade 未掉到 C 前）")
+        action = (f"🟡 財報評等 {mj_grade}（未落在 {'/'.join(T.STOCK_SWAP_GRADES)}）"
+                  f"，但財報趨勢觸發「本業由盈轉虧」")
     else:                                            # 基本面 OK（A+/A/B/B+）且無惡化
         _ta = "，本業由虧轉盈" if _turnaround else ""
         if bearish_kd:
             level = "🟡"
-            action = (f"🟡 財報佳（{mj_grade}）但 KD 短線轉弱（{kd_label}）→ 留意、暫不加碼{_ta}")
+            action = (f"🟡 財報評等 {mj_grade}（未落在 {'/'.join(T.STOCK_SWAP_GRADES)}）"
+                      f"，但 KD 短線轉弱（{kd_label}）{_ta}")
         elif strong_kd:
             level = "🟢"
-            action = f"🟢 強勢續抱：財報 {mj_grade} + KD 高檔鈍化{_ta}"
+            action = (f"🟢 財報評等 {mj_grade}（未落在 {'/'.join(T.STOCK_SWAP_GRADES)}）"
+                      f" + KD 高檔鈍化{_ta}")
         else:
             _kd_txt = f"｜KD {kd_label}" if kd_label not in ("無", "資料不足") else ""
             level = "🟢"
-            action = f"🟢 續抱：財報 {mj_grade}{_kd_txt}{_ta}"
+            action = (f"🟢 財報評等 {mj_grade}（未落在 {'/'.join(T.STOCK_SWAP_GRADES)}）"
+                      f"{_kd_txt}{_ta}")
 
     # ── 逐盞燈自己的等級（B3）───────────────────────────────────────
     # ⚠️ 這裡**沒有新的門檻**,兩行都是把「已經存在、但沒被搬出來」的判定接上:

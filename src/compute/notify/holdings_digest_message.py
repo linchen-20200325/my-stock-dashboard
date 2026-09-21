@@ -66,17 +66,17 @@ def _vix_line(vix: "float | None", total: int) -> list[str]:
 
 
 def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:
-    """建議換出（持有紅燈汰弱）。優先用 switch.switch_out（held-only,語意正確:只換你持有的）;
-    switch 缺（極少數 build 失敗）才退 digest.reds,並誠實標「含觀察清單」以免暗示賣掉未持有標的。"""
+    """健檢紅燈清單。優先用 switch.switch_out（held-only,語意正確:只列你持有的）;
+    switch 缺（極少數 build 失敗）才退 digest.reds,並誠實標「含觀察清單」以免被讀成你持有的標的。"""
     if switch is not None:
         _outs = switch.get("switch_out") or []
-        _caveat = ""
+        _caveat = "（你持有的）"
     else:
         _outs = digest.get("reds") or []
         _caveat = "（含觀察清單紅燈）"
     if not _outs:
-        return ["🔴 建議換出（持有紅燈汰弱）", "　✅ 無紅燈,續抱"]
-    _lines = [f"🔴 建議換出（持有紅燈汰弱）{_caveat}"]
+        return [f"🔴 健檢紅燈{_caveat}：0 檔", "　✅ 名單內沒有健檢紅燈"]
+    _lines = [f"🔴 健檢紅燈{_caveat}：{len(_outs)} 檔"]
     for d in _outs:
         _act = str(d.get("建議動作", "") or "").strip()
         _lines.append(f"　・{_code(d)}" + (f"（{_act}）" if _act else ""))

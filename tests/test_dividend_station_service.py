@@ -77,7 +77,7 @@ def test_build_rows_stock_kind_mj_kd():
     assert "3-3-3" not in r and "235 燈號" not in r       # 個股不套 ETF 規則
     assert "財報體檢" in r and "KD" in r
     assert r["健檢"] == "🔴"                              # F + KD 轉弱 → 汰弱換出
-    assert "換出" in r["建議動作"]
+    assert "落在 C/F 兩級內" in r["建議動作"]
     assert r["_detail"]["KD交叉"] == "死亡交叉"
 
 

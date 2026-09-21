@@ -214,16 +214,22 @@ def classify_etf_quick_sigma(cur: float, ma20: float,
     _hi15 = ma20 + ETF_QUICK_SIGMA_HIGH * std_price
     _hi2 = ma20 + ETF_QUICK_SIGMA_OVERBOUGHT * std_price
     if cur < _lo3:
-        return ('🟢🟢🟢', f'⚡短線 股災價(<-{ETF_QUICK_SIGMA_DISASTER:.0f}σ)', '大買 50%')
+        return ('🟢🟢🟢', f'⚡短線 股災價(<-{ETF_QUICK_SIGMA_DISASTER:.0f}σ)',
+                f'-{ETF_QUICK_SIGMA_DISASTER:.0f}σ 以下')
     if cur < _lo2:
-        return ('🟢🟢', f'⚡短線 超跌價(<-{ETF_QUICK_SIGMA_OVERSOLD:.0f}σ)', '買 30%')
+        return ('🟢🟢', f'⚡短線 超跌價(<-{ETF_QUICK_SIGMA_OVERSOLD:.0f}σ)',
+                f'-{ETF_QUICK_SIGMA_OVERSOLD:.0f}σ~-{ETF_QUICK_SIGMA_DISASTER:.0f}σ')
     if cur < _lo1:
-        return ('🟢', f'⚡短線 便宜價(<-{ETF_QUICK_SIGMA_CHEAP:.0f}σ)', '小買 20%')
+        return ('🟢', f'⚡短線 便宜價(<-{ETF_QUICK_SIGMA_CHEAP:.0f}σ)',
+                f'-{ETF_QUICK_SIGMA_CHEAP:.0f}σ~-{ETF_QUICK_SIGMA_OVERSOLD:.0f}σ')
     if cur >= _hi2:
-        return ('🔴', f'⚡短線 準備停利(≥+{ETF_QUICK_SIGMA_OVERBOUGHT:.0f}σ)', '分批停利')
+        return ('🔴', f'⚡短線 準備停利(≥+{ETF_QUICK_SIGMA_OVERBOUGHT:.0f}σ)',
+                f'+{ETF_QUICK_SIGMA_OVERBOUGHT:.0f}σ 以上')
     if cur >= _hi15:
-        return ('🟠', f'⚡短線 偏高(≥+{ETF_QUICK_SIGMA_HIGH:.1f}σ)', '不追高/減碼')
-    return ('⚪', f'⚡短線 中性區(±{ETF_QUICK_SIGMA_CHEAP:.0f}σ)', '靜待訊號')
+        return ('🟠', f'⚡短線 偏高(≥+{ETF_QUICK_SIGMA_HIGH:.1f}σ)',
+                f'+{ETF_QUICK_SIGMA_HIGH:.1f}σ~+{ETF_QUICK_SIGMA_OVERBOUGHT:.0f}σ')
+    return ('⚪', f'⚡短線 中性區(±{ETF_QUICK_SIGMA_CHEAP:.0f}σ)',
+            f'±{ETF_QUICK_SIGMA_CHEAP:.0f}σ 內')
 
 
 def classify_etf_deep_sigma(cur: float, ma240: float,
