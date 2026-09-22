@@ -8,7 +8,7 @@
 本檔是**機器產生**的靜態快照，⛔ 不要手改。
 
 (a) 產生來源：my-stock-dashboard 分支 ui-v2，src/ui_v2/ 於 commit 38039f59ed2340aafac96bbdf9d8c45619a4853a（2026-09-22）
-    產生當下 HEAD ＝ 38039f59ed2340aafac96bbdf9d8c45619a4853a
+    產生當下 HEAD ＝ a155e4e312c3f909350512dfedab9a45ac8c01ba
     src/ui_v2/ 工作區乾淨（無未提交變更）
     src/ui_v2 底下 7 個 .py 的內容 sha256 ＝ 38791f7e771c6a8b8c105aa22c29481273f885b1bbcc42d72a21183b09a9888a
     （雜湊算法 ＝ 檔名 ＋ 位元組，依檔名排序後依序餵進 sha256；見產生器 main()）
@@ -41,6 +41,19 @@
        每個 block 走 markup.card_html() ＋ markup.grid_html()；
        有登記層網格的層（實測只有第二層）整層走 markup.layer_html()。
     6. 徽章總覽走 markup.badge_html(n, size=…)。
+    7. 跨頁 chrome 三塊（客戶 2026-09-22 拍板）另外產：
+       ① 五頁切換：**側欄式**（⛔ 不是頂部分頁）。五個頁名 import 自 L0 SSOT
+          shared/ia_nav.PAGE_LABELS，**⛔ 一個字都沒有手抄**；dict 宣告序 ＝ 畫面序。
+          🚦 今天 ＝ current，其餘四個點下去顯示「此頁待做」佔位。
+       ② 資料時點列：**示意殼**。位置照 S2-UI_SPEC.md 7.1「頁面標題下方第一行、葉外」，
+          內容用「尚未載入」態的逐字。⛔ 一個真的日期時間都沒有填，
+          因為 L3 契約 get_macro_state() 只有 9 個 key、沒有 as_of
+          （src/ui_v2/page_today.py 已把 chrome.asof 登記為已撤回）。
+       ③ 頁尾免責：逐字 SSOT ＝ app.py 的 _render_footer()。
+          本檔放的是**有守衛的複本** —— 產生時讀 app.py 原始文字逐字比對，
+          不符就 AssertionError、⛔ 不產出 HTML（見 verbatim_sources()）。
+    8. 本輪查到的**規格缺口**畫成附錄一段（見產生器的 CHROME_SPEC_GAPS），
+       每條都標「單組／兩組調查結論，未經第三方驗」。
 
 ⚠️ 例外揭露（依 CLAUDE.md §3.3 反捏造，據實記錄）：
     body 的 font-family 用的是通用系統字堆疊，**沒有契約出處** ——
@@ -150,20 +163,168 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 .pv-btn-primary:hover{background:var(--ochre);border-color:var(--ochre);color:var(--paper)}
 .pv-btn-secondary{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding-top:6px;padding-bottom:6px;padding-left:16px;padding-right:16px;font-size:13.5px;font-weight:700;border-radius:3px;background:transparent;border-width:1px;border-style:solid;border-color:var(--ink);color:var(--ink);cursor:pointer}
 .pv-btn-secondary:hover{background:var(--panel-2);border-color:var(--rule-2)}
+/* ══ 4. 跨頁 chrome（側欄導覽／時點列／待做佔位／頁尾免責）══ */
+/* ── hidden：分頁切換靠它，⛔ 兩個頁容器都不自訂 display，讓 UA 的 [hidden] 生效 ── */
+[hidden]{display:none}
+/* ══ 跨頁 chrome ①：五頁切換（側欄式）══════════════════════════════ */
+/*    ⛔ 刻意不做頂部分頁列：理由見本檔 NAV_WHY_SIDEBAR ＋ HTML 內的可見文案。 */
+/*    版面：≥tablet_min 兩欄（側欄 min-content ＋ 內容 1fr）；≤mobile_max 單欄。 */
+/*    ⭐ 側欄欄寬刻意用 min-content 而非固定寬：本檔⛔ 不寫 px 字面值，  */
+/*       寬度由最長的那個頁名（white-space:nowrap）自己撐出來。          */
+.pv-shell{margin-top:var(--sp-6)}
+/*    面板外觀取 components.PANEL 全欄 */
+.pv-nav{background:var(--panel);border-width:1px;border-style:solid;border-color:var(--rule);border-radius:3px;padding-top:12px;padding-bottom:12px;padding-left:14px;padding-right:14px}
+/*    summary ＝ 唯一的展開控制，**任何斷點都看得見**： */
+/*    ⛔ 不在桌機把它藏起來 —— 藏了之後若 JS 沒跑，側欄就永遠打不開。 */
+.pv-nav-summary{cursor:pointer;color:var(--ink);white-space:nowrap;font-size:13px;font-weight:700;min-height:44px;display:flex;align-items:center;gap:var(--sp-2)}
+.pv-nav-body{margin-top:var(--sp-3)}
+.pv-nav-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--sp-2)}
+/*    項目：components.BUTTONS['secondary_evidence']（44x44 點擊區）逐欄展開 */
+.pv-nav-item{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding-top:7px;padding-bottom:7px;padding-left:9px;padding-right:9px;font-size:12.5px;font-weight:600;border-radius:3px;background:transparent;border-width:1px;border-style:solid;border-color:transparent;color:var(--ink-2);cursor:pointer;min-width:44px}
+.pv-nav-item:hover{background:var(--panel-2);color:var(--ink);border-color:var(--rule)}
+.pv-nav-item{width:100%;justify-content:flex-start;text-align:start;white-space:nowrap}
+/*    current：底色 + 框色 + 字重升到 t1 卡標，⛔ 不只靠顏色（另有 aria-current） */
+.pv-nav-item[aria-current="page"]{background:var(--panel-2);border-color:var(--ochre-line);color:var(--ink);font-weight:700}
+.pv-nav-why{margin-top:var(--sp-3);color:var(--ink-3);font-size:11px}
+/* ══ 跨頁 chrome ②：資料時點揭露列 ═══════════════════════════════ */
+/*    位置：S2-UI_SPEC.md 7.1 逐字「緊接其下，頁面標題下方第一行，葉外」。 */
+/*    左側 amber 虛線 ＝ 一眼看出「這是示意殼」（虛線樣式取 t4，全站唯一 dashed 的一階）*/
+.pv-asof{margin-top:var(--sp-4);padding-inline-start:var(--sp-4);border-inline-start-width:2px;border-inline-start-style:dashed;border-inline-start-color:var(--sig-amber)}
+.pv-asof-line{color:var(--ink);font-size:13px;font-weight:700}
+/*    摺疊器：收起時只佔一行 —— 客戶 2026-09-14「時點列不得吃掉首屏」 */
+.pv-asof-sum{cursor:pointer;margin-top:var(--sp-2);color:var(--ink-3);font-size:11.5px}
+.pv-fmt{list-style:none;margin-top:var(--sp-3);padding:0;display:flex;flex-direction:column;gap:var(--sp-1)}
+.pv-fmt li{color:var(--ink-3);font-size:11.5px}
+/* ══ 跨頁 chrome ③：其餘四頁的「此頁待做」佔位 ════════════════════ */
+/*    框線取 t4 的 dashed ＝ 與第四層同一種「這裡還不是實心內容」的語彙 */
+.pv-todo{margin-top:var(--sp-7)}
+.pv-todo-card{background:var(--panel);border-width:1px;border-style:dashed;border-color:var(--rule-2);border-radius:2px;padding-top:12px;padding-bottom:12px;padding-left:14px;padding-right:14px}
+.pv-todo-title{color:var(--ink);font-size:17.5px;font-weight:700}
+.pv-todo-back{margin-top:var(--sp-4)}
+/* ══ 跨頁 chrome ④：頁尾免責（逐字 SSOT ＝ app.py::_render_footer）════ */
+.pv-legal{margin-top:var(--sp-6);padding-top:var(--sp-4);text-align:center;border-top-width:1px;border-top-style:solid;border-top-color:var(--grid);color:var(--ink-3);font-size:11.5px}
+/* ══ 斷點：兩欄版面只在 >= BREAKPOINTS['tablet_min_px'] 生效 ═════════ */
+/*    ⇒ 手機（<= mobile_max_px）永遠是單欄 ＋ details 收起， */
+/*      滿足客戶 2026-09-14「狀態列、時點列、分頁列不得吃掉首屏」。 */
+@media (min-width:641px){.pv-shell{display:grid;grid-template-columns:min-content minmax(0,1fr);gap:var(--sp-6);align-items:start}.pv-nav{position:sticky;top:var(--sp-5)}}
 </style>
 </head>
 <body>
 <div class="pv-banner">⚠️ 靜態示意原型：所有數字皆為示意，未接任何資料源</div>
+<div class="pv-shell">
+<!--
+五頁切換：**側欄式**（客戶 2026-09-22 拍板 ①「做側欄式，不做頂部分頁」）。
+⛔ 這裡為何不是一列頂部分頁：
+  `app.py` 逐字記載 2026-09-07 的 FE-7~FE-16 曾把這五頁掛成第 1~5 個頂層頁籤，
+  與舊的 7 個並排 ⇒ 手機上頁籤列 7 變 12，舊的 7 個被擠出可視範圍，
+  客戶回報「很多 Tab 不見了」。2026-09-08 FE-35 客戶拍板方案 A 撤回該掛法。
+  ⇒ 本原型刻意不做頂部分頁列。
+⛔ 五個為何都是 button 而不是連結：另外四頁沒有檔案，
+  給一個連不到的 href 等於假裝它存在（CLAUDE.md 1 Fail Loud）。
+-->
+<details class="pv-nav" id="pv-nav">
+<summary class="pv-nav-summary">☰ 五頁切換</summary>
+<nav class="pv-nav-body" aria-label="戰情室五頁切換（側欄式）">
+<ul class="pv-nav-list">
+<li><button type="button" class="pv-nav-item" data-pv-page="today" aria-current="page">🚦 今天</button></li>
+<li><button type="button" class="pv-nav-item" data-pv-page="find">🔍 找標的</button></li>
+<li><button type="button" class="pv-nav-item" data-pv-page="inspect">🔬 查一檔</button></li>
+<li><button type="button" class="pv-nav-item" data-pv-page="hold">💼 我的持股</button></li>
+<li><button type="button" class="pv-nav-item" data-pv-page="why">📖 憑什麼</button></li>
+</ul>
+<p class="pv-nav-why">⛔ 刻意不做頂部分頁列</p>
+</nav>
+</details>
+<script>
+(function () {
+  var TODAY = "today";
+  var TABLET_MIN = 641;
+  var nav = document.getElementById('pv-nav');
+  var mq = window.matchMedia
+         ? window.matchMedia('(min-width: ' + TABLET_MIN + 'px)')
+         : null;
+
+  // 側欄預設收起（details 沒有 open 屬性）；桌機寬度才自動展開。
+  // ⛔ 刻意不在 CSS 裡把 summary 藏起來：JS 若沒跑，側欄仍要打得開。
+  // ⇒ 最壞情況（JS 全掛）＝ 每個斷點都收起 ＋ 一顆看得見的 summary，
+  //    客戶 2026-09-14「分頁列不得吃掉首屏」在最壞情況下也成立。
+  function syncOpen() { if (mq) { nav.open = mq.matches; } }
+  syncOpen();
+  if (mq && mq.addEventListener) { mq.addEventListener('change', syncOpen); }
+
+  function show(page, label) {
+    var today = document.getElementById('pv-page-today');
+    var todo = document.getElementById('pv-page-todo');
+    var isToday = (page === TODAY);
+    today.hidden = !isToday;
+    todo.hidden = isToday;
+    document.getElementById('pv-page-name').textContent = label;
+    if (!isToday) { document.getElementById('pv-todo-name').textContent = label; }
+    var items = document.querySelectorAll('.pv-nav-item');
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].getAttribute('data-pv-page') === page) {
+        items[i].setAttribute('aria-current', 'page');
+      } else {
+        items[i].removeAttribute('aria-current');
+      }
+    }
+    // 手機：選完就收起，⛔ 不讓分頁列繼續佔著首屏。
+    if (mq && !mq.matches) { nav.open = false; }
+    window.scrollTo(0, 0);
+  }
+
+  var labels = {};
+  var navItems = document.querySelectorAll('.pv-nav-item');
+  for (var i = 0; i < navItems.length; i++) {
+    labels[navItems[i].getAttribute('data-pv-page')] =
+      navItems[i].textContent.trim();
+  }
+  var triggers = document.querySelectorAll('[data-pv-page]');
+  for (var j = 0; j < triggers.length; j++) {
+    triggers[j].addEventListener('click', function () {
+      var page = this.getAttribute('data-pv-page');
+      show(page, labels[page]);
+    });
+  }
+})();
+</script>
+<div class="pv-main">
 <header class="pv-head">
 <div>
-<div class="pv-title">🚦 今天 · 戰情室 v2 版面原型</div>
-<p class="pv-meta">整頁 CSS 與所有卡片標記都由 src/ui_v2/markup.py 的公開函式產生（page_css / card_html / grid_html / layer_html / badge_html）；本頁沒有任何手抄的色碼或 px。</p>
+<div class="pv-title"><span id="pv-page-name">🚦 今天</span> · 戰情室 v2 版面原型</div>
+<p class="pv-meta">整頁 CSS 與所有卡片標記都由 src/ui_v2/markup.py 的公開函式產生（page_css / card_html / grid_html / layer_html / badge_html）；本頁沒有任何手抄的色碼或 px。五頁的頁名取自 L0 SSOT shared/ia_nav.PAGE_LABELS，同樣沒有手抄。</p>
 </div>
 <div class="pv-toggle">
 <button type="button" class="pv-btn-secondary" id="pv-theme-toggle">◐ 切換深／淺色</button>
 <span class="pv-meta" id="pv-theme-now">目前：跟隨系統（預設深色）</span>
 </div>
 </header>
+<!--
+資料時點揭露列 ＝ **示意殼**。
+⛔ 這一列沒有真時間，也**不准**填一個：
+  L3 canonical 契約 `get_macro_state()` 只有 9 個 key，沒有 `as_of` / `timestamp`；
+  `src/ui_v2/page_today.py` 已把 `chrome.asof` 登記為 WITHDRAWN_BLOCKS（已撤回）。
+  `src/ui/views/page_today.py::AS_OF_NOT_IN_CONTRACT` 逐字：
+  「寧可什麼都不寫，也不編一個時間出來」。
+下面那張表只是**可能的格式**（規格 5.1 第二欄逐字），⛔ 不是本頁的值。
+-->
+<section class="pv-asof" aria-label="資料時點揭露列（示意殼）">
+<div class="pv-asof-line">資料時點：尚未載入，本頁沒有任何本輪資料</div>
+<details class="pv-asof-more">
+<summary class="pv-asof-sum">▸ 這一列是形狀示意，⛔ 不是真資料（點開看原因與可能的格式）</summary>
+<p class="pv-meta">⚠️ 這一列是形狀示意，⛔ 不是真資料。真實時間目前拿不到（實測，非推測）：L3 canonical 總經契約 get_macro_state() 只有 9 個 key、沒有 as_of / timestamp，所以 src/ui_v2/page_today.py 把 chrome.asof 登記在 WITHDRAWN_BLOCKS（已撤回，不是待補），src/ui/views/page_today.py 的 AS_OF_NOT_IN_CONTRACT 逐字寫「寧可什麼都不寫，也不編一個時間出來」。⇒ 本頁畫出規格定義的那一列、用「尚未載入」態的逐字，⛔ 不填任何看起來像真的日期時間。下表只是可能的格式，⛔ 不是本頁的值。</p>
+<p class="pv-meta">S2-UI_SPEC.md 5.4 的 ★-05 定案逐字：「資料時點」只寫歸屬日 ＋ 性質，⛔ 不做「新不新鮮」的判斷；同檔 5.1 第 3 條另⛔ 禁用「今天／剛剛／最新」這類相對詞。</p>
+<ul class="pv-fmt">
+<li><span class="pv-mono">MM-DD 收盤</span>　日頻收盤序列（股價／指數／匯率）</li>
+<li><span class="pv-mono">MM-DD HH:MM 取得</span>　盤中／即時取得的純量</li>
+<li><span class="pv-mono">YYYY-MM 資料</span>　月頻總經（CPI／PMI／M1B／營收）</li>
+<li><span class="pv-mono">YYYY-Qn 財報</span>　季頻財報</li>
+<li><span class="pv-mono">MM-DD 盤後</span>　盤後統計（三大法人／融資／PCR）</li>
+<li><span class="pv-mono">YYYY-MM-DD 凍結</span>　凍結快照（前進式驗證）</li>
+</ul>
+</details>
+</section>
+<div id="pv-page-today">
 <main>
 <section class="pv-layer">
 <div class="pv-layer-label">葉外 chrome · 密度 t3 · block：today.statusbar</div>
@@ -253,7 +414,42 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 </div>
 </section>
 </main>
+</div>
+<section class="pv-todo" id="pv-page-todo" hidden>
+<div class="pv-todo-card">
+<div class="pv-todo-title"><span id="pv-todo-name">🔍 找標的</span>　·　此頁待做</div>
+<p class="pv-meta">本原型只做了「🚦 今天」。這一頁還沒有任何實作，⛔ 不是壞掉、⛔ 也不是載入失敗 —— 畫這塊佔位，是為了不讓五頁切換假裝五頁都已完成（對照 CLAUDE.md §1：錯誤的數字比沒有數字更危險）。</p>
+<p class="pv-meta">⛔ 刻意不做頂部分頁列。app.py 逐字記載：2026-09-07 的 FE-7~FE-16 曾把這五頁掛成第 1~5 個頂層頁籤與舊的 7 個並排 ⇒ 手機上頁籤列 7 變 12，舊的 7 個被擠出可視範圍，客戶回報「很多 Tab 不見了」；2026-09-08 FE-35 客戶拍板方案 A 撤回該掛法，改由側欄 radio 導覽。客戶 2026-09-22 再次拍板「五頁切換：做側欄式，不做頂部分頁（走回三個月前否決過的做法）」。</p>
+<div class="pv-todo-back">
+<button type="button" class="pv-btn-secondary" data-pv-page="today">← 回到 🚦 今天</button>
+</div>
+</div>
+</section>
+<section class="pv-layer" id="pv-gaps">
+<div class="pv-layer-label">附錄 · 本輪查到的規格缺口（逐條登記）</div>
+<p class="pv-meta">每一條都是：⚠️ 單組／兩組調查結論，未經第三方驗。⛔ 不得被引用為「已查證的事實」去支撐下一步決策（CLAUDE.md §-2 規則 6）。</p>
+<p class="pv-meta"><span class="pv-mono">G1</span>　五頁導覽在規格裡沒有元件級定義 ⇒ 本原型的導覽長相是原型自創，⛔ 非規格。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">三條實測：(a) UI_COMPONENTS.md 只有六節元件（卡片／徽章／按鈕／表格／圖表容器／序列色），沒有 nav／側欄／分頁列；(b) 規格裡的「分頁列」一律指頁內葉列（UI_PAGE_HOLD.md：leaf:null ＝「畫在分頁列之上、兩葉共用」），⛔ 不是五頁切換；(c) 五頁切換機制規格寫的是側欄 radio（docs/v2/wireframe/wf_global.js 的 global.sidebar，逐字「側欄（五頁共用，預設收起）」；app.py 的 _IA_NAV_KEY radio 是它的落地）。⇒ 本原型畫的側欄清單 ＋ 待做佔位在規格裡沒有對應元件，是為了把客戶 2026-09-22 ①「做側欄式」畫出來而自創的形狀。</p>
+<p class="pv-meta"><span class="pv-mono">G2</span>　頁尾免責不是可 import 的常數 ⇒ 本檔只能放一份「有守衛的複本」。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">實測：該字串是 app.py 的 _render_footer() 函式體內的 inline literal，⛔ 沒有任何可 import 的名字；而 app.py 是 L6 且 module-level import streamlit，本產生器（docs 工具）⛔ 不得 import 它。⇒ 本輪作法：複本 ＋ 產生時讀 app.py 原始文字逐字比對，不符就炸、⛔ 不產出 HTML。真正的解是把它抽成 L0 常數（例如 shared/compliance_copy.py）讓兩邊都 import，但那要動 app.py ⇒ ⛔ 不在本輪授權範圍，登記為待辦。</p>
+<p class="pv-meta"><span class="pv-mono">G3</span>　資料時點列拿不到真時間 ⇒ 本頁只畫示意殼。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">實測：L3 canonical 契約 get_macro_state() 只有 9 個 key、沒有 as_of／timestamp；src/ui_v2/page_today.py 因此把 chrome.asof 放進 WITHDRAWN_BLOCKS（逐字「已撤回、不是待補」），src/ui/views/page_today.py 的 AS_OF_NOT_IN_CONTRACT 逐字「寧可什麼都不寫，也不編一個時間出來」。⇒ 要顯示真實時點，得先擴充 L3 契約；在那之前本列只能是形狀示意。</p>
+<p class="pv-meta"><span class="pv-mono">G4</span>　chrome.footer 在新契約層 code 端 0 命中 ⇒ 頁尾免責由 L6 統一出，⛔ 不是頁面自己畫。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">實測：grep -rn chrome.footer src/ 為 0 命中（src/ui_v2/ 沒有頁尾這個 block，page_today.LAYERS 的 n0 只有 today.statusbar）；命中全落在 docs/。UI_PAGE_INSPECT.md 已由總管 2026-09-16 更正為「非缺陷」：頁尾是 L6 app.py 統一出的跨頁 chrome（_render_footer() 於 st.stop() 前對每一個 IA 頁呼叫），頁面 0 命中是正確設計。⇒ 本靜態原型沒有 L6 可以依賴，只能自己畫一份 —— 這是原型與 Streamlit 實作的結構差異，⛔ 不得被讀成「頁面應該自己畫頁尾」（app.py 註解逐字已點名「複製第二份 ＝ 兩邊會漂移」）。</p>
+<p class="pv-meta"><span class="pv-mono">G5</span>　側欄預設展開還是收起 ⇒ ★-08 規格上仍是未決，本原型的斷點行為是原型自創。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">實測：S2-UI_SPEC.md 7.2（★-08）於 2026-09-15 由來歷更正組把結論改標「未決」（原本引為「客戶已逐字回覆」的那句，實為 warroom_draft.html 決策卡上一顆未被按下的選項按鈕標籤）；wf_global.js 的 ★-08 grade 已同步改標「阻斷」，並與 ★-15 互指、要求一起問客戶。⇒ 本原型採「640 以下收起、641 以上展開」，是為了滿足客戶 2026-09-14「狀態列、時點列、分頁列不得吃掉首屏」而做的原型決定，⛔ 不是 ★-08 的答案，⛔ 不得被引用為已拍板。</p>
+</section>
 <footer class="pv-meta">由 src/ui_v2/（commit 38039f5、sha256 38791f7e771c）於 2026-09-22 產生的靜態快照。CSS 由 markup.page_css() 產出並逐字內嵌，卡片由 markup.card_html() / grid_html() / layer_html() / badge_html() 產出。⚠️ tokens 之後改了，這個檔不會自動跟著變，必須重跑產生器 docs/v2/prototype/gen_today_v2.py（與本檔同目錄）。</footer>
+<!--
+頁尾免責：逐字 SSOT ＝ `app.py` 的 `_render_footer()`。
+本檔放的是一份**有守衛的複本** —— 產生時會讀 `app.py` 的原始文字逐字比對，
+不符就 AssertionError、⛔ 不產出 HTML。
+⚠️ 真正的解是把它抽成 L0 常數讓兩邊都 import，但那要動 `app.py`，
+  ⛔ 不在本輪授權範圍 ⇒ 已登記為 CHROME_SPEC_GAPS 的 G2。
+-->
+<p class="pv-legal">⚠️ 台股AI戰情室 v3.0 · 僅供學術研究，非投資建議，盈虧自負</p>
+</div>
+</div>
 <script>
 (function () {
   var root = document.documentElement;
